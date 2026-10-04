@@ -28,5 +28,10 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "vitest": "^5.0.1"
+  },
+  "overrides": {
+    "@babel/cli": {
+      "chokidar": "^4.0.3"
+    }
   }
 }

@@ -3,8 +3,8 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 5617c800
-expires: 2027-01-01
+derived_from_commit: 9e361573
+expires: 2027-01-02
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
 ---
@@ -17,7 +17,7 @@ không dòng nào viết tay (luật 9, bất biến 1).
 Trục ở đây là **phân hệ sản phẩm**. Trục theo **module kho mã** nằm ở `kb/90-ephemeral/tien-do.md`;
 hai tệp trả lời hai câu khác nhau và không chép của nhau.
 
-Sinh ngày **2026-10-03** · hết hạn **2027-01-01**.
+Sinh ngày **2026-10-04** · hết hạn **2027-01-02**.
 
 ## 1 · Theo chương đặc tả
 
@@ -109,7 +109,7 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | Module | xong | đang làm | chưa làm | treo |
 |---|---|---|---|---|
 | `_chung` | 22 | 3 | 8 | 6 |
-| `citizen-app` | 37 | 20 | 3 | 0 |
+| `citizen-app` | 38 | 20 | 3 | 0 |
 | `core` | 30 | 3 | 1 | 1 |
 | `deploy` | 18 | 11 | 1 | 0 |
 | `platform-admin` | 6 | 0 | 1 | 0 |

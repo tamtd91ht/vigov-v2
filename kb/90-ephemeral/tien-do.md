@@ -3,8 +3,8 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 5617c800
-expires: 2027-01-01
+derived_from_commit: 9e361573
+expires: 2027-01-02
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
 ---
@@ -21,7 +21,7 @@ Trục ở đây là **module kho mã**. Ai hỏi *"phân hệ nào dùng đư�
 câu khác, trục khác, người đọc khác → `kb/90-ephemeral/tien-do-san-pham.md` (`/tien-do-san-pham`).
 Hai tệp LIÊN KẾT chứ không chép của nhau (luật 9, bất biến 2).
 
-Cập nhật gần nhất **2026-10-03** · hết hạn **2027-01-01**. Hạn đo lần cuối có người cập nhật
+Cập nhật gần nhất **2026-10-04** · hết hạn **2027-01-02**. Hạn đo lần cuối có người cập nhật
 một module, không phải lần cuối sinh tệp — quá hạn nghĩa là 90 ngày không ai chạm tới,
 tức tin `git log` chứ đừng tin tệp này.
 
@@ -30,7 +30,7 @@ tức tin `git log` chứ đừng tin tệp này.
 | ĐANG LÀM | 122 |
 | chưa làm | 39 |
 | treo | 14 |
-| xong | 329 |
+| xong | 330 |
 
 ## Theo menu
 
@@ -479,7 +479,7 @@ BA ĐIỀU LOG LỘ RA, chưa ai kiểm:
 
 ## `citizen-app`
 
-Cập nhật 2026-10-03 · 60 mục
+Cập nhật 2026-10-04 · 61 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -543,6 +543,7 @@ Cập nhật 2026-10-03 · 60 mục
 | `app-xa-anh-truoc-sau-va-9-cau` — App riêng của xã: ảnh trước/sau xử lý trên phiếu của người dân (khối 'Sau khi xử lý' chỉ khi có ảnh) + 9 câu giải thích trạng thái nguyên văn bản mẫu (đợt 02/10/2026; ADR 0047 dòng THAY G8, ADR 0027 Bổ sung 02/10) | xong | api: verificationPhotosAddress + listVerificationPhotos (GET …/my-citizen-reports/{maTraCuu}/verification-photos; 404 như traCuuPhieu, 403 chua_xac_thuc_so → cổng số). scene-photos.tsx: hook chung usePhotoLinks (làm mới link trước khi hết hạn, đọc lại khi ảnh lỗi) cho cả hai danh sách; PetitionPhotos xếp 'Trước khi xử lý' trên 'Sau khi xử lý'; khối sau ẩn khi rỗng/đang tải. PhanAnhAppXa PetitionBody dùng PetitionPhotos (chi tiết + tra cứu). noi-dung.ts TRANG_THAI = 9 câu FEEDBACK_STATUS_HINT của vigov-require feedback-display.ts:136-146 (neo 0053854, khớp một-một qua nhãn bước feedback-adapter.ts:91-101). verification-photos.test.tsx 19 ca; ranh-gioi-hai-nua §3e. tsc sạch, vitest 1636/1636, dựng app xã xanh. | — | CHỜ CHỦ DỰ ÁN: (1) app CHUNG cũng nhận 9 câu mới vì TRANG_THAI là một bảng (khung.tsx:108) — ADR 0027 chỉ nói cán bộ + app xã; (2) câu da-dong 'Phải có ảnh sau xử lý mới đóng được' sai ở xã tắt cờ; (3) mấy câu viết cho cán bộ, nói về người dân ở ngôi thứ ba ('chờ báo lại cho người dân', 'chờ họ xác nhận'); câu da-tiep-nhan cũ cố ý tránh ngụ ý xã đã đọc phiếu; 'chuyển lên cấp trên' có thể trái dòng cơ quan nhận. Chưa thử trên máy thật. |
 | `app-xa-logo-doc-luc-chay` — App riêng của xã: logo header đọc lúc chạy từ /commune-profiles logo_url (ADR 0069 #4 #7 #8; máy chủ d93851b9) — logo xã tải → ảnh chép lúc dựng → biểu tượng tòa nhà | xong | 02/10/2026 (TASK-6, chưa commit). api/hop-dong-cong-khai.ts: CommuneProfile thêm logo_url; readLogoUrl — vắng = '' (máy chủ cũ), không phải chuỗi = cả trả lời sai khuôn, chuỗi chỉ giữ khi readHttpsLink nhận (https tuyệt đối, có host, không phần user), khác → ''. man/khung-xa.tsx: BUNDLED_LOGO_SRC, logoSources, CommuneLogoView (không hook), markLogoFailed; LogoXa nhớ ảnh hỏng THEO URL (hồ sơ tới sau lần vẽ đầu: ảnh chép hỏng trước đó vẫn bị bỏ qua, logo tải hỏng thì xuống ảnh chép chứ không thẳng biểu tượng); alt='' vì tên xã đứng cạnh bằng chữ; ô 40×40 cố định cho cả ảnh lẫn biểu tượng. man/TrangXa.tsx: profileLogoUrl, cả bốn header tab gốc truyền logoUrl. Banner trang chủ và deploy.mjs KHÔNG đổi. Ca kiểm: commune-logo.test.tsx (10 ca), commune-public-reads.test.tsx (+4 ca logo_url). Thử đột biến: đảo thứ tự nguồn → 3 ca đỏ; bỏ lọc https → 1 ca đỏ; đã hoàn nguyên bằng Edit. tsc rc=0, vitest 63 tệp 1649/1649 rc=0, npm run build rc=0. | — | (1) Host kho ảnh công khai (phần host của OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL trong common-config) phải vào danh sách tên miền của App ID từng app xã ở Zalo Developer Console — không nằm trong kho này, cũng không trong vihat-miniapp (ADR 0052 Còn mở #3); chưa xem trên webview Zalo thật. (2) Câu chính sách quyền riêng tư: app nay tải logo từ host kho ảnh công khai lúc mở — gộp vào câu G9 đang chờ duyệt (xem chinh-sach-dung-voi-ban-dung), không viết lời văn trong lượt này; khi_nao của dòng /commune-profiles trong content/ket-xuat-ho-so.ts chưa nhắc logo, sửa cùng lượt G9. (3) Lần mở đầu thấy ảnh chép rồi đổi sang logo tải khi hồ sơ về (cùng ô, không nhảy bố cục). (4) Gỡ ảnh chép lúc dựng + scripts/logo-xa khi mọi xã đã tải logo — chủ dự án quyết lúc nào. |
 | `hien-luot-xem-tin` — Hiện '{n} lượt xem' ở danh sách tin và chi tiết bài của cả app riêng xã và app chung (ADR 0047 §6 'Lượt xem tin', 02/10/2026) | xong | Commit 6a29447b: readViewCount (hop-dong-cong-khai.ts), ViewCount + biểu tượng mắt; thẻ Tin liên quan và chi tiết bài video cũng hiện, không ở thẻ gọn Trang chủ và danh sách Video; rereadAudio gửi no_view=1; khai no_view trong hồ sơ Zalo; chính sách quyền riêng tư không đổi (chủ dự án). npm test 1663/1663, typecheck sạch. | — | — |
+| `vuln-braces-chokidar-override` — make vuln đỏ vì braces (GHSA-vfj7-8cjw-p6xm, high) — gỡ khỏi cây bằng overrides @babel/cli → chokidar ^4.0.3 | xong | (commit này) — braces không có bản vá (3.0.3 là bản cuối, nằm trong khoảng <=3.0.3). Đường vào: zmp-sdk → @babel/cli (phụ thuộc lúc chạy của zmp-sdk) → chokidar@3 (optionalDependency, chỉ cho babel --watch) → braces; zmp-sdk không nạp mã @babel/cli. chokidar 4 chỉ cần readdirp → 13 gói rời cây. make vuln PASS (0 npm), typecheck + 1685 test + npm run build xanh. | — | package.json không ghi được chú thích: lý do của khối overrides nằm ở mục này. Gỡ override khi zmp-sdk thôi kéo @babel/cli hoặc @babel/cli dùng chokidar không có braces. Còn 2 cảnh báo moderate @sentry/browser <7.119.1 qua zmp-sdk (dưới ngưỡng cổng). |
 
 ## `core`
 
