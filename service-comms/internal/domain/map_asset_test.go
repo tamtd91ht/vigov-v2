@@ -3,6 +3,7 @@ package domain
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -114,6 +115,24 @@ func TestNormalizeMapAssetFilter(t *testing.T) {
 		if _, err := NormalizeMapAssetFilter(bad); !errors.Is(err, ErrMapAssetFilterInvalid) {
 			t.Errorf("%s: err = %v", name, err)
 		}
+	}
+}
+
+func TestNormalizeMapAssetFilterRefusesAtTheCap(t *testing.T) {
+	codes := make([]string, 0, MapAssetFilterTypesMax*2+2)
+	for i := 0; i < MapAssetFilterTypesMax; i++ {
+		c := fmt.Sprintf("nhom-%02d", i)
+		codes = append(codes, c, c) // duplicates are not distinct: they never count toward the cap
+	}
+	if f, err := NormalizeMapAssetFilter(MapAssetFilter{AssetTypeCodes: codes}); err != nil || len(f.AssetTypeCodes) != MapAssetFilterTypesMax {
+		t.Fatalf("exactly the cap, with duplicates: %v, err = %v", f.AssetTypeCodes, err)
+	}
+	// One distinct code past the cap, then a malformed one. Refusing INSIDE the loop stops at the first and
+	// never reaches the second; refusing after the loop would report the shape instead.
+	codes = append(codes, "nhom-tran", "Khong Hop Le")
+	_, err := NormalizeMapAssetFilter(MapAssetFilter{AssetTypeCodes: codes})
+	if !errors.Is(err, ErrMapAssetFilterInvalid) || !strings.Contains(err.Error(), "quá nhiều") {
+		t.Errorf("err = %v, want the cap refusal before the rest is read", err)
 	}
 }
 

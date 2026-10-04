@@ -7,10 +7,15 @@ package app
 //
 // PERSONAL DATA IN THE TRAIL (rule 6 forbidden #4, 0015 §PERSONAL DATA). The delta carries
 // `representative` masked (privacy.MaskName), `phone` masked (MaskPhone), `tax_code` masked (MaskCccd —
-// it may be a citizen ID number), `address` and `description` as presence only, the coordinates NOT AT
-// ALL (a household's pin is a home location — only "moved" is recorded), and custom values as KEYS only
-// (a free-text field may hold anything). There is no masking function for an address or a coordinate in
-// core/privacy, and a truncated address is still an address.
+// it may be a citizen ID number), `name` masked (MaskName) for a household business only (see
+// auditName), `address` and `description` as presence only, the coordinates as "moved" only, and custom
+// values as KEYS only (a free-text field may hold anything).
+//
+// ADDRESS AND COORDINATES ARE NOT MASKED ON THE READ SURFACE — ADR 0072 sửa đổi 04/10/2026 — chủ dự án
+// chốt hộ kinh doanh hiển thị như doanh nghiệp: every asset.read holder sees a household business's
+// address and exact pin, as for an enterprise; representative, phone and tax code stay masked. The
+// trail still keeps them out of the delta: the ledger is never deleted, and "moved" / "changed" answers
+// an inspection without making the audit table a second copy of every place.
 
 import (
 	"context"
@@ -179,20 +184,25 @@ func (uc *MapAssets) Create(ctx context.Context, in MapAssetInput, actor audit.A
 
 // Update applies a partial edit, judged on the row AFTER the merge. A NO-OP WRITES AND AUDITS NOTHING —
 // which is what makes the route's idem.KhongCan declaration true.
-func (uc *MapAssets) Update(ctx context.Context, id string, p MapAssetPatch, actor audit.Actor) (domain.MapAsset, error) {
+//
+// `written` is true only when the row was updated AND its entry written in the same transaction. The
+// handler discloses the unmasked row only then: on a no-op there is no entry, so an unmasked reply
+// would be a full read nobody can trace (rule 6, invariant 7).
+func (uc *MapAssets) Update(ctx context.Context, id string, p MapAssetPatch, actor audit.Actor) (row domain.MapAsset, written bool, err error) {
 	if id == "" {
-		return domain.MapAsset{}, commsstore.ErrMapAssetNotFound
+		return domain.MapAsset{}, false, commsstore.ErrMapAssetNotFound
 	}
 	if actor.ID == "" {
-		return domain.MapAsset{}, ErrMissingActor
+		return domain.MapAsset{}, false, ErrMissingActor
 	}
 	if (p.Lat == nil) != (p.Lng == nil) {
 		// One coordinate alone is not a place.
-		return domain.MapAsset{}, domain.ErrMapAssetLocationMissing
+		return domain.MapAsset{}, false, domain.ErrMapAssetLocationMissing
 	}
 
 	var after domain.MapAsset
-	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		written = false // a retried transaction starts again from "nothing written"
 		before, err := uc.repo.ByIDForUpdate(ctx, tx, id)
 		if err != nil {
 			return err
@@ -237,26 +247,33 @@ func (uc *MapAssets) Update(ctx context.Context, id string, p MapAssetPatch, act
 		if err != nil {
 			return fmt.Errorf("map_asset: mã hoá delta: %w", err)
 		}
-		return audit.Write(ctx, tx, audit.Entry{
+		if err := audit.Write(ctx, tx, audit.Entry{
 			Actor: actor, Action: ActionUpdateMapAsset, Subject: mapAssetSubject(after), Delta: delta,
-		})
+		}); err != nil {
+			return err
+		}
+		written = true
+		return nil
 	})
 	if err != nil {
-		return domain.MapAsset{}, wrapMapAsset(ctx, "sửa", err)
+		return domain.MapAsset{}, false, wrapMapAsset(ctx, "sửa", err)
 	}
-	return after, nil
+	return after, written, nil
 }
 
 // SetConfirmation sets or clears the verified flag. The same state twice writes and audits nothing.
-func (uc *MapAssets) SetConfirmation(ctx context.Context, id string, verified bool, actor audit.Actor) (domain.MapAsset, error) {
+// `written` has Update's meaning: true only when the row changed and its entry is in the same
+// transaction.
+func (uc *MapAssets) SetConfirmation(ctx context.Context, id string, verified bool, actor audit.Actor) (row domain.MapAsset, written bool, err error) {
 	if id == "" {
-		return domain.MapAsset{}, commsstore.ErrMapAssetNotFound
+		return domain.MapAsset{}, false, commsstore.ErrMapAssetNotFound
 	}
 	if actor.ID == "" {
-		return domain.MapAsset{}, ErrMissingActor
+		return domain.MapAsset{}, false, ErrMissingActor
 	}
 	var after domain.MapAsset
-	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		written = false
 		before, err := uc.repo.ByIDForUpdate(ctx, tx, id)
 		if err != nil {
 			return err
@@ -284,14 +301,18 @@ func (uc *MapAssets) SetConfirmation(ctx context.Context, id string, verified bo
 		if err != nil {
 			return fmt.Errorf("map_asset: mã hoá delta: %w", err)
 		}
-		return audit.Write(ctx, tx, audit.Entry{
+		if err := audit.Write(ctx, tx, audit.Entry{
 			Actor: actor, Action: action, Subject: mapAssetSubject(after), Delta: delta,
-		})
+		}); err != nil {
+			return err
+		}
+		written = true
+		return nil
 	})
 	if err != nil {
-		return domain.MapAsset{}, wrapMapAsset(ctx, "xác minh", err)
+		return domain.MapAsset{}, false, wrapMapAsset(ctx, "xác minh", err)
 	}
-	return after, nil
+	return after, written, nil
 }
 
 // Delete soft deletes one asset with a mandatory reason. The row stays — deleted_at · deleted_by ·
@@ -363,6 +384,10 @@ func (uc *MapAssets) RecordFullView(ctx context.Context, a domain.MapAsset, acto
 
 // MapAssetPersonalFields lists the masked-by-default fields this asset actually holds — what a full
 // view discloses. One list for the detail route and its trail, so the two cannot disagree.
+//
+// ADDRESS AND COORDINATES ARE DELIBERATELY ABSENT, for every group including a household business:
+// they are never masked on the read surface, so a full view discloses nothing more of them — ADR 0072
+// sửa đổi 04/10/2026 — chủ dự án chốt hộ kinh doanh hiển thị như doanh nghiệp.
 func MapAssetPersonalFields(a domain.MapAsset) []string {
 	var out []string
 	if a.Representative != "" {
@@ -443,8 +468,10 @@ func sameMapAsset(x, y domain.MapAsset) bool {
 // mapAssetSubject is the trail's locator. A MAP ASSET HAS NO BUSINESS CODE — 0015 mints none, and the
 // tax code is not one this system issues (and may be a person's ID). The NAME IS DELIBERATELY NOT IN IT:
 // a household business is often named after its owner (0015 §PERSONAL DATA) and the ledger is never
-// deleted. So, like chuDeNoiDungMiniApp, it is composed from the facts that locate the row on the
-// `Sổ địa điểm` — the group and the day it was entered; the delta carries the id.
+// deleted. The subject is one plain string for every group, so it cannot mask per group the way the
+// delta does (auditName); it leaves the name out for all of them. So, like chuDeNoiDungMiniApp, it is
+// composed from the facts that locate the row on the `Sổ địa điểm` — the group and the day it was
+// entered; the delta carries the id.
 func mapAssetSubject(a domain.MapAsset) string {
 	day := a.CreatedAt
 	if day.IsZero() {
@@ -453,12 +480,27 @@ func mapAssetSubject(a domain.MapAsset) string {
 	return "doi-tuong-ban-do/" + a.AssetTypeCode + "/" + day.UTC().Format(time.DateOnly)
 }
 
+// assetTypeNamedAfterPerson is the group whose NAME is personal data: a household business is
+// registered under its owner's name ("Hộ kinh doanh Nguyễn Văn A"). The code is ADR 0072 §3's, sown by
+// domain.DefaultMapAssetTypes.
+const assetTypeNamedAfterPerson = "ho-kinh-doanh"
+
+// auditName is the name as the delta records it (rule 6 forbidden #4): masked with privacy.MaskName for
+// a household business, raw for every other group — a company, market or school name is not personal
+// data, and an inspection reading "renamed from X to Y" needs it whole.
+func auditName(assetTypeCode, name string) string {
+	if assetTypeCode == assetTypeNamedAfterPerson {
+		return privacy.MaskName(name)
+	}
+	return name
+}
+
 // mapAssetForAudit is the delta's view of one row — personal fields masked or reduced to presence.
 func mapAssetForAudit(a domain.MapAsset) map[string]any {
 	return map[string]any{
 		"id":                  a.ID,
 		"asset_type_code":     a.AssetTypeCode,
-		"name":                a.Name,
+		"name":                auditName(a.AssetTypeCode, a.Name),
 		"has_address":         a.Address != "",
 		"residential_unit_id": a.ResidentialUnitID,
 		"representative":      privacy.MaskName(a.Representative),
@@ -484,7 +526,9 @@ func diffMapAsset(before, after domain.MapAsset) (map[string]any, map[string]any
 		}
 	}
 	pair("asset_type_code", before.AssetTypeCode, after.AssetTypeCode, before.AssetTypeCode != after.AssetTypeCode)
-	pair("name", before.Name, after.Name, before.Name != after.Name)
+	// Each side masked by ITS OWN group: an edit that moves a row into or out of ho-kinh-doanh masks the
+	// side that was (or becomes) a household's name.
+	pair("name", auditName(before.AssetTypeCode, before.Name), auditName(after.AssetTypeCode, after.Name), before.Name != after.Name)
 	pair("residential_unit_id", before.ResidentialUnitID, after.ResidentialUnitID, before.ResidentialUnitID != after.ResidentialUnitID)
 	pair("status", before.Status, after.Status, before.Status != after.Status)
 	pair("industry_code", before.IndustryCode, after.IndustryCode, before.IndustryCode != after.IndustryCode)

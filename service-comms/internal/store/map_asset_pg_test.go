@@ -113,6 +113,75 @@ func TestPgMapAssetRegisterEndToEnd(t *testing.T) {
 	}
 }
 
+// Another commune's id, named from THIS commune, is not-found on every path that takes an id — the read,
+// the locking read and the three writes. The predicate is `tenant_id = $1` from the context's commune,
+// so a guessed or leaked id reads nothing and changes nothing (rule 1, invariant 5). Afterwards the
+// other commune's row is checked untouched from its own commune: a write that matched zero rows and still
+// reported success would leave it changed while this test stayed green on the error alone.
+func TestPgMapAssetAnotherCommunesIDIsNotFound(t *testing.T) {
+	db := moKetNoi(t)
+	c1, c2 := xaRieng(t)
+	themLoai(t, db, c1, "t-dn", "doanh-nghiep", "Doanh nghiệp", 1, false, true)
+	themLoai(t, db, c2, "t-dn2", "doanh-nghiep", "Doanh nghiệp", 1, false, true)
+
+	h := pkgstore.New(db)
+	s := NewMapAssetStore(h)
+	ctx1, ctx2 := ctxXa(tenant.ID(c1)), ctxXa(tenant.ID(c2))
+	if err := h.For(ctx2).Tx(ctx2, func(tx *pkgstore.ScopedTx) error {
+		_, err := s.Insert(ctx2, tx, domain.MapAsset{ID: "b1", AssetTypeCode: "doanh-nghiep", Name: "Công ty xã B",
+			Lat: 1, Lng: 2, Status: domain.MapAssetStatusActive, Phone: "0900000000"}, "CB-00999")
+		return err
+	}); err != nil {
+		t.Fatalf("insert in commune 2: %v", err)
+	}
+	theirs, err := s.ByID(ctx2, "b1")
+	if err != nil {
+		t.Fatalf("commune 2 reads its own row: %v", err)
+	}
+
+	if _, err := s.ByID(ctx1, "b1"); !errors.Is(err, ErrMapAssetNotFound) {
+		t.Errorf("ByID across communes: %v, want ErrMapAssetNotFound", err)
+	}
+	inTx := func(name string, fn func(tx *pkgstore.ScopedTx) error) {
+		t.Helper()
+		var got error
+		if err := h.For(ctx1).Tx(ctx1, func(tx *pkgstore.ScopedTx) error {
+			got = fn(tx)
+			return nil
+		}); err != nil {
+			t.Fatalf("%s: tx: %v", name, err)
+		}
+		if !errors.Is(got, ErrMapAssetNotFound) {
+			t.Errorf("%s across communes: %v, want ErrMapAssetNotFound", name, got)
+		}
+	}
+	inTx("ByIDForUpdate", func(tx *pkgstore.ScopedTx) error {
+		_, err := s.ByIDForUpdate(ctx1, tx, "b1")
+		return err
+	})
+	inTx("Update", func(tx *pkgstore.ScopedTx) error {
+		edited := theirs
+		edited.Name = "sửa từ xã khác"
+		_, err := s.Update(ctx1, tx, edited, "CB-00123")
+		return err
+	})
+	inTx("SetConfirmation", func(tx *pkgstore.ScopedTx) error {
+		_, err := s.SetConfirmation(ctx1, tx, theirs, true, "CB-00123")
+		return err
+	})
+	inTx("SoftDelete", func(tx *pkgstore.ScopedTx) error {
+		return s.SoftDelete(ctx1, tx, "b1", "CB-00123", "xoá từ xã khác")
+	})
+
+	after, err := s.ByID(ctx2, "b1")
+	if err != nil {
+		t.Fatalf("commune 2's row gone after commune 1's attempts: %v", err)
+	}
+	if after.Name != theirs.Name || after.Verified || !after.UpdatedAt.Equal(theirs.UpdatedAt) {
+		t.Errorf("commune 2's row changed from commune 1: %+v", after)
+	}
+}
+
 func TestPgMapAssetTypeSeedRowsAreTierTwo(t *testing.T) {
 	db := moKetNoi(t)
 	c1, _ := xaRieng(t)

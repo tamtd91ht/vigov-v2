@@ -88,7 +88,7 @@ type GhiLoaiTaiNguyen interface {
 // SCREEN, checked rather than assumed: docs/ui-ux/14-cau-hinh.md:109 lists it in the permission
 // matrix, and §5 of that same file (:148-182) is the `Danh mục` tab these routes serve — the one
 // with `+ Thêm mục`, the `✎` / `Tắt` / `🗑` actions and the `Nguồn` column. The key is seeded at
-// service-identity/migrations/0001_init.sql:274, so a commune administrator can actually tick it.
+// service-identity/migrations/0001_init.sql:281, so a commune administrator can actually tick it.
 //
 // NO NEW KEY WAS INVENTED, and that is rule 5, invariant 3c: a key no migration seeds is a right
 // nobody can grant, so the route would answer 403 to every account forever while the tests stayed

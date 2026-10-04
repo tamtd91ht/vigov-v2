@@ -354,10 +354,19 @@ func TestMapAssetUpdateNoOpWritesNothing(t *testing.T) {
 	uc, repo, d, ctx := newAssetUseCase(t)
 	a := createOne(t, uc, ctx)
 	before := len(d.audits(t))
-	_, err := uc.Update(ctx, a.ID, MapAssetPatch{Name: strp(a.Name), Phone: strp(a.Phone),
-		CustomValues: map[string]json.RawMessage{"legal_form": json.RawMessage(`"tnhh"`)}}, assetActor())
-	if err != nil {
-		t.Fatal(err)
+	for name, p := range map[string]MapAssetPatch{
+		"empty patch": {},
+		"same values": {Name: strp(a.Name), Phone: strp(a.Phone),
+			CustomValues: map[string]json.RawMessage{"legal_form": json.RawMessage(`"tnhh"`)}},
+	} {
+		_, written, err := uc.Update(ctx, a.ID, p, assetActor())
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		// `written` false is what makes the handler answer MASKED: no entry, no disclosure.
+		if written {
+			t.Errorf("%s: a no-op reported written", name)
+		}
 	}
 	if repo.updates != 0 || len(d.audits(t)) != before {
 		t.Errorf("a no-op wrote: updates=%d audits=%d", repo.updates, len(d.audits(t))-before)
@@ -367,10 +376,13 @@ func TestMapAssetUpdateNoOpWritesNothing(t *testing.T) {
 func TestMapAssetUpdateDiffIsMasked(t *testing.T) {
 	uc, repo, d, ctx := newAssetUseCase(t)
 	a := createOne(t, uc, ctx)
-	got, err := uc.Update(ctx, a.ID, MapAssetPatch{Phone: strp("0900000001"), Address: strp(""),
+	got, written, err := uc.Update(ctx, a.ID, MapAssetPatch{Phone: strp("0900000001"), Address: strp(""),
 		Lat: f64(15.8), Lng: f64(108.4)}, assetActor())
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !written {
+		t.Error("a real edit reported not written")
 	}
 	if repo.updates != 1 || got.Address != "" || got.Lat != 15.8 {
 		t.Fatalf("updates=%d row=%+v", repo.updates, got)
@@ -388,6 +400,86 @@ func TestMapAssetUpdateDiffIsMasked(t *testing.T) {
 	if _, ok := sau["name"]; ok {
 		t.Error("an unchanged field is in the diff")
 	}
+}
+
+// A household business is registered under its owner's name, so its NAME is personal data in a ledger
+// that is never deleted (rule 6 forbidden #4): every delta that carries it — create, edit before and
+// after, delete — carries it through privacy.MaskName. Any other group's name is a company's or a
+// place's, and stays whole.
+func TestMapAssetAuditMasksTheNameOfAHouseholdBusinessOnly(t *testing.T) {
+	const owner, renamed = "Tạp hoá Trần Thị Bích", "Tạp hoá Trần Văn Cường"
+	noRaw := func(t *testing.T, what string, delta map[string]any) {
+		t.Helper()
+		raw, _ := json.Marshal(delta)
+		for _, leaked := range []string{"Thị Bích", "Văn Cường", "Bích", "Cường"} {
+			if strings.Contains(string(raw), leaked) {
+				t.Errorf("%s delta carries %q: %s", what, leaked, raw)
+			}
+		}
+	}
+
+	t.Run("household business: create, edit, delete masked", func(t *testing.T) {
+		uc, repo, d, ctx := newAssetUseCase(t)
+		repo.types["ho-kinh-doanh"] = true
+		in := validInput()
+		in.AssetTypeCode, in.Name, in.CustomValues, in.TaxCode = "ho-kinh-doanh", owner, nil, ""
+		a, err := uc.Create(ctx, in, assetActor())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := uc.Update(ctx, a.ID, MapAssetPatch{Name: strp(renamed)}, assetActor()); err != nil {
+			t.Fatal(err)
+		}
+		if err := uc.Delete(ctx, a.ID, "trùng hồ sơ", assetActor()); err != nil {
+			t.Fatal(err)
+		}
+		entries := d.audits(t)
+		if len(entries) != 3 {
+			t.Fatalf("%d entries, want create + edit + delete", len(entries))
+		}
+		created, edited, deleted := entries[0].delta, entries[1].delta, entries[2].delta
+		noRaw(t, "create", created)
+		noRaw(t, "edit", edited)
+		noRaw(t, "delete", deleted)
+		if got := created["sau"].(map[string]any)["name"]; got != "Tạp h. T. T. B." {
+			t.Errorf("create name = %v", got)
+		}
+		if b, a := edited["truoc"].(map[string]any)["name"], edited["sau"].(map[string]any)["name"]; b != "Tạp h. T. T. B." || a != "Tạp h. T. V. C." {
+			t.Errorf("edit name = %v -> %v", b, a)
+		}
+		if got := deleted["truoc"].(map[string]any)["name"]; got != "Tạp h. T. V. C." {
+			t.Errorf("delete name = %v", got)
+		}
+	})
+
+	t.Run("enterprise: name kept whole", func(t *testing.T) {
+		uc, _, d, ctx := newAssetUseCase(t)
+		a := createOne(t, uc, ctx)
+		if _, _, err := uc.Update(ctx, a.ID, MapAssetPatch{Name: strp("Công ty CP Dệt Hà Lam")}, assetActor()); err != nil {
+			t.Fatal(err)
+		}
+		entries := d.audits(t)
+		if got := entries[0].delta["sau"].(map[string]any)["name"]; got != "Công ty TNHH May Thăng Bình" {
+			t.Errorf("create name = %v — a company name is not personal data", got)
+		}
+		e := entries[1].delta
+		if b, a := e["truoc"].(map[string]any)["name"], e["sau"].(map[string]any)["name"]; b != "Công ty TNHH May Thăng Bình" || a != "Công ty CP Dệt Hà Lam" {
+			t.Errorf("edit name = %v -> %v", b, a)
+		}
+	})
+
+	t.Run("moved into the household group: each side masked by its own group", func(t *testing.T) {
+		uc, repo, d, ctx := newAssetUseCase(t)
+		repo.types["ho-kinh-doanh"] = true
+		a := createOne(t, uc, ctx)
+		if _, _, err := uc.Update(ctx, a.ID, MapAssetPatch{AssetTypeCode: strp("ho-kinh-doanh"), Name: strp(owner)}, assetActor()); err != nil {
+			t.Fatal(err)
+		}
+		e := d.audits(t)[1].delta
+		if b, a := e["truoc"].(map[string]any)["name"], e["sau"].(map[string]any)["name"]; b != "Công ty TNHH May Thăng Bình" || a != "Tạp h. T. T. B." {
+			t.Errorf("edit name = %v -> %v", b, a)
+		}
+	})
 }
 
 func TestMapAssetUpdateRefusals(t *testing.T) {
@@ -408,7 +500,7 @@ func TestMapAssetUpdateRefusals(t *testing.T) {
 		"required removed":   {MapAssetPatch{CustomValues: map[string]json.RawMessage{"legal_form": json.RawMessage(`null`)}}, domain.ErrCustomValueRequired},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, err := uc.Update(ctx, a.ID, tc.p, assetActor()); !errors.Is(err, tc.want) {
+			if _, written, err := uc.Update(ctx, a.ID, tc.p, assetActor()); !errors.Is(err, tc.want) || written {
 				t.Fatalf("err = %v, want %v", err, tc.want)
 			}
 		})
@@ -417,7 +509,7 @@ func TestMapAssetUpdateRefusals(t *testing.T) {
 		t.Errorf("refusals wrote: updates=%d audits=%d", repo.updates, len(d.audits(t))-auditsBefore)
 	}
 	// Moving to ANOTHER live group: its own (empty) schema applies; the old values stay in the row.
-	got, err := uc.Update(ctx, a.ID, MapAssetPatch{AssetTypeCode: strp("cho")}, assetActor())
+	got, _, err := uc.Update(ctx, a.ID, MapAssetPatch{AssetTypeCode: strp("cho")}, assetActor())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -430,7 +522,7 @@ func TestMapAssetEditKeepsADisabledTypeItAlreadyHas(t *testing.T) {
 	uc, repo, _, ctx := newAssetUseCase(t)
 	a := createOne(t, uc, ctx)
 	repo.types["doanh-nghiep"] = false // the group was taken out of use after the asset was filed
-	if _, err := uc.Update(ctx, a.ID, MapAssetPatch{Name: strp("Tên mới")}, assetActor()); err != nil {
+	if _, _, err := uc.Update(ctx, a.ID, MapAssetPatch{Name: strp("Tên mới")}, assetActor()); err != nil {
 		t.Fatalf("editing an asset of a disabled group failed: %v", err)
 	}
 }
@@ -441,22 +533,22 @@ func TestMapAssetConfirmationSetsClearsAndIsIdempotent(t *testing.T) {
 	uc, repo, d, ctx := newAssetUseCase(t)
 	a := createOne(t, uc, ctx)
 
-	got, err := uc.SetConfirmation(ctx, a.ID, true, assetActor())
+	got, written, err := uc.SetConfirmation(ctx, a.ID, true, assetActor())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !got.Verified || got.VerifiedBy != assetActorCode || got.VerifiedAt == nil {
-		t.Fatalf("verified = %+v", got)
+	if !written || !got.Verified || got.VerifiedBy != assetActorCode || got.VerifiedAt == nil {
+		t.Fatalf("verified = %+v, written = %v", got, written)
 	}
-	if _, err := uc.SetConfirmation(ctx, a.ID, true, assetActor()); err != nil {
-		t.Fatal(err)
+	if _, written, err := uc.SetConfirmation(ctx, a.ID, true, assetActor()); err != nil || written {
+		t.Fatalf("same state again: written = %v, err = %v — must be false: no entry, so the reply is masked", written, err)
 	}
 	if repo.verifies != 1 {
 		t.Errorf("verifying a verified asset wrote again (%d)", repo.verifies)
 	}
-	got, err = uc.SetConfirmation(ctx, a.ID, false, assetActor())
-	if err != nil {
-		t.Fatal(err)
+	got, written, err = uc.SetConfirmation(ctx, a.ID, false, assetActor())
+	if err != nil || !written {
+		t.Fatalf("clear: written = %v, err = %v", written, err)
 	}
 	if got.Verified || got.VerifiedAt != nil || got.VerifiedBy != "" {
 		t.Errorf("cleared = %+v", got)

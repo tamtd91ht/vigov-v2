@@ -11,7 +11,7 @@ package http
 //
 // THE KEYS EXIST AND NONE WAS INVENTED (rule 5, invariant 3c): `asset.read` is the key of every read of
 // the economic map (map_assets.go), seeded at service-identity/migrations/0001_init.sql:287; `admin.lookup`
-// is the key H3 names ("Ai đặt") and the one every write of the map catalogue declares, seeded at :274.
+// is the key H3 names ("Ai đặt") and the one every write of the map catalogue declares, seeded at :281.
 //
 // NOT SET IS 200 {"configured": false}, NOT 404 — the repository's convention for a singleton not yet
 // saved (GET /api/v1/mail-settings). The page asks this on every open, and "no frame" is a designed

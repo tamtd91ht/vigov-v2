@@ -28,7 +28,11 @@ package http
 // MASKED unless the caller holds `asset.update` AND reads one asset's detail — and that full read is
 // itself audited (rule 6, invariant 7) before the body is written, the way petitions audit
 // `xem_day_du_nguoi_gui`. The list is ALWAYS masked: it is a register many rows at a time, and an
-// officer who needs a number opens the record. The map points carry no personal field at all.
+// officer who needs a number opens the record. The map points carry no personal field at all. A WRITE
+// reply (create, edit, confirmation) is unmasked ONLY when the use case actually wrote — its own entry,
+// same transaction, records the act; a no-op wrote no entry, so it answers masked like the detail
+// without a full view. `address` and the coordinates are never masked, for any group: ADR 0072 sửa đổi
+// 04/10/2026 — chủ dự án chốt hộ kinh doanh hiển thị như doanh nghiệp.
 
 import (
 	"context"
@@ -64,9 +68,11 @@ type MapAssetReader interface {
 // it (rule 6, invariant 3) — RecordFullView included. *app.MapAssets satisfies it.
 type MapAssetWriter interface {
 	Create(ctx context.Context, in app.MapAssetInput, actor audit.Actor) (domain.MapAsset, error)
-	Update(ctx context.Context, id string, p app.MapAssetPatch, actor audit.Actor) (domain.MapAsset, error)
+	// Update and SetConfirmation report `written`: true only when the row changed AND its entry is in the
+	// same transaction. It decides whether the reply may be unmasked.
+	Update(ctx context.Context, id string, p app.MapAssetPatch, actor audit.Actor) (row domain.MapAsset, written bool, err error)
 	Delete(ctx context.Context, id, reason string, actor audit.Actor) error
-	SetConfirmation(ctx context.Context, id string, verified bool, actor audit.Actor) (domain.MapAsset, error)
+	SetConfirmation(ctx context.Context, id string, verified bool, actor audit.Actor) (row domain.MapAsset, written bool, err error)
 	RecordFullView(ctx context.Context, a domain.MapAsset, actor audit.Actor) error
 }
 
@@ -712,7 +718,7 @@ func (h *mapAssetHandler) UpdateMapAsset(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	// Scoped in the use case: app.MapAssets opens db.For(ctx).Tx.
-	row, err := h.d.Writer.Update(r.Context(), r.PathValue("id"), app.MapAssetPatch{
+	row, written, err := h.d.Writer.Update(r.Context(), r.PathValue("id"), app.MapAssetPatch{
 		AssetTypeCode: in.AssetTypeCode, Name: in.Name, Address: in.Address, ResidentialUnitID: in.ResidentialUnitID,
 		Lat: in.Lat, Lng: in.Lng, Representative: in.Representative, Phone: in.Phone, Status: in.Status,
 		TaxCode: in.TaxCode, IndustryCode: in.IndustryCode, EmployeeCount: in.EmployeeCount,
@@ -722,9 +728,12 @@ func (h *mapAssetHandler) UpdateMapAsset(w http.ResponseWriter, r *http.Request)
 		h.writeError(w, r, "sửa", err)
 		return
 	}
-	// UNMASKED for the editor who holds asset.update — the form re-renders from it, and a mask saved back
-	// would overwrite the real value. The edit's own entry, same transaction, names the officer.
-	vietJSON(w, http.StatusOK, mapAssetToOut(row, true))
+	// UNMASKED ONLY WHEN THE EDIT WROTE: its own entry, same transaction, names the officer. A no-op
+	// (`{}`, or every value unchanged) wrote no entry — answering it unmasked would be a full read of the
+	// representative, phone and tax code with no trail (rule 6, invariant 7), reachable by sending `{}`.
+	// The form treats `masked: true` as "do not send these fields back", so a mask is never saved over
+	// the real value.
+	vietJSON(w, http.StatusOK, mapAssetToOut(row, written))
 }
 
 // DeleteMapAsset — DELETE /api/v1/map-assets/{id}. Soft delete; 204, no body.
@@ -763,12 +772,13 @@ func (h *mapAssetHandler) SetMapAssetConfirmation(w http.ResponseWriter, r *http
 		return
 	}
 	// Scoped in the use case: app.MapAssets opens db.For(ctx).Tx.
-	row, err := h.d.Writer.SetConfirmation(r.Context(), r.PathValue("id"), *in.Verified, actor)
+	row, written, err := h.d.Writer.SetConfirmation(r.Context(), r.PathValue("id"), *in.Verified, actor)
 	if err != nil {
 		h.writeError(w, r, "xác minh", err)
 		return
 	}
-	vietJSON(w, http.StatusOK, mapAssetToOut(row, true))
+	// Same rule as the PATCH: the same state twice wrote no entry, so it answers masked.
+	vietJSON(w, http.StatusOK, mapAssetToOut(row, written))
 }
 
 // --- helpers -------------------------------------------------------------------------------------

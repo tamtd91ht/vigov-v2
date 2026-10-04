@@ -38,6 +38,9 @@ type fakeMapAssets struct {
 	row                              domain.MapAsset
 	seed                             app.MapAssetTypeSeedResult
 
+	// noOp makes Update report "nothing written" — what the use case answers for `{}` or unchanged values.
+	noOp bool
+
 	calls        int
 	fullViews    int
 	lastCommune  tenant.ID
@@ -122,10 +125,10 @@ func (f *fakeMapAssets) Create(ctx context.Context, in app.MapAssetInput, actor 
 	return f.row, f.writeErr
 }
 
-func (f *fakeMapAssets) Update(ctx context.Context, _ string, p app.MapAssetPatch, actor audit.Actor) (domain.MapAsset, error) {
+func (f *fakeMapAssets) Update(ctx context.Context, _ string, p app.MapAssetPatch, actor audit.Actor) (domain.MapAsset, bool, error) {
 	f.note(ctx)
 	f.lastPatch, f.lastActor = p, actor
-	return f.row, f.writeErr
+	return f.row, f.writeErr == nil && !f.noOp, f.writeErr
 }
 
 func (f *fakeMapAssets) Delete(ctx context.Context, id, _ string, actor audit.Actor) error {
@@ -138,12 +141,14 @@ func (f *fakeMapAssets) Delete(ctx context.Context, id, _ string, actor audit.Ac
 	return nil
 }
 
-func (f *fakeMapAssets) SetConfirmation(ctx context.Context, _ string, verified bool, actor audit.Actor) (domain.MapAsset, error) {
+func (f *fakeMapAssets) SetConfirmation(ctx context.Context, _ string, verified bool, actor audit.Actor) (domain.MapAsset, bool, error) {
 	f.note(ctx)
 	f.lastVerified, f.lastActor = &verified, actor
 	r := f.row
+	// The use case's rule: the same state twice writes and audits nothing.
+	written := f.writeErr == nil && r.Verified != verified
 	r.Verified = verified
-	return r, f.writeErr
+	return r, written, f.writeErr
 }
 
 func (f *fakeMapAssets) RecordFullView(ctx context.Context, _ domain.MapAsset, actor audit.Actor) error {
@@ -270,7 +275,7 @@ func mapAssetRoutes() []mapAssetRoute {
 func TestMapAssetRoutesAskForSeededKeys(t *testing.T) {
 	// LITERALS: a fake checker grants any string, so a key the `quyen` table lacks would stay green here
 	// while answering 403 to every account (rule 5, invariant 3c). asset.read / asset.update are seeded at
-	// service-identity/migrations/0001_init.sql:287-288, admin.lookup at :274.
+	// service-identity/migrations/0001_init.sql:287-288, admin.lookup at :281.
 	for _, tc := range mapAssetRoutes() {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newMapAssetServer(t)
@@ -561,6 +566,71 @@ func TestMapAssetWriteBodiesAndRefusals(t *testing.T) {
 	if s.fake.lastVerified == nil || *s.fake.lastVerified {
 		t.Error("verified:false did not reach the use case as false")
 	}
+}
+
+// A write reply is UNMASKED only when the use case wrote — its own entry, same transaction, records the
+// act. A no-op wrote no entry, so an unmasked reply would be an untraced full read of the representative,
+// phone and tax code: anybody holding asset.update could read them all by PATCHing `{}`.
+func TestMapAssetWriteReplyIsUnmaskedOnlyWhenWritten(t *testing.T) {
+	decode := func(t *testing.T, w *httptest.ResponseRecorder) map[string]any {
+		t.Helper()
+		doiMa(t, w, http.StatusOK)
+		var got map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	masked := func(t *testing.T, got map[string]any) {
+		t.Helper()
+		// The same masking as GET detail without asset.update.
+		if got["masked"] != true || got["phone"] != "09****0000" || got["tax_code"] != "010****567" ||
+			got["representative"] != "Nguyễn V. H." {
+			t.Errorf("no-op reply = %v — want masked", got)
+		}
+	}
+
+	t.Run("PATCH {} is masked and audits nothing", func(t *testing.T) {
+		s := newMapAssetServer(t)
+		s.grant(xaA, "asset.update")
+		s.fake.noOp = true
+		masked(t, decode(t, s.call(t, http.MethodPatch, hostA, "/api/v1/map-assets/ma-a-1", canBoGhi(xaA), `{}`)))
+		if s.fake.fullViews != 0 {
+			t.Error("a no-op PATCH recorded a full view")
+		}
+	})
+	t.Run("confirmation with the value it already has is masked", func(t *testing.T) {
+		s := newMapAssetServer(t)
+		s.grant(xaA, "asset.update")
+		// The fixture row is verified already.
+		masked(t, decode(t, s.call(t, http.MethodPost, hostA, "/api/v1/map-assets/ma-a-1/confirmation", canBoGhi(xaA), `{"verified":true}`)))
+	})
+	t.Run("a real edit is unmasked", func(t *testing.T) {
+		s := newMapAssetServer(t)
+		s.grant(xaA, "asset.update")
+		got := decode(t, s.call(t, http.MethodPatch, hostA, "/api/v1/map-assets/ma-a-1", canBoGhi(xaA), `{"name":"Tên mới"}`))
+		if got["masked"] != false || got["phone"] != "0900000000" || got["tax_code"] != "0101234567" {
+			t.Errorf("written reply = %v — want unmasked", got)
+		}
+	})
+	t.Run("a real confirmation change is unmasked", func(t *testing.T) {
+		s := newMapAssetServer(t)
+		s.grant(xaA, "asset.update")
+		got := decode(t, s.call(t, http.MethodPost, hostA, "/api/v1/map-assets/ma-a-1/confirmation", canBoGhi(xaA), `{"verified":false}`))
+		if got["masked"] != false || got["phone"] != "0900000000" {
+			t.Errorf("written reply = %v — want unmasked", got)
+		}
+	})
+	t.Run("address and coordinates are never masked", func(t *testing.T) {
+		// ADR 0072 sửa đổi 04/10/2026 — chủ dự án chốt hộ kinh doanh hiển thị như doanh nghiệp.
+		s := newMapAssetServer(t)
+		s.grant(xaA, "asset.update")
+		s.fake.noOp = true
+		got := decode(t, s.call(t, http.MethodPatch, hostA, "/api/v1/map-assets/ma-a-1", canBoGhi(xaA), `{}`))
+		if got["address"] != "Cụm công nghiệp Hà Lam" || got["lat"] != 15.730507 || got["lng"] != 108.37811 {
+			t.Errorf("masked reply = %v — address and pin stay whole", got)
+		}
+	})
 }
 
 func TestMapAssetErrorMapping(t *testing.T) {

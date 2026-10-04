@@ -24,6 +24,7 @@ import (
 // is no signature that writes the row outside the one its entry is in.
 type MapFrameRepo interface {
 	Get(ctx context.Context) (domain.MapFrame, error)
+	LockCommuneFrame(ctx context.Context, tx *store.ScopedTx) error
 	ForUpdate(ctx context.Context, tx *store.ScopedTx) (domain.MapFrame, bool, error)
 	Upsert(ctx context.Context, tx *store.ScopedTx, f domain.MapFrame, by string) (domain.MapFrame, error)
 }
@@ -86,6 +87,11 @@ func (uc *MapFrames) Save(ctx context.Context, in MapFrameInput, actor audit.Act
 	var saved domain.MapFrame
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		// Scoped: tx comes from uc.db.For(ctx).Tx — tenant_id is $1 of every statement.
+		// The commune's lock FIRST: FOR UPDATE cannot lock a row that does not exist yet, so without it
+		// two first saves both read "not found" and the second entry loses its `truoc`.
+		if err := uc.repo.LockCommuneFrame(ctx, tx); err != nil {
+			return err
+		}
 		before, found, err := uc.repo.ForUpdate(ctx, tx)
 		if err != nil {
 			return err

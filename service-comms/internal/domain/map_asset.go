@@ -357,13 +357,16 @@ func NormalizeMapAssetFilter(f MapAssetFilter) (MapAssetFilter, error) {
 				return MapAssetFilter{}, fmt.Errorf("%w: asset_type_code", ErrMapAssetFilterInvalid)
 			}
 			if !seen[code] {
+				// Refused AT the first code past the cap, not after the loop: a query string of thousands
+				// of distinct codes must not cost thousands of normalisations and a map that large before
+				// it is turned away.
+				if len(out.AssetTypeCodes) == MapAssetFilterTypesMax {
+					return MapAssetFilter{}, fmt.Errorf("%w: asset_type_code quá nhiều", ErrMapAssetFilterInvalid)
+				}
 				seen[code] = true
 				out.AssetTypeCodes = append(out.AssetTypeCodes, code)
 			}
 		}
-	}
-	if len(out.AssetTypeCodes) > MapAssetFilterTypesMax {
-		return MapAssetFilter{}, fmt.Errorf("%w: asset_type_code quá nhiều", ErrMapAssetFilterInvalid)
 	}
 	if s := strings.TrimSpace(f.Status); s != "" {
 		if !ValidMapAssetStatus(s) {

@@ -216,6 +216,46 @@ func TestMapFrameChangeAuditsBeforeAndAfter(t *testing.T) {
 	}
 }
 
+func TestMapFrameSaveTakesTheCommuneLockBeforeReading(t *testing.T) {
+	// FOR UPDATE cannot lock a row that is not there yet: on a FIRST save only the commune's advisory
+	// lock makes a concurrent first save wait and then read the row, so its entry carries `truoc`.
+	// The order is the property — a lock taken after the read serialises nothing that matters.
+	d := &frameDB{}
+	uc, ctx := newMapFrameUseCase(t, d)
+	if _, err := uc.Save(ctx, MapFrameInput{CenterLat: 16, CenterLng: 108, RadiusKm: 10}, staffActor); err != nil {
+		t.Fatal(err)
+	}
+	lockAt, readAt := -1, -1
+	for i, s := range d.stmts {
+		switch {
+		case lockAt < 0 && strings.Contains(s.sql, "pg_advisory_xact_lock"):
+			lockAt = i
+			if !strings.Contains(s.sql, "'t:' || $1 || ':map-frame'") || len(s.args) != 1 || s.args[0] != string(xaA) {
+				t.Errorf("lock = %q %v — want key t:<commune>:map-frame, the commune as $1", s.sql, s.args)
+			}
+		case readAt < 0 && strings.Contains(s.sql, "FOR UPDATE"):
+			readAt = i
+		}
+	}
+	if lockAt < 0 || readAt < 0 || lockAt > readAt {
+		t.Fatalf("lock at %d, FOR UPDATE read at %d — the lock must come first", lockAt, readAt)
+	}
+	if d.begun != 1 || d.committed != 1 {
+		t.Errorf("tx begun/committed = %d/%d — the lock must sit in the save's own transaction", d.begun, d.committed)
+	}
+}
+
+func TestMapFrameLockFailureWritesNothing(t *testing.T) {
+	d := &frameDB{failOnContain: "pg_advisory_xact_lock"}
+	uc, ctx := newMapFrameUseCase(t, d)
+	if _, err := uc.Save(ctx, MapFrameInput{CenterLat: 16, CenterLng: 108, RadiusKm: 10}, staffActor); err == nil {
+		t.Fatal("saved without the commune's lock")
+	}
+	if len(d.with("FOR UPDATE")) != 0 || len(d.with("INSERT INTO")) != 0 || d.committed != 0 {
+		t.Error("the save went on after the lock failed")
+	}
+}
+
 func TestMapFrameUnchangedSaveWritesNothing(t *testing.T) {
 	d := &frameDB{row: &domain.MapFrame{CenterLat: 16, CenterLng: 108, RadiusKm: 10, CreatedBy: "CB-00001", UpdatedBy: "CB-00001"}}
 	uc, ctx := newMapFrameUseCase(t, d)

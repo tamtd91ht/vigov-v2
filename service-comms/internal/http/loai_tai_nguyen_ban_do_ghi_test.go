@@ -311,7 +311,7 @@ func TestKhoaQuyenDungChuoiCuaBangQuyen(t *testing.T) {
 	// suite green, because a route holding a key the `quyen` table lacks answers 403 to EVERY
 	// account, forever, and nothing says so (rule 5, invariant 3c).
 	//
-	// `admin.lookup` is seeded at service-identity/migrations/0001_init.sql:274 and listed as
+	// `admin.lookup` is seeded at service-identity/migrations/0001_init.sql:281 and listed as
 	// "Quản lý danh mục" at docs/ui-ux/14-cau-hinh.md:109 — the permission matrix row for the very
 	// `Danh mục` tab (§5) these routes serve.
 	//

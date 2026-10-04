@@ -75,9 +75,27 @@ func (s *MapFrameStore) Get(ctx context.Context) (domain.MapFrame, error) {
 	return f, nil
 }
 
+// LockCommuneFrame takes the commune's map-frame lock for the rest of the transaction, keyed
+// `t:<tenant_id>:map-frame` (rule 1, invariant 7).
+//
+// WHY AN ADVISORY LOCK AND NOT ONLY FOR UPDATE: FOR UPDATE locks a row that EXISTS. On the commune's
+// first save there is none, so two administrators saving at once both read "not found", both upsert,
+// and the second entry has no `truoc` — the trail says the frame was set from nothing when it overwrote
+// the first one's values. Taken BEFORE ForUpdate, this lock makes the second save wait for the first
+// to commit, and then its read sees the row. Transaction-scoped: released at commit or rollback, never
+// held across requests, never touching another commune. Same shape as LockCatalogueForSeed.
+func (s *MapFrameStore) LockCommuneFrame(ctx context.Context, tx *store.ScopedTx) error {
+	const stmt = `SELECT pg_advisory_xact_lock(hashtextextended('t:' || $1 || ':map-frame', 0))`
+	if _, err := tx.Exec(ctx, stmt, string(tx.TenantID())); err != nil {
+		return fmt.Errorf("map_frame: khoá khung bản đồ của xã: %w", err)
+	}
+	return nil
+}
+
 // ForUpdate reads the row and locks it until the transaction ends; found is false when the commune
 // has no row yet. The lock is what makes "nothing moved → no write, no entry" and the audit's
-// `truoc` side true for two administrators saving at once.
+// `truoc` side true for two administrators saving at once — once the row exists; the first save needs
+// LockCommuneFrame before it.
 func (s *MapFrameStore) ForUpdate(ctx context.Context, tx *store.ScopedTx) (domain.MapFrame, bool, error) {
 	// Scoped: tx.Query adds `WHERE tenant_id = $1`, bound from tx.TenantID().
 	rows, err := tx.Query(ctx, mapFrameColumns, "map_frame", "FOR UPDATE")
