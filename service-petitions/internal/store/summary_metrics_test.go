@@ -36,7 +36,10 @@ import (
 type countDriver struct {
 	stmts []lenhGia
 	row   []driver.Value
-	err   error
+	// rows, when set, is answered INSTEAD of row — for the grouped statement, which yields one row per
+	// department plus the grand row.
+	rows [][]driver.Value
+	err  error
 }
 
 func (d *countDriver) Connect(context.Context) (driver.Conn, error) { return &countConn{d: d}, nil }
@@ -59,7 +62,33 @@ func (c *countConn) QueryContext(_ context.Context, q string, args []driver.Name
 	if c.d.err != nil {
 		return nil, c.d.err
 	}
+	if c.d.rows != nil {
+		return &multiRows{rows: c.d.rows}, nil
+	}
 	return &countRows{row: c.d.row}, nil
+}
+
+// multiRows answers several rows of the same width.
+type multiRows struct {
+	rows [][]driver.Value
+	i    int
+}
+
+func (r *multiRows) Columns() []string {
+	cols := make([]string, len(r.rows[0]))
+	for i := range cols {
+		cols[i] = "c"
+	}
+	return cols
+}
+func (r *multiRows) Close() error { return nil }
+func (r *multiRows) Next(dest []driver.Value) error {
+	if r.i >= len(r.rows) {
+		return io.EOF
+	}
+	copy(dest, r.rows[r.i])
+	r.i++
+	return nil
 }
 
 type countRows struct {

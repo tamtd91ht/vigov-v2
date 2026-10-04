@@ -35,9 +35,12 @@ import (
 // in routes.go states: a route depending on a wider surface than it uses is how the next person
 // justifies reaching through it.
 type (
-	// TaskSummaryReader — *petstore.NhiemVuStore satisfies it.
+	// TaskSummaryReader — *petstore.NhiemVuStore satisfies it. TaskUnitSummary is the same register's
+	// figures split by department (/bao-cao); ONE reader for both, because both are counts over the
+	// one table through the one predicate set — a second field would be a second wiring of one store.
 	TaskSummaryReader interface {
 		TaskSummary(ctx context.Context, p domain.Period) (domain.TaskSummary, error)
+		TaskUnitSummary(ctx context.Context, p domain.Period) (domain.TaskUnitSummary, error)
 	}
 
 	// CitizenReportSummaryReader — *petstore.PhieuPhanAnhStore satisfies it. `restricted` is the
@@ -72,6 +75,30 @@ type taskSummaryOut struct {
 	Completed    int `json:"completed"`
 	OnTimeSample int `json:"on_time_sample"`
 	OnTime       int `json:"on_time"`
+}
+
+// taskUnitSummaryOut is GET /api/v1/task-unit-summary — the /bao-cao table "Tình hình thực hiện theo
+// bộ phận". `units` is [] — never null — when no task is in scope.
+type taskUnitSummaryOut struct {
+	// AsOf is the database instant the `overdue` figures were measured at.
+	AsOf  time.Time        `json:"as_of"`
+	Units []taskUnitRowOut `json:"units"`
+}
+
+// taskUnitRowOut is one department. ONLY DEPARTMENTS WITH A TASK IN SCOPE are listed; the client adds
+// names and zero rows from GET /api/v1/org-units.
+//
+//	total                                 tasks in hand during [from, to)
+//	completed · on_time_sample · on_time  period — the task-summary figures of the same names
+//	overdue                               stock — task-summary's `overdue`, as of `as_of`
+type taskUnitRowOut struct {
+	// OrgUnitID is identity's `bo_phan` id; "" for tasks with no department ("— Chưa xác định —").
+	OrgUnitID    string `json:"org_unit_id"`
+	Total        int    `json:"total"`
+	Completed    int    `json:"completed"`
+	OnTimeSample int    `json:"on_time_sample"`
+	OnTime       int    `json:"on_time"`
+	Overdue      int    `json:"overdue"`
 }
 
 // citizenReportSummaryOut is GET /api/v1/citizen-report-summary. The field names ARE the `metric`
@@ -277,6 +304,35 @@ func (h *Handler) TaskSummary(w http.ResponseWriter, r *http.Request) {
 		OnTimeSample: s.OnTimeSample,
 		OnTime:       s.OnTime,
 	})
+}
+
+// TaskUnitSummary serves GET /api/v1/task-unit-summary. Same period parsing and the same refusals as
+// TaskSummary. NO AUDIT ENTRY, for the same reason: counts over one commune's register, no personal data.
+func (h *Handler) TaskUnitSummary(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	p, err := parsePeriod(r.URL.Query())
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
+		return
+	}
+	s, err := h.d.TaskSummary.TaskUnitSummary(ctx, p)
+	if err != nil {
+		h.d.Log.Error("nhiệm vụ theo bộ phận: lỗi hệ thống", "xa", string(tenant.MustFrom(ctx)), "err", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return
+	}
+	out := taskUnitSummaryOut{AsOf: s.AsOf, Units: make([]taskUnitRowOut, 0, len(s.Units))}
+	for _, u := range s.Units {
+		out.Units = append(out.Units, taskUnitRowOut{
+			OrgUnitID:    u.OrgUnitID,
+			Total:        u.Total,
+			Completed:    u.Completed,
+			OnTimeSample: u.OnTimeSample,
+			OnTime:       u.OnTime,
+			Overdue:      u.Overdue,
+		})
+	}
+	vietJSON(w, http.StatusOK, out)
 }
 
 // CitizenReportSummary serves GET /api/v1/citizen-report-summary.

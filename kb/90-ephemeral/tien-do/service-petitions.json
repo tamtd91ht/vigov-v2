@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-petitions",
-  "cap_nhat": "2026-10-02",
+  "cap_nhat": "2026-10-04",
   "muc": [
     {
       "id": "so-tay-lanh-dao-bo-loc-may-chu",
@@ -565,6 +565,14 @@
       "no_confirm": [],
       "tiep_theo": "Web Admin còn nợ nhãn 'nhap-ho' → 'Nhập hộ phản ánh' ở nhan-phieu.ts:892-910 (thẻ Web Admin sau khi màn Phản ánh được làm lại). Chú thích câu hỏi 4 của migration 0029 còn nói ứng dụng đếm mọi lượt — đã cũ, không sửa vì migration có checksum. Phiếu đã mở lại mà không có dòng mở lại: ứng dụng từ chối (500), trigger coi như chưa mở lại.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "bao-cao-nhiem-vu-theo-bo-phan",
+      "menu": "bao-cao",
+      "viec": "GET /api/v1/task-unit-summary?from&to — số liệu nhiệm vụ theo bộ phận cho bảng 'Tình hình thực hiện theo bộ phận' trên /bao-cao (ADR 0053 sửa đổi 04/10/2026 B3): mỗi bo_phan_id (rỗng = chưa xác định) số việc đang nắm trong kỳ, hoàn thành, mẫu đúng hạn, đúng hạn, quá hạn (hiện trạng). Khoá task.read + report.read",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Một câu GROUP BY GROUPING SETS dùng lại nguyên văn taskMetricCondition (store/task_summary.go); vị từ mới taskInHandCondition cho 'Tổng việc'. go build/vet/test ./... xanh (main session kiểm lại 04/10/2026). Test pg task_unit_summary_pg_test.go CHƯA CHẠY — máy không có VIGOV_TEST_DSN.",
+      "tiep_theo": "Chạy task_unit_summary_pg_test.go với PostgreSQL thật (GROUPING SETS/GROUPING() mới chỉ suy luận) rồi đổi sang xong. Phiên chéo xã trả 401 (authz của service này), không phải 403 như thẻ ghi."
     }
   ]
 }

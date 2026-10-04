@@ -2197,6 +2197,26 @@ func Register(mux *http.ServeMux, d Deps) {
 			authz.RequirePermission(d.Checker, "report.read")(
 				http.HandlerFunc(h.TaskSummary))))
 
+	// THE /bao-cao TABLE "Tình hình thực hiện theo bộ phận" — the task figures above, split by
+	// `bo_phan_id`, counted live in this service like /tong-quan (ADR 0053 §1). The SAME two keys,
+	// nested the same way, for the same reason (ADR 0053 §2). Every department with a task in scope is
+	// listed — no ranking, no top-N; tasks with no department are one row with `org_unit_id: ""`.
+	//
+	// @summary  Tình hình thực hiện nhiệm vụ theo bộ phận trong kỳ [from, to) — mỗi bộ phận: số việc đang nắm trong kỳ · hoàn thành · mẫu đúng hạn · đúng hạn (theo kỳ) và quá hạn (hiện trạng)
+	// @screen   13-bao-cao §5
+	// 400: `from`/`to` missing, not RFC 3339, or from >= to. Counts only — names and zero rows come from
+	// GET /api/v1/org-units.
+	//
+	// @reply    200 taskUnitSummaryOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/task-unit-summary",
+		authz.RequirePermission(d.Checker, "task.read")(
+			authz.RequirePermission(d.Checker, "report.read")(
+				http.HandlerFunc(h.TaskUnitSummary))))
+
 	// `feedback.restricted` absent -> the `can-bo` field is excluded from EVERY figure, as it is from the
 	// register list the figures drill down into. It changes no status code.
 	//

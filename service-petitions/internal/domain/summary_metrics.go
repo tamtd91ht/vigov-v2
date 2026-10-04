@@ -97,6 +97,34 @@ type TaskSummary struct {
 	OnTime       int
 }
 
+// TaskUnitFigures is one department's (`bo_phan`) row of the /bao-cao table "Tình hình thực hiện theo
+// bộ phận". Counts only, like TaskSummary.
+//
+// OrgUnitID IS EMPTY FOR TASKS WITH NO DEPARTMENT — "— Chưa xác định —" is a real state (migration
+// 0006, `bo_phan_id` nullable), and dropping those rows would make the table add up to less than the
+// register. Names are NOT here: they are identity's, and the client joins them from GET
+// /api/v1/org-units.
+type TaskUnitFigures struct {
+	OrgUnitID string
+	// Total is the tasks IN HAND during the period — see store.taskInHandCondition.
+	Total int
+	// Completed, OnTimeSample and OnTime are TaskSummary's period figures, split by department.
+	Completed    int
+	OnTimeSample int
+	OnTime       int
+	// Overdue is TaskSummary's stock figure (as of AsOf), split by department.
+	Overdue int
+}
+
+// TaskUnitSummary is the per-department table. Units holds only departments with at least one task in
+// one of the figures; the client adds zero rows for the rest.
+type TaskUnitSummary struct {
+	// AsOf is the DATABASE instant the overdue figure compared deadlines with (`now()` of the
+	// statement) — the same clock the deadline was stored against.
+	AsOf  time.Time
+	Units []TaskUnitFigures
+}
+
 // --- citizen reports -------------------------------------------------------------------------------
 
 // CitizenReportMetric names one figure of the petition register. Same contract as TaskMetric: the

@@ -35,6 +35,12 @@ type taskSummaryFake struct {
 	byTenant map[tenant.ID]domain.TaskSummary
 	calls    int
 	period   domain.Period
+
+	// The per-department read (/bao-cao). Its own counter, so a test of one route cannot be satisfied
+	// by a call to the other.
+	unitsByTenant map[tenant.ID]domain.TaskUnitSummary
+	unitCalls     int
+	unitPeriod    domain.Period
 }
 
 func (f *taskSummaryFake) TaskSummary(ctx context.Context, p domain.Period) (domain.TaskSummary, error) {
@@ -43,12 +49,28 @@ func (f *taskSummaryFake) TaskSummary(ctx context.Context, p domain.Period) (dom
 	return f.byTenant[tenant.MustFrom(ctx)], nil
 }
 
+func (f *taskSummaryFake) TaskUnitSummary(ctx context.Context, p domain.Period) (domain.TaskUnitSummary, error) {
+	f.unitCalls++
+	f.unitPeriod = p
+	return f.unitsByTenant[tenant.MustFrom(ctx)], nil
+}
+
+var unitsAsOf = time.Date(2026, 10, 4, 3, 0, 0, 0, time.UTC)
+
 // Commune A and commune B carry DIFFERENT, all-distinct figures, so a leak and a field swap both show
 // as wrong numbers.
 func taskSummarySample() *taskSummaryFake {
 	return &taskSummaryFake{byTenant: map[tenant.ID]domain.TaskSummary{
 		xaA: {InProgress: 24, Overdue: 14, Suspended: 3, Completed: 9, OnTimeSample: 7, OnTime: 5},
 		xaB: {InProgress: 1, Overdue: 2, Suspended: 4, Completed: 8, OnTimeSample: 16, OnTime: 32},
+	}, unitsByTenant: map[tenant.ID]domain.TaskUnitSummary{
+		xaA: {AsOf: unitsAsOf, Units: []domain.TaskUnitFigures{
+			{OrgUnitID: "", Total: 3, Completed: 1, OnTimeSample: 1, OnTime: 0, Overdue: 2},
+			{OrgUnitID: "bp-van-phong", Total: 11, Completed: 7, OnTimeSample: 6, OnTime: 5, Overdue: 4},
+		}},
+		xaB: {AsOf: unitsAsOf, Units: []domain.TaskUnitFigures{
+			{OrgUnitID: "bp-xa-b", Total: 99, Completed: 98, OnTimeSample: 97, OnTime: 96, Overdue: 95},
+		}},
 	}}
 }
 
@@ -160,6 +182,8 @@ func overviewRoutes() []overviewRoute {
 	return []overviewRoute{
 		{"task-summary", "/api/v1/task-summary" + periodQuery, "task.read",
 			func(m *mayChu) int { return m.taskSummary.calls }},
+		{"task-unit-summary", "/api/v1/task-unit-summary" + periodQuery, "task.read",
+			func(m *mayChu) int { return m.taskSummary.unitCalls }},
 		{"citizen-report-summary", "/api/v1/citizen-report-summary" + periodQuery, "feedback.read",
 			func(m *mayChu) int { return m.reportSummary.calls }},
 		{"overdue-tasks", "/api/v1/overdue-tasks", "task.read",
@@ -273,6 +297,71 @@ func TestTaskSummaryReturnsOwnCommuneFiguresAndPeriod(t *testing.T) {
 	}
 }
 
+// TestTaskUnitSummaryReturnsOwnCommuneRows — commune A's rows only, the no-department row kept as
+// `org_unit_id: ""`, the exact key set per row, the period handed down unchanged, no ratio.
+func TestTaskUnitSummaryReturnsOwnCommuneRows(t *testing.T) {
+	m := dungMayChu(t)
+	grantBoth(m, t, "task.read", "report.read")
+	w := m.goi(t, http.MethodGet, hostA, "/api/v1/task-unit-summary"+periodQuery, canBoCuaXa(xaA))
+	doiMa(t, w, http.StatusOK)
+
+	var out struct {
+		AsOf  time.Time        `json:"as_of"`
+		Units []map[string]any `json:"units"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatalf("thân không phải JSON: %v — %s", err, w.Body.String())
+	}
+	if !out.AsOf.Equal(unitsAsOf) {
+		t.Errorf("as_of = %v, muốn %v", out.AsOf, unitsAsOf)
+	}
+	if len(out.Units) != 2 {
+		t.Fatalf("trả %d dòng, muốn 2 của xã A: %s", len(out.Units), w.Body.String())
+	}
+	if out.Units[0]["org_unit_id"] != "" || out.Units[0]["total"] != float64(3) || out.Units[0]["overdue"] != float64(2) {
+		t.Errorf("dòng chưa xác định bộ phận = %v", out.Units[0])
+	}
+	want := map[string]float64{"total": 11, "completed": 7, "on_time_sample": 6, "on_time": 5, "overdue": 4}
+	for k, v := range want {
+		if out.Units[1][k] != v {
+			t.Errorf("%s = %v, muốn %v", k, out.Units[1][k], v)
+		}
+	}
+	for _, u := range out.Units {
+		var keys []string
+		for k := range u {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		if got := strings.Join(keys, ","); got != "completed,on_time,on_time_sample,org_unit_id,overdue,total" {
+			t.Errorf("khoá của một dòng = %s", got)
+		}
+		if u["org_unit_id"] == "bp-xa-b" {
+			t.Error("bộ phận của xã B lọt vào bảng xã A")
+		}
+	}
+	if !m.taskSummary.unitPeriod.From.Equal(periodFrom) || !m.taskSummary.unitPeriod.To.Equal(periodTo) {
+		t.Errorf("kỳ xuống kho = %+v", m.taskSummary.unitPeriod)
+	}
+	for _, cam := range []string{"rate", "ratio", "percent", "rank"} {
+		if strings.Contains(w.Body.String(), cam) {
+			t.Errorf("phản hồi mang %q — chỉ số đếm, không xếp hạng", cam)
+		}
+	}
+}
+
+// TestTaskUnitSummaryEmptyIsArray — `units` is [] when nothing is in scope, never null.
+func TestTaskUnitSummaryEmptyIsArray(t *testing.T) {
+	m := dungMayChu(t)
+	m.taskSummary.unitsByTenant[xaA] = domain.TaskUnitSummary{AsOf: unitsAsOf}
+	grantBoth(m, t, "task.read", "report.read")
+	w := m.goi(t, http.MethodGet, hostA, "/api/v1/task-unit-summary"+periodQuery, canBoCuaXa(xaA))
+	doiMa(t, w, http.StatusOK)
+	if !strings.Contains(w.Body.String(), `"units":[]`) {
+		t.Errorf("thân = %s, muốn units là []", w.Body.String())
+	}
+}
+
 func TestCitizenReportSummaryFieldsAreMetrics(t *testing.T) {
 	m := dungMayChu(t)
 	grantBoth(m, t, "feedback.read", "report.read")
@@ -372,6 +461,7 @@ func TestSummaryPeriodRefused(t *testing.T) {
 	} {
 		for _, r := range []struct{ path, key string }{
 			{"/api/v1/task-summary", "task.read"},
+			{"/api/v1/task-unit-summary", "task.read"},
 			{"/api/v1/citizen-report-summary", "feedback.read"},
 		} {
 			t.Run(name+" "+r.path, func(t *testing.T) {
@@ -379,7 +469,7 @@ func TestSummaryPeriodRefused(t *testing.T) {
 				grantBoth(m, t, r.key, "report.read")
 				w := m.goi(t, http.MethodGet, hostA, r.path+q, canBoCuaXa(xaA))
 				doiMa(t, w, http.StatusBadRequest)
-				if m.taskSummary.calls+m.reportSummary.calls != 0 {
+				if m.taskSummary.calls+m.taskSummary.unitCalls+m.reportSummary.calls != 0 {
 					t.Error("kỳ sai mà vẫn chạm kho")
 				}
 			})

@@ -15,9 +15,11 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/vihat/vigov/service-petitions/internal/domain"
 )
@@ -191,6 +193,116 @@ func (s *NhiemVuStore) TaskSummary(ctx context.Context, p domain.Period) (domain
 		OnTimeSample: int(counts[4]),
 		OnTime:       int(counts[5]),
 	}, nil
+}
+
+// taskInHandCondition is the per-department table's `total`: tasks IN HAND at some point of [from, to)
+// — created before `to`, and either still not completed or completed at/after `from`.
+//
+// WHY THIS AND NOT "CREATED IN THE PERIOD": the table puts `completed` and `overdue` beside `total`, and
+// a leader reads them as parts of one workload. Counting only tasks created inside the period would
+// leave out the work a department carried in from before and finished inside it — `completed` would
+// then exceed `total` for any department that clears a backlog.
+//
+// NOT COMPLETED IS `trang_thai <> 'hoan-thanh'`, so a suspended (`tam-dung`) task is in hand: it is
+// still owed, only paused. A completed task always carries `ngay_hoan_thanh` (CHECK, migration 0006),
+// so the second branch cannot drop one through a NULL.
+//
+// NOT A domain.TaskMetric: it has no drill-down list yet, and adding it to TaskMetrics would change the
+// /tong-quan summary's columns. Soft-deleted rows are excluded by the caller's WHERE, like every other
+// figure here.
+func taskInHandCondition(from, to string) string {
+	return `(tao_luc < ` + to + ` AND (trang_thai <> '` + string(domain.HoanThanh) +
+		`' OR ngay_hoan_thanh >= ` + from + `))`
+}
+
+// taskUnitKey is the department a task row is grouped under. COALESCE SO "NO DEPARTMENT" IS ONE ROW:
+// the column is nullable TEXT with no CHECK against the empty string, and grouping the raw column would
+// split NULL and the empty string into two rows that the client renders under the same "— Chưa xác định —" label.
+const taskUnitKey = `COALESCE(bo_phan_id, '')`
+
+// taskUnitSummaryColumns is the SELECT list of TaskUnitSummary. Positional; the scan follows it.
+//
+// THE FIGURES ARE taskMetricCondition'S TEXT, NOT A RESPELLING — so the table's `completed`, `on_time`
+// and `overdue` summed over departments equal the /tong-quan tiles for the same period.
+func taskUnitSummaryColumns() string {
+	cols := "GROUPING(" + taskUnitKey + "), " + taskUnitKey +
+		", count(*) FILTER (WHERE " + taskInHandCondition("$2", "$3") + ")"
+	for _, m := range []domain.TaskMetric{domain.TaskCompleted, domain.TaskOnTimeSample, domain.TaskOnTime,
+		domain.TaskOverdue} {
+		cols += ", count(*) FILTER (WHERE " + taskMetricCondition(m, "$2", "$3") + ")"
+	}
+	return cols + ", now()"
+}
+
+// taskUnitSummaryTail restricts the rows to those counted by at least one figure, then groups.
+//
+// THE WHERE IS THE UNION OF THE FIGURES (on_time_sample and on_time are subsets of completed), so a
+// department appears only when it has something to show — the client fills the zero rows from the
+// unit list.
+//
+// GROUPING SETS WITH AN EMPTY SET: the `()` set yields one grand row EVEN WHEN NO ROW MATCHES, and that
+// row carries the statement's now(). Without it, a commune with no task in scope would get no `as_of`
+// at all, or one read from a second clock.
+func taskUnitSummaryTail() string {
+	return `AND deleted_at IS NULL AND (` + taskInHandCondition("$2", "$3") + ` OR ` +
+		taskMetricCondition(domain.TaskCompleted, "$2", "$3") + ` OR ` +
+		taskMetricCondition(domain.TaskOverdue, "", "") + `)` +
+		` GROUP BY GROUPING SETS ((` + taskUnitKey + `), ()) ORDER BY 1, 2`
+}
+
+// TaskUnitSummary counts the per-department figures of the commune in ONE statement, grouped by
+// `bo_phan_id` (skills/load-data-once) — never one count per department. Each task row counts once,
+// sub-tasks included as their own rows (ADR 0053 §4).
+//
+// The period has been validated by the caller; a zero one is refused here too, never read as "all
+// time".
+func (s *NhiemVuStore) TaskUnitSummary(ctx context.Context, p domain.Period) (domain.TaskUnitSummary, error) {
+	if _, err := domain.NewPeriod(p.From, p.To); err != nil {
+		return domain.TaskUnitSummary{}, fmt.Errorf("nhiem_vu: theo bộ phận: %w", err)
+	}
+	rows, err := s.db.For(ctx).Query(ctx, taskUnitSummaryColumns(), "nhiem_vu", taskUnitSummaryTail(),
+		p.From, p.To)
+	if err != nil {
+		return domain.TaskUnitSummary{}, fmt.Errorf("nhiem_vu: theo bộ phận: %w", err)
+	}
+	defer rows.Close()
+
+	out := domain.TaskUnitSummary{Units: []domain.TaskUnitFigures{}}
+	var sawGrand bool
+	for rows.Next() {
+		var (
+			grand  int64
+			unit   sql.NullString
+			counts [5]int64
+			asOf   time.Time
+		)
+		if err := rows.Scan(&grand, &unit, &counts[0], &counts[1], &counts[2], &counts[3], &counts[4],
+			&asOf); err != nil {
+			return domain.TaskUnitSummary{}, fmt.Errorf("nhiem_vu: theo bộ phận: đọc dòng: %w", err)
+		}
+		if grand != 0 {
+			// The `()` grouping set: totals over every department, read for its now() only.
+			sawGrand = true
+			out.AsOf = asOf
+			continue
+		}
+		out.Units = append(out.Units, domain.TaskUnitFigures{
+			OrgUnitID:    unit.String,
+			Total:        int(counts[0]),
+			Completed:    int(counts[1]),
+			OnTimeSample: int(counts[2]),
+			OnTime:       int(counts[3]),
+			Overdue:      int(counts[4]),
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return domain.TaskUnitSummary{}, fmt.Errorf("nhiem_vu: theo bộ phận: %w", err)
+	}
+	if !sawGrand {
+		// The empty grouping set always yields a row; none means the statement is not what was written.
+		return domain.TaskUnitSummary{}, errors.New("nhiem_vu: theo bộ phận: thiếu dòng tổng của câu đếm")
+	}
+	return out, nil
 }
 
 // OverdueQueueMax bounds the "Cần xử lý ngay" panel. The route clamps to it; the store refuses more,
