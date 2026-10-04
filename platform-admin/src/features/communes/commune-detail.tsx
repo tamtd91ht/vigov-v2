@@ -3,6 +3,7 @@
 import {
   Globe,
   Landmark,
+  MapPin,
   Pencil,
   Plus,
   Power,
@@ -41,6 +42,7 @@ import { canIssueQr, canManageCommune, canManageDomains, canManageMiniApps } fro
 
 import { StatusBadge } from "./commune-parts";
 import { LaunchLinkCard } from "./launch-link-card";
+import { MapFrameDefaultSection } from "./map-frame-default-section";
 import { MiniAppSection } from "./mini-app-section";
 
 /**
@@ -55,11 +57,12 @@ import { MiniAppSection } from "./mini-app-section";
  * server checks each call. Every write answers the commune as the registry now holds it, and that
  * answer replaces what is on screen: the page never patches its own copy.
  *
- * The page itself is a READ open to any `ops.*` key (ADR 0073 #1); so is its operator log (#2). The
- * QR card needs `ops.qr.issue`.
+ * The page itself is a READ open to any `ops.*` key (ADR 0073 #1); so is its operator log (#2) and the
+ * default map frame (ADR 0072 amendment 2, K1), whose edit control needs `ops.tenant.manage`. The QR
+ * card needs `ops.qr.issue`.
  *
  * LAYOUT (ADR 0068 look, presentation only): a page header with the commune's name, then one card
- * per concern — name and status, domains, Mini Apps, QR, operator log. The commune's name is printed exactly
+ * per concern — name and status, domains, Mini Apps, default map frame, QR, operator log. The commune's name is printed exactly
  * as the registry holds it, never rebuilt (ADR 0068 §7).
  */
 
@@ -204,6 +207,10 @@ export function CommuneDetailBody({
           onChanged={onChanged}
           onMiniAppAttached={onMiniAppAttached}
         />
+      </SectionCard>
+
+      <SectionCard id="commune-map-frame-default" title="Khung bản đồ mặc định (Bản đồ kinh tế số)" icon={MapPin}>
+        <MapFrameDefaultSection communeId={commune.id} canManage={communeAllowed} />
       </SectionCard>
 
       {/* ops.qr.issue guards the link itself (a read with its own key), so without it the card is

@@ -11,11 +11,13 @@ import {
   createCommune,
   getCommune,
   getCurrentOperator,
+  getMapFrameDefault,
   listCommunes,
   listProvinces,
   parseRetryAfter,
   regenerateRecoveryCodes,
   setActivation,
+  setMapFrameDefault,
   setPrimaryDomain,
   signIn,
   signOut,
@@ -159,6 +161,27 @@ describe("requests — path, method and exactly the documented body", () => {
       "/api/v1/communes/01HZZZ/mini-apps",
       { app_id: "123456789", note: "ghi chú" },
     ],
+    [
+      "set the default map frame — a usual radius sends no acknowledged_unusual",
+      () => setMapFrameDefault("01HZZZ", { center_lat: 21.028511, center_lng: 105.804817, radius_km: 10, reason: "lý do" }),
+      "PUT",
+      "/api/v1/communes/01HZZZ/map-frame-default",
+      { center_lat: 21.028511, center_lng: 105.804817, radius_km: 10, reason: "lý do" },
+    ],
+    [
+      "set the default map frame — a confirmed unusual radius",
+      () =>
+        setMapFrameDefault("01HZZZ", {
+          center_lat: 21.028511,
+          center_lng: 105.804817,
+          radius_km: 25,
+          acknowledged_unusual: true,
+          reason: "lý do",
+        }),
+      "PUT",
+      "/api/v1/communes/01HZZZ/map-frame-default",
+      { center_lat: 21.028511, center_lng: 105.804817, radius_km: 25, acknowledged_unusual: true, reason: "lý do" },
+    ],
   ])("%s", async (_name, run, method, url, body) => {
     await run();
     expect(calls).toHaveLength(1);
@@ -171,6 +194,7 @@ describe("requests — path, method and exactly the documented body", () => {
     await getCurrentOperator();
     await getCommune("01HZZZ");
     await listProvinces();
+    await getMapFrameDefault("01HZZZ");
     for (const c of calls) {
       expect(c.init.method).toBe("GET");
       expect(c.init.body).toBeUndefined();
@@ -179,6 +203,7 @@ describe("requests — path, method and exactly the documented body", () => {
       "/api/v1/operator-sessions/current",
       "/api/v1/communes/01HZZZ",
       "/api/v1/provinces",
+      "/api/v1/communes/01HZZZ/map-frame-default",
     ]);
   });
 

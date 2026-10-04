@@ -126,6 +126,37 @@ export type SharedMiniApp = { app_id: string; created_at: string; created_by: st
 /** operator_launch.go `launchLinkView`. */
 export type LaunchLink = { url: string; domain: string; app_id: string };
 
+/**
+ * operator_map_frame_default.go `mapFrameDefaultView` (ADR 0072 amendment 2, K1–K2). Without a default:
+ * `configured` false and the three hints only. `bounds` is [minLng, minLat, maxLng, maxLat].
+ */
+export type MapFrameDefault = {
+  configured: boolean;
+  center_lat?: number;
+  center_lng?: number;
+  radius_km?: number;
+  bounds?: [number, number, number, number];
+  updated_at?: string;
+  updated_by?: string;
+  recommended_radius_km: number;
+  /** [min, max] of the usual band; outside it the PUT needs `acknowledged_unusual: true`. */
+  usual_radius_km: [number, number];
+  max_radius_km: number;
+};
+
+/**
+ * PUT …/map-frame-default body (operator_map_frame_default.go `mapFrameDefaultBody`).
+ * `acknowledged_unusual` is sent only when the radius is outside the usual band and the operator ticked
+ * the confirmation — absent reads as false on the server.
+ */
+export type MapFrameDefaultChange = {
+  center_lat: number;
+  center_lng: number;
+  radius_km: number;
+  acknowledged_unusual?: true;
+  reason: string;
+};
+
 /** operator_petition_fields.go `petitionFieldView`. */
 export type PetitionField = {
   code: string;
@@ -456,6 +487,16 @@ export function declareSharedMiniApp(input: { appId: string; reason: string }): 
 /** Not trailed by decision (ADR 0048 §30/09 #9); `ops.qr.issue` is the gate. */
 export function getLaunchLink(communeId: string): Promise<LaunchLink> {
   return call("GET", `/communes/${id(communeId)}/mini-app-launch-link`);
+}
+
+/** Any `ops.*` key reads it (a read of commune metadata, ADR 0073 #1). */
+export function getMapFrameDefault(communeId: string): Promise<MapFrameDefault> {
+  return call("GET", `/communes/${id(communeId)}/map-frame-default`);
+}
+
+/** `ops.tenant.manage`. Create and replace are one act; identical values are a 200 with no new trail entry. */
+export function setMapFrameDefault(communeId: string, body: MapFrameDefaultChange): Promise<MapFrameDefault> {
+  return call("PUT", `/communes/${id(communeId)}/map-frame-default`, body);
 }
 
 export function listPetitionFields(): Promise<PetitionFieldList> {
