@@ -379,10 +379,12 @@ func main() {
 		Log:          log,
 	})
 
-	// The economic map's frame (migration 0016; ADR 0072 H3) — two staff routes on the SAME staff mux.
-	// One use case behind both: the read and the save (its transaction and audit entry). See
+	// The economic map's frame (migrations 0016/0017; ADR 0072 H3, amendment 2) — three staff routes on
+	// the SAME staff mux. One use case behind them: the effective read, the save and "Về mặc định" (each
+	// write with its transaction and audit entry). `nenTang` — the same platform client as the Host edge
+	// — supplies the platform DEFAULT frame when the commune applies none of its own (K3). See
 	// internal/http/map_frame.go.
-	mapFrames := commsapp.NewMapFrames(kho, commsstore.NewMapFrameStore(kho))
+	mapFrames := commsapp.NewMapFrames(kho, commsstore.NewMapFrameStore(kho), nenTang, log)
 	svchttp.RegisterMapFrame(mux, svchttp.MapFrameDeps{
 		Checker: staffauth.Checker{},
 		Reader:  mapFrames,

@@ -5,10 +5,12 @@ package domain
 // `maxBounds` from the bounds computed here, so the view can neither be dragged nor zoomed out to the
 // national scale where the world-wide tiles draw Hoàng Sa and Trường Sa under OSM's names.
 //
-// THE NUMBERS BELOW ARE THE SAME AS 0016's TWO NAMED CHECKs, and both are OWNER-PENDING (ADR 0072
-// "Mở" #4: "Cận bán kính 1–30 km (đề xuất) và giá trị khung đất liền — chủ dự án duyệt khi dựng").
-// Changing one here without a migration changing the CHECK makes the service accept what the database
-// then refuses (a 500), or refuse what it would accept. Widening either is H3's stop condition 2.
+// THE NUMBERS BELOW ARE THE SAME AS THE TWO NAMED CHECKs: the centre box is 0016's
+// map_frame_center_in_mainland_box; the radius bound is 0017's map_frame_radius_ceiling (ADR 0072
+// §"Sửa đổi 04/10/2026 (lần 2)", K2 — owner-decided, a HARD ceiling). Changing one here without a
+// migration changing the CHECK makes the service accept what the database then refuses (a 500), or
+// refuse what it would accept. Raising the radius past 50 km, or widening the centre box, is a stop
+// condition of the second revision ("Điểm dừng — thêm ở lần 2").
 //
 // ROUNDING BEFORE VALIDATING. The columns are numeric(10,6) and numeric(4,1): PostgreSQL ROUNDS a
 // longer value on insert rather than refusing it. So the service rounds first, to the same scales,
@@ -30,15 +32,41 @@ const (
 	MapFrameMaxLng = 109.5
 )
 
-// The radius bounds in km — map_frame_radius_range. The upper bound is what keeps a frame away from
-// the far sea (ADR 0072 H3 point 3).
+// The radius bounds in km — 0017's map_frame_radius_ceiling, `radius_km > 0 AND radius_km <= 50`
+// (ADR 0072 K2: the owner chose no other policy bound; whoever sets a value answers for it).
+// MapFrameMinRadiusKm IS THE EXCLUSIVE "> 0" FLOOR, not a smallest allowed value: with numeric(4,1)
+// the smallest storable radius above it is 0.1 km. The ceiling is what keeps a frame away from the far
+// sea — K2's table: ≈ 109.99°E at most, still ≥ 1.2° short of Hoàng Sa / Trường Sa.
 const (
-	MapFrameMinRadiusKm = 1.0
-	MapFrameMaxRadiusKm = 30.0
+	MapFrameMinRadiusKm = 0.0
+	MapFrameMaxRadiusKm = 50.0
+)
+
+// The RECOMMENDED radius and the "usual" band in km — ADR 0072 K2 "Mức khuyến nghị", a PROPOSAL of the
+// main session the owner may adjust ("Việc còn mở sau lần 2" #2). Comms ONLY RETURNS them, as hints
+// for the form: it never refuses a radius for being outside the band. Refusing on them would turn an
+// owner-adjustable proposal into a second ceiling nobody decided.
+const (
+	MapFrameRecommendedRadiusKm = 10.0
+	MapFrameUsualMinKm          = 3.0
+	MapFrameUsualMaxKm          = 20.0
+)
+
+// MapFrameNoticeVersion is the version of the legal notice a holder of `admin.lookup` must acknowledge
+// on EVERY change of the frame (ADR 0072 K4/K6). ADR 0072 K6 OWNS THE TEXT; this is only its version.
+// One word of the text changed = a NEW version, written in the ADR first, then here — and from that
+// moment every save carrying the old version is refused, which is the point: an acknowledgement of a
+// text the official was not shown is no acknowledgement.
+const MapFrameNoticeVersion = "2026-10-04.1"
+
+// Which frame a commune is applying (ADR 0072 K3) — wire VALUES web-admin reads.
+const (
+	MapFrameSourceCommune = "commune" // the commune's own row, is_enabled = true
+	MapFrameSourceDefault = "default" // no own frame (no row, or is_enabled = false): the platform default
 )
 
 // KmPerDegree — kilometres per degree of latitude, and of longitude at the equator. A spherical
-// approximation; at a ≤ 30 km frame its error is metres, and the bounds are rounded OUTWARD anyway.
+// approximation; at a ≤ 50 km frame its error is metres, and the bounds are rounded OUTWARD anyway.
 const KmPerDegree = 111.32
 
 // The stored scales: numeric(10,6) for the centre, numeric(4,1) for the radius.
@@ -54,13 +82,19 @@ const MapFrameSubject = "khung_ban_do"
 var (
 	ErrMapFrameCenterOutsideMainland = errors.New("map_frame: tâm khung nằm ngoài khung đất liền Việt Nam")
 	ErrMapFrameRadiusOutOfRange      = errors.New("map_frame: bán kính ngoài khoảng cho phép")
+	// ErrMapFrameNoticeNotAcknowledged — the change does not carry the CURRENT notice version (K4: the
+	// server refuses, not only the form — rule 5, forbidden #1).
+	ErrMapFrameNoticeNotAcknowledged = errors.New("map_frame: chưa xác nhận lưu ý pháp lý phiên bản hiện hành")
 )
 
 // MapFrame is one commune's frame. CreatedBy / UpdatedBy are BUSINESS codes (`CB-…`, rule 6 inv. 8).
+// Enabled false is "Về mặc định" (0017): the row and its last values are kept, the commune applies the
+// platform default instead.
 type MapFrame struct {
 	CenterLat float64
 	CenterLng float64
 	RadiusKm  float64
+	Enabled   bool
 	CreatedAt time.Time
 	CreatedBy string
 	UpdatedAt time.Time
@@ -84,13 +118,23 @@ func NormalizeMapFrame(lat, lng, radiusKm float64) (MapFrame, error) {
 		lat < MapFrameMinLat || lat > MapFrameMaxLat || lng < MapFrameMinLng || lng > MapFrameMaxLng {
 		return MapFrame{}, ErrMapFrameCenterOutsideMainland
 	}
-	if !finite(radiusKm) || radiusKm < MapFrameMinRadiusKm || radiusKm > MapFrameMaxRadiusKm {
+	if !finite(radiusKm) || radiusKm <= MapFrameMinRadiusKm || radiusKm > MapFrameMaxRadiusKm {
 		return MapFrame{}, ErrMapFrameRadiusOutOfRange
 	}
 	return MapFrame{CenterLat: lat, CenterLng: lng, RadiusKm: radiusKm}, nil
 }
 
-// SameMapFrame compares the three editable values.
+// CheckMapFrameNotice refuses a change that does not acknowledge the CURRENT notice version — missing,
+// empty and stale all alike (ADR 0072 K4).
+func CheckMapFrameNotice(version string) error {
+	if version != MapFrameNoticeVersion {
+		return ErrMapFrameNoticeNotAcknowledged
+	}
+	return nil
+}
+
+// SameMapFrame compares the three editable values. Enabled is NOT compared: the caller decides what an
+// identical frame on a disabled row means (a save re-enables it).
 func SameMapFrame(a, b MapFrame) bool {
 	return a.CenterLat == b.CenterLat && a.CenterLng == b.CenterLng && a.RadiusKm == b.RadiusKm
 }

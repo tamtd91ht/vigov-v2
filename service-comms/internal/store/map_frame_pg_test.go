@@ -85,8 +85,8 @@ func TestPgMapFrameChecksRefuseWhatTheDomainRefuses(t *testing.T) {
 	// Bypassing domain.NormalizeMapFrame on purpose: the CHECKs are the floor under it.
 	for name, f := range map[string]domain.MapFrame{
 		"east of 109.5": {CenterLat: 16, CenterLng: 109.6, RadiusKm: 10},
-		"radius 30.1":   {CenterLat: 16, CenterLng: 108, RadiusKm: 30.1},
-		"radius 0.9":    {CenterLat: 16, CenterLng: 108, RadiusKm: 0.9},
+		"radius 50.1":   {CenterLat: 16, CenterLng: 108, RadiusKm: 50.1},
+		"radius 0":      {CenterLat: 16, CenterLng: 108, RadiusKm: 0},
 	} {
 		t.Run(name, func(t *testing.T) {
 			err := h.For(ctx).Tx(ctx, func(tx *pkgstore.ScopedTx) error {
@@ -98,10 +98,10 @@ func TestPgMapFrameChecksRefuseWhatTheDomainRefuses(t *testing.T) {
 			}
 		})
 	}
-	// The domain's edges are the CHECK's edges: both accept 8.4 / 109.5 / radius 1 and 30.
+	// The domain's edges are the CHECK's edges: both accept 8.4 / 109.5 / radius 0.1 and 50 (0017, K2).
 	for _, f := range []domain.MapFrame{
-		{CenterLat: 8.4, CenterLng: 109.5, RadiusKm: 1},
-		{CenterLat: 23.4, CenterLng: 102.1, RadiusKm: 30},
+		{CenterLat: 8.4, CenterLng: 109.5, RadiusKm: 0.1},
+		{CenterLat: 23.4, CenterLng: 102.1, RadiusKm: 50},
 	} {
 		if err := h.For(ctx).Tx(ctx, func(tx *pkgstore.ScopedTx) error {
 			_, err := s.Upsert(ctx, tx, f, "CB-00123")
@@ -109,5 +109,86 @@ func TestPgMapFrameChecksRefuseWhatTheDomainRefuses(t *testing.T) {
 		}); err != nil {
 			t.Errorf("edge %+v refused by the database: %v", f, err)
 		}
+	}
+}
+
+func TestPgMapFrameDisableKeepsTheRowAndSaveReEnables(t *testing.T) {
+	db := moKetNoi(t)
+	c1, c2 := xaRieng(t)
+	h := pkgstore.New(db)
+	s := NewMapFrameStore(h)
+	ctx := ctxXa(tenant.ID(c1))
+	run := func(fn func(tx *pkgstore.ScopedTx) error) error { return h.For(ctx).Tx(ctx, fn) }
+
+	// No row: Disable changes nothing.
+	if err := run(func(tx *pkgstore.ScopedTx) error {
+		changed, err := s.Disable(ctx, tx, "CB-00123")
+		if changed {
+			t.Error("Disable changed a row that does not exist")
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := run(func(tx *pkgstore.ScopedTx) error {
+		f, err := s.Upsert(ctx, tx, domain.MapFrame{CenterLat: 16, CenterLng: 108, RadiusKm: 10}, "CB-00123")
+		if err == nil && !f.Enabled {
+			t.Error("a first save stored the frame OFF")
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := run(func(tx *pkgstore.ScopedTx) error {
+		changed, err := s.Disable(ctx, tx, "CB-00456")
+		if !changed {
+			t.Error("Disable did not change an enabled row")
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Get(ctx)
+	if err != nil {
+		t.Fatalf("a disabled row must still be read (kept, never deleted): %v", err)
+	}
+	if got.Enabled || got.RadiusKm != 10 || got.CenterLat != 16 || got.UpdatedBy != "CB-00456" || got.CreatedBy != "CB-00123" {
+		t.Errorf("after disable = %+v — off, last values kept, updated_by moved", got)
+	}
+
+	// A second disable touches nothing: updated_by keeps naming who switched it off.
+	if err := run(func(tx *pkgstore.ScopedTx) error {
+		changed, err := s.Disable(ctx, tx, "CB-00789")
+		if changed {
+			t.Error("a second disable changed the row")
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// 0017 "OWED BY GO": the save after a reset switches the frame back ON.
+	if err := run(func(tx *pkgstore.ScopedTx) error {
+		_, err := s.Upsert(ctx, tx, domain.MapFrame{CenterLat: 16, CenterLng: 108, RadiusKm: 10}, "CB-00123")
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.Get(ctx); err != nil || !got.Enabled {
+		t.Errorf("after re-save = %+v, %v — want enabled", got, err)
+	}
+
+	// Another commune: Disable from it touches nothing of commune 1.
+	ctx2 := ctxXa(tenant.ID(c2))
+	if err := h.For(ctx2).Tx(ctx2, func(tx *pkgstore.ScopedTx) error {
+		changed, err := s.Disable(ctx2, tx, "CB-00999")
+		if changed {
+			t.Error("commune 2 switched off commune 1's frame")
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
 	}
 }

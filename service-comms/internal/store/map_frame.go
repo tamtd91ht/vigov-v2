@@ -1,6 +1,7 @@
 package store
 
-// The commune's map frame — migrations/0016_map_frame.sql, `map_frame` (ADR 0072 H3).
+// The commune's map frame — migrations/0016_map_frame.sql, `map_frame` (ADR 0072 H3), and 0017's
+// `is_enabled` ("Về mặc định", ADR 0072 K4).
 //
 // THREE THINGS HOLD ACROSS EVERY METHOD, as in mail_settings.go:
 //
@@ -21,16 +22,26 @@ import (
 
 // mapFrameColumns IS READ BY POSITION in readOneMapFrame. Three adjacent numerics: a swap of lat and
 // lng produces no error, only a frame in the wrong place.
-const mapFrameColumns = `center_lat, center_lng, radius_km, created_at, created_by, updated_at, updated_by`
+const mapFrameColumns = `center_lat, center_lng, radius_km, is_enabled, created_at, created_by, updated_at, updated_by`
 
 // upsertMapFrame — one row per commune. On the first save `created_by` and `updated_by` are both the
 // actor ($5); afterwards only `updated_by` moves.
+//
+// `is_enabled = true` IN BOTH THE VALUES AND THE SET LIST (0017 "OWED BY GO"): a save IS the commune
+// choosing its own frame again. Missing from the SET list, a save after "Về mặc định" would move the
+// centre and leave the frame OFF — the official sees "saved" and the map keeps showing the default.
 const upsertMapFrame = `INSERT INTO map_frame
-	(tenant_id, center_lat, center_lng, radius_km, created_by, updated_by)
-	VALUES ($1, $2, $3, $4, $5, $5)
+	(tenant_id, center_lat, center_lng, radius_km, is_enabled, created_by, updated_by)
+	VALUES ($1, $2, $3, $4, true, $5, $5)
 	ON CONFLICT (tenant_id) DO UPDATE SET
 	center_lat = EXCLUDED.center_lat, center_lng = EXCLUDED.center_lng, radius_km = EXCLUDED.radius_km,
-	updated_by = EXCLUDED.updated_by, updated_at = now()`
+	is_enabled = true, updated_by = EXCLUDED.updated_by, updated_at = now()`
+
+// disableMapFrame — "Về mặc định" (ADR 0072 K4): an UPDATE of a kept row, never a DELETE (0016's trigger
+// refuses one; rule 7). Centre and radius stay as they were — the commune's last own frame. The
+// `AND is_enabled` makes a second reset touch nothing, so `updated_*` keep naming who switched it off.
+const disableMapFrame = `UPDATE map_frame SET is_enabled = false, updated_by = $2, updated_at = now()
+	WHERE tenant_id = $1 AND is_enabled`
 
 // ErrMapFrameNotFound — the commune has not set its frame (H3 "Chưa đặt": no map is drawn).
 var ErrMapFrameNotFound = errors.New("map_frame: xã chưa đặt khung bản đồ")
@@ -51,14 +62,15 @@ func readOneMapFrame(rows *sql.Rows) (f domain.MapFrame, found bool, err error) 
 	if !rows.Next() {
 		return domain.MapFrame{}, false, rows.Err()
 	}
-	if err := rows.Scan(&f.CenterLat, &f.CenterLng, &f.RadiusKm, &f.CreatedAt, &f.CreatedBy,
+	if err := rows.Scan(&f.CenterLat, &f.CenterLng, &f.RadiusKm, &f.Enabled, &f.CreatedAt, &f.CreatedBy,
 		&f.UpdatedAt, &f.UpdatedBy); err != nil {
 		return domain.MapFrame{}, false, err
 	}
 	return f, true, rows.Err()
 }
 
-// Get reads the commune's frame, or ErrMapFrameNotFound.
+// Get reads the commune's row, or ErrMapFrameNotFound. A row with Enabled=false IS returned: deciding
+// that it means "no own frame" is the use case's (app.MapFrames.Get), not a filter hidden here.
 func (s *MapFrameStore) Get(ctx context.Context) (domain.MapFrame, error) {
 	// Scoped: Query adds `WHERE tenant_id = $1` from the context.
 	rows, err := s.db.For(ctx).Query(ctx, mapFrameColumns, "map_frame", "")
@@ -135,4 +147,22 @@ func (s *MapFrameStore) Upsert(ctx context.Context, tx *store.ScopedTx, f domain
 		return domain.MapFrame{}, errors.New("map_frame: row missing right after its upsert")
 	}
 	return out, nil
+}
+
+// Disable switches the commune's own frame off ("Về mặc định") and reports whether a row changed. by is
+// the actor's BUSINESS CODE (rule 6, invariant 8). The use case writes the audit entry in the same tx.
+func (s *MapFrameStore) Disable(ctx context.Context, tx *store.ScopedTx, by string) (bool, error) {
+	if by == "" {
+		return false, errors.New("map_frame: disable without a business code")
+	}
+	// Scoped: tenant_id = $1, bound from tx.TenantID().
+	res, err := tx.Exec(ctx, disableMapFrame, string(tx.TenantID()), by)
+	if err != nil {
+		return false, fmt.Errorf("map_frame: disable: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("map_frame: disable, rows affected: %w", err)
+	}
+	return n > 0, nil
 }

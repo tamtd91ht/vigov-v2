@@ -20,10 +20,12 @@ func TestNormalizeMapFrameEdges(t *testing.T) {
 		"south past 8.39":            {8.39, 105, 10, ErrMapFrameCenterOutsideMainland},
 		"north past 23.41":           {23.41, 105, 10, ErrMapFrameCenterOutsideMainland},
 		"west past 102.09":           {16, 102.09, 10, ErrMapFrameCenterOutsideMainland},
-		"radius 1":                   {16, 108, 1, nil},
-		"radius 30":                  {16, 108, 30, nil},
-		"radius 0.9":                 {16, 108, 0.9, ErrMapFrameRadiusOutOfRange},
-		"radius 30.1":                {16, 108, 30.1, ErrMapFrameRadiusOutOfRange},
+		"radius 0.1 (smallest > 0)":  {16, 108, 0.1, nil},
+		"radius 0.9":                 {16, 108, 0.9, nil},
+		"radius 30.1 (old ceiling)":  {16, 108, 30.1, nil},
+		"radius 50 (K2 ceiling)":     {16, 108, 50, nil},
+		"radius 50.1":                {16, 108, 50.1, ErrMapFrameRadiusOutOfRange},
+		"radius 0.04 rounds to 0":    {16, 108, 0.04, ErrMapFrameRadiusOutOfRange},
 		"radius 0":                   {16, 108, 0, ErrMapFrameRadiusOutOfRange},
 		"radius negative":            {16, 108, -5, ErrMapFrameRadiusOutOfRange},
 		"NaN centre":                 {math.NaN(), 108, 10, ErrMapFrameCenterOutsideMainland},
@@ -52,12 +54,15 @@ func TestNormalizeMapFrameRoundsToStoredScalesFirst(t *testing.T) {
 	if _, err := NormalizeMapFrame(16, 109.5000004, 10); err != nil {
 		t.Errorf("109.5000004: %v", err)
 	}
-	// 30.04 rounds to 30.0 (accepted); 30.06 to 30.1 (refused).
-	if _, err := NormalizeMapFrame(16, 108, 30.04); err != nil {
-		t.Errorf("30.04: %v", err)
+	// 50.04 rounds to 50.0 (accepted); 50.06 to 50.1 (refused); 0.06 to 0.1 (accepted).
+	if _, err := NormalizeMapFrame(16, 108, 50.04); err != nil {
+		t.Errorf("50.04: %v", err)
 	}
-	if _, err := NormalizeMapFrame(16, 108, 30.06); !errors.Is(err, ErrMapFrameRadiusOutOfRange) {
-		t.Errorf("30.06: %v", err)
+	if _, err := NormalizeMapFrame(16, 108, 50.06); !errors.Is(err, ErrMapFrameRadiusOutOfRange) {
+		t.Errorf("50.06: %v", err)
+	}
+	if _, err := NormalizeMapFrame(16, 108, 0.06); err != nil {
+		t.Errorf("0.06: %v", err)
 	}
 }
 
@@ -72,7 +77,7 @@ func TestMapFrameBoundsAreOutwardSixDecimals(t *testing.T) {
 	for _, f := range []MapFrame{
 		{CenterLat: 16, CenterLng: 108, RadiusKm: 10},
 		{CenterLat: 8.4, CenterLng: 104.9, RadiusKm: 1},
-		{CenterLat: 23.4, CenterLng: 105.3, RadiusKm: 30},
+		{CenterLat: 23.4, CenterLng: 105.3, RadiusKm: 50},
 		{CenterLat: 15.730507, CenterLng: 108.37811, RadiusKm: 12.3},
 	} {
 		b := f.Bounds()
@@ -101,12 +106,42 @@ func TestMapFrameBoundsAreOutwardSixDecimals(t *testing.T) {
 }
 
 func TestEastEdgeFrameStaysWestOfHoangSa(t *testing.T) {
-	// The migration's claim: even at the 30 km ceiling a centre on 109.5°E reaches ~109.8°E.
-	f, err := NormalizeMapFrame(MapFrameMaxLat, MapFrameMaxLng, MapFrameMaxRadiusKm)
-	if err != nil {
-		t.Fatal(err)
+	// ADR 0072 K2's table: at the 50 km ceiling a centre on 109.5°E reaches ≈ 109.95°E (8.4°N) to
+	// ≈ 109.99°E (23.4°N) — still ≥ 1.2° short of Hoàng Sa (≈ 111.2°E).
+	for _, lat := range []float64{MapFrameMinLat, MapFrameMaxLat} {
+		f, err := NormalizeMapFrame(lat, MapFrameMaxLng, MapFrameMaxRadiusKm)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if b := f.Bounds(); b.MaxLng >= 110 {
+			t.Errorf("lat %v: east bound %v — past K2's ≈ 109.99°E", lat, b.MaxLng)
+		}
 	}
-	if b := f.Bounds(); b.MaxLng >= 110.5 {
-		t.Errorf("east bound %v — the frame reaches towards Hoàng Sa", b.MaxLng)
+}
+
+func TestMapFrameNoticeOnlyTheCurrentVersion(t *testing.T) {
+	if MapFrameNoticeVersion != "2026-10-04.1" {
+		// ADR 0072 K6 owns the version; a change here without the ADR is its stop condition 3.
+		t.Fatalf("notice version %q — not ADR 0072 K6's", MapFrameNoticeVersion)
+	}
+	if err := CheckMapFrameNotice(MapFrameNoticeVersion); err != nil {
+		t.Errorf("current version refused: %v", err)
+	}
+	for _, v := range []string{"", " 2026-10-04.1", "2026-10-04", "2026-10-04.0"} {
+		if err := CheckMapFrameNotice(v); !errors.Is(err, ErrMapFrameNoticeNotAcknowledged) {
+			t.Errorf("%q: %v, want refusal", v, err)
+		}
+	}
+}
+
+func TestMapFrameHintsSitInsideTheHardBounds(t *testing.T) {
+	// The hints are proposals; they must at least be values the save would accept.
+	for _, r := range []float64{MapFrameRecommendedRadiusKm, MapFrameUsualMinKm, MapFrameUsualMaxKm} {
+		if _, err := NormalizeMapFrame(16, 108, r); err != nil {
+			t.Errorf("hint %v refused: %v", r, err)
+		}
+	}
+	if !(MapFrameUsualMinKm <= MapFrameRecommendedRadiusKm && MapFrameRecommendedRadiusKm <= MapFrameUsualMaxKm) {
+		t.Error("recommended radius outside the usual band")
 	}
 }
