@@ -136,6 +136,35 @@ func TestRequireKey(t *testing.T) {
 	}
 }
 
+// AnyKey (ADR 0073 #1): one decided key of any kind opens a console read; a live session holding no
+// decided key — none at all, a commune permission, an unknown ops string, or the literal "ops.*" —
+// is 403, never the SignedIn pass-through.
+func TestRequireAnyKey(t *testing.T) {
+	for name, c := range map[string]struct {
+		keys []string
+		want int
+	}{
+		"zero keys":             {nil, 403},
+		"commune key only":      {[]string{"feedback.read"}, 403},
+		"unknown ops key":       {[]string{"ops.anything.goes"}, 403},
+		"literal sentinel":      {[]string{"ops.*"}, 403},
+		"only ops.qr.issue":     {[]string{string(KeyQRIssue)}, 200},
+		"only mini app":         {[]string{string(KeyMiniAppManage)}, 200},
+		"unknown + one decided": {[]string{"ops.anything.goes", string(KeyDomainManage)}, 200},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := &resolverFake{p: operatorclient.Principal{OperatorID: "op-1", OperatorCode: "VH-00001",
+				PermissionKeys: c.keys}, live: true}
+			if rec := serve(RequireKey(newAuth(t, r), AnyKey)(okHandler), opToken(t)); rec.Code != c.want {
+				t.Fatalf("status = %d, want %d", rec.Code, c.want)
+			}
+		})
+	}
+	if rec := serve(RequireKey(newAuth(t, &resolverFake{}), AnyKey)(okHandler), ""); rec.Code != 401 {
+		t.Fatalf("no cookie: status = %d, want 401", rec.Code)
+	}
+}
+
 func TestSignedInNeedsNoKey(t *testing.T) {
 	r := &resolverFake{p: operatorclient.Principal{OperatorID: "op-1", OperatorCode: "VH-00001"}, live: true}
 	if rec := serve(SignedIn(newAuth(t, r), "test")(okHandler), opToken(t)); rec.Code != 200 {
@@ -160,6 +189,8 @@ func TestDeclarationsRefuseBadWiring(t *testing.T) {
 		"unknown key":      func() { RequireKey(a, Key("ops.anything.goes")) },
 		"commune key":      func() { RequireKey(a, Key("feedback.read")) },
 		"no key":           func() { RequireKey(a) },
+		"any key mixed":    func() { RequireKey(a, AnyKey, KeyTenantManage) },
+		"any key twice":    func() { RequireKey(a, AnyKey, AnyKey) },
 		"nil auth":         func() { RequireKey(nil, KeyTenantManage) },
 		"signed-in no why": func() { SignedIn(a, "") },
 		"public no why":    func() { Public("") },

@@ -13,6 +13,7 @@
 // and tools/apidoc reads them (rule 5 invariant 1, the operator-realm equivalent):
 //
 //	opauth.RequireKey(d.Auth, opauth.KeyTenantManage, …)  the normal case — every key listed is required
+//	opauth.RequireKey(d.Auth, opauth.AnyKey)               a console read — any one decided key (ADR 0073 #1)
 //	opauth.SignedIn(d.Auth, "<why any operator needs this>")  any live operator session
 //	opauth.Public("<why this has no session>")              sign-in steps only, always rate limited
 //
@@ -68,6 +69,20 @@ var decidedKeys = map[Key]bool{
 	KeyMiniAppManage: true, KeyUploadPolicyManage: true, KeyQRIssue: true,
 }
 
+// AnyKey is NOT a key anybody holds: it is the declaration "any one decided key", for the console's
+// pure reads (ADR 0073 #1 — whoever holds an ops.* key may open a commune to do the work of that key;
+// the commune list carries no citizen data). Written as `RequireKey(d.Auth, opauth.AnyKey)`, and
+// ONLY alone: mixed with a real key the declaration would mean two things at once.
+//
+// WHY NOT SignedIn: a live session holding ZERO ops keys (an account operatorctl created but never
+// granted) must still get 403 on these reads — SignedIn would let it list every commune. And why not
+// a fifth declaration function: tools/apidoc and hooks/rbac_guard read exactly RequireKey / SignedIn /
+// Public; a new name would be a route neither reader sees as declared.
+//
+// It is satisfied by a key in decidedKeys only — a string identity hands back that this build does
+// not know (a future key not yet added here) grants nothing, the same closed set as RequireKey.
+const AnyKey Key = "ops.*"
+
 // Principal is the operator behind THIS request. Never cached, never written anywhere.
 type Principal struct {
 	// OperatorID authorises nothing here and is never written into a trail (rule 6 invariant 8).
@@ -77,9 +92,16 @@ type Principal struct {
 	Keys         []string
 }
 
-// Has reports whether the principal holds k.
+// Has reports whether the principal holds k. For AnyKey: whether it holds at least one decided key.
 func (p Principal) Has(k Key) bool {
 	for _, x := range p.Keys {
+		if k == AnyKey {
+			// Never by string equality: a principal "holding" the literal "ops.*" holds nothing.
+			if decidedKeys[Key(x)] {
+				return true
+			}
+			continue
+		}
 		if x == string(k) {
 			return true
 		}
@@ -209,6 +231,12 @@ func RequireKey(a *Auth, keys ...Key) func(http.Handler) http.Handler {
 		panic("opauth.RequireKey: no key — use SignedIn(reason) for a route any operator may call")
 	}
 	for _, k := range keys {
+		if k == AnyKey {
+			if len(keys) != 1 {
+				panic("opauth.RequireKey: AnyKey stands alone — mixed with a real key it means two things")
+			}
+			continue
+		}
 		if !decidedKeys[k] {
 			panic("opauth.RequireKey: " + string(k) + " is not a decided operator key (ADR 0048 §28/09 #3)")
 		}

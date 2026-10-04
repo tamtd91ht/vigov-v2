@@ -159,6 +159,19 @@ type writerFake struct {
 	lastState *bool
 	// The mini-app routes: the App ID of the path, the new one of a replacement, the reason.
 	lastApp, lastNewApp, lastReason string
+	// The secret-forward display copies, with the commune each targeted and the actor.
+	forwards       []domain.SecretForward
+	forwardTargets []tenant.ID
+	forwardActors  []domain.OperatorActor
+	forwardErr     error
+}
+
+func (w *writerFake) RecordMiniAppSecretForward(ctx context.Context, f domain.SecretForward, by domain.OperatorActor) error {
+	t, _ := tenant.From(ctx)
+	w.forwards = append(w.forwards, f)
+	w.forwardTargets = append(w.forwardTargets, t)
+	w.forwardActors = append(w.forwardActors, by)
+	return w.forwardErr
 }
 
 func (w *writerFake) record(ctx context.Context, by domain.OperatorActor) {
@@ -239,6 +252,8 @@ type harness struct {
 	mux     http.Handler
 	id      *identityFake
 	w       *writerFake
+	pol     *policyFake
+	oplog   *opLogFake
 	counter *memCounter
 	forgot  []string
 	logs    *bytes.Buffer // JSON lines the handlers logged
@@ -246,7 +261,8 @@ type harness struct {
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
-	h := &harness{id: &identityFake{live: true}, w: &writerFake{}, counter: &memCounter{}, logs: &bytes.Buffer{}}
+	h := &harness{id: &identityFake{live: true}, w: &writerFake{}, pol: newPolicyFake(), oplog: &opLogFake{},
+		counter: &memCounter{}, logs: &bytes.Buffer{}}
 	signer, err := operatortoken.NewSigner([]secret.Secret{opKeyFake})
 	if err != nil {
 		t.Fatal(err)
@@ -262,6 +278,8 @@ func newHarness(t *testing.T) *harness {
 		Limiter:      lim,
 		Registry:     registryFake{},
 		Writer:       h.w,
+		Policies:     h.pol,
+		OperatorLog:  h.oplog,
 		OperatorHost: operatorHostFake,
 		NewID:        func() (string, error) { return newIDFake, nil },
 		Forget:       func(host string) { h.forgot = append(h.forgot, host) },
@@ -324,34 +342,47 @@ type guardedRoute struct {
 	method, path, body string
 	keys               []string // the keys that make it succeed
 	ok                 int
+	// anyKey: an opauth.AnyKey read (ADR 0073 #1). Its 403 is a live session holding NO decided key;
+	// its 200 is tried with EACH single decided key, the narrowest grants included.
+	anyKey bool
 }
 
+// decidedKeysFake is the closed operator key set, spelled out independently of opauth.
+var decidedKeysFake = []string{"ops.tenant.manage", "ops.domain.manage", "ops.profile.manage",
+	"ops.mini_app.manage", "ops.upload_policy.manage", "ops.qr.issue"}
+
 var guarded = []guardedRoute{
-	{"GET", "/api/v1/communes", "", []string{"ops.tenant.manage"}, 200},
-	{"GET", "/api/v1/communes/" + communeIDFake, "", []string{"ops.tenant.manage"}, 200},
-	{"GET", "/api/v1/provinces", "", []string{"ops.tenant.manage"}, 200},
+	{"GET", "/api/v1/communes", "", nil, 200, true},
+	{"GET", "/api/v1/communes/" + communeIDFake, "", nil, 200, true},
+	{"GET", "/api/v1/provinces", "", nil, 200, true},
+	{"GET", "/api/v1/upload-policies", "", nil, 200, true},
+	{"GET", "/api/v1/operator-audit-entries", "", nil, 200, true},
+	{"GET", "/api/v1/communes/" + communeIDFake + "/operator-audit-entries", "", nil, 200, true},
+	{"PUT", "/api/v1/upload-policies/petition-photo",
+		`{"max_bytes":10485760,"allowed_mime_types":["image/jpeg","image/png"],"max_files_per_subject":5,"reason":"Giảm loại tệp"}`,
+		[]string{"ops.upload_policy.manage"}, 200, false},
 	{"POST", "/api/v1/communes", `{"name":"Xã Mới","province_id":"66QW36RCJ7GVW79W8GJRYH3ZNR","primary_domain":"xamoi.vigov.vn"}`,
-		[]string{"ops.tenant.manage", "ops.domain.manage"}, 201},
+		[]string{"ops.tenant.manage", "ops.domain.manage"}, 201, false},
 	{"POST", "/api/v1/communes/" + communeIDFake + "/domains", `{"domain":"thangbinh.example.gov.vn"}`,
-		[]string{"ops.domain.manage"}, 201},
+		[]string{"ops.domain.manage"}, 201, false},
 	{"PUT", "/api/v1/communes/" + communeIDFake + "/primary-domain", `{"domain":"thangbinh-danang.vigov.vn"}`,
-		[]string{"ops.domain.manage"}, 200},
+		[]string{"ops.domain.manage"}, 200, false},
 	{"PUT", "/api/v1/communes/" + communeIDFake + "/name", `{"name":"Xã Thăng Bình","reason":"Sửa lỗi gõ"}`,
-		[]string{"ops.tenant.manage"}, 200},
+		[]string{"ops.tenant.manage"}, 200, false},
 	{"PUT", "/api/v1/communes/" + communeIDFake + "/activation", `{"active":false,"reason":"Sáp nhập theo NQ"}`,
-		[]string{"ops.tenant.manage"}, 200},
+		[]string{"ops.tenant.manage"}, 200, false},
 	{"POST", "/api/v1/communes/" + communeIDFake + "/mini-apps", `{"app_id":"3291993990104489440"}`,
-		[]string{"ops.mini_app.manage"}, 201},
+		[]string{"ops.mini_app.manage"}, 201, false},
 	{"POST", "/api/v1/communes/" + communeIDFake + "/mini-apps/3291993990104489440/replacement",
-		`{"new_app_id":"3043188591857102858","reason":"Xã đổi App ID"}`, []string{"ops.mini_app.manage"}, 201},
+		`{"new_app_id":"3043188591857102858","reason":"Xã đổi App ID"}`, []string{"ops.mini_app.manage"}, 201, false},
 	{"PUT", "/api/v1/communes/" + communeIDFake + "/mini-apps/3291993990104489440/activation",
-		`{"active":false,"reason":"Xã ngừng dùng app riêng"}`, []string{"ops.mini_app.manage"}, 200},
+		`{"active":false,"reason":"Xã ngừng dùng app riêng"}`, []string{"ops.mini_app.manage"}, 200, false},
 	{"PUT", "/api/v1/communes/" + communeIDFake + "/mini-apps/3291993990104489440/secret",
-		`{"secret":"zalo-app-secret-FAKE-NOT-REAL","reason":"Đặt khoá cho app riêng"}`, []string{"ops.mini_app.manage"}, 200},
+		`{"secret":"zalo-app-secret-FAKE-NOT-REAL","reason":"Đặt khoá cho app riêng"}`, []string{"ops.mini_app.manage"}, 200, false},
 	{"DELETE", "/api/v1/communes/" + communeIDFake + "/mini-apps/3291993990104489440/secret",
-		`{"reason":"Thu hồi khoá cũ"}`, []string{"ops.mini_app.manage"}, 200},
-	{"GET", "/api/v1/operator-sessions/current", "", nil, 200},
-	{"DELETE", "/api/v1/operator-sessions/current", "", nil, 204},
+		`{"reason":"Thu hồi khoá cũ"}`, []string{"ops.mini_app.manage"}, 200, false},
+	{"GET", "/api/v1/operator-sessions/current", "", nil, 200, false},
+	{"DELETE", "/api/v1/operator-sessions/current", "", nil, 204, false},
 }
 
 func TestGuardedRoutes(t *testing.T) {
@@ -377,6 +408,26 @@ func TestGuardedRoutes(t *testing.T) {
 				t.Errorf("identity down: %d, want 503", rec.Code)
 			}
 			h.id.down = false
+
+			if rt.anyKey {
+				// A live session with no decided key: none, a commune permission, an unknown ops string.
+				for _, keys := range [][]string{nil, {"feedback.read"}, {"ops.anything.goes", "ops.*"}} {
+					h.id.keys = keys
+					if rec := h.do(rt.method, rt.path, rt.body, opCookie(t)); rec.Code != 403 {
+						t.Errorf("keys %v: %d, want 403", keys, rec.Code)
+					}
+				}
+				if h.oplog.reads != 0 {
+					t.Errorf("the operator log was read %d times without a key", h.oplog.reads)
+				}
+				for _, k := range decidedKeysFake {
+					h.id.keys = []string{k}
+					if rec := h.do(rt.method, rt.path, rt.body, opCookie(t)); rec.Code != rt.ok {
+						t.Errorf("only %s: %d, want %d (%s)", k, rec.Code, rt.ok, rec.Body)
+					}
+				}
+				return
+			}
 
 			if len(rt.keys) > 0 {
 				// Every key but the last — the wrong permission set.

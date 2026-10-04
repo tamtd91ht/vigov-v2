@@ -241,8 +241,10 @@ func run(log *slog.Logger) error {
 	// all when OPERATOR_HOST is unset. Its registry writes go through the SCOPED store, each one
 	// audited in the target commune's audit_log; its reads use the registry's raw handle, like
 	// the directory. Forget drops a written host from THIS process's cache at once.
+	// The upload limits (policyReader, the same raw-handle store the gRPC read uses) and the operator
+	// log are this service's own tables too (ADR 0073 #2, #5).
 	opEdge, err := wireOperatorEdge(cfg, svcstore.NewOperatorRegistry(db),
-		svcstore.NewRegistryWriter(store.New(db)), directory.Forget, log)
+		svcstore.NewRegistryWriter(store.New(db)), policyReader, svcstore.NewOperatorLog(db), directory.Forget, log)
 	if err != nil {
 		return err
 	}

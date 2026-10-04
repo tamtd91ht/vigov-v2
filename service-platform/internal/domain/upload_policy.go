@@ -21,4 +21,6 @@ type UploadPolicy struct {
 	MaxFilesPerSubject int32
 
 	UpdatedAt time.Time
+	// UpdatedBy is the business code that last set the row (`VH-…`, or 'system' for a migration).
+	UpdatedBy string
 }

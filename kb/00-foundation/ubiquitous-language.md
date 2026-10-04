@@ -283,10 +283,12 @@ Chỉ phục vụ trên `OPERATOR_HOST`, **không** nằm trong `kb/20-contracts
 | Mini App riêng của xã | `communes/{id}/mini-apps` | Dòng `mini_app` chế độ `rieng` |
 | Đổi App ID | `communes/{id}/mini-apps/{app_id}/replacement` | **Người dùng chốt 04/10/2026** (ADR 0070). `{app_id}` là App ID CŨ — người vận hành xác nhận đúng dòng đang thấy. Gắn mới + tắt cũ trong một giao dịch; vết `gan_mini_app` (có `thay_cho`) + `tat_mini_app` |
 | Gỡ / bật lại App ID | `communes/{id}/mini-apps/{app_id}/activation` | **Người dùng chốt 04/10/2026**. Cùng hình dạng `communes/{id}/activation`. Vết `tat_mini_app` / **`bat_lai_mini_app`** (động từ vết mới, chốt cùng ngày) |
-| Khoá bí mật của App ID | `communes/{id}/mini-apps/{app_id}/secret`, thân `{secret, reason}` | **Người dùng chốt 04/10/2026** (ADR 0070 bổ sung #6). Platform chỉ chuyển tiếp sang identity, không lưu, không log |
+| Khoá bí mật của App ID | `communes/{id}/mini-apps/{app_id}/secret`, thân `{secret, reason}` | **Người dùng chốt 04/10/2026** (ADR 0070 bổ sung #6). Platform chỉ chuyển tiếp sang identity, không lưu, không log. Vết bản sao ở platform: `dat_khoa_mini_app` / `thu_hoi_khoa_mini_app` (chỉ siêu dữ liệu) |
+| Giới hạn tải lên | `upload-policies` · `upload-policies/{purpose}` | **Người dùng chốt 04/10/2026** (ADR 0073). Sửa cần `ops.upload_policy.manage`; vết `upload_policy.changed` ở `platform_audit_log` |
+| Nhật ký vận hành | `operator-audit-entries` · `communes/{id}/operator-audit-entries` | **Người dùng chốt 04/10/2026** (ADR 0073 #2). Đọc chéo mọi xã — chính lần xem cũng để vết `operator_log.read` (luật 6 bất biến 7), dòng ấy không hiện lại trong danh sách |
 
 ⚠ `GET /api/v1/communes` có **hai** người gọi trên **hai** host: công dân (Mini App, `identity`,
-`Public`) và người vận hành (`platform`, `ops.tenant.manage`). Đường dẫn trùng là **cố ý** — cùng
+`Public`) và người vận hành (`platform`, bất kỳ khoá `ops.*` — ADR 0073 #1). Đường dẫn trùng là **cố ý** — cùng
 một loại tài nguyên. Thứ giữ chúng tách nhau là biên host của ADR 0048 và việc tuyến vận hành nằm
 ngoài `openapi.json`; một tuyến vận hành lọt vào hợp đồng xã là ADR 0048 ĐIỀU KIỆN DỪNG #6.
 

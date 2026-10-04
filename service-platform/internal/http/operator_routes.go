@@ -9,6 +9,7 @@ package http
 // EVERY ROUTE DECLARES ITS REALM GUARD IN THE SAME STATEMENT, and there are three (internal/opauth):
 //
 //	opauth.RequireKey(d.Auth, opauth.Key…)  every listed `ops.*` key required
+//	opauth.RequireKey(d.Auth, opauth.AnyKey) any one `ops.*` key — the console's pure reads (ADR 0073 #1)
 //	opauth.SignedIn(d.Auth, "<reason>")    any live operator session
 //	opauth.Public("<reason>")              the sign-in steps; always behind signInLimit
 //
@@ -43,6 +44,9 @@ type OperatorDeps struct {
 	Limiter  *ratelimit.Limiter
 	Registry CommuneReader
 	Writer   CommuneWriter
+	// Policies is upload_policy (ADR 0073 #5); OperatorLog the operator log (ADR 0073 #2).
+	Policies    UploadPolicyEditor
+	OperatorLog OperatorLogReader
 	// OperatorHost is refused as a commune host (ADR 0048 stop condition #6).
 	OperatorHost string
 	NewID        func() (string, error)
@@ -170,6 +174,10 @@ func registerOperator(mux *http.ServeMux, d OperatorDeps) {
 				http.HandlerFunc(h.regenerateRecoveryCodes)))))
 
 	// --- the commune registry ------------------------------------------------------------------
+	//
+	// THE PURE READS take opauth.AnyKey (ADR 0073 #1): an operator holding ANY ops.* key opens a
+	// commune to do the work of that key — an account granted only ops.mini_app.manage could not
+	// reach the commune it was granted to work on. Every WRITE keeps its own key.
 
 	// @summary  Danh sách mọi xã (chỉ siêu dữ liệu: tên, tỉnh, trạng thái, tên miền)
 	// @reply    200 communePageView
@@ -178,7 +186,7 @@ func registerOperator(mux *http.ServeMux, d OperatorDeps) {
 	// @reply    403 httpx.Error forbidden
 	// @reply    503 httpx.Error operator_auth_unavailable
 	mux.Handle("GET /api/v1/communes",
-		opauth.RequireKey(h.d.Auth, opauth.KeyTenantManage)(
+		opauth.RequireKey(h.d.Auth, opauth.AnyKey)(
 			http.HandlerFunc(h.listCommunes)))
 
 	// @summary  Một xã: siêu dữ liệu và các Mini App riêng đã gắn
@@ -188,7 +196,7 @@ func registerOperator(mux *http.ServeMux, d OperatorDeps) {
 	// @reply    404 httpx.Error commune_not_found
 	// @reply    503 httpx.Error operator_auth_unavailable
 	mux.Handle("GET /api/v1/communes/{id}",
-		opauth.RequireKey(h.d.Auth, opauth.KeyTenantManage)(
+		opauth.RequireKey(h.d.Auth, opauth.AnyKey)(
 			http.HandlerFunc(h.getCommune)))
 
 	// @summary  Danh mục tỉnh, thành phố (cho biểu mẫu tạo xã)
@@ -197,7 +205,7 @@ func registerOperator(mux *http.ServeMux, d OperatorDeps) {
 	// @reply    403 httpx.Error forbidden
 	// @reply    503 httpx.Error operator_auth_unavailable
 	mux.Handle("GET /api/v1/provinces",
-		opauth.RequireKey(h.d.Auth, opauth.KeyTenantManage)(
+		opauth.RequireKey(h.d.Auth, opauth.AnyKey)(
 			http.HandlerFunc(h.listProvinces)))
 
 	// @summary  Tạo xã: tên, tỉnh, tên miền chính
@@ -351,4 +359,52 @@ func registerOperator(mux *http.ServeMux, d OperatorDeps) {
 		opauth.RequireKey(h.d.Auth, opauth.KeyMiniAppManage)(
 			idem.KhongCan("retiring what is already retired is NOT_FOUND in identity, answered as the same end state with nothing written")(
 				http.HandlerFunc(h.retireMiniAppSecret))))
+
+	// --- upload limits (ADR 0073 #5, ADR 0052 §10) -------------------------------------------------
+
+	// @summary  Giới hạn tải lên của mọi mục đích (áp chung mọi xã), kèm kiểu tệp và mức trần được phép đặt
+	// @reply    200 uploadPolicyListView
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    503 httpx.Error operator_auth_unavailable
+	mux.Handle("GET /api/v1/upload-policies",
+		opauth.RequireKey(h.d.Auth, opauth.AnyKey)(
+			http.HandlerFunc(h.listUploadPolicies)))
+
+	// @summary  Sửa giới hạn tải lên của một mục đích (bắt buộc lý do); vết platform_audit_log cùng giao dịch; nơi đọc thấy sau tối đa 60 giây
+	// @request  uploadPolicyBody
+	// @reply    200 uploadPolicyView
+	// @reply    400 httpx.Error invalid_body
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    404 httpx.Error upload_policy_not_found
+	// @reply    422 httpx.Error invalid_max_bytes invalid_mime_types invalid_max_files invalid_reason
+	// @reply    503 httpx.Error operator_auth_unavailable
+	mux.Handle("PUT /api/v1/upload-policies/{purpose}",
+		opauth.RequireKey(h.d.Auth, opauth.KeyUploadPolicyManage)(
+			idem.KhongCan("setting the values it already has changes nothing and writes no entry")(
+				http.HandlerFunc(h.changeUploadPolicy))))
+
+	// --- the operator log (ADR 0073 #2) -----------------------------------------------------------
+
+	// @summary  Nhật ký vận hành: thao tác của người vận hành trên mọi xã + thay đổi cấu hình cấp nền tảng, mới nhất trước; lượt đọc được ghi vết
+	// @reply    200 operatorAuditPageView
+	// @reply    400 httpx.Error invalid_range invalid_cursor invalid_limit
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    503 httpx.Error operator_auth_unavailable
+	mux.Handle("GET /api/v1/operator-audit-entries",
+		opauth.RequireKey(h.d.Auth, opauth.AnyKey)(
+			http.HandlerFunc(h.listOperatorLog)))
+
+	// @summary  Nhật ký vận hành của một xã, mới nhất trước; lượt đọc được ghi vết
+	// @reply    200 operatorAuditPageView
+	// @reply    400 httpx.Error invalid_range invalid_cursor invalid_limit
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    404 httpx.Error commune_not_found
+	// @reply    503 httpx.Error operator_auth_unavailable
+	mux.Handle("GET /api/v1/communes/{id}/operator-audit-entries",
+		opauth.RequireKey(h.d.Auth, opauth.AnyKey)(
+			http.HandlerFunc(h.listCommuneOperatorLog)))
 }

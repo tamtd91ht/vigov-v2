@@ -23,7 +23,8 @@ type CommuneReader interface {
 	Provinces(ctx context.Context) ([]domain.Province, error)
 }
 
-// CommuneWriter is the registry write side (*store.RegistryWriter). Every method takes the TARGET
+// CommuneWriter is the registry write side (*store.RegistryWriter), plus the display copy of the
+// secret-forward trail. Every method takes the TARGET
 // commune from ctx (rule 1 invariant 4) and writes its audit entry in the same transaction.
 type CommuneWriter interface {
 	CreateCommune(ctx context.Context, in store.NewCommune, by domain.OperatorActor) (domain.Commune, error)
@@ -34,6 +35,9 @@ type CommuneWriter interface {
 	AttachMiniApp(ctx context.Context, appID, note string, by domain.OperatorActor) (domain.CommuneMiniApp, error)
 	ReplaceMiniApp(ctx context.Context, oldAppID, newAppID, reason string, by domain.OperatorActor) (domain.CommuneMiniApp, error)
 	SetMiniAppActivation(ctx context.Context, appID string, active bool, reason string, by domain.OperatorActor) (bool, error)
+	// RecordMiniAppSecretForward writes the commune's trail row for a secret act identity ACCEPTED
+	// (operator_mini_app_secrets.go). Its own transaction: the act itself is identity's write.
+	RecordMiniAppSecretForward(ctx context.Context, f domain.SecretForward, by domain.OperatorActor) error
 }
 
 // --- shapes ---------------------------------------------------------------------------------------

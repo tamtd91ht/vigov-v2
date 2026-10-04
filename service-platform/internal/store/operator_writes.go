@@ -71,6 +71,11 @@ const (
 	ActionDeactivateMiniApp = "tat_mini_app"
 	// `bat_lai_mini_app` is NEW (ADR 0070 #3): no channel could switch an App ID back on before.
 	ActionReactivateMiniApp = "bat_lai_mini_app"
+	// The two secret-forward verbs are NEW (ADR 0073 §Hệ quả): this service only relays the secret to
+	// identity, whose operator trail stays the primary record (ADR 0070 bổ sung #7); these rows exist
+	// so the operator log screen sees the act. Metadata only — RecordMiniAppSecretForward.
+	ActionSetMiniAppSecret    = "dat_khoa_mini_app"
+	ActionRetireMiniAppSecret = "thu_hoi_khoa_mini_app"
 )
 
 // nameLock serialises every write that can create a duplicate commune name. There is NO unique
@@ -722,4 +727,34 @@ func (w *RegistryWriter) SetMiniAppActivation(ctx context.Context, appID string,
 		})
 	})
 	return changed, err
+}
+
+// RecordMiniAppSecretForward writes the commune's audit_log row for a Mini App secret act identity
+// has ALREADY ACCEPTED (ADR 0073 §Hệ quả): `dat_khoa_mini_app` / `thu_hoi_khoa_mini_app`, actor the
+// operator's VH- code, delta {app_id, phien_ban, ly_do[, tu_dong]}. NEVER the secret — this method is
+// never handed it (domain.SecretForward has no field for it).
+//
+// WHY NOT ATOMIC WITH THE ACT, stated rather than hidden: the act is a write in identity's database,
+// and two services cannot share a transaction (rule 2; core/audit's package comment). identity writes
+// its own trail entry in ITS transaction with the secret, so the act is never untrailed. This row is
+// the second, display copy, written only after identity answered ACCEPTED: a row before the answer
+// could record an act that never happened, which is worse than a missing display copy. If THIS write
+// fails, the act stands, identity's entry stands, and the caller reports it (logged) — it does not
+// undo a secret already sealed elsewhere.
+func (w *RegistryWriter) RecordMiniAppSecretForward(ctx context.Context, f domain.SecretForward, by domain.OperatorActor) error {
+	act, err := w.actor(by)
+	if err != nil {
+		return err
+	}
+	action := ActionSetMiniAppSecret
+	d := map[string]any{"app_id": f.AppID, "phien_ban": f.Version, "ly_do": f.Reason}
+	if f.Retired {
+		action = ActionRetireMiniAppSecret
+		d["tu_dong"] = f.Automatic
+	}
+	return w.db.For(ctx).Tx(ctx, func(tx *corestore.ScopedTx) error {
+		return audit.Write(ctx, tx, audit.Entry{
+			Actor: act, Action: action, Subject: "MiniApp " + f.AppID, Delta: delta(d),
+		})
+	})
 }

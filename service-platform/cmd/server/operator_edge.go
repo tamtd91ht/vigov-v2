@@ -141,6 +141,7 @@ type operatorWiring struct {
 // refuses to START: an operator edge that can resolve no session is an area that is "on" and answers
 // 503 for a reason only the startup log could have named.
 func wireOperatorEdge(cfg config.Config, reg svchttp.CommuneReader, w svchttp.CommuneWriter,
+	policies svchttp.UploadPolicyEditor, oplog svchttp.OperatorLogReader,
 	forget func(string), log *slog.Logger) (operatorWiring, error) {
 	host := cfg.OperatorHost()
 	signingKeys := cfg.OperatorSessionSigningKeys()
@@ -194,6 +195,8 @@ func wireOperatorEdge(cfg config.Config, reg svchttp.CommuneReader, w svchttp.Co
 		Limiter:      limiter,
 		Registry:     reg,
 		Writer:       w,
+		Policies:     policies,
+		OperatorLog:  oplog,
 		OperatorHost: host,
 		NewID:        ulid.Moi,
 		Forget:       forget,

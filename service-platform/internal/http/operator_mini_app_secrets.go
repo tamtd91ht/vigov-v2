@@ -19,8 +19,11 @@ package http
 //	                RecordCode). Declared KhongCan because a retry is safe by contract (below)
 //	identity        one gRPC field, taken out with .Lo() inside core/operatorclient only
 //	responses       never — the answer is version metadata (version, set_at, set_by)
-//	errors / trail  never — identity writes the trail and names only the App ID (operator.proto);
-//	                this service writes no trail entry for these two acts, so no second copy
+//	errors / trail  never — identity writes the primary trail and names only the App ID
+//	                (operator.proto). This service writes a DISPLAY COPY into the commune's
+//	                audit_log after identity ACCEPTED (ADR 0073 §Hệ quả: dat_khoa_mini_app /
+//	                thu_hoi_khoa_mini_app), built from domain.SecretForward — a type with no field
+//	                that could hold the secret (recordSecretForward)
 //
 // AUTHORISATION HAPPENS TWICE, ON PURPOSE: opauth.RequireKey(KeyMiniAppManage) here, and identity
 // re-checks the same key on the principal IT resolves from the forwarded `op1.` token — the write
@@ -220,7 +223,25 @@ func (h *operatorHandlers) setMiniAppSecret(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	v := res.Version
+	h.recordSecretForward(ctx, r, domain.SecretForward{AppID: appID, Version: v.Version, Reason: reason})
 	writeJSON(w, http.StatusOK, miniAppSecretView{AppID: appID, Version: v.Version, SetAt: v.SetAt.UTC(), SetBy: v.SetBy})
+}
+
+// recordSecretForward writes the platform's display copy of a secret act identity ACCEPTED. Called
+// only after that answer: a row written before it could record an act that never happened.
+//
+// ITS FAILURE DOES NOT FAIL THE REQUEST, and that is deliberate: the secret is already sealed in
+// identity, with identity's own trail entry in the same transaction (the primary record, ADR 0070
+// bổ sung #7). Answering 5xx now would tell the operator the act failed when it did not, and a retry
+// writes a second secret version. The missing display copy is logged — commune, App ID, version, the
+// failure — never the secret, which this function is never given.
+func (h *operatorHandlers) recordSecretForward(ctx context.Context, r *http.Request, f domain.SecretForward) {
+	if err := h.d.Writer.RecordMiniAppSecretForward(context.WithoutCancel(ctx), f, actorOf(r)); err != nil {
+		t, _ := tenant.From(ctx)
+		h.d.Log.ErrorContext(ctx, "khu vận hành: identity đã nhận thao tác khoá bí mật nhưng platform không ghi được dòng vết hiển thị",
+			"event", "mini_app.secret_trail_missing", "tenant", t.String(), "app_id", f.AppID,
+			"version", f.Version, "retired", f.Retired, "err", err)
+	}
 }
 
 // retireMiniAppSecret ends the live secret of one of the commune's dedicated App IDs — the manual
@@ -262,6 +283,8 @@ func (h *operatorHandlers) retireMiniAppSecret(w http.ResponseWriter, r *http.Re
 		return
 	}
 	at := res.Retirement.RetiredAt.UTC()
+	h.recordSecretForward(ctx, r, domain.SecretForward{Retired: true, AppID: appID,
+		Version: res.Retirement.RetiredVersion, Reason: reason})
 	writeJSON(w, http.StatusOK, miniAppSecretRetirementView{AppID: appID, Retired: true,
 		RetiredVersion: res.Retirement.RetiredVersion, RetiredAt: &at, RetiredBy: res.Retirement.RetiredBy})
 }
@@ -290,6 +313,8 @@ func (h *operatorHandlers) retireAfterUnbind(ctx context.Context, r *http.Reques
 	case err != nil:
 		problem = "identity_unavailable"
 	case res.Outcome == operatorclient.OutcomeAccepted:
+		h.recordSecretForward(ctx, r, domain.SecretForward{Retired: true, AppID: appID,
+			Version: res.Retirement.RetiredVersion, Reason: reason, Automatic: true})
 		return true, ""
 	case res.Outcome == operatorclient.OutcomeSessionNotLive:
 		problem = "session_not_live"

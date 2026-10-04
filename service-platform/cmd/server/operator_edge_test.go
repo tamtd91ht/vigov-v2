@@ -253,7 +253,7 @@ func TestOperatorEdgeDialsTheOperatorAddress(t *testing.T) {
 		"OPERATOR_HOST":      operatorHostTest,
 		"IDENTITY_GRPC_ADDR": "identity:9090",
 	})
-	_, err := wireOperatorEdge(cfg, readerEmpty{}, nil, func(string) {}, log)
+	_, err := wireOperatorEdge(cfg, readerEmpty{}, nil, nil, nil, func(string) {}, log)
 	if err == nil || !strings.Contains(err.Error(), "IDENTITY_OPERATOR_GRPC_ADDR") {
 		t.Fatalf("with only IDENTITY_GRPC_ADDR set, want a refusal naming IDENTITY_OPERATOR_GRPC_ADDR, got %v", err)
 	}
@@ -262,7 +262,7 @@ func TestOperatorEdgeDialsTheOperatorAddress(t *testing.T) {
 		"OPERATOR_HOST":               operatorHostTest,
 		"IDENTITY_OPERATOR_GRPC_ADDR": "identity:9093",
 	})
-	w, err := wireOperatorEdge(cfg, readerEmpty{}, nil, func(string) {}, log)
+	w, err := wireOperatorEdge(cfg, readerEmpty{}, nil, nil, nil, func(string) {}, log)
 	if err != nil {
 		t.Fatalf("wireOperatorEdge with IDENTITY_OPERATOR_GRPC_ADDR set: %v", err)
 	}

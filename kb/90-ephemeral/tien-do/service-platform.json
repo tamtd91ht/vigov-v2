@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-platform",
-  "cap_nhat": "2026-10-03",
+  "cap_nhat": "2026-10-04",
   "muc": [
     {
       "id": "danh-muc-tham-chieu",
@@ -121,26 +121,34 @@
     {
       "id": "khu-van-hanh-dot2-ho-so-hien-thi",
       "viec": "Khu vận hành đợt 2: sửa hồ sơ hiển thị xã + logo (ho_so_hien_thi_xa, ops.profile.manage, người ghi sau thắng — ADR 0048 §30/09 #7)",
-      "trang_thai": "chua_lam",
-      "bang_chung": "",
+      "trang_thai": "xong",
+      "bang_chung": "ĐÓNG KHÔNG LÀM (04/10/2026): ADR 0073 #4 bỏ mục này khỏi đợt 2 — hồ sơ hiển thị + logo chỉ xã tự sửa (ADR 0069). Không có mã nào được viết cho mục này; khoá ops.profile.manage vẫn nằm trong tập khoá đóng của internal/opauth/opauth.go nhưng không tuyến nào dùng.",
       "no_confirm": [],
-      "tiep_theo": "service-platform/internal/http/operator_routes.go — thêm tuyến opauth.RequireKey(KeyProfileManage); logo theo ADR 0052 §2–§3"
+      "tiep_theo": "Không còn gì — đừng dựng tuyến sửa hồ sơ ở khu vận hành."
     },
     {
       "id": "khu-van-hanh-dot2-gioi-han-tai-len",
       "viec": "Khu vận hành đợt 2: sửa giới hạn tải lên (upload_policy, ops.upload_policy.manage, vết platform_audit_log — ADR 0052 §10)",
-      "trang_thai": "chua_lam",
-      "bang_chung": "",
+      "trang_thai": "dang_lam",
+      "bang_chung": "04/10/2026 PA2-1 (chưa commit). GET /api/v1/upload-policies (opauth.AnyKey) + PUT /api/v1/upload-policies/{purpose} (ops.upload_policy.manage), thân {max_bytes, allowed_mime_types, max_files_per_subject: số|null — thiếu là 400, reason}: service-platform/internal/http/operator_platform.go, operator_routes.go. Kiểm theo lớp xử lý của từng mục đích: internal/app/upload_policy.go (ảnh mã hoá lại = jpeg/png/webp, KHÔNG HEIC, trần 50 MiB; video mp4/mov trần 5 GiB; âm thanh mp3/m4a trần 100 MiB; tài liệu pdf/jpeg/png trần 100 MiB; số tệp 1..100 hoặc null). Ghi MỘT giao dịch: dòng upload_policy + platform_audit_log 'upload_policy.changed' before/after/reason/actor VH-: internal/store/upload_policy.go ChangeUploadPolicy; trùng giá trị thì không ghi. Nơi đọc thấy sau tối đa 60 giây (core/platformclient/uploadpolicy.TTL). KIỂM: go test ./service-platform/... xanh (TestChangeUploadPolicy*, TestValidateUploadPolicy, TestEveryPurposeHasAClass, TestReencodedPurposesRefuseHEIC, TestGuardedRoutes); `PYTHONIOENCODING=utf-8 mingw32-make check` rc=0. CHƯA CHẠY: TestPgChangeUploadPolicyWritesRowAndTrailTogether (máy không có VIGOV_TEST_DSN).",
       "no_confirm": [],
-      "tiep_theo": "internal/store/upload_policy.go + operator_routes.go"
+      "tiep_theo": "(1) Chạy TestPg* ở internal/store/operator_wave2_pg_test.go với VIGOV_TEST_DSN. (2) Chủ dự án xác nhận các mức trần tự chọn (âm thanh 100 MiB, tài liệu 100 MiB, số tệp ≤ 100) và tập kiểu tài liệu pdf/jpeg/png. (3) Danh từ URL `upload-policies` cần dòng ở ubiquitous-language.md §Tài nguyên URL của khu vận hành sau khi người dùng chốt. (4) Màn platform-admin (PA2-3)."
     },
     {
       "id": "khu-van-hanh-dot2-phat-hanh-qr",
       "viec": "Khu vận hành đợt 2: phát hành QR cho tên miền xã (ops.qr.issue, không ghi vết — ADR 0048 §30/09 #9)",
-      "trang_thai": "chua_lam",
-      "bang_chung": "",
+      "trang_thai": "treo",
+      "bang_chung": "04/10/2026 PA2-1: KHÔNG DỰNG — điều kiện dừng. Liên kết cần App ID của app DÙNG CHUNG (zalo.me/s/<app id>/?d=<tên miền>&src=qr), mà platform không có nguồn nào cho nó: không dòng mini_app che_do='chinh' nào được gieo (migration 0006 chỉ cho phép, không ai chèn; deploy/Jenkinsfile chỉ chèn 'rieng'), không biến cấu hình nào ở core/config; giá trị chỉ nằm ở ../vihat-miniapp/.env.example:27 ZALO_MINIAPP_APP_ID.",
       "no_confirm": [],
-      "tiep_theo": "operator_routes.go; tham số ?d=&src=qr đã chốt ở ubiquitous-language.md"
+      "tiep_theo": "Hỏi chủ dự án nguồn của App ID app chung cho platform: (a) gieo một dòng mini_app che_do='chinh' bằng migration/thao tác vận hành (bảng đã có, Directory.MiniApp đã đọc CheDoChinh) — đề xuất; hoặc (b) biến môi trường cấp nền tảng mới (luật 11 điều kiện dừng #1). Kèm câu: QR phát hành dùng liên kết bản PHÁT HÀNH (không env/version) hay cả bản thử (citizen-app/README.md:727)."
+    },
+    {
+      "id": "khu-van-hanh-dot2-doc-bat-ky-khoa-nhat-ky",
+      "viec": "Khu vận hành đợt 2: tuyến đọc xã nhận bất kỳ khoá ops.* (ADR 0073 #1) + nhật ký vận hành (ADR 0073 #2) + dòng vết hiển thị khi chuyển khoá bí mật App ID (ADR 0073 §Hệ quả)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "04/10/2026 PA2-1 (chưa commit). (1) opauth.AnyKey — RequireKey(d.Auth, opauth.AnyKey): phiên sống có ít nhất một khoá đã chốt; 0 khoá / khoá xã / chuỗi ops lạ → 403 (internal/opauth/opauth.go, TestRequireAnyKey). GET /communes, /communes/{id}, /provinces, /upload-policies, /operator-audit-entries, /communes/{id}/operator-audit-entries dùng nó (operator_routes.go; TestGuardedRoutes thử từng khoá đơn lẻ). (2) GET /api/v1/operator-audit-entries và /api/v1/communes/{id}/operator-audit-entries: ?from&to (RFC 3339) &limit&cursor, mới nhất trước, không total; gộp audit_log actor_kind='operator' (mọi xã, @cross-tenant) + platform_audit_log (chỉ ở tuyến chung); trường at/actor/action/commune{id,name}|null/subject/before/after/reason: internal/store/operator_log.go, internal/http/operator_platform.go. Lượt đọc GHI VẾT platform_audit_log 'operator_log.read' cùng giao dịch (luật 6 bất biến 7) và không bao giờ liệt kê lại. (3) Sau khi identity ACCEPTED Set/RetireMiniAppSecret (cả lần tự thu hồi sau đổi/gỡ): audit_log của xã 'dat_khoa_mini_app'/'thu_hoi_khoa_mini_app' {app_id, phien_ban, ly_do[, tu_dong]}: store/operator_writes.go RecordMiniAppSecretForward, http/operator_mini_app_secrets.go recordSecretForward; lỗi ghi dòng này → vẫn 200 + log mini_app.secret_trail_missing. KIỂM: go test ./service-platform/... xanh; make check rc=0. CHƯA CHẠY: TestPgOperatorLogMergesPagesAndTrailsTheRead (không có VIGOV_TEST_DSN).",
+      "no_confirm": [],
+      "tiep_theo": "(1) Chạy TestPg* ở internal/store/operator_wave2_pg_test.go với VIGOV_TEST_DSN. (2) Chủ dự án xác nhận: ghi vết lượt đọc nhật ký vận hành vào platform_audit_log (mở rộng nghĩa bảng từ 'đổi cấu hình' sang cả 'lượt đọc liên xã'), hay cho ngoại lệ không ghi vết như §30/09 #5. (3) Danh từ `operator-audit-entries`, động từ vết `dat_khoa_mini_app`/`thu_hoi_khoa_mini_app`/`operator_log.read` cần dòng ở ubiquitous-language.md sau khi chốt; dòng ⚠ ở đó còn ghi GET /communes cần ops.tenant.manage. (4) Mục platform-admin.json về 'mọi tuyến ĐỌC xã cần ops.tenant.manage' đã được phía máy chủ giải — người giữ tệp ấy đóng. (5) Màn platform-admin (PA2-3)."
     },
     {
       "id": "khu-van-hanh-dot2-linh-vuc-tang-1",
