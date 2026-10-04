@@ -22,9 +22,12 @@ export function PositionPicker({
   lng,
   onPick,
   onOutside,
+  expanded = false,
 }: {
   styleUrl: string;
   frame: MapFrame;
+  /** "Mở rộng bản đồ" inside the form's dialog: a taller map to place the pin precisely. */
+  expanded?: boolean;
   /** Current position from the inputs; `null` when empty or invalid. */
   lat: number | null;
   lng: number | null;
@@ -113,10 +116,20 @@ export function PositionPicker({
     if (marker.getElement().parentElement === null) marker.addTo(map);
   }, [lat, lng, minLng, minLat, maxLng, maxLat]);
 
+  // A new height needs a resize, or MapLibre keeps drawing at the old canvas size.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (map === null) return;
+    const id = requestAnimationFrame(() => map.resize());
+    return () => cancelAnimationFrame(id);
+  }, [expanded]);
+
   return (
     <div
       ref={containerRef}
-      className="h-64 w-full overflow-hidden rounded-xl border border-line"
+      id="position-picker-map"
+      className={`${expanded ? "h-[70vh]" : "h-64"} w-full overflow-hidden rounded-xl border border-line`}
+      data-expanded={expanded ? "" : undefined}
       role="region"
       aria-label="Bản đồ chọn vị trí"
       data-testid="position-picker"

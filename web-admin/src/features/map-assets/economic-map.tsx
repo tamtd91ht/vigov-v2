@@ -66,6 +66,8 @@ export type EconomicMapProps = {
   frame: MapFrame;
   /** Name drawn beside the saved frame centre (the commune's display name). */
   centreLabel: string;
+  /** Grown into the page overlay ("Mở rộng bản đồ"): fill the region instead of the fixed height. */
+  expanded?: boolean;
   collection: EconomicCollection;
   visible: ReadonlySet<string>;
   selectedId: string | null;
@@ -82,6 +84,7 @@ export function EconomicMap({
   styleUrl,
   frame,
   centreLabel,
+  expanded = false,
   collection,
   visible,
   selectedId,
@@ -332,6 +335,15 @@ export function EconomicMap({
     source?.setData(centreRef.current as unknown as GeoJSON.FeatureCollection);
   }, [ready, centreLabel]);
 
+  // Expand / collapse changes the canvas size: tell MapLibre after the layout has settled, so the
+  // view is redrawn at the new size instead of stretched. maxBounds keeps the frame at any size.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || map === null) return;
+    const id = requestAnimationFrame(() => map.resize());
+    return () => cancelAnimationFrame(id);
+  }, [ready, expanded]);
+
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || map === null || flyTo === null) return;
@@ -343,7 +355,12 @@ export function EconomicMap({
   return (
     <div
       ref={containerRef}
-      className="economic-map h-[60vh] min-h-[360px] w-full overflow-hidden rounded-xl border border-line md:h-[calc(100vh-260px)] md:min-h-[480px]"
+      className={
+        expanded
+          ? "economic-map min-h-0 w-full flex-1 overflow-hidden rounded-xl border border-line"
+          : "economic-map h-[60vh] min-h-[360px] w-full overflow-hidden rounded-xl border border-line md:h-[calc(100vh-260px)] md:min-h-[480px]"
+      }
+      data-expanded={expanded ? "" : undefined}
       role="region"
       aria-label="Bản đồ các đối tượng kinh tế của xã"
       data-testid="economic-map"

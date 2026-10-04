@@ -3,7 +3,7 @@
 import { Download, Expand, Layers, List, Map as MapIcon, MapPinned, Plus, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { useCauHinhXa } from "@/components/cau-hinh-xa";
+import { useCauHinhXa } from "@/components/cau-hinh-xa"; // vi-name-ok: existing export (rule 12 inv 3)
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
@@ -43,6 +43,7 @@ import { coQuyen, QUYEN_QUAN_LY_DANH_MUC } from "@/lib/quyen";
 import { AssetDialog, type AssetDialogMode } from "./asset-dialog";
 import { DeleteAssetDialog, DetailPanel } from "./detail-panel";
 import { EconomicMap, type FlyRequest } from "./economic-map";
+import { MapExpandToggle } from "./map-expand";
 import { FrameForm } from "./frame-form";
 import {
   ADD_BUTTON,
@@ -105,6 +106,9 @@ const SEARCH_DEBOUNCE_MS = 300;
  * `asset.update` shows the write controls, `admin.lookup` the frame form and the default-groups
  * button. The server checks each on every request.
  */
+/** The region "Mở rộng bản đồ" grows into the page overlay (`aria-controls` of the toggle). */
+const MAP_REGION_ID = "economic-map-region";
+
 export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
   const phien = usePhien();
   const permissions = phien !== null && phien.ok ? phien.duLieu.permissions : [];
@@ -116,6 +120,9 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
   const [frameRes, setFrameRes] = useState<KetQua<comms_mapFrameOut> | null>(null);
   // Commune name for the centre landmark — the same display name the header shows (from Host, ADR 0069).
   const centreLabel = useCauHinhXa().displayName.trim() || CENTRE_FALLBACK_LABEL;
+  // "Mở rộng bản đồ": the map region (map + detail panel) grows into a page overlay; Esc or "Thu gọn"
+  // brings it back. A page state, not the Fullscreen API (map-expand.tsx says why).
+  const [mapExpandedState, setMapExpanded] = useState(false);
   const [frameReload, setFrameReload] = useState(0);
   const [summary, setSummary] = useState<KetQua<comms_mapAssetSummaryOut> | null>(null);
   const [units, setUnits] = useState<readonly identity_thonToDanPhoRa[]>([]);
@@ -250,6 +257,25 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
   const activeTypes = typeItems.filter((t) => t.active);
   const currentGroup = activeTypes.some((t) => t.code === chosenGroup) ? chosenGroup : (activeTypes[0]?.code ?? "");
   const mapAvailable = frame !== null && styleUrl !== null && !mapFailed;
+  // Expanded only while a map is actually on screen: switching to Sổ địa điểm, or losing the map,
+  // returns to the normal layout by itself — derived, so it cannot get stuck open.
+  const mapExpanded = mapExpandedState && view === "map" && mapAvailable;
+
+  useEffect(() => {
+    if (!mapExpanded) return;
+    // The page behind the overlay must not scroll under it.
+    const before = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => {
+      // Esc belongs to an open dialog first (it closes the dialog); only then to the overlay.
+      if (e.key === "Escape" && !e.defaultPrevented && dialog === null) setMapExpanded(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = before;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [mapExpanded, dialog]);
 
   /* ---- actions -------------------------------------------------------------------------------- */
 
@@ -424,18 +450,24 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
     }
     if (mapFailed) return <ErrorState role="alert" title={MAP_LOAD_FAILED} onRetry={() => setMapFailed(false)} />;
     return (
-      <EconomicMap
-        key={frame.bounds.join(",")}
-        styleUrl={styleUrl}
-        frame={frame}
-        centreLabel={centreLabel}
-        collection={collection}
-        visible={visible}
-        selectedId={selectedId}
-        flyTo={flyTo}
-        onPointClick={(id) => void openAsset(id, false)}
-        onLoadError={() => setMapFailed(true)}
-      />
+      <>
+        <div className="flex justify-end">
+          <MapExpandToggle expanded={mapExpanded} onToggle={() => setMapExpanded((v) => !v)} controls={MAP_REGION_ID} />
+        </div>
+        <EconomicMap
+          key={frame.bounds.join(",")}
+          styleUrl={styleUrl}
+          frame={frame}
+          centreLabel={centreLabel}
+          expanded={mapExpanded}
+          collection={collection}
+          visible={visible}
+          selectedId={selectedId}
+          flyTo={flyTo}
+          onPointClick={(id) => void openAsset(id, false)}
+          onLoadError={() => setMapFailed(true)}
+        />
+      </>
     );
   }
 
@@ -572,8 +604,18 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
           <DensityPending />
         </aside>
 
-        <div className="flex min-w-0 flex-1 flex-col gap-3 md:flex-row">
-          <div className="flex min-w-0 flex-1 flex-col gap-3">
+        <div
+          id={MAP_REGION_ID}
+          className={
+            mapExpanded
+              ? // Above the sticky topbar (z 30), below menus/tooltips (z 60). The detail panel stays INSIDE,
+                // so a click on a point still opens it next to the map.
+                "fixed inset-0 z-40 flex min-w-0 flex-col gap-3 bg-surface p-3 md:flex-row"
+              : "flex min-w-0 flex-1 flex-col gap-3 md:flex-row"
+          }
+          data-map-expanded={mapExpanded ? "" : undefined}
+        >
+          <div className={mapExpanded ? "flex min-h-0 min-w-0 flex-1 flex-col gap-3" : "flex min-w-0 flex-1 flex-col gap-3"}>
             {points !== null && !points.ok && (
               <Notice tone="neutral" title="Không thể tải dữ liệu kinh tế.">
                 {points.message}

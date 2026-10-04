@@ -135,6 +135,8 @@ export const UNVERIFIED_LEGEND = "Chấm nhạt: chưa xác minh.";
 export const CENTRE_LEGEND = "Chấm đỏ có quầng: tâm xã đã lưu trong khung bản đồ.";
 /** Label of the centre dot when the commune's name is not available. */
 export const CENTRE_FALLBACK_LABEL = "Tâm xã";
+export const MAP_EXPAND = "Mở rộng bản đồ";
+export const MAP_COLLAPSE = "Thu gọn";
 
 /* ---- parts of the spec that are not built (ADR 0068 §14) -------------------------------------- */
 

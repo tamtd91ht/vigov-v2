@@ -17,6 +17,8 @@ import {
   DELETE_REASON_REQUIRED,
   FRAME_ASK_ADMIN,
   FRAME_NOT_SET,
+  MAP_COLLAPSE,
+  MAP_EXPAND,
   NO_BASEMAP,
   NO_GROUPS,
   OUTSIDE_FRAME,
@@ -73,6 +75,10 @@ const ml = vi.hoisted(() => {
     }
     setMinZoom(z: number) {
       this.minZoom = z;
+    }
+    resizes = 0;
+    resize() {
+      this.resizes += 1;
     }
     getStyle() {
       return {
@@ -313,6 +319,50 @@ describe("no frame → NO map (ADR 0072 H3)", () => {
     await act(async () => button("Sổ địa điểm")!.click());
     await settle();
     expect(calls.some((c) => c.path.startsWith("/api/v1/map-assets?"))).toBe(true);
+  });
+});
+
+describe("Mở rộng bản đồ / Thu gọn", () => {
+  const region = () => host!.querySelector<HTMLElement>("#economic-map-region")!;
+
+  it("grows the map region (map + detail panel) into a page overlay, resizes the map, and Thu gọn brings it back", async () => {
+    await mount({ permissions: ["asset.read"] });
+    const map = await load();
+    expect(region().hasAttribute("data-map-expanded")).toBe(false);
+    const expand = button(MAP_EXPAND)!;
+    expect(expand.getAttribute("aria-pressed")).toBe("false");
+    expect(expand.getAttribute("aria-controls")).toBe("economic-map-region");
+
+    await act(async () => expand.click());
+    await act(async () => new Promise<void>((r) => requestAnimationFrame(() => r())));
+    expect(region().hasAttribute("data-map-expanded")).toBe(true);
+    expect(region().className).toContain("fixed");
+    expect(document.body.style.overflow).toBe("hidden");
+    expect(map.resizes).toBeGreaterThan(0);
+    // Still the SAME map: expanding never rebuilds it, so the frame (maxBounds) is untouched.
+    expect(ml.FakeMap.instances).toHaveLength(1);
+
+    const collapse = button(MAP_COLLAPSE)!;
+    expect(collapse.getAttribute("aria-pressed")).toBe("true");
+    await act(async () => collapse.click());
+    expect(region().hasAttribute("data-map-expanded")).toBe(false);
+    expect(document.body.style.overflow).toBe("");
+  });
+
+  it("Esc collapses the overlay", async () => {
+    await mount({ permissions: ["asset.read"] });
+    await load();
+    await act(async () => button(MAP_EXPAND)!.click());
+    expect(region().hasAttribute("data-map-expanded")).toBe(true);
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    expect(region().hasAttribute("data-map-expanded")).toBe(false);
+  });
+
+  it("no map on screen (no frame) → no expand button", async () => {
+    await mount({ permissions: ["asset.read"], frame: { configured: false } });
+    expect(button(MAP_EXPAND)).toBeUndefined();
   });
 });
 

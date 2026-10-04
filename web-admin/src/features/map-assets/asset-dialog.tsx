@@ -42,6 +42,7 @@ import {
   STATUS_OPTIONS,
 } from "./labels";
 import { insideFrame, round6, type MapFrame } from "./map-logic";
+import { MapExpandToggle } from "./map-expand";
 import { PositionPicker } from "./position-picker";
 
 export type AssetDialogMode =
@@ -78,6 +79,8 @@ export function AssetDialog({
   );
   const [fields, setFields] = useState<KetQua<{ items: readonly comms_mapFieldSchemaOut[] }> | null>(null);
   const [error, setError] = useState("");
+  // The pin map grows inside this dialog for precise placement, and shrinks back ("Thu gọn").
+  const [pickerExpanded, setPickerExpanded] = useState(false);
   const [sending, setSending] = useState(false);
 
   const masked = mode.kind === "edit" && mode.asset.masked;
@@ -210,10 +213,18 @@ export function AssetDialog({
           <legend className="px-1 text-xs font-semibold text-ink-700">Vị trí trên bản đồ *</legend>
           {styleUrl !== null && frame !== null && (
             <>
-              <p className="ghi-chu text-[13px] text-ink-500">{PIN_HINT}</p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="ghi-chu m-0 text-[13px] text-ink-500">{PIN_HINT}</p>
+                <MapExpandToggle
+                  expanded={pickerExpanded}
+                  onToggle={() => setPickerExpanded((v) => !v)}
+                  controls="position-picker-map"
+                />
+              </div>
               <PositionPicker
                 styleUrl={styleUrl}
                 frame={frame}
+                expanded={pickerExpanded}
                 lat={pLat}
                 lng={pLng}
                 onPick={(lat, lng) => {
