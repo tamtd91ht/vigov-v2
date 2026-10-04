@@ -9,7 +9,8 @@
       "trang_thai": "chua_lam",
       "bang_chung": "service-reporting/internal/ chỉ có doc.go ở app, domain, event, store và một routes.go; migrations/ chỉ có 0001_init.sql + 0002_audit_log_append_only.sql. Commit cuối chạm vào phần mã: c199eec — kiểm 2026-09-20",
       "no_confirm": [],
-      "tiep_theo": "SỬA 29/09/2026: reporting đã có tuyến đầu tiên (loi-he-thong-bao-cao). || Đây là service sẽ ĐỌC NHIỀU XÃ, nên nó không được viết một dòng nào trước khi khách chốt câu #4 — mức chi tiết cấp huyện/tỉnh được xem. `drift_guard` đang cảnh báo #4 bị lặng lẽ quyết vì đã có 13 chỗ mang đường đọc chéo. Cùng câu ấy chặn `service-identity/store-crosstenant`. Khi khởi công: mọi truy vấn chéo xã phải mang `// @cross-tenant: <lý do>` (luật 1 cấm #6) và bản thân lượt đọc chéo phải để lại vết kiểm (luật 6 bất biến 7) CÂU TỪNG CHẶN MỤC NÀY NAY ĐÃ CHỐT: #4 (ADR 0035 §D). Đó là ĐỀ XUẤT CỦA NHÀ CUNG CẤP ngày 22/09/2026, không phải trả lời của khách — đọc ADR 0035 trước khi dựa vào nó, và bảng \"cái gì đỏ nếu một mục bị phủ quyết\" ở cuối ADR ấy."
+      "tiep_theo": "SỬA 29/09/2026: reporting đã có tuyến đầu tiên (loi-he-thong-bao-cao). || Đây là service sẽ ĐỌC NHIỀU XÃ, nên nó không được viết một dòng nào trước khi khách chốt câu #4 — mức chi tiết cấp huyện/tỉnh được xem. `drift_guard` đang cảnh báo #4 bị lặng lẽ quyết vì đã có 13 chỗ mang đường đọc chéo. Cùng câu ấy chặn `service-identity/store-crosstenant`. Khi khởi công: mọi truy vấn chéo xã phải mang `// @cross-tenant: <lý do>` (luật 1 cấm #6) và bản thân lượt đọc chéo phải để lại vết kiểm (luật 6 bất biến 7) CÂU TỪNG CHẶN MỤC NÀY NAY ĐÃ CHỐT: #4 (ADR 0035 §D). Đó là ĐỀ XUẤT CỦA NHÀ CUNG CẤP ngày 22/09/2026, không phải trả lời của khách — đọc ADR 0035 trước khi dựa vào nó, và bảng \"cái gì đỏ nếu một mục bị phủ quyết\" ở cuối ADR ấy.",
+      "menu": "bao-cao"
     },
     {
       "id": "listen-addr-mac-dinh-8080",

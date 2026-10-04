@@ -3,11 +3,17 @@ id: 0053-tong-quan-dem-truc-tiep-o-service-so-huu
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: 085c023
+derived_from_commit: c5bfb1ad
 expires: null
 owns_facts:
   - "/tong-quan đếm trực tiếp ở service sở hữu từng sổ, web-admin ghép, không bảng snapshot, không qua service-reporting — và cái giá"
-  - "hai khoá lồng nhau report.read + khoá đọc của phân hệ trên mọi tuyến số liệu /tong-quan, và vì sao web không được tin x-vigov-permission của các tuyến ấy"
+  - "/bao-cao đếm trực tiếp ở service sở hữu như /tong-quan, không dùng service-reporting cho các con số ấy (chốt 04/10/2026)"
+  - "kỳ so sánh của /bao-cao: Tuần/Tháng/Quý/Năm như /tong-quan; kỳ Tuỳ chọn so với cùng số ngày liền trước; đặc tả 13 §3/§9.1 bị thay cho kỳ có tên (chốt 04/10/2026)"
+  - "bảng 'Tình hình thực hiện theo bộ phận' của /bao-cao: tên, phạm vi mọi đơn vị + dòng 'Chưa xác định bộ phận', chỉ nhiệm vụ, sắp theo Tổng việc, định nghĩa bốn cột, và vì sao không 'xếp hạng' (chốt 04/10/2026)"
+  - "phạm vi /bao-cao đợt này (MVP) và những phần không làm: xuất PDF/XLSX/PPTX, biểu đồ So sánh với kỳ trước, job Gửi báo cáo định kỳ, Thành lập mới (chốt 04/10/2026)"
+  - "lựa chọn khi dựng /bao-cao (không phải quyết định của khách): câu meta, cột Quá hạn là số tồn hiện tại, hai khoá cho task-unit-summary, đơn vị đã xoá mềm thành dòng riêng, ranh giới kỳ Tuỳ chọn"
+  - "budget-indicators giữ riêng budget.read, không lồng report.read — đóng việc còn mở #6 (chốt 04/10/2026)"
+  - "hai khoá lồng nhau report.read + khoá đọc của phân hệ trên mọi tuyến số liệu /tong-quan (trừ budget-indicators, sửa đổi 04/10/2026 B6), và vì sao web không được tin x-vigov-permission của các tuyến ấy"
   - "kỳ Tuần/Tháng/Quý/Năm (mặc định Tháng, tuần bắt đầu thứ Hai, Asia/Ho_Chi_Minh, client tính [from,to)) và kỳ so sánh = kỳ liền trước cùng loại, cùng phần đã trôi qua, chỉ cho số theo kỳ"
   - "định nghĩa từng ô của /tong-quan đợt 1: phản ánh nhận vào, đang xử lý, trễ theo trần phân loại; nhiệm vụ tạm dừng, việc con, đúng hạn theo han_ban_dau; văn bản đến theo ngay_den (tạm)"
   - "khối Cần xử lý ngay: top 10 gộp ba hàng đợi, những trường được hiện, ngưỡng nghiêm trọng 48 giờ làm việc qua identity, không có dòng 'quá hạn N ngày M giờ'"
@@ -213,3 +219,96 @@ PostgreSQL nào**. Tức phần SQL của các ô mới được kiểm bằng c
 → ADR 0001 · 0007 (giờ làm việc) · 0008 · 0010 · 0030 (`feedback.restricted`) · 0035 §#26, §#32 ·
 0052 (kho tệp)
 → Luật 1 · 3 · 5 bất biến 3c · 9 · 10
+
+## Sửa đổi 04/10/2026 — mở `/bao-cao`
+
+Người dùng chốt 04/10/2026 bốn điều cho menu `bao-cao` (đặc tả `docs/ui-ux/13-bao-cao.md`), B1–B4,
+và đóng việc còn mở #6, B6. B5 là lựa chọn khi dựng, không phải quyết định của khách.
+Mục này **đóng** dòng *"`/bao-cao` về sau"* ở §1 *Cái giá* (dòng 71 bản gốc). Không đảo điều nào
+của §1–§9: `/bao-cao` **dùng lại** chúng. Đặc tả là của khách, không sửa; chỗ lệch ghi ở đây.
+
+**Vì sao là sửa đổi, không ADR mới.** Câu hỏi do chính ADR này để mở; kỳ so sánh (§3) và định
+nghĩa từng ô (§4) đã sở hữu ở đây. ADR mới sẽ đặt sự thật "kỳ so sánh" ở hai tệp — luật 9 cấm #2.
+Đảo §1 mới cần ADR mới (ĐIỀU KIỆN DỪNG 1); đây là nới phạm vi, không đảo.
+
+### B1. Nguồn số: đếm trực tiếp, không qua `reporting`
+
+> Người dùng, 04/10/2026: `/bao-cao` đếm **trực tiếp** ở service sở hữu, đúng như `/tong-quan`;
+> **không** dùng `service-reporting` cho các con số này.
+
+Vì sao: đặc tả cấm hai trang lệch số (`docs/ui-ux/13-bao-cao.md:122`, cũng là lý do ADR 0010:74).
+Hai nguồn cho một con số thì sẽ lệch. Hệ quả: §2 (hai khoá lồng nhau) áp nguyên cho mọi ô
+`/bao-cao` dùng lại từ `/tong-quan` — trừ khối Thu – Chi, xem B6.
+
+### B2. Kỳ và so sánh
+
+> Người dùng, 04/10/2026: Tuần / Tháng / Quý / Năm trên `/bao-cao` so sánh theo **§3** — kỳ liền
+> trước cùng loại, cùng phần đã trôi qua — giống hệt `/tong-quan`. Kỳ mới **Tuỳ chọn** (từ–đến)
+> so với **cùng số ngày ngay liền trước**.
+
+| Nguồn bị thay | Nói gì | Thay cho |
+|---|---|---|
+| `docs/ui-ux/13-bao-cao.md:41` (§3), `:112` (§9.1) | *"cùng độ dài"* liền trước cho mọi kỳ | Chỉ kỳ có tên. Kỳ Tuỳ chọn vẫn theo đặc tả |
+
+Ranh giới ngày của kỳ Tuỳ chọn là lựa chọn khi dựng, không phải quyết định của khách — B5 mục e.
+
+### B3. Bảng "Tình hình thực hiện theo bộ phận"
+
+> Người dùng, 04/10/2026, theo đề xuất domain-expert.
+
+| Điểm | Quyết định |
+|---|---|
+| Tên | **"Tình hình thực hiện theo bộ phận"** — không "Xếp hạng bộ phận" (`13-bao-cao.md:11,53`) |
+| Vì sao không "xếp hạng" | Báo cáo của UBND không được "xếp hạng" Đảng uỷ, HĐND, MTTQ — những cơ quan UBND không chỉ đạo. Ví dụ đặc tả (`13-bao-cao.md:57-61`) chính là các khối ấy |
+| Hàng | **Mọi** đơn vị trong cây tổ chức của xã, kể cả đơn vị không có việc, cộng một dòng **"Chưa xác định bộ phận"** |
+| Sắp | `Tổng việc` giảm dần |
+| Phạm vi | **Chỉ nhiệm vụ** |
+| Đơn vị của một việc | `nhiem_vu.bo_phan_id` **hiện hành** (`service-petitions/migrations/0006_nhiem_vu.sql:269`), không bộ phận lúc giao |
+| Tổng việc | Việc **đang trong tay** trong kỳ: tạo trước cuối kỳ, và không hoàn thành trước đầu kỳ |
+| Hoàn thành | Cùng vị từ ô Hoàn thành của `/tong-quan` (`service-petitions/internal/store/task_summary.go:77-78`) |
+| Đúng hạn | Cùng vị từ `/tong-quan`: so `han_ban_dau`, mẫu là việc hoàn thành có `han_ban_dau` (`task_summary.go:82,99`). Mẫu rỗng thì hiện `—` |
+| Quá hạn | **Tồn hiện tại**, không theo kỳ — cùng vị từ ô Quá hạn của `/tong-quan` (`task_summary.go:62`) |
+
+Bảng **không** có dòng so sánh kỳ trước.
+
+### B4. Phạm vi đợt này
+
+> Người dùng, 04/10/2026: MVP = trang + 6 nhóm KPI dùng lại từ `/tong-quan` + kỳ Tuỳ chọn + bảng B3.
+
+| Không làm đợt này | Nguồn ở đặc tả | Khớp với |
+|---|---|---|
+| Xuất PDF / XLSX / PPTX | `13-bao-cao.md:87-95` | §6 *Ngoài đợt 1* ở trên; ADR 0068:260 |
+| Biểu đồ "So sánh với kỳ trước" | `13-bao-cao.md:69-83` | — |
+| Job "Gửi báo cáo định kỳ" | `13-bao-cao.md:116` | ADR 0058:126 — vẫn **HOÃN**: không có xuất tệp thì không có gì để gửi |
+| Chỉ tiêu "Thành lập mới" | `13-bao-cao.md:81` | — |
+
+Mục menu Báo cáo hôm nay mang dấu "?" — ADR 0068:287 sở hữu điều ấy.
+
+### B5. Lựa chọn khi dựng — KHÔNG phải quyết định của khách
+
+Phiên chính chọn 04/10/2026 khi dựng `/bao-cao`. Đây là **lựa chọn của nhà cung cấp**, chưa người
+dùng hay khách nào chốt câu chữ; khách nói khác thì đổi theo khách.
+
+| # | Điều | Lựa chọn | Vì sao |
+|---|---|---|---|
+| a | Dòng meta của trang (đặc tả `13-bao-cao.md:15,24` ghi *"cùng độ dài kỳ liền trước"*) | Kỳ có tên: dùng câu so sánh của `/tong-quan` (cùng loại, cùng phần đã trôi qua). Tuỳ chọn: *"so với cùng số ngày liền trước"* | Câu của đặc tả sai với kỳ có tên theo B2 |
+| b | Cột Quá hạn (đặc tả `13-bao-cao.md:64` đòi thanh tỷ lệ quá hạn/tổng) | **Số trần**, nhãn ghi rõ là tồn **hiện tại**. Không thanh | Tử số là tồn hiện tại, mẫu số là việc trong kỳ — một tỷ lệ trộn hai thời điểm là con số không ai đọc đúng được |
+| c | Khoá quyền của tuyến mới `GET /api/v1/task-unit-summary` | `report.read` **VÀ** `task.read`, lồng như `task-summary` | Cùng luật hai khoá của §2 |
+| d | Đơn vị không còn trong danh sách đơn vị (đã xoá mềm) mà còn việc | **Dòng riêng**, nhãn ghi là đơn vị không còn trong danh sách. Không bao giờ gộp vào "Chưa xác định bộ phận" | Gộp vào là gán việc của một đơn vị có thật cho "không ai" — ghi sai trách nhiệm |
+| e | Ranh giới kỳ Tuỳ chọn | *Từ ngày* D1 – *Đến ngày* D2 **tính cả hai ngày**: `[D1 00:00, D2+1 00:00)` ở Asia/Ho_Chi_Minh, N ngày; kỳ so sánh `[D1 − N ngày, D1)` | Người chọn "đến ngày 17" hiểu là gồm ngày 17; nửa mở giữ quy ước `[from, to)` của §3 |
+
+### B6. Đóng việc còn mở #6 — `budget-indicators` giữ một khoá `budget.read`
+
+> Người dùng, 04/10/2026: việc còn mở #6 (bảng *Còn mở* ở trên) **đóng**. Tuyến
+> `GET /api/v1/budget-indicators` **giữ riêng `budget.read`**, không lồng `report.read`.
+
+Điều này thay mục *⚠ Còn nợ* cuối §2 và dòng #6 của bảng *Còn mở*.
+
+Vì sao: cùng tuyến ấy nuôi thẻ chỉ số năm của sổ Thu – Chi
+(`web-admin/src/features/thu-chi/bang-thu-chi.tsx:223`; tài liệu tuyến `@screen 07-thu-chi-ngan-sach
+§9 quy tắc 6`, `service-finance/internal/http/routes.go:979-987`). Lồng `report.read` sẽ giấu thẻ
+khỏi cán bộ ngân sách không có `report.read`. Cổng cho khối Thu – Chi trên `/tong-quan` và
+`/bao-cao` nằm ở chỗ khác: khối chỉ hiện với tài khoản có `budget.read`
+(`web-admin/src/features/dashboard/overview.tsx:133`, `showBudget`); máy chủ vẫn đòi `budget.read`.
+Hệ quả: với khối Thu – Chi, người có `budget.read` mà không có `report.read` vẫn đọc được ba chỉ số
+năm — đúng điều sổ Thu – Chi vốn cho họ đọc.
