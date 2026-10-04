@@ -212,6 +212,11 @@ type (
 	DeNghiLuiHanChoDuyetDoc interface {
 		ChoDuyet(ctx context.Context, loc petstore.LocDeNghiChoDuyet, yc page.Request) (
 			page.Result[domain.DeNghiLuiHanChoDuyet], error)
+
+		// CountPending is the same queue's size under the same filter, for
+		// GET /api/v1/task-extension-counts. On THIS interface so the count cannot be wired to a
+		// reader other than the one the queue pages through.
+		CountPending(ctx context.Context, loc petstore.LocDeNghiChoDuyet) (int, error)
 	}
 
 	// GhiNhiemVuUseCase is the six STAFF acts on a task, each of which opens a transaction and
@@ -1542,7 +1547,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// POST /api/v1/tasks/{ma}/assignment, below. PATCH still cannot move `bo_phan_id` or
 	// `nguoi_thuc_hien_ma` — folding it in would hand assignment to every holder of `task.update`.
 
-	// @summary  Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo phạm vi (`all` · `mine` · `related`) · trạng thái · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · sắp đến hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối) · `priority` (theo thứ tự danh mục mức ưu tiên của xã, việc không có mức ở cuối) · `title`
+	// @summary  Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo phạm vi (`all` · `mine` · `related` · `assigned-by-me` = tôi tạo hoặc tôi là lãnh đạo giao việc) · trạng thái · chưa hoàn thành (`incomplete=true`, mọi trạng thái trừ `hoan-thanh`) · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · sắp đến hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối) · `priority` (theo thứ tự danh mục mức ưu tiên của xã, việc không có mức ở cuối) · `title`
 	// @screen   02-nhiem-vu §3, §4, §5.10
 	// 400 covers a filter the server REFUSES rather than ignores.
 	//
@@ -1558,8 +1563,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	// boundary (petstore.SapXepNhiemVu, petstore.DanhSach). Every row carries `parent` as a register number and
 	// `child_count`, both resolved for the whole page in two statements.
 	//
-	// 500 additionally covers `scope=mine` on a principal with no staff business code — a wiring
-	// fault, refused rather than silently widened to the whole register.
+	// 500 additionally covers `scope=mine` / `scope=related` / `scope=assigned-by-me` on a principal
+	// with no staff business code — a wiring fault, refused rather than silently widened to the whole
+	// register. `assigned-by-me` takes "me" from the session only (ADR 0071); no parameter names it.
 	//
 	// NO idem.* DECLARATION: a GET changes no state.
 	//
@@ -2133,6 +2139,28 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/task-extensions",
 		authz.RequirePermission(d.Checker, "task.read")(
 			http.HandlerFunc(h.DanhSachDeNghiLuiHan)))
+
+	// SỐ ĐỀ NGHỊ LÙI HẠN ĐANG CHỜ (ADR 0071, Sổ tay lãnh đạo — huy hiệu nhóm "Duyệt lùi hạn") — the size
+	// of the queue above under EXACTLY its filters (one parser, pendingExtensionFilterFromRequest; one
+	// predicate, petstore.pendingExtensionFilter). A sibling count route and not a `total` on the
+	// queue: page.Result carries none by design, and task-counts is the precedent (task_counts.go).
+	//
+	// `task.read`, THE QUEUE'S OWN KEY: the number reveals nothing the queue does not, and a second key
+	// would let an account see a badge over a list it may not read. NO KEY WAS INVENTED (rule 5,
+	// invariant 3c). `approver=me` and `task=` behave as on the queue — the same 400s, the same 500 for
+	// a principal with no staff code. Paging parameters are ignored. 401 is RequirePermission's answer
+	// to no session AND to a session of another commune. NO idem.* DECLARATION: a GET. NO AUDIT ENTRY.
+	//
+	// @summary  Số đề nghị lùi hạn đang chờ duyệt, cùng bộ lọc với hàng chờ (`approver=me` · `task=NV19`) — số trên huy hiệu "Duyệt lùi hạn" của Sổ tay lãnh đạo
+	// @screen   03-so-tay-lanh-dao §3
+	// @reply    200 taskExtensionCountOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/task-extension-counts",
+		authz.RequirePermission(d.Checker, "task.read")(
+			http.HandlerFunc(h.TaskExtensionCount)))
 
 	// --- THE LEADERSHIP OVERVIEW (/tong-quan, docs/ui-ux/01). FOUR READ ROUTES ---------------------
 	//

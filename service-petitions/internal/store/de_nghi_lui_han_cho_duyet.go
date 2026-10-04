@@ -10,6 +10,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -111,17 +112,7 @@ const cotDeNghiChoDuyet = `id, nhiem_vu_id, nguoi_de_nghi_ma, han_moi, ly_do, th
 func (s *DeNghiLuiHanStore) ChoDuyet(ctx context.Context, loc LocDeNghiChoDuyet, yc page.Request) (
 	page.Result[domain.DeNghiLuiHanChoDuyet], error) {
 
-	args := []any{string(domain.ChoDuyetLuiHan)}
-	dieuKien := ""
-	if loc.LanhDaoGiaoViecMa != "" {
-		args = append(args, loc.LanhDaoGiaoViecMa)
-		dieuKien = ` AND lanh_dao_giao_viec_ma = $3`
-	}
-	if loc.TaskCode != "" {
-		// NUMBERED FROM WHAT IS ALREADY BOUND: $3 when `approver=me` is absent, $4 when it is present.
-		args = append(args, loc.TaskCode)
-		dieuKien += ` AND nhiem_vu_ma = $` + strconv.Itoa(len(args)+1)
-	}
+	dieuKien, args := pendingExtensionFilter(loc)
 
 	return store.QueryPage(ctx, s.db.For(ctx), store.PageSpec{
 		Columns: cotDeNghiChoDuyet,
@@ -146,4 +137,56 @@ func (s *DeNghiLuiHanStore) ChoDuyet(ctx context.Context, loc LocDeNghiChoDuyet,
 		d.LanhDaoGiaoViecMa = lanhDaoGiaoViec.String
 		return d, d.DeNghi.ID, nil
 	})
+}
+
+// pendingExtensionFilter is the queue's predicate after the commune: the pending status as $2, then
+// the optional filters, each a bound value. Returns the WHERE tail and the values from $2 on.
+//
+// ONE BUILDER FOR THE PAGE AND THE COUNT (CountPending), so the badge over the Sổ tay's "Duyệt lùi
+// hạn" group and the rows under it are the same set by construction (ADR 0071: counts use the list's
+// own predicate).
+func pendingExtensionFilter(loc LocDeNghiChoDuyet) (string, []any) {
+	args := []any{string(domain.ChoDuyetLuiHan)}
+	dieuKien := ""
+	if loc.LanhDaoGiaoViecMa != "" {
+		args = append(args, loc.LanhDaoGiaoViecMa)
+		dieuKien = ` AND lanh_dao_giao_viec_ma = $3`
+	}
+	if loc.TaskCode != "" {
+		// NUMBERED FROM WHAT IS ALREADY BOUND: $3 when `approver=me` is absent, $4 when it is present.
+		args = append(args, loc.TaskCode)
+		dieuKien += ` AND nhiem_vu_ma = $` + strconv.Itoa(len(args)+1)
+	}
+	return dieuKien, args
+}
+
+// CountPending counts the pending extension requests under the SAME filter ChoDuyet pages through —
+// GET /api/v1/task-extension-counts. ONE STATEMENT over the same derived table, so the commune binds
+// both tables and the soft-deleted rows of either side are excluded exactly as on the page.
+//
+// FORMATTING CONSTRAINT (fake driver): the SELECT list is `count(*)`, read between the first
+// `SELECT ` and the first ` FROM ` — the outer one store.Scoped.Query builds.
+func (s *DeNghiLuiHanStore) CountPending(ctx context.Context, loc LocDeNghiChoDuyet) (int, error) {
+	dieuKien, args := pendingExtensionFilter(loc)
+	rows, err := s.db.For(ctx).Query(ctx, "count(*)", bangDeNghiChoDuyet, dieuKien, args...)
+	if err != nil {
+		return 0, fmt.Errorf("de_nghi_lui_han: đếm hàng chờ duyệt: %w", err)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		// An aggregate without GROUP BY always yields one row; none means the driver failed.
+		if err := rows.Err(); err != nil {
+			return 0, fmt.Errorf("de_nghi_lui_han: đếm hàng chờ duyệt: %w", err)
+		}
+		return 0, errors.New("de_nghi_lui_han: đếm hàng chờ duyệt: câu đếm không trả dòng nào")
+	}
+	var n int64
+	if err := rows.Scan(&n); err != nil {
+		return 0, fmt.Errorf("de_nghi_lui_han: đếm hàng chờ duyệt: đọc dòng: %w", err)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("de_nghi_lui_han: đếm hàng chờ duyệt: %w", err)
+	}
+	return int(n), nil
 }

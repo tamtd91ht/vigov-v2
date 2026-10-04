@@ -63,6 +63,24 @@ func (g *deNghiChoDuyetGia) ChoDuyet(ctx context.Context, loc petstore.LocDeNghi
 	return ra, nil
 }
 
+// CountPending counts what ChoDuyet would return for the same commune and filter — the fake's own
+// statement of "same predicate", so the handler test can compare the badge with the queue.
+func (g *deNghiChoDuyetGia) CountPending(ctx context.Context, loc petstore.LocDeNghiChoDuyet) (int, error) {
+	g.goi++
+	g.xa, g.loc = tenant.MustFrom(ctx), loc
+	if g.loi != nil {
+		return 0, g.loi
+	}
+	n := 0
+	for _, d := range g.theo[g.xa] {
+		if loc.LanhDaoGiaoViecMa != "" && d.LanhDaoGiaoViecMa != loc.LanhDaoGiaoViecMa {
+			continue
+		}
+		n++
+	}
+	return n, nil
+}
+
 var (
 	mocDNCho1   = time.Date(2026, 9, 24, 2, 0, 0, 0, time.UTC)
 	mocDNCho2   = time.Date(2026, 9, 25, 3, 0, 0, 0, time.UTC)

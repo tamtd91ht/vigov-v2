@@ -553,9 +553,10 @@ func taskListIncludeFromQuery(q map[string][]string) (bool, error) {
 // taskFilterNeeds names the parts of the filter locNhiemVuTuQuery may NOT fill in, because they come
 // from the session or from identity and that function has neither.
 type taskFilterNeeds struct {
-	mine    bool // `scope=mine`    — the caller's own code, from the session
-	related bool // `scope=related` — the caller's own code AND units (identity StaffOrgUnits)
-	soon    bool // `soon=true`     — the commune's cutoff (identity ResolveDueSoonCutoff)
+	mine         bool // `scope=mine`           — the caller's own code, from the session
+	related      bool // `scope=related`        — the caller's own code AND units (identity StaffOrgUnits)
+	assignedByMe bool // `scope=assigned-by-me` — the caller's own code, from the session (ADR 0071)
+	soon         bool // `soon=true`            — the commune's cutoff (identity ResolveDueSoonCutoff)
 }
 
 // taskFilterFromRequest turns the query string into the store's filter, resolving `scope=mine` and
@@ -583,7 +584,7 @@ func (h *Handler) taskFilterFromRequest(w http.ResponseWriter, r *http.Request,
 		return loc, false
 	}
 
-	if needs.mine || needs.related {
+	if needs.mine || needs.related || needs.assignedByMe {
 		// FAIL CLOSED. With no business code to compare against, the honest answers are "refuse" and
 		// "return the whole register" — and the second is a screen labelled `Giao cho tôi` showing
 		// every task in the commune, which nobody would report as a fault. An empty `.Ma` on a staff
@@ -599,6 +600,12 @@ func (h *Handler) taskFilterFromRequest(w http.ResponseWriter, r *http.Request,
 		}
 		if needs.mine {
 			loc.NguoiThucHienMa = principal.Ma
+		}
+		if needs.assignedByMe {
+			// THE SESSION'S CODE AND NOTHING ELSE. No query parameter can fill this field —
+			// locNhiemVuTuQuery never reads one into it — so the Sổ tay's "Việc tôi đã giao" cannot be
+			// pointed at somebody else's assignments by editing the URL.
+			loc.AssignedByStaffCode = principal.Ma
 		}
 		if needs.related {
 			// THE CALLER'S OWN CODE, FROM THE SESSION — StaffOrgUnits' contract (rule 4, invariant 2
@@ -737,8 +744,23 @@ func locNhiemVuTuQuery(q map[string][]string) (petstore.LocNhiemVu, taskFilterNe
 		// last from identity's StaffOrgUnits (petstore.relatedCondition lists them). Never three of
 		// them: a tab missing the department's work reports nothing.
 		needs.related = true
+	case "assigned-by-me":
+		// The Sổ tay lãnh đạo's "Việc tôi đã giao" (ADR 0071): I created it OR I am the leader named as
+		// having handed it out. Narrower than `related` on purpose — no assignee, timeline or unit
+		// clause. "Me" comes from the session (taskFilterFromRequest); no parameter names anybody.
+		needs.assignedByMe = true
 	default:
 		return loc, needs, errTaskScopeInvalid
+	}
+
+	// ADR 0071's "chưa đóng": every status but `hoan-thanh`, `tam-dung` INCLUDED — so it is neither
+	// `metric=in_progress` nor overdue's open set, and is its own parameter rather than a metric.
+	// `incomplete=true` IS THE ONLY ACCEPTED SPELLING, for the reason `late` has one.
+	if s := lay("incomplete"); s != "" {
+		if s != "true" {
+			return loc, needs, errTaskIncompleteInvalid
+		}
+		loc.Incomplete = true
 	}
 
 	// `che_do_xem` (Kanban / Danh sách / Sổ theo dõi) IS DELIBERATELY NOT READ. It chooses a LAYOUT
@@ -766,7 +788,9 @@ var (
 	errPhamViKhongHopLe = errors.New(
 		"`scope` chỉ nhận `all` hoặc `mine`")
 	errTaskScopeInvalid = errors.New(
-		"`scope` chỉ nhận `all`, `mine` hoặc `related`")
+		"`scope` chỉ nhận `all`, `mine`, `related` hoặc `assigned-by-me`")
+	errTaskIncompleteInvalid = errors.New(
+		"`incomplete` chỉ nhận giá trị `true`; bỏ hẳn tham số nếu không lọc việc chưa hoàn thành")
 	errTaskSoonInvalid = errors.New(
 		"`soon` chỉ nhận giá trị `true`; bỏ hẳn tham số nếu không lọc việc sắp đến hạn")
 	errParentCodeTooLong = fmt.Errorf(

@@ -264,5 +264,12 @@ func registerFilterSummary(loc petstore.LocNhiemVu) map[string]any {
 	if loc.Related != nil {
 		out["scope"] = "related"
 	}
+	// The scope's NAME and not the code behind it: the code is the actor's own, already on the entry.
+	if loc.AssignedByStaffCode != "" {
+		out["scope"] = "assigned-by-me"
+	}
+	if loc.Incomplete {
+		out["incomplete"] = true
+	}
 	return out
 }

@@ -323,6 +323,26 @@ type LocNhiemVu struct {
 	// Related is §3's "Liên quan đến tôi" (`scope=related`). nil = no filter. A POINTER so the struct
 	// stays comparable (the handler tests compare it whole) while carrying a list.
 	Related *TaskRelatedScope
+
+	// AssignedByStaffCode is the Sổ tay lãnh đạo's "Việc tôi đã giao" (`scope=assigned-by-me`, ADR
+	// 0071): `nguoi_tao_ma = me OR lanh_dao_giao_viec_ma = me`. "" = no filter.
+	//
+	// ALWAYS THE CALLER'S OWN CODE, put here by the handler from the SESSION principal — no query
+	// parameter names it (rule 4, invariant 2 in its staff form). Unlike NguoiThucHienMa no picker
+	// shares this field: "who gave this out" is only ever asked about oneself, so a value from the
+	// request could only be a claim about who the caller is.
+	//
+	// WHY THE CREATOR COUNTS: the clerk enters most assignments on a leader's behalf (ADR 0038:25-28),
+	// and ADR 0071 chose to show the clerk what they entered rather than lose the leader's own entries.
+	AssignedByStaffCode string
+
+	// Incomplete restricts the page to every status EXCEPT `hoan-thanh` (`incomplete=true`, ADR 0071's
+	// "chưa đóng").
+	//
+	// ⚠ NOT metric=in_progress AND NOT metric=overdue's open set: those exclude `tam-dung`, this
+	// includes it, along with `chuyen-tiep` and `cho-duyet`. A leader's "việc tôi đã giao" column
+	// keeps a suspended task in view — it is still work they handed out that nobody has finished.
+	Incomplete bool
 }
 
 // TaskRelatedScope is who "tôi" is for `scope=related`, resolved by the handler from the SESSION —
@@ -465,6 +485,25 @@ func locNhiemVuThanhSQL(loc LocNhiemVu) (string, []any) {
 
 	if loc.Related != nil {
 		dieuKien += relatedCondition(loc.Related, &args)
+	}
+
+	if loc.AssignedByStaffCode != "" {
+		// ONE BOUND CODE, BOTH COLUMNS, ONE PARENTHESISED OR — so the OR cannot bind to a neighbouring
+		// AND. Exactly the two "tôi giao" clauses of relatedCondition and nothing else: no assignee,
+		// no timeline, no unit (ADR 0071).
+		//
+		// ⚠ NO INDEX SERVES EITHER COLUMN (only `nhiem_vu_nguoi_thuc_hien`, migration 0006); the OR
+		// scans this commune's partition. Bounded by one commune; an index is a migration on a
+		// populated partitioned table, which this pass does not own — reported.
+		args = append(args, loc.AssignedByStaffCode)
+		me := "$" + strconv.Itoa(len(args)+1)
+		dieuKien += " AND (nguoi_tao_ma = " + me + " OR lanh_dao_giao_viec_ma = " + me + ")"
+	}
+
+	if loc.Incomplete {
+		// A LITERAL FROM THE GO CONSTANT, the way taskInProgressCondition spells its statuses: one
+		// spelling of the code, and nothing from the request reaches the text.
+		dieuKien += " AND trang_thai <> '" + string(domain.HoanThanh) + "'"
 	}
 
 	if loc.Metric != "" {

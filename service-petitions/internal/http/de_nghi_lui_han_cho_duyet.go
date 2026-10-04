@@ -111,44 +111,8 @@ func (h *Handler) DanhSachDeNghiLuiHan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var (
-		loc        petstore.LocDeNghiChoDuyet
-		nguoiDuyet string
-	)
-	// Read by map index, as locNhiemVuTuQuery reads its filters.
-	if v := thamSo["approver"]; len(v) > 0 {
-		nguoiDuyet = v[0]
-	}
-	switch nguoiDuyet {
-	case "":
-	case "me":
-		// "ME" IS THE SESSION'S STAFF CODE AND NOTHING ELSE. FAIL CLOSED on an empty one: the honest
-		// answers are "refuse" and "return the whole commune", and the second is a screen labelled
-		// `Chờ tôi duyệt` listing everybody's requests. An empty `.Ma` on a staff principal is a wiring
-		// fault, answered 500 as `scope=mine` on GET /api/v1/tasks answers it.
-		principal, ok := authz.From(ctx)
-		if !ok || principal.Ma == "" {
-			h.d.Log.Error("bộ lọc `approver=me` chạy mà chủ thể không có mã cán bộ — SAI CẤU HÌNH ROUTE",
-				"xa", string(tenant.MustFrom(ctx)), "duong", r.URL.Path)
-			httpx.WriteError(w, http.StatusInternalServerError, "internal",
-				"Đã xảy ra lỗi. Vui lòng thử lại.", "")
-			return
-		}
-		loc.LanhDaoGiaoViecMa = principal.Ma
-	default:
-		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", errNguoiDuyetKhongHopLe.Error(), "")
-		return
-	}
-
-	// `task=NV19` — ONE task's pending requests, by register number, for §5.8's block in its drawer.
-	// Not looked up here: the store compares it with the joined task's `ma`, so a number of another
-	// commune or of nothing is an empty page, indistinguishable from a task with nothing pending.
-	// Bounded at the length an issued number can have; the value is not echoed.
-	if v := thamSo["task"]; len(v) > 0 {
-		loc.TaskCode = v[0]
-	}
-	if len([]rune(loc.TaskCode)) > domain.MaNhiemVuToiDa {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", errTaskCodeTooLong.Error(), "")
+	loc, ok := h.pendingExtensionFilterFromRequest(w, r, thamSo)
+	if !ok {
 		return
 	}
 
@@ -172,4 +136,88 @@ func (h *Handler) DanhSachDeNghiLuiHan(w http.ResponseWriter, r *http.Request) {
 		ra.Items = append(ra.Items, deNghiChoDuyetRaNgoai(d))
 	}
 	vietJSON(w, http.StatusOK, ra)
+}
+
+// pendingExtensionFilterFromRequest turns `approver` and `task` into the queue's filter, writing the
+// refusal itself and reporting false when it did.
+//
+// ONE FUNCTION FOR THE QUEUE AND ITS COUNT (GET /api/v1/task-extension-counts), for the reason
+// taskFilterFromRequest is one function for the task list and /task-counts: a badge and the list it
+// heads must turn one query string into one filter.
+func (h *Handler) pendingExtensionFilterFromRequest(w http.ResponseWriter, r *http.Request,
+	q map[string][]string) (petstore.LocDeNghiChoDuyet, bool) {
+
+	ctx := r.Context()
+	var (
+		loc      petstore.LocDeNghiChoDuyet
+		approver string
+	)
+	// Read by map index, as locNhiemVuTuQuery reads its filters.
+	if v := q["approver"]; len(v) > 0 {
+		approver = v[0]
+	}
+	switch approver {
+	case "":
+	case "me":
+		// "ME" IS THE SESSION'S STAFF CODE AND NOTHING ELSE. FAIL CLOSED on an empty one: the honest
+		// answers are "refuse" and "return the whole commune", and the second is a screen labelled
+		// `Chờ tôi duyệt` listing everybody's requests. An empty `.Ma` on a staff principal is a wiring
+		// fault, answered 500 as `scope=mine` on GET /api/v1/tasks answers it.
+		principal, ok := authz.From(ctx)
+		if !ok || principal.Ma == "" {
+			h.d.Log.Error("bộ lọc `approver=me` chạy mà chủ thể không có mã cán bộ — SAI CẤU HÌNH ROUTE",
+				"xa", string(tenant.MustFrom(ctx)), "duong", r.URL.Path)
+			httpx.WriteError(w, http.StatusInternalServerError, "internal",
+				"Đã xảy ra lỗi. Vui lòng thử lại.", "")
+			return loc, false
+		}
+		loc.LanhDaoGiaoViecMa = principal.Ma
+	default:
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", errNguoiDuyetKhongHopLe.Error(), "")
+		return loc, false
+	}
+
+	// `task=NV19` — ONE task's pending requests, by register number, for §5.8's block in its drawer.
+	// Not looked up here: the store compares it with the joined task's `ma`, so a number of another
+	// commune or of nothing is an empty page, indistinguishable from a task with nothing pending.
+	// Bounded at the length an issued number can have; the value is not echoed.
+	if v := q["task"]; len(v) > 0 {
+		loc.TaskCode = v[0]
+	}
+	if len([]rune(loc.TaskCode)) > domain.MaNhiemVuToiDa {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", errTaskCodeTooLong.Error(), "")
+		return loc, false
+	}
+	return loc, true
+}
+
+// taskExtensionCountOut is the reply of GET /api/v1/task-extension-counts: how many requests the
+// queue holds under the filters sent. Every request in the queue is pending, so there is one number.
+type taskExtensionCountOut struct {
+	Count int `json:"count"`
+}
+
+// TaskExtensionCount serves the number of pending extension requests under the queue's own filters —
+// the badge over the Sổ tay lãnh đạo's "Duyệt lùi hạn" group (ADR 0071). GET /api/v1/task-extension-counts
+//
+// A ROUTE OF ITS OWN AND NOT A `total` ON THE QUEUE, for the reason task-counts gives: page.Result
+// carries no total by design (a keyset read never computes one, skills/rest-api-design §5 #4).
+// Paging parameters are NOT READ.
+//
+// NO AUDIT ENTRY: a count of one commune, no reason text, no personal data.
+func (h *Handler) TaskExtensionCount(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	loc, ok := h.pendingExtensionFilterFromRequest(w, r, r.URL.Query())
+	if !ok {
+		return
+	}
+	n, err := h.d.DeNghiChoDuyet.CountPending(ctx, loc)
+	if err != nil {
+		h.d.Log.Error("đếm hàng chờ duyệt lùi hạn: lỗi hệ thống",
+			"xa", string(tenant.MustFrom(ctx)), "err", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal",
+			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return
+	}
+	vietJSON(w, http.StatusOK, taskExtensionCountOut{Count: n})
 }
