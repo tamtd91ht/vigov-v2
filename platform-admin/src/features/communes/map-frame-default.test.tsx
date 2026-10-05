@@ -66,6 +66,7 @@ const COMMUNE: CommuneDetail = {
   active: true,
   domains: ["chinh.example.vn"],
   mini_apps: [],
+  unbound_secrets: [],
 };
 
 const err = (status: number, code: string) => new ApiError(status, code, "", "");

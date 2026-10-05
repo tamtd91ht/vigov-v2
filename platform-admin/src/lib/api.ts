@@ -66,11 +66,38 @@ export type CommuneSummary = {
 /** operator_communes.go `communePageView`. */
 export type CommunePage = { items: CommuneSummary[]; next_cursor: string; has_more: boolean };
 
-/** operator_communes.go `miniAppView`. */
-export type MiniApp = { app_id: string; mode: string; active: boolean; created_at: string; created_by: string };
+/**
+ * operator_mini_app_secrets.go `secretStatusView`: metadata about an App ID's secret, NEVER the value
+ * (owner 05/10/2026, ADR 0070 §Sửa đổi #3). `set_at` / `set_by` only with `da_dat`. `khong_ro` = identity
+ * did not answer; it says nothing about whether a secret exists.
+ */
+export type MiniAppSecretStatus = {
+  status: "da_dat" | "chua_dat" | "khong_ro";
+  set_at?: string;
+  set_by?: string;
+};
 
-/** operator_communes.go `communeDetailView`. */
-export type CommuneDetail = CommuneSummary & { mini_apps: MiniApp[] };
+/**
+ * operator_communes.go `miniAppView`. Soft-deleted App IDs are never listed (ADR 0070 §Sửa đổi #2).
+ * `secret` is absent on the attach answer only (one row just created); every detail carries it.
+ */
+export type MiniApp = {
+  app_id: string;
+  mode: string;
+  active: boolean;
+  created_at: string;
+  created_by: string;
+  secret?: MiniAppSecretStatus;
+};
+
+/** operator_mini_app_secrets.go `unboundSecretView`: a secret identity still holds for a removed App ID. */
+export type UnboundSecret = { app_id: string; secret: MiniAppSecretStatus };
+
+/**
+ * operator_communes.go `communeDetailView`. `unbound_secrets`: null = identity could not be asked
+ * (unknown), [] = none.
+ */
+export type CommuneDetail = CommuneSummary & { mini_apps: MiniApp[]; unbound_secrets: UnboundSecret[] | null };
 
 /** operator_communes.go `provinceView`. */
 export type Province = { id: string; name: string };
@@ -123,8 +150,11 @@ export type UploadPolicyChange = {
 /** operator_launch.go `sharedMiniAppView`. */
 export type SharedMiniApp = { app_id: string; created_at: string; created_by: string };
 
-/** operator_launch.go `launchLinkView`. */
-export type LaunchLink = { url: string; domain: string; app_id: string };
+/**
+ * operator_launch.go `launchLinkView`. `source` says which app the link opens: `rieng` = the
+ * commune's own running app (`domain` may then be ""), `chung` = the shared app (ADR 0070 §Sửa đổi #4).
+ */
+export type LaunchLink = { url: string; domain: string; app_id: string; source: "rieng" | "chung" };
 
 /**
  * operator_map_frame_default.go `mapFrameDefaultView` (ADR 0072 amendment 2, K1–K2). Without a default:
@@ -403,7 +433,7 @@ export type SecretRetirementError = "identity_unavailable" | "session_not_live" 
 
 /**
  * operator_mini_app_secrets.go `miniAppChangeView`: the commune as it now stands, plus — whenever an
- * App ID was turned off — whether its secret was retired. `secret_retired` absent on a reactivation.
+ * App ID was removed — whether its secret was retired.
  */
 export type MiniAppChange = CommuneDetail & {
   secret_retired?: boolean;
@@ -434,14 +464,14 @@ export function replaceMiniApp(
   });
 }
 
-/** `active: false` detaches (turns off, never deletes); `true` reactivates the commune's own App ID. */
-export function setMiniAppActivation(
-  communeId: string,
-  appId: string,
-  input: { active: boolean; reason: string },
-): Promise<MiniAppChange> {
+/**
+ * Removes the commune's own App ID: a soft delete, permanent — it can never be attached again
+ * (ADR 0070 §Sửa đổi 05/10/2026 #2). `active: true` is no longer accepted (422
+ * `mini_app_reactivation_removed`), so this console never sends it.
+ */
+export function removeMiniApp(communeId: string, appId: string, input: { reason: string }): Promise<MiniAppChange> {
   return call("PUT", `/communes/${id(communeId)}/mini-apps/${id(appId)}/activation`, {
-    active: input.active,
+    active: false,
     reason: input.reason,
   });
 }
@@ -458,6 +488,7 @@ export function setMiniAppSecret(
   });
 }
 
+/** Also accepts a removed App ID — the ones listed in the detail's `unbound_secrets`. */
 export function retireMiniAppSecret(communeId: string, appId: string, input: { reason: string }): Promise<MiniAppSecretRetirement> {
   return call("DELETE", `/communes/${id(communeId)}/mini-apps/${id(appId)}/secret`, { reason: input.reason });
 }

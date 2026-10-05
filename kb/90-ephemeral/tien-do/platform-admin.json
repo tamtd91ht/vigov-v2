@@ -52,6 +52,15 @@
       "tiep_theo": "MÂU THUẪN CẦN CHỦ DỰ ÁN XEM: ADR 0048 §Sửa 27/09 ghi 'phần giao diện dùng chung (nếu có) tách thành gói chung, không chép' — thẻ này CHÉP 10 component + cn.ts + token từ web-admin theo chỉ đạo của thẻ (gói chung ngoài phạm vi). Hai bản phải đổi cùng nhau tới khi có gói chung. Chưa kiểm trên trình duyệt thật với service-platform thật. Dấu đỏ–vàng nhận diện của web-admin cố ý không dùng (đây là console của nhà cung cấp, không phải của cơ quan nhà nước)."
     },
     {
+      "id": "app-rieng-xoa-mem-trang-thai-khoa-nguon-qr",
+      "viec": "Chi tiết xã theo quyết định 05/10/2026 (ADR 0070 §Sửa đổi): bỏ Bật lại, Gỡ/Đổi là vĩnh viễn (xoá mềm), cột Khoá bí mật (đặt lúc … bởi …), khoá còn lưu của App ID đã gỡ + Thu hồi, thẻ QR ghi nguồn app riêng/app chung",
+      "trang_thai": "dang_lam",
+      "bang_chung": "src/features/communes/mini-app-section.tsx (RemoveDialog/RemoveWarning, SecretStatusText da_dat|chua_dat|khong_ro, UnboundSecretList, MANUAL_STEPS), launch-link-card.tsx launchSourceLabel, commune-detail.tsx (thẻ QR khoá theo App ID riêng đang chạy), lib/api.ts removeMiniApp + kiểu secret/unbound_secrets/source, lib/errors.ts mini_app_removed/mini_app_reactivation_removed/own_mini_app_ambiguous; operator-log-model.ts tat_mini_app 'Gỡ Mini App riêng' (bat_lai_mini_app giữ cho dòng cũ). typecheck + lint + vitest 10 tệp 220/220 + build xanh (05/10).",
+      "no_confirm": [],
+      "tiep_theo": "Chưa xem trên trình duyệt thật với platform 5e44473a + identity có ListMiniAppSecretStatuses. Người dùng báo 05/10: đã gỡ App ID cũ trên màn nhưng 'chưa set đúng trạng thái', và không thấy chức năng secret — chờ ảnh màn để đối chiếu bản đang chạy trên admin.vigov.vn.",
+      "menu": "phan-anh-nguoi-dan"
+    },
+    {
       "id": "doi-go-app-id-mini-app",
       "viec": "Màn chi tiết xã: đổi / gỡ / bật lại App ID Mini App riêng và đặt khoá bí mật App ID (ADR 0070 kèm Bổ sung 02/10)",
       "trang_thai": "xong",

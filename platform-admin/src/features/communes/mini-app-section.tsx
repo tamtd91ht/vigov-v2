@@ -1,10 +1,11 @@
 "use client";
 
-import { KeyRound, Plus, Power, RefreshCw, Smartphone, TriangleAlert, Unplug } from "lucide-react";
+import { KeyRound, Plus, RefreshCw, Smartphone, TriangleAlert, Unplug } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
 
 import { Dialog, DialogActions } from "@/components/dialog";
 import { FormMessage, hintClass, TextAreaField, TextField } from "@/components/form-parts";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -12,12 +13,14 @@ import { Notice } from "@/components/ui/notice";
 import { useGuardedError } from "@/features/operator/use-guarded-error";
 import {
   attachMiniApp,
+  removeMiniApp,
   replaceMiniApp,
   retireMiniAppSecret,
-  setMiniAppActivation,
   setMiniAppSecret,
   type CommuneDetail,
   type MiniAppChange,
+  type MiniAppSecretSet,
+  type MiniAppSecretStatus,
 } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { communeError, secretRetirementText, type CommuneField } from "@/lib/errors";
@@ -25,23 +28,29 @@ import { communeError, secretRetirementText, type CommuneField } from "@/lib/err
 import { formatDateTime, miniAppModeLabel, StatusBadge } from "./commune-parts";
 
 /**
- * The commune's own Mini App: attach, change, detach, reactivate, and its Zalo app secret (ADR 0070
- * with its 02/10/2026 addendum). Only `rieng` rows carry controls; the shared app is not the
- * commune's to change.
+ * The commune's own Mini App: attach, change, remove, and its Zalo app secret (ADR 0070 with its
+ * 02/10/2026 addendum and its 05/10/2026 amendment). Only `rieng` rows carry controls; the shared app
+ * is not the commune's to change.
+ *
+ * ONE APP ID AT A TIME, REMOVAL IS PERMANENT (§Sửa đổi 05/10/2026 #2): "Đổi App ID" and "Gỡ khỏi xã"
+ * soft-delete the old row, which then no longer appears in the detail. There is no "Bật lại": a
+ * removed App ID can never be attached again, even to the same commune. The confirmation dialog with
+ * its reason is the only guard against a mistaken removal — the owner accepted that cost.
  *
  * ORDER OF A CHANGE: the replacement commits first (platform, one transaction); the new App ID's
  * secret is a SEPARATE call after it. A failed secret step therefore never undoes the change — the
  * dialog says the App ID changed but signs nobody in yet, and offers the step again
  * (transaction-boundaries.json `doi_app_id_mini_app_cua_xa`).
  *
- * THE SECRET: a password-type input, cleared after every submit whatever the answer, sent in a JSON
- * body only (lib/api.ts). It is never put into the outcome below, never logged, never in a URL.
+ * THE SECRET IS WRITE-ONLY (§Sửa đổi #3): a password-type input, cleared after every submit whatever
+ * the answer, sent in a JSON body only (lib/api.ts). The screen shows only "đặt lúc … bởi …" — never
+ * the value, never put into the outcome below, never logged, never in a URL.
  *
  * Every control is a hint; service-platform checks `ops.mini_app.manage` on each call.
  */
 
 type App = CommuneDetail["mini_apps"][number];
-type ActionKind = "replace" | "detach" | "reactivate" | "secret";
+type ActionKind = "replace" | "remove" | "secret" | "retire";
 type Action = { kind: ActionKind; appId: string };
 type FieldError = { field: CommuneField; text: string };
 
@@ -61,16 +70,31 @@ export type MiniAppOutcome = {
 
 export const SECRET_STEP_FAILED = "Đã đổi App ID nhưng chưa đặt khoá — dân chưa đăng nhập được qua app mới.";
 export const SECRET_NOT_RETIRED = "Khoá của App ID cũ chưa thu hồi";
+export const UNBOUND_SECRETS_TITLE = "Khoá còn lưu của App ID đã gỡ";
+export const REMOVAL_IS_PERMANENT =
+  "Gỡ là vĩnh viễn: App ID này không gắn lại được nữa, kể cả cho chính xã này. Muốn xã có lại Mini App riêng, phải đăng ký Mini App mới trên Zalo rồi gắn App ID mới.";
 
-/** Steps outside ViGov after a change (transaction-boundaries.json `doi_app_id_mini_app_cua_xa` (3)). */
+/**
+ * Steps outside ViGov after a change (ADR 0070 §Hệ quả and §Sửa đổi 05/10/2026, last paragraph;
+ * transaction-boundaries.json `doi_app_id_mini_app_cua_xa` (3)).
+ */
 export const MANUAL_STEPS = [
-  "Ở vihat-miniapp: thêm cặp App ID mới vào biến ZALO_MINIAPP_COMMUNE_APP_SECRETS.",
-  "Build citizen-app trỏ tới App ID mới, rồi đẩy lên Zalo bằng token của App ID mới.",
+  "Dựng lại citizen-app trỏ tới App ID mới, rồi đẩy lên Zalo bằng token của App ID mới.",
+  "Ở vihat-miniapp: thêm cặp App ID mới và khoá bí mật vào biến ZALO_MINIAPP_COMMUNE_APP_SECRETS — bản sao thứ hai của khoá, dùng khi dân gửi vị trí hiện trường.",
   "Cho tới khi bản app mới lên Zalo, dân mở bản app cũ sẽ không đăng nhập được.",
 ];
 
+/** The detail half of a change answer — unknown extra keys are not carried into the screen's state. */
 function detailOf(c: MiniAppChange): CommuneDetail {
-  return { id: c.id, name: c.name, province: c.province, active: c.active, domains: c.domains, mini_apps: c.mini_apps };
+  return {
+    id: c.id,
+    name: c.name,
+    province: c.province,
+    active: c.active,
+    domains: c.domains,
+    mini_apps: c.mini_apps,
+    unbound_secrets: c.unbound_secrets,
+  };
 }
 
 /** Both labels occupy the same cell, so the button keeps its width while busy. */
@@ -156,6 +180,35 @@ function formLevel(error: FieldError | null, ...inline: CommuneField[]): string 
   return error && !inline.includes(error.field) ? error.text : null;
 }
 
+/**
+ * The secret's state in words — metadata only. `undefined` is the attach answer (it carries no
+ * status): say so rather than guess "Chưa đặt". `chua_dat` is a warning because nobody can sign in.
+ */
+export function SecretStatusText({ secret }: { secret?: MiniAppSecretStatus }) {
+  if (secret === undefined) {
+    return <span className="text-ink-500">Chưa có thông tin — tải lại trang để xem.</span>;
+  }
+  switch (secret.status) {
+    case "da_dat":
+      return (
+        <span className="text-ink-700">
+          {`Đã đặt lúc ${secret.set_at ? formatDateTime(secret.set_at) : "—"} bởi ${secret.set_by ?? "—"}`}
+        </span>
+      );
+    case "chua_dat":
+      return (
+        <span className="flex flex-col items-start gap-1">
+          <Badge tone="warning" icon={TriangleAlert}>
+            Chưa đặt
+          </Badge>
+          <span className="text-xs text-ink-500">Dân chưa đăng nhập được qua app này.</span>
+        </span>
+      );
+    default:
+      return <span className="text-ink-500">Không rõ (hệ thống xác thực chưa trả lời)</span>;
+  }
+}
+
 // --- the section -------------------------------------------------------------------------------
 
 export function MiniAppSection({
@@ -178,10 +231,32 @@ export function MiniAppSection({
   const running = commune.mini_apps.some((a) => a.mode === "rieng" && a.active);
   const close = () => setAction(null);
 
+  // The server answered with the version metadata: the row shows it without a reload.
+  function markSecretSet(set: MiniAppSecretSet) {
+    onChanged({
+      ...commune,
+      mini_apps: commune.mini_apps.map((a) =>
+        a.app_id === set.app_id ? { ...a, secret: { status: "da_dat", set_at: set.set_at, set_by: set.set_by } } : a,
+      ),
+    });
+  }
+
+  // `retired` true or false both leave no live secret (false = nothing was live): drop the entry.
+  function markRetired(appId: string) {
+    if (commune.unbound_secrets === null) return;
+    onChanged({ ...commune, unbound_secrets: commune.unbound_secrets.filter((u) => u.app_id !== appId) });
+  }
+
   return (
     <>
       <MiniAppTable apps={commune.mini_apps} onAction={allowed ? setAction : undefined} />
-      {outcome ? <MiniAppOutcomeNotices communeId={commune.id} outcome={outcome} onUpdate={setOutcome} /> : null}
+      <UnboundSecretList
+        unbound={commune.unbound_secrets}
+        onRetire={allowed ? (appId) => setAction({ kind: "retire", appId }) : undefined}
+      />
+      {outcome ? (
+        <MiniAppOutcomeNotices communeId={commune.id} outcome={outcome} onUpdate={setOutcome} onRetired={markRetired} />
+      ) : null}
       {allowed && !running ? <AttachMiniAppForm commune={commune} onAttached={onMiniAppAttached} /> : null}
       {allowed && running ? (
         <p className={cn(hintClass, "border-t border-line pt-4")}>
@@ -207,20 +282,22 @@ export function MiniAppSection({
               reason,
             });
           }}
-          onSecretSet={() => setOutcome((o) => (o ? { ...o, newSecretSet: true } : o))}
+          onSecretSet={(set) => {
+            markSecretSet(set);
+            setOutcome((o) => (o ? { ...o, newSecretSet: true } : o));
+          }}
         />
       ) : null}
-      {action?.kind === "detach" || action?.kind === "reactivate" ? (
-        <ActivationDialog
-          key={action.kind + action.appId}
+      {action?.kind === "remove" ? (
+        <RemoveDialog
+          key={"d" + action.appId}
           commune={commune}
           appId={action.appId}
-          activate={action.kind === "reactivate"}
           onClose={close}
           onDone={(change, reason) => {
             onChanged(detailOf(change));
             setOutcome({
-              kind: action.kind,
+              kind: "remove",
               appId: action.appId,
               secretRetired: change.secret_retired,
               retirementError: change.secret_retirement_error,
@@ -236,8 +313,22 @@ export function MiniAppSection({
           commune={commune}
           appId={action.appId}
           onClose={close}
-          onDone={(reason) => {
+          onDone={(set, reason) => {
+            markSecretSet(set);
             setOutcome({ kind: "secret", appId: action.appId, reason });
+            close();
+          }}
+        />
+      ) : null}
+      {action?.kind === "retire" ? (
+        <RetireSecretDialog
+          key={"k" + action.appId}
+          commune={commune}
+          appId={action.appId}
+          onClose={close}
+          onDone={(reason) => {
+            markRetired(action.appId);
+            setOutcome({ kind: "retire", appId: action.appId, reason });
             close();
           }}
         />
@@ -259,6 +350,7 @@ export function MiniAppTable({ apps, onAction }: { apps: App[]; onAction?: (a: A
             <th scope="col">App ID</th>
             <th scope="col">Chế độ</th>
             <th scope="col">Trạng thái</th>
+            <th scope="col">Khoá bí mật</th>
             <th scope="col">Gắn lúc</th>
             <th scope="col">Người gắn</th>
             {onAction ? <th scope="col">Thao tác</th> : null}
@@ -274,35 +366,32 @@ export function MiniAppTable({ apps, onAction }: { apps: App[]; onAction?: (a: A
               <td>
                 <StatusBadge active={a.active} />
               </td>
+              <td>
+                <SecretStatusText secret={a.secret} />
+              </td>
               <td className="text-ink-700">{formatDateTime(a.created_at)}</td>
               <td className="text-ink-700">{a.created_by}</td>
               {onAction ? (
                 <td>
-                  {a.mode === "rieng" ? (
+                  {/* Only the running own app has controls. A removed App ID is never listed, and
+                      there is nothing to do with one that is not running: no reactivation exists. */}
+                  {a.mode === "rieng" && a.active ? (
                     <div className="flex flex-wrap gap-2">
-                      {a.active ? (
-                        <>
-                          <Button type="button" size="sm" icon={icon(RefreshCw)} onClick={() => onAction({ kind: "replace", appId: a.app_id })}>
-                            Đổi App ID
-                          </Button>
-                          <Button type="button" size="sm" icon={icon(KeyRound)} onClick={() => onAction({ kind: "secret", appId: a.app_id })}>
-                            Đặt/đổi khoá bí mật
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="danger"
-                            icon={icon(Unplug)}
-                            onClick={() => onAction({ kind: "detach", appId: a.app_id })}
-                          >
-                            Gỡ khỏi xã
-                          </Button>
-                        </>
-                      ) : (
-                        <Button type="button" size="sm" icon={icon(Power)} onClick={() => onAction({ kind: "reactivate", appId: a.app_id })}>
-                          Bật lại
-                        </Button>
-                      )}
+                      <Button type="button" size="sm" icon={icon(RefreshCw)} onClick={() => onAction({ kind: "replace", appId: a.app_id })}>
+                        Đổi App ID
+                      </Button>
+                      <Button type="button" size="sm" icon={icon(KeyRound)} onClick={() => onAction({ kind: "secret", appId: a.app_id })}>
+                        Đặt/đổi khoá bí mật
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="danger"
+                        icon={icon(Unplug)}
+                        onClick={() => onAction({ kind: "remove", appId: a.app_id })}
+                      >
+                        Gỡ khỏi xã
+                      </Button>
                     </div>
                   ) : null}
                 </td>
@@ -315,16 +404,67 @@ export function MiniAppTable({ apps, onAction }: { apps: App[]; onAction?: (a: A
   );
 }
 
+/**
+ * Secrets identity still holds live for App IDs this commune no longer binds — an automatic
+ * retirement after a change or a removal that did not complete (ADR 0070 #4). `null` = identity could
+ * not be asked, said as such; `[]` = nothing to show.
+ */
+export function UnboundSecretList({
+  unbound,
+  onRetire,
+}: {
+  unbound: CommuneDetail["unbound_secrets"];
+  onRetire?: (appId: string) => void;
+}) {
+  if (unbound === null) {
+    return (
+      <p className={hintClass}>
+        Chưa biết còn khoá bí mật nào của App ID đã gỡ được lưu hay không (hệ thống xác thực chưa trả lời). Tải lại
+        trang sau ít phút.
+      </p>
+    );
+  }
+  if (unbound.length === 0) return null;
+  return (
+    <section aria-labelledby="unbound-secrets" className="flex flex-col gap-2 border-t border-line pt-4">
+      <h3 id="unbound-secrets" className="m-0 text-sm font-semibold text-ink-900">
+        {UNBOUND_SECRETS_TITLE}
+      </h3>
+      <p className={cn(hintClass, "m-0")}>
+        Các App ID này đã gỡ khỏi xã nên khoá không đăng nhập được cho ai, nhưng khoá vẫn còn lưu ở hệ thống xác thực.
+        Nên thu hồi.
+      </p>
+      <ul className="m-0 flex list-none flex-col gap-2 p-0">
+        {unbound.map((u) => (
+          <li key={u.app_id} className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <code className="font-mono text-[13px] text-ink-900">{u.app_id}</code>
+            <span className="text-sm">
+              <SecretStatusText secret={u.secret} />
+            </span>
+            {onRetire ? (
+              <Button type="button" size="sm" icon={<KeyRound aria-hidden="true" focusable="false" strokeWidth={1.8} />} onClick={() => onRetire(u.app_id)}>
+                Thu hồi khoá
+              </Button>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 // --- outcome -----------------------------------------------------------------------------------
 
 export function MiniAppOutcomeNotices({
   communeId,
   outcome,
   onUpdate,
+  onRetired,
 }: {
   communeId: string;
   outcome: MiniAppOutcome;
   onUpdate: (o: MiniAppOutcome) => void;
+  onRetired?: (appId: string) => void;
 }) {
   const toError = useFieldError();
   const [busy, setBusy] = useState(false);
@@ -338,6 +478,7 @@ export function MiniAppOutcomeNotices({
       // `retired: false` = nothing was live: the same end state, so both answers settle it.
       await retireMiniAppSecret(communeId, outcome.appId, { reason: outcome.reason });
       onUpdate({ ...outcome, secretRetired: true, retirementError: undefined });
+      onRetired?.(outcome.appId);
     } catch (err) {
       setError(toError(err, "thu hồi khoá bí mật")?.text ?? null);
     } finally {
@@ -348,10 +489,10 @@ export function MiniAppOutcomeNotices({
   const blocks: ReactNode[] = [];
   if (outcome.secretRetired === false) {
     blocks.push(
-      <Notice key="retire" tone="legal" icon={TriangleAlert} title={SECRET_NOT_RETIRED}>
+      <Notice key="retire-retry" tone="legal" icon={TriangleAlert} title={SECRET_NOT_RETIRED}>
         <p>
-          App ID {outcome.appId} đã tắt nên khoá cũ không đăng nhập được cho ai, nhưng khoá vẫn còn lưu ở hệ thống
-          xác thực. {secretRetirementText(outcome.retirementError)}
+          App ID {outcome.appId} đã gỡ nên khoá cũ không đăng nhập được cho ai, nhưng khoá vẫn còn lưu ở hệ thống xác
+          thực. {secretRetirementText(outcome.retirementError)}
         </p>
         <div>
           <Button type="button" size="sm" onClick={retryRetire} disabled={busy} aria-busy={busy}>
@@ -376,17 +517,13 @@ export function MiniAppOutcomeNotices({
       </Notice>,
     );
   }
-  if (outcome.kind === "detach") {
+  if (outcome.kind === "remove") {
     blocks.push(
-      <Notice key="detach" tone="neutral">
-        <p>App ID {outcome.appId} đã được gỡ khỏi xã (tắt, không xoá). Dân mở Mini App này không đăng nhập được nữa.</p>
-      </Notice>,
-    );
-  }
-  if (outcome.kind === "reactivate") {
-    blocks.push(
-      <Notice key="reactivate" tone="legal" title="Khoá bí mật không tự bật lại:">
-        <p>Đặt lại khoá bí mật cho App ID {outcome.appId} thì dân mới đăng nhập được qua app này.</p>
+      <Notice key="remove" tone="neutral">
+        <p>
+          App ID {outcome.appId} đã được gỡ khỏi xã vĩnh viễn và không gắn lại được. Dân mở Mini App này không đăng nhập
+          được nữa; mã QR của xã từ nay mở Mini App dùng chung.
+        </p>
       </Notice>,
     );
   }
@@ -394,6 +531,13 @@ export function MiniAppOutcomeNotices({
     blocks.push(
       <Notice key="secret" tone="info">
         <p>Đã lưu khoá bí mật cho App ID {outcome.appId}.</p>
+      </Notice>,
+    );
+  }
+  if (outcome.kind === "retire") {
+    blocks.push(
+      <Notice key="retired" tone="info">
+        <p>Đã thu hồi khoá bí mật của App ID {outcome.appId}.</p>
       </Notice>,
     );
   }
@@ -417,7 +561,7 @@ function ReplaceDialog({
   appId: string;
   onClose: () => void;
   onReplaced: (change: MiniAppChange, newAppId: string, reason: string) => void;
-  onSecretSet: () => void;
+  onSecretSet: (set: MiniAppSecretSet) => void;
 }) {
   const toError = useFieldError();
   const [step, setStep] = useState<"app" | "secret">("app");
@@ -453,8 +597,7 @@ function ReplaceDialog({
     setBusy(true);
     setError(null);
     try {
-      await setMiniAppSecret(commune.id, newAppId, { secret, reason });
-      onSecretSet();
+      onSecretSet(await setMiniAppSecret(commune.id, newAppId, { secret, reason }));
       onClose();
     } catch (err) {
       const e = toError(err, "đặt khoá bí mật");
@@ -492,9 +635,13 @@ function ReplaceDialog({
     <Dialog open title={`Đổi App ID ${appId} của ${commune.name}`} icon={RefreshCw} onClose={() => !busy && onClose()}>
       <form className="flex flex-col gap-4" method="post" onSubmit={submitApp} noValidate>
         <p>
-          App ID mới được gắn và App ID {appId} được tắt (không xoá) trong cùng một lần lưu; khoá bí mật của App ID cũ tự
-          thu hồi. Từ lúc đó dân mở bản app cũ không đăng nhập được.
+          App ID mới được gắn và App ID {appId} bị gỡ vĩnh viễn trong cùng một lần lưu; khoá bí mật của App ID cũ tự thu
+          hồi. Từ lúc đó dân mở bản app cũ không đăng nhập được.
         </p>
+        <Notice tone="legal" icon={TriangleAlert} title="Lưu ý:">
+          App ID {appId} sau khi đổi không gắn lại được nữa, kể cả cho chính xã này. Mã QR đã in theo App ID cũ không
+          dùng được nữa và cần in lại.
+        </Notice>
         <TextField
           label="App ID mới"
           hint="Dãy chữ số Zalo cấp cho Mini App mới của xã."
@@ -523,16 +670,27 @@ function ReplaceDialog({
   );
 }
 
-function ActivationDialog({
+/** The removal dialog body, rendered alone in tests: its wording IS the behaviour. */
+export function RemoveWarning({ appId }: { appId: string }) {
+  return (
+    <Notice tone="legal" icon={TriangleAlert} title="Lưu ý:">
+      <p className="m-0">{REMOVAL_IS_PERMANENT}</p>
+      <p className="m-0">
+        Từ lúc gỡ, dân mở Mini App {appId} không đăng nhập được nữa, khoá bí mật của App ID tự thu hồi, và mã QR của xã
+        chuyển sang mở Mini App dùng chung.
+      </p>
+    </Notice>
+  );
+}
+
+function RemoveDialog({
   commune,
   appId,
-  activate,
   onClose,
   onDone,
 }: {
   commune: CommuneDetail;
   appId: string;
-  activate: boolean;
   onClose: () => void;
   onDone: (change: MiniAppChange, reason: string) => void;
 }) {
@@ -540,7 +698,6 @@ function ActivationDialog({
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<FieldError | null>(null);
-  const label = activate ? "Bật lại" : "Gỡ App ID";
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -549,9 +706,9 @@ function ActivationDialog({
     setBusy(true);
     setError(null);
     try {
-      onDone(await setMiniAppActivation(commune.id, appId, { active: activate, reason }), reason);
+      onDone(await removeMiniApp(commune.id, appId, { reason }), reason);
     } catch (err) {
-      setError(toError(err, activate ? "bật lại App ID" : "gỡ App ID"));
+      setError(toError(err, "gỡ App ID"));
     } finally {
       setBusy(false);
     }
@@ -560,28 +717,18 @@ function ActivationDialog({
   return (
     <Dialog
       open
-      title={activate ? `Bật lại App ID ${appId} cho ${commune.name}?` : `Gỡ App ID ${appId} khỏi ${commune.name}?`}
-      tone={activate ? "default" : "danger"}
-      icon={activate ? Power : TriangleAlert}
+      title={`Gỡ vĩnh viễn App ID ${appId} khỏi ${commune.name}?`}
+      tone="danger"
+      icon={TriangleAlert}
       onClose={() => !busy && onClose()}
     >
       <form className="flex flex-col gap-4" method="post" onSubmit={submit} noValidate>
-        {activate ? (
-          <p>
-            Xã chỉ chạy một Mini App riêng: nếu đang có App ID khác chạy, hệ thống sẽ từ chối. Khoá bí mật cũ đã thu hồi,
-            cần đặt lại khoá sau khi bật.
-          </p>
-        ) : (
-          <Notice tone="legal" icon={TriangleAlert} title="Lưu ý:">
-            App ID được tắt, không xoá: từ lúc này dân mở Mini App này không đăng nhập được nữa, và khoá bí mật của App ID
-            tự thu hồi. Có thể bật lại sau, nhưng phải nhập lại khoá.
-          </Notice>
-        )}
+        <RemoveWarning appId={appId} />
         <ReasonField value={reason} onChange={setReason} disabled={busy} error={error} />
         <FormMessage text={formLevel(error, "reason")} />
         <DialogActions>
-          <Button type="submit" variant={activate ? "primary" : "danger-solid"} disabled={busy} aria-busy={busy}>
-            <BusyLabel busy={busy} label={label} busyLabel="Đang lưu…" />
+          <Button type="submit" variant="danger-solid" disabled={busy} aria-busy={busy}>
+            <BusyLabel busy={busy} label="Gỡ App ID" busyLabel="Đang lưu…" />
           </Button>
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
             Huỷ
@@ -601,7 +748,7 @@ function SecretDialog({
   commune: CommuneDetail;
   appId: string;
   onClose: () => void;
-  onDone: (reason: string) => void;
+  onDone: (set: MiniAppSecretSet, reason: string) => void;
 }) {
   const toError = useFieldError();
   const [secret, setSecret] = useState("");
@@ -617,8 +764,7 @@ function SecretDialog({
     setBusy(true);
     setError(null);
     try {
-      await setMiniAppSecret(commune.id, appId, { secret, reason });
-      onDone(reason);
+      onDone(await setMiniAppSecret(commune.id, appId, { secret, reason }), reason);
     } catch (err) {
       setError(toError(err, "đặt khoá bí mật"));
     } finally {
@@ -637,6 +783,62 @@ function SecretDialog({
         <DialogActions>
           <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
             <BusyLabel busy={busy} label="Lưu khoá" busyLabel="Đang lưu…" />
+          </Button>
+          <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
+            Huỷ
+          </Button>
+        </DialogActions>
+      </form>
+    </Dialog>
+  );
+}
+
+/** DELETE …/secret for a removed App ID still holding a live secret (`unbound_secrets`). */
+function RetireSecretDialog({
+  commune,
+  appId,
+  onClose,
+  onDone,
+}: {
+  commune: CommuneDetail;
+  appId: string;
+  onClose: () => void;
+  onDone: (reason: string) => void;
+}) {
+  const toError = useFieldError();
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<FieldError | null>(null);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    if (reason.trim() === "") return setError({ field: "reason", text: "Hãy ghi lý do." });
+    setBusy(true);
+    setError(null);
+    try {
+      // `retired: false` = nothing was live any more: the same end state, so both answers settle it.
+      await retireMiniAppSecret(commune.id, appId, { reason });
+      onDone(reason);
+    } catch (err) {
+      setError(toError(err, "thu hồi khoá bí mật"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open title={`Thu hồi khoá bí mật của App ID ${appId}?`} icon={KeyRound} onClose={() => !busy && onClose()}>
+      <form className="flex flex-col gap-4" method="post" onSubmit={submit} noValidate>
+        <p>
+          App ID {appId} đã gỡ khỏi xã nên không ai đăng nhập qua khoá này. Thu hồi xoá hiệu lực của khoá ở hệ thống xác
+          thực; dân đang dùng Mini App hiện tại của xã không bị ảnh hưởng.
+        </p>
+        <ReasonField value={reason} onChange={setReason} disabled={busy} error={error} />
+        <FormMessage text={formLevel(error, "reason")} />
+        <DialogActions>
+          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
+            <BusyLabel busy={busy} label="Thu hồi khoá" busyLabel="Đang thu hồi…" />
           </Button>
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
             Huỷ
@@ -681,7 +883,7 @@ function AttachMiniAppForm({ commune, onAttached }: { commune: CommuneDetail; on
     <form className="flex max-w-xl flex-col gap-3 border-t border-line pt-4" method="post" onSubmit={submit} noValidate>
       <TextField
         label="App ID của Mini App riêng"
-        hint="Dãy chữ số Zalo cấp cho Mini App của xã."
+        hint="Dãy chữ số Zalo cấp cho Mini App của xã. App ID đã gỡ trước đây không gắn lại được."
         name="app_id"
         type="text"
         inputMode="numeric"

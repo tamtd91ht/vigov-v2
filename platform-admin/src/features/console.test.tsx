@@ -22,7 +22,11 @@ import {
   MANUAL_STEPS,
   MiniAppOutcomeNotices,
   MiniAppSection,
+  REMOVAL_IS_PERMANENT,
+  RemoveWarning,
   SECRET_NOT_RETIRED,
+  SecretStatusText,
+  UNBOUND_SECRETS_TITLE,
   type MiniAppOutcome,
 } from "./communes/mini-app-section";
 import {
@@ -37,7 +41,14 @@ const DOMAIN = "ops.domain.manage";
 const MINI_APP = "ops.mini_app.manage";
 const ALL = [TENANT, DOMAIN, MINI_APP];
 
-const APP: MiniApp = { app_id: "4096", mode: "rieng", active: true, created_at: "2026-10-01T03:00:00Z", created_by: "VH-00001" };
+const APP: MiniApp = {
+  app_id: "4096",
+  mode: "rieng",
+  active: true,
+  created_at: "2026-10-01T03:00:00Z",
+  created_by: "VH-00001",
+  secret: { status: "da_dat", set_at: "2026-10-02T03:30:00Z", set_by: "VH-00002" },
+};
 
 const COMMUNE: CommuneDetail = {
   id: "01J0000000000000000000000A",
@@ -46,13 +57,26 @@ const COMMUNE: CommuneDetail = {
   active: true,
   domains: ["chinh.example.vn", "phu.example.vn"],
   mini_apps: [APP],
+  unbound_secrets: [],
 };
 
 const noop = () => {};
 
+/** After a removal the detail no longer lists the App ID (soft delete, ADR 0070 §Sửa đổi #2). */
 const NO_RUNNING_APP: CommuneDetail = {
   ...COMMUNE,
+  mini_apps: [],
+};
+
+/** A pre-amendment row the server might still send: turned off, not removed. Shown, never actionable. */
+const INACTIVE_ROW: CommuneDetail = {
+  ...COMMUNE,
   mini_apps: [{ ...APP, active: false }],
+};
+
+const WITH_UNBOUND: CommuneDetail = {
+  ...COMMUNE,
+  unbound_secrets: [{ app_id: "2048", secret: { status: "da_dat", set_at: "2026-09-30T03:00:00Z", set_by: "VH-00003" } }],
 };
 
 const REPLACED_NOT_RETIRED: MiniAppOutcome = {
@@ -133,12 +157,12 @@ describe("permission hints — denied cases first", () => {
   });
 });
 
-describe("Mini App change / detach / reactivate / secret (ADR 0070)", () => {
-  const MINI_CONTROLS = ["Đổi App ID", "Gỡ khỏi xã", "Đặt/đổi khoá bí mật", "Bật lại"];
+describe("Mini App change / remove / secret (ADR 0070, §Sửa đổi 05/10/2026)", () => {
+  const MINI_CONTROLS = ["Đổi App ID", "Gỡ khỏi xã", "Đặt/đổi khoá bí mật", "Thu hồi khoá"];
 
   it("without ops.mini_app.manage: no Mini App control at all", () => {
     for (const keys of [[], [TENANT, DOMAIN]]) {
-      for (const commune of [COMMUNE, NO_RUNNING_APP]) {
+      for (const commune of [COMMUNE, NO_RUNNING_APP, INACTIVE_ROW, WITH_UNBOUND]) {
         const html = renderToString(
           <CommuneDetailBody commune={commune} permissionKeys={keys} onChanged={noop} onMiniAppAttached={noop} />,
         );
@@ -147,19 +171,44 @@ describe("Mini App change / detach / reactivate / secret (ADR 0070)", () => {
     }
   });
 
-  it("a running own app offers change, secret and detach — and hides the attach form", () => {
+  it("a running own app offers change, secret and remove — and hides the attach form", () => {
     const html = renderToString(<MiniAppSection commune={COMMUNE} allowed onChanged={noop} onMiniAppAttached={noop} />);
     for (const c of ["Đổi App ID", "Gỡ khỏi xã", "Đặt/đổi khoá bí mật"]) expect(html).toContain(c);
-    expect(html).not.toContain("Bật lại");
     expect(html).not.toContain("Gắn Mini App");
   });
 
-  it("an inactive row offers Bật lại only", () => {
-    const html = renderToString(
-      <MiniAppSection commune={NO_RUNNING_APP} allowed onChanged={noop} onMiniAppAttached={noop} />,
-    );
-    expect(html).toContain("Bật lại");
+  it("there is no reactivation anywhere: no Bật lại, whatever rows the server sends", () => {
+    for (const commune of [COMMUNE, NO_RUNNING_APP, INACTIVE_ROW, WITH_UNBOUND]) {
+      const html = renderToString(<MiniAppSection commune={commune} allowed onChanged={noop} onMiniAppAttached={noop} />);
+      expect(html).not.toContain("Bật lại");
+    }
+  });
+
+  it("a row that is not running is shown without any control", () => {
+    const html = renderToString(<MiniAppSection commune={INACTIVE_ROW} allowed onChanged={noop} onMiniAppAttached={noop} />);
+    expect(html).toContain("4096");
     for (const c of ["Đổi App ID", "Gỡ khỏi xã", "Đặt/đổi khoá bí mật"]) expect(html).not.toContain(c);
+  });
+
+  it("no App ID listed: the empty state and the attach form", () => {
+    const html = renderToString(<MiniAppSection commune={NO_RUNNING_APP} allowed onChanged={noop} onMiniAppAttached={noop} />);
+    expect(html).toContain("Xã chưa gắn Mini App riêng nào.");
+    expect(html).toContain("Gắn Mini App");
+  });
+
+  it("the removal dialog says the App ID is removed permanently and cannot be re-attached", () => {
+    const html = renderToString(<RemoveWarning appId="4096" />);
+    expect(html).toContain(REMOVAL_IS_PERMANENT);
+    expect(html).toContain("không gắn lại được nữa, kể cả cho chính xã này");
+    expect(html).not.toMatch(/bật lại|Bật lại/);
+  });
+
+  it("the remove outcome says permanent, never 'tắt, không xoá'", () => {
+    const html = renderToString(
+      <MiniAppOutcomeNotices communeId={COMMUNE.id} outcome={{ kind: "remove", appId: "4096", secretRetired: true, reason: "x" }} onUpdate={noop} />,
+    );
+    expect(html).toContain("vĩnh viễn");
+    expect(html).not.toContain("không xoá");
   });
 
   it("the shared app carries no control", () => {
@@ -188,6 +237,67 @@ describe("Mini App change / detach / reactivate / secret (ADR 0070)", () => {
     expect(html).not.toContain(SECRET_NOT_RETIRED);
     expect(html).not.toContain("Thu hồi lại");
     expect(html).not.toContain("Đặt khoá bí mật cho App ID 8192");
+  });
+});
+
+describe("the secret is write-only: status in words, never a value (ADR 0070 §Sửa đổi #3)", () => {
+  it("da_dat reads 'Đã đặt lúc … bởi …' in the business time zone", () => {
+    const html = renderToString(<SecretStatusText secret={{ status: "da_dat", set_at: "2026-10-02T03:30:00Z", set_by: "VH-00002" }} />);
+    expect(html).toContain("Đã đặt lúc ");
+    expect(html).toContain("bởi VH-00002");
+    expect(html).toContain("10:30"); // 03:30Z = 10:30 +07:00
+  });
+
+  it("chua_dat warns that citizens cannot sign in", () => {
+    const html = renderToString(<SecretStatusText secret={{ status: "chua_dat" }} />);
+    expect(html).toContain("Chưa đặt");
+    expect(html).toContain("Dân chưa đăng nhập được qua app này.");
+  });
+
+  it("khong_ro says the auth system did not answer — never 'Chưa đặt'", () => {
+    const html = renderToString(<SecretStatusText secret={{ status: "khong_ro" }} />);
+    expect(html).toContain("Không rõ (hệ thống xác thực chưa trả lời)");
+    expect(html).not.toContain("Chưa đặt");
+  });
+
+  it("an attach answer (no status) is not guessed", () => {
+    const html = renderToString(<SecretStatusText />);
+    expect(html).not.toMatch(/Chưa đặt|Đã đặt/);
+  });
+
+  it("the table has a Khoá bí mật column, and no row shows anything secret-shaped", () => {
+    const html = renderToString(<MiniAppSection commune={COMMUNE} allowed onChanged={noop} onMiniAppAttached={noop} />);
+    expect(html).toContain("Khoá bí mật");
+    expect(html).toContain("bởi VH-00002");
+    expect(html).not.toMatch(/version|fingerprint/i);
+  });
+});
+
+describe("unbound secrets of removed App IDs", () => {
+  it("listed with Thu hồi khoá when allowed", () => {
+    const html = renderToString(<MiniAppSection commune={WITH_UNBOUND} allowed onChanged={noop} onMiniAppAttached={noop} />);
+    expect(html).toContain(UNBOUND_SECRETS_TITLE);
+    expect(html).toContain("2048");
+    expect(html).toContain("Thu hồi khoá");
+  });
+
+  it("denied: listed, but no Thu hồi khoá", () => {
+    const html = renderToString(
+      <MiniAppSection commune={WITH_UNBOUND} allowed={false} onChanged={noop} onMiniAppAttached={noop} />,
+    );
+    expect(html).toContain(UNBOUND_SECRETS_TITLE);
+    expect(html).not.toContain("Thu hồi khoá");
+  });
+
+  it("[] shows nothing; null says it is unknown", () => {
+    const none = renderToString(<MiniAppSection commune={COMMUNE} allowed onChanged={noop} onMiniAppAttached={noop} />);
+    expect(none).not.toContain(UNBOUND_SECRETS_TITLE);
+    expect(none).not.toContain("Chưa biết còn khoá");
+    const unknown = renderToString(
+      <MiniAppSection commune={{ ...COMMUNE, unbound_secrets: null }} allowed onChanged={noop} onMiniAppAttached={noop} />,
+    );
+    expect(unknown).not.toContain(UNBOUND_SECRETS_TITLE);
+    expect(unknown).toContain("Chưa biết còn khoá bí mật nào của App ID đã gỡ");
   });
 });
 
@@ -265,6 +375,8 @@ describe("the CSP holds: no screen draws a style attribute", () => {
       <ChangePasswordDone key="pd" />,
       <MiniAppSection key="ms" commune={COMMUNE} allowed onChanged={noop} onMiniAppAttached={noop} />,
       <MiniAppSection key="mi" commune={NO_RUNNING_APP} allowed onChanged={noop} onMiniAppAttached={noop} />,
+      <MiniAppSection key="mu" commune={WITH_UNBOUND} allowed onChanged={noop} onMiniAppAttached={noop} />,
+      <RemoveWarning key="rw" appId="4096" />,
       <MiniAppOutcomeNotices key="mo" communeId={COMMUNE.id} outcome={REPLACED_NOT_RETIRED} onUpdate={noop} />,
     ];
     for (const s of screens) expect(renderToString(s)).not.toContain("style=");

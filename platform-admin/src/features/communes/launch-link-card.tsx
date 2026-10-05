@@ -13,12 +13,14 @@ import { getLaunchLink, type LaunchLink } from "@/lib/api";
 import { launchLinkError } from "@/lib/errors";
 
 /**
- * "Mã QR mở Mini App" on a commune's page (owner 04/10/2026, ADR 0073 #5): the shared Mini App's
- * launch link for the commune's PRIMARY domain, drawn as a QR in the browser by the existing
+ * "Mã QR mở Mini App" on a commune's page (owner 04/10/2026, ADR 0073 #5; ADR 0070 §Sửa đổi
+ * 05/10/2026 #4): the commune's own running Mini App when it has one, else the shared Mini App's
+ * launch link for the commune's PRIMARY domain — the server decides, the card labels which — drawn
+ * as a QR in the browser by the existing
  * `components/qr-code.tsx` (SVG, no third-party service). Shown only with `ops.qr.issue`.
  *
  * NOT TRAILED, by the owner's decision (ADR 0048 §30/09 #9): issuing a QR is not a write. The link is
- * fetched once when the card mounts.
+ * fetched when the card mounts; the detail page remounts it when the running own App ID changes.
  *
  * NO "download PNG": the QR component draws SVG only and has no export; a download added here would
  * be a second QR path nobody reviewed. The URL is shown with a copy button, so the link itself can
@@ -26,6 +28,21 @@ import { launchLinkError } from "@/lib/errors";
  */
 
 export const SHARED_APP_PAGE = "/mini-app-dung-chung";
+
+/**
+ * Which app the QR opens, from the server's `source` (ADR 0070 §Sửa đổi 05/10/2026 #4): the
+ * commune's own running app, else the shared app. An unknown value is shown as it is, never guessed.
+ */
+export function launchSourceLabel(link: LaunchLink): string {
+  switch (link.source) {
+    case "rieng":
+      return `Mở thẳng Mini App riêng của xã (App ID ${link.app_id})`;
+    case "chung":
+      return "Qua Mini App dùng chung của ViHAT";
+    default:
+      return `Nguồn không xác định: ${String(link.source)}`;
+  }
+}
 
 export type LaunchLinkState =
   | { status: "loading" }
@@ -64,17 +81,26 @@ export function LaunchLinkView({
     );
   }
   const { link } = state;
+  const own = link.source === "rieng";
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-      <QrCode value={link.url} label={`Mã QR mở Mini App cho tên miền ${link.domain}`} />
+      <QrCode value={link.url} label={`Mã QR: ${launchSourceLabel(link)}`} />
       <div className="flex min-w-0 flex-1 flex-col gap-3">
         <dl className="m-0 flex flex-col gap-3">
           <div className="flex min-w-0 flex-col gap-1">
-            <dt className="text-xs font-medium text-ink-500">Tên miền chính của xã</dt>
-            <dd className="m-0 font-mono text-sm break-all text-ink-900">{link.domain}</dd>
+            <dt className="text-xs font-medium text-ink-500">Mã QR mở</dt>
+            <dd className="m-0 text-sm font-semibold text-ink-900">{launchSourceLabel(link)}</dd>
           </div>
+          {/* A `rieng` link does not carry the domain (the own app has its commune built in), and
+              the server may send "" then: show the row only when there is one. */}
+          {link.domain !== "" ? (
+            <div className="flex min-w-0 flex-col gap-1">
+              <dt className="text-xs font-medium text-ink-500">Tên miền chính của xã</dt>
+              <dd className="m-0 font-mono text-sm break-all text-ink-900">{link.domain}</dd>
+            </div>
+          ) : null}
           <div className="flex min-w-0 flex-col gap-1">
-            <dt className="text-xs font-medium text-ink-500">App ID Mini App dùng chung</dt>
+            <dt className="text-xs font-medium text-ink-500">{own ? "App ID Mini App riêng của xã" : "App ID Mini App dùng chung"}</dt>
             <dd className="m-0 font-mono text-sm break-all text-ink-900">{link.app_id}</dd>
           </div>
           <div className="flex min-w-0 flex-col gap-1">
@@ -91,8 +117,9 @@ export function LaunchLinkView({
           {copyNotice}
         </p>
         <p className="m-0 text-[13px] text-ink-500">
-          Mã QR mở Mini App dùng chung và đưa người dân vào đúng xã này. Nếu App ID dùng chung được đổi, mã đã in sẽ
-          không còn dùng được và cần in lại.
+          {own
+            ? "Mã QR mở thẳng Mini App riêng của xã. Nếu xã đổi hoặc gỡ App ID này, mã đã in sẽ không còn dùng được và cần in lại."
+            : "Mã QR mở Mini App dùng chung và đưa người dân vào đúng xã này. Nếu App ID dùng chung được đổi, mã đã in sẽ không còn dùng được và cần in lại."}
         </p>
       </div>
     </div>

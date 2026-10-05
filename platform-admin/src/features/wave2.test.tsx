@@ -8,7 +8,7 @@ vi.mock("next/navigation", () => ({
 
 import { ACCOUNT_ITEMS, NAV_ITEMS, SidebarView } from "@/components/sidebar";
 import { ALL_OPS_KEYS, ApiError, type CommuneDetail, type OperatorAuditEntry, type PetitionField, type UploadPolicy } from "@/lib/api";
-import { handleGuardedError, launchLinkError } from "@/lib/errors";
+import { communeError, handleGuardedError, launchLinkError } from "@/lib/errors";
 import {
   canIssueQr,
   canManageMiniApps,
@@ -85,6 +85,7 @@ const COMMUNE: CommuneDetail = {
   active: true,
   domains: ["chinh.example.vn"],
   mini_apps: [],
+  unbound_secrets: [],
 };
 
 const ENTRIES: OperatorAuditEntry[] = [
@@ -289,6 +290,7 @@ describe("launch link: every 409 is a Vietnamese next step", () => {
     ["commune_no_primary_domain", false],
     ["shared_mini_app_not_declared", true],
     ["shared_mini_app_ambiguous", false],
+    ["own_mini_app_ambiguous", false],
   ])("%s", (code, toShared) => {
     const known = launchLinkError(err(409, code));
     expect(known?.toSharedAppPage).toBe(toShared);
@@ -309,12 +311,55 @@ describe("launch link: every 409 is a Vietnamese next step", () => {
   });
 
   it("a link renders as a QR, its URL and a copy button — no download", () => {
-    const link = { url: "https://zalo.me/s/1234567/?d=chinh.example.vn&src=qr", domain: "chinh.example.vn", app_id: "1234567" };
+    const link = {
+      url: "https://zalo.me/s/1234567/?d=chinh.example.vn&src=qr",
+      domain: "chinh.example.vn",
+      app_id: "1234567",
+      source: "chung" as const,
+    };
     const html = renderToString(<LaunchLinkView state={{ status: "ready", link }} onCopy={noop} copyNotice="" />);
     expect(html).toContain("<svg");
     expect(html).toContain("https://zalo.me/s/1234567/?d=chinh.example.vn&amp;src=qr");
     expect(html).toContain("Chép liên kết");
     expect(html).not.toMatch(/Tải về|PNG/);
+  });
+
+  it("a shared-app link says so and shows the primary domain", () => {
+    const link = { url: "https://zalo.me/s/1234567/?d=chinh.example.vn&src=qr", domain: "chinh.example.vn", app_id: "1234567", source: "chung" as const };
+    const html = renderToString(<LaunchLinkView state={{ status: "ready", link }} onCopy={noop} copyNotice="" />);
+    expect(html).toContain("Qua Mini App dùng chung của ViHAT");
+    expect(html).toContain("App ID Mini App dùng chung");
+    expect(html).toContain("chinh.example.vn");
+    expect(html).not.toContain("Mini App riêng của xã");
+  });
+
+  it("an own-app link names its App ID, and with an empty domain shows no domain row", () => {
+    const link = { url: "https://zalo.me/s/4096/?src=qr", domain: "", app_id: "4096", source: "rieng" as const };
+    const html = renderToString(<LaunchLinkView state={{ status: "ready", link }} onCopy={noop} copyNotice="" />);
+    expect(html).toContain("Mở thẳng Mini App riêng của xã (App ID 4096)");
+    expect(html).toContain("App ID Mini App riêng của xã");
+    expect(html).not.toContain("Tên miền chính của xã");
+    expect(html).not.toContain("dùng chung");
+  });
+});
+
+describe("own Mini App refusals of the 05/10/2026 amendment are Vietnamese next steps", () => {
+  it.each([
+    ["mini_app_removed", 409, "appId"],
+    ["mini_app_reactivation_removed", 422, "form"],
+  ])("%s", (code, status, field) => {
+    const known = communeError(err(status, code));
+    expect(known?.field).toBe(field);
+    const text = handleGuardedError(err(status, code), "gắn Mini App", vi.fn(), (e) => communeError(e)?.text ?? null);
+    expect(text).toBe(known?.text);
+    expect(text).not.toContain(code);
+    expect(text).toMatch(/[Đđ]ăng ký Mini App mới trên Zalo/);
+  });
+
+  it("no sentence still tells the operator to 'Bật lại' an App ID", () => {
+    for (const code of ["mini_app_not_bound", "mini_app_inactive", "mini_app_removed", "mini_app_reactivation_removed"]) {
+      expect(communeError(err(409, code))?.text).not.toMatch(/Bật lại App ID/);
+    }
   });
 });
 
@@ -403,7 +448,7 @@ describe("tier-1 petition fields", () => {
 
 describe("the CSP holds: no wave-2 view draws a style attribute", () => {
   it("every new view renders without style=", () => {
-    const link = { url: "https://zalo.me/s/1/?d=a.example.vn&src=qr", domain: "a.example.vn", app_id: "1" };
+    const link = { url: "https://zalo.me/s/1/?d=a.example.vn&src=qr", domain: "a.example.vn", app_id: "1", source: "chung" as const };
     const views = [
       <SidebarView key="sb" permissionKeys={SEVEN} />,
       <UploadPolicyTable key="ut" items={[POLICY, UNCLASSED]} canEdit onEdit={noop} />,

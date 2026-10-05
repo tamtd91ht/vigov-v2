@@ -123,15 +123,24 @@ const COMMUNE_ERRORS: Record<string, { field: CommuneField; text: string }> = {
   },
   mini_app_inactive: {
     field: "form",
-    text: "App ID này đã tắt nên không đổi được. Tải lại trang để xem App ID đang chạy của xã.",
+    text: "App ID này không còn chạy ở xã nên không đổi được. Tải lại trang để xem App ID đang chạy của xã.",
   },
   mini_app_already_running: {
     field: "form",
     text: "Xã đã có một Mini App riêng đang chạy. Muốn dùng App ID khác, chọn “Đổi App ID” ở dòng App ID đang chạy.",
   },
+  // ADR 0070 §Sửa đổi 05/10/2026 #2: removal is permanent; the primary key keeps the removed row.
+  mini_app_removed: {
+    field: "appId",
+    text: "App ID này đã bị gỡ trước đây nên không gắn lại được, kể cả cho chính xã đã dùng nó. Đăng ký Mini App mới trên Zalo rồi gắn App ID mới.",
+  },
+  mini_app_reactivation_removed: {
+    field: "form",
+    text: "App ID đã gỡ không bật lại được. Muốn xã có lại Mini App riêng, đăng ký Mini App mới trên Zalo rồi gắn App ID mới.",
+  },
   mini_app_not_bound: {
     field: "form",
-    text: "App ID này chưa gắn hoặc đang tắt ở xã. Bật lại App ID trước khi đặt khoá bí mật.",
+    text: "App ID này không còn gắn với xã (đã gỡ hoặc đã đổi) nên không đặt được khoá bí mật. Tải lại trang để xem App ID đang chạy của xã.",
   },
   invalid_secret: {
     field: "secret",
@@ -233,6 +242,10 @@ const LAUNCH_LINK_ERRORS: Record<string, { text: string; toSharedAppPage: boolea
     toSharedAppPage: true,
   },
   shared_mini_app_ambiguous: { text: SHARED_APP_AMBIGUOUS, toSharedAppPage: false },
+  own_mini_app_ambiguous: {
+    text: "Xã đang có hơn một Mini App riêng chạy cùng lúc nên không biết mã QR phải mở app nào. Gỡ App ID thừa ở mục Mini App riêng của xã; hệ thống không tự chọn.",
+    toSharedAppPage: false,
+  },
   commune_not_found: { text: "Không tìm thấy xã. Quay lại danh sách xã và chọn lại.", toSharedAppPage: false },
 };
 

@@ -18,7 +18,9 @@ const ACTION_LABELS: Record<string, string> = {
   ngung_hoat_dong_xa: "Ngừng hoạt động xã",
   mo_lai_hoat_dong_xa: "Bật hoạt động trở lại cho xã",
   gan_mini_app: "Gắn Mini App riêng",
-  tat_mini_app: "Gỡ (tắt) Mini App riêng",
+  // One label for both eras: before 05/10/2026 this action switched the row off, since then it soft-deletes
+  // it (ADR 0070 §Sửa đổi 05/10/2026 #2). "Gỡ" is true of both; "(tắt)" is true only of the old rows.
+  tat_mini_app: "Gỡ Mini App riêng",
   bat_lai_mini_app: "Bật lại Mini App riêng",
   dat_khoa_mini_app: "Đặt khoá bí mật App ID",
   thu_hoi_khoa_mini_app: "Thu hồi khoá bí mật App ID",
