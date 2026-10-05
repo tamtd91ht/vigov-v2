@@ -206,6 +206,15 @@
       "menu": "phan-anh-nguoi-dan"
     },
     {
+      "id": "go-viec-demo-mini-app",
+      "viec": "Gỡ việc bat-demo-mini-app / tat-demo-mini-app khỏi job vigov-deploy và mọi hướng dẫn dựng --demo trong deploy/ (chủ dự án 05/10/2026, ADR 0066 §Sửa đổi)",
+      "trang_thai": "xong",
+      "bang_chung": "deploy/Jenkinsfile: hai việc ra khỏi choices + danh sách chặn (vẫn trùng nhau), stage 'Bật/tắt demo Mini App' gỡ, phần giải thích pod operatorctl chuyển sang stage dat-secret-mini-app (BƯỚC 5); deploy/cau-hinh/README.md §6, deploy/README.md §13.4 + :806, deploy/base/mang/netpol.yaml:476 hết hướng dẫn --demo. tools/check_build.py PASS; make check xanh trừ web check:api do schema.gen.ts chưa sinh lại sau 38793d52 — sinh lại cùng commit này.",
+      "no_confirm": [],
+      "tiep_theo": "Gỡ doi-app-id-thang-binh / gan-mini-app-thang-binh / dat-secret-mini-app khi màn platform-admin đã kiểm trên prod (ADR 0048 §01/10 #6d).",
+      "menu": "phan-anh-nguoi-dan"
+    },
+    {
       "id": "jenkins-dat-secret-mini-app",
       "viec": "Việc trong job vigov-deploy: đặt App Secret của app riêng một xã (operatorctl mini-app-secret set) — Zalo từ chối bản duyệt Xã Thăng Bình 05/10/2026 vì 'tính năng gửi phản ánh chưa hoạt động'",
       "trang_thai": "dang_lam",

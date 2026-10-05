@@ -803,7 +803,7 @@ Làm đúng thứ tự — mỗi bước sau dựa vào bước trước:
 | 5 | **`OPERATOR_HOST=admin.vigov.vn`** trên `vigov-service-platform` — biến env ghi thẳng trên Deployment (không `valueFrom`, không ConfigMap), vì job ở bước 7 **đọc nó từ đó**. Điều kiện chặn của ADR 0048 (NetworkPolicy 9093, mục #12) và bảng biến: `deploy/cau-hinh/README.md` | platform khởi động lại, không log `OPERATOR_HOST` không hợp lệ |
 | 6 | **`TRUSTED_PROXY_CIDRS`** (common-config) phải **bao dải IP pod của `platform-admin`**. Gateway của bàn điều khiển chuyển tiếp `X-Forwarded-For`; platform chỉ tin nó khi trạm trước nằm trong dải ấy. Thiếu thì **mọi người vận hành chung một IP** — IP pod platform-admin — cho giới hạn 20/15 phút (một người gõ sai khoá cả nhóm) và cho cột IP của vết kiểm toán. Đặt cả dải pod của cụm (vd `10.42.0.0/16`) đã bao sẵn | vết kiểm toán của một lần đăng nhập thử ghi IP máy người thử, không phải IP pod |
 | 7 | **Bấm job `vigov-platform-admin`**. Job đặt `PLATFORM_HTTP_ADDR=http://vigov-service-platform:8080` và chép `OPERATOR_HOST` từ `vigov-service-platform` đang chạy — platform chưa có, hay có giá trị không phải host bàn điều khiển (`admin.*` / `admin-stg.*`), thì job **dừng trước khi chạm cụm** và nói rõ; nó không tự điền giá trị nào | `rollout status` xanh; `https://admin.vigov.vn/` chuyển về `/dang-nhap` |
-| 8 | **Người vận hành đầu tiên**: `operatorctl create --email <địa chỉ> --name <tên> --ticket <số phiếu>` trong một pod một lượt từ **ảnh identity đang chạy** (cùng `envFrom` của identity — cách job `vigov-deploy` chạy `operatorctl` ở việc `bat-demo-mini-app`), rồi `operatorctl grant --code VH-… --permission ops.<key> --ticket <n>`. Mật khẩu tạm in ra một lần — không chép vào phiếu, log hay chat | đăng nhập được, bị buộc đặt MFA |
+| 8 | **Người vận hành đầu tiên**: `operatorctl create --email <địa chỉ> --name <tên> --ticket <số phiếu>` trong một pod một lượt từ **ảnh identity đang chạy** (cùng `envFrom` của identity — cách job `vigov-deploy` chạy `operatorctl` ở việc `dat-secret-mini-app`), rồi `operatorctl grant --code VH-… --permission ops.<key> --ticket <n>`. Mật khẩu tạm in ra một lần — không chép vào phiếu, log hay chat | đăng nhập được, bị buộc đặt MFA |
 
 **NetworkPolicy:** `base/mang/netpol.yaml` quy tắc 12 mở đúng một cặp — `platform-admin` → `platform`
 REST 8080 — và không gì khác (ADR 0003: bàn điều khiển không có đường tới dịch vụ nghiệp vụ). Hai luật
@@ -868,13 +868,14 @@ kubectl -n vigov-prod logs deploy/vigov-service-petitions --since=15m | grep "t�
 identity (NetworkPolicy, `IDENTITY_GRPC_ADDR`, `GRPC_CALLER_KEY`). Log chỉ mang mã xã, không dữ liệu
 cá nhân.
 
-### 13.4 Xem lỗi ngay trên điện thoại — bản `--demo`
+### 13.4 Lỗi kết nối trên điện thoại — không còn bản `--demo`
 
-Bản dựng `scripts/deploy.mjs --vao-thang --demo` ghi một dòng `console.warn("[ViGov] kết nối lỗi", …)`
-cho mỗi lần gọi ViGov không thành: tuyến, host, mã HTTP **hoặc** tên lỗi, số ms, `origin` của webview,
-`online`. Không thân, không token, không đường dẫn (`citizen-app/src/cong-dan/api/connection-log.ts`).
-Bản thường không có dòng này. Đọc nó trong công cụ debug của Zalo: `TypeError` không `status` = DNS,
-TLS hoặc CORS (13.1–13.2); `AbortError` = quá 20 giây; có `status` = máy chủ đã trả lời (13.3).
+Bản dựng `--demo` và dòng `console.warn("[ViGov] kết nối lỗi", …)` của nó **đã gỡ** (d3f725f3;
+chủ dự án 05/10/2026, ADR 0066 §Sửa đổi 05/10/2026): `scripts/deploy.mjs` từ chối cờ `--demo`. Mini App
+chỉ còn một bản dựng, đăng nhập công dân thật. Lỗi kết nối từ điện thoại thì đọc từ phía máy chủ: Ingress
+và CORS (13.1–13.2), log dịch vụ (13.3). App riêng của xã trả `422 app_not_ready` khi App ID chưa có
+App Secret — đặt nó ở platform-admin (chi tiết xã, "Đặt/đổi khoá bí mật") hoặc job `vigov-deploy`,
+việc `dat-secret-mini-app`.
 
 ### 13.5 Đổi một tên miền công khai
 

@@ -1726,7 +1726,6 @@ export type identity_citizenSessionIn = {
   "appId": string;
   "accessToken": string;
   "phoneToken": string;
-  "demoIdentity": boolean;
 };
 
 export type identity_citizenSessionOut = {
@@ -4339,7 +4338,7 @@ export type petitions_post_citizen_reports_by_maTraCuu_verification_photos_by_id
   };
 };
 
-/** POST /api/v1/citizen-sessions — App riêng của xã đổi accessToken/phoneToken Zalo (hoặc danh tính demo khi App ID bật --demo) lấy phiên công dân ViGov */
+/** POST /api/v1/citizen-sessions — App riêng của xã đổi accessToken/phoneToken Zalo lấy phiên công dân ViGov */
 export type identity_post_citizen_sessions = {
   duongDan: "/api/v1/citizen-sessions";
   phuongThuc: "POST";

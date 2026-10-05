@@ -179,11 +179,12 @@ bảng mục 1 và mục 3.
 4. Job `service-identity` — ảnh có migration 0021 và `/operatorctl`, khởi động lại pod để đọc khoá.
    Rồi `kiem-tra-dang-nhap-app-rieng` (chỉ đọc): key, ảnh, Ingress `identity.api.vigov.vn`, và
    `POST /api/v1/citizen-sessions` thân `{}` phải trả `400 invalid_body` (`404` = ảnh cũ hoặc Ingress sai).
-5. `bat-demo-mini-app` (`MT=prod`, `XAC_NHAN=vigov-prod`, `TENANT_ID`, `APP_ID`, `TICKET` bắt buộc) —
-   `operatorctl mini-app-demo on` trong một pod một lượt từ ảnh identity đang chạy.
-6. `cd citizen-app && npm run zmp:deploy -- --domain=thangbinh-danang.vigov.vn --vao-thang --demo`
-
-Trước khi Zalo duyệt app: `tat-demo-mini-app` — danh tính demo mở phiên không xác minh số điện thoại.
+5. Đặt App Secret của App ID xã (lấy ở developers.zalo.me → app → Cài đặt → App Secret): platform-admin,
+   chi tiết xã, nút "Đặt/đổi khoá bí mật"; hoặc job `vigov-deploy`, việc `dat-secret-mini-app` (`MT=prod`,
+   `XAC_NHAN=vigov-prod`, `TENANT_ID`, `APP_ID`, `TICKET`, `APP_SECRET` bắt buộc). Thiếu khoá thì
+   `POST /api/v1/citizen-sessions` trả `422 app_not_ready`.
+6. `cd citizen-app && npm run zmp:deploy -- --domain=thangbinh-danang.vigov.vn --vao-thang` — **không**
+   `--demo`: danh tính demo đã gỡ 05/10/2026 (ADR 0066 §Sửa đổi 05/10/2026), `deploy.mjs` từ chối cờ ấy.
 
 ### ClamAV cho petitions — TRƯỚC job `service-petitions`
 

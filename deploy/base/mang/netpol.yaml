@@ -473,8 +473,8 @@ spec:
 # 10. Đường RA của RIÊNG identity: 443 tới Zalo (ADR 0066). App riêng của xã đăng nhập thẳng vào
 # identity (`POST /api/v1/citizen-sessions`), nên identity tự đổi accessToken/phoneToken với Zalo
 # Graph API (`graph.zalo.me` — hằng `zalo.DefaultBaseURL` trong mã, không phải biến môi trường).
-# Thiếu luật này thì pod xanh mà mọi lượt đăng nhập thật của app riêng trả 502; `--demo` vẫn chạy vì
-# không gọi Zalo — đúng kiểu hỏng trông như chạy được.
+# Thiếu luật này thì pod xanh mà mọi lượt đăng nhập thật của app riêng trả 502 — đúng kiểu hỏng trông
+# như chạy được.
 #
 # ⚠ 443 mở tới `0.0.0.0/0` vì Zalo không công bố dải địa chỉ; CHỈ pod identity, CHỈ cổng 443 — cùng
 # loại nợ với quy tắc 4 và 9 (`_chung/netpol-duong-ra-tam-mo`). Một pod identity bị chiếm quyền gửi
