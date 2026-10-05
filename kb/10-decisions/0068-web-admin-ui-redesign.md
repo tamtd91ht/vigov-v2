@@ -3,11 +3,17 @@ id: 0068-web-admin-ui-redesign
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: 8b5c37b0
+derived_from_commit: b8e07d04
 expires: null
 owns_facts:
-  - "làm mới giao diện web-admin chỉ đổi phần trình bày: không đổi đường dẫn, lời gọi API, state, logic lọc/phân trang/phân quyền, tên trường, name/id ô nhập, handler, thứ tự bước nghiệp vụ; không thêm tính năng 'cho hiện đại' (chốt 02/10/2026)"
-  - "nền tảng giao diện web-admin là Tailwind CSS v4 + shadcn/ui, icon lucide-react, phông Be Vietnam Pro tự phục vụ qua @fontsource (không gọi Google lúc build hay lúc chạy); màu chính #1565C0, đỏ/vàng chỉ làm điểm nhấn nhận diện; token chế độ tối chuẩn bị sẵn nhưng chưa bật"
+  - "làm mới giao diện web-admin chỉ đổi phần trình bày: không đổi đường dẫn, lời gọi API, state, logic lọc/phân trang/phân quyền, tên trường, name/id ô nhập, handler, thứ tự bước nghiệp vụ; không thêm tính năng 'cho hiện đại' (chốt 02/10/2026) — NGOẠI LỆ DUY NHẤT 05/10/2026: URL theo hộp chi tiết lớn (?task=<mã>)"
+  - "nền tảng giao diện web-admin là Tailwind CSS v4 + shadcn/ui, icon lucide-react, phông Be Vietnam Pro tự phục vụ qua @fontsource (không gọi Google lúc build hay lúc chạy); đỏ/vàng chỉ làm điểm nhấn nhận diện; token chế độ tối chuẩn bị sẵn nhưng chưa bật (màu chính #1565C0 thay 05/10/2026 bằng bảng màu của §Sửa đổi 05/10/2026)"
+  - "bảng màu web-admin từ 05/10/2026, áp một lần cho toàn web-admin, không theo xã: nền trang #f4f8fb, thẻ #fff, nút chính navy #102b43, nền nhấn #e8f5fe, cyan #2fb1f9 CHỈ làm nền/viền/trạng thái hiện tại/vòng focus, không bao giờ làm chữ trên nền trắng; chữ/liên kết xanh #0369a1; chữ mờ giữ tương phản ≥4.5:1 (không dùng #8aa2b8 cho chữ)"
+  - "'sống động hơn' (chủ dự án 05/10/2026) = điểm nhấn màu + thẻ trắng bo góc trên nền xám nhạt + icon/ảnh đại diện + phản hồi khi tương tác; vẫn không blur/gradient/hình trang trí (§11 giữ)"
+  - "mọi màn chi tiết web-admin mở dạng HỘP LỚN đè lên trang danh sách, mỗi đợt một màn, Nhiệm vụ thí điểm trước (rồi Đơn thư, Phản ánh): thanh tab thao tác trên (Xem chi tiết · Chỉnh sửa · Xoá) + 'Tạo bởi … lúc …' bên phải; khối trạng thái nổi bật; thân hai cột (thông tin trái, nhật ký/trao đổi phải); dải nút tròn bên phải CHỈ cho thao tác phụ, mỗi nút có tooltip; thao tác chính giữ nút có chữ; chip bước không bấm để chuyển trạng thái ngoài allowed_transitions (chốt 05/10/2026)"
+  - "tab 'Xoá' của hộp chi tiết mở đúng luồng xoá mềm kèm lý do đang có (quyền task.delete), chỉ hiện khi có quyền (chốt 05/10/2026)"
+  - "URL theo hộp chi tiết: mở hộp đẩy MỘT mục lịch sử /nhiem-vu?task=<mã>, Back đóng hộp về danh sách cùng bộ lọc; đi tới việc cha/con trong hộp THAY mục lịch sử; đổi bộ lọc giữ ?task= (chốt 05/10/2026)"
+  - "tab nhiều bản ghi trong hộp chi tiết ('Đóng tất cả') hoãn sang đợt sau (chốt 05/10/2026)"
   - "globals.css cũ nằm trong cascade layer `legacy` để tiện ích Tailwind thắng; preflight của Tailwind KHÔNG bật ở đợt 1"
   - "không dùng component shadcn vi phạm rào chắn của kho: sidebar (document.cookie, Math.random), chart (dangerouslySetInnerHTML), sonner (chèn <style> lúc chạy); component bọc button/select/input gốc, không thay chúng"
   - "khi làm mới giao diện, kỳ vọng trình bày trong test (chuỗi class, ký tự emoji, markup bao ngoài) được đổi theo; khẳng định hành vi thì không"
@@ -24,7 +30,8 @@ owns_facts:
 
 # 0068. Làm mới giao diện web-admin — chỉ trình bày, Tailwind v4 + shadcn/ui
 
-**Trạng thái:** đã chốt · **Ngày:** 2026-10-02 · **Người quyết:** chủ dự án, 02/10/2026 · **Thay**
+**Trạng thái:** đã chốt · **Sửa đổi 05/10/2026** (bảng màu mới thay §2 màu chính, hộp chi tiết lớn,
+URL theo hộp — §*Sửa đổi 05/10/2026*) · **Ngày:** 2026-10-02 · **Người quyết:** chủ dự án, 02/10/2026 · **Thay**
 `docs/ui-ux/15-phu-luc-giao-dien-chung.md` về **hình thức** (không thay về hành vi, xem §8)
 
 ## Bối cảnh
@@ -55,6 +62,9 @@ Chủ dự án chấp nhận đặc tả, với mười quyết định dưới 
 
 ### 1. Chỉ trình bày
 
+> **Một ngoại lệ 05/10/2026:** URL theo hộp chi tiết lớn (`?task=<mã>`) — §*Sửa đổi 05/10/2026* #5.
+> Mọi điểm khác của §1 vẫn giữ.
+
 Không đổi đường dẫn, lời gọi API, state, logic lọc/phân trang/phân quyền, tên trường, `name`/`id`
 ô nhập, handler, thứ tự bước nghiệp vụ. Không thêm tính năng để "trông hiện đại" — ô tìm kiếm
 toàn cục, nút xoá lọc, đếm số trên menu, ẩn/hiện mật khẩu đều **không** thêm. Mọi nút và ô đang
@@ -73,7 +83,7 @@ markup. Hướng phong cách: hiện đại "thời đại chuyển đổi số"
 
 | Mục | Chốt |
 |---|---|
-| Màu chính | Xanh công vụ `#1565C0` |
+| Màu chính | **Thay 05/10/2026 bằng bảng màu của §*Sửa đổi 05/10/2026* #2.** Xanh công vụ `#1565C0` |
 | Đỏ cờ / vàng sao | Chỉ làm điểm nhấn nhận diện (logo, dải trên cùng), không dùng tràn lan |
 | Icon | `lucide-react`; bỏ emoji làm icon |
 | Phông | Be Vietnam Pro **tự phục vụ qua `@fontsource`** — không request nào tới Google lúc build hay lúc chạy |
@@ -346,3 +356,36 @@ Chủ dự án chốt 02/10/2026, sau khi đợt 2 dựng xong — giữ nguyên
   như mọi phụ thuộc khác.
 - Trong thời gian chuyển tiếp, hai hệ kiểu cùng tồn tại (layer `legacy` + Tailwind); màn chưa
   chuyển giữ nguyên hình cho tới đợt của nó.
+
+## Sửa đổi 05/10/2026 — sống động hơn, bảng màu mới, hộp chi tiết lớn
+
+Mục này ghi thêm, không sửa phần trên: phần trên là quyết định lúc viết, mục này thắng khi nói khác.
+**Người quyết:** chủ dự án, 05/10/2026, trong phiên chính. **Chưa dựng** — mỗi dòng là điều phải đúng
+khi dựng.
+
+Lời chủ dự án: *"tôi muốn web có ui sống động hơn hiện tại"*, kèm ảnh mẫu một màn chi tiết CRM (ảnh
+không nằm trong kho).
+
+| # | Điểm | Chốt |
+|---|---|---|
+| 1 | "Sống động hơn" nghĩa là gì | Điểm nhấn màu + **thẻ trắng bo góc trên nền xám nhạt** + icon / ảnh đại diện + phản hồi khi tương tác (hover, nhấn, focus). **Vẫn không** blur, gradient, hình trang trí — §11 giữ nguyên |
+| 2 | Bảng màu | Áp **một lần cho toàn web-admin** (token là toàn cục), **thay** dòng "Màu chính" của §2. Lấy từ prototype `../vigov-require/apps/admin/src/app/globals.css:61-100`. Nền trang `#f4f8fb` · thẻ `#fff` · nút chính navy `#102b43` · nền nhấn `#e8f5fe` · cyan `#2fb1f9` **chỉ** làm nền, viền, trạng thái hiện tại, vòng focus — **không bao giờ** làm chữ trên nền trắng · chữ / liên kết xanh = cyan đậm `#0369a1` · chữ mờ giữ tương phản **≥ 4.5:1** (không dùng `#8aa2b8` của prototype cho chữ; dùng một màu xám đậm hơn). Đỏ cờ / vàng sao của §2 không đổi. **Không theo xã** — ADR 0069 chỉ cho xã đổi logo / banner |
+| 3 | Hộp chi tiết lớn | Mọi màn chi tiết mở dạng **hộp thoại lớn đè lên trang danh sách**, **mỗi đợt một màn**: Nhiệm vụ thí điểm trước, Đơn thư và Phản ánh ở các đợt sau. Bố cục: thanh **tab thao tác** trên cùng (Xem chi tiết · Chỉnh sửa · Xoá), *"Tạo bởi … lúc …"* bên phải · **khối trạng thái** nổi bật (trạng thái hiện tại, chip các bước, *"Cập nhật gần nhất"*, liên kết nhật ký / hành trình) · thân **hai cột** (thông tin trái, nhật ký / trao đổi phải — `docs/ui-ux/02-nhiem-vu.md` §5.9) · **dải nút tròn bên phải chỉ cho thao tác PHỤ**, mỗi nút có tooltip. Thao tác chính (chuyển trạng thái, giao lại, lùi hạn) **giữ nút có chữ** — câu "thao tác quan trọng luôn có chữ" của §11 giữ. Chip bước **không** bấm được để chuyển sang trạng thái ngoài `allowed_transitions` |
+| 4 | Xoá | Giữ. Tab "Xoá" mở đúng luồng **xoá mềm kèm lý do** đang có (quyền `task.delete`, luật 7), **chỉ hiện khi có quyền** |
+| 5 | URL theo hộp | Mở hộp đẩy **một** mục lịch sử `/nhiem-vu?task=<mã>`; Back **đóng hộp** về danh sách với **cùng bộ lọc**. Đi tới việc cha / con trong hộp **thay** mục lịch sử (không đẩy thêm). Đổi bộ lọc **giữ** `?task=`. **Sửa** §1 ("chỉ trình bày — không đổi điều hướng / state") **riêng ở điểm này** |
+| 6 | Tab nhiều bản ghi ("Đóng tất cả") | **Hoãn** sang đợt sau |
+
+**Vì sao hộp lớn không phải hình thức mới:** đặc tả của khách hàng đã viết màn chi tiết nhiệm vụ là
+*"lớp phủ gần toàn màn hình"* (`docs/ui-ux/02-nhiem-vu.md:134-136`, DetailDrawer). Sửa đổi này đưa
+web-admin về đúng đặc tả ấy và dùng chung một bố cục cho mọi màn chi tiết.
+
+**Vì sao cyan không làm chữ:** `#2fb1f9` trên nền trắng chỉ đạt **2.39:1**, dưới ngưỡng WCAG AA 4.5:1
+mà §Bối cảnh đã nhận; `#8aa2b8` đạt 2.64:1, cùng lý do. `#0369a1` đạt 5.93:1. Trạng thái vẫn **icon +
+chữ, không bao giờ chỉ bằng màu** (§Bối cảnh) — bảng màu mới không đổi điều đó.
+
+**Vì sao URL theo hộp (ngoại lệ của §1):** hộp che trọn danh sách nên cán bộ đọc nó như một trang; bấm
+Back mà rời luôn màn Nhiệm vụ, mất bộ lọc, là mất việc đang làm. Một mục lịch sử cho mỗi lần mở (thay,
+không đẩy, khi đi cha / con) giữ cho một lần Back luôn về đúng danh sách.
+
+**Việc đang dở:** phần làm lại giao diện chi tiết Phản ánh (mục sổ tiến độ `giao-dien-phan-anh-w2-s1`)
+sẽ chuyển sang bố cục hộp lớn **ở đợt riêng của Phản ánh**, không trong đợt thí điểm Nhiệm vụ.
