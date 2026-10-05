@@ -3610,7 +3610,11 @@ aside.khoi-chua-khai h3 {
   outline: 2px solid var(--xanh);
 }
 
-@media (min-width: 768px) {
+/* 768–1279px ONLY: a scrolling row of fixed-width columns. From 1280px the board is the prototype's
+ * five-column grid (`xl:grid xl:grid-cols-5` on the element). This rule is unlayered CSS, so it
+ * beats Tailwind's layered `xl:min-w-0`: left open-ended, its `min-width: 15rem` kept each grid item
+ * wider than its 1fr track and the cards spilled over the next column (tester screenshot 06/10/2026). */
+@media (min-width: 768px) and (max-width: 1279.98px) {
   .bang-kanban {
     display: flex;
     align-items: flex-start;

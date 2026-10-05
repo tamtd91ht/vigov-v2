@@ -299,3 +299,15 @@ describe("new UI code", () => {
     for (const f of NEW_UI) for (const [name, re] of banned) expect(re.test(f.text), `${name} in ${f.path}`).toBe(false);
   });
 });
+
+// Tester screenshot 06/10/2026: Kanban cards spilled over the next column at ≥1280px. The legacy
+// `.cot-kanban { min-width: 15rem }` is unlayered, so it beat Tailwind's `xl:min-w-0` and each column
+// grew past its 1fr track. The rule must stay bounded below the 1280px grid breakpoint.
+describe("kanban board does not overlap at the grid breakpoint", () => {
+  it("the fixed-width column rule is limited to 768–1279px", () => {
+    const i = CSS.indexOf("min-width: 15rem;");
+    expect(i).toBeGreaterThan(-1);
+    const media = CSS.lastIndexOf("@media", i);
+    expect(CSS.slice(media, i)).toMatch(/@media \(min-width: 768px\) and \(max-width: 1279\.98px\)/);
+  });
+});
