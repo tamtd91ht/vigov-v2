@@ -132,7 +132,7 @@ import { StaffAvatarField } from "./staff-avatar-field";
  * dòng — người dùng chốt 30/09/2026, `bulk-publication.ts`, cùng khoá `content.update`) và
  * `DELETE /api/v1/staff/{id}` (xoá một dòng NHẬP TRÙNG, #10, `admin.user.delete`). Bốn tuyến còn
  * lại đổi THẨM QUYỀN hoặc đường đăng nhập của một người — thêm, đổi vai trò, khoá, mở khoá — và
- * chúng ở lại đúng chỗ đặc tả §1 đặt chúng: tab `Cấu hình → Người dùng`. Bày cùng một nút Khoá tài
+ * chúng ở lại đúng chỗ đặc tả §1 đặt chúng: màn `/nguoi-dung` (trước 05/10/2026 là tab `Cấu hình → Người dùng`). Bày cùng một nút Khoá tài
  * khoản ở hai màn hình là hai chỗ để một thao tác có hậu quả nặng bị bấm nhầm.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  *

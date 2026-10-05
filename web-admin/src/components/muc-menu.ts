@@ -43,9 +43,9 @@ export type MucMenu = {
  * Khoá mở MỤC MENU "Cấu hình" — mỗi khoá là khoá canh một tab trên `/cau-hinh`, không hơn.
  *
  * VÌ SAO MỘT PHÉP HỢP Ở ĐÂY KHÔNG TRÁI `quyetDinhTheoKhoa` ("một hàm, một khoá"): mục menu là CỬA
- * VÀO một màn sáu tab, không phải một tab. Tab nào vẫn tự quyết theo đúng một khoá của nó
- * (`features/cau-hinh/quyen-tab.ts`), nên có `admin.sla` thì vào được trang nhưng tab Người dùng
- * vẫn ẩn. Canh cửa bằng MỘT khoá (`admin.lookup`, trước 26/09/2026) thì cán bộ chỉ giữ `admin.sla`
+ * VÀO một màn nhiều tab, không phải một tab. Tab nào vẫn tự quyết theo đúng một khoá của nó
+ * (`features/cau-hinh/quyen-tab.ts`), nên có `admin.sla` thì vào được trang nhưng tab Nhật ký hệ
+ * thống vẫn ẩn. Canh cửa bằng MỘT khoá (`admin.lookup`, trước 26/09/2026) thì cán bộ chỉ giữ `admin.sla`
  * không tìm thấy lối vào tab Thời hạn xử lý — mà bảng thời hạn rỗng là xã không nhận được phản ánh
  * nào (`identity.ResolveDeadlines` từ chối).
  *
@@ -55,12 +55,15 @@ export type MucMenu = {
  * mới thì thêm đúng khoá của tab ấy vào đây, và chỉ khoá có thật trong bảng `quyen` (luật 5, bất
  * biến 3c).
  *
+ * `admin.user` VÀ `admin.role` RA KHỎI DANH SÁCH NGÀY 05/10/2026, cùng lượt hai tab của chúng rời
+ * `/cau-hinh` thành hai mục menu riêng (`Người dùng`, `Phân quyền`, theo bản mẫu chủ dự án duyệt).
+ * Giữ lại thì người chỉ có `admin.user` thấy mục Cấu hình dẫn tới một màn không còn phần nào khoá ấy
+ * mở ra — lối vào việc của họ nay là mục `Người dùng`.
+ *
  * Ẩn mục menu là tiện dụng, không phải biện pháp: mọi tuyến sau các tab tự kiểm khoá (luật 5, cấm #1).
  */
 export const KHOA_MO_CAU_HINH: readonly string[] = [
   QUYEN_QUAN_LY_SO_DO, // Sơ đồ tổ chức — nút ghi
-  QUYEN_QUAN_LY_NGUOI_DUNG, // Người dùng — cả tab
-  QUYEN_PHAN_QUYEN, // Phân quyền — cả tab
   QUYEN_QUAN_LY_DANH_MUC, // Danh mục — nút ghi
   QUYEN_CAU_HINH_THOI_HAN, // Thời hạn xử lý — bảng thời hạn và mọi nút ghi
   AUDIT_READ_PERMISSION, // Nhật ký hệ thống — cả tab
@@ -113,6 +116,12 @@ export const PENDING_SCREENS: Readonly<Record<string, PendingFeatureInfo>> = {};
  * move it if it is staff-internal, and it is — `/thong-bao` is the internal announcement book sent to
  * departments (`docs/ui-ux/08-thong-bao.md` §1, `features/thong-bao/so-thong-bao.tsx`). Under
  * NGƯỜI DÂN it would read as a message to citizens, which it never is.
+ *
+ * "Người dùng" and "Phân quyền" (05/10/2026) are TWO FLAT ITEMS, where the prototype draws one parent
+ * "Người dùng & Phân quyền" with these two as children. This menu has no child level, and adding one
+ * means a fourth field on an item — which `tools/tien_do_san_pham.py` (`MAU_MUC`) would silently stop
+ * counting. Same labels, routes, keys and order as the prototype's children; only the parent row is
+ * missing. Each needs its own key, so a parent gated on either would open onto a screen that refuses.
  */
 export const NHOM_MENU: readonly NhomMenu[] = [
   {
@@ -149,6 +158,8 @@ export const NHOM_MENU: readonly NhomMenu[] = [
     muc: [
       { nhan: "Danh bạ cán bộ", duong: "/danh-ba", khoa: QUYEN_QUAN_LY_NGUOI_DUNG },
       { nhan: "Báo cáo", duong: "/bao-cao", khoa: REPORT_READ_PERMISSION },
+      { nhan: "Người dùng", duong: "/nguoi-dung", khoa: QUYEN_QUAN_LY_NGUOI_DUNG },
+      { nhan: "Phân quyền", duong: "/nguoi-dung/phan-quyen", khoa: QUYEN_PHAN_QUYEN },
       { nhan: "Cấu hình", duong: "/cau-hinh", khoa: KHOA_MO_CAU_HINH },
     ],
   },

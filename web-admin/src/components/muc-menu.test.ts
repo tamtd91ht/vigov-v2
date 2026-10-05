@@ -13,6 +13,7 @@ const DU_QUYEN = [
   "budget.read",
   "feedback.read",
   "admin.user",
+  "admin.role",
   "admin.lookup",
   "task.read",
   "announcement.create",
@@ -26,8 +27,8 @@ function tenMuc(nhom: ReturnType<typeof locMenu>): string[] {
 }
 
 describe("locMenu", () => {
-  it("đủ quyền: thấy cả 14 mục của đặc tả §2", () => {
-    expect(tenMuc(locMenu(NHOM_MENU, DU_QUYEN))).toHaveLength(14);
+  it("đủ quyền: thấy cả 16 mục — 14 của đặc tả §2, thêm Người dùng và Phân quyền (05/10/2026)", () => {
+    expect(tenMuc(locMenu(NHOM_MENU, DU_QUYEN))).toHaveLength(16);
   });
 
   it("KHÔNG quyền nào: mọi mục biến mất — từ 04/10/2026 không còn mục nào chưa có màn", () => {
@@ -51,6 +52,8 @@ describe("locMenu", () => {
       "Sổ tay lãnh đạo",
       "Bản đồ kinh tế số",
       "Báo cáo",
+      "Người dùng",
+      "Phân quyền",
     ]) {
       expect(ten).not.toContain(n);
     }
@@ -175,7 +178,7 @@ describe("mục Cấu hình — mở khi có BẤT KỲ khoá nào canh một ta
     expect(ten).toHaveLength(1);
   });
 
-  it.each(["admin.org", "admin.user", "admin.role", "admin.lookup", "admin.sla", "admin.audit"])(
+  it.each(["admin.org", "admin.lookup", "admin.sla", "admin.audit"])(
     "chỉ có `%s`: thấy mục Cấu hình",
     (khoa) => {
       expect(tenMuc(locMenu(NHOM_MENU, [khoa]))).toContain("Cấu hình");
@@ -193,6 +196,16 @@ describe("mục Cấu hình — mở khi có BẤT KỲ khoá nào canh một ta
     const ten = tenMuc(locMenu(NHOM_MENU, ["admin.slas", "ADMIN.SLA", "admin.sla.read", "admin"]));
     expect(ten).not.toContain("Cấu hình");
   });
+
+  it.each(["admin.user", "admin.role"])(
+    "chỉ có `%s`: KHÔNG thấy mục Cấu hình — tab của khoá ấy đã rời /cau-hinh (05/10/2026)",
+    (khoa) => {
+      // Ca bị từ chối: giữ khoá này trong `KHOA_MO_CAU_HINH` là dẫn cán bộ tới một màn mà không phần
+      // nào khoá ấy mở ra. Lối vào của họ nay là mục riêng (ca dưới).
+      expect(tenMuc(locMenu(NHOM_MENU, [khoa]))).not.toContain("Cấu hình");
+      expect(KHOA_MO_CAU_HINH).not.toContain(khoa);
+    },
+  );
 
   it("chưa đọc xong phiên (null): KHÔNG thấy mục Cấu hình", () => {
     expect(tenMuc(locMenu(NHOM_MENU, null))).not.toContain("Cấu hình");
@@ -212,6 +225,37 @@ describe("mục Cấu hình — mở khi có BẤT KỲ khoá nào canh một ta
     // của nó ở `/danh-ba`, không ở đây.
     expect(KHOA_MO_CAU_HINH).toContain("admin.audit");
     expect(KHOA_MO_CAU_HINH).not.toContain("admin.user.delete");
+  });
+});
+
+describe("mục Người dùng và Phân quyền — mỗi mục đúng một khoá (05/10/2026, theo bản mẫu)", () => {
+  it("chỉ có `admin.user`: THẤY Người dùng, dẫn tới /nguoi-dung, và không mục nào khác", () => {
+    const muc = locMenu(NHOM_MENU, ["admin.user"]).flatMap((n) => n.muc);
+    expect(muc.map((m) => m.nhan)).toEqual(["Danh bạ cán bộ", "Người dùng"]);
+    expect(muc.find((m) => m.nhan === "Người dùng")?.duong).toBe("/nguoi-dung");
+  });
+
+  it("chỉ có `admin.role`: THẤY Phân quyền, dẫn tới /nguoi-dung/phan-quyen, và không mục nào khác", () => {
+    const muc = locMenu(NHOM_MENU, ["admin.role"]).flatMap((n) => n.muc);
+    expect(muc.map((m) => m.nhan)).toEqual(["Phân quyền"]);
+    expect(muc[0]?.duong).toBe("/nguoi-dung/phan-quyen");
+  });
+
+  it("CA BỊ TỪ CHỐI: thiếu hai khoá (kể cả có `admin.user.delete`, mọi khoá admin.* khác) → không thấy cả hai", () => {
+    for (const ds of [
+      [],
+      null,
+      ["admin.user.delete", "admin.users", "admin.roles", "ADMIN.ROLE", "admin.org", "admin.lookup", "admin.sla", "admin.audit"],
+    ]) {
+      const ten = tenMuc(locMenu(NHOM_MENU, ds));
+      expect(ten).not.toContain("Người dùng");
+      expect(ten).not.toContain("Phân quyền");
+    }
+  });
+
+  it("hai mục nằm trong HỆ THỐNG, giữa Báo cáo và Cấu hình — thứ tự của bản mẫu", () => {
+    const systemItems = NHOM_MENU.find((n) => n.ten === "HỆ THỐNG")?.muc.map((m) => m.nhan);
+    expect(systemItems).toEqual(["Danh bạ cán bộ", "Báo cáo", "Người dùng", "Phân quyền", "Cấu hình"]);
   });
 });
 

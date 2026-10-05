@@ -77,7 +77,7 @@ export const NUT_XAC_NHAN_KHOA = "Xác nhận khoá";
 export const NUT_XAC_NHAN_MO_KHOA = "Xác nhận mở khoá";
 
 /**
- * TAB `Cấu hình → Người dùng` KHÔNG CÓ NÚT XOÁ, và đây là hằng ghi lại lý do ở chỗ người ta sẽ đi
+ * MÀN `/nguoi-dung` (trước 05/10/2026 là màn `/nguoi-dung` (trước 05/10/2026 là tab `Cấu hình → Người dùng`)) KHÔNG CÓ NÚT XOÁ, và đây là hằng ghi lại lý do ở chỗ người ta sẽ đi
  * tìm nó.
  *
  * Câu mở #10 (chốt 22/09/2026) tách KHOÁ khỏi XOÁ: nghỉ hưu / chuyển công tác là KHOÁ, người vẫn

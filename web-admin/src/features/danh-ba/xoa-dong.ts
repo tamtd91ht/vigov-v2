@@ -53,7 +53,7 @@ export function deleteQuestion(hoTen: string): string {
  */
 export const GIAI_THICH_XOA =
   "Chỉ dùng khi một người bị nhập vào danh bạ hai lần do nhầm. Cán bộ nghỉ hưu hoặc chuyển công " +
-  "tác thì phải khoá tài khoản (Khoá tài khoản, ở Cấu hình → Người dùng), không xoá. Dòng đang có " +
+  "tác thì phải khoá tài khoản (Khoá tài khoản, ở màn Người dùng), không xoá. Dòng đang có " +
   "tài khoản đăng nhập không xoá được. Mã cán bộ của dòng bị xoá không bao giờ được cấp lại, và lý " +
   "do xoá được lưu vào hồ sơ.";
 
@@ -63,7 +63,7 @@ export const GIAI_THICH_XOA =
  */
 export const CAU_CO_TAI_KHOAN =
   "Người này đang có tài khoản đăng nhập nên không xoá được. Nếu đây là cán bộ nghỉ hưu hoặc " +
-  "chuyển công tác, hãy khoá tài khoản ở Cấu hình → Người dùng.";
+  "chuyển công tác, hãy khoá tài khoản ở màn Người dùng.";
 
 export const O_LY_DO_XOA = "Lý do xoá";
 export const MO_TA_LY_DO_XOA = `Bắt buộc, tối đa ${LY_DO_XOA_TOI_DA} ký tự. Ví dụ: nhập trùng với dòng của cùng người này.`;

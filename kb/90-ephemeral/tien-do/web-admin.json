@@ -681,6 +681,16 @@
       "trang_thai": "xong",
       "bang_chung": "web-admin/src/app/{page.tsx,giai-ngan/page.tsx,giai-ngan/du-an/[id]/page.tsx} · lib/{home-route.ts,home-route.server.ts} · lib/api/{goi.ts,excel-import.ts,noi-dung.ts,phieu-phan-anh.ts,so-do-to-chuc.ts} · components/dau-trang.tsx · features/dashboard/{labels.ts,view.tsx} · features/giai-ngan/{chung-tu-du-an.tsx,ghi-du-an.tsx,nhan-du-an.ts,nhan-ghi-giai-ngan.ts} · features/noi-dung/{nhan-noi-dung.ts,portal-sync-card.tsx,so-noi-dung.tsx} · features/thu-chi/{bang-thu-chi.tsx,lap-bang.tsx,nhan-thu-chi.ts}: tsc sạch, eslint các tệp đổi sạch, vitest 3835/3835 (ca mới: homePathFor ba nhánh, stripTechnicalPrefix với câu thật, 404 không JSON, ô số bị từ chối khi thiếu quyền, ngày khởi công sau ngày hoàn thành) — kiểm 05/10/2026, chưa commit.",
       "tiep_theo": "Chỉ kiểm được trên máy chạy thật: phép rẽ '/' (đọc phiên phía máy chủ qua goiNoiBo, chuyển tiếp nguyên header cookie tới identity như chuyen-tiep.ts), bố cục thanh bên ở chi tiết dự án 320px, nút ô số trong bảng ngân sách ở 320px. Câu báo lỗi máy chủ nay bỏ tiền tố ở web; máy chủ vẫn viết tiền tố — nếu bỏ ở máy chủ thì hàm này thành thừa."
+    },
+    {
+      "id": "nguoi-dung-phan-quyen-man-rieng-05-10",
+      "menu": [
+        "cau-hinh"
+      ],
+      "viec": "Căn web-admin theo bản mẫu (màn đầu tiên, chủ dự án duyệt 05/10/2026): tab 'Người dùng' và 'Phân quyền' rời /cau-hinh thành hai màn riêng /nguoi-dung và /nguoi-dung/phan-quyen, dùng lại nguyên component của tab (TabNguoiDung, TabPhanQuyen) trong khung trang chuẩn, cùng cổng quyền admin.user / admin.role (quyetDinhTabNguoiDung, quyetDinhTabPhanQuyen — không cổng thứ hai). Menu nhóm HỆ THỐNG thêm hai mục 'Người dùng' và 'Phân quyền' giữa Báo cáo và Cấu hình, mỗi mục đúng một khoá; admin.user và admin.role ra khỏi khoá mở mục Cấu hình. Liên kết cũ /cau-hinh?tab=nguoi-dung|phan-quyen chuyển sang màn mới (xã suy từ Host trước, Host lạ vẫn 404). Câu ở hộp xoá dòng danh bạ đổi 'Cấu hình → Người dùng' thành 'màn Người dùng'. Đây là thay đổi của bản mẫu sau 16/09 mà docs/ui-ux/14-cau-hinh.md §0 chưa thể hiện.",
+      "trang_thai": "xong",
+      "bang_chung": "web-admin/src/app/{nguoi-dung/page.tsx,nguoi-dung/phan-quyen/page.tsx,nguoi-dung/user-pages.test.tsx,cau-hinh/page.tsx,cau-hinh/moved-tab-redirect.test.tsx} · components/{muc-menu.ts,menu-icons.ts,muc-menu.test.ts} · features/cau-hinh/{moved-tabs.ts,moved-tabs.test.ts,thanh-tab-cau-hinh.ts,khung-tab-cau-hinh.tsx,tab-nguoi-dung.tsx,tab-phan-quyen.tsx} · features/danh-ba/xoa-dong.ts: tsc sạch, eslint các tệp đổi sạch, vitest 3856/3856 (ca mới: hai màn có quyền / thiếu quyền / chưa đọc phiên / phiên hỏng, menu hiện-ẩn theo từng khoá, chuyển hướng ?tab= cũ), make web xanh — kiểm 05/10/2026, chưa commit.",
+      "tiep_theo": "Menu chưa có cấp con nên hai mục đứng phẳng thay cho mục cha 'Người dùng & Phân quyền' của bản mẫu (thêm cấp con phải sửa cả MAU_MUC của tools/tien_do_san_pham.py). Ở /nguoi-dung/phan-quyen cả hai mục cùng sáng, đúng luật dangChon hiện có như /giai-ngan. docs/ui-ux/14-cau-hinh.md §0 cần ghi lại việc tách màn. Chỉ kiểm được trên trình duyệt: bố cục hai màn ở 320px."
     }
   ]
 }

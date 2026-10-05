@@ -12,8 +12,9 @@ import {
 } from "./quyen-tab";
 
 /**
- * Cổng ẩn/hiện tab "Phân quyền" — `docs/ui-ux/14-cau-hinh.md §12.8`: "Tab nào thiếu quyền thì ẩn
- * tab đó". Cùng khuôn với `tab-nguoi-dung.tsx`, khác đúng một khoá quyền.
+ * Cổng của màn "Phân quyền" — `/nguoi-dung/phan-quyen` từ 05/10/2026, trước đó là một tab của
+ * `/cau-hinh` (`docs/ui-ux/14-cau-hinh.md §12.8`). Cùng khuôn với `tab-nguoi-dung.tsx`, khác đúng một
+ * khoá quyền.
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
  * ĐÂY LÀ LỚP TIỆN DỤNG, KHÔNG PHẢI LỚP CHẶN. Hai lớp, và chỉ lớp thứ hai là biện pháp:
@@ -58,7 +59,7 @@ export function TabPhanQuyen() {
       <div className="khung-thieu-quyen flex min-w-0 flex-col items-center pb-10 [&>.trang-thai-rong]:m-0 [&>.trang-thai-rong]:max-w-md [&>.trang-thai-rong]:border-0 [&>.trang-thai-rong]:bg-transparent [&>.trang-thai-rong]:px-4 [&>.trang-thai-rong]:py-0 [&>.trang-thai-rong]:text-center [&>.trang-thai-rong]:text-[13px] [&>.trang-thai-rong]:text-ink-500">
         <NoAccess className="pb-4" />
         <p className="trang-thai-rong">
-          Tài khoản của bạn không có quyền phân quyền, nên tab này không hiển thị. Liên hệ quản trị
+          Tài khoản của bạn không có quyền phân quyền, nên màn này không hiển thị. Liên hệ quản trị
           viên của đơn vị nếu bạn cần quyền này.
         </p>
       </div>

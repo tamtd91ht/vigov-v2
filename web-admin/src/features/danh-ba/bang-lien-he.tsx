@@ -50,7 +50,7 @@ import {
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
  * ĐÂY KHÔNG PHẢI BẢN SAO CỦA `features/cau-hinh/danh-ba-can-bo.tsx`, VÀ SỰ KHÁC NHAU LÀ SỰ KHÁC
- * NHAU MÀ CHÍNH ĐẶC TẢ ĐẶT RA (§1): tab `Cấu hình → Người dùng` quản lý **tài khoản đăng nhập** —
+ * NHAU MÀ CHÍNH ĐẶC TẢ ĐẶT RA (§1): màn `/nguoi-dung` (trước 05/10/2026 là tab `Cấu hình → Người dùng`) quản lý **tài khoản đăng nhập** —
  * mã cán bộ, vai trò, trạng thái khoá, đăng nhập gần nhất, cấp tài khoản, đặt lại mật khẩu. Màn
  * này quản lý **thông tin liên hệ**: gọi ai, ở khối nào, số nào.
  *

@@ -205,11 +205,13 @@ export function DanhBaCanBo({ active = true }: { active?: boolean } = {}) {
   const [importOpen, setImportOpen] = useState(false);
 
   /**
-   * HAI DANH MỤC, ĐỌC ĐÚNG MỘT LƯỢT MỖI LẦN TAB NÀY ĐƯỢC HIỆN — `[active]` ở cuối effect là phần
+   * HAI DANH MỤC, ĐỌC ĐÚNG MỘT LƯỢT MỖI LẦN MÀN NÀY ĐƯỢC HIỆN — `[active]` ở cuối effect là phần
    * quan trọng nhất của khối này.
    *
-   * Đọc lại khi tab quay về hiện: bộ phận hay vai trò vừa tạo ở tab khác của cùng màn Cấu hình phải
-   * có mặt ở đây mà không cần tải lại trang (ND-01/ND-02). Tab đang ẩn thì không đọc — không ai nhìn.
+   * Bộ phận hay vai trò vừa tạo ở màn khác phải có mặt ở đây mà không cần tải lại trang (ND-01/ND-02).
+   * Từ 05/10/2026 màn này là `/nguoi-dung`, không còn là một tab: đi sang `/cau-hinh` hay
+   * `/nguoi-dung/phan-quyen` rồi quay lại là dựng lại component, nên effect chạy lại khi dựng. `active`
+   * vẫn được nhận để một nơi giữ component mà ẩn nó đi không đọc cho một màn không ai nhìn.
    *
    * Không đọc lại khi đổi trang, đổi sắp xếp hay mở khối chi tiết: danh mục bộ phận và vai trò
    * của một xã không đổi giữa hai lần bấm "Trang sau". Và tuyệt đối không đọc theo từng dòng —

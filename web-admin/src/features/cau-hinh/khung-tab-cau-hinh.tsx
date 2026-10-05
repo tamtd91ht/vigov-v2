@@ -6,13 +6,11 @@ import {
   FileClock,
   Home,
   ImageIcon,
-  KeyRound,
   ListTree,
   Mail,
   MapPinned,
   MessageSquareText,
   Network,
-  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
@@ -27,8 +25,6 @@ import { MailServerTab } from "./mail-server-tab";
 import { MapFieldTab } from "./map-field-tab";
 import { SystemMessagesTab } from "./system-messages-tab";
 import { TabDanhMuc } from "./tab-danh-muc";
-import { TabNguoiDung } from "./tab-nguoi-dung";
-import { TabPhanQuyen } from "./tab-phan-quyen";
 import { TabSoDoToChuc } from "./tab-so-do-to-chuc";
 import { TabThoiHanXuLy } from "./tab-thoi-han-xu-ly";
 import { TabThonToDanPho } from "./tab-thon-to-dan-pho";
@@ -41,14 +37,13 @@ import {
 } from "./thanh-tab-cau-hinh";
 
 /**
- * `active` is whether the panel is the one on display. Only a tab that shows catalogues another tab can
- * change needs it: "Người dùng" re-reads units and roles when it comes back (ND-01/ND-02).
+ * `active` is whether the panel is the one on display. No tab uses it since "Người dùng" — the one
+ * that re-read units and roles when it came back (ND-01/ND-02) — moved to `/nguoi-dung` (05/10/2026),
+ * where it re-reads on mount instead. Kept so the next tab with that need does not rebuild the plumbing.
  */
 const NOI_DUNG: Record<MaTabCauHinh, (active: boolean) => ReactNode> = {
   "so-do-to-chuc": () => <TabSoDoToChuc />,
   "thon-to-dan-pho": () => <TabThonToDanPho />,
-  "nguoi-dung": (active) => <TabNguoiDung active={active} />,
-  "phan-quyen": () => <TabPhanQuyen />,
   "danh-muc": () => <TabDanhMuc />,
   "truong-ban-do": () => <MapFieldTab />,
   "loi-he-thong": () => <SystemMessagesTab />,
@@ -63,8 +58,6 @@ const NOI_DUNG: Record<MaTabCauHinh, (active: boolean) => ReactNode> = {
 const ICON_TAB: Record<MaTabCauHinh, LucideIcon> = {
   "so-do-to-chuc": Network,
   "thon-to-dan-pho": Home,
-  "nguoi-dung": UsersRound,
-  "phan-quyen": KeyRound,
   "danh-muc": ListTree,
   "truong-ban-do": MapPinned,
   "loi-he-thong": MessageSquareText,

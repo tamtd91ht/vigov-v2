@@ -17,7 +17,7 @@ import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
  * đầu chương.
  *
  * MỘT MÀN RIÊNG, KHÔNG PHẢI MỘT TAB THỨ SÁU CỦA `/cau-hinh` — và sự tách ấy là của đặc tả (§1):
- * tab `Cấu hình → Người dùng` quản lý **tài khoản đăng nhập** (vai trò, khoá, mật khẩu tạm), màn
+ * màn `/nguoi-dung` (trước 05/10/2026 là tab `Cấu hình → Người dùng`) quản lý **tài khoản đăng nhập** (vai trò, khoá, mật khẩu tạm), màn
  * này quản lý **thông tin liên hệ** (gọi ai, ở khối nào, số nào). Hai màn đọc chung một bảng
  * `nguoi_dung` và chung một tuyến `GET /api/v1/staff`; khác nhau ở bộ trường hiển thị và ở bộ
  * thao tác ghi mở ra.

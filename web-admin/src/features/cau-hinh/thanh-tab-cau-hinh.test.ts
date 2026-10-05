@@ -40,7 +40,7 @@ afterEach(() => {
 });
 
 describe("tab nào của màn Cấu hình được hiện", () => {
-  it("đủ sáu khoá cổng → mười một tab, đúng thứ tự và nhãn của §0, Nhật ký hệ thống cuối", async () => {
+  it("đủ khoá cổng (trừ `admin.org`) → chín tab, đúng thứ tự §0 trừ hai tab đã rời màn, Nhật ký hệ thống cuối", async () => {
     const phien = await phienVoi(
       phanHoiPhien(["admin.user", "admin.role", "asset.read", "admin.lookup", "admin.sla", "admin.audit"]),
     );
@@ -48,8 +48,6 @@ describe("tab nào của màn Cấu hình được hiện", () => {
     expect(nhan(hien)).toEqual([
       "Sơ đồ tổ chức",
       "Thôn / Tổ dân phố",
-      "Người dùng",
-      "Phân quyền",
       "Danh mục",
       "Trường bản đồ",
       "Lời hệ thống",
@@ -123,11 +121,11 @@ describe("tab nào của màn Cấu hình được hiện", () => {
     expect(coThanhTab(phien, hien.length)).toBe(true);
   });
 
-  it("chỉ `admin.role` → Phân quyền hiện, Người dùng ẩn — mỗi tab đúng một khoá", async () => {
-    const phien = await phienVoi(phanHoiPhien(["admin.role"]));
-    const hien = nhan(cacTabHien(TAB_CAU_HINH, phien));
-    expect(hien).toContain("Phân quyền");
-    expect(hien).not.toContain("Người dùng");
+  it("Người dùng và Phân quyền không còn trong danh sách tab (05/10/2026 → /nguoi-dung)", () => {
+    // Hai cổng `quyetDinhTabNguoiDung` / `quyetDinhTabPhanQuyen` vẫn sống — ở màn mới
+    // (`tab-nguoi-dung.tsx`, `tab-phan-quyen.tsx`) — nhưng không tab nào ở đây gọi chúng nữa.
+    expect(nhan(TAB_CAU_HINH)).not.toContain("Người dùng");
+    expect(nhan(TAB_CAU_HINH)).not.toContain("Phân quyền");
   });
 
   it("KHÔNG thêm cổng cho bốn tab đọc mở: không khoá nào thì bốn tab ấy vẫn hiện", async () => {

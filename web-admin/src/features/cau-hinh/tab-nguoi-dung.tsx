@@ -7,8 +7,9 @@ import { DanhBaCanBo } from "./danh-ba-can-bo";
 import { quyetDinhTabNguoiDung, type QuyetDinhTab } from "./quyen-tab";
 
 /**
- * Cổng ẩn/hiện tab "Người dùng" — `docs/ui-ux/14-cau-hinh.md §12.8`: "Tab nào thiếu quyền thì
- * ẩn tab đó".
+ * Cổng của màn "Người dùng" — `/nguoi-dung` từ 05/10/2026, trước đó là một tab của `/cau-hinh`
+ * (`docs/ui-ux/14-cau-hinh.md §12.8`: "Tab nào thiếu quyền thì ẩn tab đó"). Tên `TabNguoiDung` giữ
+ * nguyên (luật 12, bất biến 3); quyết định vẫn là `quyetDinhTabNguoiDung`, không có bản thứ hai.
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
  * ĐÂY LÀ LỚP TIỆN DỤNG, KHÔNG PHẢI LỚP CHẶN. Hai lớp, và chỉ lớp thứ hai là biện pháp:
@@ -61,7 +62,7 @@ export function TabNguoiDung({ active = true }: { active?: boolean } = {}) {
       <div className="khung-thieu-quyen flex min-w-0 flex-col items-center pb-10 [&>.trang-thai-rong]:m-0 [&>.trang-thai-rong]:max-w-md [&>.trang-thai-rong]:border-0 [&>.trang-thai-rong]:bg-transparent [&>.trang-thai-rong]:px-4 [&>.trang-thai-rong]:py-0 [&>.trang-thai-rong]:text-center [&>.trang-thai-rong]:text-[13px] [&>.trang-thai-rong]:text-ink-500">
         <NoAccess className="pb-4" />
         <p className="trang-thai-rong">
-          Tài khoản của bạn không có quyền quản lý người dùng, nên tab này không hiển thị. Liên hệ
+          Tài khoản của bạn không có quyền quản lý người dùng, nên màn này không hiển thị. Liên hệ
           quản trị viên của đơn vị nếu bạn cần quyền này.
         </p>
       </div>

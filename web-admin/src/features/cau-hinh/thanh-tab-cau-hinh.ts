@@ -5,11 +5,11 @@
  * được MỘT tab thì KHÔNG hiện thanh, nội dung tab ấy hiện thẳng. Một nút tab đứng một mình không
  * chọn được gì, chỉ chiếm chỗ.
  *
- * TAB NÀO HIỆN ĐI ĐÚNG THEO CỔNG ĐÃ CÓ, không theo một luật mới đặt ở đây. Bảy tab có cổng —
- * Người dùng (`admin.user`), Phân quyền (`admin.role`), Trường bản đồ (`asset.read`, khoá tuyến ĐỌC
+ * TAB NÀO HIỆN ĐI ĐÚNG THEO CỔNG ĐÃ CÓ, không theo một luật mới đặt ở đây. Sáu tab có cổng —
+ * Trường bản đồ (`asset.read`, khoá tuyến ĐỌC
  * `GET /map-field-schemas`), Lời hệ thống và Máy chủ thư (`admin.lookup`, khoá mọi tuyến của hai
  * tab ấy, cả tuyến đọc), Tự động hoá (`admin.sla`, khoá cả ba tuyến `automation-jobs`) và Nhật ký
- * hệ thống (`admin.audit`, khoá năm tuyến `*-audit-entries`) — gọi
+ * hệ thống (`admin.audit`, khoá năm tuyến `*-audit-entries`), Nhận diện xã (`admin.org`) — gọi
  * đúng hàm của `quyen-tab.ts` mà chính tab ấy gọi, để chỉ có MỘT nguồn quyết định. Bốn tab kia KHÔNG
  * có cổng (`cong: null`) vì tuyến đọc của chúng mở cho mọi tài khoản đã đăng nhập; riêng `GET /sla`
  * thì máy chủ tự trả 403 và tab Thời hạn xử lý hiện nguyên câu ấy. Thêm cổng cho bốn tab này là để
@@ -27,8 +27,6 @@ import {
   brandingTabDecision,
   mailServerTabDecision,
   mapFieldTabDecision,
-  quyetDinhTabNguoiDung,
-  quyetDinhTabPhanQuyen,
   systemMessagesTabDecision,
   type QuyetDinhTab,
 } from "./quyen-tab";
@@ -36,8 +34,6 @@ import {
 export type MaTabCauHinh =
   | "so-do-to-chuc"
   | "thon-to-dan-pho"
-  | "nguoi-dung"
-  | "phan-quyen"
   | "danh-muc"
   | "truong-ban-do"
   | "loi-he-thong"
@@ -58,7 +54,9 @@ export type MoTaTab<M extends string = MaTabCauHinh> = {
 };
 
 /**
- * Mười hai tab đã dựng. Mười tab đầu đúng thứ tự và đúng nhãn của §0. Tự động hoá có cổng `admin.sla`
+ * Mười tab. Tám tab đầu đúng thứ tự và đúng nhãn của §0, trừ Người dùng và Phân quyền: hai tab ấy
+ * rời màn này ngày 05/10/2026 sang `/nguoi-dung` và `/nguoi-dung/phan-quyen`, theo bản mẫu chủ dự án
+ * duyệt (`moved-tabs.ts`; §0 của `docs/ui-ux/14` chưa ghi việc này). Tự động hoá có cổng `admin.sla`
  * vì cả ba tuyến của nó — kể cả tuyến đọc — khai khoá ấy (`automationTabDecision`).
  *
  * "Nhật ký hệ thống" không có trong thanh tab của §0 — đặc tả chỉ nói quyền `admin.audit` để xem
@@ -70,8 +68,6 @@ export type MoTaTab<M extends string = MaTabCauHinh> = {
 export const TAB_CAU_HINH: readonly MoTaTab[] = [
   { ma: "so-do-to-chuc", nhan: "Sơ đồ tổ chức", cong: null },
   { ma: "thon-to-dan-pho", nhan: "Thôn / Tổ dân phố", cong: null },
-  { ma: "nguoi-dung", nhan: "Người dùng", cong: quyetDinhTabNguoiDung },
-  { ma: "phan-quyen", nhan: "Phân quyền", cong: quyetDinhTabPhanQuyen },
   { ma: "danh-muc", nhan: "Danh mục", cong: null },
   { ma: "truong-ban-do", nhan: "Trường bản đồ", cong: mapFieldTabDecision },
   { ma: "loi-he-thong", nhan: "Lời hệ thống", cong: systemMessagesTabDecision },

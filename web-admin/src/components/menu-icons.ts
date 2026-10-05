@@ -12,7 +12,9 @@ import {
   MessageSquareWarning,
   NotebookPen,
   Settings,
+  ShieldCheck,
   Smartphone,
+  UserRound,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
@@ -42,6 +44,9 @@ export const MENU_ICONS: Readonly<Record<string, LucideIcon>> = {
   "Nội dung Mini App": Smartphone,
   "Danh bạ cán bộ": ContactRound,
   "Báo cáo": ChartColumn,
+  // The prototype's child-item icons (`vigov-require/apps/admin/src/lib/navigation.ts`).
+  "Người dùng": UserRound,
+  "Phân quyền": ShieldCheck,
   "Cấu hình": Settings,
 };
 

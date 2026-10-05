@@ -48,22 +48,21 @@ describe("khung tab màn Cấu hình", () => {
     expect(html).not.toContain("panel-cau-hinh-nguoi-dung");
   });
 
-  it("đủ quyền → thanh mười tab; tab đầu được chọn và là tab duy nhất có tabindex=0", () => {
+  it("đủ quyền → thanh tám tab; tab đầu được chọn và là tab duy nhất có tabindex=0", () => {
     phienGia = phienCo(["admin.user", "admin.role", "asset.read", "admin.lookup", "admin.audit"]);
     const html = renderToStaticMarkup(<KhungTabCauHinh />);
     expect(html).toContain('role="tablist"');
-    expect(soNutTab(html)).toBe(10);
+    expect(soNutTab(html)).toBe(8);
     expect(html).toContain('aria-controls="panel-cau-hinh-loi-he-thong"');
     expect(html).toContain('aria-controls="panel-cau-hinh-nhat-ky-he-thong"');
     expect(html).toContain('aria-controls="panel-cau-hinh-truong-ban-do"');
     expect(html).toContain('aria-controls="panel-cau-hinh-may-chu-thu"');
     expect((html.match(/aria-selected="true"/g) ?? []).length).toBe(1);
     expect((html.match(/role="tab"[^>]*tabindex="0"/g) ?? []).length).toBe(1);
-    expect(html).toContain('aria-controls="panel-cau-hinh-phan-quyen"');
     expect(html).toContain('role="tabpanel"');
   });
 
-  it("CA BỊ TỪ CHỐI: thiếu `admin.user` và `admin.role` → không nút, không panel Người dùng / Phân quyền", () => {
+  it("CA BỊ TỪ CHỐI: thiếu mọi khoá cổng → bốn tab đọc mở, không panel có cổng nào", () => {
     phienGia = phienCo(["task.read"]);
     const html = renderToStaticMarkup(<KhungTabCauHinh />);
     expect(soNutTab(html)).toBe(4);
@@ -105,6 +104,16 @@ describe("khung tab màn Cấu hình", () => {
     const html = renderToStaticMarkup(<KhungTabCauHinh />);
     expect(html).not.toContain(">Nhận diện xã</button>");
     expect(html).not.toContain("panel-cau-hinh-nhan-dien-xa");
+  });
+
+  it("Người dùng và Phân quyền KHÔNG còn ở màn này, kể cả khi giữ đủ khoá (05/10/2026 → /nguoi-dung)", () => {
+    phienGia = phienCo(["admin.user", "admin.role", "admin.org", "admin.lookup", "admin.sla", "admin.audit", "asset.read"]);
+    const html = renderToStaticMarkup(<KhungTabCauHinh />);
+    expect(html).not.toContain(">Người dùng</button>");
+    expect(html).not.toContain(">Phân quyền</button>");
+    expect(html).not.toContain("panel-cau-hinh-nguoi-dung");
+    expect(html).not.toContain("panel-cau-hinh-phan-quyen");
+    expect(soNutTab(html)).toBe(10);
   });
 
   it("phiên đọc hỏng → câu của máy chủ vẫn ra tới màn hình", () => {

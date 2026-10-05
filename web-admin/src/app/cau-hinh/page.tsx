@@ -1,4 +1,5 @@
 import { Settings, SlidersHorizontal } from "lucide-react";
+import { redirect } from "next/navigation";
 
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
 import { PageHeader } from "@/components/ui/page-header";
@@ -7,16 +8,20 @@ import { DauTrang } from "@/components/dau-trang";
 import { ThanhBen } from "@/components/thanh-ben";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { KhungTabCauHinh } from "@/features/cau-hinh/khung-tab-cau-hinh";
+import { movedTabRoute } from "@/features/cau-hinh/moved-tabs";
 import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
 
 /**
  * `/cau-hinh` — màn hình Cấu hình hệ thống (`docs/ui-ux/14-cau-hinh.md`).
  *
- * ĐƯỜNG DẪN: đúng đường dẫn đặc tả đã ghi (§ tiêu đề), và **không thêm đoạn nào**. Đặc tả cũ có
- * `/cau-hinh/nguoi-dung`, nhưng tên tài nguyên URL cho khái niệm "cán bộ" chưa được khách chốt
- * (`kb/00-foundation/ubiquitous-language.md`, dòng Cán bộ: "CHƯA CHỐT — HỎI KHÁCH"), và một
- * đoạn đường dẫn đã chạy thật ở một xã thì không có lần sửa nào rẻ nữa. Nên tab mở ngay trong
- * trang này; đặt tên đoạn đường dẫn là việc của khách, không phải của lượt này.
+ * ĐƯỜNG DẪN: đúng đường dẫn đặc tả đã ghi (§ tiêu đề), và **không thêm đoạn nào**.
+ *
+ * NGƯỜI DÙNG VÀ PHÂN QUYỀN ĐÃ RỜI MÀN NÀY (05/10/2026, chủ dự án duyệt theo bản mẫu
+ * `vigov-require/apps/admin`): nay là `/nguoi-dung` và `/nguoi-dung/phan-quyen`, mỗi màn một mục
+ * menu. Lý do của bản mẫu: thêm cán bộ, gỡ quyền là việc hằng tuần, danh mục thì vài tháng mới đụng
+ * — việc thường xuyên không nằm sau một mục menu cộng một tab. Đoạn đường dẫn `nguoi-dung` là của
+ * bản mẫu mà chủ dự án đã duyệt, không phải tên tự đặt ở đây. Liên kết cũ `?tab=nguoi-dung` /
+ * `?tab=phan-quyen` chuyển sang màn mới (`features/cau-hinh/moved-tabs.ts`).
  *
  * MƯỜI TAB CỦA §0, Ở ĐÂY CÓ SÁU. Bốn tab còn lại — Trường bản đồ, Lời hệ thống, Tự động hoá, Máy
  * chủ thư — chưa có tuyến nào trong hợp đồng REST. Một thanh mười tab mà bốn tab bấm vào không ra
@@ -45,13 +50,11 @@ import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
  * `features/cau-hinh/thanh-tab-cau-hinh.ts`. Chưa đọc xong phiên thì chưa dựng thanh — tab đầu
  * hiện thẳng — để thanh chỉ có thể xuất hiện, không bao giờ hiện rồi biến mất.
  *
- * CỔNG QUYỀN Ở MỖI TAB ĐI THEO TUYẾN ĐỌC CỦA NÓ Ở MÁY CHỦ, không theo một luật chung ở đây. Thanh
- * tab ẩn đúng hai tab mà trước đây cả phần bị ẩn, không thêm cổng nào:
+ * CỔNG QUYỀN Ở MỖI TAB ĐI THEO TUYẾN ĐỌC CỦA NÓ Ở MÁY CHỦ, không theo một luật chung ở đây
+ * (bảng đầy đủ: `features/cau-hinh/thanh-tab-cau-hinh.ts`):
  *
  *   | Phần            | Khoá           | Cổng bọc                                              |
  *   |-----------------|----------------|-------------------------------------------------------|
- *   | Người dùng      | `admin.user`   | cả phần — tuyến đọc khai `RequirePermission`          |
- *   | Phân quyền      | `admin.role`   | cả phần — cùng lý do                                  |
  *   | Sơ đồ tổ chức   | `admin.org`    | chỉ nút ghi — tuyến đọc `any-authenticated`           |
  *   | Danh mục        | `admin.lookup` | chỉ nút ghi — cùng lý do                              |
  *   | Thời hạn xử lý  | `admin.sla`    | chỉ nút ghi; `GET /sla` đòi khoá, máy chủ tự trả 403  |
@@ -72,8 +75,18 @@ export function generateMetadata() {
   return communePageMetadata("Cấu hình hệ thống");
 }
 
-export default async function TrangCauHinh() {
+export default async function TrangCauHinh({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  // Commune first: a Host matching no commune 404s before any redirect is issued.
   const xa = await layCauHinhXa();
+
+  // Người dùng and Phân quyền moved to `/nguoi-dung` (05/10/2026). A saved `?tab=` link to either
+  // lands on its new screen instead of on the first tab here (`moved-tabs.ts`).
+  const moved = movedTabRoute((await searchParams).tab);
+  if (moved !== null) redirect(moved);
 
   return (
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
@@ -88,7 +101,7 @@ export default async function TrangCauHinh() {
             subtitle={
               <span className="inline-flex items-center gap-1.5">
                 <SlidersHorizontal aria-hidden="true" focusable="false" strokeWidth={1.8} />
-                Tổ chức, phân quyền, danh mục nghiệp vụ và thời hạn xử lý của đơn vị.
+                Tổ chức, danh mục nghiệp vụ và thời hạn xử lý của đơn vị.
               </span>
             }
           />
