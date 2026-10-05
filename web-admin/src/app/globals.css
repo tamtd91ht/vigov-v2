@@ -1157,6 +1157,15 @@ div.thong-bao-loi:not(:empty) {
   }
 }
 
+/* The detail panel slides in from the edge it is pinned to (components/ui/large-dialog.tsx). A short
+   offset, not a full-width slide: the motion only says where the panel came from. */
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
 .dau-bang-chuong {
   display: flex;
   align-items: center;

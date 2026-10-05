@@ -5,10 +5,13 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 /**
- * The LARGE detail dialog over a list screen (ADR 0068 §Sửa đổi 05/10/2026 #3): a native `<dialog>`
- * opened with `showModal()`, ~76rem wide and 92% of the viewport tall from 768px, the whole screen
- * below it (docs/ui-ux/15 §5.2). Nhiệm vụ is the pilot; Đơn thư and Phản ánh follow in their own
- * rounds, which is why it lives in `components/ui` and knows nothing about tasks.
+ * The LARGE detail panel over a list screen (ADR 0068 §Sửa đổi 05/10/2026 #3): a native `<dialog>`
+ * opened with `showModal()`, PINNED TO THE RIGHT EDGE and running the full viewport height (owner,
+ * 05/10/2026: "mở full ra phía bên phải và kéo sát xuống phía dưới đáy màn hình"). Width grows with
+ * the screen — 92vw at 768px, 85vw from 1280px, capped at 80rem — so a slice of the list stays
+ * visible on the left and says where the user is; below 768px it is the whole screen
+ * (docs/ui-ux/15 §5.2). Nhiệm vụ is the pilot; Đơn thư and Phản ánh follow in their own rounds,
+ * which is why it lives in `components/ui` and knows nothing about tasks.
  *
  * NATIVE, NOT A HAND-MADE TRAP — same reasoning as `features/noi-dung/overlay-dialog.tsx`, which this
  * deliberately does not modify (other screens size their forms by `.overlay-dialog`): `showModal()`
@@ -65,12 +68,15 @@ export function LargeDialog({
       aria-modal="true"
       className={cn(
         // `open:` only: a `flex` that applied while closed would override the UA's `display: none`.
-        "m-auto box-border overflow-hidden border-0 bg-canvas p-0 text-ink-900 open:flex open:flex-col",
-        // Below 768px: the whole screen. The UA caps a modal at `100% - 2em`; lift both caps.
-        "h-dvh max-h-none w-screen max-w-none rounded-none",
-        "md:h-[92vh] md:w-[min(76rem,96vw)] md:rounded-[var(--r-xl)] md:border md:border-solid md:border-line md:shadow-md",
+        "box-border overflow-hidden border-0 bg-canvas p-0 text-ink-900 open:flex open:flex-col",
+        // Pinned right, top to bottom: the UA centres a modal with `margin: auto` inside `inset: 0`
+        // and caps it at `100% - 2em`; drop the margin, anchor the right edge, lift both caps.
+        "fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-none max-w-none",
+        // Below 768px: the whole screen.
+        "w-screen rounded-none",
+        "md:w-[92vw] xl:w-[min(80rem,85vw)] md:rounded-l-[var(--r-xl)] md:border-y-0 md:border-r-0 md:border-l md:border-solid md:border-line md:shadow-md",
         "backdrop:bg-brand-600/50",
-        "motion-safe:animate-[menu-in_200ms_ease-out]",
+        "motion-safe:animate-[panel-in_200ms_ease-out]",
         className,
       )}
       onCancel={(e) => {
