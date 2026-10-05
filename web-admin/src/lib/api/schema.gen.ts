@@ -520,6 +520,12 @@ export type comms_notificationOut = {
   "created_at": string;
 };
 
+export type comms_pairingCodeOut = {
+  "code": string;
+  "expires_at": string;
+  "chat_url": string;
+};
+
 export type comms_paragraphOut = {
   "runs": Array<comms_inlineRunOut>;
 };
@@ -801,6 +807,48 @@ export type comms_updateMapFieldSchemaIn = {
 
 export type comms_xoaLoaiTaiNguyenVao = {
   "reason": string;
+};
+
+export type comms_zaloChannelSettingsIn = {
+  "is_enabled": boolean | null;
+  "kinds": Array<string>;
+  "quiet_start": string | null;
+  "quiet_end": string | null;
+  "overdue_start_after_days": number | null;
+  "overdue_repeat_every_days": number | null;
+};
+
+export type comms_zaloChannelSettingsOut = {
+  "is_enabled": boolean;
+  "kinds": Array<string>;
+  "quiet_start": string;
+  "quiet_end": string;
+  "overdue_start_after_days": number | null;
+  "overdue_repeat_every_days": number | null;
+  "updated_at"?: string | null;
+  "updated_by"?: string;
+};
+
+export type comms_zaloLinkCurrentOut = {
+  "linked": boolean;
+  "linked_at"?: string | null;
+  "bot_name"?: string;
+  "chat_url"?: string;
+  "channel_enabled": boolean;
+};
+
+export type comms_zaloLinkedStaffList = {
+  "items": Array<comms_zaloLinkedStaffOut>;
+};
+
+export type comms_zaloLinkedStaffOut = {
+  "staff_code": string;
+  "staff_name": string;
+  "linked_at": string;
+};
+
+export type comms_zaloUpdateAck = {
+  "ok": boolean;
 };
 
 export type documents_capSoVanBanDiVao = {
@@ -9503,5 +9551,164 @@ export type identity_delete_working_hours_by_id = {
     403: httpx_Error;
     404: httpx_Error;
     500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/zalo-bot-updates — Webhook của Zalo Bot dùng chung — Zalo gọi khi cán bộ nhắn cho bot (mã ghép nối, /trogiup, /dung); xác thực bằng X-Bot-Api-Secret-Token so thời gian hằng, sai khoá 403 không đọc thân */
+export type comms_post_zalo_bot_updates = {
+  duongDan: "/api/v1/zalo-bot-updates";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_zaloUpdateAck;
+    403: httpx_Error;
+    429: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    429: "rate_limited";
+  };
+};
+
+/** GET /api/v1/zalo-channel-settings — Cấu hình kênh nhắc việc Zalo của xã — bật/tắt, các loại nhắc, giờ yên tĩnh (giờ Việt Nam), nhịp nhắc việc quá hạn; xã chưa lưu thì là tắt */
+export type comms_get_zalo_channel_settings = {
+  duongDan: "/api/v1/zalo-channel-settings";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_zaloChannelSettingsOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PUT /api/v1/zalo-channel-settings — Lưu cấu hình kênh nhắc việc Zalo của xã — bật thì phải chọn ít nhất một loại; chọn quá hạn thì phải đặt đủ nhịp nhắc; giờ yên tĩnh HH:MM không trùng nhau; có ghi vết trước/sau */
+export type comms_put_zalo_channel_settings = {
+  duongDan: "/api/v1/zalo-channel-settings";
+  phuongThuc: "PUT";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: comms_zaloChannelSettingsIn;
+  phanHoi: {
+    200: comms_zaloChannelSettingsOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_request";
+    422: "empty_quiet_window" | "enabled_without_kind" | "invalid_quiet_time" | "overdue_cadence_incomplete" | "overdue_cadence_required" | "overdue_repeat_out_of_range" | "overdue_start_out_of_range" | "unknown_kind";
+  };
+};
+
+/** GET /api/v1/zalo-links — Danh sách cán bộ của xã đang ghép nối Zalo — mã cán bộ, họ tên, ghép từ lúc nào; không có chat_id */
+export type comms_get_zalo_links = {
+  duongDan: "/api/v1/zalo-links";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_zaloLinkedStaffList;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    503: "staff_names_unavailable";
+  };
+};
+
+/** GET /api/v1/zalo-links/current — Trạng thái ghép nối Zalo của CHÍNH cán bộ đang đăng nhập — đã ghép chưa, từ lúc nào, tên và đường dẫn chat của bot dùng chung, xã đã bật kênh Zalo chưa; không bao giờ trả chat_id */
+export type comms_get_zalo_links_current = {
+  duongDan: "/api/v1/zalo-links/current";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_zaloLinkCurrentOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/zalo-links/current — Gỡ ghép nối Zalo của chính mình — kết thúc mềm liên kết (giữ làm lịch sử), có ghi vết; chưa ghép thì không ghi gì */
+export type comms_delete_zalo_links_current = {
+  duongDan: "/api/v1/zalo-links/current";
+  phuongThuc: "DELETE";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    204: void;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/zalo-links/current/pairing-codes — Lấy mã ghép nối Zalo 8 ký tự cho chính mình — dùng một lần, sống 10 phút, mã cũ còn mở bị huỷ; máy chủ chỉ lưu bản băm; có ghi vết (không ghi mã) */
+export type comms_post_zalo_links_current_pairing_codes = {
+  duongDan: "/api/v1/zalo-links/current/pairing-codes";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    201: comms_pairingCodeOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    409: "zalo_bot_not_configured";
+  };
+};
+
+/** POST /api/v1/zalo-links/current/test-messages — Gửi một tin thử cố định tới chat Zalo đã ghép của chính mình — có ghi vết và lưu kết quả gửi */
+export type comms_post_zalo_links_current_test_messages = {
+  duongDan: "/api/v1/zalo-links/current/test-messages";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: void;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    502: httpx_Error;
+  };
+  errorCodes: {
+    409: "zalo_bot_not_configured" | "zalo_channel_disabled" | "zalo_not_linked";
+    502: "zalo_send_failed";
   };
 };
