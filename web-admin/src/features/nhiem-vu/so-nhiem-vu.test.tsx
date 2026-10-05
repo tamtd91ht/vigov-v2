@@ -2347,7 +2347,8 @@ describe("NV-09 → hộp chi tiết lớn (ADR 0068 §Sửa đổi 05/10/2026):
   });
 
   it("thanh địa chỉ theo MÃ ĐANG MỞ, ở một chỗ; chi tiết vẽ trong `LargeDialog`", () => {
-    expect(SRC.split("useTaskDialogUrl(maDrawer,").length - 1).toBe(1);
+    // With record tabs the address names the ACTIVE tab while the panel is shown (`shownCode`).
+    expect(SRC.split("useTaskDialogUrl(shownCode,").length - 1).toBe(1);
     expect(SRC).toContain("<LargeDialog\n          titleId={TASK_DETAIL_TITLE_ID}");
   });
 });

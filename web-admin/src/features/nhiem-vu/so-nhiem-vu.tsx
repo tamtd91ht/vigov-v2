@@ -63,6 +63,21 @@ import { Field } from "@/components/ui/field";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { IconButton } from "@/components/ui/icon-button";
 import { LargeDialog } from "@/components/ui/large-dialog";
+import { RecordTabStrip, recordTabDomId } from "@/components/ui/record-tabs";
+import {
+  activateRecordTab,
+  closeAllRecordTabs,
+  closeRecordTab,
+  emptyRecordTabs,
+  mergeRecordTabs,
+  openRecordTab,
+  readStoredRecordTabs,
+  renameRecordTab,
+  updateRecordTab,
+  writeStoredRecordTabs,
+  type RecordTab,
+  type RecordTabsState,
+} from "@/components/ui/record-tabs-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { PendingFeature } from "@/components/ui/pending-feature";
 import { Tab, TabList } from "@/components/ui/tabs";
@@ -324,6 +339,7 @@ import {
 import { TaskAssignmentBlock } from "./task-assignment-block";
 import { readTaskParam, searchWithTask, useTaskDialogUrl } from "./task-dialog-url";
 import { TaskExtensionBlock } from "./task-extension-block";
+import { isTaskTabId, parseTaskTabData, taskTabsStorageKey, type TaskTabData } from "./task-tabs";
 import {
   Glyph,
   LoadingBar,
@@ -570,6 +586,175 @@ export function chuyenDrawer(s: DrawerNhiemVu | null, v: ViecDrawer): DrawerNhie
 }
 
 /**
+ * The detail PANEL: its record tabs (owner 05/10/2026), whether it is on screen, and the drawer of
+ * the ACTIVE tab (`chuyenDrawer`, unchanged). One reducer, so a row click opens the drawer AND its
+ * tab in one step — two states updated by two calls would render once with a drawer whose tab does
+ * not exist yet, and the tab-read effect would fire a needless read in that gap.
+ *
+ *   open (row, card, queue, child, parent, `?task=`, a created task)   tab added or activated, shown
+ *   tab click / ←→                                                      `chonTab`, its read follows
+ *   panel ✕ / Esc / Back (`dong`)                                       HIDDEN — the tabs stay
+ *   tab ✕                                                               neighbour (right, else left); last → hidden
+ *   Đóng tất cả                                                         every tab gone, hidden
+ *   delete succeeded (`boTab`)                                          that record's tab gone, hidden
+ *
+ * ONLY THE ACTIVE TAB HAS A DRAWER. Switching to a tab whose drawer is not loaded drops the drawer
+ * and the effect in `SoNhiemVu` reads the task through `layNhiemVu` — the same `task.read` +
+ * commune check as every read. A refusal stays IN THAT TAB's content (`tabError`), closable.
+ * The detail is keyed by code, so half-typed input in one tab is discarded by switching — the
+ * same as moving to a parent or a child today; there is no dirty guard to ask first.
+ */
+export type TaskPanel = {
+  readonly drawer: DrawerNhiemVu | null;
+  readonly tabs: RecordTabsState<TaskTabData>;
+  /** On screen. `false` with tabs kept is the HIDDEN panel of rule 4. */
+  readonly open: boolean;
+  /** The active tab's read was refused: the server's sentence, verbatim. */
+  readonly tabError: { readonly code: string; readonly message: string } | null;
+};
+
+export const NO_TASK_PANEL: TaskPanel = {
+  drawer: null,
+  tabs: emptyRecordTabs<TaskTabData>(),
+  open: false,
+  tabError: null,
+};
+
+export type TaskPanelAction =
+  /** The drawer's own moves. `dong` HIDES the panel; the tabs stay. */
+  | ViecDrawer
+  | { readonly loai: "chonTab"; readonly ma: string }
+  /** `layNhiemVu(ma)` answered for the tab that was active when it was asked. */
+  | { readonly loai: "tabVe"; readonly ma: string; readonly kq: KetQua<petitions_nhiemVuRa> }
+  | { readonly loai: "dongTab"; readonly ma: string }
+  | { readonly loai: "dongTatCa" }
+  /** These records were deleted: their tabs go; the panel hides if it showed one of them. */
+  | { readonly loai: "boTab"; readonly ma: readonly string[] }
+  /** Tabs read back from sessionStorage, folded under the open ones. */
+  | { readonly loai: "khoiPhuc"; readonly tabs: readonly RecordTab<TaskTabData>[] };
+
+function taskTabData(n: petitions_nhiemVuRa): TaskTabData {
+  return { title: n.title, status: n.status };
+}
+
+export function chuyenTaskPanel(s: TaskPanel, v: TaskPanelAction): TaskPanel {
+  switch (v.loai) {
+    case "dong":
+      return { ...s, drawer: null, open: false, tabError: null };
+    case "chonTab": {
+      const tabs = activateRecordTab(s.tabs, v.ma);
+      if (tabs.active !== v.ma) return s;
+      const drawer = s.drawer?.nhiemVu.code === v.ma ? s.drawer : null;
+      return { ...s, tabs, drawer, open: true, tabError: null };
+    }
+    case "tabVe": {
+      // A read overtaken by another switch, or arriving after the panel was hidden: dropped.
+      if (!s.open || s.tabs.active !== v.ma || s.drawer !== null) return s;
+      if (!v.kq.ok) return { ...s, tabError: { code: v.ma, message: v.kq.thongBao } };
+      const n = v.kq.duLieu;
+      // The code was renamed meanwhile: the tab follows the record rather than keep a dead code.
+      const tabs = n.code === v.ma ? s.tabs : renameRecordTab(s.tabs, v.ma, n.code, taskTabData(n));
+      return chuyenTaskPanel({ ...s, tabs }, { loai: "mo", nhiemVu: n });
+    }
+    case "dongTab": {
+      const tabs = closeRecordTab(s.tabs, v.ma);
+      if (tabs === s.tabs) return s;
+      if (tabs.active === null) return { ...s, tabs, drawer: null, open: false, tabError: null };
+      return {
+        ...s,
+        tabs,
+        drawer: s.drawer?.nhiemVu.code === tabs.active ? s.drawer : null,
+        tabError: s.tabError?.code === tabs.active ? s.tabError : null,
+      };
+    }
+    case "dongTatCa":
+      return { ...NO_TASK_PANEL, tabs: closeAllRecordTabs(s.tabs) };
+    case "boTab": {
+      let tabs = s.tabs;
+      for (const ma of v.ma) tabs = closeRecordTab(tabs, ma);
+      const shownGone = s.tabs.active !== null && v.ma.includes(s.tabs.active);
+      return shownGone ? { ...s, tabs, drawer: null, open: false, tabError: null } : { ...s, tabs };
+    }
+    case "khoiPhuc":
+      return { ...s, tabs: mergeRecordTabs(s.tabs, v.tabs) };
+    default: {
+      const drawer = chuyenDrawer(s.drawer, v);
+      if (drawer === s.drawer) return s;
+      if (drawer === null) return { ...s, drawer };
+      const code = drawer.nhiemVu.code;
+      const data = taskTabData(drawer.nhiemVu);
+      const before = s.drawer?.nhiemVu.code ?? null;
+      // An OPENING: a row/card/link (`mo`), or a write answered with no drawer on screen (a task
+      // just created from the list's form opens its detail, as before tabs).
+      if (v.loai === "mo" || before === null) {
+        return { ...s, drawer, tabs: openRecordTab(s.tabs, code, data), open: true, tabError: null };
+      }
+      // A write or a re-read of the record on screen. A different code here is a RENAME (the
+      // PATCH reply carries the new code, 3c3525f): the tab keeps its place under the new code.
+      const tabs =
+        before !== code ? renameRecordTab(s.tabs, before, code, data) : updateRecordTab(s.tabs, code, data);
+      return { ...s, drawer, tabs };
+    }
+  }
+}
+
+/**
+ * The content of a tab whose detail is not on screen: being read, or refused. The heading carries
+ * the dialog's accessible name exactly as the detail's does, from the tab's own label.
+ */
+function TaskTabPending({
+  code,
+  title,
+  error,
+  onHide,
+}: {
+  code: string;
+  title: string;
+  error: string | null;
+  onHide: () => void;
+}) {
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="shrink-0 border-b border-solid border-line bg-surface px-4 py-3 md:px-6 md:py-4">
+        <div className="flex items-start gap-3">
+          <h2
+            id={TASK_DETAIL_TITLE_ID}
+            className="m-0 min-w-0 flex-1 text-lg leading-snug font-semibold text-ink-900 [overflow-wrap:anywhere]"
+          >
+            [{code}] {title}
+          </h2>
+          <IconButton label="Đóng chi tiết nhiệm vụ" type="button" variant="secondary" onClick={onHide}>
+            <Glyph icon={X} />
+          </IconButton>
+        </div>
+      </div>
+      {error === null && <LoadingBar />}
+      <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
+        {/* Always in the DOM: a live region inserted later is not always announced. */}
+        <p className="an-thi-giac" role="status">
+          {error === null ? TASK_TAB_LOADING : ""}
+        </p>
+        {error !== null && (
+          <p className="thong-bao-loi mt-0" role="alert">
+            {error}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Said while a tab's task is read. */
+export const TASK_TAB_LOADING = "Đang tải nhiệm vụ…";
+/** The record-tab strip's accessible name, and the prefix of its tab ids. */
+export const TASK_TABS_LABEL = "Nhiệm vụ đang mở";
+const TASK_TAB_ID_PREFIX = "task-record-tab";
+const TASK_TAB_PANEL_ID = "task-record-panel";
+export function closeTaskTabLabel(code: string): string {
+  return `Đóng tab ${code}`;
+}
+
+/**
  * Câu của dải lọc Tổng quan trên sổ này — nói ra đúng những gì màn tạm tắt để số dòng bằng con số.
  * Kanban tắt vì mỗi cột chỉ đọc 20 thẻ và không vẽ các trạng thái rẽ nhánh (`Tạm dừng` là một).
  */
@@ -649,7 +834,10 @@ export function SoNhiemVu({
   const [kqDanhBaLanhDao, datKqDanhBaLanhDao] =
     useState<KetQua<identity_danhBaChonNguoiRa> | null>(null);
 
-  const [drawer, guiDrawer] = useReducer(chuyenDrawer, null);
+  // The panel: record tabs + the active tab's drawer (`chuyenTaskPanel`). `guiDrawer` keeps its
+  // name — every drawer move below goes through the panel reducer, which forwards it.
+  const [panel, guiDrawer] = useReducer(chuyenTaskPanel, NO_TASK_PANEL);
+  const drawer = panel.drawer;
   const [loiGhi, datLoiGhi] = useState<string | null>(null);
   const [dangGui, datDangGui] = useState(false);
   const [moFormTao, datMoFormTao] = useState(false);
@@ -858,13 +1046,23 @@ export function SoNhiemVu({
     guiDrawer({ loai: "mo", nhiemVu: n });
   }
   // ADR 0068 §Sửa đổi 05/10/2026 #5. Back / Forward: `null` closes; a code opens it unless shown.
-  useTaskDialogUrl(maDrawer, (code) => {
+  // ADR 0068 §Sửa đổi 05/10/2026 #5, with record tabs: the address bar names the ACTIVE tab while
+  // the panel is on screen. Opening from the list PUSHES (nothing shown → a code); switching or
+  // closing a tab with another left REPLACES (a code → another code); hiding goes Back.
+  const activeTab = panel.tabs.active;
+  const shownCode = panel.open ? activeTab : null;
+  useTaskDialogUrl(shownCode, (code) => {
     if (code === null) {
       guiDrawer({ loai: "dong" });
       datLoiGhi(null);
       return;
     }
-    if (code === maDrawer) return;
+    if (code === shownCode) return;
+    if (panel.tabs.tabs.some((t) => t.id === code)) {
+      guiDrawer({ loai: "chonTab", ma: code });
+      datLoiGhi(null);
+      return;
+    }
     layNhiemVu(code).then((kq) => {
       if (!kq.ok) {
         setOpenTaskError(kq.thongBao);
@@ -875,10 +1073,51 @@ export function SoNhiemVu({
     });
   });
 
+  // THE ACTIVE TAB'S READ, when its drawer is not on screen (a tab switch, Back onto a kept tab).
+  // The cleanup drops an answer overtaken by the next switch; the reducer drops one that arrives
+  // for a tab no longer active. The drawer's own effect then reads the detail once more — the same
+  // accepted double read as `?task=` on load, so the drawer keeps exactly one way of opening.
+  const tabNeedsRead =
+    panel.open && activeTab !== null && maDrawer !== activeTab && panel.tabError?.code !== activeTab;
+  useEffect(() => {
+    if (!tabNeedsRead || activeTab === null) return;
+    let cancelled = false;
+    layNhiemVu(activeTab).then((kq) => {
+      if (!cancelled) guiDrawer({ loai: "tabVe", ma: activeTab, kq });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [tabNeedsRead, activeTab]);
+
   const phien = usePhien();
   // FAIL CLOSED: chưa đọc xong phiên, hoặc đọc hỏng, thì KHÔNG có mã cán bộ — và không có mã thì
   // không so được với `lanh_dao_giao_viec_ma`, nên nút duyệt lùi hạn ẩn (luật 1, cấm #1).
   const maNguoiDangNhap = phien !== null && phien.ok ? phien.duLieu.staff.code : "";
+
+  /**
+   * RECORD TABS SURVIVE A RELOAD in sessionStorage (this browser tab only), keyed by commune host
+   * AND staff code (`taskTabsStorageKey`). No staff code yet → nothing read, nothing written. Read
+   * ONCE per key, then folded UNDER the tabs already open (a `?task=` link opened on load stays
+   * active). The panel itself is not restored: a reload without `?task=` shows the list.
+   * Another key appearing (a different officer in this browser tab) first drops every tab, so one
+   * officer's tabs are never written under — or shown to — the next.
+   */
+  const restoredTabsKey = useRef<string | null>(null);
+  useEffect(() => {
+    const key = taskTabsStorageKey(window.location.host, maNguoiDangNhap);
+    if (key === null || restoredTabsKey.current === key) return;
+    if (restoredTabsKey.current !== null) guiDrawer({ loai: "dongTatCa" });
+    restoredTabsKey.current = key;
+    const stored = readStoredRecordTabs(key, parseTaskTabData).filter((t) => isTaskTabId(t.id));
+    if (stored.length > 0) guiDrawer({ loai: "khoiPhuc", tabs: stored });
+  }, [maNguoiDangNhap]);
+  useEffect(() => {
+    const key = taskTabsStorageKey(window.location.host, maNguoiDangNhap);
+    // Written only once this key has been read: before that, writing would erase what is stored.
+    if (key === null || restoredTabsKey.current !== key) return;
+    writeStoredRecordTabs(key, panel.tabs.tabs);
+  }, [panel.tabs.tabs, maNguoiDangNhap]);
   // Cùng chiều FAIL CLOSED: phiên chưa đọc xong hoặc đọc hỏng thì MỌI cổng nút đóng.
   const quyen = quyenNhiemVu(phien !== null && phien.ok ? phien.duLieu.permissions : null);
   // Bảng tra họ tên theo mã — dựng MỘT LẦN mỗi lần danh bạ về, dùng chung cho thẻ, dòng và drawer.
@@ -954,7 +1193,9 @@ export function SoNhiemVu({
     setBatchResults(results);
     setSelection((s) => keepFailed(s, results));
     // A drawer showing a task that is now deleted would show a record that is gone.
-    if (maDrawer !== null && results.some((r) => r.ok && r.code === maDrawer)) guiDrawer({ loai: "dong" });
+    // Their tabs go too; a panel showing one of them hides.
+    const deleted = results.filter((r) => r.ok).map((r) => r.code);
+    if (deleted.length > 0) guiDrawer({ loai: "boTab", ma: deleted });
     datLanTai((n) => n + 1);
   }
 
@@ -1417,9 +1658,10 @@ export function SoNhiemVu({
       </Card>
 
       {/* THE DETAIL IS A LARGE DIALOG OVER THE LIST (ADR 0068 §Sửa đổi 05/10/2026 #3). Esc asks
-          the same `dong` as the ✕. The dialog stays mounted across parent / child moves (only the
-          content is keyed by code), so focus still returns to the row that first opened it. */}
-      {drawer !== null && (
+          the same `dong` as the ✕ — it HIDES the panel, the record tabs stay. The dialog stays
+          mounted across tab switches and parent / child moves (only the content is keyed by code),
+          so focus still returns to the row that first opened it. */}
+      {shownCode !== null && (
         <LargeDialog
           titleId={TASK_DETAIL_TITLE_ID}
           onDismiss={() => {
@@ -1427,6 +1669,50 @@ export function SoNhiemVu({
             datLoiGhi(null);
           }}
         >
+        <RecordTabStrip
+          label={TASK_TABS_LABEL}
+          idPrefix={TASK_TAB_ID_PREFIX}
+          panelId={TASK_TAB_PANEL_ID}
+          // Code + title + the commune's status label: what the register row already shows.
+          tabs={panel.tabs.tabs.map((t) => ({
+            id: t.id,
+            title: `[${t.id}] ${t.data.title}`,
+            secondary: nhanTrangThai(nhanTT, t.data.status),
+            icon: taskStatusIcon(t.data.status),
+          }))}
+          activeId={shownCode}
+          onSelect={(ma) => {
+            if (ma === shownCode) return;
+            guiDrawer({ loai: "chonTab", ma });
+            datLoiGhi(null);
+          }}
+          onClose={(ma) => {
+            guiDrawer({ loai: "dongTab", ma });
+            if (ma === shownCode) datLoiGhi(null);
+          }}
+          onCloseAll={() => {
+            guiDrawer({ loai: "dongTatCa" });
+            datLoiGhi(null);
+          }}
+          closeTabLabel={closeTaskTabLabel}
+        />
+        <div
+          id={TASK_TAB_PANEL_ID}
+          role="tabpanel"
+          aria-labelledby={recordTabDomId(TASK_TAB_ID_PREFIX, shownCode)}
+          className="flex min-h-0 min-w-0 flex-1 flex-col"
+        >
+        {drawer === null || drawer.nhiemVu.code !== shownCode ? (
+          <TaskTabPending
+            code={shownCode}
+            title={panel.tabs.tabs.find((t) => t.id === shownCode)?.data.title ?? ""}
+            error={panel.tabError?.code === shownCode ? panel.tabError.message : null}
+            onHide={() => {
+              guiDrawer({ loai: "dong" });
+              datLoiGhi(null);
+            }}
+          />
+        ) : (
         <ChiTietNhiemVu
           // A new task is a new detail: the open tab, the half-typed note and reason do not follow.
           key={drawer.nhiemVu.code}
@@ -1461,7 +1747,8 @@ export function SoNhiemVu({
                 return;
               }
               datLoiGhi(null);
-              guiDrawer({ loai: "dong" });
+              // The record is gone: its tab goes with it, and the panel hides as before tabs.
+              guiDrawer({ loai: "boTab", ma: [drawer.nhiemVu.code] });
               datLanTai((n) => n + 1);
             });
           }}
@@ -1604,6 +1891,8 @@ export function SoNhiemVu({
             })
           }
         />
+        )}
+        </div>
         </LargeDialog>
       )}
     </section>

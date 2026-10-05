@@ -441,6 +441,15 @@
       "tiep_theo": "(1) Các thẻ màn hình W1 (Danh bạ, Tổng quan, Nhiệm vụ…) dùng component mới; dashboard.module.css nằm NGOÀI lớp (unlayered) nên thắng mọi utility — thẻ Tổng quan phải chuyển nó vào lớp hoặc thay. (2) Chủ dự án xem lại: dòng 'Ủy ban nhân dân' trên đầu trang lặp nghĩa khi displayName đã là 'UBND xã …'. (3) Dòng 'Kết nối được mã hoá' ở màn đăng nhập chỉ trọn nghĩa khi đóng nợ HSTS/CSP của web-admin (tools/security_debt.json). (4) Preflight của Tailwind chỉ bật khi mọi màn đã chuyển."
     },
     {
+      "id": "tab-nhieu-ho-so-nhiem-vu",
+      "viec": "Tab nhiều hồ sơ trong ngăn chi tiết nhiệm vụ (ADR 0068 #6 thay 05/10/2026): mở nhiệm vụ mới thêm tab và chuyển sang, đóng ngăn giữ tab, ✕ từng tab, Đóng tất cả",
+      "trang_thai": "dang_lam",
+      "bang_chung": "components/ui/record-tabs.tsx + record-tabs-state.ts (dải tab chung cho đơn thư/phản ánh sau này: tablist, phím mũi tên, ✕ có aria-label, sessionStorage theo xã + người dùng trong try/catch, tối đa 8, LRU), features/nhiem-vu/task-tabs.ts, so-nhiem-vu.tsx nối vào ngăn LargeDialog (?task= = tab đang xem, đổi tab thay mục lịch sử). record-tabs.test.tsx, task-record-tabs.test.tsx. tsc sạch; vitest src/components + features/nhiem-vu + app 39 tệp 855/855 (05/10). Hai agent dựng bị ngắt giữa phiên rồi tiếp — kiểm lại trên đĩa trước khi commit.",
+      "no_confirm": [],
+      "tiep_theo": "Chủ dự án xem trên trình duyệt. Áp cùng RecordTabs cho đơn thư, phản ánh khi chuyển hai màn ấy sang ngăn chi tiết.",
+      "menu": "nhiem-vu"
+    },
+    {
       "id": "omicall-tokens-05-10",
       "viec": "Biến thiết kế theo ngôn ngữ OMICALL CRM (ADR 0068 §Sửa đổi 05/10/2026 lần 2): màu, Roboto 15px, bo góc, bóng nhuộm navy, control 36px, dòng bảng 64px",
       "trang_thai": "dang_lam",
@@ -718,6 +727,17 @@
       "trang_thai": "xong",
       "bang_chung": "web-admin/src/app/{nguoi-dung/page.tsx,nguoi-dung/phan-quyen/page.tsx,nguoi-dung/user-pages.test.tsx,cau-hinh/page.tsx,cau-hinh/moved-tab-redirect.test.tsx} · components/{muc-menu.ts,menu-icons.ts,muc-menu.test.ts} · features/cau-hinh/{moved-tabs.ts,moved-tabs.test.ts,thanh-tab-cau-hinh.ts,khung-tab-cau-hinh.tsx,tab-nguoi-dung.tsx,tab-phan-quyen.tsx} · features/danh-ba/xoa-dong.ts: tsc sạch, eslint các tệp đổi sạch, vitest 3856/3856 (ca mới: hai màn có quyền / thiếu quyền / chưa đọc phiên / phiên hỏng, menu hiện-ẩn theo từng khoá, chuyển hướng ?tab= cũ), make web xanh — kiểm 05/10/2026, chưa commit.",
       "tiep_theo": "Menu chưa có cấp con nên hai mục đứng phẳng thay cho mục cha 'Người dùng & Phân quyền' của bản mẫu (thêm cấp con phải sửa cả MAU_MUC của tools/tien_do_san_pham.py). Ở /nguoi-dung/phan-quyen cả hai mục cùng sáng, đúng luật dangChon hiện có như /giai-ngan. docs/ui-ux/14-cau-hinh.md §0 cần ghi lại việc tách màn. Chỉ kiểm được trên trình duyệt: bố cục hai màn ở 320px."
+    },
+    {
+      "id": "tong-quan-khung-ban-mau-05-10",
+      "menu": [
+        "tong-quan-dieu-hanh",
+        "bao-cao"
+      ],
+      "viec": "Dựng lại bố cục màn /tong-quan theo khung bản mẫu (DashboardWorkspace của vigov-require), kiểu chữ và màu theo ADR 0068 sửa đổi 05/10/2026 lần 2 (chủ dự án chốt 05/10/2026). Đầu trang: tiêu đề 'Tổng quan điều hành', dòng 'Kỳ …: … · tính đến …' có biểu tượng đồng hồ, bên phải là bốn nút kỳ (giữ nhãn và hành vi cũ), PDF/XLSX/PPTX và Trình chiếu (vô hiệu, dấu '?'). Thân trang: MỘT lưới 1 cột, 2 cột từ 1024px, 3 cột từ 1536px, sáu khối theo thứ tự bản mẫu — Nhiệm vụ · Văn bản & Đơn thư · Giải ngân ngân sách · Thu – Chi ngân sách · Phản ánh người dân · Kinh tế & Tài nguyên — rồi ô thứ bảy 'Cần xử lý ngay' (có số đếm, danh sách giới hạn chiều cao, cuộn bên trong ô, trạng thái rỗng). Mỗi khối là thẻ trắng không bóng, các ô số 2 cột, 3 cột khi khối có hơn bốn số và thẻ đủ rộng (container query), chiều cao hàng theo nội dung. Hai khối cũ 'Cần xử lý' và 'Tình hình trong kỳ' bỏ: số nhiệm vụ (đang thực hiện, quá hạn, hoàn thành, tạm dừng, tỷ lệ đúng hạn) vào khối Nhiệm vụ; số văn bản đến (đến trong kỳ, chưa xử lý xong, quá hạn xử lý) vào khối Văn bản & Đơn thư — khối thứ hai của bản mẫu — cạnh 'Tỷ lệ đúng hạn văn bản' (Chưa có dữ liệu) và 'Đơn thư trong kỳ' (dấu '?'). Giải ngân ngân sách và Kinh tế & Tài nguyên giữ chỗ trong lưới với các ô '—' theo tên chỉ số của bản mẫu và một dấu '?' ở đầu khối. Câu 'So với cùng khoảng thời gian đã trôi qua của kỳ trước' chuyển xuống dưới lưới. Giữ nguyên: không nút Tính lại ngay, không nhãn số liệu cũ (ADR 0053); bấm số mở danh sách đã lọc ?metric=… (không hộp thoại); ẩn khối theo quyền như cũ; nội dung dòng Cần xử lý ngay; câu TQ-05 và lý do thu – chi; không đổi API. /bao-cao dùng chung lưới, không có ô Cần xử lý ngay và không lặp câu so sánh (đã có ở dòng ngữ cảnh của nó).",
+      "trang_thai": "xong",
+      "bang_chung": "web-admin/src/features/dashboard/{view.tsx,labels.ts,header-actions.tsx,overview.tsx,view.test.tsx,placeholders.test.tsx} · features/report/report-view.tsx · app/tong-quan/page.tsx: tsc sạch, eslint các tệp đổi sạch, vitest 3929/3929 (ca mới: thứ tự bảy ô, một lưới 1/2/3 cột không auto-rows-fr, 3 cột ô số chỉ khi hơn bốn số, khối chưa dựng giữ chỗ có '?' không liên kết, đầu trang có nút kỳ và nút vô hiệu không có Tính lại ngay, đầu trang khi chưa qua cổng quyền chỉ có tiêu đề, bấm số là liên kết ?metric= không hộp thoại, thiếu khoá thì khối biến mất và thứ tự còn lại giữ, /bao-cao không có Cần xử lý ngay, danh sách cần xử lý ngay cuộn trong ô) — kiểm 05/10/2026, chưa commit.",
+      "tiep_theo": "Chỉ kiểm được trên trình duyệt: bố cục ở 320px, 1024px, 1536px (ô số 3 cột dựa vào container query @md = 28rem bề rộng thân thẻ), cuộn danh sách Cần xử lý ngay bằng bàn phím. Tên các ô '—' của Giải ngân và Kinh tế & Tài nguyên lấy từ bản mẫu (PENDING_BLOCK_METRICS ở labels.ts); dựng khối nào thì xoá mục ấy cùng mục PHAN_CHUA_DUNG tương ứng."
     }
   ]
 }
