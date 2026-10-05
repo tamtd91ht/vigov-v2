@@ -1162,7 +1162,7 @@
       "path": "/api/v1/citizen-sessions",
       "operation_id": "identity_post_citizen_sessions",
       "task_id": "946bffc3c7e3",
-      "summary": "App riêng của xã đổi accessToken/phoneToken Zalo (hoặc danh tính demo khi App ID bật --demo) lấy phiên công dân ViGov",
+      "summary": "App riêng của xã đổi accessToken/phoneToken Zalo lấy phiên công dân ViGov",
       "permission_kind": "public",
       "permission_reason": "app riêng của xã đổi accessToken/phoneToken lấy phiên công dân trước khi có phiên — ADR 0066",
       "consumer": "citizen-app",

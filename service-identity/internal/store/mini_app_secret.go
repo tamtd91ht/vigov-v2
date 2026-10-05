@@ -13,6 +13,12 @@ package store
 //
 // THE SEALED BYTES ARE OPAQUE HERE. This file never opens them; app/mini_app_secret.go owns the
 // envelope and its AAD.
+//
+// demo_identity_enabled IS WRITTEN, NEVER READ (owner decision 05/10/2026, ADR 0066 §Sửa đổi): the
+// column stays because dropping a populated column is rule 7 stop condition #2, and the history rows
+// that carry `true` are the answer to "which App ID opened sessions without a verified phone, and
+// since when". Every new version writes false; nothing in Go reads it back, so no code path can
+// re-enable the identity from a stale row.
 
 import (
 	"context"
@@ -24,29 +30,47 @@ import (
 	"github.com/vihat/vigov/core/store"
 )
 
-// MiniAppSecret is one version row. Sealed is nil when no secret is set (allowed only with
-// DemoIdentity — CHECK mini_app_secret_sealed_or_demo).
+// MiniAppSecret is one version row. Sealed is nil only on a row written while the demo identity
+// existed (CHECK mini_app_secret_sealed_or_demo); Insert refuses a nil one, and sign-in answers "not
+// ready" for a live row that has none.
 type MiniAppSecret struct {
-	ID           string
-	AppID        string
-	Sealed       []byte
-	DemoIdentity bool
-	SetAt        time.Time
-	SetBy        string
+	ID     string
+	AppID  string
+	Sealed []byte
+	SetAt  time.Time
+	SetBy  string
 }
 
-const miniAppSecretColumns = "id, app_id, app_secret_sealed, demo_identity_enabled, set_at, set_by"
+// MiniAppSecretStatus is one live version WITHOUT its sealed bytes: the status list computes
+// `app_secret_sealed IS NOT NULL` in SQL, so the ciphertext never even leaves the database on that
+// path (operator.proto: nothing derived from the secret — no length, no hash).
+type MiniAppSecretStatus struct {
+	ID        string
+	AppID     string
+	SecretSet bool
+	SetAt     time.Time
+	SetBy     string
+}
+
+const miniAppSecretColumns = "id, app_id, app_secret_sealed, set_at, set_by"
+
+const miniAppSecretStatusColumns = "id, app_id, app_secret_sealed IS NOT NULL, set_at, set_by"
 
 const retireMiniAppSecret = `UPDATE mini_app_secret
 	SET deleted_at = now(), deleted_by = $3, delete_reason = $4, updated_at = now()
 	WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
 
+// demo_identity_enabled is the literal false: see the file comment.
 const insertMiniAppSecret = `INSERT INTO mini_app_secret
 	(tenant_id, id, app_id, app_secret_sealed, demo_identity_enabled, set_at, set_by)
-	VALUES ($1, $2, $3, $4, $5, $6, $7)`
+	VALUES ($1, $2, $3, $4, false, $5, $6)`
 
 // ErrMiniAppSecretRetired is a retire that matched no live row — another run retired it first.
 var ErrMiniAppSecretRetired = errors.New("mini_app_secret: the version is no longer live")
+
+// ErrMiniAppSecretNoSecret is an Insert with no sealed secret. Refused here, before the database:
+// the schema would admit it only with demo on, and no version is written with demo on any more.
+var ErrMiniAppSecretNoSecret = errors.New("mini_app_secret: a version must carry a sealed secret")
 
 // MiniAppSecretStore reads and writes mini_app_secret.
 type MiniAppSecretStore struct {
@@ -77,6 +101,31 @@ func (s *MiniAppSecretStore) LiveForUpdate(ctx context.Context, tx *store.Scoped
 	return scanOneMiniAppSecret(rows)
 }
 
+// LiveStatuses lists every live version of the commune in ctx, ordered by app_id — the operator
+// screen's "đặt lúc … bởi …" read. Live = deleted_at IS NULL, i.e. live_app_id IS NOT NULL (rule 7,
+// invariant 2).
+func (s *MiniAppSecretStore) LiveStatuses(ctx context.Context) ([]MiniAppSecretStatus, error) {
+	// Scoped: Query adds `WHERE tenant_id = $1`.
+	rows, err := s.db.For(ctx).Query(ctx, miniAppSecretStatusColumns, "mini_app_secret",
+		"AND deleted_at IS NULL ORDER BY app_id")
+	if err != nil {
+		return nil, fmt.Errorf("mini_app_secret: list live: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []MiniAppSecretStatus
+	for rows.Next() {
+		var v MiniAppSecretStatus
+		if err := rows.Scan(&v.ID, &v.AppID, &v.SecretSet, &v.SetAt, &v.SetBy); err != nil {
+			return nil, fmt.Errorf("mini_app_secret: list live: scan: %w", err)
+		}
+		out = append(out, v)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("mini_app_secret: list live: %w", err)
+	}
+	return out, nil
+}
+
 // Retire soft-deletes the live version id. by is the business code of who retired it, reason the
 // operator's ticket (CHECK mini_app_secret_soft_delete_complete wants both non-blank).
 func (s *MiniAppSecretStore) Retire(ctx context.Context, tx *store.ScopedTx, id, by, reason string) error {
@@ -97,14 +146,11 @@ func (s *MiniAppSecretStore) Retire(ctx context.Context, tx *store.ScopedTx, id,
 // Insert writes a new version. The live-row key (tenant_id, live_app_id) refuses a second live row
 // for one App ID, so Retire the current one first in the same transaction.
 func (s *MiniAppSecretStore) Insert(ctx context.Context, tx *store.ScopedTx, v MiniAppSecret) error {
-	// A nil slice must reach the driver as SQL NULL, not as an empty BYTEA: the CHECK on the
-	// envelope length would otherwise refuse a demo-only row.
-	var sealed any
-	if v.Sealed != nil {
-		sealed = v.Sealed
+	if len(v.Sealed) == 0 {
+		return ErrMiniAppSecretNoSecret
 	}
-	if _, err := tx.Exec(ctx, insertMiniAppSecret, string(tx.TenantID()), v.ID, v.AppID, sealed,
-		v.DemoIdentity, v.SetAt, v.SetBy); err != nil {
+	if _, err := tx.Exec(ctx, insertMiniAppSecret, string(tx.TenantID()), v.ID, v.AppID, v.Sealed,
+		v.SetAt, v.SetBy); err != nil {
 		return fmt.Errorf("mini_app_secret: insert: %w", err)
 	}
 	return nil
@@ -119,7 +165,7 @@ func scanOneMiniAppSecret(rows *sql.Rows) (MiniAppSecret, bool, error) {
 		return MiniAppSecret{}, false, nil
 	}
 	var v MiniAppSecret
-	if err := rows.Scan(&v.ID, &v.AppID, &v.Sealed, &v.DemoIdentity, &v.SetAt, &v.SetBy); err != nil {
+	if err := rows.Scan(&v.ID, &v.AppID, &v.Sealed, &v.SetAt, &v.SetBy); err != nil {
 		return MiniAppSecret{}, false, fmt.Errorf("mini_app_secret: scan: %w", err)
 	}
 	if len(v.Sealed) == 0 {

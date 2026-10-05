@@ -446,6 +446,15 @@
       "menu": "cau-hinh"
     },
     {
+      "id": "trang-thai-khoa-go-danh-tinh-demo",
+      "viec": "ListMiniAppSecretStatuses (trạng thái khoá app riêng, chỉ siêu dữ liệu) + gỡ hẳn danh tính demo, giữ dữ liệu (chủ dự án 05/10/2026, ADR 0066/0070 §Sửa đổi)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "internal/grpc/operator.go ListMiniAppSecretStatuses (INVALID_ARGUMENT thiếu x-tenant-id/token → SESSION_NOT_LIVE → PERMISSION_DENIED nếu không có khoá ops.* hợp lệ → ACCEPTED), store LiveStatuses (deleted_at IS NULL, chỉ chọn app_secret_sealed IS NOT NULL — bản mã không rời CSDL). Gỡ demo: own_app_sign_in.go, cau_phien_cong_dan.go, app/mini_app_secret.go (SetDemo, hai hành động demo), domain DemoIdentityPhone/DemoZaloAccountID, operatorctl mini-app-demo; thân demoIdentity → 400 invalid_body (decodeStrict). Cột demo_identity_enabled + CHECK giữ (luật 7), dòng mới ghi false. Migration 0024_retire_demo_identity_settings.sql thu hồi dòng chỉ-demo (không secret), một ngung_cau_hinh_app_rieng mỗi dòng, chủ thể system. openapi.json/api-surface.json sinh lại (tools/apidoc). go build/vet/test service-identity xanh (05/10).",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA CHẠY ca PG (TestMigration0024RetiresDemoOnlyRowsPG, LiveStatuses, mini_app_secret_pg_test) — máy không có PostgreSQL. Dòng có secret mà còn cờ demo không thu hồi (cờ không ai đọc nữa). Triển khai cuốn chiếu: bản cũ còn chạy có thể bật demo sau 0024 — chạy lại khối DO sau khi lên hết. Nhãn nhật ký bat_/tat_danh_tinh_demo_app_rieng của dòng cũ chưa kiểm ở màn nhật ký web-admin.",
+      "menu": "phan-anh-nguoi-dan"
+    },
+    {
       "id": "operatorctl-secret-file",
       "viec": "operatorctl mini-app-secret set nhận --secret-file <đường dẫn> — cho pod một lượt của job vigov-deploy (ảnh distroless không shell, job không attach stdin)",
       "trang_thai": "xong",

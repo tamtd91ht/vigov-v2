@@ -170,6 +170,11 @@ func (m miniAppsUntouched) RetireAsOperator(context.Context, app.MiniAppOperator
 	return app.MiniAppSecretRetired{}, errors.New("untouched")
 }
 
+func (m miniAppsUntouched) LiveStatuses(context.Context) ([]app.MiniAppSecretStatus, error) {
+	m.t.Error("LiveStatuses ran")
+	return nil, errors.New("untouched")
+}
+
 // The two RPCs that act ON a commune are NOT exempt from the commune (operator.proto): through the
 // real chain, no x-tenant-id is INVALID_ARGUMENT before the handler; WITH it, the handler runs and a
 // token the signature refuses is SESSION_NOT_LIVE — nothing reaches the operator store or the use case.
@@ -201,6 +206,15 @@ func TestOperatorServiceMiniAppSecretRPCsNeedTheCommune(t *testing.T) {
 	rr, err := cl.RetireMiniAppSecret(ctx, ret)
 	if err != nil || rr.GetOutcome() != identityv1.OperatorAuthOutcome_OPERATOR_AUTH_OUTCOME_SESSION_NOT_LIVE {
 		t.Fatalf("RetireMiniAppSecret with commune, bad token: %v %v, want SESSION_NOT_LIVE", rr, err)
+	}
+	// The read beside them obeys the same commune rule (operator.proto ListMiniAppSecretStatuses).
+	list := &identityv1.ListMiniAppSecretStatusesRequest{SessionToken: "op1.garbage.garbage"}
+	if _, err := cl.ListMiniAppSecretStatuses(context.Background(), list); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("ListMiniAppSecretStatuses without x-tenant-id: %v, want InvalidArgument", status.Code(err))
+	}
+	lr, err := cl.ListMiniAppSecretStatuses(ctx, list)
+	if err != nil || lr.GetOutcome() != identityv1.OperatorAuthOutcome_OPERATOR_AUTH_OUTCOME_SESSION_NOT_LIVE || len(lr.GetStatuses()) != 0 {
+		t.Fatalf("ListMiniAppSecretStatuses with commune, bad token: %v %v, want SESSION_NOT_LIVE", lr, err)
 	}
 	if store.txs != 0 {
 		t.Fatalf("operator store reached %d times", store.txs)

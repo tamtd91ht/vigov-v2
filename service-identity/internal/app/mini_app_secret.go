@@ -1,9 +1,14 @@
 package app
 
 // The operator's acts on a commune's OWN Mini App sign-in settings (ADR 0066, both "Đã quyết
-// 01/10/2026" tables; migration 0021): set or replace the Zalo app secret, turn the `--demo` fixed
-// identity on or off, retire the App ID's settings. Reached from cmd/operatorctl until
-// platform-admin has a screen (ADR 0066 decision row 3).
+// 01/10/2026" tables; migration 0021): set or replace the Zalo app secret, retire the App ID's
+// settings, and list what is live (the "đặt lúc … bởi …" line, never the value). Reached from
+// cmd/operatorctl and from platform-admin through OperatorService.
+//
+// THE `--demo` SWITCH IS GONE (owner decision 05/10/2026, ADR 0066 §Sửa đổi): no act here turns it on
+// or off, every new version writes demo_identity_enabled = false (store/mini_app_secret.go), and
+// migration 0024 retired the live demo-only rows. The column and the history rows that carry it stay
+// (rule 7); the trail entries `bat_/tat_danh_tinh_demo_app_rieng` already written stay too.
 //
 // EVERY CHANGE IS A NEW VERSION ROW — retire the live one, insert the next — in ONE transaction with
 // ONE audit entry in the TARGET commune's audit_log. The entry names the App ID and whether a secret
@@ -11,7 +16,7 @@ package app
 //
 // WHO, TWO PATHS THROUGH THE SAME change():
 //
-//   - operatorctl (SetSecret, SetDemo, Retire): actor = system and reason "ticket:<n>", exactly the
+//   - operatorctl (SetSecret, Retire): actor = system and reason "ticket:<n>", exactly the
 //     operator realm's CLI rule (operator_admin.go): the person at the terminal is not an account of
 //     this system, and the ticket is what links the entry to a human decision. No ticket, no act —
 //     refused before anything is sealed.
@@ -22,11 +27,11 @@ package app
 //     The entry is in the commune's audit_log like every other, and core/audit.Log withholds it from
 //     the commune's own screen (ADR 0070 #7).
 //
-// THE PLATFORM BINDING IS CHECKED BEFORE ANYTHING THAT ENABLES SIGN-IN (set, demo on): service-platform's
+// THE PLATFORM BINDING IS CHECKED BEFORE ANYTHING THAT ENABLES SIGN-IN (set): service-platform's
 // mini_app is the one place that says which commune an App ID belongs to (migration 0021 §TENANT
 // SCOPE). A secret stored under a commune the App ID is not bound to would never be read, and an
-// operator would spend a morning finding out why. Retiring and demo-off REDUCE what the App ID can do,
-// so they are allowed even after the binding moved — that is exactly when they are needed.
+// operator would spend a morning finding out why. Retiring REDUCES what the App ID can do, so it is
+// allowed even after the binding moved — that is exactly when it is needed.
 
 import (
 	"context"
@@ -50,11 +55,12 @@ import (
 
 // Audit verbs — values, Vietnamese (ADR 0011). Subject is the App ID: a Zalo-issued public
 // identifier, not personal data, and the business key an inspector would ask about.
+//
+// ActionRetireOwnAppConfig is also the verb migration 0024 writes when it retires a demo-only row, so
+// "every retirement of this App ID's settings" is one query on one verb.
 const (
-	ActionSetOwnAppSecret     = "dat_secret_app_rieng"
-	ActionEnableDemoIdentity  = "bat_danh_tinh_demo_app_rieng"
-	ActionDisableDemoIdentity = "tat_danh_tinh_demo_app_rieng"
-	ActionRetireOwnAppConfig  = "ngung_cau_hinh_app_rieng"
+	ActionSetOwnAppSecret    = "dat_secret_app_rieng"
+	ActionRetireOwnAppConfig = "ngung_cau_hinh_app_rieng"
 )
 
 // maxAppSecretBytes bounds what is sealed. Zalo app secrets seen are ~20 characters; the bound is
@@ -67,13 +73,12 @@ const maxAppSecretBytes = 256
 const maxOperatorReasonRunes = 500
 
 var (
-	ErrMiniAppIDInvalid         = errors.New("mini app settings: app id must be 1-32 digits")
-	ErrMiniAppSecretInvalid     = errors.New("mini app settings: secret must be 1-256 printable characters with no spaces")
-	ErrMiniAppReasonInvalid     = errors.New("mini app settings: reason must be 1-500 characters, no control characters but line breaks")
-	ErrMiniAppNoOperatorCode    = errors.New("mini app settings: the operator has no business code — no fallback to the internal id")
-	ErrMiniAppNotOwnApp         = errors.New("mini app settings: the platform does not bind this app id to this commune as its own app")
-	ErrMiniAppSettingsNotFound  = errors.New("mini app settings: this app id has no live settings in this commune")
-	ErrMiniAppSettingsUnchanged = errors.New("mini app settings: already in that state — nothing written")
+	ErrMiniAppIDInvalid        = errors.New("mini app settings: app id must be 1-32 digits")
+	ErrMiniAppSecretInvalid    = errors.New("mini app settings: secret must be 1-256 printable characters with no spaces")
+	ErrMiniAppReasonInvalid    = errors.New("mini app settings: reason must be 1-500 characters, no control characters but line breaks")
+	ErrMiniAppNoOperatorCode   = errors.New("mini app settings: the operator has no business code — no fallback to the internal id")
+	ErrMiniAppNotOwnApp        = errors.New("mini app settings: the platform does not bind this app id to this commune as its own app")
+	ErrMiniAppSettingsNotFound = errors.New("mini app settings: this app id has no live settings in this commune")
 )
 
 // MiniAppBinding is the platform's App ID → commune read. *platformclient.Directory satisfies it.
@@ -86,11 +91,13 @@ type SecretSealer interface {
 	Seal(ctx context.Context, plaintext secret.Secret, aad []byte) ([]byte, error)
 }
 
-// MiniAppSecretRepo is the write half of *idstore.MiniAppSecretStore.
+// MiniAppSecretRepo is what *idstore.MiniAppSecretStore offers the operator's acts: the write half,
+// and the status list.
 type MiniAppSecretRepo interface {
 	LiveForUpdate(ctx context.Context, tx *store.ScopedTx, appID string) (idstore.MiniAppSecret, bool, error)
 	Retire(ctx context.Context, tx *store.ScopedTx, id, by, reason string) error
 	Insert(ctx context.Context, tx *store.ScopedTx, v idstore.MiniAppSecret) error
+	LiveStatuses(ctx context.Context) ([]idstore.MiniAppSecretStatus, error)
 }
 
 // miniAppSecretAAD binds sealed bytes to this table, this column, this commune and this App ID —
@@ -212,8 +219,8 @@ func operatorReason(raw string) (string, bool) {
 	return s, true
 }
 
-// SetSecret seals value and makes it the App ID's secret. The demo switch carries over unchanged.
-// operatorctl's path: system actor, ticket reason.
+// SetSecret seals value and makes it the App ID's secret. operatorctl's path: system actor, ticket
+// reason.
 func (a *MiniAppSecretAdmin) SetSecret(ctx context.Context, appID string, value secret.Secret, ticket string) error {
 	reason, err := ticketReason(ticket, "")
 	if err != nil {
@@ -261,49 +268,9 @@ func (a *MiniAppSecretAdmin) setSecret(ctx context.Context, actor changeActor, a
 	if err != nil {
 		return changeResult{}, fmt.Errorf("mini app settings: seal: %w", err)
 	}
-	return a.change(ctx, actor, appID, reason, ActionSetOwnAppSecret, func(old idstore.MiniAppSecret, found bool) (*idstore.MiniAppSecret, error) {
-		return &idstore.MiniAppSecret{Sealed: sealed, DemoIdentity: found && old.DemoIdentity}, nil
+	return a.change(ctx, actor, appID, reason, ActionSetOwnAppSecret, func(idstore.MiniAppSecret, bool) (*idstore.MiniAppSecret, error) {
+		return &idstore.MiniAppSecret{Sealed: sealed}, nil
 	})
-}
-
-// SetDemo turns the App ID's `--demo` fixed identity on or off.
-//
-// ON is allowed with no secret: stage 2 of ADR 0066's lifecycle runs before anybody has a secret.
-// OFF with no secret retires the settings — a row with neither is refused by the schema, and it
-// would be an App ID that can sign nobody in.
-func (a *MiniAppSecretAdmin) SetDemo(ctx context.Context, appID string, on bool, ticket string) error {
-	reason, err := ticketReason(ticket, "")
-	if err != nil {
-		return err
-	}
-	appID = strings.TrimSpace(appID)
-	if !domain.ValidMiniAppID(appID) {
-		return ErrMiniAppIDInvalid
-	}
-	if on {
-		if err := a.requireOwnApp(ctx, appID); err != nil {
-			return err
-		}
-		_, err := a.change(ctx, systemActor, appID, reason, ActionEnableDemoIdentity, func(old idstore.MiniAppSecret, found bool) (*idstore.MiniAppSecret, error) {
-			if found && old.DemoIdentity {
-				return nil, ErrMiniAppSettingsUnchanged
-			}
-			return &idstore.MiniAppSecret{Sealed: old.Sealed, DemoIdentity: true}, nil
-		})
-		return err
-	}
-	_, err = a.change(ctx, systemActor, appID, reason, ActionDisableDemoIdentity, func(old idstore.MiniAppSecret, found bool) (*idstore.MiniAppSecret, error) {
-		switch {
-		case !found:
-			return nil, ErrMiniAppSettingsNotFound
-		case !old.DemoIdentity:
-			return nil, ErrMiniAppSettingsUnchanged
-		case old.Sealed == nil:
-			return nil, nil // retire only
-		}
-		return &idstore.MiniAppSecret{Sealed: old.Sealed, DemoIdentity: false}, nil
-	})
-	return err
 }
 
 // Retire ends the App ID's settings: its own app signs nobody in until they are set again.
@@ -416,9 +383,37 @@ func (a *MiniAppSecretAdmin) change(ctx context.Context, actor changeActor, appI
 	return res, nil
 }
 
-// versionView is what the trail holds of a version: whether a secret is set, never its bytes.
+// versionView is what the trail holds of a version: whether a secret is set, never its bytes. No
+// `danh_tinh_demo` key any more: the switch no longer exists, and a key that is always false would
+// read as a decision somebody made. Entries written before 05/10/2026 keep theirs.
 func versionView(v idstore.MiniAppSecret) map[string]any {
-	return map[string]any{"phien_ban": v.ID, "co_secret": v.Sealed != nil, "danh_tinh_demo": v.DemoIdentity}
+	return map[string]any{"phien_ban": v.ID, "co_secret": v.Sealed != nil}
+}
+
+// MiniAppSecretStatus is one live version as OperatorService.ListMiniAppSecretStatuses reports it:
+// metadata and whether a secret is set — NEVER the secret nor anything derived from it (no value,
+// prefix, length, hash). SetBy is the business code of whoever set the version (rule 6, invariant 8).
+type MiniAppSecretStatus struct {
+	AppID     string
+	Version   string
+	SetAt     time.Time
+	SetBy     string
+	SecretSet bool
+}
+
+// LiveStatuses lists every live version of the commune in ctx, ordered by App ID. A pure read: no
+// transaction, no trail entry (operator.proto: nothing personal is read, set_by is a business code).
+// The commune comes from ctx only (rule 1, invariant 4); the store binds it as $1.
+func (a *MiniAppSecretAdmin) LiveStatuses(ctx context.Context) ([]MiniAppSecretStatus, error) {
+	rows, err := a.repo.LiveStatuses(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("mini app settings: list live: %w", err)
+	}
+	out := make([]MiniAppSecretStatus, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, MiniAppSecretStatus{AppID: r.AppID, Version: r.ID, SetAt: r.SetAt, SetBy: r.SetBy, SecretSet: r.SecretSet})
+	}
+	return out, nil
 }
 
 func (a *MiniAppSecretAdmin) requireOwnApp(ctx context.Context, appID string) error {

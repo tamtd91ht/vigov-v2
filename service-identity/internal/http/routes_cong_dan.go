@@ -193,8 +193,8 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	//
 	// PUBLIC (ADR 0066 decision row 1, user decision 2026-10-01): this IS the sign-in — the caller has
 	// no session yet. What stands in front of it is a Zalo token only Zalo issues, exchanged with the
-	// App ID's own sealed secret, and the per-IP rate limit below. The `--demo` body opens a session
-	// with NO phone check, and only for an App ID an operator switched on (default off).
+	// App ID's own sealed secret, and the per-IP rate limit below. There is no path without a verified
+	// phone: the `--demo` identity was removed on 05/10/2026 (ADR 0066 §Sửa đổi).
 	//
 	// RATE LIMIT (rule 13, invariant 7; ADR 0066 decision row 2): 10 attempts / 5 minutes / client IP,
 	// in memory per pod, checked before the body is read (rate_limit.go). 429 carries Retry-After.
@@ -204,21 +204,21 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	// after a lost reply leaves one extra session nobody holds the token of, which expires by TTL.
 	// The surface also has no idem.Middleware (cmd/server dungBienCongKhai), so Required could not work.
 	//
-	// @summary  App riêng của xã đổi accessToken/phoneToken Zalo (hoặc danh tính demo khi App ID bật --demo) lấy phiên công dân ViGov
+	// @summary  App riêng của xã đổi accessToken/phoneToken Zalo lấy phiên công dân ViGov
 	// @consumer citizen-app
 	// NO @screen: docs/ui-ux/ has no section for the Mini App sign-in; it is silent, no screen of its own.
 	//
 	// @request  citizenSessionIn
 	// 201 `{vigovSession:{token, expiresAt, tenantDisplayName, phoneVerified, communePrimaryHost}}`.
 	//
-	// 400 invalid_body: body not one JSON object of the known fields, over 8 KB, appId not digits,
-	// tokens missing, or a demo body carrying tokens. phone_required: no phoneToken, or a demo body
-	// for an App ID whose demo identity is off — vihat-miniapp's "cần số để xác minh app".
+	// 400 invalid_body: body not one JSON object of the known fields (a retired `demoIdentity` field
+	// included), over 8 KB, appId not digits, accessToken missing. phone_required: no phoneToken —
+	// vihat-miniapp's "cần số để xác minh app".
 	//
 	// 401 zalo_token_invalid: Zalo refused accessToken/phoneToken.
 	//
 	// 422 app_not_ready: ONE answer for an unknown App ID, the shared ViHAT app, a commune not active,
-	// and an App ID with no settings (or demo-only settings on a real sign-in).
+	// and an App ID with no live settings or no secret set.
 	//
 	// 502 zalo_unreachable. 503 sign_in_unavailable: platform or this service's store unreachable, or
 	// the sealed secret does not open — nothing was issued.

@@ -37,11 +37,10 @@ import (
 
 const (
 	ownApp       = "1234567890123456789"
-	ownAppDemo   = "2234567890123456789"
 	sharedApp    = "3234567890123456789"
 	ownAppIdle   = "4234567890123456789" // bound, commune inactive
 	ownAppNoConf = "5234567890123456789" // bound, no settings row
-	ownAppOnly   = "6234567890123456789" // bound, demo-only settings (no secret)
+	ownAppOnly   = "6234567890123456789" // bound, live settings with no secret (a pre-0024 demo-only row)
 
 	communeA tenant.ID = "01J9XA0000000000000000000A"
 	communeB tenant.ID = "01J9XB0000000000000000000B"
@@ -200,7 +199,6 @@ func newHarness(t *testing.T) *harness {
 	}
 	plat := &platformFake{apps: map[string]platformclient.MiniApp{
 		ownApp:       own(communeA),
-		ownAppDemo:   own(communeB),
 		sharedApp:    {CheDo: platformclient.CheDoAppChinh},
 		ownAppIdle:   {CheDo: platformclient.CheDoAppRieng}, // XaRieng empty: bound commune inactive
 		ownAppNoConf: own(communeA),
@@ -208,8 +206,7 @@ func newHarness(t *testing.T) *harness {
 	}}
 	settings := &settingsFake{rows: map[string]idstore.MiniAppSecret{
 		string(communeA) + "|" + ownApp:     {ID: "V1", AppID: ownApp, Sealed: seal(communeA, ownApp, fakeAppSecret)},
-		string(communeB) + "|" + ownAppDemo: {ID: "V2", AppID: ownAppDemo, Sealed: seal(communeB, ownAppDemo, fakeAppSecret), DemoIdentity: true},
-		string(communeA) + "|" + ownAppOnly: {ID: "V3", AppID: ownAppOnly, DemoIdentity: true},
+		string(communeA) + "|" + ownAppOnly: {ID: "V3", AppID: ownAppOnly},
 	}}
 
 	var logBuf bytes.Buffer
@@ -240,6 +237,8 @@ func normalBody(appID string) string {
 	return `{"appId":"` + appID + `","accessToken":"` + fakeAccessToken + `","phoneToken":"` + fakePhoneToken + `"}`
 }
 
+// demoBody is the body the removed `--demo` build sent (ADR 0066 §Sửa đổi 05/10/2026). Kept as a
+// fixture because a client still wired to it must be refused, not served.
 func demoBody(appID string) string { return `{"appId":"` + appID + `","demoIdentity":true}` }
 
 func wantError(t *testing.T, w *httptest.ResponseRecorder, status int, code string) {
@@ -290,7 +289,7 @@ func TestCitizenSessionsNormal201(t *testing.T) {
 	}
 	yc := hs.mo.calls[0]
 	if yc.AppID != ownApp || yc.MaZalo != fakeZaloID || yc.SoDaXacThuc != "84900000000" ||
-		yc.RequireOwnAppOf != communeA || yc.DemoIdentity || yc.IP != "203.0.113.7" || yc.ThietBi != "Zalo/test" {
+		yc.RequireOwnAppOf != communeA || yc.IP != "203.0.113.7" || yc.ThietBi != "Zalo/test" {
 		t.Fatalf("Mo request = %+v", yc)
 	}
 	// Account id FIRST, then the phone exchange (internal/zalo, ORDER).
@@ -304,30 +303,23 @@ func TestCitizenSessionsNormal201(t *testing.T) {
 	}
 }
 
-func TestCitizenSessionsDemo201CallsNoZalo(t *testing.T) {
-	hs := newHarness(t)
-	w := hs.post(demoBody(ownAppDemo), "")
-	if w.Code != http.StatusCreated {
-		t.Fatalf("status = %d — %s", w.Code, w.Body.String())
-	}
-	if len(hs.zalo.calls) != 0 {
-		t.Fatalf("demo sign-in called Zalo: %v (ADR 0066: không gọi lệnh Zalo nào)", hs.zalo.calls)
-	}
-	yc := hs.mo.calls[0]
-	if yc.MaZalo != domain.DemoZaloAccountID(ownAppDemo) || yc.SoDaXacThuc != domain.DemoIdentityPhone ||
-		!yc.DemoIdentity || yc.RequireOwnAppOf != communeB {
-		t.Fatalf("Mo request = %+v", yc)
-	}
-	if !strings.Contains(hs.log.String(), "level=WARN") || !strings.Contains(hs.log.String(), "demo_identity=true") ||
-		!strings.Contains(hs.log.String(), "app_id="+ownAppDemo) {
-		t.Fatalf("demo session not logged at WARN with app_id and demo_identity: %s", hs.log.String())
-	}
-	if strings.Contains(hs.log.String(), domain.DemoIdentityPhone) {
-		t.Error("the demo number reached the log")
-	}
-	// Demo-only settings (no secret yet) sign in as demo too.
-	if w := hs.post(demoBody(ownAppOnly), ""); w.Code != http.StatusCreated {
-		t.Fatalf("demo-only settings: status = %d", w.Code)
+// The demo identity is gone (owner decision 05/10/2026): a demo body is an unknown field to the
+// strict decoder — 400 invalid_body for EVERY App ID, before the platform, Zalo or Mo is reached. The
+// App ID that once had demo on, and a live row with no secret, get the same refusal.
+func TestCitizenSessionsDemoBodyRefused400(t *testing.T) {
+	for name, body := range map[string]string{
+		"own app":             demoBody(ownApp),
+		"no-secret settings":  demoBody(ownAppOnly),
+		"shared app":          demoBody(sharedApp),
+		"unknown app":         demoBody("7234567890123456789"),
+		"demo false + tokens": `{"appId":"` + ownApp + `","accessToken":"a","phoneToken":"p","demoIdentity":false}`,
+	} {
+		hs := newHarness(t)
+		hs.plat.err = errors.New("platform must not be asked")
+		wantError(t, hs.post(body, ""), http.StatusBadRequest, "invalid_body")
+		if len(hs.mo.calls) != 0 || len(hs.zalo.calls) != 0 {
+			t.Errorf("%s: reached Mo %d / Zalo %d times", name, len(hs.mo.calls), len(hs.zalo.calls))
+		}
 	}
 }
 
@@ -344,7 +336,7 @@ func TestCitizenSessionsBadBody400(t *testing.T) {
 		"app id not digits":   normalBody("abc"),
 		"app id missing":      `{"accessToken":"a","phoneToken":"p"}`,
 		"no access token":     `{"appId":"` + ownApp + `","phoneToken":"p"}`,
-		"demo with tokens":    `{"appId":"` + ownAppDemo + `","demoIdentity":true,"accessToken":"a"}`,
+		"demo with tokens":    `{"appId":"` + ownApp + `","demoIdentity":true,"accessToken":"a"}`,
 		"demo false no token": `{"appId":"` + ownApp + `","demoIdentity":false}`,
 	} {
 		hs := newHarness(t)
@@ -361,10 +353,6 @@ func TestCitizenSessionsPhoneRequired400(t *testing.T) {
 	// No phoneToken: refused before the platform is asked and before Zalo.
 	hs.plat.err = errors.New("platform must not be asked")
 	wantError(t, hs.post(`{"appId":"`+ownApp+`","accessToken":"a"}`, ""), http.StatusBadRequest, "phone_required")
-	hs.plat.err = nil
-	// Demo body for an App ID whose demo identity is OFF: the same answer, no Zalo call.
-	w := hs.post(demoBody(ownApp), "")
-	wantError(t, w, http.StatusBadRequest, "phone_required")
 	if len(hs.zalo.calls) != 0 || len(hs.mo.calls) != 0 {
 		t.Fatalf("Zalo %v / Mo %d", hs.zalo.calls, len(hs.mo.calls))
 	}
@@ -375,14 +363,11 @@ func TestCitizenSessionsPhoneRequired400(t *testing.T) {
 func TestCitizenSessionsNotReady422Identical(t *testing.T) {
 	var first string
 	for name, body := range map[string]string{
-		"unknown app id":            normalBody("7234567890123456789"),
-		"shared ViHAT app":          normalBody(sharedApp),
-		"bound commune inactive":    normalBody(ownAppIdle),
-		"no settings row":           normalBody(ownAppNoConf),
-		"demo-only, real sign-in":   normalBody(ownAppOnly),
-		"shared app, demo body":     demoBody(sharedApp),
-		"no settings row, demo":     demoBody(ownAppNoConf),
-		"unknown app id, demo body": demoBody("7234567890123456789"),
+		"unknown app id":           normalBody("7234567890123456789"),
+		"shared ViHAT app":         normalBody(sharedApp),
+		"bound commune inactive":   normalBody(ownAppIdle),
+		"no settings row":          normalBody(ownAppNoConf),
+		"live settings, no secret": normalBody(ownAppOnly),
 	} {
 		hs := newHarness(t)
 		w := hs.post(body, "")

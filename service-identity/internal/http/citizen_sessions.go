@@ -38,17 +38,20 @@ type OwnAppSignInner interface {
 	SignIn(ctx context.Context, req app.OwnAppSignInRequest) (app.KetQuaMoPhienCau, error)
 }
 
-// citizenSessionIn is the request body. Exactly one of two shapes:
+// citizenSessionIn is the request body, one shape:
 //
-//	{"appId": "...", "accessToken": "...", "phoneToken": "..."}   normal
-//	{"appId": "...", "demoIdentity": true}                        `--demo`, no tokens, no Zalo call
+//	{"appId": "...", "accessToken": "...", "phoneToken": "..."}
+//
+// `demoIdentity` is GONE (owner decision 05/10/2026, ADR 0066 §Sửa đổi). It is not kept as an
+// ignored field: decodeStrict disallows unknown fields, so a body still carrying it — even
+// `"demoIdentity": false` — is 400 invalid_body. A client still wired to the demo path is told so,
+// instead of being silently signed in some other way.
 //
 // Tokens are credentials: never logged, never echoed (rules 3, 8).
 type citizenSessionIn struct {
-	AppID        string `json:"appId"`
-	AccessToken  string `json:"accessToken"`
-	PhoneToken   string `json:"phoneToken"`
-	DemoIdentity bool   `json:"demoIdentity"`
+	AppID       string `json:"appId"`
+	AccessToken string `json:"accessToken"`
+	PhoneToken  string `json:"phoneToken"`
 }
 
 // citizenSessionsOut is the 201 body — vihat-miniapp's phanHoiPhienViGov, key for key.
@@ -102,12 +105,11 @@ func (h *HandlerCongKhai) CitizenSessions(w http.ResponseWriter, r *http.Request
 	}
 
 	kq, err := h.d.CitizenSessions.SignIn(r.Context(), app.OwnAppSignInRequest{
-		AppID:        in.AppID,
-		AccessToken:  in.AccessToken,
-		PhoneToken:   in.PhoneToken,
-		DemoIdentity: in.DemoIdentity,
-		IP:           httpx.ClientIP(r),
-		Device:       r.UserAgent(),
+		AppID:       in.AppID,
+		AccessToken: in.AccessToken,
+		PhoneToken:  in.PhoneToken,
+		IP:          httpx.ClientIP(r),
+		Device:      r.UserAgent(),
 	})
 	if err != nil {
 		h.citizenSessionError(w, r, err)

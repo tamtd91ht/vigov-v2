@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -75,6 +76,8 @@ type versionRepoFake struct {
 	dead  map[string]string // id -> reason
 	by    map[string]string // id -> who retired it
 	calls []string
+	// listErr, when set, is what LiveStatuses answers.
+	listErr error
 }
 
 func (r *versionRepoFake) live(appID string) (idstore.MiniAppSecret, bool) {
@@ -114,11 +117,25 @@ func (r *versionRepoFake) Insert(_ context.Context, _ *store.ScopedTx, v idstore
 	if _, ok := r.live(v.AppID); ok {
 		return errors.New("unique (tenant_id, live_app_id) violated")
 	}
-	if v.Sealed == nil && !v.DemoIdentity {
-		return errors.New("CHECK mini_app_secret_sealed_or_demo violated")
+	if v.Sealed == nil {
+		return idstore.ErrMiniAppSecretNoSecret
 	}
 	r.rows = append(r.rows, v)
 	return nil
+}
+
+func (r *versionRepoFake) LiveStatuses(context.Context) ([]idstore.MiniAppSecretStatus, error) {
+	if r.listErr != nil {
+		return nil, r.listErr
+	}
+	var out []idstore.MiniAppSecretStatus
+	for _, v := range r.rows {
+		if _, gone := r.dead[v.ID]; !gone {
+			out = append(out, idstore.MiniAppSecretStatus{ID: v.ID, AppID: v.AppID, SecretSet: v.Sealed != nil, SetAt: v.SetAt, SetBy: v.SetBy})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].AppID < out[j].AppID })
+	return out, nil
 }
 
 type bindingFake struct {
@@ -187,7 +204,7 @@ func TestMiniAppSecretSetSealsAndAuditsWithoutTheValue(t *testing.T) {
 		t.Fatal(err)
 	}
 	v, ok := rig.r.live(testOwnApp)
-	if !ok || v.Sealed == nil || v.DemoIdentity || v.SetBy != domain.SystemActor || v.ID == "" {
+	if !ok || v.Sealed == nil || v.SetBy != domain.SystemActor || v.ID == "" {
 		t.Fatalf("live version = %+v", v)
 	}
 	if bytes.Contains(v.Sealed, []byte(testAppSecret)) {
@@ -221,48 +238,27 @@ func TestMiniAppSecretSetSealsAndAuditsWithoutTheValue(t *testing.T) {
 
 func TestMiniAppSecretEveryChangeIsANewVersion(t *testing.T) {
 	rig := newAdminRig(t)
-	steps := []func() error{
-		func() error { return rig.a.SetDemo(rig.ctx, testOwnApp, true, "OPS-1") }, // demo on, no secret yet
-		func() error { return rig.a.SetSecret(rig.ctx, testOwnApp, secret.Secret(testAppSecret), "OPS-2") },
-		func() error { return rig.a.SetDemo(rig.ctx, testOwnApp, false, "OPS-3") }, // keeps the secret
+	if err := rig.a.SetSecret(rig.ctx, testOwnApp, secret.Secret(testAppSecret), "OPS-1"); err != nil {
+		t.Fatal(err)
 	}
-	for i, s := range steps {
-		if err := s(); err != nil {
-			t.Fatalf("step %d: %v", i+1, err)
-		}
+	if err := rig.a.SetSecret(rig.ctx, testOwnApp, secret.Secret("FAKE-APP-SECRET-0001"), "OPS-2"); err != nil {
+		t.Fatal(err)
 	}
-	if len(rig.r.rows) != 3 || len(rig.r.dead) != 2 {
-		t.Fatalf("rows %d, retired %d — want 3 versions, 2 retired", len(rig.r.rows), len(rig.r.dead))
+	if len(rig.r.rows) != 2 || len(rig.r.dead) != 1 {
+		t.Fatalf("rows %d, retired %d — want 2 versions, 1 retired", len(rig.r.rows), len(rig.r.dead))
 	}
 	v, _ := rig.r.live(testOwnApp)
-	if v.DemoIdentity || v.Sealed == nil || !bytes.Equal(v.Sealed, rig.r.rows[1].Sealed) {
-		t.Fatalf("after demo off: %+v — the secret must be carried verbatim", v)
+	if got, err := rig.env.Open(rig.ctx, v.Sealed, miniAppSecretAAD(rig.ctx, testOwnApp)); err != nil || string(got.Lo()) != "FAKE-APP-SECRET-0001" {
+		t.Fatalf("the live version is not the new secret: %v", err)
 	}
-	if !rig.r.rows[1].DemoIdentity {
-		t.Fatal("setting a secret turned the demo switch off")
-	}
-	// Carried bytes still open: the AAD is bound to the App ID, not the row id.
-	if _, err := rig.env.Open(rig.ctx, v.Sealed, miniAppSecretAAD(rig.ctx, testOwnApp)); err != nil {
-		t.Fatalf("carried secret does not open: %v", err)
-	}
-	if want := "lock,insert,lock,retire,insert,lock,retire,insert"; strings.Join(rig.r.calls, ",") != want {
+	if want := "lock,insert,lock,retire,insert"; strings.Join(rig.r.calls, ",") != want {
 		t.Fatalf("calls = %v, want %s", rig.r.calls, want)
 	}
-}
-
-func TestMiniAppDemoOffWithoutSecretRetires(t *testing.T) {
-	rig := newAdminRig(t)
-	if err := rig.a.SetDemo(rig.ctx, testOwnApp, true, "OPS-1"); err != nil {
-		t.Fatal(err)
-	}
-	if err := rig.a.SetDemo(rig.ctx, testOwnApp, false, "OPS-2"); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := rig.r.live(testOwnApp); ok {
-		t.Fatal("demo off with no secret left a live row")
-	}
-	if d := rig.auditDeltas(ActionDisableDemoIdentity); len(d) != 1 || !strings.Contains(d[0], `"sau":null`) {
-		t.Fatalf("audit = %v", d)
+	// The demo switch is gone (owner decision 05/10/2026): no new entry names it, not even as false.
+	for _, d := range rig.auditDeltas(ActionSetOwnAppSecret) {
+		if strings.Contains(d, "danh_tinh_demo") {
+			t.Fatalf("a new trail entry still carries the retired demo switch: %s", d)
+		}
 	}
 }
 
@@ -279,9 +275,8 @@ func TestMiniAppSecretRefusals(t *testing.T) {
 		"secret has space": {rig.a.SetSecret(ctx, testOwnApp, secret.Secret("a b"), "OPS-1"), ErrMiniAppSecretInvalid},
 		"not bound here": {rig.a.SetSecret(tenant.Into(context.Background(), xaKhac), testOwnApp,
 			secret.Secret(testAppSecret), "OPS-1"), ErrMiniAppNotOwnApp},
-		"unknown app":      {rig.a.SetDemo(ctx, "777", true, "OPS-1"), ErrMiniAppNotOwnApp},
-		"retire nothing":   {rig.a.Retire(ctx, testOwnApp, "OPS-1"), ErrMiniAppSettingsNotFound},
-		"demo off nothing": {rig.a.SetDemo(ctx, testOwnApp, false, "OPS-1"), ErrMiniAppSettingsNotFound},
+		"unknown app":    {rig.a.SetSecret(ctx, "777", secret.Secret(testAppSecret), "OPS-1"), ErrMiniAppNotOwnApp},
+		"retire nothing": {rig.a.Retire(ctx, testOwnApp, "OPS-1"), ErrMiniAppSettingsNotFound},
 	} {
 		if !errors.Is(c.err, c.want) {
 			t.Errorf("%s: err = %v, want %v", name, c.err, c.want)
@@ -290,15 +285,41 @@ func TestMiniAppSecretRefusals(t *testing.T) {
 	if len(rig.r.rows) != 0 || len(rig.auditDeltas(ActionSetOwnAppSecret)) != 0 {
 		t.Fatal("a refused act wrote something")
 	}
-	// Demo on twice: the second writes nothing.
-	if err := rig.a.SetDemo(ctx, testOwnApp, true, "OPS-1"); err != nil {
+}
+
+// LiveStatuses: every live version of the commune, metadata only, no transaction and no trail entry
+// (a pure read — operator.proto ListMiniAppSecretStatuses).
+func TestMiniAppSecretLiveStatuses(t *testing.T) {
+	rig := newAdminRig(t)
+	got, err := rig.a.LiveStatuses(rig.ctx)
+	if err != nil || len(got) != 0 {
+		t.Fatalf("nothing set: %+v %v, want an empty list", got, err)
+	}
+	if _, err := rig.a.SetSecretAsOperator(rig.ctx, testOperator, testOwnApp, secret.Secret(testAppSecret), "đặt khoá"); err != nil {
 		t.Fatal(err)
 	}
-	if err := rig.a.SetDemo(ctx, testOwnApp, true, "OPS-2"); !errors.Is(err, ErrMiniAppSettingsUnchanged) {
-		t.Fatalf("second demo on: %v", err)
+	live, _ := rig.r.live(testOwnApp)
+	txBefore := rig.g.soGiaoDich()
+	got, err = rig.a.LiveStatuses(rig.ctx)
+	if err != nil || len(got) != 1 {
+		t.Fatalf("statuses = %+v %v", got, err)
 	}
-	if len(rig.r.rows) != 1 {
-		t.Fatalf("rows = %d", len(rig.r.rows))
+	if got[0] != (MiniAppSecretStatus{AppID: testOwnApp, Version: live.ID, SetAt: live.SetAt, SetBy: testOperatorCode, SecretSet: true}) {
+		t.Fatalf("status = %+v, want the live version's metadata", got[0])
+	}
+	if rig.g.soGiaoDich() != txBefore {
+		t.Fatal("a pure read opened a transaction")
+	}
+	// Retired: no longer listed.
+	if err := rig.a.Retire(rig.ctx, testOwnApp, "OPS-2"); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := rig.a.LiveStatuses(rig.ctx); err != nil || len(got) != 0 {
+		t.Fatalf("after retire: %+v %v", got, err)
+	}
+	rig.r.listErr = errors.New("store down")
+	if _, err := rig.a.LiveStatuses(rig.ctx); err == nil || !errors.Is(err, rig.r.listErr) {
+		t.Fatalf("store error not wrapped: %v", err)
 	}
 }
 
@@ -343,37 +364,27 @@ func TestBridgeRequireOwnAppOfRefusesAMovedBinding(t *testing.T) {
 	}
 }
 
-func TestBridgeDemoIdentityIsInTheSessionAuditEntry(t *testing.T) {
+// The demo identity input is gone (owner decision 05/10/2026): no session entry carries the flag.
+// Entries written before that keep theirs — this pins only what is written from now on.
+func TestBridgeSessionEntryCarriesNoDemoFlag(t *testing.T) {
 	b := dungBanThuCau(t)
-	yc := yeuCauCau(cauAppRieng)
-	yc.MaZalo, yc.SoDaXacThuc, yc.DemoIdentity = domain.DemoZaloAccountID(cauAppRieng), domain.DemoIdentityPhone, true
-	if _, err := b.uc.Mo(context.Background(), yc); err != nil {
+	if _, err := b.uc.Mo(context.Background(), yeuCauCau(cauAppRieng)); err != nil {
 		t.Fatal(err)
 	}
 	entries := b.vet(HanhDongMoPhienCongDan)
 	if len(entries) != 1 {
 		t.Fatalf("entries = %d", len(entries))
 	}
-	found := false
 	for _, a := range entries[0].args {
 		switch d := a.(type) {
 		case []byte:
-			found = found || strings.Contains(string(d), `"danh_tinh_demo":true`)
+			if strings.Contains(string(d), "danh_tinh_demo") {
+				t.Fatal("a session entry is marked demo")
+			}
 		case string:
-			found = found || strings.Contains(d, `"danh_tinh_demo":true`)
-		}
-	}
-	if !found {
-		t.Fatalf("the demo session's audit entry does not say so: %+v", entries[0].args)
-	}
-	// And a bridge session that is not demo does not carry the flag.
-	b = dungBanThuCau(t)
-	if _, err := b.uc.Mo(context.Background(), yeuCauCau(cauAppRieng)); err != nil {
-		t.Fatal(err)
-	}
-	for _, a := range b.vet(HanhDongMoPhienCongDan)[0].args {
-		if d, ok := a.([]byte); ok && strings.Contains(string(d), "danh_tinh_demo") {
-			t.Fatal("a normal session is marked demo")
+			if strings.Contains(d, "danh_tinh_demo") {
+				t.Fatal("a session entry is marked demo")
+			}
 		}
 	}
 }

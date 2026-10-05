@@ -23,12 +23,13 @@ package main
 // (ADR 0048 step 3).
 //
 // THE OWN-MINI-APP SIGN-IN SETTINGS (ADR 0066 decision row 3) live here too until platform-admin has a
-// screen: `mini-app-secret set|retire` and `mini-app-demo on|off`, each for one App ID of one
-// commune. The secret is read from STDIN, never argv — argv is in `ps` output and in the shell's
-// history. The trail is written in the TARGET commune's audit_log, actor = system, reason =
-// ticket:<n>, never the value (app/mini_app_secret.go). These verbs dial the platform (the App ID
-// must be bound to that commune) and seal with SECRET_ENCRYPTION_KEYS; the operator verbs above need
-// neither, so the configuration groups are declared per verb.
+// screen: `mini-app-secret set|retire`, for one App ID of one commune. (`mini-app-demo on|off` was
+// removed with the demo identity, owner decision 05/10/2026 — ADR 0066 §Sửa đổi.) The secret is
+// read from STDIN, never argv — argv is in `ps` output and in the shell's history. The trail is
+// written in the TARGET commune's audit_log, actor = system, reason = ticket:<n>, never the value
+// (app/mini_app_secret.go). This verb dials the platform (the App ID must be bound to that commune)
+// and seals with SECRET_ENCRYPTION_KEYS; the operator verbs above need neither, so the
+// configuration groups are declared per verb.
 
 import (
 	"bytes"
@@ -72,7 +73,6 @@ A commune's own Zalo Mini App sign-in settings (ADR 0066):
 
   operatorctl mini-app-secret set    --tenant <commune id> --app-id <digits> --ticket <n>   secret on STDIN
   operatorctl mini-app-secret retire --tenant <commune id> --app-id <digits> --ticket <n>
-  operatorctl mini-app-demo   on|off --tenant <commune id> --app-id <digits> --ticket <n>
 
   The secret is read from standard input, never from the command line:
     operatorctl mini-app-secret set ... < secret-file     (surrounding whitespace is trimmed)
@@ -104,7 +104,7 @@ type command struct {
 	reason      string
 	ticket      string
 
-	// The mini-app verbs: sub is set|retire or on|off; tenant is the TARGET commune — an operator's
+	// The mini-app verb: sub is set|retire; tenant is the TARGET commune — an operator's
 	// explicit act under a ticket, checked against the platform's App ID binding before anything that
 	// enables sign-in (app/mini_app_secret.go). Never a value a citizen or a client supplies.
 	sub    string
@@ -116,8 +116,8 @@ type command struct {
 	secretFile string
 }
 
-// isMiniAppVerb names the two verbs that act on a commune's own-app sign-in settings.
-func isMiniAppVerb(v string) bool { return v == "mini-app-secret" || v == "mini-app-demo" }
+// isMiniAppVerb names the verb that acts on a commune's own-app sign-in settings.
+func isMiniAppVerb(v string) bool { return v == "mini-app-secret" }
 
 // errUsage wraps every command-line refusal, so run can answer exit code 2 and the usage text.
 var errUsage = errors.New("usage")
@@ -137,7 +137,6 @@ func parseArgs(args []string) (command, error) {
 		c.sub, rest = rest[0], rest[1:]
 		valid := map[string]bool{
 			"mini-app-secret set": true, "mini-app-secret retire": true,
-			"mini-app-demo on": true, "mini-app-demo off": true,
 		}
 		if !valid[c.verb+" "+c.sub] {
 			return command{}, fmt.Errorf("%w: %s: unknown sub-command %q", errUsage, c.verb, c.sub)
@@ -163,10 +162,10 @@ func parseArgs(args []string) (command, error) {
 	case "reset-mfa", "unlock":
 		fs.StringVar(&c.code, "code", "", "")
 		required = []string{"code", "ticket"}
-	case "mini-app-secret", "mini-app-demo":
+	case "mini-app-secret":
 		fs.StringVar(&c.tenant, "tenant", "", "")
 		fs.StringVar(&c.appID, "app-id", "", "")
-		if c.verb == "mini-app-secret" && c.sub == "set" {
+		if c.sub == "set" {
 			fs.StringVar(&c.secretFile, "secret-file", "", "")
 		}
 		required = []string{"tenant", "app-id", "ticket"}
@@ -285,7 +284,6 @@ func printOnce(stdout io.Writer, temp secret.Secret) {
 // miniAppAdmin is what the mini-app verbs call — app.MiniAppSecretAdmin, or a fake in tests.
 type miniAppAdmin interface {
 	SetSecret(ctx context.Context, appID string, value secret.Secret, ticket string) error
-	SetDemo(ctx context.Context, appID string, on bool, ticket string) error
 	Retire(ctx context.Context, appID, ticket string) error
 }
 
@@ -343,17 +341,6 @@ func executeMiniApp(ctx context.Context, c command, m miniAppAdmin, stdin io.Rea
 		}
 		fmt.Fprintf(stdout, "settings retired for app %s in commune %s — its own app signs nobody in until set again\n",
 			c.appID, c.tenant)
-	case "mini-app-demo on":
-		if err := m.SetDemo(ctx, c.appID, true, c.ticket); err != nil {
-			return err
-		}
-		fmt.Fprintf(stdout, "DEMO IDENTITY ON for app %s in commune %s — sessions open WITHOUT phone verification; "+
-			"turn it off before Zalo approves the app\n", c.appID, c.tenant)
-	case "mini-app-demo off":
-		if err := m.SetDemo(ctx, c.appID, false, c.ticket); err != nil {
-			return err
-		}
-		fmt.Fprintf(stdout, "demo identity off for app %s in commune %s\n", c.appID, c.tenant)
 	default:
 		return fmt.Errorf("%w: unknown command %s %s", errUsage, c.verb, c.sub)
 	}
@@ -432,7 +419,7 @@ func runMiniApp(ctx context.Context, c command, cfg config.Config, db *sql.DB, l
 		return exitFail
 	}
 	kho := store.New(db)
-	// A nil *crypto.Envelope (no KEK) is valid for retire and demo on|off, which seal nothing.
+	// A nil *crypto.Envelope (no KEK) is valid for retire, which seals nothing.
 	var env *crypto.Envelope
 	if cfg.SecretEncryptionConfigured() {
 		e, err := crypto.New(cfg.SecretEncryptionKeys(), idstore.NewDataEncryptionKeyStore(kho))

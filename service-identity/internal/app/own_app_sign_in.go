@@ -13,25 +13,22 @@ package app
 //  1. ResolveMiniApp: must be a commune's OWN app (MODE_COMMUNE) bound to an active commune. The
 //     shared app, an unknown App ID and an inactive commune give ONE answer (ErrOwnAppNotReady):
 //     the shared app's sign-in stays on vihat-miniapp, and nothing here tells a prober which.
-//  2. In THAT commune's context: its live mini_app_secret row. Missing = the same one answer.
-//  3. Demo (`{appId, demoIdentity:true}`): the row must have demo identity ON, else
-//     ErrOwnAppPhoneRequired — the same answer vihat-miniapp gives an own app with no phoneToken.
-//     NO Zalo call at all, not even getAccessToken's check (ADR 0066: an app awaiting review is
-//     refused by Zalo for every call).
-//     Normal: open the sealed secret, then AccountID(accessToken), then Phone(..., secret) —
-//     account id FIRST because the phoneToken may be single-use (internal/zalo package comment).
-//     A secret that does not open is OUR fault: 503 and an operator alert, never "sign in again".
+//  2. In THAT commune's context: its live mini_app_secret row. Missing, or live with no sealed
+//     secret, = the same one answer.
+//  3. Open the sealed secret, then AccountID(accessToken), then Phone(..., secret) — account id
+//     FIRST because the phoneToken may be single-use (internal/zalo package comment). A secret that
+//     does not open is OUR fault: 503 and an operator alert, never "sign in again".
 //  4. CauPhienCongDan.Mo, IN-PROCESS, with RequireOwnAppOf = the commune from step 1: Mo resolves
 //     the app again and refuses unless the answer is unchanged, so a binding moved between steps 1
 //     and 4 cannot open a session in a commune whose secret was never checked. Mo owns the one
 //     transaction and its audit entries (rule 6).
 //
-// # WHAT `--demo` GIVES AWAY
+// # NO DEMO IDENTITY
 //
-// A session with NO phone verification, for an App ID an operator switched on (default off, ADR
-// 0066 — "phải tắt trước khi app được duyệt"). It names the fixed fake identity
-// domain.DemoIdentityPhone, so it reads only that identity's own records in that commune (rule 4).
-// Every such session is logged at WARN and its audit entry carries danh_tinh_demo=true.
+// The `--demo` fixed identity — a session with no phone verification — was removed by the owner on
+// 05/10/2026 (ADR 0066 §Sửa đổi). Every session opened here comes from a phone Zalo verified with
+// THIS App ID's secret. A body still carrying `demoIdentity` is refused by the HTTP decoder as an
+// unknown field (400 invalid_body) before it reaches this file.
 //
 // # NOTHING PERSONAL IS LOGGED
 //
@@ -88,12 +85,11 @@ type CitizenSessionOpener interface {
 
 // OwnAppSignInRequest is the HTTP body plus what the edge knows. Tokens are credentials (rule 8).
 type OwnAppSignInRequest struct {
-	AppID        string
-	AccessToken  string
-	PhoneToken   string
-	DemoIdentity bool
-	IP           string
-	Device       string
+	AppID       string
+	AccessToken string
+	PhoneToken  string
+	IP          string
+	Device      string
 }
 
 // OwnAppSignIn is the use case. See the file comment for the order.
@@ -125,13 +121,9 @@ func (uc *OwnAppSignIn) SignIn(ctx context.Context, req OwnAppSignInRequest) (Ke
 	switch {
 	case !domain.ValidMiniAppID(appID):
 		return KetQuaMoPhienCau{}, fmt.Errorf("%w: appId", ErrOwnAppRequestInvalid)
-	case req.DemoIdentity && (req.AccessToken != "" || req.PhoneToken != ""):
-		// A demo body carrying tokens is a client wired to two modes at once; refusing it keeps the
-		// demo path from ever touching a credential.
-		return KetQuaMoPhienCau{}, fmt.Errorf("%w: demo body carries tokens", ErrOwnAppRequestInvalid)
-	case !req.DemoIdentity && req.AccessToken == "":
+	case req.AccessToken == "":
 		return KetQuaMoPhienCau{}, fmt.Errorf("%w: accessToken", ErrOwnAppRequestInvalid)
-	case !req.DemoIdentity && req.PhoneToken == "":
+	case req.PhoneToken == "":
 		// The exchange of the phoneToken with THIS App ID's secret is the only thing that verifies
 		// the App ID the client claims (internal/zalo package comment). Refused before any call.
 		return KetQuaMoPhienCau{}, ErrOwnAppPhoneRequired
@@ -167,44 +159,37 @@ func (uc *OwnAppSignIn) SignIn(ctx context.Context, req OwnAppSignInRequest) (Ke
 	yc := YeuCauMoPhienCau{AppID: appID, IP: req.IP, ThietBi: req.Device, RequireOwnAppOf: xa}
 
 	// --- 3. who --------------------------------------------------------------------------------------
-	if req.DemoIdentity {
-		if !cfg.DemoIdentity {
-			return KetQuaMoPhienCau{}, ErrOwnAppPhoneRequired
-		}
-		yc.MaZalo = domain.DemoZaloAccountID(appID)
-		yc.SoDaXacThuc = domain.DemoIdentityPhone
-		yc.DemoIdentity = true
-	} else {
-		if cfg.Sealed == nil {
-			// Demo-only settings (stage 2 of ADR 0066's lifecycle): there is no secret to verify a
-			// real sign-in with. Configuration, not the citizen's token.
-			uc.log.WarnContext(ctx, "đăng nhập app riêng: App ID chỉ bật demo, chưa có secret — từ chối lượt đăng nhập thật",
-				"app_id", appID, "xa", string(xa))
-			return KetQuaMoPhienCau{}, fmt.Errorf("%w: no secret set", ErrOwnAppNotReady)
-		}
-		appSecret, err := uc.opener.Open(ctxXa, cfg.Sealed, miniAppSecretAAD(ctxXa, appID))
-		if err != nil {
-			// Opened BEFORE any Zalo call: a broken secret must not spend the citizen's phoneToken.
-			level := slog.LevelError
-			if errors.Is(err, crypto.ErrNotConfigured) {
-				level = slog.LevelWarn
-			}
-			uc.log.Log(ctx, level, "CẢNH BÁO VẬN HÀNH: không mở được secret của App ID — kiểm SECRET_ENCRYPTION_KEYS và đặt lại secret",
-				"app_id", appID, "xa", string(xa), "err", err)
-			return KetQuaMoPhienCau{}, fmt.Errorf("%w: open secret: %w", ErrOwnAppUnavailable, err)
-		}
-		defer clear(appSecret)
-
-		maZalo, err := uc.zalo.AccountID(ctx, req.AccessToken)
-		if err != nil {
-			return KetQuaMoPhienCau{}, uc.zaloError(ctx, appID, err)
-		}
-		so, err := uc.zalo.Phone(ctx, req.AccessToken, req.PhoneToken, appSecret)
-		if err != nil {
-			return KetQuaMoPhienCau{}, uc.zaloError(ctx, appID, err)
-		}
-		yc.MaZalo, yc.SoDaXacThuc = maZalo, so
+	if cfg.Sealed == nil {
+		// A live row with no sealed secret can only be one written while the demo identity existed
+		// (migration 0024 retires those; this guard fails closed if one survived, e.g. written by an
+		// old replica during the rollout). No secret = nothing to verify the citizen's token with.
+		// Configuration, not the citizen's token.
+		uc.log.WarnContext(ctx, "đăng nhập app riêng: App ID chưa có secret — từ chối lượt đăng nhập",
+			"app_id", appID, "xa", string(xa))
+		return KetQuaMoPhienCau{}, fmt.Errorf("%w: no secret set", ErrOwnAppNotReady)
 	}
+	appSecret, err := uc.opener.Open(ctxXa, cfg.Sealed, miniAppSecretAAD(ctxXa, appID))
+	if err != nil {
+		// Opened BEFORE any Zalo call: a broken secret must not spend the citizen's phoneToken.
+		level := slog.LevelError
+		if errors.Is(err, crypto.ErrNotConfigured) {
+			level = slog.LevelWarn
+		}
+		uc.log.Log(ctx, level, "CẢNH BÁO VẬN HÀNH: không mở được secret của App ID — kiểm SECRET_ENCRYPTION_KEYS và đặt lại secret",
+			"app_id", appID, "xa", string(xa), "err", err)
+		return KetQuaMoPhienCau{}, fmt.Errorf("%w: open secret: %w", ErrOwnAppUnavailable, err)
+	}
+	defer clear(appSecret)
+
+	maZalo, err := uc.zalo.AccountID(ctx, req.AccessToken)
+	if err != nil {
+		return KetQuaMoPhienCau{}, uc.zaloError(ctx, appID, err)
+	}
+	so, err := uc.zalo.Phone(ctx, req.AccessToken, req.PhoneToken, appSecret)
+	if err != nil {
+		return KetQuaMoPhienCau{}, uc.zaloError(ctx, appID, err)
+	}
+	yc.MaZalo, yc.SoDaXacThuc = maZalo, so
 
 	// --- 4. the session --------------------------------------------------------------------------------
 	kq, err := uc.sessions.Mo(ctx, yc)
@@ -225,12 +210,7 @@ func (uc *OwnAppSignIn) SignIn(ctx context.Context, req OwnAppSignInRequest) (Ke
 		return KetQuaMoPhienCau{}, fmt.Errorf("%w: no token issued", ErrOwnAppUnavailable)
 	}
 
-	if req.DemoIdentity {
-		uc.log.WarnContext(ctx, "đăng nhập app riêng bằng DANH TÍNH DEMO — không xác minh số; tắt trước khi Zalo duyệt app (ADR 0066)",
-			"app_id", appID, "demo_identity", true, "xa", string(xa), "phien_id", kq.Sid)
-	} else {
-		uc.log.InfoContext(ctx, "mở phiên công dân qua app riêng", "app_id", appID, "xa", string(xa), "phien_id", kq.Sid)
-	}
+	uc.log.InfoContext(ctx, "mở phiên công dân qua app riêng", "app_id", appID, "xa", string(xa), "phien_id", kq.Sid)
 	return kq, nil
 }
 

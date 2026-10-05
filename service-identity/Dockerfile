@@ -59,7 +59,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/server ./cmd/server
 
-# operatorctl đi CÙNG ảnh (ADR 0066 — `mini-app-demo on|off`, `mini-app-secret set|retire`, và các
+# operatorctl đi CÙNG ảnh (ADR 0066 — `mini-app-secret set|retire`, và các
 # lệnh nhà vận hành ADR 0048). Nó phải chạy với ĐÚNG môi trường và đúng phiên bản schema của
 # identity; ảnh riêng là hai thứ có thể lệch phiên bản nhau. Job `vigov-deploy` chạy nó bằng một
 # pod một lượt từ CHÍNH ảnh đang chạy (`--command /operatorctl`). ENTRYPOINT vẫn là /server.

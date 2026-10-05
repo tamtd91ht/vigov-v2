@@ -33,15 +33,6 @@ func (f *fakeMiniApp) SetSecret(ctx context.Context, appID string, v secret.Secr
 	return nil
 }
 
-func (f *fakeMiniApp) SetDemo(ctx context.Context, appID string, on bool, ticket string) error {
-	state := "off"
-	if on {
-		state = "on"
-	}
-	f.calls = append(f.calls, "demo-"+state+" "+string(tenant.MustFrom(ctx))+"|"+appID+"|"+ticket)
-	return nil
-}
-
 func (f *fakeMiniApp) Retire(ctx context.Context, appID, ticket string) error {
 	f.calls = append(f.calls, "retire "+string(tenant.MustFrom(ctx))+"|"+appID+"|"+ticket)
 	return nil
@@ -55,11 +46,12 @@ func TestMiniAppParseArgs(t *testing.T) {
 	bad := map[string][]string{
 		"no sub-command":      {"mini-app-secret"},
 		"wrong sub":           miniArgs("mini-app-secret", "on", "--ticket", "OPS-1"),
-		"wrong demo sub":      miniArgs("mini-app-demo", "set", "--ticket", "OPS-1"),
+		"demo verb removed":   miniArgs("mini-app-demo", "on", "--ticket", "OPS-1"),
+		"demo off removed":    miniArgs("mini-app-demo", "off", "--ticket", "OPS-1"),
 		"no ticket":           miniArgs("mini-app-secret", "set"),
-		"blank ticket":        miniArgs("mini-app-demo", "on", "--ticket", "  "),
-		"no tenant":           {"mini-app-demo", "on", "--app-id", testApp, "--ticket", "OPS-1"},
-		"tenant not an id":    {"mini-app-demo", "on", "--tenant", "thangbinh-danang.vigov.vn", "--app-id", testApp, "--ticket", "OPS-1"},
+		"blank ticket":        miniArgs("mini-app-secret", "retire", "--ticket", "  "),
+		"no tenant":           {"mini-app-secret", "retire", "--app-id", testApp, "--ticket", "OPS-1"},
+		"tenant not an id":    {"mini-app-secret", "retire", "--tenant", "thangbinh-danang.vigov.vn", "--app-id", testApp, "--ticket", "OPS-1"},
 		"no app id":           {"mini-app-secret", "retire", "--tenant", testTenant, "--ticket", "OPS-1"},
 		"secret on argv":      miniArgs("mini-app-secret", "set", "--ticket", "OPS-1", "--secret", fakeSecret),
 		"secret as stray arg": miniArgs("mini-app-secret", "set", "--ticket", "OPS-1", fakeSecret),
@@ -69,8 +61,12 @@ func TestMiniAppParseArgs(t *testing.T) {
 			t.Errorf("%s: err = %v, want a usage error", name, err)
 		}
 	}
-	c, err := parseArgs(miniArgs("mini-app-demo", "off", "--ticket", "OPS-3"))
-	if err != nil || c.verb != "mini-app-demo" || c.sub != "off" || c.tenant != testTenant || c.appID != testApp || c.ticket != "OPS-3" {
+	// The demo identity is gone (owner decision 05/10/2026): the help text must not offer it.
+	if strings.Contains(usage, "mini-app-demo") {
+		t.Error("usage still advertises mini-app-demo")
+	}
+	c, err := parseArgs(miniArgs("mini-app-secret", "retire", "--ticket", "OPS-3"))
+	if err != nil || c.verb != "mini-app-secret" || c.sub != "retire" || c.tenant != testTenant || c.appID != testApp || c.ticket != "OPS-3" {
 		t.Fatalf("parsed %+v, %v", c, err)
 	}
 }
@@ -95,8 +91,6 @@ func TestMiniAppExecuteReadsSecretFromStdinOnly(t *testing.T) {
 		stdin string
 	}{
 		{miniArgs("mini-app-secret", "set", "--ticket", "OPS-1"), "  " + fakeSecret + "\r\n"},
-		{miniArgs("mini-app-demo", "on", "--ticket", "OPS-2"), ""},
-		{miniArgs("mini-app-demo", "off", "--ticket", "OPS-3"), ""},
 		{miniArgs("mini-app-secret", "retire", "--ticket", "OPS-4"), ""},
 	} {
 		c, err := parseArgs(tc.args)
@@ -116,8 +110,6 @@ func TestMiniAppExecuteReadsSecretFromStdinOnly(t *testing.T) {
 	}
 	want := []string{
 		"set " + testTenant + "|" + testApp + "|OPS-1",
-		"demo-on " + testTenant + "|" + testApp + "|OPS-2",
-		"demo-off " + testTenant + "|" + testApp + "|OPS-3",
 		"retire " + testTenant + "|" + testApp + "|OPS-4",
 	}
 	if strings.Join(f.calls, "\n") != strings.Join(want, "\n") {
@@ -155,9 +147,6 @@ func TestMiniAppSecretFromFile(t *testing.T) {
 		if _, err := parseArgs(miniArgs("mini-app-secret", sub, "--ticket", "OPS-1", "--secret-file", path)); !errors.Is(err, errUsage) {
 			t.Errorf("%s --secret-file: err = %v, want a usage error", sub, err)
 		}
-	}
-	if _, err := parseArgs(miniArgs("mini-app-demo", "on", "--ticket", "OPS-1", "--secret-file", path)); !errors.Is(err, errUsage) {
-		t.Errorf("demo on --secret-file: err = %v, want a usage error", err)
 	}
 }
 

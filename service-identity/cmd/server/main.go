@@ -376,8 +376,8 @@ func run(log *slog.Logger) error {
 	//
 	// A NIL *crypto.Envelope IS A VALID PROCESS IN DEV ONLY: staging/prod refuse to start without
 	// SECRET_ENCRYPTION_KEYS (config.SecretEncryption is declared above). In dev a real own-app
-	// sign-in then answers 503 by name; `--demo` sign-ins, which need no secret, keep working. A
-	// MALFORMED value never reaches here — config.Load refuses it.
+	// sign-in then answers 503 by name — every own-app sign-in needs the secret, there is no demo path
+	// any more (owner decision 05/10/2026). A MALFORMED value never reaches here — config.Load refuses it.
 	var envelope *crypto.Envelope
 	if cfg.SecretEncryptionConfigured() {
 		envelope, err = crypto.New(cfg.SecretEncryptionKeys(), idstore.NewDataEncryptionKeyStore(kho))
@@ -386,7 +386,7 @@ func run(log *slog.Logger) error {
 		}
 	} else {
 		log.Warn("CẢNH BÁO CẤU HÌNH", "chi_tiet",
-			"SECRET_ENCRYPTION_KEYS trống — đăng nhập app riêng của xã (không --demo) sẽ trả 503 (ADR 0066)")
+			"SECRET_ENCRYPTION_KEYS trống — đăng nhập app riêng của xã sẽ trả 503 (ADR 0066)")
 	}
 	// zalo.New("") is the real Graph API (zalo.DefaultBaseURL) — a protocol constant, not a variable
 	// (rule 11: no address that differs per environment).

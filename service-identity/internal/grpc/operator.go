@@ -38,13 +38,14 @@ import (
 // tokens, TOTP secrets and recovery codes. The use case logs the business code and the outcome; this
 // file logs ONE thing, the cause of an Internal answer, and never a field of the request.
 //
-// # THE TWO RPCs THAT ACT ON A COMMUNE
+// # THE THREE RPCs THAT ACT ON OR READ FROM A COMMUNE
 //
-// SetMiniAppSecret and RetireMiniAppSecret are the exception to the paragraph above, stated once in
-// operator.proto: they write a commune's own data, so they are NOT on methodsWithoutTenant and their
-// commune is the "x-tenant-id" metadata the interceptor lifted into ctx — read here with tenant.From,
-// refused when absent, never defaulted. The acting operator is resolved HERE from the session token
-// (uc.ResolveSession) and must hold ops.mini_app.manage; the request names no operator.
+// SetMiniAppSecret, RetireMiniAppSecret and ListMiniAppSecretStatuses are the exception to the
+// paragraph above, stated once in operator.proto: they write or read a commune's own data, so they
+// are NOT on methodsWithoutTenant and their commune is the "x-tenant-id" metadata the interceptor
+// lifted into ctx — read here with tenant.From, refused when absent, never defaulted. The operator is
+// resolved HERE from the session token (uc.ResolveSession); the two writes need ops.mini_app.manage,
+// the read any ops.* key (ADR 0073 #1). The request names no operator.
 //
 // # NOTHING IS AUDITED HERE
 //
@@ -72,12 +73,13 @@ type OperatorAuthenticator interface {
 	CompleteEnrollment(ctx context.Context, in app.OperatorEnrollmentCompletion) (app.OperatorEnrollmentResult, error)
 }
 
-// MiniAppSecretOperator is the use case behind SetMiniAppSecret / RetireMiniAppSecret.
-// *app.MiniAppSecretAdmin satisfies it.
+// MiniAppSecretOperator is the use case behind SetMiniAppSecret / RetireMiniAppSecret /
+// ListMiniAppSecretStatuses. *app.MiniAppSecretAdmin satisfies it.
 type MiniAppSecretOperator interface {
 	SetSecretAsOperator(ctx context.Context, op app.MiniAppOperator, appID string, value secret.Secret,
 		reason string) (app.MiniAppSecretSet, error)
 	RetireAsOperator(ctx context.Context, op app.MiniAppOperator, appID, reason string) (app.MiniAppSecretRetired, error)
+	LiveStatuses(ctx context.Context) ([]app.MiniAppSecretStatus, error)
 }
 
 // OperatorServer implements identityv1.OperatorServiceServer. The embedded Unimplemented server is
@@ -86,11 +88,11 @@ type OperatorServer struct {
 	identityv1.UnimplementedOperatorServiceServer
 
 	uc       OperatorAuthenticator
-	miniApps MiniAppSecretOperator // nil until WithMiniAppSecrets: both RPCs answer Unimplemented
+	miniApps MiniAppSecretOperator // nil until WithMiniAppSecrets: the three RPCs answer Unimplemented
 	log      *slog.Logger
 }
 
-// WithMiniAppSecrets wires the two Mini App secret RPCs. Without it they answer Unimplemented — the
+// WithMiniAppSecrets wires the three Mini App secret RPCs. Without it they answer Unimplemented — the
 // answer the embedded server gave before they existed, never a guess. A nil use case is refused here,
 // where a process start is watched.
 func (s *OperatorServer) WithMiniAppSecrets(m MiniAppSecretOperator) *OperatorServer {
@@ -332,7 +334,7 @@ func (s *OperatorServer) SetMiniAppSecret(ctx context.Context, req *identityv1.S
 	}); err != nil {
 		return nil, err
 	}
-	op, out, err := s.miniAppOperator(ctx, "SetMiniAppSecret", req.GetSessionToken(), req.GetClientIp())
+	op, out, err := s.miniAppOperator(ctx, "SetMiniAppSecret", req.GetSessionToken(), req.GetClientIp(), canManageMiniApps)
 	if err != nil {
 		return nil, err
 	}
@@ -368,7 +370,7 @@ func (s *OperatorServer) RetireMiniAppSecret(ctx context.Context, req *identityv
 	}); err != nil {
 		return nil, err
 	}
-	op, out, err := s.miniAppOperator(ctx, "RetireMiniAppSecret", req.GetSessionToken(), req.GetClientIp())
+	op, out, err := s.miniAppOperator(ctx, "RetireMiniAppSecret", req.GetSessionToken(), req.GetClientIp(), canManageMiniApps)
 	if err != nil {
 		return nil, err
 	}
@@ -387,15 +389,76 @@ func (s *OperatorServer) RetireMiniAppSecret(ctx context.Context, req *identityv
 	return nil, s.fault(ctx, "RetireMiniAppSecret", err)
 }
 
+// ListMiniAppSecretStatuses — ACCEPTED (possibly with an empty list), SESSION_NOT_LIVE or
+// PERMISSION_DENIED. A pure read: nothing is written, nothing is audited (operator.proto).
+//
+// What leaves this process per App ID is the version's metadata and ONE bool. Nothing derived from
+// the secret — value, prefix, length, hash — is computed anywhere on this path: the store answers
+// `app_secret_sealed IS NOT NULL` in SQL and never loads the bytes.
+func (s *OperatorServer) ListMiniAppSecretStatuses(ctx context.Context, req *identityv1.ListMiniAppSecretStatusesRequest) (
+	*identityv1.ListMiniAppSecretStatusesResponse, error) {
+
+	// NEVER LOG req: it carries a bearer token.
+	if s.miniApps == nil {
+		return nil, errMiniAppsNotWired
+	}
+	if err := miniAppRequestShape(ctx, req.GetSessionToken(), func() error { return nil }); err != nil {
+		return nil, err
+	}
+	// The request has no client_ip (nothing is written); only the outcome is used.
+	_, out, err := s.miniAppOperator(ctx, "ListMiniAppSecretStatuses", req.GetSessionToken(), "", canReadCommuneDetail)
+	if err != nil {
+		return nil, err
+	}
+	if out != outAccepted {
+		return &identityv1.ListMiniAppSecretStatusesResponse{Outcome: out}, nil
+	}
+	// Scoped: the commune is the one miniAppRequestShape found in ctx; the store binds it as $1.
+	rows, err := s.miniApps.LiveStatuses(ctx)
+	if err != nil {
+		return nil, s.fault(ctx, "ListMiniAppSecretStatuses", err)
+	}
+	statuses := make([]*identityv1.MiniAppSecretStatus, 0, len(rows))
+	for _, r := range rows {
+		statuses = append(statuses, &identityv1.MiniAppSecretStatus{
+			LiveVersion: &identityv1.MiniAppSecretVersion{
+				AppId: r.AppID, Version: r.Version, SetAt: timestamppb.New(r.SetAt), SetBy: r.SetBy,
+			},
+			SecretSet: r.SecretSet,
+		})
+	}
+	return &identityv1.ListMiniAppSecretStatusesResponse{Outcome: outAccepted, Statuses: statuses}, nil
+}
+
 var errMiniAppsNotWired = status.Error(codes.Unimplemented, "chưa nối thao tác khoá Mini App")
 
-// miniAppRequestShape is every INVALID_ARGUMENT of the two Mini App RPCs, decided from the request
+// canManageMiniApps is the two writes' key: ops.mini_app.manage, checked on THE principal identity
+// resolved (ADR 0070 #5) — never on a check made in service-platform alone.
+func canManageMiniApps(p app.OperatorPrincipal) bool {
+	return p.Has(domain.OperatorPermissionMiniAppManage)
+}
+
+// canReadCommuneDetail is the read's key: ANY granted ops.* key opens a commune's detail (ADR 0073
+// #1), the line platform's opauth.AnyKey draws. "Granted" means a key of the closed list
+// (domain.OperatorPermission.Valid): a principal carrying only strings outside it holds no key and is
+// denied — fail closed, never "non-empty means allowed".
+func canReadCommuneDetail(p app.OperatorPrincipal) bool {
+	for _, k := range p.Permissions {
+		if k.Valid() {
+			return true
+		}
+	}
+	return false
+}
+
+// miniAppRequestShape is every INVALID_ARGUMENT of the three Mini App RPCs, decided from the request
 // alone, BEFORE the session is resolved (a lookup that also refreshes the idle timer): the commune in
 // ctx, a non-empty token, then the fields. The messages name the rule, never a value.
 func miniAppRequestShape(ctx context.Context, token string, fields func() error) error {
 	if _, ok := tenant.From(ctx); !ok {
 		// The commune interceptor refuses this before the handler on a wired server; checked again
-		// because a write into a commune's data with no commune must not depend on the chain alone.
+		// because a write into — or a read of — a commune's data with no commune must not depend on
+		// the chain alone.
 		return status.Error(codes.InvalidArgument, "thiếu xã đích trong metadata x-tenant-id")
 	}
 	if token == "" {
@@ -415,11 +478,11 @@ func miniAppRequestShape(ctx context.Context, token string, fields func() error)
 	}
 }
 
-// miniAppOperator resolves the token to the acting operator and checks ops.mini_app.manage on THAT
-// principal (ADR 0070 #5) — never on a check made in service-platform alone. outAccepted with the
-// operator, or the outcome to answer (SESSION_NOT_LIVE / PERMISSION_DENIED), or a status error.
-func (s *OperatorServer) miniAppOperator(ctx context.Context, rpc, token, ip string) (
-	app.MiniAppOperator, identityv1.OperatorAuthOutcome, error) {
+// miniAppOperator resolves the token to the operator and checks allowed on THAT principal (ADR 0070
+// #5) — never on a check made in service-platform alone. outAccepted with the operator, or the
+// outcome to answer (SESSION_NOT_LIVE / PERMISSION_DENIED), or a status error.
+func (s *OperatorServer) miniAppOperator(ctx context.Context, rpc, token, ip string,
+	allowed func(app.OperatorPrincipal) bool) (app.MiniAppOperator, identityv1.OperatorAuthOutcome, error) {
 	p, err := s.uc.ResolveSession(ctx, token)
 	if errors.Is(err, app.ErrOperatorUnauthenticated) {
 		return app.MiniAppOperator{}, outNotLive, nil
@@ -433,7 +496,7 @@ func (s *OperatorServer) miniAppOperator(ctx context.Context, rpc, token, ip str
 		s.log.ErrorContext(ctx, "CẢNH BÁO HỢP ĐỒNG: phiên vận hành không có operator_code", "rpc", rpc)
 		return app.MiniAppOperator{}, 0, status.Error(codes.Internal, "lỗi nội bộ, vui lòng thử lại")
 	}
-	if !p.Has(domain.OperatorPermissionMiniAppManage) {
+	if !allowed(p) {
 		return app.MiniAppOperator{}, outDenied, nil
 	}
 	return app.MiniAppOperator{Code: p.Code, IP: ip}, outAccepted, nil

@@ -5161,7 +5161,7 @@
     },
     "/api/v1/citizen-sessions": {
       "post": {
-        "summary": "App riêng của xã đổi accessToken/phoneToken Zalo (hoặc danh tính demo khi App ID bật --demo) lấy phiên công dân ViGov",
+        "summary": "App riêng của xã đổi accessToken/phoneToken Zalo lấy phiên công dân ViGov",
         "operationId": "identity_post_citizen_sessions",
         "tags": [
           "identity"
@@ -34887,15 +34887,11 @@
           "phoneToken": {
             "type": "string",
             "writeOnly": true
-          },
-          "demoIdentity": {
-            "type": "boolean"
           }
         },
         "required": [
           "accessToken",
           "appId",
-          "demoIdentity",
           "phoneToken"
         ],
         "additionalProperties": false

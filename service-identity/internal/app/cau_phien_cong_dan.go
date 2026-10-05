@@ -143,10 +143,9 @@ type YeuCauMoPhienCau struct {
 	// a binding moved in between must not open a session in a commune whose secret nobody checked.
 	// Empty on the gRPC bridge — the caller there is vihat-miniapp and the field is not on the wire.
 	RequireOwnAppOf tenant.ID
-	// DemoIdentity marks a session opened with an own app's `--demo` fixed identity (no phone
-	// verification, ADR 0066). Written into the session's audit entry, so "which sessions were
-	// opened without a verified phone" is answerable from the trail. Never set by the gRPC bridge.
-	DemoIdentity bool
+	// There is no demo-identity input any more (owner decision 05/10/2026, ADR 0066 §Sửa đổi): every
+	// own-app session is opened from a phone verified by Zalo. Sessions opened under the old fixed
+	// identity keep their audit entries (`danh_tinh_demo: true`) untouched — history, not input.
 }
 
 // KetQuaMoPhienCau is OpenCitizenSessionResponse. Token/Sid/HetHan are empty exactly when Xa is.
@@ -367,9 +366,6 @@ func (uc *CauPhienCongDan) Mo(ctx context.Context, yc YeuCauMoPhienCau) (KetQuaM
 			"da_co_so":           congDan != "",
 			"tai_khoan_zalo":     tk.ID,
 			"tai_khoan_zalo_moi": taiKhoanMoi,
-		}
-		if yc.DemoIdentity {
-			sessionDelta["danh_tinh_demo"] = true
 		}
 		if err := ghiVetCau(ctxXa, tx, chuThe, yc.IP, HanhDongMoPhienCongDan, sid, sessionDelta); err != nil {
 			return err

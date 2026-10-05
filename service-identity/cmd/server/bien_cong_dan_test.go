@@ -115,7 +115,7 @@ func TestTuyenCongKhaiDiChuoiCongKhaiKhongCanPhien(t *testing.T) {
 func TestCitizenSessionsOnPublicChain(t *testing.T) {
 	h, cb := dungNgoaiThu(t)
 	r := httptest.NewRequest(http.MethodPost, "https://"+hostApiIdentity+svchttp.CitizenSessionsPath,
-		strings.NewReader(`{"appId":"1234567890123456789","demoIdentity":true}`))
+		strings.NewReader(`{"appId":"1234567890123456789","accessToken":"FAKE-ACCESS","phoneToken":"FAKE-PHONE"}`))
 	r.Host = hostApiIdentity
 	r.Header.Set("Origin", nguonMiniAppThu)
 	w := httptest.NewRecorder()

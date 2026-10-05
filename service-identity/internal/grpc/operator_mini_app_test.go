@@ -44,6 +44,7 @@ type miniAppsFake struct {
 	gotSecret secret.Secret
 	gotReason string
 	gotTenant tenant.ID
+	statuses  map[tenant.ID][]app.MiniAppSecretStatus
 }
 
 func (f *miniAppsFake) SetSecretAsOperator(ctx context.Context, op app.MiniAppOperator, appID string, v secret.Secret,
@@ -65,6 +66,17 @@ func (f *miniAppsFake) RetireAsOperator(ctx context.Context, op app.MiniAppOpera
 		return app.MiniAppSecretRetired{}, f.err
 	}
 	return app.MiniAppSecretRetired{AppID: strings.TrimSpace(appID), Version: maVersion, RetiredAt: maAt, RetiredBy: op.Code}, nil
+}
+
+// LiveStatuses answers the statuses stored per commune — so a test can show that the commune of the
+// metadata, and only it, decides which rows come back.
+func (f *miniAppsFake) LiveStatuses(ctx context.Context) ([]app.MiniAppSecretStatus, error) {
+	f.calls++
+	f.gotTenant, _ = tenant.From(ctx)
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.statuses[f.gotTenant], nil
 }
 
 func managerPrincipal() app.OperatorPrincipal {
@@ -306,5 +318,137 @@ func TestMiniAppSecretRPCsNeverLogValues(t *testing.T) {
 	if strings.Contains(fmt.Sprintf("%v %+v %s", secret.Secret(maSecretMarker), secret.Secret(maSecretMarker),
 		secret.Secret(maSecretMarker)), maSecretMarker) {
 		t.Fatal("secret.Secret formats its value")
+	}
+}
+
+// --- ListMiniAppSecretStatuses (owner decision 05/10/2026) -------------------------------------------
+//
+// Rule 5 #7 in this service's shape: there is no HTTP edge here, so 401/403 are outcomes —
+// SESSION_NOT_LIVE (no live session), PERMISSION_DENIED (no key), the commune dimension (the rows are
+// those of the METADATA commune and of no other), and ACCEPTED.
+
+const maCommuneOther = tenant.ID("01J0000000000000000000000B")
+
+func listReq() *identityv1.ListMiniAppSecretStatusesRequest {
+	return &identityv1.ListMiniAppSecretStatusesRequest{SessionToken: opMarkToken}
+}
+
+func listRig(ucErr error, p app.OperatorPrincipal) maRig {
+	r := newMARig(ucErr, nil, p)
+	r.m.statuses = map[tenant.ID][]app.MiniAppSecretStatus{
+		maCommune: {
+			{AppID: "1111", Version: maVersion, SetAt: maAt, SetBy: "VH-00001", SecretSet: true},
+			{AppID: "2222", Version: "01JVERSIONBBBBBBBBBBBBBBBB", SetAt: maAt.Add(time.Hour), SetBy: "system", SecretSet: false},
+		},
+		maCommuneOther: {
+			{AppID: "9999", Version: "01JVERSIONCCCCCCCCCCCCCCCC", SetAt: maAt, SetBy: "VH-00009", SecretSet: true},
+		},
+	}
+	return r
+}
+
+// ACCEPTED: every live version of the metadata commune, metadata + one bool. A principal holding ANY
+// ops.* key may read — not only ops.mini_app.manage (ADR 0073 #1).
+func TestListMiniAppSecretStatusesAccepted(t *testing.T) {
+	readOnly := managerPrincipal()
+	readOnly.Permissions = []domain.OperatorPermission{domain.OperatorPermissionQRIssue}
+	for name, p := range map[string]app.OperatorPrincipal{"manager": managerPrincipal(), "any other ops key": readOnly} {
+		t.Run(name, func(t *testing.T) {
+			r := listRig(nil, p)
+			resp, err := r.s.ListMiniAppSecretStatuses(maCtx(), listReq())
+			if err != nil || resp.GetOutcome() != outAccepted {
+				t.Fatalf("resp %v err %v, want ACCEPTED", resp.GetOutcome(), err)
+			}
+			if r.uc.gotToken != opMarkToken || r.m.gotTenant != maCommune {
+				t.Fatalf("token %q / commune %q — want the request's token and the metadata commune", r.uc.gotToken, r.m.gotTenant)
+			}
+			st := resp.GetStatuses()
+			if len(st) != 2 {
+				t.Fatalf("statuses = %v", st)
+			}
+			a, b := st[0], st[1]
+			if v := a.GetLiveVersion(); !a.GetSecretSet() || v.GetAppId() != "1111" || v.GetVersion() != maVersion ||
+				v.GetSetBy() != "VH-00001" || !v.GetSetAt().AsTime().Equal(maAt) {
+				t.Errorf("first = %v", a)
+			}
+			if v := b.GetLiveVersion(); b.GetSecretSet() || v.GetAppId() != "2222" || v.GetSetBy() != "system" {
+				t.Errorf("second = %v — secret_set must be false for a live row with no secret", b)
+			}
+		})
+	}
+}
+
+// The commune dimension: the same operator, the same token, another commune in the metadata → that
+// commune's rows only; a commune with nothing live → ACCEPTED with an EMPTY list, never NOT_FOUND.
+func TestListMiniAppSecretStatusesScopedToTheMetadataCommune(t *testing.T) {
+	r := listRig(nil, managerPrincipal())
+	resp, err := r.s.ListMiniAppSecretStatuses(tenant.Into(context.Background(), maCommuneOther), listReq())
+	if err != nil || resp.GetOutcome() != outAccepted || r.m.gotTenant != maCommuneOther {
+		t.Fatalf("resp %v err %v commune %q", resp.GetOutcome(), err, r.m.gotTenant)
+	}
+	if st := resp.GetStatuses(); len(st) != 1 || st[0].GetLiveVersion().GetAppId() != "9999" {
+		t.Fatalf("statuses = %v — want commune B's row only", st)
+	}
+	resp, err = r.s.ListMiniAppSecretStatuses(tenant.Into(context.Background(), "01J000000000000000000000ZZ"), listReq())
+	if err != nil || resp.GetOutcome() != outAccepted || len(resp.GetStatuses()) != 0 {
+		t.Fatalf("empty commune: %v %v, want ACCEPTED with no statuses", resp, err)
+	}
+}
+
+// SESSION_NOT_LIVE and PERMISSION_DENIED: answered, the store is not read, no status is returned.
+func TestListMiniAppSecretStatusesSessionAndPermission(t *testing.T) {
+	unknownOnly := managerPrincipal()
+	unknownOnly.Permissions = []domain.OperatorPermission{"ops.not_a_key", "admin.user"}
+	for name, c := range map[string]struct {
+		ucErr error
+		p     app.OperatorPrincipal
+		want  identityv1.OperatorAuthOutcome
+	}{
+		"not live":          {app.ErrOperatorUnauthenticated, app.OperatorPrincipal{}, outNotLive},
+		"no keys at all":    {nil, app.OperatorPrincipal{ID: "x", Code: "VH-00002"}, outDenied},
+		"only unknown keys": {nil, unknownOnly, outDenied},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := listRig(c.ucErr, c.p)
+			resp, err := r.s.ListMiniAppSecretStatuses(maCtx(), listReq())
+			if err != nil || resp.GetOutcome() != c.want || len(resp.GetStatuses()) != 0 {
+				t.Fatalf("%v %v, want %v and no statuses", resp, err, c.want)
+			}
+			if r.m.calls != 0 {
+				t.Fatal("the store was read")
+			}
+		})
+	}
+}
+
+// INVALID_ARGUMENT before any lookup; store errors are Internal (fail closed) with nothing quoted;
+// unwired is Unimplemented.
+func TestListMiniAppSecretStatusesFaults(t *testing.T) {
+	r := listRig(nil, managerPrincipal())
+	if _, err := r.s.ListMiniAppSecretStatuses(context.Background(), listReq()); status.Code(err) != codes.InvalidArgument {
+		t.Errorf("no commune: %v, want InvalidArgument", status.Code(err))
+	}
+	if _, err := r.s.ListMiniAppSecretStatuses(maCtx(), &identityv1.ListMiniAppSecretStatusesRequest{}); status.Code(err) != codes.InvalidArgument {
+		t.Errorf("empty token: %v, want InvalidArgument", status.Code(err))
+	}
+	if r.uc.calls != 0 || r.m.calls != 0 {
+		t.Fatalf("session resolved %d times, store read %d — want neither", r.uc.calls, r.m.calls)
+	}
+
+	r = listRig(nil, managerPrincipal())
+	r.m.err = errors.New("store exploded")
+	_, err := r.s.ListMiniAppSecretStatuses(maCtx(), listReq())
+	if status.Code(err) != codes.Internal || strings.Contains(err.Error(), "exploded") || strings.Contains(r.logs.String(), opMarkToken) {
+		t.Fatalf("store error: %v / log %s", err, r.logs.String())
+	}
+
+	r = listRig(app.ErrOperatorRealmNotConfigured, app.OperatorPrincipal{})
+	if _, err := r.s.ListMiniAppSecretStatuses(maCtx(), listReq()); status.Code(err) != codes.FailedPrecondition {
+		t.Errorf("realm not configured: %v, want FailedPrecondition", status.Code(err))
+	}
+
+	s := NewOperatorServer(&operatorAuthFake{principal: managerPrincipal()}, nil)
+	if _, err := s.ListMiniAppSecretStatuses(maCtx(), listReq()); status.Code(err) != codes.Unimplemented {
+		t.Errorf("unwired: %v, want Unimplemented", status.Code(err))
 	}
 }
