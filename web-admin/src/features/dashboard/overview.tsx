@@ -16,13 +16,13 @@ import type { SummaryPeriod } from "@/lib/api/dashboard";
 import { layLoaiNhiemVu } from "@/lib/api/danh-muc-nghiep-vu";
 import type { KetQua } from "@/lib/api/goi";
 import { layChiSoNganSach } from "@/lib/api/thu-chi";
-import { REPORT_READ_PERMISSION } from "@/lib/quyen";
+import { quyetDinhTheoKhoa, REPORT_READ_PERMISSION } from "@/lib/quyen";
 
 import { mergeQueues } from "./figures";
 import type { QueueSource } from "./figures";
 import { DEFAULT_PERIOD_KIND, periodWindows, toQueryPeriod, zoneYear } from "./period";
 import type { PeriodKind } from "./period";
-import { blockVisibility, DashboardView } from "./view";
+import { blockVisibility, DashboardHeader, DashboardView } from "./view";
 import type {
   BlocksData,
   BlockVisibility,
@@ -46,10 +46,18 @@ export const MISSING_REPORT_READ =
  * convenience: every figure route checks both keys itself (rule 5, forbidden #1).
  */
 export function DashboardPage() {
+  const session = usePhien();
+  // The full header (period, "tính đến", period buttons) is drawn by `DashboardView` inside the gate.
+  // Until the gate opens — session still being read, key missing, session unreadable — the title
+  // and the disabled actions are drawn here instead, so the account still reads which page it is on.
+  const open = session !== null && quyetDinhTheoKhoa(session, REPORT_READ_PERMISSION).hien;
   return (
-    <CongQuyen khoa={REPORT_READ_PERMISSION} cauThieuQuyen={MISSING_REPORT_READ}>
-      <DashboardOverview />
-    </CongQuyen>
+    <>
+      {!open && <DashboardHeader />}
+      <CongQuyen khoa={REPORT_READ_PERMISSION} cauThieuQuyen={MISSING_REPORT_READ}>
+        <DashboardOverview />
+      </CongQuyen>
+    </>
   );
 }
 

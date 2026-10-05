@@ -8,7 +8,6 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { PHASE_2_NOTE, pendingMarkerLabel } from "@/components/ui/pending-feature";
 
-import { DashboardHeaderActions } from "./header-actions";
 import { PHAN_CHUA_DUNG } from "./labels";
 import { periodWindows } from "./period";
 import { blockVisibility, DashboardView } from "./view";
@@ -61,12 +60,8 @@ const DATA: DashboardData = {
 const ALL_KEYS = blockVisibility(["report.read", "task.read", "document.read", "feedback.read", "budget.read"]);
 
 function page(visible = ALL_KEYS): HTMLDivElement {
-  return mount(
-    <>
-      <DashboardHeaderActions />
-      <DashboardView data={DATA} visible={visible} onPeriodChange={() => {}} />
-    </>,
-  );
+  // The view draws its own header (PDF/XLSX/PPTX, Trình chiếu) — the prototype's frame.
+  return mount(<DashboardView data={DATA} visible={visible} onPeriodChange={() => {}} />);
 }
 
 function marker(el: ParentNode, ten: string): HTMLButtonElement | null {

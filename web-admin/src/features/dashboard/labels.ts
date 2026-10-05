@@ -51,6 +51,23 @@ export const PHAN_CHUA_DUNG: readonly PendingFeatureInfo[] = [
 ];
 
 /**
+ * The tiles an unbuilt BLOCK will have, drawn as "—" under the block's one "?" so the block keeps
+ * its shape and place in the grid (prototype `DashboardWorkspace`, owner 05/10/2026). The labels are
+ * the prototype's metric names (`report-display.ts` METRIC_LABELS) — the same figures each entry's
+ * `viSao` above lists in words. Keyed by the entry's `ten`: build the block → delete both together.
+ */
+export const PENDING_BLOCK_METRICS = {
+  "Giải ngân ngân sách": [
+    "Tỷ lệ giải ngân",
+    "Thời gian đã trôi qua",
+    "Dự án chậm",
+    "Vướng mắc chưa gỡ",
+    "Đã giải ngân",
+  ],
+  "Kinh tế & Tài nguyên": ["Doanh nghiệp", "Hộ kinh doanh", "Thành lập mới", "Tổng tài nguyên"],
+} as const satisfies Readonly<Record<string, readonly string[]>>;
+
+/**
  * One entry by its `ten`. THROWS on an unknown name rather than drawing a "?" with no description:
  * the overview's tests render every placeholder, so a renamed entry turns red there, not on a screen.
  */

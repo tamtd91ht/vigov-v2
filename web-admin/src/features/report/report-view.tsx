@@ -102,7 +102,6 @@ export function ReportView({
         visible={access.blocks}
         onReload={onReload}
         urgent={false}
-        comparisonText={comparison}
       />
 
       {access.unitTable && (

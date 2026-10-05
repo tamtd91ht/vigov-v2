@@ -16,8 +16,9 @@ import { pendingPart } from "./labels";
  * NOT HERE, ON PURPOSE: `⟳ Tính lại ngay` — the owner decided not to build it (ADR 0053), and a
  * placeholder for it would announce a feature the authority refused.
  *
- * Rendered by `app/tong-quan/page.tsx` in the header, outside the `report.read` gate like the title:
- * a disabled control with no data behind it reveals nothing an account may not read.
+ * Rendered by `DashboardHeader` (`view.tsx`) on the right of the title, after the period buttons —
+ * also for an account without `report.read`: a disabled control with no data behind it reveals
+ * nothing an account may not read.
  */
 export function DashboardHeaderActions() {
   return (

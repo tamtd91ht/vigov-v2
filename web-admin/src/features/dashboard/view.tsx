@@ -1,27 +1,28 @@
 import {
   AlarmClock,
-  BellRing,
-  CalendarDays,
+  Banknote,
   CircleCheck,
   CirclePause,
+  Clock,
   CloudOff,
   Database,
   History,
   Hourglass,
   Inbox,
+  LayoutDashboard,
+  ListTodo,
   Loader,
   Mail,
   MessageSquareWarning,
   Minus,
-  RefreshCw,
   RotateCw,
   Siren,
   Star,
+  Store,
   Target,
   TrendingDown,
   TrendingUp,
   Wallet,
-  Activity,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -31,10 +32,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { PendingSection, PendingStatCard } from "@/components/ui/pending-feature";
+import { PageHeader } from "@/components/ui/page-header";
+import { PENDING_HOVER_TEXT, PendingMarker } from "@/components/ui/pending-feature";
+import type { PendingFeatureInfo } from "@/components/ui/pending-feature";
 import { Segmented } from "@/components/ui/segmented";
-import { NO_DATA_CAPTION, StatCard, type StatTone } from "@/components/ui/stat-card";
-import { TodoList, type TodoItem } from "@/components/ui/todo-list";
+import { NO_DATA_CAPTION } from "@/components/ui/stat-card";
 import { KPI_NO_RATING, ratingAverage } from "@/features/phan-anh/nhan-phieu";
 import { OTien } from "@/features/thu-chi/o-tien";
 import {
@@ -80,7 +82,8 @@ import {
   ratioPercent,
 } from "./figures";
 import type { ComparisonLine, DrillTarget, FigureKind, MergedQueue, Trend } from "./figures";
-import { pendingPart } from "./labels";
+import { DashboardHeaderActions } from "./header-actions";
+import { PENDING_BLOCK_METRICS, pendingPart } from "./labels";
 import {
   comparisonNote,
   formatDateTime,
@@ -97,12 +100,15 @@ import type { PeriodKind, PeriodWindows } from "./period";
  * `renderToStaticMarkup` in a test (pattern `features/quyen/cong-quyen.tsx` `KhungQuyen`). The
  * branches that matter most are the ones a developer with every key never sees.
  *
- * LAYOUT (owner's spec §8.2, revised 02/10/2026): the page answers "what do I handle next" first.
- *   row 1   "Cần xử lý" (pending work, from figures already read) · "Tình hình trong kỳ" (period)
- *   row 2   "Cần xử lý ngay" — the merged overdue queue, unchanged in content
- *   row 3   compact module cards for the figures rows 1–2 do not show
- * EVERY FIGURE THE PAGE SHOWED BEFORE IS STILL SHOWN EXACTLY ONCE, each still a link to its list,
- * under the same read keys. Only where it sits and how it looks changed (ADR 0068 §1).
+ * LAYOUT (owner, 05/10/2026 — the prototype's `DashboardWorkspace` frame, new UI language of
+ * ADR 0068 §"Sửa đổi 05/10/2026 (lần 2)"):
+ *   header  title · "Kỳ …: … · tính đến …" · period buttons · PDF/XLSX/PPTX · Trình chiếu
+ *   body    ONE grid — 1 column, 2 from 1024px, 3 from 1536px — of six blocks in the prototype's
+ *           order (Nhiệm vụ · Văn bản & Đơn thư · Giải ngân ngân sách · Thu – Chi ngân sách ·
+ *           Phản ánh người dân · Kinh tế & Tài nguyên), then "Cần xử lý ngay" as the 7th cell.
+ * The old "Cần xử lý" / "Tình hình trong kỳ" rows are gone as BLOCKS, not as figures: every figure
+ * they drew is a tile of its module's block now. EVERY FIGURE THE PAGE SHOWED BEFORE IS STILL SHOWN
+ * EXACTLY ONCE, each still a link to its list, under the same read keys (ADR 0068 §1).
  *
  * STYLED WITH UTILITIES ONLY. The old CSS module sat outside every cascade layer and beat every
  * utility; nothing here may reintroduce an unlayered rule.
@@ -148,7 +154,7 @@ function movement(current: Read, previous: Read): Movement {
   return current > previous ? "up" : "down";
 }
 
-/** One figure, fully decided — what the cells draw. */
+/** One figure, fully decided — what the tiles draw. */
 type Figure = {
   readonly id: string;
   /** The receiving list's heading (`drillTargetLabel`) — also the link's accessible name. */
@@ -162,21 +168,8 @@ type Figure = {
   readonly alert?: boolean;
   /** the value is a server SENTENCE (fiscal reason), not a number */
   readonly sentence?: boolean;
-  /** the call answered and the value is exactly 0 — "nothing pending" for the attention block */
-  readonly zero?: boolean;
   readonly icon?: LucideIcon;
-  /** Set on a RATE figure only: its percentage, or `null` for an empty sample. */
-  readonly ratio?: number | null;
 };
-
-/**
- * "Nhiệm vụ" + "Quá hạn" → "Nhiệm vụ quá hạn". Used where figures of two modules sit side by side
- * and the list heading alone ("Quá hạn") would not say which register it counts. Built from the
- * receiving list's own heading, so the two still cannot drift; the link keeps the heading as name.
- */
-function withModule(noun: string, label: string): string {
-  return `${noun} ${label.charAt(0).toLocaleLowerCase("vi")}${label.slice(1)}`;
-}
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * FIGURES — what is counted, compared and linked. Unchanged by the redesign.
@@ -215,7 +208,6 @@ function countFigure<T>(
         : comparisonLine(spec.kind, current, previous, spec.trend, formatCount),
     movement: movement(current, previous),
     alert: spec.alert === true && typeof current === "number" && current > 0,
-    zero: current === 0,
     icon: spec.icon,
   };
 }
@@ -261,7 +253,6 @@ function ratioFigure<T>(
         : comparisonLine("period", current, previous, "higher-is-better", formatPercent),
     movement: movement(current, previous),
     icon: Target,
-    ratio: typeof current === "number" ? current : null,
   };
 }
 
@@ -317,8 +308,8 @@ function taskFigures(pair: SummaryPair<petitions_taskSummaryOut>, windows: Compa
 
 /**
  * Khối VĂN BẢN ĐẾN's figures — incoming documents only. The spec's block also counts citizen
- * letters (`don_thu`), which no service holds yet; that cell and the on-time rate (the register
- * stores no settled instant, `incoming_dashboard.go`) say so in `DocumentSourcesBlock`.
+ * letters (`don_thu`), which no service holds yet; that tile and the on-time rate (the register
+ * stores no settled instant, `incoming_dashboard.go`) say so in `DocumentBlock`.
  */
 function incomingDocumentFigures(
   pair: SummaryPair<documents_incomingSummaryOut>,
@@ -379,46 +370,57 @@ const MOVEMENT_ICON: Readonly<Record<Movement, LucideIcon>> = {
   none: History,
 };
 
-/** Module tiles: brand or neutral ONLY — red and orange are reserved for real states (spec §8.2). */
-type TileTone = "brand" | "neutral";
-
-const TILE: Readonly<Record<TileTone, string>> = {
-  brand: "bg-brand-50 text-brand-600",
-  neutral: "bg-[#f1f4f8] text-ink-500",
-};
+/** The stable key of each block — `data-block` on its `<section>`, what the order tests read. */
+export type BlockKey = "tasks" | "documents" | "budget" | "fiscal" | "citizen-reports" | "economy" | "urgent";
 
 /**
- * A card with an icon tile + `<h2>`. The `<section aria-label>` is the landmark screen readers (and
- * the tests) find each block by.
+ * One block of the grid: a white card (no border, no shadow — ADR 0068 lần 2 #4) with a header row
+ * (icon · `<h2>` · an optional aside: a count, or the "?" of an unbuilt block) and its body.
+ *
+ * The `<section aria-label>` is the landmark screen readers (and the tests) find each block by. The
+ * body is a size CONTAINER: the tile grid picks its column count from the width of THE CARD, not of
+ * the window — the same card is a third of a 1536px screen and the whole of a phone.
  */
-function SectionCard({
+function Panel({
+  blockKey,
   title,
   icon: Icon,
-  tile = "brand",
   aside,
-  className,
-  bodyClassName,
   children,
 }: {
+  blockKey: BlockKey;
   title: string;
   icon: LucideIcon;
-  tile?: TileTone;
   aside?: ReactNode;
-  className?: string;
-  bodyClassName?: string;
   children: ReactNode;
 }) {
   return (
-    <Card as="section" aria-label={title} className={cn("flex flex-col", className)}>
-      <CardHeader>
-        <span aria-hidden="true" className={cn("grid size-9 shrink-0 place-items-center rounded-lg", TILE[tile])}>
-          <Icon className="size-[18px]" strokeWidth={1.8} focusable="false" />
-        </span>
+    <Card as="section" aria-label={title} data-block={blockKey} className="flex flex-col">
+      <CardHeader className="gap-2">
+        <Icon aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-ink-500" />
         <CardTitle className="min-w-0 flex-1">{title}</CardTitle>
         {aside}
       </CardHeader>
-      <CardContent className={cn("flex flex-1 flex-col gap-3", bodyClassName)}>{children}</CardContent>
+      <CardContent className="@container flex flex-1 flex-col gap-3">{children}</CardContent>
     </Card>
+  );
+}
+
+/**
+ * The tiles of a block: 2 columns, 3 when the block has more than four figures AND its card is wide
+ * enough (`@md` = 28rem of card body). Three columns of a 288px phone card would cut "91,30%" in
+ * half; the prototype's rule ("3 when > 4") holds wherever it fits.
+ */
+function TileGrid({ count, children }: { count: number; children: ReactNode }) {
+  return (
+    <ul
+      className={cn(
+        "-mx-2.5 m-0 grid list-none grid-cols-2 gap-1 p-0",
+        count > 4 && "@md:grid-cols-3",
+      )}
+    >
+      {children}
+    </ul>
   );
 }
 
@@ -493,7 +495,7 @@ function LoadError({
   return (
     <div
       role="alert"
-      className="flex flex-wrap items-start gap-3 rounded-xl border border-danger-200 bg-danger-50 px-3.5 py-3 text-[13px] leading-relaxed text-ink-700"
+      className="flex flex-wrap items-start gap-3 rounded-lg border border-danger-200 bg-danger-50 px-3.5 py-3 text-[13px] leading-relaxed text-ink-700"
     >
       <CloudOff aria-hidden="true" focusable="false" strokeWidth={1.8} className="mt-0.5 size-[18px] shrink-0 text-danger-600" />
       <div className="min-w-0 flex-1 basis-48">
@@ -542,148 +544,109 @@ function PairErrors<T>({
   );
 }
 
-const LINK_FRAME =
-  "block h-full rounded-xl text-inherit no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500";
+/** Value · label · caption — the order of the prototype's `MetricTile`. */
+const TILE_BODY = "flex h-full min-w-0 flex-col gap-1 rounded-lg px-2.5 py-2";
 
 /**
- * One KPI: a LINK named `Xem danh sách đằng sau: {nhãn}` (spec §4, §9) to the list behind it.
+ * One figure: a LINK named `Xem danh sách đằng sau: {nhãn}` (spec §4, §9) to the pre-filtered list
+ * behind it (`?metric=…`) — never a dialog (ADR 0053 §7).
  *
  * THE ACCESSIBLE NAME REPLACES THE VISIBLE TEXT, so the value is wired back with
  * `aria-describedby` — otherwise a screen-reader user hears where the link goes and never the
  * number it is about.
+ *
+ * Red is never alone: an alarming figure is red AND carries its clock icon AND its label says
+ * "Quá hạn" / "Trễ hạn" (ADR 0068 lần 2 #8b). Hover tints with the accent — a FILL, never text.
+ * A server SENTENCE (fiscal reason) takes the whole row: squeezed into one of three columns it
+ * would read one word per line.
  */
-function KpiCell({ figure, shown, tone = "brand" }: { figure: Figure; shown: string; tone?: StatTone }) {
+function FigureTile({ figure, value }: { figure: Figure; value?: ReactNode }) {
   const valueId = `${figure.id}-value`;
+  const Icon = figure.icon ?? Database;
+  const alert = figure.alert === true;
+  const sentence = figure.sentence === true;
   const hasCaption = figure.note !== undefined || figure.comparison !== null;
   return (
-    <li className="min-w-0">
-      <Link className={LINK_FRAME} href={figure.href} aria-label={drillLabel(figure.label)} aria-describedby={valueId}>
-        <StatCard
-          icon={figure.icon ?? Database}
-          tone={tone}
-          label={shown}
-          alert={figure.alert === true}
-          value={<FigureValue id={valueId} text={figure.display} />}
-          caption={
-            hasCaption ? (
-              <span className="flex min-w-0 flex-col gap-0.5">
-                {figure.note !== undefined && <span>{figure.note}</span>}
-                <ComparisonCaption figure={figure} />
-              </span>
-            ) : undefined
-          }
-          className="shadow-none"
-        />
+    <li className={cn("min-w-0", sentence && "col-span-full")}>
+      <Link
+        href={figure.href}
+        aria-label={drillLabel(figure.label)}
+        aria-describedby={valueId}
+        className={cn(
+          TILE_BODY,
+          "text-inherit no-underline transition-colors hover:bg-accent-50",
+          "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-500",
+        )}
+      >
+        <span
+          className={cn(
+            "font-semibold tabular-nums",
+            sentence ? "text-[13px] leading-snug" : "text-[22px] leading-tight",
+            alert ? "text-danger-600" : "text-ink-900",
+          )}
+        >
+          {value !== undefined ? (
+            <span id={valueId} className="[overflow-wrap:anywhere]">
+              {value}
+            </span>
+          ) : (
+            <FigureValue id={valueId} text={figure.display} sentence={sentence} />
+          )}
+        </span>
+        <span className="flex min-w-0 items-start gap-1.5 text-[13px] text-ink-700">
+          <Icon
+            aria-hidden="true"
+            focusable="false"
+            strokeWidth={1.8}
+            className={cn("mt-px size-3.5 shrink-0", alert ? "text-danger-600" : "text-ink-500")}
+          />
+          <span className="min-w-0">{figure.label}</span>
+        </span>
+        {hasCaption && (
+          <span className="flex min-w-0 flex-col gap-0.5 text-xs leading-snug text-ink-500">
+            {figure.note !== undefined && <span>{figure.note}</span>}
+            <ComparisonCaption figure={figure} />
+          </span>
+        )}
       </Link>
     </li>
   );
 }
 
-/**
- * A RATE figure: label, the percentage with its sample `(x/y …)`, a thin bar, the comparison.
- * Same link, same name, same `-value` wiring as a KPI.
- *
- * The bar is a native `<progress>` hidden from assistive technology: the percentage beside it is
- * the accessible value, and a bar announced as "0%" for an EMPTY sample would say the opposite.
- */
-function RatioRow({ figure, shown }: { figure: Figure; shown: string }) {
-  const valueId = `${figure.id}-value`;
-  const Icon = figure.icon ?? Target;
-  const percent = figure.ratio ?? null;
+/** A figure with no source data in wave 1: "Chưa có dữ liệu", never a 0, never a link. */
+function NoSourceTile({ label, icon: Icon }: { label: string; icon: LucideIcon }) {
   return (
-    <Link
-      className={cn(LINK_FRAME, "border border-line px-4 py-3 hover:border-line-strong")}
-      href={figure.href}
-      aria-label={drillLabel(figure.label)}
-      aria-describedby={valueId}
-    >
-      <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-ink-700">
-        <Icon aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-4 shrink-0 text-ink-500" />
-        <span className="font-medium">{shown}</span>
-        <span className="ml-auto inline-flex items-baseline gap-1.5 tabular-nums">
-          <span className="font-bold text-ink-900">
-            <FigureValue id={valueId} text={figure.display} skeleton="h-4 w-10" />
-          </span>
-          {figure.note !== undefined && <span className="text-ink-500">({figure.note})</span>}
-        </span>
-      </span>
-      <progress
-        aria-hidden="true"
-        max={100}
-        value={percent === null ? 0 : Math.min(100, Math.max(0, percent))}
-        className={cn(
-          "mt-2.5 block h-1.5 w-full appearance-none overflow-hidden rounded-full border-0 bg-[#eef1f5]",
-          "[&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-[#eef1f5]",
-          "[&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-brand-600",
-          "[&::-moz-progress-bar]:rounded-full [&::-moz-progress-bar]:bg-brand-600",
-        )}
-      />
-      {figure.comparison !== null && (
-        <span className="mt-1.5 flex text-xs">
-          <ComparisonCaption figure={figure} />
-        </span>
-      )}
-    </Link>
-  );
-}
-
-/**
- * One label–value row of a compact module card. The value is the link; an `::after` overlay
- * stretches it over the whole row, so the row is one click target and the `<dl>` stays valid.
- */
-function MetricRow({ figure }: { figure: Figure }) {
-  const valueId = `${figure.id}-value`;
-  const caption =
-    figure.note !== undefined || figure.comparison !== null ? (
-      <dd className="m-0 flex flex-col gap-0.5 text-xs text-ink-500">
-        {figure.note !== undefined && <span>{figure.note}</span>}
-        <ComparisonCaption figure={figure} />
-      </dd>
-    ) : null;
-  return (
-    <div className="relative rounded-lg px-2 py-2 hover:bg-brand-50/60">
-      <div className={cn("flex gap-3", figure.sentence === true ? "flex-col gap-1" : "items-baseline justify-between")}>
-        <dt className="min-w-0 text-[13px] text-ink-700">{figure.label}</dt>
-        <dd
-          className={cn(
-            "m-0 min-w-0 font-semibold tabular-nums",
-            figure.sentence === true ? "" : "shrink-0 text-right text-[15px]",
-            figure.alert === true ? "text-danger-600" : "text-ink-900",
-          )}
-        >
-          <Link
-            href={figure.href}
-            aria-label={drillLabel(figure.label)}
-            aria-describedby={valueId}
-            className="text-inherit no-underline after:absolute after:inset-0 after:rounded-lg focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-brand-500"
-          >
-            {figure.sentence === true && (
-              <Database aria-hidden="true" focusable="false" strokeWidth={1.8} className="mr-1.5 inline size-3.5 text-ink-400" />
-            )}
-            <FigureValue id={valueId} text={figure.display} sentence={figure.sentence} skeleton="h-4 w-10" />
-          </Link>
-        </dd>
-      </div>
-      {caption}
-    </div>
-  );
-}
-
-/** A row with no source data in wave 1: "Chưa có dữ liệu", never a 0, never a link. */
-function NoSourceRow({ label }: { label: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3 px-2 py-2" title={NO_SOURCE_DATA}>
-      <dt className="min-w-0 text-[13px] text-ink-700">{label}</dt>
-      <dd className="m-0 inline-flex shrink-0 items-center gap-1 text-xs text-ink-400">
-        <Database aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-3.5" />
+    <li className={TILE_BODY} title={NO_SOURCE_DATA}>
+      <span className="inline-flex items-center gap-1 text-[13px] leading-[26px] text-ink-500">
+        <Database aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-3.5 shrink-0" />
         {NO_DATA_CAPTION}
-      </dd>
-    </div>
+      </span>
+      <span className="flex min-w-0 items-start gap-1.5 text-[13px] text-ink-700">
+        <Icon aria-hidden="true" focusable="false" strokeWidth={1.8} className="mt-px size-3.5 shrink-0 text-ink-500" />
+        <span className="min-w-0">{label}</span>
+      </span>
+    </li>
   );
 }
 
-function MetricList({ children }: { children: ReactNode }) {
-  return <dl className="-mx-2 m-0 flex flex-col">{children}</dl>;
+/**
+ * A figure that is an UNBUILT part (ADR 0068 §14): the tile it will be, "—" for the eye and the
+ * reason for a screen reader, never a link. `info` given = the tile carries its own "?"; without it
+ * the "?" is the block's (a whole unbuilt block has one "?" in its header, not one per tile).
+ */
+function PendingTile({ label, info }: { label: string; info?: PendingFeatureInfo }) {
+  return (
+    <li className={TILE_BODY} data-pending="">
+      <span className="flex items-center gap-2">
+        <span aria-hidden="true" className="text-[22px] leading-tight font-semibold text-ink-400">
+          —
+        </span>
+        <span className="sr-only">{PENDING_HOVER_TEXT}</span>
+        {info !== undefined && <PendingMarker info={info} />}
+      </span>
+      <span className="text-[13px] text-ink-500">{label}</span>
+    </li>
+  );
 }
 
 function SmallNote({ children }: { children: ReactNode }) {
@@ -691,141 +654,94 @@ function SmallNote({ children }: { children: ReactNode }) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
- * BLOCKS
+ * BLOCKS — the grid's order: tasks · documents · budget · fiscal · citizen reports · economy
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
 /**
- * "CẦN XỬ LÝ" — the pending work, built ONLY from figures the page already reads: overdue tasks,
- * open and overdue incoming documents. "Đề nghị lùi hạn chờ duyệt" is in the spec but the page
- * reads no such figure, and the redesign adds no call.
- *
- * NO TOTAL BADGE: the rows overlap (an overdue document is also an open one), so their sum would
- * count it twice — a false figure on a public authority's screen.
- *
- * "Không có việc tồn đọng" ONLY when every row shown has ANSWERED with 0. A loading or failed row
- * keeps the list: an outage must never read as "nothing pending".
+ * Khối NHIỆM VỤ — what the old "Cần xử lý" and "Tình hình trong kỳ" showed of tasks: in progress,
+ * overdue, completed, suspended, and the on-time rate. The block's title names the module, so each
+ * tile is named by its list's heading alone ("Quá hạn"), as on the receiving list.
  */
-export function AttentionBlock({
-  tasks,
-  incomingDocuments,
+export function TaskBlock({
+  pair,
   windows,
-  showTasks,
-  showDocuments,
+  onReload,
 }: {
-  tasks: SummaryPair<petitions_taskSummaryOut>;
-  incomingDocuments: SummaryPair<documents_incomingSummaryOut>;
+  pair: SummaryPair<petitions_taskSummaryOut>;
   windows: ComparedWindows;
-  showTasks: boolean;
-  showDocuments: boolean;
+  onReload?: () => void;
 }) {
-  const rows: { figure: Figure; title: string; tone: TodoItem["tone"] }[] = [];
-  if (showTasks) {
-    const t = taskFigures(tasks, windows);
-    rows.push({
-      figure: t.overdue,
-      title: withModule("Nhiệm vụ", t.overdue.label),
-      tone: t.overdue.alert === true ? "danger" : "neutral",
-    });
-  }
-  if (showDocuments) {
-    const d = incomingDocumentFigures(incomingDocuments, windows);
-    rows.push({
-      figure: d.open,
-      title: withModule("Văn bản", d.open.label),
-      // amber = "waiting", a real state — only for a number above 0, never for loading or "—"
-      tone:
-        d.open.zero === true || d.open.display === NO_VALUE || d.open.display === LOADING
-          ? "neutral"
-          : "warning",
-    });
-    rows.push({
-      figure: d.overdue,
-      title: withModule("Văn bản", d.overdue.label),
-      tone: d.overdue.alert === true ? "danger" : "neutral",
-    });
-  }
-  const nothingPending = rows.length > 0 && rows.every((r) => r.figure.zero === true);
-  const items: TodoItem[] = rows.map(({ figure, title, tone }) => ({
-    key: figure.id,
-    icon: figure.icon ?? Database,
-    tone,
-    title,
-    detail: figure.note,
-    alert: figure.alert === true,
-    value: <FigureValue id={`${figure.id}-value`} text={figure.display} skeleton="h-6 w-8" />,
-    href: figure.href,
-    linkLabel: drillLabel(figure.label),
-    describedBy: `${figure.id}-value`,
-  }));
+  const t = taskFigures(pair, windows);
+  const figures = [t.inProgress, t.overdue, t.completed, t.suspended, t.onTime];
   return (
-    <SectionCard title="Cần xử lý" icon={BellRing} bodyClassName="p-0">
-      {nothingPending ? (
-        <EmptyState icon={CircleCheck} title="Không có việc tồn đọng" className="py-8" />
-      ) : (
-        <TodoList items={items} />
-      )}
-    </SectionCard>
+    <Panel blockKey="tasks" title="Nhiệm vụ" icon={ListTodo}>
+      <PairErrors pair={pair} noun="nhiệm vụ" onReload={onReload} />
+      <TileGrid count={figures.length}>
+        {figures.map((f) => (
+          <FigureTile key={f.id} figure={f} />
+        ))}
+      </TileGrid>
+    </Panel>
   );
 }
 
 /**
- * "TÌNH HÌNH TRONG KỲ" — the period's figures: tasks in progress, completed, suspended, incoming
- * documents arrived, and the tasks' on-time rate as a bar. The previous-period sentence closes the
- * block as a small caption — it explains every "Kỳ trước" line above it.
+ * Khối VĂN BẢN & ĐƠN THƯ — the prototype's second block ("register"). The incoming-document counts
+ * of the old "Cần xử lý" / "Tình hình trong kỳ" rows live here now, beside the two figures that are
+ * not drawn yet:
+ *   · "Tỷ lệ đúng hạn văn bản" is a NO-SOURCE tile (the register stores no settled instant): a data
+ *     gap, not an unbuilt feature, so it keeps "Chưa có dữ liệu";
+ *   · "Đơn thư trong kỳ" is an unbuilt part — there is no citizen-letter register to count — so it
+ *     is the tile it will be, with the "?" of ADR 0068 §14 (`labels.ts`).
  */
-export function PeriodStatusBlock({
-  tasks,
-  incomingDocuments,
+export function DocumentBlock({
+  pair,
   windows,
-  showTasks,
-  showDocuments,
-  comparisonText,
+  onReload,
 }: {
-  tasks: SummaryPair<petitions_taskSummaryOut>;
-  incomingDocuments: SummaryPair<documents_incomingSummaryOut>;
+  pair: SummaryPair<documents_incomingSummaryOut>;
   windows: ComparedWindows;
-  showTasks: boolean;
-  showDocuments: boolean;
-  /** Replaces the closing sentence — `/bao-cao`'s custom period compares differently (ADR 0053 B2). */
-  comparisonText?: string;
+  onReload?: () => void;
 }) {
-  const t = showTasks ? taskFigures(tasks, windows) : null;
-  const d = showDocuments ? incomingDocumentFigures(incomingDocuments, windows) : null;
+  const d = incomingDocumentFigures(pair, windows);
+  const figures = [d.arrived, d.open, d.overdue];
   return (
-    <SectionCard title="Tình hình trong kỳ" icon={Activity}>
-      <ul className="m-0 grid list-none grid-cols-1 gap-3 p-0 min-[420px]:grid-cols-2">
-        {t !== null && <KpiCell figure={t.inProgress} shown={withModule("Nhiệm vụ", t.inProgress.label)} />}
-        {t !== null && <KpiCell figure={t.completed} shown={withModule("Nhiệm vụ", t.completed.label)} />}
-        {d !== null && <KpiCell figure={d.arrived} shown={withModule("Văn bản", d.arrived.label)} />}
-        {t !== null && (
-          <KpiCell figure={t.suspended} shown={withModule("Nhiệm vụ", t.suspended.label)} tone="neutral" />
-        )}
-      </ul>
-      {t !== null && <RatioRow figure={t.onTime} shown={withModule("Nhiệm vụ", t.onTime.label)} />}
-      <p className="m-0 mt-auto flex items-start gap-1.5 pt-1 text-xs leading-relaxed text-ink-500">
-        <History aria-hidden="true" focusable="false" strokeWidth={1.8} className="mt-px size-3.5 shrink-0" />
-        <span className="min-w-0">{comparisonText ?? comparisonNote(windows)}</span>
-      </p>
-    </SectionCard>
+    <Panel blockKey="documents" title="Văn bản & Đơn thư" icon={Mail}>
+      <PairErrors pair={pair} noun="văn bản đến" onReload={onReload} />
+      <TileGrid count={figures.length + 2}>
+        {figures.map((f) => (
+          <FigureTile key={f.id} figure={f} />
+        ))}
+        <NoSourceTile label="Tỷ lệ đúng hạn văn bản" icon={Target} />
+        <PendingTile label="Đơn thư trong kỳ" info={pendingPart("Đơn thư trong kỳ")} />
+      </TileGrid>
+    </Panel>
   );
 }
 
 /**
- * "VĂN BẢN & ĐƠN THƯ" — the two figures of the spec's document block that are not drawn yet.
- *
- * The on-time rate is a NO-SOURCE row (the register stores no settled instant): a data gap, not an
- * unbuilt feature, so it keeps "Chưa có dữ liệu". "Đơn thư trong kỳ" is an unbuilt part — there is
- * no citizen-letter register to count — so it is the KPI card it will be, with the "?" of ADR 0068
- * §14 (`labels.ts`).
+ * A whole block that is an unbuilt part (Giải ngân ngân sách, Kinh tế & Tài nguyên): it stays at its
+ * place in the grid, with the tiles it will have — "—", no figure, no link, no call — and ONE "?" in
+ * its header that reads the reason from `labels.ts`.
  */
-export function DocumentSourcesBlock() {
+function PendingBlock({
+  blockKey,
+  name,
+  icon,
+}: {
+  blockKey: BlockKey;
+  name: keyof typeof PENDING_BLOCK_METRICS;
+  icon: LucideIcon;
+}) {
+  const metrics = PENDING_BLOCK_METRICS[name];
   return (
-    <SectionCard title="Văn bản & Đơn thư" icon={Mail}>
-      <MetricList>
-        <NoSourceRow label="Tỷ lệ đúng hạn văn bản" />
-      </MetricList>
-      <PendingStatCard info={pendingPart("Đơn thư trong kỳ")} icon={Inbox} />
-    </SectionCard>
+    <Panel blockKey={blockKey} title={name} icon={icon} aside={<PendingMarker info={pendingPart(name)} />}>
+      <TileGrid count={metrics.length}>
+        {metrics.map((label) => (
+          <PendingTile key={label} label={label} />
+        ))}
+      </TileGrid>
+    </Panel>
   );
 }
 
@@ -886,14 +802,14 @@ export function CitizenReportBlock({
     ratingFigure(id, pair.current, period),
   ];
   return (
-    <SectionCard title="Phản ánh người dân" icon={MessageSquareWarning}>
+    <Panel blockKey="citizen-reports" title="Phản ánh người dân" icon={MessageSquareWarning}>
       <PairErrors pair={pair} noun="phản ánh" onReload={onReload} />
-      <MetricList>
+      <TileGrid count={figures.length}>
         {figures.map((f) => (
-          <MetricRow key={f.id} figure={f} />
+          <FigureTile key={f.id} figure={f} />
         ))}
-      </MetricList>
-    </SectionCard>
+      </TileGrid>
+    </Panel>
   );
 }
 
@@ -941,6 +857,7 @@ function indicatorFigure(id: string, c: finance_chiSoRa): Figure {
     href: FISCAL_SCREEN_PATH,
     comparison: null,
     sentence: c.basis_points === null,
+    icon: Target,
   };
 }
 
@@ -950,7 +867,7 @@ function indicatorFigure(id: string, c: finance_chiSoRa): Figure {
  * EVERY WORD AND EVERY "NO VALUE" RULE IS THE THU - CHI SCREEN'S OWN (`features/thu-chi/
  * nhan-thu-chi.ts`, `bang-thu-chi.tsx` `TheChiSoNam`), reused, not re-written: a `null` with the
  * server's reason renders that SENTENCE instead of a figure (ADR 0035 §A), never `0`. The redesign
- * frames it as a muted "no data" line but does NOT replace it with a generic "Chưa có dữ liệu": the
+ * frames it as a full-width tile but does NOT replace it with a generic "Chưa có dữ liệu": the
  * sentence names what the commune has to do, which a sentence guessed by the web cannot.
  *
  * `NHAN_CHENH_LECH` IS THE TEMPORARY LABEL of the balance cell: open question #32 is disputed and
@@ -974,33 +891,33 @@ export function FiscalBlock({
     const shown = result === null ? LOADING : NO_VALUE;
     const fixed = ["Thu đạt dự toán", "Chi đạt dự toán", NHAN_CHENH_LECH];
     return (
-      <SectionCard title={title} icon={Wallet}>
+      <Panel blockKey="fiscal" title={title} icon={Wallet}>
         {result !== null && (
           <LoadError title="Chưa tải được số liệu thu – chi" onReload={onReload}>
             {result.thongBao}
           </LoadError>
         )}
-        <MetricList>
+        <TileGrid count={fixed.length}>
           {fixed.map((label, i) => (
-            <MetricRow
+            <FigureTile
               key={label}
-              figure={{ id: `fiscal-${i}`, label, display: shown, href: FISCAL_SCREEN_PATH, comparison: null }}
+              figure={{ id: `fiscal-${i}`, label, display: shown, href: FISCAL_SCREEN_PATH, comparison: null, icon: Target }}
             />
           ))}
-        </MetricList>
+        </TileGrid>
         <SmallNote>{scope}</SmallNote>
-      </SectionCard>
+      </Panel>
     );
   }
 
   const d = result.duLieu;
   const balanceText = nhanSoTienChiSo(d.balance, "dong");
   return (
-    <SectionCard title={title} icon={Wallet}>
-      <MetricList>
-        <MetricRow figure={indicatorFigure("fiscal-revenue", d.revenue_achievement)} />
-        <MetricRow figure={indicatorFigure("fiscal-expenditure", d.expenditure_achievement)} />
-        <MetricRow
+    <Panel blockKey="fiscal" title={title} icon={Wallet}>
+      <TileGrid count={3 + d.revenue_totals.length}>
+        <FigureTile figure={indicatorFigure("fiscal-revenue", d.revenue_achievement)} />
+        <FigureTile figure={indicatorFigure("fiscal-expenditure", d.expenditure_achievement)} />
+        <FigureTile
           figure={{
             id: "fiscal-balance",
             label: NHAN_CHENH_LECH,
@@ -1008,45 +925,42 @@ export function FiscalBlock({
             href: FISCAL_SCREEN_PATH,
             comparison: null,
             sentence: d.balance.amount === null,
+            icon: Banknote,
           }}
         />
         {d.revenue_totals.map((o) => {
           const reason = lyDoKhongTinh(o.unavailable_reason);
-          const valueId = `fiscal-total-${o.column_id}-value`;
           return (
-            <div key={o.column_id} className="relative flex flex-col gap-1 rounded-lg px-2 py-2 hover:bg-brand-50/60">
-              <dt className="min-w-0 text-[13px] text-ink-700">{o.name}</dt>
-              <dd className="m-0 min-w-0 text-[15px] font-semibold text-ink-900 tabular-nums">
-                <Link
-                  href={FISCAL_SCREEN_PATH}
-                  aria-label={drillLabel(o.name)}
-                  aria-describedby={valueId}
-                  className="text-inherit no-underline after:absolute after:inset-0 after:rounded-lg focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-brand-500"
-                >
-                  <span
-                    id={valueId}
-                    className={cn("[overflow-wrap:anywhere]", reason !== null && "text-[13px] font-medium text-ink-700")}
-                  >
-                    <OTien chu={withUnit(nhanSoTien(o.value, "dong"), o.value !== null)} lyDo={reason} hienLyDo />
-                  </span>
-                </Link>
-              </dd>
-            </div>
+            <FigureTile
+              key={o.column_id}
+              figure={{
+                id: `fiscal-total-${o.column_id}`,
+                label: o.name,
+                display: "",
+                href: FISCAL_SCREEN_PATH,
+                comparison: null,
+                sentence: reason !== null,
+                icon: Banknote,
+              }}
+              value={<OTien chu={withUnit(nhanSoTien(o.value, "dong"), o.value !== null)} lyDo={reason} hienLyDo />}
+            />
           );
         })}
-      </MetricList>
+      </TileGrid>
       <div className="mt-auto flex flex-col gap-1">
         <SmallNote>{scope}</SmallNote>
         <SmallNote>
           {NHAN_CHENH_LECH}: {GHI_CHU_CHENH_LECH}
         </SmallNote>
       </div>
-    </SectionCard>
+    </Panel>
   );
 }
 
 /** Task-type labels by code, or `null` when the catalogue did not load (rows then show the code). */
 export type TaskTypeLabels = ReadonlyMap<string, string> | null;
+
+const URGENT_TITLE = "Cần xử lý ngay";
 
 /**
  * "CẦN XỬ LÝ NGAY" — spec §5, cut down by the user's decision to what may be shown on the most
@@ -1055,6 +969,10 @@ export type TaskTypeLabels = ReadonlyMap<string, string> | null;
  *
  * A FAILED QUEUE IS AN ERROR LINE IN THE LIST, and the "nothing urgent" sentence appears ONLY when
  * every queue answered and none had a row. A 503 from the working calendar must never read as calm.
+ *
+ * THE LIST IS CAPPED IN HEIGHT AND SCROLLS INSIDE THE CELL: dozens of overdue rows must not stretch
+ * the grid's last row into a column of white. The scroller is a labelled, focusable region so a
+ * keyboard can scroll it (the `TableScroll` pattern).
  */
 export function UrgentPanel({
   queue,
@@ -1063,10 +981,9 @@ export function UrgentPanel({
   queue: Loaded<MergedQueue>;
   taskTypeLabels: TaskTypeLabels;
 }) {
-  const title = "Cần xử lý ngay";
   if (queue === null || !queue.ok) {
     return (
-      <SectionCard title={title} icon={Siren}>
+      <Panel blockKey="urgent" title={URGENT_TITLE} icon={Siren}>
         {queue === null ? (
           <div role="status" className="flex flex-col gap-2">
             <span className="an-thi-giac">Đang tải…</span>
@@ -1081,13 +998,14 @@ export function UrgentPanel({
         ) : (
           <LoadError title="Chưa tải được danh sách cần xử lý ngay">{queue.thongBao}</LoadError>
         )}
-      </SectionCard>
+      </Panel>
     );
   }
   const { rows, failures } = queue.duLieu;
   return (
-    <SectionCard
-      title={title}
+    <Panel
+      blockKey="urgent"
+      title={URGENT_TITLE}
       icon={Siren}
       aside={
         <Badge tone={rows.length > 0 ? "danger" : "neutral"} className="tabular-nums">
@@ -1104,33 +1022,40 @@ export function UrgentPanel({
         <EmptyState icon={CircleCheck} title={NOTHING_URGENT} className="py-6" />
       )}
       {rows.length > 0 && (
-        <ul className="-mx-4 m-0 list-none divide-y divide-line p-0">
-          {rows.map((r) => {
-            const category = categoryLabel(r, taskTypeLabels);
-            return (
-              <li
-                key={`${r.module}|${r.code}|${r.kind}`}
-                className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5 text-[13px] text-ink-700"
-              >
-                <Badge tone="info">{MODULE_LABEL[r.module]}</Badge>
-                <span className="font-semibold text-ink-900 tabular-nums [overflow-wrap:anywhere]">{r.code}</span>
-                <span>{kindLabel(r.kind)}</span>
-                {category !== null && <span className="text-ink-500">{category}</span>}
-                <span className="inline-flex items-center gap-1 text-danger-600">
-                  <AlarmClock aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-3.5 shrink-0" />
-                  {missedSinceText(r.missedAt)}
-                </span>
-                {r.critical && (
-                  <Badge tone="danger" className="sm:ml-auto">
-                    Nghiêm trọng
-                  </Badge>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+        <div
+          role="region"
+          aria-label="Danh sách cần xử lý ngay"
+          tabIndex={0}
+          className="-mx-4 max-h-80 overflow-y-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-500"
+        >
+          <ul className="m-0 list-none divide-y divide-line p-0">
+            {rows.map((r) => {
+              const category = categoryLabel(r, taskTypeLabels);
+              return (
+                <li
+                  key={`${r.module}|${r.code}|${r.kind}`}
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5 text-[13px] text-ink-700"
+                >
+                  <Badge tone="info">{MODULE_LABEL[r.module]}</Badge>
+                  <span className="font-semibold text-ink-900 tabular-nums [overflow-wrap:anywhere]">{r.code}</span>
+                  <span>{kindLabel(r.kind)}</span>
+                  {category !== null && <span className="text-ink-500">{category}</span>}
+                  <span className="inline-flex items-center gap-1 text-danger-600">
+                    <AlarmClock aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-3.5 shrink-0" />
+                    {missedSinceText(r.missedAt)}
+                  </span>
+                  {r.critical && (
+                    <Badge tone="danger" className="sm:ml-auto">
+                      Nghiêm trọng
+                    </Badge>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
-    </SectionCard>
+    </Panel>
   );
 }
 
@@ -1168,7 +1093,7 @@ export type DashboardData = BlocksData & {
   readonly fetchedAt: number;
 };
 
-/** What the blocks under the context row draw — shared by `/tong-quan` and `/bao-cao`. */
+/** What the blocks draw — shared by `/tong-quan` and `/bao-cao`. */
 export type BlocksData = {
   readonly windows: ComparedWindows;
   readonly tasks: SummaryPair<petitions_taskSummaryOut>;
@@ -1201,20 +1126,53 @@ export function blockVisibility(permissions: readonly string[]): BlockVisibility
   };
 }
 
+export const DASHBOARD_TITLE = "Tổng quan điều hành";
+
+/**
+ * The page header, prototype frame: title; "Kỳ …: … · tính đến …" under it; on the right the period
+ * buttons, then the unbuilt PDF/XLSX/PPTX and Trình chiếu (disabled, "?").
+ *
+ * `context` absent = the account cannot read the page (`report.read`), or its session is still being
+ * read: the title and the disabled actions only — a disabled control with no data behind it reveals
+ * nothing — and no period, because there is no figure for it to describe.
+ *
+ * NO "Tính lại ngay", NO "số liệu cũ" badge (ADR 0053): the counts are live at the owning service.
+ */
+export function DashboardHeader({
+  context,
+}: {
+  context?: { windows: PeriodWindows; fetchedAt: number; onPeriodChange: (k: PeriodKind) => void };
+}) {
+  return (
+    <PageHeader
+      icon={LayoutDashboard}
+      title={DASHBOARD_TITLE}
+      subtitle={
+        context === undefined ? undefined : (
+          <span className="inline-flex items-center gap-1.5">
+            <Clock aria-hidden="true" focusable="false" strokeWidth={1.8} />
+            {`${periodMetaLabel(context.windows)} · tính đến ${formatDateTime(context.fetchedAt)}`}
+          </span>
+        )
+      }
+      actions={
+        <>
+          {context !== undefined && (
+            <PeriodPicker kind={context.windows.kind} onChange={context.onPeriodChange} />
+          )}
+          <DashboardHeaderActions />
+        </>
+      }
+    />
+  );
+}
+
 /**
  * The page body. A figure whose keys the account lacks is NOT RENDERED — not drawn as 0, not drawn
  * as "—": a figure the account may not read must not be implied either way.
  *
- * `Kinh tế & Tài nguyên` has no source data and no read key of its own in wave 1; it opens nothing,
- * so it shows under the page gate (`report.read`) alone. It and `Giải ngân ngân sách` are unbuilt
- * parts, drawn as cards with the "?" of ADR 0068 §14 (`labels.ts`) — no figure, no link, no call.
- * `Giải ngân ngân sách` stays under `budget.read`: a placeholder must not reveal a block the account
- * would not see once it is built.
- *
- * THE PAGE TITLE IS NOT HERE: `app/tong-quan/page.tsx` draws the `PageHeader` outside the
- * `report.read` gate, so an account without the key still reads which page it is on. The context
- * row sits directly under it — period and "cập nhật" on the left, aligned with the title; the
- * picker on the right.
+ * Under the grid, ONE line says what "kỳ trước" means — it explains every comparison caption of
+ * every block above, so it belongs to none of them. Drawn only when a compared block is shown.
  */
 export function DashboardView({
   data,
@@ -1226,97 +1184,61 @@ export function DashboardView({
   onPeriodChange: (k: PeriodKind) => void;
 }) {
   const reload = () => onPeriodChange(data.windows.kind);
+  const compared = visible.tasks || visible.incomingDocuments || visible.citizenReports;
   return (
     <>
-      <div className="-mt-3 mb-5 flex flex-wrap items-center gap-x-4 gap-y-3 sm:pl-16">
-        <p className="m-0 flex min-w-0 flex-1 basis-72 flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-ink-500 [&_svg]:size-3.5 [&_svg]:shrink-0">
-          <span className="inline-flex items-center gap-1.5">
-            <CalendarDays aria-hidden="true" focusable="false" strokeWidth={1.8} />
-            {periodMetaLabel(data.windows)}
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <RefreshCw aria-hidden="true" focusable="false" strokeWidth={1.8} />
-            Cập nhật {formatDateTime(data.fetchedAt)}
-          </span>
-        </p>
-        <PeriodPicker kind={data.windows.kind} onChange={onPeriodChange} />
-      </div>
-
+      <DashboardHeader context={{ windows: data.windows, fetchedAt: data.fetchedAt, onPeriodChange }} />
       <DashboardBlocks data={data} visible={visible} onReload={reload} />
+      {compared && (
+        <p className="m-0 mt-4 flex items-start gap-1.5 text-xs leading-relaxed text-ink-500">
+          <History aria-hidden="true" focusable="false" strokeWidth={1.8} className="mt-px size-3.5 shrink-0" />
+          <span className="min-w-0">{comparisonNote(data.windows)}</span>
+        </p>
+      )}
     </>
   );
 }
 
 /**
- * Every block under the context row, in `/tong-quan`'s order. `/bao-cao` draws the SAME blocks from
- * the same loader, so the two pages cannot show two numbers for one period (spec 13 §10) — minus
- * "Cần xử lý ngay" (`urgent={false}`, spec 13 §1).
+ * The grid — ONE grid, 1 column, 2 from 1024px, 3 from 1536px (the prototype's `lg` / `2xl`), the six
+ * blocks in the prototype's fixed order, then "Cần xử lý ngay". A block whose key the account lacks
+ * is not rendered and the rest close up; the ORDER of what remains never changes.
  *
- * `onReload` re-asks the period on screen; `comparisonText` replaces the period block's closing
- * sentence when the comparison is not the named-period one.
+ * NO `auto-rows-fr`: the cells of one row stretch to that row's tallest, as a grid does, but a row
+ * of short blocks is not stretched to the tallest row of the page.
+ *
+ * `/bao-cao` draws the SAME blocks from the same loader, so the two pages cannot show two numbers for
+ * one period (spec 13 §10) — minus "Cần xử lý ngay" (`urgent={false}`, spec 13 §1).
+ *
+ * `Kinh tế & Tài nguyên` has no source data and no read key of its own in wave 1; it opens nothing,
+ * so it shows under the page gate (`report.read`) alone. `Giải ngân ngân sách` stays under
+ * `budget.read`: a placeholder must not reveal a block the account would not see once it is built.
  */
 export function DashboardBlocks({
   data,
   visible,
   onReload,
   urgent = true,
-  comparisonText,
 }: {
   data: BlocksData;
   visible: BlockVisibility;
   onReload: () => void;
   urgent?: boolean;
-  comparisonText?: string;
 }) {
   const anyQueue = visible.tasks || visible.incomingDocuments || visible.citizenReports;
-  const anyRow1 = visible.tasks || visible.incomingDocuments;
-  const reload = onReload;
   return (
-    <>
-      {anyRow1 && (
-        <div className="mb-4 flex flex-col gap-3">
-          {visible.tasks && <PairErrors pair={data.tasks} noun="nhiệm vụ" onReload={reload} />}
-          {visible.incomingDocuments && (
-            <PairErrors pair={data.incomingDocuments} noun="văn bản đến" onReload={reload} />
-          )}
-        </div>
+    <div data-dashboard-grid="" className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+      {visible.tasks && <TaskBlock pair={data.tasks} windows={data.windows} onReload={onReload} />}
+      {visible.incomingDocuments && (
+        <DocumentBlock pair={data.incomingDocuments} windows={data.windows} onReload={onReload} />
       )}
-
-      {anyRow1 && (
-        <div className="mb-4 grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-          <AttentionBlock
-            tasks={data.tasks}
-            incomingDocuments={data.incomingDocuments}
-            windows={data.windows}
-            showTasks={visible.tasks}
-            showDocuments={visible.incomingDocuments}
-          />
-          <PeriodStatusBlock
-            tasks={data.tasks}
-            incomingDocuments={data.incomingDocuments}
-            windows={data.windows}
-            showTasks={visible.tasks}
-            showDocuments={visible.incomingDocuments}
-            comparisonText={comparisonText}
-          />
-        </div>
+      {visible.budget && <PendingBlock blockKey="budget" name="Giải ngân ngân sách" icon={Banknote} />}
+      {visible.budget && <FiscalBlock result={data.fiscal} year={data.fiscalYear} onReload={onReload} />}
+      {visible.citizenReports && (
+        <CitizenReportBlock pair={data.citizenReports} windows={data.windows} onReload={onReload} />
       )}
-
-      {urgent && anyQueue && (
-        <div className="mb-4">
-          <UrgentPanel queue={data.queue} taskTypeLabels={data.taskTypeLabels} />
-        </div>
-      )}
-
-      <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-4">
-        {visible.citizenReports && (
-          <CitizenReportBlock pair={data.citizenReports} windows={data.windows} onReload={reload} />
-        )}
-        {visible.incomingDocuments && <DocumentSourcesBlock />}
-        {visible.budget && <PendingSection info={pendingPart("Giải ngân ngân sách")} titleAs="h2" />}
-        {visible.budget && <FiscalBlock result={data.fiscal} year={data.fiscalYear} onReload={reload} />}
-        <PendingSection info={pendingPart("Kinh tế & Tài nguyên")} titleAs="h2" />
-      </div>
-    </>
+      <PendingBlock blockKey="economy" name="Kinh tế & Tài nguyên" icon={Store} />
+      {urgent && anyQueue && <UrgentPanel queue={data.queue} taskTypeLabels={data.taskTypeLabels} />}
+    </div>
   );
 }
