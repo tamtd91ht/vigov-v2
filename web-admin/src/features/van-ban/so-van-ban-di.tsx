@@ -12,15 +12,13 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 
-import { ChonNam } from "@/components/chon-nam";
 import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
-import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Card, CardFooter } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Field } from "@/components/ui/field";
-import { FilterBar } from "@/components/ui/filter-bar";
 import { IconButton } from "@/components/ui/icon-button";
+import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
 import { Notice } from "@/components/ui/notice";
 import {
   TRANG_DAU,
@@ -66,11 +64,18 @@ import {
   ChonThuTu,
   GOI_Y_TIM_DI,
   OTimVanBan,
+  RegisterYearSelect,
   doiLocVeTrangDau,
   sapXepTheoThuTu,
   type MaThuTu,
 } from "./loc-so-van-ban";
-import { Glyph, REGISTER_TABLE_SCROLLER, RegisterRowsSkeleton } from "./document-ui";
+import {
+  Glyph,
+  REGISTER_TABLE_SCROLLER,
+  RegisterRowsSkeleton,
+  plainFrame,
+  type RegisterFrame,
+} from "./document-ui";
 import { DieuHuongTrang } from "./so-van-ban-den";
 import { guiGoVanBanDi } from "./thao-tac-van-ban";
 
@@ -93,6 +98,11 @@ import { guiGoVanBanDi } from "./thao-tac-van-ban";
  * ─────────────────────────────────────────────────────────────────────────────────────────
  *
  * CỔNG QUYỀN BỌC PHẦN GHI, KHÔNG BỌC BẢNG — cùng khuôn và cùng lý do với sổ văn bản đến.
+ *
+ * CHANGED 06/10/2026 (ADR 0068 lần 5): the prototype has no outgoing register, so this tab takes the
+ * incoming tab's composition — `Cấp số văn bản đi` in the page header, one filter row without a "Bộ
+ * lọc" panel, the table in a card, and the issue / edit / removal forms as centred dialogs. Its row
+ * actions stay on the row (Sửa + "⋯"): there is no detail view to move them into.
  */
 
 /* ---- trạng thái ---------------------------------------------------------------------------- */
@@ -146,7 +156,7 @@ function banTuDong(vb: documents_vanBanDiRa): BanNhapDi {
 
 /* ---- vỏ đọc dữ liệu ------------------------------------------------------------------------ */
 
-export function SoVanBanDi() {
+export function SoVanBanDi({ frame = plainFrame }: { frame?: RegisterFrame } = {}) {
   const [namGoc] = useState(namTheoDongHoMay);
   const [nam, datNam] = useState(namGoc);
   const [loaiLoc, datLoaiLoc] = useState("");
@@ -331,6 +341,7 @@ export function SoVanBanDi() {
           />
         )
       }
+      frame={frame}
     />
   );
 }
@@ -358,6 +369,7 @@ export function ManSoVanBanDi({
   nganXep,
   diToiTrang,
   form,
+  frame = plainFrame,
 }: {
   kq: KetQua<page_Result_documents_vanBanDiRa> | null;
   /** Re-read after a failed load ("Tải lại"). Absent → the error state draws no button. */
@@ -380,109 +392,90 @@ export function ManSoVanBanDi({
   nganXep: NganXepConTro;
   diToiTrang: (toi: NganXepConTro) => void;
   form: ReactNode;
+  frame?: RegisterFrame;
 }) {
   // "Nothing at all" vs "nothing under these filters" (spec §8b), read off the props already held.
   const filtered = nam !== namGoc || loaiLoc !== "" || tim !== "" || coTrangTruoc(nganXep);
 
-  return (
+  const headerActions = coQuyenGhi ? (
+    <Button type="button" variant="primary" icon={<Glyph icon={Plus} />} aria-haspopup="dialog" onClick={thaoTac.them}>
+      {NUT_CAP_SO}
+    </Button>
+  ) : null;
+
+  const body = (
     <section
       className="man-van-ban mt-0 flex min-w-0 flex-col gap-4 [&>*]:my-0"
       aria-labelledby="tieu-de-so-di"
     >
-      <Card>
-      <CardHeader className="justify-between">
-        <div className="min-w-0 flex-1 basis-64">
-          <CardTitle as="h2" id="tieu-de-so-di" className="flex items-center gap-2">
-            <Glyph icon={FileOutput} className="size-[18px] shrink-0 text-brand-600" />
-            Sổ văn bản đi
-          </CardTitle>
-          <p className="m-0 mt-1 text-[13px] text-ink-500">{DAN_SO_DI}</p>
-        </div>
-        {coQuyenGhi && (
-          <Button type="button" variant="primary" icon={<Glyph icon={Plus} />} onClick={thaoTac.them}>
-            {NUT_CAP_SO}
-          </Button>
-        )}
-      </CardHeader>
+      <h2 id="tieu-de-so-di" className="an-thi-giac">
+        Sổ văn bản đi
+      </h2>
+      {/* One line about the register, where the prototype's petition tab puts its own. */}
+      <p className="m-0 max-w-3xl text-[13px] text-ink-500">{DAN_SO_DI}</p>
 
-      {/* Messages and the open form, in the order they always had; no room taken when empty. */}
-      <div className="flex min-w-0 flex-col gap-3 border-b border-line px-4 py-3 empty:hidden [&>*]:my-0">
-        {thieuQuyenGhi && (
-          <Notice tone="neutral">
-            Tài khoản của bạn không có quyền cấp số, sửa hay gỡ văn bản đi. Sổ dưới đây vẫn xem được.
-          </Notice>
-        )}
+      {thieuQuyenGhi && (
+        <Notice tone="neutral">
+          Tài khoản của bạn không có quyền cấp số, sửa hay gỡ văn bản đi. Sổ dưới đây vẫn xem được.
+        </Notice>
+      )}
+      {cauDaXong !== "" && (
+        <p role="status" className="flex items-center gap-2 text-sm font-medium text-success-600">
+          <Glyph icon={CircleCheck} className="size-[18px] shrink-0" />
+          {cauDaXong}
+        </p>
+      )}
+      {loiNgoaiForm !== "" && (
+        <p className="thong-bao-loi" role="alert">
+          {loiNgoaiForm}
+        </p>
+      )}
 
-        {cauDaXong !== "" && (
-          <p role="status" className="flex items-center gap-2 text-sm font-medium text-success-600">
-            <Glyph icon={CircleCheck} className="size-[18px] shrink-0" />
-            {cauDaXong}
-          </p>
-        )}
-        {loiNgoaiForm !== "" && (
-          <p className="thong-bao-loi" role="alert">
-            {loiNgoaiForm}
-          </p>
-        )}
-
-        {form}
+      {/* ONE filter row, the incoming tab's shape: search, type, the register's year, the order. */}
+      <div id="outgoing-document-filters" className="flex min-w-0 flex-wrap items-center gap-2.5 [&>*]:my-0">
+        <OTimVanBan id="tim-van-ban-di" goiY={GOI_Y_TIM_DI} tim={tim} datTim={datTim} />
+        <Field label="Loại văn bản" htmlFor="loc-loai-di" kind="select" hideLabel grow="auto">
+          <select id="loc-loai-di" value={loaiLoc} onChange={(e) => datLoaiLoc(e.target.value)}>
+            <option value="">Tất cả loại</option>
+            {traLoai.pha === "xong" &&
+              [...traLoai.ten].map(([ma, ten]) => (
+                <option key={ma} value={ma}>
+                  {ten}
+                </option>
+              ))}
+          </select>
+        </Field>
+        <RegisterYearSelect id="nam-so-van-ban-di" year={nam} anchorYear={namGoc} onYear={datNam} />
+        <ChonThuTu id="thu-tu-so-di" thuTu={thuTu} datThuTu={datThuTu} />
       </div>
 
-      {/* Search first (owner, 02/10/2026), then the register's year; type and order sit behind
-          "Bộ lọc". The count is of those two not at their default ("" = all, "" = number order). */}
-      <FilterBar
-        id="outgoing-document-filters"
-        className="m-0 border-b border-line px-4 py-3.5"
-        moreActiveCount={[loaiLoc !== "", thuTu !== ""].filter(Boolean).length}
-        primary={
-          <>
-            <OTimVanBan id="tim-van-ban-di" goiY={GOI_Y_TIM_DI} tim={tim} datTim={datTim} />
-            <ChonNam id="nam-so-van-ban-di" nhan="Năm của sổ" nam={nam} namGoc={namGoc} datNam={datNam} />
-          </>
-        }
-        more={
-          <>
-            <p className="chon-hang-muc">
-              <label htmlFor="loc-loai-di">Loại văn bản</label>{" "}
-              <select id="loc-loai-di" value={loaiLoc} onChange={(e) => datLoaiLoc(e.target.value)}>
-                <option value="">Tất cả loại</option>
-                {traLoai.pha === "xong" &&
-                  [...traLoai.ten].map(([ma, ten]) => (
-                    <option key={ma} value={ma}>
-                      {ten}
-                    </option>
-                  ))}
-              </select>
-            </p>
-
-            <ChonThuTu id="thu-tu-so-di" thuTu={thuTu} datThuTu={datThuTu} />
-          </>
-        }
-      />
-
-      <BangVanBanDi
-        kq={kq}
-        traLoai={traLoai}
-        coQuyenGhi={coQuyenGhi}
-        thaoTac={thaoTac}
-        soCuTruoc={thuTu === "so-tang"}
-        filtered={filtered}
-        onReload={onReload}
-      />
-
-      {kq !== null && kq.ok && (
-        <CardFooter className="justify-end">
-          <DieuHuongTrang
-            nganXep={nganXep}
-            conTroTiep={kq.duLieu.next_cursor}
-            conTrangSau={kq.duLieu.has_more}
-            diToiTrang={diToiTrang}
-          />
-        </CardFooter>
-      )}
+      <Card>
+        <BangVanBanDi
+          kq={kq}
+          traLoai={traLoai}
+          coQuyenGhi={coQuyenGhi}
+          thaoTac={thaoTac}
+          soCuTruoc={thuTu === "so-tang"}
+          filtered={filtered}
+          onReload={onReload}
+        />
+        {kq !== null && kq.ok && (
+          <CardFooter className="justify-end">
+            <DieuHuongTrang
+              nganXep={nganXep}
+              conTroTiep={kq.duLieu.next_cursor}
+              conTrangSau={kq.duLieu.has_more}
+              diToiTrang={diToiTrang}
+            />
+          </CardFooter>
+        )}
       </Card>
+
+      {form}
     </section>
   );
+
+  return frame(headerActions, body);
 }
 
 /**
@@ -635,6 +628,10 @@ export function removeOutgoingQuestion(number: string): string {
   return `Gỡ văn bản đi số ${number} khỏi sổ?`;
 }
 
+/** Heading id of the issue / edit / removal dialog — its accessible name. */
+const OUTGOING_FORM_TITLE_ID = "tieu-de-bieu-mau-van-ban-di";
+
+/** The three forms as centred dialogs (500px), the incoming register's shape. */
 export function BieuMauVanBanDi({
   dangMo,
   ban,
@@ -659,6 +656,9 @@ export function BieuMauVanBanDi({
     e.preventDefault();
     onGui();
   };
+  const dismiss = () => {
+    if (!dangGui) onHuy();
+  };
 
   const refusal =
     loi !== "" ? (
@@ -670,61 +670,59 @@ export function BieuMauVanBanDi({
   if (dangMo.kieu === "go") {
     const question = removeOutgoingQuestion(nhanSoVaoSo(dangMo.vb.number, dangMo.vb.year));
     return (
-      <ConfirmDialog
-        as="form"
-        tone="danger"
-        icon={Trash2}
-        title={question}
-        aria-label={question}
-        onSubmit={submit}
-        actions={
-          <>
+      <ModalDialog titleId={OUTGOING_FORM_TITLE_ID} onDismiss={dismiss}>
+        <form className="flex min-h-0 flex-col gap-4" aria-label={question} onSubmit={submit}>
+          <ModalDialogHeader titleId={OUTGOING_FORM_TITLE_ID} title={question} />
+          <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
+            {/* CÂU QUAN TRỌNG NHẤT, đứng ĐÚNG CHỖ sắp bấm gỡ. */}
+            <Notice tone="legal" icon={Trash2}>
+              {CANH_BAO_GO_KHONG_TRA_SO}
+            </Notice>
+            <Field
+              label={O_LY_DO_GO}
+              htmlFor="o-ly-do-go-di"
+              grow="auto"
+              hint={<span id="giai-thich-ly-do-go-di">{GIAI_THICH_LY_DO_GO}</span>}
+            >
+              <input
+                id="o-ly-do-go-di"
+                name="lyDoGo"
+                required
+                value={ban.lyDoGo}
+                onChange={(e) => datBan({ ...ban, lyDoGo: e.target.value })}
+                aria-invalid={loi === LOI_THIEU_LY_DO_GO}
+                aria-describedby="giai-thich-ly-do-go-di"
+              />
+            </Field>
+            {refusal}
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button type="button" variant="outline" onClick={onHuy} disabled={dangGui}>
+              {NUT_HUY}
+            </Button>
             <Button type="submit" variant="danger" disabled={dangGui} aria-busy={dangGui || undefined}>
               <BusyLabel busy={dangGui} label={NUT_XAC_NHAN_GO} busyText="Đang gỡ…" />
             </Button>
-            <Button type="button" variant="secondary" onClick={onHuy} disabled={dangGui}>
-              {NUT_HUY}
-            </Button>
-          </>
-        }
-      >
-        <p className="m-0">{CANH_BAO_GO_KHONG_TRA_SO}</p>
-        <Field
-          label={O_LY_DO_GO}
-          htmlFor="o-ly-do-go-di"
-          grow="auto"
-          hint={<span id="giai-thich-ly-do-go-di">{GIAI_THICH_LY_DO_GO}</span>}
-        >
-          <input
-            id="o-ly-do-go-di"
-            name="lyDoGo"
-            required
-            value={ban.lyDoGo}
-            onChange={(e) => datBan({ ...ban, lyDoGo: e.target.value })}
-            aria-invalid={loi === LOI_THIEU_LY_DO_GO}
-            aria-describedby="giai-thich-ly-do-go-di"
-          />
-        </Field>
-        {refusal}
-      </ConfirmDialog>
+          </div>
+        </form>
+      </ModalDialog>
     );
   }
 
   const tieuDe = TIEU_DE_DI[dangMo.kieu];
 
   return (
-    <Card as="form" aria-label={tieuDe} onSubmit={submit}>
-      <CardHeader className="justify-between">
-        <CardTitle as="h3">{tieuDe}</CardTitle>
-        {dangMo.kieu === "sua" && (
-          <p className="m-0 text-[13px] text-ink-500 tabular-nums">
-            Văn bản đi số {nhanSoVaoSo(dangMo.vb.number, dangMo.vb.year)}
-          </p>
-        )}
-      </CardHeader>
+    <ModalDialog titleId={OUTGOING_FORM_TITLE_ID} onDismiss={dismiss}>
+      <form className="flex min-h-0 flex-col gap-4" aria-label={tieuDe} onSubmit={submit}>
+        <ModalDialogHeader
+          titleId={OUTGOING_FORM_TITLE_ID}
+          title={tieuDe}
+          description={
+            dangMo.kieu === "sua" ? `Văn bản đi số ${nhanSoVaoSo(dangMo.vb.number, dangMo.vb.year)}` : undefined
+          }
+        />
 
-      {/* Labels above, 40px controls, two columns from 640px (spec §6.3, §6.5). */}
-      <div className="grid min-w-0 gap-4 p-4 sm:grid-cols-2">
+        <div className="grid min-h-0 min-w-0 gap-3.5 overflow-y-auto sm:grid-cols-2">
           <Field label={O_NGAY_VAN_BAN} htmlFor="o-ngay-van-ban-di" grow="auto">
             <input
               id="o-ngay-van-ban-di"
@@ -742,7 +740,7 @@ export function BieuMauVanBanDi({
               value={ban.loaiVanBan}
               onChange={(e) => datBan({ ...ban, loaiVanBan: e.target.value })}
             >
-              <option value="">— Chọn loại văn bản —</option>
+              <option value="">— Chọn loại —</option>
               {traLoai.pha === "xong" &&
                 [...traLoai.ten].map(([ma, ten]) => (
                   <option key={ma} value={ma}>
@@ -760,7 +758,7 @@ export function BieuMauVanBanDi({
             <textarea
               id="o-trich-yeu-di"
               name="trichYeu"
-              rows={3}
+              rows={2}
               className="py-2"
               value={ban.trichYeu}
               onChange={(e) => datBan({ ...ban, trichYeu: e.target.value })}
@@ -793,17 +791,17 @@ export function BieuMauVanBanDi({
           )}
 
           {refusal}
-      </div>
+        </div>
 
-      {/* Same order as before (submit, then cancel), right-aligned (spec §6.5). */}
-      <CardFooter className="justify-end">
-        <Button type="submit" variant="primary" disabled={dangGui} aria-busy={dangGui || undefined}>
-          <BusyLabel busy={dangGui} label={NUT_LUU} busyText="Đang lưu…" />
-        </Button>
-        <Button type="button" variant="secondary" onClick={onHuy} disabled={dangGui}>
-          {NUT_HUY}
-        </Button>
-      </CardFooter>
-    </Card>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onHuy} disabled={dangGui}>
+            {NUT_HUY}
+          </Button>
+          <Button type="submit" variant="primary" disabled={dangGui} aria-busy={dangGui || undefined}>
+            <BusyLabel busy={dangGui} label={NUT_LUU} busyText="Đang lưu…" />
+          </Button>
+        </div>
+      </form>
+    </ModalDialog>
   );
 }

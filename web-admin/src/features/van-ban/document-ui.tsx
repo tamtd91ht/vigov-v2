@@ -112,6 +112,22 @@ export function RegisterRowsSkeleton({ rows = 5 }: { rows?: number }) {
   );
 }
 
+/**
+ * How a register puts its header buttons and its body on the page. The prototype draws the create
+ * button in the PAGE header, above the tab bar (`DocumentWorkspace.tsx`), while the button's state —
+ * which dialog is open, the `document.create` gate — lives in the register. So the page passes this
+ * function down and the register calls it with its own buttons and body: the page decides where they
+ * go, the register keeps its state. Without a page (tests, a register on its own) it is `plainFrame`.
+ */
+export type RegisterFrame = (headerActions: ReactNode, body: ReactNode) => ReactNode;
+
+export const plainFrame: RegisterFrame = (headerActions, body) => (
+  <>
+    {headerActions}
+    {body}
+  </>
+);
+
 /** Decorative icon inside a button or a line of text: hidden from assistive tech, never focusable. */
 export function Glyph({ icon: Icon, className }: { icon: LucideIcon; className?: string }) {
   return <Icon aria-hidden="true" focusable="false" strokeWidth={1.8} className={className} />;

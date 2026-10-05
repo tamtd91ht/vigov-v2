@@ -257,7 +257,7 @@ describe("màn sổ văn bản đi", () => {
 
     expect(html).toContain('role="search"');
     expect(html).toContain(`placeholder="${GOI_Y_TIM_DI}"`);
-    expect(GOI_Y_TIM_DI).toMatch(/Trích yếu/);
+    expect(GOI_Y_TIM_DI).toMatch(/trích yếu/i);
     expect(GOI_Y_TIM_DI).toMatch(/nơi nhận/);
     expect(GOI_Y_TIM_DI).not.toMatch(/ký hiệu/);
   });
@@ -265,5 +265,45 @@ describe("màn sổ văn bản đi", () => {
   it("có ô thứ tự; chú thích bảng nói đúng thứ tự đang xem", () => {
     expect(veMan(true, false)).toMatch(/<caption[^>]*>[^<]*số mới nhất trước/);
     expect(veMan(true, false, "so-tang")).toMatch(/<caption[^>]*>[^<]*số cũ nhất trước/);
+  });
+});
+
+describe("sổ văn bản đi theo khuôn tab văn bản đến (ADR 0068 lần 5)", () => {
+  it("cấp số, sửa, gỡ mở thành hộp thoại", () => {
+    for (const html of [
+      veForm({ kieu: "them", khoaChongTrung: "k" }),
+      veForm({ kieu: "sua", vb: dong() }),
+      veForm({ kieu: "go", vb: dong() }),
+    ]) {
+      expect(html).toContain('<dialog aria-labelledby="tieu-de-bieu-mau-van-ban-di"');
+    }
+  });
+
+  it("một hàng lọc, không có nút “Bộ lọc”", () => {
+    const html = renderToStaticMarkup(
+      <ManSoVanBanDi
+        kq={trang([dong()])}
+        nam={2026}
+        namGoc={2026}
+        datNam={() => {}}
+        loaiLoc=""
+        datLoaiLoc={() => {}}
+        tim=""
+        datTim={() => {}}
+        thuTu=""
+        datThuTu={() => {}}
+        traLoai={TRA_LOAI}
+        coQuyenGhi
+        thieuQuyenGhi={false}
+        thaoTac={KHONG_LAM_GI}
+        cauDaXong=""
+        loiNgoaiForm=""
+        nganXep={TRANG_DAU}
+        diToiTrang={() => {}}
+        form={null}
+      />,
+    );
+    expect(html).toContain('id="outgoing-document-filters"');
+    expect(html).not.toMatch(/>\s*Bộ lọc\s*</);
   });
 });

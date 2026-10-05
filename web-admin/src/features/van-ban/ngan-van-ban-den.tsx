@@ -1,13 +1,13 @@
 "use client";
 
-import { CircleCheck, FileText, LockKeyhole, X } from "lucide-react";
-import { useCallback, type KeyboardEvent, type ReactNode } from "react";
+import { CircleCheck, FileText, LockKeyhole, Pencil, Send, Trash2, X } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
 import { IconButton } from "@/components/ui/icon-button";
+import { LargeDialog } from "@/components/ui/large-dialog";
 import { Notice } from "@/components/ui/notice";
 import { traTen, type BangTraDanhMuc } from "@/features/cau-hinh/tra-danh-muc";
 import { BusyLabel } from "@/features/danh-ba/busy-label";
@@ -23,14 +23,23 @@ import {
   DAN_CHUYEN_XU_LY,
   DANG_TAI_CHI_TIET,
   DANG_TAI_LICH_SU,
+  ISSUED_ON_FIELD_LABEL,
   LICH_SU_RONG,
   LOI_THIEU_LY_DO_CHUYEN,
   NUT_DONG_CHI_TIET,
+  NUT_GO,
+  NUT_SUA,
   NUT_XAC_NHAN_CHUYEN,
   O_CAN_BO_XU_LY,
   O_CO_QUAN_BAN_HANH,
   O_DEN_BO_PHAN,
+  O_DO_KHAN,
+  O_LOAI_VAN_BAN,
   O_LY_DO_CHUYEN,
+  REFERENCE_FIELD_LABEL,
+  ROUTING_PERSON_PLACEHOLDER,
+  ROUTING_REASON_PLACEHOLDER,
+  SUMMARY_FIELD_LABEL,
   TIEU_DE_DONG_THOI_GIAN,
   TIEU_DE_KHOI_CHUYEN,
   nhanBoPhanDangGiu,
@@ -38,33 +47,37 @@ import {
   nhanDoKhan,
   nhanLoaiVanBan,
   nhanNgayCoThe,
+  nhanSoVaoSo,
   nhanTieuDeVanBanDen,
   nhanTrangThai,
   nhanTuBoPhan,
   trangThaiHanVanBan,
   type BanChuyen,
 } from "./nhan-van-ban";
-import { StatusChangeRow } from "./document-pending";
+import { RaiseTaskButton, StatusChangeRow } from "./document-pending";
 import { DeadlineMark, DocumentStatusBadge, Glyph, UrgencyBadge } from "./document-ui";
 
+/** Heading id of the detail — the dialog's accessible name. */
+export const INCOMING_DETAIL_TITLE_ID = "tieu-de-ngan-van-ban-den";
+
 /**
- * Ngăn chi tiết MỘT văn bản đến — `docs/ui-ux/05-van-ban-don-thu.md §3.5`, phần áp được cho văn bản
- * đến: tiêu đề, trích yếu, hàng chip, các ô thông tin, dòng thời gian chuyển tiếp CHỈ ĐỌC, và khối
- * "Chuyển cho bộ phận khác".
+ * Ngăn chi tiết MỘT văn bản đến — the PROTOTYPE's right-hand drawer (`DocumentDetailDrawer.tsx`,
+ * ADR 0068 lần 5), drawn in the shared `LargeDialog` (pinned right, full height, Esc and ✕ close it):
  *
- * ─────────────────────────────────────────────────────────────────────────────────────────
- * MỘT KHỐI TRONG LUỒNG TRANG, KHÔNG PHẢI LỚP PHỦ — cùng khuôn `khoi-chi-tiet` mà ngăn chi tiết nhiệm
- * vụ và phiếu phản ánh đang dùng, vì ứng dụng chưa có thành phần lớp phủ nào để dùng lại. Vì không
- * phải hộp thoại nên KHÔNG có bẫy tiêu điểm: bẫy tiêu điểm trong một vùng không che phần còn lại của
- * trang là nhốt người dùng bàn phím khỏi một trang họ vẫn nhìn thấy. Thay vào đó: mở thì tiêu điểm
- * sang tiêu đề ngăn, `Esc` khi tiêu điểm ở trong ngăn thì đóng, đóng thì tiêu điểm về nút "Xem chi
- * tiết" của đúng dòng ấy (bên gọi làm việc ấy — nó biết dòng nào).
- * ─────────────────────────────────────────────────────────────────────────────────────────
+ *   header      number · arrival date (the dialog's NAME), the summary large, the issuing body;
+ *               Sửa · Gỡ khỏi sổ (`document.create`) · ✕ on the right
+ *   status      the status strip — four disabled "chuyển sang" chips with one "?", then the
+ *               current status, type and urgency
+ *   facts       three cells: Hạn xử lý · Bộ phận đang giữ · Người vào sổ
+ *   body        left: trích yếu, six figures, `Chuyển thành nhiệm vụ` ("?"), the routing block;
+ *               right (from 768px; under the left column below): the routing timeline
+ *
+ * THE DIALOG'S NAME IS THE NUMBER AND THE DATE, NEVER THE SUMMARY: the prototype's title is the
+ * summary, but a name goes into the accessibility tree, and a summary is free text that may name a
+ * citizen (rule 3, forbidden #4). The summary is still the large line under it.
  *
  * BỐN NÚT ĐỔI TRẠNG THÁI LÀ CHỖ GIỮ VÔ HIỆU mang dấu "?" (`StatusChangeRow`, ADR 0068 §14): bộ trạng
- * thái riêng của văn bản đến đã chốt (30/09/2026) nhưng máy chủ chưa có tuyến đổi trạng thái. KHÔNG
- * CÓ "CHUYỂN THÀNH NHIỆM VỤ", có chủ ý: nó cần một hợp đồng giữa hai dịch vụ chưa có, và không nằm
- * trong bảng vị trí đã duyệt.
+ * thái riêng của văn bản đến đã chốt (30/09/2026) nhưng máy chủ chưa có tuyến đổi trạng thái.
  *
  * KHÔNG CÓ NÚT NÀO SỬA HAY XOÁ MỘT DÒNG LỊCH SỬ: bảng lịch sử chỉ-thêm ở tầng CSDL (trigger
  * `lich_su_chuyen_chi_them`) và hợp đồng không có tuyến nào làm việc ấy (luật 7, cấm #5).
@@ -81,10 +94,12 @@ export function NganVanBanDen({
   loi,
   dangGui,
   cauDaXong,
-  tieuDiemChuyen,
   onGui,
   onDong,
   danhBa = null,
+  coQuyenGhi = false,
+  onSua,
+  onGo,
 }: {
   /** `null` = đang đọc. Lỗi hiện NGUYÊN câu máy chủ — 404 là một câu chung cho mọi ca. */
   vb: KetQua<documents_vanBanDenRa> | null;
@@ -100,8 +115,6 @@ export function NganVanBanDen({
   loi: string;
   dangGui: boolean;
   cauDaXong: string;
-  /** Mở từ nút "Chuyển xử lý" của dòng: tiêu điểm vào ô bộ phận thay vì tiêu đề. */
-  tieuDiemChuyen: boolean;
   onGui: () => void;
   onDong: () => void;
   /**
@@ -109,169 +122,203 @@ export function NganVanBanDen({
    * `null` = not loaded or failed: every staff cell then shows the bare `CB-…` code (VBD-07).
    */
   danhBa?: DanhBaTheoMa | null;
+  /** `document.create` — draws Sửa and Gỡ khỏi sổ in the header. UX only: the server checks again. */
+  coQuyenGhi?: boolean;
+  onSua?: (vb: documents_vanBanDenRa) => void;
+  onGo?: (vb: documents_vanBanDenRa) => void;
 }) {
-  const coVanBan = vb !== null && vb.ok;
-  const tieuDe = coVanBan
-    ? nhanTieuDeVanBanDen(vb.duLieu.number, vb.duLieu.year, vb.duLieu.received_date)
-    : "Chi tiết văn bản đến";
-
-  // TIÊU ĐIỂM LÚC MỞ, bằng ref gọi lại ỔN ĐỊNH. Một hàm viết thẳng trong JSX là hàm MỚI mỗi lần
-  // vẽ, React gọi lại nó ở mỗi lần vẽ, và tiêu điểm bị giật về tiêu đề sau mỗi phím gõ vào ô lý do.
-  // Khi mở để chuyển xử lý, ô bộ phận nhận tiêu điểm thay — xem `KhoiChuyenXuLy`.
-  const tieuDiemTieuDe = useCallback(
-    (el: HTMLHeadingElement | null) => {
-      if (el !== null && !tieuDiemChuyen) el.focus();
-    },
-    [tieuDiemChuyen],
-  );
-
-  function banPhim(e: KeyboardEvent<HTMLElement>) {
-    if (e.key === "Escape") {
-      e.stopPropagation();
-      onDong();
-    }
-  }
+  const doc = vb !== null && vb.ok ? vb.duLieu : null;
+  const tieuDe = doc !== null ? nhanTieuDeVanBanDen(doc.number, doc.year, doc.received_date) : "Chi tiết văn bản đến";
 
   return (
-    <Card as="section" aria-labelledby="tieu-de-ngan-van-ban-den" onKeyDown={banPhim}>
-      <CardHeader className="justify-between">
-        <h3
-          id="tieu-de-ngan-van-ban-den"
-          className="m-0 min-w-0 flex-1 text-base leading-snug font-semibold text-ink-900 tabular-nums"
-          tabIndex={-1}
-          ref={tieuDiemTieuDe}
-        >
-          {tieuDe}
-        </h3>
+    <LargeDialog titleId={INCOMING_DETAIL_TITLE_ID} onDismiss={onDong}>
+      <header className="flex shrink-0 items-start gap-3 border-b border-solid border-line bg-surface px-5 py-4">
+        <div className="min-w-0 flex-1">
+          <h2
+            id={INCOMING_DETAIL_TITLE_ID}
+            tabIndex={-1}
+            className="m-0 text-xs leading-snug font-semibold text-ink-500 tabular-nums"
+          >
+            {tieuDe}
+          </h2>
+          {doc !== null && (
+            <>
+              <p className="m-0 mt-0.5 text-base leading-snug font-bold break-words text-ink-900">{doc.summary}</p>
+              <p className="m-0 mt-1 text-[13px] text-ink-500">{doc.issuing_body}</p>
+            </>
+          )}
+        </div>
+        {doc !== null && coQuyenGhi && (
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              icon={<Glyph icon={Pencil} />}
+              aria-haspopup="dialog"
+              onClick={() => onSua?.(doc)}
+            >
+              {NUT_SUA}
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              icon={<Glyph icon={Trash2} />}
+              aria-haspopup="dialog"
+              onClick={() => onGo?.(doc)}
+            >
+              {NUT_GO}
+            </Button>
+          </div>
+        )}
         <IconButton type="button" label={NUT_DONG_CHI_TIET} onClick={onDong}>
           <X aria-hidden="true" />
         </IconButton>
-      </CardHeader>
+      </header>
 
-      <CardContent className="flex min-w-0 flex-col gap-4 [&>*]:my-0">
-        {vb === null && (
-          <>
-            <p role="status" className="an-thi-giac">
-              {DANG_TAI_CHI_TIET}
-            </p>
-            {/* First-load placeholder (spec §8b), local: a shared Skeleton is being built elsewhere. */}
-            <div aria-hidden="true" className="flex flex-col gap-3">
-              <span className="h-4 w-3/4 rounded bg-line motion-safe:animate-pulse" />
-              <span className="h-[26px] w-64 max-w-full rounded-full bg-line motion-safe:animate-pulse" />
-              <span className="h-3 w-1/2 rounded bg-line motion-safe:animate-pulse" />
-              <span className="h-3 w-2/3 rounded bg-line motion-safe:animate-pulse" />
-            </div>
-          </>
-        )}
-        {vb !== null && !vb.ok && (
-          <p className="thong-bao-loi" role="alert">
+      {vb === null && (
+        <div className="p-5">
+          <p role="status" className="an-thi-giac">
+            {DANG_TAI_CHI_TIET}
+          </p>
+          {/* First-load placeholder (spec §8b). */}
+          <div aria-hidden="true" className="flex flex-col gap-3">
+            <span className="h-4 w-3/4 rounded bg-line motion-safe:animate-pulse" />
+            <span className="h-[26px] w-64 max-w-full rounded-full bg-line motion-safe:animate-pulse" />
+            <span className="h-3 w-1/2 rounded bg-line motion-safe:animate-pulse" />
+          </div>
+        </div>
+      )}
+      {vb !== null && !vb.ok && (
+        <div className="p-5">
+          <p className="thong-bao-loi m-0" role="alert">
             {vb.thongBao}
           </p>
-        )}
+        </div>
+      )}
 
-        {coVanBan && (
-          <>
-            <ThongTinVanBanDen
-              vb={vb.duLieu}
-              bayGio={bayGio}
-              traLoai={traLoai}
-              traBoPhan={traBoPhan}
-              danhBa={danhBa}
-            />
+      {doc !== null && (
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          {/* The prototype's status strip. Disabled placeholder; the current status follows. */}
+          <div className="flex shrink-0 flex-col gap-2.5 border-b border-solid border-line bg-surface px-5 py-3">
+            <StatusChangeRow />
+            <p className="m-0 flex flex-wrap items-center gap-2" aria-label="Trạng thái và thuộc tính">
+              <DocumentStatusBadge status={doc.status}>{nhanTrangThai(doc.status)}</DocumentStatusBadge>{" "}
+              <Badge tone="neutral" icon={FileText}>
+                {nhanLoaiVanBan(traTen(traLoai, doc.document_type))}
+              </Badge>{" "}
+              <UrgencyBadge urgency={doc.urgency ?? ""}>{nhanDoKhan(doc.urgency ?? "")}</UrgencyBadge>
+            </p>
+          </div>
 
-            <DongThoiGianChuyen lichSu={lichSu} traBoPhan={traBoPhan} danhBa={danhBa} />
+          <FactsRow doc={doc} bayGio={bayGio} traBoPhan={traBoPhan} danhBa={danhBa} />
 
-            {cauDaXong !== "" && (
-              <p role="status" className="flex items-center gap-2 text-sm font-medium text-success-600">
-                <Glyph icon={CircleCheck} className="size-[18px] shrink-0" />
-                {cauDaXong}
-              </p>
-            )}
+          <div className="flex min-w-0 flex-1 flex-col md:flex-row">
+            <div className="flex min-w-0 flex-1 flex-col gap-4 bg-surface-muted px-5 py-4 [&>*]:my-0">
+              <section aria-labelledby="tieu-de-trich-yeu-den" className="flex flex-col gap-2">
+                <h3 id="tieu-de-trich-yeu-den" className="m-0 text-[13px] font-bold text-ink-900">
+                  {SUMMARY_FIELD_LABEL}
+                </h3>
+                <p className="m-0 rounded-[10px] border border-solid border-line bg-surface px-3 py-2.5 text-[15px] leading-relaxed whitespace-pre-line text-ink-900">
+                  {doc.summary}
+                </p>
+              </section>
 
-            {coQuyenChuyen && (
-              <KhoiChuyenXuLy
-                ban={ban}
-                datBan={datBan}
-                traBoPhan={traBoPhan}
-                loi={loi}
-                dangGui={dangGui}
-                tieuDiem={tieuDiemChuyen}
-                onGui={onGui}
-              />
-            )}
-          </>
-        )}
-      </CardContent>
-    </Card>
+              <dl className="m-0 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+                <Figure label={REFERENCE_FIELD_LABEL}>
+                  {doc.reference_no === undefined || doc.reference_no === "" ? "Không ghi" : doc.reference_no}
+                </Figure>
+                <Figure label={ISSUED_ON_FIELD_LABEL}>{nhanNgayCoThe(doc.document_date ?? "")}</Figure>
+                <Figure label={O_LOAI_VAN_BAN}>{nhanLoaiVanBan(traTen(traLoai, doc.document_type))}</Figure>
+                <Figure label={O_CO_QUAN_BAN_HANH}>{doc.issuing_body}</Figure>
+                <Figure label="Số đến">{nhanSoVaoSo(doc.number, doc.year)}</Figure>
+                <Figure label={O_DO_KHAN}>{nhanDoKhan(doc.urgency ?? "")}</Figure>
+              </dl>
+
+              <div>
+                <RaiseTaskButton />
+              </div>
+
+              {cauDaXong !== "" && (
+                <p role="status" className="flex items-center gap-2 text-sm font-medium text-success-600">
+                  <Glyph icon={CircleCheck} className="size-[18px] shrink-0" />
+                  {cauDaXong}
+                </p>
+              )}
+
+              {coQuyenChuyen && (
+                <KhoiChuyenXuLy
+                  ban={ban}
+                  datBan={datBan}
+                  traBoPhan={traBoPhan}
+                  danhBa={danhBa}
+                  loi={loi}
+                  dangGui={dangGui}
+                  onGui={onGui}
+                />
+              )}
+            </div>
+
+            {/* The timeline in its own column on the right, as in the prototype: "where has this
+                document been" is what the handler looks at most. Under the left column below 768px. */}
+            <aside className="shrink-0 border-t border-solid border-line bg-surface px-4 py-3 md:w-[24rem] md:border-t-0 md:border-l">
+              <DongThoiGianChuyen lichSu={lichSu} traBoPhan={traBoPhan} danhBa={danhBa} />
+            </aside>
+          </div>
+        </div>
+      )}
+    </LargeDialog>
   );
 }
 
-/** Trích yếu, hàng chip, và các ô thông tin. Xuất ra để bài kiểm vẽ được từng phần. */
-export function ThongTinVanBanDen({
-  vb,
+/** The prototype's three titled cells under the status strip. */
+function FactsRow({
+  doc,
   bayGio,
-  traLoai,
   traBoPhan,
-  danhBa = null,
+  danhBa,
 }: {
-  vb: documents_vanBanDenRa;
+  doc: documents_vanBanDenRa;
   bayGio: Date;
-  traLoai: BangTraDanhMuc;
   traBoPhan: BangTraDanhMuc;
-  /** Staff directory by code; `null` = show the bare code. */
-  danhBa?: DanhBaTheoMa | null;
+  danhBa: DanhBaTheoMa | null;
 }) {
   // SUY RA LÚC VẼ, không lưu (luật 10, bất biến 3) — cùng hàm cột "Hạn xử lý" của bảng dùng.
-  const han = trangThaiHanVanBan(vb.due_at, bayGio);
-  const soKyHieu = vb.reference_no === undefined || vb.reference_no === "" ? "Không ghi" : vb.reference_no;
-
+  const han = trangThaiHanVanBan(doc.due_at, bayGio);
   return (
-    <>
-      <p className="m-0 text-[15px] leading-relaxed text-ink-900">{vb.summary}</p>
-
-      {/* Spec §3.5 order: header text, then the status row, then the chips. Disabled placeholder. */}
-      <StatusChangeRow />
-
-      <p className="m-0 flex flex-wrap items-center gap-2" aria-label="Trạng thái và thuộc tính">
-        <DocumentStatusBadge status={vb.status}>{nhanTrangThai(vb.status)}</DocumentStatusBadge>{" "}
-        <Badge tone="neutral" icon={FileText}>
-          {nhanLoaiVanBan(traTen(traLoai, vb.document_type))}
-        </Badge>{" "}
-        <UrgencyBadge urgency={vb.urgency ?? ""}>{nhanDoKhan(vb.urgency ?? "")}</UrgencyBadge>
-      </p>
-
-      {/* Label–value pairs, label above on a phone, beside from 640px (spec §8b "khối trạng thái"). */}
-      <dl className="m-0 grid min-w-0 gap-x-4 gap-y-3 rounded-xl border border-line bg-surface-muted p-4 sm:grid-cols-[11rem_minmax(0,1fr)]">
-        <Pair label={O_CO_QUAN_BAN_HANH}>{vb.issuing_body}</Pair>
-
-        <Pair label="Số, ký hiệu · ngày văn bản">
-          <span className="tabular-nums">
-            {soKyHieu} · {nhanNgayCoThe(vb.document_date ?? "")}
-          </span>
-        </Pair>
-
-        <Pair label="Bộ phận đang giữ">
-          {nhanBoPhanDangGiu(traTen(traBoPhan, vb.holding_unit ?? ""))} ·{" "}
-          {nhanCanBo(vb.assignee ?? "", danhBa)}
-        </Pair>
-
-        <Pair label="Hạn xử lý">
-          <DeadlineMark deadline={han} />
-        </Pair>
-
-        <Pair label="Người vào sổ">{staffNameWithCode(vb.created_by, danhBa)}</Pair>
-      </dl>
-    </>
+    <div className="grid shrink-0 grid-cols-1 gap-px border-b border-solid border-line bg-line sm:grid-cols-3">
+      <Fact label="Hạn xử lý">
+        <DeadlineMark deadline={han} />
+        <p className="m-0 mt-0.5 text-xs text-ink-500">Hệ thống ấn định lúc vào sổ</p>
+      </Fact>
+      <Fact label="Bộ phận đang giữ">
+        <p className="m-0 text-sm text-ink-900">{nhanBoPhanDangGiu(traTen(traBoPhan, doc.holding_unit ?? ""))}</p>
+        <p className="m-0 mt-0.5 text-xs text-ink-500">{nhanCanBo(doc.assignee ?? "", danhBa)}</p>
+      </Fact>
+      <Fact label="Người vào sổ">
+        <p className="m-0 text-sm text-ink-900">{staffNameWithCode(doc.created_by, danhBa)}</p>
+        <p className="m-0 mt-0.5 text-xs text-ink-500 tabular-nums">{nhanThoiDiem(doc.created_at)}</p>
+      </Fact>
+    </div>
   );
 }
 
-/** One `<dt>`/`<dd>` pair of the panel's field list. */
-function Pair({ label, children }: { label: string; children: ReactNode }) {
+function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <>
-      <dt className="text-xs font-semibold text-ink-500 sm:pt-0.5">{label}</dt>
-      <dd className="m-0 min-w-0 text-sm break-words text-ink-900">{children}</dd>
-    </>
+    <div className="min-w-0 bg-surface px-4 py-2.5">
+      <p className="m-0 mb-1 text-[11px] font-bold tracking-wide text-ink-500 uppercase">{label}</p>
+      {children}
+    </div>
+  );
+}
+
+function Figure({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[11px] font-semibold tracking-wide text-ink-500 uppercase">{label}</dt>
+      <dd className="m-0 mt-0.5 text-sm font-semibold break-words text-ink-900">{children}</dd>
+    </div>
   );
 }
 
@@ -279,8 +326,9 @@ function Pair({ label, children }: { label: string; children: ReactNode }) {
  * Dòng thời gian chuyển tiếp — CHỈ ĐỌC, GIỮ NGUYÊN THỨ TỰ MÁY CHỦ TRẢ (cũ nhất trước).
  *
  * Không sắp lại ở client: thứ tự là thứ tự các lần chuyển thật, và máy chủ đã xếp theo `routed_at`.
- * Người chuyển và cán bộ được giao hiện `Họ tên (CB-…)`, or the bare code when the directory does not
- * know it — see `nhanCanBo`.
+ * The prototype's line order: from → to, then time · who, then the reason; our status and "Phụ
+ * trách" stay as two more lines. Người chuyển và cán bộ được giao hiện `Họ tên (CB-…)`, or the bare
+ * code when the directory does not know it — see `nhanCanBo`.
  */
 export function DongThoiGianChuyen({
   lichSu,
@@ -292,10 +340,10 @@ export function DongThoiGianChuyen({
   danhBa?: DanhBaTheoMa | null;
 }) {
   return (
-    <div aria-labelledby="tieu-de-dong-thoi-gian" className="flex min-w-0 flex-col gap-3">
-      <h4 id="tieu-de-dong-thoi-gian" className="m-0 text-sm font-semibold text-ink-900">
+    <section aria-labelledby="tieu-de-dong-thoi-gian" className="flex min-w-0 flex-col gap-2.5">
+      <h3 id="tieu-de-dong-thoi-gian" className="m-0 text-[13px] font-bold text-ink-900">
         {TIEU_DE_DONG_THOI_GIAN}
-      </h4>
+      </h3>
       {lichSu === null && (
         <p role="status" className="m-0 text-[13px] text-ink-500">
           {DANG_TAI_LICH_SU}
@@ -307,18 +355,17 @@ export function DongThoiGianChuyen({
         </p>
       )}
       {lichSu !== null && lichSu.ok && lichSu.duLieu.items.length === 0 && (
-        <p className="m-0 text-[13px] text-ink-500 italic">{LICH_SU_RONG}</p>
+        <p className="m-0 text-[13px] text-ink-500">{LICH_SU_RONG}</p>
       )}
       {lichSu !== null && lichSu.ok && lichSu.duLieu.items.length > 0 && (
-        // A plain vertical list (oldest first, as the server ordered it): a rail on the left, one
-        // dot per routing. Read-only — no control on any line (rule 7, forbidden #5).
-        <ol className="m-0 flex list-none flex-col p-0">
+        // A rail on the left, one dot per routing. Read-only — no control on any line (rule 7, #5).
+        <ol className="relative m-0 flex list-none flex-col gap-4 border-l border-solid border-line p-0 pl-5">
           {lichSu.duLieu.items.map((d) => (
             <DongLichSu key={d.id} d={d} traBoPhan={traBoPhan} danhBa={danhBa} />
           ))}
         </ol>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -332,33 +379,37 @@ function DongLichSu({
   danhBa: DanhBaTheoMa | null;
 }) {
   return (
-    <li className="relative flex min-w-0 flex-col gap-1.5 border-l-2 border-line pb-4 pl-5 text-sm text-ink-700 last:pb-0 [&>p]:m-0">
+    <li className="relative flex min-w-0 flex-col gap-1 text-[13px] text-ink-700 [&>p]:m-0">
       <span
         aria-hidden="true"
-        className="absolute top-1 -left-[7px] size-3 rounded-full border-2 border-surface bg-brand-500"
+        className="absolute top-1 -left-[26px] size-2.5 rounded-full border-2 border-solid border-brand-500 bg-surface"
       />
-      <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <strong className="font-semibold text-ink-900">{staffNameWithCode(d.routed_by, danhBa)}</strong> ·{" "}
-        <time dateTime={d.routed_at} className="text-ink-500 tabular-nums">
+      <p className="font-semibold text-ink-900">
+        {nhanTuBoPhan(traTen(traBoPhan, d.from_unit ?? ""))} → {nhanBoPhanDangGiu(traTen(traBoPhan, d.to_unit))}
+      </p>
+      <p className="text-xs text-ink-500">
+        <time dateTime={d.routed_at} className="tabular-nums">
           {nhanThoiDiem(d.routed_at)}
-        </time>
+        </time>{" "}
+        · <strong className="font-medium text-ink-700">{staffNameWithCode(d.routed_by, danhBa)}</strong>
       </p>
       <p>
         <DocumentStatusBadge status={d.status}>{nhanTrangThai(d.status)}</DocumentStatusBadge>
       </p>
-      <p>
-        {nhanTuBoPhan(traTen(traBoPhan, d.from_unit ?? ""))} →{" "}
-        {nhanBoPhanDangGiu(traTen(traBoPhan, d.to_unit))}
-      </p>
-      <p className="text-ink-500">Phụ trách: {nhanCanBo(d.assignee ?? "", danhBa)}</p>
+      <p className="text-xs text-ink-500">Phụ trách: {nhanCanBo(d.assignee ?? "", danhBa)}</p>
       <p className="break-words text-ink-900">{d.reason}</p>
     </li>
   );
 }
 
 /**
- * Khối "Chuyển cho bộ phận khác" — chuyển từ biểu mẫu trong trang của sổ vào đây, giữ nguyên ba ô
- * và phép kiểm (`guiChuyenVanBan` ở `thao-tac-van-ban.ts`).
+ * Khối "Chuyển cho bộ phận khác" — the prototype's routing box (unit, person, reason, `Chuyển và ghi
+ * vết`), giữ nguyên phép kiểm (`guiChuyenVanBan` ở `thao-tac-van-ban.ts`).
+ *
+ * THE PERSON IS PICKED BY NAME from the staff directory the register already read once — the value
+ * sent is still the staff CODE (`CB-…`), the only thing the contract's `assignee` accepts. Directory
+ * not loaded (still reading, or refused): the code is typed instead, as before, so routing never
+ * waits on the directory.
  *
  * `reason` LÀ CHỮ TỰ DO CÓ THỂ NHẮC TÊN MỘT CÔNG DÂN: nó chỉ sống trong trạng thái React và trong
  * thân `POST`, không vào log, URL, `localStorage` hay một thuộc tính nào (luật 3).
@@ -367,101 +418,121 @@ export function KhoiChuyenXuLy({
   ban,
   datBan,
   traBoPhan,
+  danhBa = null,
   loi,
   dangGui,
-  tieuDiem,
   onGui,
 }: {
   ban: BanChuyen;
   datBan: (b: BanChuyen) => void;
   traBoPhan: BangTraDanhMuc;
+  danhBa?: DanhBaTheoMa | null;
   loi: string;
   dangGui: boolean;
-  tieuDiem: boolean;
   onGui: () => void;
 }) {
-  // Ổn định vì cùng lý do với tiêu đề ngăn: không giật tiêu điểm khỏi ô đang gõ.
-  const tieuDiemO = useCallback(
-    (el: HTMLSelectElement | null) => {
-      if (el !== null && tieuDiem) el.focus();
-    },
-    [tieuDiem],
-  );
-
   return (
-    <form
-      className="flex min-w-0 flex-col gap-4 border-t border-line pt-4"
-      aria-labelledby="tieu-de-khoi-chuyen"
-      onSubmit={(e) => {
-        e.preventDefault();
-        onGui();
-      }}
-    >
-      <h4 id="tieu-de-khoi-chuyen" className="m-0 text-sm font-semibold text-ink-900">
+    <section aria-labelledby="tieu-de-khoi-chuyen" className="flex min-w-0 flex-col gap-2.5 border-t border-solid border-line pt-4">
+      <h3 id="tieu-de-khoi-chuyen" className="m-0 text-[13px] font-bold text-ink-900">
         {TIEU_DE_KHOI_CHUYEN}
-      </h4>
-      <Notice tone="legal" icon={LockKeyhole}>
-        {DAN_CHUYEN_XU_LY}
-      </Notice>
+      </h3>
+      <form
+        className="flex min-w-0 flex-col gap-3 rounded-[10px] border border-solid border-line bg-surface p-3"
+        aria-labelledby="tieu-de-khoi-chuyen"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onGui();
+        }}
+      >
+        <Notice tone="legal" icon={LockKeyhole}>
+          {DAN_CHUYEN_XU_LY}
+        </Notice>
 
-      <div className="grid min-w-0 gap-4 sm:grid-cols-2">
-      <Field label={O_DEN_BO_PHAN} htmlFor="o-den-bo-phan" kind="select" grow="auto">
-        <select
-          id="o-den-bo-phan"
-          name="denBoPhan"
-          value={ban.denBoPhan}
-          ref={tieuDiemO}
-          onChange={(e) => datBan({ ...ban, denBoPhan: e.target.value })}
-        >
-          <option value="">— Chọn bộ phận —</option>
-          {traBoPhan.pha === "xong" &&
-            [...traBoPhan.ten].map(([id, ten]) => (
-              <option key={id} value={id}>
-                {ten}
-              </option>
-            ))}
-        </select>
-      </Field>
+        <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+          <Field label={O_DEN_BO_PHAN} htmlFor="o-den-bo-phan" kind="select" grow="auto">
+            <select
+              id="o-den-bo-phan"
+              name="denBoPhan"
+              value={ban.denBoPhan}
+              onChange={(e) => datBan({ ...ban, denBoPhan: e.target.value })}
+            >
+              <option value="">— Chọn bộ phận —</option>
+              {traBoPhan.pha === "xong" &&
+                [...traBoPhan.ten].map(([id, ten]) => (
+                  <option key={id} value={id}>
+                    {ten}
+                  </option>
+                ))}
+            </select>
+          </Field>
 
-      <Field label={O_CAN_BO_XU_LY} htmlFor="o-can-bo-xu-ly" grow="auto">
-        {/* Ô CHỮ, KHÔNG PHẢI Ô CHỌN CÁN BỘ: hợp đồng nhận `assignee` là MÃ CÁN BỘ (`CB-00123`),
-            và danh bạ cán bộ đòi khoá `admin.user` — một người có `document.route` chưa chắc
-            đọc được danh bạ. Vẽ một ô chọn rỗng cho họ là vẽ một ô không bao giờ dùng được. */}
-        <input
-          id="o-can-bo-xu-ly"
-          name="canBoXuLy"
-          value={ban.canBoXuLy}
-          autoComplete="off"
-          onChange={(e) => datBan({ ...ban, canBoXuLy: e.target.value })}
-          placeholder="Để trống nếu để bộ phận tự phân công"
-        />
-      </Field>
-      </div>
+          {danhBa !== null ? (
+            <Field label={O_CAN_BO_XU_LY} htmlFor="o-can-bo-xu-ly" kind="select" grow="auto">
+              <select
+                id="o-can-bo-xu-ly"
+                name="canBoXuLy"
+                value={ban.canBoXuLy}
+                onChange={(e) => datBan({ ...ban, canBoXuLy: e.target.value })}
+              >
+                <option value="">{ROUTING_PERSON_PLACEHOLDER}</option>
+                {[...danhBa.values()].map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.full_name}
+                    {c.position ? ` — ${c.position}` : ""}
+                  </option>
+                ))}
+                {/* A code typed or kept that the directory does not list still shows as itself. */}
+                {ban.canBoXuLy !== "" && !danhBa.has(ban.canBoXuLy) && (
+                  <option value={ban.canBoXuLy}>{ban.canBoXuLy}</option>
+                )}
+              </select>
+            </Field>
+          ) : (
+            <Field label={O_CAN_BO_XU_LY} htmlFor="o-can-bo-xu-ly" grow="auto">
+              <input
+                id="o-can-bo-xu-ly"
+                name="canBoXuLy"
+                value={ban.canBoXuLy}
+                autoComplete="off"
+                onChange={(e) => datBan({ ...ban, canBoXuLy: e.target.value })}
+                placeholder="Mã cán bộ — để trống nếu để bộ phận tự phân công"
+              />
+            </Field>
+          )}
+        </div>
 
-      <Field label={O_LY_DO_CHUYEN} htmlFor="o-ly-do-chuyen" grow="auto">
-        <input
-          id="o-ly-do-chuyen"
-          name="lyDoChuyen"
-          required
-          autoComplete="off"
-          value={ban.lyDo}
-          onChange={(e) => datBan({ ...ban, lyDo: e.target.value })}
-          aria-invalid={loi === LOI_THIEU_LY_DO_CHUYEN}
-        />
-      </Field>
+        <Field label={O_LY_DO_CHUYEN} htmlFor="o-ly-do-chuyen" grow="auto">
+          <input
+            id="o-ly-do-chuyen"
+            name="lyDoChuyen"
+            required
+            autoComplete="off"
+            value={ban.lyDo}
+            placeholder={ROUTING_REASON_PLACEHOLDER}
+            onChange={(e) => datBan({ ...ban, lyDo: e.target.value })}
+            aria-invalid={loi === LOI_THIEU_LY_DO_CHUYEN}
+          />
+        </Field>
 
-      {/* CÂU TỪ CHỐI RA NGUYÊN VĂN, dù từ phép kiểm ở client hay từ máy chủ. */}
-      {loi !== "" && (
-        <p className="thong-bao-loi m-0" role="alert">
-          {loi}
-        </p>
-      )}
+        {/* CÂU TỪ CHỐI RA NGUYÊN VĂN, dù từ phép kiểm ở client hay từ máy chủ. */}
+        {loi !== "" && (
+          <p className="thong-bao-loi m-0" role="alert">
+            {loi}
+          </p>
+        )}
 
-      <div className="flex justify-end">
-        <Button type="submit" variant="primary" disabled={dangGui} aria-busy={dangGui || undefined}>
-          <BusyLabel busy={dangGui} label={NUT_XAC_NHAN_CHUYEN} busyText="Đang chuyển…" />
-        </Button>
-      </div>
-    </form>
+        <div>
+          <Button
+            type="submit"
+            variant="primary"
+            icon={<Glyph icon={Send} />}
+            disabled={dangGui}
+            aria-busy={dangGui || undefined}
+          >
+            <BusyLabel busy={dangGui} label={NUT_XAC_NHAN_CHUYEN} busyText="Đang chuyển…" />
+          </Button>
+        </div>
+      </form>
+    </section>
   );
 }

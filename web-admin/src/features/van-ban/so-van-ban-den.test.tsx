@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import { TRANG_DAU } from "@/features/cau-hinh/ngan-xep-con-tro";
 import type { BangTraDanhMuc } from "@/features/cau-hinh/tra-danh-muc";
 import type { KetQua } from "@/lib/api/goi";
@@ -13,7 +12,14 @@ import type {
 } from "@/lib/api/schema.gen";
 
 import { GOI_Y_TIM_DEN, type MaThuTu } from "./loc-so-van-ban";
-import { CANH_BAO_GO_KHONG_TRA_SO, NHAN_DUONG_TOI_CAU_HINH } from "./nhan-van-ban";
+import {
+  CANH_BAO_GO_KHONG_TRA_SO,
+  INTAKE_TITLE,
+  MORE_FIELDS_TOGGLE,
+  NHAN_DUONG_TOI_CAU_HINH,
+  OVERDUE_ONLY_LABEL,
+  SAVE_AND_NEXT_LABEL,
+} from "./nhan-van-ban";
 import {
   BAN_DEN_TRONG,
   BangVanBanDen,
@@ -40,7 +46,6 @@ const KHONG_LAM_GI: ThaoTacDen = {
   them: () => {},
   sua: () => {},
   go: () => {},
-  chuyen: () => {},
   xem: () => {},
 };
 
@@ -81,21 +86,9 @@ function trang(items: documents_vanBanDenRa[]): KetQua<page_Result_documents_van
   return { ok: true, duLieu: { items, next_cursor: "", has_more: false } };
 }
 
-function veBang(
-  kq: KetQua<page_Result_documents_vanBanDenRa> | null,
-  bayGio: Date,
-  quyen: { ghi: boolean; chuyen: boolean } = { ghi: true, chuyen: true },
-) {
+function veBang(kq: KetQua<page_Result_documents_vanBanDenRa> | null, bayGio: Date) {
   return renderToStaticMarkup(
-    <BangVanBanDen
-      kq={kq}
-      bayGio={bayGio}
-      traLoai={TRA_LOAI}
-      traBoPhan={TRA_BO_PHAN}
-      coQuyenGhi={quyen.ghi}
-      coQuyenChuyen={quyen.chuyen}
-      thaoTac={KHONG_LAM_GI}
-    />,
+    <BangVanBanDen kq={kq} bayGio={bayGio} traBoPhan={TRA_BO_PHAN} thaoTac={KHONG_LAM_GI} />,
   );
 }
 
@@ -123,91 +116,32 @@ describe("bảng sổ văn bản đến — quá hạn SUY RA lúc vẽ", () => 
   });
 });
 
-/**
- * THE ROW "⋯" MENU. A closed Radix menu renders no items to the HTML, so a string check on the
- * markup cannot see "Gỡ khỏi sổ" or "Chuyển xử lý" once they live there — and a `not.toContain` on
- * them would go green for the wrong reason. These read the menu's `items` prop from the UNRENDERED
- * tree instead (`BangVanBanDen` has no hooks, so it can be called as a plain function), the same way
- * `danh-ba/bang-lien-he.test.tsx` reads its menu.
- */
-type MenuProps = { label: string; items: readonly ActionMenuItem[] };
-function menus(perm: { ghi: boolean; chuyen: boolean }, actions: ThaoTacDen = KHONG_LAM_GI): MenuProps[] {
-  const out: MenuProps[] = [];
-  const walk = (n: unknown): void => {
-    if (Array.isArray(n)) return n.forEach(walk);
-    if (typeof n !== "object" || n === null || !("props" in n)) return;
-    const el = n as { type: unknown; props: Record<string, unknown> };
-    if (el.type === ActionMenu) out.push(el.props as unknown as MenuProps);
-    walk(el.props.children);
-  };
-  walk(
-    BangVanBanDen({
-      kq: trang([dong()]),
-      bayGio: TRUOC_HAN,
-      traLoai: TRA_LOAI,
-      traBoPhan: TRA_BO_PHAN,
-      coQuyenGhi: perm.ghi,
-      coQuyenChuyen: perm.chuyen,
-      thaoTac: actions,
-    }),
-  );
-  return out;
-}
-const words = (items: readonly ActionMenuItem[]) => items.map((it) => (it.kind === "item" ? it.label : "—"));
+describe("bảng theo prototype — bảy cột, không cột thao tác (ADR 0068 lần 5)", () => {
+  it("đúng bảy cột của prototype, đúng thứ tự", () => {
+    const html = veBang(trang([dong()]), TRUOC_HAN);
+    const heads = [...html.matchAll(/<th scope="col">([^<]*)<\/th>/g)].map((m) => m[1]);
+    expect(heads).toEqual(["Số đến", "Ngày đến", "Cơ quan ban hành", "Trích yếu", "Đang giữ", "Hạn xử lý", "Trạng thái"]);
+  });
 
-describe("cổng quyền bọc phần GHI, không bọc bảng", () => {
-  it("thiếu cả hai quyền ghi: bảng VẪN hiện đủ dòng, chỉ mất cụm nút", () => {
-    // Đây là quy tắc của cả màn: ẩn bảng là giao diện từ chối điều máy chủ đang phục vụ. Tuyến đọc
-    // đòi `document.read` và máy chủ đã trả 200 — nghĩa là tài khoản này ĐƯỢC xem quyển sổ.
-    const html = veBang(trang([dong()]), TRUOC_HAN, { ghi: false, chuyen: false });
-
-    expect(html).toContain("Về việc rà soát hồ sơ cán bộ");
-    expect(html).toContain("1742-CV/BTCTU");
+  it("không có nút ghi nào trên dòng — Sửa, Gỡ và Chuyển xử lý nằm trong ngăn chi tiết", () => {
+    // VẾ PHỦ ĐỊNH: the row is read-only whatever the account may do; the detail carries the gates.
+    const html = veBang(trang([dong()]), TRUOC_HAN);
     expect(html).not.toContain("Gỡ khỏi sổ");
     expect(html).not.toContain("Chuyển xử lý");
-    expect(menus({ ghi: false, chuyen: false })).toEqual([]);
-  });
-
-  it("có `document.create` nhưng thiếu `document.route`: có Sửa và Gỡ, KHÔNG có Chuyển xử lý", () => {
-    // VẾ CHỊU LỰC, và là ca một lần gộp hai khoá thành một sẽ phá: chuyển văn bản là hành vi quyết
-    // định AI CHỊU TRÁCH NHIỆM, quyền riêng của nó là `document.route` (đặc tả §7 quy tắc 4). Một
-    // xã giao việc nhập cho văn thư và giữ việc phân luồng cho lãnh đạo là cách làm bình thường.
-    const html = veBang(trang([dong()]), TRUOC_HAN, { ghi: true, chuyen: false });
-
-    expect(html).toContain('aria-label="Sửa văn bản đến số 7/2026"');
-    expect(html).not.toContain("Chuyển xử lý");
-    // "Gỡ khỏi sổ" sits in the row's "⋯" menu (ADR 0068, spec v2 §7) — and "Chuyển xử lý" does not.
-    const m = menus({ ghi: true, chuyen: false });
-    expect(m).toHaveLength(1);
-    expect(words(m[0]!.items)).toEqual(["Gỡ khỏi sổ"]);
-  });
-
-  it("đủ hai quyền: Sửa hiện ngay, Chuyển xử lý rồi Gỡ khỏi sổ (đỏ, cuối) trong ⋯ — đúng handler", () => {
-    const calls: string[] = [];
-    const actions: ThaoTacDen = {
-      ...KHONG_LAM_GI,
-      chuyen: (vb) => calls.push(`chuyen:${vb.id}`),
-      go: (vb) => calls.push(`go:${vb.id}`),
-    };
-    const m = menus({ ghi: true, chuyen: true }, actions);
-
-    expect(m).toHaveLength(1);
-    // The trigger names the row by its NUMBER, never by summary or issuing body (rule 3, #4).
-    expect(m[0]!.label).toBe("Thao tác khác: văn bản đến số 7/2026");
-    expect(words(m[0]!.items)).toEqual(["Chuyển xử lý", "—", "Gỡ khỏi sổ"]);
-    const remove = m[0]!.items.at(-1);
-    expect(remove?.kind === "item" && remove.tone).toBe("danger");
-    for (const it of m[0]!.items) if (it.kind === "item") it.onSelect();
-    expect(calls).toEqual(["chuyen:01JVBDEN0000000000000001", "go:01JVBDEN0000000000000001"]);
-  });
-
-  it("có `document.route` nhưng thiếu `document.create`: chỉ có Chuyển xử lý", () => {
-    const html = veBang(trang([dong()]), TRUOC_HAN, { ghi: false, chuyen: true });
-
-    expect(html).toContain("Chuyển xử lý");
-    expect(html).not.toContain("Gỡ khỏi sổ");
+    expect(html).not.toMatch(/aria-label="Sửa /);
     expect(html).not.toContain("nut-xoa");
-    expect(menus({ ghi: false, chuyen: true })).toEqual([]);
+    expect(html).toContain("Về việc rà soát hồ sơ cán bộ");
+  });
+
+  it("dòng quá hạn tô nền — cùng phép so SUY RA với ô hạn, không phải một cờ", () => {
+    expect(veBang(trang([dong()]), TRUOC_HAN)).not.toContain("bg-danger-50");
+    expect(veBang(trang([dong()]), SAU_HAN)).toContain("bg-danger-50");
+  });
+
+  it("độ khẩn từ Khẩn trở lên hiện dưới trích yếu; Thường và không ghi thì không", () => {
+    expect(veBang(trang([dong({ urgency: "hoa-toc" })]), TRUOC_HAN)).toContain("Hoả tốc");
+    expect(veBang(trang([dong({ urgency: "thuong" })]), TRUOC_HAN)).not.toContain(">Thường<");
+    expect(veBang(trang([dong({ urgency: "" })]), TRUOC_HAN)).not.toContain("Không ghi độ khẩn");
   });
 });
 
@@ -219,10 +153,10 @@ describe("dữ liệu cá nhân không đi vào thuộc tính nào", () => {
     const html = veBang(trang([dong()]), TRUOC_HAN);
 
     expect(html).toContain("<td>Ban Tổ chức Tỉnh uỷ</td>");
-    expect(html).not.toContain('aria-label="Sửa văn bản đến số 7/2026"'.replace("7/2026", "Về việc"));
     expect(html).not.toMatch(/aria-label="[^"]*rà soát hồ sơ/);
+    expect(html).not.toMatch(/aria-label="[^"]*Ban Tổ chức/);
     expect(html).not.toMatch(/title="[^"]*Ban Tổ chức/);
-    expect(html).toContain('aria-label="Sửa văn bản đến số 7/2026"');
+    expect(html).toContain('aria-label="Xem chi tiết văn bản đến số 7/2026"');
   });
 });
 
@@ -247,7 +181,7 @@ describe("bảng ở ba trạng thái không phải 'có dữ liệu'", () => {
   });
 
   it("rỗng theo bộ lọc: cùng câu của sổ, thêm gợi ý đổi bộ lọc; không lọc thì không có gợi ý", () => {
-    const base = { bayGio: TRUOC_HAN, traLoai: TRA_LOAI, traBoPhan: TRA_BO_PHAN, coQuyenGhi: true, coQuyenChuyen: true, thaoTac: KHONG_LAM_GI };
+    const base = { bayGio: TRUOC_HAN, traBoPhan: TRA_BO_PHAN, thaoTac: KHONG_LAM_GI };
     const filtered = renderToStaticMarkup(<BangVanBanDen kq={trang([])} {...base} filtered />);
     const plain = renderToStaticMarkup(<BangVanBanDen kq={trang([])} {...base} />);
 
@@ -257,7 +191,7 @@ describe("bảng ở ba trạng thái không phải 'có dữ liệu'", () => {
   });
 
   it("tải hỏng: nút Tải lại gọi lại đúng lượt đọc của màn; không truyền thì không có nút", () => {
-    const base = { bayGio: TRUOC_HAN, traLoai: TRA_LOAI, traBoPhan: TRA_BO_PHAN, coQuyenGhi: true, coQuyenChuyen: true, thaoTac: KHONG_LAM_GI };
+    const base = { bayGio: TRUOC_HAN, traBoPhan: TRA_BO_PHAN, thaoTac: KHONG_LAM_GI };
     const failed = { ok: false as const, thongBao: "Máy chủ đang bận." };
 
     expect(renderToStaticMarkup(<BangVanBanDen kq={failed} {...base} onReload={() => {}} />)).toContain("Tải lại");
@@ -358,9 +292,9 @@ describe("chuyển xử lý rời khỏi biểu mẫu của trang", () => {
 
 describe("mở ngăn chi tiết từ một dòng", () => {
   it("ô Số đến là một nút mở ngăn, nhãn trợ năng dùng SỐ ĐẾN, không dùng trích yếu", () => {
-    const html = veBang(trang([dong()]), TRUOC_HAN, { ghi: false, chuyen: false });
+    const html = veBang(trang([dong()]), TRUOC_HAN);
 
-    // Lối cho bàn phím có mặt kể cả khi tài khoản không có quyền ghi nào: xem là quyền ĐỌC.
+    // Lối cho bàn phím có mặt với mọi tài khoản đọc được sổ: xem là quyền ĐỌC.
     expect(html).toContain('aria-label="Xem chi tiết văn bản đến số 7/2026"');
     expect(html).toContain('id="xem-van-ban-den-01JVBDEN0000000000000001"');
     expect(html).toContain('aria-expanded="false"');
@@ -372,10 +306,7 @@ describe("mở ngăn chi tiết từ một dòng", () => {
       <BangVanBanDen
         kq={trang([dong(), dong({ id: "01JVBDEN0000000000000002", number: 8 })])}
         bayGio={TRUOC_HAN}
-        traLoai={TRA_LOAI}
         traBoPhan={TRA_BO_PHAN}
-        coQuyenGhi={false}
-        coQuyenChuyen={false}
         thaoTac={KHONG_LAM_GI}
         idDangXem="01JVBDEN0000000000000002"
       />,
@@ -532,8 +463,8 @@ describe("màn sổ văn bản đến", () => {
     expect(html).toContain('role="search"');
     expect(html).toContain("Tìm văn bản");
     expect(html).toContain(`placeholder="${GOI_Y_TIM_DEN}"`);
-    expect(GOI_Y_TIM_DEN).toMatch(/Trích yếu/);
-    expect(GOI_Y_TIM_DEN).toMatch(/số, ký hiệu/);
+    expect(GOI_Y_TIM_DEN).toMatch(/trích yếu/i);
+    expect(GOI_Y_TIM_DEN).toMatch(/số ký hiệu/);
     expect(GOI_Y_TIM_DEN).not.toMatch(/cơ quan|nơi nhận/i);
     // Ô giữ chữ đang tìm sau khi vẽ lại — không thì cán bộ không biết bảng đang lọc theo gì.
     expect(html).toContain('value="rà soát"');
@@ -548,5 +479,136 @@ describe("màn sổ văn bản đến", () => {
     expect(macDinh).toContain("Số cũ nhất trước");
     expect(macDinh).toMatch(/<caption[^>]*>[^<]*số mới nhất trước/);
     expect(cuTruoc).toMatch(/<caption[^>]*>[^<]*số cũ nhất trước/);
+  });
+});
+
+/* ---- khung prototype (ADR 0068 lần 5) -------------------------------------------------------- */
+
+describe("khung prototype — đầu trang, hàng lọc, hộp thoại", () => {
+  it("nút đầu trang: [Vào sổ văn bản đến] hoặc [Quét & OCR ?]; thiếu quyền ghi thì chỉ còn nút “?”", () => {
+    const full = veMan({ ghi: true, thieuGhi: false, chuyen: true });
+    expect(full.indexOf("Vào sổ văn bản đến")).toBeLessThan(full.indexOf("hoặc"));
+    expect(full.indexOf("hoặc")).toBeLessThan(full.indexOf("Quét &amp; OCR"));
+
+    const denied = veMan({ ghi: false, thieuGhi: true, chuyen: false });
+    expect(denied).not.toContain("hoặc");
+    expect(denied).toContain("Quét &amp; OCR");
+  });
+
+  it("frame đặt nút vào đầu trang và thân vào khung tab — sổ không tự vẽ đầu trang", () => {
+    const html = renderToStaticMarkup(
+      <ManSoVanBanDen
+        kq={trang([dong()])}
+        bayGio={TRUOC_HAN}
+        nam={2026}
+        namGoc={2026}
+        datNam={() => {}}
+        trangThai=""
+        datTrangThai={() => {}}
+        loaiLoc=""
+        datLoaiLoc={() => {}}
+        boPhanLoc=""
+        datBoPhanLoc={() => {}}
+        tim=""
+        datTim={() => {}}
+        thuTu=""
+        datThuTu={() => {}}
+        traLoai={TRA_LOAI}
+        traBoPhan={TRA_BO_PHAN}
+        coQuyenGhi
+        thieuQuyenGhi={false}
+        thaoTac={KHONG_LAM_GI}
+        cauDaXong=""
+        loiNgoaiForm=""
+        nganXep={TRANG_DAU}
+        diToiTrang={() => {}}
+        form={null}
+        frame={(actions, body) => (
+          <>
+            <header data-test="dau-trang">{actions}</header>
+            <div data-test="than">{body}</div>
+          </>
+        )}
+      />,
+    );
+    const header = /<header data-test="dau-trang">([\s\S]*?)<\/header>/.exec(html)?.[1] ?? "";
+    expect(header).toContain("Vào sổ văn bản đến");
+    expect(header).not.toContain("Về việc rà soát hồ sơ cán bộ");
+  });
+
+  it("một hàng lọc theo thứ tự prototype: phạm vi → tìm → trạng thái → bộ phận → quá hạn … → Nhập Excel · Xuất sổ", () => {
+    const html = veMan({ ghi: true, thieuGhi: false, chuyen: true });
+    const order = [
+      "Toàn xã",
+      'id="tim-van-ban-den"',
+      'id="loc-trang-thai-den"',
+      'id="loc-bo-phan-den"',
+      OVERDUE_ONLY_LABEL,
+      'id="loc-loai-den"',
+      'id="nam-so-van-ban-den"',
+      'id="thu-tu-so-den"',
+      "Nhập hàng loạt từ Excel",
+      "Xuất sổ 2026",
+    ].map((k) => html.indexOf(k));
+    for (const i of order) expect(i).toBeGreaterThan(-1);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    // No "Bộ lọc" panel any more (ADR 0068 §12 replaced for this screen).
+    expect(html).not.toMatch(/>\s*Bộ lọc\s*</);
+  });
+
+  it("“Giao cho tôi”, “Liên quan đến tôi”, “Nhập hàng loạt”, “Xuất sổ” vô hiệu, có “?”; ô quá hạn bấm được", () => {
+    const html = veMan({ ghi: true, thieuGhi: false, chuyen: true });
+    for (const name of ["Lọc Giao cho tôi / Liên quan đến tôi", "Nhập hàng loạt từ Excel", "Xuất sổ văn bản đến"]) {
+      expect(html).toContain(`${name} — tính năng đang phát triển`);
+    }
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>[\s\S]{0,200}?Giao cho tôi/);
+    expect(html).toMatch(/<input id="loc-tre-han-den" type="checkbox"(?![^>]*disabled)[^>]*>/);
+  });
+
+  it("hộp vào sổ: tiêu đề prototype, bốn ô bắt buộc trước, phần thêm gập, Lưu & nhập tiếp, Ctrl + Enter", () => {
+    const html = veForm({ kieu: "them", khoaChongTrung: "k" });
+    expect(html).toContain("<dialog");
+    expect(html).toContain('aria-labelledby="tieu-de-bieu-mau-van-ban-den"');
+    expect(html).toContain(INTAKE_TITLE);
+    expect(html).toContain(SAVE_AND_NEXT_LABEL.replace("&", "&amp;"));
+    expect(html).toContain("Ctrl + Enter");
+    expect(html).toContain(MORE_FIELDS_TOGGLE);
+    expect(html).toContain('aria-expanded="false"');
+    for (const id of ["o-ngay-den", "o-loai-van-ban", "o-co-quan", "o-trich-yeu"]) expect(html).toContain(`id="${id}"`);
+    // Optional fields stay folded until asked for.
+    expect(html).not.toContain('id="o-so-ky-hieu"');
+    expect(html).not.toContain('id="o-do-khan"');
+  });
+
+  it("hộp sửa: không có Lưu & nhập tiếp; giá trị phụ đang có thì phần thêm mở sẵn", () => {
+    const html = veForm({ kieu: "sua", vb: dong() }, "", { ...BAN_DEN_TRONG, soKyHieu: "1742-CV/BTCTU" });
+    expect(html).toContain("Sửa văn bản đến");
+    expect(html).not.toContain(SAVE_AND_NEXT_LABEL.replace("&", "&amp;"));
+    expect(html).toContain('id="o-so-ky-hieu"');
+    expect(html).toContain('value="1742-CV/BTCTU"');
+  });
+
+  it("sau Lưu & nhập tiếp: câu đã lưu hiện ngay trong hộp đang mở", () => {
+    const html = renderToStaticMarkup(
+      <BieuMauVanBanDen
+        dangMo={{ kieu: "them", khoaChongTrung: "k2" }}
+        ban={BAN_DEN_TRONG}
+        datBan={() => {}}
+        traLoai={TRA_LOAI}
+        loi=""
+        dangGui={false}
+        savedNotice="Đã vào sổ số đến 7/2026."
+        onGui={() => {}}
+        onHuy={() => {}}
+      />,
+    );
+    expect(html).toMatch(/role="status"[^>]*>[\s\S]*Đã vào sổ số đến 7\/2026\./);
+  });
+
+  it("hộp gỡ là hộp thoại, lý do bắt buộc vẫn có", () => {
+    const html = veForm({ kieu: "go", vb: dong() });
+    expect(html).toContain("<dialog");
+    expect(html).toContain("Gỡ văn bản đến số 7/2026 khỏi sổ?");
+    expect(html).toMatch(/<input id="o-ly-do-go-den"[^>]*required/);
   });
 });

@@ -1,13 +1,12 @@
 "use client";
 
 import {
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   CircleCheck,
   CloudOff,
-  Forward,
   Inbox,
-  Pencil,
   Plus,
   RefreshCw,
   SearchX,
@@ -15,17 +14,22 @@ import {
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 
-import { ChonNam } from "@/components/chon-nam";
-import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
-import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Card, CardFooter } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Field } from "@/components/ui/field";
-import { FilterBar } from "@/components/ui/filter-bar";
-import { IconButton } from "@/components/ui/icon-button";
+import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
 import { Notice } from "@/components/ui/notice";
 import { BusyLabel } from "@/features/danh-ba/busy-label";
 import {
@@ -69,32 +73,34 @@ import {
   CANH_BAO_GO_KHONG_TRA_SO,
   DAN_DUONG_TOI_CAU_HINH,
   DAN_HAN_DO_MAY_CHU_AN_DINH,
-  DAN_SO_DEN,
   GIAI_THICH_LY_DO_GO,
+  INTAKE_DESCRIPTION,
+  INTAKE_TITLE,
+  ISSUED_ON_FIELD_LABEL,
   LOI_THIEU_LY_DO_GO,
   MA_DO_KHAN,
   MA_TRANG_THAI,
+  MORE_FIELDS_TOGGLE,
   NHAN_DUONG_TOI_CAU_HINH,
-  NUT_CHUYEN,
-  NUT_GO,
   NUT_HUY,
   NUT_LUU,
-  NUT_SUA,
   NUT_VAO_SO,
   NUT_XAC_NHAN_GO,
   NUT_XEM,
+  OVERDUE_ONLY_LABEL,
   O_CO_QUAN_BAN_HANH,
   O_DO_KHAN,
   O_LOAI_VAN_BAN,
   O_LY_DO_GO,
   O_NGAY_DEN,
-  O_NGAY_VAN_BAN,
-  O_SO_KY_HIEU,
-  O_TRICH_YEU,
+  QUICK_SAVE_HINT,
+  REFERENCE_FIELD_LABEL,
+  SAVE_AND_NEXT_LABEL,
   SO_DEN_RONG,
+  SUMMARY_FIELD_LABEL,
+  SUMMARY_PLACEHOLDER,
   nhanBoPhanDangGiu,
   nhanDoKhan,
-  nhanLoaiVanBan,
   nhanNgayCoThe,
   nhanSoVaoSo,
   nhanTrangThai,
@@ -105,6 +111,7 @@ import {
   ChonThuTu,
   GOI_Y_TIM_DEN,
   OTimVanBan,
+  RegisterYearSelect,
   doiLocVeTrangDau,
   sapXepTheoThuTu,
   type MaThuTu,
@@ -115,7 +122,11 @@ import {
   Glyph,
   REGISTER_TABLE_SCROLLER,
   RegisterRowsSkeleton,
+  UrgencyBadge,
+  plainFrame,
+  type RegisterFrame,
 } from "./document-ui";
+import { HeaderOr, IncomingRowLinks, IncomingScopeFilter, ScanOcrButton } from "./document-pending";
 import { NganVanBanDen } from "./ngan-van-ban-den";
 import { guiChuyenVanBan, guiGoVanBanDen } from "./thao-tac-van-ban";
 
@@ -129,6 +140,15 @@ import { guiChuyenVanBan, guiGoVanBanDen } from "./thao-tac-van-ban";
  * TRONG luồng trang chứ không phải một hộp thoại nổi, và mọi lần từ chối đều hiện thành chữ to
  * rõ chứ không im lặng bỏ qua.
  * ─────────────────────────────────────────────────────────────────────────────────────────
+ *
+ * CHANGED 06/10/2026 (ADR 0068 lần 5 — the prototype replaces earlier presentation preferences): the
+ * screen follows `vigov-require/apps/admin/src/components/documents/` — intake, edit and removal open
+ * as centred DIALOGS (`DocumentEntryForm`: four required fields first, the rest behind "Thông tin
+ * thêm", `Lưu & nhập tiếp`, Ctrl+Enter); one filter row without a "Bộ lọc" panel; the prototype's
+ * seven list columns with no action column — Sửa and Gỡ live in the detail's header, the routing block
+ * in the detail as before; the detail is the prototype's right-hand drawer (`LargeDialog`). Fast entry
+ * still wins: `Lưu & nhập tiếp` keeps the date, the issuing body and the type for the next document of
+ * the same batch.
  *
  * CỔNG QUYỀN BỌC PHẦN GHI, KHÔNG BỌC BẢNG — cùng khuôn với tab Danh mục và tab Thời hạn xử lý, và
  * cùng lý do: ẩn cả bảng là giao diện từ chối điều máy chủ đang phục vụ. Tuyến đọc đòi
@@ -144,8 +164,7 @@ import { guiChuyenVanBan, guiGoVanBanDen } from "./thao-tac-van-ban";
  * nào sửa hay xoá nó, và một nút như thế sẽ là một nút gọi vào hư không (luật 7, cấm #5).
  *
  * CHUYỂN XỬ LÝ NẰM TRONG NGĂN CHI TIẾT (`ngan-van-ban-den.tsx`), không trong biểu mẫu của trang:
- * người chuyển cần thấy dòng thời gian đã có TRƯỚC khi viết thêm một dòng không sửa được. Ba biểu
- * mẫu vào sổ / sửa / gỡ vẫn mở trong luồng trang như cũ.
+ * người chuyển cần thấy dòng thời gian đã có TRƯỚC khi viết thêm một dòng không sửa được.
  */
 
 /* ---- trạng thái ---------------------------------------------------------------------------- */
@@ -180,14 +199,15 @@ export const BAN_DEN_TRONG: BanNhapDen = {
   lyDoGo: "",
 };
 
-/** Năm thao tác một dòng hoặc thanh nút có thể yêu cầu. */
+/**
+ * The four actions the page header, a row or the detail can ask for. Routing has no entry: it is
+ * done inside the open detail (the prototype's drawer), never from the row.
+ */
 export type ThaoTacDen = {
   readonly them: () => void;
   readonly sua: (vb: documents_vanBanDenRa) => void;
   readonly go: (vb: documents_vanBanDenRa) => void;
-  /** Mở ngăn chi tiết, tiêu điểm vào ô bộ phận của khối chuyển xử lý. */
-  readonly chuyen: (vb: documents_vanBanDenRa) => void;
-  /** Mở ngăn chi tiết, tiêu điểm vào tiêu đề ngăn. */
+  /** Mở ngăn chi tiết. */
   readonly xem: (vb: documents_vanBanDenRa) => void;
 };
 
@@ -232,12 +252,15 @@ export const DRILL_DOWN_NOTE_INCOMING =
 
 export function SoVanBanDen({
   drillDown = NO_DRILL_DOWN,
+  frame = plainFrame,
 }: {
   /**
    * Lọc mở từ trang Tổng quan — đọc ở MÁY CHỦ (`app/van-ban/page.tsx`) và chuyển xuống bằng prop.
    * Quyển sổ vẫn KHÔNG tự đọc hay ghi thanh địa chỉ (`ngan-van-ban-den.test.tsx`, ca cuối).
    */
   drillDown?: DrillDown<"incoming-documents">;
+  /** Where the page puts the header buttons and the body — see `RegisterFrame`. */
+  frame?: RegisterFrame;
 } = {}) {
   const drillDownActive = drillDown.kind === "active";
   // Cán bộ đã tự đổi bộ lọc: câu "đường dẫn lọc không hợp lệ — đang hiện toàn bộ" hết đúng.
@@ -249,6 +272,10 @@ export function SoVanBanDen({
   const [boPhanLoc, datBoPhanLoc] = useState("");
   const [tim, datTim] = useState("");
   const [thuTu, datThuTu] = useState<MaThuTu>("");
+  // The prototype's "Chỉ văn bản quá hạn". Sent as `metric=overdue` — the server's own definition of
+  // overdue (open AND past `han_xu_ly_xong`), combined with every other filter including the year
+  // (`incoming_dashboard_test.go`, "?metric=overdue&year=2026"). Nothing is derived or stored here.
+  const [overdueOnly, setOverdueOnly] = useState(false);
 
   const [nganXep, datNganXep] = useState<NganXepConTro>(TRANG_DAU);
   /** Tăng sau mỗi lần ghi thành công để ĐỌC LẠI từ máy chủ, không vá mảng tại chỗ. */
@@ -281,7 +308,7 @@ export function SoVanBanDen({
    * NGĂN CHI TIẾT ĐANG MỞ — chỉ id văn bản, không gì khác. Không đẩy lên URL, không cất vào bộ nhớ
    * trình duyệt: không có gì trong ngăn cần sống qua một lần tải lại trang.
    */
-  const [xem, datXem] = useState<{ id: string; tieuDiemChuyen: boolean } | null>(null);
+  const [xem, datXem] = useState<{ id: string } | null>(null);
   /** Tăng sau mỗi lần chuyển (hay sửa) thành công để ĐỌC LẠI văn bản và dòng thời gian. */
   const [lanDocNgan, datLanDocNgan] = useState(0);
   /**
@@ -317,10 +344,11 @@ export function SoVanBanDen({
             loaiVanBan: loaiLoc,
             boPhanDangGiu: boPhanLoc,
             tim,
+            metric: overdueOnly ? "overdue" : undefined,
             ...sapXepTheoThuTu(thuTu),
             cursor: nganXep.hienTai,
           },
-    [drillDownActive, drillDown, nam, trangThai, loaiLoc, boPhanLoc, tim, thuTu, nganXep],
+    [drillDownActive, drillDown, nam, trangThai, loaiLoc, boPhanLoc, tim, overdueOnly, thuTu, nganXep],
   );
 
   useEffect(() => {
@@ -373,8 +401,8 @@ export function SoVanBanDen({
     };
   }, [idXem, lanDocNgan]);
 
-  const moNgan = useCallback((vb: documents_vanBanDenRa, tieuDiemChuyen: boolean) => {
-    datXem({ id: vb.id, tieuDiemChuyen });
+  const moNgan = useCallback((vb: documents_vanBanDenRa) => {
+    datXem({ id: vb.id });
     datBanChuyen(BAN_CHUYEN_TRONG);
     datLoiChuyen("");
     datCauChuyenXong("");
@@ -439,16 +467,17 @@ export function SoVanBanDen({
     them: () => mo({ kieu: "them", khoaChongTrung: crypto.randomUUID() }, { ...BAN_DEN_TRONG, ngayDen: homNay() }),
     sua: (vb) => mo({ kieu: "sua", vb }, banTuDong(vb)),
     go: (vb) => mo({ kieu: "go", vb }, BAN_DEN_TRONG),
-    chuyen: (vb) => moNgan(vb, true),
-    xem: (vb) => moNgan(vb, false),
+    xem: (vb) => moNgan(vb),
   };
 
   /** Một lượt ghi: dọn thông báo cũ, gửi, rồi hoặc nói đã làm gì và ĐỌC LẠI, hoặc hiện NGUYÊN câu
    *  máy chủ viết. Không rẽ nhánh theo `code`, không hiện `trace_id`, không hiện số hiệu HTTP. */
   const thucHien = useCallback(function <T>(
     goi: Promise<KetQua<T>>,
-    cau: string,
+    cau: string | ((saved: T) => string),
     sauKhiXong?: () => void,
+    /** `Lưu & nhập tiếp`: the dialog stays open and this prepares the next entry. */
+    keepOpen?: () => void,
   ) {
     datLoi("");
     datCauDaXong("");
@@ -459,17 +488,21 @@ export function SoVanBanDen({
         datLoi(k.thongBao);
         return;
       }
-      datDangMo(null);
-      datBan(BAN_DEN_TRONG);
-      datCauDaXong(cau);
+      datCauDaXong(typeof cau === "string" ? cau : cau(k.duLieu));
       datLanDoc((n) => n + 1);
       // Ngăn chi tiết đang mở đọc lại luôn: một lần sửa đổi đúng những ô ngăn đang hiện.
       datLanDocNgan((n) => n + 1);
+      if (keepOpen !== undefined) {
+        keepOpen();
+        return;
+      }
+      datDangMo(null);
+      datBan(BAN_DEN_TRONG);
       sauKhiXong?.();
     });
   }, []);
 
-  const guiBieuMau = useCallback(() => {
+  const guiBieuMau = useCallback((keepGoing = false) => {
     if (dangMo === null || dangGui) return;
 
     // KHÔNG KIỂM ĐỘ DÀI, KHUÔN NGÀY, HAY NGÀY VĂN BẢN SAU NGÀY ĐẾN Ở ĐÂY. Máy chủ kiểm cả ba, mỗi
@@ -490,7 +523,18 @@ export function SoVanBanDen({
             },
             dangMo.khoaChongTrung,
           ),
-          "Đã vào sổ văn bản đến. Số đến do hệ thống cấp.",
+          (saved) => `Đã vào sổ số đến ${nhanSoVaoSo(saved.number, saved.year)}.`,
+          undefined,
+          keepGoing
+            ? () => {
+                // The prototype's "Lưu & nhập tiếp": a batch handed over the same day usually comes
+                // from one sender, so the date, the issuing body, the type and the urgency stay; the
+                // summary and the reference go. A NEW key — this is a new document, and reusing the
+                // saved one's key would replay its answer instead of entering this one.
+                datDangMo({ kieu: "them", khoaChongTrung: crypto.randomUUID() });
+                datBan((b) => ({ ...b, trichYeu: "", soKyHieu: "", ngayVanBan: "" }));
+              }
+            : undefined,
         );
         return;
       case "sua":
@@ -541,6 +585,8 @@ export function SoVanBanDen({
       datBoPhanLoc={(v) => doiLoc(() => datBoPhanLoc(v))}
       tim={tim}
       datTim={(v) => doiLoc(() => datTim(v))}
+      overdueOnly={overdueOnly}
+      onOverdueOnly={(v) => doiLoc(() => setOverdueOnly(v))}
       thuTu={thuTu}
       datThuTu={(v) => doiLoc(() => datThuTu(v))}
       traLoai={loai}
@@ -572,10 +618,12 @@ export function SoVanBanDen({
             loi={loiChuyen}
             dangGui={dangGuiChuyen}
             cauDaXong={cauChuyenXong}
-            tieuDiemChuyen={xem.tieuDiemChuyen}
             onGui={guiChuyen}
             onDong={dongNgan}
             danhBa={danhBa}
+            coQuyenGhi={quyetDinhGhi !== null && quyetDinhGhi.hien}
+            onSua={thaoTac.sua}
+            onGo={thaoTac.go}
           />
         )
       }
@@ -588,11 +636,13 @@ export function SoVanBanDen({
             traLoai={loai}
             loi={loi}
             dangGui={dangGui}
+            savedNotice={dangMo.kieu === "them" ? cauDaXong : ""}
             onGui={guiBieuMau}
             onHuy={dong}
           />
         )
       }
+      frame={frame}
     />
   );
 }
@@ -605,6 +655,10 @@ export function SoVanBanDen({
  * XUẤT RA để bài kiểm kết xuất được bằng `react-dom/server` mà không cần trình duyệt giả lập. Lỗ
  * hổng đã đo ở tab Danh mục: mọi ca kiểm canh một QUYẾT ĐỊNH trong module thuần, còn việc quyết
  * định ấy có ra tới trang hay không thì không ca nào canh.
+ *
+ * The prototype's composition (`DocumentWorkspace.tsx`, tab `van-ban`): the create button in the page
+ * header (via `frame`), then ONE filter row, then the register in a card. Messages sit between the tab
+ * bar and the filter row.
  */
 export function ManSoVanBanDen({
   drillDown = NO_DRILL_DOWN,
@@ -623,13 +677,14 @@ export function ManSoVanBanDen({
   datBoPhanLoc,
   tim,
   datTim,
+  overdueOnly = false,
+  onOverdueOnly = () => {},
   thuTu,
   datThuTu,
   traLoai,
   traBoPhan,
   coQuyenGhi,
   thieuQuyenGhi,
-  coQuyenChuyen,
   thaoTac,
   cauDaXong,
   loiNgoaiForm,
@@ -638,6 +693,7 @@ export function ManSoVanBanDen({
   idDangXem = null,
   ngan = null,
   form,
+  frame = plainFrame,
 }: {
   /** Lọc mở từ trang Tổng quan. Bật thì hàng lọc không vẽ và dải "Đang xem" nói lọc gì. */
   drillDown?: DrillDown<"incoming-documents">;
@@ -659,13 +715,17 @@ export function ManSoVanBanDen({
   datBoPhanLoc: (v: string) => void;
   tim: string;
   datTim: (v: string) => void;
+  /** "Chỉ văn bản quá hạn" — a server filter (`metric=overdue`), never a field of the rows. */
+  overdueOnly?: boolean;
+  onOverdueOnly?: (on: boolean) => void;
   thuTu: MaThuTu;
   datThuTu: (v: MaThuTu) => void;
   traLoai: BangTraDanhMuc;
   traBoPhan: BangTraDanhMuc;
   coQuyenGhi: boolean;
   thieuQuyenGhi: boolean;
-  coQuyenChuyen: boolean;
+  /** Kept for the callers' shape: routing lives in the detail, which has its own gate. */
+  coQuyenChuyen?: boolean;
   thaoTac: ThaoTacDen;
   cauDaXong: string;
   loiNgoaiForm: string;
@@ -676,6 +736,7 @@ export function ManSoVanBanDen({
   /** Ngăn chi tiết, dựng sẵn bởi bên gọi (`NganVanBanDen`). */
   ngan?: ReactNode;
   form: ReactNode;
+  frame?: RegisterFrame;
 }) {
   // "Nothing at all" vs "nothing under these filters" (spec §8b) — read off the props this screen
   // already holds: the default year, every filter empty, the first page, no drill-down. Only then
@@ -687,59 +748,64 @@ export function ManSoVanBanDen({
     loaiLoc !== "" ||
     boPhanLoc !== "" ||
     tim !== "" ||
+    overdueOnly ||
     coTrangTruoc(nganXep);
 
-  return (
+  // The prototype's header group: `[+ Vào sổ …]  hoặc  [other way in]`. The other way in for an
+  // incoming document is the scan (OCR), still the authority's decision — so it is the disabled "?".
+  const headerActions = (
+    <>
+      {coQuyenGhi && (
+        <>
+          <Button
+            type="button"
+            variant="primary"
+            icon={<Glyph icon={Plus} />}
+            aria-haspopup="dialog"
+            onClick={thaoTac.them}
+          >
+            {NUT_VAO_SO}
+          </Button>
+          <HeaderOr />
+        </>
+      )}
+      <ScanOcrButton />
+    </>
+  );
+
+  const body = (
     <section
       className="man-van-ban mt-0 flex min-w-0 flex-col gap-4 [&>*]:my-0"
       aria-labelledby="tieu-de-so-den"
     >
-      <Card>
-        <CardHeader className="justify-between">
-          <div className="min-w-0 flex-1 basis-64">
-            <CardTitle as="h2" id="tieu-de-so-den" className="flex items-center gap-2">
-              <Glyph icon={Inbox} className="size-[18px] shrink-0 text-brand-600" />
-              Sổ văn bản đến
-            </CardTitle>
-            <p className="m-0 mt-1 text-[13px] text-ink-500">{DAN_SO_DEN}</p>
-          </div>
-          {coQuyenGhi && (
-            <Button type="button" variant="primary" icon={<Glyph icon={Plus} />} onClick={thaoTac.them}>
-              {NUT_VAO_SO}
-            </Button>
-          )}
-        </CardHeader>
+      {/* The page's visible title is the `<h1>`; this names the section for assistive tech. */}
+      <h2 id="tieu-de-so-den" className="an-thi-giac">
+        Sổ văn bản đến
+      </h2>
 
-        {/* Messages, the open form and the drill-down line, in the order they always had. `empty:hidden`:
-            with nothing to say the block takes no room. */}
-        <div className="flex min-w-0 flex-col gap-3 border-b border-line px-4 py-3 empty:hidden [&>*]:my-0">
-          {thieuQuyenGhi && (
-            <Notice tone="neutral">
-              Tài khoản của bạn không có quyền vào sổ, sửa hay gỡ văn bản. Sổ dưới đây vẫn xem được.
-            </Notice>
-          )}
+      {thieuQuyenGhi && (
+        <Notice tone="neutral">
+          Tài khoản của bạn không có quyền vào sổ, sửa hay gỡ văn bản. Sổ dưới đây vẫn xem được.
+        </Notice>
+      )}
+      {cauDaXong !== "" && (
+        <p role="status" className="flex items-center gap-2 text-sm font-medium text-success-600">
+          <Glyph icon={CircleCheck} className="size-[18px] shrink-0" />
+          {cauDaXong}
+        </p>
+      )}
+      {loiNgoaiForm !== "" && (
+        <p className="thong-bao-loi" role="alert">
+          {loiNgoaiForm}
+        </p>
+      )}
 
-          {cauDaXong !== "" && (
-            <p role="status" className="flex items-center gap-2 text-sm font-medium text-success-600">
-              <Glyph icon={CircleCheck} className="size-[18px] shrink-0" />
-              {cauDaXong}
-            </p>
-          )}
-          {loiNgoaiForm !== "" && (
-            <p className="thong-bao-loi" role="alert">
-              {loiNgoaiForm}
-            </p>
-          )}
-
-          {form}
-
-          <DrillDownBanner
-            drillDown={drillDown}
-            clearHref="/van-ban"
-            note={DRILL_DOWN_NOTE_INCOMING}
-            showInvalid={showInvalidDrillDown}
-          />
-        </div>
+      <DrillDownBanner
+        drillDown={drillDown}
+        clearHref="/van-ban"
+        note={DRILL_DOWN_NOTE_INCOMING}
+        showInvalid={showInvalidDrillDown}
+      />
 
       {drillDown.kind !== "active" && (
         <LocSoVanBanDen
@@ -754,6 +820,8 @@ export function ManSoVanBanDen({
           datBoPhanLoc={datBoPhanLoc}
           tim={tim}
           datTim={datTim}
+          overdueOnly={overdueOnly}
+          onOverdueOnly={onOverdueOnly}
           thuTu={thuTu}
           datThuTu={datThuTu}
           traLoai={traLoai}
@@ -761,38 +829,44 @@ export function ManSoVanBanDen({
         />
       )}
 
-      <BangVanBanDen
-        kq={kq}
-        bayGio={bayGio}
-        traLoai={traLoai}
-        traBoPhan={traBoPhan}
-        coQuyenGhi={coQuyenGhi}
-        coQuyenChuyen={coQuyenChuyen}
-        thaoTac={thaoTac}
-        soCuTruoc={thuTu === "so-tang"}
-        idDangXem={idDangXem}
-        filtered={filtered}
-        onReload={onReload}
-      />
-
-      {kq !== null && kq.ok && (
-        <CardFooter className="justify-end">
-          <DieuHuongTrang
-            nganXep={nganXep}
-            conTroTiep={kq.duLieu.next_cursor}
-            conTrangSau={kq.duLieu.has_more}
-            diToiTrang={diToiTrang}
-          />
-        </CardFooter>
-      )}
+      <Card>
+        <BangVanBanDen
+          kq={kq}
+          bayGio={bayGio}
+          traBoPhan={traBoPhan}
+          thaoTac={thaoTac}
+          soCuTruoc={thuTu === "so-tang"}
+          idDangXem={idDangXem}
+          filtered={filtered}
+          onReload={onReload}
+        />
+        {kq !== null && kq.ok && (
+          <CardFooter className="justify-end">
+            <DieuHuongTrang
+              nganXep={nganXep}
+              conTroTiep={kq.duLieu.next_cursor}
+              conTrangSau={kq.duLieu.has_more}
+              diToiTrang={diToiTrang}
+            />
+          </CardFooter>
+        )}
       </Card>
 
+      {form}
       {ngan}
     </section>
   );
+
+  return frame(headerActions, body);
 }
 
-/** Hàng lọc: năm · trạng thái · loại · bộ phận · tìm chữ · thứ tự — đúng các tham số tuyến nhận. */
+/**
+ * THE PROTOTYPE'S ONE FILTER ROW, in its order — scope → search → status → unit → "Chỉ văn bản quá
+ * hạn" — then the three filters the prototype does not have and our route needs or offers (type, the
+ * register's year, the order), then `Nhập hàng loạt từ Excel` · `Xuất sổ` at the right end. No "Bộ
+ * lọc" panel (ADR 0068 §12 replaced for this screen, lần 5 #3). Labels are visually hidden — each
+ * select's first option names it, as in the prototype — but every control keeps a real `<label>`.
+ */
 function LocSoVanBanDen({
   nam,
   namGoc,
@@ -805,6 +879,8 @@ function LocSoVanBanDen({
   datBoPhanLoc,
   tim,
   datTim,
+  overdueOnly,
+  onOverdueOnly,
   thuTu,
   datThuTu,
   traLoai,
@@ -821,95 +897,93 @@ function LocSoVanBanDen({
   datBoPhanLoc: (v: string) => void;
   tim: string;
   datTim: (v: string) => void;
+  overdueOnly: boolean;
+  onOverdueOnly: (on: boolean) => void;
   thuTu: MaThuTu;
   datThuTu: (v: MaThuTu) => void;
   traLoai: BangTraDanhMuc;
   traBoPhan: BangTraDanhMuc;
 }) {
-  // Filters behind the "Bộ lọc" button that are not at their default — the defaults are the ones
-  // this screen already starts from ("" = all, "" = server's number order).
-  const moreActiveCount = [loaiLoc !== "", boPhanLoc !== "", thuTu !== ""].filter(Boolean).length;
-
-  // Search first (owner, 02/10/2026: "ô tìm kiếm nên nằm ở bên trái"), then the register's year and
-  // the status — the two filters that decide which page of the register is in front of you.
   return (
-    <FilterBar
-      id="incoming-document-filters"
-      className="m-0 border-b border-line px-4 py-3.5"
-      moreActiveCount={moreActiveCount}
-      primary={
-        <>
-          <OTimVanBan id="tim-van-ban-den" goiY={GOI_Y_TIM_DEN} tim={tim} datTim={datTim} />
+    <div id="incoming-document-filters" className="flex min-w-0 flex-wrap items-center gap-2.5 [&>*]:my-0">
+      <IncomingScopeFilter />
 
-          <ChonNam id="nam-so-van-ban-den" nhan="Năm của sổ" nam={nam} namGoc={namGoc} datNam={datNam} />
+      <OTimVanBan id="tim-van-ban-den" goiY={GOI_Y_TIM_DEN} tim={tim} datTim={datTim} />
 
-          <p className="chon-hang-muc">
-            <label htmlFor="loc-trang-thai-den">Trạng thái</label>{" "}
-            <select
-              id="loc-trang-thai-den"
-              value={trangThai}
-              onChange={(e) => datTrangThai(e.target.value)}
-            >
-              <option value="">Tất cả trạng thái</option>
-              {MA_TRANG_THAI.map((ma) => (
-                <option key={ma} value={ma}>
-                  {nhanTrangThai(ma)}
-                </option>
-              ))}
-            </select>
-          </p>
-        </>
-      }
-      more={
-        <>
-          <p className="chon-hang-muc">
-            <label htmlFor="loc-loai-den">Loại văn bản</label>{" "}
-            <select id="loc-loai-den" value={loaiLoc} onChange={(e) => datLoaiLoc(e.target.value)}>
-              <option value="">Tất cả loại</option>
-              {traLoai.pha === "xong" &&
-                [...traLoai.ten].map(([ma, ten]) => (
-                  <option key={ma} value={ma}>
-                    {ten}
-                  </option>
-                ))}
-            </select>
-          </p>
+      <Field label="Trạng thái" htmlFor="loc-trang-thai-den" kind="select" hideLabel grow="auto">
+        <select id="loc-trang-thai-den" value={trangThai} onChange={(e) => datTrangThai(e.target.value)}>
+          <option value="">Tất cả trạng thái</option>
+          {MA_TRANG_THAI.map((ma) => (
+            <option key={ma} value={ma}>
+              {nhanTrangThai(ma)}
+            </option>
+          ))}
+        </select>
+      </Field>
 
-          <p className="chon-hang-muc">
-            <label htmlFor="loc-bo-phan-den">Bộ phận đang giữ</label>{" "}
-            <select id="loc-bo-phan-den" value={boPhanLoc} onChange={(e) => datBoPhanLoc(e.target.value)}>
-              <option value="">Tất cả bộ phận</option>
-              {traBoPhan.pha === "xong" &&
-                [...traBoPhan.ten].map(([id, ten]) => (
-                  <option key={id} value={id}>
-                    {ten}
-                  </option>
-                ))}
-            </select>
-          </p>
+      <Field label="Bộ phận đang giữ" htmlFor="loc-bo-phan-den" kind="select" hideLabel grow="auto">
+        <select id="loc-bo-phan-den" value={boPhanLoc} onChange={(e) => datBoPhanLoc(e.target.value)}>
+          <option value="">Tất cả bộ phận</option>
+          {traBoPhan.pha === "xong" &&
+            [...traBoPhan.ten].map(([id, ten]) => (
+              <option key={id} value={id}>
+                {ten}
+              </option>
+            ))}
+        </select>
+      </Field>
 
-          <ChonThuTu id="thu-tu-so-den" thuTu={thuTu} datThuTu={datThuTu} />
-        </>
-      }
-    />
+      <label htmlFor="loc-tre-han-den" className="flex items-center gap-2 text-[13px] text-ink-900">
+        <input
+          id="loc-tre-han-den"
+          type="checkbox"
+          className="size-4 accent-brand-600"
+          checked={overdueOnly}
+          onChange={(e) => onOverdueOnly(e.target.checked)}
+        />
+        {OVERDUE_ONLY_LABEL}
+      </label>
+
+      <Field label="Loại văn bản" htmlFor="loc-loai-den" kind="select" hideLabel grow="auto">
+        <select id="loc-loai-den" value={loaiLoc} onChange={(e) => datLoaiLoc(e.target.value)}>
+          <option value="">Tất cả loại</option>
+          {traLoai.pha === "xong" &&
+            [...traLoai.ten].map(([ma, ten]) => (
+              <option key={ma} value={ma}>
+                {ten}
+              </option>
+            ))}
+        </select>
+      </Field>
+
+      <RegisterYearSelect id="nam-so-van-ban-den" year={nam} anchorYear={namGoc} onYear={datNam} />
+
+      <ChonThuTu id="thu-tu-so-den" thuTu={thuTu} datThuTu={datThuTu} />
+
+      <IncomingRowLinks year={nam} />
+    </div>
   );
 }
 
 /**
- * Bảng sổ văn bản đến.
+ * Bảng sổ văn bản đến — the prototype's seven columns (`DocumentTable.tsx`): Số đến · Ngày đến · Cơ
+ * quan ban hành · Trích yếu · Đang giữ · Hạn xử lý · Trạng thái. Its eighth, "Nguồn nhập", is not
+ * drawn: the record has no source field (every entry is typed in today). No action column, as in the
+ * prototype: a row opens the detail, and Sửa / Gỡ / routing are there. Reference number, type and
+ * urgency are in the detail too; a RAISED urgency (Khẩn and above) still shows under the summary —
+ * a "Hoả tốc" document must not need a click to be seen.
  *
  * Ô TRÍCH YẾU VÀ Ô CƠ QUAN BAN HÀNH HIỆN NGUYÊN VĂN, không che: đó là nội dung quyển sổ, và máy
  * chủ trả về nguyên vẹn cho cán bộ của chính xã ấy. Điều màn hình BẢO ĐẢM hẹp hơn và nói ra được:
  * hai giá trị ấy không đi vào một `aria-label`, một `title`, một tên tệp hay một URL nào (luật 3,
  * cấm #4) — nhãn trợ năng của từng nút dùng SỐ ĐẾN, thứ vốn để đọc qua điện thoại.
+ *
+ * HOOK-FREE on purpose: tests call it as a plain function.
  */
 export function BangVanBanDen({
   kq,
   bayGio,
-  traLoai,
   traBoPhan,
-  coQuyenGhi,
-  coQuyenChuyen,
   thaoTac,
   soCuTruoc = false,
   idDangXem = null,
@@ -918,10 +992,7 @@ export function BangVanBanDen({
 }: {
   kq: KetQua<page_Result_documents_vanBanDenRa> | null;
   bayGio: Date;
-  traLoai: BangTraDanhMuc;
   traBoPhan: BangTraDanhMuc;
-  coQuyenGhi: boolean;
-  coQuyenChuyen: boolean;
   thaoTac: ThaoTacDen;
   /** Chú thích bảng nói đúng thứ tự đang xem — một câu "số mới nhất trước" trên bảng xếp tăng là sai. */
   soCuTruoc?: boolean;
@@ -977,8 +1048,6 @@ export function BangVanBanDen({
     );
   }
 
-  const coThaoTac = coQuyenGhi || coQuyenChuyen;
-
   return (
     <div className={REGISTER_TABLE_SCROLLER} role="region" aria-label="Sổ văn bản đến" tabIndex={0}>
       <table className="bang-danh-muc bang-van-ban">
@@ -989,19 +1058,11 @@ export function BangVanBanDen({
           <tr>
             <th scope="col">Số đến</th>
             <th scope="col">Ngày đến</th>
-            <th scope="col">Số, ký hiệu</th>
             <th scope="col">Cơ quan ban hành</th>
-            <th scope="col">Loại văn bản</th>
             <th scope="col">Trích yếu</th>
-            <th scope="col">Độ khẩn</th>
             <th scope="col">Đang giữ</th>
             <th scope="col">Hạn xử lý</th>
             <th scope="col">Trạng thái</th>
-            {coThaoTac && (
-              <th scope="col">
-                <span className="an-thi-giac">Thao tác</span>
-              </th>
-            )}
           </tr>
         </thead>
         <tbody>
@@ -1010,14 +1071,17 @@ export function BangVanBanDen({
             const han = trangThaiHanVanBan(vb.due_at, bayGio);
             const so = nhanSoVaoSo(vb.number, vb.year);
             const dangXem = vb.id === idDangXem;
-            const more = incomingRowMoreActions(vb, coQuyenGhi, coQuyenChuyen, thaoTac);
+            const urgency = vb.urgency ?? "";
+            const raised = urgency === "khan" || urgency === "thuong-khan" || urgency === "hoa-toc";
             return (
               <tr
                 key={vb.id}
-                className="cursor-pointer"
+                // The prototype tints a late row; the tint follows the SAME derived comparison as the
+                // deadline cell, never a stored flag.
+                className={han.loai === "quaHan" ? "cursor-pointer bg-danger-50/50" : "cursor-pointer"}
                 // BẤM MỘT DÒNG LÀ MỞ NGĂN (§3.1) — lối tắt cho chuột. Lối cho bàn phím và trình đọc
-                // màn hình là nút ở ô "Số đến"; bấm trúng một nút hay ô nhập trong dòng thì để nút
-                // ấy làm việc của nó, không mở ngăn chồng lên.
+                // màn hình là nút ở ô "Số đến"; bấm trúng một nút trong dòng thì để nút ấy làm việc
+                // của nó, không mở ngăn chồng lên.
                 onClick={(e) => {
                   if ((e.target as Element).closest("button, a, input, select, textarea")) return;
                   thaoTac.xem(vb);
@@ -1031,6 +1095,7 @@ export function BangVanBanDen({
                     size="sm"
                     className="px-2 font-semibold text-brand-700 tabular-nums"
                     aria-expanded={dangXem}
+                    aria-haspopup="dialog"
                     aria-label={`${NUT_XEM} văn bản đến số ${so}`}
                     onClick={() => thaoTac.xem(vb)}
                   >
@@ -1038,11 +1103,15 @@ export function BangVanBanDen({
                   </Button>
                 </td>
                 <td>{nhanNgayCoThe(vb.received_date)}</td>
-                <td>{vb.reference_no === undefined || vb.reference_no === "" ? "Không ghi" : vb.reference_no}</td>
                 <td>{vb.issuing_body}</td>
-                <td>{nhanLoaiVanBan(traTen(traLoai, vb.document_type))}</td>
-                <td className="o-trich-yeu">{vb.summary}</td>
-                <td>{nhanDoKhan(vb.urgency ?? "")}</td>
+                <td className="o-trich-yeu">
+                  {vb.summary}
+                  {raised && (
+                    <span className="mt-1 block">
+                      <UrgencyBadge urgency={urgency}>{nhanDoKhan(urgency)}</UrgencyBadge>
+                    </span>
+                  )}
+                </td>
                 <td>{nhanBoPhanDangGiu(traTen(traBoPhan, vb.holding_unit ?? ""))}</td>
                 <td>
                   <DeadlineMark deadline={han} />
@@ -1050,39 +1119,6 @@ export function BangVanBanDen({
                 <td>
                   <DocumentStatusBadge status={vb.status}>{nhanTrangThai(vb.status)}</DocumentStatusBadge>
                 </td>
-                {coThaoTac && (
-                  <td>
-                    {/* ONE visible control for the row's everyday action, the rest in "⋯" with WORDS
-                        (spec v2 §7): Sửa as an icon when the account may write, otherwise "Chuyển xử
-                        lý" with its words. Every label names the row by its NUMBER, never by its
-                        summary or issuing body (rule 3, forbidden #4). */}
-                    <span className="flex items-center justify-end gap-1">
-                      {coQuyenGhi ? (
-                        <IconButton
-                          type="button"
-                          label={`${NUT_SUA} văn bản đến số ${so}`}
-                          onClick={() => thaoTac.sua(vb)}
-                        >
-                          <Pencil aria-hidden="true" />
-                        </IconButton>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          icon={<Glyph icon={Forward} />}
-                          aria-label={`${NUT_CHUYEN} văn bản đến số ${so}`}
-                          onClick={() => thaoTac.chuyen(vb)}
-                        >
-                          {NUT_CHUYEN}
-                        </Button>
-                      )}
-                      {more.length > 0 && (
-                        <ActionMenu label={`Thao tác khác: văn bản đến số ${so}`} items={more} />
-                      )}
-                    </span>
-                  </td>
-                )}
               </tr>
             );
           })}
@@ -1090,31 +1126,6 @@ export function BangVanBanDen({
       </table>
     </div>
   );
-}
-
-/**
- * The "⋯" items of one incoming row — everything the visible control does not already do:
- * "Chuyển xử lý" (`document.route`) when Sửa holds the visible slot, then — after a separator, red,
- * last — "Gỡ khỏi sổ" (`document.create`). Without `document.create` the visible control IS
- * "Chuyển xử lý", so the list is empty and no menu is drawn. Each item calls the existing handler.
- *
- * Exported so tests read which actions a row offers without opening a Radix menu (a closed menu
- * renders no items to the HTML).
- */
-export function incomingRowMoreActions(
-  doc: documents_vanBanDenRa,
-  canWrite: boolean,
-  canRoute: boolean,
-  actions: ThaoTacDen,
-): ActionMenuItem[] {
-  if (!canWrite) return [];
-  const items: ActionMenuItem[] = [];
-  if (canRoute) {
-    items.push({ kind: "item", id: "chuyen", label: NUT_CHUYEN, icon: Forward, onSelect: () => actions.chuyen(doc) });
-    items.push({ kind: "separator", id: "tach-go" });
-  }
-  items.push({ kind: "item", id: "go", label: NUT_GO, icon: Trash2, tone: "danger", onSelect: () => actions.go(doc) });
-  return items;
 }
 
 /** Hai nút trang. Đọc theo mốc nên "trang trước" phải tự nhớ — `ngan-xep-con-tro.ts`. */
@@ -1159,11 +1170,8 @@ export function DieuHuongTrang({
 
 /* ---- biểu mẫu ------------------------------------------------------------------------------ */
 
-/** Titles of the two entry forms. The removal form asks the specific question instead — see below. */
-const TIEU_DE_DEN: Record<"them" | "sua", string> = {
-  them: "Vào sổ văn bản đến",
-  sua: "Sửa văn bản đến",
-};
+/** Heading id of the intake / edit / removal dialog — its accessible name. */
+const INCOMING_FORM_TITLE_ID = "tieu-de-bieu-mau-van-ban-den";
 
 /**
  * Title of the removal confirmation (spec v2 §7 "Hộp xác nhận"): the SPECIFIC question, naming the
@@ -1175,12 +1183,17 @@ export function removeIncomingQuestion(number: string): string {
 }
 
 /**
- * Một biểu mẫu cho cả ba thao tác vào sổ / sửa / gỡ. Chuyển xử lý nằm trong ngăn chi tiết.
+ * Một biểu mẫu cho cả ba thao tác vào sổ / sửa / gỡ — the prototype's centred dialog
+ * (`DocumentEntryForm.tsx`, 44rem). Chuyển xử lý nằm trong ngăn chi tiết.
  *
- * THUẦN TRÌNH BÀY: mọi giá trị đi vào qua `ban`, mọi thay đổi đi ra qua `datBan`, phép kiểm nằm ở
- * `thao-tac-van-ban.ts`. Tách như vậy để ba nhánh KHÔNG ai nhìn thấy trong lúc phát triển — "còn
- * thiếu lý do", "máy chủ vừa từ chối", và khối cảnh báo trước khi gỡ — kết xuất được bằng
- * `react-dom/server`.
+ * THE PROTOTYPE'S ORDER, OUR FIELDS. It puts five required fields first and the rest behind "Thông
+ * tin thêm (không bắt buộc)". Ours: the server REQUIRES ngày đến, cơ quan ban hành, loại văn bản and
+ * trích yếu (`domain/van_ban.go:199-209`), so those four are first — the type is required here, not
+ * optional as in the prototype — and số/ký hiệu, ngày ban hành and độ khẩn are behind the toggle. No
+ * `Số đến` and no `Hạn xử lý` field: the server assigns both and refuses either in the body.
+ *
+ * THUẦN TRÌNH BÀY về dữ liệu: mọi giá trị đi vào qua `ban`, mọi thay đổi đi ra qua `datBan`, phép
+ * kiểm nằm ở `thao-tac-van-ban.ts`. The only local state is whether "Thông tin thêm" is open.
  */
 export function BieuMauVanBanDen({
   dangMo,
@@ -1189,27 +1202,48 @@ export function BieuMauVanBanDen({
   traLoai,
   loi,
   dangGui,
+  savedNotice = "",
   onGui,
   onHuy,
 }: {
   dangMo: NonNullable<DangMoDen>;
   ban: BanNhapDen;
-  datBan: (b: BanNhapDen) => void;
+  datBan: (b: BanNhapDen | ((prev: BanNhapDen) => BanNhapDen)) => void;
   traLoai: BangTraDanhMuc;
   /**
    * MỘT VÙNG LỖI, KHÔNG HAI — khác `BieuMauThoiHan` ở tab Cấu hình, và sự khác nhau ấy có lý do:
    * ở đó phép kiểm tại chỗ và câu từ chối của máy chủ có thể cùng có mặt, còn ở đây phép kiểm
    * (`thao-tac-van-ban.ts`) CẮT đường đi tới lời gọi mạng, nên hai câu không bao giờ cùng lúc.
-   * Dựng hai vùng cho một thứ là dựng một vùng luôn trống mà không ai biết vì sao.
    */
   loi: string;
   dangGui: boolean;
-  onGui: () => void;
+  /** After `Lưu & nhập tiếp`: what was just saved, said inside the dialog that stays open. */
+  savedNotice?: string;
+  /** `keepGoing` = the prototype's `Lưu & nhập tiếp`. */
+  onGui: (keepGoing?: boolean) => void;
   onHuy: () => void;
 }) {
+  // Edit opens with "Thông tin thêm" unfolded when the record has any of those values: a folded
+  // section would hide what is about to be saved again.
+  const [showMore, setShowMore] = useState(
+    dangMo.kieu === "sua" && (ban.soKyHieu !== "" || ban.ngayVanBan !== "" || ban.doKhan !== ""),
+  );
+  const summaryRef = useRef<HTMLTextAreaElement>(null);
+  const firstKey = useRef(dangMo.kieu === "them" ? dangMo.khoaChongTrung : "");
+  const currentKey = dangMo.kieu === "them" ? dangMo.khoaChongTrung : "";
+  // After `Lưu & nhập tiếp` the key changes: the cursor goes back to the summary, the one field a
+  // batch of the same sender and day still needs. Not on the first opening — the dialog's own first
+  // focus (the first field) is right then.
+  useEffect(() => {
+    if (currentKey !== "" && currentKey !== firstKey.current) summaryRef.current?.focus();
+  }, [currentKey]);
+
   const submit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    onGui();
+    onGui(false);
+  };
+  const dismiss = () => {
+    if (!dangGui) onHuy();
   };
 
   // CÂU TỪ CHỐI RA NGUYÊN VĂN, dù nó đến từ phép kiểm ở client hay từ máy chủ. Không rẽ nhánh theo
@@ -1217,7 +1251,7 @@ export function BieuMauVanBanDen({
   // hình thời hạn xử lý, và câu ấy do máy chủ viết.
   const refusal =
     loi !== "" ? (
-      <p className="thong-bao-loi m-0 sm:col-span-2" role="alert">
+      <p className="thong-bao-loi m-0" role="alert">
         {loi}
       </p>
     ) : null;
@@ -1225,159 +1259,133 @@ export function BieuMauVanBanDen({
   if (dangMo.kieu === "go") {
     const question = removeIncomingQuestion(nhanSoVaoSo(dangMo.vb.number, dangMo.vb.year));
     return (
-      <ConfirmDialog
-        as="form"
-        tone="danger"
-        icon={Trash2}
-        title={question}
-        aria-label={question}
-        onSubmit={submit}
-        actions={
-          <>
+      <ModalDialog titleId={INCOMING_FORM_TITLE_ID} onDismiss={dismiss}>
+        <form className="flex min-h-0 flex-col gap-4" aria-label={question} onSubmit={submit}>
+          <ModalDialogHeader titleId={INCOMING_FORM_TITLE_ID} title={question} />
+          <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
+            {/* CÂU QUAN TRỌNG NHẤT MÀN HÌNH, và nó đứng ĐÚNG CHỖ sắp bấm xoá. */}
+            <Notice tone="legal" icon={Trash2}>
+              {CANH_BAO_GO_KHONG_TRA_SO}
+            </Notice>
+            <Field
+              label={O_LY_DO_GO}
+              htmlFor="o-ly-do-go-den"
+              grow="auto"
+              hint={<span id="giai-thich-ly-do-go-den">{GIAI_THICH_LY_DO_GO}</span>}
+            >
+              {/* `required` là lớp nhắc của trình duyệt, KHÔNG phải phép kiểm: nó không bắt được một
+                  ô toàn dấu cách, và tắt được. Phép kiểm thật chạy trong `guiGoVanBanDen`. */}
+              <input
+                id="o-ly-do-go-den"
+                name="lyDoGo"
+                required
+                value={ban.lyDoGo}
+                onChange={(e) => datBan({ ...ban, lyDoGo: e.target.value })}
+                aria-invalid={loi === LOI_THIEU_LY_DO_GO}
+                aria-describedby="giai-thich-ly-do-go-den"
+              />
+            </Field>
+            {refusal}
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button type="button" variant="outline" onClick={onHuy} disabled={dangGui}>
+              {NUT_HUY}
+            </Button>
             <Button type="submit" variant="danger" disabled={dangGui} aria-busy={dangGui || undefined}>
               <BusyLabel busy={dangGui} label={NUT_XAC_NHAN_GO} busyText="Đang gỡ…" />
             </Button>
-            <Button type="button" variant="secondary" onClick={onHuy} disabled={dangGui}>
-              {NUT_HUY}
-            </Button>
-          </>
-        }
-      >
-        {/* CÂU QUAN TRỌNG NHẤT MÀN HÌNH, và nó đứng ĐÚNG CHỖ sắp bấm xoá. */}
-        <p className="m-0">{CANH_BAO_GO_KHONG_TRA_SO}</p>
-        <Field
-          label={O_LY_DO_GO}
-          htmlFor="o-ly-do-go-den"
-          grow="auto"
-          hint={<span id="giai-thich-ly-do-go-den">{GIAI_THICH_LY_DO_GO}</span>}
-        >
-          {/* `required` là lớp nhắc của trình duyệt, KHÔNG phải phép kiểm: nó không bắt được một
-              ô toàn dấu cách, và tắt được. Phép kiểm thật chạy trong `guiGoVanBanDen`. */}
-          <input
-            id="o-ly-do-go-den"
-            name="lyDoGo"
-            required
-            value={ban.lyDoGo}
-            onChange={(e) => datBan({ ...ban, lyDoGo: e.target.value })}
-            aria-invalid={loi === LOI_THIEU_LY_DO_GO}
-            aria-describedby="giai-thich-ly-do-go-den"
-          />
-        </Field>
-        {refusal}
-      </ConfirmDialog>
+          </div>
+        </form>
+      </ModalDialog>
     );
   }
 
-  const tieuDe = TIEU_DE_DEN[dangMo.kieu];
+  const adding = dangMo.kieu === "them";
+  const title = adding ? INTAKE_TITLE : "Sửa văn bản đến";
+  const description = adding
+    ? INTAKE_DESCRIPTION
+    : `Văn bản đến số ${nhanSoVaoSo(dangMo.vb.number, dangMo.vb.year)}`;
+
+  // The prototype's Ctrl/Cmd + Enter: save without leaving the keyboard.
+  const onKeyDown = (e: KeyboardEvent<HTMLFormElement>) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      onGui(false);
+    }
+  };
 
   return (
-    <Card as="form" aria-label={tieuDe} onSubmit={submit}>
-      <CardHeader className="justify-between">
-        <CardTitle as="h3">{tieuDe}</CardTitle>
-        {dangMo.kieu === "sua" && (
-          <p className="m-0 text-[13px] text-ink-500 tabular-nums">
-            Văn bản đến số {nhanSoVaoSo(dangMo.vb.number, dangMo.vb.year)}
-          </p>
-        )}
-      </CardHeader>
+    <ModalDialog titleId={INCOMING_FORM_TITLE_ID} onDismiss={dismiss} className="max-w-[44rem]">
+      <form
+        className="flex min-h-0 flex-col gap-4"
+        aria-label={title}
+        onSubmit={submit}
+        onKeyDown={onKeyDown}
+      >
+        <ModalDialogHeader titleId={INCOMING_FORM_TITLE_ID} title={title} description={description} />
 
-      {/* Labels above, 40px controls, two columns from 640px (spec §6.3, §6.5). */}
-      <div className="grid min-w-0 gap-4 p-4 sm:grid-cols-2">
-          {/* THỨ TỰ Ô LÀ THỨ TỰ NGƯỜI TA ĐỌC TRÊN TỜ VĂN BẢN, không phải thứ tự cột của CSDL. */}
-          <Field label={O_NGAY_DEN} htmlFor="o-ngay-den" grow="auto">
-            {/* `type="date"` phát ra đúng `YYYY-MM-DD`, đúng khuôn hợp đồng đòi. Một ô chữ tự do
-                mời gõ "2/9/2026" rồi nhận một lời từ chối không nói được phải gõ ra sao. */}
-            <input
-              id="o-ngay-den"
-              name="ngayDen"
-              type="date"
-              value={ban.ngayDen}
-              onChange={(e) => datBan({ ...ban, ngayDen: e.target.value })}
-            />
-          </Field>
+        <div className="flex min-h-0 flex-col gap-3.5 overflow-y-auto">
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+            <Field label={O_NGAY_DEN} htmlFor="o-ngay-den" grow="auto">
+              {/* `type="date"` phát ra đúng `YYYY-MM-DD`, đúng khuôn hợp đồng đòi. */}
+              <input
+                id="o-ngay-den"
+                name="ngayDen"
+                type="date"
+                value={ban.ngayDen}
+                onChange={(e) => datBan({ ...ban, ngayDen: e.target.value })}
+              />
+            </Field>
 
-          <Field label={O_SO_KY_HIEU} htmlFor="o-so-ky-hieu" grow="auto">
-            <input
-              id="o-so-ky-hieu"
-              name="soKyHieu"
-              value={ban.soKyHieu}
-              onChange={(e) => datBan({ ...ban, soKyHieu: e.target.value })}
-              placeholder="1742-CV/BTCTU"
-            />
-          </Field>
-
-          <Field label={O_NGAY_VAN_BAN} htmlFor="o-ngay-van-ban" grow="auto">
-            <input
-              id="o-ngay-van-ban"
-              name="ngayVanBan"
-              type="date"
-              value={ban.ngayVanBan}
-              onChange={(e) => datBan({ ...ban, ngayVanBan: e.target.value })}
-            />
-          </Field>
+            <Field label={O_LOAI_VAN_BAN} htmlFor="o-loai-van-ban" kind="select" grow="auto">
+              <select
+                id="o-loai-van-ban"
+                name="loaiVanBan"
+                value={ban.loaiVanBan}
+                onChange={(e) => datBan({ ...ban, loaiVanBan: e.target.value })}
+              >
+                <option value="">— Chọn loại —</option>
+                {traLoai.pha === "xong" &&
+                  [...traLoai.ten].map(([ma, ten]) => (
+                    <option key={ma} value={ma}>
+                      {ten}
+                    </option>
+                  ))}
+                {/* MÃ ĐANG LƯU LUÔN CÓ MẶT, kể cả khi xã đã tắt loại ấy: không có mục này thì mở
+                    biểu mẫu sửa một văn bản cũ sẽ lặng lẽ đổi loại của nó sang mục đầu danh sách. */}
+                {ban.loaiVanBan !== "" &&
+                  !(traLoai.pha === "xong" && traLoai.ten.has(ban.loaiVanBan)) && (
+                    <option value={ban.loaiVanBan}>{ban.loaiVanBan} (không còn trong danh mục)</option>
+                  )}
+              </select>
+            </Field>
+          </div>
 
           <Field label={O_CO_QUAN_BAN_HANH} htmlFor="o-co-quan" grow="auto">
             <input
               id="o-co-quan"
               name="coQuanBanHanh"
+              autoComplete="off"
               value={ban.coQuanBanHanh}
               onChange={(e) => datBan({ ...ban, coQuanBanHanh: e.target.value })}
             />
           </Field>
 
-          <Field label={O_LOAI_VAN_BAN} htmlFor="o-loai-van-ban" kind="select" grow="auto">
-            <select
-              id="o-loai-van-ban"
-              name="loaiVanBan"
-              value={ban.loaiVanBan}
-              onChange={(e) => datBan({ ...ban, loaiVanBan: e.target.value })}
-            >
-              <option value="">— Chọn loại văn bản —</option>
-              {traLoai.pha === "xong" &&
-                [...traLoai.ten].map(([ma, ten]) => (
-                  <option key={ma} value={ma}>
-                    {ten}
-                  </option>
-                ))}
-              {/* MÃ ĐANG LƯU LUÔN CÓ MẶT, kể cả khi xã đã tắt loại ấy: không có mục này thì mở
-                  biểu mẫu sửa một văn bản cũ sẽ lặng lẽ đổi loại của nó sang mục đầu danh sách. */}
-              {ban.loaiVanBan !== "" &&
-                !(traLoai.pha === "xong" && traLoai.ten.has(ban.loaiVanBan)) && (
-                  <option value={ban.loaiVanBan}>{ban.loaiVanBan} (không còn trong danh mục)</option>
-                )}
-            </select>
-          </Field>
-
-          <Field label={O_TRICH_YEU} htmlFor="o-trich-yeu" grow="auto" className="sm:col-span-2">
+          <Field label={SUMMARY_FIELD_LABEL} htmlFor="o-trich-yeu" grow="auto">
             <textarea
               id="o-trich-yeu"
               name="trichYeu"
-              rows={3}
+              ref={summaryRef}
+              rows={2}
               className="py-2"
+              placeholder={SUMMARY_PLACEHOLDER}
               value={ban.trichYeu}
               onChange={(e) => datBan({ ...ban, trichYeu: e.target.value })}
             />
           </Field>
 
-          <Field label={O_DO_KHAN} htmlFor="o-do-khan" kind="select" grow="auto">
-            <select
-              id="o-do-khan"
-              name="doKhan"
-              value={ban.doKhan}
-              onChange={(e) => datBan({ ...ban, doKhan: e.target.value })}
-            >
-              {/* CHUỖI RỖNG LÀ MỘT CÂU TRẢ LỜI THẬT, không phải "chưa chọn". */}
-              <option value="">Không ghi độ khẩn</option>
-              {MA_DO_KHAN.map((ma) => (
-                <option key={ma} value={ma}>
-                  {nhanDoKhan(ma)}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          {dangMo.kieu === "them" && (
-            <div className="flex min-w-0 flex-col gap-3 sm:col-span-2">
+          {adding && (
+            <div className="flex min-w-0 flex-col gap-3">
               <p className="m-0 text-[13px] text-ink-500">{DAN_HAN_DO_MAY_CHU_AN_DINH}</p>
               {/* ĐƯỜNG DẪN HIỆN THƯỜNG TRỰC, không chỉ khi máy chủ từ chối — xem
                   `DAN_DUONG_TOI_CAU_HINH`: rẽ nhánh theo lời văn của máy chủ là dựng một bản sao
@@ -1388,18 +1396,86 @@ export function BieuMauVanBanDen({
             </div>
           )}
 
-          {refusal}
-      </div>
+          <button
+            type="button"
+            aria-expanded={showMore}
+            aria-controls="thong-tin-them-van-ban-den"
+            onClick={() => setShowMore((v) => !v)}
+            className="flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 [font-family:inherit] text-[13px] text-ink-500 hover:text-ink-900"
+          >
+            <Glyph icon={showMore ? ChevronDown : ChevronRight} className="size-4" />
+            {MORE_FIELDS_TOGGLE}
+          </button>
 
-      {/* Same order as before (submit, then cancel), right-aligned (spec §6.5). */}
-      <CardFooter className="justify-end">
-        <Button type="submit" variant="primary" disabled={dangGui} aria-busy={dangGui || undefined}>
-          <BusyLabel busy={dangGui} label={NUT_LUU} busyText="Đang lưu…" />
-        </Button>
-        <Button type="button" variant="secondary" onClick={onHuy} disabled={dangGui}>
-          {NUT_HUY}
-        </Button>
-      </CardFooter>
-    </Card>
+          {showMore && (
+            <div
+              id="thong-tin-them-van-ban-den"
+              className="grid min-w-0 gap-3 rounded-[10px] border border-solid border-line bg-surface-muted p-3 sm:grid-cols-2"
+            >
+              <Field label={REFERENCE_FIELD_LABEL} htmlFor="o-so-ky-hieu" grow="auto">
+                <input
+                  id="o-so-ky-hieu"
+                  name="soKyHieu"
+                  value={ban.soKyHieu}
+                  onChange={(e) => datBan({ ...ban, soKyHieu: e.target.value })}
+                  placeholder="1234/UBND-VP"
+                />
+              </Field>
+
+              <Field label={ISSUED_ON_FIELD_LABEL} htmlFor="o-ngay-van-ban" grow="auto">
+                <input
+                  id="o-ngay-van-ban"
+                  name="ngayVanBan"
+                  type="date"
+                  value={ban.ngayVanBan}
+                  onChange={(e) => datBan({ ...ban, ngayVanBan: e.target.value })}
+                />
+              </Field>
+
+              <Field label={O_DO_KHAN} htmlFor="o-do-khan" kind="select" grow="auto">
+                <select
+                  id="o-do-khan"
+                  name="doKhan"
+                  value={ban.doKhan}
+                  onChange={(e) => datBan({ ...ban, doKhan: e.target.value })}
+                >
+                  {/* CHUỖI RỖNG LÀ MỘT CÂU TRẢ LỜI THẬT, không phải "chưa chọn". */}
+                  <option value="">Không ghi độ khẩn</option>
+                  {MA_DO_KHAN.map((ma) => (
+                    <option key={ma} value={ma}>
+                      {nhanDoKhan(ma)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+          )}
+
+          {refusal}
+          {savedNotice !== "" && loi === "" && (
+            <p role="status" className="m-0 flex items-center gap-2 text-sm font-medium text-success-600">
+              <Glyph icon={CircleCheck} className="size-[18px] shrink-0" />
+              {savedNotice}
+            </p>
+          )}
+        </div>
+
+        {/* The prototype's footer: the shortcut hint on the left, then Huỷ · Lưu & nhập tiếp · Lưu. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] text-ink-500">{QUICK_SAVE_HINT}</span>
+          <Button type="button" variant="outline" className="ml-auto" onClick={onHuy} disabled={dangGui}>
+            {NUT_HUY}
+          </Button>
+          {adding && (
+            <Button type="button" variant="outline" disabled={dangGui} onClick={() => onGui(true)}>
+              {SAVE_AND_NEXT_LABEL}
+            </Button>
+          )}
+          <Button type="submit" variant="primary" disabled={dangGui} aria-busy={dangGui || undefined}>
+            <BusyLabel busy={dangGui} label={NUT_LUU} busyText="Đang lưu…" />
+          </Button>
+        </div>
+      </form>
+    </ModalDialog>
   );
 }

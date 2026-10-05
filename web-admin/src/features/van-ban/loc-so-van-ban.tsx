@@ -1,9 +1,12 @@
 "use client";
 
+import { Search } from "lucide-react";
 import type { FormEvent } from "react";
 
+import { Field } from "@/components/ui/field";
 import { TRANG_DAU, type NganXepConTro } from "@/features/cau-hinh/ngan-xep-con-tro";
 import type { ChieuSapXepVanBan, KhoaSapXepVanBan } from "@/lib/api/van-ban";
+import { danhSachNam } from "@/lib/nam";
 
 /**
  * Hai điều khiển chung của hai quyển sổ: ô tìm chữ và ô thứ tự — cùng phép "đổi lọc là về trang
@@ -59,22 +62,54 @@ export function ChonThuTu({
   id,
   thuTu,
   datThuTu,
+  disabled = false,
 }: {
   id: string;
   thuTu: MaThuTu;
   datThuTu: (ma: MaThuTu) => void;
+  disabled?: boolean;
 }) {
+  // One select of the prototype's filter row (ADR 0068 lần 5): the label is visually hidden — the
+  // selected option already says what it does — but stays a real `<label>`.
   return (
-    <p className="chon-hang-muc">
-      <label htmlFor={id}>Thứ tự</label>{" "}
-      <select id={id} value={thuTu} onChange={(e) => datThuTu(maThuTu(e.target.value))}>
+    <Field label="Thứ tự" htmlFor={id} kind="select" hideLabel grow="auto">
+      <select id={id} value={thuTu} disabled={disabled} onChange={(e) => datThuTu(maThuTu(e.target.value))}>
         {(Object.keys(THU_TU_SO) as MaThuTu[]).map((ma) => (
           <option key={ma} value={ma}>
             {THU_TU_SO[ma].nhan}
           </option>
         ))}
       </select>
-    </p>
+    </Field>
+  );
+}
+
+/**
+ * The register's year as one select of the filter row. Same list as `ChonNam` (`danhSachNam`, anchored
+ * on the year read ONCE by the screen); the year stays visible as words — `Sổ năm 2026` — because the
+ * route requires `year` and the screen must not pick one where nobody sees it (`lib/nam.ts`).
+ */
+export function RegisterYearSelect({
+  id,
+  year,
+  anchorYear,
+  onYear,
+}: {
+  id: string;
+  year: number;
+  anchorYear: number;
+  onYear: (year: number) => void;
+}) {
+  return (
+    <Field label="Năm của sổ" htmlFor={id} kind="select" hideLabel grow="auto">
+      <select id={id} value={year} onChange={(e) => onYear(Number(e.target.value))}>
+        {danhSachNam(anchorYear).map((n) => (
+          <option key={n} value={n}>
+            Sổ năm {n}
+          </option>
+        ))}
+      </select>
+    </Field>
   );
 }
 
@@ -112,10 +147,11 @@ export function OTimVanBan({
     datTim(typeof giaTri === "string" ? giaTri : "");
   }
 
+  // The prototype's search box: 256px, a magnifier inside, no visible label and no button —
+  // Enter submits (an implicit submission of a one-field form).
   return (
-    <form className="form-tra-cuu" role="search" onSubmit={gui}>
-      <div className="o-nhap">
-        <label htmlFor={id}>Tìm văn bản</label>
+    <form className="m-0 w-64 max-w-full" role="search" onSubmit={gui}>
+      <Field label="Tìm văn bản" htmlFor={id} icon={Search} hideLabel grow="auto">
         <input
           id={id}
           name={id}
@@ -124,13 +160,12 @@ export function OTimVanBan({
           placeholder={goiY}
           autoComplete="off"
         />
-      </div>
-      <button className="nut-phu" type="submit">
-        Tìm
-      </button>
+      </Field>
     </form>
   );
 }
 
-export const GOI_Y_TIM_DEN = "Trích yếu hoặc số, ký hiệu văn bản";
-export const GOI_Y_TIM_DI = "Trích yếu hoặc nơi nhận";
+// The prototype's wording ("Tìm theo trích yếu, cơ quan, số ký hiệu…") minus "cơ quan": the incoming
+// route does not search the issuing body, and a hint promising it is a search that silently finds nothing.
+export const GOI_Y_TIM_DEN = "Tìm theo trích yếu, số ký hiệu…";
+export const GOI_Y_TIM_DI = "Tìm theo trích yếu, nơi nhận…";

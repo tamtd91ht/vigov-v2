@@ -91,6 +91,7 @@ function ve({
   ban = BAN_CHUYEN_TRONG as BanChuyen,
   loi = "",
   danhBa = null as DanhBaTheoMa | null,
+  coQuyenGhi = false,
 } = {}) {
   return renderToStaticMarkup(
     <NganVanBanDen
@@ -105,10 +106,10 @@ function ve({
       loi={loi}
       dangGui={false}
       cauDaXong=""
-      tieuDiemChuyen={false}
       onGui={() => {}}
       onDong={() => {}}
       danhBa={danhBa}
+      coQuyenGhi={coQuyenGhi}
     />,
   );
 }
@@ -125,12 +126,13 @@ describe("phần đầu và các ô thông tin", () => {
     const html = ve();
 
     expect(html).toMatch(
-      /<h3 id="tieu-de-ngan-van-ban-den"[^>]*>Văn bản đến số 7\/2026 · nhận ngày 22\/09\/2026<\/h3>/,
+      /<h2 id="tieu-de-ngan-van-ban-den"[^>]*>Văn bản đến số 7\/2026 · nhận ngày 22\/09\/2026<\/h2>/,
     );
-    expect(html).toContain('aria-labelledby="tieu-de-ngan-van-ban-den"');
-    // Trích yếu hiện trong thân ngăn, nhưng không trong tiêu đề — tiêu đề đi vào cây trợ năng.
+    // The prototype's drawer is a dialog named by that heading (`LargeDialog`).
+    expect(html).toMatch(/<dialog aria-labelledby="tieu-de-ngan-van-ban-den"/);
+    // Trích yếu hiện ngay dưới, chữ lớn, nhưng KHÔNG trong tiêu đề — tiêu đề đi vào cây trợ năng.
     expect(html).toContain("Về việc rà soát hồ sơ cán bộ");
-    expect(html).not.toMatch(/<h3[^>]*>[^<]*rà soát/);
+    expect(html).not.toMatch(/<h2[^>]*>[^<]*rà soát/);
   });
 
   it("ba chip, cơ quan ban hành, số/ký hiệu + ngày, bộ phận đang giữ tra ra TÊN", () => {
@@ -140,7 +142,8 @@ describe("phần đầu và các ô thông tin", () => {
     expect(html).toContain("Công văn");
     expect(html).toContain("Khẩn");
     expect(html).toContain("Ban Tổ chức Tỉnh uỷ");
-    expect(html).toContain("1742-CV/BTCTU · 18/09/2026");
+    expect(html).toContain("1742-CV/BTCTU");
+    expect(html).toContain("18/09/2026");
     expect(html).toContain("VĂN PHÒNG ĐẢNG UỶ");
     // Chưa có danh bạ (đang tải / tải hỏng): cán bộ hiện bằng MÃ.
     expect(html).toContain("CB-00123");
@@ -244,7 +247,11 @@ describe("dòng thời gian chuyển tiếp — chỉ đọc", () => {
 
   it("không một nút Sửa, Xoá hay thùng rác nào trên dòng thời gian", () => {
     // Bảng lịch sử chỉ-thêm ở tầng CSDL, hợp đồng không có tuyến sửa hay xoá (luật 7, cấm #5).
-    const html = ve({ ls: lichSu([dongLichSu({})]) });
+    // Measured on the timeline section only, with write permission ON: the header's Sửa / Gỡ act
+    // on the DOCUMENT, never on a routing line.
+    const full = ve({ ls: lichSu([dongLichSu({})]), coQuyenGhi: true });
+    const html = /<section aria-labelledby="tieu-de-dong-thoi-gian"[\s\S]*?<\/section>/.exec(full)?.[0] ?? "";
+    expect(html).toContain("Lý do lần một");
 
     expect(html).not.toContain("🗑");
     expect(html).not.toContain("nut-xoa");
@@ -291,8 +298,8 @@ describe("khối chuyển xử lý — cổng `document.route`", () => {
     const html = ve({ coQuyenChuyen: true });
 
     expect(html).toContain("Chuyển cho bộ phận khác");
-    expect(html).toContain("Chuyển đến bộ phận");
-    expect(html).toContain("Cán bộ xử lý (không bắt buộc)");
+    expect(html).toContain(">Chuyển đến</label>");
+    expect(html).toContain("Người xử lý (không bắt buộc)");
     expect(html).toContain("Lý do chuyển");
     expect(html).toMatch(/KHÔNG sửa được/);
     expect(html).toMatch(/hai lần chuyển/);
@@ -391,5 +398,50 @@ describe("hàng chuyển trạng thái (chỗ giữ “?”, ADR 0068 §14)", ()
 
   it("chưa đọc được văn bản thì không có hàng ấy", () => {
     expect(ve({ vb: null })).not.toContain("nhan-chuyen-trang-thai");
+  });
+});
+
+describe("ngăn theo prototype (ADR 0068 lần 5)", () => {
+  it("Sửa và Gỡ khỏi sổ ở đầu ngăn CHỈ khi có `document.create` — vế từ chối trước", () => {
+    const denied = ve({ coQuyenGhi: false });
+    expect(denied).not.toMatch(/>\s*Sửa\s*</);
+    expect(denied).not.toContain("Gỡ khỏi sổ");
+
+    const allowed = ve({ coQuyenGhi: true });
+    expect(allowed).toMatch(/>\s*Sửa\s*</);
+    expect(allowed).toContain("Gỡ khỏi sổ");
+  });
+
+  it("hàng ba ô dưới dải trạng thái: Hạn xử lý · Bộ phận đang giữ · Người vào sổ", () => {
+    const html = ve();
+    const a = html.indexOf(">Hạn xử lý<");
+    const b = html.indexOf(">Bộ phận đang giữ<");
+    const c = html.indexOf(">Người vào sổ<");
+    expect(a).toBeGreaterThan(-1);
+    expect(b).toBeGreaterThan(a);
+    expect(c).toBeGreaterThan(b);
+  });
+
+  it("“Chuyển thành nhiệm vụ” có mặt, vô hiệu, có “?” — không gọi tuyến nào", () => {
+    const html = ve();
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>[\s\S]{0,400}?Chuyển thành nhiệm vụ/);
+    expect(html).toContain("Chuyển thành nhiệm vụ — tính năng đang phát triển");
+  });
+
+  it("dòng thời gian ở cột phải, sau thân trái", () => {
+    const html = ve({ ls: lichSu([dongLichSu({})]) });
+    expect(html.indexOf('aria-labelledby="tieu-de-dong-thoi-gian"')).toBeGreaterThan(html.indexOf("Trích yếu nội dung"));
+    expect(html).toMatch(/<aside[^>]*md:w-\[24rem\]/);
+  });
+
+  it("có danh bạ: người xử lý chọn theo HỌ TÊN, giá trị gửi đi vẫn là MÃ cán bộ", () => {
+    const html = ve({ danhBa: DANH_BA });
+    expect(html).toMatch(/<select id="o-can-bo-xu-ly"/);
+    expect(html).toContain('<option value="CB-00123">Trần Thị B — Văn thư</option>');
+    expect(html).toContain("— Để bộ phận tự phân công —");
+  });
+
+  it("chưa có danh bạ: ô gõ mã như trước — chuyển không phải chờ danh bạ", () => {
+    expect(ve({ danhBa: null })).toMatch(/<input id="o-can-bo-xu-ly"/);
   });
 });

@@ -373,8 +373,29 @@ export const O_TRICH_YEU = "Trích yếu";
 export const O_DO_KHAN = "Độ khẩn";
 export const O_NOI_NHAN = "Nơi nhận";
 export const O_NGUOI_KY = "Người ký";
-export const O_DEN_BO_PHAN = "Chuyển đến bộ phận";
-export const O_CAN_BO_XU_LY = "Cán bộ xử lý (không bắt buộc)";
+// The prototype's two routing labels (`DocumentDetailDrawer.tsx`, ADR 0068 lần 5).
+export const O_DEN_BO_PHAN = "Chuyển đến";
+export const O_CAN_BO_XU_LY = "Người xử lý (không bắt buộc)";
+
+/*
+ * Labels of the incoming-document intake dialog, in the prototype's words (`DocumentEntryForm.tsx`).
+ * The outgoing form keeps `O_NGAY_VAN_BAN` / `O_TRICH_YEU`: it has no prototype to follow.
+ */
+export const INTAKE_TITLE = "Nhập tay — vào sổ văn bản đến";
+export const INTAKE_DESCRIPTION =
+  "Chỉ cần bốn trường. Ngày đến đã điền sẵn; số đến và hạn xử lý do hệ thống cấp khi lưu, những " +
+  "mục còn lại bổ sung sau lúc nào cũng được.";
+export const SUMMARY_FIELD_LABEL = "Trích yếu nội dung";
+export const SUMMARY_PLACEHOLDER = "V/v triển khai kế hoạch chuyển đổi số năm 2026";
+export const REFERENCE_FIELD_LABEL = "Số/ký hiệu văn bản";
+export const ISSUED_ON_FIELD_LABEL = "Ngày ban hành";
+export const MORE_FIELDS_TOGGLE = "Thông tin thêm (không bắt buộc)";
+export const SAVE_AND_NEXT_LABEL = "Lưu & nhập tiếp";
+export const QUICK_SAVE_HINT = "Ctrl + Enter để lưu nhanh";
+export const ROUTING_REASON_PLACEHOLDER = "Thuộc thẩm quyền của bộ phận Địa chính";
+export const ROUTING_PERSON_PLACEHOLDER = "— Để bộ phận tự phân công —";
+/** Checkbox of the incoming filter row — `metric=overdue`, the same rows as the overview's red figure. */
+export const OVERDUE_ONLY_LABEL = "Chỉ văn bản quá hạn";
 export const O_LY_DO_CHUYEN = "Lý do chuyển";
 export const O_LY_DO_GO = "Lý do gỡ";
 
@@ -402,9 +423,6 @@ export const DAN_SO_DI =
   "Sổ ghi các văn bản xã đã phát hành. Cấp số là hành vi phát hành: hệ thống cấp số ngay khi lưu, " +
   "và số đã cấp không bao giờ được cấp lại.";
 
-export const DAN_SO_DEN =
-  "Sổ vào công văn đến của xã. Hệ thống cấp số đến và ấn định hạn xử lý theo cấu hình của xã.";
-
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * PHẦN CỦA ĐẶC TẢ CHƯA DỰNG ĐƯỢC — mô tả cho dấu "?" đặt đúng chỗ đặc tả (ADR 0068 §14).
  *
@@ -413,8 +431,10 @@ export const DAN_SO_DEN =
  * `tools/tien_do_san_pham.py` đếm làm cột "chưa dựng" của bảng tiến độ — thêm hay bớt một mục là
  * đổi con số báo lên, nên một phần dựng xong thì RỜI mảng cùng lần dựng.
  *
- * KHÔNG CÓ MỤC "Chuyển thành nhiệm vụ", dù nó cũng chưa dựng: nó không nằm trong bảng vị trí chủ
- * dự án đã duyệt, và một mục ở đây không có chỗ giữ trên màn là một câu không ai đọc được.
+ * ĐỔI CHIỀU 06/10/2026 (ADR 0068 lần 5): "Chuyển thành nhiệm vụ" NAY CÓ MỤC — prototype đặt nút ấy
+ * trong ngăn chi tiết văn bản, nên nó có chỗ giữ trên màn. Cùng lượt thêm ba chỗ giữ khác prototype
+ * có ở sổ văn bản đến: phạm vi "Giao cho tôi / Liên quan đến tôi", "Nhập hàng loạt từ Excel" và
+ * "Xuất sổ". Mọi nút của tab Đơn thư và Báo cáo dùng chung lý do của hai mục đầu.
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
 export type PendingPart = {
@@ -455,5 +475,31 @@ export const PHAN_CHUA_DUNG: readonly PendingPart[] = [
       "Các bước của văn bản đến đã được chốt: Đã vào sổ → Chờ trình/phân luồng → Đã chuyển xử lý → " +
       "Đang xử lý → Hoàn thành. Hệ thống chưa đổi được trạng thái theo các bước ấy, nên các nút " +
       "chưa bấm được. Chuyển văn bản cho bộ phận khác vẫn làm được như hiện nay.",
+  },
+  // The incoming list route takes no "assigned to me" / "involves me" parameter.
+  {
+    ten: "Lọc Giao cho tôi / Liên quan đến tôi",
+    viSao:
+      "Sổ văn bản đến chưa lọc được theo người được giao hay người liên quan, nên hai lựa chọn này " +
+      "chưa bấm được. Sổ đang hiện toàn bộ văn bản của xã.",
+  },
+  // No import route for incoming documents (the only import is the document-type catalogue).
+  {
+    ten: "Nhập hàng loạt từ Excel",
+    viSao:
+      "Hệ thống chưa nhận sổ văn bản đến từ tệp Excel. Hôm nay vào sổ từng văn bản bằng nút “Vào " +
+      "sổ văn bản đến”.",
+  },
+  // No export route for the incoming register.
+  {
+    ten: "Xuất sổ văn bản đến",
+    viSao: "Hệ thống chưa xuất được sổ văn bản đến ra tệp.",
+  },
+  // Raising a task from a document needs a contract between `documents` and `tasks` that does not exist.
+  {
+    ten: "Chuyển thành nhiệm vụ",
+    viSao:
+      "Tạo nhiệm vụ thẳng từ một văn bản đến cần sổ văn bản và sổ nhiệm vụ trao đổi với nhau, việc " +
+      "ấy hệ thống chưa có. Hôm nay vẫn giao việc được ở màn Nhiệm vụ.",
   },
 ];
