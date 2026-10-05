@@ -8,12 +8,12 @@
 # Tầng GENERATED (20-, 30-) do `make kb` tạo. KHÔNG sửa tay.
 
 version: 1
-generated_at: 2026-10-05T10:21:55Z   # `make kb` điền
-from_commit: 63afc0f8   # `make kb` điền
+generated_at: 2026-10-05T12:48:20Z   # `make kb` điền
+from_commit: fc6d8565   # `make kb` điền
 
 budget:
   always_load_max: 28000  # token — trần do người dùng chốt (20000 -> 25000 -> 27000 ngày 21/09 -> 28000 ngày 28/09/2026, cho luật 13)
-  in_use: 28060   # `make kb` đo
+  in_use: 27974   # `make kb` đo
 
 always_load:                 # T0 — nạp mọi phiên, không hỏi
   - kb/00-foundation/domain-boundaries.md
@@ -104,8 +104,8 @@ load_on_demand:              # tiết lộ dần — mô tả đủ để QUYẾ
     tier: T5
     source: CURATED
     expires: 2026-12-22
-    load_when: "trước khi mượn thiết kế / mã / đường API từ `../vigov-require`, hoặc khi dựng một phân hệ M1–M8 mà kho này chưa có tài liệu nghiệp vụ, hoặc trước khi sửa một màn web-admin cho khớp prototype (Sổ việc nhóm M)"
-    warning: "§0–§9 đo 22/09/2026 trên tài liệu (vigov-require@b159f0e · vigov-v2@4c96e9a); nhóm M (từng màn web-admin vs prototype apps/admin) đo 05/10/2026 bằng đọc mã (vigov-require@0053854 · vigov-v2@29cb87fb), không qua trình duyệt. Hết hạn 22/12/2026 — sau đó đo lại, đừng tin"
+    load_when: "trước khi mượn thiết kế / mã / API từ `../vigov-require`, dựng phân hệ M1–M8 chưa có tài liệu, hoặc sửa màn web-admin cho khớp prototype (nhóm M)"
+    warning: "§0–§9 đo 22/09/2026 (require@b159f0e); nhóm M đo 05/10/2026 bằng đọc mã (require@0053854), chưa qua trình duyệt. Hết hạn 22/12/2026 — đo lại"
 
 faq_routes:       # định tuyến thẳng — tiết kiệm nhiều token nhất
   "X nằm ở đâu":              kb/30-indexes/code-map.json
