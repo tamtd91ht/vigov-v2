@@ -36,7 +36,27 @@ var (
 	ErrThuTuBoPhanAm     = errors.New("bo_phan: thứ tự không được âm")
 	ErrThuTuBoPhanQuaLon = errors.New("bo_phan: thứ tự quá lớn")
 	ErrIDChaQuaDai       = errors.New("bo_phan: mã tham chiếu bộ phận cha quá dài")
+
+	// ErrOrgUnitNameTaken — a LIVE sibling under the same parent already carries this name, compared
+	// the way the Excel import compares it (foldName). NOT one of the 400s above: the name is well
+	// formed, it collides with the current state of the chart — 409, mapped in http/bo_phan.go.
+	// Tester report 05/10/2026, TC-02: the form accepted what the import refused.
+	ErrOrgUnitNameTaken = errors.New("bo_phan: bộ phận cha này đã có một bộ phận cùng tên")
 )
+
+// CheckSiblingNameFree refuses `name` when a sibling other than `selfID` carries the same folded
+// name. `siblings` must be the LIVE units under one parent of one commune — the caller's query
+// decides that; this only compares. selfID "" (a creation) excludes nothing, and a rename to the
+// unit's own current name passes because the unit is skipped.
+func CheckSiblingNameFree(name, selfID string, siblings []ExistingOrgUnit) error {
+	key := foldName(name)
+	for _, s := range siblings {
+		if s.ID != selfID && foldName(s.Name) == key {
+			return ErrOrgUnitNameTaken
+		}
+	}
+	return nil
+}
 
 const (
 	// TranTenBoPhan — "THƯỜNG TRỰC ỦY BAN MẶT TRẬN TỔ QUỐC VIỆT NAM XÃ …" fits in a third of it.

@@ -260,6 +260,7 @@ func TestGhiBoPhanAnhXaLoi(t *testing.T) {
 		{idstore.ErrBoPhanChaKhongTonTai, http.StatusBadRequest, "parent_not_found"},
 		{idstore.ErrMaBoPhanDaDung, http.StatusConflict, "org_unit_code_taken"},
 		{app.ErrCayBoPhanVongLap, http.StatusConflict, "org_unit_cycle"},
+		{domain.ErrOrgUnitNameTaken, http.StatusConflict, "org_unit_name_taken"}, // TC-02, 05/10/2026
 		{domain.ErrThieuTenBoPhan, http.StatusBadRequest, "invalid_request"},
 		{errors.New("cơ sở dữ liệu không phản hồi"), http.StatusInternalServerError, "internal"},
 	} {

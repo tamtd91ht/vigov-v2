@@ -210,6 +210,21 @@ func (c *connBoPhanGia) QueryContext(_ context.Context, q string, args []driver.
 		}
 		return &rowsGia{cot: []string{"id", "ma", "ten", "cha_id", "da_xoa"}, hang: ra}, nil
 
+	case strings.Contains(q, "cha_id IS NOT DISTINCT FROM"):
+		// The same-name check's read (idstore.BoPhanStore.LiveSiblings): LIVE units of the commune at
+		// $1 directly under $2. Refused if the statement stops naming the commune or the live filter.
+		if !strings.Contains(q, "tenant_id = $1") || !strings.Contains(q, "deleted_at IS NULL") {
+			return nil, fmt.Errorf("driver giả: đọc cùng cấp không lọc theo xã hay dòng sống: %q", q)
+		}
+		xa, cha := tenant.ID(chuoiThu(args, 0)), chuoiThu(args, 1)
+		var ra [][]driver.Value
+		for _, h := range c.k.hang {
+			if h.xa == xa && h.cha == cha && !h.daXoa {
+				ra = append(ra, []driver.Value{h.id, h.ten})
+			}
+		}
+		return &rowsGia{cot: []string{"id", "ten"}, hang: ra}, nil
+
 	case strings.Contains(q, "SELECT ma FROM bo_phan"):
 		xa, goc := tenant.ID(chuoiThu(args, 0)), chuoiThu(args, 1)
 		var ra [][]driver.Value

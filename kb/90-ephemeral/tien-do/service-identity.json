@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-identity",
-  "cap_nhat": "2026-10-04",
+  "cap_nhat": "2026-10-05",
   "muc": [
     {
       "id": "store-crosstenant",
@@ -480,6 +480,14 @@
       "bang_chung": "04/10/2026 PA2-2 (chưa commit). migrations/0023_operator_petition_field_key.sql: MỘT câu ALTER TABLE operator_permission_grant DROP CONSTRAINT IF EXISTS + ADD CONSTRAINT operator_permission_grant_key_known với 7 khoá (chỉ NỚI — mọi dòng cấp cũ vẫn hợp lệ), không chèn dòng nào, không đụng quyen; KHÔNG sửa 0012. internal/domain/operator.go OperatorPermissionPetitionFieldManage vào OperatorPermissions(). internal/store/operatorstore/store_params_test.go TestPermissionCheckMatchesDomainList nay đọc migration MỚI NHẤT định nghĩa ràng buộc (bỏ chú thích -- trước khi so), không còn đọc cứng 0012. migrations/operator_petition_field_key_test.go (hai ca văn bản). KIỂM: go test ./service-identity/... xanh trong make check (-race). CHƯA CHẠY 0023 trên PostgreSQL thật (không VIGOV_TEST_DSN).",
       "no_confirm": [],
       "tiep_theo": "Triển khai identity (áp 0023 + bản Go mới) TRƯỚC khi chạy job Jenkins tao-tai-khoan-van-hanh cấp đủ 7 khoá — đảo thứ tự thì lần grant thứ bảy bị CHECK từ chối và job thoát 1 (tài khoản vẫn tạo, cấp nốt bằng operatorctl grant). Tài khoản vận hành đã có không tự nhận khoá mới: operatorctl grant --permission ops.petition_field.manage --ticket … cho từng người."
+    },
+    {
+      "id": "kiem-thu-05-10-tc02-trung-ten-bo-phan",
+      "viec": "TC-02 (báo cáo kiểm thử 05/10/2026): thêm/sửa bộ phận qua form nhận tên trùng với bộ phận cùng cha, trong khi nhập Excel từ chối",
+      "trang_thai": "xong",
+      "bang_chung": "05/10/2026 TASK-E (chưa commit). internal/domain/bo_phan_ghi.go thêm ErrOrgUnitNameTaken + CheckSiblingNameFree (dùng đúng foldName của nhập Excel, bỏ qua chính bộ phận đang sửa). internal/store/bo_phan_ghi.go thêm LiveSiblings (bộ phận SỐNG cùng cha, tenant_id = $1, cha_id IS NOT DISTINCT FROM nullif($2,'')). internal/app/so_do_to_chuc.go kiểm trong giao dịch ở Them và ở Sua (chỉ khi đổi tên hoặc đổi cha — đổi thứ tự trên cặp trùng có sẵn vẫn qua). internal/http/bo_phan.go ánh xạ 409 org_unit_name_taken. Test: domain TestCheckSiblingNameFree; app org_unit_sibling_name_test.go (trùng tên bị từ chối; khác cha / dòng đã xoá mềm / xã khác thì cho; đổi tên trùng anh em bị từ chối; đổi hoa-thường tên chính mình thì qua; dời sang cha có tên trùng bị từ chối); http TestGhiBoPhanAnhXaLoi thêm dòng 409; store TestPgLiveSiblings (bỏ qua khi không có VIGOV_TEST_DSN). Kiểm: go build ./... và go test ./... service-identity xanh.",
+      "no_confirm": [],
+      "tiep_theo": "Không có chỉ mục duy nhất trên tên đã gập: hai lần tạo cùng tên ở GỐC cùng lúc (không có dòng cha để khoá) vẫn có thể cùng lọt — cần migration nếu muốn chặn tuyệt đối, chưa làm. TestPgLiveSiblings chưa chạy trên PostgreSQL thật."
     }
   ]
 }

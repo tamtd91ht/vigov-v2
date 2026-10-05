@@ -241,6 +241,10 @@ func (h *Handler) traLoiLoiGhiBoPhan(w http.ResponseWriter, r *http.Request, vie
 	case errors.Is(err, idstore.ErrMaBoPhanDaDung):
 		httpx.WriteError(w, http.StatusConflict, "org_unit_code_taken",
 			"Mã bộ phận này đã được dùng trong xã (kể cả bởi bộ phận đã xoá — mã đã cấp không cấp lại). Hãy chọn mã khác.", "")
+	case errors.Is(err, domain.ErrOrgUnitNameTaken):
+		// 409 and not 400: the name is well formed; it collides with a unit already in the chart.
+		httpx.WriteError(w, http.StatusConflict, "org_unit_name_taken",
+			"Bộ phận cha này đã có một bộ phận cùng tên trong xã. Hãy đặt tên khác.", "")
 	case errors.Is(err, app.ErrCayBoPhanVongLap):
 		httpx.WriteError(w, http.StatusConflict, "org_unit_cycle",
 			"Không thể dời một bộ phận vào dưới chính nó hay dưới một bộ phận con của nó.", "")

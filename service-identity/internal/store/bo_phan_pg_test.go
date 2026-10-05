@@ -148,3 +148,30 @@ func TestPgBoPhanGhi(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// LiveSiblings: live rows only, this commune only, root ("" → NULL) and a named parent both.
+func TestPgLiveSiblings(t *testing.T) {
+	db := moKetNoi(t)
+	xa, xaKhac := xaRieng(t)
+	kho := pkgstore.New(db)
+	s := NewBoPhanStore(kho)
+	themBoPhanPg(t, db, xa, "bp-1", "goc-1", "", false)
+	themBoPhanPg(t, db, xa, "bp-x", "goc-xoa", "", true)
+	themBoPhanPg(t, db, xa, "bp-2", "con-1", "bp-1", false)
+	themBoPhanPg(t, db, xaKhac, "bp-k", "goc-khac", "", false)
+
+	err := kho.For(ctxXa(xa)).Tx(ctxXa(xa), func(tx *pkgstore.ScopedTx) error {
+		root, err := s.LiveSiblings(ctxXa(xa), tx, "")
+		if err != nil || len(root) != 1 || root[0].ID != "bp-1" {
+			t.Errorf("gốc = %+v, %v — muốn chỉ bp-1 (không dòng đã xoá, không xã khác)", root, err)
+		}
+		under, err := s.LiveSiblings(ctxXa(xa), tx, "bp-1")
+		if err != nil || len(under) != 1 || under[0].ID != "bp-2" || under[0].Name != "CON-1" {
+			t.Errorf("dưới bp-1 = %+v, %v", under, err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}

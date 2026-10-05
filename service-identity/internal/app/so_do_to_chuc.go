@@ -35,6 +35,7 @@ import (
 type KhoBoPhan interface {
 	KhoaBoPhan(ctx context.Context, tx *store.ScopedTx, id string) (domain.BoPhan, bool, error)
 	MaCungGoc(ctx context.Context, tx *store.ScopedTx, goc string) ([]string, error)
+	LiveSiblings(ctx context.Context, tx *store.ScopedTx, parentID string) ([]domain.ExistingOrgUnit, error)
 	Chen(ctx context.Context, tx *store.ScopedTx, bp domain.BoPhan) error
 	CapNhat(ctx context.Context, tx *store.ScopedTx, bp domain.BoPhan) error
 
@@ -113,6 +114,9 @@ func (uc *SoDoToChuc) Them(ctx context.Context, yc YeuCauThemBoPhan, nguoi Nguoi
 			if err != nil {
 				return err
 			}
+		}
+		if err := uc.siblingNameFree(ctx, tx, moi.Ten, "", moi.ChaID); err != nil {
+			return err
 		}
 
 		dangCo, err := uc.kho.MaCungGoc(ctx, tx, moi.Ma)
@@ -284,6 +288,14 @@ func (uc *SoDoToChuc) Sua(ctx context.Context, id string, yc YeuCauSuaBoPhan, ng
 				return err
 			}
 		}
+		// ONLY WHEN THE NAME OR THE PARENT MOVES: re-ranking a unit must not fail because two siblings
+		// already shared a name before this check existed. The unit itself is excluded, so a rename
+		// that only changes letter case passes.
+		if sau.Ten != truoc.Ten || sau.ChaID != truoc.ChaID {
+			if err := uc.siblingNameFree(ctx, tx, sau.Ten, sau.ID, sau.ChaID); err != nil {
+				return err
+			}
+		}
 
 		if err := uc.kho.CapNhat(ctx, tx, sau); err != nil {
 			return err
@@ -302,6 +314,17 @@ func (uc *SoDoToChuc) Sua(ctx context.Context, id string, yc YeuCauSuaBoPhan, ng
 		return domain.BoPhan{}, err
 	}
 	return sau, nil
+}
+
+// siblingNameFree refuses a name a LIVE sibling under parentID already carries, compared as the
+// Excel import compares it (tester report 05/10/2026, TC-02: the form and the import disagreed).
+// Inside the write's transaction, scoped to the commune by the store.
+func (uc *SoDoToChuc) siblingNameFree(ctx context.Context, tx *store.ScopedTx, name, selfID, parentID string) error {
+	siblings, err := uc.kho.LiveSiblings(ctx, tx, parentID)
+	if err != nil {
+		return err
+	}
+	return domain.CheckSiblingNameFree(name, selfID, siblings)
 }
 
 // kiemVongLap walks from the new parent up to the root under row locks; see Sua.

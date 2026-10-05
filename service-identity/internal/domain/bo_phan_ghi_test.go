@@ -124,3 +124,23 @@ func TestKiemTraThuTuBoPhan(t *testing.T) {
 		t.Error("thứ tự quá lớn được nhận")
 	}
 }
+
+// TC-02 (tester report 05/10/2026): the same folded comparison as the Excel import, self excluded.
+func TestCheckSiblingNameFree(t *testing.T) {
+	siblings := []ExistingOrgUnit{{ID: "bp-1", Name: "VĂN PHÒNG"}, {ID: "bp-2", Name: "TỔ MỘT CỬA"}}
+	for _, tc := range []struct {
+		name, unit, self string
+		want             error
+	}{
+		{"new distinct name", "TỔ KẾ TOÁN", "", nil},
+		{"case and spaces fold", "  văn phòng ", "", ErrOrgUnitNameTaken},
+		{"rename onto a sibling", "Tổ một cửa", "bp-1", ErrOrgUnitNameTaken},
+		{"own name, other case", "Văn phòng", "bp-1", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := CheckSiblingNameFree(tc.unit, tc.self, siblings); !errors.Is(got, tc.want) {
+				t.Errorf("CheckSiblingNameFree = %v, muốn %v", got, tc.want)
+			}
+		})
+	}
+}
