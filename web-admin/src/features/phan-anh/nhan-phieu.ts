@@ -752,6 +752,17 @@ export function phanLoaiDuoc(trangThai: string): boolean {
   return trangThai === "da-tiep-nhan";
 }
 
+/**
+ * The first value of the classify select: the petition's CURRENT field when it is one of the
+ * catalogue's options, else empty. A staff-booked petition arrives with its field already chosen at
+ * intake (PA-03); an empty select made the clerk pick it a second time. A code the catalogue lacks
+ * stays empty — a select whose value matches no option shows one thing and submits another.
+ */
+export function initialClassifyField(field: string | undefined | null): string {
+  if (field === undefined || field === null) return "";
+  return LINH_VUC_PHAN_ANH.some((l) => l.ma === field) ? field : "";
+}
+
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * HAI NHÁNH RẼ — `Không tiếp nhận`, `Chuyển cấp trên` (POST …/rejection, …/referral)
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
@@ -870,15 +881,23 @@ export const PUBLICATION_DENIED =
 /** Nhãn nút tiến trạng thái. Không nêu tên bước kế tiếp: máy chủ giữ bản đồ, không phải màn này. */
 export const NHAN_TIEN_TRANG_THAI = "Chuyển sang bước kế tiếp";
 
+// Plain administrative wording (tester report 05/10/2026, PA-07): a clerk reads what the button does
+// and who may press it — not how the server is built.
 export const GHI_CHU_TIEN_TRANG_THAI =
-  "Máy chủ quyết định bước kế tiếp trên luồng chính. Phiếu được phân công cho bạn thì bạn tiến " +
-  "được, dù tài khoản không có quyền xử lý phản ánh của cả xã.";
+  "Chuyển phiếu sang bước xử lý tiếp theo. Cán bộ được phân công phiếu này hoặc cán bộ có quyền " +
+  "xử lý phản ánh của xã đều thực hiện được.";
+
+/**
+ * Shown INSTEAD of the `Chuyển xử lý` form while the petition is still classifiable (`phanLoaiDuoc`).
+ * The server refuses an assignment from `da-tiep-nhan` with 409 (ADR 0027); drawing a live form there
+ * is drawing a button whose only answer is a refusal (tester report 05/10/2026, PA-03).
+ */
+export const ASSIGN_NEEDS_CLASSIFICATION = "Cần phân loại phiếu trước khi chuyển xử lý.";
 
 export const NHAN_O_KET_QUA = "Kết quả xử lý người dân đọc được";
 
 export const GHI_CHU_O_KET_QUA =
-  "Câu này hiện trên phiếu của người dân khi họ tra cứu. Bắt buộc phải có — một phiếu đóng mà " +
-  "không nói kết quả là một phiếu bị xếp lại trong im lặng.";
+  "Bắt buộc. Ghi rõ kết quả xử lý; người dân sẽ đọc được nội dung này khi tra cứu phiếu.";
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * QUYỂN SỔ — câu chữ của danh sách và bộ lọc (§2, §4)
@@ -917,6 +936,21 @@ export type DanhBaTheoMa = ReadonlyMap<string, identity_canBoChonNguoiRa>;
 /** Dựng bảng tra từ `items` của `GET /api/v1/staff-directory`. */
 export function danhBaTheoMa(items: readonly identity_canBoChonNguoiRa[]): DanhBaTheoMa {
   return new Map(items.map((cb) => [cb.code, cb]));
+}
+
+/**
+ * A staff business code read out on a record's history line: `Full name (CB-…)` when the directory
+ * knows the code, the bare code otherwise (directory not loaded, failed, or the account is no longer
+ * active — a retired officer's rows must still name exactly one person).
+ *
+ * THE CODE STAYS ON THE LINE even with a name: history is re-read during complaints, and two officers
+ * can share a full name; the code is what still identifies one person years later (rule 6, inv. 8).
+ * Shared by the petition log, the incoming-document panel and the task log (`nhanNguoiNhatKy`).
+ */
+export function staffNameWithCode(code: string, directory: DanhBaTheoMa | null): string {
+  const cb = directory?.get(code);
+  if (cb === undefined || cb.full_name === "") return code;
+  return `${cb.full_name} (${code})`;
 }
 
 /**
@@ -1021,13 +1055,14 @@ export const CITIZEN_LOG_ACTOR = "cong-dan";
  *
  * `cong-dan` IS A MARKER, NOT A STAFF CODE, and it is never looked up in the staff directory: the server
  * writes it instead of the citizen's id on purpose, so an anonymous citizen's reports cannot be linked
- * on a staff screen (ADR 0008). Every other value is a staff business code and is shown as is (rule 6,
- * invariant 8).
+ * on a staff screen (ADR 0008). Every other value is a staff business code, read out as
+ * `Full name (CB-…)` through the screen's one directory read (`staffNameWithCode`) — the bare code when
+ * the directory does not know it (rule 6, invariant 8).
  */
-export function logActorLabel(actorCode: string): string {
+export function logActorLabel(actorCode: string, directory: DanhBaTheoMa | null): string {
   if (actorCode === "") return "—";
   if (actorCode === CITIZEN_LOG_ACTOR) return "Người dân";
-  return actorCode;
+  return staffNameWithCode(actorCode, directory);
 }
 
 /** Chỉ dòng `phan-cong` mang bộ phận và người phụ trách; dòng khác hai trường ấy rỗng. */

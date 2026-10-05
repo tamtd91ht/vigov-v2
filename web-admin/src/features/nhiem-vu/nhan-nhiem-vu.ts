@@ -20,7 +20,12 @@
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
 
-import { danhBaTheoMa, nhanThoiDiem, type DanhBaTheoMa } from "@/features/phan-anh/nhan-phieu";
+import {
+  danhBaTheoMa,
+  nhanThoiDiem,
+  staffNameWithCode,
+  type DanhBaTheoMa,
+} from "@/features/phan-anh/nhan-phieu";
 import type { KetQua } from "@/lib/api/goi";
 import type { ChieuSapXepNhiemVu, CotSapXepNhiemVu } from "@/lib/api/nhiem-vu";
 import {
@@ -673,9 +678,7 @@ export function logEntryNote(text: string): string | null {
  */
 export function nhanNguoiNhatKy(ma: string, danhBa: DanhBaTheoMa | null): string {
   if (ma === "") return O_TRONG;
-  const cb = danhBa?.get(ma);
-  if (cb === undefined || cb.full_name === "") return ma;
-  return `${cb.full_name} (${ma})`;
+  return staffNameWithCode(ma, danhBa);
 }
 
 /**

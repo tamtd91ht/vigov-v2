@@ -45,6 +45,7 @@ import {
   PHAN_CHUA_DUNG,
   petitionPendingPart,
   phanLoaiDuoc,
+  initialClassifyField,
   RE_NHANH,
   trangThaiHan,
   CITIZEN_LOG_ACTOR,
@@ -439,6 +440,14 @@ describe("khi nào vẽ nút nào", () => {
     }
   });
 
+  it("ô phân loại mở sẵn lĩnh vực đã chọn lúc nhập hộ (PA-03); mã ngoài danh mục thì để trống", () => {
+    expect(initialClassifyField("giao-thong")).toBe("giao-thong");
+    expect(initialClassifyField("ma-khong-co")).toBe("");
+    expect(initialClassifyField("")).toBe("");
+    expect(initialClassifyField(undefined)).toBe("");
+    expect(initialClassifyField(null)).toBe("");
+  });
+
   it("bước cuối luồng chính và hai rẽ nhánh thì không còn bước kế tiếp", () => {
     expect(conBuocKeTiep("dang-xu-ly")).toBe(true);
     expect(conBuocKeTiep("da-dong")).toBe(false);
@@ -663,11 +672,32 @@ describe("nhật ký xử lý — nhãn mười mã thao tác", () => {
     ]);
   });
 
-  it("actor `cong-dan` reads “Người dân”; staff codes as is; empty is a dash", () => {
+  it("actor `cong-dan` reads “Người dân”; staff codes as is without a directory; empty is a dash", () => {
     expect(CITIZEN_LOG_ACTOR).toBe("cong-dan");
-    expect(logActorLabel("cong-dan")).toBe("Người dân");
-    expect(logActorLabel("CB-00123")).toBe("CB-00123");
-    expect(logActorLabel("")).toBe("—");
+    expect(logActorLabel("cong-dan", null)).toBe("Người dân");
+    expect(logActorLabel("CB-00123", null)).toBe("CB-00123");
+    expect(logActorLabel("", null)).toBe("—");
+  });
+
+  // PA-06: the log names the officer, and keeps the code (rule 6, invariant 8).
+  const LOG_DIRECTORY = danhBaTheoMa([
+    { code: "CB-00123", full_name: "Trần Thị B", position: "Công chức", department_id: "" },
+    { code: "CB-00124", full_name: "", position: "", department_id: "" },
+    // A directory row whose code collides with the citizen marker must never be looked up.
+    { code: "cong-dan", full_name: "Không được hiện", position: "", department_id: "" },
+  ]);
+
+  it("staff code known to the directory reads `Họ tên (CB-…)`", () => {
+    expect(logActorLabel("CB-00123", LOG_DIRECTORY)).toBe("Trần Thị B (CB-00123)");
+  });
+
+  it("falls back to the bare code: not in the directory (inactive account), or no name on file", () => {
+    expect(logActorLabel("CB-00999", LOG_DIRECTORY)).toBe("CB-00999");
+    expect(logActorLabel("CB-00124", LOG_DIRECTORY)).toBe("CB-00124");
+  });
+
+  it("the citizen marker is never looked up in the directory", () => {
+    expect(logActorLabel("cong-dan", LOG_DIRECTORY)).toBe("Người dân");
   });
 
   it("mã lạ: hiện nguyên mã và NÓI RA là chưa có nhãn, không đoán", () => {

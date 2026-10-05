@@ -41,6 +41,8 @@ import {
   type NganXepConTro,
 } from "@/features/cau-hinh/ngan-xep-con-tro";
 import { usePhien } from "@/features/phien/phien-hien-tai";
+import { danhBaTheoMa, type DanhBaTheoMa } from "@/features/phan-anh/nhan-phieu";
+import { layDanhBaChonNguoi } from "@/lib/api/danh-ba-chon-nguoi";
 import { layDanhMucBoPhan } from "@/lib/api/danh-muc";
 import { layLoaiVanBan } from "@/lib/api/danh-muc-nghiep-vu";
 import type { KetQua } from "@/lib/api/goi";
@@ -265,6 +267,9 @@ export function SoVanBanDen({
   } | null>(null);
   const [loai, datLoai] = useState<BangTraDanhMuc>({ pha: "dangDoc" });
   const [boPhan, datBoPhan] = useState<BangTraDanhMuc>({ pha: "dangDoc" });
+  // Staff directory by code, for the panel's `Người vào sổ` and timeline (VBD-07). `null` until loaded
+  // or when the read fails — the panel then shows the bare `CB-…` code, never an empty cell.
+  const [danhBa, datDanhBa] = useState<DanhBaTheoMa | null>(null);
 
   const [dangMo, datDangMo] = useState<DangMoDen>(null);
   const [ban, datBan] = useState<BanNhapDen>(BAN_DEN_TRONG);
@@ -344,6 +349,10 @@ export function SoVanBanDen({
     });
     layDanhMucBoPhan().then((k) => {
       if (!bo) datBoPhan(bangTraTuKetQua(k));
+    });
+    // ONE read for the whole screen, not one per row or per opened document (skills/load-data-once).
+    layDanhBaChonNguoi().then((k) => {
+      if (!bo && k.ok) datDanhBa(danhBaTheoMa(k.duLieu.items));
     });
     return () => {
       bo = true;
@@ -566,6 +575,7 @@ export function SoVanBanDen({
             tieuDiemChuyen={xem.tieuDiemChuyen}
             onGui={guiChuyen}
             onDong={dongNgan}
+            danhBa={danhBa}
           />
         )
       }

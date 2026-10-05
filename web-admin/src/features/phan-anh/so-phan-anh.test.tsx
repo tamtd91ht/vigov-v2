@@ -21,6 +21,7 @@ import {
   CAU_THIEU_QUYEN_DONG,
   CAU_THIEU_QUYEN_PHAN_CONG,
   CAU_THIEU_QUYEN_PHAN_LOAI,
+  ASSIGN_NEEDS_CLASSIFICATION,
   congThaoTac,
   danhBaTheoMa,
   DE_BO_PHAN_PHAN_CONG,
@@ -728,7 +729,7 @@ describe("nhật ký xử lý — khối, nút ghi, các dòng", () => {
     expect(NHAT_KY_RONG).toBe("Chưa có dòng nhật ký nào. Nhật ký bắt đầu ghi từ ngày 26/09/2026.");
   });
 
-  it("một dòng: giờ Việt Nam, nhãn thao tác, chip trạng thái, MÃ người thực hiện", () => {
+  it("một dòng: giờ Việt Nam, nhãn thao tác, chip trạng thái, HỌ TÊN kèm MÃ người thực hiện", () => {
     const html = renderToStaticMarkup(
       <DanhSachNhatKy dong={[dong({ action: "chuyen-trang-thai" })]} tenBoPhan={TB} danhBa={DB} />,
     );
@@ -736,9 +737,8 @@ describe("nhật ký xử lý — khối, nút ghi, các dòng", () => {
     expect(html).toContain("10:05 26/09/2026");
     expect(html).toContain("Chuyển trạng thái");
     expect(html).toContain("Đang xử lý");
-    // MÃ, không họ tên — dù danh bạ có người ấy (`Lê Văn C`): máy chủ không trả tên người ghi.
-    expect(html).toContain("CB-00200");
-    expect(html).not.toContain("Lê Văn C");
+    // PA-06: họ tên tra từ danh bạ màn hình đã đọc một lần, MÃ vẫn ở trên dòng (luật 6, bất biến 8).
+    expect(html).toContain("Lê Văn C (CB-00200)");
     // Dòng không phải `phan-cong` thì không có ô bộ phận.
     expect(html).not.toContain(nhuTrongHTML(NHAN_BO_PHAN_PHU_TRACH));
   });
@@ -828,8 +828,10 @@ describe("ghi chú nội bộ trên sáu thao tác — ô nhập", () => {
   it("có mặt ở phân loại, chuyển xử lý, tiến trạng thái, đóng phiếu", () => {
     const html = veChiTiet(congThaoTac(true, true, true), phieu({ status: "da-tiep-nhan" }));
     expect(html).toContain('id="ghi-chu-phan-loai"');
-    expect(html).toContain('id="ghi-chu-phan-cong"');
     expect(html).toContain('id="ghi-chu-tien"');
+    // `Chuyển xử lý` is not drawn before classification (PA-03) — its note box lives one step later.
+    const phanCong = veChiTiet(congThaoTac(true, true, true), phieu({ status: "dang-phan-loai" }));
+    expect(phanCong).toContain('id="ghi-chu-phan-cong"');
     const dongP = veChiTiet(congThaoTac(false, false, true), phieu({ status: "cho-dan-xac-nhan" }));
     expect(dongP).toContain('id="ghi-chu-dong"');
   });
@@ -1167,5 +1169,97 @@ describe("log — the two citizen-rating rows", () => {
     expect(html).toContain("<strong>Mở lại do đánh giá thấp</strong>");
     expect(html).toContain("Người dân đánh giá 2 sao — phiếu được mở lại");
     expect(html).not.toContain("chưa có nhãn");
+  });
+});
+
+/**
+ * PA-03 (tester report 05/10/2026): a staff-booked petition sits in `da-tiep-nhan` with its field
+ * chosen at intake, and the server refuses `Chuyển xử lý` from there with 409 (ADR 0027). The drawer
+ * must (a) open the classify select on that field, (b) not offer a form whose only answer is a refusal,
+ * (c) say an assignment refusal next to the assign button, not at the top of the card.
+ */
+describe("PA-03 — phân loại trước, chuyển xử lý sau", () => {
+  function veVoi(p: petitions_phieuPhanAnhRa, cong: ReturnType<typeof congThaoTac>, assignRefusal: string | null = null) {
+    return renderToStaticMarkup(
+      <ChiTietPhieu
+        phieu={p}
+        bayGio={BAY_GIO}
+        cong={cong}
+        tenBoPhan={TEN_BO_PHAN}
+        boPhan={BO_PHAN}
+        danhBa={DANH_BA}
+        dangGui={false}
+        loiGhi={null}
+        dong={() => {}}
+        phanLoai={() => {}}
+        chuyenXuLy={() => {}}
+        tienTrangThai={() => {}}
+        dongPhieuLai={() => {}}
+        khongTiepNhan={() => {}}
+        chuyenCapTren={() => {}}
+        assignRefusal={assignRefusal}
+      />,
+    );
+  }
+
+  /** The `<option>` the classify select marks as selected, read from the static markup. */
+  function linhVucDangChon(html: string): string | null {
+    const o = html.match(/<select id="chon-linh-vuc"[^>]*>([\s\S]*?)<\/select>/)?.[1] ?? "";
+    return o.match(/<option value="([^"]*)" selected="">/)?.[1] ?? null;
+  }
+
+  it("(a) ô Lĩnh vực mở sẵn lĩnh vực đã chọn lúc nhập hộ — nút Chốt lĩnh vực bấm được ngay", () => {
+    const html = veVoi(
+      phieu({ status: "da-tiep-nhan", channel: "can-bo-nhap-ho", field: "giao-thong" }),
+      congThaoTac(true, false, false),
+    );
+    expect(linhVucDangChon(html)).toBe("giao-thong");
+    expect(submitTag(html)).not.toContain("disabled");
+  });
+
+  it("(a) phiếu chưa có lĩnh vực: ô để trống, nút khoá", () => {
+    const html = veVoi(phieu({ status: "da-tiep-nhan", field: "" }), congThaoTac(true, false, false));
+    expect(linhVucDangChon(html)).toBe("");
+    expect(submitTag(html)).toContain("disabled");
+  });
+
+  it("(b) CA BỊ TỪ CHỐI — `da-tiep-nhan`, có `feedback.assign`: KHÔNG có biểu mẫu chuyển xử lý, có câu lý do", () => {
+    const html = veVoi(phieu({ status: "da-tiep-nhan" }), congThaoTac(false, true, false));
+    expect(html).not.toContain('id="chon-bo-phan"');
+    expect(html).toContain(nhuTrongHTML(ASSIGN_NEEDS_CLASSIFICATION));
+    expect(ASSIGN_NEEDS_CLASSIFICATION).toBe("Cần phân loại phiếu trước khi chuyển xử lý.");
+  });
+
+  it("(b) đã phân loại (`dang-phan-loai`): biểu mẫu có, câu lý do không", () => {
+    const html = veVoi(phieu({ status: "dang-phan-loai" }), congThaoTac(false, true, false));
+    expect(html).toContain('id="chon-bo-phan"');
+    expect(html).not.toContain(nhuTrongHTML(ASSIGN_NEEDS_CLASSIFICATION));
+  });
+
+  it("(b) thiếu `feedback.assign`: câu thiếu quyền vẫn là câu được nói, ở mọi trạng thái", () => {
+    const html = veVoi(phieu({ status: "da-tiep-nhan" }), congThaoTac(false, false, false));
+    expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_PHAN_CONG));
+    expect(html).not.toContain(nhuTrongHTML(ASSIGN_NEEDS_CLASSIFICATION));
+  });
+
+  it("(c) câu từ chối chuyển xử lý nằm TRONG khối chuyển xử lý, ngay trước nút", () => {
+    const cau = "Phiếu phải được phân loại trước khi chuyển xử lý.";
+    const html = veVoi(phieu({ status: "dang-phan-loai" }), congThaoTac(false, true, false), cau);
+    const form = html.match(/<form[^>]*>(?:(?!<\/form>)[\s\S])*id="chon-bo-phan"[\s\S]*?<\/form>/)?.[0] ?? "";
+    expect(form).toContain(cau);
+    expect(form.indexOf(cau)).toBeLessThan(form.indexOf(">Chuyển xử lý</button>"));
+  });
+
+  it("(c) không có lời từ chối: khối chuyển xử lý không có dòng báo lỗi", () => {
+    const html = veVoi(phieu({ status: "dang-phan-loai" }), congThaoTac(false, true, false));
+    const form = html.match(/<form[^>]*>(?:(?!<\/form>)[\s\S])*id="chon-bo-phan"[\s\S]*?<\/form>/)?.[0] ?? "";
+    expect(form).not.toBe("");
+    expect(form).not.toContain('role="alert"');
+  });
+
+  it("PA-07: nhãn hạn phân loại viết bằng lời hành chính", () => {
+    const html = veVoi(phieu(), congThaoTac(false, false, false));
+    expect(html).toContain("Hạn phân loại");
+    expect(html).not.toContain("Trần phân loại");
   });
 });

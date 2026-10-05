@@ -273,8 +273,9 @@ export function NhatKyPhieu({
 /**
  * Các dòng nhật ký, đúng thứ tự máy chủ trả (mới nhất trước). Tách ra để kiểm bằng HTML tĩnh.
  *
- * NGƯỜI THỰC HIỆN LÀ MÃ CÁN BỘ, không họ tên: máy chủ không trả tên, và mã là thứ còn chỉ ra được
- * đúng một người nhiều năm sau (luật 6, bất biến 8). Rỗng thì hiện gạch, không để ô trống.
+ * The server returns the actor as a STAFF CODE only; the cell reads `Full name (CB-…)` through the
+ * directory the screen already read once (`danhBa`), and the bare code when the directory does not know
+ * it — the code is what still names one person years later (rule 6, invariant 8). Empty reads "—".
  * Rows the citizen caused carry the marker `cong-dan` and read "Người dân" (`logActorLabel`).
  */
 export function DanhSachNhatKy({
@@ -331,7 +332,7 @@ export function DanhSachNhatKy({
             )}
             <dt>{NHAN_NGUOI_THUC_HIEN}</dt>
             {/* `cong-dan` reads "Người dân" and is never looked up in the staff directory. */}
-            <dd>{logActorLabel(d.actor_code)}</dd>
+            <dd>{logActorLabel(d.actor_code, danhBa)}</dd>
           </dl>
           {/* The class stays exactly `ghi-chu-nhat-ky` (it keeps the line breaks; a test reads it);
               the frame comes from the wrapper. */}

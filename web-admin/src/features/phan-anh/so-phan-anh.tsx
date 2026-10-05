@@ -89,6 +89,7 @@ import {
   buocLuongChinh,
   buocReNhanh,
   AFTER_PHOTO_GO_TO,
+  ASSIGN_NEEDS_CLASSIFICATION,
   AFTER_PHOTO_REQUIRED_HINT,
   CANH_BAO_RE_NHANH,
   CAU_THIEU_QUYEN_DONG,
@@ -109,6 +110,7 @@ import {
   GOI_Y_CO_QUAN,
   GHI_CHU_TIEN_TRANG_THAI,
   LINH_VUC_PHAN_ANH,
+  initialClassifyField,
   linhVucPhanAnh,
   loiCoQuan,
   loiGhiChuNoiBo,
@@ -298,6 +300,9 @@ export function SoPhanAnh({
   // The commune's 409 `after_photo_required` sentence — shown IN the close block, not the drawer's
   // general error line, because what it asks for (a verification photo) is one card above it.
   const [closeRefusal, setCloseRefusal] = useState<string | null>(null);
+  // Any refusal of `Chuyển xử lý` — shown IN the assign block next to its button (tester report
+  // 05/10/2026, PA-03): in the general line at the top of the card it read as a button that did nothing.
+  const [assignRefusal, setAssignRefusal] = useState<string | null>(null);
 
   const khoa = `${JSON.stringify(loc)}|${nganXep.hienTai ?? ""}|${lanTai}`;
 
@@ -358,6 +363,8 @@ export function SoPhanAnh({
   /** Một lần ghi xong: giữ phiếu máy chủ vừa trả, xoá lỗi cũ, và đọc lại quyển sổ. */
   function xongGhi(kq: KetQua<petitions_phieuPhanAnhRa>): void {
     datDangGui(false);
+    // Another act answered: an earlier assignment refusal no longer describes the petition on screen.
+    setAssignRefusal(null);
     if (!kq.ok) {
       // NGUYÊN VĂN câu máy chủ. 409 của các tuyến này mang đúng quy tắc đã từ chối ("phiếu đã
       // chuyển trạng thái trong lúc bạn đang mở màn hình", "xã chưa cấu hình thời hạn xử lý cho
@@ -393,6 +400,7 @@ export function SoPhanAnh({
     datDangMo(p);
     datLoiGhi(null);
     setCloseRefusal(null);
+    setAssignRefusal(null);
   };
   const listTable = (items: readonly petitions_phieuPhanAnhRa[]) => (
     <DanhSachThe
@@ -570,11 +578,24 @@ export function SoPhanAnh({
             datDangMo(null);
             datLoiGhi(null);
             setCloseRefusal(null);
+            setAssignRefusal(null);
           }}
           phanLoai={(linhVuc, ghiChu) => chay(phanLoaiPhieu(dangMo.code, linhVuc, ghiChu))}
-          chuyenXuLy={(boPhanID, maCanBo, ghiChu) =>
-            chay(chuyenXuLyPhieu(dangMo.code, boPhanID, maCanBo, ghiChu))
-          }
+          chuyenXuLy={(boPhanID, maCanBo, ghiChu) => {
+            datDangGui(true);
+            return chuyenXuLyPhieu(dangMo.code, boPhanID, maCanBo, ghiChu).then((kq) => {
+              if (!kq.ok) {
+                // The server's sentence VERBATIM, but drawn in the assign block, not the general line.
+                datDangGui(false);
+                datLoiGhi(null);
+                setAssignRefusal(kq.thongBao);
+                return false;
+              }
+              xongGhi(kq);
+              return true;
+            });
+          }}
+          assignRefusal={assignRefusal}
           tienTrangThai={(ghiChu) => chay(tienTrangThaiPhieu(dangMo.code, ghiChu))}
           closeRefusal={closeRefusal}
           dongPhieuLai={(ketQua, ghiChu) => {
@@ -1014,6 +1035,7 @@ export function ChiTietPhieu({
   chuyenCapTren,
   setPublication,
   closeRefusal = null,
+  assignRefusal = null,
 }: {
   phieu: petitions_phieuPhanAnhRa;
   bayGio: Date;
@@ -1051,6 +1073,8 @@ export function ChiTietPhieu({
    * or `null`. Drawn inside the close block with the way to the `Sau khi xử lý` upload.
    */
   closeRefusal?: string | null;
+  /** Any refusal of `Chuyển xử lý`, verbatim, or `null`. Drawn inside the assign block, by its button. */
+  assignRefusal?: string | null;
   khongTiepNhan: (lyDo: string, ghiChu: string) => KetQuaGui;
   chuyenCapTren: (lyDo: string, coQuanTiepNhan: string, ghiChu: string) => KetQuaGui;
   /**
@@ -1059,7 +1083,9 @@ export function ChiTietPhieu({
    */
   setPublication?: (target: PublicationTarget) => KetQuaGui;
 }) {
-  const [linhVucChon, datLinhVucChon] = useState("");
+  // Seeded with the field already chosen at intake (PA-03) — a lazy initialiser, so the hook order the
+  // `chon-can-bo.test.tsx` seeding relies on is unchanged.
+  const [linhVucChon, datLinhVucChon] = useState(() => initialClassifyField(phieu.field));
   const [boPhanChon, datBoPhanChon] = useState("");
   const [canBoChon, datCanBoChon] = useState("");
   const [ketQua, datKetQua] = useState("");
@@ -1173,7 +1199,8 @@ export function ChiTietPhieu({
           <span className={lopHan(hanTiepNhan)}>{nhanHan(hanTiepNhan)}</span>
         </dd>
 
-        <dt>Trần phân loại</dt>
+        {/* `classify_due` — ADR 0035 #26, one working day from intake to classify. */}
+        <dt>Hạn phân loại</dt>
         <dd>
           <span className={lopHan(hanPhanLoai)}>{nhanHan(hanPhanLoai)}</span>
         </dd>
@@ -1388,7 +1415,15 @@ export function ChiTietPhieu({
       )}
 
       {/* ── 2. CHUYỂN XỬ LÝ (§8.5) ───────────────────────────────────────────────────────── */}
-      {cong.phanCong ? (
+      {/* Not drawn while the petition is still classifiable: the server answers 409 from
+          `da-tiep-nhan` (ADR 0027). The reason is said instead — UX only, the server still decides. */}
+      {cong.phanCong && phanLoaiDuoc(phieu.status) ? (
+        <div className="p-4">
+          <Notice tone="neutral" icon={Tags}>
+            {ASSIGN_NEEDS_CLASSIFICATION}
+          </Notice>
+        </div>
+      ) : cong.phanCong ? (
         <form
           className={ACT_CLASS}
           onSubmit={(e) => {
@@ -1456,6 +1491,14 @@ export function ChiTietPhieu({
             </p>
           )}
           <ONhapGhiChuNoiBo id="ghi-chu-phan-cong" giaTri={ghiChuPhanCong} datGiaTri={datGhiChuPhanCong} />
+          {assignRefusal !== null && (
+            <div className="flex items-start gap-2 rounded-xl border border-danger-200 bg-danger-50 px-3.5 py-3 [&>p]:m-0">
+              <Glyph icon={CircleAlert} className="mt-0.5 size-[18px] shrink-0 text-danger-600" />
+              <p className="thong-bao-loi" role="alert">
+                {assignRefusal}
+              </p>
+            </div>
+          )}
           <div className="cum-nut justify-end">
             <button
               type="submit"

@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { BangTraDanhMuc } from "@/features/cau-hinh/tra-danh-muc";
+import { danhBaTheoMa, type DanhBaTheoMa } from "@/features/phan-anh/nhan-phieu";
 import type { KetQua } from "@/lib/api/goi";
 import type {
   documents_danhSachLichSuChuyenRa,
@@ -89,6 +90,7 @@ function ve({
   coQuyenChuyen = true,
   ban = BAN_CHUYEN_TRONG as BanChuyen,
   loi = "",
+  danhBa = null as DanhBaTheoMa | null,
 } = {}) {
   return renderToStaticMarkup(
     <NganVanBanDen
@@ -106,9 +108,17 @@ function ve({
       tieuDiemChuyen={false}
       onGui={() => {}}
       onDong={() => {}}
+      danhBa={danhBa}
     />,
   );
 }
+
+// VBD-07: the staff directory the register reads once. `CB-00999` is deliberately absent — an account
+// no longer active must still read as its code.
+const DANH_BA = danhBaTheoMa([
+  { code: "CB-00123", full_name: "Trần Thị B", position: "Văn thư", department_id: "" },
+  { code: "CB-00456", full_name: "Lê Văn C", position: "", department_id: "" },
+]);
 
 describe("phần đầu và các ô thông tin", () => {
   it("tiêu đề mang số/năm và ngày nhận; tiêu đề KHÔNG mang trích yếu", () => {
@@ -132,7 +142,7 @@ describe("phần đầu và các ô thông tin", () => {
     expect(html).toContain("Ban Tổ chức Tỉnh uỷ");
     expect(html).toContain("1742-CV/BTCTU · 18/09/2026");
     expect(html).toContain("VĂN PHÒNG ĐẢNG UỶ");
-    // Cán bộ hiện bằng MÃ — không có tuyến tra tên cho người chỉ có `document.read`.
+    // Chưa có danh bạ (đang tải / tải hỏng): cán bộ hiện bằng MÃ.
     expect(html).toContain("CB-00123");
     expect(html).toContain("Để bộ phận tự phân công");
   });
@@ -142,6 +152,32 @@ describe("phần đầu và các ô thông tin", () => {
     expect(ve({ bayGio: TRUOC_HAN })).not.toContain("Quá hạn");
     expect(ve({ bayGio: SAU_HAN })).toContain("Quá hạn");
     expect(ve({ bayGio: SAU_HAN })).not.toMatch(/overdue|qua_han|is_?late/i);
+  });
+});
+
+describe("VBD-07 — cán bộ hiện họ tên, tra từ danh bạ đọc một lần", () => {
+  it("`Người vào sổ` hiện `Họ tên (CB-…)`", () => {
+    const html = ve({ danhBa: DANH_BA });
+    expect(html).toContain("Trần Thị B (CB-00123)");
+  });
+
+  it("dòng thời gian: người chuyển và người phụ trách hiện họ tên; mã ngoài danh bạ hiện nguyên mã", () => {
+    const html = ve({
+      danhBa: DANH_BA,
+      ls: lichSu([
+        dongLichSu({ routed_by: "CB-00123", assignee: "CB-00456" }),
+        dongLichSu({ id: "b", routed_by: "CB-00999", assignee: "CB-00999" }),
+      ]),
+    });
+    expect(html).toContain("Trần Thị B (CB-00123)</strong>");
+    expect(html).toContain("Phụ trách: Lê Văn C (CB-00456)");
+    // Not in the directory (e.g. an account no longer active): the bare code, never an empty cell.
+    expect(html).toContain(">CB-00999</strong>");
+    expect(html).toContain("Phụ trách: CB-00999");
+  });
+
+  it("chưa giao cán bộ: vẫn là câu tự phân công, có danh bạ hay không", () => {
+    expect(ve({ danhBa: DANH_BA })).toContain("Để bộ phận tự phân công");
   });
 });
 

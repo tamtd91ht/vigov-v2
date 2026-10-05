@@ -24,7 +24,7 @@
 // là cái giá rẻ hơn hẳn một bản sao thứ ba của cùng hai quyết định ấy (luật 9, cấm #2).
 import { nhanNgay } from "@/features/cau-hinh/nhan-lich-lam-viec";
 import type { KetTra } from "@/features/cau-hinh/tra-danh-muc";
-import { nhanThoiDiem } from "@/features/phan-anh/nhan-phieu";
+import { nhanThoiDiem, staffNameWithCode, type DanhBaTheoMa } from "@/features/phan-anh/nhan-phieu";
 
 /* ---- danh sách đóng của máy chủ ---------------------------------------------------------- */
 
@@ -308,14 +308,14 @@ export function nhanTuBoPhan(ket: KetTra): string {
 }
 
 /**
- * Cán bộ được giao, hiện bằng MÃ CÁN BỘ (`CB-00123`), không bằng họ tên.
+ * Cán bộ được giao, read out as `Full name (CB-…)` (`staffNameWithCode`).
  *
- * KHÔNG TRA TÊN, có chủ ý: danh bạ cán bộ đòi `admin.user`, và một người có `document.read` chưa
- * chắc đọc được danh bạ — cùng lẽ ô "Cán bộ xử lý" của khối chuyển là ô chữ. Tuyến danh bạ hẹp là
- * việc của backend (`service-identity/tuyen-danh-ba-can-bo-hep`); đến lúc ấy chỉ hàm này đổi.
+ * The name comes from the narrow `GET /api/v1/staff-directory` (any authenticated staff of the
+ * commune; NOT the `admin.user` register), read ONCE per screen by the caller. Not loaded, failed, or
+ * an account no longer active → the bare code, which still names exactly one person (VBD-07).
  */
-export function nhanCanBo(ma: string): string {
-  return ma === "" ? "Để bộ phận tự phân công" : ma;
+export function nhanCanBo(ma: string, danhBa: DanhBaTheoMa | null): string {
+  return ma === "" ? "Để bộ phận tự phân công" : staffNameWithCode(ma, danhBa);
 }
 
 export const TIEU_DE_DONG_THOI_GIAN = "Dòng thời gian chuyển tiếp";

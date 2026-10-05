@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "web-admin",
-  "cap_nhat": "2026-10-04",
+  "cap_nhat": "2026-10-05",
   "muc": [
     {
       "id": "tam-viec-web-tu-hop-dong",
@@ -647,6 +647,14 @@
       "trang_thai": "xong",
       "bang_chung": "web-admin/src/features/nhiem-vu/{so-nhiem-vu.tsx,nhan-nhiem-vu.ts,so-nhiem-vu.test.tsx}: tsc sạch, eslint ba tệp sạch, vitest 3783/3783 (13 ca mới, gồm ca bị từ chối thiếu task.update) — kiểm 05/10/2026, chưa commit.",
       "tiep_theo": "Chưa làm trong lượt này: phần 'Lãnh đạo giao việc' của NV-04 (chưa quyết, ADR 0038); Sổ tay lãnh đạo (features/leader-notebook/task-mini-list.tsx) vẫn chỉ ghi 'Chưa phân công' khi chưa có người; PATCH đã nhận progress nên ô tiến độ dựng được khi người dùng mở việc. Chỉ kiểm được trên trình duyệt: cuộn tới chi tiết, bố cục ô hạn ở 320px."
+    },
+    {
+      "id": "phan-anh-van-ban-sua-loi-kiem-thu-05-10",
+      "menu": "phan-anh-nguoi-dan",
+      "viec": "Sửa lỗi Phản ánh và Văn bản đến theo báo cáo kiểm thử 05/10/2026 mục 3.11, 3.15: PA-03 (ô Lĩnh vực ở bước phân loại mở sẵn lĩnh vực đã chọn lúc nhập hộ; khối Chuyển xử lý không hiện ở trạng thái Đã tiếp nhận mà nói 'Cần phân loại phiếu trước khi chuyển xử lý.'; câu từ chối chuyển xử lý hiện ngay trong khối, cạnh nút), PA-06 (nhật ký phiếu hiện 'Họ tên (CB-…)', tra từ danh bạ màn hình đã đọc một lần), VBD-07 (Người vào sổ, người chuyển và người phụ trách trên dòng thời gian văn bản đến hiện 'Họ tên (CB-…)' — sổ văn bản đến đọc GET /api/v1/staff-directory một lần cho cả màn), PA-07 ('Trần phân loại' thành 'Hạn phân loại'; viết lại hai câu hướng dẫn ở nút chuyển bước và ô kết quả). Mã không có trong danh bạ (tài khoản đã khoá) vẫn hiện nguyên mã. Hàm dùng chung staffNameWithCode ở features/phan-anh/nhan-phieu.ts, nhật ký nhiệm vụ dùng lại.",
+      "trang_thai": "xong",
+      "bang_chung": "web-admin/src/features/phan-anh/{so-phan-anh.tsx,nhan-phieu.ts,nhat-ky-phieu.tsx} · features/van-ban/{ngan-van-ban-den.tsx,so-van-ban-den.tsx,nhan-van-ban.ts} · features/nhiem-vu/nhan-nhiem-vu.ts: tsc sạch, eslint các tệp đổi sạch, vitest 3798/3798 (ca mới gồm ca bị từ chối của PA-03 và ca mã ngoài danh bạ) — kiểm 05/10/2026, chưa commit.",
+      "tiep_theo": "Máy chủ vẫn trả 409 khi chuyển xử lý từ Đã tiếp nhận (ADR 0027, giữ nguyên). Chỉ kiểm được trên trình duyệt: vị trí câu từ chối trong khối Chuyển xử lý ở 320px."
     }
   ]
 }

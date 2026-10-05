@@ -11,7 +11,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Notice } from "@/components/ui/notice";
 import { traTen, type BangTraDanhMuc } from "@/features/cau-hinh/tra-danh-muc";
 import { BusyLabel } from "@/features/danh-ba/busy-label";
-import { nhanThoiDiem } from "@/features/phan-anh/nhan-phieu";
+import { nhanThoiDiem, staffNameWithCode, type DanhBaTheoMa } from "@/features/phan-anh/nhan-phieu";
 import type { KetQua } from "@/lib/api/goi";
 import type {
   documents_danhSachLichSuChuyenRa,
@@ -84,6 +84,7 @@ export function NganVanBanDen({
   tieuDiemChuyen,
   onGui,
   onDong,
+  danhBa = null,
 }: {
   /** `null` = đang đọc. Lỗi hiện NGUYÊN câu máy chủ — 404 là một câu chung cho mọi ca. */
   vb: KetQua<documents_vanBanDenRa> | null;
@@ -103,6 +104,11 @@ export function NganVanBanDen({
   tieuDiemChuyen: boolean;
   onGui: () => void;
   onDong: () => void;
+  /**
+   * The commune's staff directory by code, read ONCE by the register (`GET /api/v1/staff-directory`).
+   * `null` = not loaded or failed: every staff cell then shows the bare `CB-…` code (VBD-07).
+   */
+  danhBa?: DanhBaTheoMa | null;
 }) {
   const coVanBan = vb !== null && vb.ok;
   const tieuDe = coVanBan
@@ -165,9 +171,15 @@ export function NganVanBanDen({
 
         {coVanBan && (
           <>
-            <ThongTinVanBanDen vb={vb.duLieu} bayGio={bayGio} traLoai={traLoai} traBoPhan={traBoPhan} />
+            <ThongTinVanBanDen
+              vb={vb.duLieu}
+              bayGio={bayGio}
+              traLoai={traLoai}
+              traBoPhan={traBoPhan}
+              danhBa={danhBa}
+            />
 
-            <DongThoiGianChuyen lichSu={lichSu} traBoPhan={traBoPhan} />
+            <DongThoiGianChuyen lichSu={lichSu} traBoPhan={traBoPhan} danhBa={danhBa} />
 
             {cauDaXong !== "" && (
               <p role="status" className="flex items-center gap-2 text-sm font-medium text-success-600">
@@ -200,11 +212,14 @@ export function ThongTinVanBanDen({
   bayGio,
   traLoai,
   traBoPhan,
+  danhBa = null,
 }: {
   vb: documents_vanBanDenRa;
   bayGio: Date;
   traLoai: BangTraDanhMuc;
   traBoPhan: BangTraDanhMuc;
+  /** Staff directory by code; `null` = show the bare code. */
+  danhBa?: DanhBaTheoMa | null;
 }) {
   // SUY RA LÚC VẼ, không lưu (luật 10, bất biến 3) — cùng hàm cột "Hạn xử lý" của bảng dùng.
   const han = trangThaiHanVanBan(vb.due_at, bayGio);
@@ -237,14 +252,14 @@ export function ThongTinVanBanDen({
 
         <Pair label="Bộ phận đang giữ">
           {nhanBoPhanDangGiu(traTen(traBoPhan, vb.holding_unit ?? ""))} ·{" "}
-          {nhanCanBo(vb.assignee ?? "")}
+          {nhanCanBo(vb.assignee ?? "", danhBa)}
         </Pair>
 
         <Pair label="Hạn xử lý">
           <DeadlineMark deadline={han} />
         </Pair>
 
-        <Pair label="Người vào sổ">{vb.created_by}</Pair>
+        <Pair label="Người vào sổ">{staffNameWithCode(vb.created_by, danhBa)}</Pair>
       </dl>
     </>
   );
@@ -264,14 +279,17 @@ function Pair({ label, children }: { label: string; children: ReactNode }) {
  * Dòng thời gian chuyển tiếp — CHỈ ĐỌC, GIỮ NGUYÊN THỨ TỰ MÁY CHỦ TRẢ (cũ nhất trước).
  *
  * Không sắp lại ở client: thứ tự là thứ tự các lần chuyển thật, và máy chủ đã xếp theo `routed_at`.
- * Người chuyển và cán bộ được giao hiện bằng MÃ CÁN BỘ — xem `nhanCanBo`.
+ * Người chuyển và cán bộ được giao hiện `Họ tên (CB-…)`, or the bare code when the directory does not
+ * know it — see `nhanCanBo`.
  */
 export function DongThoiGianChuyen({
   lichSu,
   traBoPhan,
+  danhBa = null,
 }: {
   lichSu: KetQua<documents_danhSachLichSuChuyenRa> | null;
   traBoPhan: BangTraDanhMuc;
+  danhBa?: DanhBaTheoMa | null;
 }) {
   return (
     <div aria-labelledby="tieu-de-dong-thoi-gian" className="flex min-w-0 flex-col gap-3">
@@ -296,7 +314,7 @@ export function DongThoiGianChuyen({
         // dot per routing. Read-only — no control on any line (rule 7, forbidden #5).
         <ol className="m-0 flex list-none flex-col p-0">
           {lichSu.duLieu.items.map((d) => (
-            <DongLichSu key={d.id} d={d} traBoPhan={traBoPhan} />
+            <DongLichSu key={d.id} d={d} traBoPhan={traBoPhan} danhBa={danhBa} />
           ))}
         </ol>
       )}
@@ -304,7 +322,15 @@ export function DongThoiGianChuyen({
   );
 }
 
-function DongLichSu({ d, traBoPhan }: { d: documents_lichSuChuyenRa; traBoPhan: BangTraDanhMuc }) {
+function DongLichSu({
+  d,
+  traBoPhan,
+  danhBa,
+}: {
+  d: documents_lichSuChuyenRa;
+  traBoPhan: BangTraDanhMuc;
+  danhBa: DanhBaTheoMa | null;
+}) {
   return (
     <li className="relative flex min-w-0 flex-col gap-1.5 border-l-2 border-line pb-4 pl-5 text-sm text-ink-700 last:pb-0 [&>p]:m-0">
       <span
@@ -312,7 +338,7 @@ function DongLichSu({ d, traBoPhan }: { d: documents_lichSuChuyenRa; traBoPhan: 
         className="absolute top-1 -left-[7px] size-3 rounded-full border-2 border-surface bg-brand-500"
       />
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <strong className="font-semibold text-ink-900">{d.routed_by}</strong> ·{" "}
+        <strong className="font-semibold text-ink-900">{staffNameWithCode(d.routed_by, danhBa)}</strong> ·{" "}
         <time dateTime={d.routed_at} className="text-ink-500 tabular-nums">
           {nhanThoiDiem(d.routed_at)}
         </time>
@@ -324,7 +350,7 @@ function DongLichSu({ d, traBoPhan }: { d: documents_lichSuChuyenRa; traBoPhan: 
         {nhanTuBoPhan(traTen(traBoPhan, d.from_unit ?? ""))} →{" "}
         {nhanBoPhanDangGiu(traTen(traBoPhan, d.to_unit))}
       </p>
-      <p className="text-ink-500">Phụ trách: {nhanCanBo(d.assignee ?? "")}</p>
+      <p className="text-ink-500">Phụ trách: {nhanCanBo(d.assignee ?? "", danhBa)}</p>
       <p className="break-words text-ink-900">{d.reason}</p>
     </li>
   );
