@@ -80,6 +80,8 @@ thì để `chưa làm`, đừng dựng sớm.
 
 ## M — Màn hình `web-admin` so với prototype `apps/admin` (đo 05/10/2026)
 
+**Từ 06/10/2026: giống prototype nhất có thể** — cấu trúc theo `apps/admin`, CSS giữ lần 2 + lần 4; dòng MD chỉ là **sở thích** (vd. "Bộ lọc nằm sau nút") nay nhường prototype ("Menu 5 nhóm" chỉ đổi nếu cấu trúc prototype đòi), dòng có luật/ADR giữ → ADR 0068 §*Sửa đổi 06/10/2026 (lần 5)*.
+
 Đo bằng **đọc mã** hai kho (xem đầu tệp), hai agent chỉ-đọc. Dùng để sửa **từng màn một**, khỏi
 đo lại. Luật ghi như trên: xong thì đổi trạng thái + `file:line` + ngày, không xoá dòng.
 Trước khi làm một dòng có phần backend: đọc mục tương ứng trong `kb/90-ephemeral/tien-do/<module>.json`.

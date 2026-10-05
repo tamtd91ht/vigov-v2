@@ -3,7 +3,7 @@ id: 0068-web-admin-ui-redesign
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: 66f78014
+derived_from_commit: 05510b7d
 expires: null
 owns_facts:
   - "làm mới giao diện web-admin chỉ đổi phần trình bày: không đổi đường dẫn, lời gọi API, state, logic lọc/phân trang/phân quyền, tên trường, name/id ô nhập, handler, thứ tự bước nghiệp vụ; không thêm tính năng 'cho hiện đại' (chốt 02/10/2026) — NGOẠI LỆ DUY NHẤT 05/10/2026: URL theo hộp chi tiết lớn (?task=<mã>)"
@@ -30,6 +30,7 @@ owns_facts:
   - "bố cục màn Tổng quan web-admin từ 05/10/2026 (lần 3) theo KHUNG prototype DashboardWorkspace.tsx: header 'Tổng quan điều hành' + dòng kỳ + nút kỳ bên phải, PDF/XLSX/PPTX, Trình chiếu; MỘT lưới 1/2/3 cột gồm sáu khối bằng nhau (Nhiệm vụ · Văn bản & Đơn thư · Giải ngân · Thu – chi · Phản ánh · Kinh tế & Tài nguyên) + ô thứ bảy 'Cần xử lý ngay' cuộn trong ô; thay bố cục 3 hàng của đặc tả v2 (02/10) RIÊNG cho Tổng quan; chi tiết hình ảnh theo §Sửa đổi 05/10/2026 (lần 2), không theo CSS prototype"
   - "điều hướng module web-admin từ 05/10/2026 (lần 4) là THANH DỌC BÊN TRÁI theo khung prototype AppSidebar.tsx: icon + chữ, chia nhóm, mục đang mở nổi bật, thu gọn được về dải chỉ icon (tooltip); thay header navy với nút module chỉ icon của lần 2 #6; header navy giữ tên xã, chuông, menu người dùng; dưới 768px giữ ngăn điều hướng có chữ; hình ảnh vẫn theo lần 2"
   - "sau đợt 2 giữ nguyên: thanh lọc Phản ánh hiện sẵn Tìm + Phạm vi + Trạng thái; nút thanh soạn thảo Nội dung 36px; 'Thông báo' ở nhóm Công việc của menu; câu 'Ngừng dùng <tên>?' và 'Xác nhận khôi phục câu mặc định' (chốt 02/10/2026)"
+  - "từ 06/10/2026 (lần 5) cấu trúc MỌI màn web-admin theo ../vigov-require/apps/admin (không theo vigov-prototype.html): bố cục, nhãn, thứ tự, nút, cột, trường, hộp thoại hay tại chỗ — từng màn một; CSS giữ lần 2 + lần 4; điểm sở thích trình bày ghi trước đó mà prototype nói khác thì bị prototype THAY (mỗi điểm thay ghi ở mục sổ của màn đổi nó); luật cứng và quyết định chủ dự án liệt kê ở §Sửa đổi 06/10/2026 (lần 5) #4 giữ nguyên; chỉ front-end, phần cần tuyến backend mới là control vô hiệu dấu '?' (§14)"
 ---
 
 # 0068. Làm mới giao diện web-admin — chỉ trình bày, Tailwind v4 + shadcn/ui
@@ -39,7 +40,8 @@ owns_facts:
 OMICALL CRM: màu, phông Roboto, bo góc — §*Sửa đổi 05/10/2026 (lần 2)*; điểm header chỉ icon thay
 sidebar của lần ấy đã bị thay) · **Sửa đổi 05/10/2026 (lần 3)** (Tổng quan theo khung prototype —
 §*Sửa đổi 05/10/2026 (lần 3)*) · **Sửa đổi 05/10/2026 (lần 4)** (điều hướng về thanh dọc bên trái —
-§*Sửa đổi 05/10/2026 (lần 4)*) · **Ngày:** 2026-10-02 · **Người quyết:** chủ dự án, 02/10/2026 · **Thay**
+§*Sửa đổi 05/10/2026 (lần 4)*) · **Sửa đổi 06/10/2026 (lần 5)** (cấu trúc mọi màn giống prototype
+nhất có thể, CSS giữ lần 2 + lần 4 — §*Sửa đổi 06/10/2026 (lần 5)*; đang dựng từng màn) · **Ngày:** 2026-10-02 · **Người quyết:** chủ dự án, 02/10/2026 · **Thay**
 `docs/ui-ux/15-phu-luc-giao-dien-chung.md` về **hình thức** (không thay về hành vi, xem §8)
 
 ## Bối cảnh
@@ -499,3 +501,26 @@ Nguồn khung: `../vigov-require/apps/admin/src/components/layout/AppSidebar.tsx
 **Vì sao đổi lại:** chủ dự án thấy header chỉ icon làm **mất ô menu bên trái** và muốn giữ nó; các nút
 icon không bỏ mà **xếp dọc** bên trái như prototype. Ngoài câu trên chủ dự án **không nêu** lý do — đừng
 suy thêm (chẳng hạn về tuổi người dùng, lý do của lần 2 #6).
+
+## Sửa đổi 06/10/2026 (lần 5) — web-admin giống prototype nhất có thể
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác, **trừ** các điểm ở #4.
+**Người quyết:** chủ dự án, tối 05/10/2026, trong phiên chính. **Đang dựng từng màn một** từ
+06/10/2026.
+
+Lời chủ dự án: *"dựa vào prototype để sửa lại thật chính xác nội dung của web admin nhé, yêu cầu
+giống prototype nhất"*. Cùng ngày, trước đó: *"prototype chỉ là khung thôi còn chi tiết css thì theo
+mẫu ui mới"* (lần 3).
+
+| # | Điểm | Chốt |
+|---|---|---|
+| 1 | Nguồn cấu trúc | `../vigov-require/apps/admin` — **không** phải `vigov-prototype.html` (bản mẫu tĩnh đời đầu). Bố cục, nhãn, thứ tự, nút, cột, trường, cách trình bày **hộp thoại hay tại chỗ** theo prototype, **từng màn một** |
+| 2 | CSS | **Giữ** lần 2 (token OMICALL CRM) + lần 4 (thanh dọc bên trái). "Prototype = khung, CSS = mẫu UI mới" (lần 3) vẫn đúng |
+| 3 | Sở thích trình bày đã ghi trước | Điểm **sở thích** ghi trước đó mà prototype nói khác thì bị prototype **THAY**. Ví dụ: bộ lọc sau nút "Bộ lọc" (§12) → theo hàng lọc của prototype; biểu mẫu tại chỗ → hộp thoại ở chỗ prototype dùng hộp thoại; nhóm menu → chỉ đổi nếu cấu trúc prototype đòi, và **giữ** thanh dọc bên trái. Mỗi điểm bị thay được liệt kê ở **mục sổ của màn đổi nó** |
+| 4 | Giữ bất kể prototype (luật cứng, không phải sở thích) | Xã lấy từ `Host`, **không** ô chọn xã (luật 1) · che dữ liệu cá nhân + quyền mở che riêng (luật 3, ADR 0030) · xoá mềm kèm lý do, không xoá cứng / xoá cứng hàng loạt (luật 7) · cán bộ **không** nhập đánh giá thay công dân (ADR 0062) · mã đã cấp bất biến, không tự sinh mã dự án trước khi chốt định dạng (luật 7, ADR 0065) · mã trạng thái tiếng Việt + hai đồng hồ hạn (ADR 0011, 0027, 0028) · sửa chứng từ đã xác nhận → về nháp (ADR 0036) · ô đồng ý trước khi công khai cán bộ lên Mini App (NĐ 13/2023) · khung bản đồ + xác nhận pháp lý (ADR 0072) · quyền theo luật 5, **không** thêm khoá mới · **không** "Tính lại ngay", bấm sâu ra danh sách đã lọc (ADR 0053 — số đếm trực tiếp làm nút ấy vô nghĩa) · quyết định chủ dự án trong ngày giữ: hộp chi tiết nhiệm vụ dạng ngăn phải + tab bản ghi (05/10 #3/#6), thanh dọc bên trái (lần 4), khung Tổng quan (lần 3) |
+| 5 | Phạm vi | **Chỉ front-end `web-admin`**; không đổi API, proto, migration. Thứ prototype có mà cần tuyến backend mới → đặt **đúng vị trí prototype** dưới dạng control vô hiệu dấu "?" (§14), **không bao giờ làm giả** |
+
+**Vì sao #3 và #4 tách nhau:** chủ dự án yêu cầu "giống prototype nhất", nên mọi lựa chọn trình bày
+trước đây chỉ là sở thích đều nhường prototype. Các điểm ở #4 không phải sở thích: mỗi điểm có luật
+hoặc ADR sở hữu, và prototype viết trước hoặc ngoài các ràng buộc ấy. Ngoài lời trên, chủ dự án
+**không nêu** lý do — đừng suy thêm.
