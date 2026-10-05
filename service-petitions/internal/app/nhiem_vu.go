@@ -509,7 +509,8 @@ func (uc *GhiNhiemVu) duocHoanThanh(ctx context.Context, tx *store.ScopedTx, n d
 //
 // There is no `TrangThai`: a new task starts at `moi-giao` and nowhere else — a client choosing its
 // own starting state could file work that is already "hoàn thành". There is no `HanBanDau`: it is
-// written from `HanXuLy` by the INSERT, once, and never again. There is no `NguoiTaoMa`: that is
+// written from `HanXuLy` by the INSERT, and afterwards moves only with a deadline correction made
+// before any approved extension (migration 0016). There is no `NguoiTaoMa`: that is
 // the acting principal, and a request that could name its own author is a request that can forge
 // the trail.
 type YeuCauTaoNhiemVu struct {
@@ -540,10 +541,10 @@ type YeuCauTaoNhiemVu struct {
 	// HanXuLy is "Hạn hoàn thành" as the form carried it. ZERO MEANS NO DEADLINE, which §4.1 renders
 	// as `Hạn —` and §7.1 permits by not marking the field required.
 	//
-	// ⚠ IT IS STORED, NOT DERIVED, AND IT IS FIXED HERE FOR EVER. `han_ban_dau` takes the same value
-	// in the same statement and the trigger refuses every later change to it, so a task created
-	// without a deadline can never be given one — see the report, where that consequence is raised
-	// rather than worked around.
+	// ⚠ IT IS STORED, NOT DERIVED. `han_ban_dau` takes the same value in the same statement. A later
+	// PATCH may still correct the deadline — or set one on a task created without it — and
+	// `han_ban_dau` follows that correction only while no extension was ever approved (migration
+	// 0016, ADR 0065 NV4); after an approved extension it is frozen.
 	HanXuLy time.Time
 
 	// ParentCode makes this a sub-task of §5.10, naming the parent by its REGISTER NUMBER (`NV19`).
