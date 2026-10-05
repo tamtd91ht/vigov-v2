@@ -486,6 +486,11 @@ func (h *Handler) traLoiLoiDuAn(w http.ResponseWriter, r *http.Request, viec str
 		httpx.WriteError(w, http.StatusConflict, "project_has_vouchers",
 			"Dự án này còn chứng từ giải ngân nên chưa xoá được. "+
 				"Hãy gỡ các chứng từ kèm lý do trước, rồi xoá dự án.", "")
+	case errors.Is(err, domain.ErrProjectStartAfterCompletion):
+		// A FIXED SENTENCE AND NOT err.Error(): on the edit path the refusal comes out of the
+		// transaction wrapped by bocDuAn, whose text carries the commune's id — not for a clerk.
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Ngày khởi công không được sau ngày hoàn thành.", "")
 	case laLoiDauVaoDuAn(err):
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
 	default:

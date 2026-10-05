@@ -897,9 +897,32 @@ func TestThieuBangChiThiCanDoiVaChiDatDuToanBienMatChuKhongRa0(t *testing.T) {
 	if ra.Balance.UnavailableReason == "" || ra.ExpenditureAchievement.UnavailableReason == "" {
 		t.Fatal("thiếu bảng chi mà không có lý do nào hiện ra")
 	}
+	// TQ-02 (tester report 05/10/2026): a sentence a clerk can read, never the store's `ngan_sach:`
+	// error text.
+	if got, want := ra.ExpenditureAchievement.UnavailableReason, "Xã chưa lập bảng chi năm 2026."; got != want {
+		t.Errorf("lý do Chi đạt dự toán = %q, muốn %q", got, want)
+	}
 	// The revenue half is untouched: a commune that has entered its revenue sheet must still see it.
 	if ra.RevenueAchievement.BasisPoints == nil {
 		t.Fatal("thiếu bảng CHI mà chỉ số THU cũng mất")
+	}
+}
+
+// TQ-02 on the revenue half: the missing-sheet reason names the year and carries no `ngan_sach:`.
+func TestMissingRevenueSheetReasonIsClerkSentence(t *testing.T) {
+	m := dungMayChuNganSach(t)
+	m.capQuyen(xaA, "budget.read")
+	delete(m.doc.theo[xaA], khoaBang(2026, domain.BangThu))
+
+	w := m.goi(t, http.MethodGet, hostA, duongChiSo+"?year=2026", canBoGhi(xaA), "")
+	doiMa(t, w, http.StatusOK)
+
+	var ra chiSoNamRa
+	if err := json.Unmarshal(w.Body.Bytes(), &ra); err != nil {
+		t.Fatalf("thân không phải JSON: %v", err)
+	}
+	if got, want := ra.RevenueAchievement.UnavailableReason, "Xã chưa lập bảng thu năm 2026."; got != want {
+		t.Errorf("lý do Thu đạt dự toán = %q, muốn %q", got, want)
 	}
 }
 

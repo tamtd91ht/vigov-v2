@@ -22,6 +22,7 @@ package http
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -529,6 +530,36 @@ func TestGhiDuAnAnhXaLoiNghiepVuSangMaTrangThai(t *testing.T) {
 				if e.TraceID == xau {
 					t.Errorf("trace_id = %q — đó là TÊN TRƯỜNG chui vào chỗ traceID", e.TraceID)
 				}
+			}
+		})
+	}
+}
+
+// GN-03 (tester report 05/10/2026): start after completion is a 400 in the clerk's words, on create
+// AND on edit. On edit the use case returns it wrapped by bocDuAn — whose text carries the commune's
+// id — so the sentence must be the handler's own, never err.Error().
+func TestProjectStartAfterCompletionIs400WithCleanSentence(t *testing.T) {
+	for _, tc := range []struct {
+		name, method, path, body string
+		err                      error
+	}{
+		{"create", http.MethodPost, duongDuAn, thanThemDA, domain.ErrProjectStartAfterCompletion},
+		{"update one side", http.MethodPatch, duongDuAnMot(), thanSuaDA,
+			fmt.Errorf("du_an: sửa cho xã %s: %w", xaA, domain.ErrProjectStartAfterCompletion)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := dungMayChuDuAnGhi(t)
+			m.capQuyen(xaA, "budget.update")
+			m.ghi.loi = tc.err
+
+			w := m.goi(t, tc.method, hostA, tc.path, canBoGhi(xaA), tc.body)
+			doiMa(t, w, http.StatusBadRequest)
+			e := loiTra(t, w)
+			if !strings.Contains(e.Message, "Ngày khởi công") {
+				t.Errorf("thông điệp = %q, muốn nêu \"Ngày khởi công\" bằng lời cán bộ đọc được", e.Message)
+			}
+			if strings.Contains(e.Message, "du_an:") || strings.Contains(e.Message, string(xaA)) {
+				t.Errorf("thông điệp = %q — lộ chữ kỹ thuật hoặc mã xã", e.Message)
 			}
 		})
 	}

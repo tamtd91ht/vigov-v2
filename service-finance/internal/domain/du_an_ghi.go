@@ -100,6 +100,11 @@ var (
 	ErrNgayDuAnNgoaiLich = errors.New("du_an: ngày ngoài khoảng năm hợp lệ (2000..2100)")
 	ErrThamChieuQuaDai   = errors.New("du_an: mã tham chiếu (đơn vị / cán bộ) quá dài")
 
+	// ErrProjectStartAfterCompletion — `ngay_khoi_cong` later than `ngay_hoan_thanh` (tester report
+	// 05/10/2026, GN-03). Such a row draws a negative duration on §8's timeline and nothing on the
+	// screen says which of the two dates is the typo.
+	ErrProjectStartAfterCompletion = errors.New("du_an: ngày khởi công sau ngày hoàn thành")
+
 	ErrThieuLyDoXoaDuAn  = errors.New("du_an: thiếu lý do xoá dự án")
 	ErrLyDoXoaDuAnQuaDai = errors.New("du_an: lý do xoá quá dài")
 
@@ -362,6 +367,20 @@ func KiemTraNgayDuAn(ngay time.Time) error {
 	}
 	if n := ngay.Year(); n < NamDuAnSom || n > NamDuAnMuon {
 		return ErrNgayDuAnNgoaiLich
+	}
+	return nil
+}
+
+// CheckProjectDateOrder refuses a start date later than the completion date.
+//
+// EQUAL DATES ARE ADMITTED: a small works item started and finished on one day is a real record.
+// EITHER SIDE BLANK IS ADMITTED too, because both are optional (§9) — there is nothing to order.
+func CheckProjectDateOrder(start, completion time.Time) error {
+	if start.IsZero() || completion.IsZero() {
+		return nil
+	}
+	if start.After(completion) {
+		return ErrProjectStartAfterCompletion
 	}
 	return nil
 }

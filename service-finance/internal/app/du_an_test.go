@@ -518,6 +518,91 @@ func TestSuaDuAnKhongCoThiBaoKhongThay(t *testing.T) {
 	}
 }
 
+// GN-03 (tester report 05/10/2026): a start later than the completion is refused on create, before
+// any transaction opens.
+func TestCreateProjectStartAfterCompletionIsRefused(t *testing.T) {
+	k := khoDuAnSan()
+	uc, ctx := dungUseCaseDuAn(t, k)
+
+	yc := themDuAnHopLe()
+	yc.NgayKhoiCong = time.Date(2026, time.June, 2, 0, 0, 0, 0, time.UTC)
+	yc.NgayHoanThanh = time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC)
+
+	_, err := uc.Them(ctx, yc, canBo)
+	if !errors.Is(err, domain.ErrProjectStartAfterCompletion) {
+		t.Fatalf("lỗi = %v, muốn ErrProjectStartAfterCompletion", err)
+	}
+	if k.batDau != 0 {
+		t.Errorf("mở %d giao dịch, muốn 0", k.batDau)
+	}
+
+	// The same day on both sides is a real record, not a typo.
+	yc.NgayHoanThanh = yc.NgayKhoiCong
+	if _, err := uc.Them(ctx, yc, canBo); err != nil {
+		t.Fatalf("cùng ngày mà bị từ chối: %v", err)
+	}
+}
+
+// GN-03 on edit: a PATCH naming ONE date is ordered against the OTHER date as stored.
+func TestUpdateProjectOneDateIsCheckedAgainstStoredOther(t *testing.T) {
+	stored := time.Date(2026, time.June, 30, 0, 0, 0, 0, time.UTC)
+
+	t.Run("start moved past stored completion", func(t *testing.T) {
+		k := khoDuAnSan()
+		k.hang = hangDuAnSan()
+		k.hang.hoanThanh = &stored
+		uc, ctx := dungUseCaseDuAn(t, k)
+
+		start := stored.AddDate(0, 0, 1)
+		_, err := uc.Sua(ctx, k.hang.id, YeuCauSuaDuAn{NgayKhoiCong: &start}, canBo)
+		if !errors.Is(err, domain.ErrProjectStartAfterCompletion) {
+			t.Fatalf("lỗi = %v, muốn ErrProjectStartAfterCompletion", err)
+		}
+		if k.coCau("UPDATE du_an") || k.coCau("INSERT INTO audit_log") {
+			t.Error("bị từ chối mà vẫn ghi dòng hoặc vết")
+		}
+	})
+
+	t.Run("completion moved before stored start", func(t *testing.T) {
+		k := khoDuAnSan()
+		k.hang = hangDuAnSan()
+		k.hang.khoiCong = &stored
+		uc, ctx := dungUseCaseDuAn(t, k)
+
+		completion := stored.AddDate(0, 0, -1)
+		_, err := uc.Sua(ctx, k.hang.id, YeuCauSuaDuAn{NgayHoanThanh: &completion}, canBo)
+		if !errors.Is(err, domain.ErrProjectStartAfterCompletion) {
+			t.Fatalf("lỗi = %v, muốn ErrProjectStartAfterCompletion", err)
+		}
+	})
+
+	t.Run("start moved onto stored completion", func(t *testing.T) {
+		k := khoDuAnSan()
+		k.hang = hangDuAnSan()
+		k.hang.hoanThanh = &stored
+		uc, ctx := dungUseCaseDuAn(t, k)
+
+		start := stored
+		if _, err := uc.Sua(ctx, k.hang.id, YeuCauSuaDuAn{NgayKhoiCong: &start}, canBo); err != nil {
+			t.Fatalf("cùng ngày mà bị từ chối: %v", err)
+		}
+	})
+
+	// A row already out of order (written before this check) must still take a name correction.
+	t.Run("legacy row, no date named", func(t *testing.T) {
+		k := khoDuAnSan()
+		k.hang = hangDuAnSan()
+		start := stored.AddDate(0, 0, 5)
+		k.hang.khoiCong, k.hang.hoanThanh = &start, &stored
+		uc, ctx := dungUseCaseDuAn(t, k)
+
+		name := "Tên mới"
+		if _, err := uc.Sua(ctx, k.hang.id, YeuCauSuaDuAn{Ten: &name}, canBo); err != nil {
+			t.Fatalf("sửa tên bị chặn bởi ngày cũ: %v", err)
+		}
+	})
+}
+
 // --- removing ----------------------------------------------------------------------------------
 
 // ⚠ THE STOP CONDITION, PROVED. The specification says nothing about removing a project that still

@@ -243,3 +243,26 @@ func TestTongMucHieuLucApDungLuatCuaMuc9(t *testing.T) {
 		t.Errorf("có khai: = %d, muốn 250000000", got)
 	}
 }
+
+// GN-03 (tester report 05/10/2026): a start later than the completion is refused; equal dates and a
+// blank on either side are admitted.
+func TestCheckProjectDateOrder(t *testing.T) {
+	day := func(d int) time.Time { return time.Date(2026, time.March, d, 0, 0, 0, 0, time.UTC) }
+	for _, tc := range []struct {
+		name              string
+		start, completion time.Time
+		want              error
+	}{
+		{"start before completion", day(1), day(20), nil},
+		{"same day", day(5), day(5), nil},
+		{"start after completion", day(20), day(1), ErrProjectStartAfterCompletion},
+		{"no start", time.Time{}, day(1), nil},
+		{"no completion", day(20), time.Time{}, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := CheckProjectDateOrder(tc.start, tc.completion); !errors.Is(got, tc.want) {
+				t.Errorf("CheckProjectDateOrder = %v, muốn %v", got, tc.want)
+			}
+		})
+	}
+}

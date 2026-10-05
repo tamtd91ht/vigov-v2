@@ -587,8 +587,10 @@ func (h *Handler) DocChiSoNganSach(w http.ResponseWriter, r *http.Request) {
 			ra.RevenueTotals = append(ra.RevenueTotals, o)
 		}
 	} else {
+		// A SENTENCE FOR THE CLERK, not the store's error text: that one carries a `ngan_sach:` prefix
+		// and was shown verbatim on the dashboard (tester report 05/10/2026, TQ-02).
 		ra.RevenueAchievement = chiSoRa{Name: "Thu đạt dự toán",
-			UnavailableReason: fistore.ErrKhongThayBangNganSach.Error()}
+			UnavailableReason: "Xã chưa lập bảng thu năm " + strconv.Itoa(nam) + "."}
 	}
 
 	if coChi {
@@ -596,7 +598,7 @@ func (h *Handler) DocChiSoNganSach(w http.ResponseWriter, r *http.Request) {
 		ra.ExpenditureAchievement = chiSoRaNgoai(ten, ty)
 	} else {
 		ra.ExpenditureAchievement = chiSoRa{Name: "Chi đạt dự toán",
-			UnavailableReason: fistore.ErrKhongThayBangNganSach.Error()}
+			UnavailableReason: "Xã chưa lập bảng chi năm " + strconv.Itoa(nam) + "."}
 	}
 
 	ra.Balance = soTienRaNgoai(domain.CanDoiThuChi(thu, chi))

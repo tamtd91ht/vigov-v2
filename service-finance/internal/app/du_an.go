@@ -235,6 +235,9 @@ func (uc *DuAn) Them(ctx context.Context, yc YeuCauThemDuAn,
 			return KetQuaThemDuAn{}, err
 		}
 	}
+	if err := domain.CheckProjectDateOrder(yc.NgayKhoiCong, yc.NgayHoanThanh); err != nil {
+		return KetQuaThemDuAn{}, err
+	}
 	phanBo, err := domain.ChuanHoaPhanBoMoi(yc.PhanBo)
 	if err != nil {
 		return KetQuaThemDuAn{}, err
@@ -473,6 +476,15 @@ func (uc *DuAn) Sua(ctx context.Context, id string, yc YeuCauSuaDuAn,
 				sau.ThoiHanGiaiNgan = domain.HanGiaiNganMacDinh(truoc.Nam)
 			} else {
 				sau.ThoiHanGiaiNgan = *yc.ThoiHanGiaiNgan
+			}
+		}
+
+		// AGAINST THE MERGED ROW, because a PATCH may name only one of the two dates and the other one
+		// is whatever is stored. CHECKED ONLY WHEN A DATE IS NAMED: a legacy row already out of order
+		// must still accept a name correction, the same reasoning as the category check below.
+		if yc.NgayKhoiCong != nil || yc.NgayHoanThanh != nil {
+			if err := domain.CheckProjectDateOrder(sau.NgayKhoiCong, sau.NgayHoanThanh); err != nil {
+				return err
 			}
 		}
 
