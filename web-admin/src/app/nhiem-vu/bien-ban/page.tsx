@@ -46,7 +46,7 @@ export default async function TrangBienBanHop() {
           <main className="than-trang">
             {/* The page header (`<h1>` = `TIEU_DE_MAN`, subtitle = `MO_TA_MAN`, the `Nhập biên bản`
                 button) is drawn by `SoBienBan`: the button sits on the title row (spec §5) and the
-                state it toggles — which form is open — lives in that component. */}
+                dialog it opens is that component's state. */}
             <SoBienBan />
           </main>
         </div>

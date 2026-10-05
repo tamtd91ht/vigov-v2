@@ -2446,12 +2446,13 @@ describe("the filter row — ONE row in the prototype's order, no `Bộ lọc` p
     expect(page).toContain("<FormGiaoViec\n          dialog");
     // `+ Thêm việc con` opens the SAME dialog (stacked over the detail panel).
     expect(page).toContain("key={drawer.nhiemVu.code}\n                      dialog");
-    // Biên bản `Tách thành nhiệm vụ` and Phản ánh `Tạo nhiệm vụ` still embed the same form inline.
-    for (const f of ["../bien-ban/so-bien-ban.tsx", "../phan-anh/petition-task.tsx"]) {
-      const other = readFileSync(fileURLToPath(new URL(f, import.meta.url)), "utf8");
-      expect(other).toContain("<FormGiaoViec");
-      expect(other).not.toMatch(/<FormGiaoViec\s+dialog/);
-    }
+    // Phản ánh `Tạo nhiệm vụ` still embeds the same form inline.
+    const petition = readFileSync(fileURLToPath(new URL("../phan-anh/petition-task.tsx", import.meta.url)), "utf8");
+    expect(petition).toContain("<FormGiaoViec");
+    expect(petition).not.toMatch(/<FormGiaoViec\s+dialog/);
+    // Biên bản `Tách thành nhiệm vụ` opens the SAME form as the prototype's dialog (06/10/2026).
+    const meeting = readFileSync(fileURLToPath(new URL("../bien-ban/so-bien-ban.tsx", import.meta.url)), "utf8");
+    expect(meeting).toMatch(/<FormGiaoViec\s+dialog/);
   });
 });
 

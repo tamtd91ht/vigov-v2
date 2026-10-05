@@ -6,12 +6,15 @@ import type {
   identity_canBoChonNguoiRa,
   petitions_bienBanRa,
   petitions_ketLuanRa,
+  petitions_loaiNhiemVuRa,
   petitions_nhiemVuRa,
 } from "@/lib/api/schema.gen";
 
 import {
   CANH_BAO_BI_MAT,
   CAU_XAC_NHAN_KY,
+  CREATE_MEETING_DESCRIPTION,
+  CREATE_MEETING_TITLE,
   cauDaTach,
   CHUA_TACH_NHIEM_VU,
   NHAN_NUT_BO_DAU,
@@ -31,6 +34,8 @@ import {
   NHAN_NUT_THEM_KET_LUAN,
   PLACEHOLDER_KET_LUAN,
   SO_RONG,
+  SPLIT_DIALOG_TITLE,
+  SPLIT_SUBMIT_LABEL,
 } from "./nhan-bien-ban";
 import {
   ChiTietBienBan,
@@ -43,7 +48,7 @@ import {
   type PhepTach,
   type PhepVongDoi,
 } from "./so-bien-ban";
-import { BANG_NHAN_MAC_DINH } from "@/features/nhiem-vu/nhan-nhiem-vu";
+import { BANG_NHAN_MAC_DINH, TASK_TYPE_PLACEHOLDER } from "@/features/nhiem-vu/nhan-nhiem-vu";
 
 /**
  * Canh những QUYẾT ĐỊNH CÓ RA TỚI TRANG hay không.
@@ -328,15 +333,53 @@ describe("nút `Tách thành nhiệm vụ` §3", () => {
     expect(html).toContain(nhuTrongHTML(NHAN_NUT_TACH));
   });
 
-  it("hộp Giao việc chỉ hiện khi chính kết luận NÀY đang mở", () => {
+  it("hộp Tách chỉ hiện khi chính kết luận NÀY đang mở", () => {
     const dong = ketLuan({ id: "k7" });
 
-    // Chưa mở: không có biểu mẫu nào trên dòng.
-    expect(veDong(dong)).not.toContain("Giao việc mới");
-    // Mở ở một kết luận KHÁC: dòng này vẫn không có biểu mẫu. Một hộp một lúc trên cả màn.
-    expect(veDong(dong, phepTach({ moOKetLuan: "k9" }))).not.toContain("Giao việc mới");
+    // Chưa mở: không có hộp nào trên dòng.
+    expect(veDong(dong)).not.toContain(SPLIT_DIALOG_TITLE);
+    // Mở ở một kết luận KHÁC: dòng này vẫn không có hộp. Một hộp một lúc trên cả màn.
+    expect(veDong(dong, phepTach({ moOKetLuan: "k9" }))).not.toContain(SPLIT_DIALOG_TITLE);
     // Mở ở chính nó.
-    expect(veDong(dong, phepTach({ moOKetLuan: "k7" }))).toContain("Giao việc mới");
+    expect(veDong(dong, phepTach({ moOKetLuan: "k7" }))).toContain(SPLIT_DIALOG_TITLE);
+  });
+
+  it("prototype: hộp Tách là một DIALOG 500px — tiêu đề, câu kết luận dưới tiêu đề, `Huỷ` rồi `Tạo nhiệm vụ`", () => {
+    const html = veDong(
+      ketLuan({ id: "k7", content: "Giao Tài chính đối chiếu số liệu." }),
+      phepTach({ moOKetLuan: "k7" }),
+    );
+    const dialog = html.slice(html.indexOf("<dialog"));
+    expect(dialog).toMatch(/^<dialog aria-labelledby="tieu-de-giao-viec-moi" aria-modal="true" class="[^"]*max-w-\[500px\]/);
+    expect(dialog).toContain(`>${SPLIT_DIALOG_TITLE}</h2>`);
+    expect(dialog).toContain('<p class="m-0 text-sm text-ink-500">Giao Tài chính đối chiếu số liệu.</p>');
+    expect(dialog.indexOf(">Huỷ</button>")).toBeLessThan(dialog.indexOf(`>${SPLIT_SUBMIT_LABEL}</button>`));
+    expect(dialog).not.toContain(">Giao việc</button>");
+  });
+
+  it("hộp Tách giữ ô Loại — KHÔNG tự chọn loại: xã chưa có loại mặc định thì `— Chọn loại —` và nút tắt (NV-01)", () => {
+    const html = veDong(ketLuan({ id: "k7" }), phepTach({ moOKetLuan: "k7" }));
+    expect(html).toContain('id="giao-loai"');
+    expect(html).toContain(`<option value="" selected="">${TASK_TYPE_PLACEHOLDER}</option>`);
+    const submit = html.slice(html.lastIndexOf("<button", html.indexOf(`>${SPLIT_SUBMIT_LABEL}</button>`)));
+    expect(submit.slice(0, submit.indexOf(">"))).toContain('disabled=""');
+  });
+
+  it("hộp Tách vẫn rộng 500px khi loại mặc định là `Theo văn bản` — không có ba danh sách văn bản để nới", () => {
+    const loai = {
+      id: "01JLOAI1",
+      code: "theo-van-ban",
+      label: "Theo văn bản",
+      is_default: true,
+      active: true,
+      order: 1,
+    } as petitions_loaiNhiemVuRa;
+    const html = veDong(
+      ketLuan({ id: "k7" }),
+      phepTach({ moOKetLuan: "k7", danhMuc: { loai: [loai], mucUuTien: [], khoi: [], boPhan: [] } }),
+    );
+    expect(html).toMatch(/<dialog [^>]*class="[^"]*max-w-\[500px\]/);
+    expect(html).not.toContain("Văn bản cấp trên giao");
   });
 
   it("hộp mở thì dùng LẠI biểu mẫu Giao việc của `02-nhiem-vu.md` §7, không dựng bản thứ hai", () => {
@@ -449,6 +492,93 @@ describe("danh sách thẻ", () => {
     );
 
     expect(html.split("Thiếu nội dung kết luận.").length - 1).toBe(1);
+  });
+});
+
+/** ADR 0068 lần 5 — the composition of `apps/admin` `MeetingMinutes.tsx`. */
+describe("prototype composition", () => {
+  it("empty register: the prototype's dashed box and sentence", () => {
+    const html = renderToStaticMarkup(
+      <DanhSachBienBan
+        bienBan={[]}
+        lanGhiXong={0}
+        dangGui={false}
+        loiKetLuan={null}
+        guiKetLuan={() => {}}
+        tach={phepTach()}
+        vongDoi={vongDoi()}
+      />,
+    );
+    expect(SO_RONG).toBe("Chưa có biên bản nào được nhập.");
+    expect(html).toMatch(/^<p class="[^"]*border-dashed[^"]*">Chưa có biên bản nào được nhập\.<\/p>$/);
+  });
+
+  it("card: an `article`; header = title · meta · status · count pill; then the conclusions, then the add row", () => {
+    const html = veThe(bienBan());
+    expect(html.startsWith("<article")).toBe(true);
+    const at = (s: string) => html.indexOf(s);
+    expect(at("Giao ban Uỷ ban nhân dân xã")).toBeLessThan(at("5/8/2026 · 31/BB-UBND"));
+    expect(at("5/8/2026 · 31/BB-UBND")).toBeLessThan(at(">Dự thảo<"));
+    expect(at(">Dự thảo<")).toBeLessThan(at("<strong>0/1 kết luận hoàn thành</strong>"));
+    expect(at("<strong>0/1 kết luận hoàn thành</strong>")).toBeLessThan(at("1/3 nhiệm vụ xong"));
+    expect(at("1/3 nhiệm vụ xong")).toBeLessThan(at("<ol"));
+    expect(at("<ol")).toBeLessThan(at(nhuTrongHTML(PLACEHOLDER_KET_LUAN)));
+  });
+
+  it("conclusion row: a bordered box; ordinal · sentence · sub-line, `Tách thành nhiệm vụ` after them", () => {
+    const html = veThe(bienBan());
+    expect(html).toContain('<li class="rounded-[10px] border border-line px-4 py-3">');
+    const row = veDong(ketLuan());
+    const at = (s: string) => row.indexOf(s);
+    expect(at("conclusion-ordinal")).toBeLessThan(at("Giao bộ phận Địa chính"));
+    expect(at("Giao bộ phận Địa chính")).toBeLessThan(at(CHUA_TACH_NHIEM_VU));
+    expect(at(CHUA_TACH_NHIEM_VU)).toBeLessThan(at('aria-label="Tách thành nhiệm vụ — kết luận số 1"'));
+    expect(row).toContain('aria-haspopup="dialog"');
+  });
+
+  it("add row: two-line box with the prototype placeholder, `Thêm kết luận` beside it, label for AT only", () => {
+    const html = renderToStaticMarkup(<HangThemKetLuan bienBanID="01JBB1" dangGui={false} gui={() => {}} />);
+    expect(html).toContain('rows="2"');
+    expect(html).toContain('class="an-thi-giac">Thêm một kết luận</label>');
+    expect(html.indexOf("<textarea")).toBeLessThan(html.indexOf(nhuTrongHTML(NHAN_NUT_THEM_KET_LUAN)));
+  });
+
+  it("`Nhập biên bản` is a 500px DIALOG with the prototype's title, line, placeholders and field order", () => {
+    const html = renderToStaticMarkup(
+      <FormNhapBienBan
+        che={{ loai: "tao", boSungCho: null }}
+        danhBa={DANH_BA}
+        loiDanhBa={null}
+        dangGui={false}
+        loi={null}
+        huy={() => {}}
+        luu={() => {}}
+        sua={() => {}}
+      />,
+    );
+    expect(html).toMatch(/^<dialog aria-labelledby="tieu-de-nhap-bien-ban" aria-modal="true" class="[^"]*max-w-\[500px\]/);
+    expect(html).toContain(`<h2 id="tieu-de-nhap-bien-ban" tabindex="-1" class="m-0 text-lg leading-snug font-semibold text-ink-900">${CREATE_MEETING_TITLE}</h2>`);
+    expect(html).toContain(CREATE_MEETING_DESCRIPTION);
+    expect(html).toContain('placeholder="Giao ban tuần 34 năm 2026"');
+    expect(html).toContain('placeholder="12/BB-UBND"');
+    expect(html).toContain('placeholder="Dán nội dung biên bản vào đây…"');
+    const at = (s: string) => html.indexOf(s);
+    const order = [
+      'id="ten-cuoc-hop"',
+      'id="ngay-hop"',
+      'id="so-hieu-bien-ban"',
+      'id="dia-diem-hop"',
+      'id="chu-tri-bien-ban"',
+      'id="thu-ky-bien-ban"',
+      'id="chon-thanh-phan"',
+      'id="noi-dung-bien-ban"',
+      'id="cac-ket-luan"',
+      'id="tep-dinh-kem-bien-ban"',
+      ">Huỷ</button>",
+      // Not the words: `Lưu biên bản` is also the start of the prototype's line under the title.
+      '<button type="submit"',
+    ];
+    for (let i = 1; i < order.length; i++) expect(at(order[i - 1]!)).toBeLessThan(at(order[i]!));
   });
 });
 

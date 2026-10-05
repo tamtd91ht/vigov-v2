@@ -55,12 +55,20 @@ export const NHAN_NUT_HUY = "Huỷ";
 export const NHAN_NUT_LUU = "Lưu biên bản";
 
 /**
- * Sổ rỗng. §6 của phụ lục KHÔNG có dòng nào cho danh sách biên bản — bảng ấy chỉ liệt kê Kanban,
- * Sổ tay, Thông báo, đợt thu chi, nhật ký và "Chưa tách thành nhiệm vụ nào". Câu này vì thế là
- * câu viết mới, cùng giọng với các câu đã có, và nó được nói ra ở đây thay vì để người sau tưởng
- * mình đọc lại một câu của đặc tả.
+ * Sổ rỗng — nguyên văn câu của prototype (`apps/admin` `MeetingMinutes.tsx`, ADR 0068 lần 5). §6
+ * của phụ lục không có dòng nào cho danh sách biên bản, nên câu cũ ("Chưa có biên bản họp nào.")
+ * là câu tự viết và nhường prototype.
  */
-export const SO_RONG = "Chưa có biên bản họp nào.";
+export const SO_RONG = "Chưa có biên bản nào được nhập.";
+
+/** Heading and the line under it of the `Nhập biên bản` dialog — the prototype's words. */
+export const CREATE_MEETING_TITLE = "Nhập biên bản họp";
+export const CREATE_MEETING_DESCRIPTION =
+  "Lưu biên bản trước, sau đó thêm từng kết luận và tách thành nhiệm vụ.";
+
+/** The split dialog — prototype heading and submit words. The line under the heading is the conclusion. */
+export const SPLIT_DIALOG_TITLE = "Tách kết luận thành nhiệm vụ";
+export const SPLIT_SUBMIT_LABEL = "Tạo nhiệm vụ";
 
 export const DANG_TAI_SO = "Đang tải danh sách biên bản…";
 
@@ -662,8 +670,7 @@ export function luaChonCanBo(
  * "?" đặt đúng chỗ đặc tả (ADR 0068 §14, `meeting-pending.tsx`), và là thứ `tools/tien_do_san_pham.py`
  * đếm thành cột "chưa dựng" — nên một mục RỜI mảng ngay khi phần ấy được dựng.
  *
- * KHÔNG CÓ MỤC CHO LỰA CHỌN BỐ CỤC (biểu mẫu trong trang thay hộp thoại nổi; không cổng quyền
- * `task.create` ở client): đó là quyết định, không phải phần còn thiếu — một mục ở đây sẽ đếm chúng
+ * KHÔNG CÓ MỤC CHO LỰA CHỌN BỐ CỤC (không cổng quyền `task.create` ở client): đó là quyết định, không phải phần còn thiếu — một mục ở đây sẽ đếm chúng
  * thành "chưa dựng" mãi mãi (ADR 0068 §14, bảng "không có chỗ giữ"). Lý do của từng lựa chọn nằm ở
  * chú thích ngay chỗ nó, trong `so-bien-ban.tsx`.
  * ══════════════════════════════════════════════════════════════════════════════════════════ */

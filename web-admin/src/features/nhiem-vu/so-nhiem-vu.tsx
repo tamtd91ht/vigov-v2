@@ -4778,13 +4778,27 @@ export function FormGiaoViec({
   maChaCoSan,
   tieuDeCoSan,
   dialog = false,
+  dialogTitle = "Giao việc mới",
+  dialogDescription = MO_TA_FORM_GIAO_VIEC,
+  lead,
+  submitLabel = "Giao việc",
 }: {
   /**
    * Open as the prototype's centred DIALOG (`ModalDialog`) instead of inline — the Nhiệm vụ screen's
-   * `+ Giao việc mới` and `+ Thêm việc con`. Off by default: Biên bản and Phản ánh still embed the
-   * form in their own frame, and moving them is their screen's call.
+   * `+ Giao việc mới` and `+ Thêm việc con`, and the Biên bản screen's `Tách thành nhiệm vụ`. Off by
+   * default: Phản ánh still embeds the form in its own frame, and moving it is that screen's call.
    */
   dialog?: boolean;
+  /**
+   * Heading, line under it and submit words of the DIALOG — the Biên bản screen's prototype box is
+   * `Tách kết luận thành nhiệm vụ` / the conclusion / `Tạo nhiệm vụ`. Words only: the fields and the
+   * body sent are this form's, unchanged, so the two screens cannot drift on WHAT a task carries.
+   */
+  dialogTitle?: string;
+  dialogDescription?: ReactNode;
+  submitLabel?: string;
+  /** Lines drawn above the first field (Biên bản: the locked `Nguồn giao` and the "?" hint). */
+  lead?: ReactNode;
   /**
    * The three staff fields become type-to-search boxes (`StaffCombobox`). ONLY the Nhiệm vụ
    * screen sets it. Off by default so the Biên bản screen, which reuses this form, keeps its
@@ -4959,6 +4973,7 @@ export function FormGiaoViec({
   // the same as before (`thanGiaoViec`).
   const fields = (
     <>
+      {lead}
       {hasParent && <p className="ghi-chu m-0">{childFormNote(maChaCoSan)}</p>}
 
       <div className="grid gap-3 sm:grid-cols-2 [&>*]:my-0">
@@ -5255,7 +5270,7 @@ export function FormGiaoViec({
           dangTaiDanhBa
         }
       >
-        Giao việc
+        {submitLabel}
       </button>
     </div>
   );
@@ -5274,14 +5289,15 @@ export function FormGiaoViec({
     );
   }
 
-  // THE PROTOTYPE'S DIALOG: 500px, 800px for `Theo văn bản` (three document lists). The header and
-  // the buttons stay in sight; the fields scroll between them. Esc asks `huy`, as `Huỷ` does.
+  // THE PROTOTYPE'S DIALOG: 500px, 800px when the three document lists are drawn (`hienVanBan` —
+  // a `Theo văn bản` type on a caller without them, Biên bản, has nothing to widen for). The header
+  // and the buttons stay in sight; the fields scroll between them. Esc asks `huy`, as `Huỷ` does.
   return (
-    <ModalDialog titleId={CREATE_TASK_TITLE_ID} size={theoVanBan ? "lg" : "md"} onDismiss={huy}>
+    <ModalDialog titleId={CREATE_TASK_TITLE_ID} size={hienVanBan ? "lg" : "md"} onDismiss={huy}>
       <ModalDialogHeader
         titleId={CREATE_TASK_TITLE_ID}
-        title="Giao việc mới"
-        description={MO_TA_FORM_GIAO_VIEC}
+        title={dialogTitle}
+        description={dialogDescription}
       />
       <form className="m-0 flex min-h-0 flex-col gap-4" onSubmit={gui}>
         <div className="flex min-h-0 flex-col gap-4 overflow-y-auto pr-1 [&>*]:my-0">{fields}</div>
