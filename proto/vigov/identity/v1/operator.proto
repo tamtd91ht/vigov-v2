@@ -20,7 +20,8 @@ import "google/protobuf/timestamp.proto";
 //   * The commune rule is stated once, here, not scattered. IdentityService's header states "the
 //     commune travels in metadata, always"; seven exceptions scattered through it would make that
 //     sentence false. Here the exception is the realm's own seven RPCs, stated once, below — and the
-//     two RPCs that act ON a commune (SetMiniAppSecret, RetireMiniAppSecret) are NOT exempt.
+//     three RPCs that act ON or read FROM a commune (SetMiniAppSecret, RetireMiniAppSecret,
+//     ListMiniAppSecretStatuses) are NOT exempt.
 //   * One caller. Only service-platform calls this service. NOTHING IN THE WIRING ENFORCES THAT:
 //     it is served on identity's inter-service listener behind the one shared caller key (ADR
 //     0025), which every ViGov service holds. What a stray caller could do with it is exactly what
@@ -54,7 +55,9 @@ import "google/protobuf/timestamp.proto";
 // commune. Neither request has a commune FIELD — the body is caller-declared data (rule 1,
 // forbidden #2). Why these two live HERE and not on IdentityService: ADR 0070 §"Bổ sung 02/10/2026"
 // #6 — the secret travels platform → identity on the operator port 9093 and nowhere else, and an
-// operator principal is resolved only by this service.
+// operator principal is resolved only by this service. ListMiniAppSecretStatuses, the read beside
+// them, follows the same commune rule for the same reason (it reads the same commune-owned rows) and
+// is likewise never on methodsWithoutTenant.
 //
 // AUTHENTICATION IS HYBRID AND NOT CACHED (ADR 0048 §01/10 #2). service-platform verifies the `op1.`
 // signature locally (it holds OPERATOR_SESSION_SIGNING_KEYS too), then calls ResolveOperatorSession
@@ -82,7 +85,8 @@ import "google/protobuf/timestamp.proto";
 //                        App ID, live, to the target commune as its own app. See that RPC for why the
 //                        two meanings cannot be confused by a conforming caller.
 //   NOT_FOUND            RetireMiniAppSecret only: the App ID has no live settings in the target
-//                        commune. Never produced by the seven realm RPCs.
+//                        commune. Never produced by the seven realm RPCs, nor by
+//                        ListMiniAppSecretStatuses (a commune with nothing set is an empty list).
 //   UNAUTHENTICATED      NEVER produced by these RPCs. It belongs to the caller-key interceptor
 //                        (core/grpcx.UnaryServerCallerAuth, ADR 0025) and means the DEPLOYMENT is
 //                        misconfigured. Reusing it for "wrong password" would make a fleet-wide
@@ -275,6 +279,41 @@ service OperatorService {
   //                     done, not an error to the operator. Nothing written.
   //   INVALID_ARGUMENT  shape only, decided before any lookup.
   rpc RetireMiniAppSecret(RetireMiniAppSecretRequest) returns (RetireMiniAppSecretResponse);
+
+  // ListMiniAppSecretStatuses reports, for EVERY App ID with live settings in the target commune,
+  // whether a secret is set and "since when, by whom" — the "đặt lúc … bởi …" line of the commune
+  // detail screen (owner decision 05/10/2026). NEVER the secret, nor anything derived from it: no
+  // value, prefix, length, hash or fingerprint (see MiniAppSecretVersion).
+  //
+  // WHY A gRPC READ AND NOT A PLATFORM COPY. mini_app_secret is owned by service-identity
+  // (kb/30-indexes/data-ownership.json); service-platform may read it only through this contract
+  // (rule 2, invariant 3). A "secret set" flag mirrored into platform's `mini_app` row would be a
+  // second source for one fact, and it drifts the first time a version is set or retired from
+  // `operatorctl`, which never passes through platform.
+  //
+  // WHY THE WHOLE COMMUNE AND NOT ONE app_id. The screen shows the commune; the caller already knows
+  // which App IDs platform binds to it and joins on `app_id` — a bound App ID absent from the list is
+  // "no secret set". Listing every live row, not only the bound ones, also surfaces settings LEFT
+  // LIVE under an App ID the binding moved away from (an automatic revoke that did not complete,
+  // ADR 0070 #4) — exactly what an operator must see in order to retire them. One commune, one
+  // credential, one call: the "not batched" paragraph above is about many credentials, which this is
+  // not. Rows are per commune, so nothing of another commune is reachable.
+  //
+  // WHO MAY READ. The same session resolution as Set/Retire (from `session_token`, refreshing the
+  // idle timer — call it only for a request a person made). The key check is ADR 0073 #1: ANY
+  // granted `ops.*` key may open a commune and read its detail; writing stays `ops.mini_app.manage`.
+  // A live session holding ZERO keys is PERMISSION_DENIED — the same line platform's opauth.AnyKey
+  // draws, re-checked here because the rows are identity's.
+  //
+  // A PURE READ: no version row, no trail entry (no personal data is read — rule 6 invariant 7 does
+  // not apply; set_by is an operator's business code). Idempotent.
+  //
+  //   OK + ACCEPTED          `statuses` holds every live version of the target commune; EMPTY is a
+  //                          valid answer (nothing ever set, or everything retired).
+  //   OK + SESSION_NOT_LIVE  caller answers 401.
+  //   OK + PERMISSION_DENIED live session holding no `ops.*` key. Caller answers 403.
+  //   INVALID_ARGUMENT       empty `session_token`, or no "x-tenant-id" metadata.
+  rpc ListMiniAppSecretStatuses(ListMiniAppSecretStatusesRequest) returns (ListMiniAppSecretStatusesResponse);
 }
 
 // What an RPC of OperatorService decided. Each RPC's comment lists the subset it answers; a value
@@ -294,9 +333,10 @@ enum OperatorAuthOutcome {
   OPERATOR_AUTH_OUTCOME_SESSION_NOT_LIVE = 4;
   // ChangeOperatorPassword / CompleteOperatorEnrollment only: see `new_password_refusal`.
   OPERATOR_AUTH_OUTCOME_NEW_PASSWORD_REJECTED = 5;
-  // SetMiniAppSecret / RetireMiniAppSecret only: a live session whose operator lacks the key the
-  // act needs (`ops.mini_app.manage`). Nothing written. Never sent by the seven realm RPCs — none of
-  // them is guarded by a key.
+  // SetMiniAppSecret / RetireMiniAppSecret / ListMiniAppSecretStatuses only: a live session whose
+  // operator lacks the key the act needs (`ops.mini_app.manage` for the two writes, any `ops.*` key
+  // for the read). Nothing written. Never sent by the seven realm RPCs — none of them is guarded by
+  // a key.
   OPERATOR_AUTH_OUTCOME_PERMISSION_DENIED = 6;
 }
 
@@ -611,4 +651,45 @@ message MiniAppSecretRetirement {
   google.protobuf.Timestamp retired_at = 3;
   // The BUSINESS CODE of the operator, `VH-00001`.
   string retired_by = 4;
+}
+
+message ListMiniAppSecretStatusesRequest {
+  // CREDENTIAL — as SetMiniAppSecretRequest.session_token. The reader is resolved from it.
+  //
+  // DELIBERATELY NO app_id: the answer is the whole target commune (see the RPC). DELIBERATELY NO
+  // client_ip: nothing is written, and a field no code reads is a promise nobody keeps (the
+  // argument on ResolveOperatorSessionRequest). Add either, optional and new number, the day code
+  // reads it.
+  string session_token = 1;
+}
+
+message ListMiniAppSecretStatusesResponse {
+  // ACCEPTED, SESSION_NOT_LIVE or PERMISSION_DENIED.
+  OperatorAuthOutcome outcome = 1;
+  // Set only when ACCEPTED: one entry per App ID with a LIVE version in the target commune, ordered
+  // by app_id (a stable order; it carries no meaning). At most one entry per App ID (migration 0021,
+  // UNIQUE (tenant_id, live_app_id)).
+  repeated MiniAppSecretStatus statuses = 2;
+}
+
+// The live settings of one App ID in one commune, as the commune detail screen may show them.
+//
+// WHY A WRAPPER AND NOT A BARE MiniAppSecretVersion: a live version may hold NO secret. Migration
+// 0021 allows app_secret_sealed NULL while the version exists for another reason (CHECK
+// mini_app_secret_sealed_or_demo), so "a live version exists" and "a secret is set" are two facts,
+// and a screen that read the first as the second would tell an operator a commune can sign citizens
+// in when it cannot. `secret_set` states the second fact itself.
+//
+// WHY NOT A FIELD ON MiniAppSecretVersion: that message is also SetMiniAppSecret's answer, where a
+// secret is set by construction; a bool there would be a field whose zero value — from an identity
+// older than the field — reads as "no secret" on a version that has one.
+message MiniAppSecretStatus {
+  // The live version: app_id, version id, set_at and set_by (the operator's BUSINESS CODE, rule 6
+  // invariant 8). Always present in an entry. set_at / set_by date the VERSION; when secret_set is
+  // true they are when and by whom the secret now in force was set.
+  MiniAppSecretVersion live_version = 1;
+  // True when the live version holds a sealed secret. False means the App ID has live settings but
+  // no secret: the screen shows "chưa đặt", never the version's set_at as if a secret were set.
+  // A bool and nothing more about the value (see MiniAppSecretVersion).
+  bool secret_set = 2;
 }
