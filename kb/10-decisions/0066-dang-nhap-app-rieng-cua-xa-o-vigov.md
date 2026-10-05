@@ -3,17 +3,18 @@ id: 0066-dang-nhap-app-rieng-cua-xa-o-vigov
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: e8cede77
+derived_from_commit: ce5db182
 expires: null
 owns_facts:
   - "đăng nhập app riêng của xã (đổi accessToken/phoneToken bằng secret của App ID ấy) do ViGov service-identity làm; vihat-miniapp chỉ còn app chung/demo của ViHAT"
   - "vòng đời một xã: demo trên app ViHAT với tên miền demo dùng chung → app riêng của xã, đứng tên dev ViHAT, OA xác thực là OA của xã"
-  - "hai nghĩa của cờ --demo: app ViHAT demo cho xã mới (qua vihat-miniapp) và app riêng đang chờ Zalo duyệt (qua ViGov)"
+  - "danh tính cố định (--demo) bị GỠ HẲN: cờ dựng citizen-app, operatorctl mini-app-demo, đường đăng nhập demoIdentity của identity, stage Jenkins bat/tat-demo; dữ liệu giữ nguyên, cột demo_identity_enabled không còn đọc/ghi; app chờ Zalo duyệt chỉ thử bằng đường thật (chốt 05/10/2026 — thay 'hai nghĩa của cờ --demo')"
 ---
 
 # 0066. Đăng nhập app riêng của xã chuyển vào ViGov
 
-**Trạng thái:** đã chốt · **Ngày:** 2026-10-01 · **Thay một phần ADR 0032** (phần "lượt đổi token Mini
+**Trạng thái:** đã chốt · **Sửa đổi 05/10/2026** (gỡ hẳn danh tính cố định `--demo` — §*Sửa đổi
+05/10/2026*) · **Ngày:** 2026-10-01 · **Thay một phần ADR 0032** (phần "lượt đổi token Mini
 App thuộc `vihat-miniapp`", chỉ với app riêng của xã)
 
 ## Bối cảnh
@@ -70,10 +71,11 @@ vihat vẫn dùng demo được (dùng domain demo)"*.
 | Giai đoạn | App | Đăng nhập qua | Dữ liệu |
 |---|---|---|---|
 | 1. Demo cho xã mới | App ViHAT + QR gắn **tên miền demo dùng chung** (xã demo); phần nhìn đổi theo xã được chào (logo, tên, banner) | `vihat-miniapp` | Vào xã demo |
-| 2. Chờ Zalo duyệt app riêng | App A dựng với `--vao-thang --demo` | **ViGov** | Vào xã A |
+| 2. Chờ Zalo duyệt app riêng | **Thay 05/10/2026 — không còn `--demo`; thử bằng đường thật, §*Sửa đổi 05/10/2026*.** App A dựng với `--vao-thang --demo` | **ViGov** | Vào xã A |
 | 3. Phát hành | App A dựng `--vao-thang` (không `--demo`) | **ViGov** | Vào xã A |
 
-**Hai nghĩa của `--demo`, cùng một cơ chế:** danh tính cố định, không xin quyền Zalo (app chưa duyệt
+**Hai nghĩa của `--demo`, cùng một cơ chế** — **GỠ HẲN 05/10/2026, §*Sửa đổi 05/10/2026*; đoạn này
+giữ làm lịch sử:** danh tính cố định, không xin quyền Zalo (app chưa duyệt
 thì chưa có quyền số điện thoại), mọi luồng chạy thật tới máy chủ (ADR 0047 §6 dòng "Cờ --demo làm
 lại"). Chỗ nhận danh tính cố định đi theo nơi đăng nhập: app ViHAT → `vihat-miniapp`; app riêng → ViGov,
 bật theo App ID trong cấu hình của xã, **mặc định tắt**.
@@ -91,7 +93,7 @@ bật theo App ID trong cấu hình của xã, **mặc định tắt**.
 - **ViGov giữ bí mật của bên đứng tên app (ViHAT).** Cần quy định ai được xoay secret, và với
   on-premise thì secret nằm trên hạ tầng của xã.
 - **Đường ra Zalo** từ `service-identity` (netpol, cho phép tên miền Zalo).
-- Danh tính cố định của `--demo` ở ViGov là **đường mở phiên không qua xác minh số điện thoại**. Chỉ bật
+- (Hết hiệu lực 05/10/2026 — đường này bị gỡ, §*Sửa đổi 05/10/2026*.) Danh tính cố định của `--demo` ở ViGov là **đường mở phiên không qua xác minh số điện thoại**. Chỉ bật
   theo App ID trong cấu hình xã, mặc định tắt, và phải tắt trước khi app được duyệt. Việc sửa
   `vihat-miniapp` cho `DEMO_APP_IDS` (app ViHAT) bị bộ phân loại an toàn của Claude Code chặn ngày
   01/10/2026 — loại thay đổi này cần chủ dự án duyệt quyền.
@@ -109,7 +111,7 @@ app); ADR 0032 đánh dấu bị thay một phần bởi ADR này. ADR 0045 và 
 | Nơi giữ secret | Bảng mới thuộc `service-identity`: App ID, secret **mã hoá AES-GCM**, ngày đặt, người đặt. Khoá giải mã là **một** bí mật nền tảng qua Secret k8s (luật 8 đk dừng #1 — người dùng đồng ý). Không để secret từng xã trong biến môi trường (luật 1 bất biến 10) |
 | Ai nhập, xoay secret | Vận hành ViHAT ở `platform-admin`, cùng chỗ khai App ID của xã. Thay = ghi bản mới, vết kiểm toán không chứa giá trị. Xã on-premise: người vận hành của xã |
 | Cầu 9091 | Giữ song song tới khi app riêng Thăng Bình chạy đường mới, rồi gỡ phần app riêng khỏi cầu; app chung vẫn dùng |
-| `--demo` của app riêng | Cột bật danh tính cố định theo App ID, **mặc định tắt**; bật thì identity nhận đăng nhập không `phoneToken`, gán số cố định; tắt trước khi Zalo duyệt |
+| `--demo` của app riêng | **Gỡ 05/10/2026 — §*Sửa đổi 05/10/2026*.** Cột bật danh tính cố định theo App ID, **mặc định tắt**; bật thì identity nhận đăng nhập không `phoneToken`, gán số cố định; tắt trước khi Zalo duyệt |
 | Thứ tự | Phần không đụng `service-identity` làm trước; tuyến identity đợi phiên song song đang sửa `service-identity` commit xong |
 
 ## Đã quyết 01/10/2026 — sáu câu dựng tuyến (người dùng: *"ok"*, rồi *"ok không dùng đường ẩn danh nữa mà focus vào --demo option đi"*)
@@ -118,17 +120,40 @@ app); ADR 0032 đánh dấu bị thay một phần bởi ADR này. ADR 0045 và 
 |---|---|
 | 1 | Tuyến công khai `POST /api/v1/citizen-sessions` trên `identity.api.vigov.vn`, `Public("app riêng của xã đổi accessToken/phoneToken lấy phiên công dân trước khi có phiên — ADR 0066")`. Thân và bảng mã trạng thái **giữ y như `vihat-miniapp`** (201 `{vigovSession}` · 400 · 401 · 422 · 429 · 502 · 503) |
 | 2 | Giới hạn tần suất dựng ngay trong tuyến: **10 lượt / 5 phút / IP**, đếm trong bộ nhớ từng pod (ngưỡng an ninh — người dùng duyệt) |
-| 3 | Khi `platform-admin` chưa có: nhập/xoay secret và bật/tắt demo theo App ID bằng `operatorctl` — bắt `--ticket`, đọc secret từ stdin, vết kiểm toán ở xã đích, không ghi giá trị |
+| 3 | **Phần bật/tắt demo gỡ 05/10/2026; nhập/xoay secret nay ở platform-admin (ADR 0070).** Khi `platform-admin` chưa có: nhập/xoay secret và bật/tắt demo theo App ID bằng `operatorctl` — bắt `--ticket`, đọc secret từ stdin, vết kiểm toán ở xã đích, không ghi giá trị |
 | 4 | Về sau `platform-admin` gọi thẳng một tuyến vận hành ở identity, không vòng qua `service-platform` |
 | 5 | Đổi mã vị trí (`getLocation`) của app riêng **cũng chuyển vào identity**, để on-premise tự đứng được |
 | 6 | Mã hoá secret bằng `SECRET_ENCRYPTION_KEYS` + `core/crypto` (khoá theo xã, ADR 0009); identity bắt buộc biến này ở prod — thêm vào `identity-secrets` trước khi triển khai |
 
-**Bản `--demo` không gọi lệnh Zalo nào**, kể cả `getAccessToken` (app chưa duyệt bị Zalo từ chối cả lệnh ấy — người dùng báo 01/10/2026). Thân demo là `{appId, demoIdentity: true}`; identity nhận khi App ID bật demo, danh tính cố định, không mã tài khoản Zalo. **Không** làm đường "gửi ẩn danh không phiên" (người dùng bỏ, 01/10/2026).
+**(Gỡ 05/10/2026 — §*Sửa đổi 05/10/2026*; giữ làm lịch sử.) Bản `--demo` không gọi lệnh Zalo nào**, kể cả `getAccessToken` (app chưa duyệt bị Zalo từ chối cả lệnh ấy — người dùng báo 01/10/2026). Thân demo là `{appId, demoIdentity: true}`; identity nhận khi App ID bật demo, danh tính cố định, không mã tài khoản Zalo. **Không** làm đường "gửi ẩn danh không phiên" (người dùng bỏ, 01/10/2026).
 
 ## Chưa quyết
 
-1. Nơi giữ secret App A theo xã: bảng cấu hình mã hoá trong `service-identity`, hay Secret k8s theo xã
-   — cần chọn trước khi dựng, theo luật 8 và `skills/infra-config`.
-2. Ai được xoay secret App A, nhất là với xã on-premise.
-3. Cầu phiên `vihat-miniapp → identity` (cổng 9091) còn dùng cho app chung; app riêng không còn đi qua.
-   Có gỡ phần app riêng của cầu ngay hay để một thời gian song song.
+Cả ba câu dưới **đã đóng 01/10/2026** ở §*Đã quyết 01/10/2026 — trả lời ba câu dưới* (dòng *Nơi giữ
+secret*, *Ai nhập, xoay secret*, *Cầu 9091*). Chữ giữ làm lịch sử; mục ấy thắng.
+
+1. ~~Nơi giữ secret App A theo xã: bảng cấu hình mã hoá trong `service-identity`, hay Secret k8s theo xã
+   — cần chọn trước khi dựng, theo luật 8 và `skills/infra-config`.~~ **Đóng 01/10/2026**
+2. ~~Ai được xoay secret App A, nhất là với xã on-premise.~~ **Đóng 01/10/2026** — cách làm nay ở ADR 0070
+3. ~~Cầu phiên `vihat-miniapp → identity` (cổng 9091) còn dùng cho app chung; app riêng không còn đi qua.
+   Có gỡ phần app riêng của cầu ngay hay để một thời gian song song.~~ **Đóng 01/10/2026**
+
+## Sửa đổi 05/10/2026 — gỡ hẳn danh tính cố định (`--demo`)
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. **Người quyết:** chủ dự án,
+05/10/2026, trong phiên chính. **Chưa dựng.**
+
+| Điểm | Chốt |
+|---|---|
+| Gỡ gì | **Toàn bộ** đường danh tính cố định: cờ dựng `--demo` của `citizen-app`, lệnh `operatorctl mini-app-demo`, đường đăng nhập `demoIdentity` của identity, stage Jenkins `bat-demo-mini-app` / `tat-demo-mini-app` |
+| Giữ dữ liệu (luật 7) | Cột `demo_identity_enabled` **ở lại**, không còn đọc, không còn ghi. Mục nhật ký và hồ sơ công dân tạo dưới danh tính cố định **giữ nguyên**. Dòng khoá đang sống chỉ phục vụ demo (không có khoá niêm phong) được **cho nghỉ** (retire), không xoá |
+| Không đụng | Xã demo / tên miền demo trên **app chung ViHAT** (giai đoạn 1 của vòng đời ở trên) |
+| Thay gì | Dòng `owns_facts` *"hai nghĩa của cờ --demo"*; giai đoạn 2 của bảng vòng đời; đoạn *"Hai nghĩa của `--demo`"*; gạch đầu dòng *Hệ quả* về danh tính cố định; dòng *`--demo` của app riêng* (§*Đã quyết 01/10/2026*); phần bật/tắt demo của #3 và đoạn *"Bản `--demo` không gọi lệnh Zalo nào"* (§*sáu câu dựng tuyến*); dòng *"Cờ `--demo` làm lại"* của ADR 0047 mục 6 |
+
+**Vì sao:** danh tính cố định là đường mở phiên **không qua xác minh số điện thoại** (gạch đầu dòng
+*Hệ quả* ở trên) — một ngoại lệ của luật 4 phải nhớ tắt trước mỗi lần nộp duyệt. Cấu hình App ID và
+khoá đã có màn ở platform-admin (ADR 0070), nên đường thật thử được ngay khi khoá đúng.
+
+**Giá chủ dự án chấp nhận:** app đang chờ Zalo duyệt **chỉ thử được bằng đường thật** — đúng khoá bí
+mật của App ID ấy. Ở những chỗ Zalo từ chối lệnh của app chưa duyệt (người dùng báo 01/10/2026, đoạn
+*"Bản `--demo` không gọi lệnh Zalo nào"* ở trên), luồng cần phiên không còn đường vào nào khác.

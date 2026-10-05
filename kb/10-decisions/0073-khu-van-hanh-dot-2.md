@@ -37,3 +37,10 @@ không làm được việc của chính quyền mình; danh sách xã không ch
   6 khoá — cập nhật thành 7.
 - Thao tác chuyển khoá bí mật App ID cũng ghi một dòng vết ở platform (chỉ siêu dữ liệu) để màn nhật
   ký vận hành thấy được; dòng vết chính vẫn ở identity (ADR 0070 bổ sung #7).
+
+## Sửa đổi 05/10/2026
+
+Mục này ghi thêm, không sửa phần trên. **#5 — phát hành QR:** liên kết trả về nay **theo app riêng
+của xã** — xã có app riêng đang sống thì QR mở thẳng app ấy, không có thì app dùng chung như cũ. Điều
+này do ADR 0070 §*Sửa đổi 05/10/2026* #4 sở hữu (chủ dự án, 05/10/2026). Khoá `ops.qr.issue` và việc
+không ghi vết giữ nguyên.

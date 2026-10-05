@@ -90,7 +90,7 @@ có vấn đề gì không, nên tính ổn định về sau"* — rồi chọn 
 | Gắn / **trỏ lại** tên miền | `tenant_domain` | Trỏ lại là đường sáp nhập của ADR 0047 câu 4 — **có vết** (ADR 0047 ĐIỀU KIỆN DỪNG #6) |
 | Hồ sơ hiển thị: tên, địa chỉ, logo, đường dây nóng, giờ làm việc hiển thị, giới thiệu | `ho_so_hien_thi_xa` (và tên ở sổ xã) | Giờ ở đây **chỉ để hiện** — lịch tính hạn là `lich_lam_viec` của identity (ADR 0007; `0006_mini_app_va_ho_so_hien_thi.sql:146-149`) |
 | Dòng `mini_app`: `app_id → tenant_id`, chế độ `chinh` / `rieng` | `mini_app` | Nguồn sự thật duy nhất về xã của một App ID (ADR 0047 §*Tệp dựng không phải nguồn sự thật*) |
-| Sinh QR cho tên miền xã | — | Liên kết bản thử hoặc bản phát hành của **app chung**: `https://zalo.me/s/<APP_ID>/?<tham số tên miền>=<tên miền xã>&src=qr`. **Tên tham số chưa chốt** — ADR 0047 CÒN MỞ #5. Dạng liên kết của **bản thử** chưa đo |
+| Sinh QR cho tên miền xã | — | **Thay 05/10/2026 — dạng liên kết theo app riêng của xã: ADR 0070 §*Sửa đổi 05/10/2026* #4; tên tham số đã chốt 30/09 (`d`, `src`).** Liên kết bản thử hoặc bản phát hành của **app chung**: `https://zalo.me/s/<APP_ID>/?<tham số tên miền>=<tên miền xã>&src=qr`. **Tên tham số chưa chốt** — ADR 0047 CÒN MỞ #5. Dạng liên kết của **bản thử** chưa đo |
 
 ## Thiết kế — đề xuất, chờ xác nhận
 
