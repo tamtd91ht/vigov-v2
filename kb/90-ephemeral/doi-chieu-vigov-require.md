@@ -3,10 +3,11 @@ id: doi-chieu-vigov-require
 tier: T5
 source: CURATED
 owner: architecture
-derived_from_commit: 4c96e9a
+derived_from_commit: 29cb87fb
 expires: 2026-12-22
 owns_facts:
   - "mức độ lệch giữa đặc tả ../vigov-require/docs/spec và kho vigov-v2, đo ngày 2026-09-22"
+  - "đối chiếu từng màn hình web-admin với prototype ../vigov-require/apps/admin, đo ngày 2026-10-05 bằng đọc mã"
   - "bản chất quan hệ giữa hai kho: vigov-require LÀ nguồn của prototype mà docs/ui-ux chép ra"
   - "những điểm đặc tả vigov-require TRẢ LỜI ĐƯỢC câu hỏi mở của kho này"
   - "sổ việc đối chiếu hai kho: mục nào đã kiểm, mục nào còn nợ, mục nào chờ khách"
@@ -17,8 +18,14 @@ owns_facts:
 **Đo ngày 2026-09-22**, trên `vigov-require@b159f0e` và `vigov-v2@4c96e9a`. Hết hạn
 **22/12/2026** — sau đó một trong hai kho đã đi xa, đừng tin tệp này nữa.
 
-Tệp này **chỉ đọc tài liệu**, chưa đọc mã của `vigov-require`. Mọi con số dưới đây đều
-trích từ tệp có đường dẫn ghi kèm.
+§0–§9 **chỉ đọc tài liệu**, chưa đọc mã của `vigov-require`. Mọi con số ở đó đều trích từ
+tệp có đường dẫn ghi kèm.
+
+**Bổ sung 05/10/2026:** nhóm **M** của Sổ việc là đối chiếu **từng màn hình** `web-admin` với
+prototype, đo bằng **đọc MÃ** hai kho (`vigov-require@0053854` `apps/admin` · `vigov-v2@29cb87fb`).
+**Không** đo trên trình duyệt — đăng nhập bản chạy `vigov-admin-production.up.railway.app` thất
+bại. Tham chiếu là `apps/admin`; `vigov-prototype.html` ở gốc kho kia là bản mẫu tĩnh đời đầu
+(8 mục menu), **đừng** lấy làm chuẩn.
 
 ---
 
@@ -71,11 +78,80 @@ thì để `chưa làm`, đừng dựng sớm.
 | N7 | **Zalo Bot** làm kênh nhắc việc cán bộ — bot không nhắn trước được, ghép nối bằng mã 8 ký tự sống 10 phút | `chưa làm` | `08-tich-hop-ngoai.md`. **Kho này không có khái niệm Zalo Bot nào** |
 | N8 | **Cổng TTĐT của xã** → `content_sources`, đồng bộ tin về Mini App | `chưa làm` | `08-tich-hop-ngoai.md`. `service-comms` chưa có |
 
+## M — Màn hình `web-admin` so với prototype `apps/admin` (đo 05/10/2026)
+
+Đo bằng **đọc mã** hai kho (xem đầu tệp), hai agent chỉ-đọc. Dùng để sửa **từng màn một**, khỏi
+đo lại. Luật ghi như trên: xong thì đổi trạng thái + `file:line` + ngày, không xoá dòng.
+Trước khi làm một dòng có phần backend: đọc mục tương ứng trong `kb/90-ephemeral/tien-do/<module>.json`.
+
+### MA — Lượt 1: prototype rõ, KHÔNG cần khách quyết
+
+| # | Màn / việc | Trạng thái | Ghi chú |
+|---|---|---|---|
+| MA1 | `/van-ban` — **Sổ đơn thư công dân** là màn Văn bản chính của prototype: vào sổ, Excel, lọc, ngăn chi tiết có luồng, cảnh báo trùng, chuyển thành nhiệm vụ. Prototype **ẩn** Văn bản đến và OCR theo yêu cầu xã 17/09 | `chưa làm` | Backend còn chờ: `tien-do/service-documents.json` → `so-don-thu-cong-dan` (ADR 0039) |
+| MA2 | Giải ngân — tuyến **đọc danh sách chứng từ** (tải lại trang thì bảng rỗng) | `chưa làm` | |
+| MA3 | Giải ngân — danh mục **nguồn vốn** + nguồn trên từng chứng từ, tổng năm, luỹ kế tháng, tiến độ theo hạng mục → 4 thẻ KPI, 3 biểu đồ, "Chỉ dự án chậm", "Gộp theo hạng mục" | `chưa làm` | Cùng gốc với K4 và N4 |
+| MA4 | Giải ngân — tab **Vướng mắc** và **Trao đổi** | `chưa làm` | |
+| MA5 | Thu–Chi — **nhập tệp Excel của Phòng Tài chính** (1 tệp, 2 sheet) là đường CHÍNH (prototype `FiscalReportPanel`); hiện chỉ có biểu mẫu nhập tay | `chưa làm` | Cùng vùng N5, câu #32–#33 |
+| MA6 | Thông báo nội bộ — gửi theo bộ phận, nháp/đăng, gỡ, xác nhận đã đọc, danh sách người nhận, trạng thái email | `chưa làm` | Gửi theo bộ phận cần RPC `identity` liệt kê cán bộ của một bộ phận. Khoá đọc cho mọi cán bộ: xem MC3 |
+| MA7 | Văn bản đến — chuyển trạng thái, "Chỉ quá hạn", phạm vi, nhập Excel, xuất sổ năm, chuyển thành nhiệm vụ | `chưa làm` | Bộ trạng thái đã chốt 30/09: `tien-do/service-documents.json` (mục ghi C2) |
+| MA8 | Phản ánh — cảnh báo trùng + gộp (unaccent + pg_trgm); tab **Báo cáo** (đếm theo lĩnh vực/bộ phận/thôn); danh sách dạng **thẻ** có ảnh nhỏ/thôn/sao (prototype) thay bảng 9 cột; thiếu ô "Chỉ phiếu trễ hạn" | `chưa làm` | Trùng N3. Sao: chỉ hiện đánh giá của công dân — xem MD |
+| MA9 | Tổng quan — khối **Giải ngân** và **Kinh tế & Tài nguyên** | `chưa làm` | Bố cục giữ theo MD |
+| MA10 | Việc nhỏ: nhãn menu "Thông báo nội bộ"; dòng "Quên mật khẩu, liên hệ Văn phòng UBND…" ở đăng nhập; menu tài khoản + `/ca-nhan`; % tiến độ nhiệm vụ; "Giao việc mới" và soạn thông báo dạng **hộp thoại** thay vì tại chỗ; hộp thoại "Tách thành nhiệm vụ" gọn (4 ô); duyệt/từ chối lùi hạn **trong ngăn** nhiệm vụ; Danh bạ: cờ "Có Zalo" + 2 thẻ đếm | `chưa làm` | Tách thành dòng con khi bắt tay làm |
+
+### MB — Lượt 2: menu prototype đổi SAU 16/09 (`docs/ui-ux` vẫn tả hình cũ)
+
+| # | Việc | Trạng thái | Ghi chú |
+|---|---|---|---|
+| MB1 | "Người dùng & Phân quyền" thành menu riêng (`/nguoi-dung`, `/nguoi-dung/phan-quyen`) thay vì tab trong `/cau-hinh` | `chưa làm` | |
+| MB2 | Danh bạ cán bộ thành tab của màn Mini App (`/mini-app?tab=danh-ba`); đổi tuyến `/noi-dung` → `/mini-app`, kèm chuyển hướng | `chưa làm` | |
+| MB3 | Cấu hình — tab **Kênh Zalo** (Zalo Bot nhắc việc: mã ghép 8 ký tự sống 10 phút, giờ yên tĩnh 21h–6h) + ghép nối ở `/ca-nhan` | `chưa làm` | = N7; kho này chưa có khái niệm Zalo Bot |
+| MB4 | Trang `/huong-dan` | `chưa làm` | |
+
+### MC — Cần KHÁCH chốt phạm vi trước
+
+| # | Việc | Trạng thái | Ghi chú |
+|---|---|---|---|
+| MC1 | Danh bạ người dân (`/nguoi-dan`, `citizen.read`) | `hỏi khách` | Khoá chưa có trong `quyen` → luật 5 bất biến 3c, câu #27 |
+| MC2 | Gửi tin ZNS/SMS (`/gui-thong-bao`, `notice.send`) | `hỏi khách` | Như MC1 |
+| MC3 | Danh bạ cán bộ là thực thể riêng, gồm cả người không có tài khoản (trường học, trạm y tế); khoá đọc thông báo cho mọi cán bộ | `hỏi khách` | Câu #27 |
+| MC4 | Bản đồ nhiệt / bản đồ hiện trường — gửi toạ độ công dân ra bản đồ nền bên ngoài | `hỏi khách` | ADR 0072 §4 |
+| MC5 | MFA cho tài khoản giữ `admin.user` | `chưa làm` | **ĐÃ QUYẾT** (câu #37), chỉ chưa dựng |
+
+### MD — Khác prototype CÓ CHỦ Ý — ĐỪNG sửa theo prototype
+
+Mỗi dòng đã có tệp sở hữu; lý do đọc ở đó, không chép lại đây.
+
+| Điểm khác | Căn cứ |
+|---|---|
+| Chọn xã ở màn đăng nhập | luật 1; ADR 0033, 0046 |
+| Không thương hiệu "ViGov" trên web cán bộ | ADR 0068 §13 |
+| Menu 5 nhóm | spec v2 §5 (02/10) |
+| Không có Hồ sơ công dân | ADR 0001 (= D4) |
+| Bố cục Tổng quan; không "Tính lại ngay", không nhãn "cũ"; bấm sâu ra danh sách đã lọc, không ra hộp thoại | ADR 0053, 0068 |
+| Xếp hạng bộ phận | ADR 0053 §Sửa đổi 04/10 |
+| Mã nhiệm vụ bất biến | ADR 0065; luật 7 |
+| Đếm và phân trang phía máy chủ | ADR 0071 |
+| Bộ lọc nằm sau nút "Bộ lọc" | ADR 0068 §12 |
+| Định nghĩa cột Sổ tay | ADR 0071 |
+| Phần mở rộng Biên bản | người dùng chốt 25/09 |
+| Mã trạng thái tiếng Việt + hai đồng hồ hạn | ADR 0011, 0027, 0028 |
+| Che số điện thoại + `feedback.unmask` | ADR 0030 |
+| Cán bộ không nhập đánh giá thay công dân | ADR 0062 |
+| Xoá mềm kèm lý do, không xoá hàng loạt | luật 7 |
+| Ô đồng ý trước khi công khai danh bạ | NĐ 13/2023, người dùng chốt 30/09 |
+| Sửa chứng từ đã xác nhận → về nháp | ADR 0036 |
+| Khung bản đồ + xác nhận pháp lý | ADR 0072 |
+| Tab Nhật ký hệ thống và Nhận diện xã | ADR 0054, 0069 |
+| Không tự sinh mã dự án tới khi chốt định dạng | luật 7 |
+| Danh mục: chọn nhóm trước | ⚠ **căn cứ chưa xác minh** — bản đo dẫn "ADR 0057", nhưng `kb/10-decisions/0057-config-load-by-declared-group.md` là ADR nạp cấu hình. Tìm tệp sở hữu thật trước khi viện dẫn |
+| Ẩn/hiện tab Cấu hình theo quyền | người dùng chốt 26/09 |
+
 ## X — Việc của chính tệp này
 
 | # | Việc | Trạng thái | Ghi chú |
 |---|---|---|---|
-| X1 | **Đọc MÃ `vigov-require`** — chỉ sau khi D1–D3 đã rõ | `chưa làm` | Đọc 49 migration + 16 module trước khi biết định hỏi gì là đọc để tìm câu mình chưa đặt |
+| X1 | **Đọc MÃ `vigov-require`** — chỉ sau khi D1–D3 đã rõ | `ĐANG LÀM` | Đọc 49 migration + 16 module trước khi biết định hỏi gì là đọc để tìm câu mình chưa đặt. **05/10/2026:** đã đọc mã `apps/admin` (giao diện) → nhóm M. Migration + module `apps/api` vẫn chưa đọc |
 | X2 | Đối chiếu **22 câu Q-01…Q-22** của bên kia với 34 câu của kho này | `chưa làm` | `../vigov-require/docs/open-questions.md` — **bộ khác hẳn**, chưa đối chiếu dòng nào |
 | X3 | Đo lại toàn bộ tệp khi tới hạn | `chưa làm` | Hạn **22/12/2026**. Quá hạn nghĩa là một trong hai kho đã đi xa — đo lại, đừng tin |
 
