@@ -90,6 +90,11 @@ Lời chủ dự án cho #2: *"xóa luôn dòng cũ, lấy app mới nhất, ho�
 thời điểm chỉ có 1 appId của 1 xã thôi"*, rồi *"đúng rồi, xoá mềm giữ làm lịch sử"*; chọn *"Bỏ bật
 lại"*.
 
+**Dòng đã tắt trước 05/10/2026** (vd App ID `3291993990104489440` của Thăng Bình, tắt 01/10): chủ dự án
+chọn *"Migration chuyển sang xoá mềm"* — `service-platform/migrations/0021_own_mini_app_switched_off_to_soft_delete.sql`,
+chủ thể `system`, một dòng nhật ký `tat_mini_app` mỗi App ID, cùng giao dịch. Xã ngừng hoạt động hoặc đã
+sáp nhập bị **bỏ qua** (luật 7 bất biến 6) — đổi chúng là quyết định riêng.
+
 **Vì sao xoá mềm thay cho tắt:** một dòng tắt mà bật lại được là một App ID thứ hai **đang chờ** của
 xã — đúng điều #1 muốn tránh (xã hai app). Xoá mềm nói rõ dòng ấy đã hết vai trò, mà vẫn giữ bản ghi
 cho người tra cứu sau (luật 7).
