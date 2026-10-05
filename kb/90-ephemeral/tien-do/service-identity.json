@@ -446,6 +446,15 @@
       "menu": "cau-hinh"
     },
     {
+      "id": "operatorctl-secret-file",
+      "viec": "operatorctl mini-app-secret set nhận --secret-file <đường dẫn> — cho pod một lượt của job vigov-deploy (ảnh distroless không shell, job không attach stdin)",
+      "trang_thai": "xong",
+      "bang_chung": "service-identity/cmd/operatorctl/main.go (cờ chỉ có ở mini-app-secret set; giá trị không bao giờ ở argv) · mini_app_test.go TestMiniAppSecretFromFile (đọc tệp, bỏ stdin, tệp thiếu thì không gọi, retire/demo từ chối cờ). make check exit 0.",
+      "no_confirm": [],
+      "tiep_theo": "Cần job service-identity đóng ảnh mới trước khi chạy vigov-deploy dat-secret-mini-app (mục jenkins-dat-secret-mini-app của deploy).",
+      "menu": "phan-anh-nguoi-dan"
+    },
+    {
       "id": "operator-set-retire-mini-app-secret",
       "viec": "OperatorService.SetMiniAppSecret / RetireMiniAppSecret trên cổng vận hành 9093 (TASK-P2b, ADR 0070 §Bổ sung 02/10/2026 #6, #7): người vận hành ViHAT đặt/thu hồi khoá bí mật App ID của xã thay operatorctl",
       "trang_thai": "xong",

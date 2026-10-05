@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -120,6 +122,42 @@ func TestMiniAppExecuteReadsSecretFromStdinOnly(t *testing.T) {
 	}
 	if strings.Join(f.calls, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("calls:\n%s\nwant:\n%s", strings.Join(f.calls, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// The deploy job's pod has no stdin: the secret comes from a mounted file, and stdin is not read.
+func TestMiniAppSecretFromFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "value")
+	if err := os.WriteFile(path, []byte(fakeSecret+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := parseArgs(miniArgs("mini-app-secret", "set", "--ticket", "OPS-1", "--secret-file", path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &fakeMiniApp{}
+	var out bytes.Buffer
+	if err := executeMiniApp(context.Background(), c, f, strings.NewReader("NOT-THIS"), &out); err != nil {
+		t.Fatal(err)
+	}
+	if f.secret != fakeSecret || strings.Contains(out.String(), fakeSecret) {
+		t.Fatalf("secret = %q, out = %q", f.secret, out.String())
+	}
+
+	c.secretFile = filepath.Join(t.TempDir(), "missing")
+	f = &fakeMiniApp{}
+	if err := executeMiniApp(context.Background(), c, f, strings.NewReader(fakeSecret), &bytes.Buffer{}); err == nil || len(f.calls) != 0 {
+		t.Fatalf("missing file: err = %v, calls = %v", err, f.calls)
+	}
+
+	// Only `set` takes a secret.
+	for _, sub := range []string{"retire"} {
+		if _, err := parseArgs(miniArgs("mini-app-secret", sub, "--ticket", "OPS-1", "--secret-file", path)); !errors.Is(err, errUsage) {
+			t.Errorf("%s --secret-file: err = %v, want a usage error", sub, err)
+		}
+	}
+	if _, err := parseArgs(miniArgs("mini-app-demo", "on", "--ticket", "OPS-1", "--secret-file", path)); !errors.Is(err, errUsage) {
+		t.Errorf("demo on --secret-file: err = %v, want a usage error", err)
 	}
 }
 

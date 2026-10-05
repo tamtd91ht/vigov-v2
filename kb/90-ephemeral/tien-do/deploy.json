@@ -206,6 +206,15 @@
       "menu": "phan-anh-nguoi-dan"
     },
     {
+      "id": "jenkins-dat-secret-mini-app",
+      "viec": "Việc trong job vigov-deploy: đặt App Secret của app riêng một xã (operatorctl mini-app-secret set) — Zalo từ chối bản duyệt Xã Thăng Bình 05/10/2026 vì 'tính năng gửi phản ánh chưa hoạt động'",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Đo 05/10/2026: POST https://identity.api.vigov.vn/api/v1/citizen-sessions với token giả trả 422 app_not_ready cho App ID 3043188591857102858 (y như App ID bịa) — màn 'Ứng dụng của xã chưa được kết nối' trong ảnh Zalo gửi. deploy/Jenkinsfile stage 'Đặt secret Mini App' (HANH_DONG=dat-secret-mini-app, MT=prod, XAC_NHAN=vigov-prod, TICKET, TENANT_ID/APP_ID mặc định Thăng Bình, APP_SECRET là tham số password có giá trị giữ chỗ — còn giữ chỗ thì dừng trước kubectl); secret đi qua Secret k8s tạm mount chỉ-đọc, trap xoá. operatorctl thêm --secret-file (chỉ mini-app-secret set) + TestMiniAppSecretFromFile. make check exit 0.",
+      "no_confirm": [],
+      "tiep_theo": "Thứ tự trên Jenkins: (1) job service-identity (ảnh mới có --secret-file); (2) vigov-deploy doi-app-id-thang-binh nếu chưa chạy (lượt đầu sau đổi parameters dừng — bấm lại); (3) vigov-deploy dat-secret-mini-app, dán App Secret thật; (4) curl token giả phải ra 401, không còn 422; (5) nộp lại bản duyệt + ticket logo. Chưa chạy trên cụm.",
+      "menu": "phan-anh-nguoi-dan"
+    },
+    {
       "id": "trien-khai-platform-admin",
       "viec": "Đường triển khai khu vận hành platform-admin tại admin.vigov.vn, chỉ prod (chủ dự án 01/10/2026, ADR 0048 §Chốt triển khai 01/10)",
       "trang_thai": "dang_lam",

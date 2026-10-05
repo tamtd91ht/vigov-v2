@@ -87,8 +87,9 @@ pipeline {
                                   'gan-mini-app-thang-binh', 'doi-app-id-thang-binh',
                                   'tao-khoa-ma-hoa-identity', 'mo-netpol-identity-zalo', 'bo-sung-cau-hinh-identity',
                                   'kiem-tra-dang-nhap-app-rieng', 'bat-demo-mini-app', 'tat-demo-mini-app',
+                                  'dat-secret-mini-app',
                                   'dung-clamav', 'tao-tai-khoan-van-hanh'],
-           description: 'kiem-tra: chỉ đọc · xem-log: log + sự kiện của DICH_VU · ' +
+           description:'kiem-tra: chỉ đọc · xem-log: log + sự kiện của DICH_VU · ' +
                         'tao-khoa-ma-hoa-identity: (app riêng, bước 1) sinh SECRET_ENCRYPTION_KEYS vào identity-secrets ' +
                         'của vigov-prod VÀ cùng giá trị vào vigov-staging (chung CSDL); đã có thì DỪNG, không đổi gì ' +
                         '(MT=prod; chạy TRƯỚC job service-identity) · ' +
@@ -102,6 +103,9 @@ pipeline {
                         'thử POST /api/v1/citizen-sessions · ' +
                         'bat-demo-mini-app / tat-demo-mini-app: (bước 5) operatorctl mini-app-demo on|off cho TENANT_ID + APP_ID ' +
                         '(MT=prod; chỉ chạy SAU khi ảnh identity có migration 0021 + /operatorctl đã triển khai) · ' +
+                        'dat-secret-mini-app: operatorctl mini-app-secret set cho TENANT_ID + APP_ID bằng APP_SECRET ' +
+                        '(App Secret của app trên developers.zalo.me) — app riêng đăng nhập công dân THẬT (có xác minh số); ' +
+                        'MT=prod, XAC_NHAN=vigov-prod, TICKET bắt buộc; App ID phải đã gắn xã (doi-app-id-thang-binh) · ' +
                         'doi-ten-mien-thang-binh: đặt thangbinh-danang.vigov.vn làm tên miền chính của Xã Thăng Bình ' +
                         '+ thangbinh-danang.stg.vigov.vn (MT=prod; chạy SAU khi DNS/TLS/Ingress của hai host chạy, ' +
                         'TRƯỚC job service-platform có migration 0007) · ' +
@@ -126,17 +130,23 @@ pipeline {
            description: 'Chỉ dùng cho xem-log')
     string(name: 'XAC_NHAN', defaultValue: '',
            description: 'Cho doi-ten-mien-thang-binh / tao-xa-thang-binh / gan-mini-app-thang-binh / doi-app-id-thang-binh / ' +
-                        'tao-khoa-ma-hoa-identity / bat-demo-mini-app / tat-demo-mini-app: gõ đúng vigov-prod. ' +
+                        'tao-khoa-ma-hoa-identity / bat-demo-mini-app / tat-demo-mini-app / dat-secret-mini-app: gõ đúng vigov-prod. ' +
                         'Cho mo-netpol-identity-zalo / bo-sung-cau-hinh-identity / dung-clamav: gõ đúng namespace của MT ' +
                         '(vigov-prod hoặc vigov-staging).')
     string(name: 'TENANT_ID', defaultValue: '01M3CS7HHK72V71CGRRJHGR8E8',
-           description: 'Cho bat-demo-mini-app / tat-demo-mini-app: id xã (ULID 26 ký tự). Mặc định: Xã Thăng Bình.')
+           description: 'Cho bat-demo-mini-app / tat-demo-mini-app / dat-secret-mini-app: id xã (ULID 26 ký tự). Mặc định: Xã Thăng Bình.')
     string(name: 'APP_ID', defaultValue: '3043188591857102858',
-           description: 'Cho bat-demo-mini-app / tat-demo-mini-app: App ID Zalo (chỉ chữ số) đã gắn cho xã ấy ' +
+           description: 'Cho bat-demo-mini-app / tat-demo-mini-app / dat-secret-mini-app: App ID Zalo (chỉ chữ số) đã gắn cho xã ấy ' +
                         '(doi-app-id-thang-binh). Mặc định: app riêng của Xã Thăng Bình (App ID từ 01/10/2026).')
     string(name: 'TICKET', defaultValue: '',
-           description: 'Cho bat-demo-mini-app / tat-demo-mini-app / tao-tai-khoan-van-hanh: BẮT BUỘC — số phiếu yêu cầu, ' +
+           description: 'Cho bat-demo-mini-app / tat-demo-mini-app / dat-secret-mini-app / tao-tai-khoan-van-hanh: BẮT BUỘC — số phiếu yêu cầu, ' +
                         'ghi vào vết kiểm toán (ticket:<số>). Chỉ A-Z a-z 0-9 . _ -, tối đa 64 ký tự.')
+    // A PLACEHOLDER, not a secret (rule 8): the stage refuses to run while the field still holds it,
+    // so a press that forgot to paste the real value never seals a fake secret into prod.
+    password(name: 'APP_SECRET', defaultValue: 'THAY-BANG-APP-SECRET-CUA-ZALO',
+             description: 'Cho dat-secret-mini-app: App Secret của App ID trên developers.zalo.me (Cài đặt → App Secret). ' +
+                          'Xoá giá trị mặc định rồi dán secret thật — để nguyên mặc định thì job DỪNG, không ghi gì. ' +
+                          'Không in ra log; vào pod qua một Secret k8s tạm, xoá ngay khi xong.')
     string(name: 'EMAIL_VAN_HANH', defaultValue: '',
            description: 'Cho tao-tai-khoan-van-hanh: email đăng nhập platform-admin của người vận hành (ADR 0048 — ' +
                         'tên đăng nhập LÀ email). Là dữ liệu cá nhân: job không in nó ra log, nhưng Jenkins lưu tham số của lượt build.')
@@ -172,6 +182,7 @@ pipeline {
                                   'gan-mini-app-thang-binh', 'doi-app-id-thang-binh',
                                   'tao-khoa-ma-hoa-identity', 'mo-netpol-identity-zalo', 'bo-sung-cau-hinh-identity',
                                   'kiem-tra-dang-nhap-app-rieng', 'bat-demo-mini-app', 'tat-demo-mini-app',
+                                  'dat-secret-mini-app',
                                   'dung-clamav', 'tao-tai-khoan-van-hanh'])) {
             error("HANH_DONG '${params.HANH_DONG}' không còn trong job này (đã gỡ). " +
                   'Bấm "Build with Parameters" và chọn lại trong danh sách — đừng "Rebuild" một lượt cũ.')
@@ -1372,6 +1383,111 @@ EOF
           else
             echo "Xong — danh tính demo đã tắt cho app $APP_ID."
           fi
+        '''
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    // ĐẶT APP SECRET của app riêng một xã — `operatorctl mini-app-secret set` (ADR 0066 quyết định 3,
+    // tới khi platform-admin có màn). Thiếu nó, POST /api/v1/citizen-sessions trả 422 app_not_ready
+    // và app riêng không gửi được phản ánh nào — lý do Zalo từ chối bản duyệt ngày 05/10/2026.
+    //
+    // Cùng cách chạy với 'Bật/tắt demo Mini App' (pod một lượt từ đúng ảnh identity đang chạy). Khác ở
+    // ĐƯỜNG CỦA SECRET: ảnh distroless không có shell để chuyển stdin, và job không attach được
+    // (lý do ở `chay_psql`), nên secret đi: tham số password → tệp 0600 trên máy build (printf là lệnh
+    // dựng sẵn của sh — không lên `ps`) → Secret k8s tạm → tệp mount chỉ-đọc → `--secret-file`.
+    // Không bao giờ ở argv, manifest pod hay log. trap xoá pod, Secret tạm và tệp cả khi lỗi.
+    //
+    // Giá trị mặc định của APP_SECRET là chỗ giữ chỗ: còn nguyên thì DỪNG trước mọi lệnh kubectl.
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    stage('Đặt secret Mini App') {
+      when { expression { params.HANH_DONG == 'dat-secret-mini-app' } }
+      steps {
+        script {
+          if (params.MT != 'prod') { error('dat-secret-mini-app chỉ chạy với MT=prod (staging dùng chung CSDL).') }
+          if (params.XAC_NHAN != 'vigov-prod') {
+            error("XAC_NHAN phải là đúng 'vigov-prod'. Nhận được: '${params.XAC_NHAN}'. Không ghi gì cả.")
+          }
+          if (!(params.TENANT_ID ==~ /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/)) {
+            error("TENANT_ID '${params.TENANT_ID}' không phải ULID (26 ký tự Crockford base32, chữ hoa). Không ghi gì cả.")
+          }
+          if (!(params.APP_ID ==~ /^[0-9]{1,32}$/)) {
+            error("APP_ID '${params.APP_ID}' phải chỉ gồm chữ số. Không ghi gì cả.")
+          }
+          if (!(params.TICKET ==~ /^[A-Za-z0-9._-]{1,64}$/)) {
+            error("TICKET bắt buộc, chỉ A-Z a-z 0-9 . _ -, tối đa 64 ký tự. Nhận được: '${params.TICKET}'. Không ghi gì cả.")
+          }
+          env.TENANT_ID = params.TENANT_ID
+          env.APP_ID = params.APP_ID
+          env.TICKET = params.TICKET
+          currentBuild.displayName = "#${env.BUILD_NUMBER} ${params.HANH_DONG} · ${params.APP_ID} · ${env.NGUOI_BAM}"
+        }
+        sh '''
+          set -eu
+          umask 077
+          # Read in the shell, not in Groovy: a password parameter reaches `sh` as plain env, and is masked
+          # in the console by Jenkins.
+          case "${APP_SECRET:-}" in
+            ""|THAY-BANG-APP-SECRET-CUA-ZALO)
+              echo "DỪNG: APP_SECRET còn trống hoặc còn giá trị giữ chỗ. Dán App Secret thật của App ID $APP_ID"
+              echo "(developers.zalo.me → app → Cài đặt → App Secret) rồi bấm lại. Không ghi gì cả."
+              exit 1 ;;
+          esac
+          TMP_DIR=$(mktemp -d)
+          DEP=vigov-service-identity
+          POD="vigov-operatorctl-$BUILD_NUMBER"
+          SEC="vigov-app-secret-$BUILD_NUMBER"
+          trap 'kubectl -n vigov-prod delete pod "$POD" --ignore-not-found --wait=false >/dev/null 2>&1 || true
+                kubectl -n vigov-prod delete secret "$SEC" --ignore-not-found >/dev/null 2>&1 || true
+                rm -f "$TMP_DIR"/*; rmdir "$TMP_DIR"' EXIT
+
+          n=$(kubectl -n vigov-prod get deploy "$DEP" -o go-template='{{len .spec.template.spec.containers}}')
+          [ "$n" = "1" ] || { echo "DỪNG: deploy/$DEP có $n container — không biết lấy ảnh nào. Không ghi gì."; exit 1; }
+          get_field() { kubectl -n vigov-prod get deploy "$DEP" -o jsonpath="$1"; }
+          IMG=$(get_field '{.spec.template.spec.containers[0].image}')
+          get_field '{.spec.template.spec.containers[0].envFrom}' > "$TMP_DIR/envfrom"
+          get_field '{.spec.template.spec.containers[0].env}' > "$TMP_DIR/env"
+          get_field '{.spec.template.spec.imagePullSecrets}' > "$TMP_DIR/pull"
+          for f in envfrom env pull; do [ -s "$TMP_DIR/$f" ] || printf '[]' > "$TMP_DIR/$f"; done
+          echo "── ảnh: $IMG"
+          echo "── lệnh: /operatorctl mini-app-secret set --tenant $TENANT_ID --app-id $APP_ID --ticket $TICKET --secret-file /run/app-secret/value"
+
+          printf '%s' "$APP_SECRET" > "$TMP_DIR/value"
+          kubectl -n vigov-prod create secret generic "$SEC" --from-file=value="$TMP_DIR/value" >/dev/null
+          rm -f "$TMP_DIR/value"
+
+          {
+            printf '{"apiVersion":"v1","kind":"Pod","metadata":{"name":"%s","labels":{"app.kubernetes.io/name":"identity-operatorctl"}},' "$POD"
+            printf '"spec":{"restartPolicy":"Never","imagePullSecrets":'; cat "$TMP_DIR/pull"
+            # 0444 (292): the distroless image runs as nonroot, and a 0400 root-owned file would be unreadable.
+            # The pod has one container and lives for one command.
+            printf ',"volumes":[{"name":"app-secret","secret":{"secretName":"%s","defaultMode":292}}]' "$SEC"
+            printf ',"containers":[{"name":"operatorctl","image":"%s","envFrom":' "$IMG"; cat "$TMP_DIR/envfrom"
+            printf ',"env":'; cat "$TMP_DIR/env"
+            printf ',"volumeMounts":[{"name":"app-secret","mountPath":"/run/app-secret","readOnly":true}]'
+            printf ',"command":["/operatorctl","mini-app-secret","set","--tenant","%s","--app-id","%s","--ticket","%s","--secret-file","/run/app-secret/value"]}]}}' \
+              "$TENANT_ID" "$APP_ID" "$TICKET"
+          } > "$TMP_DIR/pod.json"
+          kubectl -n vigov-prod create -f "$TMP_DIR/pod.json" >/dev/null
+
+          phase=""; i=0
+          while [ $i -lt 60 ]; do   # 60 × 5 giây = 5 phút
+            phase=$(kubectl -n vigov-prod get pod "$POD" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+            case "$phase" in Succeeded|Failed) break ;; esac
+            sleep 5; i=$((i+1))
+          done
+          echo "── log của operatorctl"
+          kubectl -n vigov-prod logs "$POD" 2>&1 || true
+          if [ "$phase" != "Succeeded" ]; then
+            echo "── pod $POD kết thúc ở pha '$phase' — sự kiện của pod:"
+            kubectl -n vigov-prod describe pod "$POD" 2>/dev/null | sed -n '/^Events:/,$p' || true
+            echo "Gợi ý: 'flag provided but not defined: -secret-file' = ảnh identity cũ — chạy job service-identity trước;"
+            echo "'not bound' / App ID chưa gắn xã = chạy HANH_DONG=doi-app-id-thang-binh trước;"
+            echo "SECRET_ENCRYPTION_KEYS rỗng = HANH_DONG=tao-khoa-ma-hoa-identity."
+            exit 1
+          fi
+          echo ""
+          echo "Xong. Kiểm: POST https://identity.api.vigov.vn/api/v1/citizen-sessions với token giả phải trả 401 (không còn 422)."
         '''
       }
     }

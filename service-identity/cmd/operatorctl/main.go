@@ -76,6 +76,8 @@ A commune's own Zalo Mini App sign-in settings (ADR 0066):
 
   The secret is read from standard input, never from the command line:
     operatorctl mini-app-secret set ... < secret-file     (surrounding whitespace is trimmed)
+  or, where there is no shell and no stdin (a one-shot pod of the distroless image), from a mounted file:
+    operatorctl mini-app-secret set ... --secret-file /run/app-secret/value
 
 Reads the identity service's environment (DATABASE_DSN, ENV, ...). Does not run migrations.
 The mini-app verbs also read PLATFORM_GRPC_ADDR, GRPC_CALLER_KEY and SECRET_ENCRYPTION_KEYS.
@@ -108,6 +110,10 @@ type command struct {
 	sub    string
 	tenant string
 	appID  string
+	// secretFile is the PATH of a file holding the secret (`mini-app-secret set` only) — for the
+	// deploy job's one-shot pod, which has no shell to redirect stdin and cannot be attached to
+	// (deploy/Jenkinsfile, chay_psql). A path, never the value: argv is in `ps` output.
+	secretFile string
 }
 
 // isMiniAppVerb names the two verbs that act on a commune's own-app sign-in settings.
@@ -160,6 +166,9 @@ func parseArgs(args []string) (command, error) {
 	case "mini-app-secret", "mini-app-demo":
 		fs.StringVar(&c.tenant, "tenant", "", "")
 		fs.StringVar(&c.appID, "app-id", "", "")
+		if c.verb == "mini-app-secret" && c.sub == "set" {
+			fs.StringVar(&c.secretFile, "secret-file", "", "")
+		}
 		required = []string{"tenant", "app-id", "ticket"}
 	case "list":
 	default:
@@ -310,6 +319,14 @@ func executeMiniApp(ctx context.Context, c command, m miniAppAdmin, stdin io.Rea
 	ctx = tenant.Into(ctx, tenant.ID(c.tenant))
 	switch c.verb + " " + c.sub {
 	case "mini-app-secret set":
+		if c.secretFile != "" {
+			f, err := os.Open(c.secretFile)
+			if err != nil {
+				return fmt.Errorf("open --secret-file: %w", err)
+			}
+			defer f.Close()
+			stdin = f
+		}
 		v, err := readSecret(stdin)
 		if err != nil {
 			return err
