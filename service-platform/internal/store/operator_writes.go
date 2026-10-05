@@ -48,11 +48,16 @@ var (
 	// operator console must not learn which commune holds an App ID through a refusal, and no path
 	// here can move a row across communes (ADR 0070 #3).
 	ErrMiniAppNotInCommune = errors.New("operator registry: App ID không phải Mini App riêng của xã này")
-	// ErrMiniAppInactive — a replacement names an old App ID that is already switched off.
+	// ErrMiniAppInactive — a replacement names an old App ID that is switched off but not removed: a
+	// row written before 05/10/2026, when "gỡ" only switched off. The console removes it instead.
 	ErrMiniAppInactive = errors.New("operator registry: App ID đã tắt")
-	// ErrMiniAppAlreadyRunning — attaching or reactivating would leave the commune with two running
-	// dedicated apps (ADR 0070 #1). The console uses the replacement route instead.
+	// ErrMiniAppAlreadyRunning — attaching would leave the commune with two running dedicated apps
+	// (ADR 0070 #1). The console uses the replacement route instead.
 	ErrMiniAppAlreadyRunning = errors.New("operator registry: xã đã có một Mini App riêng đang chạy")
+	// ErrMiniAppRemoved — the App ID to bind has a SOFT-DELETED row (removed or replaced, by any
+	// commune). Its own error, not ErrMiniAppTaken, so the operator reads WHY it can never be bound
+	// again (ADR 0070 §Sửa đổi 05/10/2026 #2: the key keeps removed App IDs). It names no commune.
+	ErrMiniAppRemoved = errors.New("operator registry: App ID đã bị gỡ trước đây, không gắn lại được")
 )
 
 // Audit actions written to audit_log.action. VALUES ARE VIETNAMESE snake_case, as every commune
@@ -67,10 +72,12 @@ const (
 	ActionDeactivate       = "ngung_hoat_dong_xa"
 	ActionReactivate       = "mo_lai_hoat_dong_xa"
 	ActionAttachMiniApp    = "gan_mini_app"
-	// `tat_mini_app` is what the Jenkins stage `doi-app-id-thang-binh` wrote for the same act.
+	// `tat_mini_app` is what the Jenkins stage `doi-app-id-thang-binh` wrote for the same act. Since
+	// 05/10/2026 the act it names is a SOFT DELETE; the delta says so (`da_xoa_mem`, removalDelta).
+	// The verb is kept so one query still finds every removal, whichever channel and date did it.
+	// `bat_lai_mini_app` is no longer written: reactivation was withdrawn (ADR 0070 §Sửa đổi
+	// 05/10/2026 #2). Rows written before that keep it; the operator log still labels them.
 	ActionDeactivateMiniApp = "tat_mini_app"
-	// `bat_lai_mini_app` is NEW (ADR 0070 #3): no channel could switch an App ID back on before.
-	ActionReactivateMiniApp = "bat_lai_mini_app"
 	// The two secret-forward verbs are NEW (ADR 0073 §Hệ quả): this service only relays the secret to
 	// identity, whose operator trail stays the primary record (ADR 0070 bổ sung #7); these rows exist
 	// so the operator log screen sees the act. Metadata only — RecordMiniAppSecretForward.
@@ -511,12 +518,15 @@ func (w *RegistryWriter) AttachMiniApp(ctx context.Context, appID, note string, 
 }
 
 // appIDFree refuses an App ID that has ANY row — any commune, the main app, soft-deleted included.
+// A soft-deleted row is ErrMiniAppRemoved, every other row ErrMiniAppTaken.
 func appIDFree(ctx context.Context, raw *sql.Tx, appID string) error {
-	var one int
+	var deleted bool
 	// @cross-tenant: mini_app.app_id is globally unique by design (migration 0006) and keeps
 	// soft-deleted rows — "has this App ID EVER been registered" spans every commune.
-	err := raw.QueryRowContext(ctx, `SELECT 1 FROM mini_app WHERE app_id = $1`, appID).Scan(&one)
+	err := raw.QueryRowContext(ctx, `SELECT deleted_at IS NOT NULL FROM mini_app WHERE app_id = $1`, appID).Scan(&deleted)
 	switch {
+	case err == nil && deleted:
+		return ErrMiniAppRemoved
 	case err == nil:
 		return ErrMiniAppTaken
 	case !errors.Is(err, sql.ErrNoRows):
@@ -560,56 +570,80 @@ func insertOwnMiniApp(ctx context.Context, tx *corestore.ScopedTx, appID, note, 
 	return out, nil
 }
 
-// lockOwnMiniApp reads and LOCKS one not-deleted `rieng` row of the commune in tx, returning whether
-// it is active. The tenant filter is the point: a row of another commune is ErrMiniAppNotInCommune,
-// exactly like an unknown App ID (see that error).
-func lockOwnMiniApp(ctx context.Context, tx *corestore.ScopedTx, appID string) (active bool, err error) {
-	err = tx.Underlying().QueryRowContext(ctx,
-		`SELECT dang_hoat_dong FROM mini_app
-		  WHERE app_id = $1 AND tenant_id = $2 AND che_do = 'rieng' AND deleted_at IS NULL
-		  FOR UPDATE`,
-		appID, tx.TenantID().String()).Scan(&active)
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
-		return false, ErrMiniAppNotInCommune
-	case err != nil:
-		return false, fmt.Errorf("operator registry: lock mini app: %w", err)
-	}
-	return active, nil
+// ownMiniAppRow is one `rieng` row of the commune in tx, soft-deleted or not, read under lock.
+type ownMiniAppRow struct {
+	active  bool
+	deleted bool
 }
 
-// setOwnMiniAppActive flips one row the caller has locked with lockOwnMiniApp. The WHERE repeats the
-// state it expects, so a row that is not in that state is reported, never silently "updated".
-func setOwnMiniAppActive(ctx context.Context, tx *corestore.ScopedTx, appID string, active bool, byCode string) error {
+// lockOwnMiniApp reads and LOCKS one `rieng` row of the commune in tx — SOFT-DELETED ROWS INCLUDED,
+// so a caller can tell "already removed from this commune" from "never this commune's". The tenant
+// filter is the point: a row of another commune is ErrMiniAppNotInCommune, exactly like an unknown
+// App ID (see that error).
+func lockOwnMiniApp(ctx context.Context, tx *corestore.ScopedTx, appID string) (ownMiniAppRow, error) {
+	var row ownMiniAppRow
+	err := tx.Underlying().QueryRowContext(ctx,
+		`SELECT dang_hoat_dong, deleted_at IS NOT NULL FROM mini_app
+		  WHERE app_id = $1 AND tenant_id = $2 AND che_do = 'rieng'
+		  FOR UPDATE`,
+		appID, tx.TenantID().String()).Scan(&row.active, &row.deleted)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return ownMiniAppRow{}, ErrMiniAppNotInCommune
+	case err != nil:
+		return ownMiniAppRow{}, fmt.Errorf("operator registry: lock mini app: %w", err)
+	}
+	return row, nil
+}
+
+// softDeleteOwnMiniApp removes one not-deleted row the caller has locked with lockOwnMiniApp (ADR
+// 0070 §Sửa đổi 05/10/2026 #2): deleted_at/deleted_by/delete_reason, and dang_hoat_dong = false as
+// well. The resolver already refuses on either column (Directory.MiniApp), so the second is not what
+// stops sign-ins; it is set so that no reader filtering on one column alone — a report, a future
+// query — ever sees a removed App ID as running. The row is never deleted: it decided the commune of
+// every earlier citizen session (rule 7), and its key keeps the App ID from ever being bound again.
+func softDeleteOwnMiniApp(ctx context.Context, tx *corestore.ScopedTx, appID, reason, byCode string) error {
 	res, err := tx.Exec(ctx,
-		`UPDATE mini_app SET dang_hoat_dong = $3, cap_nhat_luc = now(), cap_nhat_boi = $4
-		  WHERE app_id = $1 AND tenant_id = $2 AND che_do = 'rieng' AND deleted_at IS NULL
-		    AND dang_hoat_dong = NOT $3`,
-		appID, tx.TenantID().String(), active, byCode)
+		`UPDATE mini_app SET dang_hoat_dong = false, cap_nhat_luc = now(), cap_nhat_boi = $3,
+		        deleted_at = now(), deleted_by = $3, delete_reason = $4
+		  WHERE app_id = $1 AND tenant_id = $2 AND che_do = 'rieng' AND deleted_at IS NULL`,
+		appID, tx.TenantID().String(), byCode, reason)
 	if err != nil {
-		return fmt.Errorf("operator registry: update mini app: %w", err)
+		return fmt.Errorf("operator registry: soft delete mini app: %w", err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("operator registry: update mini app: %w", err)
+		return fmt.Errorf("operator registry: soft delete mini app: %w", err)
 	}
 	if n != 1 {
-		return fmt.Errorf("operator registry: update mini app: %d rows changed, want 1", n)
+		return fmt.Errorf("operator registry: soft delete mini app: %d rows changed, want 1", n)
 	}
 	return nil
 }
 
-// ReplaceMiniApp CHANGES the commune's dedicated App ID (ADR 0070 #1): the Jenkins stage
-// `doi-app-id-thang-binh`, as one transaction — insert the new `rieng` row, switch the old one off
-// (never delete it: it decided the commune of every earlier citizen session, rule 7), and write
-// `gan_mini_app` (with `thay_cho`) and `tat_mini_app` (before/after, reason). All or nothing: half of
-// it — old off, new missing — is a commune whose citizens can open no app at all.
+// removalDelta is the before/after of a removal, the same in both acts that remove: `da_xoa_mem`
+// says in the trail itself that the row was soft-deleted, not merely switched off.
+func removalDelta(appID string, wasActive bool, reason string) map[string]any {
+	return map[string]any{
+		"app_id": appID,
+		"truoc":  map[string]any{"dang_hoat_dong": wasActive, "da_xoa_mem": false},
+		"sau":    map[string]any{"dang_hoat_dong": false, "da_xoa_mem": true},
+		"ly_do":  reason,
+	}
+}
+
+// ReplaceMiniApp CHANGES the commune's dedicated App ID (ADR 0070 #1, §Sửa đổi 05/10/2026 #2): one
+// transaction — insert the new `rieng` row, SOFT-DELETE the old one (never a hard delete: it decided
+// the commune of every earlier citizen session, rule 7), and write `gan_mini_app` (with `thay_cho`)
+// and `tat_mini_app` (before/after with `da_xoa_mem`, reason). All or nothing: half of it — old
+// removed, new missing — is a commune whose citizens can open no app at all.
 //
-// Refused, writing nothing, in the stage's order: commune unknown or inactive; old App ID not an
-// active, not-deleted `rieng` row of THIS commune; new App ID already has any row.
+// Refused, writing nothing: commune unknown or inactive; old App ID not a not-deleted `rieng` row of
+// THIS commune; old App ID switched off (a legacy state — remove it instead); new App ID already has
+// any row, soft-deleted included (ErrMiniAppRemoved for those).
 //
 // Other running dedicated apps of the commune are not checked: a replacement never increases their
-// number, and attach/reactivate refuse to create a second one.
+// number, and attach refuses to create a second one.
 //
 // WHAT THIS DOES NOT DO: the identity secret of either App ID, vihat-miniapp's environment, the
 // citizen-app build — kb/30-indexes/transaction-boundaries.json `doi_app_id_mini_app_cua_xa`.
@@ -628,11 +662,15 @@ func (w *RegistryWriter) ReplaceMiniApp(ctx context.Context, oldAppID, newAppID,
 		if !c.active {
 			return ErrCommuneInactive
 		}
-		active, err := lockOwnMiniApp(ctx, tx, oldAppID)
+		old, err := lockOwnMiniApp(ctx, tx, oldAppID)
 		if err != nil {
 			return err
 		}
-		if !active {
+		if old.deleted {
+			// Removed earlier: the same answer as any App ID this commune does not hold now.
+			return ErrMiniAppNotInCommune
+		}
+		if !old.active {
 			return ErrMiniAppInactive
 		}
 		if err := appIDFree(ctx, tx.Underlying(), newAppID); err != nil {
@@ -643,7 +681,7 @@ func (w *RegistryWriter) ReplaceMiniApp(ctx context.Context, oldAppID, newAppID,
 		if err != nil {
 			return err
 		}
-		if err := setOwnMiniAppActive(ctx, tx, oldAppID, false, by.Code); err != nil {
+		if err := softDeleteOwnMiniApp(ctx, tx, oldAppID, reason, by.Code); err != nil {
 			return err
 		}
 		if err := audit.Write(ctx, tx, audit.Entry{
@@ -653,15 +691,10 @@ func (w *RegistryWriter) ReplaceMiniApp(ctx context.Context, oldAppID, newAppID,
 		}); err != nil {
 			return err
 		}
+		d := removalDelta(oldAppID, true, reason)
+		d["thay_bang"] = newAppID
 		return audit.Write(ctx, tx, audit.Entry{
-			Actor: act, Action: ActionDeactivateMiniApp, Subject: "MiniApp " + oldAppID,
-			Delta: delta(map[string]any{
-				"app_id":    oldAppID,
-				"truoc":     map[string]any{"dang_hoat_dong": true},
-				"sau":       map[string]any{"dang_hoat_dong": false},
-				"ly_do":     reason,
-				"thay_bang": newAppID,
-			}),
+			Actor: act, Action: ActionDeactivateMiniApp, Subject: "MiniApp " + oldAppID, Delta: delta(d),
 		})
 	})
 	if err != nil {
@@ -670,18 +703,23 @@ func (w *RegistryWriter) ReplaceMiniApp(ctx context.Context, oldAppID, newAppID,
 	return out, nil
 }
 
-// SetMiniAppActivation switches one of the commune's dedicated apps off (ADR 0070 #2, "gỡ") or back
-// on (#3), with a mandatory reason. changed=false when it was already in that state — no write, no
-// entry, the convention of SetActivation.
+// RemoveMiniApp removes one of the commune's dedicated apps ("Gỡ khỏi xã", ADR 0070 #2 as amended
+// 05/10/2026): SOFT-DELETES its row and writes `tat_mini_app` in the same transaction, with the
+// operator's mandatory reason as delete_reason. There is NO way back: reactivation was withdrawn
+// (§Sửa đổi 05/10/2026 #2), and the key on app_id keeps the App ID from ever being bound again.
+//
+// changed=false when the row is ALREADY soft-deleted in THIS commune — no write, no entry. That
+// repeat is how the console retries a secret retirement that failed after the first removal.
 //
 // Refused, writing nothing: commune unknown or inactive (rule 7 invariant 6 keeps a merged commune's
-// registry unchanged); App ID not a not-deleted `rieng` row of THIS commune — so an App ID is never
-// switched on for, or moved to, another commune; switching on while the commune has ANOTHER running
-// dedicated app (ADR 0070 #1).
+// registry unchanged); App ID not a `rieng` row of THIS commune.
 //
-// Switching off takes effect on the next citizen sign-in: the resolver (Directory.MiniApp) has no
-// cache. Sessions already open live to their expiry (ADR 0070 §Hệ quả).
-func (w *RegistryWriter) SetMiniAppActivation(ctx context.Context, appID string, active bool, reason string, by domain.OperatorActor) (changed bool, err error) {
+// A row that is merely switched off (written before 05/10/2026, when "gỡ" only switched off) is
+// soft-deleted like a running one; its trail entry says it was already off.
+//
+// Takes effect on the next citizen sign-in: the resolver (Directory.MiniApp) has no cache. Sessions
+// already open live to their expiry (ADR 0070 §Hệ quả).
+func (w *RegistryWriter) RemoveMiniApp(ctx context.Context, appID, reason string, by domain.OperatorActor) (changed bool, err error) {
 	act, err := w.actor(by)
 	if err != nil {
 		return false, err
@@ -695,35 +733,21 @@ func (w *RegistryWriter) SetMiniAppActivation(ctx context.Context, appID string,
 		if !c.active {
 			return ErrCommuneInactive
 		}
-		current, err := lockOwnMiniApp(ctx, tx, appID)
+		row, err := lockOwnMiniApp(ctx, tx, appID)
 		if err != nil {
 			return err
 		}
-		if current == active {
+		if row.deleted {
 			return nil
 		}
-		if active {
-			if err := noOtherRunningApp(ctx, tx, appID); err != nil {
-				return err
-			}
-		}
-		if err := setOwnMiniAppActive(ctx, tx, appID, active, by.Code); err != nil {
+		if err := softDeleteOwnMiniApp(ctx, tx, appID, reason, by.Code); err != nil {
 			return err
 		}
 		changed = true
-		action := ActionDeactivateMiniApp
-		if active {
-			action = ActionReactivateMiniApp
-		}
+		d := removalDelta(appID, row.active, reason)
+		d["xa"] = c.name
 		return audit.Write(ctx, tx, audit.Entry{
-			Actor: act, Action: action, Subject: "MiniApp " + appID,
-			Delta: delta(map[string]any{
-				"app_id": appID,
-				"truoc":  map[string]any{"dang_hoat_dong": current},
-				"sau":    map[string]any{"dang_hoat_dong": active},
-				"ly_do":  reason,
-				"xa":     c.name,
-			}),
+			Actor: act, Action: ActionDeactivateMiniApp, Subject: "MiniApp " + appID, Delta: delta(d),
 		})
 	})
 	return changed, err

@@ -39,12 +39,21 @@ type sharedMiniAppBody struct {
 }
 
 // launchLinkView is the commune's QR link. The console renders the QR client-side from `url`;
-// `domain` is shown beside it so the person printing it can read which commune it names.
+// `domain` is shown beside it so the person printing it can read which commune it names (it may be
+// "" on a `rieng` link for a commune with no primary host — that link does not carry it).
+// `source` says which app the link opens, so the card can label it: "rieng" (the commune's own app)
+// or "chung" (the shared app). Enum values Vietnamese snake_case (ADR 0011).
 type launchLinkView struct {
 	URL    string `json:"url"`
 	Domain string `json:"domain"`
 	AppID  string `json:"app_id"`
+	Source string `json:"source"`
 }
+
+const (
+	launchSourceOwn    = "rieng"
+	launchSourceShared = "chung"
+)
 
 const msgSharedAppNotDeclared = "Chưa khai báo App ID của Mini App dùng chung. Người giữ quyền Mini App khai báo trước."
 
@@ -60,6 +69,10 @@ func (h *operatorHandlers) writeSharedAppError(w http.ResponseWriter, r *http.Re
 	case errors.Is(err, store.ErrSharedMiniAppAmbiguous):
 		httpx.WriteError(w, http.StatusConflict, "shared_mini_app_ambiguous",
 			"Sổ Mini App đang có hơn một Mini App dùng chung chạy cùng lúc. Báo nhóm nền tảng, không tự chọn.", "")
+	case errors.Is(err, errOwnMiniAppAmbiguous):
+		h.d.Log.ErrorContext(r.Context(), "khu vận hành: xã có hơn một Mini App riêng đang chạy — không tạo liên kết QR", "err", err)
+		httpx.WriteError(w, http.StatusConflict, "own_mini_app_ambiguous",
+			"Xã đang có hơn một Mini App riêng chạy cùng lúc. Gỡ App ID thừa trước, không tự chọn.", "")
 	case errors.Is(err, store.ErrCommuneNoPrimaryHost):
 		httpx.WriteError(w, http.StatusConflict, "commune_no_primary_domain",
 			"Xã chưa có tên miền chính, chưa tạo được liên kết mở app.", "")
@@ -112,7 +125,10 @@ func (h *operatorHandlers) declareSharedMiniApp(w http.ResponseWriter, r *http.R
 	writeJSON(w, http.StatusOK, toSharedMiniAppView(a))
 }
 
-// getLaunchLink builds the commune's QR link from the shared app and the commune's PRIMARY host.
+// getLaunchLink builds the commune's QR link (ADR 0070 §Sửa đổi 05/10/2026 #4): from the commune's
+// LIVE own app when it has one — `https://zalo.me/s/<its App ID>/?src=qr`, no `d=` — otherwise from
+// the shared app and the commune's PRIMARY host, exactly as before. QRs already printed keep working
+// either way: both links stay valid for as long as their App ID is live.
 //
 // NOT TRAILED, by the owner's decision (ADR 0048 §30/09 #9): issuing a QR is not a write. The price,
 // stated there: a misprinted QR cannot be traced to whoever generated it. ops.qr.issue is the gate.
@@ -134,6 +150,20 @@ func (h *operatorHandlers) getLaunchLink(w http.ResponseWriter, r *http.Request)
 		h.writeRegistryError(w, r, store.ErrCommuneInactive)
 		return
 	}
+	own, found, ownErr := h.liveOwnMiniApp(r.Context(), id)
+	if ownErr != nil {
+		h.writeSharedAppError(w, r, ownErr)
+		return
+	}
+	if found {
+		link, err := domain.OwnMiniAppLaunchLink(own)
+		if err != nil {
+			h.writeSharedAppError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, launchLinkView{URL: link, Domain: host, AppID: own, Source: launchSourceOwn})
+		return
+	}
 	if err != nil {
 		h.writeSharedAppError(w, r, err)
 		return
@@ -148,5 +178,32 @@ func (h *operatorHandlers) getLaunchLink(w http.ResponseWriter, r *http.Request)
 		h.writeSharedAppError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, launchLinkView{URL: link, Domain: host, AppID: app.AppID})
+	writeJSON(w, http.StatusOK, launchLinkView{URL: link, Domain: host, AppID: app.AppID, Source: launchSourceShared})
+}
+
+// errOwnMiniAppAmbiguous — the commune has more than one running own app. ADR 0070 #1 forbids it and
+// every write path refuses to create it, but no database constraint does (migration 0006 left it
+// open); choosing one would print a QR for an App ID nobody chose. Refused, like the shared-app case.
+var errOwnMiniAppAmbiguous = errors.New("operator launch link: more than one running own mini app")
+
+// liveOwnMiniApp is the commune's running, not-deleted `rieng` App ID, if any. Commune already
+// excludes soft-deleted rows; a switched-off row (written before 05/10/2026) is not live either.
+func (h *operatorHandlers) liveOwnMiniApp(ctx context.Context, id string) (string, bool, error) {
+	_, apps, err := h.d.Registry.Commune(ctx, id)
+	if err != nil {
+		return "", false, err
+	}
+	var live []string
+	for _, a := range apps {
+		if a.Mode == domain.CheDoRieng && a.Active {
+			live = append(live, a.AppID)
+		}
+	}
+	switch len(live) {
+	case 0:
+		return "", false, nil
+	case 1:
+		return live[0], true, nil
+	}
+	return "", false, errOwnMiniAppAmbiguous
 }

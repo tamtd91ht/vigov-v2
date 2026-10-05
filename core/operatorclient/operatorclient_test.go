@@ -57,6 +57,7 @@ type fakeServer struct {
 	setSecret    *identityv1.SetMiniAppSecretResponse
 	retireSecret *identityv1.RetireMiniAppSecretResponse
 	sawSet       *identityv1.SetMiniAppSecretRequest
+	statuses     *identityv1.ListMiniAppSecretStatusesResponse
 
 	calls     int
 	sawTenant [][]string

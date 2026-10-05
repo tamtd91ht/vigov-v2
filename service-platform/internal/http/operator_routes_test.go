@@ -77,6 +77,12 @@ type identityFake struct {
 	sawRetire       []operatorclient.RetireMiniAppSecretRequest
 	sawSetTenant    []tenant.ID
 	sawRetireTenant []tenant.ID
+
+	// ListMiniAppSecretStatuses (operator_commune_detail_test.go). A nil result answers ACCEPTED with
+	// an empty list.
+	statusRes       *operatorclient.ListMiniAppSecretStatusesResult
+	statusErr       error
+	sawStatusTenant []tenant.ID
 }
 
 func (f *identityFake) hit() error {
@@ -125,7 +131,16 @@ func (f *identityFake) CompleteEnrollment(context.Context, operatorclient.Comple
 	return f.complete, f.hit()
 }
 
-type registryFake struct{}
+// registryFake: apps overrides the commune's dedicated apps when set (the launch-link tests);
+// removed are App IDs the commune held and has soft-deleted (HeldMiniApp only — Commune hides them).
+type registryFake struct {
+	apps    []domain.CommuneMiniApp
+	setApps bool
+	removed []string
+}
+
+// deletedAppFake is an App ID communeIDFake held and removed.
+const deletedAppFake = "3000000000000000001"
 
 func (registryFake) ListCommunes(context.Context, page.Request) (page.Result[domain.Commune], error) {
 	r := page.NewResult[domain.Commune]()
@@ -134,16 +149,34 @@ func (registryFake) ListCommunes(context.Context, page.Request) (page.Result[dom
 	return r, nil
 }
 
-func (registryFake) Commune(_ context.Context, id string) (domain.Commune, []domain.CommuneMiniApp, error) {
+func (f registryFake) Commune(_ context.Context, id string) (domain.Commune, []domain.CommuneMiniApp, error) {
 	if id != communeIDFake && id != newIDFake {
 		return domain.Commune{}, nil, store.ErrCommuneNotFound
 	}
-	// Two dedicated apps, one on and one off — the secret routes answer 404 for any other App ID.
-	return domain.Commune{ID: id, Name: "Xã Thăng Bình", Province: "Đà Nẵng", Active: true,
-			Domains: []string{"thangbinh-danang.vigov.vn"}}, []domain.CommuneMiniApp{
-			{AppID: "3291993990104489440", Mode: domain.CheDoRieng, Active: true, CreatedBy: opCodeFake},
-			{AppID: "3043188591857102858", Mode: domain.CheDoRieng, Active: false, CreatedBy: opCodeFake},
-		}, nil
+	c := domain.Commune{ID: id, Name: "Xã Thăng Bình", Province: "Đà Nẵng", Active: true,
+		Domains: []string{"thangbinh-danang.vigov.vn"}}
+	if f.setApps {
+		return c, f.apps, nil
+	}
+	// Two dedicated apps, one on and one off (a row from before 05/10/2026, when "gỡ" only switched
+	// off) — the secret routes answer 404 for any other App ID.
+	return c, []domain.CommuneMiniApp{
+		{AppID: "3291993990104489440", Mode: domain.CheDoRieng, Active: true, CreatedBy: opCodeFake},
+		{AppID: "3043188591857102858", Mode: domain.CheDoRieng, Active: false, CreatedBy: opCodeFake},
+	}, nil
+}
+
+func (f registryFake) HeldMiniApp(ctx context.Context, id, appID string) (bool, error) {
+	_, apps, err := f.Commune(ctx, id)
+	if err != nil {
+		return false, err
+	}
+	for _, a := range apps {
+		if a.AppID == appID {
+			return true, nil
+		}
+	}
+	return id == communeIDFake && (appID == deletedAppFake || slices.Contains(f.removed, appID)), nil
 }
 
 func (registryFake) Provinces(context.Context) ([]domain.Province, error) {
@@ -160,6 +193,7 @@ type writerFake struct {
 	lastState *bool
 	// The mini-app routes: the App ID of the path, the new one of a replacement, the reason.
 	lastApp, lastNewApp, lastReason string
+	removed                         int
 	// The secret-forward display copies, with the commune each targeted and the actor.
 	forwards       []domain.SecretForward
 	forwardTargets []tenant.ID
@@ -221,9 +255,10 @@ func (w *writerFake) ReplaceMiniApp(ctx context.Context, oldAppID, newAppID, rea
 	return domain.CommuneMiniApp{AppID: newAppID, Mode: domain.CheDoRieng, Active: true, CreatedBy: by.Code}, w.err
 }
 
-func (w *writerFake) SetMiniAppActivation(ctx context.Context, appID string, active bool, reason string, by domain.OperatorActor) (bool, error) {
+func (w *writerFake) RemoveMiniApp(ctx context.Context, appID, reason string, by domain.OperatorActor) (bool, error) {
 	w.record(ctx, by)
-	w.lastApp, w.lastReason, w.lastState = appID, reason, &active
+	w.lastApp, w.lastReason = appID, reason
+	w.removed++
 	return true, w.err
 }
 
@@ -251,6 +286,7 @@ func (c *memCounter) Incr(_ context.Context, key string, window time.Duration) (
 
 type harness struct {
 	mux     http.Handler
+	reg     *registryFake
 	id      *identityFake
 	w       *writerFake
 	pol     *policyFake
@@ -265,7 +301,7 @@ type harness struct {
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
-	h := &harness{id: &identityFake{live: true}, w: &writerFake{}, pol: newPolicyFake(), oplog: &opLogFake{},
+	h := &harness{reg: &registryFake{}, id: &identityFake{live: true}, w: &writerFake{}, pol: newPolicyFake(), oplog: &opLogFake{},
 		shared: newSharedAppFake(), fields: newFieldsFake(), frames: newMapFramesFake(), counter: &memCounter{},
 		logs: &bytes.Buffer{}}
 	signer, err := operatortoken.NewSigner([]secret.Secret{opKeyFake})
@@ -281,7 +317,7 @@ func newHarness(t *testing.T) *harness {
 		Auth:         opauth.NewAuth(signer, h.id, log).WithClock(func() time.Time { return nowFake }),
 		Identity:     h.id,
 		Limiter:      lim,
-		Registry:     registryFake{},
+		Registry:     h.reg,
 		Writer:       h.w,
 		Policies:     h.pol,
 		OperatorLog:  h.oplog,

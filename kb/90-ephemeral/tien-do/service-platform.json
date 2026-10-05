@@ -257,6 +257,15 @@
       "menu": "cau-hinh"
     },
     {
+      "id": "app-rieng-xoa-mem-qr-trang-thai-khoa",
+      "viec": "App riêng của xã theo quyết định 05/10/2026 (ADR 0070 §Sửa đổi): đổi/gỡ App ID là xoá mềm, bỏ bật lại; QR từ App ID riêng (thiếu thì app chung); chi tiết xã kèm trạng thái khoá từ identity",
+      "trang_thai": "dang_lam",
+      "bang_chung": "store/operator_writes.go RemoveMiniApp (UPDATE … deleted_at/deleted_by/delete_reason, dang_hoat_dong=false, WHERE app_id+tenant_id+rieng+deleted_at IS NULL, audit tat_mini_app da_xoa_mem cùng giao dịch), ReplaceMiniApp xoá mềm dòng cũ, ErrMiniAppRemoved 409 mini_app_removed; PUT …/activation active:true → 422 mini_app_reactivation_removed; GET /communes/{id} mini_apps[].secret {status da_dat|chua_dat|khong_ro, set_at, set_by} + unbound_secrets qua core/operatorclient ListMiniAppSecretStatuses (UNIMPLEMENTED/không tới được → khong_ro); launch-link source rieng → https://zalo.me/s/<App ID>/?src=qr, hai app chạy → 409 own_mini_app_ambiguous. go build/vet/test service-platform + core/operatorclient xanh (05/10).",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA CHẠY ca PG (TestPgReplaceMiniApp*, TestPgMiniAppRemoval*, TestPgAttachRefusedWhileAnotherAppRuns) — máy này không có PostgreSQL/Docker; chạy với VIGOV_TEST_DSN trên PG16 trước khi triển khai. Migration chuyển dòng đang tắt sang xoá mềm (T3b). identity chưa cài ListMiniAppSecretStatuses (T4) → tới lúc đó màn hiện khong_ro. platform-admin (T5). transaction-boundaries.json doi_app_id_mini_app_cua_xa còn ghi 'tắt/bật lại'.",
+      "menu": "phan-anh-nguoi-dan"
+    },
+    {
       "id": "khu-van-hanh-doi-go-bat-lai-app-id",
       "viec": "Khu vận hành (ADR 0070): đổi App ID Mini App riêng của xã (gắn mới + tắt cũ, một giao dịch), gỡ (tắt) và bật lại App ID cho chính xã đó, bắt buộc lý do; siết tuyến gắn: xã đã có app riêng đang chạy thì từ chối",
       "trang_thai": "dang_lam",

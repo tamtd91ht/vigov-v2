@@ -22,6 +22,7 @@ import (
 
 	"github.com/vihat/vigov/core/idem"
 	"github.com/vihat/vigov/core/operatorclient"
+	"github.com/vihat/vigov/core/secret"
 	"github.com/vihat/vigov/core/tenant"
 )
 
@@ -58,6 +59,20 @@ func (f *identityFake) RetireMiniAppSecret(ctx context.Context, req operatorclie
 	}
 	return operatorclient.RetireMiniAppSecretResult{Outcome: operatorclient.OutcomeAccepted, Retirement: operatorclient.MiniAppSecretRetirement{
 		AppID: req.AppID, RetiredVersion: "01JDVERSIONFAKE00000000000", RetiredAt: nowFake, RetiredBy: opCodeFake}}, nil
+}
+
+func (f *identityFake) ListMiniAppSecretStatuses(ctx context.Context, _ secret.Secret) (operatorclient.ListMiniAppSecretStatusesResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t, _ := tenant.From(ctx)
+	f.sawStatusTenant = append(f.sawStatusTenant, t)
+	if f.statusErr != nil {
+		return operatorclient.ListMiniAppSecretStatusesResult{}, f.statusErr
+	}
+	if f.statusRes != nil {
+		return *f.statusRes, nil
+	}
+	return operatorclient.ListMiniAppSecretStatusesResult{Outcome: operatorclient.OutcomeAccepted}, nil
 }
 
 func secretPath(commune, app string) string {
@@ -228,6 +243,17 @@ func TestRetireSecretAnswers(t *testing.T) {
 	if r := h.id.sawRetire[0]; r.AppID != newAppFake || r.Reason != "Thu hồi khoá cũ" || h.id.sawRetireTenant[0] != communeIDFake {
 		t.Errorf("forwarded %+v to %q", r, h.id.sawRetireTenant[0])
 	}
+	// So is an App ID this commune REMOVED (soft-deleted): the detail no longer lists it, yet a
+	// secret left live under it after a failed automatic retirement must still be endable.
+	rec = h.do("DELETE", secretPath(communeIDFake, deletedAppFake), `{"reason":"Thu hồi khoá còn sót"}`, opCookie(t))
+	if rec.Code != 200 || len(h.id.sawRetire) != 2 || h.id.sawRetire[1].AppID != deletedAppFake {
+		t.Fatalf("removed App ID: %d %s", rec.Code, rec.Body)
+	}
+	// ... but SETTING a secret on it is refused before identity: only a bound App ID takes a secret.
+	rec = h.do("PUT", secretPath(communeIDFake, deletedAppFake), secretBodyFake, opCookie(t))
+	if rec.Code != 404 || len(h.id.sawSet) != 0 {
+		t.Fatalf("set on a removed App ID: %d %s, want 404 before identity", rec.Code, rec.Body)
+	}
 
 	h = miniAppHarness(t)
 	h.id.retireErr = operatorclient.ErrNoLiveSecret
@@ -322,21 +348,23 @@ func TestReplacementRefusedRetiresNothing(t *testing.T) {
 	}
 }
 
-func TestDetachRetiresReactivateDoesNot(t *testing.T) {
+func TestRemovalRetiresTheSecret(t *testing.T) {
 	h := miniAppHarness(t)
 	h.id.retireErr = errors.New("unavailable (fake)")
 	rec := h.do("PUT", miniAppActivationPath(communeIDFake, oldAppFake), `{"active":false,"reason":"Xã ngừng dùng app riêng"}`, opCookie(t))
-	if rec.Code != 200 || h.w.lastState == nil || *h.w.lastState {
-		t.Fatalf("detach: %d %s", rec.Code, rec.Body)
+	if rec.Code != 200 || h.w.removed != 1 {
+		t.Fatalf("remove: %d %s", rec.Code, rec.Body)
 	}
 	if len(h.id.sawRetire) != 1 || h.id.sawRetire[0].AppID != oldAppFake ||
 		!strings.Contains(rec.Body.String(), `"secret_retired":false`) {
-		t.Fatalf("detach must try to retire and report the failure: %+v %s", h.id.sawRetire, rec.Body)
+		t.Fatalf("removal must try to retire and report the failure: %+v %s", h.id.sawRetire, rec.Body)
 	}
 
+	// Reactivation was withdrawn (05/10/2026): refused before the writer AND before identity.
 	h = miniAppHarness(t)
 	rec = h.do("PUT", miniAppActivationPath(communeIDFake, newAppFake), `{"active":true,"reason":"Gỡ nhầm, bật lại"}`, opCookie(t))
-	if rec.Code != 200 || len(h.id.sawRetire) != 0 || strings.Contains(rec.Body.String(), "secret_retired") {
-		t.Fatalf("reactivate: %d %s, retire calls %d — nothing to retire", rec.Code, rec.Body, len(h.id.sawRetire))
+	if rec.Code != 422 || !strings.Contains(rec.Body.String(), `"code":"mini_app_reactivation_removed"`) ||
+		h.w.target != "" || len(h.id.sawRetire) != 0 {
+		t.Fatalf("reactivate: %d %s, writer target %q, retire calls %d", rec.Code, rec.Body, h.w.target, len(h.id.sawRetire))
 	}
 }

@@ -93,14 +93,14 @@ type miniAppSecretRetirementView struct {
 	RetiredBy      string     `json:"retired_by,omitempty"`
 }
 
-// miniAppChangeView answers a replacement or an activation change: the commune as it now stands,
-// plus — whenever an App ID was turned off — whether its secret was retired in identity (ADR 0070
-// #4). Absent on a reactivation, where nothing is retired.
+// miniAppChangeView answers a replacement or a removal: the commune as it now stands, plus whether
+// the removed App ID's secret was retired in identity (ADR 0070 #4).
 //
 // SecretRetired false does NOT undo the binding change: that committed first, in platform's own
 // transaction, and is correct on its own (the login path reads the binding before the secret, so a
-// secret left live under a turned-off App ID signs nobody in). The console shows "khoá App ID cũ
-// chưa thu hồi" and offers DELETE …/{app_id}/secret as the retry.
+// secret left live under a removed App ID signs nobody in). The console shows "khoá App ID cũ
+// chưa thu hồi" and offers DELETE …/{app_id}/secret as the retry; the removed App ID then also
+// appears in the detail's `unbound_secrets`.
 type miniAppChangeView struct {
 	communeDetailView
 	SecretRetired *bool `json:"secret_retired,omitempty"`
@@ -111,7 +111,7 @@ type miniAppChangeView struct {
 
 const (
 	msgSecretInvalid     = "Khoá bí mật không hợp lệ: không được để trống, không chứa khoảng trắng hay ký tự điều khiển."
-	msgMiniAppNotBound   = "App ID chưa gắn hoặc đang tắt ở xã này. Gắn hoặc bật lại App ID trước khi đặt khoá bí mật."
+	msgMiniAppNotBound   = "App ID chưa gắn, đang tắt hoặc đã gỡ khỏi xã này. Chỉ đặt khoá bí mật cho App ID đang gắn với xã."
 	msgSecretUnavailable = "Hệ thống tạm thời không lưu được khoá bí mật. Vui lòng thử lại sau."
 )
 
@@ -149,6 +149,119 @@ func (h *operatorHandlers) communeHoldsDedicatedApp(w http.ResponseWriter, r *ht
 	}
 	h.writeRegistryError(w, r, store.ErrMiniAppNotInCommune)
 	return false
+}
+
+// communeHeldDedicatedApp is communeHoldsDedicatedApp for RETIREMENT: it also accepts an App ID this
+// commune held and has since removed (soft-deleted), because a secret left live under a removed App
+// ID — an automatic retirement that failed — must stay retirable from the console. Another commune's
+// App ID, the shared app and an unknown one are still the same 404.
+func (h *operatorHandlers) communeHeldDedicatedApp(w http.ResponseWriter, r *http.Request, id, appID string) bool {
+	if _, _, err := h.d.Registry.Commune(r.Context(), id); err != nil {
+		h.writeRegistryError(w, r, err) // unknown commune: commune_not_found, as before
+		return false
+	}
+	held, err := h.d.Registry.HeldMiniApp(r.Context(), id, appID)
+	if err != nil {
+		h.writeRegistryError(w, r, err)
+		return false
+	}
+	if !held {
+		h.writeRegistryError(w, r, store.ErrMiniAppNotInCommune)
+	}
+	return held
+}
+
+// Secret status values on the commune detail. Enum VALUES are Vietnamese snake_case (ADR 0011).
+const (
+	secretStatusSet     = "da_dat"   // a sealed secret is live: set_at / set_by present
+	secretStatusNotSet  = "chua_dat" // no live version, or a live version holding no secret
+	secretStatusUnknown = "khong_ro" // identity could not be asked or answered outside the contract
+)
+
+// secretStatusView is what the detail shows about one App ID's secret — never the value, a prefix,
+// a length or a fingerprint (owner 05/10/2026: the secret is write-only; the screen shows only
+// "đặt lúc … bởi …").
+type secretStatusView struct {
+	Status string     `json:"status"`
+	SetAt  *time.Time `json:"set_at,omitempty"`
+	SetBy  string     `json:"set_by,omitempty"`
+}
+
+type unboundSecretView struct {
+	AppID  string           `json:"app_id"`
+	Secret secretStatusView `json:"secret"`
+}
+
+// secretStatuses is identity's answer joined on app_id. known=false renders every App ID "khong_ro".
+type secretStatuses struct {
+	known bool
+	list  []operatorclient.MiniAppSecretStatus
+}
+
+func (s secretStatuses) view(appID string) secretStatusView {
+	if !s.known {
+		return secretStatusView{Status: secretStatusUnknown}
+	}
+	for _, st := range s.list {
+		if st.AppID != appID {
+			continue
+		}
+		if !st.SecretSet {
+			return secretStatusView{Status: secretStatusNotSet}
+		}
+		at := st.SetAt.UTC()
+		return secretStatusView{Status: secretStatusSet, SetAt: &at, SetBy: st.SetBy}
+	}
+	// Absent from the list: nothing live under this App ID in this commune.
+	return secretStatusView{Status: secretStatusNotSet}
+}
+
+// readSecretStatuses asks identity for the commune's secret statuses (ListMiniAppSecretStatuses).
+// Called only while answering a request a person made: identity refreshes the session's idle timer.
+// The commune is the PATH's, put in ctx (x-tenant-id) — never a body or a header.
+//
+// On the detail READ (afterWrite=false), SESSION_NOT_LIVE is 401 and PERMISSION_DENIED is 403, as on
+// the two secret writes; ok=false means that answer is already written. After a committed WRITE
+// (afterWrite=true) the same outcomes degrade to "khong_ro": the write happened, and a 401/403 now
+// would tell the operator it did not.
+//
+// EVERY OTHER FAILURE RENDERS "khong_ro", never a failed detail: UNIMPLEMENTED (an identity older
+// than the RPC, during a rollout), UNSPECIFIED or an incomplete entry (fail closed — never shown as
+// "chưa đặt" or "đã đặt"), and an outage. The detail is registry data this service owns; the secret
+// status is a second source's annotation on it. Logged with the commune and the class only — the
+// messages are never logged.
+func (h *operatorHandlers) readSecretStatuses(w http.ResponseWriter, r *http.Request, id string, afterWrite bool) (secretStatuses, bool) {
+	ctx := tenant.Into(r.Context(), tenant.ID(id))
+	tok, _ := opauth.TokenFrom(r)
+	res, err := h.d.Identity.ListMiniAppSecretStatuses(ctx, tok)
+	switch {
+	case errors.Is(err, operatorclient.ErrNotSupported):
+		return secretStatuses{}, true
+	case err != nil:
+		h.d.Log.WarnContext(ctx, "khu vận hành: không đọc được trạng thái khoá bí mật Mini App — hiện \"không rõ\"",
+			"event", "mini_app.secret_status_unknown", "tenant", id, "err_class", secretStatusErrClass(err))
+		return secretStatuses{}, true
+	}
+	switch res.Outcome {
+	case operatorclient.OutcomeAccepted:
+		return secretStatuses{known: true, list: res.Statuses}, true
+	case operatorclient.OutcomeSessionNotLive, operatorclient.OutcomePermissionDenied:
+		if afterWrite {
+			return secretStatuses{}, true
+		}
+		return secretStatuses{}, !secretOutcome(w, res.Outcome)
+	}
+	return secretStatuses{}, true
+}
+
+func secretStatusErrClass(err error) string {
+	switch {
+	case errors.Is(err, operatorclient.ErrContract):
+		return "contract"
+	case errors.Is(err, operatorclient.ErrInvalidRequest):
+		return "invalid_request"
+	}
+	return "unavailable"
 }
 
 // secretCallFailed answers a secret RPC that returned an error. Logs the class only — never the
@@ -264,7 +377,7 @@ func (h *operatorHandlers) retireMiniAppSecret(w http.ResponseWriter, r *http.Re
 		h.writeRegistryError(w, r, err)
 		return
 	}
-	if !h.communeHoldsDedicatedApp(w, r, id, appID) {
+	if !h.communeHeldDedicatedApp(w, r, id, appID) {
 		return
 	}
 	tok, _ := opauth.TokenFrom(r)
@@ -337,6 +450,7 @@ func (h *operatorHandlers) respondCommuneAfterChange(w http.ResponseWriter, r *h
 		h.writeRegistryError(w, r, err)
 		return
 	}
-	writeJSON(w, status, miniAppChangeView{communeDetailView: toDetailView(c, apps),
+	st, _ := h.readSecretStatuses(w, r, id, true)
+	writeJSON(w, status, miniAppChangeView{communeDetailView: toDetailView(c, apps, st),
 		SecretRetired: retired, SecretRetirementError: problem})
 }

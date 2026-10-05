@@ -1,7 +1,8 @@
 package operatorclient
 
-// The two RPCs of OperatorService that act ON a commune: SetMiniAppSecret and RetireMiniAppSecret
-// (proto/vigov/identity/v1/operator.proto; ADR 0070 #4, §"Bổ sung 02/10/2026" #6).
+// The RPCs of OperatorService that act ON a commune — SetMiniAppSecret and RetireMiniAppSecret — and
+// the read beside them, ListMiniAppSecretStatuses (proto/vigov/identity/v1/operator.proto; ADR 0070
+// #4, §"Bổ sung 02/10/2026" #6, §"Sửa đổi 05/10/2026" #3).
 //
 // THE COMMUNE IS THE CONTEXT'S. Both are absent from core/grpcx.methodsWithoutTenant, so
 // grpcx.UnaryClientInterceptor writes x-tenant-id from ctx. A ctx without a commune is refused HERE
@@ -43,6 +44,10 @@ var (
 	// refuses (operator.proto lists them). The caller validated App ID and reason first, so for a
 	// conforming caller what remains is the secret's shape. The status message is never surfaced.
 	ErrArgumentRefused = errors.New("operatorclient: identity refused the request shape")
+
+	// ErrNotSupported is UNIMPLEMENTED: the identity this caller reached predates the RPC — expected
+	// for the length of a rollout in which platform ships first. Not an outage, so not logged as one.
+	ErrNotSupported = errors.New("operatorclient: identity does not implement this RPC yet")
 )
 
 // MiniAppSecretVersion is what may be shown about a secret just set: that it exists, since when, by
@@ -212,6 +217,79 @@ func (c *Client) RetireMiniAppSecret(ctx context.Context, req RetireMiniAppSecre
 		}
 		res.Retirement = MiniAppSecretRetirement{AppID: v.GetAppId(), RetiredVersion: v.GetRetiredVersion(),
 			RetiredAt: v.GetRetiredAt().AsTime(), RetiredBy: v.GetRetiredBy()}
+	}
+	return res, nil
+}
+
+// MiniAppSecretStatus is what the commune detail may show about one App ID's live settings: whether
+// a secret is set and, only when it is, since when and by whom. NEVER the value or anything derived
+// from it — the wire message has no field for either (operator.proto, MiniAppSecretStatus).
+type MiniAppSecretStatus struct {
+	AppID     string
+	SecretSet bool
+	// SetAt / SetBy are filled ONLY when SecretSet: a live version without a secret dates nothing the
+	// screen may present as "đặt lúc … bởi …" (operator.proto).
+	SetAt time.Time
+	SetBy string
+}
+
+// ListMiniAppSecretStatusesResult: Statuses is meaningful exactly when Outcome is OutcomeAccepted;
+// an empty list is a valid answer (nothing set, or everything retired).
+type ListMiniAppSecretStatusesResult struct {
+	Outcome  Outcome
+	Statuses []MiniAppSecretStatus
+}
+
+// ListMiniAppSecretStatuses is OperatorService.ListMiniAppSecretStatuses, for the commune in ctx.
+// Call it only for a request a person made: identity refreshes the session's idle timer on it.
+//
+//	err == nil        Outcome ACCEPTED (Statuses), SESSION_NOT_LIVE (401) or PERMISSION_DENIED (403)
+//	ErrNotSupported   identity predates the RPC (UNIMPLEMENTED) — the caller shows "không rõ"
+//	ErrContract       UNSPECIFIED or an incomplete entry — never read as "no secret"
+//	ErrInvalidRequest a wiring fault in the caller (empty token, no commune) — nothing sent
+//	any other error   the call did not happen
+func (c *Client) ListMiniAppSecretStatuses(ctx context.Context, token secret.Secret) (ListMiniAppSecretStatusesResult, error) {
+	const rpc = "ListMiniAppSecretStatuses"
+	if token.Rong() {
+		return ListMiniAppSecretStatusesResult{}, fmt.Errorf("%w: %s with an empty token", ErrInvalidRequest, rpc)
+	}
+	if err := requireCommune(ctx, rpc); err != nil {
+		return ListMiniAppSecretStatusesResult{}, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, CallTimeout)
+	defer cancel()
+	ra, err := c.cl.ListMiniAppSecretStatuses(ctx, &identityv1.ListMiniAppSecretStatusesRequest{SessionToken: raw(token)})
+	if err != nil {
+		if status.Code(err) == codes.Unimplemented {
+			return ListMiniAppSecretStatusesResult{}, fmt.Errorf("%w: %s", ErrNotSupported, rpc)
+		}
+		return ListMiniAppSecretStatusesResult{}, c.callFailed(ctx, rpc, err)
+	}
+	o, err := outcome(rpc, ra.GetOutcome(), wAccepted, wNotLive, wDenied)
+	if err != nil {
+		return ListMiniAppSecretStatusesResult{}, err
+	}
+	if o == OutcomeRefused {
+		// UNSPECIFIED: fail closed — an answer nobody filled in must never read as "no secret set".
+		return ListMiniAppSecretStatusesResult{}, fmt.Errorf("%w: %s answered no outcome", ErrContract, rpc)
+	}
+	res := ListMiniAppSecretStatusesResult{Outcome: o}
+	if o != OutcomeAccepted {
+		return res, nil
+	}
+	for _, s := range ra.GetStatuses() {
+		v := s.GetLiveVersion()
+		if v == nil || v.GetAppId() == "" {
+			return ListMiniAppSecretStatusesResult{}, fmt.Errorf("%w: %s entry without a live version", ErrContract, rpc)
+		}
+		st := MiniAppSecretStatus{AppID: v.GetAppId(), SecretSet: s.GetSecretSet()}
+		if st.SecretSet {
+			if v.GetSetAt() == nil || v.GetSetBy() == "" {
+				return ListMiniAppSecretStatusesResult{}, fmt.Errorf("%w: %s secret set without set_at/set_by", ErrContract, rpc)
+			}
+			st.SetAt, st.SetBy = v.GetSetAt().AsTime(), v.GetSetBy()
+		}
+		res.Statuses = append(res.Statuses, st)
 	}
 	return res, nil
 }

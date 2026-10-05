@@ -61,7 +61,8 @@ func (readerEmpty) ListCommunes(context.Context, page.Request) (page.Result[doma
 func (readerEmpty) Commune(context.Context, string) (domain.Commune, []domain.CommuneMiniApp, error) {
 	return domain.Commune{}, nil, store.ErrCommuneNotFound
 }
-func (readerEmpty) Provinces(context.Context) ([]domain.Province, error) { return nil, nil }
+func (readerEmpty) Provinces(context.Context) ([]domain.Province, error)      { return nil, nil }
+func (readerEmpty) HeldMiniApp(context.Context, string, string) (bool, error) { return false, nil }
 
 type counterOK struct{}
 

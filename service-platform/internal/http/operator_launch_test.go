@@ -96,11 +96,20 @@ func citizenAppAccepts(query string) (host string, ok bool) {
 	return d, true
 }
 
-// The link is the published-app form, names the commune's PRIMARY host, and round-trips through the
-// citizen app's own parameter reader (ADR 0047: `d` + `src=qr`).
+// noLiveOwnApp leaves the commune with no running own app: only a row switched off before
+// 05/10/2026 — not live, so the shared app's link is issued.
+func noLiveOwnApp(h *harness) {
+	h.reg.setApps = true
+	h.reg.apps = []domain.CommuneMiniApp{{AppID: "3043188591857102858", Mode: domain.CheDoRieng, Active: false}}
+}
+
+// A commune WITHOUT a live own app: the shared app's link, as before 05/10/2026. It is the
+// published-app form, names the commune's PRIMARY host, and round-trips through the citizen app's own
+// parameter reader (ADR 0047: `d` + `src=qr`).
 func TestLaunchLinkRoundTripsThroughCitizenApp(t *testing.T) {
 	h := newHarness(t)
 	h.id.keys = []string{"ops.qr.issue"}
+	noLiveOwnApp(h)
 	rec := h.do("GET", launchPath, "", opCookie(t))
 	if rec.Code != 200 {
 		t.Fatalf("status %d (%s)", rec.Code, rec.Body)
@@ -110,7 +119,7 @@ func TestLaunchLinkRoundTripsThroughCitizenApp(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := "https://zalo.me/s/" + sharedAppIDFake + "/?d=thangbinh-danang.vigov.vn&src=qr"
-	if got.URL != want || got.Domain != "thangbinh-danang.vigov.vn" || got.AppID != sharedAppIDFake {
+	if got.URL != want || got.Domain != "thangbinh-danang.vigov.vn" || got.AppID != sharedAppIDFake || got.Source != "chung" {
 		t.Fatalf("got %+v, want url %s", got, want)
 	}
 	u, err := url.Parse(got.URL)
@@ -125,6 +134,60 @@ func TestLaunchLinkRoundTripsThroughCitizenApp(t *testing.T) {
 	}
 	if host, ok := citizenAppAccepts(u.RawQuery); !ok || host != got.Domain {
 		t.Errorf("citizen-app would not read the commune from %q (got %q, %v)", u.RawQuery, host, ok)
+	}
+}
+
+// A commune WITH a live own app (ADR 0070 §Sửa đổi 05/10/2026 #4): that App ID's link, `src=qr`
+// and NO `d` — the own app has its commune baked in. Needs neither the shared app nor a primary host.
+func TestLaunchLinkUsesTheLiveOwnApp(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		setup func(h *harness)
+	}{
+		{"default", func(*harness) {}},
+		{"no shared app declared", func(h *harness) { h.shared.app = nil }},
+		{"no primary domain", func(h *harness) { h.shared.host, h.shared.hostErr = "", store.ErrCommuneNoPrimaryHost }},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.id.keys = []string{"ops.qr.issue"}
+			c.setup(h)
+			// registryFake's default: 3291993990104489440 running, 3043188591857102858 switched off.
+			rec := h.do("GET", launchPath, "", opCookie(t))
+			if rec.Code != 200 {
+				t.Fatalf("status %d (%s)", rec.Code, rec.Body)
+			}
+			var got launchLinkView
+			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+				t.Fatal(err)
+			}
+			if got.URL != "https://zalo.me/s/3291993990104489440/?src=qr" || got.AppID != "3291993990104489440" || got.Source != "rieng" {
+				t.Fatalf("got %+v", got)
+			}
+			u, err := url.Parse(got.URL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if u.Query().Has("d") {
+				t.Error("an own-app link must not carry d=")
+			}
+		})
+	}
+}
+
+// Two running own apps is a state ADR 0070 #1 forbids but no constraint prevents: refused, never a
+// QR for an App ID nobody chose.
+func TestLaunchLinkRefusesTwoLiveOwnApps(t *testing.T) {
+	h := newHarness(t)
+	h.id.keys = []string{"ops.qr.issue"}
+	h.reg.setApps = true
+	h.reg.apps = []domain.CommuneMiniApp{
+		{AppID: "3291993990104489440", Mode: domain.CheDoRieng, Active: true},
+		{AppID: "3043188591857102858", Mode: domain.CheDoRieng, Active: true},
+	}
+	rec := h.do("GET", launchPath, "", opCookie(t))
+	if rec.Code != 409 || !strings.Contains(rec.Body.String(), `"code":"own_mini_app_ambiguous"`) {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
 	}
 }
 
@@ -149,6 +212,7 @@ func TestLaunchLinkRefusals(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			h := newHarness(t)
 			h.id.keys = []string{"ops.qr.issue"}
+			noLiveOwnApp(h)
 			c.setup(h.shared)
 			rec := h.do("GET", c.path, "", opCookie(t))
 			if rec.Code != c.want || !strings.Contains(rec.Body.String(), `"code":"`+c.code+`"`) {

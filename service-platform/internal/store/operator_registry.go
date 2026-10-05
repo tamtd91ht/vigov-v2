@@ -150,6 +150,25 @@ func (r *OperatorRegistry) Commune(ctx context.Context, id string) (domain.Commu
 	return c, apps, nil
 }
 
+// HeldMiniApp answers whether appID is, or WAS, a dedicated (`rieng`) App ID of commune id —
+// soft-deleted rows INCLUDED, on purpose and only here. Its one use is retiring a secret left live
+// under an App ID the commune no longer holds (an automatic retirement after "Đổi App ID" / "Gỡ khỏi
+// xã" that failed): Commune hides that row (rule 7 invariant 2), yet the secret under it is exactly
+// what the operator must still be able to end. Nothing else is read from the deleted row.
+func (r *OperatorRegistry) HeldMiniApp(ctx context.Context, id, appID string) (bool, error) {
+	var one int
+	// The tenant_id filter is the commune of the path — one commune's history, never another's.
+	err := r.db.QueryRowContext(ctx,
+		`SELECT 1 FROM mini_app WHERE tenant_id = $1 AND app_id = $2 AND che_do = 'rieng'`, id, appID).Scan(&one)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return false, nil
+	case err != nil:
+		return false, fmt.Errorf("operator registry: held mini app: %w", err)
+	}
+	return true, nil
+}
+
 // Provinces is the active tinh_thanh catalogue in its fixed display order. Bounded by nature (34 rows
 // after the 2025 reorganisation), so it is returned whole, not paginated.
 func (r *OperatorRegistry) Provinces(ctx context.Context) ([]domain.Province, error) {

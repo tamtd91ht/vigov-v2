@@ -30,6 +30,8 @@ type OperatorIdentity interface {
 	// The two that act ON a commune (operator_mini_app_secrets.go): the commune is ctx's.
 	SetMiniAppSecret(ctx context.Context, req operatorclient.SetMiniAppSecretRequest) (operatorclient.SetMiniAppSecretResult, error)
 	RetireMiniAppSecret(ctx context.Context, req operatorclient.RetireMiniAppSecretRequest) (operatorclient.RetireMiniAppSecretResult, error)
+	// The read beside them, for the commune detail: metadata only, never a secret.
+	ListMiniAppSecretStatuses(ctx context.Context, token secret.Secret) (operatorclient.ListMiniAppSecretStatusesResult, error)
 }
 
 type operatorHandlers struct{ d OperatorDeps }

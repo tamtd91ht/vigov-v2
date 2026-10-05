@@ -57,3 +57,20 @@ func MiniAppLaunchLink(appID, host string) (string, error) {
 	q.Set("src", LaunchSourceQR)
 	return zaloMiniAppLinkBase + appID + "/?" + q.Encode(), nil
 }
+
+// OwnMiniAppLaunchLink builds the QR link of a commune's OWN (che_do rieng) Mini App (ADR 0070
+// §Sửa đổi 05/10/2026 #4):
+//
+//	https://zalo.me/s/<the commune's App ID>/?src=qr
+//
+// NO `d=`: the own app has its commune baked in at build time (ADR 0047 #6), and the server resolves
+// the commune from the App ID, not from a parameter. A `d` here would be a second, client-carried
+// statement of the commune that could only disagree with the first.
+func OwnMiniAppLaunchLink(appID string) (string, error) {
+	if err := ValidateMiniAppID(appID); err != nil {
+		return "", err
+	}
+	q := url.Values{}
+	q.Set("src", LaunchSourceQR)
+	return zaloMiniAppLinkBase + appID + "/?" + q.Encode(), nil
+}

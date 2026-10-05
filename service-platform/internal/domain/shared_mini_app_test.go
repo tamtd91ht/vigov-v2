@@ -23,6 +23,17 @@ func TestMiniAppLaunchLink(t *testing.T) {
 	}
 }
 
+// The own app's QR carries no commune host: the commune is the App ID's (ADR 0070 §Sửa đổi 05/10/2026 #4).
+func TestOwnMiniAppLaunchLink(t *testing.T) {
+	got, err := OwnMiniAppLaunchLink("3291993990104489440")
+	if err != nil || got != "https://zalo.me/s/3291993990104489440/?src=qr" {
+		t.Fatalf("got %q, %v", got, err)
+	}
+	if _, err := OwnMiniAppLaunchLink("12a"); !errors.Is(err, ErrMiniAppIDInvalid) {
+		t.Errorf("a non-numeric App ID: %v", err)
+	}
+}
+
 func TestPetitionFieldValidation(t *testing.T) {
 	for _, ok := range []string{"dien", "rac-thai", "an-toan-thuc-pham", "a1", strings.Repeat("a", 64)} {
 		if err := ValidatePetitionFieldCode(ok); err != nil {

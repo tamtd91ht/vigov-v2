@@ -160,3 +160,82 @@ func TestSecretRPCOutcomes(t *testing.T) {
 		t.Errorf("REFUSED is outside the subset: %v", err)
 	}
 }
+
+func (f *fakeServer) ListMiniAppSecretStatuses(ctx context.Context, _ *identityv1.ListMiniAppSecretStatusesRequest) (*identityv1.ListMiniAppSecretStatusesResponse, error) {
+	f.record(ctx)
+	return f.statuses, f.err
+}
+
+func statusFake(appID string, set bool) *identityv1.MiniAppSecretStatus {
+	return &identityv1.MiniAppSecretStatus{SecretSet: set, LiveVersion: &identityv1.MiniAppSecretVersion{
+		AppId: appID, Version: "01JDVERSIONFAKE00000000000", SetAt: timestamppb.New(time.Unix(1_800_000_000, 0)), SetBy: "VH-00001"}}
+}
+
+// The read carries the target commune like the two writes, and a version WITHOUT a secret never
+// reaches the caller dated: "chưa đặt" must not show the version's set_at as if a secret were set.
+func TestListMiniAppSecretStatuses(t *testing.T) {
+	f := &fakeServer{statuses: &identityv1.ListMiniAppSecretStatusesResponse{Outcome: wAccepted,
+		Statuses: []*identityv1.MiniAppSecretStatus{statusFake(appIDFake, true), statusFake("3043188591857102858", false)}}}
+	c, _ := start(t, f)
+	res, err := c.ListMiniAppSecretStatuses(ctxWithTenant(), secret.Secret(tokenFake))
+	if err != nil || res.Outcome != OutcomeAccepted || len(res.Statuses) != 2 {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if s := res.Statuses[0]; !s.SecretSet || s.SetBy != "VH-00001" || s.SetAt.Unix() != 1_800_000_000 {
+		t.Errorf("set entry = %+v", s)
+	}
+	if s := res.Statuses[1]; s.SecretSet || s.SetBy != "" || !s.SetAt.IsZero() {
+		t.Errorf("a version without a secret was dated: %+v", s)
+	}
+	if len(f.sawTenant) != 1 || len(f.sawTenant[0]) != 1 || f.sawTenant[0][0] != "01JA"+strings.Repeat("A", 22) {
+		t.Errorf("x-tenant-id = %v", f.sawTenant)
+	}
+
+	for name, resp := range map[string]*identityv1.ListMiniAppSecretStatusesResponse{
+		"UNSPECIFIED":           {},
+		"REFUSED outside":       {Outcome: wRefused},
+		"entry without version": {Outcome: wAccepted, Statuses: []*identityv1.MiniAppSecretStatus{{SecretSet: true}}},
+		"set without set_by": {Outcome: wAccepted, Statuses: []*identityv1.MiniAppSecretStatus{{SecretSet: true,
+			LiveVersion: &identityv1.MiniAppSecretVersion{AppId: appIDFake}}}},
+	} {
+		f.statuses = resp
+		if _, err := c.ListMiniAppSecretStatuses(ctxWithTenant(), secret.Secret(tokenFake)); !errors.Is(err, ErrContract) {
+			t.Errorf("%s: %v, want ErrContract (fail closed)", name, err)
+		}
+	}
+	f.statuses = &identityv1.ListMiniAppSecretStatusesResponse{Outcome: wDenied}
+	if res, err := c.ListMiniAppSecretStatuses(ctxWithTenant(), secret.Secret(tokenFake)); err != nil || res.Outcome != OutcomePermissionDenied {
+		t.Errorf("PERMISSION_DENIED: %v %v", res.Outcome, err)
+	}
+	f.statuses = &identityv1.ListMiniAppSecretStatusesResponse{Outcome: wNotLive}
+	if res, err := c.ListMiniAppSecretStatuses(ctxWithTenant(), secret.Secret(tokenFake)); err != nil || res.Outcome != OutcomeSessionNotLive {
+		t.Errorf("SESSION_NOT_LIVE: %v %v", res.Outcome, err)
+	}
+}
+
+func TestListMiniAppSecretStatusesFailures(t *testing.T) {
+	f := &fakeServer{}
+	c, _ := start(t, f)
+	if _, err := c.ListMiniAppSecretStatuses(context.Background(), secret.Secret(tokenFake)); !errors.Is(err, ErrInvalidRequest) {
+		t.Errorf("without a commune: %v", err)
+	}
+	if _, err := c.ListMiniAppSecretStatuses(ctxWithTenant(), nil); !errors.Is(err, ErrInvalidRequest) {
+		t.Errorf("without a token: %v", err)
+	}
+	if f.calls != 0 {
+		t.Fatalf("%d refused calls reached the server", f.calls)
+	}
+	// An identity older than the RPC: the embedded Unimplemented server answers UNIMPLEMENTED.
+	old, _ := start(t, &fakeServer{err: status.Error(codes.Unimplemented, "x")})
+	if _, err := old.ListMiniAppSecretStatuses(ctxWithTenant(), secret.Secret(tokenFake)); !errors.Is(err, ErrNotSupported) {
+		t.Errorf("UNIMPLEMENTED: %v, want ErrNotSupported", err)
+	}
+	down, logBuf := start(t, &fakeServer{err: status.Error(codes.Unavailable, "x")})
+	_, err := down.ListMiniAppSecretStatuses(ctxWithTenant(), secret.Secret(tokenFake))
+	if err == nil || errors.Is(err, ErrNotSupported) || errors.Is(err, ErrContract) {
+		t.Errorf("UNAVAILABLE: %v", err)
+	}
+	if strings.Contains(logBuf.String(), tokenFake) {
+		t.Fatal("the log carries the token")
+	}
+}

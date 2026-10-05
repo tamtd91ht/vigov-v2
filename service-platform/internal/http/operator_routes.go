@@ -195,7 +195,7 @@ func registerOperator(mux *http.ServeMux, d OperatorDeps) {
 		opauth.RequireKey(h.d.Auth, opauth.AnyKey)(
 			http.HandlerFunc(h.listCommunes)))
 
-	// @summary  Một xã: siêu dữ liệu và các Mini App riêng đã gắn
+	// @summary  Một xã: siêu dữ liệu, các Mini App riêng đang gắn kèm trạng thái khoá bí mật (đã đặt lúc … bởi … / chưa đặt / không rõ — không bao giờ trả khoá), và khoá còn sống dưới App ID đã gỡ
 	// @reply    200 communeDetailView
 	// @reply    401 httpx.Error unauthorized
 	// @reply    403 httpx.Error forbidden
@@ -295,7 +295,7 @@ func registerOperator(mux *http.ServeMux, d OperatorDeps) {
 	// @reply    401 httpx.Error unauthorized
 	// @reply    403 httpx.Error forbidden
 	// @reply    404 httpx.Error commune_not_found
-	// @reply    409 httpx.Error mini_app_taken commune_inactive mini_app_already_running
+	// @reply    409 httpx.Error mini_app_taken mini_app_removed commune_inactive mini_app_already_running
 	// @reply    422 httpx.Error invalid_app_id invalid_note
 	// @reply    503 httpx.Error operator_auth_unavailable
 	mux.Handle("POST /api/v1/communes/{id}/mini-apps",
@@ -303,35 +303,35 @@ func registerOperator(mux *http.ServeMux, d OperatorDeps) {
 			idem.KhongCan("a repeat is refused by mini_app.app_id, the primary key, which keeps soft-deleted rows")(
 				http.HandlerFunc(h.attachMiniApp))))
 
-	// @summary  Đổi App ID Mini App riêng của xã: gắn App ID mới và tắt App ID ở đường dẫn, một giao dịch (bắt buộc lý do); sau đó tự thu hồi khoá bí mật của App ID cũ
+	// @summary  Đổi App ID Mini App riêng của xã: gắn App ID mới và xoá mềm App ID ở đường dẫn, một giao dịch (bắt buộc lý do); App ID cũ không dùng lại được; sau đó tự thu hồi khoá bí mật của App ID cũ
 	// @request  miniAppReplacementBody
 	// @reply    201 miniAppChangeView
 	// @reply    400 httpx.Error invalid_body
 	// @reply    401 httpx.Error unauthorized
 	// @reply    403 httpx.Error forbidden
 	// @reply    404 httpx.Error commune_not_found mini_app_not_found
-	// @reply    409 httpx.Error mini_app_taken mini_app_inactive commune_inactive
+	// @reply    409 httpx.Error mini_app_taken mini_app_removed mini_app_inactive commune_inactive
 	// @reply    422 httpx.Error invalid_app_id invalid_reason
 	// @reply    503 httpx.Error operator_auth_unavailable
 	mux.Handle("POST /api/v1/communes/{id}/mini-apps/{app_id}/replacement",
 		opauth.RequireKey(h.d.Auth, opauth.KeyMiniAppManage)(
-			idem.KhongCan("a repeat is refused: the old App ID is no longer running (mini_app_inactive) and the new one has a row (mini_app_taken)")(
+			idem.KhongCan("a repeat is refused: the old App ID is now soft-deleted (mini_app_not_found) and the new one has a row (mini_app_taken)")(
 				http.HandlerFunc(h.replaceMiniApp))))
 
-	// @summary  Gỡ (tắt) hoặc bật lại một Mini App riêng của xã (bắt buộc lý do); gỡ thì tự thu hồi khoá bí mật của App ID; không chuyển App ID sang xã khác
+	// @summary  Gỡ một Mini App riêng khỏi xã — xoá mềm, bắt buộc lý do, chỉ nhận active=false (bật lại đã bỏ 05/10/2026); App ID đã gỡ không dùng lại được; sau đó tự thu hồi khoá bí mật của App ID
 	// @request  miniAppActivationBody
 	// @reply    200 miniAppChangeView
 	// @reply    400 httpx.Error invalid_body
 	// @reply    401 httpx.Error unauthorized
 	// @reply    403 httpx.Error forbidden
 	// @reply    404 httpx.Error commune_not_found mini_app_not_found
-	// @reply    409 httpx.Error commune_inactive mini_app_already_running
-	// @reply    422 httpx.Error invalid_reason
+	// @reply    409 httpx.Error commune_inactive
+	// @reply    422 httpx.Error invalid_reason mini_app_reactivation_removed
 	// @reply    503 httpx.Error operator_auth_unavailable
 	mux.Handle("PUT /api/v1/communes/{id}/mini-apps/{app_id}/activation",
 		opauth.RequireKey(h.d.Auth, opauth.KeyMiniAppManage)(
-			idem.KhongCan("setting the state it already has changes nothing and writes no entry")(
-				http.HandlerFunc(h.setMiniAppActivation))))
+			idem.KhongCan("removing an App ID already removed from this commune changes nothing and writes no entry; the repeat only retries the secret retirement")(
+				http.HandlerFunc(h.removeMiniApp))))
 
 	// THE TWO SECRET ROUTES below forward a commune's Zalo app secret to identity and keep nothing
 	// (operator_mini_app_secrets.go lists every place the value goes). KhongCan is also what keeps
@@ -468,12 +468,12 @@ func registerOperator(mux *http.ServeMux, d OperatorDeps) {
 			idem.KhongCan("declaring the App ID that is already the running shared app changes nothing and writes no entry")(
 				http.HandlerFunc(h.declareSharedMiniApp))))
 
-	// @summary  Liên kết mở Mini App dùng chung cho tên miền chính của xã (in thành QR ở trình duyệt); không ghi vết (ADR 0048 §30/09 #9)
+	// @summary  Liên kết mở Mini App của xã để in QR: app riêng đang sống của xã (source=rieng, không d=) nếu có, không thì app dùng chung với tên miền chính (source=chung); không ghi vết (ADR 0048 §30/09 #9)
 	// @reply    200 launchLinkView
 	// @reply    401 httpx.Error unauthorized
 	// @reply    403 httpx.Error forbidden
 	// @reply    404 httpx.Error commune_not_found
-	// @reply    409 httpx.Error commune_inactive commune_no_primary_domain shared_mini_app_not_declared shared_mini_app_ambiguous
+	// @reply    409 httpx.Error commune_inactive commune_no_primary_domain shared_mini_app_not_declared shared_mini_app_ambiguous own_mini_app_ambiguous
 	// @reply    503 httpx.Error operator_auth_unavailable
 	mux.Handle("GET /api/v1/communes/{id}/mini-app-launch-link",
 		opauth.RequireKey(h.d.Auth, opauth.KeyQRIssue)(

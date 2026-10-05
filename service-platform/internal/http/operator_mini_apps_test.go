@@ -1,7 +1,7 @@
 package http
 
-// The ADR 0070 mini-app routes: replacement and activation (detach / reactivate) of a commune's
-// dedicated App ID, plus the attach refusal they made necessary. 401 / 401 staff token / 403 / 503 /
+// The ADR 0070 mini-app routes: replacement and removal ("Gỡ khỏi xã", a soft delete since
+// 05/10/2026 — reactivation withdrawn) of a commune's dedicated App ID, plus the attach refusals. 401 / 401 staff token / 403 / 503 /
 // 2xx for both routes are in TestGuardedRoutes; this file defends what is specific to them — the
 // commune AND the old App ID come from the PATH, the reason is mandatory, every refusal of the store
 // keeps its own status, and an App ID another commune holds is the same 404 as an unknown one.
@@ -86,26 +86,21 @@ func TestReplacementRefusals(t *testing.T) {
 	}
 }
 
-func TestMiniAppActivationDetachAndReactivate(t *testing.T) {
-	for _, active := range []bool{false, true} {
-		h := miniAppHarness(t)
-		body := `{"active":false,"reason":"Xã ngừng dùng app riêng"}`
-		if active {
-			body = `{"active":true,"reason":"Gỡ nhầm, bật lại"}`
-		}
-		rec := h.do("PUT", miniAppActivationPath(communeIDFake, oldAppFake), body, opCookie(t))
-		if rec.Code != 200 {
-			t.Fatalf("active=%v: %d (%s)", active, rec.Code, rec.Body)
-		}
-		if h.w.target != communeIDFake || h.w.lastApp != oldAppFake || h.w.lastState == nil || *h.w.lastState != active {
-			t.Errorf("active=%v: target %q app %q state %v", active, h.w.target, h.w.lastApp, h.w.lastState)
-		}
+func TestMiniAppRemovalTakesCommuneAndAppFromPath(t *testing.T) {
+	h := miniAppHarness(t)
+	rec := h.do("PUT", miniAppActivationPath(communeIDFake, oldAppFake), `{"active":false,"reason":"  Xã ngừng dùng app riêng  "}`, opCookie(t))
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"mini_apps"`) {
+		t.Fatalf("%d (%s)", rec.Code, rec.Body)
+	}
+	if h.w.target != communeIDFake || h.w.lastApp != oldAppFake || h.w.lastReason != "Xã ngừng dùng app riêng" ||
+		h.w.actor.Code != opCodeFake || h.w.actor.IP == "" {
+		t.Errorf("target %q app %q reason %q actor %+v", h.w.target, h.w.lastApp, h.w.lastReason, h.w.actor)
 	}
 }
 
-func TestMiniAppActivationRefusals(t *testing.T) {
+func TestMiniAppRemovalRefusals(t *testing.T) {
 	path := miniAppActivationPath(communeIDFake, oldAppFake)
-	on := `{"active":true,"reason":"Bật lại"}`
+	off := `{"active":false,"reason":"Gỡ"}`
 	for _, c := range []struct {
 		name, path, body string
 		storeErr         error
@@ -113,14 +108,16 @@ func TestMiniAppActivationRefusals(t *testing.T) {
 		code             string
 	}{
 		{"active absent", path, `{"reason":"x"}`, nil, 400, "invalid_body"},
+		// Reactivation was withdrawn (ADR 0070 §Sửa đổi 05/10/2026 #2) — refused whatever the reason.
+		{"reactivation", path, `{"active":true,"reason":"Bật lại"}`, nil, 422, "mini_app_reactivation_removed"},
+		{"reactivation without reason", path, `{"active":true}`, nil, 422, "mini_app_reactivation_removed"},
 		{"reason blank", path, `{"active":false,"reason":"  "}`, nil, 422, "invalid_reason"},
-		{"App ID malformed", miniAppActivationPath(communeIDFake, "x"), on, nil, 404, "mini_app_not_found"},
-		{"commune id malformed", miniAppActivationPath("nope", oldAppFake), on, nil, 404, "commune_not_found"},
+		{"App ID malformed", miniAppActivationPath(communeIDFake, "x"), off, nil, 404, "mini_app_not_found"},
+		{"commune id malformed", miniAppActivationPath("nope", oldAppFake), off, nil, 404, "commune_not_found"},
 		// Another commune's App ID: the store answers ErrMiniAppNotInCommune — the SAME 404 as unknown.
-		{"App ID of another commune", path, on, store.ErrMiniAppNotInCommune, 404, "mini_app_not_found"},
-		{"another app already running", path, on, store.ErrMiniAppAlreadyRunning, 409, "mini_app_already_running"},
-		{"commune inactive", path, on, store.ErrCommuneInactive, 409, "commune_inactive"},
-		{"unknown commune", path, on, store.ErrCommuneNotFound, 404, "commune_not_found"},
+		{"App ID of another commune", path, off, store.ErrMiniAppNotInCommune, 404, "mini_app_not_found"},
+		{"commune inactive", path, off, store.ErrCommuneInactive, 409, "commune_inactive"},
+		{"unknown commune", path, off, store.ErrCommuneNotFound, 404, "commune_not_found"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			h := miniAppHarness(t)
@@ -129,10 +126,26 @@ func TestMiniAppActivationRefusals(t *testing.T) {
 			if rec.Code != c.want || !strings.Contains(rec.Body.String(), `"code":"`+c.code+`"`) {
 				t.Fatalf("status %d body %s; want %d %s", rec.Code, rec.Body, c.want, c.code)
 			}
-			if c.storeErr == nil && h.w.lastState != nil {
+			if c.storeErr == nil && h.w.target != "" {
 				t.Error("a request refused at the edge reached the writer")
 			}
 		})
+	}
+}
+
+// An App ID removed earlier can never be bound again — the operator is told why, in words.
+func TestAttachOrReplaceWithRemovedAppID(t *testing.T) {
+	h := miniAppHarness(t)
+	h.w.err = store.ErrMiniAppRemoved
+	for _, c := range []struct{ method, path, body string }{
+		{"POST", "/api/v1/communes/" + communeIDFake + "/mini-apps", `{"app_id":"` + newAppFake + `"}`},
+		{"POST", replacementPath(communeIDFake, oldAppFake), `{"new_app_id":"` + newAppFake + `","reason":"Đổi"}`},
+	} {
+		rec := h.do(c.method, c.path, c.body, opCookie(t))
+		if rec.Code != 409 || !strings.Contains(rec.Body.String(), `"code":"mini_app_removed"`) ||
+			!strings.Contains(rec.Body.String(), "không gắn lại được") {
+			t.Errorf("%s %s: %d %s", c.method, c.path, rec.Code, rec.Body)
+		}
 	}
 }
 

@@ -21,6 +21,9 @@ type CommuneReader interface {
 	ListCommunes(ctx context.Context, req page.Request) (page.Result[domain.Commune], error)
 	Commune(ctx context.Context, id string) (domain.Commune, []domain.CommuneMiniApp, error)
 	Provinces(ctx context.Context) ([]domain.Province, error)
+	// HeldMiniApp: is or WAS appID a dedicated App ID of commune id (soft-deleted rows included) —
+	// for retiring a secret left live under a removed App ID only (operator_mini_app_secrets.go).
+	HeldMiniApp(ctx context.Context, id, appID string) (bool, error)
 }
 
 // CommuneWriter is the registry write side (*store.RegistryWriter), plus the display copy of the
@@ -34,7 +37,7 @@ type CommuneWriter interface {
 	SetActivation(ctx context.Context, active bool, reason string, by domain.OperatorActor) (bool, []string, error)
 	AttachMiniApp(ctx context.Context, appID, note string, by domain.OperatorActor) (domain.CommuneMiniApp, error)
 	ReplaceMiniApp(ctx context.Context, oldAppID, newAppID, reason string, by domain.OperatorActor) (domain.CommuneMiniApp, error)
-	SetMiniAppActivation(ctx context.Context, appID string, active bool, reason string, by domain.OperatorActor) (bool, error)
+	RemoveMiniApp(ctx context.Context, appID, reason string, by domain.OperatorActor) (bool, error)
 	// RecordMiniAppSecretForward writes the commune's trail row for a secret act identity ACCEPTED
 	// (operator_mini_app_secrets.go). Its own transaction: the act itself is identity's write.
 	RecordMiniAppSecretForward(ctx context.Context, f domain.SecretForward, by domain.OperatorActor) error
@@ -64,6 +67,9 @@ type miniAppView struct {
 	Active    bool      `json:"active"`
 	CreatedAt time.Time `json:"created_at"`
 	CreatedBy string    `json:"created_by"`
+	// Secret is set on the commune detail (and on every answer that re-reads it); absent on the
+	// attach answer, which shows one row just created. See secretStatusView.
+	Secret *secretStatusView `json:"secret,omitempty"`
 }
 
 type communeDetailView struct {
@@ -73,6 +79,11 @@ type communeDetailView struct {
 	Active   bool          `json:"active"`
 	Domains  []string      `json:"domains"`
 	MiniApps []miniAppView `json:"mini_apps"`
+	// UnboundSecrets: settings identity still holds LIVE in this commune under an App ID the commune
+	// no longer binds — an automatic retirement after a replacement/removal that did not complete
+	// (ADR 0070 #4). The console offers DELETE …/mini-apps/{app_id}/secret for each. null when the
+	// statuses could not be read ("khong_ro" on every app), [] when there are none.
+	UnboundSecrets []unboundSecretView `json:"unbound_secrets"`
 }
 
 type provinceView struct {
@@ -140,12 +151,25 @@ func toMiniAppView(a domain.CommuneMiniApp) miniAppView {
 		CreatedAt: a.CreatedAt.UTC(), CreatedBy: a.CreatedBy}
 }
 
-func toDetailView(c domain.Commune, apps []domain.CommuneMiniApp) communeDetailView {
+func toDetailView(c domain.Commune, apps []domain.CommuneMiniApp, st secretStatuses) communeDetailView {
 	v := toCommuneView(c)
 	out := communeDetailView{ID: v.ID, Name: v.Name, Province: v.Province, Active: v.Active,
 		Domains: v.Domains, MiniApps: []miniAppView{}}
+	bound := map[string]bool{}
 	for _, a := range apps {
-		out.MiniApps = append(out.MiniApps, toMiniAppView(a))
+		mv := toMiniAppView(a)
+		s := st.view(a.AppID)
+		mv.Secret = &s
+		out.MiniApps = append(out.MiniApps, mv)
+		bound[a.AppID] = true
+	}
+	if st.known {
+		out.UnboundSecrets = []unboundSecretView{}
+		for _, s := range st.list {
+			if !bound[s.AppID] {
+				out.UnboundSecrets = append(out.UnboundSecrets, unboundSecretView{AppID: s.AppID, Secret: st.view(s.AppID)})
+			}
+		}
 	}
 	return out
 }
@@ -155,6 +179,7 @@ func toDetailView(c domain.Commune, apps []domain.CommuneMiniApp) communeDetailV
 const (
 	msgInternal        = "Đã xảy ra lỗi. Vui lòng thử lại."
 	msgCommuneNotFound = "Không tìm thấy xã."
+	msgNoReactivation  = "Không bật lại được App ID đã gỡ: App ID đã gỡ không dùng lại được. Muốn xã có Mini App riêng, gắn một App ID mới."
 )
 
 // writeRegistryError maps a store/domain error to the one error shape. Unknown errors are 500 and
@@ -177,6 +202,8 @@ func (h *operatorHandlers) writeRegistryError(w http.ResponseWriter, r *http.Req
 		store.ErrMiniAppInactive: {http.StatusConflict, "mini_app_inactive", "App ID này đã tắt."},
 		store.ErrMiniAppAlreadyRunning: {http.StatusConflict, "mini_app_already_running",
 			"Xã đã có một Mini App riêng đang chạy. Dùng thao tác đổi App ID."},
+		store.ErrMiniAppRemoved: {http.StatusConflict, "mini_app_removed",
+			"App ID này đã bị gỡ trước đây nên không gắn lại được, kể cả cho chính xã đã dùng nó. Đăng ký Mini App mới trên Zalo rồi gắn App ID mới."},
 		store.ErrCommuneSucceeded: {http.StatusConflict, "commune_succeeded",
 			"Xã đã được sáp nhập hoặc chia tách vào đơn vị khác, không mở lại hoạt động được."},
 		domain.ErrCommuneHostInvalid:  {http.StatusUnprocessableEntity, "invalid_domain", "Tên miền không hợp lệ."},
@@ -213,13 +240,16 @@ func targetCommune(w http.ResponseWriter, r *http.Request) (context.Context, str
 }
 
 // respondCommune re-reads the commune after a write, so the response is what the registry now holds.
+// The secret statuses are read in afterWrite mode: the write has committed, so no answer of identity
+// may turn this response into a refusal.
 func (h *operatorHandlers) respondCommune(w http.ResponseWriter, r *http.Request, id string, status int) {
 	c, apps, err := h.d.Registry.Commune(r.Context(), id)
 	if err != nil {
 		h.writeRegistryError(w, r, err)
 		return
 	}
-	writeJSON(w, status, toDetailView(c, apps))
+	st, _ := h.readSecretStatuses(w, r, id, true)
+	writeJSON(w, status, toDetailView(c, apps, st))
 }
 
 // --- reads ----------------------------------------------------------------------------------------
@@ -248,7 +278,16 @@ func (h *operatorHandlers) getCommune(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	h.respondCommune(w, r, id, http.StatusOK)
+	c, apps, err := h.d.Registry.Commune(r.Context(), id)
+	if err != nil {
+		h.writeRegistryError(w, r, err)
+		return
+	}
+	st, ok := h.readSecretStatuses(w, r, id, false)
+	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, toDetailView(c, apps, st))
 }
 
 func (h *operatorHandlers) listProvinces(w http.ResponseWriter, r *http.Request) {
@@ -484,9 +523,12 @@ func (h *operatorHandlers) replaceMiniApp(w http.ResponseWriter, r *http.Request
 	h.respondCommuneAfterChange(w, r, id, http.StatusCreated, &retired, problem)
 }
 
-// setMiniAppActivation detaches (active=false) or reactivates (active=true) one of the commune's
-// dedicated apps (ADR 0070 #2, #3). Nothing to forget in a cache: Directory.MiniApp has none.
-func (h *operatorHandlers) setMiniAppActivation(w http.ResponseWriter, r *http.Request) {
+// removeMiniApp is "Gỡ khỏi xã" (ADR 0070 #2 as amended 05/10/2026): SOFT-DELETES one of the
+// commune's dedicated apps. The route keeps its shape, PUT …/activation {active, reason}, so the
+// console's removal call is unchanged; only `active: false` is accepted. `active: true` —
+// reactivation — was withdrawn by the owner and is refused with 422 before the store is reached.
+// Nothing to forget in a cache: Directory.MiniApp has none.
+func (h *operatorHandlers) removeMiniApp(w http.ResponseWriter, r *http.Request) {
 	ctx, id, ok := targetCommune(w, r)
 	if !ok {
 		return
@@ -503,21 +545,21 @@ func (h *operatorHandlers) setMiniAppActivation(w http.ResponseWriter, r *http.R
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_body", msgInvalidBody, "")
 		return
 	}
+	if *b.Active {
+		httpx.WriteError(w, http.StatusUnprocessableEntity, "mini_app_reactivation_removed", msgNoReactivation, "")
+		return
+	}
 	reason, err := domain.ValidateReason(norm.NFC.String(b.Reason))
 	if err != nil {
 		h.writeRegistryError(w, r, err)
 		return
 	}
-	if _, err := h.d.Writer.SetMiniAppActivation(ctx, appID, *b.Active, reason, actorOf(r)); err != nil {
+	if _, err := h.d.Writer.RemoveMiniApp(ctx, appID, reason, actorOf(r)); err != nil {
 		h.writeRegistryError(w, r, err)
 		return
 	}
-	if *b.Active {
-		h.respondCommuneAfterChange(w, r, id, http.StatusOK, nil, "")
-		return
-	}
-	// Detached (or already off — a repeat is how a retirement that failed the first time is retried
-	// from the same dialog). Retired after the commit, as in replaceMiniApp.
+	// Removed (or already removed — a repeat is how a retirement that failed the first time is
+	// retried from the same dialog). Retired after the commit, as in replaceMiniApp.
 	retired, problem := h.retireAfterUnbind(ctx, r, appID, reason)
 	h.respondCommuneAfterChange(w, r, id, http.StatusOK, &retired, problem)
 }
