@@ -355,15 +355,6 @@ export const COMMUNE_APP_SESSION = {
     `Zalo hoặc hệ thống của xã đang bận, nên ${task}. Hãy chờ một lát rồi bấm “Đồng ý chia sẻ số điện thoại” lần nữa.`,
   other_commune: (task: string) =>
     `Ứng dụng chưa xác nhận được bạn đang làm việc với đúng xã ghi ở đầu màn hình, nên ${task}. Hãy đến Bộ phận tiếp nhận của Ủy ban nhân dân xã, hoặc gọi điện thoại cho xã.`,
-  /**
-   * The build whose gate opens at once (`createSessionGate` `openAtOnce`): Zalo shows no dialog and nothing
-   * is shared, so the retry button is "Thử lại" and the two sentences that name a button name that one.
-   */
-  retry: "Thử lại",
-  retry_at_once: (task: string) =>
-    `Chưa kết nối được với hệ thống của xã vì mạng yếu hoặc hệ thống đang bận, nên ${task}. Hãy kiểm tra mạng rồi bấm “Thử lại”.`,
-  wait_at_once: (task: string) =>
-    `Hệ thống của xã đang bận, nên ${task}. Hãy chờ một lát rồi bấm “Thử lại”.`,
 } as const;
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
@@ -1028,13 +1019,13 @@ export const XA_PA = {
   // 02/10/2026 (ADR 0047 row "Ảnh hiện trường khi gửi phản ánh"): photos are OPTIONAL, at most 5, images only —
   // replacing SRS M4.2's "bắt buộc … ảnh/video". `anh_bat_buoc` keeps its name (rule 12 #3), not its meaning.
   anh_bat_buoc: "Ảnh hiện trường (không bắt buộc, tối đa 5 ảnh)",
-  // Where the form has NO photo buttons (the `--demo` build, like the location button; tests).
+  // Where the form has NO photo buttons (no picker injected — tests).
   anh_sap_co: "Bà con mô tả thật rõ sự việc ở ô trên. Ứng dụng này chưa gửi kèm được ảnh.",
   vi_tri_bat_buoc: "Vị trí trên bản đồ (bắt buộc)",
   // 29/09/2026: the app now takes the current location (button under the address box); a MAP pin is still
   // not there, and a location is still not enforced (ADR 0050 #9 — the server keeps it optional, b5d17bb).
   vi_tri_sap_co: "Bà con bấm “Lấy vị trí hiện tại” ở dưới để gửi kèm vị trí, và ghi rõ nơi xảy ra ở ô dưới.",
-  // When the form has NO location button (the `--demo` build, owner 01/10/2026; outside Zalo): the sentence
+  // When the form has NO location button (no location bridge injected; outside Zalo): the sentence
   // above would point at a button that is not there. Same next step, without it.
   location_without_button: "Bà con ghi rõ nơi xảy ra ở ô dưới: thôn, tổ, đường, số nhà.",
   so_dien_thoai: "Số điện thoại",

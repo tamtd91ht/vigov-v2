@@ -43,7 +43,6 @@ import {
 } from "../api/hop-dong-phan-anh";
 import { type LanGui, taoLanGui } from "../api/lan-gui"; // vi-name-ok: existing export, not renamed (rule 12 #3)
 import type { ReopenWithPhone } from "../api/mo-phien-vigov";
-import { DEMO_BUILD, DEMO_CITIZEN_PHONE } from "../../lib/demo-build";
 import { thoiDiemVN } from "../../lib/thoi-diem";
 
 import { BieuTuong, type TenBieuTuong } from "./BieuTuong"; // vi-name-ok: existing exported type, imported not renamed
@@ -932,8 +931,7 @@ export function blankForm(nameFromEntry: string | null): NhapPhieu {
     noi_dung: "",
     dia_chi: "",
     ho_ten: nameFromEntry ?? "",
-    // Empty in every build but `--demo`, whose fixed identity pre-fills its number (ADR 0047 §6, 01/10/2026).
-    dien_thoai: DEMO_BUILD ? DEMO_CITIZEN_PHONE : "",
+    dien_thoai: "",
     // Gửi ẩn danh là tuỳ chọn của bà con (SRS M4.2, ADR 0050 #3): bật thì không gửi họ tên, số điện thoại.
     an_danh: false,
   };
@@ -1044,8 +1042,8 @@ export function CommuneSendScreen(props: {
   /** The location exchange, injected by the shell; absent = no location button (outside Zalo, tests). */
   getSceneLocation?: GetSceneLocation;
   /**
-   * Zalo's camera and photo picker, injected by the shell (`AppRieng` only); absent = no photo buttons (the
-   * `--demo` build, tests). The photos go up AFTER the 201, by the lookup code — never inside the send.
+   * Zalo's camera and photo picker, injected by the shell (`AppRieng` only); absent = no photo buttons
+   * (tests). The photos go up AFTER the 201, by the lookup code — never inside the send.
    */
   pickScenePhotos?: PickScenePhotos;
   /** Draft kept on the phone (ADR 0050 #7) — commune app only. Absent: no draft at all. */

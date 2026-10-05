@@ -29,7 +29,6 @@ import {
   type CommuneAppLoginResult,
   type KetQuaMoPhienQuaCau,
   moPhienCongDanQuaCau,
-  openCommuneAppSessionWithDemoIdentity,
   openCommuneAppSessionWithPhone,
   reopenCitizenSessionWithPhone,
   type ReopenWithPhoneBridgeResult,
@@ -56,7 +55,6 @@ import {
   type ScreenId,
 } from "./features/company-intro/screens";
 import { cuonToiMoc } from "./lib/cuon-toi";
-import { DEMO_BUILD } from "./lib/demo-build";
 import { type KetQuaDo, thamSoMoApp, thamSoXa } from "./lib/launch-params";
 import { XA_CO_DINH } from "./lib/xa-co-dinh";
 
@@ -290,20 +288,14 @@ export function AppRieng({ ten_mien }: { ten_mien: string }) {
   // `feedbackDraftStore` goes to THIS app only (ADR 0050 #7): a separate App ID, a separate origin. The
   // shared app below never receives it — `ranh-gioi-hai-nua.test.ts` §3b reads `AppChung`'s body for it.
   //
-  // NO LOCATION BUTTON IN THE `--demo` BUILD (owner 01/10/2026): the exchange calls `getAccessToken` and
-  // `getLocation`, and Zalo refuses both to an app it has not approved yet — the button could only fail. No
-  // fake coordinates instead: the address field stays, and the citizen writes where it happened. Not
-  // injecting the function is what removes the control (`CommuneSendScreen`: absent = no button).
-  //
   // SCENE PHOTOS (owner 02/10/2026): THIS app only — `AppChung` below never receives `pickScenePhotos`
-  // (`ranh-gioi-hai-nua.test.ts`). Same `--demo` stance as the location button: Zalo refuses the camera and
-  // the picker to an app it has not approved, so the button could only fail there.
+  // (`ranh-gioi-hai-nua.test.ts`).
   return (
     <TrangXa
       ten_mien={ten_mien}
       lay_ten={layTenChoXa}
-      getSceneLocation={DEMO_BUILD ? undefined : getCommuneSceneLocation}
-      pickScenePhotos={DEMO_BUILD ? undefined : pickCommuneScenePhotos}
+      getSceneLocation={getCommuneSceneLocation}
+      pickScenePhotos={pickCommuneScenePhotos}
       draftStore={feedbackDraftStore}
       openSession={openCommuneAppSession}
       openVideo={openCommuneVideo}
@@ -375,20 +367,14 @@ export function toCommuneAppSessionResult(result: CommuneAppLoginResult): Commun
 }
 
 /**
- * `DEMO_BUILD` (ADR 0047 §6, 01/10/2026): the identity is the server's fixed demo identity — no Zalo
- * identity call at all (no `getAccessToken`, no `getPhoneNumber`), the `demoIdentity` body. Same result
- * table: everything after the session is real.
- *
- * BOTH GO TO ViGov IDENTITY (ADR 0066), not `vihat-miniapp`: `identityHost` is handed in by the state half
- * (`cong-dan/api/mo-phien-vigov.ts`, from its address map), because this shell may not import that map. The
- * shared app's QR-path openers near the top of this file are untouched and still go to `vihat-miniapp`.
+ * Always the real identity path — Zalo's `getAccessToken` + `getPhoneNumber`, exchanged by ViGov identity
+ * (owner 05/10/2026: there is no other build). It GOES TO ViGov IDENTITY (ADR 0066), not `vihat-miniapp`:
+ * `identityHost` is handed in by the state half (`cong-dan/api/mo-phien-vigov.ts`, from its address map),
+ * because this shell may not import that map. The shared app's QR-path openers near the top of this file are
+ * untouched and still go to `vihat-miniapp`.
  */
 const openCommuneAppSession: OpenCommuneAppSession = async (identityHost) =>
-  toCommuneAppSessionResult(
-    await (DEMO_BUILD
-      ? openCommuneAppSessionWithDemoIdentity(identityHost)
-      : openCommuneAppSessionWithPhone(identityHost)),
-  );
+  toCommuneAppSessionResult(await openCommuneAppSessionWithPhone(identityHost));
 
 /**
  * THE LOCATION BRIDGE, for BOTH apps — the shell builds it, the state half only declares its type

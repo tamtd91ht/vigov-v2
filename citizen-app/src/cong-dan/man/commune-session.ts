@@ -20,11 +20,6 @@
  *
  * PURE — no React, so tests step it without a DOM (the same reason as `createPhoneVerification`).
  *
- * `openAtOnce` (the `--demo` build only, ADR 0047 §6 row of 01/10/2026): that build's opener asks Zalo for
- * nothing — there is no phone dialog — so the explanation written for that dialog has nothing to explain,
- * and `require` opens the session at once. Every outcome after that is handled as in every build; only the
- * retry button's words differ (`sessionGateRetryLabel`), since no "Đồng ý chia sẻ" act exists there.
- *
  * EVERY OUTCOME HAS AN EXIT: `reset` works at any time (including while an open runs), every `ket-qua`
  * screen carries "Về trang chủ", and a retry only where a new tap can change the answer.
  */
@@ -77,7 +72,6 @@ export function createSessionGate(
   open: OpenCommuneAppSession | undefined,
   communeName: () => string,
   setState: (s: SessionGateState | null) => void,
-  openAtOnce = false,
 ): SessionGate {
   let pending: (() => void) | null = null;
   let finalOutcome: SessionGateStop | null = null;
@@ -115,10 +109,6 @@ export function createSessionGate(
         // second exchange — and never a silent tap.
         waiting = true;
         setState({ kieu: "dang-mo" });
-        return;
-      }
-      if (openAtOnce) {
-        void gate.allow();
         return;
       }
       setState({ kieu: "hoi" });
@@ -191,14 +181,6 @@ export function sessionGateOffersRetry(outcome: SessionGateStop, zalo?: ZaloFail
 }
 
 /**
- * The retry button's words. With `atOnce` (the `--demo` build) nothing is shared and no Zalo dialog opens,
- * so "Đồng ý chia sẻ số điện thoại" would name an act that does not happen: the button is "Thử lại".
- */
-export function sessionGateRetryLabel(atOnce: boolean): string {
-  return atOnce ? COMMUNE_APP_SESSION.retry : PHONE_VERIFICATION.allow;
-}
-
-/**
  * The sentence for an outcome, naming what did not happen on this screen. Never a code, in the sentence:
  * when `zalo` is given (with `thu-lai`) the sentence names the missing Zalo permission, and ZALO's code goes
  * on the separate `zaloSupportCode` line the screen renders under it.
@@ -207,15 +189,11 @@ export function sessionGateMessage(
   outcome: SessionGateStop,
   task: PhoneVerificationTask,
   zalo?: ZaloFailure,
-  atOnce = false,
 ): string {
   const t = PHONE_VERIFICATION_TASK[task];
   if (outcome === "thu-lai" && zalo !== undefined) {
     return PHONE_VERIFICATION.zalo_failed(zaloFailureSentence(zalo), t, zalo.transient);
   }
-  // `atOnce`: the two sentences that name the retry button name the one this build shows (`sessionGateRetryLabel`).
-  if (atOnce && outcome === "thu-lai") return COMMUNE_APP_SESSION.retry_at_once(t);
-  if (atOnce && outcome === "cho-lat") return COMMUNE_APP_SESSION.wait_at_once(t);
   switch (outcome) {
     case "tu-choi":
       return PHONE_VERIFICATION.refused(t);

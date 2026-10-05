@@ -55,7 +55,6 @@ import { diaChiViGov } from "./cong-dan/api/dia-chi-vigov";
 import { DUONG_DAN_PHAN_ANH_CUA_TOI } from "./cong-dan/api/hop-dong-phan-anh";
 import { NHAN_KENH_CONG_DAN } from "./cong-dan/man/KenhCongDan";
 import { CUA_TOI, KENH_CHUA_MO, KHAN_CAP, TRA_CUU } from "./cong-dan/man/noi-dung";
-import { DEMO_CITIZEN_NAME, DEMO_CITIZEN_PHONE } from "./lib/demo-build";
 
 /**
  * WHAT THIS CATCHES THAT NOTHING ELSE DOES:
@@ -584,80 +583,33 @@ describe("what the submission says the app is called", () => {
 });
 
 /**
- * THE `--demo` BUILD (`deploy.mjs --vao-thang --demo`, owner 01/10/2026, ADR 0047 §6 — dropped at submission).
+ * NO TRIAL WORDING IN THE APP. The owner, verbatim (01/10/2026): "Không có 1 dòng thông báo demo hay trải
+ * nghiệm nào trong ứng dụng cả" — measured on a REAL build.
  *
- * The owner, verbatim: "bỏ khái niệm demo ra khỏi app đi dù deploy với môi trường hay tham số nào. Không có 1
- * dòng thông báo demo hay trải nghiệm nào trong ứng dụng cả". So BOTH builds are measured for the words, on a
- * REAL build each — and the `--demo` one must still carry its fixed identity, or "no demo word" would be green
- * because the flag had silently stopped doing anything.
- *
- * WHAT COUNTS: "demo" as a WORD, anywhere in the bundle (`\bdemo\b`, any case). Measured 01/10/2026: the
- * normal bundle has no "demo" at all, and the `--demo` one only `demoIdentity` — the login body's wire key,
- * which no citizen reads and which is not a word on its own. Vietnamese phrases are searched in the whole
- * text: nothing but UI text is written in Vietnamese.
+ * WHAT COUNTS: "demo" as a WORD, anywhere in the bundle (`\bdemo\b`, any case), and the Vietnamese phrases
+ * in the whole text: nothing but UI text is written in Vietnamese.
  *
  * ONE EXEMPTION, NAMED: ViHAT's published eSMS line "…nâng cao trải nghiệm khách hàng đa kênh" (`SOLUTIONS`,
  * pinned verbatim by `company-profile.test.ts` as a quote of a real company). It is "customer experience" in
- * the commercial half, not a demo or trial notice; rewording a published quote is not this card's call.
+ * the commercial half, not a trial notice; rewording a published quote is not this card's call.
  */
 const PUBLISHED_QUOTES = SOLUTIONS.flatMap((s) => [s.headline, s.note ?? ""]).filter((s) => s !== "");
 
-function demoWordsIn(bundle: string): string[] {
+function trialWordsIn(bundle: string): string[] {
   const text = PUBLISHED_QUOTES.reduce((t, q) => t.split(q).join(" "), bundle);
-  return [...text.matchAll(/.{0,40}(?:\bdemo\b|trình diễn|trải nghiệm|chế độ demo).{0,40}/gi)].map((m) => m[0]);
+  return [...text.matchAll(/.{0,40}(?:\bdemo\b|trình diễn|trải nghiệm).{0,40}/gi)].map((m) => m[0]);
 }
 
-describe("the `--demo` build: a fixed identity, and not one demo word in either build", () => {
-  let demo = "";
-
-  beforeAll(async () => {
-    const before = { VIGOV_XA_CO_DINH: process.env["VIGOV_XA_CO_DINH"], VIGOV_DEMO: process.env["VIGOV_DEMO"] };
-    // A made-up domain: the build only needs one to bake in; no real commune is named in a test build.
-    process.env["VIGOV_XA_CO_DINH"] = "xa-thu.vigov.example";
-    process.env["VIGOV_DEMO"] = "1";
-    try {
-      demo = toanVan(await dungBan());
-    } finally {
-      for (const [k, v] of Object.entries(before)) {
-        if (v === undefined) delete process.env[k];
-        else process.env[k] = v;
-      }
-    }
-  }, 120_000);
-
-  it("the measure measures: it finds a demo word when there is one, and the exemption is real", () => {
-    // Without this, a broken pattern would find nothing and both "none" cases below would be green.
-    expect(demoWordsIn("x=`Chế độ demo · Bản trình diễn`")).toHaveLength(1);
-    expect(demoWordsIn("a={demoIdentity:!0}")).toEqual([]);
+describe("not one trial word in the bundle", () => {
+  it("the measure measures: it finds such a word when there is one, and the exemption is real", () => {
+    // Without this, a broken pattern would find nothing and the "none" case below would be green.
+    expect(trialWordsIn("x=`Bản trình diễn`")).toHaveLength(1);
     expect(PUBLISHED_QUOTES.some((q) => q.includes("trải nghiệm"))).toBe(true);
     expect(ban.length).toBeGreaterThan(100_000);
-    expect(demo).toContain(NHAN_KENH_CONG_DAN);
   });
 
-  it.each([
-    ["normal", () => ban],
-    ["--demo", () => demo],
-  ])("%s build: no 'demo', 'trình diễn' or 'trải nghiệm' anywhere", (_, bundle) => {
-    const hits = demoWordsIn(bundle());
-    expect(hits, `the bundle still carries a demo word: ${hits.slice(0, 3).join(" | ")}`).toEqual([]);
-  });
-
-  it("the --demo build carries the fixed identity and the login body without a phone token", () => {
-    expect(demo, "the fixed name is gone — the flag no longer does anything").toContain(DEMO_CITIZEN_NAME);
-    expect(demo, "the fixed number is gone").toContain(DEMO_CITIZEN_PHONE);
-    expect(demo, "the demo login body is gone").toContain("demoIdentity");
-    // The demo login goes to identity too (ADR 0066): one call path, as in the normal build.
-    expect(demo.split(COMMUNE_APP_SESSION_PATH).length - 1).toBe(1);
-  });
-
-  it("the normal build carries none of it — unreachable is not enough, it is not there", () => {
-    expect(ban).not.toContain(DEMO_CITIZEN_NAME);
-    expect(ban).not.toContain("demoIdentity");
-  });
-
-  it("the connection log (connection-log.ts) is in the --demo build only", () => {
-    // Measured by the log's own tag, not by `console.warn`: the libraries (React, zmp-sdk) carry their own.
-    expect(demo, "the --demo build lost its connection log").toContain("[ViGov] kết nối lỗi");
-    expect(ban, "the guard stopped folding away — the log ships in the real app").not.toContain("[ViGov] kết nối lỗi");
+  it("no 'demo', 'trình diễn' or 'trải nghiệm' anywhere", () => {
+    const hits = trialWordsIn(ban);
+    expect(hits, `the bundle still carries a trial word: ${hits.slice(0, 3).join(" | ")}`).toEqual([]);
   });
 });

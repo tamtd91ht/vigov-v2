@@ -652,15 +652,10 @@ npm run zmp:phat-hanh                               # APP CHUNG, BẢN PHÁT HÀ
 npm run zmp:deploy -- --domain=<tên-miền-xã>        # APP RIÊNG của xã ấy, bản thử nghiệm
 npm run zmp:phat-hanh -- --domain=<tên-miền-xã>     # APP RIÊNG của xã ấy, BẢN PHÁT HÀNH
 npm run zmp:phat-hanh -- --domain=<tên-miền-xã> --vao-thang   # APP RIÊNG mở THẲNG vào xã ấy
-npm run zmp:phat-hanh -- --domain=<tên-miền-xã> --vao-thang --demo   # … BẢN DEMO (chỉ trước khi nộp duyệt)
 ```
 
-`--demo` (chủ dự án chốt 01/10/2026, ADR 0047 §6, thay thiết kế 30/09; **bỏ cờ này trước khi nộp
-duyệt**): chỉ nhận cùng `--vao-thang`. Cờ chỉ thay NGUỒN DANH TÍNH: không gọi `getUserInfo` /
-`getPhoneNumber`, tên "Nguyễn Văn Hùng", ô số điện thoại điền sẵn `0900000000`, phiên mở bằng thân
-`{ appId, accessToken, demoIdentity: true }` (không `phoneToken`) — `vihat-miniapp` chỉ nhận thân ấy cho
-App ID có trong `DEMO_APP_IDS`. Mọi việc sau đó chạy thật tới máy chủ. Trong app **không một chữ demo
-nào**, ở mọi bản dựng; chỉ dòng kế hoạch trên terminal nói ra (`src/lib/demo-build.ts`).
+App riêng của xã luôn đăng nhập bằng đường thật (`getAccessToken` + `getPhoneNumber` → identity
+`POST /api/v1/citizen-sessions`); không còn bản dựng nào thay danh tính (chủ dự án, 05/10/2026).
 
 Tất cả đi qua `scripts/deploy.mjs`: dựng → `sync-config` → `deploy`. `--domain` chọn App ID ĐÍCH
 (tra trong `scripts/ung-dung-theo-ten-mien.mjs`). Tên miền không có trong bảng thì **DỪNG**, không
@@ -778,6 +773,6 @@ quyền gì**. Ngày có cầu phiên, thay bằng xã đọc từ phiên — **
 | `npm test` | Vitest — sự thật đã công bố, hình dạng bundle, sổ màn hình, bộ bóc tách vCard, các tính năng, kênh công dân, **và bundle đúng bằng thứ người duyệt đọc** |
 | `npm run zmp:sync` | Dựng rồi đồng bộ `app-config.json` theo trang đã dựng |
 | `npm run zmp:deploy [-- --domain=<tên-miền-xã>]` | App chung (hoặc app riêng của xã) → bản thử nghiệm |
-| `npm run zmp:phat-hanh [-- --domain=<tên-miền-xã> [--vao-thang [--demo]]]` | App chung (hoặc app riêng của xã) → **bản phát hành**, có in ra và đếm ngược 5 giây. `--vao-thang`: app riêng mở thẳng vào xã. `--demo`: danh tính cố định, không xin quyền Zalo — trước khi nộp duyệt |
+| `npm run zmp:phat-hanh [-- --domain=<tên-miền-xã> [--vao-thang]]` | App chung (hoặc app riêng của xã) → **bản phát hành**, có in ra và đếm ngược 5 giây. `--vao-thang`: app riêng mở thẳng vào xã |
 
 → Skills: `.claude/skills/zalo-miniapp-multi-tenant` · `.claude/skills/accessibility-elderly`

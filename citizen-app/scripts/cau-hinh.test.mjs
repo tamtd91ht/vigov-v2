@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { buildLabel, demoBuild, docCauHinh, kiemTenBien, TEN_BIEN_CHO_PHEP, TEP_LOCAL, xaCoDinh } from "./cau-hinh.mjs";
+import { buildLabel, docCauHinh, kiemTenBien, TEN_BIEN_CHO_PHEP, TEP_LOCAL, xaCoDinh } from "./cau-hinh.mjs";
 
 /**
  * CẤU HÌNH LÚC DỰNG — PHÉP KIỂM CỦA MỘT CÁI RÀO, KHÔNG PHẢI CỦA MỘT TIỆN ÍCH.
@@ -190,42 +190,6 @@ describe("xã cố định của bản dựng (`--vao-thang`, 27/09/2026)", () =
     expect(ma).toMatch(/delete env_dung\[BIEN_XA_CO_DINH\]/);
     expect(ma).toMatch(/if \(vao_thang\) env_dung\[BIEN_XA_CO_DINH\] = dich\.ten_mien;/);
     expect(ma).toMatch(/dung\(env_dung\)/);
-  });
-});
-
-describe("demo build of the commune app (`--vao-thang --demo`, owner 30/09/2026)", () => {
-  const COMMUNE = { VIGOV_XA_CO_DINH: "xa-a.vigov.example" };
-
-  it("unset (or blank) → false: every ordinary build is not a demo", () => {
-    expect(demoBuild({})).toBe(false);
-    expect(demoBuild({ ...COMMUNE, VIGOV_DEMO: "  " })).toBe(false);
-  });
-
-  it("\"1\" with a commune baked in → true", () => {
-    expect(demoBuild({ ...COMMUNE, VIGOV_DEMO: "1" })).toBe(true);
-  });
-
-  it("without VIGOV_XA_CO_DINH the BUILD STOPS — the shared app has no commune screens", () => {
-    expect(() => demoBuild({ VIGOV_DEMO: "1" })).toThrow(/--vao-thang/);
-  });
-
-  it.each(["true", "yes", "0", "2"])("VIGOV_DEMO=%s STOPS the build — only \"1\", only from deploy.mjs", (value) => {
-    expect(() => demoBuild({ ...COMMUNE, VIGOV_DEMO: value })).toThrow(/chỉ nhận "1"/);
-  });
-
-  it("set in `.env.local` → BLOCKED: one forgotten line would make every build on the machine a demo", () => {
-    expect(() => kiemTenBien("VIGOV_DEMO=1\n")).toThrow(/--demo/);
-  });
-
-  it("`deploy.mjs` removes it from the build environment and sets it only with `--demo`", () => {
-    const code = readFileSync(new URL("./deploy.mjs", import.meta.url), "utf8");
-    expect(code).toMatch(/delete env_dung\[DEMO_BUILD_VAR\]/);
-    expect(code).toMatch(/if \(demo\) env_dung\[DEMO_BUILD_VAR\] = "1";/);
-  });
-
-  it("`vite.config.ts` bakes it through `define`, next to the commune domain", () => {
-    const code = readFileSync(new URL("../vite.config.ts", import.meta.url), "utf8");
-    expect(code).toMatch(/__VIGOV_DEMO__: JSON\.stringify\(demoBuild\(\)\)/);
   });
 });
 

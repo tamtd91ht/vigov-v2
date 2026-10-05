@@ -31,8 +31,8 @@
  * là một khe để ai đó nhét phiếu phiên của `vihat-miniapp` vào, và phiếu ấy KHÔNG phải phiên ViGov.
  *
  * ⚠ KHÔNG `console.*`, KHÔNG IN THÂN YÊU CẦU HAY PHẢN HỒI. Chúng mang nội dung phản ánh, họ tên và
- * số điện thoại của người thật (luật 3, bất biến 1). A failed call is reported ONLY through
- * `connection-log.ts` — fixed shape, `--demo` build only, no body (owner, 01/10/2026).
+ * số điện thoại của người thật (luật 3, bất biến 1). A failed call is not logged at all: the screen's
+ * sentence for its branch (`man/noi-dung.ts`) is the whole report.
  */
 import {
   type CitizenField,
@@ -88,7 +88,6 @@ import {
   type XaTraDuoc,
 } from "./hop-dong-cong-khai";
 import type { LanGui } from "./lan-gui";
-import { type ConnectionRoute, describeThrown, hostOf, isNetworkFailure, logConnectionFailure } from "./connection-log";
 import { layPhienViGov } from "./phien-vigov";
 import { laTenMien } from "../../lib/launch-params";
 
@@ -181,6 +180,15 @@ function readRetryAfter(response: Response): number | null {
   return Number(raw.trim());
 }
 
+/**
+ * Whether a thrown value is the network failing — fetch's `TypeError`, the timeout's `AbortError` — rather than a
+ * broken body (`SyntaxError` from `response.json()`), which is the server's answer and so `loi-may-chu`.
+ */
+function isNetworkFailure(thrown: unknown): boolean {
+  const name = typeof thrown === "object" && thrown !== null ? (thrown as { name?: unknown }).name : undefined;
+  return name === "TypeError" || name === "AbortError";
+}
+
 /** Quá hạn chờ. Người dân đang cầm máy đứng chờ; thà nói "thử lại" sớm. */
 const HAN_CHO_MS = 20_000;
 
@@ -198,12 +206,12 @@ function moCong(dia_chi: string): { token: string; dia_chi: string } | NhanhKhon
  */
 async function goi<T>(
   dia_chi: string,
-  /** `token` VẮNG MẶT chỉ ở ba tuyến công khai — xem khối đầu tệp. `route` names the call in the log only. */
-  tuy_chon: { route: ConnectionRoute; method: "GET" | "POST"; token?: string; khoa?: string; than?: string },
+  /** `token` VẮNG MẶT chỉ ở ba tuyến công khai — xem khối đầu tệp. */
+  tuy_chon: { method: "GET" | "POST"; token?: string; khoa?: string; than?: string },
   doc: (than: unknown) => T | null,
   khi_404: NhanhKhongThanh,
 ): Promise<CallResult<T>> {
-  const kq = await callLogged(dia_chi, tuy_chon, doc, khi_404);
+  const kq = await callOnce(dia_chi, tuy_chon, doc, khi_404);
   // Unreachable: `refusals` is not set on this path, so `callOnce` never answers `refused` here.
   return kq.kieu === "refused" ? { kieu: "loi-may-chu" } : kq;
 }
@@ -211,45 +219,18 @@ async function goi<T>(
 /** `goi` for the photo routes: the server's refusal `code` comes back (`Refused`) instead of being folded. */
 async function goiWithRefusals<T>(
   dia_chi: string,
-  tuy_chon: { route: ConnectionRoute; method: "GET" | "POST"; token: string; khoa?: string; than?: string },
+  tuy_chon: { method: "GET" | "POST"; token: string; khoa?: string; than?: string },
   doc: (than: unknown) => T | null,
 ): Promise<CallResult<T> | Refused> {
-  return callLogged(dia_chi, { ...tuy_chon, refusals: true }, doc, { kieu: "khong-thay" });
+  return callOnce(dia_chi, { ...tuy_chon, refusals: true }, doc, { kieu: "khong-thay" });
 }
 
-/** One call, and the fixed-shape log line when it did not succeed (`connection-log.ts`). */
-async function callLogged<T>(
-  dia_chi: string,
-  tuy_chon: { route: ConnectionRoute; method: "GET" | "POST"; token?: string; khoa?: string; than?: string; refusals?: boolean },
-  doc: (than: unknown) => T | null,
-  khi_404: NhanhKhongThanh,
-): Promise<CallResult<T> | Refused> {
-  const startedAt = Date.now();
-  const trace: CallTrace = {};
-  const kq = await callOnce(dia_chi, tuy_chon, doc, khi_404, trace);
-  if (kq.kieu !== "xong") {
-    logConnectionFailure({
-      route: tuy_chon.route,
-      method: tuy_chon.method,
-      host: hostOf(dia_chi),
-      outcome: kq.kieu,
-      ...trace,
-      elapsed_ms: Date.now() - startedAt,
-    });
-  }
-  return kq;
-}
-
-/** What `callOnce` saw — a status and a thrown value's name, never a body (`connection-log.ts`). */
-type CallTrace = { status?: number; error?: string };
-
-/** `goi` without the log. */
+/** One call to ViGov — `goi` and `goiWithRefusals` both end here. */
 async function callOnce<T>(
   dia_chi: string,
   tuy_chon: { method: "GET" | "POST"; token?: string; khoa?: string; than?: string; refusals?: boolean },
   doc: (than: unknown) => T | null,
   khi_404: NhanhKhongThanh,
-  trace: CallTrace,
 ): Promise<CallResult<T> | Refused> {
   const bo_dieu_khien = new AbortController();
   const dong_ho = setTimeout(() => bo_dieu_khien.abort(), HAN_CHO_MS);
@@ -266,8 +247,6 @@ async function callOnce<T>(
       body: tuy_chon.than,
       signal: bo_dieu_khien.signal,
     });
-    trace.status = tra_loi.status;
-
     const s = tra_loi.status;
     if (tuy_chon.refusals === true && s >= 400 && s !== 401 && s !== 403 && s !== 429) {
       return { kieu: "refused", status: s, code: await readErrorCode(tra_loi) };
@@ -282,7 +261,6 @@ async function callOnce<T>(
         try {
           body = await tra_loi.json();
         } catch (err) {
-          trace.error = describeThrown(err);
           // …but a body CUT OFF mid-read (the 20 s abort, a dropped link) is the network after all.
           return isNetworkFailure(err) ? { kieu: "loi-mang" } : { kieu: "loi-may-chu" };
         }
@@ -320,8 +298,7 @@ async function callOnce<T>(
       default:
         return { kieu: "loi-may-chu" };
     }
-  } catch (err) {
-    trace.error = describeThrown(err);
+  } catch {
     return { kieu: "loi-mang" };
   } finally {
     clearTimeout(dong_ho);
@@ -353,7 +330,7 @@ export async function citizenReportFields(): Promise<
   const cong = moCong(citizenFieldsAddress());
   if ("kieu" in cong) return cong;
   const kq = withoutRateLimit(
-    await goi(cong.dia_chi, { route: "report-fields", method: "GET", token: cong.token }, readCitizenFields, { kieu: "loi-may-chu" }),
+    await goi(cong.dia_chi, { method: "GET", token: cong.token }, readCitizenFields, { kieu: "loi-may-chu" }),
   );
   return kq.kieu === "xong" ? { kieu: "xong", fields: kq.gia_tri } : kq;
 }
@@ -374,7 +351,7 @@ export async function guiPhanAnh(lan: LanGui): Promise<KetQuaGoi> {
     withoutRateLimit(
       await goi(
         cong.dia_chi,
-        { route: "send-petition", method: "POST", token: cong.token, khoa: lan.khoa, than: lan.than },
+        { method: "POST", token: cong.token, khoa: lan.khoa, than: lan.than },
         docPhieu,
         // Tuyến gửi không có 404 trong hợp đồng; gặp nó là tuyến chưa được định tuyến ở cụm.
         { kieu: "loi-may-chu" },
@@ -396,7 +373,7 @@ export async function traCuuPhieu(ma_tra_cuu: string): Promise<KetQuaGoi> {
   if (ma === "") return { kieu: "khong-thay" };
   return thanhPhieu(
     withoutRateLimit(
-      await goi(cong.dia_chi, { route: "lookup-petition", method: "GET", token: cong.token }, docPhieu, { kieu: "khong-thay" }),
+      await goi(cong.dia_chi, { method: "GET", token: cong.token }, docPhieu, { kieu: "khong-thay" }),
     ),
   );
 }
@@ -414,7 +391,7 @@ export async function phanAnhCuaToi(con_tro: string): Promise<KetQuaDanhSach> {
   const cong = moCong(diaChiDanhSach(con_tro));
   if ("kieu" in cong) return cong;
   const kq = withoutRateLimit(
-    await goi(cong.dia_chi, { route: "my-petitions", method: "GET", token: cong.token }, docTrangPhieuCuaToi, {
+    await goi(cong.dia_chi, { method: "GET", token: cong.token }, docTrangPhieuCuaToi, {
       kieu: "loi-may-chu",
     }),
   );
@@ -446,7 +423,7 @@ export async function ratePetition(ma_tra_cuu: string, attempt: LanGui): Promise
     withoutRateLimit(
       await goi(
         cong.dia_chi,
-        { route: "rate-petition", method: "POST", token: cong.token, khoa: attempt.khoa, than: attempt.than },
+        { method: "POST", token: cong.token, khoa: attempt.khoa, than: attempt.than },
         docPhieu,
         { kieu: "khong-thay" },
       ),
@@ -477,7 +454,7 @@ export async function requestScenePhotoSlot(
   if (ma === "") return { kieu: "khong-thay" };
   return goiWithRefusals(
     cong.dia_chi,
-    { route: "photo-slot", method: "POST", token: cong.token, khoa: key, than: body },
+    { method: "POST", token: cong.token, khoa: key, than: body },
     readPhotoSlot,
   );
 }
@@ -488,7 +465,7 @@ export async function completeScenePhoto(ma_tra_cuu: string, id: string): Promis
   const cong = moCong(photoCompletionAddress(ma === "" ? "x" : ma, id === "" ? "x" : id));
   if ("kieu" in cong) return cong;
   if (ma === "" || id === "") return { kieu: "khong-thay" };
-  return goiWithRefusals(cong.dia_chi, { route: "photo-complete", method: "POST", token: cong.token }, readScenePhoto);
+  return goiWithRefusals(cong.dia_chi, { method: "POST", token: cong.token }, readScenePhoto);
 }
 
 /** The citizen's own stored photos, each with a read link that lives ≤ 15 minutes. */
@@ -497,7 +474,7 @@ export async function listScenePhotos(ma_tra_cuu: string): Promise<PhotoCallResu
   const cong = moCong(photosAddress(ma === "" ? "x" : ma));
   if ("kieu" in cong) return cong;
   if (ma === "") return { kieu: "khong-thay" };
-  return goiWithRefusals(cong.dia_chi, { route: "photo-list", method: "GET", token: cong.token }, readScenePhotoList);
+  return goiWithRefusals(cong.dia_chi, { method: "GET", token: cong.token }, readScenePhotoList);
 }
 
 /**
@@ -515,7 +492,7 @@ export async function listVerificationPhotos(ma_tra_cuu: string): Promise<PhotoC
   if ("kieu" in cong) return cong;
   if (ma === "") return { kieu: "khong-thay" };
   return withoutRateLimit(
-    await goi(cong.dia_chi, { route: "verification-photo-list", method: "GET", token: cong.token }, readScenePhotoList, {
+    await goi(cong.dia_chi, { method: "GET", token: cong.token }, readScenePhotoList, {
       kieu: "khong-thay",
     }),
   );
@@ -561,36 +538,11 @@ export async function postPhotoToStorage(
   photo: Blob,
   content_type: ScenePhotoType,
 ): Promise<StorageUploadResult> {
-  let host = "";
   try {
-    const url = new URL(form.url);
-    if (url.protocol !== "https:") return { kieu: "loi-may-chu" };
-    host = url.host;
+    if (new URL(form.url).protocol !== "https:") return { kieu: "loi-may-chu" };
   } catch {
     return { kieu: "loi-may-chu" };
   }
-  const startedAt = Date.now();
-  const trace: CallTrace = {};
-  const out = await uploadOnce(form, photo, content_type, trace);
-  if (out.kieu !== "xong") {
-    logConnectionFailure({
-      route: "photo-storage",
-      method: "POST",
-      host,
-      outcome: out.kieu,
-      ...trace,
-      elapsed_ms: Date.now() - startedAt,
-    });
-  }
-  return out;
-}
-
-async function uploadOnce(
-  form: PhotoUploadForm,
-  photo: Blob,
-  content_type: ScenePhotoType,
-  trace: CallTrace,
-): Promise<StorageUploadResult> {
   const body = new FormData();
   for (const [k, v] of Object.entries(form.fields)) body.append(k, v);
   // The part's name is a fixed word, never anything of the citizen's (rule 3, forbidden #4).
@@ -599,12 +551,10 @@ async function uploadOnce(
   const timer = setTimeout(() => stop.abort(), UPLOAD_WAIT_MS);
   try {
     const answer = await fetch(form.url, { method: "POST", body, credentials: "omit", signal: stop.signal });
-    trace.status = answer.status;
     if (answer.status >= 200 && answer.status < 300) return { kieu: "xong" };
     if (answer.status >= 400 && answer.status < 500) return { kieu: "tu-choi", status: answer.status };
     return { kieu: "loi-may-chu" };
-  } catch (err) {
-    trace.error = describeThrown(err);
+  } catch {
     return { kieu: "loi-mang" };
   } finally {
     clearTimeout(timer);
@@ -642,7 +592,6 @@ export type KetQuaCongKhai<T> =
 export type NewsReadResult<T> = KetQuaCongKhai<T> | RateLimited;
 
 async function goiCongKhai<T>(
-  route: ConnectionRoute,
   ten_mien: string,
   dia_chi: (ten_mien: string) => string,
   doc: (than: unknown) => T | null,
@@ -651,7 +600,7 @@ async function goiCongKhai<T>(
   if (!laTenMien(ten_mien)) return { kieu: "khong-hop-le" };
   const url = dia_chi(ten_mien);
   if (url === "") return { kieu: "chua-cau-hinh" };
-  const kq = await goi(url, { route, method: "GET" }, doc, { kieu: "khong-thay" });
+  const kq = await goi(url, { method: "GET" }, doc, { kieu: "khong-thay" });
   switch (kq.kieu) {
     case "xong":
     case "khong-hop-le":
@@ -678,15 +627,14 @@ function identityRead<T>(kq: NewsReadResult<T>): KetQuaCongKhai<T> {
  * Tên miền là KHOÁ TRA; kết quả không cấp gì, và không được nhớ làm xã của phiên.
  */
 export function traXaTheoTenMien(ten_mien: string): Promise<KetQuaCongKhai<readonly XaTraDuoc[]>> {
-  return goiCongKhai("commune-lookup", ten_mien, diaChiTraXa, docXa).then(identityRead);
+  return goiCongKhai(ten_mien, diaChiTraXa, docXa).then(identityRead);
 }
 
 /**
- * Danh bạ cán bộ xã đã công khai. Không ghi log nội dung: danh bạ mang số di động cá nhân — bản `--demo`
- * chỉ ghi khuôn cố định của `connection-log.ts` (tuyến, mã HTTP), không một dòng nào của thân.
+ * Danh bạ cán bộ xã đã công khai. Không ghi log nội dung: danh bạ mang số di động cá nhân.
  */
 export function danhBaCanBoXa(ten_mien: string): Promise<KetQuaCongKhai<readonly CanBoCongKhai[]>> {
-  return goiCongKhai("commune-staff", ten_mien, diaChiDanhBa, docDanhBa).then(identityRead);
+  return goiCongKhai(ten_mien, diaChiDanhBa, docDanhBa).then(identityRead);
 }
 
 /**
@@ -694,7 +642,7 @@ export function danhBaCanBoXa(ten_mien: string): Promise<KetQuaCongKhai<readonly
  * phiên. Không có logo — xem `hop-dong-cong-khai.ts`.
  */
 export function communeProfiles(ten_mien: string): Promise<KetQuaCongKhai<readonly CommuneProfile[]>> {
-  return goiCongKhai("commune-profile", ten_mien, communeProfilesAddress, readCommuneProfiles).then(identityRead);
+  return goiCongKhai(ten_mien, communeProfilesAddress, readCommuneProfiles).then(identityRead);
 }
 
 /**
@@ -708,7 +656,7 @@ export function tinCuaXa(
   /** A category id from `newsCategories`; `null` = every category. The server includes its descendants. */
   category: string | null = null,
 ): Promise<NewsReadResult<TrangTinXa>> {
-  return goiCongKhai("news", ten_mien, (t) => diaChiTinXa(t, con_tro, type, category), docTrangTinXa);
+  return goiCongKhai(ten_mien, (t) => diaChiTinXa(t, con_tro, type, category), docTrangTinXa);
 }
 
 /**
@@ -719,7 +667,7 @@ export function newsCategories(
   ten_mien: string,
   type: NewsType | null = null,
 ): Promise<NewsReadResult<readonly NewsCategory[]>> {
-  return goiCongKhai("news-categories", ten_mien, (t) => newsCategoriesAddress(t, type), readNewsCategories);
+  return goiCongKhai(ten_mien, (t) => newsCategoriesAddress(t, type), readNewsCategories);
 }
 
 /**
@@ -727,7 +675,7 @@ export function newsCategories(
  * branch but `xong` with at least one banner leaves the bundled picture in place (`TrangXa.tsx`).
  */
 export function communeBanners(ten_mien: string): Promise<NewsReadResult<readonly CommuneBannerItem[]>> {
-  return goiCongKhai("banners", ten_mien, bannersAddress, readBanners);
+  return goiCongKhai(ten_mien, bannersAddress, readBanners);
 }
 
 /**
@@ -740,5 +688,5 @@ export function baiTinCuaXa(
   options: { noView?: boolean } = {},
 ): Promise<NewsReadResult<BaiTinXa>> {
   if (id === "") return Promise.resolve({ kieu: "khong-thay" });
-  return goiCongKhai("news-item", ten_mien, (t) => diaChiBaiTin(t, id, options), docBaiTin);
+  return goiCongKhai(ten_mien, (t) => diaChiBaiTin(t, id, options), docBaiTin);
 }

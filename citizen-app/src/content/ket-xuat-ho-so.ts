@@ -772,7 +772,6 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
     // ⚠ Policy sentence still owed (same stance as the row above); `chinh-sach.test.ts` pins it.
     // ⚠ Still `vihat-miniapp` on 01/10/2026 although the commune app's LOGIN moved to identity: ADR 0066
     //   decision 5 moves this exchange too, in a later card. Change this row in that card, not before.
-    //   Not offered at all in the `--demo` build (`App.tsx` `AppRieng`).
     tuyen: LOCATION_PATH,
     may_chu: "`vihat-miniapp` — máy chủ của Tập đoàn ViHAT Group, không lưu mã vị trí lẫn toạ độ",
     khi_nao:

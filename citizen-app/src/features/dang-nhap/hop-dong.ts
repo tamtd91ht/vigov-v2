@@ -344,42 +344,6 @@ export function communeAppSessionBody(req: CommuneAppSessionRequest): string {
   });
 }
 
-/* ────────────────────────────────────────────────────────────────────────────────────────────
- * FIFTH BODY — THE `--demo` BUILD'S LOGIN FROM A COMMUNE'S OWN APP (owner 01/10/2026, ADR 0047 §6)
- *
- *   route  : the fourth body's — ViGov identity `POST /api/v1/citizen-sessions` (ADR 0066)
- *   send   : { "appId", "demoIdentity": true }  — NO `accessToken`, NO `phoneToken`
- *   receive: the fourth body's 201, errors and status table, unchanged (`openCommuneAppSessionCall`)
- *
- * WHY NO ACCESS TOKEN (owner 01/10/2026): a `--demo` build runs in an app Zalo has not approved yet, and
- * Zalo refuses `getAccessToken` to such an app just as it refuses `getPhoneNumber` / `getUserInfo`. Asking
- * for it left the citizen on "Zalo chưa cho phép…" with no session at all. So that build calls NO Zalo
- * identity API; the body names the app and nothing else.
- *
- * The server side must accept this body ONLY for an App ID it lists as a demo app and then hand ViGov the
- * fixed number; any other App ID is refused, so this body never turns a real app into one without phone
- * verification. Built only under `DEMO_BUILD` (`App.tsx`), so a normal bundle does not carry it at all.
- * ⚠ As of 01/10/2026 the identity route is being built in parallel (ADR 0066) — until it answers, a
- * refusal lands in the ordinary status table.
- *
- * NOT declared in `content/ket-xuat-ho-so.ts`: that is the Zalo submission file, and a `--demo` build is
- * never submitted — the owner drops the flag first.
- * ──────────────────────────────────────────────────────────────────────────────────────────── */
-
-/** The `--demo` login request: the running app's App ID — no Zalo token of any kind. */
-export type CommuneAppDemoSessionRequest = {
-  /** App ID of the running Mini App, as Zalo reports it. Selects the commune app, grants nothing. */
-  readonly app_id: string;
-};
-
-/** The `--demo` login body. THE ONLY PLACE the key `demoIdentity` is written. */
-export function communeAppDemoSessionBody(req: CommuneAppDemoSessionRequest): string {
-  return JSON.stringify({
-    appId: req.app_id,
-    demoIdentity: true,
-  });
-}
-
 /**
  * Phiên ViGov như cầu trả về, đã đổi sang tên của ta. Không có mã xã.
  *

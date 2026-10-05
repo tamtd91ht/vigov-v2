@@ -583,7 +583,7 @@ describe("3d — ảnh hiện trường chỉ có ở app riêng của xã", () 
       "AppChung references the scene-photo capability. The owner put the photo button in the commune's own app only.",
     ).not.toMatch(SCENE_PHOTO_CAPABILITY);
     expect(commune, "AppRieng no longer injects the scene-photo picker — the feature is dead").toMatch(
-      /pickScenePhotos=\{DEMO_BUILD \? undefined : pickCommuneScenePhotos\}/,
+      /pickScenePhotos=\{pickCommuneScenePhotos\}/,
     );
     // Must-still-catch: the same wiring written into AppChung is red.
     expect(sharedAppBody(`${app}\n<KenhCongDan pickScenePhotos={pickCommuneScenePhotos} />`)).toMatch(SCENE_PHOTO_CAPABILITY);

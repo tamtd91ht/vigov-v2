@@ -33,7 +33,6 @@ import { communeBanners, type NewsReadResult } from "../api/goi-vigov";
 import type { CommuneProfile, XaTraDuoc } from "../api/hop-dong-cong-khai";
 import { type CommuneBannerItem, readHttpsLink } from "../api/hop-dong-cong-khai";
 import { communeAppReopen, dropCommuneAppSession, type OpenCommuneAppSession } from "../api/mo-phien-vigov";
-import { DEMO_BUILD, DEMO_CITIZEN_NAME } from "../../lib/demo-build";
 
 import { BieuTuong, type TenBieuTuong } from "./BieuTuong";
 import {
@@ -41,7 +40,6 @@ import {
   type SessionGate,
   sessionGateMessage,
   sessionGateOffersRetry,
-  sessionGateRetryLabel,
   type SessionGateState,
 } from "./commune-session";
 import { dichGoi } from "./DanhBaCanBoScreen";
@@ -668,15 +666,13 @@ export function profileLogoUrl(profile: CommuneProfile | null): string {
  *               where the number GOES: `COMMUNE_APP_SESSION.zalo_asks`, ADR 0066)
  *   `dang-mo`   words, not a spinner — and "Về trang chủ", which works while the open runs
  *   `ket-qua`   one sentence saying what to do next, "Về trang chủ" always, a retry only where a new tap can
- *               help ("Thử lại" in the `--demo` build, `atOnce`: no "Đồng ý chia sẻ" act exists there)
+ *               help — the retry is "Đồng ý chia sẻ số điện thoại" again, since that tap is what opens Zalo's dialog
  *
  * Exported for `session-gate-exits.test.tsx` only.
  */
 export function SessionGateScreen(props: {
   state: SessionGateState;
   task: PhoneVerificationTask;
-  /** The gate opens at once (`DEMO_BUILD`) — changes the retry button's words only. */
-  atOnce: boolean;
   onAllow: () => void;
   onDecline: () => void;
   onClose: () => void;
@@ -714,11 +710,11 @@ export function SessionGateScreen(props: {
             <KhoiTrangThai
               bieu_tuong="alert"
               loi
-              cau={sessionGateMessage(state.outcome, props.task, state.zalo, props.atOnce)}
+              cau={sessionGateMessage(state.outcome, props.task, state.zalo)}
               support_code={state.outcome === "thu-lai" ? zaloSupportCode(state.zalo) : null}
               nut={
                 sessionGateOffersRetry(state.outcome, state.zalo)
-                  ? { nhan: sessionGateRetryLabel(props.atOnce), onBam: props.onAllow }
+                  ? { nhan: PHONE_VERIFICATION.allow, onBam: props.onAllow }
                   : undefined
               }
             />
@@ -738,8 +734,7 @@ function useSessionGate(open: OpenCommuneAppSession | undefined, communeName: st
   const name = useRef(communeName);
   name.current = communeName;
   const gate = useRef<SessionGate | null>(null);
-  // `DEMO_BUILD`: that build's opener shows no Zalo dialog, so there is nothing to explain first (ADR 0047 §6).
-  if (gate.current === null) gate.current = createSessionGate(open, () => name.current, setState, DEMO_BUILD);
+  if (gate.current === null) gate.current = createSessionGate(open, () => name.current, setState);
   return { gate: gate.current, state };
 }
 
@@ -970,7 +965,6 @@ function AppCuaXa(props: {
       <SessionGateScreen
         state={gateState}
         task={gateTask}
-        atOnce={DEMO_BUILD}
         onAllow={() => void gate.allow()}
         onDecline={gate.decline}
         onClose={gate.reset}
@@ -1108,7 +1102,7 @@ export function TrangXa(props: {
   getSceneLocation?: GetSceneLocation;
   /**
    * Chụp / chọn ảnh hiện trường (`requestCameraPermission` + `openMediaPicker`), do lớp vỏ tiêm — CHỈ app riêng
-   * của xã (`AppRieng`, owner 02/10/2026). Không truyền thì không có nút ảnh nào (bản `--demo`, test).
+   * của xã (`AppRieng`, owner 02/10/2026). Không truyền thì không có nút ảnh nào (test).
    */
   pickScenePhotos?: PickScenePhotos;
   /**
@@ -1139,14 +1133,9 @@ export function TrangXa(props: {
   const [trang, datTrang] = useState<TrangTra>({ kieu: "dang-tra" });
   /** Mỗi lần bấm "Thử lại" tăng một — hiệu ứng tra chạy lại đúng một lần cho mỗi giá trị. */
   const [lan, datLan] = useState(0);
-  // `DEMO_BUILD` (ADR 0047 §6, 01/10/2026): the fixed identity's name, and `getUserInfo` is never called —
-  // no check, no card, no question. Every other build: the Zalo name, asked for as below.
+  // The Zalo name, asked for as below.
   const [name, setName] = useState<NameAtEntry>(() =>
-    DEMO_BUILD
-      ? { kind: "settled", name: DEMO_CITIZEN_NAME }
-      : lay_ten === undefined
-        ? { kind: "settled", name: null }
-        : { kind: "checking" },
+    lay_ten === undefined ? { kind: "settled", name: null } : { kind: "checking" },
   );
   /**
    * The ref, not the effect's dependency list, is what makes the check run ONCE: StrictMode mounts, unmounts
@@ -1158,7 +1147,7 @@ export function TrangXa(props: {
   // Started with the commune lookup, not after it: the check never opens a dialog, so running it while
   // the commune name loads costs the citizen nothing, and the name is usually ready by the first screen.
   useEffect(() => {
-    if (DEMO_BUILD || lay_ten === undefined || nameChecked.current) return;
+    if (lay_ten === undefined || nameChecked.current) return;
     nameChecked.current = true;
     void lay_ten("check")
       .catch((): Awaited<ReturnType<LayTenZalo>> => ({ kieu: "khong-lay-duoc" }))
@@ -1166,7 +1155,7 @@ export function TrangXa(props: {
   }, [lay_ten]);
 
   async function askName() {
-    if (DEMO_BUILD || lay_ten === undefined || name.kind !== "needs-consent") return;
+    if (lay_ten === undefined || name.kind !== "needs-consent") return;
     setName({ kind: "asking" });
     const kq = await lay_ten("ask").catch((): Awaited<ReturnType<LayTenZalo>> => ({ kieu: "khong-lay-duoc" }));
     setName(afterNameAsk(kq));

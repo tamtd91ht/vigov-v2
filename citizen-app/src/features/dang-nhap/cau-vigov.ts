@@ -24,13 +24,11 @@ import {
   type CommuneAppBridgeResult,
   type KetQuaCauViGov,
   moPhienViGovQuaCau,
-  openCommuneAppDemoSessionCall,
   openCommuneAppSessionCall,
   reopenViGovSessionWithPhone,
 } from "./goi-may-chu";
 import type {
   BridgeRequestWithPhone,
-  CommuneAppDemoSessionRequest,
   CommuneAppSessionRequest,
   YeuCauCauViGov,
 } from "./hop-dong";
@@ -161,29 +159,4 @@ export async function openCommuneAppSessionWithPhone(
     },
     address,
   );
-}
-
-/**
- * THE `--demo` BUILD'S OPENER (owner 01/10/2026, ADR 0047 §6) — App ID + the `demoIdentity` body
- * (`hop-dong.ts` fifth body), and NO Zalo SDK call of any kind: not `getUserInfo`, not `getPhoneNumber`,
- * and not `getAccessToken`. A `--demo` build runs in an app Zalo has not approved, and Zalo refuses
- * `getAccessToken` to it too — calling it is what left the citizen on "Zalo chưa cho phép…".
- *
- * Same route as `openCommuneAppSessionWithPhone` — ViGov identity (ADR 0066), whose demo switch is per App ID
- * and off by default. No address → stop; App ID unknown → stop, nothing sent (the server enables the fixed
- * identity per App ID, so there is nothing to ask without it). Reading `window.APP_ID` is a global, not a
- * permission.
- *
- * Wired only under `DEMO_BUILD` (`App.tsx`). `readAppId` / `call` are for tests.
- */
-export async function openCommuneAppSessionWithDemoIdentity(
-  identityHost: string,
-  readAppId: () => string | null = readRuntimeAppId,
-  call: (req: CommuneAppDemoSessionRequest, address: string) => Promise<CommuneAppBridgeResult> = openCommuneAppDemoSessionCall,
-): Promise<CommuneAppLoginResult> {
-  const address = communeAppSessionAddress(identityHost);
-  if (address === "") return { kieu: "chua-khai-host" };
-  const app_id = readAppId();
-  if (app_id === null || app_id === "") return { kieu: "khong-ro-app" };
-  return call({ app_id }, address);
 }

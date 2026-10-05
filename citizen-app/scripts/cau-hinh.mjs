@@ -45,9 +45,6 @@ const TEN_DA_BO = {
   VIGOV_XA_CO_DINH:
     "VIGOV_XA_CO_DINH KHÔNG đặt trong .env.local: một dòng quên ở đây biến MỌI bản dựng trên máy này " +
     "thành app của một xã. Chỉ `deploy.mjs --domain=<tên-miền> --vao-thang` đặt nó, cho đúng một lần dựng.",
-  VIGOV_DEMO:
-    "VIGOV_DEMO KHÔNG đặt trong .env.local: một dòng quên ở đây biến MỌI bản dựng trên máy này thành bản " +
-    "--demo, danh tính cố định, không xin quyền Zalo. Chỉ `deploy.mjs --domain=<tên-miền> --vao-thang --demo` đặt nó, cho đúng một lần dựng.",
 };
 
 /**
@@ -70,34 +67,6 @@ export function xaCoDinh(moi_truong = process.env) {
     gia_tri.length <= 253 && nhan.length >= 2 && nhan.every((n) => /^(?!-)[a-z0-9-]{1,63}(?<!-)$/.test(n));
   if (!dung_khuon) throw new Error(`${BIEN_XA_CO_DINH}="${gia_tri}" không phải một tên miền trần chữ thường.`);
   return gia_tri;
-}
-
-/**
- * `--demo` BUILD — owner's decision 01/10/2026 (ADR 0047 §6, replacing the 30/09 design), for the commune's
- * own app ONLY while it has not been submitted to Zalo; the owner drops the flag at submission. It changes the
- * IDENTITY SOURCE only: no `getUserInfo`/`getPhoneNumber`, the fixed name and the agreed fake number (rule 3
- * #5), a login body without `phoneToken` that `vihat-miniapp` accepts only for App IDs in its `DEMO_APP_IDS`.
- * The app shows no word of it (`src/lib/demo-build.ts`).
- *
- * Same shape as `xaCoDinh`: shell variable only (blocked in `.env.local` by `TEN_DA_BO`), set by
- * `deploy.mjs --demo` for exactly one build. It STOPS the build unless `VIGOV_XA_CO_DINH` is set too: the
- * shared app has no commune screens, so a demo shared app would be a flag that does nothing — or, worse,
- * one somebody later wires into screens the shared app does have.
- */
-export const DEMO_BUILD_VAR = "VIGOV_DEMO";
-
-export function demoBuild(env = process.env) {
-  const value = (env[DEMO_BUILD_VAR] ?? "").trim();
-  if (value === "") return false;
-  if (value !== "1") {
-    throw new Error(`${DEMO_BUILD_VAR}="${value}": chỉ nhận "1", và chỉ \`deploy.mjs --demo\` đặt biến này.`);
-  }
-  if (xaCoDinh(env) === "") {
-    throw new Error(
-      `${DEMO_BUILD_VAR}=1 cần ${BIEN_XA_CO_DINH}: chế độ demo chỉ có trong app riêng của xã (--domain=<tên-miền> --vao-thang).`,
-    );
-  }
-  return true;
 }
 
 /**

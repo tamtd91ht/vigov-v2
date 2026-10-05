@@ -35,8 +35,6 @@ import type { LocationCodes, MaDangNhap } from "../tinh-nang/zalo-api";
 import {
   type BridgeRequestWithPhone,
   bridgeBodyWithPhone,
-  type CommuneAppDemoSessionRequest,
-  communeAppDemoSessionBody,
   type CommuneAppSessionRequest,
   communeAppSessionBody,
   diaChiPhien,
@@ -296,19 +294,7 @@ export async function openCommuneAppSessionCall(
   return postCommuneAppSession(communeAppSessionBody(req), address);
 }
 
-/**
- * The `--demo` build's login (`hop-dong.ts` fifth body): App ID only — no access token, no phone token. Same
- * route, same status table as the fourth body — only the body differs. NO THROW, NO LOG. `address` is
- * required, as above.
- */
-export async function openCommuneAppDemoSessionCall(
-  req: CommuneAppDemoSessionRequest,
-  address: string,
-): Promise<CommuneAppBridgeResult> {
-  return postCommuneAppSession(communeAppDemoSessionBody(req), address);
-}
-
-/** The commune app's status table, shared by both of its login bodies. */
+/** The commune app's status table for its login body. */
 async function postCommuneAppSession(body: string, address: string): Promise<CommuneAppBridgeResult> {
   if (address === "") return { kieu: "chua-khai-host" };
   const answer = await postSession(body, address);

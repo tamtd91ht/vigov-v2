@@ -10,7 +10,6 @@ import { docCauHinh, TEN_BIEN_CHO_PHEP, TEP_LOCAL } from "./cau-hinh.mjs";
 import {
   appIdTrongToken,
   chonDich,
-  DEMO_PLAN_LINE,
   docCo,
   kiemBangAnhXa,
   kiemTenMien,
@@ -116,7 +115,7 @@ describe("tệp ánh xạ", () => {
 
 describe("cờ dòng lệnh", () => {
   it("không cờ nào là app chung, bản thử nghiệm", () => {
-    expect(docCo([])).toEqual({ ten_mien: null, phat_hanh: false, chi_thu: false, vao_thang: false, demo: false });
+    expect(docCo([])).toEqual({ ten_mien: null, phat_hanh: false, chi_thu: false, vao_thang: false });
   });
 
   it("đọc đủ bốn cờ", () => {
@@ -125,25 +124,7 @@ describe("cờ dòng lệnh", () => {
       phat_hanh: true,
       chi_thu: true,
       vao_thang: true,
-      demo: false,
     });
-  });
-
-  it("`--demo` is read with the other flags, in any order and with `--phat-hanh` (zmp:phat-hanh)", () => {
-    expect(docCo(["--phat-hanh", "--domain=xa-a.vigov.example", "--vao-thang", "--demo"])).toEqual({
-      ten_mien: "xa-a.vigov.example",
-      phat_hanh: true,
-      chi_thu: false,
-      vao_thang: true,
-      demo: true,
-    });
-    expect(docCo(["--demo", "--thu", "--vao-thang", "--domain=xa-a.vigov.example"]).demo).toBe(true);
-  });
-
-  it("`--demo` without `--vao-thang` STOPS — the shared app has no commune screens to demo", () => {
-    expect(() => docCo(["--demo"])).toThrow(/--demo cần --vao-thang/);
-    expect(() => docCo(["--domain=xa-a.vigov.example", "--demo"])).toThrow(/--demo cần --vao-thang/);
-    expect(() => docCo(["--domain=xa-a.vigov.example", "--demo", "--phat-hanh"])).toThrow(/--demo cần --vao-thang/);
   });
 
   it("`--vao-thang` không kèm `--domain` thì DỪNG — app chung không bao giờ nung một xã", () => {
@@ -428,49 +409,25 @@ describe("banner xã tạm thời chỉ đi vào đúng bản dựng --vao-thang
   });
 });
 
-describe("`--demo`: the plan says so before anything happens (owner 01/10/2026, dropped at submission)", () => {
+describe("`--vao-thang --thu`: the plan of a commune's own app, before anything happens", () => {
   const deploy = fileURLToPath(new URL("./deploy.mjs", import.meta.url));
   // `--thu` builds nothing and pushes nothing. ZMP_TOKEN emptied: the dry run must not depend on this machine.
   const dryRun = (...flags) =>
     spawnSync(process.execPath, [deploy, ...flags], {
       encoding: "utf8",
-      env: { ...process.env, ZMP_TOKEN: "", VIGOV_DEMO: "", VIGOV_XA_CO_DINH: "" },
+      env: { ...process.env, ZMP_TOKEN: "", VIGOV_XA_CO_DINH: "" },
     });
 
-  it("the plan line names the fixed identity and says what to do before submission", () => {
-    expect(DEMO_PLAN_LINE).toBe(
-      "  ⚠ --demo: danh tính cố định Nguyễn Văn Hùng / 0900000000, không xin quyền Zalo; BỎ cờ trước khi nộp duyệt",
-    );
-  });
-
-  it("with `--demo`: the plan line, the DEMO label, and VIGOV_DEMO=1 on the build line", () => {
-    const r = dryRun("--domain=thangbinh-danang.vigov.vn", "--vao-thang", "--demo", "--thu");
-    expect(r.status, r.stderr).toBe(0);
-    expect(r.stdout).toContain(DEMO_PLAN_LINE);
-    expect(r.stdout).toMatch(/Nhãn {5}: .* · DEMO/);
-    expect(r.stdout).toMatch(/VIGOV_XA_CO_DINH=thangbinh-danang\.vigov\.vn VIGOV_DEMO=1 vite build/);
-  });
-
-  it("without `--demo`: no demo line, no DEMO label, no VIGOV_DEMO", () => {
+  it("exits 0, and the build line bakes in the commune domain and nothing else", () => {
     const r = dryRun("--domain=thangbinh-danang.vigov.vn", "--vao-thang", "--thu");
     expect(r.status, r.stderr).toBe(0);
-    expect(r.stdout).not.toContain(DEMO_PLAN_LINE);
-    expect(r.stdout).not.toContain("--demo");
-    expect(r.stdout).not.toContain("DEMO");
-    expect(r.stdout).not.toContain("VIGOV_DEMO");
+    expect(r.stdout).toMatch(/VIGOV_XA_CO_DINH=thangbinh-danang\.vigov\.vn vite build/);
   });
 
-  it("`--demo` without `--vao-thang`: exit 2 with the sentence, nothing printed as a plan", () => {
-    const r = dryRun("--domain=thangbinh-danang.vigov.vn", "--demo", "--thu");
-    expect(r.status).toBe(2);
-    expect(r.stderr).toMatch(/--demo cần --vao-thang/);
-    expect(r.stdout).not.toContain("ĐỌC TRƯỚC KHI ĐỂ NÓ CHẠY TIẾP");
-  });
-
-  it("the version label carries DEMO only when asked", () => {
+  it("the version label is target · commit · time, plus `dirty` when asked", () => {
     const dich = { loai: "app-rieng", ten_mien: "xa-a.vigov.example", app_id: "1111111111111111111" };
     const base = { dich, sha: "abc1234", luc: "2026-09-30 10:00", dirty: false };
-    expect(nhanPhienBan(base)).not.toMatch(/DEMO/);
-    expect(nhanPhienBan({ ...base, demo: true })).toMatch(/ · DEMO$/);
+    expect(nhanPhienBan(base)).toBe("xa-a.vigov.example · app 1111111111111111111 · abc1234 · 2026-09-30 10:00");
+    expect(nhanPhienBan({ ...base, dirty: true })).toMatch(/ · dirty$/);
   });
 });
