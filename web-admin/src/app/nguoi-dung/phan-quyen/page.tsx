@@ -2,7 +2,6 @@ import { ShieldCheck } from "lucide-react";
 
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
 import { DauTrang } from "@/components/dau-trang";
-import { ThanhBen } from "@/components/thanh-ben";
 import { PageHeader } from "@/components/ui/page-header";
 import { TabPhanQuyen } from "@/features/cau-hinh/tab-phan-quyen";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
@@ -33,7 +32,6 @@ export default async function RolePermissionsPage() {
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
       <PhienProvider>
         <div className="khung-trang">
-          <ThanhBen />
           <DauTrang />
           <main className="than-trang">
             <PageHeader

@@ -2,7 +2,6 @@ import { NotebookTabs } from "lucide-react";
 
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa"; // vi-name-ok: existing commune-config provider
 import { DauTrang } from "@/components/dau-trang"; // vi-name-ok: existing page header bar
-import { ThanhBen } from "@/components/thanh-ben"; // vi-name-ok: existing sidebar
 import { PageHeader } from "@/components/ui/page-header";
 import { LeaderNotebook } from "@/features/leader-notebook/leader-notebook";
 import { PAGE_SUBTITLE, PAGE_TITLE } from "@/features/leader-notebook/notebook-queries";
@@ -34,7 +33,6 @@ export default async function LeaderNotebookPage() {
     <CauHinhXaProvider giaTri={phanHienThi(commune)}>
       <PhienProvider>
         <div className="khung-trang">
-          <ThanhBen />
           <DauTrang />
           <main className="than-trang">
             <PageHeader icon={NotebookTabs} title={PAGE_TITLE} subtitle={PAGE_SUBTITLE} />

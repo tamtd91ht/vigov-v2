@@ -4,7 +4,6 @@ import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
 import { PageHeader } from "@/components/ui/page-header";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
-import { ThanhBen } from "@/components/thanh-ben";
 import { BangDuAn } from "@/features/giai-ngan/bang-du-an";
 import { DisbursementHeaderActions } from "@/features/giai-ngan/pending-parts";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
@@ -43,7 +42,6 @@ export default async function TrangGiaiNgan() {
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
       <PhienProvider>
         <div className="khung-trang">
-        <ThanhBen />
         <DauTrang />
         <main className="than-trang">
           <PageHeader

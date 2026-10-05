@@ -53,15 +53,26 @@ function mount(): HTMLDivElement {
 }
 
 describe("DauTrang — system-wide search placeholder (00 §3.1, Phase 2, ADR 0068 §14)", () => {
-  it("is a DISABLED search input with the spec's label and placeholder, inside no form", () => {
+  // Presentation pin moved 05/10/2026 (ADR 0068 §Sửa đổi lần 2): in the navy header the placeholder is
+  // the guide's search ICON, disabled; the disabled FIELD lives in the narrow-screen sheet (nav-sheet).
+  it("is a DISABLED search icon button with the spec's name, inside no form, no search landmark", () => {
     const el = mount();
-    const input = el.querySelector<HTMLInputElement>('input[aria-label="Tìm kiếm toàn hệ thống"]');
+    const button = el.querySelector<HTMLButtonElement>('header button[aria-label="Tìm kiếm toàn hệ thống"]');
+    expect(button).not.toBeNull();
+    expect(button!.disabled).toBe(true);
+    expect(button!.closest("form")).toBeNull();
+    expect(el.querySelector('[role="search"]')).toBeNull();
+  });
+
+  it("in the narrow-screen sheet: the disabled field with the spec's placeholder", () => {
+    const el = mount();
+    act(() => el.querySelector<HTMLButtonElement>('button[aria-label="Mở menu"]')!.click());
+    const input = el.querySelector<HTMLInputElement>('dialog input[aria-label="Tìm kiếm toàn hệ thống"]');
     expect(input).not.toBeNull();
     expect(input!.disabled).toBe(true);
     expect(input!.type).toBe("search");
     expect(input!.placeholder).toBe("Tìm nhiệm vụ, văn bản, phản ánh…");
     expect(input!.closest("form")).toBeNull();
-    expect(el.querySelector('[role="search"]')).toBeNull();
   });
 
   it("its '?' opens the description, says Phase 2, and calls no server", () => {

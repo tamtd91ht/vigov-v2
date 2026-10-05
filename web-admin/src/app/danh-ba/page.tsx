@@ -4,7 +4,6 @@ import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
 import { PageHeader } from "@/components/ui/page-header";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
-import { ThanhBen } from "@/components/thanh-ben";
 import { DanhBaLienHe } from "@/features/danh-ba/danh-ba-lien-he";
 import { CAU_THIEU_QUYEN, MO_TA_TRANG, TIEU_DE_TRANG } from "@/features/danh-ba/nhan-danh-ba";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
@@ -53,7 +52,6 @@ export default async function TrangDanhBa() {
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
       <PhienProvider>
         <div className="khung-trang">
-        <ThanhBen />
         <DauTrang />
         <main className="than-trang">
           {/* `relative`: the screen lifts its count badge and "Công khai nhiều người" button into the

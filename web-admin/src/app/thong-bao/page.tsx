@@ -1,7 +1,6 @@
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
-import { ThanhBen } from "@/components/thanh-ben";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { SoThongBao } from "@/features/thong-bao/so-thong-bao";
 import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
@@ -45,7 +44,6 @@ export default async function TrangThongBao() {
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
       <PhienProvider>
         <div className="khung-trang">
-          <ThanhBen />
           <DauTrang />
           <main className="than-trang">
             <SoThongBao />

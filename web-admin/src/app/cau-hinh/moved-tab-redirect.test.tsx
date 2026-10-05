@@ -30,7 +30,6 @@ vi.mock("@/components/cau-hinh-xa", () => ({
 vi.mock("@/features/phien/phien-hien-tai", () => ({
   PhienProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
-vi.mock("@/components/thanh-ben", () => ({ ThanhBen: () => null }));
 vi.mock("@/components/dau-trang", () => ({ DauTrang: () => null }));
 vi.mock("@/features/cau-hinh/khung-tab-cau-hinh", () => ({ KhungTabCauHinh: () => null }));
 

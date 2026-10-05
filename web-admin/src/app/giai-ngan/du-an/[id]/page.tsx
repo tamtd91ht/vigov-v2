@@ -4,7 +4,6 @@ import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
 import { PageHeader } from "@/components/ui/page-header";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
-import { ThanhBen } from "@/components/thanh-ben";
 import { ChiTietDuAn } from "@/features/giai-ngan/chi-tiet-du-an";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { CongQuyen } from "@/features/quyen/cong-quyen";
@@ -20,9 +19,8 @@ import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
  * và cả "không có dự án ấy" lẫn "dự án của xã khác" đều nhận CÙNG một 404 từ máy chủ. Dựng thêm
  * một phép kiểm ở đây chỉ tạo ra một câu trả lời thứ hai, khác câu của máy chủ.
  *
- * SAME FRAME AS `/giai-ngan` (`khung-trang` + `ThanhBen`, tester report GN-07): without the sidebar the
- * officer had no way back but the browser button. The sidebar names the commune, so the header no
- * longer repeats it (`withCommune` is for pages WITHOUT a sidebar — `dau-trang.tsx`).
+ * SAME FRAME AS `/giai-ngan` (`khung-trang` + the navigation header `DauTrang`, tester report GN-07):
+ * without the menu the officer had no way back but the browser button.
  */
 export const dynamic = "force-dynamic";
 
@@ -39,7 +37,6 @@ export default async function TrangChiTietDuAn({ params }: { params: Promise<{ i
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
       <PhienProvider>
         <div className="khung-trang">
-        <ThanhBen />
         <DauTrang />
         <main className="than-trang">
           <div className="page--detail">

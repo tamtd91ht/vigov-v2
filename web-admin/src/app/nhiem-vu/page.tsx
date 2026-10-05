@@ -1,7 +1,6 @@
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
-import { ThanhBen } from "@/components/thanh-ben";
 import { SoNhiemVu } from "@/features/nhiem-vu/so-nhiem-vu";
 import { parseOpenTask } from "@/features/nhiem-vu/task-link";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
@@ -49,7 +48,6 @@ export default async function TrangNhiemVu({
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
       <PhienProvider>
         <div className="khung-trang">
-          <ThanhBen />
           <DauTrang />
           <main className="than-trang">
             {/* The page header (`<h1>`, subtitle, `Nhập từ Excel` · `Giao việc mới`) is drawn by

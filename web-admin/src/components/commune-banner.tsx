@@ -7,7 +7,7 @@
  * placeholder picture (ADR 0069 #7, "chưa có banner thì không có dải").
  *
  * `alt=""`: the banner is the commune's own picture, its content is unknown to this app, and the
- * commune's name is already printed as text in the sidebar or topbar. Naming the body again in an alt
+ * commune's name is already printed as text in the header. Naming the body again in an alt
  * would be a third reading of the same name for a screen-reader user, and anything else would be a
  * guess at what the picture shows.
  *

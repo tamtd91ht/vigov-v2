@@ -27,7 +27,7 @@ vi.mock("@/lib/tenant.server", () => ({
   layCauHinhXa: async () => ({}),
   communePageMetadata: async (screen: string) => ({ title: screen }),
 }));
-vi.mock("@/components/thanh-ben", () => ({ ThanhBen: () => <nav>MENU</nav> }));
+// The header carries the navigation since the text sidebar was replaced (ADR 0068 §Sửa đổi 05/10/2026 lần 2).
 vi.mock("@/components/dau-trang", () => ({ DauTrang: () => <header>HEADER</header> }));
 vi.mock("@/features/cau-hinh/danh-ba-can-bo", () => ({
   DanhBaCanBo: ({ active }: { active?: boolean }) => <section>STAFF-ACCOUNTS active={String(active)}</section>,
@@ -65,7 +65,7 @@ describe("/nguoi-dung", () => {
     const html = await render(UsersPage);
     expect(html).toMatch(/<h1[^>]*>Người dùng<\/h1>/);
     expect(html).toContain("STAFF-ACCOUNTS active=true");
-    expect(html).toContain("MENU");
+    expect(html).toContain("HEADER");
   });
 
   it("DENIED: no `admin.user` (even with `admin.role`, `admin.user.delete`) → refusal, list never mounted", async () => {

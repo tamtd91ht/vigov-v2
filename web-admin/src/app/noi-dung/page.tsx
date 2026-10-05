@@ -1,7 +1,6 @@
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
-import { ThanhBen } from "@/components/thanh-ben";
 import { SoNoiDung } from "@/features/noi-dung/so-noi-dung";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
@@ -41,7 +40,6 @@ export default async function TrangNoiDungMiniApp() {
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
       <PhienProvider>
         <div className="khung-trang">
-          <ThanhBen />
           <DauTrang />
           <main className="than-trang">
             {/* The page header (`<h1>`, the §1 sentence, `+ Thêm nội dung`) is drawn by `SoNoiDung`: the

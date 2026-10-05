@@ -4,7 +4,6 @@ import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
 import { PageHeader } from "@/components/ui/page-header";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
-import { ThanhBen } from "@/components/thanh-ben";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { DocumentTabs, ScanOcrButton } from "@/features/van-ban/document-pending";
 import { SoVanBanDen } from "@/features/van-ban/so-van-ban-den";
@@ -61,7 +60,6 @@ export default async function TrangVanBan({
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
       <PhienProvider>
         <div className="khung-trang">
-        <ThanhBen />
         <DauTrang />
         <main className="than-trang">
           <PageHeader

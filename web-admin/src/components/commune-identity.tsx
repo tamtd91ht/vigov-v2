@@ -4,9 +4,9 @@ import type { CauHinhXaHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 
 /**
  * The commune's identity block: emblem tile, "Ủy ban nhân dân", the commune's name, its province.
- * It sits at the top of the sidebar, where the product name used to be (owner decision 02/10/2026:
- * the screen belongs to the commune's People's Committee, not to the software vendor). Pages with no
- * sidebar print it in the topbar instead, so no signed-in page is without it.
+ * It sits at the left end of the navy header on every signed-in page, where a product name would be
+ * (owner decision 02/10/2026: the screen belongs to the commune's People's Committee, not to the
+ * software vendor; ADR 0068 §13 — no vendor name or logo either, §Sửa đổi 05/10/2026 (lần 2) #9).
  *
  * `displayName` IS PRINTED VERBATIM, NEVER BUILT ("UBND " + name): the correct name of the body is
  * data the commune declares, and a prefix built here is wrong at the first commune that declared
@@ -44,12 +44,12 @@ export function CommuneIdentity({ commune }: { commune: CauHinhXaHienThi }) {
 }
 
 /**
- * The logo itself, shared by the sidebar tile and the sign-in screen's tile so both draw it the
+ * The logo itself, shared by the header tile and the sign-in screen's tile so both draw it the
  * same way: `object-fit: contain` (`.commune-logo`), so a logo is never cropped and its transparent
  * background shows the tile's surface rather than a white box.
  *
  * `alt=""` AND THE TILE IS `aria-hidden`, ON PURPOSE: the commune's name is printed as text right
- * beside it in both places (and stays in the DOM when the sidebar collapses). An alt naming the body
+ * beside it in both places (and stays in the DOM when the header clamps it). An alt naming the body
  * would make a screen reader read the name twice in a row; the image adds nothing a listener lacks.
  *
  * A PLAIN `<img>`, NOT `next/image`: the optimiser needs every remote host declared in

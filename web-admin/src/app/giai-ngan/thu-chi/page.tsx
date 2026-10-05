@@ -4,7 +4,6 @@ import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
 import { PageHeader } from "@/components/ui/page-header";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
-import { ThanhBen } from "@/components/thanh-ben";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { CongQuyen } from "@/features/quyen/cong-quyen";
 import { BangThuChi } from "@/features/thu-chi/bang-thu-chi";
@@ -48,7 +47,6 @@ export default async function TrangThuChiNganSach() {
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
       <PhienProvider>
         <div className="khung-trang">
-          <ThanhBen />
           <DauTrang />
           <main className="than-trang">
             {/* MÔ TẢ TRANG KHÔNG CHÉP NGUYÊN VĂN §1, và đó là một lựa chọn có lý do. Câu của đặc

@@ -5,7 +5,6 @@ import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
 import { PageHeader } from "@/components/ui/page-header";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
-import { ThanhBen } from "@/components/thanh-ben";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { KhungTabCauHinh } from "@/features/cau-hinh/khung-tab-cau-hinh";
 import { movedTabRoute } from "@/features/cau-hinh/moved-tabs";
@@ -92,7 +91,6 @@ export default async function TrangCauHinh({
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
       <PhienProvider>
         <div className="khung-trang">
-        <ThanhBen />
         <DauTrang />
         <main className="than-trang">
           <PageHeader

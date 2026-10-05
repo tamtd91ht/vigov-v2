@@ -50,7 +50,10 @@ const NEW_UI = ALL.filter(
   (f) =>
     f.path.startsWith("components/ui/") ||
     [
-      "components/sidebar-view.tsx",
+      "components/header-modules.tsx",
+      "components/nav-sheet.tsx",
+      "components/user-menu.tsx",
+      "components/dau-trang.tsx",
       "components/menu-icons.ts",
       "components/user-initials.ts",
       "components/role-pill.tsx",
@@ -82,16 +85,19 @@ describe("globals.css layering", () => {
     expect(close).toBeGreaterThan(open);
     // Nothing but whitespace after the legacy block: a rule appended below it would be outside.
     expect(CSS.slice(close + "} /* end @layer legacy */".length).trim()).toBe("");
-    for (const cls of [".nut-chinh {", ".nut-phu {", ".bang-cuon {", ".khung-trang {", ".thanh-ben {"]) {
+    for (const cls of [".nut-chinh {", ".nut-phu {", ".bang-cuon {", ".khung-trang {", ".dau-trang {"]) {
       const at = CSS.indexOf("\n" + cls);
       expect(at, cls).toBeGreaterThan(open);
       expect(at, cls).toBeLessThan(close);
     }
   });
 
+  // Presentation pin (ADR 0068 §Sửa đổi 05/10/2026 lần 2): one column since the header replaced the
+  // sidebar. The fix it guards is unchanged — the content column may shrink.
   it("the page grid lets its content column shrink (no page-wide horizontal scroll)", () => {
-    expect(CSS).toMatch(/\.khung-trang \{[^}]*grid-template-columns: auto minmax\(0, 1fr\);/);
+    expect(CSS).toMatch(/\.khung-trang \{[^}]*grid-template-columns: minmax\(0, 1fr\);/);
     expect(CSS).not.toMatch(/grid-template-columns: auto 1fr;/);
+    expect(RULES.find((r) => r.selector === ".khung-trang")?.body).not.toMatch(/grid-template-columns: 1fr;/);
   });
 
   it("the primary button is no longer full width by default", () => {
@@ -161,6 +167,29 @@ describe("spec v2 shell", () => {
 
   it("no gradient in the shared components (the PageHeader tile is flat)", () => {
     for (const f of NEW_UI) expect(f.text, f.path).not.toMatch(/bg-linear|bg-gradient|from-brand-|linear-gradient/);
+  });
+
+  // Presentation pins (guide §7, §8.9; ADR 0068 §Sửa đổi 05/10/2026 lần 2).
+  it("app shell: grey outside, 8px margin, radius 16, `--bg` inside, corners clipped without breaking sticky", () => {
+    const shell = RULES.find((r) => r.selector === ".khung-trang")?.body ?? "";
+    for (const decl of ["margin: 8px;", "border-radius: var(--r-lg);", "background: var(--bg);", "overflow: clip;", "min-height: calc(100dvh - 16px);"])
+      expect(shell, decl).toContain(decl);
+    expect(RULES.find((r) => r.selector.includes("body:has(.khung-trang)"))?.body).toContain("background: var(--bg-outer);");
+  });
+
+  it("header: 68px navy, sticky, header shadow, WHITE focus ring on navy (the app ring is 3.18:1 there)", () => {
+    const h = RULES.find((r) => r.selector === ".dau-trang")?.body ?? "";
+    for (const decl of ["position: sticky;", "top: 0;", "height: 68px;", "background: var(--brand-600);", "box-shadow: var(--shadow-header);"])
+      expect(h, decl).toContain(decl);
+    expect(RULES.find((r) => r.selector === ".dau-trang :focus-visible")?.body).toContain("outline: 2px solid #fff;");
+    const icon = RULES.find((r) => r.selector === ".header-icon-button")?.body ?? "";
+    for (const decl of ["width: 36px;", "height: 36px;", "border-radius: var(--r-md);"]) expect(icon, decl).toContain(decl);
+  });
+
+  it("the text sidebar is gone, and no shell rule draws a gradient", () => {
+    expect(CSS).not.toMatch(/\.thanh-ben/);
+    for (const r of RULES.filter((x) => /dau-trang|header-|nav-sheet|khung-trang|user-menu/.test(x.selector)))
+      expect(r.body, r.selector).not.toMatch(/gradient/);
   });
 
   it("page width classes exist: data none, form 880px, detail 1120px", () => {

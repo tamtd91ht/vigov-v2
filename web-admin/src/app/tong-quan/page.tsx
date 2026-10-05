@@ -3,7 +3,6 @@ import { LayoutDashboard } from "lucide-react";
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
 import { PageHeader } from "@/components/ui/page-header";
 import { DauTrang } from "@/components/dau-trang";
-import { ThanhBen } from "@/components/thanh-ben";
 import { DashboardHeaderActions } from "@/features/dashboard/header-actions";
 import { DashboardPage } from "@/features/dashboard/overview";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
@@ -37,7 +36,6 @@ export default async function OverviewPage() {
     <CauHinhXaProvider giaTri={phanHienThi(commune)}>
       <PhienProvider>
         <div className="khung-trang">
-          <ThanhBen />
           <DauTrang />
           <main className="than-trang">
             {/* Outside the `report.read` gate: an account without the key still reads the title. */}

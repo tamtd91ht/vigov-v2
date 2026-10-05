@@ -27,7 +27,7 @@ import {
  * their order, their permission keys — stays in `muc-menu.ts`; this table only decorates it, so
  * nothing about who sees what can change through here.
  *
- * `muc-menu-icons.test.ts` fails the day an item is added to `NHOM_MENU` without a line here,
+ * `header-modules.test.tsx` fails the day an item is added to `NHOM_MENU` without a line here,
  * instead of letting it fall back silently to the generic circle below.
  */
 export const MENU_ICONS: Readonly<Record<string, LucideIcon>> = {

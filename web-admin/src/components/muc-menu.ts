@@ -96,7 +96,7 @@ export type NhomMenu = {
  * KEYED BY LABEL IN A SEPARATE TABLE, NOT A FIELD ON THE ITEM: `tools/tien_do_san_pham.py`
  * (`MAU_MUC`) reads each item as ONE `{ nhan, duong, khoa }` literal. An item with a fourth field
  * stops matching and silently drops out of the product progress count — the menu would then report
- * fewer unbuilt screens than it shows. `sidebar-view.test.tsx` holds that every `duong: null` item
+ * fewer unbuilt screens than it shows. `header-modules.test.tsx` holds that every `duong: null` item
  * has an entry here and no built item does.
  *
  * KHI MỘT MÀN RA ĐỜI: đổi `duong: null` thành đường dẫn thật, điền `khoa`, xoá dòng của nó trong

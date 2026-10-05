@@ -1,102 +1,96 @@
 "use client";
 
-import { KeyRound, Search } from "lucide-react";
-import Link from "next/link";
+import { Search } from "lucide-react";
+import { usePathname } from "next/navigation";
 
 import { NutDangXuat } from "@/features/auth/nut-dang-xuat";
-import { DUONG_DAN_DOI_MAT_KHAU } from "@/features/mat-khau/bat-doi-mat-khau";
 import { khoiNguoiDung } from "@/features/phien/khoi-nguoi-dung";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 
 import { useCauHinhXa } from "./cau-hinh-xa";
 import { CommuneBanner } from "./commune-banner";
 import { CommuneIdentity } from "./commune-identity";
+import { HeaderModules, SettingsButton, splitSettings } from "./header-modules";
+import { locMenu, NHOM_MENU } from "./muc-menu";
+import { NavSheet } from "./nav-sheet";
 import { NotificationBell } from "./notification-bell";
 import { PendingMarker, type PendingFeatureInfo } from "./ui/pending-feature";
-import { RolePill, sessionRoleName } from "./role-pill";
-import { userInitials } from "./user-initials";
+import { sessionRoleName } from "./role-pill";
+import { UserMenu } from "./user-menu";
 
 /**
- * Đầu trang — spec giao diện 02/10/2026 §5 (thay `15-phu-luc-giao-dien-chung` §3 về hình thức).
+ * The app header — navy, 68px, sticky; it CARRIES THE NAVIGATION, which the text sidebar used to (ADR
+ * 0068 §Sửa đổi 05/10/2026 (lần 2) #6; guide §7, §8.9).
  *
- * TÊN CƠ QUAN ĐÃ CHUYỂN SANG GÓC TRÁI CỦA THANH BÊN (chủ dự án 02/10/2026) — `CommuneIdentity`.
- * Đầu trang chỉ in lại nó khi trang KHÔNG có thanh bên (`withCommune`: đổi mật khẩu), để không trang đã đăng nhập nào thiếu tên cơ quan; in ở cả hai chỗ là lặp. Tên xã đọc lúc
- * chạy từ cấu hình xã, không bao giờ là hằng số hay giá trị dự phòng.
+ * LEFT: the commune's identity — "Ủy ban nhân dân", the commune's name verbatim, its logo when it
+ * uploaded one (`CommuneIdentity`, ADR 0069) — then the module icons. Never a product or vendor name
+ * (ADR 0068 §13). The name is read at runtime from the commune's configuration, never a constant.
  *
- * Bên phải là khối người dùng — họ tên và chức vụ của chính người đang đăng nhập, đọc từ
- * `GET /api/v1/sessions/current` qua `PhienProvider`. Không đọc được thì khối ấy BIẾN MẤT chứ
- * không có tên dự phòng nào: xem `khoi-nguoi-dung.ts`. Ô chữ tắt (avatar) đi cùng khối ấy, nên nó
- * cũng biến mất cùng.
+ * RIGHT: settings (the `Cấu hình` item), the Phase-2 search placeholder, the bell, a divider, the person
+ * block opening their own menu. Below 1024px these collapse into the nav sheet, except the bell.
  *
- * Chuông thông báo (§3.2, `08-thong-bao §8`) có ở đây từ khi `service-comms` mở hộp chuông của
- * chính cán bộ (`/api/v1/notifications`). Nó chỉ vẽ khi đã đọc được phiên: không có phiên thì
- * không có hộp thư của ai để đếm, và bốn tuyến ấy sẽ chỉ trả 401.
+ * WHO SEES WHICH MENU ITEM is `locMenu`'s decision on the session's permissions, unchanged by the move
+ * from sidebar to header. `null` permissions = session NOT READ YET (three states, not two): only items
+ * needing no key show, so the menu never shows an item and then withdraws it.
  *
- * Ô tìm kiếm toàn hệ thống (§3.1) chưa dựng — giai đoạn 2 (`ROADMAP_PHASE2.md` mục 1). Theo ADR 0068
- * §14 nó đứng ĐÚNG CHỖ của nó, giữa đầu trang, dưới dạng ô nhập bị vô hiệu kèm dấu "?": không tìm,
- * không gọi máy chủ, không lưu gì (`SystemSearchPlaceholder`).
+ * The person block appears only once the session is read (`khoiNguoiDung`) — no fallback name. Until
+ * then, or when it cannot be read, the bare sign-out control stays: it is the way out for a person at
+ * the wrong machine, and it needs no name.
+ *
+ * `navigation={false}`: the page draws no menu (`/doi-mat-khau`, where a forced change must come first
+ * and every other screen would answer 403). Identity, bell and person block stay.
+ *
+ * The commune's banner strip (ADR 0069 #5) follows the header as its SIBLING, not inside it: the header
+ * is sticky, and a 112 px picture inside it would stay over every scrolled page.
  */
-export function DauTrang({ withCommune = false }: { withCommune?: boolean }) {
+export function DauTrang({ navigation = true }: { navigation?: boolean }) {
   const xa = useCauHinhXa();
   const phien = usePhien();
+  const pathname = usePathname() ?? "/";
   const nguoi = khoiNguoiDung(phien);
   const roleName = sessionRoleName(phien);
 
-  // Left: commune (only with no sidebar) + role pill. Middle: the Phase-2 system-wide search, as a
-  // disabled field with "?". Right: bell, person, sign-out.
-  //
-  // The commune's banner strip (ADR 0069 #5) follows the header as its SIBLING, not inside it: the
-  // header is sticky, and a 112 px picture inside it would stay on screen over every scrolled page.
-  // Here it scrolls away with the page. Placed in this one component so every page with a topbar
-  // has it and none adds it by hand; `CommuneBanner` renders nothing when the commune has none.
+  const permissions = phien === null ? null : phien.ok ? phien.duLieu.permissions : [];
+  const groups = navigation ? locMenu(NHOM_MENU, permissions) : [];
+  const { modules, settings } = splitSettings(groups);
+
   return (
     <>
-    <header className="dau-trang">
-      <div className="khoi-co-quan">
-        {withCommune && <CommuneIdentity commune={xa} />}
-        {roleName !== null && <RolePill roleName={roleName} />}
-      </div>
-      <SystemSearchPlaceholder />
-      <div className="khoi-nguoi-dung">
-        {nguoi.hien && <NotificationBell />}
-        {nguoi.hien ? (
-          <div className="topbar-user">
-            {userInitials(nguoi.hoTen) !== "" && (
-              <span className="topbar-avatar" aria-hidden="true">
-                {userInitials(nguoi.hoTen)}
-              </span>
-            )}
-            <div className="topbar-user-text">
-              <p className="ho-ten">{nguoi.hoTen}</p>
-              <p className="chuc-vu">{nguoi.chucVu}</p>
-            </div>
+      <header className="dau-trang">
+        <div className="header-start">
+          <CommuneIdentity commune={xa} />
+          <HeaderModules groups={modules} pathname={pathname} />
+        </div>
+        <div className="header-end">
+          <div className="header-wide">
+            {settings !== null && <SettingsButton item={settings} pathname={pathname} />}
+            <SystemSearchPlaceholder />
           </div>
-        ) : null}
-        {/* The voluntary way into `/doi-mat-khau`. Before this link the page was reachable only when
-            the server FORCED a change (first login, admin reset), so a staff member who suspected a
-            colleague had seen their password had no way to change it. Drawn only with a read
-            session: it is the signed-in person's own password, and the route takes it from the
-            session — no identity travels in the link. */}
-        {nguoi.hien && (
-          <Link className="nut-phu" href={DUONG_DAN_DOI_MAT_KHAU} title="Đổi mật khẩu">
-            <KeyRound aria-hidden="true" focusable="false" strokeWidth={1.8} />
-            <span className="topbar-action-label">Đổi mật khẩu</span>
-          </Link>
-        )}
-        <NutDangXuat />
-      </div>
-    </header>
-    <CommuneBanner src={xa.webAdminBannerUrl} />
+          {nguoi.hien && <NotificationBell />}
+          <div className="header-wide">
+            <span className="header-divider" aria-hidden="true" />
+            {nguoi.hien ? (
+              <UserMenu fullName={nguoi.hoTen} position={nguoi.chucVu} roleName={roleName} />
+            ) : (
+              <div className="header-logout">
+                <NutDangXuat />
+              </div>
+            )}
+          </div>
+          <NavSheet groups={groups} pathname={pathname} person={nguoi} roleName={roleName} search={<SystemSearchPlaceholder inSheet />} />
+        </div>
+      </header>
+      <CommuneBanner src={xa.webAdminBannerUrl} />
     </>
   );
 }
 
 /**
- * Description behind the search box's "?". A constant HERE, not a `PHAN_CHUA_DUNG` entry: the shell is
- * no screen of its own — `tools/tien_do_san_pham.py` counts `PHAN_CHUA_DUNG` per `features/<dir>` and
- * maps each page to the dirs it imports, so an entry in any feature would be counted under that one
- * screen, and an entry in every feature would count it eleven times. Like the menu's `PENDING_SCREENS`
- * (`muc-menu.ts`), the shell keeps its own one sentence.
+ * Description behind the search placeholder's "?". A constant HERE, not a `PHAN_CHUA_DUNG` entry: the
+ * shell is no screen of its own — `tools/tien_do_san_pham.py` counts `PHAN_CHUA_DUNG` per
+ * `features/<dir>` and maps each page to the dirs it imports, so an entry in any feature would be
+ * counted under that one screen, and an entry in every feature would count it eleven times. Like the
+ * menu's `PENDING_SCREENS` (`muc-menu.ts`), the shell keeps its own one sentence.
  *
  * TRUE TODAY: the contract has staff search (`/api/v1/staff/searches`) and per-register filters, but
  * no route that searches across modules (tasks, documents, citizen reports) for one query.
@@ -109,20 +103,26 @@ export const SYSTEM_SEARCH_PENDING: PendingFeatureInfo = {
 };
 
 /**
- * `docs/ui-ux/00` §3.1: placeholder `Tìm nhiệm vụ, văn bản, phản ánh…`, aria-label `Tìm kiếm toàn hệ
- * thống`. A DISABLED native input, never a `<form>` or `role="search"`: there is nothing to submit,
- * and a search landmark that searches nothing misleads a screen-reader user. The "?" sits inside the
- * right padding, like `PendingButton`.
- *
- * Below 768px it takes its own row under the commune/role block (`order-last basis-full`), so the
- * person block keeps its place at 320px.
+ * The Phase-2 system-wide search (`docs/ui-ux/00` §3.1, `ROADMAP_PHASE2.md` item 1), drawn per ADR 0068
+ * §14 as the control it will be, DISABLED, with its "?". In the navy header it is the guide's search
+ * ICON (the header has no room for a field beside 15 module icons); in the narrow-screen sheet it is the
+ * disabled field. Either way: a DISABLED native control, never a `<form>` or `role="search"` — there is
+ * nothing to submit, and a search landmark that searches nothing misleads a screen-reader user. Nothing
+ * here calls a server or stores anything.
  */
-function SystemSearchPlaceholder() {
+function SystemSearchPlaceholder({ inSheet = false }: { inSheet?: boolean }) {
+  if (!inSheet) {
+    return (
+      <span className="header-module-pending" data-pending="">
+        <button type="button" disabled aria-label={SYSTEM_SEARCH_PENDING.ten} className="header-icon-button is-disabled">
+          <Search aria-hidden="true" focusable="false" strokeWidth={1.8} />
+        </button>
+        <PendingMarker info={SYSTEM_SEARCH_PENDING} phase2 placement="corner" side="bottom" nameInHover />
+      </span>
+    );
+  }
   return (
-    <div
-      className="relative order-last flex min-w-0 basis-full items-center md:order-none md:max-w-md md:flex-1 md:basis-auto"
-      data-pending=""
-    >
+    <div className="relative flex min-w-0 items-center" data-pending="">
       <Search
         aria-hidden="true"
         focusable="false"
@@ -132,9 +132,9 @@ function SystemSearchPlaceholder() {
       <input
         type="search"
         disabled
-        aria-label="Tìm kiếm toàn hệ thống"
+        aria-label={SYSTEM_SEARCH_PENDING.ten}
         placeholder="Tìm nhiệm vụ, văn bản, phản ánh…"
-        className="h-10 w-full min-w-0 cursor-not-allowed rounded-control border border-line bg-[#f6f8fb] pr-9 pl-9 text-sm text-ink-500 placeholder:text-ink-400"
+        className="h-9 w-full min-w-0 cursor-not-allowed rounded-pill border-0 bg-canvas pr-9 pl-9 text-sm text-ink-500 placeholder:text-ink-400"
       />
       <PendingMarker info={SYSTEM_SEARCH_PENDING} phase2 placement="end" side="bottom" />
     </div>

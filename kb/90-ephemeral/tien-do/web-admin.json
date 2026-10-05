@@ -441,6 +441,15 @@
       "tiep_theo": "(1) Các thẻ màn hình W1 (Danh bạ, Tổng quan, Nhiệm vụ…) dùng component mới; dashboard.module.css nằm NGOÀI lớp (unlayered) nên thắng mọi utility — thẻ Tổng quan phải chuyển nó vào lớp hoặc thay. (2) Chủ dự án xem lại: dòng 'Ủy ban nhân dân' trên đầu trang lặp nghĩa khi displayName đã là 'UBND xã …'. (3) Dòng 'Kết nối được mã hoá' ở màn đăng nhập chỉ trọn nghĩa khi đóng nợ HSTS/CSP của web-admin (tools/security_debt.json). (4) Preflight của Tailwind chỉ bật khi mọi màn đã chuyển."
     },
     {
+      "id": "khung-app-header-navy-05-10",
+      "viec": "Khung app theo OMICALL CRM (ADR 0068 §Sửa đổi 05/10/2026 lần 2): header navy 68px với nút phân hệ chỉ icon + tooltip, thay sidebar chữ; khung bo 16px trên nền xám ngoài",
+      "trang_thai": "dang_lam",
+      "bang_chung": "components/header-modules.tsx (nút phân hệ 36×36 r12, Tooltip + aria-label tên menu, aria-current trang đang ở, mục chưa có màn = icon vô hiệu dấu '?' ADR 0068 §14, giữ nguyên cổng quyền của muc-menu.ts), nav-sheet.tsx (dưới 768px: ngăn điều hướng có CHỮ), user-menu.tsx (đổi mật khẩu, đăng xuất), dau-trang.tsx, commune-identity/banner (UBND + tên xã, không nhãn nhà cung cấp), globals.css lớp khung; gỡ thanh-ben.tsx, sidebar-view.tsx; mọi app/*/page.tsx bỏ <ThanhBen/>. tsc sạch; vitest src/components + features/nhiem-vu + app 39 tệp 855/855 (05/10). Agent dựng bị ngắt giữa phiên rồi tiếp — kiểm lại trên đĩa trước khi commit. app/tong-quan/page.tsx chỉ commit phần gỡ ThanhBen (phần PageHeader là việc Tổng quan của phiên song song).",
+      "no_confirm": [],
+      "tiep_theo": "Chủ dự án xem trên trình duyệt (desktop + điện thoại). Đo tương phản vòng focus trên nền navy. S4: 17 tệp features còn shadow-sm, chữ legacy 0.875rem.",
+      "menu": "nhiem-vu"
+    },
+    {
       "id": "tab-nhieu-ho-so-nhiem-vu",
       "viec": "Tab nhiều hồ sơ trong ngăn chi tiết nhiệm vụ (ADR 0068 #6 thay 05/10/2026): mở nhiệm vụ mới thêm tab và chuyển sang, đóng ngăn giữ tab, ✕ từng tab, Đóng tất cả",
       "trang_thai": "dang_lam",

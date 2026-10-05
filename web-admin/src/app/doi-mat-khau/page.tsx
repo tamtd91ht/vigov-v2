@@ -46,27 +46,31 @@ export default async function TrangDoiMatKhau() {
   return (
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
       <PhienProvider>
-        <DauTrang withCommune />
-        <main className="than-trang">
-          {/* One task on one screen: a narrow, centred column inside the form-page width (spec v2
-              §5 `.page--form`), the same shape at 320px as on a wide screen. */}
-          <div className="page--form mx-auto w-full">
-            <div className="mx-auto flex w-full max-w-[28rem] flex-col [&>.nhac-bat-doi]:mt-0">
-              <PageHeader
-                icon={KeyRound}
-                title="Đổi mật khẩu"
-                subtitle={
-                  <span className="inline-flex items-center gap-1.5">
-                    <LockKeyhole aria-hidden="true" focusable="false" strokeWidth={1.8} />
-                    Mật khẩu của tài khoản đang đăng nhập trên trình duyệt này.
-                  </span>
-                }
-              />
-              <NhacBatDoiMatKhau />
-              <FormDoiMatKhau />
+        {/* The same shell as every signed-in page, with NO menu: a forced change comes first, and every
+            other screen answers 403 until it is done. */}
+        <div className="khung-trang">
+          <DauTrang navigation={false} />
+          <main className="than-trang">
+            {/* One task on one screen: a narrow, centred column inside the form-page width (spec v2
+                §5 `.page--form`), the same shape at 320px as on a wide screen. */}
+            <div className="page--form mx-auto w-full">
+              <div className="mx-auto flex w-full max-w-[28rem] flex-col [&>.nhac-bat-doi]:mt-0">
+                <PageHeader
+                  icon={KeyRound}
+                  title="Đổi mật khẩu"
+                  subtitle={
+                    <span className="inline-flex items-center gap-1.5">
+                      <LockKeyhole aria-hidden="true" focusable="false" strokeWidth={1.8} />
+                      Mật khẩu của tài khoản đang đăng nhập trên trình duyệt này.
+                    </span>
+                  }
+                />
+                <NhacBatDoiMatKhau />
+                <FormDoiMatKhau />
+              </div>
             </div>
-          </div>
-        </main>
+          </main>
+        </div>
       </PhienProvider>
     </CauHinhXaProvider>
   );

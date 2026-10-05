@@ -892,31 +892,427 @@ div.thong-bao-loi:not(:empty) {
 
 /* ---- khung đã đăng nhập ----------------------------------------------------------------- */
 
-/* TOPBAR — spec v2 §5. Sticky, solid surface: v2 forbids glass/blur ("modern = less friction, not
- * decoration", ADR 0068 §11). `min-width: 0` because it is a grid child (see `.khung-trang`). It
- * wraps instead of overflowing at 320px. */
+/* HEADER — guide §7, §8.9 (ADR 0068 §Sửa đổi 05/10/2026 (lần 2) #6): navy, 68px, sticky, the
+ * header-strength shadow; it carries the module icons that replaced the text sidebar. Flat solid fill:
+ * no glass, no gradient (ADR 0068 §11). `min-width: 0` because it is a grid child (`.khung-trang`).
+ *
+ * Z-INDEX 30, NOT THE GUIDE'S 1000. The guide's ORDER is content < header < popover; this app's
+ * popovers and tooltips sit at z-60 (`components/ui`), and the economic map's full-screen mode and its
+ * mobile detail panel at z-40 must cover the header. 1000 would put the header over both.
+ *
+ * CONTRAST ON NAVY (WCAG 2.x, measured): white 13.04:1 · white on the hover/active fill (white 10% →
+ * #354662) 9.53:1 · secondary text white 80% (#d2d6dc) 8.94:1 · the focus ring is WHITE on the header,
+ * 13.04:1 against navy and 9.53:1 against the active fill — the app ring #0284c7 is only 3.18:1 there. */
 .dau-trang {
   position: sticky;
   top: 0;
   z-index: 30;
   min-width: 0;
-  min-height: var(--topbar-h);
+  height: 68px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem 1rem;
   align-items: center;
   justify-content: space-between;
-  padding: 0.5rem 1rem;
-  background: var(--surface);
-  border-bottom: 1px solid var(--line);
+  gap: var(--space-3);
+  padding: 0 var(--space-3);
+  background: var(--brand-600);
+  color: #fff;
+  box-shadow: var(--shadow-header);
 }
 
-.khoi-co-quan {
+.dau-trang :focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+/* White panels that live INSIDE the header's DOM (the bell's panel, the nav sheet) are back on white:
+ * the app ring again (4.10:1 on white), and navy ink rather than the header's white. */
+.dau-trang .bang-chuong :focus-visible,
+.dau-trang .nav-sheet :focus-visible {
+  outline: 2px solid var(--brand-500);
+  outline-offset: 2px;
+}
+
+.dau-trang .bang-chuong,
+.dau-trang .nav-sheet {
+  color: var(--ink-900);
+}
+
+/* Commune identity ON NAVY: a 40px tile, white text. The kind line and the parent authority are white
+ * 80% (#d2d6dc, 8.94:1). The name keeps every character — at most two lines, then "…", with the
+ * full name still in the DOM for a screen reader. */
+.dau-trang .commune-identity {
+  flex: 0 1 auto;
+  gap: var(--space-3);
+}
+
+.dau-trang .commune-emblem {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.dau-trang .commune-emblem svg {
+  width: 22px;
+  height: 22px;
+}
+
+.dau-trang .commune-emblem.has-logo {
+  background: var(--surface);
+  border: 0;
+}
+
+.dau-trang .commune-identity-text {
+  max-width: 15rem;
+}
+
+.dau-trang .commune-authority-kind,
+.dau-trang .commune-identity .co-quan-cap-tren {
+  color: #d2d6dc;
+}
+
+.dau-trang .ten-co-quan {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  color: #fff;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* 1024–1279px: the parent authority leaves the header (the name and the kind stay) so the module row
+ * fits; it is back from 1280px. Below 1024px there is room again — the icons are in the sheet. */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .dau-trang .commune-identity .co-quan-cap-tren {
+    display: none;
+  }
+
+  .dau-trang .commune-identity-text {
+    max-width: 11rem;
+  }
+}
+
+@media (max-width: 479px) {
+  .dau-trang .commune-identity .co-quan-cap-tren {
+    display: none;
+  }
+}
+
+.header-start,
+.header-end {
   min-width: 0;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2) var(--space-3);
+  gap: var(--space-2);
+}
+
+.header-start {
+  flex: 1 1 auto;
+  gap: var(--space-4);
+}
+
+.header-end {
+  flex: none;
+}
+
+/* Wide-only and narrow-only parts. 1024px: below it the module row, settings, search and the person
+ * block do not fit beside the commune's name (`nav-sheet.tsx`), so they move into the sheet. */
+.header-wide {
+  display: none;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.header-narrow {
+  display: flex;
+}
+
+@media (min-width: 1024px) {
+  .dau-trang {
+    padding: 0 var(--space-4);
+  }
+
+  .header-wide {
+    display: flex;
+  }
+
+  .header-narrow {
+    display: none;
+  }
+}
+
+/* The module row. `overflow-x: auto` is the last guard only: at 1024px the row fits (15 icons ≈ 610px),
+ * but a very long commune name must not push the page sideways. */
+.header-modules {
+  display: none;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+@media (min-width: 1024px) {
+  .header-modules {
+    display: flex;
+    align-items: center;
+  }
+}
+
+.header-module-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The groups of `NHOM_MENU` stay readable as runs of icons: a thin divider between them. */
+.header-module-group + .header-module-group {
+  margin-left: var(--space-1);
+  padding-left: var(--space-1);
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Icon button — guide §8.2: 36×36, radius 12, white 20px icon; hover and the current module take the
+ * white 10% fill. The current module ALSO carries a 2px white bar under the icon, so "where am I" is not
+ * told by a 10% tint alone (a fill that faint is 1.4:1 against navy). */
+.header-icon-button {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color var(--dur) var(--ease);
+}
+
+.header-icon-button svg {
+  width: 20px;
+  height: 20px;
+}
+
+.header-icon-button:hover,
+.header-icon-button.is-active,
+.header-icon-button[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.header-icon-button.is-active::after {
+  content: "";
+  position: absolute;
+  left: 9px;
+  right: 9px;
+  bottom: 2px;
+  height: 2px;
+  border-radius: 1px;
+  background: #fff;
+}
+
+/* Disabled (ADR 0068 §14): the guide's opacity .5 — white 50% is 4.49:1 on navy — no hand cursor, no
+ * hover fill. The "?" pinned to its corner is the focusable part. */
+.header-icon-button.is-disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.header-icon-button.is-disabled:hover {
+  background: transparent;
+}
+
+.header-module-pending {
+  position: relative;
+  display: inline-flex;
+}
+
+.header-divider {
+  width: 1px;
+  height: 24px;
+  margin: 0 var(--space-2);
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Person block — guide §8.9: avatar + name 15/500 + caret. The role's name under it, 12px white 80%. */
+.header-user {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  max-width: 16rem;
+  height: 44px;
+  margin: 0;
+  padding: 0 var(--space-2) 0 var(--space-1);
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--dur) var(--ease);
+}
+
+.header-user:hover,
+.header-user[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.header-user-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.header-user .ho-ten,
+.header-user-role {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-user .ho-ten {
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.header-user-role {
+  font-size: 12px;
+  line-height: 1.3;
+  color: #d2d6dc;
+}
+
+.header-user-caret {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+/* 1024–1279px: the name and role leave the eye (avatar + caret stay, the menu prints both). They stay
+ * the button's accessible name. */
+@media (max-width: 1279px) {
+  .header-user-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* The person's menu — guide §8.8: white, radius 12, the popover shadow, items radius 8. */
+.user-menu {
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 18rem;
+  max-width: calc(100vw - 1rem);
+  padding: var(--space-2);
+  background: var(--surface);
+  color: var(--ink-900);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
+  animation: menu-in var(--dur) var(--ease);
+}
+
+.user-menu-person {
+  padding: var(--space-2);
+}
+
+.user-menu .ho-ten,
+.nav-sheet-person .ho-ten {
+  margin: 0;
+  font-weight: 500;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.user-menu .chuc-vu,
+.nav-sheet-person .chuc-vu {
+  margin: 0;
+  color: var(--ink-500);
+  font-size: 0.8125rem;
+  line-height: 1.3;
+}
+
+.user-menu > .role-pill {
+  align-self: flex-start;
+  margin: 0 var(--space-2);
+}
+
+.user-menu-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--line);
+}
+
+.user-menu-item,
+.user-menu-actions .khoi-dang-xuat .nut-phu {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--control-h);
+  padding: var(--space-2);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-900);
+  font-size: 15px;
+  text-decoration: none;
+}
+
+.user-menu-item:hover,
+.user-menu-actions .khoi-dang-xuat .nut-phu:hover:not(:disabled) {
+  background: var(--surface-subtle);
+}
+
+.user-menu-item svg {
+  width: 18px;
+  height: 18px;
+}
+
+.user-menu-actions .khoi-dang-xuat {
+  text-align: left;
+}
+
+/* Session not read (or unreadable): the bare sign-out control on navy — white 10% fill, white word. */
+.header-logout .khoi-dang-xuat {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.header-logout .nut-phu {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.header-logout .nut-phu:hover:not(:disabled) {
+  border-color: #fff;
+}
+
+.header-logout .ghi-chu {
+  margin: 0;
+  max-width: 14rem;
+  color: #d2d6dc;
 }
 
 /* Role pill — "ShieldCheck Vai trò: <role>" (spec v2 §5, `role-pill.tsx`). Neutral, not a status
@@ -955,7 +1351,8 @@ div.thong-bao-loi:not(:empty) {
   color: var(--brand-600);
 }
 
-/* Commune identity — sidebar top, or the topbar on pages with no sidebar (`commune-identity.tsx`). */
+/* Commune identity — the header's left end (`commune-identity.tsx`); its on-navy colours are under
+ * `.dau-trang` above. */
 .commune-identity {
   display: flex;
   align-items: center;
@@ -1020,7 +1417,7 @@ div.thong-bao-loi:not(:empty) {
 
 @media (min-width: 768px) {
   .commune-banner {
-    padding: 1.5rem 1.75rem 0;
+    padding: 1.5rem 1.5rem 0;
   }
 
   .commune-banner img {
@@ -1059,92 +1456,31 @@ div.thong-bao-loi:not(:empty) {
   line-height: 1.3;
 }
 
-/* Khối người dùng — `15-phu-luc-giao-dien-chung §3`, vùng Phải.
-   Khi không đọc được phiên thì khối này rỗng và chỉ còn nút đăng xuất: cố ý KHÔNG chừa một
-   ô xám giữ chỗ, vì một ô giữ chỗ tồn tại mãi trông y hệt một trang đang tải mãi. */
-.khoi-nguoi-dung {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 0.75rem;
-  align-items: center;
-  justify-content: flex-end;
-  margin-left: auto;
-  text-align: left;
-}
-
-.topbar-user {
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-  min-width: 0;
-  padding-left: 0.75rem;
-  border-left: 1px solid var(--line);
-}
-
-/* Avatar: initials of the signed-in person's own name (spec §7), purely decorative — the name
- * itself sits right beside it, so the circle is `aria-hidden`. */
+/* Avatar: initials of the signed-in person's own name (spec §7), purely decorative — the name sits
+ * right beside it (or is the button's name), so the circle is `aria-hidden`. Navy on the cyan tint
+ * (10.78:1); in the header the tile itself reads against navy. */
 .topbar-avatar {
   flex: none;
   display: grid;
   place-items: center;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  background: var(--brand-100);
-  color: var(--brand-700);
+  background: var(--accent-100);
+  color: var(--ink-900);
   font-size: 0.8125rem;
-  font-weight: 700;
-}
-
-.topbar-user-text {
-  min-width: 0;
-}
-
-.khoi-nguoi-dung .ho-ten {
-  margin: 0;
   font-weight: 600;
-  font-size: 0.8125rem;
-  line-height: 1.3;
 }
 
-.khoi-nguoi-dung .chuc-vu {
-  margin: 0;
-  color: var(--xam-chu);
-  font-size: 0.75rem;
-  line-height: 1.3;
-}
-
-.khoi-dang-xuat {
-  text-align: right;
-}
-
+/* Sign-out (`NutDangXuat`). When the session cannot be read the person block is empty and only this
+   stays: deliberately NO grey placeholder, because a placeholder that never fills looks exactly like
+   a page loading forever. */
 .khoi-dang-xuat .ghi-chu {
   max-width: 16rem;
 }
 
-/* Logout keeps its visible word from 640px up; below, the word is clipped for the eye only and
- * stays the button's accessible name. */
-.logout-label,
-.topbar-action-label {
+.logout-label {
   white-space: nowrap;
-}
-
-@media (max-width: 639px) {
-  .topbar-user-text,
-  .logout-label,
-  .topbar-action-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-
-  .topbar-user {
-    padding-left: 0;
-    border-left: 0;
-  }
 }
 
 /* Chuông thông báo — `08-thong-bao §8`. Bảng mở xuống dưới, neo mép phải; ở 320px nó rộng bằng màn
@@ -1154,45 +1490,48 @@ div.thong-bao-loi:not(:empty) {
   text-align: left;
 }
 
+/* The bell is a header icon button (guide §8.2): 36×36, radius 12, white 20px icon. */
 .nut-chuong {
   position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  border: 1px solid var(--line);
-  border-radius: var(--r-control);
-  background: var(--surface);
-  color: var(--ink-700);
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: #fff;
   cursor: pointer;
-  transition:
-    background-color var(--motion) ease,
-    border-color var(--motion) ease,
-    color var(--motion) ease;
+  transition: background-color var(--dur) var(--ease);
+}
+
+.nut-chuong svg {
+  width: 20px;
+  height: 20px;
 }
 
 .nut-chuong:hover,
 .nut-chuong[aria-expanded="true"] {
-  background: var(--brand-50);
-  border-color: var(--brand-100);
-  color: var(--brand-700);
+  background: rgba(255, 255, 255, 0.1);
 }
 
+/* Badge — guide §8.3 shape, ADR 0068 §Sửa đổi 05/10/2026 (lần 2) #7 colour: #D93A36 with white text
+ * at 11px (4.56:1); the guide's #FF5955 at 9px is 3.08:1. The count is ALSO in the bell's accessible
+ * name (`bellLabel`), so the badge is `aria-hidden`. */
 .huy-hieu-chuong {
   position: absolute;
-  top: -0.375rem;
-  right: -0.375rem;
-  min-width: 1.125rem;
-  height: 1.125rem;
-  padding: 0 0.25rem;
-  border: 2px solid #fff;
-  border-radius: 999px;
-  background: var(--do-loi);
+  top: 0;
+  right: -4px;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--red-solid);
   color: #fff;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  line-height: 0.875rem;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
   text-align: center;
 }
 
@@ -1210,6 +1549,18 @@ div.thong-bao-loi:not(:empty) {
   border-radius: var(--r-md);
   box-shadow: var(--shadow-sm);
   animation: menu-in var(--dur) var(--ease);
+}
+
+/* Below 640px the bell sits near the right edge with the menu button after it; a panel anchored to
+ * the bell would run off the left edge. It spans the viewport under the header instead. */
+@media (max-width: 639px) {
+  .bang-chuong {
+    position: fixed;
+    top: 84px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+  }
 }
 
 @keyframes menu-in {
@@ -1363,335 +1714,230 @@ div.thong-bao-loi:not(:empty) {
   color: var(--ink-900);
 }
 
+/* 24px around the content from 768px (guide §6, §7: "Main content padding ~24px"). */
 @media (min-width: 768px) {
   .than-trang,
   .trang-404 {
-    padding: 1.5rem 1.75rem 2.5rem;
+    padding: 1.5rem 1.5rem 2.5rem;
   }
 }
 
-/* ---- thanh bên · spec §5 (supersedes `15-phu-luc-giao-dien-chung` §2 on visuals) ------------ */
+/* ---- app shell · guide §7 (ADR 0068 §Sửa đổi 05/10/2026 (lần 2)) ---------------------------- */
 
-/* KHUNG HAI CỘT dựng bằng grid trên một bọc ngoài, KHÔNG bằng `position: fixed` trên thanh bên.
-   Fixed thì thân trang phải mang một `margin-left` bằng đúng chiều rộng thanh — hai con số cho
-   một sự thật, và chúng lệch nhau đúng lúc thanh đổi chiều rộng (thu gọn). Grid thì chỉ có một.
-
-   `minmax(0, 1fr)`, NOT `1fr`: a bare `1fr` track has an automatic minimum equal to its widest
-   child, so one wide table pushed the whole page sideways (spec issue #2, measured 1135px of
-   content in a 1035px viewport). `minmax(0, …)` lets the column shrink and the table scroll inside
-   its own `.bang-cuon`. */
-.khung-trang {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  grid-template-rows: auto 1fr;
-  min-height: 100vh;
-  min-height: 100dvh;
+/* The grey around the shell (guide §2.2 `--bg-outer`). Keyed on the shell's presence, so the sign-in
+   and 404 pages — which have no shell — keep their own background. */
+html:has(.khung-trang),
+body:has(.khung-trang) {
+  background: var(--bg-outer);
 }
 
-/* A commune with a web-admin banner gets a third row for it, between the topbar and the page body —
+/* THE SHELL: 8px from the window edge, radius 16, `--bg` inside; header row, optional banner row, body.
+   ONE column since the header replaced the text sidebar.
+
+   `minmax(0, 1fr)`, NOT `1fr`: a bare `1fr` track has an automatic minimum equal to its widest child,
+   so one wide table pushed the whole page sideways (spec issue #2, measured 1135px of content in a
+   1035px viewport). `minmax(0, …)` lets the column shrink and the table scroll inside its own
+   `.bang-cuon`.
+
+   `overflow: clip`, NOT `hidden`, for the rounded corners: `hidden` makes the shell a scroll container,
+   and the sticky header would then stick to a box that never scrolls — i.e. not stick at all. `clip`
+   cuts the corners without that. (`hidden` first: an engine without `clip` keeps the corners and loses
+   only the stickiness.) */
+.khung-trang {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  margin: 8px;
+  min-height: calc(100vh - 16px);
+  min-height: calc(100dvh - 16px);
+  border-radius: var(--r-lg);
+  background: var(--bg);
+  overflow: hidden;
+  overflow: clip;
+}
+
+/* A commune with a web-admin banner gets a third row for it, between the header and the page body —
    otherwise the strip would take the stretching `1fr` row and the body would fall into an implicit
    one. Keyed on the strip's presence, so a commune without one keeps the two-row frame unchanged. */
 .khung-trang:has(> .commune-banner) {
   grid-template-rows: auto auto 1fr;
 }
 
-/* Thanh bên TRẢI CẢ HAI HÀNG, nên đầu trang và thân trang ở lại làm anh em của nó thay vì phải
-   bọc thêm một tầng div. */
-.thanh-ben {
-  grid-row: 1 / -1;
-}
+/* ---- nav sheet (below 1024px) · `nav-sheet.tsx` ------------------------------------------------ */
 
-/* White sidebar, hairline right border, the red–gold identity strip on top (spec §5). Sticky at
-   full viewport height so the menu never scrolls away with a long page. */
-.thanh-ben {
-  position: sticky;
-  top: 0;
-  align-self: start;
-  width: var(--sidebar-w);
+/* Full height, pinned to the left edge, white; flat navy backdrop, no blur (ADR 0068 §11). The 250ms
+   slide is zeroed under reduced motion by the base layer. */
+.nav-sheet {
+  position: fixed;
+  inset: 0 auto 0 0;
+  box-sizing: border-box;
+  width: min(20rem, calc(100vw - 3rem));
   height: 100vh;
   height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
   padding: 0;
+  border: 0;
+  border-radius: 0 var(--r-lg) var(--r-lg) 0;
   background: var(--surface);
-  border-right: 1px solid var(--line);
-  color: var(--ink-700);
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  transition: width var(--dur-slow) var(--ease);
-}
-
-.thanh-ben::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto;
-  height: 4px;
-  background: linear-gradient(90deg, var(--red-600) 0 70%, var(--gold-500) 70%);
-}
-
-.thanh-ben.thu-gon {
-  width: var(--sidebar-w-collapsed);
-}
-
-/* Thu gọn ẩn CHỮ, giữ nguyên cây DOM và thứ tự tiêu điểm: `display: none` ở đây sẽ làm người
-   dùng bàn phím mất hẳn đường điều hướng khi thanh đang thu, mà nút thu gọn thì vẫn ở đó. */
-.thanh-ben.thu-gon .commune-identity-text,
-.thanh-ben.thu-gon .thanh-ben-nhan-nhom,
-.thanh-ben.thu-gon .thanh-ben-nhan {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
-.thanh-ben-dinh {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 1.375rem 1.25rem 1rem;
-}
-
-.thanh-ben.thu-gon .thanh-ben-dinh {
-  justify-content: center;
-  padding-inline: 0;
-}
-
-
-/* The scrolling middle: only the menu scrolls, the logo and the collapse button stay put. */
-.thanh-ben-cuon {
-  flex: 1 1 auto;
-  min-height: 0;
+  box-shadow: var(--shadow-md);
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 0 0.75rem 0.75rem;
+  animation: sheet-in var(--dur) var(--ease);
 }
 
-.thanh-ben-nhom + .thanh-ben-nhom {
-  margin-top: 0.5rem;
+.nav-sheet::backdrop {
+  background: rgba(30, 49, 80, 0.5);
 }
 
-/* Group label: 11px/600, upper case, tracked. `--ink-500` where spec §5 says `--ink-400`: that is
-   2.56:1, and the spec's own contrast table bars it from text people read. */
-.thanh-ben-nhan-nhom {
-  margin: 0;
-  padding: 0.875rem 0.5rem 0.375rem;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--ink-500);
+@keyframes sheet-in {
+  from {
+    transform: translateX(-24px);
+    opacity: 0;
+  }
 }
 
-.thanh-ben-nhom ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.nav-sheet-body {
   display: flex;
   flex-direction: column;
-  gap: 0.125rem;
+  gap: var(--space-3);
+  padding: var(--space-3);
 }
 
-/* Menu item: 36px, 18px icon + 13.5px/500 label, 12px apart, 8px radius; a long label ends in "…"
-   on one line, never wraps (spec v2 §5). */
-.thanh-ben-muc a,
-.thanh-ben-muc > span {
-  position: relative;
+.nav-sheet-head {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  min-width: 0;
-  min-height: 2.25rem;
-  padding: 0 0.75rem;
-  border-radius: var(--r-sm);
-  color: var(--ink-700);
-  text-decoration: none;
-  font-size: 13.5px;
-  font-weight: 500;
-  transition:
-    background-color var(--dur-fast) var(--ease),
-    color var(--dur-fast) var(--ease),
-    box-shadow var(--dur-fast) var(--ease);
+  justify-content: space-between;
+  gap: var(--space-2);
 }
 
-.thanh-ben.thu-gon .thanh-ben-muc a,
-.thanh-ben.thu-gon .thanh-ben-muc > span {
-  justify-content: center;
-  padding: 0;
-}
-
-.thanh-ben-muc svg {
-  flex: none;
-  width: 1.125rem;
-  height: 1.125rem;
-  color: var(--ink-500);
-  transition: color var(--motion) ease;
-}
-
-.thanh-ben-nhan {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.thanh-ben-muc a:hover {
-  background: var(--surface-muted);
-  color: var(--ink-900);
-}
-
-.thanh-ben-muc a:hover svg {
-  color: var(--brand-600);
-}
-
-/* Active: `--brand-50` fill, `--brand-700` text, a 3px inset bar (spec §5). The weight changes too,
-   so the active item is not told apart by colour alone. */
-.thanh-ben-muc a.dang-chon {
-  background: var(--brand-50);
-  color: var(--brand-700);
+.nav-sheet-head h2 {
+  margin: 0 0 0 var(--space-2);
+  font-size: 15px;
   font-weight: 600;
+}
+
+.nav-sheet-close {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--ink-900);
+  cursor: pointer;
+}
+
+.nav-sheet-close:hover {
+  background: var(--surface-subtle);
+}
+
+.nav-sheet-close svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Group label: 11px/600, upper case — `--ink-500` (5.98:1 on white), never the decorative `--ink-400`. */
+.nav-sheet-group-label {
+  margin: 0;
+  padding: var(--space-2) var(--space-2) var(--space-1);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-500);
+}
+
+.nav-sheet-group ul {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nav-sheet-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Item: 44px touch target, 20px icon + the item's WORD (touch has no tooltip), radius 8 (guide §8.8). */
+.nav-sheet-link {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border-radius: var(--r-sm);
+  color: var(--ink-900);
+  font-size: 15px;
+  text-decoration: none;
+  transition: background-color var(--dur) var(--ease);
+}
+
+.nav-sheet-link svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.nav-sheet-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+a.nav-sheet-link:hover {
+  background: var(--surface-subtle);
+}
+
+/* Current page: cyan tint fill (navy text 11.87:1), weight 500 and a 3px navy bar — never colour alone. */
+a.nav-sheet-link.is-active {
+  background: var(--accent-50);
+  font-weight: 500;
   box-shadow: inset 3px 0 0 var(--brand-600);
 }
 
-.thanh-ben-muc a.dang-chon svg {
-  color: var(--brand-600);
-}
-
-/* MỤC CHƯA CÓ MÀN: mờ đi và KHÔNG có con trỏ bàn tay. Con trỏ bàn tay trên thứ không bấm được
-   là một lời hứa nhỏ mà mỗi lần rê chuột lại lặp lại. The label stays `--ink-500` (still readable);
-   only the icon drops to the decorative `--ink-400`. */
-.thanh-ben-muc.chua-co > span {
+.nav-sheet-item.is-pending .nav-sheet-link {
   color: var(--ink-500);
   cursor: default;
 }
 
-.thanh-ben-muc.chua-co svg {
+.nav-sheet-item.is-pending svg {
   color: var(--ink-400);
 }
 
-/* Collapse control at the BOTTOM (spec §5): icon + small word, icon only when collapsed. */
-.thanh-ben-chan {
-  flex: none;
-  padding: 0.75rem;
+.nav-sheet-account {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
   border-top: 1px solid var(--line);
 }
 
-.thanh-ben-nut-thu-gon {
+.nav-sheet-person {
   display: flex;
   align-items: center;
-  gap: 0.625rem;
+  gap: var(--space-3);
+  padding: var(--space-2);
+}
+
+.nav-sheet-account > .role-pill {
+  align-self: flex-start;
+  margin: 0 var(--space-2);
+}
+
+.nav-sheet-account .khoi-dang-xuat .nut-phu {
   width: 100%;
-  min-height: 2.5rem;
-  margin: 0;
-  padding: 0 0.75rem;
-  background: none;
-  border: 0;
-  border-radius: var(--r-sm);
-  color: var(--ink-500);
-  font: inherit;
-  font-size: 0.8125rem;
-  cursor: pointer;
-  transition:
-    background-color var(--motion) ease,
-    color var(--motion) ease;
-}
-
-.thanh-ben-nut-thu-gon:hover {
-  background: var(--surface-muted);
-  color: var(--ink-900);
-}
-
-.thanh-ben-nut-thu-gon svg {
-  flex: none;
-  width: 1.125rem;
-  height: 1.125rem;
-}
-
-.thanh-ben.thu-gon .thanh-ben-nut-thu-gon {
-  justify-content: center;
-  padding: 0;
-}
-
-/* Dưới 1024px thanh bên xếp thành một dải ngang trên cùng — `15-phu-luc` §7. Same items, same
-   order: the groups lay out in one row that scrolls INSIDE the bar, so the page itself never
-   scrolls sideways. Collapsing means nothing here, so its control is not drawn. */
-@media (max-width: 1023px) {
-  .khung-trang {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .thanh-ben,
-  .thanh-ben.thu-gon {
-    position: relative;
-    width: auto;
-    height: auto;
-    min-width: 0;
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-  }
-
-  .thanh-ben-dinh,
-  .thanh-ben.thu-gon .thanh-ben-dinh {
-    justify-content: flex-start;
-    padding: 0.875rem 1rem 0.5rem;
-  }
-
-  .thanh-ben-cuon {
-    display: flex;
-    gap: 0.25rem;
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding: 0 0.75rem 0.625rem;
-    scrollbar-width: thin;
-  }
-
-  .thanh-ben-nhom + .thanh-ben-nhom {
-    margin-top: 0;
-  }
-
-  .thanh-ben-nhan-nhom {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-
-  .thanh-ben-nhom ul {
-    flex-direction: row;
-  }
-
-  .thanh-ben-muc a,
-  .thanh-ben-muc > span,
-  .thanh-ben.thu-gon .thanh-ben-muc a,
-  .thanh-ben.thu-gon .thanh-ben-muc > span {
-    justify-content: flex-start;
-    padding: 0 0.75rem;
-    white-space: nowrap;
-  }
-
-  /* A collapsed choice saved on a wide screen must not hide labels on a narrow one. */
-  .thanh-ben.thu-gon .commune-identity-text,
-  .thanh-ben.thu-gon .thanh-ben-nhan {
-    position: static;
-    width: auto;
-    height: auto;
-    overflow: visible;
-    clip-path: none;
-  }
-
-  .thanh-ben-muc a.dang-chon {
-    box-shadow: inset 0 -2px 0 var(--brand-600);
-  }
-
-  .thanh-ben-chan {
-    display: none;
-  }
-
-  .dau-trang {
-    position: relative;
-  }
+  justify-content: flex-start;
+  min-height: 44px;
 }
 
 /* ---- màn cấu hình · tab Người dùng ------------------------------------------------------ */

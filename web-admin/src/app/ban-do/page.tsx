@@ -4,7 +4,6 @@ import "maplibre-gl/dist/maplibre-gl.css";
 
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
 import { DauTrang } from "@/components/dau-trang";
-import { ThanhBen } from "@/components/thanh-ben";
 import { EconomicMapScreen } from "@/features/map-assets/economic-map-screen";
 import { NO_ASSET_READ, PAGE_TITLE } from "@/features/map-assets/labels";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
@@ -42,7 +41,6 @@ export default async function EconomicMapPage() {
     <CauHinhXaProvider giaTri={phanHienThi(commune)}>
       <PhienProvider>
         <div className="khung-trang">
-          <ThanhBen />
           <DauTrang />
           <main className="than-trang">
             <CongQuyen khoa={ASSET_READ_PERMISSION} cauThieuQuyen={NO_ASSET_READ}>
