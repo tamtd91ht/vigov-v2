@@ -246,7 +246,6 @@ describe("CỔNG QUYỀN — phân loại và chuyển xử lý", () => {
       >
         <ThePhieu
           phieu={phieu()}
-          tenBoPhan={TEN_BO_PHAN}
           bayGio={BAY_GIO}
           dangMo={false}
           mo={() => {}}
@@ -335,7 +334,6 @@ describe("dữ liệu cá nhân — màn hình hiện đúng thứ máy chủ g�
     const html = renderToStaticMarkup(
       <ThePhieu
         phieu={phieu()}
-        tenBoPhan={TEN_BO_PHAN}
         bayGio={BAY_GIO}
         dangMo={false}
         mo={() => {}}
@@ -350,7 +348,6 @@ describe("dữ liệu cá nhân — màn hình hiện đúng thứ máy chủ g�
     const html = renderToStaticMarkup(
       <ThePhieu
         phieu={phieu({ anonymous: true, reporter_name: "", reporter_phone: "" })}
-        tenBoPhan={TEN_BO_PHAN}
         bayGio={BAY_GIO}
         dangMo={false}
         mo={() => {}}
@@ -411,7 +408,6 @@ describe("lĩnh vực hạn chế — màn hình KHÔNG nói ra rằng có phi�
     const html = renderToStaticMarkup(
       <DanhSachThe
         phieu={[]}
-        tenBoPhan={TEN_BO_PHAN}
         bayGio={BAY_GIO}
         maDangMo={null}
         moPhieu={() => {}}
@@ -597,7 +593,7 @@ describe("chi tiết phiếu ở nhánh rẽ — lý do, cơ quan, thời điể
   it("thanh bước: ô rẽ nhánh đúng trạng thái là `đang ở đây`, luồng chính không ô nào", () => {
     const html = veChiTiet(congThaoTac(false, false, false), phieu({ status: "chuyen-cap-tren" }));
     expect(html.match(/đang ở đây/g)?.length).toBe(1);
-    expect(html).toMatch(/Chuyển cấp trên<\/span> (<!-- -->)?đang ở đây/);
+    expect(html).toMatch(/Chuyển cấp trên<\/span><span[^>]*>đang ở đây<\/span>/);
   });
 });
 
@@ -1081,7 +1077,7 @@ describe("drawer — rating block and reopen line", () => {
   it("card corner: stars once rated, nothing before", () => {
     const the = (p: petitions_phieuPhanAnhRa) =>
       renderToStaticMarkup(
-        <ThePhieu phieu={p} tenBoPhan={TEN_BO_PHAN} bayGio={BAY_GIO} dangMo={false} mo={() => {}} />,
+        <ThePhieu phieu={p} bayGio={BAY_GIO} dangMo={false} mo={() => {}} />,
       );
     expect(the(phieu({ rating: 2 }))).toContain('aria-label="2/5 sao"');
     expect(the(phieu({ rating: 2 }))).toContain("★★☆☆☆");
@@ -1099,10 +1095,10 @@ describe("filter `Bị đánh giá thấp` (§4) → `ratingMax: 2`", () => {
 
   it("the box exists, labelled, unticked by default; ticked when the filter is on", () => {
     expect(renderToStaticMarkup(hang({}).tree)).toMatch(
-      /<input id="loc-danh-gia-thap" type="checkbox"\/> (<!-- -->)?Bị đánh giá thấp/,
+      /<input id="loc-danh-gia-thap" type="checkbox"( class="[^"]*")?\/> (<!-- -->)?Bị đánh giá thấp/,
     );
     expect(renderToStaticMarkup(hang({ ratingMax: 2 }).tree)).toMatch(
-      /id="loc-danh-gia-thap" type="checkbox" checked=""/,
+      /id="loc-danh-gia-thap" type="checkbox"[^>]*checked=""/,
     );
   });
 
@@ -1261,5 +1257,85 @@ describe("PA-03 — phân loại trước, chuyển xử lý sau", () => {
     const html = veVoi(phieu(), congThaoTac(false, false, false));
     expect(html).toContain("Hạn phân loại");
     expect(html).not.toContain("Trần phân loại");
+  });
+});
+
+/**
+ * ADR 0068 lần 5 — the prototype's composition: cards in the list, the drawer as a right-hand dialog
+ * with its three fact cells, and the "?" where the prototype shows what the backend cannot give.
+ */
+describe("prototype composition — list cards", () => {
+  const card = (p: petitions_phieuPhanAnhRa) =>
+    renderToStaticMarkup(<ThePhieu phieu={p} bayGio={BAY_GIO} dangMo={false} mo={() => {}} />);
+
+  it("a card is ONE button that opens the drawer dialog; code, field, content, place, sender", () => {
+    const html = card(phieu());
+    expect(html.startsWith('<button type="button" aria-haspopup="dialog"')).toBe(true);
+    expect(html).toContain("PA-2026-0021");
+    expect(html).toContain("Rác thải – Vệ sinh môi trường");
+    expect(html).toContain("Tổ 6, thôn Hà Lam");
+    expect(html).toContain("Nguyễn V. A. · 09****0000");
+  });
+
+  it("the tile is a neutral placeholder: NO image is loaded, no photo link is signed", () => {
+    const html = card(phieu());
+    expect(html).not.toContain("<img");
+    expect(html).not.toMatch(/src="/);
+  });
+
+  it("no address: the prototype's fallback words; no duplicate count is ever invented", () => {
+    const html = card(phieu({ address: "" }));
+    expect(html).toContain("Chưa rõ vị trí");
+    expect(html).not.toContain("phiếu trùng");
+  });
+
+  it("past the resolve deadline: marked, with the clock icon and the words — never colour alone", () => {
+    const late = card(phieu({ resolve_due: "2026-09-09T08:00:00Z" }));
+    expect(late).toContain("data-tre-han");
+    expect(late).toContain("lucide-alarm-clock");
+    expect(card(phieu())).not.toContain("data-tre-han");
+  });
+
+  it("not rated: the channel sits in the corner instead of stars", () => {
+    expect(card(phieu())).toContain("Zalo Mini App");
+  });
+});
+
+describe("prototype composition — the drawer", () => {
+  const ALL = congThaoTac(true, true, true);
+
+  it("is a dialog named by code · channel · time — never by the citizen's words", () => {
+    const html = veChiTiet(ALL);
+    expect(html).toMatch(/<dialog[^>]*aria-labelledby="tieu-de-chi-tiet-phieu"/);
+    const name = html.match(/<h2 id="tieu-de-chi-tiet-phieu"[^>]*>([\s\S]*?)<\/h2>/)?.[1] ?? "";
+    expect(name).toContain("PA-2026-0021");
+    expect(name).not.toContain("Rác tồn đọng");
+  });
+
+  it("three fact cells in the prototype's order, both clocks in the first", () => {
+    const html = veChiTiet(ALL);
+    const order = ["Hạn xử lý xong", "Hạn tiếp nhận", "Hạn phân loại", "Đang giao cho", "Hiển thị với người dân"];
+    const at = order.map((w) => html.indexOf(w));
+    expect(at.every((i) => i >= 0)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+  });
+
+  it("sections in the prototype's order: content → photos → location → duplicates (?) → rating → acts → log", () => {
+    const html = veChiTiet(ALL);
+    const order = [
+      "Nội dung phản ánh",
+      "Vị trí hiện trường",
+      pendingMarkerLabel(petitionPendingPart("duplicates").ten),
+      "Đánh giá của người dân",
+      "Xử lý phiếu",
+      TIEU_DE_NHAT_KY,
+    ].map((w) => html.indexOf(nhuTrongHTML(w)));
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
+
+  it("the duplicates block offers NO merge button — only its '?'", () => {
+    const html = veChiTiet(ALL);
+    expect(html).not.toContain("Gộp phiếu");
   });
 });

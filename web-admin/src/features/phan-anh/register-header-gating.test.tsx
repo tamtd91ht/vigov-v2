@@ -16,9 +16,10 @@ vi.mock("@/features/phien/phien-hien-tai", () => ({
     session.permissions === null ? null : { ok: true, duLieu: { permissions: session.permissions } },
 }));
 
-import { SoPhanAnh } from "./so-phan-anh";
+// The header button lives in the page frame (`PetitionWorkspace`, the prototype's header row).
+import { PetitionWorkspace } from "./petition-workspace";
 
-const render = () => renderToStaticMarkup(<SoPhanAnh />);
+const render = () => renderToStaticMarkup(<PetitionWorkspace />);
 
 /** The button itself — NOT the words, which also appear in the "not built" list (§11's hamlet/photos). */
 const INTAKE_BUTTON = /<button[^>]*aria-haspopup="dialog"[^>]*>.*?Nhập hộ phản ánh<\/button>/;
@@ -59,5 +60,24 @@ describe("KPI cards — `feedback.read` AND `report.read`", () => {
       expect(html, String(p)).not.toContain("Điểm hài lòng trung bình");
       expect(html, String(p)).not.toContain("Đang tải số liệu phản ánh…");
     }
+  });
+});
+
+describe("the page frame — `feedback.read`", () => {
+  it("DENIED — without it: the header still names the screen, the register is not drawn", () => {
+    session.permissions = ["feedback.create"];
+    const html = render();
+    expect(html).toContain("<h1");
+    expect(html).toContain("Phản ánh của người dân");
+    expect(html).toContain("feedback.read");
+    expect(html).not.toContain("Sổ phản ánh của xã");
+    expect(html).not.toContain('id="petition-filters"');
+  });
+
+  it("with it: the register under the header; never a line about restricted petitions (rule 4)", () => {
+    session.permissions = ["feedback.read"];
+    const html = render();
+    expect(html).toContain("Sổ phản ánh của xã");
+    expect(html).not.toMatch(/luồng riêng|không hiển thị ở đây|Chủ tịch Uỷ ban đọc được/);
   });
 });

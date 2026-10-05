@@ -4786,7 +4786,8 @@ export function FormGiaoViec({
   /**
    * Open as the prototype's centred DIALOG (`ModalDialog`) instead of inline — the Nhiệm vụ screen's
    * `+ Giao việc mới` and `+ Thêm việc con`, and the Biên bản screen's `Tách thành nhiệm vụ`. Off by
-   * default: Phản ánh still embeds the form in its own frame, and moving it is that screen's call.
+   * default: an inline caller keeps the form in its own frame. (Phản ánh's `Tạo nhiệm vụ` opens it as a dialog
+   * too since 06/10/2026.)
    */
   dialog?: boolean;
   /**
@@ -5276,7 +5277,7 @@ export function FormGiaoViec({
   );
 
   if (!dialog) {
-    // Inline (Biên bản, Phản ánh): the same fields in the same order, in the screen's own frame.
+    // Inline callers: the same fields in the same order, in the screen's own frame.
     return (
       <form className="form-danh-muc flex flex-col gap-4 [&>*]:my-0" onSubmit={gui}>
         <div className="[&>*]:my-0">

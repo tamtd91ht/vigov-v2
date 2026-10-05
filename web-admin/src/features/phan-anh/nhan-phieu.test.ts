@@ -731,8 +731,9 @@ describe("phần chưa dựng được — nhật ký xử lý đã rời danh s
     expect(tatCa).not.toMatch(/Nhật ký xử lý|nhat_ky_phan_anh/);
     // Chín mục (02/10/2026, ADR 0068 §14): bảy mục cũ, trong đó hai mục tách đôi để mỗi dấu "?" mở
     // đúng một mô tả (tab Bản đồ nhiệt / tab Báo cáo; ô thôn / nút đính ảnh của modal nhập hộ). Bỏ
-    // nhầm một mục khác cùng lúc là đỏ ở đây.
-    expect(PHAN_CHUA_DUNG.length).toBe(9);
+    // nhầm một mục khác cùng lúc là đỏ ở đây. Mười từ 06/10/2026: khối `Có thể trùng với phiếu khác`
+    // của prototype (ADR 0068 lần 5) có chỗ giữ riêng.
+    expect(PHAN_CHUA_DUNG.length).toBe(10);
     // Both photo halves are built now (ADR 0047: the "after" row replaces G8).
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.startsWith("Ảnh sau khi xử lý"))).toBe(false);
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("Ảnh trước"))).toBe(false);
@@ -774,6 +775,8 @@ describe("phần chưa dựng được — đánh giá và kiểm duyệt công 
       "Bản đồ hiện trường và tên thôn",
       "Bản đồ nhiệt",
       "Báo cáo",
+      // 06/10/2026 (ADR 0068 lần 5): the prototype's duplicates block.
+      "Có thể trùng với phiếu khác",
       "Liên quan đến tôi",
       "Biểu mẫu `Ghi nhận đánh giá của người dân` (§8.6)",
       "Email của cán bộ trong ô `Đang giao cho` và ô chọn cán bộ (§8.3, §8.5)",

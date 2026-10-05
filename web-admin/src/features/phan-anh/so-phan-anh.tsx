@@ -5,6 +5,7 @@ import {
   ArrowUp,
   ArrowUpRight,
   Ban,
+  BarChart3,
   Building2,
   ChevronLeft,
   ChevronRight,
@@ -14,36 +15,33 @@ import {
   CircleCheck,
   CircleDot,
   CloudOff,
-  FileText,
   Flame,
   Forward,
-  Inbox,
+  ImageOff,
   Landmark,
-  Map as MapIcon,
   List,
   ListChecks,
+  Map as MapIcon,
   MapPin,
-  Radio,
+  MessageSquare,
   RefreshCw,
   Search,
-  SearchX,
   Shapes,
   ShieldX,
   Tags,
   UserRound,
-  Workflow,
-  BarChart3,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
+import { Card, CardHeader } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Field } from "@/components/ui/field";
 import { IconButton } from "@/components/ui/icon-button";
+import { LargeDialog } from "@/components/ui/large-dialog";
 import { Notice } from "@/components/ui/notice";
 import { PendingMarker, PendingSection, PendingTab } from "@/components/ui/pending-feature";
 import { Tab, TabList } from "@/components/ui/tabs";
@@ -81,7 +79,6 @@ import type {
 import { layDanhSachThonToDanPho } from "@/lib/api/thon-to-dan-pho";
 import { coQuyen, REPORT_READ_PERMISSION } from "@/lib/quyen";
 import { DrillDownBanner } from "@/components/drill-down-banner";
-import { FilterBar } from "@/components/ui/filter-bar";
 import { NO_DRILL_DOWN, drillDownQuery, type DrillDown } from "@/lib/drill-down";
 import { residentialUnitFilterLabel } from "@/features/cau-hinh/nhan-thon";
 
@@ -146,7 +143,9 @@ import {
   PHAM_VI_GIAO_CHO_TOI,
   PHAM_VI_TOAN_XA,
   petitionPendingPart,
-  PETITION_INTAKE_PERMISSION,
+  CARD_NO_LOCATION,
+  LIST_EMPTY_HINT,
+  LIST_EMPTY_TITLE,
   petitionTaskOffered,
   phanLoaiDuoc,
   RE_NHANH,
@@ -171,12 +170,11 @@ import { PetitionTaskBlock } from "./petition-task";
 import {
   ACT_CLASS,
   buttonClass,
-  FIELD_LIST_CLASS,
   Glyph,
   HINT_CLASS,
   LABEL_CLASS,
   LoadingBar,
-  PetitionRowsSkeleton,
+  PetitionCardsSkeleton,
   PetitionStatusBadge,
   SectionTitle,
   TEXTAREA_CLASS,
@@ -185,7 +183,6 @@ import {
 } from "./petition-ui";
 import { PetitionKpis } from "./petition-kpis";
 import { afterPhotosHeadingId, ScenePhotos } from "./scene-photos";
-import { StaffIntakeButton } from "./staff-intake";
 import { VerificationPhotos } from "./verification-photos";
 import {
   QUYEN_DONG_PHAN_ANH,
@@ -253,9 +250,8 @@ type BoLoc = Omit<LocPhanAnh, "limit" | "cursor">;
 
 const KHONG_LOC: BoLoc = {};
 
-/** The StatusStepper rows (§8.2): pills that wrap, each followed by its role in words. */
-const STEP_LIST = "m-0 flex list-none flex-wrap gap-x-4 gap-y-2 p-0";
-const STEP_ITEM = "inline-flex items-center gap-1 text-xs text-ink-500";
+/** A row of the status strip (§8.2, `FeedbackStatusPipeline.tsx:162`): chips that share the width and wrap. */
+const STEP_LIST = "m-0 flex min-w-0 flex-1 list-none flex-wrap items-stretch gap-1.5 p-0";
 
 /** Selects of a processing act: label above, 40px, full column; two columns from 640px. */
 const SELECT_GRID = "grid grid-cols-1 gap-4 sm:grid-cols-2";
@@ -267,9 +263,12 @@ export const DRILL_DOWN_NOTE_CITIZEN_REPORTS =
 
 export function SoPhanAnh({
   drillDown = NO_DRILL_DOWN,
+  reloadSignal = 0,
 }: {
   /** Lọc mở từ trang Tổng quan, đọc ở máy chủ (`app/phan-anh/page.tsx`). */
   drillDown?: DrillDown<"citizen-reports">;
+  /** Bumped by the page header after `+ Nhập hộ phản ánh` booked a petition: the register re-reads. */
+  reloadSignal?: number;
 } = {}) {
   // LỌC TỔNG QUAN ĐANG BẬT THÌ NÓ LÀ BỘ LỌC DUY NHẤT: hàng lọc §4 không vẽ, nên không lối nào ghép
   // thêm một ô vào lát cắt của con số. Màn được dựng lại khi lọc đổi (`key` ở trang), nên giá trị
@@ -304,7 +303,7 @@ export function SoPhanAnh({
   // 05/10/2026, PA-03): in the general line at the top of the card it read as a button that did nothing.
   const [assignRefusal, setAssignRefusal] = useState<string | null>(null);
 
-  const khoa = `${JSON.stringify(loc)}|${nganXep.hienTai ?? ""}|${lanTai}`;
+  const khoa = `${JSON.stringify(loc)}|${nganXep.hienTai ?? ""}|${lanTai}|${reloadSignal}`;
 
   useEffect(() => {
     let bo = false;
@@ -402,29 +401,22 @@ export function SoPhanAnh({
     setCloseRefusal(null);
     setAssignRefusal(null);
   };
-  const listTable = (items: readonly petitions_phieuPhanAnhRa[]) => (
+  const listCards = (items: readonly petitions_phieuPhanAnhRa[]) => (
     <DanhSachThe
       phieu={items}
-      tenBoPhan={tenBoPhan}
       bayGio={new Date()}
       maDangMo={dangMo?.code ?? null}
       moPhieu={openPetition}
-      empty={
-        noFilter ? (
-          // NOT "the commune has no petition": a petition of a restricted field is absent from the
-          // page for an account without `feedback.restricted`, and the screen must neither say it
-          // exists nor claim it does not (rule 4, forbidden #2). "Nothing to show" is true for both.
-          <EmptyState icon={Inbox} title="Chưa có phiếu phản ánh nào để hiển thị." />
-        ) : undefined
-      }
+      empty={noFilter ? <ListEmpty title={LIST_EMPTY_TITLE} hint={LIST_EMPTY_HINT} /> : undefined}
     />
   );
 
   return (
-    // Direct children lose their legacy vertical margins: the section's `gap` is the one spacing
-    // between blocks (spec §6.9, 16px card ↔ card).
+    // The prototype's composition (`FeedbackWorkspace.tsx:91-268`): KPI cards → the three tabs → in
+    // the list tab, ONE filter row over the cards. Direct children lose their legacy vertical margins:
+    // the section's `gap` is the one spacing between blocks.
     <section
-      className="man-phan-anh mt-0 flex min-w-0 flex-col gap-4 [&>*]:my-0"
+      className="man-phan-anh mt-0 flex min-w-0 flex-col gap-5 [&>*]:my-0"
       aria-labelledby="tieu-de-so-phan-anh"
     >
       {/* Kept for the section's accessible name; the page's visible title is the `<h1>` above. */}
@@ -432,125 +424,125 @@ export function SoPhanAnh({
         Sổ phản ánh của xã
       </h2>
 
-      {/* §2 header action `+ Nhập hộ phản ánh` — `feedback.create` only (UX; the server decides). Here
-          rather than in the page's PageHeader because the session's keys are read in this component. */}
-      {coQuyen(dsQuyen, PETITION_INTAKE_PERMISSION) && (
-        <div className="flex justify-end">
-          <StaffIntakeButton permissions={dsQuyen} onBooked={() => datLanTai((n) => n + 1)} />
-        </div>
-      )}
-
       {/* §3 — the four KPI cards. The route checks `feedback.read` AND `report.read`; without the
           second the row is not drawn at all (an account that may not read reports gets no figures). */}
       {coQuyen(dsQuyen, QUYEN_XEM_PHAN_ANH) && coQuyen(dsQuyen, REPORT_READ_PERMISSION) && <PetitionKpis />}
 
-      {/* §2 main tabs `[Danh sách] [Bản đồ nhiệt] [Báo cáo]`. Only the list exists; the other two are
-          disabled placeholders with their "?" (ADR 0068 §14). One live tab, so no arrow-key handling
-          to teach about disabled tabs. */}
-      <TabList aria-label="Phần của sổ phản ánh">
-        <Tab selected id="petition-tab-list" aria-controls="petition-list-panel" icon={List}>
-          Danh sách
-        </Tab>
-        <PendingTab info={petitionPendingPart("heatMapTab")} icon={Flame} />
-        <PendingTab info={petitionPendingPart("reportTab")} icon={BarChart3} />
-      </TabList>
+      <div className="flex min-w-0 flex-col gap-4 [&>*]:my-0">
+        {/* §2 main tabs `[Danh sách] [Bản đồ nhiệt] [Báo cáo]`. Only the list exists; the other two
+            are disabled placeholders with their "?" (ADR 0068 §14). One live tab, so no arrow-key
+            handling to teach about disabled tabs. NO COUNT on `Danh sách` (the prototype prints the
+            rows it holds): the register is paged by the server and returns no total, so a count here
+            would be the count of one page passed off as the commune's. */}
+        <TabList aria-label="Phần của sổ phản ánh">
+          <Tab selected id="petition-tab-list" aria-controls="petition-list-panel" icon={List}>
+            Danh sách
+          </Tab>
+          <PendingTab info={petitionPendingPart("heatMapTab")} icon={Flame} />
+          <PendingTab info={petitionPendingPart("reportTab")} icon={BarChart3} />
+        </TabList>
 
-      <DrillDownBanner
-        drillDown={drillDown}
-        clearHref="/phan-anh"
-        note={DRILL_DOWN_NOTE_CITIZEN_REPORTS}
-        showInvalid={!filtersChanged}
-      />
-
-      {/* THE LIST CARD (spec §8.5): the filter row at its head, the table in its own scroller, the
-          paging in its footer. */}
-      <Card className="overflow-visible" id="petition-list-panel" role="tabpanel" aria-labelledby="petition-tab-list">
-        {!drillDownActive && (
-          <HangLoc
-            loc={loc}
-            tim={tim}
-            datTim={datTim}
-            datLoc={datLocMoi}
-            boPhan={daTaiBoPhan}
-            thon={daTaiThon}
+        <div
+          className="flex min-w-0 flex-col gap-4 [&>*]:my-0"
+          id="petition-list-panel"
+          role="tabpanel"
+          aria-labelledby="petition-tab-list"
+        >
+          <DrillDownBanner
+            drillDown={drillDown}
+            clearHref="/phan-anh"
+            note={DRILL_DOWN_NOTE_CITIZEN_REPORTS}
+            showInvalid={!filtersChanged}
           />
-        )}
 
-        {/* LOADING. The sentence stays the live region; the eye gets a 2px bar and either the
-            PREVIOUS page dimmed (a re-read: `daTai` still holds the last answer while the new key
-            loads) or row-shaped placeholders (the first read). Dimmed rows are `inert`. */}
-        {so.pha === "dangTai" && (
-          <>
-            <LoadingBar />
-            <p className="an-thi-giac" role="status">
-              {DANG_TAI_SO}
-            </p>
-            {staleItems !== null ? (
-              <div inert className="pointer-events-none opacity-60 transition-opacity">
-                {listTable(staleItems)}
-              </div>
-            ) : (
-              <PetitionRowsSkeleton />
-            )}
-          </>
-        )}
+          {!drillDownActive && (
+            <HangLoc
+              loc={loc}
+              tim={tim}
+              datTim={datTim}
+              datLoc={datLocMoi}
+              boPhan={daTaiBoPhan}
+              thon={daTaiThon}
+            />
+          )}
+
+          {/* LOADING. The sentence stays the live region; the eye gets a 2px bar and either the
+              PREVIOUS page dimmed (a re-read: `daTai` still holds the last answer while the new key
+              loads) or card-shaped placeholders (the first read). Dimmed cards are `inert`. */}
+          {so.pha === "dangTai" && (
+            <>
+              <LoadingBar />
+              <p className="an-thi-giac" role="status">
+                {DANG_TAI_SO}
+              </p>
+              {staleItems !== null ? (
+                <div inert className="pointer-events-none opacity-60 transition-opacity">
+                  {listCards(staleItems)}
+                </div>
+              ) : (
+                <PetitionCardsSkeleton />
+              )}
+            </>
+          )}
 
         {/* LOAD ERROR: the server's sentence VERBATIM stays the alert; `Tải lại` asks the same read
             again through the screen's existing re-read key (`lanTai`). */}
         {so.pha === "loi" && (
-          <EmptyState
-            icon={CloudOff}
-            title="Chưa tải được sổ phản ánh"
-            description={
-              <span className="text-danger-600" role="alert">
-                {so.thongBao}
-              </span>
-            }
-            action={
-              <Button
-                type="button"
-                variant="secondary"
-                icon={<Glyph icon={RefreshCw} />}
-                onClick={() => datLanTai((n) => n + 1)}
-              >
-                Tải lại
-              </Button>
-            }
-          />
+          <div className="rounded-card border border-solid border-line bg-surface">
+            <EmptyState
+              icon={CloudOff}
+              title="Chưa tải được sổ phản ánh"
+              description={
+                <span className="text-danger-600" role="alert">
+                  {so.thongBao}
+                </span>
+              }
+              action={
+                <Button
+                  type="button"
+                  variant="secondary"
+                  icon={<Glyph icon={RefreshCw} />}
+                  onClick={() => datLanTai((n) => n + 1)}
+                >
+                  Tải lại
+                </Button>
+              }
+            />
+          </div>
         )}
 
         {so.pha === "xong" && (
           <>
-            {listTable(so.duLieu.items)}
-            <CardFooter className="justify-end">
-              <nav className="dieu-huong-trang m-0" aria-label="Phân trang sổ phản ánh">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  icon={<Glyph icon={ChevronLeft} />}
-                  disabled={!coTrangTruoc(nganXep)}
-                  onClick={() => datNganXep(veTrangTruoc(nganXep))}
-                >
-                  Trang trước
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  // Hai điều kiện, không một: `has_more` nói còn trang sau, `next_cursor` là đường đi
-                  // tới đó.
-                  disabled={!so.duLieu.has_more || so.duLieu.next_cursor === ""}
-                  onClick={() => datNganXep(sangTrangSau(nganXep, so.duLieu.next_cursor))}
-                >
-                  Trang sau
-                  <Glyph icon={ChevronRight} />
-                </Button>
-              </nav>
-            </CardFooter>
+            {listCards(so.duLieu.items)}
+            {/* Paging is ours, not the prototype's (it loads every row): the server pages by cursor. */}
+            <nav className="dieu-huong-trang m-0 flex justify-end" aria-label="Phân trang sổ phản ánh">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                icon={<Glyph icon={ChevronLeft} />}
+                disabled={!coTrangTruoc(nganXep)}
+                onClick={() => datNganXep(veTrangTruoc(nganXep))}
+              >
+                Trang trước
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                // Hai điều kiện, không một: `has_more` nói còn trang sau, `next_cursor` là đường đi
+                // tới đó.
+                disabled={!so.duLieu.has_more || so.duLieu.next_cursor === ""}
+                onClick={() => datNganXep(sangTrangSau(nganXep, so.duLieu.next_cursor))}
+              >
+                Trang sau
+                <Glyph icon={ChevronRight} />
+              </Button>
+            </nav>
           </>
         )}
-      </Card>
+        </div>
+      </div>
 
       {dangMo !== null && (
         <ChiTietPhieu
@@ -653,298 +645,247 @@ export function HangLoc({
     datLoc({ ...loc, tim: canGon === "" ? undefined : canGon });
   }
 
-  // Filters behind the "Bộ lọc" button that are on — each is ABSENT from `loc` at its default, the
-  // same rule the request builder uses, so "on" here is "sent to the server".
-  const moreActiveCount = [
-    loc.linhVuc !== undefined,
-    loc.thonID !== undefined,
-    loc.boPhanID !== undefined,
-    loc.kenh !== undefined,
-    loc.chiTreHan !== undefined,
-    loc.ratingMax !== undefined,
-  ].filter(Boolean).length;
-
-  // Search first (owner, 02/10/2026: "ô tìm kiếm nên nằm ở bên trái"), then the scope tabs and the
-  // status — what decides which petitions are in front of you; the six narrower filters sit behind
-  // "Bộ lọc".
+  // THE PROTOTYPE'S ONE FILTER ROW (`FeedbackWorkspace.tsx:141-226`), in its order — scope · search ·
+  // status · field · hamlet — then the two filters the prototype does not have and our route offers
+  // (unit holding the petition, intake channel), then its two checkboxes. No "Bộ lọc" panel (ADR 0068
+  // §12 replaced for this screen, lần 5 #3). Labels are visually hidden — each select's first option
+  // names it, as in the prototype — but every control keeps a real `<label>`.
   return (
-    <FilterBar
-      id="petition-filters"
-      className="m-0 border-b border-line px-4 py-3.5"
-      moreActiveCount={moreActiveCount}
-      primary={
-        <>
-          {/* Ô TÌM GỬI BẰNG SUBMIT, KHÔNG GỬI THEO TỪNG PHÍM: mỗi phím là một lời gọi mang chữ cán bộ
-              đang gõ vào một URL — và chuỗi ấy có thể là tên hay địa chỉ một công dân (luật 3, cấm #4).
-              Gõ xong rồi bấm là một lần. */}
-          <form
-            className="form-tra-cuu m-0 flex min-w-0 max-w-[480px] flex-[1_1_320px] flex-row items-end gap-2"
-            onSubmit={timNgay}
-            role="search"
+    <div id="petition-filters" className="flex min-w-0 flex-wrap items-center gap-2.5 [&>*]:my-0">
+      {/* HAI TAB PHẠM VI, CÙNG KHUÔN SỔ NHIỆM VỤ. `mine` KHÔNG mang danh tính nào — máy chủ lấy mã cán
+          bộ từ PHIÊN. Tab thứ ba `Liên quan đến tôi` là CHỖ GIỮ vô hiệu có dấu "?" (ADR 0068 §14): máy
+          chủ trả 400 cho `scope=related`, nên nó không có `onClick` và không bao giờ đặt `phamVi`.
+          The buttons stay native `aria-pressed` toggles, their text the only child (tests read it). */}
+      <div className={TOGGLE_TRACK} role="group" aria-label="Phạm vi">
+        <button
+          type="button"
+          className={toggleButtonClass(loc.phamVi !== "mine")}
+          aria-pressed={loc.phamVi !== "mine"}
+          onClick={() => datLoc({ ...loc, phamVi: undefined })}
+        >
+          {PHAM_VI_TOAN_XA}
+        </button>
+        <button
+          type="button"
+          className={toggleButtonClass(loc.phamVi === "mine")}
+          aria-pressed={loc.phamVi === "mine"}
+          onClick={() => datLoc({ ...loc, phamVi: "mine" })}
+        >
+          {PHAM_VI_GIAO_CHO_TOI}
+        </button>
+        <span className="relative inline-flex">
+          <button
+            type="button"
+            disabled
+            aria-pressed={false}
+            className={cn(toggleButtonClass(false), "cursor-not-allowed pr-8 opacity-60 hover:text-ink-500")}
           >
-            <Field label="Tìm trong sổ" htmlFor="tim-phan-anh" icon={Search} grow="search" className="max-w-none">
-              <input
-                id="tim-phan-anh"
-                name="tim-phan-anh"
-                value={tim}
-                placeholder={TIM_PLACEHOLDER}
-                onChange={(e) => datTim(e.target.value)}
-                autoComplete="off"
-                // Máy chủ trả 400 khi quá 200 ký tự (`store.TimPhieuToiDa`). Chặn ở ô nhập để cán bộ
-                // thấy giới hạn thay vì thấy "không tải được".
-                maxLength={200}
-              />
-            </Field>
-            <Button variant="secondary" type="submit">
-              Tìm
-            </Button>
-          </form>
+            {SCOPE_RELATED_LABEL}
+          </button>
+          <PendingMarker info={petitionPendingPart("scopeRelated")} side="bottom" placement="end" />
+        </span>
+      </div>
 
-          {/* HAI TAB PHẠM VI, CÙNG KHUÔN SỔ NHIỆM VỤ. `mine` KHÔNG mang danh tính nào — máy chủ lấy mã
-              cán bộ từ PHIÊN. Tab thứ ba `Liên quan đến tôi` là CHỖ GIỮ vô hiệu có dấu "?" (ADR 0068
-              §14): máy chủ trả 400 cho `scope=related`, nên nó không có `onClick` và không bao giờ đặt
-              `phamVi`. Drawn as a segmented control; the buttons stay native `aria-pressed` toggles,
-              their text the only child (tests read it). */}
-          <div className="flex flex-col gap-1.5">
-            <span aria-hidden="true" className="text-xs leading-tight font-semibold text-ink-700">
-              Phạm vi
-            </span>
-            <div className={TOGGLE_TRACK} role="group" aria-label="Phạm vi">
-              <button
-                type="button"
-                className={toggleButtonClass(loc.phamVi !== "mine")}
-                aria-pressed={loc.phamVi !== "mine"}
-                onClick={() => datLoc({ ...loc, phamVi: undefined })}
-              >
-                {PHAM_VI_TOAN_XA}
-              </button>
-              <button
-                type="button"
-                className={toggleButtonClass(loc.phamVi === "mine")}
-                aria-pressed={loc.phamVi === "mine"}
-                onClick={() => datLoc({ ...loc, phamVi: "mine" })}
-              >
-                {PHAM_VI_GIAO_CHO_TOI}
-              </button>
-              <span className="relative inline-flex">
-                <button
-                  type="button"
-                  disabled
-                  aria-pressed={false}
-                  className={cn(toggleButtonClass(false), "cursor-not-allowed pr-8 opacity-60 hover:text-ink-500")}
-                >
-                  {SCOPE_RELATED_LABEL}
-                </button>
-                <PendingMarker info={petitionPendingPart("scopeRelated")} side="bottom" placement="end" />
-              </span>
-            </div>
-          </div>
+      {/* Ô TÌM GỬI BẰNG SUBMIT (Enter), KHÔNG GỬI THEO TỪNG PHÍM: mỗi phím là một lời gọi mang chữ cán
+          bộ đang gõ vào một URL — và chuỗi ấy có thể là tên hay địa chỉ một công dân (luật 3, cấm #4).
+          The prototype's box: 256px, a magnifier inside, no visible label, no button. */}
+      <form className="m-0 w-64 max-w-full" onSubmit={timNgay} role="search">
+        <Field label="Tìm trong sổ" htmlFor="tim-phan-anh" icon={Search} hideLabel grow="auto">
+          <input
+            id="tim-phan-anh"
+            name="tim-phan-anh"
+            type="search"
+            value={tim}
+            placeholder={TIM_PLACEHOLDER}
+            onChange={(e) => datTim(e.target.value)}
+            autoComplete="off"
+            // Máy chủ trả 400 khi quá 200 ký tự (`store.TimPhieuToiDa`). Chặn ở ô nhập để cán bộ thấy
+            // giới hạn thay vì thấy "không tải được".
+            maxLength={200}
+          />
+        </Field>
+      </form>
 
-          <Field label="Trạng thái" htmlFor="loc-trang-thai" icon={CircleDot} kind="select">
-            <select
-              id="loc-trang-thai"
-              value={loc.trangThai ?? ""}
-              onChange={(e) => datLoc({ ...loc, trangThai: e.target.value || undefined })}
-            >
-              <option value="">{MOI_TRANG_THAI_NHAN}</option>
-              {MOI_TRANG_THAI.map((ma) => (
-                <option key={ma} value={ma}>
-                  {nhanTrangThai(ma)}
-                </option>
-              ))}
-            </select>
-          </Field>
-        </>
-      }
-      more={
-        <>
-          <Field label="Lĩnh vực" htmlFor="loc-linh-vuc" icon={Shapes} kind="select">
-            <select
-              id="loc-linh-vuc"
-              value={loc.linhVuc ?? ""}
-              onChange={(e) => datLoc({ ...loc, linhVuc: e.target.value || undefined })}
-            >
-              <option value="">{MOI_LINH_VUC_NHAN}</option>
-              {LINH_VUC_PHAN_ANH.map((l) => (
-                <option key={l.ma} value={l.ma}>
-                  {l.nhan}
-                </option>
-              ))}
-            </select>
-          </Field>
+      <Field label="Trạng thái" htmlFor="loc-trang-thai" kind="select" hideLabel grow="auto">
+        <select
+          id="loc-trang-thai"
+          value={loc.trangThai ?? ""}
+          onChange={(e) => datLoc({ ...loc, trangThai: e.target.value || undefined })}
+        >
+          <option value="">{MOI_TRANG_THAI_NHAN}</option>
+          {MOI_TRANG_THAI.map((ma) => (
+            <option key={ma} value={ma}>
+              {nhanTrangThai(ma)}
+            </option>
+          ))}
+        </select>
+      </Field>
 
-          <Field label="Địa bàn" htmlFor="loc-dia-ban" icon={MapPin} kind="select">
-            <select
-              id="loc-dia-ban"
-              value={loc.thonID ?? ""}
-              onChange={(e) => datLoc({ ...loc, thonID: e.target.value || undefined })}
-            >
-              <option value="">{MOI_DIA_BAN_NHAN}</option>
-              {/* A FILTER, not a picker: out-of-use units STAY (petitions recorded there must still be
-                  findable), marked as such (`residentialUnitFilterLabel`). */}
-              {thon.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {residentialUnitFilterLabel(t)}
-                </option>
-              ))}
-            </select>
-          </Field>
+      <Field label="Lĩnh vực" htmlFor="loc-linh-vuc" kind="select" hideLabel grow="auto">
+        <select
+          id="loc-linh-vuc"
+          value={loc.linhVuc ?? ""}
+          onChange={(e) => datLoc({ ...loc, linhVuc: e.target.value || undefined })}
+        >
+          <option value="">{MOI_LINH_VUC_NHAN}</option>
+          {LINH_VUC_PHAN_ANH.map((l) => (
+            <option key={l.ma} value={l.ma}>
+              {l.nhan}
+            </option>
+          ))}
+        </select>
+      </Field>
 
-          <Field label="Bộ phận đang giữ" htmlFor="loc-bo-phan" icon={Building2} kind="select">
-            <select
-              id="loc-bo-phan"
-              value={loc.boPhanID ?? ""}
-              onChange={(e) => datLoc({ ...loc, boPhanID: e.target.value || undefined })}
-            >
-              <option value="">{MOI_BO_PHAN_NHAN}</option>
-              {boPhan.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-          </Field>
+      <Field label="Địa bàn" htmlFor="loc-dia-ban" kind="select" hideLabel grow="auto">
+        <select
+          id="loc-dia-ban"
+          value={loc.thonID ?? ""}
+          onChange={(e) => datLoc({ ...loc, thonID: e.target.value || undefined })}
+        >
+          <option value="">{MOI_DIA_BAN_NHAN}</option>
+          {/* A FILTER, not a picker: out-of-use units STAY (petitions recorded there must still be
+              findable), marked as such (`residentialUnitFilterLabel`). */}
+          {thon.map((t) => (
+            <option key={t.id} value={t.id}>
+              {residentialUnitFilterLabel(t)}
+            </option>
+          ))}
+        </select>
+      </Field>
 
-          <Field label="Kênh tiếp nhận" htmlFor="loc-kenh" icon={Radio} kind="select">
-            <select
-              id="loc-kenh"
-              value={loc.kenh ?? ""}
-              onChange={(e) => datLoc({ ...loc, kenh: e.target.value || undefined })}
-            >
-              <option value="">{MOI_KENH_NHAN}</option>
-              {MOI_KENH.map((ma) => (
-                <option key={ma} value={ma}>
-                  {nhanKenh(ma)}
-                </option>
-              ))}
-            </select>
-          </Field>
+      <Field label="Bộ phận đang giữ" htmlFor="loc-bo-phan" kind="select" hideLabel grow="auto">
+        <select
+          id="loc-bo-phan"
+          value={loc.boPhanID ?? ""}
+          onChange={(e) => datLoc({ ...loc, boPhanID: e.target.value || undefined })}
+        >
+          <option value="">{MOI_BO_PHAN_NHAN}</option>
+          {boPhan.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.name}
+            </option>
+          ))}
+        </select>
+      </Field>
 
-          <div className="o-chon">
-            <label htmlFor="loc-tre-han">
-              <input
-                id="loc-tre-han"
-                type="checkbox"
-                checked={loc.chiTreHan === true}
-                // Ô bỏ tích thì tham số VẮNG MẶT HẲN, không gửi `late=false` — máy chủ chỉ nhận đúng
-                // chuỗi `true` và trả 400 cho mọi giá trị khác.
-                onChange={(e) => datLoc({ ...loc, chiTreHan: e.target.checked ? true : undefined })}
-              />{" "}
-              {CHI_TRE_HAN_NHAN}
-            </label>
-          </div>
+      <Field label="Kênh tiếp nhận" htmlFor="loc-kenh" kind="select" hideLabel grow="auto">
+        <select
+          id="loc-kenh"
+          value={loc.kenh ?? ""}
+          onChange={(e) => datLoc({ ...loc, kenh: e.target.value || undefined })}
+        >
+          <option value="">{MOI_KENH_NHAN}</option>
+          {MOI_KENH.map((ma) => (
+            <option key={ma} value={ma}>
+              {nhanKenh(ma)}
+            </option>
+          ))}
+        </select>
+      </Field>
 
-          <div className="o-chon">
-            <label htmlFor="loc-danh-gia-thap">
-              <input
-                id="loc-danh-gia-thap"
-                type="checkbox"
-                checked={loc.ratingMax === LOW_RATING_MAX}
-                // Spec §4 "phiếu 1–2 sao" → `rating_max=2`. Unticked, the parameter is ABSENT — never an
-                // empty `rating_max=`, which the server answers with 400.
-                onChange={(e) =>
-                  datLoc({ ...loc, ratingMax: e.target.checked ? LOW_RATING_MAX : undefined })
-                }
-              />{" "}
-              {LOW_RATING_FILTER_LABEL}
-            </label>
-          </div>
-        </>
-      }
-    />
+      <label htmlFor="loc-tre-han" className={CHECKBOX_LABEL}>
+        <input
+          id="loc-tre-han"
+          type="checkbox"
+          className="size-4 accent-brand-600"
+          checked={loc.chiTreHan === true}
+          // Ô bỏ tích thì tham số VẮNG MẶT HẲN, không gửi `late=false` — máy chủ chỉ nhận đúng chuỗi
+          // `true` và trả 400 cho mọi giá trị khác.
+          onChange={(e) => datLoc({ ...loc, chiTreHan: e.target.checked ? true : undefined })}
+        />{" "}
+        {CHI_TRE_HAN_NHAN}
+      </label>
+
+      <label htmlFor="loc-danh-gia-thap" className={CHECKBOX_LABEL}>
+        <input
+          id="loc-danh-gia-thap"
+          type="checkbox"
+          className="size-4 accent-brand-600"
+          checked={loc.ratingMax === LOW_RATING_MAX}
+          // Spec §4 "phiếu 1–2 sao" → `rating_max=2`. Unticked, the parameter is ABSENT — never an empty
+          // `rating_max=`, which the server answers with 400.
+          onChange={(e) => datLoc({ ...loc, ratingMax: e.target.checked ? LOW_RATING_MAX : undefined })}
+        />{" "}
+        {LOW_RATING_FILTER_LABEL}
+      </label>
+    </div>
+  );
+}
+
+/** A checkbox of the filter row (`FeedbackWorkspace.tsx:200-225`): box, then its words. */
+const CHECKBOX_LABEL = "flex items-center gap-2 text-[13px] text-ink-900";
+
+/**
+ * The register's empty state — the prototype's box (`FeedbackWorkspace.tsx:235-243`): one bold line,
+ * one line under it.
+ */
+function ListEmpty({ title, hint }: { title: string; hint?: string }) {
+  return (
+    <div className="rounded-card border border-solid border-line bg-surface p-10 text-center [&>p]:m-0">
+      <p className="text-sm font-semibold text-ink-900">{title}</p>
+      {hint !== undefined && <p className="mt-1.5 text-[13px] text-ink-500">{hint}</p>}
+    </div>
   );
 }
 
 /**
- * The list table inside the list card (spec v2 §6.7, §8.5): flush with the card (no second frame),
- * its OWN scroller both ways so the header row can stay put (`sticky` inside the scroller), 48px
- * rows, thin horizontal rules only — `.bang-danh-muc` already draws those.
- */
-const TABLE_IN_CARD = cn(
-  "bang-cuon max-h-[70vh] overflow-auto rounded-none border-0 shadow-none",
-  "[&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-[1] [&_thead_th]:shadow-[inset_0_-1px_0_var(--line)]",
-  "[&_tbody_td]:h-12",
-);
-
-/**
- * Quyển sổ — một BẢNG từ đợt làm mới giao diện (ADR 0068 §8, §11: đặc tả v2 thắng §2 của chương 09
- * về hình thức; §2 vẽ danh sách thẻ). Tên `DanhSachThe` giữ nguyên vì nó là tên đã xuất.
+ * Quyển sổ — the prototype's grid of CARDS (`FeedbackWorkspace.tsx:245-253`): one column, two from
+ * 1536px. Tên `DanhSachThe` giữ nguyên vì nó là tên đã xuất.
  *
  * `empty` — what an empty page shows. The screen passes "nothing to show" or leaves the filter
- * sentence `SO_RONG` (spec §8b), a choice it makes from its own filter state; this table never guesses.
+ * sentence `SO_RONG` (spec §8b), a choice it makes from its own filter state; this list never guesses.
  */
 export function DanhSachThe({
   phieu,
-  tenBoPhan,
   bayGio,
   maDangMo,
   moPhieu,
   empty,
 }: {
   phieu: readonly petitions_phieuPhanAnhRa[];
-  tenBoPhan: ReadonlyMap<string, string>;
   bayGio: Date;
   maDangMo: string | null;
   moPhieu: (p: petitions_phieuPhanAnhRa) => void;
   empty?: ReactNode;
 }) {
-  if (phieu.length === 0) return empty ?? <EmptyState icon={SearchX} title={SO_RONG} />;
+  if (phieu.length === 0) return empty ?? <ListEmpty title={SO_RONG} />;
 
   return (
-    <div className={TABLE_IN_CARD} role="region" aria-label="Danh sách phiếu phản ánh" tabIndex={0}>
-      <table className="bang-danh-muc">
-        <thead>
-          <tr>
-            <th scope="col">Mã phiếu</th>
-            <th scope="col">Nội dung</th>
-            <th scope="col">Lĩnh vực</th>
-            <th scope="col">Người gửi</th>
-            <th scope="col">Bộ phận đang giữ</th>
-            <th scope="col">Kênh tiếp nhận</th>
-            <th scope="col">Hạn xử lý xong</th>
-            <th scope="col">Trạng thái</th>
-            <th scope="col">
-              <span className="an-thi-giac">Thao tác</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {phieu.map((p) => (
-            <ThePhieu
-              key={p.code}
-              phieu={p}
-              tenBoPhan={tenBoPhan}
-              bayGio={bayGio}
-              dangMo={p.code === maDangMo}
-              mo={() => moPhieu(p)}
-            />
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <ul className="m-0 grid list-none gap-2.5 p-0 2xl:grid-cols-2" aria-label="Danh sách phiếu phản ánh">
+      {phieu.map((p) => (
+        <li key={p.code} className="min-w-0">
+          <ThePhieu phieu={p} bayGio={bayGio} dangMo={p.code === maDangMo} mo={() => moPhieu(p)} />
+        </li>
+      ))}
+    </ul>
   );
 }
 
 /**
- * Một dòng phiếu (§7) — mọi trường của thẻ cũ, nay là một hàng của bảng. Tên `ThePhieu` giữ nguyên.
+ * Một thẻ phiếu — the prototype's `FeedbackCard`: a square tile on the left, then code · field, the
+ * content (two lines), the place, the sender, and status · deadline · stars-or-channel at the foot.
+ * The whole card is the button that opens the drawer.
  *
- * NO THUMBNAIL, ON PURPOSE: the scene photos are read per petition (`GET …/photos`, opened in the
- * detail — `ScenePhotos`). A thumbnail per row would be one call per row, each signing fresh links
- * over a citizen's photographs (rule 3) for twenty petitions nobody opened. Nor is a placeholder drawn
- * that looks like it is still loading.
+ * THE TILE IS A NEUTRAL PLACEHOLDER, NEVER A PHOTO: the list carries no photo reference
+ * (`petitions_phieuPhanAnhRa`), and reading `GET …/photos` per card would sign fresh links over a
+ * citizen's photographs (rule 3) for twenty petitions nobody opened. The photos are in the drawer.
  *
- * THE CONTENT IS CUT TO ONE LINE, WITH NO `title` TOOLTIP: it is a citizen's words (rule 3 keeps
- * personal data out of attributes); the full text is in the detail.
+ * THE SENDER IS THE SERVER'S MASKED PAIR (`nhanNguoiGui`) — the prototype prints the phone in full; the
+ * list route always masks (rule 3, ADR 0030), and an anonymous petition says so and nothing more.
+ *
+ * NO HAMLET AND NO "N phiếu trùng": the petition carries neither (`PHAN_CHUA_DUNG` `sceneMap`,
+ * `duplicates`). The place line falls back to the address, as the prototype's own fallback does.
+ *
+ * NO `title` TOOLTIP ON THE CONTENT: it is a citizen's words (rule 3 keeps personal data out of
+ * attributes); the full text is in the drawer.
  */
 export function ThePhieu({
   phieu,
-  tenBoPhan,
   bayGio,
   dangMo,
   mo,
 }: {
   phieu: petitions_phieuPhanAnhRa;
-  tenBoPhan: ReadonlyMap<string, string>;
   bayGio: Date;
   dangMo: boolean;
   mo: () => void;
@@ -954,64 +895,86 @@ export function ThePhieu({
   // never kept (rule 10, invariant 3).
   const hanXuLy = trangThaiHan(phieu.resolve_due, "chuaCo", bayGio);
   const pastDeadline = hanXuLy.loai === "quaHan";
+  const rating = phieu.rating ?? null;
 
   return (
-    <tr
-      // The row tint follows the same comparison as the `Hạn xử lý xong` cell, so the two never differ.
+    <button
+      type="button"
+      onClick={mo}
+      aria-haspopup="dialog"
       data-tre-han={pastDeadline ? "" : undefined}
-      className={cn(pastDeadline && "dong-qua-han", dangMo && "bg-brand-50")}
+      className={cn(
+        "flex w-full min-w-0 cursor-pointer gap-3 overflow-hidden rounded-card border border-solid border-line bg-surface p-2.5 text-left [font-family:inherit] text-inherit",
+        "motion-safe:transition-shadow motion-safe:duration-150 hover:shadow-md",
+        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500",
+        // The left rule follows the same comparison as the deadline line, so the two never differ; the
+        // AlarmClock and the words say it too — never colour alone.
+        pastDeadline && "border-l-4 border-l-danger-600",
+        dangMo && "ring-2 ring-brand-500",
+      )}
     >
-      <td className="ma-muc">{phieu.code}</td>
-      <td className="min-w-[16rem] max-w-[26rem] whitespace-normal">
-        {/* Nội dung phản ánh KHÔNG che (cán bộ không đọc được thì không xử lý được), nhưng nó là
-            chữ của một công dân: không bao giờ ghi nó vào log, tên tệp hay URL. */}
-        <span className="block truncate">{phieu.content}</span>
-        <span className="dong-phu truncate">
-          <Glyph icon={MapPin} className="mr-1 inline size-3.5 align-[-2px]" />
-          {phieu.address === "" ? "Chưa rõ vị trí" : phieu.address}
+      <span
+        aria-hidden="true"
+        className="grid size-20 shrink-0 place-items-center rounded-lg bg-surface-muted text-ink-400"
+      >
+        <ImageOff className="size-5" strokeWidth={1.6} focusable="false" />
+      </span>
+
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="flex flex-wrap items-center gap-1.5">
+          <span className="ma-muc rounded border border-solid border-line bg-surface-muted px-1.5 py-0.5 text-[11px] font-semibold text-ink-500">
+            {phieu.code}
+          </span>
+          <span className="rounded-full bg-accent-50 px-2 py-0.5 text-[11px] font-semibold text-ink-900">
+            {nhanLinhVuc(linhVuc)}
+          </span>
         </span>
-      </td>
-      <td>{nhanLinhVuc(linhVuc)}</td>
-      <td>{nhanNguoiGui(phieu)}</td>
-      <td>{nhanBoPhan(phieu.unit, tenBoPhan)}</td>
-      <td>{nhanKenh(phieu.channel)}</td>
-      <td>
-        {/* The words are `nhanHan`'s ("Quá hạn · hạn cuối …"); AlarmClock beside them, never instead. */}
-        <span className={cn(lopHan(hanXuLy), "inline-flex items-center gap-1")}>
-          {pastDeadline && <Glyph icon={AlarmClock} className="size-3.5 shrink-0" />}
-          {nhanHan(hanXuLy)}
+
+        {/* Nội dung phản ánh KHÔNG che (cán bộ không đọc được thì không xử lý được), nhưng nó là chữ
+            của một công dân: không bao giờ ghi nó vào log, tên tệp hay URL. */}
+        <span className="mt-1.5 line-clamp-2 text-[13px] leading-snug text-ink-900">{phieu.content}</span>
+
+        <span className="mt-1 flex min-w-0 items-center gap-1 text-xs text-ink-500">
+          <Glyph icon={MapPin} className="size-3 shrink-0" />
+          <span className="truncate">{phieu.address === "" ? CARD_NO_LOCATION : phieu.address}</span>
         </span>
-      </td>
-      <td>
-        <span className="inline-flex flex-wrap items-center gap-1.5">
+
+        <span className="mt-1 flex min-w-0 items-center gap-1 text-xs text-ink-500">
+          <Glyph icon={UserRound} className="size-3 shrink-0" />
+          <span className="truncate">{nhanNguoiGui(phieu)}</span>
+        </span>
+
+        <span className="mt-auto flex flex-wrap items-center gap-2 pt-1.5">
           <PetitionStatusBadge status={phieu.status}>{nhanTrangThai(phieu.status)}</PetitionStatusBadge>
-          {/* §7 corner: the citizen's stars once rated. */}
-          {phieu.rating !== undefined && phieu.rating !== null && (
+          {/* The words are `nhanHan`'s ("Quá hạn · hạn cuối …"); AlarmClock beside them, never instead. */}
+          <span className={cn(lopHan(hanXuLy), "inline-flex items-center gap-1 text-xs")}>
+            {pastDeadline && <Glyph icon={AlarmClock} className="size-3.5 shrink-0" />}
+            {nhanHan(hanXuLy)}
+          </span>
+          {rating !== null ? (
+            // §7 corner: the citizen's stars once rated.
             <span
-              className={phieu.rating <= LOW_RATING_MAX ? "chip nhan-lech" : "chip"}
+              className={cn("ml-auto text-[13px]", rating <= LOW_RATING_MAX ? "chip nhan-lech" : "chip")}
               role="img"
-              aria-label={starsLabel(phieu.rating)}
+              aria-label={starsLabel(rating)}
             >
-              {ratingStars(phieu.rating)}
+              {ratingStars(rating)}
+            </span>
+          ) : (
+            <span className="ml-auto inline-flex items-center gap-1 text-[11px] text-ink-500">
+              <Glyph icon={MessageSquare} className="size-3 shrink-0" />
+              {nhanKenh(phieu.channel)}
             </span>
           )}
         </span>
-      </td>
-      <td className="o-thao-tac text-right">
-        <Button type="button" variant="secondary" size="sm" onClick={mo} aria-expanded={dangMo}>
-          {dangMo ? "Đang mở phiếu này" : `Mở phiếu ${phieu.code}`}
-        </Button>
-      </td>
-    </tr>
+      </span>
+    </button>
   );
 }
 
 /**
- * Khối chi tiết §8, kèm bốn thao tác.
- *
- * ĐẶC TẢ GỌI NÓ LÀ DetailDrawer "mở gần toàn màn hình". Ở đây nó là một khối nằm dưới danh sách —
- * KHÔNG phải một lớp phủ — vì một lớp phủ cần lớp CSS chưa có trong `globals.css`, và lượt này
- * không được thêm CSS. Đã báo về tên lớp cần thêm.
+ * Khối chi tiết §8, kèm bốn thao tác — the prototype's right-hand drawer, in `LargeDialog` (ADR 0068
+ * lần 5; layout under `return`). Mounted = open: the register renders it only while a petition is open.
  */
 export function ChiTietPhieu({
   phieu,
@@ -1114,515 +1077,599 @@ export function ChiTietPhieu({
   const reopened = reopenLine(phieu.reopen_count);
 
   return (
-    // THE DRAWER IS A COLUMN OF CARDS (spec v2 §7: sections, not one wall of fields): the header,
-    // the steps, the record, the photos, the rating, the processing acts, the log. Still a block
-    // under the list, not an overlay — no new CSS this round.
-    <section className="flex min-w-0 flex-col gap-4" aria-labelledby="tieu-de-chi-tiet-phieu">
-      <Card>
-        <CardHeader className="flex-nowrap items-start">
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1.5">
-            <h3 id="tieu-de-chi-tiet-phieu" className="m-0 text-base leading-snug font-semibold text-ink-900">
-              <span className="ma-muc">{phieu.code}</span> · {nhanKenh(phieu.channel)} ·{" "}
-              {nhanThoiDiem(phieu.booked_at)}
-            </h3>
-            <PetitionStatusBadge status={phieu.status}>{nhanTrangThai(phieu.status)}</PetitionStatusBadge>
-          </div>
-          <IconButton label="Đóng chi tiết phiếu" type="button" variant="secondary" onClick={dong}>
-            <Glyph icon={X} />
-          </IconButton>
-        </CardHeader>
+    // THE PROTOTYPE'S RIGHT-HAND DRAWER (`FeedbackDetailDrawer.tsx`, ADR 0068 lần 5) in the shared
+    // `LargeDialog` (pinned right, full height, Esc and ✕ close it), top to bottom:
+    //
+    //   header   code · channel · booked at (the dialog's NAME), the field large, the sender (masked)
+    //   strip    the lifecycle's steps, the two branches, one sentence on the current status
+    //   facts    three cells: Hạn xử lý (both clocks) · Đang giao cho · Hiển thị với người dân
+    //   body     left: content (+ result / branch reason), photos, location, duplicates "?", rating,
+    //            the processing acts; right (from 768px; under the left column below): the log
+    //
+    // THE DIALOG'S NAME IS THE CODE, CHANNEL AND TIME, NEVER THE FIELD OR THE CONTENT: a name goes into
+    // the accessibility tree, and the content is a citizen's words (rule 3, forbidden #4).
+    <LargeDialog titleId="tieu-de-chi-tiet-phieu" onDismiss={dong}>
+      <header className="flex shrink-0 items-start gap-3 border-b border-solid border-line bg-surface px-5 py-4">
+        <div className="min-w-0 flex-1 [&>p]:m-0">
+          <h2
+            id="tieu-de-chi-tiet-phieu"
+            tabIndex={-1}
+            className="m-0 text-xs leading-snug font-semibold text-ink-500 tabular-nums"
+          >
+            <span className="ma-muc">{phieu.code}</span> · {nhanKenh(phieu.channel)} · {nhanThoiDiem(phieu.booked_at)}
+          </h2>
+          <p className="mt-0.5 text-base leading-snug font-bold text-ink-900">{nhanLinhVuc(linhVuc)}</p>
+          <p className="mt-1 text-[13px] text-ink-500">{nhanNguoiGui(phieu)}</p>
+        </div>
+        <IconButton label="Đóng chi tiết phiếu" type="button" variant="secondary" onClick={dong}>
+          <Glyph icon={X} />
+        </IconButton>
+      </header>
 
-        {/* StatusStepper §8.2 — bảy ô luồng chính, rồi hai ô rẽ nhánh sáng theo trạng thái. Không ô
-            nào bấm được: hai nhánh đi qua biểu mẫu riêng bên dưới vì phải mang lý do (`buocReNhanh`).
-            Each step: icon + word in the pill, then its role in words — never colour alone. */}
-        <CardContent className="flex flex-col gap-3">
-          <SectionTitle icon={Workflow}>Các bước xử lý</SectionTitle>
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        {/* THE STATUS STRIP (`FeedbackStatusPipeline.tsx:160-183`): the whole path, the current step
+            filled. NOT CLICKABLE, unlike the prototype's: every move here carries its own form below
+            (a field to settle, a unit to pick, a result the citizen reads, a mandatory reason), each
+            behind its own key (`congThaoTac`). Icon + word on every step — never colour alone. */}
+        <div className="flex shrink-0 flex-col gap-1.5 border-b border-solid border-line bg-surface px-5 py-3 [&>p]:m-0">
           <ol aria-label="Các bước xử lý phiếu" className={STEP_LIST}>
             {buocLuongChinh(phieu.status).map((o) => (
-              <li key={o.ma} className={STEP_ITEM}>
-                <Badge
-                  tone={o.vaiTro === "dangODay" ? "info" : o.vaiTro === "daQua" ? "success" : "neutral"}
-                  icon={o.vaiTro === "dangODay" ? CircleDot : o.vaiTro === "daQua" ? CircleCheck : Circle}
-                  className={o.vaiTro === "dangODay" ? "ring-1 ring-brand-500" : undefined}
-                >
-                  {o.nhan}
-                </Badge>{" "}
-                {o.vaiTro === "dangODay" ? "đang ở đây" : o.vaiTro === "daQua" ? "đã qua" : "—"}
-              </li>
+              <StepChip
+                key={o.ma}
+                label={o.nhan}
+                role={o.vaiTro === "dangODay" ? "current" : o.vaiTro === "daQua" ? "done" : "ahead"}
+              />
             ))}
           </ol>
-          <ol aria-label="Rẽ nhánh" className={STEP_LIST}>
-            {buocReNhanh(phieu.status).map((o) => (
-              <li key={o.ma} className={STEP_ITEM}>
-                <Badge
-                  tone={o.vaiTro === "dangODay" ? "info" : "neutral"}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="mr-1 text-xs text-ink-500">Rẽ nhánh:</span>
+            <ol aria-label="Rẽ nhánh" className={STEP_LIST}>
+              {buocReNhanh(phieu.status).map((o) => (
+                <StepChip
+                  key={o.ma}
+                  label={o.nhan}
+                  role={o.vaiTro === "dangODay" ? "current" : "ahead"}
                   icon={o.ma === "khong-tiep-nhan" ? Ban : ArrowUpRight}
-                  className={o.vaiTro === "dangODay" ? "ring-1 ring-brand-500" : undefined}
-                >
-                  {o.nhan}
-                </Badge>{" "}
-                {o.vaiTro === "dangODay" ? "đang ở đây" : "—"}
-              </li>
-            ))}
-          </ol>
-          {giaiThich !== null && <p className="ghi-chu m-0">{giaiThich}</p>}
-        </CardContent>
-      </Card>
+                />
+              ))}
+            </ol>
+          </div>
+          {giaiThich !== null && <p className="mt-1 text-xs text-ink-500">{giaiThich}</p>}
+        </div>
 
-      <Card as="section" aria-labelledby="tieu-de-thong-tin-phieu">
-        <CardHeader>
-          <SectionTitle icon={FileText} id="tieu-de-thong-tin-phieu">
-            Thông tin phiếu
-          </SectionTitle>
-        </CardHeader>
-        <CardContent className="py-1">
-      <dl className={FIELD_LIST_CLASS}>
-        <dt>Lĩnh vực</dt>
-        <dd>{nhanLinhVuc(linhVuc)}</dd>
+        {/* THE THREE FACT CELLS (`FeedbackDetailDrawer.tsx:229-310`). The deadline cell holds BOTH
+            clocks (ADR 0027/0028) and the classify deadline — each a comparison of a stored instant with
+            now, never a stored flag (rule 10, invariant 3). */}
+        <div className="grid shrink-0 grid-cols-1 gap-px border-b border-solid border-line bg-line sm:grid-cols-3">
+          <Fact label="Hạn xử lý">
+            <dl className={FACT_LIST}>
+              <dt>Hạn xử lý xong</dt>
+              <dd>
+                <span className={lopHan(hanXuLy)}>{nhanHan(hanXuLy)}</span>
+                {/* Requirement `FeedbackDetailDrawer.tsx:242-246`. The deadline is NOT recomputed on a
+                    reopening (ADR 0050 point 2) — this line is what explains an old deadline on a
+                    petition that is back in progress. */}
+                {reopened !== null && <p className="nhan-lech">{reopened}</p>}
+              </dd>
+              <dt>Hạn tiếp nhận</dt>
+              <dd>
+                <span className={lopHan(hanTiepNhan)}>{nhanHan(hanTiepNhan)}</span>
+              </dd>
+              {/* `classify_due` — ADR 0035 #26, one working day from intake to classify. */}
+              <dt>Hạn phân loại</dt>
+              <dd>
+                <span className={lopHan(hanPhanLoai)}>{nhanHan(hanPhanLoai)}</span>
+              </dd>
+              <dt>Người dân gửi lúc</dt>
+              <dd className="tabular-nums">{nhanThoiDiem(phieu.clock_from)}</dd>
+            </dl>
+          </Fact>
 
-        <dt>Người gửi</dt>
-        <dd>{nhanNguoiGui(phieu)}</dd>
+          <Fact label="Đang giao cho">
+            <p className="m-0 text-sm text-ink-900">{nhanBoPhan(phieu.unit, tenBoPhan)}</p>
+            <p className="m-0 mt-0.5 text-xs text-ink-500">{nhanCanBoXuLy(phieu.assignee, bangDanhBa)}</p>
+          </Fact>
 
-        <dt>Nội dung</dt>
-        <dd className="noi-dung-phan-anh">{phieu.content}</dd>
+          <Fact label="Hiển thị với người dân">
+            <div className="text-sm text-ink-900 [&>p]:m-0 [&>p+p]:mt-0.5">
+              <PublicationBox
+                petition={phieu}
+                mayModerate={cong.moderate}
+                busy={dangGui}
+                setPublication={
+                  setPublication === undefined ? undefined : (target) => void setPublication(target)
+                }
+              />
+            </div>
+          </Fact>
+        </div>
 
-        <dt>{SCENE_LOCATION_LABEL}</dt>
-        <dd>
-          <SceneLocation petition={phieu} />
-        </dd>
-
-        <dt>Người dân gửi lúc</dt>
-        <dd>{nhanThoiDiem(phieu.clock_from)}</dd>
-
-        <dt>Hạn tiếp nhận</dt>
-        <dd>
-          <span className={lopHan(hanTiepNhan)}>{nhanHan(hanTiepNhan)}</span>
-        </dd>
-
-        {/* `classify_due` — ADR 0035 #26, one working day from intake to classify. */}
-        <dt>Hạn phân loại</dt>
-        <dd>
-          <span className={lopHan(hanPhanLoai)}>{nhanHan(hanPhanLoai)}</span>
-        </dd>
-
-        <dt>Hạn xử lý xong</dt>
-        <dd>
-          <span className={lopHan(hanXuLy)}>{nhanHan(hanXuLy)}</span>
-          {/* Requirement `FeedbackDetailDrawer.tsx:242-246`. The deadline is NOT recomputed on a
-              reopening (ADR 0050 point 2) — this line is what explains an old deadline on a
-              petition that is back in progress. */}
-          {reopened !== null && <p className="nhan-lech">{reopened}</p>}
-        </dd>
-
-        <dt>Đang giao cho</dt>
-        <dd>
-          {nhanBoPhan(phieu.unit, tenBoPhan)} · {nhanCanBoXuLy(phieu.assignee, bangDanhBa)}
-        </dd>
-
-        <dt>Hiển thị với người dân</dt>
-        <dd>
-          <PublicationBox
-            petition={phieu}
-            mayModerate={cong.moderate}
-            busy={dangGui}
-            setPublication={
-              setPublication === undefined ? undefined : (target) => void setPublication(target)
-            }
-          />
-        </dd>
-
-        {/* Kết quả CHỈ hiện khi đã có: một ô trống ở đây trông như một trường chưa điền, trong khi
-            phiếu chưa đóng thì nó chưa tồn tại. */}
-        {phieu.result !== "" && (
-          <>
-            <dt>Kết quả xử lý</dt>
-            <dd>{phieu.result}</dd>
-          </>
-        )}
-
-        {/* LÝ DO VÀ CƠ QUAN NHẬN CHỈ CÓ Ở HAI NHÁNH RẼ. Ở trạng thái khác hai trường không tồn tại —
-            vẽ ô trống là vẽ một trường trông như chưa điền. */}
-        {RE_NHANH.includes(phieu.status) && (
-          <>
-            <dt>Lý do</dt>
-            <dd>{nhanTruongNhanh(phieu.reason)}</dd>
-
-            {phieu.status === "chuyen-cap-tren" && (
-              <>
-                <dt>Cơ quan tiếp nhận</dt>
-                <dd>{nhanTruongNhanh(phieu.receiving_body)}</dd>
-              </>
+        <div className="flex min-w-0 flex-1 flex-col md:flex-row">
+          <div className="flex min-w-0 flex-1 flex-col gap-4 bg-surface-muted px-5 py-4 [&>*]:my-0">
+            {/* Right under the facts, so a refusal of the publication buttons above (409
+                `never_public`) reads next to the box that caused it. The `<p>` itself is unchanged (a
+                test reads it). */}
+            {loiGhi !== null && (
+              <div className="flex items-start gap-2 rounded-xl border border-danger-200 bg-danger-50 px-3.5 py-3 [&>p]:m-0">
+                <Glyph icon={CircleAlert} className="mt-0.5 size-[18px] shrink-0 text-danger-600" />
+                <p className="thong-bao-loi" role="alert">
+                  {loiGhi}
+                </p>
+              </div>
             )}
 
-            <dt>{phieu.status === "chuyen-cap-tren" ? "Chuyển lúc" : "Kết thúc lúc"}</dt>
-            <dd>
-              {phieu.branch_ended_at === undefined || phieu.branch_ended_at === null
-                ? KHONG_CO_TRONG_PHAN_HOI
-                : nhanThoiDiem(phieu.branch_ended_at)}
-            </dd>
-          </>
-        )}
-      </dl>
-        </CardContent>
-      </Card>
+            {/* `Nội dung phản ánh` with its title, then what the citizen was answered. */}
+            <section aria-labelledby="tieu-de-noi-dung-phieu" className="flex flex-col gap-2 [&>*]:my-0">
+              <h3 id="tieu-de-noi-dung-phieu" className={SECTION_HEADING}>
+                Nội dung phản ánh
+              </h3>
+              <p className="noi-dung-phan-anh rounded-[10px] border border-solid border-line bg-surface px-3 py-2.5 text-[15px] leading-relaxed text-ink-900">
+                {phieu.content}
+              </p>
+              {/* Kết quả CHỈ hiện khi đã có: một ô trống ở đây trông như một trường chưa điền, trong
+                  khi phiếu chưa đóng thì nó chưa tồn tại. */}
+              {phieu.result !== "" && (
+                <div className="rounded-[10px] border border-solid border-success-500/30 bg-success-50 px-3 py-2.5 [&>p]:m-0">
+                  <p className="text-[11px] font-semibold text-ink-500 uppercase">
+                    Kết quả xử lý đã trả lời người dân
+                  </p>
+                  <p className="noi-dung-phan-anh mt-0.5 text-sm text-ink-900">{phieu.result}</p>
+                </div>
+              )}
+              {/* LÝ DO VÀ CƠ QUAN NHẬN CHỈ CÓ Ở HAI NHÁNH RẼ. Ở trạng thái khác hai trường không tồn
+                  tại — vẽ ô trống là vẽ một trường trông như chưa điền. */}
+              {RE_NHANH.includes(phieu.status) && (
+                <dl className={cn(BRANCH_LIST, "rounded-[10px] border border-solid border-warning-500/30 bg-warning-50 px-3 py-2.5")}>
+                  <dt>Lý do</dt>
+                  <dd>{nhanTruongNhanh(phieu.reason)}</dd>
 
-      {/* §8.4 `Vị trí — địa chỉ + bản đồ nhúng với marker`, and the hamlet beside the address: a
-          disabled placeholder with its "?" (ADR 0068 §14). It draws NO map and loads NO tile — that
-          is exactly the undecided step (a citizen's coordinates sent to an outside provider). */}
-      <PendingSection info={petitionPendingPart("sceneMap")} titleAs="h3">
-        <div
-          aria-hidden="true"
-          className="grid h-32 place-items-center rounded-lg border border-dashed border-line-strong bg-surface-muted text-ink-400"
-        >
-          <MapIcon className="size-6" strokeWidth={1.6} focusable="false" />
-        </div>
-      </PendingSection>
+                  {phieu.status === "chuyen-cap-tren" && (
+                    <>
+                      <dt>Cơ quan tiếp nhận</dt>
+                      <dd>{nhanTruongNhanh(phieu.receiving_body)}</dd>
+                    </>
+                  )}
 
-      {/* Right under the list, so a refusal of the publication buttons above (409 `never_public`)
-          reads next to the box that caused it. The `<p>` itself is unchanged (a test reads it); the
-          frame around it is the spec's error look. */}
-      {loiGhi !== null && (
-        <div className="flex items-start gap-2 rounded-xl border border-danger-200 bg-danger-50 px-3.5 py-3 [&>p]:m-0">
-          <Glyph icon={CircleAlert} className="mt-0.5 size-[18px] shrink-0 text-danger-600" />
-          <p className="thong-bao-loi" role="alert">
-            {loiGhi}
-          </p>
-        </div>
-      )}
+                  <dt>{phieu.status === "chuyen-cap-tren" ? "Chuyển lúc" : "Kết thúc lúc"}</dt>
+                  <dd>
+                    {phieu.branch_ended_at === undefined || phieu.branch_ended_at === null
+                      ? KHONG_CO_TRONG_PHAN_HOI
+                      : nhanThoiDiem(phieu.branch_ended_at)}
+                  </dd>
+                </dl>
+              )}
+            </section>
 
-      {/* §8.4 photos. A separate component, NOT a hook here: it reads the network (`useEffect`), and
-          `chon-can-bo.test.tsx` calls this block as a plain function. Hidden without `feedback.read` —
-          UX only; the route checks the same key and `feedback.restricted` (rule 5, forbidden #1). */}
-      {coQuyen(permissions, QUYEN_XEM_PHAN_ANH) && (
-        <ScenePhotos
-          lookupCode={phieu.code}
-          after={
-            <VerificationPhotos
-              lookupCode={phieu.code}
-              status={phieu.status}
-              canUpload={coQuyen(permissions, QUYEN_DONG_PHAN_ANH)}
-            />
-          }
-        />
-      )}
+            {/* §8.4 photos. A separate component, NOT a hook here: it reads the network (`useEffect`),
+                and `chon-can-bo.test.tsx` calls this block as a plain function. Hidden without
+                `feedback.read` — UX only; the route checks the same key and `feedback.restricted`
+                (rule 5, forbidden #1). */}
+            {coQuyen(permissions, QUYEN_XEM_PHAN_ANH) && (
+              <ScenePhotos
+                lookupCode={phieu.code}
+                after={
+                  <VerificationPhotos
+                    lookupCode={phieu.code}
+                    status={phieu.status}
+                    canUpload={coQuyen(permissions, QUYEN_DONG_PHAN_ANH)}
+                  />
+                }
+              />
+            )}
 
-      <CitizenRatingBlock petition={phieu} headingId="tieu-de-danh-gia-phieu" />
+            {/* `Vị trí` — the address and the coordinates as TEXT, always said (absence too). The map
+                and the hamlet beside the address are a disabled placeholder with its "?" (ADR 0068
+                §14): it draws NO map and loads NO tile — that is exactly the undecided step (a
+                citizen's coordinates sent to an outside provider). */}
+            <section aria-labelledby="tieu-de-vi-tri-phieu" className="flex flex-col gap-2 [&>*]:my-0">
+              <h3 id="tieu-de-vi-tri-phieu" className={SECTION_HEADING}>
+                {SCENE_LOCATION_LABEL}
+              </h3>
+              <div className="rounded-[10px] border border-solid border-line bg-surface px-3 py-2.5 text-sm text-ink-900 [&>p]:m-0 [&>p+p]:mt-1">
+                <SceneLocation petition={phieu} />
+              </div>
+              <PendingSection info={petitionPendingPart("sceneMap")} titleAs="h3">
+                <div
+                  aria-hidden="true"
+                  className="grid h-32 place-items-center rounded-lg border border-dashed border-line-strong bg-surface-muted text-ink-400"
+                >
+                  <MapIcon className="size-6" strokeWidth={1.6} focusable="false" />
+                </div>
+              </PendingSection>
+            </section>
 
-      {/* ── XỬ LÝ PHIẾU — the processing acts, one card, a hairline between acts ───────────────── */}
-      <Card as="section" aria-labelledby="tieu-de-xu-ly-phieu">
-        <CardHeader>
-          <SectionTitle icon={ListChecks} id="tieu-de-xu-ly-phieu">
-            Xử lý phiếu
-          </SectionTitle>
-        </CardHeader>
-        <div className="flex min-w-0 flex-col divide-y divide-line">
-      {/* ── 1. PHÂN LOẠI ─────────────────────────────────────────────────────────────────── */}
-      {cong.phanLoai ? (
-        phanLoaiDuoc(phieu.status) && (
-          <form
-            className={ACT_CLASS}
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (linhVucChon !== "" && loiGhiChuNoiBo(ghiChuPhanLoai) === null) {
-                xoaKhiThanhCong(phanLoai(linhVucChon, ghiChuPhanLoai), () => datGhiChuPhanLoai(""));
-              }
-            }}
-          >
-            <SectionTitle as="h5" icon={Tags}>
-              Phân loại phiếu
-            </SectionTitle>
-            <p className="ghi-chu m-0">
-              Chốt lĩnh vực là hành vi ấn định hạn xử lý xong theo cấu hình thời hạn của xã. Xã chưa
-              cấu hình lĩnh vực này thì máy chủ từ chối và nói ra màn cần vào.
-            </p>
-            {/* Same 2-column grid as `Chuyển xử lý` (owner, 02/10/2026: label above, 40px, the full
-                column) — one select takes one column, so both acts line up. */}
-            <div className={SELECT_GRID}>
-            <Field label="Lĩnh vực" htmlFor="chon-linh-vuc" icon={Shapes} kind="select" grow="auto">
-              <select
-                id="chon-linh-vuc"
-                value={linhVucChon}
-                onChange={(e) => datLinhVucChon(e.target.value)}
+            {/* `Có thể trùng với phiếu khác` (`FeedbackDetailDrawer.tsx:408-439`) — no route detects or
+                merges duplicates: a placeholder with its "?", no button that would do nothing. */}
+            <PendingSection info={petitionPendingPart("duplicates")} titleAs="h3" />
+
+            <CitizenRatingBlock petition={phieu} headingId="tieu-de-danh-gia-phieu" />
+
+            {/* ── XỬ LÝ PHIẾU — the processing acts, one card, a hairline between acts ───────────────── */}
+            <Card as="section" aria-labelledby="tieu-de-xu-ly-phieu">
+              <CardHeader>
+                <SectionTitle icon={ListChecks} id="tieu-de-xu-ly-phieu">
+                  Xử lý phiếu
+                </SectionTitle>
+              </CardHeader>
+              <div className="flex min-w-0 flex-col divide-y divide-line">
+            {/* ── 1. PHÂN LOẠI ─────────────────────────────────────────────────────────────────── */}
+            {cong.phanLoai ? (
+              phanLoaiDuoc(phieu.status) && (
+                <form
+                  className={ACT_CLASS}
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (linhVucChon !== "" && loiGhiChuNoiBo(ghiChuPhanLoai) === null) {
+                      xoaKhiThanhCong(phanLoai(linhVucChon, ghiChuPhanLoai), () => datGhiChuPhanLoai(""));
+                    }
+                  }}
+                >
+                  <SectionTitle as="h5" icon={Tags}>
+                    Phân loại phiếu
+                  </SectionTitle>
+                  <p className="ghi-chu m-0">
+                    Chốt lĩnh vực là hành vi ấn định hạn xử lý xong theo cấu hình thời hạn của xã. Xã chưa
+                    cấu hình lĩnh vực này thì máy chủ từ chối và nói ra màn cần vào.
+                  </p>
+                  {/* Same 2-column grid as `Chuyển xử lý` (owner, 02/10/2026: label above, 40px, the full
+                      column) — one select takes one column, so both acts line up. */}
+                  <div className={SELECT_GRID}>
+                  <Field label="Lĩnh vực" htmlFor="chon-linh-vuc" icon={Shapes} kind="select" grow="auto">
+                    <select
+                      id="chon-linh-vuc"
+                      value={linhVucChon}
+                      onChange={(e) => datLinhVucChon(e.target.value)}
+                    >
+                      <option value="">— Chọn lĩnh vực —</option>
+                      {LINH_VUC_PHAN_ANH.map((l) => (
+                        <option key={l.ma} value={l.ma}>
+                          {l.nhan}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  </div>
+                  <ONhapGhiChuNoiBo id="ghi-chu-phan-loai" giaTri={ghiChuPhanLoai} datGiaTri={datGhiChuPhanLoai} />
+                  <div className="cum-nut justify-end">
+                    <button
+                      type="submit"
+                      className={buttonClass("primary")}
+                      disabled={dangGui || linhVucChon === "" || loiGhiChuNoiBo(ghiChuPhanLoai) !== null}
+                    >
+                      <Glyph icon={Tags} />
+                      Chốt lĩnh vực
+                    </button>
+                  </div>
+                </form>
+              )
+            ) : (
+              <div className="p-4">
+                <Notice tone="neutral" icon={ShieldX}>
+                  {CAU_THIEU_QUYEN_PHAN_LOAI}
+                </Notice>
+              </div>
+            )}
+
+            {/* ── 1b. HAI NHÁNH RẼ — cùng cổng `feedback.classify`, chỉ ở `dang-phan-loai` ──────────── */}
+            {cong.phanLoai && reNhanhDuoc(phieu.status) && (
+              <div className="cum-nut p-4">
+                <button
+                  type="button"
+                  className={buttonClass("secondary")}
+                  aria-pressed={reNhanhMo === "khong-tiep-nhan"}
+                  onClick={() => datReNhanhMo(reNhanhMo === "khong-tiep-nhan" ? null : "khong-tiep-nhan")}
+                >
+                  <Glyph icon={Ban} />
+                  {NHAN_KHONG_TIEP_NHAN}
+                </button>
+                <button
+                  type="button"
+                  className={buttonClass("secondary")}
+                  aria-pressed={reNhanhMo === "chuyen-cap-tren"}
+                  onClick={() => datReNhanhMo(reNhanhMo === "chuyen-cap-tren" ? null : "chuyen-cap-tren")}
+                >
+                  <Glyph icon={ArrowUpRight} />
+                  {NHAN_CHUYEN_CAP_TREN}
+                </button>
+              </div>
+            )}
+            {cong.phanLoai && reNhanhDuoc(phieu.status) && reNhanhMo !== null && (
+              <div className="p-4">
+              <BieuMauReNhanh
+                // Khoá theo nhánh: đổi nhánh là ô trống lại, không mang lý do của nhánh kia sang.
+                key={reNhanhMo}
+                loai={reNhanhMo}
+                dangGui={dangGui}
+                gui={(lyDo, coQuan, ghiChu) =>
+                  reNhanhMo === "khong-tiep-nhan"
+                    ? khongTiepNhan(lyDo, ghiChu)
+                    : chuyenCapTren(lyDo, coQuan, ghiChu)
+                }
+                huy={() => datReNhanhMo(null)}
+              />
+              </div>
+            )}
+
+            {/* ── 2. CHUYỂN XỬ LÝ (§8.5) ───────────────────────────────────────────────────────── */}
+            {/* Not drawn while the petition is still classifiable: the server answers 409 from
+                `da-tiep-nhan` (ADR 0027). The reason is said instead — UX only, the server still decides. */}
+            {cong.phanCong && phanLoaiDuoc(phieu.status) ? (
+              <div className="p-4">
+                <Notice tone="neutral" icon={Tags}>
+                  {ASSIGN_NEEDS_CLASSIFICATION}
+                </Notice>
+              </div>
+            ) : cong.phanCong ? (
+              <form
+                className={ACT_CLASS}
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (boPhanChon !== "" && loiGhiChuNoiBo(ghiChuPhanCong) === null) {
+                    xoaKhiThanhCong(
+                      chuyenXuLy(boPhanChon, canBoChon === "" ? undefined : canBoChon, ghiChuPhanCong),
+                      () => datGhiChuPhanCong(""),
+                    );
+                  }
+                }}
               >
-                <option value="">— Chọn lĩnh vực —</option>
-                {LINH_VUC_PHAN_ANH.map((l) => (
-                  <option key={l.ma} value={l.ma}>
-                    {l.nhan}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            </div>
-            <ONhapGhiChuNoiBo id="ghi-chu-phan-loai" giaTri={ghiChuPhanLoai} datGiaTri={datGhiChuPhanLoai} />
-            <div className="cum-nut justify-end">
-              <button
-                type="submit"
-                className={buttonClass("primary")}
-                disabled={dangGui || linhVucChon === "" || loiGhiChuNoiBo(ghiChuPhanLoai) !== null}
+                <SectionTitle as="h5" icon={Forward}>
+                  Chuyển xử lý, không đổi trạng thái
+                </SectionTitle>
+                <div className={SELECT_GRID}>
+                <Field label="Bộ phận" htmlFor="chon-bo-phan" icon={Building2} kind="select" grow="auto">
+                  <select
+                    id="chon-bo-phan"
+                    value={boPhanChon}
+                    onChange={(e) => {
+                      datBoPhanChon(e.target.value);
+                      // Đổi bộ phận thì bỏ người đã chọn: người ấy thuộc bộ phận cũ, và một lựa chọn
+                      // không còn nằm trong ô chọn là một lựa chọn cán bộ không nhìn thấy mà vẫn gửi đi.
+                      datCanBoChon("");
+                    }}
+                  >
+                    <option value="">— Chọn bộ phận —</option>
+                    {boPhan.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                {/* GIÁ TRỊ CỦA MỖI LỰA CHỌN LÀ MÃ CÁN BỘ (`code`), không phải id nội bộ — luật nắm giữ ở
+                    máy chủ so đúng mã ấy với phiên của người được giao. Mã chỉ nằm trong thân POST, không
+                    lên URL. */}
+                <Field label={NHAN_CHON_CAN_BO} htmlFor="chon-can-bo" icon={UserRound} kind="select" grow="auto">
+                  <select
+                    id="chon-can-bo"
+                    value={canBoChon}
+                    disabled={boPhanChon === ""}
+                    onChange={(e) => datCanBoChon(e.target.value)}
+                  >
+                    <option value="">{DE_BO_PHAN_PHAN_CONG}</option>
+                    {canBoCuaBoPhan.map((cb) => (
+                      <option key={cb.code} value={cb.code}>
+                        {nhanLuaChonCanBo(cb)}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                </div>
+                {danhBa !== null && !danhBa.ok && (
+                  <p className="thong-bao-loi m-0" role="alert">
+                    Không tải được danh bạ cán bộ: {danhBa.thongBao} Vẫn chuyển được phiếu cho bộ phận tự
+                    phân công.
+                  </p>
+                )}
+                {danhBa !== null && danhBa.ok && boPhanChon !== "" && canBoCuaBoPhan.length === 0 && (
+                  <p className="ghi-chu m-0">
+                    Bộ phận này chưa có cán bộ nào có tài khoản đang hoạt động. Phiếu sẽ để bộ phận tự
+                    phân công.
+                  </p>
+                )}
+                <ONhapGhiChuNoiBo id="ghi-chu-phan-cong" giaTri={ghiChuPhanCong} datGiaTri={datGhiChuPhanCong} />
+                {assignRefusal !== null && (
+                  <div className="flex items-start gap-2 rounded-xl border border-danger-200 bg-danger-50 px-3.5 py-3 [&>p]:m-0">
+                    <Glyph icon={CircleAlert} className="mt-0.5 size-[18px] shrink-0 text-danger-600" />
+                    <p className="thong-bao-loi" role="alert">
+                      {assignRefusal}
+                    </p>
+                  </div>
+                )}
+                <div className="cum-nut justify-end">
+                  <button
+                    type="submit"
+                    className={buttonClass("primary")}
+                    disabled={dangGui || boPhanChon === "" || loiGhiChuNoiBo(ghiChuPhanCong) !== null}
+                  >
+                    <Glyph icon={Forward} />
+                    Chuyển xử lý
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="p-4">
+                <Notice tone="neutral" icon={ShieldX}>
+                  {CAU_THIEU_QUYEN_PHAN_CONG}
+                </Notice>
+              </div>
+            )}
+
+            {/* ── 3. TIẾN TRẠNG THÁI — KHÔNG CÓ CỔNG Ở GIAO DIỆN ───────────────────────────────── */}
+            {conBuocKeTiep(phieu.status) && (
+              <div className={ACT_CLASS}>
+                <ONhapGhiChuNoiBo id="ghi-chu-tien" giaTri={ghiChuTien} datGiaTri={datGhiChuTien} />
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="ghi-chu m-0 min-w-0 flex-1 basis-60">{GHI_CHU_TIEN_TRANG_THAI}</p>
+                  <button
+                    type="button"
+                    className={buttonClass("primary")}
+                    disabled={dangGui || loiGhiChuNoiBo(ghiChuTien) !== null}
+                    onClick={() => xoaKhiThanhCong(tienTrangThai(ghiChuTien), () => datGhiChuTien(""))}
+                  >
+                    <Glyph icon={ChevronsRight} />
+                    {NHAN_TIEN_TRANG_THAI}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── 4. ĐÓNG PHIẾU — CỔNG `feedback.resolve`, KHÔNG NỚI THEO LUẬT NẮM GIỮ ─────────── */}
+            {/* Chỉ ở hai điểm máy chủ cho đóng (`dongDuocTrenManHinh`) — điểm `da-xu-ly` đọc cờ
+                `has_citizen`, và quay về luật kênh `can-bo-nhap-ho` khi cờ vắng (`coCongDanXacNhan`). */}
+            {cong.dongPhieu ? (
+              dongDuocTrenManHinh(phieu) && (
+              <form
+                className={ACT_CLASS}
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (ketQua.trim() !== "" && loiGhiChuNoiBo(ghiChuDong) === null) {
+                    xoaKhiThanhCong(dongPhieuLai(ketQua.trim(), ghiChuDong), () => datGhiChuDong(""));
+                  }
+                }}
               >
-                <Glyph icon={Tags} />
-                Chốt lĩnh vực
-              </button>
-            </div>
-          </form>
-        )
-      ) : (
-        <div className="p-4">
-          <Notice tone="neutral" icon={ShieldX}>
-            {CAU_THIEU_QUYEN_PHAN_LOAI}
-          </Notice>
-        </div>
-      )}
+                <SectionTitle as="h5" icon={CircleCheck}>
+                  Đóng phiếu
+                </SectionTitle>
+                <div>
+                  <label htmlFor="ket-qua-xu-ly" className={LABEL_CLASS}>
+                    {NHAN_O_KET_QUA}
+                  </label>
+                  <textarea
+                    id="ket-qua-xu-ly"
+                    name="ket-qua-xu-ly"
+                    rows={3}
+                    className={TEXTAREA_CLASS}
+                    value={ketQua}
+                    onChange={(e) => datKetQua(e.target.value)}
+                  />
+                  <p className={HINT_CLASS}>{GHI_CHU_O_KET_QUA}</p>
+                </div>
+                <ONhapGhiChuNoiBo id="ghi-chu-dong" giaTri={ghiChuDong} datGiaTri={datGhiChuDong} />
+                {/* 409 `after_photo_required`: the commune's sentence VERBATIM, then where to go. */}
+                {closeRefusal !== null && (
+                  <div className="flex flex-col gap-2 rounded-xl border border-danger-200 bg-danger-50 px-3.5 py-3 [&>p]:m-0">
+                    <p className="thong-bao-loi inline-flex items-start gap-2" role="alert">
+                      <Glyph icon={CircleAlert} className="mt-0.5 size-[18px] shrink-0 text-danger-600" />
+                      <span>{closeRefusal}</span>
+                    </p>
+                    <p className="text-sm text-ink-700">{AFTER_PHOTO_REQUIRED_HINT}</p>
+                    <p>
+                      <a className={buttonClass("secondary", "sm")} href={`#${afterPhotosHeadingId(phieu.code)}`}>
+                        <Glyph icon={ArrowUp} />
+                        {AFTER_PHOTO_GO_TO}
+                      </a>
+                    </p>
+                  </div>
+                )}
+                <div className="cum-nut justify-end">
+                  <button
+                    type="submit"
+                    className={buttonClass("primary")}
+                    disabled={dangGui || ketQua.trim() === "" || loiGhiChuNoiBo(ghiChuDong) !== null}
+                  >
+                    <Glyph icon={CircleCheck} />
+                    Đóng phiếu
+                  </button>
+                </div>
+              </form>
+              )
+            ) : (
+              <div className="p-4">
+                <Notice tone="neutral" icon={ShieldX}>
+                  {CAU_THIEU_QUYEN_DONG}
+                </Notice>
+              </div>
+            )}
 
-      {/* ── 1b. HAI NHÁNH RẼ — cùng cổng `feedback.classify`, chỉ ở `dang-phan-loai` ──────────── */}
-      {cong.phanLoai && reNhanhDuoc(phieu.status) && (
-        <div className="cum-nut p-4">
-          <button
-            type="button"
-            className={buttonClass("secondary")}
-            aria-pressed={reNhanhMo === "khong-tiep-nhan"}
-            onClick={() => datReNhanhMo(reNhanhMo === "khong-tiep-nhan" ? null : "khong-tiep-nhan")}
-          >
-            <Glyph icon={Ban} />
-            {NHAN_KHONG_TIEP_NHAN}
-          </button>
-          <button
-            type="button"
-            className={buttonClass("secondary")}
-            aria-pressed={reNhanhMo === "chuyen-cap-tren"}
-            onClick={() => datReNhanhMo(reNhanhMo === "chuyen-cap-tren" ? null : "chuyen-cap-tren")}
-          >
-            <Glyph icon={ArrowUpRight} />
-            {NHAN_CHUYEN_CAP_TREN}
-          </button>
-        </div>
-      )}
-      {cong.phanLoai && reNhanhDuoc(phieu.status) && reNhanhMo !== null && (
-        <div className="p-4">
-        <BieuMauReNhanh
-          // Khoá theo nhánh: đổi nhánh là ô trống lại, không mang lý do của nhánh kia sang.
-          key={reNhanhMo}
-          loai={reNhanhMo}
-          dangGui={dangGui}
-          gui={(lyDo, coQuan, ghiChu) =>
-            reNhanhMo === "khong-tiep-nhan"
-              ? khongTiepNhan(lyDo, ghiChu)
-              : chuyenCapTren(lyDo, coQuan, ghiChu)
-          }
-          huy={() => datReNhanhMo(null)}
-        />
-        </div>
-      )}
+            {/* ── 4b. TẠO NHIỆM VỤ (§13) — `task.create` AND `feedback.read`; UX only, the server decides ── */}
+            {onTaskCreated !== undefined && petitionTaskOffered(permissions, phieu) && (
+              <PetitionTaskBlock lookupCode={phieu.code} danhBa={danhBa} onCreated={onTaskCreated} />
+            )}
+              </div>
+            </Card>
 
-      {/* ── 2. CHUYỂN XỬ LÝ (§8.5) ───────────────────────────────────────────────────────── */}
-      {/* Not drawn while the petition is still classifiable: the server answers 409 from
-          `da-tiep-nhan` (ADR 0027). The reason is said instead — UX only, the server still decides. */}
-      {cong.phanCong && phanLoaiDuoc(phieu.status) ? (
-        <div className="p-4">
-          <Notice tone="neutral" icon={Tags}>
-            {ASSIGN_NEEDS_CLASSIFICATION}
-          </Notice>
-        </div>
-      ) : cong.phanCong ? (
-        <form
-          className={ACT_CLASS}
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (boPhanChon !== "" && loiGhiChuNoiBo(ghiChuPhanCong) === null) {
-              xoaKhiThanhCong(
-                chuyenXuLy(boPhanChon, canBoChon === "" ? undefined : canBoChon, ghiChuPhanCong),
-                () => datGhiChuPhanCong(""),
-              );
-            }
-          }}
-        >
-          <SectionTitle as="h5" icon={Forward}>
-            Chuyển xử lý, không đổi trạng thái
-          </SectionTitle>
-          <div className={SELECT_GRID}>
-          <Field label="Bộ phận" htmlFor="chon-bo-phan" icon={Building2} kind="select" grow="auto">
-            <select
-              id="chon-bo-phan"
-              value={boPhanChon}
-              onChange={(e) => {
-                datBoPhanChon(e.target.value);
-                // Đổi bộ phận thì bỏ người đã chọn: người ấy thuộc bộ phận cũ, và một lựa chọn
-                // không còn nằm trong ô chọn là một lựa chọn cán bộ không nhìn thấy mà vẫn gửi đi.
-                datCanBoChon("");
-              }}
-            >
-              <option value="">— Chọn bộ phận —</option>
-              {boPhan.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-          {/* GIÁ TRỊ CỦA MỖI LỰA CHỌN LÀ MÃ CÁN BỘ (`code`), không phải id nội bộ — luật nắm giữ ở
-              máy chủ so đúng mã ấy với phiên của người được giao. Mã chỉ nằm trong thân POST, không
-              lên URL. */}
-          <Field label={NHAN_CHON_CAN_BO} htmlFor="chon-can-bo" icon={UserRound} kind="select" grow="auto">
-            <select
-              id="chon-can-bo"
-              value={canBoChon}
-              disabled={boPhanChon === ""}
-              onChange={(e) => datCanBoChon(e.target.value)}
-            >
-              <option value="">{DE_BO_PHAN_PHAN_CONG}</option>
-              {canBoCuaBoPhan.map((cb) => (
-                <option key={cb.code} value={cb.code}>
-                  {nhanLuaChonCanBo(cb)}
-                </option>
-              ))}
-            </select>
-          </Field>
           </div>
-          {danhBa !== null && !danhBa.ok && (
-            <p className="thong-bao-loi m-0" role="alert">
-              Không tải được danh bạ cán bộ: {danhBa.thongBao} Vẫn chuyển được phiếu cho bộ phận tự
-              phân công.
-            </p>
-          )}
-          {danhBa !== null && danhBa.ok && boPhanChon !== "" && canBoCuaBoPhan.length === 0 && (
-            <p className="ghi-chu m-0">
-              Bộ phận này chưa có cán bộ nào có tài khoản đang hoạt động. Phiếu sẽ để bộ phận tự
-              phân công.
-            </p>
-          )}
-          <ONhapGhiChuNoiBo id="ghi-chu-phan-cong" giaTri={ghiChuPhanCong} datGiaTri={datGhiChuPhanCong} />
-          {assignRefusal !== null && (
-            <div className="flex items-start gap-2 rounded-xl border border-danger-200 bg-danger-50 px-3.5 py-3 [&>p]:m-0">
-              <Glyph icon={CircleAlert} className="mt-0.5 size-[18px] shrink-0 text-danger-600" />
-              <p className="thong-bao-loi" role="alert">
-                {assignRefusal}
-              </p>
-            </div>
-          )}
-          <div className="cum-nut justify-end">
-            <button
-              type="submit"
-              className={buttonClass("primary")}
-              disabled={dangGui || boPhanChon === "" || loiGhiChuNoiBo(ghiChuPhanCong) !== null}
-            >
-              <Glyph icon={Forward} />
-              Chuyển xử lý
-            </button>
-          </div>
-        </form>
-      ) : (
-        <div className="p-4">
-          <Notice tone="neutral" icon={ShieldX}>
-            {CAU_THIEU_QUYEN_PHAN_CONG}
-          </Notice>
-        </div>
-      )}
 
-      {/* ── 3. TIẾN TRẠNG THÁI — KHÔNG CÓ CỔNG Ở GIAO DIỆN ───────────────────────────────── */}
-      {conBuocKeTiep(phieu.status) && (
-        <div className={ACT_CLASS}>
-          <ONhapGhiChuNoiBo id="ghi-chu-tien" giaTri={ghiChuTien} datGiaTri={datGhiChuTien} />
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="ghi-chu m-0 min-w-0 flex-1 basis-60">{GHI_CHU_TIEN_TRANG_THAI}</p>
-            <button
-              type="button"
-              className={buttonClass("primary")}
-              disabled={dangGui || loiGhiChuNoiBo(ghiChuTien) !== null}
-              onClick={() => xoaKhiThanhCong(tienTrangThai(ghiChuTien), () => datGhiChuTien(""))}
-            >
-              <Glyph icon={ChevronsRight} />
-              {NHAN_TIEN_TRANG_THAI}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── 4. ĐÓNG PHIẾU — CỔNG `feedback.resolve`, KHÔNG NỚI THEO LUẬT NẮM GIỮ ─────────── */}
-      {/* Chỉ ở hai điểm máy chủ cho đóng (`dongDuocTrenManHinh`) — điểm `da-xu-ly` đọc cờ
-          `has_citizen`, và quay về luật kênh `can-bo-nhap-ho` khi cờ vắng (`coCongDanXacNhan`). */}
-      {cong.dongPhieu ? (
-        dongDuocTrenManHinh(phieu) && (
-        <form
-          className={ACT_CLASS}
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (ketQua.trim() !== "" && loiGhiChuNoiBo(ghiChuDong) === null) {
-              xoaKhiThanhCong(dongPhieuLai(ketQua.trim(), ghiChuDong), () => datGhiChuDong(""));
-            }
-          }}
-        >
-          <SectionTitle as="h5" icon={CircleCheck}>
-            Đóng phiếu
-          </SectionTitle>
-          <div>
-            <label htmlFor="ket-qua-xu-ly" className={LABEL_CLASS}>
-              {NHAN_O_KET_QUA}
-            </label>
-            <textarea
-              id="ket-qua-xu-ly"
-              name="ket-qua-xu-ly"
-              rows={3}
-              className={TEXTAREA_CLASS}
-              value={ketQua}
-              onChange={(e) => datKetQua(e.target.value)}
+          {/* ── NHẬT KÝ XỬ LÝ (§8.7) — the right column, as in the prototype: "where has this petition
+              been" is what the handler looks at most. Under the left column below 768px. A component
+              of its own, NOT a hook here: it reads the network (`useEffect`), and
+              `chon-can-bo.test.tsx` calls this block as a plain function. */}
+          <aside className="shrink-0 border-t border-solid border-line bg-surface px-4 py-3 md:w-[26rem] md:border-t-0 md:border-l">
+            <NhatKyPhieu
+              maTraCuu={phieu.code}
+              tenBoPhan={tenBoPhan}
+              danhBa={bangDanhBa}
+              coNutGhi={coGhiNhatKy}
+              lanLamMoi={lanLamMoiNhatKy}
             />
-            <p className={HINT_CLASS}>{GHI_CHU_O_KET_QUA}</p>
-          </div>
-          <ONhapGhiChuNoiBo id="ghi-chu-dong" giaTri={ghiChuDong} datGiaTri={datGhiChuDong} />
-          {/* 409 `after_photo_required`: the commune's sentence VERBATIM, then where to go. */}
-          {closeRefusal !== null && (
-            <div className="flex flex-col gap-2 rounded-xl border border-danger-200 bg-danger-50 px-3.5 py-3 [&>p]:m-0">
-              <p className="thong-bao-loi inline-flex items-start gap-2" role="alert">
-                <Glyph icon={CircleAlert} className="mt-0.5 size-[18px] shrink-0 text-danger-600" />
-                <span>{closeRefusal}</span>
-              </p>
-              <p className="text-sm text-ink-700">{AFTER_PHOTO_REQUIRED_HINT}</p>
-              <p>
-                <a className={buttonClass("secondary", "sm")} href={`#${afterPhotosHeadingId(phieu.code)}`}>
-                  <Glyph icon={ArrowUp} />
-                  {AFTER_PHOTO_GO_TO}
-                </a>
-              </p>
-            </div>
-          )}
-          <div className="cum-nut justify-end">
-            <button
-              type="submit"
-              className={buttonClass("primary")}
-              disabled={dangGui || ketQua.trim() === "" || loiGhiChuNoiBo(ghiChuDong) !== null}
-            >
-              <Glyph icon={CircleCheck} />
-              Đóng phiếu
-            </button>
-          </div>
-        </form>
-        )
-      ) : (
-        <div className="p-4">
-          <Notice tone="neutral" icon={ShieldX}>
-            {CAU_THIEU_QUYEN_DONG}
-          </Notice>
+          </aside>
         </div>
-      )}
+      </div>
+    </LargeDialog>
+  );
+}
 
-      {/* ── 4b. TẠO NHIỆM VỤ (§13) — `task.create` AND `feedback.read`; UX only, the server decides ── */}
-      {onTaskCreated !== undefined && petitionTaskOffered(permissions, phieu) && (
-        <PetitionTaskBlock lookupCode={phieu.code} danhBa={danhBa} onCreated={onTaskCreated} />
-      )}
-        </div>
-      </Card>
+/** Heading of a drawer section (`FeedbackDetailDrawer.tsx:320`, `Section`): 13px bold. */
+const SECTION_HEADING = "m-0 text-[13px] font-bold text-ink-900";
 
-      {/* ── 5. NHẬT KÝ XỬ LÝ (§8.7) ─────────────────────────────────────────────────────── */}
-      {/* Một thành phần riêng, KHÔNG phải thêm hook vào đây: nó tự đọc mạng (`useEffect`), và
-          `chon-can-bo.test.tsx` gọi khối này như một hàm thường — một `useEffect` ở đây sẽ nổ. */}
-      <NhatKyPhieu
-        maTraCuu={phieu.code}
-        tenBoPhan={tenBoPhan}
-        danhBa={bangDanhBa}
-        coNutGhi={coGhiNhatKy}
-        lanLamMoi={lanLamMoiNhatKy}
-      />
-    </section>
+/** The label–value pairs inside the `Hạn xử lý` cell: small label, value under it. */
+const FACT_LIST = cn(
+  "m-0 flex flex-col text-sm text-ink-900",
+  "[&>dt]:text-[11px] [&>dt]:font-semibold [&>dt]:text-ink-500 [&>dt:not(:first-of-type)]:mt-1.5",
+  "[&>dd]:m-0 [&_dd_p]:my-0 [&_dd_p]:mt-0.5",
+);
+
+/** The branch box (reason · receiving body · when): the prototype's `Lý do …` panel. */
+const BRANCH_LIST = cn(
+  "m-0 grid grid-cols-1 gap-x-4 gap-y-1 text-sm sm:grid-cols-[10rem_minmax(0,1fr)]",
+  "[&>dt]:text-xs [&>dt]:font-semibold [&>dt]:text-ink-500 [&>dd]:m-0 [&>dd]:min-w-0 [&>dd]:text-ink-900",
+);
+
+/** One titled cell of the facts row (`FeedbackDetailDrawer.tsx:562-577`). */
+function Fact({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="min-w-0 bg-surface px-4 py-2.5">
+      <p className="m-0 mb-1 text-[11px] font-bold tracking-wide text-ink-500 uppercase">{label}</p>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * One step of the status strip — the prototype's chip (`FeedbackStatusPipeline.tsx:112-153`): the
+ * step's word on top, its role under it ("đang ở đây" / "đã qua" / "—"). The current step is filled
+ * navy and carries `aria-current`; every step has its icon, so the state is never colour alone.
+ */
+function StepChip({
+  label,
+  role,
+  icon,
+}: {
+  label: string;
+  role: "current" | "done" | "ahead";
+  icon?: LucideIcon;
+}) {
+  const Icon = icon ?? (role === "current" ? CircleDot : role === "done" ? CircleCheck : Circle);
+  return (
+    <li
+      aria-current={role === "current" ? "step" : undefined}
+      className={cn(
+        "min-w-[6.5rem] flex-1 rounded-lg border border-solid px-2.5 py-1.5",
+        role === "current"
+          ? "border-transparent bg-brand-600 text-white"
+          : role === "done"
+            ? "border-line bg-surface text-ink-900"
+            : "border-line bg-surface text-ink-500",
+      )}
+    >
+      <span className="flex items-center gap-1 text-xs font-semibold">
+        <Glyph icon={Icon} className="size-3.5 shrink-0" />
+        {label}
+      </span>
+      <span className={cn("block text-[11px]", role === "current" ? "text-white/80" : "text-ink-500")}>
+        {role === "current" ? "đang ở đây" : role === "done" ? "đã qua" : "—"}
+      </span>
+    </li>
   );
 }
 

@@ -138,7 +138,8 @@ export function PetitionKpisView({
           {KPI_LOADING}
         </p>
       )}
-      <ul className="m-0 grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 xl:grid-cols-4">
+      {/* The prototype's grid (`FeedbackWorkspace.tsx:94`): 1 / 2 / 4 columns, 12px apart. */}
+      <ul className="m-0 grid list-none grid-cols-1 gap-3 p-0 sm:grid-cols-2 xl:grid-cols-4">
         <li className="min-w-0">
           <StatCard
             icon={Inbox}

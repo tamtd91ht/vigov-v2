@@ -205,6 +205,31 @@ describe("PetitionTaskView — the form, the refusal, the result", () => {
     expect(html).not.toContain('id="giao-tieu-de"');
   });
 
+  it("the button opens a dialog (prototype `TaskFromRecordDialog`), never an inline form", () => {
+    expect(view()).toMatch(/<button[^>]*id="nut-tao-nhiem-vu-tu-phieu"[^>]*aria-haspopup="dialog"/);
+    const html = view({ open: true });
+    expect(html).toMatch(/<dialog[^>]*aria-labelledby="tieu-de-giao-viec-moi"/);
+    expect(html).toContain("Tạo nhiệm vụ từ hồ sơ này");
+    // The locked source line, and the submit named as in the prototype.
+    expect(html).toContain("Nguồn giao: Từ phản ánh PA-2026-0021");
+    expect(html).toMatch(/<button type="submit"[^>]*>Tạo nhiệm vụ<\/button>/);
+  });
+
+  it("open: no task type is picked for the clerk (the type select starts empty)", () => {
+    const html = view({
+      open: true,
+      catalogue: {
+        loai: [{ code: "theo-van-ban", label: "Theo văn bản" } as never, { code: "dot-xuat", label: "Đột xuất" } as never],
+        mucUuTien: [],
+        khoi: [],
+        boPhan: [],
+      },
+    });
+    const select = html.match(/<select id="giao-loai"[^>]*>([\s\S]*?)<\/select>/)?.[1] ?? "";
+    expect(select).not.toBe("");
+    expect(select).toMatch(/<option value="" selected="">/);
+  });
+
   it("open: the shared task form, title pre-filled with the lookup code ONLY — no petition content", () => {
     const html = view({ open: true });
     expect(html).toContain('id="giao-tieu-de"');

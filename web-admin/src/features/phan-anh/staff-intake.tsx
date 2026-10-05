@@ -19,6 +19,7 @@ import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { IconButton } from "@/components/ui/icon-button";
+import { ModalDialog } from "@/components/ui/modal-dialog";
 import { Notice } from "@/components/ui/notice";
 import { PendingButton, PendingField } from "@/components/ui/pending-feature";
 import { khoaSauLanGhi } from "@/features/thu-chi/nhan-thu-chi";
@@ -106,42 +107,24 @@ export function StaffIntakeButton({
 const TITLE_ID = "tieu-de-nhap-ho-phan-anh";
 
 /**
- * The overlay: a native `<dialog>` opened with `showModal()` — the page behind is inert, Tab stays
- * inside, Esc fires `cancel`. Drawn by the existing `overlay-dialog` class (no new CSS). Mounted = open;
- * focus goes back to the button that opened it. jsdom has no `showModal`: the `open` attribute is the
- * fallback, so tests still find the content.
+ * The prototype's centred dialog (`FeedbackEntryForm.tsx:131`, `sm:max-w-[42rem]`) in the shared
+ * `ModalDialog` — native `showModal()`: the page behind is inert, Tab stays inside, Esc asks. Mounted =
+ * open; focus goes back to the button that opened it.
  */
 function StaffIntakeDialog({ onClose, onBooked }: { onClose: () => void; onBooked: () => void }) {
-  const ref = useRef<HTMLDialogElement>(null);
   const [sending, setSending] = useState(false);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (el === null) return;
-    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    if (typeof el.showModal === "function") {
-      if (!el.open) el.showModal();
-    } else {
-      el.setAttribute("open", "");
-    }
-    return () => {
-      if (opener !== null && opener.isConnected) opener.focus();
-    };
-  }, []);
-
   return (
-    <dialog
-      ref={ref}
-      className="overlay-dialog"
-      aria-labelledby={TITLE_ID}
-      onCancel={(e) => {
-        e.preventDefault();
-        // Closing while the booking is in flight would hide whether a code was issued.
+    <ModalDialog
+      titleId={TITLE_ID}
+      size="lg"
+      className="max-w-[42rem]"
+      // Closing while the booking is in flight would hide whether a code was issued.
+      onDismiss={() => {
         if (!sending) onClose();
       }}
     >
       <StaffIntakeForm onClose={onClose} onBooked={onBooked} onSendingChange={setSending} />
-    </dialog>
+    </ModalDialog>
   );
 }
 
@@ -291,25 +274,32 @@ export function StaffIntakeFormView({
   const canSend = fieldsReady && values.field !== "" && contentError === null && !clockBad && !sending;
 
   return (
+    // The prototype's dialog body (`FeedbackEntryForm.tsx:132-286`): header, then the fields in its
+    // order — Lĩnh vực · Nội dung · [Địa chỉ | Thôn] · [Người gửi | Số điện thoại] · ẩn danh · kênh ·
+    // ảnh — then Huỷ / Vào sổ phản ánh. `Dân phản ánh lúc` is ours (the deadline's starting point, ADR
+    // 0028) and sits under the field it times. The header and the buttons stay in sight; the fields
+    // scroll between them.
     <form
-      className="form-danh-muc m-0 flex flex-col gap-4"
+      className="form-danh-muc m-0 flex min-h-0 flex-col gap-4 border-0 bg-transparent p-0"
       aria-busy={sending}
       onSubmit={(e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (canSend) onSubmit();
       }}
     >
-      <div className="flex items-start gap-3">
+      <div className="flex shrink-0 items-start gap-3">
         <div className="min-w-0 flex-1">
-          <h2 id={TITLE_ID} className="m-0 text-lg leading-snug font-semibold text-ink-900">
+          <h2 id={TITLE_ID} tabIndex={-1} className="m-0 text-lg leading-snug font-semibold text-ink-900">
             {INTAKE_TITLE}
           </h2>
-          <p className="mt-1 mb-0 text-sm text-ink-700">{INTAKE_DESCRIPTION}</p>
+          <p className="mt-1.5 mb-0 text-sm text-ink-500">{INTAKE_DESCRIPTION}</p>
         </div>
-        <IconButton label="Đóng biểu mẫu nhập hộ" type="button" variant="secondary" onClick={onCancel} disabled={sending}>
+        <IconButton label="Đóng biểu mẫu nhập hộ" type="button" variant="ghost" onClick={onCancel} disabled={sending}>
           <Glyph icon={X} />
         </IconButton>
       </div>
+
+      <div className="flex min-h-0 flex-col gap-3.5 overflow-y-auto pr-1 [&>*]:my-0">
 
       {/* LĨNH VỰC — REQUIRED on this channel (§11): the field is known at booking, so both deadlines
           are fixed at once (ADR 0028). The list is the commune's (`citizen-report-intake-fields`). */}
@@ -337,24 +327,24 @@ export function StaffIntakeFormView({
         </p>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label={`${INTAKE_FIELD_LABEL} (bắt buộc)`} htmlFor="nhap-ho-linh-vuc" icon={Shapes} kind="select" grow="auto">
-          <select
-            id="nhap-ho-linh-vuc"
-            name="nhap-ho-linh-vuc"
-            required
-            value={values.field}
-            disabled={!fieldsReady || sending}
-            onChange={(e) => set("field", e.target.value)}
-          >
-            <option value="">{INTAKE_FIELD_PLACEHOLDER}</option>
-            {items.map((f) => (
-              <option key={f.code} value={f.code}>
-                {f.label}
-              </option>
-            ))}
-          </select>
-        </Field>
+      <Field label={`${INTAKE_FIELD_LABEL} (bắt buộc)`} htmlFor="nhap-ho-linh-vuc" icon={Shapes} kind="select" grow="auto" className="max-w-none">
+        <select
+          id="nhap-ho-linh-vuc"
+          name="nhap-ho-linh-vuc"
+          required
+          value={values.field}
+          disabled={!fieldsReady || sending}
+          onChange={(e) => set("field", e.target.value)}
+        >
+          <option value="">{INTAKE_FIELD_PLACEHOLDER}</option>
+          {items.map((f) => (
+            <option key={f.code} value={f.code}>
+              {f.label}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field
           label={INTAKE_CLOCK_LABEL}
           htmlFor="nhap-ho-luc"
@@ -397,28 +387,30 @@ export function StaffIntakeFormView({
         </p>
       </div>
 
-      <Field label={INTAKE_ADDRESS_LABEL} htmlFor="nhap-ho-dia-chi" icon={MapPin} grow="auto">
-        <input
-          id="nhap-ho-dia-chi"
-          name="nhap-ho-dia-chi"
-          value={values.address}
-          placeholder={INTAKE_ADDRESS_PLACEHOLDER}
-          autoComplete="off"
-          disabled={sending}
-          onChange={(e) => set("address", e.target.value)}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label={INTAKE_ADDRESS_LABEL} htmlFor="nhap-ho-dia-chi" icon={MapPin} grow="auto">
+          <input
+            id="nhap-ho-dia-chi"
+            name="nhap-ho-dia-chi"
+            value={values.address}
+            placeholder={INTAKE_ADDRESS_PLACEHOLDER}
+            autoComplete="off"
+            disabled={sending}
+            onChange={(e) => set("address", e.target.value)}
+          />
+        </Field>
+
+        {/* §11 `Thôn, tổ dân phố` — placeholder (ADR 0068 §14); `id` unique on the page. */}
+        <PendingField
+          info={petitionPendingPart("intakeHamlet")}
+          id="nhap-ho-thon"
+          kind="select"
+          placeholder="— Chưa xác định —"
+          className="max-w-none flex-auto"
         />
-      </Field>
+      </div>
 
-      {/* §11 `Thôn, tổ dân phố` — placeholder (ADR 0068 §14); `id` unique on the page. */}
-      <PendingField
-        info={petitionPendingPart("intakeHamlet")}
-        id="nhap-ho-thon"
-        kind="select"
-        placeholder="— Chưa xác định —"
-        className="max-w-none flex-auto"
-      />
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label={INTAKE_NAME_LABEL} htmlFor="nhap-ho-nguoi-gui" icon={UserRound} grow="auto">
           <input
             id="nhap-ho-nguoi-gui"
@@ -467,8 +459,9 @@ export function StaffIntakeFormView({
           {refusal}
         </p>
       )}
+      </div>
 
-      <div className="cum-nut justify-end">
+      <div className="cum-nut shrink-0 justify-end">
         <Button type="button" variant="secondary" onClick={onCancel} disabled={sending}>
           {INTAKE_CANCEL}
         </Button>

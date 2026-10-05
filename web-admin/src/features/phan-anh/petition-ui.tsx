@@ -25,7 +25,7 @@ import { cn } from "@/lib/cn";
  * NO HOOKS ANYWHERE IN THIS FILE: `chon-can-bo.test.tsx` calls `ChiTietPhieu` as a plain function
  * under a mocked React, and these pieces render inside it.
  *
- * LOCAL ON PURPOSE, to migrate later: `PetitionRowsSkeleton` and `LoadingBar` wait for the shared
+ * LOCAL ON PURPOSE, to migrate later: `PetitionCardsSkeleton` and `LoadingBar` wait for the shared
  * `Skeleton` being built in `components/ui`; `toggleButtonClass` / `TOGGLE_TRACK` are the same
  * segmented look as `features/nhiem-vu/task-ui.tsx` (one feature does not import another's UI).
  */
@@ -106,19 +106,22 @@ export function toggleButtonClass(on: boolean): string {
 }
 
 /**
- * First-load placeholder for the register (spec §8b): grey bars in the shape of table rows, so the
- * layout does not jump when the page arrives. Decorative: the screen's own `role="status"` sentence
- * announces the load.
+ * First-load placeholder for the register (spec §8b): grey blocks in the shape of the prototype's
+ * cards (`FeedbackWorkspace.tsx:229-233` — the same grid), so the layout does not jump when the page
+ * arrives. Decorative: the screen's own `role="status"` sentence announces the load.
  */
-export function PetitionRowsSkeleton({ rows = 5 }: { rows?: number }) {
+export function PetitionCardsSkeleton({ cards = 4 }: { cards?: number }) {
   return (
-    <div aria-hidden="true" className="divide-y divide-line">
-      {Array.from({ length: rows }, (_, i) => (
-        <div key={i} className="flex h-12 items-center gap-4 px-4">
-          <span className="h-3 w-24 shrink-0 rounded bg-line motion-safe:animate-pulse" />
-          <span className="h-3 min-w-0 flex-1 rounded bg-line motion-safe:animate-pulse" />
-          <span className="hidden h-3 w-28 shrink-0 rounded bg-line motion-safe:animate-pulse sm:block" />
-          <span className="h-[22px] w-24 shrink-0 rounded-full bg-line motion-safe:animate-pulse" />
+    <div aria-hidden="true" className="grid gap-2.5 2xl:grid-cols-2">
+      {Array.from({ length: cards }, (_, i) => (
+        <div key={i} className="flex gap-3 rounded-card border border-solid border-line bg-surface p-2.5">
+          <span className="size-20 shrink-0 rounded-lg bg-line motion-safe:animate-pulse" />
+          <span className="flex min-w-0 flex-1 flex-col gap-2 py-1">
+            <span className="h-3 w-40 max-w-full rounded bg-line motion-safe:animate-pulse" />
+            <span className="h-3 w-full rounded bg-line motion-safe:animate-pulse" />
+            <span className="h-3 w-2/3 rounded bg-line motion-safe:animate-pulse" />
+            <span className="h-[22px] w-24 rounded-full bg-line motion-safe:animate-pulse" />
+          </span>
         </div>
       ))}
     </div>

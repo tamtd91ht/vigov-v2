@@ -908,6 +908,23 @@ export const SO_RONG =
 
 export const DANG_TAI_SO = "Đang tải sổ phản ánh…";
 
+/**
+ * The register with no filter and nothing to show. NOT the prototype's "Chưa có phản ánh nào": a
+ * petition of a restricted field is absent from the page for an account without `feedback.restricted`,
+ * and the screen must neither say it exists nor claim it does not (rule 4, forbidden #2). "Nothing to
+ * show" is true for both. The second line is the prototype's, word for word.
+ */
+export const LIST_EMPTY_TITLE = "Chưa có phiếu phản ánh nào để hiển thị.";
+export const LIST_EMPTY_HINT = "Phiếu gửi từ Zalo Mini App sẽ hiện ở đây ngay khi người dân bấm gửi.";
+
+/** A card whose petition carries no address (the prototype's fallback, verbatim). */
+export const CARD_NO_LOCATION = "Chưa rõ vị trí";
+
+/** The page header (prototype `FeedbackWorkspace.tsx:75-81`, word for word). */
+export const PETITION_PAGE_TITLE = "Phản ánh của người dân";
+export const PETITION_PAGE_SUBTITLE =
+  "Tiếp nhận từ Zalo Mini App và các kênh khác, theo dõi thời hạn, đối chiếu ảnh trước và sau khi xử lý.";
+
 /** Nhãn "mọi giá trị" của từng ô lọc — nguyên văn §4. */
 export const MOI_TRANG_THAI_NHAN = "Tất cả trạng thái";
 export const MOI_LINH_VUC_NHAN = "Tất cả lĩnh vực";
@@ -1154,6 +1171,14 @@ export function petitionTaskOffered(
 export const PETITION_TASK_BUTTON = "Tạo nhiệm vụ";
 
 /**
+ * The prototype's `TaskFromRecordDialog` heading and submit words. Its description ("Hạn xử lý kế thừa
+ * từ hồ sơ…") is NOT copied: this route does not inherit the petition's deadline, and the line would
+ * promise something the server does not do. Only its first sentence is kept.
+ */
+export const PETITION_TASK_DIALOG_TITLE = "Tạo nhiệm vụ từ hồ sơ này";
+export const PETITION_TASK_DIALOG_DESCRIPTION = "Xem lại rồi mới tạo.";
+
+/**
  * The title the form opens with. ONLY the lookup code — never the petition's content or the reporter:
  * a task title is read by every officer who can read tasks, and petition content is personal data
  * (rule 3). The clerk rewrites it into a sentence of work.
@@ -1394,6 +1419,16 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
     viSao:
       "Hệ thống chưa đếm được phản ánh theo lĩnh vực, theo bộ phận hay theo thôn cho cả xã. Bốn thẻ " +
       "số liệu đầu màn là số của cả xã và đã dùng được.",
+  },
+  // The prototype's drawer section `Có thể trùng với phiếu khác` (FeedbackDetailDrawer.tsx:408-439)
+  // and the card's "N phiếu trùng". No petitions route detects or merges duplicates
+  // (service-petitions/internal/http/routes.go, re-read 06/10/2026), and the list carries no count.
+  {
+    id: "duplicates",
+    ten: "Có thể trùng với phiếu khác",
+    viSao:
+      "Hệ thống chưa dò được phiếu trùng (cùng nơi, cùng sự việc) và chưa gộp được phiếu, nên khối " +
+      "này chưa dùng được.",
   },
   // §4 scope tab. The petition list answers 400 to `scope=related`
   // (service-petitions/internal/http/xu_ly_phan_anh.go, errPhamViLienQuanChuaCo): who counts as

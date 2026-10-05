@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleCheck, ClipboardPlus } from "lucide-react";
+import { CircleCheck, ListChecks, LockKeyhole } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { FormGiaoViec } from "@/features/nhiem-vu/so-nhiem-vu";
@@ -22,6 +22,8 @@ import { QUYEN_DUYET_GIA_HAN } from "@/lib/quyen";
 
 import {
   PETITION_TASK_BUTTON,
+  PETITION_TASK_DIALOG_DESCRIPTION,
+  PETITION_TASK_DIALOG_TITLE,
   petitionTaskCreated,
   petitionTaskSourceNote,
   petitionTaskTitle,
@@ -163,7 +165,8 @@ export function PetitionTaskView({
   send: (body: petitions_petitionTaskIn, idempotencyKey: string) => void;
 }) {
   // One act of the drawer's `Xử lý phiếu` card (`ACT_CLASS`): secondary, because the card's solid
-  // button is the processing act itself; this one books follow-up work.
+  // button is the processing act itself; this one books follow-up work. It OPENS A DIALOG, as the
+  // prototype's `TaskFromRecordDialog` does (ADR 0068 lần 5) — the same `FormGiaoViec`, the same body.
   return (
     <div className={ACT_CLASS}>
       <div className="cum-nut">
@@ -171,11 +174,11 @@ export function PetitionTaskView({
           type="button"
           className={buttonClass("secondary")}
           id="nut-tao-nhiem-vu-tu-phieu"
-          aria-expanded={open}
+          aria-haspopup="dialog"
           disabled={sending}
           onClick={toggle}
         >
-          <Glyph icon={ClipboardPlus} />
+          <Glyph icon={ListChecks} />
           {PETITION_TASK_BUTTON}
         </button>
       </div>
@@ -188,24 +191,31 @@ export function PetitionTaskView({
       )}
 
       {open && (
-        <div>
-          <p className="ghi-chu mt-0">{petitionTaskSourceNote(lookupCode)}</p>
-          <FormGiaoViec
-            danhMuc={catalogue}
-            danhBa={danhBa}
-            danhBaLanhDao={leaders}
-            // The route takes `documents` and `note` (`petitions_petitionTaskIn`), unlike the meeting
-            // split — so the §7.2 lists are drawn here.
-            coDanhSachVanBan
-            dangGui={sending}
-            loi={error}
-            huy={cancel}
-            // `FormGiaoViec` hands over `petitions_taoNhiemVuVao`; `createTaskFromPetition` copies it
-            // field by field, which is where `source` / `source_id` are left behind.
-            giaoViec={(body, key) => send(body, key)}
-            tieuDeCoSan={petitionTaskTitle(lookupCode)}
-          />
-        </div>
+        <FormGiaoViec
+          dialog
+          dialogTitle={PETITION_TASK_DIALOG_TITLE}
+          dialogDescription={PETITION_TASK_DIALOG_DESCRIPTION}
+          submitLabel={PETITION_TASK_BUTTON}
+          lead={
+            <p className="ghi-chu m-0 inline-flex items-center gap-1.5">
+              <Glyph icon={LockKeyhole} className="size-3.5 shrink-0" />
+              {petitionTaskSourceNote(lookupCode)}
+            </p>
+          }
+          danhMuc={catalogue}
+          danhBa={danhBa}
+          danhBaLanhDao={leaders}
+          // The route takes `documents` and `note` (`petitions_petitionTaskIn`), unlike the meeting
+          // split — so the §7.2 lists are drawn here.
+          coDanhSachVanBan
+          dangGui={sending}
+          loi={error}
+          huy={cancel}
+          // `FormGiaoViec` hands over `petitions_taoNhiemVuVao`; `createTaskFromPetition` copies it
+          // field by field, which is where `source` / `source_id` are left behind.
+          giaoViec={(body, key) => send(body, key)}
+          tieuDeCoSan={petitionTaskTitle(lookupCode)}
+        />
       )}
     </div>
   );
