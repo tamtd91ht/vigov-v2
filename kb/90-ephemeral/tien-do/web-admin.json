@@ -441,6 +441,15 @@
       "tiep_theo": "(1) Các thẻ màn hình W1 (Danh bạ, Tổng quan, Nhiệm vụ…) dùng component mới; dashboard.module.css nằm NGOÀI lớp (unlayered) nên thắng mọi utility — thẻ Tổng quan phải chuyển nó vào lớp hoặc thay. (2) Chủ dự án xem lại: dòng 'Ủy ban nhân dân' trên đầu trang lặp nghĩa khi displayName đã là 'UBND xã …'. (3) Dòng 'Kết nối được mã hoá' ở màn đăng nhập chỉ trọn nghĩa khi đóng nợ HSTS/CSP của web-admin (tools/security_debt.json). (4) Preflight của Tailwind chỉ bật khi mọi màn đã chuyển."
     },
     {
+      "id": "bang-mau-song-dong-05-10",
+      "viec": "Bảng màu mới cho cả web-admin (ADR 0068 §Sửa đổi 05/10/2026): nền #f4f8fb, nút chính navy #102b43, cyan chỉ làm nền/viền, chữ xanh #0369a1",
+      "trang_thai": "xong",
+      "bang_chung": "web-admin/src/app/globals.css :root — brand-* giữ tên, đổi giá trị theo vai trò (600 navy #102b43, 700 navy nhạt #1b3f60 cho hover, 500 cyan đậm #0284c7 cho vòng focus/viền chọn 4.10:1 ≥ 3:1 WCAG 1.4.11, 50/100 tông cyan nhạt), thang accent-50/100/500/700 mới (#2fb1f9 chỉ làm nền; #0369a1 chữ 5.93:1), ink-500 #4d6780 chữ phụ ≥4.69:1 trên mọi nền; line-hover, surface-subtle thay màu cứng ở lớp legacy và components/ui (badge, stat-card, todo-list, segmented, pending-feature, field). Mọi cặp chữ/nền ≥4.5:1. tsc sạch, vitest 214 tệp 3856/3856, next build xanh (05/10).",
+      "no_confirm": [],
+      "tiep_theo": "Chưa xem trên trình duyệt thật. ~40 tệp features dùng text-brand-600 cho liên kết nay ra navy (không phải cyan đậm) — đổi sang text-accent-700 theo từng màn khi làm lại màn ấy. Chip trạng thái hiện tại của nhiệm vụ còn chip-hoat-dong (xanh lá) — đổi ở việc hộp chi tiết nhiệm vụ.",
+      "menu": "nhiem-vu"
+    },
+    {
       "id": "giao-dien-nhiem-vu-w1-s3",
       "viec": "Nâng cấp giao diện Web Admin đợt 1 — màn Nhiệm vụ (/nhiem-vu, W1-S3) theo đặc tả v2 §8.3 + §8b. Chỉ trình bày — không đổi route, API, state, bộ lọc, phân trang, quyền, luồng Kanban/danh sách, tên trường",
       "trang_thai": "dang_lam",

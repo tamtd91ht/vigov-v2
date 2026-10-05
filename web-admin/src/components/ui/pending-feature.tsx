@@ -281,7 +281,7 @@ export function PendingStatCard({
       data-pending=""
     >
       <div className="flex min-w-0 items-center gap-2">
-        <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-lg bg-[#f1f4f8] text-ink-400">
+        <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-lg bg-surface-subtle text-ink-400">
           <Icon className="size-4" strokeWidth={1.8} focusable="false" />
         </span>
         <span className="min-w-0 truncate text-xs font-semibold text-ink-500">{label ?? info.ten}</span>

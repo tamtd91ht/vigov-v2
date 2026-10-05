@@ -26,7 +26,7 @@ const TONE_TILE: Record<TodoTone, string> = {
   danger: "bg-danger-50 text-danger-600",
   warning: "bg-warning-50 text-warning-600",
   brand: "bg-brand-50 text-brand-600",
-  neutral: "bg-[#f1f4f8] text-ink-500",
+  neutral: "bg-surface-subtle text-ink-500",
 };
 
 export type TodoItem = {

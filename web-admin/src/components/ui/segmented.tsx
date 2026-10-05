@@ -50,7 +50,7 @@ export type SegmentedProps = {
   className?: string;
 };
 
-const TRACK = "inline-flex max-w-full flex-wrap gap-0.5 rounded-control bg-[#f1f4f8] p-[3px]";
+const TRACK = "inline-flex max-w-full flex-wrap gap-0.5 rounded-control bg-surface-subtle p-[3px]";
 
 const SEGMENT = cn(
   "inline-flex h-[34px] items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium whitespace-nowrap text-ink-500",

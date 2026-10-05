@@ -17,7 +17,7 @@ import { cn } from "@/lib/cn";
 export const controlClass = cn(
   "h-10 w-full min-w-0 rounded-control border border-line-strong bg-surface px-3 [font-family:inherit] text-base text-ink-900 md:text-sm",
   "transition-[border-color,box-shadow] duration-150",
-  "placeholder:text-ink-500 hover:not-disabled:border-[#c3ccd9]",
+  "placeholder:text-ink-500 hover:not-disabled:border-line-hover",
   "focus-visible:border-brand-500 focus-visible:shadow-[0_0_0_3px_var(--brand-100)] focus-visible:outline-none",
   "disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-500",
 );
