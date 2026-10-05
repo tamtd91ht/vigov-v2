@@ -9,8 +9,16 @@ import { NutDangXuat } from "@/features/auth/nut-dang-xuat";
 import { DUONG_DAN_DOI_MAT_KHAU } from "@/features/mat-khau/bat-doi-mat-khau";
 import type { KhoiNguoiDung } from "@/features/phien/khoi-nguoi-dung";
 
-import { menuIcon } from "./menu-icons";
-import { dangChon, PENDING_SCREENS, type NhomMenu } from "./muc-menu";
+import { MenuIcon } from "./menu-icons";
+import {
+  activeChildRoute,
+  dangChon,
+  isMenuParent,
+  parentRoute,
+  PENDING_SCREENS,
+  type MucMenu,
+  type NhomMenu,
+} from "./muc-menu";
 import { RolePill } from "./role-pill";
 import { userInitials } from "./user-initials";
 
@@ -132,33 +140,41 @@ export function NavSheetContent({
           {groups.map((g, i) => (
             <div key={g.ten === "" ? `untitled-${i}` : g.ten} className="nav-sheet-group">
               {g.ten !== "" && <p className="nav-sheet-group-label">{g.ten}</p>}
-              <ul>
+              <ul aria-label={g.ten === "" ? undefined : g.ten}>
                 {g.muc.map((m) => {
-                  const Icon = menuIcon(m.nhan);
-                  if (m.duong === null) {
-                    const info = PENDING_SCREENS[m.nhan];
-                    return (
-                      <li key={m.nhan} className="nav-sheet-item is-pending">
-                        <span aria-disabled="true" className="nav-sheet-link">
-                          <Icon aria-hidden="true" focusable="false" strokeWidth={1.8} />
-                          <span className="nav-sheet-label">{m.nhan}</span>
-                        </span>
-                        {info !== undefined && <PendingMarker info={info} side="bottom" className="ml-auto" />}
-                      </li>
-                    );
+                  if (!isMenuParent(m)) {
+                    return <NavSheetItem key={m.nhan} item={m} active={dangChon(m.duong, pathname)} onNavigate={onNavigate} />;
                   }
-                  const active = dangChon(m.duong, pathname);
+                  // Same shape as the expanded sidebar: the parent row, its children indented under it.
+                  // Never `aria-current` on the row — the current page is the child.
+                  const current = activeChildRoute(m, pathname);
+                  const href = parentRoute(m);
+                  const rowClass = current === null ? "nav-sheet-link nav-sheet-parent" : "nav-sheet-link nav-sheet-parent is-open";
+                  const row = (
+                    <>
+                      <MenuIcon label={m.nhan} />
+                      <span className="nav-sheet-label">{m.nhan}</span>
+                    </>
+                  );
                   return (
-                    <li key={m.nhan} className="nav-sheet-item">
-                      <Link
-                        href={m.duong}
-                        aria-current={active ? "page" : undefined}
-                        className={active ? "nav-sheet-link is-active" : "nav-sheet-link"}
-                        onClick={onNavigate}
-                      >
-                        <Icon aria-hidden="true" focusable="false" strokeWidth={1.8} />
-                        <span className="nav-sheet-label">{m.nhan}</span>
-                      </Link>
+                    <li key={m.nhan} className="nav-sheet-item has-children">
+                      {href === null ? (
+                        <span className={rowClass}>{row}</span>
+                      ) : (
+                        <Link href={href} className={rowClass} onClick={onNavigate}>
+                          {row}
+                        </Link>
+                      )}
+                      <ul className="nav-sheet-children" aria-label={m.nhan}>
+                        {m.children.map((c) => (
+                          <NavSheetItem
+                            key={c.nhan}
+                            item={c}
+                            active={c.duong !== null && c.duong === current}
+                            onNavigate={onNavigate}
+                          />
+                        ))}
+                      </ul>
                     </li>
                   );
                 })}
@@ -193,5 +209,34 @@ export function NavSheetContent({
         <NutDangXuat />
       </div>
     </div>
+  );
+}
+
+/** One screen row of the sheet — a link, or the disabled placeholder with its "?" (ADR 0068 §14). */
+function NavSheetItem({ item, active, onNavigate }: { item: MucMenu; active: boolean; onNavigate: () => void }) {
+  if (item.duong === null) {
+    const info = PENDING_SCREENS[item.nhan];
+    return (
+      <li className="nav-sheet-item is-pending">
+        <span aria-disabled="true" className="nav-sheet-link">
+          <MenuIcon label={item.nhan} />
+          <span className="nav-sheet-label">{item.nhan}</span>
+        </span>
+        {info !== undefined && <PendingMarker info={info} side="bottom" className="ml-auto" />}
+      </li>
+    );
+  }
+  return (
+    <li className="nav-sheet-item">
+      <Link
+        href={item.duong}
+        aria-current={active ? "page" : undefined}
+        className={active ? "nav-sheet-link is-active" : "nav-sheet-link"}
+        onClick={onNavigate}
+      >
+        <MenuIcon label={item.nhan} />
+        <span className="nav-sheet-label">{item.nhan}</span>
+      </Link>
+    </li>
   );
 }

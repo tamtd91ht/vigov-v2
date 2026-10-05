@@ -73,10 +73,13 @@ describe("DauTrang — session not read yet", () => {
     expect(html).not.toContain("role-pill");
   });
 
-  it("draws the sidebar frame with no item (every item needs a key) — the menu never shows then withdraws", () => {
+  it("draws the sidebar frame with no screen link (every screen needs a key) — the menu never shows then withdraws", () => {
     const html = render();
     expect(html).toContain('class="side-nav"');
-    expect(html).not.toContain('<nav class="side-nav-nav"');
+    const sidebar = html.slice(html.indexOf('class="side-nav"'));
+    // Only the unbuilt placeholders (ADR 0068 §14): they open no data, so they need no key.
+    expect(sidebar).not.toContain("<a ");
+    expect(sidebar.match(/class="side-nav-item is-pending"/g)).toHaveLength(3);
     expect(html).not.toContain("Cấu hình");
   });
 

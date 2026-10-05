@@ -17,12 +17,14 @@ vi.mock("next/link", () => ({
   default: ({ href, ...rest }: AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => <a href={href} {...rest} />,
 }));
 
-const { locMenu, NHOM_MENU } = await import("./muc-menu");
+const { flattenMenu, isMenuParent, locMenu, NHOM_MENU } = await import("./muc-menu");
 const { NAV_SHEET_CLOSE_LABEL, NAV_SHEET_OPEN_LABEL, NavSheet, NavSheetContent } = await import("./nav-sheet");
 
-const ALL_PERMISSIONS = NHOM_MENU.flatMap((n) =>
-  n.muc.flatMap((m) => (m.khoa === null ? [] : typeof m.khoa === "string" ? [m.khoa] : [...m.khoa])),
+const ALL_PERMISSIONS = flattenMenu(NHOM_MENU).flatMap((m) =>
+  m.khoa === null ? [] : typeof m.khoa === "string" ? [m.khoa] : [...m.khoa],
 );
+const PARENT = "Người dùng & Phân quyền";
+const PENDING = ["Danh bạ người dân", "Gửi tin ZNS / SMS", "Hướng dẫn sử dụng"];
 const PERSON: KhoiNguoiDung = { hien: true, hoTen: "Nguyễn Văn Hùng", chucVu: "Chuyên viên" };
 const NOT_READ: KhoiNguoiDung = { hien: false, vi: "dang-doc" };
 
@@ -60,8 +62,40 @@ describe("nav sheet content — small screens show TEXT labels (touch has no too
     const html = content(ALL_PERMISSIONS, PERSON);
     for (const g of NHOM_MENU) {
       if (g.ten !== "") expect(html).toContain(`<p class="nav-sheet-group-label">${g.ten}</p>`);
-      for (const m of g.muc) expect(html, m.nhan).toContain(`<span class="nav-sheet-label">${esc(m.nhan)}</span>`);
+      for (const m of g.muc) {
+        expect(html, m.nhan).toContain(`<span class="nav-sheet-label">${esc(m.nhan)}</span>`);
+        if (isMenuParent(m)) {
+          for (const c of m.children) expect(html, c.nhan).toContain(`<span class="nav-sheet-label">${esc(c.nhan)}</span>`);
+        }
+      }
     }
+  });
+
+  it("the same structure as the sidebar: two groups in order, the parent row then its children indented", () => {
+    const html = content(ALL_PERMISSIONS, PERSON, null, "/nguoi-dung/phan-quyen");
+    const headings = [...html.matchAll(/<p class="nav-sheet-group-label">([^<]*)<\/p>/g)].map((m) => m[1]);
+    expect(headings).toEqual(["Điều hành", "Quản trị"]);
+    const labels = [...html.matchAll(/<span class="nav-sheet-label">([^<]*)<\/span>/g)].map((m) => m[1]);
+    expect(labels.slice(0, -1)).toEqual(
+      NHOM_MENU.flatMap((g) => g.muc.flatMap((m) => (isMenuParent(m) ? [m.nhan, ...m.children.map((c) => c.nhan)] : [m.nhan]))).map(esc),
+    );
+    const children = new RegExp(`<ul class="nav-sheet-children" aria-label="${esc(PARENT)}">(.*?)</ul>`).exec(html)?.[1] ?? "";
+    expect([...children.matchAll(/<a href="([^"]*)"/g)].map((m) => m[1])).toEqual(["/nguoi-dung", "/nguoi-dung/phan-quyen"]);
+    // On a child: that child alone is current; the parent row is marked open.
+    expect(html.match(/aria-current="page"/g)).toHaveLength(1);
+    expect(children).toMatch(/<a href="\/nguoi-dung\/phan-quyen" aria-current="page"/);
+    expect(html).toContain('class="nav-sheet-link nav-sheet-parent is-open"');
+  });
+
+  it("DENIED: neither child key → no parent row in the sheet", () => {
+    for (const p of [["task.read"], [], null]) expect(content(p, PERSON)).not.toContain(esc(PARENT));
+  });
+
+  it("the three unbuilt items: disabled, their word, a '?' each", () => {
+    const html = content([], PERSON);
+    expect(html.match(/data-pending-marker/g)).toHaveLength(3);
+    for (const nhan of PENDING) expect(html).toContain(`<span class="nav-sheet-label">${nhan}</span>`);
+    expect(html).not.toMatch(/<a href="(?!\/doi-mat-khau)/);
   });
 
   it("marks the current page with aria-current, once", () => {
@@ -73,12 +107,13 @@ describe("nav sheet content — small screens show TEXT labels (touch has no too
   it("DENIED: only `task.read` → the three task screens and nothing else", () => {
     const html = content(["task.read"], PERSON);
     const hrefs = [...html.matchAll(/<a href="([^"]*)"/g)].map((m) => m[1]);
-    expect(hrefs).toEqual(["/nhiem-vu", "/nhiem-vu/bien-ban", "/nhiem-vu/so-tay", "/doi-mat-khau"]);
+    expect(hrefs).toEqual(["/nhiem-vu", "/nhiem-vu/so-tay", "/nhiem-vu/bien-ban", "/doi-mat-khau"]);
   });
 
-  it("session not read: no menu item, no person, no change-password link — only the sign-out control", () => {
+  it("session not read: no menu link (only the unbuilt placeholders), no person, no change-password link", () => {
     const html = content(null, NOT_READ);
-    expect(html).not.toContain("nav-sheet-nav");
+    expect(html).not.toMatch(/<a href="(?!\/dang-nhap)/);
+    expect(html.match(/class="nav-sheet-item is-pending"/g)).toHaveLength(3);
     expect(html).not.toContain("ho-ten");
     expect(html).not.toContain('href="/doi-mat-khau"');
     expect(html).toContain("khoi-dang-xuat");
@@ -124,7 +159,7 @@ describe("nav sheet — opening and closing", () => {
     expect(dialog!.hasAttribute("open")).toBe(true);
     expect(dialog!.getAttribute("aria-labelledby")).toBe("nav-sheet-title");
     const labels = [...dialog!.querySelectorAll(".nav-sheet-nav .nav-sheet-label")].map((s) => s.textContent);
-    expect(labels).toEqual(["Nhiệm vụ", "Biên bản họp", "Sổ tay lãnh đạo"]);
+    expect(labels).toEqual(["Nhiệm vụ", "Sổ tay lãnh đạo", "Biên bản họp", "Danh bạ người dân", "Gửi tin ZNS / SMS", "Hướng dẫn sử dụng"]);
     act(() => dialog!.querySelector<HTMLAnchorElement>('a[href="/nhiem-vu/so-tay"]')!.click());
     expect(el.querySelector("dialog")).toBeNull();
   });

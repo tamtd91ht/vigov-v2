@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import { dangChon, KHOA_MO_CAU_HINH, locMenu, NHOM_MENU } from "./muc-menu";
+import {
+  activeChildRoute,
+  dangChon,
+  flattenMenu,
+  isMenuParent,
+  KHOA_MO_CAU_HINH,
+  locMenu,
+  NHOM_MENU,
+  parentRoute,
+  PENDING_SCREENS,
+  type MenuParent,
+} from "./muc-menu";
 
 /**
  * Ca kiểm của luật LỌC MENU. Ba nhánh đáng kiểm nhất — thiếu quyền, chưa đọc xong phiên, và mục
@@ -22,16 +33,24 @@ const DU_QUYEN = [
   "asset.read",
 ] as const;
 
-function tenMuc(nhom: ReturnType<typeof locMenu>): string[] {
-  return nhom.flatMap((n) => n.muc.map((m) => m.nhan));
+/** Mục CÓ MÀN (con của mục cha tính như mục thường) — mục chưa có màn luôn hiện, xem ca riêng dưới. */
+function builtItems(nhom: ReturnType<typeof locMenu>) {
+  return flattenMenu(nhom).filter((m) => m.duong !== null);
 }
 
+function tenMuc(nhom: ReturnType<typeof locMenu>): string[] {
+  return builtItems(nhom).map((m) => m.nhan);
+}
+
+/** Ba mục của bản mẫu chưa có màn và chưa có tuyến (ADR 0068 lần 5 #5). */
+const PENDING_NAMES = ["Danh bạ người dân", "Gửi tin ZNS / SMS", "Hướng dẫn sử dụng"];
+
 describe("locMenu", () => {
-  it("đủ quyền: thấy cả 16 mục — 14 của đặc tả §2, thêm Người dùng và Phân quyền (05/10/2026)", () => {
+  it("đủ quyền: thấy cả 16 mục có màn", () => {
     expect(tenMuc(locMenu(NHOM_MENU, DU_QUYEN))).toHaveLength(16);
   });
 
-  it("KHÔNG quyền nào: mọi mục biến mất — từ 04/10/2026 không còn mục nào chưa có màn", () => {
+  it("KHÔNG quyền nào: mọi mục có màn biến mất, chỉ còn ba mục chưa có màn", () => {
     const ten = tenMuc(locMenu(NHOM_MENU, []));
 
     // Mười mục có màn đều mở ra dữ liệu thật, nên chúng đi theo quyền. `Thu - Chi ngân sách` vào
@@ -46,7 +65,7 @@ describe("locMenu", () => {
       "Cấu hình",
       "Nhiệm vụ",
       "Biên bản họp",
-      "Thông báo",
+      "Thông báo nội bộ",
       "Nội dung Mini App",
       "Tổng quan",
       "Sổ tay lãnh đạo",
@@ -59,8 +78,9 @@ describe("locMenu", () => {
     }
     // Mục chưa có màn không mở ra dữ liệu nào cả nên không bị lọc (`locMenu`). `Tổng quan` rời nhóm
     // ấy ngày 28/09/2026; `Sổ tay lãnh đạo`, `Bản đồ kinh tế số` (ADR 0071, ADR 0072) và `Báo cáo`
-    // (`/bao-cao`, ADR 0053 sửa đổi 04/10/2026) ngày 04/10/2026 — nhóm nay rỗng.
+    // (`/bao-cao`, ADR 0053 sửa đổi 04/10/2026) ngày 04/10/2026. Ba mục của bản mẫu vào nhóm ấy 06/10/2026.
     expect(ten).toHaveLength(0);
+    expect(flattenMenu(locMenu(NHOM_MENU, [])).map((m) => m.nhan)).toEqual(PENDING_NAMES);
   });
 
   it("CHƯA ĐỌC XONG phiên (null) hành xử như KHÔNG có quyền, không như có", () => {
@@ -112,7 +132,7 @@ describe("locMenu", () => {
   });
 
   it("chỉ có `report.read`: Báo cáo dẫn tới /bao-cao (ADR 0053 sửa đổi 04/10/2026)", () => {
-    const muc = locMenu(NHOM_MENU, ["report.read"]).flatMap((n) => n.muc);
+    const muc = builtItems(locMenu(NHOM_MENU, ["report.read"]));
     const report = muc.find((m) => m.nhan === "Báo cáo");
     expect(report?.duong).toBe("/bao-cao");
     expect(report?.khoa).toBe("report.read");
@@ -137,7 +157,7 @@ describe("locMenu", () => {
   it("chỉ có `task.read`: THẤY Sổ tay lãnh đạo, dẫn tới /nhiem-vu/so-tay (ADR 0071)", () => {
     // Mọi tuyến của ba cột đòi đúng `task.read`; nhóm "Duyệt hoàn thành" thêm `task.approve` ở
     // TRONG màn, không ở mục menu.
-    const muc = locMenu(NHOM_MENU, ["task.read"]).flatMap((n) => n.muc);
+    const muc = builtItems(locMenu(NHOM_MENU, ["task.read"]));
     const soTay = muc.find((m) => m.nhan === "Sổ tay lãnh đạo");
     expect(soTay?.duong).toBe("/nhiem-vu/so-tay");
     expect(soTay?.khoa).toBe("task.read");
@@ -150,7 +170,7 @@ describe("locMenu", () => {
   });
 
   it("chỉ có `asset.read`: THẤY Bản đồ kinh tế số, dẫn tới /ban-do (ADR 0072)", () => {
-    const muc = locMenu(NHOM_MENU, ["asset.read"]).flatMap((n) => n.muc);
+    const muc = builtItems(locMenu(NHOM_MENU, ["asset.read"]));
     const map = muc.find((m) => m.nhan === "Bản đồ kinh tế số");
     expect(map?.duong).toBe("/ban-do");
     expect(map?.khoa).toBe("asset.read");
@@ -230,13 +250,13 @@ describe("mục Cấu hình — mở khi có BẤT KỲ khoá nào canh một ta
 
 describe("mục Người dùng và Phân quyền — mỗi mục đúng một khoá (05/10/2026, theo bản mẫu)", () => {
   it("chỉ có `admin.user`: THẤY Người dùng, dẫn tới /nguoi-dung, và không mục nào khác", () => {
-    const muc = locMenu(NHOM_MENU, ["admin.user"]).flatMap((n) => n.muc);
+    const muc = builtItems(locMenu(NHOM_MENU, ["admin.user"]));
     expect(muc.map((m) => m.nhan)).toEqual(["Danh bạ cán bộ", "Người dùng"]);
     expect(muc.find((m) => m.nhan === "Người dùng")?.duong).toBe("/nguoi-dung");
   });
 
   it("chỉ có `admin.role`: THẤY Phân quyền, dẫn tới /nguoi-dung/phan-quyen, và không mục nào khác", () => {
-    const muc = locMenu(NHOM_MENU, ["admin.role"]).flatMap((n) => n.muc);
+    const muc = builtItems(locMenu(NHOM_MENU, ["admin.role"]));
     expect(muc.map((m) => m.nhan)).toEqual(["Phân quyền"]);
     expect(muc[0]?.duong).toBe("/nguoi-dung/phan-quyen");
   });
@@ -253,9 +273,113 @@ describe("mục Người dùng và Phân quyền — mỗi mục đúng một kh
     }
   });
 
-  it("hai mục nằm trong HỆ THỐNG, giữa Báo cáo và Cấu hình — thứ tự của bản mẫu", () => {
-    const systemItems = NHOM_MENU.find((n) => n.ten === "HỆ THỐNG")?.muc.map((m) => m.nhan);
-    expect(systemItems).toEqual(["Danh bạ cán bộ", "Báo cáo", "Người dùng", "Phân quyền", "Cấu hình"]);
+  it("hai mục là CON của \"Người dùng & Phân quyền\", đúng thứ tự bản mẫu", () => {
+    const parent = NHOM_MENU.flatMap((n) => n.muc).find(isMenuParent);
+    expect(parent?.nhan).toBe("Người dùng & Phân quyền");
+    expect(parent?.children.map((c) => [c.nhan, c.duong])).toEqual([
+      ["Người dùng", "/nguoi-dung"],
+      ["Phân quyền", "/nguoi-dung/phan-quyen"],
+    ]);
+  });
+
+  it("mục cha hiện khi có MỘT trong hai khoá, chỉ kèm mục con được thấy, và dẫn tới mục con ấy", () => {
+    const parentOf = (ds: readonly string[]) =>
+      locMenu(NHOM_MENU, ds)
+        .flatMap((n) => n.muc)
+        .find(isMenuParent);
+    const onlyUser = parentOf(["admin.user"]);
+    expect(onlyUser?.children.map((c) => c.nhan)).toEqual(["Người dùng"]);
+    expect(onlyUser && parentRoute(onlyUser)).toBe("/nguoi-dung");
+    const onlyRole = parentOf(["admin.role"]);
+    expect(onlyRole?.children.map((c) => c.nhan)).toEqual(["Phân quyền"]);
+    // Không dẫn tới /nguoi-dung: người chỉ có `admin.role` sẽ gặp một màn từ chối.
+    expect(onlyRole && parentRoute(onlyRole)).toBe("/nguoi-dung/phan-quyen");
+    expect(parentOf(["admin.user", "admin.role"])?.children).toHaveLength(2);
+  });
+
+  it("CA BỊ TỪ CHỐI: không khoá nào của hai mục con → mục cha cũng biến mất", () => {
+    for (const ds of [[], null, ["admin.user.delete", "admin.org", "admin.sla", "report.read"]]) {
+      const muc = locMenu(NHOM_MENU, ds).flatMap((n) => n.muc);
+      expect(muc.some(isMenuParent)).toBe(false);
+      expect(muc.map((m) => m.nhan)).not.toContain("Người dùng & Phân quyền");
+    }
+  });
+});
+
+describe("cấu trúc menu theo bản mẫu (ADR 0068 lần 5, 06/10/2026)", () => {
+  it("hai nhóm, đúng tên, đúng thứ tự và đúng nhãn của bản mẫu", () => {
+    const shape = NHOM_MENU.map((n) => [n.ten, n.muc.map((m) => m.nhan)]);
+    expect(shape).toEqual([
+      [
+        "Điều hành",
+        [
+          "Tổng quan",
+          "Nhiệm vụ",
+          "Sổ tay lãnh đạo",
+          "Biên bản họp",
+          "Văn bản & Đơn thư",
+          "Giải ngân",
+          "Thu - Chi ngân sách",
+          "Thông báo nội bộ",
+          "Danh bạ người dân",
+          "Gửi tin ZNS / SMS",
+          "Phản ánh người dân",
+          "Bản đồ kinh tế số",
+        ],
+      ],
+      [
+        "Quản trị",
+        ["Nội dung Mini App", "Danh bạ cán bộ", "Báo cáo", "Người dùng & Phân quyền", "Hướng dẫn sử dụng", "Cấu hình"],
+      ],
+    ]);
+  });
+
+  it("KHÔNG có \"Hồ sơ công dân\" — ngoài hợp đồng (ADR 0001), không cả chỗ giữ", () => {
+    expect(flattenMenu(NHOM_MENU).map((m) => m.nhan)).not.toContain("Hồ sơ công dân");
+    expect(Object.keys(PENDING_SCREENS)).not.toContain("Hồ sơ công dân");
+  });
+
+  it("mỗi mục giữ khoá quyền của nó, không chép mảng quyền của bản mẫu", () => {
+    const key = (nhan: string) => flattenMenu(NHOM_MENU).find((m) => m.nhan === nhan)?.khoa;
+    expect(key("Tổng quan")).toBe("report.read");
+    expect(key("Thông báo nội bộ")).toBe("announcement.create");
+    expect(key("Nội dung Mini App")).toBe("content.read");
+    expect(key("Danh bạ cán bộ")).toBe("admin.user");
+  });
+
+  it("ba mục chưa có màn: không đường dẫn, không khoá, mỗi mục một mô tả — và không mô tả thừa", () => {
+    const pending = flattenMenu(NHOM_MENU).filter((m) => m.duong === null);
+    expect(pending.map((m) => m.nhan)).toEqual(PENDING_NAMES);
+    for (const m of pending) {
+      expect(m.khoa, m.nhan).toBeNull();
+      expect(PENDING_SCREENS[m.nhan]?.ten, m.nhan).toBe(m.nhan);
+      expect(PENDING_SCREENS[m.nhan]?.viSao.length, m.nhan).toBeGreaterThan(0);
+    }
+    expect(Object.keys(PENDING_SCREENS).sort()).toEqual([...PENDING_NAMES].sort());
+  });
+});
+
+describe("activeChildRoute", () => {
+  const parent: MenuParent = {
+    nhan: "Người dùng & Phân quyền",
+    children: [
+      { nhan: "Người dùng", duong: "/nguoi-dung", khoa: "admin.user" },
+      { nhan: "Phân quyền", duong: "/nguoi-dung/phan-quyen", khoa: "admin.role" },
+    ],
+  };
+
+  it("mục con KHỚP CỤ THỂ NHẤT thắng: ở /nguoi-dung/phan-quyen chỉ Phân quyền sáng", () => {
+    expect(activeChildRoute(parent, "/nguoi-dung/phan-quyen")).toBe("/nguoi-dung/phan-quyen");
+  });
+
+  it("ở /nguoi-dung (và trang con của nó) là Người dùng", () => {
+    expect(activeChildRoute(parent, "/nguoi-dung")).toBe("/nguoi-dung");
+    expect(activeChildRoute(parent, "/nguoi-dung/abc")).toBe("/nguoi-dung");
+  });
+
+  it("ngoài nhánh: không mục con nào", () => {
+    expect(activeChildRoute(parent, "/nguoi-dung-khac")).toBeNull();
+    expect(activeChildRoute(parent, "/cau-hinh")).toBeNull();
   });
 });
 

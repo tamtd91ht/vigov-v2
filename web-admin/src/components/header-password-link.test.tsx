@@ -121,7 +121,7 @@ describe("DauTrang — person block and its menu", () => {
 describe("DauTrang — the left sidebar follows the session's permissions (UX; the server still checks)", () => {
   it("`task.read`: the three task screens with their words, the current one marked; nothing in the header", () => {
     const el = mount(session(["task.read"]));
-    expect(sideNames(el)).toEqual(["Nhiệm vụ", "Biên bản họp", "Sổ tay lãnh đạo"]);
+    expect(sideNames(el)).toEqual(["Nhiệm vụ", "Sổ tay lãnh đạo", "Biên bản họp"]);
     const current = el.querySelectorAll('.side-nav [aria-current="page"]');
     expect([...current].map((a) => a.textContent)).toEqual(["Nhiệm vụ"]);
     expect(header(el).querySelector('a[href="/nhiem-vu"]')).toBeNull();
@@ -135,9 +135,10 @@ describe("DauTrang — the left sidebar follows the session's permissions (UX; t
     expect(header(el).querySelector('a[href="/cau-hinh"]')).toBeNull();
   });
 
-  it("DENIED: a read session with no key → no item, no nav landmark", () => {
+  it("DENIED: a read session with no key → no link; only the three unbuilt items, disabled (ADR 0068 §14)", () => {
     const el = mount(session(["admin.user.delete", "report.export"]));
-    expect(el.querySelector(".side-nav nav")).toBeNull();
+    expect(el.querySelectorAll(".side-nav a")).toHaveLength(0);
+    expect(el.querySelectorAll('.side-nav [aria-disabled="true"]')).toHaveLength(3);
     expect(el.querySelector('a[href="/cau-hinh"]')).toBeNull();
   });
 
@@ -156,7 +157,7 @@ describe("DauTrang — the left sidebar follows the session's permissions (UX; t
     expect(el.querySelector(".side-nav")!.classList.contains("is-collapsed")).toBe(true);
     expect(window.localStorage.getItem(SIDEBAR_STORAGE_KEY)).toBe("1");
     // Still named while collapsed.
-    expect(sideNames(el)).toEqual(["Nhiệm vụ", "Biên bản họp", "Sổ tay lãnh đạo"]);
+    expect(sideNames(el)).toEqual(["Nhiệm vụ", "Sổ tay lãnh đạo", "Biên bản họp"]);
     expect(el.querySelector(".side-nav-toggle")!.getAttribute("aria-label")).toBe("Mở rộng menu");
   });
 });

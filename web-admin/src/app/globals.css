@@ -1906,6 +1906,80 @@ a.side-nav-link.is-active {
   color: var(--ink-400);
 }
 
+/* Parent row + its children (prototype `AppSidebar.tsx`: children indented under the parent behind a
+   hairline guide, one step smaller). The guide sits under the centre of the parent's 20px icon
+   (12px padding + 10px). A parent whose child is current carries weight only (`is-open`): the fill and
+   the bar belong to the child, the page actually open. */
+.side-nav-group ul.side-nav-children {
+  margin: 2px 0 0 22px;
+  padding: 0 0 0 var(--space-2);
+  border-left: 1px solid var(--line);
+}
+
+.side-nav-item.is-child .side-nav-link {
+  min-height: 36px;
+  font-size: 14px;
+}
+
+.side-nav-item.is-child .side-nav-link svg {
+  width: 18px;
+  height: 18px;
+}
+
+.side-nav-parent.is-open {
+  font-weight: 500;
+}
+
+/* Collapsed, the parent is a button opening the flyout: reset the button look to the item's. */
+button.side-nav-link {
+  width: 100%;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+button.side-nav-link:hover,
+button.side-nav-link[data-state="open"] {
+  background: var(--accent-50);
+}
+
+button.side-nav-link.is-active {
+  background: var(--accent-100);
+  box-shadow: inset 3px 0 0 var(--brand-600);
+}
+
+/* Flyout of a collapsed parent: a white card to the sidebar's right, the children with their words. */
+.side-nav-flyout {
+  z-index: 60;
+  min-width: 13rem;
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+
+.side-nav-flyout-title {
+  margin: 0;
+  padding: var(--space-1) var(--space-3) var(--space-2);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-500);
+}
+
+.side-nav-flyout ul {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 /* ---- nav sheet (below 768px) · `nav-sheet.tsx` ------------------------------------------------ */
 
 /* Full height, pinned to the left edge, white; flat navy backdrop, no blur (ADR 0068 §11). The 250ms
@@ -2055,6 +2129,23 @@ a.nav-sheet-link.is-active {
 
 .nav-sheet-item.is-pending svg {
   color: var(--ink-400);
+}
+
+/* Parent row + indented children — the sidebar's shape (`.side-nav-children`), touch-sized rows kept. */
+.nav-sheet-item.has-children {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+}
+
+.nav-sheet-group ul.nav-sheet-children {
+  margin: 0 0 0 22px;
+  padding: 0 0 0 var(--space-2);
+  border-left: 1px solid var(--line);
+}
+
+.nav-sheet-parent.is-open {
+  font-weight: 500;
 }
 
 .nav-sheet-account {

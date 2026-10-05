@@ -69,9 +69,33 @@ export const KHOA_MO_CAU_HINH: readonly string[] = [
   AUDIT_READ_PERMISSION, // Nhật ký hệ thống — cả tab
 ];
 
+/**
+ * A row that only GROUPS screens — "Người dùng & Phân quyền" of the prototype (`vigov-require`
+ * `apps/admin/src/lib/navigation.ts`, `children`). One level only, like the prototype.
+ *
+ * NO ROUTE AND NO KEY OF ITS OWN: it is shown when at least one child is (`locMenu`), and it leads to its
+ * first VISIBLE child. A route of its own would be a screen to gate; a key of its own would be a key the
+ * `quyen` table lacks (rule 5, 3c). Each child keeps its own single key.
+ *
+ * A SEPARATE SHAPE, NOT A FOURTH FIELD ON `MucMenu`: `tools/tien_do_san_pham.py` (`MAU_MUC`) reads each
+ * SCREEN as one `{ nhan, duong, khoa }` literal. The children are such literals and are counted; this row
+ * (`{ nhan, children }`) does not match, and must not — it is not a screen.
+ */
+export type MenuParent = {
+  // vi-name-ok: same field as `MucMenu.nhan`, so label-keyed tables (`MENU_ICONS`) read both shapes alike
+  readonly nhan: string;
+  readonly children: readonly MucMenu[];
+};
+
+export type MenuEntry = MucMenu | MenuParent;
+
+export function isMenuParent(entry: MenuEntry): entry is MenuParent {
+  return "children" in entry;
+}
+
 export type NhomMenu = {
   readonly ten: string;
-  readonly muc: readonly MucMenu[];
+  readonly muc: readonly MenuEntry[];
 };
 
 /**
@@ -96,70 +120,82 @@ export type NhomMenu = {
  * KEYED BY LABEL IN A SEPARATE TABLE, NOT A FIELD ON THE ITEM: `tools/tien_do_san_pham.py`
  * (`MAU_MUC`) reads each item as ONE `{ nhan, duong, khoa }` literal. An item with a fourth field
  * stops matching and silently drops out of the product progress count — the menu would then report
- * fewer unbuilt screens than it shows. `side-nav.test.tsx` holds that every `duong: null` item
+ * fewer unbuilt screens than it shows. `muc-menu.test.ts` holds that every `duong: null` item
  * has an entry here and no built item does.
  *
  * KHI MỘT MÀN RA ĐỜI: đổi `duong: null` thành đường dẫn thật, điền `khoa`, xoá dòng của nó trong
  * `PENDING_SCREENS`. Không cần đụng component.
  */
-// EMPTY SINCE 04/10/2026: "Báo cáo" was the last item without a screen (`/bao-cao`, ADR 0053
-// amendment). The table and its mechanism stay for the next item that is listed before it is built.
-export const PENDING_SCREENS: Readonly<Record<string, PendingFeatureInfo>> = {};
+// Empty from 04/10/2026 ("Báo cáo" got `/bao-cao`) until 06/10/2026, when the prototype's menu brought
+// three items no screen and no backend route serve yet (ADR 0068 lần 5 #5: placed where the prototype
+// has them, disabled with "?", never faked).
+export const PENDING_SCREENS: Readonly<Record<string, PendingFeatureInfo>> = {
+  "Danh bạ người dân": {
+    ten: "Danh bạ người dân",
+    viSao:
+      "Danh sách người dân của xã cùng thông tin liên hệ. Máy chủ chưa có tuyến nào cung cấp danh sách này, nên màn chưa được dựng.",
+  },
+  "Gửi tin ZNS / SMS": {
+    ten: "Gửi tin ZNS / SMS",
+    viSao:
+      "Soạn và gửi tin Zalo (ZNS) hoặc tin nhắn SMS tới người dân. Máy chủ chưa có tuyến gửi tin này, nên màn chưa được dựng.",
+  },
+  "Hướng dẫn sử dụng": {
+    ten: "Hướng dẫn sử dụng",
+    viSao: "Tài liệu hướng dẫn cán bộ dùng phần mềm. Nội dung hướng dẫn chưa được soạn, nên màn chưa được dựng.",
+  },
+};
 
 /**
- * Grouped BY BUSINESS AREA (spec v2 §5, 02/10/2026). Only the grouping and the order moved; every
- * item keeps its label, route and permission key, and `locMenu` filters them exactly as before.
+ * The prototype's menu (`vigov-require` `apps/admin/src/lib/navigation.ts`, ADR 0068 lần 5, 06/10/2026):
+ * its two groups, its order, its labels. It REPLACES the five business-area groups of spec v2 §5
+ * (02/10/2026) — ADR 0068 lần 5 #3: a presentation preference the prototype contradicts gives way.
  *
- * `ten: ""` = a group drawn with no heading (Tổng quan stands alone at the top).
+ * WHAT IS NOT TAKEN FROM THE PROTOTYPE, on purpose:
+ * - Its permission arrays. Every item keeps the key it had (rule 5, ADR 0068 lần 5 #4). "Tổng quan"
+ *   stays `report.read`; "Thông báo nội bộ" stays `announcement.create`, because no read key for the
+ *   announcement book exists in `quyen` (open question #27) — the prototype's "no key" would be a guess.
+ * - Its routes, where ours already exist ("Nội dung Mini App" is `/noi-dung`).
+ * - "Hồ sơ công dân": outside the contract (ADR 0001). A placeholder for it would announce a feature
+ *   the customer did not buy.
  *
- * "Thông báo" sits under CÔNG VIỆC, not NGƯỜI DÂN where the spec's table puts it: the spec says to
- * move it if it is staff-internal, and it is — `/thong-bao` is the internal announcement book sent to
- * departments (`docs/ui-ux/08-thong-bao.md` §1, `features/thong-bao/so-thong-bao.tsx`). Under
- * NGƯỜI DÂN it would read as a message to citizens, which it never is.
- *
- * "Người dùng" and "Phân quyền" (05/10/2026) are TWO FLAT ITEMS, where the prototype draws one parent
- * "Người dùng & Phân quyền" with these two as children. This menu has no child level, and adding one
- * means a fourth field on an item — which `tools/tien_do_san_pham.py` (`MAU_MUC`) would silently stop
- * counting. Same labels, routes, keys and order as the prototype's children; only the parent row is
- * missing. Each needs its own key, so a parent gated on either would open onto a screen that refuses.
+ * KEPT although the prototype lacks it: "Danh bạ cán bộ", right after "Nội dung Mini App". The prototype
+ * moves the staff directory into a tab of the Mini App screen; until that screen carries it, removing the
+ * item would cut the only way in.
  */
 export const NHOM_MENU: readonly NhomMenu[] = [
   {
-    ten: "",
-    muc: [{ nhan: "Tổng quan", duong: "/tong-quan", khoa: REPORT_READ_PERMISSION }],
-  },
-  {
-    ten: "CÔNG VIỆC",
+    ten: "Điều hành",
     muc: [
+      { nhan: "Tổng quan", duong: "/tong-quan", khoa: REPORT_READ_PERMISSION },
       { nhan: "Nhiệm vụ", duong: "/nhiem-vu", khoa: QUYEN_XEM_NHIEM_VU },
+      { nhan: "Sổ tay lãnh đạo", duong: "/nhiem-vu/so-tay", khoa: QUYEN_XEM_NHIEM_VU },
       { nhan: "Biên bản họp", duong: "/nhiem-vu/bien-ban", khoa: QUYEN_XEM_NHIEM_VU },
       { nhan: "Văn bản & Đơn thư", duong: "/van-ban", khoa: QUYEN_XEM_VAN_BAN },
-      { nhan: "Thông báo", duong: "/thong-bao", khoa: QUYEN_SOAN_THONG_BAO },
-      { nhan: "Sổ tay lãnh đạo", duong: "/nhiem-vu/so-tay", khoa: QUYEN_XEM_NHIEM_VU },
-    ],
-  },
-  {
-    ten: "TÀI CHÍNH",
-    muc: [
       { nhan: "Giải ngân", duong: "/giai-ngan", khoa: QUYEN_XEM_GIAI_NGAN },
       { nhan: "Thu - Chi ngân sách", duong: "/giai-ngan/thu-chi", khoa: QUYEN_XEM_GIAI_NGAN },
-    ],
-  },
-  {
-    ten: "NGƯỜI DÂN",
-    muc: [
+      // "nội bộ": "Gửi tin ZNS / SMS" sends to citizens; this one is the book read inside the software.
+      { nhan: "Thông báo nội bộ", duong: "/thong-bao", khoa: QUYEN_SOAN_THONG_BAO },
+      { nhan: "Danh bạ người dân", duong: null, khoa: null },
+      { nhan: "Gửi tin ZNS / SMS", duong: null, khoa: null },
       { nhan: "Phản ánh người dân", duong: "/phan-anh", khoa: QUYEN_XEM_PHAN_ANH },
-      { nhan: "Nội dung Mini App", duong: "/noi-dung", khoa: QUYEN_XEM_NOI_DUNG },
       { nhan: "Bản đồ kinh tế số", duong: "/ban-do", khoa: ASSET_READ_PERMISSION },
     ],
   },
   {
-    ten: "HỆ THỐNG",
+    ten: "Quản trị",
     muc: [
+      { nhan: "Nội dung Mini App", duong: "/noi-dung", khoa: QUYEN_XEM_NOI_DUNG },
       { nhan: "Danh bạ cán bộ", duong: "/danh-ba", khoa: QUYEN_QUAN_LY_NGUOI_DUNG },
       { nhan: "Báo cáo", duong: "/bao-cao", khoa: REPORT_READ_PERMISSION },
-      { nhan: "Người dùng", duong: "/nguoi-dung", khoa: QUYEN_QUAN_LY_NGUOI_DUNG },
-      { nhan: "Phân quyền", duong: "/nguoi-dung/phan-quyen", khoa: QUYEN_PHAN_QUYEN },
+      {
+        nhan: "Người dùng & Phân quyền",
+        children: [
+          { nhan: "Người dùng", duong: "/nguoi-dung", khoa: QUYEN_QUAN_LY_NGUOI_DUNG },
+          { nhan: "Phân quyền", duong: "/nguoi-dung/phan-quyen", khoa: QUYEN_PHAN_QUYEN },
+        ],
+      },
+      { nhan: "Hướng dẫn sử dụng", duong: null, khoa: null },
       { nhan: "Cấu hình", duong: "/cau-hinh", khoa: KHOA_MO_CAU_HINH },
     ],
   },
@@ -181,18 +217,53 @@ export function locMenu(
   nhom: readonly NhomMenu[],
   dsQuyen: readonly string[] | null,
 ): readonly NhomMenu[] {
+  const seen = (m: MucMenu): boolean => {
+    if (m.duong === null) return true;
+    if (m.khoa === null) return true;
+    if (dsQuyen === null) return false;
+    if (typeof m.khoa === "string") return coQuyen(dsQuyen, m.khoa);
+    return m.khoa.some((k) => coQuyen(dsQuyen, k));
+  };
   return nhom
     .map((n) => ({
       ten: n.ten,
-      muc: n.muc.filter((m) => {
-        if (m.duong === null) return true;
-        if (m.khoa === null) return true;
-        if (dsQuyen === null) return false;
-        if (typeof m.khoa === "string") return coQuyen(dsQuyen, m.khoa);
-        return m.khoa.some((k) => coQuyen(dsQuyen, k));
+      // A parent is kept with its VISIBLE children only, and only when one is left: it has no screen
+      // and no key of its own, so it can never be the reason something shows.
+      muc: n.muc.flatMap((m): MenuEntry[] => {
+        if (!isMenuParent(m)) return seen(m) ? [m] : [];
+        const children = m.children.filter(seen);
+        return children.length > 0 ? [{ nhan: m.nhan, children }] : [];
       }),
     }))
     .filter((n) => n.muc.length > 0);
+}
+
+/**
+ * Every item that is a screen (or a placeholder for one), parents replaced by their children, in menu
+ * order — what tests and the progress count reason about.
+ */
+export function flattenMenu(groups: readonly NhomMenu[]): MucMenu[] {
+  return groups.flatMap((g) => g.muc.flatMap((m) => (isMenuParent(m) ? [...m.children] : [m])));
+}
+
+/**
+ * Route of the child the current page belongs to, or `null`. The MOST SPECIFIC match wins: on
+ * `/nguoi-dung/phan-quyen` both `/nguoi-dung` and `/nguoi-dung/phan-quyen` match by segment, and lighting
+ * both would leave the person not knowing which screen they are on.
+ */
+export function activeChildRoute(parent: MenuParent, pathname: string): string | null {
+  let best: string | null = null;
+  for (const c of parent.children) {
+    if (c.duong !== null && dangChon(c.duong, pathname) && (best === null || c.duong.length > best.length)) {
+      best = c.duong;
+    }
+  }
+  return best;
+}
+
+/** Where a parent row leads: its first VISIBLE child that has a screen (the prototype links the parent). */
+export function parentRoute(parent: MenuParent): string | null {
+  return parent.children.find((c) => c.duong !== null)?.duong ?? null;
 }
 
 /** Mục đang chọn: khớp CHÍNH XÁC hoặc là tiền tố theo đoạn đường dẫn. */
