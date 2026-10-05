@@ -40,7 +40,7 @@ afterEach(() => {
 });
 
 describe("tab nào của màn Cấu hình được hiện", () => {
-  it("đủ khoá cổng (trừ `admin.org`) → chín tab, đúng thứ tự §0 trừ hai tab đã rời màn, Nhật ký hệ thống cuối", async () => {
+  it("đủ khoá cổng (trừ `admin.org`) → mười tab, đúng thứ tự §0 trừ hai tab đã rời màn, Kênh Zalo sau Máy chủ thư, Nhật ký hệ thống cuối", async () => {
     const phien = await phienVoi(
       phanHoiPhien(["admin.user", "admin.role", "asset.read", "admin.lookup", "admin.sla", "admin.audit"]),
     );
@@ -54,9 +54,19 @@ describe("tab nào của màn Cấu hình được hiện", () => {
       "Thời hạn xử lý",
       "Tự động hoá",
       "Máy chủ thư",
+      "Kênh Zalo",
       "Nhật ký hệ thống",
     ]);
     expect(coThanhTab(phien, hien.length)).toBe(true);
+  });
+
+  it("Kênh Zalo đi theo `admin.lookup` (ADR 0074 #6) — ca bị từ chối trước", async () => {
+    const denied = await phienVoi(
+      phanHoiPhien(["admin.user", "admin.role", "asset.read", "admin.sla", "admin.audit", "admin.org", "admin.lookups", "ADMIN.LOOKUP"]),
+    );
+    expect(nhan(cacTabHien(TAB_CAU_HINH, denied))).not.toContain("Kênh Zalo");
+    const holder = await phienVoi(phanHoiPhien(["admin.lookup"]));
+    expect(nhan(cacTabHien(TAB_CAU_HINH, holder))).toContain("Kênh Zalo");
   });
 
   it("Tự động hoá đi theo `admin.sla` — khoá của cả ba tuyến automation-jobs; ca bị từ chối", async () => {
@@ -153,6 +163,7 @@ describe("tab nào của màn Cấu hình được hiện", () => {
     expect(hien).not.toContain("Phân quyền");
     expect(hien).not.toContain("Trường bản đồ");
     expect(hien).not.toContain("Máy chủ thư");
+    expect(hien).not.toContain("Kênh Zalo");
     expect(hien).not.toContain("Lời hệ thống");
     expect(hien).not.toContain("Tự động hoá");
     expect(hien).not.toContain("Nhật ký hệ thống");

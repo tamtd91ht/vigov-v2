@@ -48,11 +48,12 @@ describe("khung tab màn Cấu hình", () => {
     expect(html).not.toContain("panel-cau-hinh-nguoi-dung");
   });
 
-  it("đủ quyền → thanh tám tab; tab đầu được chọn và là tab duy nhất có tabindex=0", () => {
+  it("đủ quyền → thanh chín tab (Kênh Zalo từ 05/10/2026); tab đầu được chọn và là tab duy nhất có tabindex=0", () => {
     phienGia = phienCo(["admin.user", "admin.role", "asset.read", "admin.lookup", "admin.audit"]);
     const html = renderToStaticMarkup(<KhungTabCauHinh />);
     expect(html).toContain('role="tablist"');
-    expect(soNutTab(html)).toBe(8);
+    expect(soNutTab(html)).toBe(9);
+    expect(html).toContain('aria-controls="panel-cau-hinh-kenh-zalo"');
     expect(html).toContain('aria-controls="panel-cau-hinh-loi-he-thong"');
     expect(html).toContain('aria-controls="panel-cau-hinh-nhat-ky-he-thong"');
     expect(html).toContain('aria-controls="panel-cau-hinh-truong-ban-do"');
@@ -113,7 +114,8 @@ describe("khung tab màn Cấu hình", () => {
     expect(html).not.toContain(">Phân quyền</button>");
     expect(html).not.toContain("panel-cau-hinh-nguoi-dung");
     expect(html).not.toContain("panel-cau-hinh-phan-quyen");
-    expect(soNutTab(html)).toBe(10);
+    // Eleven with "Kênh Zalo" (ADR 0074 #6).
+    expect(soNutTab(html)).toBe(11);
   });
 
   it("phiên đọc hỏng → câu của máy chủ vẫn ra tới màn hình", () => {

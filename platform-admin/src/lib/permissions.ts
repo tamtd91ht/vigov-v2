@@ -38,5 +38,12 @@ export const canManageUploadPolicies = (keys: readonly string[]) => hasAll(keys,
 /** GET /communes/{id}/mini-app-launch-link: ops.qr.issue (a read with its OWN key, not AnyKey). */
 export const canIssueQr = (keys: readonly string[]) => hasAll(keys, OPS_KEYS.qrIssue);
 
+/**
+ * Every `zalo-bots/shared…` route, the READS INCLUDED: ops.zalo_bot.manage (ADR 0074 #3). Unlike the
+ * other console sections this one is not open to any `ops.*` key — so its menu entry and its page
+ * follow this key alone.
+ */
+export const canManageZaloBot = (keys: readonly string[]) => hasAll(keys, OPS_KEYS.zaloBotManage);
+
 /** POST /petition-fields, PUT …/{code}, PUT …/{code}/activation: ops.petition_field.manage. */
 export const canManagePetitionFields = (keys: readonly string[]) => hasAll(keys, OPS_KEYS.petitionFieldManage);

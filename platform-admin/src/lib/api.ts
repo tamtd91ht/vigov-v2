@@ -109,7 +109,8 @@ export type SignInInput = { email: string; password: string; secondFactor: Secon
 
 /**
  * The `ops.*` keys (service-platform/internal/opauth/opauth.go `Key…`, the CLOSED set `decidedKeys`):
- * the six of ADR 0048 §28/09 #3 plus the seventh of ADR 0073 #3. A key outside this set grants the
+ * the six of ADR 0048 §28/09 #3, the seventh of ADR 0073 #3 and the eighth of ADR 0074 #3
+ * (`service-identity/migrations/0025_operator_zalo_bot_key.sql`). A key outside this set grants the
  * console nothing — the same closed set the server's `opauth.AnyKey` reads.
  */
 export const OPS_KEYS = {
@@ -120,6 +121,7 @@ export const OPS_KEYS = {
   uploadPolicyManage: "ops.upload_policy.manage",
   qrIssue: "ops.qr.issue",
   petitionFieldManage: "ops.petition_field.manage",
+  zaloBotManage: "ops.zalo_bot.manage",
 } as const;
 
 export const ALL_OPS_KEYS: readonly string[] = Object.values(OPS_KEYS);
@@ -221,6 +223,90 @@ export type OperatorAuditPage = { items: OperatorAuditEntry[]; next_cursor: stri
 /** RFC 3339 instants, half-open [from, to). Either may be absent. */
 export type OperatorAuditQuery = { from?: string; to?: string; limit?: number; cursor?: string };
 
+// --- Zalo Bot (ADR 0074) wire shapes ------------------------------------------------------------
+//
+// Mirrors of the operator routes `zalo-bots/shared…` that service-platform forwards to comms'
+// ZaloBotOperatorService (`proto/vigov/comms/v1/zalo_bot_operator.proto`). THE TOKEN IS NEVER IN A
+// RESPONSE SHAPE: it is write-only (ADR 0074 #4), so no type below has a field that could carry it.
+// No staff chat id either — the communes view is counts only (ADR 0003).
+
+/**
+ * The class of a Zalo Bot API call (`ZaloBotCallOutcome`), as the stored enum VALUES — Vietnamese
+ * without diacritics, ADR 0011, `service-comms/migrations/0018_zalo_bot.sql`. Never refined with
+ * Zalo's own text. A value outside this list (a newer server) is shown as a failure of unknown
+ * cause, never as success.
+ */
+export type ZaloBotOutcome =
+  | "thanh-cong"
+  | "chua-cau-hinh"
+  | "token-bi-tu-choi"
+  | "gioi-han-tan-suat"
+  | "khong-kha-dung"
+  | "bi-tu-choi"
+  | "phan-hoi-sai-dang";
+
+/** `SharedZaloBotStatus`: metadata about the live token, never the token. `set_by` is a `VH-…` code. */
+export type SharedZaloBotStatus = {
+  set_at: string;
+  set_by: string;
+  has_token: boolean;
+  bot_name: string;
+  chat_url: string;
+};
+
+/** GET /zalo-bots/shared. `bot` and `last_check` are absent when `configured` is false. */
+export type SharedZaloBot = {
+  configured: boolean;
+  bot?: SharedZaloBotStatus;
+  /** Absent when the token in force was never checked. */
+  last_check?: { checked_at: string; outcome: ZaloBotOutcome };
+};
+
+/**
+ * PUT /zalo-bots/shared answer: the GET shape plus `ended_link_count` — staff links of the OLD bot
+ * account soft-deleted in the same transaction (0 when the token is the same bot's).
+ */
+export type SharedZaloBotSaved = SharedZaloBot & { ended_link_count?: number };
+
+/**
+ * PUT /zalo-bots/shared body. `expected_relink_count` is sent ONLY on the second attempt, after the
+ * operator confirmed the 409 `can-xac-nhan-ghep-lai` count (ADR 0074, owner 05/10/2026): it says "I
+ * have seen that N staff must pair again", so a count that changed in between is refused again.
+ */
+export type SharedZaloBotChange = {
+  token: string;
+  bot_name: string;
+  chat_url: string;
+  expected_relink_count?: number;
+};
+
+/** POST /zalo-bots/shared/check. `account_name` only with `ok`. */
+export type ZaloBotCheck = { outcome: ZaloBotOutcome; account_name?: string };
+
+/**
+ * GET /zalo-bots/shared/webhook — what Zalo reports (`getWebhookInfo`) beside what comms holds. The
+ * Zalo fields are meaningful only with `ok`; `secret_set_*` come from comms' rows (absent = never set).
+ */
+export type ZaloBotWebhook = {
+  outcome: ZaloBotOutcome;
+  url: string;
+  url_matches: boolean;
+  secret_set_at?: string;
+  secret_set_by?: string;
+  zalo_updated_at?: string;
+};
+
+/** PUT /zalo-bots/shared/webhook. `set_at` / `set_by` only with `ok`; `url` whenever Zalo was called. */
+export type ZaloBotWebhookSet = { outcome: ZaloBotOutcome; url: string; set_at?: string; set_by?: string };
+
+/** One commune's uptake of the shared bot — counts and a switch, nothing about a person. */
+export type ZaloBotCommuneStats = {
+  tenant_id: string;
+  commune_name?: string;
+  channel_enabled: boolean;
+  linked_staff_count: number;
+};
+
 /** passwordRejectionView.problem (operator_sessions.go). */
 export type PasswordProblem = "empty" | "not_utf8" | "too_short" | "too_long" | "same_as_current";
 
@@ -243,6 +329,10 @@ export class ApiError extends Error {
     readonly traceId: string,
     readonly retryAfterSeconds: number | null = null,
     readonly passwordRejection: PasswordRejection | null = null,
+    /** 409 `can-xac-nhan-ghep-lai` of PUT /zalo-bots/shared: live staff links a new bot account ends. */
+    readonly relinkCount: number | null = null,
+    /** 422 `token-khong-dung-duoc` of PUT /zalo-bots/shared: the class of Zalo's answer to the new token. */
+    readonly zaloOutcome: string | null = null,
   ) {
     super(message);
     this.name = "ApiError";
@@ -281,6 +371,16 @@ async function errorFrom(res: Response): Promise<ApiError> {
           maxLength: asNumber(body.max_length),
         }
       : null;
+  // A count that is not a whole non-negative number is not a count the operator can confirm: null,
+  // and the screen then shows the refusal instead of a confirmation box with an invented figure.
+  const relink =
+    code === "can-xac-nhan-ghep-lai" &&
+    typeof body.live_link_count === "number" &&
+    Number.isSafeInteger(body.live_link_count) &&
+    body.live_link_count >= 0
+      ? body.live_link_count
+      : null;
+  const zaloOutcome = code === "token-khong-dung-duoc" ? asString(body.outcome) || null : null;
   return new ApiError(
     res.status,
     code,
@@ -288,6 +388,8 @@ async function errorFrom(res: Response): Promise<ApiError> {
     asString(body.trace_id),
     res.status === 429 ? parseRetryAfter(res.headers.get("Retry-After")) : null,
     rejection,
+    relink,
+    zaloOutcome,
   );
 }
 
@@ -558,6 +660,44 @@ export function editPetitionField(code: string, input: PetitionFieldPresentation
 
 export function setPetitionFieldActivation(code: string, input: { active: boolean; reason: string }): Promise<PetitionField> {
   return call("PUT", `/petition-fields/${id(code)}/activation`, { active: input.active, reason: input.reason });
+}
+
+// --- Zalo Bot (ADR 0074) — every route `ops.zalo_bot.manage`, reads included -------------------
+
+export function getSharedZaloBot(): Promise<SharedZaloBot> {
+  return call("GET", "/zalo-bots/shared");
+}
+
+/**
+ * The token travels in the JSON body only — never a path, a query, storage or a log line — and is
+ * never answered back. Built key by key: `expected_relink_count` is absent unless the operator
+ * confirmed a count, because an absent key and a 0 mean different things to the server.
+ */
+export function setSharedZaloBot(change: SharedZaloBotChange): Promise<SharedZaloBotSaved> {
+  const body: SharedZaloBotChange = { token: change.token, bot_name: change.bot_name, chat_url: change.chat_url };
+  if (change.expected_relink_count !== undefined) body.expected_relink_count = change.expected_relink_count;
+  return call("PUT", "/zalo-bots/shared", body);
+}
+
+/** Calls Zalo `getMe` once with the live token; the result becomes the bot's last check. */
+export function checkSharedZaloBot(): Promise<ZaloBotCheck> {
+  return call("POST", "/zalo-bots/shared/check");
+}
+
+/** Asks Zalo `getWebhookInfo`. A read: nothing is written. */
+export function getSharedZaloBotWebhook(): Promise<ZaloBotWebhook> {
+  return call("GET", "/zalo-bots/shared/webhook");
+}
+
+/** No body: comms builds the URL and a fresh secret itself (a caller-chosen URL could redirect every update). */
+export function setSharedZaloBotWebhook(): Promise<ZaloBotWebhookSet> {
+  return call("PUT", "/zalo-bots/shared/webhook");
+}
+
+/** Every commune's uptake of the shared bot, counts only. The server trails each read. */
+export async function listZaloBotCommunes(): Promise<ZaloBotCommuneStats[]> {
+  const res = await call<{ items: ZaloBotCommuneStats[] }>("GET", "/zalo-bots/shared/communes");
+  return res.items;
 }
 
 function auditQueryString(q: OperatorAuditQuery): string {

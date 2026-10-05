@@ -1,7 +1,7 @@
 "use client";
 
 import * as PopoverPrimitive from "@radix-ui/react-popover";
-import { ChevronDown, KeyRound } from "lucide-react";
+import { ChevronDown, KeyRound, UserRound } from "lucide-react";
 import Link from "next/link";
 
 import { NutDangXuat } from "@/features/auth/nut-dang-xuat";
@@ -9,6 +9,9 @@ import { DUONG_DAN_DOI_MAT_KHAU } from "@/features/mat-khau/bat-doi-mat-khau";
 
 import { RolePill } from "./role-pill";
 import { userInitials } from "./user-initials";
+
+/** `/ca-nhan` — the signed-in person's own settings page. */
+export const PERSONAL_PAGE_PATH = "/ca-nhan";
 
 /**
  * The header's person block — avatar + name (15/500) + caret (guide §7, §8.9) — opening the person's own
@@ -59,6 +62,14 @@ export function UserMenu({ fullName, position, roleName }: { fullName: string; p
           <div className="user-menu-actions">
             {/* The voluntary way into `/doi-mat-khau` — without it the page opens only when the server
                 forces a change. It is the signed-in person's own password; no identity travels in the link. */}
+            {/* The person's own page (`/ca-nhan`: Zalo reminders, ADR 0074). Same rule as below: no
+                identity in the link — the page reads everything from the session. */}
+            <PopoverPrimitive.Close asChild>
+              <Link className="user-menu-item" href={PERSONAL_PAGE_PATH}>
+                <UserRound aria-hidden="true" focusable="false" strokeWidth={1.8} />
+                Cá nhân
+              </Link>
+            </PopoverPrimitive.Close>
             <PopoverPrimitive.Close asChild>
               <Link className="user-menu-item" href={DUONG_DAN_DOI_MAT_KHAU}>
                 <KeyRound aria-hidden="true" focusable="false" strokeWidth={1.8} />

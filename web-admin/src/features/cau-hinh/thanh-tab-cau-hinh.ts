@@ -28,6 +28,7 @@ import {
   mailServerTabDecision,
   mapFieldTabDecision,
   systemMessagesTabDecision,
+  zaloChannelTabDecision,
   type QuyetDinhTab,
 } from "./quyen-tab";
 
@@ -40,6 +41,7 @@ export type MaTabCauHinh =
   | "thoi-han-xu-ly"
   | "tu-dong-hoa"
   | "may-chu-thu"
+  | "kenh-zalo"
   | "nhat-ky-he-thong"
   | "nhan-dien-xa";
 
@@ -64,6 +66,9 @@ export type MoTaTab<M extends string = MaTabCauHinh> = {
  *
  * "Nhận diện xã" (ADR 0069, 02/10/2026) cũng không có trong §0, nên đứng sau Nhật ký hệ thống. Cổng
  * `admin.org` — khoá của cả bảy tuyến `/api/v1/commune-branding`, kể cả tuyến đọc.
+ *
+ * "Kênh Zalo" (ADR 0074 #6, 05/10/2026) is not in §0 either; it sits right after "Máy chủ thư" — the
+ * other outbound channel of the commune, behind the same `admin.lookup` key.
  */
 export const TAB_CAU_HINH: readonly MoTaTab[] = [
   { ma: "so-do-to-chuc", nhan: "Sơ đồ tổ chức", cong: null },
@@ -74,6 +79,7 @@ export const TAB_CAU_HINH: readonly MoTaTab[] = [
   { ma: "thoi-han-xu-ly", nhan: "Thời hạn xử lý", cong: null },
   { ma: "tu-dong-hoa", nhan: "Tự động hoá", cong: automationTabDecision },
   { ma: "may-chu-thu", nhan: "Máy chủ thư", cong: mailServerTabDecision },
+  { ma: "kenh-zalo", nhan: "Kênh Zalo", cong: zaloChannelTabDecision },
   { ma: "nhat-ky-he-thong", nhan: "Nhật ký hệ thống", cong: auditLogTabDecision },
   { ma: "nhan-dien-xa", nhan: "Nhận diện xã", cong: brandingTabDecision },
 ];

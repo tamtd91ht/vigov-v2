@@ -9,6 +9,7 @@ import {
   ListTree,
   Mail,
   MapPinned,
+  MessageCircle,
   MessageSquareText,
   Network,
   type LucideIcon,
@@ -28,6 +29,7 @@ import { TabDanhMuc } from "./tab-danh-muc";
 import { TabSoDoToChuc } from "./tab-so-do-to-chuc";
 import { TabThoiHanXuLy } from "./tab-thoi-han-xu-ly";
 import { TabThonToDanPho } from "./tab-thon-to-dan-pho";
+import { ZaloChannelTab } from "./zalo-channel-tab";
 import {
   cacTabHien,
   coThanhTab,
@@ -50,6 +52,7 @@ const NOI_DUNG: Record<MaTabCauHinh, (active: boolean) => ReactNode> = {
   "thoi-han-xu-ly": () => <TabThoiHanXuLy />,
   "tu-dong-hoa": () => <AutomationTab />,
   "may-chu-thu": () => <MailServerTab />,
+  "kenh-zalo": () => <ZaloChannelTab />,
   "nhat-ky-he-thong": () => <AuditLogTab />,
   "nhan-dien-xa": () => <CommuneBrandingTab />,
 };
@@ -64,6 +67,7 @@ const ICON_TAB: Record<MaTabCauHinh, LucideIcon> = {
   "thoi-han-xu-ly": CalendarClock,
   "tu-dong-hoa": BellRing,
   "may-chu-thu": Mail,
+  "kenh-zalo": MessageCircle,
   "nhat-ky-he-thong": FileClock,
   "nhan-dien-xa": ImageIcon,
 };

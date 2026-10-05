@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Bot,
   FileUp,
   KeyRound,
   Landmark,
@@ -19,7 +20,7 @@ import { useState } from "react";
 
 import { usePermissionKeys } from "@/features/operator/operator-context";
 import { cn } from "@/lib/cn";
-import { canReadConsole } from "@/lib/permissions";
+import { canManageZaloBot, canReadConsole } from "@/lib/permissions";
 
 /**
  * Console navigation — drawn like web-admin's sidebar (`web-admin/src/components/sidebar-view.tsx`):
@@ -56,9 +57,22 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { label: "Nhật ký vận hành", href: "/nhat-ky-van-hanh", icon: ScrollText },
 ];
 
+/**
+ * The Zalo Bot section (ADR 0074 #3) is NOT one of the AnyKey reads above: every one of its routes,
+ * the reads included, requires `ops.zalo_bot.manage`, so it is listed only with that key — an entry
+ * every other operator would open onto a 403 is a broken promise, not a read-only view.
+ */
+export const ZALO_BOT_ITEM: NavItem = { label: "Zalo Bot", href: "/zalo-bot", icon: Bot };
+
 /** The sections to list for these keys — pure, so the denied case is tested without a session. */
 export function visibleNavItems(keys: readonly string[]): readonly NavItem[] {
-  return canReadConsole(keys) ? NAV_ITEMS : [];
+  const items = canReadConsole(keys) ? [...NAV_ITEMS] : [];
+  if (canManageZaloBot(keys)) {
+    // Before the operator log, which stays last: the log reads across every section.
+    const logAt = items.findIndex((i) => i.href === "/nhat-ky-van-hanh");
+    items.splice(logAt === -1 ? items.length : logAt, 0, ZALO_BOT_ITEM);
+  }
+  return items;
 }
 
 export const ACCOUNT_ITEMS: readonly NavItem[] = [

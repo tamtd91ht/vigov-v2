@@ -133,7 +133,8 @@ describe("reads: ANY ops key (ADR 0073 #1) — denied case first", () => {
   });
 
   it("each of the seven keys alone reads the console", () => {
-    expect(ALL_OPS_KEYS).toHaveLength(7);
+    // Eight since ADR 0074 #3 (`ops.zalo_bot.manage`, covered in zalo-bot/zalo-bot.test.tsx).
+    expect(ALL_OPS_KEYS).toHaveLength(8);
     expect(ALL_OPS_KEYS).toContain(FIELD);
     for (const k of SEVEN) expect(canReadConsole([k])).toBe(true);
   });
