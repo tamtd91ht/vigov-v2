@@ -28566,6 +28566,560 @@
           }
         }
       }
+    },
+    "/api/v1/zalo-bot-updates": {
+      "post": {
+        "summary": "Webhook của Zalo Bot dùng chung — Zalo gọi khi cán bộ nhắn cho bot (mã ghép nối, /trogiup, /dung); xác thực bằng X-Bot-Api-Secret-Token so thời gian hằng, sai khoá 403 không đọc thân",
+        "operationId": "comms_post_zalo_bot_updates",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0074 #5",
+        "x-vigov-permission": {
+          "kind": "public",
+          "reason": "Zalo gọi webhook của bot dùng chung khi cán bộ nhắn cho bot (ADR 0074 #5): không có phiên và không có xã ở tên miền này; xác thực bằng khoá X-Bot-Api-Secret-Token so thời gian hằng với khoá đang dùng và khoá chờ, sai khoá trả 403 không đọc thân; giới hạn tần suất theo mạng của máy gọi trước khi xem khoá"
+        },
+        "x-vigov-task": "227f05c51705",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.zaloUpdateAck"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "rate_limited"
+            ]
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/zalo-channel-settings": {
+      "get": {
+        "summary": "Cấu hình kênh nhắc việc Zalo của xã — bật/tắt, các loại nhắc, giờ yên tĩnh (giờ Việt Nam), nhịp nhắc việc quá hạn; xã chưa lưu thì là tắt",
+        "operationId": "comms_get_zalo_channel_settings",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0074 — Cấu hình → tab Kênh Zalo",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "304fe5a9aad2",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.zaloChannelSettingsOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Lưu cấu hình kênh nhắc việc Zalo của xã — bật thì phải chọn ít nhất một loại; chọn quá hạn thì phải đặt đủ nhịp nhắc; giờ yên tĩnh HH:MM không trùng nhau; có ghi vết trước/sau",
+        "operationId": "comms_put_zalo_channel_settings",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0074 — Cấu hình → tab Kênh Zalo",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "b093bab7120c",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.zaloChannelSettingsIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.zaloChannelSettingsOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "invalid_request"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "empty_quiet_window",
+              "enabled_without_kind",
+              "invalid_quiet_time",
+              "overdue_cadence_incomplete",
+              "overdue_cadence_required",
+              "overdue_repeat_out_of_range",
+              "overdue_start_out_of_range",
+              "unknown_kind"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/zalo-links": {
+      "get": {
+        "summary": "Danh sách cán bộ của xã đang ghép nối Zalo — mã cán bộ, họ tên, ghép từ lúc nào; không có chat_id",
+        "operationId": "comms_get_zalo_links",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0074 — Cấu hình → tab Kênh Zalo",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "cd6fd2ad5a03",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.zaloLinkedStaffList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "staff_names_unavailable"
+            ]
+          }
+        }
+      }
+    },
+    "/api/v1/zalo-links/current": {
+      "delete": {
+        "summary": "Gỡ ghép nối Zalo của chính mình — kết thúc mềm liên kết (giữ làm lịch sử), có ghi vết; chưa ghép thì không ghi gì",
+        "operationId": "comms_delete_zalo_links_current",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0074 — trang Cá nhân (/ca-nhan)",
+        "x-vigov-permission": {
+          "kind": "any-authenticated",
+          "reason": "cán bộ gỡ ghép nối Zalo của chính mình; câu ghi lọc theo mã cán bộ của phiên nên không chạm được liên kết của người khác (ADR 0074 #6)"
+        },
+        "x-vigov-task": "6ffd4745aa4e",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Trạng thái ghép nối Zalo của CHÍNH cán bộ đang đăng nhập — đã ghép chưa, từ lúc nào, tên và đường dẫn chat của bot dùng chung, xã đã bật kênh Zalo chưa; không bao giờ trả chat_id",
+        "operationId": "comms_get_zalo_links_current",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0074 — trang Cá nhân (/ca-nhan)",
+        "x-vigov-permission": {
+          "kind": "any-authenticated",
+          "reason": "liên kết Zalo là của CHÍNH cán bộ đang đăng nhập, lọc theo mã cán bộ của phiên — mỗi tài khoản chỉ đọc được liên kết của mình; ADR 0074 #6 chốt AnyAuthenticated và bảng quyen không có khoá nào cho việc này"
+        },
+        "x-vigov-task": "e2afc0258fea",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.zaloLinkCurrentOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/zalo-links/current/pairing-codes": {
+      "post": {
+        "summary": "Lấy mã ghép nối Zalo 8 ký tự cho chính mình — dùng một lần, sống 10 phút, mã cũ còn mở bị huỷ; máy chủ chỉ lưu bản băm; có ghi vết (không ghi mã)",
+        "operationId": "comms_post_zalo_links_current_pairing_codes",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0074 — trang Cá nhân (/ca-nhan)",
+        "x-vigov-permission": {
+          "kind": "any-authenticated",
+          "reason": "mã ghép nối Zalo được cấp cho CHÍNH cán bộ đang đăng nhập, theo mã cán bộ của phiên — không ai lấy được mã ghép vào tài khoản của người khác (ADR 0074 #6)"
+        },
+        "x-vigov-task": "c4ebbb66c094",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.pairingCodeOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "zalo_bot_not_configured"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/zalo-links/current/test-messages": {
+      "post": {
+        "summary": "Gửi một tin thử cố định tới chat Zalo đã ghép của chính mình — có ghi vết và lưu kết quả gửi",
+        "operationId": "comms_post_zalo_links_current_test_messages",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0074 — trang Cá nhân (/ca-nhan)",
+        "x-vigov-permission": {
+          "kind": "any-authenticated",
+          "reason": "tin thử chỉ gửi tới chat Zalo đã ghép của CHÍNH cán bộ đang đăng nhập, tra theo mã cán bộ của phiên (ADR 0074 #6)"
+        },
+        "x-vigov-task": "3ed43f8326d0",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "MoKhiHong",
+          "on_store_failure_effect": "Store không tới được -> cho qua và ghi cảnh báo"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "zalo_bot_not_configured",
+              "zalo_channel_disabled",
+              "zalo_not_linked"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "zalo_send_failed"
+            ]
+          }
+        }
+      }
     }
   },
   "components": {
@@ -30415,6 +30969,27 @@
         ],
         "additionalProperties": false
       },
+      "comms.pairingCodeOut": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "chat_url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "chat_url",
+          "code",
+          "expires_at"
+        ],
+        "additionalProperties": false
+      },
       "comms.paragraphOut": {
         "type": "object",
         "properties": {
@@ -31580,6 +32155,184 @@
         },
         "required": [
           "reason"
+        ],
+        "additionalProperties": false
+      },
+      "comms.zaloChannelSettingsIn": {
+        "type": "object",
+        "properties": {
+          "is_enabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "kinds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "quiet_start": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "quiet_end": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "overdue_start_after_days": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "overdue_repeat_every_days": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "is_enabled",
+          "kinds",
+          "overdue_repeat_every_days",
+          "overdue_start_after_days",
+          "quiet_end",
+          "quiet_start"
+        ],
+        "additionalProperties": false
+      },
+      "comms.zaloChannelSettingsOut": {
+        "type": "object",
+        "properties": {
+          "is_enabled": {
+            "type": "boolean"
+          },
+          "kinds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "quiet_start": {
+            "type": "string"
+          },
+          "quiet_end": {
+            "type": "string"
+          },
+          "overdue_start_after_days": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "overdue_repeat_every_days": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "is_enabled",
+          "kinds",
+          "overdue_repeat_every_days",
+          "overdue_start_after_days",
+          "quiet_end",
+          "quiet_start"
+        ],
+        "additionalProperties": false
+      },
+      "comms.zaloLinkCurrentOut": {
+        "type": "object",
+        "properties": {
+          "linked": {
+            "type": "boolean"
+          },
+          "linked_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "bot_name": {
+            "type": "string"
+          },
+          "chat_url": {
+            "type": "string"
+          },
+          "channel_enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "channel_enabled",
+          "linked"
+        ],
+        "additionalProperties": false
+      },
+      "comms.zaloLinkedStaffList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.zaloLinkedStaffOut"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "comms.zaloLinkedStaffOut": {
+        "type": "object",
+        "properties": {
+          "staff_code": {
+            "type": "string"
+          },
+          "staff_name": {
+            "type": "string"
+          },
+          "linked_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "linked_at",
+          "staff_code",
+          "staff_name"
+        ],
+        "additionalProperties": false
+      },
+      "comms.zaloUpdateAck": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
         ],
         "additionalProperties": false
       },
