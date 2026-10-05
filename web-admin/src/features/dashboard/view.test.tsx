@@ -15,6 +15,7 @@ import { pendingMarkerLabel } from "@/components/ui/pending-feature";
 import { NO_DATA_CAPTION } from "@/components/ui/stat-card";
 
 import { NO_SOURCE_DATA, NOTHING_URGENT } from "./figures";
+import type { UrgentRow } from "./figures";
 import { MISSING_REPORT_READ } from "./overview";
 import { periodWindows } from "./period";
 import {
@@ -104,7 +105,7 @@ describe("task figures (khối Nhiệm vụ)", () => {
         previous: ok({ ...TASKS_ZERO, in_progress: 10, completed: 8 }),
       },
     });
-    expect(html).toContain("↑ +12,5% so với kỳ trước");
+    expect(html).toContain("+12,5% so với kỳ trước");
     // 24 vs 10 would be +140,0% — must not be drawn for a stock figure
     expect(html).not.toContain("140,0%");
     expect(html).not.toContain("chưa có kỳ trước");
@@ -576,7 +577,7 @@ describe("layout — the prototype frame (owner, 05/10/2026)", () => {
 
   it("/bao-cao's use of the same grid has no 'Cần xử lý ngay' cell", () => {
     const html = renderToStaticMarkup(
-      <DashboardBlocks data={emptyData()} visible={ALL} onReload={() => {}} urgent={false} />,
+      <DashboardBlocks data={emptyData()} visible={ALL} onReload={() => {}} layout="report" />,
     );
     expect(blocksOf(html)).toEqual(["tasks", "documents", "budget", "fiscal", "citizen-reports", "economy"]);
     expect(html).not.toContain("Cần xử lý ngay");
@@ -601,7 +602,86 @@ describe("layout — the prototype frame (owner, 05/10/2026)", () => {
         taskTypeLabels={null}
       />,
     );
-    expect(html).toMatch(/role="region"[^>]*aria-label="Danh sách cần xử lý ngay"[^>]*tabindex="0"[^>]*class="[^"]*max-h-80[^"]*overflow-y-auto/);
+    expect(html).toMatch(/role="region"[^>]*aria-label="Danh sách cần xử lý ngay"[^>]*tabindex="0"[^>]*class="[^"]*max-h-64[^"]*overflow-auto/);
     expect(html).toContain(">1</span>");
+  });
+});
+
+describe("composition — the prototype's Panel / MetricTile / alert row (ADR 0068 lần 5)", () => {
+  const row = (patch: Partial<UrgentRow>): UrgentRow => ({
+    module: "task",
+    code: "NV-0001",
+    kind: "han-xu-ly-xong",
+    categoryCode: null,
+    missedAt: "2026-09-01T01:00:00Z",
+    critical: false,
+    ...patch,
+  });
+  const urgent = (rows: UrgentRow[]) =>
+    renderToStaticMarkup(<UrgentPanel queue={ok({ rows, failures: [] })} taskTypeLabels={null} />);
+
+  it("block title row: small upper-case muted <h2>, no icon before it", () => {
+    const html = page({ tasks: { current: ok(TASKS_ZERO), previous: ok(TASKS_ZERO) } });
+    const block = /<section[^>]*data-block="tasks"[^>]*>(.*?)<\/h2>/s.exec(html)?.[1] ?? "";
+    expect(block).toMatch(/<h2 class="[^"]*uppercase[^"]*">Nhiệm vụ$/);
+    expect(block).toContain("text-[11.5px]");
+    expect(block).not.toContain("<svg");
+  });
+
+  it("tile order is value · label · delta, the value large and bold, no icon on the label", () => {
+    const html = page({
+      tasks: { current: ok({ ...TASKS_ZERO, completed: 9 }), previous: ok({ ...TASKS_ZERO, completed: 8 }) },
+    });
+    const tile = /<a[^>]*aria-describedby="tasks-completed-value"[^>]*>(.*?)<\/a>/s.exec(html)?.[1] ?? "";
+    const value = tile.indexOf('id="tasks-completed-value"');
+    const label = tile.indexOf(">Hoàn thành trong kỳ<");
+    const delta = tile.indexOf("+12,5% so với kỳ trước");
+    expect(value).toBeGreaterThanOrEqual(0);
+    expect(label).toBeGreaterThan(value);
+    expect(delta).toBeGreaterThan(label);
+    expect(tile).toContain("font-bold");
+    expect(tile).toContain("text-[clamp(19px,1.7vw,26px)]");
+    // exactly one icon: the delta line's arrow
+    expect(tile.match(/<svg/g)).toHaveLength(1);
+  });
+
+  it("'Cần xử lý ngay' with NO row: no count pill, no red frame, the prototype's sentence", () => {
+    const html = urgent([]);
+    expect(html).toContain("Không có việc nào quá hạn. Rất tốt.");
+    expect(html).not.toContain("bg-danger-solid");
+    expect(html).not.toContain("border-danger-200");
+  });
+
+  it("'Cần xử lý ngay' WITH rows: red count pill and red frame", () => {
+    const html = urgent([row({}), row({ code: "NV-0002" })]);
+    expect(html).toMatch(/<span class="[^"]*bg-danger-solid[^"]*">2<\/span>/);
+    expect(html).toMatch(/<section[^>]*class="[^"]*border-danger-200[^"]*"[^>]*data-block="urgent"|data-block="urgent"[^>]*class="[^"]*border-danger-200/);
+  });
+
+  it("a TASK row links to its detail; a citizen-report or document row is not a link", () => {
+    const html = urgent([
+      row({ code: "NV-0001" }),
+      row({ module: "citizen-report", code: "PA-7F3K-9QXR-MNPT", kind: "han-xu-ly-xong", categoryCode: "" }),
+      row({ module: "incoming-document", code: "VB-12", kind: "van-ban-den" }),
+    ]);
+    expect(html).toContain('href="/nhiem-vu?task=NV-0001"');
+    expect(html.match(/<a /g)).toHaveLength(1);
+    expect(html).toContain("PA-7F3K-9QXR-MNPT");
+    expect(html).toContain("VB-12");
+  });
+
+  it("a critical row writes 'Nghiêm trọng' — red is never the only sign; a normal row does not", () => {
+    expect(urgent([row({ critical: true })])).toContain("Nghiêm trọng");
+    expect(urgent([row({ critical: false })])).not.toContain("Nghiêm trọng");
+  });
+
+  it("header: period buttons are separate small buttons, the chosen one solid navy", () => {
+    const html = renderToStaticMarkup(
+      <DashboardView data={emptyData()} visible={TASK_KEYS} onPeriodChange={() => {}} />,
+    );
+    const pressed = /<button class="([^"]*)" type="button" aria-pressed="true"/.exec(html)?.[1] ?? "";
+    expect(pressed).toContain("bg-brand-600");
+    expect(html).toContain('role="group" aria-label="Kỳ báo cáo"');
+    for (const f of ["PDF", "XLSX", "PPTX"]) expect(html).toMatch(new RegExp(`<button[^>]*disabled=""[^>]*><svg[^>]*>.*?</svg>${f}</button>`));
   });
 });

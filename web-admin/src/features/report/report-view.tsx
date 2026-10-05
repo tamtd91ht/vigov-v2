@@ -1,18 +1,21 @@
-import { CalendarDays, RefreshCw, Users } from "lucide-react";
+import { ChartColumn } from "lucide-react";
 import { useState } from "react";
+import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { Field } from "@/components/ui/field";
-import { PendingSection } from "@/components/ui/pending-feature";
-import { Segmented } from "@/components/ui/segmented";
+import { PageHeader } from "@/components/ui/page-header";
+import { PENDING_HOVER_TEXT, PendingMarker } from "@/components/ui/pending-feature";
 import { SkeletonRows } from "@/components/ui/skeleton";
 import { formatCount } from "@/features/dashboard/figures";
+import { ExportPendingActions } from "@/features/dashboard/header-actions";
 import { formatDateTime, PERIOD_BUTTON_LABEL, PERIOD_KINDS } from "@/features/dashboard/period";
 import type { PeriodKind } from "@/features/dashboard/period";
-import { DashboardBlocks } from "@/features/dashboard/view";
+import { DashboardBlocks, PeriodButtons } from "@/features/dashboard/view";
 import type { BlocksData, Loaded } from "@/features/dashboard/view";
 import { cn } from "@/lib/cn";
 
@@ -41,15 +44,32 @@ import type { UnitRow } from "./unit-table";
  * 04/10/2026): no fetch, no clock. Everything arrives as props, so every state — loading, failed,
  * denied, empty — renders in a Node test with `renderToStaticMarkup`.
  *
- * ORDER, spec §2: context row (period, "tính đến", picker) · the six KPI groups of `/tong-quan` ·
- * "Tình hình thực hiện theo bộ phận" · "So sánh với kỳ trước". The export row sits in the page
- * header (`header-actions.tsx`). NOT HERE (spec §1): "Cần xử lý ngay", "Tính lại ngay",
- * "Trình chiếu".
+ * COMPOSITION — the prototype's `ReportWorkspace` (ADR 0068 lần 5), top to bottom, `gap-5` apart:
+ *   header      title · "Số liệu tính đến …" line · on the right the five period buttons
+ *   custom box  "Từ ngày" / "Đến ngày", only while "Tuỳ chọn" is chosen
+ *   export row  "Xuất PDF" "Xuất XLSX" "Xuất PPTX" (disabled, one "?"), only with `report.export`
+ *   grid        the six KPI groups of `/tong-quan`, in the prototype's report spacing
+ *   card        "Tình hình thực hiện theo bộ phận" — in the prototype's "Xếp hạng bộ phận" place
+ *               (ADR 0053 amendment 04/10: a table per unit, not a ranking)
+ *   card        "So sánh với kỳ trước" — the prototype's chart, not built (ADR 0068 §14, "?")
+ * NOT HERE (spec §1): "Cần xử lý ngay", "Tính lại ngay", "Trình chiếu".
  */
 
+export const REPORT_TITLE = "Báo cáo điều hành";
 export const LOADING_SENTENCE = "Đang tải…";
 export const UNIT_LOAD_ERROR = "Chưa tải được bảng theo bộ phận";
 export const CUSTOM_SUBMIT_LABEL = "Xem";
+
+/**
+ * The page header. Without `subtitle` / `actions` = the gate is closed or the session still being
+ * read: the title only, so the account still reads which page it is on, and no period — there is no
+ * figure for it to describe.
+ */
+export function ReportHeader({ subtitle, actions }: { subtitle?: ReactNode; actions?: ReactNode }) {
+  return (
+    <PageHeader icon={ChartColumn} title={REPORT_TITLE} subtitle={subtitle} actions={actions} className="mb-0" />
+  );
+}
 
 export type ReportViewProps = {
   readonly windows: ReportWindows;
@@ -67,6 +87,13 @@ export type ReportViewProps = {
   readonly onReloadUnits: () => void;
 };
 
+type PeriodChoice = PeriodKind | typeof CUSTOM_PERIOD;
+
+const PERIOD_OPTIONS: readonly { value: PeriodChoice; label: string }[] = [
+  ...PERIOD_KINDS.map((k) => ({ value: k, label: PERIOD_BUTTON_LABEL[k] })),
+  { value: CUSTOM_PERIOD, label: CUSTOM_BUTTON_LABEL },
+];
+
 export function ReportView({
   windows,
   fetchedAt,
@@ -78,150 +105,156 @@ export function ReportView({
   onReload,
   onReloadUnits,
 }: ReportViewProps) {
-  const comparison = reportComparisonNote(windows);
-  return (
-    <>
-      <div className="-mt-3 mb-5 flex flex-wrap items-start gap-x-4 gap-y-3 sm:pl-16">
-        <div className="flex min-w-0 flex-1 basis-72 flex-col gap-1 text-[13px] text-ink-500 [&_svg]:size-3.5 [&_svg]:shrink-0">
-          <p className="m-0 inline-flex items-center gap-1.5">
-            <CalendarDays aria-hidden="true" focusable="false" strokeWidth={1.8} />
-            {reportPeriodLabel(windows)}
-          </p>
-          <p className="m-0 flex items-start gap-1.5">
-            <RefreshCw aria-hidden="true" focusable="false" strokeWidth={1.8} className="mt-0.5" />
-            <span className="min-w-0">
-              Số liệu tính đến {formatDateTime(fetchedAt)}. {comparison}
-            </span>
-          </p>
-        </div>
-        <ReportPeriodPicker windows={windows} onNamed={onNamedPeriod} onCustom={onCustomPeriod} />
-      </div>
+  // "Tuỳ chọn" only OPENS the custom box; the figures on screen stay those of the period already
+  // asked for until "Xem" sends a range `customWindows` accepted.
+  const [customOpen, setCustomOpen] = useState(windows.kind === CUSTOM_PERIOD);
+  const [from, setFrom] = useState(() => toDateInputValue(windows.current.start));
+  const [to, setTo] = useState(() => toDateInputValue(windows.current.end - 1));
 
-      <DashboardBlocks
-        data={figures}
-        visible={access.blocks}
-        onReload={onReload}
-        urgent={false}
+  const choose = (v: PeriodChoice) => {
+    if (v === CUSTOM_PERIOD) {
+      // Opening from a named period starts the inputs on the window on screen, so "Xem" right
+      // away asks for the days the reader is already looking at.
+      if (!customOpen && windows.kind !== CUSTOM_PERIOD) {
+        setFrom(toDateInputValue(windows.current.start));
+        setTo(toDateInputValue(windows.current.end - 1));
+      }
+      setCustomOpen(true);
+      return;
+    }
+    const picked = PERIOD_KINDS.find((k) => k === v);
+    if (picked === undefined) return;
+    setCustomOpen(false);
+    onNamedPeriod(picked);
+  };
+
+  return (
+    <div className="flex min-w-0 flex-col gap-5">
+      <ReportHeader
+        subtitle={
+          <span className="min-w-0">
+            {reportPeriodLabel(windows)} · Số liệu tính đến {formatDateTime(fetchedAt)}.{" "}
+            {reportComparisonNote(windows)}
+          </span>
+        }
+        actions={
+          <PeriodButtons options={PERIOD_OPTIONS} value={customOpen ? CUSTOM_PERIOD : windows.kind} onChange={choose} />
+        }
       />
 
-      {access.unitTable && (
-        <div className="mt-4">
-          <UnitSummarySection state={units} onReload={onReloadUnits} />
+      {customOpen && (
+        <CustomPeriodBox
+          from={from}
+          to={to}
+          applied={windows.kind === CUSTOM_PERIOD}
+          onFrom={setFrom}
+          onTo={setTo}
+          onApply={() => onCustomPeriod(from, to)}
+        />
+      )}
+
+      {access.exportReport && (
+        <div className="flex flex-wrap gap-2">
+          <ExportPendingActions size="md" labelPrefix="Xuất " />
         </div>
       )}
 
-      <div className="mt-4">
-        <PendingSection info={reportPendingPart("So sánh với kỳ trước")} titleAs="h2" />
-      </div>
-    </>
+      <DashboardBlocks data={figures} visible={access.blocks} onReload={onReload} layout="report" />
+
+      {access.unitTable && <UnitSummarySection state={units} onReload={onReloadUnits} />}
+
+      <ComparisonPendingSection />
+    </div>
   );
 }
 
 /**
- * Four named periods + "Tuỳ chọn". A named period applies on press, exactly as on `/tong-quan`.
- * "Tuỳ chọn" only OPENS two native date inputs; the range applies on "Xem", and only when
- * `customWindows` accepts it — a refused range shows its sentence and sends nothing.
+ * The prototype's custom-period box: two native date inputs on a bordered strip. Unlike the prototype
+ * the range applies on "Xem", and only when `customWindows` accepts it — a refused range shows its
+ * sentence and sends nothing; applying on every keystroke would ask the servers for half-typed dates.
  */
-export function ReportPeriodPicker({
-  windows,
-  onNamed,
-  onCustom,
+function CustomPeriodBox({
+  from,
+  to,
+  applied,
+  onFrom,
+  onTo,
+  onApply,
 }: {
-  windows: ReportWindows;
-  onNamed: (kind: PeriodKind) => void;
-  onCustom: (from: string, to: string) => void;
+  from: string;
+  to: string;
+  /** a custom range is already on screen */
+  applied: boolean;
+  onFrom: (v: string) => void;
+  onTo: (v: string) => void;
+  onApply: () => void;
 }) {
-  const [customOpen, setCustomOpen] = useState(windows.kind === CUSTOM_PERIOD);
-  const [from, setFrom] = useState(() => toDateInputValue(windows.current.start));
-  const [to, setTo] = useState(() => toDateInputValue(windows.current.end - 1));
   const [error, setError] = useState<string | null>(null);
   const errorId = "bao-cao-ky-tuy-chon-loi";
-
   return (
-    <div className="flex min-w-0 flex-col items-start gap-2">
-      <Segmented
-        mode="buttons"
-        legend="Kỳ báo cáo"
-        name="report-period"
-        value={customOpen ? CUSTOM_PERIOD : windows.kind}
-        options={[
-          ...PERIOD_KINDS.map((k) => ({ value: k, label: PERIOD_BUTTON_LABEL[k] })),
-          { value: CUSTOM_PERIOD, label: CUSTOM_BUTTON_LABEL },
-        ]}
-        onChange={(v) => {
-          if (v === CUSTOM_PERIOD) {
-            // Opening from a named period starts the inputs on the window on screen, so "Xem" right
-            // away asks for the days the reader is already looking at.
-            if (!customOpen && windows.kind !== CUSTOM_PERIOD) {
-              setFrom(toDateInputValue(windows.current.start));
-              setTo(toDateInputValue(windows.current.end - 1));
-            }
-            setCustomOpen(true);
-            return;
-          }
-          const picked = PERIOD_KINDS.find((k) => k === v);
-          if (picked === undefined) return;
-          setCustomOpen(false);
-          setError(null);
-          onNamed(picked);
-        }}
-      />
-      {customOpen && (
-        <form
-          className="flex max-w-full flex-wrap items-end gap-3"
-          noValidate
-          onSubmit={(e) => {
-            e.preventDefault();
-            const r = customWindows(from, to);
-            if (!r.ok) {
-              setError(r.message);
-              return;
-            }
-            setError(null);
-            onCustom(from, to);
-          }}
-        >
-          <Field label="Từ ngày" htmlFor="bao-cao-tu-ngay" grow="auto" className="min-w-0">
-            <input
-              id="bao-cao-tu-ngay"
-              type="date"
-              value={from}
-              aria-invalid={error !== null}
-              aria-describedby={error !== null ? errorId : undefined}
-              onChange={(e) => setFrom(e.target.value)}
-            />
-          </Field>
-          <Field label="Đến ngày" htmlFor="bao-cao-den-ngay" grow="auto" className="min-w-0">
-            <input
-              id="bao-cao-den-ngay"
-              type="date"
-              value={to}
-              aria-invalid={error !== null}
-              aria-describedby={error !== null ? errorId : undefined}
-              onChange={(e) => setTo(e.target.value)}
-            />
-          </Field>
-          <Button type="submit" variant="primary" size="md">
-            {CUSTOM_SUBMIT_LABEL}
-          </Button>
-          {error !== null && (
-            <p id={errorId} role="alert" className="m-0 basis-full text-[13px] text-danger-600">
-              {error}
-            </p>
-          )}
-        </form>
+    <form
+      className="flex max-w-full flex-wrap items-end gap-3 rounded-[10px] border border-line bg-surface p-3"
+      noValidate
+      onSubmit={(e) => {
+        e.preventDefault();
+        const r = customWindows(from, to);
+        if (!r.ok) {
+          setError(r.message);
+          return;
+        }
+        setError(null);
+        onApply();
+      }}
+    >
+      <Field label="Từ ngày" htmlFor="bao-cao-tu-ngay" grow="auto" className="min-w-0">
+        <input
+          id="bao-cao-tu-ngay"
+          type="date"
+          value={from}
+          aria-invalid={error !== null}
+          aria-describedby={error !== null ? errorId : undefined}
+          onChange={(e) => onFrom(e.target.value)}
+        />
+      </Field>
+      <Field label="Đến ngày" htmlFor="bao-cao-den-ngay" grow="auto" className="min-w-0">
+        <input
+          id="bao-cao-den-ngay"
+          type="date"
+          value={to}
+          aria-invalid={error !== null}
+          aria-describedby={error !== null ? errorId : undefined}
+          onChange={(e) => onTo(e.target.value)}
+        />
+      </Field>
+      <Button type="submit" variant="primary" size="md">
+        {CUSTOM_SUBMIT_LABEL}
+      </Button>
+      {error !== null ? (
+        <p id={errorId} role="alert" className="m-0 basis-full text-[13px] text-danger-600">
+          {error}
+        </p>
+      ) : (
+        !applied && (
+          <p className="m-0 pb-2 text-[12px] text-ink-500">
+            Chọn cả hai ngày rồi bấm Xem. Trong lúc đó vẫn hiển thị số liệu của kỳ đang xem.
+          </p>
+        )
       )}
-    </div>
+    </form>
   );
 }
+
+/** The prototype's section title under the grid: 14px bold navy, no icon. */
+const SECTION_TITLE = "m-0 text-[14px] leading-snug font-bold text-ink-900";
 
 const TH = "px-3 py-2.5 text-left text-xs font-semibold whitespace-nowrap text-ink-700";
 const TD = "px-3 py-2 text-[13px] text-ink-900";
 const NUM = "text-right tabular-nums whitespace-nowrap";
 
 /**
- * "Tình hình thực hiện theo bộ phận" — ONLY THE TABLE SCROLLS at 320px (`TableScroll`), never the
- * page. Loading / failed (server sentence verbatim + "Tải lại") / empty, like the Sổ tay columns.
+ * "Tình hình thực hiện theo bộ phận" — a white card in the prototype's "Xếp hạng bộ phận" place.
+ * ONLY THE TABLE SCROLLS at 320px (`TableScroll`), never the page. Loading / failed (server sentence
+ * verbatim + "Tải lại") / empty, like the Sổ tay columns.
  */
 export function UnitSummarySection({
   state,
@@ -231,21 +264,18 @@ export function UnitSummarySection({
   onReload: () => void;
 }) {
   return (
-    <section aria-label={UNIT_TABLE_TITLE} className="flex min-w-0 flex-col gap-2">
-      <h2 className="m-0 flex items-center gap-2 text-base font-semibold text-ink-900">
-        <Users aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] text-brand-600" />
-        {UNIT_TABLE_TITLE}
-      </h2>
+    <Card as="section" aria-label={UNIT_TABLE_TITLE} className="flex flex-col gap-3 p-4">
+      <h2 className={SECTION_TITLE}>{UNIT_TABLE_TITLE}</h2>
       <UnitSummaryBody state={state} onReload={onReload} />
       <p className="m-0 text-xs leading-relaxed text-ink-500">{UNIT_TABLE_NOTE}</p>
-    </section>
+    </Card>
   );
 }
 
 function UnitSummaryBody({ state, onReload }: { state: Loaded<UnitRow[]>; onReload: () => void }) {
   if (state === null) {
     return (
-      <div aria-busy="true" className="rounded-xl border border-line bg-surface p-4">
+      <div aria-busy="true">
         <p className="an-thi-giac" role="status">
           {LOADING_SENTENCE}
         </p>
@@ -254,18 +284,10 @@ function UnitSummaryBody({ state, onReload }: { state: Loaded<UnitRow[]>; onRelo
     );
   }
   if (!state.ok) {
-    return (
-      <div className="rounded-xl border border-line bg-surface">
-        <ErrorState role="alert" title={UNIT_LOAD_ERROR} message={state.thongBao} onRetry={onReload} className="py-8" />
-      </div>
-    );
+    return <ErrorState role="alert" title={UNIT_LOAD_ERROR} message={state.thongBao} onRetry={onReload} className="py-8" />;
   }
   if (state.duLieu.length === 0) {
-    return (
-      <div className="rounded-xl border border-line bg-surface">
-        <EmptyState tone="neutral" title={UNIT_TABLE_EMPTY} role="status" className="py-8" />
-      </div>
-    );
+    return <EmptyState tone="neutral" title={UNIT_TABLE_EMPTY} role="status" className="py-8" />;
   }
   return (
     <TableScroll aria-label={UNIT_TABLE_TITLE}>
@@ -310,5 +332,23 @@ function UnitSummaryBody({ state, onReload }: { state: Loaded<UnitRow[]>; onRelo
         </tbody>
       </table>
     </TableScroll>
+  );
+}
+
+/**
+ * "So sánh với kỳ trước" — the prototype's last card (a horizontal bar chart of each figure's change),
+ * not built this round (ADR 0053 amendment 04/10, B4). The card stands at the chart's place with its
+ * title and the "?" (ADR 0068 §14); the body says it is not built, never draws an empty chart.
+ */
+function ComparisonPendingSection() {
+  const info = reportPendingPart("So sánh với kỳ trước");
+  return (
+    <Card as="section" aria-label={info.ten} data-pending="" className="flex flex-col gap-3 p-4">
+      <div className="flex items-center gap-2">
+        <h2 className={cn(SECTION_TITLE, "text-ink-500")}>{info.ten}</h2>
+        <PendingMarker info={info} />
+      </div>
+      <p className="m-0 py-8 text-center text-[13px] text-ink-500">{PENDING_HOVER_TEXT}</p>
+    </Card>
   );
 }

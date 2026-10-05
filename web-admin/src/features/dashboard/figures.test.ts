@@ -63,23 +63,22 @@ describe("comparison line — period figures only, % only when previous is neith
     expect(comparisonLine("period", null, 5, "higher-is-better", formatCount)).toBeNull();
   });
 
-  it("equal → 'không đổi'", () => {
-    expect(comparisonLine("period", 5, 5, "higher-is-better", formatCount)?.text).toBe(
-      "Không đổi so với kỳ trước",
-    );
+  it("equal → 'không đổi' (the prototype's word)", () => {
+    expect(comparisonLine("period", 5, 5, "higher-is-better", formatCount)?.text).toBe("không đổi");
   });
 
   it("rise of a good figure is better; rise of a bad figure is worse; volumes stay neutral", () => {
+    // the prototype's delta line: a signed percentage — the arrow is drawn by the tile, not typed
     expect(comparisonLine("period", 9, 8, "higher-is-better", formatCount)).toEqual({
-      text: "↑ +12,5% so với kỳ trước",
+      text: "+12,5% so với kỳ trước",
       tone: "better",
     });
     expect(comparisonLine("period", 4, 2, "lower-is-better", formatCount)).toEqual({
-      text: "↑ +100,0% so với kỳ trước",
+      text: "+100,0% so với kỳ trước",
       tone: "worse",
     });
     expect(comparisonLine("period", 0, 2, "higher-is-better", formatCount)).toEqual({
-      text: "↓ -100,0% so với kỳ trước",
+      text: "-100,0% so với kỳ trước",
       tone: "worse",
     });
     expect(comparisonLine("period", 12, 10, "neutral", formatCount)?.tone).toBe("neutral");

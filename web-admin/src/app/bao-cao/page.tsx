@@ -1,10 +1,6 @@
-import { ChartColumn } from "lucide-react";
-
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
-import { PageHeader } from "@/components/ui/page-header";
 import { DauTrang } from "@/components/dau-trang";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
-import { ReportHeaderActions } from "@/features/report/header-actions";
 import { ReportPage } from "@/features/report/report-overview";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
@@ -39,8 +35,8 @@ export default async function ReportRoutePage() {
         <div className="khung-trang">
           <DauTrang />
           <main className="than-trang">
-            {/* Outside the `report.read` gate: an account without the key still reads the title. */}
-            <PageHeader icon={ChartColumn} title="Báo cáo điều hành" actions={<ReportHeaderActions />} />
+            {/* Draws its own header: the period line and buttons need the figures' state, and the
+                title stays visible outside the `report.read` gate (`ReportPage`). */}
             <ReportPage />
           </main>
         </div>

@@ -9,12 +9,12 @@ import { usePhien } from "@/features/phien/phien-hien-tai";
 import { CongQuyen } from "@/features/quyen/cong-quyen";
 import { fetchTaskUnitSummary } from "@/lib/api/dashboard";
 import { layDanhMucBoPhan } from "@/lib/api/danh-muc";
-import { REPORT_READ_PERMISSION } from "@/lib/quyen";
+import { quyetDinhTheoKhoa, REPORT_READ_PERMISSION } from "@/lib/quyen";
 
 import { reportAccess } from "./report-access";
 import { CUSTOM_PERIOD, reportWindows } from "./report-period";
 import type { ReportSelection } from "./report-period";
-import { ReportView } from "./report-view";
+import { ReportHeader, ReportView } from "./report-view";
 import { unitRowsFrom } from "./unit-table";
 import type { UnitRow } from "./unit-table";
 
@@ -24,14 +24,28 @@ export const MISSING_REPORT_READ =
   "không hiển thị. Liên hệ quản trị viên của đơn vị nếu bạn cần quyền này.";
 
 /**
- * `/bao-cao` body: the page gate (`report.read`, as `/tong-quan`), then the hook half. Each block and
- * the unit table add their own module key inside (`reportAccess`); the server checks every pair.
+ * `/bao-cao` body: the page gate (`report.read`, as `/tong-quan`), then the hook half. Each block,
+ * the unit table and the export row add their own key inside (`reportAccess`); the server checks
+ * every pair.
+ *
+ * The full header (period line, period buttons) is drawn by `ReportView` inside the gate, beside the
+ * figures it describes. Until the gate opens — session still being read, key missing, session
+ * unreadable — the bare title is drawn here instead, so the account still reads which page it is on.
  */
 export function ReportPage() {
+  const session = usePhien();
+  const open = session !== null && quyetDinhTheoKhoa(session, REPORT_READ_PERMISSION).hien;
   return (
-    <CongQuyen khoa={REPORT_READ_PERMISSION} cauThieuQuyen={MISSING_REPORT_READ}>
-      <ReportOverview />
-    </CongQuyen>
+    <>
+      {!open && (
+        <div className="mb-5">
+          <ReportHeader />
+        </div>
+      )}
+      <CongQuyen khoa={REPORT_READ_PERMISSION} cauThieuQuyen={MISSING_REPORT_READ}>
+        <ReportOverview />
+      </CongQuyen>
+    </>
   );
 }
 

@@ -1,6 +1,7 @@
-import { FileDown, Maximize2 } from "lucide-react";
+import { Download, Maximize2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import type { ButtonSize } from "@/components/ui/button";
 import { PendingButton, PendingFeature } from "@/components/ui/pending-feature";
 
 import { pendingPart } from "./labels";
@@ -18,7 +19,7 @@ import { pendingPart } from "./labels";
  *
  * Rendered by `DashboardHeader` (`view.tsx`) on the right of the title, after the period buttons —
  * also for an account without `report.read`: a disabled control with no data behind it reveals
- * nothing an account may not read.
+ * nothing an account may not read. Small buttons, as the prototype's header (`size="sm"`).
  */
 export function DashboardHeaderActions() {
   return (
@@ -27,6 +28,7 @@ export function DashboardHeaderActions() {
       <PendingButton
         info={pendingPart("Chế độ trình chiếu phòng họp")}
         phase2
+        size="sm"
         icon={<Maximize2 aria-hidden="true" focusable="false" />}
       >
         Trình chiếu
@@ -39,21 +41,31 @@ export function DashboardHeaderActions() {
  * The `[PDF][XLSX][PPTX]` group alone — also drawn by `/bao-cao` (ADR 0053 amendment 04/10/2026, B4:
  * export not built this round), which has no "Trình chiếu". One component, so the two pages cannot
  * describe the same unbuilt export in two ways.
+ *
+ * The two prototype screens word it differently, and both are kept: Tổng quan's header has small
+ * "PDF" buttons, Báo cáo's own row has full-size "Xuất PDF" buttons (`labelPrefix="Xuất "`). Every
+ * button carries the download icon, as in both.
  */
-export function ExportPendingActions() {
+export function ExportPendingActions({
+  size = "sm",
+  labelPrefix = "",
+}: {
+  size?: ButtonSize;
+  labelPrefix?: string;
+}) {
   return (
     <PendingFeature info={pendingPart("Xuất báo cáo PDF, XLSX, PPTX")} phase2>
-      <span role="group" aria-label="Xuất báo cáo" className="inline-flex gap-1">
+      <span role="group" aria-label="Xuất báo cáo" className="inline-flex flex-wrap gap-2">
         {(["PDF", "XLSX", "PPTX"] as const).map((format) => (
           <Button
             key={format}
             type="button"
             variant="secondary"
-            size="md"
+            size={size}
             disabled
-            icon={format === "PDF" ? <FileDown aria-hidden="true" focusable="false" /> : undefined}
+            icon={<Download aria-hidden="true" focusable="false" />}
           >
-            {format}
+            {`${labelPrefix}${format}`}
           </Button>
         ))}
       </span>

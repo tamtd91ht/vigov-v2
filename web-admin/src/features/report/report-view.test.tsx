@@ -5,11 +5,10 @@ import { pendingMarkerLabel } from "@/components/ui/pending-feature";
 import type { BlocksData } from "@/features/dashboard/view";
 import type { Loaded } from "@/features/dashboard/view";
 
-import { ReportExportSlot } from "./header-actions";
 import { reportAccess } from "./report-access";
 import { customWindows, reportWindows } from "./report-period";
 import type { ReportWindows } from "./report-period";
-import { ReportView, UNIT_LOAD_ERROR } from "./report-view";
+import { ReportHeader, ReportView, UNIT_LOAD_ERROR } from "./report-view";
 import { UNIT_TABLE_NOTE, UNIT_TABLE_TITLE, UNKNOWN_UNIT_LABEL } from "./unit-table";
 import type { UnitRow } from "./unit-table";
 
@@ -89,17 +88,21 @@ describe("reportAccess — permission gating (rule 5: UI convenience, the server
 });
 
 describe("export row", () => {
-  it("drawn disabled with one '?' when the session holds report.export", () => {
-    const html = renderToStaticMarkup(<ReportExportSlot permissions={["report.read", "report.export"]} />);
+  it("drawn disabled with one '?' when the session holds report.export — the prototype's 'Xuất …' labels", () => {
+    const html = render(ALL);
     expect(html).toContain('aria-label="Xuất báo cáo"');
-    expect(html.match(/<button[^>]*disabled=""/g)?.length).toBeGreaterThanOrEqual(3);
-    expect(html).toContain(pendingMarkerLabel("Xuất báo cáo PDF, XLSX, PPTX"));
+    for (const label of ["Xuất PDF", "Xuất XLSX", "Xuất PPTX"]) {
+      expect(html).toMatch(new RegExp(`<button[^>]*disabled=""[^>]*>.*?${label}</button>`));
+    }
+    expect(html.split(pendingMarkerLabel("Xuất báo cáo PDF, XLSX, PPTX"))).toHaveLength(2);
     expect(html).not.toContain("Trình chiếu");
   });
 
-  it("DENIED: nothing at all without report.export", () => {
-    expect(renderToStaticMarkup(<ReportExportSlot permissions={["report.read", "task.read"]} />)).toBe("");
-    expect(renderToStaticMarkup(<ReportExportSlot permissions={[]} />)).toBe("");
+  it("DENIED: no export row at all without report.export", () => {
+    const html = render(ALL.filter((p) => p !== "report.export"));
+    expect(html).not.toContain('aria-label="Xuất báo cáo"');
+    expect(html).not.toContain("Xuất PDF");
+    expect(html).not.toContain(pendingMarkerLabel("Xuất báo cáo PDF, XLSX, PPTX"));
   });
 });
 
@@ -181,6 +184,38 @@ describe("ReportView — page shape (spec 13 §1–§2, ADR 0053 B4/B5a)", () =>
     const html = render(ALL);
     expect(html).toContain(pendingMarkerLabel("So sánh với kỳ trước"));
     expect(html.indexOf(UNIT_TABLE_TITLE)).toBeLessThan(html.indexOf("So sánh với kỳ trước"));
+  });
+
+  it("prototype order: title · period buttons · export row · KPI grid · unit table · comparison", () => {
+    const html = render(ALL);
+    const at = [
+      ">Báo cáo điều hành</h1>",
+      ">Tuỳ chọn</button>",
+      'aria-label="Xuất báo cáo"',
+      "data-dashboard-grid",
+      `aria-label="${UNIT_TABLE_TITLE}"`,
+      'aria-label="So sánh với kỳ trước"',
+    ].map((s) => html.indexOf(s));
+    expect(at.every((i) => i >= 0)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+  });
+
+  it("the KPI grid uses the report spacing: tiles always 2 across, never 3", () => {
+    const html = render(ALL);
+    const grid = /<div data-dashboard-grid="" class="([^"]*)"/.exec(html)?.[1] ?? "";
+    expect(grid.split(" ")).toEqual(expect.arrayContaining(["grid-cols-1", "md:grid-cols-2", "xl:grid-cols-3", "gap-4"]));
+    expect(html).not.toContain("@md:grid-cols-3");
+  });
+
+  it("'Tuỳ chọn' not chosen: no date box", () => {
+    expect(render(ALL)).not.toContain('id="bao-cao-tu-ngay"');
+  });
+
+  it("the header outside the gate: the title only — no period, no button", () => {
+    const html = renderToStaticMarkup(<ReportHeader />);
+    expect(html).toContain(">Báo cáo điều hành</h1>");
+    expect(html).not.toContain("<button");
+    expect(html).not.toContain("tính đến");
   });
 
   it("the citizen-report block keeps /tong-quan's label 'Nhận vào trong kỳ'", () => {

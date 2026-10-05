@@ -32,8 +32,12 @@ export const NO_VALUE = "—";
  */
 export const NO_SOURCE_DATA = "Hệ thống chưa có nguồn số liệu cho mục này.";
 
-/** Spec §8, verbatim. */
-export const NOTHING_URGENT = "Không có việc nào cần xử lý ngay.";
+/**
+ * The prototype's sentence, verbatim (`DashboardWorkspace`, ADR 0068 lần 5) — replaces spec §8's
+ * "Không có việc nào cần xử lý ngay.". True as worded: the cell lists overdue rows only, and it is
+ * drawn only when every queue the account reads ANSWERED with no row.
+ */
+export const NOTHING_URGENT = "Không có việc nào quá hạn. Rất tốt.";
 
 const COUNT_FORMAT = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 });
 const ONE_DECIMAL = new Intl.NumberFormat("vi-VN", {
@@ -89,6 +93,10 @@ export type ComparisonLine = { readonly text: string; readonly tone: Tone };
  * The change is a percentage ONLY when the previous value is neither missing nor 0 (user decision):
  * from 0 to 3 is not "+∞%", and from a failed call it is nothing at all. In both cases the line
  * states the previous value instead, so the reader still has the number.
+ *
+ * Wording is the prototype's delta line (`report-display.ts` `movement`, ADR 0068 lần 5): a signed
+ * percentage, or "không đổi". The direction is ALSO the arrow the tile draws beside it; the sign keeps
+ * it readable without the arrow.
  */
 export function comparisonLine(
   kind: FigureKind,
@@ -101,11 +109,11 @@ export function comparisonLine(
   if (current === null) return null;
   if (previous === null) return { text: `Kỳ trước: ${NO_VALUE}`, tone: "neutral" };
   if (previous === 0) return { text: `Kỳ trước: ${format(0)}`, tone: "neutral" };
-  if (current === previous) return { text: "Không đổi so với kỳ trước", tone: "neutral" };
+  if (current === previous) return { text: "không đổi", tone: "neutral" };
 
   const change = ((current - previous) / previous) * 100;
   const up = change > 0;
-  const text = `${up ? "↑ +" : "↓ -"}${ONE_DECIMAL.format(Math.abs(change))}% so với kỳ trước`;
+  const text = `${up ? "+" : "-"}${ONE_DECIMAL.format(Math.abs(change))}% so với kỳ trước`;
   const tone: Tone =
     trend === "neutral"
       ? "neutral"
