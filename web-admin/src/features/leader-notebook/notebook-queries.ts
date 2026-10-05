@@ -63,10 +63,14 @@ export function sumCounts(out: petitions_taskCountsOut): number {
   return out.by_status.reduce((n, s) => n + s.count, 0);
 }
 
-/* ── Words (spec 03 §2-§3, domain review 04/10/2026) ─────────────────────────────────────────── */
+/* ── Words ───────────────────────────────────────────────────────────────────────────────────────
+ * Page subtitle, column titles and the column empty sentence are the prototype's
+ * (`vigov-require/apps/admin/src/components/tasks/LeaderNotebook.tsx`), verbatim — ADR 0068 lần 5
+ * replaced the spec-03 wording. The two GROUP titles and their sentences are ADR 0071's: the
+ * prototype has no groups, so nothing there to copy. */
 
 export const PAGE_TITLE = "Sổ tay lãnh đạo";
-export const PAGE_SUBTITLE = "Việc quá hạn, việc chờ tôi duyệt và việc tôi đã giao.";
+export const PAGE_SUBTITLE = "Ba việc cần biết ngay: việc trễ, việc chờ duyệt và việc mình đã giao.";
 
 export const OVERDUE_TITLE = "Việc quá hạn";
 export const APPROVAL_TITLE = "Chờ tôi duyệt";
@@ -75,9 +79,8 @@ export const ASSIGNED_TITLE = "Việc tôi đã giao";
 export const COMPLETION_GROUP_TITLE = "Duyệt hoàn thành";
 export const EXTENSION_GROUP_TITLE = "Duyệt lùi hạn";
 
-export const OVERDUE_EMPTY = "Không có việc quá hạn.";
-export const APPROVAL_EMPTY = "Không có việc chờ duyệt.";
-export const ASSIGNED_EMPTY = "Chưa có việc nào đang giao.";
+/** The prototype says one sentence for every empty column. */
+export const COLUMN_EMPTY = "Không có việc nào.";
 /** One group empty while the other is not — said in the group, not as the column's empty state. */
 export const COMPLETION_GROUP_EMPTY = "Không có việc chờ duyệt hoàn thành.";
 export const EXTENSION_GROUP_EMPTY = "Không có đề nghị lùi hạn nào chờ bạn duyệt.";

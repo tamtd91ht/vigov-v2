@@ -1,10 +1,8 @@
-import { Hourglass, LoaderCircle, TriangleAlert, UserCheck, type LucideIcon } from "lucide-react";
+import { CircleCheck, LoaderCircle, TriangleAlert, UserCheck, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { SkeletonRows } from "@/components/ui/skeleton";
 import type { BangNhanTrangThai } from "@/features/nhiem-vu/nhan-nhiem-vu"; // vi-name-ok: existing type of the commune's status labels
@@ -13,10 +11,9 @@ import type { petitions_deNghiChoDuyetRa, petitions_nhiemVuRa } from "@/lib/api/
 import { cn } from "@/lib/cn";
 
 import {
-  APPROVAL_EMPTY,
   APPROVAL_TITLE,
-  ASSIGNED_EMPTY,
   ASSIGNED_TITLE,
+  COLUMN_EMPTY,
   COMPLETION_GROUP_EMPTY,
   COMPLETION_GROUP_TITLE,
   COUNT_ERROR_PREFIX,
@@ -26,7 +23,6 @@ import {
   LOADING_SENTENCE,
   MORE_LABEL,
   NO_FIGURE,
-  OVERDUE_EMPTY,
   OVERDUE_TITLE,
 } from "./notebook-queries";
 import { ExtensionMiniList, TaskMiniList } from "./task-mini-list";
@@ -35,7 +31,7 @@ import { ExtensionMiniList, TaskMiniList } from "./task-mini-list";
  * The three columns of the Sổ tay lãnh đạo — DRAWING ONLY, no network (`leader-notebook.tsx` reads).
  * Split out so every state (loading, error, empty, hidden group) renders under `react-dom/server`.
  *
- * EMPTY IS NEVER AN ERROR, AND AN ERROR IS NEVER EMPTY. "Không có việc quá hạn." drawn because a read
+ * EMPTY IS NEVER AN ERROR, AND AN ERROR IS NEVER EMPTY. "Không có việc nào." drawn because a read
  * failed is a leader believing the commune is on time. A failed read shows the server's sentence,
  * verbatim, with `Tải lại`.
  */
@@ -88,20 +84,20 @@ export function NotebookView({ pastDue, completion, extensions, assigned, direct
   const groupsDone = [extensions.list.load, ...(completion === null ? [] : [completion.list.load])];
   const approvalAllEmpty = groupsDone.every((l) => l.phase === "done" && l.value.length === 0);
 
+  // The prototype's grid: three columns, ONE column at 1280px and below (`max-[1280px]:grid-cols-1`).
   return (
-    <div className="leader-notebook grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-3">
+    <div className="leader-notebook grid min-w-0 grid-cols-3 gap-4 max-[1280px]:grid-cols-1">
       <NotebookColumn
         id="notebook-overdue"
         icon={TriangleAlert}
-        iconClass="bg-danger-50 text-danger-600"
+        iconClass={TONE_DANGER}
         title={OVERDUE_TITLE}
         figure={figure(pastDue.count)}
-        tone={pastDue.count.phase === "done" && pastDue.count.value > 0 ? "danger" : "neutral"}
         countError={pastDue.count.phase === "error" ? pastDue.count.message : null}
       >
         <ListBody
           state={pastDue.list}
-          empty={<ColumnEmpty sentence={OVERDUE_EMPTY} />}
+          empty={<ColumnEmpty />}
           render={(tasks) => (
             <TaskMiniList tasks={tasks} directory={directory} statusLabels={statusLabels} now={now} label={OVERDUE_TITLE} />
           )}
@@ -110,15 +106,14 @@ export function NotebookView({ pastDue, completion, extensions, assigned, direct
 
       <NotebookColumn
         id="notebook-approval"
-        icon={Hourglass}
-        iconClass="bg-warning-50 text-warning-600"
+        icon={CircleCheck}
+        iconClass={TONE_APPROVAL}
         title={APPROVAL_TITLE}
         figure={approvalFigure(approvalGroups)}
-        tone="warning"
         countError={null}
       >
         {approvalAllEmpty ? (
-          <ColumnEmpty sentence={APPROVAL_EMPTY} />
+          <ColumnEmpty />
         ) : (
           <>
             {completion !== null && (
@@ -154,15 +149,14 @@ export function NotebookView({ pastDue, completion, extensions, assigned, direct
       <NotebookColumn
         id="notebook-assigned"
         icon={UserCheck}
-        iconClass="bg-brand-50 text-brand-600"
+        iconClass={TONE_BRAND}
         title={ASSIGNED_TITLE}
         figure={figure(assigned.count)}
-        tone="info"
         countError={assigned.count.phase === "error" ? assigned.count.message : null}
       >
         <ListBody
           state={assigned.list}
-          empty={<ColumnEmpty sentence={ASSIGNED_EMPTY} />}
+          empty={<ColumnEmpty />}
           render={(tasks) => (
             <TaskMiniList tasks={tasks} directory={directory} statusLabels={statusLabels} now={now} label={ASSIGNED_TITLE} />
           )}
@@ -172,14 +166,24 @@ export function NotebookView({ pastDue, completion, extensions, assigned, direct
   );
 }
 
-/** A card of fixed height (~70vh) with its own scroll; single column under 1024px (spec 03 §2). */
+/*
+ * The prototype's tile tones are danger · violet · brand, each `bg-<tone>/10 border-<tone>/25`. Our
+ * tokens have no violet (ADR 0068 lần 2), so the approval column keeps the warning tone it had.
+ */
+const TONE_DANGER = "border-danger-200 bg-danger-50 text-danger-600";
+const TONE_APPROVAL = "border-warning-500/25 bg-warning-50 text-warning-600";
+const TONE_BRAND = "border-brand-100 bg-brand-50 text-brand-600";
+
+/**
+ * One column, composed as the prototype's: header row `[tile] title ……… [count]`, then a body that
+ * scrolls past 560px. The card frame itself is our token `Card` (no border, no shadow — guide §5).
+ */
 function NotebookColumn({
   id,
   icon: Icon,
   iconClass,
   title,
   figure: shown,
-  tone,
   countError,
   children,
 }: {
@@ -188,29 +192,28 @@ function NotebookColumn({
   iconClass: string;
   title: string;
   figure: string;
-  tone: BadgeTone;
   countError: string | null;
   children: ReactNode;
 }) {
   return (
-    <Card as="section" aria-labelledby={id} className="flex max-h-[70vh] flex-col lg:h-[70vh]">
-      <CardHeader className="shrink-0 flex-nowrap">
-        <span aria-hidden="true" className={cn("grid size-9 shrink-0 place-items-center rounded-lg", iconClass)}>
-          <Icon className="size-[18px]" strokeWidth={1.8} focusable="false" />
+    <Card as="section" aria-labelledby={id}>
+      <CardHeader className="flex-nowrap gap-2.5 py-3">
+        <span aria-hidden="true" className={cn("grid size-8 shrink-0 place-items-center rounded-[9px] border", iconClass)}>
+          <Icon className="size-4" strokeWidth={1.8} focusable="false" />
         </span>
-        <CardTitle id={id} className="min-w-0 flex-1">
+        <CardTitle id={id} className="min-w-0">
           {title}
         </CardTitle>
-        <Badge tone={tone} className="notebook-count">
+        <span className="notebook-count ml-auto shrink-0 rounded-[10px] border border-line px-2 py-0.5 text-xs font-semibold text-ink-500">
           {shown}
-        </Badge>
+        </span>
       </CardHeader>
       {countError !== null && (
-        <p className="thong-bao-loi m-0 shrink-0 px-4 pt-3" role="alert">
+        <p className="thong-bao-loi m-0 px-4 pt-3" role="alert">
           {COUNT_ERROR_PREFIX} {countError}
         </p>
       )}
-      <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+      <div className="max-h-[560px] overflow-y-auto">{children}</div>
     </Card>
   );
 }
@@ -235,8 +238,13 @@ function Group({ id, title, count, children }: { id: string; title: string; coun
   );
 }
 
-function ColumnEmpty({ sentence }: { sentence: string }) {
-  return <EmptyState tone="neutral" title={sentence} role="status" className="py-8" />;
+/** The prototype's empty column: one centred muted line, no illustration. */
+function ColumnEmpty() {
+  return (
+    <p className="column-empty m-0 px-4 py-8 text-center text-[13px] text-ink-500" role="status">
+      {COLUMN_EMPTY}
+    </p>
+  );
 }
 
 function GroupEmpty({ sentence }: { sentence: string }) {

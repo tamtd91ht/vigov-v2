@@ -43,9 +43,17 @@ export function taskRowText(task: petitions_nhiemVuRa, directory: DanhBaTheoMa |
   };
 }
 
+/*
+ * The prototype's row: a full-width block, `px-4 py-3`, a rule under every row but the last, the
+ * title in bold on one line and ONE muted meta line under it. The prototype's row is a button that
+ * opens a drawer on the notebook; ours is a link to the register's own drawer (ADR 0068 05/10 #3).
+ */
 const ROW_LINK =
-  "flex flex-col gap-1 px-4 py-3 text-inherit no-underline hover:bg-surface-muted " +
+  "block w-full px-4 py-3 text-left text-inherit no-underline hover:bg-surface-muted " +
   "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-500";
+const ROW_ITEM = "border-b border-line last:border-b-0";
+const ROW_TITLE = "block text-[13px] font-semibold text-ink-900";
+const ROW_META = "mt-1 block text-xs text-ink-500";
 
 export function TaskMiniList({
   tasks,
@@ -64,25 +72,26 @@ export function TaskMiniList({
   label: string;
 }) {
   return (
-    <ul aria-label={label} className="m-0 divide-y divide-line p-0 [list-style:none]">
+    <ul aria-label={label} className="m-0 p-0 [list-style:none]">
       {tasks.map((task) => {
         const row = taskRowText(task, directory, now);
         return (
-          <li key={task.code} className="task-mini-row">
+          <li key={task.code} className={`task-mini-row ${ROW_ITEM}`}>
             <Link href={taskDetailHref(task.code)} className={ROW_LINK}>
-              <span className="line-clamp-2 text-sm font-medium text-ink-900">{row.title}</span>
-              <span className="text-xs text-ink-500">
+              <span className={ROW_TITLE}>{row.title}</span>
+              <span className={ROW_META}>
                 {row.meta}
                 {row.late !== "" && (
                   <>
                     {" · "}
-                    <span className="font-medium text-danger-600">{row.late}</span>
+                    <span className="font-semibold text-danger-600">{row.late}</span>
                   </>
                 )}
+                {/* Not in the prototype: ADR 0071 puts sub-tasks in these lists, so the row says whose. */}
+                {row.childOf !== "" && ` · ${row.childOf}`}
               </span>
-              {row.childOf !== "" && <span className="text-xs text-ink-500">{row.childOf}</span>}
               {task.status === "tam-dung" && (
-                <span>
+                <span className="mt-1 block">
                   <TaskStatusBadge status={task.status}>{nhanTrangThai(statusLabels, task.status)}</TaskStatusBadge>
                 </span>
               )}
@@ -113,12 +122,12 @@ export function ExtensionMiniList({
   label: string;
 }) {
   return (
-    <ul aria-label={label} className="m-0 divide-y divide-line p-0 [list-style:none]">
+    <ul aria-label={label} className="m-0 p-0 [list-style:none]">
       {requests.map((r) => (
-        <li key={r.id} className="extension-mini-row">
+        <li key={r.id} className={`extension-mini-row ${ROW_ITEM}`}>
           <Link href={taskDetailHref(r.task_code)} className={ROW_LINK}>
-            <span className="line-clamp-2 text-sm font-medium text-ink-900">{r.task_title}</span>
-            <span className="text-xs text-ink-500">
+            <span className={ROW_TITLE}>{r.task_title}</span>
+            <span className={ROW_META}>
               {nhanCanBoNgan(r.requested_by, directory, O_TRONG)} đề nghị · {extensionDeadlineText(r)}
             </span>
           </Link>

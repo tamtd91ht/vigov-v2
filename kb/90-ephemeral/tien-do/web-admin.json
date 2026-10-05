@@ -778,6 +778,14 @@
       "bang_chung": "web-admin/src/components/{muc-menu.ts (MenuParent, isMenuParent, flattenMenu, activeChildRoute, parentRoute),menu-icons.ts (MenuIcon),side-nav.tsx,nav-sheet.tsx} · app/globals.css (.side-nav-children, .side-nav-flyout, .nav-sheet-children) · ca kiểm: muc-menu.test.ts, side-nav.test.tsx, side-nav-flyout.test.tsx (mới, jsdom), nav-sheet.test.tsx, dau-trang.test.tsx, header-password-link.test.tsx. tools/tien_do_san_pham.py KHÔNG phải sửa: mục cha { nhan, children } không khớp MAU_MUC, mục con vẫn đếm — make kb: 16/16 → 16/19 mục menu có màn (3 mục '?' mới). typecheck + eslint sạch, vitest 223 tệp / 3973 ca xanh, make web xanh (06/10/2026). Chưa commit.",
       "no_confirm": [],
       "tiep_theo": "Chuyển 'Danh bạ cán bộ' vào tab của màn Nội dung Mini App như prototype rồi gỡ mục menu (thẻ sau). Tiêu đề trang của các màn đổi nhãn ('Thông báo nội bộ', 'Thu - Chi ngân sách') chưa đổi — ngoài phạm vi thẻ này. Ba mục '?' cần tuyến backend trước khi dựng màn. Chỉ kiểm được trên trình duyệt: bảng bay của mục cha khi thu gọn, đường thụt dưới icon cha."
+    },
+    {
+      "id": "so-tay-theo-prototype-06-10",
+      "viec": "Sổ tay lãnh đạo /nhiem-vu/so-tay bám prototype (vigov-require apps/admin components/tasks/LeaderNotebook.tsx) theo ADR 0068 lần 5. Phụ đề 'Ba việc cần biết ngay: việc trễ, việc chờ duyệt và việc mình đã giao.'; lưới 3 cột, 1 cột từ 1280px trở xuống; đầu cột [ô icon viền 32px] tiêu đề ……… [số đếm dạng viên trung tính viền]; thân cột cuộn quá 560px (thay chiều cao cố định 70vh); cột trống 'Không có việc nào.' cho cả ba cột (thay ba câu của spec 03); hàng: tiêu đề đậm một dòng + một dòng phụ 'người · hạn … · trễ N ngày' (trễ đậm đỏ), 'việc con của …' nối vào dòng phụ. Icon cột 2 CircleCheck như prototype. GIỮ: số đếm ở máy chủ và hai nhóm Duyệt hoàn thành / Duyệt lùi hạn (ADR 0071), cổng task.read + task.approve, hàng là liên kết tới ngăn chi tiết ở /nhiem-vu (prototype không duyệt trong sổ tay — mở ngăn chi tiết, nên không có gì để chép), tải/lỗi/Xem thêm theo từng cột. Không đổi API.",
+      "trang_thai": "xong",
+      "bang_chung": "web-admin/src/features/leader-notebook/{notebook-view.tsx,task-mini-list.tsx,notebook-queries.ts (COLUMN_EMPTY thay OVERDUE_EMPTY/APPROVAL_EMPTY/ASSIGNED_EMPTY, PAGE_SUBTITLE),notebook-view.test.tsx (thêm nhóm 'prototype composition')} · app/nhiem-vu/so-tay/page.tsx (PageHeader mb-6). typecheck + eslint sạch, vitest 223 tệp / 3977 ca xanh, make web xanh (06/10/2026). Chưa commit.",
+      "no_confirm": [],
+      "tiep_theo": "Không chép được: 'đã gia hạn N lần' trên hàng (hợp đồng danh sách không trả số lần gia hạn — cùng thiếu như thẻ Kanban); màu tím của cột 2 (token không có tím, giữ cam cảnh báo); khung skeleton cả trang (mỗi cột đọc riêng nên tải riêng); viền + bóng thẻ (Card token không viền không bóng); ô icon 48px của PageHeader giữ như mọi màn. Chỉ kiểm được trên trình duyệt: bố cục 1 cột ở 1280px và 320px."
     }
   ]
 }

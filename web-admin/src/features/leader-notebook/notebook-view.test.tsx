@@ -7,14 +7,13 @@ import type { DanhBaTheoMa } from "@/features/phan-anh/nhan-phieu"; // vi-name-o
 import type { petitions_deNghiChoDuyetRa, petitions_nhiemVuRa } from "@/lib/api/schema.gen"; // vi-name-ok: generated contract types
 
 import {
-  APPROVAL_EMPTY,
-  ASSIGNED_EMPTY,
+  COLUMN_EMPTY,
   COMPLETION_GROUP_TITLE,
   EXTENSION_GROUP_EMPTY,
   EXTENSION_GROUP_TITLE,
   LOAD_ERROR_TITLE,
   NO_ACCESS_SENTENCE,
-  OVERDUE_EMPTY,
+  PAGE_SUBTITLE,
 } from "./notebook-queries";
 import { NotebookView, type ListState, type Loaded, type NotebookViewProps, type Section } from "./notebook-view";
 import { extensionDeadlineText, taskRowText } from "./task-mini-list";
@@ -98,6 +97,11 @@ function render(patch: Partial<NotebookViewProps> = {}): string {
   );
 }
 
+/** How many columns say the prototype's empty sentence. */
+function emptyColumns(html: string): number {
+  return html.split(COLUMN_EMPTY).length - 1;
+}
+
 /** The badge figures in document order — column 1, 2, 3. */
 function badges(html: string): string[] {
   return [...html.matchAll(/notebook-count[^>]*>(?:<svg.*?<\/svg>)?([^<]*)</g)].map((m) => m[1]!);
@@ -139,22 +143,22 @@ describe("group 'Duyệt hoàn thành' needs task.approve (ADR 0071)", () => {
 
   it("every visible group empty: the column's own empty sentence, once", () => {
     const html = render({ completion: section([], 0), extensions: section([], 0) });
-    expect(html).toContain(APPROVAL_EMPTY);
+    expect(emptyColumns(html)).toBe(1);
     expect(html).not.toContain(COMPLETION_GROUP_TITLE);
   });
 
   it("one group empty while the other is not: said inside that group", () => {
     const html = render({ extensions: section([], 0) });
     expect(html).toContain(EXTENSION_GROUP_EMPTY);
-    expect(html).not.toContain(APPROVAL_EMPTY);
+    expect(emptyColumns(html)).toBe(0);
   });
 });
 
 describe("empty is not error, error is not empty", () => {
-  it("empty lists say the three sentences of the spec", () => {
+  it("an empty column says the prototype's sentence, 'Không có việc nào.'", () => {
     const html = render({ pastDue: section([], 0), assigned: section([], 0) });
-    expect(html).toContain(OVERDUE_EMPTY);
-    expect(html).toContain(ASSIGNED_EMPTY);
+    expect(COLUMN_EMPTY).toBe("Không có việc nào.");
+    expect(emptyColumns(html)).toBe(2);
     expect(html).not.toContain(LOAD_ERROR_TITLE);
   });
 
@@ -165,13 +169,13 @@ describe("empty is not error, error is not empty", () => {
     expect(html).toContain(LOAD_ERROR_TITLE);
     expect(html).toContain("Không đọc được bộ lọc nhiệm vụ.");
     expect(html).toContain("Tải lại");
-    expect(html).not.toContain(OVERDUE_EMPTY);
+    expect(emptyColumns(html)).toBe(0);
   });
 
   it("loading draws the skeleton, not an empty sentence", () => {
     const html = render({ assigned: { list: list({ phase: "loading" }), count: { phase: "loading" } } });
     expect(html).toContain("skeleton-rows");
-    expect(html).not.toContain(ASSIGNED_EMPTY);
+    expect(emptyColumns(html)).toBe(0);
   });
 
   it("Xem thêm only when the server says there is more", () => {
@@ -210,7 +214,7 @@ describe("row wording equals the register's (`oHan`)", () => {
   it("a sub-task names its parent; the late part is drawn red", () => {
     const html = render({ pastDue: section([task({ parent: "NV7" })], 1) });
     expect(html).toContain("việc con của NV7");
-    expect(html).toContain('<span class="font-medium text-danger-600">trễ 5 ngày</span>');
+    expect(html).toContain('<span class="font-semibold text-danger-600">trễ 5 ngày</span>');
   });
 
   it("a paused task shows its status pill in the commune's label", () => {
@@ -228,6 +232,29 @@ describe("row wording equals the register's (`oHan`)", () => {
     const html = render();
     for (const m of html.matchAll(/href="([^"]*)"/g)) expect(m[1]).toMatch(/^\/nhiem-vu\?task=NV\d+$/);
     expect(html).not.toMatch(/aria-label="[^"]*Huỳnh/);
+  });
+});
+
+describe("prototype composition (ADR 0068 lần 5)", () => {
+  it("three columns side by side, one column at 1280px and below", () => {
+    expect(render()).toContain("grid min-w-0 grid-cols-3 gap-4 max-[1280px]:grid-cols-1");
+  });
+
+  it("column order and titles are the prototype's", () => {
+    const html = render();
+    const order = ["Việc quá hạn", "Chờ tôi duyệt", "Việc tôi đã giao"].map((t) => html.indexOf(`>${t}<`));
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
+
+  it("the count is a neutral pill after the title, and each body scrolls past 560px", () => {
+    const html = render();
+    expect(html.match(/notebook-count ml-auto/g)).toHaveLength(3);
+    expect(html.match(/max-h-\[560px\] overflow-y-auto/g)).toHaveLength(3);
+  });
+
+  it("the page subtitle is the prototype's sentence", () => {
+    expect(PAGE_SUBTITLE).toBe("Ba việc cần biết ngay: việc trễ, việc chờ duyệt và việc mình đã giao.");
   });
 });
 

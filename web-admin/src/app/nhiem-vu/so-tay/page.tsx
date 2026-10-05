@@ -35,7 +35,8 @@ export default async function LeaderNotebookPage() {
         <div className="khung-trang">
           <DauTrang />
           <main className="than-trang">
-            <PageHeader icon={NotebookTabs} title={PAGE_TITLE} subtitle={PAGE_SUBTITLE} />
+            {/* The prototype's header: title + one subtitle line, no action, 24px above the columns. */}
+            <PageHeader icon={NotebookTabs} title={PAGE_TITLE} subtitle={PAGE_SUBTITLE} className="mb-6" />
             <LeaderNotebook />
           </main>
         </div>
