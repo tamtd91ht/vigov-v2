@@ -201,7 +201,15 @@
       "trang_thai": "xong",
       "bang_chung": "05/10/2026 TASK-E (chưa commit). GN-03: internal/domain/du_an_ghi.go thêm ErrProjectStartAfterCompletion + CheckProjectDateOrder (cùng ngày thì cho, thiếu một phía thì cho); internal/app/du_an.go gọi ở Them (trước giao dịch) và ở Sua (trong giao dịch, so trên dòng đã gộp nên PATCH chỉ gửi một ngày vẫn so với ngày đang lưu; chỉ kiểm khi PATCH có gửi ngày, để dòng cũ đã lệch vẫn sửa được tên). internal/http/du_an_ghi.go trả 400 invalid_request với câu cố định '`start_date`: ngày khởi công không được sau ngày hoàn thành.' — không dùng err.Error() vì đường sửa bọc lỗi qua bocDuAn có mã xã. TQ-02: internal/http/thu_chi_ngan_sach.go thay ErrKhongThayBangNganSach.Error() bằng 'Xã chưa lập bảng thu/chi năm <năm>.'. Test: domain TestCheckProjectDateOrder; app TestCreateProjectStartAfterCompletionIsRefused, TestUpdateProjectOneDateIsCheckedAgainstStoredOther; http TestProjectStartAfterCompletionIs400WithCleanSentence, TestMissingRevenueSheetReasonIsClerkSentence, ghim câu ở TestThieuBangChiThiCanDoiVaChiDatDuToanBienMatChuKhongRa0. Kiểm: go build ./... và go test ./... service-finance xanh.",
       "no_confirm": [],
-      "tiep_theo": "Chưa chạy make check toàn kho (phiên chính chạy trước khi commit). Lý do 'Cân đối' (domain.CanDoiThuChi, ErrKhongThayBang) và lý do ô tổng (thu.SoTong) vẫn đi thẳng err.Error() ra thẻ — có thể còn tiền tố kỹ thuật, ngoài phạm vi lượt này.",
+      "tiep_theo": "make check toàn kho đã xanh 05/10 (commit 0fa67247). Lý do 'Cân đối' (domain.CanDoiThuChi, ErrKhongThayBang) và lý do ô tổng (thu.SoTong) vẫn đi thẳng err.Error() ra thẻ — web nay bỏ một tiền tố kỹ thuật (3a4b603b), nhưng câu gốc ở máy chủ vẫn mang tiền tố.",
+      "menu": "thu-chi-ngan-sach"
+    },
+    {
+      "id": "can-doi-thu-chi-theo-cau-32-sua-doi",
+      "viec": "Dựng công thức 'Cân đối thu – chi' theo câu #32 ĐÃ SỬA 30/09/2026 (dòng B × cột thu-nsnn). Mã hiện vẫn tính theo cột thu-xa-huong (service-finance/internal/domain/thu_chi_ngan_sach.go:1016-1051), nên dòng chú thích 'đang chờ khách hàng xác nhận' trên Tổng quan và bảng Thu – Chi (web-admin/src/features/thu-chi/nhan-thu-chi.ts:609) được GIỮ có chủ ý — người dùng chốt 05/10: bỏ dòng ấy trước khi dựng thì một con số đã biết là sai sẽ trông như đúng (kiểm thử 05/10, TQ-03).",
+      "trang_thai": "chua_lam",
+      "no_confirm": [],
+      "tiep_theo": "Đi qua domain-expert (chỉ số báo lãnh đạo) rồi go-service-builder: đổi domain.CanDoiThuChi + test; xong thì gỡ dòng chú thích ở web và chú thích view.tsx:944-947 còn gọi #32 là đang tranh chấp.",
       "menu": "thu-chi-ngan-sach"
     }
   ]
