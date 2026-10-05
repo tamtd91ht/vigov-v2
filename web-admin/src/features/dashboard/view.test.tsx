@@ -640,7 +640,9 @@ describe("composition — the prototype's Panel / MetricTile / alert row (ADR 00
     expect(label).toBeGreaterThan(value);
     expect(delta).toBeGreaterThan(label);
     expect(tile).toContain("font-bold");
-    expect(tile).toContain("text-[clamp(19px,1.7vw,26px)]");
+    // Scaled to the TILE (container query), not the window — a `vw` size outran narrow tiles.
+    expect(tile).toContain("text-[clamp(16px,12cqi,26px)]");
+    expect(tile).not.toMatch(/clamp\([^)]*vw/);
     // exactly one icon: the delta line's arrow
     expect(tile.match(/<svg/g)).toHaveLength(1);
   });

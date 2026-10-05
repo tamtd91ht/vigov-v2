@@ -158,6 +158,8 @@ type Figure = {
   readonly alert?: boolean;
   /** the value is a server SENTENCE (fiscal reason), not a number */
   readonly sentence?: boolean;
+  /** the full value when `display` is shortened ("9,64 tỷ đồng" ← "9.640.000.000 đồng"), shown on hover */
+  readonly exact?: string;
 };
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
@@ -560,8 +562,28 @@ function PairErrors<T>({
  */
 const TILE_BODY = "block h-full min-w-0 overflow-hidden rounded-[10px] px-1 py-0.5 text-left";
 
-/** The prototype's value size: scales with the window between 19 and 26px, bold, tabular. */
-const VALUE_TEXT = "text-[clamp(19px,1.7vw,26px)] leading-tight font-bold tabular-nums";
+/**
+ * The value size: 16–26px, scaled to the TILE's own width (`cqi` of the `@container` tile), not the
+ * window's. The prototype's `1.7vw` grew with the window even when the block was one of three narrow
+ * columns, so a sum of money outran its tile — clipped ("690.000.000 đồn") or broken onto a second line
+ * (tester screenshot 06/10/2026).
+ */
+const VALUE_TEXT = "text-[clamp(16px,12cqi,26px)] leading-tight font-bold tabular-nums";
+
+/**
+ * A sum of đồng for a TILE, short like the prototype's "4.317 tỷ": "9,64 tỷ đồng", "690 triệu đồng".
+ * Only the tile is shortened — the exact amount stays on hover (`Figure.exact`) and in the Thu – Chi
+ * register, which is where a figure is checked. Under a million it is written in full.
+ */
+export function compactDong(amount: number): string {
+  const sign = amount < 0 ? "-" : "";
+  const abs = Math.abs(amount);
+  const fmt = (n: number, digits: number) =>
+    new Intl.NumberFormat("vi-VN", { maximumFractionDigits: digits }).format(n);
+  if (abs >= 1e9) return `${sign}${fmt(abs / 1e9, 2)} tỷ đồng`;
+  if (abs >= 1e6) return `${sign}${fmt(abs / 1e6, 1)} triệu đồng`;
+  return `${sign}${fmt(abs, 0)} đồng`;
+}
 
 /** The label under the value, then the extra lines (note, delta) under it. */
 const LABEL_TEXT = "mt-0.5 block text-[12px] leading-snug text-ink-500";
@@ -586,9 +608,10 @@ function FigureTile({ figure, value }: { figure: Figure; value?: ReactNode }) {
   const alert = figure.alert === true;
   const sentence = figure.sentence === true;
   return (
-    <li className={cn("min-w-0", sentence && "col-span-full")}>
+    <li className={cn("@container min-w-0", sentence && "col-span-full")}>
       <Link
         href={figure.href}
+        title={figure.exact}
         aria-label={drillLabel(figure.label)}
         aria-describedby={valueId}
         className={cn(
@@ -602,7 +625,9 @@ function FigureTile({ figure, value }: { figure: Figure; value?: ReactNode }) {
           className={cn(
             "block",
             sentence ? "text-[13px] leading-snug font-medium" : VALUE_TEXT,
-            !sentence && value === undefined && "whitespace-nowrap",
+            // A figure never wraps — a sum is shortened (`compactDong`) so it fits instead. Only a
+            // server SENTENCE wraps.
+            !sentence && "whitespace-nowrap",
             alert ? "text-danger-600" : "text-ink-900",
           )}
         >
@@ -841,6 +866,11 @@ function ratingFigure(
     comparison: null,  };
 }
 
+/** A real amount that may be shortened — not null, not past the safe-integer range ("Không đọc được"). */
+function safeAmount(amount: number | null | undefined): amount is number {
+  return typeof amount === "number" && Number.isSafeInteger(amount);
+}
+
 /** Appends "đồng" after a number — never after `—` or a server sentence (as `bang-thu-chi.tsx`). */
 function withUnit(text: string, hasNumber: boolean): string {
   return hasNumber && text !== "Không đọc được" ? `${text} đồng` : text;
@@ -917,7 +947,10 @@ export function FiscalBlock({
           figure={{
             id: "fiscal-balance",
             label: NHAN_CHENH_LECH,
-            display: withUnit(balanceText, d.balance.amount !== null),
+            display: safeAmount(d.balance.amount)
+              ? compactDong(d.balance.amount)
+              : withUnit(balanceText, d.balance.amount !== null),
+            exact: withUnit(balanceText, d.balance.amount !== null),
             href: FISCAL_SCREEN_PATH,
             comparison: null,
             sentence: d.balance.amount === null,          }}
@@ -931,10 +964,19 @@ export function FiscalBlock({
                 id: `fiscal-total-${o.column_id}`,
                 label: o.name,
                 display: "",
+                exact: withUnit(nhanSoTien(o.value, "dong"), o.value !== null),
                 href: FISCAL_SCREEN_PATH,
                 comparison: null,
                 sentence: reason !== null,              }}
-              value={<OTien chu={withUnit(nhanSoTien(o.value, "dong"), o.value !== null)} lyDo={reason} hienLyDo />}
+              value={
+                <OTien
+                  chu={
+                    safeAmount(o.value) ? compactDong(o.value) : withUnit(nhanSoTien(o.value, "dong"), o.value !== null)
+                  }
+                  lyDo={reason}
+                  hienLyDo
+                />
+              }
             />
           );
         })}
