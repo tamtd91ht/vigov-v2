@@ -63,10 +63,13 @@ export function EmailStatusBadge({ code, children }: { code: string; children: R
   );
 }
 
-/** The orange "Bắt buộc xác nhận" pill of §3 — warning tone, its own icon shape. */
+/**
+ * The "Bắt buộc xác nhận" pill — DANGER tone, as the prototype draws it (`bg-danger/12 text-danger`;
+ * ADR 0068 lần 5 replaces the earlier orange). Its own icon shape, so the word is never colour-only.
+ */
 export function AckRequiredBadge({ children }: { children: ReactNode }) {
   return (
-    <Badge tone="warning" icon={BadgeCheck}>
+    <Badge tone="danger" icon={BadgeCheck}>
       {children}
     </Badge>
   );

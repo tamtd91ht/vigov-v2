@@ -141,4 +141,24 @@ describe("Thông báo — placeholders (ADR 0068 §14)", () => {
     expect(el.textContent).not.toContain("chưa dựng được");
     pressAll(el, ["scopeMine"]);
   });
+
+  it("`Soạn thông báo` opens the compose form in a DIALOG (prototype), not inline; Huỷ closes it", () => {
+    const el = mount(<SoThongBao />);
+    expect(el.querySelector("dialog")).toBeNull();
+    expect(el.querySelector("#tieu-de-thong-bao")).toBeNull();
+
+    const open = [...el.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "Soạn thông báo");
+    expect(open?.getAttribute("aria-haspopup")).toBe("dialog");
+    act(() => open?.click());
+
+    const dialog = el.querySelector("dialog");
+    expect(dialog).not.toBeNull();
+    expect(dialog?.getAttribute("aria-labelledby")).toBe("tieu-de-soan-thong-bao");
+    expect(dialog?.querySelector("#tieu-de-soan-thong-bao")?.textContent).toBe("Soạn thông báo");
+    expect(dialog?.querySelector("#tieu-de-thong-bao")).not.toBeNull();
+
+    const cancel = [...dialog!.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "Huỷ");
+    act(() => cancel?.click());
+    expect(el.querySelector("dialog")).toBeNull();
+  });
 });

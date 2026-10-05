@@ -21,6 +21,7 @@ import {
   pendingPart,
   PINNED_LABEL,
   RECIPIENT_UNITS_CHIP,
+  RECIPIENTS_EXTRA_LABEL,
   SAVE_DRAFT_LABEL,
   SO_RONG,
 } from "./nhan-thong-bao";
@@ -131,16 +132,32 @@ describe("danh sách thẻ §2", () => {
     );
 
     expect(html).toContain(SO_RONG);
+    // The prototype's dashed box, not a card with an icon and a call to action.
+    expect(html).toContain("border-dashed");
   });
 
-  it("nói thẳng rằng ghim chỉ nâng TRONG TRANG, không phải thứ tự cả sổ", () => {
+  it("nói thẳng rằng ghim chỉ nâng TRONG TRANG, không phải thứ tự cả sổ — khi trang có thẻ ghim", () => {
     // `core/page` mang đúng một cột sắp xếp; thứ tự toàn sổ không diễn đạt được. Một cán bộ tin
     // rằng thẻ ghim luôn ở đầu quyển sổ sẽ đi tìm một thông báo ở chỗ nó không nằm.
     const html = renderToStaticMarkup(
+      <DanhSachThongBao thongBao={[thongBao({ pinned: true })]} dangChon={null} chon={() => {}} />,
+    );
+    expect(html).toContain(GHI_CHU_GHIM_TRONG_TRANG);
+
+    // ADR 0068 lần 5: the prototype has no such line; it stays only where a pinned card is shown.
+    const khongGhim = renderToStaticMarkup(
       <DanhSachThongBao thongBao={[thongBao()]} dangChon={null} chon={() => {}} />,
     );
+    expect(khongGhim).not.toContain(GHI_CHU_GHIM_TRONG_TRANG);
+  });
 
-    expect(html).toContain(GHI_CHU_GHIM_TRONG_TRANG);
+  it("cả thẻ là MỘT nút mở chi tiết (prototype) — không còn nút `Xem chi tiết` riêng", () => {
+    const html = veThe(thongBao());
+    expect(html.startsWith('<button type="button"')).toBe(true);
+    expect(html.split("<button").length - 1).toBe(1);
+    expect(html).not.toContain("Xem chi tiết");
+    // A button holds phrasing content only.
+    expect(html).not.toMatch(/<(h\d|p|div)[\s>]/);
   });
 
   it("vẽ đúng thứ tự được truyền vào, không tự sắp xếp lại lần nữa", () => {
@@ -239,7 +256,7 @@ describe("biểu mẫu Soạn thông báo §5", () => {
 
     expect(html).toContain("Tiêu đề *");
     expect(html).toContain("Nội dung *");
-    expect(html).toContain("Gửi thêm đích danh *");
+    expect(html).toContain(`${RECIPIENTS_EXTRA_LABEL} *`);
     expect(html).toContain("Ghim lên đầu danh sách");
     expect(html).toContain("Bắt buộc xác nhận đã đọc");
     expect(html).toContain("Gửi thư điện tử cho người nhận");

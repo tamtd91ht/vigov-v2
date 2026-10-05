@@ -85,7 +85,12 @@ export const WITHDRAW_LABEL = "Gỡ";
  * about the officer. The spec names the action "Xác nhận đã đọc"; it stays a "?" placeholder.
  */
 export const ACKNOWLEDGED_CHIP = "Xác nhận đã đọc";
-export const EMAIL_STATUS_CHIP = "Trạng thái thư";
+
+/**
+ * The prototype's label of the named-recipient field (`AnnouncementForm`). The parenthesis is kept
+ * verbatim although the unit chips are a placeholder today: it says how the two will combine.
+ */
+export const RECIPIENTS_EXTRA_LABEL = "Gửi thêm đích danh (ngoài các bộ phận đã chọn)";
 
 /** §4 `NGƯỜI NHẬN (12)` — the count is the server's own `recipient_count`; only the list is missing. */
 export function recipientsTitle(count: number): string {
@@ -252,7 +257,7 @@ export function trichNoiDung(noiDung: string, tran: number = TRICH_TOI_DA): stri
 
 /** Ba trạng thái §6 của bản ghi. Danh sách ĐÓNG — lược đồ CSDL cưỡng chế đúng ba giá trị này. */
 const NHAN_TRANG_THAI: Readonly<Record<string, string>> = {
-  nhap: "Nháp",
+  nhap: "Bản nháp",
   "da-phat-hanh": "Đã phát hành",
   "da-go": "Đã gỡ",
 };
@@ -386,7 +391,8 @@ export function tachMaNguoiNhan(chu: string): string[] {
  *
  * Mục KHÔNG có chỗ giữ trên màn nhưng vẫn ở đây (`tools/tien_do_san_pham.py` đếm mảng này cho báo
  * cáo tiến độ): thư điện tử trong ô chọn người nhận (chưa nằm trong bảng vị trí đã duyệt), ghim cả
- * sổ và biểu mẫu dạng lớp phủ (ADR 0068 §14: lựa chọn bố cục, không có gì để giữ chỗ).
+ * sổ (ADR 0068 §14: lựa chọn bố cục, không có gì để giữ chỗ). Biểu mẫu soạn đã là hộp thoại
+ * (ADR 0068 lần 5), nên mục "lớp phủ" đã xoá.
  *
  * MỖI MỤC PHẢI ĐÚNG VÀO NGÀY NÓ CÒN Ở ĐÂY. Dựng xong phần nào thì xoá mục ấy trong cùng lượt.
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
@@ -490,15 +496,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "bỏ sót hàng, im lặng. Trường `pinned` CÓ trên phản hồi, nên màn nâng thẻ ghim lên đầu " +
       "TRANG ĐANG XEM và nói rõ đó là nâng trong trang. Hệ quả thật: một thông báo ghim nằm ở " +
       "trang 3 thì nó ở đầu trang 3.",
-  },
-  {
-    id: "overlayForm",
-    ten: "Biểu mẫu Soạn thông báo dạng lớp phủ (§5)",
-    viSao:
-      "Biểu mẫu dựng nối tiếp trong trang, ngay dưới đầu màn, thay vì làm lớp phủ: đổi sang lớp " +
-      "phủ là đổi cách mở và đóng biểu mẫu, không chỉ đổi hình. Bố cục hai cột 2/3 – 1/3, viền thẻ " +
-      "đang chọn và trích 2 dòng đã dựng; trích vẫn cắt trước theo ký tự, toàn văn nằm ở phần chi " +
-      "tiết.",
   },
 ];
 

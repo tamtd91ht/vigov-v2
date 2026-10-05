@@ -129,7 +129,7 @@ describe("chip trạng thái thư (§3)", () => {
 
 describe("trạng thái bản ghi (§6)", () => {
   it("ba mã có nhãn tiếng Việt, mã lạ hiện NGUYÊN VĂN", () => {
-    expect(nhanTrangThai("nhap")).toBe("Nháp");
+    expect(nhanTrangThai("nhap")).toBe("Bản nháp");
     expect(nhanTrangThai("da-phat-hanh")).toBe("Đã phát hành");
     expect(nhanTrangThai("da-go")).toBe("Đã gỡ");
     // Một trạng thái mới ở máy chủ mà màn hình vẽ thành `—` là một thông báo trông như chưa có

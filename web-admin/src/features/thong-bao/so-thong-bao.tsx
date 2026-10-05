@@ -1,33 +1,28 @@
 "use client";
 
 import {
-  CheckCheck,
+  BellRing,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Clock,
-  Eye,
-  Mail,
   Megaphone,
-  MousePointerClick,
   Pin,
   Plus,
   Save,
   Send,
   Trash2,
   UserPlus,
-  X,
 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
-import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants, LEGACY_BUTTON_CLASS } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { EmptyState } from "@/components/ui/empty-state";
+import { Card } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/error-state";
 import { Field } from "@/components/ui/field";
+import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
 import { PageHeader } from "@/components/ui/page-header";
-import { PendingButton, PendingFeature, PendingMarker, PendingSection } from "@/components/ui/pending-feature";
+import { PendingButton, PendingMarker } from "@/components/ui/pending-feature";
 import { Segmented } from "@/components/ui/segmented";
 import { cn } from "@/lib/cn";
 import {
@@ -78,11 +73,11 @@ import {
   NOI_DUNG_TOI_DA,
   NUT_THEM_NGUOI_NHAN,
   ACKNOWLEDGED_CHIP,
-  EMAIL_STATUS_CHIP,
   pendingPart,
   RECIPIENT_UNITS_BLOCK_TITLE,
   RECIPIENT_UNITS_CHIP,
   RECIPIENT_UNITS_FIELD_LABEL,
+  RECIPIENTS_EXTRA_LABEL,
   recipientsTitle,
   SAVE_DRAFT_LABEL,
   SCOPE_ALL,
@@ -112,8 +107,10 @@ import {
 } from "./announcement-ui";
 
 /**
- * Sổ Thông báo nội bộ — `docs/ui-ux/08-thong-bao.md` §2 (bố cục), §3 (thẻ), §4 (chi tiết),
- * §5 (biểu mẫu soạn).
+ * Sổ Thông báo nội bộ — composition mirrors the prototype `AnnouncementWorkspace` +
+ * `AnnouncementForm` (`../vigov-require/apps/admin`, ADR 0068 §Sửa đổi 06/10/2026 lần 5): header row
+ * [title · scope segments · `+ Soạn thông báo`], then a list of whole-card buttons beside a 22rem
+ * detail panel, and the compose form in a DIALOG. Colours and type stay our tokens (lần 2).
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
  * ĐIỀU QUAN TRỌNG NHẤT CỦA MÀN NÀY: **KHÔNG CÓ Ô CHỌN BỘ PHẬN DÙNG ĐƯỢC**, và đó là một câu trả
@@ -126,7 +123,7 @@ import {
  * mang `org_unit_ids`.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  *
- * PHẦN CHƯA DỰNG (ADR 0068 §14): vẽ đúng chỗ đặc tả, vô hiệu, dấu "?" mở mô tả lấy từ
+ * PHẦN CHƯA DỰNG (ADR 0068 §14): vẽ đúng chỗ prototype đặt nó, vô hiệu, dấu "?" mở mô tả lấy từ
  * `PHAN_CHUA_DUNG` (`pendingPart`). Không gọi máy chủ, không lưu gì.
  *
  * KHÔNG CÓ CỔNG QUYỀN Ở TRANG: `service-comms` kiểm `announcement.create` trên TỪNG lời gọi; tài
@@ -153,6 +150,9 @@ export function docDanhBaNguoiNhan(): Promise<KetQua<identity_danhBaChonNguoiRa>
 
 /** Bao nhiêu thẻ một trang. Mỗi thẻ mang cả toàn văn nội dung, nên trang mỏng. */
 const SO_THE_MOI_TRANG = 10;
+
+/** Id of the compose dialog's heading — its accessible name. */
+const COMPOSE_TITLE_ID = "tieu-de-soan-thong-bao";
 
 type TrangThaiTai<T> =
   | { pha: "dangTai" }
@@ -237,6 +237,11 @@ export function SoThongBao() {
     });
   }
 
+  function closeForm(): void {
+    datDangMoBieuMau(false);
+    datLoiBieuMau(null);
+  }
+
   // Thẻ đang chọn được TÌM LẠI trong dữ liệu vừa tải, không giữ riêng. Sang trang khác hoặc sau
   // một lần phát hành, thẻ ấy có thể không còn trong trang — khi đó cột phải quay về câu "Chọn một
   // thông báo để xem." thay vì hiện một bản ghi không còn nằm trong danh sách bên trái.
@@ -251,19 +256,23 @@ export function SoThongBao() {
       ? nangGhimLenDau(daTai.kq.duLieu.items)
       : null;
 
+  // The prototype does not page; this register does (cursor pages of 10). The two buttons are drawn
+  // only when there IS another page, so a one-page register looks like the prototype's.
+  const hasOtherPage = so.pha === "xong" && (coTrangTruoc(nganXep) || so.duLieu.has_more);
+
   return (
     <>
-      {/* The `<h1>` moved here from `page.tsx`: the primary button sits on the title row (spec §5)
-          and the state it toggles — whether the form is open — lives in this component. */}
+      {/* The prototype's header row: title + one line, then the scope segments, then the primary
+          button, which OPENS the compose dialog. */}
       <PageHeader
         icon={Megaphone}
         title={TIEU_DE_MAN}
         subtitle={<span className="mo-ta-trang m-0 max-w-none text-[13px] text-ink-500">{MO_TA_MAN}</span>}
         actions={
           <>
-            {/* §2 segmented filter. `Cả sổ thông báo` is what the list shows and the only answerable
-                segment; `Gửi cho tôi` is the disabled placeholder (ADR 0068 §14). Nothing is emitted:
-                the read route takes no scope at all. */}
+            {/* `Cả sổ thông báo` is what the list shows and the only answerable segment; `Gửi cho tôi`
+                is the disabled placeholder (ADR 0068 §14). Nothing is emitted: the read route takes
+                no scope at all. */}
             <Segmented
               legend={SCOPE_LEGEND}
               name="announcement-scope"
@@ -277,10 +286,10 @@ export function SoThongBao() {
             <Button
               type="button"
               variant="primary"
-              icon={<Glyph icon={dangMoBieuMau ? X : Plus} />}
-              aria-expanded={dangMoBieuMau}
+              icon={<Glyph icon={Plus} />}
+              aria-haspopup="dialog"
               onClick={() => {
-                datDangMoBieuMau(!dangMoBieuMau);
+                datDangMoBieuMau(true);
                 datLoiBieuMau(null);
               }}
             >
@@ -290,112 +299,114 @@ export function SoThongBao() {
         }
       />
 
-      {/* `[&>*]:my-0`: the section's `gap` is the one spacing between blocks (spec §6.9). */}
+      {/* `[&>*]:my-0`: the section's `gap` is the one spacing between blocks; legacy vertical
+          margins on direct children would add to it unevenly. */}
       <section
-        className="man-thong-bao mt-0 flex min-w-0 flex-col gap-4 [&>*]:my-0"
+        className="man-thong-bao mt-0 flex min-w-0 flex-col gap-3 [&>*]:my-0"
         aria-labelledby="tieu-de-so-thong-bao"
       >
-        {dangMoBieuMau && (
-          <FormSoanThongBao
-            // Khoá dựng lại: mỗi lần GHI XONG là một biểu mẫu mới, một khoá chống trùng mới.
-            key={`bieu-mau|${lanGhiXong}`}
-            dangGui={dangGui}
-            loi={loiBieuMau}
-            danhBa={danhBa}
-            huy={() => {
-              datDangMoBieuMau(false);
-              datLoiBieuMau(null);
-            }}
-            phatHanh={phatHanh}
-          />
-        )}
+        {/* The prototype has no visible list heading; this one stays for the outline (h1 → h2 → the
+            detail's h3), read by assistive technology only. */}
+        <h2 id="tieu-de-so-thong-bao" className="an-thi-giac">
+          Danh sách thông báo
+        </h2>
 
-        {/* §2: list 2/3, detail 1/3 from 1024px; stacked (list, then detail) below that. */}
-        <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-start">
+        {/* LOADING (spec v2 §8b). The sentence stays the live region; the eye gets a 2px bar and
+            either the previous page dimmed (a re-read) or card-shaped placeholders (first read). */}
+        {so.pha === "dangTai" && (
           <div className="flex min-w-0 flex-col gap-3">
-            <h2 id="tieu-de-so-thong-bao" className="m-0 text-[15px] leading-snug font-semibold text-ink-900">
-              Danh sách thông báo
-            </h2>
-
-            {/* LOADING (spec v2 §8b). The sentence stays the live region; the eye gets a 2px bar and
-                either the previous page dimmed (a re-read) or card-shaped placeholders (first read). */}
-            {so.pha === "dangTai" && (
-              <div className="flex min-w-0 flex-col gap-3">
-                <LoadingBar />
-                <p className="an-thi-giac" role="status">
-                  {DANG_TAI_SO}
-                </p>
-                {previousPage !== null ? (
-                  <div inert className="pointer-events-none opacity-60 transition-opacity">
-                    <DanhSachThongBao thongBao={previousPage} dangChon={dangChon} chon={() => {}} />
-                  </div>
-                ) : (
-                  <AnnouncementCardsSkeleton />
-                )}
+            <LoadingBar />
+            <p className="an-thi-giac" role="status">
+              {DANG_TAI_SO}
+            </p>
+            {previousPage !== null ? (
+              <div inert className="pointer-events-none opacity-60 transition-opacity">
+                <DanhSachThongBao thongBao={previousPage} dangChon={dangChon} chon={() => {}} />
               </div>
-            )}
-
-            {/* LOAD ERROR (spec v2 §8b): the server's sentence VERBATIM is the alert; `Tải lại` asks the
-                same read again through the screen's existing re-read key (`lanTai`). */}
-            {so.pha === "loi" && (
-              <Card>
-                <ErrorState
-                  role="alert"
-                  title="Chưa tải được danh sách thông báo"
-                  message={so.thongBao}
-                  onRetry={() => datLanTai((n) => n + 1)}
-                />
-              </Card>
-            )}
-
-            {so.pha === "xong" && (
-              <>
-                <DanhSachThongBao thongBao={dsTrongTrang} dangChon={dangChon} chon={datDangChon} />
-                <nav className="dieu-huong-trang m-0" aria-label="Phân trang danh sách thông báo">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    icon={<Glyph icon={ChevronLeft} />}
-                    disabled={!coTrangTruoc(nganXep)}
-                    onClick={() => datNganXep(veTrangTruoc(nganXep))}
-                  >
-                    Trang trước
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    // Hai điều kiện, không một: `has_more` nói còn trang sau, `next_cursor` là đường đi
-                    // tới đó.
-                    disabled={!so.duLieu.has_more || so.duLieu.next_cursor === ""}
-                    onClick={() => datNganXep(sangTrangSau(nganXep, so.duLieu.next_cursor))}
-                  >
-                    Trang sau
-                    <Glyph icon={ChevronRight} />
-                  </Button>
-                </nav>
-              </>
+            ) : (
+              <AnnouncementCardsSkeleton />
             )}
           </div>
+        )}
 
-          {so.pha === "xong" && (
+        {/* LOAD ERROR (spec v2 §8b): the server's sentence VERBATIM is the alert; `Tải lại` asks the
+            same read again through the screen's existing re-read key (`lanTai`). */}
+        {so.pha === "loi" && (
+          <Card>
+            <ErrorState
+              role="alert"
+              title="Chưa tải được danh sách thông báo"
+              message={so.thongBao}
+              onRetry={() => datLanTai((n) => n + 1)}
+            />
+          </Card>
+        )}
+
+        {/* Empty register: the prototype's one dashed box, no detail panel beside it. */}
+        {so.pha === "xong" && dsTrongTrang.length === 0 && (
+          <DanhSachThongBao thongBao={dsTrongTrang} dangChon={dangChon} chon={datDangChon} />
+        )}
+
+        {/* The prototype's grid: list, and a 22rem detail panel from 1024px; stacked below that. */}
+        {so.pha === "xong" && dsTrongTrang.length > 0 && (
+          <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+            <div className="flex min-w-0 flex-col gap-2">
+              <DanhSachThongBao thongBao={dsTrongTrang} dangChon={dangChon} chon={datDangChon} />
+            </div>
             <div className="min-w-0 lg:sticky lg:top-4">
               <ChiTietThongBao thongBao={theDangChon} />
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {so.pha === "xong" && hasOtherPage && (
+          <nav className="dieu-huong-trang m-0" aria-label="Phân trang danh sách thông báo">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              icon={<Glyph icon={ChevronLeft} />}
+              disabled={!coTrangTruoc(nganXep)}
+              onClick={() => datNganXep(veTrangTruoc(nganXep))}
+            >
+              Trang trước
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              // Hai điều kiện, không một: `has_more` nói còn trang sau, `next_cursor` là đường đi
+              // tới đó.
+              disabled={!so.duLieu.has_more || so.duLieu.next_cursor === ""}
+              onClick={() => datNganXep(sangTrangSau(nganXep, so.duLieu.next_cursor))}
+            >
+              Trang sau
+              <Glyph icon={ChevronRight} />
+            </Button>
+          </nav>
+        )}
       </section>
+
+      {dangMoBieuMau && (
+        <FormSoanThongBao
+          // Khoá dựng lại: mỗi lần GHI XONG là một biểu mẫu mới, một khoá chống trùng mới.
+          key={`bieu-mau|${lanGhiXong}`}
+          dangGui={dangGui}
+          loi={loiBieuMau}
+          danhBa={danhBa}
+          huy={closeForm}
+          phatHanh={phatHanh}
+        />
+      )}
     </>
   );
 }
 
 /**
- * Cột trái §2 — danh sách thẻ, mới nhất ở trên, thẻ ghim được nâng lên đầu TRANG.
+ * The list — newest first, pinned cards lifted to the top of the PAGE.
  *
- * THE SELECTED CARD IS MARKED BY `aria-current`, and its blue border is DRAWN FROM that attribute
- * (`aria-[current=true]:` utilities): one source for "selected", readable by a screen reader, with
- * no second class that could disagree with it.
+ * Empty → the prototype's dashed box. The screen has no filter, so "empty" is only ever the empty
+ * register — never "empty under these filters".
  */
 export function DanhSachThongBao({
   thongBao,
@@ -407,26 +418,23 @@ export function DanhSachThongBao({
   chon: (id: string) => void;
 }) {
   if (thongBao.length === 0) {
-    // The screen has no filter, so "empty" here is only ever the empty register — never "empty under
-    // these filters".
     return (
-      <Card>
-        <EmptyState
-          icon={Megaphone}
-          title={SO_RONG}
-          description={`Bấm “${NHAN_NUT_SOAN}” để soạn thông báo đầu tiên.`}
-        />
-      </Card>
+      <p className="m-0 rounded-card border border-dashed border-line bg-surface px-6 py-16 text-center text-[13px] text-ink-500">
+        {SO_RONG}
+      </p>
     );
   }
 
   return (
     <>
-      <p className="ghi-chu m-0 flex items-start gap-1.5 text-[13px] text-ink-500">
-        <Glyph icon={Pin} className="mt-0.5 size-4 shrink-0" />
-        <span>{GHI_CHU_GHIM_TRONG_TRANG}</span>
-      </p>
-      <ul aria-label="Danh sách thông báo nội bộ" className="m-0 flex list-none flex-col gap-3 p-0">
+      {/* Only where a pinned card is on the page: that is when "lifted within the page" matters. */}
+      {thongBao.some((t) => t.pinned) && (
+        <p className="ghi-chu m-0 flex items-start gap-1.5 text-xs text-ink-500">
+          <Glyph icon={Pin} className="mt-0.5 size-3.5 shrink-0" />
+          <span>{GHI_CHU_GHIM_TRONG_TRANG}</span>
+        </p>
+      )}
+      <ul aria-label="Danh sách thông báo nội bộ" className="m-0 flex list-none flex-col gap-2 p-0">
         {thongBao.map((tb) => (
           <li key={tb.id}>
             <TheThongBao thongBao={tb} dangChon={tb.id === dangChon} chon={chon} />
@@ -437,7 +445,15 @@ export function DanhSachThongBao({
   );
 }
 
-/** Một thẻ §3: tiêu đề · chip · trích nội dung · mốc · bộ đếm · chip thư. */
+/**
+ * One card, the prototype's shape: the WHOLE card is the button that opens the detail. Row 1: pin ·
+ * title · chips; row 2: two-line excerpt; row 3: time · counter · mail word.
+ *
+ * THE SELECTED CARD IS MARKED BY `aria-current`, and its blue border is DRAWN FROM that attribute
+ * (`aria-[current=true]:` utilities): one source for "selected", readable by a screen reader.
+ *
+ * Phrasing content only inside (`span`s): a `<button>` may not hold a heading or a block.
+ */
 export function TheThongBao({
   thongBao,
   dangChon,
@@ -449,78 +465,74 @@ export function TheThongBao({
 }) {
   const boDem = nhanBoDemXacNhan(thongBao);
   const chipThu = nhanTrangThaiThu(thongBao.email_status);
+  const isIssued = thongBao.issued_at !== null && thongBao.issued_at !== "";
 
   return (
-    <Card
-      className="flex flex-col gap-3 p-4 transition-[border-color,box-shadow] aria-[current=true]:border-brand-500 aria-[current=true]:shadow-[0_0_0_3px_var(--brand-100)]"
+    <button
+      type="button"
       aria-current={dangChon ? "true" : undefined}
+      onClick={() => chon(thongBao.id)}
+      className={cn(
+        "block w-full cursor-pointer rounded-card border border-line bg-surface px-4 py-3 text-left [font-family:inherit] text-ink-900",
+        "transition-[border-color,box-shadow] hover:border-brand-500",
+        "aria-[current=true]:border-brand-500 aria-[current=true]:shadow-[0_0_0_2px_var(--brand-100)]",
+        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500",
+      )}
     >
-      <div className="flex min-w-0 flex-wrap items-start gap-2">
-        <h3 className="m-0 min-w-0 flex-1 basis-60 text-[15px] leading-snug font-semibold break-words text-ink-900">
-          {thongBao.title}
-        </h3>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {/* Dấu ghim §3: icon + chữ, không còn một ký hiệu đứng một mình. */}
-          {thongBao.pinned && (
-            <Badge tone="info" icon={Pin}>
-              {PINNED_LABEL}
-            </Badge>
-          )}
-          {thongBao.ack_required && <AckRequiredBadge>{CHIP_BAT_BUOC_XAC_NHAN}</AckRequiredBadge>}
-          {coChipTrangThai(thongBao.status) && (
-            <AnnouncementStatusBadge code={thongBao.status}>{nhanTrangThai(thongBao.status)}</AnnouncementStatusBadge>
-          )}
-        </div>
-      </div>
-
-      {/* `line-clamp-2` on top of the character cut of `trichNoiDung` (§3 "2 dòng, cắt bớt"). */}
-      <p className="m-0 line-clamp-2 text-sm text-ink-700">{trichNoiDung(thongBao.body)}</p>
-
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-ink-500">
-        <span className="inline-flex items-center gap-1.5">
-          <Glyph icon={Clock} className="size-4 shrink-0" />
-          {mocThe(thongBao)}
-        </span>
-        {boDem !== null && (
-          <span className="inline-flex items-center gap-1.5">
-            <Glyph icon={CheckCheck} className="size-4 shrink-0" />
-            {boDem}
-          </span>
+      <span className="flex min-w-0 flex-wrap items-center gap-2">
+        {/* The prototype's pin is the icon alone; the word stays for assistive technology. */}
+        {thongBao.pinned && (
+          <>
+            <Glyph icon={Pin} className="size-3.5 shrink-0 text-warning-600" />
+            <span className="an-thi-giac">{PINNED_LABEL}</span>
+          </>
         )}
+        <span className="min-w-0 text-[13.5px] leading-snug font-bold break-words text-ink-900">
+          {thongBao.title}
+        </span>
+        {coChipTrangThai(thongBao.status) && (
+          <AnnouncementStatusBadge code={thongBao.status}>{nhanTrangThai(thongBao.status)}</AnnouncementStatusBadge>
+        )}
+        {thongBao.ack_required && <AckRequiredBadge>{CHIP_BAT_BUOC_XAC_NHAN}</AckRequiredBadge>}
+      </span>
+
+      {/* `line-clamp-2` on top of the character cut of `trichNoiDung` ("2 dòng, cắt bớt"). */}
+      <span className="mt-1 line-clamp-2 block text-xs text-ink-500">{trichNoiDung(thongBao.body)}</span>
+
+      <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-500">
+        {/* The prototype's "Soạn …" prefix when nothing has been issued yet (status `nhap`). */}
+        <span>{isIssued ? mocThe(thongBao) : `Soạn ${mocThe(thongBao)}`}</span>
+        {boDem !== null && <span>{boDem}</span>}
         {chipThu !== null && <EmailStatusBadge code={thongBao.email_status}>{chipThu}</EmailStatusBadge>}
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className="ml-auto"
-          icon={<Glyph icon={Eye} />}
-          onClick={() => chon(thongBao.id)}
-        >
-          Xem chi tiết
-        </Button>
-      </div>
-    </Card>
+      </span>
+    </button>
   );
 }
 
+/** Small uppercase section label of the detail panel (the prototype's `Bộ phận nhận`, `Người nhận`). */
+const SECTION_LABEL = "m-0 flex items-center gap-1.5 text-[11px] font-semibold uppercase text-ink-500";
+
 /**
- * Cột phải §4 — toàn văn nội dung của thẻ đang chọn.
+ * The detail panel (prototype `aside`, 22rem): title → full text → facts → `Bộ phận nhận` → action
+ * row [`Xác nhận đã đọc`] [`Gỡ`] → `Người nhận (N)`.
  *
  * TOÀN VĂN LẤY TỪ CHÍNH PHẢN HỒI DANH SÁCH, không từ một tuyến chi tiết: `body` đi kèm mỗi thẻ vì
- * không có tuyến chi tiết nào, và máy chủ cố ý KHÔNG cắt bớt nó ở đó (nếu cắt, cột này sẽ hiện một
- * thông báo cụt mà không dòng nào nói ra).
+ * không có tuyến chi tiết nào, và máy chủ cố ý KHÔNG cắt bớt nó ở đó.
  *
- * PHẦN CHƯA DỰNG CỦA §3/§4 (ADR 0068 §14 — the owner placed all four in this panel): chip `Đã xác
- * nhận` and the mail-status chip under the title, `BỘ PHẬN NHẬN` with `🗑 Gỡ`, `NGƯỜI NHẬN (N)`.
- * Each is the control it will be, disabled, with its "?". NEVER an empty list: an empty list tells an
- * officer this announcement reached nobody, while the truth is the screen cannot read the list. The
- * `(N)` is the server's own `recipient_count`, so the heading itself is a true figure.
+ * PHẦN CHƯA DỰNG (ADR 0068 §14) at the prototype's positions: `Bộ phận nhận`, the two action
+ * buttons, `Người nhận (N)`, and the mail status (beside the mail fact — the prototype shows it per
+ * recipient, inside the list that is itself a placeholder). NEVER an empty list: an empty list tells
+ * an officer this announcement reached nobody, while the truth is the screen cannot read the list.
+ * The `(N)` is the server's own `recipient_count`, so the heading itself is a true figure.
  */
 export function ChiTietThongBao({ thongBao }: { thongBao: comms_thongBaoRa | null }) {
   if (thongBao === null) {
     return (
-      <Card>
-        <EmptyState icon={MousePointerClick} tone="neutral" title={CHUA_CHON_THONG_BAO} />
+      <Card as="aside" className="h-fit border border-line">
+        <div className="flex flex-col items-center gap-2 px-4 py-10 text-center text-[12.5px] text-ink-500">
+          <Glyph icon={BellRing} className="size-5 opacity-40" />
+          <p className="m-0">{CHUA_CHON_THONG_BAO}</p>
+        </div>
       </Card>
     );
   }
@@ -528,109 +540,93 @@ export function ChiTietThongBao({ thongBao }: { thongBao: comms_thongBaoRa | nul
   const boDem = nhanBoDemXacNhan(thongBao);
 
   return (
-    <Card aria-labelledby="tieu-de-chi-tiet-thong-bao">
-      <CardHeader>
-        <CardTitle as="h3" id="tieu-de-chi-tiet-thong-bao" className="min-w-0 flex-1 break-words">
-          {thongBao.title}
-        </CardTitle>
-      </CardHeader>
+    <Card as="aside" aria-labelledby="tieu-de-chi-tiet-thong-bao" className="h-fit border border-line p-4">
+      <h3
+        id="tieu-de-chi-tiet-thong-bao"
+        className="m-0 text-sm leading-snug font-bold break-words text-ink-900"
+      >
+        {thongBao.title}
+      </h3>
+      {/* `whitespace-pre-line`: the line breaks the author typed are kept. Toàn văn, không cắt. */}
+      <p className="m-0 mt-2 text-[12.5px] leading-relaxed break-words whitespace-pre-line text-ink-900">
+        {thongBao.body}
+      </p>
 
-      <CardContent className="flex flex-col gap-4">
-        {/* §3 chips of the signed-in officer and of the mail, as disabled placeholders. `Xác nhận đã đọc`
-            only where the announcement asks for it; the mail chip only where mail was requested —
-            the same flags that would decide the real chips. */}
-        {(thongBao.ack_required || thongBao.email_requested) && (
-          <div className="flex flex-wrap items-center gap-3">
-            {thongBao.ack_required && (
-              <PendingFeature info={pendingPart("acknowledge")}>
-                <span aria-disabled="true" className="opacity-60">
-                  <Badge tone="neutral" icon={CheckCheck}>
-                    {ACKNOWLEDGED_CHIP}
-                  </Badge>
-                </span>
-              </PendingFeature>
-            )}
-            {thongBao.email_requested && (
-              <PendingFeature info={pendingPart("emailStatus")}>
-                <span aria-disabled="true" className="opacity-60">
-                  <Badge tone="neutral" icon={Mail}>
-                    {EMAIL_STATUS_CHIP}
-                  </Badge>
-                </span>
-              </PendingFeature>
-            )}
-          </div>
-        )}
+      <dl className="m-0 mt-3 grid grid-cols-2 gap-x-4 gap-y-2 [&_dd]:m-0 [&_dd]:text-xs [&_dd]:text-ink-900 [&_dt]:text-[11px] [&_dt]:font-semibold [&_dt]:text-ink-500">
+        <div>
+          <dt>Phát hành lúc</dt>
+          <dd>{nhanMoc(thongBao.issued_at)}</dd>
+        </div>
+        <div>
+          <dt>Người soạn</dt>
+          {/* MÃ NGHIỆP VỤ (`CB-2026-7K3M9Q`), không phải họ tên và không phải id nội bộ (luật 6,
+              bất biến 8). `service-comms` không sở hữu danh bạ cán bộ nên không có tên để nối. */}
+          <dd>{thongBao.author_code === "" ? DAU_GACH : thongBao.author_code}</dd>
+        </div>
+        <div>
+          <dt>Xác nhận đã đọc</dt>
+          <dd>{boDem ?? "Không bắt buộc xác nhận"}</dd>
+        </div>
+        <div>
+          <dt className="flex items-center gap-1.5">
+            Thư điện tử
+            {thongBao.email_requested && <PendingMarker info={pendingPart("emailStatus")} />}
+          </dt>
+          {/* HAI SỰ THẬT, KHÔNG MỘT: `email_requested` là điều đã được yêu cầu, `email_status` là
+              điều đã xảy ra. Gộp chúng lại sẽ làm "chưa gửi được" không phân biệt được với "không
+              ai yêu cầu gửi thư". */}
+          <dd>
+            {thongBao.email_requested ? "Có yêu cầu gửi" : "Không yêu cầu gửi"} ·{" "}
+            {nhanTrangThaiThu(thongBao.email_status) ?? "Chưa gửi"}
+          </dd>
+        </div>
+      </dl>
 
-        {/* `whitespace-pre-line`: the line breaks the author typed are kept. Toàn văn, không cắt. */}
-        <p className="m-0 text-sm leading-relaxed break-words whitespace-pre-line text-ink-900">
-          {thongBao.body}
+      <div className="mt-3">
+        <p className={SECTION_LABEL}>
+          {RECIPIENT_UNITS_BLOCK_TITLE}
+          <PendingMarker info={pendingPart("byUnit")} />
         </p>
+        <p className="m-0 mt-1 text-xs text-ink-500">{DAU_GACH}</p>
+      </div>
 
-        <dl className="danh-sach-truong m-0 grid gap-3 [&_dd]:m-0 [&_dd]:text-sm [&_dd]:text-ink-900 [&_dt]:text-xs [&_dt]:font-semibold [&_dt]:text-ink-500">
-          <div>
-            <dt>Phát hành lúc</dt>
-            <dd>{nhanMoc(thongBao.issued_at)}</dd>
-          </div>
-          <div>
-            <dt>Người soạn</dt>
-            {/* MÃ NGHIỆP VỤ (`CB-2026-7K3M9Q`), không phải họ tên và không phải id nội bộ (luật 6,
-                bất biến 8). `service-comms` không sở hữu danh bạ cán bộ nên không có tên để nối. */}
-            <dd>{thongBao.author_code === "" ? DAU_GACH : thongBao.author_code}</dd>
-          </div>
-          <div>
-            <dt>Xác nhận đã đọc</dt>
-            <dd>{boDem ?? "Không bắt buộc xác nhận"}</dd>
-          </div>
-          <div>
-            <dt>Thư điện tử</dt>
-            {/* HAI SỰ THẬT, KHÔNG MỘT: `email_requested` là điều đã được yêu cầu, `email_status` là
-                điều đã xảy ra. Gộp chúng lại sẽ làm "chưa gửi được" không phân biệt được với "không
-                ai yêu cầu gửi thư". */}
-            <dd>
-              {thongBao.email_requested ? "Có yêu cầu gửi" : "Không yêu cầu gửi"} ·{" "}
-              {nhanTrangThaiThu(thongBao.email_status) ?? "Chưa gửi"}
-            </dd>
-          </div>
-        </dl>
+      {/* The prototype's action row. `Xác nhận đã đọc` only where the announcement asks for it — the
+          same flag that would decide the real button. */}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {thongBao.ack_required && (
+          <PendingButton
+            info={pendingPart("acknowledge")}
+            variant="primary"
+            size="sm"
+            icon={<Glyph icon={CheckCircle2} />}
+          >
+            {ACKNOWLEDGED_CHIP}
+          </PendingButton>
+        )}
+        <PendingButton info={pendingPart("withdraw")} size="sm" icon={<Glyph icon={Trash2} />}>
+          {WITHDRAW_LABEL}
+        </PendingButton>
+      </div>
 
-        {/* §4 `BỘ PHẬN NHẬN` + `🗑 Gỡ`, then `NGƯỜI NHẬN (N)`. The "?" — not a bare greyed control —
-            is what says "not built yet" rather than "you may not" (ADR 0068 §14). */}
-        <PendingSection
-          info={pendingPart("byUnit")}
-          title={RECIPIENT_UNITS_BLOCK_TITLE}
-          titleAs="h4"
-          className="shadow-none"
-        >
-          <div className="flex flex-col items-start gap-3">
-            <span>{DAU_GACH}</span>
-            <PendingButton info={pendingPart("withdraw")} size="sm" icon={<Glyph icon={Trash2} />}>
-              {WITHDRAW_LABEL}
-            </PendingButton>
-          </div>
-        </PendingSection>
-        <PendingSection
-          info={pendingPart("recipients")}
-          title={recipientsTitle(thongBao.recipient_count)}
-          titleAs="h4"
-          className="shadow-none"
-        />
-      </CardContent>
+      <div className="mt-4 border-t border-line pt-3">
+        <p className={SECTION_LABEL}>
+          {recipientsTitle(thongBao.recipient_count)}
+          <PendingMarker info={pendingPart("recipients")} />
+        </p>
+      </div>
     </Card>
   );
 }
 
 /**
- * Biểu mẫu "Soạn thông báo" §5.
+ * Biểu mẫu "Soạn thông báo" — the prototype's DIALOG (`AnnouncementForm`, 52rem): Tiêu đề → Nội
+ * dung → Bộ phận nhận thông báo → Gửi thêm đích danh → one box of three options → Huỷ · Lưu nháp ·
+ * Phát hành. Esc asks `huy`, as `Huỷ` does — except while a publish is in flight.
  *
- * ĐẶC TẢ GỌI NÓ LÀ MODAL. Ở đây nó là một thẻ nằm trong trang — KHÔNG phải một lớp phủ: đổi sang
- * lớp phủ là đổi cách mở/đóng biểu mẫu (bẫy focus, Esc, bấm ra ngoài), tức đổi hành vi chứ không
- * chỉ đổi hình (ADR 0068 §1).
- *
- * HAI THỨ CỦA §5 CHỈ LÀ CHỖ GIỮ: ô chọn bộ phận (máy chủ trả 501) và nút `Lưu nháp` (không có
- * tuyến) — vô hiệu, dấu "?" (ADR 0068 §14). Ô chọn người nhận CÓ, trên danh bạ chọn người
- * (`docDanhBaNguoiNhan`), nhưng không có email như §5 vẽ vì danh bạ ấy không trả email. Lý do từng
- * cái nằm ở `PHAN_CHUA_DUNG`.
+ * HAI THỨ CHỈ LÀ CHỖ GIỮ: ô chọn bộ phận (máy chủ trả 501) và nút `Lưu nháp` (không có tuyến) — vô
+ * hiệu, dấu "?" (ADR 0068 §14). Người nhận: ô chọn theo họ tên trên danh bạ chọn người
+ * (`docDanhBaNguoiNhan`) THÊM mã vào ô gõ mã — ô gõ mã là thứ đi lên máy chủ và vẫn dùng được khi
+ * danh bạ tải hỏng. Lý do từng cái nằm ở `PHAN_CHUA_DUNG`.
  */
 export function FormSoanThongBao({
   dangGui,
@@ -652,8 +648,8 @@ export function FormSoanThongBao({
   const [maDangChon, datMaDangChon] = useState("");
   const [ghim, datGhim] = useState(false);
   const [batBuocXacNhan, datBatBuocXacNhan] = useState(false);
-  // §5: ô này **mặc định bật**. Cột `gui_thu_dien_tu` ghi lại ĐIỀU ĐÃ ĐƯỢC YÊU CẦU, nên giá trị
-  // mặc định của đặc tả được giữ nguyên — kèm một câu ngay dưới nói rằng chưa có thư nào đi.
+  // Ô này **mặc định bật**. Cột `gui_thu_dien_tu` ghi lại ĐIỀU ĐÃ ĐƯỢC YÊU CẦU, nên giá trị mặc
+  // định được giữ nguyên — kèm một câu ngay dưới nói rằng chưa có thư nào đi.
   const [guiThu, datGuiThu] = useState(true);
   // Sinh ở chỗ MỞ biểu mẫu, không ở chỗ gửi: bấm lại sau một lỗi mạng phải dùng LẠI đúng khoá ấy,
   // vì lần gửi đầu có thể đã tới máy chủ và đã phát một thông báo đi khắp xã.
@@ -686,231 +682,223 @@ export function FormSoanThongBao({
   }
 
   return (
-    <Card as="form" onSubmit={guiNgay} aria-labelledby="tieu-de-soan-thong-bao">
-      <CardHeader>
-        <span
-          aria-hidden="true"
-          className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-600"
-        >
-          <Megaphone className="size-[18px]" strokeWidth={1.8} focusable="false" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <CardTitle as="h3" id="tieu-de-soan-thong-bao">
-            Soạn thông báo
-          </CardTitle>
-          <p className={HINT}>{MO_TA_SOAN}</p>
+    <ModalDialog
+      titleId={COMPOSE_TITLE_ID}
+      size="lg"
+      className="max-w-[52rem]"
+      onDismiss={() => (dangGui ? undefined : huy())}
+    >
+      <ModalDialogHeader titleId={COMPOSE_TITLE_ID} title={NHAN_NUT_SOAN} description={MO_TA_SOAN} />
+      <form className="m-0 flex min-h-0 flex-col gap-4" onSubmit={guiNgay}>
+        {/* The fields scroll between the header and the buttons (`ModalDialog` layout contract).
+            `[&_.o-nhap]:mb-0`: the column `gap` is the one spacing between fields; the legacy 1rem
+            bottom margin of `.o-nhap` would double it. Labels stay above their controls. */}
+        <div className="flex min-h-0 flex-col gap-3 overflow-y-auto pr-1 [&_.o-nhap]:mb-0">
+          <div className="o-nhap">
+            <label htmlFor="tieu-de-thong-bao">Tiêu đề *</label>
+            <input
+              id="tieu-de-thong-bao"
+              name="tieu-de-thong-bao"
+              value={tieuDe}
+              placeholder={PLACEHOLDER_TIEU_DE}
+              maxLength={TIEU_DE_TOI_DA}
+              autoComplete="off"
+              onChange={(e) => datTieuDe(e.target.value)}
+            />
+          </div>
+
+          <div className="o-nhap">
+            <label htmlFor="noi-dung-thong-bao">Nội dung *</label>
+            <textarea
+              id="noi-dung-thong-bao"
+              name="noi-dung-thong-bao"
+              rows={6}
+              value={noiDung}
+              maxLength={NOI_DUNG_TOI_DA}
+              onChange={(e) => datNoiDung(e.target.value)}
+            />
+          </div>
+
+          {/* `Bộ phận nhận thông báo` — ONE disabled chip with its "?" (ADR 0068 §14), never the
+              commune's unit names: those are the commune's data, and chips that each end in a 501
+              after the whole text is typed are worse than none. Nothing here reaches the body. */}
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <div className="flex items-center gap-1.5">
+              <p className="m-0 text-xs leading-tight font-semibold text-ink-500">{RECIPIENT_UNITS_FIELD_LABEL}</p>
+              <PendingMarker info={pendingPart("byUnit")} />
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                disabled
+                aria-pressed={false}
+                className="inline-flex cursor-not-allowed items-center rounded-full border border-dashed border-line-strong bg-transparent px-3 py-1 [font-family:inherit] text-xs font-medium text-ink-500 opacity-60"
+              >
+                {RECIPIENT_UNITS_CHIP}
+              </button>
+            </div>
+          </div>
+
+          {/* The picker by name: ONE row — the select grows, the add button keeps its width beside it,
+              bottoms aligned. It wraps under the select only when the row is too narrow for both. */}
+          {danhBa !== null && danhBa.ok && danhBa.duLieu.items.length > 0 ? (
+            <div className="flex min-w-0 flex-wrap items-end gap-2">
+              <Field
+                label={NHAN_CHON_NGUOI_NHAN}
+                htmlFor="chon-nguoi-nhan-thong-bao"
+                kind="select"
+                grow="auto"
+                className="min-w-0 flex-[1_1_260px]"
+              >
+                <select
+                  id="chon-nguoi-nhan-thong-bao"
+                  name="chon-nguoi-nhan-thong-bao"
+                  value={maDangChon}
+                  onChange={(e) => datMaDangChon(e.target.value)}
+                >
+                  <option value="">{CHON_NGUOI_NHAN_RONG}</option>
+                  {danhBa.duLieu.items.map((cb) => (
+                    <option key={cb.code} value={cb.code}>
+                      {nhanLuaChonNguoiNhan(cb)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Button
+                type="button"
+                variant="secondary"
+                icon={<Glyph icon={UserPlus} />}
+                disabled={maDangChon === ""}
+                onClick={() => {
+                  datNguoiNhan(themMaNguoiNhan(nguoiNhan, maDangChon));
+                  datMaDangChon("");
+                }}
+              >
+                {NUT_THEM_NGUOI_NHAN}
+              </Button>
+            </div>
+          ) : (
+            // No select to label (loading, failed, empty directory): the caption and the ONE sentence
+            // that says why, in the same place the picker would be.
+            <div className="flex min-w-0 flex-col gap-1.5">
+              <p className="m-0 text-xs leading-tight font-semibold text-ink-700">{NHAN_CHON_NGUOI_NHAN}</p>
+              {danhBa === null && (
+                <p className="m-0 text-[13px] text-ink-500" role="status">
+                  {DANG_TAI_DANH_BA}
+                </p>
+              )}
+              {danhBa !== null && !danhBa.ok && (
+                <p className="thong-bao-loi m-0" role="alert">
+                  {cauLoiDanhBa(danhBa.thongBao)}
+                </p>
+              )}
+              {danhBa !== null && danhBa.ok && (
+                <p className="m-0 text-[13px] text-ink-500">{DANH_BA_NGUOI_NHAN_RONG}</p>
+              )}
+            </div>
+          )}
+
+          <div className="o-nhap">
+            <label htmlFor="nguoi-nhan-thong-bao">{RECIPIENTS_EXTRA_LABEL} *</label>
+            <textarea
+              id="nguoi-nhan-thong-bao"
+              name="nguoi-nhan-thong-bao"
+              rows={4}
+              value={nguoiNhan}
+              // KHÔNG CÓ `maxLength` TRÊN CẢ Ô: trần của máy chủ là hai trần khác nhau — 500 người và
+              // 64 ký tự MỖI MÃ — nên một con số duy nhất trên cả ô sẽ cắt sai ở cả hai chiều. Máy chủ
+              // từ chối bằng câu của nó, và câu ấy nói đúng chỗ sai.
+              onChange={(e) => datNguoiNhan(e.target.value)}
+            />
+            <p className={HINT}>
+              {GHI_CHU_NGUOI_NHAN} Tối đa {NGUOI_NHAN_TOI_DA} người, mỗi mã tối đa{" "}
+              {MA_CAN_BO_TOI_DA} ký tự.
+            </p>
+          </div>
+
+          {/* The prototype's one box of three options, one row each. The sentence that bounds what an
+              option does today sits right under its row. The className sits AFTER `checked` on each
+              box: tests read `id="…"[^>]*checked` inside the tag. */}
+          <div className="flex flex-col gap-2 rounded-[10px] border border-line bg-surface-muted p-3">
+            <div>
+              <label htmlFor="ghim-thong-bao" className={OPTION_LABEL}>
+                <input
+                  id="ghim-thong-bao"
+                  name="ghim-thong-bao"
+                  type="checkbox"
+                  checked={ghim}
+                  onChange={(e) => datGhim(e.target.checked)}
+                  className={OPTION_BOX}
+                />{" "}
+                Ghim lên đầu danh sách
+              </label>
+              <p className={OPTION_HINT}>{CANH_BAO_GHIM_TRONG_TRANG}</p>
+            </div>
+
+            <label htmlFor="bat-buoc-xac-nhan" className={OPTION_LABEL}>
+              <input
+                id="bat-buoc-xac-nhan"
+                name="bat-buoc-xac-nhan"
+                type="checkbox"
+                checked={batBuocXacNhan}
+                onChange={(e) => datBatBuocXacNhan(e.target.checked)}
+                className={OPTION_BOX}
+              />{" "}
+              Bắt buộc xác nhận đã đọc
+            </label>
+
+            <div>
+              <label htmlFor="gui-thu-dien-tu" className={OPTION_LABEL}>
+                <input
+                  id="gui-thu-dien-tu"
+                  name="gui-thu-dien-tu"
+                  type="checkbox"
+                  checked={guiThu}
+                  onChange={(e) => datGuiThu(e.target.checked)}
+                  className={OPTION_BOX}
+                />{" "}
+                Gửi thư điện tử cho người nhận
+              </label>
+              <p className={OPTION_HINT}>{CANH_BAO_CHUA_GUI_THU}</p>
+            </div>
+          </div>
+
+          {loi !== null && (
+            <p className="thong-bao-loi m-0" role="alert">
+              {loi}
+            </p>
+          )}
         </div>
-      </CardHeader>
 
-      {/* `[&_.o-nhap]:mb-0`: the `gap` is the one spacing between fields; the legacy 1rem bottom
-          margin of `.o-nhap` would double it. Labels stay above their controls (`.o-nhap`). */}
-      <CardContent className="flex flex-col gap-4 [&_.o-nhap]:mb-0">
-      <div className="o-nhap">
-        <label htmlFor="tieu-de-thong-bao">Tiêu đề *</label>
-        <input
-          id="tieu-de-thong-bao"
-          name="tieu-de-thong-bao"
-          value={tieuDe}
-          placeholder={PLACEHOLDER_TIEU_DE}
-          maxLength={TIEU_DE_TOI_DA}
-          autoComplete="off"
-          onChange={(e) => datTieuDe(e.target.value)}
-        />
-      </div>
-
-      <div className="o-nhap">
-        <label htmlFor="noi-dung-thong-bao">Nội dung *</label>
-        <textarea
-          id="noi-dung-thong-bao"
-          name="noi-dung-thong-bao"
-          rows={6}
-          value={noiDung}
-          maxLength={NOI_DUNG_TOI_DA}
-          onChange={(e) => datNoiDung(e.target.value)}
-        />
-      </div>
-
-      {/* §5 `Bộ phận nhận thông báo` — ONE disabled chip with its "?" (ADR 0068 §14), never the
-          commune's unit names: those are the commune's data, and five chips that each end in a 501
-          after the whole text is typed are worse than none. Nothing here reaches the body. */}
-      <div className="flex min-w-0 flex-col gap-1.5">
-        <div className="flex items-center gap-1.5">
-          <p className="m-0 text-xs leading-tight font-semibold text-ink-500">{RECIPIENT_UNITS_FIELD_LABEL}</p>
-          <PendingMarker info={pendingPart("byUnit")} />
-        </div>
-        <div className="flex flex-wrap gap-2">
+        {/* The prototype's buttons, right-aligned: Huỷ · Lưu nháp · Phát hành; Phát hành stays LAST
+            and is the form's one solid button. Native submit `<button>` with `type` first. */}
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          <Button type="button" variant="secondary" disabled={dangGui} onClick={huy}>
+            {NHAN_NUT_HUY}
+          </Button>
+          {/* `Lưu nháp` — a disabled placeholder (ADR 0068 §14). It is NOT a submit button: it can
+              never publish. */}
+          <PendingButton info={pendingPart("saveDraft")} icon={<Glyph icon={Save} />}>
+            {SAVE_DRAFT_LABEL}
+          </PendingButton>
           <button
-            type="button"
-            disabled
-            aria-pressed={false}
-            className="inline-flex h-8 cursor-not-allowed items-center rounded-full border border-dashed border-line-strong bg-transparent px-3 [font-family:inherit] text-[13px] font-medium text-ink-500 opacity-60"
+            type="submit"
+            className={cn(LEGACY_BUTTON_CLASS.primary, buttonVariants({ variant: "primary" }))}
+            disabled={dangGui || !duDieuKien}
+            aria-busy={dangGui}
           >
-            {RECIPIENT_UNITS_CHIP}
+            <SubmitContent busy={dangGui} icon={Send} label={NHAN_NUT_PHAT_HANH} busyText={PUBLISH_BUSY_LABEL} />
           </button>
         </div>
-      </div>
-
-      {/* The picker: ONE row — the select grows, the add button keeps its width beside it, bottoms
-          aligned (both 40px). It wraps under the select only when the row is too narrow for both. */}
-      {danhBa !== null && danhBa.ok && danhBa.duLieu.items.length > 0 ? (
-        <div className="flex min-w-0 flex-wrap items-end gap-2">
-          <Field
-            label={NHAN_CHON_NGUOI_NHAN}
-            htmlFor="chon-nguoi-nhan-thong-bao"
-            kind="select"
-            grow="auto"
-            className="min-w-0 flex-[1_1_260px]"
-          >
-            <select
-              id="chon-nguoi-nhan-thong-bao"
-              name="chon-nguoi-nhan-thong-bao"
-              value={maDangChon}
-              onChange={(e) => datMaDangChon(e.target.value)}
-            >
-              <option value="">{CHON_NGUOI_NHAN_RONG}</option>
-              {danhBa.duLieu.items.map((cb) => (
-                <option key={cb.code} value={cb.code}>
-                  {nhanLuaChonNguoiNhan(cb)}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Button
-            type="button"
-            variant="secondary"
-            icon={<Glyph icon={UserPlus} />}
-            disabled={maDangChon === ""}
-            onClick={() => {
-              datNguoiNhan(themMaNguoiNhan(nguoiNhan, maDangChon));
-              datMaDangChon("");
-            }}
-          >
-            {NUT_THEM_NGUOI_NHAN}
-          </Button>
-        </div>
-      ) : (
-        // No select to label (loading, failed, empty directory): the caption and the ONE sentence that
-        // says why, in the same place the picker would be.
-        <div className="flex min-w-0 flex-col gap-1.5">
-          <p className="m-0 text-xs leading-tight font-semibold text-ink-700">{NHAN_CHON_NGUOI_NHAN}</p>
-          {danhBa === null && (
-            <p className="m-0 text-[13px] text-ink-500" role="status">
-              {DANG_TAI_DANH_BA}
-            </p>
-          )}
-          {danhBa !== null && !danhBa.ok && (
-            <p className="thong-bao-loi m-0" role="alert">
-              {cauLoiDanhBa(danhBa.thongBao)}
-            </p>
-          )}
-          {danhBa !== null && danhBa.ok && (
-            <p className="m-0 text-[13px] text-ink-500">{DANH_BA_NGUOI_NHAN_RONG}</p>
-          )}
-        </div>
-      )}
-
-      <div className="o-nhap">
-        <label htmlFor="nguoi-nhan-thong-bao">Gửi thêm đích danh *</label>
-        <textarea
-          id="nguoi-nhan-thong-bao"
-          name="nguoi-nhan-thong-bao"
-          rows={4}
-          value={nguoiNhan}
-          // KHÔNG CÓ `maxLength` TRÊN CẢ Ô: trần của máy chủ là hai trần khác nhau — 500 người và
-          // 64 ký tự MỖI MÃ — nên một con số duy nhất trên cả ô sẽ cắt sai ở cả hai chiều. Máy chủ
-          // từ chối bằng câu của nó, và câu ấy nói đúng chỗ sai.
-          onChange={(e) => datNguoiNhan(e.target.value)}
-        />
-        <p className={HINT}>
-          {GHI_CHU_NGUOI_NHAN} Tối đa {NGUOI_NHAN_TOI_DA} người, mỗi mã tối đa{" "}
-          {MA_CAN_BO_TOI_DA} ký tự.
-        </p>
-      </div>
-
-      {/* Three options side by side from 768px, each a tile: the box + its words, and the one
-          sentence that bounds what the option does today right under it. The className sits AFTER
-          `checked` on each box: tests read `id="…"[^>]*checked` inside the tag. */}
-      <div className="grid gap-3 md:grid-cols-3">
-        <div className={OPTION_TILE}>
-          <label htmlFor="ghim-thong-bao" className={OPTION_LABEL}>
-            <input
-              id="ghim-thong-bao"
-              name="ghim-thong-bao"
-              type="checkbox"
-              checked={ghim}
-              onChange={(e) => datGhim(e.target.checked)}
-              className={OPTION_BOX}
-            />{" "}
-            Ghim lên đầu danh sách
-          </label>
-          <p className={HINT}>{CANH_BAO_GHIM_TRONG_TRANG}</p>
-        </div>
-
-        <div className={OPTION_TILE}>
-          <label htmlFor="bat-buoc-xac-nhan" className={OPTION_LABEL}>
-            <input
-              id="bat-buoc-xac-nhan"
-              name="bat-buoc-xac-nhan"
-              type="checkbox"
-              checked={batBuocXacNhan}
-              onChange={(e) => datBatBuocXacNhan(e.target.checked)}
-              className={OPTION_BOX}
-            />{" "}
-            Bắt buộc xác nhận đã đọc
-          </label>
-        </div>
-
-        <div className={OPTION_TILE}>
-          <label htmlFor="gui-thu-dien-tu" className={OPTION_LABEL}>
-            <input
-              id="gui-thu-dien-tu"
-              name="gui-thu-dien-tu"
-              type="checkbox"
-              checked={guiThu}
-              onChange={(e) => datGuiThu(e.target.checked)}
-              className={OPTION_BOX}
-            />{" "}
-            Gửi thư điện tử cho người nhận
-          </label>
-          <p className={HINT}>{CANH_BAO_CHUA_GUI_THU}</p>
-        </div>
-      </div>
-
-      {loi !== null && (
-        <p className="thong-bao-loi m-0" role="alert">
-          {loi}
-        </p>
-      )}
-      </CardContent>
-
-      {/* Huỷ / Phát hành right-aligned at the foot (spec §6.5); Phát hành is the form's one solid
-          button and stays LAST. Native submit `<button>` with `type` first, as before. */}
-      <CardFooter className="justify-end">
-        <Button type="button" variant="secondary" disabled={dangGui} onClick={huy}>
-          {NHAN_NUT_HUY}
-        </Button>
-        {/* §5 `Lưu nháp`, between Huỷ and Phát hành — a disabled placeholder (ADR 0068 §14). It is NOT
-            a submit button: it can never publish. */}
-        <PendingButton info={pendingPart("saveDraft")} icon={<Glyph icon={Save} />}>
-          {SAVE_DRAFT_LABEL}
-        </PendingButton>
-        <button
-          type="submit"
-          className={cn(LEGACY_BUTTON_CLASS.primary, buttonVariants({ variant: "primary" }))}
-          disabled={dangGui || !duDieuKien}
-          aria-busy={dangGui}
-        >
-          <SubmitContent busy={dangGui} icon={Send} label={NHAN_NUT_PHAT_HANH} busyText={PUBLISH_BUSY_LABEL} />
-        </button>
-      </CardFooter>
-    </Card>
+      </form>
+    </ModalDialog>
   );
 }
 
 /** One helper line under a control (spec §3 "Chú thích": 12px, `--ink-500`). */
 const HINT = "ghi-chu mt-1.5 mb-0 text-xs text-ink-500";
 
-/** Frame of one checkbox option of the compose form. */
-const OPTION_TILE = "flex min-w-0 flex-col rounded-xl border border-line bg-surface-muted p-3";
-const OPTION_LABEL = "flex cursor-pointer items-start gap-2 text-sm font-semibold text-ink-900";
-const OPTION_BOX = "mt-0.5 size-4 shrink-0 cursor-pointer accent-brand-600";
+/** One option row of the compose form's option box, and the sentence under it (indented to the word). */
+const OPTION_LABEL = "flex cursor-pointer items-center gap-2 text-[13px] text-ink-900";
+const OPTION_BOX = "size-4 shrink-0 cursor-pointer accent-brand-600";
+const OPTION_HINT = "ghi-chu m-0 mt-1 pl-6 text-xs text-ink-500";
