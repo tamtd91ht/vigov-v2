@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "proto",
-  "cap_nhat": "2026-10-02",
+  "cap_nhat": "2026-10-05",
   "muc": [
     {
       "id": "operator-mini-app-secret",
@@ -135,6 +135,13 @@
       "bang_chung": "proto/vigov/platform/v1/platform.proto (TenantProfile, UploadPurpose). 02/10/2026 trên máy Windows: buf generate rc=0 (core/gen bị .gitignore, không commit) · buf lint rc=0 · buf breaking --against '.git#ref=HEAD' rc=0 · go build core + 7 service rc=0 · go vet core/platform/identity rc=0. Trường mới là string thường theo quy ước sẵn có của TenantProfile (\"\" = chưa khai), không phải trường bắt buộc.",
       "no_confirm": [],
       "tiep_theo": "Chưa xong vì service-platform chưa có dòng chính sách tải lên cho tenant-banner: TestUploadPolicyPurposeCheckMatchesStorage (service-platform/internal/store) ĐỎ cho tới khi có migration định nghĩa lại CHECK purpose và gieo dòng 'tenant-banner' — PHẢI vào cùng commit (ADR 0052 §10). Sau đó: platform điền hai trường mới trong GetTenantProfile, core/platformclient.TenantProfile mang hai trường, identity đưa ra /communes/current và /commune-profiles."
+    },
+    {
+      "id": "zalo-bot-operator-service",
+      "viec": "ZaloBotOperatorService platform → comms (ADR 0074)",
+      "trang_thai": "xong",
+      "bang_chung": "048eca0e zalo_bot_operator.proto; buf lint + breaking xanh.",
+      "tiep_theo": "Sửa chú thích 'mỗi lần trỏ webhook xoay khoá' cho khớp một ô chờ. Thêm hạn/số ngày trễ vào thông báo cán bộ nếu cần áp nhịp nhắc việc trễ."
     }
   ]
 }

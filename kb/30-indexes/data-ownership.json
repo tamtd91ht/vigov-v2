@@ -411,6 +411,20 @@
       "source": "service-platform/migrations/0008_upload_policy.sql:132"
     },
     {
+      "entity": "PlatformDataEncryptionKey",
+      "service": "comms",
+      "scope": "platform",
+      "table": "platform_data_encryption_key",
+      "source": "service-comms/migrations/0018_zalo_bot.sql:614"
+    },
+    {
+      "entity": "PlatformOperatorAuditEntry",
+      "service": "comms",
+      "scope": "platform",
+      "table": "platform_operator_audit_log",
+      "source": "service-comms/migrations/0018_zalo_bot.sql:835"
+    },
+    {
       "entity": "PlatformStoredFile",
       "service": "platform",
       "scope": "tenant",
@@ -619,6 +633,41 @@
       "scope": "cross-tenant",
       "table": "tai_khoan_zalo",
       "source": "service-identity/migrations/0011_tai_khoan_zalo_va_phien_chua_co_so.sql:95"
+    },
+    {
+      "entity": "ZaloBotShared",
+      "service": "comms",
+      "scope": "platform",
+      "table": "zalo_bot_shared",
+      "source": "service-comms/migrations/0018_zalo_bot.sql:690"
+    },
+    {
+      "entity": "ZaloChannelSetting",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "zalo_channel_setting",
+      "source": "service-comms/migrations/0018_zalo_bot.sql:105"
+    },
+    {
+      "entity": "ZaloDelivery",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "zalo_delivery",
+      "source": "service-comms/migrations/0018_zalo_bot.sql:471"
+    },
+    {
+      "entity": "ZaloLink",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "zalo_link",
+      "source": "service-comms/migrations/0018_zalo_bot.sql:327"
+    },
+    {
+      "entity": "ZaloPairingCode",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "zalo_pairing_code",
+      "source": "service-comms/migrations/0018_zalo_bot.sql:221"
     }
   ]
 }

@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "platform-admin",
-  "cap_nhat": "2026-10-04",
+  "cap_nhat": "2026-10-05",
   "muc": [
     {
       "id": "ts-chua-tung-duoc-kiem",
@@ -83,6 +83,13 @@
       "bang_chung": "5d8dec22: thẻ hiện/đặt tâm + bán kính mặc định (ops.tenant.manage, lý do bắt buộc), gợi ý từ máy chủ, cảnh báo + ô xác nhận khi bán kính ngoài 3–20 km (acknowledged_unusual), trần 50 km. typecheck + lint + 202 test xanh.",
       "tiep_theo": "Xem trên trình duyệt. Khung đất liền 8.4–23.4 / 102.1–109.5 đang viết ở client vì GET không trả — đổi khung phải sửa cả hai phía. Câu lỗi máy chủ nằm ở map-frame-default-model.ts, chưa gom vào lib/errors.ts.",
       "menu": "ban-do-kinh-te-so"
+    },
+    {
+      "id": "zalo-bot-man-van-hanh",
+      "viec": "Màn Zalo Bot ở khu vận hành (ADR 0074)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "e6484436 mục 'Zalo Bot' dưới ops.zalo_bot.manage: token chỉ ghi, xác nhận ghép lại khi đổi tài khoản bot (409 can-xac-nhan-ghep-lai), webhook, số đếm theo xã. vitest 240/240.",
+      "tiep_theo": "Chờ thẻ 05: tuyến REST zalo-bots/shared ở service-platform + khoá thứ tám ở opauth.go:70. Hỏi chủ dự án: kiểm webhook chỉ khi bấm nút (thay vì mỗi lần mở màn)? thêm ô Lý do vào hộp đặt token? Mã lỗi invalid_token/invalid_bot_name/invalid_chat_url đang giả định."
     }
   ]
 }

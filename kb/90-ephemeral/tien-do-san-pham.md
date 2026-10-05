@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 63afc0f8
+derived_from_commit: 14a06dd1
 expires: 2027-01-03
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -45,7 +45,7 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **14** Cấu hình hệ thống | 119 | 118/119 | ✓ |
 | **15** Phụ lục: giao diện dùng chung & xác thực | 9 | 9/9 | ✓ |
 
-Tổng **301 tuyến** trong hợp đồng. **15** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
+Tổng **309 tuyến** trong hợp đồng. **15** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
 
 ## 2 · web-admin, theo từng mục menu
 
@@ -117,17 +117,17 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 |---|---|---|---|---|
 | `_chung` | 22 | 3 | 8 | 6 |
 | `citizen-app` | 40 | 18 | 3 | 0 |
-| `core` | 30 | 3 | 1 | 1 |
+| `core` | 31 | 3 | 1 | 1 |
 | `deploy` | 19 | 12 | 1 | 0 |
-| `platform-admin` | 8 | 2 | 0 | 0 |
-| `proto` | 15 | 1 | 0 | 0 |
-| `service-comms` | 21 | 11 | 3 | 3 |
+| `platform-admin` | 8 | 3 | 0 | 0 |
+| `proto` | 16 | 1 | 0 | 0 |
+| `service-comms` | 21 | 12 | 3 | 3 |
 | `service-documents` | 10 | 3 | 4 | 0 |
 | `service-finance` | 20 | 4 | 1 | 0 |
-| `service-identity` | 42 | 13 | 2 | 1 |
+| `service-identity` | 43 | 13 | 2 | 1 |
 | `service-petitions` | 42 | 18 | 4 | 0 |
 | `service-platform` | 15 | 16 | 5 | 1 |
 | `service-reporting` | 3 | 0 | 1 | 0 |
 | `tools` | 20 | 0 | 0 | 0 |
-| `web-admin` | 40 | 32 | 3 | 1 |
+| `web-admin` | 44 | 36 | 3 | 1 |
 

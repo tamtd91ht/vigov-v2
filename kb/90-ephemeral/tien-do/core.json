@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "core",
-  "cap_nhat": "2026-10-02",
+  "cap_nhat": "2026-10-05",
   "muc": [
     {
       "id": "ghim-go-toolchain-1-26-6",
@@ -282,6 +282,13 @@
       "bang_chung": "02/10/2026 (TASK-P2c, chưa commit). core/operatorclient/mini_app_secret.go: ctx không có xã → ErrInvalidRequest tại chỗ, không gửi; token rỗng → ErrInvalidRequest; FAILED_PRECONDITION trên Set → ErrMiniAppNotBound (không phải ErrRealmNotConfigured), NOT_FOUND trên Retire → ErrNoLiveSecret (không log), INVALID_ARGUMENT → ErrArgumentRefused; outcome ACCEPTED / SESSION_NOT_LIVE / PERMISSION_DENIED (OutcomePermissionDenied mới), UNSPECIFIED hay REFUSED → ErrContract; ACCEPTED thiếu siêu dữ liệu → ErrContract. Khoá đi dạng secret.Secret, chỉ .Lo() ở dòng dựng yêu cầu; không log yêu cầu/trả lời/thông điệp trạng thái. Chú thích đầu gói sửa: bảy RPC miền không mang xã, hai RPC này mang. Ca kiểm: core/operatorclient/mini_app_secret_test.go (bufconn + chuỗi interceptor thật: x-tenant-id đúng một giá trị; từ chối tại chỗ; bảng mã trạng thái; khoá/token không vào log). go test -race ./core/... xanh trong make check.",
       "no_confirm": [],
       "tiep_theo": "Không còn gì ở core cho việc này. Bên gọi: service-platform operator_mini_app_secrets.go."
+    },
+    {
+      "id": "zalo-bot-niem-nen-tang",
+      "viec": "Niêm cấp nền tảng, biến ZALO_BOT_WEBHOOK_HOST, giới hạn tần suất webhook Zalo (ADR 0074)",
+      "trang_thai": "xong",
+      "bang_chung": "048eca0e grpcx miễn xã 6 RPC. 66f78014 crypto.PlatformEnvelope (phạm vi 'platform', không xã giả), config nhóm ZaloBotWebhook. a29a78eb ratelimit chính sách webhook + theo chat.",
+      "tiep_theo": "Ngưỡng webhook 600/phút là tạm (xem service-comms)."
     }
   ]
 }
