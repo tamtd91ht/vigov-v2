@@ -310,4 +310,10 @@ describe("kanban board does not overlap at the grid breakpoint", () => {
     const media = CSS.lastIndexOf("@media", i);
     expect(CSS.slice(media, i)).toMatch(/@media \(min-width: 768px\) and \(max-width: 1279\.98px\)/);
   });
+
+  it("the card list lets a card shrink below its one-line holder text", () => {
+    const list = CSS.slice(CSS.indexOf(".danh-sach-the {"), CSS.indexOf("}", CSS.indexOf(".danh-sach-the {")));
+    expect(list).toContain("grid-template-columns: minmax(0, 1fr)");
+    expect(CSS).toMatch(/\.danh-sach-the > li \{\s*min-width: 0;/);
+  });
 });

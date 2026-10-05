@@ -3456,12 +3456,26 @@ aside.khoi-chua-khai h3 {
   font-size: 0.875rem;
 }
 
+/* `minmax(0, 1fr)` and `min-width: 0` ARE THE FIX for cards spilling into the next column (tester
+ * screenshot 06/10/2026). A plain `display: grid` gives one `auto` track, and a grid item's default
+ * `min-width: auto` is its min-content width — which, with the card's one-line `truncate` holder
+ * line ("PHÒNG KINH TẾ · Chưa phân công"), is the WHOLE unbroken line. The card then grew past its
+ * column instead of truncating. */
 .danh-sach-the {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.5rem;
+}
+
+.danh-sach-the > li {
+  min-width: 0;
+}
+
+.cot-kanban {
+  min-width: 0;
 }
 
 /* Viền trái đậm để tách hai thẻ liền nhau khi chúng cùng nền trắng. MỘT MÀU DUY NHẤT, không tô
