@@ -7,7 +7,7 @@ import { extendTailwindMerge } from "tailwind-merge";
  * a merge and the winner would be whichever the stylesheet happened to emit last.
  */
 const twMerge = extendTailwindMerge({
-  extend: { theme: { radius: ["control", "card", "hero"] } },
+  extend: { theme: { radius: ["control", "popover", "card", "hero", "pill"] } },
 });
 
 /**

@@ -131,18 +131,19 @@ describe("globals.css layering", () => {
  * nothing else would catch coming back — a blur or a gradient tile is invisible to every other test.
  */
 describe("spec v2 shell", () => {
-  it("declares the v2 tokens: 240/72px sidebar, 60px topbar, 48px rows, 4/8px spacing, motion", () => {
+  // Presentation pins (ADR 0068 §5): rows and motion follow the OMICALL tokens of 05/10/2026.
+  it("declares the v2 tokens: 240/72px sidebar, 60px topbar, 64px rows, 4/8px spacing, motion", () => {
     for (const decl of [
       "--sidebar-w: 240px;",
       "--sidebar-w-collapsed: 72px;",
       "--topbar-h: 60px;",
-      "--row-h: 48px;",
+      "--row-h: 64px;",
       "--space-1: 4px;",
       "--space-6: 32px;",
-      "--dur-fast: 150ms;",
-      "--dur: 200ms;",
+      "--dur-fast: 250ms;",
+      "--dur: 250ms;",
       "--dur-slow: 250ms;",
-      "--ease: cubic-bezier(0.2, 0, 0, 1);",
+      "--ease: cubic-bezier(0.4, 0, 0.2, 1);",
     ])
       expect(CSS, decl).toContain(decl);
   });
@@ -185,7 +186,7 @@ describe("global select frame", () => {
     expect(at).toBeLessThan(CSS.lastIndexOf("} /* end @layer legacy */"));
   });
 
-  it("is the controlClass look: 40px, line-strong hairline, control radius, chevron, no native arrow", () => {
+  it("is the controlClass look: 36px, line-strong hairline, control radius, chevron, no native arrow", () => {
     const b = frame?.body ?? "";
     for (const decl of [
       "height: var(--control-h);",
@@ -220,8 +221,9 @@ describe("font", () => {
       expect(f.text, f.path).not.toMatch(/fonts\.googleapis|fonts\.gstatic|cdn\.jsdelivr/);
     }
     const layout = readFileSync(join(SRC, "app", "layout.tsx"), "utf8");
-    expect(layout).toContain('import "@fontsource/be-vietnam-pro/400.css";');
-    expect(layout).toContain('import "@fontsource/be-vietnam-pro/700.css";');
+    // Presentation pin (ADR 0068 §5): the OMICALL tokens of 05/10/2026 use Roboto 400/500/600.
+    expect(layout).toContain('import "@fontsource/roboto/400.css";');
+    expect(layout).toContain('import "@fontsource/roboto/600.css";');
   });
 });
 

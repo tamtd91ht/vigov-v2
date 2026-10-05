@@ -42,7 +42,7 @@ export function Tooltip({ content, children, side = "top", enabled = true, class
             sideOffset={8}
             collisionPadding={8}
             className={cn(
-              "z-[60] max-w-xs rounded-lg bg-ink-900 px-2.5 py-1.5 text-xs leading-snug font-medium text-white shadow-md",
+              "z-[60] max-w-xs rounded-control bg-ink-900 px-2.5 py-1.5 text-xs leading-snug font-medium text-white shadow-md",
               "origin-(--radix-tooltip-content-transform-origin) animate-[menu-in_160ms_ease-out]",
               className,
             )}

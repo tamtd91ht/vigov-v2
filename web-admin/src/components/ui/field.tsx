@@ -4,7 +4,8 @@ import type { ComponentProps, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 /**
- * Toolbar + Field — spec §6.4: ONE filter row, label above every control, every control 40px,
+ * Toolbar + Field — spec §6.4: ONE filter row, label above every control, every control 36px
+ * (guide §6, 05/10/2026),
  * bottoms aligned, wrapping onto further rows at narrow widths with the left edges still straight.
  *
  * FIELD WRAPS THE SCREEN'S OWN NATIVE CONTROL, IT NEVER REPLACES IT. The `<input>` / `<select>` the
@@ -13,12 +14,19 @@ import { cn } from "@/lib/cn";
  * selectors). So no field name, id, handler or emitted value can change by adopting it.
  */
 
-/** Frame shared by every native control inside a Field; exported for a control outside one. */
+/**
+ * Frame shared by every native control inside a Field; exported for a control outside one.
+ *
+ * Focus is the guide's §8.4 look — a pale cyan fill plus a 1px inset ring on top of the border —
+ * drawn in `brand-500` (#0284c7, ≥3:1 on white and on the tint), not the guide's #00B1FF, which
+ * at 2.40:1 would leave a keyboard user without a visible indicator. Text stays 16px below 768px:
+ * iOS zooms the page on focus into anything smaller; 15px (the guide's base) from 768px.
+ */
 export const controlClass = cn(
-  "h-10 w-full min-w-0 rounded-control border border-line-strong bg-surface px-3 [font-family:inherit] text-base text-ink-900 md:text-sm",
-  "transition-[border-color,box-shadow] duration-150",
+  "h-9 w-full min-w-0 rounded-control border border-line-strong bg-surface px-3 [font-family:inherit] text-base text-ink-900 md:text-[15px]",
+  "transition-[border-color,box-shadow,background-color] duration-(--dur-fast) ease-(--ease)",
   "placeholder:text-ink-500 hover:not-disabled:border-line-hover",
-  "focus-visible:border-brand-500 focus-visible:shadow-[0_0_0_3px_var(--brand-100)] focus-visible:outline-none",
+  "focus-visible:border-brand-500 focus-visible:bg-accent-50 focus-visible:shadow-[inset_0_0_0_1px_var(--brand-500)] focus-visible:outline-none",
   "disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-500",
 );
 
@@ -91,22 +99,23 @@ export function Field({
     <div className={cn("flex flex-col gap-1.5", GROW_CLASS[grow], className)}>
       <label
         htmlFor={htmlFor}
-        className={hideLabel ? "an-thi-giac" : "text-xs leading-tight font-semibold text-ink-700"}
+        className={hideLabel ? "an-thi-giac" : "text-xs leading-tight font-medium text-ink-700"}
       >
         {label}
       </label>
       <div
         className={cn(
           "relative",
-          "[&_input:not([type=checkbox]):not([type=radio])]:h-10 [&_select]:h-10",
+          "[&_input:not([type=checkbox]):not([type=radio])]:h-9 [&_select]:h-9",
           "[&_:is(input,select,textarea)]:w-full [&_:is(input,select,textarea)]:min-w-0",
           "[&_:is(input,select,textarea)]:rounded-control [&_:is(input,select,textarea)]:border",
           "[&_:is(input,select,textarea)]:border-line-strong [&_:is(input,select,textarea)]:bg-surface",
           "[&_:is(input,select,textarea)]:px-3 [&_:is(input,select,textarea)]:[font-family:inherit]",
-          "[&_:is(input,select,textarea)]:text-base md:[&_:is(input,select,textarea)]:text-sm",
-          "[&_:is(input,select,textarea)]:text-ink-900 [&_:is(input,select,textarea)]:transition-[border-color,box-shadow]",
+          "[&_:is(input,select,textarea)]:text-base md:[&_:is(input,select,textarea)]:text-[15px]",
+          "[&_:is(input,select,textarea)]:text-ink-900 [&_:is(input,select,textarea)]:transition-[border-color,box-shadow,background-color]",
           "[&_:is(input,select,textarea):focus-visible]:border-brand-500 [&_:is(input,select,textarea):focus-visible]:outline-none",
-          "[&_:is(input,select,textarea):focus-visible]:shadow-[0_0_0_3px_var(--brand-100)]",
+          "[&_:is(input,select,textarea):focus-visible]:bg-accent-50",
+          "[&_:is(input,select,textarea):focus-visible]:shadow-[inset_0_0_0_1px_var(--brand-500)]",
           "[&_:is(input,select,textarea):disabled]:cursor-not-allowed [&_:is(input,select,textarea):disabled]:bg-surface-muted",
           "[&_::placeholder]:text-ink-500",
           // SAME VARIANT AS `px-3` ON PURPOSE. Tailwind orders rules by variant first, property
@@ -119,6 +128,13 @@ export function Field({
           // Field draws its own ChevronDown icon below; the global select frame's background-image
           // chevron (`globals.css`) would be a second one.
           kind === "select" && "[&_select]:bg-none",
+          // The search box is the guide's §8.4 pill: 32px radius, `--bg` fill, no visible border
+          // until focus (the transparent border keeps the 36px box the same size). SAME VARIANT as
+          // the frame above on purpose: `cn` (tailwind-merge) then DROPS the frame's radius, border
+          // colour, fill and padding, rather than leaving two rules whose winner is emit order.
+          grow === "search" &&
+            "[&_:is(input,select,textarea)]:rounded-pill [&_:is(input,select,textarea)]:border-transparent [&_:is(input,select,textarea)]:bg-canvas [&_:is(input,select,textarea)]:px-4",
+          grow === "search" && Icon !== undefined && "[&_:is(input,select,textarea)]:pl-10",
         )}
       >
         {Icon !== undefined && (

@@ -13,6 +13,8 @@ import { cn } from "@/lib/cn";
  * are passed in unchanged; `as` keeps the element, every other prop (`onSubmit`, `aria-label`, `id`)
  * passes through. So adopting it cannot change when the action runs or what it sends.
  *
+ * Guide §5: a small modal-like box — white, 12px radius, the navy `--shadow-md`, no border.
+ *
  * No hooks, no portal: it renders where the screen already rendered its confirm block, server
  * rendering included (`react-dom/server` tests read its text).
  */
@@ -48,7 +50,7 @@ export function ConfirmDialog<E extends ConfirmElement = "div">({
   const Icon = icon ?? TriangleAlert;
   return (
     <Element
-      className={cn("rounded-card border border-line bg-surface p-4 shadow-sm", className)}
+      className={cn("rounded-popover bg-surface p-4 shadow-md", className)}
       {...props}
     >
       <div className="flex items-start gap-3">

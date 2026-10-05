@@ -3,7 +3,8 @@ import type { ComponentProps, ElementType, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 /**
- * Card — spec §7: white, `--line` hairline, 16px radius, `--shadow-sm`. All four parts share one
+ * Card — guide §5 / §8.7: white, 16px radius, NO border and NO shadow — on `--bg` the white alone
+ * separates it (tint separation, guide §1). All four parts share one
  * horizontal padding (16px) so a page title, the card edge and the card's content line up on the
  * same left edge (spec §6.8).
  *
@@ -21,7 +22,7 @@ export function Card<E extends CardElement = "div">({ as, className, children, .
   const Element = (as ?? "div") as ElementType;
   return (
     <Element
-      className={cn("min-w-0 overflow-hidden rounded-card border border-line bg-surface shadow-sm", className)}
+      className={cn("min-w-0 overflow-hidden rounded-card bg-surface", className)}
       {...props}
     >
       {children}

@@ -4,7 +4,7 @@ import { cn } from "@/lib/cn";
 
 /**
  * Table helpers — spec v2 §6.7 / §8.1: ONLY the table scrolls (never the page), header row sticky
- * while scrolling, body rows `--row-h` (48px).
+ * while scrolling, body rows `--row-h` (64px, OMICALL guide §6).
  *
  * CLASS NAMES, NOT A TABLE COMPONENT: every screen keeps its own `<table>` with its own
  * `<caption class="an-thi-giac">`, columns and legacy hook class (`bang-can-bo`…), because those

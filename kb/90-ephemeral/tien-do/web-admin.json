@@ -441,6 +441,15 @@
       "tiep_theo": "(1) Các thẻ màn hình W1 (Danh bạ, Tổng quan, Nhiệm vụ…) dùng component mới; dashboard.module.css nằm NGOÀI lớp (unlayered) nên thắng mọi utility — thẻ Tổng quan phải chuyển nó vào lớp hoặc thay. (2) Chủ dự án xem lại: dòng 'Ủy ban nhân dân' trên đầu trang lặp nghĩa khi displayName đã là 'UBND xã …'. (3) Dòng 'Kết nối được mã hoá' ở màn đăng nhập chỉ trọn nghĩa khi đóng nợ HSTS/CSP của web-admin (tools/security_debt.json). (4) Preflight của Tailwind chỉ bật khi mọi màn đã chuyển."
     },
     {
+      "id": "omicall-tokens-05-10",
+      "viec": "Biến thiết kế theo ngôn ngữ OMICALL CRM (ADR 0068 §Sửa đổi 05/10/2026 lần 2): màu, Roboto 15px, bo góc, bóng nhuộm navy, control 36px, dòng bảng 64px",
+      "trang_thai": "dang_lam",
+      "bang_chung": "globals.css :root (navy #1e3150, accent #00B1FF chỉ làm nền, CTA #1d853c / chữ CTA + hover #18742f, chữ phụ #56647c ≥4.62:1 mọi nền, liên kết #0369a1, đỏ chữ #c62828 / nền đặc #d93a36, vòng focus #0284c7 ≥3.39:1), lớp legacy (.nut-chinh xanh lá, .nut-phu navy 5%, ô nhập focus nền cyan nhạt + viền trong 1px, thẻ bảng bỏ bóng, hover dòng cyan .04), components/ui (button primary=CTA + outline + dark, badge, field 36px + ô tìm kiếm bo tròn, tabs/segmented tab đang chọn navy đặc, card/confirm-dialog/large-dialog), @fontsource/roboto 5.3.0 (400/500/600, đủ unicode-range tiếng Việt) thay Be Vietnam Pro; npm audit --omit=dev 0 lỗ hổng. tsc sạch, vitest 215 tệp 3875/3875, next build xanh (05/10).",
+      "no_confirm": [],
+      "tiep_theo": "S3: khung app header navy 68px chỉ icon + tooltip (thay sidebar chữ). S4: 17 tệp features còn shadow-sm (nay là bóng nổi 4px 16px) — bỏ bóng thẻ trên nền app theo guide; chữ legacy cứng 0.875rem → 15px; dialog nhiệm vụ theo component guide. Viền ô nhập --line-strong 1.45:1 (< 3:1, như trước) — nêu với chủ dự án. font-bold rơi về 600 (chỉ gói 400/500/600).",
+      "menu": "nhiem-vu"
+    },
+    {
       "id": "bang-mau-song-dong-05-10",
       "viec": "Bảng màu mới cho cả web-admin (ADR 0068 §Sửa đổi 05/10/2026): nền #f4f8fb, nút chính navy #102b43, cyan chỉ làm nền/viền, chữ xanh #0369a1",
       "trang_thai": "xong",

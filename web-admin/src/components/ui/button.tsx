@@ -23,46 +23,64 @@ import { cn } from "@/lib/cn";
 export const buttonVariants = cva(
   [
     "inline-flex items-center justify-center gap-2 whitespace-nowrap select-none",
-    "rounded-control border [font-family:inherit] text-sm font-semibold leading-tight no-underline",
-    "cursor-pointer transition-[background-color,border-color,color,box-shadow,transform] duration-150 ease-out",
+    "rounded-control border [font-family:inherit] text-[15px] font-normal leading-tight no-underline",
+    "cursor-pointer transition-[background-color,border-color,color,box-shadow,transform] duration-(--dur-fast) ease-(--ease)",
     "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500",
     "active:not-disabled:translate-y-px",
-    "disabled:cursor-not-allowed disabled:opacity-60 aria-busy:cursor-progress",
-    "[&_svg]:size-[18px] [&_svg]:shrink-0",
+    "disabled:cursor-not-allowed disabled:opacity-50 aria-busy:cursor-progress",
+    "[&_svg]:size-5 [&_svg]:shrink-0",
   ],
   {
+    /*
+     * OMICALL guide §8.1 / §9 (05/10/2026):
+     *   primary    the main call to action — solid green, white text 4.70:1. ONE per region.
+     *   outline    its quieter sibling (guide "Tải lên"): green word (5.87:1) on a soft green
+     *              border; hover fills solid.
+     *   dark       navy solid (white 13.04:1) — the active tab / segment look, a dark action.
+     *   secondary  navy 5% fill, navy text; hover keeps the fill and adds a 1px navy border.
+     *   danger     destructive: red word on the red tint (5.01:1); hover adds the red border.
+     * Weight 400 (guide §3); hierarchy comes from the fill, never from a bigger size.
+     */
     variants: {
       variant: {
         primary: [
+          "border-cta bg-cta text-white",
+          "hover:not-disabled:border-cta-hover hover:not-disabled:bg-cta-hover",
+        ],
+        outline: [
+          "border-cta-outline bg-transparent text-cta-text",
+          "hover:not-disabled:border-cta-hover hover:not-disabled:bg-cta-hover hover:not-disabled:text-white",
+        ],
+        dark: [
           "border-brand-600 bg-brand-600 text-white",
           "hover:not-disabled:border-brand-700 hover:not-disabled:bg-brand-700",
         ],
         secondary: [
-          "border-line-strong bg-surface text-ink-700",
-          "hover:not-disabled:border-brand-100 hover:not-disabled:bg-brand-50 hover:not-disabled:text-brand-700",
+          "border-transparent bg-surface-subtle text-ink-900",
+          "hover:not-disabled:border-ink-900",
         ],
         danger: [
-          "border-danger-200 bg-surface text-danger-600",
-          "hover:not-disabled:border-danger-600 hover:not-disabled:bg-danger-50",
+          "border-transparent bg-danger-50 text-danger-600",
+          "hover:not-disabled:border-danger-600",
         ],
         ghost: [
           "border-transparent bg-transparent text-ink-700",
-          "hover:not-disabled:bg-brand-50 hover:not-disabled:text-brand-700",
+          "hover:not-disabled:bg-surface-subtle hover:not-disabled:text-ink-900",
         ],
         icon: [
-          "border-transparent bg-transparent p-0 text-ink-500",
-          "hover:not-disabled:bg-brand-50 hover:not-disabled:text-brand-700",
+          "rounded-popover border-transparent bg-transparent p-0 text-ink-500",
+          "hover:not-disabled:bg-surface-subtle hover:not-disabled:text-ink-900",
         ],
       },
       size: {
         sm: "h-[34px] px-3 text-[13px]",
-        md: "h-10 px-4",
-        lg: "h-[46px] px-5 text-[15px]",
+        md: "h-9 px-4",
+        lg: "h-[46px] px-5",
       },
     },
     compoundVariants: [
       { variant: "icon", size: "sm", className: "size-[34px] px-0" },
-      { variant: "icon", size: "md", className: "size-10 px-0" },
+      { variant: "icon", size: "md", className: "size-9 px-0" },
       { variant: "icon", size: "lg", className: "size-[46px] px-0" },
     ],
     defaultVariants: { variant: "secondary", size: "md" },
@@ -75,6 +93,8 @@ export type ButtonSize = NonNullable<VariantProps<typeof buttonVariants>["size"]
 /** Legacy class each variant carries — see the block comment above for why. */
 export const LEGACY_BUTTON_CLASS: Record<ButtonVariant, string> = {
   primary: "nut-chinh",
+  outline: "nut-phu",
+  dark: "nut-phu",
   secondary: "nut-phu",
   danger: "nut-phu nut-xoa",
   ghost: "nut-phu",

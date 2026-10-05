@@ -226,7 +226,7 @@ export function PendingTab({
         disabled
         aria-disabled="true"
         tabIndex={-1}
-        className="cursor-not-allowed pr-9 opacity-60 hover:bg-transparent hover:text-ink-500"
+        className="cursor-not-allowed pr-9 opacity-50 hover:border-transparent"
       >
         {children ?? info.ten}
       </Tab>

@@ -74,7 +74,7 @@ export function LargeDialog({
         "fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-none max-w-none",
         // Below 768px: the whole screen.
         "w-screen rounded-none",
-        "md:w-[92vw] xl:w-[min(80rem,85vw)] md:rounded-l-[var(--r-xl)] md:border-y-0 md:border-r-0 md:border-l md:border-solid md:border-line md:shadow-md",
+        "md:w-[92vw] xl:w-[min(80rem,85vw)] md:rounded-l-card md:border-y-0 md:border-r-0 md:border-l md:border-solid md:border-line md:shadow-md",
         "backdrop:bg-brand-600/50",
         "motion-safe:animate-[panel-in_200ms_ease-out]",
         className,

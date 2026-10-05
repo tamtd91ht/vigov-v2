@@ -32,12 +32,20 @@
   --color-brand-600: var(--brand-600);
   --color-brand-700: var(--brand-700);
 
-  /* Cyan accent (05/10/2026 palette). `accent-500` is a FILL / BORDER / RING colour only — 2.39:1 on
-   * white, so never text; `accent-700` is the text-safe cyan (links, 5.93:1 on white). */
+  /* Cyan accent (OMICALL tokens, 05/10/2026). `accent-500` #00B1FF is a FILL / hover-tint colour
+   * only — 2.40:1 on white, so never text and never the focus ring (that is `brand-500`);
+   * `accent-700` is the text-safe cyan (links, 5.93:1 on white). */
   --color-accent-50: var(--accent-50);
   --color-accent-100: var(--accent-100);
   --color-accent-500: var(--accent-500);
   --color-accent-700: var(--accent-700);
+
+  /* The main call to action (guide §8.1 "Thêm mới"): green, ONE solid per region (spec v2). The
+   * guide's #56CC6E carries white text at 2.0:1, so the solid is a measured deeper green. */
+  --color-cta: var(--cta);
+  --color-cta-hover: var(--cta-hover);
+  --color-cta-text: var(--cta-text);
+  --color-cta-outline: var(--cta-outline);
 
   --color-ink-900: var(--ink-900);
   --color-ink-700: var(--ink-700);
@@ -51,15 +59,23 @@
   --color-surface: var(--surface);
   --color-surface-muted: var(--surface-muted);
   --color-surface-subtle: var(--surface-subtle);
+  --color-surface-subtle-2: var(--surface-subtle-2);
+  --color-outer: var(--bg-outer);
 
-  /* Status colours: reserved for status, always paired with an icon and a word (spec §1). */
+  /* Status colours: reserved for status, always paired with an icon and a word (spec §1).
+   * `-500` are the guide's saturated FILLS / icons; `-600` are the text-safe shades; `danger-solid`
+   * is the fill that carries white text (badge counts, a solid destructive button). */
   --color-success-50: var(--green-50);
+  --color-success-500: var(--green-500);
   --color-success-600: var(--green-600);
   --color-warning-50: var(--amber-50);
+  --color-warning-500: var(--amber-500);
   --color-warning-600: var(--amber-600);
   --color-danger-50: var(--red-50);
   --color-danger-200: var(--red-200);
+  --color-danger-500: var(--red-500);
   --color-danger-600: var(--red-600);
+  --color-danger-solid: var(--red-solid);
 
   /* Identity accents — logo and the 4px strip ONLY (owner decision 02/10/2026). */
   --color-flag-red: var(--red-600);
@@ -68,95 +84,139 @@
   --color-legal-200: var(--gold-200);
   --color-legal-800: var(--gold-800);
 
-  --font-sans: var(--font-be-vietnam), system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-sans: var(--font-roboto), system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
 
+  --radius-xs: var(--r-xs);
   --radius-control: var(--r-control);
+  --radius-popover: var(--r-md);
   --radius-card: var(--r-lg);
   --radius-hero: var(--r-xl);
+  --radius-pill: var(--r-pill);
 }
 
 /* Same values as the spec tokens of the same name, so `shadow-sm` and `var(--shadow-sm)` agree.
- * `lg` / `xl` are capped at `md`: spec v2 allows "bóng đổ rất nhẹ" only, so a stronger utility
- * written somewhere cannot bring back the floating-card look (ADR 0068 §11). */
+ * Navy-tinted, 4px down, 16px blur (guide §5). `lg` / `xl` are capped at `md`, so a stronger
+ * utility written somewhere cannot bring back the floating-card look (ADR 0068 §11); the header
+ * strength is its own name, `shadow-header`, used by the navy header only. */
 @theme {
-  --shadow-sm: 0 1px 2px rgba(16, 43, 67, 0.06);
-  --shadow-md: 0 4px 16px rgba(16, 43, 67, 0.06);
-  --shadow-lg: 0 4px 16px rgba(16, 43, 67, 0.08);
-  --shadow-xl: 0 4px 16px rgba(16, 43, 67, 0.08);
+  --shadow-sm: 0 4px 16px rgba(30, 49, 80, 0.16);
+  --shadow-md: 0 4px 16px rgba(30, 49, 80, 0.2);
+  --shadow-lg: 0 4px 16px rgba(30, 49, 80, 0.2);
+  --shadow-xl: 0 4px 16px rgba(30, 49, 80, 0.2);
+  --shadow-header: 0 4px 16px rgba(30, 49, 80, 0.32);
 }
 
 @layer base {
   /* Spec §3 shape, plus the few derived tokens the components need (`--red-200`, `--gold-*`).
    *
-   * PALETTE OF 05/10/2026 (owner: "đổi cả web-admin", from the vigov-require prototype): navy for
-   * action, cyan for accent. The `brand-*` NAMES are kept so every existing class keeps working, and
-   * each step keeps its ROLE — that is what decides its value, not the old blue scale:
-   *   50 / 100  pale tint fills and their hairline      → the cyan tints (`--accent-50/100`)
-   *   500       focus ring, selected border, bar fill   → a DEEPER cyan #0284c7 (4.10:1 on white):
- *             WCAG 1.4.11 wants ≥3:1 for a focus or selection indicator, and `--accent-500`
- *             (2.39:1) fails it — staff navigating by keyboard would lose the ring. The bright cyan
- *             stays for FILLS (`bg-accent-*`), where it carries no meaning on its own. Never text.
-   *   600       solid button, active bar, icon on tint  → navy #102b43 (white on it 14.50:1)
-   *   700       button hover, active text on a tint     → a LIGHTER navy, as the owner asked for
-   *             the hover; the 600/700 order is therefore inverted on purpose (white on it 10.90:1)
+   * OMICALL CRM TOKENS OF 05/10/2026 (owner decision; ADR 0068 amendment): ONE navy #1E3150 for
+   * ink and dark actions, cyan #00B1FF for tints and the selected state, green for the main call to
+   * action, a soft navy-tinted shadow, Roboto 15px, 36px controls. The `brand-*` / `ink-*` NAMES
+   * are kept so every existing class keeps working; each step keeps its ROLE, and the role decides
+   * the value:
+   *   brand 50 / 100  pale tint fills and their hairline → the cyan tints (`--accent-50/100`)
+   *   brand 500       focus ring, selected border       → a DEEPER cyan #0284c7: WCAG 1.4.11 wants
+   *                   ≥3:1 for a focus or selection indicator and the guide's #00B1FF is 2.40:1 on
+   *                   white — staff navigating by keyboard would lose the ring. #0284c7 is 4.10:1
+   *                   on white, 3.79:1 on `--bg`, 3.47:1 on navy 5% over `--bg`. Never text.
+   *   brand 600       dark solid (active tab/segment)    → navy #1E3150 (white on it 13.04:1)
+   *   brand 700       its hover                          → a lighter navy (white on it 9.84:1)
+   *
+   * The guide draws muted text as navy at `opacity: .5`; that is 2.9:1 and fails 4.5:1, and an
+   * opacity does not compose (it fades the icon and the border with the word). Muted text is
+   * therefore a SOLID token, `--ink-500`, chosen so it passes on every background it meets.
+   *
    * Contrast figures (WCAG 2.x relative luminance) are measured, not estimated; each text token
-   * below names its worst background. */
+   * below names its worst background. Solid hexes that say "navy N%" are that alpha blended over
+   * white, written out so text on them can be measured. */
   :root {
-    --brand-700: #1b3f60;
-    --brand-600: #102b43;
+    --brand-700: #2b4469;
+    --brand-600: #1e3150;
     --brand-500: #0284c7;
     --brand-100: var(--accent-100);
     --brand-50: var(--accent-50);
 
-    /* `--accent-700` is the text cyan: 5.35:1 on `--accent-50`, its worst background. */
+    /* `--accent-700` is the text cyan: 4.90:1 on `--accent-100`, its worst background.
+     * `--accent-50/100` are #00B1FF at 10% / 20% over white. `--row-hover*` are the guide's table
+     * row hover (§8.7), kept as alpha because they sit over whatever the table sits on. */
     --accent-700: #0369a1;
-    --accent-500: #2fb1f9;
-    --accent-100: #cbeafd;
-    --accent-50: #e8f5fe;
+    --accent-500: #00b1ff;
+    --accent-100: #ccefff;
+    --accent-50: #e6f7ff;
+    --row-hover: rgba(0, 177, 255, 0.04);
+    --row-hover-line: rgba(0, 177, 255, 0.1);
 
+    /* Main call to action (guide §8.1). `--cta` carries white text at 4.70:1; the guide's #56CC6E
+     * (2.0:1) and #1f8a3e (4.41:1) both fail. `--cta-text` is the outline variant's word and the
+     * hover fill: #1d853c is only 4.35:1 on `--bg`, #18742f is 5.43:1 there (white on it 5.87:1). */
+    --cta: #1d853c;
+    --cta-hover: #18742f;
+    --cta-text: #18742f;
+    --cta-outline: rgba(86, 204, 110, 0.5);
+
+    /* Danger. `--red-500` is the guide's #FF5955 — fills and icons ONLY (white on it 3.08:1).
+     * `--red-solid` carries white text (4.56:1): badge counts, a solid destructive button.
+     * `--red-600` is the TEXT red: 5.01:1 on `--red-50`; #d93a36 would be 4.06:1 there. */
     --red-600: #c62828;
-    --red-200: #f3c5c5;
-    --red-50: #fdecec;
+    --red-solid: #d93a36;
+    --red-500: #ff5955;
+    --red-200: #ffcdcc;
+    --red-50: #ffeeee;
     --gold-500: #f2b705;
     --gold-200: #f5e1a4;
     --gold-50: #fff8e1;
     --gold-800: #6b5200;
 
+    /* Status text on its own tint: green 5.54:1, amber 5.52:1. `-500` are the guide's fills. */
     --green-600: #157034;
-    --green-50: #e7f6ec;
+    --green-500: #56cc6e;
+    --green-50: #e6f7e9;
     --amber-600: #8f5600;
-    --amber-50: #fff4e0;
+    --amber-500: #fea220;
+    --amber-50: #fff4e4;
 
-    /* Navy ink. Worst text background in the app is `--surface-subtle` / `--accent-50`:
-     *   900 13.06:1 · 700 8.24:1 · 500 5.26:1 (4.69:1 on `--accent-100`).
-     * `--ink-400` is the prototype's muted #8aa2b8 — 2.64:1 on white, so disabled controls and
-     * decorative icons only, never text. The prototype used it for labels; that is the one value
-     * NOT taken over, because it fails 4.5:1. */
-    --ink-900: #102b43;
-    --ink-700: #2e4a64;
-    --ink-500: #4d6780;
-    --ink-400: #8aa2b8;
+    /* Navy ink. Worst text background is navy 10% over `--bg` (#e0e2e9, a pressed secondary):
+     *   900 10.08:1 · 700 6.49:1 · 500 4.62:1 (5.98:1 white, 5.54:1 `--bg`, 4.95:1 `--accent-100`).
+     * `--ink-500` is navy ≈75% over white rather than the guide's 72% (#5d6b81): 72% measures
+     * 4.18:1 on that pressed state.
+     * `--ink-400` is navy 50% — the guide's "disabled" look — 2.91:1 on white, so disabled
+     * controls and decorative icons only, never text. */
+    --ink-900: #1e3150;
+    --ink-700: #3e4e69;
+    --ink-500: #56647c;
+    --ink-400: #8f98a8;
 
-    --line: #dde7ef;
-    --line-strong: #c8d5e1;
-    --line-hover: #a9bccd;
-    --bg: #f4f8fb;
+    /* Borders are minimal (guide §1): layers separate by tint. `--line` is navy 10%, the hairline
+     * that remains; `--line-strong` navy 20% (control frames); `--line-hover` navy 35%. */
+    --line: #e9eaee;
+    --line-strong: #d2d6dc;
+    --line-hover: #b0b7c2;
+    --bg: #f5f6fa;
+    /* The grey around the app shell (guide §7). A token only — the shell adopts it (TASK-S3). */
+    --bg-outer: #d1d1d1;
     --surface: #ffffff;
-    --surface-muted: #f8fbfd;
-    /* The neutral chip / segmented-track fill, formerly a literal `#f1f4f8` in five components. */
-    --surface-subtle: #edf3f8;
+    --surface-muted: #f8f9fa;
+    /* Navy 5% / 10%: secondary button, chip, segmented, filter bar — and its pressed state. Alpha
+     * on purpose: the same fill reads right on white and on `--bg`. */
+    --surface-subtle: rgba(30, 49, 80, 0.05);
+    --surface-subtle-2: rgba(30, 49, 80, 0.1);
 
+    --r-xs: 6px;
     --r-sm: 8px;
-    --r-control: 10px;
+    --r-control: 8px;
     --r-md: 12px;
     --r-lg: 16px;
-    --r-xl: 20px;
-    --shadow-sm: 0 1px 2px rgba(16, 43, 67, 0.06);
-    --shadow-md: 0 4px 16px rgba(16, 43, 67, 0.06);
+    /* No 20px step in the guide; kept as a name so its consumers (login card, hero) follow. */
+    --r-xl: 16px;
+    --r-pill: 32px;
+    --shadow-sm: 0 4px 16px rgba(30, 49, 80, 0.16);
+    --shadow-md: 0 4px 16px rgba(30, 49, 80, 0.2);
+    --shadow-header: 0 4px 16px rgba(30, 49, 80, 0.32);
 
-    --control-h: 40px;
+    --font-size-base: 15px;
+    --control-h: 36px;
     --gap: 16px;
-    --row-h: 48px;
+    --row-h: 64px;
     --sidebar-w: 240px;
     --sidebar-w-collapsed: 72px;
     --topbar-h: 60px;
@@ -169,14 +229,13 @@
     --space-5: 24px;
     --space-6: 32px;
 
-    /* Motion — light, for feedback and orientation only (spec v2 §8b): hover/focus use `--dur-fast`,
-     * menus and drawers `--dur`, the sidebar collapse `--dur-slow`. All zeroed under reduced motion
-     * below. `--motion` is the older single duration the legacy rules still read; it now points at
-     * `--dur-fast` so there is one set of numbers, not two. */
-    --dur-fast: 150ms;
-    --dur: 200ms;
+    /* Motion — guide §9: one duration, 250ms on the standard curve. The three names are kept so
+     * every consumer (hover, menus, the sidebar collapse) reads the same number. All zeroed under
+     * reduced motion below. `--motion` is the older single duration the legacy rules still read. */
+    --dur-fast: 250ms;
+    --dur: 250ms;
     --dur-slow: 250ms;
-    --ease: cubic-bezier(0.2, 0, 0, 1);
+    --ease: cubic-bezier(0.4, 0, 0.2, 1);
     --motion: var(--dur-fast);
   }
 
@@ -204,11 +263,12 @@
 
   /*
    * The font variable, set by the class `src/app/layout.tsx` puts on `<html>`. The faces come from
-   * `@fontsource/be-vietnam-pro`, bundled and served from this app's own host: no request leaves
-   * for a font CDN, so a commune's staff page loads the same on a network that blocks Google.
+   * `@fontsource/roboto` (guide §3, owner decision 05/10/2026), bundled and served from this app's
+   * own host: no request leaves for a font CDN, so a commune's staff page loads the same on a
+   * network that blocks Google.
    */
-  .font-be-vietnam {
-    --font-be-vietnam: "Be Vietnam Pro";
+  .font-roboto {
+    --font-roboto: "Roboto";
   }
 
   /*
@@ -266,20 +326,20 @@
 }
 
 /* `html` stays at 16px so every `rem` in this file keeps its meaning (44px targets stay 44px);
- * only the body text drops to the spec's 14px. */
+ * only the body text takes the guide's 15px base (§3). */
 html,
 body {
   margin: 0;
   padding: 0;
   background: var(--nen);
   color: var(--ink-900);
-  font-family: var(--font-be-vietnam), system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-roboto), system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
   font-size: 16px;
   line-height: 1.5;
 }
 
 body {
-  font-size: 14px;
+  font-size: var(--font-size-base);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -393,7 +453,7 @@ body {
   background: var(--surface);
   color: var(--ink-700);
   font-weight: 500;
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 
 .login-module-icon {
@@ -503,7 +563,7 @@ body {
   color: var(--ink-700);
 }
 
-/* One control height (40px) and one frame for every native input, select and textarea drawn by
+/* One control height (`--control-h`, 36px) and one frame for every native input, select and textarea drawn by
  * the legacy classes — `.o-nhap` wraps most of them; a few carry the class themselves. Text stays
  * 16px below 768px: iOS zooms the page on focus into anything smaller.
  *
@@ -538,7 +598,8 @@ body {
 :where(input.o-nhap, textarea.o-nhap, select.o-chon):focus-visible {
   outline: none;
   border-color: var(--brand-500);
-  box-shadow: 0 0 0 3px var(--brand-100);
+  background-color: var(--accent-50);
+  box-shadow: inset 0 0 0 1px var(--brand-500);
 }
 
 :where(.o-nhap) :where(input, select, textarea):where(:disabled),
@@ -558,7 +619,7 @@ body {
 @media (min-width: 768px) {
   :where(.o-nhap) :where(input:not([type="checkbox"], [type="radio"], [type="file"]), select, textarea),
   :where(input.o-nhap, textarea.o-nhap, select.o-chon) {
-    font-size: 0.875rem;
+    font-size: 0.9375rem;
   }
 }
 
@@ -566,7 +627,7 @@ body {
  *
  * "Quá hẹp, view xấu, lạc hậu" — the Nội dung editor's selects were browser-default boxes with the
  * label beside them. Screens not yet restyled draw dozens of bare `<select>`s, so the frame is given
- * HERE, once, to all of them: the same look as `components/ui/field.tsx` `controlClass` — 40px,
+ * HERE, once, to all of them: the same look as `components/ui/field.tsx` `controlClass` — 36px,
  * `--line-strong` hairline, `--r-control` radius, a ChevronDown, the brand focus ring.
  *
  * ZERO SPECIFICITY (`:where`) AND IN `legacy`, ON PURPOSE, for the same reason as the `.o-nhap`
@@ -575,7 +636,7 @@ body {
  * or handler is touched, and `multiple` / `size` list boxes keep the browser's list drawing.
  *
  * The chevron is a background image because a `<select>` has no pseudo-elements. A data URI cannot
- * read a CSS variable, so its colour is `--ink-500` (#4d6780) written out — the one literal colour
+ * read a CSS variable, so its colour is `--ink-500` (#56647c) written out — the one literal colour
  * here; dark mode is defined but not enabled (see `:root[data-theme="dark"]`). `Field` draws its own
  * chevron icon, so it switches this image off (`[&_select]:bg-none` in field.tsx). */
 :where(select:not([multiple], [size])) {
@@ -588,7 +649,7 @@ body {
   border: 1px solid var(--line-strong);
   border-radius: var(--r-control);
   background-color: var(--surface);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%234d6780' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2356647c' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 0.75rem center;
   background-size: 1rem 1rem;
@@ -612,7 +673,8 @@ body {
 :where(select:not([multiple], [size])):focus-visible {
   outline: none;
   border-color: var(--brand-500);
-  box-shadow: 0 0 0 3px var(--brand-100);
+  background-color: var(--accent-50);
+  box-shadow: inset 0 0 0 1px var(--brand-500);
 }
 
 :where(select:not([multiple], [size])):where(:disabled) {
@@ -623,7 +685,7 @@ body {
 
 @media (min-width: 768px) {
   :where(select:not([multiple], [size])) {
-    font-size: 0.875rem;
+    font-size: 0.9375rem;
   }
 }
 
@@ -732,23 +794,23 @@ div.thong-bao-loi:not(:empty) {
   background: var(--red-50);
 }
 
-/* PRIMARY BUTTON — spec §7. No longer `width: 100%`: a full-width primary button on a desktop page
- * was the spec's issue #6. The few places that want full width (login card, the stacked search
- * form at 320px) say so themselves. */
+/* PRIMARY BUTTON — the main call to action, guide §8.1: solid green, white text (`--cta`, 4.70:1).
+ * No longer `width: 100%`: a full-width primary button on a desktop page was the spec's issue #6.
+ * The few places that want full width (login card, the stacked search form at 320px) say so. */
 .nut-chinh {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
   min-height: var(--control-h);
-  padding: 0.5rem 1rem;
-  border: 1px solid var(--brand-600);
+  padding: 0.375rem 1rem;
+  border: 1px solid var(--cta);
   border-radius: var(--r-control);
-  background: var(--brand-600);
+  background: var(--cta);
   color: #fff;
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   font-family: inherit;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1.2;
   text-decoration: none;
   cursor: pointer;
@@ -761,8 +823,8 @@ div.thong-bao-loi:not(:empty) {
 }
 
 .nut-chinh:hover:not(:disabled) {
-  background: var(--brand-700);
-  border-color: var(--brand-700);
+  background: var(--cta-hover);
+  border-color: var(--cta-hover);
 }
 
 .nut-chinh:active:not(:disabled) {
@@ -770,7 +832,7 @@ div.thong-bao-loi:not(:empty) {
 }
 
 .nut-chinh:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   box-shadow: none;
   cursor: not-allowed;
 }
@@ -1146,7 +1208,7 @@ div.thong-bao-loi:not(:empty) {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-sm);
   animation: menu-in var(--dur) var(--ease);
 }
 
@@ -1226,23 +1288,24 @@ div.thong-bao-loi:not(:empty) {
   overflow-wrap: anywhere;
 }
 
-/* SECONDARY BUTTON — spec §7: white, `--line-strong` border, `--ink-700` text. 36px rather than
- * 40px by default because it also sits in table rows and toolbars; contexts that need a 44px
- * target already say so further down (`.o-thao-tac .nut-phu` and friends). */
+/* SECONDARY BUTTON — guide §8.1: navy 5% fill, navy text, no visible border until hover (§9: hover
+ * keeps the fill and adds a 1px navy border; the transparent border reserves the pixel so nothing
+ * shifts). 36px; contexts that need a 44px target already say so further down
+ * (`.o-thao-tac .nut-phu` and friends). */
 .nut-phu {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.375rem;
-  min-height: 2.25rem;
-  padding: 0.375rem 0.875rem;
-  border: 1px solid var(--line-strong);
+  min-height: var(--control-h);
+  padding: 0.375rem 1rem;
+  border: 1px solid transparent;
   border-radius: var(--r-control);
-  background: var(--surface);
-  color: var(--ink-700);
-  font-size: 0.875rem;
+  background: var(--surface-subtle);
+  color: var(--ink-900);
+  font-size: 0.9375rem;
   font-family: inherit;
-  font-weight: 500;
+  font-weight: 400;
   line-height: 1.25;
   text-decoration: none;
   vertical-align: middle;
@@ -1255,22 +1318,20 @@ div.thong-bao-loi:not(:empty) {
 }
 
 .nut-phu:hover:not(:disabled) {
-  background: var(--brand-50);
-  border-color: var(--brand-100);
-  color: var(--brand-700);
+  border-color: var(--ink-900);
 }
 
 .nut-phu:disabled {
-  background: var(--surface-muted);
-  color: var(--ink-500);
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
+/* Pressed = the guide's active tab: navy solid, white text (13.04:1) — and weight, not colour alone. */
 .nut-phu[aria-pressed="true"] {
-  background: var(--brand-50);
+  background: var(--brand-600);
   border-color: var(--brand-600);
-  color: var(--brand-700);
-  font-weight: 600;
+  color: #fff;
+  font-weight: 500;
 }
 
 .ghi-chu {
@@ -1683,20 +1744,22 @@ div.thong-bao-loi:not(:empty) {
  * và đây đúng là dữ liệu dạng bảng. Nên vùng bảng cuộn ngang, và vùng cuộn ấy tới được bằng bàn
  * phím (`tabindex` + `role="region"` trong danh-ba-can-bo.tsx). */
 /* The table's own scroller, framed as a card (spec §6.7): ONLY the table scrolls, never the page.
- * `max-width: 100%` keeps it inside its column even inside a flex or grid parent. */
+ * `max-width: 100%` keeps it inside its column even inside a flex or grid parent. Guide §5/§8.7: a
+ * content card on `--bg` is white + 16px radius, NO shadow; only the faint `--line` hairline stays,
+ * so the card still has an edge where it sits on white. */
 .bang-cuon {
   max-width: 100%;
   overflow-x: auto;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 
 .bang-can-bo {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
 }
 
 /* Cells: 12px 16px, vertically centred, figures in tabular digits so phone numbers and amounts
@@ -1725,9 +1788,16 @@ div.thong-bao-loi:not(:empty) {
   transition: background-color var(--motion) ease;
 }
 
+/* Guide §8.7: a very pale cyan row and a cyan hairline, no zebra. The hairline is drawn on the
+ * cells (a `tr` border does not render under `border-collapse` in every browser). */
 .bang-can-bo tbody tr:hover,
 .bang-danh-muc tbody tr:hover {
-  background: var(--brand-50);
+  background: var(--row-hover);
+}
+
+.bang-can-bo tbody tr:hover > td,
+.bang-danh-muc tbody tr:hover > td {
+  border-bottom-color: var(--row-hover-line);
 }
 
 .bang-can-bo tbody tr:last-child td {
@@ -1828,14 +1898,14 @@ div.thong-bao-loi:not(:empty) {
   cursor: not-allowed;
 }
 
-/* Detail block = the spec's card: white, hairline border, 16px radius, soft shadow. */
+/* Detail block = the guide's card: white, faint hairline, 16px radius, no shadow (§5). */
 .khoi-chi-tiet {
   margin: 1rem 0;
   padding: 1rem;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 
 .dau-khoi-chi-tiet {
@@ -2144,7 +2214,7 @@ div.thong-bao-loi:not(:empty) {
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   background: var(--surface);
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 
 .the-bo-phan-than {
@@ -2344,7 +2414,8 @@ div.thong-bao-loi:not(:empty) {
 .chon-hang-muc select:focus-visible {
   outline: none;
   border-color: var(--brand-500);
-  box-shadow: 0 0 0 3px var(--brand-100);
+  background-color: var(--accent-50);
+  box-shadow: inset 0 0 0 1px var(--brand-500);
 }
 
 /* Chip "Chậm N điểm". Đỏ, VÀ chữ đã nói rõ — màu không bao giờ là tín hiệu duy nhất (a11y §8). */
@@ -2581,7 +2652,8 @@ aside.khoi-chua-khai h3 {
 :is(.hang-loc, .filter-bar) .o-chon:has(> select) > select:focus-visible {
   outline: none;
   border-color: var(--brand-500);
-  box-shadow: 0 0 0 3px var(--brand-100);
+  background-color: var(--accent-50);
+  box-shadow: inset 0 0 0 1px var(--brand-500);
 }
 
 /* Exactly 40px — `min-height` alone let a 16px-text input grow to 40.4px below 768px. */
@@ -2775,7 +2847,8 @@ aside.khoi-chua-khai h3 {
 /* Nút Xoá KHÔNG chỉ khác màu — chữ trong nút đã nói "Xoá". Màu chỉ là dấu hiệu thứ hai, để
  * người không phân biệt được màu vẫn đọc ra (a11y, `15-phu-luc §8`). */
 .nut-xoa {
-  border-color: var(--red-200);
+  background: var(--red-50);
+  border-color: transparent;
   color: var(--do-loi);
 }
 
@@ -2836,7 +2909,7 @@ aside.khoi-chua-khai h3 {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 
 /* VÙNG CHẠM TỐI THIỂU — cùng ngưỡng và cùng lý do với `.o-thao-tac .nut-phu` ở trên: cán bộ lớn
@@ -3355,7 +3428,7 @@ aside.khoi-chua-khai h3 {
   min-width: 0;
 }
 
-/* `ui/data-table.tsx`. Body rows one `--row-h` tall; the header row sticks inside a capped scroller
+/* `ui/data-table.tsx`. Body rows one `--row-h` (64px, guide §6) tall; the header row sticks inside a capped scroller
  * (`.table-scroll--sticky`) — the cap is what gives `position: sticky` something to stick to. */
 .data-table tbody td {
   height: var(--row-h);

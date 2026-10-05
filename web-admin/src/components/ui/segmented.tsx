@@ -5,7 +5,9 @@ import { cn } from "@/lib/cn";
 import { PendingMarker, type PendingFeatureInfo } from "./pending-feature";
 
 /**
- * Segmented control — spec §7: a select with ≤ 4 options drawn as one row of segments.
+ * Segmented control — spec §7: a select with ≤ 4 options drawn as one row of segments. Look:
+ * guide §7 (05/10/2026), the same as `Tab` — 36px segments on the navy 5% fill, the selected one
+ * navy solid with white text and weight 500; disabled = opacity .5 (guide §9).
  *
  * PRESENTATIONAL ONLY, AND IT EMITS EXACTLY THE VALUES IT IS GIVEN. Each option's `value` is the
  * very string the screen's `<select>` used to emit, and `onChange(value)` is the screen's existing
@@ -50,15 +52,17 @@ export type SegmentedProps = {
   className?: string;
 };
 
-const TRACK = "inline-flex max-w-full flex-wrap gap-0.5 rounded-control bg-surface-subtle p-[3px]";
+const TRACK = "inline-flex max-w-full flex-wrap gap-1";
 
+// The hover border is an INSET SHADOW, not a border: the radio-mode label and the button-mode
+// button then keep one box size, and a 1px border appearing on hover shifts nothing.
 const SEGMENT = cn(
-  "inline-flex h-[34px] items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium whitespace-nowrap text-ink-500",
-  "cursor-pointer transition-[background-color,color,box-shadow] duration-150 hover:text-ink-900",
-  "[&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex h-9 items-center gap-1.5 rounded-control bg-surface-subtle px-4 text-[15px] font-normal whitespace-nowrap text-ink-900",
+  "cursor-pointer transition-[background-color,color,box-shadow] duration-(--dur-fast) ease-(--ease) hover:shadow-[inset_0_0_0_1px_var(--ink-900)]",
+  "[&_svg]:size-5 [&_svg]:shrink-0",
 );
 
-const SEGMENT_ON = "bg-surface font-semibold text-ink-900 shadow-sm";
+const SEGMENT_ON = "bg-brand-600 font-medium text-white hover:shadow-none";
 
 function optionId(name: string, value: string): string {
   // Values may hold characters an `id` should not ("", spaces); an index-free, readable id is
@@ -94,7 +98,7 @@ export function Segmented({
                     disabled
                     className={cn(
                       SEGMENT,
-                      "cursor-not-allowed border-0 bg-transparent pr-8 [font-family:inherit] opacity-60 hover:text-ink-500",
+                      "cursor-not-allowed border-0 pr-8 [font-family:inherit] opacity-50 hover:shadow-none",
                     )}
                   >
                     {Icon !== undefined && <Icon aria-hidden="true" focusable="false" strokeWidth={1.8} />}
@@ -113,10 +117,10 @@ export function Segmented({
                 onClick={() => onChange(o.value)}
                 className={cn(
                   SEGMENT,
-                  "border-0 bg-transparent [font-family:inherit]",
+                  "border-0 [font-family:inherit]",
                   on && SEGMENT_ON,
-                  "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-500",
-                  "disabled:cursor-not-allowed disabled:opacity-60",
+                  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500",
+                  "disabled:cursor-not-allowed disabled:opacity-50",
                 )}
               >
                 {Icon !== undefined && <Icon aria-hidden="true" focusable="false" strokeWidth={1.8} />}
@@ -150,11 +154,11 @@ export function Segmented({
                   name={name}
                   value={o.value}
                   disabled
-                  className="peer absolute inset-0 m-0 appearance-none rounded-lg opacity-0"
+                  className="peer absolute inset-0 m-0 appearance-none rounded-control opacity-0"
                 />
                 <label
                   htmlFor={id}
-                  className={cn(SEGMENT, "pointer-events-none cursor-not-allowed pr-8 opacity-60 hover:text-ink-500")}
+                  className={cn(SEGMENT, "pointer-events-none cursor-not-allowed pr-8 opacity-50 hover:shadow-none")}
                 >
                   {Icon !== undefined && <Icon aria-hidden="true" focusable="false" strokeWidth={1.8} />}
                   {o.label}
@@ -172,15 +176,16 @@ export function Segmented({
                 value={o.value}
                 checked={on}
                 onChange={(e) => onChange(e.target.value)}
-                className="peer absolute inset-0 m-0 cursor-pointer appearance-none rounded-lg opacity-0"
+                className="peer absolute inset-0 m-0 cursor-pointer appearance-none rounded-control opacity-0"
               />
               <label
                 htmlFor={id}
                 className={cn(
                   SEGMENT,
                   on && SEGMENT_ON,
-                  "pointer-events-none peer-hover:text-ink-900 peer-focus-visible:outline-2 peer-focus-visible:outline-offset-1 peer-focus-visible:outline-brand-500",
-                  "peer-disabled:cursor-not-allowed peer-disabled:opacity-60",
+                  !on && "peer-hover:shadow-[inset_0_0_0_1px_var(--ink-900)]",
+                  "pointer-events-none peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-500",
+                  "peer-disabled:cursor-not-allowed peer-disabled:opacity-50",
                 )}
               >
                 {Icon !== undefined && <Icon aria-hidden="true" focusable="false" strokeWidth={1.8} />}

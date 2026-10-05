@@ -1,23 +1,25 @@
 import type { ReactNode } from "react";
 
-// Be Vietnam Pro, SELF-HOSTED (owner decision 02/10/2026): the four weights the spec uses, from
-// `@fontsource/be-vietnam-pro`. Each file declares the vietnamese, latin-ext and latin faces with
-// their `unicode-range`, so a browser downloads only the subsets a page actually uses. The fonts
-// are bundled into this app's static assets and served from the commune's own host — NOT
-// `next/font/google`, which would make the build (and a staff member's browser, on a cache miss)
-// depend on a Google request.
-import "@fontsource/be-vietnam-pro/400.css";
-import "@fontsource/be-vietnam-pro/500.css";
-import "@fontsource/be-vietnam-pro/600.css";
-import "@fontsource/be-vietnam-pro/700.css";
+// Roboto, SELF-HOSTED (OMICALL tokens, owner decision 05/10/2026): the three weights the guide
+// uses (400/500/600), from `@fontsource/roboto`. Import the COMBINED per-weight file, never the
+// per-subset ones (`vietnamese-400.css`): only the combined file gives each face its
+// `unicode-range`. Without it the last-declared subset face claims every character, and letters
+// it lacks fall through to the system font mid-word. With it a browser downloads only the
+// subsets a page uses — vietnamese, latin-ext, latin here. A 700 request resolves to the 600 face.
+// The fonts are bundled into this app's static assets and served from the commune's own host —
+// NOT `next/font/google`, which would make the build (and a staff member's browser, on a cache
+// miss) depend on a Google request.
+import "@fontsource/roboto/400.css";
+import "@fontsource/roboto/500.css";
+import "@fontsource/roboto/600.css";
 
 import "./globals.css";
 
 /**
- * Class that sets `--font-be-vietnam` (`globals.css`, layer `base`) — the same shape as a
+ * Class that sets `--font-roboto` (`globals.css`, layer `base`) — the same shape as a
  * `next/font` `variable`, so the body font is one CSS variable with a system fallback behind it.
  */
-const FONT_VARIABLE_CLASS = "font-be-vietnam";
+const FONT_VARIABLE_CLASS = "font-roboto";
 
 /**
  * Bố cục gốc. Cố ý MỎNG: nó không suy ra xã.
