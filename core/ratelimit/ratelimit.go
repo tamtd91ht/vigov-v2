@@ -78,6 +78,25 @@ const (
 	StaffImageFetchWindow = time.Hour
 )
 
+// The Zalo Bot pairing threshold — DECIDED BY THE OWNER (ADR 0074 §"Luật nghiệp vụ mượn của đặc tả",
+// 05/10/2026): "mỗi chat tối đa 5 lần thử/giờ". Every code-shaped message a chat sends to the shared bot
+// counts, right or wrong. Changing either number is a rule 13 stop condition.
+const (
+	ZaloBotPairingLimit  = 5
+	ZaloBotPairingWindow = time.Hour
+)
+
+// The Zalo Bot webhook threshold — PROVISIONAL, NOT AN OWNER FIGURE. ADR 0074 #5 requires "giới hạn tần
+// suất (luật 13 #7)" on POST /api/v1/zalo-bot-updates and names no number; choosing one is a rule 13 stop
+// condition that is OPEN until the owner answers. 600 per minute per client network was proposed because
+// EVERY legitimate update arrives from Zalo's own servers — a handful of networks carrying every staff
+// member's messages to the bot — so a figure sized for one person would throttle Zalo itself, while the
+// bound still caps how fast one network can guess the webhook secret (counted BEFORE the secret is read).
+const (
+	ZaloBotWebhookLimit  = 600
+	ZaloBotWebhookWindow = time.Minute
+)
+
 // Policy is one limit: at most Limit attempts per key per Window.
 type Policy struct {
 	// name goes into every key; it separates the counters of two policies keyed by the same subject.
@@ -135,6 +154,20 @@ var StaffImageFetch = Policy{name: "body-image-fetch", limit: StaffImageFetchLim
 	window: StaffImageFetchWindow, event: "body_image_fetch.rate_limited",
 	refusedCode:    "image_fetch_rate_limited",
 	refusedMessage: "Đã lấy ảnh từ liên kết quá nhiều lần trong một giờ. Vui lòng thử lại sau."}
+
+// ZaloBotWebhook is the policy of service-comms' POST /api/v1/zalo-bot-updates (ADR 0074 #5). Keys from
+// WebhookIPKey. FAILS CLOSED, the default: the route is unauthenticated until the secret header is
+// compared, and nobody decided that a Redis outage may lift the bound on guessing it. Its NUMBER is
+// provisional — see ZaloBotWebhookLimit.
+var ZaloBotWebhook = Policy{name: "zalo-bot-webhook", limit: ZaloBotWebhookLimit,
+	window: ZaloBotWebhookWindow, event: "zalo_bot_webhook.rate_limited"}
+
+// ZaloBotPairing is the per-chat pairing limit of the shared Zalo Bot (ADR 0074). Keys from ZaloChatKey.
+// FAILS CLOSED: what it bounds is guessing a live pairing code, which pairs a stranger's chat to a member
+// of staff's reminders. It is consulted by the webhook's use case, not by an HTTP middleware — the chat is
+// only known once the authenticated body is parsed — so its refusal is a reply in the chat, never a 429.
+var ZaloBotPairing = Policy{name: "zalo-bot-pairing", limit: ZaloBotPairingLimit,
+	window: ZaloBotPairingWindow, event: "zalo_bot_pairing.rate_limited"}
 
 // Key is one counter's identity. OPAQUE, built only by the constructors below, so that "which scope
 // does this counter belong to" is decided once, by name, and never by a caller concatenating a
@@ -258,6 +291,34 @@ var ErrNoActor = errors.New("ratelimit: no business code for a per-officer key")
 //
 // ip is the address the edge observed (httpx.ClientIP — never a raw X-Forwarded-For).
 func OperatorIPKey(ip string) Key { return Key{subject: ipSubject(ip)} }
+
+// WebhookIPKey is the key of a PLATFORM webhook's limit (the shared Zalo Bot's, ADR 0074 #5): one counter
+// per client network, reduced exactly as OperatorIPKey reduces it. NO TENANT PREFIX, and that is not a
+// default on the isolation path: the request carries no commune — the webhook host maps to none, and the
+// commune is learnt only later, from a pairing code or a link (ADR 0074 #5).
+//
+//	→ "rl:<policy>:ip:<net>"
+func WebhookIPKey(ip string) Key { return Key{subject: ipSubject(ip)} }
+
+// ZaloChatKey is the key of a per-CHAT limit of the shared Zalo Bot: one counter per chat, platform-wide.
+//
+//	→ "rl:<policy>:zalo-chat:<sha256(chatID) hex>"
+//
+// NO TENANT PREFIX: a chat belongs to no commune until it is paired, and the limit exists precisely for
+// the chats that are not (ADR 0074; 0018 "WHAT IS DELIBERATELY NOT A TABLE"). HASHED, NEVER WRITTEN AS IS:
+// chat_id is personal data (ADR 0074) and a cache key is somewhere rule 3 forbidden #4 keeps it out of.
+// An empty chat id is refused rather than turned into one counter every malformed update would share.
+func ZaloChatKey(chatID string) (Key, error) {
+	if strings.TrimSpace(chatID) == "" {
+		return Key{}, ErrNoChat
+	}
+	sum := sha256.Sum256([]byte(chatID))
+	return Key{subject: "zalo-chat:" + hex.EncodeToString(sum[:])}, nil
+}
+
+// ErrNoChat — a per-chat key was asked for with no chat id. The caller refuses, never counts under a
+// shared key.
+var ErrNoChat = errors.New("ratelimit: no chat id for a per-chat key")
 
 // ipSubject is the client-network part every IP-keyed counter shares — the table on OperatorIPKey.
 func ipSubject(ip string) string {

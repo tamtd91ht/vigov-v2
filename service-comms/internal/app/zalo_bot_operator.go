@@ -513,17 +513,25 @@ func (uc *ZaloBotOperator) ListZaloBotCommuneStats(ctx context.Context, actorCod
 // liveToken opens the stored token. ok=false: none stored (NOT_CONFIGURED). A nil envelope with a
 // stored token is crypto.ErrNotConfigured — nothing can be opened.
 func (uc *ZaloBotOperator) liveToken(ctx context.Context) (secret.Secret, []byte, bool, error) {
-	sealed, found, err := uc.store.SharedBotToken(ctx)
+	return openLiveToken(ctx, uc.store, uc.envelope)
+}
+
+// openLiveToken is liveToken for any holder of the store and the envelope — the operator acts here, and
+// the staff side's sends (zalo_bot_access.go).
+func openLiveToken(ctx context.Context, store ZaloBotStore, envelope *crypto.PlatformEnvelope) (
+	secret.Secret, []byte, bool, error) {
+
+	sealed, found, err := store.SharedBotToken(ctx)
 	if err != nil {
 		return nil, nil, false, fmt.Errorf("zalo bot: read the token: %w", err)
 	}
 	if !found {
 		return nil, nil, false, nil
 	}
-	if uc.envelope == nil {
+	if envelope == nil {
 		return nil, nil, false, crypto.ErrNotConfigured
 	}
-	token, err := uc.envelope.OpenPlatform(ctx, sealed, tokenAAD)
+	token, err := envelope.OpenPlatform(ctx, sealed, tokenAAD)
 	if err != nil {
 		return nil, nil, false, fmt.Errorf("zalo bot: open the token: %w", err)
 	}

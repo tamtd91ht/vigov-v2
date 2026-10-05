@@ -605,3 +605,60 @@ func TestCitizenKeyShape(t *testing.T) {
 		t.Errorf("no citizen: %v", err)
 	}
 }
+
+// The Zalo Bot pairing policy (ADR 0074, owner 05/10/2026): 5 per hour per chat, fails CLOSED. The
+// webhook policy's number is provisional (rule 13 stop condition, open) — pinned so a change turns red.
+func TestZaloBotPoliciesArePinnedAndFailClosed(t *testing.T) {
+	if ZaloBotPairingLimit != 5 || ZaloBotPairingWindow != time.Hour {
+		t.Fatalf("ADR 0074 decided 5 tries per hour per chat, got %d / %v", ZaloBotPairingLimit, ZaloBotPairingWindow)
+	}
+	if ZaloBotWebhookLimit != 600 || ZaloBotWebhookWindow != time.Minute {
+		t.Fatalf("webhook threshold = %d per %v", ZaloBotWebhookLimit, ZaloBotWebhookWindow)
+	}
+	for _, p := range []Policy{ZaloBotPairing, ZaloBotWebhook} {
+		if p.FailsOpen() {
+			t.Fatalf("%s must fail closed", p.name)
+		}
+		if _, err := New(newFake(), p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	l, _ := New(newFake(), ZaloBotPairing)
+	k, _ := ZaloChatKey("chat-1")
+	for i := 0; i < ZaloBotPairingLimit; i++ {
+		if ok, _, _ := l.Allow(context.Background(), k); !ok {
+			t.Fatalf("try %d refused", i+1)
+		}
+	}
+	if ok, _, _ := l.Allow(context.Background(), k); ok {
+		t.Fatal("the sixth try in the hour was allowed")
+	}
+}
+
+// Platform-realm keys: no commune prefix, chat id hashed, never written as is; an empty chat id is
+// refused rather than counted under a shared key.
+func TestZaloKeysShape(t *testing.T) {
+	f := newFake()
+	pairing, _ := New(f, ZaloBotPairing)
+	webhook, _ := New(f, ZaloBotWebhook)
+	k1, err := ZaloChatKey("1234567890123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	k2, _ := ZaloChatKey("9999999999999")
+	_, _, _ = pairing.Allow(context.Background(), k1)
+	_, _, _ = pairing.Allow(context.Background(), k2)
+	_, _, _ = webhook.Allow(context.Background(), WebhookIPKey("203.0.113.7"))
+	if len(f.keys) != 3 || f.keys[0] == f.keys[1] {
+		t.Fatalf("keys = %v", f.keys)
+	}
+	if !strings.HasPrefix(f.keys[0], "rl:zalo-bot-pairing:zalo-chat:") || strings.Contains(f.keys[0], "1234567890123") {
+		t.Errorf("chat key = %q", f.keys[0])
+	}
+	if f.keys[2] != "rl:zalo-bot-webhook:ip:203.0.113.7" {
+		t.Errorf("webhook key = %q", f.keys[2])
+	}
+	if _, err := ZaloChatKey(" "); !errors.Is(err, ErrNoChat) {
+		t.Errorf("empty chat: %v", err)
+	}
+}

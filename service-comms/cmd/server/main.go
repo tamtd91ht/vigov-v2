@@ -279,8 +279,17 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	// ONE Zalo client for the process: the operator acts, the staff test message, the webhook's replies and
+	// the dispatcher all go through it (internal/zalobot: no proxy, verified TLS, no redirects).
+	zaloClient := zalobot.New(zalobot.DefaultTimeout)
 	zaloBotOperator := commsapp.NewZaloBotOperator(commsapp.NewZaloBotStore(platformStore), platformEnvelope,
-		zalobot.New(zalobot.DefaultTimeout), cfg.ZaloBotWebhookHost())
+		zaloClient, cfg.ZaloBotWebhookHost())
+	// The commune side's read of the same bot (metadata, token, both webhook secrets), and the scoped store
+	// of the four commune tables of 0018. The cross-commune statements are crosstenant.ZaloBot, on the raw
+	// pool, like the portal runner's.
+	zaloBot := commsapp.NewSharedZaloBotAccess(commsapp.NewZaloBotStore(platformStore), platformStore, platformEnvelope)
+	zaloLinks := commsstore.NewZaloLinkStore(kho)
+	zaloCross := crosstenant.NewZaloBot(db)
 
 	mailSettings := commsapp.NewMailSettingsAdmin(kho, commsstore.NewMailSettingsStore(kho), envelope,
 		mail.NewSender(nil, mail.DefaultTimeout))
@@ -289,7 +298,9 @@ func main() {
 	// use case owns every write's transaction and audit entry — the REST mark-read routes AND the gRPC
 	// delivery below share it.
 	staffInbox := commsstore.NewStaffNotificationStore(kho)
-	staffNotifications := commsapp.NewStaffNotifications(kho, staffInbox)
+	// Since 2026-10-05 the same transaction also queues each notice's Zalo copy (ADR 0074; zalo_delivery is
+	// the outbox), inside a savepoint: a Zalo failure never fails the bell.
+	staffNotifications := commsapp.NewStaffNotifications(kho, staffInbox).WithZaloOutbox(zaloLinks, log)
 
 	// The portal sync (migration 0013, ADR 0067 §2). ONE outbound client for the process — its
 	// transport is the only way to a socket and it carries both SSRF checks (internal/portal). NO NEW
@@ -341,6 +352,29 @@ func main() {
 	})
 	if err != nil {
 		log.Error("không dựng được việc nền gỡ ảnh thân bài bỏ dở", "service", "comms", "err", err)
+		os.Exit(1)
+	}
+
+	// THE ZALO BOT CHANNEL (ADR 0074): two limiters on the same counter. The pairing one is the owner's
+	// "5 lần thử/giờ mỗi chat"; the webhook one is PROVISIONAL (core/ratelimit ZaloBotWebhookLimit). Both
+	// fail closed: without Redis, pairing replies "try later" and the webhook answers 503.
+	zaloPairingLimiter, err := ratelimit.New(rateCounter, ratelimit.ZaloBotPairing)
+	if err != nil {
+		log.Error("không dựng được bộ giới hạn thử mã ghép Zalo", "service", "comms", "err", err)
+		os.Exit(1)
+	}
+	zaloWebhookLimiter, err := ratelimit.New(rateCounter, ratelimit.ZaloBotWebhook)
+	if err != nil {
+		log.Error("không dựng được bộ giới hạn tần suất webhook Zalo Bot", "service", "comms", "err", err)
+		os.Exit(1)
+	}
+	// The sender of owed Zalo messages — the sweep's pattern (one advisory lock, per-commune context).
+	// `nenTang` gives a commune's state (a merged one is left untouched) and its host for message links.
+	zaloDispatcher, err := commsapp.NewZaloDispatcher(commsapp.ZaloDispatcherDeps{
+		DB: kho, Repo: zaloLinks, Locks: zaloCross, Registry: nenTang, Bot: zaloBot, Send: zaloClient, Log: log,
+	})
+	if err != nil {
+		log.Error("không dựng được việc nền gửi tin Zalo", "service", "comms", "err", err)
 		os.Exit(1)
 	}
 
@@ -414,6 +448,30 @@ func main() {
 		Log:     log,
 	})
 
+	// The Zalo Bot channel's staff routes (ADR 0074 §"Tài nguyên URL") — the caller's own link
+	// (AnyAuthenticated) and the commune's administration (admin.lookup), on the SAME staff mux. Staff names
+	// for the linked list come from identity's ResolveStaffNames over the client the edge already holds.
+	zaloLinkActs := commsapp.NewZaloLinks(kho, zaloLinks, zaloBot, zaloClient, dinhDanh, log)
+	svchttp.RegisterZaloLinks(mux, svchttp.ZaloLinkDeps{
+		Checker: staffauth.Checker{},
+		Reader:  zaloLinkActs,
+		Writer:  zaloLinkActs,
+		Log:     log,
+	})
+
+	// THE THIRD EDGE CHAIN — the shared Zalo Bot's webhook (ADR 0074 #5), served ONLY on
+	// ZALO_BOT_WEBHOOK_HOST (withZaloBotWebhook). Its own mux: no commune, no session, no CORS.
+	muxZaloBot := http.NewServeMux()
+	svchttp.RegisterZaloBotUpdates(muxZaloBot, svchttp.ZaloBotUpdateDeps{
+		Updates: commsapp.NewZaloWebhook(kho, zaloLinks, zaloCross, zaloPairingLimiter, zaloBot, zaloClient, log),
+		Limiter: zaloWebhookLimiter,
+		Log:     log,
+	})
+	if cfg.ZaloBotWebhookHost() == "" {
+		log.Warn("CẢNH BÁO CẤU HÌNH", "chi_tiet",
+			"ZALO_BOT_WEBHOOK_HOST trống — webhook Zalo Bot không được phục vụ ở host nào (chỉ dev)")
+	}
+
 	// THE PUBLIC SURFACE (owner decision 2026-09-27) — its own mux, its own Deps, its own chain. `nenTang`
 	// is the SAME platform client the Host edge uses, asked through XaTheoHost so an outage is a 503 and
 	// never "no such commune". The two content stores are the SAME ones the staff routes use, reached
@@ -468,7 +526,9 @@ func main() {
 		Addr: addr,
 		// OUTERMOST, around BOTH chains: every layer reads one client address per request, crossing
 		// only the proxies TRUSTED_PROXY_CIDRS names (rule 6, invariant 2).
-		Handler:           httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies())(dungBien(mux, congKhai, directory, dinhDanh, idemStore, log)),
+		Handler: httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies())(withZaloBotWebhook(
+			dungBien(mux, congKhai, directory, dinhDanh, idemStore, log),
+			zaloBotChain(muxZaloBot), cfg.ZaloBotWebhookHost())),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -519,6 +579,13 @@ func main() {
 	go func() {
 		defer close(sweepDone)
 		bodyImageSweeper.Run(jobs)
+	}()
+	// The Zalo sender (ADR 0074) on the same context. A pass cut mid-send leaves its rows leased; the lease
+	// expires and they are sent again — never lost, at worst sent twice.
+	zaloDone := make(chan struct{})
+	go func() {
+		defer close(zaloDone)
+		zaloDispatcher.Run(jobs)
 	}()
 
 	// Buffered for two: either server may fail, and a send nobody reads would leak its goroutine.
@@ -589,6 +656,11 @@ func main() {
 		case <-sweepDone:
 		case <-ctx.Done():
 			log.Warn("việc nền gỡ ảnh thân bài bỏ dở chưa dừng kịp hạn — giao dịch dở sẽ bị cuộn lại", "service", "comms")
+		}
+		select {
+		case <-zaloDone:
+		case <-ctx.Done():
+			log.Warn("việc nền gửi Zalo chưa dừng kịp hạn — tin đang giữ sẽ được gửi lại sau hạn giữ", "service", "comms")
 		}
 		if errHTTP != nil {
 			log.Error("đóng không sạch", "err", errHTTP)
@@ -717,6 +789,41 @@ func dungBienCongKhai(muxCongKhai http.Handler, nguonCORS httpx.NguonCORS) http.
 	c = httpx.StripTenantHeaders(c)
 	c = httpx.CORSCongDan(nguonCORS)(c)
 	return c
+}
+
+// zaloBotChain builds the THIRD edge chain — the shared Zalo Bot's webhook (ADR 0074 #5), outermost last:
+//
+//	StripTenantHeaders  a client naming its own commune is granting itself access; here there is not even
+//	                    a Host commune to contradict it
+//	Recover             a panic becomes a traceable 500
+//
+// NO TenantMiddleware (the webhook host maps to no commune — the commune comes from a pairing code or a
+// link), NO staffauth (Zalo has no session), NO idem (Zalo sends no key), NO CORS (server to server). The
+// route authenticates itself: rate limit, then the secret header, then the body (internal/http).
+func zaloBotChain(muxZaloBot http.Handler) http.Handler {
+	h := muxZaloBot
+	h = httpx.Recover(traceID)(h)
+	h = httpx.StripTenantHeaders(h)
+	return h
+}
+
+// withZaloBotWebhook puts the webhook in front of the other two chains — for ONE host and ONE path.
+//
+// A HOST PATTERN, NOT A PATH PATTERN: ServeMux prefers a pattern with a host, so
+// `<ZALO_BOT_WEBHOOK_HOST>/api/v1/zalo-bot-updates` reaches the webhook chain, while the same path on any
+// other Host falls through to the staff chain, where TenantMiddleware or the staff mux answers 404. The
+// webhook is therefore not reachable through a commune's domain, and the webhook host serves nothing else
+// (the staff chain 404s it: it is no commune's host — core/config refuses a commune-shaped value).
+//
+// host "" (dev only — staging and prod refuse to start without it): no webhook at all, fail closed.
+func withZaloBotWebhook(rest, zaloBot http.Handler, host string) http.Handler {
+	if host == "" {
+		return rest
+	}
+	m := http.NewServeMux()
+	m.Handle(host+svchttp.ZaloBotUpdatesPath, zaloBot)
+	m.Handle("/", rest)
+	return m
 }
 
 // deadlineOf is ctx's deadline, or now when it has none (the shutdown context always has one).

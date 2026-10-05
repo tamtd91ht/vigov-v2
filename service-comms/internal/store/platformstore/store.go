@@ -201,6 +201,23 @@ func (s *Store) PendingWebhookSecretRead(ctx context.Context) ([]byte, error) {
 	return sealed, nil
 }
 
+// WebhookSecretsSealed returns BOTH sealed webhook secrets — the one in force and the pending one — for
+// the webhook's authentication (ADR 0074 #5). During a switch Zalo may sign with either (0018
+// PENDING-THEN-PROMOTE). nil for a slot that is empty; both nil when no row or no webhook was ever set.
+func (s *Store) WebhookSecretsSealed(ctx context.Context) (current, pending []byte, err error) {
+	// @cross-tenant: platform-scope table, no commune by design (ADR 0074 #4). Two sealed columns, handed
+	// to the opener and never rendered.
+	err = s.db.QueryRowContext(ctx, `SELECT webhook_secret_sealed, webhook_secret_pending_sealed
+		FROM zalo_bot_shared WHERE bot_ref = $1`, domain.SharedZaloBotRef).Scan(&current, &pending)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil, nil
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("platformstore: read the webhook secrets: %w", err)
+	}
+	return current, pending, nil
+}
+
 // sharedBotLockKey serialises every operator write on the shared bot, including the FIRST one, when
 // there is no row yet for FOR UPDATE to lock. FNV-1a names a lock; it protects nothing.
 func sharedBotLockKey() int64 {

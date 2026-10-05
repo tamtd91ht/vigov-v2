@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/vihat/vigov/core/audit"
@@ -61,10 +62,31 @@ type StaffNotifications struct {
 	// Injected so a test can pin both. Production: ulid.Moi and time.Now.
 	newID func() (string, error)
 	now   func() time.Time
+
+	// zalo is the Zalo Bot outbox (ADR 0074, migration 0018): one zalo_delivery row per notice created,
+	// in the SAME transaction. nil = no Zalo channel wired (tests of the bell alone).
+	zalo ZaloOutbox
+	log  *slog.Logger
+}
+
+// ZaloOutbox queues the Zalo copies of the notices one Deliver call created. *store.ZaloLinkStore
+// satisfies it. Its failure is rolled back to a savepoint INSIDE it and reported, never propagated into
+// the bell's transaction (ADR 0074 #1: Zalo is an extra channel; the bell is delivered regardless).
+type ZaloOutbox interface {
+	EnqueueZaloDeliveries(ctx context.Context, tx *store.ScopedTx, keys []string, createdAt time.Time) (int, error)
 }
 
 func NewStaffNotifications(db *store.DB, repo StaffNotificationRepo) *StaffNotifications {
-	return &StaffNotifications{db: db, repo: repo, newID: ulid.Moi, now: time.Now}
+	return &StaffNotifications{db: db, repo: repo, newID: ulid.Moi, now: time.Now, log: slog.Default()}
+}
+
+// WithZaloOutbox wires the Zalo Bot outbox. log reports an enqueue failure (commune and count only).
+func (uc *StaffNotifications) WithZaloOutbox(o ZaloOutbox, log *slog.Logger) *StaffNotifications {
+	uc.zalo = o
+	if log != nil {
+		uc.log = log
+	}
+	return uc
 }
 
 // Deliver writes every notice of one call, or nothing.
@@ -84,7 +106,9 @@ func (uc *StaffNotifications) Deliver(ctx context.Context, in []domain.Notificat
 	if actor.ID == "" {
 		return nil, ErrNoActor
 	}
-	at := uc.now().UTC()
+	// Microseconds: PostgreSQL's precision. The Zalo outbox finds this call's notices by (key, created_at),
+	// and a nanosecond `at` compared with the stored, rounded value would find none of them.
+	at := uc.now().UTC().Truncate(time.Microsecond)
 
 	var out []domain.DeliveryOutcome
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
@@ -123,12 +147,29 @@ func (uc *StaffNotifications) Deliver(ctx context.Context, in []domain.Notificat
 			// app.Sua's no-op — an entry saying "nothing happened" buries the ones that matter.
 			return nil
 		}
-		delta, err := json.Marshal(map[string]any{
+		deltaMap := map[string]any{
 			"so_thong_bao": len(clean),
 			"tao_moi":      totalCreated,
 			"da_co":        totalAlready,
 			"muc":          items,
-		})
+		}
+		if uc.zalo != nil {
+			keys := make([]string, len(clean))
+			for i, n := range clean {
+				keys[i] = n.IdempotencyKey
+			}
+			queued, err := uc.zalo.EnqueueZaloDeliveries(ctx, tx, keys, at)
+			if err != nil {
+				// NOT returned: the bell is delivered without its Zalo copies, and the trail says so. The
+				// error names the statement, never a title, a body or a recipient.
+				uc.log.WarnContext(ctx, "CẢNH BÁO: không xếp được tin Zalo cho thông báo chuông — chuông vẫn giao đủ",
+					"xa", string(tx.TenantID()), "so_thong_bao", len(clean), "err", err)
+				deltaMap["zalo_loi_xep_hang"] = true
+			} else {
+				deltaMap["zalo_xep_hang"] = queued
+			}
+		}
+		delta, err := json.Marshal(deltaMap)
 		if err != nil {
 			return fmt.Errorf("staff_notification: mã hoá delta: %w", err)
 		}
