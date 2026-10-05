@@ -10,38 +10,43 @@ import { usePhien } from "@/features/phien/phien-hien-tai";
 import { useCauHinhXa } from "./cau-hinh-xa";
 import { CommuneBanner } from "./commune-banner";
 import { CommuneIdentity } from "./commune-identity";
-import { HeaderModules, SettingsButton, splitSettings } from "./header-modules";
 import { locMenu, NHOM_MENU } from "./muc-menu";
 import { NavSheet } from "./nav-sheet";
 import { NotificationBell } from "./notification-bell";
 import { PendingMarker, type PendingFeatureInfo } from "./ui/pending-feature";
 import { sessionRoleName } from "./role-pill";
+import { SideNav } from "./side-nav";
+import { useSidebarCollapsed } from "./sidebar-state";
 import { UserMenu } from "./user-menu";
 
 /**
- * The app header — navy, 68px, sticky; it CARRIES THE NAVIGATION, which the text sidebar used to (ADR
- * 0068 §Sửa đổi 05/10/2026 (lần 2) #6; guide §7, §8.9).
+ * The signed-in shell's chrome: the navy header (68px, sticky — ADR 0068 §Sửa đổi 05/10/2026 (lần 2);
+ * guide §7, §8.9), the commune's banner strip, and the LEFT sidebar carrying the module navigation
+ * (owner, 05/10/2026: navigation back on the left, vertical — `side-nav.tsx`). The header no longer
+ * carries module buttons: navigation lives in one place.
  *
- * LEFT: the commune's identity — "Ủy ban nhân dân", the commune's name verbatim, its logo when it
- * uploaded one (`CommuneIdentity`, ADR 0069) — then the module icons. Never a product or vendor name
- * (ADR 0068 §13). The name is read at runtime from the commune's configuration, never a constant.
+ * HEADER LEFT: the commune's identity — "Ủy ban nhân dân", the commune's name verbatim, its logo when it
+ * uploaded one (`CommuneIdentity`, ADR 0069). Never a product or vendor name (ADR 0068 §13). The name is
+ * read at runtime from the commune's configuration, never a constant.
  *
- * RIGHT: settings (the `Cấu hình` item), the Phase-2 search placeholder, the bell, a divider, the person
- * block opening their own menu. Below 1024px these collapse into the nav sheet, except the bell.
+ * HEADER RIGHT: the Phase-2 search placeholder, the bell, a divider, the person block opening their own
+ * menu. Below 768px the sidebar is hidden and these (except the bell) collapse into the nav sheet.
  *
- * WHO SEES WHICH MENU ITEM is `locMenu`'s decision on the session's permissions, unchanged by the move
- * from sidebar to header. `null` permissions = session NOT READ YET (three states, not two): only items
- * needing no key show, so the menu never shows an item and then withdraws it.
+ * WHO SEES WHICH MENU ITEM is `locMenu`'s decision on the session's permissions, unchanged by where the
+ * menu is drawn. `null` permissions = session NOT READ YET (three states, not two): only items needing no
+ * key show, so the menu never shows an item and then withdraws it. The sidebar FRAME is drawn even then,
+ * so the page body does not jump sideways when the session arrives.
  *
  * The person block appears only once the session is read (`khoiNguoiDung`) — no fallback name. Until
  * then, or when it cannot be read, the bare sign-out control stays: it is the way out for a person at
  * the wrong machine, and it needs no name.
  *
- * `navigation={false}`: the page draws no menu (`/doi-mat-khau`, where a forced change must come first
- * and every other screen would answer 403). Identity, bell and person block stay.
+ * `navigation={false}`: the page draws no menu and no sidebar (`/doi-mat-khau`, where a forced change
+ * must come first and every other screen would answer 403). Identity, bell and person block stay.
  *
- * The commune's banner strip (ADR 0069 #5) follows the header as its SIBLING, not inside it: the header
- * is sticky, and a 112 px picture inside it would stay over every scrolled page.
+ * ORDER OF SIBLINGS = the grid's order (`globals.css`, `.khung-trang`): header, banner, sidebar, then the
+ * page's `<main>`. The banner follows the header as its SIBLING, not inside it: the header is sticky, and
+ * a 112 px picture inside it would stay over every scrolled page.
  */
 export function DauTrang({ navigation = true }: { navigation?: boolean }) {
   const xa = useCauHinhXa();
@@ -52,18 +57,16 @@ export function DauTrang({ navigation = true }: { navigation?: boolean }) {
 
   const permissions = phien === null ? null : phien.ok ? phien.duLieu.permissions : [];
   const groups = navigation ? locMenu(NHOM_MENU, permissions) : [];
-  const { modules, settings } = splitSettings(groups);
+  const sidebar = useSidebarCollapsed();
 
   return (
     <>
       <header className="dau-trang">
         <div className="header-start">
           <CommuneIdentity commune={xa} />
-          <HeaderModules groups={modules} pathname={pathname} />
         </div>
         <div className="header-end">
           <div className="header-wide">
-            {settings !== null && <SettingsButton item={settings} pathname={pathname} />}
             <SystemSearchPlaceholder />
           </div>
           {nguoi.hien && <NotificationBell />}
@@ -81,6 +84,7 @@ export function DauTrang({ navigation = true }: { navigation?: boolean }) {
         </div>
       </header>
       <CommuneBanner src={xa.webAdminBannerUrl} />
+      {navigation && <SideNav groups={groups} pathname={pathname} collapsed={sidebar.collapsed} onToggle={sidebar.toggle} />}
     </>
   );
 }
@@ -105,7 +109,7 @@ export const SYSTEM_SEARCH_PENDING: PendingFeatureInfo = {
 /**
  * The Phase-2 system-wide search (`docs/ui-ux/00` §3.1, `ROADMAP_PHASE2.md` item 1), drawn per ADR 0068
  * §14 as the control it will be, DISABLED, with its "?". In the navy header it is the guide's search
- * ICON (the header has no room for a field beside 15 module icons); in the narrow-screen sheet it is the
+ * ICON (a field there would crowd the commune's name); in the narrow-screen sheet it is the
  * disabled field. Either way: a DISABLED native control, never a `<form>` or `role="search"` — there is
  * nothing to submit, and a search landmark that searches nothing misleads a screen-reader user. Nothing
  * here calls a server or stores anything.

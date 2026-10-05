@@ -892,9 +892,10 @@ div.thong-bao-loi:not(:empty) {
 
 /* ---- khung đã đăng nhập ----------------------------------------------------------------- */
 
-/* HEADER — guide §7, §8.9 (ADR 0068 §Sửa đổi 05/10/2026 (lần 2) #6): navy, 68px, sticky, the
- * header-strength shadow; it carries the module icons that replaced the text sidebar. Flat solid fill:
- * no glass, no gradient (ADR 0068 §11). `min-width: 0` because it is a grid child (`.khung-trang`).
+/* HEADER — guide §7, §8.9 (ADR 0068 §Sửa đổi 05/10/2026 (lần 2)): navy, 68px, sticky, the
+ * header-strength shadow. It carries the commune's identity, search, bell and person block; module
+ * navigation moved to the left sidebar (`.side-nav`, owner 05/10/2026). Flat solid fill: no glass, no
+ * gradient (ADR 0068 §11). `min-width: 0` because it is a grid child (`.khung-trang`).
  *
  * Z-INDEX 30, NOT THE GUIDE'S 1000. The guide's ORDER is content < header < popover; this app's
  * popovers and tooltips sit at z-60 (`components/ui`), and the economic map's full-screen mode and its
@@ -984,18 +985,6 @@ div.thong-bao-loi:not(:empty) {
   overflow-wrap: anywhere;
 }
 
-/* 1024–1279px: the parent authority leaves the header (the name and the kind stay) so the module row
- * fits; it is back from 1280px. Below 1024px there is room again — the icons are in the sheet. */
-@media (min-width: 1024px) and (max-width: 1279px) {
-  .dau-trang .commune-identity .co-quan-cap-tren {
-    display: none;
-  }
-
-  .dau-trang .commune-identity-text {
-    max-width: 11rem;
-  }
-}
-
 @media (max-width: 479px) {
   .dau-trang .commune-identity .co-quan-cap-tren {
     display: none;
@@ -1019,8 +1008,9 @@ div.thong-bao-loi:not(:empty) {
   flex: none;
 }
 
-/* Wide-only and narrow-only parts. 1024px: below it the module row, settings, search and the person
- * block do not fit beside the commune's name (`nav-sheet.tsx`), so they move into the sheet. */
+/* Wide-only and narrow-only parts, split at 768px — the same line as the sidebar (`.side-nav`): below
+ * it the sidebar is hidden, and the search and the person block move into the nav sheet with the menu
+ * (`nav-sheet.tsx`); the bell stays. */
 .header-wide {
   display: none;
   align-items: center;
@@ -1031,7 +1021,7 @@ div.thong-bao-loi:not(:empty) {
   display: flex;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .dau-trang {
     padding: 0 var(--space-4);
   }
@@ -1045,41 +1035,8 @@ div.thong-bao-loi:not(:empty) {
   }
 }
 
-/* The module row. `overflow-x: auto` is the last guard only: at 1024px the row fits (15 icons ≈ 610px),
- * but a very long commune name must not push the page sideways. */
-.header-modules {
-  display: none;
-  min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-@media (min-width: 1024px) {
-  .header-modules {
-    display: flex;
-    align-items: center;
-  }
-}
-
-.header-module-group {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* The groups of `NHOM_MENU` stay readable as runs of icons: a thin divider between them. */
-.header-module-group + .header-module-group {
-  margin-left: var(--space-1);
-  padding-left: var(--space-1);
-  border-left: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-/* Icon button — guide §8.2: 36×36, radius 12, white 20px icon; hover and the current module take the
- * white 10% fill. The current module ALSO carries a 2px white bar under the icon, so "where am I" is not
- * told by a 10% tint alone (a fill that faint is 1.4:1 against navy). */
+/* Icon button — guide §8.2: 36×36, radius 12, white 20px icon; hover and an open control take the white
+ * 10% fill. Used by the narrow-screen menu button and the search placeholder. */
 .header-icon-button {
   position: relative;
   flex: none;
@@ -1105,20 +1062,8 @@ div.thong-bao-loi:not(:empty) {
 }
 
 .header-icon-button:hover,
-.header-icon-button.is-active,
 .header-icon-button[aria-expanded="true"] {
   background: rgba(255, 255, 255, 0.1);
-}
-
-.header-icon-button.is-active::after {
-  content: "";
-  position: absolute;
-  left: 9px;
-  right: 9px;
-  bottom: 2px;
-  height: 2px;
-  border-radius: 1px;
-  background: #fff;
 }
 
 /* Disabled (ADR 0068 §14): the guide's opacity .5 — white 50% is 4.49:1 on navy — no hand cursor, no
@@ -1200,9 +1145,9 @@ div.thong-bao-loi:not(:empty) {
   height: 16px;
 }
 
-/* 1024–1279px: the name and role leave the eye (avatar + caret stay, the menu prints both). They stay
- * the button's accessible name. */
-@media (max-width: 1279px) {
+/* 768–1023px: the name and role leave the eye (avatar + caret stay, the menu prints both), so the
+ * commune's name keeps its room. They stay the button's accessible name. */
+@media (max-width: 1023px) {
   .header-user-text {
     position: absolute;
     width: 1px;
@@ -1732,7 +1677,7 @@ body:has(.khung-trang) {
 }
 
 /* THE SHELL: 8px from the window edge, radius 16, `--bg` inside; header row, optional banner row, body.
-   ONE column since the header replaced the text sidebar.
+   One column by default; TWO from 768px when the page draws the left sidebar (`.side-nav`, below).
 
    `minmax(0, 1fr)`, NOT `1fr`: a bare `1fr` track has an automatic minimum equal to its widest child,
    so one wide table pushed the whole page sideways (spec issue #2, measured 1135px of content in a
@@ -1763,7 +1708,205 @@ body:has(.khung-trang) {
   grid-template-rows: auto auto 1fr;
 }
 
-/* ---- nav sheet (below 1024px) · `nav-sheet.tsx` ------------------------------------------------ */
+/* ---- left sidebar · `side-nav.tsx` (owner 05/10/2026: module navigation back on the left) -------- */
+
+/* Hidden below 768px: the nav sheet carries the same items there (`nav-sheet.tsx`). */
+.side-nav {
+  display: none;
+}
+
+/* From 768px: a sidebar column (`auto` = the sidebar's own 240 / 72px) and the content column, still
+   `minmax(0, 1fr)` so a wide table scrolls inside its own box instead of pushing the page sideways.
+   Placement is EXPLICIT, not left to auto-placement: the header spans both columns; the sidebar runs from
+   under the header to the bottom; the banner (if any) and the page sit in the content column, so the
+   banner keeps lining up with the page's own edges. `-2 / -1` = the last row, with or without a banner. */
+@media (min-width: 768px) {
+  .khung-trang:has(> .side-nav) {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .khung-trang:has(> .side-nav) > .dau-trang {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .khung-trang:has(> .side-nav) > .commune-banner {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .khung-trang:has(> .side-nav) > .than-trang {
+    grid-column: 2;
+    grid-row: -2 / -1;
+  }
+
+  .side-nav {
+    display: block;
+    grid-column: 1;
+    grid-row: 2 / -1;
+    width: var(--sidebar-w);
+    min-width: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--line);
+    transition: width var(--dur) var(--ease);
+  }
+
+  .side-nav.is-collapsed {
+    width: var(--sidebar-w-collapsed);
+  }
+}
+
+/* The inner box sticks under the 68px header and scrolls on its own: a long page never carries the menu
+   away, and a short window still reaches the last item. */
+.side-nav-inner {
+  position: sticky;
+  top: 68px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 68px);
+  max-height: calc(100dvh - 68px);
+  padding: var(--space-3) var(--space-3) var(--space-4);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.side-nav-head {
+  display: flex;
+  justify-content: flex-end;
+  padding-bottom: var(--space-1);
+}
+
+.side-nav.is-collapsed .side-nav-head {
+  justify-content: center;
+}
+
+/* Toggle: the guide's 36px icon control, navy icon; hover takes the accent tint as a FILL. */
+.side-nav-toggle {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--ink-900);
+  cursor: pointer;
+  transition: background-color var(--dur) var(--ease);
+}
+
+.side-nav-toggle:hover {
+  background: var(--accent-50);
+}
+
+.side-nav-toggle svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Group heading: 11px/600 upper case, `--ink-500` (5.98:1 on white) — same as the nav sheet's. */
+.side-nav-group-label {
+  margin: 0;
+  padding: var(--space-3) var(--space-3) var(--space-1);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-500);
+}
+
+/* Collapsed (and above the untitled Tổng quan group): a hairline keeps the break the heading marked. */
+.side-nav-divider {
+  display: block;
+  height: 1px;
+  margin: var(--space-2) var(--space-2);
+  background: var(--line);
+}
+
+.side-nav-group ul {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Item: 40px row, 20px navy icon + the item's word in navy 15px, radius 8 (guide §8.8). The accent is a
+   FILL only, never text (ADR 0068 lần 2 #1): hover `--accent-50`, current `--accent-100` (navy text
+   ≈ 11:1 on it) plus weight 500 and a 3px navy bar — "where am I" is never told by colour alone.
+   The focus ring is the app ring (`--brand-500`, ≥ 3:1 on white), drawn INSIDE the item so the
+   scrolling box does not clip it. */
+.side-nav-link {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  border-radius: var(--r-sm);
+  color: var(--ink-900);
+  font-size: 15px;
+  line-height: 1.3;
+  text-decoration: none;
+  transition: background-color var(--dur) var(--ease);
+}
+
+.side-nav-link:focus-visible {
+  outline: 2px solid var(--brand-500);
+  outline-offset: -2px;
+}
+
+.side-nav-link svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.side-nav-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+a.side-nav-link:hover {
+  background: var(--accent-50);
+}
+
+a.side-nav-link.is-active {
+  background: var(--accent-100);
+  font-weight: 500;
+  box-shadow: inset 3px 0 0 var(--brand-600);
+}
+
+.side-nav.is-collapsed .side-nav-link {
+  justify-content: center;
+  padding: 0;
+}
+
+/* An item listed before its screen exists (ADR 0068 §14): muted, no hand cursor, the "?" beside it. */
+.side-nav-pending {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.side-nav-item.is-pending .side-nav-link {
+  color: var(--ink-500);
+  cursor: default;
+}
+
+.side-nav-item.is-pending svg {
+  color: var(--ink-400);
+}
+
+/* ---- nav sheet (below 768px) · `nav-sheet.tsx` ------------------------------------------------ */
 
 /* Full height, pinned to the left edge, white; flat navy backdrop, no blur (ADR 0068 §11). The 250ms
    slide is zeroed under reduced motion by the base layer. */

@@ -73,10 +73,11 @@ describe("DauTrang — session not read yet", () => {
     expect(html).not.toContain("role-pill");
   });
 
-  it("draws no module icon (every item needs a key) and no settings — the menu never shows then withdraws", () => {
+  it("draws the sidebar frame with no item (every item needs a key) — the menu never shows then withdraws", () => {
     const html = render();
-    expect(html).not.toContain("header-modules");
-    expect(html).not.toContain('aria-label="Cấu hình"');
+    expect(html).toContain('class="side-nav"');
+    expect(html).not.toContain('<nav class="side-nav-nav"');
+    expect(html).not.toContain("Cấu hình");
   });
 
   it("keeps the sign-out control — the way out needs no name", () => {
@@ -108,6 +109,30 @@ describe("DauTrang — banner strip", () => {
     expect(html.match(/<img /g)).toHaveLength(1);
     expect(html).toContain(`src="${URL_BANNER}"`);
     expect(html.indexOf('<div class="commune-banner">')).toBeGreaterThan(html.indexOf("</header>"));
+  });
+});
+
+/**
+ * Owner, 05/10/2026: module navigation lives in ONE place, the left sidebar — the header's horizontal
+ * icon row is gone. The sidebar is a SIBLING after the header and banner (the shell grid places it).
+ */
+describe("DauTrang — navigation lives in the left sidebar, not in the header", () => {
+  it("the header holds no module navigation", () => {
+    const html = render();
+    const header = html.slice(html.indexOf("<header"), html.indexOf("</header>"));
+    expect(header).not.toContain("<nav");
+    expect(header).not.toContain("header-modules");
+    expect(header).not.toContain("side-nav");
+  });
+
+  it("the sidebar follows the header (and the banner), outside it", () => {
+    const html = render({ webAdminBannerUrl: "https://media.example.test/vigov-public/t_01JXA/banner-1600.jpg" });
+    expect(html.indexOf('class="side-nav"')).toBeGreaterThan(html.indexOf("</header>"));
+    expect(html.indexOf('class="side-nav"')).toBeGreaterThan(html.indexOf('<div class="commune-banner">'));
+  });
+
+  it("`navigation={false}`: no sidebar at all", () => {
+    expect(render({}, false)).not.toContain("side-nav");
   });
 });
 

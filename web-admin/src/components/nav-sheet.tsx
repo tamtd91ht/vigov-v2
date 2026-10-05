@@ -15,15 +15,15 @@ import { RolePill } from "./role-pill";
 import { userInitials } from "./user-initials";
 
 /**
- * The narrow-screen navigation: a "menu" button in the header opening a full-height sheet, below 1024px
- * (`globals.css`, `.header-narrow`).
+ * The narrow-screen navigation: a "menu" button in the header opening a full-height sheet, below 768px
+ * (`globals.css`, `.header-narrow`), where the left sidebar (`side-nav.tsx`) is hidden.
  *
- * WHY TEXT LABELS HERE when the header row is icon-only: a small screen is a touch screen, and touch has
- * no hover, so no tooltip ever shows (`tooltip.tsx`). An icon with no visible word would be a guess.
+ * WHY 768px: below it the page is one column (`15-phu-luc §7`), and a 240px sidebar would leave a phone
+ * too little room for the content. From 768px the sidebar fits beside the page and is the one place for
+ * navigation (owner, 05/10/2026).
  *
- * WHY 1024px AND NOT 768px: the header row carries 15 module icons + settings, the commune's name and
- * the person block — about 1000px at the tightest. Between 768 and 1023px it could only fit by
- * scrolling the icon row sideways, hiding half the menu with nothing saying so.
+ * WHY TEXT LABELS HERE, like the expanded sidebar: a small screen is a touch screen, and touch has no
+ * hover, so no tooltip ever shows (`tooltip.tsx`). An icon with no visible word would be a guess.
  *
  * The right-side header items collapse into it (person, role, change password, sign out, the Phase-2
  * search placeholder); the bell stays in the header at every width, so an unread count is never one

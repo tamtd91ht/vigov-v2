@@ -11,7 +11,7 @@ import type { PhienDaDoc } from "@/features/phien/phien-hien-tai";
 
 /**
  * The header with a READ session: the person block, the menu it opens (`Đổi mật khẩu`, `Đăng xuất`),
- * and which module icons and settings the session's permissions give. "Đổi mật khẩu" is the only
+ * and which sidebar items the session's permissions give. "Đổi mật khẩu" is the only
  * voluntary way into `/doi-mat-khau` — without it the page opens only when the server forces a change.
  * It belongs to the signed-in person, so it is drawn only once the session is read, and it carries no
  * identity of its own.
@@ -28,6 +28,7 @@ vi.mock("next/link", () => ({
 
 const { CauHinhXaProvider } = await import("./cau-hinh-xa");
 const { DauTrang } = await import("./dau-trang");
+const { SIDEBAR_STORAGE_KEY } = await import("./sidebar-state");
 
 function session(permissions: string[], role: { code: string; name: string; is_leader: boolean } | null = null): PhienDaDoc {
   return {
@@ -57,6 +58,7 @@ afterEach(() => {
   host = null;
   H.phien = null;
   H.path = "/nhiem-vu";
+  window.localStorage.clear();
 });
 
 function mount(phien: PhienDaDoc, navigation = true): HTMLDivElement {
@@ -76,8 +78,7 @@ function mount(phien: PhienDaDoc, navigation = true): HTMLDivElement {
 }
 
 const header = (el: HTMLElement) => el.querySelector("header")!;
-const moduleNames = (el: HTMLElement) =>
-  [...header(el).querySelectorAll(".header-modules a")].map((a) => a.getAttribute("aria-label"));
+const sideNames = (el: HTMLElement) => [...el.querySelectorAll(".side-nav a")].map((a) => a.textContent);
 
 describe("DauTrang — person block and its menu", () => {
   it("shows the person's name and role on the trigger; no change-password link until the menu opens", () => {
@@ -117,32 +118,45 @@ describe("DauTrang — person block and its menu", () => {
   });
 });
 
-describe("DauTrang — module icons follow the session's permissions (UX; the server still checks)", () => {
-  it("`task.read`: the three task screens, the current one marked, no settings", () => {
+describe("DauTrang — the left sidebar follows the session's permissions (UX; the server still checks)", () => {
+  it("`task.read`: the three task screens with their words, the current one marked; nothing in the header", () => {
     const el = mount(session(["task.read"]));
-    expect(moduleNames(el)).toEqual(["Nhiệm vụ", "Biên bản họp", "Sổ tay lãnh đạo"]);
-    const current = header(el).querySelectorAll('.header-modules [aria-current="page"]');
-    expect([...current].map((a) => a.getAttribute("aria-label"))).toEqual(["Nhiệm vụ"]);
-    expect(header(el).querySelector('a[aria-label="Cấu hình"]')).toBeNull();
+    expect(sideNames(el)).toEqual(["Nhiệm vụ", "Biên bản họp", "Sổ tay lãnh đạo"]);
+    const current = el.querySelectorAll('.side-nav [aria-current="page"]');
+    expect([...current].map((a) => a.textContent)).toEqual(["Nhiệm vụ"]);
+    expect(header(el).querySelector('a[href="/nhiem-vu"]')).toBeNull();
+    expect(header(el).querySelector("nav")).toBeNull();
   });
 
-  it("`admin.sla`: the settings button on the right, to /cau-hinh, and no module icon", () => {
+  it("`admin.sla`: Cấu hình in the sidebar, to /cau-hinh — not a header button", () => {
     const el = mount(session(["admin.sla"]));
-    expect(moduleNames(el)).toEqual([]);
-    const settings = header(el).querySelector<HTMLAnchorElement>('.header-end a[aria-label="Cấu hình"]');
-    expect(settings?.getAttribute("href")).toBe("/cau-hinh");
+    expect(sideNames(el)).toEqual(["Cấu hình"]);
+    expect(el.querySelector<HTMLAnchorElement>('.side-nav a[href="/cau-hinh"]')).not.toBeNull();
+    expect(header(el).querySelector('a[href="/cau-hinh"]')).toBeNull();
   });
 
-  it("DENIED: a read session with no key → no module icon, no settings", () => {
+  it("DENIED: a read session with no key → no item, no nav landmark", () => {
     const el = mount(session(["admin.user.delete", "report.export"]));
-    expect(header(el).querySelector(".header-modules")).toBeNull();
-    expect(header(el).querySelector('a[aria-label="Cấu hình"]')).toBeNull();
+    expect(el.querySelector(".side-nav nav")).toBeNull();
+    expect(el.querySelector('a[href="/cau-hinh"]')).toBeNull();
   });
 
-  it("`navigation={false}` (/doi-mat-khau): no menu even with every key — the person block stays", () => {
+  it("`navigation={false}` (/doi-mat-khau): no sidebar even with every key — the person block stays", () => {
     const el = mount(session(["task.read", "admin.sla", "report.read"]), false);
-    expect(header(el).querySelector(".header-modules")).toBeNull();
-    expect(header(el).querySelector('a[aria-label="Cấu hình"]')).toBeNull();
+    expect(el.querySelector(".side-nav")).toBeNull();
+    expect(el.querySelector('a[href="/cau-hinh"]')).toBeNull();
     expect(header(el).querySelector("button.header-user")).not.toBeNull();
+  });
+
+  it("the toggle collapses the sidebar to icons, and the choice is remembered", () => {
+    const el = mount(session(["task.read"]));
+    const toggle = el.querySelector<HTMLButtonElement>(".side-nav-toggle")!;
+    expect(toggle.getAttribute("aria-label")).toBe("Thu gọn menu");
+    act(() => toggle.click());
+    expect(el.querySelector(".side-nav")!.classList.contains("is-collapsed")).toBe(true);
+    expect(window.localStorage.getItem(SIDEBAR_STORAGE_KEY)).toBe("1");
+    // Still named while collapsed.
+    expect(sideNames(el)).toEqual(["Nhiệm vụ", "Biên bản họp", "Sổ tay lãnh đạo"]);
+    expect(el.querySelector(".side-nav-toggle")!.getAttribute("aria-label")).toBe("Mở rộng menu");
   });
 });

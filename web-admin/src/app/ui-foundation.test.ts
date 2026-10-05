@@ -50,7 +50,8 @@ const NEW_UI = ALL.filter(
   (f) =>
     f.path.startsWith("components/ui/") ||
     [
-      "components/header-modules.tsx",
+      "components/side-nav.tsx",
+      "components/sidebar-state.ts",
       "components/nav-sheet.tsx",
       "components/user-menu.tsx",
       "components/dau-trang.tsx",
@@ -92,12 +93,15 @@ describe("globals.css layering", () => {
     }
   });
 
-  // Presentation pin (ADR 0068 §Sửa đổi 05/10/2026 lần 2): one column since the header replaced the
-  // sidebar. The fix it guards is unchanged — the content column may shrink.
+  // Presentation pin (owner 05/10/2026: the left sidebar is back). One column by default, a sidebar
+  // column beside the content from 768px. The fix it guards is unchanged — the content column may shrink.
   it("the page grid lets its content column shrink (no page-wide horizontal scroll)", () => {
     expect(CSS).toMatch(/\.khung-trang \{[^}]*grid-template-columns: minmax\(0, 1fr\);/);
     expect(CSS).not.toMatch(/grid-template-columns: auto 1fr;/);
     expect(RULES.find((r) => r.selector === ".khung-trang")?.body).not.toMatch(/grid-template-columns: 1fr;/);
+    expect(RULES.find((r) => r.selector === ".khung-trang:has(> .side-nav)")?.body).toContain(
+      "grid-template-columns: auto minmax(0, 1fr);",
+    );
   });
 
   it("the primary button is no longer full width by default", () => {
@@ -186,10 +190,24 @@ describe("spec v2 shell", () => {
     for (const decl of ["width: 36px;", "height: 36px;", "border-radius: var(--r-md);"]) expect(icon, decl).toContain(decl);
   });
 
-  it("the text sidebar is gone, and no shell rule draws a gradient", () => {
+  it("the old white text sidebar stays gone, and no shell rule draws a gradient", () => {
     expect(CSS).not.toMatch(/\.thanh-ben/);
-    for (const r of RULES.filter((x) => /dau-trang|header-|nav-sheet|khung-trang|user-menu/.test(x.selector)))
+    expect(CSS).not.toMatch(/\.header-modules/);
+    for (const r of RULES.filter((x) => /dau-trang|header-|nav-sheet|side-nav|khung-trang|user-menu/.test(x.selector)))
       expect(r.body, r.selector).not.toMatch(/gradient/);
+  });
+
+  // Presentation pins (owner 05/10/2026; ADR 0068 lần 2 #1): the sidebar is hidden below 768px (the nav
+  // sheet takes over), the accent #00B1FF never becomes its text colour, and it sticks under the header.
+  it("left sidebar: hidden by default, 240/72px from 768px, sticky under the 68px header, accent never text", () => {
+    expect(RULES.find((r) => r.selector === ".side-nav" && r.body.includes("display: none;"))).toBeDefined();
+    const wide = RULES.find((r) => r.selector === ".side-nav" && r.body.includes("display: block;"))?.body ?? "";
+    expect(wide).toContain("width: var(--sidebar-w);");
+    expect(RULES.find((r) => r.selector === ".side-nav.is-collapsed")?.body).toContain("width: var(--sidebar-w-collapsed);");
+    const inner = RULES.find((r) => r.selector === ".side-nav-inner")?.body ?? "";
+    for (const decl of ["position: sticky;", "top: 68px;"]) expect(inner, decl).toContain(decl);
+    for (const r of RULES.filter((x) => /side-nav/.test(x.selector)))
+      expect(r.body, r.selector).not.toMatch(/(^|[\s;])color:\s*(var\(--accent-500\)|#00b1ff)/i);
   });
 
   it("page width classes exist: data none, form 880px, detail 1120px", () => {
