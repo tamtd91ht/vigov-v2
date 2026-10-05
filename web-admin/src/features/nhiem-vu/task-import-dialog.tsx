@@ -36,6 +36,9 @@ import {
 } from "./task-import";
 import { Glyph } from "./task-ui";
 
+/** Id of the import dialog's heading — the page's `ModalDialog` takes its name from it. */
+export const IMPORT_TITLE_ID = "tieu-de-nhap-excel";
+
 /** The last answer on screen: which mode sent it, and what came back (or the refusal sentence). */
 export type ImportAnswer =
   | { readonly dryRun: boolean; readonly ok: true; readonly outcome: TaskImportOutcome }
@@ -45,8 +48,8 @@ export type ImportAnswer =
  * `⬆ Nhập từ Excel` (§8) — "Modal tương tự mẫu chung: mô tả → `⬇ Tải mẫu nhiệm vụ` → vùng kéo thả
  * `Chọn tệp .xlsx` → `Đóng` / `Nhập`".
  *
- * AN IN-PAGE DIALOG (`role="dialog"`), the repo's precedent (`features/thu-chi/dot-thu-chi.tsx`), not a
- * focus-trapping modal: focus moves into it on open and back to the opening button on `Đóng`.
+ * Drawn INSIDE the page's centred `ModalDialog` (the prototype opens import as a dialog): the native
+ * modal keeps Tab inside; focus moves to the title on open and back to the opening button on `Đóng`.
  *
  * Only a `task.create` holder gets the button (the page gates it); the route checks again.
  */
@@ -163,12 +166,18 @@ export function TaskImportView({
   const canSend = fileName !== null && fileProblem === null && sending === null;
 
   return (
-    <section className="khoi-chi-tiet" role="dialog" aria-labelledby="tieu-de-nhap-excel">
-      <div className="dau-khoi-chi-tiet">
-        <h3 id="tieu-de-nhap-excel" ref={titleRef} tabIndex={-1}>
-          {IMPORT_TITLE}
-        </h3>
-      </div>
+    // The content of the page's centred `ModalDialog` (prototype `ExcelImportDialog`, ADR 0068
+    // §Sửa đổi 06/10/2026 lần 5) — the dialog element and its name (`IMPORT_TITLE_ID`) are the
+    // page's, so this is a plain section: a `role="dialog"` inside a `<dialog>` would be two dialogs.
+    <section className="m-0 flex min-h-0 flex-col gap-3 overflow-y-auto [&>*]:my-0">
+      <h2
+        id={IMPORT_TITLE_ID}
+        ref={titleRef}
+        tabIndex={-1}
+        className="m-0 text-lg leading-snug font-semibold text-ink-900"
+      >
+        {IMPORT_TITLE}
+      </h2>
       <p>{IMPORT_DESCRIPTION}</p>
       <p className="ghi-chu">{IMPORT_DEADLINE_NOTE}</p>
 
@@ -219,7 +228,7 @@ export function TaskImportView({
       </p>
       {answer !== null && sending === null && <ImportAnswerView answer={answer} />}
 
-      <div className="cum-nut">
+      <div className="cum-nut justify-end">
         <button type="button" className="nut-phu" onClick={onClose} disabled={sending !== null}>
           {IMPORT_CLOSE_BUTTON}
         </button>

@@ -59,7 +59,10 @@ describe("the dialog — §8 order: description → template → file → Đóng
   it("the parts in order, and the deadline note that says date AND time", () => {
     const html = view();
     const at = (s: string) => html.indexOf(s);
-    expect(html).toContain('role="dialog"');
+    // The page's centred `ModalDialog` is the dialog (06/10/2026); this view is its content, named
+    // by the heading the dialog points at.
+    expect(html).not.toContain('role="dialog"');
+    expect(html).toContain('id="tieu-de-nhap-excel"');
     expect(at(IMPORT_DESCRIPTION)).toBeGreaterThan(-1);
     expect(at(IMPORT_DESCRIPTION)).toBeLessThan(at(IMPORT_TEMPLATE_BUTTON));
     expect(at(IMPORT_TEMPLATE_BUTTON)).toBeLessThan(at("Chọn tệp .xlsx"));
@@ -164,6 +167,7 @@ describe("wiring (source)", () => {
   it("the button sits under `task.create` next to `+ Giao việc mới`; a success reloads the register", () => {
     expect(PAGE).toContain("{IMPORT_OPEN_BUTTON}");
     expect(PAGE).toContain("{importOpen && quyen.giaoViec && (");
+    expect(PAGE).toContain("<ModalDialog\n          titleId={IMPORT_TITLE_ID}");
     expect(PAGE).toContain("onImported={() => datLanTai((n) => n + 1)}");
     // ADR 0068: the `⬆` glyph is a lucide `Upload` icon drawn by the button; the words stay.
     expect(IMPORT_OPEN_BUTTON).toBe("Nhập từ Excel");

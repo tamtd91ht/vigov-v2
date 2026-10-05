@@ -22,7 +22,7 @@ import {
   kanbanColumnCount,
   kanbanPartialNote,
 } from "./nhan-nhiem-vu";
-import { BangKanban, TheNhiemVu, type CotKanban, type DanhMucNhiemVu } from "./so-nhiem-vu";
+import { BangKanban, TheNhiemVu, priorityStripClass, type CotKanban, type DanhMucNhiemVu } from "./so-nhiem-vu";
 import type { TrangThaiTai } from "./so-nhiem-vu"; // vi-name-ok: existing type, imported not declared (rule 12 inv 3)
 
 /**
@@ -174,7 +174,7 @@ describe("(#15) con số đầu cột — TỔNG THẬT từ `/task-counts`, kh�
       namCot({ "dang-thuc-hien": trang([nhiemVu(), nhiemVu({ code: "NV20" })], true) }),
       { pha: "xong", duLieu: allCounts({ "dang-thuc-hien": 57 }) },
     );
-    expect(html).toContain('<span class="chip chip-ngung">57</span>');
+    expect(html).toMatch(/<span class="chip chip-ngung[^"]*">57<\/span>/);
     expect(html).not.toContain(">2+<");
     expect(html).toContain(nhuTrongHTML(kanbanPartialNote(2, 57)));
     // The old "cards loaded, not a total" disclaimer is gone — it would now be false.
@@ -183,7 +183,7 @@ describe("(#15) con số đầu cột — TỔNG THẬT từ `/task-counts`, kh�
 
   it("đang đọc số: chưa có chip số nào — không vẽ một số chưa biết", () => {
     const html = veBang(namCot(), { pha: "dangTai" });
-    expect(html).not.toContain('<span class="chip chip-ngung">0</span>');
+    expect(html).not.toMatch(/<span class="chip chip-ngung[^"]*">0<\/span>/);
     expect(html).not.toContain(KANBAN_COUNTS_ERROR);
   });
 
@@ -193,10 +193,10 @@ describe("(#15) con số đầu cột — TỔNG THẬT từ `/task-counts`, kh�
       pha: "loi",
       thongBao: cau,
     });
-    expect(html).toContain('<span class="chip chip-ngung">—</span>');
-    expect(html).not.toContain('<span class="chip chip-ngung">0</span>');
+    expect(html).toMatch(/<span class="chip chip-ngung[^"]*">—<\/span>/);
+    expect(html).not.toMatch(/<span class="chip chip-ngung[^"]*">0<\/span>/);
     expect(html).toContain(`role="alert">${KANBAN_COUNTS_ERROR} ${nhuTrongHTML(cau)}</p>`);
-    expect(html).toContain("Mở NV19");
+    expect(html).toContain('aria-labelledby="the-nhiem-vu-NV19"');
     // `has_more` still says the column goes on, even without a total.
     expect(html).toContain(nhuTrongHTML(kanbanPartialNote(1, null)));
   });
@@ -270,8 +270,31 @@ describe("thẻ nhiệm vụ §4.1", () => {
     const html = veThe();
     expect(html).toContain("NV19");
     expect(html).toContain("Trễ 86 ngày");
-    expect(html).toContain('class="nhan-lech"');
+    expect(html).toMatch(/class="[^"]*\bnhan-lech\b[^"]*"/);
     expect(html).toContain("CB-2026-3H8N2W");
+  });
+
+  it("prototype card (06/10/2026): priority strip on top, then code → title → deadline → assignee", () => {
+    const html = veThe({ child_count: 2 });
+    const at = (s: string) => html.indexOf(s);
+    // Rank 0 of the commune's scale is the top of the scale — the red strip; colour is never alone.
+    expect(html).toMatch(/<div class="h-\[3px\] bg-[a-z0-9-]+" aria-hidden="true">/);
+    expect(at("h-[3px]")).toBeLessThan(at(">NV19<"));
+    expect(at(">NV19<")).toBeLessThan(at("Báo cáo tổng kết"));
+    expect(at("Báo cáo tổng kết")).toBeLessThan(at("2 việc con"));
+    expect(at("2 việc con")).toBeLessThan(at("Trễ 86 ngày"));
+    expect(at("Trễ 86 ngày")).toBeLessThan(at("CB-2026-3H8N2W"));
+    // No extension count: the list contract carries none (schema.gen.ts `petitions_nhiemVuRa`).
+    expect(html).not.toContain("đã gia hạn");
+  });
+
+  it("`priorityStripClass` follows the commune's RANK, not a hard-coded code", () => {
+    const scale = [{ code: "a" }, { code: "b" }, { code: "c" }];
+    expect(priorityStripClass(scale, "a")).toBe("bg-danger-500");
+    expect(priorityStripClass(scale, "b")).toBe("bg-warning-500");
+    expect(priorityStripClass(scale, "c")).toBe("bg-brand-500");
+    expect(priorityStripClass(scale, "")).toBe("bg-line-strong");
+    expect(priorityStripClass(scale, "khong-co")).toBe("bg-line-strong");
   });
 
   it("không có hạn thì `Hạn —`, không phải một ô trống và không phải `Trễ 0 ngày`", () => {
@@ -312,8 +335,8 @@ describe("thẻ nhiệm vụ §4.1", () => {
       );
     const coTen = ve("CB-2026-3H8N2W");
     expect(coTen).toContain("Huỳnh Văn Ba");
-    expect(coTen).not.toContain("CB-2026-3H8N2W ·");
-    expect(ve("CB-2019-NGHIHUU")).toContain("CB-2019-NGHIHUU ·");
+    expect(coTen).not.toContain("CB-2026-3H8N2W");
+    expect(ve("CB-2019-NGHIHUU")).toContain(">CB-2019-NGHIHUU</span>");
   });
 
   it("chip `Hoàn thành trễ hạn` so với HẠN BAN ĐẦU, không với hạn hiện tại", () => {
@@ -327,9 +350,9 @@ describe("thẻ nhiệm vụ §4.1", () => {
     expect(html).toContain("Hoàn thành trễ hạn");
   });
 
-  it("thẻ mở drawer — đó là lối đổi trạng thái của Kanban", () => {
-    expect(veThe()).toContain("Mở NV19");
-    expect(veThe({}, "NV19")).toContain("Đang mở");
+  it("thẻ mở drawer — cả thân thẻ là MỘT nút (prototype), `aria-expanded` nói thẻ nào đang mở", () => {
+    expect(veThe()).toMatch(/<button type="button" class="[^"]*" aria-expanded="false"><span class="ma-muc/);
+    expect(veThe({}, "NV19")).toContain('aria-expanded="true"');
   });
 
   it("bảng CHỈ ĐỌC (không `move`): không `draggable`, không nút chuyển cột", () => {
@@ -351,7 +374,7 @@ describe("thẻ nhiệm vụ §4.1", () => {
     expect(childCountLabel(0)).toBeNull();
     expect(childCountLabel(1)).toBe("1 việc con");
     expect(childCountLabel(3)).toBe("3 việc con");
-    expect(veThe({ child_count: 3 })).toContain('<span class="chip chip-ngung">3 việc con</span>');
+    expect(veThe({ child_count: 3 })).toMatch(/<\/svg>3 việc con<\/span>/);
     // Zero children: no chip at all — not "0 việc con".
     expect(veThe({ child_count: 0 })).not.toContain("việc con");
   });

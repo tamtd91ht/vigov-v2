@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "web-admin",
-  "cap_nhat": "2026-10-05",
+  "cap_nhat": "2026-10-06",
   "muc": [
     {
       "id": "tam-viec-web-tu-hop-dong",
@@ -762,6 +762,14 @@
       "trang_thai": "dang_lam",
       "bang_chung": "e6484436 /ca-nhan (mã 8 ký tự, đếm ngược, hỏi lại 5 s, gửi thử, gỡ ghép), tab Kênh Zalo (admin.lookup). vitest 3951/3951. 14a06dd1 openapi đã có 7 tuyến zalo-links / zalo-channel-settings.",
       "tiep_theo": "Chạy npm run gen:api rồi bỏ kiểu viết tay trong src/lib/api/zalo.ts; sinh lại dinh-tuyen.gen.ts (go run ./tools/ingress) để cổng cho qua /api/v1/zalo-links, /api/v1/zalo-channel-settings. Nhãn 'leo-thang' cần khách duyệt."
+    },
+    {
+      "id": "nhiem-vu-theo-prototype-06-10",
+      "viec": "Màn /nhiem-vu bám prototype (TaskWorkspace, TaskAssignForm, TaskCard, TaskListTable, TaskDetailDrawer) theo ADR 0068 sửa đổi 06/10/2026 lần 5. THAY BA QUYẾT ĐỊNH GIAO DIỆN TRƯỚC: (1) ADR 0068 §12 nút 'Bộ lọc' + bảng lọc thêm và ô Trạng thái → MỘT hàng lọc theo thứ tự prototype (phạm vi dạng nhóm nút → tìm → Bộ phận → Người thực hiện (ô chọn, không còn ô gõ tên) → Ưu tiên → Loại (ẩn ở Sổ theo dõi) → Khối → Nguồn giao → hai nút 'Chỉ việc quá hạn' / 'Sắp đến hạn' loại trừ nhau → 'Đã chọn N · Xoá đã chọn' → chế độ xem); (2) mục 'Đề nghị lùi hạn chờ duyệt' trên trang → gỡ, Duyệt/Từ chối chỉ còn trong chi tiết (thẻ 'Đề nghị lùi hạn'), Sổ tay lãnh đạo vẫn liệt kê; (3) form giao việc mở tại chỗ → hộp thoại giữa màn (500px, 800px khi Theo văn bản), thứ tự ô theo prototype, cùng hộp cho '+ Thêm việc con'. Nhập từ Excel và Xoá đã chọn cũng thành hộp thoại; lý do xoá vẫn bắt buộc. Thẻ Kanban: dải màu ưu tiên theo THỨ HẠNG thang của xã, cả thẻ là nút mở. Danh sách: bỏ cột Ngày giao và cột 'Mở NV…', bấm cả dòng để mở. Chi tiết: dải chờ duyệt lùi hạn, hàng 4 ô (Hạn xử lý · Cơ quan thực hiện · Người thực hiện · Mức ưu tiên), cột trái Sổ theo dõi/Thông tin → Mô tả → Thời hạn → Nhiệm vụ con → Giao việc → Đề nghị lùi hạn, cột phải nhật ký 24rem. Lọc từ Tổng quan: hàng lọc vẫn hiện nhưng khoá, dải lọc nằm dưới; ?status= từ đường dẫn có dòng 'Đang lọc theo trạng thái … · Bỏ lọc trạng thái'. Gỡ mã chết đổi tên tab khi đổi mã (ADR 0065 NV3).",
+      "trang_thai": "xong",
+      "bang_chung": "web-admin/src/features/nhiem-vu/{so-nhiem-vu.tsx,task-import-dialog.tsx,task-extension-block.tsx,nhan-nhiem-vu.ts} · components/ui/modal-dialog.tsx (mới) · gỡ features/nhiem-vu/hang-cho-lui-han.tsx + .test.tsx · ca kiểm sửa/thêm: so-nhiem-vu, kanban-nhiem-vu, kanban-move, child-tasks, batch-delete, nhan-trang-thai-xa, task-import, task-register, task-ui, task-record-tabs, task-detail-dialog, components/drill-down-banner. typecheck + eslint sạch, vitest 222 tệp / 3951 ca xanh, make web xanh (06/10/2026). Chưa commit.",
+      "no_confirm": [],
+      "tiep_theo": "Hợp đồng danh sách không trả số lần gia hạn → thẻ Kanban và chi tiết KHÔNG có 'đã gia hạn N lần'; tuyến /task-extensions chỉ trả đề nghị đang chờ → không có khối 'Lịch sử gia hạn' — cần trường/tuyến ở service-petitions nếu chủ dự án muốn. Chỉ kiểm được trên trình duyệt: hai hộp thoại chồng nhau (Thêm việc con trên khung chi tiết), hàng lọc xuống dòng ở 320px, 5 cột Kanban từ 1280px. Biên bản ('Tách thành nhiệm vụ') và Phản ánh ('Tạo nhiệm vụ') vẫn nhúng form tại chỗ — đã nhận thứ tự ô mới, chưa thành hộp thoại."
     }
   ]
 }

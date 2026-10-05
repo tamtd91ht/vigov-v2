@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -286,7 +289,7 @@ describe("màn Nhiệm vụ dùng NHÃN CỦA XÃ ở mọi chỗ hiện trạng
     expect(html).toContain(">Việc mới về xã</span>");
   });
 
-  it("ô lọc Trạng thái: nhãn của xã, theo thứ tự của xã", () => {
+  it("hàng lọc KHÔNG còn ô Trạng thái (prototype, 06/10/2026); lọc trạng thái từ đường dẫn nói bằng nhãn của xã", () => {
     const html = renderToStaticMarkup(
       <HangLoc
         loc={{}}
@@ -298,10 +301,11 @@ describe("màn Nhiệm vụ dùng NHÃN CỦA XÃ ở mọi chỗ hiện trạng
         nhanTT={bangXa()}
       />,
     );
-    expect(html).toContain('<option value="moi-giao">Việc mới về xã</option>');
-    expect(html).toContain('<option value="tam-dung">Tạm hoãn</option>');
-    // GIÁ TRỊ vẫn là MÃ — bộ lọc gửi mã lên máy chủ, không gửi nhãn.
-    expect(html.indexOf('value="cho-duyet"')).toBeLessThan(html.indexOf('value="dang-thuc-hien"'));
+    expect(html).not.toContain('id="loc-trang-thai"');
+    expect(html).not.toContain('value="moi-giao"');
+    // The notice under the row names the filtered status by the COMMUNE's label (`nhanTrangThai`).
+    const src = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
+    expect(src).toContain("Đang lọc theo trạng thái “{nhanTrangThai(nhanTT, loc.trangThai)}”.");
   });
 
   it("dải bước và nút chuyển trạng thái trong drawer", () => {
@@ -382,14 +386,11 @@ describe("không chỗ vẽ nào còn đọc nhãn mặc định khi xã đã đ
     for (const ma of ma7) expect(html).toContain(`>Xã đặt ${ma}</span>`);
   });
 
-  it("ô lọc: bảy lựa chọn đều là nhãn xã", () => {
+  it("hàng lọc: không một nhãn trạng thái mặc định nào", () => {
     const html = renderToStaticMarkup(
       <HangLoc loc={{}} tim="" datTim={() => {}} datLoc={() => {}} danhMuc={DANH_MUC} danhBa={null} nhanTT={bangDoiHet()} />,
     );
     expect(chuMacDinhLot(html)).toEqual([]);
-    for (const ma of BANG_NHAN_MAC_DINH.thuTu) {
-      expect(html).toContain(`<option value="${ma}">Xã đặt ${ma}</option>`);
-    }
   });
 });
 

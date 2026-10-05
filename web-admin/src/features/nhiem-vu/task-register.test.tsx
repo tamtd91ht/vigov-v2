@@ -212,7 +212,8 @@ describe("page wiring (source)", () => {
   const SRC = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
 
   it("third view button; register view reads the page with `include=documents` under its own key", () => {
-    expect(SRC).toContain('onClick={() => datCheDoXem("so-theo-doi")}');
+    expect(SRC).toContain('["so-theo-doi", REGISTER_VIEW_LABEL, BookOpen],');
+    expect(SRC).toContain("onClick={() => datCheDoXem(value)}");
     expect(SRC).toContain('includeDocuments: viewMode === "so-theo-doi",');
     expect(SRC).toContain('|${viewMode === "so-theo-doi" ? "docs" : ""}');
   });

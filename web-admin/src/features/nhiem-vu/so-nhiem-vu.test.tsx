@@ -60,7 +60,10 @@ import {
   NHAN_NUT_SUA,
   NHAT_KY_RONG,
   O_TRONG,
+  PHAM_VI_CUA_TOI,
+  PHAM_VI_TOAN_XA,
   PHAN_CHUA_DUNG,
+  SCOPE_RELATED_LABEL,
   SO_RONG,
   TIEU_DE_KHOI_VAN_BAN,
   CAU_KHONG_AI_CO_QUYEN_DUYET_GIA_HAN,
@@ -79,6 +82,7 @@ import {
   type SapXepSo,
 } from "./nhan-nhiem-vu";
 import { TRANG_DAU } from "@/features/cau-hinh/ngan-xep-con-tro";
+import { nhanThoiDiem } from "@/features/phan-anh/nhan-phieu";
 import { duongDanHangChoLuiHan, duongDanSoNhiemVu } from "@/lib/api/nhiem-vu";
 import { TaskExtensionList, taskExtensionsQuery } from "./task-extension-block";
 import {
@@ -86,6 +90,7 @@ import {
   ChiTietNhiemVu,
   FormGiaoViec,
   FormSuaKhoiVanBan,
+  HangLoc,
   KhoiChuaDung,
   KhoiLuiHan,
   KhoiTraLai,
@@ -707,8 +712,9 @@ describe("drawer §5 — hai hạn cạnh nhau và hai ô tick", () => {
       original_due_at: "2026-06-20T23:59:59+07:00",
     });
     expect(html).toContain("Hạn ban đầu");
-    expect(html).toContain("20/6/2026");
-    expect(html).toContain("30/8/2026");
+    // The `Thời hạn` card (prototype) gives both with their time — the time is part of a deadline.
+    expect(html).toContain(nhuTrongHTML(nhanThoiDiem("2026-06-20T23:59:59+07:00")));
+    expect(html).toContain(nhuTrongHTML(nhanThoiDiem("2026-08-30T23:59:59+07:00")));
   });
 
   it("chú thích BẮT BUỘC của hai ô tick phê duyệt có mặt", () => {
@@ -748,7 +754,7 @@ describe("drawer §5 — hai hạn cạnh nhau và hai ô tick", () => {
 });
 
 describe("form Giao việc mới §7", () => {
-  it("`Tự sinh mã` MẶC ĐỊNH BẬT, và ô mã chỉ hiện khi tắt nó", () => {
+  it("`Tự sinh mã` MẶC ĐỊNH BẬT; ô mã đứng cùng hàng nhưng KHOÁ và RỖNG khi đang tự sinh", () => {
     const html = renderToStaticMarkup(
       <FormGiaoViec
         danhMuc={DANH_MUC}
@@ -762,8 +768,13 @@ describe("form Giao việc mới §7", () => {
     );
     expect(html).toContain('id="giao-tu-sinh-ma"');
     expect(html).toContain('checked=""');
-    // Mã tự nhập ẩn khi đang tự sinh — một ô mã bỏ trống kèm `auto_code: false` là 400.
-    expect(html).not.toContain('id="giao-ma"');
+    // 06/10/2026 (prototype): the code box sits beside the tick, DISABLED and empty while the server
+    // numbers the task — nothing typed can be sent then (`thanGiaoViec` drops it with `tuSinhMa`).
+    const codeBox = /<input id="giao-ma"[^>]*>/.exec(html)?.[0] ?? "";
+    expect(codeBox).toContain('disabled=""');
+    expect(codeBox).toContain('placeholder="Hệ thống sẽ tự sinh"');
+    expect(codeBox).not.toMatch(/value="[^"]+"/);
+    expect(html.indexOf('id="giao-ma"')).toBeLessThan(html.indexOf('id="giao-tu-sinh-ma"'));
   });
 
   it("cạnh ô ngày: bỏ trống được, hạn ĐẶT/SỬA được về sau — không còn câu 'chỉ đặt một lần'", () => {
@@ -903,13 +914,17 @@ describe("form Giao việc mới §7", () => {
     expect(html.split("+ Thêm văn bản</button>").length - 1).toBe(3);
     expect(html).toContain('id="giao-them-van-ban-cap-tren-giao"');
     expect(html).toContain("Nội dung nhiệm vụ / Trích yếu văn bản");
-    // ADR 0065 NV5: no separate lead unit / monitor — they ARE `Đơn vị thực hiện` / `Người thực hiện`.
+    // ADR 0065 NV5: no SEPARATE lead unit / monitor fields — they ARE the unit and the assignee. Since
+    // 06/10/2026 (prototype) a `Theo văn bản` task shows those two fields under the tracking book's
+    // names; same ids, same values sent.
     expect(html).not.toContain('id="giao-co-quan-chu-tri"');
     expect(html).not.toContain('id="giao-chuyen-vien"');
-    expect(html).not.toContain("Cơ quan chủ trì");
-    expect(html).not.toContain("theo dõi");
-    expect(html).toContain('<label for="giao-bo-phan">Đơn vị thực hiện</label>');
-    expect(html).toContain("Người thực hiện");
+    expect(html).toContain('<label for="giao-bo-phan">Cơ quan chủ trì tham mưu (cơ quan thực hiện)</label>');
+    expect(html).toContain("Chuyên viên tham mưu / theo dõi (người thực hiện)");
+    // The prototype's order: upper + party documents BEFORE the deadline, output AFTER it.
+    const at = (s: string) => html.indexOf(s);
+    expect(at('id="giao-them-van-ban-chi-dao-dang-uy"')).toBeLessThan(at('id="giao-han"'));
+    expect(at('id="giao-han"')).toBeLessThan(at('id="giao-them-van-ban-san-pham-dau-ra"'));
     // ĐỔI CHIỀU CÓ CHỦ Ý 27/09/2026 (TASK-04): `POST /api/v1/tasks` nay nhận `note`, nên ô
     // `Ghi chú` §7.2 có mặt — có nhãn, sau ba danh sách, dừng ở cùng giới hạn với form `✎ Sửa`.
     expect(html).toContain('<label for="giao-ghi-chu">Ghi chú</label>');
@@ -940,6 +955,59 @@ describe("form Giao việc mới §7", () => {
     expect(html).not.toContain("Thêm văn bản");
     expect(html).not.toContain("Văn bản cấp trên giao");
     expect(html).not.toContain('id="giao-ghi-chu"');
+  });
+
+  it("`dialog` (06/10/2026, prototype): a named modal, 500px; the prototype's field order", () => {
+    const html = renderToStaticMarkup(
+      <FormGiaoViec
+        dialog
+        danhMuc={DANH_MUC_CO_BAN}
+        danhBa={DANH_BA}
+        danhBaLanhDao={DANH_BA}
+        coDanhSachVanBan
+        dangGui={false}
+        loi={null}
+        huy={() => {}}
+        giaoViec={() => {}}
+      />,
+    );
+    expect(html).toMatch(/^<dialog aria-labelledby="tieu-de-giao-viec-moi" aria-modal="true" class="[^"]*max-w-\[500px\]/);
+    expect(html).toContain('<h2 id="tieu-de-giao-viec-moi"');
+    const at = (s: string) => html.indexOf(s);
+    const order = [
+      'id="giao-loai"',
+      'id="giao-khoi"',
+      'id="giao-ma"',
+      'id="giao-tu-sinh-ma"',
+      'id="giao-tieu-de"',
+      'id="giao-mo-ta"',
+      'id="giao-bo-phan"',
+      'id="giao-nguoi-thuc-hien"',
+      'id="giao-lanh-dao"',
+      'id="giao-han"',
+      'id="giao-uu-tien"',
+      ">Huỷ</button>",
+      ">Giao việc</button>",
+    ];
+    for (let i = 1; i < order.length; i++) expect(at(order[i - 1]!)).toBeLessThan(at(order[i]!));
+    expect(html).toContain('<label for="giao-bo-phan">Đơn vị thực hiện</label>');
+  });
+
+  it("`dialog` + `Theo văn bản`: the wide 800px box (three document lists)", () => {
+    const html = renderToStaticMarkup(
+      <FormGiaoViec
+        dialog
+        danhMuc={DANH_MUC}
+        danhBa={DANH_BA}
+        danhBaLanhDao={DANH_BA}
+        coDanhSachVanBan
+        dangGui={false}
+        loi={null}
+        huy={() => {}}
+        giaoViec={() => {}}
+      />,
+    );
+    expect(html).toMatch(/^<dialog [^>]*class="[^"]*max-w-\[800px\]/);
   });
 
   it("màn Biên bản (không truyền prop): loại `theo-van-ban` mà KHÔNG có ba danh sách", () => {
@@ -1712,9 +1780,10 @@ describe("họ tên thay mã `CB-…` — danh bạ đọc MỘT LẦN, mã lạ
       DANH_BA,
     );
     expect(html).toContain(`Nguyễn Thị Thực (${NGUOI_KHAC})`);
-    expect(html).toContain(`<dd>${NGUOI_DA_NGHI}</dd>`);
+    // The assigner sits under the assignee in the fact row (prototype, 06/10/2026).
+    expect(html).toContain(`Lãnh đạo giao việc: ${NGUOI_DA_NGHI}</dd>`);
     const khac = veChiTiet({ assigner: LANH_DAO }, LANH_DAO, { pha: "dangTai" }, DU_QUYEN, DANH_BA);
-    expect(khac).toContain(`<dd>Trần Văn Lãnh (${LANH_DAO})</dd>`);
+    expect(khac).toContain(`Lãnh đạo giao việc: Trần Văn Lãnh (${LANH_DAO})</dd>`);
   });
 
   it("drawer KHÔNG còn `Cơ quan chủ trì tham mưu` / `Chuyên viên theo dõi` (ADR 0065 NV5)", () => {
@@ -1745,7 +1814,7 @@ describe("§4.2 — hàng quá hạn tô nền hồng rất nhạt, SUY RA từ 
   it("quá hạn: nền hồng, VÀ chữ `(trễ N ngày)` cùng dòng — màu không đứng một mình", () => {
     const html = veMotDong({});
     // LỚP, không còn giá trị inline — `.dong-qua-han` ở `globals.css`.
-    expect(html).toMatch(/<tr data-tre-han="" class="dong-qua-han">/);
+    expect(html).toMatch(/<tr data-tre-han="" class="[^"]*\bdong-qua-han\b[^"]*">/);
     expect(html).not.toContain("style=");
     expect(html).toContain("(trễ 86 ngày)");
   });
@@ -1971,12 +2040,13 @@ describe("§4.2 — tiêu đề sắp được: Mã, Tên việc, Ngày giao, Ư
   // by `due_at` since ad7f821, so `Hạn` gets the third button.
   // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3b): was "đúng BA", with `Tên việc` plain. Backend P9 sorts by
   // `title` and `priority` too — five buttons; the other columns stay plain text.
-  it("đúng NĂM nút sắp, `aria-sort` đúng chiều ở cột đang sắp, `none` ở các cột kia", () => {
+  // ĐỔI CHIỀU CÓ CHỦ Ý 06/10/2026 (prototype columns): FOUR — `Ngày giao` left the table.
+  it("đúng BỐN nút sắp, `aria-sort` đúng chiều ở cột đang sắp, `none` ở các cột kia", () => {
     const html = veBangSapXep({ cot: "code", chieu: "asc" });
-    expect(html.split('class="nut-sap-xep"').length - 1).toBe(5);
+    expect(html.split('class="nut-sap-xep"').length - 1).toBe(4);
     expect(html).toContain('<th scope="col" aria-sort="ascending"><button type="button" class="nut-sap-xep">Mã ↑</button></th>');
     expect(html).toContain('aria-sort="none"><button type="button" class="nut-sap-xep">Tên việc ⇅</button>');
-    expect(html).toContain('aria-sort="none"><button type="button" class="nut-sap-xep">Ngày giao ⇅</button>');
+    expect(html).not.toContain("Ngày giao");
     expect(html).toContain('aria-sort="none"><button type="button" class="nut-sap-xep">Ưu tiên ⇅</button>');
     expect(html).toContain('aria-sort="none"><button type="button" class="nut-sap-xep">Hạn ⇅</button>');
     // Các cột còn lại là chữ thường — không mũi tên nào hứa một cách sắp máy chủ không có.
@@ -1991,10 +2061,15 @@ describe("§4.2 — tiêu đề sắp được: Mã, Tên việc, Ngày giao, Ư
     expect(src).toContain('<p className="ghi-chu">{NO_PRIORITY_LAST_NOTE}</p>');
   });
 
-  it("mặc định (`created_at` giảm dần): mũi tên xuống ở Ngày giao; ô ngày hiện ngày giao", () => {
+  it("prototype columns, in order: Mã · Tên việc · Người thực hiện · Bộ phận · Ưu tiên · Hạn · Trạng thái", () => {
     const html = veBangSapXep(SAP_XEP_MAC_DINH);
-    expect(html).toContain("Ngày giao ↓");
-    expect(html).toContain('<time dateTime="2026-06-01T02:00:00Z">1/6/2026</time>');
+    const heads = [...html.matchAll(/<th scope="col"[^>]*>(?:<button[^>]*>)?([^<⇅↑↓]+)/g)].map((m) => m[1]!.trim());
+    expect(heads).toEqual(["Mã", "Tên việc", "Người thực hiện", "Bộ phận", "Ưu tiên", "Hạn", "Trạng thái"]);
+    // The default order (newest first) has no column of its own: no arrow anywhere.
+    expect(html).not.toMatch(/aria-sort="(ascending|descending)"/);
+    // The whole row opens the task; the code cell is the keyboard's button. No `Mở NV…` column.
+    expect(html).not.toContain("Mở NV");
+    expect(html).toMatch(/<td class="ma-muc"><button type="button"[^>]*aria-expanded="false">NV19<\/button><\/td>/);
   });
 
   it("đổi cách sắp là VỀ TRANG ĐẦU — con trỏ cũ thuộc cách sắp cũ, máy chủ trả 400", () => {
@@ -2262,14 +2337,140 @@ describe("khối Chuyển trạng thái — người thực hiện, danh sách m
 describe("W5 — tab `Liên quan đến tôi` và ô `Sắp đến hạn` trên hàng lọc", () => {
   const SRC = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
 
-  it("ba tab phạm vi và ô tick mới có mặt, gửi đúng giá trị (đọc mã: không có DOM)", () => {
-    expect(SRC).toContain('onClick={() => datLoc({ ...loc, phamVi: "related" })}');
-    expect(SRC).toContain("{SCOPE_RELATED_LABEL}");
-    expect(SRC).toContain("onChange={(e) => datLoc({ ...loc, dueSoon: e.target.checked ? true : undefined })}");
-    expect(SRC).toContain("{DUE_SOON_FILTER_LABEL}");
-    // The Kanban counts are read with the SAME `loc` as the cards (`getTaskCounts(loc)` shares the
-    // filter builder with the list — see lib/api/nhiem-vu.test.ts).
+  it("the Kanban counts are read with the SAME `loc` as the cards", () => {
+    // `getTaskCounts(loc)` shares the filter builder with the list — see lib/api/nhiem-vu.test.ts.
     expect(SRC).toContain("getTaskCounts(loc).then(");
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * 06/10/2026 — ADR 0068 §Sửa đổi lần 5: the screen follows the prototype (`TaskWorkspace.tsx`)
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Every element in a tree built WITHOUT rendering — `HangLoc` has no hooks, so its props can be called. */
+function elementsOf(node: unknown): { type: unknown; props: Record<string, unknown> }[] {
+  if (node === null || typeof node !== "object") return [];
+  if (Array.isArray(node)) return node.flatMap(elementsOf);
+  const el = node as { type?: unknown; props?: Record<string, unknown> };
+  if (el.props === undefined) return [];
+  return [{ type: el.type, props: el.props }, ...elementsOf(el.props.children), ...elementsOf(el.props.end)];
+}
+
+describe("the filter row — ONE row in the prototype's order, no `Bộ lọc` panel", () => {
+  const row = (loc: Parameters<typeof HangLoc>[0]["loc"] = {}, extra: Partial<Parameters<typeof HangLoc>[0]> = {}) =>
+    renderToStaticMarkup(
+      <HangLoc
+        loc={loc}
+        tim=""
+        datTim={() => {}}
+        datLoc={() => {}}
+        danhMuc={DANH_MUC}
+        danhBa={DANH_BA}
+        {...extra}
+      />,
+    );
+
+  it("scope first as a segmented group, then search → Bộ phận → Người thực hiện → Ưu tiên → Loại → Khối → Nguồn giao → two toggles", () => {
+    const html = row();
+    const at = (s: string) => html.indexOf(s);
+    const order = [
+      'role="group" aria-label="Phạm vi"',
+      'id="tim-nhiem-vu"',
+      'id="loc-bo-phan"',
+      'id="loc-nguoi-thuc-hien"',
+      'id="loc-uu-tien"',
+      'id="loc-loai"',
+      'id="loc-khoi"',
+      'id="loc-nguon-giao"',
+      'id="loc-qua-han"',
+      'id="loc-sap-den-han"',
+    ];
+    for (let i = 0; i < order.length; i++) expect(at(order[i]!)).toBeGreaterThan(-1);
+    for (let i = 1; i < order.length; i++) expect(at(order[i - 1]!)).toBeLessThan(at(order[i]!));
+    expect(html).toContain(`>${PHAM_VI_TOAN_XA}</button>`);
+    expect(html).toContain(`>${PHAM_VI_CUA_TOI}</button>`);
+    expect(html).toContain(`>${SCOPE_RELATED_LABEL}</button>`);
+  });
+
+  it("DENIED shapes: no `Bộ lọc` button, no panel, no status select, no `Tìm` button", () => {
+    const html = row();
+    expect(html).not.toContain(">Bộ lọc<");
+    expect(html).not.toContain('aria-controls="task-filters-more"');
+    expect(html).not.toContain('id="loc-trang-thai"');
+    expect(html).not.toContain(">Tìm</button>");
+  });
+
+  it("`Sổ theo dõi` hides `Loại`, as the prototype does", () => {
+    expect(row({}, { hideType: true })).not.toContain('id="loc-loai"');
+  });
+
+  it("drill-down: every control drawn but disabled", () => {
+    const html = row({}, { disabled: true });
+    expect(html).toMatch(/<select id="loc-bo-phan" disabled=""/);
+    expect(html).toMatch(/id="loc-qua-han"[^>]*disabled=""/);
+  });
+
+  it("scope values: `` / `mine` / `related` — never a staff code (rule 1, forbidden #2)", () => {
+    const datLoc = vi.fn();
+    const tree = HangLoc({ loc: {}, tim: "", datTim: () => {}, datLoc, danhMuc: DANH_MUC, danhBa: null });
+    const seg = elementsOf(tree).find((e) => e.props.name === "pham-vi")!;
+    const onChange = seg.props.onChange as (v: string) => void;
+    onChange("related");
+    onChange("mine");
+    onChange("");
+    expect(datLoc.mock.calls.map((c) => (c[0] as { phamVi?: string }).phamVi)).toEqual(["related", "mine", undefined]);
+  });
+
+  it("`Chỉ việc quá hạn` and `Sắp đến hạn` exclude each other; off = ABSENT, never `false`", () => {
+    const datLoc = vi.fn();
+    const click = (loc: Parameters<typeof HangLoc>[0]["loc"], id: string) => {
+      const tree = HangLoc({ loc, tim: "", datTim: () => {}, datLoc, danhMuc: DANH_MUC, danhBa: null });
+      (elementsOf(tree).find((e) => e.props.id === id)!.props.onClick as () => void)();
+      return datLoc.mock.calls.at(-1)![0] as { chiTreHan?: boolean; dueSoon?: boolean };
+    };
+    expect(click({ dueSoon: true }, "loc-qua-han")).toEqual({ chiTreHan: true, dueSoon: undefined });
+    expect(click({ chiTreHan: true }, "loc-sap-den-han")).toEqual({ chiTreHan: undefined, dueSoon: true });
+    expect(click({ chiTreHan: true }, "loc-qua-han")).toEqual({ chiTreHan: undefined, dueSoon: undefined });
+  });
+
+  it("page wiring: the selection bar and the view switch are the row's right end; drill-down banner under it", () => {
+    const src = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
+    const page = src.slice(src.indexOf("export function SoNhiemVu("), src.indexOf("export function CanhBaoNhanTrangThai"));
+    expect(page.indexOf("<HangLoc")).toBeGreaterThan(-1);
+    expect(page.indexOf("<HangLoc")).toBeLessThan(page.indexOf("<DrillDownBanner"));
+    expect(page).toContain("disabled={drillDownActive}");
+    expect(page).toContain('hideType={viewMode === "so-theo-doi"}');
+    // The on-page extension queue and the inline create form are gone (prototype).
+    expect(page).not.toContain("HangChoLuiHan");
+    expect(page).not.toContain("Đóng biểu mẫu giao việc");
+    expect(page).toContain("<FormGiaoViec\n          dialog");
+    // `+ Thêm việc con` opens the SAME dialog (stacked over the detail panel).
+    expect(page).toContain("key={drawer.nhiemVu.code}\n                      dialog");
+    // Biên bản `Tách thành nhiệm vụ` and Phản ánh `Tạo nhiệm vụ` still embed the same form inline.
+    for (const f of ["../bien-ban/so-bien-ban.tsx", "../phan-anh/petition-task.tsx"]) {
+      const other = readFileSync(fileURLToPath(new URL(f, import.meta.url)), "utf8");
+      expect(other).toContain("<FormGiaoViec");
+      expect(other).not.toMatch(/<FormGiaoViec\s+dialog/);
+    }
+  });
+});
+
+describe("the detail's `Xem chi tiết` — the prototype's order", () => {
+  it("status block → fact row (Hạn xử lý · Cơ quan thực hiện · Người thực hiện · Mức ưu tiên) → left column → Nhật ký", () => {
+    const html = veChiTiet({ description: "Mô tả giả" });
+    const at = (s: string) => html.indexOf(s);
+    expect(at('aria-label="Trạng thái nhiệm vụ"')).toBeLessThan(at('aria-label="Tóm tắt nhiệm vụ"'));
+    const facts = html.slice(at('aria-label="Tóm tắt nhiệm vụ"'), html.indexOf("</dl>", at('aria-label="Tóm tắt nhiệm vụ"')));
+    const dts = [...facts.matchAll(/<dt[^>]*>([^<]+)<\/dt>/g)].map((m) => m[1]);
+    expect(dts).toEqual(["Hạn xử lý", "Cơ quan thực hiện", "Người thực hiện", "Mức ưu tiên"]);
+    expect(at('aria-label="Tóm tắt nhiệm vụ"')).toBeLessThan(at('id="task-detail-info"'));
+    expect(at('id="task-detail-info"')).toBeLessThan(at('id="task-detail-description"'));
+    expect(at('id="task-detail-description"')).toBeLessThan(at('id="task-detail-deadlines"'));
+    expect(at('id="task-detail-deadlines"')).toBeLessThan(at('id="task-detail-extensions"'));
+  });
+
+  it("no description: no empty `Mô tả` card", () => {
+    expect(veChiTiet({ description: "" })).not.toContain('id="task-detail-description"');
   });
 });
 
@@ -2341,9 +2542,10 @@ describe("NV-09 → hộp chi tiết lớn (ADR 0068 §Sửa đổi 05/10/2026):
     expect(SRC).not.toContain("scrollIntoView");
   });
 
-  it("dòng bảng, thẻ Kanban, Sổ theo dõi, việc con, hàng chờ, việc cha và Back/Forward đều qua `openDrawer`", () => {
+  it("dòng bảng, thẻ Kanban, Sổ theo dõi, việc con, việc cha và Back/Forward đều qua `openDrawer`", () => {
     expect(SRC.split("openDrawer(n);").length - 1).toBe(4);
-    expect(SRC.split("openDrawer(kq.duLieu);").length - 1).toBe(3);
+    // 3 → 2 on 06/10/2026: the on-page extension queue (one of the three) is gone (prototype).
+    expect(SRC.split("openDrawer(kq.duLieu);").length - 1).toBe(2);
   });
 
   it("thanh địa chỉ theo MÃ ĐANG MỞ, ở một chỗ; chi tiết vẽ trong `LargeDialog`", () => {

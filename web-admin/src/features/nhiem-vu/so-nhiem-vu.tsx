@@ -3,21 +3,18 @@
 import {
   AlarmClock,
   BookOpen,
-  Building2,
+  CalendarClock,
   ChevronLeft,
   ChevronRight,
-  CircleDot,
   ClipboardList,
   Clock,
   CloudOff,
   Download,
   Eye,
   FileText,
-  Flag,
   GitBranch,
   History,
   Landmark,
-  Layers,
   Link2,
   List,
   ListChecks,
@@ -27,12 +24,10 @@ import {
   RefreshCw,
   Search,
   SearchX,
-  Shapes,
   SquareKanban,
   Trash2,
   Upload,
   UserRound,
-  Workflow,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -54,15 +49,14 @@ import {
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import { OChonCanBo } from "@/components/o-chon-can-bo";
 import { StaffCombobox } from "@/components/staff-combobox";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardFooter } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Field } from "@/components/ui/field";
-import { FilterBar } from "@/components/ui/filter-bar";
 import { IconButton } from "@/components/ui/icon-button";
 import { LargeDialog } from "@/components/ui/large-dialog";
+import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
 import { RecordTabStrip, recordTabDomId } from "@/components/ui/record-tabs";
 import {
   activateRecordTab,
@@ -72,7 +66,6 @@ import {
   mergeRecordTabs,
   openRecordTab,
   readStoredRecordTabs,
-  renameRecordTab,
   updateRecordTab,
   writeStoredRecordTabs,
   type RecordTab,
@@ -80,6 +73,7 @@ import {
 } from "@/components/ui/record-tabs-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { PendingFeature } from "@/components/ui/pending-feature";
+import { Segmented } from "@/components/ui/segmented";
 import { Tab, TabList } from "@/components/ui/tabs";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/cn";
@@ -173,12 +167,10 @@ import {
   MOI_NGUON_GIAO,
   MOI_NGUON_GIAO_NHAN,
   MOI_NHOM_VAN_BAN,
-  MOI_TRANG_THAI_NHAN,
   MO_TA_FORM_GIAO_VIEC,
   NHAN_CHE_DO_DANH_SACH,
   NHAN_CHE_DO_KANBAN,
   NHAN_COT_MA,
-  NHAN_COT_NGAY_GIAO,
   NHAN_LY_DO_TRA_LAI,
   NHAN_NUT_TRA_LAI,
   NHAN_NUT_HUY,
@@ -300,10 +292,12 @@ import {
 } from "./nhan-nhiem-vu";
 import { BatchDeleteBar } from "./batch-delete-bar";
 import {
+  BATCH_DELETE_BUTTON,
   EMPTY_SELECTION,
   keepFailed,
   runBatchDelete,
   selectLabel,
+  selectedCountLabel,
   toggleSelected,
   type BatchDeleteResult,
   type TaskSelection,
@@ -311,7 +305,7 @@ import {
 } from "./batch-delete";
 import { ChildTasks, ParentTaskField } from "./child-tasks";
 import { saveFile } from "./save-file";
-import { TaskImportDialog } from "./task-import-dialog";
+import { IMPORT_TITLE_ID, TaskImportDialog } from "./task-import-dialog";
 import { IMPORT_OPEN_BUTTON } from "./task-import";
 import {
   APPROVAL_TICKED,
@@ -327,7 +321,6 @@ import {
   registerExportDoneText,
   registerRowDocuments,
 } from "./task-register";
-import { HangChoLuiHan } from "./hang-cho-lui-han";
 import { taskDetailHref } from "./task-link";
 import { KanbanMoveMenu } from "./kanban-move-menu";
 import { NhatKyNhiemVu } from "./nhat-ky-nhiem-vu";
@@ -346,17 +339,16 @@ import {
   TaskRowsSkeleton,
   TaskStatusBadge,
   taskStatusIcon,
-  TOGGLE_TRACK,
-  toggleButtonClass,
 } from "./task-ui";
 
 /**
- * The list and register tables inside the list card (spec §6.7, v2 §8.1): flush with the card (no
- * second frame), their OWN scroller both ways so the header row can stay put (`sticky` inside
- * the scroller), 48px rows, thin horizontal rules only — `.bang-danh-muc` already draws those.
+ * The list and register tables: the prototype's white box with a 1px border and rounded corners
+ * straight on the page (no card around the filters any more), their OWN scroller both ways so the
+ * header row can stay put (`sticky` inside the scroller), 48px rows, thin horizontal rules only —
+ * `.bang-danh-muc` already draws those.
  */
 const TABLE_IN_CARD = cn(
-  "bang-cuon max-h-[70vh] overflow-auto rounded-none border-0 shadow-none",
+  "bang-cuon max-h-[70vh] overflow-auto rounded-card border border-solid border-line bg-surface shadow-none",
   "[&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-[1] [&_thead_th]:shadow-[inset_0_-1px_0_var(--line)]",
   "[&_tbody_td]:h-12",
 );
@@ -506,6 +498,24 @@ function nhanDanhMuc(
 }
 
 /**
+ * Colour of the Kanban card's top strip, from the task's RANK on the commune's own priority scale —
+ * never from a hard-coded code: the scale is a commune catalogue whose order IS its meaning
+ * (`muc_uu_tien_nhiem_vu.go`, first = most urgent). Top rank red, bottom rank brand, anything between
+ * amber; no priority or a code not on the scale is the neutral line colour. The colour is the
+ * SECOND signal: the card says the priority in words too.
+ */
+export function priorityStripClass(
+  scale: readonly { readonly code: string }[],
+  code: string,
+): string {
+  const rank = code === "" ? -1 : scale.findIndex((m) => m.code === code);
+  if (rank < 0) return "bg-line-strong";
+  if (rank === 0) return "bg-danger-500";
+  if (rank === scale.length - 1) return "bg-brand-500";
+  return "bg-warning-500";
+}
+
+/**
  * Drawer đang mở: nhiệm vụ để vẽ, khối văn bản §5.4, và LƯỢT ĐỌC chi tiết đang chờ.
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
@@ -651,10 +661,9 @@ export function chuyenTaskPanel(s: TaskPanel, v: TaskPanelAction): TaskPanel {
       // A read overtaken by another switch, or arriving after the panel was hidden: dropped.
       if (!s.open || s.tabs.active !== v.ma || s.drawer !== null) return s;
       if (!v.kq.ok) return { ...s, tabError: { code: v.ma, message: v.kq.thongBao } };
-      const n = v.kq.duLieu;
-      // The code was renamed meanwhile: the tab follows the record rather than keep a dead code.
-      const tabs = n.code === v.ma ? s.tabs : renameRecordTab(s.tabs, v.ma, n.code, taskTabData(n));
-      return chuyenTaskPanel({ ...s, tabs }, { loai: "mo", nhiemVu: n });
+      // A task code never changes (ADR 0065 NV3: `PATCH` has no `code`), so the answer is always
+      // the tab's own record.
+      return chuyenTaskPanel(s, { loai: "mo", nhiemVu: v.kq.duLieu });
     }
     case "dongTab": {
       const tabs = closeRecordTab(s.tabs, v.ma);
@@ -689,11 +698,8 @@ export function chuyenTaskPanel(s: TaskPanel, v: TaskPanelAction): TaskPanel {
       if (v.loai === "mo" || before === null) {
         return { ...s, drawer, tabs: openRecordTab(s.tabs, code, data), open: true, tabError: null };
       }
-      // A write or a re-read of the record on screen. A different code here is a RENAME (the
-      // PATCH reply carries the new code, 3c3525f): the tab keeps its place under the new code.
-      const tabs =
-        before !== code ? renameRecordTab(s.tabs, before, code, data) : updateRecordTab(s.tabs, code, data);
-      return { ...s, drawer, tabs };
+      // A write or a re-read of the record on screen: same code (ADR 0065 NV3), new title/status.
+      return { ...s, drawer, tabs: updateRecordTab(s.tabs, code, data) };
     }
   }
 }
@@ -871,6 +877,8 @@ export function SoNhiemVu({
   const [selection, setSelection] = useState<TaskSelectionState>(EMPTY_SELECTION);
   const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(null);
   const [batchResults, setBatchResults] = useState<readonly BatchDeleteResult[] | null>(null);
+  // The `Xoá đã chọn` dialog. Opened from the filter row; holds the reason, the run and its results.
+  const [batchOpen, setBatchOpen] = useState(false);
 
   // The register view reads the SAME page with `include=documents`: a different answer, so a
   // different key — switching view must not show a page read without the documents.
@@ -1303,46 +1311,45 @@ export function SoNhiemVu({
     <PageHeader
       icon={ListChecks}
       title="Quản lý nhiệm vụ"
-      subtitle={
-        <span className="inline-flex items-center gap-1.5">
-          <Glyph icon={Workflow} />
-          Giao việc từ kết luận họp, theo dõi tiến độ và đôn đốc tự động.
-        </span>
-      }
+      subtitle="Giao việc từ kết luận họp, theo dõi tiến độ và đôn đốc tự động."
       actions={
         quyen.giaoViec ? (
           <>
-            {/* §1 draws `[Nhập từ Excel] [Giao việc mới]` — both `task.create` (the import IS
-                creation; the route checks again). */}
+            {/* The prototype's pair, in its order: `[Nhập từ Excel]` outline, then `[+ Giao việc
+                mới]` solid — both `task.create` (the import IS creation; the route checks again).
+                Each opens a dialog; neither is a toggle any more. */}
             <Button
               ref={importButtonRef}
               type="button"
-              variant="secondary"
+              variant="outline"
               icon={<Glyph icon={Upload} />}
-              aria-expanded={importOpen}
-              onClick={() => setImportOpen((o) => !o)}
+              aria-haspopup="dialog"
+              onClick={() => setImportOpen(true)}
             >
               {IMPORT_OPEN_BUTTON}
             </Button>
             <Button
               type="button"
               variant="primary"
-              icon={<Glyph icon={moFormTao ? X : Plus} />}
+              icon={<Glyph icon={Plus} />}
+              aria-haspopup="dialog"
               onClick={() => {
-                datMoFormTao((m) => !m);
+                datMoFormTao(true);
                 setChildFormFor(null);
                 datLoiGhi(null);
               }}
-              aria-expanded={moFormTao}
             >
-              {moFormTao ? "Đóng biểu mẫu giao việc" : "Giao việc mới"}
+              Giao việc mới
             </Button>
           </>
         ) : undefined
       }
     />
     {/* Direct children lose their legacy vertical margins: the section's `gap` is the one spacing
-        between blocks (spec §6.9, 16px card ↔ card). */}
+        between blocks. The prototype's page: header → ONE filter row → the board or the table →
+        `Hiển thị N nhiệm vụ.` — no card around the filters, no block in between (ADR 0068 §Sửa đổi
+        06/10/2026 lần 5: the on-page extension queue and the inline create form are gone; approving
+        an extension happens in the detail, and Sổ tay lãnh đạo lists what waits). */}
     <section
       className="man-nhiem-vu mt-0 flex min-w-0 flex-col gap-4 [&>*]:my-0"
       aria-labelledby="tieu-de-so-nhiem-vu"
@@ -1362,19 +1369,121 @@ export function SoNhiemVu({
 
       <CanhBaoNhanTrangThai canhBao={canhBaoNhanTT} />
 
+      {/* THE ONE FILTER ROW, in the prototype's order, the view switch at its right end. Under an
+          overview drill-down it stays in sight but DISABLED: the banner below says why, and the
+          rows must equal the overview's number (`DRILL_DOWN_NOTE_TASKS`). */}
+      <HangLoc
+        loc={loc}
+        tim={tim}
+        datTim={datTim}
+        datLoc={datLocMoi}
+        danhMuc={danhMuc}
+        danhBa={kqDanhBa}
+        nhanTT={nhanTT}
+        disabled={drillDownActive}
+        hideType={viewMode === "so-theo-doi"}
+        end={
+          <>
+            {/* `Đã chọn N nhiệm vụ · Xoá đã chọn` beside the view switch, as in the prototype: after
+                ticking a few rows the eye is mid-table, not at the foot of a long page. The reason
+                is asked in the dialog — mandatory, one for all (rule 7). */}
+            {quyen.xoa && selection.size > 0 && (
+              <div className="ml-auto flex items-center gap-2">
+                <span className="text-[13px] text-ink-500">{selectedCountLabel(selection.size)}</span>
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="sm"
+                  icon={<Glyph icon={Trash2} />}
+                  aria-haspopup="dialog"
+                  onClick={() => setBatchOpen(true)}
+                >
+                  {BATCH_DELETE_BUTTON}
+                </Button>
+              </div>
+            )}
+            <div
+              className={cn(
+                "flex gap-1 rounded-control border border-solid border-line bg-surface-subtle p-1",
+                quyen.xoa && selection.size > 0 ? "" : "ml-auto",
+              )}
+              role="group"
+              aria-label="Chế độ xem"
+            >
+              {(
+                [
+                  ["kanban", NHAN_CHE_DO_KANBAN, SquareKanban],
+                  ["danh-sach", NHAN_CHE_DO_DANH_SACH, List],
+                  ["so-theo-doi", REGISTER_VIEW_LABEL, BookOpen],
+                ] as const
+              ).map(([value, label, icon]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={cn(
+                    "inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-[8px] border-0 px-3 [font-family:inherit] text-[13px] font-semibold",
+                    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:cursor-not-allowed disabled:opacity-50",
+                    viewMode === value ? "bg-surface text-ink-900 shadow-sm" : "bg-transparent text-ink-500",
+                  )}
+                  aria-pressed={viewMode === value}
+                  disabled={drillDownActive}
+                  onClick={() => datCheDoXem(value)}
+                >
+                  <Glyph icon={icon} />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </>
+        }
+      />
+
+      {/* A status filter arriving in the address bar (Sổ tay lãnh đạo, a shared link) has no
+          control of its own on this row — the prototype has no status filter. Said here, with the
+          way out, so a filtered list never passes for the whole register. */}
+      {!drillDownActive && loc.trangThai !== undefined && (
+        <p className="m-0 flex flex-wrap items-center gap-2 text-sm text-ink-700" role="status">
+          Đang lọc theo trạng thái “{nhanTrangThai(nhanTT, loc.trangThai)}”.
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => datLocMoi({ ...loc, trangThai: undefined })}
+          >
+            Bỏ lọc trạng thái
+          </Button>
+        </p>
+      )}
+
+      <DrillDownBanner
+        drillDown={drillDown}
+        clearHref="/nhiem-vu"
+        note={DRILL_DOWN_NOTE_TASKS}
+        showInvalid={locDaDoi === null}
+      />
+
       {importOpen && quyen.giaoViec && (
-        <TaskImportDialog
-          onClose={() => {
+        <ModalDialog
+          titleId={IMPORT_TITLE_ID}
+          onDismiss={() => {
             setImportOpen(false);
             importButtonRef.current?.focus();
           }}
-          // The new rows are read from the server, never spliced in: the register reloads.
-          onImported={() => datLanTai((n) => n + 1)}
-        />
+        >
+          <TaskImportDialog
+            onClose={() => {
+              setImportOpen(false);
+              importButtonRef.current?.focus();
+            }}
+            // The new rows are read from the server, never spliced in: the register reloads.
+            onImported={() => datLanTai((n) => n + 1)}
+          />
+        </ModalDialog>
       )}
 
       {moFormTao && quyen.giaoViec && (
         <FormGiaoViec
+          dialog
           danhMuc={danhMuc}
           danhBa={kqDanhBa}
           danhBaLanhDao={kqDanhBaLanhDao}
@@ -1404,106 +1513,46 @@ export function SoNhiemVu({
         />
       )}
 
-      {/* §5.8 — quyết định lùi hạn. Một MỤC trên sổ chứ không trong drawer: tuyến hàng chờ không
-          lọc được theo nhiệm vụ (xem `HÀNG CHỜ DUYỆT LÙI HẠN`, `nhan-nhiem-vu.ts`). */}
-      <HangChoLuiHan
-        danhBa={danhBaMa}
-        maNguoiDangNhap={maNguoiDangNhap}
-        coQuyenDuyetGiaHan={quyen.duyetGiaHan}
-        lanLamMoi={lanHangCho}
-        moNhiemVu={(ma) =>
-          layNhiemVu(ma).then((kq) => {
-            if (kq.ok) {
-              openDrawer(kq.duLieu);
-              datLoiGhi(null);
-            }
-            return kq;
-          })
-        }
-        daQuyet={(ma) => {
-          // Duyệt là đổi hạn xử lý: drawer đang mở đúng việc ấy và quyển sổ đều đã cũ.
-          guiDrawer({ loai: "docLai", ma });
-          datLanTai((n) => n + 1);
-        }}
-      />
-
-      <DrillDownBanner
-        drillDown={drillDown}
-        clearHref="/nhiem-vu"
-        note={DRILL_DOWN_NOTE_TASKS}
-        showInvalid={locDaDoi === null}
-      />
-
-      {/* THE LIST CARD (spec §5, §8.3): scope tabs + one filter row at its head, the view switch,
-          the board or table in its own scroller, and notes + paging in its footer. `overflow-visible`:
-          the staff combobox opens its list in the flow, and a focus ring on the edge must not be cut. */}
-      <Card className="overflow-visible">
-      {!drillDownActive && (
-        <HangLoc
-          loc={loc}
-          tim={tim}
-          datTim={datTim}
-          datLoc={datLocMoi}
-          danhMuc={danhMuc}
-          danhBa={kqDanhBa}
-          nhanTT={nhanTT}
-        />
-      )}
-
-      {/* CỤM CHỌN CHẾ ĐỘ XEM — §2, bên phải hàng lọc 2. ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W6): BA nút.
-          `Sổ theo dõi` §4.3 đọc cùng trang với Danh sách, kèm `include=documents` (90d12ff).
-          Drawn as a segmented control; the buttons stay native `aria-pressed` toggles. */}
-      {!drillDownActive && (
-      <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3">
-      <div className={TOGGLE_TRACK} role="group" aria-label="Chế độ xem">
-        <button
-          type="button"
-          className={toggleButtonClass(cheDoXem === "kanban")}
-          aria-pressed={cheDoXem === "kanban"}
-          onClick={() => datCheDoXem("kanban")}
-        >
-          <Glyph icon={SquareKanban} />
-          {NHAN_CHE_DO_KANBAN}
-        </button>
-        <button
-          type="button"
-          className={toggleButtonClass(cheDoXem === "danh-sach")}
-          aria-pressed={cheDoXem === "danh-sach"}
-          onClick={() => datCheDoXem("danh-sach")}
-        >
-          <Glyph icon={List} />
-          {NHAN_CHE_DO_DANH_SACH}
-        </button>
-        <button
-          type="button"
-          className={toggleButtonClass(cheDoXem === "so-theo-doi")}
-          aria-pressed={cheDoXem === "so-theo-doi"}
-          onClick={() => datCheDoXem("so-theo-doi")}
-        >
-          <Glyph icon={BookOpen} />
-          {REGISTER_VIEW_LABEL}
-        </button>
-      </div>
-      </div>
-      )}
-
-      {quyen.xoa && (selection.size > 0 || batchResults !== null || batchProgress !== null) && (
-        <div className="border-b border-line px-4 py-3 [&>*]:my-0">
-        <BatchDeleteBar
-          count={selection.size}
-          progress={batchProgress}
-          results={batchResults}
-          onRun={(reason) => void runBatch(reason)}
-          onClear={() => {
-            setSelection(EMPTY_SELECTION);
+      {/* `Xoá đã chọn` — the prototype's confirm dialog, with OUR mandatory shared reason (rule 7:
+          a soft delete always says why). The per-task results stay in it until it is closed. */}
+      {quyen.xoa && batchOpen && (
+        <ModalDialog
+          titleId="tieu-de-xoa-da-chon"
+          onDismiss={() => {
+            if (batchProgress !== null) return;
+            setBatchOpen(false);
             setBatchResults(null);
           }}
-        />
-        </div>
+        >
+          <BatchDeleteBar
+            count={selection.size}
+            progress={batchProgress}
+            results={batchResults}
+            onRun={(reason) => void runBatch(reason)}
+            onClear={() => {
+              setSelection(EMPTY_SELECTION);
+              setBatchResults(null);
+              setBatchOpen(false);
+            }}
+          />
+          <div className="cum-nut justify-end">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={batchProgress !== null}
+              onClick={() => {
+                setBatchOpen(false);
+                setBatchResults(null);
+              }}
+            >
+              Đóng
+            </Button>
+          </div>
+        </ModalDialog>
       )}
 
       {viewMode === "kanban" && (
-        <div className="min-w-0 p-4">
+        <div className="min-w-0">
         <BangKanban
           cot={cotKanban}
           danhMuc={danhMuc}
@@ -1530,7 +1579,7 @@ export function SoNhiemVu({
       )}
 
       {viewMode === "so-theo-doi" && (
-        <div className="cum-nut border-b border-line px-4 py-3 [&>p]:my-0">
+        <div className="cum-nut m-0 items-center [&>p]:my-0">
           <Button
             type="button"
             variant="secondary"
@@ -1622,7 +1671,9 @@ export function SoNhiemVu({
       {viewMode !== "kanban" && so.pha === "xong" && (
         <>
           {viewMode === "danh-sach" && listTable(so.duLieu.items)}
-          <CardFooter className="justify-between">
+          {/* The prototype's `Hiển thị N nhiệm vụ.` under the table, with the two sort notes and the
+              pager beside it. */}
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 [&>.ghi-chu]:m-0">
           <p className="ghi-chu">{nhanBoDem(so.duLieu.items.length)}</p>
           <p className="ghi-chu">{NO_DEADLINE_LAST_NOTE}</p>
@@ -1652,10 +1703,9 @@ export function SoNhiemVu({
               <Glyph icon={ChevronRight} />
             </Button>
           </nav>
-          </CardFooter>
+          </div>
         </>
       )}
-      </Card>
 
       {/* THE DETAIL IS A LARGE DIALOG OVER THE LIST (ADR 0068 §Sửa đổi 05/10/2026 #3). Esc asks
           the same `dong` as the ✕ — it HIDES the panel, the record tabs stay. The dialog stays
@@ -1818,6 +1868,7 @@ export function SoNhiemVu({
                     <FormGiaoViec
                       // A new form (and a new idempotency key) per parent.
                       key={drawer.nhiemVu.code}
+                      dialog
                       danhMuc={danhMuc}
                       danhBa={kqDanhBa}
                       danhBaLanhDao={kqDanhBaLanhDao}
@@ -1858,8 +1909,6 @@ export function SoNhiemVu({
           // nên `ghiXong` thay cả trường vô hướng lẫn khối văn bản, rồi đọc lại sổ như mọi lần ghi
           // khác. Hỏng: trả `KetQua` nguyên vẹn về form, để form GIỮ chữ cán bộ đã gõ và in câu máy
           // chủ — không đóng form, không xoá gì.
-          // RENAME (3c3525f): the reply carries the NEW code; `ghiXong` takes the reply, so the drawer,
-          // its next detail read and every block keyed by code switch to it — the old code 404s.
           // FAILURE: re-read the drawer (a 409 `task_changed` means the task moved on) — the form
           // keeps what was typed and says so; it does not adopt the new version itself.
           suaKhoiVanBan={(than) => {
@@ -1947,9 +1996,9 @@ export function KhoiChuaDung() {
  * Mọi ô đều có tuyến đứng sau. ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W5): tab `Liên quan đến tôi` và ô tick
  * `Sắp đến hạn` từng vắng mặt vì máy chủ từ chối; nay máy chủ phục vụ cả hai (3a4e60f).
  *
- * Ô `Người thực hiện` là Ô GÕ TÊN ĐỂ TÌM (`StaffCombobox`) trên danh bạ chọn người
- * (`GET /api/v1/staff-directory`, mọi cán bộ đăng nhập đọc được). Chữ gõ lọc TẠI CHỖ, không đi lên
- * mạng hay đường dẫn; giá trị là MÃ NGHIỆP VỤ `CB-…` — thứ `?assignee=` so khớp.
+ * Ô `Người thực hiện` là ô chọn trên danh bạ chọn người (`GET /api/v1/staff-directory`, mọi cán bộ
+ * đăng nhập đọc được), như prototype — ĐỔI CHIỀU 06/10/2026 (lần 5): trước là ô gõ tên trong bảng
+ * `Bộ lọc`. Giá trị vẫn là MÃ NGHIỆP VỤ `CB-…` — thứ `?assignee=` so khớp.
  */
 export function HangLoc({
   loc,
@@ -1958,7 +2007,9 @@ export function HangLoc({
   datLoc,
   danhMuc,
   danhBa,
-  nhanTT,
+  disabled = false,
+  hideType = false,
+  end,
 }: {
   loc: BoLoc;
   tim: string;
@@ -1967,21 +2018,19 @@ export function HangLoc({
   danhMuc: DanhMucNhiemVu;
   /** Câu trả lời nguyên vẹn của danh bạ chọn người; `null` = chưa đọc xong. */
   danhBa: KetQua<identity_danhBaChonNguoiRa> | null;
-  /** Nhãn và thứ tự bảy trạng thái của xã — ô lọc hiện đúng chữ và thứ tự xã đặt. */
-  nhanTT: BangNhanTrangThai;
+  /**
+   * Kept for the callers' shape. The row has NO status filter any more (the prototype has none);
+   * a status arriving in the address bar is said under the row by the page.
+   */
+  nhanTT?: BangNhanTrangThai;
+  /** Overview drill-down on: every filter is drawn but off — the rows must match the number. */
+  disabled?: boolean;
+  /** `Sổ theo dõi` hides `Loại`, as the prototype does — the book is the directive tasks' book. */
+  hideType?: boolean;
+  /** The right end of the row: the selection bar and the view switch (the page's). */
+  end?: ReactNode;
 }) {
   const db = docDanhBaChonNguoi(danhBa);
-  // Panel filters that are on — each is ABSENT from `loc` at its default, exactly what is not sent.
-  const moreActiveCount = [
-    loc.loai,
-    loc.khoi,
-    loc.mucUuTien,
-    loc.nguonGiao,
-    loc.boPhanID,
-    loc.nguoiThucHienMa,
-    loc.chiTreHan,
-    loc.dueSoon,
-  ].filter((v) => v !== undefined).length;
 
   function timNgay(e: FormEvent) {
     e.preventDefault();
@@ -1989,249 +2038,208 @@ export function HangLoc({
     datLoc({ ...loc, tim: canGon === "" ? undefined : canGon });
   }
 
+  // Overdue and due-soon EXCLUDE each other: a task cannot be both, and both on is an always-empty
+  // list that reads as "nothing to do". Turning one on turns the other off. Off = ABSENT from the
+  // query (the server only accepts the string `true`).
+  function toggleLate(): void {
+    const on = loc.chiTreHan !== true;
+    datLoc({ ...loc, chiTreHan: on ? true : undefined, dueSoon: on ? undefined : loc.dueSoon });
+  }
+  function toggleDueSoon(): void {
+    const on = loc.dueSoon !== true;
+    datLoc({ ...loc, dueSoon: on ? true : undefined, chiTreHan: on ? undefined : loc.chiTreHan });
+  }
+
   return (
-    <>
-      {/* BA TAB PHẠM VI (§3). `mine` và `related` KHÔNG mang theo danh tính nào — máy chủ lấy mã cán
-          bộ từ PHIÊN, và với `related` tự hỏi `identity` bộ phận của người ấy. Một tab gửi lên
-          `?assignee=CB-…` của chính mình sẽ là client tự khai mình là ai (luật 1, cấm #2).
-          ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W5): tab thứ ba có từ khi máy chủ phục vụ `scope=related`.
-          Drawn as underline tabs at the head of the list card (spec §8.3); the click handlers and the
-          value each tab sends are unchanged. */}
-      <TabList aria-label="Phạm vi" className="px-4">
-        <Tab
-          icon={Landmark}
-          selected={loc.phamVi !== "mine" && loc.phamVi !== "related"}
-          onClick={() => datLoc({ ...loc, phamVi: undefined })}
+    // THE PROTOTYPE'S ONE ROW (`TaskWorkspace.tsx`): scope → search → Bộ phận → Người thực hiện →
+    // Mức ưu tiên → Loại → Khối → Nguồn giao → Chỉ việc quá hạn · Sắp đến hạn → (selection) → view
+    // switch. No `Bộ lọc` panel (ADR 0068 §12 replaced for this screen, §Sửa đổi 06/10/2026 lần 5).
+    // Labels are visually hidden — each select's first option names it, as in the prototype — but
+    // every control keeps a real `<label>`. It wraps onto further lines at narrow widths.
+    <div id="task-filters" className="flex min-w-0 flex-col gap-2 [&>*]:my-0">
+      <div className="flex min-w-0 flex-wrap items-center gap-2.5 [&>*]:my-0">
+        {/* BA PHẠM VI. `mine` và `related` KHÔNG mang theo danh tính nào — máy chủ lấy mã cán bộ từ
+            PHIÊN, và với `related` tự hỏi `identity` bộ phận của người ấy. Một nút gửi lên
+            `?assignee=CB-…` của chính mình sẽ là client tự khai mình là ai (luật 1, cấm #2). */}
+        <Segmented
+          mode="buttons"
+          legend="Phạm vi"
+          name="pham-vi"
+          value={loc.phamVi === "mine" || loc.phamVi === "related" ? loc.phamVi : ""}
+          disabled={disabled}
+          options={[
+            { value: "", label: PHAM_VI_TOAN_XA },
+            { value: "mine", label: PHAM_VI_CUA_TOI },
+            { value: "related", label: SCOPE_RELATED_LABEL },
+          ]}
+          onChange={(v) =>
+            datLoc({ ...loc, phamVi: v === "mine" || v === "related" ? v : undefined })
+          }
+        />
+
+        {/* Ô TÌM GỬI BẰNG ENTER, KHÔNG GỬI THEO TỪNG PHÍM: mỗi phím là một lời gọi mang chữ cán bộ
+            đang gõ vào một URL, và một URL đi vào mọi log truy cập (luật 3, cấm #4). */}
+        <form className="m-0 w-64 max-w-full" onSubmit={timNgay} role="search">
+          <Field label="Tìm theo tên nhiệm vụ" htmlFor="tim-nhiem-vu" icon={Search} hideLabel grow="auto">
+            <input
+              id="tim-nhiem-vu"
+              name="tim-nhiem-vu"
+              value={tim}
+              placeholder={TIM_PLACEHOLDER}
+              disabled={disabled}
+              onChange={(e) => datTim(e.target.value)}
+              autoComplete="off"
+              // Máy chủ trả 400 khi quá 200 ký tự (`store.TimNhiemVuToiDa`). Chặn ở ô nhập để cán bộ
+              // thấy giới hạn thay vì thấy "không tải được".
+              maxLength={200}
+            />
+          </Field>
+        </form>
+
+        <Field label="Lọc theo bộ phận" htmlFor="loc-bo-phan" kind="select" hideLabel grow="auto">
+          <select
+            id="loc-bo-phan"
+            value={loc.boPhanID ?? ""}
+            disabled={disabled}
+            onChange={(e) => datLoc({ ...loc, boPhanID: e.target.value || undefined })}
+          >
+            <option value="">{MOI_BO_PHAN_NHAN}</option>
+            {danhMuc.boPhan.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        {/* Giá trị là MÃ NGHIỆP VỤ `CB-…` — thứ `?assignee=` so khớp; mã không phải dữ liệu cá nhân, họ
+            tên chỉ nằm trong chữ của lựa chọn và không bao giờ lên URL (luật 3, cấm #4). A native
+            select like the prototype's, fed by the staff directory read once for the screen. */}
+        <Field label="Lọc theo người thực hiện" htmlFor="loc-nguoi-thuc-hien" kind="select" hideLabel grow="auto">
+          <select
+            id="loc-nguoi-thuc-hien"
+            value={loc.nguoiThucHienMa ?? ""}
+            disabled={disabled || db.dangTai}
+            onChange={(e) => datLoc({ ...loc, nguoiThucHienMa: e.target.value || undefined })}
+          >
+            <option value="">{nhanTrongOChonCanBo(db, MOI_NGUOI_THUC_HIEN_NHAN)}</option>
+            {db.ds.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.full_name}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Lọc theo mức ưu tiên" htmlFor="loc-uu-tien" kind="select" hideLabel grow="auto">
+          <select
+            id="loc-uu-tien"
+            value={loc.mucUuTien ?? ""}
+            disabled={disabled}
+            onChange={(e) => datLoc({ ...loc, mucUuTien: e.target.value || undefined })}
+          >
+            <option value="">{MOI_MUC_UU_TIEN_NHAN}</option>
+            {/* KHÔNG SẮP XẾP LẠI MẢNG NÀY: thứ tự `items` LÀ thang bậc của xã, không phải sở thích
+                trình bày (`muc_uu_tien_nhiem_vu.go`). */}
+            {danhMuc.mucUuTien.map((m) => (
+              <option key={m.code} value={m.code}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        {!hideType && (
+          <Field label="Lọc theo loại nhiệm vụ" htmlFor="loc-loai" kind="select" hideLabel grow="auto">
+            <select
+              id="loc-loai"
+              value={loc.loai ?? ""}
+              disabled={disabled}
+              onChange={(e) => datLoc({ ...loc, loai: e.target.value || undefined })}
+            >
+              <option value="">{MOI_LOAI_NHAN}</option>
+              {danhMuc.loai.map((l) => (
+                <option key={l.code} value={l.code}>
+                  {l.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+
+        <Field label="Lọc theo khối nhiệm vụ" htmlFor="loc-khoi" kind="select" hideLabel grow="auto">
+          <select
+            id="loc-khoi"
+            value={loc.khoi ?? ""}
+            disabled={disabled}
+            onChange={(e) => datLoc({ ...loc, khoi: e.target.value || undefined })}
+          >
+            <option value="">{MOI_KHOI_NHAN}</option>
+            {danhMuc.khoi.map((k) => (
+              <option key={k.code} value={k.code}>
+                {k.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Lọc theo nguồn giao" htmlFor="loc-nguon-giao" kind="select" hideLabel grow="auto">
+          <select
+            id="loc-nguon-giao"
+            value={loc.nguonGiao ?? ""}
+            disabled={disabled}
+            onChange={(e) => datLoc({ ...loc, nguonGiao: e.target.value || undefined })}
+          >
+            <option value="">{MOI_NGUON_GIAO_NHAN}</option>
+            {MOI_NGUON_GIAO.map((ma) => (
+              <option key={ma} value={ma}>
+                {nhanNguonGiao(ma)}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        {/* "Sắp đến hạn" carries no number of days: the threshold is the commune's own, read by the
+            server from identity; a commune that set none gets the server's 409 sentence verbatim. */}
+        <Button
+          id="loc-qua-han"
+          type="button"
+          size="sm"
+          variant={loc.chiTreHan === true ? "primary" : "outline"}
+          aria-pressed={loc.chiTreHan === true}
+          disabled={disabled}
+          onClick={toggleLate}
         >
-          {PHAM_VI_TOAN_XA}
-        </Tab>
-        <Tab
-          icon={UserRound}
-          selected={loc.phamVi === "mine"}
-          onClick={() => datLoc({ ...loc, phamVi: "mine" })}
+          {CHI_QUA_HAN_NHAN}
+        </Button>
+        <Button
+          id="loc-sap-den-han"
+          type="button"
+          size="sm"
+          variant={loc.dueSoon === true ? "primary" : "outline"}
+          aria-pressed={loc.dueSoon === true}
+          disabled={disabled}
+          onClick={toggleDueSoon}
         >
-          {PHAM_VI_CUA_TOI}
-        </Tab>
-        <Tab
-          icon={Link2}
-          selected={loc.phamVi === "related"}
-          aria-describedby={loc.phamVi === "related" ? "pham-vi-lien-quan-ghi-chu" : undefined}
-          onClick={() => datLoc({ ...loc, phamVi: "related" })}
-        >
-          {SCOPE_RELATED_LABEL}
-        </Tab>
-      </TabList>
+          {DUE_SOON_FILTER_LABEL}
+        </Button>
+
+        {end}
+      </div>
+
       {loc.phamVi === "related" && (
-        <p id="pham-vi-lien-quan-ghi-chu" className="ghi-chu mx-4 mt-2">
+        <p id="pham-vi-lien-quan-ghi-chu" className="ghi-chu m-0">
           {SCOPE_RELATED_NOTE}
         </p>
       )}
-
-      {/* ONE FILTER ROW (spec §6.4) + "Bộ lọc" (owner, 02/10/2026): the search box first, then the
-          status; the seven narrower filters sit in the panel behind the button. Every native control
-          keeps its id, value and handler. */}
-      <FilterBar
-        id="task-filters"
-        className="m-0 border-b border-line px-4 py-3.5"
-        moreActiveCount={moreActiveCount}
-        primary={
-          <>
-            {/* Ô TÌM GỬI BẰNG SUBMIT, KHÔNG GỬI THEO TỪNG PHÍM: mỗi phím là một lời gọi mang chữ cán bộ
-                đang gõ vào một URL, và một URL đi vào mọi log truy cập (luật 3, cấm #4). */}
-            <form
-              className="form-tra-cuu m-0 flex min-w-0 flex-[1_1_320px] flex-row items-end gap-2 max-w-[480px]"
-              onSubmit={timNgay}
-              role="search"
-            >
-              <Field label="Tìm trong sổ" htmlFor="tim-nhiem-vu" icon={Search} grow="search" className="max-w-none">
-                <input
-                  id="tim-nhiem-vu"
-                  name="tim-nhiem-vu"
-                  value={tim}
-                  placeholder={TIM_PLACEHOLDER}
-                  onChange={(e) => datTim(e.target.value)}
-                  autoComplete="off"
-                  // Máy chủ trả 400 khi quá 200 ký tự (`store.TimNhiemVuToiDa`). Chặn ở ô nhập để cán bộ
-                  // thấy giới hạn thay vì thấy "không tải được".
-                  maxLength={200}
-                />
-              </Field>
-              <Button variant="secondary" type="submit">
-                Tìm
-              </Button>
-            </form>
-
-            <Field label="Trạng thái" htmlFor="loc-trang-thai" icon={CircleDot} kind="select">
-              <select
-                id="loc-trang-thai"
-                value={loc.trangThai ?? ""}
-                onChange={(e) => datLoc({ ...loc, trangThai: e.target.value || undefined })}
-              >
-                <option value="">{MOI_TRANG_THAI_NHAN}</option>
-                {nhanTT.thuTu.map((ma) => (
-                  <option key={ma} value={ma}>
-                    {nhanTrangThai(nhanTT, ma)}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </>
-        }
-        more={
-          <>
-            <Field label="Loại nhiệm vụ" htmlFor="loc-loai" icon={Shapes} kind="select">
-              <select
-                id="loc-loai"
-                value={loc.loai ?? ""}
-                onChange={(e) => datLoc({ ...loc, loai: e.target.value || undefined })}
-              >
-                <option value="">{MOI_LOAI_NHAN}</option>
-                {danhMuc.loai.map((l) => (
-                  <option key={l.code} value={l.code}>
-                    {l.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            <Field label="Khối" htmlFor="loc-khoi" icon={Layers} kind="select">
-              <select
-                id="loc-khoi"
-                value={loc.khoi ?? ""}
-                onChange={(e) => datLoc({ ...loc, khoi: e.target.value || undefined })}
-              >
-                <option value="">{MOI_KHOI_NHAN}</option>
-                {danhMuc.khoi.map((k) => (
-                  <option key={k.code} value={k.code}>
-                    {k.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            <Field label="Mức ưu tiên" htmlFor="loc-uu-tien" icon={Flag} kind="select">
-              <select
-                id="loc-uu-tien"
-                value={loc.mucUuTien ?? ""}
-                onChange={(e) => datLoc({ ...loc, mucUuTien: e.target.value || undefined })}
-              >
-                <option value="">{MOI_MUC_UU_TIEN_NHAN}</option>
-                {/* KHÔNG SẮP XẾP LẠI MẢNG NÀY: thứ tự `items` LÀ thang bậc của xã, không phải sở thích
-                    trình bày (`muc_uu_tien_nhiem_vu.go`). */}
-                {danhMuc.mucUuTien.map((m) => (
-                  <option key={m.code} value={m.code}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            <Field label="Nguồn giao" htmlFor="loc-nguon-giao" icon={GitBranch} kind="select">
-              <select
-                id="loc-nguon-giao"
-                value={loc.nguonGiao ?? ""}
-                onChange={(e) => datLoc({ ...loc, nguonGiao: e.target.value || undefined })}
-              >
-                <option value="">{MOI_NGUON_GIAO_NHAN}</option>
-                {MOI_NGUON_GIAO.map((ma) => (
-                  <option key={ma} value={ma}>
-                    {nhanNguonGiao(ma)}
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            <Field label="Bộ phận" htmlFor="loc-bo-phan" icon={Building2} kind="select">
-              <select
-                id="loc-bo-phan"
-                value={loc.boPhanID ?? ""}
-                onChange={(e) => datLoc({ ...loc, boPhanID: e.target.value || undefined })}
-              >
-                <option value="">{MOI_BO_PHAN_NHAN}</option>
-                {danhMuc.boPhan.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            {/* Mã đi lên URL (`?assignee=CB-…`) — mã nghiệp vụ, không phải dữ liệu cá nhân; họ tên
-                chỉ nằm trong chữ của lựa chọn, không bao giờ lên URL (luật 3, cấm #4).
-                The combobox is a shared component with its own label and hint; the frame below only
-                restyles it to the Field look by descendant selectors and draws the leading icon. It aligns
-                on its TOP (label row) because its hint line hangs below the control. */}
-            <div className={STAFF_FILTER_FRAME}>
-              <Glyph
-                icon={UserRound}
-                className="pointer-events-none absolute top-[32px] left-3 z-[1] size-[18px] text-ink-500"
-              />
-              <StaffCombobox
-                id="loc-nguoi-thuc-hien"
-                label="Người thực hiện"
-                emptyLabel={nhanTrongOChonCanBo(db, MOI_NGUOI_THUC_HIEN_NHAN)}
-                value={loc.nguoiThucHienMa ?? ""}
-                directory={db.ds}
-                disabled={db.dangTai}
-                onChange={(ma) => datLoc({ ...loc, nguoiThucHienMa: ma || undefined })}
-              />
-            </div>
-            {db.loi !== null && (
-              <p className="thong-bao-loi col-span-full m-0" role="alert">
-                {cauLoiDanhBaLoc(db.loi)}
-              </p>
-            )}
-
-            <div className="o-chon h-10">
-              <label htmlFor="loc-qua-han">
-                <input
-                  id="loc-qua-han"
-                  type="checkbox"
-                  checked={loc.chiTreHan === true}
-                  // Ô bỏ tích thì tham số VẮNG MẶT HẲN, không gửi `late=false` — máy chủ chỉ nhận đúng
-                  // chuỗi `true` và trả 400 cho mọi giá trị khác.
-                  onChange={(e) => datLoc({ ...loc, chiTreHan: e.target.checked ? true : undefined })}
-                />{" "}
-                {CHI_QUA_HAN_NHAN}
-              </label>
-            </div>
-
-            {/* §3 `☐ Sắp đến hạn` (W5). Only the switch goes up — `soon=true`, never a number: the
-                threshold is the commune's own, read by the server from identity. A commune that set none
-                gets the server's 409 sentence in place of the page, verbatim. Unticked = absent. */}
-            <div className="o-chon h-10">
-              <label htmlFor="loc-sap-den-han">
-                <input
-                  id="loc-sap-den-han"
-                  type="checkbox"
-                  checked={loc.dueSoon === true}
-                  onChange={(e) => datLoc({ ...loc, dueSoon: e.target.checked ? true : undefined })}
-                />{" "}
-                {DUE_SOON_FILTER_LABEL}
-              </label>
-            </div>
-          </>
-        }
-      />
-    </>
+      {db.loi !== null && (
+        <p className="thong-bao-loi m-0" role="alert">
+          {cauLoiDanhBaLoc(db.loi)}
+        </p>
+      )}
+    </div>
   );
 }
-
-/**
- * Restyles the shared `StaffCombobox` (its own `.o-nhap` label + input + hint) to the Field look of
- * the filter row: 12px/600 label 6px above a 40px control, room for the leading icon. Descendant
- * selectors only — the component's markup, ids and behaviour are not touched (it is outside this
- * screen's scope). The icon's `top-[32px]` follows from this: 15px label (12px × 1.25, the Field
- * label) + 6px gap + (40−18)/2. It sits in the FilterBar panel grid, so it takes its cell's width.
- */
-const STAFF_FILTER_FRAME = cn(
-  "relative min-w-0 self-start",
-  "[&_.o-nhap]:m-0 [&_.o-nhap]:flex [&_.o-nhap]:flex-col [&_.o-nhap]:gap-1.5",
-  "[&_.o-nhap>label]:m-0 [&_.o-nhap>label]:text-xs [&_.o-nhap>label]:leading-tight [&_.o-nhap>label]:font-semibold [&_.o-nhap>label]:text-ink-700",
-  "[&_.hop-tim-can-bo_input]:h-10 [&_.hop-tim-can-bo_input]:min-h-10 [&_.hop-tim-can-bo_input]:pl-10 [&_.hop-tim-can-bo_input]:text-base md:[&_.hop-tim-can-bo_input]:text-sm",
-  "[&_.nut-mo-danh-sach]:size-10 [&_.nut-mo-danh-sach]:min-h-10 [&_.nut-mo-danh-sach]:min-w-10 [&_.nut-mo-danh-sach]:p-0",
-  "[&_.goi-y-tim]:text-xs",
-);
 
 /** Which gesture started a Kanban move — only focus handling differs, never the request. */
 export type KanbanMoveVia = "menu" | "drag";
@@ -2425,11 +2433,17 @@ export function BangKanban({
         </p>
       )}
       <div className="bang-cuon" role="region" aria-label="Bảng Kanban nhiệm vụ" tabIndex={0}>
-        <div className="bang-kanban">
+        {/* The prototype's board: five equal columns side by side on a wide screen (`grid-cols-5`,
+            14px gaps). Narrower, the legacy layout holds — stacked on a phone, a scrolling row from
+            768px (reason in `globals.css`). */}
+        <div className="bang-kanban p-0 xl:grid xl:grid-cols-5 xl:gap-3.5">
           {cotSap.map((c) => (
             <section
               key={c.ma}
-              className={dropAllowed(c.ma) ? "cot-kanban cot-nhan-tha" : "cot-kanban"}
+              className={cn(
+                dropAllowed(c.ma) ? "cot-kanban cot-nhan-tha" : "cot-kanban",
+                "min-h-45 rounded-card border-line bg-surface-subtle p-3 xl:min-w-0",
+              )}
               aria-labelledby={`cot-kanban-${c.ma}`}
               onDragOver={
                 move === null
@@ -2453,14 +2467,17 @@ export function BangKanban({
                     }
               }
             >
-              <h3 id={`cot-kanban-${c.ma}`}>
+              <h3
+                id={`cot-kanban-${c.ma}`}
+                className="mb-3 flex items-center gap-2 px-1 text-[13px] font-semibold text-ink-900"
+              >
                 {/* NHÃN CỘT LÀ NHÃN CỦA XÃ — cùng một chữ với chip và ô lọc. Chữ "Chưa thực hiện"
                     của §4.1 là thứ xã tự đặt cho `moi-giao` ở tab Danh mục (xem `nhan-nhiem-vu.ts`). */}
                 {nhanTrangThai(nhanTT, c.ma)}{" "}
                 {/* THE REAL TOTAL (#15), not the cards loaded. Unreadable or missing → `—`, never
                     a `0` that reads as "nothing here". Still loading → no chip yet. */}
                 {counts.pha !== "dangTai" && (
-                  <span className="chip chip-ngung">
+                  <span className="chip chip-ngung ml-auto rounded-[10px] border border-solid border-line bg-surface px-2 text-[11px] font-semibold text-ink-500">
                     {totalOf(c.ma) === null ? O_TRONG : String(totalOf(c.ma))}
                   </span>
                 )}
@@ -2477,10 +2494,10 @@ export function BangKanban({
                 </p>
               )}
               {c.tai.pha === "xong" && c.tai.duLieu.items.length === 0 && (
-                <p className="trang-thai-rong">{COT_RONG}</p>
+                <p className="trang-thai-rong m-0 px-1 py-6 text-center text-[12px] text-ink-500">{COT_RONG}</p>
               )}
               {c.tai.pha === "xong" && c.tai.duLieu.items.length > 0 && (
-                <ul className="danh-sach-the">
+                <ul className="danh-sach-the gap-2.5">
                   {c.tai.duLieu.items.map((n) => (
                     <li key={n.code}>
                       <TheNhiemVu
@@ -2713,9 +2730,15 @@ export function TheNhiemVu({
   const canReturn =
     move !== null && reasonMove(nhiemVu, move.permissions, move.staffCode) === "return";
 
+  const priorityLabel = nhiemVu.priority === "" ? "" : nhanDanhMuc(danhMuc.mucUuTien, nhiemVu.priority);
+  const completedLate = hoanThanhTreHan(nhiemVu.completed_at, nhiemVu.original_due_at);
+
   return (
+    // THE PROTOTYPE'S CARD (`TaskCard.tsx`): a priority strip on top, `☐ Chọn`, then ONE button
+    // holding code · title · `N việc con` · deadline · assignee. The strip is colour, so the
+    // priority is also said in words for a screen reader (colour is never the only signal).
     <article
-      className="the-nhiem-vu"
+      className="the-nhiem-vu overflow-hidden rounded-[10px] border border-solid border-line bg-surface p-0 shadow-sm"
       aria-labelledby={`the-nhiem-vu-${nhiemVu.code}`}
       aria-busy={pendingHere !== null ? true : undefined}
       draggable={targets.length > 0 && !busy ? true : undefined}
@@ -2732,8 +2755,10 @@ export function TheNhiemVu({
       }
       onDragEnd={targets.length > 0 ? () => onDragEnd?.() : undefined}
     >
+      <div className={cn("h-[3px]", priorityStripClass(danhMuc.mucUuTien, nhiemVu.priority))} aria-hidden="true" />
       {selection !== null && (
-        <label className="o-chon">
+        // OUTSIDE the open button, never inside it: a checkbox in a button is a nested control.
+        <label className="m-0 flex cursor-pointer items-center gap-2 px-3 pt-2.5 text-[12px] text-ink-500">
           <input
             type="checkbox"
             aria-label={selectLabel(nhiemVu.code)}
@@ -2744,50 +2769,54 @@ export function TheNhiemVu({
           Chọn
         </label>
       )}
-      <p className="ma-muc">{nhiemVu.code}</p>
-      <p id={`the-nhiem-vu-${nhiemVu.code}`} className="tieu-de-the">
-        {nhiemVu.title}
-      </p>
-      {/* `Trễ 87 ngày` · `Hạn 20/12/2026` · `Hạn —` — cùng một hàm với dải hạn của drawer. */}
-      <p className={treHan ? "nhan-lech" : "dong-phu"}>
-        <Glyph icon={treHan ? AlarmClock : Clock} className="mr-1 inline size-3.5 align-[-2px]" />
-        {nhanHanThe(nhiemVu.due_at, bayGio)}
-      </p>
-      <p className="dong-phu">
-        {cardHolderText(nhiemVu, danhBa, unitNames)} ·{" "}
-        {nhanDanhMuc(danhMuc.mucUuTien, nhiemVu.priority)}
-      </p>
-      {childCountLabel(nhiemVu.child_count) !== null && (
-        <p>
-          <span className="chip chip-ngung">{childCountLabel(nhiemVu.child_count)}</span>
-        </p>
-      )}
-      {hoanThanhTreHan(nhiemVu.completed_at, nhiemVu.original_due_at) && (
-        <p>
-          <span className="chip chip-hoat-dong">{nhanHoanThanhTreHan(nhanTT)}</span>
-        </p>
-      )}
+      <button
+        type="button"
+        className="block w-full cursor-pointer border-0 bg-transparent p-3 text-left [font-family:inherit] text-ink-900 hover:bg-surface-subtle focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-500"
+        onClick={() => moNhiemVu(nhiemVu)}
+        aria-expanded={nhiemVu.code === maDangMo}
+      >
+        <span className="ma-muc mb-0.5 block text-[11px] font-semibold text-ink-500">{nhiemVu.code}</span>
+        <span id={`the-nhiem-vu-${nhiemVu.code}`} className="tieu-de-the text-[13px] leading-snug font-semibold">
+          {nhiemVu.title}
+        </span>
+        {priorityLabel !== "" && <span className="an-thi-giac"> · Mức ưu tiên {priorityLabel}</span>}
+        {childCountLabel(nhiemVu.child_count) !== null && (
+          <span className="mt-2 flex items-center gap-1 text-[11px] text-ink-500">
+            <Glyph icon={GitBranch} className="size-3" />
+            {childCountLabel(nhiemVu.child_count)}
+          </span>
+        )}
+        {/* Late (red) ≠ finished late (amber): a finished task owes nothing, so red would be wrong,
+            but it came in after its deadline, so a plain date would hide it. Overdue is DERIVED
+            from `due_at` vs now (rule 10, invariant 3). */}
+        <span
+          className={cn(
+            "mt-2.5 flex items-center gap-1 text-[11px]",
+            completedLate ? "font-semibold text-warning-600" : treHan ? "nhan-lech font-semibold" : "text-ink-500",
+          )}
+        >
+          <Glyph icon={treHan && !completedLate ? AlarmClock : Clock} className="size-3" />
+          {completedLate ? nhanHoanThanhTreHan(nhanTT) : nhanHanThe(nhiemVu.due_at, bayGio)}
+        </span>
+        <span className="mt-2 block truncate text-[12px] text-ink-500">
+          {cardHolderText(nhiemVu, danhBa, unitNames)}
+        </span>
+      </button>
       {pendingHere !== null && (
-        <p className="dong-phu">
+        <p className="dong-phu mx-3 mt-0 mb-2">
           {kanbanMovePendingText(nhanTT, pendingHere.code, pendingHere.target)}
         </p>
       )}
       {/* THE SERVER'S SENTENCE, VERBATIM — the list of unfinished child tasks lives in it. */}
       {refusal !== null && (
-        <p className="thong-bao-loi" role="alert">
+        <p className="thong-bao-loi mx-3 mt-0 mb-2" role="alert">
           {kanbanMoveRefusedPrefix(nhanTT, refusal.target)} {refusal.message}
         </p>
       )}
-      <div className="cum-nut-the">
-        <button
-          type="button"
-          className="nut-phu"
-          onClick={() => moNhiemVu(nhiemVu)}
-          aria-expanded={nhiemVu.code === maDangMo}
-        >
-          {nhiemVu.code === maDangMo ? "Đang mở" : `Mở ${nhiemVu.code}`}
-        </button>
-        {move !== null && targets.length > 0 && (
+      {/* The keyboard path to moving the card — drag-and-drop alone has none (a11y). Not in the
+          prototype, which only drags; kept, below the card's content. */}
+      {move !== null && targets.length > 0 && (
+        <div className="cum-nut-the mx-3 mt-0 mb-2">
           <KanbanMoveMenu
             code={nhiemVu.code}
             targets={targets}
@@ -2796,8 +2825,8 @@ export function TheNhiemVu({
             showReturnNote={canReturn}
             onMove={(t) => move.move(nhiemVu, t, "menu")}
           />
-        )}
-      </div>
+        </div>
+      )}
     </article>
   );
 }
@@ -2836,9 +2865,10 @@ function OTieuDeSapXepNhiemVu({
  * HÀNG QUÁ HẠN: lớp `.dong-qua-han` (`globals.css`), bám vào đúng điều kiện `data-tre-han` đang đánh
  * dấu. Màu không phải tín hiệu duy nhất — cùng dòng ấy cột Hạn có chữ `(trễ N ngày)`.
  *
- * CỘT `Ngày giao` KHÔNG CÓ TRONG BẢNG CỘT §4.2, và nó có mặt vì một lý do: §4.2 đòi cột sắp được, mà
- * máy chủ chỉ sắp được theo `code` và `created_at`. Một cách sắp không có cột nào hiện giá trị của nó
- * là một thứ tự cán bộ không kiểm được bằng mắt.
+ * CỘT ĐÚNG PROTOTYPE (ADR 0068 §Sửa đổi 06/10/2026 lần 5): Mã · Tên việc · Người thực hiện · Bộ phận ·
+ * Ưu tiên · Hạn · Trạng thái. `Ngày giao` và cột nút `Mở NV…` đã gỡ: máy chủ nay sắp được theo tên,
+ * ưu tiên và hạn — đều có cột — và cả dòng là chỗ bấm để mở. Thứ tự MẶC ĐỊNH vẫn là ngày giao mới
+ * nhất trước (`sapXepDayDu`); không cột nào mang mũi tên lúc ấy.
  *
  * CỘT Ô TICK `☐` (§4.2) — CHỈ khi phiên cầm `task.delete` (`selection`, mặc định `null`). ĐỔI CHIỀU
  * CÓ CHỦ Ý 28/09/2026 (W4): trước đó không có cột này vì `Xoá đã chọn` chưa dựng; một ô tick không
@@ -2913,12 +2943,6 @@ export function BangNhiemVu({
               sapXep={sapXep}
               doiSapXep={doiSapXep}
             />
-            <OTieuDeSapXepNhiemVu
-              cot="created_at"
-              nhan={NHAN_COT_NGAY_GIAO}
-              sapXep={sapXep}
-              doiSapXep={doiSapXep}
-            />
             <th scope="col">Người thực hiện</th>
             <th scope="col">Bộ phận</th>
             <OTieuDeSapXepNhiemVu
@@ -2934,9 +2958,6 @@ export function BangNhiemVu({
               doiSapXep={doiSapXep}
             />
             <th scope="col">Trạng thái</th>
-            <th scope="col">
-              <span className="an-thi-giac">Thao tác</span>
-            </th>
           </tr>
         </thead>
         <tbody>
@@ -2948,10 +2969,13 @@ export function BangNhiemVu({
                 // SUY RA từ `due_at` so với bây giờ — cùng phép `oHan` cột Hạn dùng, không đọc cột
                 // cờ nào (luật 10, bất biến 3). Nên nền hồng và chữ `(trễ N ngày)` không lệch nhau.
                 data-tre-han={o.phanTre !== "" ? "" : undefined}
-                className={o.phanTre !== "" ? "dong-qua-han" : undefined}
+                // The prototype opens a task by clicking ANYWHERE on its row. The code cell keeps a
+                // real button for the keyboard; both open through the same `moNhiemVu`.
+                className={cn("cursor-pointer hover:bg-surface-subtle", o.phanTre !== "" && "dong-qua-han")}
+                onClick={() => moNhiemVu(n)}
               >
                 {selection !== null && (
-                  <td>
+                  <td onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       aria-label={selectLabel(n.code)}
@@ -2961,16 +2985,25 @@ export function BangNhiemVu({
                     />
                   </td>
                 )}
-                <td className="ma-muc">{n.code}</td>
-                <td>
-                  {n.title}
-                  <span className="dong-phu">{nhanNguonGiao(n.source)}</span>
-                  {childCountLabel(n.child_count) !== null && (
-                    <span className="chip chip-ngung">{childCountLabel(n.child_count)}</span>
-                  )}
+                <td className="ma-muc">
+                  <button
+                    type="button"
+                    className="cursor-pointer border-0 bg-transparent p-0 [font-family:inherit] text-[13px] font-semibold text-ink-500 underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
+                    aria-expanded={n.code === maDangMo}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      moNhiemVu(n);
+                    }}
+                  >
+                    {n.code}
+                  </button>
                 </td>
                 <td>
-                  <time dateTime={n.created_at}>{nhanNgay(n.created_at)}</time>
+                  <span className="block font-semibold text-ink-900">{n.title}</span>
+                  <span className="dong-phu">
+                    {nhanNguonGiao(n.source)}
+                    {childCountLabel(n.child_count) !== null && ` · ${childCountLabel(n.child_count)}`}
+                  </span>
                 </td>
                 <td>{nhanCanBoNgan(n.assignee, danhBa, CHUA_PHAN_CONG)}</td>
                 <td>{n.unit === "" ? O_TRONG : (tenBoPhan.get(n.unit) ?? n.unit)}</td>
@@ -2993,16 +3026,6 @@ export function BangNhiemVu({
                   {hoanThanhTreHan(n.completed_at, n.original_due_at) && (
                     <span className="chip chip-hoat-dong">{nhanHoanThanhTreHan(nhanTT)}</span>
                   )}
-                </td>
-                <td className="o-thao-tac">
-                  <button
-                    type="button"
-                    className="nut-phu"
-                    onClick={() => moNhiemVu(n)}
-                    aria-expanded={n.code === maDangMo}
-                  >
-                    {n.code === maDangMo ? "Đang mở" : `Mở ${n.code}`}
-                  </button>
                 </td>
               </tr>
             );
@@ -3211,6 +3234,8 @@ export function ChiTietNhiemVu({
   const [tabChosen, setTab] = useState<TaskDetailTab>(initialTab);
   const [parentError, setParentError] = useState<string | null>(null);
   const [copyNote, setCopyNote] = useState<string | null>(null);
+  // Whether the `Đề nghị lùi hạn` block's own read found a pending request — drives the strip.
+  const [hasPendingExtension, setHasPendingExtension] = useState(false);
   // An element to focus once the `view` panel is shown again (rail buttons pointing into it).
   const pendingFocus = useRef<string | null>(null);
 
@@ -3505,70 +3530,98 @@ export function ChiTietNhiemVu({
               )}
             </Card>
 
-            <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">
-              {/* ── LEFT: information, documents, children, assignment, deadline requests ─── */}
-              <div className="flex min-w-0 flex-col gap-4 [&>*]:my-0">
-                <Card as="section" aria-labelledby="task-detail-info" className="overflow-visible p-4 md:p-5">
-                  <h3 id="task-detail-info" className="m-0 mb-4 text-[15px] font-semibold text-ink-900">
-                    Thông tin nhiệm vụ
+            {/* ── PENDING EXTENSION: a strip, not a status. The task keeps running in its own state;
+                this is a request lying on the assigner's desk (prototype `TaskDetailDrawer`). Known
+                from the same read the `Đề nghị lùi hạn` block below makes — no second call. */}
+            {hasPendingExtension && (
+              <p
+                className="m-0 flex items-center gap-2 rounded-control border border-solid border-warning-500/30 bg-warning-50 px-4 py-2 text-[13px] font-semibold text-warning-600"
+                role="status"
+              >
+                <Glyph icon={CalendarClock} className="size-4 shrink-0" />
+                Chờ duyệt lùi hạn — đã gửi tới {nhanCanBoDrawer(nhiemVu.assigner, danhBaMa, O_TRONG)}
+              </p>
+            )}
+
+            {/* ── THE FACT ROW: four titled cells instead of a row of look-alike chips (prototype).
+                §5.3 — HAI MẢNH, KHÔNG MỘT: `Trễ 87 ngày` **và** `Hạn 20/6/2026`. Overdue is DERIVED
+                from `due_at` and now (rule 10, invariant 3). */}
+            <dl
+              aria-label="Tóm tắt nhiệm vụ"
+              className="m-0 grid gap-px overflow-hidden rounded-card border border-solid border-line bg-line sm:grid-cols-2 xl:grid-cols-4 [&_dd]:m-0 [&>div]:bg-surface [&>div]:px-4 [&>div]:py-2.5"
+            >
+              <div>
+                <dt className="mb-1 text-[11px] font-semibold tracking-wide text-ink-500 uppercase">Hạn xử lý</dt>
+                <dd className={cn("text-sm", o.phanTre !== "" ? "nhan-lech font-semibold" : "text-ink-900")}>
+                  {o.phanTre !== "" && <Glyph icon={AlarmClock} className="mr-1 inline size-3.5 align-[-2px]" />}
+                  {nhanHanThe(nhiemVu.due_at, bayGio)}
+                </dd>
+                <dd className="mt-0.5 text-xs text-ink-500">
+                  {o.phanTre !== "" ? `Hạn ${nhanNgay(nhiemVu.due_at)}` : nhiemVu.due_at === null ? "Chưa đặt hạn" : "Còn trong hạn"}
+                </dd>
+              </div>
+              <div>
+                <dt className="mb-1 text-[11px] font-semibold tracking-wide text-ink-500 uppercase">Cơ quan thực hiện</dt>
+                <dd className="text-sm text-ink-900">{unitName}</dd>
+                <dd className="mt-0.5 text-xs text-ink-500">
+                  {nhiemVu.unit !== ""
+                    ? "Bộ phận chịu trách nhiệm"
+                    : nhiemVu.assignee !== ""
+                      ? "Giao thẳng cho cá nhân"
+                      : "Chưa cử ai"}
+                </dd>
+              </div>
+              <div>
+                <dt className="mb-1 text-[11px] font-semibold tracking-wide text-ink-500 uppercase">Người thực hiện</dt>
+                <dd className="flex items-center gap-2 text-sm text-ink-900">
+                  {/* Decorative: the name is the text beside it. */}
+                  <span
+                    aria-hidden="true"
+                    className="grid size-7 shrink-0 place-items-center rounded-full bg-accent-100 text-[11px] font-semibold text-ink-900"
+                  >
+                    {initials !== "" ? initials : <Glyph icon={UserRound} className="size-4" />}
+                  </span>
+                  <span className="min-w-0">{nhanCanBoDrawer(nhiemVu.assignee, danhBaMa, CHUA_PHAN_CONG)}</span>
+                </dd>
+                <dd className="mt-0.5 text-xs text-ink-500">
+                  Lãnh đạo giao việc: {nhanCanBoDrawer(nhiemVu.assigner, danhBaMa, O_TRONG)}
+                </dd>
+              </div>
+              <div>
+                <dt className="mb-1 text-[11px] font-semibold tracking-wide text-ink-500 uppercase">Mức ưu tiên</dt>
+                <dd className="text-sm text-ink-900">{nhanDanhMuc(danhMuc.mucUuTien, nhiemVu.priority)}</dd>
+                <dd className="mt-0.5 text-xs text-ink-500">{nhanDanhMuc(danhMuc.loai, nhiemVu.type)}</dd>
+              </div>
+            </dl>
+
+            {/* Two columns from 1024px: information left, Nhật ký & trao đổi right at the prototype's
+                24rem — its own input and scroll, so writing a line never means scrolling past the
+                register block. */}
+            <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start">
+              {/* ── LEFT, the prototype's order: register block → description → deadlines →
+                  children → assignment → extension requests ─────────────────────────────────── */}
+              <div className="flex min-w-0 flex-col gap-3 [&>*]:my-0">
+                {/* §5.4 — READ here. Its `✎ Sửa` (and with it the deadline of this type) is the
+                    `Chỉnh sửa` tab: the block below is the same read, so the two never disagree.
+                    Rẽ nhánh trên MÃ, không trên nhãn: xem `LOAI_THEO_VAN_BAN`. */}
+                {theoVanBan && (
+                  <Card as="section" aria-labelledby="task-detail-documents" className="p-4">
+                    <h3
+                      id="task-detail-documents"
+                      tabIndex={-1}
+                      className="m-0 mb-2.5 text-[13px] font-semibold text-ink-900 focus-visible:outline-2 focus-visible:outline-brand-500"
+                    >
+                      {TIEU_DE_KHOI_VAN_BAN}
+                    </h3>
+                    <DocKhoiVanBan tai={vanBan} />
+                  </Card>
+                )}
+
+                <Card as="section" aria-labelledby="task-detail-info" className="overflow-visible p-4">
+                  <h3 id="task-detail-info" className="m-0 mb-2.5 text-[13px] font-semibold text-ink-900">
+                    {theoVanBan ? "Sổ theo dõi" : "Thông tin nhiệm vụ"}
                   </h3>
                   <dl className="m-0 grid gap-x-6 gap-y-4 sm:grid-cols-2 [&_dd]:m-0 [&_dd]:mt-1 [&_dd]:text-sm [&_dd]:text-ink-900 [&_dt]:text-xs [&_dt]:font-medium [&_dt]:text-ink-500">
-                    {/* §5.3 — HAI MẢNH, KHÔNG MỘT: `Trễ 87 ngày` **và** `Hạn 20/6/2026`. Chỉ hiện số
-                        ngày trễ thì cán bộ không biết hạn là ngày nào; chỉ hiện ngày thì con số
-                        phải tự nhẩm. Overdue is DERIVED from `due_at` and now (rule 10, inv. 3). */}
-                    <div className="sm:col-span-2">
-                      <dt>Hạn xử lý</dt>
-                      <dd className="flex flex-wrap items-center gap-2 text-base! font-semibold">
-                        {o.phanTre !== "" ? (
-                          <>
-                            <Badge tone="danger" icon={AlarmClock} className="nhan-lech">
-                              {nhanHanThe(nhiemVu.due_at, bayGio)}
-                            </Badge>
-                            <span>Hạn {nhanNgay(nhiemVu.due_at)}</span>
-                          </>
-                        ) : (
-                          nhanHanThe(nhiemVu.due_at, bayGio)
-                        )}
-                      </dd>
-                    </div>
-
-                    {/* §5.6 — HAI HẠN CẠNH NHAU. `HẠN BAN ĐẦU` không đổi khi gia hạn; tỷ lệ đúng
-                        hạn §11.3 đếm theo nó. */}
-                    <div>
-                      <dt>Hạn ban đầu</dt>
-                      <dd>{nhanNgay(nhiemVu.original_due_at)}</dd>
-                    </div>
-
-                    <div>
-                      <dt>Mức ưu tiên</dt>
-                      <dd>
-                        <Badge tone="neutral" icon={Flag}>
-                          {nhanDanhMuc(danhMuc.mucUuTien, nhiemVu.priority)}
-                        </Badge>
-                      </dd>
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <dt>Đang giao cho</dt>
-                      <dd className="flex items-center gap-3">
-                        {/* Decorative: the name and the unit are the text beside it. */}
-                        <span
-                          aria-hidden="true"
-                          className="grid size-9 shrink-0 place-items-center rounded-full bg-accent-100 text-[13px] font-semibold text-ink-900"
-                        >
-                          {initials !== "" ? initials : <Glyph icon={UserRound} className="size-[18px]" />}
-                        </span>
-                        <span className="min-w-0">
-                          {unitName} · {nhanCanBoDrawer(nhiemVu.assignee, danhBaMa, CHUA_PHAN_CONG)}
-                        </span>
-                      </dd>
-                    </div>
-
-                    <div>
-                      <dt>Lãnh đạo giao việc</dt>
-                      <dd>{nhanCanBoDrawer(nhiemVu.assigner, danhBaMa, O_TRONG)}</dd>
-                    </div>
-
                     {/* ADR 0068 §14: no form edits `progress` yet, so the stored figure sits in a
                         DISABLED field with a "?" (report 05/10/2026, NV-08). */}
                     <div>
@@ -3645,11 +3698,6 @@ export function ChiTietNhiemVu({
                     </div>
 
                     <div className="sm:col-span-2">
-                      <dt>Mô tả nhiệm vụ</dt>
-                      <dd className="whitespace-pre-line">{nhiemVu.description === "" ? O_TRONG : nhiemVu.description}</dd>
-                    </div>
-
-                    <div className="sm:col-span-2">
                       <dt>Tóm tắt kết quả thực hiện</dt>
                       <dd className="whitespace-pre-line">{nhiemVu.result_summary === "" ? O_TRONG : nhiemVu.result_summary}</dd>
                     </div>
@@ -3672,21 +3720,35 @@ export function ChiTietNhiemVu({
                   <p className="ghi-chu mb-0">{CHU_THICH_HAI_O_TICK}</p>
                 </Card>
 
-                {/* §5.4 — READ here. Its `✎ Sửa` (and with it the deadline of this type) is the
-                    `Chỉnh sửa` tab: the block below is the same read, so the two never disagree.
-                    Rẽ nhánh trên MÃ, không trên nhãn: xem `LOAI_THEO_VAN_BAN`. */}
-                {theoVanBan && (
-                  <Card as="section" aria-labelledby="task-detail-documents" className="p-4 md:p-5">
-                    <h3
-                      id="task-detail-documents"
-                      tabIndex={-1}
-                      className="m-0 mb-2 text-[15px] font-semibold text-ink-900 focus-visible:outline-2 focus-visible:outline-brand-500"
-                    >
-                      {TIEU_DE_KHOI_VAN_BAN}
+                {/* Mô tả: only when there is one, as in the prototype — an empty card says nothing. */}
+                {nhiemVu.description !== "" && (
+                  <Card as="section" aria-labelledby="task-detail-description" className="p-4">
+                    <h3 id="task-detail-description" className="m-0 mb-2.5 text-[13px] font-semibold text-ink-900">
+                      Mô tả nhiệm vụ
                     </h3>
-                    <DocKhoiVanBan tai={vanBan} />
+                    <p className="m-0 text-sm whitespace-pre-line text-ink-900">{nhiemVu.description}</p>
                   </Card>
                 )}
+
+                {/* §5.6 — HAI HẠN CẠNH NHAU, with the time: the time is part of the deadline.
+                    `Hạn ban đầu` does not move with an extension; on-time rates count against it. */}
+                <Card as="section" aria-labelledby="task-detail-deadlines" className="p-4">
+                  <h3 id="task-detail-deadlines" className="m-0 mb-2.5 text-[13px] font-semibold text-ink-900">
+                    Thời hạn
+                  </h3>
+                  <dl className="m-0 grid grid-cols-2 gap-4 [&_dd]:m-0 [&_dd]:mt-1 [&_dd]:text-sm [&_dd]:text-ink-900 [&_dt]:text-xs [&_dt]:font-medium [&_dt]:text-ink-500">
+                    <div>
+                      <dt>Hạn xử lý</dt>
+                      <dd>{nhiemVu.due_at === null ? O_TRONG : nhanThoiDiem(nhiemVu.due_at)}</dd>
+                    </div>
+                    <div>
+                      <dt>Hạn ban đầu</dt>
+                      <dd>
+                        {nhiemVu.original_due_at === null ? O_TRONG : nhanThoiDiem(nhiemVu.original_due_at)}
+                      </dd>
+                    </div>
+                  </dl>
+                </Card>
 
                 {/* §5.10 `Nhiệm vụ con` (#6). `key` by code: another task's "Xem thêm" page must
                     not follow into this one. Opening a child REPLACES the history entry. */}
@@ -3699,16 +3761,18 @@ export function ChiTietNhiemVu({
                   now={bayGio}
                   openTask={openTask}
                 />
+                {/* `+ Thêm việc con` opens THE SAME create dialog as `+ Giao việc mới`, stacked over
+                    this panel (two native modals stack in the top layer). */}
                 {addChild !== null && (
-                  <div className="form-danh-muc">
-                    <div className="cum-nut">
+                  <div className="flex flex-col gap-2 [&>*]:my-0">
+                    <div className="cum-nut m-0">
                       <button
                         type="button"
                         className="nut-phu"
-                        aria-expanded={addChild.open}
+                        aria-haspopup="dialog"
                         onClick={addChild.toggle}
                       >
-                        {addChild.open ? "Đóng biểu mẫu việc con" : ADD_CHILD_BUTTON}
+                        {ADD_CHILD_BUTTON}
                       </button>
                     </div>
                     {addChild.created !== null && <p role="status">{addChild.created}</p>}
@@ -3729,28 +3793,37 @@ export function ChiTietNhiemVu({
                   />
                 )}
 
-                <KhoiLuiHan
-                  coQuyenDeNghi={quyen.capNhat}
-                  hanHienTai={nhiemVu.due_at}
-                  dangGui={dangGui}
-                  guiDeNghi={guiDeNghiLuiHan}
-                />
-
-                {/* §5.8 — this task's pending requests and, for the recorded assigner holding
-                    `task.extend`, Duyệt / Từ chối (#11). Same row gate and route as the queue. */}
-                <TaskExtensionBlock
-                  key={`lui-han-${nhiemVu.code}`}
-                  taskCode={nhiemVu.code}
-                  assigner={nhiemVu.assigner}
-                  directory={danhBaMa}
-                  sessionStaffCode={maNguoiDangNhap}
-                  // LAYER ONE — `task.extend` of the SESSION. Layer two (ADR 0038) runs inside the
-                  // row gate, and the server decides both again in the transaction.
-                  canApproveExtension={quyen.duyetGiaHan}
-                  refreshKey={extensionRefreshKey}
-                  decide={quyetDinh}
-                  onDecided={onExtensionDecided}
-                />
+                {/* `Đề nghị lùi hạn` — ONE card, as in the prototype: the pending request with
+                    Duyệt / Từ chối (this is now the only place on the screen to decide, the on-page
+                    queue being gone), then the form to ask. `Lịch sử gia hạn` is NOT drawn: the
+                    contract serves pending requests only (`GET /task-extensions?task=`), no history. */}
+                <Card as="section" aria-labelledby="task-detail-extensions" className="p-4 [&_.form-danh-muc]:m-0">
+                  <h3 id="task-detail-extensions" className="m-0 mb-2.5 text-[13px] font-semibold text-ink-900">
+                    Đề nghị lùi hạn
+                  </h3>
+                  {/* §5.8 — this task's pending requests and, for the recorded assigner holding
+                      `task.extend`, Duyệt / Từ chối (#11). */}
+                  <TaskExtensionBlock
+                    key={`lui-han-${nhiemVu.code}`}
+                    taskCode={nhiemVu.code}
+                    assigner={nhiemVu.assigner}
+                    directory={danhBaMa}
+                    sessionStaffCode={maNguoiDangNhap}
+                    // LAYER ONE — `task.extend` of the SESSION. Layer two (ADR 0038) runs inside the
+                    // row gate, and the server decides both again in the transaction.
+                    canApproveExtension={quyen.duyetGiaHan}
+                    refreshKey={extensionRefreshKey}
+                    decide={quyetDinh}
+                    onDecided={onExtensionDecided}
+                    onPendingChange={setHasPendingExtension}
+                  />
+                  <KhoiLuiHan
+                    coQuyenDeNghi={quyen.capNhat}
+                    hanHienTai={nhiemVu.due_at}
+                    dangGui={dangGui}
+                    guiDeNghi={guiDeNghiLuiHan}
+                  />
+                </Card>
               </div>
 
               {/* ── RIGHT: Nhật ký & Trao đổi §5.9 — the existing form above the timeline ─────── */}
@@ -4666,7 +4739,7 @@ export function KhoiLuiHan({
       {deNghi !== null && (
         <p role="status">
           Đã gửi đề nghị lùi hạn tới {nhanNgay(deNghi.new_due_at)}. Đề nghị hiện ở mục “Đề nghị lùi
-          hạn đang chờ duyệt” ngay dưới.
+          hạn đang chờ duyệt” ngay trên.
         </p>
       )}
     </div>
@@ -4704,7 +4777,14 @@ export function FormGiaoViec({
   giaoViec,
   maChaCoSan,
   tieuDeCoSan,
+  dialog = false,
 }: {
+  /**
+   * Open as the prototype's centred DIALOG (`ModalDialog`) instead of inline — the Nhiệm vụ screen's
+   * `+ Giao việc mới` and `+ Thêm việc con`. Off by default: Biên bản and Phản ánh still embed the
+   * form in their own frame, and moving them is their screen's call.
+   */
+  dialog?: boolean;
   /**
    * The three staff fields become type-to-search boxes (`StaffCombobox`). ONLY the Nhiệm vụ
    * screen sets it. Off by default so the Biên bản screen, which reuses this form, keeps its
@@ -4859,14 +4939,29 @@ export function FormGiaoViec({
     giaoViec(than, khoaChongTrung);
   }
 
-  return (
-    <form className="form-danh-muc" onSubmit={gui}>
-      <h4>Giao việc mới</h4>
-      <p className="ghi-chu">{MO_TA_FORM_GIAO_VIEC}</p>
-      {maChaCoSan !== undefined && maChaCoSan !== "" && (
-        <p className="ghi-chu">{childFormNote(maChaCoSan)}</p>
-      )}
+  const hasParent = maChaCoSan !== undefined && maChaCoSan !== "";
+  const documentGroup = (group: NhomVanBan) => (
+    <NhomVanBanNhap
+      key={group}
+      nhom={group}
+      dong={dongCuaNhom(vanBan, group)}
+      them={() => themVanBan(group)}
+      go={goVanBan}
+      sua={suaVanBan}
+    />
+  );
 
+  // THE PROTOTYPE'S FIELD ORDER (`TaskAssignForm.tsx`, ADR 0068 §Sửa đổi 06/10/2026 lần 5):
+  // [Loại | Khối] → Mã + Tự sinh mã → Tên → Mô tả → đơn vị → người → Lãnh đạo giao việc → (văn bản
+  // cấp trên, chỉ đạo Đảng uỷ) → [Hạn | Mức ưu tiên] → (Kết quả đầu ra, Ghi chú) → Huỷ / Giao việc.
+  // The order follows the columns of the commune's own tracking book, so a clerk copying from the
+  // Excel file reads straight down. ONLY THE ORDER CHANGED: every id, value and the body sent are
+  // the same as before (`thanGiaoViec`).
+  const fields = (
+    <>
+      {hasParent && <p className="ghi-chu m-0">{childFormNote(maChaCoSan)}</p>}
+
+      <div className="grid gap-3 sm:grid-cols-2 [&>*]:my-0">
       <div className="o-chon">
         <label htmlFor="giao-loai">Loại nhiệm vụ</label>
         {/* THE EMPTY OPTION WHENEVER NOTHING IS CHOSEN, not only when the catalogue is empty: a
@@ -4899,32 +4994,39 @@ export function FormGiaoViec({
           ))}
         </select>
       </div>
-
-      <div className="o-chon">
-        <label htmlFor="giao-tu-sinh-ma">
-          <input
-            id="giao-tu-sinh-ma"
-            type="checkbox"
-            checked={tuSinhMa}
-            onChange={(e) => datTuSinhMa(e.target.checked)}
-          />{" "}
-          Tự sinh mã
-        </label>
       </div>
-      <p className="ghi-chu">{GHI_CHU_TU_SINH_MA}</p>
 
-      {!tuSinhMa && (
-        <div className="o-nhap">
-          <label htmlFor="giao-ma">Mã nhiệm vụ</label>
-          <input
-            id="giao-ma"
-            name="giao-ma"
-            value={ma}
-            autoComplete="off"
-            onChange={(e) => datMa(e.target.value)}
-          />
+      {/* Mã + `☐ Tự sinh mã` on ONE row, the code box disabled while the server numbers it. The
+          box is EMPTY while ticked, so a code typed earlier is never shown as if it would be sent —
+          `thanGiaoViec` drops it whenever `tuSinhMa` is on. */}
+      <div>
+        <div className="flex flex-wrap items-end gap-3 [&>*]:my-0">
+          <div className="o-nhap min-w-0 flex-1 basis-48">
+            <label htmlFor="giao-ma">Mã nhiệm vụ</label>
+            <input
+              id="giao-ma"
+              name="giao-ma"
+              value={tuSinhMa ? "" : ma}
+              disabled={tuSinhMa}
+              placeholder={tuSinhMa ? "Hệ thống sẽ tự sinh" : "NV01"}
+              autoComplete="off"
+              onChange={(e) => datMa(e.target.value)}
+            />
+          </div>
+          <div className="o-chon shrink-0">
+            <label htmlFor="giao-tu-sinh-ma">
+              <input
+                id="giao-tu-sinh-ma"
+                type="checkbox"
+                checked={tuSinhMa}
+                onChange={(e) => datTuSinhMa(e.target.checked)}
+              />{" "}
+              Tự sinh mã
+            </label>
+          </div>
         </div>
-      )}
+        <p className="ghi-chu mb-0">{GHI_CHU_TU_SINH_MA}</p>
+      </div>
 
       <div className="o-nhap">
         <label htmlFor="giao-tieu-de">{nhanOTieuDe(loaiChon)}</label>
@@ -4949,26 +5051,16 @@ export function FormGiaoViec({
         />
       </div>
 
+      {/* ĐƠN VỊ → NGƯỜI THỰC HIỆN. Under `Theo văn bản` the same two fields carry the names the
+          commune's tracking book gives them — "cơ quan chủ trì tham mưu" IS the unit and "chuyên viên
+          tham mưu / theo dõi" IS the assignee (ADR 0065 NV5). One field, two names: the label
+          changes, the field and what it sends do not. */}
       <div className="o-chon">
-        <label htmlFor="giao-uu-tien">Mức ưu tiên</label>
-        <select
-          id="giao-uu-tien"
-          value={mucUuTien}
-          onChange={(e) => datMucUuTien(e.target.value)}
-        >
-          <option value="">{CHUA_XAC_DINH}</option>
-          {danhMuc.mucUuTien.map((m) => (
-            <option key={m.code} value={m.code}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="o-chon">
-        <label htmlFor="giao-bo-phan">Đơn vị thực hiện</label>
+        <label htmlFor="giao-bo-phan">
+          {theoVanBan ? "Cơ quan chủ trì tham mưu (cơ quan thực hiện)" : "Đơn vị thực hiện"}
+        </label>
         <select id="giao-bo-phan" value={boPhan} onChange={(e) => datBoPhan(e.target.value)}>
-          <option value="">{CHUA_XAC_DINH}</option>
+          <option value="">{theoVanBan ? "— Chọn cơ quan —" : CHUA_XAC_DINH}</option>
           {danhMuc.boPhan.map((b) => (
             <option key={b.id} value={b.id}>
               {b.name}
@@ -4986,110 +5078,141 @@ export function FormGiaoViec({
           {cauLoiDanhBaGiaoViec(db.loi)}
         </p>
       )}
-      <StaffPicker
-        search={staffSearch}
-        id="giao-nguoi-thuc-hien"
-        label="Người thực hiện"
-        emptyLabel={nhanTrongOChonCanBo(db, DE_BO_PHAN_TU_PHAN_CONG)}
-        value={nguoiThucHien}
-        directory={db.ds}
-        disabled={db.dangTai}
-        onChange={datNguoiThucHien}
-      />
+      <div>
+        <StaffPicker
+          search={staffSearch}
+          id="giao-nguoi-thuc-hien"
+          label={theoVanBan ? "Chuyên viên tham mưu / theo dõi (người thực hiện)" : "Người thực hiện"}
+          emptyLabel={nhanTrongOChonCanBo(db, DE_BO_PHAN_TU_PHAN_CONG)}
+          value={nguoiThucHien}
+          directory={db.ds}
+          disabled={db.dangTai}
+          onChange={datNguoiThucHien}
+        />
+        {theoVanBan && (
+          <p className="ghi-chu mb-0">
+            Người này là người thực hiện chính: nhiệm vụ hiện trong mục “Giao cho tôi” của họ ngay
+            khi lưu.
+          </p>
+        )}
+      </div>
 
       {/* LÃNH ĐẠO GIAO VIỆC — CHỈ NGƯỜI CẦM `task.extend` (`danhBaLanhDao`). Ba ca có chữ: đọc hỏng
           (câu máy chủ nguyên văn), đọc được mà rỗng (không ai cầm quyền — một câu, không một ô rỗng),
           còn lại là ô chọn. */}
-      {dbLanhDao.loi !== null && (
-        <p className="thong-bao-loi" role="alert">
-          {cauLoiDanhBaLanhDao(dbLanhDao.loi)}
-        </p>
-      )}
-      {khongAiDuyetDuoc ? (
-        <div className="o-nhap">
-          <span>Lãnh đạo giao việc</span>
-          <p className="ghi-chu" id="giao-lanh-dao-trong">
-            {CAU_KHONG_AI_CO_QUYEN_DUYET_GIA_HAN}
+      <div>
+        {dbLanhDao.loi !== null && (
+          <p className="thong-bao-loi" role="alert">
+            {cauLoiDanhBaLanhDao(dbLanhDao.loi)}
           </p>
+        )}
+        {khongAiDuyetDuoc ? (
+          <div className="o-nhap">
+            <span>Lãnh đạo giao việc</span>
+            <p className="ghi-chu" id="giao-lanh-dao-trong">
+              {CAU_KHONG_AI_CO_QUYEN_DUYET_GIA_HAN}
+            </p>
+          </div>
+        ) : (
+          // `dbLanhDao` — the `?permission=task.extend` directory, so typing can only ever find an
+          // approver (ADR 0038). The whole-commune `db` must never feed this box.
+          <StaffPicker
+            search={staffSearch}
+            id="giao-lanh-dao"
+            label="Lãnh đạo giao việc"
+            emptyLabel={nhanTrongOChonCanBo(dbLanhDao, CHUA_XAC_DINH)}
+            value={lanhDaoGiaoViec}
+            directory={dbLanhDao.ds}
+            disabled={dbLanhDao.dangTai}
+            onChange={datLanhDaoGiaoViec}
+          />
+        )}
+        {/* KHÔNG CHỈ LÀ NƠI NHẬN THÔNG BÁO: ô này quyết định AI DUYỆT ĐƯỢC ĐỀ NGHỊ LÙI HẠN (ADR
+            0038), và bỏ trống nghĩa là KHÔNG AI duyệt được — vĩnh viễn, vì `PATCH` cố ý không sửa
+            được cột này. Câu ấy đứng cạnh ô chứ không nằm trong tài liệu. Không ai để chọn thì câu
+            `CAU_KHONG_AI_CO_QUYEN_DUYET_GIA_HAN` đã nói đủ hệ quả ấy. */}
+        {!khongAiDuyetDuoc && (
+          <p className="ghi-chu mb-0">
+            {GHI_CHU_LANH_DAO_GIAO_VIEC} Bỏ trống thì không ai duyệt được đề nghị lùi hạn của nhiệm vụ
+            này, và ô này không sửa lại được sau khi tạo.
+          </p>
+        )}
+      </div>
+
+      {/* Văn bản cấp trên giao + chỉ đạo của Đảng uỷ come BEFORE the deadline; the output group comes
+          after it, beside `Ghi chú` — the prototype's order, which is the tracking book's columns. */}
+      {hienVanBan && (
+        <div className="flex flex-col gap-3 [&>*]:my-0">
+          {MOI_NHOM_VAN_BAN.filter((g) => g !== "san-pham-dau-ra").map((g) => documentGroup(g))}
         </div>
-      ) : (
-        // `dbLanhDao` — the `?permission=task.extend` directory, so typing can only ever find an
-        // approver (ADR 0038). The whole-commune `db` must never feed this box.
-        <StaffPicker
-          search={staffSearch}
-          id="giao-lanh-dao"
-          label="Lãnh đạo giao việc"
-          emptyLabel={nhanTrongOChonCanBo(dbLanhDao, CHUA_XAC_DINH)}
-          value={lanhDaoGiaoViec}
-          directory={dbLanhDao.ds}
-          disabled={dbLanhDao.dangTai}
-          onChange={datLanhDaoGiaoViec}
-        />
-      )}
-      {/* KHÔNG CHỈ LÀ NƠI NHẬN THÔNG BÁO: ô này quyết định AI DUYỆT ĐƯỢC ĐỀ NGHỊ LÙI HẠN (ADR
-          0038), và bỏ trống nghĩa là KHÔNG AI duyệt được — vĩnh viễn, vì `PATCH` cố ý không sửa
-          được cột này. Câu ấy đứng cạnh ô chứ không nằm trong tài liệu. */}
-      {/* Không ai để chọn thì câu `CAU_KHONG_AI_CO_QUYEN_DUYET_GIA_HAN` đã nói đủ hệ quả ấy. */}
-      {!khongAiDuyetDuoc && (
-        <p className="ghi-chu">
-          {GHI_CHU_LANH_DAO_GIAO_VIEC} Bỏ trống thì không ai duyệt được đề nghị lùi hạn của nhiệm vụ
-          này, và ô này không sửa lại được sau khi tạo.
-        </p>
       )}
 
-      {hienVanBan && (
-        <>
-          {MOI_NHOM_VAN_BAN.map((nhom) => (
-            <NhomVanBanNhap
-              key={nhom}
-              nhom={nhom}
-              dong={dongCuaNhom(vanBan, nhom)}
-              them={() => themVanBan(nhom)}
-              go={goVanBan}
-              sua={suaVanBan}
+      <div className="grid gap-3 sm:grid-cols-2 [&>*]:my-0">
+        {/* Date AND time: a deadline "tomorrow" read as 00:00 counts work done tomorrow as late.
+            Two native inputs (the contract's `due_at` is built from both by `thanGiaoViec`). */}
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,8rem)] gap-2 [&>*]:my-0">
+          <div className="o-nhap">
+            <label htmlFor="giao-han">Hạn hoàn thành</label>
+            <input
+              id="giao-han"
+              name="giao-han"
+              type="date"
+              value={han}
+              onChange={(e) => datHan(e.target.value)}
             />
-          ))}
-          {/* §7.2 đặt `Ghi chú` NGAY SAU ba danh sách. Cùng cổng `hienVanBan`: §7.3 bỏ ô này ở loại
-              khác, và màn Biên bản gửi tới tuyến không có `note`. */}
+          </div>
+          <div className="o-nhap">
+            <label htmlFor="giao-han-gio">Giờ</label>
+            <input
+              id="giao-han-gio"
+              name="giao-han-gio"
+              type="time"
+              value={dueTime}
+              required={han !== ""}
+              onChange={(e) => setDueTime(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="o-chon">
+          <label htmlFor="giao-uu-tien">Mức ưu tiên</label>
+          <select
+            id="giao-uu-tien"
+            value={mucUuTien}
+            onChange={(e) => datMucUuTien(e.target.value)}
+          >
+            <option value="">{CHUA_XAC_DINH}</option>
+            {danhMuc.mucUuTien.map((m) => (
+              <option key={m.code} value={m.code}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div className="[&>*]:my-0">
+        <p className="ghi-chu">{NEW_TASK_DUE_PREFILLED_NOTE}</p>
+        <p className="ghi-chu">{NEW_TASK_DUE_LATER_NOTE}</p>
+        {hasParent && <p className="ghi-chu">{GHI_CHU_HAN_VIEC_CON}</p>}
+      </div>
+
+      {hienVanBan && (
+        <div className="flex flex-col gap-3 [&>*]:my-0">
+          {documentGroup("san-pham-dau-ra")}
+          {/* Cùng cổng `hienVanBan`: §7.3 bỏ ô này ở loại khác, và màn Biên bản gửi tới tuyến không
+              có `note`. */}
           <div className="o-nhap">
             <label htmlFor="giao-ghi-chu">Ghi chú</label>
             <textarea
               id="giao-ghi-chu"
               name="giao-ghi-chu"
-              rows={3}
+              rows={2}
               maxLength={GHI_CHU_NHIEM_VU_TOI_DA}
               value={ghiChu}
               onChange={(e) => datGhiChu(e.target.value)}
             />
           </div>
-        </>
-      )}
-
-      <div className="o-nhap">
-        <label htmlFor="giao-han">Hạn hoàn thành</label>
-        <input
-          id="giao-han"
-          name="giao-han"
-          type="date"
-          value={han}
-          onChange={(e) => datHan(e.target.value)}
-        />
-      </div>
-      <div className="o-nhap">
-        <label htmlFor="giao-han-gio">Giờ</label>
-        <input
-          id="giao-han-gio"
-          name="giao-han-gio"
-          type="time"
-          value={dueTime}
-          required={han !== ""}
-          onChange={(e) => setDueTime(e.target.value)}
-        />
-      </div>
-      <p className="ghi-chu">{NEW_TASK_DUE_PREFILLED_NOTE}</p>
-      <p className="ghi-chu">{NEW_TASK_DUE_LATER_NOTE}</p>
-      {maChaCoSan !== undefined && maChaCoSan !== "" && (
-        <p className="ghi-chu">{GHI_CHU_HAN_VIEC_CON}</p>
+        </div>
       )}
 
       {/* KHÔNG `role="alert"`: câu này hiện ngay khi bấm `+ Thêm văn bản` (dòng mới còn trống), và
@@ -5108,33 +5231,68 @@ export function FormGiaoViec({
           {loi}
         </p>
       )}
+    </>
+  );
 
-      <div className="cum-nut">
-        <button type="button" className="nut-phu" onClick={huy} disabled={dangGui}>
-          Huỷ
-        </button>
-        <button
-          type="submit"
-          className="nut-chinh"
-          // Danh bạ CÒN ĐANG TẢI thì khoá: ba ô chọn chưa chọn được ai, và một nhiệm vụ tạo ra lúc
-          // ấy mang `Lãnh đạo giao việc` rỗng VĨNH VIỄN (`PATCH` không sửa cột ấy). Tải HỎNG thì
-          // không khoá — câu lỗi ngay trên nói hệ quả, và việc giao cho bộ phận vẫn phải làm được
-          // khi `identity` trục trặc (cùng chiều màn Phản ánh).
-          disabled={
-            dangGui ||
-            tieuDe.trim() === "" ||
-            loaiChon === "" ||
-            chanVanBan !== null ||
-            chanHan !== null ||
-            dangTaiDanhBa
-          }
-        >
-          Giao việc
-        </button>
-      </div>
-    </form>
+  const buttons = (
+    <div className="cum-nut justify-end">
+      <button type="button" className="nut-phu" onClick={huy} disabled={dangGui}>
+        Huỷ
+      </button>
+      <button
+        type="submit"
+        className="nut-chinh"
+        // Danh bạ CÒN ĐANG TẢI thì khoá: ba ô chọn chưa chọn được ai, và một nhiệm vụ tạo ra lúc
+        // ấy mang `Lãnh đạo giao việc` rỗng VĨNH VIỄN (`PATCH` không sửa cột ấy). Tải HỎNG thì
+        // không khoá — câu lỗi ngay trên nói hệ quả, và việc giao cho bộ phận vẫn phải làm được
+        // khi `identity` trục trặc (cùng chiều màn Phản ánh).
+        disabled={
+          dangGui ||
+          tieuDe.trim() === "" ||
+          loaiChon === "" ||
+          chanVanBan !== null ||
+          chanHan !== null ||
+          dangTaiDanhBa
+        }
+      >
+        Giao việc
+      </button>
+    </div>
+  );
+
+  if (!dialog) {
+    // Inline (Biên bản, Phản ánh): the same fields in the same order, in the screen's own frame.
+    return (
+      <form className="form-danh-muc flex flex-col gap-4 [&>*]:my-0" onSubmit={gui}>
+        <div className="[&>*]:my-0">
+          <h4>Giao việc mới</h4>
+          <p className="ghi-chu">{MO_TA_FORM_GIAO_VIEC}</p>
+        </div>
+        {fields}
+        {buttons}
+      </form>
+    );
+  }
+
+  // THE PROTOTYPE'S DIALOG: 500px, 800px for `Theo văn bản` (three document lists). The header and
+  // the buttons stay in sight; the fields scroll between them. Esc asks `huy`, as `Huỷ` does.
+  return (
+    <ModalDialog titleId={CREATE_TASK_TITLE_ID} size={theoVanBan ? "lg" : "md"} onDismiss={huy}>
+      <ModalDialogHeader
+        titleId={CREATE_TASK_TITLE_ID}
+        title="Giao việc mới"
+        description={MO_TA_FORM_GIAO_VIEC}
+      />
+      <form className="m-0 flex min-h-0 flex-col gap-4" onSubmit={gui}>
+        <div className="flex min-h-0 flex-col gap-4 overflow-y-auto pr-1 [&>*]:my-0">{fields}</div>
+        {buttons}
+      </form>
+    </ModalDialog>
   );
 }
+
+/** Id of the create dialog's heading — its accessible name. */
+export const CREATE_TASK_TITLE_ID = "tieu-de-giao-viec-moi";
 
 /**
  * The form's staff field: `StaffCombobox` when `search`, otherwise the native `OChonCanBo` the

@@ -263,7 +263,8 @@ describe("the board — allowed, denied, pending, refused, done", () => {
     const html = board(TASK, moveWith({ permissions: NO_KEYS }));
     expect(html).not.toContain("draggable");
     expect(html).not.toContain(KANBAN_MOVE_BUTTON);
-    expect(html).toContain("Mở NV19");
+    // The card body is its open button (prototype, 06/10/2026).
+    expect(html).toMatch(/aria-expanded="false"><span class="ma-muc[^"]*">NV19</);
   });
 
   it("ALLOWED — the ASSIGNEE without `task.update` gets the drag handle and the menu", () => {

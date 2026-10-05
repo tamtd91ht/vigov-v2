@@ -290,6 +290,15 @@ function stubServer(t: petitions_nhiemVuRa): void {
 }
 
 function buttonByText(text: string): HTMLButtonElement {
+  // `Mở NV19` = the Kanban card's open button (the whole card body since 06/10/2026).
+  const card = /^Mở (\S+)$/.exec(text);
+  if (card !== null) {
+    const open = document.querySelector<HTMLButtonElement>(
+      `article[aria-labelledby="the-nhiem-vu-${card[1]}"] button[aria-expanded]`,
+    );
+    if (open === null) throw new Error(`no card "${card[1]}"`);
+    return open;
+  }
   const b = Array.from(document.querySelectorAll("button")).find((x) => x.textContent?.trim() === text);
   if (b === undefined) throw new Error(`no button "${text}"`);
   return b;

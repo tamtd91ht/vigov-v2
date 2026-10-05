@@ -115,7 +115,8 @@ describe("(#6) chip `{n} việc con` on list rows", () => {
   }
 
   it("shown only when `child_count > 0`, with the server's number", () => {
-    expect(list(2)).toContain('<span class="chip chip-ngung">2 việc con</span>');
+    // Under the title, after the source — the prototype's second line of the `Tên việc` cell.
+    expect(list(2)).toMatch(/<span class="dong-phu">[^<]* · 2 việc con<\/span>/);
     expect(list(0)).not.toContain("việc con");
     expect(childCountLabel(-1)).toBeNull();
   });
@@ -349,7 +350,7 @@ describe("(#13) `Hạn` sortable — `sort=due_at`, with the note about tasks wi
     );
   });
 
-  it("the header is a sort button next to Mã and Ngày giao", () => {
+  it("the header is a sort button next to Mã, Tên việc and Ưu tiên", () => {
     const out = html(
       <BangNhiemVu
         nhiemVu={[task()]}
@@ -364,7 +365,8 @@ describe("(#13) `Hạn` sortable — `sort=due_at`, with the note about tasks wi
       />,
     );
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3b): 3 → 5 — `Tên việc` and `Ưu tiên` sort too (backend P9).
-    expect(out.split('class="nut-sap-xep"').length - 1).toBe(5);
+    // 06/10/2026 (prototype columns): 5 → 4 — the `Ngày giao` column is gone.
+    expect(out.split('class="nut-sap-xep"').length - 1).toBe(4);
     expect(out).toContain('aria-sort="ascending"><button type="button" class="nut-sap-xep">Hạn ↑</button>');
   });
 

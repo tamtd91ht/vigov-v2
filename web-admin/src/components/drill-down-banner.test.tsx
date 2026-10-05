@@ -89,13 +89,19 @@ function render(node: ReactNode): string {
 }
 
 describe("sổ nhiệm vụ nhận lọc", () => {
-  it("lọc bật: có dải, KHÔNG hàng lọc, KHÔNG ô tìm, KHÔNG nút Kanban", () => {
+  // ĐỔI CHIỀU CÓ CHỦ Ý 06/10/2026 (ADR 0068 §Sửa đổi lần 5, prototype layout): the filter row STAYS in
+  // sight with every control DISABLED, and the banner sits under it — what must hold is unchanged:
+  // nothing can be added to the slice the number counts, and Kanban cannot be chosen.
+  it("lọc bật: có dải DƯỚI hàng lọc; mọi ô lọc, ô tìm và nút chế độ xem đều KHOÁ", () => {
     const html = render(<SoNhiemVu drillDown={parseDrillDown("tasks", { metric: "suspended" })} />);
     expect(html).toContain("Đang xem: Tạm dừng — tính đến hiện tại");
-    expect(html).not.toContain('id="tim-nhiem-vu"');
+    expect(html.indexOf('id="task-filters"')).toBeLessThan(html.indexOf("Đang xem: Tạm dừng"));
+    expect(html).toMatch(/<input id="tim-nhiem-vu"[^>]*disabled=""/);
     expect(html).not.toContain('id="loc-trang-thai"');
-    expect(html).not.toContain('aria-label="Chế độ xem"');
-    expect(html).not.toContain('aria-label="Phạm vi"');
+    const views = html.slice(html.indexOf('aria-label="Chế độ xem"'));
+    expect(views.split("</div>")[0]!.match(/disabled=""/g)?.length).toBe(3);
+    const scope = html.slice(html.indexOf('aria-label="Phạm vi"'));
+    expect(scope.split("</div>")[0]!.match(/disabled=""/g)?.length).toBe(3);
   });
 
   it("không lọc: hàng lọc và nút chế độ xem như cũ, không có dải", () => {

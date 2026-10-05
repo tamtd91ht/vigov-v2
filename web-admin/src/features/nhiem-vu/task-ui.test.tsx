@@ -31,7 +31,13 @@ describe("page header — `Nhập từ Excel` · `Giao việc mới` stay behind
 
   it("ALLOWED (source): both buttons are the `actions` of the header only when `quyen.giaoViec`", () => {
     expect(PAGE).toMatch(/actions=\{\s*quyen\.giaoViec \? \(/);
-    expect(PAGE).toContain('{moFormTao ? "Đóng biểu mẫu giao việc" : "Giao việc mới"}');
+    // 06/10/2026 (prototype): `Nhập từ Excel` outline FIRST, `+ Giao việc mới` solid second; each
+    // opens a dialog, neither toggles.
+    const actions = PAGE.slice(PAGE.indexOf("actions={"), PAGE.indexOf("<section"));
+    expect(actions.indexOf('variant="outline"')).toBeLessThan(actions.indexOf('variant="primary"'));
+    expect(actions.indexOf("{IMPORT_OPEN_BUTTON}")).toBeLessThan(actions.indexOf("Giao việc mới"));
+    expect(actions).toContain("onClick={() => setImportOpen(true)}");
+    expect(actions).toContain("datMoFormTao(true);");
   });
 
   it("the section keeps its accessible name; only the visual heading moved to the `<h1>`", () => {

@@ -107,6 +107,16 @@ async function settle(): Promise<void> {
 }
 
 function button(text: string): HTMLButtonElement {
+  // `Mở NV19` = the Kanban card of NV19: since the prototype layout (06/10/2026) the whole card body
+  // is the open button, named by its content rather than by a `Mở …` label.
+  const card = /^Mở (\S+)$/.exec(text);
+  if (card !== null) {
+    const open = document.querySelector<HTMLButtonElement>(
+      `article[aria-labelledby="the-nhiem-vu-${card[1]}"] button[aria-expanded]`,
+    );
+    if (open === null) throw new Error(`no card "${card[1]}"`);
+    return open;
+  }
   const b = Array.from(document.querySelectorAll("button")).find((x) => x.textContent?.trim() === text);
   if (b === undefined) throw new Error(`no button "${text}"`);
   return b;

@@ -296,9 +296,11 @@ describe("page wiring (source) and PHAN_CHUA_DUNG", () => {
     expect(SRC).toContain("setSelection((s) => keepFailed(s, results));");
     expect(SRC).toContain("datLanTai((n) => n + 1);\n  }");
     expect(SRC).toContain("const taskSelection: TaskSelection | null = quyen.xoa");
-    expect(SRC).toContain(
-      "{quyen.xoa && (selection.size > 0 || batchResults !== null || batchProgress !== null) && (",
-    );
+    // 06/10/2026 (prototype): `Đã chọn N · Xoá đã chọn` sits in the filter row; the reason — still
+    // MANDATORY (rule 7) — is asked in the dialog it opens.
+    expect(SRC).toContain("{quyen.xoa && selection.size > 0 && (");
+    expect(SRC).toContain("{quyen.xoa && batchOpen && (");
+    expect(SRC).toMatch(/<BatchDeleteBar\s+count=\{selection\.size\}/);
   });
 
   it("`Xoá đã chọn` left PHAN_CHUA_DUNG; no Excel entry remains either", () => {

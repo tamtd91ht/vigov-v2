@@ -1330,10 +1330,11 @@ export function gopTrangNhatKy<T extends { readonly id: string }>(
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * HÀNG CHỜ DUYỆT LÙI HẠN §5.8 — `GET /api/v1/task-extensions`
  *
- * HAI CHỖ QUYẾT ĐỊNH, MỘT CỔNG VÀ MỘT TUYẾN: mục `Đề nghị lùi hạn chờ duyệt` trên sổ, và — từ khi
- * tuyến nhận `task=NV19` (ad7f821) — khối đề nghị đang chờ trong drawer của chính nhiệm vụ ấy
- * (`task-extension-block.tsx`). Cả hai vẽ dòng qua `hienDongHangCho` và gọi `quyetDinhLuiHan` với
- * cùng ghi chú tuỳ chọn đã cắt khoảng trắng, nên không chỗ nào mời duyệt khi chỗ kia không mời.
+ * MỘT CHỖ QUYẾT ĐỊNH TRÊN MÀN NHIỆM VỤ: khối đề nghị đang chờ trong chi tiết của chính nhiệm vụ ấy
+ * (`task-extension-block.tsx`, tuyến nhận `task=NV19`, ad7f821). Mục hàng chờ trên sổ đã gỡ theo
+ * prototype (ADR 0068 §Sửa đổi 06/10/2026 lần 5); Sổ tay lãnh đạo liệt kê đề nghị chờ và dẫn về
+ * đúng nhiệm vụ. Dòng vẽ qua `hienDongHangCho`, quyết định gọi `quyetDinhLuiHan` với ghi chú tuỳ
+ * chọn đã cắt khoảng trắng. Các hằng hàng chờ dưới đây giữ lại cho bài kiểm của hàm thuần.
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
 /**
@@ -1386,7 +1387,7 @@ export const CAU_KHONG_AI_DUYET_DUOC =
 export const TASK_EXTENSIONS_TITLE = "Đề nghị lùi hạn đang chờ duyệt";
 export const TASK_EXTENSIONS_LOADING = "Đang tải đề nghị lùi hạn của nhiệm vụ này…";
 export const TASK_EXTENSIONS_EMPTY = "Nhiệm vụ này không có đề nghị lùi hạn nào đang chờ duyệt.";
-/** Same label and optional-note rule as the queue on the register (`hang-cho-lui-han.tsx`). */
+/** The optional decision note — trimmed; empty means "no note". */
 export const DECISION_NOTE_LABEL = "Ghi chú quyết định (không bắt buộc)";
 
 /**

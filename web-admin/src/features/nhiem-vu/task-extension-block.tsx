@@ -26,8 +26,9 @@ import {
  * §5.8 in the drawer — THIS task's pending extension requests (#11), via
  * `GET /api/v1/task-extensions?task=NV19` (ad7f821).
  *
- * THE SAME GATE, THE SAME ROUTE, THE SAME NOTE RULE AS THE QUEUE ON THE REGISTER
- * (`hang-cho-lui-han.tsx`): each row goes through `hienDongHangCho` — `task.extend` of the session
+ * THE ONE PLACE A DECISION IS TAKEN ON THE NHIỆM VỤ SCREEN — the on-page queue was removed with the
+ * prototype layout (ADR 0068 §Sửa đổi 06/10/2026 lần 5); Sổ tay lãnh đạo lists what waits and links
+ * here. Each row goes through `hienDongHangCho` — `task.extend` of the session
  * (layer one) and the business-code comparison with `task_assigner` (ADR 0038, layer two) — and a
  * decision calls `quyetDinhLuiHan` with the optional note trimmed. A second gate here would be a
  * second copy of ADR 0038 that drifts; the server re-checks both layers inside the transaction
@@ -64,7 +65,14 @@ export function TaskExtensionBlock({
   refreshKey,
   decide,
   onDecided,
+  onPendingChange,
 }: {
+  /**
+   * Told whether this read found a pending request — the detail's `Chờ duyệt lùi hạn` strip uses it
+   * instead of reading the same route a second time. A failed read says `false`: the block itself
+   * then shows the server's sentence.
+   */
+  onPendingChange?: (pending: boolean) => void;
   taskCode: string;
   /** `assigner` of the task — `lanh_dao_giao_viec_ma`, the one approver ADR 0038 names. */
   assigner: string;
@@ -100,6 +108,10 @@ export function TaskExtensionBlock({
   }, [taskCode, key]);
 
   const current = loaded !== null && loaded.key === key ? loaded : null;
+  const pending = current !== null && current.ok && current.rows.length > 0;
+  useEffect(() => {
+    onPendingChange?.(pending);
+  }, [pending, onPendingChange]);
 
   function decideRow(row: petitions_deNghiChoDuyetRa, approve: boolean): void {
     setDeciding(row.id);
