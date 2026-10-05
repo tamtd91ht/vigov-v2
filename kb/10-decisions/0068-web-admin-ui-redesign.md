@@ -3,12 +3,14 @@ id: 0068-web-admin-ui-redesign
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: b8e07d04
+derived_from_commit: 485fbb48
 expires: null
 owns_facts:
   - "làm mới giao diện web-admin chỉ đổi phần trình bày: không đổi đường dẫn, lời gọi API, state, logic lọc/phân trang/phân quyền, tên trường, name/id ô nhập, handler, thứ tự bước nghiệp vụ; không thêm tính năng 'cho hiện đại' (chốt 02/10/2026) — NGOẠI LỆ DUY NHẤT 05/10/2026: URL theo hộp chi tiết lớn (?task=<mã>)"
-  - "nền tảng giao diện web-admin là Tailwind CSS v4 + shadcn/ui, icon lucide-react, phông Be Vietnam Pro tự phục vụ qua @fontsource (không gọi Google lúc build hay lúc chạy); đỏ/vàng chỉ làm điểm nhấn nhận diện; token chế độ tối chuẩn bị sẵn nhưng chưa bật (màu chính #1565C0 thay 05/10/2026 bằng bảng màu của §Sửa đổi 05/10/2026)"
-  - "bảng màu web-admin từ 05/10/2026, áp một lần cho toàn web-admin, không theo xã: nền trang #f4f8fb, thẻ #fff, nút chính navy #102b43, nền nhấn #e8f5fe, cyan #2fb1f9 CHỈ làm nền/viền/trạng thái hiện tại/vòng focus, không bao giờ làm chữ trên nền trắng; chữ/liên kết xanh #0369a1; chữ mờ giữ tương phản ≥4.5:1 (không dùng #8aa2b8 cho chữ)"
+  - "nền tảng giao diện web-admin là Tailwind CSS v4 + shadcn/ui, icon lucide-react, phông tự phục vụ qua @fontsource (không gọi Google lúc build hay lúc chạy); đỏ/vàng chỉ làm điểm nhấn nhận diện; token chế độ tối chuẩn bị sẵn nhưng chưa bật (màu chính #1565C0 và phông Be Vietnam Pro đã bị thay — xem §Sửa đổi 05/10/2026 (lần 2))"
+  - "ngôn ngữ hình ảnh web-admin từ 05/10/2026 (lần 2) theo bản quy chuẩn OMICALL CRM (§1–§11 của bản ấy) trừ 4 điều chỉnh chữ cho WCAG AA và 2 điểm loại trừ: navy #1E3150 cho chữ/icon/header/tab đang chọn; accent #00B1FF chỉ làm nền hover/trạng thái chọn/mảng tô, KHÔNG làm chữ; vòng focus dùng accent ĐẬM đạt ≥3:1 (#00B1FF chỉ 2.40:1, WCAG 1.4.11); nút chính xanh lá chữ trắng #1d853c (#56CC6E chỉ làm nền nhạt/viền); đỏ #FF5955, cam #FEA220; nền ngoài #D1D1D1, app #F5F6FA, thẻ #FFFFFF, nền phụ navy 5%/10%; bóng nhuộm navy, thẻ trên nền app không bóng; Roboto 15px, phân cấp bằng độ đậm 400/500/600, chú thích 12px; bo góc 6/8/12/16/32/50%; control cao 36px; header navy 68px dính trên cùng với nút module chỉ icon + tooltip THAY sidebar chữ; thanh lọc 48px nền navy 5%; dòng bảng 64px không kẻ sọc; áp một lần cho toàn web-admin, không theo xã (thay bảng màu #102b43/#2fb1f9 của §Sửa đổi 05/10/2026)"
+  - "chữ mờ web-admin = navy ở độ mờ ≈0.72 (≥4.5:1); độ mờ 0.5 CHỈ cho trạng thái vô hiệu; chữ liên kết #0369a1; huy hiệu thông báo đỏ #D93A36 chữ trắng ≥11px (chốt 05/10/2026 lần 2)"
+  - "web-admin không có nút nổi (FAB) chat/gọi; không có tên hay logo OMICALL/ViHAT trên màn cán bộ — chỉ mượn ngôn ngữ hình ảnh (chốt 05/10/2026 lần 2)"
   - "'sống động hơn' (chủ dự án 05/10/2026) = điểm nhấn màu + thẻ trắng bo góc trên nền xám nhạt + icon/ảnh đại diện + phản hồi khi tương tác; vẫn không blur/gradient/hình trang trí (§11 giữ)"
   - "mọi màn chi tiết web-admin mở dạng HỘP LỚN đè lên trang danh sách, mỗi đợt một màn, Nhiệm vụ thí điểm trước (rồi Đơn thư, Phản ánh): thanh tab thao tác trên (Xem chi tiết · Chỉnh sửa · Xoá) + 'Tạo bởi … lúc …' bên phải; khối trạng thái nổi bật; thân hai cột (thông tin trái, nhật ký/trao đổi phải); dải nút tròn bên phải CHỈ cho thao tác phụ, mỗi nút có tooltip; thao tác chính giữ nút có chữ; chip bước không bấm để chuyển trạng thái ngoài allowed_transitions (chốt 05/10/2026)"
   - "tab 'Xoá' của hộp chi tiết mở đúng luồng xoá mềm kèm lý do đang có (quyền task.delete), chỉ hiện khi có quyền (chốt 05/10/2026)"
@@ -30,8 +32,10 @@ owns_facts:
 
 # 0068. Làm mới giao diện web-admin — chỉ trình bày, Tailwind v4 + shadcn/ui
 
-**Trạng thái:** đã chốt · **Sửa đổi 05/10/2026** (bảng màu mới thay §2 màu chính, hộp chi tiết lớn,
-URL theo hộp — §*Sửa đổi 05/10/2026*) · **Ngày:** 2026-10-02 · **Người quyết:** chủ dự án, 02/10/2026 · **Thay**
+**Trạng thái:** đã chốt · **Sửa đổi 05/10/2026** (hộp chi tiết lớn, URL theo hộp — §*Sửa đổi
+05/10/2026*; bảng màu của sửa đổi ấy đã bị thay) · **Sửa đổi 05/10/2026 (lần 2)** (ngôn ngữ thiết kế
+OMICALL CRM: màu, phông Roboto, bo góc, header navy chỉ icon thay sidebar — §*Sửa đổi 05/10/2026 (lần
+2)*) · **Ngày:** 2026-10-02 · **Người quyết:** chủ dự án, 02/10/2026 · **Thay**
 `docs/ui-ux/15-phu-luc-giao-dien-chung.md` về **hình thức** (không thay về hành vi, xem §8)
 
 ## Bối cảnh
@@ -83,10 +87,10 @@ markup. Hướng phong cách: hiện đại "thời đại chuyển đổi số"
 
 | Mục | Chốt |
 |---|---|
-| Màu chính | **Thay 05/10/2026 bằng bảng màu của §*Sửa đổi 05/10/2026* #2.** Xanh công vụ `#1565C0` |
+| Màu chính | **Thay 05/10/2026, rồi thay lần nữa bằng §*Sửa đổi 05/10/2026 (lần 2)* #1.** Xanh công vụ `#1565C0` |
 | Đỏ cờ / vàng sao | Chỉ làm điểm nhấn nhận diện (logo, dải trên cùng), không dùng tràn lan |
 | Icon | `lucide-react`; bỏ emoji làm icon |
-| Phông | Be Vietnam Pro **tự phục vụ qua `@fontsource`** — không request nào tới Google lúc build hay lúc chạy |
+| Phông | **Phông thay bằng Roboto — §*Sửa đổi 05/10/2026 (lần 2)* #3; cách tự phục vụ giữ.** Be Vietnam Pro **tự phục vụ qua `@fontsource`** — không request nào tới Google lúc build hay lúc chạy |
 | Chế độ tối | Token chuẩn bị sẵn, **chưa bật** |
 
 **Vì sao `@fontsource` chứ không `next/font/google` như đặc tả:** `next/font/google` tải phông từ
@@ -369,7 +373,7 @@ không nằm trong kho).
 | # | Điểm | Chốt |
 |---|---|---|
 | 1 | "Sống động hơn" nghĩa là gì | Điểm nhấn màu + **thẻ trắng bo góc trên nền xám nhạt** + icon / ảnh đại diện + phản hồi khi tương tác (hover, nhấn, focus). **Vẫn không** blur, gradient, hình trang trí — §11 giữ nguyên |
-| 2 | Bảng màu | Áp **một lần cho toàn web-admin** (token là toàn cục), **thay** dòng "Màu chính" của §2. Lấy từ prototype `../vigov-require/apps/admin/src/app/globals.css:61-100`. Nền trang `#f4f8fb` · thẻ `#fff` · nút chính navy `#102b43` · nền nhấn `#e8f5fe` · cyan `#2fb1f9` **chỉ** làm nền, viền, trạng thái hiện tại, vòng focus — **không bao giờ** làm chữ trên nền trắng · chữ / liên kết xanh = cyan đậm `#0369a1` · chữ mờ giữ tương phản **≥ 4.5:1** (không dùng `#8aa2b8` của prototype cho chữ; dùng một màu xám đậm hơn). Đỏ cờ / vàng sao của §2 không đổi. **Không theo xã** — ADR 0069 chỉ cho xã đổi logo / banner |
+| 2 | Bảng màu | **Đã bị thay bởi §*Sửa đổi 05/10/2026 (lần 2)* — đừng dựng theo dòng này.** Áp **một lần cho toàn web-admin** (token là toàn cục), **thay** dòng "Màu chính" của §2. Lấy từ prototype `../vigov-require/apps/admin/src/app/globals.css:61-100`. Nền trang `#f4f8fb` · thẻ `#fff` · nút chính navy `#102b43` · nền nhấn `#e8f5fe` · cyan `#2fb1f9` **chỉ** làm nền, viền, trạng thái hiện tại, vòng focus — **không bao giờ** làm chữ trên nền trắng · chữ / liên kết xanh = cyan đậm `#0369a1` · chữ mờ giữ tương phản **≥ 4.5:1** (không dùng `#8aa2b8` của prototype cho chữ; dùng một màu xám đậm hơn). Đỏ cờ / vàng sao của §2 không đổi. **Không theo xã** — ADR 0069 chỉ cho xã đổi logo / banner |
 | 3 | Hộp chi tiết lớn | Mọi màn chi tiết mở dạng **hộp thoại lớn đè lên trang danh sách**, **mỗi đợt một màn**: Nhiệm vụ thí điểm trước, Đơn thư và Phản ánh ở các đợt sau. Bố cục: thanh **tab thao tác** trên cùng (Xem chi tiết · Chỉnh sửa · Xoá), *"Tạo bởi … lúc …"* bên phải · **khối trạng thái** nổi bật (trạng thái hiện tại, chip các bước, *"Cập nhật gần nhất"*, liên kết nhật ký / hành trình) · thân **hai cột** (thông tin trái, nhật ký / trao đổi phải — `docs/ui-ux/02-nhiem-vu.md` §5.9) · **dải nút tròn bên phải chỉ cho thao tác PHỤ**, mỗi nút có tooltip. Thao tác chính (chuyển trạng thái, giao lại, lùi hạn) **giữ nút có chữ** — câu "thao tác quan trọng luôn có chữ" của §11 giữ. Chip bước **không** bấm được để chuyển sang trạng thái ngoài `allowed_transitions` |
 | 4 | Xoá | Giữ. Tab "Xoá" mở đúng luồng **xoá mềm kèm lý do** đang có (quyền `task.delete`, luật 7), **chỉ hiện khi có quyền** |
 | 5 | URL theo hộp | Mở hộp đẩy **một** mục lịch sử `/nhiem-vu?task=<mã>`; Back **đóng hộp** về danh sách với **cùng bộ lọc**. Đi tới việc cha / con trong hộp **thay** mục lịch sử (không đẩy thêm). Đổi bộ lọc **giữ** `?task=`. **Sửa** §1 ("chỉ trình bày — không đổi điều hướng / state") **riêng ở điểm này** |
@@ -389,3 +393,53 @@ không đẩy, khi đi cha / con) giữ cho một lần Back luôn về đúng d
 
 **Việc đang dở:** phần làm lại giao diện chi tiết Phản ánh (mục sổ tiến độ `giao-dien-phan-anh-w2-s1`)
 sẽ chuyển sang bố cục hộp lớn **ở đợt riêng của Phản ánh**, không trong đợt thí điểm Nhiệm vụ.
+
+## Sửa đổi 05/10/2026 (lần 2) — theo ngôn ngữ thiết kế OMICALL CRM
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng mọi chỗ phía trên khi nói khác — kể cả **bảng
+màu** của §*Sửa đổi 05/10/2026* #2 (`#102b43` / `#2fb1f9`), nay **bị thay**. Các điểm #1, #3–#6 của
+sửa đổi ấy (thẻ trắng trên nền xám, hộp chi tiết lớn, Xoá, URL theo hộp, hoãn tab nhiều bản ghi)
+**giữ**. **Người quyết:** chủ dự án, 05/10/2026, trong phiên chính. **Chưa dựng.**
+
+Nguồn: bản quy chuẩn OMICALL CRM chủ dự án đưa 05/10/2026 (ngoài kho). Bản ấy không vào git; các giá
+trị đã chốt ghi dưới đây, đây là chỗ sở hữu duy nhất của chúng.
+
+Lời chủ dự án, theo thứ tự: *"tôi muốn theo hướng này"* (bản quy chuẩn); về trợ năng: *"miniapp mới cần
+cho người lớn tuổi chứ web-admin thì đa số là trẻ tuổi"*; rồi *"làm đi"* với phương án được đề xuất
+**"theo guide + chỉnh 4 màu chữ cho đạt chuẩn"**.
+
+**Phạm vi:** áp §1–§11 của bản quy chuẩn, **trừ** 4 điều chỉnh (#7) và 2 điểm loại trừ (#8). Áp **một
+lần cho toàn web-admin**, không theo xã (ADR 0069 chỉ cho xã đổi logo / banner).
+
+| # | Điểm | Chốt |
+|---|---|---|
+| 1 | Màu lõi | Navy chính `#1E3150` — chữ, icon, header, tab đang chọn. Accent `#00B1FF` — nền hover, trạng thái đang chọn, mảng tô; **không làm chữ**. **Vòng focus** dùng accent đậm đạt ≥3:1 trên nền trắng (`#00B1FF` chỉ 2.40:1 — WCAG 1.4.11; bản quy chuẩn ghi focus = accent, đây là điều chỉnh thứ 5 cho AA). Thành công `#56CC6E` (họ màu của nút chính, xem #7). Nguy hiểm `#FF5955`. Cảnh báo `#FEA220` |
+| 2 | Nền | Ngoài cùng `#D1D1D1` · vùng app `#F5F6FA` · thẻ `#FFFFFF` · nền phụ `rgba(30,49,80,.05)` · nền phụ 2 `rgba(30,49,80,.10)`. Nền nhạt (tint) = màu gốc ở alpha `.1` (cảnh báo, focus) hoặc `.2–.3` (tag, chip). Bảng màu phân loại cho tag / nhãn / ảnh đại diện theo §2.4 bản quy chuẩn: `#00B1FF` `#56CC6E` `#FF5955` `#FEA220` `#E82A8F` `#57BFDB` `#A540B8` `#6C63FF` `#F0557F` `#10A37F` `#B161F8` `#155AEF` `#229FDA` |
+| 3 | Chữ | **Roboto**, tự phục vụ qua `@fontsource` (cách tự phục vụ của §2 giữ), **thay Be Vietnam Pro**. Cỡ gốc **15px**; phân cấp bằng độ đậm 400 / 500 / 600, không bằng cỡ; chú thích 12px |
+| 4 | Bo góc · bóng | Bo góc 6 / 8 / 12 / 16 / 32 px / 50%. Bóng nhuộm navy theo §5 bản quy chuẩn (`0 4px 16px` ở alpha `.16` / `.20` / `.32` cho popover / thẻ nổi / header). Thẻ trên nền app **không bóng** |
+| 5 | Kích thước | Control cao **36px** — **thay** 40px của §Bối cảnh và §12 (quy tắc căn hàng của §12 giữ). Header navy **68px** dính trên cùng. Thanh lọc **48px** nền navy 5%. Dòng bảng **64px**, không kẻ sọc, hover nền accent `.04` + viền accent `.1` — **thay** dòng 48px của §11. Ô tìm dạng viên thuốc (bo 32px). Popover bo 12px, bóng `.16` |
+| 6 | Điều hướng | Header navy với **nút module chỉ icon + tooltip**, **thay** sidebar chữ (sidebar trắng của §8). Câu "thao tác quan trọng luôn có chữ" của §11 vẫn áp cho **thao tác**; nút module là điều hướng |
+| 7 | 4 điều chỉnh cho WCAG AA | Yêu cầu AA của §Bối cảnh **giữ** — bảng dưới |
+| 8 | Loại trừ | (a) **Không** nút nổi (FAB) chat / gọi — web-admin không có tính năng ấy, và §1 / `ROADMAP_PHASE2.md` không cho thêm tính năng. (b) Trạng thái / tag **không bao giờ chỉ bằng màu** — icon + chữ giữ (§Bối cảnh) |
+| 9 | Không đổi | Vẫn **không** blur, gradient (§11). **Không** tên hay logo OMICALL / ViHAT trên màn cán bộ — chỉ mượn ngôn ngữ hình ảnh; chỗ đứng tên vẫn là tên xã (§13) |
+
+**4 điều chỉnh (#7)** — tỉ lệ đo lại khi ghi (công thức độ chói tương đối WCAG 2.x):
+
+| Chỗ | Bản quy chuẩn | Chốt | Tương phản |
+|---|---|---|---|
+| Chữ mờ | navy độ mờ `.5` — 2.91:1 trên trắng, trượt | navy độ mờ **≈ `.72`**; `.5` **chỉ** cho trạng thái vô hiệu | 5.42:1 trên trắng · 5.21:1 trên `#F5F6FA` · 4.97:1 trên nền phụ navy 5% |
+| Nút chính chữ trắng | `#56CC6E` — 2.05:1, trượt | **`#1d853c`**; `#56CC6E` giữ cho nền nhạt và viền nút viền | 4.70:1 |
+| Chữ liên kết | `#00B1FF` — 2.40:1, trượt | **`#0369a1`** | 5.93:1 trên trắng · 5.49:1 trên `#F5F6FA` |
+| Huy hiệu thông báo | `#FF5955` chữ trắng 9–10px — 3.08:1, trượt | đỏ đậm hơn **`#D93A36`**, chữ **≥ 11px**; `#FF5955` giữ cho icon và nền nhạt | 4.56:1 |
+
+**Vì sao vẫn giữ AA dù người dùng trẻ:** chủ dự án nêu tuổi người dùng để nói web-admin không cần mức
+chăm chút như Mini App, và đã chọn phương án "chỉnh 4 màu chữ cho đạt chuẩn" chứ không bỏ chuẩn. AA là
+ngưỡng §Bối cảnh đã nhận cho một cơ quan công quyền; bốn chỗ trên là những chỗ bản quy chuẩn dùng màu
+nhấn **làm chữ**, nên chỉnh đúng bốn chỗ ấy và giữ nguyên phần còn lại.
+
+**Vì sao `#1d853c`, không `#1f8a3e` như phương án đề xuất:** đo lại khi ghi, `#1f8a3e` với chữ trắng chỉ
+đạt 4.41:1 — dưới 4.5:1, tức không "đạt chuẩn" như chủ dự án chốt. `#1d853c` cùng sắc độ, đậm hơn một
+chút, vượt ngưỡng.
+
+**Vì sao bỏ sidebar chữ:** chủ dự án chấp nhận header chỉ icon vì người dùng web-admin đa số là cán bộ
+trẻ; tooltip thay nhãn chữ.
