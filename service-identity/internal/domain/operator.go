@@ -29,7 +29,8 @@ import (
 type OperatorPermission string
 
 // THE CLOSED LIST decided by the owner on 2026-09-28, grown to seven on 2026-10-04 (ADR 0073 #3:
-// `ops.petition_field.manage`, migration 0023). Adding a key is ADR 0048 stop condition #1
+// `ops.petition_field.manage`, migration 0023) and to eight on 2026-10-05 (ADR 0074 #3:
+// `ops.zalo_bot.manage`, migration 0025). Adding a key is ADR 0048 stop condition #1
 // (authority beyond one commune) — an owner decision, never a line added here in passing. The
 // migration's CHECK on operator_permission_grant.permission_key is the database's copy of this
 // list; internal/store/operatorstore tests compare the two.
@@ -42,6 +43,8 @@ const (
 	OperatorPermissionQRIssue            OperatorPermission = "ops.qr.issue"
 	// The tier-1 petition field codes (ADR 0060), edited in the operator area (ADR 0073 #3).
 	OperatorPermissionPetitionFieldManage OperatorPermission = "ops.petition_field.manage"
+	// The shared Zalo Bot (token, webhook), whose data service-comms owns (ADR 0074 #2, #3).
+	OperatorPermissionZaloBotManage OperatorPermission = "ops.zalo_bot.manage"
 )
 
 // OperatorPermissions returns the closed list, in a stable order. A fresh slice every call, so no
@@ -55,6 +58,7 @@ func OperatorPermissions() []OperatorPermission {
 		OperatorPermissionUploadPolicyManage,
 		OperatorPermissionQRIssue,
 		OperatorPermissionPetitionFieldManage,
+		OperatorPermissionZaloBotManage,
 	}
 }
 
