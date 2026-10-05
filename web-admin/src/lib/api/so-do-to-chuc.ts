@@ -21,7 +21,7 @@
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
 
-import { CHUNG, docThanKetQua, errorMessageOr, goiGhi, LOI_KHONG_RO, type KetQua } from "./goi";
+import { CHUNG, docThanKetQua, errorMessageOr, goiGhi, LOI_KHONG_RO, stripTechnicalPrefix, type KetQua } from "./goi";
 import type {
   identity_boPhanDaGhiRa,
   identity_delete_org_units_by_id,
@@ -150,7 +150,8 @@ export async function deleteOrgUnit(id: string, reason: string): Promise<OrgUnit
 async function readInUse(res: Response): Promise<OrgUnitDeleteResult> {
   try {
     const body = (await res.json()) as Partial<identity_orgUnitInUseOut>;
-    const message = typeof body.message === "string" && body.message !== "" ? body.message : LOI_KHONG_RO;
+    const message =
+      typeof body.message === "string" && body.message !== "" ? stripTechnicalPrefix(body.message) : LOI_KHONG_RO;
     const h = body.holdings;
     const holdings = h !== null && typeof h === "object" && isHoldings(h) ? h : null;
     return { ok: false, message, holdings };

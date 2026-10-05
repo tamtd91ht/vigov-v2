@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { LOI_KHONG_RO } from "./goi";
+import { LOI_KHONG_RO, stripTechnicalPrefix } from "./goi";
 import {
   TASK_IMPORT_FILE_FIELD,
   TASK_IMPORT_TOO_LARGE,
@@ -85,7 +85,8 @@ describe("POST /api/v1/tasks/imports", () => {
     for (const dryRun of [false, true]) {
       vi.unstubAllGlobals();
       stub(json({ code: "import_retired_columns", message: cau, trace_id: "t" }, 400));
-      expect(await submitTaskImport(FILE, "mau-cu.xlsx", "k", dryRun)).toEqual({ ok: false, thongBao: cau });
+      // §4.3: the `nhiem_vu: ` tag is stripped for display (`goi.ts`); the rest is the server's sentence.
+      expect(await submitTaskImport(FILE, "mau-cu.xlsx", "k", dryRun)).toEqual({ ok: false, thongBao: stripTechnicalPrefix(cau) });
     }
   });
 

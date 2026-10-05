@@ -120,9 +120,9 @@ export function LapBang({
 
       <div className="flex min-w-0 flex-col gap-4 p-4">
         <Notice tone="neutral">
-          Hệ thống chưa nhận tệp Excel của Phòng Tài chính: hợp đồng chưa có tuyến nạp tệp. Bộ cột
-          dưới đây điền sẵn theo biểu mẫu thường gặp và sửa được — cột là dữ liệu của bảng, không
-          phải cấu trúc cố định.
+          Chức năng nạp tệp Excel của Phòng Tài chính chưa có, nên bảng được lập bằng biểu mẫu này.
+          Bộ cột dưới đây điền sẵn theo biểu mẫu thường gặp và sửa được — cột là dữ liệu của bảng,
+          không phải cấu trúc cố định.
         </Notice>
 
         {/* Labels above, 40px controls, two columns from 640px (spec §6.3, §6.5). */}

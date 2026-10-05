@@ -1142,12 +1142,14 @@ export type PhanChuaDung = {
 };
 
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
+  // §3 `{n} chuyên mục` on the card's meta line. The category list is never copied (ADR 0067 §2): every
+  // read is an outbound call to the commune's portal, so counting on the card would call the portal on
+  // every open of this screen. Drawn as a "?" on the portal-sync card (`portal-sync-card.tsx`, MA-02).
   {
-    ten: "Con số `{n} chuyên mục` trên dòng tóm tắt của thẻ Đồng bộ Cổng (§3)",
+    ten: "Số chuyên mục đang đồng bộ",
     viSao:
-      "Danh sách chuyên mục không được chép về hệ thống (ADR 0067 §2): mỗi lần đọc là một lần hỏi " +
-      "thẳng Cổng của xã. Đếm trên thẻ thì mỗi lần mở màn này là một lần gọi ra Cổng, nên thẻ không " +
-      "hiện con số ấy. Số đã chọn hiện ở mục `Cấu hình`, dạng `đã chọn n/30` (mỗi xã chọn tối đa " +
-      "30 chuyên mục).",
+      "Thẻ chưa hiện số chuyên mục đang đồng bộ: danh sách chuyên mục được hỏi thẳng Cổng thông tin " +
+      "của xã mỗi lần cần, không lưu lại, nên đếm trên thẻ là hỏi Cổng mỗi lần mở màn này. Số chuyên " +
+      "mục đã chọn xem ở mục “Cấu hình” của thẻ, dạng “đã chọn n/30” (mỗi xã chọn tối đa 30 chuyên mục).",
   },
 ];

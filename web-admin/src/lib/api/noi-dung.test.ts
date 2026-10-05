@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { stripTechnicalPrefix } from "./goi";
+
 import {
   completeCoverUpload,
   contentCategoryPath,
@@ -601,7 +603,9 @@ describe("category edit / delete (ADR 0067 §3)", () => {
       batFetch(traJSON(r.status, { code: r.code, message: r.message, trace_id: "t-1" }));
       const kq = (await r.call()) as { ok: boolean; thongBao?: string };
       expect(kq.ok).toBe(false);
-      expect(kq.thongBao).toBe(r.message);
+      // §4.3: verbatim minus one leading technical tag (`danh_muc_mini_app: `), see `goi.ts`.
+      expect(kq.thongBao).toBe(stripTechnicalPrefix(r.message));
+      expect(kq.thongBao).not.toMatch(/^[a-z_]+: /);
       // Neither the machine code nor the trace id is shown to the officer.
       expect(kq.thongBao).not.toContain(r.code);
       expect(kq.thongBao).not.toContain("t-1");
@@ -655,7 +659,7 @@ describe("category edit / delete (ADR 0067 §3)", () => {
     batFetch(traJSON(422, { code: "banner_cover_required", message }));
     const kq = await themNoiDung({ ...BANNER_FULL, cover_image_file_id: "" }, "k");
     expect(kq.ok).toBe(false);
-    if (!kq.ok) expect(kq.thongBao).toBe(message);
+    if (!kq.ok) expect(kq.thongBao).toBe("Banner phải có ảnh bìa — tải ảnh lên trước khi lưu, và không gỡ ảnh khỏi banner");
   });
 
   it("POST sends the banner fields for a banner only", async () => {

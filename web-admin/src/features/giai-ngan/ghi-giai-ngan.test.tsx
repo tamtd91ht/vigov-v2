@@ -208,7 +208,7 @@ describe("BANG CHỨNG TỪ — vòng đời quyết định nút nào có nghĩ
     const html = veBang(true, true, []);
 
     expect(html).toContain("phiên làm việc này");
-    expect(html).toContain("chưa có tuyến đọc danh sách chứng từ");
+    expect(html).toContain("chưa xem lại được chứng từ đã lưu từ trước");
   });
 });
 
@@ -291,7 +291,9 @@ describe("NÚT THÊM DỰ ÁN — cổng budget.update", () => {
 
     expect(html).not.toContain(NUT_THEM_DU_AN);
     expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_GHI));
-    expect(html).toContain("budget.update");
+    // The permission by its Phân quyền NAME, never the machine key (GN-07).
+    expect(html).toContain("Cập nhật giải ngân");
+    expect(html).not.toContain("budget.update");
   });
 
   it("có `budget.update`: nút hiện", () => {
@@ -319,7 +321,8 @@ describe("SỬA / GỠ DỰ ÁN — hai cổng riêng", () => {
     expect(html).toContain(NUT_SUA_DU_AN);
     expect(html).not.toContain(NUT_GO_DU_AN);
     expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_XAC_NHAN));
-    expect(html).toContain("budget.confirm");
+    expect(html).toContain("Xác nhận, khoá khoản giải ngân");
+    expect(html).not.toContain("budget.confirm");
   });
 
   it("`budget.confirm` MỘT MÌNH: có Gỡ dự án, KHÔNG có Sửa dự án", () => {
@@ -468,7 +471,7 @@ describe("PHẦN CHƯA DỰNG — dấu '?' đúng vị trí đặc tả (ADR 00
   it("mục đầu tiên (không có tuyến ĐỌC danh sách chứng từ) vẫn được nói ra — ở bảng chứng từ rỗng", () => {
     // No placeholder of its own: it is a limit of a BUILT table, and every page load starts empty.
     expect(PHAN_CHUA_DUNG_GHI[0]!.viSao).toContain("chưa có cách đọc lại danh sách chứng từ");
-    expect(veBang(true, true, [])).toContain("chưa có tuyến đọc danh sách chứng từ");
+    expect(veBang(true, true, [])).toContain("chưa xem lại được chứng từ đã lưu từ trước");
   });
 
   it("khối gập 'N phần chưa dựng' không còn trên màn", () => {

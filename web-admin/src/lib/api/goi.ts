@@ -32,6 +32,42 @@ export type KetQua<T> = { ok: true; duLieu: T } | { ok: false; thongBao: string 
 export const LOI_KHONG_RO = "Không kết nối được máy chủ. Vui lòng thử lại.";
 
 /**
+ * A 404 whose body is NOT the server's `httpx.Error` (BC-01). The connection worked: a Go mux answering
+ * "404 page not found" in plain text means the deployed service has no such route yet — saying
+ * "Không kết nối được máy chủ" sends the officer to check their network for nothing. A 404 the server
+ * DID explain (a record that does not exist, a commune the edge does not know) keeps its own sentence.
+ */
+export const LOI_CHUA_HO_TRO = "Máy chủ chưa hỗ trợ chức năng này. Vui lòng báo quản trị hệ thống.";
+
+/**
+ * Entity prefixes `service-documents` writes in front of its Vietnamese refusals
+ * (`service-documents/internal/domain/van_ban.go:199-238`). Longest first, so "văn bản đến: " is not
+ * cut as "văn bản" plus a stray "đến: ".
+ */
+const ENTITY_PREFIXES = ["văn bản đến: ", "văn bản đi: ", "văn bản: "] as const;
+
+/** A snake_case package/entity tag the Go side puts before its sentence: `bo_phan: `, `ngan_sach: `. */
+const SNAKE_PREFIX = /^[a-z_]+: /;
+
+/**
+ * The server's sentence as an officer should read it: ONE leading technical prefix removed — a
+ * snake_case tag (`bo_phan: thiếu tên bộ phận`) or a known entity prefix (`văn bản đến: …`) — and the
+ * first letter then capitalised (§4.3 of the 05/10 tester report).
+ *
+ * ONE PREFIX ONLY, AND NOTHING INSIDE THE SENTENCE: "danh_muc: `code` chỉ gồm…" becomes
+ * "`code` chỉ gồm…" — the backticked field name is the sentence's subject, not a tag. Display only:
+ * nothing here branches on, logs or stores the message.
+ */
+export function stripTechnicalPrefix(message: string): string {
+  let rest = message;
+  const entity = ENTITY_PREFIXES.find((p) => message.startsWith(p));
+  if (entity !== undefined) rest = message.slice(entity.length);
+  else if (SNAKE_PREFIX.test(message)) rest = message.replace(SNAKE_PREFIX, "");
+  if (rest === message || rest === "") return message;
+  return rest.charAt(0).toLocaleUpperCase("vi") + rest.slice(1);
+}
+
+/**
  * Lấy câu thông báo do máy chủ viết, nguyên văn.
  *
  * MỌI mã lỗi đều trả về cùng một hình dạng `httpx.Error` (`code` · `message` · `trace_id`) —
@@ -44,12 +80,7 @@ export const LOI_KHONG_RO = "Không kết nối được máy chủ. Vui lòng t
  *     một câu thông báo là mời cán bộ đọc nó thành "mã lỗi" rồi đọc lại qua điện thoại.
  */
 export async function thongBaoLoi(phanHoi: Response): Promise<string> {
-  try {
-    const than = (await phanHoi.json()) as httpx_Error;
-    return typeof than?.message === "string" && than.message !== "" ? than.message : LOI_KHONG_RO;
-  } catch {
-    return LOI_KHONG_RO;
-  }
+  return errorMessageOr(phanHoi, phanHoi.status === 404 ? LOI_CHUA_HO_TRO : LOI_KHONG_RO);
 }
 
 /**
@@ -64,7 +95,9 @@ export async function thongBaoLoi(phanHoi: Response): Promise<string> {
 export async function errorMessageOr(res: Response, fallback: string): Promise<string> {
   try {
     const body = (await res.json()) as httpx_Error;
-    return typeof body?.message === "string" && body.message !== "" ? body.message : fallback;
+    return typeof body?.message === "string" && body.message !== ""
+      ? stripTechnicalPrefix(body.message)
+      : fallback;
   } catch {
     return fallback;
   }

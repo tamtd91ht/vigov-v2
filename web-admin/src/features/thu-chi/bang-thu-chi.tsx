@@ -100,6 +100,7 @@ import {
   nhanSoTien,
   nhanSoTienChiSo,
   nhanTab,
+  nhanSuaO,
   nhanThemCon,
   NHAN_SUA_TEN,
   O_KHONG_TINH_DUOC,
@@ -1149,12 +1150,27 @@ export function DongKhoanMuc({
 
       {cot.map((c) => {
         if (c.type === "so") {
+          const chu = nhanSoTien(d.values[c.id] ?? null, donVi.ma);
+          const lyDo = lyDoKhongTinh(d.unavailable_reasons?.[c.id]);
           return (
             <td key={c.id} className="text-right tabular-nums">
-              <OTien
-                chu={nhanSoTien(d.values[c.id] ?? null, donVi.ma)}
-                lyDo={lyDoKhongTinh(d.unavailable_reasons?.[c.id])}
-              />
+              {coGhi && suaDuocOSo(d.method) ? (
+                // §4.1 "Các ô số — button, bấm để sửa tại chỗ" (NS-01): opens the SAME in-place form as
+                // the name, where every figure of the row is a box. Only a `manual` row: the others'
+                // figures are sums the server computes, and it refuses a typed one (409).
+                <button
+                  type="button"
+                  className="cursor-pointer rounded-sm border-0 bg-transparent p-0 text-right [font-family:inherit] text-[length:inherit] text-brand-700 tabular-nums hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:cursor-not-allowed disabled:text-ink-700 disabled:no-underline"
+                  aria-label={nhanSuaO(c.name, d.name, lyDo === null ? chu : O_KHONG_TINH_DUOC)}
+                  disabled={editDisabled}
+                  title={lockTitle}
+                  onClick={moSua}
+                >
+                  <OTien chu={chu} lyDo={lyDo} />
+                </button>
+              ) : (
+                <OTien chu={chu} lyDo={lyDo} />
+              )}
             </td>
           );
         }

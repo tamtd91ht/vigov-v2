@@ -79,6 +79,7 @@ import {
   docThanKetQua,
   goiGhi,
   LOI_KHONG_RO,
+  stripTechnicalPrefix,
   thamSoTheoHopDong,
   thongBaoLoi,
   type KetQua,
@@ -536,7 +537,7 @@ async function readAudioJSON<T>(res: Response, want: number): Promise<AudioCallR
     try {
       const body = (await res.json()) as { code?: unknown; message?: unknown };
       if (typeof body?.code === "string") code = body.code;
-      if (typeof body?.message === "string" && body.message !== "") message = body.message;
+      if (typeof body?.message === "string" && body.message !== "") message = stripTechnicalPrefix(body.message);
     } catch {
       // Not the server's httpx.Error (a proxy page): the generic sentence, no code.
     }

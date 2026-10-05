@@ -103,7 +103,7 @@ export function FormDuAn({
         {thieuDanhMuc && (
           <Notice tone="info">
             Danh mục hạng mục kế hoạch vốn của xã đang rỗng, mà mỗi dự án phải thuộc đúng một hạng
-            mục. Cần khai hạng mục ở màn Cấu hình (quyền admin.lookup) trước khi thêm dự án.
+            mục. Cần khai hạng mục ở màn Cấu hình (quyền “Quản lý danh mục”) trước khi thêm dự án.
           </Notice>
         )}
 

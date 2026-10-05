@@ -205,7 +205,7 @@ describe("lập bảng", () => {
     );
     expect(kq).toEqual({
       ok: false,
-      thongBao: "ngan_sach: xã đã có bảng ngân sách đang dùng cho năm và loại này",
+      thongBao: "Xã đã có bảng ngân sách đang dùng cho năm và loại này", // tag stripped (§4.3)
     });
   });
 });
@@ -238,7 +238,7 @@ describe("gỡ bảng và gỡ khoản mục", () => {
 
     expect(await goKhoanMuc("01JDONG", "x")).toEqual({
       ok: false,
-      thongBao: "ngan_sach: khoản mục còn khoản mục con thì không gỡ thẳng",
+      thongBao: "Khoản mục còn khoản mục con thì không gỡ thẳng", // tag stripped (§4.3)
     });
   });
 });
@@ -288,7 +288,7 @@ describe("thêm và sửa khoản mục", () => {
 
     expect(await suaKhoanMuc("01JCHA", { values: { "01JCOT1": 1 } })).toEqual({
       ok: false,
-      thongBao: "ngan_sach: khoản mục có dòng con thì con số là tổng các con",
+      thongBao: "Khoản mục có dòng con thì con số là tổng các con", // tag stripped (§4.3)
     });
   });
 });
@@ -367,7 +367,7 @@ describe("đổi cách tính", () => {
 
     expect(await doiCachTinh("01JCHA", "manual")).toEqual({
       ok: false,
-      thongBao: "ngan_sach: khoản mục có dòng con thì cách tính là cộng con",
+      thongBao: "Khoản mục có dòng con thì cách tính là cộng con", // tag stripped (§4.3)
     });
   });
 
@@ -378,7 +378,11 @@ describe("đổi cách tính", () => {
       "ngan_sach: tổng các đợt của khoản mục vượt mức một con số ngân sách có thể có — gỡ đợt ghi nhầm để tính lại";
     batFetch(traJSON({ code: "budget_tree", message: cau, trace_id: "01JTRACE" }, 409));
 
-    expect(await doiCachTinh("01JLA", "manual")).toEqual({ ok: false, thongBao: cau });
+    // §4.3 (05/10/2026): the sentence verbatim, minus its one leading technical tag (`goi.ts`).
+    expect(await doiCachTinh("01JLA", "manual")).toEqual({
+      ok: false,
+      thongBao: "Tổng các đợt của khoản mục vượt mức một con số ngân sách có thể có — gỡ đợt ghi nhầm để tính lại",
+    });
   });
 });
 
@@ -452,7 +456,11 @@ describe("các đợt thu, chi", () => {
     batFetch(traJSON({ code: "budget_tree", message: cau, trace_id: "01JTRACE" }, 409));
 
     const kq = await ghiDot("01JDONG", { date: "2026-09-25", content: "x", values: { C1: 1 } }, "k");
-    expect(kq).toEqual({ ok: false, thongBao: cau });
+    // §4.3 (05/10/2026): the sentence verbatim, minus its one leading technical tag (`goi.ts`).
+    expect(kq).toEqual({
+      ok: false,
+      thongBao: "Khoản mục đã đủ số đợt thu chi tối đa — không ghi thêm được; gỡ bớt đợt ghi nhầm trước",
+    });
   });
 
   it("gỡ đợt: DELETE với `reason` trong thân, 204 không thân", async () => {

@@ -758,6 +758,15 @@ export function nhanDatDongTong(ten: string): string {
 
 export const NHAN_SUA_TEN = "Bấm để sửa tên khoản mục";
 
+/**
+ * A number cell of a `manual` row is a button (§4.1 "Các ô số — button, bấm để sửa tại chỗ", NS-01).
+ * The name says WHICH figure and WHAT it reads now: `aria-label` replaces the cell's text, so without
+ * `shown` a screen reader would hear the action and never the number.
+ */
+export function nhanSuaO(cot: string, khoanMuc: string, shown: string): string {
+  return `Sửa số ${cot} của ${khoanMuc} (đang là ${shown})`;
+}
+
 export function nhanThemCon(ten: string): string {
   return `Thêm khoản mục con dưới ${ten}`;
 }

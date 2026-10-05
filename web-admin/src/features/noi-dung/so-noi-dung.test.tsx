@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -58,7 +60,6 @@ import {
   FormNoiDung,
   HangLocNoiDung,
   HeaderActions,
-  KhoiChuaDung,
   ThanhTabLoai,
   TheDanhBaChinhQuyen,
   ThongTinChiDoc,
@@ -795,54 +796,36 @@ describe("`CategoryAdmin` — the tree with Sửa · Ẩn/Hiện · Xoá (ADR 00
  * PHẦN CHƯA DỰNG ĐƯỢC — mỗi mục PHẢI ra HTML
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
-describe("khối `phần chưa dựng được`", () => {
-  const html = renderToStaticMarkup(<KhoiChuaDung />);
+describe("phần chưa dựng được — một dấu '?' trên thẻ Đồng bộ Cổng, không còn khối gấp ở đầu màn (MA-02)", () => {
+  const all = PHAN_CHUA_DUNG.map((p) => `${p.ten} ${p.viSao}`).join(" | ");
 
-  it("số mục trên nhãn khớp danh sách thật", () => {
-    expect(html).toContain(`${PHAN_CHUA_DUNG.length} phần của bản thiết kế chưa dựng được`);
+  it("màn không còn khối 'N phần của bản thiết kế chưa dựng được'", () => {
+    const src = readFileSync(new URL("./so-noi-dung.tsx", import.meta.url), "utf8");
+    expect(src).not.toContain("phần của bản thiết kế chưa dựng được");
+    expect(src).not.toContain("KhoiChuaDung");
   });
 
-  it("TỪNG mục ra tới trang, cả tên lẫn lý do", () => {
-    // Ca này là lý do khối ấy tồn tại: một mục nằm trong mảng mà không ra HTML là một phần thiếu
-    // mà không ai biết là thiếu — đúng loại lỗi màn hình này sinh ra để tránh.
-    for (const p of PHAN_CHUA_DUNG) {
-      expect(html, `thiếu tên: ${p.ten}`).toContain(nhuTrongHTML(p.ten));
-      expect(html, `thiếu lý do của: ${p.ten}`).toContain(nhuTrongHTML(p.viSao));
-    }
+  it("lý do viết cho cán bộ đọc: không số hiệu ADR, không ký hiệu mục đặc tả", () => {
+    expect(all).not.toMatch(/ADR|§/);
+    expect(all).toContain("đã chọn n/30");
   });
 
   it("thứ chặn THẬT được gọi tên — không phải thứ đã có", () => {
-    // Built 02/10/2026: the §4 count, the §2 layout (tabs, cards, overlay, line clamp) and the
-    // `content.update` gate. No item may still say they are missing.
-    expect(html).not.toContain("Đang hiện 26 cán bộ");
-    expect(html).not.toContain("aria-pressed");
-    expect(html).not.toContain("lượt này không được thêm CSS");
-    expect(html).not.toContain("CỐ Ý không có cổng ở client");
-    // Built (ADR 0067 §2): the portal sync card is no longer listed as missing; what is left of §3 is
-    // named — the meta count. The status filter is BUILT (02/10/2026): no item may still say it is missing.
-    expect(html).not.toContain("bộ lập lịch");
-    expect(html).not.toContain("adapter HTTP đi ra THEO XÃ");
-    expect(html).not.toContain(nhuTrongHTML("Cần thêm tham số `status` vào hợp đồng"));
-    expect(html).not.toContain(nhuTrongHTML("Lọc riêng các bài `Chờ duyệt`"));
-    expect(html).toContain(nhuTrongHTML("`đã chọn n/30`"));
-    // Built (ADR 0067 §4): the broadcast audio upload is no longer listed as missing.
-    expect(html).not.toContain("lối tải tệp âm thanh");
-  });
-
-  it("the cover upload is BUILT — no item still says it is missing", () => {
-    expect(html).not.toContain("Chọn tệp từ máy");
-    expect(html).not.toContain("chưa mở lối tải ảnh lên");
-    expect(html).not.toContain(nhuTrongHTML("chưa có `.man-noi-dung`"));
-  });
-
-  it("KHÔNG còn câu nào nói một phần đã có là chưa có", () => {
-    // `core/crypto` (45f4f110), `core/storage` và tuyến công khai `GET /api/v1/commune-news`
-    // (10337524) đều đã có. Một khối "chưa dựng được" nói sai lý do là một khối cán bộ thôi tin.
-    expect(html).not.toContain("core/crypto` chưa tồn tại");
-    expect(html).not.toContain("core/storage` chưa tồn tại");
-    expect(html).not.toContain("/api/cong/mini-app");
-    expect(html).not.toContain(nhuTrongHTML("KHÔNG CÓ TÊN MIỀN"));
-    expect(html).not.toContain("chưa có hằng");
+    // Built 02/10/2026: the §4 count, the §2 layout and the `content.update` gate; ADR 0067 §2 the
+    // portal sync, §4 the broadcast audio. No entry may still say they are missing.
+    for (const built of [
+      "Đang hiện 26 cán bộ",
+      "aria-pressed",
+      "bộ lập lịch",
+      "adapter HTTP",
+      "Lọc riêng các bài `Chờ duyệt`",
+      "tệp âm thanh",
+      "Chọn tệp từ máy",
+      "core/crypto` chưa tồn tại",
+      "/api/cong/mini-app",
+    ]) {
+      expect(all).not.toContain(built);
+    }
   });
 });
 

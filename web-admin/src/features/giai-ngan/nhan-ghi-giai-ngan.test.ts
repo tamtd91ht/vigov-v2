@@ -7,6 +7,7 @@ import {
   CAU_SO_TIEN_PHAI_DUONG,
   CAU_SO_TIEN_VUOT_CHINH_XAC,
   CAU_THIEU_HANG_MUC,
+  CAU_KHOI_CONG_SAU_HOAN_THANH,
   CAU_THIEU_MA_DU_AN,
   CAU_THIEU_NGAY_CHI,
   CAU_THIEU_NOI_DUNG,
@@ -337,8 +338,30 @@ describe("thanThemDuAn", () => {
   });
 
   it("câu 'thiếu mã' nói rõ hệ thống CHƯA tự sinh mã", () => {
-    // §9 vẽ ô `☑ Tự sinh mã`; máy chủ chưa có. Người dùng phải biết vì sao ô ấy không có.
-    expect(CAU_THIEU_MA_DU_AN).toContain("Tự sinh mã");
+    // §9 vẽ ô `☑ Tự sinh mã`; máy chủ chưa có. Người dùng phải biết vì sao mã phải nhập tay — bằng
+    // lời thường, không nhắc "bản thiết kế" (GN-04).
+    expect(CAU_THIEU_MA_DU_AN).toContain("chưa tự sinh mã");
+    expect(CAU_THIEU_MA_DU_AN).not.toMatch(/bản thiết kế/);
+  });
+});
+
+describe("ngày khởi công không sau ngày hoàn thành (GN-03, mirror of the server's 0fa67247)", () => {
+  const LOI = { ok: false, cau: CAU_KHOI_CONG_SAU_HOAN_THANH };
+
+  it("thêm: khởi công sau hoàn thành → bị từ chối tại chỗ, không dựng thân", () => {
+    expect(thanThemDuAn(2026, { ...DU_AN_MAU, ngayKhoiCong: "2026-12-01", ngayHoanThanh: "2026-11-30" })).toEqual(LOI);
+  });
+
+  it("thêm: cùng ngày được; thiếu một trong hai ngày thì không có gì để so", () => {
+    expect(thanThemDuAn(2026, { ...DU_AN_MAU, ngayKhoiCong: "2026-11-30", ngayHoanThanh: "2026-11-30" }).ok).toBe(true);
+    expect(thanThemDuAn(2026, { ...DU_AN_MAU, ngayKhoiCong: "2026-12-01", ngayHoanThanh: "" }).ok).toBe(true);
+    expect(thanThemDuAn(2026, { ...DU_AN_MAU, ngayKhoiCong: "", ngayHoanThanh: "2026-01-01" }).ok).toBe(true);
+  });
+
+  it("sửa: so cặp ngày SAU KHI SỬA — đổi một ngày cho vượt ngày còn lại cũng bị từ chối", () => {
+    expect(thanSuaDuAn(DU_AN_MAU, { ...DU_AN_MAU, ngayHoanThanh: "2026-02-01" })).toEqual(LOI);
+    expect(thanSuaDuAn(DU_AN_MAU, { ...DU_AN_MAU, ngayKhoiCong: "2026-12-01" })).toEqual(LOI);
+    expect(thanSuaDuAn(DU_AN_MAU, { ...DU_AN_MAU, ngayHoanThanh: "2026-03-01" }).ok).toBe(true);
   });
 });
 

@@ -7,6 +7,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
+import { pendingMarkerLabel } from "@/components/ui/pending-feature";
 import type { KetQua } from "@/lib/api/goi";
 import type { CategoryTreeResult, StartRunResult } from "@/lib/api/portal-sync";
 import type {
@@ -28,6 +29,7 @@ import {
   SHOW_PENDING_LABEL,
   WINDOW_DAYS_ERROR,
 } from "./portal-sync";
+import { PHAN_CHUA_DUNG } from "./nhan-noi-dung";
 import { PortalSyncCard, type PortalSyncApi } from "./portal-sync-card";
 
 beforeAll(() => {
@@ -166,6 +168,18 @@ describe("status chip and meta line", () => {
   it("meta line: interval and publish mode", async () => {
     await mount(fakes());
     expect(text()).toContain("Mỗi 6 giờ · đăng thẳng");
+  });
+
+  it("meta line: §3's category count is a disabled '?' whose reason is the PHAN_CHUA_DUNG entry (MA-02)", async () => {
+    await mount(fakes());
+    const marker = host!.querySelector(`[aria-label="${pendingMarkerLabel(PHAN_CHUA_DUNG[0]!.ten)}"]`);
+    expect(marker).not.toBeNull();
+    expect(marker!.closest('[aria-disabled="true"]')?.textContent).toContain("Số chuyên mục");
+  });
+
+  it("not configured: no category-count placeholder on a line that shows no figures", async () => {
+    await mount(fakes({ settings: { ok: true, duLieu: settingsOut({ configured: false }) } }));
+    expect(text()).not.toContain("Số chuyên mục");
   });
 });
 

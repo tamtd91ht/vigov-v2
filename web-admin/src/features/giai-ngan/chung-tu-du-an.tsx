@@ -276,7 +276,7 @@ export function BangChungTu({
       <EmptyState
         icon={ReceiptText}
         title="Chưa có chứng từ nào trong phiên làm việc này."
-        description="Bảng này không đọc được chứng từ đã lưu từ trước — hợp đồng chưa có tuyến đọc danh sách chứng từ."
+        description="Bảng này chỉ hiện chứng từ vừa ghi trong lần mở trang này — hệ thống chưa xem lại được chứng từ đã lưu từ trước."
       />
     );
   }
@@ -539,8 +539,8 @@ export function KhoiChungTu({
           </CardTitle>
           {/* VÒNG ĐỜI NÓI RA NGAY TRÊN BẢNG, không để cán bộ suy từ việc nút nào hiện nút nào không. */}
           <p className="m-0 mt-1 text-[13px] text-ink-500">
-            Vòng đời: Kế toán nhập → Đã xác nhận → Đã khoá. Nhập và sửa cần quyền budget.update; xác
-            nhận, khoá, mở khoá và gỡ cần quyền budget.confirm.
+            Vòng đời: Kế toán nhập → Đã xác nhận → Đã khoá. Nhập và sửa cần quyền “Cập nhật giải
+            ngân”; xác nhận, khoá, mở khoá và gỡ cần quyền “Xác nhận, khoá khoản giải ngân”.
           </p>
         </div>
         {coGhi && (
@@ -625,7 +625,7 @@ export function KhoiChungTu({
           busyText="Đang mở khoá…"
           moTa={
             "Mở khoá đưa chứng từ về Đã xác nhận để sửa được. Lý do là bắt buộc, và NGƯỜI VỪA KHOÁ " +
-            "không tự mở lại được — cần một cán bộ khác có quyền budget.confirm."
+            "không tự mở lại được — cần một cán bộ khác có quyền “Xác nhận, khoá khoản giải ngân”."
           }
           nhanNut="Mở khoá"
           dangGui={dangGui}

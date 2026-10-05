@@ -301,7 +301,11 @@ describe("Ba tuyến vòng đời — xác nhận · khoá · mở khoá", () =>
 
     expect(kq.ok).toBe(false);
     // Nuốt câu này thành "Có lỗi xảy ra" là lấy mất đúng thứ cán bộ cần để biết phải làm gì.
-    if (!kq.ok) expect(kq.thongBao).toBe(cau);
+    // §4.3 (05/10/2026): the sentence minus its leading `chung_tu: ` tag (`goi.ts`).
+    if (!kq.ok)
+      expect(kq.thongBao).toBe(
+        "Người vừa khoá chứng từ không tự mở lại được — cần một cán bộ khác có quyền `budget.confirm`",
+      );
   });
 });
 

@@ -47,6 +47,7 @@ import {
   nhanDatDongTong,
   nhanGoKhoanMuc,
   nhanNutDot,
+  nhanSuaO,
   nhanThemCon,
   NHAN_SUA_TEN,
   PHAN_CHUA_DUNG,
@@ -239,6 +240,57 @@ describe("CỔNG QUYỀN — nhánh bị từ chối", () => {
     const html = veBang(false, false);
     expect(html).toContain('title="Dòng đang là con số tổng"');
     expect(html).not.toContain('aria-pressed=');
+  });
+});
+
+/** One line, rendered alone, with or without `budget.update`. */
+function renderLineAs(line: finance_dongRa, coGhi: boolean): string {
+  return renderToStaticMarkup(
+    <table>
+      <tbody>
+        <DongKhoanMuc
+          sheetLock={null}
+          hien={{ dong: line, cap: 0, coCon: false, moRong: false }}
+          cot={COT}
+          donVi={donViCuaBang(bang().sheet)}
+          dongTongId=""
+          coGhi={coGhi}
+          coXacNhan={false}
+          dangGui={false}
+          moRongDoi={() => {}}
+          moSua={() => {}}
+          them={() => {}}
+          go={() => {}}
+          datTong={() => {}}
+          doiCachTinh={() => {}}
+          moDot={() => {}}
+        />
+      </tbody>
+    </table>,
+  );
+}
+
+describe("Ô SỐ BẤM ĐỂ SỬA TẠI CHỖ (§4.1, NS-01)", () => {
+  const MANUAL = dong({ id: "I", name: "Chi đầu tư phát triển", method: "manual", values: { C1: 5502660000000 } });
+
+  it("dòng Nhập trực tiếp + `budget.update`: mỗi ô số là một nút, tên nói cột, khoản mục và con số", () => {
+    const html = renderLineAs(MANUAL, true);
+    expect(html).toContain(nhuTrongHTML(nhanSuaO("Dự toán năm", "Chi đầu tư phát triển", "5.502.660")));
+    expect(html).toContain(nhuTrongHTML(nhanSuaO("Chi ngân sách", "Chi đầu tư phát triển", "—")));
+    // The % column is computed by the server, never a button.
+    expect(html).not.toContain("Sửa số So sánh");
+  });
+
+  it("THIẾU `budget.update`: không ô số nào là nút — vẫn hiện con số", () => {
+    const html = renderLineAs(MANUAL, false);
+    expect(html).not.toContain("Sửa số ");
+    expect(html).toContain("5.502.660");
+  });
+
+  it("dòng Cộng theo đợt hay cộng con: không ô số nào là nút (máy chủ từ chối số gõ tay)", () => {
+    for (const method of ["entries", "children"]) {
+      expect(renderLineAs({ ...MANUAL, method }, true)).not.toContain("Sửa số ");
+    }
   });
 });
 

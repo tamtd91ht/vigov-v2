@@ -655,6 +655,32 @@
       "trang_thai": "xong",
       "bang_chung": "web-admin/src/features/phan-anh/{so-phan-anh.tsx,nhan-phieu.ts,nhat-ky-phieu.tsx} · features/van-ban/{ngan-van-ban-den.tsx,so-van-ban-den.tsx,nhan-van-ban.ts} · features/nhiem-vu/nhan-nhiem-vu.ts: tsc sạch, eslint các tệp đổi sạch, vitest 3798/3798 (ca mới gồm ca bị từ chối của PA-03 và ca mã ngoài danh bạ) — kiểm 05/10/2026, chưa commit.",
       "tiep_theo": "Máy chủ vẫn trả 409 khi chuyển xử lý từ Đã tiếp nhận (ADR 0027, giữ nguyên). Chỉ kiểm được trên trình duyệt: vị trí câu từ chối trong khối Chuyển xử lý ở 320px."
+    },
+    {
+      "id": "cau-hinh-thong-bao-sua-loi-kiem-thu-05-10",
+      "menu": [
+        "cau-hinh",
+        "thong-bao"
+      ],
+      "viec": "Sửa lỗi Cấu hình và Thông báo theo báo cáo kiểm thử 05/10/2026: ND-01/ND-02 (tab Người dùng đọc lại danh mục bộ phận và vai trò mỗi lần tab được chọn lại — bộ phận/vai trò vừa tạo ở tab khác hiện ngay, không cần tải lại trang; tab đang ẩn không đọc), PQ-01 (câu dẫn nút 'Tạo tám vai trò mẫu' viết lại bằng lời thường, bỏ 'theo đặc tả'; câu 'Hiện đơn vị chỉ có vai trò Quản trị hệ thống' chỉ hiện khi ma trận vừa đọc đúng là chỉ có vai trò ấy), SLA-03 (cột Lĩnh vực của bảng thời hạn hiện nhãn của xã đọc một lần từ GET /api/v1/citizen-report-fields; tài khoản thiếu admin.lookup hoặc đọc hỏng thì giữ mã thô, không gửi lời gọi chắc chắn 403; bỏ câu dẫn câu hỏi mở #4 đã chốt), TB-03 (ô vô hiệu dấu '?' đổi chữ 'Đã xác nhận' thành 'Xác nhận đã đọc'), TB-05 (lý do chưa có bộ lọc 'Gửi cho tôi' không còn dẫn câu hỏi mở #27 đã chốt)",
+      "trang_thai": "xong",
+      "bang_chung": "web-admin/src/features/cau-hinh/{danh-ba-can-bo.tsx,tab-nguoi-dung.tsx,khung-tab-cau-hinh.tsx,role-templates.ts,role-template-seed-panel.tsx,ma-tran-phan-quyen.tsx,nhan-thoi-han.ts,tab-thoi-han-xu-ly.tsx,quyen-tab.ts} · lib/api/thoi-han-xu-ly.ts · features/thong-bao/{nhan-thong-bao.ts,so-thong-bao.tsx}: tsc sạch, eslint các tệp đổi sạch, vitest 3811/3811 (ca mới: đọc lại danh mục khi tab hiện lại, câu chỉ-có-quản-trị đúng/sai, nhãn lĩnh vực và ca thiếu admin.lookup giữ mã thô) — kiểm 05/10/2026, chưa commit.",
+      "tiep_theo": "Chỉ kiểm được trên trình duyệt: chuyển tab Sơ đồ tổ chức → Người dùng rồi mở biểu mẫu thêm cán bộ thấy bộ phận mới. Các ô chọn bộ phận/vai trò ở màn khác ngoài Cấu hình chưa rà."
+    },
+    {
+      "id": "tong-quan-giai-ngan-noi-dung-thu-chi-sua-loi-kiem-thu-05-10",
+      "menu": [
+        "tong-quan-dieu-hanh",
+        "so-tay-lanh-dao",
+        "giai-ngan",
+        "thu-chi-ngan-sach",
+        "noi-dung-mini-app",
+        "bao-cao"
+      ],
+      "viec": "Sửa lỗi theo báo cáo kiểm thử 05/10/2026: TQ-01 (trang '/' chuyển hướng phía máy chủ theo vai trò — role.is_leader của GET /api/v1/sessions/current → /nhiem-vu/so-tay, mọi trường hợp khác kể cả chưa có vai trò hoặc không đọc được phiên → /tong-quan; xã được suy từ Host trước, Host lạ vẫn 404), TQ-04 (lý do ô 'Kinh tế & Tài nguyên' nói đúng: bản đồ đã có, phép đếm chưa làm), TQ-05 (chú thích tỷ lệ đúng hạn phản ánh nói đúng mẫu số: phiếu xử lý xong hoặc quá hạn phân loại trong kỳ; số không đổi), BC-01 (404 không có thân JSON hiện 'Máy chủ chưa hỗ trợ chức năng này…' thay vì 'Không kết nối được máy chủ'), §4.3 (một hàm stripTechnicalPrefix ở lib/api/goi.ts bỏ một tiền tố kỹ thuật đầu câu máy chủ — dạng snake_case và 'văn bản đến: ', 'văn bản đi: ', 'văn bản: ' — áp ở goi.ts và bốn bản đọc thân lỗi riêng), GN-07 (trang chi tiết dự án có thanh bên; quyền gọi bằng tên màn Phân quyền thay cho khoá budget.*/admin.lookup; bỏ chữ 'tuyến', 'hợp đồng', 'bản thiết kế' khỏi câu người dùng đọc), MA-02 (lý do thiếu số chuyên mục thành dấu '?' trên thẻ Đồng bộ Cổng, bỏ khối gấp đầu màn và số hiệu ADR), NS-01 (ô số của dòng Nhập trực tiếp là nút mở biểu mẫu sửa tại chỗ, chỉ với tài khoản có quyền cập nhật), NS-05 (câu lập bảng viết lại), GN-03 phía web (chặn tại chỗ ngày khởi công sau ngày hoàn thành ở thêm và sửa dự án, cùng ngày được)",
+      "trang_thai": "xong",
+      "bang_chung": "web-admin/src/app/{page.tsx,giai-ngan/page.tsx,giai-ngan/du-an/[id]/page.tsx} · lib/{home-route.ts,home-route.server.ts} · lib/api/{goi.ts,excel-import.ts,noi-dung.ts,phieu-phan-anh.ts,so-do-to-chuc.ts} · components/dau-trang.tsx · features/dashboard/{labels.ts,view.tsx} · features/giai-ngan/{chung-tu-du-an.tsx,ghi-du-an.tsx,nhan-du-an.ts,nhan-ghi-giai-ngan.ts} · features/noi-dung/{nhan-noi-dung.ts,portal-sync-card.tsx,so-noi-dung.tsx} · features/thu-chi/{bang-thu-chi.tsx,lap-bang.tsx,nhan-thu-chi.ts}: tsc sạch, eslint các tệp đổi sạch, vitest 3835/3835 (ca mới: homePathFor ba nhánh, stripTechnicalPrefix với câu thật, 404 không JSON, ô số bị từ chối khi thiếu quyền, ngày khởi công sau ngày hoàn thành) — kiểm 05/10/2026, chưa commit.",
+      "tiep_theo": "Chỉ kiểm được trên máy chạy thật: phép rẽ '/' (đọc phiên phía máy chủ qua goiNoiBo, chuyển tiếp nguyên header cookie tới identity như chuyen-tiep.ts), bố cục thanh bên ở chi tiết dự án 320px, nút ô số trong bảng ngân sách ở 320px. Câu báo lỗi máy chủ nay bỏ tiền tố ở web; máy chủ vẫn viết tiền tố — nếu bỏ ở máy chủ thì hàm này thành thừa."
     }
   ]
 }

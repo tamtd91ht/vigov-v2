@@ -19,7 +19,7 @@
  * NO `tenant_id`, RELATIVE PATHS, `credentials: same-origin`: the three rules of `goi.ts`.
  */
 
-import { CHUNG, errorMessageOr, LOI_KHONG_RO } from "./goi";
+import { CHUNG, errorMessageOr, LOI_KHONG_RO, stripTechnicalPrefix } from "./goi";
 import type { KetQua } from "./goi";
 
 /** The three paths of one import. Each caller writes them with `satisfies <generated>["duongDan"]`. */
@@ -188,7 +188,10 @@ export async function commitImport<R>(
       const body = (await res.json()) as { message?: unknown; errors?: unknown };
       return {
         ok: false,
-        message: typeof body.message === "string" && body.message !== "" ? body.message : LOI_KHONG_RO,
+        message:
+          typeof body.message === "string" && body.message !== ""
+            ? stripTechnicalPrefix(body.message)
+            : LOI_KHONG_RO,
         errors: Array.isArray(body.errors) ? (body.errors as ImportError[]) : [],
       };
     } catch {

@@ -5,6 +5,7 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import { Field } from "@/components/ui/field";
+import { PendingMarker } from "@/components/ui/pending-feature";
 import type { KetQua } from "@/lib/api/goi";
 import {
   getPortalCategories,
@@ -25,7 +26,7 @@ import type {
   page_Result_comms_portalRunOut,
 } from "@/lib/api/schema.gen";
 
-import { DAU_GACH, nhanMoc } from "./nhan-noi-dung";
+import { DAU_GACH, nhanMoc, PHAN_CHUA_DUNG } from "./nhan-noi-dung";
 import {
   API_URL_HINT,
   categoriesBody,
@@ -98,8 +99,9 @@ import { OverlayDialog } from "./overlay-dialog";
  * empty on every open, and its text lives only in the form's state until the PUT, then is dropped.
  *
  * THE CATEGORY TREE IS ASKED ONLY WHEN `Cấu hình` IS OPEN. Each read is an outbound call to the commune's
- * portal (ADR 0067 §2: never copied), so the card's meta line does not show §3's `{n} chuyên mục` — see
- * `PHAN_CHUA_DUNG`. The count is shown inside the form, from the live tree.
+ * portal (ADR 0067 §2: never copied), so the card's meta line does not show §3's `{n} chuyên mục` — it
+ * holds a disabled "?" at that spot instead (`PHAN_CHUA_DUNG`, ADR 0068 §14). The count is shown inside
+ * the form, from the live tree.
  *
  * `⟳ Đồng bộ ngay` AND `Cấu hình` ARE DRAWN ONLY WITH `content.update` (`canEdit`, 02/10/2026, as the
  * prototype's `ContentSourcePanel canEdit`): every call behind them declares that key — the run, both
@@ -277,7 +279,8 @@ export function PortalSyncCard({
             {s.configured && (
               <>
                 {" "}
-                · {intervalLabel(s.interval_hours)} · {publishModeLabel(s.publish_mode)}
+                · {intervalLabel(s.interval_hours)} · {publishModeLabel(s.publish_mode)} ·{" "}
+                <CategoryCountPending />
               </>
             )}
           </p>
@@ -836,5 +839,21 @@ export function CategoryPicker({ api }: { api: PortalSyncApi }) {
         </button>
       </div>
     </form>
+  );
+}
+
+/**
+ * §3's `{n} chuyên mục` on the meta line, as a disabled "?" placeholder (ADR 0068 §14, MA-02) — the
+ * reason is the single `PHAN_CHUA_DUNG` entry, passed as-is. A child component because `PendingMarker`
+ * uses hooks.
+ */
+function CategoryCountPending() {
+  const info = PHAN_CHUA_DUNG[0];
+  if (info === undefined) return null;
+  return (
+    <span className="inline-flex items-center gap-1 text-ink-400" aria-disabled="true" data-pending="">
+      Số chuyên mục
+      <PendingMarker info={info} />
+    </span>
   );
 }

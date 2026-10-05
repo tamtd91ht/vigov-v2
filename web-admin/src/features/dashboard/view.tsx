@@ -226,6 +226,11 @@ type RatioSpec<T> = {
   readonly sample: (t: T) => number;
   /** `việc` / `phiếu` — what the sample counts */
   readonly unit: string;
+  /**
+   * The note under the figure, when "x/y <unit> có hạn" does not say what the sample is. Must describe
+   * the server's own denominator, never a nicer one (TQ-05).
+   */
+  readonly note?: (numerator: string, sample: string) => string;
   readonly target: DrillTarget;
 };
 
@@ -245,9 +250,11 @@ function ratioFigure<T>(
     display: display(current, formatPercent),
     href: drillHref(spec.target, period),
     note:
-      c !== null && c.ok
-        ? `${formatCount(spec.numerator(c.duLieu))}/${formatCount(spec.sample(c.duLieu))} ${spec.unit} có hạn`
-        : undefined,
+      c === null || !c.ok
+        ? undefined
+        : spec.note !== undefined
+          ? spec.note(formatCount(spec.numerator(c.duLieu)), formatCount(spec.sample(c.duLieu)))
+          : `${formatCount(spec.numerator(c.duLieu))}/${formatCount(spec.sample(c.duLieu))} ${spec.unit} có hạn`,
     comparison:
       current === undefined || previous === undefined
         ? null
@@ -859,6 +866,11 @@ export function CitizenReportBlock({
         numerator: (r) => r.on_time,
         sample: (r) => r.on_time_sample,
         unit: "phiếu",
+        // The sample is NOT "petitions with a deadline": it is A ∪ B of
+        // `service-petitions/internal/store/citizen_report_summary.go:40-84` — settled in the period
+        // against a stored deadline, plus those whose classification ceiling fell in the period unmet.
+        note: (onTime, sample) =>
+          `${onTime}/${sample} phiếu đúng hạn, trên số phiếu xử lý xong hoặc quá hạn phân loại trong kỳ`,
         target: { list: "citizen-reports", metric: "on_time" },
       },
       period,

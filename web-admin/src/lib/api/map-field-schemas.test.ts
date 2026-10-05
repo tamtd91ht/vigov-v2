@@ -131,7 +131,11 @@ describe("updateMapField — PATCH", () => {
   it("409 option_removed is the server's sentence", async () => {
     const sentence = "truong_ban_do: không bỏ được một lựa chọn đã có — có thể đổi nhãn hoặc thêm lựa chọn mới";
     stubFetch(() => reply(409, { code: "option_removed", message: sentence }));
-    expect(await updateMapField("01JMF1", { options: [] })).toEqual({ ok: false, thongBao: sentence });
+    // §4.3: the `truong_ban_do: ` tag is stripped for display (`goi.ts`).
+    expect(await updateMapField("01JMF1", { options: [] })).toEqual({
+      ok: false,
+      thongBao: "Không bỏ được một lựa chọn đã có — có thể đổi nhãn hoặc thêm lựa chọn mới",
+    });
   });
 });
 

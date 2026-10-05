@@ -66,6 +66,7 @@ import {
   docThanLoiGoi,
   goiGhi,
   LOI_KHONG_RO,
+  stripTechnicalPrefix,
   thamSoTheoHopDong,
   thongBaoLoi,
   type KetQua,
@@ -452,7 +453,10 @@ async function readError(res: Response): Promise<{ message: string; code: string
   try {
     const body = (await res.json()) as httpx_Error;
     return {
-      message: typeof body?.message === "string" && body.message !== "" ? body.message : LOI_KHONG_RO,
+      message:
+        typeof body?.message === "string" && body.message !== ""
+          ? stripTechnicalPrefix(body.message)
+          : LOI_KHONG_RO,
       code: typeof body?.code === "string" ? body.code : "",
     };
   } catch {

@@ -35,7 +35,8 @@ export const PHAN_CHUA_DUNG: readonly PendingFeatureInfo[] = [
     ten: "Kinh tế & Tài nguyên",
     viSao:
       "Số doanh nghiệp, hộ kinh doanh, cơ sở thành lập mới trong kỳ và tổng tài nguyên trên địa " +
-      "bàn, đếm từ Bản đồ kinh tế số. Bản đồ ấy chưa được dựng, nên chưa có số liệu để đếm.",
+      "bàn, đếm từ Bản đồ kinh tế số. Bản đồ đã có, nhưng phép đếm các số này cho màn Tổng quan " +
+      "chưa được làm.",
   },
   {
     ten: "Xuất báo cáo PDF, XLSX, PPTX",

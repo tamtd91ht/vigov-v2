@@ -188,7 +188,9 @@ describe("CitizenReportBlock", () => {
     const html = block(r);
     expect(html).toContain("Nhận vào trong kỳ");
     expect(html).toContain("33,3%");
-    expect(html).toContain("1/3 phiếu có hạn");
+    // TQ-05: the note names the server's real denominator (settled + classification ceiling missed).
+    expect(html).toContain("1/3 phiếu đúng hạn, trên số phiếu xử lý xong hoặc quá hạn phân loại trong kỳ");
+    expect(html).not.toContain("phiếu có hạn");
     expect(html).toContain("Trễ hạn trong kỳ");
     expect(html).toContain('href="/phan-anh?metric=in_progress"');
   });

@@ -184,11 +184,16 @@ export function nhanNguongCham(phanVan: number): string {
 // Banner BẮT BUỘC của §1 ("không phải phần mềm kế toán") KHÔNG còn là hằng ở đây từ 29/09/2026:
 // câu ấy là `budget.scope_notice` do máy chủ gửi (`scope_notice`), xã sửa được — xem `scope-notice.tsx`.
 
-/** Trạng thái rỗng: năm ngân sách chưa có dự án nào. Bình thường, không phải lỗi. */
+/**
+ * Trạng thái rỗng: năm ngân sách chưa có dự án nào. Bình thường, không phải lỗi.
+ *
+ * Quyền gọi bằng TÊN trên màn Phân quyền ("Cập nhật giải ngân"), không bằng khoá máy `budget.update`
+ * (tester report GN-07): cán bộ đọc tên ấy cho quản trị viên, và đó là chữ quản trị viên tìm thấy.
+ */
 export function nhanNamRong(nam: number): string {
   return (
-    `Năm ngân sách ${nam} chưa có dự án nào. Thêm dự án bằng nút ở trên (cần quyền ` +
-    "budget.update)."
+    `Năm ngân sách ${nam} chưa có dự án nào. Thêm dự án bằng nút ở trên — nút chỉ hiện với tài ` +
+    "khoản có quyền “Cập nhật giải ngân”."
   );
 }
 
@@ -203,5 +208,5 @@ export function nhanNamRong(nam: number): string {
  * phần chưa dựng nằm ở `PHAN_CHUA_DUNG_GHI` trong `nhan-ghi-giai-ngan.ts`, hiện ra trên màn.
  */
 export const GHI_CHU_CHI_XEM_GIAI_NGAN =
-  "Thêm dự án, sửa dự án và ghi nhận khoản chi đã mở, mỗi thao tác đứng sau đúng khoá quyền của " +
-  "nó. Nhập giải ngân từ Excel chưa có tuyến nào phía sau nên chưa mở.";
+  "Thêm dự án, sửa dự án và ghi nhận khoản chi đã dùng được, tuỳ quyền được cấp cho tài khoản. " +
+  "Chức năng nhập giải ngân từ Excel chưa có.";

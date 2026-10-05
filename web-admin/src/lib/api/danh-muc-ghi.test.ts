@@ -236,7 +236,8 @@ describe("409 — từ chối theo tầng", () => {
 
     expect(kq.ok).toBe(false);
     if (kq.ok) return;
-    expect(kq.thongBao).toBe(cauMayChu);
+    // §4.3 (05/10/2026): the sentence verbatim, minus its one leading technical tag (`goi.ts`).
+    expect(kq.thongBao).toBe("`source` và tầng của mục do hệ thống quyết định, không nhận từ yêu cầu");
   });
 
   it("mạng hỏng KHÔNG bị đọc thành một trạng thái nghiệp vụ", async () => {

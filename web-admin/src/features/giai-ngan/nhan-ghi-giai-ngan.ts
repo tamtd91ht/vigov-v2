@@ -395,12 +395,23 @@ export const FORM_DU_AN_TRONG: GiaTriFormDuAn = {
 };
 
 export const CAU_THIEU_MA_DU_AN =
-  "Chưa có mã dự án. Hệ thống CHƯA tự sinh mã (ô `Tự sinh mã` của bản thiết kế chưa dựng được), " +
-  "nên mã phải nhập tay: chỉ chữ cái, chữ số và dấu gạch nối.";
+  "Chưa có mã dự án. Hệ thống chưa tự sinh mã dự án, nên mã phải nhập tay: chỉ chữ cái, chữ số " +
+  "và dấu gạch nối.";
 export const CAU_THIEU_HANG_MUC =
   "Chưa chọn hạng mục. Báo cáo tiến độ cộng dồn theo hạng mục nên mỗi dự án thuộc đúng một hạng mục.";
 export const CAU_THIEU_TEN_DU_AN = "Chưa có tên dự án.";
 export const CAU_KE_HOACH_VON_AM = "Kế hoạch vốn năm không được âm.";
+export const CAU_KHOI_CONG_SAU_HOAN_THANH = "Ngày khởi công không được sau ngày hoàn thành.";
+
+/**
+ * Local mirror of `domain.ErrProjectStartAfterCompletion` (service-finance `du_an_ghi.go`, 0fa67247):
+ * said at the form instead of after a round trip (GN-03). Same day is allowed, an empty box is no
+ * date. The server still checks, and its sentence wins if the two ever disagree. Both values are the
+ * `<input type="date">` `YYYY-MM-DD` form, so string order is date order.
+ */
+function startAfterCompletion(start: string, completion: string): boolean {
+  return start !== "" && completion !== "" && start > completion;
+}
 
 /**
  * Dựng thân `POST /api/v1/investment-projects` từ các ô của biểu mẫu §9.
@@ -419,6 +430,9 @@ export function thanThemDuAn(nam: number, gt: GiaTriFormDuAn): ThanDung<ThemDuAn
   if (ma === "") return { ok: false, cau: CAU_THIEU_MA_DU_AN };
   if (gt.hangMucID === "") return { ok: false, cau: CAU_THIEU_HANG_MUC };
   if (gt.ten.trim() === "") return { ok: false, cau: CAU_THIEU_TEN_DU_AN };
+  if (startAfterCompletion(gt.ngayKhoiCong, gt.ngayHoanThanh)) {
+    return { ok: false, cau: CAU_KHOI_CONG_SAU_HOAN_THANH };
+  }
 
   const keHoach = docSoTien(gt.keHoachVon);
   let keHoachDong = 0;
@@ -530,6 +544,10 @@ export function thanSuaDuAn(dau: GiaTriFormDuAn, moi: GiaTriFormDuAn): ThanDung<
     }
   }
 
+  // The pair AS IT WILL STAND after the PATCH: the form holds both dates, changed or not.
+  if (startAfterCompletion(moi.ngayKhoiCong, moi.ngayHoanThanh)) {
+    return { ok: false, cau: CAU_KHOI_CONG_SAU_HOAN_THANH };
+  }
   if (moi.ngayKhoiCong !== dau.ngayKhoiCong) than.start_date = moi.ngayKhoiCong;
   if (moi.ngayHoanThanh !== dau.ngayHoanThanh) than.completion_date = moi.ngayHoanThanh;
   if (moi.thoiHanGiaiNgan !== dau.thoiHanGiaiNgan) {
@@ -556,16 +574,17 @@ export function lyDoDuDung(lyDo: string): boolean {
 /**
  * Câu hiện thay cho nhóm nút GHI khi tài khoản thiếu khoá.
  *
- * GỌI ĐÚNG TÊN KHOÁ, và gọi đúng khoá NÀO cho việc NÀO: "bạn không có quyền" trống trơn là câu
+ * GỌI ĐÚNG TÊN QUYỀN, và gọi đúng quyền NÀO cho việc NÀO: "bạn không có quyền" trống trơn là câu
  * khiến cán bộ gọi lên huyện hỏi mình thiếu quyền gì, và ở màn này câu trả lời có hai khả năng
- * khác hẳn nhau.
+ * khác hẳn nhau. Tên là tên màn Phân quyền hiện (`quyen.ten`, migration 0001 của identity), không
+ * phải khoá máy `budget.*` (tester report GN-07).
  */
 export const CAU_THIEU_QUYEN_GHI =
-  "Tài khoản của bạn không có quyền nhập liệu ngân sách (budget.update), nên phần thêm và sửa " +
+  "Tài khoản của bạn chưa được cấp quyền “Cập nhật giải ngân”, nên phần thêm và sửa " +
   "không hiển thị. Liên hệ quản trị viên của đơn vị nếu bạn cần quyền này.";
 
 export const CAU_THIEU_QUYEN_XAC_NHAN =
-  "Tài khoản của bạn không có quyền xác nhận ngân sách (budget.confirm), nên các thao tác xác " +
+  "Tài khoản của bạn chưa được cấp quyền “Xác nhận, khoá khoản giải ngân”, nên các thao tác xác " +
   "nhận, khoá, mở khoá và gỡ không hiển thị. Đây là quyền của người chịu trách nhiệm, tách khỏi " +
   "quyền nhập liệu có chủ ý.";
 

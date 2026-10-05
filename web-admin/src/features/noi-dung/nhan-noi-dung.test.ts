@@ -667,9 +667,7 @@ describe("phần chưa dựng được", () => {
     // prototype: the §4 count, the §2 layout and the `content.update` gate left it — and then the
     // per-item delete (soft, with a reason, DELETE /api/v1/content-items/{id}). The `Lượt xem` column
     // left it the same day: the owner decided to show the server's count (ADR 0047, row 02/10/2026).
-    expect(PHAN_CHUA_DUNG.map((p) => p.ten)).toEqual([
-      "Con số `{n} chuyên mục` trên dòng tóm tắt của thẻ Đồng bộ Cổng (§3)",
-    ]);
+    expect(PHAN_CHUA_DUNG.map((p) => p.ten)).toEqual(["Số chuyên mục đang đồng bộ"]);
   });
 
   it("no item still claims the view count is not shown", () => {

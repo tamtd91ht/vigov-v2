@@ -20,8 +20,7 @@ import { userInitials } from "./user-initials";
  * Đầu trang — spec giao diện 02/10/2026 §5 (thay `15-phu-luc-giao-dien-chung` §3 về hình thức).
  *
  * TÊN CƠ QUAN ĐÃ CHUYỂN SANG GÓC TRÁI CỦA THANH BÊN (chủ dự án 02/10/2026) — `CommuneIdentity`.
- * Đầu trang chỉ in lại nó khi trang KHÔNG có thanh bên (`withCommune`: đổi mật khẩu, chi tiết dự
- * án), để không trang đã đăng nhập nào thiếu tên cơ quan; in ở cả hai chỗ là lặp. Tên xã đọc lúc
+ * Đầu trang chỉ in lại nó khi trang KHÔNG có thanh bên (`withCommune`: đổi mật khẩu), để không trang đã đăng nhập nào thiếu tên cơ quan; in ở cả hai chỗ là lặp. Tên xã đọc lúc
  * chạy từ cấu hình xã, không bao giờ là hằng số hay giá trị dự phòng.
  *
  * Bên phải là khối người dùng — họ tên và chức vụ của chính người đang đăng nhập, đọc từ

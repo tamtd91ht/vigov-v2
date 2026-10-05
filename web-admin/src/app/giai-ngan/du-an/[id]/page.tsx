@@ -4,6 +4,7 @@ import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
 import { PageHeader } from "@/components/ui/page-header";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
+import { ThanhBen } from "@/components/thanh-ben";
 import { ChiTietDuAn } from "@/features/giai-ngan/chi-tiet-du-an";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { CongQuyen } from "@/features/quyen/cong-quyen";
@@ -18,6 +19,10 @@ import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
  * gì cả: kho của `finance` bị buộc theo `tenant_id` nên nó không với tới được dự án của xã khác,
  * và cả "không có dự án ấy" lẫn "dự án của xã khác" đều nhận CÙNG một 404 từ máy chủ. Dựng thêm
  * một phép kiểm ở đây chỉ tạo ra một câu trả lời thứ hai, khác câu của máy chủ.
+ *
+ * SAME FRAME AS `/giai-ngan` (`khung-trang` + `ThanhBen`, tester report GN-07): without the sidebar the
+ * officer had no way back but the browser button. The sidebar names the commune, so the header no
+ * longer repeats it (`withCommune` is for pages WITHOUT a sidebar — `dau-trang.tsx`).
  */
 export const dynamic = "force-dynamic";
 
@@ -33,14 +38,16 @@ export default async function TrangChiTietDuAn({ params }: { params: Promise<{ i
   return (
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
       <PhienProvider>
-        <DauTrang withCommune />
+        <div className="khung-trang">
+        <ThanhBen />
+        <DauTrang />
         <main className="than-trang">
           <div className="page--detail">
             <PageHeader icon={Banknote} title="Chi tiết dự án" />
             <CongQuyen
               khoa={QUYEN_XEM_GIAI_NGAN}
               cauThieuQuyen={
-                "Tài khoản của bạn không có quyền xem theo dõi giải ngân (budget.read), nên phần " +
+                "Tài khoản của bạn chưa được cấp quyền “Xem giải ngân”, nên phần " +
                 "này không hiển thị. Liên hệ quản trị viên của đơn vị nếu bạn cần quyền này."
               }
             >
@@ -48,6 +55,7 @@ export default async function TrangChiTietDuAn({ params }: { params: Promise<{ i
             </CongQuyen>
           </div>
         </main>
+        </div>
       </PhienProvider>
     </CauHinhXaProvider>
   );

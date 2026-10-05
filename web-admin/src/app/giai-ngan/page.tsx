@@ -61,7 +61,7 @@ export default async function TrangGiaiNgan() {
           <CongQuyen
             khoa={QUYEN_XEM_GIAI_NGAN}
             cauThieuQuyen={
-              "Tài khoản của bạn không có quyền xem theo dõi giải ngân (budget.read), nên phần " +
+              "Tài khoản của bạn chưa được cấp quyền “Xem giải ngân”, nên phần " +
               "này không hiển thị. Liên hệ quản trị viên của đơn vị nếu bạn cần quyền này."
             }
           >
