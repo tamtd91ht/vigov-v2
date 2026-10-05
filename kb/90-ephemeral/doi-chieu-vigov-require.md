@@ -84,6 +84,12 @@ thì để `chưa làm`, đừng dựng sớm.
 đo lại. Luật ghi như trên: xong thì đổi trạng thái + `file:line` + ngày, không xoá dòng.
 Trước khi làm một dòng có phần backend: đọc mục tương ứng trong `kb/90-ephemeral/tien-do/<module>.json`.
 
+**Luật trình bày cho MỌI mục M còn lại (từ 05/10/2026): prototype = KHUNG, CSS = mẫu UI mới.** Lấy
+từ prototype thứ tự, vị trí, số cột; màu, phông, cỡ, control lấy theo ADR 0068 §*Sửa đổi 05/10/2026
+(lần 2)* (header navy với nút module chỉ icon thay sidebar chữ, Roboto 15px, control 36px…). Bản đo
+nhóm M làm **trước** thay đổi ấy, nên mọi chỗ nó tả hình dáng prototype chỉ còn đúng về khung. Câu
+gốc của chủ dự án và phạm vi: ADR 0068 §*Sửa đổi 05/10/2026 (lần 3)*.
+
 ### MA — Lượt 1: prototype rõ, KHÔNG cần khách quyết
 
 | # | Màn / việc | Trạng thái | Ghi chú |
@@ -96,14 +102,15 @@ Trước khi làm một dòng có phần backend: đọc mục tương ứng tro
 | MA6 | Thông báo nội bộ — gửi theo bộ phận, nháp/đăng, gỡ, xác nhận đã đọc, danh sách người nhận, trạng thái email | `chưa làm` | Gửi theo bộ phận cần RPC `identity` liệt kê cán bộ của một bộ phận. Khoá đọc cho mọi cán bộ: xem MC3 |
 | MA7 | Văn bản đến — chuyển trạng thái, "Chỉ quá hạn", phạm vi, nhập Excel, xuất sổ năm, chuyển thành nhiệm vụ | `chưa làm` | Bộ trạng thái đã chốt 30/09: `tien-do/service-documents.json` (mục ghi C2) |
 | MA8 | Phản ánh — cảnh báo trùng + gộp (unaccent + pg_trgm); tab **Báo cáo** (đếm theo lĩnh vực/bộ phận/thôn); danh sách dạng **thẻ** có ảnh nhỏ/thôn/sao (prototype) thay bảng 9 cột; thiếu ô "Chỉ phiếu trễ hạn" | `chưa làm` | Trùng N3. Sao: chỉ hiện đánh giá của công dân — xem MD |
-| MA9 | Tổng quan — khối **Giải ngân** và **Kinh tế & Tài nguyên** | `chưa làm` | Bố cục giữ theo MD |
+| MA9 | Tổng quan — khối **Giải ngân** và **Kinh tế & Tài nguyên** | `chưa làm` | ~~Bố cục giữ theo MD~~ **05/10/2026:** bố cục nay theo khung prototype — xem MA11 |
+| MA11 | Tổng quan — **bố cục** theo khung `DashboardWorkspace.tsx`: header + kỳ + PDF/XLSX/PPTX + Trình chiếu; một lưới 1/2/3 cột, sáu khối bằng nhau + ô "Cần xử lý ngay" | `ĐANG LÀM` | Thêm 05/10/2026: dòng "Bố cục Tổng quan" **rời khỏi MD** vì chủ dự án chốt theo khung prototype. Phạm vi và những gì giữ: ADR 0068 §*Sửa đổi 05/10/2026 (lần 3)*. Thẻ việc TASK-P2 |
 | MA10 | Việc nhỏ: nhãn menu "Thông báo nội bộ"; dòng "Quên mật khẩu, liên hệ Văn phòng UBND…" ở đăng nhập; menu tài khoản + `/ca-nhan`; % tiến độ nhiệm vụ; "Giao việc mới" và soạn thông báo dạng **hộp thoại** thay vì tại chỗ; hộp thoại "Tách thành nhiệm vụ" gọn (4 ô); duyệt/từ chối lùi hạn **trong ngăn** nhiệm vụ; Danh bạ: cờ "Có Zalo" + 2 thẻ đếm | `chưa làm` | Tách thành dòng con khi bắt tay làm |
 
 ### MB — Lượt 2: menu prototype đổi SAU 16/09 (`docs/ui-ux` vẫn tả hình cũ)
 
 | # | Việc | Trạng thái | Ghi chú |
 |---|---|---|---|
-| MB1 | "Người dùng & Phân quyền" thành menu riêng (`/nguoi-dung`, `/nguoi-dung/phan-quyen`) thay vì tab trong `/cau-hinh` | `chưa làm` | |
+| MB1 | "Người dùng & Phân quyền" thành menu riêng (`/nguoi-dung`, `/nguoi-dung/phan-quyen`) thay vì tab trong `/cau-hinh` | `xong` | Commit `b8e07d04` (05/10/2026). **Hai mục phẳng** "Người dùng" · "Phân quyền" trong nhóm HỆ THỐNG (`web-admin/src/components/muc-menu.ts:161-162` tại commit ấy) vì menu chưa có cấp con; liên kết cũ `/cau-hinh?tab=nguoi-dung\|phan-quyen` tự chuyển sang màn mới |
 | MB2 | Danh bạ cán bộ thành tab của màn Mini App (`/mini-app?tab=danh-ba`); đổi tuyến `/noi-dung` → `/mini-app`, kèm chuyển hướng | `chưa làm` | |
 | MB3 | Cấu hình — tab **Kênh Zalo** (Zalo Bot nhắc việc: mã ghép 8 ký tự sống 10 phút, giờ yên tĩnh 21h–6h) + ghép nối ở `/ca-nhan` | `chưa làm` | = N7; kho này chưa có khái niệm Zalo Bot |
 | MB4 | Trang `/huong-dan` | `chưa làm` | |
@@ -128,7 +135,7 @@ Mỗi dòng đã có tệp sở hữu; lý do đọc ở đó, không chép lạ
 | Không thương hiệu "ViGov" trên web cán bộ | ADR 0068 §13 |
 | Menu 5 nhóm | spec v2 §5 (02/10) |
 | Không có Hồ sơ công dân | ADR 0001 (= D4) |
-| Bố cục Tổng quan; không "Tính lại ngay", không nhãn "cũ"; bấm sâu ra danh sách đã lọc, không ra hộp thoại | ADR 0053, 0068 |
+| Tổng quan: không "Tính lại ngay", không nhãn "cũ"; bấm sâu ra danh sách đã lọc, không ra hộp thoại | ADR 0053; ADR 0068 §*Sửa đổi 05/10/2026 (lần 3)* #5. (~~Bố cục Tổng quan~~ — rời khỏi bảng này 05/10/2026, nay theo khung prototype: MA11) |
 | Xếp hạng bộ phận | ADR 0053 §Sửa đổi 04/10 |
 | Mã nhiệm vụ bất biến | ADR 0065; luật 7 |
 | Đếm và phân trang phía máy chủ | ADR 0071 |
@@ -144,7 +151,7 @@ Mỗi dòng đã có tệp sở hữu; lý do đọc ở đó, không chép lạ
 | Khung bản đồ + xác nhận pháp lý | ADR 0072 |
 | Tab Nhật ký hệ thống và Nhận diện xã | ADR 0054, 0069 |
 | Không tự sinh mã dự án tới khi chốt định dạng | luật 7 |
-| Danh mục: chọn nhóm trước | ⚠ **căn cứ chưa xác minh** — bản đo dẫn "ADR 0057", nhưng `kb/10-decisions/0057-config-load-by-declared-group.md` là ADR nạp cấu hình. Tìm tệp sở hữu thật trước khi viện dẫn |
+| Danh mục: chọn nhóm trước | ⚠ **căn cứ chưa xác minh** — bản đo dẫn "ADR 0057", nhưng `kb/10-decisions/0057-config-load-by-declared-group.md` là ADR nạp cấu hình. Tìm tệp sở hữu thật trước khi viện dẫn. **05/10/2026:** tìm "chọn nhóm" / "nhóm trước" trong `kb/` (trừ tầng sinh) và `web-admin/src/features/cau-hinh/` — **không thấy** tệp sở hữu nào; cờ giữ nguyên, hỏi người đã chốt trước khi viện dẫn |
 | Ẩn/hiện tab Cấu hình theo quyền | người dùng chốt 26/09 |
 
 ## X — Việc của chính tệp này
