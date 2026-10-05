@@ -63,6 +63,7 @@
 //	OPERATOR_HOST                         Deploy env OperatorEdge           off, in EVERY environment: operator area answers 404
 //	OPERATOR_GRPC_LISTEN_ADDR             ConfigMap  OperatorRealm          default :9093
 //	IDENTITY_OPERATOR_GRPC_ADDR           Deploy env OperatorEdge           refused in staging/prod; dev: refused at Dial when OPERATOR_HOST is set
+//	ZALO_BOT_WEBHOOK_HOST                 Deploy env ZaloBotWebhook         refused in staging/prod; dev: "Trỏ webhook" refused by name
 //	RABBITMQ_DSN, RABBITMQ_EXCHANGE       Secret/CM  RabbitMQ               refused in staging/prod once declared
 //	ELASTICSEARCH_ADDRS / _API_KEY / _INDEX_PREFIX   Elasticsearch          refused in staging/prod once declared
 //
@@ -526,6 +527,12 @@ type Config struct {
 	// the DECODED key. Group SecretEncryption (comms, identity); why the backup is not optional:
 	// secret_encryption.go.
 	secretEncryptionKeys []secret.Secret
+
+	// ZaloBotWebhookHost is the bare host the shared Zalo Bot's webhook points at (ADR 0074 #5):
+	// comms builds `https://<host>/api/v1/zalo-bot-updates` from it and no caller supplies a URL.
+	// Group ZaloBotWebhook, comms only. Validated by parseZaloBotWebhookHost (zalo_bot.go): the
+	// OPERATOR_HOST shape, and never a commune's web host. A platform-wide constant (rule 8, invariant 5).
+	zaloBotWebhookHost string
 }
 
 // ThoiHanPhienCongDanMacDinh is CITIZEN_SESSION_TTL when the variable is unset — 30 days, the
@@ -686,6 +693,12 @@ func Load(serviceName string, uses Usage) (Config, error) {
 	// OPERATOR_HOST is set. In dev, empty is refused by name at Dial when the area is switched on.
 	opIdentityAddr := r.read("IDENTITY_OPERATOR_GRPC_ADDR", os.Getenv("IDENTITY_OPERATOR_GRPC_ADDR"), requiredInProd, OperatorEdge)
 
+	// ---- ZaloBotWebhook (ADR 0074 #5; comms only) ------------------------------------------
+	// Required in prod once declared (owner, 05/10/2026: "bắt buộc ở prod"): without it the shared
+	// bot cannot be pointed at comms, and no member of staff can pair. In dev, empty means the
+	// operator's "Trỏ webhook" is refused by name.
+	zaloBotHostRaw := r.read("ZALO_BOT_WEBHOOK_HOST", os.Getenv("ZALO_BOT_WEBHOOK_HOST"), requiredInProd, ZaloBotWebhook)
+
 	// ---- RabbitMQ / Elasticsearch (ADR 0010; no service declares them yet) ----------------
 	// Required in prod once declared — the service that declares one is the one that connects to
 	// it. An Elasticsearch without an API key would hold petition contents unguarded (rule 3).
@@ -769,6 +782,12 @@ func Load(serviceName string, uses Usage) (Config, error) {
 		}
 	}
 
+	// Malformed is fatal, never trimmed into shape — the OPERATOR_HOST rule.
+	zaloBotWebhookHost, err := parseZaloBotWebhookHost(zaloBotHostRaw)
+	if err != nil {
+		return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
+	}
+
 	// Malformed is fatal: a skipped entry is a KEK that silently cannot unwrap the DEKs it wrapped.
 	secretEncryptionKeys, err := parseAES256KeyList(secretKeysRaw, ErrSecretEncryptionKeysInvalid)
 	if err != nil {
@@ -811,6 +830,7 @@ func Load(serviceName string, uses Usage) (Config, error) {
 		operatorHost:               operatorHost,
 		operatorGRPCListenAddr:     firstNonEmpty(opGRPCListen, ":9093"),
 		identityOperatorGRPCAddr:   opIdentityAddr,
+		zaloBotWebhookHost:         zaloBotWebhookHost,
 
 		rabbitMQDSN:              secret.DSN(rabbitDSN),
 		rabbitMQExchange:         rabbitExchange,

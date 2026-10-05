@@ -47,6 +47,8 @@ import (
 	"github.com/vihat/vigov/service-comms/internal/portal"
 	commsstore "github.com/vihat/vigov/service-comms/internal/store"
 	"github.com/vihat/vigov/service-comms/internal/store/crosstenant"
+	"github.com/vihat/vigov/service-comms/internal/store/platformstore"
+	"github.com/vihat/vigov/service-comms/internal/zalobot"
 	"github.com/vihat/vigov/service-comms/migrations"
 )
 
@@ -59,7 +61,8 @@ import (
 // secrets (SecretEncryption). Since 2026-10-01 it stores the Mini App cover image (ADR 0047 §6 (1),
 // ADR 0052): ObjectStore + MalwareScan like petitions, and PublicMedia because it is the first service
 // to PUBLISH a derivative — `image_url` on the public news routes is built from that base URL. Declared
-// ⇒ required in staging and prod (ADR 0057): comms refuses to start there without them.
+// ⇒ required in staging and prod (ADR 0057): comms refuses to start there without them. Since 2026-10-05
+// it holds the ONE shared Zalo Bot (ADR 0074): ZaloBotWebhook is the host its webhook points at.
 var configUses = config.Uses(
 	config.HTTPServer,
 	config.GRPCServer,
@@ -72,6 +75,7 @@ var configUses = config.Uses(
 	config.ObjectStore,
 	config.PublicMedia,
 	config.MalwareScan,
+	config.ZaloBotWebhook,
 )
 
 func main() {
@@ -260,6 +264,24 @@ func main() {
 		log.Warn("CẢNH BÁO CẤU HÌNH", "chi_tiet",
 			"SECRET_ENCRYPTION_KEYS trống — lưu và gửi thử máy chủ thư của xã sẽ trả 503 (ADR 0009)")
 	}
+	// THE SHARED ZALO BOT (migration 0018, ADR 0074) — platform-scope, no commune by design. Its store is
+	// internal/store/platformstore on the RAW pool, the countable unscoped package beside crosstenant; its
+	// secrets are sealed by the PLATFORM envelope (same KEKs, a different key space — core/crypto
+	// platform.go), nil without SECRET_ENCRYPTION_KEYS exactly like the commune envelope: the six RPCs
+	// that need a key then answer FAILED_PRECONDITION by name. The Zalo base URL is a constant of the
+	// adapter, not a variable; the webhook host is ZALO_BOT_WEBHOOK_HOST (required in staging/prod).
+	platformStore := platformstore.New(db)
+	var platformEnvelope *crypto.PlatformEnvelope
+	if cfg.SecretEncryptionConfigured() {
+		platformEnvelope, err = crypto.NewPlatform(cfg.SecretEncryptionKeys(), platformStore)
+		if err != nil {
+			log.Error("không dựng được bộ niêm bí mật cấp nền tảng", "service", "comms", "err", err)
+			os.Exit(1)
+		}
+	}
+	zaloBotOperator := commsapp.NewZaloBotOperator(commsapp.NewZaloBotStore(platformStore), platformEnvelope,
+		zalobot.New(zalobot.DefaultTimeout), cfg.ZaloBotWebhookHost())
+
 	mailSettings := commsapp.NewMailSettingsAdmin(kho, commsstore.NewMailSettingsStore(kho), envelope,
 		mail.NewSender(nil, mail.DefaultTimeout))
 
@@ -451,12 +473,15 @@ func main() {
 	}
 
 	// THE gRPC SURFACE — its own port (GRPC_LISTEN_ADDR, default :9090), the same shape as petitions.
-	// One business RPC, DeliverStaffNotifications (ADR 0058 §3), writing through the SAME use case the
-	// bell's REST routes use.
+	// DeliverStaffNotifications (ADR 0058 §3), writing through the SAME use case the bell's REST routes
+	// use; and since 2026-10-05 ZaloBotOperatorService (ADR 0074), the six platform-scope RPCs
+	// service-platform's operator routes call — on THIS port, behind the SAME caller key and chain, exempt
+	// from the commune by name in core/grpcx.methodsWithoutTenant.
 	//
 	// Plaintext, like every gRPC port here (ADR 0025): the guard is GRPC_CALLER_KEY on every RPC plus
 	// the NetworkPolicy confining the port to the cluster — both, not either.
-	grpcSrv := buildGRPCServer(cfg.GRPCCallerKey(), svcgrpc.Deps{Notifications: staffNotifications, Log: log})
+	grpcSrv := buildGRPCServer(cfg.GRPCCallerKey(), svcgrpc.Deps{Notifications: staffNotifications, Log: log},
+		svcgrpc.NewZaloBotServer(zaloBotOperator, log))
 	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr())
 	if err != nil {
 		log.Error("không mở được cổng gRPC", "service", "comms", "addr", cfg.GRPCListenAddr(), "err", err)
@@ -579,8 +604,9 @@ func main() {
 //
 // ORDER IS NOT NEGOTIABLE: caller key first, so an unauthenticated caller never reaches the commune
 // logic; then the commune from metadata into context. DeliverStaffNotifications is NOT tenant-exempt,
-// so a call without "x-tenant-id" is refused with InvalidArgument before the handler (rule 1).
-func buildGRPCServer(callerKey secret.Secret, d svcgrpc.Deps) *grpc.Server {
+// so a call without "x-tenant-id" is refused with InvalidArgument before the handler (rule 1). The six
+// ZaloBotOperatorService RPCs ARE exempt, by full name (core/grpcx) — the caller key is not.
+func buildGRPCServer(callerKey secret.Secret, d svcgrpc.Deps, zaloBot commsv1.ZaloBotOperatorServiceServer) *grpc.Server {
 	srv := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
 			// Panics at construction when GRPC_CALLER_KEY is empty: a server without the key accepts
@@ -590,6 +616,7 @@ func buildGRPCServer(callerKey secret.Secret, d svcgrpc.Deps) *grpc.Server {
 		),
 	)
 	commsv1.RegisterCommsServiceServer(srv, svcgrpc.NewServer(d))
+	commsv1.RegisterZaloBotOperatorServiceServer(srv, zaloBot)
 	return srv
 }
 

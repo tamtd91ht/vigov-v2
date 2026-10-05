@@ -137,6 +137,18 @@ func newKeyring(keys []secret.Secret) (*keyring, error) {
 
 // wrap seals a DEK under the NEWEST KEK, bound to the commune.
 func (r *keyring) wrap(tid tenant.ID, dek []byte) (WrappedDEK, error) {
+	return r.wrapBound(wrapLabel, []byte(tid), dek)
+}
+
+// unwrap opens a commune's wrapped DEK with whichever KEK it names. The caller wipes the result.
+func (r *keyring) unwrap(tid tenant.ID, w WrappedDEK) ([]byte, error) {
+	return r.unwrapBound(wrapLabel, []byte(tid), w)
+}
+
+// wrapBound seals a DEK under the NEWEST KEK, bound to (label, binding). The commune wrap passes
+// (wrapLabel, tenant_id); the platform wrap passes (platformWrapLabel, PlatformScope) — two labels, so
+// a wrapped DEK copied from one table to the other opens in neither (platform.go).
+func (r *keyring) wrapBound(label string, binding, dek []byte) (WrappedDEK, error) {
 	k := r.keks[0]
 	out := make([]byte, wrapHeaderSize+nonceSize, wrapHeaderSize+nonceSize+len(dek)+tagSize)
 	out[0] = formatVersion
@@ -144,12 +156,13 @@ func (r *keyring) wrap(tid tenant.ID, dek []byte) (WrappedDEK, error) {
 	if _, err := rand.Read(out[wrapHeaderSize:]); err != nil {
 		return WrappedDEK{}, fmt.Errorf("crypto: nonce: %w", err)
 	}
-	sealed := k.aead.Seal(out, out[wrapHeaderSize:], dek, wrapAD(out[:wrapHeaderSize], tid))
+	sealed := k.aead.Seal(out, out[wrapHeaderSize:], dek, wrapAD(label, out[:wrapHeaderSize], binding))
 	return WrappedDEK{KEKID: kekIDString(k.id), Wrapped: sealed}, nil
 }
 
-// unwrap opens a wrapped DEK with whichever KEK it names. The caller wipes the result.
-func (r *keyring) unwrap(tid tenant.ID, w WrappedDEK) ([]byte, error) {
+// unwrapBound opens a wrapped DEK bound to (label, binding) with whichever KEK it names. The caller
+// wipes the result.
+func (r *keyring) unwrapBound(label string, binding []byte, w WrappedDEK) ([]byte, error) {
 	b := w.Wrapped
 	if len(b) != wrapHeaderSize+nonceSize+KeyLength+tagSize || b[0] != formatVersion {
 		return nil, ErrOpenFailed
@@ -165,7 +178,7 @@ func (r *keyring) unwrap(tid tenant.ID, w WrappedDEK) ([]byte, error) {
 	if !ok {
 		return nil, ErrUnknownKey
 	}
-	dek, err := k.aead.Open(nil, b[wrapHeaderSize:wrapHeaderSize+nonceSize], b[wrapHeaderSize+nonceSize:], wrapAD(b[:wrapHeaderSize], tid))
+	dek, err := k.aead.Open(nil, b[wrapHeaderSize:wrapHeaderSize+nonceSize], b[wrapHeaderSize+nonceSize:], wrapAD(label, b[:wrapHeaderSize], binding))
 	if err != nil {
 		return nil, ErrOpenFailed
 	}
@@ -197,8 +210,8 @@ func newAEAD(key []byte) (cipher.AEAD, error) {
 
 func kekIDString(id [kekIDSize]byte) string { return hex.EncodeToString(id[:]) }
 
-func wrapAD(header []byte, tid tenant.ID) []byte {
-	return appendField(appendField(appendField(nil, []byte(wrapLabel)), header), []byte(tid))
+func wrapAD(label string, header, binding []byte) []byte {
+	return appendField(appendField(appendField(nil, []byte(label)), header), binding)
 }
 
 // appendField length-prefixes every part of an additional-data string, so "ab"+"c" and "a"+"bc"

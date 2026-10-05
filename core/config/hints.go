@@ -222,6 +222,14 @@ var envHints = map[string]envHint{
 		place:   inSecret,
 		shape:   newKeyList,
 	},
+	"ZALO_BOT_WEBHOOK_HOST": {
+		meaning: "Tên máy (host) mà Zalo gửi tin nhắn của bot dùng chung tới — comms tự dựng địa chỉ webhook https://<host>/api/v1/zalo-bot-updates (ADR 0074 #5). " +
+			"Thiếu thì người vận hành không trỏ được webhook, và không cán bộ nào ghép được Zalo.",
+		source: "Tên miền đã trỏ DNS và có chứng chỉ TLS + Ingress vào service-comms: bot.api.vigov.vn ở prod (ADR 0074); môi trường khác hỏi người giữ DNS. " +
+			"Chỉ tên máy: chữ thường, không https://, không cổng, không đường dẫn, không bao giờ là tên miền của một xã.",
+		place: inDeploymentEnv,
+		shape: "bot.api.vigov.vn",
+	},
 	"RABBITMQ_DSN": {
 		meaning: "Kết nối RabbitMQ cho tác vụ nền có hẹn giờ (ADR 0010) — không dùng cho sự kiện giữa các dịch vụ.",
 		source:  "Người vận hành RabbitMQ cấp user, mật khẩu và vhost.",

@@ -83,6 +83,9 @@ const (
 	// else: declaring OperatorRealm there would also demand OPERATOR_TOTP_ENCRYPTION_KEY, putting the
 	// key that decrypts every operator's second factor into a pod that never decrypts one.
 	OperatorEdge
+	// ZaloBotWebhook: ZALO_BOT_WEBHOOK_HOST — the host comms points the shared Zalo Bot's webhook at
+	// (ADR 0074 #5, owner 05/10/2026: "chỉ comms nạp, bắt buộc ở prod"). service-comms only. APPENDED.
+	ZaloBotWebhook
 
 	groupEnd // not a group: the bound Uses checks against
 )
@@ -108,6 +111,7 @@ var groupNames = map[Group]string{
 	Elasticsearch:       "Elasticsearch",
 	CommsClient:         "CommsClient",
 	OperatorEdge:        "OperatorEdge",
+	ZaloBotWebhook:      "ZaloBotWebhook",
 }
 
 // String is the identifier a main writes (`config.Redis`), so a message names what to add.

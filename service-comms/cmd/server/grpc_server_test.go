@@ -46,12 +46,32 @@ func (d *tenantDeliverer) Deliver(ctx context.Context, in []domain.NotificationD
 	return out, nil
 }
 
+// zaloBotProbe stands in for the Zalo Bot operator service and records whether the chain let a call
+// through — and whether a commune reached it (it must not: the six RPCs are platform-scope).
+type zaloBotProbe struct {
+	commsv1.UnimplementedZaloBotOperatorServiceServer
+	called     bool
+	sawCommune bool
+}
+
+func (z *zaloBotProbe) GetSharedZaloBot(ctx context.Context, _ *commsv1.GetSharedZaloBotRequest) (*commsv1.GetSharedZaloBotResponse, error) {
+	z.called = true
+	_, z.sawCommune = tenant.From(ctx)
+	return &commsv1.GetSharedZaloBotResponse{Configured: false}, nil
+}
+
 func startGRPC(t *testing.T, d *tenantDeliverer, opts ...grpc.DialOption) commsv1.CommsServiceClient {
+	t.Helper()
+	conn := dialGRPC(t, d, &zaloBotProbe{}, opts...)
+	return commsv1.NewCommsServiceClient(conn)
+}
+
+func dialGRPC(t *testing.T, d *tenantDeliverer, z *zaloBotProbe, opts ...grpc.DialOption) *grpc.ClientConn {
 	t.Helper()
 	lis := bufconn.Listen(1 << 20)
 	srv := buildGRPCServer(testCallerKey, svcgrpc.Deps{
 		Notifications: d, Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
-	})
+	}, z)
 	go func() {
 		if err := srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
 			t.Errorf("Serve: %v", err)
@@ -69,7 +89,7 @@ func startGRPC(t *testing.T, d *tenantDeliverer, opts ...grpc.DialOption) commsv
 		t.Fatalf("NewClient: %v", err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	return commsv1.NewCommsServiceClient(conn)
+	return conn
 }
 
 var deliverReq = &commsv1.DeliverStaffNotificationsRequest{Notifications: []*commsv1.StaffNotification{{
@@ -116,5 +136,31 @@ func TestGRPCServerWithoutCallerKeyDoesNotBuild(t *testing.T) {
 		}
 	}()
 	_ = buildGRPCServer(nil, svcgrpc.Deps{Notifications: &tenantDeliverer{},
-		Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+		Log: slog.New(slog.NewTextHandler(io.Discard, nil))}, &zaloBotProbe{})
+}
+
+// ZaloBotOperatorService is on THIS port: refused without the caller key…
+func TestGRPCZaloBotRefusesCallerWithoutKey(t *testing.T) {
+	z := &zaloBotProbe{}
+	cl := commsv1.NewZaloBotOperatorServiceClient(dialGRPC(t, &tenantDeliverer{}, z))
+	if _, err := cl.GetSharedZaloBot(context.Background(), &commsv1.GetSharedZaloBotRequest{}); status.Code(err) != codes.Unauthenticated {
+		t.Errorf("mã = %v, muốn Unauthenticated (lỗi: %v)", status.Code(err), err)
+	}
+	if z.called {
+		t.Error("the handler ran without the caller key")
+	}
+}
+
+// …and answered WITHOUT a commune (core/grpcx.methodsWithoutTenant, owner 05/10/2026), with none in
+// the handler's context.
+func TestGRPCZaloBotAnswersWithKeyAndNoCommune(t *testing.T) {
+	z := &zaloBotProbe{}
+	cl := commsv1.NewZaloBotOperatorServiceClient(dialGRPC(t, &tenantDeliverer{}, z,
+		grpc.WithChainUnaryInterceptor(grpcx.UnaryClientCallerAuth(testCallerKey))))
+	if _, err := cl.GetSharedZaloBot(context.Background(), &commsv1.GetSharedZaloBotRequest{}); err != nil {
+		t.Fatalf("with the key and no commune, refused: %v", err)
+	}
+	if !z.called || z.sawCommune {
+		t.Errorf("called=%v sawCommune=%v", z.called, z.sawCommune)
+	}
 }

@@ -83,31 +83,8 @@ func parseOperatorHost(raw, trimmed string) (string, error) {
 		return "", nil
 	}
 	h := trimmed
-	switch {
-	case strings.Contains(h, "://") || strings.Contains(h, "/"):
-		return "", fmt.Errorf("%w: %q must be a bare host name, no scheme or path", ErrOperatorHostInvalid, h)
-	case strings.Contains(h, ":") || strings.Contains(h, "["):
-		return "", fmt.Errorf("%w: %q must not carry a port (or be an IPv6 literal)", ErrOperatorHostInvalid, h)
-	case h != strings.ToLower(h):
-		return "", fmt.Errorf("%w: %q must be lower-case — the edge compares Host lower-cased", ErrOperatorHostInvalid, h)
-	case strings.HasSuffix(h, "."):
-		return "", fmt.Errorf("%w: %q must not end with a dot", ErrOperatorHostInvalid, h)
-	case net.ParseIP(h) != nil:
-		// A host-only cookie on an IP is a cookie for whatever else answers on that address, and
-		// TLS for the area needs a name.
-		return "", fmt.Errorf("%w: %q is an IP address, the operator area needs a host name", ErrOperatorHostInvalid, h)
-	case len(h) > 253:
-		return "", fmt.Errorf("%w: longer than 253 characters", ErrOperatorHostInvalid)
-	}
-	labels := strings.Split(h, ".")
-	if len(labels) < 2 {
-		return "", fmt.Errorf("%w: %q is not a fully qualified host name", ErrOperatorHostInvalid, h)
-	}
-	for _, l := range labels {
-		if !validHostLabel(l) {
-			return "", fmt.Errorf("%w: %q has an invalid label %q (letters a-z, digits, '-', 1-63 characters, "+
-				"not starting or ending with '-')", ErrOperatorHostInvalid, h, l)
-		}
+	if err := checkBareHost(h, ErrOperatorHostInvalid); err != nil {
+		return "", err
 	}
 	if slices.Contains(platformWebRoots, h) {
 		return "", fmt.Errorf("%w: %q is the platform's root domain, not the operator console", ErrOperatorHostInvalid, h)
@@ -125,6 +102,39 @@ func parseOperatorHost(raw, trimmed string) (string, error) {
 		}
 	}
 	return h, nil
+}
+
+// checkBareHost is the shape every host-name variable of this package shares (OPERATOR_HOST,
+// ZALO_BOT_WEBHOOK_HOST): a fully qualified, lower-case DNS name with no scheme, path, port, trailing
+// dot or IP literal. Refused, never repaired (see parseOperatorHost). errInvalid names the variable.
+func checkBareHost(h string, errInvalid error) error {
+	switch {
+	case strings.Contains(h, "://") || strings.Contains(h, "/"):
+		return fmt.Errorf("%w: %q must be a bare host name, no scheme or path", errInvalid, h)
+	case strings.Contains(h, ":") || strings.Contains(h, "["):
+		return fmt.Errorf("%w: %q must not carry a port (or be an IPv6 literal)", errInvalid, h)
+	case h != strings.ToLower(h):
+		return fmt.Errorf("%w: %q must be lower-case — hosts are compared lower-cased", errInvalid, h)
+	case strings.HasSuffix(h, "."):
+		return fmt.Errorf("%w: %q must not end with a dot", errInvalid, h)
+	case net.ParseIP(h) != nil:
+		// A host-only cookie on an IP is a cookie for whatever else answers on that address, and TLS
+		// needs a name.
+		return fmt.Errorf("%w: %q is an IP address, a host name is required", errInvalid, h)
+	case len(h) > 253:
+		return fmt.Errorf("%w: longer than 253 characters", errInvalid)
+	}
+	labels := strings.Split(h, ".")
+	if len(labels) < 2 {
+		return fmt.Errorf("%w: %q is not a fully qualified host name", errInvalid, h)
+	}
+	for _, l := range labels {
+		if !validHostLabel(l) {
+			return fmt.Errorf("%w: %q has an invalid label %q (letters a-z, digits, '-', 1-63 characters, "+
+				"not starting or ending with '-')", errInvalid, h, l)
+		}
+	}
+	return nil
 }
 
 func validHostLabel(l string) bool {

@@ -171,6 +171,13 @@ func (c Config) OperatorTOTPEncryptionKeys() []secret.Secret {
 	return c.operatorTOTPEncryptionKeys
 }
 
+// ZaloBotWebhookHost is ZALO_BOT_WEBHOOK_HOST, validated — the bare host comms builds the shared
+// Zalo Bot's webhook URL from. "" only in dev (required in staging/prod).
+func (c Config) ZaloBotWebhookHost() string {
+	c.require("ZaloBotWebhookHost", ZaloBotWebhook)
+	return c.zaloBotWebhookHost
+}
+
 // RabbitMQDSN is RABBITMQ_DSN.
 func (c Config) RabbitMQDSN() secret.DSN {
 	c.require("RabbitMQDSN", RabbitMQ)
@@ -241,6 +248,7 @@ type configView struct {
 	OperatorHost                   string
 	OperatorGRPCListenAddr         string
 	IdentityOperatorGRPCAddr       string
+	ZaloBotWebhookHost             string
 	RabbitMQDSN                    secret.DSN
 	RabbitMQExchange               string
 	ElasticsearchAddrs             []string
@@ -284,6 +292,7 @@ func (c Config) view() configView {
 		OperatorHost:                   c.operatorHost,
 		OperatorGRPCListenAddr:         c.operatorGRPCListenAddr,
 		IdentityOperatorGRPCAddr:       c.identityOperatorGRPCAddr,
+		ZaloBotWebhookHost:             c.zaloBotWebhookHost,
 		RabbitMQDSN:                    c.rabbitMQDSN,
 		RabbitMQExchange:               c.rabbitMQExchange,
 		ElasticsearchAddrs:             c.elasticsearchAddrs,
