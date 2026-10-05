@@ -86,7 +86,7 @@ Trước khi làm một dòng có phần backend: đọc mục tương ứng tro
 
 **Luật trình bày cho MỌI mục M còn lại (từ 05/10/2026): prototype = KHUNG, CSS = mẫu UI mới.** Lấy
 từ prototype thứ tự, vị trí, số cột; màu, phông, cỡ, control lấy theo ADR 0068 §*Sửa đổi 05/10/2026
-(lần 2)* (header navy với nút module chỉ icon thay sidebar chữ, Roboto 15px, control 36px…). Bản đo
+(lần 2)* (Roboto 15px, control 36px…; điều hướng thì theo lần 4 — thanh dọc bên trái như prototype). Bản đo
 nhóm M làm **trước** thay đổi ấy, nên mọi chỗ nó tả hình dáng prototype chỉ còn đúng về khung. Câu
 gốc của chủ dự án và phạm vi: ADR 0068 §*Sửa đổi 05/10/2026 (lần 3)*.
 
@@ -104,6 +104,7 @@ gốc của chủ dự án và phạm vi: ADR 0068 §*Sửa đổi 05/10/2026 (l
 | MA8 | Phản ánh — cảnh báo trùng + gộp (unaccent + pg_trgm); tab **Báo cáo** (đếm theo lĩnh vực/bộ phận/thôn); danh sách dạng **thẻ** có ảnh nhỏ/thôn/sao (prototype) thay bảng 9 cột; thiếu ô "Chỉ phiếu trễ hạn" | `chưa làm` | Trùng N3. Sao: chỉ hiện đánh giá của công dân — xem MD |
 | MA9 | Tổng quan — khối **Giải ngân** và **Kinh tế & Tài nguyên** | `chưa làm` | ~~Bố cục giữ theo MD~~ **05/10/2026:** bố cục nay theo khung prototype — xem MA11 |
 | MA11 | Tổng quan — **bố cục** theo khung `DashboardWorkspace.tsx`: header + kỳ + PDF/XLSX/PPTX + Trình chiếu; một lưới 1/2/3 cột, sáu khối bằng nhau + ô "Cần xử lý ngay" | `ĐANG LÀM` | Thêm 05/10/2026: dòng "Bố cục Tổng quan" **rời khỏi MD** vì chủ dự án chốt theo khung prototype. Phạm vi và những gì giữ: ADR 0068 §*Sửa đổi 05/10/2026 (lần 3)*. Thẻ việc TASK-P2 |
+| MA12 | Khung chung — điều hướng module lại theo **thanh dọc bên trái** của prototype (`AppSidebar.tsx`: icon + chữ, chia nhóm, mục đang mở nổi bật, thu gọn được); header navy chỉ còn tên xã, chuông, menu người dùng | `ĐANG LÀM` | Thêm 05/10/2026: thay header chỉ icon của commit `b6a1eb12`. Phạm vi: ADR 0068 §*Sửa đổi 05/10/2026 (lần 4)*. Thẻ việc TASK-P3 |
 | MA10 | Việc nhỏ: nhãn menu "Thông báo nội bộ"; dòng "Quên mật khẩu, liên hệ Văn phòng UBND…" ở đăng nhập; menu tài khoản + `/ca-nhan`; % tiến độ nhiệm vụ; "Giao việc mới" và soạn thông báo dạng **hộp thoại** thay vì tại chỗ; hộp thoại "Tách thành nhiệm vụ" gọn (4 ô); duyệt/từ chối lùi hạn **trong ngăn** nhiệm vụ; Danh bạ: cờ "Có Zalo" + 2 thẻ đếm | `chưa làm` | Tách thành dòng con khi bắt tay làm |
 
 ### MB — Lượt 2: menu prototype đổi SAU 16/09 (`docs/ui-ux` vẫn tả hình cũ)

@@ -3,12 +3,12 @@ id: 0068-web-admin-ui-redesign
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: 2d9af536
+derived_from_commit: 66f78014
 expires: null
 owns_facts:
   - "làm mới giao diện web-admin chỉ đổi phần trình bày: không đổi đường dẫn, lời gọi API, state, logic lọc/phân trang/phân quyền, tên trường, name/id ô nhập, handler, thứ tự bước nghiệp vụ; không thêm tính năng 'cho hiện đại' (chốt 02/10/2026) — NGOẠI LỆ DUY NHẤT 05/10/2026: URL theo hộp chi tiết lớn (?task=<mã>)"
   - "nền tảng giao diện web-admin là Tailwind CSS v4 + shadcn/ui, icon lucide-react, phông tự phục vụ qua @fontsource (không gọi Google lúc build hay lúc chạy); đỏ/vàng chỉ làm điểm nhấn nhận diện; token chế độ tối chuẩn bị sẵn nhưng chưa bật (màu chính #1565C0 và phông Be Vietnam Pro đã bị thay — xem §Sửa đổi 05/10/2026 (lần 2))"
-  - "ngôn ngữ hình ảnh web-admin từ 05/10/2026 (lần 2) theo bản quy chuẩn OMICALL CRM (§1–§11 của bản ấy) trừ 4 điều chỉnh chữ cho WCAG AA và 2 điểm loại trừ: navy #1E3150 cho chữ/icon/header/tab đang chọn; accent #00B1FF chỉ làm nền hover/trạng thái chọn/mảng tô, KHÔNG làm chữ; vòng focus dùng accent ĐẬM đạt ≥3:1 (#00B1FF chỉ 2.40:1, WCAG 1.4.11); nút chính xanh lá chữ trắng #1d853c (#56CC6E chỉ làm nền nhạt/viền); đỏ #FF5955, cam #FEA220; nền ngoài #D1D1D1, app #F5F6FA, thẻ #FFFFFF, nền phụ navy 5%/10%; bóng nhuộm navy, thẻ trên nền app không bóng; Roboto 15px, phân cấp bằng độ đậm 400/500/600, chú thích 12px; bo góc 6/8/12/16/32/50%; control cao 36px; header navy 68px dính trên cùng với nút module chỉ icon + tooltip THAY sidebar chữ; thanh lọc 48px nền navy 5%; dòng bảng 64px không kẻ sọc; áp một lần cho toàn web-admin, không theo xã (thay bảng màu #102b43/#2fb1f9 của §Sửa đổi 05/10/2026)"
+  - "ngôn ngữ hình ảnh web-admin từ 05/10/2026 (lần 2) theo bản quy chuẩn OMICALL CRM (§1–§11 của bản ấy) trừ 4 điều chỉnh chữ cho WCAG AA và 2 điểm loại trừ: navy #1E3150 cho chữ/icon/header/tab đang chọn; accent #00B1FF chỉ làm nền hover/trạng thái chọn/mảng tô, KHÔNG làm chữ; vòng focus dùng accent ĐẬM đạt ≥3:1 (#00B1FF chỉ 2.40:1, WCAG 1.4.11); nút chính xanh lá chữ trắng #1d853c (#56CC6E chỉ làm nền nhạt/viền); đỏ #FF5955, cam #FEA220; nền ngoài #D1D1D1, app #F5F6FA, thẻ #FFFFFF, nền phụ navy 5%/10%; bóng nhuộm navy, thẻ trên nền app không bóng; Roboto 15px, phân cấp bằng độ đậm 400/500/600, chú thích 12px; bo góc 6/8/12/16/32/50%; control cao 36px; header navy 68px dính trên cùng (điều hướng module KHÔNG còn ở header — xem §Sửa đổi 05/10/2026 (lần 4)); thanh lọc 48px nền navy 5%; dòng bảng 64px không kẻ sọc; áp một lần cho toàn web-admin, không theo xã (thay bảng màu #102b43/#2fb1f9 của §Sửa đổi 05/10/2026)"
   - "chữ mờ web-admin = navy ở độ mờ ≈0.72 (≥4.5:1); độ mờ 0.5 CHỈ cho trạng thái vô hiệu; chữ liên kết #0369a1; huy hiệu thông báo đỏ #D93A36 chữ trắng ≥11px (chốt 05/10/2026 lần 2)"
   - "web-admin không có nút nổi (FAB) chat/gọi; không có tên hay logo OMICALL/ViHAT trên màn cán bộ — chỉ mượn ngôn ngữ hình ảnh (chốt 05/10/2026 lần 2)"
   - "'sống động hơn' (chủ dự án 05/10/2026) = điểm nhấn màu + thẻ trắng bo góc trên nền xám nhạt + icon/ảnh đại diện + phản hồi khi tương tác; vẫn không blur/gradient/hình trang trí (§11 giữ)"
@@ -28,6 +28,7 @@ owns_facts:
   - "web-admin không hiện chữ 'ViGov' ở bất cứ chỗ nào cán bộ nhìn thấy; chỗ đứng tên sản phẩm thay bằng tên xã đang đăng nhập (đọc lúc chạy theo tên miền), câu 'hệ thống ViGov' thành 'hệ thống'; đăng nhập = tên xã + 'Hệ thống điều hành số', tab mặc định 'Hệ thống điều hành số cấp xã', tab màn '<Màn> · <tên xã>'; định danh mã, chú thích, tên gói, tên biến môi trường và tên miền vigov.vn giữ nguyên; issuer TOTP 'ViGov' của tài khoản vận hành nhà cung cấp giữ nguyên vì cán bộ xã không thấy (chốt 02/10/2026)"
   - "phần đặc tả màn web-admin chưa dựng hiện đúng vị trí đặc tả dưới dạng control nó sẽ là, bị vô hiệu, mang dấu '?': di chuột hiện 'Tính năng đang phát triển', bấm mở mô tả; không gọi máy chủ, không lưu gì; việc chủ dự án quyết không làm thì không có chỗ giữ, mục ROADMAP_PHASE2 thì có (mô tả ghi giai đoạn 2); khối gập 'phần chưa dựng' cuối màn bị bỏ; bảng vị trí từng màn chủ dự án đã duyệt, kèm bảng điều chỉnh khi dựng thắng dòng tương ứng — Điểm hài lòng Tổng quan dựng số thật, không còn là chỗ giữ (chốt 02/10/2026)"
   - "bố cục màn Tổng quan web-admin từ 05/10/2026 (lần 3) theo KHUNG prototype DashboardWorkspace.tsx: header 'Tổng quan điều hành' + dòng kỳ + nút kỳ bên phải, PDF/XLSX/PPTX, Trình chiếu; MỘT lưới 1/2/3 cột gồm sáu khối bằng nhau (Nhiệm vụ · Sổ đơn thư · Giải ngân · Thu – chi · Phản ánh · Kinh tế & Tài nguyên) + ô thứ bảy 'Cần xử lý ngay' cuộn trong ô; thay bố cục 3 hàng của đặc tả v2 (02/10) RIÊNG cho Tổng quan; chi tiết hình ảnh theo §Sửa đổi 05/10/2026 (lần 2), không theo CSS prototype"
+  - "điều hướng module web-admin từ 05/10/2026 (lần 4) là THANH DỌC BÊN TRÁI theo khung prototype AppSidebar.tsx: icon + chữ, chia nhóm, mục đang mở nổi bật, thu gọn được về dải chỉ icon (tooltip); thay header navy với nút module chỉ icon của lần 2 #6; header navy giữ tên xã, chuông, menu người dùng; dưới 768px giữ ngăn điều hướng có chữ; hình ảnh vẫn theo lần 2"
   - "sau đợt 2 giữ nguyên: thanh lọc Phản ánh hiện sẵn Tìm + Phạm vi + Trạng thái; nút thanh soạn thảo Nội dung 36px; 'Thông báo' ở nhóm Công việc của menu; câu 'Ngừng dùng <tên>?' và 'Xác nhận khôi phục câu mặc định' (chốt 02/10/2026)"
 ---
 
@@ -35,9 +36,10 @@ owns_facts:
 
 **Trạng thái:** đã chốt · **Sửa đổi 05/10/2026** (hộp chi tiết lớn, URL theo hộp — §*Sửa đổi
 05/10/2026*; bảng màu của sửa đổi ấy đã bị thay) · **Sửa đổi 05/10/2026 (lần 2)** (ngôn ngữ thiết kế
-OMICALL CRM: màu, phông Roboto, bo góc, header navy chỉ icon thay sidebar — §*Sửa đổi 05/10/2026 (lần
-2)*) · **Sửa đổi 05/10/2026 (lần 3)** (Tổng quan theo khung prototype — §*Sửa đổi 05/10/2026 (lần
-3)*) · **Ngày:** 2026-10-02 · **Người quyết:** chủ dự án, 02/10/2026 · **Thay**
+OMICALL CRM: màu, phông Roboto, bo góc — §*Sửa đổi 05/10/2026 (lần 2)*; điểm header chỉ icon thay
+sidebar của lần ấy đã bị thay) · **Sửa đổi 05/10/2026 (lần 3)** (Tổng quan theo khung prototype —
+§*Sửa đổi 05/10/2026 (lần 3)*) · **Sửa đổi 05/10/2026 (lần 4)** (điều hướng về thanh dọc bên trái —
+§*Sửa đổi 05/10/2026 (lần 4)*) · **Ngày:** 2026-10-02 · **Người quyết:** chủ dự án, 02/10/2026 · **Thay**
 `docs/ui-ux/15-phu-luc-giao-dien-chung.md` về **hình thức** (không thay về hành vi, xem §8)
 
 ## Bối cảnh
@@ -420,7 +422,7 @@ lần cho toàn web-admin**, không theo xã (ADR 0069 chỉ cho xã đổi logo
 | 3 | Chữ | **Roboto**, tự phục vụ qua `@fontsource` (cách tự phục vụ của §2 giữ), **thay Be Vietnam Pro**. Cỡ gốc **15px**; phân cấp bằng độ đậm 400 / 500 / 600, không bằng cỡ; chú thích 12px |
 | 4 | Bo góc · bóng | Bo góc 6 / 8 / 12 / 16 / 32 px / 50%. Bóng nhuộm navy theo §5 bản quy chuẩn (`0 4px 16px` ở alpha `.16` / `.20` / `.32` cho popover / thẻ nổi / header). Thẻ trên nền app **không bóng** |
 | 5 | Kích thước | Control cao **36px** — **thay** 40px của §Bối cảnh và §12 (quy tắc căn hàng của §12 giữ). Header navy **68px** dính trên cùng. Thanh lọc **48px** nền navy 5%. Dòng bảng **64px**, không kẻ sọc, hover nền accent `.04` + viền accent `.1` — **thay** dòng 48px của §11. Ô tìm dạng viên thuốc (bo 32px). Popover bo 12px, bóng `.16` |
-| 6 | Điều hướng | Header navy với **nút module chỉ icon + tooltip**, **thay** sidebar chữ (sidebar trắng của §8). Câu "thao tác quan trọng luôn có chữ" của §11 vẫn áp cho **thao tác**; nút module là điều hướng |
+| 6 | Điều hướng | **Đã bị thay bởi §*Sửa đổi 05/10/2026 (lần 4)* — đừng dựng theo dòng này.** Header navy với **nút module chỉ icon + tooltip**, **thay** sidebar chữ (sidebar trắng của §8). Câu "thao tác quan trọng luôn có chữ" của §11 vẫn áp cho **thao tác**; nút module là điều hướng |
 | 7 | 4 điều chỉnh cho WCAG AA | Yêu cầu AA của §Bối cảnh **giữ** — bảng dưới |
 | 8 | Loại trừ | (a) **Không** nút nổi (FAB) chat / gọi — web-admin không có tính năng ấy, và §1 / `ROADMAP_PHASE2.md` không cho thêm tính năng. (b) Trạng thái / tag **không bao giờ chỉ bằng màu** — icon + chữ giữ (§Bối cảnh) |
 | 9 | Không đổi | Vẫn **không** blur, gradient (§11). **Không** tên hay logo OMICALL / ViHAT trên màn cán bộ — chỉ mượn ngôn ngữ hình ảnh; chỗ đứng tên vẫn là tên xã (§13) |
@@ -444,7 +446,7 @@ nhấn **làm chữ**, nên chỉnh đúng bốn chỗ ấy và giữ nguyên ph
 chút, vượt ngưỡng.
 
 **Vì sao bỏ sidebar chữ:** chủ dự án chấp nhận header chỉ icon vì người dùng web-admin đa số là cán bộ
-trẻ; tooltip thay nhãn chữ.
+trẻ; tooltip thay nhãn chữ. *(Lý do lúc ấy; điểm #6 đã bị §Sửa đổi 05/10/2026 (lần 4) thay.)*
 
 ## Sửa đổi 05/10/2026 (lần 3) — Tổng quan theo khung prototype
 
@@ -469,3 +471,31 @@ Nguồn khung: `../vigov-require/apps/admin/src/components/reports/DashboardWork
 ngôn ngữ hình ảnh đã chốt ở lần 2. Lấy luôn CSS của prototype là quay lại bảng màu `#102b43` /
 `#2fb1f9` mà lần 2 đã thay. Lý do chọn một lưới thay ba hàng: chủ dự án **không nêu** ngoài việc theo
 prototype — đừng suy thêm.
+
+## Sửa đổi 05/10/2026 (lần 4) — điều hướng về thanh dọc bên trái
+
+Mục này ghi thêm, không sửa phần trên; mục này **thay** §*Sửa đổi 05/10/2026 (lần 2)* #6 (header navy
+với nút module chỉ icon thay sidebar chữ — đã dựng ở commit `b6a1eb12`). Mọi điểm khác của lần 2 **giữ**.
+**Người quyết:** chủ dự án, 05/10/2026, trong phiên chính. **Đang dựng** (thẻ việc TASK-P3).
+
+Lời chủ dự án, theo thứ tự: *"nó làm mất ô menu bên trái rồi, phải giữ ô menu đó lại chứ"*; rồi, khi
+được hỏi xử lý các nút icon trên header thế nào: *"Menu trái + giữ cả nút icon nhưng là nằm dọc bên
+trái thay vì nằm ngang phía trên, hãy xem prototype"*.
+
+Nguồn khung: `../vigov-require/apps/admin/src/components/layout/AppSidebar.tsx` (`vigov-require@0053854`).
+
+| # | Điểm | Chốt |
+|---|---|---|
+| 1 | Điều hướng module | **Thanh dọc bên trái** theo khung prototype: mỗi mục **icon + chữ**, **chia nhóm** có nhãn nhóm, mục đang mở **nổi bật** (`aria-current`, vạch đánh dấu), **thu gọn được** về dải chỉ icon có tooltip — prototype có (rộng `w-60` / thu gọn `w-16`, `AppSidebar.tsx:22-23`) |
+| 2 | Header navy | **Giữ**: tên xã (§7, §13), chuông thông báo, menu người dùng. Nút module **rời khỏi** header |
+| 3 | Dưới 768px | Ngăn điều hướng có chữ **giữ** như đã dựng ở `b6a1eb12` |
+| 4 | Hình ảnh | Màu, Roboto, cỡ, bo góc, control theo lần 2 — **"prototype = khung, CSS = mẫu UI mới"** (lần 3). **Không** lấy màu `bg-sidebar` của prototype |
+| 5 | Giữ nguyên | Cổng quyền của từng mục; mục chưa có màn mang dấu "?" (§14); không dùng component `sidebar` của shadcn (§4) |
+
+**Ghi chú khi dựng (#1, thu gọn):** prototype nhớ trạng thái thu gọn bằng `localStorage`
+(`SidebarState.tsx:24,70`), không bằng cookie — khác component `sidebar` của shadcn mà §4 đã loại vì ghi
+`document.cookie`. Trạng thái này là tuỳ chọn hiển thị, không phải dữ liệu cá nhân.
+
+**Vì sao đổi lại:** chủ dự án thấy header chỉ icon làm **mất ô menu bên trái** và muốn giữ nó; các nút
+icon không bỏ mà **xếp dọc** bên trái như prototype. Ngoài câu trên chủ dự án **không nêu** lý do — đừng
+suy thêm (chẳng hạn về tuổi người dùng, lý do của lần 2 #6).
