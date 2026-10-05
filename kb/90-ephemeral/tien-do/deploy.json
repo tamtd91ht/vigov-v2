@@ -211,7 +211,7 @@
       "trang_thai": "dang_lam",
       "bang_chung": "Đo 05/10/2026: POST https://identity.api.vigov.vn/api/v1/citizen-sessions với token giả trả 422 app_not_ready cho App ID 3043188591857102858 (y như App ID bịa) — màn 'Ứng dụng của xã chưa được kết nối' trong ảnh Zalo gửi. deploy/Jenkinsfile stage 'Đặt secret Mini App' (HANH_DONG=dat-secret-mini-app, MT=prod, XAC_NHAN=vigov-prod, TICKET, TENANT_ID/APP_ID mặc định Thăng Bình, APP_SECRET là tham số password có giá trị giữ chỗ — còn giữ chỗ thì dừng trước kubectl); secret đi qua Secret k8s tạm mount chỉ-đọc, trap xoá. operatorctl thêm --secret-file (chỉ mini-app-secret set) + TestMiniAppSecretFromFile. make check exit 0.",
       "no_confirm": [],
-      "tiep_theo": "Thứ tự trên Jenkins: (1) job service-identity (ảnh mới có --secret-file); (2) vigov-deploy doi-app-id-thang-binh nếu chưa chạy (lượt đầu sau đổi parameters dừng — bấm lại); (3) vigov-deploy dat-secret-mini-app, dán App Secret thật; (4) curl token giả phải ra 401, không còn 422; (5) nộp lại bản duyệt + ticket logo. Chưa chạy trên cụm.",
+      "tiep_theo": "Thứ tự trên Jenkins: (1) job service-identity (ảnh mới có --secret-file); (2) vigov-deploy doi-app-id-thang-binh nếu chưa chạy (lượt đầu sau đổi parameters dừng — bấm lại); (3) vigov-deploy dat-secret-mini-app, dán App Secret thật; (4) curl token giả phải ra 401, không còn 422; (5) nộp lại bản duyệt + ticket logo. ĐÃ CHẠY 05/10/2026 (người dùng báo); curl token giả nay trả 401 zalo_token_invalid (trước: 422) — App ID đã gắn xã, có cấu hình, secret mở được. CHƯA chứng minh secret ĐÚNG: Zalo từ chối token giả ở bước lấy account id, trước lượt đổi số dùng secret — chỉ một lượt gửi phản ánh trên máy thật mới chứng minh.",
       "menu": "phan-anh-nguoi-dan"
     },
     {
