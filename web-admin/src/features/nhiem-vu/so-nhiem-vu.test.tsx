@@ -2092,7 +2092,7 @@ describe("cổng nút theo khoá `task.*` — CA BỊ TỪ CHỐI, không chỉ 
       quyenNhiemVu([]),
     );
     expect(html).not.toContain("Chuyển sang");
-    expect(html).not.toContain("<h4>Chuyển trạng thái</h4>");
+    expect(html).not.toContain(">Chuyển trạng thái</h4>");
     expect(html).not.toContain('id="han-moi-lui-han"');
     expect(html).not.toContain('id="ly-do-xoa-nhiem-vu"');
     // ADR 0068: the button no longer shows the `✎ Sửa` glyph text, so absence is checked on the
@@ -2181,7 +2181,7 @@ describe("khối Chuyển trạng thái — người thực hiện, danh sách m
 
   it("ĐƯỢC — người thực hiện, KHÔNG có `task.update`: khối hiện, đúng các bước máy chủ liệt kê", () => {
     const html = veChiTiet({ status: "dang-thuc-hien" }, NGUOI_THUC_HIEN, { pha: "dangTai" }, KHONG_KHOA);
-    expect(html).toContain("<h4>Chuyển trạng thái</h4>");
+    expect(html).toContain(">Chuyển trạng thái</h4>");
     expect(html).toContain("Chuyển sang Chờ duyệt");
     expect(html).toContain("Chuyển sang Tạm dừng");
     // ĐỔI CHIỀU CÓ CHỦ Ý 30/09/2026 (ADR 0065 NV1): người thực hiện hoàn thành thẳng, không cần
@@ -2192,7 +2192,7 @@ describe("khối Chuyển trạng thái — người thực hiện, danh sách m
 
   it("BỊ TỪ CHỐI — người thực hiện ở `cho-duyet`, thiếu `task.approve`: không tự duyệt, không trả lại", () => {
     const html = veChiTiet({ status: "cho-duyet" }, NGUOI_THUC_HIEN, { pha: "dangTai" }, KHONG_KHOA);
-    expect(html).toContain("<h4>Chuyển trạng thái</h4>");
+    expect(html).toContain(">Chuyển trạng thái</h4>");
     expect(html).not.toContain("Chuyển sang Hoàn thành");
     expect(html).not.toContain('id="ly-do-tra-lai"');
     expect(html).not.toContain("Chuyển sang Đang thực hiện");
@@ -2202,7 +2202,7 @@ describe("khối Chuyển trạng thái — người thực hiện, danh sách m
   it("BỊ TỪ CHỐI — không phải người thực hiện, không `task.update`: không khối, kể cả có `task.approve`", () => {
     for (const q of [KHONG_KHOA, CHI_DUYET]) {
       const html = veChiTiet({ status: "dang-thuc-hien" }, NGUOI_KHAC, { pha: "dangTai" }, q);
-      expect(html).not.toContain("<h4>Chuyển trạng thái</h4>");
+      expect(html).not.toContain(">Chuyển trạng thái</h4>");
       expect(html).not.toContain("Chuyển sang");
       expect(html).not.toContain(nhuTrongHTML(CAU_THIEU_QUYEN_DUYET_HOAN_THANH));
     }
@@ -2210,7 +2210,7 @@ describe("khối Chuyển trạng thái — người thực hiện, danh sách m
 
   it("BỊ TỪ CHỐI — phiên chưa đọc (mã rỗng) trên việc CHƯA phân công: không khớp, không khối", () => {
     const html = veChiTiet({ status: "dang-thuc-hien", assignee: "" }, "", { pha: "dangTai" }, KHONG_KHOA);
-    expect(html).not.toContain("<h4>Chuyển trạng thái</h4>");
+    expect(html).not.toContain(">Chuyển trạng thái</h4>");
   });
 
   it("chỉ vẽ bước MÁY CHỦ liệt kê: danh sách rỗng ⇒ không nút nào, và câu nói vì sao", () => {
@@ -2320,23 +2320,35 @@ describe("NV-08 — tiến độ: ô vô hiệu kèm dấu \"?\", không còn `0
   });
 });
 
-describe("NV-09 — mọi lần mở chi tiết đều cuộn tới chi tiết (đọc mã: không có DOM)", () => {
+describe("NV-09 → hộp chi tiết lớn (ADR 0068 §Sửa đổi 05/10/2026): mọi lối mở đi qua MỘT lệnh, không còn cuộn", () => {
+  // ĐỔI CHIỀU CÓ CHỦ Ý 05/10/2026: these pinned the scroll-to-detail of NV-09. The detail is now a
+  // dialog over the list, so there is nothing to scroll to; what must still hold is that every way
+  // of opening dispatches the same `mo` — the dialog, its URL and its focus return all hang off it.
+  // The behaviour itself (click → dialog + one pushed entry, `?task=` → dialog, close → focus back)
+  // is exercised in a DOM in `task-detail-dialog.test.tsx`.
   const SRC = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
 
-  it("chỉ hai chỗ phát lệnh mở: hàm `openDrawer` (đặt cờ cuộn) và đường `?task=` (đặt cờ ngay trước)", () => {
+  it("chỉ hai chỗ phát lệnh mở: hàm `openDrawer` và đường `?task=` lúc tải", () => {
     expect(SRC).toContain(
-      'function openDrawer(n: petitions_nhiemVuRa) {\n    scrollToDrawer.current = n.code;\n    guiDrawer({ loai: "mo", nhiemVu: n });',
+      'function openDrawer(n: petitions_nhiemVuRa) {\n    guiDrawer({ loai: "mo", nhiemVu: n });\n  }',
     );
     expect(SRC).toContain(
-      'scrollToDrawer.current = kq.duLieu.code;\n      guiDrawer({ loai: "mo", nhiemVu: kq.duLieu });',
+      '      guiDrawer({ loai: "mo", nhiemVu: kq.duLieu });\n    });\n    return () => {\n      cancelled = true;',
     );
-    // Any THIRD dispatch is a way of opening that never scrolls — the bug this pins.
+    // A THIRD dispatch would be a way of opening that bypasses `openDrawer`.
     expect(SRC.split('guiDrawer({ loai: "mo"').length - 1).toBe(2);
+    // The scroll is gone with the in-page block — a leftover would jump the page under the dialog.
+    expect(SRC).not.toContain("scrollIntoView");
   });
 
-  it("dòng bảng, thẻ Kanban, Sổ theo dõi, hàng chờ và việc con đều đi qua `openDrawer`", () => {
+  it("dòng bảng, thẻ Kanban, Sổ theo dõi, việc con, hàng chờ, việc cha và Back/Forward đều qua `openDrawer`", () => {
     expect(SRC.split("openDrawer(n);").length - 1).toBe(4);
-    expect(SRC.split("openDrawer(kq.duLieu);").length - 1).toBe(2);
+    expect(SRC.split("openDrawer(kq.duLieu);").length - 1).toBe(3);
+  });
+
+  it("thanh địa chỉ theo MÃ ĐANG MỞ, ở một chỗ; chi tiết vẽ trong `LargeDialog`", () => {
+    expect(SRC.split("useTaskDialogUrl(maDrawer,").length - 1).toBe(1);
+    expect(SRC).toContain("<LargeDialog\n          titleId={TASK_DETAIL_TITLE_ID}");
   });
 });
 

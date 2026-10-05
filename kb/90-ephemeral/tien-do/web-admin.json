@@ -450,6 +450,15 @@
       "menu": "nhiem-vu"
     },
     {
+      "id": "hop-chi-tiet-nhiem-vu-05-10",
+      "viec": "Chi tiết nhiệm vụ mở dạng hộp lớn trên danh sách, bố cục mẫu sống động (ADR 0068 §Sửa đổi 05/10/2026) — mẫu đầu tiên của các view chi tiết",
+      "trang_thai": "dang_lam",
+      "bang_chung": "components/ui/large-dialog.tsx (dialog showModal, min(76rem,96vw) × 92vh, toàn màn dưới 768px, nền phủ navy phẳng, Esc/✕ trả tiêu điểm); features/nhiem-vu/task-dialog-url.ts (mở = push ?task= giữ bộ lọc + #hash, cha/con = replace, đóng = back nếu đã push, popstate mở/đóng; bộ ghi lọc giữ ?task=); so-nhiem-vu.tsx: tab Xem chi tiết · Chỉnh sửa (task.update) · Xoá (task.delete, xoá mềm bắt lý do trong ConfirmDialog), 'Tạo bởi … · lúc', khối trạng thái (pill cyan nhạt + icon, chip bước không bấm được, aria-current), hai cột ≥1024px (trái thông tin nhãn-trên-giá-trị, hạn + quá hạn tính ra, avatar chữ tắt; phải Nhật ký & Trao đổi), cột icon thao tác phụ có tooltip (Sao chép liên kết, Mở biên bản nguồn, Xem văn bản chỉ đạo, Đính kèm). Mọi handler/cổng quyền/API giữ nguyên; bỏ tự cuộn NV-09. task-detail-dialog.test.tsx 18 ca. tsc sạch, vitest 215 tệp 3875/3875, next build xanh (05/10).",
+      "no_confirm": [],
+      "tiep_theo": "Chủ dự án xem trên trình duyệt và duyệt mẫu. Chưa có đường 'hành trình chuyển trạng thái' riêng trong khối trạng thái (cột nhật ký thay vai). Sau duyệt: đơn thư, phản ánh theo cùng LargeDialog; tab nhiều hồ sơ để sau. Hook data_safety_guard bắt nhầm URLSearchParams.delete trong tệp có chữ 'task' — báo người dùng.",
+      "menu": "nhiem-vu"
+    },
+    {
       "id": "giao-dien-nhiem-vu-w1-s3",
       "viec": "Nâng cấp giao diện Web Admin đợt 1 — màn Nhiệm vụ (/nhiem-vu, W1-S3) theo đặc tả v2 §8.3 + §8b. Chỉ trình bày — không đổi route, API, state, bộ lọc, phân trang, quyền, luồng Kanban/danh sách, tên trường",
       "trang_thai": "dang_lam",

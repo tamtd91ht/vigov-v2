@@ -340,7 +340,9 @@ describe("không chỗ vẽ nào còn đọc nhãn mặc định khi xã đã đ
     // Ca "dải bước" ở trên chỉ nhìn `Chuyển sang Tạm hoãn` — chữ của NÚT. Hàng `Rẽ nhánh:` là chỗ
     // vẽ thứ hai của cùng mã ấy, và trước ca này nó có thể đọc bảng mặc định mà không gì đỏ.
     const html = veChiTiet(bangXa(), "tam-dung");
-    expect(html).toContain('class="chip chip-hoat-dong">Tạm hoãn</span>');
+    // Presentation pin (ADR 0068 §5): the lit chip is `data-step="current"` since the dialog of
+    // 05/10/2026, no longer the legacy `chip-hoat-dong` class.
+    expect(html).toContain('data-step="current">Tạm hoãn</span>');
     expect(html).not.toContain(">Tạm dừng<");
   });
 
@@ -348,7 +350,7 @@ describe("không chỗ vẽ nào còn đọc nhãn mặc định khi xã đã đ
     it(`drawer ở trạng thái ${ma}: dải bước, hàng Rẽ nhánh, nút chuyển — không một nhãn mặc định`, () => {
       const html = veChiTiet(bangDoiHet(), ma);
       expect(chuMacDinhLot(html)).toEqual([]);
-      expect(html).toContain(`class="chip chip-hoat-dong">Xã đặt ${ma}</span>`);
+      expect(html).toContain(`data-step="current">Xã đặt ${ma}</span>`);
     });
   }
 

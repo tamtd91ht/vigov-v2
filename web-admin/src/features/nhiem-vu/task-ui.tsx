@@ -37,6 +37,11 @@ const STATUS_LOOK: Readonly<Record<string, { tone: BadgeTone; icon: LucideIcon }
   "chuyen-tiep": { tone: "neutral", icon: Forward },
 };
 
+/** The icon of a status CODE — the detail dialog's large status pill uses the same map as the list. */
+export function taskStatusIcon(status: string): LucideIcon {
+  return STATUS_LOOK[status]?.icon ?? CircleDot;
+}
+
 /** Status pill for the list table. `label` is the commune's label for `status`, passed verbatim. */
 export function TaskStatusBadge({ status, children }: { status: string; children: ReactNode }) {
   const look = STATUS_LOOK[status];

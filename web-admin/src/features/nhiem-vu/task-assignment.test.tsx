@@ -276,7 +276,7 @@ describe("the drawer — block present / absent, and the stepper's `Chuyển ti�
       task({ status: "chuyen-tiep", allowed_transitions: ["da-tiep-nhan", "dang-thuc-hien"] }),
       quyenNhiemVu([...ALL_WRITE_KEYS, TASK_ASSIGN_PERMISSION]),
     );
-    expect(html).toContain('<span class="chip chip-hoat-dong">Chuyển tiếp</span>');
+    expect(html).toMatch(/data-step="current">Chuyển tiếp<\/span>/);
     expect(html).toContain(BLOCK_MARK);
     expect(html).toContain("Chuyển sang Đã tiếp nhận");
     expect(html).toContain("Chuyển sang Đang thực hiện");
@@ -291,8 +291,8 @@ describe("the drawer — block present / absent, and the stepper's `Chuyển ti�
     );
     expect(html).toMatch(
       new RegExp(
-        `<button type="button" class="nut-phu" aria-controls="${ASSIGNMENT_UNIT_FIELD_ID}"[^>]*>` +
-          '<span class="chip chip-ngung">Chuyển tiếp</span></button>',
+        `<button type="button" class="[^"]*" aria-controls="${ASSIGNMENT_UNIT_FIELD_ID}"[^>]*>` +
+          '<span class="[^"]*" data-step="branch">Chuyển tiếp</span></button>',
       ),
     );
     // And the status block no longer offers it as a move.
