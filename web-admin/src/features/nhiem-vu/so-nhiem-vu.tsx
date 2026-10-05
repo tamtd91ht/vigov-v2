@@ -40,8 +40,10 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  type Dispatch,
   type FormEvent,
   type ReactNode,
+  type SetStateAction,
 } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
@@ -54,6 +56,7 @@ import { Field } from "@/components/ui/field";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { IconButton } from "@/components/ui/icon-button";
 import { PageHeader } from "@/components/ui/page-header";
+import { PendingFeature } from "@/components/ui/pending-feature";
 import { Tab, TabList } from "@/components/ui/tabs";
 import { cn } from "@/lib/cn";
 import { duongDanBienBan } from "@/features/bien-ban/nhan-bien-ban";
@@ -114,7 +117,7 @@ import type {
 
 import {
   ADD_CHILD_BUTTON,
-  CANH_BAO_HAN_MOT_LAN,
+  cardHolderText,
   CAU_KHONG_AI_CO_QUYEN_DUYET_GIA_HAN,
   CAU_LOC_TRANG_THAI_KHONG_CO_COT,
   CAU_THIEU_QUYEN_DUYET_HOAN_THANH,
@@ -200,10 +203,17 @@ import {
   defaultDueTime,
   defaultNewTaskDue,
   NEW_TASK_DUE_PREFILLED_NOTE,
+  NEW_TASK_DUE_LATER_NOTE,
   newTaskDueProblem,
+  DUE_EDIT_BUTTON,
   DUE_EDIT_NOTE,
+  DUE_SET_BUTTON,
   dueTimeHint,
+  EXTENSION_NO_DUE,
   TASK_CHANGED_NOTE,
+  TASK_PROGRESS_PENDING,
+  TASK_TYPE_MISSING,
+  TASK_TYPE_PLACEHOLDER,
   type CalendarLoad,
   canWriteLogEntry,
   clickableTransitions,
@@ -810,6 +820,7 @@ export function SoNhiemVu({
         setOpenTaskError(kq.thongBao);
         return;
       }
+      // Inline rather than `openDrawer`: a component function in this effect would be a dependency.
       scrollToDrawer.current = kq.duLieu.code;
       guiDrawer({ loai: "mo", nhiemVu: kq.duLieu });
     });
@@ -817,7 +828,16 @@ export function SoNhiemVu({
       cancelled = true;
     };
   }, [openTask]);
-  // The detail renders BELOW the list; arriving by link, the clerk must not have to look for it.
+  /**
+   * How every click opens the drawer. The detail renders BELOW the list, so every opening — a row,
+   * a card, the queue, a child task, and the `?task=` link above — asks to be scrolled to (report 05/10/2026, NV-09: "Mở
+   * NV01" seemed to do nothing because the detail opened off-screen at the foot of the page).
+   */
+  function openDrawer(n: petitions_nhiemVuRa) {
+    scrollToDrawer.current = n.code;
+    guiDrawer({ loai: "mo", nhiemVu: n });
+  }
+  // Scroll once the drawer shows the requested code.
   useEffect(() => {
     if (scrollToDrawer.current === null || maDrawer !== scrollToDrawer.current) return;
     scrollToDrawer.current = null;
@@ -992,7 +1012,7 @@ export function SoNhiemVu({
       bayGio={new Date()}
       maDangMo={maDrawer}
       moNhiemVu={(n) => {
-        guiDrawer({ loai: "mo", nhiemVu: n });
+        openDrawer(n);
         datLoiGhi(null);
       }}
       sapXep={sapXepDayDu(loc)}
@@ -1122,7 +1142,7 @@ export function SoNhiemVu({
         moNhiemVu={(ma) =>
           layNhiemVu(ma).then((kq) => {
             if (kq.ok) {
-              guiDrawer({ loai: "mo", nhiemVu: kq.duLieu });
+              openDrawer(kq.duLieu);
               datLoiGhi(null);
             }
             return kq;
@@ -1216,11 +1236,12 @@ export function SoNhiemVu({
           cot={cotKanban}
           danhMuc={danhMuc}
           danhBa={danhBaMa}
+          unitNames={tenBoPhan}
           nhanTT={nhanTT}
           bayGio={new Date()}
           maDangMo={maDrawer}
           moNhiemVu={(n) => {
-            guiDrawer({ loai: "mo", nhiemVu: n });
+            openDrawer(n);
             datLoiGhi(null);
           }}
           counts={taiTu(countsLoaded, khoaKanban)}
@@ -1318,7 +1339,7 @@ export function SoNhiemVu({
           bayGio={new Date()}
           maDangMo={maDrawer}
           moNhiemVu={(n) => {
-            guiDrawer({ loai: "mo", nhiemVu: n });
+            openDrawer(n);
             datLoiGhi(null);
           }}
           selection={taskSelection}
@@ -1420,13 +1441,13 @@ export function SoNhiemVu({
             datLanHangCho((n) => n + 1);
           }}
           openTask={(n) => {
-            guiDrawer({ loai: "mo", nhiemVu: n });
+            openDrawer(n);
             datLoiGhi(null);
           }}
           openTaskByCode={(ma) =>
             layNhiemVu(ma).then((kq) => {
               if (kq.ok) {
-                guiDrawer({ loai: "mo", nhiemVu: kq.duLieu });
+                openDrawer(kq.duLieu);
                 datLoiGhi(null);
               }
               return kq;
@@ -1966,10 +1987,14 @@ export type CotKanban = {
  * `task.delete` — `selection`, mặc định `null` = không ô tick. Trước đó: "không có tuyến nào"; nay
  * nút gom gọi từng tuyến xoá một (require a037b76).
  */
+/** Default of `unitNames`: no catalogue yet — a card with no assignee then shows the unit id. */
+const NO_UNIT_NAMES: ReadonlyMap<string, string> = new Map();
+
 export function BangKanban({
   cot,
   danhMuc,
   danhBa = null,
+  unitNames = NO_UNIT_NAMES,
   nhanTT,
   bayGio,
   maDangMo,
@@ -1982,6 +2007,8 @@ export function BangKanban({
   danhMuc: DanhMucNhiemVu;
   /** Danh bạ tra theo mã — họ tên người thực hiện trên thẻ. `null` = chưa có, thẻ hiện mã. */
   danhBa?: DanhBaTheoMa | null;
+  /** Unit names by id — a card with no assignee names the unit holding it (`cardHolderText`). */
+  unitNames?: ReadonlyMap<string, string>;
   /**
    * `GET /api/v1/task-counts` under the board's filters — the header numbers (#15). REQUIRED: a
    * caller that forgets it gets a red `tsc`, not headers that silently fall back to card counts.
@@ -2127,6 +2154,7 @@ export function BangKanban({
                         nhiemVu={n}
                         danhMuc={danhMuc}
                         danhBa={danhBa}
+                        unitNames={unitNames}
                         nhanTT={nhanTT}
                         bayGio={bayGio}
                         maDangMo={maDangMo}
@@ -2312,6 +2340,7 @@ export function TheNhiemVu({
   nhiemVu,
   danhMuc,
   danhBa = null,
+  unitNames = NO_UNIT_NAMES,
   nhanTT,
   bayGio,
   maDangMo,
@@ -2325,6 +2354,8 @@ export function TheNhiemVu({
   danhMuc: DanhMucNhiemVu;
   /** Xem `BangKanban`. Mã không có trong danh bạ thì hiện MÃ, không bao giờ để trống. */
   danhBa?: DanhBaTheoMa | null;
+  /** See `BangKanban`. */
+  unitNames?: ReadonlyMap<string, string>;
   nhanTT: BangNhanTrangThai;
   bayGio: Date;
   maDangMo: string | null;
@@ -2390,7 +2421,7 @@ export function TheNhiemVu({
         {nhanHanThe(nhiemVu.due_at, bayGio)}
       </p>
       <p className="dong-phu">
-        {nhanCanBoNgan(nhiemVu.assignee, danhBa, CHUA_PHAN_CONG)} ·{" "}
+        {cardHolderText(nhiemVu, danhBa, unitNames)} ·{" "}
         {nhanDanhMuc(danhMuc.mucUuTien, nhiemVu.priority)}
       </p>
       {childCountLabel(nhiemVu.child_count) !== null && (
@@ -2878,8 +2909,24 @@ export function ChiTietNhiemVu({
         </dd>
 
         <dt>Mức ưu tiên</dt>
+        <dd>{nhanDanhMuc(danhMuc.mucUuTien, nhiemVu.priority)}</dd>
+
+        {/* ADR 0068 §14: no form edits `progress` yet, so the stored figure sits in a DISABLED field
+            with a "?" — a bare `0% tiến độ ghi nhận` read as measured (report 05/10/2026, NV-08). */}
+        <dt>
+          <label htmlFor="chi-tiet-tien-do">Tiến độ</label>
+        </dt>
         <dd>
-          {nhanDanhMuc(danhMuc.mucUuTien, nhiemVu.priority)} · {nhiemVu.progress}% tiến độ ghi nhận
+          <PendingFeature info={TASK_PROGRESS_PENDING}>
+            <input
+              id="chi-tiet-tien-do"
+              type="text"
+              disabled
+              readOnly
+              value={`${nhiemVu.progress}%`}
+              size={6}
+            />
+          </PendingFeature>
         </dd>
 
         <dt>Loại nhiệm vụ</dt>
@@ -2920,6 +2967,18 @@ export function ChiTietNhiemVu({
         <dd>{nhiemVu.superior_acknowledged ? "Đã đánh dấu" : "Chưa đánh dấu"}</dd>
       </dl>
       <p className="ghi-chu">{CHU_THICH_HAI_O_TICK}</p>
+
+      {/* ADR 0065 NV4 — the deadline is editable on EVERY type. `Theo văn bản` edits it inside the
+          document block's `✎ Sửa` below; every other type gets this block, behind the same key
+          (`task.update`). Hiding it is UX only — the PATCH route checks the key itself. */}
+      {!coKhoiVanBanChiDao(nhiemVu.type) && quyen.capNhat && (
+        <DueEditBlock
+          key={`han-${nhiemVu.code}`}
+          nhiemVu={nhiemVu}
+          save={suaKhoiVanBan}
+          reread={docLaiChiTiet}
+        />
+      )}
 
       {/* §5.4 — CHỈ với loại `Theo văn bản`. Rẽ nhánh trên MÃ, không trên nhãn: xem
           `LOAI_THEO_VAN_BAN`. */}
@@ -3366,29 +3425,7 @@ export function FormSuaKhoiVanBan({
   const [dangLuu, datDangLuu] = useState(false);
   const [loi, datLoi] = useState<string | null>(null);
   const [staleNote, setStaleNote] = useState(false);
-  // The commune's weekly calendar — read once per opening of the form, only for the default hour.
-  const [calendar, setCalendar] = useState<CalendarLoad>({ pha: "dangTai" });
-
-  useEffect(() => {
-    let dropped = false;
-    layLichLamViec().then((r) => {
-      if (dropped) return;
-      const cal: CalendarLoad = r.ok ? { pha: "xong", shifts: r.duLieu.items } : { pha: "loi" };
-      setCalendar(cal);
-      // A date chosen while the calendar was still loading gets its default now — only if the time
-      // is still empty, never over an hour the clerk typed.
-      if (cal.pha === "xong") {
-        datF((cu) =>
-          cu.dueDate !== "" && cu.dueTime === ""
-            ? { ...cu, dueTime: defaultDueTime(cal.shifts, cu.dueDate) }
-            : cu,
-        );
-      }
-    });
-    return () => {
-      dropped = true;
-    };
-  }, []);
+  const calendar = useDueCalendar(datF);
   const demKhoaVanBan = useRef(0);
   // Mở form thì tiêu điểm vào ô đầu tiên sửa được; sau đó là ô vừa thêm / nút thêm của nhóm vừa gỡ.
   const oCanTieuDiem = useRef<string | null>("sua-tieu-de");
@@ -3401,18 +3438,6 @@ export function FormSuaKhoiVanBan({
 
   const than = thanSuaNhiemVu(f, goc.nhiemVu, goc.vanBan);
   const chan = canhBaoSua(f, goc.nhiemVu);
-  const timeHint = dueTimeHint(calendar, f, goc.nhiemVu);
-
-  function changeDueDate(date: string) {
-    datF((cu) => ({
-      ...cu,
-      dueDate: date,
-      // Only an EMPTY time is filled: an hour already there (read from the task, or typed) stays.
-      dueTime:
-        cu.dueTime === "" && calendar.pha === "xong" ? defaultDueTime(calendar.shifts, date) : cu.dueTime,
-    }));
-  }
-
   function doi(sua: Partial<FormSuaNhiemVu>) {
     datF((cu) => ({ ...cu, ...sua }));
   }
@@ -3492,37 +3517,13 @@ export function FormSuaKhoiVanBan({
         />
       </div>
 
-      <fieldset className="o-nhap" aria-describedby="sua-han-ghi-chu">
-        <legend>Hạn xử lý</legend>
-        <label htmlFor="sua-han-ngay">Ngày</label>
-        <input
-          id="sua-han-ngay"
-          name="sua-han-ngay"
-          type="date"
-          value={f.dueDate}
-          onChange={(e) => changeDueDate(e.target.value)}
-        />
-        <label htmlFor="sua-han-gio">Giờ</label>
-        <input
-          id="sua-han-gio"
-          name="sua-han-gio"
-          type="time"
-          value={f.dueTime}
-          // Required as soon as a date is there: the server stores the instant as sent and defaults
-          // no hour (`nhiem_vu_ghi.go:220-221`).
-          required={f.dueDate !== ""}
-          aria-describedby={timeHint !== null ? "sua-han-gio-goi-y" : undefined}
-          onChange={(e) => doi({ dueTime: e.target.value })}
-        />
-        {timeHint !== null && (
-          <p id="sua-han-gio-goi-y" className="ghi-chu">
-            {timeHint}
-          </p>
-        )}
-        <p id="sua-han-ghi-chu" className="ghi-chu">
-          {DUE_EDIT_NOTE}
-        </p>
-      </fieldset>
+      <DueFieldset
+        f={f}
+        calendar={calendar}
+        goc={goc.nhiemVu}
+        changeDate={(date) => datF((cu) => withDueDate(cu, date, calendar))}
+        changeTime={(dueTime) => doi({ dueTime })}
+      />
 
       {MOI_NHOM_VAN_BAN.map((nhom) => (
         <NhomVanBanNhap
@@ -3613,6 +3614,235 @@ export function FormSuaKhoiVanBan({
 }
 
 /**
+ * The commune's weekly calendar for the deadline's default hour — read once per opening of a form
+ * that edits a deadline (`FormSuaKhoiVanBan`, `DueEditForm`). A date chosen while it was still
+ * loading gets its default once it arrives — only into an EMPTY time, never over a typed hour.
+ */
+function useDueCalendar(setForm: Dispatch<SetStateAction<FormSuaNhiemVu>>): CalendarLoad {
+  const [calendar, setCalendar] = useState<CalendarLoad>({ pha: "dangTai" });
+  useEffect(() => {
+    let dropped = false;
+    layLichLamViec().then((r) => {
+      if (dropped) return;
+      const cal: CalendarLoad = r.ok ? { pha: "xong", shifts: r.duLieu.items } : { pha: "loi" };
+      setCalendar(cal);
+      if (cal.pha === "xong") {
+        setForm((cu) =>
+          cu.dueDate !== "" && cu.dueTime === ""
+            ? { ...cu, dueTime: defaultDueTime(cal.shifts, cu.dueDate) }
+            : cu,
+        );
+      }
+    });
+    return () => {
+      dropped = true;
+    };
+  }, [setForm]);
+  return calendar;
+}
+
+/** A new deadline date. Only an EMPTY time is filled: an hour already there (read, or typed) stays. */
+function withDueDate(cu: FormSuaNhiemVu, date: string, calendar: CalendarLoad): FormSuaNhiemVu {
+  return {
+    ...cu,
+    dueDate: date,
+    dueTime:
+      cu.dueTime === "" && calendar.pha === "xong" ? defaultDueTime(calendar.shifts, date) : cu.dueTime,
+  };
+}
+
+/** The deadline's date + time fields with their notes — shared by both deadline editors. */
+function DueFieldset({
+  f,
+  calendar,
+  goc,
+  changeDate,
+  changeTime,
+}: {
+  f: FormSuaNhiemVu;
+  calendar: CalendarLoad;
+  /** The task as the form opened it — the time hint compares against it. */
+  goc: petitions_nhiemVuRa;
+  changeDate: (date: string) => void;
+  changeTime: (time: string) => void;
+}) {
+  const timeHint = dueTimeHint(calendar, f, goc);
+  return (
+    <fieldset className="o-nhap" aria-describedby="sua-han-ghi-chu">
+      <legend>Hạn xử lý</legend>
+      <label htmlFor="sua-han-ngay">Ngày</label>
+      <input
+        id="sua-han-ngay"
+        name="sua-han-ngay"
+        type="date"
+        value={f.dueDate}
+        onChange={(e) => changeDate(e.target.value)}
+      />
+      <label htmlFor="sua-han-gio">Giờ</label>
+      <input
+        id="sua-han-gio"
+        name="sua-han-gio"
+        type="time"
+        value={f.dueTime}
+        // Required as soon as a date is there: the server stores the instant as sent and defaults
+        // no hour (`nhiem_vu_ghi.go:220-221`).
+        required={f.dueDate !== ""}
+        aria-describedby={timeHint !== null ? "sua-han-gio-goi-y" : undefined}
+        onChange={(e) => changeTime(e.target.value)}
+      />
+      {timeHint !== null && (
+        <p id="sua-han-gio-goi-y" className="ghi-chu">
+          {timeHint}
+        </p>
+      )}
+      <p id="sua-han-ghi-chu" className="ghi-chu">
+        {DUE_EDIT_NOTE}
+      </p>
+    </fieldset>
+  );
+}
+
+/**
+ * The deadline editor of a task whose type has NO document block (ADR 0065 NV4; report 05/10/2026,
+ * NV-04: "a task created without a deadline can never get one"). `Theo văn bản` keeps editing it in
+ * `FormSuaKhoiVanBan`; the two never show together, so they share the field ids.
+ *
+ * The caller renders it only for `task.update` — the key `PATCH /api/v1/tasks/{code}` checks.
+ */
+export function DueEditBlock({
+  nhiemVu,
+  save,
+  reread,
+}: {
+  nhiemVu: petitions_nhiemVuRa;
+  save: (body: petitions_suaNhiemVuVao) => Promise<KetQua<petitions_nhiemVuRa>>;
+  reread: () => Promise<KetQua<petitions_nhiemVuRa>>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const button = useRef<HTMLButtonElement>(null);
+  const returnFocus = useRef(false);
+
+  useEffect(() => {
+    if (editing || !returnFocus.current) return;
+    returnFocus.current = false;
+    button.current?.focus();
+  }, [editing]);
+
+  const label = nhiemVu.due_at === null || nhiemVu.due_at === "" ? DUE_SET_BUTTON : DUE_EDIT_BUTTON;
+
+  return (
+    <div className="form-danh-muc">
+      {editing ? (
+        <DueEditForm
+          nhiemVu={nhiemVu}
+          title={label}
+          save={save}
+          reread={reread}
+          done={() => {
+            returnFocus.current = true;
+            setEditing(false);
+          }}
+        />
+      ) : (
+        <div className="cum-nut">
+          <button ref={button} type="button" className="nut-phu" onClick={() => setEditing(true)}>
+            <Glyph icon={Pencil} className="size-[18px]" />
+            {label}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The form behind `DueEditBlock`. Starts from the task as opened (`goc`) and sends ONLY `due_at`
+ * plus the optimistic-lock token — the same field-by-field comparison as `thanSuaNhiemVu`, so an
+ * untouched `23:59:59` is never re-sent as `23:59:00`. A refusal stays in the form, verbatim, and a
+ * re-read says whether the task moved on (`changedSince`), exactly as in `FormSuaKhoiVanBan`.
+ */
+function DueEditForm({
+  nhiemVu,
+  title,
+  save,
+  reread,
+  done,
+}: {
+  nhiemVu: petitions_nhiemVuRa;
+  title: string;
+  save: (body: petitions_suaNhiemVuVao) => Promise<KetQua<petitions_nhiemVuRa>>;
+  reread: () => Promise<KetQua<petitions_nhiemVuRa>>;
+  done: () => void;
+}) {
+  const [goc] = useState(nhiemVu);
+  const [f, setF] = useState<FormSuaNhiemVu>(() => formSuaTuChiTiet(nhiemVu, []));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [staleNote, setStaleNote] = useState(false);
+  const calendar = useDueCalendar(setF);
+
+  useEffect(() => {
+    document.getElementById("sua-han-ngay")?.focus();
+  }, []);
+
+  const dueAt = thanSuaNhiemVu(f, goc, [])?.due_at;
+  const body: petitions_suaNhiemVuVao | null =
+    dueAt === undefined || dueAt === null
+      ? null
+      : goc.updated_at !== ""
+        ? { due_at: dueAt, expected_updated_at: goc.updated_at }
+        : { due_at: dueAt };
+  const block = canhBaoSua(f, goc);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (body === null || block !== null || saving) return;
+    setSaving(true);
+    const r = await save(body);
+    if (!r.ok) {
+      setError(r.thongBao);
+      setStaleNote(changedSince(await reread(), goc.updated_at));
+      setSaving(false);
+      return;
+    }
+    setSaving(false);
+    done();
+  }
+
+  return (
+    <form onSubmit={submit} aria-labelledby="tieu-de-sua-han">
+      <h5 id="tieu-de-sua-han">{title}</h5>
+      <DueFieldset
+        f={f}
+        calendar={calendar}
+        goc={goc}
+        changeDate={(date) => setF((cu) => withDueDate(cu, date, calendar))}
+        changeTime={(dueTime) => setF((cu) => ({ ...cu, dueTime }))}
+      />
+
+      {block !== null && <p className="thong-bao-loi">{block}</p>}
+      {block === null && body === null && <p className="ghi-chu">{CHUA_CO_GI_DOI}</p>}
+
+      {error !== null && (
+        <p className="thong-bao-loi" role="alert">
+          {error}
+          {staleNote && ` ${TASK_CHANGED_NOTE}`}
+        </p>
+      )}
+
+      <div className="cum-nut">
+        <button type="button" className="nut-phu" onClick={done} disabled={saving}>
+          {NHAN_NUT_HUY}
+        </button>
+        <button type="submit" className="nut-chinh" disabled={saving || body === null || block !== null}>
+          {NHAN_NUT_LUU}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/**
  * §5.8 — đề nghị lùi hạn, và quyết định của lãnh đạo giao việc.
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
@@ -3673,9 +3903,7 @@ export function KhoiLuiHan({
       <p className="ghi-chu">{GHI_CHU_LUI_HAN}</p>
 
       {hanHienTai === null && (
-        <p className="trang-thai-rong">
-          Nhiệm vụ này không có hạn, nên không có gì để lùi. Hạn chỉ đặt được một lần, lúc tạo việc.
-        </p>
+        <p className="trang-thai-rong">{EXTENSION_NO_DUE}</p>
       )}
 
       {hanHienTai !== null && coQuyenDeNghi && (
@@ -3931,8 +4159,17 @@ export function FormGiaoViec({
 
       <div className="o-chon">
         <label htmlFor="giao-loai">Loại nhiệm vụ</label>
-        <select id="giao-loai" value={loaiChon} onChange={(e) => datLoai(e.target.value)}>
-          {danhMuc.loai.length === 0 && <option value="">{CHUA_XAC_DINH}</option>}
+        {/* THE EMPTY OPTION WHENEVER NOTHING IS CHOSEN, not only when the catalogue is empty: a
+            commune with no default row otherwise showed its FIRST type while the value was `""`,
+            and `Giao việc` stayed grey for no visible reason (report 05/10/2026, NV-01). The first
+            row is NOT picked for the clerk — the default is the commune's catalogue choice. */}
+        <select
+          id="giao-loai"
+          value={loaiChon}
+          aria-describedby={loaiChon === "" ? "giao-loai-thieu" : undefined}
+          onChange={(e) => datLoai(e.target.value)}
+        >
+          {loaiChon === "" && <option value="">{TASK_TYPE_PLACEHOLDER}</option>}
           {danhMuc.loai.map((l) => (
             <option key={l.code} value={l.code}>
               {l.label}
@@ -4140,7 +4377,7 @@ export function FormGiaoViec({
         />
       </div>
       <p className="ghi-chu">{NEW_TASK_DUE_PREFILLED_NOTE}</p>
-      <p className="ghi-chu">{CANH_BAO_HAN_MOT_LAN}</p>
+      <p className="ghi-chu">{NEW_TASK_DUE_LATER_NOTE}</p>
       {maChaCoSan !== undefined && maChaCoSan !== "" && (
         <p className="ghi-chu">{GHI_CHU_HAN_VIEC_CON}</p>
       )}
@@ -4148,6 +4385,11 @@ export function FormGiaoViec({
       {/* KHÔNG `role="alert"`: câu này hiện ngay khi bấm `+ Thêm văn bản` (dòng mới còn trống), và
           một vùng thông báo khẩn sẽ cắt ngang đúng lúc tiêu điểm vừa sang ô trích yếu. Nó là lý do
           nút `Giao việc` đang khoá, nên đứng ngay trên nút ấy. */}
+      {loaiChon === "" && (
+        <p id="giao-loai-thieu" className="thong-bao-loi">
+          {TASK_TYPE_MISSING}
+        </p>
+      )}
       {chanVanBan !== null && <p className="thong-bao-loi">{chanVanBan}</p>}
       {chanHan !== null && <p className="thong-bao-loi">{chanHan}</p>}
 

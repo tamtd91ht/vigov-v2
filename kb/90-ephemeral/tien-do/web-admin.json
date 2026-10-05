@@ -639,6 +639,14 @@
       "trang_thai": "xong",
       "bang_chung": "web-admin: tsc sạch, vitest 3749/3749 (4 tệp test mới features/report, 43 ca; gồm phép kiểm /bao-cao và /tong-quan gửi chuỗi truy vấn số liệu giống hệt nhau cho cùng kỳ — đặc tả 13 §10), check:api khớp. Main session kiểm lại 04/10/2026.",
       "tiep_theo": "Đợt sau (chờ người dùng mở): xuất tệp (report.export, có vết kiểm), biểu đồ So sánh với kỳ trước, việc Gửi báo cáo định kỳ, Thành lập mới. tools/tien_do_san_pham.py đếm thiếu phần chưa dựng của /bao-cao (chỉ đọc import @/features trực tiếp của trang: thấy biểu đồ, không thấy Đơn thư, Giải ngân, Kinh tế & Tài nguyên, xuất tệp đến qua features/dashboard). Số liệu chưa chạy trên PostgreSQL thật — xem service-petitions/bao-cao-nhiem-vu-theo-bo-phan."
+    },
+    {
+      "id": "nhiem-vu-sua-loi-kiem-thu-05-10",
+      "menu": "nhiem-vu",
+      "viec": "Sửa lỗi màn Nhiệm vụ theo báo cáo kiểm thử 05/10/2026 mục 3.9: NV-01 (ô Loại nhiệm vụ có dòng '— Chọn loại —' khi chưa chọn, câu lý do cạnh nút Giao việc; không tự chọn dòng đầu), NV-04 phần hạn (nút Sửa/Đặt hạn xử lý trong chi tiết cho mọi loại ngoài Theo văn bản, cùng khoá task.update; bỏ câu 'hạn chỉ đặt được một lần'), NV-08 (tiến độ là ô vô hiệu dấu '?'), NV-09 (mọi lần mở chi tiết đều cuộn tới), NV-11 (thẻ Kanban hiện bộ phận khi chưa phân công; nhãn nguồn truc-tiep thành 'Tạo trên sổ nhiệm vụ'), NV-13 (bỏ '(§4.1)' và câu kỹ thuật của việc con)",
+      "trang_thai": "xong",
+      "bang_chung": "web-admin/src/features/nhiem-vu/{so-nhiem-vu.tsx,nhan-nhiem-vu.ts,so-nhiem-vu.test.tsx}: tsc sạch, eslint ba tệp sạch, vitest 3783/3783 (13 ca mới, gồm ca bị từ chối thiếu task.update) — kiểm 05/10/2026, chưa commit.",
+      "tiep_theo": "Chưa làm trong lượt này: phần 'Lãnh đạo giao việc' của NV-04 (chưa quyết, ADR 0038); Sổ tay lãnh đạo (features/leader-notebook/task-mini-list.tsx) vẫn chỉ ghi 'Chưa phân công' khi chưa có người; PATCH đã nhận progress nên ô tiến độ dựng được khi người dùng mở việc. Chỉ kiểm được trên trình duyệt: cuộn tới chi tiết, bố cục ô hạn ở 320px."
     }
   ]
 }

@@ -25,8 +25,18 @@ import {
   BANG_NHAN_MAC_DINH,
   CAU_CHUA_GHI_LANH_DAO_GIAO_VIEC,
   CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC,
-  CANH_BAO_HAN_MOT_LAN,
+  NEW_TASK_DUE_LATER_NOTE,
   NEW_TASK_DUE_PREFILLED_NOTE,
+  DUE_EDIT_BUTTON,
+  DUE_SET_BUTTON,
+  EXTENSION_NO_DUE,
+  TASK_PROGRESS_PENDING,
+  TASK_TYPE_MISSING,
+  TASK_TYPE_PLACEHOLDER,
+  cardHolderText,
+  childFormNote,
+  ghiChuKanbanReNhanh,
+  nhanNguonGiao,
   CAU_THIEU_QUYEN_DUYET_GIA_HAN,
   CAU_THIEU_QUYEN_DUYET_HOAN_THANH,
   DECISION_NOTE_LABEL,
@@ -756,9 +766,9 @@ describe("form Giao việc mới §7", () => {
     expect(html).not.toContain('id="giao-ma"');
   });
 
-  it("CẢNH BÁO hạn chỉ đặt được MỘT LẦN đứng cạnh ô ngày", () => {
-    // `han_ban_dau` lấy cùng mốc lúc INSERT và trigger `nhiem_vu_bat_bien` từ chối mọi lần ghi
-    // lại. Một nhiệm vụ tạo ra không hạn thì không bao giờ có hạn nữa.
+  it("cạnh ô ngày: bỏ trống được, hạn ĐẶT/SỬA được về sau — không còn câu 'chỉ đặt một lần'", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 05/10/2026 (NV-04): ca này ghim `CANH_BAO_HAN_MOT_LAN` ("không đặt được về
+    // sau"). ADR 0065 NV4 cho PATCH đặt/sửa `due_at`, kể cả việc tạo ra không có hạn.
     const html = renderToStaticMarkup(
       <FormGiaoViec
         danhMuc={DANH_MUC}
@@ -771,7 +781,66 @@ describe("form Giao việc mới §7", () => {
       />,
     );
     expect(html).toContain('id="giao-han"');
-    expect(html).toContain(nhuTrongHTML(CANH_BAO_HAN_MOT_LAN));
+    expect(html).toContain(nhuTrongHTML(NEW_TASK_DUE_LATER_NOTE));
+    expect(html).not.toContain("chỉ đặt được một lần");
+    expect(html).not.toContain("không đặt được về sau");
+  });
+
+  it("NV-01: xã KHÔNG có loại mặc định — ô loại đứng ở `— Chọn loại —`, nút khoá KÈM lý do", () => {
+    // Trước: không có dòng trống, trình duyệt hiện loại ĐẦU TIÊN trong khi giá trị là "" — nút
+    // `Giao việc` mờ mà không nói vì sao (báo cáo kiểm thử 05/10/2026).
+    const typeRow = (code: string, label: string) => ({
+      id: `01J${code}`,
+      code,
+      label,
+      is_default: false,
+      active: true,
+      order: 1,
+      source: "he-thong",
+      tier: 1,
+    });
+    const noDefaultType: DanhMucNhiemVu = {
+      ...DANH_MUC,
+      loai: [typeRow("theo-van-ban", "Theo văn bản"), typeRow("co-ban", "Nhiệm vụ cơ bản")],
+    };
+    const html = renderToStaticMarkup(
+      <FormGiaoViec
+        danhMuc={noDefaultType}
+        danhBa={DANH_BA}
+        danhBaLanhDao={DANH_BA}
+        dangGui={false}
+        loi={null}
+        huy={() => {}}
+        giaoViec={() => {}}
+        tieuDeCoSan="Tên việc đã điền"
+      />,
+    );
+    const o = oChon(html, "giao-loai");
+    expect(o).toContain(`<option value="" selected="">${TASK_TYPE_PLACEHOLDER}</option>`);
+    // Không tự chọn dòng đầu thay cán bộ — mặc định là lựa chọn của danh mục xã.
+    expect(o).not.toMatch(/<option value="theo-van-ban" selected="">/);
+    expect(o).toContain('aria-describedby="giao-loai-thieu"');
+    expect(html).toContain(`<p id="giao-loai-thieu" class="thong-bao-loi">${TASK_TYPE_MISSING}</p>`);
+    expect(html).toMatch(/<button type="submit" class="nut-chinh" disabled="">Giao việc<\/button>/);
+  });
+
+  it("NV-01: xã CÓ loại mặc định — không dòng trống, không câu lý do", () => {
+    const html = renderToStaticMarkup(
+      <FormGiaoViec
+        danhMuc={DANH_MUC}
+        danhBa={DANH_BA}
+        danhBaLanhDao={DANH_BA}
+        dangGui={false}
+        loi={null}
+        huy={() => {}}
+        giaoViec={() => {}}
+        tieuDeCoSan="Tên việc đã điền"
+      />,
+    );
+    const o = oChon(html, "giao-loai");
+    expect(o).toContain('<option value="theo-van-ban" selected="">');
+    expect(o).not.toContain(TASK_TYPE_PLACEHOLDER);
+    expect(html).not.toContain(TASK_TYPE_MISSING);
   });
 
   it("hạn ĐIỀN SẴN +7 ngày lúc 17:00 (ADR 0065 NV6), ô giờ bắt buộc khi có ngày, câu nói sửa được", () => {
@@ -2201,5 +2270,100 @@ describe("W5 — tab `Liên quan đến tôi` và ô `Sắp đến hạn` trên 
     // The Kanban counts are read with the SAME `loc` as the cards (`getTaskCounts(loc)` shares the
     // filter builder with the list — see lib/api/nhiem-vu.test.ts).
     expect(SRC).toContain("getTaskCounts(loc).then(");
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * BÁO CÁO KIỂM THỬ 05/10/2026 — mục 3.9 (NV-04, NV-08, NV-09, NV-11, NV-13)
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+describe("NV-04 — hạn xử lý sửa/đặt được ở MỌI loại, sau cùng khoá `task.update`", () => {
+  const ONLY_UPDATE = quyenNhiemVu([QUYEN_CAP_NHAT_NHIEM_VU]);
+  const READ_ONLY = quyenNhiemVu(["task.read"]);
+
+  it("loại `co-ban`, cầm `task.update`: có nút `Sửa hạn xử lý`", () => {
+    const html = veChiTiet({ type: "co-ban" }, LANH_DAO, { pha: "dangTai" }, ONLY_UPDATE);
+    expect(html).toContain(`</svg>${DUE_EDIT_BUTTON}</button>`);
+  });
+
+  it("việc tạo ra KHÔNG có hạn: nút là `Đặt hạn xử lý`, và khối lùi hạn chỉ tới đó", () => {
+    const html = veChiTiet(
+      { type: "co-ban", due_at: null, original_due_at: null },
+      LANH_DAO,
+      { pha: "dangTai" },
+      ONLY_UPDATE,
+    );
+    expect(html).toContain(`</svg>${DUE_SET_BUTTON}</button>`);
+    expect(html).toContain(nhuTrongHTML(EXTENSION_NO_DUE));
+    expect(html).not.toContain("Hạn chỉ đặt được một lần");
+  });
+
+  it("CA BỊ TỪ CHỐI — thiếu `task.update`: không có nút sửa/đặt hạn", () => {
+    const html = veChiTiet({ type: "co-ban", due_at: null }, LANH_DAO, { pha: "dangTai" }, READ_ONLY);
+    expect(html).not.toContain(DUE_EDIT_BUTTON);
+    expect(html).not.toContain(DUE_SET_BUTTON);
+  });
+
+  it("loại `theo-van-ban`: KHÔNG có nút riêng — hạn sửa trong `✎ Sửa` của khối văn bản", () => {
+    const html = veChiTiet({}, LANH_DAO, { pha: "xong", duLieu: BA_VAN_BAN }, ONLY_UPDATE);
+    expect(html).not.toContain(DUE_EDIT_BUTTON);
+  });
+});
+
+describe("NV-08 — tiến độ: ô vô hiệu kèm dấu \"?\", không còn `0% tiến độ ghi nhận` trần", () => {
+  it("drawer vẽ giá trị đang lưu trong ô DISABLED, cạnh nút \"?\" mang mô tả", () => {
+    const html = veChiTiet({ progress: 40 });
+    expect(html).not.toContain("tiến độ ghi nhận");
+    expect(html).toMatch(/<input id="chi-tiet-tien-do"[^>]*disabled=""[^>]*value="40%"/);
+    expect(html).toContain(nhuTrongHTML(TASK_PROGRESS_PENDING.ten));
+    expect(html).toContain("data-pending-marker");
+  });
+});
+
+describe("NV-09 — mọi lần mở chi tiết đều cuộn tới chi tiết (đọc mã: không có DOM)", () => {
+  const SRC = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
+
+  it("chỉ hai chỗ phát lệnh mở: hàm `openDrawer` (đặt cờ cuộn) và đường `?task=` (đặt cờ ngay trước)", () => {
+    expect(SRC).toContain(
+      'function openDrawer(n: petitions_nhiemVuRa) {\n    scrollToDrawer.current = n.code;\n    guiDrawer({ loai: "mo", nhiemVu: n });',
+    );
+    expect(SRC).toContain(
+      'scrollToDrawer.current = kq.duLieu.code;\n      guiDrawer({ loai: "mo", nhiemVu: kq.duLieu });',
+    );
+    // Any THIRD dispatch is a way of opening that never scrolls — the bug this pins.
+    expect(SRC.split('guiDrawer({ loai: "mo"').length - 1).toBe(2);
+  });
+
+  it("dòng bảng, thẻ Kanban, Sổ theo dõi, hàng chờ và việc con đều đi qua `openDrawer`", () => {
+    expect(SRC.split("openDrawer(n);").length - 1).toBe(4);
+    expect(SRC.split("openDrawer(kq.duLieu);").length - 1).toBe(2);
+  });
+});
+
+describe("NV-11 — thẻ Kanban nói bộ phận đang giữ việc; nhãn nguồn `truc-tiep` không gợi 'giao cho người'", () => {
+  const UNITS = new Map([["01JBOPHAN", "VĂN PHÒNG ĐẢNG ỦY"]]);
+
+  it("chưa phân công người: `{bộ phận} · Chưa phân công`", () => {
+    expect(cardHolderText({ assignee: "", unit: "01JBOPHAN" }, null, UNITS)).toBe(
+      `VĂN PHÒNG ĐẢNG ỦY · ${CHUA_PHAN_CONG}`,
+    );
+    // Bộ phận ngoài danh mục: hiện id, không bịa tên.
+    expect(cardHolderText({ assignee: "", unit: "bp-la" }, null, UNITS)).toBe(`bp-la · ${CHUA_PHAN_CONG}`);
+  });
+
+  it("có người: họ tên/mã như cũ; không bộ phận lẫn người: `Chưa phân công`", () => {
+    expect(cardHolderText({ assignee: "CB-1", unit: "01JBOPHAN" }, null, UNITS)).toBe("CB-1");
+    expect(cardHolderText({ assignee: "", unit: "" }, null, UNITS)).toBe(CHUA_PHAN_CONG);
+  });
+
+  it("nhãn nguồn `truc-tiep` không còn là `Giao trực tiếp`", () => {
+    expect(nhanNguonGiao("truc-tiep")).not.toContain("trực tiếp");
+  });
+});
+
+describe("NV-13 — không còn tham chiếu đặc tả hay câu kỹ thuật trên màn", () => {
+  it("câu dưới Kanban không có `§`; câu việc con là câu hành chính", () => {
+    expect(ghiChuKanbanReNhanh(BANG_NHAN_MAC_DINH)).not.toContain("§");
+    expect(childFormNote("NV19")).toBe("Việc con của NV19.");
   });
 });

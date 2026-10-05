@@ -295,7 +295,10 @@ export function cauGiaiThichTrangThai(ma: string): string {
 export type NguonGiao = "truc-tiep" | "ket-luan-hop" | "van-ban-den" | "phan-anh";
 
 const NHAN_NGUON_GIAO: Readonly<Record<NguonGiao, string>> = {
-  "truc-tiep": "Giao trực tiếp",
+  // NOT "Giao trực tiếp": testers read it as "assigned to a person" (report 05/10/2026, NV-11). The
+  // code means the task was entered on the register itself, not split from a meeting, a document or
+  // a petition — it says nothing about who holds it.
+  "truc-tiep": "Tạo trên sổ nhiệm vụ",
   "ket-luan-hop": "Từ kết luận họp",
   "van-ban-den": "Từ văn bản đến",
   "phan-anh": "Từ phản ánh",
@@ -702,6 +705,22 @@ export function nhanCanBoNgan(ma: string, danhBa: DanhBaTheoMa | null, rong: str
   if (ma === "") return rong;
   const cb = danhBa?.get(ma);
   return cb === undefined || cb.full_name === "" ? ma : cb.full_name;
+}
+
+/**
+ * Who holds a task, on a Kanban card: the assignee's name; with no assignee, the holding unit
+ * `{unit} · Chưa phân công` (report 05/10/2026, NV-11) — "Chưa phân công" alone hid which unit
+ * still owed the work. A unit missing from the catalogue shows its id, as in the timeline.
+ */
+export function cardHolderText(
+  task: Pick<petitions_nhiemVuRa, "assignee" | "unit">,
+  danhBa: DanhBaTheoMa | null,
+  unitNames: ReadonlyMap<string, string>,
+): string {
+  if (task.assignee !== "" || task.unit === "") {
+    return nhanCanBoNgan(task.assignee, danhBa, CHUA_PHAN_CONG);
+  }
+  return `${unitNames.get(task.unit) ?? task.unit} · ${CHUA_PHAN_CONG}`;
 }
 
 /**
@@ -1614,15 +1633,43 @@ export const MO_TA_FORM_GIAO_VIEC =
   "người thì hệ thống báo lên lãnh đạo.";
 
 /**
- * Câu nói ra rằng hạn CHỈ ĐẶT ĐƯỢC MỘT LẦN, đặt ngay cạnh ô ngày ở form tạo.
- *
- * Không phải một lời nhắc lịch sự: `han_ban_dau` lấy cùng mốc với `han_xu_ly` lúc INSERT và
- * trigger `nhiem_vu_bat_bien` từ chối mọi lần ghi lại. Một nhiệm vụ tạo ra không có hạn thì
- * **không bao giờ** có hạn nữa — kể cả qua đường đề nghị lùi hạn, vì không có gì để lùi.
+ * Under the create form's deadline fields. Replaces `CANH_BAO_HAN_MOT_LAN` ("set once, never
+ * later"), which stopped being true with ADR 0065 NV4: `PATCH /api/v1/tasks/{code}` sets or corrects
+ * `due_at`, including on a task created without one (`service-petitions/internal/app/nhiem_vu.go`).
+ * Keeping the old sentence pushed clerks to invent a deadline rather than leave it empty.
  */
-export const CANH_BAO_HAN_MOT_LAN =
-  "Hạn hoàn thành chỉ đặt được một lần, ngay lúc tạo. Bỏ trống thì nhiệm vụ này sẽ không có hạn " +
-  "và cũng không đặt được về sau — kể cả qua đề nghị lùi hạn.";
+export const NEW_TASK_DUE_LATER_NOTE =
+  "Bỏ trống thì nhiệm vụ chưa có hạn. Người có quyền cập nhật nhiệm vụ đặt hoặc sửa hạn về sau " +
+  "trong phần chi tiết nhiệm vụ.";
+
+/** Drawer button that opens the deadline editor of a task whose type has no document block. */
+export const DUE_EDIT_BUTTON = "Sửa hạn xử lý";
+/** Same button on a task created without a deadline. */
+export const DUE_SET_BUTTON = "Đặt hạn xử lý";
+
+/** The extension block of a task without a deadline: nothing to extend, and where to set one. */
+export const EXTENSION_NO_DUE =
+  "Nhiệm vụ này chưa có hạn, nên chưa có gì để lùi. Người có quyền cập nhật nhiệm vụ đặt hạn ngay " +
+  "trong phần chi tiết này.";
+
+/**
+ * Reason `Giao việc` is disabled while no task type is chosen (report 05/10/2026, NV-01). Without
+ * it the button simply greyed out, and the select showed its first option while the value was `""`.
+ */
+export const TASK_TYPE_MISSING = "Chọn loại nhiệm vụ để giao việc.";
+/** Empty first option of the type select while nothing is chosen. */
+export const TASK_TYPE_PLACEHOLDER = "— Chọn loại —";
+
+/**
+ * The drawer's progress figure (ADR 0068 §14): no screen edits `progress` yet, so the field is
+ * drawn disabled with a "?" instead of a bare `0%` that reads as measured.
+ */
+export const TASK_PROGRESS_PENDING = {
+  ten: "Cập nhật tiến độ (%)",
+  viSao:
+    "Chưa có ô nhập phần trăm tiến độ trên màn hình này. Con số đang hiện là giá trị đang lưu của " +
+    "nhiệm vụ; muốn theo dõi tiến độ, ghi vào nhật ký nhiệm vụ.",
+} as const;
 
 /** §5.10 — việc con có hạn RIÊNG (ADR 0037 quyết định 2), không thừa kế hạn cha. */
 export const GHI_CHU_HAN_VIEC_CON =
@@ -2487,7 +2534,7 @@ export const CAU_LOC_TRANG_THAI_KHONG_CO_COT =
 export function ghiChuKanbanReNhanh(bang: BangNhanTrangThai): string {
   return (
     `Hai trạng thái rẽ nhánh — ${nhanTrangThai(bang, "tam-dung")} và ` +
-    `${nhanTrangThai(bang, "chuyen-tiep")} — không có cột riêng trên Kanban (§4.1), nên việc đang ` +
+    `${nhanTrangThai(bang, "chuyen-tiep")} — không có cột riêng trên Kanban, nên việc đang ` +
     "ở hai trạng thái ấy không hiện ở bảng này. Xem chúng ở chế độ Danh sách."
   );
 }
@@ -2555,9 +2602,12 @@ export const CHILD_TASKS_LOADING = "Đang tải các việc con…";
 export const CHILD_TASKS_EMPTY = "Nhiệm vụ này chưa có việc con nào.";
 export const ADD_CHILD_BUTTON = "+ Thêm việc con";
 
-/** Shown above the create form when it was opened from a drawer. */
+/**
+ * Shown above the create form when it was opened from a drawer. Plain words only (report
+ * 05/10/2026, NV-13): the server's checks on the parent surface as its own refusal if they fail.
+ */
 export function childFormNote(parentCode: string): string {
-  return `Việc con của ${parentCode}. Mã việc cha được gửi kèm; máy chủ kiểm việc cha còn đó, cùng xã và chưa quá số tầng cho phép.`;
+  return `Việc con của ${parentCode}.`;
 }
 
 export function childCreatedText(code: string): string {
