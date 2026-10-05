@@ -63,6 +63,15 @@ export function quyetDinhGhiThoiHan(ketQua: KetQua<identity_phienHienTaiRa>): Qu
 }
 
 /**
+ * Whether the SLA tab may read the petition field catalogue for its "Lĩnh vực" labels —
+ * `admin.lookup`, the key `GET /api/v1/citizen-report-fields` declares. The tab itself is `admin.sla`;
+ * without this second key the column keeps the raw codes and no request is sent that would only 403.
+ */
+export function slaFieldLabelReadDecision(ketQua: KetQua<identity_phienHienTaiRa>): QuyetDinhTab {
+  return theoKhoaQuyen(ketQua, QUYEN_QUAN_LY_DANH_MUC);
+}
+
+/**
  * Tab "Trường bản đồ" — `asset.read`, the key `GET /api/v1/map-field-schemas` declares. The whole
  * tab hides without it: its only read answers 403 then, so there is nothing to show.
  *

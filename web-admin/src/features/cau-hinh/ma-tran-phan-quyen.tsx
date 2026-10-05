@@ -166,7 +166,12 @@ export function MaTranPhanQuyen({
 
       {/* The seed button follows the same gate as the ticks: `admin.role`, the key the route
           declares. Convenience only — the server checks it, and #14, on the call. */}
-      {choSua && <RoleTemplateSeedPanel onSeeded={() => setReloadCount((n) => n + 1)} />}
+      {choSua && (
+        <RoleTemplateSeedPanel
+          onSeeded={() => setReloadCount((n) => n + 1)}
+          roles={trangThai.pha === "coDuLieu" ? trangThai.vaiTro : null}
+        />
+      )}
 
       <UnheldPermissionWarnings warnings={warnings} />
       </div>

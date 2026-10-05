@@ -536,7 +536,7 @@ export function ChiTietThongBao({ thongBao }: { thongBao: comms_thongBaoRa | nul
       </CardHeader>
 
       <CardContent className="flex flex-col gap-4">
-        {/* §3 chips of the signed-in officer and of the mail, as disabled placeholders. `✓ Đã xác nhận`
+        {/* §3 chips of the signed-in officer and of the mail, as disabled placeholders. `Xác nhận đã đọc`
             only where the announcement asks for it; the mail chip only where mail was requested —
             the same flags that would decide the real chips. */}
         {(thongBao.ack_required || thongBao.email_requested) && (

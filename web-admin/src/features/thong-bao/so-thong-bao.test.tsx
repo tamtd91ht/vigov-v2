@@ -8,6 +8,7 @@ import type { KetQua } from "@/lib/api/goi";
 import type { comms_thongBaoRa, identity_danhBaChonNguoiRa } from "@/lib/api/schema.gen";
 
 import {
+  ACKNOWLEDGED_CHIP,
   CANH_BAO_CHUA_GUI_THU,
   CHIP_BAT_BUOC_XAC_NHAN,
   CHUA_CHON_THONG_BAO,
@@ -208,7 +209,7 @@ describe("panel chi tiết §4", () => {
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>(?:(?!<\/button>).)*Gỡ<\/button>/s);
   });
 
-  it("chip `Đã xác nhận` chỉ khi bắt buộc xác nhận; chip thư chỉ khi có yêu cầu gửi thư", () => {
+  it("chip `Xác nhận đã đọc` chỉ khi bắt buộc xác nhận; chip thư chỉ khi có yêu cầu gửi thư", () => {
     const tat = renderToStaticMarkup(
       <ChiTietThongBao thongBao={thongBao({ ack_required: false, email_requested: false })} />,
     );
@@ -319,8 +320,14 @@ describe("phần chưa dựng — mô tả sau dấu '?' (ADR 0068 §14)", () =>
     expect(() => pendingPart("khong-co")).toThrow();
   });
 
-  it("vì sao không có `Gửi cho tôi`: thiếu khoá đọc thông báo — câu hỏi mở #27", () => {
-    expect(pendingPart("scopeMine").viSao).toContain("#27");
+  it("vì sao không có `Gửi cho tôi`: thiếu quyền đọc thông báo — không còn dẫn câu hỏi mở đã chốt (TB-05)", () => {
+    const viSao = pendingPart("scopeMine").viSao;
+    expect(viSao).toContain("quyền đọc thông báo");
+    expect(viSao).not.toMatch(/#27|câu hỏi mở/);
+  });
+
+  it("chip xác nhận là HÀNH ĐỘNG `Xác nhận đã đọc`, không phải trạng thái `Đã xác nhận` (TB-03)", () => {
+    expect(ACKNOWLEDGED_CHIP).toBe("Xác nhận đã đọc");
   });
 });
 

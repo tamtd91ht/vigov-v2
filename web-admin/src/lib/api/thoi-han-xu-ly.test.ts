@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { gieoThoiHanMacDinh, layThoiHanXuLy, suaThoiHanXuLy } from "./thoi-han-xu-ly";
+import {
+  gieoThoiHanMacDinh,
+  layThoiHanXuLy,
+  readCitizenReportFieldLabels,
+  suaThoiHanXuLy,
+} from "./thoi-han-xu-ly";
 
 /**
  * Ba tuyến của bảng thời hạn xử lý, nhìn từ phía **dây**: đúng đường dẫn, đúng phương thức, đúng
@@ -158,5 +163,28 @@ describe("POST /api/v1/sla/defaults", () => {
     const kq = await gieoThoiHanMacDinh();
 
     expect(kq).toEqual({ ok: true, duLieu: { seeded: 3, kept: 12 } });
+  });
+});
+
+describe("GET /api/v1/citizen-report-fields — nhãn cột Lĩnh vực (SLA-03)", () => {
+  const field = (code: string, label: string, active = true) => ({
+    code, label, order: 1, default_label: label, default_order: 1, icon: "", tone: "", active, enabled: active, customised: false,
+  });
+
+  it("đường dẫn tương đối; mọi mã — kể cả mã đã tắt — thành code → nhãn", async () => {
+    const gia = ghiGia(200, { items: [field("an-ninh-trat-tu", "An ninh, trật tự"), field("cu", "Lĩnh vực cũ", false)] });
+    const m = await readCitizenReportFieldLabels();
+    expect(loiGoi(gia, 0).duongDan).toBe("/api/v1/citizen-report-fields");
+    expect(m.get("an-ninh-trat-tu")).toBe("An ninh, trật tự");
+    expect(m.get("cu")).toBe("Lĩnh vực cũ");
+  });
+
+  it("403 / 503 / mạng hỏng → bảng rỗng (màn hình hiện mã thô), không ném lỗi", async () => {
+    ghiGia(403, { code: "forbidden", message: "Bạn không có quyền thực hiện thao tác này." });
+    expect((await readCitizenReportFieldLabels()).size).toBe(0);
+    ghiGia(503, { code: "field_catalogue_unavailable", message: "x" });
+    expect((await readCitizenReportFieldLabels()).size).toBe(0);
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("network"); }));
+    expect((await readCitizenReportFieldLabels()).size).toBe(0);
   });
 });

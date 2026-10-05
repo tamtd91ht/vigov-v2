@@ -55,6 +55,7 @@ import {
   UNASSIGNED_HOLD_KEY,
   gieoThoiHanMacDinh,
   layThoiHanXuLy,
+  readCitizenReportFieldLabels,
   suaThoiHanXuLy,
 } from "@/lib/api/thoi-han-xu-ly";
 import { namTheoDongHoMay } from "@/lib/nam";
@@ -107,7 +108,7 @@ import {
   nhanLinhVuc,
   nhanLoaiViec,
 } from "./nhan-thoi-han";
-import { quyetDinhGhiThoiHan } from "./quyen-tab";
+import { quyetDinhGhiThoiHan, slaFieldLabelReadDecision } from "./quyen-tab";
 import { COT_GIO, NHAN_COT, banTuDong, soanSua, type BanNhapGio } from "./sua-thoi-han";
 
 /**
@@ -256,6 +257,25 @@ export function TabThoiHanXuLy() {
    */
   const quyetDinhGhi = phien === null ? null : quyetDinhGhiThoiHan(phien);
   const coQuyenGhi = quyetDinhGhi !== null && quyetDinhGhi.hien;
+
+  /**
+   * Field code → the commune's label, for the "Lĩnh vực" column only (SLA-03). Read ONCE per screen,
+   * and only by an account holding `admin.lookup` — the key that route declares; this tab is
+   * `admin.sla`, so many accounts here lack it, and for them the column keeps the raw code rather
+   * than sending a request bound to answer 403. Not re-read after a write: no SLA write changes it.
+   */
+  const canReadFieldLabels = phien !== null && slaFieldLabelReadDecision(phien).hien;
+  const [fieldLabels, setFieldLabels] = useState<ReadonlyMap<string, string>>(() => new Map());
+  useEffect(() => {
+    if (!canReadFieldLabels) return;
+    let bo = false;
+    readCitizenReportFieldLabels().then((m) => {
+      if (!bo) setFieldLabels(m);
+    });
+    return () => {
+      bo = true;
+    };
+  }, [canReadFieldLabels]);
 
   useEffect(() => {
     let bo = false;
@@ -457,6 +477,7 @@ export function TabThoiHanXuLy() {
       namGoc={namGoc}
       datNam={datNam}
       coQuyenGhi={coQuyenGhi}
+      fieldLabels={fieldLabels}
       thieuQuyen={quyetDinhGhi !== null && !quyetDinhGhi.hien && quyetDinhGhi.vi === "khong-du-quyen"}
       thaoTac={thaoTac}
       cauDaXong={cauDaXong}
@@ -497,6 +518,7 @@ export function ManThoiHanXuLy({
   namGoc,
   datNam,
   coQuyenGhi,
+  fieldLabels,
   thieuQuyen,
   thaoTac,
   cauDaXong,
@@ -510,6 +532,8 @@ export function ManThoiHanXuLy({
   namGoc: number;
   datNam: (n: number) => void;
   coQuyenGhi: boolean;
+  /** Field code → label for the "Lĩnh vực" column; empty map = show raw codes. Omitted = empty. */
+  fieldLabels?: ReadonlyMap<string, string>;
   thieuQuyen: boolean;
   thaoTac: ThaoTacThoiHan;
   cauDaXong: string;
@@ -563,6 +587,7 @@ export function ManThoiHanXuLy({
       <BangThoiHan
         kq={du.thoiHan}
         coQuyenGhi={coQuyenGhi}
+        fieldLabels={fieldLabels}
         dangGui={dangGui}
         thaoTac={thaoTac}
         form={nhomForm === "thoiHan" ? form : null}
@@ -707,12 +732,14 @@ function KhungTai({ kq, dangTai }: { kq: KetQua<unknown> | null; dangTai: string
 export function BangThoiHan({
   kq,
   coQuyenGhi,
+  fieldLabels = new Map(),
   dangGui,
   thaoTac,
   form,
 }: {
   kq: KetQua<identity_danhSachSLARa> | null;
   coQuyenGhi: boolean;
+  fieldLabels?: ReadonlyMap<string, string>;
   dangGui: boolean;
   thaoTac: ThaoTacThoiHan;
   form: ReactNode;
@@ -785,8 +812,9 @@ export function BangThoiHan({
                   {kq.duLieu.items.map((d) => (
                     <tr key={d.id}>
                       <td>{nhanLoaiViec(d.work_kind)}</td>
-                      <td className={d.is_default ? undefined : "ma-muc"}>
-                        {nhanLinhVuc(d.field, d.is_default)}
+                      {/* `ma-muc` (code styling) only while the cell really shows a raw code. */}
+                      <td className={d.is_default || fieldLabels.has(d.field) ? undefined : "ma-muc"}>
+                        {nhanLinhVuc(d.field, d.is_default, fieldLabels)}
                       </td>
                       {COT_GIO.map((c) => (
                         <td key={c}>{hoursCellLabel(d[c])}</td>
@@ -797,7 +825,7 @@ export function BangThoiHan({
                             type="button"
                             variant="ghost"
                             size="sm"
-                            aria-label={`${NUT_SUA} thời hạn ${nhanLoaiViec(d.work_kind)} — ${nhanLinhVuc(d.field, d.is_default)}`}
+                            aria-label={`${NUT_SUA} thời hạn ${nhanLoaiViec(d.work_kind)} — ${nhanLinhVuc(d.field, d.is_default, fieldLabels)}`}
                             icon={<Pencil aria-hidden="true" focusable="false" strokeWidth={1.8} />}
                             onClick={() => thaoTac.suaThoiHan(d)}
                           >

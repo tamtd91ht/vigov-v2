@@ -32,7 +32,8 @@ import { quyetDinhTabNguoiDung, type QuyetDinhTab } from "./quyen-tab";
  * (`lib/api/goi.ts`).
  */
 
-export function TabNguoiDung() {
+/** `active` — whether this tab is on display; passed through so the staff screen re-reads its catalogues. */
+export function TabNguoiDung({ active = true }: { active?: boolean } = {}) {
   // Phiên đọc MỘT LẦN cho cả trang, ở `PhienProvider`. Trước đây component này tự gọi, nên
   // mở một màn hình là hai lời gọi cùng một tuyến — và tệ hơn: hai câu trả lời có thể khác
   // nhau, cho ra một màn hình vừa hiện tên cán bộ trên đầu trang vừa báo phiên đã hết hạn ở
@@ -67,5 +68,5 @@ export function TabNguoiDung() {
     );
   }
 
-  return <DanhBaCanBo />;
+  return <DanhBaCanBo active={active} />;
 }

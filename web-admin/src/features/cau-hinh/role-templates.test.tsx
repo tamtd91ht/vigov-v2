@@ -12,6 +12,9 @@ import {
   SEED_BUTTON,
   SEED_CONFIRM_BUTTON,
   SEED_CONFIRM_TEXT,
+  SEED_HINT,
+  ONLY_ADMIN_ROLE_HINT,
+  seedHint,
   seedSummary,
   unheldPermissionWarnings,
 } from "./role-templates";
@@ -75,7 +78,7 @@ describe("unheldPermissionWarnings", () => {
 
 describe("seed button", () => {
   const view = (phase: SeedPhase) =>
-    renderToStaticMarkup(<RoleTemplateSeedView phase={phase} onOpen={() => {}} onConfirm={() => {}} onCancel={() => {}} />);
+    renderToStaticMarkup(<RoleTemplateSeedView phase={phase} hint={SEED_HINT} onOpen={() => {}} onConfirm={() => {}} onCancel={() => {}} />);
 
   it("idle: one button, no confirm text yet", () => {
     const html = view({ kind: "idle" });
@@ -120,5 +123,28 @@ describe("seed button", () => {
     const s = seedSummary({ created: [], skipped_existing: [{ code: "a", name: "A" }], skipped_deleted: [] });
     expect(s.lead).toMatch(/Không tạo thêm/);
     expect(s.blocks.map((b) => b.heading)).toHaveLength(1);
+  });
+});
+
+describe("seed hint (PQ-01)", () => {
+  it("plain words: no 'đặc tả'", () => {
+    expect(SEED_HINT).not.toMatch(/đặc tả/);
+  });
+
+  it("only the administrator role → says so, then the hint", () => {
+    expect(seedHint([ADMIN])).toBe(`${ONLY_ADMIN_ROLE_HINT} ${SEED_HINT}`);
+  });
+
+  it("other roles exist, matrix unread, or one role that is not the administrator → no such sentence", () => {
+    for (const roles of [[ADMIN, CHAIR], null, [CHAIR], []]) {
+      expect(seedHint(roles)).toBe(SEED_HINT);
+    }
+  });
+
+  it("the view renders the hint it is given", () => {
+    const html = renderToStaticMarkup(
+      <RoleTemplateSeedView phase={{ kind: "idle" }} hint={seedHint([ADMIN])} onOpen={() => {}} onConfirm={() => {}} onCancel={() => {}} />,
+    );
+    expect(html).toContain(ONLY_ADMIN_ROLE_HINT);
   });
 });

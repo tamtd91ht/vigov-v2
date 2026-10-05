@@ -50,10 +50,17 @@ describe("nhanLinhVuc", () => {
     expect(nhanLinhVuc("", true)).toBe("Mặc định cho mọi lĩnh vực");
   });
 
-  it("dòng có lĩnh vực hiện MÃ THÔ — web không giữ bảng tra tên lĩnh vực nào", () => {
-    // Danh mục `Lĩnh vực phản ánh` chưa có chủ (câu mở #4, ADR 0024) và chưa có tuyến nào phát ra
-    // nhãn của nó. Một bảng tra gõ tay ở đây là bản sao thứ hai của một danh mục chưa ai sở hữu.
+  it("có nhãn của xã (đọc từ petitions) → hiện nhãn, không hiện mã", () => {
+    const labels = new Map([["an-ninh-trat-tu", "An ninh, trật tự"]]);
+    expect(nhanLinhVuc("an-ninh-trat-tu", false, labels)).toBe("An ninh, trật tự");
+  });
+
+  it("không có nhãn (đọc hỏng, thiếu admin.lookup, mã lạ, nhãn rỗng) → hiện NGUYÊN MÃ, không đoán", () => {
     expect(nhanLinhVuc("an-ninh-trat-tu", false)).toBe("an-ninh-trat-tu");
+    expect(nhanLinhVuc("an-ninh-trat-tu", false, new Map([["cap-thoat-nuoc", "Cấp thoát nước"]]))).toBe(
+      "an-ninh-trat-tu",
+    );
+    expect(nhanLinhVuc("an-ninh-trat-tu", false, new Map([["an-ninh-trat-tu", ""]]))).toBe("an-ninh-trat-tu");
   });
 });
 

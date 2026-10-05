@@ -80,7 +80,11 @@ export const RECIPIENT_UNITS_CHIP = "Chọn bộ phận";
 export const RECIPIENT_UNITS_BLOCK_TITLE = "Bộ phận nhận";
 export const SAVE_DRAFT_LABEL = "Lưu nháp";
 export const WITHDRAW_LABEL = "Gỡ";
-export const ACKNOWLEDGED_CHIP = "Đã xác nhận";
+/**
+ * The ACT, not the state (TB-03): beside "0/1 đã xác nhận" a disabled "Đã xác nhận" read as a fact
+ * about the officer. The spec names the action "Xác nhận đã đọc"; it stays a "?" placeholder.
+ */
+export const ACKNOWLEDGED_CHIP = "Xác nhận đã đọc";
 export const EMAIL_STATUS_CHIP = "Trạng thái thư";
 
 /** §4 `NGƯỜI NHẬN (12)` — the count is the server's own `recipient_count`; only the list is missing. */
@@ -427,16 +431,15 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "Chưa lưu được thông báo ở dạng nháp: thông báo được tạo ra là phát hành ngay tới người " +
       "nhận. Bấm “Huỷ” sẽ bỏ phần đang soạn.",
   },
-  // §2 `Gửi cho tôi`. The read route takes NO scope parameter, on purpose. Deeper: the `quyen` table
-  // holds no announcement READ key — `announcement.create` is the group's only key — so "every officer
-  // reads what was sent to them" needs a key that does not exist (open question #27, never an
-  // `INSERT`) or `AnyAuthenticated` (rule 5 stop condition 1). Both are the customer's call.
+  // §2 `Gửi cho tôi`. The read route takes NO scope parameter, on purpose: "every officer reads what
+  // was sent to them" needs a read key no migration seeds today (`announcement.create` is the group's
+  // only key), and a key is never added by an ad-hoc `INSERT` (rule 5, invariant 3c).
   {
     id: "scopeMine",
     ten: "Bộ lọc “Gửi cho tôi”",
     viSao:
-      "Lọc riêng thông báo gửi cho mình cần một quyền đọc thông báo dành cho mọi cán bộ. Danh mục " +
-      "quyền hiện chưa có quyền ấy, và việc thêm quyền là quyết định của đơn vị (câu hỏi mở #27).",
+      "Lọc riêng thông báo gửi cho mình cần một quyền đọc thông báo dành cho mọi cán bộ, mà phần " +
+      "mềm chưa có quyền ấy.",
   },
   // §4 `NGƯỜI NHẬN (12)`. No detail route (`GET /api/thong-bao/:id` of §7 does not exist) and the list
   // response carries two COUNTS, not the people. The list would add staff NAMES, which service-comms

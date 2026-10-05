@@ -427,3 +427,41 @@ describe("ô tìm của tab Người dùng", () => {
     expect(tatCa(cay, (p) => p.type === "select")[0]?.props.id).toBe("loc-bo-phan-nguoi-dung");
   });
 });
+
+/* ---- 4. danh mục bộ phận/vai trò đọc lại khi tab quay về hiện (ND-01/ND-02) ------------------- */
+
+describe("danh mục: tab Người dùng đọc lại khi được hiện lại", () => {
+  it("ẩn → không đọc; hiện lại → đọc thêm đúng một lượt; đổi trang không đọc", async () => {
+    const props = { active: true };
+    const m = may(DanhBaCanBo, props);
+    await xongMang(m);
+    const doc = vi.mocked(apiDanhMuc.docDanhMucDanhBa);
+    expect(doc).toHaveBeenCalledTimes(1);
+
+    // Sang tab khác (panel bị ẩn nhưng vẫn gắn): không đọc gì thêm.
+    props.active = false;
+    await xongMang(m);
+    expect(doc).toHaveBeenCalledTimes(1);
+
+    // Quay lại: bộ phận / vai trò vừa tạo ở tab khác phải có mặt — đọc lại một lượt.
+    props.active = true;
+    await xongMang(m);
+    expect(doc).toHaveBeenCalledTimes(2);
+
+    // Sang trang trong cùng tab không phải lý do đọc lại.
+    diToiTrang(m)(sangTrangSau(TRANG_DAU, "CB-00001"));
+    await xongMang(m);
+    expect(doc).toHaveBeenCalledTimes(2);
+  });
+
+  it("panel mở sẵn trong trạng thái ẩn → chưa đọc, tới khi tab được chọn", async () => {
+    const props = { active: false };
+    const m = may(DanhBaCanBo, props);
+    await xongMang(m);
+    const doc = vi.mocked(apiDanhMuc.docDanhMucDanhBa);
+    expect(doc).not.toHaveBeenCalled();
+    props.active = true;
+    await xongMang(m);
+    expect(doc).toHaveBeenCalledTimes(1);
+  });
+});

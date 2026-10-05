@@ -149,16 +149,21 @@ export function nhanLoaiViec(ma: string): string {
 }
 
 /**
- * Cột Lĩnh vực: dòng mặc định nói rõ nó là mặc định; dòng có lĩnh vực hiện **mã thô**.
+ * Cột Lĩnh vực: dòng mặc định nói rõ nó là mặc định; dòng có lĩnh vực hiện **nhãn của xã**, lấy từ
+ * `labels` — bảng `petitions` trả về (`GET /api/v1/citizen-report-fields`, đọc một lần cho cả màn).
  *
- * KHÔNG DỰNG BẢNG TRA MÃ → TÊN LĨNH VỰC Ở ĐÂY. Danh mục `Lĩnh vực phản ánh` chưa có chủ (câu mở
- * #4, ADR 0024) và chưa có tuyến nào phát ra nhãn của nó; một bảng tra gõ tay trong tệp này là bản
- * sao thứ hai của một danh mục chưa ai sở hữu, và bản sao ấy trôi mà không bài test nào đỏ (luật
- * 9, cấm #2). Chính đặc tả cũng in mã thô cho lĩnh vực đã đổi mã (`14-cau-hinh.md:308`).
+ * KHÔNG CÓ BẢNG TRA GÕ TAY Ở ĐÂY: nhãn là của danh mục xã, một bản chép trong tệp này trôi mà không
+ * bài test nào đỏ (luật 9, cấm #2). Mã không có trong `labels` — đọc hỏng, tài khoản thiếu
+ * `admin.lookup`, hay một mã danh mục không còn biết — thì hiện NGUYÊN MÃ, không đoán một tên.
  */
-export function nhanLinhVuc(linhVuc: string, laMacDinh: boolean): string {
+export function nhanLinhVuc(
+  linhVuc: string,
+  laMacDinh: boolean,
+  labels: ReadonlyMap<string, string> = new Map(),
+): string {
   if (laMacDinh) return "Mặc định cho mọi lĩnh vực";
-  return linhVuc;
+  const label = labels.get(linhVuc);
+  return label !== undefined && label !== "" ? label : linhVuc;
 }
 
 /**

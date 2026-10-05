@@ -103,8 +103,22 @@ export const SEED_CONFIRM_TEXT =
   "này cho người phụ trách sau khi tạo.";
 
 export const SEED_HINT =
-  "Đơn vị mới chỉ có vai trò Quản trị hệ thống. Bấm nút dưới để tạo các vai trò mẫu theo đặc tả, " +
+  `Bấm "${SEED_BUTTON}" để tạo sẵn các vai trò thường dùng ở cấp xã, mỗi vai trò kèm bộ quyền mẫu, ` +
   "rồi điều chỉnh quyền của từng vai trò trong bảng.";
+
+/** Said only while it is TRUE — see `seedHint`. */
+export const ONLY_ADMIN_ROLE_HINT = "Hiện đơn vị chỉ có vai trò Quản trị hệ thống.";
+
+/**
+ * The hint above the seed button. The "only the administrator role" sentence is a statement of fact
+ * about this commune, so it is said only when the matrix just read shows exactly that one role —
+ * printed unconditionally it read as false on every commune that already had its roles (PQ-01).
+ * `roles === null` (matrix not read yet, or unreadable) is "do not know": the sentence is omitted.
+ */
+export function seedHint(roles: readonly Pick<identity_vaiTroCotRa, "code">[] | null): string {
+  const onlyAdmin = roles !== null && roles.length === 1 && roles[0]?.code === DEFAULT_ADMIN_ROLE_CODE;
+  return onlyAdmin ? `${ONLY_ADMIN_ROLE_HINT} ${SEED_HINT}` : SEED_HINT;
+}
 
 export type SeedSummaryBlock = { readonly heading: string; readonly names: readonly string[] };
 

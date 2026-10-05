@@ -40,10 +40,14 @@ import {
   type MaTabCauHinh,
 } from "./thanh-tab-cau-hinh";
 
-const NOI_DUNG: Record<MaTabCauHinh, () => ReactNode> = {
+/**
+ * `active` is whether the panel is the one on display. Only a tab that shows catalogues another tab can
+ * change needs it: "Người dùng" re-reads units and roles when it comes back (ND-01/ND-02).
+ */
+const NOI_DUNG: Record<MaTabCauHinh, (active: boolean) => ReactNode> = {
   "so-do-to-chuc": () => <TabSoDoToChuc />,
   "thon-to-dan-pho": () => <TabThonToDanPho />,
-  "nguoi-dung": () => <TabNguoiDung />,
+  "nguoi-dung": (active) => <TabNguoiDung active={active} />,
   "phan-quyen": () => <TabPhanQuyen />,
   "danh-muc": () => <TabDanhMuc />,
   "truong-ban-do": () => <MapFieldTab />,
@@ -153,7 +157,7 @@ export function KhungTabCauHinh() {
             ? { role: "tabpanel", "aria-labelledby": idTab(t.ma), tabIndex: 0 }
             : {})}
         >
-          {NOI_DUNG[t.ma]()}
+          {NOI_DUNG[t.ma](t.ma === chon)}
         </div>
       ))}
     </>

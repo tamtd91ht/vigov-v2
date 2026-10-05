@@ -11,7 +11,7 @@ import type {
   identity_phienHienTaiRa,
 } from "@/lib/api/schema.gen";
 
-import { quyetDinhGhiThoiHan } from "./quyen-tab";
+import { quyetDinhGhiThoiHan, slaFieldLabelReadDecision } from "./quyen-tab";
 import { banTuDong } from "./sua-thoi-han";
 import {
   BAN_TRONG,
@@ -105,7 +105,10 @@ const TUAN_RONG = ok<identity_danhSachCaLamViecRa>({ items: [], problems: [] });
 const NGHI_RONG = ok<identity_danhSachNgayNghiLeRa>({ items: [] });
 const LAM_BU_RONG = ok<identity_danhSachCaLamBuRa>({ items: [], problems: [] });
 
-function ve(du: Partial<DuLieuTab> = {}, them: { coQuyenGhi?: boolean; cauDaXong?: string } = {}) {
+function ve(
+  du: Partial<DuLieuTab> = {},
+  them: { coQuyenGhi?: boolean; cauDaXong?: string; fieldLabels?: ReadonlyMap<string, string> } = {},
+) {
   return renderToStaticMarkup(
     <ManThoiHanXuLy
       du={{
@@ -119,6 +122,7 @@ function ve(du: Partial<DuLieuTab> = {}, them: { coQuyenGhi?: boolean; cauDaXong
       namGoc={2026}
       datNam={() => {}}
       coQuyenGhi={them.coQuyenGhi ?? true}
+      fieldLabels={them.fieldLabels}
       thieuQuyen={false}
       thaoTac={KHONG_LAM_GI}
       cauDaXong={them.cauDaXong ?? ""}
@@ -400,5 +404,23 @@ describe("trạng thái rỗng của hai bảng theo năm", () => {
     const html = ve({ lamBu: LAM_BU_RONG });
 
     expect(html).toContain("Phần lớn các năm là như vậy");
+  });
+});
+
+describe("cột Lĩnh vực (SLA-03)", () => {
+  it("có nhãn của xã → hiện nhãn, cả trong tên nút Sửa; không còn nhắc câu hỏi mở #4", () => {
+    const html = ve({}, { fieldLabels: new Map([["an-ninh-trat-tu", "An ninh, trật tự"]]) });
+    expect(html).toContain("An ninh, trật tự");
+    expect(html).not.toContain(">an-ninh-trat-tu<");
+    expect(html).not.toMatch(/câu mở #4|câu hỏi mở #4/);
+  });
+
+  it("không đọc được nhãn → hiện nguyên mã", () => {
+    expect(ve()).toContain("an-ninh-trat-tu");
+  });
+
+  it("slaFieldLabelReadDecision: chỉ admin.lookup mới đọc danh mục lĩnh vực; admin.sla thôi thì không", () => {
+    expect(slaFieldLabelReadDecision(phienVoi(["admin.sla", "admin.lookup"])).hien).toBe(true);
+    expect(slaFieldLabelReadDecision(phienVoi(["admin.sla"])).hien).toBe(false);
   });
 });

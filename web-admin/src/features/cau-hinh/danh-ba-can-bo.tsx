@@ -127,7 +127,14 @@ type TrangThaiChiTiet =
   | { pha: "loi"; id: string; thongBao: string }
   | { pha: "xong"; id: string; canBo: identity_canBoTomTat };
 
-export function DanhBaCanBo() {
+/**
+ * `active` — whether the tab holding this screen is the one on display. The Cấu hình shell keeps hidden
+ * panels mounted (`khung-tab-cau-hinh.tsx`), so without it the catalogues read at mount would stay frozen
+ * while the officer creates a unit in "Sơ đồ tổ chức" or a role in "Phân quyền" — and the new one would
+ * be missing from this tab's pickers until a full page reload (tester report 05/10, ND-01/ND-02).
+ * Omitted means a screen with no tabs around it: always on display.
+ */
+export function DanhBaCanBo({ active = true }: { active?: boolean } = {}) {
   const [khoaSapXep, datKhoaSapXep] = useState<KhoaSapXep>("code");
   const [chieu, datChieu] = useState<ChieuSapXep>("asc");
   const [nganXep, datNganXep] = useState<NganXepConTro>(TRANG_DAU);
@@ -198,8 +205,11 @@ export function DanhBaCanBo() {
   const [importOpen, setImportOpen] = useState(false);
 
   /**
-   * HAI DANH MỤC, ĐỌC ĐÚNG MỘT LƯỢT KHI MỞ MÀN HÌNH — `[]` ở cuối effect là phần quan trọng
-   * nhất của khối này.
+   * HAI DANH MỤC, ĐỌC ĐÚNG MỘT LƯỢT MỖI LẦN TAB NÀY ĐƯỢC HIỆN — `[active]` ở cuối effect là phần
+   * quan trọng nhất của khối này.
+   *
+   * Đọc lại khi tab quay về hiện: bộ phận hay vai trò vừa tạo ở tab khác của cùng màn Cấu hình phải
+   * có mặt ở đây mà không cần tải lại trang (ND-01/ND-02). Tab đang ẩn thì không đọc — không ai nhìn.
    *
    * Không đọc lại khi đổi trang, đổi sắp xếp hay mở khối chi tiết: danh mục bộ phận và vai trò
    * của một xã không đổi giữa hai lần bấm "Trang sau". Và tuyệt đối không đọc theo từng dòng —
@@ -217,6 +227,7 @@ export function DanhBaCanBo() {
    * mục xã này hiện trên màn hình xã khác (`lib/api/danh-muc.ts`).
    */
   useEffect(() => {
+    if (!active) return;
     let bo = false;
     docDanhMucDanhBa().then((dm) => {
       if (!bo) datDanhMuc(dm);
@@ -224,7 +235,7 @@ export function DanhBaCanBo() {
     return () => {
       bo = true;
     };
-  }, []);
+  }, [active]);
 
   // Dựng bảng tra một lần cho mỗi lần danh mục đổi, không dựng lại ở mỗi dòng.
   const traBoPhan = useMemo<BangTraDanhMuc>(

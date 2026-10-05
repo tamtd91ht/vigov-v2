@@ -9,15 +9,15 @@ import { BusyLabel } from "@/features/danh-ba/busy-label";
 
 import type { KetQua } from "@/lib/api/goi";
 import { seedRoleTemplates } from "@/lib/api/role-templates";
-import type { identity_seedRoleTemplatesOut } from "@/lib/api/schema.gen";
+import type { identity_seedRoleTemplatesOut, identity_vaiTroCotRa } from "@/lib/api/schema.gen";
 
 import {
   SEED_BUTTON,
   SEED_CANCEL_BUTTON,
   SEED_CONFIRM_BUTTON,
   SEED_CONFIRM_TEXT,
-  SEED_HINT,
   SEED_SENDING,
+  seedHint,
   seedSummary,
 } from "./role-templates";
 
@@ -38,7 +38,14 @@ export type SeedPhase =
  * NO RETRY LOOP, NO OPTIMISM: after a 200 the matrix is read again (`onSeeded`), because the new
  * columns and their ticks exist only on the server.
  */
-export function RoleTemplateSeedPanel({ onSeeded }: { onSeeded: () => void }) {
+export function RoleTemplateSeedPanel({
+  onSeeded,
+  roles,
+}: {
+  onSeeded: () => void;
+  /** The matrix's role columns as last read; `null` while unknown. Only feeds the hint (`seedHint`). */
+  roles: readonly identity_vaiTroCotRa[] | null;
+}) {
   const [phase, setPhase] = useState<SeedPhase>({ kind: "idle" });
 
   async function send() {
@@ -51,6 +58,7 @@ export function RoleTemplateSeedPanel({ onSeeded }: { onSeeded: () => void }) {
   return (
     <RoleTemplateSeedView
       phase={phase}
+      hint={seedHint(roles)}
       onOpen={() => setPhase({ kind: "confirming" })}
       onConfirm={() => void send()}
       onCancel={() => setPhase({ kind: "idle" })}
@@ -65,11 +73,13 @@ export function RoleTemplateSeedPanel({ onSeeded }: { onSeeded: () => void }) {
  */
 export function RoleTemplateSeedView({
   phase,
+  hint,
   onOpen,
   onConfirm,
   onCancel,
 }: {
   phase: SeedPhase;
+  hint: string;
   onOpen: () => void;
   onConfirm: () => void;
   onCancel: () => void;
@@ -78,7 +88,7 @@ export function RoleTemplateSeedView({
     <div className="khoi-vai-tro-mau flex min-w-0 flex-col gap-3 [&>*]:my-0">
       {phase.kind === "confirming" || phase.kind === "sending" ? (
         <>
-          <p className="ghi-chu m-0 text-[13px] text-ink-500">{SEED_HINT}</p>
+          <p className="ghi-chu m-0 text-[13px] text-ink-500">{hint}</p>
           <ConfirmDialog
             className="form-danh-muc m-0"
             role="group"
@@ -107,7 +117,7 @@ export function RoleTemplateSeedView({
         </>
       ) : (
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="ghi-chu m-0 min-w-0 flex-1 basis-64 text-[13px] text-ink-500">{SEED_HINT}</p>
+          <p className="ghi-chu m-0 min-w-0 flex-1 basis-64 text-[13px] text-ink-500">{hint}</p>
           <Button
             type="button"
             variant="secondary"

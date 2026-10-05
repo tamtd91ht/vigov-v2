@@ -34,6 +34,8 @@ import type {
   identity_patch_sla_by_id,
   identity_post_sla_defaults,
   identity_suaSLAVao,
+  petitions_get_citizen_report_fields,
+  petitions_petitionFieldListOut,
 } from "./schema.gen";
 
 /**
@@ -51,6 +53,22 @@ import type {
 export function layThoiHanXuLy(): Promise<KetQua<identity_danhSachSLARa>> {
   const duongDan: identity_get_sla["duongDan"] = "/api/v1/sla";
   return docJSON<identity_danhSachSLARa>(duongDan);
+}
+
+/**
+ * GET /api/v1/citizen-report-fields (owned by `petitions`, `admin.lookup`) — code → label of the
+ * commune's petition field catalogue, ONLY to name the "Lĩnh vực" column of the SLA table.
+ *
+ * Every code is kept, disabled and retired ones included: an SLA row may point at a field the commune
+ * has since switched off, and it still deserves its name. A failed read gives an EMPTY map, never an
+ * error on screen — the column then shows the raw code, which is what it showed before (SLA-03). No
+ * module-level cache: the catalogue is one commune's (`danh-muc.ts`).
+ */
+export async function readCitizenReportFieldLabels(): Promise<ReadonlyMap<string, string>> {
+  const path: petitions_get_citizen_report_fields["duongDan"] = "/api/v1/citizen-report-fields";
+  const kq = await docJSON<petitions_petitionFieldListOut>(path);
+  if (!kq.ok) return new Map();
+  return new Map(kq.duLieu.items.map((f) => [f.code, f.label]));
 }
 
 /**
