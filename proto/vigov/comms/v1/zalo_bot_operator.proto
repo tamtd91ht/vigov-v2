@@ -1,0 +1,424 @@
+syntax = "proto3";
+
+package vigov.comms.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// ZaloBotOperatorService manages the ONE shared platform Zalo Bot held by service-comms (ADR 0074
+// #1, #2): its token, its display metadata, its webhook, and the per-commune counts the operator
+// screen shows. The bot is the staff reminder channel (ADR 0074 #1) — never a citizen channel.
+//
+// ONE CALLER: service-platform's operator routes on OPERATOR_HOST (`zalo-bots/shared`, `/check`,
+// `/webhook`, `/communes` — ADR 0074 §"Tài nguyên URL"), for a request a person made in
+// platform-admin, AFTER platform's own ResolveOperatorSession and `ops.zalo_bot.manage` check on
+// that same request. Nothing in the wiring enforces "one caller": the service sits on comms'
+// inter-service port behind the one shared caller key (ADR 0025), like every other service.
+//
+// A SEPARATE SERVICE, NOT METHODS ON CommsService, FOR TWO REASONS:
+//
+//   * A different scope. CommsService serves ONE commune at a time, and its header states "the
+//     commune travels in metadata, always". Every RPC here is PLATFORM-scope: the shared bot belongs
+//     to no commune (ADR 0074 #4 — "không dùng một tenant_id giả"). Six exceptions inside
+//     CommsService would make its header sentence false; here the exception is the service itself.
+//   * A different trust shape. CommsService trusts the commune in metadata; this service trusts
+//     service-platform's operator check (below). A separate generated client means a caller holding
+//     a CommsServiceClient cannot reach a bot-token RPC by a typo.
+//
+// # TRUST — ADR 0074 #3, DECIDED BY THE OWNER 05/10/2026
+//
+// Comms TRUSTS that service-platform has checked `ops.zalo_bot.manage`. No operator token is
+// forwarded and comms does NOT re-ask identity — the owner chose this simplification over the
+// ADR 0070 shape (OperatorService.SetMiniAppSecret resolves the `op1.` token itself). What that
+// costs, stated so nobody assumes otherwise: `actor_code` below is a CLAIM of the caller. It is
+// worth exactly as much as the trust placed in every holder of the shared caller key (core/grpcx
+// package doc, "IT DOES NOT SAY WHICH SERVICE CALLED"). It is the business code platform resolved
+// from the operator's session — never a value platform reads from the HTTP request.
+//
+// # THE COMMUNE: NONE — ANSWERED BY THE OWNER 2026-10-05
+//
+// None of the six RPCs can know a commune at call time: the shared bot belongs to no commune, and
+// ListZaloBotCommuneStats answers about ALL of them. They pass ADR 0012 decision 1's test ("can this
+// RPC know the commune at call time?") with a structural no, and adding them to
+// core/grpcx.methodsWithoutTenant — a STOP CONDITION (`0012-grpc-boundary-contract.md:96-98`) — was
+// put to the owner and answered YES on 2026-10-05 (ADR 0074, frontmatter). They are listed there BY
+// FULL NAME; a seventh RPC added here later is NOT exempt until it is a visible diff on that list.
+// Inventing a commune instead (a "platform" ULID, the first commune, any default) is rule 1,
+// forbidden #1, and ADR 0074 #4 rejects it in so many words.
+//
+// What keeps the exemption from widening the hole:
+//
+//   * no request carries a commune field, and no handler reads tenant.From;
+//   * no response carries business content of any commune — the bot's own metadata, a Zalo call
+//     outcome, and per-commune COUNTS (ADR 0003: platform holds metadata, never business data);
+//   * no response carries a secret: the bot token and the webhook `secret_token` are WRITE-ONLY;
+//   * ListZaloBotCommuneStats DOES return every commune's ULID — the exposure that keeps ListTenants
+//     off the exemption list. Accepted by the owner for this RPC only, because its one intended
+//     caller is service-platform, which owns the commune list those ULIDs come from.
+//
+// # THE TRAIL — rule 6, and ADR 0074 (owner, 05/10/2026)
+//
+// Every WRITE here leaves one entry IN THE SAME TRANSACTION as the change it records (rule 6,
+// invariant 3), in service-comms' own PLATFORM-SCOPE operator trail table — the bot is no commune's
+// record, so the entry never lands in a commune's staff audit screen (ADR 0070 §"Bổ sung 02/10/2026"
+// #7). Attributed `actor_kind = "operator"`, `actor = actor_code` (the operator's BUSINESS CODE,
+// `VH-00001` — rule 6 invariant 8; an empty or malformed code is INVALID_ARGUMENT, there is no
+// fallback to an internal id or to "system"), `actor_ip = actor_ip`. The entry names WHAT changed
+// (bot name, chat URL, "token replaced", "bot account changed, N links ended", "webhook secret
+// rotated") and NEVER a token, a secret_token, or anything derived from either. This comms entry is
+// THE trail.
+//
+// service-platform ADDITIONALLY records a metadata DISPLAY row for its operator log screen (who,
+// what act, when, outcome class) — a view for that screen, not a second trail: it is written after
+// comms answered, outside comms' transaction, and when the two disagree comms' entry is the record.
+//
+// ListZaloBotCommuneStats is a READ ACROSS COMMUNES and is therefore audited too (rule 6,
+// invariant 7), which is why it carries actor_code / actor_ip although it writes nothing else.
+//
+// # ZALO IS NEVER QUOTED
+//
+// Four RPCs call bot-api.zaloplatforms.com (Set, Check, SetWebhook, GetWebhook). The token sits IN
+// THE URL PATH of every such call (`/bot<TOKEN>/<method>`), so a Go `*url.Error`, a transport error string, or a Zalo error body
+// may carry it. A Zalo failure is therefore reported as a ZaloBotCallOutcome CLASS, never as text:
+// no status message, response field, log line or trail entry carries a raw Zalo string or an
+// error's Error() (ADR 0074 §Bối cảnh).
+//
+// # STATUS CODES SAY WHETHER THE CALL WAS MADE PROPERLY; THE RESPONSE SAYS WHAT HAPPENED
+//
+// A Zalo refusal is an ordinary answer, not an RPC failure. One table for the whole service:
+//
+//   OK                  the call was handled. A Zalo outcome, where there is one, is in the response.
+//   INVALID_ARGUMENT    a CALLER fault decided from the request alone, before any read: a missing or
+//                       malformed `actor_code`, a token or field outside its shape. Nothing written,
+//                       nothing sent to Zalo. The status MESSAGE names the rule, never the value.
+//   FAILED_PRECONDITION comms' platform data key is not configured (ADR 0074 #4): nothing can be
+//                       sealed or opened. Nothing written. An operator-facing 503, not a 4xx.
+//   UNAVAILABLE etc.    comms' own store failed. Nothing written (each write is one transaction).
+//                       Retrying is safe — see each RPC.
+//   UNAUTHENTICATED     never produced here; it belongs to the caller-key interceptor.
+//
+// NEVER LOG A REQUEST OF THIS SERVICE WHOLE. The generated String() of SetSharedZaloBotRequest
+// prints the token.
+service ZaloBotOperatorService {
+  // SetSharedZaloBot makes `token`, with `bot_name` and `chat_url`, the live configuration of the
+  // shared bot. Two steps, in this order:
+  //
+  //   1. OUTSIDE any transaction: Zalo `getMe` with the NEW token (read-only at Zalo). It answers
+  //      whether Zalo accepts the token and WHICH BOT ACCOUNT it belongs to (getMe's account id).
+  //      Not OK → `result = TOKEN_CHECK_FAILED`, `zalo_outcome` says the class; NOTHING is written
+  //      and no trail entry — a token Zalo rejects is never saved (owner, 05/10/2026).
+  //   2. ONE comms transaction: seal the token with the PLATFORM data key (ADR 0074 #4 — a
+  //      dedicated sealing function in core/crypto, never a commune's key); replace the single
+  //      configuration row in place (service-comms zalo_bot_shared), storing the bot account id
+  //      getMe returned; record the last check as (now, OK) — step 1 WAS a check of this token;
+  //      one operator-trail entry. The previous token is gone from the row; its who-and-when stays
+  //      in the trail, never its value.
+  //
+  // A DIFFERENT BOT ACCOUNT (owner, 05/10/2026, ADR 0074 frontmatter). Chats belong to a bot: a
+  // staff link paired with the old bot cannot reach anyone through the new one. So when step 1's
+  // account id differs from the stored one — or nothing is stored while links exist (fail closed:
+  // "unknown" is treated as "different") — step 2 also SOFT-DELETES every live staff link
+  // (`deleted_at`, `deleted_by = actor_code`, `delete_reason` naming the bot change — rule 7), in
+  // the SAME transaction, and the trail entry carries the per-commune counts it ended. That write
+  // spans every commune: the comms store call carries `// @cross-tenant:` (rule 1, forbidden #6).
+  //
+  // THE CONFIRMATION. Ending staff links is done only on an operator's informed confirmation of HOW
+  // MANY: inside step 2's transaction, under the row lock, comms counts the live links and compares
+  // with `expected_relink_count`. Different → the transaction rolls back, nothing is written, and the
+  // answer is `result = RELINK_CONFIRMATION_REQUIRED` with `live_link_count` = the actual number. The
+  // screen shows the dialog ("N cán bộ sẽ phải ghép lại") and resubmits with that number. Counting
+  // INSIDE the transaction, not before step 1, means a link made while the dialog was open makes the
+  // numbers differ and asks again — the operator never confirms a number that was not the one acted
+  // on. A first call with the default 0 against a bot with links therefore always gets the dialog.
+  // SAME ACCOUNT (re-setting a rotated token of the same bot): `expected_relink_count` is ignored and
+  // every link is kept.
+  //
+  // WHY AN ANSWER AND NOT FAILED_PRECONDITION: the call was made properly and comms DECIDED something
+  // the caller must act on — the service-wide rule above ("the status says whether the call was made
+  // properly; the response says what happened"). A status error also carries no response body, so
+  // the count would have to ride in error details nobody else in this repository reads. And
+  // FAILED_PRECONDITION already means "platform data key not configured" here; one code with two
+  // meanings is a code a caller cannot act on.
+  //
+  // DOES NOT TOUCH THE WEBHOOK. A different bot account has no webhook pointing at comms until
+  // SetSharedZaloBotWebhook runs again; the screen says so (GetSharedZaloBotWebhook.url_matches).
+  //
+  // NOT IDEMPOTENT, SAFE TO RETRY: a retry after a lost response finds the SAME account now stored,
+  // keeps the links and writes the token again with a new set_at — two true trail entries.
+  rpc SetSharedZaloBot(SetSharedZaloBotRequest) returns (SetSharedZaloBotResponse);
+
+  // GetSharedZaloBot reports the live configuration as metadata: whether a token is set, since when,
+  // by whom, the display fields, and the result of the last CheckSharedZaloBot. NEVER the token nor
+  // anything derived from it (no prefix, length, hash, fingerprint, bot id parsed out of it).
+  //
+  // A PURE READ of comms' own rows: no Zalo call, no trail entry (no personal data, no commune
+  // data). Idempotent. A bot never configured is OK with `configured = false`, not NOT_FOUND.
+  rpc GetSharedZaloBot(GetSharedZaloBotRequest) returns (GetSharedZaloBotResponse);
+
+  // CheckSharedZaloBot opens the live token and calls Zalo `getMe` once. It records the result
+  // (when, outcome class) as the bot's LAST CHECK, with one trail entry naming who ran it, in one
+  // transaction AFTER the Zalo call returns — the Zalo call is never inside a transaction. The bot's
+  // account name `getMe` returned is in the response only; it is not stored.
+  //
+  // `outcome = NOT_CONFIGURED`: no live token; Zalo is not called and nothing is recorded.
+  // If recording fails after Zalo answered, the RPC fails (UNAVAILABLE) and nothing is recorded:
+  // the check simply did not happen as far as the screen knows. Retrying is safe — `getMe` changes
+  // nothing at Zalo.
+  rpc CheckSharedZaloBot(CheckSharedZaloBotRequest) returns (CheckSharedZaloBotResponse);
+
+  // SetSharedZaloBotWebhook points the shared bot at comms. COMMS BUILDS EVERYTHING: the URL is
+  // `https://<ZALO_BOT_WEBHOOK_HOST>/api/v1/zalo-bot-updates` — a platform-wide variable read by
+  // comms only (core/config; `bot.api.vigov.vn` in production, ADR 0074 #5 and frontmatter) — and `secret_token` is fresh
+  // CSPRNG output (rule 13 #2). The caller supplies neither: a caller-chosen URL would let one
+  // holder of the shared caller key redirect every staff update to itself.
+  //
+  // NOT ATOMIC — a comms write and a Zalo call cannot share a transaction. The order is fixed so
+  // that no failure stops updates that were already flowing:
+  //
+  //   1. ONE comms transaction: seal the new secret_token as PENDING beside the current one, trail
+  //      entry "webhook requested". From here the webhook route accepts the current secret OR any
+  //      pending one (constant-time compare against each, ADR 0074 #5).
+  //   2. Zalo `setWebhook(url, secret_token)`.
+  //   3. OK → ONE comms transaction: this PENDING becomes CURRENT, every other secret (old current,
+  //      older pendings) is retired, trail entry "webhook set".
+  //      A DEFINITE refusal (TOKEN_REJECTED, REJECTED, RATE_LIMITED) → ONE comms transaction: this
+  //      pending is cleared (Zalo never used it), trail entry with the outcome class.
+  //      An AMBIGUOUS result (UNAVAILABLE — a timeout may have been applied at Zalo; MALFORMED_RESPONSE)
+  //      → the pending is KEPT accepted and a trail entry records the class: discarding a secret Zalo
+  //      may already be using would 403 every staff update. The next OK call retires it.
+  //
+  // Full failure table and compensation: kb/30-indexes/transaction-boundaries.json,
+  // `tro_webhook_zalo_bot_dung_chung`.
+  //
+  // `outcome = NOT_CONFIGURED`: no live token; nothing written, Zalo not called.
+  // NOT IDEMPOTENT, SAFE TO RETRY: each call rotates the secret_token once more.
+  rpc SetSharedZaloBotWebhook(SetSharedZaloBotWebhookRequest) returns (SetSharedZaloBotWebhookResponse);
+
+  // GetSharedZaloBotWebhook asks Zalo `getWebhookInfo` with the live token and reports what Zalo
+  // says, compared with the URL comms would set. A READ: nothing written, no trail entry. Never the
+  // secret_token. Idempotent.
+  rpc GetSharedZaloBotWebhook(GetSharedZaloBotWebhookRequest) returns (GetSharedZaloBotWebhookResponse);
+
+  // ListZaloBotCommuneStats reports, per commune that comms holds Zalo Bot data for, whether the
+  // commune turned the channel on and how many of its staff have a live link. COUNTS ONLY — no
+  // staff code, no name, no chat_id (ADR 0003: platform holds metadata, never a commune's people).
+  //
+  // @cross-tenant: the operator screen `GET zalo-bots/shared/communes` (ADR 0074 §"Tài nguyên URL",
+  // decided by the user 05/10/2026) shows every commune's uptake of the ONE shared bot; there is no
+  // single commune to scope it to. The comms store query behind it carries the same
+  // `// @cross-tenant:` marker (rule 1, forbidden #6), and the read is AUDITED (rule 6, invariant 7):
+  // one trail entry per call, attributed to `actor_code`.
+  //
+  // A commune comms holds nothing for is ABSENT from the list; the caller (platform, which owns the
+  // commune list) shows it as "off, 0". Ordered by tenant_id — a stable order with no meaning.
+  rpc ListZaloBotCommuneStats(ListZaloBotCommuneStatsRequest) returns (ListZaloBotCommuneStatsResponse);
+}
+
+// The class of a Zalo Bot API call's result. NEVER refined with Zalo's own text (see the service
+// comment, "ZALO IS NEVER QUOTED").
+//
+// UNSPECIFIED (0) IS NEVER SENT by a conforming server; a caller that receives it — a comms older
+// than a value, a bug — shows it as a failure of unknown cause. Never as success.
+enum ZaloBotCallOutcome {
+  ZALO_BOT_CALL_OUTCOME_UNSPECIFIED = 0;
+  // Zalo accepted the call.
+  ZALO_BOT_CALL_OUTCOME_OK = 1;
+  // No live token in comms. Zalo was not called.
+  ZALO_BOT_CALL_OUTCOME_NOT_CONFIGURED = 2;
+  // Zalo refused the token (unauthorised / revoked / unknown bot). Set a new token.
+  ZALO_BOT_CALL_OUTCOME_TOKEN_REJECTED = 3;
+  // Zalo answered 429. Try later; comms does not retry an operator's call in a loop.
+  ZALO_BOT_CALL_OUTCOME_RATE_LIMITED = 4;
+  // Timeout, network failure, or a 5xx/408 from Zalo. Try later.
+  ZALO_BOT_CALL_OUTCOME_UNAVAILABLE = 5;
+  // Any other refusal by Zalo (a 4xx or `ok: false` not covered above).
+  ZALO_BOT_CALL_OUTCOME_REJECTED = 6;
+  // Zalo answered something comms could not read — neither the flat nor the `result`-wrapped shape
+  // ADR 0074 names.
+  ZALO_BOT_CALL_OUTCOME_MALFORMED_RESPONSE = 7;
+}
+
+// The live configuration of the shared bot, as the operator screen may show it.
+//
+// DELIBERATELY ABSENT: the token, and anything derived from it — prefix, length, hash, fingerprint,
+// the bot id that may be parsed out of it. Each narrows a guess; the bot's identity is what `getMe`
+// answers (CheckSharedZaloBotResponse.account_name), never something read out of the token.
+message SharedZaloBotStatus {
+  // When and by whom the token now in force was set — the "đặt lúc … bởi …" line (ADR 0074 #4).
+  google.protobuf.Timestamp set_at = 1;
+  // The operator's BUSINESS CODE, `VH-00001` (rule 6, invariant 8). Never an internal id.
+  string set_by = 2;
+  // True when a sealed token is stored. A bool and nothing more about the value.
+  bool has_token = 3;
+  // As SetSharedZaloBotRequest.bot_name / chat_url.
+  string bot_name = 4;
+  string chat_url = 5;
+}
+
+// The last check of the token now in force: CheckSharedZaloBot's, or the `getMe` SetSharedZaloBot
+// ran before saving (recorded as OK — a token Zalo refused is never saved). WHO ran it is in the
+// trail, not here.
+message SharedZaloBotCheck {
+  google.protobuf.Timestamp checked_at = 1;
+  // The class recorded. Never NOT_CONFIGURED (nothing is recorded then) nor UNSPECIFIED.
+  ZaloBotCallOutcome outcome = 2;
+}
+
+message SetSharedZaloBotRequest {
+  // SECRET (rule 8) — the shared bot's Zalo Bot API token. WRITE-ONLY:
+  //   * never echoed — no response of this service carries it, in any form, ever;
+  //   * never logged at either end, at any level, nor this whole message (String() prints it);
+  //   * never in a status message, an error, a trail entry or a metric label;
+  //   * service-platform forwards it and keeps nothing — no store, no cache, no request-body log.
+  // Verbatim, not trimmed: 1-256 bytes of printable ASCII with no whitespace and none of
+  // `/ ? # %` — it is spliced into a URL PATH, and any of those would change which URL is called.
+  // Outside that is INVALID_ARGUMENT; the message names the rule, never the value.
+  string token = 1;
+
+  // What the operator calls the bot on the screens (staff see it on their "Kết nối Zalo" page).
+  // Trimmed, 1-100 runes, valid UTF-8. Not a secret, not personal data.
+  string bot_name = 2;
+
+  // Where staff open a chat with the bot to pair (the link shown on their "Kết nối Zalo" page). An
+  // ABSOLUTE `https://` URL, at most 300 characters, no userinfo. Anything else is INVALID_ARGUMENT.
+  // Comms stores it and shows it; it never fetches it.
+  string chat_url = 3;
+
+  // The acting operator's BUSINESS CODE (`^VH-[0-9]{5,}$`, the shape of identity's
+  // domain.ValidOperatorCode), as service-platform resolved it from the operator's session. Stored
+  // as the trail's actor and as `set_by`. Empty or malformed is INVALID_ARGUMENT — never a fallback.
+  string actor_code = 4;
+
+  // The operator's client IP as service-platform saw it. Stored as the trail's actor_ip. Decides
+  // nothing. Empty is allowed (stored as unknown), never invented.
+  string actor_ip = 5;
+
+  // The operator's confirmation of how many staff links a CHANGE OF BOT ACCOUNT will end — the number
+  // the dialog showed (a previous answer's `live_link_count`). Read ONLY when getMe names a different
+  // account than the stored one (see the RPC); then it must equal the live link count at the moment
+  // of writing, or nothing is written. Same account: ignored. Negative is INVALID_ARGUMENT. The
+  // default 0 is a real claim ("no link will end"), never "unknown": against a bot with links it
+  // simply gets the dialog.
+  int32 expected_relink_count = 6;
+}
+
+// What SetSharedZaloBot decided.
+//
+// UNSPECIFIED (0) IS NEVER SENT by a conforming server; a caller that receives it treats it as "not
+// saved" — fail closed.
+enum SetSharedZaloBotResult {
+  SET_SHARED_ZALO_BOT_RESULT_UNSPECIFIED = 0;
+  // Saved. `bot` is set; `ended_link_count` says how many links a change of account ended (0 when
+  // the account is the same).
+  SET_SHARED_ZALO_BOT_RESULT_SAVED = 1;
+  // getMe with the new token was not OK; `zalo_outcome` says the class. Nothing written.
+  SET_SHARED_ZALO_BOT_RESULT_TOKEN_CHECK_FAILED = 2;
+  // The token names a different bot account and `expected_relink_count` is not the live link count.
+  // `live_link_count` is the actual number; show it and resubmit with it. Nothing written.
+  SET_SHARED_ZALO_BOT_RESULT_RELINK_CONFIRMATION_REQUIRED = 3;
+}
+
+message SetSharedZaloBotResponse {
+  SetSharedZaloBotResult result = 1;
+  // The configuration now live. Set exactly when SAVED. Metadata only.
+  SharedZaloBotStatus bot = 2;
+  // The class of the getMe made before saving. OK when SAVED or RELINK_CONFIRMATION_REQUIRED.
+  ZaloBotCallOutcome zalo_outcome = 3;
+  // Set when RELINK_CONFIRMATION_REQUIRED: live staff links (all communes) the change would end.
+  int32 live_link_count = 4;
+  // Set when SAVED: links soft-deleted because the bot account changed; 0 for the same account.
+  int32 ended_link_count = 5;
+}
+
+// DELIBERATELY EMPTY: nothing is written, so there is no actor; and no commune, see the service.
+message GetSharedZaloBotRequest {}
+
+message GetSharedZaloBotResponse {
+  // False when no version was ever set. Then `bot` and `last_check` are absent.
+  bool configured = 1;
+  SharedZaloBotStatus bot = 2;
+  // Absent when the live version was never checked.
+  SharedZaloBotCheck last_check = 3;
+}
+
+message CheckSharedZaloBotRequest {
+  // As SetSharedZaloBotRequest.actor_code.
+  string actor_code = 1;
+  // As SetSharedZaloBotRequest.actor_ip.
+  string actor_ip = 2;
+}
+
+message CheckSharedZaloBotResponse {
+  // The check as recorded — the same value GetSharedZaloBot will now return as `last_check`.
+  // Absent exactly when nothing was recorded: no live token (NOT_CONFIGURED, see `outcome`).
+  SharedZaloBotCheck check = 1;
+  // OK, or the class of the failure; NOT_CONFIGURED when no token is stored.
+  ZaloBotCallOutcome outcome = 2;
+  // The bot's account name as `getMe` returned it. Set only when outcome is OK. A bot's public
+  // display name, not personal data. NOT stored: the screen shows it beside the check it came with.
+  string account_name = 3;
+}
+
+message SetSharedZaloBotWebhookRequest {
+  // As SetSharedZaloBotRequest.actor_code.
+  string actor_code = 1;
+  // As SetSharedZaloBotRequest.actor_ip.
+  string actor_ip = 2;
+  // DELIBERATELY NO url and NO secret_token: comms builds both (see the RPC).
+}
+
+message SetSharedZaloBotWebhookResponse {
+  // OK: Zalo accepted, the new secret_token is current. A definite refusal: Zalo kept its previous
+  // webhook and the pending secret was cleared. UNAVAILABLE / MALFORMED_RESPONSE: UNKNOWN whether
+  // Zalo applied it — the pending secret stays accepted; the operator retries (see the RPC).
+  ZaloBotCallOutcome outcome = 1;
+  // The URL comms asked Zalo to call. Set whenever Zalo was called. Not a secret.
+  string url = 2;
+  // When the secret now in force was made current, and by whom (BUSINESS CODE). Set only on OK.
+  google.protobuf.Timestamp set_at = 3;
+  string set_by = 4;
+}
+
+// DELIBERATELY EMPTY: a read, see GetSharedZaloBotRequest.
+message GetSharedZaloBotWebhookRequest {}
+
+message GetSharedZaloBotWebhookResponse {
+  // The outcome of `getWebhookInfo`. The fields below are set only when OK.
+  ZaloBotCallOutcome outcome = 1;
+  // The URL Zalo reports. Empty means Zalo reports no webhook.
+  string url = 2;
+  // True when `url` equals the URL comms would set now. False with a non-empty `url` means the bot
+  // posts somewhere else — the screen warns; it never "fixes" it on read.
+  bool url_matches = 3;
+  // When comms last made a secret_token current, and by whom — from comms' own rows, NOT from
+  // Zalo. Absent when never set. The secret itself is never returned.
+  google.protobuf.Timestamp secret_set_at = 4;
+  string secret_set_by = 5;
+  // Zalo's own "last updated" instant for the webhook, when its answer carries one. Absent
+  // otherwise — Zalo's getWebhookInfo shape is not a ViGov contract; comms reports only what it can
+  // read, never a value it inferred.
+  google.protobuf.Timestamp zalo_updated_at = 6;
+}
+
+message ListZaloBotCommuneStatsRequest {
+  // As SetSharedZaloBotRequest.actor_code — required here because the cross-commune read is audited
+  // (rule 6, invariant 7).
+  string actor_code = 1;
+  // As SetSharedZaloBotRequest.actor_ip.
+  string actor_ip = 2;
+}
+
+message ListZaloBotCommuneStatsResponse {
+  repeated ZaloBotCommuneStats communes = 1;
+}
+
+// One commune's uptake of the shared bot. Counts and a switch — nothing about any person.
+message ZaloBotCommuneStats {
+  // The commune (ULID) this row is about. An ANSWER the server returns about a stored record — never
+  // an input (the comms.proto header draws this line). Platform joins it with its own commune list.
+  string tenant_id = 1;
+  // The commune's own switch on `Cấu hình → Kênh Zalo` (`zalo-channel-settings`). False when the
+  // commune never saved one.
+  bool channel_enabled = 2;
+  // Staff of this commune with a LIVE (not soft-deleted) link to a chat of the shared bot.
+  uint32 linked_staff_count = 3;
+}

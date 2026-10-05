@@ -214,6 +214,25 @@ const MethodResolveMiniApp = "/vigov.platform.v1.PlatformService/ResolveMiniApp"
 //
 // Listed BY FULL NAME, all seven, not by service prefix: an eighth RPC added to OperatorService
 // later must be a visible diff here, not inherited.
+//
+// THE SIX ZaloBotOperatorService RPCs WERE asked, and answered on 2026-10-05: the owner said yes
+// (ADR 0074, frontmatter owns_facts — "sáu RPC vận hành Zalo Bot của comms … KHÔNG cần xã"). They
+// pass ADR 0012's test with a structural no: they manage the ONE shared platform bot, which belongs
+// to no commune (ADR 0074 #1, #4 — a fake commune id is refused in so many words), and the last of
+// them answers about ALL communes. What keeps them from widening the hole (proto/vigov/comms/v1/
+// zalo_bot_operator.proto, service comment):
+//
+//	no request carries a commune field, and no handler reads tenant.From;
+//	no response carries a secret (token and webhook secret_token are write-only) nor business
+//	content of any commune — bot metadata, a Zalo outcome class, per-commune COUNTS (ADR 0003);
+//	ListZaloBotCommuneStats DOES return every commune's ULID — the exposure that keeps ListTenants
+//	off this list. The owner accepted it for this RPC knowingly (ADR 0074, 05/10/2026): its one
+//	intended caller is service-platform, which owns the commune list those ULIDs come from, and
+//	the read is audited in comms as a cross-commune read (rule 6, invariant 7). It does NOT carry
+//	over to ListTenants, whose question has still not been put to the user;
+//	the exemption is from the COMMUNE, not from the CALLER: the caller key is still required.
+//
+// By full name, all six, for the same reason as the operator block.
 var methodsWithoutTenant = map[string]struct{}{
 	MethodResolveHost:           {},
 	MethodResolveCitizenSession: {},
@@ -227,6 +246,13 @@ var methodsWithoutTenant = map[string]struct{}{
 	"/vigov.identity.v1.OperatorService/RegenerateOperatorRecoveryCodes": {},
 	"/vigov.identity.v1.OperatorService/BeginOperatorEnrollment":         {},
 	"/vigov.identity.v1.OperatorService/CompleteOperatorEnrollment":      {},
+
+	"/vigov.comms.v1.ZaloBotOperatorService/SetSharedZaloBot":        {},
+	"/vigov.comms.v1.ZaloBotOperatorService/GetSharedZaloBot":        {},
+	"/vigov.comms.v1.ZaloBotOperatorService/CheckSharedZaloBot":      {},
+	"/vigov.comms.v1.ZaloBotOperatorService/SetSharedZaloBotWebhook": {},
+	"/vigov.comms.v1.ZaloBotOperatorService/GetSharedZaloBotWebhook": {},
+	"/vigov.comms.v1.ZaloBotOperatorService/ListZaloBotCommuneStats": {},
 }
 
 // ExemptFromTenant reports whether fullMethod may be called without a commune.

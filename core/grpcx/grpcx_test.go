@@ -19,6 +19,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
+	commsv1 "github.com/vihat/vigov/core/gen/vigov/comms/v1"
 	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
 	"github.com/vihat/vigov/core/grpcx"
 	"github.com/vihat/vigov/core/httpx"
@@ -95,6 +96,28 @@ func TestDanhSachMienLaTuongMinh(t *testing.T) {
 		if !grpcx.ExemptFromTenant(literal) {
 			t.Fatalf("%s phải được miễn: người vận hành không thuộc xã nào (ADR 0048 §01/10 #2)", literal)
 		}
+	}
+	// Owner's decision of 2026-10-05 (ADR 0074): the shared platform Zalo Bot belongs to no commune.
+	// Literal strings checked against the generated names, as above.
+	zaloBotRPCs := map[string]string{
+		"/vigov.comms.v1.ZaloBotOperatorService/SetSharedZaloBot":        commsv1.ZaloBotOperatorService_SetSharedZaloBot_FullMethodName,
+		"/vigov.comms.v1.ZaloBotOperatorService/GetSharedZaloBot":        commsv1.ZaloBotOperatorService_GetSharedZaloBot_FullMethodName,
+		"/vigov.comms.v1.ZaloBotOperatorService/CheckSharedZaloBot":      commsv1.ZaloBotOperatorService_CheckSharedZaloBot_FullMethodName,
+		"/vigov.comms.v1.ZaloBotOperatorService/SetSharedZaloBotWebhook": commsv1.ZaloBotOperatorService_SetSharedZaloBotWebhook_FullMethodName,
+		"/vigov.comms.v1.ZaloBotOperatorService/GetSharedZaloBotWebhook": commsv1.ZaloBotOperatorService_GetSharedZaloBotWebhook_FullMethodName,
+		"/vigov.comms.v1.ZaloBotOperatorService/ListZaloBotCommuneStats": commsv1.ZaloBotOperatorService_ListZaloBotCommuneStats_FullMethodName,
+	}
+	for literal, generated := range zaloBotRPCs {
+		if literal != generated {
+			t.Fatalf("the proto renamed %s to %s — the exemption no longer names the real RPC", literal, generated)
+		}
+		if !grpcx.ExemptFromTenant(literal) {
+			t.Fatalf("%s must be exempt: the shared Zalo Bot belongs to no commune (ADR 0074)", literal)
+		}
+	}
+	// Per RPC, never per service: CommsService stays commune-bound.
+	if grpcx.ExemptFromTenant("/vigov.comms.v1.CommsService/DeliverStaffNotifications") {
+		t.Fatal("a comms RPC outside ZaloBotOperatorService is exempt — exemption leaked by prefix")
 	}
 	// The exemption is per RPC, never per service: an RPC added to OperatorService later is NOT
 	// inherited.
