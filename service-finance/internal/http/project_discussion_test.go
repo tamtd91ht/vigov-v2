@@ -190,8 +190,8 @@ func newDiscussionServer(t *testing.T) *discussionServer {
 		GhiDuAn: &ghiDuAnGia{}, GhiChungTu: &ghiChungTuGia{}, Nguong: nguongMau(),
 		NganSach: &nganSachGia{}, GhiNganSach: &ghiNganSachGia{}, AuditLog: &auditLogFake{},
 		SystemMessages: &systemMessagesFake{}, Nay: func() time.Time { return lucDaQua7096 }, Log: logger,
-		CapitalPlanCategoryImports: &catalogueImportFake{},
-		FundingSources:             &fundingSourcesFake{}, FundingSourceWrites: &fundingSourceWritesFake{},
+		CapitalPlanCategoryImports: &catalogueImportFake{}, DisbursementImports: &disbursementImportFake{},
+		FundingSources: &fundingSourcesFake{}, FundingSourceWrites: &fundingSourceWritesFake{},
 		ProjectDiscussion: read, ProjectDiscussionWrites: write,
 	})
 	var h http.Handler = mux
@@ -520,7 +520,7 @@ func TestRegisterRefusesMissingDiscussionStores(t *testing.T) {
 		Checker: khongQuyen(), HangMuc: hangMucMau(), GhiHangMuc: &ghiDanhMucGia{}, DuAn: duAnMau(),
 		GhiDuAn: &ghiDuAnGia{}, GhiChungTu: &ghiChungTuGia{}, Nguong: nguongMau(),
 		NganSach: &nganSachGia{}, GhiNganSach: &ghiNganSachGia{}, AuditLog: &auditLogFake{},
-		SystemMessages: &systemMessagesFake{}, CapitalPlanCategoryImports: &catalogueImportFake{},
+		SystemMessages: &systemMessagesFake{}, CapitalPlanCategoryImports: &catalogueImportFake{}, DisbursementImports: &disbursementImportFake{},
 		FundingSources: &fundingSourcesFake{}, FundingSourceWrites: &fundingSourceWritesFake{},
 	})
 }

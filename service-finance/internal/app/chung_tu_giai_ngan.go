@@ -160,9 +160,9 @@ type YeuCauThemChungTu struct {
 	// project with none takes no source, and that voucher is §13 rule 6's "đã chi nhưng chưa ghi rút từ
 	// nguồn nào", still counted toward "đã giải ngân".
 	//
-	// ⚠ EXCEL IMPORT OF VOUCHERS DOES NOT EXIST YET. The prototype imports with a NULL source; whoever
-	// builds it here must decide how that meets this rule on a project with allocations — not in this
-	// card.
+	// THE EXCEL IMPORT DOES NOT BYPASS THIS (the prototype imports with a NULL source): its rows go
+	// through newVoucher and insertNewVoucher like the form's, and its "Nguồn vốn" column carries the
+	// source by name — domain/disbursement_import.go, THE SOURCE RULE (pending the user's confirmation).
 	NguonVonID string
 }
 
@@ -210,6 +210,25 @@ type YeuCauSuaChungTu struct {
 func (uc *ChungTuGiaiNgan) Them(ctx context.Context, yc YeuCauThemChungTu,
 	nguoi audit.Actor) (domain.ChungTuGiaiNgan, error) {
 
+	moi, err := newVoucher(yc, nguoi, uc.sinhID)
+	if err != nil {
+		return domain.ChungTuGiaiNgan{}, err
+	}
+	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		return insertNewVoucher(ctx, tx, uc.kho, moi, nguoi, nil)
+	})
+	if err != nil {
+		// Nothing was committed: no voucher, no trail. The two states agree.
+		return domain.ChungTuGiaiNgan{}, bocChungTu(ctx, "thêm", err)
+	}
+	return moi, nil
+}
+
+// newVoucher is the SHAPE half of creating a voucher — every check that needs no database — and the
+// voucher it would write. SHARED BY Them AND THE EXCEL IMPORT (disbursement_import.go), so a rule added
+// here refuses an imported row exactly as it refuses the form: two copies of these checks would drift,
+// and the copy that drifts is the one letting a file write what the form cannot.
+func newVoucher(yc YeuCauThemChungTu, nguoi audit.Actor, sinhID func() (string, error)) (domain.ChungTuGiaiNgan, error) {
 	if yc.DuAnID == "" {
 		return domain.ChungTuGiaiNgan{}, domain.ErrThieuDuAn
 	}
@@ -239,12 +258,12 @@ func (uc *ChungTuGiaiNgan) Them(ctx context.Context, yc YeuCauThemChungTu,
 		return domain.ChungTuGiaiNgan{}, err
 	}
 
-	id, err := uc.sinhID()
+	id, err := sinhID()
 	if err != nil {
 		return domain.ChungTuGiaiNgan{}, fmt.Errorf("chung_tu_giai_ngan: sinh mã: %w", err)
 	}
 
-	moi := domain.ChungTuGiaiNgan{
+	return domain.ChungTuGiaiNgan{
 		ID:        id,
 		DuAnID:    yc.DuAnID,
 		NgayChi:   yc.NgayChi,
@@ -262,58 +281,71 @@ func (uc *ChungTuGiaiNgan) Them(ctx context.Context, yc YeuCauThemChungTu,
 		// convention for all four `nguoi_*_id` columns, and audit.Actor.ID already carries exactly
 		// that value (the handler reads `Principal.Ma`, rule 6, invariant 8).
 		NguoiNhapID: nguoi.ID,
-	}
+	}, nil
+}
 
-	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
-		// THE PROJECT IS READ FIRST, AND FOR TWO REASONS AT ONCE: it refuses a voucher filed
-		// against a project this commune does not have (money that would total nowhere), and it
-		// yields the BUSINESS CODE the audit entry is filed under. A voucher has no code of its
-		// own — there is no `ma` column on the table — so `subject` is the project's, and the
-		// voucher is named inside the delta.
-		// THE PROJECT ROW IS HELD `FOR SHARE` FROM HERE TO COMMIT, so no allocation edit or project
-		// removal can interleave with this write (store.ProjectForVoucherWrite says why).
-		maDuAn, allocated, err := uc.kho.ProjectForVoucherWrite(ctx, tx, moi.DuAnID)
-		if err != nil {
-			return err
-		}
-		// THE CATALOGUE IS ASKED FIRST, ONLY WHEN A SOURCE WAS NAMED, so an id naming nothing in this
-		// commune keeps its 404 (rule 1: another commune's source and a missing one are one answer).
-		// INSIDE THE TRANSACTION, because with no foreign key underneath (0007:102-113) this check IS
-		// the constraint.
-		if moi.NguonVonID != "" {
-			if err := uc.kho.NguonVonConSong(ctx, tx, moi.NguonVonID); err != nil {
-				return err
-			}
-		}
-		// THEN THE PROJECT'S RULE (decision 06/10/2026): required and one of its sources when it has
-		// allocation lines, absent when it has none.
-		if err := domain.CheckVoucherSource(allocated, moi.NguonVonID); err != nil {
-			return err
-		}
-		if err := uc.kho.Chen(ctx, tx, moi); err != nil {
-			return err
-		}
+// voucherInserter is the part of the store a voucher CREATE needs. Both KhoChungTu and
+// VoucherImportRepo carry it, which is what lets the form and the Excel import share insertNewVoucher.
+type voucherInserter interface {
+	ProjectForVoucherWrite(ctx context.Context, tx *store.ScopedTx, projectID string) (string, []string, error)
+	NguonVonConSong(ctx context.Context, tx *store.ScopedTx, nguonVonID string) error
+	Chen(ctx context.Context, tx *store.ScopedTx, ct domain.ChungTuGiaiNgan) error
+}
 
-		delta, err := json.Marshal(map[string]any{"sau": tomTatChungTu(moi)})
-		if err != nil {
-			return fmt.Errorf("chung_tu_giai_ngan: mã hoá delta: %w", err)
-		}
-		// SAME TRANSACTION AS THE INSERT (rule 6, invariant 3). TenantID is left unset on purpose:
-		// audit.Write fills it from the transaction, which took it from the context (rule 1,
-		// invariant 4). Passing it here would be a second source for the one fact that decides
-		// which commune the entry belongs to.
-		return audit.Write(ctx, tx, audit.Entry{
-			Actor:   nguoi,
-			Action:  HanhViThemChungTu,
-			Subject: maDuAn,
-			Delta:   delta,
-		})
-	})
+// insertNewVoucher is the IN-TRANSACTION half of creating a voucher: the project's lock and rule, the
+// INSERT, and its audit entry — all inside the caller's transaction. SHARED BY Them AND THE EXCEL
+// IMPORT. `provenance` is merged into the audit delta beside `sau` (the import's batch and row); nil
+// for the form.
+func insertNewVoucher(ctx context.Context, tx *store.ScopedTx, kho voucherInserter, moi domain.ChungTuGiaiNgan,
+	nguoi audit.Actor, provenance map[string]any) error {
+
+	// THE PROJECT IS READ FIRST, AND FOR TWO REASONS AT ONCE: it refuses a voucher filed
+	// against a project this commune does not have (money that would total nowhere), and it
+	// yields the BUSINESS CODE the audit entry is filed under. A voucher has no code of its
+	// own — there is no `ma` column on the table — so `subject` is the project's, and the
+	// voucher is named inside the delta.
+	// THE PROJECT ROW IS HELD `FOR SHARE` FROM HERE TO COMMIT, so no allocation edit or project
+	// removal can interleave with this write (store.ProjectForVoucherWrite says why).
+	maDuAn, allocated, err := kho.ProjectForVoucherWrite(ctx, tx, moi.DuAnID)
 	if err != nil {
-		// Nothing was committed: no voucher, no trail. The two states agree.
-		return domain.ChungTuGiaiNgan{}, bocChungTu(ctx, "thêm", err)
+		return err
 	}
-	return moi, nil
+	// THE CATALOGUE IS ASKED FIRST, ONLY WHEN A SOURCE WAS NAMED, so an id naming nothing in this
+	// commune keeps its 404 (rule 1: another commune's source and a missing one are one answer).
+	// INSIDE THE TRANSACTION, because with no foreign key underneath (0007:102-113) this check IS
+	// the constraint.
+	if moi.NguonVonID != "" {
+		if err := kho.NguonVonConSong(ctx, tx, moi.NguonVonID); err != nil {
+			return err
+		}
+	}
+	// THEN THE PROJECT'S RULE (decision 06/10/2026): required and one of its sources when it has
+	// allocation lines, absent when it has none.
+	if err := domain.CheckVoucherSource(allocated, moi.NguonVonID); err != nil {
+		return err
+	}
+	if err := kho.Chen(ctx, tx, moi); err != nil {
+		return err
+	}
+
+	body := map[string]any{"sau": tomTatChungTu(moi)}
+	for k, v := range provenance {
+		body[k] = v
+	}
+	delta, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("chung_tu_giai_ngan: mã hoá delta: %w", err)
+	}
+	// SAME TRANSACTION AS THE INSERT (rule 6, invariant 3). TenantID is left unset on purpose:
+	// audit.Write fills it from the transaction, which took it from the context (rule 1,
+	// invariant 4). Passing it here would be a second source for the one fact that decides
+	// which commune the entry belongs to.
+	return audit.Write(ctx, tx, audit.Entry{
+		Actor:   nguoi,
+		Action:  HanhViThemChungTu,
+		Subject: maDuAn,
+		Delta:   delta,
+	})
 }
 
 // Sua corrects an UNLOCKED voucher.

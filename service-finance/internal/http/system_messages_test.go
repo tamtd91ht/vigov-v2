@@ -119,7 +119,7 @@ func newSystemMessagesHarness(t *testing.T) *systemMessagesHarness {
 		Log:            lg,
 
 		// The catalogue's Excel import — never called here; own suite in internal/http/catalogue_import_test.go.
-		CapitalPlanCategoryImports: &catalogueImportFake{},
+		CapitalPlanCategoryImports: &catalogueImportFake{}, DisbursementImports: &disbursementImportFake{},
 
 		// Funding sources — never called here; own suite in internal/http/funding_sources_test.go.
 		FundingSources:      &fundingSourcesFake{},

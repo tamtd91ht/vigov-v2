@@ -143,6 +143,7 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 
 		// The catalogue's Excel import — never called here; own suite in internal/http/catalogue_import_test.go.
 		CapitalPlanCategoryImports: app.NewCapitalPlanCategoryImporter(nil, nil),
+		DisbursementImports:        app.NewDisbursementImporter(nil, nil),
 
 		// Funding sources — built on a nil *store.DB, never called from this file, present because
 		// Register refuses a nil dependency at construction.

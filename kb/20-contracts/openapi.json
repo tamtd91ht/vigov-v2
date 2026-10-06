@@ -8571,6 +8571,256 @@
         }
       }
     },
+    "/api/v1/disbursements/import-previews": {
+      "post": {
+        "summary": "Kiểm tra một tệp Excel chứng từ giải ngân trước khi nhập — không ghi gì",
+        "operationId": "finance_post_disbursements_import_previews",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "06-giai-ngan §10",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.update"
+        },
+        "x-vigov-task": "8d76a00e48e6",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.disbursementImportPreviewOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/disbursements/import-template": {
+      "get": {
+        "summary": "Tải tệp Excel mẫu để nhập chứng từ giải ngân",
+        "operationId": "finance_get_disbursements_import_template",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "06-giai-ngan §10",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.read"
+        },
+        "x-vigov-task": "a9c54bf51566",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/disbursements/imports": {
+      "post": {
+        "summary": "Nhập chứng từ giải ngân từ tệp Excel — toàn bộ tệp hoặc không gì cả",
+        "operationId": "finance_post_disbursements_imports",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "06-giai-ngan §10",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.update"
+        },
+        "x-vigov-task": "1ccef1be592c",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "DongKhiHong",
+          "on_store_failure_effect": "Store không tới được -> trả 503"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.disbursementImportCreatedOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.catalogueImportRejectedOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/disbursements/{id}": {
       "parameters": [
         {
@@ -34951,6 +35201,95 @@
         },
         "required": [
           "items"
+        ],
+        "additionalProperties": false
+      },
+      "finance.disbursementImportCreatedOut": {
+        "type": "object",
+        "properties": {
+          "valid": {
+            "type": "boolean"
+          },
+          "row_count": {
+            "type": "integer"
+          },
+          "total_amount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/finance.catalogueImportErrorOut"
+            }
+          },
+          "batch": {
+            "type": "string"
+          },
+          "created": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/finance.disbursementImportCreatedRowOut"
+            }
+          }
+        },
+        "required": [
+          "batch",
+          "created",
+          "errors",
+          "row_count",
+          "total_amount",
+          "valid"
+        ],
+        "additionalProperties": false
+      },
+      "finance.disbursementImportCreatedRowOut": {
+        "type": "object",
+        "properties": {
+          "row": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "project_code": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "project_code",
+          "row"
+        ],
+        "additionalProperties": false
+      },
+      "finance.disbursementImportPreviewOut": {
+        "type": "object",
+        "properties": {
+          "valid": {
+            "type": "boolean"
+          },
+          "row_count": {
+            "type": "integer",
+            "description": "số dòng dữ liệu đọc được (bỏ dòng trống)"
+          },
+          "total_amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "đồng"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/finance.catalogueImportErrorOut"
+            }
+          }
+        },
+        "required": [
+          "errors",
+          "row_count",
+          "total_amount",
+          "valid"
         ],
         "additionalProperties": false
       },

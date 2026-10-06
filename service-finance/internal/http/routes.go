@@ -242,6 +242,10 @@ type Deps struct {
 	// routes in routes_catalogue_import.go. See CatalogueImporting.
 	CapitalPlanCategoryImports CatalogueImporting
 
+	// DisbursementImports is the Excel import of disbursement vouchers (§10), three routes in
+	// routes_disbursement_import.go. *app.DisbursementImporter in production. Refused when missing.
+	DisbursementImports DisbursementImporting
+
 	// AuditLog reads this service's own `audit_log` for the "Xem nhật ký hệ thống" screen (ADR 0054).
 	// *audit.Log in production. Refused at construction when missing.
 	AuditLog AuditLogReader
@@ -298,6 +302,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	if d.CapitalPlanCategoryImports == nil {
 		panic("finance/http: thiếu use case nhập Excel hạng mục kế hoạch vốn — ba tuyến /api/v1/capital-plan-categories/import* sẽ panic khi có người gọi")
 	}
+	if d.DisbursementImports == nil {
+		panic("finance/http: thiếu use case nhập Excel giải ngân — ba tuyến /api/v1/disbursements/import* sẽ panic khi có người gọi")
+	}
 	if d.DuAn == nil {
 		panic("finance/http: thiếu kho dự án — các tuyến /api/v1/investment-projects sẽ panic khi có người gọi")
 	}
@@ -340,6 +347,10 @@ func Register(mux *http.ServeMux, d Deps) {
 
 	// The catalogue's Excel import — three routes, all `admin.lookup` (routes_catalogue_import.go).
 	registerCatalogueImportRoutes(mux, d, h)
+
+	// The voucher register's Excel import — `budget.read` template, `budget.update` preview and import
+	// (routes_disbursement_import.go).
+	registerDisbursementImportRoutes(mux, d, h)
 
 	// --- the commune's capital plan category catalogue ----------------------------------------
 	//

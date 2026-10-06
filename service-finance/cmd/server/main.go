@@ -156,6 +156,7 @@ func main() {
 		// Its Excel import (user decision 2026-09-29, ADR 0059 §3), under `admin.lookup`: the SAME store,
 		// so an imported row is inserted by the statement the create form runs.
 		CapitalPlanCategoryImports: app.NewCapitalPlanCategoryImporter(kho, hangMuc),
+		DisbursementImports:        app.NewDisbursementImporter(kho, chungTu),
 		DuAn:                       fistore.NewDuAnStore(kho),
 		// The investment project write path. A SECOND STORE BESIDE THE READ ONE, not the same handle
 		// wearing two interfaces: every method of DuAnGhiStore takes the caller's transaction, and

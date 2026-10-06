@@ -1280,6 +1280,30 @@ export type finance_danhSachHangMucRa = {
   "items": Array<finance_hangMucRa>;
 };
 
+export type finance_disbursementImportCreatedOut = {
+  "valid": boolean;
+  "row_count": number;
+  "total_amount": number;
+  "errors": Array<finance_catalogueImportErrorOut>;
+  "batch": string;
+  "created": Array<finance_disbursementImportCreatedRowOut>;
+};
+
+export type finance_disbursementImportCreatedRowOut = {
+  "row": number;
+  "id": string;
+  "project_code": string;
+};
+
+export type finance_disbursementImportPreviewOut = {
+  "valid": boolean;
+  /** số dòng dữ liệu đọc được (bỏ dòng trống) */
+  "row_count": number;
+  /** đồng */
+  "total_amount": number;
+  "errors": Array<finance_catalogueImportErrorOut>;
+};
+
 export type finance_dongRa = {
   "id": string;
   "parent_id"?: string;
@@ -5314,6 +5338,64 @@ export type finance_post_disbursements = {
   };
   errorCodes: {
     409: "source_not_allocated" | "source_required";
+  };
+};
+
+/** POST /api/v1/disbursements/import-previews — Kiểm tra một tệp Excel chứng từ giải ngân trước khi nhập — không ghi gì */
+export type finance_post_disbursements_import_previews = {
+  duongDan: "/api/v1/disbursements/import-previews";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: finance_disbursementImportPreviewOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/disbursements/import-template — Tải tệp Excel mẫu để nhập chứng từ giải ngân */
+export type finance_get_disbursements_import_template = {
+  duongDan: "/api/v1/disbursements/import-template";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: void;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/disbursements/imports — Nhập chứng từ giải ngân từ tệp Excel — toàn bộ tệp hoặc không gì cả */
+export type finance_post_disbursements_imports = {
+  duongDan: "/api/v1/disbursements/imports";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    201: finance_disbursementImportCreatedOut;
+    400: finance_catalogueImportRejectedOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
   };
 };
 

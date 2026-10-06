@@ -232,7 +232,7 @@ func dungMayChuVoi(t *testing.T, c checkerGia) *mayChu {
 		Log:            slog.New(slog.NewTextHandler(io.Discard, nil)),
 
 		// The catalogue's Excel import — never called here; own suite in internal/http/catalogue_import_test.go.
-		CapitalPlanCategoryImports: &catalogueImportFake{},
+		CapitalPlanCategoryImports: &catalogueImportFake{}, DisbursementImports: &disbursementImportFake{},
 
 		// Funding sources — never called here; own suite in internal/http/funding_sources_test.go.
 		FundingSources:      &fundingSourcesFake{},

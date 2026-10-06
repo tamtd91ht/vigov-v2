@@ -154,7 +154,10 @@ func (h *Handler) CapitalPlanCategoryImportTemplate(w http.ResponseWriter, r *ht
 //	400  no `file` part, or two of them
 //
 // THE FILE NAME IS READ ONLY FOR ITS SUFFIX and never logged or echoed (rule 3, forbidden #4).
-func readCatalogueUpload(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
+//
+// tooLarge writes the 413: each import states its OWN row cap in it (the voucher import reuses this
+// reader, disbursement_import.go), and one shared sentence would quote the wrong figure for one of them.
+func readCatalogueUpload(w http.ResponseWriter, r *http.Request, tooLarge func(http.ResponseWriter)) ([]byte, bool) {
 	mt, _, err := mime.ParseMediaType(r.Header.Get(catalogueHeaderContentType))
 	if err != nil || mt != "multipart/form-data" {
 		httpx.WriteError(w, http.StatusUnsupportedMediaType, "unsupported_media_type",
@@ -174,13 +177,13 @@ func readCatalogueUpload(w http.ResponseWriter, r *http.Request) ([]byte, bool) 
 			break
 		}
 		if err != nil {
-			writeCatalogueUploadError(w, err)
+			writeCatalogueUploadError(w, err, tooLarge)
 			return nil, false
 		}
 		if part.FormName() != catalogueFormField {
 			// Drained, not kept: bounded by the body cap either way.
 			if _, err := io.Copy(io.Discard, part); err != nil {
-				writeCatalogueUploadError(w, err)
+				writeCatalogueUploadError(w, err, tooLarge)
 				return nil, false
 			}
 			continue
@@ -196,11 +199,11 @@ func readCatalogueUpload(w http.ResponseWriter, r *http.Request) ([]byte, bool) 
 		}
 		b, err := io.ReadAll(io.LimitReader(part, xlsx.DefaultLimits.MaxFileBytes+1))
 		if err != nil {
-			writeCatalogueUploadError(w, err)
+			writeCatalogueUploadError(w, err, tooLarge)
 			return nil, false
 		}
 		if int64(len(b)) > xlsx.DefaultLimits.MaxFileBytes {
-			writeCatalogueFileTooLarge(w)
+			tooLarge(w)
 			return nil, false
 		}
 		data = b
@@ -231,10 +234,10 @@ func writeCatalogueFileTooLarge(w http.ResponseWriter) {
 		"Tệp quá lớn. Tối đa 2 MB và 200 dòng mỗi lần nhập.", "")
 }
 
-func writeCatalogueUploadError(w http.ResponseWriter, err error) {
+func writeCatalogueUploadError(w http.ResponseWriter, err error, tooLarge func(http.ResponseWriter)) {
 	var tooBig *http.MaxBytesError
 	if errors.As(err, &tooBig) {
-		writeCatalogueFileTooLarge(w)
+		tooLarge(w)
 		return
 	}
 	httpx.WriteError(w, http.StatusBadRequest, "invalid_request", "Nội dung gửi lên không đọc được.", "")
@@ -244,17 +247,28 @@ func writeCatalogueUploadError(w http.ResponseWriter, err error) {
 // sheetErrs non-empty means the SHEET is not the template (answered by the caller). AN EMPTY SHEET IS
 // A CONTENT ERROR ("Tệp không có dòng nào."), like identity. EVERY SENTINEL HAS ONE FIXED SENTENCE.
 func (h *Handler) readCatalogueRows(w http.ResponseWriter, r *http.Request) ([]domain.CatalogueImportRow, []domain.CatalogueImportError, bool) {
-	data, ok := readCatalogueUpload(w, r)
+	cells, ok := h.readUploadedSheet(w, r, writeCatalogueFileTooLarge, "nhập hạng mục kế hoạch vốn")
 	if !ok {
 		return nil, nil, false
+	}
+	rows, errs := domain.CatalogueRowsFromSheet(cells)
+	return rows, errs, true
+}
+
+// readUploadedSheet reads the upload and its first sheet, or answers and returns false. An EMPTY sheet
+// is ok with no cells — the caller's row reader states it as a content error. Shared by both imports of
+// this service; `what` names the import in the one log line, tooLarge writes its own 413.
+func (h *Handler) readUploadedSheet(w http.ResponseWriter, r *http.Request, tooLarge func(http.ResponseWriter), what string) ([][]string, bool) {
+	data, ok := readCatalogueUpload(w, r, tooLarge)
+	if !ok {
+		return nil, false
 	}
 	cells, err := xlsx.ReadSheet(bytes.NewReader(data), int64(len(data)), xlsx.DefaultLimits)
 	switch {
 	case err == nil, errors.Is(err, xlsx.ErrEmptySheet):
-		rows, errs := domain.CatalogueRowsFromSheet(cells)
-		return rows, errs, true
+		return cells, true
 	case errors.Is(err, xlsx.ErrTooLarge), errors.Is(err, xlsx.ErrTooManyRows):
-		writeCatalogueFileTooLarge(w)
+		tooLarge(w)
 	case errors.Is(err, xlsx.ErrMacroEnabled):
 		httpx.WriteError(w, http.StatusUnsupportedMediaType, "unsupported_file_type",
 			"Tệp có macro (.xlsm) không được nhận. Hãy lưu lại dưới dạng Excel Workbook (.xlsx) không macro.", "")
@@ -266,10 +280,10 @@ func (h *Handler) readCatalogueRows(w http.ResponseWriter, r *http.Request) ([]d
 			"Tệp Excel bị hỏng hoặc không đọc trọn được. Hãy mở tệp bằng Excel, lưu lại rồi gửi lại.", "")
 	default:
 		// No `err` in the log line: it may wrap a read of the request body, and nothing more is known.
-		h.d.Log.Error("nhập hạng mục kế hoạch vốn: đọc tệp lỗi hệ thống", "xa", string(tenant.MustFrom(r.Context())))
+		h.d.Log.Error(what+": đọc tệp lỗi hệ thống", "xa", string(tenant.MustFrom(r.Context())))
 		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
 	}
-	return nil, nil, false
+	return nil, false
 }
 
 // PreviewCapitalPlanCategoryImport serves POST /api/v1/capital-plan-categories/import-previews — 200
