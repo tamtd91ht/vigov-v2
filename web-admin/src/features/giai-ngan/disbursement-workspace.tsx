@@ -13,6 +13,7 @@ import { danhSachNam, namTheoDongHoMay } from "@/lib/nam";
 import { coQuyen, QUYEN_GHI_NGAN_SACH, QUYEN_XEM_GIAI_NGAN } from "@/lib/quyen";
 
 import { BangDuAn } from "./bang-du-an";
+import { FundingSourceProgress } from "./funding-source-progress";
 import { KhoiThemDuAn } from "./ghi-du-an";
 import { DISBURSEMENT_READ_DENIED } from "./nhan-du-an";
 import { DisbursementHeaderActions } from "./pending-parts";
@@ -88,7 +89,14 @@ export function DisbursementWorkspace() {
       />
       <CongQuyen khoa={QUYEN_XEM_GIAI_NGAN} cauThieuQuyen={DISBURSEMENT_READ_DENIED}>
         {/* The empty list repeats `+ Thêm dự án` (prototype `:375-380`); `null` without the key. */}
-        <BangDuAn nam={year} danhMuc={categories} reloadSignal={saves} emptyAction={addProject} />
+        <BangDuAn
+          nam={year}
+          danhMuc={categories}
+          reloadSignal={saves}
+          emptyAction={addProject}
+          // §6, under the same `budget.read` gate as the register; its writes need `budget.update`.
+          fundingProgress={<FundingSourceProgress year={year} canManage={canRecord} />}
+        />
       </CongQuyen>
     </>
   );

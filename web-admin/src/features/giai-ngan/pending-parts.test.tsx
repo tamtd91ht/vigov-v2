@@ -10,7 +10,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { pendingMarkerLabel } from "@/components/ui/pending-feature";
 
 import { FormDuAn } from "./ghi-du-an";
-import { FORM_DU_AN_TRONG, PHAN_CHUA_DUNG_GHI } from "./nhan-ghi-giai-ngan";
+import { FORM_DU_AN_TRONG, PHAN_CHUA_DUNG_GHI, pendingPart } from "./nhan-ghi-giai-ngan";
 import {
   DisbursementHeaderActions,
   DisbursementOverviewPending,
@@ -114,6 +114,14 @@ describe("Giải ngân placeholders (ADR 0068 §14)", () => {
     }
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(setItem).not.toHaveBeenCalled();
+  });
+
+  it("§6 'Tiến độ theo nguồn vốn' is LIVE: no placeholder, no disabled 'Quản lý nguồn vốn', no registry entry", () => {
+    const el = mount(<DisbursementOverviewPending />);
+    expect(el.textContent).not.toContain("Tiến độ theo nguồn vốn");
+    expect(el.textContent).not.toContain("Quản lý nguồn vốn");
+    expect(PHAN_CHUA_DUNG_GHI.some((p) => p.ten === "Tiến độ theo nguồn vốn")).toBe(false);
+    expect(() => pendingPart("Tiến độ theo nguồn vốn")).toThrow();
   });
 
   it("a disabled tab never becomes selected; Chứng từ stays the selected tab", () => {

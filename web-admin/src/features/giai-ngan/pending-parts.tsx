@@ -8,7 +8,6 @@ import {
   MessagesSquare,
   Plus,
   ReceiptText,
-  Settings2,
   TriangleAlert,
   Upload,
   Wallet,
@@ -48,7 +47,6 @@ const CATEGORIES = "Hạng mục"; // §5
 const KPI_CARDS = "Số liệu tổng hợp của năm"; // §3
 const CUMULATIVE_CHART = "Luỹ kế giải ngân so với kế hoạch"; // §4
 const CATEGORY_PROGRESS = "Tiến độ theo hạng mục"; // §5
-const FUNDING_PROGRESS = "Tiến độ theo nguồn vốn"; // §6
 const ONLY_DELAYED = "Chỉ dự án chậm"; // §7.1
 const GROUP_BY_CATEGORY = "Gộp theo hạng mục"; // §7.1
 /** Names of the list table's two pending columns, read by `bang-du-an.tsx`. */
@@ -85,9 +83,9 @@ export function DisbursementHeaderActions() {
 }
 
 /**
- * Body of the list screen between the scope banner and the filter row, in the prototype's order and
- * spacing (`BudgetWorkspace.tsx:198-269`): four KPI cards, the cumulative chart, the per-category
- * table, the per-funding-source block.
+ * Body of the list screen between the scope banner and the live funding-source block, in the
+ * prototype's order and spacing (`BudgetWorkspace.tsx:198-251`): four KPI cards, the cumulative chart,
+ * the per-category table.
  */
 export function DisbursementOverviewPending() {
   const kpi = pendingPart(KPI_CARDS);
@@ -105,22 +103,8 @@ export function DisbursementOverviewPending() {
         className="mb-4"
       />
       <PendingSection info={pendingPart(CATEGORY_PROGRESS)} title="Tiến độ theo hạng mục" className="mb-5" />
-      <PendingSection info={pendingPart(FUNDING_PROGRESS)} title="Tiến độ theo nguồn vốn" className="mb-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <span>{PENDING_HOVER_TEXT}</span>
-          {/* The prototype's `[⚙ Quản lý nguồn vốn]` (`SourceReportPanel.tsx:76-81`), right-aligned —
-              drawn disabled; the section's "?" explains both. */}
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            icon={<Settings2 aria-hidden="true" />}
-            disabled
-          >
-            Quản lý nguồn vốn
-          </Button>
-        </div>
-      </PendingSection>
+      {/* §6 "Tiến độ theo nguồn vốn" is LIVE since migration 0013 (`funding-source-progress.tsx`); the
+          register draws it right after this block, in the prototype's order. */}
     </>
   );
 }

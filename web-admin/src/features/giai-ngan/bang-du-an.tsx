@@ -45,11 +45,12 @@ import { ScopeNotice } from "./scope-notice";
  *
  * WHAT THE PROTOTYPE DRAWS THAT THIS DOES NOT FILL, and why — read before adding a figure:
  *
- *   KPI cards · cumulative chart · per-category and per-source blocks · the `Đơn vị / phụ trách`,
+ *   KPI cards · cumulative chart · per-category block · the `Đơn vị / phụ trách`,
  *   `Nguồn vốn` and `Vướng mắc mới nhất` columns · `Chỉ dự án chậm` · `Gộp theo hạng mục`
  *
  * All are disabled "?" placeholders at their prototype position (ADR 0068 §14, `pending-parts.tsx`);
- * none shows a figure. No route returns year totals, funding or issue data, and `org_unit_id` /
+ * none shows a figure. The per-source block is live and passed in (`fundingProgress`). No route
+ * returns year totals or issue data, the list carries no funding per project, and `org_unit_id` /
  * `assignee_id` arrive as internal ids. Drawing "0 vướng mắc" would tell leadership a figure nobody
  * measured.
  *
@@ -72,6 +73,7 @@ export function BangDuAn({
   danhMuc,
   reloadSignal,
   emptyAction,
+  fundingProgress,
 }: {
   /** Budget year chosen in the page header. */
   nam: number;
@@ -80,6 +82,8 @@ export function BangDuAn({
   reloadSignal: number;
   /** `+ Thêm dự án` repeated inside the empty state; `null` for an account without the key. */
   emptyAction?: ReactNode;
+  /** §6 block (`FundingSourceProgress`), drawn after the category table as the prototype orders it. */
+  fundingProgress?: ReactNode;
 }) {
   const [hangMucId, datHangMucId] = useState("");
   const [keyword, setKeyword] = useState("");
@@ -140,6 +144,7 @@ export function BangDuAn({
       )}
 
       <DisbursementOverviewPending />
+      {fundingProgress}
 
       {/* ONE filter row (prototype `:271-359`): search, category, the two checkboxes. The budget
           year is in the page header, as the prototype puts it. */}

@@ -696,13 +696,7 @@ export const PHAN_CHUA_DUNG_GHI: readonly PhanChuaDung[] = [
       "Bảng cần tổng kế hoạch vốn và tổng đã giải ngân của từng hạng mục trong năm. Hệ thống chưa " +
       "tính các tổng ấy.",
   },
-  // §6 per-funding-source block + `Quản lý nguồn vốn`: no route reads or manages the funding catalogue.
-  {
-    ten: "Tiến độ theo nguồn vốn",
-    viSao:
-      "Hệ thống chưa có danh mục nguồn vốn, nên chưa tính được số đã phân bổ và đã giải ngân theo " +
-      "từng nguồn, và chưa quản lý được nguồn vốn.",
-  },
+  // §6 per-funding-source block + `Quản lý nguồn vốn`: BUILT (migration 0013, `funding-source-progress.tsx`).
   // §7.1 filter: the project list route filters by budget year and category only.
   {
     ten: "Chỉ dự án chậm",
