@@ -573,6 +573,15 @@
       "trang_thai": "dang_lam",
       "bang_chung": "Một câu GROUP BY GROUPING SETS dùng lại nguyên văn taskMetricCondition (store/task_summary.go); vị từ mới taskInHandCondition cho 'Tổng việc'. go build/vet/test ./... xanh (main session kiểm lại 04/10/2026). Test pg task_unit_summary_pg_test.go CHƯA CHẠY — máy không có VIGOV_TEST_DSN.",
       "tiep_theo": "Chạy task_unit_summary_pg_test.go với PostgreSQL thật (GROUPING SETS/GROUPING() mới chỉ suy luận) rồi đổi sang xong. Phiên chéo xã trả 401 (authz của service này), không phải 403 như thẻ ghi."
+    },
+    {
+      "id": "giai-ngan-nhiem-vu-theo-doi-vuong-mac",
+      "menu": "giai-ngan",
+      "viec": "Bên tiêu thụ: vướng mắc ghi trên dự án đầu tư có cán bộ phụ trách → tạo nhiệm vụ theo dõi (06-giai-ngan.md §13 quy tắc 4), qua SỰ KIỆN từ finance (ADR 0075 #5)",
+      "trang_thai": "chua_lam",
+      "bang_chung": "Chưa có consumer nào trong service-petitions cho sự kiện của finance; phía phát cũng chưa có (sổ service-finance → `giai-ngan-su-kien-vuong-mac-nhac-ten`). Kiểm 06/10/2026.",
+      "no_confirm": [],
+      "tiep_theo": "Chờ thiết kế sự kiện (lượt bị chặn quyền 06/10/2026, chờ chủ dự án). Khi dựng: tiêu thụ luỹ đẳng (luật 2 bất biến 5), tenant_id trong thông điệp — thiếu thì từ chối (luật 1 bất biến 9), vết theo chủ thể hệ thống (luật 6 bất biến 6). Câu cần chốt cùng lượt: loại nhiệm vụ, người giao (chủ thể hệ thống hay người ghi vướng mắc), hạn mặc định (ADR 0065 NV6: 17:00, +7 ngày?), và khi vướng mắc đã gỡ thì nhiệm vụ ra sao."
     }
   ]
 }

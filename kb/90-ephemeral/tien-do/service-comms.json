@@ -330,6 +330,15 @@
       "trang_thai": "dang_lam",
       "bang_chung": "e2a4f2f3 migration 0018 (7 bảng). 66f78014 internal/zalobot (không trả error, chỉ lớp kết quả — token trong URL không lọt), platformstore (cấm ghi thiếu vết vận hành), 6 RPC ZaloBotOperatorService. a29a78eb + 14a06dd1 webhook /api/v1/zalo-bot-updates chỉ trên ZALO_BOT_WEBHOOK_HOST (giới hạn mạng → so khoá thời gian hằng → thân 64 KB), ghép nối qua chat, zalo-links/* (AnyAuthenticated) + zalo-links, zalo-channel-settings (admin.lookup), outbox zalo_delivery cùng giao dịch chuông (SAVEPOINT), bộ gửi 30 s. go test 15 gói xanh; 5 test PG mới xanh trên postgres:16.",
       "tiep_theo": "(1) Ngưỡng 600/phút/mạng của webhook là TẠM — luật 13 STOP, chờ chủ dự án. (2) 'Sai 3 lần huỷ mã' chưa có tác dụng (mã sai không khớp dòng nào để đếm) — hỏi chủ dự án cách hiểu. (3) Nhịp nhắc việc trễ lưu nhưng chưa áp: staff_notification không có hạn/số ngày trễ — cần thêm vào comms.proto. (4) Chú thích proto nói mỗi lần trỏ webhook xoay khoá; mã giữ một ô chờ và gửi lại — sửa chú thích. (5) Lùi gửi 1→30 phút, tối đa 6 lần do agent chọn. (6) Hai test PG nội dung Mini App đỏ từ trước (noi_dung_mini_app_pg_test.go:324,482), ngoài việc này."
+    },
+    {
+      "id": "giai-ngan-thong-bao-nhac-ten",
+      "menu": "giai-ngan",
+      "viec": "Bên tiêu thụ: ý kiến trao đổi trên dự án đầu tư có @nhắc tên cán bộ → thông báo vào chuông của người được nhắc, qua SỰ KIỆN từ finance (ADR 0075 #5)",
+      "trang_thai": "chua_lam",
+      "bang_chung": "Chưa có consumer nào trong service-comms cho sự kiện của finance; tuyến POST /api/v1/investment-projects/{id}/comments tự ghi 'chưa gửi thông báo' (kb/30-indexes/api-surface.json). Phía phát: sổ service-finance → `giai-ngan-su-kien-vuong-mac-nhac-ten`. Kiểm 06/10/2026.",
+      "no_confirm": [],
+      "tiep_theo": "Chờ thiết kế sự kiện (lượt bị chặn quyền 06/10/2026, chờ chủ dự án). Khi dựng: tiêu thụ luỹ đẳng, tenant_id trong thông điệp, thân thông báo KHÔNG chép nội dung ý kiến (tự do, có thể chứa dữ liệu cá nhân — luật 3); chỉ báo 'được nhắc trong trao đổi của dự án <mã>' và liên kết. Người được nhắc định danh bằng mã cán bộ."
     }
   ]
 }
