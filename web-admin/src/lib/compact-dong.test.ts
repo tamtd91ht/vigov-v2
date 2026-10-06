@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { compactDong } from "./view";
+import { compactDong } from "./compact-dong";
 
 // Tester screenshot 06/10/2026: "690.000.000 đồn" clipped and "9.640.000.000 / đồng" broken over two
 // lines in a dashboard tile. A tile shows the sum short, like the prototype's "4.317 tỷ"; the exact

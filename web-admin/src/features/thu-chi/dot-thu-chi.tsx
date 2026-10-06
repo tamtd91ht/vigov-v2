@@ -1,24 +1,15 @@
 "use client";
 
-import {
-  ArrowLeftRight,
-  CircleCheck,
-  ListOrdered,
-  LockKeyhole,
-  PencilLine,
-  Plus,
-  Trash2,
-  X,
-} from "lucide-react";
+import { CircleCheck, ListOrdered, LockKeyhole, PencilLine, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Field } from "@/components/ui/field";
+import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
 import { Notice } from "@/components/ui/notice";
 import { SkeletonRows } from "@/components/ui/skeleton";
 import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
@@ -43,7 +34,6 @@ import {
   MO_TA_HOP_DOT,
   nhanNgayLuyKe,
   nhanSoTien,
-  O_TRONG,
   tieuDeHopDot,
   type DonViHien,
   type NhapDot,
@@ -149,25 +139,21 @@ export function HopDotThuChi({
   const sheetLock = sheetLockReason(closes, sheetYear);
   const monthsHint = closedMonthsHint(closes, sheetYear);
 
+  // The prototype's `FiscalEntriesDialog`: a centred modal 52rem wide, title = the line, the entry form
+  // on top and the list under it. Esc and `Đóng` both close it; nothing is lost — every entry is
+  // saved by its own submit.
   return (
-    <Card as="section" role="dialog" aria-labelledby="tieu-de-hop-dot">
-      <CardHeader className="justify-between">
-        <CardTitle as="h3" id="tieu-de-hop-dot" className="inline-flex min-w-0 items-center gap-2">
-          <ArrowLeftRight aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
-          {tieuDeHopDot(tenKhoanMuc)}
-        </CardTitle>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          icon={<X aria-hidden="true" focusable="false" strokeWidth={1.8} />}
-          onClick={dong}
-        >
-          Đóng
+    <ModalDialog titleId="tieu-de-hop-dot" size="lg" className="max-w-[52rem]" onDismiss={dong}>
+      <div className="flex min-w-0 shrink-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <ModalDialogHeader titleId="tieu-de-hop-dot" title={tieuDeHopDot(tenKhoanMuc)} />
+        </div>
+        <Button type="button" variant="icon" size="sm" aria-label="Đóng" title="Đóng" onClick={dong}>
+          <X aria-hidden="true" focusable="false" strokeWidth={1.8} />
         </Button>
-      </CardHeader>
+      </div>
 
-      <div className="flex min-w-0 flex-col gap-4 p-4">
+      <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto">
       <NoiDungHopDot
         method={method}
         cot={cot}
@@ -250,7 +236,7 @@ export function HopDotThuChi({
         )}
       </NoiDungHopDot>
       </div>
-    </Card>
+    </ModalDialog>
   );
 }
 
@@ -323,18 +309,18 @@ export function NoiDungHopDot({
           <table className={cn("bang-danh-muc", DATA_TABLE_CLASS)}>
             <thead>
               <tr>
+                {/* The prototype's four columns: Ngày · Nội dung (with "Đơn vị, cá nhân · Số chứng
+                    từ" under it) · one per money column · the remove action. */}
                 <th scope="col">Ngày</th>
                 <th scope="col">Nội dung</th>
-                <th scope="col">Đơn vị, cá nhân</th>
-                <th scope="col">Số chứng từ</th>
                 {cot.map((c) => (
                   <th key={c.id} scope="col" className="text-right">
                     {c.name}
                   </th>
                 ))}
                 {coXacNhan && (
-                  <th scope="col" className="text-right">
-                    Thao tác
+                  <th scope="col">
+                    <span className="an-thi-giac">Thao tác</span>
                   </th>
                 )}
               </tr>
@@ -343,10 +329,13 @@ export function NoiDungHopDot({
               {danhSach.duLieu.entries.map((d) => {
                 const lock = entryLockReason(closes, d.date, sheetYear);
                 const adjustment = d.adjustment_reason ?? "";
+                // ĐÃ CHE Ở MÁY CHỦ (`privacy.MaskName`) — in nguyên, không khôi phục (luật 3).
+                const counterparty = d.counterparty ?? "";
+                const documentNo = d.document_no ?? "";
                 return (
                 <tr key={d.id}>
-                  <td className="tabular-nums">{nhanNgayLuyKe(d.date)}</td>
-                  <td className="whitespace-normal">
+                  <td className="align-top tabular-nums">{nhanNgayLuyKe(d.date)}</td>
+                  <td className="min-w-[14rem] align-top whitespace-normal">
                     {adjustment !== "" && (
                       <>
                         <Badge tone="warning" icon={PencilLine}>
@@ -361,12 +350,14 @@ export function NoiDungHopDot({
                         <span className="ghi-chu">Lý do điều chỉnh: {adjustment}</span>
                       </>
                     )}
+                    {(counterparty !== "" || documentNo !== "") && (
+                      <span className="block text-xs text-ink-500">
+                        {[counterparty, documentNo].filter((s) => s !== "").join(" · ")}
+                      </span>
+                    )}
                   </td>
-                  {/* ĐÃ CHE Ở MÁY CHỦ — in nguyên, không khôi phục (luật 3). */}
-                  <td>{d.counterparty !== undefined && d.counterparty !== "" ? d.counterparty : O_TRONG}</td>
-                  <td>{d.document_no !== undefined && d.document_no !== "" ? d.document_no : O_TRONG}</td>
                   {cot.map((c) => (
-                    <td key={c.id} className="text-right tabular-nums">
+                    <td key={c.id} className="text-right align-top tabular-nums">
                       <OTien
                         chu={nhanSoTien(d.values[c.id] ?? null, donVi.ma)}
                         lyDo={lyDoKhongTinh(d.unavailable_reasons?.[c.id])}
@@ -374,7 +365,7 @@ export function NoiDungHopDot({
                     </td>
                   ))}
                   {coXacNhan && (
-                    <td className="text-right">
+                    <td className="text-right align-top">
                       {lock === null ? (
                         // A removal keeps its WORDS (spec v2 §7) and the red outline.
                         <Button
@@ -453,8 +444,11 @@ export function FormGhiDot({
   const [ngayMacDinh] = useState(homNay);
 
   return (
+    // The prototype's entry form: ONE tinted box, a 4-column grid from 640px — Ngày | Nội dung (3) ·
+    // Đơn vị, cá nhân (2) | Số chứng từ (2) · one box per money column · `Ghi đợt` in the last cell.
     <form
-      className="flex min-w-0 flex-col gap-4 rounded-xl border border-line p-4"
+      aria-label="Ghi một đợt"
+      className="grid min-w-0 gap-3 rounded-xl border border-line bg-surface-muted p-3 sm:grid-cols-4"
       onSubmit={(e) => {
         e.preventDefault();
         const bieuMau = e.currentTarget;
@@ -474,9 +468,6 @@ export function FormGhiDot({
         );
       }}
     >
-      <h4 className="m-0 text-sm font-semibold text-ink-900">Ghi một đợt</h4>
-      {/* Labels above, 40px controls, two columns from 640px (spec §6.3, §6.5). */}
-      <div className="grid min-w-0 gap-4 sm:grid-cols-2">
         <Field label="Ngày" htmlFor="dot-date" grow="auto">
           <input
             id="dot-date"
@@ -487,7 +478,7 @@ export function FormGhiDot({
             defaultValue={ngayMacDinh}
           />
         </Field>
-        <Field label="Nội dung" htmlFor="dot-content" grow="auto">
+        <Field label="Nội dung" htmlFor="dot-content" grow="auto" className="sm:col-span-3">
           <input
             id="dot-content"
             name="content"
@@ -498,7 +489,7 @@ export function FormGhiDot({
             placeholder="Thu tiền sử dụng đất đợt 2"
           />
         </Field>
-        <Field label="Đơn vị, cá nhân" htmlFor="dot-counterparty" grow="auto">
+        <Field label="Đơn vị, cá nhân" htmlFor="dot-counterparty" grow="auto" className="sm:col-span-2">
           <input
             id="dot-counterparty"
             name="counterparty"
@@ -508,7 +499,7 @@ export function FormGhiDot({
             autoComplete="off"
           />
         </Field>
-        <Field label="Số chứng từ" htmlFor="dot-document-no" grow="auto">
+        <Field label="Số chứng từ" htmlFor="dot-document-no" grow="auto" className="sm:col-span-2">
           <input
             id="dot-document-no"
             name="document_no"
@@ -522,7 +513,7 @@ export function FormGhiDot({
           label="Lý do điều chỉnh (chỉ điền khi đây là đợt điều chỉnh)"
           htmlFor="dot-adjustment-reason"
           grow="auto"
-          className="sm:col-span-2"
+          className="sm:col-span-4"
           hint={
             <span id="dot-adjustment-reason-hint">
               Đợt điều chỉnh sửa sai sót của một kỳ đã chốt và được ghi ở kỳ còn mở. Để trống nếu là
@@ -551,18 +542,18 @@ export function FormGhiDot({
             />
           </Field>
         ))}
-      </div>
-      <p className="m-0 flex justify-end">
+      <div className="flex min-w-0 items-end">
         <Button
           type="submit"
           variant="primary"
+          className="w-full"
           icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
           disabled={dangGui}
           aria-busy={dangGui || undefined}
         >
           <BusyLabel busy={dangGui} label="Ghi đợt" busyText={BUSY_SAVING} />
         </Button>
-      </p>
+      </div>
     </form>
   );
 }

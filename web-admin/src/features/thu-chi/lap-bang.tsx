@@ -1,12 +1,12 @@
 "use client";
 
-import { FilePlus2, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import { Button } from "@/components/ui/button";
-import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
+import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
 import { Notice } from "@/components/ui/notice";
 import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 import type { KetQua } from "@/lib/api/goi";
@@ -51,14 +51,19 @@ export function LapBang({
   dangGui,
   datDangGui,
   xong,
+  onClose,
+  serverError = null,
 }: {
   nam: number;
   loai: LoaiBang;
   dangGui: boolean;
   datDangGui: (b: boolean) => void;
   xong: (kq: KetQua<unknown>) => void;
+  /** Closes the dialog. Esc is ignored while the POST is in flight — closing then would hide whether a sheet was created. */
+  onClose: () => void;
+  /** The server's refusal of the last submit, verbatim (shown inside the dialog, not behind it). */
+  serverError?: string | null;
 }) {
-  const [mo, datMo] = useState(false);
   const [cot, datCot] = useState<readonly finance_cotVao[]>(() => boCotKhoiDiem(loai, nam));
 
   /**
@@ -71,159 +76,147 @@ export function LapBang({
    */
   const [khoaChongTrung] = useState(khoaChongTrungMoi);
   const [loi, datLoi] = useState<string | null>(null);
+  const shownError = loi ?? serverError;
 
-  if (!mo) {
-    // The one action of the "no sheet yet" state, so it is that region's solid button (spec §5).
-    return (
-      <p className="m-0 flex justify-center">
-        <Button
-          type="button"
-          variant="primary"
-          icon={<FilePlus2 aria-hidden="true" focusable="false" strokeWidth={1.8} />}
-          onClick={() => datMo(true)}
-        >
-          Lập bảng {nhanLoaiBang(loai).toLowerCase()} năm {nam}
-        </Button>
-      </p>
-    );
-  }
-
+  // A centred dialog, opened from the selection bar's `Lập bảng` (ADR 0068 lần 5: the prototype opens
+  // its forms as dialogs). The fields scroll between the title and the buttons (`ModalDialog` contract).
   return (
-    <Card
-      as="form"
-      aria-labelledby="tieu-de-lap-bang"
-      onSubmit={(e: FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        const fd = new FormData(e.currentTarget);
-        const dung = dungThanTaoBang({
-          nam,
-          loai,
-          tieuDe: String(fd.get("title") ?? ""),
-          donVi: String(fd.get("unit") ?? ""),
-          luyKe: String(fd.get("cumulative_to") ?? ""),
-          cot,
-        });
-        if (!dung.ok) {
-          datLoi(dung.thongBao);
-          return;
-        }
-        datLoi(null);
-        datDangGui(true);
-        taoBang(dung.than, khoaChongTrung).then(xong);
+    <ModalDialog
+      titleId={CREATE_SHEET_TITLE_ID}
+      size="lg"
+      onDismiss={() => {
+        if (!dangGui) onClose();
       }}
     >
-      <CardHeader>
-        <CardTitle as="h3" id="tieu-de-lap-bang">
-          Lập bảng {nhanLoaiBang(loai).toLowerCase()} năm {nam}
-        </CardTitle>
-      </CardHeader>
+      <ModalDialogHeader
+        titleId={CREATE_SHEET_TITLE_ID}
+        title={`Lập bảng ${nhanLoaiBang(loai).toLowerCase()} năm ${nam}`}
+      />
+      <form
+        aria-labelledby={CREATE_SHEET_TITLE_ID}
+        className="flex min-h-0 min-w-0 flex-col gap-4"
+        onSubmit={(e: FormEvent<HTMLFormElement>) => {
+          e.preventDefault();
+          const fd = new FormData(e.currentTarget);
+          const dung = dungThanTaoBang({
+            nam,
+            loai,
+            tieuDe: String(fd.get("title") ?? ""),
+            donVi: String(fd.get("unit") ?? ""),
+            luyKe: String(fd.get("cumulative_to") ?? ""),
+            cot,
+          });
+          if (!dung.ok) {
+            datLoi(dung.thongBao);
+            return;
+          }
+          datLoi(null);
+          datDangGui(true);
+          taoBang(dung.than, khoaChongTrung).then(xong);
+        }}
+      >
+        <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto">
+          <Notice tone="neutral">
+            Chức năng nạp tệp Excel của Phòng Tài chính chưa có, nên bảng được lập bằng biểu mẫu này.
+            Bộ cột dưới đây điền sẵn theo biểu mẫu thường gặp và sửa được — cột là dữ liệu của bảng,
+            không phải cấu trúc cố định.
+          </Notice>
 
-      <div className="flex min-w-0 flex-col gap-4 p-4">
-        <Notice tone="neutral">
-          Chức năng nạp tệp Excel của Phòng Tài chính chưa có, nên bảng được lập bằng biểu mẫu này.
-          Bộ cột dưới đây điền sẵn theo biểu mẫu thường gặp và sửa được — cột là dữ liệu của bảng,
-          không phải cấu trúc cố định.
-        </Notice>
+          {/* Labels above, 40px controls, two columns from 640px (spec §6.3, §6.5). */}
+          <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+            <Field
+              label="Tiêu đề bảng (in trên đầu báo cáo)"
+              htmlFor="lap-title"
+              grow="auto"
+              className="sm:col-span-2"
+            >
+              <input
+                id="lap-title"
+                name="title"
+                className="o-nhap"
+                type="text"
+                required
+                maxLength={300}
+                placeholder="BÁO CÁO CHI NGÂN SÁCH NHÀ NƯỚC XÃ … NĂM …"
+              />
+            </Field>
 
-        {/* Labels above, 40px controls, two columns from 640px (spec §6.3, §6.5). */}
-        <div className="grid min-w-0 gap-4 sm:grid-cols-2">
-          <Field
-            label="Tiêu đề bảng (in trên đầu báo cáo)"
-            htmlFor="lap-title"
-            grow="auto"
-            className="sm:col-span-2"
-          >
-            <input
-              id="lap-title"
-              name="title"
-              className="o-nhap"
-              type="text"
-              required
-              maxLength={300}
-              placeholder="BÁO CÁO CHI NGÂN SÁCH NHÀ NƯỚC XÃ … NĂM …"
-            />
-          </Field>
+            <Field
+              label="Đơn vị tính"
+              htmlFor="lap-unit"
+              kind="select"
+              grow="auto"
+              hint={
+                "Số liệu luôn lưu bằng đồng. Đơn vị tính chỉ quyết định cách hiện và cách gõ số trên " +
+                "bảng, và đổi được về sau mà không con số nào bị quy đổi."
+              }
+            >
+              <select id="lap-unit" name="unit" required defaultValue={DON_VI_KHOI_DIEM}>
+                {DON_VI_TINH.map((d) => (
+                  <option key={d.ma} value={d.ma}>
+                    {d.nhan}
+                  </option>
+                ))}
+              </select>
+            </Field>
 
-          <Field
-            label="Đơn vị tính"
-            htmlFor="lap-unit"
-            kind="select"
-            grow="auto"
-            hint={
-              "Số liệu luôn lưu bằng đồng. Đơn vị tính chỉ quyết định cách hiện và cách gõ số trên " +
-              "bảng, và đổi được về sau mà không con số nào bị quy đổi."
-            }
-          >
-            <select id="lap-unit" name="unit" required defaultValue={DON_VI_KHOI_DIEM}>
-              {DON_VI_TINH.map((d) => (
-                <option key={d.ma} value={d.ma}>
-                  {d.nhan}
-                </option>
-              ))}
-            </select>
-          </Field>
+            <Field label="Luỹ kế đến (sửa được về sau)" htmlFor="lap-cumulative" grow="auto">
+              <input id="lap-cumulative" name="cumulative_to" className="o-nhap" type="date" />
+            </Field>
+          </div>
 
-          <Field label="Luỹ kế đến (sửa được về sau)" htmlFor="lap-cumulative" grow="auto">
-            <input id="lap-cumulative" name="cumulative_to" className="o-nhap" type="date" />
-          </Field>
-        </div>
+          <div className="flex min-w-0 flex-col gap-1">
+            <h4 className="m-0 text-sm font-semibold text-ink-900">Cột của bảng</h4>
+            <p className="m-0 text-xs text-ink-500">
+              Cột đánh dấu vai trò là cột hai chỉ số của năm đọc số từ đó. Bảng lập thiếu vai trò thì
+              `Thu đạt dự toán` và `Chi đạt dự toán` trống suốt năm.
+            </p>
+          </div>
 
-        <div className="flex min-w-0 flex-col gap-1">
-          <h4 className="m-0 text-sm font-semibold text-ink-900">Cột của bảng</h4>
-          <p className="m-0 text-xs text-ink-500">
-            Cột đánh dấu vai trò là cột hai chỉ số của năm đọc số từ đó. Bảng lập thiếu vai trò thì
-            `Thu đạt dự toán` và `Chi đạt dự toán` trống suốt năm.
+          <ColumnFieldsets kind={loai} columns={cot} onChange={datCot} />
+
+          <p className="m-0">
+            <Button
+              type="button"
+              variant="secondary"
+              icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+              onClick={() => datCot([...cot, { name: "", order: cot.length + 1, type: "so" }])}
+            >
+              Thêm cột
+            </Button>
           </p>
+
+          {shownError !== null && (
+            <p className="thong-bao-loi m-0" role="alert">
+              {shownError}
+            </p>
+          )}
         </div>
 
-        <ColumnFieldsets kind={loai} columns={cot} onChange={datCot} />
-
-        <p className="m-0">
-          <Button
-            type="button"
-            variant="secondary"
-            icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
-            onClick={() => datCot([...cot, { name: "", order: cot.length + 1, type: "so" }])}
-          >
-            Thêm cột
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          <Button type="button" variant="secondary" disabled={dangGui} onClick={onClose}>
+            Huỷ
           </Button>
-        </p>
-
-        {loi !== null && (
-          <p className="thong-bao-loi m-0" role="alert">
-            {loi}
-          </p>
-        )}
-      </div>
-
-      <CardFooter className="justify-end">
-        <Button
-          type="button"
-          variant="secondary"
-          disabled={dangGui}
-          onClick={() => {
-            datMo(false);
-            datCot(boCotKhoiDiem(loai, nam));
-          }}
-        >
-          Huỷ
-        </Button>
-        <Button
-          type="submit"
-          variant="primary"
-          disabled={dangGui || cot.length === 0}
-          aria-busy={dangGui || undefined}
-        >
-          <BusyLabel busy={dangGui} label="Lập bảng" busyText={BUSY_SAVING} />
-        </Button>
-      </CardFooter>
-    </Card>
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={dangGui || cot.length === 0}
+            aria-busy={dangGui || undefined}
+          >
+            <BusyLabel busy={dangGui} label="Lập bảng" busyText={BUSY_SAVING} />
+          </Button>
+        </div>
+      </form>
+    </ModalDialog>
   );
 }
 
+/** Heading id of the Lập bảng dialog — the dialog and its form take their name from it. */
+const CREATE_SHEET_TITLE_ID = "tieu-de-lap-bang";
+
 /**
- * Các ô khai báo từng cột của biểu mẫu lập bảng. Tách khỏi `LapBang` để kiểm được bằng một lần dựng
- * tĩnh: `LapBang` chỉ hiện biểu mẫu sau một lần bấm, và bộ kiểm không có DOM để bấm.
+ * Các ô khai báo từng cột của biểu mẫu lập bảng. Tách khỏi `LapBang` để kiểm được riêng bằng một lần
+ * dựng tĩnh, không cần dựng cả hộp thoại.
  */
 export function ColumnFieldsets({
   kind,

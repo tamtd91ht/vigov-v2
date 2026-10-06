@@ -7,7 +7,6 @@ import { DauTrang } from "@/components/dau-trang";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { CongQuyen } from "@/features/quyen/cong-quyen";
 import { BangThuChi } from "@/features/thu-chi/bang-thu-chi";
-import { BudgetSheetHeaderActions } from "@/features/thu-chi/header-actions";
 import { CAU_THIEU_QUYEN_XEM } from "@/features/thu-chi/nhan-thu-chi";
 import { QUYEN_XEM_GIAI_NGAN } from "@/lib/quyen";
 import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
@@ -64,7 +63,6 @@ export default async function TrangThuChiNganSach() {
                   số liệu nhập trên lưới, và ba chỉ số của năm.
                 </span>
               }
-              actions={<BudgetSheetHeaderActions />}
             />
             {/* Câu thiếu quyền nằm ở `nhan-thu-chi.ts`, không viết thẳng ở đây: nhánh ấy là nhánh
                 người viết mã không bao giờ nhìn thấy, nên nó phải kiểm được bằng một bài test. */}

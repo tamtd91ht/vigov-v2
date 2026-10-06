@@ -8,7 +8,7 @@ import type {
   finance_danhSachDotRa,
 } from "@/lib/api/schema.gen";
 
-import { BangDayDu } from "./bang-thu-chi"; // vi-name-ok: existing component under test
+import { BangDayDu, SheetSelectionBar } from "./bang-thu-chi"; // vi-name-ok: existing component under test
 import { FormGhiDot, HopDotThuChi, NoiDungHopDot } from "./dot-thu-chi"; // vi-name-ok: existing components under test
 import { donViCuaBang, dungThanDot, nhanGoKhoanMuc, nhanNutDot, nhanThemCon } from "./nhan-thu-chi"; // vi-name-ok: existing helpers under test
 import {
@@ -409,6 +409,26 @@ describe("entries dialog: lock state and adjustment entries", () => {
 });
 
 describe("sheet under a year close", () => {
+  function renderBar(sheetLock: string | null): string {
+    return renderToStaticMarkup(
+      <SheetSelectionBar
+        year={2026}
+        anchorYear={2026}
+        onYearChange={() => {}}
+        kind="chi"
+        onKindChange={() => {}}
+        sheetState="ready"
+        canRecord
+        canConfirm
+        sheetLock={sheetLock}
+        busy={false}
+        onCreate={() => {}}
+        onEdit={() => {}}
+        onRemove={() => {}}
+      />,
+    );
+  }
+
   function renderSheet(sheetLock: string | null): string {
     return renderToStaticMarkup(
       <BangDayDu
@@ -426,8 +446,6 @@ describe("sheet under a year close", () => {
         moThem={() => {}}
         moGoDong={() => {}}
         datTong={() => {}}
-        moGoBang={() => {}}
-        moSuaBang={() => {}}
         moCachTinh={() => {}}
         moDot={() => {}}
       />,
@@ -442,9 +460,11 @@ describe("sheet under a year close", () => {
     // Presentational pins (ADR 0068 §5): the `🔒` glyph of the notice became a lucide icon, so the
     // notice is found by its `role="note"`; the glyph prefixes of the buttons became icons too.
     expect(html).toContain('role="note"');
-    for (const label of ["Sửa thông tin bảng", "Gỡ bảng", "Thêm khoản mục cấp cao nhất"]) {
-      expect(buttonTag(html, label)).toContain(DISABLED);
-    }
+    expect(buttonTag(html, "Thêm khoản mục cấp cao nhất")).toContain(DISABLED);
+    // Sheet edit and removal live in the selection bar (prototype layout, ADR 0068 lần 5).
+    const bar = renderBar(reason);
+    expect(buttonTag(bar, "Sửa thông tin bảng")).toContain(DISABLED);
+    expect(buttonTagByLabel(bar, "Gỡ bảng")).toContain(DISABLED);
     for (const label of [nhanThemCon(LEAF_NAME), nhanGoKhoanMuc(LEAF_NAME)]) {
       expect(buttonTagByLabel(html, label)).toContain(DISABLED);
     }
@@ -455,7 +475,9 @@ describe("sheet under a year close", () => {
   it("no year close: the same controls are live", () => {
     const html = renderSheet(null);
     expect(html).not.toContain('role="note"');
-    expect(buttonTag(html, "Sửa thông tin bảng")).not.toContain(DISABLED);
-    expect(buttonTag(html, "Gỡ bảng")).not.toContain(DISABLED);
+    expect(buttonTag(html, "Thêm khoản mục cấp cao nhất")).not.toContain(DISABLED);
+    const bar = renderBar(null);
+    expect(buttonTag(bar, "Sửa thông tin bảng")).not.toContain(DISABLED);
+    expect(buttonTagByLabel(bar, "Gỡ bảng")).not.toContain(DISABLED);
   });
 });

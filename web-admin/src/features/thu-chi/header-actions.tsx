@@ -20,7 +20,8 @@ export function BudgetSheetHeaderActions() {
   const info = PHAN_CHUA_DUNG.find((p) => p.ten === IMPORT_EXCEL);
   if (info === undefined) throw new Error(`PHAN_CHUA_DUNG has no entry "${IMPORT_EXCEL}"`);
   return (
-    <PendingButton info={info} side="bottom" icon={<Upload aria-hidden="true" />}>
+    // The prototype's main action of the selection bar (`Button size="sm"`, default = solid).
+    <PendingButton info={info} side="bottom" variant="primary" size="sm" icon={<Upload aria-hidden="true" />}>
       Nạp từ Excel
     </PendingButton>
   );

@@ -41,6 +41,7 @@ import type {
   petitions_taskSummaryOut,
 } from "@/lib/api/schema.gen";
 import { cn } from "@/lib/cn";
+import { compactDong } from "@/lib/compact-dong";
 import {
   QUYEN_XEM_GIAI_NGAN,
   QUYEN_XEM_NHIEM_VU,
@@ -569,21 +570,6 @@ const TILE_BODY = "block h-full min-w-0 overflow-hidden rounded-[10px] px-1 py-0
  * (tester screenshot 06/10/2026).
  */
 const VALUE_TEXT = "text-[clamp(16px,12cqi,26px)] leading-tight font-bold tabular-nums";
-
-/**
- * A sum of đồng for a TILE, short like the prototype's "4.317 tỷ": "9,64 tỷ đồng", "690 triệu đồng".
- * Only the tile is shortened — the exact amount stays on hover (`Figure.exact`) and in the Thu – Chi
- * register, which is where a figure is checked. Under a million it is written in full.
- */
-export function compactDong(amount: number): string {
-  const sign = amount < 0 ? "-" : "";
-  const abs = Math.abs(amount);
-  const fmt = (n: number, digits: number) =>
-    new Intl.NumberFormat("vi-VN", { maximumFractionDigits: digits }).format(n);
-  if (abs >= 1e9) return `${sign}${fmt(abs / 1e9, 2)} tỷ đồng`;
-  if (abs >= 1e6) return `${sign}${fmt(abs / 1e6, 1)} triệu đồng`;
-  return `${sign}${fmt(abs, 0)} đồng`;
-}
 
 /** The label under the value, then the extra lines (note, delta) under it. */
 const LABEL_TEXT = "mt-0.5 block text-[12px] leading-snug text-ink-500";

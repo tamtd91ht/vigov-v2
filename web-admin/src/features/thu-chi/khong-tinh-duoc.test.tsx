@@ -129,15 +129,15 @@ describe("cây khoản mục", () => {
 
   it("ô không tính được KHÔNG vẽ thành `—`; ô trống bên cạnh VẪN là `—`", () => {
     const o = cacO(veDong(dongHaiTrangThai()));
-    // [TT, Nội dung, C1, C2, Cách tính, Thao tác]
-    expect(o[2]).toContain(O_KHONG_TINH_DUOC);
-    expect(o[2]).not.toBe(O_TRONG);
-    expect(o[3]).toBe(O_TRONG);
-    expect(o[3]).not.toContain(O_KHONG_TINH_DUOC);
+    // [mở/dòng tổng, TT, Nội dung, C1, C2, Cách tính] — the prototype's columns.
+    expect(o[3]).toContain(O_KHONG_TINH_DUOC);
+    expect(o[3]).not.toBe(O_TRONG);
+    expect(o[4]).toBe(O_TRONG);
+    expect(o[4]).not.toContain(O_KHONG_TINH_DUOC);
   });
 
   it("câu lý do đọc được KHÔNG CHỈ bằng tooltip: có trong `title` VÀ trong chữ ẩn thị giác", () => {
-    const o = cacO(veDong(dongHaiTrangThai()))[2] ?? "";
+    const o = cacO(veDong(dongHaiTrangThai()))[3] ?? "";
     expect(o).toContain(`title="${nhuTrongHTML(CAU_DA_LUU)}"`);
     expect(o).toMatch(new RegExp(`class="an-thi-giac">[^<]*${CAU_DA_LUU}`));
     // Dấu ⚠ là trang trí — trình đọc màn hình không đọc "cảnh báo" rồi mới đọc câu.
@@ -167,8 +167,6 @@ describe("cây khoản mục", () => {
         moThem={() => {}}
         moGoDong={() => {}}
         datTong={() => {}}
-        moGoBang={() => {}}
-        moSuaBang={() => {}}
         moCachTinh={() => {}}
         moDot={() => {}}
       />,
@@ -195,8 +193,6 @@ describe("cây khoản mục", () => {
         moThem={() => {}}
         moGoDong={() => {}}
         datTong={() => {}}
-        moGoBang={() => {}}
-        moSuaBang={() => {}}
         moCachTinh={() => {}}
         moDot={() => {}}
       />,
@@ -211,7 +207,7 @@ describe("thẻ tóm tắt", () => {
     const html = renderToStaticMarkup(
       <TheTomTat bang={b.sheet} tomTat={b.summary} soKhoanMuc={1} donVi={donViCuaBang(b.sheet)} />,
     );
-    const dd = [...html.matchAll(/<dd>(.*?)<\/dd>/g)].map((m) => m[1] ?? "");
+    const dd = [...html.matchAll(/<dd[^>]*>(.*?)<\/dd>/g)].map((m) => m[1] ?? "");
     expect(dd[0]).toContain(O_KHONG_TINH_DUOC);
     expect(dd[0]).toContain(CAU_TONG);
     expect(dd[1]).toBe(O_TRONG);
@@ -232,7 +228,7 @@ describe("thẻ chỉ số — tổng thu", () => {
       ],
     };
     const html = renderToStaticMarkup(<TheChiSoNam chiSo={chiSo} />);
-    const dd = [...html.matchAll(/<dd>(.*?)<\/dd>/g)].map((m) => m[1] ?? "");
+    const dd = [...html.matchAll(/<dd[^>]*>(.*?)<\/dd>/g)].map((m) => m[1] ?? "");
     // [Thu đạt, Chi đạt, Chênh lệch, T1, T2]
     expect(dd[3]).toContain(O_KHONG_TINH_DUOC);
     expect(dd[3]).toContain(cau);
@@ -272,11 +268,11 @@ describe("danh sách đợt", () => {
       />,
     );
     const o = cacO(html);
-    // [Ngày, Nội dung, Đơn vị cá nhân, Số chứng từ, C1, C2]
-    expect(o[4]).toContain(O_KHONG_TINH_DUOC);
-    expect(o[4]).toContain(`title="${nhuTrongHTML(CAU_DA_LUU)}"`);
-    expect(o[4]).toMatch(new RegExp(`class="an-thi-giac">[^<]*${CAU_DA_LUU}`));
-    expect(o[5]).toBe(O_TRONG);
+    // [Ngày, Nội dung (+ đơn vị, cá nhân · số chứng từ), C1, C2] — the prototype's columns.
+    expect(o[2]).toContain(O_KHONG_TINH_DUOC);
+    expect(o[2]).toContain(`title="${nhuTrongHTML(CAU_DA_LUU)}"`);
+    expect(o[2]).toMatch(new RegExp(`class="an-thi-giac">[^<]*${CAU_DA_LUU}`));
+    expect(o[3]).toBe(O_TRONG);
     expect(html).toContain("Đợt ngày 20/9/2026 — Dự toán năm</strong>: " + CAU_DA_LUU);
   });
 });

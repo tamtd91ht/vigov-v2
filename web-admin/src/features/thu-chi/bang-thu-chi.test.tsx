@@ -19,6 +19,7 @@ import {
   FormDoiCachTinh,
   FormGoKemLyDo,
   FormSuaDong,
+  SheetSelectionBar,
   TheChiSoNam,
   TheTomTat,
 } from "./bang-thu-chi";
@@ -157,10 +158,34 @@ function veBang(coGhi: boolean, coXacNhan: boolean, duLieu = bang()): string {
       moThem={() => {}}
       moGoDong={() => {}}
       datTong={() => {}}
-      moGoBang={() => {}}
-      moSuaBang={() => {}}
       moCachTinh={() => {}}
       moDot={() => {}}
+    />,
+  );
+}
+
+/** The selection bar (year · sheets · sheet actions) with a set of permissions. */
+function renderSelectionBar(
+  canRecord: boolean,
+  canConfirm: boolean,
+  sheetLock: string | null = null,
+  sheetState: "loading" | "ready" | "missing" = "ready",
+): string {
+  return renderToStaticMarkup(
+    <SheetSelectionBar
+      year={2026}
+      anchorYear={2026}
+      onYearChange={() => {}}
+      kind="chi"
+      onKindChange={() => {}}
+      sheetState={sheetState}
+      canRecord={canRecord}
+      canConfirm={canConfirm}
+      sheetLock={sheetLock}
+      busy={false}
+      onCreate={() => {}}
+      onEdit={() => {}}
+      onRemove={() => {}}
     />,
   );
 }
@@ -316,7 +341,21 @@ describe("CỔNG QUYỀN — chỗ dễ gắn nhầm nhất", () => {
 
     expect(html).toContain(nhuTrongHTML(nhanDatDongTong("CHI NGÂN SÁCH NHÀ NƯỚC")));
     expect(html).toContain(nhuTrongHTML(nhanGoKhoanMuc("CHI NGÂN SÁCH NHÀ NƯỚC")));
-    expect(html).toContain("Gỡ bảng");
+  });
+
+  it("thanh chọn bảng: `Gỡ` (bảng) đứng sau `budget.confirm`, KHÔNG sau `budget.update`", () => {
+    // The sheet's removal moved to the selection bar, as in the prototype (ADR 0068 lần 5).
+    expect(renderSelectionBar(true, false)).not.toContain('aria-label="Gỡ bảng"');
+    expect(renderSelectionBar(false, false)).not.toContain('aria-label="Gỡ bảng"');
+    expect(renderSelectionBar(false, true)).toContain('aria-label="Gỡ bảng"');
+  });
+
+  it("thanh chọn bảng: chưa có bảng thì `Lập bảng` (budget.update), không `Sửa` hay `Gỡ`", () => {
+    const html = renderSelectionBar(true, true, null, "missing");
+    expect(html).toContain(">Lập bảng<");
+    expect(html).not.toContain("Sửa thông tin bảng");
+    expect(html).not.toContain('aria-label="Gỡ bảng"');
+    expect(renderSelectionBar(false, true, null, "missing")).not.toContain(">Lập bảng<");
   });
 
   it("`budget.confirm` MỘT MÌNH không mở nút thêm và không mở sửa tên", () => {
@@ -514,8 +553,6 @@ describe("cây khoản mục và thanh công cụ", () => {
         moThem={() => {}}
         moGoDong={() => {}}
         datTong={() => {}}
-        moGoBang={() => {}}
-        moSuaBang={() => {}}
         moCachTinh={() => {}}
         moDot={() => {}}
       />,
@@ -651,7 +688,7 @@ describe("lập bảng — thứ thay cho `⬆ Nạp từ Excel`", () => {
     // Vẽ một vùng kéo thả `.xlsx` ở đây là hứa với cán bộ một chức năng không tồn tại — đúng điều
     // `dau-trang.tsx` đã từ chối làm với ô tìm kiếm.
     const html = renderToStaticMarkup(
-      <LapBang nam={2026} loai="chi" dangGui={false} datDangGui={() => {}} xong={() => {}} />,
+      <LapBang nam={2026} loai="chi" dangGui={false} datDangGui={() => {}} xong={() => {}} onClose={() => {}} />,
     );
 
     expect(html).toContain("Lập bảng chi ngân sách năm 2026");
@@ -834,7 +871,8 @@ describe("hộp các đợt thu, chi (§5)", () => {
     expect(html).toContain(MO_TA_HOP_DOT);
     expect(html).toContain("Cộng theo đợt");
     expect(html).toContain("chưa được cộng");
-    expect(html).toContain('role="dialog"');
+    // A centred modal now, as the prototype's `FiscalEntriesDialog` (native `<dialog>`).
+    expect(html).toContain("<dialog");
   });
 
   it("thiếu `budget.update`: không có biểu mẫu ghi đợt", () => {
@@ -866,8 +904,8 @@ describe("hộp các đợt thu, chi (§5)", () => {
   it("'Đơn vị, cá nhân' in NGUYÊN chuỗi máy chủ đã che — không thử khôi phục", () => {
     const html = veNoiDung(false);
 
-    expect(html).toContain("Đơn vị, cá nhân");
-    expect(html).toContain("N*** V** A");
+    // Under the entry's content, as the prototype: "<đơn vị, cá nhân> · <số chứng từ>".
+    expect(html).toContain("N*** V** A · PT-12");
   });
 
   it("số tiền của đợt quy đổi theo đơn vị của bảng, giống ô của bảng", () => {
@@ -917,8 +955,8 @@ describe("hộp các đợt thu, chi (§5)", () => {
 
 describe("sửa thông tin bảng", () => {
   it("nút sửa bảng đứng sau `budget.update`, không sau `budget.confirm`", () => {
-    expect(veBang(true, false)).toContain("Sửa thông tin bảng");
-    expect(veBang(false, true)).not.toContain("Sửa thông tin bảng");
+    expect(renderSelectionBar(true, false)).toContain("Sửa thông tin bảng");
+    expect(renderSelectionBar(false, true)).not.toContain("Sửa thông tin bảng");
   });
 
   it("ba trường, đơn vị là Ô CHỌN ba mã, và câu gợi ý nói đổi đơn vị không đổi con số", () => {
@@ -1124,8 +1162,6 @@ function veBangJSX() {
       moThem={() => {}}
       moGoDong={() => {}}
       datTong={() => {}}
-      moGoBang={() => {}}
-      moSuaBang={() => {}}
       moCachTinh={() => {}}
       moDot={() => {}}
     />

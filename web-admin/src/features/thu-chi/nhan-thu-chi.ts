@@ -834,7 +834,7 @@ export const CAU_THIEU_QUYEN_XEM =
 export function nhanChuaCoBang(nam: number, loai: LoaiBang): string {
   return (
     `Chưa đọc được bảng ${nhanLoaiBang(loai).toLowerCase()} năm ${nam}. Nếu đơn vị chưa lập bảng ` +
-    "cho năm này, dùng biểu mẫu Lập bảng ngân sách bên dưới."
+    "cho năm này, bấm Lập bảng ở thanh phía trên."
   );
 }
 
@@ -931,11 +931,19 @@ export function cotSo(cot: readonly finance_cotRa[]): readonly finance_cotRa[] {
  * luật 1 bất biến 10 cấm. Nó do người lập bảng gõ và máy chủ lưu.
  */
 export function dongPhuTieuDe(bang: finance_bangRa, soKhoanMuc: number): string {
+  return subtitleParts(bang, soKhoanMuc).join(" · ");
+}
+
+/**
+ * The parts of that sub-line, one per item: the prototype's report card draws them as separate
+ * spans with a gap (`FiscalReportPanel.tsx:242-254`), not as one joined string.
+ */
+export function subtitleParts(bang: finance_bangRa, soKhoanMuc: number): string[] {
   // Nhãn của đơn vị ĐANG DÙNG ĐỂ VẼ, không phải `unit` (một mã máy) và không phải chữ cũ chưa ánh
   // xạ được — với bảng ấy số đang hiện là đồng, và dòng phụ phải nói đúng điều đó.
   const phan: string[] = [`Đơn vị tính: ${donViCuaBang(bang).nhan}`];
   const luyKe = nhanNgayLuyKe(bang.cumulative_to ?? "");
   if (luyKe !== "") phan.push(`Luỹ kế đến ${luyKe}`);
   phan.push(`${soKhoanMuc} khoản mục`);
-  return phan.join(" · ");
+  return phan;
 }

@@ -28,7 +28,13 @@ export function FormGoKemLyDo({
   luu,
   idTruong = "go-reason",
   submitLabel = "Gỡ",
+  formId,
+  className,
 }: {
+  /** `id` of the `<form>` — a surrounding `ModalDialog` names itself after it (`aria-labelledby`). */
+  formId?: string;
+  /** Extra classes on the box, e.g. `shadow-none` inside a `ModalDialog` that already draws a frame. */
+  className?: string;
   /** The SPECIFIC question of the confirm box (spec v2 §7), e.g. "Gỡ bảng X?". */
   tieuDe: string;
   canhBao: string;
@@ -45,6 +51,8 @@ export function FormGoKemLyDo({
       as="form"
       tone="danger"
       icon={Trash2}
+      id={formId}
+      className={className}
       title={tieuDe}
       aria-label={tieuDe}
       onSubmit={(e: FormEvent<HTMLFormElement>) => {
