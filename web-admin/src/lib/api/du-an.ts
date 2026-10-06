@@ -1,7 +1,8 @@
 /**
- * Ba tuyến đọc của màn "Theo dõi giải ngân": `GET /api/v1/investment-projects`,
- * `GET /api/v1/investment-projects/{id}` và `GET /api/v1/investment-projects/{id}/disbursements`.
- * Máy chủ đòi `budget.read` trên cả ba.
+ * Các tuyến đọc của màn "Theo dõi giải ngân": `GET /api/v1/investment-projects`,
+ * `GET /api/v1/investment-projects/{id}`, `GET /api/v1/investment-projects/{id}/disbursements`,
+ * `GET /api/v1/investment-project-summary` và `GET /api/v1/investment-projects/{id}/disbursement-curve`.
+ * Máy chủ đòi `budget.read` trên cả năm.
  *
  * KIỂU LẤY TỪ HỢP ĐỒNG, KHÔNG GÕ TAY: `finance_danhSachDuAnRa` và `finance_duAnRa` đến từ
  * `schema.gen.ts`. Không tệp nào trong ứng dụng này mô tả lại mười tám trường của một dự án.
@@ -31,7 +32,11 @@ import type {
   finance_duAnRa,
   finance_get_investment_projects,
   finance_get_investment_projects_by_id,
+  finance_get_investment_projects_by_id_disbursement_curve,
   finance_get_investment_projects_by_id_disbursements,
+  finance_get_investment_project_summary,
+  finance_projectCurveOut,
+  finance_projectSummaryOut,
   finance_projectVouchersOut,
 } from "./schema.gen";
 
@@ -45,6 +50,12 @@ export type LocDuAn = {
   nam: number;
   /** Mã hạng mục kế hoạch vốn (ULID). Không đặt thì máy chủ trả mọi hạng mục. */
   hangMucId?: string;
+  /**
+   * §7.1 `Chỉ dự án chậm`: the SERVER filters with the rule behind each row's `is_delayed` and the
+   * summary's `delayed_project_count`, so the three cannot disagree. Only `true` is sent — the
+   * route reads an absent parameter as "no filter", and refuses anything but `true` / `false`.
+   */
+  delayedOnly?: boolean;
 };
 
 /**
@@ -62,6 +73,10 @@ export function duongDanDanhSachDuAn(loc: LocDuAn): string {
   // đi vào bộ lọc như một mã hạng mục rỗng thay vì như "mọi hạng mục".
   if (loc.hangMucId !== undefined && loc.hangMucId !== "") {
     truyVan.set("category", loc.hangMucId);
+  }
+  if (loc.delayedOnly === true) {
+    const delayed: NonNullable<finance_get_investment_projects["truyVan"]["delayed_only"]> = "true";
+    truyVan.set("delayed_only", delayed);
   }
 
   return `${duongDan}?${truyVan.toString()}`;
@@ -104,4 +119,36 @@ export function getProjectVouchers(projectId: string): Promise<KetQua<finance_pr
   const template: finance_get_investment_projects_by_id_disbursements["duongDan"] =
     "/api/v1/investment-projects/{id}/disbursements";
   return docJSON<finance_projectVouchersOut>(template.replace("{id}", encodeURIComponent(params.id)));
+}
+
+/** Path of the year summary; split from the call so it is testable without stubbing `fetch`. */
+export function projectSummaryPath(year: number): string {
+  const path: finance_get_investment_project_summary["duongDan"] = "/api/v1/investment-project-summary";
+  const query: finance_get_investment_project_summary["truyVan"] = { year: String(year) };
+  return `${path}?${new URLSearchParams(query).toString()}`;
+}
+
+/**
+ * GET /api/v1/investment-project-summary — §3's four KPI cards, §4's monthly curve and §5's
+ * per-category table for ONE budget year (a3fdcac2). Every figure is the server's: the screen used to
+ * have none of them, because summing a filtered list in the browser is wrong the moment a filter is on.
+ *
+ * Ratios are hundredths of a percent, NOT clamped, `null` on a zero denominator; `remaining_total`
+ * and `undisbursed` may be negative (over-disbursement). `year` is required — no default, as on the
+ * list route. Read again after every write that moves a total (add, delete, a category rename).
+ */
+export function getProjectSummary(year: number): Promise<KetQua<finance_projectSummaryOut>> {
+  return docJSON<finance_projectSummaryOut>(projectSummaryPath(year));
+}
+
+/**
+ * GET /api/v1/investment-projects/{id}/disbursement-curve — §8.3: the project's cumulative paid per
+ * month against its own plan line, from its start month to December. Same 404 for "no such project"
+ * and "another commune's project" as `layChiTietDuAn`.
+ */
+export function getProjectCurve(projectId: string): Promise<KetQua<finance_projectCurveOut>> {
+  const params: finance_get_investment_projects_by_id_disbursement_curve["thamSo"] = { id: projectId };
+  const template: finance_get_investment_projects_by_id_disbursement_curve["duongDan"] =
+    "/api/v1/investment-projects/{id}/disbursement-curve";
+  return docJSON<finance_projectCurveOut>(template.replace("{id}", encodeURIComponent(params.id)));
 }

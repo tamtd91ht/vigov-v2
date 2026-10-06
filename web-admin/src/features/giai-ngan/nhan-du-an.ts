@@ -55,6 +55,16 @@ export function nhanTyLeGiaiNgan(phanVan: number | null): string {
 }
 
 /**
+ * A hundredths-of-a-percent figure that has no "no denominator" case — the share of the budget year
+ * gone (`time_elapsed_ratio`): 7096 ⇒ `70,96%`. Same format as `nhanTyLeGiaiNgan`, without its `null`
+ * sentence, which would be false here.
+ */
+export function percentLabel(hundredths: number): string {
+  if (!Number.isFinite(hundredths)) return "Không đọc được";
+  return `${DINH_DANG_PHAN_VAN.format(hundredths / 100)}%`;
+}
+
+/**
  * Chip tiến độ dưới mã dự án — BA ca, và không ca nào là một ô trống.
  *
  * `is_delayed` và `delay_score` là hai trường KHÁC NHAU và cả hai đều đến từ máy chủ: cờ là kết

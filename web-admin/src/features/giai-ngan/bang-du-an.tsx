@@ -1,8 +1,8 @@
 "use client";
 
-import { FolderKanban, Gauge, Search, SearchX, Trash2, TrendingDown } from "lucide-react";
+import { FolderKanban, Search, SearchX, Trash2, TrendingDown } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
@@ -11,13 +11,14 @@ import { ErrorState } from "@/components/ui/error-state";
 import { Field } from "@/components/ui/field";
 import { PendingCell, PendingColumnHeader } from "@/components/ui/pending-feature";
 import { SkeletonRows } from "@/components/ui/skeleton";
-import { layDanhSachDuAn } from "@/lib/api/du-an";
+import { getProjectSummary, layDanhSachDuAn } from "@/lib/api/du-an";
 import type { KetQua } from "@/lib/api/goi";
 import type {
   finance_danhSachDuAnRa,
   finance_duAnRa,
   finance_fundingStatusOut,
   finance_hangMucRa,
+  finance_projectSummaryOut,
 } from "@/lib/api/schema.gen";
 import { cn } from "@/lib/cn";
 
@@ -27,16 +28,17 @@ import {
   nhanHangMuc,
   nhanNamRong,
   nhanNgay,
-  nhanNguongCham,
   nhanTien,
   nhanTienDo,
   nhanTyLeGiaiNgan,
   tienDoDuAn,
 } from "./nhan-du-an";
 import { pendingPart } from "./nhan-ghi-giai-ngan";
-import { DisbursementOverviewPending, LATEST_ISSUE_COLUMN, ProjectFilterPending, UNIT_OWNER } from "./pending-parts";
+import { DisbursementOverview, type SummaryState } from "./disbursement-overview";
+import { LATEST_ISSUE_COLUMN, UNIT_OWNER } from "./pending-parts";
 import { ProjectBulkDeleteDialog } from "./project-bulk-delete-dialog";
 import { BULK_DELETE_BUTTON, selectedProjectsLabel, type SelectedProject } from "./project-bulk-delete";
+import { categoryRowLabel, groupProjects, type ProjectGroup } from "./project-groups";
 import { Glyph } from "./project-ui";
 import { ScopeNotice } from "./scope-notice";
 
@@ -45,20 +47,20 @@ import { ScopeNotice } from "./scope-notice";
  * 0068 lần 5): scope banner · four KPI cards · cumulative chart · per-category table · per-source
  * block · ONE filter row · the project table.
  *
- * WHAT THE PROTOTYPE DRAWS THAT THIS DOES NOT FILL, and why — read before adding a figure:
+ * THE YEAR BLOCK (§3 cards, §4 chart, §5 table) READS `GET /api/v1/investment-project-summary`
+ * (`disbursement-overview.tsx`), separately from the list and UNFILTERED: its figures are the year's,
+ * whatever filter the list below has on. It is read again with the list after every project write this
+ * screen makes (add through `reloadSignal`, bulk delete), and after a `Hạng mục` write (labels).
+ * Funding-source writes (§6) move none of its figures — plans and vouchers only — so they do not
+ * re-read it. Edit and delete of one project happen on the detail page; coming back mounts this anew.
  *
- *   KPI cards · cumulative chart · per-category block · the `Đơn vị / phụ trách` and
- *   `Vướng mắc mới nhất` columns · `Chỉ dự án chậm` · `Gộp theo hạng mục`
+ * WHAT THE PROTOTYPE DRAWS THAT THIS DOES NOT FILL: the `Đơn vị / phụ trách` and `Vướng mắc mới nhất`
+ * columns and the fourth card's issue counts — disabled "?" placeholders (ADR 0068 §14,
+ * `pending-parts.tsx`). No issue data exists, and `org_unit_id` / `assignee_id` arrive as internal ids.
+ * Drawing "0 vướng mắc" would tell leadership a figure nobody measured.
  *
- * All are disabled "?" placeholders at their prototype position (ADR 0068 §14, `pending-parts.tsx`);
- * none shows a figure. The per-source block is live and passed in (`fundingProgress`), and so is the
- * `Nguồn vốn` column (`FundingChip`, from the list's `funding_status`). No route returns year totals
- * or issue data, and `org_unit_id` / `assignee_id` arrive as internal ids. Drawing "0 vướng mắc" would tell leadership a figure nobody
- * measured.
- *
- * KHÔNG GỘP THEO HẠNG MỤC (prototype bật mặc định): gộp cần tổng theo nhóm, và tổng ấy phải cộng ở
- * máy chủ trên nguyên tập dự án. So the category a project belongs to is on its row instead, under
- * its name — the information the group header would carry.
+ * `GỘP THEO HẠNG MỤC` (on by default, §7.1): group headers carry the SERVER's `by_category` totals, and
+ * only while the rows under a header are that whole category — see `project-groups.ts`.
  *
  * THE SEARCH BOX FILTERS THE LIST ALREADY LOADED, and that is exact, not an approximation: the list
  * route returns the WHOLE year or refuses (`lib/api/du-an.ts`, no pagination), and the box only hides
@@ -96,6 +98,10 @@ export function BangDuAn({
 }) {
   const [hangMucId, datHangMucId] = useState("");
   const [keyword, setKeyword] = useState("");
+  /** §7.1 `Chỉ dự án chậm` — filtered by the SERVER (`delayed_only=true`), part of the list's key. */
+  const [delayedOnly, setDelayedOnly] = useState(false);
+  /** §7.1 `Gộp theo hạng mục`, on by default as the spec has it. Presentation only: no re-read. */
+  const [grouped, setGrouped] = useState(true);
 
   /**
    * KẾT QUẢ ĐƯỢC LƯU KÈM BỘ LỌC ĐÃ SINH RA NÓ, và "đang tải" được SUY RA từ chỗ hai bộ lọc lệch
@@ -118,17 +124,46 @@ export function BangDuAn({
    * mọi hàng khác đang mang số thật, và chúng trông y hệt nhau.
    */
   const [lanTai, datLanTai] = useState(0);
-  const khoa = `${nam}|${hangMucId}|${lanTai}|${reloadSignal}`;
+  const khoa = `${nam}|${hangMucId}|${delayedOnly}|${lanTai}|${reloadSignal}`;
 
   useEffect(() => {
     let bo = false;
-    layDanhSachDuAn({ nam, hangMucId }).then((kq) => {
+    layDanhSachDuAn({ nam, hangMucId, delayedOnly }).then((kq) => {
       if (!bo) datDaTai({ khoa, kq });
     });
     return () => {
       bo = true;
     };
-  }, [nam, hangMucId, khoa]);
+  }, [nam, hangMucId, delayedOnly, khoa]);
+
+  /**
+   * The year summary, kept like the list: the result is stored WITH the key that produced it, and
+   * "loading" is derived from the two differing. Not keyed by the list's filters — the year's figures
+   * do not move when the list is narrowed. `summaryReads`: retry after an error, re-read after a bulk
+   * delete.
+   */
+  const [summaryReads, setSummaryReads] = useState(0);
+  const summaryKey = `${nam}|${reloadSignal}|${summaryReads}`;
+  const [summaryLoaded, setSummaryLoaded] = useState<{
+    key: string;
+    kq: KetQua<finance_projectSummaryOut>;
+  } | null>(null);
+  useEffect(() => {
+    let dropped = false;
+    getProjectSummary(nam).then((kq) => {
+      if (!dropped) setSummaryLoaded({ key: summaryKey, kq });
+    });
+    return () => {
+      dropped = true;
+    };
+  }, [nam, summaryKey]);
+  const summaryState: SummaryState =
+    summaryLoaded === null || summaryLoaded.key !== summaryKey
+      ? { phase: "loading" }
+      : summaryLoaded.kq.ok
+        ? { phase: "ready", summary: summaryLoaded.kq.duLieu }
+        : { phase: "error", message: summaryLoaded.kq.thongBao };
+  const summary = summaryState.phase === "ready" ? summaryState.summary : null;
 
   /**
    * Selected project ids, TIED TO THE LOAD THAT DREW THEM: a new year, a new category filter or a
@@ -150,6 +185,30 @@ export function BangDuAn({
   const shown =
     trangThai.pha === "xong"
       ? { ...trangThai.duLieu, items: matchKeyword(trangThai.duLieu.items, keyword) }
+      : null;
+
+  const filtered = keyword.trim() !== "" || delayedOnly;
+  const groups: ProjectGroup[] | undefined =
+    grouped && shown !== null
+      ? groupProjects(shown.items, {
+          byCategory: summary?.by_category ?? null,
+          danhMuc,
+          totalsApply: !filtered && summary !== null && summary.year === shown.year,
+          filtered,
+        })
+      : undefined;
+
+  /**
+   * A category chosen from the §5 table may be one the catalogue no longer lists (`in_catalogue:
+   * false`): it still gets an option, named as the table names it, so the select shows what filters
+   * the list instead of falling back to its first option.
+   */
+  const strayCategoryLabel =
+    hangMucId !== "" && !danhMuc.some((h) => h.id === hangMucId)
+      ? (() => {
+          const row = summary?.by_category.find((r) => r.category_id === hangMucId);
+          return row !== undefined ? categoryRowLabel(row) : nhanHangMuc(hangMucDuAn(hangMucId, danhMuc));
+        })()
       : null;
 
   // From the WHOLE loaded list, not only the rows the search box leaves: a ticked row hidden by a
@@ -190,7 +249,12 @@ export function BangDuAn({
         </div>
       )}
 
-      <DisbursementOverviewPending />
+      <DisbursementOverview
+        state={summaryState}
+        selectedCategoryId={hangMucId}
+        onSelectCategory={datHangMucId}
+        onRetry={() => setSummaryReads((n) => n + 1)}
+      />
       {fundingProgress}
 
       {/* ONE filter row (prototype `:271-359`): search, category, the two checkboxes. The budget
@@ -214,7 +278,7 @@ export function BangDuAn({
             onChange={(e) => datHangMucId(e.target.value)}
             // Danh mục rỗng là đường THÔNG THƯỜNG hôm nay (danh mục ship rỗng), nên ô chọn chỉ còn
             // một lựa chọn "Tất cả" — tắt nó đi để không mời cán bộ bấm vào một ô không lọc được gì.
-            disabled={danhMuc.length === 0}
+            disabled={danhMuc.length === 0 && strayCategoryLabel === null}
           >
             <option value="">Tất cả hạng mục</option>
             {danhMuc.map((h) => (
@@ -222,13 +286,19 @@ export function BangDuAn({
                 {h.label}
               </option>
             ))}
+            {strayCategoryLabel !== null && <option value={hangMucId}>{strayCategoryLabel}</option>}
           </select>
         </Field>
 
         {/* The prototype's unit filter shows only once a project names a unit; no project carries a
             unit NAME here (ids only), so — by the prototype's own rule — it is not drawn. */}
 
-        <ProjectFilterPending />
+        <FilterCheckbox id="loc-chi-du-an-cham" checked={delayedOnly} onChange={setDelayedOnly}>
+          Chỉ dự án chậm
+        </FilterCheckbox>
+        <FilterCheckbox id="loc-gop-hang-muc" checked={grouped} onChange={setGrouped}>
+          Gộp theo hạng mục
+        </FilterCheckbox>
 
         {/* `Đã chọn N dự án · Xoá đã chọn` at the right of the filter row, as the prototype puts it
             (`:343-358`): after ticking rows the eye is on the table, not at the foot of the page. */}
@@ -277,7 +347,17 @@ export function BangDuAn({
 
       {trangThai.pha === "xong" && shown !== null && (
         <>
-          {trangThai.duLieu.items.length === 0 ? (
+          {trangThai.duLieu.items.length === 0 && delayedOnly ? (
+            // "No late project" is good news, not an empty year: never the `Thêm dự án` invitation.
+            <div className="rounded-card bg-surface">
+              <EmptyState
+                icon={SearchX}
+                tone="neutral"
+                title="Không có dự án nào đang chậm"
+                description="Bỏ chọn “Chỉ dự án chậm” để xem mọi dự án của năm."
+              />
+            </div>
+          ) : trangThai.duLieu.items.length === 0 ? (
             <div className="rounded-card bg-surface">
               <EmptyState
                 icon={FolderKanban}
@@ -296,16 +376,9 @@ export function BangDuAn({
               />
             </div>
           ) : (
-            <BangDanhSach duLieu={shown} danhMuc={danhMuc} selection={selection} />
+            <BangDanhSach duLieu={shown} danhMuc={danhMuc} selection={selection} groups={groups} />
           )}
-
-          {/* NGƯỠNG LÀ CỦA MÁY CHỦ, HIỆN RA ĐỂ NGƯỜI ĐỌC BIẾT CHỮ "CHẬM" ĐANG ĐO BẰNG GÌ. The prototype
-              prints it in the third KPI card's hint; those cards are placeholders, so it stays as
-              the line under the table rather than disappearing. */}
-          <p className="m-0 mt-2 inline-flex items-center gap-1.5 text-xs text-ink-500">
-            <Glyph icon={Gauge} className="size-3.5 shrink-0" />
-            {nhanNguongCham(trangThai.duLieu.delay_threshold)}
-          </p>
+          {/* The delay threshold the server applied is in the third KPI card's sub-line (prototype). */}
         </>
       )}
 
@@ -313,8 +386,12 @@ export function BangDuAn({
         <ProjectBulkDeleteDialog
           projects={bulkRows}
           onClose={() => setBulkRows(null)}
-          // Re-read the whole list: deleted rows leave, refused ones stay — the server says which.
-          onFinished={() => datLanTai((n) => n + 1)}
+          // Re-read the whole list: deleted rows leave, refused ones stay — the server says which. The
+          // year summary too: a deleted project leaves every total it was in.
+          onFinished={() => {
+            datLanTai((n) => n + 1);
+            setSummaryReads((n) => n + 1);
+          }}
         />
       )}
     </section>
@@ -322,6 +399,28 @@ export function BangDuAn({
 }
 
 const EMPTY_IDS: ReadonlySet<string> = new Set();
+
+/** A live §7.1 checkbox, same box and spacing as the "?" ones of `pending-parts.tsx`. */
+function FilterCheckbox({
+  id,
+  checked,
+  onChange,
+  children,
+}: {
+  id: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex h-10 items-center gap-2">
+      <input id={id} type="checkbox" className="size-4" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <label htmlFor={id} className="text-sm text-ink-700">
+        {children}
+      </label>
+    </div>
+  );
+}
 
 /** What the table needs to draw its checkbox column. `undefined` = no column at all. */
 export type RowSelection = {
@@ -343,7 +442,8 @@ function matchKeyword(items: readonly finance_duAnRa[], keyword: string): financ
 /**
  * Bảng dự án — prototype columns (`BudgetItemTable.tsx:191-216, 276-393`): Mã · Dự án · Đơn vị /
  * phụ trách · KH vốn năm · Đã giải ngân · Tiến độ · Nguồn vốn · Thời hạn giải ngân · Vướng mắc mới
- * nhất. Giữ NGUYÊN thứ tự máy chủ trả về và không lọc bỏ dòng nào.
+ * nhất. Giữ NGUYÊN thứ tự máy chủ trả về và không lọc bỏ dòng nào — inside each group too, when
+ * `groups` is passed; the groups themselves follow the catalogue's order (`project-groups.ts`).
  *
  * NO "CÒN LẠI" COLUMN, as in the prototype: the remainder is on the project page, and an over-plan
  * disbursement still shows here as a ratio above 100% — never clamped (spec §13 rule 2).
@@ -358,14 +458,75 @@ export function BangDanhSach({
   duLieu,
   danhMuc,
   selection,
+  groups,
 }: {
   duLieu: finance_danhSachDuAnRa;
   danhMuc: readonly finance_hangMucRa[];
   /** Checkbox column + select-all; only passed for an account holding `budget.update`. */
   selection?: RowSelection;
+  /**
+   * `Gộp theo hạng mục` on: the rows of `duLieu.items` by category, each group under a header row
+   * (`project-groups.ts`). `undefined` = one flat list in the server's order.
+   */
+  groups?: readonly ProjectGroup[];
 }) {
+  const columnCount = (selection !== undefined ? 1 : 0) + 9;
   const ticked = selection === undefined ? 0 : duLieu.items.filter((d) => selection.has(d.id)).length;
   const allChecked = duLieu.items.length > 0 && ticked === duLieu.items.length;
+
+  function renderRow(d: finance_duAnRa) {
+    const tienDo = tienDoDuAn(d.delay_score, d.is_delayed);
+    const hangMuc = hangMucDuAn(d.category_id, danhMuc);
+    const late = tienDo.loai === "cham";
+    return (
+      // Red left edge for a project the SERVER flagged late (prototype `:252-254`): the eye
+      // scanning for late projects passes the left edge first. The words say it too.
+      <tr key={d.id} className={cn(late && "border-l-[3px] border-l-danger-500")}>
+        {selection !== undefined && (
+          <td>
+            <input
+              type="checkbox"
+              className="size-4"
+              aria-label={`Chọn dự án ${d.code}`}
+              checked={selection.has(d.id)}
+              onChange={() => selection.toggle(d.id)}
+            />
+          </td>
+        )}
+        <td className="ma-muc text-xs font-semibold text-ink-500">{d.code}</td>
+        <td className="whitespace-normal">
+          {/* Đường dẫn con đúng như đặc tả ghi ở đầu chương: `/giai-ngan/du-an/:id`. */}
+          <Link
+            href={`/giai-ngan/du-an/${encodeURIComponent(d.id)}`}
+            className="leading-snug font-semibold text-ink-900 no-underline hover:underline"
+          >
+            {d.name}
+          </Link>
+          <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-500">
+            {late && (
+              <span className="inline-flex items-center gap-0.5 font-semibold text-danger-600">
+                <Glyph icon={TrendingDown} className="size-3 shrink-0" />
+                {nhanTienDo(tienDo)}
+              </span>
+            )}
+            <span className={lopHangMuc(hangMuc)}>{nhanHangMuc(hangMuc)}</span>
+          </span>
+        </td>
+        <PendingCell />
+        <td className="text-right tabular-nums">{nhanTien(d.planned_amount)}</td>
+        <td className="text-right tabular-nums">{nhanTien(d.disbursed_amount)}</td>
+        <td>
+          <ProgressCell ratio={d.disbursed_ratio} late={late} />
+        </td>
+        <td className="whitespace-normal">
+          <FundingChip status={d.funding_status} names={d.funding_source_names} />
+        </td>
+        <td className="tabular-nums">{nhanNgay(d.disbursement_deadline)}</td>
+        <PendingCell />
+      </tr>
+    );
+  }
+
   return (
     <TableScroll sticky aria-label={`Danh sách dự án đầu tư năm ${duLieu.year}`}>
       <table className={cn("bang-danh-muc", DATA_TABLE_CLASS)}>
@@ -412,58 +573,19 @@ export function BangDanhSach({
           </tr>
         </thead>
         <tbody>
-          {duLieu.items.map((d) => {
-            const tienDo = tienDoDuAn(d.delay_score, d.is_delayed);
-            const hangMuc = hangMucDuAn(d.category_id, danhMuc);
-            const late = tienDo.loai === "cham";
-            return (
-              // Red left edge for a project the SERVER flagged late (prototype `:252-254`): the eye
-              // scanning for late projects passes the left edge first. The words say it too.
-              <tr key={d.id} className={cn(late && "border-l-[3px] border-l-danger-500")}>
-                {selection !== undefined && (
-                  <td>
-                    <input
-                      type="checkbox"
-                      className="size-4"
-                      aria-label={`Chọn dự án ${d.code}`}
-                      checked={selection.has(d.id)}
-                      onChange={() => selection.toggle(d.id)}
-                    />
-                  </td>
-                )}
-                <td className="ma-muc text-xs font-semibold text-ink-500">{d.code}</td>
-                <td className="whitespace-normal">
-                  {/* Đường dẫn con đúng như đặc tả ghi ở đầu chương: `/giai-ngan/du-an/:id`. */}
-                  <Link
-                    href={`/giai-ngan/du-an/${encodeURIComponent(d.id)}`}
-                    className="leading-snug font-semibold text-ink-900 no-underline hover:underline"
-                  >
-                    {d.name}
-                  </Link>
-                  <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-500">
-                    {late && (
-                      <span className="inline-flex items-center gap-0.5 font-semibold text-danger-600">
-                        <Glyph icon={TrendingDown} className="size-3 shrink-0" />
-                        {nhanTienDo(tienDo)}
-                      </span>
-                    )}
-                    <span className={lopHangMuc(hangMuc)}>{nhanHangMuc(hangMuc)}</span>
-                  </span>
-                </td>
-                <PendingCell />
-                <td className="text-right tabular-nums">{nhanTien(d.planned_amount)}</td>
-                <td className="text-right tabular-nums">{nhanTien(d.disbursed_amount)}</td>
-                <td>
-                  <ProgressCell ratio={d.disbursed_ratio} late={late} />
-                </td>
-                <td className="whitespace-normal">
-                  <FundingChip status={d.funding_status} names={d.funding_source_names} />
-                </td>
-                <td className="tabular-nums">{nhanNgay(d.disbursement_deadline)}</td>
-                <PendingCell />
-              </tr>
-            );
-          })}
+          {groups === undefined
+            ? duLieu.items.map(renderRow)
+            : groups.map((g) => (
+                <Fragment key={`group-${g.key}`}>
+                  <tr data-group-header={g.key} className="bg-surface-subtle">
+                    <th scope="colgroup" colSpan={columnCount} className="text-left whitespace-normal">
+                      <span className="font-semibold text-ink-900">{g.title}</span>
+                      <span className="font-normal text-ink-500"> — {g.detail}</span>
+                    </th>
+                  </tr>
+                  {g.items.map(renderRow)}
+                </Fragment>
+              ))}
         </tbody>
       </table>
     </TableScroll>
@@ -546,8 +668,8 @@ export function FundingChip({
 /**
  * The prototype's bar + percent (`BudgetItemTable.tsx:313-342`). The ratio is the SERVER's
  * (`disbursed_ratio`, hundredths of a percent); the bar only draws it, capped at full width while the
- * words keep the real figure. No elapsed-time marker: the server does not send that figure, and a
- * browser-clock copy would drift from it at both ends of the year (`chi-tiet-du-an.tsx`).
+ * words keep the real figure. The elapsed-time marker is drawn on the project page only (§8,
+ * `chi-tiet-du-an.tsx`, from the server's `time_elapsed_ratio`) — never from the browser's clock.
  *
  * Red only for a project the server flagged late, green otherwise — no colour thresholds of our own.
  */

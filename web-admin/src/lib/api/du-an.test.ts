@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { duongDanDanhSachDuAn, getProjectVouchers, layChiTietDuAn, layDanhSachDuAn } from "./du-an";
+import {
+  duongDanDanhSachDuAn,
+  getProjectCurve,
+  getProjectSummary,
+  getProjectVouchers,
+  layChiTietDuAn,
+  layDanhSachDuAn,
+  projectSummaryPath,
+} from "./du-an";
 
 /**
  * Kiểm cả đường của hai tuyến dự án: đường dẫn được dựng ra sao, và phản hồi HTTP thành cái gì.
@@ -166,5 +174,43 @@ describe("project vouchers (GET /api/v1/investment-projects/{id}/disbursements)"
       }),
     );
     expect(await getProjectVouchers("01JKHONGCO")).toEqual({ ok: false, thongBao: "Không tìm thấy dự án." });
+  });
+});
+
+describe("§7.1 `Chỉ dự án chậm` — `delayed_only`", () => {
+  it("ticked → `delayed_only=true`, beside year and category", () => {
+    expect(duongDanDanhSachDuAn({ nam: 2026, hangMucId: "01JHM", delayedOnly: true })).toBe(
+      "/api/v1/investment-projects?year=2026&category=01JHM&delayed_only=true",
+    );
+  });
+
+  it("unticked → NO parameter at all (the route refuses anything but true / false)", () => {
+    expect(duongDanDanhSachDuAn({ nam: 2026, delayedOnly: false })).toBe("/api/v1/investment-projects?year=2026");
+  });
+});
+
+describe("year summary and project curve (a3fdcac2)", () => {
+  it("summary path carries the year and nothing about the commune", () => {
+    const path = projectSummaryPath(2026);
+    expect(path).toBe("/api/v1/investment-project-summary?year=2026");
+    expect(path).not.toMatch(/tenant|xa=/i);
+  });
+
+  it("summary 200 is returned as the server sent it — null ratio and negative remainder untouched", async () => {
+    const body = { year: 2026, planned_total: 0, disbursed_ratio: null, remaining_total: -5 };
+    const gia = batFetch(new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } }));
+    expect(await getProjectSummary(2026)).toEqual({ ok: true, duLieu: body });
+    expect(gia.mock.calls[0]![0]).toBe("/api/v1/investment-project-summary?year=2026");
+  });
+
+  it("curve: id encoded into the path; 404 is the server's sentence", async () => {
+    const gia = batFetch(
+      new Response(JSON.stringify({ code: "not_found", message: "Không tìm thấy dự án.", trace_id: "t" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    expect(await getProjectCurve("a/b")).toEqual({ ok: false, thongBao: "Không tìm thấy dự án." });
+    expect(gia.mock.calls[0]![0]).toBe("/api/v1/investment-projects/a%2Fb/disbursement-curve");
   });
 });

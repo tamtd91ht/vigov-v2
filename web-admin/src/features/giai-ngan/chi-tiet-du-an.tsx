@@ -18,8 +18,9 @@ import { coQuyen, QUYEN_GHI_NGAN_SACH, QUYEN_XAC_NHAN_NGAN_SACH } from "@/lib/qu
 
 import { KhoiChungTu, useProjectVouchers } from "./chung-tu-du-an";
 import { ProjectEditPanel, ProjectHeaderActions, ProjectRemoveDialog } from "./ghi-du-an";
-import { nhanNgay, nhanTien, nhanTienDo, nhanTyLeGiaiNgan, tienDoDuAn } from "./nhan-du-an";
+import { nhanNgay, nhanTien, nhanTienDo, nhanTyLeGiaiNgan, percentLabel, tienDoDuAn } from "./nhan-du-an";
 import { ProjectRecordTabs, ProjectUnitPending } from "./pending-parts";
+import { ProjectCurvePanel } from "./project-curve";
 import { Glyph, ProgressBadge } from "./project-ui";
 import { ScopeNotice } from "./scope-notice";
 
@@ -28,9 +29,10 @@ import { ScopeNotice } from "./scope-notice";
  * the `← Theo dõi giải ngân` link, the inline edit panel when open, then ONE card — header (code,
  * name, `Sửa dự án`), progress pill, figures, progress bar, the funding block, and the four tabs.
  *
- * BA TRONG BỐN TAB VẪN KHÔNG CÓ (Vướng mắc · Biểu đồ · Trao đổi): không tab nào có tuyến phía sau
- * trong hợp đồng REST. They are drawn DISABLED with a "?" (ADR 0068 §14, `pending-parts.tsx`) — never
- * a live tab that opens an empty panel. So Chứng từ, not the prototype's Vướng mắc, is the open tab.
+ * HAI TRONG BỐN TAB VẪN KHÔNG CÓ (Vướng mắc · Trao đổi): không tab nào có tuyến phía sau trong hợp
+ * đồng REST. They are drawn DISABLED with a "?" (ADR 0068 §14, `pending-parts.tsx`) — never a live tab
+ * that opens an empty panel. So Chứng từ, not the prototype's Vướng mắc, is the open tab. `Biểu đồ`
+ * is live since 06/10/2026 (`project-curve.tsx`).
  *
  * TAB "CHỨNG TỪ" ĐỌC DANH SÁCH TỪ MÁY CHỦ (db94b35c) bằng CÙNG khoá đọc lại dự án, nên một lần ghi
  * chứng từ đọc lại cả hai — xem `useProjectVouchers` trong `chung-tu-du-an.tsx`.
@@ -38,11 +40,9 @@ import { ScopeNotice } from "./scope-notice";
  * KHỐI "GIẢI NGÂN THEO NGUỒN VỐN" is live since 8245698b (`funding_allocations` on the detail,
  * `ProjectFundingBlock` below).
  *
- * KHÔNG CÓ VẠCH "THỜI GIAN ĐÃ TRÔI QUA" (prototype thanh tiến độ + "thời gian đã trôi qua y%"). Con
- * số ấy là một phép tính trên đồng hồ và trên biên của năm ngân sách; máy chủ tính nó để ra
- * `delay_score` nhưng KHÔNG gửi nó về. Dựng lại phép tính ở trình duyệt là một bản thứ hai đọc đồng
- * hồ của MÁY CÁN BỘ, và nó sẽ lệch bản của máy chủ đúng vào hai đầu năm — thiếu ở hợp đồng, không
- * vá tạm.
+ * VẠCH "THỜI GIAN ĐÃ TRÔI QUA" trên thanh tiến độ (§8) đặt tại `time_elapsed_ratio` của MÁY CHỦ —
+ * cùng con số máy chủ dùng để ra `delay_score` (a3fdcac2). Never re-derived from the officer's clock:
+ * that copy would drift from the server's at both ends of the year.
  */
 
 type TrangThaiChiTiet =
@@ -184,7 +184,10 @@ export function ChiTietDuAn({ id }: { id: string }) {
                 {/* MỖI LẦN GHI CHỨNG TỪ XONG LÀ MỘT LẦN ĐỌC LẠI DỰ ÁN VÀ DANH SÁCH CHỨNG TỪ:
                     `disbursed_amount`, `remaining_amount`, `disbursed_ratio` và `delay_score` đều suy
                     ra từ chứng từ. */}
-                <ProjectRecordTabs voucherCount={vouchers.phase === "ready" ? vouchers.count : undefined}>
+                <ProjectRecordTabs
+                  voucherCount={vouchers.phase === "ready" ? vouchers.count : undefined}
+                  chart={<ProjectCurvePanel projectId={trangThai.duAn.id} />}
+                >
                   <KhoiChungTu
                     duAnID={trangThai.duAn.id}
                     allocations={trangThai.duAn.funding_allocations ?? []}
@@ -228,6 +231,11 @@ export function ThongTinDuAn({
   const tienDo = tienDoDuAn(duAn.delay_score, duAn.is_delayed);
   const late = tienDo.loai === "cham";
   const ratio = duAn.disbursed_ratio;
+  /** The server's share of the budget year gone; absent on an older reply → no marker, no words. */
+  const elapsed =
+    duAn.time_elapsed_ratio !== undefined && duAn.time_elapsed_ratio !== null && Number.isFinite(duAn.time_elapsed_ratio)
+      ? duAn.time_elapsed_ratio
+      : null;
 
   return (
     <Card as="article" aria-labelledby="ten-du-an-chi-tiet">
@@ -269,15 +277,27 @@ export function ThongTinDuAn({
 
         <div className="mt-4">
           {ratio !== null && Number.isFinite(ratio) && (
-            <div aria-hidden="true" className="relative h-2.5 overflow-hidden rounded-full bg-surface-subtle-2">
-              <div
-                className={cn("h-full rounded-full", late ? "bg-danger-500" : "bg-success-500")}
-                style={{ width: `${Math.min(100, Math.max(0, ratio / 100))}%` }}
-              />
+            // The marker is a SIBLING of the track, not inside it: the track clips (`overflow-hidden`)
+            // and the marker stands a little above and below it, as the prototype draws it.
+            <div aria-hidden="true" className="relative">
+              <div className="h-2.5 overflow-hidden rounded-full bg-surface-subtle-2">
+                <div
+                  className={cn("h-full rounded-full", late ? "bg-danger-500" : "bg-success-500")}
+                  style={{ width: `${Math.min(100, Math.max(0, ratio / 100))}%` }}
+                />
+              </div>
+              {elapsed !== null && (
+                <span
+                  data-elapsed-marker=""
+                  className="absolute -top-1 -bottom-1 w-0.5 -translate-x-1/2 rounded-full bg-ink-900"
+                  style={{ left: `${Math.min(100, Math.max(0, elapsed / 100))}%` }}
+                />
+              )}
             </div>
           )}
-          <p className="m-0 mt-1.5 text-xs text-ink-500">
+          <p className="m-0 mt-1.5 text-xs text-ink-500" data-progress-caption="">
             {ratio === null ? nhanTyLeGiaiNgan(ratio) : `Giải ngân ${nhanTyLeGiaiNgan(ratio)}`}
+            {elapsed !== null && ` · thời gian đã trôi qua ${percentLabel(elapsed)}`}
           </p>
         </div>
 

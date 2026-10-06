@@ -18,12 +18,7 @@ import {
   PHAN_CHUA_DUNG_GHI,
 } from "./nhan-ghi-giai-ngan";
 import { BangDanhSach } from "./bang-du-an";
-import {
-  DisbursementHeaderActions,
-  DisbursementOverviewPending,
-  ProjectFilterPending,
-  ProjectRecordTabs,
-} from "./pending-parts";
+import { AttentionIssuesPending, DisbursementHeaderActions, ProjectRecordTabs } from "./pending-parts";
 
 /** The server's list of a project with no voucher. */
 const EMPTY_LIST: ProjectVoucherList = { phase: "ready", items: [], count: 0 };
@@ -462,15 +457,14 @@ describe("BIỂU MẪU DỰ ÁN", () => {
 function allPlaceholders(): string {
   return [
     renderToStaticMarkup(<DisbursementHeaderActions />),
-    renderToStaticMarkup(<DisbursementOverviewPending />),
-    renderToStaticMarkup(<ProjectFilterPending />),
+    renderToStaticMarkup(<AttentionIssuesPending />),
     renderToStaticMarkup(
       <BangDanhSach
         duLieu={{ items: [DU_AN], year: 2026, delay_threshold: 1000, delay_threshold_source: "mac_dinh" }}
         danhMuc={HANG_MUC}
       />,
     ),
-    renderToStaticMarkup(<ProjectRecordTabs>panel</ProjectRecordTabs>),
+    renderToStaticMarkup(<ProjectRecordTabs chart={null}>panel</ProjectRecordTabs>),
     renderToStaticMarkup(
       <FormDuAn
         budgetYear={2026}
@@ -512,17 +506,17 @@ describe("PHẦN CHƯA DỰNG — dấu '?' đúng vị trí đặc tả (ADR 00
     expect(header).not.toContain("Hạng mục");
     expect(header).toMatch(/<button[^>]* disabled=""[^>]*>.*Nhập giải ngân<\/button>/);
 
-    const filters = renderToStaticMarkup(<ProjectFilterPending />);
-    expect(filters).toContain('id="loc-chi-du-an-cham" type="checkbox" disabled=""');
-    // Unchecked: a ticked box that does nothing would claim the table is grouped.
-    expect(filters).toContain('id="loc-gop-hang-muc" type="checkbox" disabled=""');
-    expect(filters).not.toContain("checked");
+    // §7.1 `Chỉ dự án chậm` and `Gộp theo hạng mục` are LIVE since 06/10/2026 (`bang-du-an.tsx`).
 
-    const tabs = renderToStaticMarkup(<ProjectRecordTabs>panel</ProjectRecordTabs>);
-    for (const name of ["Vướng mắc", "Biểu đồ", "Trao đổi"]) {
+    const tabs = renderToStaticMarkup(<ProjectRecordTabs chart={null}>panel</ProjectRecordTabs>);
+    for (const name of ["Vướng mắc", "Trao đổi"]) {
       expect(tabs).toMatch(new RegExp(`role="tab" aria-selected="false"[^>]* disabled=""[^>]*>.*${name}<\/button>`));
     }
-    // The one live tab is Chứng từ, selected, and its panel holds the voucher block.
+    // Biểu đồ is live (§8.3) but not the default; Chứng từ is selected and its panel holds the vouchers.
+    const chartTab = /<button([^>]*)>(?:(?!<\/button>).)*Biểu đồ<\/button>/.exec(tabs);
+    expect(chartTab).not.toBeNull();
+    expect(chartTab![1]).toContain('role="tab"');
+    expect(chartTab![1]).not.toContain("disabled");
     expect(tabs).toMatch(/role="tab" aria-selected="true"[^>]*>.*Chứng từ<\/button>/);
     expect(tabs).toContain('role="tabpanel"');
   });
@@ -553,9 +547,10 @@ describe("PHẦN CHƯA DỰNG — dấu '?' đúng vị trí đặc tả (ADR 00
     expect(html).toContain(marker("Đơn vị thực hiện và Cán bộ phụ trách"));
   });
 
-  it("thẻ số liệu giữ chỗ KHÔNG in con số nào — chỉ '—'", () => {
-    const html = renderToStaticMarkup(<DisbursementOverviewPending />);
-    expect(html).not.toMatch(/\d+(\.\d{3})+ đ/);
-    expect(html).not.toContain("0 đ");
+  it("dòng phụ 'vướng mắc · nguy cơ' giữ chỗ KHÔNG in con số nào — '0 vướng mắc' sẽ đọc thành 'không có'", () => {
+    const html = renderToStaticMarkup(<AttentionIssuesPending />);
+    // The words on screen, not the class names (`gap-1.5`, `size-[18px]`).
+    expect(html.replace(/<[^>]*>/g, "")).not.toMatch(/\d/);
+    expect(html).toContain("data-pending");
   });
 });

@@ -826,39 +826,18 @@ export const PHAN_CHUA_DUNG_GHI: readonly PhanChuaDung[] = [
   // §5 `☰ Hạng mục`: BUILT 06/10/2026 as the prototype's dialog (`category-manager-dialog.tsx`) —
   // list, add, rename, turn off / on, soft delete. A per-category deadline and yearly capital plan
   // are in neither the prototype dialog nor the contract.
-  // §3 four KPI cards. No route returns whole-year totals (capital plan, disbursed, delayed count) and
-  // there is no issue data. Summing the filtered list in the browser is wrong whenever a filter is on.
+  // §3 four KPI cards, §4 cumulative chart, §5 per-category table, §7.1 `Chỉ dự án chậm` and `Gộp theo
+  // hạng mục`: BUILT 06/10/2026 on `GET /api/v1/investment-project-summary` and the list's
+  // `delayed_only` (a3fdcac2; `disbursement-overview.tsx`, `project-groups.ts`). §6 per-funding-source
+  // block + `Quản lý nguồn vốn`: BUILT (migration 0013, `funding-source-progress.tsx`).
+  // §3 fourth card, its sub-line "N vướng mắc đang theo dõi · N nguy cơ không giải ngân hết". `vuong_mac`
+  // (§8.1) does not exist in `finance` and the at-risk rule is undefined; the summary route leaves both
+  // counts out on purpose (`disbursement_summary.go`), because "0 vướng mắc" would read as "none".
   {
-    ten: "Số liệu tổng hợp của năm",
+    ten: "Vướng mắc và nguy cơ không giải ngân hết",
     viSao:
-      "Hệ thống chưa tính các số tổng của cả năm ngân sách (kế hoạch vốn, đã giải ngân, số dự án " +
-      "chậm) và chưa ghi nhận vướng mắc, nên chưa có số liệu để hiện.",
-  },
-  // §4 cumulative chart: no route returns cumulative disbursement per month of the year.
-  {
-    ten: "Luỹ kế giải ngân so với kế hoạch",
-    viSao: "Hệ thống chưa tính số giải ngân luỹ kế theo từng tháng, nên chưa có số liệu để vẽ.",
-  },
-  // §5 per-category table: needs per-category totals over every project of the year; no route has them.
-  {
-    ten: "Tiến độ theo hạng mục",
-    viSao:
-      "Bảng cần tổng kế hoạch vốn và tổng đã giải ngân của từng hạng mục trong năm. Hệ thống chưa " +
-      "tính các tổng ấy.",
-  },
-  // §6 per-funding-source block + `Quản lý nguồn vốn`: BUILT (migration 0013, `funding-source-progress.tsx`).
-  // §7.1 filter: the project list route filters by budget year and category only.
-  {
-    ten: "Chỉ dự án chậm",
-    viSao: "Chưa lọc được riêng các dự án chậm. Danh sách hiện lọc được theo năm ngân sách và hạng mục.",
-  },
-  // §7.1 grouping: needs per-category totals over the whole year; summing in the browser is wrong as
-  // soon as the list is filtered.
-  {
-    ten: "Gộp theo hạng mục",
-    viSao:
-      "Gộp cần tổng kế hoạch vốn và tổng đã giải ngân của từng hạng mục trong năm. Hệ thống chưa " +
-      "tính các tổng ấy.",
+      "Hệ thống chưa ghi nhận vướng mắc của dự án và chưa có quy tắc xác định dự án có nguy cơ không " +
+      "giải ngân hết, nên chưa có số liệu để hiện.",
   },
   // §7.2 funding chip: BUILT (`funding_status` on the list, `FundingChip` in `bang-du-an.tsx`).
   // Prototype list column "Đơn vị / phụ trách" + the detail figure "Đơn vị thực hiện" (ADR 0068 lần
@@ -881,11 +860,8 @@ export const PHAN_CHUA_DUNG_GHI: readonly PhanChuaDung[] = [
     ten: "Vướng mắc",
     viSao: "Hệ thống chưa có chức năng ghi nhận và theo dõi vướng mắc của dự án.",
   },
-  // §8.3 tab: no route returns a project's cumulative disbursement per month.
-  {
-    ten: "Biểu đồ",
-    viSao: "Hệ thống chưa tính số giải ngân luỹ kế theo tháng của dự án, nên chưa có số liệu để vẽ.",
-  },
+  // §8.3 tab `Biểu đồ`: BUILT 06/10/2026 on `GET /api/v1/investment-projects/{id}/disbursement-curve`
+  // (`project-curve.tsx`).
   // §8.4 tab: no discussion storage for a project.
   {
     ten: "Trao đổi",

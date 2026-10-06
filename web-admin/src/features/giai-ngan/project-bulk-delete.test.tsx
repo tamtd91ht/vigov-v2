@@ -120,11 +120,35 @@ const LOCKED = "Dự án này có chứng từ đã khoá nên chưa xoá đư�
 
 const listGets = (calls: Call[]) =>
   calls.filter((c) => c.method === "GET" && c.url.startsWith("/api/v1/investment-projects?"));
+const summaryGets = (calls: Call[]) =>
+  calls.filter((c) => c.method === "GET" && c.url.startsWith("/api/v1/investment-project-summary?"));
+
+/** The year summary the register reads beside the list (§3–§5); the figures do not matter here. */
+const SUMMARY = {
+  year: 2026,
+  planned_total: 1_250_000_000,
+  project_count: 3,
+  disbursed_total: 0,
+  disbursed_ratio: 0,
+  time_elapsed_ratio: 7096,
+  remaining_total: 1_250_000_000,
+  delay_threshold: 1000,
+  delay_threshold_source: "mac_dinh",
+  delayed_project_count: 0,
+  monthly: [],
+  disbursed_after_year: 0,
+  by_category: [],
+  total: { order: 0, in_catalogue: false, project_count: 3, planned: 1_250_000_000, disbursed: 0, undisbursed: 1_250_000_000, disbursed_ratio: 0, undisbursed_ratio: 10000 },
+};
+
+/** A project row of the register — group header rows (`Gộp theo hạng mục`, on by default) excluded. */
+const projectRows = (el: ParentNode) => el.querySelectorAll("tbody tr:not([data-group-header])");
 const deletes = (calls: Call[]) => calls.filter((c) => c.method === "DELETE");
 
 /** Lists PROJECTS for 2026; DA02's delete is refused 409, the others answer 204. */
 function server(): Call[] {
   return stubServer((c) => {
+    if (c.method === "GET" && c.url.startsWith("/api/v1/investment-project-summary?")) return json(SUMMARY, 200);
     if (c.method === "GET") return json({ items: PROJECTS, year: 2026, delay_threshold: 1000, delay_threshold_source: "mac_dinh" }, 200);
     if (c.url.endsWith("/01JP2")) return json({ code: "project_has_locked_vouchers", message: LOCKED, trace_id: "t" }, 409);
     return new Response(null, { status: 204 });
@@ -174,8 +198,12 @@ describe("Project register — selection gated on budget.update", () => {
   it("without the key: no checkbox column, no select-all, no bar", async () => {
     server();
     const el = await register(false);
-    expect(el.querySelectorAll("tbody tr")).toHaveLength(3);
-    expect(el.querySelectorAll('input[type="checkbox"]:not([disabled])')).toHaveLength(0);
+    expect(projectRows(el)).toHaveLength(3);
+    // Inside the project table: the §7.1 filter checkboxes above it are live for every reader.
+    expect(
+      el.querySelectorAll('[aria-label^="Danh sách dự án"] input[type="checkbox"]:not([disabled])'),
+    ).toHaveLength(0);
+    expect(el.querySelectorAll("#loc-chi-du-an-cham, #loc-gop-hang-muc")).toHaveLength(2);
     expect(selectAll(el)).toBeNull();
     expect(el.querySelector("[data-bulk-bar]")).toBeNull();
   });
@@ -222,6 +250,7 @@ describe("Xoá đã chọn — confirm, sequential DELETEs, per-row result, re-r
     const calls = server();
     const el = await register(true);
     expect(listGets(calls)).toHaveLength(1);
+    expect(summaryGets(calls)).toHaveLength(1);
 
     act(() => selectAll(el)!.click());
     act(() => buttonByText(el.querySelector("[data-bulk-bar]")!, "Xoá đã chọn")!.click());
@@ -257,6 +286,8 @@ describe("Xoá đã chọn — confirm, sequential DELETEs, per-row result, re-r
     expect(el.querySelector('dialog [role="status"]')?.textContent).toContain("Đã xoá 2/3 dự án; 1 dự án chưa xoá được");
     // The list is read again, and the selection made on the old list is gone.
     expect(listGets(calls)).toHaveLength(2);
+    // The year totals are read again too: a deleted project leaves every total it was in.
+    expect(summaryGets(calls)).toHaveLength(2);
     expect(el.querySelector("[data-bulk-bar]")).toBeNull();
 
     act(() => buttonByText(el.querySelector("dialog")!, "Đóng")!.click());
@@ -266,6 +297,7 @@ describe("Xoá đã chọn — confirm, sequential DELETEs, per-row result, re-r
   it("the second DELETE leaves only after the first has answered", async () => {
     let release: (() => void) | null = null;
     const calls = stubServer((c) => {
+      if (c.method === "GET" && c.url.startsWith("/api/v1/investment-project-summary?")) return json(SUMMARY, 200);
       if (c.method === "GET") return json({ items: PROJECTS.slice(0, 2), year: 2026, delay_threshold: 1000, delay_threshold_source: "mac_dinh" }, 200);
       if (c.url.endsWith("/01JP1")) return new Promise<Response>((r) => (release = () => r(new Response(null, { status: 204 }))));
       return new Response(null, { status: 204 });

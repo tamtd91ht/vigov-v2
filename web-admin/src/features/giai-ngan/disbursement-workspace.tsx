@@ -96,7 +96,9 @@ export function DisbursementWorkspace() {
         <BangDuAn
           nam={year}
           danhMuc={categories}
-          reloadSignal={saves}
+          // Both counters only grow, so their sum changes on every add AND every `Hạng mục` write: the
+          // list and the year summary re-read (the summary's category labels come from the catalogue).
+          reloadSignal={saves + categoryReads}
           emptyAction={addProject}
           // §6, under the same `budget.read` gate as the register; its writes need `budget.update`.
           fundingProgress={<FundingSourceProgress year={year} canManage={canRecord} />}
