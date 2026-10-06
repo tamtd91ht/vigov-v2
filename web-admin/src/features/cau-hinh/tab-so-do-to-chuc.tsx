@@ -1,12 +1,11 @@
 "use client";
 
-import { Building2, Network, Pencil, Plus, Trash2, Upload, UsersRound } from "lucide-react";
+import { Building2, Pencil, Plus, Trash2, Upload, UsersRound } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
+import { IconButton } from "@/components/ui/icon-button";
 import { Notice } from "@/components/ui/notice";
 import { SkeletonRows } from "@/components/ui/skeleton";
 import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
@@ -26,7 +25,6 @@ import {
   idNutMo,
   luaChonCha,
   moThem,
-  theNeo,
   type BanNhap,
   type DangMo,
   type DongPhang,
@@ -43,9 +41,7 @@ import {
   LOI_THU_TU,
   NUT_HUY,
   NUT_LUU,
-  NUT_SUA_BO_PHAN,
   NUT_THEM_BO_PHAN,
-  NUT_THEM_CON,
   O_CHA,
   O_MA,
   O_TEN,
@@ -60,9 +56,10 @@ import {
   tieuDeThemCon,
   tieuDeThemGoc,
 } from "./nhan-so-do";
+import { ConfigDialog } from "./config-dialog";
 import { DELETE_REASON_ID, OrgUnitDeleteForm } from "./org-unit-delete-form";
 import type { DeleteRefusal } from "./org-unit-delete-form";
-import { DELETE_BUTTON, deleteButtonLabel, deletedSentence } from "./org-unit-delete";
+import { deleteButtonLabel, deletedSentence, deleteFormTitle } from "./org-unit-delete";
 import { IMPORT_BUTTON } from "./org-unit-import-flow";
 import { OrgUnitImportPanel } from "./org-unit-import-panel";
 import { kiemLyDoXoa } from "./tang-danh-muc";
@@ -246,44 +243,58 @@ export function TabSoDoToChuc() {
     });
   }, [ban, dangGui, dangMo]);
 
+  // ADD / EDIT / DELETE OPEN IN A DIALOG, as the prototype's `OrgUnitDialog` (ADR 0068 lần 5). The
+  // form inside is unchanged — same fields, same two error areas, same create key kept across retries.
   const bieuMau =
     dangMo === null ? null : (
-      <BieuMauBoPhan
-        dangMo={dangMo}
-        ban={ban}
-        datBan={datBan}
-        luaChon={luaChonCha(cay, items, dangMo.kieu === "sua" ? dangMo.bp.id : null)}
-        loiTaiCho={loiTaiCho}
-        loiMayChu={loiMayChu}
-        dangGui={dangGui}
-        onGui={gui}
-        onHuy={dong}
-      />
+      <ConfigDialog
+        title={formTitle(dangMo)}
+        onDismiss={() => {
+          if (!dangGui) dong();
+        }}
+      >
+        <BieuMauBoPhan
+          dangMo={dangMo}
+          ban={ban}
+          datBan={datBan}
+          luaChon={luaChonCha(cay, items, dangMo.kieu === "sua" ? dangMo.bp.id : null)}
+          loiTaiCho={loiTaiCho}
+          loiMayChu={loiMayChu}
+          dangGui={dangGui}
+          onGui={gui}
+          onHuy={dong}
+        />
+      </ConfigDialog>
     );
-  const neo = dangMo === null ? undefined : theNeo(dangMo);
   const deleteForm =
     removing === null ? null : (
-      <OrgUnitDeleteForm
-        unit={removing}
-        reason={reason}
-        setReason={setReason}
-        localError={deleteLocalError}
-        refusal={refusal}
-        sending={deleting}
-        onSubmit={submitDelete}
-        onCancel={closeDelete}
-      />
+      <ConfigDialog
+        title={deleteFormTitle(removing.name)}
+        hideHeader
+        onDismiss={() => {
+          if (!deleting) closeDelete();
+        }}
+      >
+        <OrgUnitDeleteForm
+          unit={removing}
+          reason={reason}
+          setReason={setReason}
+          localError={deleteLocalError}
+          refusal={refusal}
+          sending={deleting}
+          onSubmit={submitDelete}
+          onCancel={closeDelete}
+        />
+      </ConfigDialog>
     );
 
   return (
-    <Card as="section" className="tab-so-do-to-chuc" aria-labelledby="tieu-de-so-do">
-      <CardHeader>
-        <CardTitle as="h2" id="tieu-de-so-do" className="flex items-center gap-2">
-          <Network aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
-          {TIEU_DE_SO_DO}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="flex min-w-0 flex-col gap-3 [&>*]:my-0">
+    // No card, no visible title: the tab IS the section, as in the prototype (ADR 0068 lần 5). The
+    // heading stays for the outline and the region's name, out of view.
+    <section className="tab-so-do-to-chuc flex min-w-0 flex-col gap-3 [&>*]:my-0" aria-labelledby="tieu-de-so-do">
+      <h2 id="tieu-de-so-do" className="an-thi-giac">
+        {TIEU_DE_SO_DO}
+      </h2>
 
       {/* FIRST LOAD (spec §8b): the sentence stays the live region; the eye gets placeholder rows. */}
       {tai.pha === "dangDoc" && (
@@ -316,24 +327,24 @@ export function TabSoDoToChuc() {
         bieuMauDauTab={
           importOpen && coQuyenGhi ? (
             <OrgUnitImportPanel
+              asDialog
               onImported={() => datLanDoc((n) => n + 1)}
               onClose={() => setImportOpen(false)}
             />
-          ) : neo === null ? (
-            bieuMau
-          ) : null
+          ) : (
+            (bieuMau ?? deleteForm)
+          )
         }
-        bieuMauTaiThe={
-          removing !== null
-            ? { id: removing.id, node: deleteForm }
-            : neo !== undefined && neo !== null
-              ? { id: neo, node: bieuMau }
-              : null
-        }
+        bieuMauTaiThe={null}
       />
-      </CardContent>
-    </Card>
+    </section>
   );
+}
+
+/** The dialog's title — the same words the form's own heading used. */
+function formTitle(open: DangMo): string {
+  if (open.kieu === "sua") return tieuDeSua(open.bp.name);
+  return open.tenCha === null ? tieuDeThemGoc() : tieuDeThemCon(open.tenCha);
 }
 
 /** `id` của ô `Tên` — nơi tiêu điểm tới khi biểu mẫu mở. */
@@ -385,21 +396,28 @@ export function KhungSoDo({
 }) {
   return (
     <>
+      {/* Prototype order: "Nhập từ Excel" (outline) on its own row, then "Thêm bộ phận" (primary), both
+          right-aligned, both small. */}
       {coQuyenGhi && (
-        <p className="cum-nut m-0 flex flex-wrap items-center justify-end gap-2">
-          <Button type="button" variant="secondary" icon={<Upload aria-hidden="true" focusable="false" strokeWidth={1.8} />} onClick={onOpenImport}>
-            {IMPORT_BUTTON}
-          </Button>
-          <Button
-            type="button"
-            variant="primary"
-            id={idNutMo("themGoc")}
-            icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
-            onClick={thaoTac.themGoc}
-          >
-            {NUT_THEM_BO_PHAN}
-          </Button>
-        </p>
+        <>
+          <p className="cum-nut m-0 flex justify-end">
+            <Button type="button" variant="outline" size="sm" icon={<Upload aria-hidden="true" focusable="false" strokeWidth={1.8} />} onClick={onOpenImport}>
+              {IMPORT_BUTTON}
+            </Button>
+          </p>
+          <p className="cum-nut m-0 flex justify-end">
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              id={idNutMo("themGoc")}
+              icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+              onClick={thaoTac.themGoc}
+            >
+              {NUT_THEM_BO_PHAN}
+            </Button>
+          </p>
+        </>
       )}
       {/* Read-only is a normal state of an account, not an error: a neutral note, no role. */}
       {thieuQuyen && (
@@ -415,7 +433,9 @@ export function KhungSoDo({
         <ErrorState role="alert" title="Chưa tải được sơ đồ tổ chức" message={tai.thongBao} />
       )}
 
-      {tai.pha === "xong" && cay.length === 0 && <EmptyState icon={Network} title={nhanCayRong(coQuyenGhi)} />}
+      {tai.pha === "xong" && cay.length === 0 && (
+        <p className="m-0 py-8 text-center text-[13px] text-ink-500">{nhanCayRong(coQuyenGhi)}</p>
+      )}
 
       {tai.pha === "xong" && cay.length > 0 && (
         <CapBoPhan
@@ -483,56 +503,54 @@ function TheBoPhan({
   thaoTac: ThaoTacCay;
 }) {
   return (
+    // The prototype's `TreeBranch` card: icon tile · name over code · headcount · three icon buttons.
     <div className="the-bo-phan">
+      <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-[9px] bg-brand-50 text-brand-600">
+        <Building2 focusable="false" strokeWidth={1.8} className="size-4" />
+      </span>
       <div className="the-bo-phan-than">
-        <span className="the-bo-phan-ten inline-flex items-center gap-2">
-          <Building2 aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-4 shrink-0 text-brand-600" />
-          {bp.name}
-        </span>
+        <span className="the-bo-phan-ten text-[13px] text-ink-900">{bp.name}</span>
         {/* Mã font đẳng chiều: nó là slug đọc qua điện thoại, `l`/`1` phải phân biệt được. */}
-        <span className="ma-muc the-bo-phan-ma">{bp.code}</span>
+        <span className="ma-muc the-bo-phan-ma text-[11px]">{bp.code}</span>
       </div>
-      <span className="the-bo-phan-so inline-flex items-center gap-1.5">
-        <UsersRound aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-4 shrink-0 text-ink-500" />
+      <span className="the-bo-phan-so inline-flex items-center gap-1.5 text-xs">
+        <UsersRound aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-3.5 shrink-0" />
         {nhanSoCanBo(bp.staff_count)}
       </span>
       {coQuyenGhi && (
-        // Icon + word on every button, Xoá included (spec v2 §7: an action with a consequence is never
-        // icon-only). Same ids, names and handlers.
+        // Icon-only, as the prototype: `IconButton` gives each the SAME words as its accessible name and
+        // its hover title, naming the unit ("Sửa bộ phận VĂN PHÒNG"). Same ids and handlers as before.
         <span className="cum-nut flex flex-wrap items-center gap-1.5">
-          <Button
+          <IconButton
             type="button"
-            variant="ghost"
-            size="sm"
+            variant="secondary"
+            className="w-11"
             id={idNutMo("themCon", bp.id)}
-            aria-label={nhanNutThemCon(bp.name)}
-            icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+            label={nhanNutThemCon(bp.name)}
             onClick={() => thaoTac.themCon(bp)}
           >
-            {NUT_THEM_CON}
-          </Button>
-          <Button
+            <Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />
+          </IconButton>
+          <IconButton
             type="button"
-            variant="ghost"
-            size="sm"
+            variant="secondary"
+            className="w-11"
             id={idNutMo("sua", bp.id)}
-            aria-label={nhanNutSua(bp.name)}
-            icon={<Pencil aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+            label={nhanNutSua(bp.name)}
             onClick={() => thaoTac.sua(bp)}
           >
-            {NUT_SUA_BO_PHAN}
-          </Button>
-          <Button
+            <Pencil aria-hidden="true" focusable="false" strokeWidth={1.8} />
+          </IconButton>
+          <IconButton
             type="button"
-            variant="danger"
-            size="sm"
+            variant="secondary"
+            className="w-11 text-danger-600 hover:not-disabled:border-danger-600 hover:not-disabled:text-danger-600"
             id={deleteButtonId(bp.id)}
-            aria-label={deleteButtonLabel(bp.name)}
-            icon={<Trash2 aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+            label={deleteButtonLabel(bp.name)}
             onClick={() => thaoTac.xoa(bp)}
           >
-            {DELETE_BUTTON}
-          </Button>
+            <Trash2 aria-hidden="true" focusable="false" strokeWidth={1.8} />
+          </IconButton>
         </span>
       )}
     </div>

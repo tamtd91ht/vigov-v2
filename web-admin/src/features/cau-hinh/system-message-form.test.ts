@@ -29,7 +29,7 @@ describe("validateMessageText", () => {
 
   it("empty (or only spaces) is refused and points to Khôi phục", () => {
     expect(validateMessageText("   ")).toEqual({ ok: false, message: TEXT_EMPTY });
-    expect(TEXT_EMPTY).toMatch(/Khôi phục câu mặc định/);
+    expect(TEXT_EMPTY).toMatch(/Khôi phục lời gốc/);
   });
 
   it("counts CHARACTERS: 1000 Vietnamese letters pass, 1001 do not", () => {

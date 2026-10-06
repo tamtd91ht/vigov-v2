@@ -1,15 +1,14 @@
 "use client";
 
-import { Home, Pencil, Plus, PowerOff, RotateCcw, Upload } from "lucide-react";
+import { Pencil, Plus, PowerOff, RotateCcw, Upload } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
-import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
+import { IconButton } from "@/components/ui/icon-button";
 import { Notice } from "@/components/ui/notice";
 import { SkeletonRows } from "@/components/ui/skeleton";
 import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
@@ -26,6 +25,7 @@ import { layDanhSachThonToDanPho } from "@/lib/api/thon-to-dan-pho";
 import { QUYEN_QUAN_LY_SO_DO, quyetDinhTheoKhoa } from "@/lib/quyen";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 
+import { ConfigDialog } from "./config-dialog";
 import { IMPORT_BUTTON } from "./excel-import-flow";
 import { ExcelImportPanel } from "./excel-import-panel";
 import { RESIDENTIAL_UNIT_IMPORT_TARGET } from "./excel-import-targets";
@@ -45,7 +45,6 @@ import {
   CONFIRM_RETIRE_BUTTON,
   COUNT_HELP,
   CREATE_TITLE,
-  EDIT_BUTTON,
   FIELD_CODE,
   FIELD_HEAD,
   FIELD_HOUSEHOLDS,
@@ -58,7 +57,6 @@ import {
   NAME_HELP,
   NO_WRITE_PERMISSION,
   ORDER_HELP,
-  REACTIVATE_BUTTON,
   RESIDENTIAL_UNIT_API,
   RETIRE_BUTTON,
   TYPE_HELP,
@@ -314,14 +312,11 @@ export function TabThonToDanPho() {
     );
 
   return (
-    <Card as="section" className="tab-thon-to-dan-pho" aria-labelledby="tieu-de-thon">
-      <CardHeader>
-        <CardTitle as="h2" id="tieu-de-thon" className="flex items-center gap-2">
-          <Home aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
-          Thôn / Tổ dân phố
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="flex min-w-0 flex-col gap-3 [&>*]:my-0">
+    // No card, no visible title: the tab IS the section, as in the prototype (ADR 0068 lần 5).
+    <section className="tab-thon-to-dan-pho flex min-w-0 flex-col gap-3 [&>*]:my-0" aria-labelledby="tieu-de-thon">
+      <h2 id="tieu-de-thon" className="an-thi-giac">
+        Thôn / Tổ dân phố
+      </h2>
       {decision !== null && !decision.hien && decision.vi === "khong-doc-duoc" && (
         <p className="thong-bao-loi" role="alert">
           {decision.thongBao}
@@ -337,6 +332,7 @@ export function TabThonToDanPho() {
         topPanel={
           importOpen && canWrite ? (
             <ExcelImportPanel
+              asDialog
               target={RESIDENTIAL_UNIT_IMPORT_TARGET}
               onImported={() => setReads((n) => n + 1)}
               onClose={() => setImportOpen(false)}
@@ -348,8 +344,7 @@ export function TabThonToDanPho() {
         retiring={retiring}
         rowError={rowError}
       />
-      </CardContent>
-    </Card>
+    </section>
   );
 }
 
@@ -388,25 +383,32 @@ export function ResidentialUnitsView({
 }) {
   return (
     <>
+      {/* Prototype order: "Nhập từ Excel" (outline) right-aligned on the first row — here beside the
+          no-delete note the user asked for (ADR 0059 §2) — then "Thêm thôn / tổ dân phố" (primary). */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="ghi-chu m-0 min-w-0 flex-1 basis-64 text-[13px] text-ink-500">{GHI_CHU_CHI_XEM_THON}</p>
         {canWrite && (
-          <p className="cum-nut m-0 flex flex-wrap items-center gap-2">
-            <Button type="button" variant="secondary" icon={<Upload aria-hidden="true" focusable="false" strokeWidth={1.8} />} onClick={actions.openImport}>
+          <p className="cum-nut m-0 flex">
+            <Button type="button" variant="outline" size="sm" icon={<Upload aria-hidden="true" focusable="false" strokeWidth={1.8} />} onClick={actions.openImport}>
               {IMPORT_BUTTON}
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              id={ADD_BUTTON_ID}
-              icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
-              onClick={actions.add}
-            >
-              {ADD_BUTTON}
             </Button>
           </p>
         )}
       </div>
+      {canWrite && (
+        <p className="cum-nut m-0 flex justify-end">
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            id={ADD_BUTTON_ID}
+            icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+            onClick={actions.add}
+          >
+            {ADD_BUTTON}
+          </Button>
+        </p>
+      )}
       {/* Read-only is a normal state of an account: a neutral note, no role. */}
       {missingPermission && (
         <Notice tone="neutral" className="m-0">
@@ -435,10 +437,9 @@ export function ResidentialUnitsView({
         <ErrorState role="alert" title="Chưa tải được danh sách thôn / tổ dân phố" message={load.message} />
       )}
 
-      {/* TRẠNG THÁI RỖNG, KHÔNG PHẢI TRẠNG THÁI LỖI. Máy chủ trả `items: []`, không bao giờ `null`. */}
-      {load.phase === "ready" && load.units.length === 0 && <EmptyState icon={Home} title={THON_RONG} />}
-
-      {load.phase === "ready" && load.units.length > 0 && (
+      {/* TRẠNG THÁI RỖNG, KHÔNG PHẢI TRẠNG THÁI LỖI. Máy chủ trả `items: []`, không bao giờ `null` — and,
+          as in the prototype, it is said inside the table frame, under the column heads. */}
+      {load.phase === "ready" && (
         <UnitsTable
           units={load.units}
           canWrite={canWrite}
@@ -473,6 +474,8 @@ function UnitsTable({
 }) {
   const columns = canWrite ? 8 : 7;
   return (
+    <>
+    {canWrite && retiring !== null && <RetireDialog unit={retiring} sending={sending} actions={actions} />}
     <TableScroll sticky aria-label="Danh sách thôn / tổ dân phố">
       <table className={`bang-danh-muc ${DATA_TABLE_CLASS}`}>
         <caption className="an-thi-giac">Danh sách thôn và tổ dân phố của đơn vị</caption>
@@ -489,6 +492,13 @@ function UnitsTable({
           </tr>
         </thead>
         <tbody>
+          {units.length === 0 && (
+            <tr>
+              <td colSpan={columns} className="py-10 text-center whitespace-normal text-ink-500">
+                {THON_RONG}
+              </td>
+            </tr>
+          )}
           {units.map((t) => {
             // Ba ca của cột Loại (`nhan-thon.ts`): không ca nào để lại một ô trống.
             const loai = loaiDonVi(t.type_code, t.type_label);
@@ -510,72 +520,46 @@ function UnitsTable({
                     <Badge tone={t.active ? "success" : "neutral"}>{nhanTrangThaiDiaBan(t.active)}</Badge>
                   </td>
                   {canWrite && (
-                    <td>
-                      <span className="cum-nut flex flex-wrap items-center gap-1.5">
-                        <Button
+                    <td className="o-thao-tac">
+                      {/* The prototype's right-aligned icon buttons. Its 🗑 is "Ngừng dùng" here: a hamlet is
+                          never deleted (ADR 0059). Each button's words are its accessible name and title. */}
+                      <span className="cum-nut flex flex-wrap items-center justify-end gap-1.5">
+                        <IconButton
                           type="button"
-                          variant="ghost"
-                          size="sm"
+                          variant="secondary"
                           id={editButtonId(t.id)}
-                          aria-label={editButtonLabel(t.name)}
-                          icon={<Pencil aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+                          label={editButtonLabel(t.name)}
                           onClick={() => actions.edit(t)}
                           disabled={sending}
                         >
-                          {EDIT_BUTTON}
-                        </Button>
+                          <Pencil aria-hidden="true" focusable="false" strokeWidth={1.8} />
+                        </IconButton>
                         {t.active ? (
-                          <Button
+                          <IconButton
                             type="button"
-                            variant="ghost"
-                            size="sm"
-                            aria-label={retireButtonLabel(t.name)}
-                            icon={<PowerOff aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+                            variant="secondary"
+                            className="text-danger-600 hover:not-disabled:border-danger-600 hover:not-disabled:text-danger-600"
+                            label={retireButtonLabel(t.name)}
                             onClick={() => actions.askRetire(t)}
                             disabled={sending}
                           >
-                            {RETIRE_BUTTON}
-                          </Button>
+                            <PowerOff aria-hidden="true" focusable="false" strokeWidth={1.8} />
+                          </IconButton>
                         ) : (
-                          <Button
+                          <IconButton
                             type="button"
-                            variant="ghost"
-                            size="sm"
-                            aria-label={reactivateButtonLabel(t.name)}
-                            icon={<RotateCcw aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+                            variant="secondary"
+                            label={reactivateButtonLabel(t.name)}
                             onClick={() => actions.reactivate(t)}
                             disabled={sending}
                           >
-                            {REACTIVATE_BUTTON}
-                          </Button>
+                            <RotateCcw aria-hidden="true" focusable="false" strokeWidth={1.8} />
+                          </IconButton>
                         )}
                       </span>
                     </td>
                   )}
                 </tr>
-                {canWrite && retiring !== null && retiring.id === t.id && (
-                  <tr>
-                    <td colSpan={columns} className="whitespace-normal">
-                      <ConfirmDialog
-                        icon={PowerOff}
-                        title={`${RETIRE_BUTTON} ${t.name}?`}
-                        className="m-0"
-                        actions={
-                          <>
-                            <Button type="button" variant="primary" onClick={actions.confirmRetire} disabled={sending} aria-busy={sending}>
-                              <BusyLabel busy={sending} label={CONFIRM_RETIRE_BUTTON} busyText={BUSY_SAVING} />
-                            </Button>
-                            <Button type="button" variant="secondary" onClick={actions.cancelRetire} disabled={sending}>
-                              {NUT_HUY}
-                            </Button>
-                          </>
-                        }
-                      >
-                        <p className="m-0">{retireConfirmSentence(t.name)}</p>
-                      </ConfirmDialog>
-                    </td>
-                  </tr>
-                )}
                 {rowError !== null && rowError.id === t.id && (
                   <tr>
                     <td colSpan={columns}>
@@ -591,6 +575,50 @@ function UnitsTable({
         </tbody>
       </table>
     </TableScroll>
+    </>
+  );
+}
+
+/**
+ * "Ngừng dùng" asks once (ADR 0059), in a dialog over the list. The question is the visible title; the
+ * dialog's own header only names it for assistive technology.
+ */
+function RetireDialog({
+  unit,
+  sending,
+  actions,
+}: {
+  unit: identity_thonToDanPhoRa;
+  sending: boolean;
+  actions: ResidentialUnitActions;
+}) {
+  const question = `${RETIRE_BUTTON} ${unit.name}?`;
+  return (
+    <ConfigDialog
+      title={question}
+      hideHeader
+      onDismiss={() => {
+        if (!sending) actions.cancelRetire();
+      }}
+    >
+      <ConfirmDialog
+        icon={PowerOff}
+        title={question}
+        className="m-0 p-0 shadow-none"
+        actions={
+          <>
+            <Button type="button" variant="primary" onClick={actions.confirmRetire} disabled={sending} aria-busy={sending}>
+              <BusyLabel busy={sending} label={CONFIRM_RETIRE_BUTTON} busyText={BUSY_SAVING} />
+            </Button>
+            <Button type="button" variant="secondary" onClick={actions.cancelRetire} disabled={sending}>
+              {NUT_HUY}
+            </Button>
+          </>
+        }
+      >
+        <p className="m-0">{retireConfirmSentence(unit.name)}</p>
+      </ConfirmDialog>
+    </ConfigDialog>
   );
 }
 

@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CardHeader, CardTitle } from "@/components/ui/card";
 import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { NoAccess } from "@/components/ui/no-access";
@@ -13,6 +12,7 @@ import { Notice } from "@/components/ui/notice";
 import { PendingSection } from "@/components/ui/pending-feature";
 import { SkeletonRows } from "@/components/ui/skeleton";
 import { BusyLabel } from "@/features/danh-ba/busy-label";
+import { cn } from "@/lib/cn";
 
 import { usePhien } from "@/features/phien/phien-hien-tai";
 import {
@@ -104,23 +104,16 @@ export function AutomationTab() {
 /** Pure list rendering — exported so the loading, failure and empty states have tests. */
 export function AutomationTabView({ loaded }: { loaded: KetQua<readonly AutomationJob[]> | null }) {
   return (
-    <section className="tab-danh-muc flex min-w-0 flex-col gap-4 [&>*]:my-0" aria-labelledby="tieu-de-tu-dong-hoa">
-      <div className="min-w-0 overflow-hidden rounded-card border border-line bg-surface shadow-sm">
-        <CardHeader className="m-0">
-          <div className="min-w-0 flex-1 basis-64">
-            <CardTitle as="h2" id="tieu-de-tu-dong-hoa" className="flex items-center gap-2">
-              <BellRing aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
-              {AUTOMATION_TITLE}
-            </CardTitle>
-            <p className="ghi-chu m-0 mt-1 text-[13px] text-ink-500">{AUTOMATION_GUIDANCE}</p>
-          </div>
-        </CardHeader>
-        <div className="p-4">
-          <Notice tone="info" className="ghi-chu">
-            {AUTOMATION_RECIPIENTS}
-          </Notice>
-        </div>
-      </div>
+    // The prototype's `AutomationTable` (ADR 0068 lần 5): the guidance as plain text, then one card per
+    // job. No outer card, no visible tab title.
+    <section className="tab-danh-muc flex min-w-0 flex-col gap-3 [&>*]:my-0" aria-labelledby="tieu-de-tu-dong-hoa">
+      <h2 id="tieu-de-tu-dong-hoa" className="an-thi-giac">
+        {AUTOMATION_TITLE}
+      </h2>
+      <p className="ghi-chu m-0 max-w-2xl text-[13px] text-ink-500">{AUTOMATION_GUIDANCE}</p>
+      <Notice tone="info" className="ghi-chu">
+        {AUTOMATION_RECIPIENTS}
+      </Notice>
       {loaded === null ? (
         <>
           <p role="status" className="an-thi-giac">
@@ -244,16 +237,20 @@ export function AutomationJobCardView({
   const canRunNow = job.configured && job.enabled;
 
   return (
+    // A job that is off sits on the muted fill, as in the prototype; one that runs is white.
     <article
-      className="the-loi-he-thong m-0 flex min-w-0 flex-col gap-3 rounded-card border border-line bg-surface p-4 shadow-sm [&>*]:my-0"
+      className={cn(
+        "the-loi-he-thong m-0 flex min-w-0 flex-col gap-3 rounded-card border border-line p-4 shadow-sm [&>*]:my-0",
+        job.configured && job.enabled ? "bg-surface" : "bg-surface-muted",
+      )}
       aria-labelledby={`${id}-ten`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1 basis-64">
-          <h3 id={`${id}-ten`} className="m-0 text-[15px] font-semibold text-ink-900">
+          <h3 id={`${id}-ten`} className="m-0 text-[13px] font-bold text-ink-900">
             {words.title}
           </h3>
-          {words.description !== "" && <p className="ghi-chu m-0 mt-1 text-[13px] text-ink-500">{words.description}</p>}
+          {words.description !== "" && <p className="ghi-chu m-0 mt-0.5 text-xs text-ink-500">{words.description}</p>}
         </div>
         <p className="m-0">
           {/* Tone by the CODES (`configured`, `enabled`); icon + word, never colour alone. */}

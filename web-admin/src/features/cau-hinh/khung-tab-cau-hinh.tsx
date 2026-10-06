@@ -1,23 +1,9 @@
 "use client";
 
-import {
-  BellRing,
-  CalendarClock,
-  FileClock,
-  Home,
-  ImageIcon,
-  ListTree,
-  Mail,
-  MapPinned,
-  MessageCircle,
-  MessageSquareText,
-  Network,
-  type LucideIcon,
-} from "lucide-react";
 import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
-import { Tab, TabList } from "@/components/ui/tabs";
 import { usePhien } from "@/features/phien/phien-hien-tai";
+import { cn } from "@/lib/cn";
 
 import { AuditLogTab } from "./audit-log-tab";
 import { AutomationTab } from "./automation-tab";
@@ -55,21 +41,6 @@ const NOI_DUNG: Record<MaTabCauHinh, (active: boolean) => ReactNode> = {
   "kenh-zalo": () => <ZaloChannelTab />,
   "nhat-ky-he-thong": () => <AuditLogTab />,
   "nhan-dien-xa": () => <CommuneBrandingTab />,
-};
-
-/** Icon of each tab (spec §7 "Tab: chữ 14/500 + icon"). Decorative: the tab's word carries the meaning. */
-const ICON_TAB: Record<MaTabCauHinh, LucideIcon> = {
-  "so-do-to-chuc": Network,
-  "thon-to-dan-pho": Home,
-  "danh-muc": ListTree,
-  "truong-ban-do": MapPinned,
-  "loi-he-thong": MessageSquareText,
-  "thoi-han-xu-ly": CalendarClock,
-  "tu-dong-hoa": BellRing,
-  "may-chu-thu": Mail,
-  "kenh-zalo": MessageCircle,
-  "nhat-ky-he-thong": FileClock,
-  "nhan-dien-xa": ImageIcon,
 };
 
 const idTab = (ma: MaTabCauHinh) => `tab-cau-hinh-${ma}`;
@@ -119,27 +90,43 @@ export function KhungTabCauHinh() {
         </p>
       )}
 
+      {/* The prototype's `TabsList` (ADR 0068 lần 5): one muted rounded strip, 3px inset, the open
+          tab a white raised segment; words only, no icons. Eleven tabs do not fit 320px, so the
+          strip scrolls sideways INSIDE its own box (`max-w-full overflow-x-auto`) and never widens
+          the page. */}
       {coThanh && (
-        <TabList aria-label="Các phần cấu hình" className="mb-4">
-          {hien.map((t, i) => (
-            <Tab
-              key={t.ma}
-              ref={(el) => {
-                nutTab.current[t.ma] = el;
-              }}
-              type="button"
-              icon={ICON_TAB[t.ma]}
-              id={idTab(t.ma)}
-              selected={t.ma === chon}
-              aria-controls={idPanel(t.ma)}
-              tabIndex={t.ma === chon ? 0 : -1}
-              onClick={() => datDangChon(t.ma)}
-              onKeyDown={(e) => xuLyPhim(e, i)}
-            >
-              {t.nhan}
-            </Tab>
-          ))}
-        </TabList>
+        <div className="mb-1 max-w-full min-w-0 overflow-x-auto">
+          <div
+            role="tablist"
+            aria-label="Các phần cấu hình"
+            className="inline-flex w-max items-center gap-0.5 rounded-lg bg-surface-subtle p-[3px]"
+          >
+            {hien.map((t, i) => (
+              <button
+                key={t.ma}
+                ref={(el) => {
+                  nutTab.current[t.ma] = el;
+                }}
+                type="button"
+                role="tab"
+                id={idTab(t.ma)}
+                aria-selected={t.ma === chon}
+                aria-controls={idPanel(t.ma)}
+                tabIndex={t.ma === chon ? 0 : -1}
+                onClick={() => datDangChon(t.ma)}
+                onKeyDown={(e) => xuLyPhim(e, i)}
+                className={cn(
+                  "inline-flex h-8 shrink-0 cursor-pointer items-center rounded-md border border-solid border-transparent bg-transparent px-3 [font-family:inherit] text-[13px] font-medium whitespace-nowrap text-ink-500",
+                  "transition-[color,background-color] duration-(--dur-fast) ease-(--ease) hover:text-ink-900",
+                  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500",
+                  t.ma === chon && "bg-surface text-ink-900 shadow-sm",
+                )}
+              >
+                {t.nhan}
+              </button>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Cùng một danh sách có `key` ở cả hai trạng thái (có thanh / không thanh), nên khi thanh

@@ -155,15 +155,15 @@ describe("nút của một dòng, theo tầng", () => {
   it("tầng 1 — đơn vị tự thêm: đủ Sửa, Tắt, Xoá", () => {
     const html = ve(nhomCoMuc([muc(TANG_DON_VI)]));
 
-    expect(html).toContain(`>${NUT_SUA}</button>`);
+    expect(html).toContain(`aria-label="${NUT_SUA} — mục `);
     expect(html).toContain(NUT_TAT);
-    expect(html).toContain(`>${NUT_XOA}</button>`);
+    expect(html).toContain(`aria-label="${NUT_XOA} — mục `);
   });
 
   it("tầng 2 — phần mềm cấp: CÓ Tắt, KHÔNG có Xoá", () => {
     const html = ve(nhomCoMuc([muc(TANG_HE_THONG)]));
 
-    expect(html).toContain(`>${NUT_SUA}</button>`);
+    expect(html).toContain(`aria-label="${NUT_SUA} — mục `);
     expect(html).toContain(NUT_TAT);
     expect(html).not.toContain(NUT_XOA);
     // Và nói ra vì sao thiếu nút, ngay trong ô hành động của chính dòng ấy.
@@ -176,7 +176,7 @@ describe("nút của một dòng, theo tầng", () => {
     // đang làm đúng việc của nó. Cái CHẶN thật là trigger CSDL; ca này canh cái VẼ.
     const html = ve(nhomCoMuc([muc(TANG_RE_NHANH)]));
 
-    expect(html).toContain(`>${NUT_SUA}</button>`);
+    expect(html).toContain(`aria-label="${NUT_SUA} — mục `);
     expect(html).not.toContain(NUT_TAT);
     expect(html).not.toContain(NUT_XOA);
     expect(html).toContain(giaiThichKhongThaoTac(TANG_RE_NHANH));
@@ -364,9 +364,9 @@ describe("hai danh mục identity: Loại đơn vị dân cư và Khối nhiệm
       const html = ve(nhomThat(khoa, mucIdentity(TANG_DON_VI)), true);
 
       expect(html).toContain(`>${NUT_THEM}</button>`);
-      expect(html).toContain(`>${NUT_SUA}</button>`);
+      expect(html).toContain(`aria-label="${NUT_SUA} — mục `);
       expect(html).toContain(NUT_TAT);
-      expect(html).toContain(`>${NUT_XOA}</button>`);
+      expect(html).toContain(`aria-label="${NUT_XOA} — mục `);
       expect(html).toContain("Nguồn");
       expect(html).not.toContain(GHI_CHU_NHOM_CHI_XEM);
     });
@@ -383,12 +383,12 @@ describe("hai danh mục identity: Loại đơn vị dân cư và Khối nhiệm
 
     it(`${khoa}: tầng 2 — không Xoá; tầng 3 — không Tắt, không Xoá`, () => {
       const t2 = ve(nhomThat(khoa, mucIdentity(TANG_HE_THONG)), true);
-      expect(t2).toContain(`>${NUT_SUA}</button>`);
+      expect(t2).toContain(`aria-label="${NUT_SUA} — mục `);
       expect(t2).toContain(NUT_TAT);
       expect(t2).not.toContain(NUT_XOA);
 
       const t3 = ve(nhomThat(khoa, mucIdentity(TANG_RE_NHANH)), true);
-      expect(t3).toContain(`>${NUT_SUA}</button>`);
+      expect(t3).toContain(`aria-label="${NUT_SUA} — mục `);
       expect(t3).not.toContain(NUT_TAT);
       expect(t3).not.toContain(NUT_XOA);
     });

@@ -5,6 +5,8 @@ import { useReducer, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ModalDialog } from "@/components/ui/modal-dialog";
+import { cn } from "@/lib/cn";
 import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { BusyLabel } from "@/features/danh-ba/busy-label";
@@ -43,10 +45,16 @@ export function ExcelImportPanel<R, C = R>({
   target,
   onImported,
   onClose,
+  asDialog = false,
 }: {
   target: ImportTarget<R, C>;
   onImported: () => void;
   onClose: () => void;
+  /**
+   * Open as a centred dialog — the prototype's `ExcelImportDialog` behind every "Nhập từ Excel" of the
+   * Cấu hình screen (ADR 0068 lần 5). Same view, same flow; only the frame changes.
+   */
+  asDialog?: boolean;
 }) {
   // ONE reducer for everything the server answered (`nextAttempt`): the 201 of the staff import carries
   // temporary passwords, and "which event clears them" must be one tested function, not four setters.
@@ -104,7 +112,7 @@ export function ExcelImportPanel<R, C = R>({
     onClose();
   }
 
-  return (
+  const view = (
     <ExcelImportView
       target={target}
       fileChosen={file !== null}
@@ -117,9 +125,27 @@ export function ExcelImportPanel<R, C = R>({
       onPreview={() => void check()}
       onImport={() => void commit()}
       onClose={close}
+      framed={!asDialog}
     />
   );
+  if (!asDialog) return view;
+  return (
+    // Esc while the import is in flight does nothing: the box must stay until the server has answered,
+    // or the "Đã nhập…" sentence (and a staff import's temporary passwords) would have nowhere to show.
+    <ModalDialog
+      titleId={importTitleId(target.id)}
+      onDismiss={() => {
+        if (busy !== "import") close();
+      }}
+      size="lg"
+      className="p-0"
+    >
+      <div className="min-h-0 min-w-0 overflow-y-auto">{view}</div>
+    </ModalDialog>
+  );
 }
+
+const importTitleId = (targetId: string) => `tieu-de-nhap-${targetId}`;
 
 /** Pure rendering — exported so the errors table and the preview list have tests without a DOM. */
 export function ExcelImportView<R, C = R>({
@@ -134,8 +160,11 @@ export function ExcelImportView<R, C = R>({
   onPreview,
   onImport,
   onClose,
+  framed = true,
 }: {
   target: ImportTarget<R, C>;
+  /** `false` inside a dialog: the dialog already draws the frame. */
+  framed?: boolean;
   fileChosen: boolean;
   preview: KetQua<ImportPreview<R>> | null;
   result: ImportResult<C> | null;
@@ -148,13 +177,16 @@ export function ExcelImportView<R, C = R>({
   onClose: () => void;
 }) {
   const done = result !== null && result.ok;
-  const titleId = `tieu-de-nhap-${target.id}`;
+  const titleId = importTitleId(target.id);
   const fileId = `o-tep-nhap-${target.id}`;
   return (
     // A card of its own (spec v2 §7); NO HOOKS anywhere in this view — the staff-import test renders
     // it under a mocked React that only knows useState/useReducer inside its own render loop.
     <section
-      className="form-danh-muc m-0 min-w-0 overflow-hidden rounded-card border border-line bg-surface p-0 shadow-sm"
+      className={cn(
+        "form-danh-muc m-0 min-w-0 overflow-hidden bg-surface p-0",
+        framed ? "rounded-card border border-line shadow-sm" : "border-0",
+      )}
       aria-labelledby={titleId}
     >
       <CardHeader className="m-0 justify-between">

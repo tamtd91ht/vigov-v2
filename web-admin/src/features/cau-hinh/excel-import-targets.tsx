@@ -323,7 +323,7 @@ export const CAPITAL_PLAN_CATEGORY_IMPORT_TARGET = lookupImportTarget<FinanceCat
 export type CatalogueImport = {
   /** The key the three routes declare — gated in the UI, checked by the server. */
   readonly permission: string;
-  readonly panel: (p: { onImported: () => void; onClose: () => void }) => ReactNode;
+  readonly panel: (p: { onImported: () => void; onClose: () => void; asDialog?: boolean }) => ReactNode;
 };
 
 /**

@@ -4,7 +4,6 @@ import { MessageCircle, Save, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { CardHeader, CardTitle } from "@/components/ui/card";
 import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
 import { ErrorState } from "@/components/ui/error-state";
 import { NoAccess } from "@/components/ui/no-access";
@@ -151,18 +150,21 @@ export function ZaloChannelView({
   const formError = saveMessage !== null && !saveMessage.ok && saveMessage.field === undefined ? saveMessage.text : null;
 
   return (
-    <div className="page--form flex min-w-0 flex-col gap-4">
+    // Presentation only follows the prototype's `ZaloChannelPanel` (ADR 0068 lần 5): white cards with the
+    // title INSIDE (14px bold, no header bar), 20px padding, 20px apart. Fields, calls and rules are
+    // unchanged (ADR 0074).
+    <div className="page--form flex min-w-0 flex-col gap-5">
       <section
         className="m-0 min-w-0 overflow-hidden rounded-card border border-line bg-surface shadow-sm"
         aria-labelledby="tieu-de-kenh-zalo"
       >
-        <CardHeader className="m-0">
-          <div className="min-w-0 flex-1 basis-64">
-            <CardTitle as="h2" id="tieu-de-kenh-zalo" className="flex items-center gap-2">
-              <MessageCircle aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
+        <div className="px-5 pt-5">
+          <div className="min-w-0">
+            <h2 id="tieu-de-kenh-zalo" className="m-0 flex items-center gap-2 text-sm font-bold text-ink-900">
+              <MessageCircle aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-4 shrink-0 text-brand-600" />
               {ZALO_TAB_TITLE}
-            </CardTitle>
-            <p className="m-0 mt-1 text-[13px] text-ink-500">{ZALO_TAB_DESCRIPTION}</p>
+            </h2>
+            <p className="m-0 mt-1 max-w-xl text-[13px] text-ink-500">{ZALO_TAB_DESCRIPTION}</p>
             {saved.updated_at !== undefined && (
               <p className="m-0 mt-1 text-xs text-ink-500">
                 Cập nhật {formatVietnamDateTime(saved.updated_at)}
@@ -170,9 +172,9 @@ export function ZaloChannelView({
               </p>
             )}
           </div>
-        </CardHeader>
+        </div>
         <form
-          className="form-danh-muc m-0 p-4"
+          className="form-danh-muc m-0 border-0 bg-transparent p-5"
           aria-label="Cấu hình kênh Zalo"
           onSubmit={(e) => {
             e.preventDefault();
@@ -328,15 +330,15 @@ function LinkedStaffSection({ staff }: { staff: KetQua<ZaloLinkedStaff[]> | null
       className="m-0 min-w-0 overflow-hidden rounded-card border border-line bg-surface shadow-sm"
       aria-labelledby="tieu-de-can-bo-zalo"
     >
-      <CardHeader className="m-0">
-        <CardTitle as="h2" id="tieu-de-can-bo-zalo" className="flex items-center gap-2">
-          <Users aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
+      <div className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-3">
+        <h2 id="tieu-de-can-bo-zalo" className="m-0 flex items-center gap-2 text-sm font-bold text-ink-900">
+          <Users aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-4 shrink-0 text-brand-600" />
           Cán bộ đã ghép nối Zalo
           {staff !== null && staff.ok && staff.duLieu.length > 0 && (
             <span className="text-[13px] font-normal text-ink-500">({staff.duLieu.length})</span>
           )}
-        </CardTitle>
-      </CardHeader>
+        </h2>
+      </div>
       {staff === null ? (
         <div className="flex flex-col gap-2 p-4">
           <p role="status" className="an-thi-giac">

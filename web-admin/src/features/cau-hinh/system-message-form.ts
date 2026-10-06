@@ -23,7 +23,7 @@ export const SYSTEM_MESSAGES_TITLE = "Lời hệ thống";
 export const SYSTEM_MESSAGES_GUIDANCE =
   "Những câu dưới đây là lời hệ thống nói khi từ chối một thao tác. Câu đi kèm phần mềm sửa được " +
   "lời nhưng không xoá được — xoá đi thì lúc từ chối, hệ thống không còn gì để nói. Muốn dùng lại " +
-  "câu gốc thì bấm Khôi phục câu mặc định.";
+  "câu gốc thì bấm Khôi phục lời gốc.";
 
 /**
  * The three sections, in the order of §7's groups. `note` is a section-wide sentence, drawn under the
@@ -64,16 +64,17 @@ export const MESSAGES_NOT_RAISED_YET: ReadonlySet<string> = new Set([
 ]);
 
 export const NOT_RAISED_NOTE = "Chưa có chức năng nào dùng câu này.";
-export const OVERRIDDEN_BADGE = "Đang dùng câu của xã";
+// Button, badge and confirmation words are the prototype's (`MessageTemplateTable`, ADR 0068 lần 5).
+export const OVERRIDDEN_BADGE = "Đã sửa lời";
 export const EDIT_BUTTON = "Sửa lời";
 export const SAVE_BUTTON = "Lưu";
 export const CANCEL_BUTTON = "Huỷ";
-export const RESTORE_BUTTON = "Khôi phục câu mặc định";
+export const RESTORE_BUTTON = "Khôi phục lời gốc";
 export const RESTORE_CONFIRM =
   "Dùng lại câu mặc định của phần mềm cho câu này? Câu xã đã sửa sẽ không còn được dùng.";
 export const RESTORE_CONFIRM_BUTTON = "Khôi phục";
-export const SAVED_SENTENCE = "Đã lưu câu của xã.";
-export const RESTORED_SENTENCE = "Đã khôi phục câu mặc định.";
+export const SAVED_SENTENCE = "Đã lưu lời mới.";
+export const RESTORED_SENTENCE = "Đã khôi phục lời gốc.";
 
 /**
  * The bound the server stores (`MessageTextMax`, in characters — runes — and the CHECK of migration
@@ -82,7 +83,7 @@ export const RESTORED_SENTENCE = "Đã khôi phục câu mặc định.";
  */
 export const SYSTEM_MESSAGE_MAX = 1000;
 export const TEXT_EMPTY =
-  "Câu không được để trống. Muốn dùng lại câu mặc định thì bấm Khôi phục câu mặc định.";
+  "Câu không được để trống. Muốn dùng lại câu mặc định thì bấm Khôi phục lời gốc.";
 export const TEXT_TOO_LONG = `Câu dài quá ${SYSTEM_MESSAGE_MAX} ký tự.`;
 
 /** Trim, then refuse empty and over-long. Counts characters, not UTF-16 units (Vietnamese marks). */

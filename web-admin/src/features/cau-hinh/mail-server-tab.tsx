@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 
 import { useCauHinhXa } from "@/components/cau-hinh-xa";
 import { Button } from "@/components/ui/button";
-import { CardHeader, CardTitle } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/error-state";
 import { NoAccess } from "@/components/ui/no-access";
 import { Notice } from "@/components/ui/notice";
@@ -199,21 +198,20 @@ export function MailServerView({
   const readOnly = !saved.encryption_configured;
   const note = passwordNote(saved, draft);
   return (
-    // A long settings form: the form-page width (spec v2 §5 `.page--form`, 880px).
+    // The prototype's `EmailSettingPanel` (ADR 0068 lần 5): ONE white card, 768px wide, its title inside
+    // (icon + 13px bold), the fields in two columns with host and sender name full width, the switches
+    // in one muted box, then "Lưu cấu hình" and — right-aligned — the test send.
     <section
-      className="tab-danh-muc page--form m-0 min-w-0 overflow-hidden rounded-card border border-line bg-surface shadow-sm"
+      className="tab-danh-muc m-0 flex max-w-3xl min-w-0 flex-col gap-3 rounded-card border border-line bg-surface p-4 [&>*]:my-0"
       aria-labelledby="tieu-de-may-chu-thu"
     >
-      <CardHeader className="m-0">
-        <div className="min-w-0 flex-1 basis-64">
-          <CardTitle as="h2" id="tieu-de-may-chu-thu" className="flex items-center gap-2">
-            <Mail aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
-            {MAIL_TITLE}
-          </CardTitle>
-          <p className="ghi-chu m-0 mt-1 text-[13px] text-ink-500">{MAIL_DESCRIPTION}</p>
-        </div>
-      </CardHeader>
-      <div className="flex min-w-0 flex-col gap-4 p-4 [&>*]:my-0">
+      <div className="min-w-0">
+        <h2 id="tieu-de-may-chu-thu" className="m-0 flex items-center gap-1.5 text-[13px] font-bold text-ink-900">
+          <Mail aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-4 shrink-0 text-brand-600" />
+          {MAIL_TITLE}
+        </h2>
+        <p className="ghi-chu m-0 mt-1 text-xs text-ink-500">{MAIL_DESCRIPTION}</p>
+      </div>
 
       {readOnly && (
         <p className="khoi-chua-khai" role="alert">
@@ -227,7 +225,7 @@ export function MailServerView({
       )}
 
       <form
-        className="form-danh-muc m-0"
+        className="form-danh-muc m-0 border-0 bg-transparent p-0"
         aria-label="Cấu hình máy chủ thư"
         onSubmit={(e) => {
           e.preventDefault();
@@ -239,8 +237,8 @@ export function MailServerView({
         <fieldset disabled={readOnly || saving}>
           {/* Layout lives on this inner div, NOT on the fieldset: the tab's test counts the bare
               `<fieldset disabled="">` tags. Two columns from 640px for the short paired fields. */}
-          <div className="grid min-w-0 gap-4 sm:grid-cols-2 [&>*]:m-0 [&>.cum-nut]:col-span-full [&>fieldset]:col-span-full">
-          <div className="o-nhap">
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2 [&>*]:m-0 [&>.cum-nut]:col-span-full">
+          <div className="o-nhap sm:col-span-2">
             <label htmlFor="o-smtp-host">Máy chủ SMTP</label>
             <input
               id="o-smtp-host"
@@ -272,22 +270,6 @@ export function MailServerView({
               {PORT_HINT}
             </p>
           </div>
-
-          <fieldset className="o-nhap flex flex-wrap gap-x-6 gap-y-2 rounded-xl border border-line px-3 pt-1 pb-3">
-            <legend className="px-1 text-xs font-semibold text-ink-700">Bảo mật kết nối</legend>
-            {MAIL_SECURITY.map((s) => (
-              <label key={s.value} className="inline-flex min-h-10 cursor-pointer items-center gap-2">
-                <input
-                  type="radio"
-                  name="security"
-                  value={s.value}
-                  checked={draft.security === s.value}
-                  onChange={() => setDraft({ ...draft, security: s.value })}
-                />{" "}
-                {s.label}
-              </label>
-            ))}
-          </fieldset>
 
           <div className="o-nhap">
             <label htmlFor="o-smtp-tai-khoan">Tài khoản</label>
@@ -337,7 +319,7 @@ export function MailServerView({
             />
           </div>
 
-          <div className="o-nhap">
+          <div className="o-nhap sm:col-span-2">
             <label htmlFor="o-smtp-ten-gui">Tên hiển thị của người gửi</label>
             <input
               id="o-smtp-ten-gui"
@@ -348,8 +330,10 @@ export function MailServerView({
             />
           </div>
 
-          <div className="o-nhap col-span-full">
-            <label className="inline-flex min-h-10 cursor-pointer items-center gap-2">
+          {/* The prototype's muted box of switches: "use this server", then the connection security.
+              Security stays ONE choice of three (the contract's enum), not two independent boxes. */}
+          <div className="col-span-full flex min-w-0 flex-col gap-1 rounded-[10px] border border-line bg-surface-muted p-3">
+            <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 text-[13px]">
               <input
                 type="checkbox"
                 name="is_enabled"
@@ -358,9 +342,24 @@ export function MailServerView({
               />{" "}
               Dùng máy chủ thư này cho xã
             </label>
+            <fieldset className="o-nhap m-0 flex min-w-0 flex-wrap gap-x-6 gap-y-1 border-0 p-0">
+              <legend className="p-0 text-xs font-semibold text-ink-700">Bảo mật kết nối</legend>
+              {MAIL_SECURITY.map((s) => (
+                <label key={s.value} className="inline-flex min-h-10 cursor-pointer items-center gap-2 text-[13px]">
+                  <input
+                    type="radio"
+                    name="security"
+                    value={s.value}
+                    checked={draft.security === s.value}
+                    onChange={() => setDraft({ ...draft, security: s.value })}
+                  />{" "}
+                  {s.label}
+                </label>
+              ))}
+            </fieldset>
           </div>
 
-          <div className="cum-nut flex justify-end">
+          <div className="cum-nut flex">
             <Button
               type="submit"
               variant="primary"
@@ -385,7 +384,7 @@ export function MailServerView({
       </form>
 
       <form
-        className="form-danh-muc m-0 border-t border-line pt-4"
+        className="form-danh-muc m-0 border-0 bg-transparent p-0"
         aria-label="Gửi thư thử"
         onSubmit={(e) => {
           e.preventDefault();
@@ -393,31 +392,32 @@ export function MailServerView({
         }}
       >
         <fieldset disabled={readOnly || testing || !saved.configured}>
-          <div className="flex min-w-0 flex-col gap-3">
-          <div className="o-nhap m-0 min-w-0">
-            <label htmlFor="o-gui-thu-toi">{TEST_LABEL}</label>
-            <input
-              id="o-gui-thu-toi"
-              name="recipient"
-              type="email"
-              value={recipient}
-              onChange={(e) => setRecipient(e.target.value)}
-              aria-describedby="giai-thich-gui-thu"
-            />
-            <p className="ghi-chu" id="giai-thich-gui-thu">
+          {/* Right-aligned, as the prototype's: the address box then the outline "Gửi thử". */}
+          <div className="flex min-w-0 flex-wrap items-end justify-end gap-2">
+            <div className="o-nhap m-0 min-w-0 flex-[0_1_16rem]">
+              <label htmlFor="o-gui-thu-toi">{TEST_LABEL}</label>
+              <input
+                id="o-gui-thu-toi"
+                name="recipient"
+                type="email"
+                value={recipient}
+                placeholder="ten@xa.danang.gov.vn"
+                onChange={(e) => setRecipient(e.target.value)}
+                aria-describedby="giai-thich-gui-thu"
+              />
+            </div>
+            <Button
+              type="submit"
+              variant="outline"
+              icon={<Send aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+              disabled={recipient.trim() === ""}
+              aria-busy={testing}
+            >
+              {TEST_BUTTON}
+            </Button>
+            <p className="ghi-chu m-0 w-full text-right text-xs text-ink-500" id="giai-thich-gui-thu">
               {TEST_SAVED_ONLY}
             </p>
-          </div>
-          <Button
-            type="submit"
-            variant="secondary"
-            className="self-start"
-            icon={<Send aria-hidden="true" focusable="false" strokeWidth={1.8} />}
-            disabled={recipient.trim() === ""}
-            aria-busy={testing}
-          >
-            {TEST_BUTTON}
-          </Button>
           </div>
         </fieldset>
         {testMessage !== null &&
@@ -432,7 +432,6 @@ export function MailServerView({
             </p>
           ))}
       </form>
-      </div>
     </section>
   );
 }

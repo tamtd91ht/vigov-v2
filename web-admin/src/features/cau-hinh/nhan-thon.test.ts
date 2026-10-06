@@ -90,7 +90,7 @@ describe("trạng thái địa bàn dùng chung một hàm với tab Danh mục"
 
 describe("TRẠNG THÁI RỖNG và ghi chú đầu tab Thôn / Tổ dân phố", () => {
   it("rỗng: nói đúng một điều, không nói là lỗi, không còn nói 'chỉ xem'", () => {
-    expect(THON_RONG).toBe("Đơn vị chưa có thôn hoặc tổ dân phố nào.");
+    expect(THON_RONG).toBe("Chưa khai báo thôn hoặc tổ dân phố nào.");
     for (const tu of ["lỗi", "thất bại", "thử lại", "đang phát triển", "chỉ xem"]) {
       expect(THON_RONG.toLowerCase()).not.toContain(tu);
     }

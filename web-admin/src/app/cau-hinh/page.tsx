@@ -1,4 +1,4 @@
-import { Settings, SlidersHorizontal } from "lucide-react";
+import { Settings } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
@@ -68,6 +68,10 @@ import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
  */
 export const dynamic = "force-dynamic";
 
+const CONFIG_SUBTITLE =
+  "Sơ đồ tổ chức, địa bàn dân cư, danh mục nghiệp vụ và thời hạn xử lý của đơn vị. Tài khoản và " +
+  "phân quyền nằm ở menu Người dùng.";
+
 // Tab title carries the signed-in commune, never the product name (ADR 0068 §13); a Host
 // matching no commune 404s here exactly as the page body does.
 export function generateMetadata() {
@@ -93,16 +97,8 @@ export default async function TrangCauHinh({
         <div className="khung-trang">
         <DauTrang />
         <main className="than-trang">
-          <PageHeader
-            icon={Settings}
-            title="Cấu hình hệ thống"
-            subtitle={
-              <span className="inline-flex items-center gap-1.5">
-                <SlidersHorizontal aria-hidden="true" focusable="false" strokeWidth={1.8} />
-                Tổ chức, danh mục nghiệp vụ và thời hạn xử lý của đơn vị.
-              </span>
-            }
-          />
+          {/* Title and subtitle are the prototype's own words (`ConfigWorkspace`, ADR 0068 lần 5). */}
+          <PageHeader icon={Settings} title="Cấu hình hệ thống" subtitle={<span>{CONFIG_SUBTITLE}</span>} />
           {/* Thứ tự tab của đặc tả §0 nằm ở `TAB_CAU_HINH` (`thanh-tab-cau-hinh.ts`). `min-w-0`: a
               wide tab (the permission matrix) scrolls inside its own region, never the page. */}
           <div className="flex min-w-0 flex-col gap-4">

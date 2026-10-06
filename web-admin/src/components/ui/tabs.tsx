@@ -9,8 +9,8 @@ import { cn } from "@/lib/cn";
  * tab keeps the fill and adds a 1px navy border (guide §9).
  *
  * PRIMITIVES, NOT A TABS WIDGET. The screens already own their tab state, their `id`s, their
- * `aria-controls` and their click handlers (`features/cau-hinh/khung-tab-cau-hinh.tsx`, the
- * Nhiệm vụ scope switch). `TabList` and `Tab` only draw: every native prop passes through, and
+ * `aria-controls` and their click handlers (the Nhiệm vụ scope switch). Cấu hình draws its own
+ * segmented strip since ADR 0068 lần 5 (the prototype's `TabsList`, `khung-tab-cau-hinh.tsx`). `TabList` and `Tab` only draw: every native prop passes through, and
  * `selected` maps to `aria-selected`. A screen keeps its own keyboard handling exactly as it is.
  *
  * The selected tab differs by weight (500 vs 400) and by a fill whose luminance is far from its

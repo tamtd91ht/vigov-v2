@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  CalendarClock,
   CalendarDays,
   CalendarOff,
   CalendarPlus,
@@ -9,17 +8,17 @@ import {
   Pencil,
   Plus,
   Sprout,
-  Timer,
   Trash2,
   TriangleAlert,
 } from "lucide-react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
-import { CardHeader, CardTitle } from "@/components/ui/card";
 import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
+import { IconButton } from "@/components/ui/icon-button";
+import { PendingButton } from "@/components/ui/pending-feature";
 import { Notice } from "@/components/ui/notice";
 import { SkeletonRows } from "@/components/ui/skeleton";
 import { BUSY_DELETING, BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
@@ -61,6 +60,7 @@ import {
 import { namTheoDongHoMay } from "@/lib/nam";
 
 import { khoiCanhBao, tinhTrangBang, type KhoiCanhBao } from "./chua-cau-hinh";
+import { PHAN_CHUA_DUNG } from "./nhan-cau-hinh";
 import { DAN_LICH_LAM_VIEC, nhanCa, nhanGio, nhanNgay, tenThu } from "./nhan-lich-lam-viec";
 import {
   CANH_BAO_XOA_CA,
@@ -144,6 +144,9 @@ import { COT_GIO, NHAN_COT, banTuDong, soanSua, type BanNhapGio } from "./sua-th
  * KHÔNG MỘT PHÉP CỘNG GIỜ LÀM VIỆC NÀO Ở ĐÂY. `identity` sở hữu bốn bảng và sở hữu phép cộng
  * (ADR 0007). Màn hình chỉ hiện những dòng máy chủ trả về và những câu máy chủ viết.
  */
+
+/** The "+ Thêm thời hạn cho một lĩnh vực" entry — looked up by name so a renamed entry fails a test. */
+const ADD_FIELD_SLA = PHAN_CHUA_DUNG.find((p) => p.ten === "Thêm thời hạn cho một lĩnh vực")!;
 
 /* ---- trạng thái ---------------------------------------------------------------------------- */
 
@@ -554,15 +557,12 @@ export function ManThoiHanXuLy({
   const khoi = khoiCanhBao(tinhTrangBang(du.thoiHan), tinhTrangBang(du.tuan));
 
   return (
-    <section className="tab-thoi-han flex min-w-0 flex-col gap-4 [&>*]:my-0" aria-labelledby="tieu-de-thoi-han">
-      <div className="min-w-0 overflow-hidden rounded-card border border-line bg-surface shadow-sm">
-        <CardHeader className="m-0">
-          <CardTitle as="h2" id="tieu-de-thoi-han" className="flex items-center gap-2">
-            <CalendarClock aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
-            Thời hạn xử lý và lịch làm việc
-          </CardTitle>
-        </CardHeader>
-        <div className="flex min-w-0 flex-col gap-3 p-4 empty:hidden [&>*]:my-0">
+    // The prototype's `SlaTable` (ADR 0068 lần 5): no card, no visible tab title; the working-hours banner
+    // on top, then the table. The three calendar tables below it are this system's own (ADR 0007).
+    <section className="tab-thoi-han flex min-w-0 flex-col gap-3 [&>*]:my-0" aria-labelledby="tieu-de-thoi-han">
+      <h2 id="tieu-de-thoi-han" className="an-thi-giac">
+        Thời hạn xử lý và lịch làm việc
+      </h2>
       <KhoiChuaKhai khoi={khoi} coQuyenGhi={coQuyenGhi} dangGui={dangGui} thaoTac={thaoTac} />
 
       {cauDaXong !== "" && (
@@ -581,8 +581,6 @@ export function ManThoiHanXuLy({
           đây vẫn xem được.
         </Notice>
       )}
-        </div>
-      </div>
 
       <BangThoiHan
         kq={du.thoiHan}
@@ -745,15 +743,25 @@ export function BangThoiHan({
   form: ReactNode;
 }) {
   return (
-    <div className="nhom-lich m-0 flex min-w-0 flex-col gap-3 rounded-card border border-line bg-surface p-4 shadow-sm [&>*]:my-0 [&>h3]:flex [&>h3]:items-center [&>h3]:gap-2 [&>h3]:text-[15px] [&>h3]:font-semibold [&>h3]:text-ink-900">
-      <h3>
-        <Timer aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
-        Thời hạn xử lý
-      </h3>
-      {/* HAI CÂU DẪN BẮT BUỘC GIỮ của đặc tả. Câu đầu là điều dễ hiểu sai nhất trên màn hình. */}
-      <Notice tone="info">{DAN_THOI_HAN_1}</Notice>
-      <p className="ghi-chu text-[13px] text-ink-500">{DAN_THOI_HAN_2}</p>
+    <div className="nhom-lich m-0 flex min-w-0 flex-col gap-3 [&>*]:my-0">
+      <h3 className="an-thi-giac">Thời hạn xử lý</h3>
+      {/* HAI CÂU DẪN BẮT BUỘC GIỮ của đặc tả, in the prototype's single tinted banner with its warning
+          icon. The first is the easiest thing on this screen to get wrong. */}
+      <Notice tone="info" icon={TriangleAlert}>
+        <span className="flex flex-col gap-1">
+          <span>{DAN_THOI_HAN_1}</span>
+          <span>{DAN_THOI_HAN_2}</span>
+        </span>
+      </Notice>
       <p className="ghi-chu text-[13px] text-ink-500">{GHI_CHU_HAI_COT_LEO_THANG}</p>
+
+      {/* The prototype's "+ Thêm thời hạn cho một lĩnh vực", right-aligned above the table, as a
+          disabled placeholder: no route adds a field row yet (ADR 0068 §14). */}
+      {coQuyenGhi && (
+        <p className="m-0 flex justify-end">
+          <PendingButton info={ADD_FIELD_SLA} variant="primary" size="sm" icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />} />
+        </p>
+      )}
 
       <KhungTai kq={kq} dangTai="Đang tải bảng thời hạn xử lý…" />
 
@@ -821,16 +829,17 @@ export function BangThoiHan({
                       ))}
                       {coQuyenGhi && (
                         <td className="o-thao-tac">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            aria-label={`${NUT_SUA} thời hạn ${nhanLoaiViec(d.work_kind)} — ${nhanLinhVuc(d.field, d.is_default, fieldLabels)}`}
-                            icon={<Pencil aria-hidden="true" focusable="false" strokeWidth={1.8} />}
-                            onClick={() => thaoTac.suaThoiHan(d)}
-                          >
-                            {NUT_SUA}
-                          </Button>
+                          {/* The prototype's pencil icon; its words are the name and the hover title. */}
+                          <span className="flex justify-end">
+                            <IconButton
+                              type="button"
+                              variant="secondary"
+                              label={`${NUT_SUA} thời hạn ${nhanLoaiViec(d.work_kind)} — ${nhanLinhVuc(d.field, d.is_default, fieldLabels)}`}
+                              onClick={() => thaoTac.suaThoiHan(d)}
+                            >
+                              <Pencil aria-hidden="true" focusable="false" strokeWidth={1.8} />
+                            </IconButton>
+                          </span>
                         </td>
                       )}
                     </tr>

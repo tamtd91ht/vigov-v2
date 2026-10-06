@@ -4,13 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { identity_boPhanRa } from "@/lib/api/schema.gen";
 
 import { banSua, banThem, dungCay, luaChonCha, moThem } from "./cay-bo-phan";
-import {
-  CAU_THIEU_QUYEN_GHI,
-  NUT_SUA_BO_PHAN,
-  NUT_THEM_BO_PHAN,
-  NUT_THEM_CON,
-  nhanCayRong,
-} from "./nhan-so-do";
+import { CAU_THIEU_QUYEN_GHI, NUT_THEM_BO_PHAN, nhanCayRong } from "./nhan-so-do";
 import { DELETE_BUTTON } from "./org-unit-delete";
 import { IMPORT_BUTTON } from "./org-unit-import-flow";
 import { BieuMauBoPhan, KhungSoDo } from "./tab-so-do-to-chuc";
@@ -50,10 +44,10 @@ describe("thẻ bộ phận và nút ghi", () => {
   it("có admin.org: nút Thêm bộ phận, và ＋ ✎ trên TỪNG thẻ", () => {
     const html = khung(true);
     expect(html).toContain(NUT_THEM_BO_PHAN);
-    // The words lost their ＋/✎ prefix (lucide icon instead), so the bare word also sits inside each
-    // button's aria-label; count the button's own text node instead.
-    expect(html.split(`>${NUT_THEM_CON}</button>`).length - 1).toBe(MAU.length);
-    expect(html.split(`>${NUT_SUA_BO_PHAN}</button>`).length - 1).toBe(MAU.length);
+    // Icon-only since ADR 0068 lần 5 (the prototype's `TreeBranch`): each button is named by its
+    // aria-label, which carries the unit — count those, one per card.
+    expect(html.match(/aria-label="Thêm bộ phận con của [^"]+"/g)?.length).toBe(MAU.length);
+    expect(html.match(/aria-label="Sửa bộ phận [^"]+"/g)?.length).toBe(MAU.length);
     expect(html).toContain('aria-label="Thêm bộ phận con của VĂN PHÒNG"');
     expect(html).toContain('aria-label="Sửa bộ phận VĂN PHÒNG"');
     expect(html).not.toContain(CAU_THIEU_QUYEN_GHI);
@@ -75,7 +69,7 @@ describe("thẻ bộ phận và nút ghi", () => {
 
   it("có admin.org: 🗑 Xoá trên TỪNG thẻ, tên đọc được kèm tên bộ phận; và nút Nhập từ Excel", () => {
     const html = khung(true);
-    expect(html.split(`>${DELETE_BUTTON}</button>`).length - 1).toBe(MAU.length);
+    expect(html.match(/aria-label="Xoá bộ phận [^"]+"/g)?.length).toBe(MAU.length);
     expect(html).toContain('aria-label="Xoá bộ phận VĂN PHÒNG"');
     expect(html).toContain(IMPORT_BUTTON);
   });

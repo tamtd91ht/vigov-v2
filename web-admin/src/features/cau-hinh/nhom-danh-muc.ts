@@ -98,6 +98,9 @@ const BANG_NHOM: readonly { khoa: KhoaNhom; nhan: string; thuTuLaThangBac: boole
   { khoa: "mucUuTienNhiemVu", nhan: "Mức ưu tiên nhiệm vụ", thuTuLaThangBac: true },
 ];
 
+/** The seven groups' keys and names in screen order — the Danh mục tab's group buttons (no read needed). */
+export const CATALOGUE_GROUPS: readonly { khoa: KhoaNhom; nhan: string }[] = BANG_NHOM;
+
 /**
  * Bảy kết quả đọc → bảy nhóm dựng được, giữ nguyên thứ tự `BANG_NHOM`.
  *

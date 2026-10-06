@@ -116,10 +116,9 @@ export const DANG_TAI = "Đang tải sơ đồ tổ chức của đơn vị…";
  * người thiếu quyền mà được bảo "bấm Thêm bộ phận" sẽ đi tìm một nút không có.
  */
 export function nhanCayRong(themDuoc: boolean): string {
-  const dau = "Đơn vị chưa có bộ phận nào trong sơ đồ tổ chức.";
-  return themDuoc
-    ? `${dau} Bấm + ${NUT_THEM_BO_PHAN} ở trên để lập bộ phận đầu tiên.` // "+" = the Plus icon; words verbatim
-    : `${dau} Tài khoản của bạn không có quyền thêm bộ phận.`;
+  // The prototype's sentence (`OrgChart`, ADR 0068 lần 5); the "Thêm bộ phận" button sits right above it.
+  const dau = "Chưa khai báo bộ phận nào.";
+  return themDuoc ? dau : `${dau} Tài khoản của bạn không có quyền thêm bộ phận.`;
 }
 
 /** Câu hiện thay cho các nút ghi khi tài khoản không có `admin.org`. */

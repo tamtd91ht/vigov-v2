@@ -32,4 +32,11 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "Tự gửi báo cáo tuần vào đầu tuần và báo cáo tháng vào ngày mùng 1. Việc này chờ chức năng xuất " +
       "báo cáo của màn Báo cáo: chưa xuất được tệp thì chưa có gì để gửi.",
   },
+  {
+    ten: "Thêm thời hạn cho một lĩnh vực",
+    viSao:
+      "Đặt thời hạn riêng cho một lĩnh vực, khác với thời hạn mặc định của loại việc. Chưa có đường ghi " +
+      "nào nhận mã lĩnh vực: mã gửi lên phải được đối chiếu với bộ mã lĩnh vực chung, và cách đối chiếu " +
+      "ấy chưa được chốt (ADR 0026). Số giờ của các dòng đang có thì sửa được bằng nút bút chì trên dòng.",
+  },
 ];

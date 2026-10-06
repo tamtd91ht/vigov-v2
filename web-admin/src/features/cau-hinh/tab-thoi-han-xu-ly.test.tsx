@@ -11,6 +11,8 @@ import type {
   identity_phienHienTaiRa,
 } from "@/lib/api/schema.gen";
 
+import { pendingMarkerLabel } from "@/components/ui/pending-feature";
+
 import { quyetDinhGhiThoiHan, slaFieldLabelReadDecision } from "./quyen-tab";
 import { banTuDong } from "./sua-thoi-han";
 import {
@@ -32,7 +34,8 @@ import {
  * 2. VÀ VẮNG MẶT KHI ĐÃ KHAI XONG — vế phủ định là vế chịu lực. Một lời báo động cũng hiện ở xã đã
  *    cấu hình đủ là một lời báo động người ta học cách bỏ qua, rồi bỏ qua nốt lần nó đúng.
  *
- * 3. KHÔNG CÓ NÚT `+ Thêm thời hạn cho một lĩnh vực` DƯỚI BẤT KỲ CÁCH VIẾT NÀO. Đặc tả vẽ nút ấy
+ * 3. KHÔNG CÓ NÚT `+ Thêm thời hạn cho một lĩnh vực` BẤM ĐƯỢC — chỉ một chỗ giữ VÔ HIỆU có dấu "?"
+ *    ở đúng vị trí prototype (ADR 0068 §14, lần 5), không gọi tuyến nào. Đặc tả vẽ nút ấy
  *    (`14-cau-hinh.md:293`) nên áp lực thêm lại nó là có thật và đến từ một tài liệu trông có thẩm
  *    quyền — nhưng tuyến sau nó cố ý chưa có (ADR 0026 điều kiện dừng #2: mã lĩnh vực từ client
  *    phải đối chiếu bộ mã tầng 1 ở `platform`, và đường đọc ấy chưa có ADR). Một nút gọi vào tuyến
@@ -191,13 +194,21 @@ describe("khối 'đơn vị chưa khai xong'", () => {
 });
 
 describe("bảng thời hạn xử lý", () => {
-  it("KHÔNG có nút thêm thời hạn cho một lĩnh vực, dưới bất kỳ cách viết nào", () => {
+  it("thêm thời hạn cho một lĩnh vực: CHỈ là chỗ giữ vô hiệu có dấu '?' (ADR 0068 §14), không một nút bấm được", () => {
+    // No route adds a field row (ADR 0026), so the prototype's button stands disabled in its place.
     const html = ve();
 
-    expect(html).not.toContain("Thêm thời hạn");
-    expect(html).not.toContain("thêm thời hạn");
+    expect(html).toContain(pendingMarkerLabel("Thêm thời hạn cho một lĩnh vực"));
+    // Every "Thêm thời hạn" button on the page is a disabled one inside a placeholder.
+    const buttons = html.match(/<button[^>]*>(?:(?!<\/button>).)*Thêm thời hạn(?:(?!<\/button>).)*<\/button>/g) ?? [];
+    expect(buttons.length).toBeGreaterThan(0);
+    for (const b of buttons) expect(b).toContain('disabled=""');
     expect(html).not.toContain("lĩnh vực mới");
     expect(html).not.toContain("Thêm lĩnh vực");
+  });
+
+  it("CA BỊ TỪ CHỐI: thiếu admin.sla thì không có cả chỗ giữ ấy", () => {
+    expect(ve({}, { coQuyenGhi: false })).not.toContain("Thêm thời hạn");
   });
 
   it("câu 'chỉ áp dụng cho hồ sơ tiếp nhận sau' có trên trang", () => {

@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
@@ -49,7 +48,7 @@ import {
  *
  * WHAT §7 DRAWS AND THIS DOES NOT: `+ Thêm câu mới` and `[Tắt]`. The catalogue is closed and lives
  * in each service's code — a new key is a release, not a row — and a refusal cannot be switched off
- * (an empty refusal is one nobody can act on). "Khôi phục câu mặc định" is the only way back.
+ * (an empty refusal is one nobody can act on). "Khôi phục lời gốc" is the only way back.
  *
  * Each section loads and fails on its own: one service being down must not hide the other two.
  */
@@ -75,18 +74,13 @@ export function SystemMessagesTab() {
   }
 
   return (
-    <section className="tab-danh-muc flex min-w-0 flex-col gap-4 [&>*]:my-0" aria-labelledby="tieu-de-loi-he-thong">
-      <div className="min-w-0 overflow-hidden rounded-card border border-line bg-surface shadow-sm">
-        <CardHeader className="m-0">
-          <div className="min-w-0 flex-1 basis-64">
-            <CardTitle as="h2" id="tieu-de-loi-he-thong" className="flex items-center gap-2">
-              <MessageSquareText aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
-              {SYSTEM_MESSAGES_TITLE}
-            </CardTitle>
-            <p className="ghi-chu m-0 mt-1 text-[13px] text-ink-500">{SYSTEM_MESSAGES_GUIDANCE}</p>
-          </div>
-        </CardHeader>
-      </div>
+    // The prototype's `MessageTemplateTable` (ADR 0068 lần 5): the guidance as plain text on top, then
+    // one titled group per module, each a stack of sentence cards. No outer card, no visible tab title.
+    <section className="tab-danh-muc flex min-w-0 flex-col gap-5 [&>*]:my-0" aria-labelledby="tieu-de-loi-he-thong">
+      <h2 id="tieu-de-loi-he-thong" className="an-thi-giac">
+        {SYSTEM_MESSAGES_TITLE}
+      </h2>
+      <p className="ghi-chu m-0 max-w-2xl text-[13px] text-ink-500">{SYSTEM_MESSAGES_GUIDANCE}</p>
       {SYSTEM_MESSAGE_SECTIONS.map((s) => (
         <SystemMessageSection key={s.module} module={s.module} title={s.title} note={s.note} />
       ))}
@@ -124,11 +118,8 @@ function SystemMessageSection({
 
   const headingId = `loi-he-thong-${module}`;
   return (
-    <section
-      className="m-0 flex min-w-0 flex-col gap-3 rounded-card border border-line bg-surface p-4 shadow-sm [&>*]:my-0"
-      aria-labelledby={headingId}
-    >
-      <h3 id={headingId} className="flex items-center gap-2 text-[15px] font-semibold text-ink-900">
+    <section className="m-0 flex min-w-0 flex-col gap-2.5 [&>*]:my-0" aria-labelledby={headingId}>
+      <h3 id={headingId} className="flex items-center gap-2 text-[13px] font-bold text-ink-900">
         {title}
       </h3>
       {note !== undefined && (
@@ -275,16 +266,17 @@ export function SystemMessageCardView({
   const edited = lastEditLine(m);
   return (
     <article
-      className="the-loi-he-thong m-0 flex min-w-0 flex-col gap-2 rounded-xl border border-line p-3.5 [&>*]:my-0"
+      className="the-loi-he-thong m-0 flex min-w-0 flex-col gap-2 rounded-[10px] border border-line bg-surface p-3 [&>*]:my-0"
       aria-label={m.code}
     >
       <p className="flex flex-wrap items-center gap-2">
-        <span className="ma-muc">{m.code}</span>{" "}
+        {/* The code as a small bordered chip, as the prototype draws it. */}
+        <span className="ma-muc rounded border border-line bg-surface-muted px-1.5 py-0.5 text-[11px] text-ink-500">{m.code}</span>{" "}
         {/* Tone by the CODE (`overridden`, the not-raised set); icon + word, never colour alone. */}
         {m.overridden && <Badge tone="info" icon={Pencil}>{OVERRIDDEN_BADGE}</Badge>}{" "}
         {MESSAGES_NOT_RAISED_YET.has(m.code) && <Badge tone="neutral">{NOT_RAISED_NOTE}</Badge>}
       </p>
-      <p className="ghi-chu text-[13px] text-ink-500">{m.description}</p>
+      <p className="ghi-chu text-xs text-ink-500">{m.description}</p>
       <dl className="grid gap-x-4 gap-y-1 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)] [&_dd]:m-0 [&_dt]:text-xs [&_dt]:font-semibold [&_dt]:text-ink-700">
         <dt>Câu mặc định của phần mềm</dt>
         <dd>{m.default_text}</dd>
@@ -329,9 +321,9 @@ export function SystemMessageCardView({
         <ConfirmDialog
           className="cum-nut m-0"
           role="group"
-          aria-label="Xác nhận khôi phục câu mặc định"
+          aria-label="Xác nhận khôi phục lời gốc"
           icon={RotateCcw}
-          title="Xác nhận khôi phục câu mặc định"
+          title="Xác nhận khôi phục lời gốc"
           titleAs="h4"
           actions={
             <>
@@ -350,12 +342,12 @@ export function SystemMessageCardView({
 
       {mode === "view" && (
         <div className="cum-nut flex flex-wrap gap-2">
-          <Button type="button" variant="secondary" size="sm" icon={<Pencil aria-hidden="true" focusable="false" strokeWidth={1.8} />} onClick={onEdit}>
+          <Button type="button" variant="primary" size="sm" icon={<Pencil aria-hidden="true" focusable="false" strokeWidth={1.8} />} onClick={onEdit}>
             {EDIT_BUTTON}
           </Button>
           {/* Only an overridden sentence has anything to restore. */}
           {m.overridden && (
-            <Button type="button" variant="ghost" size="sm" icon={<RotateCcw aria-hidden="true" focusable="false" strokeWidth={1.8} />} onClick={onAskRestore}>
+            <Button type="button" variant="outline" size="sm" icon={<RotateCcw aria-hidden="true" focusable="false" strokeWidth={1.8} />} onClick={onAskRestore}>
               {RESTORE_BUTTON}
             </Button>
           )}

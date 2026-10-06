@@ -1,21 +1,13 @@
 "use client";
 
-import {
-  ListTree,
-  Pencil,
-  Plus,
-  Power,
-  PowerOff,
-  Trash2,
-  TriangleAlert,
-  Upload,
-} from "lucide-react";
+import { Pencil, Plus, Trash2, TriangleAlert, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardHeader } from "@/components/ui/card";
 import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
+import { IconButton } from "@/components/ui/icon-button";
 import { Notice } from "@/components/ui/notice";
 import { SkeletonRows } from "@/components/ui/skeleton";
 import { BUSY_DELETING, BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
@@ -72,8 +64,9 @@ import {
   tieuDeXoa,
   type LoiRaCuaNhomRong,
 } from "./nhan-danh-muc";
-import { nhomDanhMuc, type NhomDanhMuc } from "./nhom-danh-muc";
+import { CATALOGUE_GROUPS, nhomDanhMuc, type NhomDanhMuc } from "./nhom-danh-muc";
 import { NhomTrangThaiNhiemVu } from "./nhom-trang-thai-nhiem-vu";
+import { TIEU_DE_NHOM_TRANG_THAI } from "./trang-thai-nhiem-vu";
 import { choBatLai, kiemLyDoXoa, laMucGhi, thaoTacCuaMuc } from "./tang-danh-muc";
 
 /**
@@ -167,6 +160,8 @@ export function TabDanhMuc() {
   }, [lanDoc]);
 
   const nhom = useMemo<readonly NhomDanhMuc[]>(() => (bay === null ? [] : nhomDanhMuc(bay)), [bay]);
+  /** The group the screen is narrowed to, or `null` for all of them. */
+  const [shownGroup, setShownGroup] = useState<string | null>(null);
 
   const coMucNao = nhom.some((n) => n.trangThai.pha === "coMuc");
 
@@ -296,17 +291,38 @@ export function TabDanhMuc() {
 
   return (
     <section className="tab-danh-muc flex min-w-0 flex-col gap-4 [&>*]:my-0" aria-labelledby="tieu-de-danh-muc">
-      <Card>
-        <CardHeader>
-          <div className="min-w-0 flex-1 basis-64">
-            <CardTitle as="h2" id="tieu-de-danh-muc" className="flex items-center gap-2">
-              <ListTree aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
-              Danh mục
-            </CardTitle>
-            <p className="ghi-chu m-0 mt-1 text-[13px] text-ink-500">{GHI_CHU_BA_TANG}</p>
-          </div>
-        </CardHeader>
-        <CardContent className="flex min-w-0 flex-col gap-3 empty:hidden [&>*]:my-0">
+      {/* No card, no visible title: the tab IS the section, as in the prototype (ADR 0068 lần 5). */}
+      <h2 id="tieu-de-danh-muc" className="an-thi-giac">
+        Danh mục
+      </h2>
+
+      {/* The prototype's group buttons — "Tất cả" then one per group, the chosen one solid. Choosing a
+          group narrows the screen to it; adding stays INSIDE a group (pick the group first), because each
+          group is written through its own route and its own rules. */}
+      <div className="flex min-w-0 flex-wrap items-center gap-2" role="group" aria-label="Lọc theo nhóm danh mục">
+        <Button
+          type="button"
+          size="sm"
+          variant={shownGroup === null ? "dark" : "secondary"}
+          aria-pressed={shownGroup === null}
+          onClick={() => setShownGroup(null)}
+        >
+          {ALL_GROUPS}
+        </Button>
+        {groupChoices.map((g) => (
+          <Button
+            key={g.key}
+            type="button"
+            size="sm"
+            variant={shownGroup === g.key ? "dark" : "secondary"}
+            aria-pressed={shownGroup === g.key}
+            onClick={() => setShownGroup(g.key)}
+          >
+            {g.label}
+          </Button>
+        ))}
+      </div>
+      <p className="ghi-chu m-0 text-[13px] text-ink-500">{GHI_CHU_BA_TANG}</p>
 
       {/* MỘT dòng `role="status"` cho cả tab, không phải bảy. Bảy vùng thông báo cùng đọc
           "Đang tải…" là bảy lần trình đọc màn hình ngắt lời người dùng về cùng một chuyện. */}
@@ -338,10 +354,8 @@ export function TabDanhMuc() {
       )}
 
       {coMucNao && <p className="ghi-chu text-[13px] text-ink-500">{GIAI_THICH_DA_TAT}</p>}
-        </CardContent>
-      </Card>
 
-      {nhom.map((n) => {
+      {nhom.filter((n) => shownGroup === null || shownGroup === n.khoa).map((n) => {
         const groupWrite = n.ghi;
         // Cổng của khung nhập là KHOÁ CỦA TUYẾN NHẬP, không mặc nhiên là khoá ghi của tab: hôm nay hai
         // khoá trùng nhau (`admin.lookup`), nhưng một nhóm sau này có thể khai khoá khác.
@@ -363,6 +377,7 @@ export function TabDanhMuc() {
             importPanel={
               catalogueImport !== null && groupWrite !== null && importingGroup === groupWrite.khoa
                 ? catalogueImport.panel({
+                    asDialog: true,
                     // Đọc lại cả bảy nhóm: mục vừa nhập chỉ có thật ở máy chủ. Khung giữ nguyên để
                     // cán bộ đọc câu "Đã nhập N loại…" rồi tự đóng.
                     onImported: () => datLanDoc((k) => k + 1),
@@ -390,14 +405,31 @@ export function TabDanhMuc() {
 
       {/* NHÓM THỨ TÁM, KHUÔN RIÊNG (#21): chỉ đổi nhãn và thứ tự, không thêm · tắt · xoá. Nút ghi
           chỉ vẽ khi đã biết có quyền — `coQuyenGhi` là `false` khi phiên còn đang đọc. */}
-      <NhomTrangThaiNhiemVu
-        coQuyenGhi={coQuyenGhi}
-        maDangSua={maTrangThaiDangSua}
-        moSua={moSuaTrangThai}
-      />
+      {(shownGroup === null || shownGroup === TASK_STATUS_GROUP) && (
+        <NhomTrangThaiNhiemVu
+          coQuyenGhi={coQuyenGhi}
+          maDangSua={maTrangThaiDangSua}
+          moSua={moSuaTrangThai}
+        />
+      )}
     </section>
   );
 }
+
+/** The "all groups" button — the prototype's "Tất cả". */
+export const ALL_GROUPS = "Tất cả";
+
+/** Key of the eighth group's button — it is not one of the seven catalogue keys (`nhom-trang-thai-nhiem-vu.tsx`). */
+const TASK_STATUS_GROUP = "trangThaiNhiemVu";
+
+/**
+ * One button per group, in the screen's order. The names are FIXED, not read: the buttons stand before
+ * the first read lands and whether a group's read fails.
+ */
+const groupChoices: readonly { key: string; label: string }[] = [
+  ...CATALOGUE_GROUPS.map((g) => ({ key: g.khoa as string, label: g.nhan })),
+  { key: TASK_STATUS_GROUP, label: TIEU_DE_NHOM_TRANG_THAI },
+];
 
 /* ---- trạng thái của các biểu mẫu ghi ------------------------------------------------------ */
 
@@ -519,19 +551,21 @@ export function NhomMuc({
 
         {((veDuocNutGhi && ghi !== null) || importAllowed) && (
           <p className="cum-nut m-0 flex flex-wrap items-center gap-2">
+            {/* Prototype variants: "Nhập từ Excel" outline, "+ Thêm mục" primary, both small. */}
+            {importAllowed && (
+              <Button type="button" variant="outline" size="sm" icon={<Upload aria-hidden="true" focusable="false" strokeWidth={1.8} />} onClick={onOpenImport}>
+                {IMPORT_BUTTON}
+              </Button>
+            )}
             {veDuocNutGhi && ghi !== null && (
               <Button
                 type="button"
-                variant="secondary"
+                variant="primary"
+                size="sm"
                 icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
                 onClick={() => thaoTac.them(ghi, nhom.nhan)}
               >
                 {NUT_THEM}
-              </Button>
-            )}
-            {importAllowed && (
-              <Button type="button" variant="secondary" icon={<Upload aria-hidden="true" focusable="false" strokeWidth={1.8} />} onClick={onOpenImport}>
-                {IMPORT_BUTTON}
               </Button>
             )}
           </p>
@@ -621,7 +655,6 @@ function BangMuc({
             <th scope="col">Mã</th>
             <th scope="col">Nhãn hiển thị</th>
             <th scope="col">Thứ tự</th>
-            <th scope="col">Mặc định</th>
             {ghi !== null && <th scope="col">Nguồn</th>}
             <th scope="col">Trạng thái</th>
             {ghi !== null && (
@@ -637,14 +670,19 @@ function BangMuc({
               {/* `code` font mono theo đặc tả §5: nó là một slug được gõ lại và đọc qua điện
                   thoại, nên `l`/`1` và `O`/`0` phải phân biệt được. */}
               <td className="ma-muc">{m.code}</td>
-              <td>{m.label}</td>
+              {/* "Mặc định" is a badge beside the label, as in the prototype — not a column of "Không". */}
+              <td>
+                <span className="inline-flex flex-wrap items-center gap-2">
+                  {m.label}
+                  {m.is_default && <Badge tone="info">{nhanMacDinh(true)}</Badge>}
+                </span>
+              </td>
               {/* THỨ TỰ LÀ TRƯỜNG CỦA HỢP ĐỒNG KHI CÓ, VÀ LÀ VỊ TRÍ TRONG MẢNG KHI KHÔNG. Cả bảy
                   danh mục đều phát ra `order`, và cột này PHẢI hiện đúng con số ấy: biểu mẫu sửa
                   đổi chính nó, nên một cột hiện vị trí trong mảng sẽ nói "3" sau khi cán bộ vừa
                   đặt thứ tự 7. Vị trí trong `items` chỉ còn là đường lui cho một dòng méo hình
                   dạng (hợp đồng trôi) — `laMucGhi` trả `false` cho nó. */}
               <td>{laMucGhi(m) ? m.order : i + 1}</td>
-              <td>{nhanMacDinh(m.is_default)}</td>
               {ghi !== null && <td>{laMucGhi(m) ? nhanNguon(m.source) : ""}</td>}
               <td>
                 {/* Tone by the CODE (`active`); icon + word, never colour alone. */}
@@ -708,17 +746,12 @@ function NutCuaDong({
 
   return (
     <span className="cum-nut flex flex-wrap items-center gap-1.5">
+      {/* The prototype's row: pencil icon, then "Tắt" / "Bật lại" in words, then a red bin icon. An icon
+          button's words are its accessible name and its hover title (`IconButton`). */}
       {cho.doiNhan && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          aria-label={nhanNutCuaDong(NUT_SUA, m.label)}
-          icon={<Pencil aria-hidden="true" focusable="false" strokeWidth={1.8} />}
-          onClick={() => thaoTac.sua(ghi, nhanNhom, m)}
-        >
-          {NUT_SUA}
-        </Button>
+        <IconButton type="button" variant="secondary" label={nhanNutCuaDong(NUT_SUA, m.label)} onClick={() => thaoTac.sua(ghi, nhanNhom, m)}>
+          <Pencil aria-hidden="true" focusable="false" strokeWidth={1.8} />
+        </IconButton>
       )}
 
       {/* `Tắt` THEO TẦNG, `Bật lại` THÌ KHÔNG. Trigger chỉ từ chối chiều bật → tắt ở tầng 3;
@@ -727,10 +760,9 @@ function NutCuaDong({
       {cho.tat && m.active && (
         <Button
           type="button"
-          variant="ghost"
+          variant="secondary"
           size="sm"
           aria-label={nhanNutCuaDong(NUT_TAT, m.label)}
-          icon={<PowerOff aria-hidden="true" focusable="false" strokeWidth={1.8} />}
           onClick={() => thaoTac.datTrangThai(ghi, nhanNhom, m, false)}
         >
           {NUT_TAT}
@@ -739,10 +771,9 @@ function NutCuaDong({
       {batLaiDuoc && (
         <Button
           type="button"
-          variant="ghost"
+          variant="secondary"
           size="sm"
           aria-label={nhanNutCuaDong(NUT_BAT_LAI, m.label)}
-          icon={<Power aria-hidden="true" focusable="false" strokeWidth={1.8} />}
           onClick={() => thaoTac.datTrangThai(ghi, nhanNhom, m, true)}
         >
           {NUT_BAT_LAI}
@@ -750,16 +781,15 @@ function NutCuaDong({
       )}
 
       {cho.xoa && (
-        <Button
+        <IconButton
           type="button"
-          variant="danger"
-          size="sm"
-          aria-label={nhanNutCuaDong(NUT_XOA, m.label)}
-          icon={<Trash2 aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+          variant="secondary"
+          className="text-danger-600 hover:not-disabled:border-danger-600 hover:not-disabled:text-danger-600"
+          label={nhanNutCuaDong(NUT_XOA, m.label)}
           onClick={() => thaoTac.xoa(ghi, nhanNhom, m)}
         >
-          {NUT_XOA}
-        </Button>
+          <Trash2 aria-hidden="true" focusable="false" strokeWidth={1.8} />
+        </IconButton>
       )}
 
       {/* Tầng 2 và 3 vẫn phải nói vì sao thiếu nút, kể cả khi còn nút `Sửa` đứng bên cạnh. */}

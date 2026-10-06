@@ -28,7 +28,7 @@ export type DeleteRefusal = {
 };
 
 /**
- * The inline delete form under a unit card. PURE RENDERING: every value in by props, every change
+ * The delete form of a unit, opened in a dialog from the card's 🗑. PURE RENDERING: every value in by props, every change
  * out by callbacks — exported so the 409 rendering has a test (`org-unit-delete.test.tsx`).
  *
  * THE REASON IS REQUIRED and checked before sending (`kiemLyDoXoa`), because the server refuses a
@@ -60,7 +60,8 @@ export function OrgUnitDeleteForm({
     // same `onSubmit`/`onKeyDown`, the specific title, a red confirm button that names the action.
     <ConfirmDialog
       as="form"
-      className="form-danh-muc form-bo-phan m-0"
+      // Shown inside the tab's dialog (ADR 0068 lần 5): the dialog is the box, so no second padding/shadow.
+      className="form-danh-muc form-bo-phan m-0 p-0 shadow-none"
       aria-label={title}
       onSubmit={(e) => {
         e.preventDefault();

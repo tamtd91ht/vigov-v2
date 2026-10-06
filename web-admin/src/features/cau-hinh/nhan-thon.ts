@@ -104,7 +104,8 @@ export function nhanSoDem(so: number | null): string {
  *
  * "Địa bàn" chứ không phải "bản ghi": người đọc màn hình này là cán bộ, không phải người lập trình.
  */
-export const THON_RONG = "Đơn vị chưa có thôn hoặc tổ dân phố nào.";
+// The prototype's sentence (`HamletTable`, ADR 0068 lần 5), said inside the table frame.
+export const THON_RONG = "Chưa khai báo thôn hoặc tổ dân phố nào.";
 
 /**
  * Ghi chú đầu tab §2 (người dùng chốt 29/09/2026, ADR 0059 §2). Nói điều cán bộ cần biết TRƯỚC khi

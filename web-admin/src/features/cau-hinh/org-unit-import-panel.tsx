@@ -18,8 +18,16 @@ export { ErrorsTable } from "./excel-import-panel";
  * The panel is the shared one (`excel-import-panel.tsx`) bound to `ORG_UNIT_IMPORT_TARGET`: the org
  * chart was the first import, and its flow is now every import's flow.
  */
-export function OrgUnitImportPanel({ onImported, onClose }: { onImported: () => void; onClose: () => void }) {
-  return <ExcelImportPanel target={ORG_UNIT_IMPORT_TARGET} onImported={onImported} onClose={onClose} />;
+export function OrgUnitImportPanel({
+  onImported,
+  onClose,
+  asDialog = false,
+}: {
+  onImported: () => void;
+  onClose: () => void;
+  asDialog?: boolean;
+}) {
+  return <ExcelImportPanel target={ORG_UNIT_IMPORT_TARGET} onImported={onImported} onClose={onClose} asDialog={asDialog} />;
 }
 
 /**

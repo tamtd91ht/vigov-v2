@@ -1,17 +1,17 @@
 "use client";
 
-import { Layers, MapPinned, Pencil, Plus, Power, PowerOff, Trash2, X } from "lucide-react";
+import { Layers, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { Field } from "@/components/ui/field";
+import { IconButton } from "@/components/ui/icon-button";
 import { Notice } from "@/components/ui/notice";
 import { SkeletonRows } from "@/components/ui/skeleton";
 import { BUSY_DELETING, BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
@@ -61,7 +61,8 @@ export const NO_ASSET_TYPES =
   "Đơn vị chưa có nhóm tài nguyên bản đồ nào, nên chưa khai được trường. Hãy thêm nhóm ở tab Danh " +
   "mục (mục Loại tài nguyên bản đồ) trước, rồi quay lại đây.";
 
-export const NO_FIELDS = "Nhóm này chưa có trường tuỳ biến nào.";
+// The prototype's sentence (`AssetFieldTable`, ADR 0068 lần 5), said inside the table frame.
+export const NO_FIELDS = "Nhóm này chưa khai báo trường riêng nào.";
 export const READ_ONLY_NOTE =
   "Tài khoản của bạn chỉ xem được các trường. Việc thêm, sửa, tắt và xoá trường cần quyền Quản lý danh mục.";
 
@@ -236,23 +237,12 @@ export function MapFieldTab() {
     );
 
   return (
-    <section
-      className="tab-danh-muc m-0 min-w-0 overflow-hidden rounded-card border border-line bg-surface shadow-sm"
-      aria-labelledby="tieu-de-truong-ban-do"
-    >
-      <CardHeader className="m-0">
-        <div className="min-w-0 flex-1 basis-64">
-          <CardTitle as="h2" id="tieu-de-truong-ban-do" className="flex items-center gap-2">
-            <MapPinned aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
-            {MAP_FIELD_TITLE}
-          </CardTitle>
-          <p className="ghi-chu m-0 mt-1 text-[13px] text-ink-500">{MAP_FIELD_NOTE}</p>
-        </div>
-      </CardHeader>
-      <div className="flex min-w-0 flex-col gap-3 p-4 [&>*]:my-0">
-      <Notice tone="info" className="ghi-chu">
-        {NO_REGISTER_NOTE}
-      </Notice>
+    // The prototype's `AssetFieldTable` (ADR 0068 lần 5): no card, no visible title — the type picker and
+    // "Thêm trường" on one row, the form, the table, and the notes UNDER the table.
+    <section className="tab-danh-muc m-0 flex min-w-0 flex-col gap-4 [&>*]:my-0" aria-labelledby="tieu-de-truong-ban-do">
+      <h2 id="tieu-de-truong-ban-do" className="an-thi-giac">
+        {MAP_FIELD_TITLE}
+      </h2>
       {writeDecision !== null && !writeDecision.hien && <Notice tone="neutral">{READ_ONLY_NOTE}</Notice>}
 
       {types === null && (
@@ -291,10 +281,11 @@ export function MapFieldTab() {
           </Field>
 
           {canWrite && (
-            <p className="m-0">
+            <p className="m-0 ml-auto">
               <Button
                 type="button"
                 variant="primary"
+                size="sm"
                 icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
                 onClick={() => start({ kind: "create", idempotencyKey: crypto.randomUUID() }, newDraft(chosenType))}
               >
@@ -339,7 +330,10 @@ export function MapFieldTab() {
           )}
         </>
       )}
-      </div>
+
+      {/* The prototype's footnote, then where these fields show up. */}
+      <p className="ghi-chu m-0 text-xs text-ink-500">{MAP_FIELD_NOTE}</p>
+      <p className="ghi-chu m-0 text-xs text-ink-500">{NO_REGISTER_NOTE}</p>
     </section>
   );
 }
@@ -368,7 +362,6 @@ export function MapFieldTable({
   onToggle: (row: comms_mapFieldSchemaOut) => void;
   onDelete: (row: comms_mapFieldSchemaOut) => void;
 }) {
-  if (rows.length === 0) return <EmptyState icon={MapPinned} title={NO_FIELDS} />;
   const cols = canWrite ? 7 : 6;
   return (
     <TableScroll sticky aria-label="Các trường tuỳ biến">
@@ -389,6 +382,13 @@ export function MapFieldTable({
           </tr>
         </thead>
         <tbody>
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={cols} className="py-10 text-center whitespace-normal text-ink-500">
+                {NO_FIELDS}
+              </td>
+            </tr>
+          )}
           {rows.map((r) => (
             <FieldRow
               key={r.id}
@@ -434,41 +434,33 @@ function FieldRow({
         <td>{row.sort_order}</td>
         <td>
           {/* Tone by the CODE (`is_active`); icon + word, never colour alone. */}
-          <Badge tone={row.is_active ? "success" : "neutral"}>{row.is_active ? "Đang dùng" : "Đang tắt"}</Badge>
+          <Badge tone={row.is_active ? "success" : "neutral"}>{row.is_active ? "Đang dùng" : "Ngừng dùng"}</Badge>
         </td>
         {canWrite && (
-          <td>
-            <span className="cum-nut flex flex-wrap items-center gap-1.5">
+          <td className="o-thao-tac">
+            {/* The prototype's row: pencil icon · "Tắt"/"Bật" in words · red bin icon, right-aligned. */}
+            <span className="cum-nut flex flex-wrap items-center justify-end gap-1.5">
+              <IconButton type="button" variant="secondary" label={`Sửa trường ${row.label}`} onClick={() => onEdit(row)}>
+                <Pencil aria-hidden="true" focusable="false" strokeWidth={1.8} />
+              </IconButton>
               <Button
                 type="button"
-                variant="ghost"
-                size="sm"
-                aria-label={`Sửa trường ${row.label}`}
-                icon={<Pencil aria-hidden="true" focusable="false" strokeWidth={1.8} />}
-                onClick={() => onEdit(row)}
-              >
-                Sửa
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
+                variant="secondary"
                 size="sm"
                 aria-label={`${row.is_active ? "Tắt" : "Bật"} trường ${row.label}`}
-                icon={row.is_active ? <PowerOff aria-hidden="true" focusable="false" strokeWidth={1.8} /> : <Power aria-hidden="true" focusable="false" strokeWidth={1.8} />}
                 onClick={() => onToggle(row)}
               >
                 {row.is_active ? "Tắt" : "Bật"}
               </Button>
-              <Button
+              <IconButton
                 type="button"
-                variant="danger"
-                size="sm"
-                aria-label={`Xoá trường ${row.label}`}
-                icon={<Trash2 aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+                variant="secondary"
+                className="text-danger-600 hover:not-disabled:border-danger-600 hover:not-disabled:text-danger-600"
+                label={`Xoá trường ${row.label}`}
                 onClick={() => onDelete(row)}
               >
-                Xoá
-              </Button>
+                <Trash2 aria-hidden="true" focusable="false" strokeWidth={1.8} />
+              </IconButton>
             </span>
           </td>
         )}
