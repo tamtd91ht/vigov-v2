@@ -372,6 +372,10 @@ func (khoDuAnTrong) VouchersOfProject(context.Context, string) ([]domain.Project
 	return nil, fistore.ErrKhongThayDuAn
 }
 
+func (khoDuAnTrong) DisbursedByMonth(context.Context, int, string) (domain.DisbursedByMonth, error) {
+	return domain.DisbursedByMonth{}, nil
+}
+
 // nguongTrong answers the software's default threshold, which is what every commune is on today —
 // `cau_hinh_giai_ngan` has no write path yet. No case in this file reads it; it is here because
 // Register refuses to start without one, deliberately (see routes.go).

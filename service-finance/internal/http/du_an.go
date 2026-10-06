@@ -128,6 +128,17 @@ type duAnRa struct {
 	// nào" — DETAIL ROUTE ONLY, and present there even when 0 (a pointer, so 0 is a fact rather than an
 	// absence).
 	UnallocatedPlanAmount *int64 `json:"unallocated_plan_amount,omitempty"`
+
+	// TimeElapsedRatio is the share of the project's budget year already gone, hundredths of a percent
+	// — the "thời gian đã trôi qua" marker on §8's progress bar. DETAIL ROUTE ONLY.
+	//
+	// IT IS THE SAME QUANTITY delay_score SUBTRACTS FROM (domain.PhanTramThoiGianDaQua: the prototype's
+	// elapsed_year_percent, 0 for a future year, 10000 for a closed one), so the marker, the ratio and
+	// the "chậm N điểm" chip always satisfy delay_score = time_elapsed_ratio − disbursed_ratio. The
+	// prototype ALSO has a per-project-window variant (elapsed_percent: ngay_khoi_cong → ngay_hoan_thanh)
+	// that it feeds into its delay flag; this API's delay rule is §3's calendar-year one, and switching
+	// the marker alone would make the bar contradict the chip.
+	TimeElapsedRatio *int64 `json:"time_elapsed_ratio,omitempty"`
 }
 
 // fundingStatusOut is the funding chip of one project.
@@ -283,6 +294,24 @@ func (h *Handler) DanhSachDuAn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// `delayed_only` is §7.1's "☐ Chỉ dự án chậm", applied HERE with domain.LaCham against the commune's
+	// threshold — the same rule as each item's `is_delayed` and the summary's `delayed_project_count`,
+	// so the filtered list's length is the KPI card's number. Not a store filter: fistore.LocDuAn says
+	// why the rule is not re-implemented in SQL.
+	//
+	// ONLY `true` AND `false` (or absent) ARE ACCEPTED. A value like `yes` silently read as false would
+	// show every project under a ticked box.
+	var delayedOnly bool
+	switch r.URL.Query().Get("delayed_only") {
+	case "", "false":
+	case "true":
+		delayedOnly = true
+	default:
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_argument",
+			"`delayed_only` chỉ nhận true hoặc false.", "")
+		return
+	}
+
 	ds, err := h.d.DuAn.DanhSach(ctx, fistore.LocDuAn{
 		Nam: nam,
 		// `category` filters WITHIN the commune; tenant_id still comes only from the context, and
@@ -357,6 +386,9 @@ func (h *Handler) DanhSachDuAn(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, mot := range ds {
 		item := duAnRaNgoai(mot, nay, nguong)
+		if delayedOnly && !item.IsDelayed {
+			continue
+		}
 		lines := allocations[mot.DuAn.ID]
 		item.FundingStatus = fundingStatusOutOf(mot.DuAn.KeHoachVonNam, lines)
 		for _, l := range lines {
@@ -424,8 +456,11 @@ func (h *Handler) ChiTietDuAn(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	ra := duAnRaNgoai(mot, h.nay(), nguong)
+	nay := h.nay()
+	ra := duAnRaNgoai(mot, nay, nguong)
 	ra.ScopeNotice = notice
+	elapsed := int64(domain.PhanTramThoiGianDaQua(nay, mot.DuAn.Nam))
+	ra.TimeElapsedRatio = &elapsed
 	ra.FundingStatus = fundingStatusOutOf(mot.DuAn.KeHoachVonNam, lines)
 	unallocated := ra.FundingStatus.ShortfallAmount
 	ra.UnallocatedPlanAmount = &unallocated

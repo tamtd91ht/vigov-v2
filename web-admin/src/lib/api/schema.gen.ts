@@ -1171,6 +1171,20 @@ export type finance_catalogueImportRejectedOut = {
   "errors": Array<finance_catalogueImportErrorOut>;
 };
 
+export type finance_categoryProgressOut = {
+  "category_id"?: string;
+  "label"?: string;
+  "order": number;
+  "in_catalogue": boolean;
+  "project_count": number;
+  "planned": number;
+  "disbursed": number;
+  "undisbursed": number;
+  "disbursed_ratio": number | null;
+  "undisbursed_ratio": number | null;
+  "disbursement_deadline"?: string;
+};
+
 export type finance_chiSoNamRa = {
   "year": number;
   /** Thu đạt dự toán */
@@ -1237,6 +1251,14 @@ export type finance_cotVao = {
   "role"?: string;
   "numerator_index"?: number | null;
   "denominator_index"?: number | null;
+};
+
+export type finance_curvePointOut = {
+  /** 1..12 */
+  "month": number;
+  /** đồng, at the end of the month */
+  "planned_cumulative": number;
+  "disbursed_cumulative": number | null;
 };
 
 export type finance_danhSachDotRa = {
@@ -1339,6 +1361,7 @@ export type finance_duAnRa = {
   "funding_source_names"?: Array<string>;
   "funding_allocations"?: Array<finance_projectAllocationOut>;
   "unallocated_plan_amount"?: number | null;
+  "time_elapsed_ratio"?: number | null;
 };
 
 export type finance_fundingSourceCreateIn = {
@@ -1480,6 +1503,36 @@ export type finance_projectAllocationOut = {
   /** this project's vouchers drawn from this source */
   "disbursed_amount": number;
   "disbursed_ratio": number | null;
+};
+
+export type finance_projectCurveOut = {
+  "project_id": string;
+  "year": number;
+  "points": Array<finance_curvePointOut>;
+  "expected_end_month"?: number | null;
+  "disbursed_after_year": number;
+};
+
+export type finance_projectSummaryOut = {
+  "year": number;
+  /** §3 card 1: sum of the year's project plans */
+  "planned_total": number;
+  /** §3 card 1, sub-line */
+  "project_count": number;
+  /** §3 card 2: every live voucher, every state (§11) */
+  "disbursed_total": number;
+  /** disbursed / planned; null when planned is 0 */
+  "disbursed_ratio": number | null;
+  "time_elapsed_ratio": number;
+  "remaining_total": number;
+  "delay_threshold": number;
+  "delay_threshold_source": string;
+  "delayed_project_count": number;
+  "monthly": Array<finance_curvePointOut>;
+  "disbursed_after_year": number;
+  "by_category": Array<finance_categoryProgressOut>;
+  "total": finance_categoryProgressOut;
+  "scope_notice"?: string;
 };
 
 export type finance_projectVouchersOut = {
@@ -5926,6 +5979,25 @@ export type documents_post_incoming_documents_by_id_routings = {
   };
 };
 
+/** GET /api/v1/investment-project-summary — Tổng hợp giải ngân của xã theo năm ngân sách: bốn thẻ KPI, luỹ kế theo tháng, bảng theo hạng mục */
+export type finance_get_investment_project_summary = {
+  duongDan: "/api/v1/investment-project-summary";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "year": string;
+  };
+  than: never;
+  phanHoi: {
+    200: finance_projectSummaryOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/investment-projects — Danh sách dự án đầu tư của xã theo năm ngân sách, kèm số đã giải ngân suy ra từ chứng từ */
 export type finance_get_investment_projects = {
   duongDan: "/api/v1/investment-projects";
@@ -5934,6 +6006,7 @@ export type finance_get_investment_projects = {
   };
   truyVan: {
     "category"?: string;
+    "delayed_only"?: string;
     "year": string;
   };
   than: never;
@@ -6030,6 +6103,26 @@ export type finance_delete_investment_projects_by_id = {
     403: httpx_Error;
     404: httpx_Error;
     409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/investment-projects/{id}/disbursement-curve — Luỹ kế giải ngân theo tháng của một dự án so với kế hoạch theo lịch của chính dự án */
+export type finance_get_investment_projects_by_id_disbursement_curve = {
+  duongDan: "/api/v1/investment-projects/{id}/disbursement-curve";
+  phuongThuc: "GET";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: finance_projectCurveOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
     500: httpx_Error;
   };
 };

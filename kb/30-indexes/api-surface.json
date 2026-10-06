@@ -2691,6 +2691,26 @@
     {
       "service": "finance",
       "method": "GET",
+      "path": "/api/v1/investment-project-summary",
+      "operation_id": "finance_get_investment_project_summary",
+      "task_id": "c67ec56c473e",
+      "summary": "Tổng hợp giải ngân của xã theo năm ngân sách: bốn thẻ KPI, luỹ kế theo tháng, bảng theo hạng mục",
+      "screen": "06-giai-ngan §3",
+      "permission_kind": "permission",
+      "permission": "budget.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "finance.projectSummaryOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-finance/internal/http/routes.go"
+    },
+    {
+      "service": "finance",
+      "method": "GET",
       "path": "/api/v1/investment-projects",
       "operation_id": "finance_get_investment_projects",
       "task_id": "e0b90d44eae7",
@@ -2797,6 +2817,27 @@
         "403": "httpx.Error",
         "404": "httpx.Error",
         "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-finance/internal/http/routes.go"
+    },
+    {
+      "service": "finance",
+      "method": "GET",
+      "path": "/api/v1/investment-projects/{id}/disbursement-curve",
+      "operation_id": "finance_get_investment_projects_by_id_disbursement_curve",
+      "task_id": "5feba41cf51c",
+      "summary": "Luỹ kế giải ngân theo tháng của một dự án so với kế hoạch theo lịch của chính dự án",
+      "screen": "06-giai-ngan §8.3",
+      "permission_kind": "permission",
+      "permission": "budget.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "finance.projectCurveOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
         "500": "httpx.Error"
       },
       "declared_in": "service-finance/internal/http/routes.go"

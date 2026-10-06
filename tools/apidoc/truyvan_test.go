@@ -597,7 +597,7 @@ func TestBaTuyenThatCoThamSoNam(t *testing.T) {
 		khoa string
 		ten  []string
 	}{
-		{"GET /api/v1/investment-projects", []string{"category", "year"}},
+		{"GET /api/v1/investment-projects", []string{"category", "delayed_only", "year"}},
 		{"GET /api/v1/public-holidays", []string{"year"}},
 		{"GET /api/v1/swap-working-days", []string{"year"}},
 	} {

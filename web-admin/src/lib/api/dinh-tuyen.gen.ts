@@ -8,6 +8,7 @@ export type DichVuAPI = "comms" | "documents" | "finance" | "identity" | "petiti
 export const DINH_TUYEN_API: ReadonlyArray<{ readonly tienTo: string; readonly dichVu: DichVuAPI }> = [
   { tienTo: "/api/v1/incoming-document-overdue-queue", dichVu: "documents" },
   { tienTo: "/api/v1/citizen-report-intake-fields", dichVu: "petitions" },
+  { tienTo: "/api/v1/investment-project-summary", dichVu: "finance" },
   { tienTo: "/api/v1/commune-external-contacts", dichVu: "comms" },
   { tienTo: "/api/v1/incoming-document-summary", dichVu: "documents" },
   { tienTo: "/api/v1/petitions-system-messages", dichVu: "petitions" },

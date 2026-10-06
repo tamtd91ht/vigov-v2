@@ -61,6 +61,20 @@ type duAnGia struct {
 	vouchers     map[tenant.ID]map[string][]domain.ProjectVoucher
 	voucherReads int
 	voucherErr   error
+
+	// byMonth are the month buckets KEYED BY COMMUNE, then by project id ("" = the whole year), then
+	// by year — so commune B's project sharing A's id cannot read A's buckets.
+	byMonth    map[tenant.ID]map[string]map[int]domain.DisbursedByMonth
+	monthReads int
+	monthErr   error
+}
+
+func (d *duAnGia) DisbursedByMonth(ctx context.Context, year int, projectID string) (domain.DisbursedByMonth, error) {
+	d.monthReads++
+	if d.monthErr != nil {
+		return domain.DisbursedByMonth{}, d.monthErr
+	}
+	return d.byMonth[tenant.MustFrom(ctx)][projectID][year], nil
 }
 
 func (d *duAnGia) VouchersOfProject(ctx context.Context, id string) ([]domain.ProjectVoucher, error) {

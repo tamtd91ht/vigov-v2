@@ -446,3 +446,70 @@ func (s *DuAnStore) AllocationsOfProject(ctx context.Context, projectID string) 
 	}
 	return out, nil
 }
+
+// disbursedByMonth buckets the live vouchers of ONE budget year's live projects by the calendar month
+// of `ngay_chi` — §4's year curve, and §8.3's project curve when `$3` names a project.
+//
+// THE TWO EDGES ARE domain.DisbursedByMonth's RULE, expressed in SQL as buckets: a payment dated before
+// 01/01 of the year lands in bucket 1 (January), one dated after 31/12 in bucket 13 (AfterYear). The
+// statement only BUCKETS; the meaning of each bucket is decided once, in domain.
+//
+// THE VOUCHER SET IS tongChungTu's: every state counts, soft-deleted vouchers do not — so the curve and
+// "đã giải ngân" total the same rows. A soft-deleted PROJECT's vouchers are excluded too, as DanhSach
+// excludes the project.
+//
+// ONE STATEMENT, AT MOST 13 ROWS, whatever the number of projects or vouchers (no read per project).
+//
+// tenant_id = $1 ON BOTH TABLES, for the reason tongChungTu gives (rule 1).
+const disbursedByMonth = `SELECT CASE
+	         WHEN ct.ngay_chi < make_date($2::int, 1, 1) THEN 1
+	         WHEN ct.ngay_chi >= make_date($2::int + 1, 1, 1) THEN 13
+	         ELSE EXTRACT(MONTH FROM ct.ngay_chi)::int
+	       END AS bucket,
+	       SUM(ct.so_tien)::bigint
+	  FROM chung_tu_giai_ngan ct
+	  JOIN du_an da
+	    ON da.tenant_id = ct.tenant_id AND da.tenant_id = $1 AND da.id = ct.du_an_id
+	 WHERE ct.tenant_id = $1 AND ct.deleted_at IS NULL
+	   AND da.deleted_at IS NULL AND da.nam = $2::int
+	   AND ($3 = '' OR ct.du_an_id = $3)
+	 GROUP BY 1`
+
+// DisbursedByMonth reads the month buckets of one budget year — the whole commune when projectID is
+// empty, one project otherwise. The caller of the project form has already answered 404 for a project
+// not in this commune (ChiTiet); here such an id simply matches no row.
+func (s *DuAnStore) DisbursedByMonth(ctx context.Context, year int, projectID string) (domain.DisbursedByMonth, error) {
+	var out domain.DisbursedByMonth
+	if year == 0 {
+		return out, ErrThieuNamNganSach
+	}
+	rows, err := s.db.For(ctx).QueryJoin(ctx, disbursedByMonth, year, projectID)
+	if err != nil {
+		return out, fmt.Errorf("chung_tu_giai_ngan: đọc theo tháng: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			bucket int
+			amount int64
+		)
+		if err := rows.Scan(&bucket, &amount); err != nil {
+			return out, fmt.Errorf("chung_tu_giai_ngan: đọc dòng theo tháng: %w", err)
+		}
+		switch {
+		case bucket >= 1 && bucket <= 12:
+			out.Months[bucket-1] = domain.Dong(amount)
+		case bucket == 13:
+			out.AfterYear = domain.Dong(amount)
+		default:
+			// Unreachable by the CASE above. Refused rather than dropped: a bucket nobody adds is money
+			// missing from the curve with nothing saying so.
+			return domain.DisbursedByMonth{}, fmt.Errorf("chung_tu_giai_ngan: ô tháng lạ %d", bucket)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return out, fmt.Errorf("chung_tu_giai_ngan: duyệt theo tháng: %w", err)
+	}
+	return out, nil
+}

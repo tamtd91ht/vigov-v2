@@ -11813,6 +11813,83 @@
         }
       }
     },
+    "/api/v1/investment-project-summary": {
+      "get": {
+        "summary": "Tổng hợp giải ngân của xã theo năm ngân sách: bốn thẻ KPI, luỹ kế theo tháng, bảng theo hạng mục",
+        "operationId": "finance_get_investment_project_summary",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "06-giai-ngan §3",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.read"
+        },
+        "x-vigov-task": "c67ec56c473e",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.projectSummaryOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/investment-projects": {
       "get": {
         "summary": "Danh sách dự án đầu tư của xã theo năm ngân sách, kèm số đã giải ngân suy ra từ chứng từ",
@@ -11829,6 +11906,14 @@
         "parameters": [
           {
             "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "delayed_only",
             "in": "query",
             "required": false,
             "schema": {
@@ -12275,6 +12360,93 @@
               "duplicate_source",
               "source_has_disbursements"
             ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/investment-projects/{id}/disbursement-curve": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Luỹ kế giải ngân theo tháng của một dự án so với kế hoạch theo lịch của chính dự án",
+        "operationId": "finance_get_investment_projects_by_id_disbursement_curve",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "06-giai-ngan §8.3",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.read"
+        },
+        "x-vigov-task": "5feba41cf51c",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.projectCurveOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal Server Error",
@@ -33940,6 +34112,66 @@
         ],
         "additionalProperties": false
       },
+      "finance.categoryProgressOut": {
+        "type": "object",
+        "properties": {
+          "category_id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "order": {
+            "type": "integer"
+          },
+          "in_catalogue": {
+            "type": "boolean"
+          },
+          "project_count": {
+            "type": "integer"
+          },
+          "planned": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "disbursed": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "undisbursed": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "disbursed_ratio": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "undisbursed_ratio": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "disbursement_deadline": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "disbursed",
+          "disbursed_ratio",
+          "in_catalogue",
+          "order",
+          "planned",
+          "project_count",
+          "undisbursed",
+          "undisbursed_ratio"
+        ],
+        "additionalProperties": false
+      },
       "finance.chiSoNamRa": {
         "type": "object",
         "properties": {
@@ -34155,6 +34387,33 @@
           "name",
           "order",
           "type"
+        ],
+        "additionalProperties": false
+      },
+      "finance.curvePointOut": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": "integer",
+            "description": "1..12"
+          },
+          "planned_cumulative": {
+            "type": "integer",
+            "format": "int64",
+            "description": "đồng, at the end of the month"
+          },
+          "disbursed_cumulative": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        },
+        "required": [
+          "disbursed_cumulative",
+          "month",
+          "planned_cumulative"
         ],
         "additionalProperties": false
       },
@@ -34530,6 +34789,13 @@
             }
           },
           "unallocated_plan_amount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "time_elapsed_ratio": {
             "type": [
               "integer",
               "null"
@@ -35053,6 +35319,127 @@
           "disbursed_ratio",
           "funding_source_id",
           "name"
+        ],
+        "additionalProperties": false
+      },
+      "finance.projectCurveOut": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "year": {
+            "type": "integer"
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/finance.curvePointOut"
+            }
+          },
+          "expected_end_month": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "disbursed_after_year": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "disbursed_after_year",
+          "points",
+          "project_id",
+          "year"
+        ],
+        "additionalProperties": false
+      },
+      "finance.projectSummaryOut": {
+        "type": "object",
+        "properties": {
+          "year": {
+            "type": "integer"
+          },
+          "planned_total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "§3 card 1: sum of the year's project plans"
+          },
+          "project_count": {
+            "type": "integer",
+            "description": "§3 card 1, sub-line"
+          },
+          "disbursed_total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "§3 card 2: every live voucher, every state (§11)"
+          },
+          "disbursed_ratio": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "disbursed / planned; null when planned is 0"
+          },
+          "time_elapsed_ratio": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "remaining_total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "delay_threshold": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "delay_threshold_source": {
+            "type": "string"
+          },
+          "delayed_project_count": {
+            "type": "integer"
+          },
+          "monthly": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/finance.curvePointOut"
+            }
+          },
+          "disbursed_after_year": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "by_category": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/finance.categoryProgressOut"
+            }
+          },
+          "total": {
+            "$ref": "#/components/schemas/finance.categoryProgressOut"
+          },
+          "scope_notice": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "by_category",
+          "delay_threshold",
+          "delay_threshold_source",
+          "delayed_project_count",
+          "disbursed_after_year",
+          "disbursed_ratio",
+          "disbursed_total",
+          "monthly",
+          "planned_total",
+          "project_count",
+          "remaining_total",
+          "time_elapsed_ratio",
+          "total",
+          "year"
         ],
         "additionalProperties": false
       },

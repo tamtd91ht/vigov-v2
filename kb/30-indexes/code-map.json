@@ -3670,6 +3670,10 @@
       "kind": "func",
       "at": "service-comms/internal/domain/public_category.go:59"
     },
+    "domain.CategoryProgress": {
+      "kind": "type",
+      "at": "service-finance/internal/domain/disbursement_summary.go:195"
+    },
     "domain.CheDoApp": {
       "kind": "type",
       "at": "service-identity/internal/domain/cau_phien.go:33"
@@ -4230,6 +4234,10 @@
       "kind": "func",
       "at": "service-finance/internal/domain/nguong_canh_bao_cham.go:55"
     },
+    "domain.CurvePoint": {
+      "kind": "type",
+      "at": "service-finance/internal/domain/disbursement_summary.go:65"
+    },
     "domain.CustomValueError": {
       "kind": "type",
       "at": "service-comms/internal/domain/map_asset_custom_value.go:47"
@@ -4321,6 +4329,10 @@
     "domain.Disabled": {
       "kind": "func",
       "at": "service-identity/internal/domain/operator.go:262"
+    },
+    "domain.DisbursedByMonth": {
+      "kind": "type",
+      "at": "service-finance/internal/domain/disbursement_summary.go:59"
     },
     "domain.DisbursedRatio": {
       "kind": "func",
@@ -5946,9 +5958,21 @@
       "kind": "type",
       "at": "service-finance/internal/domain/project_allocation.go:33"
     },
+    "domain.ProjectCurve": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/disbursement_summary.go:162"
+    },
+    "domain.ProjectScheduleMonths": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/disbursement_summary.go:123"
+    },
     "domain.ProjectVoucher": {
       "kind": "type",
       "at": "service-finance/internal/domain/voucher_source.go:62"
+    },
+    "domain.ProjectsSummary": {
+      "kind": "type",
+      "at": "service-finance/internal/domain/disbursement_summary.go:233"
     },
     "domain.Province": {
       "kind": "type",
@@ -6005,6 +6029,10 @@
     "domain.RatingReopens": {
       "kind": "func",
       "at": "service-petitions/internal/domain/petition_rating.go:89"
+    },
+    "domain.RatioOf": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/disbursement_summary.go:30"
     },
     "domain.Read": {
       "kind": "func",
@@ -6362,6 +6390,10 @@
       "kind": "func",
       "at": "service-finance/internal/domain/project_allocation.go:106"
     },
+    "domain.SummariseProjects": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/disbursement_summary.go:246"
+    },
     "domain.SystemMessage": {
       "kind": "type",
       "at": "service-reporting/internal/domain/system_message.go:128"
@@ -6654,6 +6686,14 @@
       "kind": "func",
       "at": "service-petitions/internal/domain/automation.go:310"
     },
+    "domain.Undisbursed": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/disbursement_summary.go:215"
+    },
+    "domain.UndisbursedRatio": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/disbursement_summary.go:219"
+    },
     "domain.UngVienXa": {
       "kind": "type",
       "at": "service-identity/internal/domain/cau_phien.go:73"
@@ -6833,6 +6873,10 @@
     "domain.WorkingSpan": {
       "kind": "type",
       "at": "service-identity/internal/domain/tien_gio_lam_viec.go:329"
+    },
+    "domain.YearCurve": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/disbursement_summary.go:98"
     },
     "domain.YeuCauSoanThongBao": {
       "kind": "type",
@@ -7360,7 +7404,7 @@
     },
     "http.ChiTietDuAn": {
       "kind": "func",
-      "at": "service-finance/internal/http/du_an.go:377"
+      "at": "service-finance/internal/http/du_an.go:409"
     },
     "http.ChiTietVanBanDen": {
       "kind": "func",
@@ -7556,7 +7600,7 @@
     },
     "http.DanhSachDuAn": {
       "kind": "func",
-      "at": "service-finance/internal/http/du_an.go:264"
+      "at": "service-finance/internal/http/du_an.go:275"
     },
     "http.DanhSachHangMucKeHoachVon": {
       "kind": "func",
@@ -7820,7 +7864,7 @@
     },
     "http.GhiChungTu": {
       "kind": "type",
-      "at": "service-finance/internal/http/routes.go:156"
+      "at": "service-finance/internal/http/routes.go:159"
     },
     "http.GhiDanhMucMiniApp": {
       "kind": "type",
@@ -7832,11 +7876,11 @@
     },
     "http.GhiDuAn": {
       "kind": "type",
-      "at": "service-finance/internal/http/routes.go:121"
+      "at": "service-finance/internal/http/routes.go:124"
     },
     "http.GhiHangMuc": {
       "kind": "type",
-      "at": "service-finance/internal/http/routes.go:136"
+      "at": "service-finance/internal/http/routes.go:139"
     },
     "http.GhiLoaiNhiemVu": {
       "kind": "type",
@@ -7856,7 +7900,7 @@
     },
     "http.GhiNganSach": {
       "kind": "type",
-      "at": "service-finance/internal/http/routes.go:211"
+      "at": "service-finance/internal/http/routes.go:214"
     },
     "http.GhiNhiemVuUseCase": {
       "kind": "type",
@@ -8252,7 +8296,7 @@
     },
     "http.NganSachDoc": {
       "kind": "type",
-      "at": "service-finance/internal/http/routes.go:190"
+      "at": "service-finance/internal/http/routes.go:193"
     },
     "http.NgayLamBuDoc": {
       "kind": "type",
@@ -8272,7 +8316,7 @@
     },
     "http.NguongCham": {
       "kind": "type",
-      "at": "service-finance/internal/http/routes.go:173"
+      "at": "service-finance/internal/http/routes.go:176"
     },
     "http.NhanLinhVucDanhMuc": {
       "kind": "type",
@@ -8457,6 +8501,14 @@
     "http.PreviewTaskTypeImport": {
       "kind": "func",
       "at": "service-petitions/internal/http/catalogue_import.go:387"
+    },
+    "http.ProjectDisbursementCurve": {
+      "kind": "func",
+      "at": "service-finance/internal/http/disbursement_summary.go:237"
+    },
+    "http.ProjectSummary": {
+      "kind": "func",
+      "at": "service-finance/internal/http/disbursement_summary.go:166"
     },
     "http.PublicAudioLinks": {
       "kind": "type",
@@ -11481,6 +11533,10 @@
     "store.Disable": {
       "kind": "func",
       "at": "service-comms/internal/store/map_frame.go:154"
+    },
+    "store.DisbursedByMonth": {
+      "kind": "func",
+      "at": "service-finance/internal/store/du_an.go:481"
     },
     "store.Doc": {
       "kind": "func",

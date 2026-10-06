@@ -103,6 +103,9 @@ type DuAnTienDo interface {
 	// VouchersOfProject feeds §8.2's voucher tab: the project's live vouchers, newest payment first.
 	// fistore.ErrKhongThayDuAn for a project not in this commune.
 	VouchersOfProject(ctx context.Context, projectID string) ([]domain.ProjectVoucher, error)
+	// DisbursedByMonth feeds the cumulative curves (§4 for the whole year when projectID is "", §8.3
+	// for one project): ONE read of at most 13 buckets, never a read per project.
+	DisbursedByMonth(ctx context.Context, year int, projectID string) (domain.DisbursedByMonth, error)
 }
 
 // GhiDuAn is the WRITE half of the investment project register, and it is its own interface rather
@@ -472,6 +475,52 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/investment-projects/{id}/disbursements",
 		authz.RequirePermission(d.Checker, "budget.read")(
 			http.HandlerFunc(h.ListProjectVouchers)))
+
+	// §3's four KPI cards, §4's cumulative curve and §5's category table for one budget year — every
+	// figure computed here, none in the browser (disbursement_summary.go says why).
+	//
+	// `investment-project-summary`, TOP LEVEL AND SINGULAR, following the repository's own precedent for
+	// an aggregate read (`incoming-document-summary`, `task-summary`, `map-asset-summary`). NOT
+	// `investment-projects/overview`: under `{id}` that segment would be one ULID-shaped value away from
+	// meaning a project, and a reader of the path could not tell the two apart.
+	//
+	// `budget.read`, the key the project list it summarises already requires (seeded at
+	// service-identity/migrations/0001_init.sql:282-284; no key invented, rule 5 invariant 3c).
+	//
+	// NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Tổng hợp giải ngân của xã theo năm ngân sách: bốn thẻ KPI, luỹ kế theo tháng, bảng theo hạng mục
+	// @screen   06-giai-ngan §3
+	// @reply    200 projectSummaryOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/investment-project-summary",
+		authz.RequirePermission(d.Checker, "budget.read")(
+			http.HandlerFunc(h.ProjectSummary)))
+
+	// §8.3's chart tab: one project's cumulative disbursement by month against its plan line, which
+	// follows the project's OWN calendar (prototype 03c1787 — domain.ProjectCurve).
+	//
+	// `disbursement-curve`, A NOUN FOR THE DATA, not `chart`: a chart is one way of drawing it, and the
+	// path outlives the drawing. Nested under the project because the project IS the filter.
+	//
+	// `budget.read`, as the project's detail. 404 for a project of another commune, as the detail.
+	//
+	// NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Luỹ kế giải ngân theo tháng của một dự án so với kế hoạch theo lịch của chính dự án
+	// @screen   06-giai-ngan §8.3
+	// @reply    200 projectCurveOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/investment-projects/{id}/disbursement-curve",
+		authz.RequirePermission(d.Checker, "budget.read")(
+			http.HandlerFunc(h.ProjectDisbursementCurve)))
 
 	// --- the commune enters, corrects and withdraws its own investment projects ------------------
 	//
