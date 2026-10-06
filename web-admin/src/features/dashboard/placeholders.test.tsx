@@ -74,7 +74,7 @@ describe("Tổng quan — unbuilt parts at their spec position (ADR 0068 §14)",
     for (const p of PHAN_CHUA_DUNG) expect(marker(el, p.ten)).not.toBeNull();
   });
 
-  it("PDF / XLSX / PPTX and Trình chiếu are DISABLED buttons; Tính lại ngay has no spot (ADR 0053)", () => {
+  it("without an export source PDF / XLSX / PPTX are DISABLED; Trình chiếu is DISABLED; Tính lại ngay has no spot (ADR 0053)", () => {
     const el = page();
     for (const label of ["PDF", "XLSX", "PPTX", "Trình chiếu"]) {
       const b = [...el.querySelectorAll("button")].find((x) => x.textContent?.trim() === label);

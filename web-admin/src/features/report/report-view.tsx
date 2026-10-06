@@ -12,13 +12,13 @@ import { PageHeader } from "@/components/ui/page-header";
 import { PENDING_HOVER_TEXT, PendingMarker } from "@/components/ui/pending-feature";
 import { SkeletonRows } from "@/components/ui/skeleton";
 import { formatCount } from "@/features/dashboard/figures";
-import { ExportPendingActions } from "@/features/dashboard/header-actions";
 import { formatDateTime, PERIOD_BUTTON_LABEL, PERIOD_KINDS } from "@/features/dashboard/period";
 import type { PeriodKind } from "@/features/dashboard/period";
 import { DashboardBlocks, PeriodButtons } from "@/features/dashboard/view";
 import type { BlocksData, Loaded } from "@/features/dashboard/view";
 import { cn } from "@/lib/cn";
 
+import { ExportPendingActions } from "./export-pending-actions";
 import { reportPendingPart } from "./labels";
 import type { ReportAccess } from "./report-access";
 import {
@@ -155,7 +155,7 @@ export function ReportView({
 
       {access.exportReport && (
         <div className="flex flex-wrap gap-2">
-          <ExportPendingActions size="md" labelPrefix="Xuất " />
+          <ExportPendingActions />
         </div>
       )}
 

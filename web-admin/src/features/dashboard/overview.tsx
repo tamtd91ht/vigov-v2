@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { useCauHinhXa } from "@/components/cau-hinh-xa";
 import { CongQuyen } from "@/features/quyen/cong-quyen";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 import {
@@ -16,7 +17,7 @@ import type { SummaryPeriod } from "@/lib/api/dashboard";
 import { layLoaiNhiemVu } from "@/lib/api/danh-muc-nghiep-vu";
 import type { KetQua } from "@/lib/api/goi";
 import { layChiSoNganSach } from "@/lib/api/thu-chi";
-import { quyetDinhTheoKhoa, REPORT_READ_PERMISSION } from "@/lib/quyen";
+import { coQuyen, quyetDinhTheoKhoa, REPORT_EXPORT_PERMISSION, REPORT_READ_PERMISSION } from "@/lib/quyen";
 
 import { mergeQueues } from "./figures";
 import type { QueueSource } from "./figures";
@@ -119,12 +120,19 @@ function DashboardOverview() {
   const windows = useMemo(() => periodWindows(request.kind, new Date(request.at)), [request]);
   const shown = useDashboardFigures(windows, request.at, visible, true);
   const data: DashboardData = { ...shown, windows, fetchedAt: request.at };
+  // The commune printed on the export files: the runtime configuration the server resolved from
+  // `Host` (rule 1 inv. 10) — the same value the page header prints. Never a constant.
+  const commune = useCauHinhXa();
 
   return (
     <DashboardView
       data={data}
       visible={visible}
       onPeriodChange={(kind) => setRequest({ kind, at: new Date().getTime() })}
+      exportAccess={{
+        commune: { displayName: commune.displayName, parentAuthority: commune.parentAuthority },
+        canExport: coQuyen(permissions, REPORT_EXPORT_PERMISSION),
+      }}
     />
   );
 }

@@ -5,3 +5,7 @@ tsconfig.tsbuildinfo
 # MapLibre's worker, copied from node_modules by scripts/copy-maplibre-worker.mjs on every build/dev
 # start. Generated: committing it would let it drift from the installed maplibre-gl version.
 public/maplibre/
+
+# Roboto TTFs for the Tong quan PDF export, copied from node_modules by scripts/copy-pdf-fonts.mjs on every
+# build/dev start. Generated: committing them would let them drift from the installed font package.
+public/pdf-fonts/

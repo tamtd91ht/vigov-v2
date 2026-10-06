@@ -2,9 +2,13 @@ import type { PendingFeatureInfo } from "@/components/ui/pending-feature";
 
 /**
  * The parts of `docs/ui-ux/13-bao-cao.md` that `/bao-cao` does NOT build this round and that are not
- * already declared by `features/dashboard/labels.ts` (the reused KPI blocks' placeholders and the
- * export buttons live there, once). Drawn at their spec position as disabled controls with the "?" of
- * ADR 0068 §14; pressing "?" reads the entry here.
+ * already declared by `features/dashboard/labels.ts` (the reused KPI blocks' placeholders live there,
+ * once). Drawn at their spec position as disabled controls with the "?" of ADR 0068 §14; pressing "?"
+ * reads the entry here.
+ *
+ * THE EXPORT ENTRY MOVED HERE on 06/10/2026: Tổng quan's export was built (user decision, browser-side
+ * files from the figures on screen), Báo cáo's was not — so the "?" and its reason now belong to this
+ * page alone, and Tổng quan's registry no longer lists it.
  *
  * Out of this round by the owner's decision (ADR 0053, amendment 04/10/2026, B4): the comparison
  * chart, the export, the scheduled report job and the "Thành lập mới" indicator. The job and the
@@ -22,6 +26,10 @@ export const PHAN_CHUA_DUNG: readonly PendingFeatureInfo[] = [
     viSao:
       "Biểu đồ thanh ngang so từng chỉ tiêu của kỳ đang chọn với kỳ so sánh, theo phần trăm tăng " +
       "hoặc giảm. Chưa dựng trong đợt này; từng ô số liệu phía trên đã ghi số của kỳ trước.",
+  },
+  {
+    ten: "Xuất báo cáo PDF, XLSX, PPTX",
+    viSao: "Xuất số liệu của kỳ đang chọn ra tệp PDF, Excel hoặc PowerPoint để gửi lên cấp trên.",
   },
 ];
 

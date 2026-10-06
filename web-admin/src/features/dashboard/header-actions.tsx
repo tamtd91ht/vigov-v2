@@ -1,30 +1,33 @@
-import { Download, Maximize2 } from "lucide-react";
+import { Maximize2 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import type { ButtonSize } from "@/components/ui/button";
-import { PendingButton, PendingFeature } from "@/components/ui/pending-feature";
+import { PendingButton } from "@/components/ui/pending-feature";
 
+import { DashboardExportActions } from "./export-actions";
+import type { ExportSource } from "./export-actions";
 import { pendingPart } from "./labels";
 
+export type { ExportSource };
+
 /**
- * The PageHeader buttons of spec §2 that are not built — `[PDF][XLSX][PPTX]` and `[⤢ Trình chiếu]`,
- * both Phase 2 (ADR 0068 §14). Drawn disabled with the "?"; nothing here calls a server or stores
- * anything, and there is no handler to pass.
+ * The PageHeader buttons of spec §2 after the period picker: `[PDF][XLSX][PPTX]` and `[⤢ Trình chiếu]`.
  *
- * THE THREE EXPORT FORMATS SHARE ONE "?": they are one feature (export the period on screen) in
- * three file types, so three marks would say the same sentence three times in a row.
+ * THE EXPORT IS BUILT (user decision 06/10/2026, overriding ADR 0053 B4 / ADR 0068 §14 "phase 2" for
+ * Tổng quan only): files made in the browser from the figures on screen (`export-actions.tsx`).
+ * `exportSource` absent = the gate is closed, the session still being read, or no commune
+ * configuration was passed — the three buttons are drawn disabled, which reveals nothing.
+ *
+ * "Trình chiếu" stays Phase 2: disabled with its "?" (`labels.ts`).
  *
  * NOT HERE, ON PURPOSE: `⟳ Tính lại ngay` — the owner decided not to build it (ADR 0053), and a
  * placeholder for it would announce a feature the authority refused.
  *
- * Rendered by `DashboardHeader` (`view.tsx`) on the right of the title, after the period buttons —
- * also for an account without `report.read`: a disabled control with no data behind it reveals
- * nothing an account may not read. Small buttons, as the prototype's header (`size="sm"`).
+ * `/bao-cao`'s export is NOT this component: it is still unbuilt there and has its own pending row
+ * (`features/report/export-pending-actions.tsx`).
  */
-export function DashboardHeaderActions() {
+export function DashboardHeaderActions({ exportSource }: { exportSource?: ExportSource }) {
   return (
     <>
-      <ExportPendingActions />
+      <DashboardExportActions source={exportSource} />
       <PendingButton
         info={pendingPart("Chế độ trình chiếu phòng họp")}
         phase2
@@ -34,41 +37,5 @@ export function DashboardHeaderActions() {
         Trình chiếu
       </PendingButton>
     </>
-  );
-}
-
-/**
- * The `[PDF][XLSX][PPTX]` group alone — also drawn by `/bao-cao` (ADR 0053 amendment 04/10/2026, B4:
- * export not built this round), which has no "Trình chiếu". One component, so the two pages cannot
- * describe the same unbuilt export in two ways.
- *
- * The two prototype screens word it differently, and both are kept: Tổng quan's header has small
- * "PDF" buttons, Báo cáo's own row has full-size "Xuất PDF" buttons (`labelPrefix="Xuất "`). Every
- * button carries the download icon, as in both.
- */
-export function ExportPendingActions({
-  size = "sm",
-  labelPrefix = "",
-}: {
-  size?: ButtonSize;
-  labelPrefix?: string;
-}) {
-  return (
-    <PendingFeature info={pendingPart("Xuất báo cáo PDF, XLSX, PPTX")} phase2>
-      <span role="group" aria-label="Xuất báo cáo" className="inline-flex flex-wrap gap-2">
-        {(["PDF", "XLSX", "PPTX"] as const).map((format) => (
-          <Button
-            key={format}
-            type="button"
-            variant="secondary"
-            size={size}
-            disabled
-            icon={<Download aria-hidden="true" focusable="false" />}
-          >
-            {`${labelPrefix}${format}`}
-          </Button>
-        ))}
-      </span>
-    </PendingFeature>
   );
 }

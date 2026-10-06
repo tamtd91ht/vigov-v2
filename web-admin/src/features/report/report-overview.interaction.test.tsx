@@ -8,10 +8,13 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
 import { DashboardPage } from "@/features/dashboard/overview";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 
 import { ReportPage } from "./report-overview";
+
+const COMMUNE = { displayName: "Xã Kiểm Thử", parentAuthority: "", logoUrl: "", webAdminBannerUrl: "" };
 
 const PERMISSIONS = ["report.read", "task.read", "document.read", "feedback.read", "budget.read"];
 
@@ -59,7 +62,13 @@ async function mount(page: React.ReactNode): Promise<HTMLDivElement> {
   const r = createRoot(host);
   root = r;
   await act(async () => {
-    r.render(<PhienProvider>{page}</PhienProvider>);
+    // The commune configuration every page receives from the server (`app/tong-quan/page.tsx`);
+    // Tổng quan reads it for its export files and refuses to render without it.
+    r.render(
+      <CauHinhXaProvider giaTri={COMMUNE}>
+        <PhienProvider>{page}</PhienProvider>
+      </CauHinhXaProvider>,
+    );
   });
   await act(async () => {
     await Promise.resolve();

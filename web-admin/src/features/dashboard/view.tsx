@@ -31,6 +31,7 @@ import {
   nhanChiSo,
   nhanSoTien,
   nhanSoTienChiSo,
+  O_KHONG_TINH_DUOC,
 } from "@/features/thu-chi/nhan-thu-chi";
 import type { KetQua } from "@/lib/api/goi";
 import type {
@@ -68,7 +69,10 @@ import {
   ratioPercent,
 } from "./figures";
 import type { ComparisonLine, DrillTarget, FigureKind, MergedQueue, Trend, UrgentRow } from "./figures";
+import { buildDashboardExport, EXPORT_NO_FIGURE, urgentSummary } from "./export-model";
+import type { DashboardExport, ExportBlock, ExportCommune, ExportFigure } from "./export-model";
 import { DashboardHeaderActions } from "./header-actions";
+import type { ExportSource } from "./header-actions";
 import { PENDING_BLOCK_METRICS, pendingPart } from "./labels";
 import {
   comparisonNote,
@@ -88,7 +92,7 @@ import type { PeriodKind, PeriodWindows } from "./period";
  *
  * LAYOUT (owner, 05/10/2026 — the prototype's `DashboardWorkspace` frame, new UI language of
  * ADR 0068 §"Sửa đổi 05/10/2026 (lần 2)"):
- *   header  title · "Kỳ …: … · tính đến …" · period buttons · PDF/XLSX/PPTX · Trình chiếu
+ *   header  title · "Kỳ …: … · tính đến …" · period buttons · PDF/XLSX/PPTX (live) · Trình chiếu
  *   body    ONE grid — 1 column, 2 from 1024px, 3 from 1536px — of six blocks in the prototype's
  *           order (Nhiệm vụ · Văn bản & Đơn thư · Giải ngân ngân sách · Thu – Chi ngân sách ·
  *           Phản ánh người dân · Kinh tế & Tài nguyên), then "Cần xử lý ngay" as the 7th cell.
@@ -161,6 +165,8 @@ type Figure = {
   readonly sentence?: boolean;
   /** the full value when `display` is shortened ("9,64 tỷ đồng" ← "9.640.000.000 đồng"), shown on hover */
   readonly exact?: string;
+  /** the server's own count behind `display` — for the exported workbook only, never drawn */
+  readonly raw?: number;
 };
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
@@ -199,6 +205,7 @@ function countFigure<T>(
         : comparisonLine(spec.kind, current, previous, spec.trend, formatCount),
     movement: movement(current, previous),
     alert: spec.alert === true && typeof current === "number" && current > 0,
+    raw: typeof current === "number" ? current : undefined,
   };
 }
 
@@ -713,6 +720,9 @@ export function TaskBlock({
  *   · "Đơn thư trong kỳ" is an unbuilt part — there is no citizen-letter register to count — so it
  *     is the tile it will be, with the "?" of ADR 0068 §14 (`labels.ts`).
  */
+const DOCUMENT_ON_TIME_LABEL = "Tỷ lệ đúng hạn văn bản";
+const LETTERS_LABEL = "Đơn thư trong kỳ";
+
 export function DocumentBlock({
   pair,
   windows,
@@ -731,8 +741,8 @@ export function DocumentBlock({
         {figures.map((f) => (
           <FigureTile key={f.id} figure={f} />
         ))}
-        <NoSourceTile label="Tỷ lệ đúng hạn văn bản" />
-        <PendingTile label="Đơn thư trong kỳ" info={pendingPart("Đơn thư trong kỳ")} />
+        <NoSourceTile label={DOCUMENT_ON_TIME_LABEL} />
+        <PendingTile label={LETTERS_LABEL} info={pendingPart(LETTERS_LABEL)} />
       </TileGrid>
     </Panel>
   );
@@ -772,11 +782,29 @@ export function CitizenReportBlock({
   windows: ComparedWindows;
   onReload?: () => void;
 }) {
+  const figures = citizenReportFigures(pair, windows);
+  return (
+    <Panel blockKey="citizen-reports" title="Phản ánh người dân">
+      <PairErrors pair={pair} noun="phản ánh" onReload={onReload} />
+      <TileGrid count={figures.length}>
+        {figures.map((f) => (
+          <FigureTile key={f.id} figure={f} />
+        ))}
+      </TileGrid>
+    </Panel>
+  );
+}
+
+/** Khối PHẢN ÁNH NGƯỜI DÂN's figures — shared by the block and the export (`exportBlocks`). */
+function citizenReportFigures(
+  pair: SummaryPair<petitions_citizenReportSummaryOut>,
+  windows: ComparedWindows,
+): Figure[] {
   const period = toQueryPeriod(windows.current);
   const id = "citizen-reports";
   const count = (s: CountSpec<petitions_citizenReportSummaryOut>) =>
     countFigure(id, pair, s, period);
-  const figures: Figure[] = [
+  return [
     count({
       pick: (r) => r.received,
       kind: "period",
@@ -812,16 +840,6 @@ export function CitizenReportBlock({
       alert: true,    }),
     ratingFigure(id, pair.current, period),
   ];
-  return (
-    <Panel blockKey="citizen-reports" title="Phản ánh người dân">
-      <PairErrors pair={pair} noun="phản ánh" onReload={onReload} />
-      <TileGrid count={figures.length}>
-        {figures.map((f) => (
-          <FigureTile key={f.id} figure={f} />
-        ))}
-      </TileGrid>
-    </Panel>
-  );
 }
 
 /**
@@ -897,7 +915,7 @@ export function FiscalBlock({
   onReload?: () => void;
 }) {
   const title = "Thu – Chi ngân sách";
-  const scope = `Luỹ kế năm ${year}, không so với kỳ trước.`;
+  const scope = fiscalScope(year);
 
   if (result === null || !result.ok) {
     const shown = result === null ? LOADING : NO_VALUE;
@@ -923,26 +941,14 @@ export function FiscalBlock({
   }
 
   const d = result.duLieu;
-  const balanceText = nhanSoTienChiSo(d.balance, "dong");
   return (
     <Panel blockKey="fiscal" title={title}>
       <TileGrid count={3 + d.revenue_totals.length}>
         <FigureTile figure={indicatorFigure("fiscal-revenue", d.revenue_achievement)} />
         <FigureTile figure={indicatorFigure("fiscal-expenditure", d.expenditure_achievement)} />
-        <FigureTile
-          figure={{
-            id: "fiscal-balance",
-            label: NHAN_CHENH_LECH,
-            display: safeAmount(d.balance.amount)
-              ? compactDong(d.balance.amount)
-              : withUnit(balanceText, d.balance.amount !== null),
-            exact: withUnit(balanceText, d.balance.amount !== null),
-            href: FISCAL_SCREEN_PATH,
-            comparison: null,
-            sentence: d.balance.amount === null,          }}
-        />
+        <FigureTile figure={balanceFigure(d)} />
         {d.revenue_totals.map((o) => {
-          const reason = lyDoKhongTinh(o.unavailable_reason);
+          const total = revenueTotalText(o);
           return (
             <FigureTile
               key={o.column_id}
@@ -950,31 +956,64 @@ export function FiscalBlock({
                 id: `fiscal-total-${o.column_id}`,
                 label: o.name,
                 display: "",
-                exact: withUnit(nhanSoTien(o.value, "dong"), o.value !== null),
+                exact: total.exact,
                 href: FISCAL_SCREEN_PATH,
                 comparison: null,
-                sentence: reason !== null,              }}
-              value={
-                <OTien
-                  chu={
-                    safeAmount(o.value) ? compactDong(o.value) : withUnit(nhanSoTien(o.value, "dong"), o.value !== null)
-                  }
-                  lyDo={reason}
-                  hienLyDo
-                />
-              }
+                sentence: total.reason !== null,              }}
+              value={<OTien chu={total.shown} lyDo={total.reason} hienLyDo />}
             />
           );
         })}
       </TileGrid>
       <div className="mt-auto flex flex-col gap-1">
         <SmallNote>{scope}</SmallNote>
-        <SmallNote>
-          {NHAN_CHENH_LECH}: {GHI_CHU_CHENH_LECH}
-        </SmallNote>
+        <SmallNote>{balanceNote()}</SmallNote>
       </div>
     </Panel>
   );
+}
+
+/** The scope line under the fiscal block — on screen and in the files. */
+function fiscalScope(year: number): string {
+  return `Luỹ kế năm ${year}, không so với kỳ trước.`;
+}
+
+/** The balance cell's temporary label and how it is computed (open question #32). */
+function balanceNote(): string {
+  return `${NHAN_CHENH_LECH}: ${GHI_CHU_CHENH_LECH}`;
+}
+
+/** The balance tile — the tile and the export read this one object. */
+function balanceFigure(d: finance_chiSoNamRa): Figure {
+  const balanceText = nhanSoTienChiSo(d.balance, "dong");
+  return {
+    id: "fiscal-balance",
+    label: NHAN_CHENH_LECH,
+    display: safeAmount(d.balance.amount)
+      ? compactDong(d.balance.amount)
+      : withUnit(balanceText, d.balance.amount !== null),
+    exact: withUnit(balanceText, d.balance.amount !== null),
+    href: FISCAL_SCREEN_PATH,
+    comparison: null,
+    sentence: d.balance.amount === null,
+    raw: safeAmount(d.balance.amount) ? d.balance.amount : undefined,
+  };
+}
+
+/** One revenue total's text: shortened for the tile, exact for hover, and the "not computed" reason. */
+function revenueTotalText(o: finance_chiSoNamRa["revenue_totals"][number]): {
+  shown: string;
+  exact: string;
+  reason: string | null;
+  raw: number | undefined;
+} {
+  const exact = withUnit(nhanSoTien(o.value, "dong"), o.value !== null);
+  return {
+    shown: safeAmount(o.value) ? compactDong(o.value) : exact,
+    exact,
+    reason: lyDoKhongTinh(o.unavailable_reason),
+    raw: safeAmount(o.value) ? o.value : undefined,
+  };
 }
 
 /** Task-type labels by code, or `null` when the catalogue did not load (rows then show the code). */
@@ -1208,7 +1247,8 @@ export const DASHBOARD_TITLE = "Tổng quan điều hành";
 
 /**
  * The page header, prototype frame: title; "Kỳ …: … · tính đến …" under it; on the right the period
- * buttons, then the unbuilt PDF/XLSX/PPTX and Trình chiếu (disabled, "?").
+ * buttons, then PDF/XLSX/PPTX (built 06/10/2026, `export-actions.tsx`) and the unbuilt Trình chiếu
+ * (disabled, "?").
  *
  * `context` absent = the account cannot read the page (`report.read`), or its session is still being
  * read: the title and the disabled actions only — a disabled control with no data behind it reveals
@@ -1219,7 +1259,13 @@ export const DASHBOARD_TITLE = "Tổng quan điều hành";
 export function DashboardHeader({
   context,
 }: {
-  context?: { windows: PeriodWindows; fetchedAt: number; onPeriodChange: (k: PeriodKind) => void };
+  context?: {
+    windows: PeriodWindows;
+    fetchedAt: number;
+    onPeriodChange: (k: PeriodKind) => void;
+    /** absent = no export possible (no commune configuration passed) — the buttons stay disabled */
+    exportSource?: ExportSource;
+  };
 }) {
   return (
     <PageHeader
@@ -1240,11 +1286,36 @@ export function DashboardHeader({
           {context !== undefined && (
             <PeriodPicker kind={context.windows.kind} onChange={context.onPeriodChange} />
           )}
-          <DashboardHeaderActions />
+          <DashboardHeaderActions exportSource={context?.exportSource} />
         </>
       }
     />
   );
+}
+
+/** Why the export buttons are disabled — said on the buttons' group, never only greyed. */
+export const EXPORT_NEEDS_PERMISSION =
+  "Tài khoản của bạn chưa có quyền Xuất báo cáo (report.export), nên chưa xuất được tệp.";
+export const EXPORT_WAITING = "Đang tải số liệu — xuất được khi mọi khối đã tải xong.";
+
+/**
+ * What the export needs from the hook half: the commune's DISPLAY configuration (runtime, from
+ * `Host` — rule 1 inv. 10) and whether the account holds `report.export`. Absent = no export.
+ */
+export type ExportAccess = {
+  readonly commune: ExportCommune;
+  readonly canExport: boolean;
+};
+
+function exportSourceOf(data: DashboardData, visible: BlockVisibility, access: ExportAccess): ExportSource {
+  return {
+    blockedReason: !access.canExport
+      ? EXPORT_NEEDS_PERMISSION
+      : !figuresSettled(data, visible)
+        ? EXPORT_WAITING
+        : null,
+    build: (generatedAt) => dashboardExport(data, visible, access.commune, generatedAt),
+  };
 }
 
 /**
@@ -1258,16 +1329,25 @@ export function DashboardView({
   data,
   visible,
   onPeriodChange,
+  exportAccess,
 }: {
   data: DashboardData;
   visible: BlockVisibility;
   onPeriodChange: (k: PeriodKind) => void;
+  exportAccess?: ExportAccess;
 }) {
   const reload = () => onPeriodChange(data.windows.kind);
   const compared = visible.tasks || visible.incomingDocuments || visible.citizenReports;
   return (
     <>
-      <DashboardHeader context={{ windows: data.windows, fetchedAt: data.fetchedAt, onPeriodChange }} />
+      <DashboardHeader
+        context={{
+          windows: data.windows,
+          fetchedAt: data.fetchedAt,
+          onPeriodChange,
+          exportSource: exportAccess === undefined ? undefined : exportSourceOf(data, visible, exportAccess),
+        }}
+      />
       <DashboardBlocks data={data} visible={visible} onReload={reload} />
       {compared && (
         <p className="m-0 mt-3 flex items-start gap-1.5 text-xs leading-relaxed text-ink-500">
@@ -1333,4 +1413,163 @@ export function DashboardBlocks({
       </div>
     </BlockLayoutContext.Provider>
   );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * EXPORT — the blocks above, as the files carry them (`export-model.ts`)
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Has every block the account sees ANSWERED — success or failure, but no longer loading? The export
+ * buttons wait for it: a file written while a tile still says "…" would carry a figure nobody saw.
+ * At least one figure block must be visible; a file of placeholders only is not a report.
+ */
+export function figuresSettled(data: BlocksData, visible: BlockVisibility): boolean {
+  const settled = <T,>(p: SummaryPair<T>) => p.current !== null && p.previous !== null;
+  if (!(visible.tasks || visible.incomingDocuments || visible.citizenReports || visible.budget)) return false;
+  if (visible.tasks && !settled(data.tasks)) return false;
+  if (visible.incomingDocuments && !settled(data.incomingDocuments)) return false;
+  if (visible.citizenReports && !settled(data.citizenReports)) return false;
+  if (visible.budget && data.fiscal === null) return false;
+  const anyQueue = visible.tasks || visible.incomingDocuments || visible.citizenReports;
+  if (anyQueue && data.queue === null) return false;
+  return true;
+}
+
+function toExportFigure(f: Figure, unit: "count" | "dong" = "count"): ExportFigure {
+  return {
+    label: f.label,
+    value: f.display,
+    exact: f.exact,
+    number: f.raw,
+    unit: f.raw === undefined ? undefined : unit,
+    note: f.note,
+    comparison: f.comparison?.text,
+    alert: f.alert === true,
+  };
+}
+
+/** `PairErrors` in words — the same two sentences the block draws. */
+function pairErrors<T>(pair: SummaryPair<T>, noun: string): string[] {
+  if (pair.current !== null && !pair.current.ok) {
+    return [`Chưa tải được số liệu ${noun}: ${pair.current.thongBao}`];
+  }
+  if (pair.current !== null && pair.current.ok && pair.previous !== null && !pair.previous.ok) {
+    return [`Không tải được số liệu kỳ trước: ${pair.previous.thongBao}`];
+  }
+  return [];
+}
+
+function pendingExportBlock(name: keyof typeof PENDING_BLOCK_METRICS): ExportBlock {
+  return {
+    title: name,
+    figures: PENDING_BLOCK_METRICS[name].map((label) => ({ label, value: EXPORT_NO_FIGURE, noFigure: true })),
+    notes: [],
+    errors: [],
+    pending: pendingPart(name).viSao,
+  };
+}
+
+function fiscalExportBlock(result: Loaded<finance_chiSoNamRa>, year: number): ExportBlock {
+  const title = "Thu – Chi ngân sách";
+  if (result === null || !result.ok) {
+    return {
+      title,
+      figures: ["Thu đạt dự toán", "Chi đạt dự toán", NHAN_CHENH_LECH].map((label) => ({ label, value: NO_VALUE })),
+      notes: [fiscalScope(year)],
+      errors: result === null ? [] : [`Chưa tải được số liệu thu – chi: ${result.thongBao}`],
+    };
+  }
+  const d = result.duLieu;
+  const totals: ExportFigure[] = d.revenue_totals.map((o) => {
+    const t = revenueTotalText(o);
+    return t.reason === null
+      ? { label: o.name, value: t.shown, exact: t.exact, number: t.raw, unit: t.raw === undefined ? undefined : "dong" }
+      : { label: o.name, value: `${O_KHONG_TINH_DUOC} — ${t.reason}` };
+  });
+  return {
+    title,
+    figures: [
+      toExportFigure(indicatorFigure("fiscal-revenue", d.revenue_achievement)),
+      toExportFigure(indicatorFigure("fiscal-expenditure", d.expenditure_achievement)),
+      toExportFigure(balanceFigure(d), "dong"),
+      ...totals,
+    ],
+    notes: [fiscalScope(year), balanceNote()],
+    errors: [],
+  };
+}
+
+/**
+ * The blocks the account sees, in the grid's order, as the files carry them. A block whose keys the
+ * account lacks is absent here exactly as on screen — a file must not reveal what the page hides.
+ * "Cần xử lý ngay" is not a block here: it goes in as an aggregate (`urgentSummary`).
+ */
+export function exportBlocks(data: BlocksData, visible: BlockVisibility): ExportBlock[] {
+  const blocks: ExportBlock[] = [];
+  if (visible.tasks) {
+    const t = taskFigures(data.tasks, data.windows);
+    blocks.push({
+      title: "Nhiệm vụ",
+      figures: [t.inProgress, t.overdue, t.completed, t.suspended, t.onTime].map((f) => toExportFigure(f)),
+      notes: [],
+      errors: pairErrors(data.tasks, "nhiệm vụ"),
+    });
+  }
+  if (visible.incomingDocuments) {
+    const d = incomingDocumentFigures(data.incomingDocuments, data.windows);
+    blocks.push({
+      title: "Văn bản & Đơn thư",
+      figures: [
+        ...[d.arrived, d.open, d.overdue].map((f) => toExportFigure(f)),
+        { label: DOCUMENT_ON_TIME_LABEL, value: NO_DATA_CAPTION, note: NO_SOURCE_DATA, noFigure: true },
+        { label: LETTERS_LABEL, value: EXPORT_NO_FIGURE, note: pendingPart(LETTERS_LABEL).viSao, noFigure: true },
+      ],
+      notes: [],
+      errors: pairErrors(data.incomingDocuments, "văn bản đến"),
+    });
+  }
+  if (visible.budget) {
+    blocks.push(pendingExportBlock("Giải ngân ngân sách"));
+    blocks.push(fiscalExportBlock(data.fiscal, data.fiscalYear));
+  }
+  if (visible.citizenReports) {
+    blocks.push({
+      title: "Phản ánh người dân",
+      figures: citizenReportFigures(data.citizenReports, data.windows).map((f) => toExportFigure(f)),
+      notes: [],
+      errors: pairErrors(data.citizenReports, "phản ánh"),
+    });
+  }
+  blocks.push(pendingExportBlock("Kinh tế & Tài nguyên"));
+  return blocks;
+}
+
+/**
+ * The whole file content at the instant of the click, or throws — `buildDashboardExport` refuses a
+ * commune with no name. `null` source = nothing exportable (gate closed, commune unknown).
+ */
+export function dashboardExport(
+  data: DashboardData,
+  visible: BlockVisibility,
+  commune: ExportCommune,
+  generatedAt: number,
+): DashboardExport {
+  const anyQueue = visible.tasks || visible.incomingDocuments || visible.citizenReports;
+  const compared = anyQueue;
+  return buildDashboardExport({
+    commune,
+    title: DASHBOARD_TITLE,
+    windows: data.windows,
+    fetchedAt: data.fetchedAt,
+    generatedAt,
+    blocks: exportBlocks(data, visible),
+    urgent:
+      !anyQueue || data.queue === null
+        ? null
+        : data.queue.ok
+          ? urgentSummary(data.queue.duLieu)
+          : { title: "Cần xử lý ngay", lines: [`Chưa tải được danh sách cần xử lý ngay: ${data.queue.thongBao}`] },
+    comparisonNote: compared ? comparisonNote(data.windows) : null,
+  });
 }

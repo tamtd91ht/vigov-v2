@@ -912,6 +912,14 @@
       "bang_chung": "Chưa commit. web-admin/src/features/nhiem-vu/kanban-drag.ts (+ kanban-drag.test.ts, kanban-drag.interaction.test.tsx), so-nhiem-vu.tsx (BangKanban, KanbanColumn, TheNhiemVu), kanban-move.test.tsx, app/globals.css, package.json + package-lock.json (@dnd-kit/core 6.3.1). vitest src/features/nhiem-vu 18 tệp/550 ca xanh; make web rc=0 (web-admin 246 tệp/4351 ca); tsc + eslint sạch. npm audit --omit=dev: 1 high source-map-js có sẵn từ trước ở HEAD (không do @dnd-kit).",
       "no_confirm": [],
       "tiep_theo": "Chưa thử bằng mắt trên trình duyệt: kéo chuột thật, giữ-kéo trên điện thoại/máy tính bảng, kéo bằng bàn phím + trình đọc màn hình, cuộn ngang bảng khi kéo gần mép."
+    },
+    {
+      "id": "tong-quan-xuat-pdf-xlsx-pptx-06-10",
+      "menu": "tong-quan",
+      "viec": "Tổng quan — nút PDF/XLSX/PPTX chạy thật: dựng tệp trong trình duyệt từ đúng số liệu máy chủ trả cho màn (người dùng chốt 06/10/2026, thay ADR 0053 B4 / ADR 0068 §14 'giai đoạn 2' cho riêng Tổng quan). Báo cáo vẫn là ô '?'.",
+      "trang_thai": "xong",
+      "bang_chung": "commit 'feat(web-admin): Tổng quan — xuất PDF, XLSX, PPTX'; vitest dashboard+report 183 ca xanh; tsc sạch; npm run build xanh; make check rc=0 (golangci-lint chưa cài). Chưa mở thử tệp bằng Excel/PowerPoint; PDF kiểm bằng trích chữ pdfjs.",
+      "tiep_theo": "(1) NỢ MÁY CHỦ: chưa có route ghi nhật ký lần xuất (luật 3 bất biến 4) — cần POST ở identity hoặc reporting. (2) Nút cần report.read VÀ report.export (agent chọn, khoá có sẵn ở identity 0001:304) — người dùng chưa xác nhận. (3) make vuln đỏ vì source-map-js (GHSA-68fv-2mgg-jv7q) có từ trước. (4) 'Cần xử lý ngay' chỉ ghi số đếm, không ghi từng việc."
     }
   ]
 }

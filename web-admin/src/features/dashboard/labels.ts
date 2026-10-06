@@ -38,10 +38,8 @@ export const PHAN_CHUA_DUNG: readonly PendingFeatureInfo[] = [
       "bàn, đếm từ Bản đồ kinh tế số. Bản đồ đã có, nhưng phép đếm các số này cho màn Tổng quan " +
       "chưa được làm.",
   },
-  {
-    ten: "Xuất báo cáo PDF, XLSX, PPTX",
-    viSao: "Xuất số liệu của kỳ đang chọn ra tệp PDF, Excel hoặc PowerPoint để gửi lên cấp trên.",
-  },
+  // "Xuất báo cáo PDF, XLSX, PPTX" was built on 06/10/2026 (`export-actions.tsx`) and left this list;
+  // `/bao-cao`'s still-unbuilt export keeps its own entry in `features/report/labels.ts`.
   {
     ten: "Chế độ trình chiếu phòng họp",
     viSao:

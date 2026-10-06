@@ -398,9 +398,12 @@ export const REPORT_READ_PERMISSION = "report.read";
 
 /**
  * `report.export` — "Xuất báo cáo" (`service-identity/migrations/0001_init.sql:304`). `/bao-cao`
- * draws its export buttons only for an account holding it (spec 13 §9.4). The export itself is not
- * built (ADR 0053, amendment 04/10/2026, B4), so today the key reveals three disabled buttons; the
- * export route will check it server-side when it exists.
+ * draws its export buttons only for an account holding it (spec 13 §9.4); its export is not built
+ * (ADR 0053, amendment 04/10/2026, B4), so there the key reveals three disabled buttons.
+ *
+ * `/tong-quan`'s export IS built (06/10/2026): files made in the browser from the figures on screen,
+ * enabled only with this key (`features/dashboard/export-actions.tsx`). No server route sees that
+ * export, so nothing server-side checks the key or audits the act yet — convenience, not protection.
  */
 export const REPORT_EXPORT_PERMISSION = "report.export";
 
