@@ -12,14 +12,14 @@ import { usePhien } from "@/features/phien/phien-hien-tai";
 import { layHangMucKeHoachVon } from "@/lib/api/danh-muc-nghiep-vu";
 import { layChiTietDuAn } from "@/lib/api/du-an";
 import type { KetQua } from "@/lib/api/goi";
-import type { finance_duAnRa, finance_hangMucRa } from "@/lib/api/schema.gen";
+import type { finance_duAnRa, finance_hangMucRa, finance_projectAllocationOut } from "@/lib/api/schema.gen";
 import { cn } from "@/lib/cn";
 import { coQuyen, QUYEN_GHI_NGAN_SACH, QUYEN_XAC_NHAN_NGAN_SACH } from "@/lib/quyen";
 
 import { KhoiChungTu } from "./chung-tu-du-an";
 import { ProjectEditPanel, ProjectHeaderActions, ProjectRemoveDialog } from "./ghi-du-an";
 import { nhanNgay, nhanTien, nhanTienDo, nhanTyLeGiaiNgan, tienDoDuAn } from "./nhan-du-an";
-import { ProjectFundingPending, ProjectRecordTabs, ProjectUnitPending } from "./pending-parts";
+import { ProjectRecordTabs, ProjectUnitPending } from "./pending-parts";
 import { Glyph, ProgressBadge } from "./project-ui";
 import { ScopeNotice } from "./scope-notice";
 
@@ -35,8 +35,8 @@ import { ScopeNotice } from "./scope-notice";
  * TAB "CHỨNG TỪ" CÓ SÁU TUYẾN GHI VÀ KHÔNG CÓ TUYẾN ĐỌC — xem `chung-tu-du-an.tsx` và mục đầu của
  * `PHAN_CHUA_DUNG_GHI`.
  *
- * KHỐI "GIẢI NGÂN THEO NGUỒN VỐN" CŨNG KHÔNG: `phan_bo_nguon_von` chưa có tuyến nào, và một khối
- * rỗng gắn nhãn "0 đ / 0 đ" đọc thành "xã chưa gắn nguồn nào". Its placeholder carries no figure.
+ * KHỐI "GIẢI NGÂN THEO NGUỒN VỐN" is live since 8245698b (`funding_allocations` on the detail,
+ * `ProjectFundingBlock` below).
  *
  * KHÔNG CÓ VẠCH "THỜI GIAN ĐÃ TRÔI QUA" (prototype thanh tiến độ + "thời gian đã trôi qua y%"). Con
  * số ấy là một phép tính trên đồng hồ và trên biên của năm ngân sách; máy chủ tính nó để ra
@@ -233,9 +233,11 @@ export function ThongTinDuAn({
           <h2 id="ten-du-an-chi-tiet" className="m-0 mt-0.5 text-base leading-snug font-bold text-ink-900">
             {duAn.name}
           </h2>
-          {/* The prototype's line names the funding sources and the officer — neither is readable
-              here (ids only, no catalogue) — so it carries the budget year this project belongs to. */}
-          <p className="m-0 mt-1 text-xs text-ink-500">Năm ngân sách {duAn.year}</p>
+          {/* The prototype's line names the funding sources and the officer. The sources come with the
+              project; the officer is an internal id only, so the budget year takes its place. */}
+          <p className="m-0 mt-1 text-xs text-ink-500" data-funding-sources="">
+            {sourceNamesLine(duAn)} · Năm ngân sách {duAn.year}
+          </p>
         </div>
         {actions}
       </header>
@@ -279,9 +281,10 @@ export function ThongTinDuAn({
           <p className="m-0 mt-3 text-sm whitespace-pre-line text-ink-700">{duAn.description}</p>
         )}
 
-        <div className="mt-4">
-          <ProjectFundingPending />
-        </div>
+        <ProjectFundingBlock
+          allocations={duAn.funding_allocations}
+          unallocatedPlanAmount={duAn.unallocated_plan_amount}
+        />
 
         {children !== undefined && <div className="mt-5">{children}</div>}
       </div>
@@ -290,6 +293,71 @@ export function ThongTinDuAn({
           (`org_unit_id`, `assignee_id`); in một chuỗi ULID lên màn hình cán bộ không nói với ai điều
           gì — the figure above is a "?" placeholder instead. */}
     </Card>
+  );
+}
+
+/** "Ngân sách tỉnh · Ngân sách xã", or "Chưa gắn nguồn vốn" (prototype `BudgetItemDetail.tsx:257-262`). */
+function sourceNamesLine(duAn: finance_duAnRa): string {
+  const names = duAn.funding_allocations?.map((a) => a.name) ?? duAn.funding_source_names ?? [];
+  return names.length === 0 ? "Chưa gắn nguồn vốn" : names.join(" · ");
+}
+
+/**
+ * `GIẢI NGÂN THEO NGUỒN VỐN` (prototype `BudgetItemDetail.tsx:333-372`, spec §8): per source,
+ * disbursed / allocated · % and a bar. A project spending 60% overall may have used all of the
+ * province's share and none of the commune's — two different stories at settlement.
+ *
+ * EVERY FIGURE IS THE SERVER'S. `disbursed_ratio` is hundredths of a percent, NOT clamped (the words
+ * keep a figure above 100%, the bar stops at full width), and `null` when the allocated amount is 0 —
+ * "—" over an empty track, never "0%". Nothing is drawn for a project with no allocation: the header
+ * line already says "Chưa gắn nguồn vốn", and a block of "0 đ / 0 đ" would read as a measurement.
+ */
+export function ProjectFundingBlock({
+  allocations,
+  unallocatedPlanAmount,
+}: {
+  allocations: readonly finance_projectAllocationOut[] | undefined;
+  unallocatedPlanAmount: number | null | undefined;
+}) {
+  if (allocations === undefined || allocations.length === 0) return null;
+  return (
+    <section
+      aria-labelledby="tieu-de-giai-ngan-theo-nguon"
+      className="mt-4 rounded-xl border border-line p-3"
+      data-project-funding=""
+    >
+      <h3 id="tieu-de-giai-ngan-theo-nguon" className="m-0 mb-2 text-xs font-bold tracking-wide text-ink-500 uppercase">
+        Giải ngân theo nguồn vốn
+      </h3>
+      <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
+        {allocations.map((a) => {
+          const ratio = a.disbursed_ratio;
+          const known = ratio !== null && Number.isFinite(ratio);
+          const width = known ? Math.min(100, Math.max(0, ratio / 100)) : 0;
+          return (
+            <li key={a.funding_source_id} className="min-w-0" data-allocation={a.funding_source_id}>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-[13px]">
+                <span className="min-w-0 font-semibold text-ink-900">{a.name}</span>
+                <span className="text-ink-500 tabular-nums">
+                  {nhanTien(a.disbursed_amount)} / {nhanTien(a.amount)} ·{" "}
+                  <span className="font-semibold text-ink-900">
+                    {known ? nhanTyLeGiaiNgan(ratio) : "—"}
+                  </span>
+                </span>
+              </div>
+              <div aria-hidden="true" className="mt-1 h-2 overflow-hidden rounded-full bg-surface-subtle-2">
+                <div className="h-full rounded-full bg-success-500" style={{ width: `${width}%` }} />
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      {unallocatedPlanAmount !== null && unallocatedPlanAmount !== undefined && unallocatedPlanAmount > 0 && (
+        <p className="m-0 mt-2 text-[13px] text-warning-600">
+          Còn {nhanTien(unallocatedPlanAmount)} của kế hoạch vốn năm chưa gắn nguồn nào.
+        </p>
+      )}
+    </section>
   );
 }
 

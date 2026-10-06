@@ -333,10 +333,11 @@ export function themDuAn(
  * trách về `— Chưa phân công —`, thời hạn giải ngân về mặc định 31/12). Một thân giá trị thường
  * không phân biệt được hai điều ấy, và hộp thoại sửa mỗi cái tên sẽ lặng lẽ bỏ phân công của dự án.
  *
- * `funding_allocations` KHÔNG CÓ Ở ĐÂY, và đó là một khoảng trống ĐÃ ĐƯỢC KHAI: §9 đặt danh sách
- * nguồn vốn ở modal TẠO, §8 chỉ hiện nó để đọc. Sửa được nó đòi trả lời câu hỏi mở (b) của
- * migration 0007 — một dự án có được khai hai dòng cùng một nguồn hay không — và đó là quyết định
- * của khách.
+ * `funding_allocations` HAS THREE MEANINGS (8245698b): ABSENT = leave the allocations as they are,
+ * `[]` = remove every line, a list = FULL REPLACEMENT. So the form sends it only when the clerk
+ * changed the set (`thanSuaDuAn`) — sending the unchanged list back is a write nobody asked for, and
+ * the server would refuse it with `source_has_disbursements` the day a line it repeats was dropped.
+ * One source twice in one project is refused (409 `duplicate_source`).
  */
 export type SuaDuAnVao = Omit<finance_suaDuAnVao, "code" | "year">;
 
@@ -360,6 +361,12 @@ export function suaDuAn(id: string, than: SuaDuAnVao): Promise<KetQua<finance_du
     start_date: than.start_date,
     completion_date: than.completion_date,
     disbursement_deadline: than.disbursement_deadline,
+    // Rebuilt line by line, as on create; `undefined` drops out of the JSON and means "unchanged",
+    // while `[]` survives and means "remove all" — `map` keeps that difference.
+    funding_allocations: than.funding_allocations?.map((d) => ({
+      funding_source_id: d.funding_source_id,
+      amount: d.amount,
+    })),
   };
 
   return docThanLoiGoi<finance_duAnGhiRa>(goiGhi(duongDanMot(MAU_SUA_DU_AN, id), "PATCH", thanGui, 200));

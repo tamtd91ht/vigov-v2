@@ -15,7 +15,6 @@ import {
   DisbursementHeaderActions,
   DisbursementOverviewPending,
   ProjectFilterPending,
-  ProjectFundingPending,
   ProjectRecordTabs,
 } from "./pending-parts";
 
@@ -62,7 +61,6 @@ function screens(): ReactNode {
       <DisbursementHeaderActions />
       <DisbursementOverviewPending />
       <ProjectFilterPending />
-      <ProjectFundingPending />
       <ProjectRecordTabs>
         <p>panel</p>
       </ProjectRecordTabs>
@@ -71,6 +69,7 @@ function screens(): ReactNode {
         tieuDeForm="Thêm dự án"
         giaTriDau={FORM_DU_AN_TRONG}
         danhMuc={[]}
+        fundingCatalogue={{ phase: "ready", items: [] }}
         dangGui={false}
         loi={null}
         huy={() => {}}
@@ -122,6 +121,15 @@ describe("Giải ngân placeholders (ADR 0068 §14)", () => {
     expect(el.textContent).not.toContain("Quản lý nguồn vốn");
     expect(PHAN_CHUA_DUNG_GHI.some((p) => p.ten === "Tiến độ theo nguồn vốn")).toBe(false);
     expect(() => pendingPart("Tiến độ theo nguồn vốn")).toThrow();
+  });
+
+  it("project funding (§7.2 chip, §8 block, §9 list) is LIVE: no registry entry left, voucher source still pending", () => {
+    for (const ten of ["Nguồn vốn của dự án", "Giải ngân theo nguồn vốn", "Thêm nguồn vốn cho dự án"]) {
+      expect(PHAN_CHUA_DUNG_GHI.some((p) => p.ten === ten)).toBe(false);
+      expect(() => pendingPart(ten)).toThrow();
+    }
+    // TASK-07 builds the voucher's source select; until then its "?" stays.
+    expect(pendingPart("Nguồn vốn của chứng từ").ten).toBe("Nguồn vốn của chứng từ");
   });
 
   it("a disabled tab never becomes selected; Chứng từ stays the selected tab", () => {

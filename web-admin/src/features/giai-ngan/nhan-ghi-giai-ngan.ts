@@ -11,6 +11,9 @@
  */
 
 import type { SuaChungTuVao, SuaDuAnVao, ThemChungTuVao, ThemDuAnVao } from "@/lib/api/giai-ngan";
+import type { finance_phanBoVao } from "@/lib/api/schema.gen";
+
+import { nhanTien } from "./nhan-du-an"; // vi-name-ok: existing formatter of nhan-du-an.ts (rule 12, invariant 3)
 
 /* ── Trần độ dài, chép từ máy chủ ──────────────────────────────────────────────────────────── */
 
@@ -369,6 +372,16 @@ export function thanSuaChungTu(
 
 /* ── Dự án §9 · §8 ─────────────────────────────────────────────────────────────────────────── */
 
+/**
+ * One line of the §9 `Nguồn vốn` list: a source and the amount drawn from it, as typed.
+ * `key` only identifies the row on screen (React) and is never sent.
+ */
+export type AllocationRow = {
+  readonly key: number;
+  readonly sourceId: string;
+  readonly amount: string;
+};
+
 /** Giá trị các ô của biểu mẫu dự án §9. CHUỖI hết. */
 export type GiaTriFormDuAn = {
   readonly ma: string;
@@ -380,6 +393,7 @@ export type GiaTriFormDuAn = {
   readonly ngayKhoiCong: string;
   readonly ngayHoanThanh: string;
   readonly thoiHanGiaiNgan: string;
+  readonly allocations: readonly AllocationRow[];
 };
 
 export const FORM_DU_AN_TRONG: GiaTriFormDuAn = {
@@ -392,7 +406,110 @@ export const FORM_DU_AN_TRONG: GiaTriFormDuAn = {
   ngayKhoiCong: "",
   ngayHoanThanh: "",
   thoiHanGiaiNgan: "",
+  allocations: [],
 };
+
+/* ── Phân bổ nguồn vốn §9 ─────────────────────────────────────────────────────────────────── */
+
+export const ALLOCATION_NO_SOURCE =
+  "Có dòng nguồn vốn chưa chọn nguồn. Chọn nguồn cho từng dòng, hoặc bỏ dòng không dùng.";
+export const ALLOCATION_NO_AMOUNT =
+  "Có dòng nguồn vốn chưa có số tiền. Nhập số tiền cho từng dòng, hoặc bỏ dòng không dùng.";
+
+/**
+ * The live comparison under the funding list: what the rows add up to against the year plan typed
+ * above. A figure of what the clerk is TYPING, not a report figure — the server re-checks on save and
+ * answers 409 `allocation_exceeds_plan` (8245698b); under-allocation is a normal project (its chip
+ * shows the shortfall), so only `over` blocks.
+ *
+ * A row whose amount is empty or unreadable counts as 0 here; the submit check names it.
+ * `unsafe`: the total left the range where a browser number holds every đồng — refused, never rounded.
+ */
+export type AllocationSummary =
+  | { readonly state: "none" }
+  | { readonly state: "noPlan"; readonly allocated: number }
+  | { readonly state: "unsafe" }
+  | { readonly state: "short"; readonly allocated: number; readonly planned: number; readonly gap: number }
+  | { readonly state: "match"; readonly allocated: number; readonly planned: number }
+  | { readonly state: "over"; readonly allocated: number; readonly planned: number; readonly gap: number };
+
+export function summarizeAllocations(plannedTyped: string, rows: readonly AllocationRow[]): AllocationSummary {
+  if (rows.length === 0) return { state: "none" };
+  let allocated = 0;
+  for (const row of rows) {
+    const read = docSoTien(row.amount);
+    if (read.loai === "vuotChinhXac") return { state: "unsafe" };
+    if (read.loai === "so") allocated += read.dong;
+  }
+  if (!Number.isSafeInteger(allocated)) return { state: "unsafe" };
+
+  const plan = docSoTien(plannedTyped);
+  if (plan.loai !== "so") return { state: "noPlan", allocated };
+  const planned = plan.dong;
+  if (allocated > planned) return { state: "over", allocated, planned, gap: allocated - planned };
+  if (allocated < planned) return { state: "short", allocated, planned, gap: planned - allocated };
+  return { state: "match", allocated, planned };
+}
+
+/** Whether the summary forbids saving: over the plan, or a total the browser cannot hold exactly. */
+export function allocationBlocksSave(summary: AllocationSummary): boolean {
+  return summary.state === "over" || summary.state === "unsafe";
+}
+
+/** The sentence for a blocking summary — the same words the live line shows. */
+function allocationBlockSentence(summary: AllocationSummary): string | null {
+  if (summary.state === "unsafe") return CAU_SO_TIEN_VUOT_CHINH_XAC;
+  if (summary.state === "over") {
+    return (
+      `Đã phân bổ ${nhanTien(summary.allocated)}, vượt số tiền bố trí ${nhanTien(summary.planned)} là ` +
+      `${nhanTien(summary.gap)}, không lưu được. Hãy giảm số phân bổ hoặc tăng số tiền bố trí.`
+    );
+  }
+  return null;
+}
+
+/**
+ * The rows as the contract's lines, or the sentence naming what is missing. Field by field, never the
+ * row itself (`key` must not reach the server). Amount 0 is a line the server accepts and is kept.
+ */
+export function allocationLines(rows: readonly AllocationRow[]): ThanDung<finance_phanBoVao[]> {
+  const lines: finance_phanBoVao[] = [];
+  for (const row of rows) {
+    if (row.sourceId === "") return { ok: false, cau: ALLOCATION_NO_SOURCE };
+    const read = docSoTien(row.amount);
+    switch (read.loai) {
+      case "trong":
+        return { ok: false, cau: ALLOCATION_NO_AMOUNT };
+      case "khongPhaiSo":
+        return { ok: false, cau: CAU_SO_TIEN_KHONG_DOC_DUOC };
+      case "vuotChinhXac":
+        return { ok: false, cau: CAU_SO_TIEN_VUOT_CHINH_XAC };
+      case "so":
+        lines.push({ funding_source_id: row.sourceId, amount: read.dong });
+        break;
+    }
+  }
+  return { ok: true, than: lines };
+}
+
+/**
+ * Whether two lists say the same thing: the same sources with the same amounts, in any order. Amounts
+ * compare by VALUE (`100.000.000` = `100000000`); an unreadable amount compares as typed, so editing
+ * one is a change. Re-adding a removed source with its old amount is no change — and sends nothing.
+ */
+export function sameAllocations(a: readonly AllocationRow[], b: readonly AllocationRow[]): boolean {
+  if (a.length !== b.length) return false;
+  const canon = (rows: readonly AllocationRow[]) =>
+    rows
+      .map((r) => {
+        const read = docSoTien(r.amount);
+        return `${r.sourceId}\u0000${read.loai === "so" ? String(read.dong) : r.amount}`;
+      })
+      .sort();
+  const left = canon(a);
+  const right = canon(b);
+  return left.every((v, i) => v === right[i]);
+}
 
 export const CAU_THIEU_MA_DU_AN =
   "Chưa có mã dự án. Hệ thống chưa tự sinh mã dự án, nên mã phải nhập tay: chỉ chữ cái, chữ số " +
@@ -423,7 +540,9 @@ function startAfterCompletion(start: string, completion: string): boolean {
  * bố trí năm nay"*, và máy chủ áp đúng quy tắc ấy (`0` nghĩa là "same as this year's plan"). Gửi 0
  * và để máy chủ suy là cùng kết quả, nhưng vắng mặt mới là điều biểu mẫu đang nói.
  *
- * KHÔNG CÓ `org_unit_id`, `assignee_id`, `funding_allocations` — xem `PHAN_CHUA_DUNG_GHI`.
+ * KHÔNG CÓ `org_unit_id`, `assignee_id` — xem `PHAN_CHUA_DUNG_GHI`. `funding_allocations` is sent only
+ * when the list has rows: absent and `[]` both create a project with no source on POST, and absent is
+ * what an untouched list says.
  */
 export function thanThemDuAn(nam: number, gt: GiaTriFormDuAn): ThanDung<ThemDuAnVao> {
   const ma = gt.ma.trim();
@@ -462,6 +581,15 @@ export function thanThemDuAn(nam: number, gt: GiaTriFormDuAn): ThanDung<ThemDuAn
       break;
   }
 
+  let lines: finance_phanBoVao[] | undefined;
+  if (gt.allocations.length > 0) {
+    const read = allocationLines(gt.allocations);
+    if (!read.ok) return read;
+    const blocked = allocationBlockSentence(summarizeAllocations(gt.keHoachVon, gt.allocations));
+    if (blocked !== null) return { ok: false, cau: blocked };
+    lines = read.than;
+  }
+
   const moTa = gt.moTa.trim();
 
   return {
@@ -477,6 +605,7 @@ export function thanThemDuAn(nam: number, gt: GiaTriFormDuAn): ThanDung<ThemDuAn
       start_date: gt.ngayKhoiCong === "" ? undefined : gt.ngayKhoiCong,
       completion_date: gt.ngayHoanThanh === "" ? undefined : gt.ngayHoanThanh,
       disbursement_deadline: gt.thoiHanGiaiNgan === "" ? undefined : gt.thoiHanGiaiNgan,
+      funding_allocations: lines,
     },
   };
 }
@@ -500,6 +629,7 @@ export function thanSuaDuAn(dau: GiaTriFormDuAn, moi: GiaTriFormDuAn): ThanDung<
     start_date?: string;
     completion_date?: string;
     disbursement_deadline?: string;
+    funding_allocations?: finance_phanBoVao[];
   } = {};
 
   if (moi.hangMucID !== dau.hangMucID) {
@@ -553,6 +683,18 @@ export function thanSuaDuAn(dau: GiaTriFormDuAn, moi: GiaTriFormDuAn): ThanDung<
   if (moi.thoiHanGiaiNgan !== dau.thoiHanGiaiNgan) {
     than.disbursement_deadline = moi.thoiHanGiaiNgan;
   }
+
+  // FUNDING: ABSENT = unchanged, `[]` = remove all, a list = full replacement (8245698b). So it is
+  // sent ONLY when the set changed — an unchanged list sent back would be a write nobody asked for.
+  // The plan-vs-allocation check runs on the list AS IT WILL STAND, changed or not: lowering the plan
+  // below what is already allocated is refused by the server too.
+  if (!sameAllocations(dau.allocations, moi.allocations)) {
+    const read = allocationLines(moi.allocations);
+    if (!read.ok) return read;
+    than.funding_allocations = read.than;
+  }
+  const blocked = allocationBlockSentence(summarizeAllocations(moi.keHoachVon, moi.allocations));
+  if (blocked !== null) return { ok: false, cau: blocked };
 
   if (Object.keys(than).length === 0) return { ok: false, cau: CAU_KHONG_CO_GI_DOI };
   return { ok: true, than };
@@ -649,16 +791,8 @@ export const PHAN_CHUA_DUNG_GHI: readonly PhanChuaDung[] = [
       "Chưa chọn được đơn vị thực hiện và cán bộ phụ trách khi thêm dự án. Dự án được tạo với hai " +
       "mục này để trống.",
   },
-  // §9 dynamic `Nguồn vốn` list + editing allocations in §8. `POST` ACCEPTS `funding_allocations`, so
-  // the server is not the gap here — the funding-source select is (entry above). EDITING allocations
-  // is deliberately absent: `PATCH` does not take the field until open question (b) of migration 0007
-  // is answered (may a project declare two lines from the same source) — the customer's call.
-  {
-    ten: "Thêm nguồn vốn cho dự án",
-    viSao:
-      "Chưa khai được nguồn vốn khi thêm dự án, vì hệ thống chưa có danh mục nguồn vốn để chọn. " +
-      "Việc sửa phân bổ nguồn vốn của dự án còn chờ đơn vị quyết định cách ghi.",
-  },
+  // §9 dynamic `Nguồn vốn` list + editing allocations: BUILT (8245698b, `FundingAllocationList` in
+  // `ghi-du-an.tsx`).
   // §10 Excel import modal. No contract route takes an Excel file, and §10's all-or-nothing rule is a
   // SERVER rule (check the whole file; any error, accept no row) — half of it in the browser would
   // promise something nothing guarantees.
@@ -710,12 +844,7 @@ export const PHAN_CHUA_DUNG_GHI: readonly PhanChuaDung[] = [
       "Gộp cần tổng kế hoạch vốn và tổng đã giải ngân của từng hạng mục trong năm. Hệ thống chưa " +
       "tính các tổng ấy.",
   },
-  // §7.2 column: the list response carries no funding source per project, and no route reads the
-  // funding catalogue.
-  {
-    ten: "Nguồn vốn của dự án",
-    viSao: "Danh sách dự án chưa có thông tin nguồn vốn, vì hệ thống chưa có danh mục nguồn vốn.",
-  },
+  // §7.2 funding chip: BUILT (`funding_status` on the list, `FundingChip` in `bang-du-an.tsx`).
   // Prototype list column "Đơn vị / phụ trách" + the detail figure "Đơn vị thực hiện" (ADR 0068 lần
   // 5). The contract returns `org_unit_id` / `assignee_id` as internal ids only; turning them into
   // names is another service's route under another permission, and an id is not a name.
@@ -730,12 +859,7 @@ export const PHAN_CHUA_DUNG_GHI: readonly PhanChuaDung[] = [
     ten: "Vướng mắc mới nhất",
     viSao: "Hệ thống chưa ghi nhận vướng mắc của dự án, nên chưa có nội dung để hiện.",
   },
-  // §8 block: the detail response carries no funding allocation, and no route reads the catalogue.
-  {
-    ten: "Giải ngân theo nguồn vốn",
-    viSao:
-      "Trang chi tiết chưa có phân bổ nguồn vốn của dự án, vì hệ thống chưa có danh mục nguồn vốn.",
-  },
+  // §8 `GIẢI NGÂN THEO NGUỒN VỐN`: BUILT (`funding_allocations` on the detail, `ProjectFundingBlock`).
   // §8.1 tab: no issue-tracking routes.
   {
     ten: "Vướng mắc",

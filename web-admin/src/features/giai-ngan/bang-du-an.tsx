@@ -12,7 +12,12 @@ import { PendingCell, PendingColumnHeader } from "@/components/ui/pending-featur
 import { SkeletonRows } from "@/components/ui/skeleton";
 import { layDanhSachDuAn } from "@/lib/api/du-an";
 import type { KetQua } from "@/lib/api/goi";
-import type { finance_danhSachDuAnRa, finance_duAnRa, finance_hangMucRa } from "@/lib/api/schema.gen";
+import type {
+  finance_danhSachDuAnRa,
+  finance_duAnRa,
+  finance_fundingStatusOut,
+  finance_hangMucRa,
+} from "@/lib/api/schema.gen";
 import { cn } from "@/lib/cn";
 
 import {
@@ -28,13 +33,7 @@ import {
   tienDoDuAn,
 } from "./nhan-du-an";
 import { pendingPart } from "./nhan-ghi-giai-ngan";
-import {
-  DisbursementOverviewPending,
-  FUNDING_COLUMN,
-  LATEST_ISSUE_COLUMN,
-  ProjectFilterPending,
-  UNIT_OWNER,
-} from "./pending-parts";
+import { DisbursementOverviewPending, LATEST_ISSUE_COLUMN, ProjectFilterPending, UNIT_OWNER } from "./pending-parts";
 import { Glyph } from "./project-ui";
 import { ScopeNotice } from "./scope-notice";
 
@@ -45,13 +44,13 @@ import { ScopeNotice } from "./scope-notice";
  *
  * WHAT THE PROTOTYPE DRAWS THAT THIS DOES NOT FILL, and why — read before adding a figure:
  *
- *   KPI cards · cumulative chart · per-category block · the `Đơn vị / phụ trách`,
- *   `Nguồn vốn` and `Vướng mắc mới nhất` columns · `Chỉ dự án chậm` · `Gộp theo hạng mục`
+ *   KPI cards · cumulative chart · per-category block · the `Đơn vị / phụ trách` and
+ *   `Vướng mắc mới nhất` columns · `Chỉ dự án chậm` · `Gộp theo hạng mục`
  *
  * All are disabled "?" placeholders at their prototype position (ADR 0068 §14, `pending-parts.tsx`);
- * none shows a figure. The per-source block is live and passed in (`fundingProgress`). No route
- * returns year totals or issue data, the list carries no funding per project, and `org_unit_id` /
- * `assignee_id` arrive as internal ids. Drawing "0 vướng mắc" would tell leadership a figure nobody
+ * none shows a figure. The per-source block is live and passed in (`fundingProgress`), and so is the
+ * `Nguồn vốn` column (`FundingChip`, from the list's `funding_status`). No route returns year totals
+ * or issue data, and `org_unit_id` / `assignee_id` arrive as internal ids. Drawing "0 vướng mắc" would tell leadership a figure nobody
  * measured.
  *
  * KHÔNG GỘP THEO HẠNG MỤC (prototype bật mặc định): gộp cần tổng theo nhóm, và tổng ấy phải cộng ở
@@ -300,7 +299,9 @@ export function BangDanhSach({
             <th scope="col" className="w-44">
               Tiến độ
             </th>
-            <PendingColumnHeader info={pendingPart(FUNDING_COLUMN)}>Nguồn vốn</PendingColumnHeader>
+            <th scope="col" className="w-44">
+              Nguồn vốn
+            </th>
             <th scope="col">Thời hạn giải ngân</th>
             <PendingColumnHeader info={pendingPart(LATEST_ISSUE_COLUMN)} className="min-w-52">
               Vướng mắc mới nhất
@@ -341,7 +342,9 @@ export function BangDanhSach({
                 <td>
                   <ProgressCell ratio={d.disbursed_ratio} late={late} />
                 </td>
-                <PendingCell />
+                <td className="whitespace-normal">
+                  <FundingChip status={d.funding_status} names={d.funding_source_names} />
+                </td>
                 <td className="tabular-nums">{nhanNgay(d.disbursement_deadline)}</td>
                 <PendingCell />
               </tr>
@@ -350,6 +353,50 @@ export function BangDanhSach({
         </tbody>
       </table>
     </TableScroll>
+  );
+}
+
+/**
+ * Whether a project's funding is declared, and declared in full (prototype `SourceState`,
+ * `BudgetItemTable.tsx:404-436`; spec §7.2). Three states because they lead to three different jobs:
+ * none → open the project and declare; short → declare the rest; full → nothing to do.
+ *
+ * THE STATE AND THE SHORTFALL ARE THE SERVER'S (`funding_status`), never re-derived from the names.
+ * The shortfall is in full đồng, like every amount of this table. An unknown state shows the raw
+ * string: guessing a friendly label would hide a contract drift.
+ */
+export function FundingChip({
+  status,
+  names,
+}: {
+  status: finance_fundingStatusOut | null | undefined;
+  names: readonly string[] | undefined;
+}) {
+  if (status === null || status === undefined) return <span className="text-ink-500">—</span>;
+  let chip: ReactNode;
+  switch (status.status) {
+    case "chua-gan-nguon":
+      chip = <span className="font-semibold text-warning-600">Chưa gắn nguồn</span>;
+      break;
+    case "chua-du":
+      chip = <span className="font-semibold text-warning-600">Thiếu {nhanTien(status.shortfall_amount)}</span>;
+      break;
+    case "du":
+      chip = <span className="font-semibold text-success-600">Đủ · {status.source_count} nguồn</span>;
+      break;
+    default:
+      chip = <span className="font-semibold text-ink-700">{status.status}</span>;
+  }
+  const joined = (names ?? []).join(", ");
+  return (
+    <span className="block text-xs" data-funding-status={status.status}>
+      {chip}
+      {joined !== "" && (
+        <span className="block max-w-44 truncate text-ink-500" title={joined}>
+          {joined}
+        </span>
+      )}
+    </span>
   );
 }
 

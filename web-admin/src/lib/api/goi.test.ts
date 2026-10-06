@@ -30,6 +30,18 @@ describe("stripTechnicalPrefix — real server sentences", () => {
     );
   });
 
+  it("strips a backticked field TAG (followed by ': '), as service-finance's 409s write it", () => {
+    expect(
+      stripTechnicalPrefix("`funding_allocations`: mỗi nguồn vốn chỉ khai một dòng trong một dự án — hãy gộp số tiền vào một dòng."),
+    ).toBe("Mỗi nguồn vốn chỉ khai một dòng trong một dự án — hãy gộp số tiền vào một dòng.");
+    expect(stripTechnicalPrefix("`name`: tên nguồn vốn đã được dùng")).toBe("Tên nguồn vốn đã được dùng");
+    expect(stripTechnicalPrefix("`code`: mã đã cấp thì không cấp lại")).toBe("Mã đã cấp thì không cấp lại");
+    // No colon after it: the field is the sentence's subject, kept.
+    expect(stripTechnicalPrefix("`code` chỉ gồm chữ thường")).toBe("`code` chỉ gồm chữ thường");
+    // A tag with nothing after it is not emptied out.
+    expect(stripTechnicalPrefix("`name`: ")).toBe("`name`: ");
+  });
+
   it("one prefix only; a plain Vietnamese sentence is untouched", () => {
     expect(stripTechnicalPrefix("du_an: ngan_sach: x")).toBe("Ngan_sach: x");
     const plain = "Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.";

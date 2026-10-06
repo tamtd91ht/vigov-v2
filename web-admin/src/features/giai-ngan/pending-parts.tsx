@@ -6,7 +6,6 @@ import {
   Hourglass,
   Layers,
   MessagesSquare,
-  Plus,
   ReceiptText,
   TriangleAlert,
   Upload,
@@ -14,11 +13,9 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { Button } from "@/components/ui/button";
 import {
   PENDING_HOVER_TEXT,
   PendingButton,
-  PendingFeature,
   PendingField,
   PendingMarker,
   PendingSection,
@@ -49,20 +46,18 @@ const CUMULATIVE_CHART = "Luỹ kế giải ngân so với kế hoạch"; // §4
 const CATEGORY_PROGRESS = "Tiến độ theo hạng mục"; // §5
 const ONLY_DELAYED = "Chỉ dự án chậm"; // §7.1
 const GROUP_BY_CATEGORY = "Gộp theo hạng mục"; // §7.1
-/** Names of the list table's two pending columns, read by `bang-du-an.tsx`. */
-export const FUNDING_COLUMN = "Nguồn vốn của dự án"; // §7.2
+/** Name of the list table's pending column, read by `bang-du-an.tsx`. */
 export const LATEST_ISSUE_COLUMN = "Vướng mắc mới nhất"; // §7.2
 /** Prototype list column "Đơn vị / phụ trách" and the detail figure "Đơn vị thực hiện". */
 export const UNIT_OWNER = "Đơn vị và cán bộ phụ trách của dự án";
-const PROJECT_FUNDING = "Giải ngân theo nguồn vốn"; // §8
 const ISSUES_TAB = "Vướng mắc"; // §8.1
 const CHART_TAB = "Biểu đồ"; // §8.3
 const DISCUSSION_TAB = "Trao đổi"; // §8.4
 /** Names used by the Thêm dự án form and the voucher table. */
 export const AUTO_CODE = "Tự sinh mã"; // §9
 export const UNIT_AND_OFFICER = "Đơn vị thực hiện và Cán bộ phụ trách"; // §9
-export const FUNDING_LIST = "Thêm nguồn vốn cho dự án"; // §9, §8
 export const VOUCHER_FUNDING_COLUMN = "Nguồn vốn của chứng từ"; // §8.2, §6
+// §7.2 funding chip, §8 per-source block and the §9 funding list are LIVE since 8245698b.
 
 /**
  * PageHeader buttons, prototype `BudgetWorkspace.tsx:154-168`: `[Hạng mục] [Nhập giải ngân]`, before
@@ -183,21 +178,6 @@ export function PendingCheckbox({
 }
 
 /**
- * Detail page: the `GIẢI NGÂN THEO NGUỒN VỐN` box inside the project card, under the progress bar
- * (prototype `BudgetItemDetail.tsx:333-372`) — bordered, as it sits on the card's own white.
- */
-export function ProjectFundingPending() {
-  return (
-    <PendingSection
-      info={pendingPart(PROJECT_FUNDING)}
-      title="Giải ngân theo nguồn vốn"
-      titleAs="h3"
-      className="rounded-xl border border-line"
-    />
-  );
-}
-
-/**
  * Detail page tabs, spec §8: `[Vướng mắc] [Chứng từ] [Biểu đồ] [Trao đổi]`. Chứng từ is the only
  * live tab, always selected, and its panel is `children`. No arrow-key handling: with one enabled tab
  * there is nowhere to move, and the three pending tabs are `disabled` + `tabIndex={-1}`.
@@ -227,8 +207,8 @@ export function ProjectRecordTabs({ children }: { children: ReactNode }) {
 }
 
 /**
- * The three spec §9 fields of `Thêm dự án` that are not built: `☑ Tự sinh mã`, the `Đơn vị thực
- * hiện` / `Cán bộ phụ trách` selects, and the dynamic `Nguồn vốn` list.
+ * The two spec §9 fields of `Thêm dự án` that are not built: `☑ Tự sinh mã` and the `Đơn vị thực
+ * hiện` / `Cán bộ phụ trách` selects.
  */
 export function AutoCodePending() {
   return <PendingCheckbox id="tu-sinh-ma-du-an" name={AUTO_CODE} label="Tự sinh mã" />;
@@ -242,18 +222,5 @@ export function UnitAndOfficerPending() {
       <PendingField info={info} id="don-vi-du-an" label="Đơn vị thực hiện" kind="select" placeholder="— Chưa xác định —" className="min-w-0" />
       <PendingField info={info} id="can-bo-du-an" label="Cán bộ phụ trách" kind="select" placeholder="— Chưa phân công —" className="min-w-0" />
     </>
-  );
-}
-
-export function FundingListPending() {
-  return (
-    <fieldset className="m-0 flex min-w-0 flex-col gap-1.5 border-0 p-0 sm:col-span-2" data-pending="">
-      <legend className="mb-1.5 p-0 text-xs leading-tight font-semibold text-ink-500">Nguồn vốn</legend>
-      <PendingFeature info={pendingPart(FUNDING_LIST)} className="self-start">
-        <Button type="button" variant="secondary" size="sm" icon={<Plus aria-hidden="true" />} disabled>
-          Thêm nguồn vốn
-        </Button>
-      </PendingFeature>
-    </fieldset>
   );
 }

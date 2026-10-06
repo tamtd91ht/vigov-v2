@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ALLOCATION_NO_AMOUNT,
+  ALLOCATION_NO_SOURCE,
+  allocationBlocksSave,
+  allocationLines,
+  sameAllocations,
+  summarizeAllocations,
+  type AllocationRow,
   CANH_BAO_SUA_VE_NHAP,
   CAU_KHONG_CO_GI_DOI,
   CAU_SO_TIEN_KHONG_DOC_DUOC,
@@ -61,6 +68,7 @@ const DU_AN_MAU: GiaTriFormDuAn = {
   ngayKhoiCong: "2026-03-01",
   ngayHoanThanh: "2026-11-30",
   thoiHanGiaiNgan: "2026-12-31",
+  allocations: [],
 };
 
 describe("docSoTien — tiền vào hệ thống bằng đúng con số người ta gõ", () => {
@@ -389,5 +397,132 @@ describe("thanSuaDuAn — CHỈ những ô thật sự đổi", () => {
     const kq = thanSuaDuAn(DU_AN_MAU, { ...DU_AN_MAU, ngayKhoiCong: "", thoiHanGiaiNgan: "" });
 
     expect(kq).toEqual({ ok: true, than: { start_date: "", disbursement_deadline: "" } });
+  });
+});
+
+/* ── Phân bổ nguồn vốn §9 (8245698b) ─────────────────────────────────────────────────────────── */
+
+function row(key: number, sourceId: string, amount: string): AllocationRow {
+  return { key, sourceId, amount };
+}
+
+describe("summarizeAllocations — the live line under the funding list", () => {
+  it("no rows: nothing to say", () => {
+    expect(summarizeAllocations("100000000", [])).toEqual({ state: "none" });
+  });
+
+  it("thiếu · khớp · vượt against the plan typed above, amounts read like every money box", () => {
+    expect(summarizeAllocations("100.000.000", [row(0, "S1", "60.000.000")])).toEqual({
+      state: "short",
+      allocated: 60000000,
+      planned: 100000000,
+      gap: 40000000,
+    });
+    expect(summarizeAllocations("100000000", [row(0, "S1", "60000000"), row(1, "S2", "40000000")])).toEqual({
+      state: "match",
+      allocated: 100000000,
+      planned: 100000000,
+    });
+    expect(summarizeAllocations("100000000", [row(0, "S1", "60000000"), row(1, "S2", "50000000")])).toEqual({
+      state: "over",
+      allocated: 110000000,
+      planned: 100000000,
+      gap: 10000000,
+    });
+  });
+
+  it("only `over` and `unsafe` block saving — under-allocation is a normal project", () => {
+    expect(allocationBlocksSave(summarizeAllocations("100", [row(0, "S1", "101")]))).toBe(true);
+    expect(allocationBlocksSave(summarizeAllocations("100", [row(0, "S1", "99")]))).toBe(false);
+    expect(allocationBlocksSave(summarizeAllocations("100", [row(0, "S1", "100")]))).toBe(false);
+    expect(allocationBlocksSave(summarizeAllocations("", [row(0, "S1", "100")]))).toBe(false);
+    // Two amounts each exact, whose total a browser number cannot hold exactly: refused, never rounded.
+    const big = String(Number.MAX_SAFE_INTEGER);
+    expect(summarizeAllocations("1", [row(0, "S1", big), row(1, "S2", big)])).toEqual({ state: "unsafe" });
+    expect(allocationBlocksSave({ state: "unsafe" })).toBe(true);
+  });
+
+  it("an empty plan is `noPlan`, not 'over' — the clerk may type the list first", () => {
+    expect(summarizeAllocations("", [row(0, "S1", "5")])).toEqual({ state: "noPlan", allocated: 5 });
+  });
+});
+
+describe("allocationLines — rows to the contract's lines", () => {
+  it("field by field; the row `key` never reaches the server; 0 is a line the server accepts", () => {
+    expect(allocationLines([row(7, "S1", "1.000"), row(9, "S2", "0")])).toEqual({
+      ok: true,
+      than: [
+        { funding_source_id: "S1", amount: 1000 },
+        { funding_source_id: "S2", amount: 0 },
+      ],
+    });
+  });
+
+  it("a row without a source, or without an amount, is named", () => {
+    expect(allocationLines([row(0, "", "5")])).toEqual({ ok: false, cau: ALLOCATION_NO_SOURCE });
+    expect(allocationLines([row(0, "S1", "")])).toEqual({ ok: false, cau: ALLOCATION_NO_AMOUNT });
+    expect(allocationLines([row(0, "S1", "1,5")])).toEqual({ ok: false, cau: CAU_SO_TIEN_KHONG_DOC_DUOC });
+  });
+});
+
+describe("sameAllocations — whether the set changed", () => {
+  it("same sources and amounts in any order, amounts compared by value", () => {
+    expect(sameAllocations([row(0, "S1", "100000000"), row(1, "S2", "5")], [row(4, "S2", "5"), row(5, "S1", "100.000.000")])).toBe(true);
+    expect(sameAllocations([row(0, "S1", "5")], [row(0, "S1", "6")])).toBe(false);
+    expect(sameAllocations([row(0, "S1", "5")], [row(0, "S2", "5")])).toBe(false);
+    expect(sameAllocations([row(0, "S1", "5")], [])).toBe(false);
+  });
+});
+
+describe("thanThemDuAn / thanSuaDuAn — funding_allocations", () => {
+  const WITH_TWO: GiaTriFormDuAn = {
+    ...DU_AN_MAU,
+    allocations: [row(0, "S1", "5000000000"), row(1, "S2", "2500000000")],
+  };
+
+  it("thêm: lines sent when the list has rows, absent when it has none", () => {
+    const sent = thanThemDuAn(2026, WITH_TWO);
+    expect(sent.ok && sent.than.funding_allocations).toEqual([
+      { funding_source_id: "S1", amount: 5000000000 },
+      { funding_source_id: "S2", amount: 2500000000 },
+    ]);
+    const none = thanThemDuAn(2026, DU_AN_MAU);
+    expect(none.ok).toBe(true);
+    if (!none.ok) return;
+    expect(none.than.funding_allocations).toBeUndefined();
+  });
+
+  it("thêm: over the plan is refused before sending, naming the overrun", () => {
+    const kq = thanThemDuAn(2026, { ...WITH_TWO, keHoachVon: "7000000000" });
+    expect(kq.ok).toBe(false);
+    if (kq.ok) return;
+    expect(kq.cau).toContain("vượt");
+    expect(kq.cau).toContain("không lưu được");
+    expect(kq.cau).toContain("500.000.000 đ");
+  });
+
+  it("sửa: an UNCHANGED set is OMITTED (absent = leave as is), even when re-entered in another order", () => {
+    const reordered: GiaTriFormDuAn = {
+      ...WITH_TWO,
+      ten: "Tên mới",
+      allocations: [row(5, "S2", "2.500.000.000"), row(6, "S1", "5000000000")],
+    };
+    expect(thanSuaDuAn(WITH_TWO, reordered)).toEqual({ ok: true, than: { name: "Tên mới" } });
+  });
+
+  it("sửa: a changed set is sent as the FULL list; removing every row sends []", () => {
+    expect(thanSuaDuAn(WITH_TWO, { ...WITH_TWO, allocations: [row(0, "S1", "5000000000")] })).toEqual({
+      ok: true,
+      than: { funding_allocations: [{ funding_source_id: "S1", amount: 5000000000 }] },
+    });
+    expect(thanSuaDuAn(WITH_TWO, { ...WITH_TWO, allocations: [] })).toEqual({
+      ok: true,
+      than: { funding_allocations: [] },
+    });
+  });
+
+  it("sửa: lowering the plan below what stays allocated is refused here too", () => {
+    const kq = thanSuaDuAn(WITH_TWO, { ...WITH_TWO, keHoachVon: "1000" });
+    expect(kq.ok).toBe(false);
   });
 });

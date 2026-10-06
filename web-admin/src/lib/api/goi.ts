@@ -50,9 +50,17 @@ const ENTITY_PREFIXES = ["văn bản đến: ", "văn bản đi: ", "văn bản:
 const SNAKE_PREFIX = /^[a-z_]+: /;
 
 /**
+ * A backticked contract field the Go side puts before its sentence, FOLLOWED BY A COLON:
+ * "`funding_allocations`: mỗi nguồn vốn chỉ khai một dòng…" (`service-finance` 409s, 8245698b). The
+ * colon is what makes it a tag: "`code` chỉ gồm…" has none, and there the field is the subject.
+ */
+const FIELD_PREFIX = /^`[A-Za-z_][A-Za-z0-9_.]*`: /;
+
+/**
  * The server's sentence as an officer should read it: ONE leading technical prefix removed — a
- * snake_case tag (`bo_phan: thiếu tên bộ phận`) or a known entity prefix (`văn bản đến: …`) — and the
- * first letter then capitalised (§4.3 of the 05/10 tester report).
+ * snake_case tag (`bo_phan: thiếu tên bộ phận`), a known entity prefix (`văn bản đến: …`) or a
+ * backticked field tag (`` `name`: … ``) — and the first letter then capitalised (§4.3 of the 05/10
+ * tester report).
  *
  * ONE PREFIX ONLY, AND NOTHING INSIDE THE SENTENCE: "danh_muc: `code` chỉ gồm…" becomes
  * "`code` chỉ gồm…" — the backticked field name is the sentence's subject, not a tag. Display only:
@@ -63,6 +71,7 @@ export function stripTechnicalPrefix(message: string): string {
   const entity = ENTITY_PREFIXES.find((p) => message.startsWith(p));
   if (entity !== undefined) rest = message.slice(entity.length);
   else if (SNAKE_PREFIX.test(message)) rest = message.replace(SNAKE_PREFIX, "");
+  else if (FIELD_PREFIX.test(message)) rest = message.replace(FIELD_PREFIX, "");
   if (rest === message || rest === "") return message;
   return rest.charAt(0).toLocaleUpperCase("vi") + rest.slice(1);
 }

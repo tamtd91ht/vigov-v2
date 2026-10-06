@@ -5,7 +5,7 @@ import { pendingMarkerLabel } from "@/components/ui/pending-feature";
 import type { finance_chungTuRa, finance_duAnRa, finance_hangMucRa } from "@/lib/api/schema.gen";
 
 import { BangChungTu, FormChungTu, giaTriTuChungTu, KhoiChungTu } from "./chung-tu-du-an";
-import { FormDuAn, giaTriTuDuAn, KhoiThemDuAn, ProjectHeaderActions } from "./ghi-du-an";
+import { FormDuAn, giaTriTuDuAn, KhoiThemDuAn, ProjectHeaderActions, type FundingCatalogue } from "./ghi-du-an";
 import {
   CANH_BAO_SUA_VE_NHAP,
   CAU_THIEU_QUYEN_GHI,
@@ -22,9 +22,11 @@ import {
   DisbursementHeaderActions,
   DisbursementOverviewPending,
   ProjectFilterPending,
-  ProjectFundingPending,
   ProjectRecordTabs,
 } from "./pending-parts";
+
+/** The funding catalogue of a commune that declared no source yet. */
+const NO_SOURCES: FundingCatalogue = { phase: "ready", items: [] };
 
 /**
  * Canh những QUYẾT ĐỊNH CÓ RA TỚI TRANG hay không — bổ cho `nhan-ghi-giai-ngan.test.ts`, vốn chỉ
@@ -371,6 +373,7 @@ describe("BIỂU MẪU DỰ ÁN", () => {
         tieuDeForm="Thêm dự án"
         giaTriDau={FORM_DU_AN_TRONG}
         danhMuc={[]}
+        fundingCatalogue={NO_SOURCES}
         dangGui={false}
         loi={null}
         huy={() => {}}
@@ -396,6 +399,7 @@ describe("BIỂU MẪU DỰ ÁN", () => {
         giaTriDau={giaTriTuDuAn(DU_AN)}
         maChiDoc={DU_AN.code}
         danhMuc={HANG_MUC}
+        fundingCatalogue={NO_SOURCES}
         dangGui={false}
         loi={null}
         huy={() => {}}
@@ -415,6 +419,7 @@ describe("BIỂU MẪU DỰ ÁN", () => {
         tieuDeForm="Thêm dự án"
         giaTriDau={FORM_DU_AN_TRONG}
         danhMuc={HANG_MUC}
+        fundingCatalogue={NO_SOURCES}
         dangGui={false}
         loi={null}
         huy={() => {}}
@@ -445,7 +450,6 @@ function allPlaceholders(): string {
         danhMuc={HANG_MUC}
       />,
     ),
-    renderToStaticMarkup(<ProjectFundingPending />),
     renderToStaticMarkup(<ProjectRecordTabs>panel</ProjectRecordTabs>),
     renderToStaticMarkup(
       <FormDuAn
@@ -453,6 +457,7 @@ function allPlaceholders(): string {
         tieuDeForm="Thêm dự án"
         giaTriDau={FORM_DU_AN_TRONG}
         danhMuc={HANG_MUC}
+        fundingCatalogue={NO_SOURCES}
         dangGui={false}
         loi={null}
         huy={() => {}}
@@ -509,7 +514,8 @@ describe("PHẦN CHƯA DỰNG — dấu '?' đúng vị trí đặc tả (ADR 00
 
   it("biểu mẫu SỬA dự án: không 'Tự sinh mã' (mã đã cấp), nhưng có nguồn vốn và đơn vị như prototype", () => {
     // ADR 0068 lần 5: the prototype's edit form is the add form minus the code (`BudgetItemForm.tsx
-    // :318`), so the funding list and the unit / officer selects are there too, as "?" placeholders.
+    // :318`), so the funding list and the unit / officer selects are there too. The funding list is
+    // LIVE since 8245698b (no "?"); the unit / officer selects remain "?" placeholders.
     const html = renderToStaticMarkup(
       <FormDuAn
         budgetYear={2026}
@@ -517,6 +523,7 @@ describe("PHẦN CHƯA DỰNG — dấu '?' đúng vị trí đặc tả (ADR 00
         giaTriDau={giaTriTuDuAn(DU_AN)}
         maChiDoc={DU_AN.code}
         danhMuc={HANG_MUC}
+        fundingCatalogue={NO_SOURCES}
         dangGui={false}
         loi={null}
         huy={() => {}}
@@ -526,7 +533,8 @@ describe("PHẦN CHƯA DỰNG — dấu '?' đúng vị trí đặc tả (ADR 00
     const marker = (ten: string) => `aria-label="${nhuTrongHTML(pendingMarkerLabel(ten))}"`;
     expect(html).not.toContain(marker("Tự sinh mã"));
     expect(html).not.toContain('id="tu-sinh-ma-du-an"');
-    expect(html).toContain(marker("Thêm nguồn vốn cho dự án"));
+    expect(html).not.toContain(marker("Thêm nguồn vốn cho dự án"));
+    expect(html).toContain("data-funding-allocations");
     expect(html).toContain(marker("Đơn vị thực hiện và Cán bộ phụ trách"));
   });
 
