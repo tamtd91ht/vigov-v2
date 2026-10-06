@@ -348,7 +348,7 @@ describe("ghi App ID vào tệp ánh xạ", () => {
     const mod = await nap(updateRegistryText(that, xa("xa-z.vigov.example"), "9999999999999999999"));
     expect(mod.APP_ID_THEO_TEN_MIEN).toEqual({ ...APP_ID_THEO_TEN_MIEN, "xa-z.vigov.example": "9999999999999999999" });
     expect(mod.COMMUNE_TERMS_BY_DOMAIN).toEqual(COMMUNE_TERMS_BY_DOMAIN);
-    expect(mod.APP_ID_APP_CHUNG).toBeNull();
+    expect(mod.APP_ID_APP_CHUNG).toBe(APP_ID_APP_CHUNG);
   });
 
   it("tên miền đã có (kể cả placeholder): đổi đúng dòng ấy, giữ dấu phẩy", () => {
@@ -665,18 +665,19 @@ describe("`deploy.mjs --thu` end to end: the plan, before anything happens", () 
   });
 
   it("--app=vihat --app-id: plan of the shared app, NO domain baked, the App ID in the label", () => {
-    const r = dryRun(["--app=vihat", "--app-id=123", "--thu"], {
-      ZMP_TOKEN: tokenCua("123"),
+    // `--app-id` must equal the registry's ViHAT App ID now that it is filled in.
+    const r = dryRun(["--app=vihat", `--app-id=${APP_ID_APP_CHUNG}`, "--thu"], {
+      ZMP_TOKEN: tokenCua(APP_ID_APP_CHUNG),
       VIGOV_XA_CO_DINH: "thangbinh-danang.vigov.vn",
     });
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toMatch(/Đích {5}: App ViHAT/);
     expect(r.stdout).toMatch(/Nung xã {2}: KHÔNG/);
-    expect(r.stdout).toMatch(/Nhãn {5}: app-vihat · app 123 · /);
+    expect(r.stdout).toMatch(new RegExp(`Nhãn {5}: app-vihat · app ${APP_ID_APP_CHUNG} · `));
     expect(r.stdout).toMatch(/VIGOV_API_HOST=.+ vite build/);
     expect(r.stdout).not.toMatch(/VIGOV_XA_CO_DINH=/);
     expect(r.stdout).not.toMatch(/Lần chạy thật sẽ DỪNG/);
-    expect(r.stdout).not.toContain(tokenCua("123"));
+    expect(r.stdout).not.toContain(tokenCua(APP_ID_APP_CHUNG));
   });
 
   it("no target, no terminal: refuses and lists the options — never a default", () => {
@@ -688,10 +689,12 @@ describe("`deploy.mjs --thu` end to end: the plan, before anything happens", () 
     expect(r.stdout).not.toMatch(/ĐỌC TRƯỚC KHI/);
   });
 
-  it("shared app with no App ID anywhere, no terminal: refuses and asks for --app-id", () => {
-    const r = dryRun(["--app=vihat", "--thu"]);
+  // The ViHAT App ID is in the registry since 06/10/2026, so the "no App ID" path is exercised with a
+  // commune domain the registry does not have.
+  it("target with no App ID anywhere, no terminal: refuses and asks for --app-id", () => {
+    const r = dryRun(["--domain=xa-z.vigov.example", "--thu"]);
     expect(r.status).toBe(2);
-    expect(r.stderr).toMatch(/App ID của App ViHAT chưa có.*--app-id=<chữ số>/s);
+    expect(r.stderr).toMatch(/chưa có.*--app-id=<chữ số>/s);
   });
 
   it("--vao-thang refuses with the removal sentence", () => {
