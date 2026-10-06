@@ -273,13 +273,17 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     // "Vị trí nơi xảy ra sự việc" THÊM 29/09/2026: the location exchange (`vihat-miniapp`
     // `POST /api/v1/location`) needs this token beside the `getLocation` one — same call, one more
     // place the code goes, so the sentence tells it.
-    man: "Liên hệ · Xác nhận xã · Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi",
-    tinh_nang: "Đăng nhập bằng số Zalo · Mở phiên làm việc với xã · Vị trí nơi xảy ra sự việc",
+    // "Trang chủ" and the two one-tap features JOINED 07/10/2026: "Chat với chuyên viên" (Liên hệ) and "Nhận ưu
+    // đãi qua SMS" (Trang chủ) log the citizen in with this same call when no session is held
+    // (`features/dang-nhap/ensure-session.ts`). Same call, two more buttons it runs behind — so the row says so.
+    man: "Liên hệ · Trang chủ · Xác nhận xã · Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi",
+    tinh_nang:
+      "Đăng nhập bằng số Zalo · Chat với chuyên viên · Nhận ưu đãi qua SMS · Mở phiên làm việc với xã · Vị trí nơi xảy ra sự việc",
     de_lam_gi:
-      "Lấy mã phiên Zalo của bạn. Mã này không chứa tên hay số điện thoại; chỉ máy chủ đổi được nó thành định danh người dùng. Phiên mở ra từ mã này là thứ cho bạn gửi yêu cầu tư vấn và xem lại những yêu cầu của chính mình, và — sau khi bạn quét mã QR của xã và bấm xác nhận — là thứ mở phiên làm việc với đúng xã ấy. Khi xã cần xác nhận số điện thoại của bạn, ứng dụng lấy lại mã này để mở lại phiên ấy kèm số điện thoại bạn đồng ý chia sẻ. Khi bạn bấm “Lấy vị trí hiện tại” lúc gửi phản ánh, mã này đi cùng mã vị trí để máy chủ đổi mã vị trí thành toạ độ.",
+      "Lấy mã phiên Zalo của bạn. Mã này không chứa tên hay số điện thoại; chỉ máy chủ đổi được nó thành định danh người dùng. Phiên mở ra từ mã này là thứ cho bạn gửi yêu cầu tư vấn và xem lại những yêu cầu của chính mình, và — sau khi bạn quét mã QR của xã và bấm xác nhận — là thứ mở phiên làm việc với đúng xã ấy. Khi bạn bấm “Chat với chuyên viên” ở màn Liên hệ hoặc “Đăng ký nhận” ưu đãi SMS ở Trang chủ mà chưa đăng nhập, ứng dụng đăng nhập cho bạn bằng chính mã này, trong cùng một lần bấm. Khi xã cần xác nhận số điện thoại của bạn, ứng dụng lấy lại mã này để mở lại phiên ấy kèm số điện thoại bạn đồng ý chia sẻ. Khi bạn bấm “Lấy vị trí hiện tại” lúc gửi phản ánh, mã này đi cùng mã vị trí để máy chủ đổi mã vị trí thành toạ độ.",
     hoi_nguoi_dung: false,
     roi_khoi_may:
-      "Mã phiên được gửi tới máy chủ để phát hành phiên đăng nhập, để mở phiên làm việc với xã, hoặc — khi bạn bấm lấy vị trí — để đổi mã vị trí thành toạ độ.",
+      "Mã phiên được gửi tới máy chủ để phát hành phiên đăng nhập (kể cả khi bạn bấm “Chat với chuyên viên” hoặc “Đăng ký nhận” ưu đãi SMS), để mở phiên làm việc với xã, hoặc — khi bạn bấm lấy vị trí — để đổi mã vị trí thành toạ độ.",
     // ADR 0066: the commune app's login goes straight to ViGov identity; only the location exchange still
     // goes to `vihat-miniapp` (decision 5 moves it later — change this sentence in that card).
     commune_app: {
@@ -298,13 +302,17 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     // `reopenCitizenSessionWithPhone`). Cùng lời gọi, thêm một nơi mã đi tới — nên câu phải kể thêm.
     api: "getPhoneNumber",
     nua: "ca-hai",
-    man: "Liên hệ · Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi",
-    tinh_nang: "Đăng nhập bằng số Zalo · Xác nhận số điện thoại với xã",
+    // "Trang chủ" · "Chat với chuyên viên" · "Nhận ưu đãi qua SMS" JOINED 07/10/2026 — the one-tap login those
+    // two buttons run when no session is held. The number gains two purposes the citizen has NOT agreed to by
+    // agreeing to log in: being shown to a specialist, and receiving promotional SMS. Both are said here.
+    man: "Liên hệ · Trang chủ · Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi",
+    tinh_nang:
+      "Đăng nhập bằng số Zalo · Chat với chuyên viên · Nhận ưu đãi qua SMS · Xác nhận số điện thoại với xã",
     de_lam_gi:
-      "Lấy mã số điện thoại sau khi bạn đồng ý chia sẻ. Số điện thoại KHÔNG nằm trong mã; chỉ máy chủ đổi được mã thành số. Số ấy làm tên đăng nhập của bạn, là nơi nhận thông báo ZNS, và là số chúng tôi gọi lại nếu bạn tự đề nghị gọi lại ở màn Tư vấn và báo giá. Khi xã cần xác nhận số điện thoại của bạn để gửi hoặc xem phản ánh, ứng dụng nói rõ vì sao và hỏi bạn trước; chỉ khi bạn bấm đồng ý, mã mới được gửi qua máy chủ của chúng tôi tới hệ thống của xã.",
+      "Lấy mã số điện thoại sau khi bạn đồng ý chia sẻ. Số điện thoại KHÔNG nằm trong mã; chỉ máy chủ đổi được mã thành số. Số ấy làm tên đăng nhập của bạn, là nơi nhận thông báo ZNS, và là số chúng tôi gọi lại nếu bạn tự đề nghị gọi lại ở màn Tư vấn và báo giá. Khi bạn bấm “Chat với chuyên viên” ở màn Liên hệ, số ấy giúp chuyên viên biết ai đang nhắn và gọi lại cho bạn nếu cuộc trò chuyện bị gián đoạn. Khi bạn bấm “Đăng ký nhận” ưu đãi SMS ở Trang chủ, số ấy là nơi nhận tin nhắn SMS giới thiệu ưu đãi của chúng tôi, cho tới khi bạn bấm “Huỷ nhận ưu đãi SMS”. Khi xã cần xác nhận số điện thoại của bạn để gửi hoặc xem phản ánh, ứng dụng nói rõ vì sao và hỏi bạn trước; chỉ khi bạn bấm đồng ý, mã mới được gửi qua máy chủ của chúng tôi tới hệ thống của xã.",
     hoi_nguoi_dung: true,
     roi_khoi_may:
-      "Mã số điện thoại được gửi tới máy chủ để phát hành phiên đăng nhập, hoặc để mở lại phiên làm việc với xã kèm số điện thoại đã xác nhận.",
+      "Mã số điện thoại được gửi tới máy chủ để phát hành phiên đăng nhập (kể cả khi bạn bấm “Chat với chuyên viên” hoặc “Đăng ký nhận” ưu đãi SMS), hoặc để mở lại phiên làm việc với xã kèm số điện thoại đã xác nhận.",
     commune_app: {
       man: "Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi · Đánh giá kết quả xử lý",
       tinh_nang: "Xác nhận số điện thoại với xã",
@@ -322,14 +330,28 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     // điện thoại của biểu mẫu vẫn do người dân tự gõ.
     // 29/09/2026 (user decision): asked ONCE, when the commune app opens — no longer from a button on
     // "Gửi phản ánh" / "Cá nhân". Those two screens now only SHOW the name taken at entry.
+    //
+    // `nua` BECAME "ca-hai" ON 07/10/2026 (owner decision): "Chat với chuyên viên" on the commercial half's
+    // Liên hệ asks for the name and SENDS it, with a `chat` request, to ViHAT's server — the first time this
+    // call's result leaves the phone outside a petition. The shared sentences below now tell both uses (the
+    // shared App ID also prefills the name on a commune page opened by QR, `App.tsx` `QrCommuneApp`); the
+    // commune app's own wording moved, unchanged, into `commune_app` (`ket-xuat-ho-so.test.ts` §7).
     api: "getUserInfo",
-    nua: "nha-nuoc",
-    man: "Mở ứng dụng của xã (tên hiện ở Trang chủ, Cá nhân và ô họ tên của Gửi phản ánh)",
-    tinh_nang: "Điền sẵn họ tên khi gửi phản ánh",
+    nua: "ca-hai",
+    man: "Liên hệ · Trang của một xã mở bằng mã QR (tên hiện ở Trang chủ, Cá nhân và ô họ tên của Gửi phản ánh)",
+    tinh_nang: "Chat với chuyên viên · Điền sẵn họ tên khi gửi phản ánh",
     de_lam_gi:
-      "Lấy tên hiển thị Zalo của bạn một lần, khi bạn mở ứng dụng của xã và đồng ý, để điền sẵn ô họ tên khi gửi phản ánh tới xã. Tên chỉ nằm trên điện thoại này; ứng dụng không gửi nó đi đâu cho tới khi bạn tự bấm gửi phản ánh.",
+      "Lấy tên hiển thị Zalo của bạn sau khi bạn đồng ý. Ở màn Liên hệ, khi bạn bấm “Chat với chuyên viên”, tên được gửi kèm yêu cầu trò chuyện tới máy chủ của Tập đoàn ViHAT Group để chuyên viên biết ai đang nhắn; bạn từ chối thì cửa sổ trò chuyện vẫn mở, chỉ là không có tên. Trên trang của một xã, tên được lấy một lần khi trang mở ra, để điền sẵn ô họ tên khi gửi phản ánh; tên ấy chỉ nằm trên điện thoại này cho tới khi bạn tự bấm gửi phản ánh.",
     hoi_nguoi_dung: true,
-    roi_khoi_may: "",
+    roi_khoi_may:
+      "Ở màn Liên hệ: tên hiển thị Zalo được gửi tới máy chủ của Tập đoàn ViHAT Group cùng yêu cầu trò chuyện, khi bạn bấm “Chat với chuyên viên”. Trên trang của một xã: tên không rời khỏi máy cho tới khi bạn tự bấm gửi phản ánh.",
+    commune_app: {
+      man: "Mở ứng dụng của xã (tên hiện ở Trang chủ, Cá nhân và ô họ tên của Gửi phản ánh)",
+      tinh_nang: "Điền sẵn họ tên khi gửi phản ánh",
+      de_lam_gi:
+        "Lấy tên hiển thị Zalo của bạn một lần, khi bạn mở ứng dụng của xã và đồng ý, để điền sẵn ô họ tên khi gửi phản ánh tới xã. Tên chỉ nằm trên điện thoại này; ứng dụng không gửi nó đi đâu cho tới khi bạn tự bấm gửi phản ánh.",
+      roi_khoi_may: "",
+    },
   },
   {
     api: "getLocation",
@@ -540,7 +562,8 @@ export function readRuntimeAppId(): string | null {
  * `ask` false = CHECK ONLY: `autoRequestPermission: false` never opens Zalo's dialog — it returns the name
  * when the citizen already allowed it, and fails otherwise. That is what lets the commune app read the
  * name at entry without prompting a returning citizen on every open. `ask` true opens Zalo's own dialog,
- * and is only called after the entry card has said why the name is wanted (policy 3.3.4, `khung.tsx`).
+ * and is only called after the entry card has said why the name is wanted (policy 3.3.4, `khung.tsx`) — or,
+ * since 07/10/2026, after the "Chat với chuyên viên" block has said it (`features/yeu-cau/ChatWithSpecialist.tsx`).
  */
 export function layTenZalo(ask: boolean): Promise<KetQuaXin<string>> {
   return xin("name", async (sdk) => (await sdk.getUserInfo({ autoRequestPermission: ask })).userInfo.name ?? "");

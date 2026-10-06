@@ -543,9 +543,12 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
     // Chiều "mã đi trước": thêm một trường vào `thanYeuCau` mà quên khai là ĐỎ ở đây.
     for (const [ten, than, bang] of [
       ["phiên đăng nhập", thanYeuCauPhien({ ma_so_dien_thoai: "x", ma_truy_cap: "y" }), TRUONG_GUI_DI_PHIEN],
+      // 07/10/2026: measured on a CHAT body carrying a name — the widest shape of this route (`displayName`
+      // rides on `chat` only; every other kind sends a subset). Measured on a consult body, `displayName` would
+      // read as "declared but never sent". `chinh-sach.test.ts` checks the union of shapes both ways.
       [
         "yêu cầu tư vấn",
-        thanYeuCau({ loai: "consult", quan_tam: [], quy_mo: "", ghi_chu: "", nguon: "" }),
+        thanYeuCau({ loai: "chat", quan_tam: [], quy_mo: "", ghi_chu: "", nguon: "", display_name: "Nguyễn Văn Thử" }),
         TRUONG_GUI_DI,
       ],
       [

@@ -8418,6 +8418,10 @@
       "kind": "func",
       "at": "service-comms/internal/http/staff_notification.go:158"
     },
+    "http.MiniAppIDDeps": {
+      "kind": "type",
+      "at": "service-platform/internal/http/mini_app_ids.go:46"
+    },
     "http.MoKhoaCanBo": {
       "kind": "func",
       "at": "service-identity/internal/http/can_bo_ghi.go:257"
@@ -8537,6 +8541,10 @@
     "http.OwnAppSignInner": {
       "kind": "type",
       "at": "service-identity/internal/http/citizen_sessions.go:37"
+    },
+    "http.OwnMiniAppResolver": {
+      "kind": "type",
+      "at": "service-platform/internal/http/mini_app_ids.go:41"
     },
     "http.PetitionFieldCatalogue": {
       "kind": "type",
@@ -8770,6 +8778,10 @@
       "kind": "func",
       "at": "service-comms/internal/http/map_frame.go:165"
     },
+    "http.RegisterMiniAppIDs": {
+      "kind": "func",
+      "at": "service-platform/internal/http/mini_app_ids.go:70"
+    },
     "http.RegisterPublicExternalContacts": {
       "kind": "func",
       "at": "service-comms/internal/http/external_contacts.go:257"
@@ -8897,6 +8909,10 @@
     "http.SharedMiniAppEditor": {
       "kind": "type",
       "at": "service-platform/internal/http/operator_launch.go:21"
+    },
+    "http.SharedMiniAppReader": {
+      "kind": "type",
+      "at": "service-platform/internal/http/mini_app_ids.go:36"
     },
     "http.StaffCounts": {
       "kind": "func",
@@ -9768,7 +9784,7 @@
     },
     "main.ListUploadPolicies": {
       "kind": "func",
-      "at": "service-platform/cmd/server/main.go:485"
+      "at": "service-platform/cmd/server/main.go:499"
     },
     "main.MarshalJSON": {
       "kind": "func",
@@ -10800,15 +10816,15 @@
     },
     "ratelimit.ActorKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:263"
+      "at": "core/ratelimit/ratelimit.go:280"
     },
     "ratelimit.Allow": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:389"
+      "at": "core/ratelimit/ratelimit.go:414"
     },
     "ratelimit.CitizenKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:237"
+      "at": "core/ratelimit/ratelimit.go:254"
     },
     "ratelimit.Close": {
       "kind": "func",
@@ -10816,11 +10832,11 @@
     },
     "ratelimit.Counter": {
       "kind": "type",
-      "at": "core/ratelimit/ratelimit.go:340"
+      "at": "core/ratelimit/ratelimit.go:365"
     },
     "ratelimit.FailsOpen": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:128"
+      "at": "core/ratelimit/ratelimit.go:139"
     },
     "ratelimit.Gate": {
       "kind": "func",
@@ -10836,11 +10852,11 @@
     },
     "ratelimit.Key": {
       "kind": "type",
-      "at": "core/ratelimit/ratelimit.go:182"
+      "at": "core/ratelimit/ratelimit.go:199"
     },
     "ratelimit.Limiter": {
       "kind": "type",
-      "at": "core/ratelimit/ratelimit.go:347"
+      "at": "core/ratelimit/ratelimit.go:372"
     },
     "ratelimit.Middleware": {
       "kind": "func",
@@ -10848,7 +10864,7 @@
     },
     "ratelimit.New": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:362"
+      "at": "core/ratelimit/ratelimit.go:387"
     },
     "ratelimit.NewRedisCounter": {
       "kind": "func",
@@ -10860,19 +10876,23 @@
     },
     "ratelimit.OperatorIPKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:293"
+      "at": "core/ratelimit/ratelimit.go:310"
     },
     "ratelimit.Outcome": {
       "kind": "type",
       "at": "core/ratelimit/middleware.go:65"
     },
+    "ratelimit.PlatformIPKey": {
+      "kind": "func",
+      "at": "core/ratelimit/ratelimit.go:326"
+    },
     "ratelimit.Policy": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:376"
+      "at": "core/ratelimit/ratelimit.go:401"
     },
     "ratelimit.PublicHostIPKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:213"
+      "at": "core/ratelimit/ratelimit.go:230"
     },
     "ratelimit.RedisCounter": {
       "kind": "type",
@@ -10880,11 +10900,11 @@
     },
     "ratelimit.WebhookIPKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:301"
+      "at": "core/ratelimit/ratelimit.go:318"
     },
     "ratelimit.ZaloChatKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:311"
+      "at": "core/ratelimit/ratelimit.go:336"
     },
     "richtext.Block": {
       "kind": "type",
@@ -12165,6 +12185,10 @@
     "store.LiveLinks": {
       "kind": "func",
       "at": "service-comms/internal/store/zalo_link.go:281"
+    },
+    "store.LiveOwnMiniAppID": {
+      "kind": "func",
+      "at": "service-platform/internal/store/mini_app_ids.go:26"
     },
     "store.LiveProjectCode": {
       "kind": "func",

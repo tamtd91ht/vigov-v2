@@ -695,9 +695,11 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
   {
     tuyen: DUONG_DAN_YEU_CAU,
     may_chu: "`vihat-miniapp` — máy chủ của Tập đoàn ViHAT Group",
-    khi_nao: "người dùng tự bấm “Gửi yêu cầu tư vấn” hoặc “Đề nghị gọi lại cho tôi”",
+    // 07/10/2026: the same route, with its own kinds, behind two one-tap buttons on two more screens.
+    khi_nao:
+      "người dùng tự bấm “Gửi yêu cầu tư vấn” hoặc “Đề nghị gọi lại cho tôi”; “Chat với chuyên viên” (kèm tên Zalo nếu người dùng đồng ý); hoặc “Đăng ký nhận” / “Huỷ nhận ưu đãi SMS”",
     nguoi_dung_bam: true,
-    man: "Tư vấn và báo giá",
+    man: "Tư vấn và báo giá · Liên hệ — khối “Chat với chuyên viên” · Trang chủ — khối “Nhận ưu đãi qua SMS”",
     truong: TRUONG_GUI_DI,
     app: "shared",
   },

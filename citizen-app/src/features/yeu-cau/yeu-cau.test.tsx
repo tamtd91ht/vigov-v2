@@ -77,8 +77,14 @@ describe("thân yêu cầu không mang một trường nào nói 'tôi là ai'",
    *   một danh sách tên xấu luôn thiếu đúng cái tên người sau nghĩ ra.
    */
   it("tập khoá gửi đi ĐÚNG BẰNG bảng khai, không thừa một khoá nào", () => {
+    // 07/10/2026: `displayName` is declared and rides on `chat` only. So: a consult sends the table minus that
+    // one key, a chat with a name sends the table exactly — the union is the table, nothing more.
     const khoa = Object.keys(JSON.parse(thanYeuCau(MAU)) as Record<string, unknown>).sort();
-    expect(khoa).toEqual(TRUONG_GUI_DI.map((t) => t.khoa).sort());
+    expect(khoa).toEqual(TRUONG_GUI_DI.map((t) => t.khoa).filter((k) => k !== "displayName").sort());
+    const chat = Object.keys(
+      JSON.parse(thanYeuCau({ ...MAU, loai: "chat", display_name: "Nguyễn Văn Thử" })) as Record<string, unknown>,
+    ).sort();
+    expect(chat).toEqual(TRUONG_GUI_DI.map((t) => t.khoa).sort());
   });
 
   it("không một hình dạng nào của 'tôi là ai' lọt vào thân", () => {

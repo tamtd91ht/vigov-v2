@@ -41,6 +41,9 @@ export const GIAI_THICH_TRANG_THAI: Readonly<Record<MaTrangThai, string>> = {
 export const NHAN_LOAI: Readonly<Record<LoaiYeuCau, string>> = {
   consult: "Tư vấn và báo giá",
   callback: "Đề nghị gọi lại",
+  chat: "Chat với chuyên viên",
+  sms_promo: "Đăng ký nhận ưu đãi SMS",
+  sms_optout: "Huỷ nhận ưu đãi SMS",
 };
 
 /**

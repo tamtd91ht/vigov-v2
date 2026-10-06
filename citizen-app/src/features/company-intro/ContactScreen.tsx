@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { CONTACT } from "../../content/company-profile";
 import { KhoiDangNhap, TimVanPhong } from "../tinh-nang/index";
+import { ChatWithSpecialist } from "../yeu-cau/ChatWithSpecialist";
 
 import { ChinhSachRiengTu } from "./ChinhSachRiengTu";
 import { MOC_QUAN_LY_QUYEN, type ThamSoMan } from "./dieu-huong";
@@ -93,6 +94,11 @@ export function ContactScreen({ moc }: ThamSoMan) {
       </a>
 
       <NutWebsite lop_them="hien-len hien-len--3" />
+
+      {/* FIRST OF THE BLOCKS THAT ASK A PERMISSION (07/10/2026): someone on Liên hệ came to talk to us, and
+          this is the one-tap way to talk with the specialist knowing who they are. Below the three contacts
+          that need nothing, by the rule at the top of this file. The floating "Chat Zalo" stays as is. */}
+      <ChatWithSpecialist />
 
       <KhoiDangNhap />
       <TimVanPhong />

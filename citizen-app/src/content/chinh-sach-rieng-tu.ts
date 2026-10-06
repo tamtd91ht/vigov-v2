@@ -171,6 +171,13 @@
  *   ZNS about a petition's progress is NOT mentioned: `service-comms` has the ledger but no broker and no
  *   per-commune template yet (`internal/event/phieu_doi_trang_thai.go`), so nothing is sent today.
  *
+ * ⚠ 07/10/2026 — "CHAT VỚI CHUYÊN VIÊN" AND "NHẬN ƯU ĐÃI QUA SMS" (owner decision). The Zalo name now leaves the
+ * phone with a chat request, and the phone number now also receives PROMOTIONAL SMS on the citizen's opt-in.
+ * Drafted, marked, in section `chat-sms` and in every older sentence the change made false ("không tên", "đúng
+ * hai việc", the request table). `PHIEN_BAN_CHINH_SACH` STILL stays 1.0, by the version rule below: the text has
+ * still reached no user (no publication; the marks alone forbid submitting it). From the first publication on,
+ * a change of this size is a new number.
+ *
  * VÌ SAO THIẾU MÃ SỐ THUẾ VÀ NGƯỜI ĐẠI DIỆN: không có nguồn. `content/company-profile.ts` chỉ
  * có những gì đã công bố trên vihatsoftware.com và vihatgroup.com. Bịa hai trường ấy trong một
  * văn bản pháp lý là thứ không sửa lại được sau khi nộp. → README §"Còn thiếu"
@@ -279,7 +286,7 @@ export const PENDING_APPROVAL_MARK = "[CHỜ DUYỆT — bản nháp 02/10/2026,
 // shared app opened from a commune QR began rendering the commune's interface (draft on the phone, petitions to
 // ViGov). It now says the two shapes of the app apart, each in its own sentence.
 export const CAU_DAU =
-  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Ứng dụng này có hai cách dùng, và mỗi cách gửi đi những thứ khác nhau. Khi bạn mở nó bình thường, đây là phần giới thiệu của Tập đoàn ViHAT Group: ứng dụng không lưu dữ liệu nào của bạn xuống máy, và chỉ gửi đi khi chính bạn bấm đăng nhập hoặc bấm gửi một yêu cầu tư vấn — tới máy chủ của Tập đoàn ViHAT Group. Khi bạn mở nó bằng mã QR hoặc đường liên kết của một xã, ứng dụng hiện trang của xã ấy: nó đọc thông tin công khai của xã ngay khi mở; khi bạn tự bấm gửi, xem hoặc đánh giá phản ánh, nó gửi số điện thoại Zalo bạn đồng ý chia sẻ qua máy chủ của Tập đoàn ViHAT Group tới hệ thống ViGov của xã, rồi gửi thẳng tới hệ thống ấy những gì bạn điền và ảnh bạn chọn; và nó giữ bản nháp phản ánh trên máy bạn cho tới khi bạn gửi hoặc bỏ nháp.";
+  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Ứng dụng này có hai cách dùng, và mỗi cách gửi đi những thứ khác nhau. Khi bạn mở nó bình thường, đây là phần giới thiệu của Tập đoàn ViHAT Group: ứng dụng không lưu dữ liệu nào của bạn xuống máy, và chỉ gửi đi khi chính bạn bấm đăng nhập, bấm gửi một yêu cầu tư vấn, bấm 'Chat với chuyên viên', hoặc bấm đăng ký hay huỷ nhận ưu đãi qua SMS — tới máy chủ của Tập đoàn ViHAT Group. Khi bạn mở nó bằng mã QR hoặc đường liên kết của một xã, ứng dụng hiện trang của xã ấy: nó đọc thông tin công khai của xã ngay khi mở; khi bạn tự bấm gửi, xem hoặc đánh giá phản ánh, nó gửi số điện thoại Zalo bạn đồng ý chia sẻ qua máy chủ của Tập đoàn ViHAT Group tới hệ thống ViGov của xã, rồi gửi thẳng tới hệ thống ấy những gì bạn điền và ảnh bạn chọn; và nó giữ bản nháp phản ánh trên máy bạn cho tới khi bạn gửi hoặc bỏ nháp.";
 
 /**
  * MỘT DANH SÁCH PHẲNG, ĐỌC TỪ TRÊN XUỐNG.
@@ -380,7 +387,9 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
       // 06/10/2026 DRAFT: "Ngoài số điện thoại, ứng dụng không gửi thông tin nào khác của bạn đi" was a claim
       // about the WHOLE app, false since the consultation form (22/09) and again since petitions. Scoped to
       // this login step, where it is still exactly true.
-      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] MÁY CHỦ LƯU SỐ ĐIỆN THOẠI CỦA BẠN, và lưu để làm đúng hai việc: làm tên đăng nhập cho những lần bạn mở lại ứng dụng, và làm nơi nhận thông báo ZNS. Ở bước đăng nhập này, ngoài hai mã ấy, ứng dụng không gửi thông tin nào khác của bạn đi.",
+      // 07/10/2026: "đúng hai việc" was false once the number also became the one a specialist sees on "Chat với
+      // chuyên viên" and the one promotional SMS go to on "Đăng ký nhận" — each only on the citizen's own tap.
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] MÁY CHỦ LƯU SỐ ĐIỆN THOẠI CỦA BẠN, và lưu để làm những việc sau: làm tên đăng nhập cho những lần bạn mở lại ứng dụng; làm nơi nhận thông báo ZNS; và — chỉ khi chính bạn bấm — làm số chúng tôi gọi lại khi bạn đề nghị gọi lại, số chuyên viên thấy khi bạn bấm 'Chat với chuyên viên', và số nhận tin nhắn SMS ưu đãi khi bạn bấm 'Đăng ký nhận', cho tới khi bạn bấm 'Huỷ nhận ưu đãi SMS'. Ở bước đăng nhập này, ngoài hai mã ấy, ứng dụng không gửi thông tin nào khác của bạn đi.",
       "Máy chủ trả về một phiếu phiên, và giữ lại bản ghi của phiên ấy: thời điểm tạo, thời điểm hết hạn, và một bản mã hoá một chiều của chính phiếu — không phải phiếu. Phiên hết hạn sau 7 ngày. Ứng dụng trên máy bạn thì chỉ giữ phiếu trong bộ nhớ: không ghi xuống máy, không hiện ra màn hình, và mất đi khi bạn đóng ứng dụng.",
       // VIẾT LẠI CHO ĐÚNG SAU KHI ĐỌC LƯỢC ĐỒ THẬT
       // (`vihat-miniapp/migrations/0001_init.sql`). Bản nháp viết "mỗi lần bạn đăng nhập" — người
@@ -430,15 +439,46 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
       "Bạn phải đăng nhập trước khi gửi, vì chúng tôi cần biết liên hệ lại với ai. Nếu bạn chưa đăng nhập, màn ấy không hiện biểu mẫu nào — nó mời bạn đăng nhập, hoặc gọi thẳng hotline.",
       // ⚠ KHÔNG GÕ TAY. Dựng từ `TRUONG_GUI_DI` trong `api/hop-dong-yeu-cau.ts`, khoá hai chiều
       // với chính thân yêu cầu — xem khối chú thích đầu tệp này.
-      cauKhaiTruongGuiDi(),
+      // 07/10/2026 DRAFT: the table gained the chat / SMS kinds and `displayName`, so the generated sentence is
+      // new wording too — marked like every other unapproved paragraph. Joined at run time is fine here: no
+      // test needs this section verbatim in the bundle (only its heading, `bundle-for-zalo.test.ts`).
+      `${PENDING_APPROVAL_MARK} ${cauKhaiTruongGuiDi()}`,
       // 06/10/2026 DRAFT: "TRONG CẢ ỨNG DỤNG" became false with the commune page's petition form.
       "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] PHẦN GHI CHÚ LÀ Ô DUY NHẤT TRONG PHẦN GIỚI THIỆU NHẬN CHỮ BẠN TỰ GÕ, và chúng tôi không kiểm soát được bạn viết gì vào đó. Bạn không bắt buộc phải điền nó, và chúng tôi khuyên bạn đừng ghi vào đó số căn cước, thông tin tài khoản ngân hàng, hay dữ liệu cá nhân của một người khác.",
-      "Ứng dụng KHÔNG gửi kèm tên, địa chỉ, vị trí, danh bạ, ảnh hay thông tin thiết bị của bạn. Máy chủ biết yêu cầu ấy là của ai vì bạn đang đăng nhập — ứng dụng không gửi kèm một trường nào nói 'tôi là ai', và tuyến ấy cũng không nhận một trường như thế.",
+      // 07/10/2026 DRAFT: "KHÔNG gửi kèm tên" became false for one kind — the chat request carries the Zalo name.
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Trừ tên hiển thị Zalo đi kèm một yêu cầu trò chuyện với chuyên viên — chỉ khi bạn đồng ý chia sẻ, mục 'Chat với chuyên viên và nhận ưu đãi qua SMS' nói rõ —, ứng dụng KHÔNG gửi kèm tên, địa chỉ, vị trí, danh bạ, ảnh hay thông tin thiết bị của bạn. Máy chủ biết yêu cầu ấy là của ai vì bạn đang đăng nhập — ứng dụng không gửi kèm một trường nào nói 'tôi là ai', và tuyến ấy cũng không nhận một trường như thế.",
       "SAU KHI BẠN GỬI, CHÚNG TÔI CÓ THỂ GỬI MỘT TIN ZNS XÁC NHẬN tới số Zalo bạn đã đăng nhập. Tin ấy có giới hạn số lượng và có thể tạm ngưng, nên không nhận được tin KHÔNG có nghĩa là yêu cầu của bạn chưa tới: bạn xem lại yêu cầu ở màn 'Yêu cầu của tôi' bất cứ lúc nào.",
       "NẾU BẠN BẤM 'ĐỀ NGHỊ GỌI LẠI', một nhân viên của chúng tôi sẽ gọi vào số Zalo bạn đã đăng nhập. Bạn đề nghị gọi lại được tối đa 3 lần trong 24 giờ; quá mức ấy, màn hình nói rõ và mời bạn gọi hotline nếu cần gấp. Chúng tôi không cam kết một mốc thời gian cụ thể cho cuộc gọi ấy.",
       "MÀN 'YÊU CẦU CỦA TÔI' CHỈ HIỆN YÊU CẦU CỦA CHÍNH BẠN. Máy chủ nhận ra bạn từ phiên đăng nhập, không từ một tham số nào ứng dụng gửi lên, nên không có cách nào đổi một con số để đọc yêu cầu của người khác.",
       "THỜI GIAN LƯU YÊU CẦU: 24 THÁNG, RỒI ẨN DANH HOÁ — không phải xoá. Sau 24 tháng kể từ ngày bạn gửi, chúng tôi XOÁ PHẦN GHI CHÚ bạn đã gõ và đánh dấu hàng ấy là đã ẩn danh. Những gì ở lại là sự kiện đã xảy ra: có một yêu cầu loại này, quan tâm dòng giải pháp này, đến từ chiến dịch này, vào ngày này — để thống kê hiệu quả không vỡ khi dữ liệu tới hạn.",
       "Trước mốc 24 tháng, bạn vẫn yêu cầu xoá được bất cứ lúc nào theo cách nói ở mục 'Cách xử lý và thời gian lưu' bên dưới.",
+    ],
+  },
+  {
+    /**
+     * THE TWO ONE-TAP REQUESTS — 07/10/2026 DRAFT, every paragraph marked (owner decision of that day; the
+     * wording is not approved yet).
+     *
+     *   What each sentence is read from:
+     *     · flow — `features/yeu-cau/quick-request.ts` (`chatWithSpecialist`, `sendSmsChoice`), login through
+     *       `features/dang-nhap/ensure-session.ts`, name through `zalo-api.ts` `layTenZalo(true)`, chat through
+     *       the declared `chat-oa` destination;
+     *     · body — `api/hop-dong-yeu-cau.ts` `thanYeuCau`: `displayName` on `chat` only, no phone in any body;
+     *     · subscription — derived from the citizen's own list, in memory (`deriveSmsSubscription`).
+     *
+     *   ⚠ NOT READ FROM CODE, AND SAID AS THE OWNER STATED IT (07/10/2026): that `vihat-miniapp` forwards these
+     *   requests to ViHAT's internal processing system (a webhook). That half is being built in parallel; the
+     *   retention of the name and of the SMS choice is not decided anywhere — left as a visible decision.
+     */
+    ma: "chat-sms",
+    tieu_de: "Chat với chuyên viên và nhận ưu đãi qua SMS",
+    doan: [
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Ở màn Liên hệ có nút 'Chat với chuyên viên'. Khi bạn bấm, nếu bạn chưa đăng nhập, ứng dụng đăng nhập cho bạn bằng một lần chạm như mục Đăng nhập nói rõ; rồi xin Zalo cho dùng tên hiển thị Zalo của bạn; rồi gửi tới máy chủ của Tập đoàn ViHAT Group một yêu cầu trò chuyện, kèm tên ấy nếu bạn đồng ý chia sẻ; rồi mở cửa sổ trò chuyện với Official Account của chúng tôi. Máy chủ biết yêu cầu ấy là của ai, và số điện thoại nào, từ phiên đăng nhập — nhờ đó chuyên viên biết ai đang nhắn và gọi lại cho bạn nếu cuộc trò chuyện bị gián đoạn.",
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Bạn có quyền từ chối. Từ chối chia sẻ số điện thoại thì không có gì được gửi đi, và nút này không mở cửa sổ trò chuyện; bạn vẫn nhắn được ngay bằng nút 'Chat Zalo' trên màn hình — nút ấy không gửi thông tin nào của bạn. Từ chối chia sẻ tên thì yêu cầu vẫn được gửi, chỉ là không có tên. Nếu yêu cầu không gửi được, cửa sổ trò chuyện vẫn mở và màn hình nói rõ chuyên viên chưa nhận được thông tin của bạn.",
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Ở Trang chủ có khối 'Nhận ưu đãi qua SMS'. Khi bạn bấm 'Đăng ký nhận', ứng dụng đăng nhập cho bạn nếu cần, rồi gửi tới máy chủ của Tập đoàn ViHAT Group một yêu cầu đăng ký. Từ đó, SỐ ĐIỆN THOẠI ZALO CỦA BẠN — số máy chủ đã lưu khi bạn đăng nhập — ĐƯỢC DÙNG ĐỂ GỬI TIN NHẮN SMS QUẢNG CÁO: ưu đãi và chương trình khuyến mại của Tập đoàn ViHAT Group. Ứng dụng không gửi kèm số ấy trong yêu cầu; máy chủ biết số từ phiên đăng nhập.",
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] MUỐN DỪNG NHẬN, bạn bấm 'Huỷ nhận ưu đãi SMS' ngay trong khối ấy, bất cứ lúc nào; ứng dụng gửi một yêu cầu huỷ theo cùng cách. Ứng dụng không lưu việc bạn đã đăng ký xuống máy: khi bạn đang đăng nhập, nó đọc lại từ danh sách yêu cầu của chính bạn ở máy chủ, và yêu cầu mới nhất — đăng ký hay huỷ — là yêu cầu có hiệu lực.",
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Máy chủ của Tập đoàn ViHAT Group chuyển tiếp các yêu cầu bạn gửi — tư vấn, đề nghị gọi lại, trò chuyện với chuyên viên, đăng ký hay huỷ nhận ưu đãi SMS — sang hệ thống xử lý nội bộ của Tập đoàn ViHAT Group, để nhân viên của chúng tôi tiếp nhận, liên hệ lại hoặc ngừng gửi tin cho bạn. Những gì được chuyển tiếp: [CHỜ DUYỆT — CẦN CHỦ DỰ ÁN QUYẾT: danh sách trường máy chủ chuyển sang hệ thống nội bộ, đọc từ mã của máy chủ khi phần ấy dựng xong].",
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Thời hạn lưu tên Zalo đi kèm yêu cầu trò chuyện, và lưu các yêu cầu đăng ký hay huỷ nhận ưu đãi SMS: [CHỜ DUYỆT — CẦN CHỦ DỰ ÁN QUYẾT: chưa có con số nào trong mã nguồn hay trong các quyết định của dự án].",
     ],
   },
   {
@@ -601,8 +641,10 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
       // ⚠ "BỐN THỨ" THÀNH "NĂM THỨ" NGÀY 22/09/2026, và việc sửa con số này là bắt buộc: một câu
       // liệt kê đủ rồi chốt bằng "ngoài bốn thứ ấy, máy chủ KHÔNG lưu gì khác" là một lời khai
       // TRỌN VẸN — thiếu một mục thì cả câu thành sai, không chỉ thiếu.
-      "Ở máy chủ, năm thứ được lưu: số điện thoại dùng làm tên đăng nhập của bạn; bản ghi của từng phiên đăng nhập (thời điểm tạo, thời điểm hết hạn, và bản mã hoá một chiều của phiếu phiên); nhật ký đăng nhập; những yêu cầu tư vấn hoặc đề nghị gọi lại bạn đã gửi, nói ở mục 'Yêu cầu tư vấn và đề nghị gọi lại' bên trên; và — chỉ khi bạn từng yêu cầu xoá — một dòng bằng chứng của chính lần xoá ấy, nói ở cuối mục này. Mỗi bản ghi định danh còn mang thời điểm nó được tạo và lần gần nhất được cập nhật.",
-      "Ngoài năm thứ ấy, máy chủ KHÔNG lưu gì khác của bạn: không tên, không email, không vị trí, không thông tin thiết bị, không danh bạ, không ảnh. Dịch vụ này cũng không cài công cụ đo hành vi nào và không nhúng bộ công cụ của bên thứ ba nào.",
+      // 07/10/2026 DRAFT: the fourth thing now covers the chat and SMS requests, and the name a chat may carry.
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Ở máy chủ, năm thứ được lưu: số điện thoại dùng làm tên đăng nhập của bạn; bản ghi của từng phiên đăng nhập (thời điểm tạo, thời điểm hết hạn, và bản mã hoá một chiều của phiếu phiên); nhật ký đăng nhập; những yêu cầu bạn đã gửi — tư vấn, đề nghị gọi lại, trò chuyện với chuyên viên (kèm tên Zalo nếu bạn đồng ý chia sẻ), đăng ký hay huỷ nhận ưu đãi SMS —, nói ở mục 'Yêu cầu tư vấn và đề nghị gọi lại' và mục 'Chat với chuyên viên và nhận ưu đãi qua SMS' bên trên; và — chỉ khi bạn từng yêu cầu xoá — một dòng bằng chứng của chính lần xoá ấy, nói ở cuối mục này. Mỗi bản ghi định danh còn mang thời điểm nó được tạo và lần gần nhất được cập nhật.",
+      // 07/10/2026 DRAFT: "không tên" is kept, with the one exception said inside the same sentence.
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Ngoài năm thứ ấy, máy chủ KHÔNG lưu gì khác của bạn: không tên — trừ tên Zalo đi kèm một yêu cầu trò chuyện với chuyên viên, khi bạn đồng ý chia sẻ —, không email, không vị trí, không thông tin thiết bị, không danh bạ, không ảnh. Dịch vụ này cũng không cài công cụ đo hành vi nào và không nhúng bộ công cụ của bên thứ ba nào.",
       // DRAFT 02/10/2026 (PENDING_APPROVAL_MARK): "không ảnh" above is a COMPLETE claim about the login and
       // consultation server; left unscoped it now reads as "no photo is stored anywhere", which the commune
       // app's scene photos make false. Scoped here, without editing the approved sentence.
@@ -657,7 +699,7 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
       // ⚠ 06/10/2026 DRAFT — SỬA LẦN THỨ NĂM: "Nơi duy nhất" became false with the commune page, whose reads,
       //   petitions and photos go straight to ViGov hosts (`cong-dan/api/dia-chi-vigov.ts`) and whose pictures
       //   come from ViGov's public store. The receivers are now listed, each with the act that reaches it.
-      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Ứng dụng gửi dữ liệu tới đúng những nơi sau, và không nơi nào khác, trong nước hay ngoài nước. Thứ nhất, máy chủ của Tập đoàn ViHAT Group: khi bạn đăng nhập hoặc gửi một yêu cầu tư vấn trong phần giới thiệu; và trên trang của một xã, khi bạn đồng ý mở phiên làm việc với xã hoặc bấm 'Lấy vị trí hiện tại'. Thứ hai, hệ thống ViGov của xã — dịch vụ định danh, dịch vụ tin tức, dịch vụ tiếp nhận phản ánh và kho lưu tệp: khi bạn dùng trang của một xã. Thứ ba, kho ảnh công khai của hệ thống ViGov: khi trang của xã hiện ảnh và logo. Thứ tư, Zalo, nền tảng mà ứng dụng chạy trên đó. Từng bước gửi được nói ở mục Đăng nhập, mục Yêu cầu tư vấn, mục 'Khi bạn mở ứng dụng bằng mã QR của một xã', mục 'Phản ánh gửi tới xã' và mục 'Ảnh hiện trường gửi kèm phản ánh'.",
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Ứng dụng gửi dữ liệu tới đúng những nơi sau, và không nơi nào khác, trong nước hay ngoài nước. Thứ nhất, máy chủ của Tập đoàn ViHAT Group: khi bạn đăng nhập, gửi một yêu cầu tư vấn, bấm 'Chat với chuyên viên', hoặc đăng ký hay huỷ nhận ưu đãi SMS trong phần giới thiệu — máy chủ ấy chuyển tiếp các yêu cầu sang hệ thống xử lý nội bộ của Tập đoàn ViHAT Group; và trên trang của một xã, khi bạn đồng ý mở phiên làm việc với xã hoặc bấm 'Lấy vị trí hiện tại'. Thứ hai, hệ thống ViGov của xã — dịch vụ định danh, dịch vụ tin tức, dịch vụ tiếp nhận phản ánh và kho lưu tệp: khi bạn dùng trang của một xã. Thứ ba, kho ảnh công khai của hệ thống ViGov: khi trang của xã hiện ảnh và logo. Thứ tư, Zalo, nền tảng mà ứng dụng chạy trên đó. Từng bước gửi được nói ở mục Đăng nhập, mục Yêu cầu tư vấn, mục 'Chat với chuyên viên và nhận ưu đãi qua SMS', mục 'Khi bạn mở ứng dụng bằng mã QR của một xã', mục 'Phản ánh gửi tới xã' và mục 'Ảnh hiện trường gửi kèm phản ánh'.",
       // ⚠ CÂU NÀY KHÔNG CÒN ĐƯỢC GÕ TAY — 21/09/2026. Nó được DỰNG RA từ `DICH_MO_RA_NGOAI`, và
       // đó là cách duy nhất con số và danh sách không lệch nhau được nữa.
       //
@@ -701,7 +743,7 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
       // dữ liệu nào để yêu cầu xoá") chỉ đúng khi ứng dụng không gửi gì đi. Vế "trên máy bạn"
       // thì đúng ở mọi bản dựng, và vế còn lại được chỉ sang đúng chỗ người đọc phải đi.
       // 06/10/2026 DRAFT: the draft is now on the phone; and who answers for data held at ViGov is undecided.
-      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Trên máy bạn, chỉ bản nháp phản ánh được lưu lại, và bạn tự xoá nó bằng nút 'Bỏ nháp' hoặc 'Huỷ bỏ' trên màn gửi phản ánh. Với những gì đã gửi tới máy chủ của Tập đoàn ViHAT Group — ở bước đăng nhập, và ở những yêu cầu tư vấn bạn đã gửi — bạn thực hiện các quyền trên bằng cách liên hệ theo các đầu mối ở màn Liên hệ; chúng tôi trả lời trong thời hạn Nghị định 13/2023/NĐ-CP quy định.",
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Trên máy bạn, chỉ bản nháp phản ánh được lưu lại, và bạn tự xoá nó bằng nút 'Bỏ nháp' hoặc 'Huỷ bỏ' trên màn gửi phản ánh. Với những gì đã gửi tới máy chủ của Tập đoàn ViHAT Group — ở bước đăng nhập, và ở những yêu cầu bạn đã gửi, kể cả tên Zalo đi kèm yêu cầu trò chuyện — bạn thực hiện các quyền trên bằng cách liên hệ theo các đầu mối ở màn Liên hệ; riêng đồng ý nhận ưu đãi qua SMS, bạn rút lại bằng nút 'Huỷ nhận ưu đãi SMS' ở Trang chủ; chúng tôi trả lời trong thời hạn Nghị định 13/2023/NĐ-CP quy định.",
       "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Với phản ánh và dữ liệu đã gửi tới hệ thống ViGov của một xã, bạn liên hệ: [CHỜ DUYỆT — CẦN CHỦ DỰ ÁN QUYẾT: Ủy ban nhân dân xã ấy, Tập đoàn ViHAT Group, hay cả hai — và bên nào trả lời yêu cầu xem, sửa, xoá].",
     ],
   },
@@ -714,7 +756,7 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
       // cầu, và nó sai đúng về phía làm người đọc yên tâm hơn thực tế. Ô ghi chú là văn bản tự
       // do: nó có thể chứa bất cứ thứ gì người dùng gõ vào, nên nó phải có tên trong mục rủi ro.
       // 06/10/2026 DRAFT: the old sentence was true of the intro only; the commune page is said beside it.
-      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Trong phần giới thiệu, ứng dụng không lưu dữ liệu nào của bạn trên máy; thứ nó gửi đi là hai mã đăng nhập dùng một lần — số điện thoại của bạn không nằm trong hai mã ấy — và, nếu bạn tự gửi một yêu cầu tư vấn, những gì bạn đã chọn cùng phần ghi chú bạn tự gõ. Trên trang của một xã, ứng dụng gửi phản ánh bạn viết, kèm họ tên, số điện thoại, toạ độ và ảnh nếu bạn điền hoặc chọn, và giữ bản nháp phản ánh trên máy bạn.",
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Trong phần giới thiệu, ứng dụng không lưu dữ liệu nào của bạn trên máy; thứ nó gửi đi là hai mã đăng nhập dùng một lần — số điện thoại của bạn không nằm trong hai mã ấy — và, nếu bạn tự gửi một yêu cầu tư vấn, những gì bạn đã chọn cùng phần ghi chú bạn tự gõ; nếu bạn bấm 'Chat với chuyên viên' và đồng ý, tên Zalo của bạn. Trên trang của một xã, ứng dụng gửi phản ánh bạn viết, kèm họ tên, số điện thoại, toạ độ và ảnh nếu bạn điền hoặc chọn, và giữ bản nháp phản ánh trên máy bạn.",
       "RỦI RO ĐÁNG KỂ NHẤT NẰM Ở CHÍNH Ô GHI CHÚ ẤY: nó là văn bản tự do, nên nó chứa đúng những gì bạn viết vào. Bạn hãy cân nhắc trước khi ghi vào đó số căn cước, thông tin tài khoản ngân hàng, hay dữ liệu cá nhân của một người khác — chúng tôi không có cách nào biết trước để ngăn.",
       "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Nội dung phản ánh cũng là văn bản tự do. Bạn chỉ cần viết những gì xã cần để xử lý sự việc; đừng ghi số căn cước hay thông tin tài khoản ngân hàng vào đó.",
       "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Bản nháp phản ánh nằm trên máy bạn, kể cả họ tên và số điện thoại đã điền, cho tới khi bạn gửi hoặc bỏ nháp. Người khác cầm máy bạn và mở trang của đúng xã ấy sẽ thấy nó.",

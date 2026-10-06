@@ -9,6 +9,7 @@ import {
   SOLUTIONS,
 } from "../../content/company-profile";
 import { KHAI_BAO_LOI_GOI } from "../tinh-nang/zalo-api";
+import { SmsOffers } from "../yeu-cau/SmsOffers";
 
 import { DaiChienDich } from "./DaiChienDich";
 import { MOC_CHANG_DUONG, MOC_QUAN_LY_QUYEN, type ThamSoMan } from "./dieu-huong";
@@ -181,6 +182,10 @@ export function HomeScreen({ onDi }: ThamSoMan) {
       </ul>
 
       <KhoiTin />
+
+      {/* RIGHT UNDER "Tin ViHAT" (07/10/2026): someone who just read our news is the reader for our offers.
+          One tap, a consent sentence that names the number, the content and the way to stop. */}
+      <SmsOffers />
 
       {/*
         QUẢN LÝ QUYỀN — MỘT KHỐI TÓM TẮT TRÊN MÀN CHỦ, MÀN CHI TIẾT VẪN LÀ MÀN CON.

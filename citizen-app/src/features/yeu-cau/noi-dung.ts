@@ -102,6 +102,58 @@ export const YEU_CAU_CUA_TOI = {
 } as const;
 
 /**
+ * "CHAT VỚI CHUYÊN VIÊN" — the block on Liên hệ (07/10/2026).
+ *
+ * The explanation says WHY before Zalo's dialog does (Mini App policy 3.3.4): the specialist knows who is
+ * writing and can call back if the chat drops. It names the floating "Chat Zalo" button (`NHAN_NUT_CHAT`,
+ * pinned equal by the test) as the way to chat while sharing nothing — the refusal path, not an error.
+ */
+export const CHAT_SPECIALIST = {
+  title: "Chat với chuyên viên",
+  why: "Khi bạn bấm nút dưới đây, chuyên viên của chúng tôi nhận được số điện thoại và tên Zalo của bạn, để biết ai đang nhắn và gọi lại cho bạn nếu cuộc trò chuyện bị gián đoạn. Zalo hỏi bạn trước khi chia sẻ từng thứ, và bạn có quyền từ chối.",
+  share_nothing: "Muốn nhắn ngay mà không chia sẻ gì, bạn dùng nút “Chat Zalo” trên màn hình.",
+  button: "Chat với chuyên viên",
+  busy: "Đang mở cửa sổ trò chuyện…",
+  refused:
+    "Bạn chưa chia sẻ số điện thoại, nên chuyên viên sẽ không biết ai đang nhắn. Không sao cả — bạn vẫn nhắn được ngay bằng nút “Chat Zalo” trên màn hình, hoặc gọi hotline.",
+  opened_delivered: "Đã mở cửa sổ trò chuyện, và chuyên viên đã nhận được thông tin để biết ai đang nhắn.",
+  // The POST failed but the chat opened (owner: the chat is the goal). Says what to do so it still works.
+  opened_undelivered:
+    "Đã mở cửa sổ trò chuyện, nhưng thông tin của bạn chưa tới được chuyên viên. Bạn hãy cho biết tên mình trong tin nhắn đầu tiên.",
+  not_opened:
+    "Chưa mở được cửa sổ trò chuyện. Bạn hãy bấm lại nút bên trên, hoặc dùng nút “Chat Zalo” trên màn hình.",
+} as const;
+
+/**
+ * "NHẬN ƯU ĐÃI QUA SMS" — the block on the home screen (07/10/2026).
+ *
+ * ⚠ THE CONSENT SENTENCE NAMES ALL THREE THINGS, AND NONE MAY BE DROPPED: which number (the Zalo phone number),
+ *   what arrives (ViHAT's offers and promotions — it is ADVERTISING, said as such), and how to stop (the
+ *   "Huỷ nhận ưu đãi SMS" button, here, any time). No frequency and no "you will receive" promise: nothing in
+ *   this build fixes either.
+ */
+export const SMS_OFFERS = {
+  title: "Nhận ưu đãi qua SMS",
+  consent:
+    "Khi bạn bấm “Đăng ký nhận”, chúng tôi dùng số điện thoại Zalo của bạn để gửi tin nhắn SMS giới thiệu ưu đãi và chương trình khuyến mại của ViHAT Group. Zalo hỏi bạn trước khi chia sẻ số, và bạn có quyền từ chối. Muốn dừng nhận, bạn bấm “Huỷ nhận ưu đãi SMS” ngay tại đây, bất cứ lúc nào.",
+  subscribe: "Đăng ký nhận",
+  unsubscribe: "Huỷ nhận ưu đãi SMS",
+  busy: "Đang gửi…",
+  status_subscribed: "Bạn đang nhận ưu đãi qua SMS.",
+  done_subscribe:
+    "Đã ghi nhận đăng ký. Từ nay chúng tôi có thể gửi ưu đãi của ViHAT Group qua SMS tới số điện thoại Zalo của bạn.",
+  done_unsubscribe: "Đã ghi nhận: bạn huỷ nhận ưu đãi qua SMS.",
+  refused_subscribe:
+    "Bạn chưa chia sẻ số điện thoại, nên chưa đăng ký được. Không sao cả — bạn vẫn dùng được toàn bộ ứng dụng, và có thể bấm lại bất cứ lúc nào.",
+  refused_unsubscribe:
+    "Bạn chưa chia sẻ số điện thoại, nên ứng dụng chưa biết cần huỷ cho số nào. Bạn hãy bấm lại và đồng ý chia sẻ, hoặc gọi hotline để chúng tôi huỷ giúp.",
+  session_failed: "Chưa đăng nhập được bằng số Zalo, nên yêu cầu chưa gửi được. Bạn hãy bấm lại sau vài giây.",
+  expired:
+    "Phiên đăng nhập đã hết hạn nên yêu cầu chưa gửi được. Bạn hãy bấm lại — ứng dụng đăng nhập lại bằng một lần chạm.",
+  network: "Yêu cầu chưa gửi được. Bạn hãy kiểm tra kết nối mạng rồi bấm lại.",
+} as const;
+
+/**
  * CÂU NÓI RA RẰNG PHIÊN KHÔNG SỐNG QUA MỘT LẦN ĐÓNG APP.
  *
  * Nói ra là bắt buộc, không phải lịch sự: người dùng mở lại app hôm sau, thấy mình đã đăng xuất

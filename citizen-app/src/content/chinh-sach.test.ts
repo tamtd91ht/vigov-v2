@@ -98,11 +98,17 @@ describe("chính sách mô tả đúng thứ ứng dụng thật sự làm", () 
    *   Chiều thứ hai mới là chiều người ta dọn văn bản cho gọn, và nó là chiều không ai nghĩ tới.
    */
   it("MỌI trường thân yêu cầu gửi đi đều có một dòng khai trong chính sách", () => {
-    const khoa_gui_di = Object.keys(
-      JSON.parse(
-        thanYeuCau({ loai: "consult", quan_tam: ["messaging"], quy_mo: "10-50", ghi_chu: "x", nguon: "" }),
-      ) as Record<string, unknown>,
-    );
+    // 07/10/2026: the body's keys depend on the kind — `displayName` rides on `chat` only. So "what the body
+    // sends" is the UNION over the shapes it can take: a consult, and a chat carrying a name. Measuring one kind
+    // alone would call `displayName` "declared but never sent", or miss it entirely.
+    const khoa_gui_di = [
+      ...new Set(
+        [
+          thanYeuCau({ loai: "consult", quan_tam: ["messaging"], quy_mo: "10-50", ghi_chu: "x", nguon: "" }),
+          thanYeuCau({ loai: "chat", quan_tam: [], quy_mo: "", ghi_chu: "", nguon: "", display_name: "Nguyễn Văn Thử" }),
+        ].flatMap((than) => Object.keys(JSON.parse(than) as Record<string, unknown>)),
+      ),
+    ];
     expect(khoa_gui_di.length, "thân yêu cầu không còn trường nào để đo").toBeGreaterThan(0);
 
     const da_khai = new Set(TRUONG_GUI_DI.map((t) => t.khoa));
@@ -397,14 +403,18 @@ describe("chính sách mô tả đúng thứ ứng dụng thật sự làm", () 
       "du-lieu": 3,
       "trang-xa": whole("trang-xa"),
       "dang-nhap": 9,
-      "yeu-cau-tu-van": 1,
+      // 07/10/2026 (chat / SMS): yeu-cau-tu-van +2 (the generated table sentence, "Trừ tên hiển thị Zalo…") ·
+      // cach-thuc +2 ("năm thứ", "không tên — trừ…") · chat-sms whole (6). dang-nhap's "đúng hai việc" paragraph
+      // was already marked, so its count is unchanged.
+      "yeu-cau-tu-van": 3,
+      "chat-sms": whole("chat-sms"),
       "phan-anh": whole("phan-anh"),
       "nhap-phan-anh": whole("nhap-phan-anh"),
       "anh-hien-truong": whole("anh-hien-truong"),
       "cac-quyen": 5,
       "tung-quyen": 6,
       "ghi-tep": 2,
-      "cach-thuc": 5,
+      "cach-thuc": 7,
       "ben-thu-ba": 2,
       "quyen-cua-ban": 2,
       "rui-ro": 4,
@@ -414,6 +424,7 @@ describe("chính sách mô tả đúng thứ ứng dụng thật sự làm", () 
     expect(marked["trang-xa"]).toBe(5);
     expect(marked["phan-anh"]).toBe(8);
     expect(marked["nhap-phan-anh"]).toBe(4);
+    expect(marked["chat-sms"]).toBe(6);
     // The opening sentence is a draft too (06/10/2026); it is not in `MUC_CHINH_SACH`, so it is checked here.
     expect(CAU_DAU.startsWith(PENDING_APPROVAL_MARK), "the opening sentence lost its mark").toBe(true);
   });
@@ -985,7 +996,58 @@ describe("trang của xã trong app chung — phản ánh, bản nháp, và nh�
     expect(muc("trang-xa")).toMatch(/địa chỉ IP và thông tin trình duyệt/);
   });
 
-  it("quyền tên Zalo được khai trong danh sách từng quyền", () => {
-    expect(DOAN_CHINH_SACH_TUNG_QUYEN.join("\n")).toMatch(/Tên Zalo \(getUserInfo\) — chỉ trên trang của một xã/);
+  it("quyền tên Zalo được khai trong danh sách từng quyền — cả hai nơi dùng", () => {
+    // 07/10/2026: "chỉ trên trang của một xã" became false — "Chat với chuyên viên" asks and SENDS it.
+    const line = DOAN_CHINH_SACH_TUNG_QUYEN.find((d) => d.includes("Tên Zalo (getUserInfo)"));
+    expect(line, "the per-permission list lost its Zalo-name line").toBeDefined();
+    expect(line).toMatch(/Chat với chuyên viên/);
+    expect(line).toMatch(/máy chủ của Tập đoàn ViHAT Group/);
+    expect(line).toMatch(/trên trang của một xã/);
+    expect(line, "still says the name is used on the commune page only").not.toMatch(/chỉ trên trang của một xã/);
+  });
+});
+
+/**
+ * 07/10/2026 — "CHAT VỚI CHUYÊN VIÊN" AND "NHẬN ƯU ĐÃI QUA SMS". What the drafted text must keep saying, and the
+ * old sentences the two features made false.
+ */
+describe("chat với chuyên viên và ưu đãi SMS — khai đủ, không câu cũ nào còn sai", () => {
+  const section = () => {
+    const m = MUC_CHINH_SACH.find((x) => x.ma === "chat-sms");
+    expect(m, "the policy lost its chat / SMS section").toBeDefined();
+    return m!.doan.join("\n");
+  };
+
+  it("the name leaves the phone ONLY with a chat request, and only when the citizen agrees", () => {
+    const t = section();
+    expect(t).toMatch(/kèm tên ấy nếu bạn đồng ý chia sẻ/);
+    expect(t).toMatch(/Từ chối chia sẻ tên thì yêu cầu vẫn được gửi, chỉ là không có tên/);
+    // The refusal path is said, and it names the button that shares nothing.
+    expect(t).toMatch(/nút 'Chat Zalo' trên màn hình — nút ấy không gửi thông tin nào của bạn/);
+  });
+
+  it("the SMS consent names the number, says it is advertising, and says how to stop", () => {
+    const t = section();
+    expect(t).toMatch(/SỐ ĐIỆN THOẠI ZALO CỦA BẠN/);
+    expect(t).toMatch(/SMS QUẢNG CÁO/);
+    expect(t).toMatch(/MUỐN DỪNG NHẬN, bạn bấm 'Huỷ nhận ưu đãi SMS' ngay trong khối ấy, bất cứ lúc nào/);
+    expect(t, "says the choice is stored on the phone").toMatch(/không lưu việc bạn đã đăng ký xuống máy/);
+  });
+
+  it("forwarding to ViHAT's internal system is declared; the forwarded fields and retention stay open decisions", () => {
+    const t = section();
+    expect(t).toMatch(/hệ thống xử lý nội bộ của Tập đoàn ViHAT Group/);
+    expect(t).toMatch(/Những gì được chuyển tiếp: \[CHỜ DUYỆT — CẦN CHỦ DỰ ÁN QUYẾT/);
+    expect(t).toMatch(/ưu đãi SMS: \[CHỜ DUYỆT — CẦN CHỦ DỰ ÁN QUYẾT/);
+    expect(MUC_CHINH_SACH.find((m) => m.ma === "ben-thu-ba")!.doan.join("\n")).toMatch(/hệ thống xử lý nội bộ/);
+  });
+
+  it("no sentence still says the server keeps no name, or keeps the number for exactly two things", () => {
+    const all = [CAU_DAU, ...MUC_CHINH_SACH.flatMap((m) => m.doan)].join("\n");
+    expect(all, "'không tên' without its chat exception").not.toMatch(/không tên, không email/);
+    expect(all).toMatch(/không tên — trừ tên Zalo đi kèm một yêu cầu trò chuyện với chuyên viên/);
+    expect(all, "the number is said to serve exactly two purposes").not.toMatch(/lưu để làm đúng hai việc/);
+    expect(all, "the request section still says no name is ever sent").not.toMatch(/^Ứng dụng KHÔNG gửi kèm tên/m);
+    expect(CAU_DAU).toMatch(/'Chat với chuyên viên'/);
   });
 });

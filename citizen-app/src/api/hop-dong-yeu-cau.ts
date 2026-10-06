@@ -2,8 +2,9 @@
  * HỢP ĐỒNG TUYẾN YÊU CẦU — MỘT TỆP, VÀ LÀ TỆP DUY NHẤT BIẾT `/api/v1/requests`.
  *
  *   POST <api-host>/api/v1/requests   Authorization: Bearer <phiếu phiên>
- *     gửi : { "kind": "consult" | "callback", "interests": [<mã>…], "scale": "<mã>",
- *             "source": "<mã chiến dịch>", "note": "<tối đa 2000 KÝ TỰ>" }
+ *     gửi : { "kind": "consult" | "callback" | "chat" | "sms_promo" | "sms_optout",
+ *             "interests": [<mã>…], "scale": "<mã>", "source": "<mã chiến dịch>",
+ *             "note": "<tối đa 2000 KÝ TỰ>", "displayName"?: "<≤100 KÝ TỰ, CHỈ với kind chat>" }
  *     nhận: 201 { "requestId", "kind", "status": "moi", "createdAt" }
  *
  *   GET  <api-host>/api/v1/requests   Authorization: Bearer <phiếu phiên>
@@ -90,7 +91,25 @@ export function conLaiGhiChu(ghi_chu: string): number {
   return TRAN_GHI_CHU - demKyTu(ghi_chu.trim());
 }
 
-export type LoaiYeuCau = "consult" | "callback";
+/**
+ * `chat` · `sms_promo` · `sms_optout` JOINED 07/10/2026 (owner decision): "Chat với chuyên viên" on Liên hệ and
+ * "Nhận ưu đãi qua SMS" on the home screen. Each is one tap that records WHO asked (from the session) and
+ * nothing more; the wire names are `vihat-miniapp`'s, fixed by its contract.
+ */
+export type LoaiYeuCau = "consult" | "callback" | "chat" | "sms_promo" | "sms_optout";
+
+/**
+ * Every kind the client knows. `docDanhSach` keeps only these: a row of a kind this build has no label for is
+ * dropped rather than shown under a wrong label (the same reasoning as an unknown status, below).
+ */
+export const REQUEST_KINDS: readonly LoaiYeuCau[] = ["consult", "callback", "chat", "sms_promo", "sms_optout"];
+
+/**
+ * Server cap on `displayName`, in RUNES (`vihat-miniapp` counts with `utf8.RuneCountInString`, like the note).
+ * A Zalo display name longer than this is cut here rather than sent whole: a 400 would cost the citizen the
+ * whole chat request for a name they never typed.
+ */
+export const DISPLAY_NAME_MAX_RUNES = 100;
 
 /** Mã trạng thái máy chủ trả về. Union đóng: một mã lạ không lọt qua `tsc` vào bảng nhãn. */
 export type MaTrangThai = "moi" | "dang_xu_ly" | "da_lien_he" | "dong";
@@ -108,6 +127,12 @@ export type YeuCauMoi = {
   ghi_chu: string;
   /** Mã chiến dịch của đường mở app, hoặc rỗng. */
   nguon: string;
+  /**
+   * The Zalo display name, ONLY for `chat`, and only when the citizen allowed Zalo to share it. The server
+   * answers 400 to this field on any other kind, so `thanYeuCau` drops it for them — a caller that sets it on
+   * `sms_promo` changes nothing on the wire.
+   */
+  display_name?: string;
 };
 
 /** Một yêu cầu đã gửi, đọc từ danh sách. Hình dạng của ta. */
@@ -145,7 +170,12 @@ export type TruongGuiDi = {
 };
 
 export const TRUONG_GUI_DI: readonly TruongGuiDi[] = [
-  { khoa: "kind", trong_chinh_sach: "loại yêu cầu bạn chọn: tư vấn, hay đề nghị chúng tôi gọi lại" },
+  // 07/10/2026: the two new surfaces send the same body, with their own kind — so this sentence names them.
+  {
+    khoa: "kind",
+    trong_chinh_sach:
+      "loại yêu cầu bạn chọn: tư vấn, đề nghị chúng tôi gọi lại, trò chuyện với chuyên viên, đăng ký hay huỷ nhận ưu đãi qua SMS",
+  },
   { khoa: "interests", trong_chinh_sach: "những dòng giải pháp bạn đánh dấu là đang quan tâm" },
   { khoa: "scale", trong_chinh_sach: "quy mô nhân sự bạn chọn trong danh sách có sẵn" },
   {
@@ -157,6 +187,12 @@ export const TRUONG_GUI_DI: readonly TruongGuiDi[] = [
     khoa: "source",
     trong_chinh_sach:
       "mã chiến dịch của đường liên kết hoặc mã QR bạn đã dùng để mở ứng dụng, nếu có",
+  },
+  // 07/10/2026 — the ONLY personal value this body carries, and only on a chat request (see `thanYeuCau`).
+  {
+    khoa: "displayName",
+    trong_chinh_sach:
+      "tên hiển thị Zalo của bạn — chỉ khi bạn bấm 'Chat với chuyên viên' và đồng ý cho Zalo chia sẻ tên",
   },
 ];
 
@@ -176,20 +212,30 @@ export function cauKhaiTruongGuiDi(danh_sach: readonly TruongGuiDi[] = TRUONG_GU
 /**
  * Yêu cầu của ta → thân JSON đúng khuôn của máy chủ.
  *
- * ĐÂY LÀ CHỖ DUY NHẤT NĂM TÊN TRƯỜNG GỬI ĐI ĐƯỢC VIẾT RA. Màn hình chỉ chuyền `YeuCauMoi` — kiểu
+ * ĐÂY LÀ CHỖ DUY NHẤT CÁC TÊN TRƯỜNG GỬI ĐI ĐƯỢC VIẾT RA (năm, cộng `displayName` cho `chat`). Màn hình chỉ chuyền `YeuCauMoi` — kiểu
  * của ta, đặt tên theo việc chứ không theo dây.
  *
  * ⚠ KHÔNG THÊM MỘT KHOÁ NÀO VÀO ĐÂY MÀ KHÔNG THÊM MỘT DÒNG VÀO `TRUONG_GUI_DI`. Đó không phải
  * một lời khuyên: `content/chinh-sach.test.ts` đọc thẳng các khoá của thân này ra và đối chiếu.
  */
 export function thanYeuCau(yc: YeuCauMoi): string {
-  return JSON.stringify({
+  const base = {
     kind: yc.loai,
     interests: yc.quan_tam,
     scale: yc.quy_mo,
     note: yc.ghi_chu.trim(),
     source: yc.nguon,
-  });
+  };
+  // `displayName` ONLY on `chat`, and only when there is a name: the server refuses the field on every other
+  // kind (400), and an empty one says nothing. Trimmed and cut to the server's rune cap here, not there.
+  const name =
+    yc.loai === "chat"
+      ? Array.from((yc.display_name ?? "").trim())
+          .slice(0, DISPLAY_NAME_MAX_RUNES)
+          .join("")
+          .trim()
+      : "";
+  return JSON.stringify(name === "" ? base : { ...base, displayName: name });
 }
 
 /**
@@ -202,6 +248,10 @@ export function docMaYeuCau(than: unknown): string | null {
   if (typeof than !== "object" || than === null) return null;
   const { requestId } = than as Record<string, unknown>;
   return typeof requestId === "string" && requestId !== "" ? requestId : null;
+}
+
+function isRequestKind(v: unknown): v is LoaiYeuCau {
+  return typeof v === "string" && (REQUEST_KINDS as readonly string[]).includes(v);
 }
 
 /** Chỉ bốn mã đã khai mới được coi là trạng thái. Mã lạ: xem `docDanhSach`. */
@@ -229,7 +279,7 @@ export function docDanhSach(than: unknown): readonly YeuCauDaGui[] {
     if (typeof mot !== "object" || mot === null) continue;
     const { requestId, kind, status, createdAt } = mot as Record<string, unknown>;
     if (typeof requestId !== "string" || requestId === "") continue;
-    if (kind !== "consult" && kind !== "callback") continue;
+    if (!isRequestKind(kind)) continue;
     if (!laMaTrangThai(status)) continue;
     ra.push({
       ma: requestId,
