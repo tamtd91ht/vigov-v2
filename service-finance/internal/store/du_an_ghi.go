@@ -163,7 +163,9 @@ func docMotDongDuAn(quet func(...any) error) (domain.DuAn, error) {
 // IT IS ALSO WHAT MAKES THE REMOVAL CHECK MEAN ANYTHING. Go counts the project's live vouchers and
 // refuses if there are any; read without a lock, a voucher entered between the count and the UPDATE
 // would land on a project that is being removed in another transaction, and its money would be
-// stranded exactly as ErrDuAnConChungTu exists to prevent.
+// stranded exactly as ErrDuAnConChungTu exists to prevent. The voucher side of that guarantee is
+// ChungTuGiaiNganStore.ProjectForVoucherWrite, which takes this row FOR SHARE — a lock this FOR UPDATE
+// waits for and blocks.
 func (s *DuAnGhiStore) TheoIDDeSua(ctx context.Context, tx *store.ScopedTx,
 	id string) (domain.DuAn, error) {
 
@@ -552,12 +554,13 @@ const voucherCountBySource = `SELECT ct.nguon_von_id, count(*) AS so
 // VoucherCountBySource answers "which sources of this project already carry vouchers" — what
 // domain.ErrSourceHasDisbursements is decided on.
 //
-// ⚠ A RACE REMAINS, STATED RATHER THAN HIDDEN: the edit holds the PROJECT's row lock, but creating a
-// voucher does not take that lock (ChungTuGiaiNganStore reads the project without FOR UPDATE). A
-// voucher naming source X committed between this count and the soft delete of X's line leaves one
-// voucher on a source the project no longer allocates — visible on §6 as money drawn from a source
-// with no line for this project (DisbursedWithoutAllocation), not lost. Closing it means the voucher
-// path locking the project row (FOR SHARE), which is a change to that path, not to this one.
+// THE RACE THIS COUNT USED TO HAVE IS CLOSED (06/10/2026). The edit holds the PROJECT's row FOR UPDATE
+// (TheoIDDeSua); creating or correcting a voucher now takes that same row FOR SHARE
+// (ChungTuGiaiNganStore.ProjectForVoucherWrite) before it decides its source. The two locks conflict,
+// so a voucher naming source X cannot commit between this count and the soft delete of X's line: it
+// either committed before (and this count sees it) or waits for the edit (and then finds X no longer
+// allocated — source_not_allocated). ⚠ Any NEW path that writes `chung_tu_giai_ngan.nguon_von_id` must
+// take the same share lock, or the race reopens with nothing red.
 func (s *DuAnGhiStore) VoucherCountBySource(ctx context.Context, tx *store.ScopedTx,
 	projectID string) (map[string]int, error) {
 

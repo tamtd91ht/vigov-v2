@@ -55,6 +55,25 @@ type duAnGia struct {
 	// allocationReads counts the reads, so the list's "one read per page" is a fact a test can check.
 	allocationReads int
 	allocationErr   error
+
+	// vouchers are each commune's vouchers KEYED BY PROJECT ID, already in the store's order — the same
+	// keying as `allocations`, so commune B's project sharing A's id cannot read A's vouchers.
+	vouchers     map[tenant.ID]map[string][]domain.ProjectVoucher
+	voucherReads int
+	voucherErr   error
+}
+
+func (d *duAnGia) VouchersOfProject(ctx context.Context, id string) ([]domain.ProjectVoucher, error) {
+	d.voucherReads++
+	if d.voucherErr != nil {
+		return nil, d.voucherErr
+	}
+	for _, p := range d.theo[tenant.MustFrom(ctx)] {
+		if p.DuAn.ID == id {
+			return d.vouchers[tenant.MustFrom(ctx)][id], nil
+		}
+	}
+	return nil, fistore.ErrKhongThayDuAn
 }
 
 func (d *duAnGia) AllocationsOfYear(ctx context.Context,

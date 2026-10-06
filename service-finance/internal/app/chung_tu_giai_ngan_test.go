@@ -717,7 +717,17 @@ func khoCoNguonVon(hang *hangCT) *khoCTGia {
 		maDuAn:     maDuAnMau,
 		hang:       hang,
 		nguonVonCo: map[string]bool{idNguonVonCu: true, idNguonVonMoi: true},
+		// The project draws on both — so a voucher on it must name one of them (decision 06/10/2026).
+		allocated: []string{idNguonVonCu, idNguonVonMoi},
 	}
+}
+
+// storeWithoutAllocations is the same commune's catalogue with a project that declared NO source: the
+// case where a voucher names none (§13 rule 6).
+func storeWithoutAllocations(hang *hangCT) *khoCTGia {
+	k := khoCoNguonVon(hang)
+	k.allocated = nil
+	return k
 }
 
 func TestSuaChungTu_ChiDoiNguonVon_VanLaMotLanSuaThatSu(t *testing.T) {
@@ -792,7 +802,7 @@ func TestThemChungTu_ChuaGanNguonThiGhiNULLChuKhongPhaiChuoiRong(t *testing.T) {
 	// warning while belonging to no source either: money missing from BOTH sides of one screen.
 	for ten, gui := range map[string]string{"bỏ trống": "", "toàn khoảng trắng": "   "} {
 		t.Run(ten, func(t *testing.T) {
-			k := khoCoNguonVon(nil)
+			k := storeWithoutAllocations(nil)
 			uc, ctx := dungUseCaseChungTu(t, k)
 
 			yc := themChungTuMau()
@@ -823,7 +833,7 @@ func TestSuaChungTu_GoKhoiNguon_GhiNULLVaKhongHoiDanhMuc(t *testing.T) {
 	// right one is not yet known.
 	truoc := hangOTrangThai(domain.ChungTuKeToanNhap)
 	truoc.nguonVonID = idNguonVonCu
-	k := khoCoNguonVon(truoc)
+	k := storeWithoutAllocations(truoc) // detaching is admitted only on a project with no allocation line
 	uc, ctx := dungUseCaseChungTu(t, k)
 
 	go_ := ""

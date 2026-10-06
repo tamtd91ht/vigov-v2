@@ -182,6 +182,10 @@ func (s *ChungTuGiaiNganStore) TheoIDDeSua(ctx context.Context, tx *store.Scoped
 //
 // NOT `FOR UPDATE`: this reads a fact about a row nothing here writes. Locking the project row for
 // every voucher write would serialise all of one project's data entry behind one clerk.
+//
+// USED BY THE LIFECYCLE MOVES AND THE REMOVAL ONLY (confirm, lock, unlock, soft delete) — none of them
+// changes the voucher's source or adds money to the project. Create and edit use
+// ProjectForVoucherWrite, which takes the project row FOR SHARE.
 func (s *ChungTuGiaiNganStore) MaDuAnConSong(ctx context.Context, tx *store.ScopedTx,
 	duAnID string) (string, error) {
 
@@ -197,6 +201,82 @@ func (s *ChungTuGiaiNganStore) MaDuAnConSong(ctx context.Context, tx *store.Scop
 		return "", fmt.Errorf("chung_tu_giai_ngan: đọc mã dự án: %w", err)
 	}
 	return ma, nil
+}
+
+// projectForVoucherWrite reads the project's business code AND HOLDS THE PROJECT ROW `FOR SHARE`.
+//
+// `FOR SHARE` CLOSES THE RACE store/du_an_ghi.go used to state openly (VoucherCountBySource). Every
+// writer of a project's allocation lines — the project edit and the project removal — first takes the
+// project row FOR UPDATE (DuAnGhiStore.TheoIDDeSua). A share lock conflicts with that and with nothing
+// else, so:
+//
+//	voucher write vs allocation edit   serialised: the edit's "which sources carry vouchers" count can
+//	                                   no longer miss a voucher committed in between, and this write's
+//	                                   allocated-source answer cannot go stale before its INSERT.
+//	voucher write vs project removal   serialised the same way — the removal's live-voucher count
+//	                                   (ErrDuAnConChungTu) can no longer miss a voucher landing on a
+//	                                   project being removed.
+//	voucher write vs voucher write     NOT serialised: two share locks are compatible, so two clerks
+//	                                   entering payments on one project do not queue behind each other.
+//	                                   That is why this is FOR SHARE and not FOR UPDATE.
+//
+// NO DEADLOCK CYCLE: the voucher path locks voucher row → project row; the project path locks the
+// project row and only COUNTS vouchers (no row lock on them).
+const projectForVoucherWrite = `SELECT ma FROM du_an ` +
+	`WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL FOR SHARE`
+
+// allocatedSourcesOfProject lists the sources of the project's LIVE allocation lines whose source is
+// still in the catalogue — the same set the detail screen draws (store/du_an.go allocationsOfProject).
+// `nv.deleted_at IS NULL` excludes nothing today (the catalogue has no remove route, decision
+// 06/10/2026); it keeps "allocated" meaning one thing on the screen and in this check.
+//
+// NO LOCK OF ITS OWN: the project row's share lock above is what every line writer conflicts with.
+const allocatedSourcesOfProject = `SELECT pb.nguon_von_id
+	FROM phan_bo_nguon_von pb
+	JOIN nguon_von nv
+	  ON nv.tenant_id = pb.tenant_id AND nv.tenant_id = $1 AND nv.id = pb.nguon_von_id
+	WHERE pb.tenant_id = $1 AND pb.du_an_id = $2 AND pb.deleted_at IS NULL
+	  AND nv.deleted_at IS NULL
+	ORDER BY pb.nguon_von_id
+	LIMIT $3`
+
+// ProjectForVoucherWrite is the project half of creating or correcting a voucher: the project's
+// business code (the audit subject — see MaDuAnConSong) and the sources it is allocated, read under
+// the project row's share lock inside the caller's transaction.
+//
+// An unknown project, or one of another commune, is ErrKhongThayDuAnCuaChungTu — one answer for both.
+func (s *ChungTuGiaiNganStore) ProjectForVoucherWrite(ctx context.Context, tx *store.ScopedTx,
+	projectID string) (code string, allocated []string, err error) {
+
+	tid := string(tx.TenantID())
+	err = tx.Underlying().QueryRowContext(ctx, projectForVoucherWrite, tid, projectID).Scan(&code)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil, ErrKhongThayDuAnCuaChungTu
+	}
+	if err != nil {
+		return "", nil, fmt.Errorf("chung_tu_giai_ngan: khoá chia sẻ dự án: %w", err)
+	}
+
+	rows, err := tx.Underlying().QueryContext(ctx, allocatedSourcesOfProject, tid, projectID, TranPhanBoMotDuAn+1)
+	if err != nil {
+		return "", nil, fmt.Errorf("chung_tu_giai_ngan: đọc nguồn được phân bổ: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return "", nil, fmt.Errorf("chung_tu_giai_ngan: đọc dòng nguồn được phân bổ: %w", err)
+		}
+		allocated = append(allocated, id)
+	}
+	if err := rows.Err(); err != nil {
+		return "", nil, fmt.Errorf("chung_tu_giai_ngan: duyệt nguồn được phân bổ: %w", err)
+	}
+	// REFUSED, NOT TRUNCATED: a short list could refuse a source the project really draws on.
+	if len(allocated) > TranPhanBoMotDuAn {
+		return "", nil, ErrQuaNhieuPhanBo
+	}
+	return code, allocated, nil
 }
 
 // NguonVonConSong refuses a funding source that is not a live source OF THIS COMMUNE.

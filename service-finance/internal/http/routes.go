@@ -100,6 +100,9 @@ type DuAnTienDo interface {
 	AllocationsOfYear(ctx context.Context, loc fistore.LocDuAn) (map[string][]domain.ProjectAllocation, error)
 	// AllocationsOfProject feeds the detail screen's "Giải ngân theo nguồn vốn" block.
 	AllocationsOfProject(ctx context.Context, projectID string) ([]domain.ProjectAllocation, error)
+	// VouchersOfProject feeds §8.2's voucher tab: the project's live vouchers, newest payment first.
+	// fistore.ErrKhongThayDuAn for a project not in this commune.
+	VouchersOfProject(ctx context.Context, projectID string) ([]domain.ProjectVoucher, error)
 }
 
 // GhiDuAn is the WRITE half of the investment project register, and it is its own interface rather
@@ -444,6 +447,31 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/investment-projects/{id}",
 		authz.RequirePermission(d.Checker, "budget.read")(
 			http.HandlerFunc(h.ChiTietDuAn)))
+
+	// §8.2's voucher tab: one project's live vouchers, newest `payment_date` first (ties: newest id).
+	//
+	// NESTED UNDER THE PROJECT, unlike the voucher write routes, and the reason those give does not
+	// apply here: they act on ONE voucher by its own id, where a project segment would be read by
+	// nothing. Here the project IS the filter — the segment is the one thing the route reads — and a
+	// voucher belongs to a project, so the path states the relationship the right way round.
+	//
+	// `budget.read`, the key that guards the project's own detail (seeded at
+	// service-identity/migrations/0001_init.sql:282-284; no key invented, rule 5 invariant 3c). Every
+	// state is returned, `ke-toan-nhap` included — the same set `da_giai_ngan` totals (§11).
+	//
+	// NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Danh sách chứng từ giải ngân còn hiệu lực của một dự án, ngày chi mới nhất trước, kèm tên nguồn vốn
+	// @screen   06-giai-ngan §8.2
+	// @reply    200 projectVouchersOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/investment-projects/{id}/disbursements",
+		authz.RequirePermission(d.Checker, "budget.read")(
+			http.HandlerFunc(h.ListProjectVouchers)))
 
 	// --- the commune enters, corrects and withdraws its own investment projects ------------------
 	//
@@ -837,6 +865,11 @@ func Register(mux *http.ServeMux, d Deps) {
 	// exactly the legal-consequence case skills/rest-api-design reserves DongKhiHong for: answer 503
 	// and let the commune retry, rather than take a payment record on trust.
 	//
+	// 409 FOR THE FUNDING-SOURCE RULE (decision 06/10/2026): `source_required` when the project has
+	// allocation lines and none was named, `source_not_allocated` when the named source is not one of
+	// them (or the project has none). Decided under the project row's share lock, inside the write's
+	// transaction — store.ProjectForVoucherWrite.
+	//
 	// @summary  Ghi nhận một chứng từ giải ngân cho dự án đầu tư
 	// @screen   06-giai-ngan §8.2
 	// @request  themChungTuVao
@@ -845,6 +878,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error source_required source_not_allocated
 	// @reply    500 httpx.Error
 	// @reply    503 httpx.Error
 	mux.Handle("POST /api/v1/disbursements",
@@ -876,6 +910,10 @@ func Register(mux *http.ServeMux, d Deps) {
 	// declaration would become a lie AND a repeated PATCH would strip a leader's confirmation off a
 	// voucher nobody actually edited.
 	//
+	// 409 `source_required` / `source_not_allocated` WHEN THE BODY NAMES `funding_source_id` and the
+	// project's allocation lines refuse it (decision 06/10/2026); a body that does not name it is not
+	// checked. A locked voucher answers `voucher_state` first, whatever the body says.
+	//
 	// @summary  Sửa ngày chi, số tiền, nội dung, đối tác hoặc số chứng từ của một chứng từ chưa khoá — chứng từ đã xác nhận sẽ về nháp
 	// @screen   06-giai-ngan §8.2
 	// @request  suaChungTuVao
@@ -884,7 +922,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    404 httpx.Error
-	// @reply    409 httpx.Error
+	// @reply    409 httpx.Error voucher_state source_required source_not_allocated
 	// @reply    500 httpx.Error
 	mux.Handle("PATCH /api/v1/disbursements/{id}",
 		authz.RequirePermission(d.Checker, "budget.update")(

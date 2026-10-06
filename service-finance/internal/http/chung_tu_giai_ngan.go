@@ -4,9 +4,10 @@ package http
 //
 // SIX ROUTES, THREE PERMISSIONS, AND THE SPLIT IS THE SPECIFICATION'S OWN (06-giai-ngan.md:202):
 // `budget.update` enters and corrects, `budget.confirm` confirms and freezes. The seventh thing a
-// screen needs — LISTING a project's vouchers — is NOT here and is not an oversight: this turn
-// closes the write path, and a read route carries its own questions (paging, which states, what a
-// commune with 4000 vouchers in a year gets) that are cheaper to answer in one piece than half-way.
+// screen needs — LISTING a project's vouchers — is GET /api/v1/investment-projects/{id}/disbursements
+// (ListProjectVouchers, below; added 06/10/2026). The questions it was deferred over are answered
+// there: every state, no paging (one PROJECT's vouchers, not a commune's year), a hard ceiling that
+// refuses rather than truncates.
 //
 // THE LIFECYCLE IS A CHAIN AND THE ROUTES ARE ITS EDGES:
 //
@@ -79,6 +80,13 @@ type chungTuRa struct {
 	// 0007:134). No CRUD route for the catalogue is created here — that noun still has to be asked for.
 	FundingSourceID string `json:"funding_source_id,omitempty"`
 
+	// FundingSourceName is the NAME of that source, for the `NGUỒN VỐN` column — SET BY THE PROJECT'S
+	// VOUCHER LIST ONLY (GET /api/v1/investment-projects/{id}/disbursements). The write routes reply
+	// without it: the client just chose the source and already holds its name, and reading the
+	// catalogue again inside every write to echo a label would be a second read for no new fact.
+	// Absent when the voucher names no source.
+	FundingSourceName string `json:"funding_source_name,omitempty"`
+
 	// Status is `ke-toan-nhap` | `da-xac-nhan` | `da-khoa` — Vietnamese without diacritics, which
 	// is ADR 0011: only the surrounding contract is English. OUTPUT ONLY; a request carrying it is
 	// refused with 400, because the state is what the four lifecycle routes are FOR.
@@ -145,10 +153,11 @@ func chungTuRaNgoai(c domain.ChungTuGiaiNgan) chungTuRa {
 // principal from the session; a field would be a client naming somebody else as the author of a
 // financial record (rule 1, forbidden #2, applied to a person instead of a commune).
 //
-// `funding_source_id` IS OPTIONAL AND MUST STAY OPTIONAL. §13 rule 6 makes "chi rồi nhưng chưa ghi
-// nguồn" a state the system holds and reports, so requiring it here would refuse the operation the
-// specification permits — and refuse it at the moment a payment has already left the commune's
-// account, which is when refusing is most expensive.
+// `funding_source_id` IS OPTIONAL IN THE SCHEMA AND DECIDED BY THE PROJECT (user decision 06/10/2026,
+// domain.CheckVoucherSource): on a project with live allocation lines it is required and must be one
+// of them — 409 `source_required` / `source_not_allocated`; on a project with none it must be absent —
+// 409 `source_not_allocated`. The schema cannot say "required when the project has lines", so the
+// field stays `omitempty` and the 409 carries the rule.
 type themChungTuVao struct {
 	ProjectID       string `json:"project_id"`
 	PaymentDate     string `json:"payment_date"` // YYYY-MM-DD
@@ -177,7 +186,10 @@ type themChungTuVao struct {
 // absent leaves the source alone, `""` DETACHES the voucher — putting it back into §6's "đã chi
 // nhưng chưa ghi rút từ nguồn nào" warning — and an id attaches it to that source. A body of plain
 // values could not express the middle one, so a commune that attributed a payment to the wrong
-// source would have no way to say "not this one" short of removing the voucher entirely.
+// source would have no way to say "not this one" short of removing the voucher entirely. WHEN NAMED,
+// the project's rule applies (decision 06/10/2026): `""` on a project with allocation lines is 409
+// `source_required`, a source it does not draw on is 409 `source_not_allocated`. WHEN ABSENT, nothing
+// is checked — see app.Sua for why a legacy NULL source is not forced.
 //
 // `null` READS AS ABSENT, NOT AS DETACH, because that is what a `*string` does in encoding/json and
 // it is the convention `counterparty` and `voucher_no` already set on this very body. The clearing
@@ -410,6 +422,64 @@ func (h *Handler) MoKhoaChungTu(w http.ResponseWriter, r *http.Request) {
 	vietJSON(w, http.StatusOK, chungTuRaNgoai(sau))
 }
 
+// projectVouchersOut is the reply of GET /api/v1/investment-projects/{id}/disbursements.
+//
+// `items` IS NEVER null — a project with no voucher is the ordinary state of a new project, and `[]`
+// says so. `count` is len(items): the list is never paged or truncated (fistore.MaxVouchersPerProject
+// refuses instead), so the count IS the project's number of live vouchers.
+type projectVouchersOut struct {
+	ProjectID string      `json:"project_id"`
+	Items     []chungTuRa `json:"items"`
+	Count     int         `json:"count"`
+}
+
+// ListProjectVouchers serves one project's live vouchers, newest payment date first.
+// GET /api/v1/investment-projects/{id}/disbursements
+//
+// WHY IT WAS DEFERRED AND WHY THAT NO LONGER HOLDS: the file header used to say a read route brings
+// paging and "what does a commune with 4000 vouchers a year get". This route reads ONE PROJECT's
+// vouchers — §8.2's tab — not a commune's year, so there is no page to choose; the ceiling refuses a
+// project past any real size rather than truncating it. Nothing in that deferral was about personal
+// data: `counterparty` is a company (0004:283-284) and the staff fields are business codes; the
+// attachment column `tep_dinh_kem` is NOT read here at all.
+//
+// A PROJECT OF ANOTHER COMMUNE ANSWERS 404, the same as one that does not exist — the store cannot
+// reach it (rule 4, forbidden #2, applied between communes). NO AUDIT ENTRY, for the reason
+// DanhSachDuAn gives: the commune's own public-money figures, under `budget.read`.
+func (h *Handler) ListProjectVouchers(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := r.PathValue("id")
+	if id == "" {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_argument", "Thiếu mã dự án.", "")
+		return
+	}
+	vouchers, err := h.d.DuAn.VouchersOfProject(ctx, id)
+	if err != nil {
+		switch {
+		case errors.Is(err, fistore.ErrKhongThayDuAn):
+			httpx.WriteError(w, http.StatusNotFound, "not_found", "Không tìm thấy dự án.", "")
+		case errors.Is(err, fistore.ErrTooManyVouchers):
+			h.d.Log.Error("chứng từ của dự án: vượt trần — TỪ CHỐI thay vì cắt bớt",
+				"xa", string(tenant.MustFrom(ctx)))
+			httpx.WriteError(w, http.StatusInternalServerError, "internal",
+				"Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		default:
+			h.d.Log.Error("chứng từ của dự án: lỗi hệ thống",
+				"xa", string(tenant.MustFrom(ctx)), "err", err)
+			httpx.WriteError(w, http.StatusInternalServerError, "internal",
+				"Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		}
+		return
+	}
+	out := projectVouchersOut{ProjectID: id, Items: make([]chungTuRa, 0, len(vouchers)), Count: len(vouchers)}
+	for _, v := range vouchers {
+		item := chungTuRaNgoai(v.Voucher)
+		item.FundingSourceName = v.FundingSourceName
+		out.Items = append(out.Items, item)
+	}
+	vietJSON(w, http.StatusOK, out)
+}
+
 // thieuChuThe answers a request that reached a guarded write route with no principal.
 //
 // A 500 AND NOT AN ANONYMOUS WRITE. These routes sit behind authz.RequirePermission, so there is
@@ -470,6 +540,20 @@ func (h *Handler) traLoiLoiChungTu(w http.ResponseWriter, r *http.Request, viec 
 		errors.Is(err, domain.ErrChuaXacNhanThiChuaKhoaDuoc),
 		errors.Is(err, domain.ErrTuMoKhoaChungTuMinhVuaKhoa):
 		httpx.WriteError(w, http.StatusConflict, "voucher_state", err.Error(), "")
+	case errors.Is(err, domain.ErrSourceRequired):
+		// 409, NOT 400 — the repository's convention for the allocation refusals (8245698b): the body
+		// is well formed; what refuses it is the state of THIS project (it has allocation lines). The
+		// sentence names the way out.
+		httpx.WriteError(w, http.StatusConflict, "source_required",
+			"`funding_source_id`: dự án này đã khai nguồn vốn, nên chứng từ phải ghi rõ rút từ nguồn nào "+
+				"trong các nguồn đã phân bổ cho dự án.", "")
+	case errors.Is(err, domain.ErrSourceNotAllocated):
+		// ONE ANSWER for "the project draws on other sources" and "the project declared no source": both
+		// say the same thing — this source is not one this project draws on — and the way out is the
+		// same screen (the project's `funding_allocations`).
+		httpx.WriteError(w, http.StatusConflict, "source_not_allocated",
+			"`funding_source_id`: nguồn vốn này không được phân bổ cho dự án. Hãy chọn một nguồn đã phân "+
+				"bổ cho dự án, hoặc bỏ trống nếu dự án chưa khai nguồn vốn nào.", "")
 	case laLoiDauVaoChungTu(err):
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
 	default:

@@ -1199,6 +1199,7 @@ export type finance_chungTuRa = {
   "counterparty"?: string;
   "voucher_no"?: string;
   "funding_source_id"?: string;
+  "funding_source_name"?: string;
   "status": string;
   /** `nguoi_nhap_id` — a staff business code */
   "entered_by": string;
@@ -1479,6 +1480,12 @@ export type finance_projectAllocationOut = {
   /** this project's vouchers drawn from this source */
   "disbursed_amount": number;
   "disbursed_ratio": number | null;
+};
+
+export type finance_projectVouchersOut = {
+  "project_id": string;
+  "items": Array<finance_chungTuRa>;
+  "count": number;
 };
 
 export type finance_rewordSystemMessageIn = {
@@ -5190,8 +5197,12 @@ export type finance_post_disbursements = {
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;
+    409: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
+  };
+  errorCodes: {
+    409: "source_not_allocated" | "source_required";
   };
 };
 
@@ -5213,6 +5224,9 @@ export type finance_patch_disbursements_by_id = {
     404: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;
+  };
+  errorCodes: {
+    409: "source_not_allocated" | "source_required" | "voucher_state";
   };
 };
 
@@ -6016,6 +6030,26 @@ export type finance_delete_investment_projects_by_id = {
     403: httpx_Error;
     404: httpx_Error;
     409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/investment-projects/{id}/disbursements — Danh sách chứng từ giải ngân còn hiệu lực của một dự án, ngày chi mới nhất trước, kèm tên nguồn vốn */
+export type finance_get_investment_projects_by_id_disbursements = {
+  duongDan: "/api/v1/investment-projects/{id}/disbursements";
+  phuongThuc: "GET";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: finance_projectVouchersOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
     500: httpx_Error;
   };
 };

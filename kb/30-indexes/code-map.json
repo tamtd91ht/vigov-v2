@@ -272,7 +272,7 @@
     },
     "app.ChungTuGiaiNgan": {
       "kind": "type",
-      "at": "service-finance/internal/app/chung_tu_giai_ngan.go:90"
+      "at": "service-finance/internal/app/chung_tu_giai_ngan.go:93"
     },
     "app.Chuyen": {
       "kind": "func",
@@ -652,7 +652,7 @@
     },
     "app.Go": {
       "kind": "func",
-      "at": "service-finance/internal/app/chung_tu_giai_ngan.go:494"
+      "at": "service-finance/internal/app/chung_tu_giai_ngan.go:518"
     },
     "app.GoBang": {
       "kind": "func",
@@ -920,7 +920,7 @@
     },
     "app.Khoa": {
       "kind": "func",
-      "at": "service-finance/internal/app/chung_tu_giai_ngan.go:577"
+      "at": "service-finance/internal/app/chung_tu_giai_ngan.go:601"
     },
     "app.KhongTiepNhan": {
       "kind": "func",
@@ -1176,7 +1176,7 @@
     },
     "app.MoKhoa": {
       "kind": "func",
-      "at": "service-finance/internal/app/chung_tu_giai_ngan.go:620"
+      "at": "service-finance/internal/app/chung_tu_giai_ngan.go:644"
     },
     "app.NenTangCauPhien": {
       "kind": "type",
@@ -1208,7 +1208,7 @@
     },
     "app.NewChungTuGiaiNgan": {
       "kind": "func",
-      "at": "service-finance/internal/app/chung_tu_giai_ngan.go:106"
+      "at": "service-finance/internal/app/chung_tu_giai_ngan.go:109"
     },
     "app.NewCitizenPetitionPhotos": {
       "kind": "func",
@@ -2476,7 +2476,7 @@
     },
     "app.XacNhan": {
       "kind": "func",
-      "at": "service-finance/internal/app/chung_tu_giai_ngan.go:551"
+      "at": "service-finance/internal/app/chung_tu_giai_ngan.go:575"
     },
     "app.XemNguoiGui": {
       "kind": "type",
@@ -2596,7 +2596,7 @@
     },
     "app.YeuCauSuaChungTu": {
       "kind": "type",
-      "at": "service-finance/internal/app/chung_tu_giai_ngan.go:175"
+      "at": "service-finance/internal/app/chung_tu_giai_ngan.go:181"
     },
     "app.YeuCauSuaDanhMuc": {
       "kind": "type",
@@ -2684,7 +2684,7 @@
     },
     "app.YeuCauThemChungTu": {
       "kind": "type",
-      "at": "service-finance/internal/app/chung_tu_giai_ngan.go:147"
+      "at": "service-finance/internal/app/chung_tu_giai_ngan.go:150"
     },
     "app.YeuCauThemDanhMuc": {
       "kind": "type",
@@ -3817,6 +3817,10 @@
     "domain.CheckUnusualRadius": {
       "kind": "func",
       "at": "service-platform/internal/domain/map_frame_default.go:115"
+    },
+    "domain.CheckVoucherSource": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/voucher_source.go:41"
     },
     "domain.ChiSoDatDuToan": {
       "kind": "func",
@@ -5942,6 +5946,10 @@
       "kind": "type",
       "at": "service-finance/internal/domain/project_allocation.go:33"
     },
+    "domain.ProjectVoucher": {
+      "kind": "type",
+      "at": "service-finance/internal/domain/voucher_source.go:62"
+    },
     "domain.Province": {
       "kind": "type",
       "at": "service-platform/internal/domain/commune.go:35"
@@ -7812,7 +7820,7 @@
     },
     "http.GhiChungTu": {
       "kind": "type",
-      "at": "service-finance/internal/http/routes.go:153"
+      "at": "service-finance/internal/http/routes.go:156"
     },
     "http.GhiDanhMucMiniApp": {
       "kind": "type",
@@ -7824,11 +7832,11 @@
     },
     "http.GhiDuAn": {
       "kind": "type",
-      "at": "service-finance/internal/http/routes.go:118"
+      "at": "service-finance/internal/http/routes.go:121"
     },
     "http.GhiHangMuc": {
       "kind": "type",
-      "at": "service-finance/internal/http/routes.go:133"
+      "at": "service-finance/internal/http/routes.go:136"
     },
     "http.GhiLoaiNhiemVu": {
       "kind": "type",
@@ -7848,7 +7856,7 @@
     },
     "http.GhiNganSach": {
       "kind": "type",
-      "at": "service-finance/internal/http/routes.go:208"
+      "at": "service-finance/internal/http/routes.go:211"
     },
     "http.GhiNhiemVuUseCase": {
       "kind": "type",
@@ -7892,7 +7900,7 @@
     },
     "http.GoChungTu": {
       "kind": "func",
-      "at": "service-finance/internal/http/chung_tu_giai_ngan.go:340"
+      "at": "service-finance/internal/http/chung_tu_giai_ngan.go:352"
     },
     "http.GoDotThuChi": {
       "kind": "func",
@@ -8004,7 +8012,7 @@
     },
     "http.KhoaChungTu": {
       "kind": "func",
-      "at": "service-finance/internal/http/chung_tu_giai_ngan.go:376"
+      "at": "service-finance/internal/http/chung_tu_giai_ngan.go:388"
     },
     "http.KhoiNhiemVuDanhMuc": {
       "kind": "type",
@@ -8093,6 +8101,10 @@
     "http.ListPortalSyncRuns": {
       "kind": "func",
       "at": "service-comms/internal/http/portal_sync.go:265"
+    },
+    "http.ListProjectVouchers": {
+      "kind": "func",
+      "at": "service-finance/internal/http/chung_tu_giai_ngan.go:449"
     },
     "http.ListStaffIntakeFields": {
       "kind": "func",
@@ -8216,7 +8228,7 @@
     },
     "http.MoKhoaChungTu": {
       "kind": "func",
-      "at": "service-finance/internal/http/chung_tu_giai_ngan.go:395"
+      "at": "service-finance/internal/http/chung_tu_giai_ngan.go:407"
     },
     "http.MotNoiDung": {
       "kind": "func",
@@ -8240,7 +8252,7 @@
     },
     "http.NganSachDoc": {
       "kind": "type",
-      "at": "service-finance/internal/http/routes.go:187"
+      "at": "service-finance/internal/http/routes.go:190"
     },
     "http.NgayLamBuDoc": {
       "kind": "type",
@@ -8260,7 +8272,7 @@
     },
     "http.NguongCham": {
       "kind": "type",
-      "at": "service-finance/internal/http/routes.go:170"
+      "at": "service-finance/internal/http/routes.go:173"
     },
     "http.NhanLinhVucDanhMuc": {
       "kind": "type",
@@ -8720,7 +8732,7 @@
     },
     "http.SuaChungTu": {
       "kind": "func",
-      "at": "service-finance/internal/http/chung_tu_giai_ngan.go:284"
+      "at": "service-finance/internal/http/chung_tu_giai_ngan.go:296"
     },
     "http.SuaDuAn": {
       "kind": "func",
@@ -8892,7 +8904,7 @@
     },
     "http.ThemChungTu": {
       "kind": "func",
-      "at": "service-finance/internal/http/chung_tu_giai_ngan.go:238"
+      "at": "service-finance/internal/http/chung_tu_giai_ngan.go:250"
     },
     "http.ThemDanhMucNoiDung": {
       "kind": "func",
@@ -9040,7 +9052,7 @@
     },
     "http.XacNhanChungTu": {
       "kind": "func",
-      "at": "service-finance/internal/http/chung_tu_giai_ngan.go:361"
+      "at": "service-finance/internal/http/chung_tu_giai_ngan.go:373"
     },
     "http.XacThuc": {
       "kind": "func",
@@ -10944,11 +10956,11 @@
     },
     "store.AllocationLinesForEdit": {
       "kind": "func",
-      "at": "service-finance/internal/store/du_an_ghi.go:512"
+      "at": "service-finance/internal/store/du_an_ghi.go:514"
     },
     "store.AllocationsOfProject": {
       "kind": "func",
-      "at": "service-finance/internal/store/du_an.go:340"
+      "at": "service-finance/internal/store/du_an.go:422"
     },
     "store.AllocationsOfYear": {
       "kind": "func",
@@ -11192,7 +11204,7 @@
     },
     "store.ChenPhanBo": {
       "kind": "func",
-      "at": "service-finance/internal/store/du_an_ghi.go:403"
+      "at": "service-finance/internal/store/du_an_ghi.go:405"
     },
     "store.ChenQuanTriMacDinh": {
       "kind": "func",
@@ -11452,7 +11464,7 @@
     },
     "store.DemChungTuConSong": {
       "kind": "func",
-      "at": "service-finance/internal/store/du_an_ghi.go:284"
+      "at": "service-finance/internal/store/du_an_ghi.go:286"
     },
     "store.DemDangSong": {
       "kind": "func",
@@ -11640,7 +11652,7 @@
     },
     "store.HangMucConSong": {
       "kind": "func",
-      "at": "service-finance/internal/store/du_an_ghi.go:226"
+      "at": "service-finance/internal/store/du_an_ghi.go:228"
     },
     "store.HangMucKeHoachVonStore": {
       "kind": "type",
@@ -11752,7 +11764,7 @@
     },
     "store.Khoa": {
       "kind": "func",
-      "at": "service-finance/internal/store/chung_tu_giai_ngan.go:374"
+      "at": "service-finance/internal/store/chung_tu_giai_ngan.go:454"
     },
     "store.KhoaBoPhan": {
       "kind": "func",
@@ -12032,7 +12044,7 @@
     },
     "store.MaDuAnConSong": {
       "kind": "func",
-      "at": "service-finance/internal/store/chung_tu_giai_ngan.go:185"
+      "at": "service-finance/internal/store/chung_tu_giai_ngan.go:189"
     },
     "store.MaGhepDaTao": {
       "kind": "type",
@@ -12116,7 +12128,7 @@
     },
     "store.MoKhoa": {
       "kind": "func",
-      "at": "service-finance/internal/store/chung_tu_giai_ngan.go:408"
+      "at": "service-finance/internal/store/chung_tu_giai_ngan.go:488"
     },
     "store.Moc": {
       "kind": "type",
@@ -12436,11 +12448,11 @@
     },
     "store.NguonVonConSong": {
       "kind": "func",
-      "at": "service-finance/internal/store/chung_tu_giai_ngan.go:218"
+      "at": "service-finance/internal/store/chung_tu_giai_ngan.go:298"
     },
     "store.NguonVonConSongTrongNam": {
       "kind": "func",
-      "at": "service-finance/internal/store/du_an_ghi.go:262"
+      "at": "service-finance/internal/store/du_an_ghi.go:264"
     },
     "store.NguonVonStore": {
       "kind": "type",
@@ -12614,6 +12626,10 @@
       "kind": "func",
       "at": "service-platform/internal/store/branding.go:39"
     },
+    "store.ProjectForVoucherWrite": {
+      "kind": "func",
+      "at": "service-finance/internal/store/chung_tu_giai_ngan.go:248"
+    },
     "store.Provinces": {
       "kind": "func",
       "at": "service-platform/internal/store/operator_registry.go:174"
@@ -12752,7 +12768,7 @@
     },
     "store.ReviveAllocation": {
       "kind": "func",
-      "at": "service-finance/internal/store/du_an_ghi.go:607"
+      "at": "service-finance/internal/store/du_an_ghi.go:616"
     },
     "store.RevokeAccount": {
       "kind": "func",
@@ -12896,7 +12912,7 @@
     },
     "store.SoftDeleteAllocation": {
       "kind": "func",
-      "at": "service-finance/internal/store/du_an_ghi.go:621"
+      "at": "service-finance/internal/store/du_an_ghi.go:630"
     },
     "store.SourceForUpdate": {
       "kind": "func",
@@ -13164,7 +13180,7 @@
     },
     "store.UpdateAllocationAmount": {
       "kind": "func",
-      "at": "service-finance/internal/store/du_an_ghi.go:587"
+      "at": "service-finance/internal/store/du_an_ghi.go:596"
     },
     "store.UpdateAnnualAmount": {
       "kind": "func",
@@ -13244,7 +13260,7 @@
     },
     "store.VeNhapSauKhiSua": {
       "kind": "func",
-      "at": "service-finance/internal/store/chung_tu_giai_ngan.go:339"
+      "at": "service-finance/internal/store/chung_tu_giai_ngan.go:419"
     },
     "store.VerificationPhotoRequired": {
       "kind": "func",
@@ -13260,11 +13276,15 @@
     },
     "store.VoucherCountBySource": {
       "kind": "func",
-      "at": "service-finance/internal/store/du_an_ghi.go:555"
+      "at": "service-finance/internal/store/du_an_ghi.go:564"
+    },
+    "store.VouchersOfProject": {
+      "kind": "func",
+      "at": "service-finance/internal/store/du_an.go:373"
     },
     "store.XacNhan": {
       "kind": "func",
-      "at": "service-finance/internal/store/chung_tu_giai_ngan.go:354"
+      "at": "service-finance/internal/store/chung_tu_giai_ngan.go:434"
     },
     "store.XoaMem": {
       "kind": "func",
@@ -13292,7 +13312,7 @@
     },
     "store.XoaMemPhanBoCuaDuAn": {
       "kind": "func",
-      "at": "service-finance/internal/store/du_an_ghi.go:434"
+      "at": "service-finance/internal/store/du_an_ghi.go:436"
     },
     "store.XoaMemVanBan": {
       "kind": "func",

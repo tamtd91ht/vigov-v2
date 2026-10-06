@@ -1918,6 +1918,7 @@
         "401": "httpx.Error",
         "403": "httpx.Error",
         "404": "httpx.Error",
+        "409": "httpx.Error",
         "500": "httpx.Error",
         "503": "httpx.Error"
       },
@@ -2796,6 +2797,27 @@
         "403": "httpx.Error",
         "404": "httpx.Error",
         "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-finance/internal/http/routes.go"
+    },
+    {
+      "service": "finance",
+      "method": "GET",
+      "path": "/api/v1/investment-projects/{id}/disbursements",
+      "operation_id": "finance_get_investment_projects_by_id_disbursements",
+      "task_id": "8988f622f145",
+      "summary": "Danh sách chứng từ giải ngân còn hiệu lực của một dự án, ngày chi mới nhất trước, kèm tên nguồn vốn",
+      "screen": "06-giai-ngan §8.2",
+      "permission_kind": "permission",
+      "permission": "budget.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "finance.projectVouchersOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
         "500": "httpx.Error"
       },
       "declared_in": "service-finance/internal/http/routes.go"

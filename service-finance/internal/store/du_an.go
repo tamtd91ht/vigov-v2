@@ -334,6 +334,88 @@ const allocationsOfProject = `SELECT pb.nguon_von_id, nv.ten, pb.so_tien_phan_bo
 	ORDER BY nv.thu_tu, nv.ten, nv.id
 	LIMIT $3`
 
+// MaxVouchersPerProject bounds §8.2's voucher list of ONE project.
+//
+// A real project carries a handful to a few dozen payments (instalments, treasury lines); 5000 is
+// past any of them — the point where the data is no longer one project's payments (an import run
+// twice, a fixture on a live database). The read REFUSES rather than truncates: the screen sums what
+// it shows, and a silently short list is a project that looks less disbursed than it is.
+const MaxVouchersPerProject = 5000
+
+// ErrTooManyVouchers says the ceiling was reached. The caller answers 500 and refuses.
+var ErrTooManyVouchers = errors.New("chung_tu_giai_ngan: dự án vượt trần số chứng từ")
+
+// vouchersOfProject lists one project's LIVE vouchers, newest payment date first.
+//
+// ORDER BY ngay_chi DESC, id DESC: the id is a ULID, so among vouchers paid on the same day the one
+// entered last comes first, and the order is TOTAL — two reads cannot swap two rows.
+//
+// THE SOURCE NAME IS A CORRELATED SUBQUERY, NOT A JOIN, so cotChungTu's unqualified columns stay
+// unambiguous. It is constrained to tenant_id = $1 like every other table here (rule 1). It does NOT
+// filter `nv.deleted_at`: a voucher drawn from a source is drawn from it historically, and blanking the
+// name would make the row read as "no source" — which §6 counts as something else entirely.
+//
+// EVERY STATE, soft-deleted excluded — the same set tongChungTu totals, so the tab and the project's
+// "đã giải ngân" cannot disagree.
+const vouchersOfProject = `SELECT ` + cotChungTu + `,
+	COALESCE((SELECT nv.ten FROM nguon_von nv
+	           WHERE nv.tenant_id = $1 AND nv.id = ct.nguon_von_id), '')
+	FROM chung_tu_giai_ngan ct
+	WHERE ct.tenant_id = $1 AND ct.du_an_id = $2 AND ct.deleted_at IS NULL
+	ORDER BY ct.ngay_chi DESC, ct.id DESC
+	LIMIT $3`
+
+// VouchersOfProject reads the voucher tab of one LIVE project of this commune.
+//
+// THE PROJECT IS CHECKED FIRST, so "no such project" (404) and "a project with no voucher yet" ([])
+// are two different answers. A project of another commune is ErrKhongThayDuAn — the statement cannot
+// reach it.
+func (s *DuAnStore) VouchersOfProject(ctx context.Context, projectID string) ([]domain.ProjectVoucher, error) {
+	scoped := s.db.For(ctx)
+	exists, err := scoped.Query(ctx, "1", "du_an", "AND id = $2 AND deleted_at IS NULL", projectID)
+	if err != nil {
+		return nil, fmt.Errorf("du_an: kiểm dự án của danh sách chứng từ: %w", err)
+	}
+	found := exists.Next()
+	if err := exists.Err(); err != nil {
+		exists.Close()
+		return nil, fmt.Errorf("du_an: kiểm dự án của danh sách chứng từ: %w", err)
+	}
+	exists.Close()
+	if !found {
+		return nil, ErrKhongThayDuAn
+	}
+
+	rows, err := scoped.QueryJoin(ctx, vouchersOfProject, projectID, MaxVouchersPerProject+1)
+	if err != nil {
+		return nil, fmt.Errorf("chung_tu_giai_ngan: đọc theo dự án: %w", err)
+	}
+	defer rows.Close()
+
+	out := make([]domain.ProjectVoucher, 0, 16)
+	for rows.Next() {
+		var (
+			v    domain.ProjectVoucher
+			name string
+		)
+		v.Voucher, err = docMotDongChungTu(func(dest ...any) error {
+			return rows.Scan(append(dest, &name)...)
+		})
+		if err != nil {
+			return nil, fmt.Errorf("chung_tu_giai_ngan: đọc dòng theo dự án: %w", err)
+		}
+		v.FundingSourceName = name
+		out = append(out, v)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("chung_tu_giai_ngan: duyệt theo dự án: %w", err)
+	}
+	if len(out) > MaxVouchersPerProject {
+		return nil, ErrTooManyVouchers
+	}
+	return out, nil
+}
+
 // AllocationsOfProject reads one project's allocation lines for the detail screen. A project of
 // another commune yields no line — the statement binds tenant_id = $1 on every table; the caller has
 // already answered 404 for it through ChiTiet.

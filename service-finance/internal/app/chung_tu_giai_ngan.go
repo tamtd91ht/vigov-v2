@@ -70,6 +70,9 @@ import (
 type KhoChungTu interface {
 	TheoIDDeSua(ctx context.Context, tx *store.ScopedTx, id string) (domain.ChungTuGiaiNgan, error)
 	MaDuAnConSong(ctx context.Context, tx *store.ScopedTx, duAnID string) (string, error)
+	// ProjectForVoucherWrite is MaDuAnConSong plus the project's allocated sources, read under the
+	// project row's SHARE lock — what create and edit decide the source rule on (06/10/2026).
+	ProjectForVoucherWrite(ctx context.Context, tx *store.ScopedTx, projectID string) (string, []string, error)
 	// NguonVonConSong takes the TRANSACTION for the reason every method here does: there is no
 	// foreign key under `chung_tu_giai_ngan.nguon_von_id` (0007:102-113), so this check IS the
 	// constraint — and a constraint asked outside the transaction that writes the row is a
@@ -152,11 +155,14 @@ type YeuCauThemChungTu struct {
 	DoiTac    string
 	SoChungTu string
 
-	// NguonVonID is OPTIONAL, and empty is a legitimate answer rather than an omission: §13 rule 6
-	// says a voucher with no funding source still counts toward "đã giải ngân" and is reported
-	// separately as "đã chi nhưng chưa ghi rút từ nguồn nào" — §6 prints that as a real figure on a
-	// real commune. Nothing here may start requiring it: refusing the entry would refuse exactly the
-	// operation the specification permits, at the moment a payment has already left the account.
+	// NguonVonID — REQUIRED OR FORBIDDEN BY THE PROJECT, never free (user decision 06/10/2026,
+	// domain.CheckVoucherSource): a project with live allocation lines requires one of ITS sources; a
+	// project with none takes no source, and that voucher is §13 rule 6's "đã chi nhưng chưa ghi rút từ
+	// nguồn nào", still counted toward "đã giải ngân".
+	//
+	// ⚠ EXCEL IMPORT OF VOUCHERS DOES NOT EXIST YET. The prototype imports with a NULL source; whoever
+	// builds it here must decide how that meets this rule on a project with allocations — not in this
+	// card.
 	NguonVonID string
 }
 
@@ -184,9 +190,10 @@ type YeuCauSuaChungTu struct {
 	//
 	//	nil    leave the voucher's funding source exactly as it is
 	//	""     DETACH it — the column goes to NULL and the voucher rejoins §6's "đã chi nhưng chưa
-	//	       ghi rút từ nguồn nào" warning. A real correction: the accountant attributed a payment
-	//	       to the wrong source and the right one is not yet known.
-	//	"01J…" attach it to that source, which must be a LIVE source OF THIS COMMUNE (rule 1).
+	//	       ghi rút từ nguồn nào" warning. Admitted only on a project with NO allocation line;
+	//	       on one with lines it is source_required (decision 06/10/2026).
+	//	"01J…" attach it to that source, which must be a LIVE source OF THIS COMMUNE (rule 1) AND one
+	//	       of the project's allocated sources (source_not_allocated otherwise).
 	//
 	// "" IS NORMALISED TO NULL IN THIS LAYER AND NEVER TRAVELS DOWNWARD AS A BLANK. The column
 	// carries `CHECK (nguon_von_id IS NULL OR btrim(nguon_von_id) <> '')` (0007:274-277), so an empty
@@ -263,21 +270,25 @@ func (uc *ChungTuGiaiNgan) Them(ctx context.Context, yc YeuCauThemChungTu,
 		// yields the BUSINESS CODE the audit entry is filed under. A voucher has no code of its
 		// own — there is no `ma` column on the table — so `subject` is the project's, and the
 		// voucher is named inside the delta.
-		maDuAn, err := uc.kho.MaDuAnConSong(ctx, tx, moi.DuAnID)
+		// THE PROJECT ROW IS HELD `FOR SHARE` FROM HERE TO COMMIT, so no allocation edit or project
+		// removal can interleave with this write (store.ProjectForVoucherWrite says why).
+		maDuAn, allocated, err := uc.kho.ProjectForVoucherWrite(ctx, tx, moi.DuAnID)
 		if err != nil {
 			return err
 		}
-		// THE SOURCE IS CHECKED ONLY WHEN ONE WAS NAMED. A voucher with no source is the state §13
-		// rule 6 defines, so an empty value has nothing to verify — asking anyway would turn "no
-		// source" into an error and refuse the operation the specification permits.
-		//
+		// THE CATALOGUE IS ASKED FIRST, ONLY WHEN A SOURCE WAS NAMED, so an id naming nothing in this
+		// commune keeps its 404 (rule 1: another commune's source and a missing one are one answer).
 		// INSIDE THE TRANSACTION, because with no foreign key underneath (0007:102-113) this check IS
-		// the constraint. An id naming nothing, or naming another commune's source, would put the
-		// money on no card of §6 AND out of the "chưa ghi rút từ nguồn nào" warning at the same time.
+		// the constraint.
 		if moi.NguonVonID != "" {
 			if err := uc.kho.NguonVonConSong(ctx, tx, moi.NguonVonID); err != nil {
 				return err
 			}
+		}
+		// THEN THE PROJECT'S RULE (decision 06/10/2026): required and one of its sources when it has
+		// allocation lines, absent when it has none.
+		if err := domain.CheckVoucherSource(allocated, moi.NguonVonID); err != nil {
+			return err
 		}
 		if err := uc.kho.Chen(ctx, tx, moi); err != nil {
 			return err
@@ -397,22 +408,35 @@ func (uc *ChungTuGiaiNgan) Sua(ctx context.Context, id string, yc YeuCauSuaChung
 			return nil
 		}
 
-		maDuAn, err := uc.kho.MaDuAnConSong(ctx, tx, truoc.DuAnID)
+		// THE PROJECT ROW IS HELD `FOR SHARE` from here to commit, as on create — see Them.
+		maDuAn, allocated, err := uc.kho.ProjectForVoucherWrite(ctx, tx, truoc.DuAnID)
 		if err != nil {
 			return err
 		}
-		// CHECKED ONLY WHEN THE SOURCE ACTUALLY MOVES TO A NEW ONE, and both halves of that are
-		// deliberate:
+		// THE CATALOGUE CHECK RUNS ONLY WHEN THE SOURCE ACTUALLY MOVES TO A NEW ONE:
 		//
 		//	unchanged     a correction of the description must not fail because the source this
 		//	              voucher has always named was removed from the catalogue afterwards. The row
 		//	              is the historical fact; refusing to edit anything else would strand it.
-		//	moved to ""   detaching needs nothing to exist. It is the state §13 rule 6 defines.
-		//
-		// What IS refused is attaching money to a source that does not exist in this commune — the
-		// case rule 1 is made for, and the case no foreign key is underneath to catch.
+		//	moved to ""   detaching needs nothing to exist in the catalogue.
 		if sau.NguonVonID != truoc.NguonVonID && sau.NguonVonID != "" {
 			if err := uc.kho.NguonVonConSong(ctx, tx, sau.NguonVonID); err != nil {
+				return err
+			}
+		}
+		// THE PROJECT'S SOURCE RULE (decision 06/10/2026) RUNS WHEN THIS PATCH NAMES THE FIELD — the
+		// prototype's own trigger (service.py:807-810, `if "source_id" in changes`). So "" on a project
+		// with allocation lines is source_required, and a source the project does not draw on is
+		// source_not_allocated.
+		//
+		// ⚠ A PATCH THAT DOES NOT NAME THE FIELD IS NOT CHECKED, AND THAT IS A CHOICE: a voucher entered
+		// before its project declared sources keeps its NULL source through a correction of its amount
+		// or description. Forcing a source there would make fixing a typo require answering a question
+		// the clerk did not open the dialog to answer; the voucher stays visible in §6's "chưa ghi rút
+		// từ nguồn nào" warning until somebody attributes it. The no-op branch above has already
+		// returned, so a resend of identical values writes nothing and is never refused.
+		if yc.NguonVonID != nil {
+			if err := domain.CheckVoucherSource(allocated, sau.NguonVonID); err != nil {
 				return err
 			}
 		}

@@ -8534,6 +8534,20 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "source_not_allocated",
+              "source_required"
+            ]
+          },
           "500": {
             "description": "Internal Server Error",
             "content": {
@@ -8737,7 +8751,12 @@
                   "$ref": "#/components/schemas/httpx.Error"
                 }
               }
-            }
+            },
+            "x-vigov-error-codes": [
+              "source_not_allocated",
+              "source_required",
+              "voucher_state"
+            ]
           },
           "500": {
             "description": "Internal Server Error",
@@ -12256,6 +12275,93 @@
               "duplicate_source",
               "source_has_disbursements"
             ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/investment-projects/{id}/disbursements": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Danh sách chứng từ giải ngân còn hiệu lực của một dự án, ngày chi mới nhất trước, kèm tên nguồn vốn",
+        "operationId": "finance_get_investment_projects_by_id_disbursements",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "06-giai-ngan §8.2",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.read"
+        },
+        "x-vigov-task": "8988f622f145",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.projectVouchersOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal Server Error",
@@ -33920,6 +34026,9 @@
           "funding_source_id": {
             "type": "string"
           },
+          "funding_source_name": {
+            "type": "string"
+          },
           "status": {
             "type": "string"
           },
@@ -34944,6 +35053,29 @@
           "disbursed_ratio",
           "funding_source_id",
           "name"
+        ],
+        "additionalProperties": false
+      },
+      "finance.projectVouchersOut": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/finance.chungTuRa"
+            }
+          },
+          "count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "items",
+          "project_id"
         ],
         "additionalProperties": false
       },

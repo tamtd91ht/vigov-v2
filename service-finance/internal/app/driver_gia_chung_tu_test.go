@@ -80,6 +80,11 @@ type khoCTGia struct {
 	// (rule 1) — and it is the case with no foreign key underneath to catch it (0007:102-113).
 	nguonVonCo map[string]bool
 
+	// allocated are the sources of the project's live allocation lines — what
+	// `FROM phan_bo_nguon_von` answers. EMPTY MEANS THE PROJECT DECLARED NO SOURCE, the case where a
+	// voucher must name none (domain.CheckVoucherSource).
+	allocated []string
+
 	loi error
 
 	// loiSau fails the FIRST statement containing this substring, and only that one.
@@ -169,6 +174,12 @@ func (c *connCTGia) QueryContext(_ context.Context, q string, args []driver.Name
 		return nil, err
 	}
 	switch {
+	case strings.Contains(q, "FROM phan_bo_nguon_von"):
+		ra := &rowsGia{cot: []string{"nguon_von_id"}}
+		for _, s := range c.k.allocated {
+			ra.hang = append(ra.hang, []driver.Value{s})
+		}
+		return ra, nil
 	case strings.Contains(q, "FROM du_an"):
 		if c.k.maDuAn == "" {
 			return &rowsGia{cot: []string{"ma"}}, nil
