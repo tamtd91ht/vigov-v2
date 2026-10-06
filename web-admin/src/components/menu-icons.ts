@@ -6,7 +6,6 @@ import {
   ClipboardCheck,
   ClipboardList,
   Contact,
-  ContactRound,
   FileText,
   LayoutDashboard,
   Map as MapIcon,
@@ -26,7 +25,7 @@ import { createElement } from "react";
 /**
  * Icon of each menu item — the prototype's (`vigov-require` `apps/admin/src/lib/navigation.ts`, ADR 0068
  * lần 5). "Báo cáo" is its `BarChart3` under the current lucide name `ChartColumn`. "Danh bạ cán bộ" is
- * not in the prototype's menu and keeps its own icon.
+ * a tab of "Nội dung Mini App" since 06/10/2026, as in the prototype, so it has no row and no icon here.
  *
  * KEYED BY THE ITEM'S LABEL (`nhan`), not by its route: placeholder items and parent rows have no route,
  * and the label is the one field every row has. The menu itself — which items, their order, their
@@ -50,7 +49,6 @@ export const MENU_ICONS: Readonly<Record<string, LucideIcon>> = {
   "Phản ánh người dân": MessageSquareWarning,
   "Bản đồ kinh tế số": MapIcon,
   "Nội dung Mini App": Smartphone,
-  "Danh bạ cán bộ": ContactRound,
   "Báo cáo": ChartColumn,
   "Người dùng & Phân quyền": UsersRound,
   "Người dùng": UserRound,

@@ -10,7 +10,7 @@ import { NHAN_XOA_DONG } from "./xoa-dong";
 import { GOI_Y_O_TIM, TAT_CA_KHOI, TRUY_VAN_DAU } from "./loc-danh-ba";
 import { pendingMarkerLabel } from "@/components/ui/pending-feature";
 
-import { PHAN_CHUA_DUNG } from "./nhan-danh-ba";
+import { ADD_LINK, IMPORT_LINK, NHAN_SO_KHOI, OPENS_STAFF_ADMIN, PHAN_CHUA_DUNG } from "./nhan-danh-ba";
 
 /**
  * `PHAN_CHUA_DUNG` CHỈ CÓ NGHĨA KHI NÓ RA TỚI TRANG. `tools/tien_do_san_pham.py` đếm mảng ấy với lời
@@ -67,6 +67,28 @@ describe("màn danh bạ — nút Mini App (một người lẫn nhiều ngườ
   });
 });
 
+describe("đầu ngăn theo bản mẫu (06/10/2026)", () => {
+  it("`Nhập từ Excel` and `Thêm cán bộ` lead to /nguoi-dung, where both live — never a second form here", () => {
+    const html = veMan();
+    const links = [...html.matchAll(/<a [^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/g)].map((m) => [m[1], m[2]?.replace(/<[^>]*>/g, "")]);
+    expect(links).toContainEqual(["/nguoi-dung", IMPORT_LINK]);
+    expect(links).toContainEqual(["/nguoi-dung", ADD_LINK]);
+    expect(html).toContain(`title="${OPENS_STAFF_ADMIN}"`);
+  });
+
+  it("three summary cards: two '?' (no total served) and the counted Số khối / đơn vị — no number before it is counted", () => {
+    const html = veMan();
+    expect(html).toContain(NHAN_SO_KHOI);
+    expect(html).toContain("đang đếm…");
+  });
+
+  it("no bulk delete and no row selection — publication stays one consent per person (Decree 13)", () => {
+    const html = veMan();
+    expect(html).not.toContain("Xoá đã chọn");
+    expect(html).not.toContain('type="checkbox"');
+  });
+});
+
 describe("hàng lọc — chữ tìm không có đường lên URL", () => {
   const BO_PHAN = [
     { id: "BP-LE", name: "VĂN PHÒNG ĐẢNG ỦY" },
@@ -103,10 +125,13 @@ describe("hàng lọc — chữ tìm không có đường lên URL", () => {
 
   it("ô trạng thái: đánh dấu đúng lựa chọn đang áp", () => {
     const html = dung({ tuKhoa: null, boPhan: "BP-CHAN", hienThi: "0" });
-    // A segmented control now (spec §7): exactly one radio checked, and it is the "0" one.
-    expect(html.match(/name="loc-hien-thi-danh-ba"/g)).toHaveLength(3);
-    expect(html.match(/checked=""/g)).toHaveLength(1);
-    expect(html).toMatch(/<input (?=[^>]*name="loc-hien-thi-danh-ba")(?=[^>]*value="0")(?=[^>]*checked="")[^>]*>/);
+    // The prototype's select (06/10/2026, it replaced the segmented control): the three codes, "0" chosen.
+    const select = /<select id="loc-hien-thi-danh-ba"[^>]*>(.*?)<\/select>/.exec(html)?.[1] ?? "";
+    expect([...select.matchAll(/<option value="([^"]*)"/g)].map((m) => m[1])).toEqual(["", "1", "0"]);
+    expect(select).toContain('<option value="0" selected="">Chưa hiện</option>');
+    expect(select.match(/selected=""/g)).toHaveLength(1);
+    // Outside the search form — a filter code, never typed text, so no native submit can carry it.
+    expect(html.indexOf('id="loc-hien-thi-danh-ba"')).toBeGreaterThan(html.indexOf("</form>"));
     expect(html).toContain('<option value="BP-CHAN" selected="">');
   });
 });

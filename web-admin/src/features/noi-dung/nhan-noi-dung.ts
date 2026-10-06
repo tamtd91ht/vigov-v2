@@ -90,6 +90,13 @@ export const MO_TA_MAN =
 
 export const NHAN_NUT_THEM = "+ Thêm nội dung";
 export const NHAN_NUT_DANH_MUC = "⊞ Danh mục tin";
+/**
+ * The FIRST sentence under the prototype's `Danh mục tin` dialog title (`CategoryManagerDialog.tsx`).
+ * Its second sentence ("categories fetched from the portal update themselves on every sync") is left
+ * out: here the portal sync maps portal categories onto content TYPES (ADR 0067 §2), it does not write
+ * this catalogue — printing it would tell the commune something this system does not do.
+ */
+export const CATEGORY_DIALOG_DESCRIPTION = "Bà con lọc tin theo danh mục này trên Mini App.";
 export const NHAN_NUT_HUY = "Huỷ";
 export const NHAN_NUT_LUU = "Lưu";
 /** §6 — the edit symbol of the action column. */
@@ -123,13 +130,13 @@ export const TIEU_DE_THE_DANH_BA = "Danh bạ chính quyền";
  * then would tell the commune that residents see nobody.
  */
 export const MO_TA_THE_DANH_BA =
-  "Chọn thêm hoặc bớt cán bộ hiện cho bà con ở màn Danh bạ cán bộ.";
+  "Chọn thêm hoặc bớt cán bộ hiện cho bà con ở ngăn Danh bạ cán bộ.";
 /** Said under the line when the count could not be read — a fact, never a guessed figure. */
 export const PUBLISHED_STAFF_UNREAD = "Chưa đọc được số cán bộ đang hiện cho bà con.";
 
 /** §4 verbatim, with the count the server returned: `Đang hiện 26 cán bộ cho bà con. …` */
 export function publishedStaffLine(n: number): string {
-  return `Đang hiện ${n} cán bộ cho bà con. Chọn thêm hoặc bớt ở màn Danh bạ cán bộ.`;
+  return `Đang hiện ${n} cán bộ cho bà con. Chọn thêm hoặc bớt ở ngăn Danh bạ cán bộ.`;
 }
 
 /**
@@ -1136,6 +1143,9 @@ export function categoryPatchBody(
  * Thông báo, màn Biên bản họp và màn Nhiệm vụ.
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
+/** Name of the table's thumbnail column part — the prototype's first column. */
+export const THUMBNAIL_PART = "Ảnh thu nhỏ trong bảng";
+
 export type PhanChuaDung = {
   readonly ten: string;
   readonly viSao: string;
@@ -1152,4 +1162,23 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "của xã mỗi lần cần, không lưu lại, nên đếm trên thẻ là hỏi Cổng mỗi lần mở màn này. Số chuyên " +
       "mục đã chọn xem ở mục “Cấu hình” của thẻ, dạng “đã chọn n/30” (mỗi xã chọn tối đa 30 chuyên mục).",
   },
+  // The prototype's first table column (06/10/2026): a thumbnail of each item. The LIST route serves only
+  // `has_image`; the signed preview link is on the DETAIL route alone, so the column holds a "?" header
+  // and "—" cells (`so-noi-dung.tsx`, `BangNoiDung`).
+  // A literal, not `THUMBNAIL_PART`: `tools/tien_do_san_pham.py` counts `ten: "` lines in this block, and
+  // a constant here drops the entry from the product progress table. `pendingContentPart(THUMBNAIL_PART)`
+  // throws on any mismatch, so the two cannot drift silently (the table test renders it).
+  {
+    ten: "Ảnh thu nhỏ trong bảng",
+    viSao:
+      "Bảng chưa hiện ảnh thu nhỏ của từng bài: danh sách máy chủ trả chỉ cho biết bài có ảnh hay không, " +
+      "còn đường xem ảnh chỉ có khi mở từng bài. Ảnh của một bài xem ở biểu mẫu sửa bài ấy.",
+  },
 ];
+
+/** One entry by its `ten`. Throws on an unknown name — a "?" with no description is never drawn. */
+export function pendingContentPart(ten: string): PhanChuaDung {
+  const found = PHAN_CHUA_DUNG.find((p) => p.ten === ten);
+  if (found === undefined) throw new Error(`PHAN_CHUA_DUNG has no entry "${ten}"`);
+  return found;
+}

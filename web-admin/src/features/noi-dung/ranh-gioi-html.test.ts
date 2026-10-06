@@ -31,6 +31,9 @@ const GOC = fileURLToPath(new URL(".", import.meta.url));
 const PHAM_VI = [
   fileURLToPath(new URL(".", import.meta.url)),
   fileURLToPath(new URL("../../app/noi-dung/", import.meta.url)),
+  // Since 06/10/2026 the screen renders at `/mini-app` (its `Nội dung` tab); `/noi-dung` redirects there.
+  fileURLToPath(new URL("../../app/mini-app/", import.meta.url)),
+  fileURLToPath(new URL("../mini-app/", import.meta.url)),
   fileURLToPath(new URL("../../lib/api/noi-dung.ts", import.meta.url)),
   // §3's routes (ADR 0067 §2). The card itself (`portal-sync-card.tsx`) is in this folder already.
   fileURLToPath(new URL("../../lib/api/portal-sync.ts", import.meta.url)),

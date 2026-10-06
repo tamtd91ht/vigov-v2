@@ -28,7 +28,7 @@ import type {
 export const PORTAL_SYNC_TITLE = "Đồng bộ tin từ Cổng thông tin điện tử";
 export const PORTAL_SYNC_DESCRIPTION =
   "Tin đã đăng trên Cổng thông tin của xã sẽ tự về sổ tin này, khỏi phải gõ lại.";
-export const RUN_NOW_LABEL = "⟳ Đồng bộ ngay";
+export const RUN_NOW_LABEL = "Đồng bộ ngay";
 export const CONFIGURE_LABEL = "Cấu hình";
 export const RELOAD_LABEL = "Tải lại";
 export const HISTORY_LABEL = "Lịch sử đồng bộ";

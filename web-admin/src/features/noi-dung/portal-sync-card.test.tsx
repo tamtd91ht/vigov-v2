@@ -189,7 +189,7 @@ describe("denied — the server's 403 reaches the card verbatim", () => {
     await mount(fakes({ settings: { ok: false, thongBao: sentence }, runs: { ok: false, thongBao: sentence } }));
     expect(chip()).toBeUndefined();
     expect(host!.querySelector('[role="alert"]')?.textContent).toBe(sentence);
-    expect(button("⟳ Đồng bộ ngay").disabled).toBe(true);
+    expect(button("Đồng bộ ngay").disabled).toBe(true);
     expect(button("Cấu hình").disabled).toBe(true);
   });
 });
@@ -199,7 +199,7 @@ describe("`content.update` gates the two write controls (prototype `ContentSourc
 
   it("DENIED: no `⟳ Đồng bộ ngay`, no `Cấu hình`, no run-blocked hint — status, last run and reload stay", async () => {
     await mount(fakes({ settings: { ok: true, duLieu: settingsOut({ configured: false }) } }), 1000, undefined, false);
-    expect(has("⟳ Đồng bộ ngay")).toBe(false);
+    expect(has("Đồng bộ ngay")).toBe(false);
     expect(has("Cấu hình")).toBe(false);
     expect(host!.querySelector("#portal-sync-run-blocked")).toBeNull();
     expect(host!.querySelector("dialog")).toBeNull();
@@ -209,7 +209,7 @@ describe("`content.update` gates the two write controls (prototype `ContentSourc
 
   it("ALLOWED: both are there, and `Cấu hình` opens the settings in an overlay `<dialog>` named by its heading", async () => {
     await mount(fakes());
-    expect(has("⟳ Đồng bộ ngay")).toBe(true);
+    expect(has("Đồng bộ ngay")).toBe(true);
     expect(host!.querySelector("dialog")).toBeNull();
     await click(button("Cấu hình"));
     const dialog = host!.querySelector("dialog")!;
@@ -260,13 +260,13 @@ describe("last run and error block", () => {
 describe("⟳ Đồng bộ ngay", () => {
   it("is off while the newest run is unfinished", async () => {
     await mount(fakes({ runs: page([RUNNING]) }));
-    expect(button("⟳ Đồng bộ ngay").disabled).toBe(true);
+    expect(button("Đồng bộ ngay").disabled).toBe(true);
     expect(text()).toContain("Đang có một lượt đồng bộ chạy");
   });
 
   it("is off before the commune configured anything", async () => {
     await mount(fakes({ settings: { ok: true, duLieu: settingsOut({ configured: false, api_key_set: false }) } }));
-    expect(button("⟳ Đồng bộ ngay").disabled).toBe(true);
+    expect(button("Đồng bộ ngay").disabled).toBe(true);
   });
 
   it("polls a BOUNDED number of times, then stops and says so", async () => {
@@ -275,9 +275,9 @@ describe("⟳ Đồng bộ ngay", () => {
     await mount(api);
     api.listRuns.mockImplementation(async () => page([RUNNING]));
 
-    await click(button("⟳ Đồng bộ ngay"));
+    await click(button("Đồng bộ ngay"));
     expect(api.startRun).toHaveBeenCalledTimes(1);
-    expect(button("⟳ Đồng bộ ngay").disabled).toBe(true);
+    expect(button("Đồng bộ ngay").disabled).toBe(true);
     const afterStart = api.listRuns.mock.calls.length; // mount + the read right after the 202
 
     for (let i = 0; i < POLL_MAX_ATTEMPTS + 5; i++) {
@@ -304,7 +304,7 @@ describe("⟳ Đồng bộ ngay", () => {
     api.listRuns.mockImplementation(async () => page([run({ id: "R2", outcome: "thanh-cong", error_summary: [] })]));
     const settingsBefore = api.getSettings.mock.calls.length;
 
-    await click(button("⟳ Đồng bộ ngay"));
+    await click(button("Đồng bộ ngay"));
     for (let i = 0; i < 6; i++) {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1000);
@@ -313,7 +313,7 @@ describe("⟳ Đồng bộ ngay", () => {
     // mount + after-202 + poll 1 + poll 2 (finished) — then silence.
     expect(api.listRuns).toHaveBeenCalledTimes(4);
     expect(api.getSettings.mock.calls.length).toBe(settingsBefore + 1);
-    expect(button("⟳ Đồng bộ ngay").disabled).toBe(false);
+    expect(button("Đồng bộ ngay").disabled).toBe(false);
     expect(text()).not.toContain(POLL_GAVE_UP);
   });
 
@@ -322,9 +322,9 @@ describe("⟳ Đồng bộ ngay", () => {
     const sentence = "Đang có một lượt đồng bộ của xã. Hãy chờ lượt ấy xong rồi chạy lại.";
     api.startRun.mockImplementationOnce(async () => ({ ok: false, thongBao: sentence }));
     await mount(api);
-    await click(button("⟳ Đồng bộ ngay"));
+    await click(button("Đồng bộ ngay"));
     expect(host!.querySelector('[role="alert"]')?.textContent).toBe(sentence);
-    await click(button("⟳ Đồng bộ ngay"));
+    await click(button("Đồng bộ ngay"));
     const [k1, k2] = api.startRun.mock.calls.map((c) => c[0]);
     expect(k1).toBe(k2);
     expect(k1).not.toBe("");
@@ -336,7 +336,7 @@ describe("⟳ Đồng bộ ngay", () => {
     const sentence = "Hệ thống đang chạy đồng bộ cho các xã khác. Hãy thử lại sau ít phút.";
     api.startRun.mockImplementation(async () => ({ ok: false, thongBao: sentence, retryAfterSeconds: 60 }));
     await mount(api);
-    await click(button("⟳ Đồng bộ ngay"));
+    await click(button("Đồng bộ ngay"));
     const alert = host!.querySelector('[role="alert"]')!;
     expect(alert.textContent).toContain(sentence);
     expect(host!.querySelector('[data-testid="portal-sync-retry-wait"]')?.textContent).toBe(
@@ -349,14 +349,14 @@ describe("⟳ Đồng bộ ngay", () => {
     expect(api.startRun).toHaveBeenCalledTimes(1);
     expect(api.listRuns.mock.calls.length).toBe(runsBefore);
     // The officer may press again; the button is not held.
-    expect(button("⟳ Đồng bộ ngay").disabled).toBe(false);
+    expect(button("Đồng bộ ngay").disabled).toBe(false);
   });
 
   it("a refusal without Retry-After shows no wait line", async () => {
     const api = fakes();
     api.startRun.mockImplementationOnce(async () => ({ ok: false, thongBao: "Bộ chạy đồng bộ đang khởi động lại." }));
     await mount(api);
-    await click(button("⟳ Đồng bộ ngay"));
+    await click(button("Đồng bộ ngay"));
     expect(host!.querySelector('[data-testid="portal-sync-retry-wait"]')).toBeNull();
   });
 });
@@ -569,7 +569,7 @@ describe("Cấu hình — categories", () => {
     expect(host!.querySelector("#portal-sync-api-url")).not.toBeNull();
     expect(chip()).toBe("Đang bật");
     expect(host!.querySelector('[data-testid="portal-sync-last-run"]')).not.toBeNull();
-    expect(button("⟳ Đồng bộ ngay").disabled).toBe(false);
+    expect(button("Đồng bộ ngay").disabled).toBe(false);
   });
 
   it("ALLOWED: the same card with content.update draws the picker and no permission sentence", async () => {

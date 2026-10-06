@@ -14,10 +14,11 @@ import { pendingPart } from "./nhan-danh-ba";
  * a child element this is never invoked there.
  */
 export function PendingStaffKpis() {
+  // A fragment: the two cards sit in the caller's grid, beside the counted third (prototype: three in a row).
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:max-w-2xl">
+    <>
       <PendingStatCard info={pendingPart("Tổng số cán bộ")} icon={Users} />
       <PendingStatCard info={pendingPart("Đang hiện trên Mini App")} icon={Smartphone} />
-    </div>
+    </>
   );
 }

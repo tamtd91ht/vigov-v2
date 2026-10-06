@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { pendingMarkerLabel } from "@/components/ui/pending-feature";
 import type { comms_danhMucRa, comms_noiDungRa } from "@/lib/api/schema.gen";
 
 import {
@@ -34,6 +35,7 @@ import {
   NHAN_O_DANG,
   PENDING_REVIEW_HINT,
   PHAN_CHUA_DUNG,
+  THUMBNAIL_PART,
   portalCategoryLabel,
   PUBLISHED_STAFF_UNREAD,
   SO_RONG,
@@ -144,6 +146,9 @@ function veBang(
     <BangNoiDung ds={ds} danhMuc={dm} sua={() => {}} remove={() => {}} canEdit={canEdit} />,
   );
 }
+
+/** The table's body only — the header carries a "?" popover trigger of its own. */
+const bodyOf = (html: string) => html.slice(html.indexOf("<tbody>"));
 
 function veForm(gt = FORM_TRONG, h?: comms_noiDungRa, coverState?: CoverUploadState) {
   return renderToStaticMarkup(
@@ -279,7 +284,8 @@ describe("bảng nội dung §6", () => {
     expect(html).toContain(
       `aria-label="${nhuTrongHTML(contentDeleteAriaLabel("Xã tổ chức hội nghị tổng kết công tác chuyển đổi số"))}"`,
     );
-    expect(html.match(/aria-haspopup="dialog"/g)?.length).toBe(2);
+    // Counted in the BODY: the header's thumbnail "?" opens a popover of its own.
+    expect(bodyOf(html).match(/aria-haspopup="dialog"/g)?.length).toBe(2);
   });
 
   it("bài chưa xếp danh mục hiện đúng chữ đặc tả, không hiện ô trống", () => {
@@ -318,22 +324,26 @@ describe("`content.update` gates the table's write controls", () => {
     expect(html).not.toContain(CONTENT_DELETE_TITLE);
     expect(html).not.toContain("Xoá");
     expect(html).not.toContain(`>${ACTIONS_COLUMN_LABEL}</th>`);
-    expect(html).not.toContain("aria-haspopup");
-    expect(html.match(/<th scope="col">/g)?.length).toBe(6);
+    expect(bodyOf(html)).not.toContain("aria-haspopup");
+    // Eight header cells: the thumbnail "?" (prototype, not served), Tiêu đề, Loại, Chuyên mục, Tệp đính
+    // kèm, Ngày đăng, Lượt xem, Trạng thái — and no Thao tác.
+    expect(html.match(/<th scope="col"/g)?.length).toBe(8);
     expect(html).toContain("Xã tổ chức hội nghị tổng kết công tác chuyển đổi số");
   });
 
   it("ALLOWED: the pencil and the trash on every row, each saying it opens a dialog", () => {
     const html = veBang([hang({ id: "A" }), hang({ id: "B" })], [danhMuc()], true);
-    expect(html.match(/aria-haspopup="dialog"/g)?.length).toBe(4);
+    expect(bodyOf(html).match(/aria-haspopup="dialog"/g)?.length).toBe(4);
     expect(html.match(new RegExp(`title="${CONTENT_DELETE_TITLE}"`, "g"))?.length).toBe(2);
     expect(html).toContain(`>${ACTIONS_COLUMN_LABEL}</th>`);
   });
 
-  it("`+ Thêm nội dung`: absent without the key, present with it", () => {
+  it("`+ Thêm nội dung`: absent without the key, present with it — the prototype's Plus icon + words", () => {
     expect(renderToStaticMarkup(<HeaderActions canEdit={false} addOpen={false} openAdd={() => {}} />)).toBe("");
     const html = renderToStaticMarkup(<HeaderActions canEdit addOpen={false} openAdd={() => {}} />);
-    expect(html).toContain(nhuTrongHTML(NHAN_NUT_THEM));
+    expect(html).toContain("lucide-plus");
+    expect(html).toContain("Thêm nội dung");
+    expect(html).not.toContain(nhuTrongHTML(NHAN_NUT_THEM));
     expect(html).toContain('aria-haspopup="dialog"');
   });
 
@@ -713,8 +723,8 @@ describe("thẻ Danh bạ chính quyền §4", () => {
 
   it("after a successful read: §4's sentence with the server's number, and the link", () => {
     const html = card({ ok: true, duLieu: 26 });
-    expect(html).toContain("Đang hiện 26 cán bộ cho bà con. Chọn thêm hoặc bớt ở màn Danh bạ cán bộ.");
-    expect(html).toContain('href="/danh-ba"');
+    expect(html).toContain("Đang hiện 26 cán bộ cho bà con. Chọn thêm hoặc bớt ở ngăn Danh bạ cán bộ.");
+    expect(html).toContain('href="/mini-app?tab=danh-ba"');
   });
 
   it("a successful 0 is said — it is true", () => {
@@ -726,7 +736,7 @@ describe("thẻ Danh bạ chính quyền §4", () => {
     expect(html).not.toMatch(/\d+ cán bộ/);
     expect(html).toContain(MO_TA_THE_DANH_BA);
     expect(html).not.toContain(PUBLISHED_STAFF_UNREAD);
-    expect(html).toContain('href="/danh-ba"');
+    expect(html).toContain('href="/mini-app?tab=danh-ba"');
   });
 
   it("after a failed read: NO number — never a 0 that lies — and the failure is said", () => {
@@ -936,3 +946,33 @@ describe("portal-synced items in the table and the edit form", () => {
     expect(veForm(giaTriTuHang(live), live)).not.toContain(nhuTrongHTML(PENDING_REVIEW_HINT));
   });
 });
+
+describe("bảng theo bản mẫu (ADR 0068 lần 5, 06/10/2026)", () => {
+  it("the prototype's thumbnail column is a '?' header and '—' cells: the list route serves no image link", () => {
+    const html = veBang([hang()]);
+    expect(html).toContain(`aria-label="${pendingMarkerLabel(THUMBNAIL_PART)}"`);
+    expect(bodyOf(html)).toContain("data-pending");
+    expect(html).not.toContain("<img");
+  });
+
+  it("`Loại` is drawn under `Tất cả` only — each other tab IS one type, as in the prototype", () => {
+    const all = renderToStaticMarkup(
+      <BangNoiDung ds={[hang()]} danhMuc={[danhMuc()]} sua={() => {}} remove={() => {}} canEdit showType />,
+    );
+    const one = renderToStaticMarkup(
+      <BangNoiDung ds={[hang()]} danhMuc={[danhMuc()]} sua={() => {}} remove={() => {}} canEdit showType={false} />,
+    );
+    expect(all).toContain(">Loại</th>");
+    expect(one).not.toContain(">Loại</th>");
+  });
+
+  it("a long title stays one line, cut by CSS, the whole title on hover; the table scrolls inside its frame", () => {
+    const long = "Tiêu đề rất dài ".repeat(20).trim();
+    const html = veBang([hang({ title: long })]);
+    expect(html).toContain(`title="${long}"`);
+    expect(html).toMatch(/class="ten-can-bo block overflow-hidden text-ellipsis whitespace-nowrap"/);
+    expect(html).toContain("max-w-[34rem]");
+    expect(html).toContain("overflow-auto");
+  });
+});
+

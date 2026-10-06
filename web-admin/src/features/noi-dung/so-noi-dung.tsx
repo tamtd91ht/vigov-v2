@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  ArrowRight,
   AudioLines,
   BookUser,
   CalendarClock,
@@ -17,6 +16,7 @@ import {
   FolderTree,
   Image as ImageIcon,
   ImagePlus,
+  Images,
   LayoutGrid,
   Link as LinkIcon,
   ListOrdered,
@@ -26,7 +26,9 @@ import {
   Pencil,
   Pilcrow,
   Plus,
+  Radio,
   RefreshCw,
+  Search,
   Send,
   Shapes,
   Smartphone,
@@ -36,16 +38,16 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
+import { createElement, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Field } from "@/components/ui/field";
 import { IconButton } from "@/components/ui/icon-button";
 import { Notice } from "@/components/ui/notice";
+import { PendingCell, PendingColumnHeader } from "@/components/ui/pending-feature";
 import { PageHeader } from "@/components/ui/page-header";
 import { cn } from "@/lib/cn";
 import {
@@ -56,6 +58,7 @@ import {
   type NganXepConTro,
 } from "@/features/cau-hinh/ngan-xep-con-tro";
 import { tabKeTheoPhim } from "@/features/cau-hinh/thanh-tab-cau-hinh";
+import { miniAppTabHref } from "@/features/mini-app/mini-app-tabs";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 import type { KetQua } from "@/lib/api/goi";
 import {
@@ -93,6 +96,7 @@ import {
   bannerLinkTapWarning,
   canEditContent,
   CANH_BAO_HTML_THO,
+  CATEGORY_DIALOG_DESCRIPTION,
   CHUA_XEP_DANH_MUC,
   CLOSE_LABEL,
   CONTENT_DELETE_GONE,
@@ -137,6 +141,7 @@ import {
   nhanTrangThai,
   pageAfterDelete,
   PENDING_REVIEW_HINT,
+  pendingContentPart,
   portalCategoryLabel,
   publishedAtLabel,
   publishedStaffText,
@@ -147,6 +152,7 @@ import {
   STATUS_PENDING_REVIEW,
   SUMMARY_SAPO_HINT,
   TEN_DANH_MUC_TOI_DA,
+  THUMBNAIL_PART,
   TIEU_DE_FORM_THEM,
   TIEU_DE_MAN,
   TIEU_DE_THE_DANH_BA,
@@ -500,8 +506,9 @@ export function SoNoiDung() {
         }
       />
 
-      {/* §2: Card 1 and Card 2 side by side on a wide screen, stacked at 320px. */}
-      <div className="content-top-cards">
+      {/* Prototype order (`ContentWorkspace.tsx`): the portal sync panel, then the government-directory link
+          card, each full width, one under the other. */}
+      <div className="mb-5 flex min-w-0 flex-col gap-5">
         <PortalSyncCard
           canEdit={canEdit}
           // `Xem tin chờ duyệt` on the card is the same `Trạng thái` filter, set from there — one filter,
@@ -542,6 +549,8 @@ export function SoNoiDung() {
               <X aria-hidden="true" focusable="false" />
             </IconButton>
           </div>
+          {/* The prototype's dialog description (`CategoryManagerDialog.tsx`), verbatim. */}
+          <p className="m-0 mb-3 text-[13px] text-ink-500">{CATEGORY_DIALOG_DESCRIPTION}</p>
           <CategoryAdmin
             categories={dsDanhMuc}
             update={updateContentCategory}
@@ -568,7 +577,8 @@ export function SoNoiDung() {
           {chiTiet.pha === "xong" ? (
             <FormNoiDung
               key={`sua|${dangSuaID}|${lanGhiXong}`}
-              tieuDeForm={`Sửa nội dung: ${chiTiet.duLieu.title}`}
+              // The prototype's title, verbatim ("Sửa nội dung"); the article's own title is the first box.
+              tieuDeForm={EDIT_FORM_TITLE}
               moTa={MO_TA_FORM_THEM}
               giaTriDau={giaTriTuHang(chiTiet.duLieu)}
               hang={chiTiet.duLieu}
@@ -624,11 +634,13 @@ export function SoNoiDung() {
         />
       )}
 
-      {/* Spec §8.5: ONE list card — tabs, the filter row, the table and its pagination. */}
-      <Card as="section" className="mt-4" aria-labelledby="tieu-de-so-noi-dung">
-      <CardHeader className="border-b-0 pb-0">
-        <CardTitle id="tieu-de-so-noi-dung">Sổ nội dung Mini App</CardTitle>
-      </CardHeader>
+      {/* The prototype's list, in its order: the type tabs (a pill bar), the filter row, then ONE bordered
+          frame holding the table and its pagination. The heading stays for screen readers only — the
+          prototype draws none, and a section without a name is a landmark nobody can find. */}
+      <section className="min-w-0" aria-labelledby="tieu-de-so-noi-dung">
+      <h2 id="tieu-de-so-noi-dung" className="an-thi-giac">
+        Sổ nội dung Mini App
+      </h2>
       <ThanhTabLoai
         loai={loc.loai}
         datLoai={(l) => {
@@ -644,6 +656,7 @@ export function SoNoiDung() {
         // The panel itself takes focus after the tablist (WAI-ARIA tabs): Tab from the selected tab
         // lands here, not on the first filter box three controls further down.
         tabIndex={0}
+        className="min-w-0"
       >
         <HangLocNoiDung
           danhMucID={loc.danhMucID}
@@ -667,11 +680,14 @@ export function SoNoiDung() {
           // edit/hide/delete and the add form, nothing to read in it that the filter does not show.
           extra={
             canEdit ? (
+              // Prototype: `variant="outline" size="sm" className="ml-auto"` with `FolderTree`.
               <Button
                 type="button"
                 variant="secondary"
+                size="sm"
+                className="min-h-0 sm:ml-auto"
                 aria-haspopup="dialog"
-                icon={<LayoutGrid aria-hidden="true" focusable="false" />}
+                icon={<FolderTree aria-hidden="true" focusable="false" />}
                 onClick={() => {
                   dongMoiBieuMau();
                   datDangMoDanhMuc(true);
@@ -684,18 +700,19 @@ export function SoNoiDung() {
         />
 
         {danhMuc !== null && !danhMuc.ok && (
-          <p className="thong-bao-loi mx-4 my-3" role="alert">
+          <p className="thong-bao-loi mb-4" role="alert">
             {danhMuc.thongBao}
           </p>
         )}
 
         {deleteNotice !== null && (
-          <Notice className="mx-4 my-3" icon={CircleCheck} role="status">
+          <Notice className="mb-4" icon={CircleCheck} role="status">
             {deleteNotice}
           </Notice>
         )}
         {/* LOADING (spec §8b): the sentence stays the live announcement; the eye gets rows shaped like
             the table, so the card does not jump when the answer lands. */}
+        <div className="min-w-0 overflow-hidden rounded-xl border border-line bg-surface">
         {so.pha === "dangTai" && (
           <>
             <p role="status" className="an-thi-giac">
@@ -742,9 +759,11 @@ export function SoNoiDung() {
               setDeleting(nd);
             }}
             canEdit={canEdit}
+            showType={loc.loai === ""}
           />
+          {/* Inside the frame, under the table (prototype: "the bar sits in the table frame"). */}
           <nav
-            className="dieu-huong-trang m-0 border-t border-line px-4 py-3"
+            className="dieu-huong-trang m-0 border-t border-line px-4 py-2.5"
             aria-label="Phân trang sổ nội dung Mini App"
           >
             <Button
@@ -773,15 +792,18 @@ export function SoNoiDung() {
           </nav>
         </>
         )}
+        </div>
       </div>
-      </Card>
+      </section>
     </div>
   );
 }
 
 /**
- * §2's page-header action: `[+ Thêm nội dung]`. Drawn only with `content.update` (`canEditContent`):
- * before the session is read it is absent too, so it can appear but never flash and vanish.
+ * §2's page-header action: `[+ Thêm nội dung]` — drawn as the prototype draws it, a `Plus` icon and the
+ * words (`NHAN_NUT_THEM` without its "+", the icon now says it). Drawn only with `content.update`
+ * (`canEditContent`): before the session is read it is absent too, so it can appear but never flash and
+ * vanish.
  */
 export function HeaderActions({
   canEdit,
@@ -795,15 +817,23 @@ export function HeaderActions({
   if (!canEdit) return null;
   return (
     <div className="cum-nut">
-      <Button type="button" variant="primary" aria-haspopup="dialog" aria-expanded={addOpen} onClick={openAdd}>
-        {NHAN_NUT_THEM}
+      <Button
+        type="button"
+        variant="primary"
+        aria-haspopup="dialog"
+        aria-expanded={addOpen}
+        icon={<Plus aria-hidden="true" focusable="false" />}
+        onClick={openAdd}
+      >
+        {withoutLeadingGlyph(NHAN_NUT_THEM)}
       </Button>
     </div>
   );
 }
 
 /**
- * Thẻ §4 — Danh bạ chính quyền: `Đang hiện {n} cán bộ cho bà con` and the link to `/danh-ba`.
+ * Thẻ §4 — Danh bạ chính quyền, drawn as the prototype's link card (`ContentWorkspace.tsx`): the whole
+ * card is ONE link to the `Danh bạ cán bộ` tab of this screen, icon · title over the line · `Mở →`.
  *
  * THE NUMBER IS SHOWN ONLY AFTER THE SERVER ANSWERED (`publishedStaffText`). While loading, or when the
  * read failed, the line carries no number at all — a `0` there would tell the commune that residents
@@ -812,23 +842,22 @@ export function HeaderActions({
 export function TheDanhBaChinhQuyen({ publishedCount }: { publishedCount: KetQua<number> | null }) {
   const text = publishedStaffText(publishedCount);
   return (
-    <section className="khoi-chi-tiet flex flex-col gap-2" aria-labelledby="government-directory-title">
-      <div className="dau-khoi-chi-tiet">
-        <h3 id="government-directory-title" className="flex items-center gap-2">
-          <BookUser aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] text-brand-600" />
+    <Link
+      href={miniAppTabHref("danh-ba")}
+      className="flex min-w-0 items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 no-underline transition-colors hover:border-brand-500/40 hover:bg-brand-50"
+    >
+      <BookUser aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-5 shrink-0 text-brand-600" />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span id="government-directory-title" className="text-[13px] font-semibold text-ink-900">
           {TIEU_DE_THE_DANH_BA}
-        </h3>
-        <Link
-          className={cn("nut-phu flex-row-reverse", buttonVariants({ variant: "secondary", size: "sm" }))}
-          href="/danh-ba"
-        >
-          <ArrowRight aria-hidden="true" focusable="false" />
-          Mở danh bạ cán bộ
-        </Link>
-      </div>
-      <p className="m-0 text-sm text-ink-700">{text.line}</p>
-      {text.note !== null && <p className="ghi-chu m-0">{text.note}</p>}
-    </section>
+        </span>
+        <span className="text-xs text-ink-500">{text.line}</span>
+        {text.note !== null && <span className="ghi-chu text-xs">{text.note}</span>}
+      </span>
+      <span className="shrink-0 text-[12.5px] font-semibold text-brand-700">
+        Mở <span aria-hidden="true">→</span>
+      </span>
+    </Link>
   );
 }
 
@@ -873,7 +902,13 @@ export function ThanhTabLoai({
   }
 
   return (
-    <div className="thanh-tab-cau-hinh mt-2 px-2" role="tablist" aria-label="Loại nội dung">
+    // The prototype's pill bar: `w-fit gap-1 rounded-[10px] border p-1`, the open tab white and raised.
+    // `flex-wrap` + `max-w-full`: seven tabs wrap at 320px instead of spilling past the page edge.
+    <div
+      className="mb-4 flex w-fit max-w-full flex-wrap gap-1 rounded-[10px] border border-line bg-surface-muted p-1"
+      role="tablist"
+      aria-label="Loại nội dung"
+    >
       {types.map((type, i) => (
         <button
           key={type === "" ? "all" : type}
@@ -888,12 +923,26 @@ export function ThanhTabLoai({
           tabIndex={loai === type ? 0 : -1}
           onClick={() => datLoai(type)}
           onKeyDown={(e) => onKey(e, i)}
+          className={cn(
+            "flex min-h-8 items-center gap-1.5 rounded-[8px] px-3 py-1.5 text-[12.5px] font-semibold whitespace-nowrap",
+            loai === type ? "bg-surface text-ink-900 shadow-sm" : "text-ink-500 hover:text-ink-900",
+          )}
         >
+          {createElement(typeTabIcon(type), { "aria-hidden": true, focusable: "false", className: "size-3.5" })}
           {type === "" ? MOI_LOAI_NHAN : nhanLoai(type)}
         </button>
       ))}
     </div>
   );
+}
+
+/** The prototype's tab icons: radio for broadcasts, video, images for banners, a newspaper for the rest. */
+function typeTabIcon(type: string): LucideIcon {
+  if (type === "") return LayoutGrid;
+  if (type === CONTENT_TYPE_BROADCAST) return Radio;
+  if (type === CONTENT_TYPE_VIDEO) return Video;
+  if (type === CONTENT_TYPE_BANNER) return Images;
+  return Newspaper;
 }
 
 /**
@@ -930,12 +979,15 @@ export function HangLocNoiDung({
   }
 
   return (
-    <div className="hang-loc m-0 border-b border-line px-4 py-3.5">
+    // The prototype's filter row: `mb-4 flex flex-wrap items-center gap-2.5` — a 288px search box with
+    // its icon inside, the category select, then (ours) the status select, and what closes the row
+    // pushed right (`ml-auto`). Labels stay in the DOM for screen readers; the icons and placeholders
+    // say them on screen, as the prototype does.
+    <div className="hang-loc mt-0 mb-4 flex min-w-0 flex-row flex-wrap items-center gap-2.5">
       {/* Ô TÌM GỬI BẰNG SUBMIT, KHÔNG GỬI THEO TỪNG PHÍM: mỗi phím là một lời gọi mang chữ cán bộ
           đang gõ vào một URL, và một URL đi vào mọi log truy cập (luật 3, cấm #4). */}
-      <form className="form-tra-cuu" onSubmit={gui} role="search">
-        <div className="o-nhap">
-          <label htmlFor="tim-noi-dung">Tìm theo tiêu đề</label>
+      <form className="form-tra-cuu m-0 flex min-w-0 max-w-full flex-[0_1_auto] items-center gap-2" onSubmit={gui} role="search">
+        <Field label="Tìm theo tiêu đề" htmlFor="tim-noi-dung" hideLabel icon={Search} grow="auto" className="w-72 max-w-full min-w-0 flex-[0_1_18rem]">
           <input
             id="tim-noi-dung"
             name="tim-noi-dung"
@@ -947,29 +999,28 @@ export function HangLocNoiDung({
             maxLength={TU_KHOA_TIM_TOI_DA}
             onChange={(e) => datTim(e.target.value)}
           />
-        </div>
-        <button className="nut-phu" type="submit">
+        </Field>
+        <Button type="submit" variant="secondary" size="sm">
           Tìm
-        </button>
+        </Button>
       </form>
 
-      {/* `max-md:flex-none`: below 768px the row is a COLUMN, where Field's 220px basis would be a height. */}
-      <Field label="Danh mục" htmlFor="loc-danh-muc" kind="select" icon={FolderTree} className="max-md:flex-none">
-        <select
-          id="loc-danh-muc"
-          value={danhMucID}
-          onChange={(e) => datDanhMucID(e.target.value)}
-        >
-          <option value="">{MOI_DANH_MUC}</option>
-          {dungCayDanhMuc(danhMuc).map((m) => (
-            <option key={m.dm.id} value={m.dm.id}>
-              {nhanMucDanhMuc(m)}
-            </option>
-          ))}
-        </select>
-      </Field>
+      {/* Prototype: the category select only once the commune has categories — a select holding only
+          "Tất cả" takes room and does nothing. Kept while a category is the active filter. */}
+      {(danhMuc.length > 0 || danhMucID !== "") && (
+        <Field label="Danh mục" htmlFor="loc-danh-muc" hideLabel kind="select" icon={FolderTree} grow="auto" className="min-w-0 max-w-full">
+          <select id="loc-danh-muc" value={danhMucID} onChange={(e) => datDanhMucID(e.target.value)}>
+            <option value="">{MOI_DANH_MUC}</option>
+            {dungCayDanhMuc(danhMuc).map((m) => (
+              <option key={m.dm.id} value={m.dm.id}>
+                {nhanMucDanhMuc(m)}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
 
-      <Field label="Trạng thái" htmlFor="loc-trang-thai" kind="select" icon={CircleDot} className="max-md:flex-none">
+      <Field label="Trạng thái" htmlFor="loc-trang-thai" hideLabel kind="select" icon={CircleDot} grow="auto" className="min-w-0 max-w-full">
         <select id="loc-trang-thai" value={status} onChange={(e) => setStatus(e.target.value)}>
           {STATUS_FILTER_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>
@@ -1005,6 +1056,7 @@ export function BangNoiDung({
   sua,
   remove,
   canEdit,
+  showType = true,
 }: {
   ds: readonly comms_noiDungRa[];
   danhMuc: readonly comms_danhMucRa[];
@@ -1012,6 +1064,11 @@ export function BangNoiDung({
   /** Opens the delete dialog for this row. */
   remove: (nd: comms_noiDungRa) => void;
   canEdit: boolean;
+  /**
+   * The `Loại` column. The prototype has none — each of its tabs IS one type. Ours keeps `Tất cả`, where
+   * rows of every type are mixed, so the column is drawn there and only there.
+   */
+  showType?: boolean;
 }) {
   // ONE sentence for "nothing yet" and "nothing in this slice": the screen does not tell the two apart,
   // and `SO_RONG` already says "trong lát cắt đang xem" (spec §8b: only states the code distinguishes).
@@ -1020,32 +1077,64 @@ export function BangNoiDung({
   return (
     <>
       <div className={TABLE_SCROLL_CLASS}>
-        <table className="bang-can-bo">
+        {/* The prototype's column widths as hints (`w-16 / w-48 / w-28 / w-32 / w-24 / w-28 / w-32`) and,
+            as there, the title capped by an absolute width (`max-w-[34rem]`): a long title can never push
+            Ngày đăng and Trạng thái off the frame — it is cut by "…" with the whole title on hover. Cells
+            never wrap (`.bang-can-bo td`), so below `min-w` the frame scrolls sideways, inside itself. */}
+        <table className="bang-can-bo w-full min-w-[60rem]">
           <caption className="an-thi-giac">Sổ nội dung Mini App của xã</caption>
           <thead>
             <tr>
+              {/* The prototype's thumbnail column: the list route serves no image link (only the detail
+                  does), so it holds the "?" of a part not built (`PHAN_CHUA_DUNG`). */}
+              <PendingColumnHeader info={pendingContentPart(THUMBNAIL_PART)} className="w-16">
+                Ảnh
+              </PendingColumnHeader>
               <th scope="col">Tiêu đề</th>
-              <th scope="col">Loại</th>
-              <th scope="col">Chuyên mục</th>
-              <th scope="col">Tệp đính kèm</th>
-              <th scope="col">Ngày đăng</th>
+              {showType && (
+                <th scope="col" className="w-28">
+                  Loại
+                </th>
+              )}
+              <th scope="col" className="w-48">
+                Chuyên mục
+              </th>
+              <th scope="col" className="w-28">
+                Tệp đính kèm
+              </th>
+              <th scope="col" className="w-36">
+                Ngày đăng
+              </th>
               {/* Not sortable (owner, 02/10/2026): keyset paging over a number that moves while the
                   officer pages would skip and repeat rows. */}
-              <th scope="col" className="text-right">
+              <th scope="col" className="w-24 text-right">
                 {VIEW_COUNT_LABEL}
               </th>
-              <th scope="col">Trạng thái</th>
-              {canEdit && <th scope="col">{ACTIONS_COLUMN_LABEL}</th>}
+              <th scope="col" className="w-32">
+                Trạng thái
+              </th>
+              {canEdit && (
+                <th scope="col" className="w-28">
+                  {ACTIONS_COLUMN_LABEL}
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
             {ds.map((nd) => {
               const trich = trichTomTat(nd.summary);
               const firstPublished = publishedAtLabel(nd);
+              const category = tenDanhMuc(nd.category_id, danhMuc);
               return (
                 <tr key={nd.id}>
-                  <td>
-                    <span className="ten-can-bo">{nd.title}</span>
+                  <PendingCell className="align-top" />
+                  <td className="align-top">
+                    {/* One line, cut by "…", the whole title on hover — rows stay one height. The wrapper
+                        clips, so no sub-line can spill into the next column either. */}
+                    <div className="max-w-[34rem] min-w-0 overflow-hidden">
+                    <span className="ten-can-bo block overflow-hidden text-ellipsis whitespace-nowrap" title={nd.title}>
+                      {nd.title}
+                    </span>
                     {trich !== "" && <span className="dong-phu summary-one-line">{trich}</span>}
                     {/* The portal sync's items say so under the title (ADR 0067 §2): the
                         commune must see which rows came from its portal, most of all the
@@ -1055,13 +1144,20 @@ export function BangNoiDung({
                     )}
                     {/* The portal category it came in under (C2, 02/10/2026) — synced rows only. */}
                     {nd.source === SOURCE_PORTAL_SYNC && portalCategoryName(nd) !== "" && (
-                      <span className="dong-phu">{portalCategoryLabel(portalCategoryName(nd))}</span>
+                      <span className="dong-phu overflow-hidden text-ellipsis whitespace-nowrap">
+                        {portalCategoryLabel(portalCategoryName(nd))}
+                      </span>
                     )}
                     {nd.hand_edited && <span className="dong-phu">{NHAN_DA_SUA_TAY}</span>}
+                    </div>
                   </td>
-                  <td>{nhanLoai(nd.type)}</td>
-                  <td>{tenDanhMuc(nd.category_id, danhMuc)}</td>
-                  <td>
+                  {showType && <td className="align-top">{nhanLoai(nd.type)}</td>}
+                  <td className="align-top text-xs text-ink-500">
+                    <span className="block max-w-[14rem] overflow-hidden text-ellipsis whitespace-nowrap" title={category}>
+                      {category}
+                    </span>
+                  </td>
+                  <td className="align-top text-xs">
                     {nd.has_image ? (
                       <span className="inline-flex items-center gap-1.5">
                         <ImageIcon aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-4 text-ink-500" />
@@ -1071,50 +1167,51 @@ export function BangNoiDung({
                       nhanTepDinhKem(false)
                     )}
                   </td>
-                  <td>
+                  <td className="align-top text-xs">
                     {nhanNgayDang(nd.published_on)}
                     {firstPublished !== null && <span className="dong-phu">{firstPublished}</span>}
                   </td>
-                  <td className="text-right tabular-nums">
-                    <span className="inline-flex items-center justify-end gap-1.5">
-                      <Eye aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-4 text-ink-500" />
+                  <td className="align-top text-right text-xs tabular-nums">
+                    <span className="inline-flex items-center justify-end gap-1.5 whitespace-nowrap text-ink-500">
+                      <Eye aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-3.5 text-ink-500" />
                       {viewCountText(nd.view_count)}
                     </span>
                   </td>
-                  <td>
+                  <td className="align-top">
                     <ContentStatusBadge status={nd.status} />
                   </td>
                   {canEdit && (
-                    <td className="o-thao-tac flex-nowrap justify-end gap-1">
-                      {/* 34px icon buttons (spec §7 "Nút trong bảng"). `min-h-0` lifts the legacy 44px of
-                          `.o-thao-tac .nut-phu`; the names below are unchanged. */}
-                      <Button
-                        type="button"
-                        variant="icon"
-                        size="sm"
-                        className="min-h-0"
-                        aria-haspopup="dialog"
-                        onClick={() => sua(nd.id)}
-                        // Ký hiệu một mình không đọc được bằng trình đọc màn hình, và sáu hàng đều
-                        // mang cùng một ký hiệu. Nhãn mang theo tiêu đề để nói rõ đang sửa bài nào.
-                        aria-label={`${NHAN_NUT_SUA} Sửa: ${nd.title}`}
-                        title="Sửa"
-                      >
-                        <Pencil aria-hidden="true" focusable="false" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="icon"
-                        size="sm"
-                        className="nut-xoa min-h-0 border-transparent text-danger-600 hover:not-disabled:bg-danger-50 hover:not-disabled:text-danger-600"
-                        aria-haspopup="dialog"
-                        onClick={() => remove(nd)}
-                        // Same reason as the pencil: the icon alone names no row.
-                        aria-label={contentDeleteAriaLabel(nd.title)}
-                        title={CONTENT_DELETE_TITLE}
-                      >
-                        <Trash2 aria-hidden="true" focusable="false" />
-                      </Button>
+                    <td className="align-top">
+                      {/* The prototype's outline icon buttons, right-aligned: pencil, then trash. */}
+                      <span className="flex justify-end gap-1">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          className="min-h-0 px-2"
+                          aria-haspopup="dialog"
+                          onClick={() => sua(nd.id)}
+                          // Ký hiệu một mình không đọc được bằng trình đọc màn hình, và sáu hàng đều
+                          // mang cùng một ký hiệu. Nhãn mang theo tiêu đề để nói rõ đang sửa bài nào.
+                          aria-label={`${NHAN_NUT_SUA} Sửa: ${nd.title}`}
+                          title="Sửa"
+                        >
+                          <Pencil aria-hidden="true" focusable="false" className="size-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          className="nut-xoa min-h-0 px-2 text-danger-600 hover:not-disabled:bg-danger-50 hover:not-disabled:text-danger-600"
+                          aria-haspopup="dialog"
+                          onClick={() => remove(nd)}
+                          // Same reason as the pencil: the icon alone names no row.
+                          aria-label={contentDeleteAriaLabel(nd.title)}
+                          title={CONTENT_DELETE_TITLE}
+                        >
+                          <Trash2 aria-hidden="true" focusable="false" className="size-3.5" />
+                        </Button>
+                      </span>
                     </td>
                   )}
                 </tr>

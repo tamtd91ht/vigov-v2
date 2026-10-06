@@ -98,6 +98,23 @@ export function unitCountText(so: SoKhoi): string {
   return so.pha === "xong" ? `${so.so} khối / đơn vị` : `${NHAN_SO_KHOI}: ${nhanSoKhoi(so)}`;
 }
 
+/* ---- nút đầu ngăn dẫn sang màn Người dùng (06/10/2026, bản mẫu) ----------------------------- */
+
+/**
+ * The prototype's two header buttons, verbatim. Here they lead to `/nguoi-dung`, where the staff import
+ * (ADR 0059 §1) and adding a staff record already live — see `danh-ba-lien-he.tsx`.
+ */
+export const IMPORT_LINK = "Nhập từ Excel";
+export const ADD_LINK = "Thêm cán bộ";
+export const STAFF_ADMIN_PATH = "/nguoi-dung";
+/** Tooltip of both: says where the press goes, so nobody expects a dialog here. */
+export const OPENS_STAFF_ADMIN = "Mở màn Người dùng — nơi thêm cán bộ và nhập từ Excel";
+
+/** Prototype's line under the table. Counts the rows ON THIS PAGE: the directory route returns no total. */
+export function shownCountText(n: number): string {
+  return `Hiển thị ${n} cán bộ trên trang này.`;
+}
+
 /* ---- trạng thái của vùng danh sách (đặc tả giao diện v2 §8b) --------------------------------- */
 
 /** Tiêu đề khi đọc danh sách hỏng; câu bên dưới là câu NGUYÊN VĂN của máy chủ. */

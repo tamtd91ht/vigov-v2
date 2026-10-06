@@ -6,12 +6,12 @@ import {
   Phone,
   Smartphone,
   Trash2,
+  X,
 } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import { IconButton } from "@/components/ui/icon-button";
 import { PendingCell, PendingColumnHeader } from "@/components/ui/pending-feature";
 import { nhanBoPhan } from "@/features/cau-hinh/nhan-can-bo";
@@ -30,10 +30,9 @@ import {
   ariaThemMiniApp,
   dongYGhiLuc,
 } from "./cong-khai";
-import { DELETE_SHORT, NHAN_XOA_DONG, ariaXoaDong } from "./xoa-dong";
+import { DELETE_SHORT, ariaXoaDong } from "./xoa-dong";
 
 import {
-  ariaMoreActions,
   ariaSua,
   COT_CHUC_VU,
   COT_DI_DONG,
@@ -41,7 +40,6 @@ import {
   COT_KHOI,
   COT_MAY_BAN,
   EDIT_SHORT,
-  NUT_SUA_THONG_TIN,
   pendingPart,
 } from "./nhan-danh-ba";
 
@@ -160,12 +158,11 @@ export function BangLienHe({
                       đặc tả vẽ: màn này không có khối chi tiết riêng, vì mọi trường `canBoTomTat`
                       mang nghĩa liên hệ đều đã nằm ngay trên dòng. Một nút mở ra đúng thứ đang hiện
                       là một nút không làm gì. */}
-                  <span className="flex items-center gap-3">
-                    <Avatar fullName={cb.full_name} size="sm" />
-                    <span className="min-w-0 leading-tight">
-                      <span className="ten-can-bo text-ink-900">{cb.full_name}</span>
-                      <span className="dong-phu leading-tight text-ink-500">{cb.email}</span>
-                    </span>
+                  {/* Prototype: the name, the e-mail under it — no initials tile (the photo column is the
+                      "?" before this one). */}
+                  <span className="block min-w-0 leading-tight">
+                    <span className="ten-can-bo text-ink-900">{cb.full_name}</span>
+                    <span className="dong-phu leading-tight text-ink-500">{cb.email}</span>
                   </span>
                 </td>
                 <td className="text-ink-700">{cb.position || <Dash />}</td>
@@ -187,22 +184,52 @@ export function BangLienHe({
                   <OMiniApp cb={cb} />
                 </td>
                 <td>
-                  {/* ONE icon button for the everyday action, the rest in "⋯" with WORDS (spec v2 §7):
-                      publishing a personal number and deleting a row are never icon-only. The menu
-                      items are built by `rowActions` from the SAME handlers and the SAME permission
-                      props as the phone cards below. */}
+                  {/* The prototype's three outline icon buttons (`StaffDirectoryWorkspace.tsx`), in its
+                      order: Mini App (add or withdraw, by the row's state), edit, delete. Each names
+                      the person in its label and tooltip (`IconButton`). Publishing still only OPENS
+                      the consent dialog (`HopCongKhai`, Decree 13 — the tick is asked there, per
+                      person); delete only opens the reason dialog (`HopXoa`). Same handlers, same
+                      permission props as the phone cards below. */}
                   <span className="flex items-center justify-end gap-1">
+                    {congKhai !== undefined &&
+                      (cb.published ? (
+                        <IconButton
+                          type="button"
+                          variant="secondary"
+                          label={ariaRutMiniApp(cb.full_name)}
+                          onClick={() => congKhai.onRut(cb)}
+                        >
+                          <X aria-hidden="true" />
+                        </IconButton>
+                      ) : (
+                        <IconButton
+                          type="button"
+                          variant="secondary"
+                          label={ariaThemMiniApp(cb.full_name)}
+                          onClick={() => congKhai.onThem(cb)}
+                        >
+                          <Smartphone aria-hidden="true" />
+                        </IconButton>
+                      ))}
                     <IconButton
                       type="button"
+                      variant="secondary"
                       label={ariaSua(cb.full_name)}
                       onClick={() => onSua(cb)}
                     >
                       <Pencil aria-hidden="true" />
                     </IconButton>
-                    <ActionMenu
-                      label={ariaMoreActions(cb.full_name)}
-                      items={rowActions(cb, onSua, congKhai, onXoa)}
-                    />
+                    {onXoa !== undefined && (
+                      <IconButton
+                        type="button"
+                        variant="secondary"
+                        className="text-danger-600 hover:not-disabled:bg-danger-50 hover:not-disabled:text-danger-600"
+                        label={ariaXoaDong(cb.full_name)}
+                        onClick={() => onXoa(cb)}
+                      >
+                        <Trash2 aria-hidden="true" />
+                      </IconButton>
+                    )}
                   </span>
                 </td>
               </tr>
@@ -291,37 +318,6 @@ export function BangLienHe({
       </ul>
     </>
   );
-}
-
-/**
- * The "⋯" items of one row (spec v2 §8.1): edit, then publish OR withdraw, then — after a separator,
- * red, last — delete. An absent permission prop removes its item, exactly as it removes the button on
- * the phone card: `congKhai` undefined → no Mini App item; `onXoa` undefined → no delete item and
- * no dangling separator.
- */
-export function rowActions(
-  cb: identity_canBoTomTat,
-  onSua: (cb: identity_canBoTomTat) => void,
-  congKhai: { onThem: (cb: identity_canBoTomTat) => void; onRut: (cb: identity_canBoTomTat) => void } | undefined,
-  onXoa: ((cb: identity_canBoTomTat) => void) | undefined,
-): ActionMenuItem[] {
-  const items: ActionMenuItem[] = [
-    { kind: "item", id: "sua", label: NUT_SUA_THONG_TIN, icon: Pencil, onSelect: () => onSua(cb) },
-  ];
-  if (congKhai !== undefined) {
-    items.push(
-      cb.published
-        ? { kind: "item", id: "rut", label: NUT_RUT_MINI_APP, icon: EyeOff, onSelect: () => congKhai.onRut(cb) }
-        : { kind: "item", id: "them", label: NUT_THEM_MINI_APP, icon: Smartphone, onSelect: () => congKhai.onThem(cb) },
-    );
-  }
-  if (onXoa !== undefined) {
-    items.push(
-      { kind: "separator", id: "tach-xoa" },
-      { kind: "item", id: "xoa", label: NHAN_XOA_DONG, icon: Trash2, tone: "danger", onSelect: () => onXoa(cb) },
-    );
-  }
-  return items;
 }
 
 const ICON_CLASS = "size-4 shrink-0 text-ink-500";

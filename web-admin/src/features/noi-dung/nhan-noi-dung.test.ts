@@ -667,7 +667,8 @@ describe("phần chưa dựng được", () => {
     // prototype: the §4 count, the §2 layout and the `content.update` gate left it — and then the
     // per-item delete (soft, with a reason, DELETE /api/v1/content-items/{id}). The `Lượt xem` column
     // left it the same day: the owner decided to show the server's count (ADR 0047, row 02/10/2026).
-    expect(PHAN_CHUA_DUNG.map((p) => p.ten)).toEqual(["Số chuyên mục đang đồng bộ"]);
+    // 06/10/2026: the prototype's thumbnail column joined it — the list route serves no image link.
+    expect(PHAN_CHUA_DUNG.map((p) => p.ten)).toEqual(["Số chuyên mục đang đồng bộ", "Ảnh thu nhỏ trong bảng"]);
   });
 
   it("no item still claims the view count is not shown", () => {
@@ -757,7 +758,7 @@ describe("`pageAfterDelete` — stay on the page, one back when it empties", () 
 describe("`publishedStaffText` — §4's line in three states", () => {
   it("a number only after a successful read", () => {
     expect(publishedStaffText({ ok: true, duLieu: 26 })).toEqual({
-      line: "Đang hiện 26 cán bộ cho bà con. Chọn thêm hoặc bớt ở màn Danh bạ cán bộ.",
+      line: "Đang hiện 26 cán bộ cho bà con. Chọn thêm hoặc bớt ở ngăn Danh bạ cán bộ.",
       note: null,
     });
     expect(publishedStaffText(null)).toEqual({ line: MO_TA_THE_DANH_BA, note: null });

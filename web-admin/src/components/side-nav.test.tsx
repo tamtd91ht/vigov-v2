@@ -25,7 +25,7 @@ const PARENT = "Người dùng & Phân quyền";
 /** React escapes `&` in attributes and text; "Văn bản & Đơn thư" carries one. */
 const esc = (s: string) => s.replace(/&/g, "&amp;");
 
-function sidebar(permissions: readonly string[] | null, { pathname = "/danh-ba", collapsed = false } = {}) {
+function sidebar(permissions: readonly string[] | null, { pathname = "/mini-app", collapsed = false } = {}) {
   return renderToStaticMarkup(
     <SideNav groups={locMenu(NHOM_MENU, permissions)} pathname={pathname} collapsed={collapsed} onToggle={() => {}} />,
   );
@@ -58,8 +58,7 @@ describe("sidebar — what it draws (expanded)", () => {
       "/thong-bao",
       "/phan-anh",
       "/ban-do",
-      "/noi-dung",
-      "/danh-ba",
+      "/mini-app",
       "/bao-cao",
       "/nguoi-dung", // the parent row
       "/nguoi-dung",
@@ -91,7 +90,8 @@ describe("sidebar — what it draws (expanded)", () => {
 
   it("only `admin.user`: the parent with Người dùng only; only `admin.role`: the parent leads to Phân quyền", () => {
     const user = sidebar(["admin.user"]);
-    expect(hrefs(user)).toEqual(["/danh-ba", "/nguoi-dung", "/nguoi-dung"]);
+    // `admin.user` also opens "Nội dung Mini App": its Danh bạ cán bộ tab is gated by that key.
+    expect(hrefs(user)).toEqual(["/mini-app", "/nguoi-dung", "/nguoi-dung"]);
     expect(hrefs(childList(user)!)).toEqual(["/nguoi-dung"]);
     const role = sidebar(["admin.role"]);
     expect(hrefs(role)).toEqual(["/nguoi-dung/phan-quyen", "/nguoi-dung/phan-quyen"]);
@@ -104,6 +104,10 @@ describe("sidebar — what it draws (expanded)", () => {
       expect(html).not.toContain(esc(PARENT));
       expect(html).not.toContain("side-nav-children");
     }
+  });
+
+  it("only `content.read`: exactly Nội dung Mini App, at /mini-app", () => {
+    expect(hrefs(sidebar(["content.read"]))).toEqual(["/mini-app"]);
   });
 
   it("only `report.read`: exactly Tổng quan and Báo cáo", () => {
@@ -131,9 +135,9 @@ describe("sidebar — what it draws (expanded)", () => {
 
 describe("sidebar — the current page", () => {
   it("marks the current item with aria-current=\"page\" and the active class, once", () => {
-    const html = sidebar(ALL_PERMISSIONS, { pathname: "/danh-ba" });
+    const html = sidebar(ALL_PERMISSIONS, { pathname: "/mini-app" });
     expect(html.match(/aria-current="page"/g)).toHaveLength(1);
-    const a = linkTo(html, "/danh-ba");
+    const a = linkTo(html, "/mini-app");
     expect(a).toContain('aria-current="page"');
     expect(a).toContain('class="side-nav-link is-active"');
   });
@@ -249,7 +253,7 @@ describe("items with no screen (ADR 0068 §14)", () => {
     (PENDING_SCREENS as Record<string, { ten: string; viSao: string }>)["Báo cáo"] = { ten: "Báo cáo", viSao: "x" };
     try {
       for (const collapsed of [false, true]) {
-        const html = renderToStaticMarkup(<SideNav groups={groups} pathname="/danh-ba" collapsed={collapsed} onToggle={() => {}} />);
+        const html = renderToStaticMarkup(<SideNav groups={groups} pathname="/mini-app" collapsed={collapsed} onToggle={() => {}} />);
         expect(html).not.toContain("<a ");
         expect(html).toContain('aria-disabled="true"');
         expect(html).toContain(collapsed ? '<span class="an-thi-giac">Báo cáo</span>' : '<span class="side-nav-label">Báo cáo</span>');

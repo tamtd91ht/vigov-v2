@@ -3831,27 +3831,6 @@ aside.khoi-chua-khai h3 {
 
 /* ---- Nội dung Mini App: bố cục §2 (02/10/2026) -------------------------------------------------- */
 
-/* §2's two cards at the head of the screen: stacked at 320px, side by side from 1024px. The portal card
- * is the wider one — it holds the last run and the error block; the directory card is two lines. */
-.content-top-cards {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 1rem;
-  margin: 1rem 0;
-}
-
-.content-top-cards > .khoi-chi-tiet {
-  margin: 0;
-  min-width: 0; /* a long portal URL must wrap inside its column, not widen the grid */
-}
-
-@media (min-width: 1024px) {
-  .content-top-cards {
-    grid-template-columns: 2fr 1fr;
-    align-items: start;
-  }
-}
-
 /* `⊞ Danh mục tin` closes the filter row (§2): its own width at 320px, pushed right on a wide screen. */
 .man-noi-dung .hang-loc > .nut-phu {
   align-self: flex-start;

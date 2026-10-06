@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: c4238d9c
+derived_from_commit: bee60434
 expires: 2027-01-04
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -67,15 +67,14 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 | 10 | Gửi tin ZNS / SMS | — | — | ✗ | |
 | 11 | Phản ánh người dân | `/phan-anh` | `QUYEN_XEM_PHAN_ANH` | ✓ | 10 |
 | 12 | Bản đồ kinh tế số | `/ban-do` | `ASSET_READ_PERMISSION` | ✓ | 6 |
-| 13 | Nội dung Mini App | `/noi-dung` | `QUYEN_XEM_NOI_DUNG` | ✓ | 1 |
-| 14 | Danh bạ cán bộ | `/danh-ba` | `QUYEN_QUAN_LY_NGUOI_DUNG` | ✓ | 3 |
-| 15 | Báo cáo | `/bao-cao` | `REPORT_READ_PERMISSION` | ✓ | 1 |
-| 16 | Người dùng | `/nguoi-dung` | `QUYEN_QUAN_LY_NGUOI_DUNG` | ✓ | 1 |
-| 17 | Phân quyền | `/nguoi-dung/phan-quyen` | `QUYEN_PHAN_QUYEN` | ✓ | 1 |
-| 18 | Hướng dẫn sử dụng | — | — | ✗ | |
-| 19 | Cấu hình | `/cau-hinh` | `KHOA_MO_CAU_HINH` | ✓ | 1 |
+| 13 | Nội dung Mini App | `/mini-app` | `MINI_APP_MENU_KEYS` | ✓ | 5 |
+| 14 | Báo cáo | `/bao-cao` | `REPORT_READ_PERMISSION` | ✓ | 1 |
+| 15 | Người dùng | `/nguoi-dung` | `QUYEN_QUAN_LY_NGUOI_DUNG` | ✓ | 1 |
+| 16 | Phân quyền | `/nguoi-dung/phan-quyen` | `QUYEN_PHAN_QUYEN` | ✓ | 1 |
+| 17 | Hướng dẫn sử dụng | — | — | ✗ | |
+| 18 | Cấu hình | `/cau-hinh` | `KHOA_MO_CAU_HINH` | ✓ | 1 |
 
-**16/19** mục menu có màn thật. **69** phần chưa dựng đang hiện trên các màn ấy.
+**15/18** mục menu có màn thật. **70** phần chưa dựng đang hiện trên các màn ấy.
 
 ⚠ **1 màn KHÔNG KHAI khối `PHAN_CHUA_DUNG`**, và ô của chúng đọc là `không khai` chứ không phải `0` —
 hai thứ khác hẳn nhau. `0` nghĩa là màn có khai một danh sách và danh sách ấy rỗng, tức mọi phần
@@ -132,5 +131,5 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `service-platform` | 15 | 16 | 5 | 1 |
 | `service-reporting` | 3 | 0 | 1 | 0 |
 | `tools` | 20 | 0 | 0 | 0 |
-| `web-admin` | 54 | 36 | 3 | 1 |
+| `web-admin` | 55 | 36 | 3 | 1 |
 

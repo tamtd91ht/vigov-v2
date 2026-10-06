@@ -4,8 +4,6 @@ import { describe, expect, it } from "vitest";
 import { KhungQuyen } from "@/features/quyen/cong-quyen";
 import type { identity_canBoTomTat } from "@/lib/api/schema.gen";
 
-import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
-
 import { BangLienHe, initialsOf } from "./bang-lien-he";
 import {
   CHIP_CHUA_HIEN,
@@ -222,52 +220,64 @@ describe("nút 🗑 xoá dòng nhập trùng", () => {
 });
 
 /**
- * THE DESKTOP "⋯" MENU. A closed Radix menu renders no items to the HTML, so the string checks above
- * only see the phone-card buttons. These read the menu's `items` prop from the unrendered tree
- * (`BangLienHe` has no hooks), so a permission that stops gating the DESKTOP actions turns red too.
+ * THE DESKTOP ROW BUTTONS — the prototype's three outline icon buttons (06/10/2026, ADR 0068 lần 5):
+ * Mini App (add OR withdraw), edit, delete, each present only with its key. Read from the `<table>` only:
+ * the phone cards below carry the same labels.
  */
-describe("menu ⋯ của bảng — mục theo đúng khoá của phiên", () => {
-  type El = { type: unknown; props: Record<string, unknown> };
-  function menus(props: Parameters<typeof BangLienHe>[0]): { label: string; items: readonly ActionMenuItem[] }[] {
-    const out: { label: string; items: readonly ActionMenuItem[] }[] = [];
+describe("nút trên dòng của bảng — theo đúng khoá của phiên", () => {
+  const tableOf = (html: string) => html.slice(html.indexOf("<table"), html.indexOf("</table>"));
+  const labels = (html: string) =>
+    [...tableOf(html).matchAll(/<button[^>]*aria-label="([^"]*)"/g)].map((m) => m[1]).filter((l) => !l?.includes("tính năng đang phát triển"));
+
+  it("không `content.update`, không `admin.user.delete` → chỉ nút sửa (ca bị từ chối)", () => {
+    expect(labels(dung([canBo()]))).toEqual([`${NUT_SUA_THONG_TIN}: Nguyễn Văn A`]);
+  });
+
+  it("đủ khoá → Mini App theo trạng thái dòng, rồi sửa, rồi xoá — đúng thứ tự bản mẫu", () => {
+    const html = renderToStaticMarkup(
+      <BangLienHe
+        danhSach={[canBo(), canBo({ id: "b", full_name: "Trần Thị B", published: true })]}
+        traBoPhan={TRA_XONG}
+        onSua={() => undefined}
+        congKhai={{ onThem: () => undefined, onRut: () => undefined }}
+        onXoa={() => undefined}
+      />,
+    );
+    expect(labels(html)).toEqual([
+      `${NUT_THEM_MINI_APP}: Nguyễn Văn A`,
+      `${NUT_SUA_THONG_TIN}: Nguyễn Văn A`,
+      `${NHAN_XOA_DONG}: Nguyễn Văn A`,
+      `${NUT_RUT_MINI_APP}: Trần Thị B`,
+      `${NUT_SUA_THONG_TIN}: Trần Thị B`,
+      `${NHAN_XOA_DONG}: Trần Thị B`,
+    ]);
+    // Every icon-only button carries its words as the tooltip too.
+    expect(tableOf(html)).toContain(`title="${NUT_THEM_MINI_APP}: Nguyễn Văn A"`);
+  });
+
+  it("the publish button only OPENS the consent dialog — it calls the handler, never a route", () => {
+    // `BangLienHe` has no hooks: walk the unrendered tree for the desktop publish button and press it.
+    const calls: string[] = [];
+    type El = { type: unknown; props: Record<string, unknown> };
+    const found: El[] = [];
     const walk = (n: unknown) => {
       if (Array.isArray(n)) return n.forEach(walk);
       if (typeof n !== "object" || n === null || !("props" in n)) return;
       const el = n as El;
-      if (el.type === ActionMenu) out.push(el.props as unknown as { label: string; items: readonly ActionMenuItem[] });
+      if (el.props.label === `${NUT_THEM_MINI_APP}: Nguyễn Văn A`) found.push(el);
       walk(el.props.children);
     };
-    walk(BangLienHe(props));
-    return out;
-  }
-  const words = (items: readonly ActionMenuItem[]) =>
-    items.map((it) => (it.kind === "item" ? it.label : "—"));
-
-  it("không `content.update`, không `admin.user.delete` → chỉ 'Sửa thông tin cán bộ' (ca bị từ chối)", () => {
-    const [m] = menus({ danhSach: [canBo()], traBoPhan: TRA_XONG, onSua: () => undefined });
-    expect(m?.label).toBe("Thao tác khác: Nguyễn Văn A");
-    expect(words(m?.items ?? [])).toEqual([NUT_SUA_THONG_TIN]);
-  });
-
-  it("đủ khoá → sửa, thêm/rút theo trạng thái dòng, gạch ngăn, xoá ĐỎ ở cuối; mỗi mục gọi đúng handler", () => {
-    const goi: string[] = [];
-    const ds = [canBo(), canBo({ id: "b", full_name: "Trần Thị B", published: true })];
-    const [a, b] = menus({
-      danhSach: ds,
-      traBoPhan: TRA_XONG,
-      onSua: (cb) => goi.push(`sua:${cb.id}`),
-      congKhai: { onThem: (cb) => goi.push(`them:${cb.id}`), onRut: (cb) => goi.push(`rut:${cb.id}`) },
-      onXoa: (cb) => goi.push(`xoa:${cb.id}`),
-    });
-    expect(words(a?.items ?? [])).toEqual([NUT_SUA_THONG_TIN, NUT_THEM_MINI_APP, "—", NHAN_XOA_DONG]);
-    expect(words(b?.items ?? [])).toEqual([NUT_SUA_THONG_TIN, NUT_RUT_MINI_APP, "—", NHAN_XOA_DONG]);
-    const xoa = a?.items.at(-1);
-    expect(xoa?.kind === "item" && xoa.tone).toBe("danger");
-    for (const it of [...(a?.items ?? []), ...(b?.items ?? [])]) if (it.kind === "item") it.onSelect();
-    expect(goi).toEqual([
-      `sua:${ds[0]!.id}`, `them:${ds[0]!.id}`, `xoa:${ds[0]!.id}`,
-      `sua:b`, `rut:b`, `xoa:b`,
-    ]);
+    walk(
+      BangLienHe({
+        danhSach: [canBo()],
+        traBoPhan: TRA_XONG,
+        onSua: () => undefined,
+        congKhai: { onThem: (cb) => calls.push(`them:${cb.id}`), onRut: () => undefined },
+      }),
+    );
+    expect(found).toHaveLength(1);
+    (found[0]!.props.onClick as () => void)();
+    expect(calls).toEqual([`them:${canBo().id}`]);
   });
 });
 

@@ -1,4 +1,5 @@
 import type { PendingFeatureInfo } from "@/components/ui/pending-feature";
+import { MINI_APP_MENU_KEYS } from "@/features/mini-app/mini-app-tabs";
 import { coQuyen } from "@/lib/quyen";
 import {
   ASSET_READ_PERMISSION,
@@ -11,7 +12,6 @@ import {
   QUYEN_SOAN_THONG_BAO,
   QUYEN_XEM_GIAI_NGAN,
   QUYEN_XEM_NHIEM_VU,
-  QUYEN_XEM_NOI_DUNG,
   QUYEN_XEM_PHAN_ANH,
   QUYEN_XEM_VAN_BAN,
   REPORT_READ_PERMISSION,
@@ -50,7 +50,7 @@ export type MucMenu = {
  * nào (`identity.ResolveDeadlines` từ chối).
  *
  * DANH SÁCH ĐÓNG, LIỆT KÊ TỪNG KHOÁ, chứ không phải `admin.*`: `admin.user.delete` (nút ở
- * `/danh-ba`) cố ý VẮNG. `admin.audit` VẮNG cho tới 29/09/2026 vì chưa tab nào canh nó; nay tab Nhật
+ * `/mini-app?tab=danh-ba`) cố ý VẮNG. `admin.audit` VẮNG cho tới 29/09/2026 vì chưa tab nào canh nó; nay tab Nhật
  * ký hệ thống canh nó, nên nó vào đây cùng lượt dựng tab (ADR 0054 §6). Thêm một tab có cổng quyền
  * mới thì thêm đúng khoá của tab ấy vào đây, và chỉ khoá có thật trong bảng `quyen` (luật 5, bất
  * biến 3c).
@@ -155,13 +155,14 @@ export const PENDING_SCREENS: Readonly<Record<string, PendingFeatureInfo>> = {
  * - Its permission arrays. Every item keeps the key it had (rule 5, ADR 0068 lần 5 #4). "Tổng quan"
  *   stays `report.read`; "Thông báo nội bộ" stays `announcement.create`, because no read key for the
  *   announcement book exists in `quyen` (open question #27) — the prototype's "no key" would be a guess.
- * - Its routes, where ours already exist ("Nội dung Mini App" is `/noi-dung`).
+ * - Its routes, where ours already exist. "Nội dung Mini App" IS the prototype's `/mini-app` (06/10/2026);
+ *   `/noi-dung` and `/danh-ba` redirect there.
  * - "Hồ sơ công dân": outside the contract (ADR 0001). A placeholder for it would announce a feature
  *   the customer did not buy.
  *
- * KEPT although the prototype lacks it: "Danh bạ cán bộ", right after "Nội dung Mini App". The prototype
- * moves the staff directory into a tab of the Mini App screen; until that screen carries it, removing the
- * item would cut the only way in.
+ * "Danh bạ cán bộ" HAS NO ITEM OF ITS OWN since 06/10/2026: it is the second tab of `/mini-app`, as in the
+ * prototype. So the "Nội dung Mini App" item opens on EITHER tab's key (`MINI_APP_MENU_KEYS`) — keeping
+ * `content.read` alone would have cut the only way in for an account that holds just `admin.user`.
  */
 export const NHOM_MENU: readonly NhomMenu[] = [
   {
@@ -185,8 +186,7 @@ export const NHOM_MENU: readonly NhomMenu[] = [
   {
     ten: "Quản trị",
     muc: [
-      { nhan: "Nội dung Mini App", duong: "/noi-dung", khoa: QUYEN_XEM_NOI_DUNG },
-      { nhan: "Danh bạ cán bộ", duong: "/danh-ba", khoa: QUYEN_QUAN_LY_NGUOI_DUNG },
+      { nhan: "Nội dung Mini App", duong: "/mini-app", khoa: MINI_APP_MENU_KEYS },
       { nhan: "Báo cáo", duong: "/bao-cao", khoa: REPORT_READ_PERMISSION },
       {
         nhan: "Người dùng & Phân quyền",

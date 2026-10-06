@@ -46,8 +46,9 @@ function tenMuc(nhom: ReturnType<typeof locMenu>): string[] {
 const PENDING_NAMES = ["Danh bạ người dân", "Gửi tin ZNS / SMS", "Hướng dẫn sử dụng"];
 
 describe("locMenu", () => {
-  it("đủ quyền: thấy cả 16 mục có màn", () => {
-    expect(tenMuc(locMenu(NHOM_MENU, DU_QUYEN))).toHaveLength(16);
+  it("đủ quyền: thấy cả 15 mục có màn", () => {
+    // 15 since 06/10/2026: "Danh bạ cán bộ" became a tab of "Nội dung Mini App" (ADR 0068 lần 5).
+    expect(tenMuc(locMenu(NHOM_MENU, DU_QUYEN))).toHaveLength(15);
   });
 
   it("KHÔNG quyền nào: mọi mục có màn biến mất, chỉ còn ba mục chưa có màn", () => {
@@ -61,7 +62,6 @@ describe("locMenu", () => {
       "Giải ngân",
       "Thu - Chi ngân sách",
       "Phản ánh người dân",
-      "Danh bạ cán bộ",
       "Cấu hình",
       "Nhiệm vụ",
       "Biên bản họp",
@@ -97,14 +97,14 @@ describe("locMenu", () => {
     // ký hệ thống (ADR 0054) nay canh đúng khoá ấy, nên nó mở mục Cấu hình — và CHỈ mục ấy (ca dưới).
     const ten = tenMuc(locMenu(NHOM_MENU, ["admin.user.delete", "admin.users", "admin"]));
     expect(ten).not.toContain("Cấu hình");
-    expect(ten).not.toContain("Danh bạ cán bộ");
+    expect(ten).not.toContain("Nội dung Mini App");
     expect(ten).toHaveLength(0);
   });
 
-  it("chỉ có `admin.audit`: THẤY mục Cấu hình (tab Nhật ký hệ thống), không thấy Danh bạ", () => {
+  it("chỉ có `admin.audit`: THẤY mục Cấu hình (tab Nhật ký hệ thống), không thấy Nội dung Mini App", () => {
     const names = tenMuc(locMenu(NHOM_MENU, ["admin.audit"]));
     expect(names).toContain("Cấu hình");
-    expect(names).not.toContain("Danh bạ cán bộ");
+    expect(names).not.toContain("Nội dung Mini App");
     expect(names).toHaveLength(1);
   });
 
@@ -248,10 +248,32 @@ describe("mục Cấu hình — mở khi có BẤT KỲ khoá nào canh một ta
   });
 });
 
+describe("mục Nội dung Mini App — mở khi có khoá của BẤT KỲ tab nào (06/10/2026)", () => {
+  const item = (ds: readonly string[] | null) =>
+    builtItems(locMenu(NHOM_MENU, ds)).find((m) => m.nhan === "Nội dung Mini App");
+
+  it("chỉ có `content.read` (tab Nội dung): THẤY mục, dẫn tới /mini-app", () => {
+    expect(item(["content.read"])?.duong).toBe("/mini-app");
+    expect(tenMuc(locMenu(NHOM_MENU, ["content.read"]))).toEqual(["Nội dung Mini App"]);
+  });
+
+  it("chỉ có `admin.user` (tab Danh bạ cán bộ): THẤY mục", () => {
+    expect(item(["admin.user"])?.duong).toBe("/mini-app");
+  });
+
+  it("CA BỊ TỪ CHỐI: không khoá nào của hai tab (kể cả `content.update`, `admin.user.delete`) → không thấy", () => {
+    // `content.update` alone opens no tab: the content tab's READ routes declare `content.read`.
+    for (const ds of [[], null, ["content.update", "admin.user.delete", "content.reads", "admin.users", "admin.role"]]) {
+      expect(item(ds)).toBeUndefined();
+    }
+  });
+});
+
 describe("mục Người dùng và Phân quyền — mỗi mục đúng một khoá (05/10/2026, theo bản mẫu)", () => {
   it("chỉ có `admin.user`: THẤY Người dùng, dẫn tới /nguoi-dung, và không mục nào khác", () => {
     const muc = builtItems(locMenu(NHOM_MENU, ["admin.user"]));
-    expect(muc.map((m) => m.nhan)).toEqual(["Danh bạ cán bộ", "Người dùng"]);
+    // "Nội dung Mini App" too: its Danh bạ cán bộ tab opens on `admin.user` (06/10/2026).
+    expect(muc.map((m) => m.nhan)).toEqual(["Nội dung Mini App", "Người dùng"]);
     expect(muc.find((m) => m.nhan === "Người dùng")?.duong).toBe("/nguoi-dung");
   });
 
@@ -329,7 +351,7 @@ describe("cấu trúc menu theo bản mẫu (ADR 0068 lần 5, 06/10/2026)", () 
       ],
       [
         "Quản trị",
-        ["Nội dung Mini App", "Danh bạ cán bộ", "Báo cáo", "Người dùng & Phân quyền", "Hướng dẫn sử dụng", "Cấu hình"],
+        ["Nội dung Mini App", "Báo cáo", "Người dùng & Phân quyền", "Hướng dẫn sử dụng", "Cấu hình"],
       ],
     ]);
   });
@@ -343,8 +365,13 @@ describe("cấu trúc menu theo bản mẫu (ADR 0068 lần 5, 06/10/2026)", () 
     const key = (nhan: string) => flattenMenu(NHOM_MENU).find((m) => m.nhan === nhan)?.khoa;
     expect(key("Tổng quan")).toBe("report.read");
     expect(key("Thông báo nội bộ")).toBe("announcement.create");
-    expect(key("Nội dung Mini App")).toBe("content.read");
-    expect(key("Danh bạ cán bộ")).toBe("admin.user");
+    expect(key("Nội dung Mini App")).toEqual(["content.read", "admin.user"]);
+  });
+
+  it("KHÔNG còn mục \"Danh bạ cán bộ\" riêng — nay là tab của /mini-app, như bản mẫu", () => {
+    expect(flattenMenu(NHOM_MENU).map((m) => m.nhan)).not.toContain("Danh bạ cán bộ");
+    expect(flattenMenu(NHOM_MENU).map((m) => m.duong)).not.toContain("/danh-ba");
+    expect(flattenMenu(NHOM_MENU).map((m) => m.duong)).not.toContain("/noi-dung");
   });
 
   it("ba mục chưa có màn: không đường dẫn, không khoá, mỗi mục một mô tả — và không mô tả thừa", () => {

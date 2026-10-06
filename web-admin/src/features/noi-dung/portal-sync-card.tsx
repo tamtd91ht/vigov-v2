@@ -1,9 +1,10 @@
 "use client";
 
-import { Clock, Shapes } from "lucide-react";
+import { Clock, Link2, LoaderCircle, RefreshCw, Shapes } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
+import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { PendingMarker } from "@/components/ui/pending-feature";
 import type { KetQua } from "@/lib/api/goi";
@@ -236,74 +237,100 @@ export function PortalSyncCard({
   const runDisabled = s === null || starting || blocked !== null || runs === null;
 
   return (
-    <section className="khoi-chi-tiet portal-sync-card" aria-labelledby="portal-sync-title">
-      <div className="dau-khoi-chi-tiet">
-        <h3 id="portal-sync-title">🔗 {PORTAL_SYNC_TITLE}</h3>
-        <div className="cum-nut">
+    // The prototype's `ContentSourcePanel`: one bordered panel, the title with its link icon, the status
+    // line and the last run on the left, `Đồng bộ ngay` (outline) and `Cấu hình` (primary) on the right.
+    // Ours adds `Tải lại` and the run history under it — kept, they are how a failed run is read.
+    <section
+      className="khoi-chi-tiet portal-sync-card m-0 min-w-0 rounded-xl border border-line bg-surface p-4"
+      aria-labelledby="portal-sync-title"
+    >
+      <div className="flex min-w-0 flex-wrap items-start gap-3">
+        <div className="flex min-w-0 flex-1 basis-72 flex-col gap-1 text-xs text-ink-500 [&_p]:m-0">
+          <h2 id="portal-sync-title" className="m-0 flex items-center gap-2 text-[13px] font-bold text-ink-900">
+            <Link2 aria-hidden="true" focusable="false" className="size-4 shrink-0" />
+            {PORTAL_SYNC_TITLE}
+          </h2>
+
+          {settings === null && <p role="status">{LOADING_SETTINGS}</p>}
+          {settings !== null && !settings.ok && (
+            <p className="thong-bao-loi" role="alert">
+              {settings.thongBao}
+            </p>
+          )}
+
+          {s !== null && status !== null && (
+            <>
+              <p className="flex flex-wrap items-center gap-x-1">
+                <span className={portalSyncStatusChipClass(status)} data-testid="portal-sync-status">
+                  {portalSyncStatusLabel(status)}
+                </span>
+                {s.configured && (
+                  <>
+                    {" "}
+                    · {intervalLabel(s.interval_hours)} · {publishModeLabel(s.publish_mode)} ·{" "}
+                    <CategoryCountPending />
+                  </>
+                )}
+              </p>
+              {portalSyncStatusExplainer(status) !== "" && <p className="ghi-chu">{portalSyncStatusExplainer(status)}</p>}
+              {/* Review mode puts every import in `Chờ duyệt`; the way to that queue is one press. No count:
+                  the list route has no total, and a number read off one page would be wrong. */}
+              {showPendingReview !== undefined && s.configured && s.publish_mode === PUBLISH_MODE_REVIEW && (
+                <p>
+                  <button type="button" className="nut-phu" onClick={showPendingReview}>
+                    {SHOW_PENDING_LABEL}
+                  </button>
+                </p>
+              )}
+            </>
+          )}
+
+          {runs !== null && runs.ok && <LastRun run={latest} />}
+        </div>
+
+        <div className="cum-nut flex flex-wrap items-center gap-2">
           {canEdit && (
             <>
-              <button type="button" className="nut-chinh" disabled={runDisabled} onClick={runNow}>
-                {RUN_NOW_LABEL}
-              </button>
-              <button
+              <Button
                 type="button"
-                className="nut-phu"
+                variant="secondary"
+                size="sm"
+                disabled={runDisabled}
+                icon={
+                  starting ? (
+                    <LoaderCircle aria-hidden="true" focusable="false" className="animate-spin" />
+                  ) : (
+                    <RefreshCw aria-hidden="true" focusable="false" />
+                  )
+                }
+                onClick={runNow}
+              >
+                {RUN_NOW_LABEL}
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
                 aria-haspopup="dialog"
                 aria-expanded={configOpen}
                 disabled={s === null}
                 onClick={() => setConfigOpen(true)}
               >
                 {CONFIGURE_LABEL}
-              </button>
+              </Button>
             </>
           )}
-          <button type="button" className="nut-phu" onClick={reloadAll}>
+          <Button type="button" variant="ghost" size="sm" onClick={reloadAll}>
             {RELOAD_LABEL}
-          </button>
+          </Button>
         </div>
       </div>
-
-      {settings === null && <p role="status">{LOADING_SETTINGS}</p>}
-      {settings !== null && !settings.ok && (
-        <p className="thong-bao-loi" role="alert">
-          {settings.thongBao}
-        </p>
-      )}
-
-      {s !== null && status !== null && (
-        <>
-          <p>
-            <span className={portalSyncStatusChipClass(status)} data-testid="portal-sync-status">
-              {portalSyncStatusLabel(status)}
-            </span>
-            {s.configured && (
-              <>
-                {" "}
-                · {intervalLabel(s.interval_hours)} · {publishModeLabel(s.publish_mode)} ·{" "}
-                <CategoryCountPending />
-              </>
-            )}
-          </p>
-          {portalSyncStatusExplainer(status) !== "" && <p className="ghi-chu">{portalSyncStatusExplainer(status)}</p>}
-          {/* Review mode puts every import in `Chờ duyệt`; the way to that queue is one press. No count:
-              the list route has no total, and a number read off one page would be wrong. */}
-          {showPendingReview !== undefined && s.configured && s.publish_mode === PUBLISH_MODE_REVIEW && (
-            <p>
-              <button type="button" className="nut-phu" onClick={showPendingReview}>
-                {SHOW_PENDING_LABEL}
-              </button>
-            </p>
-          )}
-        </>
-      )}
 
       {runs !== null && !runs.ok && (
         <p className="thong-bao-loi" role="alert">
           {runs.thongBao}
         </p>
       )}
-      {runs !== null && runs.ok && <LastRun run={latest} />}
-
       {canEdit && blocked !== null && s !== null && (
         <p className="ghi-chu" id="portal-sync-run-blocked">
           {blocked}

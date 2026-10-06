@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 
+import Link from "next/link";
 import {
   Building2,
   ChevronLeft,
@@ -14,7 +15,9 @@ import {
   RotateCw,
   Search,
   SearchX,
+  Plus,
   Send,
+  Upload,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -42,13 +45,12 @@ import {
   suaCanBo,
   xoaCanBo,
 } from "@/lib/api/can-bo";
-import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardFooter } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Field, Toolbar } from "@/components/ui/field";
+import { Field } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
-import { Segmented } from "@/components/ui/segmented";
+import { StatCard } from "@/components/ui/stat-card";
 import { cn } from "@/lib/cn";
 import { layDanhMucBoPhan } from "@/lib/api/danh-muc";
 import type {
@@ -109,9 +111,15 @@ import {
   NO_MATCH_TITLE,
   PAGE_NEXT,
   PAGE_PREVIOUS,
+  ADD_LINK,
+  IMPORT_LINK,
+  NHAN_SO_KHOI,
+  OPENS_STAFF_ADMIN,
   RELOAD,
+  STAFF_ADMIN_PATH,
   demSoKhoi,
-  unitCountText,
+  nhanSoKhoi,
+  shownCountText,
 } from "./nhan-danh-ba";
 import { PendingStaffKpis } from "./pending-staff-kpis";
 import { StaffAvatarField } from "./staff-avatar-field";
@@ -514,22 +522,19 @@ export function DanhBaLienHe() {
       </h2>
 
       {/*
-        THE RIGHT HALF OF THE PAGE HEADER. The `<h1>` stays in `app/danh-ba/page.tsx`, OUTSIDE the
-        permission gate, so the page keeps its title while the gate is still reading the session or
-        when it refuses. The count badge and the "Công khai nhiều người" button need this screen's
-        state, so they render here — and from `lg` up they are lifted into the header row by
-        `lg:absolute` against the `relative` wrapper `page.tsx` puts around header + gate (the
-        header reserves the space with `lg:pr-*`). Below `lg` they simply flow as the first row.
+        THE RIGHT HALF OF THE PAGE HEADER — the prototype's `[Nhập từ Excel] [+ Thêm cán bộ]`, plus ours,
+        `Công khai nhiều người`. The `<h1>` stays in `staff-directory-tab.tsx`, OUTSIDE the permission
+        gate, so the tab keeps its title while the gate is still reading the session or when it refuses.
+        These need this screen's state, so they render here — and from `lg` up they are lifted into the
+        header row by `lg:absolute` against the `relative` wrapper around header + gate (the header
+        reserves the room with `lg:pr-*`). Below `lg` they simply flow as the first row.
 
-        The one countable KPI (khối / đơn vị) is this badge; the number is joined only once counted
-        (`unitCountText`). The two that cannot be counted are the disabled cards below (`PendingStaffKpis`).
+        `Nhập từ Excel` and `Thêm cán bộ` are LINKS to `/nguoi-dung`, where both already live (staff import,
+        ADR 0059 §1; adding a staff record). The prototype opens them in place; here the directory reads
+        the same `nguoi_dung` rows, and a second add form or importer on this tab would be a second copy
+        of each to drift. Same key as this tab (`admin.user`), so nobody is sent to a refusal.
       */}
-      <div className="flex flex-wrap items-center gap-3 lg:absolute lg:top-0 lg:right-0 lg:h-12 lg:justify-end">
-        <p className="m-0">
-          <Badge tone="info" icon={Building2}>
-            {unitCountText(soKhoi)}
-          </Badge>
-        </p>
+      <div className="flex flex-wrap items-center gap-2 lg:absolute lg:top-0 lg:right-0 lg:h-12 lg:justify-end">
         {duocCongKhai && !bulkOpen && (
           // A native `<button>` whose ONLY child is the label: the flow test finds this button by
           // `children === BULK_OPEN_BUTTON`. The `Send` icon is therefore drawn beside it, over the
@@ -537,7 +542,7 @@ export function DanhBaLienHe() {
           <span className="relative inline-flex">
             <button
               type="button"
-              className={cn("nut-chinh", buttonVariants({ variant: "primary" }), "pl-11 max-lg:h-11")}
+              className={cn("nut-phu", buttonVariants({ variant: "secondary" }), "pl-10 max-lg:h-11")}
               onClick={openBulk}
             >
               {BULK_OPEN_BUTTON}
@@ -545,14 +550,35 @@ export function DanhBaLienHe() {
             <Send
               aria-hidden="true"
               focusable="false"
-              className="pointer-events-none absolute top-1/2 left-4 size-[18px] -translate-y-1/2 text-white"
+              className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-ink-500"
             />
           </span>
         )}
+        <Link
+          href={STAFF_ADMIN_PATH}
+          title={OPENS_STAFF_ADMIN}
+          className={cn(buttonVariants({ variant: "secondary" }), "no-underline max-lg:h-11")}
+        >
+          <Upload aria-hidden="true" focusable="false" />
+          {IMPORT_LINK}
+        </Link>
+        <Link
+          href={STAFF_ADMIN_PATH}
+          title={OPENS_STAFF_ADMIN}
+          className={cn(buttonVariants({ variant: "primary" }), "no-underline max-lg:h-11")}
+        >
+          <Plus aria-hidden="true" focusable="false" />
+          {ADD_LINK}
+        </Link>
       </div>
 
-      {/* Spec §2 "3 thẻ KPI": TỔNG SỐ CÁN BỘ and ĐANG HIỆN TRÊN MINI APP, disabled with "?" (ADR 0068 §14). */}
-      <PendingStaffKpis />
+      {/* The prototype's three summary cards, one row from `sm`: TỔNG SỐ CÁN BỘ and ĐANG HIỆN TRÊN MINI APP
+          are disabled with "?" (ADR 0068 §14 — the contract returns no total), SỐ KHỐI / ĐƠN VỊ is counted
+          from the org-unit catalogue (`demSoKhoi`). The number only once counted (`nhanSoKhoi`). */}
+      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3">
+        <PendingStaffKpis />
+        <StatCard icon={Building2} label={NHAN_SO_KHOI} value={nhanSoKhoi(soKhoi)} />
+      </div>
 
       {/* Danh mục bộ phận hỏng thì NÓI RA MỘT LẦN Ở ĐÂY, không để hai mươi ô cùng báo lỗi. Hiện
           đúng `message` của máy chủ, không diễn giải và không rẽ nhánh theo `code`. */}
@@ -640,8 +666,11 @@ export function DanhBaLienHe() {
 
       {/* ONE card: filter row, then exactly one of loading · error · empty · table, then the pager.
           Below 768px the card frame drops away and the rows are cards of their own (spec §9). */}
-      <Card className="max-md:overflow-visible max-md:rounded-none max-md:border-0 max-md:bg-transparent max-md:shadow-none">
-        <HangLoc loc={truyVan.loc} boPhan={mucBoPhan} doiLoc={doiLoc} />
+      {/* The prototype's order: the filter row, then ONE bordered frame — the table (or its loading,
+          error or empty state) and the pager. */}
+      <HangLoc loc={truyVan.loc} boPhan={mucBoPhan} doiLoc={doiLoc} />
+
+      <Card className="min-w-0 max-md:overflow-visible max-md:rounded-none max-md:border-0 max-md:bg-transparent max-md:shadow-none">
 
         {trangThai.pha === "dangTai" && <LoadingRows />}
 
@@ -682,7 +711,9 @@ export function DanhBaLienHe() {
               congKhai={hanhDongCongKhai}
               onXoa={duocXoa ? moXoa : undefined}
             />
-            <CardFooter className="justify-end max-md:mt-3 max-md:border-0 max-md:px-0">
+            <CardFooter className="flex-wrap justify-between gap-3 max-md:mt-3 max-md:border-0 max-md:px-0">
+              {/* Prototype: "Hiển thị {n} cán bộ." — here, the rows of THIS page: the route returns no total. */}
+              <p className="m-0 text-xs text-ink-500">{shownCountText(trangThai.trang.items.length)}</p>
               <DieuHuongTrang
                 nganXep={truyVan.nganXep}
                 conTroTiep={trangThai.trang.next_cursor}
@@ -772,16 +803,18 @@ export function HangLoc({
   }
 
   return (
-    <Toolbar className="hang-loc m-0 flex-row max-md:border-0 max-md:px-0 max-md:pt-0">
-      <div className="flex min-w-0 flex-[1_1_320px] flex-col md:max-w-[30rem]">
-        <form className="form-tra-cuu m-0 flex flex-row items-end gap-2" role="search" method="post" onSubmit={gui}>
+    // The prototype's filter row (`flex flex-wrap items-center gap-2.5`): a 288px search box with its
+    // icon inside, the block select, the visibility select. Labels stay for screen readers.
+    <div className="hang-loc m-0 flex min-w-0 flex-row flex-wrap items-start gap-2.5">
+      <div className="flex min-w-0 max-w-full flex-col">
+        <form className="form-tra-cuu m-0 flex min-w-0 flex-[0_1_auto] flex-row items-center gap-2" role="search" method="post" onSubmit={gui}>
           <Field
             label={NHAN_O_TIM}
             htmlFor="tim-danh-ba"
             hideLabel
             icon={Search}
-            grow="search"
-            className={cn("max-w-none", TALL_ON_PHONE)}
+            grow="auto"
+            className={cn("w-72 max-w-full min-w-0 flex-[0_1_18rem]", TALL_ON_PHONE)}
           >
             <input
               id="tim-danh-ba"
@@ -794,7 +827,7 @@ export function HangLoc({
               aria-invalid={loiTim !== ""}
             />
           </Field>
-          <Button type="submit" variant="secondary" className="max-md:h-11">
+          <Button type="submit" variant="secondary" size="sm" className="max-md:h-11">
             {NUT_TIM}
           </Button>
         </form>
@@ -815,7 +848,8 @@ export function HangLoc({
         hideLabel
         icon={Building2}
         kind="select"
-        className={cn("max-md:flex-[1_1_100%]", TALL_ON_PHONE)}
+        grow="auto"
+        className={cn("min-w-0 max-w-full", TALL_ON_PHONE)}
       >
         <select
           id="loc-khoi-danh-ba"
@@ -831,24 +865,31 @@ export function HangLoc({
         </select>
       </Field>
 
-      {/* THREE OPTIONS → SEGMENTED (spec §7), emitting EXACTLY the select's three codes ("", "1",
-          "0") through the same `maHienThi` → `doiLoc`. Its radios carry a `name` (a radio group needs
-          one) and that is safe for the reason the search box has none: they sit OUTSIDE the search
-          `<form>`, so no native submit can put them in a URL — and they hold a filter code, never
-          what somebody typed. */}
-      <Segmented
-        legend={NHAN_LOC_HIEN_THI}
-        name="loc-hien-thi-danh-ba"
-        value={loc.hienThi}
-        options={THU_TU_HIEN_THI.map((ma) => ({
-          value: ma,
-          label: LUA_CHON_HIEN_THI[ma].nhan,
-          icon: SEGMENT_ICON[ma],
-        }))}
-        onChange={(v) => doiLoc({ hienThi: maHienThi(v) })}
-        className="max-md:[&_label]:h-[38px]"
-      />
-    </Toolbar>
+      {/* The prototype's select (it replaced a segmented control, 06/10/2026), emitting EXACTLY the three
+          codes ("", "1", "0") through the same `maHienThi` → `doiLoc`. Outside the search `<form>`, and it
+          holds a filter code, never what somebody typed. */}
+      <Field
+        label={NHAN_LOC_HIEN_THI}
+        htmlFor="loc-hien-thi-danh-ba"
+        hideLabel
+        icon={SEGMENT_ICON[loc.hienThi]}
+        kind="select"
+        grow="auto"
+        className={cn("min-w-0 max-w-full", TALL_ON_PHONE)}
+      >
+        <select
+          id="loc-hien-thi-danh-ba"
+          value={loc.hienThi}
+          onChange={(e) => doiLoc({ hienThi: maHienThi(e.target.value) })}
+        >
+          {THU_TU_HIEN_THI.map((ma) => (
+            <option key={ma} value={ma}>
+              {LUA_CHON_HIEN_THI[ma].nhan}
+            </option>
+          ))}
+        </select>
+      </Field>
+    </div>
   );
 }
 

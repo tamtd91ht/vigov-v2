@@ -29,7 +29,10 @@ const GOC = fileURLToPath(new URL("../../", import.meta.url));
 const PHAM_VI = [
   fileURLToPath(new URL(".", import.meta.url)),
   fileURLToPath(new URL("../../components/danh-ba/", import.meta.url)),
-  fileURLToPath(new URL("../../app/danh-ba/", import.meta.url)),
+  // The page that renders the directory since 06/10/2026 (its `Danh bạ cán bộ` tab). `app/danh-ba/` is now
+  // a bare redirect to a constant path (`LEGACY_DIRECTORY_REDIRECT`) that carries nothing typed — it
+  // imports `next/navigation` for `redirect` alone, and is pinned by `app/mini-app/legacy-redirects.test.tsx`.
+  fileURLToPath(new URL("../../app/mini-app/", import.meta.url)),
   fileURLToPath(new URL("../../lib/api/can-bo.ts", import.meta.url)),
 ];
 
@@ -85,6 +88,7 @@ describe("màn Danh bạ — không lối nào để chữ tìm nằm lại ngo�
     expect(ds).toContain("features/danh-ba/loc-danh-ba.ts");
     expect(ds).toContain("lib/api/can-bo.ts");
     expect(ds).toContain("components/danh-ba/bieu-mau-ghi-can-bo.tsx");
+    expect(ds).toContain("app/mini-app/page.tsx");
   });
 
   for (const { mau, viSao } of LOI_CAM) {
