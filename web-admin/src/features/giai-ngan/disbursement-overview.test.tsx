@@ -250,13 +250,23 @@ describe("§3 KPI cards — the server's figures, formatted, never re-derived", 
     expect(yearIsBehind(summary({ time_elapsed_ratio: 2034, disbursed_ratio: 1033, delay_threshold: 1000 }))).toBe(true);
   });
 
-  it("the issue counts of the fourth card stay a '?' — no number", () => {
-    const el = mount(<KpiCards summary={summary()} />);
+  it("fourth card: the server's open-issue count; the at-risk half stays a '?' with no number", () => {
+    const el = mount(<KpiCards summary={summary({ open_issue_count: 4 })} />);
+    expect(el.querySelector("[data-open-issues]")?.textContent).toBe("4 vướng mắc đang theo dõi");
     const spot = el.querySelector<HTMLElement>("[data-pending]")!;
     expect(spot.textContent).not.toMatch(/\d/);
     expect(spot.querySelector("button[data-pending-marker]")?.getAttribute("aria-label")).toContain(
-      pendingPart("Vướng mắc và nguy cơ không giải ngân hết").ten,
+      pendingPart("Nguy cơ không giải ngân hết").ten,
     );
+  });
+
+  it("fourth card: zero is said as 0; an ABSENT count is not turned into 0", () => {
+    const zero = mount(<KpiCards summary={summary({ open_issue_count: 0 })} />);
+    expect(zero.querySelector("[data-open-issues]")?.textContent).toBe("0 vướng mắc đang theo dõi");
+    act(() => root?.unmount());
+    host?.remove();
+    const absent = mount(<KpiCards summary={summary({ open_issue_count: undefined })} />);
+    expect(absent.querySelector("[data-open-issues]")?.textContent).toBe("Chưa đọc được số vướng mắc");
   });
 });
 

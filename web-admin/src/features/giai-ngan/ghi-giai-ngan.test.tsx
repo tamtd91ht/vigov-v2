@@ -18,7 +18,13 @@ import {
   PHAN_CHUA_DUNG_GHI,
 } from "./nhan-ghi-giai-ngan";
 import { BangDanhSach } from "./bang-du-an";
-import { AttentionIssuesPending, DisbursementHeaderActions, ProjectRecordTabs } from "./pending-parts";
+import {
+  AttentionCaption,
+  DisbursementHeaderActions,
+  MentionNoticePending,
+  ProjectRecordTabs,
+  TrackingTaskPending,
+} from "./pending-parts";
 
 /** The server's list of a project with no voucher. */
 const EMPTY_LIST: ProjectVoucherList = { phase: "ready", items: [], count: 0 };
@@ -460,14 +466,20 @@ describe("BIỂU MẪU DỰ ÁN", () => {
 function allPlaceholders(): string {
   return [
     renderToStaticMarkup(<DisbursementHeaderActions />),
-    renderToStaticMarkup(<AttentionIssuesPending />),
+    renderToStaticMarkup(<AttentionCaption openIssueCount={3} />),
+    renderToStaticMarkup(<TrackingTaskPending />),
+    renderToStaticMarkup(<MentionNoticePending />),
     renderToStaticMarkup(
       <BangDanhSach
         duLieu={{ items: [DU_AN], year: 2026, delay_threshold: 1000, delay_threshold_source: "mac_dinh" }}
         danhMuc={HANG_MUC}
       />,
     ),
-    renderToStaticMarkup(<ProjectRecordTabs chart={null}>panel</ProjectRecordTabs>),
+    renderToStaticMarkup(
+      <ProjectRecordTabs chart={null} issues="issues" discussion="discussion">
+        panel
+      </ProjectRecordTabs>,
+    ),
     renderToStaticMarkup(
       <FormDuAn
         budgetYear={2026}
@@ -511,16 +523,20 @@ describe("PHẦN CHƯA DỰNG — dấu '?' đúng vị trí đặc tả (ADR 00
 
     // §7.1 `Chỉ dự án chậm` and `Gộp theo hạng mục` are LIVE since 06/10/2026 (`bang-du-an.tsx`).
 
-    const tabs = renderToStaticMarkup(<ProjectRecordTabs chart={null}>panel</ProjectRecordTabs>);
-    for (const name of ["Vướng mắc", "Trao đổi"]) {
-      expect(tabs).toMatch(new RegExp(`role="tab" aria-selected="false"[^>]* disabled=""[^>]*>.*${name}<\/button>`));
+    // All four §8 tabs are LIVE since 889d4598: no disabled tab, no "?" in the tab row, Vướng mắc selected.
+    const tabs = renderToStaticMarkup(
+      <ProjectRecordTabs chart={null} issues="issues" discussion="discussion">
+        panel
+      </ProjectRecordTabs>,
+    );
+    for (const name of ["Vướng mắc", "Chứng từ", "Biểu đồ", "Trao đổi"]) {
+      const tab = new RegExp(`<button([^>]*)>(?:(?!</button>).)*${name}</button>`).exec(tabs);
+      expect(tab).not.toBeNull();
+      expect(tab![1]).toContain('role="tab"');
+      expect(tab![1]).not.toContain("disabled");
     }
-    // Biểu đồ is live (§8.3) but not the default; Chứng từ is selected and its panel holds the vouchers.
-    const chartTab = /<button([^>]*)>(?:(?!<\/button>).)*Biểu đồ<\/button>/.exec(tabs);
-    expect(chartTab).not.toBeNull();
-    expect(chartTab![1]).toContain('role="tab"');
-    expect(chartTab![1]).not.toContain("disabled");
-    expect(tabs).toMatch(/role="tab" aria-selected="true"[^>]*>.*Chứng từ<\/button>/);
+    expect(tabs).not.toContain("data-pending");
+    expect(tabs).toMatch(/role="tab" aria-selected="true"[^>]*>.*Vướng mắc<\/button>/);
     expect(tabs).toContain('role="tabpanel"');
   });
 
@@ -552,10 +568,12 @@ describe("PHẦN CHƯA DỰNG — dấu '?' đúng vị trí đặc tả (ADR 00
     expect(html).toContain('<select id="can-bo-du-an"');
   });
 
-  it("dòng phụ 'vướng mắc · nguy cơ' giữ chỗ KHÔNG in con số nào — '0 vướng mắc' sẽ đọc thành 'không có'", () => {
-    const html = renderToStaticMarkup(<AttentionIssuesPending />);
-    // The words on screen, not the class names (`gap-1.5`, `size-[18px]`).
-    expect(html.replace(/<[^>]*>/g, "")).not.toMatch(/\d/);
-    expect(html).toContain("data-pending");
+  it("dòng phụ thẻ 4: số vướng mắc của máy chủ; phần 'nguy cơ' giữ chỗ KHÔNG in con số nào", () => {
+    const html = renderToStaticMarkup(<AttentionCaption openIssueCount={3} />);
+    expect(html).toContain("3 vướng mắc đang theo dõi");
+    // The at-risk half: words and a "?", never a number — "0 nguy cơ" would read as "none".
+    const pending = /<span[^>]*data-pending=""[^>]*>(.*)<\/span><\/span>$/.exec(html);
+    expect(pending).not.toBeNull();
+    expect(pending![1]!.replace(/<[^>]*>/g, "")).not.toMatch(/\d/);
   });
 });

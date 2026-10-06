@@ -14,13 +14,15 @@ import { layChiTietDuAn } from "@/lib/api/du-an";
 import type { KetQua } from "@/lib/api/goi";
 import type { finance_duAnRa, finance_hangMucRa, finance_projectAllocationOut } from "@/lib/api/schema.gen";
 import { cn } from "@/lib/cn";
-import { coQuyen, QUYEN_GHI_NGAN_SACH, QUYEN_XAC_NHAN_NGAN_SACH } from "@/lib/quyen";
+import { coQuyen, QUYEN_GHI_NGAN_SACH, QUYEN_XAC_NHAN_NGAN_SACH, QUYEN_XEM_GIAI_NGAN } from "@/lib/quyen";
 
 import { KhoiChungTu, useProjectVouchers } from "./chung-tu-du-an";
 import { ProjectEditPanel, ProjectHeaderActions, ProjectRemoveDialog } from "./ghi-du-an";
 import { nhanNgay, nhanTien, nhanTienDo, nhanTyLeGiaiNgan, percentLabel, tienDoDuAn } from "./nhan-du-an";
 import { ProjectRecordTabs } from "./pending-parts";
+import { ProjectCommentsPanel } from "./project-comments";
 import { ProjectCurvePanel } from "./project-curve";
+import { ProjectIssuesPanel, useProjectIssues } from "./project-issues";
 import { officerLabel, PEOPLE_LOADING, unitLabel, useProjectPeople, type ProjectPeople } from "./project-people";
 import { Glyph, ProgressBadge } from "./project-ui";
 import { ScopeNotice } from "./scope-notice";
@@ -30,10 +32,9 @@ import { ScopeNotice } from "./scope-notice";
  * the `← Theo dõi giải ngân` link, the inline edit panel when open, then ONE card — header (code,
  * name, `Sửa dự án`), progress pill, figures, progress bar, the funding block, and the four tabs.
  *
- * HAI TRONG BỐN TAB VẪN KHÔNG CÓ (Vướng mắc · Trao đổi): không tab nào có tuyến phía sau trong hợp
- * đồng REST. They are drawn DISABLED with a "?" (ADR 0068 §14, `pending-parts.tsx`) — never a live tab
- * that opens an empty panel. So Chứng từ, not the prototype's Vướng mắc, is the open tab. `Biểu đồ`
- * is live since 06/10/2026 (`project-curve.tsx`).
+ * ALL FOUR TABS ARE LIVE: Vướng mắc (default, as the prototype) and Trao đổi since 889d4598
+ * (`project-issues.tsx`, `project-comments.tsx`), Biểu đồ since 06/10/2026 (`project-curve.tsx`).
+ * Names of authors and mentioned staff come from the SAME staff-directory read as the officer's name.
  *
  * TAB "CHỨNG TỪ" ĐỌC DANH SÁCH TỪ MÁY CHỦ (db94b35c) bằng CÙNG khoá đọc lại dự án, nên một lần ghi
  * chứng từ đọc lại cả hai — xem `useProjectVouchers` trong `chung-tu-du-an.tsx`.
@@ -66,6 +67,10 @@ export function ChiTietDuAn({ id }: { id: string }) {
   const [danhMuc, datDanhMuc] = useState<readonly finance_hangMucRa[]>([]);
   const khoa = `${id}|${lanTai}`;
   const vouchers = useProjectVouchers(id, String(lanTai));
+  // §8.1: its own reload count — an issue write moves no figure of the project, so it re-reads only the
+  // timeline (and with it the tab's `(N)`); a project re-read (retry, edit) re-reads it too.
+  const [issueReloads, setIssueReloads] = useState(0);
+  const issues = useProjectIssues(id, `${lanTai}|${issueReloads}`);
   // Org units and staff, read ONCE for the page: the card's names and the edit form's selects.
   const people = useProjectPeople();
 
@@ -102,6 +107,8 @@ export function ChiTietDuAn({ id }: { id: string }) {
   const dsQuyen: readonly string[] = phien !== null && phien.ok ? phien.duLieu.permissions : [];
   const coGhi = coQuyen(dsQuyen, QUYEN_GHI_NGAN_SACH);
   const coXacNhan = coQuyen(dsQuyen, QUYEN_XAC_NHAN_NGAN_SACH);
+  // The comment route's own key (`budget.read`): the page is reachable without it only by a stale session.
+  const canRead = coQuyen(dsQuyen, QUYEN_XEM_GIAI_NGAN);
 
   return (
     <section className="flex min-w-0 flex-col" aria-label="Chi tiết dự án">
@@ -192,6 +199,19 @@ export function ChiTietDuAn({ id }: { id: string }) {
                 <ProjectRecordTabs
                   voucherCount={vouchers.phase === "ready" ? vouchers.count : undefined}
                   chart={<ProjectCurvePanel projectId={trangThai.duAn.id} />}
+                  issueCount={issues.phase === "ready" ? issues.openCount : undefined}
+                  issues={
+                    <ProjectIssuesPanel
+                      projectId={trangThai.duAn.id}
+                      issues={issues}
+                      staff={people.staff}
+                      canRecord={coGhi}
+                      onChanged={() => setIssueReloads((n) => n + 1)}
+                    />
+                  }
+                  discussion={
+                    <ProjectCommentsPanel projectId={trangThai.duAn.id} staff={people.staff} canComment={canRead} />
+                  }
                 >
                   <KhoiChungTu
                     duAnID={trangThai.duAn.id}

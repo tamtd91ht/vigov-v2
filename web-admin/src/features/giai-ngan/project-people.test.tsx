@@ -337,6 +337,8 @@ describe("registry — the two unit / officer placeholders are gone", () => {
       expect(PHAN_CHUA_DUNG_GHI.some((p) => p.ten === ten)).toBe(false);
       expect(() => pendingPart(ten)).toThrow();
     }
-    for (const p of PHAN_CHUA_DUNG_GHI) expect(p.viSao).not.toContain("cán bộ phụ trách");
+    // A sentence saying the officer cannot be set yet. Merely NAMING the officer is fine: §8.1's tracking
+    // task entry ("Khi dự án đã có cán bộ phụ trách…") is about something else that is not built.
+    for (const p of PHAN_CHUA_DUNG_GHI) expect(p.viSao).not.toMatch(/chưa[^.]*cán bộ phụ trách/);
   });
 });

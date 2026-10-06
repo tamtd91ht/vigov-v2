@@ -11,7 +11,13 @@ import { pendingMarkerLabel } from "@/components/ui/pending-feature";
 
 import { FormDuAn } from "./ghi-du-an";
 import { FORM_DU_AN_TRONG, PHAN_CHUA_DUNG_GHI, pendingPart } from "./nhan-ghi-giai-ngan";
-import { AttentionIssuesPending, DisbursementHeaderActions, ProjectRecordTabs } from "./pending-parts";
+import {
+  AttentionCaption,
+  DisbursementHeaderActions,
+  MentionNoticePending,
+  ProjectRecordTabs,
+  TrackingTaskPending,
+} from "./pending-parts";
 
 // Opening ~25 Radix popovers one by one in jsdom takes ~5s on its own and timed out under the full
 // parallel suite (06/10/2026); same allowance as `task-record-tabs.test.tsx`. Not a hang guard.
@@ -54,8 +60,10 @@ function screens(): ReactNode {
   return (
     <>
       <DisbursementHeaderActions />
-      <AttentionIssuesPending />
-      <ProjectRecordTabs chart={<p>chart</p>}>
+      <AttentionCaption openIssueCount={2} />
+      <TrackingTaskPending />
+      <MentionNoticePending />
+      <ProjectRecordTabs chart={<p>chart</p>} issues={<p>issues</p>} discussion={<p>discussion</p>}>
         <p>panel</p>
       </ProjectRecordTabs>
       <FormDuAn
@@ -136,8 +144,8 @@ describe("Giải ngân placeholders (ADR 0068 §14)", () => {
       expect(PHAN_CHUA_DUNG_GHI.some((p) => p.ten === ten)).toBe(false);
       expect(() => pendingPart(ten)).toThrow();
     }
-    // The fourth card's issue counts stay a "?": no issue data, no at-risk rule.
-    expect(pendingPart("Vướng mắc và nguy cơ không giải ngân hết").viSao).toContain("vướng mắc");
+    // The fourth card's at-risk half stays a "?": no rule defines it.
+    expect(pendingPart("Nguy cơ không giải ngân hết").viSao).toContain("quy tắc");
   });
 
   it("project funding (§7.2 chip, §8 block, §9 list) and the §8.2 voucher list + source are LIVE: no registry entry left", () => {
@@ -159,64 +167,102 @@ describe("Giải ngân placeholders (ADR 0068 §14)", () => {
     }
   });
 
-  it("the Chứng từ tab carries the server's count once the list is read, and no number before", () => {
+  it("§7.2 column, §8.1 and §8.4 tabs and the card's issue count are LIVE (889d4598): no entry left", () => {
+    for (const ten of ["Vướng mắc mới nhất", "Vướng mắc", "Trao đổi", "Vướng mắc và nguy cơ không giải ngân hết"]) {
+      expect(PHAN_CHUA_DUNG_GHI.some((p) => p.ten === ten)).toBe(false);
+      expect(() => pendingPart(ten)).toThrow();
+    }
+    // No stale sentence claiming issues or discussions cannot be recorded.
+    for (const p of PHAN_CHUA_DUNG_GHI) {
+      expect(p.viSao).not.toContain("chưa ghi nhận vướng mắc");
+      expect(p.viSao).not.toContain("chưa có chức năng");
+    }
+    // What is still NOT built is said as not built, never as a fact.
+    expect(pendingPart("Tự sinh nhiệm vụ theo dõi").viSao).toContain("chưa sinh nhiệm vụ nào");
+    expect(pendingPart("Thông báo cho người được nhắc tên").viSao).toContain("chưa nhận được thông báo");
+  });
+
+  it("tabs carry the server's counts once read, and no number before", () => {
     const counted = mount(
-      <ProjectRecordTabs voucherCount={3} chart={null}>
+      <ProjectRecordTabs voucherCount={3} issueCount={2} chart={null} issues={null} discussion={null}>
         <p>panel</p>
       </ProjectRecordTabs>,
     );
-    expect(counted.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Chứng từ (3)");
+    expect([...counted.querySelectorAll('[role="tab"]')].map((t) => t.textContent)).toEqual([
+      "Vướng mắc (2)",
+      "Chứng từ (3)",
+      "Biểu đồ",
+      "Trao đổi",
+    ]);
     act(() => root?.unmount());
     host?.remove();
 
     const loading = mount(
-      <ProjectRecordTabs chart={null}>
+      <ProjectRecordTabs chart={null} issues={null} discussion={null}>
         <p>panel</p>
       </ProjectRecordTabs>,
     );
-    expect(loading.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Chứng từ");
+    expect([...loading.querySelectorAll('[role="tab"]')].map((t) => t.textContent)).toEqual([
+      "Vướng mắc",
+      "Chứng từ",
+      "Biểu đồ",
+      "Trao đổi",
+    ]);
   });
 
-  it("a disabled tab never becomes selected; Chứng từ is the default tab", () => {
+  it("all four tabs are live; Vướng mắc is the default; the other panels stay mounted, hidden", () => {
     const el = mount(
-      <ProjectRecordTabs chart={<p>chart</p>}>
+      <ProjectRecordTabs chart={<p>chart</p>} issues={<p>issues</p>} discussion={<p>discussion</p>}>
         <p>panel</p>
       </ProjectRecordTabs>,
     );
     const tabs = [...el.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
-    expect(tabs.map((t) => t.textContent)).toEqual(["Vướng mắc", "Chứng từ", "Biểu đồ", "Trao đổi"]);
+    for (const t of tabs) expect(t.disabled).toBe(false);
+    expect(el.querySelector("[data-pending]")).toBeNull();
     const selected = () =>
       [...el.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
         .filter((t) => t.getAttribute("aria-selected") === "true")
         .map((t) => t.textContent);
-    expect(selected()).toEqual(["Chứng từ"]);
-    act(() => tabs[0]!.click());
+    expect(selected()).toEqual(["Vướng mắc"]);
+    expect(el.querySelector('[role="tabpanel"]:not([hidden])')?.textContent).toBe("issues");
+
     act(() => tabs[3]!.click());
-    expect(selected()).toEqual(["Chứng từ"]);
-    expect(el.querySelector('[role="tabpanel"]:not([hidden])')?.textContent).toBe("panel");
+    expect(selected()).toEqual(["Trao đổi"]);
+    // A half-typed issue or voucher survives a look at another tab.
+    expect(el.querySelector<HTMLElement>("#panel-vuong-mac-du-an")?.hidden).toBe(true);
+    expect(el.querySelector("#panel-vuong-mac-du-an")?.textContent).toBe("issues");
+    expect(el.querySelector<HTMLElement>("#panel-chung-tu-du-an")?.hidden).toBe(true);
+    expect(el.querySelector("#panel-trao-doi-du-an")?.textContent).toBe("discussion");
   });
 
-  it("Biểu đồ is live: selecting it shows the chart panel; the voucher panel stays mounted, hidden", () => {
+  it("Biểu đồ mounts only while selected; ←/→ cycle through the four tabs", () => {
     const el = mount(
-      <ProjectRecordTabs chart={<p>chart</p>}>
+      <ProjectRecordTabs chart={<p>chart</p>} issues={<p>issues</p>} discussion={<p>discussion</p>}>
         <p>panel</p>
       </ProjectRecordTabs>,
     );
-    expect(el.textContent).not.toContain("chart");
+    expect(el.querySelector("#panel-bieu-do-du-an")).toBeNull();
     const chartTab = el.querySelector<HTMLButtonElement>("#tab-bieu-do-du-an")!;
-    expect(chartTab.disabled).toBe(false);
     act(() => chartTab.click());
     expect(chartTab.getAttribute("aria-selected")).toBe("true");
     expect(el.querySelector("#panel-bieu-do-du-an")?.textContent).toBe("chart");
-    // A half-filled voucher form must survive a look at the chart.
     expect(el.querySelector<HTMLElement>("#panel-chung-tu-du-an")?.hidden).toBe(true);
-    expect(el.querySelector("#panel-chung-tu-du-an")?.textContent).toBe("panel");
 
-    // ←/→ move between the two live tabs only.
-    act(() => {
-      chartTab.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
-    });
-    expect(el.querySelector("#tab-chung-tu-du-an")?.getAttribute("aria-selected")).toBe("true");
+    const key = (k: string) =>
+      act(() => {
+        document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true }));
+      });
+    chartTab.focus();
+    key("ArrowRight");
+    expect(el.querySelector("#tab-trao-doi-du-an")?.getAttribute("aria-selected")).toBe("true");
     expect(el.querySelector("#panel-bieu-do-du-an")).toBeNull();
+    key("ArrowRight");
+    expect(el.querySelector("#tab-vuong-mac-du-an")?.getAttribute("aria-selected")).toBe("true");
+    key("ArrowLeft");
+    expect(el.querySelector("#tab-trao-doi-du-an")?.getAttribute("aria-selected")).toBe("true");
+    key("Home");
+    expect(el.querySelector("#tab-vuong-mac-du-an")?.getAttribute("aria-selected")).toBe("true");
+    key("End");
+    expect(el.querySelector("#tab-trao-doi-du-an")?.getAttribute("aria-selected")).toBe("true");
   });
 });

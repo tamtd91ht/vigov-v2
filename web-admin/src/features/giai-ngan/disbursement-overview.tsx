@@ -12,7 +12,7 @@ import { cn } from "@/lib/cn";
 
 import { CumulativeChart } from "./cumulative-chart";
 import { nhanNgay, nhanNguongCham, nhanTien, nhanTyLeGiaiNgan, percentLabel } from "./nhan-du-an";
-import { AttentionIssuesPending } from "./pending-parts";
+import { AttentionCaption } from "./pending-parts";
 import { categoryRowLabel } from "./project-groups";
 
 /**
@@ -134,7 +134,7 @@ export function KpiCards({ summary: s }: { summary: finance_projectSummaryOut })
         label="Cần chú ý"
         value={`${s.delayed_project_count} dự án chậm`}
         alert={s.delayed_project_count > 0}
-        caption={<AttentionIssuesPending />}
+        caption={<AttentionCaption openIssueCount={s.open_issue_count} />}
       />
     </div>
   );

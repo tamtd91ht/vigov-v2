@@ -164,7 +164,7 @@ describe("§8.2 list — read from the server", () => {
     const el = mount(<ChiTietDuAn id="01JDA1" />);
     await settle();
 
-    expect(el.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Chứng từ (2)");
+    expect(el.querySelector("#tab-chung-tu-du-an")?.textContent).toBe("Chứng từ (2)");
     const rows = [...el.querySelectorAll('table[class*="bang-danh-muc"] tbody tr')];
     expect(rows).toHaveLength(2);
     // Column order: Ngày chi · Số tiền · Nguồn vốn · ...
@@ -188,7 +188,7 @@ describe("§8.2 list — read from the server", () => {
     expect(el.textContent).toContain("Chưa tải được danh sách chứng từ");
     expect(el.textContent).toContain("Bạn không có quyền thực hiện thao tác này.");
     expect(el.textContent).not.toContain("chưa có chứng từ giải ngân nào");
-    expect(el.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Chứng từ");
+    expect(el.querySelector("#tab-chung-tu-du-an")?.textContent).toBe("Chứng từ");
   });
 
   it("RE-READS after a write: the list shown is the server's new list, not a patched row", async () => {
@@ -210,7 +210,7 @@ describe("§8.2 list — read from the server", () => {
 
     expect(seen.some((s) => s.method === "POST" && s.url === "/api/v1/disbursements/01JCT1/confirmation")).toBe(true);
     expect(listReads(seen)).toBe(2);
-    expect(el.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Chứng từ (2)");
+    expect(el.querySelector("#tab-chung-tu-du-an")?.textContent).toBe("Chứng từ (2)");
     expect(el.textContent).toContain("Khoản chi người khác vừa ghi");
   });
 });

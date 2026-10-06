@@ -229,6 +229,28 @@ export function nhanMocKhoa(mocISO: string | undefined): string {
   );
 }
 
+const SHORT_DAY_FORMAT = new Intl.DateTimeFormat("en-GB", {
+  timeZone: MUI_GIO,
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+});
+
+/**
+ * An RFC 3339 instant → the commune's calendar day, unpadded (`27/8/2026`, spec §7.2's "Vướng mắc mới
+ * nhất"). Same pinned zone as `nhanMocKhoa`: 23:30 UTC on the 26th is already the 27th in Hà Nội.
+ * An unreadable string is shown as sent, never guessed.
+ */
+export function shortDayLabel(iso: string | undefined): string {
+  if (iso === undefined || iso === "") return DAU_GACH;
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return iso;
+  const parts = SHORT_DAY_FORMAT.formatToParts(new Date(t));
+  // `en-GB` pads even a "numeric" day and month ("27/08"); the spec writes them unpadded.
+  const unpadded = (type: Intl.DateTimeFormatPartTypes) => String(Number(phanCua(parts, type)));
+  return `${unpadded("day")}/${unpadded("month")}/${phanCua(parts, "year")}`;
+}
+
 /* ── Thân yêu cầu ──────────────────────────────────────────────────────────────────────────── */
 
 /**
@@ -841,35 +863,39 @@ export const PHAN_CHUA_DUNG_GHI: readonly PhanChuaDung[] = [
   // hạng mục`: BUILT 06/10/2026 on `GET /api/v1/investment-project-summary` and the list's
   // `delayed_only` (a3fdcac2; `disbursement-overview.tsx`, `project-groups.ts`). §6 per-funding-source
   // block + `Quản lý nguồn vốn`: BUILT (migration 0013, `funding-source-progress.tsx`).
-  // §3 fourth card, its sub-line "N vướng mắc đang theo dõi · N nguy cơ không giải ngân hết". `vuong_mac`
-  // (§8.1) does not exist in `finance` and the at-risk rule is undefined; the summary route leaves both
-  // counts out on purpose (`disbursement_summary.go`), because "0 vướng mắc" would read as "none".
+  // §3 fourth card, sub-line: "N vướng mắc đang theo dõi" is LIVE (889d4598, the summary's
+  // `open_issue_count`); "N nguy cơ không giải ngân hết" stays a "?" — no rule says which project is at
+  // risk, and a number drawn without one would be a figure nobody measured.
   {
-    ten: "Vướng mắc và nguy cơ không giải ngân hết",
+    ten: "Nguy cơ không giải ngân hết",
     viSao:
-      "Hệ thống chưa ghi nhận vướng mắc của dự án và chưa có quy tắc xác định dự án có nguy cơ không " +
-      "giải ngân hết, nên chưa có số liệu để hiện.",
+      "Chưa có quy tắc xác định dự án nào có nguy cơ không giải ngân hết trong năm, nên chưa có số " +
+      "liệu để hiện.",
   },
   // §7.2 funding chip: BUILT (`funding_status` on the list, `FundingChip` in `bang-du-an.tsx`).
   // Prototype list column "Đơn vị / phụ trách" + the detail figure "Đơn vị thực hiện": BUILT — names
   // resolved client-side, one read per catalogue per screen (`project-people.ts`).
-  // §7.2 column: no issue-tracking data exists anywhere yet.
-  {
-    ten: "Vướng mắc mới nhất",
-    viSao: "Hệ thống chưa ghi nhận vướng mắc của dự án, nên chưa có nội dung để hiện.",
-  },
+  // §7.2 `Vướng mắc mới nhất`, §8.1 tab `Vướng mắc` and §8.4 tab `Trao đổi`: BUILT (889d4598,
+  // `project-issues.tsx`, `project-comments.tsx`, the list's `latest_issue`).
   // §8 `GIẢI NGÂN THEO NGUỒN VỐN`: BUILT (`funding_allocations` on the detail, `ProjectFundingBlock`).
-  // §8.1 tab: no issue-tracking routes.
+  // §8.3 tab `Biểu đồ`: BUILT 06/10/2026 (`project-curve.tsx`).
+  // §8.1 note + §13 rule 4: an issue on a project with an officer opens a tracking task. NOT BUILT: the
+  // task belongs to another service and arrives later as an event (user decision 06/10/2026,
+  // `service-finance/internal/domain/project_discussion.go`). Saying it happens would be untrue.
   {
-    ten: "Vướng mắc",
-    viSao: "Hệ thống chưa có chức năng ghi nhận và theo dõi vướng mắc của dự án.",
+    ten: "Tự sinh nhiệm vụ theo dõi",
+    viSao:
+      "Khi dự án đã có cán bộ phụ trách, mỗi vướng mắc ghi nhận sẽ sinh một nhiệm vụ theo dõi ở phần " +
+      "hồ sơ nhiệm vụ. Phần này chưa có: hiện vướng mắc chỉ được ghi vào dòng thời gian của dự án, " +
+      "chưa sinh nhiệm vụ nào.",
   },
-  // §8.3 tab `Biểu đồ`: BUILT 06/10/2026 on `GET /api/v1/investment-projects/{id}/disbursement-curve`
-  // (`project-curve.tsx`).
-  // §8.4 tab: no discussion storage for a project.
+  // §8.4: the server stores the mentioned staff codes but sends nobody anything — the notification
+  // belongs to `comms` and arrives later as an event (same decision).
   {
-    ten: "Trao đổi",
-    viSao: "Hệ thống chưa có chức năng lưu trao đổi giữa các cán bộ về một dự án.",
+    ten: "Thông báo cho người được nhắc tên",
+    viSao:
+      "Người được nhắc tên trong trao đổi chưa nhận được thông báo nào. Tên được lưu cùng ý kiến, " +
+      "nhưng hệ thống chưa gửi tin cho họ — hãy báo trực tiếp nếu cần họ đọc.",
   },
 ];
 

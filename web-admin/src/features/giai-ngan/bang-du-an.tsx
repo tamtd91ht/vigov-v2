@@ -1,6 +1,6 @@
 "use client";
 
-import { FolderKanban, Search, SearchX, Trash2, TrendingDown } from "lucide-react";
+import { CircleAlert, CircleCheck, FolderKanban, Search, SearchX, Trash2, TrendingDown } from "lucide-react";
 import Link from "next/link";
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 
@@ -9,7 +9,6 @@ import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { Field } from "@/components/ui/field";
-import { PendingCell, PendingColumnHeader } from "@/components/ui/pending-feature";
 import { SkeletonRows } from "@/components/ui/skeleton";
 import { getProjectSummary, layDanhSachDuAn } from "@/lib/api/du-an";
 import type { KetQua } from "@/lib/api/goi";
@@ -18,6 +17,7 @@ import type {
   finance_duAnRa,
   finance_fundingStatusOut,
   finance_hangMucRa,
+  finance_latestIssueOut,
   finance_projectSummaryOut,
 } from "@/lib/api/schema.gen";
 import { cn } from "@/lib/cn";
@@ -33,9 +33,8 @@ import {
   nhanTyLeGiaiNgan,
   tienDoDuAn,
 } from "./nhan-du-an";
-import { pendingPart } from "./nhan-ghi-giai-ngan";
 import { DisbursementOverview, type SummaryState } from "./disbursement-overview";
-import { LATEST_ISSUE_COLUMN } from "./pending-parts";
+import { latestIssueDateLine } from "./project-discussion-labels";
 import { ProjectBulkDeleteDialog } from "./project-bulk-delete-dialog";
 import { PEOPLE_LOADING, unitOwnerLabel, useProjectPeople, type ProjectPeople } from "./project-people";
 import { BULK_DELETE_BUTTON, selectedProjectsLabel, type SelectedProject } from "./project-bulk-delete";
@@ -55,10 +54,12 @@ import { ScopeNotice } from "./scope-notice";
  * Funding-source writes (§6) move none of its figures — plans and vouchers only — so they do not
  * re-read it. Edit and delete of one project happen on the detail page; coming back mounts this anew.
  *
- * WHAT THE PROTOTYPE DRAWS THAT THIS DOES NOT FILL: the `Vướng mắc mới nhất` column and the fourth
- * card's issue counts — disabled "?" placeholders (ADR 0068 §14, `pending-parts.tsx`). No issue data
- * exists, and drawing "0 vướng mắc" would tell leadership a figure nobody measured. `Đơn vị / phụ
- * trách` is names resolved from identity's two catalogues, read once per mount (`project-people.ts`).
+ * `Vướng mắc mới nhất` is the list's own `latest_issue` (889d4598) — no read per row. The fourth card's
+ * at-risk count stays a "?" (`pending-parts.tsx`): no rule defines it. `Đơn vị / phụ trách` is names
+ * resolved from identity's two catalogues, read once per mount (`project-people.ts`).
+ *
+ * COMING BACK FROM A PROJECT PAGE MOUNTS THIS SCREEN ANEW (a different App Router page), so the list
+ * and the summary are read again — an issue recorded or resolved there shows here with no extra signal.
  *
  * `GỘP THEO HẠNG MỤC` (on by default, §7.1): group headers carry the SERVER's `by_category` totals, and
  * only while the rows under a header are that whole category — see `project-groups.ts`.
@@ -531,7 +532,9 @@ export function BangDanhSach({
           <FundingChip status={d.funding_status} names={d.funding_source_names} />
         </td>
         <td className="tabular-nums">{nhanNgay(d.disbursement_deadline)}</td>
-        <PendingCell />
+        <td className="whitespace-normal">
+          <LatestIssueCell issue={d.latest_issue} />
+        </td>
       </tr>
     );
   }
@@ -576,9 +579,9 @@ export function BangDanhSach({
               Nguồn vốn
             </th>
             <th scope="col">Thời hạn giải ngân</th>
-            <PendingColumnHeader info={pendingPart(LATEST_ISSUE_COLUMN)} className="min-w-52">
+            <th scope="col" className="min-w-52">
               Vướng mắc mới nhất
-            </PendingColumnHeader>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -670,6 +673,30 @@ export function FundingChip({
           {joined}
         </span>
       )}
+    </span>
+  );
+}
+
+/**
+ * §7.2 `Vướng mắc mới nhất` (prototype `BudgetItemTable.tsx:365-393`): the newest issue's text, then
+ * `27/8/2026 · đã gỡ` — amber while open, grey once resolved, icon + words, never colour alone. "—" for a
+ * project with none: the server fills the column from its own read, so absent means none, not unknown.
+ * Long text is clamped to two lines; the whole of it stays in `title` and on the project page.
+ */
+export function LatestIssueCell({ issue }: { issue: finance_latestIssueOut | null | undefined }) {
+  if (issue === null || issue === undefined) return <span className="text-ink-500">—</span>;
+  return (
+    <span
+      className={cn("flex items-start gap-1 text-xs", issue.resolved ? "text-ink-500" : "text-warning-600")}
+      data-latest-issue={issue.resolved ? "resolved" : "open"}
+    >
+      <Glyph icon={issue.resolved ? CircleCheck : CircleAlert} className="mt-0.5 size-3 shrink-0" />
+      <span className="min-w-0 leading-snug">
+        <span className="line-clamp-2 break-words" title={issue.text}>
+          {issue.text}
+        </span>
+        <span className="block text-ink-500 tabular-nums">{latestIssueDateLine(issue)}</span>
+      </span>
     </span>
   );
 }

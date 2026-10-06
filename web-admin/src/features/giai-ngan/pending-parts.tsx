@@ -3,13 +3,15 @@
 import { ChartLine, MessagesSquare, ReceiptText, TriangleAlert, Upload } from "lucide-react";
 import { useState, type KeyboardEvent, type ReactNode } from "react";
 
-import { PendingButton, PendingMarker, PendingTab } from "@/components/ui/pending-feature";
+import { PendingButton, PendingMarker } from "@/components/ui/pending-feature";
 import { Tab, TabList } from "@/components/ui/tabs";
 
 import { pendingPart } from "./nhan-ghi-giai-ngan";
+import { openIssuesLabel } from "./project-discussion-labels";
 
 /**
- * The "?" placeholders of the Giải ngân screens — ADR 0068 §14, positions approved 02/10/2026.
+ * The "?" placeholders of the Giải ngân screens — ADR 0068 §14, positions approved 02/10/2026 — and the
+ * project page's four tabs, which used to hold two of them.
  *
  * Every part is drawn where `docs/ui-ux/06-giai-ngan.md` puts it, as the control it will be, DISABLED.
  * Nothing here fetches, stores or emits: a placeholder is presentation (ADR 0068 §1). The sentence
@@ -24,12 +26,11 @@ const IMPORT_EXCEL = "Nhập giải ngân từ Excel"; // §10
 // §5 `☰ Hạng mục` is LIVE since 06/10/2026 (`category-manager-dialog.tsx`).
 // §3 KPI cards, §4 chart, §5 category table and the two §7.1 checkboxes are LIVE since 06/10/2026
 // (`disbursement-overview.tsx`, `bang-du-an.tsx`); §8.3 `Biểu đồ` too (`project-curve.tsx`).
-const ATTENTION_ISSUES = "Vướng mắc và nguy cơ không giải ngân hết"; // §3, fourth card's sub-line
-/** Name of the list table's pending column, read by `bang-du-an.tsx`. */
-export const LATEST_ISSUE_COLUMN = "Vướng mắc mới nhất"; // §7.2
+const AT_RISK = "Nguy cơ không giải ngân hết"; // §3, fourth card's sub-line, second half
+// §7.2 `Vướng mắc mới nhất`, §8.1 `Vướng mắc` and §8.4 `Trao đổi` are LIVE since 889d4598.
+const TRACKING_TASK = "Tự sinh nhiệm vụ theo dõi"; // §8.1 note, §13 rule 4
+const MENTION_NOTICE = "Thông báo cho người được nhắc tên"; // §8.4
 // §7.2 `Đơn vị / phụ trách`, §8 `Đơn vị thực hiện` and the two §9 selects are LIVE (`project-people.ts`).
-const ISSUES_TAB = "Vướng mắc"; // §8.1
-const DISCUSSION_TAB = "Trao đổi"; // §8.4
 // §9 `Tự sinh mã` is LIVE since 9f0a0187 (`ghi-du-an.tsx`).
 // §7.2 funding chip, §8 per-source block and the §9 funding list are LIVE since 8245698b; the §8.2
 // voucher list, its `NGUỒN VỐN` column and the voucher form's source select since db94b35c.
@@ -48,100 +49,155 @@ export function DisbursementHeaderActions() {
 }
 
 /**
- * Sub-line of §3's fourth card ("0 vướng mắc đang theo dõi · 0 nguy cơ không giải ngân hết"): the words
- * the figures would sit in, and the "?" — never a 0, which would read as "none" (the summary route
- * leaves both counts out on purpose).
+ * Sub-line of §3's fourth card: "3 vướng mắc đang theo dõi · nguy cơ không giải ngân hết ?". The first
+ * half is the server's `open_issue_count`; the second has no rule behind it, so it stays words and a
+ * "?" — never a 0, which would read as "none".
  */
-export function AttentionIssuesPending() {
+export function AttentionCaption({ openIssueCount }: { openIssueCount: number | null | undefined }) {
   return (
-    <span className="inline-flex min-w-0 flex-wrap items-center gap-1.5" data-pending="">
-      <span className="text-ink-400">Vướng mắc · nguy cơ không giải ngân hết</span>
-      <PendingMarker info={pendingPart(ATTENTION_ISSUES)} />
+    <span className="inline-flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5" data-attention-caption="">
+      <span data-open-issues="">{openIssuesLabel(openIssueCount)}</span>
+      <span aria-hidden="true">·</span>
+      <span className="inline-flex items-center gap-1.5" data-pending="">
+        <span className="text-ink-400">nguy cơ không giải ngân hết</span>
+        <PendingMarker info={pendingPart(AT_RISK)} />
+      </span>
     </span>
   );
 }
 
-type ProjectTab = "vouchers" | "chart";
+/**
+ * §8.1's note, as what it is: NOT BUILT. The spec's sentence ("…hệ thống tự sinh một nhiệm vụ theo dõi")
+ * is not printed as a fact — no task is created yet — so the part is named greyed, with its "?".
+ */
+export function TrackingTaskPending() {
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1.5 text-xs" data-pending="">
+      <span className="text-ink-400">{TRACKING_TASK}</span>
+      <PendingMarker info={pendingPart(TRACKING_TASK)} />
+    </span>
+  );
+}
+
+/** §8.4: a mention is stored, but nobody is notified yet — said beside the composer, with its "?". */
+export function MentionNoticePending() {
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1.5 text-xs" data-pending="">
+      <span className="text-ink-400">{MENTION_NOTICE} — chưa có</span>
+      <PendingMarker info={pendingPart(MENTION_NOTICE)} />
+    </span>
+  );
+}
+
+type ProjectTab = "issues" | "vouchers" | "chart" | "discussion";
+
+const TAB_ORDER: readonly ProjectTab[] = ["issues", "vouchers", "chart", "discussion"];
+const TAB_ID: Record<ProjectTab, string> = {
+  issues: "tab-vuong-mac-du-an",
+  vouchers: "tab-chung-tu-du-an",
+  chart: "tab-bieu-do-du-an",
+  discussion: "tab-trao-doi-du-an",
+};
+const PANEL_ID: Record<ProjectTab, string> = {
+  issues: "panel-vuong-mac-du-an",
+  vouchers: "panel-chung-tu-du-an",
+  chart: "panel-bieu-do-du-an",
+  discussion: "panel-trao-doi-du-an",
+};
+
+/** `Vướng mắc (2)` once the server's count is read; no number before — a "(0)" would read as "none". */
+function counted(label: string, n: number | undefined): string {
+  return n === undefined ? label : `${label} (${n})`;
+}
 
 /**
- * Detail page tabs, spec §8: `[Vướng mắc] [Chứng từ] [Biểu đồ] [Trao đổi]`. Chứng từ (the default) and
- * Biểu đồ are live; Vướng mắc and Trao đổi are disabled "?" tabs (`tabIndex={-1}`), which ←/→ skip.
+ * Detail page tabs, spec §8: `[Vướng mắc (N)] [Chứng từ (N)] [Biểu đồ] [Trao đổi]` — all four live.
+ * `Vướng mắc` is the default, as in the prototype (`BudgetItemDetail.tsx:379`); it was `Chứng từ` only
+ * while the issue tab had no route behind it.
  *
- * The voucher panel stays MOUNTED while the chart is shown (`hidden`), so a half-filled voucher form
- * survives a look at the chart. The chart panel mounts only while selected: `chart` reads the curve on
- * mount, so every opening shows the curve as it is after the last voucher write.
+ * Issues, vouchers and discussion stay MOUNTED while hidden, so a half-typed issue, voucher or message
+ * survives a look at another tab. The chart mounts only while selected: it reads the curve on mount,
+ * so every opening shows the curve as it is after the last voucher write.
  *
- * `voucherCount` is the server's `count` (prototype `Chứng từ (N)`); `undefined` while the list is
- * loading or failed — no number rather than a "0" that would read as "nothing spent".
+ * `issueCount` is the server's `open_count` (the prototype's `Vướng mắc (open_issue_count)`);
+ * `voucherCount` its `count`. `undefined` while loading or failed.
  */
 export function ProjectRecordTabs({
   children,
   voucherCount,
   chart,
+  issues,
+  issueCount,
+  discussion,
 }: {
+  /** The §8.2 voucher panel. */
   children: ReactNode;
   voucherCount?: number;
   /** The §8.3 panel (`ProjectCurvePanel`), rendered only while `Biểu đồ` is selected. */
   chart: ReactNode;
+  /** The §8.1 panel (`ProjectIssuesPanel`). */
+  issues: ReactNode;
+  issueCount?: number;
+  /** The §8.4 panel (`ProjectCommentsPanel`). */
+  discussion: ReactNode;
 }) {
-  const [selected, setSelected] = useState<ProjectTab>("vouchers");
+  const [selected, setSelected] = useState<ProjectTab>("issues");
 
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>): void {
-    // Only from a tab: the "?" buttons of the pending tabs sit in this list too.
     if ((e.target as HTMLElement).getAttribute("role") !== "tab") return;
-    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" && e.key !== "Home" && e.key !== "End") return;
+    const at = TAB_ORDER.indexOf(selected);
+    const last = TAB_ORDER.length - 1;
+    let next: number;
+    if (e.key === "ArrowRight") next = at === last ? 0 : at + 1;
+    else if (e.key === "ArrowLeft") next = at === 0 ? last : at - 1;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = last;
+    else return;
     e.preventDefault();
-    // Two live tabs: ←/→ land on the other one; Home/End name their end.
-    const next: ProjectTab =
-      e.key === "Home" ? "vouchers" : e.key === "End" ? "chart" : selected === "vouchers" ? "chart" : "vouchers";
-    setSelected(next);
-    document.getElementById(next === "vouchers" ? "tab-chung-tu-du-an" : "tab-bieu-do-du-an")?.focus();
+    const tab = TAB_ORDER[next]!;
+    setSelected(tab);
+    document.getElementById(TAB_ID[tab])?.focus();
+  }
+
+  function tab(id: ProjectTab, icon: typeof TriangleAlert, label: string) {
+    return (
+      <Tab
+        selected={selected === id}
+        id={TAB_ID[id]}
+        aria-controls={PANEL_ID[id]}
+        tabIndex={selected === id ? 0 : -1}
+        icon={icon}
+        onClick={() => setSelected(id)}
+      >
+        {label}
+      </Tab>
+    );
+  }
+
+  function kept(id: ProjectTab, content: ReactNode) {
+    return (
+      <div role="tabpanel" id={PANEL_ID[id]} aria-labelledby={TAB_ID[id]} hidden={selected !== id} className="min-w-0">
+        {content}
+      </div>
+    );
   }
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
       <TabList aria-label="Hồ sơ dự án" onKeyDown={onKeyDown}>
-        <PendingTab info={pendingPart(ISSUES_TAB)} icon={TriangleAlert}>
-          Vướng mắc
-        </PendingTab>
-        <Tab
-          selected={selected === "vouchers"}
-          id="tab-chung-tu-du-an"
-          aria-controls="panel-chung-tu-du-an"
-          tabIndex={selected === "vouchers" ? 0 : -1}
-          icon={ReceiptText}
-          onClick={() => setSelected("vouchers")}
-        >
-          {voucherCount === undefined ? "Chứng từ" : `Chứng từ (${voucherCount})`}
-        </Tab>
-        <Tab
-          selected={selected === "chart"}
-          id="tab-bieu-do-du-an"
-          aria-controls="panel-bieu-do-du-an"
-          tabIndex={selected === "chart" ? 0 : -1}
-          icon={ChartLine}
-          onClick={() => setSelected("chart")}
-        >
-          Biểu đồ
-        </Tab>
-        <PendingTab info={pendingPart(DISCUSSION_TAB)} icon={MessagesSquare}>
-          Trao đổi
-        </PendingTab>
+        {tab("issues", TriangleAlert, counted("Vướng mắc", issueCount))}
+        {tab("vouchers", ReceiptText, counted("Chứng từ", voucherCount))}
+        {tab("chart", ChartLine, "Biểu đồ")}
+        {tab("discussion", MessagesSquare, "Trao đổi")}
       </TabList>
-      <div
-        role="tabpanel"
-        id="panel-chung-tu-du-an"
-        aria-labelledby="tab-chung-tu-du-an"
-        hidden={selected !== "vouchers"}
-        className="min-w-0"
-      >
-        {children}
-      </div>
+      {kept("issues", issues)}
+      {kept("vouchers", children)}
       {selected === "chart" && (
-        <div role="tabpanel" id="panel-bieu-do-du-an" aria-labelledby="tab-bieu-do-du-an" className="min-w-0">
+        <div role="tabpanel" id={PANEL_ID.chart} aria-labelledby={TAB_ID.chart} className="min-w-0">
           {chart}
         </div>
       )}
+      {kept("discussion", discussion)}
     </div>
   );
 }
