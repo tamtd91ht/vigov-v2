@@ -357,8 +357,10 @@ export function EconomicMap({
       ref={containerRef}
       className={
         expanded
-          ? "economic-map min-h-0 w-full flex-1 overflow-hidden rounded-xl border border-line"
-          : "economic-map h-[60vh] min-h-[360px] w-full overflow-hidden rounded-xl border border-line md:h-[calc(100vh-260px)] md:min-h-[480px]"
+          ? "economic-map min-h-0 w-full flex-1 overflow-hidden"
+          : // Flush inside the workspace frame (prototype `MapWorkspace.tsx`). From lg the frame has a fixed
+            // height and the map takes what the toolbar leaves; stacked below lg, it has its own height.
+            "economic-map h-[60vh] min-h-[360px] w-full overflow-hidden lg:h-auto lg:min-h-0 lg:flex-1"
       }
       data-expanded={expanded ? "" : undefined}
       role="region"

@@ -1,7 +1,7 @@
 "use client";
 
-import { BadgeCheck, CircleSlash, Pencil, Trash2, X } from "lucide-react";
-import { useId, useState } from "react";
+import { BadgeCheck, Building2, CircleSlash, MapPin, Pencil, Phone, Trash2, User, X, type LucideIcon } from "lucide-react";
+import { useId, useState, type ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -37,9 +37,13 @@ export function customValueText(field: comms_mapFieldSchemaOut | undefined, v: J
 }
 
 /**
- * The detail of one asset (side panel on desktop, bottom sheet on a phone) — opened by a CLICK, never
- * hover-only. Personal fields are shown EXACTLY as the server returned them: masked for `asset.read`
- * alone, full for `asset.update` (the server decides and audits the full read; rule 3).
+ * The detail of one asset — prototype `AssetCard.tsx`: header (swatch, name, group, close), two badges
+ * (verification, status), icon rows for address / representative / phone / tax code, label–value rows,
+ * description, coordinates; the write actions in a footer. Beside the map from `xl`, a bottom sheet
+ * below that (a 320px column next to the left column and the map does not fit at 1024px). Opened by a
+ * CLICK, never hover-only. Personal fields are shown EXACTLY as the server returned them: masked for
+ * `asset.read` alone, full for `asset.update` (the server decides and audits the full read; rule 3) —
+ * and never as a `tel:` link, which would put the number in a URL (rule 3, forbidden #4).
  */
 export function DetailPanel({
   detail,
@@ -67,15 +71,22 @@ export function DetailPanel({
   onDelete: () => void;
 }) {
   const titleId = useId();
+  const a = detail !== "loading" && detail.ok ? detail.duLieu : null;
   return (
     <aside
-      className="detail-panel fixed inset-x-0 bottom-0 z-40 max-h-[65vh] overflow-y-auto rounded-t-2xl border border-line bg-surface p-4 shadow-lg md:static md:z-auto md:max-h-none md:w-[340px] md:shrink-0 md:rounded-xl md:shadow-sm"
+      className="detail-panel fixed inset-x-0 bottom-0 z-40 flex max-h-[65vh] min-w-0 flex-col overflow-y-auto rounded-t-2xl border border-line bg-surface shadow-lg xl:static xl:z-auto xl:max-h-none xl:w-80 xl:shrink-0 xl:rounded-none xl:border-0 xl:border-l xl:shadow-none"
       aria-labelledby={titleId}
     >
-      <div className="flex items-start gap-2">
-        <h2 id={titleId} className="m-0 min-w-0 flex-1 text-base font-semibold text-ink-900">
-          {detail === "loading" ? "Đang tải…" : detail.ok ? detail.duLieu.name : "Không mở được đối tượng"}
-        </h2>
+      <header className="flex items-start gap-2 border-b border-line p-4">
+        {a !== null && (
+          <span aria-hidden="true" className={cn("mt-1 inline-block size-3 shrink-0 rounded-full", groupSwatchClass(a.asset_type_code))} />
+        )}
+        <div className="min-w-0 flex-1">
+          <h2 id={titleId} className="m-0 text-[15px] leading-snug font-semibold break-words text-ink-900">
+            {detail === "loading" ? "Đang tải…" : a !== null ? a.name : "Không mở được đối tượng"}
+          </h2>
+          {a !== null && <p className="m-0 text-xs text-ink-500">{groupLabel(a.asset_type_code)}</p>}
+        </div>
         <Button
           type="button"
           variant="icon"
@@ -84,43 +95,59 @@ export function DetailPanel({
           icon={<X aria-hidden="true" focusable="false" strokeWidth={1.8} />}
           onClick={onClose}
         />
-      </div>
-      {detail === "loading" && <p role="status">Đang tải thông tin đối tượng…</p>}
+      </header>
+      {detail === "loading" && (
+        <p role="status" className="m-0 p-4 text-[13px] text-ink-500">
+          Đang tải thông tin đối tượng…
+        </p>
+      )}
       {detail !== "loading" && !detail.ok && (
-        <p className="thong-bao-loi" role="alert">
+        <p className="thong-bao-loi m-4" role="alert">
           {detail.thongBao}
         </p>
       )}
-      {detail !== "loading" && detail.ok && (
-        <AssetFacts
-          a={detail.duLieu}
-          groupLabel={groupLabel}
-          unitName={unitName}
-          fields={fields}
-        />
-      )}
-      {detail !== "loading" && detail.ok && canUpdate && (
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button type="button" variant="secondary" size="sm" icon={<Pencil aria-hidden="true" />} onClick={onEdit} disabled={busy}>
-            {EDIT_BUTTON}
-          </Button>
+      {a !== null && <AssetFacts a={a} unitName={unitName} fields={fields} />}
+      {a !== null && canUpdate && (
+        <footer className="mt-auto flex flex-col gap-2 border-t border-line p-4">
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="min-w-0 flex-1"
+              icon={<Pencil aria-hidden="true" />}
+              onClick={onEdit}
+              disabled={busy}
+            >
+              {EDIT_BUTTON}
+            </Button>
+            <Button
+              type="button"
+              variant={a.verified ? "secondary" : "primary"}
+              size="sm"
+              className="min-w-0 flex-1"
+              icon={a.verified ? <CircleSlash aria-hidden="true" /> : <BadgeCheck aria-hidden="true" />}
+              onClick={onToggleVerified}
+              disabled={busy}
+            >
+              {a.verified ? UNVERIFY_BUTTON : VERIFY_BUTTON}
+            </Button>
+          </div>
           <Button
             type="button"
-            variant="secondary"
+            variant="ghost"
             size="sm"
-            icon={detail.duLieu.verified ? <CircleSlash aria-hidden="true" /> : <BadgeCheck aria-hidden="true" />}
-            onClick={onToggleVerified}
+            className="w-full text-danger-600 hover:not-disabled:text-danger-600"
+            icon={<Trash2 aria-hidden="true" />}
+            onClick={onDelete}
             disabled={busy}
           >
-            {detail.duLieu.verified ? UNVERIFY_BUTTON : VERIFY_BUTTON}
-          </Button>
-          <Button type="button" variant="danger" size="sm" icon={<Trash2 aria-hidden="true" />} onClick={onDelete} disabled={busy}>
             {DELETE_BUTTON}
           </Button>
-        </div>
+        </footer>
       )}
       {actionError !== "" && (
-        <p className="thong-bao-loi mt-2" role="alert">
+        <p className="thong-bao-loi mx-4 mb-4" role="alert">
           {actionError}
         </p>
       )}
@@ -128,50 +155,96 @@ export function DetailPanel({
   );
 }
 
+/** Icon row of the card (prototype `Row`): icon, small label, value under it. */
+function IconRow({ icon: Icon, label, children }: { icon: LucideIcon; label: string; children: ReactNode }) {
+  return (
+    <div className="flex min-w-0 gap-2">
+      <Icon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-ink-500" />
+      <div className="min-w-0">
+        <dt className="text-xs text-ink-500">{label}</dt>
+        <dd className="m-0 break-words text-ink-900">{children}</dd>
+      </div>
+    </div>
+  );
+}
+
+/** Label left, value right (prototype `Field`). */
+function FactRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex min-w-0 items-baseline justify-between gap-3">
+      <dt className="shrink-0 text-xs text-ink-500">{label}</dt>
+      <dd className="m-0 min-w-0 text-right font-medium break-words text-ink-900">{children}</dd>
+    </div>
+  );
+}
+
+function present(v: string | null | undefined): v is string {
+  return v !== null && v !== undefined && v !== "";
+}
+
+/** The card's body. Like the prototype, a row appears only when the record has the value (address always). */
 export function AssetFacts({
   a,
-  groupLabel,
   unitName,
   fields,
 }: {
   a: comms_mapAssetOut;
-  groupLabel: (code: string) => string;
   unitName: (id: string) => string;
   fields: readonly comms_mapFieldSchemaOut[];
 }) {
   const byCode = new Map(fields.map((f) => [f.field_code, f]));
-  const rows: [string, string][] = [
-    ["Trạng thái", statusLabel(a.status)],
-    ["Địa chỉ", a.address ?? ""],
-    ["Thôn / Tổ dân phố", a.residential_unit_id ? unitName(a.residential_unit_id) : ""],
-    ["Người đại diện", a.representative ?? ""],
-    ["Điện thoại", a.phone ?? ""],
-    ["Mã số thuế", a.tax_code ?? ""],
-    ["Ngành nghề", a.industry_code ? `${a.industry_code} · ${industryLabel(a.industry_code)}` : ""],
-    ["Số lao động", a.employee_count === null || a.employee_count === undefined ? "" : String(a.employee_count)],
-    ["Ngày thành lập", a.established_on ?? ""],
-    ["Mô tả", a.description ?? ""],
-  ];
-  for (const [code, v] of Object.entries(a.custom_values ?? {})) {
-    const f = byCode.get(code);
-    rows.push([f?.label ?? code, customValueText(f, v)]);
-  }
+  const custom = Object.entries(a.custom_values ?? {});
+  const unit = present(a.residential_unit_id) ? unitName(a.residential_unit_id) : "";
   return (
-    <div className="mt-2 flex flex-col gap-3">
-      <p className="m-0 flex flex-wrap items-center gap-2 text-[13px] text-ink-700">
-        <span aria-hidden="true" className={cn("inline-block size-3 rounded-full", groupSwatchClass(a.asset_type_code))} />
-        <span>{groupLabel(a.asset_type_code)}</span>
+    <>
+      <div className="flex flex-wrap gap-1.5 px-4 pt-3">
         <Badge tone={a.verified ? "success" : "neutral"}>{a.verified ? VERIFIED_CHIP : UNVERIFIED_CHIP}</Badge>
-      </p>
-      <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[13px]">
-        {rows.map(([k, v]) => (
-          <div key={k} className="contents">
-            <dt className="text-ink-500">{k}</dt>
-            <dd className="m-0 break-words text-ink-900">{v === "" ? "—" : v}</dd>
+        <Badge tone="neutral">{statusLabel(a.status)}</Badge>
+      </div>
+      <dl className="m-0 flex flex-col gap-2.5 p-4 text-[13px]">
+        <IconRow icon={MapPin} label="Địa chỉ">
+          {present(a.address) ? a.address : "—"}
+          {unit !== "" && <span className="text-ink-500">{` · ${unit}`}</span>}
+        </IconRow>
+        {present(a.representative) && (
+          <IconRow icon={User} label="Người đại diện">
+            {a.representative}
+          </IconRow>
+        )}
+        {present(a.phone) && (
+          <IconRow icon={Phone} label="Điện thoại">
+            <span className="tabular-nums">{a.phone}</span>
+          </IconRow>
+        )}
+        {present(a.tax_code) && (
+          <IconRow icon={Building2} label="Mã số thuế">
+            <code className="text-xs">{a.tax_code}</code>
+          </IconRow>
+        )}
+        {present(a.industry_code) && <FactRow label="Ngành nghề">{industryLabel(a.industry_code)}</FactRow>}
+        {a.employee_count !== null && a.employee_count !== undefined && (
+          <FactRow label="Số lao động">{String(a.employee_count)}</FactRow>
+        )}
+        {present(a.established_on) && <FactRow label="Thành lập">{a.established_on}</FactRow>}
+        {custom.map(([code, v]) => {
+          const f = byCode.get(code);
+          return (
+            <FactRow key={code} label={f?.label ?? code}>
+              {customValueText(f, v)}
+            </FactRow>
+          );
+        })}
+        {present(a.description) && (
+          <div className="min-w-0">
+            <dt className="text-xs text-ink-500">Mô tả</dt>
+            <dd className="m-0 mt-0.5 break-words whitespace-pre-line text-ink-900">{a.description}</dd>
           </div>
-        ))}
+        )}
+        <FactRow label="Toạ độ">
+          <code className="text-[11px]">{`${a.lat.toFixed(5)}, ${a.lng.toFixed(5)}`}</code>
+        </FactRow>
       </dl>
-    </div>
+    </>
   );
 }
 

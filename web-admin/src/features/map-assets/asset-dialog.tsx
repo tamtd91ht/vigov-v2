@@ -4,6 +4,7 @@ import { LocateFixed } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { PendingField } from "@/components/ui/pending-feature";
 import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 import { OverlayDialog } from "@/features/noi-dung/overlay-dialog";
 import type { KetQua } from "@/lib/api/goi";
@@ -31,6 +32,7 @@ import {
   ADD_SUBMIT,
   ADD_TITLE,
   EDIT_SUBMIT,
+  EDIT_TITLE,
   INDUSTRIES,
   MASKED_NOTE,
   MY_LOCATION_BUTTON,
@@ -40,6 +42,7 @@ import {
   PIN_HINT,
   PIN_OUTSIDE_FRAME,
   STATUS_OPTIONS,
+  pendingPart,
 } from "./labels";
 import { insideFrame, round6, type MapFrame } from "./map-logic";
 import { MapExpandToggle } from "./map-expand";
@@ -53,6 +56,11 @@ export type AssetDialogMode =
  * "Thêm đối tượng lên bản đồ" / edit (spec §8), in the shared native `<dialog>` (`OverlayDialog`).
  * The rules live in `asset-form.ts`; this file draws them. Server refusals (409 tax code taken, 422
  * group unavailable / custom values invalid) are shown as the server's own sentence (`goi.ts`).
+ *
+ * Field order, titles and buttons follow prototype `AssetFormDialog.tsx` (ADR 0068 lần 5). Kept against
+ * it: the position stays required and inside the commune frame (ADR 0072), so there is no "Bỏ toạ độ";
+ * masked personal fields cannot be edited (rule 3); "Ngày thành lập" stays (the record has it). The
+ * prototype's place search needs a geocoder this system does not have — a disabled "?" field (§14).
  */
 export function AssetDialog({
   mode,
@@ -158,13 +166,13 @@ export function AssetDialog({
       >
         <div className="sm:col-span-2">
           <h2 id={titleId} className="m-0 text-lg font-semibold text-ink-900">
-            {mode.kind === "create" ? ADD_TITLE : `Sửa ${mode.asset.name}`}
+            {mode.kind === "create" ? ADD_TITLE : EDIT_TITLE}
           </h2>
           <p className="m-0 mt-1 text-[13px] text-ink-500">{ADD_DESCRIPTION}</p>
         </div>
 
         <div className="o-nhap">
-          <label htmlFor="asset-group">Nhóm *</label>
+          <label htmlFor="asset-group">Nhóm</label>
           <select id="asset-group" name="asset_type_code" value={draft.assetTypeCode} onChange={(e) => set({ assetTypeCode: e.target.value })}>
             <option value="">— Chọn nhóm —</option>
             {activeTypes.map((t) => (
@@ -185,10 +193,10 @@ export function AssetDialog({
           </select>
         </div>
         <div className="o-nhap sm:col-span-2">
-          <label htmlFor="asset-name">Tên *</label>
+          <label htmlFor="asset-name">Tên</label>
           <input id="asset-name" name="name" value={draft.name} onChange={(e) => set({ name: e.target.value })} />
         </div>
-        <div className="o-nhap">
+        <div className="o-nhap sm:col-span-2">
           <label htmlFor="asset-address">Địa chỉ</label>
           <input id="asset-address" name="address" value={draft.address} onChange={(e) => set({ address: e.target.value })} />
         </div>
@@ -209,10 +217,16 @@ export function AssetDialog({
           </select>
         </div>
 
-        <fieldset className="m-0 flex min-w-0 flex-col gap-2 rounded-xl border border-line p-3 sm:col-span-2 [&>*]:my-0">
-          <legend className="px-1 text-xs font-semibold text-ink-700">Vị trí trên bản đồ *</legend>
+        <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0 sm:col-span-2 [&>*]:my-0">
+          <legend className="mb-2 p-0 text-xs font-semibold text-ink-700">Vị trí trên bản đồ</legend>
           {styleUrl !== null && frame !== null && (
             <>
+              <PendingField
+                info={pendingPart("Tìm địa điểm theo tên")}
+                id="asset-place-search"
+                placeholder="Tìm theo tên: chợ, trường học, thôn…"
+                className="w-full max-w-none min-w-0 flex-none"
+              />
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="ghi-chu m-0 text-[13px] text-ink-500">{PIN_HINT}</p>
                 <MapExpandToggle
@@ -340,15 +354,6 @@ export function AssetDialog({
             onChange={(e) => set({ establishedOn: e.target.value })}
           />
         </div>
-        <div className="o-nhap sm:col-span-2">
-          <label htmlFor="asset-description">Mô tả</label>
-          <textarea
-            id="asset-description"
-            name="description"
-            value={draft.description}
-            onChange={(e) => set({ description: e.target.value })}
-          />
-        </div>
 
         {fields !== null && !fields.ok && (
           <p className="thong-bao-loi sm:col-span-2" role="alert">
@@ -363,6 +368,16 @@ export function AssetDialog({
             onChange={(v) => setDraft((d) => ({ ...d, custom: { ...d.custom, [f.field_code]: v } }))}
           />
         ))}
+
+        <div className="o-nhap sm:col-span-2">
+          <label htmlFor="asset-description">Mô tả</label>
+          <textarea
+            id="asset-description"
+            name="description"
+            value={draft.description}
+            onChange={(e) => set({ description: e.target.value })}
+          />
+        </div>
 
         {error !== "" && (
           <p className="thong-bao-loi sm:col-span-2" role="alert">

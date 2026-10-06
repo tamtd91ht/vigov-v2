@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, Expand, Layers, List, Map as MapIcon, MapPinned, Plus, RotateCcw, Upload } from "lucide-react";
+import { Download, Layers, List, Map as MapIcon, MapPinned, Maximize2, Plus, RotateCcw, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useCauHinhXa } from "@/components/cau-hinh-xa"; // vi-name-ok: existing export (rule 12 inv 3)
@@ -366,13 +366,13 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
   const headerActions = (
     <>
       {activeTypes.length > 0 && (
-        <span className="inline-flex">
+        <span className="inline-flex min-w-0">
           <label htmlFor="header-group" className="an-thi-giac">
             Nhóm tài nguyên đang thao tác
           </label>
           <select
             id="header-group"
-            className="h-10 rounded-control border border-line-strong bg-surface px-3 text-sm"
+            className="h-[34px] max-w-56 min-w-0 rounded-control border border-line-strong bg-surface px-2.5 text-[13px]"
             value={currentGroup}
             onChange={(e) => setChosenGroup(e.target.value)}
           >
@@ -384,12 +384,13 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
           </select>
         </span>
       )}
-      <PendingButton info={pendingPart("Mẫu Excel")} side="bottom" icon={<Download aria-hidden="true" />} />
-      <PendingButton info={pendingPart("Nhập Excel")} side="bottom" icon={<Upload aria-hidden="true" />} />
+      <PendingButton info={pendingPart("Mẫu Excel")} side="bottom" size="sm" icon={<Download aria-hidden="true" />} />
+      {canUpdate && <PendingButton info={pendingPart("Nhập Excel")} side="bottom" size="sm" icon={<Upload aria-hidden="true" />} />}
       {canUpdate && activeTypes.length > 0 && (
         <Button
           type="button"
           variant="primary"
+          size="sm"
           icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
           onClick={() =>
             setDialog({
@@ -401,6 +402,20 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
           {ADD_BUTTON}
         </Button>
       )}
+      {/* The map answers "what is where"; the register answers "what does the commune manage" — the
+          question data-entry staff ask more often (prototype `MapWorkspace.tsx`). */}
+      <Segmented
+        legend="Chế độ xem"
+        name="map-view"
+        mode="buttons"
+        value={view}
+        onChange={(v) => setView(v === "register" ? "register" : "map")}
+        options={[
+          { value: "map", label: VIEW_MAP, icon: MapIcon },
+          { value: "register", label: VIEW_REGISTER, icon: List },
+        ]}
+      />
+      <PendingButton info={pendingPart("Trình chiếu")} side="bottom" size="sm" icon={<Maximize2 aria-hidden="true" />} />
     </>
   );
 
@@ -426,20 +441,24 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
   function mapArea() {
     if (frameRes === null) {
       return (
-        <>
+        <div className="p-4">
           <p role="status" className="an-thi-giac">
             Đang tải khung bản đồ…
           </p>
           <SkeletonRows rows={4} className="rounded-xl border border-line" />
-        </>
+        </div>
       );
     }
     if (!frameRes.ok) {
-      return <ErrorState role="alert" title={FRAME_LOAD_FAILED} message={frameRes.thongBao} onRetry={() => setFrameReload((n) => n + 1)} />;
+      return (
+        <div className="p-4">
+          <ErrorState role="alert" title={FRAME_LOAD_FAILED} message={frameRes.thongBao} onRetry={() => setFrameReload((n) => n + 1)} />
+        </div>
+      );
     }
     if (frame === null) {
       return (
-        <div className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-4" data-frame-unset="">
+        <div className="flex min-h-0 flex-col gap-4 overflow-y-auto p-4" data-frame-unset="">
           <p className="m-0 text-[15px] font-semibold text-ink-900">{FRAME_NOT_SET}</p>
           {canAdminLookup && hints !== null ? (
             <FrameForm
@@ -460,19 +479,46 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
         </div>
       );
     }
-    if (styleUrl === null) {
+    // The frame's own controls (ADR 0072; the prototype has none): one slim row above the map, with
+    // "Mở rộng bản đồ" at its end — they act on this map, so they sit on it, not in the page header.
+    const toolbar = (
+      <div className="flex min-w-0 flex-wrap items-center gap-2 border-b border-line px-3 py-2">
+        {canAdminLookup && (
+          <Button type="button" variant="secondary" size="sm" icon={<MapPinned aria-hidden="true" />} onClick={() => setDialog({ kind: "frame" })}>
+            {FRAME_CHANGE_BUTTON}
+          </Button>
+        )}
+        {canAdminLookup && frame.source === "commune" && (
+          <Button type="button" variant="secondary" size="sm" icon={<RotateCcw aria-hidden="true" />} onClick={() => setDialog({ kind: "reset" })}>
+            {FRAME_RESET_BUTTON}
+          </Button>
+        )}
+        {mapAvailable && (
+          <span className="ml-auto">
+            <MapExpandToggle expanded={mapExpanded} onToggle={() => setMapExpanded((v) => !v)} controls={MAP_REGION_ID} />
+          </span>
+        )}
+      </div>
+    );
+    if (styleUrl === null || mapFailed) {
       return (
-        <Notice tone="neutral" title={NO_BASEMAP}>
-          {NO_BASEMAP_DETAIL}
-        </Notice>
+        <>
+          {canAdminLookup && toolbar}
+          <div className="p-4">
+            {styleUrl === null ? (
+              <Notice tone="neutral" title={NO_BASEMAP}>
+                {NO_BASEMAP_DETAIL}
+              </Notice>
+            ) : (
+              <ErrorState role="alert" title={MAP_LOAD_FAILED} onRetry={() => setMapFailed(false)} />
+            )}
+          </div>
+        </>
       );
     }
-    if (mapFailed) return <ErrorState role="alert" title={MAP_LOAD_FAILED} onRetry={() => setMapFailed(false)} />;
     return (
       <>
-        <div className="flex justify-end">
-          <MapExpandToggle expanded={mapExpanded} onToggle={() => setMapExpanded((v) => !v)} controls={MAP_REGION_ID} />
-        </div>
+        {toolbar}
         <EconomicMap
           key={frame.bounds.join(",")}
           styleUrl={styleUrl}
@@ -493,17 +539,23 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
   function registerArea() {
     if (register === null) {
       return (
-        <>
+        <div className="p-4">
           <p role="status" className="an-thi-giac">
             Đang tải sổ địa điểm…
           </p>
           <SkeletonRows rows={5} className="rounded-xl border border-line" />
-        </>
+        </div>
       );
     }
-    if (!register.ok) return <ErrorState role="alert" title="Chưa tải được sổ địa điểm" message={register.thongBao} />;
+    if (!register.ok) {
+      return (
+        <div className="p-4">
+          <ErrorState role="alert" title="Chưa tải được sổ địa điểm" message={register.thongBao} />
+        </div>
+      );
+    }
     return (
-      <div className="flex flex-col gap-3">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-auto p-4">
         <RegisterTable
           rows={register.duLieu.rows}
           hasMore={register.duLieu.hasMore}
@@ -545,31 +597,6 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
         className="mb-0"
       />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Segmented
-          legend="Chế độ xem"
-          name="map-view"
-          mode="buttons"
-          value={view}
-          onChange={(v) => setView(v === "register" ? "register" : "map")}
-          options={[
-            { value: "map", label: VIEW_MAP, icon: MapIcon },
-            { value: "register", label: VIEW_REGISTER, icon: List },
-          ]}
-        />
-        <PendingButton info={pendingPart("Trình chiếu")} side="bottom" size="sm" icon={<Expand aria-hidden="true" />} />
-        {canAdminLookup && frame !== null && (
-          <Button type="button" variant="secondary" size="sm" icon={<MapPinned aria-hidden="true" />} onClick={() => setDialog({ kind: "frame" })}>
-            {FRAME_CHANGE_BUTTON}
-          </Button>
-        )}
-        {canAdminLookup && frame !== null && frame.source === "commune" && (
-          <Button type="button" variant="secondary" size="sm" icon={<RotateCcw aria-hidden="true" />} onClick={() => setDialog({ kind: "reset" })}>
-            {FRAME_RESET_BUTTON}
-          </Button>
-        )}
-      </div>
-
       {notice !== "" && (
         <p role="status" className="m-0 text-sm font-medium text-ink-700" data-notice="">
           {notice}
@@ -597,8 +624,14 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
         />
       )}
 
-      <div className="flex min-w-0 flex-col gap-4 lg:flex-row">
-        <aside className="flex w-full min-w-0 flex-col gap-5 lg:w-[280px] lg:shrink-0" aria-label="Lớp và bộ lọc">
+      {/* Prototype `MapWorkspace.tsx`: ONE workspace — left column (layers · filters · density, divided
+          by rules), the map or the register in the middle, the detail card on the right. Fixed height
+          from lg so the left column scrolls inside and the map fills what is left; stacked below lg. */}
+      <div className="economic-workspace flex min-w-0 flex-col overflow-hidden rounded-xl border border-line bg-surface lg:h-[calc(100dvh-210px)] lg:min-h-[560px] lg:flex-row">
+        <aside
+          className="flex w-full min-w-0 flex-col gap-4 border-b border-line p-4 lg:w-72 lg:shrink-0 lg:overflow-y-auto lg:border-r lg:border-b-0"
+          aria-label="Lớp và bộ lọc"
+        >
           <LayerPanel
             types={typeItems}
             counts={counts}
@@ -611,22 +644,31 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
                 return next;
               })
             }
+            onOnly={(code) => setHidden(new Set(typeItems.map((t) => t.code).filter((c) => c !== code)))}
             onHideAll={() => setHidden(new Set(typeItems.map((t) => t.code)))}
             onShowAll={() => setHidden(new Set())}
             centreIsDefault={frame?.source === "default"}
           />
-          <FilterPanel
-            value={{ search, industryCode: filter.industryCode, residentialUnitId: filter.residentialUnitId, status: filter.status }}
-            units={units}
-            results={results}
-            onSearchChange={setSearch}
-            onChange={(patch) => setFilter((f) => ({ ...f, ...patch }))}
-            onChooseResult={(row) => {
-              setView("map");
-              void openAsset(row.id, true);
-            }}
-          />
-          <DensityPending />
+          <div className="border-t border-line pt-4">
+            <FilterPanel
+              value={{ search, industryCode: filter.industryCode, residentialUnitId: filter.residentialUnitId, status: filter.status }}
+              units={units}
+              results={results}
+              onSearchChange={setSearch}
+              onChange={(patch) => setFilter((f) => ({ ...f, ...patch }))}
+              onClear={() => {
+                setSearch("");
+                setFilter(NO_FILTER);
+              }}
+              onChooseResult={(row) => {
+                setView("map");
+                void openAsset(row.id, true);
+              }}
+            />
+          </div>
+          <div className="border-t border-line pt-4">
+            <DensityPending />
+          </div>
         </aside>
 
         <div
@@ -635,16 +677,18 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
             mapExpanded
               ? // Above the sticky topbar (z 30), below menus/tooltips (z 60). The detail panel stays INSIDE,
                 // so a click on a point still opens it next to the map.
-                "fixed inset-0 z-40 flex min-w-0 flex-col gap-3 bg-surface p-3 md:flex-row"
-              : "flex min-w-0 flex-1 flex-col gap-3 md:flex-row"
+                "fixed inset-0 z-40 flex min-w-0 flex-col bg-surface xl:flex-row"
+              : "flex min-h-0 min-w-0 flex-1 flex-col xl:flex-row"
           }
           data-map-expanded={mapExpanded ? "" : undefined}
         >
-          <div className={mapExpanded ? "flex min-h-0 min-w-0 flex-1 flex-col gap-3" : "flex min-w-0 flex-1 flex-col gap-3"}>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             {points !== null && !points.ok && (
-              <Notice tone="neutral" title="Không thể tải dữ liệu kinh tế.">
-                {points.message}
-              </Notice>
+              <div className="p-3 pb-0">
+                <Notice tone="neutral" title="Không thể tải dữ liệu kinh tế.">
+                  {points.message}
+                </Notice>
+              </div>
             )}
             {view === "map" ? mapArea() : registerArea()}
           </div>

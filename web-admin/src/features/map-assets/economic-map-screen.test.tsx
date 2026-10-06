@@ -13,6 +13,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa"; // vi-name-ok: existing export (rule 12 inv 3)
+import { pendingMarkerLabel } from "@/components/ui/pending-feature";
 import { PhienProvider } from "@/features/phien/phien-hien-tai"; // vi-name-ok: existing export (rule 12 inv 3)
 
 import { EconomicMapScreen } from "./economic-map-screen";
@@ -20,6 +21,8 @@ import { RADIUS_ERROR } from "./frame-form";
 import {
   CENTRE_LEGEND,
   CENTRE_LEGEND_DEFAULT,
+  CLEAR_FILTERS,
+  DELETE_BUTTON,
   DELETE_REASON_REQUIRED,
   FRAME_ASK_ADMIN,
   FRAME_CHANGE_BUTTON,
@@ -517,6 +520,40 @@ describe("toggles filter, server filters refetch", () => {
     expect(data.features).toHaveLength(1); // clusters recount only what is shown
   });
 
+  it("'chỉ lớp này' shows that group alone, WITHOUT a request; 'Hiện hết' brings every group back", async () => {
+    await mount({ permissions: ["asset.read"] });
+    const map = await load();
+    const before = calls.length;
+    await act(async () => host!.querySelector<HTMLButtonElement>('[data-layer-only="cho"]')!.click());
+    await settle();
+    expect(calls.length).toBe(before);
+    const last = map.filterCalls.filter(([id]) => id === LAYER_POINTS).at(-1)![1];
+    expect(JSON.stringify(last)).toContain('["literal",["cho"]]');
+    expect(host!.querySelector('[data-layer-toggle="doanh-nghiep"]')!.getAttribute("aria-pressed")).toBe("false");
+    expect(button("Ẩn hết")).toBeUndefined();
+    await act(async () => button("Hiện hết")!.click());
+    expect(host!.querySelector('[data-layer-toggle="doanh-nghiep"]')!.getAttribute("aria-pressed")).toBe("true");
+    expect(button("Ẩn hết")).toBeDefined();
+  });
+
+  it("'Xoá lọc' appears only while a filter is set, and clears it (a refetch without the filter)", async () => {
+    await mount({ permissions: ["asset.read"] });
+    await load();
+    expect(button(CLEAR_FILTERS)).toBeUndefined();
+    const sel = host!.querySelector<HTMLSelectElement>("#map-status")!;
+    await act(async () => {
+      sel.value = "tam-ngung";
+      sel.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await settle();
+    calls = [];
+    await act(async () => button(CLEAR_FILTERS)!.click());
+    await settle();
+    expect(host!.querySelector<HTMLSelectElement>("#map-status")!.value).toBe("");
+    expect(calls.some((c) => c.path === "/api/v1/map-asset-points")).toBe(true);
+    expect(button(CLEAR_FILTERS)).toBeUndefined();
+  });
+
   it("a status filter REFETCHES the points with the filter", async () => {
     await mount({ permissions: ["asset.read"] });
     await load();
@@ -541,18 +578,18 @@ describe("detail panel", () => {
     expect(text()).toContain("N*** V*** H***");
     // asset.read only: no write controls (denied case).
     expect(button("Sửa")).toBeUndefined();
-    expect(button("Xoá")).toBeUndefined();
+    expect(button(DELETE_BUTTON)).toBeUndefined();
     expect(button("Bỏ xác minh")).toBeUndefined();
   });
 
-  it("with asset.update: Sửa, Bỏ xác minh, Xoá — and Xoá requires a reason", async () => {
+  it("with asset.update: Sửa, Bỏ xác minh, Xoá khỏi bản đồ — and deleting requires a reason", async () => {
     await mount({ permissions: ["asset.read", "asset.update"] });
     const map = await load();
     await act(async () => map.fire(`click:${LAYER_POINTS}`, { features: [{ properties: { id: "a1" } }] }));
     await settle();
     expect(button("Sửa")).toBeDefined();
     expect(button("Bỏ xác minh")).toBeDefined();
-    await act(async () => button("Xoá")!.click());
+    await act(async () => button(DELETE_BUTTON)!.click());
     await settle();
     await act(async () => button("Xác nhận xoá")!.form!.requestSubmit());
     await settle();
@@ -628,6 +665,40 @@ describe("add button follows asset.update", () => {
     await settle();
     expect(host!.querySelector("#asset-name")).not.toBeNull();
     expect(host!.querySelector<HTMLInputElement>("#asset-lat")!.value).toBe("15.700000");
+    // The prototype's place search sits above the pin map, disabled with its "?" (no geocoder).
+    expect(host!.querySelector<HTMLInputElement>("#asset-place-search")!.disabled).toBe(true);
+  });
+
+  it("header, in the prototype's order: Mẫu Excel · Nhập Excel · Thêm đối tượng · Bản đồ / Sổ địa điểm · Trình chiếu", async () => {
+    await mount({ permissions: ["asset.read", "asset.update"] });
+    const header = host!.querySelector("header")!;
+    const labels = Array.from(header.querySelectorAll("button"))
+      .map((b) => b.textContent ?? "")
+      .filter((t) => t !== "" && t !== "?");
+    expect(labels).toEqual(["Mẫu Excel", "Nhập Excel", "Thêm đối tượng", "Bản đồ", "Sổ địa điểm", "Trình chiếu"]);
+  });
+
+  it("DENIED: asset.read only → Mẫu Excel stays, Nhập Excel is not offered", async () => {
+    await mount({ permissions: ["asset.read"] });
+    const header = host!.querySelector("header")!;
+    expect(header.querySelector(`[aria-label="${pendingMarkerLabel("Mẫu Excel")}"]`)).not.toBeNull();
+    expect(header.querySelector(`[aria-label="${pendingMarkerLabel("Nhập Excel")}"]`)).toBeNull();
+  });
+});
+
+describe("Sổ địa điểm", () => {
+  it("a group header folds and unfolds its rows", async () => {
+    await mount({ permissions: ["asset.read"] });
+    await act(async () => button("Sổ địa điểm")!.click());
+    await settle();
+    const toggle = host!.querySelector<HTMLButtonElement>('[data-group-toggle="cho"]')!;
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(text()).toContain("Ngoài khung");
+    await act(async () => toggle.click());
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(text()).not.toContain("Ngoài khung");
+    await act(async () => toggle.click());
+    expect(text()).toContain("Ngoài khung");
   });
 });
 

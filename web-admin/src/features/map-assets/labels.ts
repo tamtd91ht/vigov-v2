@@ -139,7 +139,8 @@ export const ADD_BUTTON = "Thêm đối tượng";
 export const ADD_TITLE = "Thêm đối tượng lên bản đồ";
 export const ADD_DESCRIPTION = "Bắt buộc: nhóm, tên và vị trí. Phần còn lại điền được lúc nào cũng được.";
 export const ADD_SUBMIT = "Thêm vào bản đồ";
-export const EDIT_SUBMIT = "Lưu thay đổi";
+export const EDIT_SUBMIT = "Lưu";
+export const EDIT_TITLE = "Sửa đối tượng trên bản đồ";
 export const PIN_HINT = "Bấm vào bản đồ để đặt ghim, rồi kéo ghim để chỉnh cho đúng.";
 export const MY_LOCATION_BUTTON = "Vị trí của tôi";
 export const REQUIRED_GROUP = "Hãy chọn nhóm.";
@@ -155,7 +156,7 @@ export const NO_CHANGE = "Chưa có thay đổi nào để lưu.";
 export const VERIFY_BUTTON = "Xác minh";
 export const UNVERIFY_BUTTON = "Bỏ xác minh";
 export const EDIT_BUTTON = "Sửa";
-export const DELETE_BUTTON = "Xoá";
+export const DELETE_BUTTON = "Xoá khỏi bản đồ";
 export const DELETE_EXPLANATION =
   "Đối tượng sẽ rời khỏi bản đồ, sổ địa điểm và số liệu. Hồ sơ vẫn được lưu giữ kèm lý do xoá.";
 export const DELETE_REASON_REQUIRED = "Vui lòng nhập lý do xoá. Lý do được lưu cùng hồ sơ đã xoá.";
@@ -174,6 +175,10 @@ export const SEARCH_PLACEHOLDER = "Tên, địa chỉ, mã số thuế…";
 export const LAYERS_TITLE = "LỚP BẢN ĐỒ";
 export const FILTERS_TITLE = "BỘ LỌC";
 export const HIDE_ALL = "Ẩn hết";
+export const ONLY_LAYER = "chỉ lớp này";
+export const ONLY_LAYER_TITLE = "Chỉ hiện lớp này";
+export const CLEAR_FILTERS = "Xoá lọc";
+export const DENSITY_TITLE = "MẬT ĐỘ THEO THÔN";
 export const SHOW_ALL = "Hiện hết";
 export const UNVERIFIED_LEGEND = "Chấm nhạt: chưa xác minh.";
 export const CENTRE_LEGEND = "Chấm đỏ có quầng: tâm xã đã lưu trong khung bản đồ.";
@@ -214,6 +219,11 @@ export const PHAN_CHUA_DUNG: readonly PendingFeatureInfo[] = [
     ten: "Bản đồ nhiệt phản ánh",
     viSao:
       "Phủ mật độ phiếu phản ánh của người dân lên bản đồ. Chưa làm: cần hợp đồng đọc từ phân hệ phản ánh, và việc vẽ toạ độ phản ánh của công dân lên nền bản đồ bên ngoài chưa được quyết (ADR 0072 §4, H2).",
+  },
+  {
+    ten: "Tìm địa điểm theo tên",
+    viSao:
+      "Gõ tên chợ, trường, thôn… để bản đồ chọn vị trí bay tới và đặt sẵn ghim. Chưa làm: cần một dịch vụ tra địa danh, hệ thống chưa có. Bấm hoặc kéo ghim trên bản đồ, hoặc nhập vĩ độ và kinh độ.",
   },
   {
     ten: "Mật độ theo thôn",
