@@ -443,7 +443,10 @@ describe("BIỂU MẪU DỰ ÁN", () => {
     );
 
     expect(html).toContain('id="ma-du-an"');
-    expect(html).toContain("Mã đã cấp thì không cấp lại");
+    expect(html).toContain("kể cả bởi dự án đã rút khỏi danh sách");
+    // §9: `Tự sinh mã` checked by default, the code box disabled and saying who fills it.
+    expect(html).toMatch(/<input id="tu-sinh-ma-du-an" type="checkbox"[^>]* checked=""/);
+    expect(html).toMatch(/<input id="ma-du-an"[^>]* disabled=""[^>]* placeholder="Hệ thống cấp khi lưu"/);
   });
 
   it("giá trị ban đầu của biểu mẫu SỬA là SỐ THÔ, không phải chuỗi đã định dạng", () => {

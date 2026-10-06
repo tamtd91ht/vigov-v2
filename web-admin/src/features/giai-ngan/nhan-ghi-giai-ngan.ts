@@ -426,8 +426,13 @@ export type AllocationRow = {
   readonly amount: string;
 };
 
-/** Giá trị các ô của biểu mẫu dự án §9. CHUỖI hết. */
+/** Giá trị các ô của biểu mẫu dự án §9. CHUỖI hết, trừ ô đánh dấu `Tự sinh mã`. */
 export type GiaTriFormDuAn = {
+  /**
+   * §9 `☑ Tự sinh mã`. Checked: no `code` is sent and the server issues the next code of the commune's
+   * DA01, DA02… series (9f0a0187). Only the add form reads it; an issued code is never re-chosen.
+   */
+  readonly autoCode: boolean;
   readonly ma: string;
   readonly hangMucID: string;
   readonly ten: string;
@@ -441,6 +446,8 @@ export type GiaTriFormDuAn = {
 };
 
 export const FORM_DU_AN_TRONG: GiaTriFormDuAn = {
+  // Checked by default, as §9 and the prototype draw it (`BudgetItemForm.tsx:119-121`).
+  autoCode: true,
   ma: "",
   hangMucID: "",
   ten: "",
@@ -556,8 +563,8 @@ export function sameAllocations(a: readonly AllocationRow[], b: readonly Allocat
 }
 
 export const CAU_THIEU_MA_DU_AN =
-  "Chưa có mã dự án. Hệ thống chưa tự sinh mã dự án, nên mã phải nhập tay: chỉ chữ cái, chữ số " +
-  "và dấu gạch nối.";
+  "Chưa có mã dự án. Nhập mã (chỉ chữ cái, chữ số và dấu gạch nối), hoặc đánh dấu “Tự sinh mã” " +
+  "để hệ thống cấp mã tiếp theo trong dãy DA01, DA02…";
 export const CAU_THIEU_HANG_MUC =
   "Chưa chọn hạng mục. Báo cáo tiến độ cộng dồn theo hạng mục nên mỗi dự án thuộc đúng một hạng mục.";
 export const CAU_THIEU_TEN_DU_AN = "Chưa có tên dự án.";
@@ -589,7 +596,10 @@ function startAfterCompletion(start: string, completion: string): boolean {
  * what an untouched list says.
  */
 export function thanThemDuAn(nam: number, gt: GiaTriFormDuAn): ThanDung<ThemDuAnVao> {
-  const ma = gt.ma.trim();
+  // `Tự sinh mã` checked → `code` ABSENT and the server issues the next DA-number. Unchecked with a
+  // blank box is REFUSED here, never sent blank: the server reads a blank code as "issue one", which
+  // is not what a clerk who unticked the box chose.
+  const ma = gt.autoCode ? undefined : gt.ma.trim();
   if (ma === "") return { ok: false, cau: CAU_THIEU_MA_DU_AN };
   if (gt.hangMucID === "") return { ok: false, cau: CAU_THIEU_HANG_MUC };
   if (gt.ten.trim() === "") return { ok: false, cau: CAU_THIEU_TEN_DU_AN };
@@ -793,16 +803,7 @@ export type PhanChuaDung = {
 export const PHAN_CHUA_DUNG_GHI: readonly PhanChuaDung[] = [
   // §8.2 voucher table + its `NGUỒN VỐN` column + the form's `Rút từ nguồn vốn` select: BUILT
   // (db94b35c, `GET /api/v1/investment-projects/{id}/disbursements`; `chung-tu-du-an.tsx`).
-  // §9 `☑ Tự sinh mã`. The server does not generate codes and says why (`domain.ErrThieuMaDuAn`): the
-  // spec gives two contradicting formats (`DA01` in §9, `DA-2026-be-tong-hoa-duong-ngo-xo-2` in §7.2)
-  // and never says what range a sequence runs in. A project code is an ISSUED code (rule 7: never
-  // renumbered), so a sequence invented on screen cannot be taken back. A question for the customer.
-  {
-    ten: "Tự sinh mã",
-    viSao:
-      "Hệ thống chưa tự sinh mã dự án, vì quy cách đánh mã chưa được thống nhất. Mã đã cấp không " +
-      "được đánh lại, nên hiện mỗi dự án cần được nhập mã bằng tay.",
-  },
+  // §9 `☑ Tự sinh mã`: BUILT (9f0a0187 — the server issues DA01, DA02… per commune; `ghi-du-an.tsx`).
   // §9 `Đơn vị thực hiện` / `Cán bộ phụ trách`. The contract takes `org_unit_id` and `assignee_id`,
   // but both are ids of records `service-identity` owns; turning them into two selects needs another
   // route under another permission, and a text box for a ULID is not an interface. Projects are

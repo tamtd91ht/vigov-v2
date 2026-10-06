@@ -68,6 +68,7 @@ const NO_LINES: readonly string[] = [];
 const TWO_LINES: readonly string[] = ["S1", "S2"];
 
 const DU_AN_MAU: GiaTriFormDuAn = {
+  autoCode: false,
   ma: "DA01",
   hangMucID: "01JHM1",
   ten: "Bê tông hoá đường trục chính thôn Hà Lam",
@@ -408,11 +409,35 @@ describe("thanThemDuAn", () => {
     expect(thanThemDuAn(2026, FORM_DU_AN_TRONG).ok).toBe(false);
   });
 
-  it("câu 'thiếu mã' nói rõ hệ thống CHƯA tự sinh mã", () => {
-    // §9 vẽ ô `☑ Tự sinh mã`; máy chủ chưa có. Người dùng phải biết vì sao mã phải nhập tay — bằng
-    // lời thường, không nhắc "bản thiết kế" (GN-04).
-    expect(CAU_THIEU_MA_DU_AN).toContain("chưa tự sinh mã");
+  it("câu 'thiếu mã' chỉ ra hai lối: nhập mã, hoặc đánh dấu Tự sinh mã — không còn câu 'chưa tự sinh'", () => {
+    expect(CAU_THIEU_MA_DU_AN).toContain("Tự sinh mã");
+    expect(CAU_THIEU_MA_DU_AN).not.toContain("chưa tự sinh");
     expect(CAU_THIEU_MA_DU_AN).not.toMatch(/bản thiết kế/);
+  });
+});
+
+describe("thanThemDuAn — §9 `☑ Tự sinh mã` (server issues DA01, DA02…, 9f0a0187)", () => {
+  it("the empty form starts with Tự sinh mã checked", () => {
+    expect(FORM_DU_AN_TRONG.autoCode).toBe(true);
+  });
+
+  it("checked: NO `code` in the body — even when something was typed before ticking", () => {
+    const kq = thanThemDuAn(2026, { ...DU_AN_MAU, autoCode: true, ma: "DA99" });
+    expect(kq.ok).toBe(true);
+    if (!kq.ok) return;
+    expect(kq.than.code).toBeUndefined();
+    expect(JSON.parse(JSON.stringify(kq.than))).not.toHaveProperty("code");
+  });
+
+  it("checked with an empty box is not 'thiếu mã'", () => {
+    expect(thanThemDuAn(2026, { ...DU_AN_MAU, autoCode: true, ma: "" }).ok).toBe(true);
+  });
+
+  it("unchecked: the code is required (blank is refused, never sent blank) and sent trimmed", () => {
+    expect(thanThemDuAn(2026, { ...DU_AN_MAU, autoCode: false, ma: "" })).toEqual({ ok: false, cau: CAU_THIEU_MA_DU_AN });
+    const kq = thanThemDuAn(2026, { ...DU_AN_MAU, autoCode: false, ma: "  DA-07 " });
+    expect(kq.ok).toBe(true);
+    if (kq.ok) expect(kq.than.code).toBe("DA-07");
   });
 });
 

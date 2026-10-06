@@ -259,10 +259,10 @@ const MAU_XOA_DU_AN: finance_delete_investment_projects_by_id["duongDan"] =
 /**
  * Thân của `POST /api/v1/investment-projects` — §9 modal "Thêm dự án", trường theo trường.
  *
- * ⚠ `code` LÀ BẮT BUỘC, VÀ Ô `☑ Tự sinh mã` CỦA §9 CHƯA CÓ. Máy chủ nói thẳng: *"hệ thống chưa tự
- * sinh mã dự án, hãy nhập mã"* (`domain.ErrThieuMaDuAn`), vì đặc tả đưa ra hai khuôn mã mâu thuẫn
- * nhau và không nói dãy số chạy trong phạm vi nào — mà một mã dự án là MÃ ĐÃ CẤP, thứ luật 7 cấm
- * đánh lại. Đây là câu để HỎI khách, không phải để màn hình tự chế một dãy.
+ * `code` KHÔNG BẮT BUỘC (9f0a0187): vắng hoặc trống thì máy chủ cấp mã tiếp theo trong dãy DA01,
+ * DA02… của xã — §9 `☑ Tự sinh mã`; mã đã cấp không cấp lại, dãy bước qua mã đã có. Mã tự nhập đã
+ * từng dùng (kể cả bởi dự án đã rút) là 409 `code_taken`; dãy không cấp tiếp được là 409
+ * `code_series_blocked`. Phản hồi mang mã đã cấp.
  *
  * KHÔNG CÓ `disbursed_amount` và hợp đồng cũng không có: số đã giải ngân là SUM trên chứng từ còn
  * sống, suy ra mỗi lần đọc. Một trường ở đây là một client tự khai con số xã báo cáo lên cấp trên.

@@ -351,6 +351,27 @@ describe("Ba tuyến dự án", () => {
     expect(kq.ok).toBe(true);
   });
 
+  it("POST without `code` (§9 Tự sinh mã): the key is absent from the body, not `\"\"`; issued code read back", async () => {
+    const gia = batFetch(traJSON(201, { ...DU_AN_GHI_RA, code: "DA03" }));
+    const withoutCode: ThemDuAnVao = { ...THEM_DU_AN_DAY_DU, code: undefined };
+
+    const kq = await themDuAn(withoutCode, "khoa-tu-sinh");
+
+    expect(thanDaGui(gia, 0)).not.toHaveProperty("code");
+    expect(kq.ok).toBe(true);
+    if (kq.ok) expect(kq.duLieu.code).toBe("DA03");
+  });
+
+  it("POST 409 `code_taken` / `code_series_blocked`: the server's sentence comes through verbatim", async () => {
+    for (const code of ["code_taken", "code_series_blocked"]) {
+      const cau = `Câu của máy chủ cho ${code}.`;
+      batFetch(traJSON(409, { code, message: cau, trace_id: "t" }));
+      const kq = await themDuAn(THEM_DU_AN_DAY_DU, "khoa");
+      expect(kq.ok).toBe(false);
+      if (!kq.ok) expect(kq.thongBao).toBe(cau);
+    }
+  });
+
   it("PATCH: thân KHÔNG mang `code` và KHÔNG mang `year`", async () => {
     const gia = batFetch(traJSON(200, DU_AN_GHI_RA));
 

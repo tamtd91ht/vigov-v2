@@ -36,7 +36,7 @@ import {
   type AllocationSummary,
   type GiaTriFormDuAn,
 } from "./nhan-ghi-giai-ngan";
-import { AutoCodePending, UnitAndOfficerPending } from "./pending-parts";
+import { UnitAndOfficerPending } from "./pending-parts";
 import { Glyph } from "./project-ui";
 
 /**
@@ -170,28 +170,46 @@ export function FormDuAn({
 
         {!isEdit && (
           <div className="flex min-w-0 flex-col gap-1.5">
-            {/* Input and `Tự sinh mã` on one row (prototype `:320-338`). The checkbox is a disabled
-                "?" placeholder: no code is generated until its format is agreed (rule 7). */}
+            {/* Input and `Tự sinh mã` on one row (prototype `:320-338`). Checked (the default): the box
+                is disabled and empty, and no `code` leaves the browser — the server issues the next
+                DA-number of this commune (9f0a0187). What was typed before ticking is kept, not sent. */}
             <div className="flex min-w-0 items-end gap-3">
-              <Field label="Mã dự án *" htmlFor="ma-du-an" grow="auto" className="min-w-0 flex-1">
+              <Field
+                label={gt.autoCode ? "Mã dự án" : "Mã dự án *"}
+                htmlFor="ma-du-an"
+                grow="auto"
+                className="min-w-0 flex-1"
+              >
                 <input
                   id="ma-du-an"
                   name="ma-du-an"
-                  value={gt.ma}
+                  value={gt.autoCode ? "" : gt.ma}
+                  disabled={gt.autoCode}
                   maxLength={MA_DU_AN_TOI_DA}
                   autoComplete="off"
-                  placeholder="DA01"
+                  placeholder={gt.autoCode ? "Hệ thống cấp khi lưu" : "DA01"}
                   onChange={(e) => datGT({ ...gt, ma: e.target.value })}
                 />
               </Field>
-              <AutoCodePending />
+              <div className="flex h-10 shrink-0 items-center gap-2">
+                <input
+                  id="tu-sinh-ma-du-an"
+                  type="checkbox"
+                  className="size-4"
+                  checked={gt.autoCode}
+                  onChange={(e) => datGT({ ...gt, autoCode: e.target.checked })}
+                />
+                <label htmlFor="tu-sinh-ma-du-an" className="text-sm text-ink-700">
+                  Tự sinh mã
+                </label>
+              </div>
             </div>
             {/* MÃ ĐÃ CẤP THÌ KHÔNG CẤP LẠI, KỂ CẢ KHI DỰ ÁN MANG MÃ ẤY ĐÃ RÚT KHỎI DANH SÁCH — nói
                 trước, vì nếu không thì câu 409 của máy chủ đọc như một lỗi trước mặt người vừa xem
-                hết danh sách và không thấy mã ấy ở đâu. */}
+                hết danh sách và không thấy mã ấy ở đâu. Spec §9 wording. */}
             <p className="m-0 text-xs text-ink-500">
-              Chỉ gồm chữ cái, chữ số và dấu gạch nối. Hệ thống chưa tự sinh mã. Mã đã cấp thì không
-              cấp lại, kể cả khi dự án mang mã đó đã rút khỏi danh sách.
+              Tự sinh sẽ cấp số tiếp theo trong dãy DA01, DA02… Mã tự nhập chỉ gồm chữ cái, chữ số và
+              dấu gạch nối, và phải chưa từng được dùng, kể cả bởi dự án đã rút khỏi danh sách.
             </p>
           </div>
         )}
@@ -746,6 +764,8 @@ function AddProjectDialog({
 /** Các ô của biểu mẫu SỬA, đổ từ dự án máy chủ vừa trả về. */
 export function giaTriTuDuAn(duAn: finance_duAnRa): GiaTriFormDuAn {
   return {
+    // The code is already issued; the edit form shows it read-only and never sends it.
+    autoCode: false,
     ma: duAn.code,
     hangMucID: duAn.category_id,
     ten: duAn.name,

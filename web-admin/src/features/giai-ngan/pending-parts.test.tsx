@@ -109,6 +109,16 @@ describe("Giải ngân placeholders (ADR 0068 §14)", () => {
     expect(setItem).not.toHaveBeenCalled();
   });
 
+  it("§9 'Tự sinh mã' is LIVE (9f0a0187): no registry entry, no '?' in the add form, no stale sentence", () => {
+    expect(PHAN_CHUA_DUNG_GHI.some((p) => p.ten === "Tự sinh mã")).toBe(false);
+    expect(() => pendingPart("Tự sinh mã")).toThrow();
+    for (const p of PHAN_CHUA_DUNG_GHI) expect(p.viSao).not.toContain("tự sinh mã");
+    const el = mount(screens());
+    const box = el.querySelector<HTMLInputElement>("#tu-sinh-ma-du-an")!;
+    expect(box.disabled).toBe(false);
+    expect(box.closest("[data-pending]")).toBeNull();
+  });
+
   it("§6 'Tiến độ theo nguồn vốn' is LIVE: no registry entry", () => {
     expect(PHAN_CHUA_DUNG_GHI.some((p) => p.ten === "Tiến độ theo nguồn vốn")).toBe(false);
     expect(() => pendingPart("Tiến độ theo nguồn vốn")).toThrow();

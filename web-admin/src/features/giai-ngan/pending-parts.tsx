@@ -11,7 +11,6 @@ import {
   PendingTab,
 } from "@/components/ui/pending-feature";
 import { Tab, TabList } from "@/components/ui/tabs";
-import { cn } from "@/lib/cn";
 
 import { pendingPart } from "./nhan-ghi-giai-ngan";
 
@@ -38,8 +37,7 @@ export const LATEST_ISSUE_COLUMN = "Vướng mắc mới nhất"; // §7.2
 export const UNIT_OWNER = "Đơn vị và cán bộ phụ trách của dự án";
 const ISSUES_TAB = "Vướng mắc"; // §8.1
 const DISCUSSION_TAB = "Trao đổi"; // §8.4
-/** Names used by the Thêm dự án form. */
-export const AUTO_CODE = "Tự sinh mã"; // §9
+/** Name used by the Thêm dự án form. §9 `Tự sinh mã` is LIVE since 9f0a0187 (`ghi-du-an.tsx`). */
 export const UNIT_AND_OFFICER = "Đơn vị thực hiện và Cán bộ phụ trách"; // §9
 // §7.2 funding chip, §8 per-source block and the §9 funding list are LIVE since 8245698b; the §8.2
 // voucher list, its `NGUỒN VỐN` column and the voucher form's source select since db94b35c.
@@ -86,29 +84,6 @@ export function ProjectUnitPending() {
         <span aria-hidden="true">—</span>
         <span className="sr-only">{PENDING_HOVER_TEXT}</span>
       </dd>
-    </div>
-  );
-}
-
-/** A disabled checkbox + its label, with the "?" BESIDE the label (never inside it — ADR 0068 §14). */
-export function PendingCheckbox({
-  id,
-  name,
-  label,
-  className,
-}: {
-  id: string;
-  name: string;
-  label: ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={cn("flex h-10 items-center gap-2", className)} data-pending="">
-      <input id={id} type="checkbox" disabled className="size-4 cursor-not-allowed" />
-      <label htmlFor={id} className="text-sm text-ink-500">
-        {label}
-      </label>
-      <PendingMarker info={pendingPart(name)} />
     </div>
   );
 }
@@ -198,15 +173,7 @@ export function ProjectRecordTabs({
   );
 }
 
-/**
- * The two spec §9 fields of `Thêm dự án` that are not built: `☑ Tự sinh mã` and the `Đơn vị thực
- * hiện` / `Cán bộ phụ trách` selects.
- */
-export function AutoCodePending() {
-  return <PendingCheckbox id="tu-sinh-ma-du-an" name={AUTO_CODE} label="Tự sinh mã" />;
-}
-
-/** The two `Thông tin thêm` selects of §9, drawn disabled with their spec placeholders. */
+/** The two `Thông tin thêm` selects of §9 not built yet, drawn disabled with their spec placeholders. */
 export function UnitAndOfficerPending() {
   const info = pendingPart(UNIT_AND_OFFICER);
   return (
