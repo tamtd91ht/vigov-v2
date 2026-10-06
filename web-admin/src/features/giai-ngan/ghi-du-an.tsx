@@ -36,7 +36,16 @@ import {
   type AllocationSummary,
   type GiaTriFormDuAn,
 } from "./nhan-ghi-giai-ngan";
-import { UnitAndOfficerPending } from "./pending-parts";
+import {
+  OFFICER_NOT_LISTED,
+  OFFICER_PLACEHOLDER,
+  PEOPLE_LOADING,
+  UNIT_NOT_LISTED,
+  UNIT_PLACEHOLDER,
+  useProjectPeople,
+  type PeopleCatalogue,
+  type ProjectPeople,
+} from "./project-people";
 import { Glyph } from "./project-ui";
 
 /**
@@ -83,6 +92,7 @@ export function FormDuAn({
   danhMuc,
   fundingCatalogue,
   currentAllocations,
+  people = PEOPLE_LOADING,
   dangGui,
   loi,
   huy,
@@ -100,6 +110,11 @@ export function FormDuAn({
   fundingCatalogue: FundingCatalogue;
   /** When editing: the project's allocations as read, so a line keeps its name whatever the catalogue holds. */
   currentAllocations?: readonly finance_projectAllocationOut[];
+  /**
+   * Org units and staff for the two §9 selects, loaded by the dialog / panel around the form. Absent =
+   * still loading: both selects stay disabled on their saved value, so nothing about them is sent.
+   */
+  people?: ProjectPeople;
   dangGui: boolean;
   loi: string | null;
   huy: () => void;
@@ -294,7 +309,30 @@ export function FormDuAn({
         </Field>
 
         <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-          <UnitAndOfficerPending />
+          <ReferenceSelect
+            id="don-vi-du-an"
+            label="Đơn vị thực hiện"
+            what="danh mục bộ phận"
+            placeholder={UNIT_PLACEHOLDER}
+            notListed={UNIT_NOT_LISTED}
+            catalogue={people.units}
+            optionsOf={(units) => units.map((u) => ({ value: u.id, label: u.name }))}
+            value={gt.orgUnitId}
+            onChange={(orgUnitId) => datGT({ ...gt, orgUnitId })}
+          />
+          <ReferenceSelect
+            id="can-bo-du-an"
+            label="Cán bộ phụ trách"
+            what="danh bạ cán bộ"
+            placeholder={OFFICER_PLACEHOLDER}
+            notListed={OFFICER_NOT_LISTED}
+            catalogue={people.staff}
+            optionsOf={(staff) =>
+              staff.map((c) => ({ value: c.code, label: c.position !== "" ? `${c.full_name} — ${c.position}` : c.full_name }))
+            }
+            value={gt.assigneeId}
+            onChange={(assigneeId) => datGT({ ...gt, assigneeId })}
+          />
         </div>
 
         <div className="grid min-w-0 gap-3 sm:grid-cols-2">
@@ -372,6 +410,62 @@ export function FormDuAn({
         </Button>
       </div>
     </form>
+  );
+}
+
+/**
+ * One §9 reference select (`Đơn vị thực hiện` / `Cán bộ phụ trách`) over an identity catalogue.
+ *
+ * A SAVED VALUE THE CATALOGUE DOES NOT LIST KEEPS AN OPTION OF ITS OWN, named for what it is — the select
+ * would otherwise show the placeholder over a project that IS assigned, and a later save of some other
+ * field would look like it cleared it. The raw reference is never printed.
+ *
+ * Catalogue loading or failed: the select is disabled on its current value (so a PATCH leaves the field
+ * out) and a failure says so in the server's words; every other field still saves.
+ */
+function ReferenceSelect<T>({
+  id,
+  label,
+  what,
+  placeholder,
+  notListed,
+  catalogue,
+  optionsOf,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  /** "danh mục bộ phận" — named in the loading / failure hint. */
+  what: string;
+  placeholder: string;
+  notListed: string;
+  catalogue: PeopleCatalogue<T>;
+  optionsOf: (items: readonly T[]) => { value: string; label: string }[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const ready = catalogue.phase === "ready";
+  const options = ready ? optionsOf(catalogue.items) : [];
+  const stray = value !== "" && !options.some((o) => o.value === value);
+  const hint =
+    catalogue.phase === "loading"
+      ? `Đang tải ${what}…`
+      : catalogue.phase === "error"
+        ? `Chưa tải được ${what}: ${catalogue.message} Mục này được giữ nguyên; các mục khác vẫn lưu được.`
+        : undefined;
+  return (
+    <Field label={label} htmlFor={id} kind="select" grow="auto" className="min-w-0" hint={hint}>
+      <select id={id} value={value} disabled={!ready} onChange={(e) => onChange(e.target.value)}>
+        <option value="">{placeholder}</option>
+        {stray && <option value={value}>{ready ? notListed : "…"}</option>}
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </Field>
   );
 }
 
@@ -705,6 +799,7 @@ function AddProjectDialog({
   const [dangGui, datDangGui] = useState(false);
   const [loi, datLoi] = useState<string | null>(null);
   const fundingCatalogue = useFundingCatalogue(nam);
+  const people = useProjectPeople();
 
   function them(gt: GiaTriFormDuAn, khoa: string): void {
     const than = thanThemDuAn(nam, gt);
@@ -751,6 +846,7 @@ function AddProjectDialog({
           giaTriDau={FORM_DU_AN_TRONG}
           danhMuc={danhMuc}
           fundingCatalogue={fundingCatalogue}
+          people={people}
           dangGui={dangGui}
           loi={loi}
           huy={onClose}
@@ -781,6 +877,8 @@ export function giaTriTuDuAn(duAn: finance_duAnRa): GiaTriFormDuAn {
     ngayHoanThanh: duAn.completion_date ?? "",
     thoiHanGiaiNgan: duAn.disbursement_deadline,
     allocations: allocationRowsOf(duAn.funding_allocations),
+    orgUnitId: duAn.org_unit_id ?? "",
+    assigneeId: duAn.assignee_id ?? "",
   };
 }
 
@@ -843,11 +941,14 @@ export function ProjectHeaderActions({
 export function ProjectEditPanel({
   duAn,
   danhMuc,
+  people,
   onClose,
   onSaved,
 }: {
   duAn: finance_duAnRa;
   danhMuc: readonly finance_hangMucRa[];
+  /** The detail page's catalogues (already read for its figures) — not read a second time here. */
+  people: ProjectPeople;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -894,6 +995,7 @@ export function ProjectEditPanel({
         danhMuc={danhMuc}
         fundingCatalogue={fundingCatalogue}
         currentAllocations={duAn.funding_allocations}
+        people={people}
         dangGui={dangGui}
         loi={loi}
         huy={onClose}

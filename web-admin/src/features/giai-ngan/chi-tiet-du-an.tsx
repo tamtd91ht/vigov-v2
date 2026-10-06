@@ -19,8 +19,9 @@ import { coQuyen, QUYEN_GHI_NGAN_SACH, QUYEN_XAC_NHAN_NGAN_SACH } from "@/lib/qu
 import { KhoiChungTu, useProjectVouchers } from "./chung-tu-du-an";
 import { ProjectEditPanel, ProjectHeaderActions, ProjectRemoveDialog } from "./ghi-du-an";
 import { nhanNgay, nhanTien, nhanTienDo, nhanTyLeGiaiNgan, percentLabel, tienDoDuAn } from "./nhan-du-an";
-import { ProjectRecordTabs, ProjectUnitPending } from "./pending-parts";
+import { ProjectRecordTabs } from "./pending-parts";
 import { ProjectCurvePanel } from "./project-curve";
+import { officerLabel, PEOPLE_LOADING, unitLabel, useProjectPeople, type ProjectPeople } from "./project-people";
 import { Glyph, ProgressBadge } from "./project-ui";
 import { ScopeNotice } from "./scope-notice";
 
@@ -65,6 +66,8 @@ export function ChiTietDuAn({ id }: { id: string }) {
   const [danhMuc, datDanhMuc] = useState<readonly finance_hangMucRa[]>([]);
   const khoa = `${id}|${lanTai}`;
   const vouchers = useProjectVouchers(id, String(lanTai));
+  // Org units and staff, read ONCE for the page: the card's names and the edit form's selects.
+  const people = useProjectPeople();
 
   useEffect(() => {
     let bo = false;
@@ -165,6 +168,7 @@ export function ChiTietDuAn({ id }: { id: string }) {
                 <ProjectEditPanel
                   duAn={trangThai.duAn}
                   danhMuc={danhMuc}
+                  people={people}
                   onClose={() => setEditing(false)}
                   onSaved={() => datLanTai((n) => n + 1)}
                 />
@@ -172,6 +176,7 @@ export function ChiTietDuAn({ id }: { id: string }) {
 
               <ThongTinDuAn
                 duAn={trangThai.duAn}
+                people={people}
                 actions={
                   <ProjectHeaderActions
                     coGhi={coGhi}
@@ -221,10 +226,13 @@ export function ChiTietDuAn({ id }: { id: string }) {
  */
 export function ThongTinDuAn({
   duAn,
+  people = PEOPLE_LOADING,
   actions,
   children,
 }: {
   duAn: finance_duAnRa;
+  /** Names for `org_unit_id` / `assignee_id` (`project-people.ts`). Absent = not loaded: "—", never the id. */
+  people?: ProjectPeople;
   actions?: ReactNode;
   children?: ReactNode;
 }) {
@@ -245,10 +253,11 @@ export function ThongTinDuAn({
           <h2 id="ten-du-an-chi-tiet" className="m-0 mt-0.5 text-base leading-snug font-bold text-ink-900">
             {duAn.name}
           </h2>
-          {/* The prototype's line names the funding sources and the officer. The sources come with the
-              project; the officer is an internal id only, so the budget year takes its place. */}
+          {/* The prototype's line names the funding sources and the officer (spec §8 "· phụ trách
+              Chưa phân công"); the budget year stays, it is the set the project belongs to. */}
           <p className="m-0 mt-1 text-xs text-ink-500" data-funding-sources="">
             {sourceNamesLine(duAn)} · Năm ngân sách {duAn.year}
+            <span data-project-officer=""> · phụ trách {officerLabel(duAn, people)}</span>
           </p>
         </div>
         {actions}
@@ -268,7 +277,7 @@ export function ThongTinDuAn({
           {/* Số âm hiện nguyên là số âm: giải ngân vượt kế hoạch phải nhìn thấy được. */}
           <Figure label="Còn lại">{nhanTien(duAn.remaining_amount)}</Figure>
           <Figure label="Thời gian thực hiện">{executionPeriod(duAn.start_date, duAn.completion_date)}</Figure>
-          <ProjectUnitPending />
+          <Figure label="Đơn vị thực hiện">{unitLabel(duAn, people)}</Figure>
           {/* HAI MỐC KHÁC NHAU, CỐ Ý ĐỂ CẠNH NHAU. §9 nói rõ: công trình xong tháng 3 vẫn có thể
               phải giải ngân trước 31/12, nên "ngày hoàn thành" không thay được "thời hạn giải
               ngân". Not in the prototype's grid; kept because it is the date asked at settlement. */}
@@ -313,9 +322,8 @@ export function ThongTinDuAn({
         {children !== undefined && <div className="mt-5">{children}</div>}
       </div>
 
-      {/* ĐƠN VỊ THỰC HIỆN VÀ CÁN BỘ PHỤ TRÁCH KHÔNG HIỆN BẰNG ID. Hợp đồng chỉ trả ID nội bộ
-          (`org_unit_id`, `assignee_id`); in một chuỗi ULID lên màn hình cán bộ không nói với ai điều
-          gì — the figure above is a "?" placeholder instead. */}
+      {/* ĐƠN VỊ THỰC HIỆN VÀ CÁN BỘ PHỤ TRÁCH KHÔNG HIỆN BẰNG ID: a reference the catalogue does not
+          list, or one read while the catalogue failed, shows words or "—" (`project-people.ts`). */}
     </Card>
   );
 }

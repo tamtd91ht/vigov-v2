@@ -19,6 +19,7 @@ import { FundingChip } from "./bang-du-an";
 import { ProjectFundingBlock, ThongTinDuAn } from "./chi-tiet-du-an";
 import { FormDuAn, ProjectEditPanel, type FundingCatalogue } from "./ghi-du-an";
 import { FORM_DU_AN_TRONG } from "./nhan-ghi-giai-ngan";
+import { PEOPLE_LOADING } from "./project-people";
 
 /**
  * Project funding allocations on the Giải ngân screens (8245698b): the §9 list in the add / edit form,
@@ -254,7 +255,9 @@ function stubServer(patchReply: () => Response): Captured {
 const OK_REPLY = () => new Response(JSON.stringify({ id: "01JDA1" }), { status: 200 });
 
 async function mountEdit(onSaved = vi.fn()): Promise<HTMLDivElement> {
-  const el = mount(<ProjectEditPanel duAn={PROJECT} danhMuc={CATEGORIES} onClose={() => {}} onSaved={onSaved} />);
+  const el = mount(
+    <ProjectEditPanel duAn={PROJECT} danhMuc={CATEGORIES} people={PEOPLE_LOADING} onClose={() => {}} onSaved={onSaved} />,
+  );
   await act(async () => {}); // the catalogue arrives
   return el;
 }

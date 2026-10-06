@@ -3,13 +3,7 @@
 import { ChartLine, MessagesSquare, ReceiptText, TriangleAlert, Upload } from "lucide-react";
 import { useState, type KeyboardEvent, type ReactNode } from "react";
 
-import {
-  PENDING_HOVER_TEXT,
-  PendingButton,
-  PendingField,
-  PendingMarker,
-  PendingTab,
-} from "@/components/ui/pending-feature";
+import { PendingButton, PendingMarker, PendingTab } from "@/components/ui/pending-feature";
 import { Tab, TabList } from "@/components/ui/tabs";
 
 import { pendingPart } from "./nhan-ghi-giai-ngan";
@@ -33,12 +27,10 @@ const IMPORT_EXCEL = "Nhập giải ngân từ Excel"; // §10
 const ATTENTION_ISSUES = "Vướng mắc và nguy cơ không giải ngân hết"; // §3, fourth card's sub-line
 /** Name of the list table's pending column, read by `bang-du-an.tsx`. */
 export const LATEST_ISSUE_COLUMN = "Vướng mắc mới nhất"; // §7.2
-/** Prototype list column "Đơn vị / phụ trách" and the detail figure "Đơn vị thực hiện". */
-export const UNIT_OWNER = "Đơn vị và cán bộ phụ trách của dự án";
+// §7.2 `Đơn vị / phụ trách`, §8 `Đơn vị thực hiện` and the two §9 selects are LIVE (`project-people.ts`).
 const ISSUES_TAB = "Vướng mắc"; // §8.1
 const DISCUSSION_TAB = "Trao đổi"; // §8.4
-/** Name used by the Thêm dự án form. §9 `Tự sinh mã` is LIVE since 9f0a0187 (`ghi-du-an.tsx`). */
-export const UNIT_AND_OFFICER = "Đơn vị thực hiện và Cán bộ phụ trách"; // §9
+// §9 `Tự sinh mã` is LIVE since 9f0a0187 (`ghi-du-an.tsx`).
 // §7.2 funding chip, §8 per-source block and the §9 funding list are LIVE since 8245698b; the §8.2
 // voucher list, its `NGUỒN VỐN` column and the voucher form's source select since db94b35c.
 
@@ -66,25 +58,6 @@ export function AttentionIssuesPending() {
       <span className="text-ink-400">Vướng mắc · nguy cơ không giải ngân hết</span>
       <PendingMarker info={pendingPart(ATTENTION_ISSUES)} />
     </span>
-  );
-}
-
-/**
- * The detail card's `Đơn vị thực hiện` figure (prototype `BudgetItemDetail.tsx:302`): its label, the
- * "?", and "—" — never the internal id the contract carries.
- */
-export function ProjectUnitPending() {
-  return (
-    <div className="flex min-w-0 flex-col gap-0.5" data-pending="">
-      <dt className="flex items-center gap-1.5 text-xs font-semibold text-ink-500">
-        Đơn vị thực hiện
-        <PendingMarker info={pendingPart(UNIT_OWNER)} />
-      </dt>
-      <dd className="m-0 text-sm font-medium text-ink-400">
-        <span aria-hidden="true">—</span>
-        <span className="sr-only">{PENDING_HOVER_TEXT}</span>
-      </dd>
-    </div>
   );
 }
 
@@ -170,16 +143,5 @@ export function ProjectRecordTabs({
         </div>
       )}
     </div>
-  );
-}
-
-/** The two `Thông tin thêm` selects of §9 not built yet, drawn disabled with their spec placeholders. */
-export function UnitAndOfficerPending() {
-  const info = pendingPart(UNIT_AND_OFFICER);
-  return (
-    <>
-      <PendingField info={info} id="don-vi-du-an" label="Đơn vị thực hiện" kind="select" placeholder="— Chưa xác định —" className="min-w-0" />
-      <PendingField info={info} id="can-bo-du-an" label="Cán bộ phụ trách" kind="select" placeholder="— Chưa phân công —" className="min-w-0" />
-    </>
   );
 }

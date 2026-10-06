@@ -443,6 +443,13 @@ export type GiaTriFormDuAn = {
   readonly ngayHoanThanh: string;
   readonly thoiHanGiaiNgan: string;
   readonly allocations: readonly AllocationRow[];
+  /** §9 `Đơn vị thực hiện`: an org unit's `id` (`GET /api/v1/org-units`), `""` = not set. */
+  readonly orgUnitId: string;
+  /**
+   * §9 `Cán bộ phụ trách`: the staff BUSINESS CODE (`CB-00123`) from the staff directory, `""` = not
+   * assigned. The contract field is `assignee_id`; why it holds the code: `project-people.ts`.
+   */
+  readonly assigneeId: string;
 };
 
 export const FORM_DU_AN_TRONG: GiaTriFormDuAn = {
@@ -458,6 +465,8 @@ export const FORM_DU_AN_TRONG: GiaTriFormDuAn = {
   ngayHoanThanh: "",
   thoiHanGiaiNgan: "",
   allocations: [],
+  orgUnitId: "",
+  assigneeId: "",
 };
 
 /* ── Phân bổ nguồn vốn §9 ─────────────────────────────────────────────────────────────────── */
@@ -591,7 +600,8 @@ function startAfterCompletion(start: string, completion: string): boolean {
  * bố trí năm nay"*, và máy chủ áp đúng quy tắc ấy (`0` nghĩa là "same as this year's plan"). Gửi 0
  * và để máy chủ suy là cùng kết quả, nhưng vắng mặt mới là điều biểu mẫu đang nói.
  *
- * KHÔNG CÓ `org_unit_id`, `assignee_id` — xem `PHAN_CHUA_DUNG_GHI`. `funding_allocations` is sent only
+ * `org_unit_id` / `assignee_id` are ABSENT when their select is unset — a project created with nobody
+ * assigned, as §9 draws it. `funding_allocations` is sent only
  * when the list has rows: absent and `[]` both create a project with no source on POST, and absent is
  * what an untouched list says.
  */
@@ -660,6 +670,8 @@ export function thanThemDuAn(nam: number, gt: GiaTriFormDuAn): ThanDung<ThemDuAn
       completion_date: gt.ngayHoanThanh === "" ? undefined : gt.ngayHoanThanh,
       disbursement_deadline: gt.thoiHanGiaiNgan === "" ? undefined : gt.thoiHanGiaiNgan,
       funding_allocations: lines,
+      org_unit_id: gt.orgUnitId === "" ? undefined : gt.orgUnitId,
+      assignee_id: gt.assigneeId === "" ? undefined : gt.assigneeId,
     },
   };
 }
@@ -684,6 +696,8 @@ export function thanSuaDuAn(dau: GiaTriFormDuAn, moi: GiaTriFormDuAn): ThanDung<
     completion_date?: string;
     disbursement_deadline?: string;
     funding_allocations?: finance_phanBoVao[];
+    org_unit_id?: string;
+    assignee_id?: string;
   } = {};
 
   if (moi.hangMucID !== dau.hangMucID) {
@@ -737,6 +751,10 @@ export function thanSuaDuAn(dau: GiaTriFormDuAn, moi: GiaTriFormDuAn): ThanDung<
   if (moi.thoiHanGiaiNgan !== dau.thoiHanGiaiNgan) {
     than.disbursement_deadline = moi.thoiHanGiaiNgan;
   }
+  // `""` CLEARS: the server stores NULL for a blank reference (`ChuanHoaThamChieu`), which is how a
+  // project goes back to `Chưa phân công`. Unchanged = absent, so an untouched select writes nothing.
+  if (moi.orgUnitId !== dau.orgUnitId) than.org_unit_id = moi.orgUnitId;
+  if (moi.assigneeId !== dau.assigneeId) than.assignee_id = moi.assigneeId;
 
   // FUNDING: ABSENT = unchanged, `[]` = remove all, a list = full replacement (8245698b). So it is
   // sent ONLY when the set changed — an unchanged list sent back would be a write nobody asked for.
@@ -804,16 +822,8 @@ export const PHAN_CHUA_DUNG_GHI: readonly PhanChuaDung[] = [
   // §8.2 voucher table + its `NGUỒN VỐN` column + the form's `Rút từ nguồn vốn` select: BUILT
   // (db94b35c, `GET /api/v1/investment-projects/{id}/disbursements`; `chung-tu-du-an.tsx`).
   // §9 `☑ Tự sinh mã`: BUILT (9f0a0187 — the server issues DA01, DA02… per commune; `ghi-du-an.tsx`).
-  // §9 `Đơn vị thực hiện` / `Cán bộ phụ trách`. The contract takes `org_unit_id` and `assignee_id`,
-  // but both are ids of records `service-identity` owns; turning them into two selects needs another
-  // route under another permission, and a text box for a ULID is not an interface. Projects are
-  // created with both empty, as §9 draws (`— Chưa xác định —`, `— Chưa phân công —`).
-  {
-    ten: "Đơn vị thực hiện và Cán bộ phụ trách",
-    viSao:
-      "Chưa chọn được đơn vị thực hiện và cán bộ phụ trách khi thêm dự án. Dự án được tạo với hai " +
-      "mục này để trống.",
-  },
+  // §9 `Đơn vị thực hiện` / `Cán bộ phụ trách`: BUILT — two selects on identity's AnyAuthenticated
+  // org-unit and staff-directory routes (`project-people.ts`, `ghi-du-an.tsx`).
   // §9 dynamic `Nguồn vốn` list + editing allocations: BUILT (8245698b, `FundingAllocationList` in
   // `ghi-du-an.tsx`).
   // §10 Excel import modal. No contract route takes an Excel file, and §10's all-or-nothing rule is a
@@ -841,15 +851,8 @@ export const PHAN_CHUA_DUNG_GHI: readonly PhanChuaDung[] = [
       "giải ngân hết, nên chưa có số liệu để hiện.",
   },
   // §7.2 funding chip: BUILT (`funding_status` on the list, `FundingChip` in `bang-du-an.tsx`).
-  // Prototype list column "Đơn vị / phụ trách" + the detail figure "Đơn vị thực hiện" (ADR 0068 lần
-  // 5). The contract returns `org_unit_id` / `assignee_id` as internal ids only; turning them into
-  // names is another service's route under another permission, and an id is not a name.
-  {
-    ten: "Đơn vị và cán bộ phụ trách của dự án",
-    viSao:
-      "Hệ thống chỉ lưu mã nội bộ của đơn vị thực hiện và cán bộ phụ trách, chưa tra được thành " +
-      "tên để hiện.",
-  },
+  // Prototype list column "Đơn vị / phụ trách" + the detail figure "Đơn vị thực hiện": BUILT — names
+  // resolved client-side, one read per catalogue per screen (`project-people.ts`).
   // §7.2 column: no issue-tracking data exists anywhere yet.
   {
     ten: "Vướng mắc mới nhất",

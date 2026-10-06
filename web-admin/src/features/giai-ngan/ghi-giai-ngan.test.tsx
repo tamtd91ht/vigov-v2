@@ -526,8 +526,8 @@ describe("PHẦN CHƯA DỰNG — dấu '?' đúng vị trí đặc tả (ADR 00
 
   it("biểu mẫu SỬA dự án: không 'Tự sinh mã' (mã đã cấp), nhưng có nguồn vốn và đơn vị như prototype", () => {
     // ADR 0068 lần 5: the prototype's edit form is the add form minus the code (`BudgetItemForm.tsx
-    // :318`), so the funding list and the unit / officer selects are there too. The funding list is
-    // LIVE since 8245698b (no "?"); the unit / officer selects remain "?" placeholders.
+    // :318`), so the funding list and the unit / officer selects are there too. Both are LIVE now:
+    // the funding list since 8245698b, the unit / officer selects on identity's catalogues.
     const html = renderToStaticMarkup(
       <FormDuAn
         budgetYear={2026}
@@ -547,7 +547,9 @@ describe("PHẦN CHƯA DỰNG — dấu '?' đúng vị trí đặc tả (ADR 00
     expect(html).not.toContain('id="tu-sinh-ma-du-an"');
     expect(html).not.toContain(marker("Thêm nguồn vốn cho dự án"));
     expect(html).toContain("data-funding-allocations");
-    expect(html).toContain(marker("Đơn vị thực hiện và Cán bộ phụ trách"));
+    expect(html).not.toContain(marker("Đơn vị thực hiện và Cán bộ phụ trách"));
+    expect(html).toContain('<select id="don-vi-du-an"');
+    expect(html).toContain('<select id="can-bo-du-an"');
   });
 
   it("dòng phụ 'vướng mắc · nguy cơ' giữ chỗ KHÔNG in con số nào — '0 vướng mắc' sẽ đọc thành 'không có'", () => {

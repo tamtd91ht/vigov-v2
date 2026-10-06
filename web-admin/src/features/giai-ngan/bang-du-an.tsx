@@ -35,8 +35,9 @@ import {
 } from "./nhan-du-an";
 import { pendingPart } from "./nhan-ghi-giai-ngan";
 import { DisbursementOverview, type SummaryState } from "./disbursement-overview";
-import { LATEST_ISSUE_COLUMN, UNIT_OWNER } from "./pending-parts";
+import { LATEST_ISSUE_COLUMN } from "./pending-parts";
 import { ProjectBulkDeleteDialog } from "./project-bulk-delete-dialog";
+import { PEOPLE_LOADING, unitOwnerLabel, useProjectPeople, type ProjectPeople } from "./project-people";
 import { BULK_DELETE_BUTTON, selectedProjectsLabel, type SelectedProject } from "./project-bulk-delete";
 import { categoryRowLabel, groupProjects, type ProjectGroup } from "./project-groups";
 import { Glyph } from "./project-ui";
@@ -54,10 +55,10 @@ import { ScopeNotice } from "./scope-notice";
  * Funding-source writes (§6) move none of its figures — plans and vouchers only — so they do not
  * re-read it. Edit and delete of one project happen on the detail page; coming back mounts this anew.
  *
- * WHAT THE PROTOTYPE DRAWS THAT THIS DOES NOT FILL: the `Đơn vị / phụ trách` and `Vướng mắc mới nhất`
- * columns and the fourth card's issue counts — disabled "?" placeholders (ADR 0068 §14,
- * `pending-parts.tsx`). No issue data exists, and `org_unit_id` / `assignee_id` arrive as internal ids.
- * Drawing "0 vướng mắc" would tell leadership a figure nobody measured.
+ * WHAT THE PROTOTYPE DRAWS THAT THIS DOES NOT FILL: the `Vướng mắc mới nhất` column and the fourth
+ * card's issue counts — disabled "?" placeholders (ADR 0068 §14, `pending-parts.tsx`). No issue data
+ * exists, and drawing "0 vướng mắc" would tell leadership a figure nobody measured. `Đơn vị / phụ
+ * trách` is names resolved from identity's two catalogues, read once per mount (`project-people.ts`).
  *
  * `GỘP THEO HẠNG MỤC` (on by default, §7.1): group headers carry the SERVER's `by_category` totals, and
  * only while the rows under a header are that whole category — see `project-groups.ts`.
@@ -102,6 +103,8 @@ export function BangDuAn({
   const [delayedOnly, setDelayedOnly] = useState(false);
   /** §7.1 `Gộp theo hạng mục`, on by default as the spec has it. Presentation only: no re-read. */
   const [grouped, setGrouped] = useState(true);
+  /** Org units + staff for the `Đơn vị / phụ trách` column: one read each per mount, not per year or row. */
+  const people = useProjectPeople();
 
   /**
    * KẾT QUẢ ĐƯỢC LƯU KÈM BỘ LỌC ĐÃ SINH RA NÓ, và "đang tải" được SUY RA từ chỗ hai bộ lọc lệch
@@ -290,8 +293,9 @@ export function BangDuAn({
           </select>
         </Field>
 
-        {/* The prototype's unit filter shows only once a project names a unit; no project carries a
-            unit NAME here (ids only), so — by the prototype's own rule — it is not drawn. */}
+        {/* The prototype's unit filter (shown once a project names a unit) is not built: the list
+            route has no unit parameter, and filtering only the loaded rows by a resolved name is a
+            separate card. */}
 
         <FilterCheckbox id="loc-chi-du-an-cham" checked={delayedOnly} onChange={setDelayedOnly}>
           Chỉ dự án chậm
@@ -376,7 +380,7 @@ export function BangDuAn({
               />
             </div>
           ) : (
-            <BangDanhSach duLieu={shown} danhMuc={danhMuc} selection={selection} groups={groups} />
+            <BangDanhSach duLieu={shown} danhMuc={danhMuc} selection={selection} groups={groups} people={people} />
           )}
           {/* The delay threshold the server applied is in the third KPI card's sub-line (prototype). */}
         </>
@@ -459,6 +463,7 @@ export function BangDanhSach({
   danhMuc,
   selection,
   groups,
+  people = PEOPLE_LOADING,
 }: {
   duLieu: finance_danhSachDuAnRa;
   danhMuc: readonly finance_hangMucRa[];
@@ -469,6 +474,8 @@ export function BangDanhSach({
    * (`project-groups.ts`). `undefined` = one flat list in the server's order.
    */
   groups?: readonly ProjectGroup[];
+  /** Names for the `Đơn vị / phụ trách` column. Absent = not loaded: "—" for an assigned row, never an id. */
+  people?: ProjectPeople;
 }) {
   const columnCount = (selection !== undefined ? 1 : 0) + 9;
   const ticked = selection === undefined ? 0 : duLieu.items.filter((d) => selection.has(d.id)).length;
@@ -512,7 +519,9 @@ export function BangDanhSach({
             <span className={lopHangMuc(hangMuc)}>{nhanHangMuc(hangMuc)}</span>
           </span>
         </td>
-        <PendingCell />
+        <td className="text-xs whitespace-normal text-ink-500" data-unit-owner="">
+          {unitOwnerLabel(d, people)}
+        </td>
         <td className="text-right tabular-nums">{nhanTien(d.planned_amount)}</td>
         <td className="text-right tabular-nums">{nhanTien(d.disbursed_amount)}</td>
         <td>
@@ -550,9 +559,9 @@ export function BangDanhSach({
             <th scope="col" className="min-w-64">
               Dự án
             </th>
-            <PendingColumnHeader info={pendingPart(UNIT_OWNER)} className="w-36">
+            <th scope="col" className="w-36">
               Đơn vị / phụ trách
-            </PendingColumnHeader>
+            </th>
             {/* Money columns right-aligned so the digits of every row line up (spec §6.7). */}
             <th scope="col" className="text-right">
               KH vốn năm

@@ -79,6 +79,8 @@ const DU_AN_MAU: GiaTriFormDuAn = {
   ngayHoanThanh: "2026-11-30",
   thoiHanGiaiNgan: "2026-12-31",
   allocations: [],
+  orgUnitId: "",
+  assigneeId: "",
 };
 
 describe("docSoTien — tiền vào hệ thống bằng đúng con số người ta gõ", () => {
