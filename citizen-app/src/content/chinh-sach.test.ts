@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { thanYeuCau, TRUONG_GUI_DI } from "../api/hop-dong-yeu-cau";
+import { createFeedbackDraftStore } from "../commune-app/feedback-draft-store";
+import { thanGuiPhanAnh } from "../cong-dan/api/hop-dong-phan-anh";
 import {
+  BRIDGE_FIELDS_WITH_PHONE,
   bridgeBodyWithPhone,
   COMMUNE_APP_SESSION_FIELDS,
   communeAppSessionBody,
@@ -12,6 +15,7 @@ import {
 } from "../features/dang-nhap/hop-dong";
 import {
   DOAN_CHINH_SACH_TINH_NANG,
+  DOAN_CHINH_SACH_TUNG_QUYEN,
   TOKEN_KHONG_CHUA_GI,
 } from "../features/tinh-nang/noi-dung";
 import { TRUONG_THIEP_CUA_CHUNG_TOI } from "../features/tinh-nang/vcard";
@@ -169,53 +173,69 @@ describe("chính sách mô tả đúng thứ ứng dụng thật sự làm", () 
       }
     });
 
-    it("câu khai nói ai nhận, rằng không gì khác đi kèm, và rằng không gửi mã số điện thoại", () => {
+    /**
+     * 06/10/2026: THE "ĐÚNG, TIẾP TỤC" STEP IS NO LONGER RENDERED (3fe60cd0). The commune page of the shared app
+     * opens its session with `bridgeBodyWithPhone` — the three keys above PLUS `phoneToken` — after the citizen's
+     * "Đồng ý chia sẻ số điện thoại". The two approved 27/09 sentences describing the old step ("Khi bạn bấm xác
+     * nhận làm việc với một xã…", "Bước xác nhận xã không gửi mã số điện thoại…") described a screen nobody
+     * sees; they are replaced by a drafted paragraph that names all four keys, and this case pins it.
+     */
+    it("câu khai của trang xã nói ai nhận, rằng không gì khác đi kèm, và CÓ mã số điện thoại", () => {
       const cau = MUC_CHINH_SACH.find((m) => m.ma === "dang-nhap")!.doan.find((d) =>
-        d.startsWith("Khi bạn bấm xác nhận làm việc với một xã"),
+        d.startsWith(`${PENDING_APPROVAL_MARK} Khi bạn đồng ý, ứng dụng gửi tới máy chủ`),
       );
-      expect(cau, "không còn câu khai bước xác nhận xã").toBeDefined();
+      expect(cau, "không còn câu khai thân mở phiên của trang xã").toBeDefined();
       expect(cau).toMatch(/máy chủ của Tập đoàn ViHAT Group/);
       expect(cau).toMatch(/và không gì khác/);
-      // Thân KHÔNG có `phoneToken` (ADR 0045 câu 2) — văn bản nói ra điều đó, và nói đúng.
-      expect(khoaThan()).not.toContain("phoneToken");
-      expect(mucDangNhap()).toMatch(/Bước xác nhận xã không gửi mã số điện thoại của bạn/);
+      expect(cau, "does not say the phone code goes too").toMatch(/mã số điện thoại do Zalo cấp/);
+      expect(mucDangNhap(), "still describes the confirmation step that is no longer rendered").not.toMatch(
+        /Khi bạn bấm xác nhận làm việc với một xã|Bước xác nhận xã không gửi mã số điện thoại/,
+      );
     });
 
     /**
-     * ⚠ KHOẢNG HỞ CÒN NỢ — MỞ LẠI PHIÊN KÈM SỐ (28/09/2026).
-     *
-     *   Khi ViGov trả 403 `chua_xac_thuc_so`, công dân bấm đồng ý và thân `bridgeBodyWithPhone` đi ra —
-     *   bằng thân xác nhận xã CỘNG `phoneToken`. Mục Đăng nhập chưa có câu nói mã số đi ở đường này, tới
-     *   ViGov: đó là lời văn pháp lý của chủ dự án, không viết thay trong mã. Ca này ghim khoảng hở ở ĐÚNG
-     *   một khoá — thêm một trường nữa vào thân ấy là ĐỎ, và ngày câu chính sách được duyệt thì ca này
-     *   phải đổi thành khoá hai chiều như hai ca trên.
+     * MỞ PHIÊN KÈM SỐ — the gap pinned here since 28/09/2026 is now DRAFTED (06/10/2026, marked): the two-way lock
+     * the old case promised. Body keys ⇄ `BRIDGE_FIELDS_WITH_PHONE` ⇄ every sentence verbatim in the login section.
      */
-    it("thân mở lại kèm số: ngoài ba khoá đã khai, CHỈ `phoneToken` — khoảng hở chính sách còn nợ", () => {
+    it("thân mở phiên kèm số: mọi khoá có dòng khai, mọi dòng khai có mặt NGUYÊN VĂN trong mục Đăng nhập", () => {
       const withPhone = Object.keys(
         JSON.parse(
           bridgeBodyWithPhone({ ma_truy_cap: "m", ten_mien_xa: "xa-vi-du.vigov.example", ma_so_dien_thoai: "p" }),
         ) as Record<string, unknown>,
+      ).sort();
+      expect(withPhone).toEqual(BRIDGE_FIELDS_WITH_PHONE.map((t) => t.khoa).sort());
+      expect(withPhone).toContain("phoneToken");
+      for (const t of BRIDGE_FIELDS_WITH_PHONE) {
+        expect(mucDangNhap(), `mục Đăng nhập không còn nói tới: ${t.trong_chinh_sach.slice(0, 40)}…`).toContain(
+          t.trong_chinh_sach,
+        );
+      }
+    });
+
+    it("nói ra những gì máy chủ ViHAT chuyển sang ViGov, rằng nó không lưu số, và rằng ViGov lưu gì", () => {
+      const chu = mucDangNhap();
+      // `vihat-miniapp` `internal/vigovcau/client.go` YeuCau: app id · Zalo account id · number · IP · user agent
+      // · host · confirmed. Each named, because each is personal data or identifies the device.
+      for (const vat of [
+        "mã tài khoản Zalo của bạn đối với riêng ứng dụng này",
+        "số điện thoại Zalo của bạn",
+        "địa chỉ IP và thông tin trình duyệt của máy bạn",
+        "mã số của ứng dụng",
+        "tên miền của xã",
+      ]) {
+        expect(chu, `does not say ViHAT's server forwards: ${vat}`).toContain(vat);
+      }
+      expect(chu).toMatch(/KHÔNG lưu số điện thoại của bạn và không tạo tài khoản đăng nhập nào ở phía mình/);
+      expect(chu).toMatch(/HỆ THỐNG ViGov CỦA XÃ LƯU/);
+      expect(chu, "states a ViGov retention period nobody decided").toMatch(
+        /Thời hạn lưu những dữ liệu này: \[CHỜ DUYỆT — CẦN CHỦ DỰ ÁN QUYẾT/,
       );
-      const declared = TRUONG_GUI_DI_CAU_VIGOV.map((t) => t.khoa);
-      expect(withPhone.filter((k) => !declared.includes(k))).toEqual(["phoneToken"]);
-      for (const k of declared) expect(withPhone).toContain(k);
-      // Câu chính sách của bước xác nhận xã VẪN ĐÚNG: thân của bước ấy vẫn không mang mã số.
-      expect(khoaThan()).not.toContain("phoneToken");
+      expect(chu, "does not say the commune's own app goes straight to ViGov").toMatch(
+        /Trong ứng dụng riêng của một xã, phiên làm việc với xã được mở THẲNG tại hệ thống ViGov/,
+      );
     });
   });
 
-  /**
-   * ⚠ KHOẢNG HỞ CÒN NỢ — ĐỔI MÃ VỊ TRÍ (29/09/2026, `vihat-miniapp` `POST /api/v1/location`).
-   *
-   *   "Lấy vị trí hiện tại" on the send screen sends two codes to the ViHAT Group server and brings
-   *   coordinates back. The route is declared in the Zalo submission (`ket-xuat-ho-so.ts`,
-   *   `LOCATION_FIELDS`), but the policy text has no section for it yet, and two policy sentences say
-   *   the opposite for the app as a whole (`ben-thu-ba`: "ứng dụng không hề có vị trí của bạn";
-   *   `DOAN_CHINH_SACH_TUNG_QUYEN`: "Ứng dụng chỉ nhận một mã, không nhận toạ độ"). Legal wording is
-   *   the project owner's — not written here. This case pins the gap at EXACTLY the two declared keys:
-   *   a third key in that body is red, and the day the section is approved this case becomes a two-way
-   *   lock like the ones above.
-   */
   /**
    * ⚠ KHOẢNG HỞ CÒN NỢ — ĐĂNG NHẬP TỪ APP RIÊNG CỦA XÃ (29/09/2026, `vihat-miniapp` 4114f00).
    *
@@ -278,8 +298,15 @@ describe("chính sách mô tả đúng thứ ứng dụng thật sự làm", () 
 
     it("nói đủ những gì đã dựng: chỉ app xã · không bắt buộc · tối đa 5 · chỉ khi bấm · sau khi ghi nhận", () => {
       const t = text();
-      expect(section().tieu_de, "the heading must name the commune app").toMatch(/ứng dụng của xã/);
-      expect(t, "does not say the shared app has no photo button").toMatch(/không có nút gửi ảnh nào/);
+      // 06/10/2026: the shared app on a commune QR has the photo button too — the section is scoped to "trang
+      // của xã" (both apps), and only the INTRO has none.
+      expect(section().tieu_de, "the heading must name the commune page").toMatch(/trang của xã/);
+      expect(t, "does not say the intro has no photo button").toMatch(
+        /Phần giới thiệu của Tập đoàn ViHAT Group không có nút gửi ảnh nào/,
+      );
+      expect(t, "still says the shared app has no photo button — false since 3fe60cd0").not.toMatch(
+        /Ứng dụng chung[^.]*không có nút gửi ảnh/,
+      );
       expect(t).toMatch(/KHÔNG BẮT BUỘC/);
       expect(t).toMatch(/tối đa 5 ảnh hiện trường/);
       expect(t).toMatch(/JPEG, PNG hoặc WebP, không nhận video/);
@@ -302,9 +329,14 @@ describe("chính sách mô tả đúng thứ ứng dụng thật sự làm", () 
       expect(t).toMatch(/tối đa 15 phút/);
       expect(t, "does not say staff views are recorded").toMatch(/cán bộ xem ảnh đều được ghi lại/);
       expect(t, "does not say the photo is not kept in the draft").toMatch(/không nằm trong bản nháp phản ánh/);
-      expect(t, "does not name the recipient as the rest of the policy does (#28)").toMatch(
-        /máy chủ của Tập đoàn ViHAT Group/,
+      // RECIPIENT (06/10/2026): the code names ViGov's private store and nothing about who runs its servers; #28
+      // decided `vihat-miniapp`'s operator, not ViGov's. So the text names the store and leaves the operator as a
+      // visible decision — it must not state "trên máy chủ của Tập đoàn ViHAT Group" as settled.
+      expect(t).toMatch(/kho lưu tệp riêng, không công khai, của hệ thống tiếp nhận phản ánh của xã \(hệ thống ViGov\)/);
+      expect(t, "the operator of ViGov's store is written as decided").toMatch(
+        /Bên vận hành máy chủ đặt kho ấy: \[CHỜ DUYỆT — CẦN CHỦ DỰ ÁN QUYẾT/,
       );
+      expect(t).not.toMatch(/trên máy chủ của Tập đoàn ViHAT Group/);
     });
 
     it("thời hạn lưu ảnh: nói CHƯA CHỐT và gắn 'giá trị tạm' — không in 24 tháng như một con số đã chốt", () => {
@@ -355,28 +387,51 @@ describe("chính sách mô tả đúng thứ ứng dụng thật sự làm", () 
         }
       }
     }
+    // 02/10/2026 drafts: du-lieu 1 · anh-hien-truong 11 · cac-quyen 1 · tung-quyen 2 · cach-thuc 2.
+    // 06/10/2026 drafts (the shared app on a commune QR, 3fe60cd0) added: ben-xu-ly 1 · du-lieu 2 · trang-xa 5 ·
+    // dang-nhap 9 · yeu-cau-tu-van 1 · phan-anh 8 · nhap-phan-anh 4 · cac-quyen 4 · tung-quyen 4 · ghi-tep 2 ·
+    // cach-thuc 3 · ben-thu-ba 2 · quyen-cua-ban 2 · rui-ro 4 (and the opening sentence).
+    const whole = (ma: string) => MUC_CHINH_SACH.find((m) => m.ma === ma)!.doan.length;
     expect(marked).toEqual({
-      "du-lieu": 1,
-      "anh-hien-truong": MUC_CHINH_SACH.find((m) => m.ma === "anh-hien-truong")!.doan.length,
-      "cac-quyen": 1,
-      "tung-quyen": 2,
-      "cach-thuc": 2,
+      "ben-xu-ly": 1,
+      "du-lieu": 3,
+      "trang-xa": whole("trang-xa"),
+      "dang-nhap": 9,
+      "yeu-cau-tu-van": 1,
+      "phan-anh": whole("phan-anh"),
+      "nhap-phan-anh": whole("nhap-phan-anh"),
+      "anh-hien-truong": whole("anh-hien-truong"),
+      "cac-quyen": 5,
+      "tung-quyen": 6,
+      "ghi-tep": 2,
+      "cach-thuc": 5,
+      "ben-thu-ba": 2,
+      "quyen-cua-ban": 2,
+      "rui-ro": 4,
     });
-    // The whole scene-photo section is a draft: no paragraph of it may lose its mark alone.
+    // Whole sections are drafts: no paragraph of them may lose its mark alone.
     expect(marked["anh-hien-truong"]).toBe(11);
+    expect(marked["trang-xa"]).toBe(5);
+    expect(marked["phan-anh"]).toBe(8);
+    expect(marked["nhap-phan-anh"]).toBe(4);
+    // The opening sentence is a draft too (06/10/2026); it is not in `MUC_CHINH_SACH`, so it is checked here.
+    expect(CAU_DAU.startsWith(PENDING_APPROVAL_MARK), "the opening sentence lost its mark").toBe(true);
   });
 
-  it("đổi mã vị trí: thân gửi đúng hai khoá đã khai — mục chính sách cho tuyến này CÒN NỢ", () => {
+  /**
+   * ĐỔI MÃ VỊ TRÍ — the gap pinned here since 29/09/2026 is now DRAFTED (06/10/2026, section `phan-anh`, marked),
+   * so this is the two-way lock the old case promised: body keys ⇄ `LOCATION_FIELDS` ⇄ each sentence verbatim.
+   */
+  it("đổi mã vị trí: thân gửi đúng hai khoá đã khai, và mỗi câu khai có mặt NGUYÊN VĂN trong mục phản ánh", () => {
     const keys = Object.keys(
       JSON.parse(locationBody({ access_token: "m", location_token: "v" })) as Record<string, unknown>,
     ).sort();
     expect(keys).toEqual(LOCATION_FIELDS.map((t) => t.khoa).sort());
-    const policy = MUC_CHINH_SACH.flatMap((m) => m.doan).join("\n");
+    const petitions = MUC_CHINH_SACH.find((m) => m.ma === "phan-anh")!.doan.join("\n");
     for (const t of LOCATION_FIELDS) {
-      expect(
-        policy,
-        "the policy now declares the location exchange — turn this case into a two-way lock",
-      ).not.toContain(t.trong_chinh_sach);
+      expect(petitions, `the petition section no longer says: ${t.trong_chinh_sach.slice(0, 40)}…`).toContain(
+        t.trong_chinh_sach,
+      );
     }
   });
 
@@ -794,5 +849,143 @@ describe("khai của tệp danh thiếp khớp với tấm thiếp thật", () =
     } else {
       expect(van_ban, "văn bản khai một trang web mà tệp không chứa").not.toMatch(/trang web/);
     }
+  });
+});
+
+/**
+ * 06/10/2026 — THE SHARED APP ON A COMMUNE QR (3fe60cd0). What the redrafted text must keep saying, each locked to
+ * the code that makes it true: the petition body, the on-phone draft, and the sentences that were false.
+ */
+describe("trang của xã trong app chung — phản ánh, bản nháp, và những câu cũ đã sai", () => {
+  const toanBo = () =>
+    [CAU_DAU, ...MUC_CHINH_SACH.flatMap((m) => m.doan), ...DOAN_CHINH_SACH_TUNG_QUYEN].join("\n");
+  const muc = (ma: string) => {
+    const m = MUC_CHINH_SACH.find((x) => x.ma === ma);
+    expect(m, `the policy lost its section ${ma}`).toBeDefined();
+    return m!.doan.join("\n");
+  };
+
+  it("KHÔNG còn những câu đã thành sai trên đường QR", () => {
+    const chu = toanBo();
+    for (const sai of [
+      "Ứng dụng này không lưu bất kỳ dữ liệu nào của bạn xuống máy",
+      "chỉ gửi đi ở đúng HAI việc",
+      "Ngoài số điện thoại, ứng dụng không gửi thông tin nào khác của bạn đi",
+      "Nơi duy nhất nhận gì đó từ ứng dụng",
+      "Thứ nó gửi đi là hai mã đăng nhập",
+      "Ứng dụng chung của Tập đoàn ViHAT Group không có nút gửi ảnh nào",
+      "đúng sáu tính năng",
+      "hành vi duy nhất ứng dụng viết lên thiết bị",
+      "vì ứng dụng không hề có vị trí của bạn",
+      "Ứng dụng chỉ nhận một mã, không nhận toạ độ",
+      "Trên máy bạn không có dữ liệu nào được lưu lại",
+      "Ô DUY NHẤT TRONG CẢ ỨNG DỤNG",
+    ]) {
+      expect(chu, `a sentence false since 06/10/2026 is back: ${sai}`).not.toContain(sai);
+    }
+  });
+
+  it("MỌI khoá thân gửi phản ánh có một cụm khai trong mục 'Phản ánh gửi tới xã', và ngược lại", () => {
+    // Every key `thanGuiPhanAnh` can send (location and field included) ⇄ the phrase naming it.
+    const KHAI: Readonly<Record<string, string>> = {
+      content: "nội dung phản ánh bạn viết",
+      address: "địa chỉ nơi xảy ra sự việc bạn điền",
+      reporter_name: "họ tên và số điện thoại bạn điền trong biểu mẫu",
+      reporter_phone: "họ tên và số điện thoại bạn điền trong biểu mẫu",
+      anonymous: "việc bạn có chọn gửi ẩn danh hay không",
+      field: "lĩnh vực bạn chọn, nếu bạn chọn",
+      lat: "toạ độ nơi xảy ra sự việc, nếu bạn đã bấm 'Lấy vị trí hiện tại'",
+      lng: "toạ độ nơi xảy ra sự việc, nếu bạn đã bấm 'Lấy vị trí hiện tại'",
+    };
+    const keys = Object.keys(
+      JSON.parse(
+        thanGuiPhanAnh({
+          noi_dung: "x",
+          dia_chi: "y",
+          ho_ten: "z",
+          dien_thoai: "0900000000",
+          an_danh: false,
+          scene_location: { lat: 16, lng: 108 },
+          field: "f",
+        }),
+      ) as Record<string, unknown>,
+    ).sort();
+    expect(keys).toEqual(Object.keys(KHAI).sort());
+    const chu = muc("phan-anh");
+    for (const k of keys) expect(chu, `the petition section does not declare "${k}"`).toContain(KHAI[k]!);
+    expect(chu).toMatch(/đúng những thứ sau, và không gì khác/);
+  });
+
+  it("ẩn danh: không gửi họ tên và số, nhưng nói thật rằng hệ thống vẫn biết phản ánh là của ai", () => {
+    const an = JSON.parse(
+      thanGuiPhanAnh({ noi_dung: "x", dia_chi: "y", ho_ten: "z", dien_thoai: "0900000000", an_danh: true }),
+    ) as Record<string, unknown>;
+    expect(an["reporter_name"]).toBe("");
+    expect(an["reporter_phone"]).toBe("");
+    const chu = muc("phan-anh");
+    expect(chu).toMatch(/KHÔNG gửi họ tên và số điện thoại bạn đã điền/);
+    expect(chu, "hides that the citizen id is still stored (ADR 0008)").toMatch(
+      /ẩn danh không có nghĩa là hệ thống không biết/,
+    );
+    expect(chu).toMatch(/che bớt trên màn hình của cán bộ, trừ cán bộ được giao quyền xem đầy đủ/);
+  });
+
+  it("bản nháp: khai đúng sáu trường mà kho nháp thật sự ghi, không hạn, không ảnh, không toạ độ", () => {
+    const written = new Map<string, string>();
+    const store = createFeedbackDraftStore(
+      () => ({
+        getItem: (k) => written.get(k) ?? null,
+        setItem: (k, v) => void written.set(k, v),
+        removeItem: (k) => void written.delete(k),
+      }),
+      "k",
+    );
+    store.save({ linh_vuc: "f", noi_dung: "x", dia_chi: "y", ho_ten: "z", dien_thoai: "0900000000", an_danh: true });
+    const KHAI: Readonly<Record<string, string>> = {
+      linh_vuc: "lĩnh vực bạn chọn",
+      noi_dung: "nội dung phản ánh",
+      dia_chi: "địa chỉ",
+      ho_ten: "họ tên",
+      dien_thoai: "số điện thoại bạn đã điền",
+      an_danh: "việc bạn có chọn gửi ẩn danh hay không",
+    };
+    const keys = Object.keys(JSON.parse(written.get("k")!) as Record<string, unknown>).sort();
+    expect(keys).toEqual(Object.keys(KHAI).sort());
+    const chu = muc("nhap-phan-anh");
+    expect(chu).toMatch(/Bản nháp gồm đúng sáu thứ/);
+    for (const k of keys) expect(chu, `the draft section does not name "${k}"`).toContain(KHAI[k]!);
+    expect(chu).toMatch(/Ảnh và toạ độ KHÔNG nằm trong bản nháp/);
+    expect(chu).toMatch(/KHÔNG tự hết hạn/);
+    expect(chu).toMatch(/'Bỏ nháp'/);
+    expect(chu).toMatch(/'Huỷ bỏ'/);
+    expect(chu).toMatch(/không bao giờ được gửi đi đâu/);
+  });
+
+  it("câu mở đầu nói hai cách dùng, và nói bản nháp nằm trên máy", () => {
+    expect(CAU_DAU).toMatch(/hai cách dùng/);
+    expect(CAU_DAU).toMatch(/mã QR hoặc đường liên kết của một xã/);
+    expect(CAU_DAU).toMatch(/hệ thống ViGov của xã/);
+    expect(CAU_DAU).toMatch(/bản nháp phản ánh trên máy bạn/);
+  });
+
+  it("bên chịu trách nhiệm và thời hạn lưu ở ViGov KHÔNG được viết như đã quyết", () => {
+    expect(muc("ben-xu-ly")).toMatch(/Bên chịu trách nhiệm về dữ liệu phản ánh[^\n]*\[CHỜ DUYỆT — CẦN CHỦ DỰ ÁN QUYẾT/);
+    expect(muc("phan-anh")).toMatch(/THỜI HẠN LƯU PHẢN ÁNH: CHƯA CHỐT\. \[CHỜ DUYỆT — CẦN CHỦ DỰ ÁN QUYẾT/);
+    expect(muc("quyen-cua-ban")).toMatch(/bạn liên hệ: \[CHỜ DUYỆT — CẦN CHỦ DỰ ÁN QUYẾT/);
+  });
+
+  it("nơi nhận được kể đủ: máy chủ ViHAT · hệ thống ViGov · kho ảnh công khai · Zalo", () => {
+    const chu = muc("ben-thu-ba");
+    expect(chu).toMatch(/máy chủ của Tập đoàn ViHAT Group/);
+    expect(chu).toMatch(/hệ thống ViGov của xã — dịch vụ định danh/);
+    expect(chu).toMatch(/kho ảnh công khai của hệ thống ViGov/);
+    expect(chu).toMatch(/Zalo, nền tảng/);
+    // The pictures load at open, without a tap — said, because the host sees the IP.
+    expect(muc("trang-xa")).toMatch(/ngay khi chúng hiện lên màn hình, không cần bạn bấm/);
+    expect(muc("trang-xa")).toMatch(/địa chỉ IP và thông tin trình duyệt/);
+  });
+
+  it("quyền tên Zalo được khai trong danh sách từng quyền", () => {
+    expect(DOAN_CHINH_SACH_TUNG_QUYEN.join("\n")).toMatch(/Tên Zalo \(getUserInfo\) — chỉ trên trang của một xã/);
   });
 });

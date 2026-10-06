@@ -433,9 +433,15 @@ export const SO_HOA_THIEP = {
  * là mô tả sai; viết mỗi "chưa làm gì" mà giấu mục đích là không đủ để xét duyệt. Nói cả hai.
  */
 export const DOAN_CHINH_SACH_TINH_NANG: readonly string[] = [
-  "Ứng dụng xin các quyền của nền tảng Zalo cho đúng sáu tính năng dưới đây. Mỗi quyền chỉ được hỏi khi bạn tự bấm nút, và bạn có quyền từ chối mà vẫn dùng được ứng dụng.",
+  // 06/10/2026 DRAFT (`PENDING_APPROVAL_MARK`, `content/chinh-sach-rieng-tu.ts`): "đúng sáu tính năng" became
+  // false when the shared app opened from a commune QR began asking phone, location, camera, picker and Zalo
+  // name for petitions (`App.tsx` `QrCommuneApp`). The six features stay the intro's; the commune page is said.
+  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Trong phần giới thiệu, ứng dụng xin các quyền của nền tảng Zalo cho sáu tính năng dưới đây. Trên trang của một xã, ứng dụng dùng thêm một số quyền ấy cho việc gửi phản ánh — số điện thoại, vị trí, máy ảnh và chọn ảnh — và xin thêm quyền đọc tên Zalo của bạn; mục 'Phản ánh gửi tới xã' và mục 'Danh sách từng quyền' nói rõ. Mỗi quyền chỉ được hỏi khi bạn tự bấm nút, và bạn có quyền từ chối mà vẫn dùng được ứng dụng.",
   ...NOI_DUNG_TINH_NANG.map((mot) => `${mot.nhan_ngan} — ${mot.vi_sao}`),
   "Với số điện thoại và vị trí, Zalo không trả giá trị thật về máy: ứng dụng chỉ nhận một mã dùng được một lần và hết hạn sau 2 phút. Số điện thoại và toạ độ của bạn không nằm trong mã đó.",
+  // 06/10/2026 DRAFT: the sentence above is still true of what ZALO returns; this one says what the commune
+  // page's location exchange (`vihat-miniapp` `/api/v1/location`) brings back. The verified number never does.
+  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Riêng khi bạn bấm 'Lấy vị trí hiện tại' lúc gửi phản ánh trên trang của một xã, máy chủ của Tập đoàn ViHAT Group đổi mã vị trí thành toạ độ và trả toạ độ về máy bạn, để hiện lên màn hình và gửi kèm phản ánh nếu bạn bấm gửi. Số điện thoại Zalo của bạn thì không bao giờ được trả về máy.",
   "Với quét mã QR, nội dung mã hiện lên màn hình và mất đi khi bạn quét mã khác hoặc rời màn hình. Nếu mã là một tấm danh thiếp, nội dung ấy là dữ liệu cá nhân của người đã đưa nó cho bạn, và ứng dụng cũng không lưu lại.",
   // VẾ TRONG NGOẶC LÀ BẮT BUỘC, KHÔNG PHẢI TRANG TRÍ. Câu này nói "ứng dụng không nhận địa
   // chỉ IP" — đúng, vì `getNetworkType` chỉ trả về kiểu kết nối. Nhưng mục Đăng nhập
@@ -447,7 +453,7 @@ export const DOAN_CHINH_SACH_TINH_NANG: readonly string[] = [
   // DRAFT 02/10/2026 (`PENDING_APPROVAL_MARK`, `content/chinh-sach-rieng-tu.ts`): "KHÔNG RỜI KHỎI MÁY" is true of
   // the business-card feature only; the commune app's scene photos are uploaded. The feature is now named and the
   // exception pointed to — the approved promise itself is unchanged.
-  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Với máy ảnh và cửa sổ chọn ảnh ở tính năng số hoá danh thiếp giấy, tấm ảnh bạn chọn KHÔNG RỜI KHỎI MÁY: ứng dụng nhận một đường dẫn tạm trên chính thiết bị của bạn, hiện ảnh lên màn hình, và không tải ảnh lên bất kỳ máy chủ nào. Ứng dụng không tự đọc thư viện ảnh — nó chỉ nhận đúng tấm ảnh bạn tự chọn trong cửa sổ của Zalo. Riêng ảnh hiện trường bạn tự gửi kèm một phản ánh trong ứng dụng riêng của một xã thì được tải lên: mục 'Ảnh hiện trường gửi kèm phản ánh' nói rõ.",
+  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Với máy ảnh và cửa sổ chọn ảnh ở tính năng số hoá danh thiếp giấy, tấm ảnh bạn chọn KHÔNG RỜI KHỎI MÁY: ứng dụng nhận một đường dẫn tạm trên chính thiết bị của bạn, hiện ảnh lên màn hình, và không tải ảnh lên bất kỳ máy chủ nào. Ứng dụng không tự đọc thư viện ảnh — nó chỉ nhận đúng tấm ảnh bạn tự chọn trong cửa sổ của Zalo. Riêng ảnh hiện trường bạn tự gửi kèm một phản ánh trên trang của một xã thì được tải lên: mục 'Ảnh hiện trường gửi kèm phản ánh' nói rõ.",
   "Với việc giữ màn hình sáng, ứng dụng chỉ bật chế độ ấy khi bạn tự bấm, và tự tắt lại khi bạn rời màn hình danh thiếp. Chế độ này không đọc gì và không gửi gì; nó chỉ ngăn màn hình tối đi trong lúc người khác đang quét mã.",
   // LIỆT KÊ ĐÚNG NHỮNG TRƯỜNG TẤM THIẾP THẬT SỰ CHỨA. Câu này và câu `ghi-tep` trong chính sách
   // phải khớp nhau VÀ khớp với `vcard.ts`.
@@ -461,12 +467,16 @@ export const DOAN_CHINH_SACH_TINH_NANG: readonly string[] = [
   //
   // Câu tương ứng trong chính sách thì thoát, vì nó CÓ ca canh "khi và chỉ khi". Nay ca ấy phủ
   // cả hai câu — xem `chinh-sach.test.ts`, khối "khai của tệp danh thiếp khớp với tấm thiếp thật".
-  "Với việc tải tệp, ứng dụng GHI MỘT TỆP XUỐNG MÁY BẠN, và đây là hành vi duy nhất ứng dụng viết lên thiết bị. Tệp ấy là danh thiếp của chúng tôi — tên, hotline, email và trang web của công ty — không phải dữ liệu của bạn. Ứng dụng không đọc, không sửa và không xoá bất kỳ tệp nào khác.",
+  //
+  // 06/10/2026 DRAFT: "hành vi duy nhất ứng dụng viết lên thiết bị" is false since the commune page keeps a
+  // petition draft in the app's storage (`commune-app/feedback-draft-store.ts`). The card is still the only FILE.
+  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Với việc tải tệp, ứng dụng GHI MỘT TỆP XUỐNG MÁY BẠN, và đây là tệp duy nhất ứng dụng ghi vào thư mục của máy. Tệp ấy là danh thiếp của chúng tôi — tên, hotline, email và trang web của công ty — không phải dữ liệu của bạn. Ứng dụng không đọc, không sửa và không xoá bất kỳ tệp nào khác.",
   // CÂU CUỐI ĐÃ PHẢI ĐỔI, VÀ VIỆC ĐỔI NÓ LÀ BẮT BUỘC. Bản trước viết "chưa gửi bất kỳ
   // dữ liệu nào của bạn đi đâu" — một câu ĐÚNG với bản nộp và SAI với bản dựng có bước đăng
   // nhập. Một câu chỉ đúng ở một nửa số bản dựng là một câu sai ở nửa kia, và không có gì đỏ
   // lên. Nên nó trỏ sang mục "Đăng nhập", nơi từng biến thể tự nói ra điều nó thật sự làm.
-  "Các mục đích nêu trên là mục đích ứng dụng sẽ dùng các quyền này khi có đầy đủ chức năng. Ngoài đúng một tệp danh thiếp của chúng tôi nói ở trên, ứng dụng không lưu gì xuống máy bạn; việc đăng nhập có gửi gì đi hay không thì mục Đăng nhập bên dưới nói rõ cho đúng bản bạn đang dùng.",
+  // 06/10/2026 DRAFT: "Ngoài đúng một tệp danh thiếp…, ứng dụng không lưu gì xuống máy bạn" — the draft again.
+  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Các mục đích nêu trên là mục đích ứng dụng sẽ dùng các quyền này khi có đầy đủ chức năng. Ngoài tệp danh thiếp của chúng tôi nói ở trên và bản nháp phản ánh trên trang của một xã — mục 'Bản nháp phản ánh trên máy bạn' nói rõ —, ứng dụng không lưu gì xuống máy bạn; việc gửi gì đi thì mục Đăng nhập và mục 'Phản ánh gửi tới xã' nói rõ.",
 ];
 
 /**
@@ -486,16 +496,23 @@ export const DOAN_CHINH_SACH_TUNG_QUYEN: readonly string[] = [
   // ⚠ HAI CÂU NÀY RỘNG RA 22/09/2026, CÙNG LÚC VỚI `KHAI_BAO_LOI_GOI`. Phiên đăng nhập nay còn là
   // CỬA VÀO màn "Tư vấn và báo giá" và màn "Yêu cầu của tôi". Người đã đồng ý cho "đăng nhập +
   // ZNS" chưa đồng ý cho "gửi yêu cầu tư vấn", và câu khai từng quyền là chỗ họ đọc điều đó.
-  "Số điện thoại (getPhoneNumber) — để bạn đăng nhập bằng một lần chạm; để gửi thông báo ZNS tới đúng số ấy; và để chúng tôi gọi lại đúng số ấy nếu bạn tự đề nghị gọi lại ở màn Tư vấn và báo giá. Ứng dụng chỉ nhận một mã, không nhận số.",
-  "Thông tin xác thực phiên Zalo (getAccessToken) — mã này cho biết bạn là người dùng Zalo nào đối với riêng ứng dụng này. Nó đi cùng mã số điện thoại ở bước đăng nhập, và không cho ứng dụng biết tên hay ảnh đại diện của bạn. Phiên mở ra từ hai mã ấy là thứ cho bạn gửi yêu cầu tư vấn và chỉ xem được yêu cầu của chính mình.",
-  "Vị trí (getLocation) — để chỉ ra văn phòng gần bạn. Ứng dụng chỉ nhận một mã, không nhận toạ độ.",
+  // 06/10/2026 DRAFT (`PENDING_APPROVAL_MARK`): the three lines below gained the commune page's purposes
+  // (`KHAI_BAO_LOI_GOI` rows `getPhoneNumber`, `getAccessToken`, `getLocation`, `nua: "ca-hai"`), and "Ứng dụng
+  // chỉ nhận một mã, không nhận toạ độ" was false there — the exchanged coordinates come back to the phone.
+  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Số điện thoại (getPhoneNumber) — để bạn đăng nhập bằng một lần chạm; để gửi thông báo ZNS tới đúng số ấy; để chúng tôi gọi lại đúng số ấy nếu bạn tự đề nghị gọi lại ở màn Tư vấn và báo giá; và, trên trang của một xã, để xã biết phản ánh là của ai và chỉ bạn xem được phản ánh của bạn. Ứng dụng chỉ nhận một mã, không nhận số.",
+  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Thông tin xác thực phiên Zalo (getAccessToken) — mã này cho biết bạn là người dùng Zalo nào đối với riêng ứng dụng này. Nó đi cùng mã số điện thoại ở bước đăng nhập, và không cho ứng dụng biết tên hay ảnh đại diện của bạn. Phiên mở ra từ hai mã ấy là thứ cho bạn gửi yêu cầu tư vấn và chỉ xem được yêu cầu của chính mình. Trên trang của một xã, mã này còn đi cùng mã số điện thoại để mở phiên làm việc với xã, và đi cùng mã vị trí khi bạn bấm 'Lấy vị trí hiện tại'.",
+  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Vị trí (getLocation) — để chỉ ra văn phòng gần bạn; và, trên trang của một xã, để lấy vị trí nơi xảy ra sự việc khi bạn gửi phản ánh. Ứng dụng chỉ nhận một mã. Ở màn Liên hệ, mã ở lại trên máy; khi gửi phản ánh, máy chủ của Tập đoàn ViHAT Group đổi mã thành toạ độ và trả toạ độ về máy.",
   "Quét mã QR (scanQRCode) — để đọc danh thiếp số của đối tác.",
   "Kiểu kết nối mạng (getNetworkType) — để cho bạn biết cuộc gọi sắp tới đi qua Wi-Fi hay mạng di động.",
   "Rung (vibrate) — để báo bằng một nhịp rung khi một việc bạn vừa bấm đã xong, cho người không nhìn màn hình liên tục.",
   "Giữ màn hình sáng (keepScreen) — để màn hình không tối đi trong lúc người khác quét mã danh thiếp của chúng tôi.",
   // DRAFT 02/10/2026 (`PENDING_APPROVAL_MARK`): both permissions gained a second purpose in the commune app
   // (`zalo-api.ts` rows `camera` / `photos`, `nua: "ca-hai"`). "Ảnh không rời khỏi máy" now names its feature.
-  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Máy ảnh (requestCameraPermission) — để chụp lại một tấm danh thiếp giấy; và, trong ứng dụng riêng của một xã, để bạn chụp ảnh hiện trường gửi kèm một phản ánh.",
-  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Chọn ảnh (openMediaPicker) — để bạn chọn ảnh tấm danh thiếp từ máy, và ảnh danh thiếp không rời khỏi máy; trong ứng dụng riêng của một xã, còn để bạn chụp bằng máy ảnh của Zalo hoặc chọn tối đa 5 ảnh hiện trường gửi kèm một phản ánh, và những ảnh ấy được tải lên hệ thống của xã sau khi phản ánh đã được ghi nhận.",
+  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Máy ảnh (requestCameraPermission) — để chụp lại một tấm danh thiếp giấy; và, trên trang của một xã, để bạn chụp ảnh hiện trường gửi kèm một phản ánh.",
+  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Chọn ảnh (openMediaPicker) — để bạn chọn ảnh tấm danh thiếp từ máy, và ảnh danh thiếp không rời khỏi máy; trên trang của một xã, còn để bạn chụp bằng máy ảnh của Zalo hoặc chọn tối đa 5 ảnh hiện trường gửi kèm một phản ánh, và những ảnh ấy được tải lên hệ thống của xã sau khi phản ánh đã được ghi nhận.",
   "Tải tệp (downloadFile) — để ghi tệp danh thiếp của chúng tôi xuống máy bạn.",
+  // 06/10/2026 DRAFT: `getUserInfo` was `nua: "nha-nuoc"` (commune app only) when this list was written; the
+  // shared App ID calls it too since 3fe60cd0 (`App.tsx` `QrCommuneApp` passes `layTenChoXa`). Only the name is
+  // read (`zalo-api.ts` `layTenZalo`).
+  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Tên Zalo (getUserInfo) — chỉ trên trang của một xã: để điền sẵn ô họ tên khi bạn gửi phản ánh. Ứng dụng chỉ dùng tên hiển thị Zalo của bạn, sau khi bạn đồng ý; tên chỉ đi tới xã khi bạn tự bấm gửi phản ánh.",
 ];
