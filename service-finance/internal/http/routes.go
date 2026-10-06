@@ -238,6 +238,12 @@ type Deps struct {
 	// *app.SystemMessages in production. Refused at construction when missing.
 	SystemMessages SystemMessageService
 
+	// FundingSources / FundingSourceWrites are §6's funding source block and its "Quản lý nguồn vốn"
+	// dialog (funding_sources.go): *fistore.NguonVonStore and *app.FundingSources in production.
+	// Refused at construction when missing.
+	FundingSources      FundingSourceReading
+	FundingSourceWrites FundingSourceWriting
+
 	// Nay is the clock the derived disbursement figures are computed against. NIL IN PRODUCTION,
 	// where Handler.nay falls back to time.Now — see the reason there. It exists so the delay
 	// arithmetic of §3 can be exercised at the two dates it is most fragile on.
@@ -301,6 +307,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	}
 	if d.SystemMessages == nil {
 		panic("finance/http: thiếu use case lời hệ thống — các tuyến /api/v1/finance-system-messages sẽ panic khi có người gọi")
+	}
+	if d.FundingSources == nil || d.FundingSourceWrites == nil {
+		panic("finance/http: thiếu kho đọc hoặc use case ghi nguồn vốn — các tuyến /api/v1/funding-sources sẽ panic khi có người gọi")
 	}
 
 	h := NewHandler(d)
@@ -585,6 +594,97 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "budget.confirm")(
 			idem.KhongCan("xoá một dự án đã xoá cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người xoá và lý do")(
 				http.HandlerFunc(h.XoaDuAn))))
+
+	// --- §6 "Tiến độ theo nguồn vốn" and "Quản lý nguồn vốn" (migration 0013) --------------------
+	//
+	// THE URL NOUN IS `funding-sources`, plural, kebab-case — the English the contract already uses for
+	// this concept (`funding_source_id` on vouchers and allocation lines, `funding_allocations`, the
+	// FundingSourceAnnualAmount entity of 0013). A second English word for it would be rule 12's
+	// forbidden #2. TOP LEVEL: a source belongs to the commune, not to a project or a year.
+	//
+	// THE KEYS ARE THE USER'S (decision 06/10/2026): `budget.read` to read, `budget.update` to manage —
+	// both seeded at service-identity/migrations/0001_init.sql:282-284 (rule 5, invariant 3c; no key
+	// invented). `budget.update` is the key §8.2 gives to data entry on this screen, and entering a
+	// source or the amount granted to it is data entry. There is NO remove and NO rename route — the
+	// user decided neither exists, so no key had to be chosen for them.
+
+	// NO idem.* DECLARATION: a GET changes no state. `year` is required and never defaults.
+	//
+	// @summary  Tiến độ theo nguồn vốn của một năm ngân sách: vốn được giao, đã phân bổ, đã giải ngân, ba tỷ lệ, và số đã chi chưa ghi rút từ nguồn nào
+	// @screen   06-giai-ngan §6
+	// @reply    200 fundingSourcesOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/funding-sources",
+		authz.RequirePermission(d.Checker, "budget.read")(
+			http.HandlerFunc(h.ListFundingSources)))
+
+	// idem.Required(MoKhiHong), AND WHICH LAYER PROTECTS THIS (skills/rest-api-design §4): the real
+	// guard is `nguon_von_name_unique` (0013), which counts soft-deleted rows — a second source with the
+	// same name in one commune CANNOT EXIST, whatever happens to Redis. The key is the second layer:
+	// a double-submitted form gets one source and a replayed 201 instead of a confusing 409. MoKhiHong
+	// and not DongKhiHong for the reason POST /api/v1/investment-projects gives: with the unique key
+	// underneath, a cache outage cannot produce a duplicate, so refusing a clerk during one would be
+	// paying with an outage for a risk already covered.
+	//
+	// 409 AND NOT 403 for a taken name or a full catalogue: the caller may manage sources; what is
+	// refused is this value against the state of the data.
+	//
+	// @summary  Thêm một nguồn vốn vào danh mục nguồn vốn của xã, kèm vốn được giao của năm nếu xã khai
+	// @screen   06-giai-ngan §6
+	// @request  fundingSourceCreateIn
+	// @reply    201 fundingSourceOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error funding_source_name_taken funding_source_catalogue_full
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/funding-sources",
+		authz.RequirePermission(d.Checker, "budget.update")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.CreateFundingSource))))
+
+	// PUT, AN UPSERT OF THE ONE FIGURE THIS SUB-RESOURCE HAS — the shape the system-message override
+	// uses: `annual-amounts/{year}` is addressed by its natural key (one figure per source per year,
+	// 0013's unique key), so the client names it and PUT sets it, whether or not a figure existed.
+	//
+	// ⚠ A PAST YEAR'S FIGURE MAY BE CORRECTED — an assumption, stated in app.SetGrantedAmount, because
+	// no lock rule was decided. Every correction is audited with before and after.
+	//
+	// idem.KhongCan: app.SetGrantedAmount writes nothing and files no entry when the figure already
+	// recorded equals the figure sent — so a retry leaves one row and one entry.
+	//
+	// @summary  Ghi hoặc sửa vốn được giao của một nguồn vốn cho một năm ngân sách
+	// @screen   06-giai-ngan §6
+	// @request  grantedAmountIn
+	// @reply    200 grantedAmountOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PUT /api/v1/funding-sources/{id}/annual-amounts/{year}",
+		authz.RequirePermission(d.Checker, "budget.update")(
+			idem.KhongCan("đặt lại đúng số vốn đang ghi không ghi gì và không để vết, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.SetFundingSourceGrantedAmount))))
+
+	// The projects behind one card (prototype SourceItemsDialog): this source's share of each project
+	// of the year, and what was paid from it. 404 covers "no such source" and "a source of another
+	// commune" as one answer. NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Các dự án của một năm lấy vốn từ một nguồn: phần phân bổ từ nguồn ấy, đã chi từ nguồn ấy và tỷ lệ
+	// @screen   06-giai-ngan §6
+	// @reply    200 fundingSourceProjectsOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/funding-sources/{id}/projects",
+		authz.RequirePermission(d.Checker, "budget.read")(
+			http.HandlerFunc(h.ListFundingSourceProjects)))
 
 	// --- the commune adds a capital plan category of its own -------------------------------------------
 	//

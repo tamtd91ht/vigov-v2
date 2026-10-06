@@ -476,8 +476,11 @@ func (h *Handler) traLoiLoiDuAn(w http.ResponseWriter, r *http.Request, viec str
 		httpx.WriteError(w, http.StatusNotFound, "not_found",
 			"`category_id`: không tìm thấy hạng mục kế hoạch vốn này trong xã.", "")
 	case errors.Is(err, fistore.ErrKhongThayNguonVonPhanBo):
+		// Since migration 0013 a source belongs to the commune's catalogue and serves every year, so
+		// the sentence names the catalogue — never "the project's budget year", which is no longer a
+		// property a source has.
 		httpx.WriteError(w, http.StatusNotFound, "not_found",
-			"`funding_allocations`: không tìm thấy nguồn vốn này trong xã ở năm ngân sách của dự án.", "")
+			"`funding_allocations`: không tìm thấy nguồn vốn này trong danh mục nguồn vốn của xã.", "")
 	case errors.Is(err, fistore.ErrDuAnConChungTu):
 		// 409 AND THE SENTENCE NAMES THE WAY OUT, because otherwise the screen looks broken: the
 		// project is right there and the Delete button did nothing. What the commune has to do first

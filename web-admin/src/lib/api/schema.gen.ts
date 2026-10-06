@@ -1336,6 +1336,61 @@ export type finance_duAnRa = {
   "scope_notice"?: string;
 };
 
+export type finance_fundingSourceCreateIn = {
+  /** trimmed; unique within the commune, never renamed */
+  "name": string;
+  "year": number;
+  "granted_amount"?: number | null;
+};
+
+export type finance_fundingSourceOut = {
+  "id": string;
+  "name": string;
+  "order": number;
+  /** the year every figure below was read for */
+  "year": number;
+  "granted_amount": number;
+  "allocated_amount": number;
+  "project_count": number;
+  "disbursed_amount": number;
+  "unallocated_amount": number;
+  "overallocated_amount": number;
+  /** allocated / granted */
+  "allocated_ratio": number | null;
+  /** disbursed / allocated */
+  "disbursed_of_allocated_ratio": number | null;
+  /** disbursed / granted */
+  "disbursed_of_granted_ratio": number | null;
+};
+
+export type finance_fundingSourceProjectOut = {
+  "id": string;
+  "code": string;
+  "name": string;
+  /** the project's whole year plan, for context */
+  "planned_amount": number;
+  /** this source's allocation line */
+  "allocated_amount": number;
+  /** vouchers drawn from this source */
+  "disbursed_amount": number;
+  "disbursed_ratio": number | null;
+};
+
+export type finance_fundingSourceProjectsOut = {
+  "funding_source_id": string;
+  "name": string;
+  "year": number;
+  "items": Array<finance_fundingSourceProjectOut>;
+  "disbursed_without_allocation_amount": number;
+};
+
+export type finance_fundingSourcesOut = {
+  "year": number;
+  "items": Array<finance_fundingSourceOut>;
+  "unattributed_disbursed_amount": number;
+  "scope_notice"?: string;
+};
+
 export type finance_ghiDotVao = {
   /** YYYY-MM-DD */
   "date": string;
@@ -1352,6 +1407,16 @@ export type finance_goChungTuVao = {
 
 export type finance_goVao = {
   "reason": string;
+};
+
+export type finance_grantedAmountIn = {
+  "granted_amount": number | null;
+};
+
+export type finance_grantedAmountOut = {
+  "funding_source_id": string;
+  "year": number;
+  "granted_amount": number;
 };
 
 export type finance_hangMucRa = {
@@ -5518,6 +5583,89 @@ export type finance_delete_finance_system_messages_by_code_override = {
   than: never;
   phanHoi: {
     204: void;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/funding-sources — Tiến độ theo nguồn vốn của một năm ngân sách: vốn được giao, đã phân bổ, đã giải ngân, ba tỷ lệ, và số đã chi chưa ghi rút từ nguồn nào */
+export type finance_get_funding_sources = {
+  duongDan: "/api/v1/funding-sources";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "year"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: finance_fundingSourcesOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/funding-sources — Thêm một nguồn vốn vào danh mục nguồn vốn của xã, kèm vốn được giao của năm nếu xã khai */
+export type finance_post_funding_sources = {
+  duongDan: "/api/v1/funding-sources";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: finance_fundingSourceCreateIn;
+  phanHoi: {
+    201: finance_fundingSourceOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    409: "funding_source_catalogue_full" | "funding_source_name_taken";
+  };
+};
+
+/** PUT /api/v1/funding-sources/{id}/annual-amounts/{year} — Ghi hoặc sửa vốn được giao của một nguồn vốn cho một năm ngân sách */
+export type finance_put_funding_sources_by_id_annual_amounts_by_year = {
+  duongDan: "/api/v1/funding-sources/{id}/annual-amounts/{year}";
+  phuongThuc: "PUT";
+  thamSo: {
+    "id": string;
+    "year": string;
+  };
+  truyVan: {
+  };
+  than: finance_grantedAmountIn;
+  phanHoi: {
+    200: finance_grantedAmountOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/funding-sources/{id}/projects — Các dự án của một năm lấy vốn từ một nguồn: phần phân bổ từ nguồn ấy, đã chi từ nguồn ấy và tỷ lệ */
+export type finance_get_funding_sources_by_id_projects = {
+  duongDan: "/api/v1/funding-sources/{id}/projects";
+  phuongThuc: "GET";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+    "year"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: finance_fundingSourceProjectsOut;
+    400: httpx_Error;
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;

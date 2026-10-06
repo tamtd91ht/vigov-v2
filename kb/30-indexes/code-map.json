@@ -10,6 +10,10 @@
       "kind": "func",
       "at": "service-identity/internal/app/operator_store.go:77"
     },
+    "app.AddFundingSource": {
+      "kind": "func",
+      "at": "service-finance/internal/app/funding_source.go:81"
+    },
     "app.AddLogEntry": {
       "kind": "func",
       "at": "service-petitions/internal/app/task_log_entry.go:70"
@@ -577,6 +581,18 @@
     "app.Format": {
       "kind": "func",
       "at": "service-identity/internal/app/operator_redact.go:92"
+    },
+    "app.FundingSourceCreateRequest": {
+      "kind": "type",
+      "at": "service-finance/internal/app/funding_source.go:72"
+    },
+    "app.FundingSourceStore": {
+      "kind": "type",
+      "at": "service-finance/internal/app/funding_source.go:33"
+    },
+    "app.FundingSources": {
+      "kind": "type",
+      "at": "service-finance/internal/app/funding_source.go:44"
     },
     "app.Get": {
       "kind": "func",
@@ -1269,6 +1285,10 @@
     "app.NewExternalContacts": {
       "kind": "func",
       "at": "service-comms/internal/app/external_contact.go:50"
+    },
+    "app.NewFundingSources": {
+      "kind": "func",
+      "at": "service-finance/internal/app/funding_source.go:52"
     },
     "app.NewGhiBienBanHop": {
       "kind": "func",
@@ -2017,6 +2037,10 @@
     "app.SetConfirmation": {
       "kind": "func",
       "at": "service-comms/internal/app/map_asset.go:267"
+    },
+    "app.SetGrantedAmount": {
+      "kind": "func",
+      "at": "service-finance/internal/app/funding_source.go:197"
     },
     "app.SetPublication": {
       "kind": "func",
@@ -7378,6 +7402,10 @@
       "kind": "func",
       "at": "service-comms/internal/http/external_contacts.go:339"
     },
+    "http.CreateFundingSource": {
+      "kind": "func",
+      "at": "service-finance/internal/http/funding_sources.go:214"
+    },
     "http.CreateMapAsset": {
       "kind": "func",
       "at": "service-comms/internal/http/map_assets.go:665"
@@ -7682,6 +7710,14 @@
       "kind": "func",
       "at": "service-comms/internal/http/content_body_image.go:158"
     },
+    "http.FundingSourceReading": {
+      "kind": "type",
+      "at": "service-finance/internal/http/funding_sources.go:35"
+    },
+    "http.FundingSourceWriting": {
+      "kind": "type",
+      "at": "service-finance/internal/http/funding_sources.go:45"
+    },
     "http.GetCurrentZaloLink": {
       "kind": "func",
       "at": "service-comms/internal/http/zalo_links.go:286"
@@ -7961,6 +7997,14 @@
     "http.ListExternalContacts": {
       "kind": "func",
       "at": "service-comms/internal/http/external_contacts.go:305"
+    },
+    "http.ListFundingSourceProjects": {
+      "kind": "func",
+      "at": "service-finance/internal/http/funding_sources.go:274"
+    },
+    "http.ListFundingSources": {
+      "kind": "func",
+      "at": "service-finance/internal/http/funding_sources.go:177"
     },
     "http.ListMapAssets": {
       "kind": "func",
@@ -8545,6 +8589,10 @@
     "http.SendZaloTestMessage": {
       "kind": "func",
       "at": "service-comms/internal/http/zalo_links.go:334"
+    },
+    "http.SetFundingSourceGrantedAmount": {
+      "kind": "func",
+      "at": "service-finance/internal/http/funding_sources.go:241"
     },
     "http.SetMapAssetConfirmation": {
       "kind": "func",

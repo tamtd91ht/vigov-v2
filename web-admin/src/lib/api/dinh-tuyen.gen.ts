@@ -47,6 +47,7 @@ export const DINH_TUYEN_API: ReadonlyArray<{ readonly tienTo: string; readonly d
   { tienTo: "/api/v1/zalo-bot-updates", dichVu: "comms" },
   { tienTo: "/api/v1/automation-jobs", dichVu: "identity" },
   { tienTo: "/api/v1/citizen-reports", dichVu: "petitions" },
+  { tienTo: "/api/v1/funding-sources", dichVu: "finance" },
   { tienTo: "/api/v1/map-asset-types", dichVu: "comms" },
   { tienTo: "/api/v1/public-holidays", dichVu: "identity" },
   { tienTo: "/api/v1/staff-directory", dichVu: "identity" },

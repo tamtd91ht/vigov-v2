@@ -16,8 +16,9 @@ import (
 // through db.For(ctx), so there is no constructor, no field and no method here that could produce a
 // query without one (rule 1, invariant 5).
 //
-// READ-ONLY. Migration 0013 settled the two unique keys 0007 left open (user decision 06/10/2026),
-// so a write path is no longer blocked on the customer; it is TASK-02's, and it does not live here.
+// READ-ONLY. Migration 0013 settled the two unique keys 0007 left open (user decision 06/10/2026);
+// the write path is FundingSourceWriteStore (funding_source.go), whose every method takes the
+// caller's transaction.
 type NguonVonStore struct {
 	db *store.DB
 }
@@ -231,8 +232,8 @@ const tongPhanBoTheoNguon = `(SELECT pb.tenant_id, pb.nguon_von_id,
 // 6's case — they count toward the project's and the commune's disbursed total and are reported
 // separately as "đã chi nhưng chưa ghi rút từ nguồn nào". They belong to NO card here, and the
 // GROUP BY would otherwise produce a NULL-keyed group that joins to nothing and disappears
-// silently. The predicate says so out loud instead. That warning total is a read this slice
-// deliberately does not build.
+// silently. The predicate says so out loud instead. That warning total is UnattributedDisbursed
+// (funding_source.go).
 //
 // SOFT-DELETED VOUCHERS AND PROJECTS ARE EXCLUDED, everywhere and always (rule 7, invariant 2).
 const tongChungTuTheoNguon = `(SELECT ct.tenant_id, ct.nguon_von_id, SUM(ct.so_tien) AS da_giai_ngan

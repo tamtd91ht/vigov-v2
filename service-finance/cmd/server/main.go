@@ -181,7 +181,12 @@ func main() {
 		// "Lời hệ thống": a commune's wording of the sentences this service raises. The use case
 		// owns the transaction the override row and its audit entry share (rule 6, invariant 3).
 		SystemMessages: app.NewSystemMessages(kho, fistore.NewSystemMessageOverrideStore(kho)),
-		Log:            log,
+		// §6's funding source block (migration 0013). The reads are the store; the writes are a use
+		// case on a SECOND store whose every method takes the use case's transaction, so a source, its
+		// year amount and the audit entry commit together (rule 6, invariant 3).
+		FundingSources:      fistore.NewNguonVonStore(kho),
+		FundingSourceWrites: app.NewFundingSources(kho, fistore.NewFundingSourceWriteStore(kho)),
+		Log:                 log,
 	})
 
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.

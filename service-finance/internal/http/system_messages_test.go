@@ -120,6 +120,10 @@ func newSystemMessagesHarness(t *testing.T) *systemMessagesHarness {
 
 		// The catalogue's Excel import — never called here; own suite in internal/http/catalogue_import_test.go.
 		CapitalPlanCategoryImports: &catalogueImportFake{},
+
+		// Funding sources — never called here; own suite in internal/http/funding_sources_test.go.
+		FundingSources:      &fundingSourcesFake{},
+		FundingSourceWrites: &fundingSourceWritesFake{},
 	})
 	var h http.Handler = mux
 	h = chuTheGhi(h)

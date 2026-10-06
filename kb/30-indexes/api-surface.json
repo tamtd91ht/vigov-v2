@@ -2386,6 +2386,93 @@
       "declared_in": "service-finance/internal/http/routes.go"
     },
     {
+      "service": "finance",
+      "method": "GET",
+      "path": "/api/v1/funding-sources",
+      "operation_id": "finance_get_funding_sources",
+      "task_id": "514317ec6e70",
+      "summary": "Tiến độ theo nguồn vốn của một năm ngân sách: vốn được giao, đã phân bổ, đã giải ngân, ba tỷ lệ, và số đã chi chưa ghi rút từ nguồn nào",
+      "screen": "06-giai-ngan §6",
+      "permission_kind": "permission",
+      "permission": "budget.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "finance.fundingSourcesOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-finance/internal/http/routes.go"
+    },
+    {
+      "service": "finance",
+      "method": "POST",
+      "path": "/api/v1/funding-sources",
+      "operation_id": "finance_post_funding_sources",
+      "task_id": "86c3708ab0db",
+      "summary": "Thêm một nguồn vốn vào danh mục nguồn vốn của xã, kèm vốn được giao của năm nếu xã khai",
+      "screen": "06-giai-ngan §6",
+      "permission_kind": "permission",
+      "permission": "budget.update",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "MoKhiHong",
+      "request_schema": "finance.fundingSourceCreateIn",
+      "reply_schemas": {
+        "201": "finance.fundingSourceOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-finance/internal/http/routes.go"
+    },
+    {
+      "service": "finance",
+      "method": "PUT",
+      "path": "/api/v1/funding-sources/{id}/annual-amounts/{year}",
+      "operation_id": "finance_put_funding_sources_by_id_annual_amounts_by_year",
+      "task_id": "4e67c202af73",
+      "summary": "Ghi hoặc sửa vốn được giao của một nguồn vốn cho một năm ngân sách",
+      "screen": "06-giai-ngan §6",
+      "permission_kind": "permission",
+      "permission": "budget.update",
+      "idempotency": "khong-can",
+      "idempotency_reason": "đặt lại đúng số vốn đang ghi không ghi gì và không để vết, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết",
+      "request_schema": "finance.grantedAmountIn",
+      "reply_schemas": {
+        "200": "finance.grantedAmountOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-finance/internal/http/routes.go"
+    },
+    {
+      "service": "finance",
+      "method": "GET",
+      "path": "/api/v1/funding-sources/{id}/projects",
+      "operation_id": "finance_get_funding_sources_by_id_projects",
+      "task_id": "9ab840b2e74a",
+      "summary": "Các dự án của một năm lấy vốn từ một nguồn: phần phân bổ từ nguồn ấy, đã chi từ nguồn ấy và tỷ lệ",
+      "screen": "06-giai-ngan §6",
+      "permission_kind": "permission",
+      "permission": "budget.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "finance.fundingSourceProjectsOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-finance/internal/http/routes.go"
+    },
+    {
       "service": "identity",
       "method": "GET",
       "path": "/api/v1/identity-audit-entries",

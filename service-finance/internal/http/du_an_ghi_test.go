@@ -142,6 +142,10 @@ func dungMayChuDuAnGhi(t *testing.T) *mayChuDuAnGhi {
 
 		// The catalogue's Excel import — never called here; own suite in internal/http/catalogue_import_test.go.
 		CapitalPlanCategoryImports: &catalogueImportFake{},
+
+		// Funding sources — never called here; own suite in internal/http/funding_sources_test.go.
+		FundingSources:      &fundingSourcesFake{},
+		FundingSourceWrites: &fundingSourceWritesFake{},
 	})
 
 	var h http.Handler = mux
@@ -476,7 +480,7 @@ func TestGhiDuAnAnhXaLoiNghiepVuSangMaTrangThai(t *testing.T) {
 			khoa: "budget.update", muon: http.StatusNotFound, truong: "category_id",
 		},
 		{
-			ten: "nguồn vốn sai năm ngân sách", loi: fistore.ErrKhongThayNguonVonPhanBo,
+			ten: "nguồn vốn không có trong danh mục của xã", loi: fistore.ErrKhongThayNguonVonPhanBo,
 			method: http.MethodPost, duong: duongDuAn, than: thanThemDA,
 			khoa: "budget.update", muon: http.StatusNotFound, truong: "funding_allocations",
 		},

@@ -233,6 +233,10 @@ func dungMayChuVoi(t *testing.T, c checkerGia) *mayChu {
 
 		// The catalogue's Excel import — never called here; own suite in internal/http/catalogue_import_test.go.
 		CapitalPlanCategoryImports: &catalogueImportFake{},
+
+		// Funding sources — never called here; own suite in internal/http/funding_sources_test.go.
+		FundingSources:      &fundingSourcesFake{},
+		FundingSourceWrites: &fundingSourceWritesFake{},
 	}
 
 	mux := http.NewServeMux()

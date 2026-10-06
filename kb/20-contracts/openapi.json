@@ -10409,6 +10409,390 @@
         }
       }
     },
+    "/api/v1/funding-sources": {
+      "get": {
+        "summary": "Tiến độ theo nguồn vốn của một năm ngân sách: vốn được giao, đã phân bổ, đã giải ngân, ba tỷ lệ, và số đã chi chưa ghi rút từ nguồn nào",
+        "operationId": "finance_get_funding_sources",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "06-giai-ngan §6",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.read"
+        },
+        "x-vigov-task": "514317ec6e70",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.fundingSourcesOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Thêm một nguồn vốn vào danh mục nguồn vốn của xã, kèm vốn được giao của năm nếu xã khai",
+        "operationId": "finance_post_funding_sources",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "06-giai-ngan §6",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.update"
+        },
+        "x-vigov-task": "86c3708ab0db",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "MoKhiHong",
+          "on_store_failure_effect": "Store không tới được -> cho qua và ghi cảnh báo"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/finance.fundingSourceCreateIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.fundingSourceOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "funding_source_catalogue_full",
+              "funding_source_name_taken"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/funding-sources/{id}/annual-amounts/{year}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "year",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "put": {
+        "summary": "Ghi hoặc sửa vốn được giao của một nguồn vốn cho một năm ngân sách",
+        "operationId": "finance_put_funding_sources_by_id_annual_amounts_by_year",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "06-giai-ngan §6",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.update"
+        },
+        "x-vigov-task": "4e67c202af73",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/finance.grantedAmountIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.grantedAmountOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/funding-sources/{id}/projects": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Các dự án của một năm lấy vốn từ một nguồn: phần phân bổ từ nguồn ấy, đã chi từ nguồn ấy và tỷ lệ",
+        "operationId": "finance_get_funding_sources_by_id_projects",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "06-giai-ngan §6",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.read"
+        },
+        "x-vigov-task": "9ab840b2e74a",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.fundingSourceProjectsOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/identity-audit-entries": {
       "get": {
         "summary": "Nhật ký hệ thống của phân hệ Tổ chức & tài khoản — vết thao tác của xã, mới nhất trước, lọc theo thời gian · người · động từ · đối tượng",
@@ -34014,6 +34398,216 @@
         ],
         "additionalProperties": false
       },
+      "finance.fundingSourceCreateIn": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "trimmed; unique within the commune, never renamed"
+          },
+          "year": {
+            "type": "integer"
+          },
+          "granted_amount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        },
+        "required": [
+          "name",
+          "year"
+        ],
+        "additionalProperties": false
+      },
+      "finance.fundingSourceOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "order": {
+            "type": "integer"
+          },
+          "year": {
+            "type": "integer",
+            "description": "the year every figure below was read for"
+          },
+          "granted_amount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "allocated_amount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "project_count": {
+            "type": "integer"
+          },
+          "disbursed_amount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "unallocated_amount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "overallocated_amount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "allocated_ratio": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "allocated / granted"
+          },
+          "disbursed_of_allocated_ratio": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "disbursed / allocated"
+          },
+          "disbursed_of_granted_ratio": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "disbursed / granted"
+          }
+        },
+        "required": [
+          "allocated_amount",
+          "allocated_ratio",
+          "disbursed_amount",
+          "disbursed_of_allocated_ratio",
+          "disbursed_of_granted_ratio",
+          "granted_amount",
+          "id",
+          "name",
+          "order",
+          "overallocated_amount",
+          "project_count",
+          "unallocated_amount",
+          "year"
+        ],
+        "additionalProperties": false
+      },
+      "finance.fundingSourceProjectOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "planned_amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "the project's whole year plan, for context"
+          },
+          "allocated_amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "this source's allocation line"
+          },
+          "disbursed_amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "vouchers drawn from this source"
+          },
+          "disbursed_ratio": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        },
+        "required": [
+          "allocated_amount",
+          "code",
+          "disbursed_amount",
+          "disbursed_ratio",
+          "id",
+          "name",
+          "planned_amount"
+        ],
+        "additionalProperties": false
+      },
+      "finance.fundingSourceProjectsOut": {
+        "type": "object",
+        "properties": {
+          "funding_source_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "year": {
+            "type": "integer"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/finance.fundingSourceProjectOut"
+            }
+          },
+          "disbursed_without_allocation_amount": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "disbursed_without_allocation_amount",
+          "funding_source_id",
+          "items",
+          "name",
+          "year"
+        ],
+        "additionalProperties": false
+      },
+      "finance.fundingSourcesOut": {
+        "type": "object",
+        "properties": {
+          "year": {
+            "type": "integer"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/finance.fundingSourceOut"
+            }
+          },
+          "unattributed_disbursed_amount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "scope_notice": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "unattributed_disbursed_amount",
+          "year"
+        ],
+        "additionalProperties": false
+      },
       "finance.ghiDotVao": {
         "type": "object",
         "properties": {
@@ -34075,6 +34669,43 @@
         },
         "required": [
           "reason"
+        ],
+        "additionalProperties": false
+      },
+      "finance.grantedAmountIn": {
+        "type": "object",
+        "properties": {
+          "granted_amount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        },
+        "required": [
+          "granted_amount"
+        ],
+        "additionalProperties": false
+      },
+      "finance.grantedAmountOut": {
+        "type": "object",
+        "properties": {
+          "funding_source_id": {
+            "type": "string"
+          },
+          "year": {
+            "type": "integer"
+          },
+          "granted_amount": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "funding_source_id",
+          "granted_amount",
+          "year"
         ],
         "additionalProperties": false
       },
