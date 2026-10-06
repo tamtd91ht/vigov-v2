@@ -97,6 +97,17 @@ const (
 	ZaloBotWebhookWindow = time.Minute
 )
 
+// The public Mini App ID lookup threshold (service-platform GET /api/v1/mini-app-ids; owner chose
+// option A on 06/10/2026: the deploy script reads App IDs from the platform registry). PROVISIONAL, NOT
+// AN OWNER FIGURE: the owner approved the unauthenticated route and named no number. 30 per minute per
+// client network was chosen because the one legitimate caller is a deploy run — a person or a Jenkins
+// job asking one or two questions per push — so the bound only shapes a scraper walking domain names.
+// Changing either number is a rule 13 stop condition.
+const (
+	MiniAppIDLookupLimit  = 30
+	MiniAppIDLookupWindow = time.Minute
+)
+
 // Policy is one limit: at most Limit attempts per key per Window.
 type Policy struct {
 	// name goes into every key; it separates the counters of two policies keyed by the same subject.
@@ -168,6 +179,12 @@ var ZaloBotWebhook = Policy{name: "zalo-bot-webhook", limit: ZaloBotWebhookLimit
 // only known once the authenticated body is parsed — so its refusal is a reply in the chat, never a 429.
 var ZaloBotPairing = Policy{name: "zalo-bot-pairing", limit: ZaloBotPairingLimit,
 	window: ZaloBotPairingWindow, event: "zalo_bot_pairing.rate_limited"}
+
+// MiniAppIDLookup is the policy of service-platform's public GET /api/v1/mini-app-ids. Keys from
+// PlatformIPKey. FAILS CLOSED, the default: nobody decided that a Redis outage may lift the bound on an
+// unauthenticated route, and the caller (a deploy run) can simply retry.
+var MiniAppIDLookup = Policy{name: "mini-app-ids", limit: MiniAppIDLookupLimit,
+	window: MiniAppIDLookupWindow, event: "mini_app_ids.rate_limited"}
 
 // Key is one counter's identity. OPAQUE, built only by the constructors below, so that "which scope
 // does this counter belong to" is decided once, by name, and never by a caller concatenating a
@@ -299,6 +316,14 @@ func OperatorIPKey(ip string) Key { return Key{subject: ipSubject(ip)} }
 //
 //	→ "rl:<policy>:ip:<net>"
 func WebhookIPKey(ip string) Key { return Key{subject: ipSubject(ip)} }
+
+// PlatformIPKey is the key of a public PLATFORM-REGISTRY read (GET /api/v1/mini-app-ids): one counter
+// per client network, reduced exactly as OperatorIPKey reduces it. NO TENANT PREFIX, and that is not a
+// default on the isolation path: the route belongs to no commune — it answers about the platform's
+// registry, and keying it per commune would let a 429 say which domains name the same commune.
+//
+//	→ "rl:<policy>:ip:<net>"
+func PlatformIPKey(ip string) Key { return Key{subject: ipSubject(ip)} }
 
 // ZaloChatKey is the key of a per-CHAT limit of the shared Zalo Bot: one counter per chat, platform-wide.
 //

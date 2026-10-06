@@ -48,7 +48,7 @@ import { fileURLToPath } from "node:url";
 
 import { createServer } from "vite";
 
-import { APP_ID_THEO_TEN_MIEN, COMMUNE_TERMS_BY_DOMAIN } from "./ung-dung-theo-ten-mien.mjs";
+import { COMMUNE_TERMS_BY_DOMAIN } from "./ung-dung-theo-ten-mien.mjs";
 
 const GOC_APP = fileURLToPath(new URL("..", import.meta.url));
 const GOC_KHO = fileURLToPath(new URL("../..", import.meta.url));
@@ -113,14 +113,9 @@ async function main() {
 
     const da_ghi = [];
 
-    // The commune dossier is for a commune APP: no App ID for the domain means there is nothing to submit, and a
-    // terms text for it would be a text for an app that does not exist.
-    if (!Object.prototype.hasOwnProperty.call(APP_ID_THEO_TEN_MIEN, DOSSIER_COMMUNE_DOMAIN)) {
-      throw new Error(
-        `"${DOSSIER_COMMUNE_DOMAIN}" chưa có App ID trong scripts/ung-dung-theo-ten-mien.mjs (APP_ID_THEO_TEN_MIEN).\n` +
-          "Hồ sơ app xã là hồ sơ của một App ID. Điền App ID chủ dự án giao, hoặc đổi DOSSIER_COMMUNE_DOMAIN trong scripts/ho-so-zalo.mjs.",
-      );
-    }
+    // No App ID check here since 06/10/2026: App IDs live only in service-platform's `mini_app` table (the
+    // repo copy was removed), and this generator runs offline. Whether the commune HAS an app is answered
+    // by `deploy.mjs --domain=<x> --thu`, which asks the platform.
     const commune_terms = await may_chu.ssrLoadModule("/src/content/commune-terms.ts");
     // Throws, naming the table row and every missing field, BEFORE any file is written. The file path is added
     // here: `src/` may not name this table's file (`dich-den.test.mjs`).

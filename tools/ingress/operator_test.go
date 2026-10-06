@@ -54,10 +54,13 @@ func TestRealTablesRouteNothingToPlatform(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, r := range routes {
+		if _, public := pathScopedPublicRoutes["platform"][r.Duong]; public {
+			continue
+		}
 		if r.DichVu == "platform" && r.Duong != platformCommunePrefix &&
 			!strings.HasPrefix(r.Duong, platformCommunePrefix+"/") {
-			t.Errorf("contract routes %s to platform — only %s is a platform commune route (ADR 0069)",
-				r.Duong, platformCommunePrefix)
+			t.Errorf("contract routes %s to platform — only %s is a platform commune route (ADR 0069), "+
+				"plus the owner-approved public paths in pathScopedPublicRoutes", r.Duong, platformCommunePrefix)
 		}
 	}
 	for _, f := range []string{duongTepSinh, duongTepTS} {
@@ -71,26 +74,46 @@ func TestRealTablesRouteNothingToPlatform(t *testing.T) {
 			}
 		}
 	}
-	// The gateway table names platform for exactly one prefix, and the Ingress has one platform rule.
+	// The gateway table names platform only for commune-branding and the allow-listed public paths.
 	ts, err := os.ReadFile(filepath.Join(root, duongTepTS))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n, ok := strings.Count(string(ts), `dichVu: "platform"`), strings.Contains(string(ts),
-		`{ tienTo: "`+platformCommunePrefix+`", dichVu: "platform" }`); n > 1 || (n == 1 && !ok) {
-		t.Errorf("%s routes %d prefixes to platform, want only %s", duongTepTS, n, platformCommunePrefix)
+	allowedTS := []string{platformCommunePrefix}
+	for p := range pathScopedPublicRoutes["platform"] {
+		allowedTS = append(allowedTS, p)
 	}
-	// ZERO Ingress rules reach platform. Its REST port also serves the operator realm, so any public
-	// rule — above all a `path: /` host rule — puts /api/v1/operator-* one spoofed Host away from the
-	// internet (servicesWithoutAPIHost, ADR 0048 #6(c)). Its commune routes are reached in-cluster
-	// through web-admin's gateway, which the dinh-tuyen check above covers.
+	n := strings.Count(string(ts), `dichVu: "platform"`)
+	found := 0
+	for _, p := range allowedTS {
+		if strings.Contains(string(ts), `{ tienTo: "`+p+`", dichVu: "platform" }`) {
+			found++
+		}
+	}
+	if n != found {
+		t.Errorf("%s routes %d prefixes to platform, only %d of them allowed (%v)", duongTepTS, n, found, allowedTS)
+	}
+	// The ONLY Ingress rules reaching platform are the Exact rules of pathScopedPublicRoutes. Its REST
+	// port also serves the operator realm, so any other public rule — above all a `path: /` host rule —
+	// puts /api/v1/operator-* one spoofed Host away from the internet (ADR 0048 #6(c)).
 	ing, err := os.ReadFile(filepath.Join(root, duongTepSinh))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n := platformBackends(string(ing)); n != 0 {
-		t.Errorf("%s has %d rule(s) whose backend is platform, want 0 — a public route to the pod that "+
-			"serves the operator realm", duongTepSinh, n)
+	if n, want := platformBackends(string(ing)), len(pathScopedPublicRoutes["platform"]); n != want {
+		t.Errorf("%s has %d rule(s) whose backend is platform, want %d (the Exact public paths only)",
+			duongTepSinh, n, want)
+	}
+	for _, r := range docTepSinh(t).Spec.Rules {
+		for _, p := range r.HTTP.Paths {
+			if p.Backend.Service.Name != "platform" {
+				continue
+			}
+			if _, ok := pathScopedPublicRoutes["platform"][p.Path]; !ok || p.PathType != "Exact" {
+				t.Errorf("Ingress rule %s %s → platform: only Exact rules of pathScopedPublicRoutes may reach platform",
+					p.PathType, p.Path)
+			}
+		}
 	}
 }
 
@@ -127,6 +150,39 @@ func TestNoAPIHostForPlatform(t *testing.T) {
 	}
 	if len(hosts) != 1 || hosts[0].DichVu != "identity" {
 		t.Errorf("hosts = %+v, want identity only", hosts)
+	}
+}
+
+// An allow-listed public path gives platform a host with that Exact path ONLY — commune-branding,
+// grouped beside it, never reaches the host.
+func TestPlatformHostCarriesOnlyAllowListedExactPaths(t *testing.T) {
+	hosts, err := cacHostDichVu([]luatIngress{
+		{Duong: "/api/v1/commune-branding", DichVu: "platform", Cong: "rest", Phu: []string{"/api/v1/commune-branding"}},
+		{Duong: "/api/v1/mini-app-ids", DichVu: "platform", Cong: "rest", Phu: []string{"/api/v1/mini-app-ids"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hosts) != 1 || hosts[0].DichVu != "platform" ||
+		strings.Join(hosts[0].Exact, ",") != "/api/v1/mini-app-ids" {
+		t.Fatalf("hosts = %+v, want platform with exactly /api/v1/mini-app-ids", hosts)
+	}
+}
+
+// The allow-list is checked against the contract: missing, owned elsewhere, or not public → stop.
+func TestPathScopedPublicRoutesCheckedAgainstContract(t *testing.T) {
+	ok := []tuyenHopDong{{Duong: "/api/v1/mini-app-ids", DichVu: "platform", Public: true}}
+	if err := checkPathScopedPublicRoutes(ok); err != nil {
+		t.Fatalf("valid contract refused: %v", err)
+	}
+	for name, bad := range map[string][]tuyenHopDong{
+		"missing":    {},
+		"not public": {{Duong: "/api/v1/mini-app-ids", DichVu: "platform", Public: false}},
+		"other svc":  {{Duong: "/api/v1/mini-app-ids", DichVu: "identity", Public: true}},
+	} {
+		if err := checkPathScopedPublicRoutes(bad); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
 	}
 }
 

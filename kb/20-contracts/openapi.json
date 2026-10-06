@@ -16891,6 +16891,131 @@
         }
       }
     },
+    "/api/v1/mini-app-ids": {
+      "get": {
+        "summary": "App ID của Mini App đang chạy — app chung (app=vihat) hoặc app riêng của xã giữ tên miền (host=…); cho lệnh đẩy Mini App",
+        "operationId": "platform_get_mini_app_ids",
+        "tags": [
+          "platform"
+        ],
+        "x-vigov-screen": "*(không có màn hình — lệnh đẩy citizen-app/scripts/deploy.mjs gọi; chủ dự án chọn phương án A 06/10/2026)*",
+        "x-vigov-permission": {
+          "kind": "public",
+          "reason": "lệnh đẩy Mini App (citizen-app/scripts/deploy.mjs, máy dev hoặc Jenkins, không có phiên cán bộ) đọc App ID từ sổ mini_app của nền tảng thay cho tệp chép tay (chủ dự án chọn phương án A 06/10/2026); App ID không phải bí mật — mọi mã QR in ra đều mang nó; chỉ trả App ID và loại app, không mã xã, không tên xã, không danh sách; giới hạn 30 lần/phút theo mạng của máy gọi"
+        },
+        "x-vigov-consumer": "citizen-app",
+        "x-vigov-task": "7a9dad03e900",
+        "parameters": [
+          {
+            "name": "app",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "host",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/platform.miniAppIDOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "invalid_query"
+            ]
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "mini_app_id_not_found"
+            ]
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "own_mini_app_ambiguous",
+              "shared_mini_app_ambiguous"
+            ]
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "rate_limited"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "internal"
+            ]
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "rate_limit_unavailable"
+            ]
+          }
+        }
+      }
+    },
     "/api/v1/my-citizen-report-fields": {
       "get": {
         "summary": "Danh sách lĩnh vực xã đang mở cho người dân chọn khi gửi phản ánh, theo thứ tự của xã",
@@ -43719,6 +43844,22 @@
         "required": [
           "file",
           "upload"
+        ],
+        "additionalProperties": false
+      },
+      "platform.miniAppIDOut": {
+        "type": "object",
+        "properties": {
+          "app_id": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "app_id",
+          "source"
         ],
         "additionalProperties": false
       },

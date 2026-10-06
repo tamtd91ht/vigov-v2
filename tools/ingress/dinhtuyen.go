@@ -54,6 +54,9 @@ var phuongThuc = map[string]bool{
 type tuyenHopDong struct {
 	Duong  string // "/api/v1/sessions/current"
 	DichVu string // "identity" — from the OpenAPI tag, cross-checked against operationId
+	// Public is true when EVERY operation of the path declares authz.Public (x-vigov-permission
+	// kind "public"). Read only by checkPathScopedPublicRoutes.
+	Public bool
 }
 
 // luatIngress is one entry of `spec.rules[].http.paths` in the generated file.
@@ -103,6 +106,7 @@ func docHopDong(raw []byte) ([]tuyenHopDong, error) {
 		}
 		chu := ""
 		soThaoTac := 0
+		allPublic := true
 		for pt, raw := range hd.Paths[duong] {
 			if !phuongThuc[strings.ToLower(pt)] {
 				continue
@@ -127,6 +131,9 @@ func docHopDong(raw []byte) ([]tuyenHopDong, error) {
 					"tuyến %s %s thuộc miền vận hành (%s) — chỉ phục vụ trên OPERATOR_HOST, không bao giờ vào bảng định tuyến của xã (ADR 0048)",
 					strings.ToUpper(pt), duong, op.Permission.Kind)
 			}
+			if op.Permission.Kind != "public" {
+				allPublic = false
+			}
 			if len(op.Tags) != 1 {
 				return nil, fmt.Errorf(
 					"tuyến %s %s khai %d tag — cần ĐÚNG MỘT để biết dịch vụ chủ; không mặc định về identity (luật 1)",
@@ -149,7 +156,7 @@ func docHopDong(raw []byte) ([]tuyenHopDong, error) {
 		if soThaoTac == 0 {
 			return nil, fmt.Errorf("tuyến %s không có thao tác HTTP nào — không xác định được dịch vụ chủ", duong)
 		}
-		out = append(out, tuyenHopDong{Duong: duong, DichVu: chu})
+		out = append(out, tuyenHopDong{Duong: duong, DichVu: chu, Public: allPublic})
 	}
 	return out, nil
 }
@@ -376,6 +383,9 @@ func sinhTuKho(root string) (map[string][]byte, error) {
 	}
 	tuyens, err := docHopDong(raw)
 	if err != nil {
+		return nil, err
+	}
+	if err := checkPathScopedPublicRoutes(tuyens); err != nil {
 		return nil, err
 	}
 	luats, err := bangDinhTuyen(tuyens, congCuaDichVu(root))

@@ -862,7 +862,6 @@ const DOMAIN_TABLE_MODULE = Object.values(
   import.meta.glob("../../scripts/ung-dung-theo-ten-mien.mjs", { eager: true }),
 )[0] as {
   COMMUNE_TERMS_BY_DOMAIN: Record<string, Partial<CommuneTermsValues>>;
-  APP_ID_THEO_TEN_MIEN: Record<string, string>;
 };
 
 const THANG_BINH = "thangbinh-danang.vigov.vn";
@@ -882,14 +881,14 @@ const VALID: CommuneTermsValues = {
 };
 
 describe("8 — the commune app's terms of use", () => {
-  it("the table holds the values the owner gave for Thăng Bình, under the same key as its App ID", () => {
+  it("the table holds the values the owner gave for Thăng Bình", () => {
+    // App IDs left this file on 06/10/2026 (service-platform `mini_app` is the only source), so there is no
+    // second table to pair this row with any more.
     expect(DOMAIN_TABLE_MODULE.COMMUNE_TERMS_BY_DOMAIN[THANG_BINH]).toEqual({
       displayName: "Xã Thăng Bình",
       province: "Thành phố Đà Nẵng",
       introductionUrl: THANG_BINH_URL,
     });
-    // Same key in both tables: a commune with terms but no app (or the reverse) is a dossier that cannot be filed.
-    expect(Object.keys(DOMAIN_TABLE_MODULE.APP_ID_THEO_TEN_MIEN)).toContain(THANG_BINH);
   });
 
   it("renders with Thăng Bình's values: name, province, People's Committee, version and date", () => {

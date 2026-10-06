@@ -7,18 +7,29 @@
  * |---|---|---|
  * | `--app=vihat` | App ViHAT — app chung | KHÔNG BAO GIỜ (ADR 0044: một xã trong bundle chung đưa MỌI người, kể cả người duyệt của Zalo, vào xã ấy) |
  * | `--domain=<tên-miền>` | app riêng của xã ấy | LUÔN — app mở thẳng vào xã (ADR 0047 §6; trước 06/10/2026 là cờ `--vao-thang`, nay đã bỏ) |
- * | không cờ nào | hỏi bằng menu khi có người ngồi trước cửa sổ lệnh; không thì TỪ CHỐI | — |
+ * | không cờ nào | HỎI "vihat hay tên miền xã" khi có người ngồi trước cửa sổ lệnh; không thì TỪ CHỐI | — |
  *
  * VÌ SAO KHÔNG CÒN "KHÔNG CỜ = APP CHUNG": trước 06/10/2026, không cờ thì zmp-cli đọc `ZMP_TOKEN` trong
  * `citizen-app/.env` — tức đẩy lên app nào người ấy đăng nhập lần cuối trên máy ấy. Đích được chọn
  * ngầm bởi một tệp không ai nhìn. Nay script KHÔNG BAO GIỜ để zmp rơi về tệp ấy, với bất kỳ đích nào.
  *
+ * APP ID CỦA ĐÍCH ĐỌC TỪ PLATFORM (chủ dự án 06/10/2026, phương án A): bảng `mini_app` của
+ * `service-platform` là nguồn sự thật DUY NHẤT về App ID — cũng là bảng máy chủ đọc để biết một App ID
+ * phục vụ xã nào (ADR 0044, 0045). Trước ngày ấy App ID còn được chép tay vào
+ * `scripts/ung-dung-theo-ten-mien.mjs`; hai nơi cho một cặp (xã, App ID) là hai nơi lệch nhau (ADR 0047
+ * CÒN MỞ #3), và khi lệch thì máy chủ thắng — app vừa đẩy mở ra bị từ chối. Nay tệp ấy không còn App ID
+ * nào; `GET /api/v1/mini-app-ids` trả App ID, và script chỉ đối chiếu (`appIdFromPlatform`).
+ *
+ * KHÔNG CÓ MENU CÁC XÃ: tuyến ấy cố ý không có lệnh "liệt kê" — nó trả lời đúng một câu hỏi cho đúng
+ * một đích. Nên khi không cờ, script hỏi người gõ tên đích, không đưa danh sách.
+ *
  * QR mở App ViHAT vào một xã (`zalo.me/s/<App ID app chung>/?d=<host>&src=qr`) KHÔNG phải việc của
  * bước đẩy: nó làm ở platform-admin (chi tiết xã → "Mở bằng app ViHAT").
  *
  * Mọi hàm ở đây THUẦN — nhận dữ liệu, trả dữ liệu hoặc ném lỗi, không đọc đĩa, không đọc môi
- * trường, không hỏi ai — để `dich-den.test.mjs` kiểm được từng nhánh mà không chạy `zmp-cli`.
- * `deploy.mjs` là nơi duy nhất nối chúng với `process.argv` / `process.env` / bàn phím / tệp.
+ * trường, không gọi mạng, không hỏi ai — để `dich-den.test.mjs` kiểm được từng nhánh mà không chạy
+ * `zmp-cli`. Lời gọi mạng là `mini-app-id-lookup.mjs`; `deploy.mjs` là nơi duy nhất nối chúng với
+ * `process.argv` / `process.env` / bàn phím / tệp / mạng.
  *
  * ⚠ APP ID KHÔNG CHỌN ĐƯỢC ĐÍCH — TOKEN MỚI CHỌN. ĐÃ ĐO, KHÔNG PHẢI SUY ĐOÁN (27/09/2026, zmp-cli 4.0.3):
  *
@@ -35,25 +46,23 @@
  *   không cần tin token, chỉ cần biết zmp sẽ đẩy token ấy đi đâu.
  */
 
-/** Tên đọc được của app chung, trên menu, trong kế hoạch và trong câu hỏi. */
+/** Tên đọc được của app chung, trong câu hỏi, câu từ chối và kế hoạch. */
 export const SHARED_APP_NAME = "App ViHAT";
 
-/** Tệp ánh xạ, gọi đúng tên trong mọi câu nói với người chạy lệnh. */
-const REGISTRY_FILE = "scripts/ung-dung-theo-ten-mien.mjs";
+/** Tuyến của platform trả App ID của một đích (hợp đồng cố định 06/10/2026). */
+export const MINI_APP_ID_PATH = "/api/v1/mini-app-ids";
 
-/** Nơi người chạy lệnh tìm được App ID thật — không đoán, không chép từ chỗ khác. */
-const WHERE_APP_ID = "xem platform-admin → chi tiết xã → ô QR";
+/** Nơi sửa khi platform không có App ID — người chạy lệnh không sửa được gì ở kho này. */
+const WHERE_TO_FIX = {
+  "app-chung": "platform-admin → khai App ViHAT (app chung) với App ID của nó",
+  "app-rieng": (ten_mien) => `platform-admin → chi tiết xã ${ten_mien} → gắn App ID app riêng của xã`,
+};
 
 /** Mọi cờ còn nhận, nói ra mỗi khi một cờ bị từ chối. */
 const VALID_FLAGS = "--app=vihat · --domain=<tên-miền> · --app-id=<chữ số> · --phat-hanh · --thu";
 
 /** Tên miền dạng máy chủ: chữ thường, số, gạch nối; ít nhất hai nhãn; không scheme/cổng/đường dẫn. */
 const NHAN = /^(?!-)[a-z0-9-]{1,63}(?<!-)$/;
-
-/** Placeholder trong tệp ánh xạ: `<…>`. Coi như CHƯA CÓ App ID. */
-export function laPlaceholder(app_id) {
-  return /^<[^>]*>$/.test(app_id);
-}
 
 /** App ID thật: chỉ chữ số. */
 function isAppId(value) {
@@ -79,34 +88,33 @@ export function kiemTenMien(ten) {
 }
 
 /**
- * Kiểm cả tệp ánh xạ. Ném lỗi nếu một khoá không phải tên miền trần, một App ID rỗng / có khoảng
- * trắng / không phải chữ số (placeholder `<…>` vẫn được), hoặc App ID của app chung trùng App ID của
- * một xã (đẩy app chung đè lên app của xã ấy).
+ * Địa chỉ platform đã kiểm: một ORIGIN `https://<host>[:<cổng>]`, không đường dẫn, không truy vấn,
+ * không tên/mật khẩu. Trả origin (không dấu `/` cuối). Kiểm hằng `VIGOV_PLATFORM_API_HOST` của
+ * `deploy-config.mjs` lúc khởi động và trong test: một lượt sửa hằng ấy thành `http://…` hay thêm đường
+ * dẫn phải đỏ trước khi một App ID được đọc từ đó.
+ *
+ * CHỈ HTTPS: câu trả lời quyết định bản dựng đi lên app nào trên Zalo.
  */
-export function kiemBangAnhXa(bang, app_chung) {
-  if (bang === null || typeof bang !== "object" || Array.isArray(bang)) {
-    throw new Error("Tệp ánh xạ tên miền → App ID phải là một đối tượng.");
+export function checkPlatformApiHost(value) {
+  const how = "  Sửa hằng VIGOV_PLATFORM_API_HOST trong citizen-app/scripts/deploy-config.mjs (origin https của service-platform).";
+  const v = typeof value === "string" ? value.trim() : "";
+  if (v === "") throw new Error(`Không đẩy: VIGOV_PLATFORM_API_HOST rỗng.\n${how}`);
+  let url;
+  try {
+    url = new URL(v);
+  } catch {
+    throw new Error(`Không đẩy: VIGOV_PLATFORM_API_HOST="${v}" không phải một địa chỉ.\n${how}`);
   }
-  for (const [ten, app_id] of Object.entries(bang)) {
-    kiemTenMien(ten);
-    if (typeof app_id !== "string" || app_id.trim() === "" || /\s/.test(app_id)) {
-      throw new Error(`App ID của "${ten}" rỗng hoặc có khoảng trắng.`);
-    }
-    if (!isAppId(app_id) && !laPlaceholder(app_id)) {
-      throw new Error(`App ID của "${ten}" phải chỉ gồm chữ số (hoặc placeholder <…>): "${app_id}".`);
-    }
-  }
-  if (app_chung !== null) {
-    if (typeof app_chung !== "string" || app_chung.trim() === "" || /\s/.test(app_chung)) {
-      throw new Error("APP_ID_APP_CHUNG phải là null hoặc một App ID không rỗng.");
-    }
-    if (!isAppId(app_chung)) {
-      throw new Error(`APP_ID_APP_CHUNG phải là null hoặc chỉ gồm chữ số: "${app_chung}".`);
-    }
-    if (Object.values(bang).includes(app_chung)) {
-      throw new Error("APP_ID_APP_CHUNG trùng App ID của một xã: đẩy app chung sẽ đè lên app của xã ấy.");
-    }
-  }
+  const vi_sao =
+    url.protocol !== "https:"
+      ? "phải là https://"
+      : url.username !== "" || url.password !== ""
+        ? "không được mang tên/mật khẩu"
+        : (url.pathname !== "/" && url.pathname !== "") || url.search !== "" || url.hash !== "" || /[?#]/.test(v)
+          ? "chỉ là origin — bỏ đường dẫn, `?…`, `#…`"
+          : null;
+  if (vi_sao !== null) throw new Error(`Không đẩy: VIGOV_PLATFORM_API_HOST="${v}" ${vi_sao}.\n${how}`);
+  return url.origin;
 }
 
 /**
@@ -117,7 +125,7 @@ export function kiemBangAnhXa(bang, app_chung) {
  * trông giống hệt nhau. App chung có cờ riêng của nó (`--app=vihat`).
  *
  * Không cờ đích nào thì trả `shared_app: false, ten_mien: null` — CHƯA CÓ ĐÍCH, không phải "app chung".
- * `deploy.mjs` hỏi bằng menu, hoặc từ chối khi không có người để hỏi.
+ * `deploy.mjs` hỏi, hoặc từ chối khi không có người để hỏi.
  */
 export function docCo(argv) {
   const co = { ten_mien: null, shared_app: false, app_id: null, phat_hanh: false, chi_thu: false };
@@ -134,7 +142,7 @@ export function docCo(argv) {
     } else if (c.startsWith("--app-id=")) {
       const gia_tri = c.slice("--app-id=".length);
       if (!isAppId(gia_tri)) {
-        throw new Error(`--app-id="${gia_tri}" không phải App ID: chỉ gồm chữ số (${WHERE_APP_ID}).`);
+        throw new Error(`--app-id="${gia_tri}" không phải App ID: chỉ gồm chữ số.`);
       }
       if (co.app_id !== null && co.app_id !== gia_tri) throw new Error("--app-id có hai giá trị khác nhau.");
       co.app_id = gia_tri;
@@ -189,149 +197,149 @@ export function targetName(dich) {
   return dich.loai === "app-chung" ? SHARED_APP_NAME : `app riêng của xã ${dich.ten_mien}`;
 }
 
+/** Câu hỏi đích khi không có cờ. Không có danh sách: platform cố ý không có lệnh liệt kê. */
+export const TARGET_PROMPT = "App ViHAT (gõ vihat) hay tên miền xã: ";
+
 /**
- * Menu khi không có cờ đích: 1 = App ViHAT, rồi từng tên miền của tệp ánh xạ theo thứ tự trong tệp.
- * Mỗi dòng mang App ID, để người chọn đọc được mình sắp thay app nào.
+ * Câu trả lời cho `TARGET_PROMPT` → `{ shared_app, ten_mien }`. `vihat` (không phân biệt hoa thường,
+ * bỏ khoảng trắng hai đầu) là App ViHAT; còn lại phải là một tên miền trần. Ném lỗi thì hỏi lại.
  */
-export function buildMenu(bang, app_chung) {
-  const show = (app_id) => (app_id === null || laPlaceholder(app_id) ? "chưa có App ID" : app_id);
-  return [
-    { number: 1, label: `${SHARED_APP_NAME} (${show(app_chung)})`, shared_app: true, ten_mien: null },
-    ...Object.entries(bang).map(([ten, app_id], i) => ({
-      number: i + 2,
-      label: `app riêng xã ${ten} (${show(app_id)})`,
-      shared_app: false,
-      ten_mien: ten,
-    })),
-  ];
-}
-
-/** Dòng menu ứng với câu trả lời; ném lỗi nếu câu trả lời không phải một số trên menu. */
-export function pickMenuItem(menu, answer) {
+export function parseTargetAnswer(answer) {
   const t = String(answer ?? "").trim();
-  const item = /^\d+$/.test(t) ? menu.find((m) => m.number === Number(t)) : undefined;
-  if (item === undefined) throw new Error(`"${t}" không phải một lựa chọn. Gõ một số từ 1 đến ${menu.length}.`);
-  return item;
+  if (t === "") throw new Error("Chưa gõ gì. Gõ vihat cho App ViHAT, hoặc tên miền của xã (vd xa-a.vigov.vn).");
+  if (t.toLowerCase() === "vihat") return { shared_app: true, ten_mien: null };
+  return { shared_app: false, ten_mien: kiemTenMien(t) };
 }
 
-/** Câu từ chối khi không có cờ đích và không có người để hỏi — liệt kê đủ các cách chọn. */
-export function noTargetMessage(menu) {
-  const dong = menu.map((m) =>
-    m.shared_app ? `    --app=vihat                 ${m.label}` : `    --domain=${m.ten_mien}   ${m.label}`,
-  );
+/** Câu từ chối khi không có cờ đích và không có người để hỏi — đủ hai cách chọn. */
+export function noTargetMessage() {
   return [
     "Không đẩy: chưa chọn đích, và đây không phải một cửa sổ lệnh có người ngồi để chọn.",
     "  Script không bao giờ tự chọn đích, cũng không lấy đích từ citizen-app/.env. Chạy lại với một trong:",
-    ...dong,
-    "    --domain=<tên-miền>         app riêng của một xã chưa có trong tệp (kèm --app-id=<chữ số>)",
+    `    --app=vihat               ${SHARED_APP_NAME} (app chung)`,
+    "    --domain=<tên-miền>       app riêng của xã có tên miền ấy",
   ].join("\n");
 }
 
-/**
- * Chọn đích và App ID của nó. Trả `{ loai, ten_mien, app_id, app_id_source }`.
- *
- * | Tệp ánh xạ có App ID | `--app-id` | Kết quả |
- * |---|---|---|
- * | có | không | App ID của tệp |
- * | có | trùng | App ID của tệp |
- * | có | khác | DỪNG — một trong hai đã sai, và script không chọn hộ |
- * | không (null / `<…>` / tên miền chưa có dòng) | có | App ID của cờ |
- * | không | không | `app_id: null` — `deploy.mjs` hỏi, hoặc từ chối khi không có người để hỏi |
- *
- * App ID của cờ còn bị chặn khi nó là App ID của "phía bên kia": App ViHAT mang App ID của một xã
- * (đè app của xã), hoặc app riêng mang App ID của App ViHAT (đè app chung).
- */
-export function chonDich({ shared_app, ten_mien, app_id: given = null }, bang, app_chung) {
-  if (!shared_app && ten_mien === null) {
-    throw new Error("Chưa chọn đích: --app=vihat hoặc --domain=<tên-miền>.");
-  }
-  const loai = shared_app ? "app-chung" : "app-rieng";
-  const ten = shared_app ? null : ten_mien;
-  const name = targetName({ loai, ten_mien: ten });
-  const registry = shared_app ? app_chung : Object.hasOwn(bang, ten_mien) ? bang[ten_mien] : null;
-  const known = registry !== null && !laPlaceholder(registry) ? registry : null;
+/** `{ loai, ten_mien }` của đích đã chọn. Ném nếu chưa chọn — hàm không tự chọn. */
+export function targetOf({ shared_app, ten_mien }) {
+  if (!shared_app && ten_mien === null) throw new Error("Chưa chọn đích: --app=vihat hoặc --domain=<tên-miền>.");
+  return shared_app ? { loai: "app-chung", ten_mien: null } : { loai: "app-rieng", ten_mien };
+}
 
-  if (given !== null) {
-    if (known !== null && given !== known) {
+/** Truy vấn của tuyến App ID cho một đích: `app=vihat` hoặc `host=<tên-miền>`. */
+export function miniAppIdQuery(dich) {
+  return dich.loai === "app-chung" ? { app: "vihat" } : { host: dich.ten_mien };
+}
+
+/**
+ * KẾT QUẢ CỦA PLATFORM → APP ID CỦA ĐÍCH. `outcome` là thứ `lookupMiniAppId` trả:
+ * `{ kind: "http", status, body }` (body đã parse JSON, hoặc `null`) hoặc `{ kind: "network", reason }`.
+ *
+ * | Platform | `--app-id` | Kết quả |
+ * |---|---|---|
+ * | 200, `source` đúng loại đích | không | `{ kind: "verified", app_id }` |
+ * | 200, `source` đúng loại đích | trùng | như trên |
+ * | 200, `source` đúng loại đích | KHÁC | DỪNG — một trong hai đã sai, script không chọn hộ |
+ * | 200, `source` sai loại (App ViHAT ra `rieng`, xã ra `chung`) | bất kỳ | DỪNG — đẩy sẽ đè app phía bên kia |
+ * | 200 mà thân hỏng | bất kỳ | DỪNG |
+ * | 404 `mini_app_id_not_found` | bất kỳ | DỪNG — chỉ chỗ sửa ở platform-admin |
+ * | 409 | bất kỳ | DỪNG — platform có hơn một app sống cho đích, script không chọn |
+ * | 400 | bất kỳ | DỪNG |
+ * | lỗi mạng · 5xx · 429 · 404 không mang mã ấy (tuyến chưa có) | không | DỪNG (fail closed) |
+ * | như dòng trên | có | `{ kind: "unverified", app_id: --app-id, warning }` — deploy.mjs chỉ đi tiếp khi có người gõ "c" |
+ * | mã khác (401, 403, 3xx…) | bất kỳ | DỪNG |
+ *
+ * VÌ SAO 404 KHÔNG CHO `--app-id` ĐI QUA: platform đã TRẢ LỜI rằng đích không có App ID. Máy chủ đọc
+ * đúng bảng ấy để biết một App ID phục vụ xã nào, nên app đẩy lên bằng một App ID bảng không biết sẽ
+ * mở ra bị từ chối. Chỗ sửa là bảng, không phải cờ.
+ *
+ * VÌ SAO 404 KHÔNG MANG MÃ ẤY LẠI LÀ "KHÔNG TỚI ĐƯỢC": hợp đồng nói MỌI "không có" là một thân duy
+ * nhất. Một 404 khác là ingress chưa có tuyến (platform chưa bản mới) — platform không trả lời gì về đích.
+ */
+export function appIdFromPlatform(dich, outcome, given = null) {
+  const name = targetName(dich);
+  const fix = dich.loai === "app-chung" ? WHERE_TO_FIX["app-chung"] : WHERE_TO_FIX["app-rieng"](dich.ten_mien);
+  const code = outcome?.kind === "http" && typeof outcome.body?.code === "string" ? outcome.body.code : null;
+
+  const unreachable = (why) => {
+    if (given === null) {
       throw new Error(
-        `--app-id=${given} khác App ID của ${name} trong ${REGISTRY_FILE} (${known}).\n` +
-          "  Một trong hai đã sai. App ID thật đã đổi thì sửa tệp ấy (và dòng MiniApp ở service-platform), " +
-          "rồi commit; không thì bỏ --app-id.",
+        `Không đẩy: không hỏi được platform App ID của ${name} — ${why}.\n` +
+          "  Script không đoán App ID khi platform không trả lời (fail closed). Thử lại khi platform chạy.\n" +
+          "  Khẩn cấp, có người ngồi trước cửa sổ lệnh: thêm --app-id=<chữ số> (App ID ở platform-admin) —\n" +
+          "  script sẽ cảnh báo rằng App ID ấy CHƯA được đối chiếu và hỏi xác nhận. Không có người thì không có lối này.",
       );
     }
-    if (shared_app && Object.values(bang).includes(given)) {
-      throw new Error(`--app-id=${given} là App ID của app riêng một xã: đẩy ${SHARED_APP_NAME} lên đó sẽ đè app của xã.`);
-    }
-    if (!shared_app && app_chung !== null && given === app_chung) {
-      throw new Error(`--app-id=${given} là App ID của ${SHARED_APP_NAME}: đẩy app riêng của xã lên đó sẽ đè app chung.`);
-    }
-  }
-  const app_id = known ?? given;
-  return {
-    loai,
-    ten_mien: ten,
-    app_id,
-    app_id_source: known !== null ? "registry" : given !== null ? "flag" : null,
+    return {
+      kind: "unverified",
+      app_id: given,
+      warning:
+        `⚠ ⚠ App ID ${given} của ${name} KHÔNG được đối chiếu với platform (${why}).\n` +
+        "  Nếu nó sai, bản dựng đè lên app của người khác, hoặc lên một App ID máy chủ không biết — app mở ra bị từ chối.\n" +
+        "  Chỉ đi tiếp nếu bạn đã tự mở platform-admin và thấy đúng App ID này cho đích này.",
+    };
   };
+
+  if (outcome?.kind === "network") return unreachable(`không kết nối được (${outcome.reason})`);
+  if (outcome?.kind !== "http") throw new Error("Kết quả tra App ID không đọc được.");
+  const { status, body } = outcome;
+
+  if (status === 200) {
+    const app_id = body?.app_id;
+    const source = body?.source;
+    if (!isAppId(app_id) || (source !== "chung" && source !== "rieng")) {
+      throw new Error(
+        `Không đẩy: platform trả 200 nhưng thân không đúng hợp đồng {"app_id":"<chữ số>","source":"chung"|"rieng"}.`,
+      );
+    }
+    const expected = dich.loai === "app-chung" ? "chung" : "rieng";
+    if (source !== expected) {
+      throw new Error(
+        dich.loai === "app-chung"
+          ? `Không đẩy: platform nói App ID ${app_id} là app RIÊNG của một xã, không phải ${SHARED_APP_NAME} — đẩy lên đó sẽ đè app của xã.\n  Sửa ở: ${fix}.`
+          : `Không đẩy: platform nói App ID ${app_id} của ${dich.ten_mien} là app CHUNG — đẩy app riêng lên đó sẽ đè ${SHARED_APP_NAME}.\n  Sửa ở: ${fix}.`,
+      );
+    }
+    if (given !== null && given !== app_id) {
+      throw new Error(
+        `Không đẩy: --app-id=${given} khác App ID platform trả cho ${name} (${app_id}).\n` +
+          "  Một trong hai đã sai. Platform là nguồn sự thật: bỏ --app-id, hoặc sửa App ID ở platform-admin nếu chính nó sai.",
+      );
+    }
+    return { kind: "verified", app_id };
+  }
+  if (status === 404 && code === "mini_app_id_not_found") {
+    throw new Error(
+      `Không đẩy: platform chưa có App ID nào đang dùng cho ${name}.\n` +
+        `  Sửa ở: ${fix}, rồi chạy lại. --app-id không thay được bước này: máy chủ đọc chính bảng ấy để mở app.`,
+    );
+  }
+  if (status === 409) {
+    throw new Error(
+      `Không đẩy: platform trả 409${code ? ` (${code})` : ""} — có hơn một app đang sống cho ${name}.\n` +
+        `  Script không chọn hộ. Tắt app thừa ở platform-admin (${fix.replace(/^platform-admin → /, "")}), rồi chạy lại.`,
+    );
+  }
+  if (status === 400) {
+    throw new Error(`Không đẩy: platform từ chối truy vấn (400${code ? ` ${code}` : ""}). Kiểm lại tên miền của đích.`);
+  }
+  if (status === 404) return unreachable("platform chưa có tuyến tra App ID (404 không mang mã mini_app_id_not_found)");
+  if (status === 429) return unreachable("platform đang giới hạn tần suất (429)");
+  if (status >= 500) return unreachable(`platform lỗi (${status})`);
+  throw new Error(`Không đẩy: platform trả ${status}${code ? ` (${code})` : ""} cho tuyến tra App ID — không đúng hợp đồng.`);
 }
 
-/** Câu hỏi App ID khi đích chưa có. */
-export function appIdPrompt(dich) {
-  return `Nhập App ID của ${targetName(dich)} (${WHERE_APP_ID}): `;
-}
+/** Câu hỏi xác nhận khi App ID chưa đối chiếu được. Chỉ "c" là đi tiếp. */
+export const UNVERIFIED_CONFIRM_PROMPT = "Vẫn đẩy với App ID CHƯA đối chiếu này? (c/k) ";
 
-/** App ID người dùng gõ: bỏ khoảng trắng hai đầu, phải chỉ gồm chữ số. */
-export function checkAppIdInput(text) {
-  const t = String(text ?? "").trim();
-  if (!isAppId(t)) throw new Error(`"${t}" không phải App ID: chỉ gồm chữ số (${WHERE_APP_ID}).`);
-  return t;
-}
-
-/** Câu từ chối khi đích chưa có App ID và không có người để hỏi. */
-export function missingAppIdMessage(dich) {
+/** Câu từ chối khi App ID chưa đối chiếu được và không có người để xác nhận. */
+export function unverifiedRefusal(dich) {
   return (
-    `Không đẩy: App ID của ${targetName(dich)} chưa có trong ${REGISTRY_FILE}, và đây không phải một ` +
-    "cửa sổ lệnh có người ngồi để nhập.\n" +
-    `  Chạy lại với --app-id=<chữ số> (${WHERE_APP_ID}), hoặc ghi App ID vào tệp ấy rồi commit.`
+    `Không đẩy: App ID của ${targetName(dich)} chưa đối chiếu được với platform, và đây không phải một ` +
+    "cửa sổ lệnh có người ngồi để xác nhận. --app-id chỉ là lối khẩn cấp có người gõ \"c\"; Jenkins và mọi " +
+    "lần chạy không người phải đợi platform trả lời."
   );
-}
-
-/** Lời nhắc sau khi script vừa ghi App ID vào tệp ánh xạ. */
-export function savedRegistryNote(dich) {
-  const dong = [
-    `Đã ghi App ID của ${targetName(dich)} vào ${REGISTRY_FILE}. Tệp ấy PHẢI được commit —`,
-    "  kèm cặp ghim trong scripts/dich-den.test.mjs (ca \"chỉ có App ID chủ dự án đã giao\" sẽ đỏ tới khi sửa).",
-  ];
-  if (dich.loai === "app-rieng") {
-    dong.push("  Và thêm dòng MiniApp tương ứng ở service-platform: máy chủ đọc xã của một App ID ở đó (ADR 0047).");
-  }
-  return dong.join("\n");
-}
-
-/**
- * Văn bản mới của tệp ánh xạ sau khi ghi `app_id` cho đích. Sửa TỐI THIỂU: đúng một dòng
- * (`APP_ID_APP_CHUNG`, hoặc dòng của tên miền trong `APP_ID_THEO_TEN_MIEN`), hoặc thêm một dòng cuối
- * bảng ấy khi tên miền chưa có. Không đụng `COMMUNE_TERMS_BY_DOMAIN` — bảng ấy cũng khoá bằng tên miền,
- * nên chỉ tìm TRONG khối `APP_ID_THEO_TEN_MIEN`. Không tìm thấy hình dạng mong đợi thì ném lỗi, không đoán.
- */
-export function updateRegistryText(text, dich, app_id) {
-  if (!isAppId(app_id)) throw new Error(`"${app_id}" không phải App ID: chỉ gồm chữ số.`);
-  if (dich.loai === "app-chung") {
-    const re = /^export const APP_ID_APP_CHUNG = (?:null|"[^"\n]*");$/m;
-    if (!re.test(text)) throw new Error(`Không tìm thấy dòng \`export const APP_ID_APP_CHUNG = …;\` trong ${REGISTRY_FILE}.`);
-    return text.replace(re, () => `export const APP_ID_APP_CHUNG = "${app_id}";`);
-  }
-  const ten = kiemTenMien(dich.ten_mien);
-  const block = /^(export const APP_ID_THEO_TEN_MIEN = \{\r?\n)([\s\S]*?)(^\};)/m.exec(text);
-  if (block === null) throw new Error(`Không tìm thấy khối \`export const APP_ID_THEO_TEN_MIEN = { … };\` trong ${REGISTRY_FILE}.`);
-  const [whole, open, body, close] = block;
-  const escaped = ten.replace(/[.]/g, "\\.");
-  const line = new RegExp(`^(\\s*)"${escaped}"\\s*:\\s*"[^"\\n]*"(,?)`, "m");
-  const eol = open.endsWith("\r\n") ? "\r\n" : "\n";
-  const new_body = line.test(body)
-    ? body.replace(line, (_m, indent, comma) => `${indent}"${ten}": "${app_id}"${comma}`)
-    : `${body}  "${ten}": "${app_id}",${eol}`;
-  return text.slice(0, block.index) + open + new_body + close + text.slice(block.index + whole.length);
 }
 
 /** Claim `appId` trong payload JWT của `ZMP_TOKEN`, hoặc `null` nếu không đọc được. */
@@ -357,14 +365,14 @@ export function appIdTrongToken(token) {
  * | đích chưa có App ID | TỪ CHỐI — không biết token phải thuộc app nào |
  * | không có token trong môi trường | TỪ CHỐI — `.env` của máy là token của app đăng nhập lần cuối |
  * | token không đọc được claim | TỪ CHỐI |
- * | claim ≠ App ID đích | TỪ CHỐI (App ViHAT mà claim là App ID của một xã: nói rõ sẽ đè app của xã) |
+ * | claim ≠ App ID đích | TỪ CHỐI |
  * | claim == App ID đích | QUA |
  *
  * `deploy.mjs` đọc mọi lần TỪ CHỐI (trừ dòng đầu, đã chặn trước đó) là "cần đăng nhập cho đúng App ID"
  * khi có người ngồi trước cửa sổ lệnh.
  */
-export function kiemToken(dich, token, bang) {
-  if (dich.app_id === null || laPlaceholder(dich.app_id)) {
+export function kiemToken(dich, token) {
+  if (!isAppId(dich.app_id)) {
     return { ok: false, ly_do: `App ID của ${targetName(dich)} chưa có — không biết token phải thuộc app nào.` };
   }
   if (typeof token !== "string" || token === "") {
@@ -378,12 +386,6 @@ export function kiemToken(dich, token, bang) {
   const claim = appIdTrongToken(token);
   if (claim === null) return { ok: false, ly_do: "ZMP_TOKEN không đọc được claim appId — không biết nó đẩy đi đâu." };
   if (claim !== dich.app_id) {
-    if (dich.loai === "app-chung" && Object.values(bang).includes(claim)) {
-      return {
-        ok: false,
-        ly_do: `ZMP_TOKEN là token của App ID ${claim} — app RIÊNG của một xã, không phải ${SHARED_APP_NAME} ${dich.app_id}.`,
-      };
-    }
     return { ok: false, ly_do: `ZMP_TOKEN là token của App ID ${claim}, không phải ${dich.app_id}.` };
   }
   return { ok: true, ly_do: `thuộc đúng App ID ${claim}.` };
@@ -419,11 +421,7 @@ export function appConfigChoLanDay(noi_dung, own_app) {
  */
 export function nhanPhienBan({ dich, sha, luc, dirty }) {
   const noi =
-    dich.loai === "app-rieng"
-      ? `${dich.ten_mien} · app ${dich.app_id}`
-      : dich.app_id === null
-        ? "app-vihat"
-        : `app-vihat · app ${dich.app_id}`;
+    dich.loai === "app-rieng" ? `${dich.ten_mien} · app ${dich.app_id}` : `app-vihat · app ${dich.app_id}`;
   return `${noi} · ${sha} · ${luc}${dirty ? " · dirty" : ""}`;
 }
 
@@ -432,9 +430,24 @@ export function nhanPhienBan({ dich, sha, luc, dirty }) {
  * nào, App ID nào và lấy từ đâu, tên miền có vào bundle không, token từ đâu và có qua không, bản thử
  * nghiệm hay phát hành, nhãn nào hiện trong console Zalo, máy chủ nào nung vào bundle.
  */
-export function planLines({ dich, kiem_token, token_source, phat_hanh, api_host, mota, logo = null, banner = null }) {
+export function planLines({
+  dich,
+  kiem_token,
+  token_source,
+  phat_hanh,
+  api_host,
+  platform_host,
+  mota,
+  logo = null,
+  banner = null,
+}) {
   const own = dich.loai === "app-rieng";
-  const source = { registry: "tệp ánh xạ", flag: "--app-id", typed: "vừa nhập" }[dich.app_id_source] ?? "?";
+  const source =
+    dich.app_id_source === "platform"
+      ? `platform ${platform_host}`
+      : dich.app_id_source === "unverified"
+        ? "--app-id, CHƯA ĐỐI CHIẾU platform"
+        : "?";
   const lines = [
     own ? `  Đích     : APP RIÊNG của xã ${dich.ten_mien}` : `  Đích     : ${SHARED_APP_NAME} (app chung)`,
     `  App ID   : ${dich.app_id}  (${source})`,

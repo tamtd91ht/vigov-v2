@@ -6,7 +6,7 @@
 # phải sửa tệp này: khai route trong Go, chạy `make kb`. Quên sinh lại thì
 # `go test ./tools/ingress` ĐỎ.
 #
-#     239 tuyến của 7 dịch vụ — petitions 71 · identity 62 · comms 48 · finance 36 · documents 13 · platform 7 · reporting 2
+#     240 tuyến của 7 dịch vụ — petitions 71 · identity 62 · comms 48 · finance 36 · documents 13 · platform 8 · reporting 2
 #
 # MÔ HÌNH TÊN MIỀN — chủ dự án chốt 26/09/2026:
 #   <xã>.vigov.vn          → web-admin, chỉ một luật `/`. Web tự chuyển tiếp /api/v1/* tới
@@ -18,7 +18,7 @@
 # HOST và TLS của từng môi trường do overlay vá vào (deploy/overlays/<mt>/ingress-moi-truong.yaml,
 # CŨNG SINH RA bởi bộ sinh này). Base mang host của prod.
 #
-# 1 host web + 6 host dịch vụ.
+# 1 host web + 7 host dịch vụ.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -133,6 +133,19 @@ spec:
             backend:
               service:
                 name: petitions
+                port: { name: rest }
+    #
+    # platform — CHỈ 1 đường dẫn công khai, khớp ĐÚNG (Exact), không `/`: cổng REST của
+    # dịch vụ này còn phục vụ miền vận hành (ADR 0048), nên chỉ tuyến được chủ dự án mở mới
+    # ra internet — danh sách ở pathScopedPublicRoutes (tools/ingress/sinh.go).
+    - host: "platform.api.vigov.vn"
+      http:
+        paths:
+          - path: /api/v1/mini-app-ids
+            pathType: Exact
+            backend:
+              service:
+                name: platform
                 port: { name: rest }
     #
     # reporting — 1 tài nguyên: /api/v1/reporting-system-messages

@@ -55,12 +55,57 @@ var servicesWithoutAPIHost = map[string]string{
 	"platform": "REST port shared with the operator realm (ADR 0048 #6(c)); staff-only commune routes (ADR 0069)",
 }
 
+// pathScopedPublicRoutes are the ONLY paths of a servicesWithoutAPIHost service that reach the
+// internet: each one gets a `pathType: Exact` rule on `<service>.<api_suffix>` — never `/`, never a
+// Prefix — so nothing else of that pod's REST port (the operator realm above all) is routable through
+// it, and the Host the pod sees is the API host, never OPERATOR_HOST. The value is the decision.
+//
+// A HAND LIST ON PURPOSE, checked against the contract (checkPathScopedPublicRoutes): the path must
+// exist, belong to that service, and be authz.Public on every method. Adding a line exposes a route of
+// the operator pod to the internet — an owner decision first, then here.
+var pathScopedPublicRoutes = map[string]map[string]string{
+	"platform": {
+		"/api/v1/mini-app-ids": "owner chose option A, 06/10/2026: the Mini App deploy script reads App IDs from platform's mini_app registry; public read approved by the owner",
+	},
+}
+
+// checkPathScopedPublicRoutes refuses the run when an allow-listed path is missing from the contract,
+// owned by another service, or not public on every method — an Exact rule to a staff route would put
+// it on the internet on a host no web session reaches.
+func checkPathScopedPublicRoutes(routes []tuyenHopDong) error {
+	byPath := map[string]tuyenHopDong{}
+	for _, r := range routes {
+		byPath[r.Duong] = r
+	}
+	for svc, paths := range pathScopedPublicRoutes {
+		if _, ok := servicesWithoutAPIHost[svc]; !ok {
+			return fmt.Errorf("pathScopedPublicRoutes: %s đã có host `/` — tuyến theo đường dẫn chỉ dành cho dịch vụ trong servicesWithoutAPIHost", svc)
+		}
+		for p := range paths {
+			r, ok := byPath[p]
+			switch {
+			case !ok:
+				return fmt.Errorf("pathScopedPublicRoutes: %s không có trong %s — xoá dòng hoặc khai route", p, duongHopDong)
+			case r.DichVu != svc:
+				return fmt.Errorf("pathScopedPublicRoutes: %s thuộc %s, không thuộc %s", p, r.DichVu, svc)
+			case !r.Public:
+				return fmt.Errorf("pathScopedPublicRoutes: %s không phải authz.Public trên mọi phương thức — không mở ra internet", p)
+			}
+		}
+	}
+	return nil
+}
+
 // hostDichVu is one per-service host rule: the service, its REST port name, and the resource
 // prefixes it owns (rendered as a comment only — the host rule itself routes `/`).
+//
+// Exact is set only for a servicesWithoutAPIHost service with pathScopedPublicRoutes: the host then
+// routes exactly those paths and nothing else.
 type hostDichVu struct {
 	DichVu string
 	Cong   string
 	TienTo []string
+	Exact  []string
 }
 
 // cacHostDichVu derives the per-service host rules from the SAME resolved rule list the admin
@@ -76,8 +121,17 @@ func cacHostDichVu(luats []luatIngress) ([]hostDichVu, error) {
 		if l.BatHet {
 			continue
 		}
-		if _, skip := servicesWithoutAPIHost[l.DichVu]; skip {
-			continue
+		_, pathScopedOnly := servicesWithoutAPIHost[l.DichVu]
+		var exact []string
+		if pathScopedOnly {
+			for _, p := range l.Phu {
+				if _, ok := pathScopedPublicRoutes[l.DichVu][p]; ok {
+					exact = append(exact, p)
+				}
+			}
+			if len(exact) == 0 {
+				continue
+			}
 		}
 		if !nhanDNS.MatchString(l.DichVu) {
 			return nil, fmt.Errorf("dịch vụ %q không phải một nhãn DNS — không dựng được host %s.<api_suffix>", l.DichVu, l.DichVu)
@@ -96,6 +150,11 @@ func cacHostDichVu(luats []luatIngress) ([]hostDichVu, error) {
 		if h.Cong != l.Cong {
 			return nil, fmt.Errorf("dịch vụ %s có hai tên cổng (%s và %s)", l.DichVu, h.Cong, l.Cong)
 		}
+		if pathScopedOnly {
+			h.TienTo = append(h.TienTo, exact...)
+			h.Exact = append(h.Exact, exact...)
+			continue
+		}
 		h.TienTo = append(h.TienTo, l.Duong)
 	}
 	if len(theoTen) == 0 {
@@ -104,6 +163,7 @@ func cacHostDichVu(luats []luatIngress) ([]hostDichVu, error) {
 	ra := make([]hostDichVu, 0, len(theoTen))
 	for _, h := range theoTen {
 		sort.Strings(h.TienTo)
+		sort.Strings(h.Exact)
 		ra = append(ra, *h)
 	}
 	sort.Slice(ra, func(i, j int) bool { return ra[i].DichVu < ra[j].DichVu })
@@ -205,6 +265,18 @@ func sinhYAML(tuyens []tuyenHopDong, luats []luatIngress, base moiTruong) ([]byt
 	viet1Path(&b, web.DichVu, web.Cong)
 	for _, h := range hosts {
 		b.WriteString("    #\n")
+		if len(h.Exact) > 0 {
+			b.WriteString(fmt.Sprintf("    # %s — CHỈ %d đường dẫn công khai, khớp ĐÚNG (Exact), không `/`: cổng REST của\n", h.DichVu, len(h.Exact)))
+			b.WriteString("    # dịch vụ này còn phục vụ miền vận hành (ADR 0048), nên chỉ tuyến được chủ dự án mở mới\n")
+			b.WriteString("    # ra internet — danh sách ở pathScopedPublicRoutes (tools/ingress/sinh.go).\n")
+			b.WriteString(fmt.Sprintf("    - host: %q\n", h.DichVu+"."+duoi))
+			b.WriteString("      http:\n")
+			b.WriteString("        paths:\n")
+			for _, p := range h.Exact {
+				writePath(&b, p, "Exact", h.DichVu, h.Cong)
+			}
+			continue
+		}
 		for _, dong := range ghiChuPhu(fmt.Sprintf("%s — %d tài nguyên:", h.DichVu, len(h.TienTo)), h.TienTo) {
 			b.WriteString("    # " + dong + "\n")
 		}
@@ -217,8 +289,12 @@ func sinhYAML(tuyens []tuyenHopDong, luats []luatIngress, base moiTruong) ([]byt
 }
 
 func viet1Path(b *strings.Builder, dichVu, cong string) {
-	b.WriteString("          - path: /\n")
-	b.WriteString("            pathType: Prefix\n")
+	writePath(b, "/", "Prefix", dichVu, cong)
+}
+
+func writePath(b *strings.Builder, path, pathType, dichVu, cong string) {
+	b.WriteString("          - path: " + path + "\n")
+	b.WriteString("            pathType: " + pathType + "\n")
 	b.WriteString("            backend:\n")
 	b.WriteString("              service:\n")
 	b.WriteString("                name: " + dichVu + "\n")

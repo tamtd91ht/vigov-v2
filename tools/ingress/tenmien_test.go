@@ -162,12 +162,29 @@ func TestMoiTuyenHopDongCoDungMotLuatIngress(t *testing.T) {
 				khop = append(khop, i)
 			}
 		}
-		// A service with no public host by decision (servicesWithoutAPIHost) must have ZERO rules — its
-		// commune routes travel only through web-admin's in-cluster gateway (dinh-tuyen.gen.ts).
+		// A service with no `/` host by decision (servicesWithoutAPIHost): its commune routes travel only
+		// through web-admin's in-cluster gateway (dinh-tuyen.gen.ts). Its host, if any, carries ONLY the
+		// pathScopedPublicRoutes as Exact rules — an allow-listed path has exactly one, every other path
+		// none, and no rule of that host is a Prefix that could cover it.
 		if _, none := servicesWithoutAPIHost[tuyen.DichVu]; none {
-			if len(khop) != 0 {
-				t.Errorf("tuyến %s (%s): %d quy tắc host công khai, mong 0 — %s", tuyen.Duong, tuyen.DichVu,
-					len(khop), servicesWithoutAPIHost[tuyen.DichVu])
+			_, allowed := pathScopedPublicRoutes[tuyen.DichVu][tuyen.Duong]
+			exact := 0
+			for _, i := range khop {
+				for _, p := range rules[i].HTTP.Paths {
+					if p.PathType != "Exact" {
+						t.Errorf("host %s: luật %s %s — host chỉ theo đường dẫn chỉ được có Exact", rules[i].Host, p.PathType, p.Path)
+					}
+					if p.Path == tuyen.Duong {
+						exact++
+					}
+				}
+			}
+			if allowed && (len(khop) != 1 || exact != 1) {
+				t.Errorf("tuyến %s (%s): %d host · %d luật Exact, mong 1 · 1", tuyen.Duong, tuyen.DichVu, len(khop), exact)
+			}
+			if !allowed && exact != 0 {
+				t.Errorf("tuyến %s (%s) ra internet mà không nằm trong pathScopedPublicRoutes — %s",
+					tuyen.Duong, tuyen.DichVu, servicesWithoutAPIHost[tuyen.DichVu])
 			}
 			continue
 		}

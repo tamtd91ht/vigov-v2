@@ -310,14 +310,12 @@ describe("bản đẩy lên Zalo — một bundle, đúng bằng thứ người 
     expect(ban, "APP_ID của môi trường dựng lọt vào bundle").not.toContain(APP_ID_GIA);
     expect(ban, "ZMP_TOKEN của môi trường dựng lọt vào bundle").not.toContain(ZMP_TOKEN_GIA);
 
-    // Khoá và giá trị của tệp ánh xạ, đọc từ chính tệp (`?raw`), không gõ lại.
-    const trong_tep = [...tenMienRaw.matchAll(/^\s*"([^"]+)"\s*:\s*"([^"]+)"/gm)].flatMap((m) => [
-      m[1]!,
-      m[2]!,
-    ]);
+    // Tên miền xã (khoá có nháy) của tệp, đọc từ chính tệp (`?raw`), không gõ lại. App ID không còn ở
+    // tệp ấy từ 06/10/2026 (platform `mini_app` là nguồn duy nhất), nên chỉ còn khoá để đo.
+    const trong_tep = [...tenMienRaw.matchAll(/^\s*"([^"]+)"\s*:/gm)].map((m) => m[1]!);
     expect(trong_tep.length, "không đọc được dòng nào của tệp ánh xạ — ca này sẽ xanh vì rỗng").toBeGreaterThan(0);
     for (const chuoi of trong_tep) {
-      expect(ban, `bundle mang "${chuoi}" của tệp ánh xạ tên miền → App ID`).not.toContain(chuoi);
+      expect(ban, `bundle mang tên miền xã "${chuoi}" của scripts/ung-dung-theo-ten-mien.mjs`).not.toContain(chuoi);
     }
   });
 

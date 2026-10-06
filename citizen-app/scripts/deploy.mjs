@@ -5,16 +5,20 @@
  * ```
  * node scripts/deploy.mjs --app=vihat                     App ViHAT (app chung), bản thử nghiệm (-t)
  * node scripts/deploy.mjs --domain=<tên-miền-xã>          APP RIÊNG của xã ấy, mở thẳng vào xã, bản thử nghiệm
- * node scripts/deploy.mjs                                 MENU chọn đích (chỉ khi có người ngồi trước cửa sổ lệnh)
+ * node scripts/deploy.mjs                                 HỎI "vihat hay tên miền xã" (chỉ khi có người ngồi trước cửa sổ lệnh)
  * node scripts/deploy.mjs … --phat-hanh                   BẢN PHÁT HÀNH (bỏ -t)
- * node scripts/deploy.mjs … --app-id=<chữ số>             App ID của đích, khi tệp ánh xạ chưa có (có thì phải trùng)
- * node scripts/deploy.mjs … --thu                         IN RA rồi DỪNG, không dựng, không đẩy
+ * node scripts/deploy.mjs … --app-id=<chữ số>             đối chiếu: phải TRÙNG App ID platform trả; platform không
+ *                                                         trả lời thì là lối khẩn cấp, chỉ khi có người gõ "c"
+ * node scripts/deploy.mjs … --thu                         IN RA rồi DỪNG, không dựng, không đẩy (vẫn hỏi platform App ID)
  * ```
+ *
+ * APP ID CỦA ĐÍCH ĐỌC TỪ PLATFORM (`GET /api/v1/mini-app-ids`, bảng `mini_app`; chủ dự án 06/10/2026):
+ * xem đầu `dich-den.mjs`. Platform không trả lời thì DỪNG — không bao giờ đoán App ID.
  *
  * HAI ĐÍCH (chủ dự án 06/10/2026; ADR 0047): `--app=vihat` đẩy lên App ViHAT, bundle chung, KHÔNG nung
  * xã nào (ADR 0044). `--domain=<x>` đẩy lên App ID riêng của xã `<x>` và LUÔN nung `<x>` vào bundle —
  * app mở thẳng vào xã (ADR 0047 §6; cờ `--vao-thang` cũ, nay đã bỏ và bị từ chối). Không cờ nào: hỏi
- * bằng menu, hoặc TỪ CHỐI khi không có người để hỏi. KHÔNG BAO GIỜ một đích mặc định: trước 06/10/2026
+ * "vihat hay tên miền xã", hoặc TỪ CHỐI khi không có người để hỏi. KHÔNG BAO GIỜ một đích mặc định: trước 06/10/2026
  * "không cờ" nghĩa là app mà `ZMP_TOKEN` trong `citizen-app/.env` thuộc về — app người ấy đăng nhập lần
  * cuối trên máy ấy.
  *
@@ -68,32 +72,31 @@ import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
 
 import { BIEN_XA_CO_DINH, docCauHinh } from "./cau-hinh.mjs";
+import { VIGOV_PLATFORM_API_HOST } from "./deploy-config.mjs";
 import {
   appConfigChoLanDay,
-  appIdPrompt,
-  buildMenu,
-  checkAppIdInput,
-  chonDich,
+  appIdFromPlatform,
+  checkPlatformApiHost,
   docCo,
   hasTarget,
-  kiemBangAnhXa,
   kiemToken,
-  missingAppIdMessage,
+  miniAppIdQuery,
   nhanPhienBan,
   noTargetMessage,
-  pickMenuItem,
+  parseTargetAnswer,
   planLines,
-  savedRegistryNote,
+  TARGET_PROMPT,
   targetName,
+  targetOf,
   tokenTrongTepEnv,
-  updateRegistryText,
+  UNVERIFIED_CONFIRM_PROMPT,
+  unverifiedRefusal,
 } from "./dich-den.mjs";
 import { dung } from "./dung.mjs";
-import { APP_ID_APP_CHUNG, APP_ID_THEO_TEN_MIEN } from "./ung-dung-theo-ten-mien.mjs";
+import { lookupMiniAppId } from "./mini-app-id-lookup.mjs";
 
 const ZMP = "zmp-cli@4.0.3";
 const GIAY_CHO = 5;
-const REGISTRY_URL = new URL("./ung-dung-theo-ten-mien.mjs", import.meta.url);
 
 function git(...args) {
   const r = spawnSync("git", args, { encoding: "utf8" });
@@ -183,12 +186,11 @@ ${typeof loi === "string" ? loi : loi.message}
 // mọi chỗ lẽ ra hỏi thành TỪ CHỐI kèm cờ phải truyền.
 const interactive = Boolean(process.stdin.isTTY);
 
-let bang = APP_ID_THEO_TEN_MIEN;
-let app_chung = APP_ID_APP_CHUNG;
 let co;
+let platform_host;
 try {
-  kiemBangAnhXa(bang, app_chung);
   co = docCo(process.argv.slice(2));
+  platform_host = checkPlatformApiHost(VIGOV_PLATFORM_API_HOST);
 } catch (loi) {
   dungLai(loi);
 }
@@ -228,56 +230,32 @@ if (api_host === "" && !chi_thu) {
   process.exit(2);
 }
 
-// 1. ĐÍCH. Cờ, hoặc menu. Không cờ và không ai để hỏi thì TỪ CHỐI — không bao giờ một đích mặc định.
+// 1. ĐÍCH. Cờ, hoặc hỏi. Không cờ và không ai để hỏi thì TỪ CHỐI — không bao giờ một đích mặc định.
+// Không có menu các xã: platform cố ý không có lệnh liệt kê.
 let target = co;
 if (!hasTarget(co)) {
-  const menu = buildMenu(bang, app_chung);
-  if (!interactive) dungLai(noTargetMessage(menu));
-  console.log("\nĐẩy lên app nào?");
-  for (const m of menu) console.log(`  ${m.number}. ${m.label}`);
-  const item = await askUntil(`Chọn số (1–${menu.length}): `, (t) => pickMenuItem(menu, t));
-  target = { ...co, shared_app: item.shared_app, ten_mien: item.ten_mien };
+  if (!interactive) dungLai(noTargetMessage());
+  const chosen = await askUntil(`\nĐẩy lên app nào? ${TARGET_PROMPT}`, parseTargetAnswer);
+  target = { ...co, ...chosen };
 }
 
-// 2. APP ID CỦA ĐÍCH. Tệp ánh xạ, `--app-id`, hoặc hỏi. Không có và không ai để hỏi thì TỪ CHỐI.
+// 2. APP ID CỦA ĐÍCH — PLATFORM TRẢ (bảng `mini_app`). `--app-id` chỉ đối chiếu; platform không trả lời
+// thì nó là lối khẩn cấp có người gõ "c", không người thì TỪ CHỐI. `--thu` cũng hỏi: tuyến chỉ đọc, và
+// kế hoạch phải in App ID thật.
 let dich;
 try {
-  dich = chonDich(target, bang, app_chung);
+  const base = targetOf(target);
+  const outcome = await lookupMiniAppId(platform_host, miniAppIdQuery(base));
+  const r = appIdFromPlatform(base, outcome, co.app_id);
+  if (r.kind === "unverified") {
+    console.error(`\n${r.warning}\n`);
+    if (!interactive) dungLai(unverifiedRefusal(base));
+    const answer = await ask(UNVERIFIED_CONFIRM_PROMPT);
+    if (answer.trim().toLowerCase() !== "c") dungLai("Không đẩy: chưa xác nhận App ID chưa đối chiếu.");
+  }
+  dich = { ...base, app_id: r.app_id, app_id_source: r.kind === "verified" ? "platform" : "unverified" };
 } catch (loi) {
   dungLai(loi);
-}
-if (dich.app_id === null) {
-  if (!interactive) dungLai(missingAppIdMessage(dich));
-  const typed = await askUntil(appIdPrompt(dich), checkAppIdInput);
-  try {
-    // Qua `chonDich` lần nữa: App ID vừa gõ chịu đúng các phép chặn của `--app-id`.
-    dich = { ...chonDich({ ...target, app_id: typed }, bang, app_chung), app_id_source: "typed" };
-  } catch (loi) {
-    dungLai(loi);
-  }
-  if (chi_thu) {
-    console.log("  (--thu: không lưu vào tệp ánh xạ; lần chạy thật sẽ hỏi có lưu không.)");
-  } else {
-    const save = await ask("Lưu vào scripts/ung-dung-theo-ten-mien.mjs? (c/k) ");
-    if (save.trim().toLowerCase() === "c") {
-      const before = readFileSync(REGISTRY_URL, "utf8");
-      try {
-        writeFileSync(REGISTRY_URL, updateRegistryText(before, dich, dich.app_id), "utf8");
-        // Nạp lại và kiểm lại như lúc khởi động: một lần ghi làm hỏng tệp phải bị bắt ở đây, không
-        // phải ở lần đẩy kế tiếp của người khác.
-        const mod = await import(`${REGISTRY_URL.href}?t=${Date.now()}`);
-        kiemBangAnhXa(mod.APP_ID_THEO_TEN_MIEN, mod.APP_ID_APP_CHUNG);
-        const reread = chonDich({ ...target, app_id: null }, mod.APP_ID_THEO_TEN_MIEN, mod.APP_ID_APP_CHUNG);
-        if (reread.app_id !== dich.app_id) throw new Error("đọc lại tệp không ra App ID vừa ghi.");
-        bang = mod.APP_ID_THEO_TEN_MIEN;
-        app_chung = mod.APP_ID_APP_CHUNG;
-      } catch (loi) {
-        writeFileSync(REGISTRY_URL, before, "utf8");
-        dungLai(`Không lưu được vào scripts/ung-dung-theo-ten-mien.mjs (tệp đã trả về như cũ): ${loi.message}`);
-      }
-      console.log(`\n${savedRegistryNote(dich)}\n`);
-    }
-  }
 }
 
 // 3. TOKEN. Từ môi trường; claim `appId` phải bằng App ID đích. Không đúng thì đăng nhập cho ĐÚNG App
@@ -285,7 +263,7 @@ if (dich.app_id === null) {
 // (xem `zmp()`). `citizen-app/.env` không bao giờ là nguồn token, với bất kỳ đích nào.
 let token = process.env.ZMP_TOKEN || undefined;
 let token_source = "ZMP_TOKEN của môi trường";
-let kiem_token = kiemToken(dich, token, bang);
+let kiem_token = kiemToken(dich, token);
 if (!kiem_token.ok && interactive) {
   if (chi_thu) {
     token_source = `lần chạy thật sẽ đăng nhập Zalo (quét QR) cho App ID ${dich.app_id}, vì ZMP_TOKEN của môi trường`;
@@ -294,7 +272,7 @@ if (!kiem_token.ok && interactive) {
     token = dangNhapRieng(dich.app_id) ?? undefined;
     if (token === undefined) dungLai("Không đẩy: đăng nhập Zalo không thành công, không có token nào được ghi ra.");
     token_source = "đăng nhập Zalo vừa xong (thư mục tạm, đã xoá)";
-    kiem_token = kiemToken(dich, token, bang);
+    kiem_token = kiemToken(dich, token);
   }
 }
 
@@ -346,6 +324,7 @@ for (const dong of planLines({
   token_source,
   phat_hanh,
   api_host,
+  platform_host,
   mota,
   logo: co_logo ? `scripts/logo-xa/${dich.ten_mien}.png` : null,
   banner: has_banner ? `scripts/banner-xa/${dich.ten_mien}.png` : null,

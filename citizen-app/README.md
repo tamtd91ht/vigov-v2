@@ -648,10 +648,10 @@ npm ci                                              # máy mới: cài đúng pa
 npm run zmp:deploy -- --app=vihat --thu             # in kế hoạch rồi dừng — chạy trước mọi lần đẩy thật
 npm run zmp:deploy -- --app=vihat                   # App ViHAT (app chung), bản thử nghiệm (-t)
 npm run zmp:deploy -- --domain=<tên-miền-xã>        # APP RIÊNG của xã ấy, mở thẳng vào xã, bản thử nghiệm
-npm run zmp:deploy                                  # MENU: 1 = App ViHAT, rồi từng xã trong tệp ánh xạ
+npm run zmp:deploy                                  # HỎI: "App ViHAT (gõ vihat) hay tên miền xã"
 npm run zmp:phat-hanh -- --app=vihat                # thêm --phat-hanh (zmp:phat-hanh) = BẢN PHÁT HÀNH (bỏ -t)
 npm run zmp:phat-hanh -- --domain=<tên-miền-xã>     # APP RIÊNG của xã ấy, BẢN PHÁT HÀNH
-npm run zmp:deploy -- --domain=<tên-miền-xã> --app-id=<chữ số>   # xã chưa có dòng trong tệp ánh xạ
+npm run zmp:deploy -- --domain=<tên-miền-xã> --app-id=<chữ số>   # đối chiếu với App ID platform trả
 ```
 
 **Đích luôn được chọn tường minh (chủ dự án, 06/10/2026).** Trước ngày ấy, `npm run zmp:deploy`
@@ -662,16 +662,25 @@ trên máy ấy. Nay:
 |---|---|---|
 | `--app=vihat` | App ViHAT (app chung) | **Không bao giờ** (ADR 0044) — mở ra là màn giới thiệu ViHAT, vào xã bằng QR `d` |
 | `--domain=<tên-miền-xã>` | App ID riêng của xã ấy | **Luôn** — app mở thẳng vào kênh công dân của xã, ẩn thanh tiêu đề Zalo (ADR 0047 §6) |
-| không cờ đích | menu đánh số (có người ngồi trước cửa sổ lệnh) | — ; không có người (Jenkins, ống) thì **DỪNG** và liệt kê các cờ |
+| không cờ đích | hỏi `vihat` hay tên miền xã (có người ngồi trước cửa sổ lệnh) — không có danh sách: platform cố ý không có lệnh liệt kê | — ; không có người (Jenkins, ống) thì **DỪNG** và nêu hai cờ |
 | `--app=vihat --domain=…` | **DỪNG** | QR mở App ViHAT vào một xã làm ở **platform-admin** (chi tiết xã → "Mở bằng app ViHAT"), không bằng một lần đẩy |
 | `--vao-thang` | **DỪNG** — đã bỏ | `--domain` nay luôn làm việc ấy |
 
-App ID của đích tra trong `scripts/ung-dung-theo-ten-mien.mjs` (`APP_ID_APP_CHUNG`, `APP_ID_THEO_TEN_MIEN`).
-Chưa có (App ViHAT hôm nay là `null`, hoặc xã chưa có dòng): có người ngồi thì script **hỏi** App ID
-(xem platform-admin → chi tiết xã → ô QR), rồi hỏi có ghi vào tệp ấy không — ghi thì tệp phải được
-**commit**, kèm cặp ghim trong `scripts/dich-den.test.mjs`, và với xã mới thì thêm dòng `MiniApp` ở
-service-platform. Không có người thì phải có `--app-id=<chữ số>`. `--app-id` khác App ID đã có trong
-tệp thì **DỪNG** — một trong hai đã sai.
+**App ID của đích do service-platform trả** (chủ dự án 06/10/2026): script gọi
+`GET https://platform.api.vigov.vn/api/v1/mini-app-ids?app=vihat` hoặc `?host=<tên-miền-xã>` — đọc
+bảng `mini_app`, chính bảng máy chủ dùng để biết một App ID phục vụ xã nào. Kho này **không còn chép
+App ID nào** (`scripts/ung-dung-theo-ten-mien.mjs` chỉ còn điều khoản theo xã). Khai / đổi App ID:
+**platform-admin**. Địa chỉ platform là hằng đã commit trong `scripts/deploy-config.mjs` (công khai,
+không theo xã) — máy nào pull về cũng chạy được, không cần `.env.local`. `--thu` cũng gọi tuyến này
+(chỉ đọc), để kế hoạch in đúng App ID.
+
+| Platform trả | Script |
+|---|---|
+| 200, `source` đúng loại (`chung` cho `--app=vihat`, `rieng` cho `--domain`) | dùng App ID ấy; `--app-id` có thì phải **trùng**, khác thì **DỪNG** |
+| 200, `source` sai loại | **DỪNG** — đẩy sẽ đè app phía bên kia |
+| 404 `mini_app_id_not_found` | **DỪNG** và chỉ chỗ sửa: platform-admin → khai App ViHAT, hoặc chi tiết xã → gắn App ID app riêng. `--app-id` không thay được bước này: máy chủ đọc chính bảng ấy để mở app |
+| 409 (hơn một app sống cho đích) | **DỪNG** — script không chọn hộ; tắt app thừa ở platform-admin |
+| không tới được — lỗi mạng, 5xx, 429, hoặc 404 không mang mã ấy (platform chưa có tuyến) | **DỪNG** (fail closed). Lối khẩn cấp: `--app-id=<chữ số>` **và** có người ngồi trước cửa sổ lệnh — script in cảnh báo rằng App ID ấy **chưa đối chiếu** rồi hỏi `c/k`. Không có người (Jenkins) thì **DỪNG** dù có `--app-id` |
 
 App riêng của xã luôn đăng nhập bằng đường thật (`getAccessToken` + `getPhoneNumber` → identity
 `POST /api/v1/citizen-sessions`); không còn bản dựng nào thay danh tính (chủ dự án, 05/10/2026).
@@ -689,7 +698,7 @@ không còn lệnh `zmp:login` (nó chỉ ghi token vào tệp ấy). Đích th�
 ngoài rồi đẩy trong là hai lệnh có thể lệch nhau.
 
 Jenkins (`citizen-app/Jenkinsfile`): tham số `TARGET` bắt buộc (`vihat` hoặc tên miền xã) và `APP_ID`
-tuỳ chọn; credential `zmp-token-app-chung` / `zmp-token-<tên-miền>` suy ra từ `TARGET`.
+tuỳ chọn, **chỉ để đối chiếu**; credential `zmp-token-app-chung` / `zmp-token-<tên-miền>` suy ra từ `TARGET`.
 
 ⚠ **Mọi lệnh đẩy đều cần `VIGOV_API_HOST`**, vì khối đăng nhập đọc địa chỉ máy chủ lúc dựng. Cách
 thường dùng là điền nó một lần vào `.env.local` (§"`.env.local` — cấu hình cho máy đẩy bản");
@@ -715,7 +724,7 @@ thì `app-config.json` trỏ vào bản dựng của lần trước.
 
 **zmp-cli không hỏi câu nào.** CLI vốn dừng ba lần — *"This is not a ZMP Project?"*, *"where is your
 dist folder"*, *"description"* — và cả ba đã tắt bằng `-e`, `-o dist`, `-m`, cộng `-p`. Câu hỏi duy
-nhất là của `deploy.mjs`, và chỉ khi thiếu đích / App ID / token đúng app.
+nhất là của `deploy.mjs`, và chỉ khi thiếu đích / token đúng app, hoặc khi xác nhận một `--app-id` chưa đối chiếu.
 
 Mô tả phiên bản **sinh theo từng lần đẩy**, không cố định: `<đích> · app <App ID> · <sha ngắn> · <ngày giờ>` (đích là `app-vihat` hoặc tên miền xã), cộng
 `dirty` khi cây làm việc còn thay đổi chưa commit. Một nhãn cố định thì mọi bản trong console
@@ -792,7 +801,7 @@ quyền gì**. Ngày có cầu phiên, thay bằng xã đọc từ phiên — **
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm test` | Vitest — sự thật đã công bố, hình dạng bundle, sổ màn hình, bộ bóc tách vCard, các tính năng, kênh công dân, **và bundle đúng bằng thứ người duyệt đọc** |
 | `npm run zmp:sync` | Dựng rồi đồng bộ `app-config.json` theo trang đã dựng |
-| `npm run zmp:deploy -- --app=vihat` · `-- --domain=<tên-miền-xã>` · (không cờ: menu) | App ViHAT, hoặc app riêng của xã (mở thẳng vào xã) → bản thử nghiệm. Thêm `--app-id=<chữ số>` khi tệp ánh xạ chưa có App ID, `--thu` để chỉ in kế hoạch |
+| `npm run zmp:deploy -- --app=vihat` · `-- --domain=<tên-miền-xã>` · (không cờ: hỏi) | App ViHAT, hoặc app riêng của xã (mở thẳng vào xã) → bản thử nghiệm. App ID do service-platform trả; `--app-id=<chữ số>` chỉ đối chiếu, `--thu` để chỉ in kế hoạch |
 | `npm run zmp:phat-hanh -- --app=vihat` · `-- --domain=<tên-miền-xã>` | Như trên, có `--phat-hanh` → **bản phát hành**, có in ra và đếm ngược 5 giây |
 
 → Skills: `.claude/skills/zalo-miniapp-multi-tenant` · `.claude/skills/accessibility-elderly`

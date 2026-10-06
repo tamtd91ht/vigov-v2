@@ -3888,6 +3888,29 @@
       "declared_in": "service-petitions/internal/http/routes.go"
     },
     {
+      "service": "platform",
+      "method": "GET",
+      "path": "/api/v1/mini-app-ids",
+      "operation_id": "platform_get_mini_app_ids",
+      "task_id": "7a9dad03e900",
+      "summary": "App ID của Mini App đang chạy — app chung (app=vihat) hoặc app riêng của xã giữ tên miền (host=…); cho lệnh đẩy Mini App",
+      "screen": "*(không có màn hình — lệnh đẩy citizen-app/scripts/deploy.mjs gọi; chủ dự án chọn phương án A 06/10/2026)*",
+      "permission_kind": "public",
+      "permission_reason": "lệnh đẩy Mini App (citizen-app/scripts/deploy.mjs, máy dev hoặc Jenkins, không có phiên cán bộ) đọc App ID từ sổ mini_app của nền tảng thay cho tệp chép tay (chủ dự án chọn phương án A 06/10/2026); App ID không phải bí mật — mọi mã QR in ra đều mang nó; chỉ trả App ID và loại app, không mã xã, không tên xã, không danh sách; giới hạn 30 lần/phút theo mạng của máy gọi",
+      "consumer": "citizen-app",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "platform.miniAppIDOut",
+        "400": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "429": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-platform/internal/http/mini_app_ids.go"
+    },
+    {
       "service": "petitions",
       "method": "GET",
       "path": "/api/v1/my-citizen-report-fields",

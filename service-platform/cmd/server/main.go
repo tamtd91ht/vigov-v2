@@ -263,6 +263,20 @@ func run(log *slog.Logger) error {
 	// matches no commune, TenantMiddleware answers 404 — and a healthy process is restarted
 	// during a database blip, which is exactly when restarting it is worst.
 	ngoai := buildOuter(h, opEdge.handler, cfg.OperatorHost())
+	// The public Mini App ID lookup (mini_app_ids.go): outside both chains, like /healthz. The shared
+	// app is read through the same store the operator console declares it with; the own app through the
+	// directory, so a domain resolves exactly as the edge resolves a Host.
+	appIDLimiter, closeAppIDLimiter, err := miniAppIDLimiter(cfg, log)
+	if err != nil {
+		return err
+	}
+	defer closeAppIDLimiter()
+	mountMiniAppIDs(ngoai, svchttp.MiniAppIDDeps{
+		Shared:  svcstore.NewSharedMiniAppStore(db),
+		Own:     danhBa,
+		Limiter: appIDLimiter,
+		Log:     log,
+	})
 	// KHÔNG gắn webhook của Zalo Mini App ở đây, và chỗ trống này là có chủ ý — ADR 0032.
 	//
 	// Nó TỪNG nằm đúng chỗ này, biện hộ bằng `domain-boundaries.md`: "platform = Nền tảng —

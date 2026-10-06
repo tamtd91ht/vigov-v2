@@ -115,10 +115,15 @@ func TestBangTSKhopHostDichVuIngress(t *testing.T) {
 	}
 	sort.Strings(tsDS)
 	// The gateway reaches every service; the Ingress reaches every service EXCEPT those that have no
-	// public host by decision (servicesWithoutAPIHost) — those are reachable in-cluster only.
+	// public host by decision (servicesWithoutAPIHost) — those are reachable in-cluster only, save for
+	// one Exact rule per path in pathScopedPublicRoutes.
 	var tsCoHost []string
 	for _, d := range tsDS {
 		if _, none := servicesWithoutAPIHost[d]; !none {
+			tsCoHost = append(tsCoHost, d)
+			continue
+		}
+		for range pathScopedPublicRoutes[d] {
 			tsCoHost = append(tsCoHost, d)
 		}
 	}

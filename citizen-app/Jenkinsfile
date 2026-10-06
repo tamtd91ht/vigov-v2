@@ -5,9 +5,12 @@
 //                      ADR 0044), tên miền xã = APP RIÊNG của xã ấy, tên miền LUÔN nung vào bundle và
 //                      app mở thẳng vào xã (ADR 0047 §6). Không có giá trị mặc định: trống thì dừng.
 //                      Tham số DOMAIN và VAO_THANG cũ đã gỡ (06/10/2026)
-//   · App ID nào     — tệp scripts/ung-dung-theo-ten-mien.mjs; tham số APP_ID (tuỳ chọn) phải TRÙNG
-//                      tệp ấy, hoặc cấp App ID khi tệp chưa có. Job không có ai để hỏi, nên thiếu cả
-//                      hai là deploy.mjs từ chối
+//   · App ID nào     — deploy.mjs HỎI service-platform (`GET /api/v1/mini-app-ids`, bảng `mini_app`;
+//                      chủ dự án 06/10/2026). Địa chỉ platform là hằng đã commit
+//                      (scripts/deploy-config.mjs), nên job không cần credential hay tham số nào cho nó.
+//                      Tham số APP_ID (tuỳ chọn) CHỈ ĐỐI CHIẾU: khác App ID platform trả thì dừng. Khi
+//                      platform không trả lời, --app-id là lối khẩn cấp chỉ dành cho người ngồi trước
+//                      cửa sổ lệnh gõ "c" — job không có ai, nên job luôn DỪNG (fail closed)
 //   · QR App ViHAT mở vào một xã — KHÔNG phải việc của job này: platform-admin (chi tiết xã → "Mở bằng
 //                      app ViHAT")
 //   · đẩy BẰNG GÌ    — `node scripts/deploy.mjs`, KHÔNG BAO GIỜ gọi thẳng `zmp deploy`
@@ -37,7 +40,7 @@
 //   hai xã dùng chung một ô credential. Tên miền được kiểm hình dạng TRƯỚC khi ghép vào tên ấy.
 //
 //   Tên credential chỉ là QUY ƯỚC; cái bảo đảm token đúng app là `deploy.mjs` (`kiemToken`): claim
-//   `appId` của token phải bằng App ID đích (tệp ánh xạ, hoặc APP_ID), không thì job dừng trước khi dựng
+//   `appId` của token phải bằng App ID đích (do platform trả), không thì job dừng trước khi dựng
 //   — job không có ai quét QR để đăng nhập lại.
 //
 //   Token vào MÔI TRƯỜNG của đúng một bước `sh`, qua `withCredentials` — KHÔNG ghi xuống tệp nào
@@ -81,8 +84,9 @@ pipeline {
                         'RIÊNG của xã ấy, tên miền nung vào bundle, app mở thẳng vào xã (credential ' +
                         'zmp-token-<tên-miền>). QR mở App ViHAT vào một xã làm ở platform-admin, không ở đây.')
     string(name: 'APP_ID', defaultValue: '',
-           description: 'Tuỳ chọn. App ID của đích, chỉ chữ số (platform-admin → chi tiết xã → ô QR). ' +
-                        'scripts/ung-dung-theo-ten-mien.mjs đã có App ID thì phải TRÙNG; chưa có thì bắt buộc ở đây.')
+           description: 'Tuỳ chọn, CHỈ ĐỐI CHIẾU. App ID lấy từ service-platform (bảng mini_app); điền ở đây ' +
+                        'thì phải TRÙNG App ID platform trả, không thì dừng. Platform không trả lời thì job DỪNG ' +
+                        'dù có ô này — lối khẩn cấp chỉ dành cho lần chạy tay có người xác nhận.')
     booleanParam(name: 'PHAT_HANH', defaultValue: false,
                  description: 'Bỏ chọn = BẢN THỬ NGHIỆM (-t). Chọn = BẢN PHÁT HÀNH — ra người dùng thật / gửi ' +
                               'duyệt, và phải gõ XAC_NHAN.')
@@ -148,7 +152,7 @@ pipeline {
           String appId = params.APP_ID.trim()
           if (appId && !(appId ==~ /^[0-9]+$/)) {
             error("APP_ID '${appId}' không phải App ID: chỉ gồm chữ số (platform-admin → chi tiết xã → ô QR). " +
-                  'Để trống nếu scripts/ung-dung-theo-ten-mien.mjs đã có App ID của đích.')
+                  'Thường để trống: App ID lấy từ service-platform.')
           }
           env.DICH = target
           env.CRED_ZMP = tenMien ? "zmp-token-${tenMien}" : 'zmp-token-app-chung'

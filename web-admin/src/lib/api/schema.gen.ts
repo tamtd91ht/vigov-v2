@@ -3541,6 +3541,11 @@ export type platform_brandingUploadOut = {
   "upload": platform_brandingPresignedPost;
 };
 
+export type platform_miniAppIDOut = {
+  "app_id": string;
+  "source": string;
+};
+
 export type reporting_rewordSystemMessageIn = {
   "text": string;
 };
@@ -7197,6 +7202,36 @@ export type petitions_post_meetings_by_id_signature = {
     404: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/mini-app-ids — App ID của Mini App đang chạy — app chung (app=vihat) hoặc app riêng của xã giữ tên miền (host=…); cho lệnh đẩy Mini App */
+export type platform_get_mini_app_ids = {
+  duongDan: "/api/v1/mini-app-ids";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "app"?: string;
+    "host"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: platform_miniAppIDOut;
+    400: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    429: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_query";
+    404: "mini_app_id_not_found";
+    409: "own_mini_app_ambiguous" | "shared_mini_app_ambiguous";
+    429: "rate_limited";
+    500: "internal";
+    503: "rate_limit_unavailable";
   };
 };
 

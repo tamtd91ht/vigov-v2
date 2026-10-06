@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-platform",
-  "cap_nhat": "2026-10-04",
+  "cap_nhat": "2026-10-06",
   "muc": [
     {
       "id": "danh-muc-tham-chieu",
@@ -304,6 +304,13 @@
       "bang_chung": "7abf9b47 proto + core/platformclient; 2ec6dfa4 migration 0020 commune_map_frame_default, GET/PUT /api/v1/communes/{id}/map-frame-default (đọc: mọi khoá ops.*, ghi: KeyTenantManage + lý do; bán kính ngoài 3–20 km cần acknowledged_unusual — máy chủ kiểm), RPC đọc xã từ x-tenant-id. go test xanh, ca PG SKIP.",
       "tiep_theo": "Giao diện platform-admin (P2). Chạy ca PG trên PostgreSQL thật. Giá trị đề xuất 10 km / 3–20 km là đề xuất, chủ dự án chỉnh được.",
       "menu": "ban-do-kinh-te-so"
+    },
+    {
+      "id": "mini-app-ids-cong-khai",
+      "viec": "Tuyến công khai GET /api/v1/mini-app-ids — lệnh đẩy Mini App (citizen-app/scripts/deploy.mjs) đọc App ID app chung (?app=vihat) hoặc app riêng của xã giữ tên miền (?host=…) từ sổ mini_app thay tệp chép tay (chủ dự án chọn phương án A 06/10/2026)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "service-platform/internal/http/mini_app_ids.go (authz.Public, Cache-Control: no-store, 404 mini_app_id_not_found một thân cho mọi trường hợp vắng, 409 *_ambiguous, 400 invalid_query); store.Directory.LiveOwnMiniAppID (mọi tên miền của xã đang hoạt động); gắn ngoài cả hai chuỗi ở cmd/server/mini_app_ids.go; giới hạn ratelimit.MiniAppIDLookup 30 lần/phút/mạng IP, đóng kín khi Redis hỏng (con số TẠM, chủ dự án chưa chốt); Ingress: luật Exact duy nhất trên platform.api.vigov.vn (pathScopedPublicRoutes, tools/ingress/sinh.go). go test xanh, ca PG SKIP.",
+      "tiep_theo": "Deploy service-platform + nạp lại Ingress vào Rancher, rồi `curl https://platform.api.vigov.vn/api/v1/mini-app-ids?app=vihat`. Kiểm DNS platform.api.vigov.vn trỏ về ingress (TLS *.api.vigov.vn đã phủ). Chủ dự án chốt con số 30/phút. Ghi ADR (sửa đổi 0070 hoặc 0048) cho việc mở một đường dẫn của pod platform ra internet. Chạy ca PG trên PostgreSQL thật."
     }
   ]
 }

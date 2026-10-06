@@ -143,6 +143,13 @@ func TestRealContractCarriesNoOperatorRoute(t *testing.T) {
 				// ONE platform commune resource exists, by owner decision: the commune's logo and web-admin
 				// banner (ADR 0069, 02/10/2026). Any other platform path in the commune contract is still a
 				// route that reached the wrong surface — a second one needs its own ADR first.
+				// The second, by owner decision 06/10/2026 (option A): the PUBLIC Mini App ID lookup the
+				// deploy script reads — admitted only while it stays authz.Public (tools/ingress
+				// pathScopedPublicRoutes exposes it with one Exact rule).
+				b, _ := json.Marshal(op.Permission)
+				if tag == "platform" && p == "/api/v1/mini-app-ids" && strings.Contains(string(b), `"kind":"public"`) {
+					continue
+				}
 				if tag == "platform" && p != "/api/v1/commune-branding" &&
 					!strings.HasPrefix(p, "/api/v1/commune-branding/") {
 					t.Errorf("%s %s tagged platform in the commune contract — platform's only commune REST resource is /api/v1/commune-branding (ADR 0069)", m, p)

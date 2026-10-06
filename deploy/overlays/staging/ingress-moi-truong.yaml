@@ -49,9 +49,15 @@
   value: "petitions.api-stg.vigov.vn"
 - op: test
   path: /spec/rules/6/host
-  value: "reporting.api.vigov.vn"
+  value: "platform.api.vigov.vn"
 - op: replace
   path: /spec/rules/6/host
+  value: "platform.api-stg.vigov.vn"
+- op: test
+  path: /spec/rules/7/host
+  value: "reporting.api.vigov.vn"
+- op: replace
+  path: /spec/rules/7/host
   value: "reporting.api-stg.vigov.vn"
 
 # `add` chứ không `replace`: base cố ý KHÔNG khai `tls`, và `replace` đổ khi đường dẫn chưa có.

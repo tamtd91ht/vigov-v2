@@ -662,3 +662,34 @@ func TestZaloKeysShape(t *testing.T) {
 		t.Errorf("empty chat: %v", err)
 	}
 }
+
+// The public Mini App ID lookup (service-platform, owner option A 06/10/2026): a provisional 30 per
+// minute per client network, fails CLOSED, keyed with no commune prefix. Pinned so a change turns red.
+func TestMiniAppIDLookupPolicyIsPinnedFailClosedAndPerNetwork(t *testing.T) {
+	if MiniAppIDLookupLimit != 30 || MiniAppIDLookupWindow != time.Minute {
+		t.Fatalf("mini-app-ids threshold = %d per %v", MiniAppIDLookupLimit, MiniAppIDLookupWindow)
+	}
+	if MiniAppIDLookup.FailsOpen() {
+		t.Fatal("mini-app-ids must fail closed")
+	}
+	f := newFake()
+	l, err := New(f, MiniAppIDLookup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < MiniAppIDLookupLimit; i++ {
+		if ok, _, _ := l.Allow(context.Background(), PlatformIPKey("203.0.113.7")); !ok {
+			t.Fatalf("request %d refused", i+1)
+		}
+	}
+	if ok, _, _ := l.Allow(context.Background(), PlatformIPKey("203.0.113.7")); ok {
+		t.Fatal("request 31 in the minute was allowed")
+	}
+	_, _, _ = l.Allow(context.Background(), PlatformIPKey("2001:db8:1:2::9"))
+	if got := f.keys[0]; got != "rl:mini-app-ids:ip:203.0.113.7" {
+		t.Errorf("key = %q", got)
+	}
+	if got := f.keys[len(f.keys)-1]; got != "rl:mini-app-ids:ip:2001:db8:1:2::/64" {
+		t.Errorf("IPv6 key = %q", got)
+	}
+}
