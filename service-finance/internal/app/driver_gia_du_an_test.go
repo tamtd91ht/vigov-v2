@@ -74,9 +74,10 @@ type khoDAGia struct {
 	// — the query binds tenant_id = $1, so such a row is simply not there (rule 1).
 	hangMucCo map[string]bool
 
-	// nguonVonCo is keyed by "<id>|<nam>", because the statement binds BOTH: a source of the right
-	// commune but the WRONG budget year must answer "no such source", or a 2026 project's allocation
-	// lands on a card §6 draws for 2027 (§13 rule 8).
+	// nguonVonCo is the set of LIVE sources in this commune's catalogue, keyed by id alone — since
+	// migration 0013 a source has no year, and the statement binds only tenant_id and id. An id
+	// outside the set answers "no such source", which is also what another commune's source is
+	// (the query binds tenant_id = $1).
 	nguonVonCo map[string]bool
 
 	// soChungTu is what `count(*) FROM chung_tu_giai_ngan` answers — the live vouchers blocking a
@@ -194,14 +195,13 @@ func (c *connDAGia) QueryContext(_ context.Context, q string, args []driver.Name
 		}
 		return &rowsGia{cot: []string{"?column?"}, hang: [][]driver.Value{{int64(1)}}}, nil
 	case strings.Contains(q, "FROM nguon_von"):
-		// KEYED ON id AND nam TOGETHER — $2 and $3 — because that is what the statement binds. A test
-		// that only matched the id could not tell a right-year source from a wrong-year one, which is
-		// the whole point of store.ErrKhongThayNguonVonPhanBo.
-		if len(args) < 3 {
-			return &rowsGia{cot: []string{"?column?"}}, nil
+		// KEYED ON id ($2) ALONE, because that is all the statement binds since 0013. A THIRD
+		// argument means somebody put a year back into the check — refused here so the test turns red
+		// rather than silently matching on the id.
+		if len(args) != 2 {
+			return nil, fmt.Errorf("driver giả: kiểm nguồn vốn nhận %d tham số, muốn 2 (tenant_id, id)", len(args))
 		}
-		khoa := fmt.Sprintf("%v|%v", args[1].Value, args[2].Value)
-		if !c.k.nguonVonCo[khoa] {
+		if !c.k.nguonVonCo[fmt.Sprint(args[1].Value)] {
 			return &rowsGia{cot: []string{"?column?"}}, nil
 		}
 		return &rowsGia{cot: []string{"?column?"}, hang: [][]driver.Value{{int64(1)}}}, nil

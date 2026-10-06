@@ -8,7 +8,14 @@ package domain
 // `da_giai_ngan` column and rule 10 gives for refusing `is_overdue`: two homes for one number
 // drift, and the stale one is what reaches the report going upward.
 
-// NguonVon is one funding source of one commune in one budget year (table `nguon_von`).
+// NguonVon is one funding source of one commune's catalogue (table `nguon_von`), as read FOR ONE
+// budget year — together with the amount granted to it that year
+// (`funding_source_annual_amounts`, migration 0013).
+//
+// SINCE 0013 THE SOURCE HAS NO YEAR; ONLY ITS GRANTED AMOUNT DOES (user decision 06/10/2026). A
+// source is declared once per commune and serves every year, while each year's amount is its own
+// row, so entering 2027's figure cannot move a 2026 figure already reported. Nam and TongNguon below
+// are therefore a PAIR describing the read, not properties of the source.
 //
 // COLUMNS DELIBERATELY ABSENT, the same two as DuAn: `tenant_id` rides in context.Context and is
 // bound by the scoped repository (rule 1, invariant 4), and `deleted_at` never reaches a reader
@@ -16,17 +23,19 @@ package domain
 type NguonVon struct {
 	ID string // ULID
 
-	// Ten is what §6 prints on the card ("Ngân sách xã, phường"). There is no code column: §11
-	// gives this table a name and no `ma`, so nothing here is an issued business code.
+	// Ten is what §6 prints on the card ("Ngân sách xã, phường"). Unique within a commune since
+	// 0013. There is no code column: §11 gives this table a name and no `ma`, so nothing here is an
+	// issued business code.
 	Ten string
 
-	// Nam is the budget year this source belongs to. A source of 2026 and the same-named source of
-	// 2027 are two rows with two ceilings (§13 rule 8).
+	// Nam is the budget year TongNguon was read for — the year the caller asked for, not a column
+	// of the source.
 	Nam int
 
 	ThuTu int
 
-	// TongNguon is the CEILING of the source, not a balance. Nothing decrements it as money is
+	// TongNguon is the amount granted to the source FOR Nam ("vốn được giao") — 0 when nothing has
+	// been entered for that year. It is the CEILING, not a balance: nothing decrements it as money is
 	// allocated or spent — TienDoNguonVon computes both of those from rows.
 	TongNguon Dong
 }
@@ -67,10 +76,10 @@ const (
 type TinhTrangGanNguon struct {
 	TrangThai TrangThaiGanNguon
 
-	// SoNguon counts DISTINCT sources, not rows. That is load-bearing while
-	// migration 0007 leaves `UNIQUE (tenant_id, du_an_id, nguon_von_id)` undeclared: two rows
-	// naming one source must read as one source on the chip, or "3 nguồn" silently means "2 sources,
-	// one of them entered twice" and nothing on the screen says so.
+	// SoNguon counts DISTINCT sources, not rows. Since migration 0013 declared
+	// `UNIQUE (tenant_id, du_an_id, nguon_von_id)` the two are equal for stored lines; the count
+	// stays distinct because this function also sees lines that never went through that key (a
+	// caller's own slice), and "3 nguồn" must never mean "2 sources, one of them listed twice".
 	SoNguon int
 
 	// TongPhanBo is the sum of the allocation lines — it can exceed the plan, and it is not

@@ -20,7 +20,8 @@ package store
 //
 // THIS FILE ADDS NO MIGRATION AND NEEDS NONE. Every column it writes was declared by 0004 and 0007,
 // including `phan_bo_nguon_von` in full — 0007 shipped the table and deliberately shipped no write
-// path, and this is that write path.
+// path, and this is that write path. 0013 added `UNIQUE (tenant_id, du_an_id, nguon_von_id)`, which
+// domain.ChuanHoaPhanBoMoi already refuses per request (ErrPhanBoTrungNguon) before it can fire.
 
 import (
 	"context"
@@ -78,14 +79,11 @@ var (
 	ErrKhongThayHangMuc = errors.New("du_an: không có hạng mục kế hoạch vốn này trong xã")
 
 	// ErrKhongThayNguonVonPhanBo — the funding source an allocation line names does not exist in this
-	// commune, or belongs to a DIFFERENT budget year.
+	// commune's catalogue, or has been removed from it.
 	//
-	// THE YEAR IS PART OF THE CHECK AND THAT IS NOT AN EXTRA. `nguon_von` carries `nam` (0007) and
-	// §13 rule 8 makes each budget year its own set of data; §6's cards are drawn per year. A 2026
-	// project allocated against a 2027 source would put its money on a card of the wrong year — where
-	// it inflates one year's "đã phân bổ" and is missing from the other's, on two screens that are
-	// each internally consistent.
-	ErrKhongThayNguonVonPhanBo = errors.New("du_an: không có nguồn vốn này trong xã ở năm ngân sách của dự án")
+	// THE YEAR IS NO LONGER PART OF THE CHECK (migration 0013): a source belongs to the commune, not
+	// to a year, and the year an allocation counts in is the project's own — see NguonVonConSongTrongNam.
+	ErrKhongThayNguonVonPhanBo = errors.New("du_an: không có nguồn vốn này trong danh mục nguồn vốn của xã")
 
 	// ErrDuAnConChungTu — a project still carrying LIVE disbursement vouchers cannot be removed.
 	//
@@ -242,11 +240,19 @@ func (s *DuAnGhiStore) HangMucConSong(ctx context.Context, tx *store.ScopedTx,
 	return nil
 }
 
-// NguonVonConSongTrongNam refuses a funding source that is not a live source of this commune IN THIS
-// BUDGET YEAR.
+// NguonVonConSongTrongNam refuses a funding source that is not a live source of this commune's
+// catalogue.
 //
-// THE YEAR IS BOUND AS $3 AND IS THE PROJECT'S OWN — never a client's, and never the calendar's. A
-// source of the wrong year would put a project's allocation on a card §6 draws for a different year.
+// ⚠ THE NAME SAYS "in this year" AND THE CHECK NO LONGER HAS A YEAR (migration 0013). The identifier
+// is kept because rule 12 forbids renaming an existing one; the `nam` parameter is gone, so no
+// caller can believe a year is being checked. A source is declared once per commune and shared by
+// every budget year (user decision 06/10/2026); only its granted AMOUNT is per year. The year an
+// allocation line counts in is the PROJECT's (`du_an.nam`), and the §6 read derives it from there —
+// a year check here would be a second copy of that fact with nothing left to guard.
+//
+// A SOURCE WITH NO AMOUNT GRANTED FOR THE PROJECT'S YEAR IS ACCEPTED, and that is the decided
+// meaning rather than a gap: "nothing granted yet" reads as 0 on the card, and a commune can plan a
+// project against a source before the year's figure is entered.
 //
 // NOT `FOR UPDATE`, for the same reason HangMucConSong is not.
 //
@@ -254,13 +260,13 @@ func (s *DuAnGhiStore) HangMucConSong(ctx context.Context, tx *store.ScopedTx,
 // code), so there is no business code to hand back; the audit subject stays the PROJECT's code and
 // the source id is named inside the delta.
 func (s *DuAnGhiStore) NguonVonConSongTrongNam(ctx context.Context, tx *store.ScopedTx,
-	nguonVonID string, nam int) error {
+	nguonVonID string) error {
 
 	const stmt = `SELECT 1 FROM nguon_von ` +
-		`WHERE tenant_id = $1 AND id = $2 AND nam = $3 AND deleted_at IS NULL`
+		`WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
 
 	var mot int
-	err := tx.Underlying().QueryRowContext(ctx, stmt, string(tx.TenantID()), nguonVonID, nam).Scan(&mot)
+	err := tx.Underlying().QueryRowContext(ctx, stmt, string(tx.TenantID()), nguonVonID).Scan(&mot)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrKhongThayNguonVonPhanBo
 	}

@@ -93,7 +93,7 @@ func TestPgCapNhatGoChungTuKhoiNguonThiCotVeNULL(t *testing.T) {
 	ctx := ctxXa(tenant.ID(xa))
 
 	themDuAnToiThieu(t, db, xa, "da-1", "DA01", 2026, 100_000_000)
-	themNguonVon(t, db, xa, "nv-xa", "Ngân sách xã, phường", 2026, 1, 9_200_000_000)
+	themNguonVon(t, db, xa, "nv-xa", "Ngân sách xã, phường", 1)
 
 	kho := pkgstore.New(db)
 	s := NewChungTuGiaiNganStore(kho)
@@ -129,8 +129,8 @@ func TestPgNguonVonConSongKhongThayNguonCuaXaKhac(t *testing.T) {
 	xaA, xaB := xaRieng(t)
 	ctxA := ctxXa(tenant.ID(xaA))
 
-	themNguonVon(t, db, xaB, "nv-cua-xa-b", "Nguồn xã hội hoá", 2026, 1, 1_100_000_000)
-	themNguonVon(t, db, xaA, "nv-cua-xa-a", "Ngân sách xã, phường", 2026, 1, 9_200_000_000)
+	themNguonVon(t, db, xaB, "nv-cua-xa-b", "Nguồn xã hội hoá", 1)
+	themNguonVon(t, db, xaA, "nv-cua-xa-a", "Ngân sách xã, phường", 1)
 
 	kho := pkgstore.New(db)
 	s := NewChungTuGiaiNganStore(kho)
@@ -160,7 +160,7 @@ func TestPgNguonVonConSongKhongThayNguonDaXoaMem(t *testing.T) {
 	xa, _ := xaRieng(t)
 	ctx := ctxXa(tenant.ID(xa))
 
-	themNguonVon(t, db, xa, "nv-cu", "Nguồn đã rút", 2026, 1, 1_000_000_000)
+	themNguonVon(t, db, xa, "nv-cu", "Nguồn đã rút", 1)
 	if _, err := db.Exec(
 		`UPDATE nguon_von SET deleted_at = now(), deleted_by = 'CB-00123', delete_reason = 'khai nhầm'
 		  WHERE tenant_id = $1 AND id = 'nv-cu'`, xa); err != nil {

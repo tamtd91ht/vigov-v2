@@ -110,16 +110,15 @@ var (
 
 	// ErrPhanBoTrungNguon — one create request named the same funding source twice.
 	//
-	// REFUSED HERE AND NOT IN THE DATABASE, AND THE DIFFERENCE IS WHAT IS BEING DECIDED. Migration
-	// 0007 deliberately leaves `UNIQUE (tenant_id, du_an_id, nguon_von_id)` undeclared and says so
-	// outright: whether one project may hold TWO lines naming one source is the customer's call, and
-	// this repository is not entitled to answer it (0007:56-66).
+	// THE QUESTION 0007 LEFT OPEN IS ANSWERED: a project may NOT hold two lines naming one source
+	// (user decision 06/10/2026), and migration 0013 declares `UNIQUE (tenant_id, du_an_id,
+	// nguon_von_id)`. That key is the floor against every writer; this error is the sentence — it
+	// refuses the request before the transaction opens, in Vietnamese, instead of a constraint
+	// violation rolling the whole project back as a 500.
 	//
-	// THIS ERROR DOES NOT ANSWER IT. What it refuses is one REQUEST naming a source twice, which is a
-	// malformed body rather than a business state — the §9 modal lists one row per source, so two
-	// rows for one source is a client bug, and accepting it would silently double that source's share
-	// of a project's plan. The open question stays open: nothing here forbids two lines arriving by
-	// any other route, and no constraint was added to the schema.
+	// A brand-new project has no existing line, so checking the request alone is complete for the
+	// create path. An EDIT path for allocation lines (none exists yet) would also have to check the
+	// lines already stored.
 	ErrPhanBoTrungNguon = errors.New("du_an: một nguồn vốn chỉ được khai một dòng phân bổ trong cùng một lần tạo dự án")
 
 	ErrThieuNguonVonPhanBo = errors.New("du_an: dòng phân bổ thiếu `funding_source_id`")

@@ -48,7 +48,7 @@ func khoDuAnSan() *khoDAGia {
 // entry are ONE transaction. Not "the write, then the entry if it works".
 func TestThemDuAnGhiDuAnPhanBoVaVetTrongCungMotGiaoDich(t *testing.T) {
 	k := khoDuAnSan()
-	k.nguonVonCo = map[string]bool{"nv-xa|2026": true, "nv-thanh-pho|2026": true}
+	k.nguonVonCo = map[string]bool{"nv-xa": true, "nv-thanh-pho": true}
 	uc, ctx := dungUseCaseDuAn(t, k)
 
 	yc := themDuAnHopLe()
@@ -193,7 +193,7 @@ func TestThemDuAnTongNguonLechKeHoachVanTaoVichiCanhBao(t *testing.T) {
 	} {
 		t.Run(tc.ten, func(t *testing.T) {
 			k := khoDuAnSan()
-			k.nguonVonCo = map[string]bool{"nv-xa|2026": true}
+			k.nguonVonCo = map[string]bool{"nv-xa": true}
 			uc, ctx := dungUseCaseDuAn(t, k)
 
 			yc := themDuAnHopLe() // kế hoạch 100.000.000
@@ -213,14 +213,15 @@ func TestThemDuAnTongNguonLechKeHoachVanTaoVichiCanhBao(t *testing.T) {
 	}
 }
 
-// §13 rule 8: each budget year is its own set. A source of the right commune but the WRONG year must
-// be refused, or a 2026 project's allocation lands on a card §6 draws for 2027.
-func TestThemDuAnTuChoiNguonVonKhacNamNganSach(t *testing.T) {
+// Migration 0013: a source belongs to the commune's catalogue, not to a year. A source the catalogue
+// does not hold (never declared, removed, or another commune's) must be refused — with no foreign key
+// under the column, this check IS the constraint — and the refusal writes nothing.
+func TestCreateProjectRejectsSourceNotInCatalogue(t *testing.T) {
 	k := khoDuAnSan()
-	k.nguonVonCo = map[string]bool{"nv-xa|2027": true} // live, but for 2027
+	k.nguonVonCo = map[string]bool{"nv-thanh-pho": true} // nv-xa is not in this catalogue
 	uc, ctx := dungUseCaseDuAn(t, k)
 
-	yc := themDuAnHopLe() // nam 2026
+	yc := themDuAnHopLe()
 	yc.PhanBo = []domain.DongPhanBoMoi{{NguonVonID: "nv-xa", SoTien: 100_000_000}}
 
 	_, err := uc.Them(ctx, yc, canBo)
@@ -229,6 +230,26 @@ func TestThemDuAnTuChoiNguonVonKhacNamNganSach(t *testing.T) {
 	}
 	if k.daCommit != 0 {
 		t.Errorf("commit=%d, muốn 0 — từ chối thì không ghi gì", k.daCommit)
+	}
+}
+
+// Migration 0013, the other half: ONE catalogue source serves EVERY budget year. A 2027 project may
+// draw on the same source a 2026 project does; under 0007's per-year rows that needed a second row,
+// and a check still filtering by year would refuse it.
+func TestCreateProjectAcceptsCatalogueSourceInAnyYear(t *testing.T) {
+	k := khoDuAnSan()
+	k.nguonVonCo = map[string]bool{"nv-xa": true}
+	uc, ctx := dungUseCaseDuAn(t, k)
+
+	yc := themDuAnHopLe()
+	yc.Nam = 2027
+	yc.PhanBo = []domain.DongPhanBoMoi{{NguonVonID: "nv-xa", SoTien: 100_000_000}}
+
+	if _, err := uc.Them(ctx, yc, canBo); err != nil {
+		t.Fatalf("nguồn vốn trong danh mục bị từ chối ở năm 2027: %v", err)
+	}
+	if k.daCommit != 1 {
+		t.Errorf("commit=%d, muốn 1", k.daCommit)
 	}
 }
 

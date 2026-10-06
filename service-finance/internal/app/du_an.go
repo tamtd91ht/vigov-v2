@@ -71,7 +71,7 @@ type KhoDuAn interface {
 	TheoIDDeSua(ctx context.Context, tx *store.ScopedTx, id string) (domain.DuAn, error)
 	MaDaDung(ctx context.Context, tx *store.ScopedTx, ma string) (bool, error)
 	HangMucConSong(ctx context.Context, tx *store.ScopedTx, hangMucID string) error
-	NguonVonConSongTrongNam(ctx context.Context, tx *store.ScopedTx, nguonVonID string, nam int) error
+	NguonVonConSongTrongNam(ctx context.Context, tx *store.ScopedTx, nguonVonID string) error
 	DemChungTuConSong(ctx context.Context, tx *store.ScopedTx, duAnID string) (int, error)
 	Chen(ctx context.Context, tx *store.ScopedTx, d domain.DuAn) error
 	CapNhat(ctx context.Context, tx *store.ScopedTx, d domain.DuAn) error
@@ -162,10 +162,11 @@ type YeuCauThemDuAn struct {
 //
 // `PhanBo` IS ABSENT TOO, AND THAT IS A STATED GAP RATHER THAN A DECISION. §9 puts the allocation
 // list in the CREATE modal; §8's detail screen shows allocations read-only and offers no editor for
-// them. Editing them means answering migration 0007's open question (b) — may one project hold two
-// lines naming one source — which 0007 says outright is the customer's call and not this
-// repository's. Creating is safe from that question because a brand-new project has no existing
-// line to collide with, so ChuanHoaPhanBoMoi's per-request check settles it completely.
+// them. 0007's open question (b) is answered since migration 0013 — one line per source per project,
+// `UNIQUE (tenant_id, du_an_id, nguon_von_id)` counting soft-deleted lines — so an editor, when one
+// is built, must UPDATE a line in place rather than soft-delete and reinsert it, or the key refuses
+// the reinsert. Creating needs no such care: a brand-new project has no existing line to collide
+// with, so ChuanHoaPhanBoMoi's per-request check settles it completely.
 type YeuCauSuaDuAn struct {
 	HangMucID *string
 	Ten       *string
@@ -312,11 +313,12 @@ func (uc *DuAn) Them(ctx context.Context, yc YeuCauThemDuAn,
 			return err
 		}
 
-		// EVERY SOURCE IS CHECKED AGAINST THE PROJECT'S OWN YEAR. Not the calendar's, and not one the
-		// client sent: `moi.Nam` is the year this project belongs to, and §13 rule 8 makes each year
-		// its own set. There is no foreign key here either (0007:102-113), so this is the constraint.
+		// EVERY SOURCE MUST BE A LIVE SOURCE OF THIS COMMUNE'S CATALOGUE. Not of a year: since
+		// migration 0013 a source is shared by every budget year (user decision 06/10/2026), and the
+		// year this allocation counts in is `moi.Nam`, which the §6 read takes from the project. There
+		// is no foreign key here either (0007:102-113), so this is the constraint.
 		for _, pb := range dongPhanBo {
-			if err := uc.kho.NguonVonConSongTrongNam(ctx, tx, pb.NguonVonID, moi.Nam); err != nil {
+			if err := uc.kho.NguonVonConSongTrongNam(ctx, tx, pb.NguonVonID); err != nil {
 				return err
 			}
 		}

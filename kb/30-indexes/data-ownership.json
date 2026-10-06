@@ -222,6 +222,13 @@
       "source": "service-finance/migrations/0007_nguon_von.sql:134"
     },
     {
+      "entity": "FundingSourceAnnualAmount",
+      "service": "finance",
+      "scope": "tenant",
+      "table": "funding_source_annual_amounts",
+      "source": "service-finance/migrations/0013_funding_source_catalogue.sql:181"
+    },
+    {
       "entity": "IdentityDataEncryptionKey",
       "service": "identity",
       "scope": "tenant",

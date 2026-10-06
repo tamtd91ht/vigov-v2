@@ -53,11 +53,10 @@ func TestGanNguonThieuMotDongVanLaChuaDu(t *testing.T) {
 }
 
 func TestGanNguonDemNguonRIENGBIETChuKhongDemDong(t *testing.T) {
-	// THE CASE THAT EXISTS BECAUSE OF A SCHEMA DECISION, not because of a screen. Migration 0007
-	// deliberately leaves `UNIQUE (tenant_id, du_an_id, nguon_von_id)` undeclared — it is an open
-	// question for the customer — so two rows CAN name one source. The chip must then read "2
-	// nguồn", not "3": a count of rows would tell a commune it has funding from three places when
-	// it has two, and nothing on the screen would say otherwise.
+	// Since migration 0013 `UNIQUE (tenant_id, du_an_id, nguon_von_id)` keeps two STORED lines from
+	// naming one source, but GanNguon takes any slice — a create request's own lines included — and
+	// must not depend on that key. The chip must read "2 nguồn", not "3": a count of rows would tell a
+	// commune it has funding from three places when it has two.
 	tt := GanNguon(100_000_000, []PhanBoNguonVon{
 		{NguonVonID: "nv-xa", SoTien: 30_000_000},
 		{NguonVonID: "nv-xa", SoTien: 30_000_000},
@@ -143,8 +142,10 @@ func TestTienDoNguonVonPhanBoVuotTongNguonKhongBiKep(t *testing.T) {
 }
 
 func TestTienDoNguonVonTongNguonKhongThiKhongCoTyLeNao(t *testing.T) {
-	// A source entered before its ceiling is decided. Both bars measured against the ceiling must
-	// say "không tính được"; neither may return a plausible 0%.
+	// A source with nothing granted for the year — entered before its figure is decided, or (since
+	// migration 0013) a catalogue source with no `funding_source_annual_amounts` row for that year,
+	// which the store reads as 0. Both bars measured against the ceiling must say "không tính được";
+	// neither may return a plausible 0%.
 	nv := TienDoNguonVon{
 		NguonVon:   NguonVon{ID: "nv-moi", Ten: "Nguồn mới", Nam: 2026},
 		DaPhanBo:   5_000_000,
