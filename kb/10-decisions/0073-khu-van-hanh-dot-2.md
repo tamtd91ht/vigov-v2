@@ -44,3 +44,6 @@ Mục này ghi thêm, không sửa phần trên. **#5 — phát hành QR:** liê
 của xã** — xã có app riêng đang sống thì QR mở thẳng app ấy, không có thì app dùng chung như cũ. Điều
 này do ADR 0070 §*Sửa đổi 05/10/2026* #4 sở hữu (chủ dự án, 05/10/2026). Khoá `ops.qr.issue` và việc
 không ghi vết giữ nguyên.
+
+**06/10/2026:** câu trên bị thay — tuyến trả **cả hai** liên kết (app chung luôn có, app riêng khi đang
+sống), người vận hành chọn tấm in. Chủ sở hữu: ADR 0070 §*Sửa đổi 06/10/2026*.
