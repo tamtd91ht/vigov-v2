@@ -4,8 +4,8 @@ import { describe, expect, it } from "vitest";
 import { pendingMarkerLabel } from "@/components/ui/pending-feature";
 import type { finance_chungTuRa, finance_duAnRa, finance_hangMucRa } from "@/lib/api/schema.gen";
 
-import { BangChungTu, FormChungTu, giaTriTuChungTu } from "./chung-tu-du-an";
-import { FormDuAn, giaTriTuDuAn, KhoiSuaXoaDuAn, KhoiThemDuAn } from "./ghi-du-an";
+import { BangChungTu, FormChungTu, giaTriTuChungTu, KhoiChungTu } from "./chung-tu-du-an";
+import { FormDuAn, giaTriTuDuAn, KhoiThemDuAn, ProjectHeaderActions } from "./ghi-du-an";
 import {
   CANH_BAO_SUA_VE_NHAP,
   CAU_THIEU_QUYEN_GHI,
@@ -284,80 +284,82 @@ const NUT_SUA_DU_AN = ">Sửa dự án<";
 const NUT_GO_DU_AN = ">Gỡ dự án<";
 
 describe("NÚT THÊM DỰ ÁN — cổng budget.update", () => {
-  it("thiếu `budget.update`: KHÔNG có nút, và câu từ chối GỌI ĐÚNG TÊN KHOÁ", () => {
+  it("thiếu `budget.update`: KHÔNG có nút, và không gì khác thay chỗ nó", () => {
+    // Presentational change (ADR 0068 lần 5): the prototype draws nothing for an account without the
+    // key (`canRecord`), so the refusal sentence left the header. The permission is still named, by
+    // its Phân quyền NAME, in the empty list (`nhanNamRong`).
     const html = renderToStaticMarkup(
       <KhoiThemDuAn nam={2026} danhMuc={HANG_MUC} coGhi={false} daGhiXong={() => {}} />,
     );
 
-    expect(html).not.toContain(NUT_THEM_DU_AN);
-    expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_GHI));
-    // The permission by its Phân quyền NAME, never the machine key (GN-07).
-    expect(html).toContain("Cập nhật giải ngân");
-    expect(html).not.toContain("budget.update");
+    expect(html).toBe("");
   });
 
-  it("có `budget.update`: nút hiện", () => {
+  it("có `budget.update`: nút hiện, và hộp thoại CHƯA mở", () => {
     const html = renderToStaticMarkup(
       <KhoiThemDuAn nam={2026} danhMuc={HANG_MUC} coGhi daGhiXong={() => {}} />,
     );
 
     expect(html).toContain(NUT_THEM_DU_AN);
+    expect(html).toContain('aria-haspopup="dialog"');
+    expect(html).not.toContain("<dialog");
   });
 });
 
+/** Header buttons of the project card for one pair of keys. */
+function renderProjectButtons(canRecord: boolean, canConfirm: boolean, editing = false): string {
+  return renderToStaticMarkup(
+    <ProjectHeaderActions
+      coGhi={canRecord}
+      coXacNhan={canConfirm}
+      editing={editing}
+      onToggleEdit={() => {}}
+      onRemove={() => {}}
+    />,
+  );
+}
+
 describe("SỬA / GỠ DỰ ÁN — hai cổng riêng", () => {
   it("`budget.update` MỘT MÌNH: có Sửa dự án, KHÔNG có Gỡ dự án", () => {
-    const html = renderToStaticMarkup(
-      <KhoiSuaXoaDuAn
-        duAn={DU_AN}
-        danhMuc={HANG_MUC}
-        coGhi
-        coXacNhan={false}
-        daSuaXong={() => {}}
-        daXoaXong={() => {}}
-      />,
-    );
-
+    const html = renderProjectButtons(true, false);
     expect(html).toContain(NUT_SUA_DU_AN);
     expect(html).not.toContain(NUT_GO_DU_AN);
-    expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_XAC_NHAN));
-    expect(html).toContain("Xác nhận, khoá khoản giải ngân");
-    expect(html).not.toContain("budget.confirm");
   });
 
   it("`budget.confirm` MỘT MÌNH: có Gỡ dự án, KHÔNG có Sửa dự án", () => {
-    const html = renderToStaticMarkup(
-      <KhoiSuaXoaDuAn
-        duAn={DU_AN}
-        danhMuc={HANG_MUC}
-        coGhi={false}
-        coXacNhan
-        daSuaXong={() => {}}
-        daXoaXong={() => {}}
-      />,
-    );
-
+    const html = renderProjectButtons(false, true);
     expect(html).toContain(NUT_GO_DU_AN);
     expect(html).not.toContain(NUT_SUA_DU_AN);
-    expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_GHI));
   });
 
-  it("không khoá nào: cả hai câu từ chối, không nút nào", () => {
-    const html = renderToStaticMarkup(
-      <KhoiSuaXoaDuAn
-        duAn={DU_AN}
-        danhMuc={HANG_MUC}
-        coGhi={false}
-        coXacNhan={false}
-        daSuaXong={() => {}}
-        daXoaXong={() => {}}
-      />,
-    );
+  it("không khoá nào: không nút nào", () => {
+    expect(renderProjectButtons(false, false)).toBe("");
+  });
 
-    expect(html).not.toContain(NUT_SUA_DU_AN);
-    expect(html).not.toContain(NUT_GO_DU_AN);
+  it("đang sửa: nút đọc 'Đang sửa' và báo đang mở", () => {
+    const html = renderProjectButtons(true, false, true);
+    expect(html).toContain(">Đang sửa<");
+    expect(html).toContain('aria-expanded="true"');
+  });
+});
+
+describe("TAB CHỨNG TỪ — câu từ chối gọi đúng TÊN quyền", () => {
+  it("thiếu cả hai khoá: hai câu, bằng tên trên màn Phân quyền, không bằng khoá máy", () => {
+    const html = renderToStaticMarkup(
+      <KhoiChungTu duAnID={DU_AN.id} coGhi={false} coXacNhan={false} daGhiXong={() => {}} />,
+    );
     expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_GHI));
     expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_XAC_NHAN));
+    expect(html).not.toContain(">Ghi nhận khoản chi<");
+    expect(html).not.toContain("budget.update");
+    expect(html).not.toContain("budget.confirm");
+  });
+
+  it("có `budget.update`: nút Ghi nhận khoản chi hiện", () => {
+    const html = renderToStaticMarkup(
+      <KhoiChungTu duAnID={DU_AN.id} coGhi coXacNhan={false} daGhiXong={() => {}} />,
+    );
+    expect(html).toContain(">Ghi nhận khoản chi<");
   });
 });
 
@@ -365,6 +367,7 @@ describe("BIỂU MẪU DỰ ÁN", () => {
   it("danh mục hạng mục RỖNG: nói trước, và nút Lưu bị tắt", () => {
     const html = renderToStaticMarkup(
       <FormDuAn
+        budgetYear={2026}
         tieuDeForm="Thêm dự án"
         giaTriDau={FORM_DU_AN_TRONG}
         danhMuc={[]}
@@ -381,12 +384,14 @@ describe("BIỂU MẪU DỰ ÁN", () => {
     // một phép so lỏng sẽ xanh kể cả khi nút Lưu vẫn bấm được.
     // Presentational pin (ADR 0068 §5): the button now carries the `Button` utilities after its
     // legacy `nut-chinh` class; what is asserted is still THE SUBMIT BUTTON, disabled.
-    expect(html).toMatch(/<button class="nut-chinh [^"]*" type="submit" disabled="">Lưu dự án<\/button>/);
+    // The add form's submit reads "Thêm dự án", the edit form's "Lưu dự án" (prototype `:672`).
+    expect(html).toMatch(/<button class="nut-chinh [^"]*" type="submit" disabled="">Thêm dự án<\/button>/);
   });
 
   it("khi SỬA: mã dự án chỉ ĐỌC, không có ô nhập mã", () => {
     const html = renderToStaticMarkup(
       <FormDuAn
+        budgetYear={2026}
         tieuDeForm="Sửa dự án"
         giaTriDau={giaTriTuDuAn(DU_AN)}
         maChiDoc={DU_AN.code}
@@ -406,6 +411,7 @@ describe("BIỂU MẪU DỰ ÁN", () => {
   it("khi THÊM: có ô mã, và nói rõ mã đã cấp thì không cấp lại", () => {
     const html = renderToStaticMarkup(
       <FormDuAn
+        budgetYear={2026}
         tieuDeForm="Thêm dự án"
         giaTriDau={FORM_DU_AN_TRONG}
         danhMuc={HANG_MUC}
@@ -443,6 +449,7 @@ function allPlaceholders(): string {
     renderToStaticMarkup(<ProjectRecordTabs>panel</ProjectRecordTabs>),
     renderToStaticMarkup(
       <FormDuAn
+        budgetYear={2026}
         tieuDeForm="Thêm dự án"
         giaTriDau={FORM_DU_AN_TRONG}
         danhMuc={HANG_MUC}
@@ -500,9 +507,12 @@ describe("PHẦN CHƯA DỰNG — dấu '?' đúng vị trí đặc tả (ADR 00
     expect(tabs).toContain('role="tabpanel"');
   });
 
-  it("biểu mẫu SỬA dự án KHÔNG mang ba ô giữ chỗ của hộp Thêm dự án", () => {
+  it("biểu mẫu SỬA dự án: không 'Tự sinh mã' (mã đã cấp), nhưng có nguồn vốn và đơn vị như prototype", () => {
+    // ADR 0068 lần 5: the prototype's edit form is the add form minus the code (`BudgetItemForm.tsx
+    // :318`), so the funding list and the unit / officer selects are there too, as "?" placeholders.
     const html = renderToStaticMarkup(
       <FormDuAn
+        budgetYear={2026}
         tieuDeForm="Sửa dự án"
         giaTriDau={giaTriTuDuAn(DU_AN)}
         maChiDoc={DU_AN.code}
@@ -513,7 +523,11 @@ describe("PHẦN CHƯA DỰNG — dấu '?' đúng vị trí đặc tả (ADR 00
         luu={() => {}}
       />,
     );
-    expect(html).not.toContain("data-pending-marker");
+    const marker = (ten: string) => `aria-label="${nhuTrongHTML(pendingMarkerLabel(ten))}"`;
+    expect(html).not.toContain(marker("Tự sinh mã"));
+    expect(html).not.toContain('id="tu-sinh-ma-du-an"');
+    expect(html).toContain(marker("Thêm nguồn vốn cho dự án"));
+    expect(html).toContain(marker("Đơn vị thực hiện và Cán bộ phụ trách"));
   });
 
   it("thẻ số liệu giữ chỗ KHÔNG in con số nào — chỉ '—'", () => {

@@ -1,29 +1,21 @@
 "use client";
 
-import { FolderKanban, Gauge } from "lucide-react";
+import { FolderKanban, Gauge, Search, SearchX, TrendingDown } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
-import { ChonNam } from "@/components/chon-nam";
-import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
-import { Field, Toolbar } from "@/components/ui/field";
+import { Field } from "@/components/ui/field";
 import { PendingCell, PendingColumnHeader } from "@/components/ui/pending-feature";
 import { SkeletonRows } from "@/components/ui/skeleton";
-import { usePhien } from "@/features/phien/phien-hien-tai";
 import { layDanhSachDuAn } from "@/lib/api/du-an";
-import { layHangMucKeHoachVon } from "@/lib/api/danh-muc-nghiep-vu";
 import type { KetQua } from "@/lib/api/goi";
-import type { finance_danhSachDuAnRa, finance_hangMucRa } from "@/lib/api/schema.gen";
+import type { finance_danhSachDuAnRa, finance_duAnRa, finance_hangMucRa } from "@/lib/api/schema.gen";
 import { cn } from "@/lib/cn";
-import { namTheoDongHoMay } from "@/lib/nam";
-import { coQuyen, QUYEN_GHI_NGAN_SACH } from "@/lib/quyen";
 
-import { KhoiThemDuAn } from "./ghi-du-an";
 import {
-  GHI_CHU_CHI_XEM_GIAI_NGAN,
   hangMucDuAn,
   lopHangMuc,
   nhanHangMuc,
@@ -41,32 +33,33 @@ import {
   FUNDING_COLUMN,
   LATEST_ISSUE_COLUMN,
   ProjectFilterPending,
+  UNIT_OWNER,
 } from "./pending-parts";
-import { Glyph, ProgressBadge } from "./project-ui";
+import { Glyph } from "./project-ui";
 import { ScopeNotice } from "./scope-notice";
 
 /**
- * Bảng dự án đầu tư của một năm ngân sách — `docs/ui-ux/06-giai-ngan.md §7`, cộng nút `+ Thêm dự
- * án` của §9.
+ * The register of the Giải ngân screen, in the prototype's order (`BudgetWorkspace.tsx:185-407`, ADR
+ * 0068 lần 5): scope banner · four KPI cards · cumulative chart · per-category table · per-source
+ * block · ONE filter row · the project table.
  *
- * NHỮNG GÌ ĐẶC TẢ VẼ MÀ ĐÂY KHÔNG DỰNG, và vì sao — đọc trước khi thêm vào:
+ * WHAT THE PROTOTYPE DRAWS THAT THIS DOES NOT FILL, and why — read before adding a figure:
  *
- *   4 thẻ KPI · biểu đồ luỹ kế · bảng tiến độ theo hạng mục · khối tiến độ theo nguồn vốn ·
- *   chip nguồn vốn trên từng dòng · cột "Vướng mắc mới nhất" · cột "Đơn vị / phụ trách" bằng TÊN
+ *   KPI cards · cumulative chart · per-category and per-source blocks · the `Đơn vị / phụ trách`,
+ *   `Nguồn vốn` and `Vướng mắc mới nhất` columns · `Chỉ dự án chậm` · `Gộp theo hạng mục`
  *
- * All but the last are drawn as disabled "?" placeholders at their spec position (ADR 0068 §14,
- * `pending-parts.tsx`); none shows a figure. Không thứ nào trong số đó có tuyến phía sau trong hợp
- * đồng REST. Nguồn vốn và vướng mắc chưa có
- * tuyến nào; `org_unit_id` và `assignee_id` về dưới dạng ID nội bộ, và tra chúng thành tên người
- * là việc của tuyến khác dưới quyền khác. Vẽ ra một ô rỗng gắn nhãn "0 vướng mắc" là nói với lãnh
- * đạo một con số không ai đo.
+ * All are disabled "?" placeholders at their prototype position (ADR 0068 §14, `pending-parts.tsx`);
+ * none shows a figure. No route returns year totals, funding or issue data, and `org_unit_id` /
+ * `assignee_id` arrive as internal ids. Drawing "0 vướng mắc" would tell leadership a figure nobody
+ * measured.
  *
- * ⚠ CHỨNG TỪ NAY CÓ SÁU TUYẾN GHI (nhưng vẫn không có tuyến ĐỌC danh sách) — xem
- * `chung-tu-du-an.tsx` và `PHAN_CHUA_DUNG_GHI`.
+ * KHÔNG GỘP THEO HẠNG MỤC (prototype bật mặc định): gộp cần tổng theo nhóm, và tổng ấy phải cộng ở
+ * máy chủ trên nguyên tập dự án. So the category a project belongs to is on its row instead, under
+ * its name — the information the group header would carry.
  *
- * KHÔNG GỘP THEO HẠNG MỤC (đặc tả bật mặc định): gộp cần tổng theo nhóm, và tổng ấy phải cộng ở
- * máy chủ trên nguyên tập dự án. Cộng ở trình duyệt trên danh sách đã lọc là một tổng đúng cho
- * tới lần đầu ai đó lọc, rồi sai lặng lẽ.
+ * THE SEARCH BOX FILTERS THE LIST ALREADY LOADED, and that is exact, not an approximation: the list
+ * route returns the WHOLE year or refuses (`lib/api/du-an.ts`, no pagination), and the box only hides
+ * rows — it sums nothing.
  */
 
 type TrangThaiBang =
@@ -74,13 +67,22 @@ type TrangThaiBang =
   | { pha: "loi"; thongBao: string }
   | { pha: "xong"; duLieu: finance_danhSachDuAnRa };
 
-export function BangDuAn() {
-  // Năm neo đọc MỘT lần khi component gắn vào, không đọc lại mỗi lần dựng: đọc lại sẽ làm danh
-  // sách năm nhảy ngay giữa phiên làm việc của một cán bộ trực đêm 31/12.
-  const [namGoc] = useState(namTheoDongHoMay);
-  const [nam, datNam] = useState(namGoc);
+export function BangDuAn({
+  nam,
+  danhMuc,
+  reloadSignal,
+  emptyAction,
+}: {
+  /** Budget year chosen in the page header. */
+  nam: number;
+  danhMuc: readonly finance_hangMucRa[];
+  /** Bumped by the page after a project is added: the list re-reads. */
+  reloadSignal: number;
+  /** `+ Thêm dự án` repeated inside the empty state; `null` for an account without the key. */
+  emptyAction?: ReactNode;
+}) {
   const [hangMucId, datHangMucId] = useState("");
-  const [danhMuc, datDanhMuc] = useState<readonly finance_hangMucRa[]>([]);
+  const [keyword, setKeyword] = useState("");
 
   /**
    * KẾT QUẢ ĐƯỢC LƯU KÈM BỘ LỌC ĐÃ SINH RA NÓ, và "đang tải" được SUY RA từ chỗ hai bộ lọc lệch
@@ -95,7 +97,7 @@ export function BangDuAn() {
   );
 
   /**
-   * Bộ đếm lần tải. Mỗi lần THÊM DỰ ÁN xong thì tăng một, và danh sách đọc lại từ máy chủ.
+   * Bộ đếm lần tải ("Tải lại" after an error); `reloadSignal` is the page's count of added projects.
    *
    * ĐỌC LẠI CẢ DANH SÁCH, KHÔNG VÁ HÀNG MỚI VÀO: phản hồi của tuyến thêm (`duAnGhiRa`) cố ý KHÔNG
    * mang `disbursed_amount`, `disbursed_ratio`, `delay_score` hay `is_delayed` — tuyến ghi không
@@ -103,7 +105,7 @@ export function BangDuAn() {
    * mọi hàng khác đang mang số thật, và chúng trông y hệt nhau.
    */
   const [lanTai, datLanTai] = useState(0);
-  const khoa = `${nam}|${hangMucId}|${lanTai}`;
+  const khoa = `${nam}|${hangMucId}|${lanTai}|${reloadSignal}`;
 
   useEffect(() => {
     let bo = false;
@@ -122,135 +124,142 @@ export function BangDuAn() {
         ? { pha: "xong", duLieu: daTai.kq.duLieu }
         : { pha: "loi", thongBao: daTai.kq.thongBao };
 
-  /**
-   * Danh mục hạng mục đọc RIÊNG và chỉ một lần: nó không đổi theo năm, và tuyến của nó khai
-   * `any-authenticated` trong khi tuyến dự án đòi `budget.read`. Hỏng danh mục KHÔNG làm hỏng
-   * bảng — cột Hạng mục khi ấy hiện mã kèm lời giải thích, thay vì cả màn hình trắng vì một
-   * danh mục phụ.
-   */
-  useEffect(() => {
-    let bo = false;
-    layHangMucKeHoachVon().then((kq) => {
-      if (!bo && kq.ok) datDanhMuc(kq.duLieu.items);
-    });
-    return () => {
-      bo = true;
-    };
-  }, []);
-
-  /**
-   * FAIL CLOSED: chưa đọc xong phiên, hoặc đọc hỏng, thì KHÔNG có quyền nào — "chưa rõ" không được
-   * hành xử như "có" (luật 1, cấm #1).
-   *
-   * CHỈ ĐỌC `budget.update` Ở MÀN NÀY. Bốn thao tác `budget.confirm` của phân hệ (xác nhận, khoá,
-   * mở khoá, gỡ) đều nằm ở trang chi tiết, và đọc sẵn khoá ấy ở đây là để lại một biến mà chỗ dùng
-   * duy nhất của nó là chỗ ai đó sẽ gắn nhầm một cái nút vào.
-   */
-  const phien = usePhien();
-  const dsQuyen: readonly string[] = phien !== null && phien.ok ? phien.duLieu.permissions : [];
-  const coGhi = coQuyen(dsQuyen, QUYEN_GHI_NGAN_SACH);
+  const shown =
+    trangThai.pha === "xong"
+      ? { ...trangThai.duLieu, items: matchKeyword(trangThai.duLieu.items, keyword) }
+      : null;
 
   return (
-    <section className="man-giai-ngan flex min-w-0 flex-col gap-4" aria-labelledby="tieu-de-du-an">
+    <section className="flex min-w-0 flex-col" aria-label="Theo dõi giải ngân theo dự án">
       {/* BANNER BẮT BUỘC (§1) — câu của MÁY CHỦ (`scope_notice`, xã sửa được ở Lời hệ thống), nên nó
           chỉ hiện khi danh sách đã về. Không câu dự phòng ở client: xem `scope-notice.tsx`. */}
-      {trangThai.pha === "xong" && <ScopeNotice text={trangThai.duLieu.scope_notice} />}
-      <p className="m-0 text-[13px] text-ink-500">{GHI_CHU_CHI_XEM_GIAI_NGAN}</p>
+      {trangThai.pha === "xong" && (
+        <div className="mb-5">
+          <ScopeNotice text={trangThai.duLieu.scope_notice} />
+        </div>
+      )}
 
       <DisbursementOverviewPending />
 
-      <KhoiThemDuAn
-        nam={nam}
-        danhMuc={danhMuc}
-        coGhi={coGhi}
-        daGhiXong={() => datLanTai((n) => n + 1)}
-      />
+      {/* ONE filter row (prototype `:271-359`): search, category, the two checkboxes. The budget
+          year is in the page header, as the prototype puts it. */}
+      <div className="mb-4 flex min-w-0 flex-wrap items-center gap-2.5">
+        <Field label="Tìm dự án" hideLabel htmlFor="tim-du-an" icon={Search} grow="auto" className="w-64 max-w-full">
+          <input
+            id="tim-du-an"
+            type="search"
+            value={keyword}
+            autoComplete="off"
+            placeholder="Tìm theo tên hoặc mã dự án…"
+            onChange={(e) => setKeyword(e.target.value)}
+          />
+        </Field>
 
-      <Card>
-        <CardHeader>
-          <CardTitle id="tieu-de-du-an" className="inline-flex items-center gap-2">
-            <Glyph icon={FolderKanban} className="size-[18px] shrink-0 text-brand-600" />
-            Dự án đầu tư
-          </CardTitle>
-        </CardHeader>
+        <Field label="Lọc theo hạng mục" hideLabel htmlFor="loc-hang-muc" kind="select" grow="auto">
+          <select
+            id="loc-hang-muc"
+            value={hangMucId}
+            onChange={(e) => datHangMucId(e.target.value)}
+            // Danh mục rỗng là đường THÔNG THƯỜNG hôm nay (danh mục ship rỗng), nên ô chọn chỉ còn
+            // một lựa chọn "Tất cả" — tắt nó đi để không mời cán bộ bấm vào một ô không lọc được gì.
+            disabled={danhMuc.length === 0}
+          >
+            <option value="">Tất cả hạng mục</option>
+            {danhMuc.map((h) => (
+              <option key={h.id} value={h.id}>
+                {h.label}
+              </option>
+            ))}
+          </select>
+        </Field>
 
-        {/* TWO filters, no search box on this screen: an aligned row, no "Bộ lọc" button (ADR 0068
-            §12, "Hàng ≤ 3 ô"). Year first — it decides which budget every figure belongs to. */}
-        <Toolbar className="[&_.chon-nam]:m-0 [&_.chon-nam_label]:text-xs [&_.chon-nam_select]:h-10">
-          <ChonNam id="nam-ngan-sach" nhan="Năm ngân sách" nam={nam} namGoc={namGoc} datNam={datNam} />
+        {/* The prototype's unit filter shows only once a project names a unit; no project carries a
+            unit NAME here (ids only), so — by the prototype's own rule — it is not drawn. */}
 
-          <Field label="Hạng mục" htmlFor="loc-hang-muc" kind="select">
-            <select
-              id="loc-hang-muc"
-              value={hangMucId}
-              onChange={(e) => datHangMucId(e.target.value)}
-              // Danh mục rỗng là đường THÔNG THƯỜNG hôm nay (danh mục ship rỗng), nên ô chọn chỉ
-              // còn một lựa chọn "Tất cả" — tắt nó đi để không mời cán bộ bấm vào một ô không lọc
-              // được gì.
-              disabled={danhMuc.length === 0}
-            >
-              <option value="">Tất cả hạng mục</option>
-              {danhMuc.map((h) => (
-                <option key={h.id} value={h.id}>
-                  {h.label}
-                </option>
-              ))}
-            </select>
-          </Field>
+        <ProjectFilterPending />
+      </div>
 
-          {/* Spec §7.1's two checkboxes — disabled "?" placeholders (ADR 0068 §14). */}
-          <ProjectFilterPending />
-        </Toolbar>
+      {trangThai.pha === "dangTai" && (
+        // FIRST LOAD (spec §8b): the sentence stays the live region, read out as before; the eye
+        // gets row-shaped placeholders so the page does not jump when the list arrives.
+        <div className="rounded-card bg-surface">
+          <p role="status" className="an-thi-giac">
+            Đang tải danh sách dự án…
+          </p>
+          <SkeletonRows />
+        </div>
+      )}
 
-        {trangThai.pha === "dangTai" && (
-          // FIRST LOAD (spec §8b): the sentence stays the live region, read out as before; the eye
-          // gets row-shaped placeholders so the card does not jump when the list arrives.
-          <>
-            <p role="status" className="an-thi-giac">
-              Đang tải danh sách dự án…
-            </p>
-            <SkeletonRows />
-          </>
-        )}
-
-        {/* LỖI: hiện đúng `message` của máy chủ, không diễn giải và không rẽ nhánh theo `code`.
-            "Tải lại" bumps the reload counter this list already has (`lanTai`). */}
-        {trangThai.pha === "loi" && (
+      {/* LỖI: hiện đúng `message` của máy chủ, không diễn giải và không rẽ nhánh theo `code`. */}
+      {trangThai.pha === "loi" && (
+        <div className="rounded-card bg-surface">
           <ErrorState
             title="Chưa tải được danh sách dự án"
             message={<span role="alert">{trangThai.thongBao}</span>}
             onRetry={() => datLanTai((n) => n + 1)}
           />
-        )}
+        </div>
+      )}
 
-        {trangThai.pha === "xong" &&
-          (trangThai.duLieu.items.length === 0 ? (
-            <EmptyState icon={FolderKanban} title={nhanNamRong(trangThai.duLieu.year)} />
+      {trangThai.pha === "xong" && shown !== null && (
+        <>
+          {trangThai.duLieu.items.length === 0 ? (
+            <div className="rounded-card bg-surface">
+              <EmptyState
+                icon={FolderKanban}
+                title="Chưa có dự án nào"
+                description={nhanNamRong(trangThai.duLieu.year)}
+                action={emptyAction ?? undefined}
+              />
+            </div>
+          ) : shown.items.length === 0 ? (
+            <div className="rounded-card bg-surface">
+              <EmptyState
+                icon={SearchX}
+                tone="neutral"
+                title="Không có dự án nào khớp từ khoá"
+                description="Thử tên hoặc mã dự án khác, hoặc xoá từ khoá để xem cả danh sách."
+              />
+            </div>
           ) : (
-            <BangDanhSach duLieu={trangThai.duLieu} danhMuc={danhMuc} />
-          ))}
+            <BangDanhSach duLieu={shown} danhMuc={danhMuc} />
+          )}
 
-        {/* NGƯỠNG LÀ CỦA MÁY CHỦ, HIỆN RA ĐỂ NGƯỜI ĐỌC BIẾT CHỮ "CHẬM" ĐANG ĐO BẰNG GÌ. Metadata of
-            the list, so it sits in the card footer. */}
-        {trangThai.pha === "xong" && (
-          <CardFooter>
-            <span className="inline-flex items-center gap-1.5">
-              <Glyph icon={Gauge} className="size-3.5 shrink-0" />
-              {nhanNguongCham(trangThai.duLieu.delay_threshold)}
-            </span>
-          </CardFooter>
-        )}
-      </Card>
+          {/* NGƯỠNG LÀ CỦA MÁY CHỦ, HIỆN RA ĐỂ NGƯỜI ĐỌC BIẾT CHỮ "CHẬM" ĐANG ĐO BẰNG GÌ. The prototype
+              prints it in the third KPI card's hint; those cards are placeholders, so it stays as
+              the line under the table rather than disappearing. */}
+          <p className="m-0 mt-2 inline-flex items-center gap-1.5 text-xs text-ink-500">
+            <Glyph icon={Gauge} className="size-3.5 shrink-0" />
+            {nhanNguongCham(trangThai.duLieu.delay_threshold)}
+          </p>
+        </>
+      )}
     </section>
   );
 }
 
+/** Rows whose name or code contains the typed words, case- and accent-sensitive as typed. */
+function matchKeyword(items: readonly finance_duAnRa[], keyword: string): finance_duAnRa[] {
+  const needle = keyword.trim().toLocaleLowerCase("vi");
+  if (needle === "") return [...items];
+  return items.filter(
+    (d) => d.name.toLocaleLowerCase("vi").includes(needle) || d.code.toLocaleLowerCase("vi").includes(needle),
+  );
+}
+
 /**
- * Bảng dự án. Giữ NGUYÊN thứ tự máy chủ trả về và không lọc bỏ dòng nào.
+ * Bảng dự án — prototype columns (`BudgetItemTable.tsx:191-216, 276-393`): Mã · Dự án · Đơn vị /
+ * phụ trách · KH vốn năm · Đã giải ngân · Tiến độ · Nguồn vốn · Thời hạn giải ngân · Vướng mắc mới
+ * nhất. Giữ NGUYÊN thứ tự máy chủ trả về và không lọc bỏ dòng nào.
+ *
+ * NO "CÒN LẠI" COLUMN, as in the prototype: the remainder is on the project page, and an over-plan
+ * disbursement still shows here as a ratio above 100% — never clamped (spec §13 rule 2).
+ *
+ * MONEY IN FULL ĐỒNG, not the prototype's short form ("7,5 tỷ"): a rounded figure here goes straight
+ * into a budget report.
  *
  * `year` lấy từ PHẢN HỒI chứ không từ trạng thái của ô chọn: một phản hồi không nói nó thuộc năm
- * nào thì không phân biệt được với phản hồi của năm khác, và máy chủ gửi `year` về đúng vì lý do
- * ấy (`service-finance/internal/http/du_an.go`, `danhSachDuAnRa.Year`).
+ * nào thì không phân biệt được với phản hồi của năm khác (`du_an.go`, `danhSachDuAnRa.Year`).
  */
 export function BangDanhSach({
   duLieu,
@@ -260,20 +269,22 @@ export function BangDanhSach({
   danhMuc: readonly finance_hangMucRa[];
 }) {
   return (
-    <TableScroll
-      sticky
-      aria-label={`Danh sách dự án đầu tư năm ${duLieu.year}`}
-      className="rounded-none border-0 shadow-none"
-    >
+    <TableScroll sticky aria-label={`Danh sách dự án đầu tư năm ${duLieu.year}`}>
       <table className={cn("bang-danh-muc", DATA_TABLE_CLASS)}>
         <caption className="an-thi-giac">
           Dự án đầu tư của đơn vị trong năm ngân sách {duLieu.year}
         </caption>
         <thead>
           <tr>
-            <th scope="col">Mã</th>
-            <th scope="col">Dự án</th>
-            <th scope="col">Hạng mục</th>
+            <th scope="col" className="w-20">
+              Mã
+            </th>
+            <th scope="col" className="min-w-64">
+              Dự án
+            </th>
+            <PendingColumnHeader info={pendingPart(UNIT_OWNER)} className="w-36">
+              Đơn vị / phụ trách
+            </PendingColumnHeader>
             {/* Money columns right-aligned so the digits of every row line up (spec §6.7). */}
             <th scope="col" className="text-right">
               KH vốn năm
@@ -281,43 +292,49 @@ export function BangDanhSach({
             <th scope="col" className="text-right">
               Đã giải ngân
             </th>
-            <th scope="col" className="text-right">
-              Còn lại
+            <th scope="col" className="w-44">
+              Tiến độ
             </th>
-            <th scope="col">Tiến độ</th>
-            {/* Spec §7.2 puts the funding chip under the Tiến độ cell; drawn as its own column so the
-                placeholder never sits inside a real figure's cell. */}
             <PendingColumnHeader info={pendingPart(FUNDING_COLUMN)}>Nguồn vốn</PendingColumnHeader>
             <th scope="col">Thời hạn giải ngân</th>
-            <PendingColumnHeader info={pendingPart(LATEST_ISSUE_COLUMN)}>Vướng mắc mới nhất</PendingColumnHeader>
+            <PendingColumnHeader info={pendingPart(LATEST_ISSUE_COLUMN)} className="min-w-52">
+              Vướng mắc mới nhất
+            </PendingColumnHeader>
           </tr>
         </thead>
         <tbody>
           {duLieu.items.map((d) => {
             const tienDo = tienDoDuAn(d.delay_score, d.is_delayed);
             const hangMuc = hangMucDuAn(d.category_id, danhMuc);
+            const late = tienDo.loai === "cham";
             return (
-              <tr key={d.id}>
-                <td className="ma-muc text-[13px] text-ink-500">{d.code}</td>
-                <td className="min-w-48 whitespace-normal">
+              // Red left edge for a project the SERVER flagged late (prototype `:252-254`): the eye
+              // scanning for late projects passes the left edge first. The words say it too.
+              <tr key={d.id} className={cn(late && "border-l-[3px] border-l-danger-500")}>
+                <td className="ma-muc text-xs font-semibold text-ink-500">{d.code}</td>
+                <td className="whitespace-normal">
                   {/* Đường dẫn con đúng như đặc tả ghi ở đầu chương: `/giai-ngan/du-an/:id`. */}
                   <Link
                     href={`/giai-ngan/du-an/${encodeURIComponent(d.id)}`}
-                    className="font-semibold text-brand-700 no-underline hover:underline"
+                    className="leading-snug font-semibold text-ink-900 no-underline hover:underline"
                   >
                     {d.name}
                   </Link>
+                  <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-500">
+                    {late && (
+                      <span className="inline-flex items-center gap-0.5 font-semibold text-danger-600">
+                        <Glyph icon={TrendingDown} className="size-3 shrink-0" />
+                        {nhanTienDo(tienDo)}
+                      </span>
+                    )}
+                    <span className={lopHangMuc(hangMuc)}>{nhanHangMuc(hangMuc)}</span>
+                  </span>
                 </td>
-                <td>
-                  <span className={lopHangMuc(hangMuc)}>{nhanHangMuc(hangMuc)}</span>
-                </td>
+                <PendingCell />
                 <td className="text-right tabular-nums">{nhanTien(d.planned_amount)}</td>
                 <td className="text-right tabular-nums">{nhanTien(d.disbursed_amount)}</td>
-                {/* Số âm hiện nguyên là số âm: giải ngân vượt kế hoạch phải nhìn thấy được. */}
-                <td className="text-right tabular-nums">{nhanTien(d.remaining_amount)}</td>
                 <td>
-                  <ProgressBadge progress={tienDo}>{nhanTienDo(tienDo)}</ProgressBadge>
-                  <span className="dong-phu mt-1 tabular-nums">{nhanTyLeGiaiNgan(d.disbursed_ratio)}</span>
+                  <ProgressCell ratio={d.disbursed_ratio} late={late} />
                 </td>
                 <PendingCell />
                 <td className="tabular-nums">{nhanNgay(d.disbursement_deadline)}</td>
@@ -328,5 +345,34 @@ export function BangDanhSach({
         </tbody>
       </table>
     </TableScroll>
+  );
+}
+
+/**
+ * The prototype's bar + percent (`BudgetItemTable.tsx:313-342`). The ratio is the SERVER's
+ * (`disbursed_ratio`, hundredths of a percent); the bar only draws it, capped at full width while the
+ * words keep the real figure. No elapsed-time marker: the server does not send that figure, and a
+ * browser-clock copy would drift from it at both ends of the year (`chi-tiet-du-an.tsx`).
+ *
+ * Red only for a project the server flagged late, green otherwise — no colour thresholds of our own.
+ */
+function ProgressCell({ ratio, late }: { ratio: number | null; late: boolean }) {
+  // `null` = no capital allocated: words, never a 0% bar (it would read as the worst project).
+  if (ratio === null || !Number.isFinite(ratio)) {
+    return <span className="text-[13px] text-ink-500">{nhanTyLeGiaiNgan(ratio)}</span>;
+  }
+  const width = Math.min(100, Math.max(0, ratio / 100));
+  return (
+    <div className="flex items-center gap-2">
+      <div aria-hidden="true" className="relative h-1.5 min-w-16 flex-1 overflow-hidden rounded-full bg-surface-subtle-2">
+        <div
+          className={cn("h-full rounded-full", late ? "bg-danger-500" : "bg-success-500")}
+          style={{ width: `${width}%` }}
+        />
+      </div>
+      <span className={cn("shrink-0 text-right text-[13px] font-semibold tabular-nums", late && "text-danger-600")}>
+        {nhanTyLeGiaiNgan(ratio)}
+      </span>
+    </div>
   );
 }

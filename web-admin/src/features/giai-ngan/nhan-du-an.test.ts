@@ -8,7 +8,9 @@ import {
   hangMucDuAn,
   lopHangMuc,
   lopTienDo,
+  DISBURSEMENT_READ_DENIED,
   nhanHangMuc,
+  nhanNamRong,
   nhanNgay,
   nhanNguongCham,
   nhanTien,
@@ -16,6 +18,20 @@ import {
   nhanTyLeGiaiNgan,
   tienDoDuAn,
 } from "./nhan-du-an";
+
+describe("câu về quyền — gọi bằng TÊN trên màn Phân quyền, không bằng khoá máy (GN-07)", () => {
+  it("danh sách rỗng nêu năm và quyền cần để thấy nút Thêm dự án", () => {
+    const text = nhanNamRong(2026);
+    expect(text).toContain("năm 2026");
+    expect(text).toContain("“Cập nhật giải ngân”");
+    expect(text).not.toContain("budget.update");
+  });
+
+  it("thiếu quyền xem: câu nêu tên quyền, không nêu khoá máy", () => {
+    expect(DISBURSEMENT_READ_DENIED).toContain("“Xem giải ngân”");
+    expect(DISBURSEMENT_READ_DENIED).not.toContain("budget.read");
+  });
+});
 
 describe("số tiền", () => {
   it("định dạng vi-VN kèm đơn vị đồng", () => {

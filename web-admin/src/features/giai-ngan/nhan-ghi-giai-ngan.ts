@@ -722,6 +722,15 @@ export const PHAN_CHUA_DUNG_GHI: readonly PhanChuaDung[] = [
     ten: "Nguồn vốn của dự án",
     viSao: "Danh sách dự án chưa có thông tin nguồn vốn, vì hệ thống chưa có danh mục nguồn vốn.",
   },
+  // Prototype list column "Đơn vị / phụ trách" + the detail figure "Đơn vị thực hiện" (ADR 0068 lần
+  // 5). The contract returns `org_unit_id` / `assignee_id` as internal ids only; turning them into
+  // names is another service's route under another permission, and an id is not a name.
+  {
+    ten: "Đơn vị và cán bộ phụ trách của dự án",
+    viSao:
+      "Hệ thống chỉ lưu mã nội bộ của đơn vị thực hiện và cán bộ phụ trách, chưa tra được thành " +
+      "tên để hiện.",
+  },
   // §7.2 column: no issue-tracking data exists anywhere yet.
   {
     ten: "Vướng mắc mới nhất",

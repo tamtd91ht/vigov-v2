@@ -1,24 +1,14 @@
 "use client";
 
-import {
-  CircleCheck,
-  LockKeyhole,
-  LockKeyholeOpen,
-  Pencil,
-  Plus,
-  ReceiptText,
-  Trash2,
-  TriangleAlert,
-} from "lucide-react";
+import { CircleCheck, LockKeyhole, LockKeyholeOpen, Pencil, Plus, ReceiptText, Trash2, TriangleAlert } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import { Button } from "@/components/ui/button";
-import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Field } from "@/components/ui/field";
-import { IconButton } from "@/components/ui/icon-button";
+import { ModalDialog } from "@/components/ui/modal-dialog";
 import { Notice } from "@/components/ui/notice";
 import { PendingCell, PendingColumnHeader } from "@/components/ui/pending-feature";
 import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
@@ -43,6 +33,7 @@ import {
   CAU_THIEU_QUYEN_XAC_NHAN,
   CHUNG_TU_DA_XAC_NHAN,
   DAU_GACH,
+  docSoTien,
   DOI_TAC_TOI_DA,
   FORM_CHUNG_TU_TRONG,
   NOI_DUNG_CHUNG_TU_TOI_DA,
@@ -55,11 +46,14 @@ import {
   pendingPart,
   type GiaTriFormChungTu,
 } from "./nhan-ghi-giai-ngan";
-import { VOUCHER_FUNDING_COLUMN } from "./pending-parts";
+import { VOUCHER_FUNDING_COLUMN, VoucherFundingPending } from "./pending-parts";
 import { DeniedNote, Glyph, VoucherStatusBadge } from "./project-ui";
 
 /**
- * Tab "Chứng từ" của §8.2 — sáu tuyến ghi của vòng đời chứng từ giải ngân.
+ * Tab "Chứng từ" của §8.2 — sáu tuyến ghi của vòng đời chứng từ giải ngân, in the prototype's
+ * composition (`BudgetItemDetail.tsx:391-519`, `DisbursementForm.tsx`, ADR 0068 lần 5): the
+ * `+ Ghi nhận khoản chi` button that unfolds the entry box in place, the edit box with the accent
+ * bar, then the table whose status cell carries the row's actions.
  *
  * ═══════════════════════════════════════════════════════════════════════════════════════════
  * ⚠ BẢNG NÀY CHỈ CHỨA CHỨNG TỪ CỦA CHÍNH PHIÊN LÀM VIỆC NÀY, VÀ ĐÓ KHÔNG PHẢI MỘT LỰA CHỌN.
@@ -71,7 +65,7 @@ import { DeniedNote, Glyph, VoucherStatusBadge } from "./project-ui";
  *
  * Câu ấy được NÓI RA trên màn (`PHAN_CHUA_DUNG_GHI`, mục đầu tiên) chứ không giấu ở đây: một bảng
  * trống không kèm lời giải thích đọc thành "dự án này chưa chi đồng nào" — một khẳng định về tiền
- * của xã mà màn hình không có căn cứ nào để đưa ra.
+ * của xã mà màn hình không có căn cứ nào để đưa ra. Hence no "(N)" count on the tab either.
  * ═══════════════════════════════════════════════════════════════════════════════════════════
  *
  * HAI KHOÁ, CHIA THEO TRỤC NGUY HIỂM (§8.2): `budget.update` NHẬP và SỬA; `budget.confirm` XÁC
@@ -96,7 +90,9 @@ export function giaTriTuChungTu(ct: finance_chungTuRa): GiaTriFormChungTu {
 }
 
 /**
- * Biểu mẫu `+ Ghi nhận khoản chi` §8.2, dùng cho cả THÊM và SỬA.
+ * Biểu mẫu `+ Ghi nhận khoản chi` §8.2, dùng cho cả THÊM và SỬA — prototype fields in a two-column
+ * grid: `Rút từ nguồn vốn` (full width, a "?" placeholder) · Ngày chi · Số tiền · Nội dung chi (full
+ * width) · Đơn vị thụ hưởng · Số chứng từ; the buttons below, left-aligned, save first.
  *
  * ⚠ KHỐI CẢNH BÁO ADR 0036 HIỆN NGAY TRÊN CÁC Ô, KHÔNG PHẢI SAU KHI LƯU. Sửa một chứng từ đang
  * `Đã xác nhận` sẽ kéo nó VỀ `Kế toán nhập` và xoá dấu người xác nhận. Máy chủ làm việc ấy trong im
@@ -105,8 +101,6 @@ export function giaTriTuChungTu(ct: finance_chungTuRa): GiaTriFormChungTu {
  * KHÔNG CÓ Ô `Trạng thái`: vòng đời đi qua các tuyến xác nhận / khoá / mở khoá, mỗi bước một vết
  * kiểm toán. Máy chủ trả 400 cho một thân mang `status`, và kiểu `ThemChungTuVao` đã loại nó ra ở
  * tầng biên dịch.
- *
- * KHÔNG CÓ Ô `Nguồn vốn`: chưa có tuyến nào đọc danh mục nguồn vốn — xem `PHAN_CHUA_DUNG_GHI`.
  */
 export function FormChungTu({
   tieuDeForm,
@@ -128,6 +122,8 @@ export function FormChungTu({
 }) {
   const [gt, datGT] = useState<GiaTriFormChungTu>(giaTriDau);
   const [khoaChongTrung] = useState(khoaChongTrungMoi);
+  const isEdit = trangThaiHienTai !== undefined;
+  const amount = docSoTien(gt.soTien);
 
   function guiNgay(e: FormEvent) {
     e.preventDefault();
@@ -135,110 +131,116 @@ export function FormChungTu({
   }
 
   return (
-    <Card as="form" onSubmit={guiNgay} aria-label={tieuDeForm}>
-      <CardHeader>
-        <CardTitle as="h4">{tieuDeForm}</CardTitle>
-      </CardHeader>
+    <form
+      onSubmit={guiNgay}
+      aria-label={tieuDeForm}
+      className={cn(
+        "flex min-w-0 flex-col gap-3 rounded-xl border p-3",
+        // Prototype: the entry box sits on the muted fill; the edit box is white with the accent bar.
+        isEdit ? "border-brand-100 border-l-4 border-l-brand-500 bg-surface" : "border-line bg-surface-muted",
+      )}
+    >
+      {isEdit && <p className="m-0 text-[13px] font-semibold text-ink-900">{tieuDeForm}</p>}
 
-      <div className="flex min-w-0 flex-col gap-4 p-4">
-        {trangThaiHienTai === CHUNG_TU_DA_XAC_NHAN && (
-          <Notice tone="legal" icon={TriangleAlert}>
-            {CANH_BAO_SUA_VE_NHAP}
-          </Notice>
-        )}
+      {trangThaiHienTai === CHUNG_TU_DA_XAC_NHAN && (
+        <Notice tone="legal" icon={TriangleAlert}>
+          {CANH_BAO_SUA_VE_NHAP}
+        </Notice>
+      )}
 
-        {/* Labels above, 40px controls, two columns from 640px (spec §6.3, §6.5). */}
-        <div className="grid min-w-0 gap-4 sm:grid-cols-2">
-          {/* HAI NGÀY KHÁC NHAU, và xã nhập chứng từ tuần trước vào sáng thứ Hai là chuyện thường —
-              mọi biểu đồ luỹ kế của §4 xếp theo ngày CHI, không theo ngày gõ. */}
-          <Field
-            label="Ngày chi *"
-            htmlFor="ngay-chi-chung-tu"
-            grow="auto"
-            hint="Ngày tiền thực sự chi ra, không phải ngày gõ vào sổ."
-          >
-            <input
-              id="ngay-chi-chung-tu"
-              name="ngay-chi-chung-tu"
-              type="date"
-              value={gt.ngayChi}
-              onChange={(e) => datGT({ ...gt, ngayChi: e.target.value })}
-            />
-          </Field>
+      <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+        <VoucherFundingPending />
 
-          <Field label="Số tiền (đồng) *" htmlFor="so-tien-chung-tu" grow="auto">
-            <input
-              id="so-tien-chung-tu"
-              name="so-tien-chung-tu"
-              value={gt.soTien}
-              inputMode="numeric"
-              autoComplete="off"
-              placeholder="30.000.000"
-              className="tabular-nums"
-              onChange={(e) => datGT({ ...gt, soTien: e.target.value })}
-            />
-          </Field>
+        {/* HAI NGÀY KHÁC NHAU, và xã nhập chứng từ tuần trước vào sáng thứ Hai là chuyện thường —
+            mọi biểu đồ luỹ kế của §4 xếp theo ngày CHI, không theo ngày gõ. */}
+        <Field label="Ngày chi *" htmlFor="ngay-chi-chung-tu" grow="auto" className="min-w-0">
+          <input
+            id="ngay-chi-chung-tu"
+            name="ngay-chi-chung-tu"
+            type="date"
+            value={gt.ngayChi}
+            onChange={(e) => datGT({ ...gt, ngayChi: e.target.value })}
+          />
+        </Field>
 
-          <Field label="Nội dung *" htmlFor="noi-dung-chung-tu" grow="auto" className="sm:col-span-2">
-            <textarea
-              id="noi-dung-chung-tu"
-              name="noi-dung-chung-tu"
-              rows={2}
-              value={gt.noiDung}
-              maxLength={NOI_DUNG_CHUNG_TU_TOI_DA}
-              placeholder="Thanh toán đợt 3"
-              className="py-2"
-              onChange={(e) => datGT({ ...gt, noiDung: e.target.value })}
-            />
-          </Field>
+        <Field
+          label="Số tiền (đồng) *"
+          htmlFor="so-tien-chung-tu"
+          grow="auto"
+          className="min-w-0"
+          hint={amount.loai === "so" ? nhanTien(amount.dong) : DAU_GACH}
+        >
+          <input
+            id="so-tien-chung-tu"
+            name="so-tien-chung-tu"
+            value={gt.soTien}
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder="250.000.000"
+            className="tabular-nums"
+            onChange={(e) => datGT({ ...gt, soTien: e.target.value })}
+          />
+        </Field>
 
-          <Field label="Đối tác" htmlFor="doi-tac-chung-tu" grow="auto">
-            <input
-              id="doi-tac-chung-tu"
-              name="doi-tac-chung-tu"
-              value={gt.doiTac}
-              maxLength={DOI_TAC_TOI_DA}
-              autoComplete="off"
-              onChange={(e) => datGT({ ...gt, doiTac: e.target.value })}
-            />
-          </Field>
+        <Field label="Nội dung chi *" htmlFor="noi-dung-chung-tu" grow="auto" className="min-w-0 sm:col-span-2">
+          <input
+            id="noi-dung-chung-tu"
+            name="noi-dung-chung-tu"
+            value={gt.noiDung}
+            maxLength={NOI_DUNG_CHUNG_TU_TOI_DA}
+            autoComplete="off"
+            placeholder="Thanh toán khối lượng đợt 1"
+            onChange={(e) => datGT({ ...gt, noiDung: e.target.value })}
+          />
+        </Field>
 
-          <Field label="Số chứng từ" htmlFor="so-chung-tu" grow="auto">
-            <input
-              id="so-chung-tu"
-              name="so-chung-tu"
-              value={gt.soChungTu}
-              maxLength={SO_CHUNG_TU_TOI_DA}
-              autoComplete="off"
-              onChange={(e) => datGT({ ...gt, soChungTu: e.target.value })}
-            />
-          </Field>
-        </div>
+        <Field label="Đơn vị thụ hưởng" htmlFor="doi-tac-chung-tu" grow="auto" className="min-w-0">
+          <input
+            id="doi-tac-chung-tu"
+            name="doi-tac-chung-tu"
+            value={gt.doiTac}
+            maxLength={DOI_TAC_TOI_DA}
+            autoComplete="off"
+            onChange={(e) => datGT({ ...gt, doiTac: e.target.value })}
+          />
+        </Field>
 
-        {loi !== null && (
-          <p className="thong-bao-loi m-0" role="alert">
-            {loi}
-          </p>
-        )}
+        <Field label="Số chứng từ" htmlFor="so-chung-tu" grow="auto" className="min-w-0">
+          <input
+            id="so-chung-tu"
+            name="so-chung-tu"
+            value={gt.soChungTu}
+            maxLength={SO_CHUNG_TU_TOI_DA}
+            autoComplete="off"
+            onChange={(e) => datGT({ ...gt, soChungTu: e.target.value })}
+          />
+        </Field>
       </div>
 
-      <CardFooter className="justify-end">
+      {loi !== null && (
+        <p className="thong-bao-loi m-0" role="alert">
+          {loi}
+        </p>
+      )}
+
+      <div className="flex gap-2">
+        <Button type="submit" variant="primary" disabled={dangGui} aria-busy={dangGui || undefined}>
+          <BusyLabel busy={dangGui} label={isEdit ? "Lưu thay đổi" : "Lưu khoản chi"} busyText={BUSY_SAVING} />
+        </Button>
         <Button type="button" variant="secondary" disabled={dangGui} onClick={huy}>
           Huỷ
         </Button>
-        <Button type="submit" variant="primary" disabled={dangGui} aria-busy={dangGui || undefined}>
-          <BusyLabel busy={dangGui} label="Lưu chứng từ" busyText={BUSY_SAVING} />
-        </Button>
-      </CardFooter>
-    </Card>
+      </div>
+    </form>
   );
 }
 
 /**
- * Bảng chứng từ §8.2 với cột thao tác.
+ * Bảng chứng từ §8.2 — prototype columns (`BudgetItemDetail.tsx:417-424`): Ngày chi · Số tiền · Nguồn
+ * vốn · Nội dung · Chứng từ · Trạng thái, the row's actions UNDER the status pill (`:462-510`).
  *
  * ═══════════════════════════════════════════════════════════════════════════════════════════
- * CỘT THAO TÁC LÀ GIAO CỦA HAI ĐIỀU, VÀ CẢ HAI ĐỀU CẦN:
+ * NÚT CỦA MỘT HÀNG LÀ GIAO CỦA HAI ĐIỀU, VÀ CẢ HAI ĐỀU CẦN:
  *
  *   1. TRẠNG THÁI cho phép gì (`thaoTacChungTu`) — vòng đời là một dây xích: chưa xác nhận thì
  *      chưa khoá được, đã khoá thì không sửa và không gỡ.
@@ -293,26 +295,99 @@ export function BangChungTu({
             <th scope="col" className="text-right">
               Số tiền
             </th>
-            {/* Spec §8.2's NGUỒN VỐN column — a "?" placeholder (ADR 0068 §14), "—" in every row. */}
+            {/* The prototype's NGUỒN VỐN column — a "?" placeholder (ADR 0068 §14), "—" in every row. */}
             <PendingColumnHeader info={pendingPart(VOUCHER_FUNDING_COLUMN)}>Nguồn vốn</PendingColumnHeader>
             <th scope="col">Nội dung</th>
             <th scope="col">Chứng từ</th>
             <th scope="col">Trạng thái</th>
-            <th scope="col" className="text-right">
-              Thao tác
-            </th>
           </tr>
         </thead>
         <tbody>
           {ds.map((ct) => {
             const cho = thaoTacChungTu(ct.status);
             const ngay = nhanNgay(ct.payment_date);
+            const actions = [
+              coXacNhan && cho.xacNhan && (
+                <Button
+                  key="xac-nhan"
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  icon={<Glyph icon={CircleCheck} />}
+                  disabled={dangGui}
+                  onClick={() => xacNhan(ct.id)}
+                  aria-label={`Xác nhận chứng từ ngày ${ngay}`}
+                >
+                  Xác nhận
+                </Button>
+              ),
+              coXacNhan && cho.khoa && (
+                <Button
+                  key="khoa"
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  icon={<Glyph icon={LockKeyhole} />}
+                  disabled={dangGui}
+                  onClick={() => khoa(ct.id)}
+                  aria-label={`Khoá chứng từ ngày ${ngay}`}
+                  title={CANH_BAO_KHOA}
+                >
+                  Khoá
+                </Button>
+              ),
+              coXacNhan && cho.moKhoa && (
+                <Button
+                  key="mo-khoa"
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  icon={<Glyph icon={LockKeyholeOpen} />}
+                  disabled={dangGui}
+                  onClick={() => moMoKhoa(ct.id)}
+                  aria-label={`Mở khoá chứng từ ngày ${ngay}`}
+                >
+                  Mở khoá
+                </Button>
+              ),
+              coGhi && cho.sua && (
+                <Button
+                  key="sua"
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  icon={<Glyph icon={Pencil} />}
+                  disabled={dangGui}
+                  onClick={() => moSua(ct.id)}
+                  aria-label={`Sửa chứng từ ngày ${ngay}`}
+                >
+                  Sửa
+                </Button>
+              ),
+              // Gỡ sits last, in the danger look (prototype `:498-508`).
+              coXacNhan && cho.go && (
+                <Button
+                  key="go"
+                  type="button"
+                  variant="danger"
+                  size="sm"
+                  icon={<Glyph icon={Trash2} />}
+                  disabled={dangGui}
+                  onClick={() => moGo(ct.id)}
+                  aria-label={`Gỡ chứng từ ngày ${ngay}`}
+                >
+                  Gỡ
+                </Button>
+              ),
+            ].filter(Boolean);
             return (
-              <tr key={ct.id}>
-                <td className="tabular-nums">{ngay}</td>
+              <tr key={ct.id} className="align-top">
+                <td className="tabular-nums whitespace-nowrap">{ngay}</td>
                 {/* IN ĐÚNG CON SỐ MÁY CHỦ TRẢ. Không đổi đơn vị, không làm tròn: một con số sai ở
                     đây đi thẳng vào báo cáo ngân sách. */}
-                <td className="text-right tabular-nums">{nhanTien(ct.amount)}</td>
+                <td className="text-right font-semibold whitespace-nowrap text-ink-900 tabular-nums">
+                  {nhanTien(ct.amount)}
+                </td>
                 <PendingCell />
                 <td className="whitespace-normal">
                   {ct.description}
@@ -320,7 +395,9 @@ export function BangChungTu({
                     <span className="dong-phu">{ct.counterparty}</span>
                   )}
                 </td>
-                <td>{ct.voucher_no === undefined || ct.voucher_no === "" ? DAU_GACH : ct.voucher_no}</td>
+                <td className="whitespace-nowrap text-ink-500">
+                  {ct.voucher_no === undefined || ct.voucher_no === "" ? DAU_GACH : ct.voucher_no}
+                </td>
                 <td>
                   <VoucherStatusBadge status={ct.status}>{nhanTrangThaiChungTu(ct.status)}</VoucherStatusBadge>
                   {/* MỐC KHOÁ VÀ SỐ LẦN MỞ KHOÁ ĐỀU HIỆN, và `unlock_count` là con số nói rằng đã
@@ -328,79 +405,8 @@ export function BangChungTu({
                   {ct.locked_at !== undefined && ct.locked_at !== "" && (
                     <span className="dong-phu mt-1 tabular-nums">Khoá lúc {nhanMocKhoa(ct.locked_at)}</span>
                   )}
-                  {ct.unlock_count > 0 && (
-                    <span className="dong-phu">Đã mở khoá {ct.unlock_count} lần</span>
-                  )}
-                </td>
-                <td>
-                  {/* Sửa is the everyday action: an icon with its name as label + tooltip. The
-                      four `budget.confirm` actions keep their WORDS (spec v2 §7); Gỡ is the red
-                      outline and sits last. Every label names the voucher by its DATE. */}
-                  <span className="flex flex-wrap items-center justify-end gap-1.5">
-                    {coGhi && cho.sua && (
-                      <IconButton
-                        type="button"
-                        label={`Sửa chứng từ ngày ${ngay}`}
-                        disabled={dangGui}
-                        onClick={() => moSua(ct.id)}
-                      >
-                        <Pencil aria-hidden="true" />
-                      </IconButton>
-                    )}
-                    {coXacNhan && cho.xacNhan && (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        icon={<Glyph icon={CircleCheck} />}
-                        disabled={dangGui}
-                        onClick={() => xacNhan(ct.id)}
-                        aria-label={`Xác nhận chứng từ ngày ${ngay}`}
-                      >
-                        Xác nhận
-                      </Button>
-                    )}
-                    {coXacNhan && cho.khoa && (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        icon={<Glyph icon={LockKeyhole} />}
-                        disabled={dangGui}
-                        onClick={() => khoa(ct.id)}
-                        aria-label={`Khoá chứng từ ngày ${ngay}`}
-                        title={CANH_BAO_KHOA}
-                      >
-                        Khoá
-                      </Button>
-                    )}
-                    {coXacNhan && cho.moKhoa && (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        icon={<Glyph icon={LockKeyholeOpen} />}
-                        disabled={dangGui}
-                        onClick={() => moMoKhoa(ct.id)}
-                        aria-label={`Mở khoá chứng từ ngày ${ngay}`}
-                      >
-                        Mở khoá
-                      </Button>
-                    )}
-                    {coXacNhan && cho.go && (
-                      <Button
-                        type="button"
-                        variant="danger"
-                        size="sm"
-                        icon={<Glyph icon={Trash2} />}
-                        disabled={dangGui}
-                        onClick={() => moGo(ct.id)}
-                        aria-label={`Gỡ chứng từ ngày ${ngay}`}
-                      >
-                        Gỡ
-                      </Button>
-                    )}
-                  </span>
+                  {ct.unlock_count > 0 && <span className="dong-phu">Đã mở khoá {ct.unlock_count} lần</span>}
+                  {actions.length > 0 && <span className="mt-1.5 flex flex-wrap gap-1.5">{actions}</span>}
                 </td>
               </tr>
             );
@@ -418,8 +424,14 @@ type DangMo =
   | { kieu: "moKhoa"; ct: finance_chungTuRa }
   | null;
 
+const REASON_FORM_ID = "form-ly-do-chung-tu";
+
 /**
- * Khối "Chứng từ" của trang chi tiết dự án — nối cả sáu tuyến ghi.
+ * Khối "Chứng từ" của trang chi tiết dự án — nối cả sáu tuyến ghi. Rendered as the tab panel's
+ * content, not as a card of its own (the prototype's tab content sits inside the project card).
+ *
+ * GỠ AND MỞ KHOÁ ASK FOR THEIR REASON IN A DIALOG — the prototype confirms a removal in a dialog; the
+ * server requires the reason for both (rule 7, open question #29).
  *
  * MỖI LẦN GHI XONG GỌI `daGhiXong`, và trang cha ĐỌC LẠI dự án: `disbursed_amount`,
  * `remaining_amount`, `disbursed_ratio` và `delay_score` đều SUY RA từ chứng từ, nên một chứng từ
@@ -529,40 +541,30 @@ export function KhoiChungTu({
     return ds.find((c) => c.id === id);
   }
 
+  function dong(): void {
+    if (dangGui) return;
+    datDangMo(null);
+    datLoi(null);
+  }
+
   return (
-    <Card as="section" aria-labelledby="tieu-de-chung-tu">
-      <CardHeader className="justify-between">
-        <div className="min-w-0">
-          <CardTitle as="h3" id="tieu-de-chung-tu" className="inline-flex items-center gap-2">
-            <Glyph icon={ReceiptText} className="size-[18px] shrink-0 text-brand-600" />
-            Chứng từ giải ngân
-          </CardTitle>
-          {/* VÒNG ĐỜI NÓI RA NGAY TRÊN BẢNG, không để cán bộ suy từ việc nút nào hiện nút nào không. */}
-          <p className="m-0 mt-1 text-[13px] text-ink-500">
-            Vòng đời: Kế toán nhập → Đã xác nhận → Đã khoá. Nhập và sửa cần quyền “Cập nhật giải
-            ngân”; xác nhận, khoá, mở khoá và gỡ cần quyền “Xác nhận, khoá khoản giải ngân”.
-          </p>
-        </div>
-        {coGhi && (
+    <div className="flex min-w-0 flex-col gap-3">
+      {/* The entry box unfolds IN PLACE of its button (prototype `DisbursementForm.tsx:134-141`). */}
+      {coGhi && dangMo?.kieu !== "them" && (
+        <div>
           <Button
             type="button"
-            variant="primary"
+            variant="secondary"
             icon={<Glyph icon={Plus} />}
-            aria-expanded={dangMo?.kieu === "them"}
             onClick={() => {
               datLoi(null);
-              datDangMo(dangMo?.kieu === "them" ? null : { kieu: "them" });
+              datDangMo({ kieu: "them" });
             }}
           >
             Ghi nhận khoản chi
           </Button>
-        )}
-      </CardHeader>
-
-      <div className="flex min-w-0 flex-col gap-4 p-4 empty:hidden">
-      {!coGhi && <DeniedNote>{CAU_THIEU_QUYEN_GHI}</DeniedNote>}
-
-      {!coXacNhan && <DeniedNote>{CAU_THIEU_QUYEN_XAC_NHAN}</DeniedNote>}
+        </div>
+      )}
 
       {dangMo?.kieu === "them" && coGhi && (
         <FormChungTu
@@ -571,10 +573,7 @@ export function KhoiChungTu({
           giaTriDau={FORM_CHUNG_TU_TRONG}
           dangGui={dangGui}
           loi={loi}
-          huy={() => {
-            datDangMo(null);
-            datLoi(null);
-          }}
+          huy={dong}
           luu={them}
         />
       )}
@@ -582,63 +581,26 @@ export function KhoiChungTu({
       {dangMo?.kieu === "sua" && coGhi && (
         <FormChungTu
           key={`sua-chung-tu|${dangMo.ct.id}|${lanGhiXong}`}
-          tieuDeForm="Sửa chứng từ"
+          tieuDeForm={`Sửa khoản chi ngày ${nhanNgay(dangMo.ct.payment_date)}`}
           giaTriDau={giaTriTuChungTu(dangMo.ct)}
           trangThaiHienTai={dangMo.ct.status}
           dangGui={dangGui}
           loi={loi}
-          huy={() => {
-            datDangMo(null);
-            datLoi(null);
-          }}
+          huy={dong}
           luu={(gt) => {
             sua(dangMo.ct, gt);
           }}
         />
       )}
 
-      {dangMo?.kieu === "go" && coXacNhan && (
-        <FormLyDo
-          tieuDe={`Gỡ chứng từ ngày ${nhanNgay(dangMo.ct.payment_date)}?`}
-          busyText="Đang gỡ…"
-          moTa={
-            "Chứng từ được gỡ MỀM: hàng vẫn còn kèm người gỡ và lý do, nhưng nó thôi cộng vào số " +
-            "đã giải ngân của dự án — tức là một con số đã báo cáo vừa thay đổi."
-          }
-          nhanNut="Gỡ chứng từ"
-          dangGui={dangGui}
-          loi={loi}
-          huy={() => {
-            datDangMo(null);
-            datLoi(null);
-          }}
-          xacNhan={(lyDo) => {
-            go(dangMo.ct, lyDo);
-          }}
-        />
-      )}
+      {/* VÒNG ĐỜI NÓI RA NGAY TRÊN BẢNG, không để cán bộ suy từ việc nút nào hiện nút nào không. */}
+      <p className="m-0 text-[13px] text-ink-500">
+        Vòng đời: Kế toán nhập → Đã xác nhận → Đã khoá. Nhập và sửa cần quyền “Cập nhật giải ngân”;
+        xác nhận, khoá, mở khoá và gỡ cần quyền “Xác nhận, khoá khoản giải ngân”.
+      </p>
 
-      {dangMo?.kieu === "moKhoa" && coXacNhan && (
-        <FormLyDo
-          tieuDe={`Mở khoá chứng từ ngày ${nhanNgay(dangMo.ct.payment_date)}?`}
-          tone="default"
-          busyText="Đang mở khoá…"
-          moTa={
-            "Mở khoá đưa chứng từ về Đã xác nhận để sửa được. Lý do là bắt buộc, và NGƯỜI VỪA KHOÁ " +
-            "không tự mở lại được — cần một cán bộ khác có quyền “Xác nhận, khoá khoản giải ngân”."
-          }
-          nhanNut="Mở khoá"
-          dangGui={dangGui}
-          loi={loi}
-          huy={() => {
-            datDangMo(null);
-            datLoi(null);
-          }}
-          xacNhan={(lyDo) => {
-            moKhoa(dangMo.ct, lyDo);
-          }}
-        />
-      )}
+      {!coGhi && <DeniedNote>{CAU_THIEU_QUYEN_GHI}</DeniedNote>}
+      {!coXacNhan && <DeniedNote>{CAU_THIEU_QUYEN_XAC_NHAN}</DeniedNote>}
 
       {/* LỖI CỦA MỘT THAO TÁC KHÔNG MỞ BIỂU MẪU NÀO (xác nhận, khoá) vẫn phải ra màn hình. */}
       {loi !== null && dangMo === null && (
@@ -646,7 +608,6 @@ export function KhoiChungTu({
           {loi}
         </p>
       )}
-      </div>
 
       <BangChungTu
         ds={ds}
@@ -674,6 +635,51 @@ export function KhoiChungTu({
         xacNhan={xacNhan}
         khoa={khoa}
       />
-    </Card>
+
+      {dangMo?.kieu === "go" && coXacNhan && (
+        <ModalDialog titleId={REASON_FORM_ID} onDismiss={dong} className="p-0">
+          <FormLyDo
+            formId={REASON_FORM_ID}
+            className="shadow-none"
+            tieuDe={`Gỡ chứng từ ngày ${nhanNgay(dangMo.ct.payment_date)}?`}
+            busyText="Đang gỡ…"
+            moTa={
+              "Chứng từ được gỡ MỀM: hàng vẫn còn kèm người gỡ và lý do, nhưng nó thôi cộng vào số " +
+              "đã giải ngân của dự án — tức là một con số đã báo cáo vừa thay đổi."
+            }
+            nhanNut="Gỡ chứng từ"
+            dangGui={dangGui}
+            loi={loi}
+            huy={dong}
+            xacNhan={(lyDo) => {
+              go(dangMo.ct, lyDo);
+            }}
+          />
+        </ModalDialog>
+      )}
+
+      {dangMo?.kieu === "moKhoa" && coXacNhan && (
+        <ModalDialog titleId={REASON_FORM_ID} onDismiss={dong} className="p-0">
+          <FormLyDo
+            formId={REASON_FORM_ID}
+            className="shadow-none"
+            tieuDe={`Mở khoá chứng từ ngày ${nhanNgay(dangMo.ct.payment_date)}?`}
+            tone="default"
+            busyText="Đang mở khoá…"
+            moTa={
+              "Mở khoá đưa chứng từ về Đã xác nhận để sửa được. Lý do là bắt buộc, và NGƯỜI VỪA KHOÁ " +
+              "không tự mở lại được — cần một cán bộ khác có quyền “Xác nhận, khoá khoản giải ngân”."
+            }
+            nhanNut="Mở khoá"
+            dangGui={dangGui}
+            loi={loi}
+            huy={dong}
+            xacNhan={(lyDo) => {
+              moKhoa(dangMo.ct, lyDo);
+            }}
+          />
+        </ModalDialog>
+      )}
+    </div>
   );
 }

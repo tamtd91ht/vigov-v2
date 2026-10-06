@@ -4,7 +4,7 @@ import { ArrowLeft, CircleCheck } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,41 +13,36 @@ import { layHangMucKeHoachVon } from "@/lib/api/danh-muc-nghiep-vu";
 import { layChiTietDuAn } from "@/lib/api/du-an";
 import type { KetQua } from "@/lib/api/goi";
 import type { finance_duAnRa, finance_hangMucRa } from "@/lib/api/schema.gen";
+import { cn } from "@/lib/cn";
 import { coQuyen, QUYEN_GHI_NGAN_SACH, QUYEN_XAC_NHAN_NGAN_SACH } from "@/lib/quyen";
 
 import { KhoiChungTu } from "./chung-tu-du-an";
-import { KhoiSuaXoaDuAn } from "./ghi-du-an";
-import {
-  nhanNgay,
-  nhanTien,
-  nhanTienDo,
-  nhanTyLeGiaiNgan,
-  tienDoDuAn,
-} from "./nhan-du-an";
-import { ProjectFundingPending, ProjectRecordTabs } from "./pending-parts";
+import { ProjectEditPanel, ProjectHeaderActions, ProjectRemoveDialog } from "./ghi-du-an";
+import { nhanNgay, nhanTien, nhanTienDo, nhanTyLeGiaiNgan, tienDoDuAn } from "./nhan-du-an";
+import { ProjectFundingPending, ProjectRecordTabs, ProjectUnitPending } from "./pending-parts";
 import { Glyph, ProgressBadge } from "./project-ui";
 import { ScopeNotice } from "./scope-notice";
 
 /**
- * Trang chi tiết một dự án — `docs/ui-ux/06-giai-ngan.md §8`, cộng `[✎ Sửa dự án]`, `🗑 Gỡ dự án`
- * và khối "Chứng từ" của §8.2.
+ * Trang chi tiết một dự án in the prototype's composition (`BudgetItemDetail.tsx`, ADR 0068 lần 5):
+ * the `← Theo dõi giải ngân` link, the inline edit panel when open, then ONE card — header (code,
+ * name, `Sửa dự án`), progress pill, figures, progress bar, the funding block, and the four tabs.
  *
- * BA TRONG BỐN TAB CỦA ĐẶC TẢ VẪN KHÔNG CÓ (Vướng mắc · Biểu đồ · Trao đổi): không tab nào có
- * tuyến phía sau trong hợp đồng REST. They are drawn DISABLED with a "?" (ADR 0068 §14,
- * `pending-parts.tsx`) — never a live tab that opens an empty panel.
+ * BA TRONG BỐN TAB VẪN KHÔNG CÓ (Vướng mắc · Biểu đồ · Trao đổi): không tab nào có tuyến phía sau
+ * trong hợp đồng REST. They are drawn DISABLED with a "?" (ADR 0068 §14, `pending-parts.tsx`) — never
+ * a live tab that opens an empty panel. So Chứng từ, not the prototype's Vướng mắc, is the open tab.
  *
- * TAB "CHỨNG TỪ" NAY CÓ SÁU TUYẾN GHI VÀ KHÔNG CÓ TUYẾN ĐỌC. Khối chứng từ dưới đây vì thế chỉ giữ
- * được những chứng từ của chính phiên làm việc này, và nó NÓI RA điều đó — xem `chung-tu-du-an.tsx`
- * và mục đầu của `PHAN_CHUA_DUNG_GHI`.
+ * TAB "CHỨNG TỪ" CÓ SÁU TUYẾN GHI VÀ KHÔNG CÓ TUYẾN ĐỌC — xem `chung-tu-du-an.tsx` và mục đầu của
+ * `PHAN_CHUA_DUNG_GHI`.
  *
  * KHỐI "GIẢI NGÂN THEO NGUỒN VỐN" CŨNG KHÔNG: `phan_bo_nguon_von` chưa có tuyến nào, và một khối
- * rỗng gắn nhãn "0 đ / 0 đ" đọc thành "xã chưa gắn nguồn nào" — một khẳng định về dữ liệu của xã
- * mà màn hình này không có căn cứ để đưa ra. Its placeholder carries no figure at all.
+ * rỗng gắn nhãn "0 đ / 0 đ" đọc thành "xã chưa gắn nguồn nào". Its placeholder carries no figure.
  *
- * KHÔNG CÓ VẠCH "THỜI GIAN ĐÃ TRÔI QUA" (§8, thanh tiến độ). Con số ấy là một phép tính trên
- * đồng hồ và trên biên của năm ngân sách; máy chủ tính nó để ra `delay_score` nhưng KHÔNG gửi
- * nó về. Dựng lại phép tính ở trình duyệt là một bản thứ hai đọc đồng hồ của MÁY CÁN BỘ, và nó
- * sẽ lệch bản của máy chủ đúng vào hai đầu năm — thiếu ở hợp đồng, đã báo lên, không vá tạm.
+ * KHÔNG CÓ VẠCH "THỜI GIAN ĐÃ TRÔI QUA" (prototype thanh tiến độ + "thời gian đã trôi qua y%"). Con
+ * số ấy là một phép tính trên đồng hồ và trên biên của năm ngân sách; máy chủ tính nó để ra
+ * `delay_score` nhưng KHÔNG gửi nó về. Dựng lại phép tính ở trình duyệt là một bản thứ hai đọc đồng
+ * hồ của MÁY CÁN BỘ, và nó sẽ lệch bản của máy chủ đúng vào hai đầu năm — thiếu ở hợp đồng, không
+ * vá tạm.
  */
 
 type TrangThaiChiTiet =
@@ -65,6 +60,8 @@ export function ChiTietDuAn({ id }: { id: string }) {
   const [daTai, datDaTai] = useState<{ khoa: string; kq: KetQua<finance_duAnRa> } | null>(null);
   const [lanTai, datLanTai] = useState(0);
   const [daXoa, datDaXoa] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const [danhMuc, datDanhMuc] = useState<readonly finance_hangMucRa[]>([]);
   const khoa = `${id}|${lanTai}`;
 
@@ -96,26 +93,29 @@ export function ChiTietDuAn({ id }: { id: string }) {
         ? { pha: "xong", duAn: daTai.kq.duLieu }
         : { pha: "loi", thongBao: daTai.kq.thongBao };
 
-  // FAIL CLOSED — xem `bang-du-an.tsx`. HAI khoá đọc riêng, và chúng không suy ra nhau.
+  // FAIL CLOSED — xem `disbursement-workspace.tsx`. HAI khoá đọc riêng, và chúng không suy ra nhau.
   const phien = usePhien();
   const dsQuyen: readonly string[] = phien !== null && phien.ok ? phien.duLieu.permissions : [];
   const coGhi = coQuyen(dsQuyen, QUYEN_GHI_NGAN_SACH);
   const coXacNhan = coQuyen(dsQuyen, QUYEN_XAC_NHAN_NGAN_SACH);
 
   return (
-    <section className="man-giai-ngan flex min-w-0 flex-col gap-4" aria-labelledby="tieu-de-chi-tiet-du-an">
-      <p className="duong-lui m-0">
-        <Link href="/giai-ngan" className="inline-flex items-center gap-1.5">
-          <Glyph icon={ArrowLeft} className="size-4 shrink-0" />
-          Theo dõi giải ngân
-        </Link>
-      </p>
-      {/* The page's `<h1>` already says "Chi tiết dự án"; this heading stays for the region's name. */}
-      <h2 id="tieu-de-chi-tiet-du-an" className="an-thi-giac">
-        Chi tiết dự án
-      </h2>
-      {/* Câu của máy chủ trên chính dự án (`scope_notice`), chỉ khi dự án đã về — `scope-notice.tsx`. */}
-      {trangThai.pha === "xong" && <ScopeNotice text={trangThai.duAn.scope_notice} />}
+    <section className="flex min-w-0 flex-col" aria-label="Chi tiết dự án">
+      <Link
+        href="/giai-ngan"
+        className="mb-3 inline-flex w-fit items-center gap-1.5 text-[13px] text-ink-500 no-underline hover:text-ink-900"
+      >
+        <Glyph icon={ArrowLeft} className="size-3.5 shrink-0" />
+        Theo dõi giải ngân
+      </Link>
+
+      {/* Câu của máy chủ trên chính dự án (`scope_notice`), chỉ khi dự án đã về — `scope-notice.tsx`.
+          Not in the prototype's detail page; kept because the banner is mandatory (§1). */}
+      {trangThai.pha === "xong" && !daXoa && (
+        <div className="mb-4">
+          <ScopeNotice text={trangThai.duAn.scope_notice} />
+        </div>
+      )}
 
       {/* DỰ ÁN VỪA BỊ GỠ THÌ KHÔNG DỰNG LẠI NÓ. Máy chủ trả 204 không thân, và đọc lại sẽ ra 404 —
           một câu "Không tìm thấy dự án" ngay sau một thao tác thành công đọc như một lỗi. */}
@@ -125,7 +125,7 @@ export function ChiTietDuAn({ id }: { id: string }) {
             icon={CircleCheck}
             title="Đã gỡ dự án."
             description="Bản ghi vẫn còn trong hệ thống kèm người gỡ và lý do (xoá mềm), và mã dự án không quay lại dãy."
-            action={<Link href="/giai-ngan">Về danh sách dự án</Link>}
+            action={<Link href="/giai-ngan">Về danh sách giải ngân</Link>}
           />
         </Card>
       ) : (
@@ -136,14 +136,10 @@ export function ChiTietDuAn({ id }: { id: string }) {
               <p role="status" className="an-thi-giac">
                 Đang tải dự án…
               </p>
-              <div aria-hidden="true" className="flex flex-col gap-4 p-4">
-                <Skeleton className="h-5 w-2/3" />
-                <Skeleton className="w-40" />
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {Array.from({ length: 6 }, (_, i) => (
-                    <Skeleton key={i} className="h-4" />
-                  ))}
-                </div>
+              <div aria-hidden="true" className="flex flex-col gap-3 p-5">
+                <Skeleton className="h-7 w-1/2" />
+                <Skeleton className="h-24 w-full" />
+                <Skeleton className="h-64 w-full" />
               </div>
             </Card>
           )}
@@ -162,29 +158,48 @@ export function ChiTietDuAn({ id }: { id: string }) {
 
           {trangThai.pha === "xong" && (
             <>
-              <ThongTinDuAn duAn={trangThai.duAn} />
-
-              <KhoiSuaXoaDuAn
-                duAn={trangThai.duAn}
-                danhMuc={danhMuc}
-                coGhi={coGhi}
-                coXacNhan={coXacNhan}
-                daSuaXong={() => datLanTai((n) => n + 1)}
-                daXoaXong={() => datDaXoa(true)}
-              />
-
-              <ProjectFundingPending />
-
-              {/* MỖI LẦN GHI CHỨNG TỪ XONG LÀ MỘT LẦN ĐỌC LẠI DỰ ÁN: `disbursed_amount`,
-                  `remaining_amount`, `disbursed_ratio` và `delay_score` đều suy ra từ chứng từ. */}
-              <ProjectRecordTabs>
-                <KhoiChungTu
-                  duAnID={trangThai.duAn.id}
-                  coGhi={coGhi}
-                  coXacNhan={coXacNhan}
-                  daGhiXong={() => datLanTai((n) => n + 1)}
+              {/* The edit form opens ON the page, above the card — a dialog would cover the very
+                  figures needed to edit right (prototype `:125-145`). */}
+              {editing && coGhi && (
+                <ProjectEditPanel
+                  duAn={trangThai.duAn}
+                  danhMuc={danhMuc}
+                  onClose={() => setEditing(false)}
+                  onSaved={() => datLanTai((n) => n + 1)}
                 />
-              </ProjectRecordTabs>
+              )}
+
+              <ThongTinDuAn
+                duAn={trangThai.duAn}
+                actions={
+                  <ProjectHeaderActions
+                    coGhi={coGhi}
+                    coXacNhan={coXacNhan}
+                    editing={editing}
+                    onToggleEdit={() => setEditing((v) => !v)}
+                    onRemove={() => setRemoving(true)}
+                  />
+                }
+              >
+                {/* MỖI LẦN GHI CHỨNG TỪ XONG LÀ MỘT LẦN ĐỌC LẠI DỰ ÁN: `disbursed_amount`,
+                    `remaining_amount`, `disbursed_ratio` và `delay_score` đều suy ra từ chứng từ. */}
+                <ProjectRecordTabs>
+                  <KhoiChungTu
+                    duAnID={trangThai.duAn.id}
+                    coGhi={coGhi}
+                    coXacNhan={coXacNhan}
+                    daGhiXong={() => datLanTai((n) => n + 1)}
+                  />
+                </ProjectRecordTabs>
+              </ThongTinDuAn>
+
+              {removing && coXacNhan && (
+                <ProjectRemoveDialog
+                  duAn={trangThai.duAn}
+                  onClose={() => setRemoving(false)}
+                  onRemoved={() => datDaXoa(true)}
+                />
+              )}
             </>
           )}
         </>
@@ -193,74 +208,108 @@ export function ChiTietDuAn({ id }: { id: string }) {
   );
 }
 
-/** Phần thuần trình bày, tách ra để kết xuất được trong test mà không cần mạng. */
-export function ThongTinDuAn({ duAn }: { duAn: finance_duAnRa }) {
+/**
+ * The project card (prototype `ItemBody`, `BudgetItemDetail.tsx:249-324`). Presentational, so it
+ * renders in tests without the network; `actions` is the header's buttons, `children` the tabs.
+ */
+export function ThongTinDuAn({
+  duAn,
+  actions,
+  children,
+}: {
+  duAn: finance_duAnRa;
+  actions?: ReactNode;
+  children?: ReactNode;
+}) {
   const tienDo = tienDoDuAn(duAn.delay_score, duAn.is_delayed);
+  const late = tienDo.loai === "cham";
+  const ratio = duAn.disbursed_ratio;
 
   return (
-    <Card>
-      <CardHeader className="justify-between">
-        <div className="min-w-0">
-          <CardTitle as="h3" className="text-base">
+    <Card as="article" aria-labelledby="ten-du-an-chi-tiet">
+      <header className="flex items-start gap-3 border-b border-line px-5 py-4">
+        <div className="min-w-0 flex-1">
+          <p className="ma-muc m-0 text-xs font-semibold text-ink-500">{duAn.code}</p>
+          <h2 id="ten-du-an-chi-tiet" className="m-0 mt-0.5 text-base leading-snug font-bold text-ink-900">
             {duAn.name}
-          </CardTitle>
-          <p className="ma-muc m-0 mt-1 text-[13px] text-ink-500">{duAn.code}</p>
+          </h2>
+          {/* The prototype's line names the funding sources and the officer — neither is readable
+              here (ids only, no catalogue) — so it carries the budget year this project belongs to. */}
+          <p className="m-0 mt-1 text-xs text-ink-500">Năm ngân sách {duAn.year}</p>
         </div>
-        <ProgressBadge progress={tienDo}>{nhanTienDo(tienDo)}</ProgressBadge>
-      </CardHeader>
+        {actions}
+      </header>
 
-      <div className="flex min-w-0 flex-col gap-4 p-4">
-        {/* Label–value pairs (spec v2 §8b), in the same order as before. */}
-        <dl className={DETAIL_LIST}>
-          <DetailItem label="Năm ngân sách">{duAn.year}</DetailItem>
+      <div className="px-5 py-4">
+        <div className="mb-4 flex flex-wrap gap-2">
+          <ProgressBadge progress={tienDo}>{nhanTienDo(tienDo)}</ProgressBadge>
+        </div>
 
-          <DetailItem label="Kế hoạch vốn năm">{nhanTien(duAn.planned_amount)}</DetailItem>
-
+        <dl className="m-0 grid min-w-0 grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
+          <Figure label="Kế hoạch vốn năm">{nhanTien(duAn.planned_amount)}</Figure>
           {/* "Tổng mức được duyệt" về đây đã áp sẵn quy tắc §9 cho ô để trống — máy chủ làm việc
               ấy, nên không có nhánh "để trống thì lấy bằng kế hoạch vốn" nào ở phía web. */}
-          <DetailItem label="Tổng mức được duyệt">{nhanTien(duAn.approved_amount)}</DetailItem>
-
-          <DetailItem label="Đã giải ngân">{nhanTien(duAn.disbursed_amount)}</DetailItem>
-
-          <DetailItem label="Còn lại">{nhanTien(duAn.remaining_amount)}</DetailItem>
-
-          <DetailItem label="Tỷ lệ giải ngân">{nhanTyLeGiaiNgan(duAn.disbursed_ratio)}</DetailItem>
-
+          <Figure label="Tổng mức được duyệt">{nhanTien(duAn.approved_amount)}</Figure>
+          <Figure label="Đã giải ngân">{nhanTien(duAn.disbursed_amount)}</Figure>
+          {/* Số âm hiện nguyên là số âm: giải ngân vượt kế hoạch phải nhìn thấy được. */}
+          <Figure label="Còn lại">{nhanTien(duAn.remaining_amount)}</Figure>
+          <Figure label="Thời gian thực hiện">{executionPeriod(duAn.start_date, duAn.completion_date)}</Figure>
+          <ProjectUnitPending />
           {/* HAI MỐC KHÁC NHAU, CỐ Ý ĐỂ CẠNH NHAU. §9 nói rõ: công trình xong tháng 3 vẫn có thể
               phải giải ngân trước 31/12, nên "ngày hoàn thành" không thay được "thời hạn giải
-              ngân". Gộp hai dòng này làm một là mất đúng mốc bị hỏi khi quyết toán. */}
-          <DetailItem label="Thời hạn giải ngân">{nhanNgay(duAn.disbursement_deadline)}</DetailItem>
-
-          {/* Trường tuỳ chọn trong hợp đồng: vắng mặt nghĩa là máy chủ không nói gì, và `nhanNgay`
-              nói ra điều đó bằng "Chưa đặt" chứ không bằng một ô trống. */}
-          <DetailItem label="Ngày khởi công">{nhanNgay(duAn.start_date ?? "")}</DetailItem>
-
-          <DetailItem label="Ngày hoàn thành">{nhanNgay(duAn.completion_date ?? "")}</DetailItem>
+              ngân". Not in the prototype's grid; kept because it is the date asked at settlement. */}
+          <Figure label="Thời hạn giải ngân">{nhanNgay(duAn.disbursement_deadline)}</Figure>
         </dl>
 
+        <div className="mt-4">
+          {ratio !== null && Number.isFinite(ratio) && (
+            <div aria-hidden="true" className="relative h-2.5 overflow-hidden rounded-full bg-surface-subtle-2">
+              <div
+                className={cn("h-full rounded-full", late ? "bg-danger-500" : "bg-success-500")}
+                style={{ width: `${Math.min(100, Math.max(0, ratio / 100))}%` }}
+              />
+            </div>
+          )}
+          <p className="m-0 mt-1.5 text-xs text-ink-500">
+            {ratio === null ? nhanTyLeGiaiNgan(ratio) : `Giải ngân ${nhanTyLeGiaiNgan(ratio)}`}
+          </p>
+        </div>
+
         {duAn.description !== undefined && duAn.description !== "" && (
-          <p className="m-0 text-sm whitespace-pre-line text-ink-700">{duAn.description}</p>
+          <p className="m-0 mt-3 text-sm whitespace-pre-line text-ink-700">{duAn.description}</p>
         )}
+
+        <div className="mt-4">
+          <ProjectFundingPending />
+        </div>
+
+        {children !== undefined && <div className="mt-5">{children}</div>}
       </div>
 
-      {/* ĐƠN VỊ THỰC HIỆN VÀ CÁN BỘ PHỤ TRÁCH KHÔNG HIỆN Ở ĐÂY. Hợp đồng chỉ trả ID nội bộ
-          (`org_unit_id`, `assignee_id`); tra chúng thành tên bộ phận và tên cán bộ là việc của
-          tuyến khác dưới quyền khác, và in một chuỗi ULID lên màn hình cán bộ không nói với ai
-          điều gì. */}
+      {/* ĐƠN VỊ THỰC HIỆN VÀ CÁN BỘ PHỤ TRÁCH KHÔNG HIỆN BẰNG ID. Hợp đồng chỉ trả ID nội bộ
+          (`org_unit_id`, `assignee_id`); in một chuỗi ULID lên màn hình cán bộ không nói với ai điều
+          gì — the figure above is a "?" placeholder instead. */}
     </Card>
   );
 }
 
-/** Label–value grid of the project card: one column on a phone, two pairs per row from 640px. */
-const DETAIL_LIST =
-  "m-0 grid min-w-0 gap-x-6 gap-y-3 rounded-xl border border-line bg-surface-muted p-4 sm:grid-cols-2";
+/**
+ * `01/01/2026 → 20/03/2026` (prototype `Thời gian thực hiện`). Both dates unset is ONE "Chưa đặt",
+ * not "Chưa đặt → Chưa đặt"; one unset keeps its own "Chưa đặt" so the reader sees which is missing.
+ */
+function executionPeriod(start: string | undefined, end: string | undefined): string {
+  const from = start ?? "";
+  const to = end ?? "";
+  if (from === "" && to === "") return nhanNgay("");
+  return `${nhanNgay(from)} → ${nhanNgay(to)}`;
+}
 
-/** One `<dt>`/`<dd>` pair; figures in tabular digits so amounts line up down the column. */
-function DetailItem({ label, children }: { label: string; children: ReactNode }) {
+/** One `<dt>`/`<dd>` pair of the figure grid (prototype `Figure`). */
+function Figure({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
       <dt className="text-xs font-semibold text-ink-500">{label}</dt>
-      <dd className="m-0 text-sm font-medium break-words text-ink-900 tabular-nums">{children}</dd>
+      <dd className="m-0 text-sm font-semibold break-words text-ink-900 tabular-nums">{children}</dd>
     </div>
   );
 }

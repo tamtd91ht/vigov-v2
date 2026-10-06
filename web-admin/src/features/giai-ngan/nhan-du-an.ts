@@ -185,28 +185,27 @@ export function nhanNguongCham(phanVan: number): string {
 // câu ấy là `budget.scope_notice` do máy chủ gửi (`scope_notice`), xã sửa được — xem `scope-notice.tsx`.
 
 /**
- * Trạng thái rỗng: năm ngân sách chưa có dự án nào. Bình thường, không phải lỗi.
+ * Trạng thái rỗng: năm ngân sách chưa có dự án nào. Bình thường, không phải lỗi. The first sentence
+ * is the prototype's (`BudgetWorkspace.tsx:371-374`, under the title "Chưa có dự án nào").
  *
  * Quyền gọi bằng TÊN trên màn Phân quyền ("Cập nhật giải ngân"), không bằng khoá máy `budget.update`
  * (tester report GN-07): cán bộ đọc tên ấy cho quản trị viên, và đó là chữ quản trị viên tìm thấy.
  */
 export function nhanNamRong(nam: number): string {
   return (
-    `Năm ngân sách ${nam} chưa có dự án nào. Thêm dự án bằng nút ở trên — nút chỉ hiện với tài ` +
-    "khoản có quyền “Cập nhật giải ngân”."
+    `Thêm dự án và xếp vào hạng mục để bắt đầu theo dõi giải ngân năm ${nam}. Nút “Thêm dự án” chỉ ` +
+    "hiện với tài khoản có quyền “Cập nhật giải ngân”."
   );
 }
 
 /**
- * Ghi chú đầu màn: phần nào của bản thiết kế đã có đường ghi thật, phần nào chưa.
- *
- * ⚠ CÂU CŨ Ở ĐÂY — *"Màn hình hiện chỉ xem. Thêm dự án, ghi nhận khoản chi … chưa mở"* — ĐÃ SAI TỪ
- * 24/09/2026, khi chín tuyến ghi của phân hệ được nối vào. Nó được viết lại chứ không gỡ đi, vì một
- * câu đầu màn nói sai về việc cán bộ làm được gì là câu họ tin và làm theo.
- *
- * NHẬP EXCEL VẪN CHƯA CÓ, và đó là sự thật của hợp đồng: không tuyến nào nhận tệp. Chi tiết từng
- * phần chưa dựng nằm ở `PHAN_CHUA_DUNG_GHI` trong `nhan-ghi-giai-ngan.ts`, hiện ra trên màn.
+ * What an account without `budget.read` is told on both Giải ngân pages, by the permission's Phân
+ * quyền name (GN-07). Here, in a plain module, because the detail page is a Server Component.
  */
-export const GHI_CHU_CHI_XEM_GIAI_NGAN =
-  "Thêm dự án, sửa dự án và ghi nhận khoản chi đã dùng được, tuỳ quyền được cấp cho tài khoản. " +
-  "Chức năng nhập giải ngân từ Excel chưa có.";
+export const DISBURSEMENT_READ_DENIED =
+  "Tài khoản của bạn chưa được cấp quyền “Xem giải ngân”, nên phần này không hiển thị. Liên hệ " +
+  "quản trị viên của đơn vị nếu bạn cần quyền này.";
+
+// The header note `GHI_CHU_CHI_XEM_GIAI_NGAN` ("… nhập giải ngân từ Excel chưa có") left the screen
+// on 06/10/2026 (ADR 0068 lần 5): the prototype has no such line, and the Excel import now says it
+// through the "?" of its own disabled `Nhập giải ngân` button (`PHAN_CHUA_DUNG_GHI`).

@@ -19,6 +19,10 @@ import {
   ProjectRecordTabs,
 } from "./pending-parts";
 
+// Opening ~25 Radix popovers one by one in jsdom takes ~5s on its own and timed out under the full
+// parallel suite (06/10/2026); same allowance as `task-record-tabs.test.tsx`. Not a hang guard.
+vi.setConfig({ testTimeout: 30_000 });
+
 beforeAll(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   // Radix measures the trigger to place the popover; jsdom has no ResizeObserver.
@@ -63,6 +67,7 @@ function screens(): ReactNode {
         <p>panel</p>
       </ProjectRecordTabs>
       <FormDuAn
+        budgetYear={2026}
         tieuDeForm="Thêm dự án"
         giaTriDau={FORM_DU_AN_TRONG}
         danhMuc={[]}

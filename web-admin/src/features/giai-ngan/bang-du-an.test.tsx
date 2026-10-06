@@ -61,22 +61,26 @@ describe("bảng dự án kết xuất ra trang", () => {
     );
 
     expect(html).toContain("Chậm 31,36 điểm");
-    // Presentational pin (ADR 0068 §5): the red pill of `Badge tone="danger"`, which replaced the
-    // legacy `chip-cham` class. Only a late project paints red on this table.
-    expect(html).toContain("bg-danger-50");
+    // Presentational pin (ADR 0068 lần 5): the prototype's red left edge on the row and red words
+    // under the name. Only a late project paints red on this table.
+    expect(html).toContain("border-l-danger-500");
+    expect(html).toContain("text-danger-600");
   });
 
   it("dự án bám sát tiến độ KHÔNG mang màu đỏ — đỏ chỉ dành cho dự án máy chủ báo chậm", () => {
     const html = renderToStaticMarkup(
       <BangDanhSach
-        duLieu={danhSach([duAn({ delay_score: 500, is_delayed: false }), duAn({ id: "01JDUAN2" })])}
+        duLieu={danhSach([duAn({ delay_score: 500, is_delayed: false }), duAn({ id: "01JDUAN2", disbursed_ratio: null })])}
         danhMuc={[]}
       />,
     );
 
-    expect(html).toContain("Bám sát tiến độ");
+    // The prototype's list says nothing for an on-track project ("Bám sát tiến độ" is on the
+    // project page); a project with no capital still says so in words.
     expect(html).toContain("Chưa bố trí vốn");
-    expect(html).not.toContain("bg-danger-50");
+    expect(html).not.toContain("border-l-danger-500");
+    expect(html).not.toContain("text-danger-600");
+    expect(html).not.toContain("bg-danger-500");
   });
 
   it("dự án chưa bố trí vốn KHÔNG bao giờ hiện thành 0%", () => {
@@ -92,15 +96,41 @@ describe("bảng dự án kết xuất ra trang", () => {
     expect(html).not.toContain("0,00%");
   });
 
-  it("giải ngân vượt kế hoạch: số còn lại ÂM ra tới trang, không bị kẹp về 0", () => {
+  it("giải ngân vượt kế hoạch: tỷ lệ TRÊN 100% ra tới bảng, không bị kẹp", () => {
+    // The list has no "Còn lại" column (prototype); the over-plan shows as the ratio, the bar is
+    // capped at full width but the words keep the real figure. The negative remainder: project page.
     const html = renderToStaticMarkup(
       <BangDanhSach
-        duLieu={danhSach([duAn({ disbursed_amount: 110000000, remaining_amount: -10000000 })])}
+        duLieu={danhSach([
+          duAn({ disbursed_amount: 110000000, remaining_amount: -10000000, disbursed_ratio: 11000 }),
+        ])}
         danhMuc={[]}
       />,
     );
 
-    expect(html).toContain("-10.000.000 đ");
+    expect(html).toContain("110,00%");
+    expect(html).toContain("width:100%");
+  });
+
+  it("hạng mục của dự án ra tới dòng của nó (thay cho dòng gộp theo hạng mục)", () => {
+    const html = renderToStaticMarkup(
+      <BangDanhSach
+        duLieu={danhSach([duAn({ category_id: "01JHM1" })])}
+        danhMuc={[
+          {
+            id: "01JHM1",
+            code: "chuyen-tiep",
+            label: "Các công trình chuyển tiếp",
+            is_default: true,
+            active: true,
+            order: 1,
+            source: "he-thong",
+            tier: 1,
+          },
+        ]}
+      />,
+    );
+    expect(html).toContain("Các công trình chuyển tiếp");
   });
 
   it("năm trên bảng lấy từ PHẢN HỒI, không từ ô chọn", () => {
@@ -140,9 +170,18 @@ describe("trang chi tiết dự án kết xuất ra trang", () => {
     );
 
     expect(html).toContain("Thời hạn giải ngân");
-    expect(html).toContain("Ngày hoàn thành");
-    expect(html).toContain("20/03/2026");
+    // Prototype figure "Thời gian thực hiện": start → completion, beside — never instead of — the
+    // disbursement deadline.
+    expect(html).toContain("Thời gian thực hiện");
+    expect(html).toContain("Chưa đặt → 20/03/2026");
     expect(html).toContain("31/12/2026");
+  });
+
+  it("giải ngân vượt kế hoạch: số còn lại ÂM ra tới trang, không bị kẹp về 0", () => {
+    const html = renderToStaticMarkup(
+      <ThongTinDuAn duAn={duAn({ disbursed_amount: 110000000, remaining_amount: -10000000 })} />,
+    );
+    expect(html).toContain("-10.000.000 đ");
   });
 
   it("ngày chưa đặt nói ra bằng chữ, không để ô trống", () => {

@@ -1,14 +1,8 @@
-import { Banknote, FolderKanban } from "lucide-react";
-
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
-import { PageHeader } from "@/components/ui/page-header";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
-import { BangDuAn } from "@/features/giai-ngan/bang-du-an";
-import { DisbursementHeaderActions } from "@/features/giai-ngan/pending-parts";
+import { DisbursementWorkspace } from "@/features/giai-ngan/disbursement-workspace";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
-import { CongQuyen } from "@/features/quyen/cong-quyen";
-import { QUYEN_XEM_GIAI_NGAN } from "@/lib/quyen";
 import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
 
 /**
@@ -20,12 +14,15 @@ import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
  *
  * BẢO VỆ ĐƯỜNG NẰM Ở `src/proxy.ts`, phía máy chủ, trước khi trang này được dựng — chưa có cookie
  * phiên thì chuyển sang `/dang-nhap`. Nó cố ý KHÔNG kiểm quyền: `budget.read` do dịch vụ
- * `finance` kiểm trên TỪNG lời gọi API thật. `CongQuyen` dưới đây chỉ để cán bộ thiếu quyền
- * không phải nhìn một bảng chắc chắn trả 403 (luật 5, cấm #1).
+ * `finance` kiểm trên TỪNG lời gọi API thật. Cổng `CongQuyen` trong `DisbursementWorkspace` chỉ để
+ * cán bộ thiếu quyền không phải nhìn một bảng chắc chắn trả 403 (luật 5, cấm #1).
  *
  * XÃ ĐỌC LÚC CHẠY TỪ `Host`, như mọi trang khác: không có giá trị riêng của xã nào nằm trong
  * bundle, và `Host` không khớp xã nào thì trang này là 404 trước khi dựng gì (luật 1, bất biến
  * 3 và 10).
+ *
+ * KHUNG MÀN — ADR 0068 lần 5 (06/10/2026): prototype `BudgetWorkspace.tsx`. Header, năm ngân sách và
+ * nút `+ Thêm dự án` nằm ở `features/giai-ngan/disbursement-workspace.tsx`.
  */
 export const dynamic = "force-dynamic";
 
@@ -42,30 +39,10 @@ export default async function TrangGiaiNgan() {
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
       <PhienProvider>
         <div className="khung-trang">
-        <DauTrang />
-        <main className="than-trang">
-          <PageHeader
-            icon={Banknote}
-            title="Theo dõi giải ngân"
-            subtitle={
-              <span className="inline-flex items-center gap-1.5">
-                <FolderKanban aria-hidden="true" focusable="false" strokeWidth={1.8} />
-                Tiến độ giải ngân theo dự án, chứng từ và vướng mắc cần tháo gỡ.
-              </span>
-            }
-            // Disabled "?" placeholders at the spec's PageHeader position (ADR 0068 §14).
-            actions={<DisbursementHeaderActions />}
-          />
-          <CongQuyen
-            khoa={QUYEN_XEM_GIAI_NGAN}
-            cauThieuQuyen={
-              "Tài khoản của bạn chưa được cấp quyền “Xem giải ngân”, nên phần " +
-              "này không hiển thị. Liên hệ quản trị viên của đơn vị nếu bạn cần quyền này."
-            }
-          >
-            <BangDuAn />
-          </CongQuyen>
-        </main>
+          <DauTrang />
+          <main className="than-trang">
+            <DisbursementWorkspace />
+          </main>
         </div>
       </PhienProvider>
     </CauHinhXaProvider>

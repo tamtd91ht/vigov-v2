@@ -39,7 +39,12 @@ export function FormLyDo({
   xacNhan,
   tone = "danger",
   busyText = "Đang lưu…",
+  formId,
+  className,
 }: {
+  /** `id` of the `<form>` — a surrounding `ModalDialog` names itself after it (`aria-labelledby`). */
+  formId?: string;
+  className?: string;
   /** The SPECIFIC question of the confirm box (spec v2 §7), e.g. "Gỡ dự án X?". Also the form's name. */
   tieuDe: string;
   /** Câu nói TRƯỚC hậu quả của thao tác. Nhận vào chứ không viết cứng: ba thao tác, ba hậu quả. */
@@ -66,6 +71,8 @@ export function FormLyDo({
   return (
     <ConfirmDialog
       as="form"
+      id={formId}
+      className={className}
       tone={tone}
       icon={tone === "danger" ? Trash2 : LockKeyholeOpen}
       title={tieuDe}

@@ -4,10 +4,11 @@ import {
   Banknote,
   ChartLine,
   Hourglass,
-  List,
+  Layers,
   MessagesSquare,
   Plus,
   ReceiptText,
+  Settings2,
   TriangleAlert,
   Upload,
   Wallet,
@@ -16,6 +17,7 @@ import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
+  PENDING_HOVER_TEXT,
   PendingButton,
   PendingFeature,
   PendingField,
@@ -52,6 +54,8 @@ const GROUP_BY_CATEGORY = "Gộp theo hạng mục"; // §7.1
 /** Names of the list table's two pending columns, read by `bang-du-an.tsx`. */
 export const FUNDING_COLUMN = "Nguồn vốn của dự án"; // §7.2
 export const LATEST_ISSUE_COLUMN = "Vướng mắc mới nhất"; // §7.2
+/** Prototype list column "Đơn vị / phụ trách" and the detail figure "Đơn vị thực hiện". */
+export const UNIT_OWNER = "Đơn vị và cán bộ phụ trách của dự án";
 const PROJECT_FUNDING = "Giải ngân theo nguồn vốn"; // §8
 const ISSUES_TAB = "Vướng mắc"; // §8.1
 const CHART_TAB = "Biểu đồ"; // §8.3
@@ -62,11 +66,15 @@ export const UNIT_AND_OFFICER = "Đơn vị thực hiện và Cán bộ phụ tr
 export const FUNDING_LIST = "Thêm nguồn vốn cho dự án"; // §9, §8
 export const VOUCHER_FUNDING_COLUMN = "Nguồn vốn của chứng từ"; // §8.2, §6
 
-/** PageHeader buttons, spec §2: `[☰ Hạng mục] [⬆ Nhập giải ngân]`, before `+ Thêm dự án`. */
+/**
+ * PageHeader buttons, prototype `BudgetWorkspace.tsx:154-168`: `[Hạng mục] [Nhập giải ngân]`, before
+ * `+ Thêm dự án`. The caller draws them only for an account holding `budget.update`, as the prototype
+ * does (`canRecord`).
+ */
 export function DisbursementHeaderActions() {
   return (
     <>
-      <PendingButton info={pendingPart(CATEGORIES)} side="bottom" icon={<List aria-hidden="true" />}>
+      <PendingButton info={pendingPart(CATEGORIES)} side="bottom" icon={<Layers aria-hidden="true" />}>
         Hạng mục
       </PendingButton>
       <PendingButton info={pendingPart(IMPORT_EXCEL)} side="bottom" icon={<Upload aria-hidden="true" />}>
@@ -77,26 +85,38 @@ export function DisbursementHeaderActions() {
 }
 
 /**
- * Body of the list screen above the project filters, spec §2: four KPI cards, the cumulative chart,
- * the per-category table, the per-funding-source block.
+ * Body of the list screen between the scope banner and the filter row, in the prototype's order and
+ * spacing (`BudgetWorkspace.tsx:198-269`): four KPI cards, the cumulative chart, the per-category
+ * table, the per-funding-source block.
  */
 export function DisbursementOverviewPending() {
   const kpi = pendingPart(KPI_CARDS);
   return (
     <>
-      <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-5 grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <PendingStatCard info={kpi} icon={Wallet} label="Kế hoạch vốn năm" />
         <PendingStatCard info={kpi} icon={Banknote} label="Đã giải ngân" />
         <PendingStatCard info={kpi} icon={Hourglass} label="Còn phải giải ngân" />
         <PendingStatCard info={kpi} icon={TriangleAlert} label="Cần chú ý" />
       </div>
-      <PendingSection info={pendingPart(CUMULATIVE_CHART)} title="Luỹ kế giải ngân so với kế hoạch" />
-      <PendingSection info={pendingPart(CATEGORY_PROGRESS)} title="Tiến độ theo hạng mục" />
-      <PendingSection info={pendingPart(FUNDING_PROGRESS)} title="Tiến độ theo nguồn vốn">
+      <PendingSection
+        info={pendingPart(CUMULATIVE_CHART)}
+        title="Luỹ kế giải ngân so với kế hoạch"
+        className="mb-4"
+      />
+      <PendingSection info={pendingPart(CATEGORY_PROGRESS)} title="Tiến độ theo hạng mục" className="mb-5" />
+      <PendingSection info={pendingPart(FUNDING_PROGRESS)} title="Tiến độ theo nguồn vốn" className="mb-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <span>Tính năng đang phát triển</span>
-          {/* The spec's `[Quản lý nguồn vốn]` — drawn disabled; the section's "?" explains both. */}
-          <Button type="button" variant="secondary" size="sm" disabled>
+          <span>{PENDING_HOVER_TEXT}</span>
+          {/* The prototype's `[⚙ Quản lý nguồn vốn]` (`SourceReportPanel.tsx:76-81`), right-aligned —
+              drawn disabled; the section's "?" explains both. */}
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            icon={<Settings2 aria-hidden="true" />}
+            disabled
+          >
             Quản lý nguồn vốn
           </Button>
         </div>
@@ -113,9 +133,45 @@ export function DisbursementOverviewPending() {
 export function ProjectFilterPending() {
   return (
     <>
-      <PendingCheckbox id="loc-chi-du-an-cham" name={ONLY_DELAYED} label="Chỉ dự án chậm" className="self-end" />
-      <PendingCheckbox id="loc-gop-hang-muc" name={GROUP_BY_CATEGORY} label="Gộp theo hạng mục" className="self-end" />
+      <PendingCheckbox id="loc-chi-du-an-cham" name={ONLY_DELAYED} label="Chỉ dự án chậm" />
+      <PendingCheckbox id="loc-gop-hang-muc" name={GROUP_BY_CATEGORY} label="Gộp theo hạng mục" />
     </>
+  );
+}
+
+/**
+ * The voucher form's `Rút từ nguồn vốn` select (prototype `DisbursementForm.tsx:158-175`), full width
+ * above the date — disabled with the "?" of the voucher funding column (same missing catalogue).
+ */
+export function VoucherFundingPending() {
+  return (
+    <PendingField
+      info={pendingPart(VOUCHER_FUNDING_COLUMN)}
+      id="nguon-von-chung-tu"
+      label="Rút từ nguồn vốn"
+      kind="select"
+      placeholder="— Chọn nguồn vốn —"
+      className="min-w-0 sm:col-span-2"
+    />
+  );
+}
+
+/**
+ * The detail card's `Đơn vị thực hiện` figure (prototype `BudgetItemDetail.tsx:302`): its label, the
+ * "?", and "—" — never the internal id the contract carries.
+ */
+export function ProjectUnitPending() {
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5" data-pending="">
+      <dt className="flex items-center gap-1.5 text-xs font-semibold text-ink-500">
+        Đơn vị thực hiện
+        <PendingMarker info={pendingPart(UNIT_OWNER)} />
+      </dt>
+      <dd className="m-0 text-sm font-medium text-ink-400">
+        <span aria-hidden="true">—</span>
+        <span className="sr-only">{PENDING_HOVER_TEXT}</span>
+      </dd>
+    </div>
   );
 }
 
@@ -142,9 +198,19 @@ export function PendingCheckbox({
   );
 }
 
-/** Detail page, spec §8: the `GIẢI NGÂN THEO NGUỒN VỐN` block under the project card. */
+/**
+ * Detail page: the `GIẢI NGÂN THEO NGUỒN VỐN` box inside the project card, under the progress bar
+ * (prototype `BudgetItemDetail.tsx:333-372`) — bordered, as it sits on the card's own white.
+ */
 export function ProjectFundingPending() {
-  return <PendingSection info={pendingPart(PROJECT_FUNDING)} title="Giải ngân theo nguồn vốn" titleAs="h3" />;
+  return (
+    <PendingSection
+      info={pendingPart(PROJECT_FUNDING)}
+      title="Giải ngân theo nguồn vốn"
+      titleAs="h3"
+      className="rounded-xl border border-line"
+    />
+  );
 }
 
 /**

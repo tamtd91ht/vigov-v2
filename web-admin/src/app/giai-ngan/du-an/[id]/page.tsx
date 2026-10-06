@@ -1,10 +1,8 @@
-import { Banknote } from "lucide-react";
-
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
-import { PageHeader } from "@/components/ui/page-header";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
 import { ChiTietDuAn } from "@/features/giai-ngan/chi-tiet-du-an";
+import { DISBURSEMENT_READ_DENIED } from "@/features/giai-ngan/nhan-du-an";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { CongQuyen } from "@/features/quyen/cong-quyen";
 import { QUYEN_XEM_GIAI_NGAN } from "@/lib/quyen";
@@ -21,6 +19,10 @@ import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
  *
  * SAME FRAME AS `/giai-ngan` (`khung-trang` + the navigation header `DauTrang`, tester report GN-07):
  * without the menu the officer had no way back but the browser button.
+ *
+ * KHUNG MÀN — ADR 0068 lần 5: prototype `BudgetItemDetail.tsx` — no page header, a back link and one
+ * project card, 76rem wide at most. The page `<h1>` stays for assistive tech only; the project name
+ * is the card's heading.
  */
 export const dynamic = "force-dynamic";
 
@@ -37,21 +39,15 @@ export default async function TrangChiTietDuAn({ params }: { params: Promise<{ i
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
       <PhienProvider>
         <div className="khung-trang">
-        <DauTrang />
-        <main className="than-trang">
-          <div className="page--detail">
-            <PageHeader icon={Banknote} title="Chi tiết dự án" />
-            <CongQuyen
-              khoa={QUYEN_XEM_GIAI_NGAN}
-              cauThieuQuyen={
-                "Tài khoản của bạn chưa được cấp quyền “Xem giải ngân”, nên phần " +
-                "này không hiển thị. Liên hệ quản trị viên của đơn vị nếu bạn cần quyền này."
-              }
-            >
-              <ChiTietDuAn id={id} />
-            </CongQuyen>
-          </div>
-        </main>
+          <DauTrang />
+          <main className="than-trang">
+            <div className="mx-auto w-full max-w-[76rem] min-w-0">
+              <h1 className="an-thi-giac">Chi tiết dự án</h1>
+              <CongQuyen khoa={QUYEN_XEM_GIAI_NGAN} cauThieuQuyen={DISBURSEMENT_READ_DENIED}>
+                <ChiTietDuAn id={id} />
+              </CongQuyen>
+            </div>
+          </main>
         </div>
       </PhienProvider>
     </CauHinhXaProvider>
