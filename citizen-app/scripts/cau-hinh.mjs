@@ -44,12 +44,13 @@ const TEN_DA_BO = {
     "VIGOV_BIEN_THE đã bỏ (27/09/2026): bản dựng không còn biến thể nào. Xoá dòng ấy khỏi .env.local.",
   VIGOV_XA_CO_DINH:
     "VIGOV_XA_CO_DINH KHÔNG đặt trong .env.local: một dòng quên ở đây biến MỌI bản dựng trên máy này " +
-    "thành app của một xã. Chỉ `deploy.mjs --domain=<tên-miền> --vao-thang` đặt nó, cho đúng một lần dựng.",
+    "thành app của một xã. Chỉ `deploy.mjs --domain=<tên-miền>` đặt nó, cho đúng một lần dựng.",
 };
 
 /**
- * XÃ CỐ ĐỊNH CỦA BẢN DỰNG — tên miền xã nung vào bundle khi đẩy app riêng với `--vao-thang`
- * (chủ dự án chọn 27/09/2026, thay ADR 0047 câu 1 cho riêng đường này). Rỗng = app chung.
+ * XÃ CỐ ĐỊNH CỦA BẢN DỰNG — tên miền xã nung vào bundle khi đẩy app riêng của xã (`--domain`; cờ
+ * `--vao-thang` cũ, bỏ 06/10/2026) (chủ dự án chọn 27/09/2026, thay ADR 0047 câu 1 cho riêng đường này).
+ * Rỗng = app chung.
  *
  * CHỈ ĐỌC BIẾN SHELL, KHÔNG ĐỌC `.env.local` — và `kiemTenBien` chặn tên này trong tệp ấy. Người đặt
  * nó duy nhất là `deploy.mjs`, cho tiến trình con dựng, nên tên miền nung vào luôn là đúng `--domain`

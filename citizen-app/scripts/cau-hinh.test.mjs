@@ -164,7 +164,7 @@ describe("cái rào thật sự được nối vào hai chỗ dùng", () => {
   });
 });
 
-describe("xã cố định của bản dựng (`--vao-thang`, 27/09/2026)", () => {
+describe("xã cố định của bản dựng (app riêng của xã, `--domain`)", () => {
   it("không đặt thì rỗng — mọi bản dựng thường là app chung", () => {
     expect(xaCoDinh({})).toBe("");
     expect(xaCoDinh({ VIGOV_XA_CO_DINH: "  " })).toBe("");
@@ -182,13 +182,13 @@ describe("xã cố định của bản dựng (`--vao-thang`, 27/09/2026)", () =
   );
 
   it("đặt trong `.env.local` thì CHẶN — chỉ deploy.mjs được đặt nó, cho một lần dựng", () => {
-    expect(() => kiemTenBien("VIGOV_XA_CO_DINH=xa-a.vigov.example\n")).toThrow(/--vao-thang/);
+    expect(() => kiemTenBien("VIGOV_XA_CO_DINH=xa-a.vigov.example\n")).toThrow(/deploy\.mjs --domain=/);
   });
 
-  it("`deploy.mjs` xoá biến khỏi môi trường dựng khi không có cờ, và chỉ đặt nó bằng `--domain`", () => {
+  it("`deploy.mjs` xoá biến khỏi môi trường dựng, và chỉ đặt nó cho app riêng, bằng `--domain`", () => {
     const ma = readFileSync(new URL("./deploy.mjs", import.meta.url), "utf8");
     expect(ma).toMatch(/delete env_dung\[BIEN_XA_CO_DINH\]/);
-    expect(ma).toMatch(/if \(vao_thang\) env_dung\[BIEN_XA_CO_DINH\] = dich\.ten_mien;/);
+    expect(ma).toMatch(/if \(own_app\) env_dung\[BIEN_XA_CO_DINH\] = dich\.ten_mien;/);
     expect(ma).toMatch(/dung\(env_dung\)/);
   });
 });

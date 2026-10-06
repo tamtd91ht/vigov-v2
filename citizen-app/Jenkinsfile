@@ -1,10 +1,15 @@
 // Pipeline đẩy Mini App `citizen-app` lên Zalo. Tệp này thuộc về ỨNG DỤNG NÀY (ADR 0047 câu 8).
 //
 //   · dựng CÁI GÌ    — đúng một bundle cho mọi đích (ADR 0047 §Trả lời mục 1: không biến thể)
-//   · đẩy ĐI ĐÂU     — tham số DOMAIN: trống = APP CHUNG, có = APP RIÊNG của xã mang tên miền ấy
-//   · mở vào ĐÂU     — tham số VAO_THANG (chỉ kèm DOMAIN): nung tên miền vào bundle, app mở thẳng vào
-//                      xã, không màn ViHAT (ADR 0047 §6). Bỏ chọn khi đẩy app riêng là thay nó bằng
-//                      giao diện app chung — không lỗi nào báo, nên kế hoạch in dòng "Mở app"
+//   · đẩy ĐI ĐÂU     — tham số TARGET, BẮT BUỘC: `vihat` = App ViHAT (app chung, không nung xã nào —
+//                      ADR 0044), tên miền xã = APP RIÊNG của xã ấy, tên miền LUÔN nung vào bundle và
+//                      app mở thẳng vào xã (ADR 0047 §6). Không có giá trị mặc định: trống thì dừng.
+//                      Tham số DOMAIN và VAO_THANG cũ đã gỡ (06/10/2026)
+//   · App ID nào     — tệp scripts/ung-dung-theo-ten-mien.mjs; tham số APP_ID (tuỳ chọn) phải TRÙNG
+//                      tệp ấy, hoặc cấp App ID khi tệp chưa có. Job không có ai để hỏi, nên thiếu cả
+//                      hai là deploy.mjs từ chối
+//   · QR App ViHAT mở vào một xã — KHÔNG phải việc của job này: platform-admin (chi tiết xã → "Mở bằng
+//                      app ViHAT")
 //   · đẩy BẰNG GÌ    — `node scripts/deploy.mjs`, KHÔNG BAO GIỜ gọi thẳng `zmp deploy`
 //
 // BẤM TAY, KHÔNG TỰ CHẠY. Không có `duongKichHoat()`: Mini App không có ảnh đang chạy để so mốc,
@@ -25,11 +30,15 @@
 //
 //     | Đích | credentialsId |
 //     |---|---|
-//     | app chung (DOMAIN trống) | `zmp-token-app-chung` |
+//     | App ViHAT (TARGET = vihat) | `zmp-token-app-chung` |
 //     | app riêng của `<tên-miền>` | `zmp-token-<tên-miền>` — nguyên văn, giữ dấu chấm (vd `zmp-token-xa-a.vigov.vn`) |
 //
 //   Giữ nguyên dấu chấm chứ không đổi sang gạch nối: đổi thì `a-b.c` và `a.b-c` cùng ra một tên, tức
 //   hai xã dùng chung một ô credential. Tên miền được kiểm hình dạng TRƯỚC khi ghép vào tên ấy.
+//
+//   Tên credential chỉ là QUY ƯỚC; cái bảo đảm token đúng app là `deploy.mjs` (`kiemToken`): claim
+//   `appId` của token phải bằng App ID đích (tệp ánh xạ, hoặc APP_ID), không thì job dừng trước khi dựng
+//   — job không có ai quét QR để đăng nhập lại.
 //
 //   Token vào MÔI TRƯỜNG của đúng một bước `sh`, qua `withCredentials` — KHÔNG ghi xuống tệp nào
 //   (không `.env`, không `writeFile`), KHÔNG in ra, và KHÔNG có mặt ở bước `npm ci` / test: mã của
@@ -66,13 +75,14 @@ pipeline {
   }
 
   parameters {
-    string(name: 'DOMAIN', defaultValue: '',
-           description: 'TRỐNG = APP CHUNG. Có = APP RIÊNG của xã mang tên miền này (chữ thường, không ' +
-                        'https://, không đường dẫn), phải có dòng trong scripts/ung-dung-theo-ten-mien.mjs ' +
-                        'và credential zmp-token-<tên-miền> trong Jenkins.')
-    booleanParam(name: 'VAO_THANG', defaultValue: false,
-                 description: 'Chỉ kèm DOMAIN. Chọn = app riêng MỞ THẲNG vào xã ấy, không màn giới thiệu ViHAT ' +
-                              '(ADR 0047 §6). App riêng đã phát hành với cờ này thì lần đẩy sau cũng phải chọn.')
+    string(name: 'TARGET', defaultValue: '',
+           description: 'BẮT BUỘC. vihat = App ViHAT (app chung, không nung xã nào; credential ' +
+                        'zmp-token-app-chung). Tên miền xã (chữ thường, không https://, không đường dẫn) = APP ' +
+                        'RIÊNG của xã ấy, tên miền nung vào bundle, app mở thẳng vào xã (credential ' +
+                        'zmp-token-<tên-miền>). QR mở App ViHAT vào một xã làm ở platform-admin, không ở đây.')
+    string(name: 'APP_ID', defaultValue: '',
+           description: 'Tuỳ chọn. App ID của đích, chỉ chữ số (platform-admin → chi tiết xã → ô QR). ' +
+                        'scripts/ung-dung-theo-ten-mien.mjs đã có App ID thì phải TRÙNG; chưa có thì bắt buộc ở đây.')
     booleanParam(name: 'PHAT_HANH', defaultValue: false,
                  description: 'Bỏ chọn = BẢN THỬ NGHIỆM (-t). Chọn = BẢN PHÁT HÀNH — ra người dùng thật / gửi ' +
                               'duyệt, và phải gõ XAC_NHAN.')
@@ -80,7 +90,7 @@ pipeline {
                  description: 'Chọn (mặc định) = CHỈ IN KẾ HOẠCH rồi dừng, không dựng, không đẩy. Bỏ chọn ' +
                               'để đẩy thật.')
     string(name: 'XAC_NHAN', defaultValue: '',
-           description: 'Chỉ khi PHAT_HANH: gõ đúng tên miền của DOMAIN, hoặc app-chung nếu DOMAIN trống.')
+           description: 'Chỉ khi PHAT_HANH: gõ lại đúng TARGET (vihat, hoặc tên miền của xã).')
   }
 
   environment {
@@ -95,17 +105,18 @@ pipeline {
           // LƯỢT ĐẦU SAU KHI ĐỔI `parameters {}`: Jenkins chỉ HỌC danh sách tham số ở lượt ấy, nên
           // lượt ấy chạy với mọi `params.*` là null. `THU` null mà coi là "không thử" là đẩy thật một
           // lượt không ai chọn đích — dừng trước mọi lệnh.
-          if (params.DOMAIN == null || params.PHAT_HANH == null || params.THU == null || params.XAC_NHAN == null ||
-              params.VAO_THANG == null) {
+          if (params.TARGET == null || params.APP_ID == null || params.PHAT_HANH == null || params.THU == null ||
+              params.XAC_NHAN == null) {
             error('Jenkins vừa học tham số mới của job — lượt này không có tham số nào.\n' +
                   'Bấm lại bằng "Build with Parameters". Không có gì được dựng hay đẩy.')
           }
 
           // "Rebuild" một lượt cũ mang lại đúng tham số của lượt ấy — kể cả một tham số đã GỠ khỏi
           // job (đo được ở deploy/Jenkinsfile 25/09/2026: một việc đã gỡ chạy xanh mà không làm gì).
-          // Ở đây tham số lạ là một ý định cũ (ví dụ `BIEN_THE`, đã bỏ 27/09/2026) mà người bấm tưởng
-          // vẫn có tác dụng — nói ra, đừng lặng lẽ bỏ qua.
-          List<String> biet = ['DOMAIN', 'VAO_THANG', 'PHAT_HANH', 'THU', 'XAC_NHAN']
+          // Ở đây tham số lạ là một ý định cũ (ví dụ `BIEN_THE`, đã bỏ 27/09/2026; `DOMAIN` và
+          // `VAO_THANG`, thay bằng TARGET 06/10/2026) mà người bấm tưởng vẫn có tác dụng — nói ra, đừng
+          // lặng lẽ bỏ qua.
+          List<String> biet = ['TARGET', 'APP_ID', 'PHAT_HANH', 'THU', 'XAC_NHAN']
           for (String k : params.keySet()) {
             if (!(k in biet)) {
               error("Tham số '${k}' không còn trong job này (đã gỡ). " +
@@ -113,32 +124,42 @@ pipeline {
             }
           }
           // Cùng lý do: một lượt cũ có thể mang giá trị kiểu khác (chuỗi 'true' thay cho boolean).
-          if (!(params.PHAT_HANH instanceof Boolean) || !(params.THU instanceof Boolean) ||
-              !(params.VAO_THANG instanceof Boolean)) {
-            error('PHAT_HANH / THU / VAO_THANG không phải ô chọn đúng/sai — lượt này đến từ một cấu hình job cũ. ' +
+          if (!(params.PHAT_HANH instanceof Boolean) || !(params.THU instanceof Boolean)) {
+            error('PHAT_HANH / THU không phải ô chọn đúng/sai — lượt này đến từ một cấu hình job cũ. ' +
                   'Bấm "Build with Parameters".')
           }
 
-          String tenMien = params.DOMAIN.trim()
-          // HÌNH DẠNG TRƯỚC, ĐỂ GHÉP TÊN CREDENTIAL AN TOÀN. `deploy.mjs` còn kiểm kỹ hơn (`kiemTenMien`)
-          // và kiểm tên miền CÓ trong tệp ánh xạ; ở đây chỉ chặn những gì không được phép đi vào một
-          // credentialsId: chữ hoa, scheme, cổng, đường dẫn, khoảng trắng.
-          if (tenMien && !(tenMien ==~ /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/)) {
-            error("DOMAIN '${tenMien}' không phải một tên miền trần (chữ thường, không https://, không cổng, " +
-                  'không đường dẫn). Ví dụ đúng: xa-a.vigov.vn. Để TRỐNG nếu muốn đẩy lên app chung.')
+          String target = params.TARGET.trim()
+          // KHÔNG MẶC ĐỊNH. Trống từng nghĩa là "app chung"; một ô quên điền và một ô để trống có chủ ý
+          // trông giống hệt nhau, nên trống nay là dừng.
+          if (!target) {
+            error('TARGET trống. Ghi vihat để đẩy App ViHAT, hoặc tên miền của xã để đẩy app riêng của xã ấy. ' +
+                  'Không có gì được dựng hay đẩy.')
           }
-          env.DICH = tenMien ?: 'app-chung'
+          boolean sharedApp = target == 'vihat'
+          // HÌNH DẠNG TRƯỚC, ĐỂ GHÉP TÊN CREDENTIAL AN TOÀN. `deploy.mjs` còn kiểm kỹ hơn (`kiemTenMien`);
+          // ở đây chỉ chặn những gì không được phép đi vào một credentialsId: chữ hoa, scheme, cổng, đường
+          // dẫn, khoảng trắng.
+          String tenMien = sharedApp ? '' : target
+          if (!sharedApp && !(tenMien ==~ /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/)) {
+            error("TARGET '${target}' không phải vihat, cũng không phải một tên miền trần (chữ thường, không " +
+                  'https://, không cổng, không đường dẫn). Ví dụ đúng: vihat · xa-a.vigov.vn.')
+          }
+          String appId = params.APP_ID.trim()
+          if (appId && !(appId ==~ /^[0-9]+$/)) {
+            error("APP_ID '${appId}' không phải App ID: chỉ gồm chữ số (platform-admin → chi tiết xã → ô QR). " +
+                  'Để trống nếu scripts/ung-dung-theo-ten-mien.mjs đã có App ID của đích.')
+          }
+          env.DICH = target
           env.CRED_ZMP = tenMien ? "zmp-token-${tenMien}" : 'zmp-token-app-chung'
           env.DOMAIN_XA = tenMien
-          if (params.VAO_THANG && !tenMien) {
-            error('VAO_THANG cần DOMAIN: nó nung đúng tên miền ấy vào app riêng của xã. App chung không bao giờ mở thẳng vào một xã.')
-          }
-          env.VAO_THANG_CO = params.VAO_THANG ? 'co' : 'khong'
+          env.SHARED_APP = sharedApp ? 'yes' : 'no'
+          env.TARGET_APP_ID = appId
           env.PHAT_HANH_CO = params.PHAT_HANH ? 'co' : 'khong'
           env.THU_CO = params.THU ? 'co' : 'khong'
 
           // XÁC NHẬN BẰNG CHỮ khi phát hành: gõ lại ĐÍCH chứ không gõ "yes". Gõ "yes" là phản xạ; gõ
-          // tên miền của xã là đọc lại xem mình sắp thay app của ai.
+          // tên miền của xã (hoặc vihat) là đọc lại xem mình sắp thay app của ai.
           if (params.PHAT_HANH && params.XAC_NHAN.trim() != env.DICH) {
             error("PHAT_HANH cần XAC_NHAN là đúng '${env.DICH}'. Nhận được: '${params.XAC_NHAN}'. " +
                   'Không dựng, không đẩy gì cả.')
@@ -171,9 +192,9 @@ pipeline {
           node --version
           echo "commit của kho: $(git rev-parse --short=12 HEAD)"
           # MỘT `.env` CŨ TRONG WORKSPACE LÀ MỘT TOKEN NẰM TRÊN ĐĨA của máy build — thứ `zmp login` để
-          # lại, của app nào người ấy đăng nhập lần cuối. Đường app chung của `deploy.mjs` rơi về tệp
-          # ấy khi môi trường không có token; job này luôn có, nhưng một tệp như thế không được phép
-          # tồn tại ở đây. Dừng, không xoá hộ: ai đó phải biết nó đã nằm đó.
+          # lại, của app nào người ấy đăng nhập lần cuối. `deploy.mjs` không còn đường nào rơi về tệp
+          # ấy (06/10/2026), nhưng một token như thế không được phép nằm ở đây. Dừng, không xoá hộ: ai
+          # đó phải biết nó đã nằm đó.
           if [ -e citizen-app/.env ]; then
             echo ""
             echo "CÓ TỆP citizen-app/.env TRONG WORKSPACE — có thể là một token đẩy app nằm trên đĩa."
@@ -214,13 +235,14 @@ pipeline {
           string(credentialsId: 'citizen-app-vigov-api-host', variable: 'VIGOV_API_HOST')
         ]) {
           // NHÁY ĐƠN: không một biến bí mật nào đi qua nội suy của Groovy. Cờ dựng từ biến môi trường
-          // không bí mật (DOMAIN_XA · VAO_THANG_CO · PHAT_HANH_CO · THU_CO) ngay trong shell.
+          // không bí mật (SHARED_APP · DOMAIN_XA · TARGET_APP_ID · PHAT_HANH_CO · THU_CO) ngay trong shell.
+          // Đích luôn là một cờ tường minh — --app=vihat hoặc --domain=<tên-miền>, không bao giờ "không cờ".
           sh '''
             set -eu
             cd citizen-app
             set --
-            if [ -n "$DOMAIN_XA" ]; then set -- "$@" "--domain=$DOMAIN_XA"; fi
-            if [ "$VAO_THANG_CO" = "co" ]; then set -- "$@" --vao-thang; fi
+            if [ "$SHARED_APP" = "yes" ]; then set -- "$@" --app=vihat; else set -- "$@" "--domain=$DOMAIN_XA"; fi
+            if [ -n "$TARGET_APP_ID" ]; then set -- "$@" "--app-id=$TARGET_APP_ID"; fi
             if [ "$PHAT_HANH_CO" = "co" ]; then set -- "$@" --phat-hanh; fi
             if [ "$THU_CO" = "co" ]; then set -- "$@" --thu; fi
             node scripts/deploy.mjs "$@"

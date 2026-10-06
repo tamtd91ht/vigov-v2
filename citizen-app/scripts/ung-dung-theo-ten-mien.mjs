@@ -1,8 +1,8 @@
 /**
  * TÊN MIỀN XÃ → APP ID ZALO — TỆP CHỌN ĐÍCH CỦA BƯỚC ĐẨY (ADR 0047, câu 1–2).
  *
- * TỆP NÀY CHỈ QUYẾT **ĐẨY BUNDLE LÊN ĐÂU**. Bundle đẩy lên mọi App ID là CÙNG MỘT bundle; không giá
- * trị nào ở đây đi vào bundle. Chỉ `scripts/deploy.mjs` (qua `dich-den.mjs`) nhập tệp này — không
+ * TỆP NÀY CHỈ QUYẾT **ĐẨY BUNDLE LÊN ĐÂU**. Không giá trị nào ở đây đi vào bundle (tên miền nung vào
+ * app riêng của xã là giá trị của cờ `--domain`, không phải của tệp này). Chỉ `scripts/deploy.mjs` (qua `dich-den.mjs`) nhập tệp này — không
  * `vite.config.ts`, không tệp nào dưới `src/`, và `dich-den.test.mjs` ghim đúng điều đó. Nhập nó
  * từ bước dựng là đúng thứ ADR 0044 điều kiện dừng #1 cấm: giá trị theo xã vào bundle.
  *
@@ -21,12 +21,13 @@
  * tên miền (sáp nhập — `service-platform/internal/domain/tenant.go:19-25`), nên hai khoá cùng trỏ
  * một App ID là hợp lệ. Tên miền ở đây chỉ là khoá tra lúc đẩy, KHÔNG BAO GIỜ là tham chiếu xã.
  *
- * GIÁ TRỊ dạng `<…>` là PLACEHOLDER: `--thu` in được kế hoạch với nó, lần chạy thật thì bị từ chối.
- * Dòng dưới là dòng VÍ DỤ duy nhất — `.example` là tên miền dành riêng (RFC 2606), không trỏ vào
- * xã nào. Chỉ điền App ID chủ dự án đã giao; đừng điền một con số đoán ra.
+ * GIÁ TRỊ là chữ số. Dạng `<…>` là PLACEHOLDER, coi như CHƯA CÓ App ID: `deploy.mjs` hỏi (có người
+ * ngồi trước cửa sổ lệnh) hoặc đòi `--app-id`. Mọi dòng ở đây hiện trên menu chọn đích của `deploy.mjs`,
+ * nên không có dòng ví dụ. Chỉ điền App ID chủ dự án đã giao (platform-admin → chi tiết xã → ô QR);
+ * đừng điền một con số đoán ra. `deploy.mjs` ghi được vào tệp này khi người chạy đồng ý — khi ấy tệp
+ * phải được commit.
  */
 export const APP_ID_THEO_TEN_MIEN = {
-  "xa-vi-du.vigov.example": "<APP-ID-MINI-APP-CUA-XA>",
   // Given by the owner 2026-10-01, replacing 3291993990104489440 (given 2026-09-27). Its `mini_app`
   // row in service-platform is entered by the Jenkins stage `doi-app-id-thang-binh`, which also
   // switches the old row off; until it runs the app deploys but the server refuses to open it
@@ -35,11 +36,12 @@ export const APP_ID_THEO_TEN_MIEN = {
 };
 
 /**
- * App ID của APP CHUNG (bản `goc`, không truyền tên miền). `null` = chưa khai trong tệp này.
+ * App ID của APP CHUNG — App ViHAT (`deploy.mjs --app=vihat`). `null` = chưa khai trong tệp này.
  *
- * Hôm nay app chung là app mà `ZMP_TOKEN` trong `citizen-app/.env` thuộc về (`zmp login` ghi cả
- * hai), và App ID ấy do kho `vihat-miniapp` sở hữu. Để `null` thì đường app chung chạy như trước;
- * khai nó thì `deploy.mjs` còn kiểm được token trong môi trường đúng là token của app chung.
+ * App ID ấy do kho `vihat-miniapp` sở hữu. Từ 06/10/2026 `deploy.mjs` KHÔNG còn để zmp-cli đọc token
+ * trong `citizen-app/.env` cho app chung: để `null` thì mỗi lần đẩy App ViHAT phải có người nhập App ID
+ * (hoặc `--app-id`), rồi token phải mang đúng claim ấy. Ghi `"<chữ số>"` vào đây — tay, hoặc để
+ * `deploy.mjs` ghi khi được hỏi — rồi commit.
  */
 export const APP_ID_APP_CHUNG = null;
 

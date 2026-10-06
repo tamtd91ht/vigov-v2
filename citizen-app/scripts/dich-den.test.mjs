@@ -2,24 +2,34 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
 import { docCauHinh, TEN_BIEN_CHO_PHEP, TEP_LOCAL } from "./cau-hinh.mjs";
 import {
+  appConfigChoLanDay,
+  appIdPrompt,
   appIdTrongToken,
+  buildMenu,
+  checkAppIdInput,
   chonDich,
   docCo,
+  hasTarget,
   kiemBangAnhXa,
   kiemTenMien,
   kiemToken,
   laPlaceholder,
-  appConfigChoLanDay,
+  missingAppIdMessage,
   nhanPhienBan,
+  noTargetMessage,
+  pickMenuItem,
+  planLines,
+  savedRegistryNote,
   tokenTrongTepEnv,
+  updateRegistryText,
 } from "./dich-den.mjs";
-import { APP_ID_APP_CHUNG, APP_ID_THEO_TEN_MIEN } from "./ung-dung-theo-ten-mien.mjs";
+import { APP_ID_APP_CHUNG, APP_ID_THEO_TEN_MIEN, COMMUNE_TERMS_BY_DOMAIN } from "./ung-dung-theo-ten-mien.mjs";
 
 /**
  * CHỌN ĐÍCH CỦA LẦN ĐẨY (ADR 0047). Mỗi ca dưới là một cách đẩy nhầm app mà không lỗi nào báo ra:
@@ -87,14 +97,12 @@ describe("tệp ánh xạ", () => {
   it("tệp thật chỉ có App ID chủ dự án đã giao — không App ID nào được đoán ra", () => {
     // Every real pair is pinned here, so adding one is a deliberate two-file change a reviewer
     // sees — and the same pair needs its `mini_app` row in service-platform (ADR 0047, #3).
+    // `deploy.mjs` can write the registry when asked; this pin then stays red until it is updated too.
     const DA_GIAO = {
       "thangbinh-danang.vigov.vn": "3043188591857102858", // owner, 2026-10-01 (replaced 3291993990104489440)
     };
-    const that = Object.fromEntries(
-      Object.entries(APP_ID_THEO_TEN_MIEN).filter(([, app_id]) => !laPlaceholder(app_id)),
-    );
-    expect(that).toEqual(DA_GIAO);
-    for (const app_id of Object.values(that)) expect(app_id).toMatch(/^\d+$/);
+    expect(APP_ID_THEO_TEN_MIEN).toEqual(DA_GIAO);
+    for (const app_id of Object.values(APP_ID_THEO_TEN_MIEN)) expect(app_id).toMatch(/^\d+$/);
     expect(APP_ID_APP_CHUNG).toBeNull();
   });
 
@@ -102,34 +110,75 @@ describe("tệp ánh xạ", () => {
     expect(() => kiemBangAnhXa({ "https://xa-a.vigov.example": "1" }, null)).toThrow(/scheme/);
   });
 
-  it("App ID rỗng hoặc có khoảng trắng thì DỪNG", () => {
+  it("App ID rỗng, có khoảng trắng, hay không phải chữ số thì DỪNG; placeholder thì qua", () => {
     expect(() => kiemBangAnhXa({ "xa-a.vigov.example": "" }, null)).toThrow(/rỗng/);
     expect(() => kiemBangAnhXa({ "xa-a.vigov.example": "11 11" }, null)).toThrow(/khoảng trắng/);
+    expect(() => kiemBangAnhXa({ "xa-a.vigov.example": "11a" }, null)).toThrow(/chữ số/);
+    expect(() => kiemBangAnhXa({ "xa-a.vigov.example": "<APP-ID>" }, null)).not.toThrow();
+    expect(() => kiemBangAnhXa(BANG, "abc")).toThrow(/chữ số/);
   });
 
-  it("App ID app chung trùng App ID một xã thì DỪNG — `goc` sẽ đè lên app của xã", () => {
+  it("App ID app chung trùng App ID một xã thì DỪNG — App ViHAT sẽ đè lên app của xã", () => {
     expect(() => kiemBangAnhXa(BANG, "2222222222222222222")).toThrow(/đè lên app của xã/);
     expect(() => kiemBangAnhXa(BANG, "3333333333333333333")).not.toThrow();
   });
 });
 
 describe("cờ dòng lệnh", () => {
-  it("không cờ nào là app chung, bản thử nghiệm", () => {
-    expect(docCo([])).toEqual({ ten_mien: null, phat_hanh: false, chi_thu: false, vao_thang: false });
+  it("không cờ nào là CHƯA CÓ ĐÍCH — không phải app chung", () => {
+    const co = docCo([]);
+    expect(co).toEqual({ ten_mien: null, shared_app: false, app_id: null, phat_hanh: false, chi_thu: false });
+    expect(hasTarget(co)).toBe(false);
   });
 
-  it("đọc đủ bốn cờ", () => {
-    expect(docCo(["--domain=xa-a.vigov.example", "--vao-thang", "--phat-hanh", "--thu"])).toEqual({
+  it("đọc đủ các cờ của app riêng", () => {
+    expect(docCo(["--domain=xa-a.vigov.example", "--app-id=123", "--phat-hanh", "--thu"])).toEqual({
       ten_mien: "xa-a.vigov.example",
+      shared_app: false,
+      app_id: "123",
       phat_hanh: true,
       chi_thu: true,
-      vao_thang: true,
     });
   });
 
-  it("`--vao-thang` không kèm `--domain` thì DỪNG — app chung không bao giờ nung một xã", () => {
-    expect(() => docCo(["--vao-thang"])).toThrow(/cần --domain/);
-    expect(() => docCo(["--vao-thang", "--phat-hanh"])).toThrow(/cần --domain/);
+  it("`--app=vihat` là App ViHAT", () => {
+    const co = docCo(["--app=vihat"]);
+    expect(co.shared_app).toBe(true);
+    expect(co.ten_mien).toBeNull();
+    expect(hasTarget(co)).toBe(true);
+  });
+
+  it("`--app=vihat` cùng `--domain` thì DỪNG và chỉ tới platform-admin — QR của xã không làm bằng một lần đẩy", () => {
+    for (const argv of [
+      ["--app=vihat", "--domain=xa-a.vigov.example"],
+      ["--domain=xa-a.vigov.example", "--app=vihat"],
+    ]) {
+      expect(() => docCo(argv)).toThrow(/platform-admin.*Mở bằng app ViHAT/s);
+    }
+  });
+
+  it("`--app=<khác vihat>` thì DỪNG", () => {
+    for (const c of ["--app=xa-a.vigov.example", "--app=", "--app=ViHAT", "--app=chung"]) {
+      expect(() => docCo([c]), c).toThrow(/Chỉ nhận --app=vihat/);
+    }
+  });
+
+  it("`--vao-thang` (bỏ 06/10/2026) thì DỪNG và nói `--domain` nay luôn làm việc ấy", () => {
+    for (const argv of [["--vao-thang"], ["--domain=xa-a.vigov.example", "--vao-thang"], ["--vao-thang=co"]]) {
+      expect(() => docCo(argv), argv.join(" ")).toThrow(/--vao-thang đã bỏ.*--domain.*LUÔN nung/s);
+    }
+  });
+
+  it("`--app-id` phải chỉ gồm chữ số; hai giá trị khác nhau thì DỪNG", () => {
+    for (const c of ["--app-id=", "--app-id=12a", "--app-id= 12", "--app-id=<APP-ID>"]) {
+      expect(() => docCo(["--app=vihat", c]), c).toThrow(/chỉ gồm chữ số/);
+    }
+    expect(() => docCo(["--app-id=1", "--app-id=2"])).toThrow(/hai giá trị/);
+    expect(docCo(["--app-id=1", "--app-id=1"]).app_id).toBe("1");
+  });
+
+  it("hai `--domain` khác nhau thì DỪNG", () => {
+    expect(() => docCo(["--domain=xa-a.vigov.example", "--domain=xa-b.vigov.example"])).toThrow(/hai giá trị/);
   });
 
   it("`--bien-the` (cờ đã bỏ 27/09/2026) thì DỪNG và nói vì sao — không lặng lẽ bị bỏ qua", () => {
@@ -139,13 +188,14 @@ describe("cờ dòng lệnh", () => {
     }
   });
 
-  it("cờ gõ nhầm thì DỪNG, không lặng lẽ thành app chung", () => {
-    expect(() => docCo(["--domian=xa-a.vigov.example"])).toThrow(/không có/);
+  it("cờ gõ nhầm thì DỪNG và liệt kê các cờ còn nhận", () => {
+    expect(() => docCo(["--domian=xa-a.vigov.example"])).toThrow(/không có.*--app=vihat.*--domain/s);
     expect(() => docCo(["--domain", "xa-a.vigov.example"])).toThrow(/không có/);
+    expect(() => docCo(["--app", "vihat"])).toThrow(/không có/);
   });
 
   it("`--domain=` để trống thì DỪNG — không hiểu thành app chung", () => {
-    expect(() => docCo(["--domain="])).toThrow(/bỏ hẳn cờ --domain/);
+    expect(() => docCo(["--domain="])).toThrow(/để trống.*--app=vihat/s);
   });
 
   it("`--domain` sai hình dạng thì DỪNG ngay lúc đọc cờ", () => {
@@ -153,47 +203,194 @@ describe("cờ dòng lệnh", () => {
   });
 });
 
-describe("chọn đích: tên miền → App ID", () => {
-  it("không tên miền → app chung", () => {
-    expect(chonDich(null, BANG, null)).toEqual({ loai: "app-chung", ten_mien: null, app_id: null });
-    expect(chonDich(null, BANG, "3333333333333333333").app_id).toBe("3333333333333333333");
+describe("menu chọn đích khi không có cờ", () => {
+  it("1 = App ViHAT, rồi từng tên miền theo thứ tự trong tệp, mỗi dòng mang App ID", () => {
+    const menu = buildMenu(BANG, null);
+    expect(menu.map((m) => m.label)).toEqual([
+      "App ViHAT (chưa có App ID)",
+      "app riêng xã xa-a.vigov.example (1111111111111111111)",
+      "app riêng xã xa-a-cu.vigov.example (1111111111111111111)",
+      "app riêng xã xa-b.vigov.example (2222222222222222222)",
+    ]);
+    expect(menu.map((m) => m.number)).toEqual([1, 2, 3, 4]);
+    expect(menu[0]).toMatchObject({ shared_app: true, ten_mien: null });
+    expect(menu[3]).toMatchObject({ shared_app: false, ten_mien: "xa-b.vigov.example" });
+    expect(buildMenu(BANG, "3333333333333333333")[0].label).toBe("App ViHAT (3333333333333333333)");
+    expect(buildMenu({ "xa-c.vigov.example": "<APP-ID>" }, null)[1].label).toMatch(/chưa có App ID/);
   });
 
-  it("tên miền có trong bảng → App ID của nó; tên miền cũ trỏ cùng App ID", () => {
-    expect(chonDich("xa-b.vigov.example", BANG, null)).toEqual({
+  it("chỉ nhận một số có trên menu", () => {
+    const menu = buildMenu(BANG, null);
+    expect(pickMenuItem(menu, " 1 ").shared_app).toBe(true);
+    expect(pickMenuItem(menu, "4").ten_mien).toBe("xa-b.vigov.example");
+    for (const t of ["", "0", "5", "1.5", "abc", "-1", undefined]) {
+      expect(() => pickMenuItem(menu, t), String(t)).toThrow(/từ 1 đến 4/);
+    }
+  });
+
+  it("không có người để hỏi: câu từ chối liệt kê mọi cách chọn bằng cờ", () => {
+    const msg = noTargetMessage(buildMenu(BANG, null));
+    expect(msg).toMatch(/không phải một cửa sổ lệnh có người ngồi/);
+    expect(msg).toMatch(/--app=vihat/);
+    expect(msg).toMatch(/--domain=xa-b\.vigov\.example/);
+    expect(msg).toMatch(/--app-id=<chữ số>/);
+    expect(msg).toMatch(/citizen-app\/\.env/);
+  });
+});
+
+describe("chọn đích → App ID", () => {
+  const vihat = { shared_app: true, ten_mien: null, app_id: null };
+  const xa = (ten_mien, app_id = null) => ({ shared_app: false, ten_mien, app_id });
+
+  it("chưa chọn đích thì ném — hàm không tự chọn", () => {
+    expect(() => chonDich(xa(null), BANG, null)).toThrow(/Chưa chọn đích/);
+  });
+
+  it("tệp có App ID → App ID của tệp; tên miền cũ trỏ cùng App ID", () => {
+    expect(chonDich(xa("xa-b.vigov.example"), BANG, null)).toEqual({
       loai: "app-rieng",
       ten_mien: "xa-b.vigov.example",
       app_id: "2222222222222222222",
+      app_id_source: "registry",
     });
-    expect(chonDich("xa-a-cu.vigov.example", BANG, null).app_id).toBe("1111111111111111111");
+    expect(chonDich(xa("xa-a-cu.vigov.example"), BANG, null).app_id).toBe("1111111111111111111");
+    expect(chonDich(vihat, BANG, "3333333333333333333")).toEqual({
+      loai: "app-chung",
+      ten_mien: null,
+      app_id: "3333333333333333333",
+      app_id_source: "registry",
+    });
   });
 
-  it("tên miền lạ thì DỪNG, không rơi về app chung, và không liệt kê bảng", () => {
-    let loi;
-    try {
-      chonDich("xa-z.vigov.example", BANG, "3333333333333333333");
-    } catch (e) {
-      loi = e;
-    }
-    expect(loi, "tên miền lạ vừa được chọn một đích").toBeDefined();
-    expect(loi.message).toMatch(/ung-dung-theo-ten-mien\.mjs/);
-    expect(loi.message).toMatch(/MiniApp/);
-    for (const [ten, app_id] of Object.entries(BANG)) {
-      expect(loi.message).not.toContain(ten);
-      expect(loi.message).not.toContain(app_id);
-    }
+  it("tệp chưa có (null / placeholder / tên miền chưa có dòng), không --app-id → app_id null: phải hỏi", () => {
+    expect(chonDich(vihat, BANG, null)).toMatchObject({ app_id: null, app_id_source: null });
+    expect(chonDich(xa("xa-z.vigov.example"), BANG, null)).toMatchObject({ loai: "app-rieng", app_id: null });
+    expect(chonDich(xa("xa-c.vigov.example"), { "xa-c.vigov.example": "<APP-ID>" }, null).app_id).toBeNull();
   });
 
-  it("khoá kế thừa của Object (`constructor`, `__proto__`) không phải tên miền có trong bảng", () => {
-    // `in` / `bang[x]` thấy cả nguyên mẫu; `Object.hasOwn` thì không. Hai tên dưới không qua
-    // `kiemTenMien` nên không tới được đây từ dòng lệnh — ca này canh hàm, không canh cờ.
-    expect(() => chonDich("constructor", BANG, null)).toThrow(/chưa có/);
+  it("khoá kế thừa của Object (`constructor`) không phải tên miền có trong bảng", () => {
+    // `in` / `bang[x]` thấy cả nguyên mẫu; `Object.hasOwn` thì không.
+    expect(chonDich(xa("constructor"), BANG, null).app_id).toBeNull();
+  });
+
+  it("tệp chưa có, có --app-id → App ID của cờ", () => {
+    expect(chonDich({ ...vihat, app_id: "3333333333333333333" }, BANG, null)).toMatchObject({
+      app_id: "3333333333333333333",
+      app_id_source: "flag",
+    });
+    expect(chonDich(xa("xa-z.vigov.example", "9999999999999999999"), BANG, null)).toMatchObject({
+      app_id: "9999999999999999999",
+      app_id_source: "flag",
+    });
+  });
+
+  it("--app-id trùng tệp thì qua; KHÁC tệp thì DỪNG", () => {
+    expect(chonDich(xa("xa-b.vigov.example", "2222222222222222222"), BANG, null).app_id_source).toBe("registry");
+    expect(() => chonDich(xa("xa-b.vigov.example", "1111111111111111111"), BANG, null)).toThrow(
+      /--app-id=1111111111111111111 khác App ID.*\(2222222222222222222\)/s,
+    );
+    expect(() => chonDich({ ...vihat, app_id: "4444444444444444444" }, BANG, "3333333333333333333")).toThrow(
+      /khác App ID của App ViHAT/,
+    );
+  });
+
+  it("--app-id của phía bên kia thì DỪNG: App ViHAT mang App ID một xã, app riêng mang App ID App ViHAT", () => {
+    expect(() => chonDich({ ...vihat, app_id: "2222222222222222222" }, BANG, null)).toThrow(/đè app của xã/);
+    expect(() => chonDich(xa("xa-z.vigov.example", "3333333333333333333"), BANG, "3333333333333333333")).toThrow(
+      /đè app chung/,
+    );
+  });
+
+  it("câu hỏi và câu từ chối nói đúng đích và chỉ chỗ lấy App ID", () => {
+    const d_vihat = chonDich(vihat, BANG, null);
+    const d_xa = chonDich(xa("xa-z.vigov.example"), BANG, null);
+    expect(appIdPrompt(d_vihat)).toBe("Nhập App ID của App ViHAT (xem platform-admin → chi tiết xã → ô QR): ");
+    expect(appIdPrompt(d_xa)).toBe(
+      "Nhập App ID của app riêng của xã xa-z.vigov.example (xem platform-admin → chi tiết xã → ô QR): ",
+    );
+    expect(missingAppIdMessage(d_xa)).toMatch(/xa-z\.vigov\.example.*--app-id=<chữ số>/s);
+  });
+
+  it("App ID gõ vào: bỏ khoảng trắng hai đầu, chỉ nhận chữ số", () => {
+    expect(checkAppIdInput(" 123 \n")).toBe("123");
+    for (const t of ["", "12 3", "abc", "<APP-ID>", undefined]) {
+      expect(() => checkAppIdInput(t), String(t)).toThrow(/chỉ gồm chữ số/);
+    }
+  });
+});
+
+describe("ghi App ID vào tệp ánh xạ", () => {
+  const that = readFileSync(new URL("./ung-dung-theo-ten-mien.mjs", import.meta.url), "utf8");
+  const vihat = { loai: "app-chung", ten_mien: null };
+  const xa = (ten_mien) => ({ loai: "app-rieng", ten_mien });
+  /** Load the edited text as a module, the way deploy.mjs re-imports it after writing. */
+  const nap = async (text) => {
+    const thu_muc = mkdtempSync(join(tmpdir(), "vigov-registry-"));
+    const tep = join(thu_muc, "registry.mjs");
+    writeFileSync(tep, text, "utf8");
+    return import(pathToFileURL(tep).href);
+  };
+
+  it("App ViHAT: đổi đúng một dòng `APP_ID_APP_CHUNG`", async () => {
+    const moi = updateRegistryText(that, vihat, "3333333333333333333");
+    const mod = await nap(moi);
+    expect(mod.APP_ID_APP_CHUNG).toBe("3333333333333333333");
+    expect(mod.APP_ID_THEO_TEN_MIEN).toEqual(APP_ID_THEO_TEN_MIEN);
+    expect(() => kiemBangAnhXa(mod.APP_ID_THEO_TEN_MIEN, mod.APP_ID_APP_CHUNG)).not.toThrow();
+    const cu = that.split("\n");
+    const khac = moi.split("\n").filter((d, i) => d !== cu[i]);
+    expect(khac).toEqual(['export const APP_ID_APP_CHUNG = "3333333333333333333";']);
+    // Ghi lần hai thay đúng giá trị ấy.
+    expect(updateRegistryText(moi, vihat, "4")).toMatch(/^export const APP_ID_APP_CHUNG = "4";$/m);
+  });
+
+  it("tên miền chưa có: thêm một dòng cuối bảng App ID, không đụng COMMUNE_TERMS_BY_DOMAIN", async () => {
+    const mod = await nap(updateRegistryText(that, xa("xa-z.vigov.example"), "9999999999999999999"));
+    expect(mod.APP_ID_THEO_TEN_MIEN).toEqual({ ...APP_ID_THEO_TEN_MIEN, "xa-z.vigov.example": "9999999999999999999" });
+    expect(mod.COMMUNE_TERMS_BY_DOMAIN).toEqual(COMMUNE_TERMS_BY_DOMAIN);
+    expect(mod.APP_ID_APP_CHUNG).toBeNull();
+  });
+
+  it("tên miền đã có (kể cả placeholder): đổi đúng dòng ấy, giữ dấu phẩy", () => {
+    const text = [
+      "export const APP_ID_THEO_TEN_MIEN = {",
+      '  "xa-a.vigov.example": "<APP-ID>",',
+      '  "xa-ab.vigov.example": "5"',
+      "};",
+      "export const APP_ID_APP_CHUNG = null;",
+      "export const COMMUNE_TERMS_BY_DOMAIN = {",
+      '  "xa-a.vigov.example": { displayName: "X" },',
+      "};",
+      "",
+    ].join("\n");
+    const moi = updateRegistryText(text, xa("xa-a.vigov.example"), "7");
+    expect(moi).toContain('  "xa-a.vigov.example": "7",\n');
+    expect(moi).toContain('  "xa-ab.vigov.example": "5"\n');
+    expect(moi).toContain('  "xa-a.vigov.example": { displayName: "X" },');
+    // A dot in a domain is a literal dot, not "any character".
+    const moi2 = updateRegistryText(text, xa("xa-ab.vigov.example"), "8");
+    expect(moi2).toContain('  "xa-ab.vigov.example": "8"\n');
+    expect(moi2).toContain('  "xa-a.vigov.example": "<APP-ID>",');
+  });
+
+  it("hình dạng lạ hay App ID không phải chữ số thì NÉM, không đoán", () => {
+    expect(() => updateRegistryText("export const X = 1;\n", vihat, "1")).toThrow(/APP_ID_APP_CHUNG/);
+    expect(() => updateRegistryText("export const X = 1;\n", xa("xa-a.vigov.example"), "1")).toThrow(
+      /APP_ID_THEO_TEN_MIEN/,
+    );
+    expect(() => updateRegistryText(that, vihat, "12a")).toThrow(/chữ số/);
+  });
+
+  it("lời nhắc sau khi ghi: phải commit; app riêng còn cần dòng MiniApp ở service-platform", () => {
+    expect(savedRegistryNote(vihat)).toMatch(/PHẢI được commit/);
+    expect(savedRegistryNote(vihat)).not.toMatch(/MiniApp/);
+    expect(savedRegistryNote(xa("xa-z.vigov.example"))).toMatch(/MiniApp.*service-platform/s);
   });
 });
 
 describe("token: đích thật là claim appId của ZMP_TOKEN", () => {
   const rieng_a = { loai: "app-rieng", ten_mien: "xa-a.vigov.example", app_id: "1111111111111111111" };
-  const chung = { loai: "app-chung", ten_mien: null, app_id: null };
+  const vihat = { loai: "app-chung", ten_mien: null, app_id: "3333333333333333333" };
 
   it("đọc được claim appId; không phải JWT thì null", () => {
     expect(appIdTrongToken(tokenCua("1111111111111111111"))).toBe("1111111111111111111");
@@ -203,49 +400,45 @@ describe("token: đích thật là claim appId của ZMP_TOKEN", () => {
     expect(appIdTrongToken(undefined)).toBeNull();
   });
 
-  it("app riêng: token đúng App ID thì qua", () => {
+  it("token đúng App ID thì qua — cả hai đích", () => {
     expect(kiemToken(rieng_a, tokenCua("1111111111111111111"), BANG).ok).toBe(true);
+    expect(kiemToken(vihat, tokenCua("3333333333333333333"), BANG).ok).toBe(true);
   });
 
-  it("app riêng: token của xã khác thì TỪ CHỐI", () => {
+  it("token app khác thì TỪ CHỐI", () => {
     const kq = kiemToken(rieng_a, tokenCua("2222222222222222222"), BANG);
     expect(kq.ok).toBe(false);
     expect(kq.ly_do).toMatch(/2222222222222222222.*không phải 1111111111111111111/);
+    expect(kiemToken(vihat, tokenCua("4444444444444444444"), BANG).ok).toBe(false);
   });
 
-  it("app riêng: không token trong môi trường thì TỪ CHỐI — không dùng `.env` của máy", () => {
-    expect(kiemToken(rieng_a, undefined, BANG)).toMatchObject({ ok: false, ly_do: expect.stringMatching(/\.env/) });
-    expect(kiemToken(rieng_a, "", BANG).ok).toBe(false);
+  it("không token trong môi trường thì TỪ CHỐI — CẢ App ViHAT; không đích nào dùng `.env` của máy", () => {
+    for (const dich of [rieng_a, vihat]) {
+      expect(kiemToken(dich, undefined, BANG)).toMatchObject({ ok: false, ly_do: expect.stringMatching(/\.env/) });
+      expect(kiemToken(dich, "", BANG).ok).toBe(false);
+    }
   });
 
-  it("app riêng: token không đọc được claim thì TỪ CHỐI", () => {
+  it("token không đọc được claim thì TỪ CHỐI", () => {
     expect(kiemToken(rieng_a, "khong-phai-jwt", BANG).ok).toBe(false);
+    expect(kiemToken(vihat, "khong-phai-jwt", BANG).ok).toBe(false);
   });
 
-  it("app riêng: App ID đích còn placeholder thì TỪ CHỐI, kể cả token có claim trùng", () => {
-    const vi_du = { loai: "app-rieng", ten_mien: "xa-vi-du.vigov.example", app_id: "<APP-ID>" };
+  it("đích chưa có App ID (null / placeholder) thì TỪ CHỐI, kể cả token có claim trùng", () => {
+    expect(kiemToken({ ...vihat, app_id: null }, tokenCua("3333333333333333333"), BANG).ok).toBe(false);
+    const vi_du = { loai: "app-rieng", ten_mien: "xa-c.vigov.example", app_id: "<APP-ID>" };
     expect(kiemToken(vi_du, tokenCua("<APP-ID>"), BANG)).toMatchObject({ ok: false });
   });
 
-  it("app chung: không token trong môi trường thì qua — đường cũ, zmp đọc .env", () => {
-    expect(kiemToken(chung, undefined, BANG).ok).toBe(true);
-  });
-
-  it("app chung: token của một XÃ thì TỪ CHỐI — `goc` sẽ đè lên app của xã", () => {
-    const kq = kiemToken(chung, tokenCua("2222222222222222222"), BANG);
+  it("App ViHAT với token của một XÃ thì TỪ CHỐI và nói rõ sẽ đè app của xã", () => {
+    const kq = kiemToken(vihat, tokenCua("2222222222222222222"), BANG);
     expect(kq.ok).toBe(false);
     expect(kq.ly_do).toMatch(/app RIÊNG/);
   });
 
-  it("app chung đã khai App ID: token app khác thì TỪ CHỐI, đúng thì qua", () => {
-    const chung_khai = { ...chung, app_id: "3333333333333333333" };
-    expect(kiemToken(chung_khai, tokenCua("4444444444444444444"), BANG).ok).toBe(false);
-    expect(kiemToken(chung_khai, tokenCua("3333333333333333333"), BANG).ok).toBe(true);
-  });
-
   it("lý do không bao giờ chứa token", () => {
     const token = tokenCua("2222222222222222222");
-    for (const dich of [rieng_a, chung]) {
+    for (const dich of [rieng_a, vihat]) {
       const { ly_do } = kiemToken(dich, token, BANG);
       expect(ly_do).not.toContain(token);
       expect(ly_do).not.toContain(token.split(".")[1]);
@@ -256,21 +449,59 @@ describe("token: đích thật là claim appId của ZMP_TOKEN", () => {
 describe("nhãn phiên bản phân biệt được đích trên console Zalo", () => {
   const chung = { sha: "abc1234", luc: "2026-09-27 10:00", dirty: false };
 
-  it("app chung và app riêng cùng commit ra hai nhãn khác nhau", () => {
-    // Nhãn không còn mang tên biến thể (27/09/2026): bundle là một, chỉ ĐÍCH phân biệt hai lần đẩy.
-    const a = nhanPhienBan({ ...chung, dich: { loai: "app-chung", ten_mien: null, app_id: null } });
+  it("App ViHAT và app riêng cùng commit ra hai nhãn khác nhau, cả hai mang App ID", () => {
+    const a = nhanPhienBan({ ...chung, dich: { loai: "app-chung", ten_mien: null, app_id: "3333333333333333333" } });
     const b = nhanPhienBan({
       ...chung,
       dich: { loai: "app-rieng", ten_mien: "xa-a.vigov.example", app_id: "1111111111111111111" },
     });
-    expect(a).toBe("app-chung · abc1234 · 2026-09-27 10:00");
+    expect(a).toBe("app-vihat · app 3333333333333333333 · abc1234 · 2026-09-27 10:00");
     expect(b).toBe("xa-a.vigov.example · app 1111111111111111111 · abc1234 · 2026-09-27 10:00");
   });
 
   it("dirty vẫn hiện", () => {
     expect(
-      nhanPhienBan({ ...chung, dirty: true, dich: { loai: "app-chung", ten_mien: null, app_id: null } }),
+      nhanPhienBan({ ...chung, dirty: true, dich: { loai: "app-chung", ten_mien: null, app_id: "3" } }),
     ).toMatch(/ · dirty$/);
+  });
+});
+
+describe("kế hoạch in ra trước khi chạy", () => {
+  const base = {
+    kiem_token: { ok: true, ly_do: "thuộc đúng App ID 1." },
+    token_source: "ZMP_TOKEN của môi trường",
+    phat_hanh: false,
+    api_host: "https://api.vigov.example",
+    mota: "nhan",
+  };
+  const vihat = { loai: "app-chung", ten_mien: null, app_id: "3333333333333333333", app_id_source: "flag" };
+  const rieng = { loai: "app-rieng", ten_mien: "xa-a.vigov.example", app_id: "1", app_id_source: "registry" };
+
+  it("App ViHAT: đích, App ID và nguồn của nó, KHÔNG nung xã, nguồn token", () => {
+    const t = planLines({ ...base, dich: vihat }).join("\n");
+    expect(t).toMatch(/Đích {5}: App ViHAT/);
+    expect(t).toMatch(/App ID {3}: 3333333333333333333 {2}\(--app-id\)/);
+    expect(t).toMatch(/Nung xã {2}: KHÔNG/);
+    expect(t).toMatch(/Token {4}: ZMP_TOKEN của môi trường — thuộc đúng App ID/);
+    expect(t).not.toMatch(/Logo xã|Banner xã/);
+    expect(t).toMatch(/THỬ NGHIỆM/);
+  });
+
+  it("app riêng: tên miền CÓ nung vào bundle; logo/banner; token không qua thì nói ra", () => {
+    const t = planLines({
+      ...base,
+      dich: rieng,
+      phat_hanh: true,
+      kiem_token: { ok: false, ly_do: "lý do" },
+      logo: "scripts/logo-xa/xa-a.vigov.example.png",
+    }).join("\n");
+    expect(t).toMatch(/Đích {5}: APP RIÊNG của xã xa-a\.vigov\.example/);
+    expect(t).toMatch(/\(tệp ánh xạ\)/);
+    expect(t).toMatch(/Nung xã {2}: CÓ — xa-a\.vigov\.example/);
+    expect(t).toMatch(/Logo xã {2}: scripts\/logo-xa/);
+    expect(t).toMatch(/Banner xã: \(chưa có/);
+    expect(t).toMatch(/KHÔNG QUA: lý do/);
+    expect(t).toMatch(/PHÁT HÀNH/);
   });
 });
 
@@ -333,7 +564,7 @@ describe("App ID và token KHÔNG BAO GIỜ tới được bundle", () => {
     expect(ma).toMatch(/if \(!kiem_token\.ok && !chi_thu\)/);
   });
 
-  it("`zmp login` chạy trong thư mục tạm — không bao giờ ghi đè `citizen-app/.env` của app chung", () => {
+  it("`zmp login` chạy trong thư mục tạm — không bao giờ ghi một token xuống `citizen-app/.env`", () => {
     const ma = doc("./deploy.mjs");
     const than = ma.slice(ma.indexOf("function dangNhapRieng("), ma.indexOf("function nghi("));
     expect(than).toMatch(/mkdtempSync\(/);
@@ -345,11 +576,11 @@ describe("App ID và token KHÔNG BAO GIỜ tới được bundle", () => {
 describe("app-config.json cho một lần đẩy", () => {
   const goc = readFileSync(new URL("../app-config.json", import.meta.url), "utf8");
 
-  it("không cờ thì nguyên văn — app chung không đổi một byte", () => {
+  it("App ViHAT: nguyên văn — không đổi một byte", () => {
     expect(appConfigChoLanDay(goc, false)).toBe(goc);
   });
 
-  it("--vao-thang ẩn thanh tiêu đề Zalo, giữ mọi khoá khác", () => {
+  it("app riêng ẩn thanh tiêu đề Zalo, giữ mọi khoá khác", () => {
     const moi = JSON.parse(appConfigChoLanDay(goc, true));
     const cu = JSON.parse(goc);
     expect(moi.app.actionBarHidden).toBe(true);
@@ -357,9 +588,11 @@ describe("app-config.json cho một lần đẩy", () => {
     expect(moi.listSyncJS).toEqual(cu.listSyncJS);
   });
 
-  it("deploy.mjs trả tệp về nguyên văn trong `finally`", () => {
+  it("deploy.mjs đổi tệp CHỈ cho app riêng và trả về nguyên văn trong `finally`", () => {
     const ma = readFileSync(new URL("./deploy.mjs", import.meta.url), "utf8");
-    expect(ma).toMatch(/finally \{\s*if \(vao_thang\) writeFileSync\(TEP_APP_CONFIG, app_config_goc/);
+    expect(ma).toMatch(/const own_app = dich\.loai === "app-rieng";/);
+    expect(ma).toMatch(/if \(own_app\) writeFileSync\(TEP_APP_CONFIG, appConfigChoLanDay\(app_config_goc, true\)/);
+    expect(ma).toMatch(/finally \{\s*if \(own_app\) writeFileSync\(TEP_APP_CONFIG, app_config_goc/);
   });
 });
 
@@ -375,11 +608,11 @@ describe("mọi script dòng lệnh phải PHÂN TÍCH ĐƯỢC", () => {
   }
 });
 
-describe("logo xã tạm thời chỉ đi vào đúng bản dựng --vao-thang", () => {
+describe("logo xã tạm thời chỉ đi vào đúng bản dựng app riêng của xã", () => {
   const ma = readFileSync(new URL("./deploy.mjs", import.meta.url), "utf8");
 
-  it("chỉ chép khi có cờ, và xoá trong `finally` sau bước dựng", () => {
-    expect(ma).toMatch(/const LOGO_NGUON = vao_thang \?/);
+  it("chỉ chép cho app riêng, và xoá trong `finally` sau bước dựng", () => {
+    expect(ma).toMatch(/const LOGO_NGUON = own_app \?/);
     expect(ma).toMatch(/if \(co_logo\) copyFileSync\(LOGO_NGUON, LOGO_DICH\)/);
     expect(ma).toMatch(/finally \{[^}]*if \(co_logo\) rmSync\(LOGO_DICH/);
   });
@@ -390,13 +623,13 @@ describe("logo xã tạm thời chỉ đi vào đúng bản dựng --vao-thang",
   });
 });
 
-describe("banner xã tạm thời chỉ đi vào đúng bản dựng --vao-thang", () => {
+describe("banner xã tạm thời chỉ đi vào đúng bản dựng app riêng của xã", () => {
   // Same exception, same shape as the logo: a banner left in `public/` would ship one commune's picture
   // inside the next build — the shared app included.
   const ma = readFileSync(new URL("./deploy.mjs", import.meta.url), "utf8");
 
-  it("chỉ chép khi có cờ, và xoá trong `finally` sau bước dựng", () => {
-    expect(ma).toMatch(/const BANNER_SOURCE = vao_thang \?/);
+  it("chỉ chép cho app riêng, và xoá trong `finally` sau bước dựng", () => {
+    expect(ma).toMatch(/const BANNER_SOURCE = own_app \?/);
     expect(ma).toMatch(/if \(has_banner\) copyFileSync\(BANNER_SOURCE, BANNER_TARGET\)/);
     // The block is read whole: the logo's `{ force: true }` before it would stop a `[^}]*` match short.
     const sau_dung = /ma = dung\(env_dung\);\s*\} finally \{([\s\S]*?)\n\}/.exec(ma);
@@ -409,25 +642,67 @@ describe("banner xã tạm thời chỉ đi vào đúng bản dựng --vao-thang
   });
 });
 
-describe("`--vao-thang --thu`: the plan of a commune's own app, before anything happens", () => {
+describe("`deploy.mjs --thu` end to end: the plan, before anything happens", () => {
   const deploy = fileURLToPath(new URL("./deploy.mjs", import.meta.url));
-  // `--thu` builds nothing and pushes nothing. ZMP_TOKEN emptied: the dry run must not depend on this machine.
-  const dryRun = (...flags) =>
+  // `--thu` builds nothing and pushes nothing. spawnSync gives the child a PIPE for stdin — not a TTY —
+  // so every run here is the non-interactive path (Jenkins). ZMP_TOKEN emptied: the dry run must not
+  // depend on this machine.
+  const dryRun = (flags, env = {}) =>
     spawnSync(process.execPath, [deploy, ...flags], {
       encoding: "utf8",
-      env: { ...process.env, ZMP_TOKEN: "", VIGOV_XA_CO_DINH: "" },
+      input: "",
+      env: { ...process.env, ZMP_TOKEN: "", VIGOV_XA_CO_DINH: "", ...env },
     });
 
-  it("exits 0, and the build line bakes in the commune domain and nothing else", () => {
-    const r = dryRun("--domain=thangbinh-danang.vigov.vn", "--vao-thang", "--thu");
+  it("--domain: exits 0, and the build line ALWAYS bakes in the commune domain", () => {
+    const r = dryRun(["--domain=thangbinh-danang.vigov.vn", "--thu"]);
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toMatch(/VIGOV_XA_CO_DINH=thangbinh-danang\.vigov\.vn vite build/);
+    expect(r.stdout).toMatch(/Nung xã {2}: CÓ/);
+    expect(r.stdout).toMatch(/APP_ID=3043188591857102858 ZMP_TOKEN=<môi trường>/);
+    // No token in a non-interactive run: the plan says the real run would stop.
+    expect(r.stdout).toMatch(/Lần chạy thật sẽ DỪNG ở đây: ZMP_TOKEN chưa có/);
   });
 
-  it("the version label is target · commit · time, plus `dirty` when asked", () => {
-    const dich = { loai: "app-rieng", ten_mien: "xa-a.vigov.example", app_id: "1111111111111111111" };
-    const base = { dich, sha: "abc1234", luc: "2026-09-30 10:00", dirty: false };
-    expect(nhanPhienBan(base)).toBe("xa-a.vigov.example · app 1111111111111111111 · abc1234 · 2026-09-30 10:00");
-    expect(nhanPhienBan({ ...base, dirty: true })).toMatch(/ · dirty$/);
+  it("--app=vihat --app-id: plan of the shared app, NO domain baked, the App ID in the label", () => {
+    const r = dryRun(["--app=vihat", "--app-id=123", "--thu"], {
+      ZMP_TOKEN: tokenCua("123"),
+      VIGOV_XA_CO_DINH: "thangbinh-danang.vigov.vn",
+    });
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toMatch(/Đích {5}: App ViHAT/);
+    expect(r.stdout).toMatch(/Nung xã {2}: KHÔNG/);
+    expect(r.stdout).toMatch(/Nhãn {5}: app-vihat · app 123 · /);
+    expect(r.stdout).toMatch(/VIGOV_API_HOST=.+ vite build/);
+    expect(r.stdout).not.toMatch(/VIGOV_XA_CO_DINH=/);
+    expect(r.stdout).not.toMatch(/Lần chạy thật sẽ DỪNG/);
+    expect(r.stdout).not.toContain(tokenCua("123"));
+  });
+
+  it("no target, no terminal: refuses and lists the options — never a default", () => {
+    const r = dryRun(["--thu"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/chưa chọn đích/);
+    expect(r.stderr).toMatch(/--app=vihat/);
+    expect(r.stderr).toMatch(/--domain=thangbinh-danang\.vigov\.vn/);
+    expect(r.stdout).not.toMatch(/ĐỌC TRƯỚC KHI/);
+  });
+
+  it("shared app with no App ID anywhere, no terminal: refuses and asks for --app-id", () => {
+    const r = dryRun(["--app=vihat", "--thu"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/App ID của App ViHAT chưa có.*--app-id=<chữ số>/s);
+  });
+
+  it("--vao-thang refuses with the removal sentence", () => {
+    const r = dryRun(["--vao-thang", "--domain=thangbinh-danang.vigov.vn", "--thu"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/--vao-thang đã bỏ/);
+  });
+
+  it("--app-id that disagrees with the registry refuses", () => {
+    const r = dryRun(["--domain=thangbinh-danang.vigov.vn", "--app-id=1", "--thu"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/khác App ID/);
   });
 });
