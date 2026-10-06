@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowRightLeft } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import {
@@ -52,7 +53,14 @@ export function KanbanMoveMenu({
   disabled,
   showReturnNote,
   onMove,
+  compact = false,
 }: {
+  /**
+   * An icon button on the card's top row and a menu that FLOATS over the card (tester 06/10/2026:
+   * the full-size button below some cards and not others made the cards uneven in height). Same
+   * accessible name, same keys, same `onMove` — only the footprint changes.
+   */
+  compact?: boolean;
   code: string;
   targets: readonly TrangThaiNhiemVu[];
   labels: BangNhanTrangThai;
@@ -95,7 +103,8 @@ export function KanbanMoveMenu({
         ref={buttonRef}
         id={buttonId}
         type="button"
-        className="nut-phu"
+        className={compact ? "nut-chuyen-cot-gon" : "nut-phu"}
+        title={compact ? KANBAN_MOVE_BUTTON : undefined}
         aria-label={kanbanMoveButtonName(code)}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -112,10 +121,14 @@ export function KanbanMoveMenu({
           }
         }}
       >
-        {KANBAN_MOVE_BUTTON}
+        {compact ? (
+          <ArrowRightLeft aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-4" />
+        ) : (
+          KANBAN_MOVE_BUTTON
+        )}
       </button>
       {open && (
-        <>
+        <div className={compact ? "menu-noi" : "contents"}>
           <ul id={menuId} role="menu" aria-labelledby={buttonId} className="menu-chuyen-cot">
             {targets.map((t, i) => (
               <li key={t} role="none">
@@ -145,7 +158,7 @@ export function KanbanMoveMenu({
             ))}
           </ul>
           {showReturnNote && <p className="ghi-chu">{KANBAN_RETURN_NOTE}</p>}
-        </>
+        </div>
       )}
     </div>
   );

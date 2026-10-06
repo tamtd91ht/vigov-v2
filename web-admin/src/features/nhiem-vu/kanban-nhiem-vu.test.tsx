@@ -278,12 +278,16 @@ describe("thẻ nhiệm vụ §4.1", () => {
     const html = veThe({ child_count: 2 });
     const at = (s: string) => html.indexOf(s);
     // Rank 0 of the commune's scale is the top of the scale — the red strip; colour is never alone.
-    expect(html).toMatch(/<div class="h-\[3px\] bg-[a-z0-9-]+" aria-hidden="true">/);
+    expect(html).toMatch(/<div class="h-\[3px\] rounded-t-\[10px\] bg-[a-z0-9-]+" aria-hidden="true">/);
     expect(at("h-[3px]")).toBeLessThan(at(">NV19<"));
     expect(at(">NV19<")).toBeLessThan(at("Báo cáo tổng kết"));
-    expect(at("Báo cáo tổng kết")).toBeLessThan(at("2 việc con"));
-    expect(at("2 việc con")).toBeLessThan(at("Trễ 86 ngày"));
-    expect(at("Trễ 86 ngày")).toBeLessThan(at("CB-2026-3H8N2W"));
+    // Deadline and sub-task count share ONE meta line (equal card heights, 06/10/2026).
+    expect(at("Báo cáo tổng kết")).toBeLessThan(at("Trễ 86 ngày"));
+    expect(at("Trễ 86 ngày")).toBeLessThan(at("2 việc con"));
+    expect(at("2 việc con")).toBeLessThan(at("CB-2026-3H8N2W"));
+    // The title reserves and clamps to two lines; the full title stays on hover.
+    expect(html).toContain("min-h-[2.75em]");
+    expect(html).toContain('title="Báo cáo tổng kết');
     // No extension count: the list contract carries none (schema.gen.ts `petitions_nhiemVuRa`).
     expect(html).not.toContain("đã gia hạn");
   });

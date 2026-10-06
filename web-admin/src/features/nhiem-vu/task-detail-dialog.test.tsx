@@ -294,7 +294,7 @@ function buttonByText(text: string): HTMLButtonElement {
   const card = /^Mở (\S+)$/.exec(text);
   if (card !== null) {
     const open = document.querySelector<HTMLButtonElement>(
-      `article[aria-labelledby="the-nhiem-vu-${card[1]}"] button[aria-expanded]`,
+      `article[aria-labelledby="the-nhiem-vu-${card[1]}"] button[aria-expanded]:not([aria-haspopup])`,
     );
     if (open === null) throw new Error(`no card "${card[1]}"`);
     return open;

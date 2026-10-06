@@ -2737,8 +2737,11 @@ export function TheNhiemVu({
     // THE PROTOTYPE'S CARD (`TaskCard.tsx`): a priority strip on top, `☐ Chọn`, then ONE button
     // holding code · title · `N việc con` · deadline · assignee. The strip is colour, so the
     // priority is also said in words for a screen reader (colour is never the only signal).
+    // EVERY CARD THE SAME HEIGHT (tester 06/10/2026): a fixed top row, the title clamped to two
+    // lines and always reserving two, ONE meta line (deadline + sub-task count), one holder line —
+    // overflow is cut with "…". No `overflow-hidden` here: the move menu floats over the card.
     <article
-      className="the-nhiem-vu overflow-hidden rounded-[10px] border border-solid border-line bg-surface p-0 shadow-sm"
+      className="the-nhiem-vu relative rounded-[10px] border border-solid border-line bg-surface p-0 shadow-sm"
       aria-labelledby={`the-nhiem-vu-${nhiemVu.code}`}
       aria-busy={pendingHere !== null ? true : undefined}
       draggable={targets.length > 0 && !busy ? true : undefined}
@@ -2755,48 +2758,78 @@ export function TheNhiemVu({
       }
       onDragEnd={targets.length > 0 ? () => onDragEnd?.() : undefined}
     >
-      <div className={cn("h-[3px]", priorityStripClass(danhMuc.mucUuTien, nhiemVu.priority))} aria-hidden="true" />
-      {selection !== null && (
-        // OUTSIDE the open button, never inside it: a checkbox in a button is a nested control.
-        <label className="m-0 flex cursor-pointer items-center gap-2 px-3 pt-2.5 text-[12px] text-ink-500">
-          <input
-            type="checkbox"
-            aria-label={selectLabel(nhiemVu.code)}
-            checked={selection.selected.has(nhiemVu.code)}
-            disabled={selection.disabled}
-            onChange={() => selection.toggle(nhiemVu)}
-          />{" "}
-          Chọn
-        </label>
-      )}
+      <div
+        className={cn("h-[3px] rounded-t-[10px]", priorityStripClass(danhMuc.mucUuTien, nhiemVu.priority))}
+        aria-hidden="true"
+      />
+      {/* TOP ROW, always the same height whether or not it holds the checkbox or the move button. */}
+      <div className="flex h-9 items-center justify-between gap-2 px-3 pt-1">
+        {selection !== null ? (
+          // OUTSIDE the open button, never inside it: a checkbox in a button is a nested control.
+          <label className="m-0 flex cursor-pointer items-center gap-2 text-[12px] text-ink-500">
+            <input
+              type="checkbox"
+              aria-label={selectLabel(nhiemVu.code)}
+              checked={selection.selected.has(nhiemVu.code)}
+              disabled={selection.disabled}
+              onChange={() => selection.toggle(nhiemVu)}
+            />{" "}
+            Chọn
+          </label>
+        ) : (
+          <span />
+        )}
+        {/* The keyboard path to moving the card — drag-and-drop alone has none (a11y). Compact:
+            an icon button here, its menu floating over the card. */}
+        {move !== null && targets.length > 0 && (
+          <KanbanMoveMenu
+            compact
+            code={nhiemVu.code}
+            targets={targets}
+            labels={nhanTT}
+            disabled={busy}
+            showReturnNote={canReturn}
+            onMove={(t) => move.move(nhiemVu, t, "menu")}
+          />
+        )}
+      </div>
       <button
         type="button"
-        className="block w-full cursor-pointer border-0 bg-transparent p-3 text-left [font-family:inherit] text-ink-900 hover:bg-surface-subtle focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-500"
+        className="block w-full cursor-pointer rounded-b-[10px] border-0 bg-transparent px-3 pt-1 pb-3 text-left [font-family:inherit] text-ink-900 hover:bg-surface-subtle focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-500"
         onClick={() => moNhiemVu(nhiemVu)}
         aria-expanded={nhiemVu.code === maDangMo}
       >
         <span className="ma-muc mb-0.5 block text-[11px] font-semibold text-ink-500">{nhiemVu.code}</span>
-        <span id={`the-nhiem-vu-${nhiemVu.code}`} className="tieu-de-the text-[13px] leading-snug font-semibold">
+        {/* Two lines, always reserved (`min-h` = 2 × leading-snug): a one-line title does not make a
+            shorter card. Longer titles end in "…" (`.the-nhiem-vu .tieu-de-the` clamps to 2). */}
+        <span
+          id={`the-nhiem-vu-${nhiemVu.code}`}
+          className="tieu-de-the min-h-[2.75em] text-[13px] leading-snug font-semibold"
+          title={nhiemVu.title}
+        >
           {nhiemVu.title}
         </span>
         {priorityLabel !== "" && <span className="an-thi-giac"> · Mức ưu tiên {priorityLabel}</span>}
-        {childCountLabel(nhiemVu.child_count) !== null && (
-          <span className="mt-2 flex items-center gap-1 text-[11px] text-ink-500">
-            <Glyph icon={GitBranch} className="size-3" />
-            {childCountLabel(nhiemVu.child_count)}
+        {/* ONE meta line: deadline, then the sub-task count — never a second line that only some
+            cards have. Late (red) ≠ finished late (amber): a finished task owes nothing, so red would
+            be wrong, but it came in after its deadline, so a plain date would hide it. Overdue is
+            DERIVED from `due_at` vs now (rule 10, invariant 3). */}
+        <span className="mt-2.5 flex min-w-0 items-center gap-3 overflow-hidden text-[11px] whitespace-nowrap">
+          <span
+            className={cn(
+              "flex shrink-0 items-center gap-1",
+              completedLate ? "font-semibold text-warning-600" : treHan ? "nhan-lech font-semibold" : "text-ink-500",
+            )}
+          >
+            <Glyph icon={treHan && !completedLate ? AlarmClock : Clock} className="size-3" />
+            {completedLate ? nhanHoanThanhTreHan(nhanTT) : nhanHanThe(nhiemVu.due_at, bayGio)}
           </span>
-        )}
-        {/* Late (red) ≠ finished late (amber): a finished task owes nothing, so red would be wrong,
-            but it came in after its deadline, so a plain date would hide it. Overdue is DERIVED
-            from `due_at` vs now (rule 10, invariant 3). */}
-        <span
-          className={cn(
-            "mt-2.5 flex items-center gap-1 text-[11px]",
-            completedLate ? "font-semibold text-warning-600" : treHan ? "nhan-lech font-semibold" : "text-ink-500",
+          {childCountLabel(nhiemVu.child_count) !== null && (
+            <span className="flex min-w-0 items-center gap-1 truncate text-ink-500">
+              <Glyph icon={GitBranch} className="size-3" />
+              {childCountLabel(nhiemVu.child_count)}
+            </span>
           )}
-        >
-          <Glyph icon={treHan && !completedLate ? AlarmClock : Clock} className="size-3" />
-          {completedLate ? nhanHoanThanhTreHan(nhanTT) : nhanHanThe(nhiemVu.due_at, bayGio)}
         </span>
         <span className="mt-2 block truncate text-[12px] text-ink-500">
           {cardHolderText(nhiemVu, danhBa, unitNames)}
@@ -2812,20 +2845,6 @@ export function TheNhiemVu({
         <p className="thong-bao-loi mx-3 mt-0 mb-2" role="alert">
           {kanbanMoveRefusedPrefix(nhanTT, refusal.target)} {refusal.message}
         </p>
-      )}
-      {/* The keyboard path to moving the card — drag-and-drop alone has none (a11y). Not in the
-          prototype, which only drags; kept, below the card's content. */}
-      {move !== null && targets.length > 0 && (
-        <div className="cum-nut-the mx-3 mt-0 mb-2">
-          <KanbanMoveMenu
-            code={nhiemVu.code}
-            targets={targets}
-            labels={nhanTT}
-            disabled={busy}
-            showReturnNote={canReturn}
-            onMove={(t) => move.move(nhiemVu, t, "menu")}
-          />
-        </div>
       )}
     </article>
   );

@@ -256,7 +256,10 @@ describe("the board — allowed, denied, pending, refused, done", () => {
     expect(html).toContain(`aria-label="${KANBAN_MOVE_BUTTON} (NV19)"`);
     expect(html).toContain('aria-haspopup="menu"');
     expect(html).toContain('aria-expanded="false"');
-    expect(html).toContain(`>${KANBAN_MOVE_BUTTON}</button>`);
+    // Compact on the card (06/10/2026): an icon button whose tooltip carries the words; the
+    // accessible name above is unchanged.
+    expect(html).toContain('class="nut-chuyen-cot-gon"');
+    expect(html).toContain(`title="${KANBAN_MOVE_BUTTON}"`);
   });
 
   it("DENIED — no `task.update` and not the assignee: no drag handle, no menu; the card still opens", () => {

@@ -3523,6 +3523,66 @@ aside.khoi-chua-khai h3 {
   font-size: 1rem;
 }
 
+/* Compact move control on a Kanban card (06/10/2026): an icon button on the card's top row, its
+ * menu floating over the card so opening it never makes one card taller than the others. */
+.chuyen-cot {
+  position: relative;
+}
+
+.nut-chuyen-cot-gon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink-700);
+  cursor: pointer;
+}
+
+.nut-chuyen-cot-gon:hover:not(:disabled) {
+  background: var(--surface-subtle);
+}
+
+.nut-chuyen-cot-gon:focus-visible {
+  outline: 2px solid var(--xanh);
+  outline-offset: 1px;
+}
+
+.nut-chuyen-cot-gon:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.menu-noi {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 30;
+  min-width: 13rem;
+  box-shadow: 0 4px 16px rgba(30, 49, 80, 0.16);
+  border-radius: 0.5rem;
+  background: #fff;
+}
+
+.menu-noi .menu-chuyen-cot {
+  margin: 0;
+}
+
+.menu-noi .ghi-chu {
+  margin: 0;
+  padding: 0.375rem 0.75rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+/* The card title clamps to TWO lines (the legacy rule below is three, kept for other cards). */
+.the-nhiem-vu .tieu-de-the {
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
 .menu-chuyen-cot {
   list-style: none;
   margin: 0.375rem 0 0;
