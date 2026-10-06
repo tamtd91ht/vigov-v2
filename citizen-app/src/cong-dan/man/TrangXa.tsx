@@ -19,7 +19,11 @@
  *   · chưa có — truyền thanh, video, bản đồ, thông báo, tra cứu hồ sơ: trạng thái trống bằng lời.
  *
  * NHÁP PHẢN ÁNH (ADR 0050 #7, chủ dự án 28/09/2026): có, như bản mẫu — nhưng nửa này KHÔNG chạm kho lưu
- * trữ; lớp vỏ tiêm `draftStore` (chỉ `AppRieng`), tệp duy nhất chạm kho là `commune-app/feedback-draft-store.ts`.
+ * trữ; lớp vỏ tiêm `draftStore` (`AppRieng`, và app chung qua QR xã — khoá theo tên miền xã, 06/10/2026), tệp
+ * duy nhất chạm kho là `commune-app/feedback-draft-store.ts`.
+ *
+ * TWO HOSTS (owner 06/10/2026): the commune's own app (`AppRieng`) and the SHARED app opened from a commune QR
+ * (`QrCommuneApp`), which borrows this whole interface until the commune apps can be published.
  *
  * KHÔNG LẤY TỪ BẢN MẪU: router, lưu trữ trực tiếp, tên xã từ biến môi trường, lớp gọi máy chủ của nó, OTP,
  * quét căn cước, số ngày cam kết viết cứng (luật 10). Bước chọn lĩnh vực CÓ, và lĩnh vực ấy là của phiếu (ADR 0050, thay ADR 0049).
@@ -1086,7 +1090,7 @@ type TrangTra =
   | { readonly kieu: "xong"; readonly xa: XaCuaApp };
 
 export function TrangXa(props: {
-  /** Tên miền xã nung vào bản dựng (`lib/xa-co-dinh.ts`). */
+  /** Tên miền xã: nung vào bản dựng (`lib/xa-co-dinh.ts`), hoặc `d` của QR xã trên app chung (`QrCommuneApp`). */
   ten_mien: string;
   /**
    * Lấy họ tên từ Zalo (`getUserInfo`), do lớp vỏ tiêm — nửa này không nhập zmp-sdk (`ranh-gioi-hai-nua.test.ts`
@@ -1101,13 +1105,15 @@ export function TrangXa(props: {
    */
   getSceneLocation?: GetSceneLocation;
   /**
-   * Chụp / chọn ảnh hiện trường (`requestCameraPermission` + `openMediaPicker`), do lớp vỏ tiêm — CHỈ app riêng
-   * của xã (`AppRieng`, owner 02/10/2026). Không truyền thì không có nút ảnh nào (test).
+   * Chụp / chọn ảnh hiện trường (`requestCameraPermission` + `openMediaPicker`), do lớp vỏ tiêm — app riêng của
+   * xã (`AppRieng`) và app chung qua QR xã (`QrCommuneApp`, owner 06/10/2026). Không truyền thì không có nút ảnh
+   * nào (test).
    */
   pickScenePhotos?: PickScenePhotos;
   /**
-   * Nháp phản ánh đang soạn (ADR 0050 #7), do lớp vỏ tiêm — CHỈ app riêng của xã. Không truyền thì không
-   * có nháp (app chung, chạy thử, test): nửa này không tự chạm kho lưu trữ nào.
+   * Nháp phản ánh đang soạn (ADR 0050 #7), do lớp vỏ tiêm — app riêng của xã, và app chung qua QR xã với khoá
+   * theo tên miền xã (06/10/2026). Không truyền thì không có nháp (chạy thử, test): nửa này không tự chạm kho
+   * lưu trữ nào.
    */
   draftStore?: FeedbackDraftStore;
   /**

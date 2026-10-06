@@ -50,11 +50,9 @@ import {
   LOCATION_PATH,
   thanYeuCau as thanYeuCauPhien,
 } from "./features/dang-nhap/hop-dong";
-import { nhanNguon, TIEU_DE_XAC_NHAN_XA } from "./features/kham-pha/goi-y";
 import { diaChiViGov } from "./cong-dan/api/dia-chi-vigov";
 import { DUONG_DAN_PHAN_ANH_CUA_TOI } from "./cong-dan/api/hop-dong-phan-anh";
-import { NHAN_KENH_CONG_DAN } from "./cong-dan/man/KenhCongDan";
-import { CUA_TOI, KENH_CHUA_MO, KHAN_CAP, TRA_CUU } from "./cong-dan/man/noi-dung";
+import { APP_RIENG, CUA_TOI, KENH_CHUA_MO, KHAN_CAP, TRA_CUU } from "./cong-dan/man/noi-dung";
 
 /**
  * WHAT THIS CATCHES THAT NOTHING ELSE DOES:
@@ -257,16 +255,17 @@ describe("bản đẩy lên Zalo — một bundle, đúng bằng thứ người 
     }
   });
 
-  it("mang màn xác nhận xã — vỏ để card sau nối vào nguồn xã phía máy chủ", () => {
-    // Vế "CÓ" của ca "không còn bộ chọn xã" ngay dưới: màn xác nhận vẫn phải có mặt.
-    for (const chuoi of [
-      TIEU_DE_XAC_NHAN_XA,
-      nhanNguon("qr"),
-      nhanNguon("zns"),
-      "Bạn cần liên hệ với xã này?",
-      "Không phải xã này",
-    ]) {
+  /**
+   * THE COMMUNE QR OPENS THE COMMUNE'S FULL INTERFACE (owner 06/10/2026) — the same `TrangXa` the commune's own
+   * app renders, so the shared bundle must carry its words. The old one-tap confirmation step ("Bạn cần liên hệ
+   * với xã này?") is no longer rendered by any path; it reappearing in the bundle means someone wired it back.
+   */
+  it("mang giao diện đầy đủ của xã cho đường QR — và không còn bước xác nhận xã cũ", () => {
+    for (const chuoi of [APP_RIENG.dang_mo, APP_RIENG.khong_thay]) {
       expect(ban, `bundle thiếu: ${chuoi}`).toContain(chuoi);
+    }
+    for (const chuoi of ["Bạn cần liên hệ với xã này?", "Không phải xã này"]) {
+      expect(ban, `bundle vẫn chứa bước xác nhận cũ: ${chuoi}`).not.toContain(chuoi);
     }
   });
 
@@ -400,7 +399,7 @@ describe("bản đẩy lên Zalo — một bundle, đúng bằng thứ người 
       KENH_CHUA_MO.tieu_de,
       KHAN_CAP,
       TRA_CUU.khong_thay,
-      NHAN_KENH_CONG_DAN,
+      APP_RIENG.dang_mo,
       CUA_TOI.tieu_de,
       CUA_TOI.trong,
     ]) {
@@ -539,7 +538,7 @@ describe("bản đẩy lên Zalo — một bundle, đúng bằng thứ người 
     try {
       const lai = toanVan(await dungBan());
       expect(lai.length).toBe(ban.length);
-      expect(lai).toContain(NHAN_KENH_CONG_DAN);
+      expect(lai).toContain(APP_RIENG.dang_mo);
     } finally {
       if (truoc === undefined) delete process.env["VIGOV_BIEN_THE"];
       else process.env["VIGOV_BIEN_THE"] = truoc;

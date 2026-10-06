@@ -751,7 +751,7 @@ describe("Tin tức: the 'Xem video' button", () => {
     expect(calls).toEqual([CLIP, CLIP]);
   });
 
-  it("wired in the commune's own app only, through the declared destination 'video'", () => {
+  it("wired in the commune's interface only (own app · shared app on a commune QR), through the declared destination 'video'", () => {
     const raw = import.meta.glob(["../../App.tsx", "./TinTucXaScreen.tsx", "./TinTucAppXa.tsx"], {
       query: "?raw",
       import: "default",
@@ -761,7 +761,12 @@ describe("Tin tức: the 'Xem video' button", () => {
     const own = app.slice(app.indexOf("export function AppRieng("), app.indexOf("function AppChung("));
     expect(own).toMatch(/openVideo=\{openCommuneVideo\}/);
     expect(app).toMatch(/const openCommuneVideo: OpenVideo = \(url\) => moRaNgoai\("video", url\);/);
-    expect(app.slice(app.indexOf("function AppChung("))).not.toMatch(/openVideo|openCommuneVideo/);
+    // Owner 06/10/2026: the shared app on a commune QR renders the commune's full interface (`QrCommuneApp`), video
+    // included; the shared app's intro (no QR) still never names it.
+    const qrStart = app.indexOf("function QrCommuneApp(");
+    expect(qrStart, "QrCommuneApp is gone from App.tsx").toBeGreaterThan(app.indexOf("function AppChung("));
+    expect(app.slice(qrStart)).toMatch(/openVideo=\{openCommuneVideo\}/);
+    expect(app.slice(app.indexOf("function AppChung("), qrStart)).not.toMatch(/openVideo|openCommuneVideo/);
     // The shared app's news screen is untouched (owner, 01/10/2026: commune app only).
     expect(raw["./TinTucXaScreen.tsx"]).not.toMatch(/Xem video|watch_video|openVideo/);
     // And the state half itself opens nothing: it only calls what it was given. Comments stripped — they may NAME

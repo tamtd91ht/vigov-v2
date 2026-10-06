@@ -639,12 +639,16 @@ describe("wiring — the commune app only, through the declared destination, and
   ) as Record<string, string>;
   const code = (p: string) => raw[p]!.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(?<!:)\/\/[^\n]*/g, " ");
 
-  it("AppRieng injects `moRaNgoai(\"lien-ket-xa\", …)`; AppChung does not; the shared news screen takes no opener", () => {
+  it("AppRieng and the shared app's QR path inject `moRaNgoai(\"lien-ket-xa\", …)`; the shared intro does not; the old shared news screen takes no opener", () => {
     const app = raw["../../App.tsx"]!;
     const own = app.slice(app.indexOf("export function AppRieng("), app.indexOf("function AppChung("));
     expect(own).toMatch(/openLink=\{openCommuneLink\}/);
     expect(app).toMatch(/const openCommuneLink: OpenExternal = \(url\) => moRaNgoai\("lien-ket-xa", url\);/);
-    expect(app.slice(app.indexOf("function AppChung("))).not.toMatch(/openLink|openCommuneLink/);
+    // Owner 06/10/2026: the shared app on a commune QR renders the commune's full interface (`QrCommuneApp`).
+    const qrStart = app.indexOf("function QrCommuneApp(");
+    expect(qrStart, "QrCommuneApp is gone from App.tsx").toBeGreaterThan(app.indexOf("function AppChung("));
+    expect(app.slice(qrStart)).toMatch(/openLink=\{openCommuneLink\}/);
+    expect(app.slice(app.indexOf("function AppChung("), qrStart)).not.toMatch(/openLink|openCommuneLink/);
     expect(code("./TinTucXaScreen.tsx")).not.toMatch(/onLink|openLink|useLeaveApp/);
   });
 

@@ -1,26 +1,20 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 
-import { feedbackDraftStore } from "./commune-app/feedback-draft-store";
+import { feedbackDraftStore, sharedAppDraftStore } from "./commune-app/feedback-draft-store";
 import { TabBar } from "./components/TabBar";
 import {
   type CommuneAppSessionResult,
   type GetSceneLocation,
-  KenhCongDan,
   type KetQuaMoPhien,
-  type KetThucXacNhan,
   type LayTenZalo,
-  type MoPhienViGov,
-  NutVaoKenhCongDan,
   type OpenCommuneAppSession,
   type OpenExternal,
   type OpenVideo,
   type PickScenePhotos,
-  type ReopenWithPhone,
   type ReopenWithPhoneResult,
   type SceneLocationResult,
   type ScenePhotoPickResult,
   TrangXa,
-  XacNhanXa,
   type ZaloFailure,
 } from "./cong-dan";
 import { COMPANY } from "./content/company-profile";
@@ -28,7 +22,6 @@ import { NutChatOA } from "./features/company-intro/NutChatOA";
 import {
   type CommuneAppLoginResult,
   type KetQuaMoPhienQuaCau,
-  moPhienCongDanQuaCau,
   openCommuneAppSessionWithPhone,
   reopenCitizenSessionWithPhone,
   type ReopenWithPhoneBridgeResult,
@@ -72,8 +65,8 @@ import { XA_CO_DINH } from "./lib/xa-co-dinh";
  * WHY NOT A ROUTER:
  *
  *   Four sibling screens with no deep-linkable state do not need history. The one deep link the app
- *   reads (`?d=<commune domain>&src=qr|zns`, ADR 0047) opens ONE confirmation step, not a route, so
- *   there is still nothing to route.
+ *   reads (`?d=<commune domain>&src=qr|zns`, ADR 0047) swaps the WHOLE app for the commune's interface
+ *   (`QrCommuneApp`, owner 06/10/2026), not a route, so there is still nothing to route.
  */
 
 /**
@@ -96,9 +89,10 @@ function retryWith(failure: SdkFailure | undefined): { kieu: "thu-lai"; zalo?: Z
 /**
  * CẦU NỐI HAI NỬA — CHỖ DUY NHẤT KẾT QUẢ CỦA CLIENT ĐĂNG NHẬP THƯƠNG MẠI ĐỔI SANG KIỂU CỦA NỬA NHÀ NƯỚC.
  *
- * Nửa nhà nước cần mở phiên ViGov sau khi công dân xác nhận xã, nhưng không được nhập `zmp-sdk` hay
- * client của `vihat-miniapp` (`ranh-gioi-hai-nua.test.ts` §3a). Nó chỉ khai KIỂU hàm nó cần
- * (`MoPhienViGov`); lớp vỏ — được nhập cả hai nửa — dựng hàm ấy ở đây và tiêm xuống `XacNhanXa`.
+ * Nửa nhà nước cần mở phiên ViGov, nhưng không được nhập `zmp-sdk` hay client của `vihat-miniapp`
+ * (`ranh-gioi-hai-nua.test.ts` §3a). Since 06/10/2026 the only caller is `toReopenWithPhoneResult` below
+ * (the shared app's QR path, `QrCommuneApp`); the confirmation step it was first written for is no longer
+ * rendered.
  *
  * Bảng dịch theo VIỆC NGƯỜI DÂN LÀM TIẾP, không theo mã trạng thái:
  *   xong                                        → có phiên
@@ -129,10 +123,6 @@ export function sangKieuCongDan(kq: KetQuaMoPhienQuaCau): KetQuaMoPhien {
   }
 }
 
-/** `communeConfirmed` không đọc ở đây: kiểu của nó là hằng `true`, và thân gửi đi cũng ghi hằng ấy. */
-const moPhienViGov: MoPhienViGov = async (yc) =>
-  sangKieuCongDan(await moPhienCongDanQuaCau(yc.communeHostHint));
-
 /**
  * Bảng dịch của lần MỞ LẠI KÈM SỐ — cùng bảng với `sangKieuCongDan`, thêm `tu-choi`, và nhánh `xong`
  * mang `phoneVerified` của phiên mới thay cho tên miền (lần mở lại không đổi khoá tra của hai màn công
@@ -150,17 +140,6 @@ export function toReopenWithPhoneResult(result: ReopenWithPhoneBridgeResult): Re
 }
 
 /**
- * Hàm mở lại phiên kèm số cho kênh công dân, gắn với TÊN MIỀN CÔNG DÂN ĐÃ XÁC NHẬN ở lần mở này (`d`).
- *
- * VÌ SAO `d`, KHÔNG PHẢI `communePrimaryHost` của phiên: `communeHostHint` là gợi ý mà công dân đã bấm
- * xác nhận; lần mở lại dùng lại ĐÚNG cú xác nhận ấy, không một tên miền nào khác. Nếu máy chủ phân giải
- * nó ra một xã khác xã của phiên đang dùng, `reopenSessionWithPhone` (nửa nhà nước) từ chối thay phiên.
- */
-function reopenWithPhoneFor(ten_mien_da_xac_nhan: string): ReopenWithPhone {
-  return async () => toReopenWithPhoneResult(await reopenCitizenSessionWithPhone(ten_mien_da_xac_nhan));
-}
-
-/**
  * KHOÁ TRA `?host=` CHO HAI MÀN CÔNG KHAI (tin tức · danh bạ) — hoặc `null`, và hai màn ấy ẩn đi.
  *
  *   1. `communePrimaryHost` của PHIÊN, nếu phiên có và đúng khuôn. Phiên nói thật (ADR 0047 §Trả lời
@@ -171,6 +150,9 @@ function reopenWithPhoneFor(ten_mien_da_xac_nhan: string): ReopenWithPhone {
  *
  * Đây KHÔNG phải đường cô lập xã: hai tuyến này công khai, chỉ trả thứ xã đã công bố, và không mang
  * phiên. Nhưng thứ tự vẫn là một quyết định, nên nó có tên và có ca kiểm (`kham-pha.test.tsx`).
+ *
+ * NO PRODUCTION CALLER since 06/10/2026: the QR path now renders `QrCommuneApp`, whose public screens read
+ * the QR host directly (`TrangXa`). Kept, with its test, until someone decides to remove the old path.
  */
 export function khoaTraCongKhai(
   ten_mien_phien: string | null,
@@ -179,16 +161,6 @@ export function khoaTraCongKhai(
   if (ten_mien_phien !== null) return ten_mien_phien;
   return ten_mien_da_xac_nhan;
 }
-
-/**
- * Xã đã xác nhận ở lần mở này — chỉ trong `useState`, mất khi app đóng (`ranh-gioi-hai-nua.test.ts` §3b).
- *
- *   `ten`       có phiên → `tenantDisplayName` của phiên; không phiên → `name` của `/communes`
- *   `tinh`      chỉ khi KHÔNG phiên: `province` của `/communes`. Phiên không trả tỉnh, và ghép tỉnh của
- *               `/communes` với tên của phiên là ghép hai nguồn có thể nói hai xã khác nhau
- *   `ten_mien`  khoá tra của hai màn công khai (`khoaTraCongKhai`), hoặc `null`
- */
-type XaCuaLanMo = { ten: string; tinh: string | null; ten_mien: string | null };
 
 /**
  * Vỏ ứng dụng, THUẦN — nhận mọi thứ qua tham số, không giữ trạng thái nào.
@@ -285,11 +257,9 @@ export function App() {
  * chủ dự án chọn 28/09/2026; lớp vỏ này chỉ chọn nó.
  */
 export function AppRieng({ ten_mien }: { ten_mien: string }) {
-  // `feedbackDraftStore` goes to THIS app only (ADR 0050 #7): a separate App ID, a separate origin. The
-  // shared app below never receives it — `ranh-gioi-hai-nua.test.ts` §3b reads `AppChung`'s body for it.
-  //
-  // SCENE PHOTOS (owner 02/10/2026): THIS app only — `AppChung` below never receives `pickScenePhotos`
-  // (`ranh-gioi-hai-nua.test.ts`).
+  // `feedbackDraftStore` — the single-key store (ADR 0050 #7): a separate App ID, a separate origin, one commune.
+  // The shared app's QR path (`QrCommuneApp`) gets a store keyed per commune host instead; its intro gets none
+  // (`ranh-gioi-hai-nua.test.ts` §3b).
   return (
     <TrangXa
       ten_mien={ten_mien}
@@ -308,7 +278,8 @@ export function AppRieng({ ten_mien }: { ten_mien: string }) {
  * THE LINK OPENER of the commune's own app (ADR 0067 §1, §5; owner 01/10/2026): a link inside an article's body,
  * and a home-strip banner pointing at an https page. Built here for the same reason as `openCommuneVideo`; the
  * state half asks the citizen first (`cong-dan/man/leave-app.tsx`) and calls this only on "Mở trang". Destination
- * `"lien-ket-xa"`, so the privacy policy's counted sentence names it. Not in `AppChung`.
+ * `"lien-ket-xa"`, so the privacy policy's counted sentence names it. Also injected by the shared app's QR path
+ * (`QrCommuneApp`, owner 06/10/2026); never by its intro.
  */
 const openCommuneLink: OpenExternal = (url) => moRaNgoai("lien-ket-xa", url);
 
@@ -317,7 +288,8 @@ const openCommuneLink: OpenExternal = (url) => moRaNgoai("lien-ket-xa", url);
  * declares its type (`OpenVideo`), as for `lay_ten`. It goes through the one declared door, `moRaNgoai`, under
  * the destination `"video"`, which is what makes the privacy policy's counted sentence name it
  * (`content/dich-ra-ngoai.ts`). Only the link the commune posted goes out — nothing of the citizen's.
- * Not in `AppChung`: the shared app's news screen (`TinTucXaScreen`) has no video button.
+ * Also injected by the shared app's QR path (`QrCommuneApp`, owner 06/10/2026); the shared app's OLD news screen
+ * (`TinTucXaScreen`) has no video button.
  */
 const openCommuneVideo: OpenVideo = (url) => moRaNgoai("video", url);
 
@@ -371,7 +343,7 @@ export function toCommuneAppSessionResult(result: CommuneAppLoginResult): Commun
  * (owner 05/10/2026: there is no other build). It GOES TO ViGov IDENTITY (ADR 0066), not `vihat-miniapp`:
  * `identityHost` is handed in by the state half (`cong-dan/api/mo-phien-vigov.ts`, from its address map),
  * because this shell may not import that map. The shared app's QR-path openers near the top of this file are
- * untouched and still go to `vihat-miniapp`.
+ * untouched and still go to `vihat-miniapp` (`openSharedAppSession` below).
  */
 const openCommuneAppSession: OpenCommuneAppSession = async (identityHost) =>
   toCommuneAppSessionResult(await openCommuneAppSessionWithPhone(identityHost));
@@ -420,7 +392,9 @@ const getSceneLocation: GetSceneLocation = async () => toSceneLocationResult(awa
 const getCommuneSceneLocation: GetSceneLocation = async () => toSceneLocationResult(await getCommuneAppLocation());
 
 /**
- * THE SCENE-PHOTO BRIDGE — the commune's own app ONLY. The shell builds it, the state half only declares its
+ * THE SCENE-PHOTO BRIDGE — the commune's own app, and the shared app ONLY on its QR commune path (`QrCommuneApp`,
+ * owner 06/10/2026, revoking "own app only" of 02/10/2026). The SDK picker is app-independent. The shell builds
+ * it, the state half only declares its
  * type (`PickScenePhotos`), exactly like the location bridge above. What comes down is LOCAL temp paths: the
  * picker uploads nothing, and the bytes leave the phone only through the state half's presigned POST, after
  * the petition is recorded.
@@ -465,7 +439,20 @@ const layTenChoXa: LayTenZalo = async (mode) => {
   return ho_ten === "" ? { kieu: "khong-lay-duoc" } : { kieu: "xong", ho_ten };
 };
 
+/**
+ * THE SHARED VIHAT APP — two shapes, chosen once from the launch link (read at mount; `location.search` is
+ * synchronous, so the branch never changes between renders and each branch keeps its own hooks):
+ *   a trusted commune link (`?d=<host>&src=qr|zns`, `thamSoXa`) → `QrCommuneApp`, the commune's full interface
+ *   anything else                                                → `SharedAppIntro`, the ViHAT intro and tabs
+ */
 function AppChung() {
+  const [thamSo] = useState<KetQuaDo>(thamSoMoApp);
+  const goiY = thamSoXa(thamSo);
+  return goiY !== null ? <QrCommuneApp ten_mien={goiY.ten_mien} /> : <SharedAppIntro />;
+}
+
+/** The ViHAT intro and tabs — the shared app opened WITHOUT a commune QR. Unchanged by 06/10/2026. */
+function SharedAppIntro() {
   const [vi_tri, datViTri] = useState<ViTri>({ man: DEFAULT_SCREEN_ID, lan: 0 });
   const currentId = vi_tri.man;
   const screen = findScreen(currentId);
@@ -487,57 +474,6 @@ function AppChung() {
     cuonToiMoc(vi_tri.moc);
   }, [vi_tri.lan, vi_tri.moc]);
 
-  // Đọc MỘT LẦN, NGAY LÚC DỰNG. `location.search` có sẵn đồng bộ, nên không còn `useEffect` và
-  // không còn nhịp nhấp nháy: công dân quét QR thấy thẳng màn xác nhận xã, không thấy màn giới
-  // thiệu công ty loé lên trước. Đó là món quà kèm theo của việc bỏ `zmp-sdk` — xem
-  // lib/launch-params.ts. Hàm bọc try/catch, nên ngoài trình duyệt nó trả về "không có tham số".
-  const [thamSo] = useState<KetQuaDo>(thamSoMoApp);
-
-  /**
-   * XÃ ĐÃ XÁC NHẬN Ở LẦN MỞ NÀY — `XaCuaLanMo`. Có hai cách tới đây, cả hai đều qua cú bấm xác nhận:
-   *
-   *   có phiên   `ten` là `tenantDisplayName` cầu phiên trả (ADR 0047 §Trả lời mục 4: "phiên nói
-   *              thật"), nên header và bước xác nhận cuối trước khi gửi nói CÙNG một xã với xã máy chủ
-   *              sẽ ghi phiếu.
-   *   không phiên (27/09/2026, quyết định của chủ sản phẩm) `ten` + `tinh` là thứ `/communes` trả cho
-   *              `d` và công dân vừa xác nhận. Chỉ tin tức và danh bạ mở được; gửi phản ánh vẫn cần phiên.
-   *
-   * `ten_mien` chỉ làm khoá tra `?host=`. Nó không phải tham chiếu xã: không được gửi làm "xã của
-   * tôi", không lưu, không vẽ ra (ADR 0047 điều kiện dừng #1). Tất cả sống trong `useState`.
-   */
-  const [xa, datXa] = useState<XaCuaLanMo | null>(null);
-  /** Lớp khám phá đã kết thúc (xác nhận xong, "không phải xã này", hoặc fail closed). */
-  const [xongKhamPha, datXongKhamPha] = useState(false);
-  /** Câu nói vì sao app về phần giới thiệu thay vì mở kênh — hoặc `null`. */
-  const [thongBao, datThongBao] = useState<string | null>(null);
-  /**
-   * Đang mở kênh công dân (gửi / tra cứu phản ánh). App.tsx KHÔNG nhập client ViGov — chỉ mở màn
-   * của nửa nhà nước qua cửa `./cong-dan` (`ranh-gioi-hai-nua.test.ts`).
-   */
-  const [moKenhCongDan, setMoKenhCongDan] = useState(false);
-
-  /**
-   * LỚP KHÁM PHÁ (ADR 0005 · 0047). `d` + `src` trên QR chỉ DẪN GIAO DIỆN — không chọn xã, không mở
-   * phiên nếu công dân chưa bấm xác nhận. `null` (không có `d`, `src` không tin được, `d` sai khuôn)
-   * là mở như không tham số: KHÔNG một lời gọi nào tới `identity`/`comms`.
-   */
-  const goiY = thamSoXa(thamSo);
-  const dangKhamPha = goiY !== null && xa === null && !xongKhamPha;
-
-  function ketThucKhamPha(kq: KetThucXacNhan) {
-    datXongKhamPha(true);
-    // `goiY === null` không tới được đây (màn xác nhận chỉ dựng khi có nó); nếu có thì KHÔNG đặt xã nào.
-    if (kq.kieu === "da-mo" && goiY !== null) {
-      datXa({ ten: kq.ten_xa, tinh: null, ten_mien: khoaTraCongKhai(kq.ten_mien, goiY.ten_mien) });
-      datThongBao(null);
-    } else if (kq.kieu === "xac-nhan-khong-phien" && goiY !== null) {
-      datXa({ ten: kq.xa.ten, tinh: kq.xa.tinh, ten_mien: khoaTraCongKhai(null, goiY.ten_mien) });
-      datThongBao(null);
-    } else if (kq.kieu === "ve-gioi-thieu") {
-      datThongBao(kq.cau);
-    }
-  }
-
   /**
    * `key` MANG CẢ `moc` LẪN `lan`, VÀ ĐÓ LÀ THỨ LÀM MỤC "QUYỀN" TRÊN MÀN CHỦ CHẠY ĐƯỢC LẦN THỨ HAI.
    *
@@ -546,55 +482,7 @@ function AppChung() {
    * Quay lại -> đóng, bấm Quyền lần nữa -> KHÔNG mở lại, vì màn cha không hề được dựng lại. Một
    * nút chạy đúng một lần rồi im là kiểu hỏng không ai báo, người ta chỉ thôi bấm nó.
    */
-  let noiDung: ReactNode = (
-    <Screen key={`${currentId}:${vi_tri.moc ?? ""}:${vi_tri.lan}`} moc={vi_tri.moc} onDi={di} />
-  );
-  if (moKenhCongDan) {
-    noiDung = (
-      <KenhCongDan
-        onDong={() => setMoKenhCongDan(false)}
-        ten_mien={xa === null ? null : xa.ten_mien}
-        // Chỉ có khi lần mở này đi qua bước xác nhận xã — nơi DUY NHẤT phiên ViGov được mở.
-        reopenWithPhone={goiY === null ? undefined : reopenWithPhoneFor(goiY.ten_mien)}
-        getSceneLocation={getSceneLocation}
-      />
-    );
-  } else if (dangKhamPha && goiY !== null) {
-    noiDung = (
-      <XacNhanXa
-        ten_mien={goiY.ten_mien}
-        nguon={goiY.nguon}
-        moPhienViGov={moPhienViGov}
-        onKetThuc={ketThucKhamPha}
-      />
-    );
-  } else if (thongBao !== null && currentId === DEFAULT_SCREEN_ID) {
-    // FAIL CLOSED CÓ LỜI: về phần giới thiệu, và nói bằng một câu vì sao — không mã lỗi, không tên
-    // miền. Chỉ trên tab đầu: đó là chỗ công dân vừa được đưa về.
-    noiDung = (
-      <>
-        <p className="cd-loi" role="status">
-          {thongBao}
-        </p>
-        {noiDung}
-      </>
-    );
-  } else if (xa !== null && currentId === DEFAULT_SCREEN_ID) {
-    /**
-     * ĐÃ XÁC NHẬN XÃ THÌ TAB ĐẦU MỞ LỐI VÀO KÊNH CÔNG DÂN — đặt TRÊN màn chủ, không thay nó.
-     *
-     *   Trang xã mẫu (dịch vụ, số trực, giờ làm việc) đã bị xoá cùng danh mục xã mẫu: mọi chữ trên
-     *   đó là dữ liệu đặt ra, và một trang xã thật cần nguồn máy chủ chưa có. Nên ở đây chỉ còn
-     *   đúng thứ có thật — lối vào kênh — và phần giới thiệu, thứ Zalo đã duyệt, vẫn còn đường tới.
-     *   Chỗ đặt nút là quyết định của card nối nguồn xã (TASK-04b), không phải của card này.
-     */
-    noiDung = (
-      <>
-        <NutVaoKenhCongDan onBam={() => setMoKenhCongDan(true)} />
-        {noiDung}
-      </>
-    );
-  }
+  const noiDung = <Screen key={`${currentId}:${vi_tri.moc ?? ""}:${vi_tri.lan}`} moc={vi_tri.moc} onDi={di} />;
 
   return (
     /**
@@ -612,11 +500,91 @@ function AppChung() {
         // Bấm một tab là điều hướng KHÔNG CÓ MỐC: người bấm muốn về đầu màn ấy, không muốn bị thả
         // xuống giữa một khối mà lần trước họ đi tới từ màn chủ.
         onChonMan={(id) => di({ man: id })}
-        xaDaChon={xa === null ? null : { ten: xa.ten, tinh: xa.tinh }}
-        khamPha={dangKhamPha}
+        // No commune on this path: a commune QR renders `QrCommuneApp`, which carries the commune's own header.
+        xaDaChon={null}
       >
         {noiDung}
       </KhungApp>
     </NhaCungCapPhien>
+  );
+}
+
+/**
+ * Bridge result of the shared app's session opening → the commune app's session result, for the QR path.
+ *
+ * The shared app opens the session through the `vihat-miniapp` bridge WITH the phone, bound to the QR host
+ * (`reopenCitizenSessionWithPhone`, translated by `toReopenWithPhoneResult`), because the shared App ID's
+ * secret lives there (ADR 0032). `TrangXa` expects `CommuneAppSessionResult`; this maps one onto the other by
+ * WHAT THE CITIZEN DOES NEXT:
+ *   xong                      → xong (token, commune name, phone-verified flag — unchanged)
+ *   tu-choi · ngoai-zalo      → the same branch
+ *   thu-lai                   → thu-lai, keeping Zalo's code when Zalo refused
+ *   chua-mo                   → tam-ngung: the bridge is off or not serving; pressing again changes nothing now
+ * No branch carries the phone code: it stops in `features/dang-nhap/cau-vigov.ts`.
+ */
+export function toSharedAppSessionResult(result: ReopenWithPhoneResult): CommuneAppSessionResult {
+  switch (result.kieu) {
+    case "xong": {
+      const { token, ten_xa, da_xac_thuc_so } = result;
+      return { kieu: "xong", token, ten_xa, da_xac_thuc_so };
+    }
+    case "tu-choi":
+    case "ngoai-zalo":
+      return { kieu: result.kieu };
+    case "thu-lai":
+      return result.zalo === undefined ? { kieu: "thu-lai" } : { kieu: "thu-lai", zalo: result.zalo };
+    case "chua-mo":
+      return { kieu: "tam-ngung" };
+  }
+}
+
+/**
+ * The shared app's session opener for ONE commune host. It IGNORES the identity host `TrangXa` hands out: that
+ * host is where a commune's OWN App ID logs in (ADR 0066); the shared App ID logs in through `vihat-miniapp`.
+ * The host it sends is the QR's `d` — the commune whose public pages the citizen is looking at — and the
+ * session is still kept only if the server's commune name equals the name on screen (`openCommuneAppSession`).
+ *
+ * `reopen` is for tests only — production code never passes it.
+ */
+export function openSharedAppSession(
+  communeHost: string,
+  reopen: (communeHost: string) => Promise<ReopenWithPhoneBridgeResult> = reopenCitizenSessionWithPhone,
+): OpenCommuneAppSession {
+  return async () => toSharedAppSessionResult(toReopenWithPhoneResult(await reopen(communeHost)));
+}
+
+/**
+ * THE SHARED APP ON A COMMUNE QR — the commune's full interface (owner 06/10/2026: the commune apps cannot be
+ * published yet, so citizens borrow the shared app — "full nội dung trong citizen app"). `TrangXa` owns the
+ * whole screen, as in `AppRieng`: no ViHAT header, tab bar or chat button; the commune name is on every screen
+ * and the send button names the commune (README §Non-negotiables #2, #5).
+ *
+ * `d` STEERS THE INTERFACE AND GRANTS NOTHING (ADR 0005 · 0019 · 0022): it picks whose PUBLIC pages are looked
+ * up. A session opens only by the citizen's explicit act through `TrangXa`'s gate (`commune-session.ts`), and
+ * is kept only if its commune name equals the one on screen (`cong-dan/api/mo-phien-vigov.ts`).
+ *
+ * What differs from `AppRieng`, and why:
+ *   openSession       through `vihat-miniapp`, bound to this host (`openSharedAppSession`)
+ *   getSceneLocation  the shared App ID's exchange (`getSceneLocation`), not the own app's App ID
+ *   draftStore        keyed by THIS host (`sharedAppDraftStore`): one origin serves every commune, so a single
+ *                     key would offer one commune's draft — name and phone included — inside another (rule 1)
+ * The rest (name, scene photos, video, links) is app-independent and the same as `AppRieng`.
+ *
+ * Both per-host values are memoised: `TrangXa` keys its session gate and effects on them.
+ */
+function QrCommuneApp({ ten_mien }: { ten_mien: string }) {
+  const openSession = useMemo(() => openSharedAppSession(ten_mien), [ten_mien]);
+  const draftStore = useMemo(() => sharedAppDraftStore(ten_mien), [ten_mien]);
+  return (
+    <TrangXa
+      ten_mien={ten_mien}
+      lay_ten={layTenChoXa}
+      getSceneLocation={getSceneLocation}
+      pickScenePhotos={pickCommuneScenePhotos}
+      draftStore={draftStore}
+      openSession={openSession}
+      openVideo={openCommuneVideo}
+      openLink={openCommuneLink}
+    />
   );
 }

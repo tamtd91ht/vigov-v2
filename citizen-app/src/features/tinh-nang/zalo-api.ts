@@ -197,8 +197,9 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
   },
   {
     // `nua` BECAME "ca-hai" ON 02/10/2026: "Chụp ảnh" on "Gửi phản ánh" of the commune's own app asks this
-    // same permission (`takeScenePhoto`). The shared sentences stay the shared app's: that App ID never
-    // receives the scene-photo functions (`App.tsx` `AppChung`), so nothing changed for its reviewer.
+    // same permission (`takeScenePhoto`). SINCE 06/10/2026 the shared App ID asks it there too — the shared app
+    // opened from a commune QR renders the commune's interface (`App.tsx` `QrCommuneApp`). The sentences below
+    // still describe only the business-card feature: updating them for the shared app's reviewer is OWED.
     api: "requestCameraPermission",
     nua: "ca-hai",
     man: "Danh thiếp",

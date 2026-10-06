@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { App, KhungApp, khoaTraCongKhai } from "../../App";
 import { NHAN_KENH_CONG_DAN } from "../../cong-dan/man/KenhCongDan";
-import { XAC_NHAN_XA } from "../../cong-dan/man/noi-dung";
+import { APP_RIENG } from "../../cong-dan/man/noi-dung";
 import { COMPANY } from "../../content/company-profile";
 import { SCREENS } from "../company-intro/screens";
 import { GoiYXaScreen } from "./GoiYXaScreen";
@@ -371,21 +371,23 @@ describe("app mở bằng một liên kết không đủ tin — fail closed, kh
 });
 
 /**
- * ĐƯỜNG LIÊN KẾT ĐỦ TIN (`d` đúng khuôn + `src` qr/zns) → LỚP KHÁM PHÁ MỞ Ở BƯỚC "ĐANG TÌM XÃ".
+ * ĐƯỜNG LIÊN KẾT ĐỦ TIN (`d` đúng khuôn + `src` qr/zns) → GIAO DIỆN ĐẦY ĐỦ CỦA XÃ (chủ dự án 06/10/2026: app
+ * của xã chưa nộp được, nên công dân MƯỢN app chung — cùng `TrangXa` app riêng dựng).
  *
- * `renderToStaticMarkup` không chạy hiệu ứng, nên lượt dựng đầu tiên là đúng thứ người dân thấy trong
- * lúc app hỏi máy chủ: một câu chờ, KHÔNG một tên xã nào, KHÔNG tên miền nào, không thanh tab. Tên xã
- * chỉ hiện khi máy chủ trả lời — `cong-dan/cong-khai.test.tsx` kiểm bước ấy.
+ * `renderToStaticMarkup` không chạy hiệu ứng, nên lượt dựng đầu tiên là đúng thứ người dân thấy trong lúc
+ * app hỏi máy chủ tên xã: một câu chờ, KHÔNG một tên xã nào, KHÔNG tên miền nào. `TrangXa` chiếm cả màn hình
+ * như ở app riêng: không header ViHAT, không thanh tab, không bước xác nhận cũ. Tên xã chỉ hiện khi máy chủ
+ * trả lời — `cong-dan/cong-khai.test.tsx` và `commune-screens.test.tsx` kiểm bước ấy.
  */
-describe("app mở bằng QR có `d` — hỏi máy chủ, không tự dựng tên xã", () => {
+describe("app mở bằng QR có `d` — giao diện của xã, hỏi máy chủ, không tự dựng tên xã", () => {
   for (const chuoi of ["?src=qr&d=xa-vi-du.vigov.example", "?d=xa-vi-du.vigov.example&src=zns"]) {
-    it(`mở bằng "${chuoi}": câu chờ, header 'Xác nhận xã', không tab, không tên xã, không tên miền`, () => {
+    it(`mở bằng "${chuoi}": câu chờ của app xã, không header ViHAT, không tab, không tên xã, không tên miền`, () => {
       const markup = moVoi(chuoi, () => render(<App />));
       const chu = textOf(markup);
-      expect(chu).toContain(XAC_NHAN_XA.dang_tra);
-      expect(dauTrang(markup)).toContain(TIEU_DE_XAC_NHAN_XA);
-      expect(dauTrang(markup)).toContain(COMPANY.name);
+      expect(chu).toContain(APP_RIENG.dang_mo);
+      expect(chu).not.toContain(COMPANY.name);
       expect(markup).not.toContain("tabbar");
+      expect(chu).not.toContain(TIEU_DE_XAC_NHAN_XA);
       expect(chu).not.toContain("xa-vi-du");
       expect(chu).not.toContain("Bạn cần liên hệ với xã này?");
       expect(chu).not.toContain(NHAN_KENH_CONG_DAN);

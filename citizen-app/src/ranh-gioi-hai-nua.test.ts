@@ -384,18 +384,21 @@ const KHO_LUU_TRU =
   /\blocalStorage\b|\bsessionStorage\b|\bindexedDB\b|\bIDBFactory\b|\bIDBDatabase\b|\bIDBOpenDBRequest\b|\bIDBTransaction\b|\bIDBObjectStore\b|\bdocument\s*\.\s*cookie\b/;
 
 /**
- * THE ONE-FILE EXCEPTION — 28/09/2026, the first this constraint has ever had.
+ * THE ONE-FILE EXCEPTION — 28/09/2026, the first this constraint has ever had; widened in WHO GETS IT (not in
+ * where storage is touched) on 06/10/2026.
  *
  *   WHY: ADR 0050 #7, owner decision 28/09/2026 ("3 điểm còn lại cũng theo require nhé"): the commune's
  *   OWN app keeps a feedback being written on the phone, as the requirements prototype does.
  *
- *   WHY THE "ONE ORIGIN" ARGUMENT ABOVE DOES NOT APPLY TO IT: the commune's own app is a SEPARATE Zalo App
- *   ID (`--vao-thang`, `XA_CO_DINH !== null`, `App.tsx` renders `AppRieng`) — a separate origin, with no
- *   commercial half in it and no privacy policy published yet (ADR 0047). The SHARED ViHAT app, whose two
- *   halves DO share one origin, still writes nothing: its promise "không lưu gì xuống máy" stands, and the
- *   cases below pin the three things that keep it — (1) `localStorage` in this ONE file only, nothing else
- *   of the pattern even here; (2) `App.tsx` is the only importer of that file; (3) `AppChung` never
- *   references the store (and the store itself opens no storage when `XA_CO_DINH === null`).
+ *   06/10/2026, owner: the commune apps cannot be published yet, so the SHARED app, opened from a commune QR,
+ *   shows the commune's FULL interface (`QrCommuneApp` in `App.tsx`) — draft included. That revokes "the shared
+ *   app writes nothing". What still holds, and what the cases below pin:
+ *     (1) `localStorage` in this ONE file only, nothing else of the pattern even here — so the commercial half,
+ *         which shares the shared app's origin, has no code path that reads the draft;
+ *     (2) `App.tsx` is the only importer of that file;
+ *     (3) the shared app's INTRO (no QR) never references a draft store; only `QrCommuneApp` does, and with the
+ *         store KEYED BY THE COMMUNE HOST (`sharedAppDraftStore`) — never the own app's single key, which in one
+ *         origin serving every commune would offer commune A's draft (name, phone) inside commune B (rule 1).
  *
  *   The state half (`./cong-dan/**`) still touches no storage API: it receives the store as a prop, the way
  *   it receives `lay_ten` / `lay_ma_vi_tri`.
@@ -421,9 +424,20 @@ function draftStoreImporters(files: readonly TepNguon[]): string[] {
     .map((f) => f.path);
 }
 
-/** The body of `AppChung` in `App.tsx` source — from its declaration to the end of the file. */
+/**
+ * The shared app WITHOUT a commune QR — `AppChung` (the branch) and its intro, up to `QrCommuneApp`. Without a
+ * `QrCommuneApp` declaration (as in the must-still-catch snippets) it runs to the end of the source.
+ */
 function sharedAppBody(appSource: string): string {
   const start = appSource.indexOf("function AppChung(");
+  if (start < 0) return "";
+  const end = appSource.indexOf("function QrCommuneApp(", start);
+  return end < 0 ? appSource.slice(start) : appSource.slice(start, end);
+}
+
+/** The shared app ON a commune QR (owner 06/10/2026) — `QrCommuneApp`, to the end of the file. */
+function qrCommuneAppBody(appSource: string): string {
+  const start = appSource.indexOf("function QrCommuneApp(");
   return start < 0 ? "" : appSource.slice(start);
 }
 
@@ -533,39 +547,57 @@ describe("3b — không nửa nào ghi định danh xuống thiết bị", () =>
     }
   });
 
-  it("AppChung (the shared ViHAT app) never receives the draft store; AppRieng does", () => {
+  it("the shared app's intro never receives a draft store; its QR path gets one keyed per commune; AppRieng the single key", () => {
     const app = RAW_SOURCES["./App.tsx"] ?? "";
     const shared = sharedAppBody(boChuThich(app));
+    const qr = qrCommuneAppBody(boChuThich(app));
     const commune = communeAppBody(boChuThich(app));
-    // Both slices must be non-empty — an empty slice is green for the wrong reason.
+    // Every slice must be non-empty — an empty slice is green for the wrong reason.
     expect(shared.length, "không tìm thấy `function AppChung(` trong App.tsx").toBeGreaterThan(500);
+    expect(qr.length, "không tìm thấy `function QrCommuneApp(` trong App.tsx").toBeGreaterThan(100);
     expect(commune.length, "không tìm thấy `export function AppRieng(` trong App.tsx").toBeGreaterThan(0);
     expect(
       shared,
-      "AppChung references the feedback-draft store. The shared app promises 'không lưu gì xuống máy', and " +
-        "its two halves share one origin — the draft belongs to the commune's own App ID only (ADR 0050 #7).",
+      "the shared app's intro (no commune QR) references a feedback-draft store. Without a commune there is no " +
+        "key to keep a draft under; only `QrCommuneApp` may hold one.",
     ).not.toMatch(DRAFT_STORE_REFERENCE);
+    // The QR path: a store built from THIS commune's host, never the own app's single-key store.
+    expect(qr, "QrCommuneApp no longer builds a per-commune draft store").toMatch(/sharedAppDraftStore\(ten_mien\)/);
+    expect(qr, "QrCommuneApp no longer injects its draft store").toMatch(/draftStore=\{draftStore\}/);
+    expect(
+      qr,
+      "QrCommuneApp uses the own app's SINGLE-key store. One origin serves every commune in the shared app, so " +
+        "commune A's draft (name, phone) would be offered inside commune B — rule 1.",
+    ).not.toMatch(/\bfeedbackDraftStore\b/);
     expect(commune, "AppRieng no longer injects the draft store — the draft feature is dead").toMatch(
       /draftStore=\{feedbackDraftStore\}/,
     );
+    // Must-still-catch: the single-key store written into the QR path is red.
+    expect(qrCommuneAppBody("function QrCommuneApp() { return <TrangXa draftStore={feedbackDraftStore} />; }")).toMatch(
+      /\bfeedbackDraftStore\b/,
+    );
 
-    // Must-still-catch: the same wiring written into AppChung is red.
-    const wired = `${app}\n<TrangXa draftStore={feedbackDraftStore} />`;
+    // Must-still-catch: the same wiring written into the intro (inside the real source, BEFORE `QrCommuneApp`,
+    // so the slice boundary itself is exercised) is red.
+    const wired = app.replace("function SharedAppIntro() {", "function SharedAppIntro() {\n<TrangXa draftStore={feedbackDraftStore} />;");
+    expect(wired, "the intro's declaration moved — this must-still-catch case would inject nothing").not.toBe(app);
     expect(sharedAppBody(wired)).toMatch(DRAFT_STORE_REFERENCE);
     expect(sharedAppBody("function AppChung() { return <KenhCongDan draftStore={x} />; }")).toMatch(DRAFT_STORE_REFERENCE);
   });
 });
 
 /**
- * SCENE PHOTOS ARE THE COMMUNE APP'S BUTTON ONLY (owner 02/10/2026: "chỉ trên app chính của xã nhé, không phải
- * app vihat"). The server does not check the app (ADR 0047: "mở ở đâu cũng được"), so THIS is the whole rule:
- * the shell's two picker functions are reached from `App.tsx` alone, and only `AppRieng` hands the state half
- * the capability. `AppChung` (the shared ViHAT app, `KenhCongDan` → `GuiPhanAnhScreen`) never receives it.
+ * SCENE PHOTOS ARE THE COMMUNE INTERFACE'S BUTTON (owner 02/10/2026: "chỉ trên app chính của xã nhé, không phải
+ * app vihat" — REVOKED for the QR path on 06/10/2026: the shared app, opened from a commune QR, borrows the
+ * commune's full interface, photos included). The server does not check the app (ADR 0047: "mở ở đâu cũng
+ * được"), so THIS is the whole rule: the shell's two picker functions are reached from `App.tsx` alone, and only
+ * `AppRieng` and `QrCommuneApp` hand the state half the capability. The shared app's intro never does, and the
+ * OLD shared-app petition path (`KenhCongDan` → `GuiPhanAnhScreen`, no longer rendered) still cannot take it.
  */
 const SCENE_PHOTO_SHELL_CALL = /\b(takeScenePhoto|chooseScenePhotos)\b/;
 const SCENE_PHOTO_CAPABILITY = /pickScenePhotos|PickScenePhotos|pickCommuneScenePhotos|takeScenePhoto|chooseScenePhotos/;
 
-describe("3d — ảnh hiện trường chỉ có ở app riêng của xã", () => {
+describe("3d — ảnh hiện trường chỉ có ở giao diện của xã (app riêng · app chung qua QR xã)", () => {
   it("only App.tsx (and zalo-api.ts, which defines them) names the shell's camera/picker functions", () => {
     expect(
       TEP_SAN_XUAT.filter((f) => SCENE_PHOTO_SHELL_CALL.test(f.code)).map((f) => f.path).sort(),
@@ -573,25 +605,33 @@ describe("3d — ảnh hiện trường chỉ có ở app riêng của xã", () 
     ).toEqual(["./App.tsx", "./features/tinh-nang/zalo-api.ts"]);
   });
 
-  it("AppChung never receives the scene-photo capability; AppRieng injects it", () => {
+  it("the shared app's intro never receives the scene-photo capability; AppRieng and the QR path inject it", () => {
     const app = boChuThich(RAW_SOURCES["./App.tsx"] ?? "");
     const shared = sharedAppBody(app);
+    const qr = qrCommuneAppBody(app);
     const commune = communeAppBody(app);
     expect(shared.length, "không tìm thấy `function AppChung(` trong App.tsx").toBeGreaterThan(500);
+    expect(qr.length, "không tìm thấy `function QrCommuneApp(` trong App.tsx").toBeGreaterThan(100);
     expect(
       shared,
-      "AppChung references the scene-photo capability. The owner put the photo button in the commune's own app only.",
+      "the shared app's intro (no commune QR) references the scene-photo capability. Photos belong to the commune's " +
+        "interface — the own app, or the shared app on a commune QR (`QrCommuneApp`).",
     ).not.toMatch(SCENE_PHOTO_CAPABILITY);
     expect(commune, "AppRieng no longer injects the scene-photo picker — the feature is dead").toMatch(
       /pickScenePhotos=\{pickCommuneScenePhotos\}/,
     );
+    expect(qr, "QrCommuneApp no longer injects the scene-photo picker (owner 06/10/2026: full interface)").toMatch(
+      /pickScenePhotos=\{pickCommuneScenePhotos\}/,
+    );
     // Must-still-catch: the same wiring written into AppChung is red.
-    expect(sharedAppBody(`${app}\n<KenhCongDan pickScenePhotos={pickCommuneScenePhotos} />`)).toMatch(SCENE_PHOTO_CAPABILITY);
+    const wired = app.replace("function SharedAppIntro() {", "function SharedAppIntro() {\n<KenhCongDan pickScenePhotos={pickCommuneScenePhotos} />;");
+    expect(wired, "the intro's declaration moved — this must-still-catch case would inject nothing").not.toBe(app);
+    expect(sharedAppBody(wired)).toMatch(SCENE_PHOTO_CAPABILITY);
   });
 
-  it("the shared app's send screen has no way to receive it at all", () => {
-    // `KenhCongDan` → `GuiPhanAnhScreen` is the shared app's petition path: neither names the capability, so
-    // no prop can carry it there even by mistake.
+  it("the OLD shared-app send screen has no way to receive it at all", () => {
+    // `KenhCongDan` → `GuiPhanAnhScreen` was the shared app's petition path until 06/10/2026 (no longer rendered;
+    // the QR path renders `TrangXa`): neither names the capability, so no prop can carry it there by mistake.
     for (const path of ["./cong-dan/man/KenhCongDan.tsx", "./cong-dan/man/GuiPhanAnhScreen.tsx"]) {
       const f = TEP_SAN_XUAT.find((t) => t.path === path);
       expect(f, `${path} không còn trong lượt quét`).toBeDefined();
@@ -602,14 +642,15 @@ describe("3d — ảnh hiện trường chỉ có ở app riêng của xã", () 
 });
 
 /**
- * THE COMMUNE'S "SAU XỬ LÝ" PHOTOS ARE THE COMMUNE APP'S ONLY (ADR 0047 row "THAY G8"; this round's brief: the
- * shared app gets nothing new). The server serves the route to any citizen session, so — as for the scene
- * photos — the whole rule is HERE: the route is called from one state file and drawn by one, and neither is
- * reachable from the shared app's citizen screens.
+ * THE COMMUNE'S "SAU XỬ LÝ" PHOTOS ARE THE COMMUNE INTERFACE'S ONLY (ADR 0047 row "THAY G8"). Since 06/10/2026
+ * the shared app on a commune QR renders that interface (`QrCommuneApp` → `TrangXa`), so it shows them too; the
+ * shared app's intro and the OLD shared-app citizen screens still do not. The server serves the route to any
+ * citizen session, so — as for the scene photos — the whole rule is HERE: the route is called from one state
+ * file and drawn by one, reachable only through `TrangXa`.
  */
 const VERIFICATION_PHOTO_REFERENCE = /listVerificationPhotos|verificationPhotosAddress|verification-photos|PetitionPhotos|VerificationPhotosView/;
 
-describe("3e — ảnh sau xử lý chỉ có ở app riêng của xã", () => {
+describe("3e — ảnh sau xử lý chỉ có ở giao diện của xã (app riêng · app chung qua QR xã)", () => {
   it("only the contract, the network layer and the commune app's photo screen name the route", () => {
     expect(
       TEP_SAN_XUAT.filter((f) => /listVerificationPhotos|verificationPhotosAddress|verification-photos/.test(f.code))
@@ -625,7 +666,7 @@ describe("3e — ảnh sau xử lý chỉ có ở app riêng của xã", () => {
     ).toEqual(["./cong-dan/man/PhanAnhAppXa.tsx", "./cong-dan/man/scene-photos.tsx"]);
   });
 
-  it("the shared app's citizen screens and AppChung never name it", () => {
+  it("the OLD shared-app citizen screens and the shared app's intro never name it; only TrangXa's hosts render it", () => {
     for (const path of [
       "./cong-dan/man/KenhCongDan.tsx",
       "./cong-dan/man/GuiPhanAnhScreen.tsx",
@@ -639,10 +680,18 @@ describe("3e — ảnh sau xử lý chỉ có ở app riêng của xã", () => {
       // …nor reach the commune app's petition screens, where the block lives.
       expect(f!.code, path).not.toMatch(/PhanAnhAppXa|scene-photos|TrangXa/);
     }
-    const shared = sharedAppBody(boChuThich(RAW_SOURCES["./App.tsx"] ?? ""));
+    const app = boChuThich(RAW_SOURCES["./App.tsx"] ?? "");
+    const shared = sharedAppBody(app);
     expect(shared.length, "không tìm thấy `function AppChung(` trong App.tsx").toBeGreaterThan(500);
     expect(shared).not.toMatch(VERIFICATION_PHOTO_REFERENCE);
-    expect(shared, "AppChung renders the commune app's screens").not.toMatch(/<TrangXa\b|PetitionDetail|PetitionLookup/);
+    expect(
+      shared,
+      "the shared app's intro renders the commune interface — only `QrCommuneApp` (a commune QR) may",
+    ).not.toMatch(/<TrangXa\b|PetitionDetail|PetitionLookup/);
+    // The commune interface is rendered from exactly two places: the own app, and the shared app's QR path.
+    expect(communeAppBody(app)).toMatch(/<TrangXa\b/);
+    expect(qrCommuneAppBody(app)).toMatch(/<TrangXa\b/);
+    expect((app.match(/<TrangXa\b/g) ?? []).length, "a third place renders the commune interface").toBe(2);
     // Must-still-catch: the same block written into AppChung is red.
     expect(sharedAppBody("function AppChung() { return <PetitionPhotos code={c} />; }")).toMatch(VERIFICATION_PHOTO_REFERENCE);
   });

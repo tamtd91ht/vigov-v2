@@ -29,8 +29,8 @@ import indexHtmlRaw from "../index.html?raw";
  *   ⚠ TỆP THỨ BA VÀ TỆP THỨ HAI (24/09/2026) thuộc KÊNH CÔNG DÂN — có mặt trong bản dựng duy nhất
  *   từ 27/09/2026, và hôm nay không gọi mạng (cầu phiên ViGov chưa có).
  *     `localStorage`                   →  miễn ĐÚNG MỘT TỆP (28/09/2026): nháp phản ánh của APP RIÊNG
- *                                          của xã — App ID riêng, origin riêng (ADR 0050 #7). App chung
- *                                          vẫn "không lưu gì xuống máy"
+ *                                          của xã (ADR 0050 #7) — và từ 06/10/2026 của app chung khi mở
+ *                                          bằng QR xã, khoá theo tên miền xã. Vẫn MỘT tệp, MỘT API
  *     `getSetting`/`authorize` · `sessionStorage`/cookie/IndexedDB · `serverUploadUrl` · geolocation
  *                                      →  KHÔNG miễn cho gì cả, không một dòng nào
  *
@@ -199,11 +199,12 @@ const TEP_O_NHAP_CONG_DAN = "./cong-dan/man/o-nhap.tsx";
  *   OWN app keeps a feedback being written on the phone, as the requirements prototype does
  *   (`apps/miniapp/src/store/draft.ts`).
  *
- *   WHY IT DOES NOT BREAK THE PROMISE THIS BAN WAS WRITTEN FOR: the commune's own app is a SEPARATE Zalo App
- *   ID (built with `--vao-thang`, `XA_CO_DINH !== null`, `App.tsx` renders `AppRieng`), i.e. a separate
- *   origin with no privacy policy published yet (ADR 0047). The SHARED ViHAT app's "không lưu gì xuống máy"
- *   (`content/chinh-sach-rieng-tu.ts`) STILL STANDS: only `AppRieng` passes the store down, the store opens
- *   no storage when `XA_CO_DINH === null`, and `ranh-gioi-hai-nua.test.ts` §3b pins both.
+ *   06/10/2026, owner: the commune apps cannot be published yet, so the SHARED app opened from a commune QR
+ *   renders the commune's full interface (`App.tsx` `QrCommuneApp`), draft included — keyed by the commune
+ *   host, so one commune's draft is never offered in another. That REVOKES the shared app's "không lưu gì xuống
+ *   máy" (`content/chinh-sach-rieng-tu.ts`) on that path; the policy text is owed an update. What this ban still
+ *   pins is unchanged: `localStorage` in this ONE file only; `ranh-gioi-hai-nua.test.ts` §3b pins who receives
+ *   the store (the shared app's intro never does).
  *
  *   WHAT WAS NOT NARROWED: only `localStorage` left the absolute ban, and only for this ONE FILE (not its
  *   directory — the "SÁT BÊN" case below). `sessionStorage`, `document.cookie` and IndexedDB stay banned in

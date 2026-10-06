@@ -1,19 +1,25 @@
 /**
- * THE ONLY PRODUCTION FILE IN THIS APP ALLOWED TO TOUCH DEVICE STORAGE — and only `localStorage`, one key.
+ * THE ONLY PRODUCTION FILE IN THIS APP ALLOWED TO TOUCH DEVICE STORAGE — and only `localStorage`, one key per
+ * commune (see TWO APPS below).
  *
  * WHY IT EXISTS: ADR 0050 #7, owner decision 28/09/2026 ("3 điểm còn lại cũng theo require nhé"). The
  * requirements prototype keeps a feedback being written on the phone (`apps/miniapp/src/store/draft.ts`,
  * `NewFeedbackPage.tsx:124-136`), because losing what one typed — a phone call, a flat battery — is the
  * commonest reason a citizen gives up on reporting.
  *
- * WHY ONLY THE COMMUNE'S OWN APP: that app is a SEPARATE Zalo App ID (built with `--vao-thang`, so
- * `XA_CO_DINH !== null`), i.e. a separate origin, and it has no published privacy policy yet (ADR 0047).
- * The shared ViHAT app promises "không lưu gì xuống máy" (`content/chinh-sach-rieng-tu.ts`) and its two
- * halves share one origin — so it must stay storage-free. Three layers keep it so:
- *   1. only `AppRieng` in `App.tsx` passes this store down (a test reads `AppChung`'s body for it);
- *   2. the default store below opens NO storage when `XA_CO_DINH === null`, i.e. in the shared app build;
- *   3. `phase1-collects-nothing.test.ts` and `ranh-gioi-hai-nua.test.ts` §3b allow `localStorage` in THIS
- *      FILE ONLY; `sessionStorage`, cookies and IndexedDB stay banned here too.
+ * TWO APPS, TWO STORES, ONE FILE.
+ *   · The commune's OWN app (`--vao-thang`, `XA_CO_DINH !== null`, `AppRieng`) — a separate App ID, so a
+ *     separate origin serving ONE commune: `feedbackDraftStore`, the single key `FEEDBACK_DRAFT_KEY`
+ *     (unchanged since 28/09/2026, so drafts already saved on phones are still found).
+ *   · The SHARED ViHAT app on the commune QR path (owner 06/10/2026: the commune apps cannot be published yet,
+ *     so the shared app BORROWS the commune's full interface — "full nội dung trong citizen app"). One origin
+ *     there serves EVERY commune, so a single key would offer commune A's draft — with the citizen's name and
+ *     phone — inside commune B: a cross-commune leak (rule 1). `sharedAppDraftStore(host)` therefore keys by
+ *     the commune host from the QR (`sharedAppDraftKey`), and refuses (no storage) without a valid host.
+ * Each store fails closed in the OTHER build: the own-app store opens nothing when `XA_CO_DINH === null`, the
+ * shared-app store opens nothing when `XA_CO_DINH !== null`. `phase1-collects-nothing.test.ts` and
+ * `ranh-gioi-hai-nua.test.ts` §3b allow `localStorage` in THIS FILE ONLY; `sessionStorage`, cookies and
+ * IndexedDB stay banned here too. `App.tsx` is the only importer.
  *
  * WHAT IS WRITTEN: exactly the six fields of `NhapPhieu`, rebuilt one by one (never a spread of the
  * caller's object, so a field added to the form later is not written silently). The name and phone typed
@@ -24,10 +30,24 @@
  * must never block writing or sending a feedback.
  */
 import type { FeedbackDraftStore, NhapPhieu } from "../cong-dan";
+import { laTenMien } from "../lib/launch-params";
 import { XA_CO_DINH } from "../lib/xa-co-dinh";
 
-/** The single key. Versioned, like the prototype's, so a future shape change can ignore old drafts. */
+/**
+ * The own app's single key. Versioned, like the prototype's, so a future shape change can ignore old drafts.
+ * Never renamed: the drafts already saved on phones live under exactly this string.
+ */
 export const FEEDBACK_DRAFT_KEY = "vigov.feedback.draft.v1";
+
+/**
+ * The shared app's key for ONE commune: the own app's key plus the commune host from the QR, so two communes
+ * opened on the same phone never see each other's draft. `null` when the host is not a well-formed domain —
+ * no commune, no key, no storage (fail closed: rule 1, never a default on the isolation path).
+ */
+export function sharedAppDraftKey(communeHost: string): string | null {
+  const host = communeHost.trim().toLowerCase();
+  return laTenMien(host) ? `${FEEDBACK_DRAFT_KEY}:${host}` : null;
+}
 
 export type KeyValueStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
@@ -87,7 +107,10 @@ function parseDraft(raw: string | null): NhapPhieu | null {
  * A draft store over any key-value storage. `openStorage` returning `null` (or throwing) means "no
  * storage": every call becomes a no-op and `load` returns `null`. Tests pass a fake here.
  */
-export function createFeedbackDraftStore(openStorage: () => KeyValueStorage | null): FeedbackDraftStore {
+export function createFeedbackDraftStore(
+  openStorage: () => KeyValueStorage | null,
+  key: string = FEEDBACK_DRAFT_KEY,
+): FeedbackDraftStore {
   const storage = (): KeyValueStorage | null => {
     try {
       return openStorage();
@@ -99,7 +122,7 @@ export function createFeedbackDraftStore(openStorage: () => KeyValueStorage | nu
     load: () => {
       try {
         const s = storage();
-        return s === null ? null : parseDraft(s.getItem(FEEDBACK_DRAFT_KEY));
+        return s === null ? null : parseDraft(s.getItem(key));
       } catch {
         return null;
       }
@@ -108,15 +131,15 @@ export function createFeedbackDraftStore(openStorage: () => KeyValueStorage | nu
       try {
         const s = storage();
         if (s === null) return;
-        if (isEmptyDraft(draft)) s.removeItem(FEEDBACK_DRAFT_KEY);
-        else s.setItem(FEEDBACK_DRAFT_KEY, JSON.stringify(toStored(draft)));
+        if (isEmptyDraft(draft)) s.removeItem(key);
+        else s.setItem(key, JSON.stringify(toStored(draft)));
       } catch {
         // Full or blocked storage. Writing and sending the feedback must go on.
       }
     },
     clear: () => {
       try {
-        storage()?.removeItem(FEEDBACK_DRAFT_KEY);
+        storage()?.removeItem(key);
       } catch {
         // Nothing more to do.
       }
@@ -126,8 +149,20 @@ export function createFeedbackDraftStore(openStorage: () => KeyValueStorage | nu
 
 /**
  * The store `AppRieng` injects. FAILS CLOSED: in a build without a fixed commune (the shared ViHAT app,
- * every test run) it opens no storage at all, so even a wrong wiring cannot make the shared app write.
+ * every test run) it opens no storage at all — the shared app must use `sharedAppDraftStore`, whose key
+ * names the commune, never this single key.
  */
 export const feedbackDraftStore: FeedbackDraftStore = createFeedbackDraftStore(() =>
   XA_CO_DINH === null ? null : (globalThis.localStorage ?? null),
 );
+
+/**
+ * The store the shared app injects on the commune QR path, keyed by that commune's host. FAILS CLOSED twice:
+ * a malformed host gets no key (every call a no-op), and in a commune's own build (`XA_CO_DINH !== null`) it
+ * opens nothing — that build has its own store and its own key.
+ */
+export function sharedAppDraftStore(communeHost: string): FeedbackDraftStore {
+  const key = sharedAppDraftKey(communeHost);
+  if (key === null) return createFeedbackDraftStore(() => null);
+  return createFeedbackDraftStore(() => (XA_CO_DINH !== null ? null : (globalThis.localStorage ?? null)), key);
+}
