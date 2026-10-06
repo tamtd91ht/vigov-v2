@@ -373,11 +373,28 @@ describe("Ba tuyến dự án", () => {
     expect(kq.ok).toBe(true);
   });
 
-  it("DELETE: 204 kèm lý do trong thân; 409 'còn chứng từ' ra nguyên văn", async () => {
+  it("DELETE KHÔNG lý do (quyết định 06/10/2026): thân là `{}`, không phải thân rỗng; 204", async () => {
     const gia = batFetch(traTrong(204));
-    const kq = await xoaDuAn("01JDA1", "Trùng với dự án DA07");
+    const kq = await xoaDuAn("01JDA1");
 
     expect(loiGoi(gia, 0).duongDan).toBe("/api/v1/investment-projects/01JDA1");
+    expect(loiGoi(gia, 0).tuyChon.method).toBe("DELETE");
+    // An EMPTY body is an EOF to the handler's JSON decoder → 400; `{}` decodes to a blank reason.
+    expect(loiGoi(gia, 0).tuyChon.body).toBe("{}");
+    expect(thanDaGui(gia, 0)).toEqual({});
+    expect(kq.ok).toBe(true);
+  });
+
+  it("DELETE: lý do chỉ toàn dấu cách cũng không đi lên", async () => {
+    const gia = batFetch(traTrong(204));
+    await xoaDuAn("01JDA1", "   ");
+    expect(thanDaGui(gia, 0)).toEqual({});
+  });
+
+  it("DELETE: lý do có chữ (nếu một nơi gọi còn truyền) đi trong thân, đã cắt trắng; 409 ra nguyên văn", async () => {
+    const gia = batFetch(traTrong(204));
+    const kq = await xoaDuAn("01JDA1", " Trùng với dự án DA07 ");
+
     expect(thanDaGui(gia, 0)).toEqual({ reason: "Trùng với dự án DA07" });
     expect(kq.ok).toBe(true);
 

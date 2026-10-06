@@ -5,10 +5,11 @@ import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Field } from "@/components/ui/field";
 import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
 import { Notice } from "@/components/ui/notice";
-import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
+import { BUSY_DELETING, BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 import { listFundingSources } from "@/lib/api/funding-sources";
 import { suaDuAn, themDuAn, xoaDuAn } from "@/lib/api/giai-ngan";
 import type {
@@ -20,7 +21,6 @@ import type {
 import { cn } from "@/lib/cn";
 import { compactDong } from "@/lib/compact-dong";
 
-import { FormLyDo } from "./form-ly-do";
 import { nhanTien } from "./nhan-du-an";
 import {
   allocationBlocksSave,
@@ -765,57 +765,53 @@ export function giaTriTuDuAn(duAn: finance_duAnRa): GiaTriFormDuAn {
 }
 
 /**
- * The detail card header's buttons: `Sửa dự án` (`budget.update`) and `Gỡ dự án` (`budget.confirm`).
+ * The detail card header's buttons: `Sửa dự án` and `Gỡ dự án`, BOTH under `budget.update`.
  *
- * HAI CỔNG RIÊNG, KHÔNG MỘT. Đây là chỗ dễ gắn nhầm nhất của phân hệ: gộp hai khoá lại thì người
- * chỉ được nhập liệu bỗng xoá được cả một dự án khỏi mọi con số tổng của năm. Hiding is UX only —
- * the server checks each key on its route (rule 5).
+ * ONE KEY FOR BOTH, BY USER DECISION 06/10/2026 (follow the prototype, where `canRecord` gates edit
+ * and delete alike). This reverses the earlier split that put project deletion under `budget.confirm`;
+ * the route follows in a server card, and until it lands a `budget.update`-only account gets the
+ * server's 403 sentence in the dialog. Voucher confirm / lock / unlock / remove stay `budget.confirm`.
+ * Hiding is UX only — the server checks the key on its route (rule 5).
  *
  * While the edit panel is open the edit button reads `Đang sửa` in the solid look and closes it
  * again (prototype `BudgetItemDetail.tsx:264-273`).
  */
 export function ProjectHeaderActions({
   coGhi,
-  coXacNhan,
   editing,
   onToggleEdit,
   onRemove,
 }: {
   coGhi: boolean;
-  coXacNhan: boolean;
   editing: boolean;
   onToggleEdit: () => void;
   onRemove: () => void;
 }) {
-  if (!coGhi && !coXacNhan) return null;
+  if (!coGhi) return null;
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-2">
-      {coGhi && (
-        <Button
-          type="button"
-          variant={editing ? "primary" : "secondary"}
-          size="sm"
-          icon={<Glyph icon={Pencil} />}
-          aria-expanded={editing}
-          aria-controls="sua-du-an"
-          onClick={onToggleEdit}
-        >
-          {editing ? "Đang sửa" : "Sửa dự án"}
-        </Button>
-      )}
+      <Button
+        type="button"
+        variant={editing ? "primary" : "secondary"}
+        size="sm"
+        icon={<Glyph icon={Pencil} />}
+        aria-expanded={editing}
+        aria-controls="sua-du-an"
+        onClick={onToggleEdit}
+      >
+        {editing ? "Đang sửa" : "Sửa dự án"}
+      </Button>
       {/* Removal is the danger look, never the solid colour, and keeps its words (spec v2 §7). */}
-      {coXacNhan && (
-        <Button
-          type="button"
-          variant="danger"
-          size="sm"
-          icon={<Glyph icon={Trash2} />}
-          aria-haspopup="dialog"
-          onClick={onRemove}
-        >
-          Gỡ dự án
-        </Button>
-      )}
+      <Button
+        type="button"
+        variant="danger"
+        size="sm"
+        icon={<Glyph icon={Trash2} />}
+        aria-haspopup="dialog"
+        onClick={onRemove}
+      >
+        Gỡ dự án
+      </Button>
     </div>
   );
 }
@@ -889,9 +885,19 @@ export function ProjectEditPanel({
 
 const REMOVE_FORM_ID = "form-go-du-an";
 
+/** The consequence sentence of `Gỡ dự án`. Exported for the test that pins "no reason asked". */
+export const PROJECT_REMOVE_NOTE =
+  "Dự án được xoá mềm: bản ghi vẫn còn trong hệ thống kèm người gỡ, và mã dự án không quay lại dãy — " +
+  "nhập lại phải chọn mã khác. Nếu máy chủ từ chối (ví dụ dự án còn chứng từ giải ngân), câu trả lời " +
+  "của máy chủ hiện ngay tại đây.";
+
 /**
- * `Gỡ dự án` — the reason form in a centred dialog (the prototype confirms removals in a dialog).
- * Xoá MỀM kèm lý do (luật 7); the server refuses while vouchers remain and says so verbatim.
+ * `Gỡ dự án` — a confirmation in a centred dialog (the prototype confirms removals in a dialog).
+ *
+ * NO REASON FIELD (user decision 06/10/2026, as the prototype): `xoaDuAn` sends none and the server
+ * writes its fixed sentence into `delete_reason`, so the soft delete still names a reason (rule 7).
+ * The confirmation stays: one click must not remove a project from every total of the year. A refusal
+ * (409 vouchers, or 403 until the route takes `budget.update`) is the server's sentence, verbatim.
  */
 export function ProjectRemoveDialog({
   duAn,
@@ -905,9 +911,12 @@ export function ProjectRemoveDialog({
   const [dangGui, datDangGui] = useState(false);
   const [loi, datLoi] = useState<string | null>(null);
 
-  function xoa(lyDo: string): void {
+  function xoa(e: FormEvent<HTMLFormElement>): void {
+    e.preventDefault();
+    if (dangGui) return;
     datDangGui(true);
-    xoaDuAn(duAn.id, lyDo).then((kq) => {
+    datLoi(null);
+    xoaDuAn(duAn.id).then((kq) => {
       datDangGui(false);
       if (!kq.ok) {
         // 409 "Dự án này còn chứng từ giải ngân nên chưa xoá được…" ra NGUYÊN VĂN: không có câu ấy
@@ -928,22 +937,34 @@ export function ProjectRemoveDialog({
       }}
       className="p-0"
     >
-      <FormLyDo
-        formId={REMOVE_FORM_ID}
+      <ConfirmDialog
+        as="form"
+        id={REMOVE_FORM_ID}
         className="shadow-none"
-        tieuDe={`Gỡ dự án “${duAn.name}”?`}
-        busyText="Đang gỡ…"
-        moTa={
-          "Dự án được xoá MỀM: hàng vẫn còn kèm người xoá và lý do, và mã dự án KHÔNG quay lại " +
-          "dãy — nhập lại phải chọn mã khác. Dự án còn chứng từ giải ngân thì máy chủ từ chối, " +
-          "phải gỡ từng chứng từ kèm lý do trước."
+        tone="danger"
+        icon={Trash2}
+        title={`Gỡ dự án “${duAn.name}”?`}
+        titleAs="h4"
+        aria-label={`Gỡ dự án “${duAn.name}”?`}
+        onSubmit={xoa}
+        actions={
+          <>
+            <Button type="submit" variant="danger" disabled={dangGui} aria-busy={dangGui || undefined}>
+              <BusyLabel busy={dangGui} label="Gỡ dự án" busyText={BUSY_DELETING} />
+            </Button>
+            <Button type="button" variant="secondary" disabled={dangGui} onClick={onClose}>
+              Huỷ
+            </Button>
+          </>
         }
-        nhanNut="Gỡ dự án"
-        dangGui={dangGui}
-        loi={loi}
-        huy={onClose}
-        xacNhan={xoa}
-      />
+      >
+        <p className="m-0">{PROJECT_REMOVE_NOTE}</p>
+        {loi !== null && (
+          <p className="thong-bao-loi m-0" role="alert">
+            {loi}
+          </p>
+        )}
+      </ConfirmDialog>
     </ModalDialog>
   );
 }

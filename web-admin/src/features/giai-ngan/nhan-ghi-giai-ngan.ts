@@ -823,15 +823,9 @@ export const PHAN_CHUA_DUNG_GHI: readonly PhanChuaDung[] = [
     viSao:
       "Chưa nhập được giải ngân từ tệp Excel. Hãy ghi từng khoản chi ở trang chi tiết của dự án.",
   },
-  // §5 `☰ Hạng mục`. Add / rename / reorder categories already works in Cấu hình → Danh mục
-  // (`admin.lookup`). A per-category disbursement deadline and yearly capital plan, as the spec draws
-  // them, have no server support, so the button that opens them from this screen is not built.
-  {
-    ten: "Hạng mục",
-    viSao:
-      "Thêm, sửa tên và sắp xếp hạng mục đã làm được ở màn Cấu hình, phần Danh mục. Đặt thời hạn " +
-      "giải ngân và kế hoạch vốn năm cho từng hạng mục thì hệ thống chưa có.",
-  },
+  // §5 `☰ Hạng mục`: BUILT 06/10/2026 as the prototype's dialog (`category-manager-dialog.tsx`) —
+  // list, add, rename, turn off / on, soft delete. A per-category deadline and yearly capital plan
+  // are in neither the prototype dialog nor the contract.
   // §3 four KPI cards. No route returns whole-year totals (capital plan, disbursed, delayed count) and
   // there is no issue data. Summing the filtered list in the browser is wrong whenever a filter is on.
   {

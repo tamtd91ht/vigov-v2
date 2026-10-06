@@ -4,7 +4,6 @@ import {
   Banknote,
   ChartLine,
   Hourglass,
-  Layers,
   MessagesSquare,
   ReceiptText,
   TriangleAlert,
@@ -40,7 +39,7 @@ import { pendingPart } from "./nhan-ghi-giai-ngan";
 
 // Exact `ten` of each `PHAN_CHUA_DUNG_GHI` entry (spec sections in the entry's comment there).
 const IMPORT_EXCEL = "Nhập giải ngân từ Excel"; // §10
-const CATEGORIES = "Hạng mục"; // §5
+// §5 `☰ Hạng mục` is LIVE since 06/10/2026 (`category-manager-dialog.tsx`).
 const KPI_CARDS = "Số liệu tổng hợp của năm"; // §3
 const CUMULATIVE_CHART = "Luỹ kế giải ngân so với kế hoạch"; // §4
 const CATEGORY_PROGRESS = "Tiến độ theo hạng mục"; // §5
@@ -60,20 +59,15 @@ export const UNIT_AND_OFFICER = "Đơn vị thực hiện và Cán bộ phụ tr
 // voucher list, its `NGUỒN VỐN` column and the voucher form's source select since db94b35c.
 
 /**
- * PageHeader buttons, prototype `BudgetWorkspace.tsx:154-168`: `[Hạng mục] [Nhập giải ngân]`, before
- * `+ Thêm dự án`. The caller draws them only for an account holding `budget.update`, as the prototype
- * does (`canRecord`).
+ * PageHeader button `[Nhập giải ngân]`, prototype `BudgetWorkspace.tsx:154-168`, between the live
+ * `[Hạng mục]` (`category-manager-dialog.tsx`) and `+ Thêm dự án`. The caller draws it only for an
+ * account holding `budget.update`, as the prototype does (`canRecord`).
  */
 export function DisbursementHeaderActions() {
   return (
-    <>
-      <PendingButton info={pendingPart(CATEGORIES)} side="bottom" icon={<Layers aria-hidden="true" />}>
-        Hạng mục
-      </PendingButton>
-      <PendingButton info={pendingPart(IMPORT_EXCEL)} side="bottom" icon={<Upload aria-hidden="true" />}>
-        Nhập giải ngân
-      </PendingButton>
-    </>
+    <PendingButton info={pendingPart(IMPORT_EXCEL)} side="bottom" icon={<Upload aria-hidden="true" />}>
+      Nhập giải ngân
+    </PendingButton>
   );
 }
 

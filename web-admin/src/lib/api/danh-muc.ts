@@ -240,6 +240,22 @@ export type MoTaDanhMucGhi = {
  * tuyến riêng `PATCH /api/v1/task-statuses/{code}` — không thêm, không xoá — nên đường gọi của nó
  * ở `trang-thai-nhiem-vu.ts`, không trong bảng thêm · sửa · xoá mềm này.
  */
+/**
+ * The capital-plan category group on its own — the Giải ngân screen's `☰ Hạng mục` dialog writes
+ * through it (prototype `CategoryManagerDialog.tsx`). Exported so that dialog uses THIS description
+ * rather than a second copy of the two paths, or a `find` by key whose "not found" branch would have
+ * to pick a default group to write into.
+ */
+export const CAPITAL_PLAN_CATEGORY_WRITES: MoTaDanhMucGhi = {
+  khoa: "hangMucKeHoachVon",
+  gocThem:
+    "/api/v1/capital-plan-categories" satisfies finance_post_capital_plan_categories["duongDan"],
+  mauMuc:
+    "/api/v1/capital-plan-categories/{id}" satisfies finance_patch_capital_plan_categories_by_id["duongDan"] &
+      finance_delete_capital_plan_categories_by_id["duongDan"],
+  doc: layHangMucKeHoachVon,
+};
+
 export const BAY_DANH_MUC_GHI: readonly MoTaDanhMucGhi[] = [
   {
     khoa: "loaiTaiNguyenBanDo",
@@ -248,15 +264,7 @@ export const BAY_DANH_MUC_GHI: readonly MoTaDanhMucGhi[] = [
       comms_delete_map_asset_types_by_id["duongDan"],
     doc: layLoaiTaiNguyenBanDo,
   },
-  {
-    khoa: "hangMucKeHoachVon",
-    gocThem:
-      "/api/v1/capital-plan-categories" satisfies finance_post_capital_plan_categories["duongDan"],
-    mauMuc:
-      "/api/v1/capital-plan-categories/{id}" satisfies finance_patch_capital_plan_categories_by_id["duongDan"] &
-        finance_delete_capital_plan_categories_by_id["duongDan"],
-    doc: layHangMucKeHoachVon,
-  },
+  CAPITAL_PLAN_CATEGORY_WRITES,
   {
     khoa: "loaiVanBan",
     gocThem: "/api/v1/document-types" satisfies documents_post_document_types["duongDan"],

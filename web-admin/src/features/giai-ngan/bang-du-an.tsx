@@ -1,9 +1,10 @@
 "use client";
 
-import { FolderKanban, Gauge, Search, SearchX, TrendingDown } from "lucide-react";
+import { FolderKanban, Gauge, Search, SearchX, Trash2, TrendingDown } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
+import { Button } from "@/components/ui/button";
 import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
@@ -34,6 +35,8 @@ import {
 } from "./nhan-du-an";
 import { pendingPart } from "./nhan-ghi-giai-ngan";
 import { DisbursementOverviewPending, LATEST_ISSUE_COLUMN, ProjectFilterPending, UNIT_OWNER } from "./pending-parts";
+import { ProjectBulkDeleteDialog } from "./project-bulk-delete-dialog";
+import { BULK_DELETE_BUTTON, selectedProjectsLabel, type SelectedProject } from "./project-bulk-delete";
 import { Glyph } from "./project-ui";
 import { ScopeNotice } from "./scope-notice";
 
@@ -73,6 +76,7 @@ export function BangDuAn({
   reloadSignal,
   emptyAction,
   fundingProgress,
+  canDelete = false,
 }: {
   /** Budget year chosen in the page header. */
   nam: number;
@@ -83,6 +87,12 @@ export function BangDuAn({
   emptyAction?: ReactNode;
   /** §6 block (`FundingSourceProgress`), drawn after the category table as the prototype orders it. */
   fundingProgress?: ReactNode;
+  /**
+   * `budget.update` held (user decision 06/10/2026): the checkbox column, select-all and `Xoá đã chọn`.
+   * `false` by default — a caller that forgets it draws fewer controls, never more. UX only: the
+   * DELETE route checks its own key on every call (rule 5).
+   */
+  canDelete?: boolean;
 }) {
   const [hangMucId, datHangMucId] = useState("");
   const [keyword, setKeyword] = useState("");
@@ -120,6 +130,16 @@ export function BangDuAn({
     };
   }, [nam, hangMucId, khoa]);
 
+  /**
+   * Selected project ids, TIED TO THE LOAD THAT DREW THEM: a new year, a new category filter or a
+   * re-read after a delete makes `khoa` differ, and the selection reads as empty — no effect clearing
+   * it, and no way for a tick made on the 2025 list to delete from the 2026 one.
+   */
+  const [picked, setPicked] = useState<{ khoa: string; ids: ReadonlySet<string> } | null>(null);
+  const selectedIds: ReadonlySet<string> = picked !== null && picked.khoa === khoa ? picked.ids : EMPTY_IDS;
+  /** Snapshot of the rows sent to the confirm dialog, or `null` when it is closed. */
+  const [bulkRows, setBulkRows] = useState<readonly SelectedProject[] | null>(null);
+
   const trangThai: TrangThaiBang =
     daTai === null || daTai.khoa !== khoa
       ? { pha: "dangTai" }
@@ -131,6 +151,34 @@ export function BangDuAn({
     trangThai.pha === "xong"
       ? { ...trangThai.duLieu, items: matchKeyword(trangThai.duLieu.items, keyword) }
       : null;
+
+  // From the WHOLE loaded list, not only the rows the search box leaves: a ticked row hidden by a
+  // keyword is still selected, and the confirm dialog lists it by name before anything is sent.
+  const selectedRows: finance_duAnRa[] =
+    trangThai.pha === "xong" ? trangThai.duLieu.items.filter((d) => selectedIds.has(d.id)) : [];
+
+  const selection: RowSelection | undefined =
+    canDelete && shown !== null
+      ? {
+          has: (id) => selectedIds.has(id),
+          toggle: (id) => {
+            const next = new Set(selectedIds);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            setPicked({ khoa, ids: next });
+          },
+          // Select-all acts on the rows ON SCREEN: ticking it never selects a row the clerk cannot see.
+          toggleAll: () => {
+            const next = new Set(selectedIds);
+            const allOn = shown.items.every((d) => next.has(d.id));
+            for (const d of shown.items) {
+              if (allOn) next.delete(d.id);
+              else next.add(d.id);
+            }
+            setPicked({ khoa, ids: next });
+          },
+        }
+      : undefined;
 
   return (
     <section className="flex min-w-0 flex-col" aria-label="Theo dõi giải ngân theo dự án">
@@ -181,6 +229,28 @@ export function BangDuAn({
             unit NAME here (ids only), so — by the prototype's own rule — it is not drawn. */}
 
         <ProjectFilterPending />
+
+        {/* `Đã chọn N dự án · Xoá đã chọn` at the right of the filter row, as the prototype puts it
+            (`:343-358`): after ticking rows the eye is on the table, not at the foot of the page. */}
+        {canDelete && selectedRows.length > 0 && (
+          <div className="ml-auto flex items-center gap-2" data-bulk-bar="">
+            <span className="text-[13px] text-ink-500">{selectedProjectsLabel(selectedRows.length)}</span>
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              icon={<Glyph icon={Trash2} />}
+              aria-haspopup="dialog"
+              onClick={() =>
+                setBulkRows(
+                  selectedRows.map((d) => ({ id: d.id, code: d.code, name: d.name, planned_amount: d.planned_amount })),
+                )
+              }
+            >
+              {BULK_DELETE_BUTTON}
+            </Button>
+          </div>
+        )}
       </div>
 
       {trangThai.pha === "dangTai" && (
@@ -226,7 +296,7 @@ export function BangDuAn({
               />
             </div>
           ) : (
-            <BangDanhSach duLieu={shown} danhMuc={danhMuc} />
+            <BangDanhSach duLieu={shown} danhMuc={danhMuc} selection={selection} />
           )}
 
           {/* NGƯỠNG LÀ CỦA MÁY CHỦ, HIỆN RA ĐỂ NGƯỜI ĐỌC BIẾT CHỮ "CHẬM" ĐANG ĐO BẰNG GÌ. The prototype
@@ -238,9 +308,28 @@ export function BangDuAn({
           </p>
         </>
       )}
+
+      {canDelete && bulkRows !== null && (
+        <ProjectBulkDeleteDialog
+          projects={bulkRows}
+          onClose={() => setBulkRows(null)}
+          // Re-read the whole list: deleted rows leave, refused ones stay — the server says which.
+          onFinished={() => datLanTai((n) => n + 1)}
+        />
+      )}
     </section>
   );
 }
+
+const EMPTY_IDS: ReadonlySet<string> = new Set();
+
+/** What the table needs to draw its checkbox column. `undefined` = no column at all. */
+export type RowSelection = {
+  readonly has: (id: string) => boolean;
+  readonly toggle: (id: string) => void;
+  /** Ticks every row on screen, or unticks them all when every one is already ticked. */
+  readonly toggleAll: () => void;
+};
 
 /** Rows whose name or code contains the typed words, case- and accent-sensitive as typed. */
 function matchKeyword(items: readonly finance_duAnRa[], keyword: string): finance_duAnRa[] {
@@ -268,10 +357,15 @@ function matchKeyword(items: readonly finance_duAnRa[], keyword: string): financ
 export function BangDanhSach({
   duLieu,
   danhMuc,
+  selection,
 }: {
   duLieu: finance_danhSachDuAnRa;
   danhMuc: readonly finance_hangMucRa[];
+  /** Checkbox column + select-all; only passed for an account holding `budget.update`. */
+  selection?: RowSelection;
 }) {
+  const ticked = selection === undefined ? 0 : duLieu.items.filter((d) => selection.has(d.id)).length;
+  const allChecked = duLieu.items.length > 0 && ticked === duLieu.items.length;
   return (
     <TableScroll sticky aria-label={`Danh sách dự án đầu tư năm ${duLieu.year}`}>
       <table className={cn("bang-danh-muc", DATA_TABLE_CLASS)}>
@@ -280,6 +374,15 @@ export function BangDanhSach({
         </caption>
         <thead>
           <tr>
+            {selection !== undefined && (
+              <th scope="col" className="w-10">
+                <SelectAllBox
+                  checked={allChecked}
+                  indeterminate={ticked > 0 && !allChecked}
+                  onToggle={selection.toggleAll}
+                />
+              </th>
+            )}
             <th scope="col" className="w-20">
               Mã
             </th>
@@ -317,6 +420,17 @@ export function BangDanhSach({
               // Red left edge for a project the SERVER flagged late (prototype `:252-254`): the eye
               // scanning for late projects passes the left edge first. The words say it too.
               <tr key={d.id} className={cn(late && "border-l-[3px] border-l-danger-500")}>
+                {selection !== undefined && (
+                  <td>
+                    <input
+                      type="checkbox"
+                      className="size-4"
+                      aria-label={`Chọn dự án ${d.code}`}
+                      checked={selection.has(d.id)}
+                      onChange={() => selection.toggle(d.id)}
+                    />
+                  </td>
+                )}
                 <td className="ma-muc text-xs font-semibold text-ink-500">{d.code}</td>
                 <td className="whitespace-normal">
                   {/* Đường dẫn con đúng như đặc tả ghi ở đầu chương: `/giai-ngan/du-an/:id`. */}
@@ -353,6 +467,35 @@ export function BangDanhSach({
         </tbody>
       </table>
     </TableScroll>
+  );
+}
+
+/**
+ * The header box: ticked when every row on screen is, MIXED (`indeterminate`) when some are. That
+ * third state is a DOM property with no HTML attribute, hence the ref.
+ */
+function SelectAllBox({
+  checked,
+  indeterminate,
+  onToggle,
+}: {
+  checked: boolean;
+  indeterminate: boolean;
+  onToggle: () => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ref.current !== null) ref.current.indeterminate = indeterminate;
+  }, [indeterminate]);
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      className="size-4"
+      aria-label="Chọn tất cả dự án đang hiện"
+      checked={checked}
+      onChange={onToggle}
+    />
   );
 }
 

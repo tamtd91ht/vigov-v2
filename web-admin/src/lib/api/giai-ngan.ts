@@ -10,7 +10,8 @@
  *   DELETE /api/v1/disbursements/{id}/lockout        budget.confirm  (lý do BẮT BUỘC)
  *   POST   /api/v1/investment-projects               budget.update   + Idempotency-Key BẮT BUỘC
  *   PATCH  /api/v1/investment-projects/{id}          budget.update
- *   DELETE /api/v1/investment-projects/{id}          budget.confirm  (lý do BẮT BUỘC)
+ *   DELETE /api/v1/investment-projects/{id}          budget.confirm  (lý do BẮT BUỘC) — đang đổi:
+ *                                                     budget.update, lý do tuỳ chọn (06/10/2026, `xoaDuAn`)
  *
  * ⚠ HAI KHOÁ, KHÔNG MỘT. Bảng trên chia đôi đúng theo trục nguy hiểm mà đặc tả §8.2 vạch ra
  * (`06-giai-ngan.md:202`): **sửa** thì `budget.update`, còn **xoá · xác nhận · khoá/mở khoá** thì
@@ -366,18 +367,26 @@ export function suaDuAn(id: string, than: SuaDuAnVao): Promise<KetQua<finance_du
 }
 
 /**
- * DELETE /api/v1/investment-projects/{id} — xoá mềm một dự án kèm lý do. 204 KHÔNG THÂN.
+ * DELETE /api/v1/investment-projects/{id} — xoá mềm một dự án. 204 KHÔNG THÂN.
  *
- * ĐỨNG SAU `budget.confirm`, cùng lập luận với `goChungTu`.
+ * THE REASON IS OPTIONAL, BY USER DECISION 06/10/2026 (follow the prototype: deleting a project asks
+ * no reason, and `budget.update` gates it). The server card that goes with it makes `reason` optional
+ * and writes a fixed sentence into `delete_reason` when it is blank, so rule 7's three columns are
+ * still filled — by the server, not by a default typed on screen. Until that card lands the route
+ * still says `budget.confirm` + reason required, and its refusal is shown verbatim.
  *
- * DỰ ÁN CÒN CHỨNG TỪ THÌ **409**, không phải một lần xoá kéo theo cả chùm: câu của máy chủ nói rõ
- * đường ra — gỡ từng chứng từ kèm lý do trước, mỗi lần một vết kiểm toán. Câu ấy ra thẳng màn hình,
- * vì không có nó thì màn hình trông như hỏng: dự án nằm ngay đó và nút Xoá thì không làm gì.
+ * `{}` IS SENT, NEVER AN EMPTY BODY: the handler decodes JSON before anything else, and an empty body
+ * is an EOF → 400 "không phải JSON hợp lệ" (`service-finance/internal/http/danh_muc_ghi.go` `docThan`).
+ * `Partial<…>` of the GENERATED type, so the field name still comes from the contract.
+ *
+ * DỰ ÁN MÀ MÁY CHỦ TỪ CHỐI (409 — còn chứng từ) thì câu của máy chủ ra thẳng màn hình, vì không có
+ * nó thì màn hình trông như hỏng: dự án nằm ngay đó và nút Xoá thì không làm gì.
  *
  * MÃ DỰ ÁN KHÔNG QUAY LẠI DÃY sau khi xoá (luật 7, bất biến 3) — nhập lại phải chọn mã khác.
  */
-export async function xoaDuAn(id: string, lyDo: string): Promise<KetQua<null>> {
-  const thanGui: finance_xoaDuAnVao = { reason: lyDo };
+export async function xoaDuAn(id: string, lyDo?: string): Promise<KetQua<null>> {
+  const reason = lyDo?.trim() ?? "";
+  const thanGui: Partial<finance_xoaDuAnVao> = reason === "" ? {} : { reason };
   const kq = await goiGhi(duongDanMot(MAU_XOA_DU_AN, id), "DELETE", thanGui, 204);
   return kq.ok ? { ok: true, duLieu: null } : kq;
 }

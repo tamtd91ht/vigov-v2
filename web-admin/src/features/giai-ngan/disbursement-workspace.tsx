@@ -13,6 +13,7 @@ import { danhSachNam, namTheoDongHoMay } from "@/lib/nam";
 import { coQuyen, QUYEN_GHI_NGAN_SACH, QUYEN_XEM_GIAI_NGAN } from "@/lib/quyen";
 
 import { BangDuAn } from "./bang-du-an";
+import { CategoryManagerButton } from "./category-manager-dialog";
 import { FundingSourceProgress } from "./funding-source-progress";
 import { KhoiThemDuAn } from "./ghi-du-an";
 import { DISBURSEMENT_READ_DENIED } from "./nhan-du-an";
@@ -37,9 +38,11 @@ export function DisbursementWorkspace() {
   /** Bumped after a project is added: the register re-reads the whole list (see `bang-du-an.tsx`). */
   const [saves, setSaves] = useState(0);
   const [categories, setCategories] = useState<readonly finance_hangMucRa[]>([]);
+  /** Bumped after the `Hạng mục` dialog writes: the filter select and the forms re-read the catalogue. */
+  const [categoryReads, setCategoryReads] = useState(0);
 
   /**
-   * Danh mục hạng mục đọc RIÊNG và chỉ một lần: nó không đổi theo năm, và tuyến của nó khai
+   * Danh mục hạng mục đọc RIÊNG, once and again after each write of the `Hạng mục` dialog: nó không đổi theo năm, và tuyến của nó khai
    * `any-authenticated` trong khi tuyến dự án đòi `budget.read`. Hỏng danh mục KHÔNG làm hỏng bảng —
    * the project's category then shows its code with the reason, instead of a blank screen.
    */
@@ -51,7 +54,7 @@ export function DisbursementWorkspace() {
     return () => {
       dropped = true;
     };
-  }, []);
+  }, [categoryReads]);
 
   // FAIL CLOSED: an unread or failed session holds no key (rule 1, forbidden #1).
   const phien = usePhien();
@@ -71,6 +74,7 @@ export function DisbursementWorkspace() {
           <>
             {canRecord && (
               <>
+                <CategoryManagerButton canManage={canRecord} onChanged={() => setCategoryReads((n) => n + 1)} />
                 <DisbursementHeaderActions />
                 {addProject}
               </>
@@ -96,6 +100,8 @@ export function DisbursementWorkspace() {
           emptyAction={addProject}
           // §6, under the same `budget.read` gate as the register; its writes need `budget.update`.
           fundingProgress={<FundingSourceProgress year={year} canManage={canRecord} />}
+          // Bulk selection + `Xoá đã chọn` under `budget.update` (user decision 06/10/2026).
+          canDelete={canRecord}
         />
       </CongQuyen>
     </>

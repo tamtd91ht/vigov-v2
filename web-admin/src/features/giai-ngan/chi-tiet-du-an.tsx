@@ -125,7 +125,7 @@ export function ChiTietDuAn({ id }: { id: string }) {
           <EmptyState
             icon={CircleCheck}
             title="Đã gỡ dự án."
-            description="Bản ghi vẫn còn trong hệ thống kèm người gỡ và lý do (xoá mềm), và mã dự án không quay lại dãy."
+            description="Bản ghi vẫn còn trong hệ thống kèm người gỡ (xoá mềm), và mã dự án không quay lại dãy."
             action={<Link href="/giai-ngan">Về danh sách giải ngân</Link>}
           />
         </Card>
@@ -175,7 +175,6 @@ export function ChiTietDuAn({ id }: { id: string }) {
                 actions={
                   <ProjectHeaderActions
                     coGhi={coGhi}
-                    coXacNhan={coXacNhan}
                     editing={editing}
                     onToggleEdit={() => setEditing((v) => !v)}
                     onRemove={() => setRemoving(true)}
@@ -197,7 +196,8 @@ export function ChiTietDuAn({ id }: { id: string }) {
                 </ProjectRecordTabs>
               </ThongTinDuAn>
 
-              {removing && coXacNhan && (
+              {/* `budget.update`, as the button (user decision 06/10/2026, `ProjectHeaderActions`). */}
+              {removing && coGhi && (
                 <ProjectRemoveDialog
                   duAn={trangThai.duAn}
                   onClose={() => setRemoving(false)}

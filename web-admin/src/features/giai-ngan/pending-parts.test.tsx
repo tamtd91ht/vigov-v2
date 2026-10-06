@@ -125,6 +125,7 @@ describe("Giải ngân placeholders (ADR 0068 §14)", () => {
 
   it("project funding (§7.2 chip, §8 block, §9 list) and the §8.2 voucher list + source are LIVE: no registry entry left", () => {
     for (const ten of [
+      "Hạng mục",
       "Nguồn vốn của dự án",
       "Giải ngân theo nguồn vốn",
       "Thêm nguồn vốn cho dự án",

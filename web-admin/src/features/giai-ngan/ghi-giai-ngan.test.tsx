@@ -328,12 +328,11 @@ describe("NÚT THÊM DỰ ÁN — cổng budget.update", () => {
   });
 });
 
-/** Header buttons of the project card for one pair of keys. */
-function renderProjectButtons(canRecord: boolean, canConfirm: boolean, editing = false): string {
+/** Header buttons of the project card for `budget.update` held or not. */
+function renderProjectButtons(canRecord: boolean, editing = false): string {
   return renderToStaticMarkup(
     <ProjectHeaderActions
       coGhi={canRecord}
-      coXacNhan={canConfirm}
       editing={editing}
       onToggleEdit={() => {}}
       onRemove={() => {}}
@@ -341,25 +340,19 @@ function renderProjectButtons(canRecord: boolean, canConfirm: boolean, editing =
   );
 }
 
-describe("SỬA / GỠ DỰ ÁN — hai cổng riêng", () => {
-  it("`budget.update` MỘT MÌNH: có Sửa dự án, KHÔNG có Gỡ dự án", () => {
-    const html = renderProjectButtons(true, false);
+describe("SỬA / GỠ DỰ ÁN — cùng cổng budget.update (quyết định 06/10/2026)", () => {
+  it("`budget.update`: có Sửa dự án VÀ Gỡ dự án", () => {
+    const html = renderProjectButtons(true);
     expect(html).toContain(NUT_SUA_DU_AN);
-    expect(html).not.toContain(NUT_GO_DU_AN);
-  });
-
-  it("`budget.confirm` MỘT MÌNH: có Gỡ dự án, KHÔNG có Sửa dự án", () => {
-    const html = renderProjectButtons(false, true);
     expect(html).toContain(NUT_GO_DU_AN);
-    expect(html).not.toContain(NUT_SUA_DU_AN);
   });
 
-  it("không khoá nào: không nút nào", () => {
-    expect(renderProjectButtons(false, false)).toBe("");
+  it("thiếu `budget.update` (kể cả khi giữ `budget.confirm`): không nút nào", () => {
+    expect(renderProjectButtons(false)).toBe("");
   });
 
   it("đang sửa: nút đọc 'Đang sửa' và báo đang mở", () => {
-    const html = renderProjectButtons(true, false, true);
+    const html = renderProjectButtons(true, true);
     expect(html).toContain(">Đang sửa<");
     expect(html).toContain('aria-expanded="true"');
   });
@@ -515,7 +508,8 @@ describe("PHẦN CHƯA DỰNG — dấu '?' đúng vị trí đặc tả (ADR 00
 
   it("control giữ chỗ là control THẬT, VÔ HIỆU: nút, ô chọn, tab, ô đánh dấu", () => {
     const header = renderToStaticMarkup(<DisbursementHeaderActions />);
-    expect(header).toMatch(/<button[^>]* disabled=""[^>]*>.*Hạng mục<\/button>/);
+    // `Hạng mục` is LIVE (06/10/2026, `category-manager-dialog.tsx`): no placeholder left here.
+    expect(header).not.toContain("Hạng mục");
     expect(header).toMatch(/<button[^>]* disabled=""[^>]*>.*Nhập giải ngân<\/button>/);
 
     const filters = renderToStaticMarkup(<ProjectFilterPending />);
