@@ -94,6 +94,12 @@ type HangMucKeHoachVonDanhMuc interface {
 type DuAnTienDo interface {
 	DanhSach(ctx context.Context, loc fistore.LocDuAn) ([]domain.TienDoDuAn, error)
 	ChiTiet(ctx context.Context, id string) (domain.TienDoDuAn, error)
+
+	// AllocationsOfYear feeds the list's funding chip — ONE read for the whole page, keyed by project
+	// id, under the same filter as DanhSach (no read per project).
+	AllocationsOfYear(ctx context.Context, loc fistore.LocDuAn) (map[string][]domain.ProjectAllocation, error)
+	// AllocationsOfProject feeds the detail screen's "Giải ngân theo nguồn vốn" block.
+	AllocationsOfProject(ctx context.Context, projectID string) ([]domain.ProjectAllocation, error)
 }
 
 // GhiDuAn is the WRITE half of the investment project register, and it is its own interface rather
@@ -111,7 +117,7 @@ type DuAnTienDo interface {
 // that is wrong with nothing on any screen saying so.
 type GhiDuAn interface {
 	Them(ctx context.Context, yc app.YeuCauThemDuAn, nguoi audit.Actor) (app.KetQuaThemDuAn, error)
-	Sua(ctx context.Context, id string, yc app.YeuCauSuaDuAn, nguoi audit.Actor) (domain.DuAn, error)
+	Sua(ctx context.Context, id string, yc app.YeuCauSuaDuAn, nguoi audit.Actor) (app.ProjectEditResult, error)
 	Xoa(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
 }
 
@@ -487,6 +493,10 @@ func Register(mux *http.ServeMux, d Deps) {
 	// 409 AND NOT 403 for a code already issued: the caller holds `budget.update` and is allowed to
 	// enter projects. What is refused is this value against the state of the data.
 	//
+	// 409 ALSO COVERS THE ALLOCATION REFUSALS (decision 06/10/2026): a total above `planned_amount`
+	// (`allocation_exceeds_plan`, the sentence names the overrun) and one source twice
+	// (`duplicate_source`).
+	//
 	// @summary  Thêm một dự án đầu tư cho năm ngân sách, kèm phân bổ nguồn vốn nếu xã khai
 	// @screen   06-giai-ngan §9
 	// @request  themDuAnVao
@@ -495,7 +505,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    404 httpx.Error
-	// @reply    409 httpx.Error
+	// @reply    409 httpx.Error code_taken allocation_exceeds_plan duplicate_source
 	// @reply    500 httpx.Error
 	mux.Handle("POST /api/v1/investment-projects",
 		authz.RequirePermission(d.Checker, "budget.update")(
@@ -527,7 +537,13 @@ func Register(mux *http.ServeMux, d Deps) {
 	// state and one entry in the ledger. Were that comparison removed, this declaration would become
 	// a lie and the second request would file an entry saying nothing changed.
 	//
-	// @summary  Sửa hạng mục, tên, mô tả, kế hoạch vốn, đơn vị, cán bộ phụ trách hoặc các mốc thời gian của một dự án đầu tư
+	// `funding_allocations` IS EDITABLE HERE SINCE 06/10/2026 (user decision, following the prototype):
+	// a full replacement set — kept sources updated in place, re-added ones revived, dropped ones soft
+	// deleted. 409 when the total would exceed the plan (also when `planned_amount` is revised below
+	// what is allocated), when one source is named twice, or when a dropped source already has
+	// vouchers of this project. idem.KhongCan still holds: an identical replacement set is a no-op.
+	//
+	// @summary  Sửa hạng mục, tên, mô tả, kế hoạch vốn, đơn vị, cán bộ phụ trách, các mốc thời gian hoặc phân bổ nguồn vốn của một dự án đầu tư
 	// @screen   06-giai-ngan §8
 	// @request  suaDuAnVao
 	// @reply    200 duAnGhiRa
@@ -535,6 +551,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error allocation_exceeds_plan duplicate_source source_has_disbursements
 	// @reply    500 httpx.Error
 	mux.Handle("PATCH /api/v1/investment-projects/{id}",
 		authz.RequirePermission(d.Checker, "budget.update")(

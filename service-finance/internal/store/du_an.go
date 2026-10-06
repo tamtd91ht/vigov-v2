@@ -238,3 +238,129 @@ func (s *DuAnStore) ChiTiet(ctx context.Context, id string) (domain.TienDoDuAn, 
 	}
 	return mot, nil
 }
+
+// TranPhanBoMotNam bounds the allocation lines read for ONE budget year's project list.
+//
+// 20000 IS TEN SOURCES ON EVERY ONE OF TranDuAnMotNam PROJECTS. §14's commune carries 63 projects and
+// §6's sample four sources, so a real year is a few hundred lines. Past this the data is no longer a
+// commune's capital plan, and the read REFUSES rather than truncates — a short list here is a project
+// whose chip says "Chưa gắn nguồn" while it has sources (ErrQuaNhieuPhanBo's reasoning).
+const TranPhanBoMotNam = 20000
+
+// allocationsOfYear lists the live allocation lines of one year's live projects, with each source's
+// name, in the commune's own source order — ONE statement for the whole page (no read per project).
+//
+// THE SAME FILTERS AS DanhSach (`da.nam = $2`, the optional category `$3`), so the lines match the
+// projects the list returns and nothing else.
+//
+// `nv.deleted_at IS NULL`: a line naming a source that is no longer in the catalogue is left out, the
+// way §6's cards leave it out (tongPhanBoTheoNguon joins only live sources). The catalogue has no
+// remove route today (decision 06/10/2026), so this excludes nothing in practice; it keeps the chip and
+// the cards agreeing should one ever be added.
+//
+// tenant_id = $1 ON EVERY TABLE, for the reason tongChungTu gives (rule 1).
+const allocationsOfYear = `SELECT pb.du_an_id, pb.nguon_von_id, nv.ten, pb.so_tien_phan_bo
+	FROM phan_bo_nguon_von pb
+	JOIN du_an da
+	  ON da.tenant_id = pb.tenant_id AND da.tenant_id = $1 AND da.id = pb.du_an_id
+	JOIN nguon_von nv
+	  ON nv.tenant_id = pb.tenant_id AND nv.tenant_id = $1 AND nv.id = pb.nguon_von_id
+	WHERE pb.tenant_id = $1 AND pb.deleted_at IS NULL
+	  AND da.deleted_at IS NULL AND da.nam = $2
+	  AND ($3 = '' OR da.hang_muc_id = $3)
+	  AND nv.deleted_at IS NULL
+	ORDER BY pb.du_an_id, nv.thu_tu, nv.ten, nv.id
+	LIMIT $4`
+
+// AllocationsOfYear reads the allocation lines behind the list's chips, keyed by project id. A project
+// with no line is simply absent from the map — "Chưa gắn nguồn".
+func (s *DuAnStore) AllocationsOfYear(ctx context.Context,
+	loc LocDuAn) (map[string][]domain.ProjectAllocation, error) {
+
+	if loc.Nam == 0 {
+		return nil, ErrThieuNamNganSach
+	}
+	rows, err := s.db.For(ctx).QueryJoin(ctx, allocationsOfYear, loc.Nam, loc.HangMucID, TranPhanBoMotNam+1)
+	if err != nil {
+		return nil, fmt.Errorf("phan_bo_nguon_von: đọc theo năm: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[string][]domain.ProjectAllocation, 64)
+	n := 0
+	for rows.Next() {
+		var (
+			projectID string
+			a         domain.ProjectAllocation
+			amount    int64
+		)
+		if err := rows.Scan(&projectID, &a.FundingSourceID, &a.SourceName, &amount); err != nil {
+			return nil, fmt.Errorf("phan_bo_nguon_von: đọc dòng theo năm: %w", err)
+		}
+		a.Amount = domain.Dong(amount)
+		out[projectID] = append(out[projectID], a)
+		n++
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("phan_bo_nguon_von: duyệt theo năm: %w", err)
+	}
+	if n > TranPhanBoMotNam {
+		return nil, ErrQuaNhieuPhanBo
+	}
+	return out, nil
+}
+
+// allocationsOfProject lists one project's live allocation lines with what its vouchers drew FROM EACH
+// SOURCE — the "Giải ngân theo nguồn vốn" block of §8 (prototype BudgetItemDetail.tsx:333-372).
+//
+// THE VOUCHER SUBQUERY IS tongChungTu's RULE restricted to one project and grouped by source: every
+// state counts, soft-deleted vouchers do not. Vouchers naming NO source belong to no line (§13 rule 6);
+// vouchers naming a source the project has no line for appear on no line either — the per-source bars
+// show allocated sources only, as the prototype does.
+const allocationsOfProject = `SELECT pb.nguon_von_id, nv.ten, pb.so_tien_phan_bo, COALESCE(ct.da_giai_ngan, 0)
+	FROM phan_bo_nguon_von pb
+	JOIN du_an da
+	  ON da.tenant_id = pb.tenant_id AND da.tenant_id = $1 AND da.id = pb.du_an_id
+	JOIN nguon_von nv
+	  ON nv.tenant_id = pb.tenant_id AND nv.tenant_id = $1 AND nv.id = pb.nguon_von_id
+	LEFT JOIN (SELECT c.tenant_id, c.nguon_von_id, SUM(c.so_tien) AS da_giai_ngan
+	             FROM chung_tu_giai_ngan c
+	            WHERE c.tenant_id = $1 AND c.du_an_id = $2 AND c.deleted_at IS NULL
+	              AND c.nguon_von_id IS NOT NULL
+	            GROUP BY c.tenant_id, c.nguon_von_id) ct
+	  ON ct.tenant_id = pb.tenant_id AND ct.nguon_von_id = pb.nguon_von_id
+	WHERE pb.tenant_id = $1 AND pb.du_an_id = $2 AND pb.deleted_at IS NULL
+	  AND da.deleted_at IS NULL AND nv.deleted_at IS NULL
+	ORDER BY nv.thu_tu, nv.ten, nv.id
+	LIMIT $3`
+
+// AllocationsOfProject reads one project's allocation lines for the detail screen. A project of
+// another commune yields no line — the statement binds tenant_id = $1 on every table; the caller has
+// already answered 404 for it through ChiTiet.
+func (s *DuAnStore) AllocationsOfProject(ctx context.Context, projectID string) ([]domain.ProjectAllocation, error) {
+	rows, err := s.db.For(ctx).QueryJoin(ctx, allocationsOfProject, projectID, TranPhanBoMotDuAn+1)
+	if err != nil {
+		return nil, fmt.Errorf("phan_bo_nguon_von: đọc theo dự án: %w", err)
+	}
+	defer rows.Close()
+
+	out := make([]domain.ProjectAllocation, 0, 4)
+	for rows.Next() {
+		var (
+			a                 domain.ProjectAllocation
+			amount, disbursed int64
+		)
+		if err := rows.Scan(&a.FundingSourceID, &a.SourceName, &amount, &disbursed); err != nil {
+			return nil, fmt.Errorf("phan_bo_nguon_von: đọc dòng theo dự án: %w", err)
+		}
+		a.Amount, a.Disbursed = domain.Dong(amount), domain.Dong(disbursed)
+		out = append(out, a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("phan_bo_nguon_von: duyệt theo dự án: %w", err)
+	}
+	if len(out) > TranPhanBoMotDuAn {
+		return nil, ErrQuaNhieuPhanBo
+	}
+	return out, nil
+}

@@ -2782,7 +2782,7 @@
       "path": "/api/v1/investment-projects/{id}",
       "operation_id": "finance_patch_investment_projects_by_id",
       "task_id": "c1fe65f6e611",
-      "summary": "Sửa hạng mục, tên, mô tả, kế hoạch vốn, đơn vị, cán bộ phụ trách hoặc các mốc thời gian của một dự án đầu tư",
+      "summary": "Sửa hạng mục, tên, mô tả, kế hoạch vốn, đơn vị, cán bộ phụ trách, các mốc thời gian hoặc phân bổ nguồn vốn của một dự án đầu tư",
       "screen": "06-giai-ngan §8",
       "permission_kind": "permission",
       "permission": "budget.update",
@@ -2795,6 +2795,7 @@
         "401": "httpx.Error",
         "403": "httpx.Error",
         "404": "httpx.Error",
+        "409": "httpx.Error",
         "500": "httpx.Error"
       },
       "declared_in": "service-finance/internal/http/routes.go"

@@ -48,6 +48,39 @@ type duAnGia struct {
 	theo map[tenant.ID][]domain.TienDoDuAn
 	loi  error
 	goi  int
+
+	// allocations are the allocation lines, KEYED BY COMMUNE THEN PROJECT ID — the same keying as
+	// `theo`, so a commune-B project sharing commune A's id cannot borrow A's lines.
+	allocations map[tenant.ID]map[string][]domain.ProjectAllocation
+	// allocationReads counts the reads, so the list's "one read per page" is a fact a test can check.
+	allocationReads int
+	allocationErr   error
+}
+
+func (d *duAnGia) AllocationsOfYear(ctx context.Context,
+	loc fistore.LocDuAn) (map[string][]domain.ProjectAllocation, error) {
+	d.allocationReads++
+	if d.allocationErr != nil {
+		return nil, d.allocationErr
+	}
+	out := map[string][]domain.ProjectAllocation{}
+	for _, p := range d.theo[tenant.MustFrom(ctx)] {
+		if p.DuAn.Nam != loc.Nam {
+			continue
+		}
+		if lines, ok := d.allocations[tenant.MustFrom(ctx)][p.DuAn.ID]; ok {
+			out[p.DuAn.ID] = lines
+		}
+	}
+	return out, nil
+}
+
+func (d *duAnGia) AllocationsOfProject(ctx context.Context, id string) ([]domain.ProjectAllocation, error) {
+	d.allocationReads++
+	if d.allocationErr != nil {
+		return nil, d.allocationErr
+	}
+	return d.allocations[tenant.MustFrom(ctx)][id], nil
 }
 
 func (d *duAnGia) DanhSach(ctx context.Context, loc fistore.LocDuAn) ([]domain.TienDoDuAn, error) {

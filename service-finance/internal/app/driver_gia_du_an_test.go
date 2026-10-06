@@ -88,6 +88,13 @@ type khoDAGia struct {
 	// the figure that reaches the audit delta.
 	soPhanBoXoa int64
 
+	// lines are what allocationLinesForEdit answers — EVERY row of the project, soft-deleted ones
+	// included, exactly as that statement reads them (it has no `deleted_at` predicate on purpose).
+	lines []storedLineFake
+
+	// vouchersBySource is what voucherCountBySource answers: live vouchers of the project per source.
+	vouchersBySource map[string]int64
+
 	loi error
 
 	// loiSau fails the FIRST statement containing this substring, and only that one.
@@ -170,6 +177,10 @@ func (c *connDAGia) ExecContext(_ context.Context, q string, args []driver.Named
 	// delta. Everything else reports one row: store.doiMotDongDuAn turns zero into "not found", and a
 	// fake returning zero would make every update look like a missing project — hiding the case the
 	// test is actually about.
+	// ONE LINE BY ITS OWN id ($2) — the edit path's update / revive / soft delete — is one row.
+	if strings.Contains(q, "UPDATE phan_bo_nguon_von") && strings.Contains(q, "AND id = $2") {
+		return driver.RowsAffected(1), nil
+	}
 	if strings.Contains(q, "UPDATE phan_bo_nguon_von") {
 		return driver.RowsAffected(c.k.soPhanBoXoa), nil
 	}
@@ -182,6 +193,18 @@ func (c *connDAGia) QueryContext(_ context.Context, q string, args []driver.Name
 		return nil, err
 	}
 	switch {
+	case strings.Contains(q, "FROM phan_bo_nguon_von"):
+		h := make([][]driver.Value, 0, len(c.k.lines))
+		for _, l := range c.k.lines {
+			h = append(h, []driver.Value{l.id, l.nguon, l.soTien, l.removed})
+		}
+		return &rowsGia{cot: []string{"id", "nguon_von_id", "so_tien_phan_bo", "removed"}, hang: h}, nil
+	case strings.Contains(q, "FROM chung_tu_giai_ngan ct"):
+		h := make([][]driver.Value, 0, len(c.k.vouchersBySource))
+		for nguon, n := range c.k.vouchersBySource {
+			h = append(h, []driver.Value{nguon, n})
+		}
+		return &rowsGia{cot: []string{"nguon_von_id", "so"}, hang: h}, nil
 	case strings.Contains(q, "count(*) FROM du_an"):
 		return &rowsGia{cot: []string{"count"}, hang: [][]driver.Value{{c.k.maDaDung}}}, nil
 	case strings.Contains(q, "count(*) FROM chung_tu_giai_ngan"):
@@ -218,6 +241,13 @@ func (c *connDAGia) QueryContext(_ context.Context, q string, args []driver.Name
 		}}}, nil
 	}
 	return nil, fmt.Errorf("driver giả: không biết trả gì cho %q", q)
+}
+
+// storedLineFake is one stored allocation row as the edit path reads it.
+type storedLineFake struct {
+	id, nguon string
+	soTien    int64
+	removed   bool
 }
 
 // tongHoacKhong mirrors `COALESCE(tong_muc_duoc_duyet, 0)`: a NULL column reaches Go as 0, which is

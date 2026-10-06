@@ -1334,6 +1334,10 @@ export type finance_duAnRa = {
   "delay_threshold": number;
   "delay_threshold_source": string;
   "scope_notice"?: string;
+  "funding_status"?: finance_fundingStatusOut | null;
+  "funding_source_names"?: Array<string>;
+  "funding_allocations"?: Array<finance_projectAllocationOut>;
+  "unallocated_plan_amount"?: number | null;
 };
 
 export type finance_fundingSourceCreateIn = {
@@ -1389,6 +1393,16 @@ export type finance_fundingSourcesOut = {
   "items": Array<finance_fundingSourceOut>;
   "unattributed_disbursed_amount": number;
   "scope_notice"?: string;
+};
+
+export type finance_fundingStatusOut = {
+  "status": string;
+  /** DISTINCT sources */
+  "source_count": number;
+  /** đồng */
+  "allocated_total": number;
+  /** max(0, plan − allocated), đồng */
+  "shortfall_amount": number;
 };
 
 export type finance_ghiDotVao = {
@@ -1457,6 +1471,16 @@ export type finance_phanBoVao = {
   "amount": number;
 };
 
+export type finance_projectAllocationOut = {
+  "funding_source_id": string;
+  "name": string;
+  /** allocated from this source, đồng */
+  "amount": number;
+  /** this project's vouchers drawn from this source */
+  "disbursed_amount": number;
+  "disbursed_ratio": number | null;
+};
+
 export type finance_rewordSystemMessageIn = {
   "text": string;
 };
@@ -1513,6 +1537,7 @@ export type finance_suaDuAnVao = {
   "start_date"?: string | null;
   "completion_date"?: string | null;
   "disbursement_deadline"?: string | null;
+  "funding_allocations"?: Array<finance_phanBoVao> | null;
   "code"?: string | null;
   "year"?: number | null;
 };
@@ -5925,6 +5950,9 @@ export type finance_post_investment_projects = {
     409: httpx_Error;
     500: httpx_Error;
   };
+  errorCodes: {
+    409: "allocation_exceeds_plan" | "code_taken" | "duplicate_source";
+  };
 };
 
 /** GET /api/v1/investment-projects/{id} — Chi tiết một dự án đầu tư: kế hoạch vốn, đã giải ngân, tỷ lệ và điểm chậm */
@@ -5947,7 +5975,7 @@ export type finance_get_investment_projects_by_id = {
   };
 };
 
-/** PATCH /api/v1/investment-projects/{id} — Sửa hạng mục, tên, mô tả, kế hoạch vốn, đơn vị, cán bộ phụ trách hoặc các mốc thời gian của một dự án đầu tư */
+/** PATCH /api/v1/investment-projects/{id} — Sửa hạng mục, tên, mô tả, kế hoạch vốn, đơn vị, cán bộ phụ trách, các mốc thời gian hoặc phân bổ nguồn vốn của một dự án đầu tư */
 export type finance_patch_investment_projects_by_id = {
   duongDan: "/api/v1/investment-projects/{id}";
   phuongThuc: "PATCH";
@@ -5963,7 +5991,11 @@ export type finance_patch_investment_projects_by_id = {
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;
+    409: httpx_Error;
     500: httpx_Error;
+  };
+  errorCodes: {
+    409: "allocation_exceeds_plan" | "duplicate_source" | "source_has_disbursements";
   };
 };
 

@@ -78,14 +78,14 @@ func (g *ghiDuAnGia) Them(ctx context.Context, yc app.YeuCauThemDuAn,
 }
 
 func (g *ghiDuAnGia) Sua(ctx context.Context, id string, yc app.YeuCauSuaDuAn,
-	nguoi audit.Actor) (domain.DuAn, error) {
+	nguoi audit.Actor) (app.ProjectEditResult, error) {
 	g.suaGoi++
 	g.idCuoi, g.suaCuoi = id, yc
 	g.ghiNhan(ctx, nguoi)
 	if g.loi != nil {
-		return domain.DuAn{}, g.loi
+		return app.ProjectEditResult{}, g.loi
 	}
-	return g.ra, nil
+	return app.ProjectEditResult{DuAn: g.ra, Allocations: g.phanBo}, nil
 }
 
 func (g *ghiDuAnGia) Xoa(ctx context.Context, id, lyDo string, nguoi audit.Actor) error {
@@ -228,6 +228,14 @@ func baTuyenGhiDuAn() []motTuyenDuAn {
 		},
 		{
 			ten: "sửa dự án", method: http.MethodPatch, duong: duongDuAnMot(), than: thanSuaDA,
+			khoa: "budget.update", ok: http.StatusOK,
+			dem: func(g *ghiDuAnGia) int { return g.suaGoi },
+		},
+		{
+			// THE SAME ROUTE, CARRYING `funding_allocations` (decision 06/10/2026): editing a project's
+			// sources is not a separate authority, and the matrix proves the body does not change that.
+			ten: "sửa phân bổ nguồn vốn", method: http.MethodPatch, duong: duongDuAnMot(),
+			than: `{"funding_allocations":[{"funding_source_id":"nv-xa","amount":40000000}]}`,
 			khoa: "budget.update", ok: http.StatusOK,
 			dem: func(g *ghiDuAnGia) int { return g.suaGoi },
 		},
@@ -423,35 +431,6 @@ func TestThemDuAnKhongKhaiNguonVonVan201(t *testing.T) {
 	}
 	if ra.FundingAllocatedTotal != 0 {
 		t.Errorf("funding_allocated_total = %d, muốn 0", ra.FundingAllocatedTotal)
-	}
-}
-
-// ⚠ §9 SAYS THE MISMATCH IS A WARNING, NOT A REFUSAL. The route returns the two raw figures —
-// `planned_amount` and `funding_allocated_total` — and lets the screen make §9's warning and §11's
-// chip out of them. This case is what stops a future reader from turning that sentence into a 400.
-func TestThemDuAnTongNguonVuotKeHoachVan201VaTraVeHaiSo(t *testing.T) {
-	m := dungMayChuDuAnGhi(t)
-	m.capQuyen(xaA, "budget.update")
-	m.ghi.phanBo = []domain.PhanBoNguonVon{
-		{ID: "01JPB1", NguonVonID: "nv-xa", SoTien: 500_000_000},
-	}
-
-	than := `{"code":"DA-2026-moi","year":2026,"category_id":"hm-chuyen-tiep",` +
-		`"name":"Dự án mới","planned_amount":100000000,` +
-		`"funding_allocations":[{"funding_source_id":"nv-xa","amount":500000000}]}`
-
-	w := m.goi(t, http.MethodPost, hostA, duongDuAn, canBoGhi(xaA), than)
-	doiMa(t, w, http.StatusCreated)
-
-	var ra duAnGhiRa
-	if err := json.Unmarshal(w.Body.Bytes(), &ra); err != nil {
-		t.Fatalf("thân không phải JSON: %q", w.Body.String())
-	}
-	if ra.FundingAllocatedTotal != 500_000_000 {
-		t.Errorf("funding_allocated_total = %d, muốn 500000000", ra.FundingAllocatedTotal)
-	}
-	if ra.PlannedAmount != 100_000_000 {
-		t.Errorf("planned_amount = %d, muốn 100000000", ra.PlannedAmount)
 	}
 }
 

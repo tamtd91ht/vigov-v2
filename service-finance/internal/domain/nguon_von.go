@@ -86,6 +86,14 @@ type TinhTrangGanNguon struct {
 	// clamped. §13 rule 2 refuses to hide over-disbursement for the same reason: the figure somebody
 	// needs to see is exactly the one a clamp would remove.
 	TongPhanBo Dong
+
+	// Shortfall is the part of the year plan no source carries yet — max(0, plan − TongPhanBo). It is
+	// the "Thiếu {X}" of the list chip and the "Còn X của kế hoạch vốn năm chưa gắn nguồn nào" of the
+	// detail screen (prototype BudgetItemTable.tsx:424-427, BudgetItemDetail.tsx:365-369). NEVER
+	// NEGATIVE: since 06/10/2026 an allocation above the plan is refused at the write
+	// (CheckAllocationWithinPlan), and a legacy row still over its plan reads as 0 here, not as a
+	// negative shortfall nobody can render.
+	Shortfall Dong
 }
 
 // GanNguon computes the chip of §11 for one project from its live allocation lines.
@@ -104,7 +112,7 @@ type TinhTrangGanNguon struct {
 // sentence anywhere granting this function permission to invent a fourth state for it.
 func GanNguon(keHoachVonNam Dong, phanBo []PhanBoNguonVon) TinhTrangGanNguon {
 	if len(phanBo) == 0 {
-		return TinhTrangGanNguon{TrangThai: ChuaGanNguon}
+		return TinhTrangGanNguon{TrangThai: ChuaGanNguon, Shortfall: shortfallOf(keHoachVonNam, 0)}
 	}
 
 	var tong Dong
@@ -118,7 +126,16 @@ func GanNguon(keHoachVonNam Dong, phanBo []PhanBoNguonVon) TinhTrangGanNguon {
 	if tong >= keHoachVonNam {
 		tt = DuNguon
 	}
-	return TinhTrangGanNguon{TrangThai: tt, SoNguon: len(rieng), TongPhanBo: tong}
+	return TinhTrangGanNguon{TrangThai: tt, SoNguon: len(rieng), TongPhanBo: tong,
+		Shortfall: shortfallOf(keHoachVonNam, tong)}
+}
+
+// shortfallOf is max(0, plan − allocated).
+func shortfallOf(plan, allocated Dong) Dong {
+	if d := plan - allocated; d > 0 {
+		return d
+	}
+	return 0
 }
 
 // TienDoNguonVon is one funding source together with the figures DERIVED from rows that name it —

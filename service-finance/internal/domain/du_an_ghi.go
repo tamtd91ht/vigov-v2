@@ -116,15 +116,15 @@ var (
 	// refuses the request before the transaction opens, in Vietnamese, instead of a constraint
 	// violation rolling the whole project back as a 500.
 	//
-	// A brand-new project has no existing line, so checking the request alone is complete for the
-	// create path. An EDIT path for allocation lines (none exists yet) would also have to check the
-	// lines already stored.
-	ErrPhanBoTrungNguon = errors.New("du_an: một nguồn vốn chỉ được khai một dòng phân bổ trong cùng một lần tạo dự án")
+	// THE REQUEST ALONE IS COMPLETE on both paths: create has no stored line, and the edit path
+	// (PATCH `funding_allocations`) sends the FULL replacement set, so a duplicate can only be inside
+	// the request. The handler answers 409 `duplicate_source`.
+	ErrPhanBoTrungNguon = errors.New("du_an: một nguồn vốn chỉ được khai một dòng phân bổ trong một dự án")
 
 	ErrThieuNguonVonPhanBo = errors.New("du_an: dòng phân bổ thiếu `funding_source_id`")
 	ErrPhanBoAm            = errors.New("du_an: `amount` của dòng phân bổ không được âm")
 	ErrPhanBoQuaLon        = errors.New("du_an: `amount` của dòng phân bổ vượt mức một dự án cấp xã có thể có")
-	ErrQuaNhieuDongPhanBo  = errors.New("du_an: quá nhiều dòng phân bổ nguồn vốn trong một lần tạo dự án")
+	ErrQuaNhieuDongPhanBo  = errors.New("du_an: quá nhiều dòng phân bổ nguồn vốn trong một dự án")
 )
 
 // The bounds. They are not business rules and are not pretending to be: they are the point past
@@ -405,19 +405,16 @@ func ChuanHoaLyDoXoaDuAn(s string) (string, error) {
 	return chuanHoaLyDo(s, LyDoXoaDuAnToiDa, ErrThieuLyDoXoaDuAn, ErrLyDoXoaDuAnQuaDai)
 }
 
-// ChuanHoaPhanBoMoi validates the allocation lines of ONE create request and returns them trimmed.
+// ChuanHoaPhanBoMoi validates the allocation lines of ONE request — a create, or the full replacement
+// set of an edit — and returns them trimmed.
 //
-// §9 PUTS THIS LIST IN THE CREATE MODAL AND MAKES IT OPTIONAL: *"Chưa gắn nguồn nào. Xã theo dõi kế
-// hoạch vốn theo hạng mục thì để trống cũng được."* A project with no line here is a NORMAL project,
-// not an incomplete one, and §11 names that state (`Chưa gắn nguồn`). Nothing below requires a line.
+// §9 MAKES THIS LIST OPTIONAL: *"Chưa gắn nguồn nào. Xã theo dõi kế hoạch vốn theo hạng mục thì để
+// trống cũng được."* A project with no line here is a NORMAL project, not an incomplete one, and §11
+// names that state (`Chưa gắn nguồn`). Nothing below requires a line.
 //
-// ⚠ IT DOES NOT COMPARE THE TOTAL AGAINST THE YEAR PLAN, AND MUST NEVER START TO. §9 says the system
-// *"đối chiếu tổng các nguồn với số ấy và CẢNH BÁO khi thiếu hoặc vượt"* — a warning, not a refusal —
-// and §11 turns the same two numbers into the chip `Đủ` / `Chưa đủ` / `Chưa gắn nguồn`. Both are
-// things a SCREEN says about a state the system holds. Turning either into a constraint here would
-// refuse the entry at the moment the commune is still working the figures out, which is the only
-// moment the modal is open. GanNguon computes the chip; the API returns the two raw numbers; nobody
-// is refused.
+// THE TOTAL AGAINST THE YEAR PLAN IS CHECKED ELSEWHERE, by CheckAllocationWithinPlan (decision
+// 06/10/2026: over-allocation is refused, under-allocation allowed). Not here, because on the edit
+// path the plan that counts is the MERGED one — the stored plan, or the one the same PATCH revises.
 //
 // A ZERO AMOUNT IS ADMITTED, matching `CHECK (so_tien_phan_bo >= 0)` (0007) and its stated reason: a
 // source attached before its figure is agreed is a real intermediate state a commune types.

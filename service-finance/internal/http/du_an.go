@@ -105,6 +105,65 @@ type duAnRa struct {
 	// fact. Absent on list items and on the write replies, which is why it is optional. Same reason as
 	// the delay pair above for putting it on this type: the detail route returns a bare duAnRa.
 	ScopeNotice string `json:"scope_notice,omitempty"`
+
+	// --- funding allocation (user decisions 06/10/2026, following the prototype) -------------------
+	//
+	// ALL OPTIONAL IN THE CONTRACT: added to a published reply, so they may only grow it (rule 2,
+	// forbidden #4's principle applied to REST). Which route fills which is stated per field.
+
+	// FundingStatus is the chip, on the list AND the detail route. The server sends the state and the
+	// figures; the WORDS (`Chưa gắn nguồn`, `Thiếu {X}`, `Đủ · N nguồn`) are the screen's.
+	FundingStatus *fundingStatusOut `json:"funding_status,omitempty"`
+
+	// FundingSourceNames are the names of the sources this project draws on, in the commune's own
+	// source order — LIST ROUTE ONLY (the detail route carries the full lines below). Absent when the
+	// project has no line.
+	FundingSourceNames []string `json:"funding_source_names,omitempty"`
+
+	// FundingAllocations are the project's allocation lines with what was disbursed from each source —
+	// DETAIL ROUTE ONLY. Absent when the project has no line.
+	FundingAllocations []projectAllocationOut `json:"funding_allocations,omitempty"`
+
+	// UnallocatedPlanAmount is max(0, plan − allocated): "Còn X của kế hoạch vốn năm chưa gắn nguồn
+	// nào" — DETAIL ROUTE ONLY, and present there even when 0 (a pointer, so 0 is a fact rather than an
+	// absence).
+	UnallocatedPlanAmount *int64 `json:"unallocated_plan_amount,omitempty"`
+}
+
+// fundingStatusOut is the funding chip of one project.
+//
+// `status` VALUES ARE VIETNAMESE WITHOUT DIACRITICS, per ADR 0011 (enum values are not translated) —
+// the values domain.TrangThaiGanNguon already defines:
+//
+//	chua-gan-nguon   no allocation line                       "Chưa gắn nguồn"
+//	chua-du          allocated, total below the year plan     "Thiếu {shortfall_amount}"
+//	du               total reaches the year plan              "Đủ · {source_count} nguồn"
+type fundingStatusOut struct {
+	Status          string `json:"status"`
+	SourceCount     int    `json:"source_count"`     // DISTINCT sources
+	AllocatedTotal  int64  `json:"allocated_total"`  // đồng
+	ShortfallAmount int64  `json:"shortfall_amount"` // max(0, plan − allocated), đồng
+}
+
+// projectAllocationOut is one allocation line of one project, as the detail screen shows it.
+type projectAllocationOut struct {
+	FundingSourceID string `json:"funding_source_id"`
+	Name            string `json:"name"`
+	Amount          int64  `json:"amount"`           // allocated from this source, đồng
+	DisbursedAmount int64  `json:"disbursed_amount"` // this project's vouchers drawn from this source
+	// DisbursedRatio = disbursed / allocated, hundredths of a percent; NULL when allocated is 0. Not
+	// clamped (§13 rule 2).
+	DisbursedRatio *int64 `json:"disbursed_ratio"`
+}
+
+func fundingStatusOutOf(plan domain.Dong, lines []domain.ProjectAllocation) *fundingStatusOut {
+	st := domain.FundingStatusOfAllocations(plan, lines)
+	return &fundingStatusOut{
+		Status:          string(st.TrangThai),
+		SourceCount:     st.SoNguon,
+		AllocatedTotal:  int64(st.TongPhanBo),
+		ShortfallAmount: int64(st.Shortfall),
+	}
 }
 
 type danhSachDuAnRa struct {
@@ -269,6 +328,17 @@ func (h *Handler) DanhSachDuAn(w http.ResponseWriter, r *http.Request) {
 			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
 		return
 	}
+	// THE ALLOCATION LINES OF THE WHOLE PAGE IN ONE READ, under the same filter as the project list —
+	// never one read per project (skill load-data-once). A failure is a 500, not a page of
+	// "Chưa gắn nguồn" chips: that would report every project as unfunded with nothing saying why.
+	allocations, err := h.d.DuAn.AllocationsOfYear(ctx, fistore.LocDuAn{Nam: nam, HangMucID: thamSo.Get("category")})
+	if err != nil {
+		h.d.Log.Error("phân bổ nguồn vốn theo năm: lỗi hệ thống",
+			"xa", string(tenant.MustFrom(ctx)), "nam", nam, "err", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal",
+			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return
+	}
 	notice, ok := h.scopeNotice(w, r)
 	if !ok {
 		return
@@ -286,7 +356,13 @@ func (h *Handler) DanhSachDuAn(w http.ResponseWriter, r *http.Request) {
 		ScopeNotice:          notice,
 	}
 	for _, mot := range ds {
-		ra.Items = append(ra.Items, duAnRaNgoai(mot, nay, nguong))
+		item := duAnRaNgoai(mot, nay, nguong)
+		lines := allocations[mot.DuAn.ID]
+		item.FundingStatus = fundingStatusOutOf(mot.DuAn.KeHoachVonNam, lines)
+		for _, l := range lines {
+			item.FundingSourceNames = append(item.FundingSourceNames, l.SourceName)
+		}
+		ra.Items = append(ra.Items, item)
 	}
 	vietJSON(w, http.StatusOK, ra)
 }
@@ -333,12 +409,35 @@ func (h *Handler) ChiTietDuAn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// AFTER ChiTiet, so a project of another commune has already answered 404 and this read never runs
+	// for it; the statement binds tenant_id = $1 on every table regardless (rule 1).
+	lines, err := h.d.DuAn.AllocationsOfProject(ctx, mot.DuAn.ID)
+	if err != nil {
+		h.d.Log.Error("phân bổ nguồn vốn của dự án: lỗi hệ thống",
+			"xa", string(tenant.MustFrom(ctx)), "err", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal",
+			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return
+	}
+
 	notice, ok := h.scopeNotice(w, r)
 	if !ok {
 		return
 	}
 	ra := duAnRaNgoai(mot, h.nay(), nguong)
 	ra.ScopeNotice = notice
+	ra.FundingStatus = fundingStatusOutOf(mot.DuAn.KeHoachVonNam, lines)
+	unallocated := ra.FundingStatus.ShortfallAmount
+	ra.UnallocatedPlanAmount = &unallocated
+	for _, l := range lines {
+		ra.FundingAllocations = append(ra.FundingAllocations, projectAllocationOut{
+			FundingSourceID: l.FundingSourceID,
+			Name:            l.SourceName,
+			Amount:          int64(l.Amount),
+			DisbursedAmount: int64(l.Disbursed),
+			DisbursedRatio:  ratioOut(l.DisbursedRatio()),
+		})
+	}
 	vietJSON(w, http.StatusOK, ra)
 }
 

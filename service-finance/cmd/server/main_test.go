@@ -360,6 +360,14 @@ func (khoDuAnTrong) ChiTiet(context.Context, string) (domain.TienDoDuAn, error) 
 	return domain.TienDoDuAn{}, fistore.ErrKhongThayDuAn
 }
 
+func (khoDuAnTrong) AllocationsOfYear(context.Context, fistore.LocDuAn) (map[string][]domain.ProjectAllocation, error) {
+	return nil, nil
+}
+
+func (khoDuAnTrong) AllocationsOfProject(context.Context, string) ([]domain.ProjectAllocation, error) {
+	return nil, nil
+}
+
 // nguongTrong answers the software's default threshold, which is what every commune is on today —
 // `cau_hinh_giai_ngan` has no write path yet. No case in this file reads it; it is here because
 // Register refuses to start without one, deliberately (see routes.go).

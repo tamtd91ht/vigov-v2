@@ -528,7 +528,7 @@
     },
     "app.DuAn": {
       "kind": "type",
-      "at": "service-finance/internal/app/du_an.go:84"
+      "at": "service-finance/internal/app/du_an.go:91"
     },
     "app.Edit": {
       "kind": "func",
@@ -788,7 +788,7 @@
     },
     "app.KetQuaThemDuAn": {
       "kind": "type",
-      "at": "service-finance/internal/app/du_an.go:188"
+      "at": "service-finance/internal/app/du_an.go:204"
     },
     "app.KhoBienBanGhi": {
       "kind": "type",
@@ -1276,7 +1276,7 @@
     },
     "app.NewDuAn": {
       "kind": "func",
-      "at": "service-finance/internal/app/du_an.go:96"
+      "at": "service-finance/internal/app/du_an.go:103"
     },
     "app.NewEffectiveFieldLabels": {
       "kind": "func",
@@ -1789,6 +1789,10 @@
     "app.PreviewMapAssetTypeImport": {
       "kind": "func",
       "at": "service-comms/internal/app/map_asset_type_import.go:56"
+    },
+    "app.ProjectEditResult": {
+      "kind": "type",
+      "at": "service-finance/internal/app/du_an.go:192"
     },
     "app.PublicAudio": {
       "kind": "type",
@@ -2600,7 +2604,7 @@
     },
     "app.YeuCauSuaDuAn": {
       "kind": "type",
-      "at": "service-finance/internal/app/du_an.go:170"
+      "at": "service-finance/internal/app/du_an.go:172"
     },
     "app.YeuCauSuaHangMuc": {
       "kind": "type",
@@ -2688,7 +2692,7 @@
     },
     "app.YeuCauThemDuAn": {
       "kind": "type",
-      "at": "service-finance/internal/app/du_an.go:119"
+      "at": "service-finance/internal/app/du_an.go:126"
     },
     "app.YeuCauThemHangMuc": {
       "kind": "type",
@@ -3438,6 +3442,14 @@
       "kind": "func",
       "at": "service-identity/internal/domain/sign_in_lock.go:53"
     },
+    "domain.AllocationExceedsPlanError": {
+      "kind": "type",
+      "at": "service-finance/internal/domain/project_allocation.go:80"
+    },
+    "domain.AllocationReplacement": {
+      "kind": "type",
+      "at": "service-finance/internal/domain/project_allocation.go:163"
+    },
     "domain.AllowedTransitions": {
       "kind": "func",
       "at": "service-petitions/internal/domain/nhiem_vu.go:145"
@@ -3665,6 +3677,10 @@
     "domain.CheDoMiniApp": {
       "kind": "type",
       "at": "service-platform/internal/domain/mini_app.go:10"
+    },
+    "domain.CheckAllocationWithinPlan": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/project_allocation.go:119"
     },
     "domain.CheckAssignable": {
       "kind": "func",
@@ -4000,7 +4016,7 @@
     },
     "domain.ChuanHoaPhanBoMoi": {
       "kind": "func",
-      "at": "service-finance/internal/domain/du_an_ghi.go:424"
+      "at": "service-finance/internal/domain/du_an_ghi.go:421"
     },
     "domain.ChuanHoaSlugDanhMuc": {
       "kind": "func",
@@ -4176,7 +4192,7 @@
     },
     "domain.ConChuaPhanBo": {
       "kind": "func",
-      "at": "service-finance/internal/domain/nguon_von.go:151"
+      "at": "service-finance/internal/domain/nguon_von.go:168"
     },
     "domain.ConChuaXong": {
       "kind": "func",
@@ -4304,7 +4320,7 @@
     },
     "domain.DisbursedRatio": {
       "kind": "func",
-      "at": "service-finance/internal/domain/funding_source.go:128"
+      "at": "service-finance/internal/domain/project_allocation.go:42"
     },
     "domain.DoKhan": {
       "kind": "type",
@@ -4418,6 +4434,10 @@
       "kind": "func",
       "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:824"
     },
+    "domain.Empty": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/project_allocation.go:171"
+    },
     "domain.EntryLockingClose": {
       "kind": "func",
       "at": "service-finance/internal/domain/budget_period_close.go:204"
@@ -4502,6 +4522,10 @@
       "kind": "func",
       "at": "service-comms/internal/domain/zalo_link.go:278"
     },
+    "domain.FormatDong": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/project_allocation.go:127"
+    },
     "domain.FormatLocalInstant": {
       "kind": "func",
       "at": "service-petitions/internal/domain/automation.go:269"
@@ -4522,9 +4546,13 @@
       "kind": "type",
       "at": "service-finance/internal/domain/funding_source.go:136"
     },
+    "domain.FundingStatusOfAllocations": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/project_allocation.go:51"
+    },
     "domain.GanNguon": {
       "kind": "func",
-      "at": "service-finance/internal/domain/nguon_von.go:105"
+      "at": "service-finance/internal/domain/nguon_von.go:113"
     },
     "domain.GiaTri": {
       "kind": "func",
@@ -5073,6 +5101,10 @@
     "domain.LienKetKetLuanHop": {
       "kind": "type",
       "at": "service-petitions/internal/domain/bien_ban_hop.go:220"
+    },
+    "domain.LiveAllocationLines": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/project_allocation.go:212"
     },
     "domain.LoaiBang": {
       "kind": "type",
@@ -5682,6 +5714,10 @@
       "kind": "func",
       "at": "service-petitions/internal/domain/automation.go:296"
     },
+    "domain.Overrun": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/project_allocation.go:93"
+    },
     "domain.OwnMiniAppLaunchLink": {
       "kind": "func",
       "at": "service-platform/internal/domain/shared_mini_app.go:69"
@@ -5798,6 +5834,10 @@
       "kind": "func",
       "at": "service-petitions/internal/domain/petition_photo.go:22"
     },
+    "domain.PlanAllocationReplacement": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/project_allocation.go:177"
+    },
     "domain.PlanCatalogueImport": {
       "kind": "func",
       "at": "service-petitions/internal/domain/catalogue_import.go:183"
@@ -5897,6 +5937,10 @@
     "domain.ProfileBranding": {
       "kind": "type",
       "at": "service-platform/internal/domain/branding.go:121"
+    },
+    "domain.ProjectAllocation": {
+      "kind": "type",
+      "at": "service-finance/internal/domain/project_allocation.go:33"
     },
     "domain.Province": {
       "kind": "type",
@@ -6270,6 +6314,10 @@
       "kind": "type",
       "at": "service-identity/internal/domain/staff_counts.go:5"
     },
+    "domain.StoredAllocationLine": {
+      "kind": "type",
+      "at": "service-finance/internal/domain/project_allocation.go:154"
+    },
     "domain.StoredFile": {
       "kind": "type",
       "at": "service-platform/internal/domain/branding.go:85"
@@ -6301,6 +6349,10 @@
     "domain.SuggestedAutomationSetting": {
       "kind": "func",
       "at": "service-identity/internal/domain/automation.go:140"
+    },
+    "domain.SumAllocations": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/project_allocation.go:106"
     },
     "domain.SystemMessage": {
       "kind": "type",
@@ -6440,7 +6492,7 @@
     },
     "domain.TienDoNguonVon": {
       "kind": "type",
-      "at": "service-finance/internal/domain/nguon_von.go:130"
+      "at": "service-finance/internal/domain/nguon_von.go:147"
     },
     "domain.TienDoNhiemVu": {
       "kind": "func",
@@ -6469,6 +6521,10 @@
     "domain.TongMucHieuLuc": {
       "kind": "func",
       "at": "service-finance/internal/domain/du_an.go:95"
+    },
+    "domain.TotalOfLines": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/project_allocation.go:223"
     },
     "domain.TranPhanLoaiKhongApDung": {
       "kind": "func",
@@ -6560,7 +6616,7 @@
     },
     "domain.TyLeDaPhanBo": {
       "kind": "func",
-      "at": "service-finance/internal/domain/nguon_von.go:169"
+      "at": "service-finance/internal/domain/nguon_von.go:186"
     },
     "domain.TyLeDong": {
       "kind": "func",
@@ -6572,11 +6628,11 @@
     },
     "domain.TyLeGiaiNganTrenPhanBo": {
       "kind": "func",
-      "at": "service-finance/internal/domain/nguon_von.go:178"
+      "at": "service-finance/internal/domain/nguon_von.go:195"
     },
     "domain.TyLeGiaiNganTrenTongNguon": {
       "kind": "func",
-      "at": "service-finance/internal/domain/nguon_von.go:186"
+      "at": "service-finance/internal/domain/nguon_von.go:203"
     },
     "domain.UnallocatedAmount": {
       "kind": "func",
@@ -6596,7 +6652,7 @@
     },
     "domain.Unwrap": {
       "kind": "func",
-      "at": "service-finance/internal/domain/budget_period_close.go:110"
+      "at": "service-finance/internal/domain/project_allocation.go:90"
     },
     "domain.UploadPolicy": {
       "kind": "type",
@@ -7296,7 +7352,7 @@
     },
     "http.ChiTietDuAn": {
       "kind": "func",
-      "at": "service-finance/internal/http/du_an.go:301"
+      "at": "service-finance/internal/http/du_an.go:377"
     },
     "http.ChiTietVanBanDen": {
       "kind": "func",
@@ -7492,7 +7548,7 @@
     },
     "http.DanhSachDuAn": {
       "kind": "func",
-      "at": "service-finance/internal/http/du_an.go:205"
+      "at": "service-finance/internal/http/du_an.go:264"
     },
     "http.DanhSachHangMucKeHoachVon": {
       "kind": "func",
@@ -7756,7 +7812,7 @@
     },
     "http.GhiChungTu": {
       "kind": "type",
-      "at": "service-finance/internal/http/routes.go:147"
+      "at": "service-finance/internal/http/routes.go:153"
     },
     "http.GhiDanhMucMiniApp": {
       "kind": "type",
@@ -7768,11 +7824,11 @@
     },
     "http.GhiDuAn": {
       "kind": "type",
-      "at": "service-finance/internal/http/routes.go:112"
+      "at": "service-finance/internal/http/routes.go:118"
     },
     "http.GhiHangMuc": {
       "kind": "type",
-      "at": "service-finance/internal/http/routes.go:127"
+      "at": "service-finance/internal/http/routes.go:133"
     },
     "http.GhiLoaiNhiemVu": {
       "kind": "type",
@@ -7792,7 +7848,7 @@
     },
     "http.GhiNganSach": {
       "kind": "type",
-      "at": "service-finance/internal/http/routes.go:202"
+      "at": "service-finance/internal/http/routes.go:208"
     },
     "http.GhiNhiemVuUseCase": {
       "kind": "type",
@@ -8184,7 +8240,7 @@
     },
     "http.NganSachDoc": {
       "kind": "type",
-      "at": "service-finance/internal/http/routes.go:181"
+      "at": "service-finance/internal/http/routes.go:187"
     },
     "http.NgayLamBuDoc": {
       "kind": "type",
@@ -8204,7 +8260,7 @@
     },
     "http.NguongCham": {
       "kind": "type",
-      "at": "service-finance/internal/http/routes.go:164"
+      "at": "service-finance/internal/http/routes.go:170"
     },
     "http.NhanLinhVucDanhMuc": {
       "kind": "type",
@@ -8668,7 +8724,7 @@
     },
     "http.SuaDuAn": {
       "kind": "func",
-      "at": "service-finance/internal/http/du_an_ghi.go:320"
+      "at": "service-finance/internal/http/du_an_ghi.go:319"
     },
     "http.SuaHangMuc": {
       "kind": "func",
@@ -8844,7 +8900,7 @@
     },
     "http.ThemDuAn": {
       "kind": "func",
-      "at": "service-finance/internal/http/du_an_ghi.go:255"
+      "at": "service-finance/internal/http/du_an_ghi.go:254"
     },
     "http.ThemHangMuc": {
       "kind": "func",
@@ -9008,7 +9064,7 @@
     },
     "http.XoaDuAn": {
       "kind": "func",
-      "at": "service-finance/internal/http/du_an_ghi.go:403"
+      "at": "service-finance/internal/http/du_an_ghi.go:412"
     },
     "http.XoaHangMuc": {
       "kind": "func",
@@ -10886,6 +10942,18 @@
       "kind": "func",
       "at": "service-reporting/internal/store/system_message_override.go:100"
     },
+    "store.AllocationLinesForEdit": {
+      "kind": "func",
+      "at": "service-finance/internal/store/du_an_ghi.go:512"
+    },
+    "store.AllocationsOfProject": {
+      "kind": "func",
+      "at": "service-finance/internal/store/du_an.go:340"
+    },
+    "store.AllocationsOfYear": {
+      "kind": "func",
+      "at": "service-finance/internal/store/du_an.go:277"
+    },
     "store.Allows": {
       "kind": "func",
       "at": "service-identity/internal/store/checker.go:100"
@@ -12682,6 +12750,10 @@
       "kind": "func",
       "at": "service-comms/internal/store/zalo_link.go:566"
     },
+    "store.ReviveAllocation": {
+      "kind": "func",
+      "at": "service-finance/internal/store/du_an_ghi.go:607"
+    },
     "store.RevokeAccount": {
       "kind": "func",
       "at": "service-identity/internal/store/mat_khau.go:184"
@@ -12821,6 +12893,10 @@
     "store.SoftDelete": {
       "kind": "func",
       "at": "service-reporting/internal/store/system_message_override.go:125"
+    },
+    "store.SoftDeleteAllocation": {
+      "kind": "func",
+      "at": "service-finance/internal/store/du_an_ghi.go:621"
     },
     "store.SourceForUpdate": {
       "kind": "func",
@@ -13086,6 +13162,10 @@
       "kind": "func",
       "at": "service-comms/internal/store/noi_dung_mini_app.go:939"
     },
+    "store.UpdateAllocationAmount": {
+      "kind": "func",
+      "at": "service-finance/internal/store/du_an_ghi.go:587"
+    },
     "store.UpdateAnnualAmount": {
       "kind": "func",
       "at": "service-finance/internal/store/funding_source.go:361"
@@ -13177,6 +13257,10 @@
     "store.VerificationPhotos": {
       "kind": "func",
       "at": "service-petitions/internal/store/petition_photo.go:62"
+    },
+    "store.VoucherCountBySource": {
+      "kind": "func",
+      "at": "service-finance/internal/store/du_an_ghi.go:555"
     },
     "store.XacNhan": {
       "kind": "func",

@@ -53,12 +53,10 @@ type phanBoVao struct {
 // THE ORDER BELOW IS §9's OWN AND THE ORDER IS BUSINESS: `planned_amount` comes before
 // `funding_allocations` because the split is compared against the amount, not the other way round.
 //
-// ⚠ THAT COMPARISON IS A WARNING AND NEVER A REFUSAL. §9: the system *"đối chiếu tổng các nguồn với
-// số ấy và CẢNH BÁO khi thiếu hoặc vượt"*. §11 turns the same two numbers into the chip
-// `Đủ` / `Chưa đủ` / `Chưa gắn nguồn`. Both are statements a SCREEN makes about a state the system
-// holds — so this API returns the two raw numbers (`planned_amount` and `funding_allocated_total`)
-// and refuses nothing. A server that enforced the match would reject the entry at the only moment
-// the modal is open, while the commune is still working the figures out.
+// OVER-ALLOCATION IS REFUSED, UNDER-ALLOCATION IS NOT (user decision 06/10/2026, following the
+// prototype — budget/service.py:584-610): a total above `planned_amount` answers 409
+// `allocation_exceeds_plan` naming the overrun; a total below it is a normal project whose chip shows
+// the shortfall. The same source twice answers 409 `duplicate_source`.
 //
 // THERE IS NO `disbursed_amount` AND THERE MUST NEVER BE ONE. It is SUM over the project's live
 // vouchers, derived on every read and stored nowhere (0004:33-42) — a field here would be a client
@@ -108,10 +106,11 @@ type themDuAnVao struct {
 // REFUSED RATHER THAN IGNORED because ignoring leaves the client believing it just moved a project
 // to another year, while every screen still shows it where it was.
 //
-// `funding_allocations` IS ABSENT, AND THAT IS A STATED GAP. §9 puts the list in the CREATE modal;
-// §8 shows allocations read-only. Editing them means answering migration 0007's open question (b) —
-// may one project hold two lines naming one source — which 0007 says outright is the customer's
-// call.
+// `funding_allocations` IS THE FULL REPLACEMENT SET (decision 06/10/2026): absent or null = the lines
+// are left alone; present = exactly these lines afterwards (`[]` removes every line). A pointer to a
+// slice, because "absent" and "empty" mean opposite things here. Refusals: 409 `duplicate_source`,
+// 409 `allocation_exceeds_plan` (also when `planned_amount` is revised below what is allocated), 409
+// `source_has_disbursements` when a dropped source already has vouchers of this project.
 type suaDuAnVao struct {
 	CategoryID  *string `json:"category_id,omitempty"`
 	Name        *string `json:"name,omitempty"`
@@ -126,6 +125,8 @@ type suaDuAnVao struct {
 	StartDate            *string `json:"start_date,omitempty"`
 	CompletionDate       *string `json:"completion_date,omitempty"`
 	DisbursementDeadline *string `json:"disbursement_deadline,omitempty"`
+
+	FundingAllocations *[]phanBoVao `json:"funding_allocations,omitempty"`
 
 	Code *string `json:"code,omitempty"`
 	Year *int    `json:"year,omitempty"`
@@ -182,15 +183,13 @@ type duAnGhiRa struct {
 
 	DisbursementDeadline string `json:"disbursement_deadline"`
 
-	// FundingAllocations is what was written, echoed back so the client does not have to guess which
-	// lines landed. `omitempty`, because "Chưa gắn nguồn" is a normal project (§9, §11).
+	// FundingAllocations is the project's live lines after the write — on create what was written, on
+	// an edit what the project draws on afterwards — so the client does not have to guess which lines
+	// landed. `omitempty`, because "Chưa gắn nguồn" is a normal project (§9, §11).
 	FundingAllocations []phanBoRa `json:"funding_allocations,omitempty"`
 
-	// FundingAllocatedTotal is SUM of the lines above, in đồng. RETURNED AS A RAW NUMBER AND NOT AS A
-	// CHIP: §11's `Đủ`/`Chưa đủ`/`Chưa gắn nguồn` and §9's "thiếu hoặc vượt" warning are two
-	// different readings of these same two figures, so the server sends the figures and the screen
-	// makes whichever statement it is drawing. Sending a chip would force this file to pick one of
-	// the two readings and would leave the other screen unable to draw its own.
+	// FundingAllocatedTotal is SUM of the lines above, in đồng. The chip itself is on the READ routes
+	// (`funding_status`); a write reply carries the raw figure.
 	//
 	// NOT `omitempty`. Zero is the answer for a project with no allocation, and it is a fact rather
 	// than an absence — a field that vanished at zero would make a client unable to tell "nothing
@@ -351,6 +350,18 @@ func (h *Handler) SuaDuAn(w http.ResponseWriter, r *http.Request) {
 		so := domain.Dong(*vao.ApprovedAmount)
 		yc.TongMucDuocDuyet = &so
 	}
+	if vao.FundingAllocations != nil {
+		// NON-NIL EVEN WHEN EMPTY: `[]` is "remove every line", and only a nil pointer means "leave the
+		// lines alone".
+		phanBo := make([]domain.DongPhanBoMoi, 0, len(*vao.FundingAllocations))
+		for _, mot := range *vao.FundingAllocations {
+			phanBo = append(phanBo, domain.DongPhanBoMoi{
+				NguonVonID: mot.FundingSourceID,
+				SoTien:     domain.Dong(mot.Amount),
+			})
+		}
+		yc.PhanBo = &phanBo
+	}
 	for _, mot := range []struct {
 		vao    *string
 		truong string
@@ -382,17 +393,15 @@ func (h *Handler) SuaDuAn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sau, err := h.d.GhiDuAn.Sua(r.Context(), r.PathValue("id"), yc, nguoi)
+	kq, err := h.d.GhiDuAn.Sua(r.Context(), r.PathValue("id"), yc, nguoi)
 	if err != nil {
 		h.traLoiLoiDuAn(w, r, "sửa", err)
 		return
 	}
-	// NO ALLOCATION LINES IN THE REPLY OF A PATCH, and their absence is honest rather than lazy: this
-	// route neither reads nor writes them, so echoing a list would mean reading it a second time to
-	// say something the edit did not touch. `funding_allocated_total` is 0 here for the same reason,
-	// which is why the field carries its own meaning on the create reply only — §8 reads the
-	// allocations through the project's own GET.
-	vietJSON(w, http.StatusOK, duAnGhiRaNgoai(sau, nil))
+	// THE LIVE LINES AFTER THE EDIT, read inside the edit's own transaction (app.Sua), so
+	// `funding_allocated_total` is the real figure on every PATCH reply — whether or not this PATCH
+	// named `funding_allocations`.
+	vietJSON(w, http.StatusOK, duAnGhiRaNgoai(kq.DuAn, kq.Allocations))
 }
 
 // XoaDuAn soft deletes one project. DELETE /api/v1/investment-projects/{id}
@@ -454,6 +463,7 @@ func (h *Handler) ngaySai(w http.ResponseWriter, truong string) {
 // underneath — its text is English, it names a constraint, and it says nothing an accountant in a
 // commune can act on (rule 3, forbidden #3).
 func (h *Handler) traLoiLoiDuAn(w http.ResponseWriter, r *http.Request, viec string, err error) {
+	var overPlan *domain.AllocationExceedsPlanError
 	switch {
 	case errors.Is(err, fistore.ErrKhongThayDuAn):
 		// 404 COVERS "no such project" AND "a project of another commune" as ONE answer, because the
@@ -489,6 +499,21 @@ func (h *Handler) traLoiLoiDuAn(w http.ResponseWriter, r *http.Request, viec str
 		httpx.WriteError(w, http.StatusConflict, "project_has_vouchers",
 			"Dự án này còn chứng từ giải ngân nên chưa xoá được. "+
 				"Hãy gỡ các chứng từ kèm lý do trước, rồi xoá dự án.", "")
+	case errors.As(err, &overPlan):
+		// 409, NOT 400: the body is well formed; what is refused is this total against this project's
+		// plan. The sentence is the domain's own and names the overrun — amounts of public money only,
+		// never the commune id bocDuAn wraps around it.
+		httpx.WriteError(w, http.StatusConflict, "allocation_exceeds_plan", overPlan.Sentence(), "")
+	case errors.Is(err, domain.ErrPhanBoTrungNguon):
+		httpx.WriteError(w, http.StatusConflict, "duplicate_source",
+			"`funding_allocations`: mỗi nguồn vốn chỉ khai một dòng trong một dự án — hãy gộp số tiền "+
+				"vào một dòng.", "")
+	case errors.Is(err, domain.ErrSourceHasDisbursements):
+		// The way out is in the sentence: the vouchers drawn from that source have to be moved to another
+		// source or removed (each with its own reason and audit entry) before the source can go.
+		httpx.WriteError(w, http.StatusConflict, "source_has_disbursements",
+			"`funding_allocations`: nguồn vốn muốn gỡ đã có chứng từ giải ngân của dự án này. Hãy chuyển "+
+				"các chứng từ ấy sang nguồn khác hoặc gỡ chúng trước, rồi mới gỡ nguồn vốn.", "")
 	case errors.Is(err, domain.ErrProjectStartAfterCompletion):
 		// A FIXED SENTENCE AND NOT err.Error(): on the edit path the refusal comes out of the
 		// transaction wrapped by bocDuAn, whose text carries the commune's id — not for a clerk.
@@ -524,7 +549,7 @@ func laLoiDauVaoDuAn(err error) bool {
 		domain.ErrTongMucAm, domain.ErrTongMucQuaLon,
 		domain.ErrNgayDuAnNgoaiLich, domain.ErrThamChieuQuaDai,
 		domain.ErrThieuLyDoXoaDuAn, domain.ErrLyDoXoaDuAnQuaDai,
-		domain.ErrPhanBoTrungNguon, domain.ErrThieuNguonVonPhanBo,
+		domain.ErrThieuNguonVonPhanBo,
 		domain.ErrPhanBoAm, domain.ErrPhanBoQuaLon, domain.ErrQuaNhieuDongPhanBo,
 	} {
 		if errors.Is(err, mot) {

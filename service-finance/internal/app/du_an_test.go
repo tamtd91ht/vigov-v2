@@ -180,34 +180,46 @@ func TestThemDuAnKhongKhaiNguonVonVanTao(t *testing.T) {
 	}
 }
 
-// ⚠ §9 SAYS THE MISMATCH IS A WARNING, NOT A REFUSAL: the system "đối chiếu tổng các nguồn với số ấy
-// và CẢNH BÁO khi thiếu hoặc vượt". This is the case that stops a future reader from turning that
-// sentence into a constraint — both directions, short AND over, must be accepted and written.
-func TestThemDuAnTongNguonLechKeHoachVanTaoVichiCanhBao(t *testing.T) {
+// USER DECISION 06/10/2026 (prototype service.py:584-610): an allocation ABOVE the year plan is
+// refused, before any transaction opens; BELOW it, or exactly at it, is written. This replaced the
+// earlier "warning only" reading of §9, and this case is what pins the new rule in both directions.
+func TestCreateProjectAllocationAgainstPlan(t *testing.T) {
 	for _, tc := range []struct {
-		ten  string
-		tien domain.Dong
+		name   string
+		amount domain.Dong
+		refuse bool
 	}{
-		{"thiếu so với kế hoạch", 10_000_000},
-		{"vượt kế hoạch", 500_000_000},
+		{"below the plan", 10_000_000, false},
+		{"exactly the plan", 100_000_000, false},
+		{"above the plan", 120_000_000, true},
 	} {
-		t.Run(tc.ten, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			k := khoDuAnSan()
 			k.nguonVonCo = map[string]bool{"nv-xa": true}
 			uc, ctx := dungUseCaseDuAn(t, k)
 
-			yc := themDuAnHopLe() // kế hoạch 100.000.000
-			yc.PhanBo = []domain.DongPhanBoMoi{{NguonVonID: "nv-xa", SoTien: tc.tien}}
+			yc := themDuAnHopLe() // plan 100.000.000
+			yc.PhanBo = []domain.DongPhanBoMoi{{NguonVonID: "nv-xa", SoTien: tc.amount}}
 
-			kq, err := uc.Them(ctx, yc, canBo)
-			if err != nil {
-				t.Fatalf("lệch tổng nguồn KHÔNG được từ chối (§9 là cảnh báo): %v", err)
+			_, err := uc.Them(ctx, yc, canBo)
+			if !tc.refuse {
+				if err != nil {
+					t.Fatalf("Them: %v", err)
+				}
+				if k.daCommit != 1 {
+					t.Errorf("commit=%d, want 1", k.daCommit)
+				}
+				return
 			}
-			if len(kq.PhanBo) != 1 {
-				t.Errorf("có %d dòng phân bổ, muốn 1", len(kq.PhanBo))
+			var over *domain.AllocationExceedsPlanError
+			if !errors.As(err, &over) || !errors.Is(err, domain.ErrAllocationExceedsPlan) {
+				t.Fatalf("err = %v, want AllocationExceedsPlanError", err)
 			}
-			if k.daCommit != 1 {
-				t.Errorf("commit=%d, muốn 1", k.daCommit)
+			if over.Overrun() != 20_000_000 {
+				t.Errorf("overrun = %d, want 20000000", over.Overrun())
+			}
+			if k.batDau != 0 {
+				t.Errorf("opened %d transactions for a refused shape, want 0", k.batDau)
 			}
 		})
 	}
@@ -478,8 +490,8 @@ func TestSuaDuAnCoChungTuDaXacNhanVanSuaBinhThuong(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Sua: %v", err)
 	}
-	if sau.KeHoachVonNam != moi {
-		t.Errorf("ke_hoach_von_nam = %d, muốn %d", sau.KeHoachVonNam, moi)
+	if sau.DuAn.KeHoachVonNam != moi {
+		t.Errorf("ke_hoach_von_nam = %d, muốn %d", sau.DuAn.KeHoachVonNam, moi)
 	}
 	if k.daCommit != 1 {
 		t.Errorf("commit=%d, muốn 1", k.daCommit)

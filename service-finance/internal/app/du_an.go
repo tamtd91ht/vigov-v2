@@ -78,6 +78,13 @@ type KhoDuAn interface {
 	XoaMem(ctx context.Context, tx *store.ScopedTx, id, boi, lyDo string) error
 	ChenPhanBo(ctx context.Context, tx *store.ScopedTx, pb domain.PhanBoNguonVon) error
 	XoaMemPhanBoCuaDuAn(ctx context.Context, tx *store.ScopedTx, duAnID, boi, lyDo string) (int, error)
+
+	// Editing the allocation set (PATCH `funding_allocations`, decision 06/10/2026).
+	AllocationLinesForEdit(ctx context.Context, tx *store.ScopedTx, projectID string) ([]domain.StoredAllocationLine, error)
+	VoucherCountBySource(ctx context.Context, tx *store.ScopedTx, projectID string) (map[string]int, error)
+	UpdateAllocationAmount(ctx context.Context, tx *store.ScopedTx, lineID string, amount domain.Dong) error
+	ReviveAllocation(ctx context.Context, tx *store.ScopedTx, lineID string, amount domain.Dong) error
+	SoftDeleteAllocation(ctx context.Context, tx *store.ScopedTx, lineID, by, reason string) error
 }
 
 // DuAn owns entering, correcting and removing one commune's investment projects.
@@ -142,11 +149,8 @@ type YeuCauThemDuAn struct {
 	// kế hoạch vốn theo hạng mục thì để trống cũng được."* A project with no line is a NORMAL project
 	// and §11 names that state (`Chưa gắn nguồn`).
 	//
-	// ⚠ THE TOTAL IS NEVER COMPARED AGAINST KeHoachVonNam HERE, AND THAT MUST NOT CHANGE. §9 says the
-	// system *warns* when the sources come to less or more than the allocated amount. A warning
-	// refuses nothing. Turning it into a constraint would refuse the entry at the only moment the
-	// modal is open — while the commune is still working the figures out — and §13 rule 6 requires
-	// every rule here to survive a project with NO allocation at all.
+	// ITS TOTAL MAY NOT EXCEED KeHoachVonNam (decision 06/10/2026, prototype service.py:607-610) —
+	// domain.CheckAllocationWithinPlan. Less is allowed: the remainder is the chip's shortfall.
 	PhanBo []domain.DongPhanBoMoi
 }
 
@@ -160,13 +164,11 @@ type YeuCauThemDuAn struct {
 // `Ma` AND `Nam` ARE ABSENT AND THAT IS NOT AN OVERSIGHT — the handler refuses a body naming either,
 // with domain.ErrMaDuAnBatBien and domain.ErrNamBatBien, and `capNhatDuAn` has no column for them.
 //
-// `PhanBo` IS ABSENT TOO, AND THAT IS A STATED GAP RATHER THAN A DECISION. §9 puts the allocation
-// list in the CREATE modal; §8's detail screen shows allocations read-only and offers no editor for
-// them. 0007's open question (b) is answered since migration 0013 — one line per source per project,
-// `UNIQUE (tenant_id, du_an_id, nguon_von_id)` counting soft-deleted lines — so an editor, when one
-// is built, must UPDATE a line in place rather than soft-delete and reinsert it, or the key refuses
-// the reinsert. Creating needs no such care: a brand-new project has no existing line to collide
-// with, so ChuanHoaPhanBoMoi's per-request check settles it completely.
+// `PhanBo` IS THE FULL REPLACEMENT SET OF ALLOCATION LINES (decision 06/10/2026): nil = leave the lines
+// alone; non-nil = these lines and no others (an empty slice removes every line). Kept sources are
+// UPDATED IN PLACE, re-added sources REVIVE their old row, removed ones are soft deleted — never
+// soft-delete-then-reinsert, because `UNIQUE (tenant_id, du_an_id, nguon_von_id)` (0013) counts
+// soft-deleted rows. See domain.PlanAllocationReplacement.
 type YeuCauSuaDuAn struct {
 	HangMucID *string
 	Ten       *string
@@ -181,7 +183,21 @@ type YeuCauSuaDuAn struct {
 	NgayKhoiCong    *time.Time
 	NgayHoanThanh   *time.Time
 	ThoiHanGiaiNgan *time.Time
+
+	PhanBo *[]domain.DongPhanBoMoi
 }
+
+// ProjectEditResult is the project after an edit together with its LIVE allocation lines after it, so
+// the PATCH reply echoes what the project now draws on without a second read.
+type ProjectEditResult struct {
+	DuAn        domain.DuAn
+	Allocations []domain.PhanBoNguonVon
+}
+
+// allocationRemovedReason is `delete_reason` on a line an edit drops. FIXED TEXT: the PATCH body has
+// no reason field (the prototype's has none either), and rule 7 invariant 1 still wants the column
+// filled. The act itself — who, when, which lines before and after — is the `sua_du_an` audit entry.
+const allocationRemovedReason = "gỡ nguồn vốn khỏi dự án khi sửa phân bổ nguồn vốn"
 
 // KetQuaThemDuAn is the project together with the allocation lines written beside it, so the caller
 // can echo back exactly what landed without a second read.
@@ -241,6 +257,9 @@ func (uc *DuAn) Them(ctx context.Context, yc YeuCauThemDuAn,
 	}
 	phanBo, err := domain.ChuanHoaPhanBoMoi(yc.PhanBo)
 	if err != nil {
+		return KetQuaThemDuAn{}, err
+	}
+	if err := domain.CheckAllocationWithinPlan(yc.KeHoachVonNam, totalOfNewLines(phanBo)); err != nil {
 		return KetQuaThemDuAn{}, err
 	}
 	if err := coNguoiThucHien(nguoi); err != nil {
@@ -379,10 +398,10 @@ func (uc *DuAn) Them(ctx context.Context, yc YeuCauThemDuAn,
 // the denominator of every ratio on §3 and §8, which is exactly why the before/after pair below is
 // the whole point of the entry.
 func (uc *DuAn) Sua(ctx context.Context, id string, yc YeuCauSuaDuAn,
-	nguoi audit.Actor) (domain.DuAn, error) {
+	nguoi audit.Actor) (ProjectEditResult, error) {
 
 	if id == "" {
-		return domain.DuAn{}, fistore.ErrKhongThayDuAn
+		return ProjectEditResult{}, fistore.ErrKhongThayDuAn
 	}
 
 	// Shape first, outside the transaction, for the same reason as Them.
@@ -390,37 +409,37 @@ func (uc *DuAn) Sua(ctx context.Context, id string, yc YeuCauSuaDuAn,
 	var err error
 	if yc.HangMucID != nil {
 		if hangMucID, err = domain.ChuanHoaHangMucID(*yc.HangMucID); err != nil {
-			return domain.DuAn{}, err
+			return ProjectEditResult{}, err
 		}
 	}
 	if yc.Ten != nil {
 		if ten, err = domain.ChuanHoaTenDuAn(*yc.Ten); err != nil {
-			return domain.DuAn{}, err
+			return ProjectEditResult{}, err
 		}
 	}
 	if yc.MoTa != nil {
 		if moTa, err = domain.ChuanHoaMoTaDuAn(*yc.MoTa); err != nil {
-			return domain.DuAn{}, err
+			return ProjectEditResult{}, err
 		}
 	}
 	if yc.DonViThucHienID != nil {
 		if donVi, err = domain.ChuanHoaThamChieu(*yc.DonViThucHienID); err != nil {
-			return domain.DuAn{}, err
+			return ProjectEditResult{}, err
 		}
 	}
 	if yc.CanBoPhuTrachID != nil {
 		if canBo, err = domain.ChuanHoaThamChieu(*yc.CanBoPhuTrachID); err != nil {
-			return domain.DuAn{}, err
+			return ProjectEditResult{}, err
 		}
 	}
 	if yc.KeHoachVonNam != nil {
 		if err := domain.KiemTraKeHoachVon(*yc.KeHoachVonNam); err != nil {
-			return domain.DuAn{}, err
+			return ProjectEditResult{}, err
 		}
 	}
 	if yc.TongMucDuocDuyet != nil {
 		if err := domain.KiemTraTongMuc(*yc.TongMucDuocDuyet); err != nil {
-			return domain.DuAn{}, err
+			return ProjectEditResult{}, err
 		}
 	}
 	for _, ngay := range []*time.Time{yc.NgayKhoiCong, yc.NgayHoanThanh, yc.ThoiHanGiaiNgan} {
@@ -428,21 +447,40 @@ func (uc *DuAn) Sua(ctx context.Context, id string, yc YeuCauSuaDuAn,
 			continue
 		}
 		if err := domain.KiemTraNgayDuAn(*ngay); err != nil {
-			return domain.DuAn{}, err
+			return ProjectEditResult{}, err
+		}
+	}
+	// THE REPLACEMENT SET IS VALIDATED HERE (shape, duplicates, bounds); WHETHER IT FITS THE PLAN is
+	// decided inside the transaction, against the MERGED plan — the stored one, or the one this same
+	// PATCH revises.
+	var wanted []domain.DongPhanBoMoi
+	if yc.PhanBo != nil {
+		if wanted, err = domain.ChuanHoaPhanBoMoi(*yc.PhanBo); err != nil {
+			return ProjectEditResult{}, err
 		}
 	}
 	if err := coNguoiThucHien(nguoi); err != nil {
-		return domain.DuAn{}, err
+		return ProjectEditResult{}, err
+	}
+	// Ids for lines this edit may INSERT, minted outside the transaction for the reason Them gives.
+	// One per wanted line; the ones a kept or revived source does not need are simply not used.
+	newIDs := make([]string, 0, len(wanted))
+	for range wanted {
+		pbID, err := uc.sinhID()
+		if err != nil {
+			return ProjectEditResult{}, fmt.Errorf("du_an: sinh mã dòng phân bổ: %w", err)
+		}
+		newIDs = append(newIDs, pbID)
 	}
 
-	var sau domain.DuAn
+	var kq ProjectEditResult
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		truoc, err := uc.kho.TheoIDDeSua(ctx, tx, id)
 		if err != nil {
 			return err
 		}
 
-		sau = truoc
+		sau := truoc
 		if yc.HangMucID != nil {
 			sau.HangMucID = hangMucID
 		}
@@ -490,7 +528,35 @@ func (uc *DuAn) Sua(ctx context.Context, id string, yc YeuCauSuaDuAn,
 			}
 		}
 
-		if khongDoiDuAn(truoc, sau) {
+		// THE LINES, LIVE AND REMOVED, read under the project's lock — every writer of a project's
+		// lines holds that lock, so what is read here is still true at the writes below. Read on every
+		// edit, so the reply can echo what the project draws on after it.
+		stored, err := uc.kho.AllocationLinesForEdit(ctx, tx, truoc.ID)
+		if err != nil {
+			return err
+		}
+		lineBefore := domain.LiveAllocationLines(stored)
+		lineAfter := lineBefore
+		var repl domain.AllocationReplacement
+		if yc.PhanBo != nil {
+			repl = domain.PlanAllocationReplacement(stored, wanted)
+			lineAfter = linesAfterReplacement(stored, wanted, truoc.ID, newIDs)
+		}
+
+		// OVER-ALLOCATION IS REFUSED (decision 06/10/2026) on the two edits that can produce it: a new
+		// allocation set, and a plan revised DOWN below what is already allocated. Neither named — a
+		// name correction on a legacy row already over its plan — is not refused: that row is the
+		// historical fact, the same reasoning as the category check below.
+		if yc.PhanBo != nil || sau.KeHoachVonNam < truoc.KeHoachVonNam {
+			if err := domain.CheckAllocationWithinPlan(sau.KeHoachVonNam,
+				domain.TotalOfLines(lineAfter)); err != nil {
+				return err
+			}
+		}
+
+		projectMoved := !khongDoiDuAn(truoc, sau)
+		if !projectMoved && repl.Empty() {
+			kq = ProjectEditResult{DuAn: truoc, Allocations: lineBefore}
 			return nil
 		}
 
@@ -503,8 +569,16 @@ func (uc *DuAn) Sua(ctx context.Context, id string, yc YeuCauSuaDuAn,
 				return err
 			}
 		}
-		if err := uc.kho.CapNhat(ctx, tx, sau); err != nil {
-			return err
+
+		if !repl.Empty() {
+			if err := uc.applyAllocationReplacement(ctx, tx, truoc.ID, repl, lineAfter, nguoi); err != nil {
+				return err
+			}
+		}
+		if projectMoved {
+			if err := uc.kho.CapNhat(ctx, tx, sau); err != nil {
+				return err
+			}
 		}
 
 		// BEFORE AND AFTER, AND ONLY THE FIELDS THAT MOVED (rule 6, invariant 5). A delta carrying
@@ -515,25 +589,148 @@ func (uc *DuAn) Sua(ctx context.Context, id string, yc YeuCauSuaDuAn,
 		// disbursement ratio on §7.2 and of the delay score on §3, so revising it silently moves a
 		// project from "chậm 31,36 điểm" to "bám sát tiến độ" without one đồng having moved. The pair
 		// of numbers in an append-only ledger is the only thing that tells that apart afterwards.
+		//
+		// THE ALLOCATION LINES, WHEN THEY MOVED, ARE LISTED IN FULL ON BOTH SIDES — source id and
+		// amount, plus the total — because "which sources did this project draw on before the edit"
+		// has no other source once a line is soft deleted or revived.
+		deltaBefore := tomTatDoiDuAn(truoc, sau, true)
+		deltaAfter := tomTatDoiDuAn(truoc, sau, false)
+		if !repl.Empty() {
+			deltaBefore["phan_bo_nguon_von"], deltaBefore["tong_phan_bo"] = allocationDelta(lineBefore)
+			deltaAfter["phan_bo_nguon_von"], deltaAfter["tong_phan_bo"] = allocationDelta(lineAfter)
+		}
 		delta, err := json.Marshal(map[string]any{
 			"du_an_id": sau.ID,
-			"truoc":    tomTatDoiDuAn(truoc, sau, true),
-			"sau":      tomTatDoiDuAn(truoc, sau, false),
+			"truoc":    deltaBefore,
+			"sau":      deltaAfter,
 		})
 		if err != nil {
 			return fmt.Errorf("du_an: mã hoá delta: %w", err)
 		}
-		return audit.Write(ctx, tx, audit.Entry{
+		if err := audit.Write(ctx, tx, audit.Entry{
 			Actor:   nguoi,
 			Action:  HanhViSuaDuAn,
 			Subject: truoc.Ma, // the business code; `ma` cannot change, so before and after agree
 			Delta:   delta,
-		})
+		}); err != nil {
+			return err
+		}
+		kq = ProjectEditResult{DuAn: sau, Allocations: lineAfter}
+		return nil
 	})
 	if err != nil {
-		return domain.DuAn{}, bocDuAn(ctx, "sửa", err)
+		return ProjectEditResult{}, bocDuAn(ctx, "sửa", err)
 	}
-	return sau, nil
+	return kq, nil
+}
+
+// applyAllocationReplacement writes one replacement, inside the edit's transaction.
+//
+// THE VOUCHER GUARD COMES FIRST AND WRITES NOTHING: a source that already has live vouchers of THIS
+// project cannot be dropped (domain.ErrSourceHasDisbursements). The count is asked only when the edit
+// actually removes a source, so an edit that only moves amounts never touches the voucher table.
+//
+// EVERY SOURCE THE PROJECT GAINS — inserted or revived — MUST BE A LIVE SOURCE OF THIS COMMUNE'S
+// CATALOGUE, the same check the create path makes (no foreign key underneath, 0007:102-113). Kept
+// sources are not re-checked, for the category reasoning: the line is the historical fact.
+func (uc *DuAn) applyAllocationReplacement(ctx context.Context, tx *store.ScopedTx, projectID string,
+	repl domain.AllocationReplacement, lineAfter []domain.PhanBoNguonVon, nguoi audit.Actor) error {
+
+	if len(repl.Remove) > 0 {
+		counts, err := uc.kho.VoucherCountBySource(ctx, tx, projectID)
+		if err != nil {
+			return err
+		}
+		for _, r := range repl.Remove {
+			if counts[r.NguonVonID] > 0 {
+				return domain.ErrSourceHasDisbursements
+			}
+		}
+	}
+	for _, r := range repl.Revive {
+		if err := uc.kho.NguonVonConSongTrongNam(ctx, tx, r.NguonVonID); err != nil {
+			return err
+		}
+	}
+	for _, w := range repl.Insert {
+		if err := uc.kho.NguonVonConSongTrongNam(ctx, tx, w.NguonVonID); err != nil {
+			return err
+		}
+	}
+
+	// `deleted_by` IS THE STAFF BUSINESS CODE, the value the entry's actor carries (rule 6, inv. 8).
+	for _, r := range repl.Remove {
+		if err := uc.kho.SoftDeleteAllocation(ctx, tx, r.ID, nguoi.ID, allocationRemovedReason); err != nil {
+			return err
+		}
+	}
+	for _, u := range repl.Update {
+		if err := uc.kho.UpdateAllocationAmount(ctx, tx, u.ID, u.SoTien); err != nil {
+			return err
+		}
+	}
+	for _, r := range repl.Revive {
+		if err := uc.kho.ReviveAllocation(ctx, tx, r.ID, r.SoTien); err != nil {
+			return err
+		}
+	}
+	inserted := make(map[string]struct{}, len(repl.Insert))
+	for _, w := range repl.Insert {
+		inserted[w.NguonVonID] = struct{}{}
+	}
+	for _, l := range lineAfter {
+		if _, ok := inserted[l.NguonVonID]; !ok {
+			continue
+		}
+		if err := uc.kho.ChenPhanBo(ctx, tx, l); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// linesAfterReplacement is the project's live line set once the replacement lands, in the order the
+// request listed the sources. A stored row keeps its id (updated or revived); a new source takes the
+// next pre-minted id.
+func linesAfterReplacement(stored []domain.StoredAllocationLine, wanted []domain.DongPhanBoMoi,
+	projectID string, newIDs []string) []domain.PhanBoNguonVon {
+
+	bySource := make(map[string]domain.StoredAllocationLine, len(stored))
+	for _, s := range stored {
+		bySource[s.NguonVonID] = s
+	}
+	out := make([]domain.PhanBoNguonVon, 0, len(wanted))
+	next := 0
+	for _, w := range wanted {
+		line := domain.PhanBoNguonVon{DuAnID: projectID, NguonVonID: w.NguonVonID, SoTien: w.SoTien}
+		if s, ok := bySource[w.NguonVonID]; ok {
+			line.ID = s.ID
+		} else {
+			line.ID = newIDs[next]
+			next++
+		}
+		out = append(out, line)
+	}
+	return out
+}
+
+// allocationDelta is the audit view of a line set: each source with its amount, and the total. No
+// personal data (rule 3) — ids of catalogue rows and amounts of public money.
+func allocationDelta(lines []domain.PhanBoNguonVon) ([]map[string]any, int64) {
+	out := make([]map[string]any, 0, len(lines))
+	for _, l := range lines {
+		out = append(out, map[string]any{"nguon_von_id": l.NguonVonID, "so_tien": int64(l.SoTien)})
+	}
+	return out, int64(domain.TotalOfLines(lines))
+}
+
+// totalOfNewLines totals the lines of a create request (saturating — domain.SumAllocations).
+func totalOfNewLines(lines []domain.DongPhanBoMoi) domain.Dong {
+	amounts := make([]domain.Dong, 0, len(lines))
+	for _, l := range lines {
+		amounts = append(amounts, l.SoTien)
+	}
+	return domain.SumAllocations(amounts...)
 }
 
 // Xoa soft deletes one project together with its funding allocation lines.

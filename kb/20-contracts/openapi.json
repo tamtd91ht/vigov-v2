@@ -11975,7 +11975,12 @@
                   "$ref": "#/components/schemas/httpx.Error"
                 }
               }
-            }
+            },
+            "x-vigov-error-codes": [
+              "allocation_exceeds_plan",
+              "code_taken",
+              "duplicate_source"
+            ]
           },
           "500": {
             "description": "Internal Server Error",
@@ -12165,7 +12170,7 @@
         }
       },
       "patch": {
-        "summary": "Sửa hạng mục, tên, mô tả, kế hoạch vốn, đơn vị, cán bộ phụ trách hoặc các mốc thời gian của một dự án đầu tư",
+        "summary": "Sửa hạng mục, tên, mô tả, kế hoạch vốn, đơn vị, cán bộ phụ trách, các mốc thời gian hoặc phân bổ nguồn vốn của một dự án đầu tư",
         "operationId": "finance_patch_investment_projects_by_id",
         "tags": [
           "finance"
@@ -12236,6 +12241,21 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "allocation_exceeds_plan",
+              "duplicate_source",
+              "source_has_disbursements"
+            ]
           },
           "500": {
             "description": "Internal Server Error",
@@ -34377,6 +34397,35 @@
           },
           "scope_notice": {
             "type": "string"
+          },
+          "funding_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/finance.fundingStatusOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "funding_source_names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "funding_allocations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/finance.projectAllocationOut"
+            }
+          },
+          "unallocated_plan_amount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
           }
         },
         "required": [
@@ -34608,6 +34657,35 @@
         ],
         "additionalProperties": false
       },
+      "finance.fundingStatusOut": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "source_count": {
+            "type": "integer",
+            "description": "DISTINCT sources"
+          },
+          "allocated_total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "đồng"
+          },
+          "shortfall_amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "max(0, plan − allocated), đồng"
+          }
+        },
+        "required": [
+          "allocated_total",
+          "shortfall_amount",
+          "source_count",
+          "status"
+        ],
+        "additionalProperties": false
+      },
       "finance.ghiDotVao": {
         "type": "object",
         "properties": {
@@ -34830,6 +34908,42 @@
         "required": [
           "amount",
           "funding_source_id"
+        ],
+        "additionalProperties": false
+      },
+      "finance.projectAllocationOut": {
+        "type": "object",
+        "properties": {
+          "funding_source_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "allocated from this source, đồng"
+          },
+          "disbursed_amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "this project's vouchers drawn from this source"
+          },
+          "disbursed_ratio": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        },
+        "required": [
+          "amount",
+          "disbursed_amount",
+          "disbursed_ratio",
+          "funding_source_id",
+          "name"
         ],
         "additionalProperties": false
       },
@@ -35098,6 +35212,15 @@
               "string",
               "null"
             ]
+          },
+          "funding_allocations": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/finance.phanBoVao"
+            }
           },
           "code": {
             "type": [

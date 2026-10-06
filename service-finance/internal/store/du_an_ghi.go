@@ -489,3 +489,160 @@ func ngayThanhNil(t time.Time) any {
 	}
 	return t
 }
+
+// --- editing a project's allocation set (PATCH `funding_allocations`, decision 06/10/2026) ---------
+
+// allocationLinesForEdit reads EVERY allocation row of one project — SOFT-DELETED ROWS INCLUDED.
+//
+// THE ONE READ IN THIS FILE THAT MUST SEE REMOVED ROWS, beside MaDaDung, and for the same kind of
+// reason: `UNIQUE (tenant_id, du_an_id, nguon_von_id)` (0013) counts them. Re-adding a source the
+// project once dropped must REVIVE that row (reviveAllocation); an INSERT would hit the key and roll the
+// edit back as a 500. Nothing read here reaches a screen.
+//
+// NO `FOR UPDATE`: the caller holds the PROJECT's row lock (TheoIDDeSua), and every writer of a
+// project's lines — create, this edit, the project removal — runs under that lock.
+const allocationLinesForEdit = `SELECT id, nguon_von_id, so_tien_phan_bo, deleted_at IS NOT NULL
+	FROM phan_bo_nguon_von
+	WHERE tenant_id = $1 AND du_an_id = $2
+	ORDER BY nguon_von_id, id
+	LIMIT $3`
+
+// AllocationLinesForEdit reads one project's allocation rows, live and removed, inside the edit's
+// transaction.
+func (s *DuAnGhiStore) AllocationLinesForEdit(ctx context.Context, tx *store.ScopedTx,
+	projectID string) ([]domain.StoredAllocationLine, error) {
+
+	rows, err := tx.Underlying().QueryContext(ctx, allocationLinesForEdit,
+		string(tx.TenantID()), projectID, TranPhanBoMotDuAn+1)
+	if err != nil {
+		return nil, fmt.Errorf("phan_bo_nguon_von: đọc để sửa: %w", err)
+	}
+	defer rows.Close()
+
+	out := make([]domain.StoredAllocationLine, 0, 4)
+	for rows.Next() {
+		var (
+			l      domain.StoredAllocationLine
+			amount int64
+		)
+		if err := rows.Scan(&l.ID, &l.NguonVonID, &amount, &l.Removed); err != nil {
+			return nil, fmt.Errorf("phan_bo_nguon_von: đọc dòng để sửa: %w", err)
+		}
+		l.DuAnID, l.SoTien = projectID, domain.Dong(amount)
+		out = append(out, l)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("phan_bo_nguon_von: duyệt để sửa: %w", err)
+	}
+	if len(out) > TranPhanBoMotDuAn {
+		return nil, ErrQuaNhieuPhanBo
+	}
+	return out, nil
+}
+
+// voucherCountBySource counts this project's LIVE vouchers per source they name. Soft-deleted vouchers
+// are out of every figure already, so they block nothing; vouchers naming no source are §13 rule 6's
+// case and belong to no line.
+const voucherCountBySource = `SELECT ct.nguon_von_id, count(*) AS so
+	FROM chung_tu_giai_ngan ct
+	WHERE ct.tenant_id = $1 AND ct.du_an_id = $2 AND ct.deleted_at IS NULL
+	  AND ct.nguon_von_id IS NOT NULL
+	GROUP BY ct.nguon_von_id`
+
+// VoucherCountBySource answers "which sources of this project already carry vouchers" — what
+// domain.ErrSourceHasDisbursements is decided on.
+//
+// ⚠ A RACE REMAINS, STATED RATHER THAN HIDDEN: the edit holds the PROJECT's row lock, but creating a
+// voucher does not take that lock (ChungTuGiaiNganStore reads the project without FOR UPDATE). A
+// voucher naming source X committed between this count and the soft delete of X's line leaves one
+// voucher on a source the project no longer allocates — visible on §6 as money drawn from a source
+// with no line for this project (DisbursedWithoutAllocation), not lost. Closing it means the voucher
+// path locking the project row (FOR SHARE), which is a change to that path, not to this one.
+func (s *DuAnGhiStore) VoucherCountBySource(ctx context.Context, tx *store.ScopedTx,
+	projectID string) (map[string]int, error) {
+
+	rows, err := tx.Underlying().QueryContext(ctx, voucherCountBySource, string(tx.TenantID()), projectID)
+	if err != nil {
+		return nil, fmt.Errorf("du_an: đếm chứng từ theo nguồn: %w", err)
+	}
+	defer rows.Close()
+	out := map[string]int{}
+	for rows.Next() {
+		var (
+			source string
+			n      int
+		)
+		if err := rows.Scan(&source, &n); err != nil {
+			return nil, fmt.Errorf("du_an: đọc dòng đếm chứng từ theo nguồn: %w", err)
+		}
+		out[source] = n
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("du_an: duyệt đếm chứng từ theo nguồn: %w", err)
+	}
+	return out, nil
+}
+
+// updateAllocationAmount moves the amount of one LIVE line in place — the kept-source half of a
+// replacement. Never soft-delete-then-reinsert: the full unique key would refuse the reinsert.
+const updateAllocationAmount = `UPDATE phan_bo_nguon_von
+	SET so_tien_phan_bo = $3, cap_nhat_luc = now()
+	WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
+
+// UpdateAllocationAmount writes one kept line's new amount.
+func (s *DuAnGhiStore) UpdateAllocationAmount(ctx context.Context, tx *store.ScopedTx,
+	lineID string, amount domain.Dong) error {
+
+	res, err := tx.Exec(ctx, updateAllocationAmount, string(tx.TenantID()), lineID, int64(amount))
+	return exactlyOneAllocationRow(res, err, "sửa số phân bổ")
+}
+
+// reviveAllocation brings back the soft-deleted line of a source the commune re-adds, with its new
+// amount.
+//
+// THE ROW'S OLD `deleted_by` / `delete_reason` ARE CLEARED, AND NOTHING IS LOST BY IT: the removal was
+// itself an audited edit (`sua_du_an`, its delta lists the line under `truoc`), and so is this one.
+// The ledger, not the row, is the history; the row is the current state, and the current state is
+// "this project draws on this source". Leaving `deleted_at` set would keep the line off every read.
+const reviveAllocation = `UPDATE phan_bo_nguon_von
+	SET so_tien_phan_bo = $3, deleted_at = NULL, deleted_by = NULL, delete_reason = NULL,
+	    cap_nhat_luc = now()
+	WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NOT NULL`
+
+// ReviveAllocation re-activates one previously removed line.
+func (s *DuAnGhiStore) ReviveAllocation(ctx context.Context, tx *store.ScopedTx,
+	lineID string, amount domain.Dong) error {
+
+	res, err := tx.Exec(ctx, reviveAllocation, string(tx.TenantID()), lineID, int64(amount))
+	return exactlyOneAllocationRow(res, err, "khôi phục dòng phân bổ")
+}
+
+// softDeleteAllocation removes ONE line — all three of rule 7 invariant 1's columns in one statement.
+const softDeleteAllocation = `UPDATE phan_bo_nguon_von
+	SET deleted_at = now(), deleted_by = $3, delete_reason = $4, cap_nhat_luc = now()
+	WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
+
+// SoftDeleteAllocation removes one line a replacement no longer names. `by` is the staff business
+// code — the same value the audit entry's actor carries (rule 6, invariant 8).
+func (s *DuAnGhiStore) SoftDeleteAllocation(ctx context.Context, tx *store.ScopedTx,
+	lineID, by, reason string) error {
+
+	res, err := tx.Exec(ctx, softDeleteAllocation, string(tx.TenantID()), lineID, by, reason)
+	return exactlyOneAllocationRow(res, err, "gỡ dòng phân bổ")
+}
+
+// exactlyOneAllocationRow: each line was read under the project's lock a moment ago, so anything but
+// one affected row is an error, never a silent success.
+func exactlyOneAllocationRow(res sql.Result, err error, op string) error {
+	if err != nil {
+		return fmt.Errorf("phan_bo_nguon_von: %s: %w", op, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("phan_bo_nguon_von: %s: đọc số dòng: %w", op, err)
+	}
+	if n != 1 {
+		return fmt.Errorf("phan_bo_nguon_von: %s: %d dòng đổi, muốn 1", op, n)
+	}
+	return nil
+}
