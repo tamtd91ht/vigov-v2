@@ -183,11 +183,11 @@ func (uc *OwnAppSignIn) SignIn(ctx context.Context, req OwnAppSignInRequest) (Ke
 
 	maZalo, err := uc.zalo.AccountID(ctx, req.AccessToken)
 	if err != nil {
-		return KetQuaMoPhienCau{}, uc.zaloError(ctx, appID, err)
+		return KetQuaMoPhienCau{}, uc.zaloError(ctx, appID, xa, "account_id", err)
 	}
 	so, err := uc.zalo.Phone(ctx, req.AccessToken, req.PhoneToken, appSecret)
 	if err != nil {
-		return KetQuaMoPhienCau{}, uc.zaloError(ctx, appID, err)
+		return KetQuaMoPhienCau{}, uc.zaloError(ctx, appID, xa, "phone", err)
 	}
 	yc.MaZalo, yc.SoDaXacThuc = maZalo, so
 
@@ -216,10 +216,19 @@ func (uc *OwnAppSignIn) SignIn(ctx context.Context, req OwnAppSignInRequest) (Ke
 
 // zaloError keeps Zalo's two classes apart (internal/zalo: merging them tells a citizen to sign in
 // again while the fault is ours). The wrapped error carries only a status or a numeric code.
-func (uc *OwnAppSignIn) zaloError(ctx context.Context, appID string, err error) error {
+//
+// The 401 class is LOGGED too, with the step and Zalo's numeric code. Until 06/10/2026 it was not, and
+// a commune app on a real phone stuck on "chưa xác nhận được số điện thoại" left no trace at all: the
+// citizen-side sentence is generic, and wire.go UNKNOWN #2 says some of these codes may mean OUR
+// secret is wrong — which only the code, read here, can tell. Warn, not Error: an expired token is
+// the citizen's ordinary case. `err` holds no token, number or message text (internal/zalo).
+func (uc *OwnAppSignIn) zaloError(ctx context.Context, appID string, xa tenant.ID, step string, err error) error {
 	if errors.Is(err, zalo.ErrTokenInvalid) {
+		uc.log.WarnContext(ctx, "đăng nhập app riêng: Zalo từ chối token",
+			"app_id", appID, "xa", string(xa), "buoc", step, "err", err)
 		return fmt.Errorf("%w: %w", ErrOwnAppTokenInvalid, err)
 	}
-	uc.log.ErrorContext(ctx, "đăng nhập app riêng: không đổi được token với Zalo", "app_id", appID, "err", err)
+	uc.log.ErrorContext(ctx, "đăng nhập app riêng: không đổi được token với Zalo",
+		"app_id", appID, "xa", string(xa), "buoc", step, "err", err)
 	return fmt.Errorf("%w: %w", ErrOwnAppZaloUnreachable, err)
 }

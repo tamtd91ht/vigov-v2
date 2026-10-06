@@ -412,16 +412,34 @@ func TestCitizenSessionsZaloMapping(t *testing.T) {
 	hs := newHarness(t)
 	hs.zalo.meError = -216
 	wantError(t, hs.post(normalBody(ownApp), ""), http.StatusUnauthorized, "zalo_token_invalid")
+	wantZaloRefusalLogged(t, hs.log.String(), "account_id", "-216")
 
 	hs = newHarness(t)
 	hs.zalo.wantSecret = "ANOTHER-SECRET" // our stored secret is not the one Zalo knows → error 452
 	wantError(t, hs.post(normalBody(ownApp), ""), http.StatusUnauthorized, "zalo_token_invalid")
+	// The one case a 401 is OUR fault: only this line tells it apart from an expired token.
+	wantZaloRefusalLogged(t, hs.log.String(), "phone", "452")
 
 	hs = newHarness(t)
 	hs.zalo.down = true
 	wantError(t, hs.post(normalBody(ownApp), ""), http.StatusBadGateway, "zalo_unreachable")
 	if len(hs.mo.calls) != 0 {
 		t.Fatal("a session was opened although Zalo failed")
+	}
+}
+
+// A 401 left no trace before 06/10/2026, so a real phone stuck on the sign-in gate could not be
+// diagnosed. The line must name the step and Zalo's numeric code — and nothing the citizen sent.
+func wantZaloRefusalLogged(t *testing.T, log, step, code string) {
+	t.Helper()
+	if !strings.Contains(log, "Zalo từ chối token") || !strings.Contains(log, "buoc="+step) ||
+		!strings.Contains(log, "error code "+code) {
+		t.Errorf("401 not logged with step %q and code %s: %s", step, code, log)
+	}
+	for _, leak := range []string{fakeAccessToken, fakePhoneToken, fakeAppSecret} {
+		if strings.Contains(log, leak) {
+			t.Errorf("log carries %q", leak)
+		}
 	}
 }
 
