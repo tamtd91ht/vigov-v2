@@ -3519,6 +3519,50 @@ aside.khoi-chua-khai h3 {
   outline-offset: 2px;
 }
 
+/* The allowed column under the dragged card: solid instead of dashed. */
+.cot-nhan-tha.cot-dang-tren {
+  outline-style: solid;
+}
+
+/* A column that will NOT take the dragged card. Dimmed and a not-allowed cursor — and
+ * `.goi-y-khong-tha` says it in words, because neither of those is a signal on its own. */
+.cot-khong-nhan {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.goi-y-khong-tha {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: var(--ink-700);
+}
+
+/* A card this account may drag (@dnd-kit, 06/10/2026). `touch-action: manipulation` leaves the
+ * board scrollable by finger while a held press starts the drag; no text selection or callout
+ * menu on that long press. The card is focusable for the keyboard drag, so it shows its focus. */
+.the-keo-duoc {
+  cursor: grab;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.the-keo-duoc:focus-visible {
+  outline: 2px solid var(--xanh);
+  outline-offset: 2px;
+}
+
+/* The real card while its copy is dragged: it stays in its column until the server answers. */
+.the-dang-keo {
+  opacity: 0.4;
+}
+
+/* The copy under the pointer. */
+.the-dang-bay {
+  cursor: grabbing;
+  box-shadow: 0 8px 24px rgba(30, 49, 80, 0.24);
+}
+
 .goi-y-tha,
 .trang-thai-chuyen-cot {
   margin: 0 0 0.5rem;

@@ -14,6 +14,7 @@ import {
   TASK_ASSIGN_PERMISSION,
 } from "@/lib/quyen";
 
+import { KANBAN_CARD_ROLE } from "./kanban-drag";
 import { menuKey } from "./kanban-move-menu";
 import { serverTransitions } from "./task-transitions.fixture";
 import {
@@ -40,8 +41,9 @@ import {
  * Kanban moves (#14, 28/09/2026): drag-and-drop plus an equal keyboard path, both calling the
  * drawer's route `POST /api/v1/tasks/{ma}/status`.
  *
- * THE LIMIT, STATED: no DOM here (`vitest.config.mts`), so no case fires a real `drop` or a real
- * click. What IS tested: the route and body `moveTaskStatus` sends; that the server's refusal
+ * THE LIMIT, STATED: no DOM here (`vitest.config.mts`), so no case fires a real drag or a real
+ * click — the drop decisions are pure and tested in `kanban-drag.test.ts`, the click in
+ * `kanban-drag.interaction.test.tsx`. What IS tested: the route and body `moveTaskStatus` sends; that the server's refusal
  * survives verbatim to the card; what the board renders in each phase (allowed, denied, pending,
  * refused, done); the menu keys; and — by reading the source, the precedent of
  * `noi-nhan-trang-thai.test.ts` — that the drop handler and the menu call the SAME function.
@@ -239,9 +241,10 @@ describe("which moves a card offers — the SERVER's list, one source", () => {
     expect(source).toContain(
       "move === null ? [] : clickableTransitions(nhiemVu, move.permissions, move.staffCode);",
     );
-    expect(source).toContain(
-      "clickableTransitions(dragging, move.permissions, move.staffCode).includes(target)",
-    );
+    // The drop targets: `dragTargets` in `kanban-drag.ts`, which is `clickableTransitions` again.
+    expect(source).toContain("const allowedTargets = dragging === null ? [] : dragTargets(dragging, move);");
+    const drag = readFileSync(fileURLToPath(new URL("./kanban-drag.ts", import.meta.url)), "utf8");
+    expect(drag).toContain("return clickableTransitions(task, gate.permissions, gate.staffCode);");
     expect(source).toContain("const buocBamDuoc = clickableTransitions(nhiemVu, quyen, maNguoiDangNhap);");
     expect(source).toContain("staffCode: maNguoiDangNhap,");
     // No second lifecycle map may come back.
@@ -252,7 +255,9 @@ describe("which moves a card offers — the SERVER's list, one source", () => {
 describe("the board — allowed, denied, pending, refused, done", () => {
   it("ALLOWED: the card is draggable and has the `Chuyển sang cột…` menu button", () => {
     const html = board(TASK, moveWith());
-    expect(html).toContain('draggable="true"');
+    // @dnd-kit (06/10/2026): the card is focusable and announced as draggable, not `draggable="true"`.
+    expect(html).toContain(`aria-roledescription="${KANBAN_CARD_ROLE}"`);
+    expect(html).toMatch(/<article[^>]*tabindex="0"/);
     expect(html).toContain(`aria-label="${KANBAN_MOVE_BUTTON} (NV19)"`);
     expect(html).toContain('aria-haspopup="menu"');
     expect(html).toContain('aria-expanded="false"');
@@ -265,6 +270,8 @@ describe("the board — allowed, denied, pending, refused, done", () => {
   it("DENIED — no `task.update` and not the assignee: no drag handle, no menu; the card still opens", () => {
     const html = board(TASK, moveWith({ permissions: NO_KEYS }));
     expect(html).not.toContain("draggable");
+    expect(html).not.toContain(KANBAN_CARD_ROLE);
+    expect(html).not.toMatch(/<article[^>]*tabindex=/);
     expect(html).not.toContain(KANBAN_MOVE_BUTTON);
     // The card body is its open button (prototype, 06/10/2026).
     expect(html).toMatch(/aria-expanded="false"><span class="ma-muc[^"]*">NV19</);
@@ -272,7 +279,7 @@ describe("the board — allowed, denied, pending, refused, done", () => {
 
   it("ALLOWED — the ASSIGNEE without `task.update` gets the drag handle and the menu", () => {
     const html = board(TASK, moveWith({ permissions: NO_KEYS, staffCode: ASSIGNEE }));
-    expect(html).toContain('draggable="true"');
+    expect(html).toContain(`aria-roledescription="${KANBAN_CARD_ROLE}"`);
     expect(html).toContain(`aria-label="${KANBAN_MOVE_BUTTON} (NV19)"`);
   });
 
@@ -281,6 +288,7 @@ describe("the board — allowed, denied, pending, refused, done", () => {
     // dead end. The server now lists the reopen; it is a reason form, never a card move.
     const html = board(at("hoan-thanh"), moveWith({ permissions: UPDATE_AND_APPROVE }));
     expect(html).not.toContain("draggable");
+    expect(html).not.toContain(KANBAN_CARD_ROLE);
     expect(html).not.toContain(KANBAN_MOVE_BUTTON);
   });
 
@@ -293,6 +301,7 @@ describe("the board — allowed, denied, pending, refused, done", () => {
     expect(html).toContain(pending);
     expect(html).toMatch(/role="status"[^>]*>[^<]*Đang chuyển NV19/);
     expect(html).not.toContain("draggable");
+    expect(html).not.toContain(KANBAN_CARD_ROLE);
     expect(html).toMatch(/aria-haspopup="menu"[^>]*disabled=""/);
   });
 
@@ -370,7 +379,9 @@ describe("both paths call the SAME function (source wiring)", () => {
   const SOURCE = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
 
   it("drop and menu both go through `move.move`, which is `moveOnKanban` → `moveTaskStatus`", () => {
-    expect(SOURCE).toContain('move.move(task, c.ma, "drag")');
+    expect(SOURCE).toContain("dropOnKanban(task, e.over?.id ?? null, move);");
+    const drag = readFileSync(fileURLToPath(new URL("./kanban-drag.ts", import.meta.url)), "utf8");
+    expect(drag).toContain('gate.move(task, target, "drag");');
     expect(SOURCE).toContain('move.move(nhiemVu, t, "menu")');
     expect(SOURCE).toContain("move: moveOnKanban,");
     expect(SOURCE).toContain("moveTaskStatus(task.code, target, via)");

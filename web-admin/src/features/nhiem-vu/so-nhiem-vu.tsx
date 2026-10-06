@@ -1,6 +1,17 @@
 "use client";
 
 import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  MouseSensor,
+  TouchSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
   AlarmClock,
   BookOpen,
   CalendarClock,
@@ -33,6 +44,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import {
+  useCallback,
   useEffect,
   useMemo,
   useReducer,
@@ -322,6 +334,17 @@ import {
   registerRowDocuments,
 } from "./task-register";
 import { taskDetailHref } from "./task-link";
+import {
+  KANBAN_CARD_ROLE,
+  KANBAN_DRAG_INSTRUCTIONS,
+  KANBAN_DROP_REFUSED_HINT,
+  columnKeyboardCoordinates,
+  dragTargets,
+  draggedTask,
+  dropOnKanban,
+  kanbanAnnouncements,
+  kanbanCollision,
+} from "./kanban-drag";
 import { KanbanMoveMenu } from "./kanban-move-menu";
 import { NhatKyNhiemVu } from "./nhat-ky-nhiem-vu";
 import {
@@ -2307,8 +2330,9 @@ export type CotKanban = {
  * ─────────────────────────────────────────────────────────────────────────────────────────
  * KÉO-THẢ CÓ, VÀ CÓ MỘT LỐI BÀN PHÍM NGANG HÀNG (28/09/2026).
  *
- * Kéo-thả HTML5 một mình không có lối bàn phím: cán bộ dùng bàn phím, trình đọc màn hình, hay cầm
- * chuột không vững sẽ không thao tác được (`skills/accessibility-elderly`). Nên mỗi thẻ có thêm nút
+ * Kéo-thả chạy bằng @dnd-kit từ 06/10/2026 (chuột, cảm ứng, bàn phím) — kéo-thả HTML5 không bắt
+ * đầu được từ nút mở thẻ và không chạy trên màn cảm ứng; lý do đầy đủ ở `kanban-drag.ts`. Cán bộ
+ * cầm chuột không vững vẫn cần một lối không phải kéo (`skills/accessibility-elderly`). Nên mỗi thẻ có thêm nút
  * `Chuyển sang cột…` (`KanbanMoveMenu`), liệt kê ĐÚNG các bước drawer liệt kê
  * (`clickableTransitions`). Hai lối gọi CÙNG một hàm (`move.move` → `moveTaskStatus`), tức cùng
  * tuyến `POST /api/v1/tasks/{ma}/status` của drawer, và câu từ chối của máy chủ hiện NGUYÊN VĂN
@@ -2369,11 +2393,19 @@ export function BangKanban({
   maDangMo: string | null;
   moNhiemVu: (n: petitions_nhiemVuRa) => void;
 }) {
-  // The card being dragged. Held here, not in `dataTransfer`: `dragover` cannot read the payload,
-  // and the column must know DURING the drag whether the lifecycle allows the drop.
+  // The card being dragged: every column must know DURING the drag whether the lifecycle takes it.
   const [dragging, setDragging] = useState<petitions_nhiemVuRa | null>(null);
   const statusRef = useRef<HTMLParagraphElement>(null);
   const result = move?.result ?? null;
+  const sensors = useSensors(
+    // Mouse, not Pointer: a pointer sensor also fires for a finger and would race the touch
+    // sensor for the same gesture. 6px before a press becomes a drag, so a plain click on the
+    // card still opens the task (the prototype's constraint).
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    // A short press-and-hold on touch: a finger that moves at once is scrolling the board.
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: columnKeyboardCoordinates }),
+  );
 
   useEffect(() => {
     // A menu move that succeeded reloads the board, and the button that had focus is gone with
@@ -2403,11 +2435,10 @@ export function BangKanban({
   // Every column refused for ONE reason (e.g. 409 under `Sắp đến hạn`): say it ONCE, above the board.
   const sharedError = kanbanSharedError(cot);
 
-  const dropAllowed = (target: TrangThaiNhiemVu): boolean =>
-    move !== null &&
-    move.pending === null &&
-    dragging !== null &&
-    clickableTransitions(dragging, move.permissions, move.staffCode).includes(target);
+  // `dragTargets` = `clickableTransitions` (the drawer's list), empty while a move is pending.
+  const allowedTargets = dragging === null ? [] : dragTargets(dragging, move);
+  const dropState = (target: TrangThaiNhiemVu): KanbanDropState =>
+    dragging === null ? "idle" : allowedTargets.includes(target) ? "allowed" : "refused";
 
   const statusText =
     move === null
@@ -2432,103 +2463,115 @@ export function BangKanban({
           {sharedError}
         </p>
       )}
-      <div className="bang-cuon" role="region" aria-label="Bảng Kanban nhiệm vụ" tabIndex={0}>
-        {/* The prototype's board: five equal columns side by side on a wide screen (`grid-cols-5`,
-            14px gaps). Narrower, the legacy layout holds — stacked on a phone, a scrolling row from
-            768px (reason in `globals.css`). */}
-        <div className="bang-kanban p-0 xl:grid xl:grid-cols-5 xl:gap-3.5">
-          {cotSap.map((c) => (
-            <section
-              key={c.ma}
-              className={cn(
-                dropAllowed(c.ma) ? "cot-kanban cot-nhan-tha" : "cot-kanban",
-                "min-h-45 rounded-card border-line bg-surface-subtle p-3 xl:min-w-0",
-              )}
-              aria-labelledby={`cot-kanban-${c.ma}`}
-              onDragOver={
-                move === null
-                  ? undefined
-                  : (e) => {
-                      // Accepting `dragover` IS what makes a column a drop target. A column the
-                      // lifecycle does not allow never accepts it, so the drop cannot happen.
-                      if (!dropAllowed(c.ma)) return;
-                      e.preventDefault();
-                      e.dataTransfer.dropEffect = "move";
-                    }
-              }
-              onDrop={
-                move === null
-                  ? undefined
-                  : (e) => {
-                      e.preventDefault();
-                      const task = dragging;
-                      setDragging(null);
-                      if (task !== null && dropAllowed(c.ma)) move.move(task, c.ma, "drag");
-                    }
-              }
-            >
-              <h3
-                id={`cot-kanban-${c.ma}`}
-                className="mb-3 flex items-center gap-2 px-1 text-[13px] font-semibold text-ink-900"
-              >
-                {/* NHÃN CỘT LÀ NHÃN CỦA XÃ — cùng một chữ với chip và ô lọc. Chữ "Chưa thực hiện"
-                    của §4.1 là thứ xã tự đặt cho `moi-giao` ở tab Danh mục (xem `nhan-nhiem-vu.ts`). */}
-                {nhanTrangThai(nhanTT, c.ma)}{" "}
-                {/* THE REAL TOTAL (#15), not the cards loaded. Unreadable or missing → `—`, never
-                    a `0` that reads as "nothing here". Still loading → no chip yet. */}
-                {counts.pha !== "dangTai" && (
-                  <span className="chip chip-ngung ml-auto rounded-[10px] border border-solid border-line bg-surface px-2 text-[11px] font-semibold text-ink-500">
-                    {totalOf(c.ma) === null ? O_TRONG : String(totalOf(c.ma))}
-                  </span>
+      <DndContext
+        // A fixed id keeps dnd-kit's `aria-describedby` the same on the server and in the browser.
+        id="bang-kanban-nhiem-vu"
+        sensors={sensors}
+        collisionDetection={kanbanCollision}
+        accessibility={{
+          announcements: kanbanAnnouncements(nhanTT, move),
+          screenReaderInstructions: KANBAN_DRAG_INSTRUCTIONS,
+        }}
+        onDragStart={(e) => setDragging(draggedTask(e.active.data.current))}
+        onDragCancel={() => setDragging(null)}
+        onDragEnd={(e) => {
+          const task = draggedTask(e.active.data.current);
+          setDragging(null);
+          // The SAME call as the menu: `move.move(task, target, "drag")`, once, and only for a column
+          // `dragTargets` lists. Anywhere else nothing is sent and the card stays put.
+          dropOnKanban(task, e.over?.id ?? null, move);
+        }}
+      >
+        <div className="bang-cuon" role="region" aria-label="Bảng Kanban nhiệm vụ" tabIndex={0}>
+          {/* The prototype's board: five equal columns side by side on a wide screen (`grid-cols-5`,
+              14px gaps). Narrower, the legacy layout holds — stacked on a phone, a scrolling row from
+              768px (reason in `globals.css`). */}
+          <div className="bang-kanban p-0 xl:grid xl:grid-cols-5 xl:gap-3.5">
+            {cotSap.map((c) => (
+              <KanbanColumn key={c.ma} status={c.ma} drop={dropState(c.ma)} droppable={move !== null}>
+                <h3
+                  id={`cot-kanban-${c.ma}`}
+                  className="mb-3 flex items-center gap-2 px-1 text-[13px] font-semibold text-ink-900"
+                >
+                  {/* NHÃN CỘT LÀ NHÃN CỦA XÃ — cùng một chữ với chip và ô lọc. Chữ "Chưa thực hiện"
+                      của §4.1 là thứ xã tự đặt cho `moi-giao` ở tab Danh mục (xem `nhan-nhiem-vu.ts`). */}
+                  {nhanTrangThai(nhanTT, c.ma)}{" "}
+                  {/* THE REAL TOTAL (#15), not the cards loaded. Unreadable or missing → `—`, never
+                      a `0` that reads as "nothing here". Still loading → no chip yet. */}
+                  {counts.pha !== "dangTai" && (
+                    <span className="chip chip-ngung ml-auto rounded-[10px] border border-solid border-line bg-surface px-2 text-[11px] font-semibold text-ink-500">
+                      {totalOf(c.ma) === null ? O_TRONG : String(totalOf(c.ma))}
+                    </span>
+                  )}
+                </h3>
+                {/* Words, not only the outline colour, say where the card may go (a11y §8). */}
+                {dropState(c.ma) === "allowed" && (
+                  <p className="goi-y-tha">{kanbanDropHint(nhanTT, c.ma)}</p>
                 )}
-              </h3>
-              {/* Words, not only the outline colour, say where the card may go (a11y §8). */}
-              {dropAllowed(c.ma) && <p className="goi-y-tha">{kanbanDropHint(nhanTT, c.ma)}</p>}
+                {dropState(c.ma) === "refused" && <p className="goi-y-khong-tha">{KANBAN_DROP_REFUSED_HINT}</p>}
 
-              {/* NĂM CỘT LÀ NĂM CÂU TRẢ LỜI RỜI NHAU. Một cột hỏng thì bốn cột kia vẫn là sổ —
-                  và câu hỏng của nó hiện nguyên văn ở đúng cột ấy, không nuốt thành một lỗi chung. */}
-              {c.tai.pha === "dangTai" && <p role="status">{DANG_TAI_SO}</p>}
-              {c.tai.pha === "loi" && sharedError === null && (
-                <p className="thong-bao-loi" role="alert">
-                  {c.tai.thongBao}
-                </p>
-              )}
-              {c.tai.pha === "xong" && c.tai.duLieu.items.length === 0 && (
-                <p className="trang-thai-rong m-0 px-1 py-6 text-center text-[12px] text-ink-500">{COT_RONG}</p>
-              )}
-              {c.tai.pha === "xong" && c.tai.duLieu.items.length > 0 && (
-                <ul className="danh-sach-the gap-2.5">
-                  {c.tai.duLieu.items.map((n) => (
-                    <li key={n.code}>
-                      <TheNhiemVu
-                        nhiemVu={n}
-                        danhMuc={danhMuc}
-                        danhBa={danhBa}
-                        unitNames={unitNames}
-                        nhanTT={nhanTT}
-                        bayGio={bayGio}
-                        maDangMo={maDangMo}
-                        moNhiemVu={moNhiemVu}
-                        move={move}
-                        selection={selection}
-                        onDragStart={setDragging}
-                        onDragEnd={() => setDragging(null)}
-                      />
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {/* 20 cards under a header of 57 must say so — the board has no per-column paging. */}
-              {c.tai.pha === "xong" &&
-                (c.tai.duLieu.has_more || (totalOf(c.ma) ?? 0) > c.tai.duLieu.items.length) && (
-                  <p className="ghi-chu">
-                    {kanbanPartialNote(c.tai.duLieu.items.length, totalOf(c.ma))}
+                {/* NĂM CỘT LÀ NĂM CÂU TRẢ LỜI RỜI NHAU. Một cột hỏng thì bốn cột kia vẫn là sổ —
+                    và câu hỏng của nó hiện nguyên văn ở đúng cột ấy, không nuốt thành một lỗi chung. */}
+                {c.tai.pha === "dangTai" && <p role="status">{DANG_TAI_SO}</p>}
+                {c.tai.pha === "loi" && sharedError === null && (
+                  <p className="thong-bao-loi" role="alert">
+                    {c.tai.thongBao}
                   </p>
                 )}
-            </section>
-          ))}
+                {c.tai.pha === "xong" && c.tai.duLieu.items.length === 0 && (
+                  <p className="trang-thai-rong m-0 px-1 py-6 text-center text-[12px] text-ink-500">{COT_RONG}</p>
+                )}
+                {c.tai.pha === "xong" && c.tai.duLieu.items.length > 0 && (
+                  <ul className="danh-sach-the gap-2.5">
+                    {c.tai.duLieu.items.map((n) => (
+                      <li key={n.code}>
+                        <TheNhiemVu
+                          nhiemVu={n}
+                          danhMuc={danhMuc}
+                          danhBa={danhBa}
+                          unitNames={unitNames}
+                          nhanTT={nhanTT}
+                          bayGio={bayGio}
+                          maDangMo={maDangMo}
+                          moNhiemVu={moNhiemVu}
+                          move={move}
+                          selection={selection}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {/* 20 cards under a header of 57 must say so — the board has no per-column paging. */}
+                {c.tai.pha === "xong" &&
+                  (c.tai.duLieu.has_more || (totalOf(c.ma) ?? 0) > c.tai.duLieu.items.length) && (
+                    <p className="ghi-chu">
+                      {kanbanPartialNote(c.tai.duLieu.items.length, totalOf(c.ma))}
+                    </p>
+                  )}
+              </KanbanColumn>
+            ))}
+          </div>
         </div>
-      </div>
+        {/* The copy under the pointer while the real card stays, dimmed, in its column — it moves
+            only once the server answers. Outside the scrolling region: a fixed overlay inside an
+            overflow container would be clipped. No drop animation: gliding back would read as
+            "refused" while the request is still on its way. */}
+        <DragOverlay dropAnimation={null}>
+          {dragging !== null && (
+            <TheNhiemVu
+              overlay
+              nhiemVu={dragging}
+              danhMuc={danhMuc}
+              danhBa={danhBa}
+              unitNames={unitNames}
+              nhanTT={nhanTT}
+              bayGio={bayGio}
+              maDangMo={maDangMo}
+              moNhiemVu={moNhiemVu}
+            />
+          )}
+        </DragOverlay>
+      </DndContext>
 
       {counts.pha === "loi" && counts.thongBao !== sharedError && (
         <p className="thong-bao-loi" role="alert">
@@ -2540,6 +2583,44 @@ export function BangKanban({
           Kanban hoàn toàn, và §4.1 muốn thế. Không nói ra thì người giao việc kết luận nó đã bị xoá. */}
       <p className="ghi-chu">{ghiChuKanbanReNhanh(nhanTT)}</p>
     </>
+  );
+}
+
+/** A column during a drag: no drag (`idle`), takes the dragged card, or will not take it. */
+type KanbanDropState = "idle" | "allowed" | "refused";
+
+/**
+ * One Kanban column as a @dnd-kit drop zone. EVERY column is a drop zone while moves are possible,
+ * refused ones included: a refused column must catch the drop (and do nothing) rather than let a
+ * neighbouring allowed column catch it. Whether the drop moves anything is `dropOnKanban`'s call.
+ */
+function KanbanColumn({
+  status,
+  drop,
+  droppable,
+  children,
+}: {
+  status: TrangThaiNhiemVu;
+  drop: KanbanDropState;
+  /** `false` on a read-only board: nothing to drop. */
+  droppable: boolean;
+  children: ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: status, disabled: !droppable });
+  return (
+    <section
+      ref={setNodeRef}
+      className={cn(
+        "cot-kanban",
+        drop === "allowed" && "cot-nhan-tha",
+        drop === "allowed" && isOver && "cot-dang-tren",
+        drop === "refused" && "cot-khong-nhan",
+        "min-h-45 rounded-card border-line bg-surface-subtle p-3 xl:min-w-0",
+      )}
+      aria-labelledby={`cot-kanban-${status}`}
+    >
+      {children}
+    </section>
   );
 }
 
@@ -2697,8 +2778,7 @@ export function TheNhiemVu({
   moNhiemVu,
   move = null,
   selection = null,
-  onDragStart,
-  onDragEnd,
+  overlay = false,
 }: {
   nhiemVu: petitions_nhiemVuRa;
   danhMuc: DanhMucNhiemVu;
@@ -2714,8 +2794,12 @@ export function TheNhiemVu({
   move?: KanbanMove | null;
   /** `☐ Chọn` (§4.1) — see `TaskSelection`. `null` = no checkbox. */
   selection?: TaskSelection | null;
-  onDragStart?: (task: petitions_nhiemVuRa) => void;
-  onDragEnd?: () => void;
+  /**
+   * The copy `DragOverlay` draws under the pointer: hidden from screen readers (the real card is
+   * still on the board), never a second drag source. Registered under its own id — the real card's
+   * id would overwrite the node dnd-kit is measuring.
+   */
+  overlay?: boolean;
 }) {
   const treHan = oHan(nhiemVu.due_at, bayGio).phanTre !== "";
   // Same list as the drawer's buttons. Empty (neither `task.update` nor the assignee, or nothing the
@@ -2723,6 +2807,25 @@ export function TheNhiemVu({
   const targets =
     move === null ? [] : clickableTransitions(nhiemVu, move.permissions, move.staffCode);
   const busy = move !== null && move.pending !== null;
+  const canDrag = !overlay && targets.length > 0 && !busy;
+  const drag = useDraggable({
+    id: overlay ? `overlay:${nhiemVu.code}` : nhiemVu.code,
+    data: { task: nhiemVu },
+    disabled: !canDrag,
+  });
+  const { setNodeRef, setActivatorNodeRef } = drag;
+  // Stable, so a re-render during the drag does not detach and re-attach the node dnd-kit measures.
+  const setCardRef = useCallback(
+    (node: HTMLElement | null) => {
+      setNodeRef(node);
+      // The keyboard drag starts only when the CARD itself has focus: Enter on its open button,
+      // Space on its checkbox or its menu button keep their own meaning.
+      setActivatorNodeRef(node);
+    },
+    [setNodeRef, setActivatorNodeRef],
+  );
+  // The overlay copy carries no id: the real card is still on the page and ids must stay unique.
+  const titleId = `the-nhiem-vu-${nhiemVu.code}`;
   const pendingHere = move?.pending?.code === nhiemVu.code ? move.pending : null;
   const lastResult = move?.result ?? null;
   const refusal =
@@ -2741,22 +2844,24 @@ export function TheNhiemVu({
     // lines and always reserving two, ONE meta line (deadline + sub-task count), one holder line —
     // overflow is cut with "…". No `overflow-hidden` here: the move menu floats over the card.
     <article
-      className="the-nhiem-vu relative rounded-[10px] border border-solid border-line bg-surface p-0 shadow-sm"
-      aria-labelledby={`the-nhiem-vu-${nhiemVu.code}`}
+      // The whole card is the drag source; its open button stays a plain click because a drag
+      // starts only after 6px of movement (mouse) or a held press (touch).
+      ref={setCardRef}
+      className={cn(
+        "the-nhiem-vu relative rounded-[10px] border border-solid border-line bg-surface p-0 shadow-sm",
+        canDrag && "the-keo-duoc",
+        drag.isDragging && "the-dang-keo",
+        overlay && "the-dang-bay",
+      )}
+      aria-labelledby={overlay ? undefined : titleId}
+      aria-hidden={overlay ? true : undefined}
       aria-busy={pendingHere !== null ? true : undefined}
-      draggable={targets.length > 0 && !busy ? true : undefined}
-      onDragStart={
-        targets.length > 0 && !busy
-          ? (e) => {
-              e.dataTransfer.effectAllowed = "move";
-              // Some browsers start no drag without a payload. The code is a business code,
-              // not personal data (rule 3).
-              e.dataTransfer.setData("text/plain", nhiemVu.code);
-              onDragStart?.(nhiemVu);
-            }
-          : undefined
-      }
-      onDragEnd={targets.length > 0 ? () => onDragEnd?.() : undefined}
+      // Not `{...drag.attributes}`: its `role="button"` would turn an article holding three
+      // controls into one button. The rest — focusable, described by the drag instructions — is kept.
+      tabIndex={canDrag ? 0 : undefined}
+      aria-roledescription={canDrag ? KANBAN_CARD_ROLE : undefined}
+      aria-describedby={canDrag ? drag.attributes["aria-describedby"] : undefined}
+      {...(canDrag ? drag.listeners : {})}
     >
       <div
         className={cn("h-[3px] rounded-t-[10px]", priorityStripClass(danhMuc.mucUuTien, nhiemVu.priority))}
@@ -2803,7 +2908,7 @@ export function TheNhiemVu({
         {/* Two lines, always reserved (`min-h` = 2 × leading-snug): a one-line title does not make a
             shorter card. Longer titles end in "…" (`.the-nhiem-vu .tieu-de-the` clamps to 2). */}
         <span
-          id={`the-nhiem-vu-${nhiemVu.code}`}
+          id={overlay ? undefined : titleId}
           className="tieu-de-the min-h-[2.75em] text-[13px] leading-snug font-semibold"
           title={nhiemVu.title}
         >
