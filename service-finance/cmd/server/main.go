@@ -186,7 +186,12 @@ func main() {
 		// year amount and the audit entry commit together (rule 6, invariant 3).
 		FundingSources:      fistore.NewNguonVonStore(kho),
 		FundingSourceWrites: app.NewFundingSources(kho, fistore.NewFundingSourceWriteStore(kho)),
-		Log:                 log,
+		// §8.1 issues and §8.4 discussion (migration 0015). Same split as funding sources: reads on the
+		// store, writes on a use case whose store takes its transaction, so each row and its audit
+		// entry commit together (rule 6, invariant 3).
+		ProjectDiscussion:       fistore.NewProjectDiscussionStore(kho),
+		ProjectDiscussionWrites: app.NewProjectDiscussion(kho, fistore.NewProjectDiscussionWriteStore(kho)),
+		Log:                     log,
 	})
 
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.

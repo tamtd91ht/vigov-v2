@@ -2824,6 +2824,50 @@
     {
       "service": "finance",
       "method": "GET",
+      "path": "/api/v1/investment-projects/{id}/comments",
+      "operation_id": "finance_get_investment_projects_by_id_comments",
+      "task_id": "00b6294fba85",
+      "summary": "Các ý kiến trao đổi về một dự án, cũ nhất trước",
+      "screen": "06-giai-ngan §8.4",
+      "permission_kind": "permission",
+      "permission": "budget.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "finance.projectCommentsOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-finance/internal/http/routes.go"
+    },
+    {
+      "service": "finance",
+      "method": "POST",
+      "path": "/api/v1/investment-projects/{id}/comments",
+      "operation_id": "finance_post_investment_projects_by_id_comments",
+      "task_id": "9acfe6fdd3c3",
+      "summary": "Gửi một ý kiến trao đổi về dự án, có thể nhắc tên cán bộ (chưa gửi thông báo)",
+      "screen": "06-giai-ngan §8.4",
+      "permission_kind": "permission",
+      "permission": "budget.read",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "MoKhiHong",
+      "request_schema": "finance.projectCommentIn",
+      "reply_schemas": {
+        "201": "finance.projectCommentOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-finance/internal/http/routes.go"
+    },
+    {
+      "service": "finance",
+      "method": "GET",
       "path": "/api/v1/investment-projects/{id}/disbursement-curve",
       "operation_id": "finance_get_investment_projects_by_id_disbursement_curve",
       "task_id": "5feba41cf51c",
@@ -2855,6 +2899,50 @@
       "idempotency": "",
       "reply_schemas": {
         "200": "finance.projectVouchersOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-finance/internal/http/routes.go"
+    },
+    {
+      "service": "finance",
+      "method": "GET",
+      "path": "/api/v1/investment-projects/{id}/issues",
+      "operation_id": "finance_get_investment_projects_by_id_issues",
+      "task_id": "f1b487ffca7d",
+      "summary": "Dòng thời gian vướng mắc của một dự án, mới nhất trước — cả vướng mắc đã gỡ",
+      "screen": "06-giai-ngan §8.1",
+      "permission_kind": "permission",
+      "permission": "budget.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "finance.projectIssuesOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-finance/internal/http/routes.go"
+    },
+    {
+      "service": "finance",
+      "method": "POST",
+      "path": "/api/v1/investment-projects/{id}/issues",
+      "operation_id": "finance_post_investment_projects_by_id_issues",
+      "task_id": "a887bf8444ae",
+      "summary": "Ghi nhận một vướng mắc của dự án — dòng đầu là tiêu đề, phần sau là diễn giải",
+      "screen": "06-giai-ngan §8.1",
+      "permission_kind": "permission",
+      "permission": "budget.update",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "MoKhiHong",
+      "request_schema": "finance.projectIssueIn",
+      "reply_schemas": {
+        "201": "finance.projectIssueOut",
         "400": "httpx.Error",
         "401": "httpx.Error",
         "403": "httpx.Error",
@@ -4519,6 +4607,28 @@
         "503": "httpx.Error"
       },
       "declared_in": "service-comms/internal/http/routes_portal_sync.go"
+    },
+    {
+      "service": "finance",
+      "method": "POST",
+      "path": "/api/v1/project-issues/{id}/resolution",
+      "operation_id": "finance_post_project_issues_by_id_resolution",
+      "task_id": "32d14ae3fe0a",
+      "summary": "Ghi vướng mắc là đã gỡ — một lần, không mở lại",
+      "screen": "06-giai-ngan §8.1",
+      "permission_kind": "permission",
+      "permission": "budget.update",
+      "idempotency": "khong-can",
+      "idempotency_reason": "gỡ lần hai bị từ chối 409 và câu UPDATE mang `resolved_at IS NULL`, nên lần gửi lại không ghi đè người gỡ và thời điểm gỡ",
+      "reply_schemas": {
+        "200": "finance.projectIssueOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-finance/internal/http/routes.go"
     },
     {
       "service": "identity",

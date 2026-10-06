@@ -56,6 +56,7 @@ export const DINH_TUYEN_API: ReadonlyArray<{ readonly tienTo: string; readonly d
   { tienTo: "/api/v1/task-priorities", dichVu: "petitions" },
   { tienTo: "/api/v1/budget-entries", dichVu: "finance" },
   { tienTo: "/api/v1/document-types", dichVu: "documents" },
+  { tienTo: "/api/v1/project-issues", dichVu: "finance" },
   { tienTo: "/api/v1/announcements", dichVu: "comms" },
   { tienTo: "/api/v1/budget-sheets", dichVu: "finance" },
   { tienTo: "/api/v1/commune-staff", dichVu: "identity" },

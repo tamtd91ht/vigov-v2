@@ -91,10 +91,11 @@ func categoryProgressOutOf(c domain.CategoryProgress) categoryProgressOut {
 
 // projectSummaryOut is GET /api/v1/investment-project-summary.
 //
-// NO `open_issue_count` AND NO "nguy cơ không giải ngân hết" COUNT, on purpose. §3's fourth card prints
-// both, but `vuong_mac` (§8.1) does not exist in this service and the at-risk rule is undefined. A 0
-// would be a plausible figure that is simply false — the commune would read "0 vướng mắc" as "none".
-// The fields are added (optional) the day the data behind them exists.
+// NO "nguy cơ không giải ngân hết" COUNT, on purpose. §3's fourth card prints it, but in the prototype
+// it is a HAND-SET flag on each project (`budget_items.at_risk`, ticked on the project form), not a
+// figure derivable from anything this service stores — and inventing a rule for it would decide the
+// commune's warning for them. A 0 would be a plausible figure that is simply false. It is added
+// (optional) the day the flag, or a decided rule, exists.
 type projectSummaryOut struct {
 	Year int `json:"year"`
 
@@ -118,6 +119,11 @@ type projectSummaryOut struct {
 	// DelayedProjectCount is §3 card 4: projects domain.LaCham flags — the rule behind each project's
 	// `is_delayed` and the list's `delayed_only=true`, so the three cannot disagree.
 	DelayedProjectCount int `json:"delayed_project_count"`
+
+	// OpenIssueCount is §3 card 4's "N vướng mắc đang theo dõi": unresolved issues of THIS YEAR's live
+	// projects (the prototype counted every year at once; the card is about one year). Optional in the
+	// contract because it was added to a published reply; this route always fills it.
+	OpenIssueCount *int `json:"open_issue_count,omitempty"`
 
 	// Monthly is §4's curve, January..December: linear plan against cumulative paid by `payment_date`.
 	Monthly []curvePointOut `json:"monthly"`
@@ -197,6 +203,12 @@ func (h *Handler) ProjectSummary(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, "tổng hợp giải ngân: luỹ kế theo tháng", err, "nam", year)
 		return
 	}
+	// A failure is a 500, never 0: "0 vướng mắc" reads as "none" (fail closed).
+	openIssues, err := h.d.ProjectDiscussion.OpenIssueCount(ctx, year)
+	if err != nil {
+		h.internalError(w, r, "tổng hợp giải ngân: đếm vướng mắc chưa gỡ", err, "nam", year)
+		return
+	}
 	notice, ok := h.scopeNotice(w, r)
 	if !ok {
 		return
@@ -217,6 +229,7 @@ func (h *Handler) ProjectSummary(w http.ResponseWriter, r *http.Request) {
 		DelayThreshold:       int64(threshold.Gia),
 		DelayThresholdSource: string(threshold.Nguon),
 		DelayedProjectCount:  s.DelayedCount,
+		OpenIssueCount:       &openIssues,
 		Monthly:              curveOut(domain.YearCurve(s.Total.Planned, byMonth, year, now)),
 		DisbursedAfterYear:   int64(byMonth.AfterYear),
 		ByCategory:           make([]categoryProgressOut, 0, len(s.ByCategory)),

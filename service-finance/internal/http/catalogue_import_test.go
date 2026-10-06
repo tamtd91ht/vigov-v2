@@ -86,6 +86,8 @@ func newCatalogueImportHarness(t *testing.T) *catalogueImportHarness {
 		CapitalPlanCategoryImports: fake,
 		FundingSources:             &fundingSourcesFake{},
 		FundingSourceWrites:        &fundingSourceWritesFake{},
+		ProjectDiscussion:          newProjectDiscussionFake(),
+		ProjectDiscussionWrites:    &projectDiscussionWritesFake{},
 		DuAn:                       duAnMau(),
 		GhiDuAn:                    &ghiDuAnGia{},
 		GhiChungTu:                 &ghiChungTuGia{},

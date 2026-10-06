@@ -237,6 +237,11 @@ func dungMayChuVoi(t *testing.T, c checkerGia) *mayChu {
 		// Funding sources — never called here; own suite in internal/http/funding_sources_test.go.
 		FundingSources:      &fundingSourcesFake{},
 		FundingSourceWrites: &fundingSourceWritesFake{},
+
+		// Issues and discussion — the list and summary routes read the latest issue and the open count;
+		// the five routes have their own suite in internal/http/project_discussion_test.go.
+		ProjectDiscussion:       newProjectDiscussionFake(),
+		ProjectDiscussionWrites: &projectDiscussionWritesFake{},
 	}
 
 	mux := http.NewServeMux()

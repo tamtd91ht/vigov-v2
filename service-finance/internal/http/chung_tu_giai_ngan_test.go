@@ -276,6 +276,10 @@ func dungMayChuChungTuVoi(t *testing.T, khoIdem idem.Store) *mayChuChungTu {
 		// Funding sources — never called here; own suite in internal/http/funding_sources_test.go.
 		FundingSources:      &fundingSourcesFake{},
 		FundingSourceWrites: &fundingSourceWritesFake{},
+
+		// Issues and discussion — the list route reads the latest issue; own suite in project_discussion_test.go.
+		ProjectDiscussion:       newProjectDiscussionFake(),
+		ProjectDiscussionWrites: &projectDiscussionWritesFake{},
 	})
 
 	var h http.Handler = mux

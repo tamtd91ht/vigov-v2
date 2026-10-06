@@ -146,6 +146,10 @@ func dungMayChuDuAnGhi(t *testing.T) *mayChuDuAnGhi {
 		// Funding sources — never called here; own suite in internal/http/funding_sources_test.go.
 		FundingSources:      &fundingSourcesFake{},
 		FundingSourceWrites: &fundingSourceWritesFake{},
+
+		// Issues and discussion — never called here; own suite in internal/http/project_discussion_test.go.
+		ProjectDiscussion:       newProjectDiscussionFake(),
+		ProjectDiscussionWrites: &projectDiscussionWritesFake{},
 	})
 
 	var h http.Handler = mux

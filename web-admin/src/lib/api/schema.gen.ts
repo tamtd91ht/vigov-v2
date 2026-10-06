@@ -1362,6 +1362,7 @@ export type finance_duAnRa = {
   "funding_allocations"?: Array<finance_projectAllocationOut>;
   "unallocated_plan_amount"?: number | null;
   "time_elapsed_ratio"?: number | null;
+  "latest_issue"?: finance_latestIssueOut | null;
 };
 
 export type finance_fundingSourceCreateIn = {
@@ -1471,6 +1472,13 @@ export type finance_hangMucRa = {
   "tier": number;
 };
 
+export type finance_latestIssueOut = {
+  "id": string;
+  "text": string;
+  "recorded_at": string;
+  "resolved": boolean;
+};
+
 export type finance_moKhoaVao = {
   "reason": string;
 };
@@ -1505,12 +1513,61 @@ export type finance_projectAllocationOut = {
   "disbursed_ratio": number | null;
 };
 
+export type finance_projectCommentIn = {
+  "body": string;
+  "mentioned_staff_codes"?: Array<string>;
+};
+
+export type finance_projectCommentOut = {
+  "id": string;
+  "project_id": string;
+  "body": string;
+  /** staff business code */
+  "author_code": string;
+  "mentioned_staff_codes": Array<string>;
+  /** RFC 3339, UTC */
+  "created_at": string;
+};
+
+export type finance_projectCommentsOut = {
+  "project_id": string;
+  "items": Array<finance_projectCommentOut>;
+  "count": number;
+};
+
 export type finance_projectCurveOut = {
   "project_id": string;
   "year": number;
   "points": Array<finance_curvePointOut>;
   "expected_end_month"?: number | null;
   "disbursed_after_year": number;
+};
+
+export type finance_projectIssueIn = {
+  "text": string;
+};
+
+export type finance_projectIssueOut = {
+  "id": string;
+  "project_id": string;
+  "title": string;
+  "description"?: string;
+  /** staff business code */
+  "recorded_by": string;
+  /** RFC 3339, UTC */
+  "recorded_at": string;
+  "resolved": boolean;
+  "resolved_at"?: string;
+  /** staff business code */
+  "resolved_by"?: string;
+  "tracking_task_id"?: string;
+};
+
+export type finance_projectIssuesOut = {
+  "project_id": string;
+  "items": Array<finance_projectIssueOut>;
+  "count": number;
+  "open_count": number;
 };
 
 export type finance_projectSummaryOut = {
@@ -1528,6 +1585,7 @@ export type finance_projectSummaryOut = {
   "delay_threshold": number;
   "delay_threshold_source": string;
   "delayed_project_count": number;
+  "open_issue_count"?: number | null;
   "monthly": Array<finance_curvePointOut>;
   "disbursed_after_year": number;
   "by_category": Array<finance_categoryProgressOut>;
@@ -6107,6 +6165,46 @@ export type finance_delete_investment_projects_by_id = {
   };
 };
 
+/** GET /api/v1/investment-projects/{id}/comments — Các ý kiến trao đổi về một dự án, cũ nhất trước */
+export type finance_get_investment_projects_by_id_comments = {
+  duongDan: "/api/v1/investment-projects/{id}/comments";
+  phuongThuc: "GET";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: finance_projectCommentsOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/investment-projects/{id}/comments — Gửi một ý kiến trao đổi về dự án, có thể nhắc tên cán bộ (chưa gửi thông báo) */
+export type finance_post_investment_projects_by_id_comments = {
+  duongDan: "/api/v1/investment-projects/{id}/comments";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: finance_projectCommentIn;
+  phanHoi: {
+    201: finance_projectCommentOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/investment-projects/{id}/disbursement-curve — Luỹ kế giải ngân theo tháng của một dự án so với kế hoạch theo lịch của chính dự án */
 export type finance_get_investment_projects_by_id_disbursement_curve = {
   duongDan: "/api/v1/investment-projects/{id}/disbursement-curve";
@@ -6139,6 +6237,46 @@ export type finance_get_investment_projects_by_id_disbursements = {
   than: never;
   phanHoi: {
     200: finance_projectVouchersOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/investment-projects/{id}/issues — Dòng thời gian vướng mắc của một dự án, mới nhất trước — cả vướng mắc đã gỡ */
+export type finance_get_investment_projects_by_id_issues = {
+  duongDan: "/api/v1/investment-projects/{id}/issues";
+  phuongThuc: "GET";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: finance_projectIssuesOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/investment-projects/{id}/issues — Ghi nhận một vướng mắc của dự án — dòng đầu là tiêu đề, phần sau là diễn giải */
+export type finance_post_investment_projects_by_id_issues = {
+  duongDan: "/api/v1/investment-projects/{id}/issues";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: finance_projectIssueIn;
+  phanHoi: {
+    201: finance_projectIssueOut;
     400: httpx_Error;
     401: httpx_Error;
     403: httpx_Error;
@@ -7728,6 +7866,29 @@ export type comms_put_portal_sync_settings = {
     422: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
+  };
+};
+
+/** POST /api/v1/project-issues/{id}/resolution — Ghi vướng mắc là đã gỡ — một lần, không mở lại */
+export type finance_post_project_issues_by_id_resolution = {
+  duongDan: "/api/v1/project-issues/{id}/resolution";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: finance_projectIssueOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    409: "issue_already_resolved";
   };
 };
 

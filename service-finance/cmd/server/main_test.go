@@ -148,6 +148,11 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		// Register refuses a nil dependency at construction.
 		FundingSources:      fistore.NewNguonVonStore(pkgstore.New(nil)),
 		FundingSourceWrites: app.NewFundingSources(nil, nil),
+
+		// Issues and discussion — an empty read store (the list route reads it), and the write use case
+		// on a nil *store.DB, never called from this file.
+		ProjectDiscussion:       emptyDiscussionStore{},
+		ProjectDiscussionWrites: app.NewProjectDiscussion(nil, nil),
 	})
 
 	danhBa := thuMucGia{
@@ -375,6 +380,24 @@ func (khoDuAnTrong) VouchersOfProject(context.Context, string) ([]domain.Project
 func (khoDuAnTrong) DisbursedByMonth(context.Context, int, string) (domain.DisbursedByMonth, error) {
 	return domain.DisbursedByMonth{}, nil
 }
+
+// emptyDiscussionStore holds no issue and no comment — the project list route reads its latest
+// issues, and this file is about the edge, not about issues.
+type emptyDiscussionStore struct{}
+
+func (emptyDiscussionStore) IssuesOfProject(context.Context, string) ([]domain.ProjectIssue, error) {
+	return nil, fistore.ErrKhongThayDuAn
+}
+
+func (emptyDiscussionStore) CommentsOfProject(context.Context, string) ([]domain.ProjectComment, error) {
+	return nil, fistore.ErrKhongThayDuAn
+}
+
+func (emptyDiscussionStore) LatestIssuesOfYear(context.Context, fistore.LocDuAn) (map[string]domain.ProjectIssue, error) {
+	return nil, nil
+}
+
+func (emptyDiscussionStore) OpenIssueCount(context.Context, int) (int, error) { return 0, nil }
 
 // nguongTrong answers the software's default threshold, which is what every commune is on today —
 // `cau_hinh_giai_ngan` has no write path yet. No case in this file reads it; it is here because

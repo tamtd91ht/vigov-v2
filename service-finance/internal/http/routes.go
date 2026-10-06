@@ -256,6 +256,13 @@ type Deps struct {
 	FundingSources      FundingSourceReading
 	FundingSourceWrites FundingSourceWriting
 
+	// ProjectDiscussion / ProjectDiscussionWrites are §8.1's issues and §8.4's discussion
+	// (project_discussion.go): *fistore.ProjectDiscussionStore and *app.ProjectDiscussion in
+	// production. The read half also feeds §7.2's latest-issue column and §3's open-issue count.
+	// Refused at construction when missing.
+	ProjectDiscussion       ProjectDiscussionReading
+	ProjectDiscussionWrites ProjectDiscussionWriting
+
 	// Nay is the clock the derived disbursement figures are computed against. NIL IN PRODUCTION,
 	// where Handler.nay falls back to time.Now — see the reason there. It exists so the delay
 	// arithmetic of §3 can be exercised at the two dates it is most fragile on.
@@ -322,6 +329,11 @@ func Register(mux *http.ServeMux, d Deps) {
 	}
 	if d.FundingSources == nil || d.FundingSourceWrites == nil {
 		panic("finance/http: thiếu kho đọc hoặc use case ghi nguồn vốn — các tuyến /api/v1/funding-sources sẽ panic khi có người gọi")
+	}
+	if d.ProjectDiscussion == nil || d.ProjectDiscussionWrites == nil {
+		// The list and the summary read it too, so a missing store would break §3 and §7 as well as
+		// the two tabs — or, worse, tempt a nil check that prints "0 vướng mắc" for every commune.
+		panic("finance/http: thiếu kho đọc hoặc use case ghi vướng mắc/trao đổi — các tuyến issues/comments và danh sách dự án sẽ panic khi có người gọi")
 	}
 
 	h := NewHandler(d)
@@ -521,6 +533,114 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/investment-projects/{id}/disbursement-curve",
 		authz.RequirePermission(d.Checker, "budget.read")(
 			http.HandlerFunc(h.ProjectDisbursementCurve)))
+
+	// --- §8.1 "Vướng mắc" and §8.4 "Trao đổi" (migration 0015, user decision 06/10/2026) ----------
+	//
+	// THE KEYS FOLLOW THE PROTOTYPE'S ROUTER, checked rather than assumed (vigov-require
+	// apps/api/app/modules/budget/router.py:266-342): `budget.read` to read both tabs, `budget.update`
+	// to record and to resolve an issue, and `budget.read` — NOT `budget.update` — to post a message.
+	// All three keys are seeded at service-identity/migrations/0001_init.sql:282-284; no key invented
+	// (rule 5, invariant 3c).
+	//
+	// NESTED UNDER THE PROJECT for the reads and the two creates — the project IS the parent and the
+	// filter. The resolution is addressed by the issue's own id (`project-issues/{id}`), like the
+	// voucher lifecycle routes: a project segment there would be read by nothing.
+	//
+	// NOTHING CROSSES A SERVICE BOUNDARY HERE: the tracking task (§13 rule 4) and the mention
+	// notification arrive later as events (app/project_discussion.go says how).
+
+	// NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Dòng thời gian vướng mắc của một dự án, mới nhất trước — cả vướng mắc đã gỡ
+	// @screen   06-giai-ngan §8.1
+	// @reply    200 projectIssuesOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/investment-projects/{id}/issues",
+		authz.RequirePermission(d.Checker, "budget.read")(
+			http.HandlerFunc(h.ListProjectIssues)))
+
+	// `budget.update`, the prototype's key for recording an obstacle (router.py:281-291) and the key
+	// §8.2 gives to data entry on this screen.
+	//
+	// idem.Required(MoKhiHong): nothing underneath stops a double-submitted form from recording the same
+	// obstacle twice, so the key is the layer that does. MoKhiHong and not DongKhiHong: a duplicated note
+	// is visible on the timeline and costs nothing legal — no money moves, no number is issued — so
+	// refusing a clerk while the idempotency store is down would trade an outage for a cosmetic risk.
+	//
+	// @summary  Ghi nhận một vướng mắc của dự án — dòng đầu là tiêu đề, phần sau là diễn giải
+	// @screen   06-giai-ngan §8.1
+	// @request  projectIssueIn
+	// @reply    201 projectIssueOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/investment-projects/{id}/issues",
+		authz.RequirePermission(d.Checker, "budget.update")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.RecordProjectIssue))))
+
+	// `budget.update`, the prototype's key for moving an issue along (router.py:294-306).
+	//
+	// A SUB-RESOURCE NOUN, `resolution`, not a verb — the shape `.../signature` and `.../rating` use.
+	// ONE-WAY: there is no DELETE of it and no reopen (the prototype has one "Đã gỡ xong" button and
+	// none to undo it); 0015's trigger refuses a reopen underneath.
+	//
+	// idem.KhongCan: a second resolution is refused with 409 and cannot overwrite who resolved it or
+	// when (the UPDATE carries `resolved_at IS NULL`), so a retry leaves one row state and one entry.
+	//
+	// @summary  Ghi vướng mắc là đã gỡ — một lần, không mở lại
+	// @screen   06-giai-ngan §8.1
+	// @reply    200 projectIssueOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error issue_already_resolved
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/project-issues/{id}/resolution",
+		authz.RequirePermission(d.Checker, "budget.update")(
+			idem.KhongCan("gỡ lần hai bị từ chối 409 và câu UPDATE mang `resolved_at IS NULL`, nên lần gửi lại không ghi đè người gỡ và thời điểm gỡ")(
+				http.HandlerFunc(h.ResolveProjectIssue))))
+
+	// NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Các ý kiến trao đổi về một dự án, cũ nhất trước
+	// @screen   06-giai-ngan §8.4
+	// @reply    200 projectCommentsOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/investment-projects/{id}/comments",
+		authz.RequirePermission(d.Checker, "budget.read")(
+			http.HandlerFunc(h.ListProjectComments)))
+
+	// `budget.read` ON A WRITE, AND THAT IS THE PROTOTYPE'S STATED DECISION (router.py:321-342):
+	// "discussing a figure is not changing it, and shutting people who can see the project out of the
+	// conversation would push it back to Zalo". A message changes no figure on any screen. Every message
+	// is still audited with who posted it, when and from where.
+	//
+	// idem.Required(MoKhiHong), for the reason the issue POST gives.
+	//
+	// @summary  Gửi một ý kiến trao đổi về dự án, có thể nhắc tên cán bộ (chưa gửi thông báo)
+	// @screen   06-giai-ngan §8.4
+	// @request  projectCommentIn
+	// @reply    201 projectCommentOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/investment-projects/{id}/comments",
+		authz.RequirePermission(d.Checker, "budget.read")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.AddProjectComment))))
 
 	// --- the commune enters, corrects and withdraws its own investment projects ------------------
 	//

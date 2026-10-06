@@ -12375,6 +12375,194 @@
         }
       }
     },
+    "/api/v1/investment-projects/{id}/comments": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Các ý kiến trao đổi về một dự án, cũ nhất trước",
+        "operationId": "finance_get_investment_projects_by_id_comments",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "06-giai-ngan §8.4",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.read"
+        },
+        "x-vigov-task": "00b6294fba85",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.projectCommentsOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Gửi một ý kiến trao đổi về dự án, có thể nhắc tên cán bộ (chưa gửi thông báo)",
+        "operationId": "finance_post_investment_projects_by_id_comments",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "06-giai-ngan §8.4",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.read"
+        },
+        "x-vigov-task": "9acfe6fdd3c3",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "MoKhiHong",
+          "on_store_failure_effect": "Store không tới được -> cho qua và ghi cảnh báo"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/finance.projectCommentIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.projectCommentOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/investment-projects/{id}/disbursement-curve": {
       "parameters": [
         {
@@ -12492,6 +12680,194 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/finance.projectVouchersOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/investment-projects/{id}/issues": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Dòng thời gian vướng mắc của một dự án, mới nhất trước — cả vướng mắc đã gỡ",
+        "operationId": "finance_get_investment_projects_by_id_issues",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "06-giai-ngan §8.1",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.read"
+        },
+        "x-vigov-task": "f1b487ffca7d",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.projectIssuesOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Ghi nhận một vướng mắc của dự án — dòng đầu là tiêu đề, phần sau là diễn giải",
+        "operationId": "finance_post_investment_projects_by_id_issues",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "06-giai-ngan §8.1",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.update"
+        },
+        "x-vigov-task": "a887bf8444ae",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "MoKhiHong",
+          "on_store_failure_effect": "Store không tới được -> cho qua và ghi cảnh báo"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/finance.projectIssueIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.projectIssueOut"
                 }
               }
             }
@@ -19682,6 +20058,96 @@
           },
           "503": {
             "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/project-issues/{id}/resolution": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Ghi vướng mắc là đã gỡ — một lần, không mở lại",
+        "operationId": "finance_post_project_issues_by_id_resolution",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "06-giai-ngan §8.1",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.update"
+        },
+        "x-vigov-task": "32d14ae3fe0a",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.projectIssueOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "issue_already_resolved"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
             "content": {
               "application/json": {
                 "schema": {
@@ -34802,6 +35268,16 @@
               "null"
             ],
             "format": "int64"
+          },
+          "latest_issue": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/finance.latestIssueOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -35206,6 +35682,30 @@
         ],
         "additionalProperties": false
       },
+      "finance.latestIssueOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "recorded_at": {
+            "type": "string"
+          },
+          "resolved": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "recorded_at",
+          "resolved",
+          "text"
+        ],
+        "additionalProperties": false
+      },
       "finance.moKhoaVao": {
         "type": "object",
         "properties": {
@@ -35323,6 +35823,84 @@
         ],
         "additionalProperties": false
       },
+      "finance.projectCommentIn": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "mentioned_staff_codes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "additionalProperties": false
+      },
+      "finance.projectCommentOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "author_code": {
+            "type": "string",
+            "description": "staff business code"
+          },
+          "mentioned_staff_codes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "description": "RFC 3339, UTC"
+          }
+        },
+        "required": [
+          "author_code",
+          "body",
+          "created_at",
+          "id",
+          "mentioned_staff_codes",
+          "project_id"
+        ],
+        "additionalProperties": false
+      },
+      "finance.projectCommentsOut": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/finance.projectCommentOut"
+            }
+          },
+          "count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "items",
+          "project_id"
+        ],
+        "additionalProperties": false
+      },
       "finance.projectCurveOut": {
         "type": "object",
         "properties": {
@@ -35354,6 +35932,92 @@
           "points",
           "project_id",
           "year"
+        ],
+        "additionalProperties": false
+      },
+      "finance.projectIssueIn": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "finance.projectIssueOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "recorded_by": {
+            "type": "string",
+            "description": "staff business code"
+          },
+          "recorded_at": {
+            "type": "string",
+            "description": "RFC 3339, UTC"
+          },
+          "resolved": {
+            "type": "boolean"
+          },
+          "resolved_at": {
+            "type": "string"
+          },
+          "resolved_by": {
+            "type": "string",
+            "description": "staff business code"
+          },
+          "tracking_task_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "recorded_at",
+          "recorded_by",
+          "resolved",
+          "title"
+        ],
+        "additionalProperties": false
+      },
+      "finance.projectIssuesOut": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/finance.projectIssueOut"
+            }
+          },
+          "count": {
+            "type": "integer"
+          },
+          "open_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "items",
+          "open_count",
+          "project_id"
         ],
         "additionalProperties": false
       },
@@ -35402,6 +36066,12 @@
           },
           "delayed_project_count": {
             "type": "integer"
+          },
+          "open_issue_count": {
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "monthly": {
             "type": "array",

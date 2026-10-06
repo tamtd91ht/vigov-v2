@@ -481,6 +481,20 @@
       "source": "service-finance/migrations/0014_project_code_counter.sql:49"
     },
     {
+      "entity": "ProjectComment",
+      "service": "finance",
+      "scope": "tenant",
+      "table": "project_comments",
+      "source": "service-finance/migrations/0015_project_issues_and_comments.sql:136"
+    },
+    {
+      "entity": "ProjectIssue",
+      "service": "finance",
+      "scope": "tenant",
+      "table": "project_issues",
+      "source": "service-finance/migrations/0015_project_issues_and_comments.sql:29"
+    },
+    {
       "entity": "Province",
       "service": "platform",
       "scope": "platform",

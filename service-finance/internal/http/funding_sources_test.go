@@ -144,6 +144,8 @@ func newFundingSourceHarness(t *testing.T) *fundingSourceHarness {
 		CapitalPlanCategoryImports: &catalogueImportFake{},
 		FundingSources:             read,
 		FundingSourceWrites:        write,
+		ProjectDiscussion:          newProjectDiscussionFake(),
+		ProjectDiscussionWrites:    &projectDiscussionWritesFake{},
 		Nay:                        func() time.Time { return lucDaQua7096 },
 		Log:                        lg,
 	})

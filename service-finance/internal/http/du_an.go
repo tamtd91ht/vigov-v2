@@ -139,6 +139,10 @@ type duAnRa struct {
 	// that it feeds into its delay flag; this API's delay rule is §3's calendar-year one, and switching
 	// the marker alone would make the bar contradict the chip.
 	TimeElapsedRatio *int64 `json:"time_elapsed_ratio,omitempty"`
+
+	// LatestIssue is §7.2's "Vướng mắc mới nhất": the project's most recent issue, resolved or not —
+	// LIST ROUTE ONLY. Absent when the project has none (the column shows "—").
+	LatestIssue *latestIssueOut `json:"latest_issue,omitempty"`
 }
 
 // fundingStatusOut is the funding chip of one project.
@@ -368,6 +372,19 @@ func (h *Handler) DanhSachDuAn(w http.ResponseWriter, r *http.Request) {
 			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
 		return
 	}
+	// THE LATEST ISSUE OF EVERY PROJECT OF THE YEAR IN ONE READ — never one read per project. Read for
+	// the whole year rather than under the category filter: the map is keyed by project id and only
+	// consulted for the projects on this page, so the extra rows change no answer, and the read is
+	// bounded by the same TranDuAnMotNam ceiling. A failure is a 500, not a column of "—": that would
+	// say no project has an obstacle.
+	latestIssues, err := h.d.ProjectDiscussion.LatestIssuesOfYear(ctx, fistore.LocDuAn{Nam: nam})
+	if err != nil {
+		h.d.Log.Error("vướng mắc mới nhất theo năm: lỗi hệ thống",
+			"xa", string(tenant.MustFrom(ctx)), "nam", nam, "err", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal",
+			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return
+	}
 	notice, ok := h.scopeNotice(w, r)
 	if !ok {
 		return
@@ -393,6 +410,9 @@ func (h *Handler) DanhSachDuAn(w http.ResponseWriter, r *http.Request) {
 		item.FundingStatus = fundingStatusOutOf(mot.DuAn.KeHoachVonNam, lines)
 		for _, l := range lines {
 			item.FundingSourceNames = append(item.FundingSourceNames, l.SourceName)
+		}
+		if issue, ok := latestIssues[mot.DuAn.ID]; ok {
+			item.LatestIssue = latestIssueOutOf(issue)
 		}
 		ra.Items = append(ra.Items, item)
 	}

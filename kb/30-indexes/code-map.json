@@ -10,6 +10,10 @@
       "kind": "func",
       "at": "service-identity/internal/app/operator_store.go:77"
     },
+    "app.AddComment": {
+      "kind": "func",
+      "at": "service-finance/internal/app/project_discussion.go:192"
+    },
     "app.AddFundingSource": {
       "kind": "func",
       "at": "service-finance/internal/app/funding_source.go:81"
@@ -788,7 +792,7 @@
     },
     "app.KetQuaThemDuAn": {
       "kind": "type",
-      "at": "service-finance/internal/app/du_an.go:203"
+      "at": "service-finance/internal/app/du_an.go:202"
     },
     "app.KhoBienBanGhi": {
       "kind": "type",
@@ -1390,6 +1394,10 @@
       "kind": "func",
       "at": "service-comms/internal/app/portal_sync_runner.go:222"
     },
+    "app.NewProjectDiscussion": {
+      "kind": "func",
+      "at": "service-finance/internal/app/project_discussion.go:65"
+    },
     "app.NewRatePetition": {
       "kind": "func",
       "at": "service-petitions/internal/app/petition_rating.go:89"
@@ -1790,9 +1798,21 @@
       "kind": "func",
       "at": "service-comms/internal/app/map_asset_type_import.go:56"
     },
+    "app.ProjectCommentRequest": {
+      "kind": "type",
+      "at": "service-finance/internal/app/project_discussion.go:78"
+    },
+    "app.ProjectDiscussion": {
+      "kind": "type",
+      "at": "service-finance/internal/app/project_discussion.go:57"
+    },
+    "app.ProjectDiscussionStore": {
+      "kind": "type",
+      "at": "service-finance/internal/app/project_discussion.go:48"
+    },
     "app.ProjectEditResult": {
       "kind": "type",
-      "at": "service-finance/internal/app/du_an.go:191"
+      "at": "service-finance/internal/app/du_an.go:190"
     },
     "app.PublicAudio": {
       "kind": "type",
@@ -1857,6 +1877,10 @@
     "app.RecordFullView": {
       "kind": "func",
       "at": "service-comms/internal/app/map_asset.go:362"
+    },
+    "app.RecordIssue": {
+      "kind": "func",
+      "at": "service-finance/internal/app/project_discussion.go:88"
     },
     "app.RecordOnSourceInTx": {
       "kind": "type",
@@ -1937,6 +1961,10 @@
     "app.ResolveDeadlineReader": {
       "kind": "type",
       "at": "service-petitions/internal/app/staff_intake.go:60"
+    },
+    "app.ResolveIssue": {
+      "kind": "func",
+      "at": "service-finance/internal/app/project_discussion.go:143"
     },
     "app.ResolveSession": {
       "kind": "func",
@@ -2604,7 +2632,7 @@
     },
     "app.YeuCauSuaDuAn": {
       "kind": "type",
-      "at": "service-finance/internal/app/du_an.go:171"
+      "at": "service-finance/internal/app/du_an.go:170"
     },
     "app.YeuCauSuaHangMuc": {
       "kind": "type",
@@ -2692,7 +2720,7 @@
     },
     "app.YeuCauThemDuAn": {
       "kind": "type",
-      "at": "service-finance/internal/app/du_an.go:124"
+      "at": "service-finance/internal/app/du_an.go:123"
     },
     "app.YeuCauThemHangMuc": {
       "kind": "type",
@@ -5498,6 +5526,10 @@
       "kind": "func",
       "at": "service-finance/internal/domain/budget_period_close.go:163"
     },
+    "domain.NormaliseCommentBody": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/project_discussion.go:140"
+    },
     "domain.NormaliseFundingSourceName": {
       "kind": "func",
       "at": "service-finance/internal/domain/funding_source.go:57"
@@ -5505,6 +5537,10 @@
     "domain.NormaliseHost": {
       "kind": "func",
       "at": "service-platform/internal/domain/tenant.go:54"
+    },
+    "domain.NormaliseMentions": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/project_discussion.go:161"
     },
     "domain.NormaliseReopenReason": {
       "kind": "func",
@@ -5962,9 +5998,17 @@
       "kind": "type",
       "at": "service-finance/internal/domain/project_allocation.go:33"
     },
+    "domain.ProjectComment": {
+      "kind": "type",
+      "at": "service-finance/internal/domain/project_discussion.go:97"
+    },
     "domain.ProjectCurve": {
       "kind": "func",
       "at": "service-finance/internal/domain/disbursement_summary.go:162"
+    },
+    "domain.ProjectIssue": {
+      "kind": "type",
+      "at": "service-finance/internal/domain/project_discussion.go:73"
     },
     "domain.ProjectScheduleMonths": {
       "kind": "func",
@@ -6113,6 +6157,10 @@
     "domain.ResolveMessage": {
       "kind": "func",
       "at": "service-reporting/internal/domain/system_message.go:142"
+    },
+    "domain.Resolved": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/project_discussion.go:94"
     },
     "domain.RoleTemplate": {
       "kind": "type",
@@ -6289,6 +6337,10 @@
     "domain.SoTrongMaNhiemVu": {
       "kind": "func",
       "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:265"
+    },
+    "domain.SplitIssueText": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/project_discussion.go:119"
     },
     "domain.StaffChoiceLabel": {
       "kind": "func",
@@ -7338,6 +7390,10 @@
       "kind": "func",
       "at": "core/grpcx/grpcx.go:311"
     },
+    "http.AddProjectComment": {
+      "kind": "func",
+      "at": "service-finance/internal/http/project_discussion.go:238"
+    },
     "http.AddTaskLogEntry": {
       "kind": "func",
       "at": "service-petitions/internal/http/nhat_ky_nhiem_vu.go:183"
@@ -7408,7 +7464,7 @@
     },
     "http.ChiTietDuAn": {
       "kind": "func",
-      "at": "service-finance/internal/http/du_an.go:409"
+      "at": "service-finance/internal/http/du_an.go:429"
     },
     "http.ChiTietVanBanDen": {
       "kind": "func",
@@ -7604,7 +7660,7 @@
     },
     "http.DanhSachDuAn": {
       "kind": "func",
-      "at": "service-finance/internal/http/du_an.go:275"
+      "at": "service-finance/internal/http/du_an.go:279"
     },
     "http.DanhSachHangMucKeHoachVon": {
       "kind": "func",
@@ -8150,6 +8206,14 @@
       "kind": "func",
       "at": "service-comms/internal/http/portal_sync.go:265"
     },
+    "http.ListProjectComments": {
+      "kind": "func",
+      "at": "service-finance/internal/http/project_discussion.go:219"
+    },
+    "http.ListProjectIssues": {
+      "kind": "func",
+      "at": "service-finance/internal/http/project_discussion.go:162"
+    },
     "http.ListProjectVouchers": {
       "kind": "func",
       "at": "service-finance/internal/http/chung_tu_giai_ngan.go:449"
@@ -8508,11 +8572,19 @@
     },
     "http.ProjectDisbursementCurve": {
       "kind": "func",
-      "at": "service-finance/internal/http/disbursement_summary.go:237"
+      "at": "service-finance/internal/http/disbursement_summary.go:250"
+    },
+    "http.ProjectDiscussionReading": {
+      "kind": "type",
+      "at": "service-finance/internal/http/project_discussion.go:37"
+    },
+    "http.ProjectDiscussionWriting": {
+      "kind": "type",
+      "at": "service-finance/internal/http/project_discussion.go:51"
     },
     "http.ProjectSummary": {
       "kind": "func",
-      "at": "service-finance/internal/http/disbursement_summary.go:166"
+      "at": "service-finance/internal/http/disbursement_summary.go:172"
     },
     "http.PublicAudioLinks": {
       "kind": "type",
@@ -8581,6 +8653,10 @@
     "http.ReceiveZaloBotUpdate": {
       "kind": "func",
       "at": "service-comms/internal/http/zalo_bot_updates.go:120"
+    },
+    "http.RecordProjectIssue": {
+      "kind": "func",
+      "at": "service-finance/internal/http/project_discussion.go:184"
     },
     "http.Register": {
       "kind": "func",
@@ -8669,6 +8745,10 @@
     "http.ResidentialUnitWriting": {
       "kind": "type",
       "at": "service-identity/internal/http/routes.go:277"
+    },
+    "http.ResolveProjectIssue": {
+      "kind": "func",
+      "at": "service-finance/internal/http/project_discussion.go:204"
     },
     "http.RestoreSystemMessage": {
       "kind": "func",
@@ -11342,6 +11422,10 @@
       "kind": "func",
       "at": "service-comms/internal/store/map_asset_type_defaults.go:35"
     },
+    "store.CommentsOfProject": {
+      "kind": "func",
+      "at": "service-finance/internal/store/project_discussion.go:215"
+    },
     "store.Commune": {
       "kind": "func",
       "at": "service-platform/internal/store/operator_registry.go:106"
@@ -11770,9 +11854,17 @@
       "kind": "func",
       "at": "service-comms/internal/store/portal_sync.go:267"
     },
+    "store.InsertComment": {
+      "kind": "func",
+      "at": "service-finance/internal/store/project_discussion.go:371"
+    },
     "store.InsertImported": {
       "kind": "func",
       "at": "service-petitions/internal/store/catalogue_import.go:113"
+    },
+    "store.InsertIssue": {
+      "kind": "func",
+      "at": "service-finance/internal/store/project_discussion.go:298"
     },
     "store.InsertLink": {
       "kind": "func",
@@ -11817,6 +11909,14 @@
     "store.InsertUnit": {
       "kind": "func",
       "at": "service-identity/internal/store/residential_unit_write.go:314"
+    },
+    "store.IssueForUpdate": {
+      "kind": "func",
+      "at": "service-finance/internal/store/project_discussion.go:318"
+    },
+    "store.IssuesOfProject": {
+      "kind": "func",
+      "at": "service-finance/internal/store/project_discussion.go:106"
     },
     "store.KetLuanTheoThuTu": {
       "kind": "func",
@@ -11873,6 +11973,10 @@
     "store.LastRuns": {
       "kind": "func",
       "at": "service-identity/internal/store/automation.go:268"
+    },
+    "store.LatestIssuesOfYear": {
+      "kind": "func",
+      "at": "service-finance/internal/store/project_discussion.go:150"
     },
     "store.LatestReopenAtTx": {
       "kind": "func",
@@ -11973,6 +12077,10 @@
     "store.LiveLinks": {
       "kind": "func",
       "at": "service-comms/internal/store/zalo_link.go:281"
+    },
+    "store.LiveProjectCode": {
+      "kind": "func",
+      "at": "service-finance/internal/store/project_discussion.go:276"
     },
     "store.LiveSiblings": {
       "kind": "func",
@@ -12422,6 +12530,14 @@
       "kind": "func",
       "at": "service-comms/internal/store/portal_sync.go:60"
     },
+    "store.NewProjectDiscussionStore": {
+      "kind": "func",
+      "at": "service-finance/internal/store/project_discussion.go:54"
+    },
+    "store.NewProjectDiscussionWriteStore": {
+      "kind": "func",
+      "at": "service-finance/internal/store/project_discussion.go:259"
+    },
     "store.NewQuanHeCongDanXaStore": {
       "kind": "func",
       "at": "service-identity/internal/store/quan_he_cong_dan_xa.go:48"
@@ -12566,6 +12682,10 @@
       "kind": "func",
       "at": "service-documents/internal/store/automation.go:66"
     },
+    "store.OpenIssueCount": {
+      "kind": "func",
+      "at": "service-finance/internal/store/project_discussion.go:191"
+    },
     "store.OpenTasksForAutomation": {
       "kind": "func",
       "at": "service-petitions/internal/store/automation.go:61"
@@ -12694,6 +12814,14 @@
       "kind": "func",
       "at": "service-platform/internal/store/branding.go:39"
     },
+    "store.ProjectDiscussionStore": {
+      "kind": "type",
+      "at": "service-finance/internal/store/project_discussion.go:50"
+    },
+    "store.ProjectDiscussionWriteStore": {
+      "kind": "type",
+      "at": "service-finance/internal/store/project_discussion.go:255"
+    },
     "store.ProjectForVoucherWrite": {
       "kind": "func",
       "at": "service-finance/internal/store/chung_tu_giai_ngan.go:248"
@@ -12821,6 +12949,10 @@
     "store.ResealKey": {
       "kind": "func",
       "at": "service-comms/internal/store/portal_sync.go:193"
+    },
+    "store.ResolveIssue": {
+      "kind": "func",
+      "at": "service-finance/internal/store/project_discussion.go:350"
     },
     "store.Retire": {
       "kind": "func",
