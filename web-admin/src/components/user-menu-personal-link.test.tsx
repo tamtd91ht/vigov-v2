@@ -37,8 +37,8 @@ afterEach(() => {
   host = null;
 });
 
-describe("UserMenu — Cá nhân", () => {
-  it("closed: no link; opened: Cá nhân → /ca-nhan, before Đổi mật khẩu, no identity in the URL", () => {
+describe("UserMenu — Hồ sơ cá nhân", () => {
+  it("closed: no link; opened: Hồ sơ cá nhân → /ca-nhan, before Đổi mật khẩu, no identity in the URL", () => {
     host = document.createElement("div");
     document.body.append(host);
     const r = createRoot(host);
@@ -51,8 +51,22 @@ describe("UserMenu — Cá nhân", () => {
     const links = [...menu.querySelectorAll<HTMLAnchorElement>("a.user-menu-item")];
     expect(PERSONAL_PAGE_PATH).toBe("/ca-nhan");
     expect(links.map((a) => [a.getAttribute("href"), a.textContent?.trim()])).toEqual([
-      ["/ca-nhan", "Cá nhân"],
+      ["/ca-nhan", "Hồ sơ cá nhân"],
       ["/doi-mat-khau", "Đổi mật khẩu"],
     ]);
+  });
+
+  it("the trigger shows the position under the name, as the prototype's topbar does; the role stays in the menu", () => {
+    host = document.createElement("div");
+    document.body.append(host);
+    const r = createRoot(host);
+    root = r;
+    act(() => r.render(<UserMenu fullName="Nguyễn Văn Hùng" position="Chuyên viên" roleName="Văn thư" />));
+    const trigger = host.querySelector<HTMLButtonElement>("button.header-user")!;
+    expect(trigger.querySelector(".header-user-role")?.textContent).toBe("Chuyên viên");
+    expect(trigger.textContent).not.toContain("Văn thư");
+
+    act(() => trigger.click());
+    expect(document.body.querySelector(".user-menu")!.textContent).toContain("Văn thư");
   });
 });

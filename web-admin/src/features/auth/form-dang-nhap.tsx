@@ -1,8 +1,9 @@
 "use client";
 
-import { LockKeyhole, LogIn, Mail, ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import { useId, useState, type FormEvent } from "react";
 
+import { BusyLabel } from "@/features/danh-ba/busy-label";
 import { dangNhap } from "@/lib/api/phien";
 
 import { duongDanTiepTuc } from "./duong-dan-tiep-tuc";
@@ -66,65 +67,67 @@ export function FormDangNhap({ tiepTuc }: { tiepTuc: string | null }) {
   return (
     <form className="form-dang-nhap" onSubmit={guiDi} noValidate>
       <h1 className="tieu-de-form">Đăng nhập hệ thống</h1>
-      <p className="login-card-sub">Dành cho cán bộ, công chức của xã</p>
+      <p className="login-card-sub">Dùng tài khoản thư điện tử công vụ do Văn phòng Uỷ ban cấp.</p>
 
+      {/* The asterisk is the prototype's `Field required` mark, drawn and hidden from assistive
+          tech. It is NOT the `required` attribute: see "VÌ SAO KHÔNG ĐẶT `required`" above. No
+          placeholder: the prototype's is a sample account address, and this page carries none. */}
       <div className="o-nhap">
-        <label htmlFor={idEmail}>Thư điện tử công vụ</label>
-        <div className="login-input">
-          <Mail aria-hidden="true" focusable="false" strokeWidth={1.8} />
-          <input
-            id={idEmail}
-            name="email"
-            type="email"
-            autoComplete="username"
-            autoCapitalize="none"
-            spellCheck={false}
-            value={email}
-            onChange={(su) => datEmail(su.target.value)}
-            disabled={dangGui}
-            aria-describedby={thongBaoLoi ? idLoi : undefined}
-          />
-        </div>
+        <label htmlFor={idEmail}>
+          Thư điện tử công vụ<span className="login-field-mark" aria-hidden="true">*</span>
+        </label>
+        <input
+          id={idEmail}
+          name="email"
+          type="email"
+          autoComplete="username"
+          autoCapitalize="none"
+          spellCheck={false}
+          value={email}
+          onChange={(su) => datEmail(su.target.value)}
+          disabled={dangGui}
+          aria-describedby={thongBaoLoi ? idLoi : undefined}
+        />
       </div>
 
       <div className="o-nhap">
-        <label htmlFor={idMatKhau}>Mật khẩu</label>
-        <div className="login-input">
-          <LockKeyhole aria-hidden="true" focusable="false" strokeWidth={1.8} />
-          <input
-            id={idMatKhau}
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            value={matKhau}
-            onChange={(su) => datMatKhau(su.target.value)}
-            disabled={dangGui}
-            aria-describedby={thongBaoLoi ? idLoi : undefined}
-          />
-        </div>
+        <label htmlFor={idMatKhau}>
+          Mật khẩu<span className="login-field-mark" aria-hidden="true">*</span>
+        </label>
+        <input
+          id={idMatKhau}
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          value={matKhau}
+          onChange={(su) => datMatKhau(su.target.value)}
+          disabled={dangGui}
+          aria-describedby={thongBaoLoi ? idLoi : undefined}
+        />
       </div>
 
       {/*
         `role="alert"` + `aria-live` để người dùng trình đọc màn hình nghe được câu từ chối mà
-        không phải đi tìm. Chỉ có một vùng thông báo, vì chỉ có một thông báo.
+        không phải đi tìm. Chỉ có một vùng thông báo, vì chỉ có một thông báo. The shield icon is
+        the prototype's; it is drawn only with a sentence, so the empty region stays empty.
+
+        NO two-factor step here although the prototype's form grows one (open question #37 decided
+        it for accounts holding `admin.user`): the prototype shows it only after the server answers
+        `mfa_required`, and no server route here does yet. A field that could never be reached, or
+        a step that pretended to check a code, would be a fake (ADR 0068 lần 5 #5).
       */}
-      <p id={idLoi} className="thong-bao-loi" role="alert" aria-live="assertive">
-        {thongBaoLoi ?? ""}
+      <p id={idLoi} className="thong-bao-loi login-error" role="alert" aria-live="assertive">
+        {thongBaoLoi ? (
+          <>
+            <ShieldCheck aria-hidden="true" focusable="false" strokeWidth={1.8} />
+            <span>{thongBaoLoi}</span>
+          </>
+        ) : null}
       </p>
 
       <button type="submit" className="nut-chinh" disabled={dangGui} aria-busy={dangGui}>
-        <LogIn aria-hidden="true" focusable="false" strokeWidth={1.8} />
-        {dangGui ? "Đang đăng nhập…" : "Đăng nhập"}
+        <BusyLabel busy={dangGui} label="Đăng nhập" busyText="Đang đăng nhập…" />
       </button>
-
-      {/* Trust line requested by the owner (spec §8.4, 02/10/2026). It is a statement about the
-          transport: the session cookie is `Secure`, so a sign-in over plain HTTP cannot complete.
-          HSTS is NOT sent yet (`tools/security_debt.json`, web-admin headers) — closing that debt
-          is what makes this sentence true for the very first request too. */}
-      <p className="login-trust">
-        <ShieldCheck aria-hidden="true" focusable="false" strokeWidth={1.8} />
-        Kết nối được mã hoá
-      </p>
     </form>
   );
 }

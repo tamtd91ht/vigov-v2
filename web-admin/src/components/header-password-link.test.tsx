@@ -81,11 +81,11 @@ const header = (el: HTMLElement) => el.querySelector("header")!;
 const sideNames = (el: HTMLElement) => [...el.querySelectorAll(".side-nav a")].map((a) => a.textContent);
 
 describe("DauTrang — person block and its menu", () => {
-  it("shows the person's name and role on the trigger; no change-password link until the menu opens", () => {
+  it("shows the person's name and position on the trigger (prototype topbar); no change-password link until the menu opens", () => {
     const el = mount(session([], { code: "van-thu", name: "Văn thư", is_leader: false }));
     const trigger = header(el).querySelector<HTMLButtonElement>("button.header-user")!;
     expect(trigger.textContent).toContain("Nguyễn Văn Hùng");
-    expect(trigger.textContent).toContain("Văn thư");
+    expect(trigger.textContent).toContain("Chuyên viên");
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
     expect(document.querySelector('a[href="/doi-mat-khau"]')).toBeNull();
   });

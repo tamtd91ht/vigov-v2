@@ -25,8 +25,14 @@ export const PERSONAL_PAGE_PATH = "/ca-nhan";
  * (`NutDangXuat`), and a menu closes on select — the person would never read why they are still signed
  * in. `modal` stays false: a modal Radix popover injects a `<style>` element (ADR 0068 §4).
  *
- * The role's name sits under the person's name on wide screens too, not only inside the menu: the
- * person always sees which authority they are acting with (spec v2 §5, `role-pill.tsx`).
+ * Composition mirrors the prototype's `AppTopbar` account dropdown (ADR 0068 lần 5): the trigger shows
+ * the name with the POSITION under it (the prototype's `title`); the menu opens with name + a second
+ * line, a divider, `Hồ sơ cá nhân` → `/ca-nhan`, then sign-out. Two departures, both deliberate:
+ * - the second line in the menu is the position, not the e-mail address the prototype prints there —
+ *   a work address is personal data (rule 3) and `khoiNguoiDung` never carries it;
+ * - `Đổi mật khẩu` stays as a menu item: the prototype has no change-password screen at all, and this
+ *   link is the only voluntary way into `/doi-mat-khau`.
+ * The role pill stays inside the menu, so the person can still see which authority they act with.
  */
 export function UserMenu({ fullName, position, roleName }: { fullName: string; position: string; roleName: string | null }) {
   const initials = userInitials(fullName);
@@ -41,7 +47,7 @@ export function UserMenu({ fullName, position, roleName }: { fullName: string; p
           )}
           <span className="header-user-text">
             <span className="ho-ten">{fullName}</span>
-            {roleName !== null && <span className="header-user-role">{roleName}</span>}
+            {position !== "" && <span className="header-user-role">{position}</span>}
           </span>
           <ChevronDown aria-hidden="true" focusable="false" strokeWidth={1.8} className="header-user-caret" />
         </button>
@@ -67,7 +73,7 @@ export function UserMenu({ fullName, position, roleName }: { fullName: string; p
             <PopoverPrimitive.Close asChild>
               <Link className="user-menu-item" href={PERSONAL_PAGE_PATH}>
                 <UserRound aria-hidden="true" focusable="false" strokeWidth={1.8} />
-                Cá nhân
+                Hồ sơ cá nhân
               </Link>
             </PopoverPrimitive.Close>
             <PopoverPrimitive.Close asChild>

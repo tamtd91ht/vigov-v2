@@ -1,80 +1,39 @@
 "use client";
 
-import { Banknote, Landmark, ListChecks, Mail, MessageSquareWarning, type LucideIcon } from "lucide-react";
+import { Landmark } from "lucide-react";
 
 import { useCauHinhXa } from "@/components/cau-hinh-xa";
 import { CommuneLogoImage } from "@/components/commune-identity";
 
 /**
- * Cột thương hiệu của màn đăng nhập — spec giao diện 02/10/2026 §8.4: logo, khẩu hiệu ngắn, bốn ô
- * phân hệ, tên xã.
+ * The identity block above the login card — the prototype's tile + two lines
+ * (`(auth)/dang-nhap/page.tsx`, ADR 0068 lần 5). The slogan, the four module tiles and the
+ * parent-authority row of the earlier two-column screen are gone: the prototype has none of them.
  *
- * KHÔNG CÓ TÊN SẢN PHẨM (ADR 0068 §13, chủ dự án chốt 02/10/2026): chỗ trước đây in `ViGov` nay in
- * tên xã, phụ đề là "Hệ thống điều hành số". Tên xã vì thế chỉ in MỘT lần, ở đầu cột; khối dưới
- * cùng chỉ còn cơ quan cấp trên (ẩn khi xã không khai, như `components/commune-identity.tsx`).
+ * NO PRODUCT NAME (ADR 0068 §13, owner 02/10/2026): where the prototype prints "ViGov" this prints
+ * the commune's name, and the second line is "Hệ thống điều hành số" — the wording the owner
+ * approved for this block, kept over the prototype's "Nền tảng điều hành số cấp xã".
  *
- * Phụ đề, khẩu hiệu và bốn tên phân hệ là hằng số của SẢN PHẨM — viết thẳng được, giống nhau ở
- * mọi xã. Tên xã và cơ quan cấp trên thì KHÔNG: chúng đi xuống qua ngữ cảnh do máy chủ dựng, đọc
- * lúc chạy từ `Host`. Đây chính là chỗ một `NEXT_PUBLIC_TEN_XA` sẽ len vào nếu không ai để ý — và
- * một bundle không mang nổi tên của 300 xã, nên nó sẽ kéo theo mỗi xã một bản dựng riêng.
- *
- * Tên xã in NGUYÊN VĂN, không viết HOA, không ghép tiền tố: tên đúng của đơn vị hành chính là dữ
- * liệu do xã khai.
- *
- * Bốn ô phân hệ chỉ là hình minh hoạ, KHÔNG phải liên kết: người chưa đăng nhập không vào được
- * phân hệ nào, và một ô trông như bấm được mà không dẫn đi đâu là một lời hứa suông.
+ * The commune's name comes down through server-built context, read at runtime from `Host`. This is
+ * exactly where a `NEXT_PUBLIC_TEN_XA` would creep in — and one bundle cannot carry 300 names.
+ * Printed VERBATIM: no upper-casing, no prefix — the unit's name is data the commune declared.
  */
-const MODULES: readonly { label: string; Icon: LucideIcon; tone: string }[] = [
-  { label: "Nhiệm vụ", Icon: ListChecks, tone: "tone-brand" },
-  { label: "Văn bản & Đơn thư", Icon: Mail, tone: "tone-amber" },
-  { label: "Ngân sách", Icon: Banknote, tone: "tone-green" },
-  { label: "Phản ánh người dân", Icon: MessageSquareWarning, tone: "tone-red" },
-];
-
 export function KhoiThuongHieu() {
   const xa = useCauHinhXa();
 
   return (
-    <section className="cot-thuong-hieu">
-      <div className="login-brand-head">
-        {/* The commune's own logo when it uploaded one (ADR 0069 #4), drawn exactly as in the sidebar
-            tile (`CommuneLogoImage`: contain, transparency kept, alt "" because the name is printed
-            right beside it). None yet → the building icon, as in the sidebar (ADR 0069 #7): the old star
-            was the product's mark, and ADR 0068 §13 removed the product from this screen. */}
-        <div className={xa.logoUrl !== "" ? "logo-vigov has-logo" : "logo-vigov"} aria-hidden="true">
-          {xa.logoUrl !== "" ? <CommuneLogoImage src={xa.logoUrl} /> : <Landmark focusable="false" strokeWidth={1.8} />}
-        </div>
-        <div>
-          <p className="ten-san-pham">{xa.displayName}</p>
-          <p className="phu-de-san-pham">Hệ thống điều hành số</p>
-        </div>
+    <div className="login-brand-head">
+      {/* The commune's own logo when it uploaded one (ADR 0069 #4), drawn exactly as in the sidebar
+          tile (`CommuneLogoImage`: contain, transparency kept, alt "" because the name is printed
+          right beside it). None yet → the building icon, as in the sidebar (ADR 0069 #7): the
+          prototype's "VG" initials were the product's mark, and ADR 0068 §13 removed the product. */}
+      <div className={xa.logoUrl !== "" ? "logo-vigov has-logo" : "logo-vigov"} aria-hidden="true">
+        {xa.logoUrl !== "" ? <CommuneLogoImage src={xa.logoUrl} /> : <Landmark focusable="false" strokeWidth={1.8} />}
       </div>
-
-      <p className="login-slogan">
-        Điều hành <span>thông suốt</span>, phục vụ người dân <span>kịp thời</span>
-      </p>
-
-      <ul className="login-modules" aria-label="Các phân hệ">
-        {MODULES.map(({ label, Icon, tone }) => (
-          <li key={label}>
-            <span className={`login-module-icon ${tone}`} aria-hidden="true">
-              <Icon focusable="false" strokeWidth={1.8} />
-            </span>
-            {label}
-          </li>
-        ))}
-      </ul>
-
-      {xa.parentAuthority !== "" && (
-        <div className="login-commune">
-          <span className="login-commune-icon" aria-hidden="true">
-            <Landmark focusable="false" strokeWidth={1.8} />
-          </span>
-          <div>
-            <p className="co-quan-cap-tren">{xa.parentAuthority}</p>
-          </div>
-        </div>
-      )}
-    </section>
+      <div className="min-w-0">
+        <p className="ten-san-pham">{xa.displayName}</p>
+        <p className="phu-de-san-pham">Hệ thống điều hành số</p>
+      </div>
+    </div>
   );
 }
