@@ -6,6 +6,7 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/url"
 	"regexp"
 	"strings"
@@ -97,15 +98,32 @@ func citizenAppAccepts(query string) (host string, ok bool) {
 }
 
 // noLiveOwnApp leaves the commune with no running own app: only a row switched off before
-// 05/10/2026 — not live, so the shared app's link is issued.
+// 05/10/2026 — not live, so the shared app's link is the only one.
 func noLiveOwnApp(h *harness) {
 	h.reg.setApps = true
 	h.reg.apps = []domain.CommuneMiniApp{{AppID: "3043188591857102858", Mode: domain.CheDoRieng, Active: false}}
 }
 
-// A commune WITHOUT a live own app: the shared app's link, as before 05/10/2026. It is the
-// published-app form, names the commune's PRIMARY host, and round-trips through the citizen app's own
-// parameter reader (ADR 0047: `d` + `src=qr`).
+func decodeLaunchLinks(t *testing.T, body []byte) launchLinksView {
+	t.Helper()
+	var got launchLinksView
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Links == nil || got.Unavailable == nil {
+		t.Fatalf("both arrays must be present, even empty: %s", body)
+	}
+	return got
+}
+
+const (
+	sharedLinkFake = "https://zalo.me/s/" + sharedAppIDFake + "/?d=thangbinh-danang.vigov.vn&src=qr"
+	ownLinkFake    = "https://zalo.me/s/3291993990104489440/?src=qr"
+)
+
+// A commune WITHOUT a live own app: the shared app's link only. It is the published-app form, names
+// the commune's PRIMARY host, and round-trips through the citizen app's own parameter reader (ADR 0047:
+// `d` + `src=qr`). No own app is an absence, not a refusal: nothing is listed as unavailable.
 func TestLaunchLinkRoundTripsThroughCitizenApp(t *testing.T) {
 	h := newHarness(t)
 	h.id.keys = []string{"ops.qr.issue"}
@@ -114,13 +132,13 @@ func TestLaunchLinkRoundTripsThroughCitizenApp(t *testing.T) {
 	if rec.Code != 200 {
 		t.Fatalf("status %d (%s)", rec.Code, rec.Body)
 	}
-	var got launchLinkView
-	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
-		t.Fatal(err)
+	all := decodeLaunchLinks(t, rec.Body.Bytes())
+	if len(all.Links) != 1 || len(all.Unavailable) != 0 {
+		t.Fatalf("got %+v, want the shared link only", all)
 	}
-	want := "https://zalo.me/s/" + sharedAppIDFake + "/?d=thangbinh-danang.vigov.vn&src=qr"
-	if got.URL != want || got.Domain != "thangbinh-danang.vigov.vn" || got.AppID != sharedAppIDFake || got.Source != "chung" {
-		t.Fatalf("got %+v, want url %s", got, want)
+	got := all.Links[0]
+	if got.URL != sharedLinkFake || got.Domain != "thangbinh-danang.vigov.vn" || got.AppID != sharedAppIDFake || got.Source != "chung" {
+		t.Fatalf("got %+v, want url %s", got, sharedLinkFake)
 	}
 	u, err := url.Parse(got.URL)
 	if err != nil {
@@ -137,57 +155,125 @@ func TestLaunchLinkRoundTripsThroughCitizenApp(t *testing.T) {
 	}
 }
 
-// A commune WITH a live own app (ADR 0070 §Sửa đổi 05/10/2026 #4): that App ID's link, `src=qr`
-// and NO `d` — the own app has its commune baked in. Needs neither the shared app nor a primary host.
-func TestLaunchLinkUsesTheLiveOwnApp(t *testing.T) {
+// A commune WITH a live own app gets BOTH links, shared first (owner 06/10/2026: "QR từ đâu thì mở
+// app từ đó"): the shared app is borrowed while the own app waits for Zalo, so it must stay printable.
+func TestLaunchLinkGivesBothWhenOwnAppIsLive(t *testing.T) {
+	h := newHarness(t)
+	h.id.keys = []string{"ops.qr.issue"}
+	// registryFake's default: 3291993990104489440 running, 3043188591857102858 switched off.
+	rec := h.do("GET", launchPath, "", opCookie(t))
+	if rec.Code != 200 {
+		t.Fatalf("status %d (%s)", rec.Code, rec.Body)
+	}
+	all := decodeLaunchLinks(t, rec.Body.Bytes())
+	if len(all.Links) != 2 || len(all.Unavailable) != 0 {
+		t.Fatalf("got %+v, want two links", all)
+	}
+	if s := all.Links[0]; s.Source != "chung" || s.URL != sharedLinkFake || s.AppID != sharedAppIDFake {
+		t.Errorf("first link %+v, want the shared app's", s)
+	}
+	o := all.Links[1]
+	if o.Source != "rieng" || o.URL != ownLinkFake || o.AppID != "3291993990104489440" || o.Domain != "thangbinh-danang.vigov.vn" {
+		t.Errorf("second link %+v, want the own app's", o)
+	}
+	u, err := url.Parse(o.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.Query().Has("d") {
+		t.Error("an own-app link must not carry d=")
+	}
+}
+
+// The shared link cannot be built, the own app is live: the own link alone, and the shared link's
+// reason — the same code the route refused with before — so the card explains the gap.
+func TestLaunchLinkOwnOnlyWhenSharedUnavailable(t *testing.T) {
 	for _, c := range []struct {
-		name  string
-		setup func(h *harness)
+		name   string
+		setup  func(f *sharedAppFake)
+		code   string
+		domain string
 	}{
-		{"default", func(*harness) {}},
-		{"no shared app declared", func(h *harness) { h.shared.app = nil }},
-		{"no primary domain", func(h *harness) { h.shared.host, h.shared.hostErr = "", store.ErrCommuneNoPrimaryHost }},
+		{"no shared app declared", func(f *sharedAppFake) { f.app = nil }, "shared_mini_app_not_declared", "thangbinh-danang.vigov.vn"},
+		{"two shared apps", func(f *sharedAppFake) { f.appErr = store.ErrSharedMiniAppAmbiguous }, "shared_mini_app_ambiguous", "thangbinh-danang.vigov.vn"},
+		{"no primary domain", func(f *sharedAppFake) { f.host, f.hostErr = "", store.ErrCommuneNoPrimaryHost }, "commune_no_primary_domain", ""},
+		{"unparseable stored host", func(f *sharedAppFake) { f.host = "Bad Host" }, "commune_no_primary_domain", "Bad Host"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			h := newHarness(t)
 			h.id.keys = []string{"ops.qr.issue"}
-			c.setup(h)
-			// registryFake's default: 3291993990104489440 running, 3043188591857102858 switched off.
+			c.setup(h.shared)
 			rec := h.do("GET", launchPath, "", opCookie(t))
 			if rec.Code != 200 {
 				t.Fatalf("status %d (%s)", rec.Code, rec.Body)
 			}
-			var got launchLinkView
-			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
-				t.Fatal(err)
+			all := decodeLaunchLinks(t, rec.Body.Bytes())
+			if len(all.Links) != 1 || all.Links[0].Source != "rieng" || all.Links[0].URL != ownLinkFake || all.Links[0].Domain != c.domain {
+				t.Fatalf("links %+v, want the own link only", all.Links)
 			}
-			if got.URL != "https://zalo.me/s/3291993990104489440/?src=qr" || got.AppID != "3291993990104489440" || got.Source != "rieng" {
-				t.Fatalf("got %+v", got)
-			}
-			u, err := url.Parse(got.URL)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if u.Query().Has("d") {
-				t.Error("an own-app link must not carry d=")
+			if len(all.Unavailable) != 1 || all.Unavailable[0].Source != "chung" || all.Unavailable[0].Code != c.code || all.Unavailable[0].Message == "" {
+				t.Fatalf("unavailable %+v, want chung %s", all.Unavailable, c.code)
 			}
 		})
 	}
 }
 
-// Two running own apps is a state ADR 0070 #1 forbids but no constraint prevents: refused, never a
-// QR for an App ID nobody chose.
-func TestLaunchLinkRefusesTwoLiveOwnApps(t *testing.T) {
-	h := newHarness(t)
-	h.id.keys = []string{"ops.qr.issue"}
-	h.reg.setApps = true
-	h.reg.apps = []domain.CommuneMiniApp{
-		{AppID: "3291993990104489440", Mode: domain.CheDoRieng, Active: true},
-		{AppID: "3043188591857102858", Mode: domain.CheDoRieng, Active: true},
+// Two running own apps is a state ADR 0070 #1 forbids but no constraint prevents: never a QR for an
+// App ID nobody chose. It no longer hides the shared link; with no shared link either, the route
+// refuses with the own-app reason, as it did before 06/10/2026.
+func TestLaunchLinkTwoLiveOwnApps(t *testing.T) {
+	setup := func(h *harness) {
+		h.id.keys = []string{"ops.qr.issue"}
+		h.reg.setApps = true
+		h.reg.apps = []domain.CommuneMiniApp{
+			{AppID: "3291993990104489440", Mode: domain.CheDoRieng, Active: true},
+			{AppID: "3043188591857102858", Mode: domain.CheDoRieng, Active: true},
+		}
 	}
+	h := newHarness(t)
+	setup(h)
 	rec := h.do("GET", launchPath, "", opCookie(t))
+	if rec.Code != 200 {
+		t.Fatalf("status %d (%s)", rec.Code, rec.Body)
+	}
+	all := decodeLaunchLinks(t, rec.Body.Bytes())
+	if len(all.Links) != 1 || all.Links[0].Source != "chung" {
+		t.Fatalf("links %+v, want the shared link only", all.Links)
+	}
+	if len(all.Unavailable) != 1 || all.Unavailable[0].Source != "rieng" || all.Unavailable[0].Code != "own_mini_app_ambiguous" {
+		t.Fatalf("unavailable %+v", all.Unavailable)
+	}
+
+	h = newHarness(t)
+	setup(h)
+	h.shared.app = nil
+	rec = h.do("GET", launchPath, "", opCookie(t))
 	if rec.Code != 409 || !strings.Contains(rec.Body.String(), `"code":"own_mini_app_ambiguous"`) {
 		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+}
+
+// Refusals of the whole commune hold whatever links it has: an inactive commune with a live own app
+// gets no QR, and a store failure on one link is an error, not a quietly half-empty card.
+func TestLaunchLinkRefusesTheCommuneDespiteOwnApp(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		setup func(f *sharedAppFake)
+		want  int
+		code  string
+	}{
+		{"inactive commune", func(f *sharedAppFake) { f.active = false }, 409, "commune_inactive"},
+		{"shared app read fails", func(f *sharedAppFake) { f.appErr = errors.New("connection reset") }, 500, "internal"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.id.keys = []string{"ops.qr.issue"}
+			c.setup(h.shared)
+			rec := h.do("GET", launchPath, "", opCookie(t))
+			if rec.Code != c.want || !strings.Contains(rec.Body.String(), `"code":"`+c.code+`"`) {
+				t.Fatalf("status %d body %s; want %d %s", rec.Code, rec.Body, c.want, c.code)
+			}
+		})
 	}
 }
 

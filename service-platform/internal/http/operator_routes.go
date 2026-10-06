@@ -468,8 +468,8 @@ func registerOperator(mux *http.ServeMux, d OperatorDeps) {
 			idem.KhongCan("declaring the App ID that is already the running shared app changes nothing and writes no entry")(
 				http.HandlerFunc(h.declareSharedMiniApp))))
 
-	// @summary  Liên kết mở Mini App của xã để in QR: app riêng đang sống của xã (source=rieng, không d=) nếu có, không thì app dùng chung với tên miền chính (source=chung); không ghi vết (ADR 0048 §30/09 #9)
-	// @reply    200 launchLinkView
+	// @summary  Mọi liên kết mở Mini App của xã để in QR, người vận hành chọn mã nào in (chủ đầu tư 06/10/2026): app dùng chung với tên miền chính (source=chung) trước, app riêng đang sống (source=rieng, không d=) sau; liên kết không tạo được nằm ở unavailable kèm mã lỗi; chỉ từ chối khi không có liên kết nào; không ghi vết (ADR 0048 §30/09 #9)
+	// @reply    200 launchLinksView
 	// @reply    401 httpx.Error unauthorized
 	// @reply    403 httpx.Error forbidden
 	// @reply    404 httpx.Error commune_not_found

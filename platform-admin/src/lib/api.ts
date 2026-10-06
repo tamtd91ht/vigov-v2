@@ -153,10 +153,19 @@ export type UploadPolicyChange = {
 export type SharedMiniApp = { app_id: string; created_at: string; created_by: string };
 
 /**
- * operator_launch.go `launchLinkView`. `source` says which app the link opens: `rieng` = the
- * commune's own running app (`domain` may then be ""), `chung` = the shared app (ADR 0070 §Sửa đổi #4).
+ * operator_launch.go `launchLinkView`. `source` says which app the link opens: `chung` = the shared
+ * ViHAT app, `rieng` = the commune's own running app (`domain` may then be "").
  */
 export type LaunchLink = { url: string; domain: string; app_id: string; source: "rieng" | "chung" };
+
+/** operator_launch.go `launchLinkUnavailable`: a link the commune cannot get now, and why. */
+export type LaunchLinkUnavailable = { source: "rieng" | "chung"; code: string; message: string };
+
+/**
+ * operator_launch.go `launchLinksView` (owner 06/10/2026): every link the commune has, shared first,
+ * so the operator chooses which QR to print. Both arrays are always present.
+ */
+export type LaunchLinks = { links: LaunchLink[]; unavailable: LaunchLinkUnavailable[] };
 
 /**
  * operator_map_frame_default.go `mapFrameDefaultView` (ADR 0072 amendment 2, K1–K2). Without a default:
@@ -618,7 +627,7 @@ export function declareSharedMiniApp(input: { appId: string; reason: string }): 
 }
 
 /** Not trailed by decision (ADR 0048 §30/09 #9); `ops.qr.issue` is the gate. */
-export function getLaunchLink(communeId: string): Promise<LaunchLink> {
+export function getLaunchLinks(communeId: string): Promise<LaunchLinks> {
   return call("GET", `/communes/${id(communeId)}/mini-app-launch-link`);
 }
 

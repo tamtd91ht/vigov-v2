@@ -7,7 +7,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { ACCOUNT_ITEMS, NAV_ITEMS, SidebarView } from "@/components/sidebar";
-import { ALL_OPS_KEYS, ApiError, type CommuneDetail, type OperatorAuditEntry, type PetitionField, type UploadPolicy } from "@/lib/api";
+import { ALL_OPS_KEYS, ApiError, type CommuneDetail, type LaunchLinks, type OperatorAuditEntry, type PetitionField, type UploadPolicy } from "@/lib/api";
 import { communeError, handleGuardedError, launchLinkError } from "@/lib/errors";
 import {
   canIssueQr,
@@ -18,7 +18,7 @@ import {
 } from "@/lib/permissions";
 
 import { CommuneDetailBody } from "./communes/commune-detail";
-import { LaunchLinkView, SHARED_APP_PAGE } from "./communes/launch-link-card";
+import { LaunchLinkView, SHARED_APP_PAGE, launchSourceLabel } from "./communes/launch-link-card";
 import { OperatorLogMore, OperatorLogTable, PLATFORM_WIDE } from "./operator-log/operator-log";
 import { actionLabel, compactValue, logRange, VALUE_MAX_CHARS } from "./operator-log/operator-log-model";
 import {
@@ -311,36 +311,66 @@ describe("launch link: every 409 is a Vietnamese next step", () => {
     expect(other).not.toContain(`href="${SHARED_APP_PAGE}"`);
   });
 
+  const SHARED_LINK = {
+    url: "https://zalo.me/s/1234567/?d=chinh.example.vn&src=qr",
+    domain: "chinh.example.vn",
+    app_id: "1234567",
+    source: "chung" as const,
+  };
+  const OWN_LINK = { url: "https://zalo.me/s/4096/?src=qr", domain: "chinh.example.vn", app_id: "4096", source: "rieng" as const };
+  const ready = (links: LaunchLinks) => renderToString(<LaunchLinkView state={{ status: "ready", links }} onCopy={noop} copyNotice="" />);
+
   it("a link renders as a QR, its URL and a copy button — no download", () => {
-    const link = {
-      url: "https://zalo.me/s/1234567/?d=chinh.example.vn&src=qr",
-      domain: "chinh.example.vn",
-      app_id: "1234567",
-      source: "chung" as const,
-    };
-    const html = renderToString(<LaunchLinkView state={{ status: "ready", link }} onCopy={noop} copyNotice="" />);
+    const html = ready({ links: [SHARED_LINK], unavailable: [] });
     expect(html).toContain("<svg");
     expect(html).toContain("https://zalo.me/s/1234567/?d=chinh.example.vn&amp;src=qr");
     expect(html).toContain("Chép liên kết");
     expect(html).not.toMatch(/Tải về|PNG/);
   });
 
-  it("a shared-app link says so and shows the primary domain", () => {
-    const link = { url: "https://zalo.me/s/1234567/?d=chinh.example.vn&src=qr", domain: "chinh.example.vn", app_id: "1234567", source: "chung" as const };
-    const html = renderToString(<LaunchLinkView state={{ status: "ready", link }} onCopy={noop} copyNotice="" />);
-    expect(html).toContain("Qua Mini App dùng chung của ViHAT");
+  it("a shared-app link is labelled as the ViHAT app and shows the primary domain", () => {
+    const html = ready({ links: [SHARED_LINK], unavailable: [] });
+    expect(html).toContain("Mở bằng app ViHAT");
     expect(html).toContain("App ID Mini App dùng chung");
     expect(html).toContain("chinh.example.vn");
-    expect(html).not.toContain("Mini App riêng của xã");
+    expect(html).not.toContain("Mở bằng app riêng của xã");
   });
 
-  it("an own-app link names its App ID, and with an empty domain shows no domain row", () => {
-    const link = { url: "https://zalo.me/s/4096/?src=qr", domain: "", app_id: "4096", source: "rieng" as const };
-    const html = renderToString(<LaunchLinkView state={{ status: "ready", link }} onCopy={noop} copyNotice="" />);
-    expect(html).toContain("Mở thẳng Mini App riêng của xã (App ID 4096)");
+  it("a commune with its own app gets TWO QR cards, shared first, each labelled and with its domain (owner 06/10/2026)", () => {
+    const html = ready({ links: [SHARED_LINK, OWN_LINK], unavailable: [] });
+    expect(html.match(/Mã QR: /g)?.length).toBe(2);
+    expect(html.match(/Chép liên kết/g)?.length).toBe(2);
+    const shared = html.indexOf("Mở bằng app ViHAT");
+    const own = html.indexOf("Mở bằng app riêng của xã");
+    expect(shared).toBeGreaterThan(-1);
+    expect(own).toBeGreaterThan(shared);
+    expect(html.match(/chinh\.example\.vn<\/dd>/g)?.length).toBe(2);
+    expect(html).toContain("https://zalo.me/s/4096/?src=qr");
     expect(html).toContain("App ID Mini App riêng của xã");
+  });
+
+  it("an own-app link with an empty domain shows no domain row", () => {
+    const html = ready({ links: [{ ...OWN_LINK, domain: "" }], unavailable: [] });
+    expect(html).toContain("Mở bằng app riêng của xã");
     expect(html).not.toContain("Tên miền chính của xã");
-    expect(html).not.toContain("dùng chung");
+  });
+
+  it("a link the server could not build is shown with its Vietnamese reason, never silently missing", () => {
+    const html = ready({
+      links: [OWN_LINK],
+      unavailable: [{ source: "chung", code: "shared_mini_app_not_declared", message: "server text" }],
+    });
+    expect(html.match(/Mã QR: /g)?.length).toBe(1);
+    expect(html).toContain("Mở bằng app ViHAT");
+    expect(html).toContain(launchLinkError(err(409, "shared_mini_app_not_declared"))!.text);
+    expect(html).toContain(`href="${SHARED_APP_PAGE}"`);
+    expect(html).not.toContain("shared_mini_app_not_declared");
+    const unknown = ready({ links: [SHARED_LINK], unavailable: [{ source: "rieng", code: "mot_ma_moi", message: "Văn bản của máy chủ." }] });
+    expect(unknown).toContain("Văn bản của máy chủ.");
+  });
+
+  it("an unknown source is shown as it is, never guessed", () => {
+    expect(launchSourceLabel("khac")).toBe("Nguồn không xác định: khac");
   });
 });
 
@@ -450,6 +480,7 @@ describe("tier-1 petition fields", () => {
 describe("the CSP holds: no wave-2 view draws a style attribute", () => {
   it("every new view renders without style=", () => {
     const link = { url: "https://zalo.me/s/1/?d=a.example.vn&src=qr", domain: "a.example.vn", app_id: "1", source: "chung" as const };
+    const own = { url: "https://zalo.me/s/2/?src=qr", domain: "a.example.vn", app_id: "2", source: "rieng" as const };
     const views = [
       <SidebarView key="sb" permissionKeys={SEVEN} />,
       <UploadPolicyTable key="ut" items={[POLICY, UNCLASSED]} canEdit onEdit={noop} />,
@@ -459,7 +490,12 @@ describe("the CSP holds: no wave-2 view draws a style attribute", () => {
       <DeclareSharedMiniAppFields key="sd" current={{ app_id: "1", created_at: "", created_by: "" }} appId="" reason="" onAppId={noop} onReason={noop} busy={false} error={null} />,
       <PetitionFieldTable key="pt" items={[FIELD_ACTIVE, FIELD_RETIRED]} canManage onEdit={noop} onToggle={noop} />,
       <PetitionFieldFormFields key="pf" field={null} tones={["green"]} form={FIELD_FORM} onChange={noop} busy={false} error={{ field: "tone", text: "x" }} />,
-      <LaunchLinkView key="ll" state={{ status: "ready", link }} onCopy={noop} copyNotice="" />,
+      <LaunchLinkView
+        key="ll"
+        state={{ status: "ready", links: { links: [link, own], unavailable: [{ source: "chung", code: "commune_no_primary_domain", message: "x" }] } }}
+        onCopy={noop}
+        copyNotice=""
+      />,
       <LaunchLinkView key="le" state={{ status: "error", message: "x", toSharedAppPage: true }} onCopy={noop} copyNotice="" />,
       <OperatorLogTable key="ol" items={ENTRIES} showCommune />,
       <OperatorLogTable key="oe" items={[]} showCommune />,

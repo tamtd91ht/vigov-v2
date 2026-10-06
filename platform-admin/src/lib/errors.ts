@@ -225,8 +225,9 @@ export function sharedMiniAppError(err: ApiError): { field: SharedMiniAppField; 
 }
 
 /**
- * GET /communes/{id}/mini-app-launch-link refusals (409s of operator_launch.go). `toSharedAppPage`
- * says the next step is on the "Mini App dùng chung" page, so the card links there.
+ * GET /communes/{id}/mini-app-launch-link refusals (409s of operator_launch.go), and the same codes
+ * on its `unavailable` entries — one link the commune cannot get while the other is shown.
+ * `toSharedAppPage` says the next step is on the "Mini App dùng chung" page, so the card links there.
  */
 const LAUNCH_LINK_ERRORS: Record<string, { text: string; toSharedAppPage: boolean }> = {
   commune_inactive: {
@@ -249,7 +250,7 @@ const LAUNCH_LINK_ERRORS: Record<string, { text: string; toSharedAppPage: boolea
   commune_not_found: { text: "Không tìm thấy xã. Quay lại danh sách xã và chọn lại.", toSharedAppPage: false },
 };
 
-export function launchLinkError(err: ApiError): { text: string; toSharedAppPage: boolean } | null {
+export function launchLinkError(err: Pick<ApiError, "code">): { text: string; toSharedAppPage: boolean } | null {
   return LAUNCH_LINK_ERRORS[err.code] ?? null;
 }
 
