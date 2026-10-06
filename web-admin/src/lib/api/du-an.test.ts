@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { duongDanDanhSachDuAn, layChiTietDuAn, layDanhSachDuAn } from "./du-an";
+import { duongDanDanhSachDuAn, getProjectVouchers, layChiTietDuAn, layDanhSachDuAn } from "./du-an";
 
 /**
  * Kiểm cả đường của hai tuyến dự án: đường dẫn được dựng ra sao, và phản hồi HTTP thành cái gì.
@@ -145,5 +145,26 @@ describe("gọi chi tiết dự án", () => {
       ok: false,
       thongBao: "Không tìm thấy dự án.",
     });
+  });
+});
+
+describe("project vouchers (GET /api/v1/investment-projects/{id}/disbursements)", () => {
+  it("encodes the id into the path, sends no tenant, and returns the body as is", async () => {
+    const body = { project_id: "a/b", items: [], count: 0 };
+    const fake = batFetch(new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    expect(await getProjectVouchers("a/b")).toEqual({ ok: true, duLieu: body });
+    expect(fake.mock.calls[0]?.[0]).toBe("/api/v1/investment-projects/a%2Fb/disbursements");
+    expect(fake.mock.calls[0]?.[1]?.method).toBe("GET");
+  });
+
+  it("404 (no such project, or another commune's) is the server's one sentence", async () => {
+    batFetch(
+      new Response(JSON.stringify({ code: "not_found", message: "Không tìm thấy dự án.", trace_id: "01J" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    expect(await getProjectVouchers("01JKHONGCO")).toEqual({ ok: false, thongBao: "Không tìm thấy dự án." });
   });
 });

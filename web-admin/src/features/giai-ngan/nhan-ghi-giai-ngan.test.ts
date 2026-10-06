@@ -25,7 +25,10 @@ import {
   docSoTien,
   FORM_CHUNG_TU_TRONG,
   FORM_DU_AN_TRONG,
+  allocationOptionLabel,
+  initialFundingSource,
   lopTrangThaiChungTu,
+  MISSING_FUNDING_SOURCE,
   nhanMocKhoa,
   nhanTrangThaiChungTu,
   thaoTacChungTu,
@@ -56,7 +59,13 @@ const CHUNG_TU_MAU: GiaTriFormChungTu = {
   noiDung: "Thanh toán đợt 3",
   doiTac: "Công ty ABC",
   soChungTu: "CT-2026-0912",
+  fundingSourceId: "",
 };
+
+/** A project with no allocation line: no source select, no source sent. */
+const NO_LINES: readonly string[] = [];
+/** A project drawing on two sources. */
+const TWO_LINES: readonly string[] = ["S1", "S2"];
 
 const DU_AN_MAU: GiaTriFormDuAn = {
   ma: "DA01",
@@ -191,7 +200,7 @@ describe("nhanMocKhoa — múi giờ GHIM", () => {
 
 describe("thanThemChungTu", () => {
   it("dựng đủ trường, cắt khoảng trắng, và mang `project_id` của TRANG", () => {
-    const kq = thanThemChungTu("01JDA1", { ...CHUNG_TU_MAU, noiDung: "  Thanh toán đợt 3  " });
+    const kq = thanThemChungTu("01JDA1", { ...CHUNG_TU_MAU, noiDung: "  Thanh toán đợt 3  " }, NO_LINES);
 
     expect(kq.ok).toBe(true);
     if (!kq.ok) return;
@@ -206,7 +215,7 @@ describe("thanThemChungTu", () => {
   });
 
   it("ô tuỳ chọn để trống thì VẮNG MẶT, không gửi chuỗi rỗng", () => {
-    const kq = thanThemChungTu("01JDA1", { ...CHUNG_TU_MAU, doiTac: "  ", soChungTu: "" });
+    const kq = thanThemChungTu("01JDA1", { ...CHUNG_TU_MAU, doiTac: "  ", soChungTu: "" }, NO_LINES);
 
     expect(kq.ok).toBe(true);
     if (!kq.ok) return;
@@ -215,7 +224,7 @@ describe("thanThemChungTu", () => {
   });
 
   it("KHÔNG BAO GIỜ mang `status`: vòng đời không do client đặt", () => {
-    const kq = thanThemChungTu("01JDA1", CHUNG_TU_MAU);
+    const kq = thanThemChungTu("01JDA1", CHUNG_TU_MAU, NO_LINES);
 
     expect(kq.ok).toBe(true);
     if (!kq.ok) return;
@@ -223,75 +232,129 @@ describe("thanThemChungTu", () => {
   });
 
   it("từ chối ngày chi trống, nội dung trống, số tiền không đọc được, số tiền 0", () => {
-    expect(thanThemChungTu("01JDA1", { ...CHUNG_TU_MAU, ngayChi: "" })).toEqual({
+    expect(thanThemChungTu("01JDA1", { ...CHUNG_TU_MAU, ngayChi: "" }, NO_LINES)).toEqual({
       ok: false,
       cau: CAU_THIEU_NGAY_CHI,
     });
-    expect(thanThemChungTu("01JDA1", { ...CHUNG_TU_MAU, noiDung: "   " })).toEqual({
+    expect(thanThemChungTu("01JDA1", { ...CHUNG_TU_MAU, noiDung: "   " }, NO_LINES)).toEqual({
       ok: false,
       cau: CAU_THIEU_NOI_DUNG,
     });
-    expect(thanThemChungTu("01JDA1", { ...CHUNG_TU_MAU, soTien: "1,5" })).toEqual({
+    expect(thanThemChungTu("01JDA1", { ...CHUNG_TU_MAU, soTien: "1,5" }, NO_LINES)).toEqual({
       ok: false,
       cau: CAU_SO_TIEN_KHONG_DOC_DUOC,
     });
-    expect(thanThemChungTu("01JDA1", { ...CHUNG_TU_MAU, soTien: "" })).toEqual({
+    expect(thanThemChungTu("01JDA1", { ...CHUNG_TU_MAU, soTien: "" }, NO_LINES)).toEqual({
       ok: false,
       cau: CAU_SO_TIEN_KHONG_DOC_DUOC,
     });
     // `amount` phải lớn hơn 0 đồng ở máy chủ, và đây là câu nói ra điều đó trước.
-    expect(thanThemChungTu("01JDA1", { ...CHUNG_TU_MAU, soTien: "0" })).toEqual({
+    expect(thanThemChungTu("01JDA1", { ...CHUNG_TU_MAU, soTien: "0" }, NO_LINES)).toEqual({
       ok: false,
       cau: CAU_SO_TIEN_PHAI_DUONG,
     });
-    expect(thanThemChungTu("01JDA1", { ...CHUNG_TU_MAU, soTien: "100000000000000000" })).toEqual({
+    expect(thanThemChungTu("01JDA1", { ...CHUNG_TU_MAU, soTien: "100000000000000000" }, NO_LINES)).toEqual({
       ok: false,
       cau: CAU_SO_TIEN_VUOT_CHINH_XAC,
     });
   });
 
   it("biểu mẫu trống không dựng được thân nào", () => {
-    expect(thanThemChungTu("01JDA1", FORM_CHUNG_TU_TRONG).ok).toBe(false);
+    expect(thanThemChungTu("01JDA1", FORM_CHUNG_TU_TRONG, NO_LINES).ok).toBe(false);
+  });
+});
+
+describe("voucher funding source — decided by the project's allocation lines (06/10/2026)", () => {
+  it("project with lines: source REQUIRED on add, refused before the server's 409", () => {
+    expect(thanThemChungTu("01JDA1", CHUNG_TU_MAU, TWO_LINES)).toEqual({ ok: false, cau: MISSING_FUNDING_SOURCE });
+    const kq = thanThemChungTu("01JDA1", { ...CHUNG_TU_MAU, fundingSourceId: "S2" }, TWO_LINES);
+    expect(kq.ok && kq.than.funding_source_id).toBe("S2");
+  });
+
+  it("project with NO line: nothing sent, even if a value lingers", () => {
+    const kq = thanThemChungTu("01JDA1", { ...CHUNG_TU_MAU, fundingSourceId: "S1" }, NO_LINES);
+    expect(kq.ok).toBe(true);
+    if (!kq.ok) return;
+    expect("funding_source_id" in kq.than && kq.than.funding_source_id !== undefined).toBe(false);
+    expect(JSON.stringify(kq.than)).not.toContain("funding_source_id");
+  });
+
+  it("PATCH omits an UNCHANGED source — even a legacy empty one on a project with lines", () => {
+    const filed = { ...CHUNG_TU_MAU, fundingSourceId: "S1" };
+    expect(thanSuaChungTu(filed, { ...filed, noiDung: "Đợt 4" }, TWO_LINES)).toEqual({
+      ok: true,
+      than: { description: "Đợt 4" },
+    });
+    // Entered before the project declared sources: still editable without being forced onto one.
+    expect(thanSuaChungTu(CHUNG_TU_MAU, { ...CHUNG_TU_MAU, noiDung: "Đợt 4" }, TWO_LINES)).toEqual({
+      ok: true,
+      than: { description: "Đợt 4" },
+    });
+  });
+
+  it("PATCH sends a CHANGED source, and refuses clearing it on a project with lines", () => {
+    const filed = { ...CHUNG_TU_MAU, fundingSourceId: "S1" };
+    expect(thanSuaChungTu(filed, { ...filed, fundingSourceId: "S2" }, TWO_LINES)).toEqual({
+      ok: true,
+      than: { funding_source_id: "S2" },
+    });
+    expect(thanSuaChungTu(filed, { ...filed, fundingSourceId: "" }, TWO_LINES)).toEqual({
+      ok: false,
+      cau: MISSING_FUNDING_SOURCE,
+    });
+  });
+
+  it("option label: name — còn (allocated − drawn), short form; overdrawn stays negative", () => {
+    const line = { funding_source_id: "S1", name: "Ngân sách tỉnh", amount: 1_500_000_000, disbursed_amount: 300_000_000, disbursed_ratio: 2000 };
+    expect(allocationOptionLabel(line)).toBe("Ngân sách tỉnh — còn 1,2 tỷ đồng");
+    expect(allocationOptionLabel({ ...line, disbursed_amount: 1_600_000_000 })).toBe("Ngân sách tỉnh — còn -100 triệu đồng");
+  });
+
+  it("preselected only when the project has exactly one line", () => {
+    const line = { funding_source_id: "S1", name: "A", amount: 1, disbursed_amount: 0, disbursed_ratio: 0 };
+    expect(initialFundingSource([line])).toBe("S1");
+    expect(initialFundingSource([line, { ...line, funding_source_id: "S2" }])).toBe("");
+    expect(initialFundingSource([])).toBe("");
   });
 });
 
 describe("thanSuaChungTu — CHỈ những ô thật sự đổi", () => {
   it("không đổi gì thì KHÔNG gửi `PATCH` nào", () => {
     // Một `PATCH` thừa vẫn là một lần ghi, và ở tuyến này nó có thể bóc chữ xác nhận của lãnh đạo.
-    expect(thanSuaChungTu(CHUNG_TU_MAU, { ...CHUNG_TU_MAU })).toEqual({
+    expect(thanSuaChungTu(CHUNG_TU_MAU, { ...CHUNG_TU_MAU }, NO_LINES)).toEqual({
       ok: false,
       cau: CAU_KHONG_CO_GI_DOI,
     });
   });
 
   it("đổi một ô thì thân CHỈ có ô ấy", () => {
-    const kq = thanSuaChungTu(CHUNG_TU_MAU, { ...CHUNG_TU_MAU, noiDung: "Thanh toán đợt 4" });
+    const kq = thanSuaChungTu(CHUNG_TU_MAU, { ...CHUNG_TU_MAU, noiDung: "Thanh toán đợt 4" }, NO_LINES);
 
     expect(kq).toEqual({ ok: true, than: { description: "Thanh toán đợt 4" } });
   });
 
   it("xoá trắng ô đối tác GỬI `\"\"` — đó là một lần sửa có thật", () => {
-    const kq = thanSuaChungTu(CHUNG_TU_MAU, { ...CHUNG_TU_MAU, doiTac: "" });
+    const kq = thanSuaChungTu(CHUNG_TU_MAU, { ...CHUNG_TU_MAU, doiTac: "" }, NO_LINES);
 
     expect(kq).toEqual({ ok: true, than: { counterparty: "" } });
   });
 
   it("số tiền đổi thì đi qua `docSoTien`, và ca vượt chính xác bị chặn", () => {
-    expect(thanSuaChungTu(CHUNG_TU_MAU, { ...CHUNG_TU_MAU, soTien: "12.000.000" })).toEqual({
+    expect(thanSuaChungTu(CHUNG_TU_MAU, { ...CHUNG_TU_MAU, soTien: "12.000.000" }, NO_LINES)).toEqual({
       ok: true,
       than: { amount: 12000000 },
     });
-    expect(thanSuaChungTu(CHUNG_TU_MAU, { ...CHUNG_TU_MAU, soTien: "999999999999999999" })).toEqual(
+    expect(thanSuaChungTu(CHUNG_TU_MAU, { ...CHUNG_TU_MAU, soTien: "999999999999999999" }, NO_LINES)).toEqual(
       { ok: false, cau: CAU_SO_TIEN_VUOT_CHINH_XAC },
     );
   });
 
   it("xoá trắng ngày chi hoặc nội dung bị TỪ CHỐI — cả hai bắt buộc ở máy chủ", () => {
-    expect(thanSuaChungTu(CHUNG_TU_MAU, { ...CHUNG_TU_MAU, ngayChi: "" })).toEqual({
+    expect(thanSuaChungTu(CHUNG_TU_MAU, { ...CHUNG_TU_MAU, ngayChi: "" }, NO_LINES)).toEqual({
       ok: false,
       cau: CAU_THIEU_NGAY_CHI,
     });
-    expect(thanSuaChungTu(CHUNG_TU_MAU, { ...CHUNG_TU_MAU, noiDung: "" })).toEqual({
+    expect(thanSuaChungTu(CHUNG_TU_MAU, { ...CHUNG_TU_MAU, noiDung: "" }, NO_LINES)).toEqual({
       ok: false,
       cau: CAU_THIEU_NOI_DUNG,
     });

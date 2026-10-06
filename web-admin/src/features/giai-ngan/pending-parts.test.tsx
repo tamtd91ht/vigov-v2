@@ -123,13 +123,40 @@ describe("Giải ngân placeholders (ADR 0068 §14)", () => {
     expect(() => pendingPart("Tiến độ theo nguồn vốn")).toThrow();
   });
 
-  it("project funding (§7.2 chip, §8 block, §9 list) is LIVE: no registry entry left, voucher source still pending", () => {
-    for (const ten of ["Nguồn vốn của dự án", "Giải ngân theo nguồn vốn", "Thêm nguồn vốn cho dự án"]) {
+  it("project funding (§7.2 chip, §8 block, §9 list) and the §8.2 voucher list + source are LIVE: no registry entry left", () => {
+    for (const ten of [
+      "Nguồn vốn của dự án",
+      "Giải ngân theo nguồn vốn",
+      "Thêm nguồn vốn cho dự án",
+      "Nguồn vốn của chứng từ",
+      "Danh sách chứng từ của dự án",
+    ]) {
       expect(PHAN_CHUA_DUNG_GHI.some((p) => p.ten === ten)).toBe(false);
       expect(() => pendingPart(ten)).toThrow();
     }
-    // TASK-07 builds the voucher's source select; until then its "?" stays.
-    expect(pendingPart("Nguồn vốn của chứng từ").ten).toBe("Nguồn vốn của chứng từ");
+    // No stale sentence claiming the voucher list or the source catalogue does not exist.
+    for (const p of PHAN_CHUA_DUNG_GHI) {
+      expect(p.viSao).not.toContain("danh mục nguồn vốn");
+      expect(p.viSao).not.toContain("danh sách chứng từ");
+    }
+  });
+
+  it("the Chứng từ tab carries the server's count once the list is read, and no number before", () => {
+    const counted = mount(
+      <ProjectRecordTabs voucherCount={3}>
+        <p>panel</p>
+      </ProjectRecordTabs>,
+    );
+    expect(counted.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Chứng từ (3)");
+    act(() => root?.unmount());
+    host?.remove();
+
+    const loading = mount(
+      <ProjectRecordTabs>
+        <p>panel</p>
+      </ProjectRecordTabs>,
+    );
+    expect(loading.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Chứng từ");
   });
 
   it("a disabled tab never becomes selected; Chứng từ stays the selected tab", () => {

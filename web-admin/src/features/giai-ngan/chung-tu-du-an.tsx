@@ -1,7 +1,7 @@
 "use client";
 
 import { CircleCheck, LockKeyhole, LockKeyholeOpen, Pencil, Plus, ReceiptText, Trash2, TriangleAlert } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import { Button } from "@/components/ui/button";
@@ -9,8 +9,9 @@ import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Field } from "@/components/ui/field";
 import { ModalDialog } from "@/components/ui/modal-dialog";
+import { ErrorState } from "@/components/ui/error-state";
 import { Notice } from "@/components/ui/notice";
-import { PendingCell, PendingColumnHeader } from "@/components/ui/pending-feature";
+import { Skeleton } from "@/components/ui/skeleton";
 import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 import type { KetQua } from "@/lib/api/goi";
 import { cn } from "@/lib/cn";
@@ -22,11 +23,17 @@ import {
   themChungTu,
   xacNhanChungTu,
 } from "@/lib/api/giai-ngan";
-import type { finance_chungTuRa } from "@/lib/api/schema.gen";
+import { getProjectVouchers } from "@/lib/api/du-an";
+import type {
+  finance_chungTuRa,
+  finance_projectAllocationOut,
+  finance_projectVouchersOut,
+} from "@/lib/api/schema.gen";
 
 import { FormLyDo } from "./form-ly-do";
 import { nhanNgay, nhanTien } from "./nhan-du-an";
 import {
+  allocationOptionLabel,
   CANH_BAO_KHOA,
   CANH_BAO_SUA_VE_NHAP,
   CAU_THIEU_QUYEN_GHI,
@@ -36,6 +43,7 @@ import {
   docSoTien,
   DOI_TAC_TOI_DA,
   FORM_CHUNG_TU_TRONG,
+  initialFundingSource,
   NOI_DUNG_CHUNG_TU_TOI_DA,
   nhanMocKhoa,
   nhanTrangThaiChungTu,
@@ -43,10 +51,8 @@ import {
   thaoTacChungTu,
   thanSuaChungTu,
   thanThemChungTu,
-  pendingPart,
   type GiaTriFormChungTu,
 } from "./nhan-ghi-giai-ngan";
-import { VOUCHER_FUNDING_COLUMN, VoucherFundingPending } from "./pending-parts";
 import { DeniedNote, Glyph, VoucherStatusBadge } from "./project-ui";
 
 /**
@@ -56,16 +62,11 @@ import { DeniedNote, Glyph, VoucherStatusBadge } from "./project-ui";
  * bar, then the table whose status cell carries the row's actions.
  *
  * ═══════════════════════════════════════════════════════════════════════════════════════════
- * ⚠ BẢNG NÀY CHỈ CHỨA CHỨNG TỪ CỦA CHÍNH PHIÊN LÀM VIỆC NÀY, VÀ ĐÓ KHÔNG PHẢI MỘT LỰA CHỌN.
- *
- * Hợp đồng có sáu tuyến GHI chứng từ và **không có tuyến nào ĐỌC danh sách chứng từ** — máy chủ nói
- * thẳng đó là chủ ý (`service-finance/internal/http/chung_tu_giai_ngan.go`, khối đầu tệp). Bốn
- * tuyến `POST` · `PATCH` · `confirmation` · `lockout` trả về nguyên hàng, nên màn hình giữ lại được
- * đúng những hàng nó vừa chạm vào. Tải lại trang là bảng trống.
- *
- * Câu ấy được NÓI RA trên màn (`PHAN_CHUA_DUNG_GHI`, mục đầu tiên) chứ không giấu ở đây: một bảng
- * trống không kèm lời giải thích đọc thành "dự án này chưa chi đồng nào" — một khẳng định về tiền
- * của xã mà màn hình không có căn cứ nào để đưa ra. Hence no "(N)" count on the tab either.
+ * THE TABLE IS THE SERVER'S LIST, RE-READ AFTER EVERY WRITE (db94b35c,
+ * `GET /api/v1/investment-projects/{id}/disbursements`): every live voucher of the project, newest
+ * payment date first, with its source's name. The rows the six write routes return are NOT patched
+ * into the table — a second copy kept in the browser is what drifts from the server's order, status
+ * and source name, and it is what a reload used to empty.
  * ═══════════════════════════════════════════════════════════════════════════════════════════
  *
  * HAI KHOÁ, CHIA THEO TRỤC NGUY HIỂM (§8.2): `budget.update` NHẬP và SỬA; `budget.confirm` XÁC
@@ -86,13 +87,18 @@ export function giaTriTuChungTu(ct: finance_chungTuRa): GiaTriFormChungTu {
     noiDung: ct.description,
     doiTac: ct.counterparty ?? "",
     soChungTu: ct.voucher_no ?? "",
+    fundingSourceId: ct.funding_source_id ?? "",
   };
 }
 
 /**
  * Biểu mẫu `+ Ghi nhận khoản chi` §8.2, dùng cho cả THÊM và SỬA — prototype fields in a two-column
- * grid: `Rút từ nguồn vốn` (full width, a "?" placeholder) · Ngày chi · Số tiền · Nội dung chi (full
- * width) · Đơn vị thụ hưởng · Số chứng từ; the buttons below, left-aligned, save first.
+ * grid: `Rút từ nguồn vốn` (full width) · Ngày chi · Số tiền · Nội dung chi (full width) · Đơn vị thụ
+ * hưởng · Số chứng từ; the buttons below, left-aligned, save first.
+ *
+ * `Rút từ nguồn vốn` EXISTS ONLY WHEN THE PROJECT HAS ALLOCATION LINES (prototype
+ * `DisbursementForm.tsx:158`), and its options are THOSE lines — not the commune's catalogue: the
+ * server refuses any other source (409 `source_not_allocated`, decision 06/10/2026).
  *
  * ⚠ KHỐI CẢNH BÁO ADR 0036 HIỆN NGAY TRÊN CÁC Ô, KHÔNG PHẢI SAU KHI LƯU. Sửa một chứng từ đang
  * `Đã xác nhận` sẽ kéo nó VỀ `Kế toán nhập` và xoá dấu người xác nhận. Máy chủ làm việc ấy trong im
@@ -105,6 +111,8 @@ export function giaTriTuChungTu(ct: finance_chungTuRa): GiaTriFormChungTu {
 export function FormChungTu({
   tieuDeForm,
   giaTriDau,
+  allocations,
+  currentSourceName,
   trangThaiHienTai,
   dangGui,
   loi,
@@ -113,6 +121,10 @@ export function FormChungTu({
 }: {
   tieuDeForm: string;
   giaTriDau: GiaTriFormChungTu;
+  /** The project's allocation lines (`funding_allocations`). Empty → no source select at all. */
+  allocations: readonly finance_projectAllocationOut[];
+  /** EDIT only: the voucher's current source name, for a source the project no longer allocates. */
+  currentSourceName?: string;
   /** Trạng thái của chứng từ đang SỬA. `undefined` khi đang THÊM. */
   trangThaiHienTai?: string;
   dangGui: boolean;
@@ -124,6 +136,10 @@ export function FormChungTu({
   const [khoaChongTrung] = useState(khoaChongTrungMoi);
   const isEdit = trangThaiHienTai !== undefined;
   const amount = docSoTien(gt.soTien);
+  // A voucher filed on a source the project has since stopped allocating still shows THAT source
+  // pre-filled — a select silently showing another line would read as the voucher's real source.
+  const sourceOutsideLines =
+    gt.fundingSourceId !== "" && !allocations.some((a) => a.funding_source_id === gt.fundingSourceId);
 
   function guiNgay(e: FormEvent) {
     e.preventDefault();
@@ -149,7 +165,32 @@ export function FormChungTu({
       )}
 
       <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-        <VoucherFundingPending />
+        {allocations.length > 0 && (
+          <Field label="Rút từ nguồn vốn *" htmlFor="nguon-von-chung-tu" grow="auto" className="min-w-0 sm:col-span-2">
+            <select
+              id="nguon-von-chung-tu"
+              name="nguon-von-chung-tu"
+              value={gt.fundingSourceId}
+              onChange={(e) => datGT({ ...gt, fundingSourceId: e.target.value })}
+            >
+              <option value="">— Chọn nguồn vốn —</option>
+              {sourceOutsideLines && (
+                <option value={gt.fundingSourceId}>
+                  {currentSourceName ?? "Nguồn vốn hiện tại"} — không còn phân bổ cho dự án
+                </option>
+              )}
+              {allocations.map((a) => (
+                <option
+                  key={a.funding_source_id}
+                  value={a.funding_source_id}
+                  title={nhanTien(a.amount - a.disbursed_amount)}
+                >
+                  {allocationOptionLabel(a)}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
 
         {/* HAI NGÀY KHÁC NHAU, và xã nhập chứng từ tuần trước vào sáng thứ Hai là chuyện thường —
             mọi biểu đồ luỹ kế của §4 xếp theo ngày CHI, không theo ngày gõ. */}
@@ -273,30 +314,21 @@ export function BangChungTu({
   khoa: (id: string) => void;
 }) {
   if (ds.length === 0) {
-    // The sentence is unchanged, split between the title and the one guidance line (spec §7).
-    return (
-      <EmptyState
-        icon={ReceiptText}
-        title="Chưa có chứng từ nào trong phiên làm việc này."
-        description="Bảng này chỉ hiện chứng từ vừa ghi trong lần mở trang này — hệ thống chưa xem lại được chứng từ đã lưu từ trước."
-      />
-    );
+    // The server's list, so an empty table is a fact about the project, said as one.
+    return <EmptyState icon={ReceiptText} title="Dự án này chưa có chứng từ giải ngân nào." />;
   }
 
   return (
-    <TableScroll sticky aria-label="Chứng từ giải ngân vừa ghi" className="rounded-none border-0 shadow-none">
+    <TableScroll sticky aria-label="Chứng từ giải ngân của dự án" className="rounded-none border-0 shadow-none">
       <table className={cn("bang-danh-muc", DATA_TABLE_CLASS)}>
-        <caption className="an-thi-giac">
-          Chứng từ giải ngân đã ghi hoặc đã đổi trạng thái trong phiên làm việc này
-        </caption>
+        <caption className="an-thi-giac">Chứng từ giải ngân của dự án, ngày chi mới nhất trước</caption>
         <thead>
           <tr>
             <th scope="col">Ngày chi</th>
             <th scope="col" className="text-right">
               Số tiền
             </th>
-            {/* The prototype's NGUỒN VỐN column — a "?" placeholder (ADR 0068 §14), "—" in every row. */}
-            <PendingColumnHeader info={pendingPart(VOUCHER_FUNDING_COLUMN)}>Nguồn vốn</PendingColumnHeader>
+            <th scope="col">Nguồn vốn</th>
             <th scope="col">Nội dung</th>
             <th scope="col">Chứng từ</th>
             <th scope="col">Trạng thái</th>
@@ -388,7 +420,12 @@ export function BangChungTu({
                 <td className="text-right font-semibold whitespace-nowrap text-ink-900 tabular-nums">
                   {nhanTien(ct.amount)}
                 </td>
-                <PendingCell />
+                {/* The server's name for the source; "—" for a voucher drawn on none (§13 rule 6). */}
+                <td className="whitespace-normal">
+                  {ct.funding_source_name === undefined || ct.funding_source_name === ""
+                    ? DAU_GACH
+                    : ct.funding_source_name}
+                </td>
                 <td className="whitespace-normal">
                   {ct.description}
                   {ct.counterparty !== undefined && ct.counterparty !== "" && (
@@ -426,6 +463,42 @@ type DangMo =
 
 const REASON_FORM_ID = "form-ly-do-chung-tu";
 
+/** The project's voucher list as the tab sees it. `count` is the server's, not `items.length`. */
+export type ProjectVoucherList =
+  | { phase: "loading" }
+  | { phase: "error"; message: string }
+  | { phase: "ready"; items: readonly finance_chungTuRa[]; count: number };
+
+/**
+ * Reads `GET /api/v1/investment-projects/{id}/disbursements` once per `reloadKey`.
+ *
+ * THE CALLER PASSES THE SAME KEY THAT RE-READS THE PROJECT, so one write re-reads both: the voucher
+ * list and the four figures derived from it (`disbursed_amount`, `remaining_amount`,
+ * `disbursed_ratio`, `delay_score`) can never be from two different moments. "Loading" is DERIVED from
+ * the stored key differing from the current one — the `chi-tiet-du-an.tsx` pattern, no `setState` in
+ * the effect body.
+ */
+export function useProjectVouchers(projectId: string, reloadKey: string): ProjectVoucherList {
+  const key = `${projectId}|${reloadKey}`;
+  const [loaded, setLoaded] = useState<{ key: string; result: KetQua<finance_projectVouchersOut> } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    getProjectVouchers(projectId).then((result) => {
+      if (!cancelled) setLoaded({ key, result });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, key]);
+
+  if (loaded === null || loaded.key !== key) return { phase: "loading" };
+  if (!loaded.result.ok) return { phase: "error", message: loaded.result.thongBao };
+  return { phase: "ready", items: loaded.result.duLieu.items, count: loaded.result.duLieu.count };
+}
+
 /**
  * Khối "Chứng từ" của trang chi tiết dự án — nối cả sáu tuyến ghi. Rendered as the tab panel's
  * content, not as a card of its own (the prototype's tab content sits inside the project card).
@@ -433,108 +506,97 @@ const REASON_FORM_ID = "form-ly-do-chung-tu";
  * GỠ AND MỞ KHOÁ ASK FOR THEIR REASON IN A DIALOG — the prototype confirms a removal in a dialog; the
  * server requires the reason for both (rule 7, open question #29).
  *
- * MỖI LẦN GHI XONG GỌI `daGhiXong`, và trang cha ĐỌC LẠI dự án: `disbursed_amount`,
- * `remaining_amount`, `disbursed_ratio` và `delay_score` đều SUY RA từ chứng từ, nên một chứng từ
- * mới làm cả bốn con số ấy cũ đi ngay lập tức. Vá tại chỗ ở trình duyệt là dựng câu trả lời thứ
- * hai cho cùng một câu hỏi.
+ * MỖI LẦN GHI XONG GỌI `daGhiXong`, và trang cha ĐỌC LẠI cả dự án lẫn danh sách chứng từ:
+ * `disbursed_amount`, `remaining_amount`, `disbursed_ratio` và `delay_score` đều SUY RA từ chứng từ,
+ * và thứ tự, trạng thái, tên nguồn của từng hàng là của máy chủ. Vá tại chỗ ở trình duyệt là dựng câu
+ * trả lời thứ hai cho cùng một câu hỏi.
  */
 export function KhoiChungTu({
   duAnID,
+  allocations,
+  vouchers,
   coGhi,
   coXacNhan,
   daGhiXong,
 }: {
   duAnID: string;
+  /** The project's `funding_allocations`: the source select's options and its "required" rule. */
+  allocations: readonly finance_projectAllocationOut[];
+  vouchers: ProjectVoucherList;
   coGhi: boolean;
   coXacNhan: boolean;
+  /** After a successful write, and as the list's retry: the parent re-reads project AND vouchers. */
   daGhiXong: () => void;
 }) {
-  const [ds, datDS] = useState<readonly finance_chungTuRa[]>([]);
+  const ds: readonly finance_chungTuRa[] = vouchers.phase === "ready" ? vouchers.items : [];
+  const allocatedSourceIds = allocations.map((a) => a.funding_source_id);
   const [dangMo, datDangMo] = useState<DangMo>(null);
   const [dangGui, datDangGui] = useState(false);
   const [loi, datLoi] = useState<string | null>(null);
   const [lanGhiXong, datLanGhiXong] = useState(0);
 
-  /** Một hàng vừa đổi: thay tại chỗ, GIỮ NGUYÊN thứ tự — thứ tự là thứ tự cán bộ vừa ghi. */
-  function thayHang(moi: finance_chungTuRa): void {
-    datDS((truoc) => truoc.map((c) => (c.id === moi.id ? moi : c)));
-  }
-
   /**
    * Kết thúc MỘT lần ghi, dùng chung cho cả sáu tuyến.
    *
    * MỘT HÀM CHO SÁU TUYẾN vì sáu bản sao của đoạn này sẽ trôi, và bản trôi là bản quên gọi
-   * `daGhiXong` — tức bảng chứng từ đúng còn bốn con số suy ra của dự án ở ngay trên thì cũ, mà
-   * không có gì nói ra rằng chúng cũ.
+   * `daGhiXong` — tức bảng chứng từ và bốn con số suy ra của dự án ở ngay trên đều cũ, mà không có gì
+   * nói ra rằng chúng cũ.
    */
-  function ketThuc<T>(kq: KetQua<T>, apDung: (duLieu: T) => void): void {
+  function ketThuc<T>(kq: KetQua<T>): void {
     datDangGui(false);
     if (!kq.ok) {
-      // NGUYÊN VĂN câu máy chủ, kể cả 409 của vòng đời và 409 "người vừa khoá không tự mở lại
-      // được". Những câu ấy mang tên thao tác và mang đường ra — nuốt chúng thành "Có lỗi xảy ra"
-      // là lấy mất đúng thứ cán bộ cần để biết phải làm gì.
+      // NGUYÊN VĂN câu máy chủ, kể cả 409 của vòng đời, 409 "người vừa khoá không tự mở lại được"
+      // và 409 `source_required` / `source_not_allocated`. Những câu ấy mang tên thao tác và mang
+      // đường ra — nuốt chúng thành "Có lỗi xảy ra" là lấy mất đúng thứ cán bộ cần để biết phải làm gì.
       datLoi(kq.thongBao);
       return;
     }
     datLoi(null);
     datDangMo(null);
     datLanGhiXong((n) => n + 1);
-    apDung(kq.duLieu);
     daGhiXong();
   }
 
   function them(gt: GiaTriFormChungTu, khoa: string): void {
-    const than = thanThemChungTu(duAnID, gt);
+    const than = thanThemChungTu(duAnID, gt, allocatedSourceIds);
     if (!than.ok) {
       datLoi(than.cau);
       return;
     }
     datDangGui(true);
-    themChungTu(than.than, khoa).then((kq) => {
-      ketThuc(kq, (ct) => datDS((truoc) => [...truoc, ct]));
-    });
+    themChungTu(than.than, khoa).then(ketThuc);
   }
 
   function sua(ct: finance_chungTuRa, gt: GiaTriFormChungTu): void {
-    const than = thanSuaChungTu(giaTriTuChungTu(ct), gt);
+    const than = thanSuaChungTu(giaTriTuChungTu(ct), gt, allocatedSourceIds);
     if (!than.ok) {
       datLoi(than.cau);
       return;
     }
     datDangGui(true);
-    suaChungTu(ct.id, than.than).then((kq) => {
-      ketThuc(kq, thayHang);
-    });
+    suaChungTu(ct.id, than.than).then(ketThuc);
   }
 
   function xacNhan(id: string): void {
     datDangGui(true);
-    xacNhanChungTu(id).then((kq) => {
-      ketThuc(kq, thayHang);
-    });
+    xacNhanChungTu(id).then(ketThuc);
   }
 
   function khoa(id: string): void {
     datDangGui(true);
-    khoaChungTu(id).then((kq) => {
-      ketThuc(kq, thayHang);
-    });
+    khoaChungTu(id).then(ketThuc);
   }
 
   function moKhoa(ct: finance_chungTuRa, lyDo: string): void {
     datDangGui(true);
-    moKhoaChungTu(ct.id, lyDo).then((kq) => {
-      ketThuc(kq, thayHang);
-    });
+    moKhoaChungTu(ct.id, lyDo).then(ketThuc);
   }
 
   function go(ct: finance_chungTuRa, lyDo: string): void {
     datDangGui(true);
-    goChungTu(ct.id, lyDo).then((kq) => {
-      // 204 KHÔNG THÂN: hàng biến khỏi bảng. Nó vẫn còn ở CSDL kèm người gỡ và lý do (xoá mềm) —
-      // chỉ là không còn gì để làm với nó ở màn hình này.
-      ketThuc(kq, () => datDS((truoc) => truoc.filter((c) => c.id !== ct.id)));
-    });
+    // 204 KHÔNG THÂN. Hàng vẫn còn ở CSDL kèm người gỡ và lý do (xoá mềm); danh sách đọc lại không
+    // còn nó vì tuyến đọc chỉ trả chứng từ còn hiệu lực.
+    goChungTu(ct.id, lyDo).then(ketThuc);
   }
 
   function timHang(id: string): finance_chungTuRa | undefined {
@@ -570,7 +632,8 @@ export function KhoiChungTu({
         <FormChungTu
           key={`them-chung-tu|${lanGhiXong}`}
           tieuDeForm="Ghi nhận khoản chi"
-          giaTriDau={FORM_CHUNG_TU_TRONG}
+          giaTriDau={{ ...FORM_CHUNG_TU_TRONG, fundingSourceId: initialFundingSource(allocations) }}
+          allocations={allocations}
           dangGui={dangGui}
           loi={loi}
           huy={dong}
@@ -583,6 +646,8 @@ export function KhoiChungTu({
           key={`sua-chung-tu|${dangMo.ct.id}|${lanGhiXong}`}
           tieuDeForm={`Sửa khoản chi ngày ${nhanNgay(dangMo.ct.payment_date)}`}
           giaTriDau={giaTriTuChungTu(dangMo.ct)}
+          allocations={allocations}
+          currentSourceName={dangMo.ct.funding_source_name}
           trangThaiHienTai={dangMo.ct.status}
           dangGui={dangGui}
           loi={loi}
@@ -609,6 +674,29 @@ export function KhoiChungTu({
         </p>
       )}
 
+      {vouchers.phase === "loading" && (
+        <div>
+          <p role="status" className="an-thi-giac">
+            Đang tải chứng từ…
+          </p>
+          <div aria-hidden="true" className="flex flex-col gap-2">
+            <Skeleton className="h-9 w-full" />
+            <Skeleton className="h-9 w-full" />
+          </div>
+        </div>
+      )}
+
+      {/* A failed read is NOT an empty table: "chưa có chứng từ nào" would be a claim about the
+          commune's money that the screen has no ground for. */}
+      {vouchers.phase === "error" && (
+        <ErrorState
+          title="Chưa tải được danh sách chứng từ"
+          message={<span role="alert">{vouchers.message}</span>}
+          onRetry={daGhiXong}
+        />
+      )}
+
+      {vouchers.phase === "ready" && (
       <BangChungTu
         ds={ds}
         coGhi={coGhi}
@@ -635,6 +723,7 @@ export function KhoiChungTu({
         xacNhan={xacNhan}
         khoa={khoa}
       />
+      )}
 
       {dangMo?.kieu === "go" && coXacNhan && (
         <ModalDialog titleId={REASON_FORM_ID} onDismiss={dong} className="p-0">

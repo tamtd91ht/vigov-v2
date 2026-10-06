@@ -53,11 +53,11 @@ export const UNIT_OWNER = "Đơn vị và cán bộ phụ trách của dự án"
 const ISSUES_TAB = "Vướng mắc"; // §8.1
 const CHART_TAB = "Biểu đồ"; // §8.3
 const DISCUSSION_TAB = "Trao đổi"; // §8.4
-/** Names used by the Thêm dự án form and the voucher table. */
+/** Names used by the Thêm dự án form. */
 export const AUTO_CODE = "Tự sinh mã"; // §9
 export const UNIT_AND_OFFICER = "Đơn vị thực hiện và Cán bộ phụ trách"; // §9
-export const VOUCHER_FUNDING_COLUMN = "Nguồn vốn của chứng từ"; // §8.2, §6
-// §7.2 funding chip, §8 per-source block and the §9 funding list are LIVE since 8245698b.
+// §7.2 funding chip, §8 per-source block and the §9 funding list are LIVE since 8245698b; the §8.2
+// voucher list, its `NGUỒN VỐN` column and the voucher form's source select since db94b35c.
 
 /**
  * PageHeader buttons, prototype `BudgetWorkspace.tsx:154-168`: `[Hạng mục] [Nhập giải ngân]`, before
@@ -119,23 +119,6 @@ export function ProjectFilterPending() {
 }
 
 /**
- * The voucher form's `Rút từ nguồn vốn` select (prototype `DisbursementForm.tsx:158-175`), full width
- * above the date — disabled with the "?" of the voucher funding column (same missing catalogue).
- */
-export function VoucherFundingPending() {
-  return (
-    <PendingField
-      info={pendingPart(VOUCHER_FUNDING_COLUMN)}
-      id="nguon-von-chung-tu"
-      label="Rút từ nguồn vốn"
-      kind="select"
-      placeholder="— Chọn nguồn vốn —"
-      className="min-w-0 sm:col-span-2"
-    />
-  );
-}
-
-/**
  * The detail card's `Đơn vị thực hiện` figure (prototype `BudgetItemDetail.tsx:302`): its label, the
  * "?", and "—" — never the internal id the contract carries.
  */
@@ -181,8 +164,11 @@ export function PendingCheckbox({
  * Detail page tabs, spec §8: `[Vướng mắc] [Chứng từ] [Biểu đồ] [Trao đổi]`. Chứng từ is the only
  * live tab, always selected, and its panel is `children`. No arrow-key handling: with one enabled tab
  * there is nowhere to move, and the three pending tabs are `disabled` + `tabIndex={-1}`.
+ *
+ * `voucherCount` is the server's `count` (prototype `Chứng từ (N)`); `undefined` while the list is
+ * loading or failed — no number rather than a "0" that would read as "nothing spent".
  */
-export function ProjectRecordTabs({ children }: { children: ReactNode }) {
+export function ProjectRecordTabs({ children, voucherCount }: { children: ReactNode; voucherCount?: number }) {
   return (
     <div className="flex min-w-0 flex-col gap-4">
       <TabList aria-label="Hồ sơ dự án">
@@ -190,7 +176,7 @@ export function ProjectRecordTabs({ children }: { children: ReactNode }) {
           Vướng mắc
         </PendingTab>
         <Tab selected id="tab-chung-tu-du-an" aria-controls="panel-chung-tu-du-an" icon={ReceiptText}>
-          Chứng từ
+          {voucherCount === undefined ? "Chứng từ" : `Chứng từ (${voucherCount})`}
         </Tab>
         <PendingTab info={pendingPart(CHART_TAB)} icon={ChartLine}>
           Biểu đồ

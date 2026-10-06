@@ -1,6 +1,7 @@
 /**
- * Hai tuyến đọc của màn "Theo dõi giải ngân": `GET /api/v1/investment-projects` và
- * `GET /api/v1/investment-projects/{id}`. Máy chủ đòi `budget.read` trên cả hai.
+ * Ba tuyến đọc của màn "Theo dõi giải ngân": `GET /api/v1/investment-projects`,
+ * `GET /api/v1/investment-projects/{id}` và `GET /api/v1/investment-projects/{id}/disbursements`.
+ * Máy chủ đòi `budget.read` trên cả ba.
  *
  * KIỂU LẤY TỪ HỢP ĐỒNG, KHÔNG GÕ TAY: `finance_danhSachDuAnRa` và `finance_duAnRa` đến từ
  * `schema.gen.ts`. Không tệp nào trong ứng dụng này mô tả lại mười tám trường của một dự án.
@@ -30,6 +31,8 @@ import type {
   finance_duAnRa,
   finance_get_investment_projects,
   finance_get_investment_projects_by_id,
+  finance_get_investment_projects_by_id_disbursements,
+  finance_projectVouchersOut,
 } from "./schema.gen";
 
 /**
@@ -86,4 +89,19 @@ export function layDanhSachDuAn(loc: LocDuAn): Promise<KetQua<finance_danhSachDu
 export function layChiTietDuAn(id: string): Promise<KetQua<finance_duAnRa>> {
   const thamSo: finance_get_investment_projects_by_id["thamSo"] = { id };
   return docJSON<finance_duAnRa>(`/api/v1/investment-projects/${encodeURIComponent(thamSo.id)}`);
+}
+
+/**
+ * GET /api/v1/investment-projects/{id}/disbursements — every live voucher of ONE project, newest
+ * payment date first, all statuses, each with the NAME of the source it draws on (db94b35c).
+ *
+ * The voucher tab reads this after every write instead of patching rows in the browser: the server
+ * decides order, status and source name, and a second copy kept on screen would drift from it.
+ * Same 404 for "no such project" and "another commune's project" as `layChiTietDuAn`.
+ */
+export function getProjectVouchers(projectId: string): Promise<KetQua<finance_projectVouchersOut>> {
+  const params: finance_get_investment_projects_by_id_disbursements["thamSo"] = { id: projectId };
+  const template: finance_get_investment_projects_by_id_disbursements["duongDan"] =
+    "/api/v1/investment-projects/{id}/disbursements";
+  return docJSON<finance_projectVouchersOut>(template.replace("{id}", encodeURIComponent(params.id)));
 }

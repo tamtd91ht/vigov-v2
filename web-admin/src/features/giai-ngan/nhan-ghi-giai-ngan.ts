@@ -11,7 +11,8 @@
  */
 
 import type { SuaChungTuVao, SuaDuAnVao, ThemChungTuVao, ThemDuAnVao } from "@/lib/api/giai-ngan";
-import type { finance_phanBoVao } from "@/lib/api/schema.gen";
+import type { finance_phanBoVao, finance_projectAllocationOut } from "@/lib/api/schema.gen";
+import { compactDong } from "@/lib/compact-dong";
 
 import { nhanTien } from "./nhan-du-an"; // vi-name-ok: existing formatter of nhan-du-an.ts (rule 12, invariant 3)
 
@@ -245,6 +246,8 @@ export type GiaTriFormChungTu = {
   readonly noiDung: string;
   readonly doiTac: string;
   readonly soChungTu: string;
+  /** `funding_source_id` of the `Rút từ nguồn vốn` select; `""` = none chosen. */
+  readonly fundingSourceId: string;
 };
 
 export const FORM_CHUNG_TU_TRONG: GiaTriFormChungTu = {
@@ -253,7 +256,30 @@ export const FORM_CHUNG_TU_TRONG: GiaTriFormChungTu = {
   noiDung: "",
   doiTac: "",
   soChungTu: "",
+  fundingSourceId: "",
 };
+
+/**
+ * Asked when the project draws on named sources and the voucher names none — the client half of the
+ * server's 409 `source_required` (decision 06/10/2026, `service-finance/internal/domain/voucher_source.go`).
+ */
+export const MISSING_FUNDING_SOURCE =
+  "Chưa chọn nguồn vốn. Dự án này đã khai nguồn vốn, nên khoản chi phải ghi rõ rút từ nguồn nào.";
+
+/**
+ * One option of `Rút từ nguồn vốn`: "Ngân sách tỉnh — còn 1,2 tỷ đồng" (prototype
+ * `DisbursementForm.tsx:167-171`). "Còn" is THIS PROJECT's line: allocated minus already drawn by its
+ * vouchers, both the server's figures. Short form (`compactDong`) as on every funding tile; a negative
+ * remainder stays negative — an overdrawn line must be visible where the next payment is chosen.
+ */
+export function allocationOptionLabel(line: finance_projectAllocationOut): string {
+  return `${line.name} — còn ${compactDong(line.amount - line.disbursed_amount)}`;
+}
+
+/** The select's starting value on ADD: the only source when there is exactly one, else none. */
+export function initialFundingSource(lines: readonly finance_projectAllocationOut[]): string {
+  return lines.length === 1 ? lines[0]!.funding_source_id : "";
+}
 
 export const CAU_THIEU_NGAY_CHI = "Chưa có ngày chi. Đây là ngày TIỀN RA, không phải ngày gõ vào sổ.";
 export const CAU_THIEU_NOI_DUNG = "Chưa có nội dung chi.";
@@ -266,9 +292,10 @@ export const CAU_SO_TIEN_PHAI_DUONG = "Số tiền phải lớn hơn 0 đồng."
  * thể. Một ô cho cán bộ gõ id dự án là một ô gõ nhầm được, và nhầm ở đây là ghi một khoản chi vào
  * dự án khác.
  *
- * KHÔNG CÓ `funding_source_id`: chưa có tuyến nào đọc danh mục nguồn vốn, nên không có ô chọn nào
- * dựng được — xem `PHAN_CHUA_DUNG_GHI`. Chứng từ chưa gắn nguồn là trạng thái §13 quy tắc 6 định
- * nghĩa và §6 báo cáo, không phải một lỗi.
+ * `funding_source_id` FOLLOWS THE PROJECT (decision 06/10/2026): `allocatedSourceIds` non-empty → the
+ * source is REQUIRED (refused here before the server's 409 `source_required`); empty → NOTHING is sent,
+ * because the server refuses any source on a project with no allocation line (409
+ * `source_not_allocated`). A voucher with no source on such a project is §13 rule 6's legal state.
  *
  * Ô TRỐNG KHÔNG ĐƯỢC GỬI THÀNH `""`: `counterparty` và `voucher_no` có `omitempty`, nên vắng mặt là
  * cách nói "chứng từ này không có số kho bạc". Gửi chuỗi rỗng cũng ra cùng kết quả ở máy chủ, nhưng
@@ -277,7 +304,10 @@ export const CAU_SO_TIEN_PHAI_DUONG = "Số tiền phải lớn hơn 0 đồng."
 export function thanThemChungTu(
   duAnID: string,
   gt: GiaTriFormChungTu,
+  allocatedSourceIds: readonly string[],
 ): ThanDung<ThemChungTuVao> {
+  const drawsOnSources = allocatedSourceIds.length > 0;
+  if (drawsOnSources && gt.fundingSourceId === "") return { ok: false, cau: MISSING_FUNDING_SOURCE };
   if (gt.ngayChi === "") return { ok: false, cau: CAU_THIEU_NGAY_CHI };
   if (gt.noiDung.trim() === "") return { ok: false, cau: CAU_THIEU_NOI_DUNG };
 
@@ -305,6 +335,7 @@ export function thanThemChungTu(
       description: gt.noiDung.trim(),
       counterparty: doiTac === "" ? undefined : doiTac,
       voucher_no: soChungTu === "" ? undefined : soChungTu,
+      funding_source_id: drawsOnSources ? gt.fundingSourceId : undefined,
     },
   };
 }
@@ -327,6 +358,7 @@ export const CAU_KHONG_CO_GI_DOI =
 export function thanSuaChungTu(
   dau: GiaTriFormChungTu,
   moi: GiaTriFormChungTu,
+  allocatedSourceIds: readonly string[],
 ): ThanDung<SuaChungTuVao> {
   const than: {
     payment_date?: string;
@@ -334,7 +366,19 @@ export function thanSuaChungTu(
     description?: string;
     counterparty?: string;
     voucher_no?: string;
+    funding_source_id?: string;
   } = {};
+
+  // SENT ONLY WHEN CHANGED. Absent means "leave the source alone" and the server checks nothing — so
+  // a voucher entered before the project declared its sources can still have its description fixed
+  // without being forced onto a source. Changed to `""` on a project with sources is the server's 409
+  // `source_required`, refused here first. No allocation line → no select → the values never differ.
+  if (moi.fundingSourceId !== dau.fundingSourceId) {
+    if (allocatedSourceIds.length > 0 && moi.fundingSourceId === "") {
+      return { ok: false, cau: MISSING_FUNDING_SOURCE };
+    }
+    than.funding_source_id = moi.fundingSourceId;
+  }
 
   if (moi.ngayChi !== dau.ngayChi) {
     if (moi.ngayChi === "") return { ok: false, cau: CAU_THIEU_NGAY_CHI };
@@ -738,8 +782,7 @@ export const CAU_THIEU_QUYEN_XAC_NHAN =
  * vẽ một nút chắc chắn hỏng. Cùng khuôn `PHAN_CHUA_DUNG` của các màn khác.
  *
  * Each entry is the description behind a disabled "?" placeholder AT ITS SPEC POSITION (ADR 0068
- * §14, `components/ui/pending-feature.tsx`), looked up with `pendingPart`. The first entry has no
- * placeholder of its own: the voucher table's empty state says it on every page load.
+ * §14, `components/ui/pending-feature.tsx`), looked up with `pendingPart`.
  * ══════════════════════════════════════════════════════════════════════════════════════════
  */
 export type PhanChuaDung = {
@@ -748,29 +791,8 @@ export type PhanChuaDung = {
 };
 
 export const PHAN_CHUA_DUNG_GHI: readonly PhanChuaDung[] = [
-  // §8.2 voucher table. THE MOST IMPORTANT ENTRY HERE. The contract has SIX voucher write routes and
-  // NO read route for a project's voucher list — on purpose, and the server says why
-  // (`service-finance/internal/http/chung_tu_giai_ngan.go`, file header: a read route brings the
-  // pagination question and "what does a commune with 4000 vouchers a year get"). So the table holds
-  // only what THIS session just wrote or re-stated, because those four routes return the whole row.
-  // No "?" of its own: the empty voucher table says it on every page load (`chung-tu-du-an.tsx`).
-  {
-    ten: "Danh sách chứng từ của dự án",
-    viSao:
-      "Hệ thống chưa có cách đọc lại danh sách chứng từ đã ghi của một dự án. Bảng chứng từ chỉ " +
-      "hiện những chứng từ vừa ghi hoặc vừa đổi trạng thái trong lần làm việc này; tải lại trang " +
-      "thì bảng trống, dù dự án vẫn có chứng từ.",
-  },
-  // §8.2 `NGUỒN VỐN` column + the voucher form's funding select (§6). No contract route reads the
-  // `nguon_von` catalogue, so no select can be built — a box for pasting a ULID is not a select. A
-  // voucher with no funding source is a state §13 rule 6 defines and §6 reports ("spent, not yet
-  // drawn from any source"), so leaving it empty is a valid path. `PATCH` already accepts it.
-  {
-    ten: "Nguồn vốn của chứng từ",
-    viSao:
-      "Hệ thống chưa có danh mục nguồn vốn để chọn, nên chứng từ được ghi mà chưa gắn nguồn vốn. " +
-      "Chứng từ chưa gắn nguồn vốn vẫn là chứng từ hợp lệ.",
-  },
+  // §8.2 voucher table + its `NGUỒN VỐN` column + the form's `Rút từ nguồn vốn` select: BUILT
+  // (db94b35c, `GET /api/v1/investment-projects/{id}/disbursements`; `chung-tu-du-an.tsx`).
   // §9 `☑ Tự sinh mã`. The server does not generate codes and says why (`domain.ErrThieuMaDuAn`): the
   // spec gives two contradicting formats (`DA01` in §9, `DA-2026-be-tong-hoa-duong-ngo-xo-2` in §7.2)
   // and never says what range a sequence runs in. A project code is an ISSUED code (rule 7: never

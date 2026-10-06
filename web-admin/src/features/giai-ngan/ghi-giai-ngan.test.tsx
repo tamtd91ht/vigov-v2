@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { pendingMarkerLabel } from "@/components/ui/pending-feature";
 import type { finance_chungTuRa, finance_duAnRa, finance_hangMucRa } from "@/lib/api/schema.gen";
 
-import { BangChungTu, FormChungTu, giaTriTuChungTu, KhoiChungTu } from "./chung-tu-du-an";
+import { BangChungTu, FormChungTu, giaTriTuChungTu, KhoiChungTu, type ProjectVoucherList } from "./chung-tu-du-an";
 import { FormDuAn, giaTriTuDuAn, KhoiThemDuAn, ProjectHeaderActions, type FundingCatalogue } from "./ghi-du-an";
 import {
   CANH_BAO_SUA_VE_NHAP,
@@ -24,6 +24,9 @@ import {
   ProjectFilterPending,
   ProjectRecordTabs,
 } from "./pending-parts";
+
+/** The server's list of a project with no voucher. */
+const EMPTY_LIST: ProjectVoucherList = { phase: "ready", items: [], count: 0 };
 
 /** The funding catalogue of a commune that declared no source yet. */
 const NO_SOURCES: FundingCatalogue = { phase: "ready", items: [] };
@@ -206,11 +209,24 @@ describe("BANG CHỨNG TỪ — vòng đời quyết định nút nào có nghĩ
     expect(html).toContain("da-quyet-toan");
   });
 
-  it("bảng rỗng NÓI RÕ vì sao nó rỗng — không để đọc thành 'dự án chưa chi đồng nào'", () => {
+  it("bảng rỗng là danh sách CỦA MÁY CHỦ: nói thẳng dự án chưa có chứng từ, không còn câu 'phiên làm việc'", () => {
     const html = veBang(true, true, []);
 
-    expect(html).toContain("phiên làm việc này");
-    expect(html).toContain("chưa xem lại được chứng từ đã lưu từ trước");
+    expect(html).toContain("Dự án này chưa có chứng từ giải ngân nào.");
+    expect(html).not.toContain("phiên làm việc");
+    expect(html).not.toContain("chưa xem lại được");
+  });
+
+  it("cột NGUỒN VỐN: tên nguồn máy chủ trả, hoặc '—' — không còn dấu '?'", () => {
+    const html = veBang(true, true, [
+      chungTu({ id: "A", funding_source_name: "Ngân sách tỉnh" }),
+      chungTu({ id: "B" }),
+    ]);
+
+    expect(html).toContain("<td class=\"whitespace-normal\">Ngân sách tỉnh</td>");
+    expect(html).toContain("<td class=\"whitespace-normal\">—</td>");
+    expect(html).toContain('<th scope="col">Nguồn vốn</th>');
+    expect(html).not.toContain("data-pending");
   });
 });
 
@@ -218,6 +234,7 @@ describe("BIỂU MẪU CHỨNG TỪ — cảnh báo ADR 0036", () => {
   it("sửa một chứng từ ĐÃ XÁC NHẬN: cảnh báo 'về Kế toán nhập' hiện NGAY TRÊN các ô", () => {
     const html = renderToStaticMarkup(
       <FormChungTu
+        allocations={[]}
         tieuDeForm="Sửa chứng từ"
         giaTriDau={giaTriTuChungTu(chungTu({ status: CHUNG_TU_DA_XAC_NHAN }))}
         trangThaiHienTai={CHUNG_TU_DA_XAC_NHAN}
@@ -234,6 +251,7 @@ describe("BIỂU MẪU CHỨNG TỪ — cảnh báo ADR 0036", () => {
   it("thêm mới hoặc sửa chứng từ CHƯA xác nhận thì KHÔNG hiện cảnh báo ấy", () => {
     const them = renderToStaticMarkup(
       <FormChungTu
+        allocations={[]}
         tieuDeForm="Ghi nhận khoản chi"
         giaTriDau={FORM_CHUNG_TU_TRONG}
         dangGui={false}
@@ -244,6 +262,7 @@ describe("BIỂU MẪU CHỨNG TỪ — cảnh báo ADR 0036", () => {
     );
     const suaNhap = renderToStaticMarkup(
       <FormChungTu
+        allocations={[]}
         tieuDeForm="Sửa chứng từ"
         giaTriDau={giaTriTuChungTu(chungTu())}
         trangThaiHienTai={CHUNG_TU_KE_TOAN_NHAP}
@@ -262,6 +281,7 @@ describe("BIỂU MẪU CHỨNG TỪ — cảnh báo ADR 0036", () => {
   it("KHÔNG có ô `Trạng thái` ở biểu mẫu — vòng đời không do client đặt", () => {
     const html = renderToStaticMarkup(
       <FormChungTu
+        allocations={[]}
         tieuDeForm="Ghi nhận khoản chi"
         giaTriDau={FORM_CHUNG_TU_TRONG}
         dangGui={false}
@@ -348,7 +368,14 @@ describe("SỬA / GỠ DỰ ÁN — hai cổng riêng", () => {
 describe("TAB CHỨNG TỪ — câu từ chối gọi đúng TÊN quyền", () => {
   it("thiếu cả hai khoá: hai câu, bằng tên trên màn Phân quyền, không bằng khoá máy", () => {
     const html = renderToStaticMarkup(
-      <KhoiChungTu duAnID={DU_AN.id} coGhi={false} coXacNhan={false} daGhiXong={() => {}} />,
+      <KhoiChungTu
+        duAnID={DU_AN.id}
+        allocations={[]}
+        vouchers={EMPTY_LIST}
+        coGhi={false}
+        coXacNhan={false}
+        daGhiXong={() => {}}
+      />,
     );
     expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_GHI));
     expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_XAC_NHAN));
@@ -359,7 +386,7 @@ describe("TAB CHỨNG TỪ — câu từ chối gọi đúng TÊN quyền", () =
 
   it("có `budget.update`: nút Ghi nhận khoản chi hiện", () => {
     const html = renderToStaticMarkup(
-      <KhoiChungTu duAnID={DU_AN.id} coGhi coXacNhan={false} daGhiXong={() => {}} />,
+      <KhoiChungTu duAnID={DU_AN.id} allocations={[]} vouchers={EMPTY_LIST} coGhi coXacNhan={false} daGhiXong={() => {}} />,
     );
     expect(html).toContain(">Ghi nhận khoản chi<");
   });
@@ -469,21 +496,15 @@ function allPlaceholders(): string {
 }
 
 describe("PHẦN CHƯA DỰNG — dấu '?' đúng vị trí đặc tả (ADR 0068 §14)", () => {
-  it("MỌI mục (trừ mục đầu) có một dấu '?' trên màn, mang đúng tên của mục ấy", () => {
+  it("MỌI mục có một dấu '?' trên màn, mang đúng tên của mục ấy", () => {
     const html = allPlaceholders();
-    for (const p of PHAN_CHUA_DUNG_GHI.slice(1)) {
+    for (const p of PHAN_CHUA_DUNG_GHI) {
       expect(html).toContain(`aria-label="${nhuTrongHTML(pendingMarkerLabel(p.ten))}"`);
     }
     // The description opens only when "?" is pressed: no sentence is printed on the page.
     for (const p of PHAN_CHUA_DUNG_GHI) {
       expect(html).not.toContain(nhuTrongHTML(p.viSao));
     }
-  });
-
-  it("mục đầu tiên (không có tuyến ĐỌC danh sách chứng từ) vẫn được nói ra — ở bảng chứng từ rỗng", () => {
-    // No placeholder of its own: it is a limit of a BUILT table, and every page load starts empty.
-    expect(PHAN_CHUA_DUNG_GHI[0]!.viSao).toContain("chưa có cách đọc lại danh sách chứng từ");
-    expect(veBang(true, true, [])).toContain("chưa xem lại được chứng từ đã lưu từ trước");
   });
 
   it("khối gập 'N phần chưa dựng' không còn trên màn", () => {

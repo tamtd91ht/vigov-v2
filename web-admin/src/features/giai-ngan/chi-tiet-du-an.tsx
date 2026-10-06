@@ -16,7 +16,7 @@ import type { finance_duAnRa, finance_hangMucRa, finance_projectAllocationOut } 
 import { cn } from "@/lib/cn";
 import { coQuyen, QUYEN_GHI_NGAN_SACH, QUYEN_XAC_NHAN_NGAN_SACH } from "@/lib/quyen";
 
-import { KhoiChungTu } from "./chung-tu-du-an";
+import { KhoiChungTu, useProjectVouchers } from "./chung-tu-du-an";
 import { ProjectEditPanel, ProjectHeaderActions, ProjectRemoveDialog } from "./ghi-du-an";
 import { nhanNgay, nhanTien, nhanTienDo, nhanTyLeGiaiNgan, tienDoDuAn } from "./nhan-du-an";
 import { ProjectRecordTabs, ProjectUnitPending } from "./pending-parts";
@@ -32,8 +32,8 @@ import { ScopeNotice } from "./scope-notice";
  * trong hợp đồng REST. They are drawn DISABLED with a "?" (ADR 0068 §14, `pending-parts.tsx`) — never
  * a live tab that opens an empty panel. So Chứng từ, not the prototype's Vướng mắc, is the open tab.
  *
- * TAB "CHỨNG TỪ" CÓ SÁU TUYẾN GHI VÀ KHÔNG CÓ TUYẾN ĐỌC — xem `chung-tu-du-an.tsx` và mục đầu của
- * `PHAN_CHUA_DUNG_GHI`.
+ * TAB "CHỨNG TỪ" ĐỌC DANH SÁCH TỪ MÁY CHỦ (db94b35c) bằng CÙNG khoá đọc lại dự án, nên một lần ghi
+ * chứng từ đọc lại cả hai — xem `useProjectVouchers` trong `chung-tu-du-an.tsx`.
  *
  * KHỐI "GIẢI NGÂN THEO NGUỒN VỐN" is live since 8245698b (`funding_allocations` on the detail,
  * `ProjectFundingBlock` below).
@@ -64,6 +64,7 @@ export function ChiTietDuAn({ id }: { id: string }) {
   const [removing, setRemoving] = useState(false);
   const [danhMuc, datDanhMuc] = useState<readonly finance_hangMucRa[]>([]);
   const khoa = `${id}|${lanTai}`;
+  const vouchers = useProjectVouchers(id, String(lanTai));
 
   useEffect(() => {
     let bo = false;
@@ -181,11 +182,14 @@ export function ChiTietDuAn({ id }: { id: string }) {
                   />
                 }
               >
-                {/* MỖI LẦN GHI CHỨNG TỪ XONG LÀ MỘT LẦN ĐỌC LẠI DỰ ÁN: `disbursed_amount`,
-                    `remaining_amount`, `disbursed_ratio` và `delay_score` đều suy ra từ chứng từ. */}
-                <ProjectRecordTabs>
+                {/* MỖI LẦN GHI CHỨNG TỪ XONG LÀ MỘT LẦN ĐỌC LẠI DỰ ÁN VÀ DANH SÁCH CHỨNG TỪ:
+                    `disbursed_amount`, `remaining_amount`, `disbursed_ratio` và `delay_score` đều suy
+                    ra từ chứng từ. */}
+                <ProjectRecordTabs voucherCount={vouchers.phase === "ready" ? vouchers.count : undefined}>
                   <KhoiChungTu
                     duAnID={trangThai.duAn.id}
+                    allocations={trangThai.duAn.funding_allocations ?? []}
+                    vouchers={vouchers}
                     coGhi={coGhi}
                     coXacNhan={coXacNhan}
                     daGhiXong={() => datLanTai((n) => n + 1)}

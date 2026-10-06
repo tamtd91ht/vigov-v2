@@ -28,16 +28,9 @@
  * Máy chủ cũng không có tuyến ghi"* — câu ấy ĐÃ SAI từ lượt này; tệp ấy nằm ngoài ranh giới ghi của
  * lượt này nên nó được báo về chứ không sửa lén.
  *
- * ─────────────────────────────────────────────────────────────────────────────────────────────
- * KHÔNG CÓ TUYẾN NÀO ĐỌC DANH SÁCH CHỨNG TỪ, VÀ ĐÓ LÀ SỰ THẬT CỦA HỢP ĐỒNG chứ không phải việc còn
- * lại của tệp này. `openapi.json` có sáu tuyến GHI chứng từ và **không có `GET /disbursements`**
- * nào; máy chủ nói thẳng vì sao và nói rằng đó là chủ ý (`chung_tu_giai_ngan.go:6-9`: một tuyến đọc
- * mang theo câu hỏi phân trang và câu hỏi "xã có 4000 chứng từ một năm thì nhận được gì").
- *
- * Hệ quả đi thẳng ra màn hình chứ không bị giấu: tab "Chứng từ" của §8.2 **không dựng lại được từ
- * máy chủ**. Màn hình chỉ giữ được những chứng từ do CHÍNH phiên làm việc này vừa ghi — bốn tuyến
- * `POST`/`PATCH`/`confirmation`/`lockout` đều trả về nguyên hàng — và nó phải nói rõ đó là gì.
- * ─────────────────────────────────────────────────────────────────────────────────────────────
+ * THE VOUCHER LIST IS READ PER PROJECT since db94b35c — `getProjectVouchers` in `du-an.ts`
+ * (`GET /api/v1/investment-projects/{id}/disbursements`). The §8.2 tab re-reads it after every write
+ * below; the rows these routes return are not kept on screen as a second copy.
  *
  * KHÔNG CÓ `tenant_id` Ở BẤT KỲ ĐÂU — không thân, không query, không header. Xã suy từ `Host` ở rìa
  * ngoài cùng; client tự khai xã là client tự cấp quyền (luật 1, cấm #2).
