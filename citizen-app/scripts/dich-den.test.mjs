@@ -103,7 +103,7 @@ describe("tệp ánh xạ", () => {
     };
     expect(APP_ID_THEO_TEN_MIEN).toEqual(DA_GIAO);
     for (const app_id of Object.values(APP_ID_THEO_TEN_MIEN)) expect(app_id).toMatch(/^\d+$/);
-    expect(APP_ID_APP_CHUNG).toBeNull();
+    expect(APP_ID_APP_CHUNG).toBe("3749147383835819800"); // the new ViHAT app, owner 2026-10-06
   });
 
   it("khoá không phải tên miền trần thì DỪNG", () => {

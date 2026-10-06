@@ -43,7 +43,7 @@ export const APP_ID_THEO_TEN_MIEN = {
  * (hoặc `--app-id`), rồi token phải mang đúng claim ấy. Ghi `"<chữ số>"` vào đây — tay, hoặc để
  * `deploy.mjs` ghi khi được hỏi — rồi commit.
  */
-export const APP_ID_APP_CHUNG = null;
+export const APP_ID_APP_CHUNG = "3749147383835819800";
 
 /**
  * PER-COMMUNE VALUES OF THE COMMUNE APP'S TERMS OF USE (owner, 02/10/2026; ADR 0044 §"Đã quyết 02/10/2026").
