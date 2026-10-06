@@ -848,14 +848,8 @@ export const PHAN_CHUA_DUNG_GHI: readonly PhanChuaDung[] = [
   // org-unit and staff-directory routes (`project-people.ts`, `ghi-du-an.tsx`).
   // §9 dynamic `Nguồn vốn` list + editing allocations: BUILT (8245698b, `FundingAllocationList` in
   // `ghi-du-an.tsx`).
-  // §10 Excel import modal. No contract route takes an Excel file, and §10's all-or-nothing rule is a
-  // SERVER rule (check the whole file; any error, accept no row) — half of it in the browser would
-  // promise something nothing guarantees.
-  {
-    ten: "Nhập giải ngân từ Excel",
-    viSao:
-      "Chưa nhập được giải ngân từ tệp Excel. Hãy ghi từng khoản chi ở trang chi tiết của dự án.",
-  },
+  // §10 `Nhập giải ngân` (Excel import modal): BUILT (f181bb76 — `/api/v1/disbursements/import-*`;
+  // `disbursement-import-dialog.tsx`). All-or-nothing stays the server's rule.
   // §5 `☰ Hạng mục`: BUILT 06/10/2026 as the prototype's dialog (`category-manager-dialog.tsx`) —
   // list, add, rename, turn off / on, soft delete. A per-category deadline and yearly capital plan
   // are in neither the prototype dialog nor the contract.

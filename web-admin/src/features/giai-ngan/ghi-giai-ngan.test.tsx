@@ -20,7 +20,6 @@ import {
 import { BangDanhSach } from "./bang-du-an";
 import {
   AttentionCaption,
-  DisbursementHeaderActions,
   MentionNoticePending,
   ProjectRecordTabs,
   TrackingTaskPending,
@@ -465,7 +464,6 @@ describe("BIỂU MẪU DỰ ÁN", () => {
 /** Every "?" of the Giải ngân screens, server-rendered — the spots ADR 0068 §14 approved. */
 function allPlaceholders(): string {
   return [
-    renderToStaticMarkup(<DisbursementHeaderActions />),
     renderToStaticMarkup(<AttentionCaption openIssueCount={3} />),
     renderToStaticMarkup(<TrackingTaskPending />),
     renderToStaticMarkup(<MentionNoticePending />),
@@ -516,10 +514,7 @@ describe("PHẦN CHƯA DỰNG — dấu '?' đúng vị trí đặc tả (ADR 00
   });
 
   it("control giữ chỗ là control THẬT, VÔ HIỆU: nút, ô chọn, tab, ô đánh dấu", () => {
-    const header = renderToStaticMarkup(<DisbursementHeaderActions />);
-    // `Hạng mục` is LIVE (06/10/2026, `category-manager-dialog.tsx`): no placeholder left here.
-    expect(header).not.toContain("Hạng mục");
-    expect(header).toMatch(/<button[^>]* disabled=""[^>]*>.*Nhập giải ngân<\/button>/);
+    // The header holds no placeholder: `Hạng mục` (06/10/2026) and `Nhập giải ngân` (f181bb76) are LIVE.
 
     // §7.1 `Chỉ dự án chậm` and `Gộp theo hạng mục` are LIVE since 06/10/2026 (`bang-du-an.tsx`).
 

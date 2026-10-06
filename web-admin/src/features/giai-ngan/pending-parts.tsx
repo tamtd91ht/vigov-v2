@@ -1,9 +1,9 @@
 "use client";
 
-import { ChartLine, MessagesSquare, ReceiptText, TriangleAlert, Upload } from "lucide-react";
+import { ChartLine, MessagesSquare, ReceiptText, TriangleAlert } from "lucide-react";
 import { useState, type KeyboardEvent, type ReactNode } from "react";
 
-import { PendingButton, PendingMarker } from "@/components/ui/pending-feature";
+import { PendingMarker } from "@/components/ui/pending-feature";
 import { Tab, TabList } from "@/components/ui/tabs";
 
 import { pendingPart } from "./nhan-ghi-giai-ngan";
@@ -22,7 +22,7 @@ import { openIssuesLabel } from "./project-discussion-labels";
  */
 
 // Exact `ten` of each `PHAN_CHUA_DUNG_GHI` entry (spec sections in the entry's comment there).
-const IMPORT_EXCEL = "Nhập giải ngân từ Excel"; // §10
+// §10 `Nhập giải ngân` is LIVE (`disbursement-import-dialog.tsx`, server f181bb76).
 // §5 `☰ Hạng mục` is LIVE since 06/10/2026 (`category-manager-dialog.tsx`).
 // §3 KPI cards, §4 chart, §5 category table and the two §7.1 checkboxes are LIVE since 06/10/2026
 // (`disbursement-overview.tsx`, `bang-du-an.tsx`); §8.3 `Biểu đồ` too (`project-curve.tsx`).
@@ -34,19 +34,6 @@ const MENTION_NOTICE = "Thông báo cho người được nhắc tên"; // §8.4
 // §9 `Tự sinh mã` is LIVE since 9f0a0187 (`ghi-du-an.tsx`).
 // §7.2 funding chip, §8 per-source block and the §9 funding list are LIVE since 8245698b; the §8.2
 // voucher list, its `NGUỒN VỐN` column and the voucher form's source select since db94b35c.
-
-/**
- * PageHeader button `[Nhập giải ngân]`, prototype `BudgetWorkspace.tsx:154-168`, between the live
- * `[Hạng mục]` (`category-manager-dialog.tsx`) and `+ Thêm dự án`. The caller draws it only for an
- * account holding `budget.update`, as the prototype does (`canRecord`).
- */
-export function DisbursementHeaderActions() {
-  return (
-    <PendingButton info={pendingPart(IMPORT_EXCEL)} side="bottom" icon={<Upload aria-hidden="true" />}>
-      Nhập giải ngân
-    </PendingButton>
-  );
-}
 
 /**
  * Sub-line of §3's fourth card: "3 vướng mắc đang theo dõi · nguy cơ không giải ngân hết ?". The first

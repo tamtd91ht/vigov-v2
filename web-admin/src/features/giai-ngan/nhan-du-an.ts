@@ -217,5 +217,5 @@ export const DISBURSEMENT_READ_DENIED =
   "quản trị viên của đơn vị nếu bạn cần quyền này.";
 
 // The header note `GHI_CHU_CHI_XEM_GIAI_NGAN` ("… nhập giải ngân từ Excel chưa có") left the screen
-// on 06/10/2026 (ADR 0068 lần 5): the prototype has no such line, and the Excel import now says it
-// through the "?" of its own disabled `Nhập giải ngân` button (`PHAN_CHUA_DUNG_GHI`).
+// on 06/10/2026 (ADR 0068 lần 5): the prototype has no such line, and the Excel import is now live
+// (`disbursement-import-dialog.tsx`).

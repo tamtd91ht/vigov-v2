@@ -72,8 +72,11 @@ export const FILE_TOO_LARGE_FALLBACK =
 export const FILE_TYPE_FALLBACK =
   "Chỉ nhận tệp Excel .xlsx. Hãy tải tệp mẫu, nhập vào đó rồi lưu lại dưới dạng .xlsx.";
 
-/** A refusal by status: 413 / 415 get the fallbacks above, everything else `LOI_KHONG_RO`. */
-function fallbackFor(status: number): string {
+/**
+ * A refusal by status: 413 / 415 get the fallbacks above, everything else `LOI_KHONG_RO`. Exported for
+ * an import whose preview carries no row list (`disbursement-import.ts`): one table of sentences.
+ */
+export function fallbackFor(status: number): string {
   if (status === 413) return FILE_TOO_LARGE_FALLBACK;
   if (status === 415) return FILE_TYPE_FALLBACK;
   return LOI_KHONG_RO;

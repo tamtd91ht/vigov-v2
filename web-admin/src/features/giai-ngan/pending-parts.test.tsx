@@ -13,7 +13,6 @@ import { FormDuAn } from "./ghi-du-an";
 import { FORM_DU_AN_TRONG, PHAN_CHUA_DUNG_GHI, pendingPart } from "./nhan-ghi-giai-ngan";
 import {
   AttentionCaption,
-  DisbursementHeaderActions,
   MentionNoticePending,
   ProjectRecordTabs,
   TrackingTaskPending,
@@ -59,7 +58,6 @@ function mount(node: ReactNode): HTMLDivElement {
 function screens(): ReactNode {
   return (
     <>
-      <DisbursementHeaderActions />
       <AttentionCaption openIssueCount={2} />
       <TrackingTaskPending />
       <MentionNoticePending />
@@ -125,6 +123,11 @@ describe("Giải ngân placeholders (ADR 0068 §14)", () => {
     const box = el.querySelector<HTMLInputElement>("#tu-sinh-ma-du-an")!;
     expect(box.disabled).toBe(false);
     expect(box.closest("[data-pending]")).toBeNull();
+  });
+
+  it("§10 'Nhập giải ngân' is LIVE (f181bb76): no registry entry left", () => {
+    expect(PHAN_CHUA_DUNG_GHI.some((p) => p.ten === "Nhập giải ngân từ Excel")).toBe(false);
+    expect(() => pendingPart("Nhập giải ngân từ Excel")).toThrow();
   });
 
   it("§6 'Tiến độ theo nguồn vốn' is LIVE: no registry entry", () => {
