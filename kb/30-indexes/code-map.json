@@ -3690,6 +3690,14 @@
       "kind": "func",
       "at": "service-comms/internal/domain/external_contact.go:114"
     },
+    "domain.CheckFundingSourceYear": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/funding_source.go:72"
+    },
+    "domain.CheckGrantedAmount": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/funding_source.go:85"
+    },
     "domain.CheckMapFrameNotice": {
       "kind": "func",
       "at": "service-comms/internal/domain/map_frame.go:129"
@@ -4270,6 +4278,10 @@
       "kind": "func",
       "at": "service-identity/internal/domain/operator.go:262"
     },
+    "domain.DisbursedRatio": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/funding_source.go:128"
+    },
     "domain.DoKhan": {
       "kind": "type",
       "at": "service-documents/internal/domain/van_ban.go:64"
@@ -4473,6 +4485,18 @@
     "domain.FormatOperatorCode": {
       "kind": "func",
       "at": "service-identity/internal/domain/operator.go:105"
+    },
+    "domain.FundingSourceAnnualAmount": {
+      "kind": "type",
+      "at": "service-finance/internal/domain/funding_source.go:98"
+    },
+    "domain.FundingSourceProject": {
+      "kind": "type",
+      "at": "service-finance/internal/domain/funding_source.go:109"
+    },
+    "domain.FundingSourceProjects": {
+      "kind": "type",
+      "at": "service-finance/internal/domain/funding_source.go:136"
     },
     "domain.GanNguon": {
       "kind": "func",
@@ -5398,6 +5422,10 @@
       "kind": "func",
       "at": "service-finance/internal/domain/budget_period_close.go:163"
     },
+    "domain.NormaliseFundingSourceName": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/funding_source.go:57"
+    },
     "domain.NormaliseHost": {
       "kind": "func",
       "at": "service-platform/internal/domain/tenant.go:54"
@@ -5613,6 +5641,10 @@
     "domain.OrgUnitName": {
       "kind": "type",
       "at": "service-identity/internal/domain/reference_names.go:12"
+    },
+    "domain.OverallocatedAmount": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/funding_source.go:171"
     },
     "domain.OverdueItem": {
       "kind": "type",
@@ -6521,6 +6553,10 @@
     "domain.TyLeGiaiNganTrenTongNguon": {
       "kind": "func",
       "at": "service-finance/internal/domain/nguon_von.go:186"
+    },
+    "domain.UnallocatedAmount": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/funding_source.go:157"
     },
     "domain.UnassignedKey": {
       "kind": "func",
@@ -10814,6 +10850,10 @@
       "kind": "func",
       "at": "service-comms/internal/store/noi_dung_mini_app.go:883"
     },
+    "store.AnnualAmount": {
+      "kind": "func",
+      "at": "service-finance/internal/store/funding_source.go:313"
+    },
     "store.Apdung": {
       "kind": "func",
       "at": "service-petitions/internal/store/nhiem_vu_ghi.go:454"
@@ -11160,7 +11200,7 @@
     },
     "store.CountLive": {
       "kind": "func",
-      "at": "service-comms/internal/store/map_field_schema.go:205"
+      "at": "service-finance/internal/store/funding_source.go:246"
     },
     "store.CountLiveChildren": {
       "kind": "func",
@@ -11418,6 +11458,10 @@
       "kind": "func",
       "at": "service-platform/internal/store/stored_file.go:72"
     },
+    "store.FundingSourceWriteStore": {
+      "kind": "type",
+      "at": "service-finance/internal/store/funding_source.go:217"
+    },
     "store.Get": {
       "kind": "func",
       "at": "service-comms/internal/store/map_frame.go:74"
@@ -11522,6 +11566,10 @@
       "kind": "func",
       "at": "service-identity/internal/store/mini_app_secret.go:148"
     },
+    "store.InsertAnnualAmount": {
+      "kind": "func",
+      "at": "service-finance/internal/store/funding_source.go:343"
+    },
     "store.InsertBudgetPeriodClose": {
       "kind": "func",
       "at": "service-finance/internal/store/budget_period_close.go:179"
@@ -11557,6 +11605,10 @@
     "store.InsertSetting": {
       "kind": "func",
       "at": "service-identity/internal/store/automation.go:91"
+    },
+    "store.InsertSource": {
+      "kind": "func",
+      "at": "service-finance/internal/store/funding_source.go:274"
     },
     "store.InsertSyncedItem": {
       "kind": "func",
@@ -11958,6 +12010,10 @@
       "kind": "type",
       "at": "service-petitions/internal/store/muc_uu_tien_nhiem_vu.go:22"
     },
+    "store.NameTaken": {
+      "kind": "func",
+      "at": "service-finance/internal/store/funding_source.go:231"
+    },
     "store.NamesByID": {
       "kind": "func",
       "at": "service-identity/internal/store/reference_names.go:29"
@@ -12029,6 +12085,10 @@
     "store.NewExternalContactStore": {
       "kind": "func",
       "at": "service-comms/internal/store/external_contact.go:33"
+    },
+    "store.NewFundingSourceWriteStore": {
+      "kind": "func",
+      "at": "service-finance/internal/store/funding_source.go:221"
     },
     "store.NewGhepPhienStore": {
       "kind": "func",
@@ -12112,7 +12172,7 @@
     },
     "store.NewNguonVonStore": {
       "kind": "func",
-      "at": "service-finance/internal/store/nguon_von.go:25"
+      "at": "service-finance/internal/store/nguon_von.go:26"
     },
     "store.NewNhanLinhVucStore": {
       "kind": "func",
@@ -12268,7 +12328,7 @@
     },
     "store.NguonVonStore": {
       "kind": "type",
-      "at": "service-finance/internal/store/nguon_von.go:21"
+      "at": "service-finance/internal/store/nguon_von.go:22"
     },
     "store.NguongCanhBaoCham": {
       "kind": "func",
@@ -12384,7 +12444,7 @@
     },
     "store.PhanBoTheoDuAn": {
       "kind": "func",
-      "at": "service-finance/internal/store/nguon_von.go:159"
+      "at": "service-finance/internal/store/nguon_von.go:160"
     },
     "store.PhanCong": {
       "kind": "func",
@@ -12714,6 +12774,14 @@
       "kind": "func",
       "at": "service-reporting/internal/store/system_message_override.go:125"
     },
+    "store.SourceForUpdate": {
+      "kind": "func",
+      "at": "service-finance/internal/store/funding_source.go:298"
+    },
+    "store.SourceProjects": {
+      "kind": "func",
+      "at": "service-finance/internal/store/funding_source.go:124"
+    },
     "store.StaffCounts": {
       "kind": "func",
       "at": "service-identity/internal/store/staff_counts.go:56"
@@ -12932,7 +13000,7 @@
     },
     "store.TienDoTheoNguon": {
       "kind": "func",
-      "at": "service-finance/internal/store/nguon_von.go:259"
+      "at": "service-finance/internal/store/nguon_von.go:260"
     },
     "store.TraCuu": {
       "kind": "func",
@@ -12950,6 +13018,10 @@
       "kind": "func",
       "at": "core/store/scoped.go:77"
     },
+    "store.UnattributedDisbursed": {
+      "kind": "func",
+      "at": "service-finance/internal/store/funding_source.go:54"
+    },
     "store.Underlying": {
       "kind": "func",
       "at": "core/store/scoped.go:116"
@@ -12965,6 +13037,10 @@
     "store.Update": {
       "kind": "func",
       "at": "service-comms/internal/store/noi_dung_mini_app.go:939"
+    },
+    "store.UpdateAnnualAmount": {
+      "kind": "func",
+      "at": "service-finance/internal/store/funding_source.go:361"
     },
     "store.UpdateCategory": {
       "kind": "func",

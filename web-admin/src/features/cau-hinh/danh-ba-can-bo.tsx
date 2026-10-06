@@ -1,6 +1,18 @@
 "use client";
 
-import { Plus, Search, Upload, UsersRound, X } from "lucide-react";
+import {
+  ArrowUpDown,
+  Eye,
+  KeyRound,
+  Lock,
+  LockOpen,
+  Pencil,
+  Plus,
+  Search,
+  UserCog,
+  UserPlus,
+  UsersRound,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import {
@@ -24,10 +36,13 @@ import {
   khoaChongTrungMoi,
   thanSua,
   thanThem,
+  tieuDeKhoa,
+  tieuDeSua,
+  tieuDeThem,
+  tieuDeVaiTro,
   type BanNhapCanBo,
 } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import {
-  KHOA_SAP_XEP,
   datKhoaCanBo,
   docTrangDanhBa,
   doiVaiTroCanBo,
@@ -47,18 +62,20 @@ import {
 import { KHONG_KHOP_LOC } from "@/features/danh-ba/nhan-danh-ba";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
-import { Toolbar } from "@/components/ui/field";
+import { controlClass } from "@/components/ui/field";
+import { IconButton } from "@/components/ui/icon-button";
 import { Notice } from "@/components/ui/notice";
 import { SkeletonRows } from "@/components/ui/skeleton";
 import { docDanhMucDanhBa, type DanhMucDanhBa } from "@/lib/api/danh-muc";
 import type { identity_canBoTomTat, page_Result_identity_canBoTomTat } from "@/lib/api/schema.gen";
 import { capTaiKhoan, datLaiMatKhau } from "@/lib/api/tai-khoan";
+import { cn } from "@/lib/cn";
 
-import { IMPORT_BUTTON } from "./excel-import-flow";
+import { ConfigDialog } from "./config-dialog";
 import { ExcelImportPanel } from "./excel-import-panel";
 import { STAFF_IMPORT_TARGET } from "./excel-import-targets";
 import {
@@ -67,6 +84,7 @@ import {
   NUT_DAT_LAI_MAT_KHAU,
   OMatKhauTam,
   XacNhanTaiKhoan,
+  tieuDeXacNhan,
   type DangMoTaiKhoan,
   type MatKhauTamHienRa,
 } from "./mat-khau-tam";
@@ -134,7 +152,20 @@ type TrangThaiChiTiet =
  * be missing from this tab's pickers until a full page reload (tester report 05/10, ND-01/ND-02).
  * Omitted means a screen with no tabs around it: always on display.
  */
-export function DanhBaCanBo({ active = true }: { active?: boolean } = {}) {
+export function DanhBaCanBo({
+  active = true,
+  importOpen = false,
+  onImportClose = () => {},
+}: {
+  active?: boolean;
+  /**
+   * Whether the staff Excel import dialog is open. Owned by `TabNguoiDung`, because its button sits in
+   * the page header (prototype); the dialog and what it reloads belong here.
+   */
+  importOpen?: boolean;
+  /** The dialog's own close — the ONLY thing that ends an import attempt (its N passwords included). */
+  onImportClose?: () => void;
+} = {}) {
   const [khoaSapXep, datKhoaSapXep] = useState<KhoaSapXep>("code");
   const [chieu, datChieu] = useState<ChieuSapXep>("asc");
   const [nganXep, datNganXep] = useState<NganXepConTro>(TRANG_DAU);
@@ -194,15 +225,10 @@ export function DanhBaCanBo({ active = true }: { active?: boolean } = {}) {
    */
   const [matKhauTam, datMatKhauTam] = useState<MatKhauTamHienRa | null>(null);
 
-  /**
-   * Whether the Excel import panel is open (ADR 0059 §1). The panel holds its own attempt — including,
-   * after a 201, the N temporary passwords — and they die when this goes `false` and the panel unmounts.
-   *
-   * NOTHING BUT THE PANEL'S OWN CLOSE SETS THIS TO `false`: opening another form, a list re-read, a
-   * failed re-read — none of them may take the passwords off the screen before they are saved. Same rule
-   * as `matKhauTam` above.
-   */
-  const [importOpen, setImportOpen] = useState(false);
+  // The Excel import panel's open state (ADR 0059 §1) is the `importOpen` prop: the panel holds its own
+  // attempt — including, after a 201, the N temporary passwords — and they die when it unmounts. NOTHING
+  // BUT THE PANEL'S OWN CLOSE (`onImportClose`) ends it: a list re-read, a failed re-read, another dialog —
+  // none of them may take the passwords off the screen before they are saved. Same rule as `matKhauTam`.
 
   /**
    * HAI DANH MỤC, ĐỌC ĐÚNG MỘT LƯỢT MỖI LẦN MÀN NÀY ĐƯỢC HIỆN — `[active]` ở cuối effect là phần
@@ -564,84 +590,75 @@ export function DanhBaCanBo({ active = true }: { active?: boolean } = {}) {
     [moBieuMau, moChiTiet, moCapTaiKhoan, moDatLaiMatKhau],
   );
 
-  return (
-    <section className="tab-nguoi-dung flex min-w-0 flex-col gap-4 [&>*]:my-0" aria-labelledby="tieu-de-nguoi-dung">
-      <Card>
-      <CardHeader className="justify-between">
-        <div className="min-w-0 flex-1 basis-64">
-          <CardTitle as="h2" id="tieu-de-nguoi-dung" className="flex items-center gap-2">
-            <UsersRound aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
-            Người dùng
-          </CardTitle>
-          <p className="ghi-chu m-0 mt-1 text-[13px] text-ink-500">{VI_SAO_KHONG_CO_NUT_XOA}</p>
-        </div>
+  // Tiêu đề biểu mẫu ghi — chính câu `BieuMauGhiCanBo` dùng cho `aria-label` và `<h4>` của nó; trong hộp
+  // thoại, `<h4>` ấy được ẩn (`.hop-thoai-cau-hinh`) và câu này thành tiêu đề của hộp.
+  const tieuDeBieuMau =
+    dangMo === null
+      ? ""
+      : dangMo.kieu === "them"
+        ? tieuDeThem()
+        : dangMo.kieu === "sua"
+          ? tieuDeSua(dangMo.canBo.full_name)
+          : dangMo.kieu === "vaiTro"
+            ? tieuDeVaiTro(dangMo.canBo.full_name)
+            : tieuDeKhoa(dangMo.canBo.full_name, dangMo.khoa);
 
+  return (
+    // THE PROTOTYPE'S COMPOSITION (`UserWorkspace` + `UserTable`, ADR 0068 lần 5): under the page header,
+    // one filter row with `Thêm cán bộ` at its right end, then the bordered table, then the count. Every
+    // write opens in a centred dialog, as the prototype's `UserFormDialog` does.
+    <section className="tab-nguoi-dung flex min-w-0 flex-col gap-3 [&>*]:my-0" aria-label="Danh sách người dùng">
       {/*
         ĐẶC TẢ CÓ, Ở ĐÂY KHÔNG — và mỗi dòng nói luôn cái gì mở khoá nó:
 
           · Ô tìm và bộ lọc theo bộ phận: ĐÃ DỰNG (26/09/2026) — `HangLocNguoiDung` dưới đây, đi
-            qua `docTrangDanhBa` như màn `/danh-ba`. Chữ gợi ý KHÔNG theo nguyên văn đặc tả
+            qua `docTrangDanhBa` như màn `/danh-ba`. Chữ gợi ý KHÔNG theo nguyên văn đặc tả/prototype
             ("Tìm theo tên, thư điện tử, bộ phận…"): máy chủ tìm trên họ tên, chức danh và hai số
             điện thoại (`store/can_bo_danh_sach.go`, `menhDeLocCanBo`), KHÔNG trên thư điện tử;
             bộ phận là ô chọn riêng. Hứa tìm theo thư điện tử là để cán bộ gõ một địa chỉ, thấy
             danh sách rỗng, và kết luận người đó không có trong hệ thống.
-          · Sắp xếp khi đang tìm: tuyến tìm không nhận `sort`/`order`, nên thanh sắp xếp nói ra
-            điều ấy thay vì hiện mũi tên không có tác dụng (`ThanhSapXep`).
+          · Sắp xếp khi đang tìm: tuyến tìm không nhận `sort`/`order`, nên `ThanhSapXep` nói ra điều
+            ấy và hai đầu cột thôi là nút.
           · Bộ lọc theo trạng thái (đang hoạt động / đã khoá): `LocCanBo` chỉ có bộ phận và công
             khai — hợp đồng chưa có tham số trạng thái.
-          · `⬆ Nhập từ Excel`: ĐÃ DỰNG (29/09/2026, ADR 0059 §1) — `STAFF_IMPORT_TARGET`, cùng
-            khung nhập dùng chung; mật khẩu tạm của lượt nhập hiện một lần ở `staff-import-result.tsx`.
-          · `⬇ Xuất Excel`: không có tuyến nào trong hợp đồng. Bản xuất còn kéo theo một quyết định
-            chưa có: #11 chốt KHÔNG che số trên màn hình nội bộ nhưng VẪN CHE ở bản xuất, nên tuyến
-            xuất phải có luật che riêng chứ không tái dùng tuyến đọc.
-          · `🖼 Ảnh đại diện`: không có cột nào trong lược đồ.
-          · Ô `Hiện trên Mini App` (#12, `PUT /staff/{id}/publication` kèm sự đồng ý) và
-            `🗑 Xoá khỏi danh bạ` (quyền `admin.user.delete`): CỐ Ý đặt ở màn `/danh-ba`, không ở
-            đây — xem `VI_SAO_KHONG_CO_NUT_XOA`.
+          · `Nhập từ Excel`: ĐÃ DỰNG (29/09/2026, ADR 0059 §1) — nút ở đầu trang (`TabNguoiDung`),
+            hộp thoại ở đây; mật khẩu tạm của lượt nhập hiện một lần ở `staff-import-result.tsx`.
+          · `Xuất Excel`: không có tuyến nào trong hợp đồng. Bản xuất còn kéo theo một quyết định
+            chưa có: #11 chốt KHÔNG che số trên màn hình nội bộ nhưng VẪN CHE ở bản xuất.
+          · `Ảnh đại diện`: không có cột nào trong lược đồ.
+          · Ô `Hiện trên Mini App` (#12) và `Xoá khỏi danh bạ` (prototype: `Trash2` ở mỗi dòng; quyền
+            `admin.user.delete`): CỐ Ý đặt ở màn `/danh-ba`, không ở đây — xem `VI_SAO_KHONG_CO_NUT_XOA`.
       */}
-      <div className="cum-nut m-0 flex flex-wrap items-center gap-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-3">
+        <HangLocNguoiDung loc={loc} boPhan={mucBoPhan} doiLoc={doiLoc} />
         <Button
           type="button"
           variant="primary"
+          className="ml-auto"
           icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+          aria-haspopup="dialog"
           onClick={() => moBieuMau({ kieu: "them", khoaChongTrung: khoaChongTrungMoi() })}
         >
           {NUT_THEM_CAN_BO}
         </Button>
-        {/* Same key as every write of this tab (`admin.user`, `routes.go:974`), so no second gate —
-            see the header. The Vai trò column's extra `admin.role` is the server's to check. */}
-        <Button
-          type="button"
-          variant="secondary"
-          icon={<Upload aria-hidden="true" focusable="false" strokeWidth={1.8} />}
-          onClick={() => {
-            datDangMo(null);
-            datMoTaiKhoan(null);
-            datLoiTaiKhoan("");
-            datCauDaXong("");
-            setImportOpen(true);
-          }}
-          disabled={importOpen}
-        >
-          {IMPORT_BUTTON}
-        </Button>
       </div>
-      </CardHeader>
+      <ThanhSapXep khoa={khoaSapXep} chieu={chieu} doiSapXep={dangTim ? null : doiSapXep} />
 
-      {/* Messages and the open form, in the order they always had. `empty:hidden`: with nothing to
-          say the block takes no room. */}
-      <div className="flex min-w-0 flex-col gap-3 border-b border-line px-4 py-3 empty:hidden [&>*]:my-0">
       {/* Câu xác nhận sau một lần ghi. `role="status"` chứ không `alert`: không có gì hỏng. */}
       {cauDaXong !== "" && (
-        <p role="status" className="text-sm font-medium text-success-600">
+        <p role="status" className="m-0 text-sm font-medium text-success-600">
           {cauDaXong}
         </p>
       )}
 
       {/*
-        OUTSIDE EVERY BRANCH OF `trangThai`, for the reason `OMatKhauTam` is: a successful import
-        re-reads the list, and a re-read that fails must not replace the panel holding N passwords.
+        THE DIALOGS. Each one is OUTSIDE every branch of `trangThai`, and that place is a condition, not
+        an order of presentation: a successful write re-reads the list, and a re-read that fails replaces
+        the table with an error line — it must not take an open dialog (or a password) with it.
       */}
+
+      {/* Staff import (`asDialog`). Esc does nothing while sending, nor after a success that shows
+          passwords (`excel-import-panel.tsx`); only the panel's own close calls `onImportClose`. */}
       {importOpen && (
         <ExcelImportPanel
           target={STAFF_IMPORT_TARGET}
@@ -650,62 +667,65 @@ export function DanhBaCanBo({ active = true }: { active?: boolean } = {}) {
             datChiTiet(null);
             datLanDoc((n) => n + 1);
           }}
-          onClose={() => setImportOpen(false)}
+          onClose={onImportClose}
+          asDialog
         />
       )}
 
-      {/*
-        Ô MẬT KHẨU TẠM ĐỨNG NGOÀI MỌI NHÁNH CỦA `trangThai`, và chỗ đứng ấy là một điều kiện chứ
-        không phải thứ tự trình bày: nó được dựng ngay sau một lần ghi thành công, mà lần ghi ấy
-        kéo theo một lần đọc lại danh sách. Đặt nó trong nhánh `pha === "xong"` thì một lần đọc lại
-        hỏng — phiên hết hạn, mạng chập — sẽ thay cả vùng ấy bằng một dòng báo lỗi và mang theo một
-        giá trị không lấy lại được.
-
-        NÓ CŨNG ĐỨNG TRÊN BIỂU MẪU: sau khi bấm, mắt người dùng ở đúng chỗ này, và thứ họ phải đọc
-        ngay là mật khẩu cùng câu "chỉ hiện một lần".
-      */}
-      {matKhauTam !== null && <OMatKhauTam matKhauTam={matKhauTam} onDong={dongMatKhauTam} />}
+      {/* MỘT BIỂU MẪU, MỘT HỘP THOẠI. Tiêu đề hộp luôn gọi tên người đang được thao tác, nên không có ca
+          nào sửa nhầm hồ sơ vì không biết biểu mẫu thuộc về dòng nào. Esc huỷ, trừ lúc đang gửi. */}
+      {dangMo !== null && (
+        <ConfigDialog
+          title={tieuDeBieuMau}
+          onDismiss={() => {
+            if (!dangGui) dongBieuMau();
+          }}
+        >
+          <BieuMauGhiCanBo
+            dangMo={dangMo}
+            ban={ban}
+            datBan={datBan}
+            vaiTroID={vaiTroID}
+            datVaiTroID={datVaiTroID}
+            boPhan={mucBoPhan}
+            vaiTro={mucVaiTro}
+            loiMayChu={loiMayChu}
+            dangGui={dangGui}
+            onGui={guiBieuMau}
+            onHuy={dongBieuMau}
+          />
+        </ConfigDialog>
+      )}
 
       {moTaiKhoan !== null && (
-        <XacNhanTaiKhoan
-          dangMo={moTaiKhoan}
-          loiMayChu={loiTaiKhoan}
-          dangGui={dangGuiTaiKhoan}
-          onGui={guiTaiKhoan}
-          onHuy={dongXacNhanTaiKhoan}
-        />
+        <ConfigDialog
+          title={tieuDeXacNhan(moTaiKhoan)}
+          hideHeader
+          onDismiss={() => {
+            if (!dangGuiTaiKhoan) dongXacNhanTaiKhoan();
+          }}
+        >
+          <XacNhanTaiKhoan
+            dangMo={moTaiKhoan}
+            loiMayChu={loiTaiKhoan}
+            dangGui={dangGuiTaiKhoan}
+            onGui={guiTaiKhoan}
+            onHuy={dongXacNhanTaiKhoan}
+          />
+        </ConfigDialog>
       )}
 
-      {/*
-        MỘT BIỂU MẪU, MỘT CHỖ TRÊN MÀN HÌNH, ĐẶT NGAY DƯỚI THANH NÚT.
-
-        Không dựng biểu mẫu lồng trong dòng của bảng: ở bề rộng nhỏ nhất (320px) bảng cuộn NGANG,
-        nên một biểu mẫu nằm trong một ô của bảng có thể mở ra ngoài khung nhìn và người dùng
-        không thấy nó đã mở. Ở đây tiêu đề biểu mẫu luôn gọi tên người đang được thao tác, nên
-        không có ca nào sửa nhầm hồ sơ vì không biết biểu mẫu thuộc về dòng nào.
-      */}
-      {dangMo !== null && (
-        <BieuMauGhiCanBo
-          dangMo={dangMo}
-          ban={ban}
-          datBan={datBan}
-          vaiTroID={vaiTroID}
-          datVaiTroID={datVaiTroID}
-          boPhan={mucBoPhan}
-          vaiTro={mucVaiTro}
-          loiMayChu={loiMayChu}
-          dangGui={dangGui}
-          onGui={guiBieuMau}
-          onHuy={dongBieuMau}
-        />
+      {/* Ô MẬT KHẨU TẠM — a dialog Esc does NOT close (`onDismiss` does nothing): the value is shown once
+          and cannot be shown again, so only the explicit "Tôi đã ghi lại" removes it. */}
+      {matKhauTam !== null && (
+        <ConfigDialog title="Mật khẩu tạm — chỉ hiện một lần" hideHeader onDismiss={() => {}}>
+          <OMatKhauTam matKhauTam={matKhauTam} onDong={dongMatKhauTam} />
+        </ConfigDialog>
       )}
-      </div>
 
-      {/* One aligned filter row, search first (ADR 0068 §12: ≤ 3 controls, so no "Bộ lọc" button). */}
-      <Toolbar>
-        <HangLocNguoiDung loc={loc} boPhan={mucBoPhan} doiLoc={doiLoc} />
-        <ThanhSapXep khoa={khoaSapXep} chieu={chieu} doiSapXep={dangTim ? null : doiSapXep} />
-      </Toolbar>
+      {chiTiet !== null && (
+        <KhoiChiTiet chiTiet={chiTiet} dong={dongChiTiet} traBoPhan={traBoPhan} traVaiTro={traVaiTro} />
+      )}
 
       {/* FIRST LOAD (spec §8b): the sentence stays the live region, read out as before; the eye gets
           row-shaped placeholders. */}
@@ -718,21 +738,17 @@ export function DanhBaCanBo({ active = true }: { active?: boolean } = {}) {
         </>
       )}
 
-      {/*
-        LỖI: hiện đúng `message` của máy chủ, không diễn giải. Mọi mã lỗi — kể cả 401, 403, 404 —
-        đều trả cùng hình dạng `httpx.Error`, nên không có chỗ nào ở đây rẽ nhánh theo `code` để
-        đoán chuyện gì đã xảy ra, và `trace_id` không hiện ra: nó là mốc tra log, không phải mã
-        lỗi nghiệp vụ (xem `lib/api/goi.ts`).
-      */}
+      {/* LỖI: hiện đúng `message` của máy chủ, không diễn giải. Mọi mã lỗi — kể cả 401, 403, 404 — đều
+          trả cùng hình dạng `httpx.Error`, nên không có chỗ nào ở đây rẽ nhánh theo `code`, và
+          `trace_id` không hiện ra (xem `lib/api/goi.ts`). */}
       {trangThai.pha === "loi" && (
         <ErrorState role="alert" title="Chưa tải được danh sách cán bộ" message={trangThai.thongBao} />
       )}
 
       {trangThai.pha === "xong" && trangThai.trang.items.length === 0 && (
-        // TRẠNG THÁI RỖNG, KHÔNG PHẢI TRẠNG THÁI LỖI. Một xã vừa onboard có danh bạ rỗng thật;
-        // máy chủ trả `items: []` chứ không bao giờ trả `null`. Câu chữ vì vậy phải nói rõ là
-        // "chưa có ai", để không ai đi tìm lỗi mạng ở một hệ thống đang chạy đúng. Và khi đang
-        // tìm hay lọc thì câu ấy là SAI: "không ai khớp" không phải "xã chưa có ai".
+        // TRẠNG THÁI RỖNG, KHÔNG PHẢI TRẠNG THÁI LỖI. Một xã vừa onboard có danh bạ rỗng thật; máy chủ
+        // trả `items: []` chứ không bao giờ trả `null`. Khi đang tìm hay lọc thì câu ấy là SAI: "không
+        // ai khớp" không phải "xã chưa có ai".
         <EmptyState
           icon={loc.tuKhoa !== null || loc.boPhan !== "" ? Search : UsersRound}
           title={
@@ -745,65 +761,47 @@ export function DanhBaCanBo({ active = true }: { active?: boolean } = {}) {
 
       {trangThai.pha === "xong" && trangThai.trang.items.length > 0 && (
         <>
-          {/*
-            DANH MỤC HỎNG THÌ NÓI RA MỘT LẦN Ở ĐÂY, chứ không để hai mươi ô cùng báo lỗi. Hiện
-            đúng `message` của máy chủ, không diễn giải và không rẽ nhánh theo `code`
-            (`lib/api/goi.ts`). Mỗi danh mục một dòng: hỏng một tuyến không được nói thành hỏng
-            cả hai.
-
-            ĐẶT CẠNH BẢNG, KHÔNG ĐẶT TRÊN ĐẦU MÀN HÌNH: khi chính danh sách cán bộ cũng hỏng
-            (phiên hết hạn chẳng hạn) thì cả ba tuyến cùng trả một câu, và ba dòng giống hệt
-            nhau chồng lên nhau không nói thêm được gì. Ở đây hai dòng này chỉ hiện khi có bảng
-            để mà thiếu cột — đúng lúc câu ấy giải thích được một thứ người dùng đang nhìn.
-          */}
+          {/* DANH MỤC HỎNG THÌ NÓI RA MỘT LẦN Ở ĐÂY, chứ không để hai mươi ô cùng báo lỗi — đúng
+              `message` của máy chủ, mỗi danh mục một dòng, chỉ khi có bảng để mà thiếu cột. */}
           {(traBoPhan.pha === "loi" || traVaiTro.pha === "loi") && (
-            <div className="flex flex-col gap-2 px-4 pt-3 [&>*]:my-0">
+            <div className="flex flex-col gap-2 [&>*]:my-0">
               <BaoLoiDanhMuc nhan="Danh mục bộ phận" bang={traBoPhan} />
               <BaoLoiDanhMuc nhan="Danh mục vai trò" bang={traVaiTro} />
             </div>
           )}
-          <BangCanBo
-            danhSach={trangThai.trang.items}
-            khoa={khoaHien}
-            chieu={chieuHien}
-            doiSapXep={dangTim ? null : doiSapXep}
-            thaoTac={thaoTac}
-            idDangMo={chiTiet?.id ?? null}
-            traBoPhan={traBoPhan}
-            traVaiTro={traVaiTro}
-          />
-          {/* CÂU NÀY TỪNG NÓI NGƯỢC VỚI CHÍNH BẢNG NGAY TRÊN NÓ, và sai theo chiều nguy hiểm.
-              Nó viết "hiển thị dạng che" trong khi hai cột ở :934-935 in `cb.phone` và
-              `cb.mobile` NGUYÊN VẸN — đúng như khách chốt câu #11 ngày 22/09/2026. Chú thích
-              kỹ thuật cạnh hai cột ấy đã ghi nhận #11; câu hiển thị thì chưa ai gỡ.
-
-              Vì sao một câu chữ đáng sửa như một khiếm khuyết: cán bộ đọc "đã che" rồi chụp màn
-              hình gửi đi, tin rằng mình đang gửi bản đã che. Một lời khai SAI về mức bảo vệ dữ
-              liệu cá nhân, đặt ngay cạnh dữ liệu CHƯA che, nguy hiểm hơn hẳn việc không nói gì.
-              Không phép kiểm nào đỏ vì nó — chỉ người đọc màn hình mới thấy. */}
-          <CardFooter className="justify-between">
-            <Notice tone="legal" className="ghi-chu m-0 min-w-0 flex-1 basis-80">
-              Số điện thoại hiển thị đầy đủ cho cán bộ trong xã. Đây là dữ liệu cá nhân theo Nghị
-              định 13/2023/NĐ-CP — không sao chép ra ngoài cơ quan.
-            </Notice>
+          <Card className="border border-line">
+            <BangCanBo
+              danhSach={trangThai.trang.items}
+              khoa={khoaHien}
+              chieu={chieuHien}
+              doiSapXep={dangTim ? null : doiSapXep}
+              thaoTac={thaoTac}
+              traBoPhan={traBoPhan}
+              traVaiTro={traVaiTro}
+            />
+          </Card>
+          {/* The prototype's footer line ("Hiển thị N/M cán bộ."). No "/M": the contract pages by cursor
+              and returns no total (`DieuHuongTrang`), so the count is this page's rows, said as such. */}
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+            <p className="m-0 text-[13px] text-ink-500">
+              Hiển thị {trangThai.trang.items.length} cán bộ trên trang này.
+            </p>
             <DieuHuongTrang
               nganXep={nganXep}
               conTroTiep={trangThai.trang.next_cursor}
               conTrangSau={trangThai.trang.has_more}
               diToiTrang={diToiTrang}
             />
-          </CardFooter>
+          </div>
+          {/* CÂU NGHỊ ĐỊNH 13 GIỮ NGUYÊN: hai cột số điện thoại in NGUYÊN VẸN (#11, 22/09/2026), và cán
+              bộ đọc câu cạnh bảng trước khi chụp màn hình gửi đi. Một lời khai sai về mức bảo vệ dữ liệu
+              cá nhân, ngay cạnh dữ liệu chưa che, nguy hiểm hơn không nói gì. */}
+          <Notice tone="legal" className="ghi-chu m-0 min-w-0">
+            Số điện thoại hiển thị đầy đủ cho cán bộ trong xã. Đây là dữ liệu cá nhân theo Nghị
+            định 13/2023/NĐ-CP — không sao chép ra ngoài cơ quan.
+          </Notice>
+          <p className="ghi-chu m-0 text-[13px] text-ink-500">{VI_SAO_KHONG_CO_NUT_XOA}</p>
         </>
-      )}
-      </Card>
-
-      {chiTiet !== null && (
-        <KhoiChiTiet
-          chiTiet={chiTiet}
-          dong={dongChiTiet}
-          traBoPhan={traBoPhan}
-          traVaiTro={traVaiTro}
-        />
       )}
     </section>
   );
@@ -832,7 +830,21 @@ function BaoLoiDanhMuc({ nhan, bang }: { nhan: string; bang: BangTraDanhMuc }) {
  * "không tra được" (một dòng dữ liệu lệch) không trông giống nhau.
  */
 function ODanhMuc({ ket, nhan }: { ket: KetTra; nhan: (ket: KetTra) => string }) {
-  return <span className={lopNhanDanhMuc(ket)}>{nhan(ket)}</span>;
+  const chu = nhan(ket);
+  return (
+    <span className={`block max-w-[14rem] overflow-hidden text-ellipsis ${lopNhanDanhMuc(ket) ?? ""}`} title={chu}>
+      {chu}
+    </span>
+  );
+}
+
+/** One line of free text with "…" and the full words on hover — `Chức danh` and the like. */
+function OMotDong({ text }: { text: string }) {
+  return (
+    <span className="block max-w-[14rem] overflow-hidden text-ellipsis" title={text}>
+      {text}
+    </span>
+  );
 }
 
 function lopNhanDanhMuc(ket: KetTra): string | undefined {
@@ -847,45 +859,24 @@ function lopNhanDanhMuc(ket: KetTra): string | undefined {
 }
 
 /**
- * Điều khiển sắp xếp, đặt trên bảng để dùng được cả ở bề rộng nhỏ nhất (320px) — ở đó bảng cuộn
- * ngang, nên một nút nằm trong ô tiêu đề cột có thể đang ở ngoài khung nhìn.
- *
- * CHỈ HAI KHOÁ, và đó là toàn bộ những gì máy chủ nhận (xem `KHOA_SAP_XEP`).
+ * Sorting control above the table. Since ADR 0068 lần 5 the sortable column heads (`Mã cán bộ`,
+ * `Ngày tạo`, the prototype's `ArrowUpDown` heads) are the ONLY place to sort, so this bar no longer draws
+ * buttons: with `doiSapXep` given it renders nothing. CHỈ HAI KHOÁ, và đó là toàn bộ những gì máy chủ
+ * nhận (xem `KHOA_SAP_XEP`).
  *
  * `doiSapXep === null` LÀ ĐANG TÌM: tuyến tìm không có tham số sắp xếp và luôn trả theo mã tăng
- * dần, nên thanh này NÓI RA điều ấy thay vì vẽ hai nút bấm vào không có gì xảy ra — hay tệ hơn,
- * một mũi tên "Ngày tạo ↓" nằm trên một bảng đang xếp theo mã. Không dùng nút `disabled`: nhiều
- * trình đọc màn hình bỏ qua nút bị vô hiệu, và người dùng ấy không biết vì sao không có gì để bấm.
+ * dần, nên thanh này NÓI RA điều ấy thay vì để hai đầu cột mời bấm mà không có gì xảy ra — hay tệ
+ * hơn, một mũi tên "Ngày tạo ↓" nằm trên một bảng đang xếp theo mã.
  */
 export function ThanhSapXep({
-  khoa,
-  chieu,
   doiSapXep,
 }: {
   khoa: KhoaSapXep;
   chieu: ChieuSapXep;
   doiSapXep: ((khoa: KhoaSapXep) => void) | null;
 }) {
-  if (doiSapXep === null) {
-    return <p className="ghi-chu m-0 ml-auto max-w-md self-center text-[13px] text-ink-500">{CAU_SAP_XEP_KHI_TIM}</p>;
-  }
-  return (
-    <div className="thanh-sap-xep m-0 ml-auto flex flex-wrap items-center gap-2">
-      <span className="nhan-sap-xep text-xs font-semibold text-ink-700">Sắp xếp theo</span>
-      {KHOA_SAP_XEP.map((k) => (
-        <button
-          key={k}
-          type="button"
-          className="nut-phu"
-          aria-pressed={k === khoa}
-          onClick={() => doiSapXep(k)}
-        >
-          {NHAN_KHOA[k]}
-          {k === khoa ? (chieu === "asc" ? " ↑" : " ↓") : " ⇅"}
-        </button>
-      ))}
-    </div>
-  );
+  if (doiSapXep !== null) return null;
+  return <p className="ghi-chu m-0 text-[13px] text-ink-500">{CAU_SAP_XEP_KHI_TIM}</p>;
 }
 
 /** Nhãn người đọc của hai khoá sắp xếp. Khoá là chuỗi của hợp đồng, nhãn là chữ của đặc tả. */
@@ -960,17 +951,34 @@ export function HangLocNguoiDung({
   }
 
   return (
-    // NATIVE `<label>`s STAY IN THIS COMPONENT'S OWN TREE, not inside a shared `Field`: the tab's test
-    // reads the unrendered element tree for "both controls are labelled", and a label drawn by a
-    // child component is not in it. The legacy `.hang-loc` rules (`globals.css`, "filter rows") give
-    // this markup the same 40px controls and labels-above as `Field`. Search first (ADR 0068 §12).
-    <div className="hang-loc m-0 flex min-w-0 flex-[1_1_480px] flex-wrap items-end gap-3">
-      <form className="form-tra-cuu min-w-0 flex-[1_1_320px]" role="search" method="post" onSubmit={gui}>
-        <div className="o-nhap">
-          <label htmlFor="tim-nguoi-dung">{NHAN_O_TIM_NGUOI_DUNG}</label>
+    // THE PROTOTYPE'S FILTER ROW (`UserTable`, ADR 0068 lần 5): a search box with the magnifier inside
+    // it and no visible label, ~28rem at most. The labels stay — native `<label>`s, visually hidden — in
+    // this component's own tree: the tab's test reads the unrendered element tree for "both controls
+    // are labelled", and a screen reader needs them.
+    //
+    // KEPT, THOUGH THE PROTOTYPE HAS NEITHER: the `Tìm` button (this search runs on submit, not per key —
+    // a box that does nothing while typing needs a visible way to run it) and the Bộ phận picker.
+    <div className="hang-loc-nguoi-dung m-0 flex min-w-0 flex-[1_1_480px] flex-wrap items-center gap-2">
+      <form
+        className="m-0 flex min-w-0 flex-[1_1_300px] items-center gap-2 sm:max-w-[28rem]"
+        role="search"
+        method="post"
+        onSubmit={gui}
+      >
+        <label htmlFor="tim-nguoi-dung" className="an-thi-giac">
+          {NHAN_O_TIM_NGUOI_DUNG}
+        </label>
+        <span className="relative min-w-0 flex-1">
+          <Search
+            aria-hidden="true"
+            focusable="false"
+            strokeWidth={1.8}
+            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-500"
+          />
           <input
             id="tim-nguoi-dung"
             type="search"
+            className={cn(controlClass, "pl-9")}
             value={oTim}
             onChange={(e) => go(e.target.value)}
             placeholder={GOI_Y_O_TIM}
@@ -978,27 +986,28 @@ export function HangLocNguoiDung({
             aria-describedby="loi-tim-nguoi-dung"
             aria-invalid={loiTim !== ""}
           />
-        </div>
-        <Button variant="secondary" type="submit" icon={<Search aria-hidden="true" focusable="false" strokeWidth={1.8} />}>
+        </span>
+        <Button variant="secondary" type="submit" className="shrink-0">
           {NUT_TIM}
         </Button>
       </form>
 
-      <p className="chon-hang-muc flex min-w-[180px] flex-[0_1_220px] flex-col gap-1.5">
-        <label htmlFor="loc-bo-phan-nguoi-dung">{NHAN_LOC_BO_PHAN}</label>{" "}
-        <select
-          id="loc-bo-phan-nguoi-dung"
-          value={loc.boPhan}
-          onChange={(e) => doiLoc({ boPhan: maBoPhanLoc(e.target.value, boPhan) })}
-        >
-          <option value="">{TAT_CA_BO_PHAN}</option>
-          {boPhan.map((bp) => (
-            <option key={bp.id} value={bp.id}>
-              {bp.name}
-            </option>
-          ))}
-        </select>
-      </p>
+      <label htmlFor="loc-bo-phan-nguoi-dung" className="an-thi-giac">
+        {NHAN_LOC_BO_PHAN}
+      </label>
+      <select
+        id="loc-bo-phan-nguoi-dung"
+        className={cn(controlClass, "w-auto max-w-[16rem] min-w-[11rem] flex-[0_1_14rem]")}
+        value={loc.boPhan}
+        onChange={(e) => doiLoc({ boPhan: maBoPhanLoc(e.target.value, boPhan) })}
+      >
+        <option value="">{TAT_CA_BO_PHAN}</option>
+        {boPhan.map((bp) => (
+          <option key={bp.id} value={bp.id}>
+            {bp.name}
+          </option>
+        ))}
+      </select>
       {/* Always in the DOM (the live region the search box points at); a full-width line of its own
           so a message never squeezes the row. */}
       <p id="loi-tim-nguoi-dung" className="thong-bao-loi m-0 basis-full empty:hidden" role="alert">
@@ -1044,51 +1053,31 @@ export type ThaoTacDong = {
  * máy chủ, và nó cũng chính là thứ tuyến khoá/mở khoá ghi vào — nên nhãn nút không thể lệch với
  * việc nút ấy sắp làm.
  */
-function NutCuaDong({
-  cb,
-  thaoTac,
-  idDangMo,
-}: {
-  cb: identity_canBoTomTat;
-  thaoTac: ThaoTacDong;
-  idDangMo: string | null;
-}) {
+function NutCuaDong({ cb, thaoTac }: { cb: identity_canBoTomTat; thaoTac: ThaoTacDong }) {
   const nhanKhoa = cb.active ? NUT_KHOA : NUT_MO_KHOA;
+  const ten = (nut: string) => `${nut}: ${cb.full_name}`;
   return (
-    <span className="o-thao-tac">
-      <button
-        type="button"
-        className="nut-phu"
-        aria-expanded={idDangMo === cb.id}
-        aria-label={`Chi tiết: ${cb.full_name}`}
-        onClick={() => thaoTac.chiTiet(cb.id)}
-      >
-        Chi tiết
-      </button>
-      <button
-        type="button"
-        className="nut-phu"
-        aria-label={`${NUT_SUA}: ${cb.full_name}`}
-        onClick={() => thaoTac.sua(cb)}
-      >
-        {NUT_SUA}
-      </button>
-      <button
-        type="button"
-        className="nut-phu"
-        aria-label={`${NUT_DOI_VAI_TRO}: ${cb.full_name}`}
-        onClick={() => thaoTac.doiVaiTro(cb)}
-      >
-        {NUT_DOI_VAI_TRO}
-      </button>
-      <button
-        type="button"
-        className="nut-phu"
-        aria-label={`${nhanKhoa}: ${cb.full_name}`}
-        onClick={() => thaoTac.datKhoa(cb)}
-      >
-        {nhanKhoa}
-      </button>
+    // THE PROTOTYPE'S ROW ACTIONS ARE ICON BUTTONS (`UserTable`: Pencil, Trash2), one line, right-aligned —
+    // so every row keeps one height. `IconButton` makes the name both `aria-label` and the hover `title`,
+    // and the name carries the person (see above). 44px squares: older staff tap these on a phone
+    // (`.o-thao-tac .nut-phu`, `skills/accessibility-elderly`).
+    <span className="o-thao-tac o-thao-tac-icon">
+      <IconButton className="size-11" label={ten("Chi tiết")} type="button" aria-haspopup="dialog" onClick={() => thaoTac.chiTiet(cb.id)}>
+        <Eye aria-hidden="true" focusable="false" strokeWidth={1.8} />
+      </IconButton>
+      <IconButton className="size-11" label={ten(NUT_SUA)} type="button" aria-haspopup="dialog" onClick={() => thaoTac.sua(cb)}>
+        <Pencil aria-hidden="true" focusable="false" strokeWidth={1.8} />
+      </IconButton>
+      <IconButton className="size-11" label={ten(NUT_DOI_VAI_TRO)} type="button" aria-haspopup="dialog" onClick={() => thaoTac.doiVaiTro(cb)}>
+        <UserCog aria-hidden="true" focusable="false" strokeWidth={1.8} />
+      </IconButton>
+      <IconButton className="size-11" label={ten(nhanKhoa)} type="button" aria-haspopup="dialog" onClick={() => thaoTac.datKhoa(cb)}>
+        {cb.active ? (
+          <Lock aria-hidden="true" focusable="false" strokeWidth={1.8} />
+        ) : (
+          <LockOpen aria-hidden="true" focusable="false" strokeWidth={1.8} />
+        )}
+      </IconButton>
 
       {/*
         MỘT NÚT, KHÔNG HAI — và nút kia VẮNG MẶT chứ không mờ đi.
@@ -1098,49 +1087,44 @@ function NutCuaDong({
         lại chỉ có nghĩa khi tài khoản đã tồn tại), nên không nút nào làm được việc của nút kia.
 
         Một nút mờ đi mời người dùng hỏi "vì sao không bấm được" và đi tìm một quyền họ không
-        thiếu; một nút vắng mặt nói đúng điều đang đúng — việc ấy không áp dụng cho dòng này. Và
-        `disabled` còn là một cái bẫy riêng với trình đọc màn hình: nhiều bộ bỏ qua hẳn nút bị vô
-        hiệu, nên người dùng ấy không biết là có thứ gì ở đó cả.
+        thiếu; một nút vắng mặt nói đúng điều đang đúng — việc ấy không áp dụng cho dòng này.
       */}
       {cb.has_account ? (
-        <button
-          type="button"
-          className="nut-phu"
-          aria-label={`${NUT_DAT_LAI_MAT_KHAU}: ${cb.full_name}`}
-          onClick={() => thaoTac.datLaiMatKhau(cb)}
-        >
-          {NUT_DAT_LAI_MAT_KHAU}
-        </button>
+        <IconButton className="size-11" label={ten(NUT_DAT_LAI_MAT_KHAU)} type="button" aria-haspopup="dialog" onClick={() => thaoTac.datLaiMatKhau(cb)}>
+          <KeyRound aria-hidden="true" focusable="false" strokeWidth={1.8} />
+        </IconButton>
       ) : canIssueAccount(cb.email) ? (
-        <button
-          type="button"
-          className="nut-phu"
-          aria-label={`${NUT_CAP_TAI_KHOAN}: ${cb.full_name}`}
-          onClick={() => thaoTac.capTaiKhoan(cb)}
-        >
-          {NUT_CAP_TAI_KHOAN}
-        </button>
+        <IconButton className="size-11" label={ten(NUT_CAP_TAI_KHOAN)} type="button" aria-haspopup="dialog" onClick={() => thaoTac.capTaiKhoan(cb)}>
+          <UserPlus aria-hidden="true" focusable="false" strokeWidth={1.8} />
+        </IconButton>
       ) : (
-        // NO EMAIL, NO ACCOUNT: disabled WITH the reason as visible text, tied by
-        // `aria-describedby`. Unlike the pair above, this is the SAME action blocked by a fixable
-        // gap, so the person must learn what to fix. The server still refuses (409
-        // `staff_has_no_email`); if that sentence ever arrives, `guiTaiKhoan` shows it verbatim.
-        <>
-          <button
-            type="button"
-            className="nut-phu"
-            aria-label={`${NUT_CAP_TAI_KHOAN}: ${cb.full_name}`}
-            aria-describedby={`no-email-reason-${cb.id}`}
-            disabled
-          >
-            {NUT_CAP_TAI_KHOAN}
-          </button>
-          <span className="ghi-chu" id={`no-email-reason-${cb.id}`}>
-            {NO_EMAIL_ACCOUNT_REASON}
-          </span>
-        </>
+        // NO EMAIL, NO ACCOUNT: disabled, tied by `aria-describedby` to the reason, which is VISIBLE
+        // text in the row's "Tài khoản" cell (`OTaiKhoan`). Unlike the pair above, this is the SAME
+        // action blocked by a fixable gap, so the person must learn what to fix. The server still
+        // refuses (409 `staff_has_no_email`); if that sentence ever arrives, `guiTaiKhoan` shows it.
+        <IconButton className="size-11" label={ten(NUT_CAP_TAI_KHOAN)} type="button" aria-describedby={`no-email-reason-${cb.id}`} disabled>
+          <UserPlus aria-hidden="true" focusable="false" strokeWidth={1.8} />
+        </IconButton>
       )}
     </span>
+  );
+}
+
+/**
+ * Ô "Tài khoản": has / has not, and — for a row that cannot get one yet — the reason, one line with "…"
+ * and the full sentence on hover and for the screen reader (`aria-describedby` of the disabled button).
+ */
+function OTaiKhoan({ cb }: { cb: identity_canBoTomTat }) {
+  const khongCoThu = !cb.has_account && !canIssueAccount(cb.email);
+  return (
+    <>
+      <span className="block">{nhanTaiKhoan(cb.has_account)}</span>
+      {khongCoThu && (
+        <span className="dong-phu max-w-[14rem] overflow-hidden text-ellipsis" title={NO_EMAIL_ACCOUNT_REASON} id={`no-email-reason-${cb.id}`}>
+          {NO_EMAIL_ACCOUNT_REASON}
+        </span>
+      )}
+    </>
   );
 }
 
@@ -1155,7 +1139,6 @@ export function BangCanBo({
   chieu,
   doiSapXep,
   thaoTac,
-  idDangMo,
   traBoPhan,
   traVaiTro,
 }: {
@@ -1165,7 +1148,6 @@ export function BangCanBo({
   /** `null` = đang tìm: hai ô tiêu đề hiện chữ, không hiện nút (xem `ThanhSapXep`). */
   doiSapXep: ((khoa: KhoaSapXep) => void) | null;
   thaoTac: ThaoTacDong;
-  idDangMo: string | null;
   /** Bảng tra đã dựng sẵn, đi XUỐNG như tham số. Không dòng nào tự đi hỏi máy chủ. */
   traBoPhan: BangTraDanhMuc;
   traVaiTro: BangTraDanhMuc;
@@ -1174,6 +1156,9 @@ export function BangCanBo({
     // `role="region"` + `tabIndex` để vùng cuộn ngang tới được bằng bàn phím. Ở dưới 768px bảng
     // cuộn ngang chứ không đổi thành thẻ: đổi `display` của các phần tử bảng làm mất ngữ nghĩa
     // bảng với trình đọc màn hình, mà đây đúng là dữ liệu dạng bảng.
+    // The prototype's table box: it scrolls sideways INSIDE itself, never the page. Cells stay one line
+    // (`.bang-can-bo td` is `nowrap`); free text is capped with "…" and the full words on hover, so every
+    // row has one height and nothing spills into the next column.
     <TableScroll sticky aria-label="Danh sách cán bộ" className="rounded-none border-0 shadow-none">
       <table className={`bang-can-bo ${DATA_TABLE_CLASS}`}>
         <caption className="an-thi-giac">
@@ -1218,7 +1203,7 @@ export function BangCanBo({
               chieu={chieu}
               doiSapXep={doiSapXep}
             />
-            <th scope="col">
+            <th scope="col" className="text-right">
               <span className="an-thi-giac">Hành động</span>
             </th>
           </tr>
@@ -1228,10 +1213,14 @@ export function BangCanBo({
             <tr key={cb.id}>
               <td>{cb.code}</td>
               <td>
-                <span className="ten-can-bo">{cb.full_name}</span>
+                <span className="ten-can-bo max-w-[16rem] overflow-hidden text-ellipsis" title={cb.full_name}>
+                  {cb.full_name}
+                </span>
                 <span className="dong-phu">{emailLabel(cb.email)}</span>
               </td>
-              <td>{cb.position}</td>
+              <td>
+                <OMotDong text={cb.position} />
+              </td>
               <td>
                 <ODanhMuc ket={traTen(traBoPhan, cb.department_id)} nhan={nhanBoPhan} />
               </td>
@@ -1255,10 +1244,12 @@ export function BangCanBo({
                 {/* Tone by the CODE (`active`), never by the words; icon + word, never colour alone. */}
                 <Badge tone={cb.active ? "success" : "neutral"}>{nhanTrangThai(cb.active)}</Badge>
               </td>
-              <td>{nhanTaiKhoan(cb.has_account)}</td>
-              <td>{nhanNgayTao(cb.created_at)}</td>
               <td>
-                <NutCuaDong cb={cb} thaoTac={thaoTac} idDangMo={idDangMo} />
+                <OTaiKhoan cb={cb} />
+              </td>
+              <td>{nhanNgayTao(cb.created_at)}</td>
+              <td className="text-right">
+                <NutCuaDong cb={cb} thaoTac={thaoTac} />
               </td>
             </tr>
           ))}
@@ -1294,9 +1285,14 @@ function OTieuDeSapXep({
           {mui}
         </>
       ) : (
-        <button type="button" className="nut-sap-xep" onClick={() => doiSapXep(khoa)}>
+        // The prototype's sortable head: the words, then `ArrowUpDown` while unsorted, an arrow once sorted.
+        <button type="button" className="nut-sap-xep inline-flex items-center gap-1.5" onClick={() => doiSapXep(khoa)}>
           {NHAN_KHOA[khoa]}
-          {mui === "" ? " ⇅" : mui}
+          {mui === "" ? (
+            <ArrowUpDown aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-3 opacity-40" />
+          ) : (
+            mui
+          )}
         </button>
       )}
     </th>
@@ -1371,20 +1367,9 @@ function KhoiChiTiet({
   traVaiTro: BangTraDanhMuc;
 }) {
   return (
-    <Card as="aside" className="khoi-chi-tiet m-0 p-0" aria-label="Chi tiết cán bộ">
-      <CardHeader className="dau-khoi-chi-tiet m-0 justify-between">
-        <CardTitle as="h3">Chi tiết cán bộ</CardTitle>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          icon={<X aria-hidden="true" focusable="false" strokeWidth={1.8} />}
-          onClick={dong}
-        >
-          Đóng
-        </Button>
-      </CardHeader>
-      <CardContent className="[&>*]:my-0">
+    // A dialog since ADR 0068 lần 5, like every other per-row view of the redesigned screen; Esc and
+    // "Đóng" both close it — it holds nothing that cannot be read again.
+    <ConfigDialog title="Chi tiết cán bộ" onDismiss={dong}>
 
       {chiTiet.pha === "dangTai" && <p role="status">Đang tải…</p>}
 
@@ -1428,7 +1413,11 @@ function KhoiChiTiet({
           <dd>{nhanNgayTao(chiTiet.canBo.created_at)}</dd>
         </dl>
       )}
-      </CardContent>
-    </Card>
+      <div className="flex justify-end">
+        <Button type="button" variant="secondary" onClick={dong}>
+          Đóng
+        </Button>
+      </div>
+    </ConfigDialog>
   );
 }

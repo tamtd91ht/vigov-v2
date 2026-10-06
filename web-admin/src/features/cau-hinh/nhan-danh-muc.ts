@@ -11,7 +11,7 @@
  * Chip cột "Trạng thái" — `active`.
  *
  * HAI CHỮ NÀY LÀ CHỮ CỦA ĐẶC TẢ §5 (`Đang dùng` / `Đã tắt`), KHÔNG PHẢI CHỮ CỦA TAB NGƯỜI DÙNG
- * (`Đang hoạt động` / `Đã ngừng`). Hai màn hình nói về hai thứ khác nhau: ở đó là một CON NGƯỜI
+ * (`Đang hoạt động` / `Tạm khoá`). Hai màn hình nói về hai thứ khác nhau: ở đó là một CON NGƯỜI
  * còn công tác hay đã nghỉ, ở đây là một MÃ còn được chọn khi lập hồ sơ mới hay không. Mượn chữ
  * của nhau là mời người đọc suy ra một quan hệ không có.
  */

@@ -36,7 +36,7 @@ describe("cột Ngày tạo", () => {
 describe("Trạng thái và Tài khoản là hai câu hỏi khác nhau", () => {
   it("`active` nói người này còn làm việc hay đã ngừng", () => {
     expect(nhanTrangThai(true)).toBe("Đang hoạt động");
-    expect(nhanTrangThai(false)).toBe("Đã ngừng");
+    expect(nhanTrangThai(false)).toBe("Tạm khoá");
   });
 
   it("`has_account` nói người này đăng nhập được hay chỉ có trong danh bạ", () => {

@@ -66,6 +66,8 @@ describe("/nguoi-dung", () => {
     expect(html).toMatch(/<h1[^>]*>Người dùng<\/h1>/);
     expect(html).toContain("STAFF-ACCOUNTS active=true");
     expect(html).toContain("HEADER");
+    // The prototype's header action (ADR 0068 lần 5) — the import opens a dialog of the list.
+    expect(html).toMatch(/<button[^>]*>.*Nhập từ Excel<\/button>/);
   });
 
   it("DENIED: no `admin.user` (even with `admin.role`, `admin.user.delete`) → refusal, list never mounted", async () => {
@@ -73,6 +75,9 @@ describe("/nguoi-dung", () => {
     const html = await render(UsersPage);
     expect(html).not.toContain("STAFF-ACCOUNTS");
     expect(html).toContain("không có quyền quản lý người dùng");
+    // The header stays (the page still says where you are), but without its write action.
+    expect(html).toMatch(/<h1[^>]*>Người dùng<\/h1>/);
+    expect(html).not.toContain("Nhập từ Excel");
   });
 
   it("session not read yet → neither the list nor a refusal", async () => {
@@ -81,6 +86,7 @@ describe("/nguoi-dung", () => {
     expect(html).not.toContain("STAFF-ACCOUNTS");
     expect(html).not.toContain("không có quyền");
     expect(html).toContain("Đang kiểm tra quyền truy cập");
+    expect(html).not.toContain("Nhập từ Excel");
   });
 
   it("session unreadable → the server's sentence, list never mounted (fail closed)", async () => {

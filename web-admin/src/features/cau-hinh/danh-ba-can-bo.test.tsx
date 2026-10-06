@@ -83,7 +83,6 @@ function ve(danhSach: readonly identity_canBoTomTat[] = [CAN_BO]) {
       chieu="asc"
       doiSapXep={() => {}}
       thaoTac={KHONG_LAM_GI}
-      idDangMo={null}
       traBoPhan={TRA_RONG}
       traVaiTro={TRA_RONG}
     />,
@@ -164,6 +163,16 @@ describe("cụm nút của một dòng — ba thao tác ghi, KHÔNG có Xoá", (
     expect(ve([{ ...CAN_BO, active: false }])).toContain("Mở khoá tài khoản");
   });
 
+  it("prototype row (ADR 0068 lần 5): icon-only actions named in `aria-label` AND hover `title`; locked = `Tạm khoá`", () => {
+    const html = ve([{ ...CAN_BO, active: false }]);
+    expect(html).toContain('title="Sửa hồ sơ: Huỳnh Văn A"');
+    expect(html).toContain('title="Mở khoá tài khoản: Huỳnh Văn A"');
+    // No visible action WORDS in the row: the names live in the attributes, so the row stays one line.
+    expect(html).not.toContain(">Sửa hồ sơ<");
+    expect(html).not.toContain(">Đổi vai trò<");
+    expect(html).toContain(">Tạm khoá<");
+  });
+
   it("mỗi nút mang tên người trong nhãn trợ năng", () => {
     // Hai mươi dòng cho ra hai mươi nút đọc lên giống hệt nhau là danh sách mà người dùng trình
     // đọc màn hình không chọn đúng được dòng nào — và chọn nhầm dòng ở đây là khoá nhầm tài khoản.
@@ -226,7 +235,8 @@ describe("hai nút thông tin đăng nhập loại trừ nhau theo `has_account`
         Number(html.includes(NUT_CAP_TAI_KHOAN)) + Number(html.includes(NUT_DAT_LAI_MAT_KHAU));
 
       expect(soNut).toBe(1);
-      expect(html).not.toContain("disabled");
+      // `disabled=""`, the attribute — the shared Button's classes carry `disabled:` variants.
+      expect(html).not.toContain('disabled=""');
     }
   });
 });
@@ -368,7 +378,7 @@ describe("staff without an email — optional since 4cf87b6", () => {
     const html = ve([{ ...NO_EMAIL, email: "demo@thangbinh.test" }]);
 
     expect(issueButton(html)).not.toBe("");
-    expect(issueButton(html)).not.toContain("disabled");
+    expect(issueButton(html)).not.toContain('disabled=""');
     expect(html).not.toContain(NO_EMAIL_ACCOUNT_REASON);
   });
 

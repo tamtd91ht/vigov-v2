@@ -11,6 +11,7 @@ import type { KetQua } from "@/lib/api/goi";
 import { seedRoleTemplates } from "@/lib/api/role-templates";
 import type { identity_seedRoleTemplatesOut, identity_vaiTroCotRa } from "@/lib/api/schema.gen";
 
+import { ConfigDialog } from "./config-dialog";
 import {
   SEED_BUTTON,
   SEED_CANCEL_BUTTON,
@@ -32,8 +33,8 @@ export type SeedPhase =
  * "Tạo tám vai trò mẫu" (ADR 0055 §2) — shown only to an account the tab already let edit
  * (`admin.role`); the server checks `admin.role` AND #14 (every key the templates grant) on the call.
  *
- * CONFIRM FIRST, INLINE: a click that creates roles with rights attached deserves one sentence read
- * before it. Inline, not a floating dialog — the same choice as every write form on this screen.
+ * CONFIRM FIRST: a click that creates roles with rights attached deserves one sentence read before it.
+ * In a centred dialog since ADR 0068 lần 5, as the redesigned admin screens confirm everything.
  *
  * NO RETRY LOOP, NO OPTIMISM: after a 200 the matrix is read again (`onSeeded`), because the new
  * columns and their ticks exist only on the server.
@@ -86,9 +87,30 @@ export function RoleTemplateSeedView({
 }) {
   return (
     <div className="khoi-vai-tro-mau flex min-w-0 flex-col gap-3 [&>*]:my-0">
-      {phase.kind === "confirming" || phase.kind === "sending" ? (
-        <>
-          <p className="ghi-chu m-0 text-[13px] text-ink-500">{hint}</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="ghi-chu m-0 min-w-0 flex-1 basis-64 text-[13px] text-ink-500">{hint}</p>
+        <Button
+          type="button"
+          variant="secondary"
+          icon={<LayoutTemplate aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+          onClick={onOpen}
+          disabled={phase.kind === "confirming" || phase.kind === "sending"}
+        >
+          {SEED_BUTTON}
+        </Button>
+      </div>
+
+      {/* The confirmation opens as a centred dialog, like every other confirm of the redesigned admin
+          screens (ADR 0068 lần 5). Esc cancels, except while the request is in flight: the answer must
+          have somewhere to land. */}
+      {(phase.kind === "confirming" || phase.kind === "sending") && (
+        <ConfigDialog
+          title={SEED_BUTTON}
+          hideHeader
+          onDismiss={() => {
+            if (phase.kind !== "sending") onCancel();
+          }}
+        >
           <ConfirmDialog
             className="form-danh-muc m-0"
             role="group"
@@ -114,19 +136,7 @@ export function RoleTemplateSeedView({
           >
             <p className="m-0">{SEED_CONFIRM_TEXT}</p>
           </ConfirmDialog>
-        </>
-      ) : (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="ghi-chu m-0 min-w-0 flex-1 basis-64 text-[13px] text-ink-500">{hint}</p>
-          <Button
-            type="button"
-            variant="secondary"
-            icon={<LayoutTemplate aria-hidden="true" focusable="false" strokeWidth={1.8} />}
-            onClick={onOpen}
-          >
-            {SEED_BUTTON}
-          </Button>
-        </div>
+        </ConfigDialog>
       )}
 
       {phase.kind === "done" && !phase.result.ok && (

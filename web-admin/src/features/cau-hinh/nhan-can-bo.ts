@@ -73,7 +73,9 @@ export function nhanNgayTao(giaTri: string): string {
  * hai hàm, không một hàm nào trộn cả hai.
  */
 export function nhanTrangThai(active: boolean): string {
-  return active ? "Đang hoạt động" : "Đã ngừng";
+  // The prototype's two words (`UserTable`, ADR 0068 lần 5). "Tạm khoá", not "Đã ngừng": `active` is what
+  // the lockout route writes, and the row keeps its "Mở khoá tài khoản" action.
+  return active ? "Đang hoạt động" : "Tạm khoá";
 }
 
 /** Nhãn cột "Tài khoản" — `has_account`. Xem chú thích của `nhanTrangThai`. */

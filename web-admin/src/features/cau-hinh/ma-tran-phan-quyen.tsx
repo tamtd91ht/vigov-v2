@@ -1,10 +1,10 @@
 "use client";
 
-import { Check, Crown, KeyRound, Minus, ShieldQuestion, TriangleAlert } from "lucide-react";
+import { Check, Crown, Minus, ShieldQuestion, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
-import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { Notice } from "@/components/ui/notice";
@@ -149,20 +149,14 @@ export function MaTranPhanQuyen({
   }
 
   return (
-    <section className="tab-phan-quyen flex min-w-0 flex-col gap-4 [&>*]:my-0" aria-labelledby="tieu-de-phan-quyen">
-      <Card>
-      <CardHeader>
-        <div className="min-w-0 flex-1 basis-64">
-          <CardTitle as="h2" id="tieu-de-phan-quyen" className="flex items-center gap-2">
-            <KeyRound aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
-            Phân quyền
-          </CardTitle>
-          {/* Câu hướng dẫn của đặc tả §4 khi sửa được; câu chỉ-xem khi không. */}
-          <p className="ghi-chu m-0 mt-1 text-[13px] text-ink-500">{choSua ? HUONG_DAN_SUA : GHI_CHU_CHI_XEM}</p>
-        </div>
-      </CardHeader>
+    // The prototype's composition (`RolePermissionMatrix`, ADR 0068 lần 5): under the page header, one
+    // hint line, then the bordered matrix — no second "Phân quyền" title inside a card. The section keeps
+    // its accessible name from the page `<h1>`'s words.
+    <section className="tab-phan-quyen flex min-w-0 flex-col gap-3 [&>*]:my-0" aria-label="Phân quyền">
+      {/* Câu hướng dẫn của đặc tả §4 khi sửa được; câu chỉ-xem khi không. */}
+      <p className="ghi-chu m-0 text-[13px] text-ink-500">{choSua ? HUONG_DAN_SUA : GHI_CHU_CHI_XEM}</p>
 
-      <div className="flex min-w-0 flex-col gap-3 px-4 py-3 empty:hidden [&>*]:my-0">
+      <div className="flex min-w-0 flex-col gap-3 empty:hidden [&>*]:my-0">
 
       {/* The seed button follows the same gate as the ticks: `admin.role`, the key the route
           declares. Convenience only — the server checks it, and #14, on the call. */}
@@ -216,7 +210,6 @@ export function MaTranPhanQuyen({
         ) : (
           <BangMaTran nhom={trangThai.nhom} vaiTro={trangThai.vaiTro} daCap={trangThai.daCap} />
         ))}
-      </Card>
     </section>
   );
 }
@@ -273,8 +266,9 @@ export function BangMaTran({
   return (
     // `role="region"` + `tabIndex` để vùng cuộn tới được bằng bàn phím — vùng này cuộn CẢ HAI
     // chiều, nên không tới được bằng bàn phím là 33 hàng đọc được bằng chuột thôi.
+    // The prototype's frame: one bordered, rounded box that scrolls inside itself, never the page.
     <div
-      className="bang-cuon bang-cuon-ma-tran m-0 rounded-none border-0 border-t border-line shadow-none"
+      className="bang-cuon bang-cuon-ma-tran m-0 min-w-0 rounded-card border border-line bg-surface shadow-none"
       role="region"
       aria-label="Ma trận phân quyền"
       tabIndex={0}
@@ -333,11 +327,15 @@ export function BangMaTran({
             {n.permissions.map((q) => (
               <tr key={q.code}>
                 <th scope="row" className="cot-quyen">
-                  <span className="nhan-quyen">{q.label}</span>
+                  {/* One line each, "…" + the full words on hover: every row stays the same height, so
+                      a tick is read against the right row (layout lesson, ADR 0068 lần 5). */}
+                  <span className="nhan-quyen truncate" title={q.label}>
+                    {q.label}
+                  </span>
                   {/* Khoá quyền hiện ngay dưới nhãn: nó là MỘT khoá phẳng `<nhóm>.<việc>` (luật 5,
                       bất biến 3b), là chuỗi mà máy chủ kiểm trên từng tuyến, và là thứ cán bộ đối
                       chiếu được khi hỏi "vì sao màn hình kia báo không có quyền". */}
-                  <span className="dong-phu">{q.code}</span>
+                  <code className="dong-phu ma-khoa-quyen truncate">{q.code}</code>
                 </th>
                 {vaiTro.map((vt) =>
                   chinhSua === undefined ? (
@@ -393,9 +391,11 @@ function laCotCuaToi(c: ChinhSuaMaTran, vt: identity_vaiTroCotRa): boolean {
 /**
  * Phần sửa ở đầu một cột: `Lưu` · `Huỷ` · câu lỗi của máy chủ · lý do cột bị khoá.
  *
- * `Lưu` HIỆN Ở MỌI CỘT (đặc tả §4 vẽ nó ở mọi đầu cột) nhưng chỉ BẬT khi cột đã sửa. `Huỷ` chỉ hiện
- * khi có gì để huỷ. Câu lỗi mang `role="alert"` và nằm ngay dưới nút của CHÍNH cột ấy — một câu
- * lỗi chung ở đầu bảng không cho biết cột nào chưa lưu được.
+ * THE PROTOTYPE'S RULE (ADR 0068 lần 5): `Lưu` · `Huỷ` appear ONLY on a column with unsaved changes
+ * (or one being saved) — a column nobody touched has nothing to save, and eight greyed `Lưu` buttons
+ * read as eight things waiting. The column of the signed-in admin's own role can never be changed
+ * (#14), so it never shows them; it shows the reason instead. Câu lỗi mang `role="alert"` và nằm ngay
+ * dưới nút của CHÍNH cột ấy — một câu lỗi chung ở đầu bảng không cho biết cột nào chưa lưu được.
  */
 function DauCotSua({ vt, chinhSua }: { vt: identity_vaiTroCotRa; chinhSua: ChinhSuaMaTran }) {
   const { banSua } = chinhSua;
@@ -406,28 +406,31 @@ function DauCotSua({ vt, chinhSua }: { vt: identity_vaiTroCotRa; chinhSua: Chinh
 
   return (
     <>
-      <span className="nut-cot">
-        <button
-          type="button"
-          className="nut-phu"
-          disabled={!daSua || dangLuu || cuaToi}
-          aria-label={nhanNutLuu(vt.name)}
-          onClick={() => chinhSua.luu(vt.id)}
-        >
-          {dangLuu ? NUT_DANG_LUU : NUT_LUU}
-        </button>
-        {daSua && (
-          <button
+      {(daSua || dangLuu) && !cuaToi && (
+        <span className="nut-cot">
+          <Button
             type="button"
-            className="nut-phu"
+            variant="primary"
+            size="sm"
+            disabled={dangLuu}
+            aria-busy={dangLuu}
+            aria-label={nhanNutLuu(vt.name)}
+            onClick={() => chinhSua.luu(vt.id)}
+          >
+            {dangLuu ? NUT_DANG_LUU : NUT_LUU}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
             disabled={dangLuu}
             aria-label={nhanNutHuy(vt.name)}
             onClick={() => chinhSua.huy(vt.id)}
           >
             {NUT_HUY}
-          </button>
-        )}
-      </span>
+          </Button>
+        </span>
+      )}
       {cuaToi && <span className="dong-phu">{LY_DO_KHONG_TU_SUA}</span>}
       {loi !== undefined && (
         <span className="thong-bao-loi loi-cot" role="alert">
@@ -461,7 +464,11 @@ function ODaCap({ daCap }: { daCap: boolean }) {
 }
 
 /**
- * Một ô ở chế độ SỬA: một ô tích thật, tên đọc được "{nhãn quyền} — {tên vai trò}".
+ * Một ô ở chế độ SỬA: the prototype's toggle — a `<button aria-pressed>` drawing the same two SHAPES as
+ * the read-only cell (a tick, a dash), named "{nhãn quyền} — {tên vai trò}" (ADR 0068 lần 5).
+ *
+ * `aria-pressed` is the state a screen reader announces with the name, so for that user the state is
+ * never shape or colour alone; the name itself says which right, for which role.
  *
  * Ô đã khác bản máy chủ mang thêm lớp `o-da-doi` — cán bộ thấy được mình đã đổi những ô nào trước
  * khi bấm Lưu, thay vì phải nhớ. Màu không phải tín hiệu duy nhất: trạng thái của ô là chính dấu
@@ -482,14 +489,21 @@ function OBatTat({
 }) {
   return (
     <td className={`${daCap ? "o-da-cap" : "o-chua-cap"}${daDoi ? " o-da-doi" : ""}`}>
-      <input
-        type="checkbox"
+      <button
+        type="button"
         className="o-bat-tat"
-        checked={daCap}
+        aria-pressed={daCap}
         disabled={khoa}
         aria-label={nhan}
-        onChange={batTat}
-      />
+        title={nhan}
+        onClick={batTat}
+      >
+        {daCap ? (
+          <Check aria-hidden="true" focusable="false" strokeWidth={2.2} className="size-4 text-success-600" />
+        ) : (
+          <Minus aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-4 text-ink-400" />
+        )}
+      </button>
     </td>
   );
 }

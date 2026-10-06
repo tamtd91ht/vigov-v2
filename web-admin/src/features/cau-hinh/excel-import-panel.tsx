@@ -132,10 +132,14 @@ export function ExcelImportPanel<R, C = R>({
   return (
     // Esc while the import is in flight does nothing: the box must stay until the server has answered,
     // or the "Đã nhập…" sentence (and a staff import's temporary passwords) would have nowhere to show.
+    // Nor after a success whose result owns its own closing (`resultView` — the staff import's one-time
+    // passwords): a reflex Esc must not destroy values nobody can show again; its explicit button closes.
     <ModalDialog
       titleId={importTitleId(target.id)}
       onDismiss={() => {
-        if (busy !== "import") close();
+        if (busy === "import") return;
+        if (target.resultView !== undefined && result !== null && result.ok) return;
+        close();
       }}
       size="lg"
       className="p-0"

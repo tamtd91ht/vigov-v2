@@ -1,8 +1,5 @@
-import { UsersRound } from "lucide-react";
-
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
 import { DauTrang } from "@/components/dau-trang";
-import { PageHeader } from "@/components/ui/page-header";
 import { TabNguoiDung } from "@/features/cau-hinh/tab-nguoi-dung";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
@@ -14,7 +11,7 @@ import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
  * owner approved (`vigov-require/apps/admin`, `src/lib/navigation.ts`): adding an account is weekly
  * work and should not sit behind a tab. Route segment and title are the prototype's.
  *
- * THE COMPONENT IS THE TAB'S, UNCHANGED: `TabNguoiDung` carries the gate (`quyetDinhTabNguoiDung`,
+ * THE COMPONENT IS THE TAB'S: `TabNguoiDung` carries the page header (ADR 0068 lần 5), the gate (`quyetDinhTabNguoiDung`,
  * `admin.user`) and its denied / unreadable-session states, so this screen treats an account without
  * the key exactly as the tab did. It mounts with `active` defaulting to `true`, so units and roles are
  * read on every arrival here (ND-01/ND-02).
@@ -42,14 +39,11 @@ export default async function UsersPage() {
         <div className="khung-trang">
           <DauTrang />
           <main className="than-trang">
-            <PageHeader
-              icon={UsersRound}
-              title="Người dùng"
-              subtitle="Tài khoản cán bộ của đơn vị: bộ phận công tác, vai trò được gán và trạng thái hoạt động."
-            />
-            {/* `[&>section]:mt-0`: the section kept the 2.5rem top margin it had as one of several
-                stacked parts of `/cau-hinh`; under a page header it is a gap with no reason. */}
-            <div className="flex min-w-0 flex-col gap-4 [&>section]:mt-0">
+            {/* The page header is drawn by `TabNguoiDung` (prototype: `Nhập từ Excel` sits in the
+                header and opens a dialog of the list below). `[&>header]:mb-1` because the column gap
+                already spaces it. `[&>section]:mt-0`: the section kept the 2.5rem top margin it had as
+                one of several stacked parts of `/cau-hinh`; under a page header it is a gap with no reason. */}
+            <div className="flex min-w-0 flex-col gap-4 [&>header]:mb-1 [&>section]:mt-0">
               <TabNguoiDung />
             </div>
           </main>

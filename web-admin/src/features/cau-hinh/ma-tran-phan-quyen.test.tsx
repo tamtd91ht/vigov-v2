@@ -161,9 +161,12 @@ function nut(html: string, ten: string): string {
   return m[0];
 }
 
-/** Thẻ `<input>` mang đúng tên đọc được ấy — thứ tự thuộc tính do React quyết, nên tách thẻ ra. */
+/**
+ * The toggle `<button aria-pressed>` with exactly that name (the prototype's cell, ADR 0068 lần 5) —
+ * attribute order is React's, so the tag is cut out. `nut` finds the column-head buttons the same way.
+ */
 function o(html: string, ten: string): string {
-  const m = html.match(new RegExp(`<input[^>]*aria-label="${ten}"[^>]*>`));
+  const m = html.match(new RegExp(`<button[^>]*aria-label="${ten}"[^>]*>`));
   if (m === null) throw new Error(`không thấy ô "${ten}"`);
   return m[0];
 }
@@ -171,28 +174,34 @@ function o(html: string, ten: string): string {
 const GOC_A = dungBangDaCap([{ role_id: "vt-2", permission: "admin.user" }]);
 
 describe("BangMaTran ở chế độ sửa", () => {
-  it("KHÔNG có phần sửa (tài khoản thiếu `admin.role`) thì không một ô tích, không một nút Lưu", () => {
+  it("KHÔNG có phần sửa (tài khoản thiếu `admin.role`) thì không một ô bấm, không một nút Lưu", () => {
     const html = ve(NHOM_A, [{ role_id: "vt-2", permission: "admin.user" }]);
-    expect(html).not.toContain('type="checkbox"');
+    expect(html).not.toContain("aria-pressed");
     expect(html).not.toContain("<button");
   });
 
-  it("có phần sửa thì mỗi ô là một ô tích mang tên \"{nhãn quyền} — {tên vai trò}\"", () => {
+  it("có phần sửa thì mỗi ô là một nút bật/tắt mang tên \"{nhãn quyền} — {tên vai trò}\"", () => {
     const html = veSua(banSuaMoi(GOC_A));
-    expect(html).toContain('type="checkbox"');
+    expect(html).toContain("aria-pressed");
     expect(html).toContain('aria-label="Quản lý tài khoản — Chuyên viên"');
     expect(html).toContain('aria-label="Phân quyền — Lãnh đạo"');
-    // Ô đã cấp thì đã tick.
-    expect(o(html, "Quản lý tài khoản — Lãnh đạo")).toContain('checked=""');
-    expect(o(html, "Quản lý tài khoản — Chuyên viên")).not.toContain("checked");
+    // Ô đã cấp thì đang bật.
+    expect(o(html, "Quản lý tài khoản — Lãnh đạo")).toContain('aria-pressed="true"');
+    expect(o(html, "Quản lý tài khoản — Chuyên viên")).toContain('aria-pressed="false"');
   });
 
-  it("`Lưu` chỉ bật ở cột ĐÃ SỬA; `Huỷ` chỉ có ở cột đã sửa", () => {
+  it("`Lưu` · `Huỷ` chỉ có ở cột ĐÃ SỬA (prototype) — cột chưa đụng tới không có nút nào", () => {
     const html = veSua(batTatO(banSuaMoi(GOC_A), "vt-1", "admin.role"));
-    expect(nut(html, "Lưu phân quyền của vai trò Chuyên viên")).not.toContain("disabled");
-    expect(nut(html, "Lưu phân quyền của vai trò Lãnh đạo")).toContain("disabled");
+    expect(nut(html, "Lưu phân quyền của vai trò Chuyên viên")).not.toContain('disabled=""');
     expect(html).toContain('aria-label="Huỷ thay đổi chưa lưu của vai trò Chuyên viên"');
+    expect(html).not.toContain('aria-label="Lưu phân quyền của vai trò Lãnh đạo"');
     expect(html).not.toContain('aria-label="Huỷ thay đổi chưa lưu của vai trò Lãnh đạo"');
+    // The changed cell is marked, so the officer sees what will be saved before pressing it.
+    expect(html).toMatch(/<td class="o-da-cap o-da-doi"><button[^>]*aria-label="Phân quyền — Chuyên viên"/);
+  });
+
+  it("chưa sửa gì thì không cột nào có nút Lưu", () => {
+    expect(veSua(banSuaMoi(GOC_A))).not.toContain("Lưu phân quyền của vai trò");
   });
 
   it("câu từ chối của máy chủ hiện NGUYÊN VĂN, role=alert, và phần đã tick vẫn còn trên bảng", () => {
@@ -205,7 +214,7 @@ describe("BangMaTran ở chế độ sửa", () => {
     expect(html).toContain(`role="alert">${cau}<`);
     // Ô vừa gỡ vẫn đang gỡ (không bị trả về bản máy chủ), và nút Lưu vẫn bật để thử lại bằng tay.
     expect(o(html, "Quản lý tài khoản — Lãnh đạo")).not.toContain("checked");
-    expect(nut(html, "Lưu phân quyền của vai trò Lãnh đạo")).not.toContain("disabled");
+    expect(nut(html, "Lưu phân quyền của vai trò Lãnh đạo")).not.toContain('disabled=""');
   });
 
   it("cột của CHÍNH vai trò mình bị khoá kèm lý do (#14); cột khác vẫn bấm được", () => {
@@ -213,12 +222,14 @@ describe("BangMaTran ở chế độ sửa", () => {
     expect(html).toContain(LY_DO_KHONG_TU_SUA);
     expect(o(html, "Phân quyền — Lãnh đạo")).toContain('disabled=""');
     expect(o(html, "Phân quyền — Chuyên viên")).not.toContain("disabled");
-    expect(nut(html, "Lưu phân quyền của vai trò Lãnh đạo")).toContain("disabled");
+    // Its cells cannot change, so it never offers a Save.
+    expect(html).not.toContain('aria-label="Lưu phân quyền của vai trò Lãnh đạo"');
   });
 
   it("không biết vai trò của mình thì KHÔNG khoá cột nào — không đoán, máy chủ vẫn trả 403", () => {
     const html = veSua(banSuaMoi(GOC_A), null);
     expect(html).not.toContain(LY_DO_KHONG_TU_SUA);
-    expect(html).not.toMatch(/<input[^>]*disabled=""/);
+    expect(html).not.toMatch(/<button[^>]*aria-pressed[^>]*disabled=""/);
+    expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*aria-pressed/);
   });
 });

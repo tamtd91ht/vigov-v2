@@ -2197,25 +2197,6 @@ a.nav-sheet-link.is-active {
   border: 0;
 }
 
-.thanh-sap-xep {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  margin: 0.75rem 0;
-}
-
-.nhan-sap-xep {
-  font-size: 0.8125rem;
-  color: var(--xam-chu);
-}
-
-.thanh-sap-xep .nut-phu[aria-pressed="true"] {
-  border-color: var(--xanh);
-  color: var(--xanh);
-  font-weight: 600;
-}
-
 /* Bảng CUỘN NGANG ở bề rộng nhỏ, không đổi thành thẻ.
  *
  * Bề rộng nhỏ nhất được hỗ trợ là 320px (`15-phu-luc §7`) và bảng này có mười một cột, nên ở đó nó
@@ -2502,8 +2483,33 @@ a.nav-sheet-link.is-active {
   font-weight: 600;
 }
 
+/* The label and the key are one line each with "…" (full label on hover): rows of equal height keep a
+ * tick on the row it belongs to. A table cell grows to fit `nowrap` text, so the cap sits on the text,
+ * not the cell — 11rem keeps a role column in view beside it at 320px. */
+.bang-phan-quyen .cot-quyen .nhan-quyen,
+.bang-phan-quyen .cot-quyen .ma-khoa-quyen {
+  max-width: 11rem;
+}
+
+@media (min-width: 768px) {
+  .bang-phan-quyen .cot-quyen .nhan-quyen,
+  .bang-phan-quyen .cot-quyen .ma-khoa-quyen {
+    max-width: 18rem;
+  }
+}
+
+.ma-khoa-quyen {
+  font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, monospace;
+}
+
+/* Role heads centred over their column of ticks, as in the prototype's matrix. */
 .cot-vai-tro {
   min-width: 9rem;
+}
+
+.bang-phan-quyen .cot-vai-tro {
+  text-align: center;
+  vertical-align: bottom;
 }
 
 .ten-vai-tro {
@@ -2526,6 +2532,7 @@ a.nav-sheet-link.is-active {
   background: var(--surface-subtle);
   font-size: 0.75rem;
   letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--navy);
 }
 
@@ -2549,6 +2556,7 @@ a.nav-sheet-link.is-active {
 .bang-phan-quyen .o-da-cap,
 .bang-phan-quyen .o-chua-cap {
   text-align: center;
+  vertical-align: middle;
   font-size: 1rem;
   user-select: none;
 }
@@ -2570,16 +2578,33 @@ a.nav-sheet-link.is-active {
  * tuổi, và bấm trượt sang ô bên cạnh ở đây là cấp nhầm một quyền cho một vai trò
  * (`skills/accessibility-elderly`). `.o-da-doi` đánh dấu ô đã khác bản máy chủ, để cán bộ thấy mình
  * đã đổi những ô nào trước khi bấm Lưu — nền nhạt, dấu tích vẫn là tín hiệu chính. */
+/* The prototype's toggle: a 2rem square button holding the tick or the dash, centred in its cell. */
 .bang-phan-quyen .o-bat-tat {
-  width: 1.25rem;
-  height: 1.25rem;
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
   margin: 0;
-  accent-color: var(--xanh);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  background: transparent;
   cursor: pointer;
+}
+
+.bang-phan-quyen .o-bat-tat:hover:not(:disabled) {
+  background: var(--surface-subtle);
+  border-color: var(--line);
+}
+
+.bang-phan-quyen .o-bat-tat:focus-visible {
+  outline: 2px solid var(--brand-500);
+  outline-offset: 1px;
 }
 
 .bang-phan-quyen .o-bat-tat:disabled {
   cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .bang-phan-quyen .o-da-doi {
@@ -2590,6 +2615,7 @@ a.nav-sheet-link.is-active {
 .nut-cot {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 0.25rem;
   margin-top: 0.375rem;
 }
@@ -3909,6 +3935,27 @@ aside.khoi-chua-khai h3 {
 
 .hop-thoai-cau-hinh .form-danh-muc > h4 {
   display: none;
+}
+
+/* A card-shaped block (the one-time password box) opened inside a config dialog: the dialog is the
+ * frame, so the card's own border goes — a box in a box reads as two things. */
+.hop-thoai-cau-hinh .khoi-chi-tiet {
+  margin: 0;
+  border: 0;
+  background: transparent;
+}
+
+.hop-thoai-cau-hinh .khoi-chi-tiet > .dau-khoi-chi-tiet,
+.hop-thoai-cau-hinh .khoi-chi-tiet > * {
+  padding-inline: 0;
+}
+
+/* The staff list's icon-only row actions: one line, so every row keeps one height (ADR 0068 lần 5);
+ * the table scrolls sideways in its own box when the row is wider than the screen. */
+.bang-can-bo .o-thao-tac.o-thao-tac-icon {
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: 0.25rem;
 }
 
 .overlay-dialog .dau-khoi-chi-tiet .nut-phu {
