@@ -543,38 +543,32 @@ func Register(mux *http.ServeMux, d Deps) {
 	// accountant, which is precisely what that key is for. It is the same key §8.2 assigns to
 	// entering a voucher, and a project is the thing a voucher is entered against.
 	//
-	// idem.Required(MoKhiHong), AND THE QUESTION skills/rest-api-design §4 SAYS TO ANSWER AT THE
-	// ROUTE — which layer is actually protecting this. The real guard is `UNIQUE (tenant_id, ma)`
-	// (0004:216-221), which counts soft-deleted rows: a second project with the same code CANNOT
-	// EXIST, whatever happens to Redis. The idempotency key is the second, independent layer — it is
-	// what stops a double-submitted form from producing one project and one confusing 409 instead of
-	// one project and a replayed 201.
+	// idem.Required(DongKhiHong) — CHANGED FROM MoKhiHong ON 06/10/2026, when `code` became optional.
+	// skills/rest-api-design §4 says to answer at the route which layer is actually protecting this.
+	// With a TYPED code the answer was `UNIQUE (tenant_id, ma)` (0004:216-221): a second project with
+	// that code cannot exist whatever happens to Redis, so MoKhiHong was enough. With an AUTO-ISSUED
+	// code (§9 `☑ Tự sinh mã`, user decision 06/10/2026) that key protects nothing against a double
+	// submit: the second request is simply issued the NEXT number, and the commune's plan counts one
+	// project twice under DA07 and DA08 — the same shape as POST /api/v1/disbursements, which takes
+	// DongKhiHong for that reason. The skill reserves DongKhiHong for issued numbers; this route now
+	// issues one. THE COST, STATED: while the idempotency store is down, entering a project is refused
+	// (typed codes included) rather than risking a duplicate.
 	//
-	// MoKhiHong AND NOT DongKhiHong, AND THE CONTRAST WITH POST /api/v1/disbursements IS THE WHOLE
-	// ARGUMENT. That route takes DongKhiHong because two genuine payments to one company on one day
-	// for one amount are a real thing, so NO uniqueness constraint could tell them from a
-	// double-submitted form — with nothing underneath, a cache outage plus a double click is money
-	// counted twice in "đã giải ngân". Here the code is mandatory and unique for ever, so a duplicate
-	// project is impossible by construction; refusing a commune mid-entry during a Redis outage would
-	// be paying with an outage for a risk that is already covered.
-	//
-	// ⚠ `code` IS REQUIRED AND §9's `☑ Tự sinh mã` IS NOT IMPLEMENTED. The specification gives two
-	// incompatible formats for that column (`DA01, DA02…` in §9, `DA-2026-be-tong-hoa-duong-ngo-xo-2`
-	// in §7.2 · §8 · §11) and no scope for the sequence — `UNIQUE (tenant_id, ma)` has no `nam` in
-	// it, so a per-year sequence collides across years while a per-commune one exhausts `DA01..DA99`
-	// inside two budget years (§14's commune carries 63 projects in ONE year). A project code is an
-	// ISSUED CODE: rule 7, invariant 3 forbids reissuing one and forbidden #4 forbids renumbering
-	// one. Refusing writes nothing and can be loosened with one function; generating cannot be taken
-	// back. This is a finding for the user — domain.ErrThieuMaDuAn carries the full argument.
+	// `code` OPTIONAL (user decision 06/10/2026): omitted or blank → the next code of the commune's
+	// ONE series, DA01, DA02 … DA99, DA100 (the prototype's format, vigov-require budget/service.py
+	// `_next_serial_code`). Issued under a per-commune counter row lock (migration 0014), stepping over
+	// every code already used — removed projects included — so an issued code is never issued again
+	// (rule 7, invariant 3). A typed code is still accepted and must never have been used (§9).
 	//
 	// 409 AND NOT 403 for a code already issued: the caller holds `budget.update` and is allowed to
-	// enter projects. What is refused is this value against the state of the data.
+	// enter projects. What is refused is this value against the state of the data. `code_series_blocked`
+	// is the auto path refusing after domain.ProjectSerialSkipLimit hand-typed DA codes in a row.
 	//
 	// 409 ALSO COVERS THE ALLOCATION REFUSALS (decision 06/10/2026): a total above `planned_amount`
 	// (`allocation_exceeds_plan`, the sentence names the overrun) and one source twice
 	// (`duplicate_source`).
 	//
-	// @summary  Thêm một dự án đầu tư cho năm ngân sách, kèm phân bổ nguồn vốn nếu xã khai
+	// @summary  Thêm một dự án đầu tư cho năm ngân sách, kèm phân bổ nguồn vốn nếu xã khai; để trống mã thì hệ thống cấp mã tiếp theo trong dãy DA01, DA02…
 	// @screen   06-giai-ngan §9
 	// @request  themDuAnVao
 	// @reply    201 duAnGhiRa
@@ -582,11 +576,11 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    404 httpx.Error
-	// @reply    409 httpx.Error code_taken allocation_exceeds_plan duplicate_source
+	// @reply    409 httpx.Error code_taken code_series_blocked allocation_exceeds_plan duplicate_source
 	// @reply    500 httpx.Error
 	mux.Handle("POST /api/v1/investment-projects",
 		authz.RequirePermission(d.Checker, "budget.update")(
-			idem.Required(idem.MoKhiHong)(
+			idem.Required(idem.DongKhiHong)(
 				http.HandlerFunc(h.ThemDuAn))))
 
 	// PATCH AND NOT PUT: several fields have a meaningful zero — a description cleared to "", an
@@ -635,31 +629,20 @@ func Register(mux *http.ServeMux, d Deps) {
 			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; app.Sua không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
 				http.HandlerFunc(h.SuaDuAn))))
 
-	// `budget.confirm` ON A REMOVAL, AND THE SPECIFICATION ASSIGNS NONE — the same decision the
-	// voucher's `🗑 Gỡ` route had to make, made the same way and for a heavier reason.
+	// `budget.update` ON A REMOVAL — USER DECISION 06/10/2026, following the prototype
+	// (vigov-require apps/api/app/modules/budget/router.py:171-175, where removing an item takes the
+	// same right as entering one). The specification (06-giai-ngan.md:202) assigns the removal no key;
+	// this route carried `budget.confirm` until that decision, chosen then as the direction that could
+	// be loosened with one line. This is that line. What the decision accepts, stated: withdrawing a
+	// project — which moves "KẾ HOẠCH VỐN NĂM" on §3, its category row on §5 and two figures on §6 — is
+	// now the same authority as entering one. Every removal is still a soft delete with an audit entry
+	// naming who and when. The key is seeded (service-identity/migrations/0001_init.sql:284); no key
+	// invented (rule 5, invariant 3c).
 	//
-	// 06-giai-ngan.md:202 covers `budget.update` for entry/edit and `budget.confirm` for
-	// confirm/lock; withdrawing a PROJECT is listed with no key at all. The choice is between the two
-	// that exist:
-	//
-	//	budget.update    "the person who entered it can take it back". True for a typo caught in the
-	//	                 same minute — and it is also the key every accountant holds, so it would make
-	//	                 withdrawing a whole year's capital plan line the same authority as typing one.
-	//	budget.confirm   CHOSEN. A project's `ke_hoach_von_nam` is inside "KẾ HOẠCH VỐN NĂM" on §3 and
-	//	                 inside its category's row on §5 from the moment it is entered, so removing one
-	//	                 CHANGES A FIGURE THAT HAS ALREADY BEEN READ off a screen and possibly reported
-	//	                 upward — and it takes the project's funding allocation lines with it, moving
-	//	                 two more figures on §6.
-	//
-	// CHOSEN IN THE DIRECTION THAT CAN BE LOOSENED LATER WITH ONE LINE and cannot be tightened later
-	// at all: widening it to `budget.update` the day the customer says so costs one edit, while
-	// narrowing it afterwards means every removal already made was made under the wrong authority.
-	// Needing a third key — a `budget.delete` the `quyen` table does not have — would be a finding for
-	// open question #27, never an INSERT (rule 5, invariant 3c).
-	//
-	// A BODY ON A DELETE, and the alternative was worse: the reason is mandatory (rule 7, invariant 1
-	// names `delete_reason`), and the query string would put free text about a public authority's
-	// spending into every access log and proxy cache.
+	// THE BODY IS OPTIONAL (same decision): `reason` omitted, blank, or no body → `delete_reason` is the
+	// fixed "Rút khỏi danh sách dự án", so rule 7 invariant 1's column is never empty. A reason that is
+	// given travels in the body, never the query string, which would put free text about a public
+	// authority's spending into every access log and proxy cache.
 	//
 	// ⚠ 409 WHEN THE PROJECT STILL HAS LIVE VOUCHERS, AND THAT IS AN OPEN QUESTION ANSWERED IN THE
 	// ONLY DIRECTION THAT WRITES NOTHING. The specification says nothing about removing a project
@@ -674,7 +657,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// idem.KhongCan — removing an already-removed project is a 404 either way, and the second request
 	// cannot overwrite who removed it or why: the UPDATE carries `AND deleted_at IS NULL`.
 	//
-	// @summary  Xoá mềm một dự án đầu tư kèm lý do bắt buộc — từ chối khi dự án còn chứng từ giải ngân
+	// @summary  Rút một dự án đầu tư khỏi danh sách (xoá mềm), lý do không bắt buộc — từ chối khi dự án còn chứng từ giải ngân
 	// @screen   06-giai-ngan §7
 	// @request  xoaDuAnVao
 	// @reply    204 -
@@ -685,7 +668,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    409 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("DELETE /api/v1/investment-projects/{id}",
-		authz.RequirePermission(d.Checker, "budget.confirm")(
+		authz.RequirePermission(d.Checker, "budget.update")(
 			idem.KhongCan("xoá một dự án đã xoá cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người xoá và lý do")(
 				http.HandlerFunc(h.XoaDuAn))))
 

@@ -34,26 +34,18 @@ import (
 // --- what a client may actually supply ----------------------------------------------------------
 
 var (
-	// ErrThieuMaDuAn — §9 offers `☑ Tự sinh mã` beside the code box, and THIS SERVICE DOES NOT
-	// GENERATE ONE. That is a refusal to decide, not an omission, and it is the one thing to read
-	// before "fixing" it.
+	// ErrThieuMaDuAn — ChuanHoaMaDuAn was handed a blank code.
 	//
-	// THE SPECIFICATION GIVES TWO INCOMPATIBLE FORMATS FOR THE SAME COLUMN:
-	//
-	//	§9      "Tự sinh sẽ cấp số tiếp theo trong dãy DA01, DA02…"
-	//	§7.2 · §8 · §11   `DA-2026-be-tong-hoa-duong-ngo-xo-2`
-	//
-	// and the scope of the sequence is undecidable too. `UNIQUE (tenant_id, ma)` (0004:216-221) has
-	// no `nam` in it, so a per-year sequence would make 2027's `DA01` collide with 2026's — while a
-	// per-commune sequence exhausts `DA01..DA99` inside two budget years, since §14's own commune
-	// carries 63 projects in ONE year.
-	//
-	// WHY GUESSING IS THE EXPENSIVE MOVE RATHER THAN THE CHEAP ONE: a project code is an ISSUED
-	// CODE. Rule 7, invariant 3 forbids reissuing one and forbidden #4 forbids renumbering one that
-	// has already been issued — so the first commune to enter a project under a guessed format is a
-	// commune whose codes can never be corrected. Refusing writes nothing and can be loosened with
-	// one function the day the customer answers; generating cannot be taken back at all.
-	ErrThieuMaDuAn = errors.New("du_an: thiếu `code` — hệ thống chưa tự sinh mã dự án, hãy nhập mã")
+	// THE CREATE PATH NO LONGER REACHES IT: since the user's decision of 06/10/2026 a blank `code`
+	// means "issue the next one" (§9's `☑ Tự sinh mã`, FormatProjectSerial). The error stays because
+	// ChuanHoaMaDuAn validates a code somebody TYPED, and a blank typed code is still not a code.
+	ErrThieuMaDuAn = errors.New("du_an: thiếu `code`")
+
+	// ErrProjectSerialExhausted — ProjectSerialSkipLimit consecutive serial codes were all already
+	// taken by codes typed by hand. Not a state a commune reaches by entering projects; it means
+	// somebody typed a long run of `DA…` codes ahead of the counter. Refused rather than looping on,
+	// because the loop runs under the commune's counter row lock.
+	ErrProjectSerialExhausted = errors.New("du_an: không cấp được mã tự sinh — quá nhiều mã DA liên tiếp đã được nhập tay; hãy nhập mã")
 
 	ErrMaDuAnQuaDai      = errors.New("du_an: `code` quá dài")
 	ErrMaDuAnSaiDinhDang = errors.New("du_an: `code` chỉ gồm chữ cái, chữ số và dấu gạch nối")
@@ -396,13 +388,38 @@ func HanGiaiNganMacDinh(nam int) time.Time {
 	return time.Date(nam, time.December, 31, 0, 0, 0, 0, time.UTC)
 }
 
-// ChuanHoaLyDoXoaDuAn validates the reason recorded beside a soft delete.
+// ProjectRemovalDefaultReason is `delete_reason` when the person removing a project gives none.
 //
-// MANDATORY, AND THAT IS RULE 7, INVARIANT 1: `deleted_at`, `deleted_by` AND `delete_reason`. A
-// project that vanished from the commune's plan with no reason attached is a whole year's
-// allocation nobody can account for — and the row is still there, so the question WILL be asked.
+// THE REASON IS OPTIONAL ON THE WAY IN (user decision 06/10/2026, following the prototype's
+// "Rút khỏi danh sách" action) AND STILL NEVER EMPTY IN THE ROW: rule 7, invariant 1 names
+// `delete_reason`, so a blank is replaced by this fixed text rather than stored as nothing. The
+// audit entry of the act still names who removed it and when.
+const ProjectRemovalDefaultReason = "Rút khỏi danh sách dự án"
+
+// ChuanHoaLyDoXoaDuAn validates the reason recorded beside a soft delete; a blank one becomes
+// ProjectRemovalDefaultReason.
 func ChuanHoaLyDoXoaDuAn(s string) (string, error) {
+	if strings.TrimSpace(s) == "" {
+		return ProjectRemovalDefaultReason, nil
+	}
 	return chuanHoaLyDo(s, LyDoXoaDuAnToiDa, ErrThieuLyDoXoaDuAn, ErrLyDoXoaDuAnQuaDai)
+}
+
+// --- the auto-issued project code (§9 `☑ Tự sinh mã`, user decision 06/10/2026) -------------------
+
+// ProjectSerialPrefix and the padding are the prototype's (vigov-require budget/service.py
+// `_next_serial_code`): `DA01`, `DA02` … `DA99`, `DA100`. Two digits of padding up to 99, then the
+// number simply grows, so the series stays sortable by length-then-text.
+const ProjectSerialPrefix = "DA"
+
+// ProjectSerialSkipLimit bounds how many already-taken serial codes one create may step over before
+// it gives up (ErrProjectSerialExhausted). The counter normally points past every auto-issued code,
+// so the only codes it ever steps over are `DA…` codes typed by hand.
+const ProjectSerialSkipLimit = 1000
+
+// FormatProjectSerial renders serial number n (n >= 1) as a project code.
+func FormatProjectSerial(n int64) string {
+	return fmt.Sprintf("%s%02d", ProjectSerialPrefix, n)
 }
 
 // ChuanHoaPhanBoMoi validates the allocation lines of ONE request — a create, or the full replacement

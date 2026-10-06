@@ -31,24 +31,22 @@ package app
 // transaction rolls back with the audit entry inside it.
 //
 // ---------------------------------------------------------------------------
-// TWO QUESTIONS THIS FILE DELIBERATELY DOES NOT ANSWER, because they are the customer's:
+// THE AUTO-ISSUED CODE (§9's `☑ Tự sinh mã`) WAS DECIDED BY THE USER ON 06/10/2026: a blank `code`
+// is issued the next number of ONE per-commune series, DA01, DA02 … DA100 (domain.FormatProjectSerial,
+// the prototype's format). See issueProjectSerial for how "never reissued" holds.
 //
-//	the auto-generated code    §9's `☑ Tự sinh mã` is NOT implemented. The specification gives two
-//	                          incompatible formats for one column and no scope for the sequence —
-//	                          domain.ErrThieuMaDuAn sets out the whole argument. A project code is an
-//	                          ISSUED CODE (rule 7, invariant 3 and forbidden #4), so a guessed format
-//	                          is a commune whose codes can never be corrected.
+// ONE QUESTION THIS FILE DELIBERATELY DOES NOT ANSWER, because it is the customer's:
+//
 //	removing a project that    refused, and store.ErrDuAnConChungTu states why refusal is the only
 //	  still has vouchers       direction that writes nothing and can be loosened later with one
 //	                          branch. ADR 0037 settled the same SHAPE for the task tree; that is a
 //	                          different record and its answer does not carry over.
-//
-// Both are findings for the user, not decisions taken quietly here.
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/vihat/vigov/core/audit"
@@ -70,6 +68,8 @@ import (
 type KhoDuAn interface {
 	TheoIDDeSua(ctx context.Context, tx *store.ScopedTx, id string) (domain.DuAn, error)
 	MaDaDung(ctx context.Context, tx *store.ScopedTx, ma string) (bool, error)
+	LockProjectSerial(ctx context.Context, tx *store.ScopedTx) (int64, error)
+	AdvanceProjectSerial(ctx context.Context, tx *store.ScopedTx, next int64) error
 	HangMucConSong(ctx context.Context, tx *store.ScopedTx, hangMucID string) error
 	NguonVonConSongTrongNam(ctx context.Context, tx *store.ScopedTx, nguonVonID string) error
 	DemChungTuConSong(ctx context.Context, tx *store.ScopedTx, duAnID string) (int, error)
@@ -120,11 +120,9 @@ const (
 // against the amount and not the other way round. Nothing here enforces that check — §9 calls it a
 // WARNING ("cảnh báo khi thiếu hoặc vượt"), §11 turns the same two numbers into the
 // `Đủ`/`Chưa đủ`/`Chưa gắn nguồn` chip, and both are things a SCREEN says. See PhanBo.
-//
-// THERE IS NO `Ma` DEFAULT AND NO GENERATOR. §9 offers `☑ Tự sinh mã`; domain.ErrThieuMaDuAn is the
-// refusal and carries the whole argument for why guessing the format is the expensive move.
 type YeuCauThemDuAn struct {
-	// Ma is REQUIRED — see domain.ErrThieuMaDuAn.
+	// Ma is OPTIONAL: blank (after trimming) means "issue the next code of this commune's series"
+	// (§9's `☑ Tự sinh mã`). A typed code must never have been used, removed projects included.
 	Ma  string
 	Nam int
 
@@ -214,9 +212,16 @@ type KetQuaThemDuAn struct {
 func (uc *DuAn) Them(ctx context.Context, yc YeuCauThemDuAn,
 	nguoi audit.Actor) (KetQuaThemDuAn, error) {
 
-	ma, err := domain.ChuanHoaMaDuAn(yc.Ma)
-	if err != nil {
-		return KetQuaThemDuAn{}, err
+	// A BLANK CODE IS A REQUEST FOR THE NEXT SERIAL, not a missing field (user decision 06/10/2026).
+	// The number is chosen INSIDE the transaction, under the counter's row lock; a typed code is
+	// validated here, before anything opens.
+	autoCode := strings.TrimSpace(yc.Ma) == ""
+	var ma string
+	if !autoCode {
+		var err error
+		if ma, err = domain.ChuanHoaMaDuAn(yc.Ma); err != nil {
+			return KetQuaThemDuAn{}, err
+		}
 	}
 	if err := domain.KiemTraNamDuAn(yc.Nam); err != nil {
 		return KetQuaThemDuAn{}, err
@@ -316,12 +321,20 @@ func (uc *DuAn) Them(ctx context.Context, yc YeuCauThemDuAn,
 		// THE CODE FIRST, BECAUSE IT IS THE REFUSAL THE COMMUNE CAN ACT ON WITHOUT KNOWING ANYTHING
 		// ELSE. A taken code is a condition of ONE value the person just typed; a missing category is
 		// a condition of the commune's configuration.
-		daDung, err := uc.kho.MaDaDung(ctx, tx, moi.Ma)
-		if err != nil {
-			return err
-		}
-		if daDung {
-			return fistore.ErrMaDuAnDaTonTai
+		if autoCode {
+			issued, err := uc.issueProjectSerial(ctx, tx)
+			if err != nil {
+				return err
+			}
+			moi.Ma = issued
+		} else {
+			daDung, err := uc.kho.MaDaDung(ctx, tx, moi.Ma)
+			if err != nil {
+				return err
+			}
+			if daDung {
+				return fistore.ErrMaDuAnDaTonTai
+			}
 		}
 
 		// INSIDE THE TRANSACTION, because with no foreign key underneath (0004:182-190) this check IS
@@ -354,7 +367,13 @@ func (uc *DuAn) Them(ctx context.Context, yc YeuCauThemDuAn,
 			}
 		}
 
-		delta, err := json.Marshal(map[string]any{"sau": tomTatDuAn(moi, dongPhanBo)})
+		// `auto_code` SAYS WHO CHOSE THE CODE. A system-issued code and a typed one look identical in
+		// the row; years later the question "why is this project DA07" has two different answers.
+		themDelta := map[string]any{"sau": tomTatDuAn(moi, dongPhanBo)}
+		if autoCode {
+			themDelta["auto_code"] = true
+		}
+		delta, err := json.Marshal(themDelta)
 		if err != nil {
 			return fmt.Errorf("du_an: mã hoá delta: %w", err)
 		}
@@ -381,6 +400,42 @@ func (uc *DuAn) Them(ctx context.Context, yc YeuCauThemDuAn,
 		return KetQuaThemDuAn{}, bocDuAn(ctx, "thêm", err)
 	}
 	return KetQuaThemDuAn{DuAn: moi, PhanBo: dongPhanBo}, nil
+}
+
+// issueProjectSerial picks the next free code of this commune's series, inside the create transaction.
+//
+// WHY "NEVER REISSUED" HOLDS (rule 7, invariant 3): each candidate is checked with MaDaDung, which
+// counts SOFT-DELETED projects, so a code a removed project carries is stepped over exactly like a
+// live one — and `UNIQUE (tenant_id, ma)` is the floor under that check. The counter only decides
+// where to START; it is not what makes the answer correct.
+//
+// WHY TWO CLERKS DO NOT GET THE SAME NUMBER: LockProjectSerial holds the commune's counter row until
+// this transaction ends, so a concurrent auto-coded create waits, then starts from the advanced value.
+// (A concurrent create with a TYPED code equal to the candidate is not serialised by this lock; the
+// unique key refuses one of the two, which rolls that one back.)
+//
+// CODES TYPED BY HAND ARE STEPPED OVER, not jumped to: a commune that typed `DA05` gets DA01..DA04,
+// then DA06. Bounded by domain.ProjectSerialSkipLimit because it runs under a row lock.
+func (uc *DuAn) issueProjectSerial(ctx context.Context, tx *store.ScopedTx) (string, error) {
+	n, err := uc.kho.LockProjectSerial(ctx, tx)
+	if err != nil {
+		return "", err
+	}
+	for i := 0; i < domain.ProjectSerialSkipLimit; i, n = i+1, n+1 {
+		candidate := domain.FormatProjectSerial(n)
+		taken, err := uc.kho.MaDaDung(ctx, tx, candidate)
+		if err != nil {
+			return "", err
+		}
+		if taken {
+			continue
+		}
+		if err := uc.kho.AdvanceProjectSerial(ctx, tx, n+1); err != nil {
+			return "", err
+		}
+		return candidate, nil
+	}
+	return "", domain.ErrProjectSerialExhausted
 }
 
 // Sua corrects one project — §8's `[✎ Sửa dự án]`.

@@ -210,6 +210,44 @@ func (s *DuAnGhiStore) MaDaDung(ctx context.Context, tx *store.ScopedTx, ma stri
 	return n > 0, nil
 }
 
+// lockProjectSerial creates the commune's counter row on first use and, either way, LOCKS it until the
+// transaction ends: `ON CONFLICT … DO UPDATE` takes the row lock even though the SET writes the value
+// it already holds. A second concurrent create of the same commune blocks here until the first
+// commits, then reads the number the first one advanced (migration 0014's header).
+//
+// A plain `SELECT … FOR UPDATE` would lock nothing on a commune's very first auto-coded create, when
+// the row does not exist yet — two first creates would both see "no row" and both start at DA01.
+const lockProjectSerial = `INSERT INTO project_code_counters (tenant_id, next_number) VALUES ($1, 1)
+	ON CONFLICT (tenant_id) DO UPDATE SET next_number = project_code_counters.next_number
+	RETURNING next_number`
+
+// LockProjectSerial returns the next serial number to try for this commune, holding the counter row
+// until the caller's transaction ends.
+func (s *DuAnGhiStore) LockProjectSerial(ctx context.Context, tx *store.ScopedTx) (int64, error) {
+	var n int64
+	if err := tx.Underlying().QueryRowContext(ctx, lockProjectSerial, string(tx.TenantID())).Scan(&n); err != nil {
+		return 0, fmt.Errorf("du_an: khoá bộ đếm mã tự sinh: %w", err)
+	}
+	return n, nil
+}
+
+// advanceProjectSerial — `next_number < $2` keeps the series moving forward only, even if a caller
+// ever passed a smaller value: a counter that went backwards would make every later create step over
+// the codes it already issued (slow, not a reissue — but wrong).
+const advanceProjectSerial = `UPDATE project_code_counters
+	SET next_number = $2, updated_at = now()
+	WHERE tenant_id = $1 AND next_number < $2`
+
+// AdvanceProjectSerial records that every number below next has been issued or stepped over. Called
+// in the same transaction as LockProjectSerial and the project INSERT, so a rolled-back create
+// leaves the counter where it was — a code nobody committed was never issued.
+func (s *DuAnGhiStore) AdvanceProjectSerial(ctx context.Context, tx *store.ScopedTx, next int64) error {
+	if _, err := tx.Exec(ctx, advanceProjectSerial, string(tx.TenantID()), next); err != nil {
+		return fmt.Errorf("du_an: tăng bộ đếm mã tự sinh: %w", err)
+	}
+	return nil
+}
+
 // HangMucConSong refuses a category that is not a live category OF THIS COMMUNE.
 //
 // IT LIVES HERE AND NOT ON HangMucKeHoachVonStore, AND THE REASON IS THE TRANSACTION — the same one

@@ -314,19 +314,18 @@ func TestThemDuAnTuChoiHangMucKhongCoTrongXa(t *testing.T) {
 	}
 }
 
-// §9 offers `☑ Tự sinh mã` and this service does not generate one — the specification gives two
-// incompatible formats and no scope for the sequence, and a project code is an ISSUED code. The
-// refusal must be a 400-shaped domain error, not a 500 and not a silent blank code.
-func TestThemDuAnThieuMaThiTuChoiChuKhongTuSinh(t *testing.T) {
+// A malformed TYPED code is still refused before any transaction opens — the auto path (a blank
+// code) must not have swallowed validation of the typed one.
+func TestCreateProjectMalformedTypedCodeRefusedBeforeTx(t *testing.T) {
 	k := khoDuAnSan()
 	uc, ctx := dungUseCaseDuAn(t, k)
 
 	yc := themDuAnHopLe()
-	yc.Ma = "   "
+	yc.Ma = "DA--01"
 
 	_, err := uc.Them(ctx, yc, canBo)
-	if !errors.Is(err, domain.ErrThieuMaDuAn) {
-		t.Fatalf("lỗi = %v, muốn ErrThieuMaDuAn", err)
+	if !errors.Is(err, domain.ErrMaDuAnSaiDinhDang) {
+		t.Fatalf("lỗi = %v, muốn ErrMaDuAnSaiDinhDang", err)
 	}
 	if k.batDau != 0 {
 		t.Errorf("mở %d giao dịch, muốn 0 — hình dạng sai thì không được giữ khoá dòng", k.batDau)
@@ -748,20 +747,39 @@ func TestXoaDuAnGhiDuBaCotVaXoaLuonDongPhanBo(t *testing.T) {
 	}
 }
 
-// Rule 7, invariant 1 names `delete_reason` and it is not optional: a project that vanished from the
-// commune's plan with no reason attached is a whole year's allocation nobody can account for — and
-// the row is still there, so the question WILL be asked.
-func TestXoaDuAnThieuLyDoThiTuChoiTruocKhiMoGiaoDich(t *testing.T) {
+// User decision 06/10/2026: the reason is OPTIONAL on the way in, and a blank one is stored as the
+// fixed "Rút khỏi danh sách dự án" — on the project, on its allocation lines, and in the trail. Rule 7,
+// invariant 1 still holds: `delete_reason` is never empty.
+func TestRemoveProjectWithoutReasonStoresFixedReason(t *testing.T) {
 	k := khoDuAnSan()
 	k.hang = hangDuAnSan()
 	uc, ctx := dungUseCaseDuAn(t, k)
 
-	err := uc.Xoa(ctx, k.hang.id, "   ", canBo)
-	if !errors.Is(err, domain.ErrThieuLyDoXoaDuAn) {
-		t.Fatalf("lỗi = %v, muốn ErrThieuLyDoXoaDuAn", err)
+	if err := uc.Xoa(ctx, k.hang.id, "   ", canBo); err != nil {
+		t.Fatalf("Xoa không lý do phải được: %v", err)
 	}
-	if k.batDau != 0 {
-		t.Errorf("mở %d giao dịch, muốn 0", k.batDau)
+	const want = "Rút khỏi danh sách dự án"
+	for _, stmt := range []string{"UPDATE du_an", "UPDATE phan_bo_nguon_von"} {
+		got := k.cau(stmt)
+		if len(got) != 1 {
+			t.Fatalf("%s: %d câu, muốn 1", stmt, len(got))
+		}
+		// $4 is delete_reason on both statements.
+		if got[0].args[3] != want {
+			t.Errorf("%s: delete_reason = %v, muốn %q", stmt, got[0].args[3], want)
+		}
+	}
+	vet := k.cau("INSERT INTO audit_log")
+	if len(vet) != 1 {
+		t.Fatalf("có %d vết, muốn 1", len(vet))
+	}
+	var than map[string]any
+	tho, _ := vet[0].args[7].([]byte)
+	if err := json.Unmarshal(tho, &than); err != nil {
+		t.Fatalf("đọc delta: %v", err)
+	}
+	if than["ly_do"] != want {
+		t.Errorf("ly_do = %v, muốn %q", than["ly_do"], want)
 	}
 }
 

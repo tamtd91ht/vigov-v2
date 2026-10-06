@@ -474,6 +474,13 @@
       "source": "service-finance/migrations/0004_du_an_va_chung_tu_giai_ngan.sql:171"
     },
     {
+      "entity": "ProjectCodeCounter",
+      "service": "finance",
+      "scope": "tenant",
+      "table": "project_code_counters",
+      "source": "service-finance/migrations/0014_project_code_counter.sql:49"
+    },
+    {
       "entity": "Province",
       "service": "platform",
       "scope": "platform",

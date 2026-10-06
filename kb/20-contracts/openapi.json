@@ -11983,7 +11983,7 @@
         }
       },
       "post": {
-        "summary": "Thêm một dự án đầu tư cho năm ngân sách, kèm phân bổ nguồn vốn nếu xã khai",
+        "summary": "Thêm một dự án đầu tư cho năm ngân sách, kèm phân bổ nguồn vốn nếu xã khai; để trống mã thì hệ thống cấp mã tiếp theo trong dãy DA01, DA02…",
         "operationId": "finance_post_investment_projects",
         "tags": [
           "finance"
@@ -11997,8 +11997,8 @@
         "x-vigov-idempotency": {
           "required": true,
           "header": "Idempotency-Key",
-          "on_store_failure": "MoKhiHong",
-          "on_store_failure_effect": "Store không tới được -> cho qua và ghi cảnh báo"
+          "on_store_failure": "DongKhiHong",
+          "on_store_failure_effect": "Store không tới được -> trả 503"
         },
         "parameters": [
           {
@@ -12082,6 +12082,7 @@
             },
             "x-vigov-error-codes": [
               "allocation_exceeds_plan",
+              "code_series_blocked",
               "code_taken",
               "duplicate_source"
             ]
@@ -12111,7 +12112,7 @@
         }
       ],
       "delete": {
-        "summary": "Xoá mềm một dự án đầu tư kèm lý do bắt buộc — từ chối khi dự án còn chứng từ giải ngân",
+        "summary": "Rút một dự án đầu tư khỏi danh sách (xoá mềm), lý do không bắt buộc — từ chối khi dự án còn chứng từ giải ngân",
         "operationId": "finance_delete_investment_projects_by_id",
         "tags": [
           "finance"
@@ -12119,7 +12120,7 @@
         "x-vigov-screen": "06-giai-ngan §7",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "budget.confirm"
+          "key": "budget.update"
         },
         "x-vigov-task": "d04d2543384e",
         "requestBody": {
@@ -36043,7 +36044,6 @@
         },
         "required": [
           "category_id",
-          "code",
           "name",
           "planned_amount",
           "year"
@@ -36116,9 +36116,6 @@
             "type": "string"
           }
         },
-        "required": [
-          "reason"
-        ],
         "additionalProperties": false
       },
       "finance.xoaHangMucVao": {

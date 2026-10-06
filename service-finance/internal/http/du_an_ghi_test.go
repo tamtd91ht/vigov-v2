@@ -16,9 +16,9 @@ package http
 // in commune B" — which is why this file uses checkerDanhMucGia and its own harness rather than
 // routes_test.go's.
 //
-// THE PERMISSION SPLIT UNDER TEST IS THE SPECIFICATION'S OWN (06-giai-ngan.md:202): `budget.update`
-// enters and corrects, and the REMOVAL takes `budget.confirm` — a choice routes.go argues in full,
-// because the specification assigns the removal no key at all.
+// THE PERMISSION UNDER TEST: `budget.update` enters, corrects AND removes (user decision 06/10/2026,
+// following the prototype; the removal took `budget.confirm` before). The wrong-key case grants
+// `budget.confirm` too, so a route that still wanted it — or accepted it — turns red.
 
 import (
 	"encoding/json"
@@ -240,11 +240,10 @@ func baTuyenGhiDuAn() []motTuyenDuAn {
 			dem: func(g *ghiDuAnGia) int { return g.suaGoi },
 		},
 		{
-			// `budget.confirm` AND NOT `budget.update`. The specification assigns the removal no key;
-			// routes.go argues the choice, and this case is what makes the choice testable rather than
-			// a sentence in a comment.
+			// `budget.update` SINCE 06/10/2026 (user decision, following the prototype) — it was
+			// `budget.confirm`. TestGhiDuAnSaiQuyenThi403 grants `budget.confirm` alone and expects 403.
 			ten: "xoá mềm dự án", method: http.MethodDelete, duong: duongDuAnMot(), than: thanXoaDA,
-			khoa: "budget.confirm", ok: http.StatusNoContent,
+			khoa: "budget.update", ok: http.StatusNoContent,
 			dem: func(g *ghiDuAnGia) int { return g.xoaGoi },
 		},
 	}
@@ -269,10 +268,10 @@ func TestGhiDuAnSaiQuyenThi403(t *testing.T) {
 	for _, tu := range baTuyenGhiDuAn() {
 		t.Run(tu.ten, func(t *testing.T) {
 			m := dungMayChuDuAnGhi(t)
-			// A real key of the same group, deliberately: `budget.read` is seeded beside the two keys
-			// these routes declare, so this proves the route wants THAT key rather than merely "some
-			// budget permission".
-			m.capQuyen(xaA, "budget.read")
+			// Real keys of the same group, deliberately: `budget.read` and `budget.confirm` are seeded
+			// beside `budget.update`, so this proves the routes want THAT key rather than merely "some
+			// budget permission" — and that the removal no longer accepts the key it used to take.
+			m.capQuyen(xaA, "budget.read", "budget.confirm")
 			w := m.goi(t, tu.method, hostA, tu.duong, canBoGhi(xaA), tu.than)
 			doiMa(t, w, http.StatusForbidden)
 			if n := m.ghi.tongGoi(); n != 0 {
@@ -474,17 +473,19 @@ func TestGhiDuAnAnhXaLoiNghiepVuSangMaTrangThai(t *testing.T) {
 			// right there and the Delete button did nothing.
 			ten: "dự án còn chứng từ", loi: fistore.ErrDuAnConChungTu,
 			method: http.MethodDelete, duong: duongDuAnMot(), than: thanXoaDA,
-			khoa: "budget.confirm", muon: http.StatusConflict,
+			khoa: "budget.update", muon: http.StatusConflict,
 		},
 		{
-			ten: "thiếu lý do xoá", loi: domain.ErrThieuLyDoXoaDuAn,
-			method: http.MethodDelete, duong: duongDuAnMot(), than: `{"reason":""}`,
-			khoa: "budget.confirm", muon: http.StatusBadRequest,
-		},
-		{
-			ten: "thiếu mã dự án — hệ thống không tự sinh", loi: domain.ErrThieuMaDuAn,
-			method: http.MethodPost, duong: duongDuAn, than: `{"year":2026}`,
+			ten: "lý do xoá quá dài", loi: domain.ErrLyDoXoaDuAnQuaDai,
+			method: http.MethodDelete, duong: duongDuAnMot(), than: thanXoaDA,
 			khoa: "budget.update", muon: http.StatusBadRequest,
+		},
+		{
+			// The auto path blocked by a long run of hand-typed DA codes: 409, and the sentence names
+			// the way out (type a code).
+			ten: "dãy mã tự sinh bị chặn", loi: domain.ErrProjectSerialExhausted,
+			method: http.MethodPost, duong: duongDuAn, than: `{"year":2026}`,
+			khoa: "budget.update", muon: http.StatusConflict, truong: "code",
 		},
 	} {
 		t.Run(tc.ten, func(t *testing.T) {
@@ -575,7 +576,7 @@ func TestThemDuAnNgaySaiDinhDangThi400VaNeuTenTruong(t *testing.T) {
 // one it has just taken off the screen.
 func TestXoaDuAnTraVe204KhongThan(t *testing.T) {
 	m := dungMayChuDuAnGhi(t)
-	m.capQuyen(xaA, "budget.confirm")
+	m.capQuyen(xaA, "budget.update")
 
 	w := m.goi(t, http.MethodDelete, hostA, duongDuAnMot(), canBoGhi(xaA), thanXoaDA)
 	doiMa(t, w, http.StatusNoContent)
@@ -588,5 +589,53 @@ func TestXoaDuAnTraVe204KhongThan(t *testing.T) {
 	}
 	if m.ghi.idCuoi != idDuAnMau {
 		t.Errorf("id = %q, muốn %q", m.ghi.idCuoi, idDuAnMau)
+	}
+}
+
+// §9 `☑ Tự sinh mã` (user decision 06/10/2026): a POST with no `code` — or a blank one — is a 201, and
+// the code reaches the use case BLANK, which is what asks it to issue the next serial. The handler must
+// not invent a code, and must not refuse.
+func TestCreateProjectWithoutCodeReachesUseCaseBlank(t *testing.T) {
+	for _, body := range []string{
+		`{"year":2026,"category_id":"hm-chuyen-tiep","name":"Dự án mới","planned_amount":100000000}`,
+		`{"code":"","year":2026,"category_id":"hm-chuyen-tiep","name":"Dự án mới","planned_amount":100000000}`,
+	} {
+		m := dungMayChuDuAnGhi(t)
+		m.capQuyen(xaA, "budget.update")
+		m.ghi.ra.Ma = "DA01" // what the use case issued
+		w := m.goi(t, http.MethodPost, hostA, duongDuAn, canBoGhi(xaA), body)
+		doiMa(t, w, http.StatusCreated)
+		if m.ghi.themCuoi.Ma != "" {
+			t.Errorf("use case nhận mã %q, muốn rỗng (= tự sinh)", m.ghi.themCuoi.Ma)
+		}
+		var ra duAnGhiRa
+		if err := json.Unmarshal(w.Body.Bytes(), &ra); err != nil {
+			t.Fatalf("thân không phải JSON: %q", w.Body.String())
+		}
+		if ra.Code != "DA01" {
+			t.Errorf("code trả về = %q, muốn mã đã cấp DA01", ra.Code)
+		}
+	}
+}
+
+// The reason is OPTIONAL since 06/10/2026: no body at all, `{}`, and a blank reason are all a 204, and
+// the use case receives the blank (it stores the fixed reason — app.TestRemoveProjectWithoutReason…).
+// A body that is NOT JSON is still a 400.
+func TestRemoveProjectReasonOptional(t *testing.T) {
+	for _, body := range []string{"", `{}`, `{"reason":"  "}`} {
+		m := dungMayChuDuAnGhi(t)
+		m.capQuyen(xaA, "budget.update")
+		w := m.goi(t, http.MethodDelete, hostA, duongDuAnMot(), canBoGhi(xaA), body)
+		doiMa(t, w, http.StatusNoContent)
+		if m.ghi.xoaGoi != 1 {
+			t.Errorf("thân %q: use case được gọi %d lần, muốn 1", body, m.ghi.xoaGoi)
+		}
+	}
+	m := dungMayChuDuAnGhi(t)
+	m.capQuyen(xaA, "budget.update")
+	w := m.goi(t, http.MethodDelete, hostA, duongDuAnMot(), canBoGhi(xaA), `reason=x`)
+	doiMa(t, w, http.StatusBadRequest)
+	if m.ghi.xoaGoi != 0 {
+		t.Errorf("thân không phải JSON mà use case vẫn được gọi")
 	}
 }

@@ -29,10 +29,9 @@ func TestChuanHoaMaDuAn(t *testing.T) {
 		{ten: "mã dãy số của §9", vao: "DA01", ra: "DA01"},
 		{ten: "cắt khoảng trắng hai đầu", vao: "  DA01  ", ra: "DA01"},
 
-		// ⚠ THE REFUSAL THAT IS A FINDING, NOT A BUG. §9 offers `☑ Tự sinh mã`; this service does not
-		// generate one, because the specification gives two incompatible formats and no scope for the
-		// sequence, and a project code is an ISSUED code that rule 7 forbids renumbering.
-		{ten: "trống thì từ chối, KHÔNG tự sinh", vao: "", loi: ErrThieuMaDuAn},
+		// A blank TYPED code is not a code. (The create path never calls this with a blank any more —
+		// a blank `code` there means "issue the next serial", FormatProjectSerial.)
+		{ten: "trống thì từ chối", vao: "", loi: ErrThieuMaDuAn},
 		{ten: "chỉ khoảng trắng cũng là trống", vao: "   ", loi: ErrThieuMaDuAn},
 
 		{ten: "gạch nối đầu", vao: "-DA01", loi: ErrMaDuAnSaiDinhDang},
@@ -216,10 +215,21 @@ func TestKiemTraNamDuAn(t *testing.T) {
 	}
 }
 
-// Rule 7, invariant 1 names `delete_reason` and it is not optional.
-func TestChuanHoaLyDoXoaDuAnBatBuoc(t *testing.T) {
-	if _, err := ChuanHoaLyDoXoaDuAn("   "); !errors.Is(err, ErrThieuLyDoXoaDuAn) {
-		t.Fatalf("lỗi = %v, muốn ErrThieuLyDoXoaDuAn", err)
+// Rule 7, invariant 1 names `delete_reason`, so the COLUMN is never empty — but since 06/10/2026 the
+// person removing a project need not type one: a blank becomes the fixed reason.
+func TestRemovalReasonBlankBecomesFixedReason(t *testing.T) {
+	for _, blank := range []string{"", "   "} {
+		got, err := ChuanHoaLyDoXoaDuAn(blank)
+		if err != nil {
+			t.Fatalf("%q: lỗi bất ngờ: %v", blank, err)
+		}
+		// The literal, not the constant: the fixed text is the user's wording and must not drift.
+		if got != "Rút khỏi danh sách dự án" {
+			t.Errorf("%q -> %q, muốn %q", blank, got, "Rút khỏi danh sách dự án")
+		}
+	}
+	if _, err := ChuanHoaLyDoXoaDuAn(strings.Repeat("x", LyDoXoaDuAnToiDa+1)); !errors.Is(err, ErrLyDoXoaDuAnQuaDai) {
+		t.Errorf("lý do quá dài: lỗi = %v, muốn ErrLyDoXoaDuAnQuaDai", err)
 	}
 	ra, err := ChuanHoaLyDoXoaDuAn("  xã rút khỏi kế hoạch vốn  ")
 	if err != nil {
@@ -264,5 +274,20 @@ func TestCheckProjectDateOrder(t *testing.T) {
 				t.Errorf("CheckProjectDateOrder = %v, muốn %v", got, tc.want)
 			}
 		})
+	}
+}
+
+// The prototype's series: two digits of padding up to 99, then the number grows (DA100). The padding
+// is what keeps DA01..DA99 in order beside DA100 once a list sorts by length then text.
+func TestFormatProjectSerial(t *testing.T) {
+	for n, want := range map[int64]string{1: "DA01", 9: "DA09", 10: "DA10", 99: "DA99", 100: "DA100", 1234: "DA1234"} {
+		if got := FormatProjectSerial(n); got != want {
+			t.Errorf("FormatProjectSerial(%d) = %q, muốn %q", n, got, want)
+		}
+		// Every issued serial must also pass the rule a typed code passes, or the two paths would
+		// disagree about what a project code is.
+		if _, err := ChuanHoaMaDuAn(FormatProjectSerial(n)); err != nil {
+			t.Errorf("mã tự sinh %q không qua ChuanHoaMaDuAn: %v", FormatProjectSerial(n), err)
+		}
 	}
 }

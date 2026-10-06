@@ -1666,7 +1666,7 @@ export type finance_themDongVao = {
 };
 
 export type finance_themDuAnVao = {
-  "code": string;
+  "code"?: string;
   "year": number;
   "category_id": string;
   "name": string;
@@ -1703,7 +1703,7 @@ export type finance_tomTatRa = {
 };
 
 export type finance_xoaDuAnVao = {
-  "reason": string;
+  "reason"?: string;
 };
 
 export type finance_xoaHangMucVao = {
@@ -6019,7 +6019,7 @@ export type finance_get_investment_projects = {
   };
 };
 
-/** POST /api/v1/investment-projects — Thêm một dự án đầu tư cho năm ngân sách, kèm phân bổ nguồn vốn nếu xã khai */
+/** POST /api/v1/investment-projects — Thêm một dự án đầu tư cho năm ngân sách, kèm phân bổ nguồn vốn nếu xã khai; để trống mã thì hệ thống cấp mã tiếp theo trong dãy DA01, DA02… */
 export type finance_post_investment_projects = {
   duongDan: "/api/v1/investment-projects";
   phuongThuc: "POST";
@@ -6038,7 +6038,7 @@ export type finance_post_investment_projects = {
     500: httpx_Error;
   };
   errorCodes: {
-    409: "allocation_exceeds_plan" | "code_taken" | "duplicate_source";
+    409: "allocation_exceeds_plan" | "code_series_blocked" | "code_taken" | "duplicate_source";
   };
 };
 
@@ -6086,7 +6086,7 @@ export type finance_patch_investment_projects_by_id = {
   };
 };
 
-/** DELETE /api/v1/investment-projects/{id} — Xoá mềm một dự án đầu tư kèm lý do bắt buộc — từ chối khi dự án còn chứng từ giải ngân */
+/** DELETE /api/v1/investment-projects/{id} — Rút một dự án đầu tư khỏi danh sách (xoá mềm), lý do không bắt buộc — từ chối khi dự án còn chứng từ giải ngân */
 export type finance_delete_investment_projects_by_id = {
   duongDan: "/api/v1/investment-projects/{id}";
   phuongThuc: "DELETE";

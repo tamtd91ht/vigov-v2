@@ -95,6 +95,19 @@ type khoDAGia struct {
 	// vouchersBySource is what voucherCountBySource answers: live vouchers of the project per source.
 	vouchersBySource map[string]int64
 
+	// --- the auto-issued code (migration 0014) ---------------------------------------------------
+	//
+	// takenCodes, when non-nil, replaces maDaDung: the count answers per code ($2), which is what the
+	// serial path needs ("is DA03 taken?"). It holds EVERY code ever committed, removed projects
+	// included — the statement under test has no `deleted_at` predicate.
+	takenCodes map[string]bool
+	// counter is the commune's `project_code_counters.next_number`; nil = no row yet.
+	counter *int64
+	// serialLock MODELS POSTGRESQL'S ROW LOCK on the counter row: taken by the upsert, released when
+	// the transaction that took it commits or rolls back. A buffered channel of one, so a second
+	// transaction's upsert really blocks — which is the property the concurrency test is about.
+	serialLock chan struct{}
+
 	loi error
 
 	// loiSau fails the FIRST statement containing this substring, and only that one.
@@ -149,7 +162,37 @@ func (k *khoDAGia) kiemLoi(q string) error {
 func (k *khoDAGia) Connect(context.Context) (driver.Conn, error) { return &connDAGia{k: k}, nil }
 func (k *khoDAGia) Driver() driver.Driver                        { return trinhGia{} }
 
-type connDAGia struct{ k *khoDAGia }
+// connDAGia carries what ONE transaction has written but not committed, so another connection cannot
+// see it — the read-committed visibility the serial path relies on.
+type connDAGia struct {
+	k *khoDAGia
+
+	holdsSerial    bool
+	pendingCodes   []string
+	pendingCounter int64
+}
+
+// endTx applies (commit) or drops (rollback) this connection's pending writes, then releases the
+// counter row lock if this transaction held it.
+func (c *connDAGia) endTx(commit bool) {
+	c.k.mu.Lock()
+	if commit {
+		for _, code := range c.pendingCodes {
+			if c.k.takenCodes != nil {
+				c.k.takenCodes[code] = true
+			}
+		}
+		if c.pendingCounter > 0 && c.k.counter != nil && c.pendingCounter > *c.k.counter {
+			*c.k.counter = c.pendingCounter
+		}
+	}
+	c.pendingCodes, c.pendingCounter = nil, 0
+	c.k.mu.Unlock()
+	if c.holdsSerial {
+		c.holdsSerial = false
+		<-c.k.serialLock
+	}
+}
 
 func (c *connDAGia) Prepare(string) (driver.Stmt, error) {
 	return nil, errors.New("driver giả: không hỗ trợ Prepare")
@@ -164,13 +207,22 @@ func (c *connDAGia) BeginTx(context.Context, driver.TxOptions) (driver.Tx, error
 	c.k.mu.Lock()
 	c.k.batDau++
 	c.k.mu.Unlock()
-	return &txDAGia{k: c.k}, nil
+	return &txDAGia{k: c.k, c: c}, nil
 }
 
 func (c *connDAGia) ExecContext(_ context.Context, q string, args []driver.NamedValue) (driver.Result, error) {
 	c.k.ghi(q, args)
 	if err := c.k.kiemLoi(q); err != nil {
 		return nil, err
+	}
+	// Uncommitted until the transaction commits (endTx): `ma` is $3, the counter's next value is $2.
+	if strings.Contains(q, "INSERT INTO du_an") && len(args) > 2 {
+		c.pendingCodes = append(c.pendingCodes, fmt.Sprint(args[2].Value))
+	}
+	if strings.Contains(q, "UPDATE project_code_counters") && len(args) > 1 {
+		if n, ok := args[1].Value.(int64); ok {
+			c.pendingCounter = n
+		}
 	}
 	// THE ALLOCATION SOFT DELETE REPORTS ITS OWN COUNT, because zero rows is the ORDINARY case there
 	// (§9: a project with no allocation is normal) and the use case puts the figure into the audit
@@ -205,7 +257,31 @@ func (c *connDAGia) QueryContext(_ context.Context, q string, args []driver.Name
 			h = append(h, []driver.Value{nguon, n})
 		}
 		return &rowsGia{cot: []string{"nguon_von_id", "so"}, hang: h}, nil
+	case strings.Contains(q, "INSERT INTO project_code_counters"):
+		// THE ROW LOCK: blocks while another transaction holds it, exactly as `ON CONFLICT DO UPDATE`
+		// waits on PostgreSQL. Created at 1 on first use (the INSERT half of the upsert).
+		if c.k.serialLock != nil && !c.holdsSerial {
+			c.k.serialLock <- struct{}{}
+			c.holdsSerial = true
+		}
+		c.k.mu.Lock()
+		if c.k.counter == nil {
+			one := int64(1)
+			c.k.counter = &one
+		}
+		n := *c.k.counter
+		c.k.mu.Unlock()
+		return &rowsGia{cot: []string{"next_number"}, hang: [][]driver.Value{{n}}}, nil
 	case strings.Contains(q, "count(*) FROM du_an"):
+		c.k.mu.Lock()
+		defer c.k.mu.Unlock()
+		if c.k.takenCodes != nil {
+			n := int64(0)
+			if len(args) > 1 && c.k.takenCodes[fmt.Sprint(args[1].Value)] {
+				n = 1
+			}
+			return &rowsGia{cot: []string{"count"}, hang: [][]driver.Value{{n}}}, nil
+		}
 		return &rowsGia{cot: []string{"count"}, hang: [][]driver.Value{{c.k.maDaDung}}}, nil
 	case strings.Contains(q, "count(*) FROM chung_tu_giai_ngan"):
 		return &rowsGia{cot: []string{"count"}, hang: [][]driver.Value{{c.k.soChungTu}}}, nil
@@ -272,12 +348,16 @@ func cotDA() []string {
 	}
 }
 
-type txDAGia struct{ k *khoDAGia }
+type txDAGia struct {
+	k *khoDAGia
+	c *connDAGia
+}
 
 func (t *txDAGia) Commit() error {
 	t.k.mu.Lock()
 	t.k.daCommit++
 	t.k.mu.Unlock()
+	t.c.endTx(true)
 	return nil
 }
 
@@ -285,6 +365,7 @@ func (t *txDAGia) Rollback() error {
 	t.k.mu.Lock()
 	t.k.daRollback++
 	t.k.mu.Unlock()
+	t.c.endTx(false)
 	return nil
 }
 

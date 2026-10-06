@@ -2,25 +2,27 @@ package http
 
 // The WRITE routes of the investment project register (docs/ui-ux/06-giai-ngan.md §9, §8).
 //
-// THREE ROUTES, TWO PERMISSIONS, BOTH THE SPECIFICATION'S OWN (06-giai-ngan.md:202): `budget.update`
-// enters and corrects, `budget.confirm` removes. The reasoning for putting a REMOVAL on the second
-// one is at the route, and it is the same argument the voucher's `🗑 Gỡ` already carries.
+// THREE ROUTES, ONE PERMISSION: `budget.update` enters, corrects AND — since the user's decision of
+// 06/10/2026, following the prototype (vigov-require budget/router.py) — removes. routes.go records
+// the change at the DELETE route.
 //
-//	POST   /api/v1/investment-projects        §9's "Thêm dự án" modal
+//	POST   /api/v1/investment-projects        §9's "Thêm dự án" modal; blank `code` = auto-issued
 //	PATCH  /api/v1/investment-projects/{id}   §8's `[✎ Sửa dự án]`
-//	DELETE /api/v1/investment-projects/{id}   soft delete, reason mandatory
+//	DELETE /api/v1/investment-projects/{id}   soft delete, reason optional (blank = fixed reason)
 //
 // THE PATH IS THE ONE THE READ ROUTES ALREADY OWN. `investment-projects` was decided by the user on
 // 20/09/2026 and routes.go carries the argument for both halves of the noun; nothing is renamed or
 // re-derived here.
 //
-// ⚠ §9's `☑ Tự sinh mã` IS NOT IMPLEMENTED AND `code` IS REQUIRED. The specification gives two
-// incompatible formats for that column and no scope for the sequence — domain.ErrThieuMaDuAn sets
-// out the whole argument, and a project code is an ISSUED CODE that rule 7 forbids renumbering. This
-// is a finding for the user, not something for a screen to work around.
+// §9's `☑ Tự sinh mã` (user decision 06/10/2026): `code` omitted or blank → the server issues the next
+// code of the commune's series DA01, DA02 … (app.issueProjectSerial). There is no separate `auto_code`
+// flag: an absent code already says it, and a flag beside a typed code would be a contradiction to
+// resolve.
 
 import (
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"time"
 
@@ -62,9 +64,10 @@ type phanBoVao struct {
 // vouchers, derived on every read and stored nowhere (0004:33-42) — a field here would be a client
 // naming a figure the commune reports upward.
 type themDuAnVao struct {
-	// Code is REQUIRED. §9 offers `☑ Tự sinh mã`; this service does not generate one — see
-	// domain.ErrThieuMaDuAn.
-	Code string `json:"code"`
+	// Code is OPTIONAL. Omitted or blank: the server issues the next code of this commune's series,
+	// DA01, DA02 … (§9 `☑ Tự sinh mã`). Typed: it must never have been used in this commune, removed
+	// projects included (409 `code_taken`). The issued code is in the 201 reply's `code`.
+	Code string `json:"code,omitempty"`
 	Year int    `json:"year"`
 
 	CategoryID  string `json:"category_id"`
@@ -134,12 +137,13 @@ type suaDuAnVao struct {
 
 // xoaDuAnVao is the body of DELETE /api/v1/investment-projects/{id}.
 //
-// A DELETE WITH A BODY, and the alternative was worse. Rule 7, invariant 1 names three columns —
-// `deleted_at`, `deleted_by`, `delete_reason` — so the reason is not optional, and the only other
-// place to put it is the query string, where free text about a public authority's spending would
-// land in every access log and proxy cache.
+// A DELETE WITH AN OPTIONAL BODY. The reason is OPTIONAL since 06/10/2026 (user decision, following the
+// prototype): omitted, blank, or no body at all → `delete_reason` is the fixed "Rút khỏi danh sách dự
+// án" (domain.ProjectRemovalDefaultReason), so rule 7 invariant 1's column is never empty. When given,
+// it travels in the body and never in the query string, where free text about a public authority's
+// spending would land in every access log and proxy cache.
 type xoaDuAnVao struct {
-	Reason string `json:"reason"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // duAnGhiRa is one project as a WRITE route returns it.
@@ -410,8 +414,13 @@ func (h *Handler) SuaDuAn(w http.ResponseWriter, r *http.Request) {
 // `delete_reason`, and its code stays taken forever — but there is nothing the caller can do with
 // it, and returning it would invite a client to display a project it has just taken off the screen.
 func (h *Handler) XoaDuAn(w http.ResponseWriter, r *http.Request) {
+	// AN EMPTY BODY IS ACCEPTED HERE, unlike docThan: the reason is optional, and a client removing a
+	// project without one may well send no body at all. Anything that IS sent must still be valid JSON.
 	var vao xoaDuAnVao
-	if !docThan(w, r, &vao) {
+	r.Body = http.MaxBytesReader(w, r.Body, thanToiDa)
+	if err := json.NewDecoder(r.Body).Decode(&vao); err != nil && !errors.Is(err, io.EOF) {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Nội dung gửi lên không phải JSON hợp lệ hoặc quá lớn.", "")
 		return
 	}
 	nguoi, ok := nguoiThucHien(r)
@@ -471,6 +480,12 @@ func (h *Handler) traLoiLoiDuAn(w http.ResponseWriter, r *http.Request, viec str
 		// that a record exists inside an authority they have no business knowing about (rule 4,
 		// forbidden #2, applied between communes).
 		httpx.WriteError(w, http.StatusNotFound, "not_found", "Không tìm thấy dự án.", "")
+	case errors.Is(err, domain.ErrProjectSerialExhausted):
+		// 409: the caller may create projects; what blocks the AUTO code is the state of the commune's
+		// codes (a long run of hand-typed DA codes). Typing a code is the way out, and the sentence says so.
+		httpx.WriteError(w, http.StatusConflict, "code_series_blocked",
+			"`code`: không cấp được mã tự sinh vì quá nhiều mã DA liên tiếp đã được nhập tay. "+
+				"Hãy nhập mã dự án.", "")
 	case errors.Is(err, fistore.ErrMaDuAnDaTonTai):
 		// The message says WHY a code that is nowhere on the screen is nonetheless taken: a removed
 		// project keeps its code forever (§9, rule 7, invariant 3). Without that sentence this reads
