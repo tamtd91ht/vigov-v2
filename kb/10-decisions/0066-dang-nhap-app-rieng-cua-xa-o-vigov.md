@@ -19,7 +19,7 @@ App thuộc `vihat-miniapp`", chỉ với app riêng của xã)
 
 ## Bối cảnh
 
-Đến 30/09/2026, MỌI lượt đăng nhập công dân, kể cả app riêng của xã (`deploy.mjs --vao-thang`), đi
+Đến 30/09/2026, MỌI lượt đăng nhập công dân, kể cả app riêng của xã (`deploy.mjs --vao-thang`; cờ bỏ 06/10/2026 — nay `--domain`, ADR 0047 §*Sửa đổi 06/10/2026* #5), đi
 `App → vihat-miniapp → ViGov`. Lý do nằm ở bảng của CLAUDE.md và ADR 0032: *"bề mặt Zalo thuộc kho
 nào do secret nào ký quyết định"*. Lượt đổi `accessToken`/`phoneToken` ký bằng app secret của bên
 đứng tên app, nên thuộc `vihat-miniapp`. Quy tắc ấy viết khi Mini App là **một** app của ViHAT.
@@ -71,8 +71,8 @@ vihat vẫn dùng demo được (dùng domain demo)"*.
 | Giai đoạn | App | Đăng nhập qua | Dữ liệu |
 |---|---|---|---|
 | 1. Demo cho xã mới | App ViHAT + QR gắn **tên miền demo dùng chung** (xã demo); phần nhìn đổi theo xã được chào (logo, tên, banner) | `vihat-miniapp` | Vào xã demo |
-| 2. Chờ Zalo duyệt app riêng | **Thay 05/10/2026 — không còn `--demo`; thử bằng đường thật, §*Sửa đổi 05/10/2026*.** App A dựng với `--vao-thang --demo` | **ViGov** | Vào xã A |
-| 3. Phát hành | App A dựng `--vao-thang` (không `--demo`) | **ViGov** | Vào xã A |
+| 2. Chờ Zalo duyệt app riêng | **Thay 05/10/2026 — không còn `--demo`; thử bằng đường thật, §*Sửa đổi 05/10/2026*.** App A dựng với `--vao-thang --demo` (`--vao-thang` cũng bỏ 06/10/2026 — ADR 0047 §*Sửa đổi 06/10/2026* #5) | **ViGov** | Vào xã A |
+| 3. Phát hành | App A dựng `--vao-thang` (không `--demo`) — **cờ bỏ 06/10/2026: nay `--domain=<tên miền xã A>`**, ADR 0047 §*Sửa đổi 06/10/2026* #5 | **ViGov** | Vào xã A |
 
 **Hai nghĩa của `--demo`, cùng một cơ chế** — **GỠ HẲN 05/10/2026, §*Sửa đổi 05/10/2026*; đoạn này
 giữ làm lịch sử:** danh tính cố định, không xin quyền Zalo (app chưa duyệt

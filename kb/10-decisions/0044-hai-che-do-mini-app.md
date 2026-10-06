@@ -100,7 +100,7 @@ cho mọi app, tách khỏi OA gửi thông báo của từng xã.
 > Khuôn `t`/`src`/`v` thay bởi ADR 0047 (27/09/2026): tham số mang tên miền xã, `src` giữ nguyên.
 >
 > *"Một bản build"* và dòng *"App riêng … App ID → bảng → máy chủ gắn sẵn"* có ngoại lệ từ ADR 0047 §6
-> (27–28/09/2026): app riêng dựng `--vao-thang` mang tên miền xã trong bundle, mở ra là trang công khai
+> (27–28/09/2026): app riêng dựng `--vao-thang` (cờ bỏ 06/10/2026 — nay `--domain`, ADR 0047 §*Sửa đổi 06/10/2026* #5) mang tên miền xã trong bundle, mở ra là trang công khai
 > của xã; nó **chưa mở phiên** — đường phiên theo App ID đã xác minh chưa dựng.
 
 ## Hệ quả
@@ -146,7 +146,7 @@ liệu của mình đi đâu, người dân phải mở văn bản thứ hai.
 ## ĐIỀU KIỆN DỪNG
 
 1. Có đề xuất đặt **giá trị theo xã vào bản build** — biến môi trường, hằng số, nhánh mã, tệp cấu hình theo App ID
-   (tệp **chỉ chọn App ID đích** được nới — ADR 0047, 27/09/2026; tên miền xã của `--vao-thang` — ADR 0047 §6)
+   (tệp **chỉ chọn App ID đích** được nới — ADR 0047, 27/09/2026; tên miền xã của `--vao-thang` — ADR 0047 §6; từ 06/10/2026 là `--domain`, ADR 0047 §*Sửa đổi 06/10/2026* #5)
 2. Có đề xuất cho client **tự chọn xã** từ App ID hay tham số URL
 3. Có xã muốn **UBND xã đứng tên** app riêng — đổi bên chịu trách nhiệm dữ liệu, cần ADR mới
 4. Có yêu cầu một công dân trong một app thao tác với **nhiều xã**

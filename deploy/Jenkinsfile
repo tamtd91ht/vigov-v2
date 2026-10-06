@@ -538,7 +538,7 @@ SQL
           echo "── ghi"
           chay_psql "vigov-psql-ghi-$BUILD_NUMBER" gan-mini-app.sql
           echo ""
-          echo "Xong. Bước kế: cd citizen-app && npm run zmp:phat-hanh -- --domain=thangbinh-danang.vigov.vn --vao-thang"
+          echo "Xong. Bước kế: cd citizen-app && npm run zmp:phat-hanh -- --domain=thangbinh-danang.vigov.vn (citizen-app/README.md §Nộp lên Zalo)"
         ''')
       }
     }
@@ -636,7 +636,7 @@ SQL
           echo "  1. identity: operatorctl mini-app-secret set --tenant 01M3CS7HHK72V71CGRRJHGR8E8 --app-id 3043188591857102858 --ticket <n> < tệp-khoá"
           echo "  2. identity: operatorctl mini-app-secret retire --tenant 01M3CS7HHK72V71CGRRJHGR8E8 --app-id 3291993990104489440 --ticket <n>"
           echo "  3. vihat-miniapp: thêm cặp 3043188591857102858=<khoá> vào biến các app xã (đổi mã vị trí)"
-          echo "  4. cd citizen-app && npm run zmp:phat-hanh -- --domain=thangbinh-danang.vigov.vn --vao-thang (ZMP_TOKEN của App ID mới)"
+          echo "  4. cd citizen-app && npm run zmp:phat-hanh -- --domain=thangbinh-danang.vigov.vn (ZMP_TOKEN của App ID mới; citizen-app/README.md §Nộp lên Zalo)"
         ''')
       }
     }
@@ -659,8 +659,10 @@ SQL
     //      rồi kiem-tra-dang-nhap-app-rieng (chỉ đọc) — tuyến mới có sống chưa.
     //   5. đặt App Secret của App ID xã: platform-admin "Đặt/đổi khoá bí mật", hoặc
     //      dat-secret-mini-app (MT=prod).
-    //   rồi: cd citizen-app && npm run zmp:deploy -- --domain=thangbinh-danang.vigov.vn --vao-thang
-    //   (không có --demo: danh tính demo đã gỡ 05/10/2026, ADR 0066 §Sửa đổi; deploy.mjs từ chối cờ ấy).
+    //   rồi: cd citizen-app && npm run zmp:deploy -- --domain=thangbinh-danang.vigov.vn
+    //   (không có --demo: danh tính demo đã gỡ 05/10/2026, ADR 0066 §Sửa đổi; không có --vao-thang:
+    //   bỏ 06/10/2026, --domain nay luôn nung tên miền — ADR 0047 §Sửa đổi 06/10/2026 #5; deploy.mjs
+    //   từ chối cả hai cờ. Lệnh đầy đủ: citizen-app/README.md §Nộp lên Zalo).
     //
     // Cùng bản ở trang của người vận hành: deploy/cau-hinh/README.md mục 6. Sửa một thì sửa cả hai.
     // Gỡ năm việc này cùng commit đưa platform-admin có màn tương ứng.

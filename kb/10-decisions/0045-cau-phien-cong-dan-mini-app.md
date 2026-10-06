@@ -124,7 +124,7 @@ chưa ai chốt — luật 8 bất biến 6 đòi con số ấy.
 | Chính | `t` + công dân **đã xác nhận** | `t` — phải đang hoạt động, không thì từ chối | Thành `t`; khác xã cũ thì ghi vết `doi_xa` kèm xã cũ |
 | Chính | Không xác nhận (có hay không có `t`) | Xã đã nhớ nếu còn hoạt động, không thì `""` | Không đổi |
 
-> 28/09/2026 — app riêng Thăng Bình dựng `--vao-thang` **chưa mở phiên**: đi qua cầu của app chung sẽ
+> 28/09/2026 — app riêng Thăng Bình dựng `--vao-thang` (cờ bỏ 06/10/2026 — nay `--domain`, ADR 0047 §*Sửa đổi 06/10/2026* #5) **chưa mở phiên**: đi qua cầu của app chung sẽ
 > rơi vào dòng **Chính + đã xác nhận** (không phải **Riêng**) với hệ quả ghi ở ADR 0047 §6, nên app chỉ
 > đọc tuyến công khai cho tới khi dòng **Riêng** có đường tới.
 

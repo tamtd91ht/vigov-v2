@@ -184,8 +184,10 @@ bảng mục 1 và mục 3.
    chi tiết xã, nút "Đặt/đổi khoá bí mật"; hoặc job `vigov-deploy`, việc `dat-secret-mini-app` (`MT=prod`,
    `XAC_NHAN=vigov-prod`, `TENANT_ID`, `APP_ID`, `TICKET`, `APP_SECRET` bắt buộc). Thiếu khoá thì
    `POST /api/v1/citizen-sessions` trả `422 app_not_ready`.
-6. `cd citizen-app && npm run zmp:deploy -- --domain=thangbinh-danang.vigov.vn --vao-thang` — **không**
-   `--demo`: danh tính demo đã gỡ 05/10/2026 (ADR 0066 §Sửa đổi 05/10/2026), `deploy.mjs` từ chối cờ ấy.
+6. `cd citizen-app && npm run zmp:deploy -- --domain=thangbinh-danang.vigov.vn` — **không**
+   `--demo`: danh tính demo đã gỡ 05/10/2026 (ADR 0066 §Sửa đổi 05/10/2026); **không** `--vao-thang`:
+   bỏ 06/10/2026, `--domain` nay luôn nung tên miền (ADR 0047 §Sửa đổi 06/10/2026 #5). `deploy.mjs`
+   từ chối cả hai cờ. Mọi cờ khác: `citizen-app/README.md` §Nộp lên Zalo.
 
 ### ClamAV cho petitions — TRƯỚC job `service-petitions`
 

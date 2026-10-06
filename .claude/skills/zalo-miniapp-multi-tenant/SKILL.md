@@ -35,11 +35,14 @@ bundle is uploaded to**; nothing from it enters the bundle. It is **not** the so
 which commune an App ID serves — the platform `MiniApp` table is, and when the two disagree the
 server wins.
 
-Second, narrower exception (ADR 0047 §6, 27/09/2026): `deploy.mjs --domain=<x> --vao-thang` bakes
+Second, narrower exception (ADR 0047 §6, 27/09/2026): `deploy.mjs --domain=<x>` bakes
 the domain `<x>` — and nothing else — into `__VIGOV_XA_CO_DINH__`, so a commune's own app opens
 straight into that commune with no group introduction and no confirmation step. It only steers the
 UI, like `d` on a public QR; the server still resolves the commune. Only `deploy.mjs` sets it, always
-equal to `--domain`. Widening it (another value, another source) is a new decision.
+equal to `--domain`. Widening it (another value, another source) is a new decision. Since 06/10/2026
+`--domain` ALWAYS bakes (the old `--vao-thang` flag is removed and refused), the shared app is
+`--app=vihat` and never bakes a commune, and a deploy never makes a commune QR — that QR comes from
+platform-admin (ADR 0047 §Sửa đổi 06/10/2026 #5; commands: `citizen-app/README.md` §Nộp lên Zalo).
 
 ---
 
@@ -50,7 +53,7 @@ exists to prevent.
 
 | Layer | Answers | Source | Trusted? |
 |---|---|---|---|
-| **Discovery** | Which commune does this open point at | QR / deep link (main app) · App ID read by the client (own app) · domain baked by `--vao-thang` (own app, ADR 0047 §6) | **No — drives the UI only** |
+| **Discovery** | Which commune does this open point at | QR / deep link (main app) · App ID read by the client (own app) · domain baked by `--domain` (own app, ADR 0047 §6) | **No — drives the UI only** |
 | **Session** | Which commune is this session *acting in* | Server: after the citizen confirms a QR, or from the App ID the app secret verified | **Yes — server-issued** |
 | **Authorization** | What may this citizen read/write there | Citizen↔commune relationship + rule 4 | **Yes** |
 
@@ -146,7 +149,7 @@ ADR 0044 replaced ADR 0005's no-parameter path (picker, GPS, profile). Do not re
   anyone enter any commune's content from a public store listing.
 - **Own app**: the commune is fixed by the verified App ID. A picker would be a second, weaker
   source for a fact the server already knows. ⚠ Today (ADR 0047 §6) the Thăng Bình own app shows its
-  commune's PUBLIC view from the baked `--vao-thang` domain and opens NO session — never auto-open one
+  commune's PUBLIC view from the baked `--domain` domain and opens NO session — never auto-open one
   over the main-app bridge (it records a confirmation nobody made).
 - **GPS** has no role in choosing a commune: locations are spoofable, and urban boundaries run
   down the middle of streets.
@@ -188,7 +191,7 @@ per-commune notification OA; read 0018 before touching this section) · ADR 0031
 | 1 | The commune comes from the **server** — confirmed QR (main app) or verified App ID (own app). Never from GPS, a picker, or a client-read App ID |
 | 2 | The session's commune name appears on **every** screen |
 | 3 | No switch action. A new commune in the main app = new QR, explicit confirmation, **new session, audited** |
-| 4 | API base URL and commune data are read **at runtime**, never baked into the bundle; one build serves every App ID — except the commune domain of a `--vao-thang` build (ADR 0047 §6) |
+| 4 | API base URL and commune data are read **at runtime**, never baked into the bundle; one build serves every App ID — except the commune domain of a `--domain` (own-app) build (ADR 0047 §6) |
 | 5 | Confirm the commune at the **final step** before submitting anything |
 | 6 | The app works correctly when opened with **no parameter at all** — in both modes |
 | 7 | Nothing personal in logs, URLs, or file names |
