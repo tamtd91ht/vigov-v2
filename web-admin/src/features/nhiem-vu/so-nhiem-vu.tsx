@@ -4915,7 +4915,9 @@ export function FormGiaoViec({
               onChange={(e) => datMa(e.target.value)}
             />
           </div>
-          <div className="o-chon shrink-0">
+          {/* One control high, so the tick sits level with the middle of the code box beside it
+              (prototype `items-center`, TaskAssignForm.tsx:245) instead of on its bottom edge. */}
+          <div className="o-chon min-h-(--control-h) shrink-0">
             <label htmlFor="giao-tu-sinh-ma">
               <input
                 id="giao-tu-sinh-ma"
@@ -4931,7 +4933,14 @@ export function FormGiaoViec({
       </div>
 
       <div className="o-nhap">
-        <label htmlFor="giao-tieu-de">{nhanOTieuDe(loaiChon)}</label>
+        {/* The prototype's required mark (`Field required`, TaskAssignForm.tsx:281) — drawn only;
+            the `required` attribute on the input is what the browser enforces. */}
+        <label htmlFor="giao-tieu-de">
+          {nhanOTieuDe(loaiChon)}
+          <span className="login-field-mark" aria-hidden="true">
+            *
+          </span>
+        </label>
         <input
           id="giao-tieu-de"
           name="giao-tieu-de"
@@ -5010,7 +5019,11 @@ export function FormGiaoViec({
         )}
         {khongAiDuyetDuoc ? (
           <div className="o-nhap">
-            <span>Lãnh đạo giao việc</span>
+            {/* A span, not a label (nothing to point at) — but drawn at the label size of every
+                other field in this form. */}
+            <span className="mb-1.5 block text-[0.8125rem] font-semibold text-ink-700">
+              Lãnh đạo giao việc
+            </span>
             <p className="ghi-chu" id="giao-lanh-dao-trong">
               {CAU_KHONG_AI_CO_QUYEN_DUYET_GIA_HAN}
             </p>
@@ -5049,10 +5062,12 @@ export function FormGiaoViec({
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 [&>*]:my-0">
+      {/* 3fr | 2fr, not halves: the prototype's half holds ONE datetime-local box, ours holds date +
+          time. Halves of the 500px dialog left the date box ~90px wide — "dd/mm/yyyy" clipped. */}
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] [&>*]:my-0">
         {/* Date AND time: a deadline "tomorrow" read as 00:00 counts work done tomorrow as late.
             Two native inputs (the contract's `due_at` is built from both by `thanGiaoViec`). */}
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,8rem)] gap-2 [&>*]:my-0">
+        <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-2 [&>*]:my-0">
           <div className="o-nhap">
             <label htmlFor="giao-han">Hạn hoàn thành</label>
             <input
@@ -5165,7 +5180,7 @@ export function FormGiaoViec({
   if (!dialog) {
     // Inline callers: the same fields in the same order, in the screen's own frame.
     return (
-      <form className="form-danh-muc flex flex-col gap-4 [&>*]:my-0" onSubmit={gui}>
+      <form className={cn("form-danh-muc flex flex-col gap-4 [&>*]:my-0", CREATE_TASK_TYPE_SCALE)} onSubmit={gui}>
         <div className="[&>*]:my-0">
           <h4>Giao việc mới</h4>
           <p className="ghi-chu">{MO_TA_FORM_GIAO_VIEC}</p>
@@ -5180,19 +5195,76 @@ export function FormGiaoViec({
   // a `Theo văn bản` type on a caller without them, Biên bản, has nothing to widen for). The header
   // and the buttons stay in sight; the fields scroll between them. Esc asks `huy`, as `Huỷ` does.
   return (
-    <ModalDialog titleId={CREATE_TASK_TITLE_ID} size={hienVanBan ? "lg" : "md"} onDismiss={huy}>
+    <ModalDialog
+      titleId={CREATE_TASK_TITLE_ID}
+      size={hienVanBan ? "lg" : "md"}
+      className={CREATE_TASK_DIALOG_CLASS}
+      onDismiss={huy}
+    >
       <ModalDialogHeader
         titleId={CREATE_TASK_TITLE_ID}
         title={dialogTitle}
         description={dialogDescription}
       />
       <form className="m-0 flex min-h-0 flex-col gap-4" onSubmit={gui}>
-        <div className="flex min-h-0 flex-col gap-4 overflow-y-auto pr-1 [&>*]:my-0">{fields}</div>
+        <div className={cn(CREATE_TASK_BODY_CLASS, CREATE_TASK_TYPE_SCALE)}>{fields}</div>
         {buttons}
       </form>
     </ModalDialog>
   );
 }
+
+/**
+ * The create dialog's box, over `ModalDialog`'s defaults (`cn` lets the last utility win, so the
+ * other dialogs keep theirs). Tester 07/10/2026: "dính sát mép trên", "tăng size rộng như prototype".
+ *
+ * - `p-4`: the prototype's `DialogContent` padding (`components/ui/dialog.tsx:77`). Our default
+ *   `p-6` took 16px more out of the same 500/800px box, so the fields sat narrower than the prototype's.
+ * - `max-h-[calc(100dvh-6rem)]`: at least 48px clear above and below at every height, where `90dvh`
+ *   left ~30px on a laptop screen — the box looked stuck to the top edge.
+ */
+export const CREATE_TASK_DIALOG_CLASS = "max-h-[calc(100dvh-6rem)] p-4";
+
+/**
+ * The scrolling field area between the header and the buttons. `max-h-[70vh]` is the prototype's own
+ * cap on the form (`TaskAssignForm.tsx:208`): on a tall screen the box stops there and stays centred
+ * with room around it, rather than growing to the dialog's limit. On a short screen the dialog's cap
+ * above is reached first and this area scrolls; the header and the buttons stay in sight.
+ */
+export const CREATE_TASK_BODY_CLASS = "flex max-h-[70vh] min-h-0 flex-col gap-4 overflow-y-auto pr-1 [&>*]:my-0";
+
+/**
+ * ONE label size, ONE control text size, ONE help-text size across the create form (tester
+ * 07/10/2026: "font size chữ phần nhất quán"). The prototype draws every field through one `Field`
+ * (`components/ui/field.tsx:37`, label 13px semibold); ours mixes legacy classes that disagree:
+ * `.o-nhap label` 13px but `.o-chon > label` 12px, the document group heading a browser `<h5>`, the
+ * staff search box 16px text in a 44px box with a 16px hint, beside 15px/36px selects.
+ *
+ * Mapped to OUR tokens, not the prototype's literal pixels: label 13px/600 (`.o-nhap label`),
+ * control text 16px below 768px and 15px above (iOS zooms into anything smaller — `controlClass`
+ * in `components/ui/field.tsx`), control height `--control-h` (36px, the prototype's `h-9`), help
+ * text 12px (`.ghi-chu`). The staff search box and its ▾ button drop from 44px to that 36px here:
+ * every other control of this form is already 36px, as is the prototype's `PersonPicker`.
+ *
+ * SCOPED HERE, NOT IN globals.css: the same legacy classes draw other screens that were not asked
+ * to change. Utilities win over `@layer legacy` by layer order, whatever the selector.
+ *
+ * `[&_select]:min-w-0`: the global select frame's 12rem floor is wider than the priority cell of the
+ * 500px dialog, and pushed the body into a horizontal scroll.
+ */
+export const CREATE_TASK_TYPE_SCALE = [
+  "[&_label]:text-[0.8125rem]",
+  "[&_h5]:mt-0 [&_h5]:mb-1.5 [&_h5]:text-[0.8125rem] [&_h5]:font-semibold [&_h5]:text-ink-700",
+  "[&_select]:min-w-0",
+  // `.o-nhap` inputs grew to ~39px (36px floor + vertical padding) beside 36px selects: the deadline
+  // and priority boxes, side by side, did not share a bottom edge. One height, as `Field` draws it.
+  "[&_input:not([type=checkbox]):not([type=radio])]:h-(--control-h) [&_input:not([type=checkbox]):not([type=radio])]:py-0",
+  "[&_.o-tim-can-bo]:mb-0",
+  "[&_.hop-tim-can-bo_input]:min-h-(--control-h) md:[&_.hop-tim-can-bo_input]:text-[0.9375rem]",
+  "[&_.nut-mo-danh-sach]:min-h-(--control-h) [&_.nut-mo-danh-sach]:min-w-(--control-h)",
+  "md:[&_.danh-sach-goi-y_li]:text-[0.9375rem]",
+  "[&_.goi-y-tim]:text-xs",
+].join(" ");
 
 /** Id of the create dialog's heading — its accessible name. */
 export const CREATE_TASK_TITLE_ID = "tieu-de-giao-viec-moi";

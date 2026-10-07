@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import type { KetQua } from "@/lib/api/goi";
+import { cn } from "@/lib/cn";
 import {
   QUYEN_CAP_NHAT_NHIEM_VU,
   QUYEN_DUYET_GIA_HAN,
@@ -85,6 +86,9 @@ import { TaskExtensionList, taskExtensionsQuery } from "./task-extension-block";
 import {
   BangNhiemVu,
   ChiTietNhiemVu,
+  CREATE_TASK_BODY_CLASS,
+  CREATE_TASK_DIALOG_CLASS,
+  CREATE_TASK_TYPE_SCALE,
   FormGiaoViec,
   FormSuaKhoiVanBan,
   HangLoc,
@@ -956,7 +960,8 @@ describe("form Giao việc mới §7", () => {
         giaoViec={() => {}}
       />,
     );
-    expect(html).toContain(">Tên nhiệm vụ</label>");
+    // 07/10/2026: the prototype's required mark follows the words (`Field required`).
+    expect(html).toContain('>Tên nhiệm vụ<span class="login-field-mark" aria-hidden="true">*</span></label>');
     expect(html).not.toContain("Trích yếu văn bản");
     expect(html).not.toContain('id="giao-co-quan-chu-tri"');
     expect(html).not.toContain('id="giao-chuyen-vien"');
@@ -1016,6 +1021,108 @@ describe("form Giao việc mới §7", () => {
       />,
     );
     expect(html).toMatch(/^<dialog [^>]*class="[^"]*max-w-\[800px\]/);
+  });
+
+  // Tester 07/10/2026 (menu Nhiệm vụ, popup thêm mới): width, spacing from the top edge, field
+  // order, one type scale. Each assertion names the prototype value it follows.
+  const dialogMarkup = (danhMuc: DanhMucNhiemVu) =>
+    renderToStaticMarkup(
+      <FormGiaoViec
+        dialog
+        danhMuc={danhMuc}
+        danhBa={DANH_BA}
+        danhBaLanhDao={DANH_BA}
+        coDanhSachVanBan
+        staffSearch
+        dangGui={false}
+        loi={null}
+        huy={() => {}}
+        giaoViec={() => {}}
+      />,
+    );
+  const dialogClass = (html: string) => /^<dialog [^>]*class="([^"]*)"/.exec(html)?.[1]?.split(" ") ?? [];
+
+  it("07/10: the create dialog keeps clear of the top edge and pads like the prototype (p-4)", () => {
+    for (const [danhMuc, width] of [
+      [DANH_MUC_CO_BAN, "max-w-[500px]"],
+      [DANH_MUC, "max-w-[800px]"],
+    ] as const) {
+      const cls = dialogClass(dialogMarkup(danhMuc));
+      expect(cls).toContain(width);
+      // The variant REPLACES `ModalDialog`'s defaults (cn → last utility wins), it does not stack.
+      expect(cls).toContain("max-h-[calc(100dvh-6rem)]");
+      expect(cls).not.toContain("max-h-[90dvh]");
+      expect(cls).toContain("p-4");
+      expect(cls).not.toContain("p-6");
+      // Still centred by the browser's top layer — no top pin.
+      expect(cls).toContain("m-auto");
+      expect(cls.some((c) => /^(top|mt)-/.test(c))).toBe(false);
+    }
+    expect(CREATE_TASK_DIALOG_CLASS).toBe("max-h-[calc(100dvh-6rem)] p-4");
+  });
+
+  it("07/10: only the fields scroll — capped at the prototype's 70vh, header and buttons outside", () => {
+    const html = dialogMarkup(DANH_MUC);
+    const attr = cn(CREATE_TASK_BODY_CLASS, CREATE_TASK_TYPE_SCALE).replaceAll("&", "&amp;").replaceAll(">", "&gt;");
+    const body = html.indexOf(`<div class="${attr}">`);
+    expect(body).toBeGreaterThan(-1);
+    expect(CREATE_TASK_BODY_CLASS).toContain("max-h-[70vh]");
+    expect(CREATE_TASK_BODY_CLASS).toContain("overflow-y-auto");
+    expect(html.indexOf('<h2 id="tieu-de-giao-viec-moi"')).toBeLessThan(body);
+    // The buttons follow the scrolling area's closing tag, as siblings — not inside it.
+    expect(html.lastIndexOf(">Giao việc</button>")).toBeGreaterThan(html.lastIndexOf('id="giao-ghi-chu"'));
+    expect(html).toMatch(/<\/textarea><\/div><\/div><\/div><div class="cum-nut justify-end">/);
+  });
+
+  it("07/10: `Theo văn bản` — the prototype's full field order, title marked required", () => {
+    const html = dialogMarkup(DANH_MUC);
+    const at = (s: string) => html.indexOf(s);
+    const order = [
+      'id="giao-loai"',
+      'id="giao-khoi"',
+      'id="giao-ma"',
+      'id="giao-tu-sinh-ma"',
+      'for="giao-tieu-de">Nội dung nhiệm vụ / Trích yếu văn bản<span class="login-field-mark" aria-hidden="true">*</span></label>',
+      'id="giao-mo-ta"',
+      'for="giao-bo-phan">Cơ quan chủ trì tham mưu (cơ quan thực hiện)</label>',
+      'id="giao-nguoi-thuc-hien"',
+      'id="giao-lanh-dao"',
+      'id="giao-them-van-ban-cap-tren-giao"',
+      'id="giao-them-van-ban-chi-dao-dang-uy"',
+      'id="giao-han"',
+      'id="giao-han-gio"',
+      'id="giao-uu-tien"',
+      'id="giao-them-van-ban-san-pham-dau-ra"',
+      'id="giao-ghi-chu"',
+      ">Huỷ</button>",
+      ">Giao việc</button>",
+    ];
+    for (const s of order) expect(at(s), s).toBeGreaterThan(-1);
+    for (let i = 1; i < order.length; i++) expect(at(order[i - 1]!), order[i]).toBeLessThan(at(order[i]!));
+    // Only the title carries the mark, as in the prototype.
+    expect(html.match(/class="login-field-mark"/g)).toHaveLength(1);
+  });
+
+  it("07/10: one type scale — labels 13px, controls 36px, help text 12px, no 12rem select floor", () => {
+    for (const c of [
+      "[&_label]:text-[0.8125rem]",
+      "[&_h5]:text-[0.8125rem]",
+      "[&_select]:min-w-0",
+      "[&_input:not([type=checkbox]):not([type=radio])]:h-(--control-h)",
+      "[&_.hop-tim-can-bo_input]:min-h-(--control-h)",
+      "[&_.nut-mo-danh-sach]:min-h-(--control-h)",
+      "[&_.goi-y-tim]:text-xs",
+    ]) {
+      expect(CREATE_TASK_TYPE_SCALE.split(" ")).toContain(c);
+    }
+    // tailwind-merge must not drop any of them against the body's own utilities.
+    const merged = cn(CREATE_TASK_BODY_CLASS, CREATE_TASK_TYPE_SCALE).split(" ");
+    for (const c of CREATE_TASK_TYPE_SCALE.split(" ")) expect(merged, c).toContain(c);
+  });
+
+  it("07/10: the date box keeps room in the 500px dialog — 3fr|2fr row, 7rem time column", () => {
+    const html = dialogMarkup(DANH_MUC_CO_BAN);
+    expect(html).toContain('class="grid gap-3 sm:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] [&amp;&gt;*]:my-0"><div class="grid grid-cols-[minmax(0,1fr)_7rem]');
   });
 
   it("màn Biên bản (không truyền prop): loại `theo-van-ban` mà KHÔNG có ba danh sách", () => {
