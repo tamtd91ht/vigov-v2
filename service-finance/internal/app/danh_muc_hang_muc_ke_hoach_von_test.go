@@ -397,17 +397,160 @@ func TestSuaDongDaXoaLa404(t *testing.T) {
 	}
 }
 
-func TestXoaDoiLyDo(t *testing.T) {
-	// A soft delete with no reason is refused BEFORE the transaction opens. `delete_reason` is not
-	// decoration: it is the only thing that will ever answer "why is this type gone".
+func TestDeleteWithoutReasonStoresFixedReasonAndAudits(t *testing.T) {
+	// THE REASON IS OPTIONAL SINCE 07/10/2026 (user decision, the prototype deletes with no reason —
+	// CategoryManagerDialog.tsx:170-182), and the column is still never empty: a blank becomes
+	// domain.CategoryRemovalDefaultReason, the way DELETE of a project writes
+	// domain.ProjectRemovalDefaultReason (ADR 0075 #4a). Who and when are unchanged, and the audit
+	// entry still shares the transaction (rule 6, invariant 3).
 	k := &khoGia{hang: dongTang1()}
 	uc, ctx := dungUseCase(t, k)
 
-	if err := uc.Xoa(ctx, "hm-001", "   ", nguoiThu()); !errors.Is(err, domain.ErrThieuLyDoXoa) {
-		t.Fatalf("lỗi = %v, muốn ErrThieuLyDoXoa", err)
+	if err := uc.Xoa(ctx, "hm-001", "   ", nguoiThu()); err != nil {
+		t.Fatalf("xoá không lý do bị từ chối: %v", err)
+	}
+	xoa := k.cau("deleted_at = now()")
+	if len(xoa) != 1 {
+		t.Fatalf("chạy %d câu xoá mềm, muốn 1", len(xoa))
+	}
+	doi := chuoiTrongDoi(xoa[0].args)
+	if !doi[domain.CategoryRemovalDefaultReason] || !doi["CB-00123"] {
+		t.Errorf("xoá mềm không ghi câu mặc định và người xoá: %v", xoa[0].args)
+	}
+	if !k.coCau("INSERT INTO audit_log") {
+		t.Fatal("xoá không lý do mà không để vết")
+	}
+	if k.batDau != 1 || k.daCommit != 1 || k.daRollback != 0 {
+		t.Errorf("begin=%d commit=%d rollback=%d, muốn 1/1/0", k.batDau, k.daCommit, k.daRollback)
+	}
+}
+
+func TestDeleteReasonTooLongIsRefusedBeforeTransaction(t *testing.T) {
+	// Optional is not unbounded: a reason that IS given is still bounded, and refused before a row
+	// lock is taken.
+	k := &khoGia{hang: dongTang1()}
+	uc, ctx := dungUseCase(t, k)
+
+	if err := uc.Xoa(ctx, "hm-001", strings.Repeat("a", domain.LyDoXoaToiDa+1), nguoiThu()); !errors.Is(err, domain.ErrLyDoXoaQuaDai) {
+		t.Fatalf("lỗi = %v, muốn ErrLyDoXoaQuaDai", err)
 	}
 	if k.batDau != 0 {
 		t.Error("mở giao dịch cho một yêu cầu đã sai hình dạng — giữ khoá dòng mà không cần")
+	}
+}
+
+// --- the auto-issued code (user decision 07/10/2026) ------------------------------------------------
+
+func TestCreateWithoutCodeIssuesSlugOfLabel(t *testing.T) {
+	// The prototype's format: the code is the label without diacritics, kebab-case
+	// (vigov-require apps/api/app/modules/admin/service.py:300 `slugify(payload.label)`,
+	// app/core/text.py:9-25). The audit entry says the code was issued, not typed.
+	k := &khoGia{takenCodes: map[string]bool{}}
+	uc, ctx := dungUseCase(t, k)
+
+	moi, err := uc.Them(ctx, YeuCauThemHangMuc{Nhan: "Vốn sự nghiệp có tính chất đầu tư"}, nguoiThu())
+	if err != nil {
+		t.Fatalf("Them lỗi: %v", err)
+	}
+	if moi.Ma != "von-su-nghiep-co-tinh-chat-dau-tu" {
+		t.Errorf("mã cấp = %q, muốn von-su-nghiep-co-tinh-chat-dau-tu", moi.Ma)
+	}
+	chen := k.cau("INSERT INTO hang_muc_ke_hoach_von")
+	if len(chen) != 1 || !chuoiTrongDoi(chen[0].args)["von-su-nghiep-co-tinh-chat-dau-tu"] {
+		t.Fatalf("câu chèn không mang mã đã cấp: %v", chen)
+	}
+	vet := k.cau("INSERT INTO audit_log")
+	if len(vet) != 1 {
+		t.Fatalf("ghi %d vết, muốn 1", len(vet))
+	}
+	var thay bool
+	for _, a := range vet[0].args {
+		if s, ok := a.([]byte); ok && strings.Contains(string(s), `"auto_code":true`) {
+			thay = true
+		}
+		if s, ok := a.(string); ok && strings.Contains(s, `"auto_code":true`) {
+			thay = true
+		}
+	}
+	if !thay {
+		t.Errorf("vết không ghi rằng mã do máy chủ cấp: %v", vet[0].args)
+	}
+}
+
+func TestCreateWithoutCodeStepsOverEveryUsedCodeIncludingDeleted(t *testing.T) {
+	// RULE 7, INVARIANT 3: an issued code is never issued again. `von-dau-tu` and `von-dau-tu-2` are
+	// taken — in the store's terms, the duplicate check (which counts soft-deleted rows) says so —
+	// so the next is `von-dau-tu-3`, the prototype's own suffix series (budget/service.py:269-279).
+	k := &khoGia{takenCodes: map[string]bool{"von-dau-tu": true, "von-dau-tu-2": true}}
+	uc, ctx := dungUseCase(t, k)
+
+	moi, err := uc.Them(ctx, YeuCauThemHangMuc{Nhan: "Vốn đầu tư"}, nguoiThu())
+	if err != nil {
+		t.Fatalf("Them lỗi: %v", err)
+	}
+	if moi.Ma != "von-dau-tu-3" {
+		t.Errorf("mã cấp = %q, muốn von-dau-tu-3", moi.Ma)
+	}
+	// Every candidate was asked of the statement that does NOT exclude deleted rows.
+	for _, l := range k.cau("count(*)") {
+		if strings.Contains(l.sql, "ma = $2") && strings.Contains(l.sql, "deleted_at") {
+			t.Errorf("câu kiểm mã LOẠI dòng đã xoá — mã đã cấp sẽ được cấp lại: %q", l.sql)
+		}
+	}
+}
+
+func TestCreateWithoutCodeRetriesWholeTransactionOnUniqueConflict(t *testing.T) {
+	// THE RACE: two clerks add the same label at the same instant, both find `von-dau-tu` free, one
+	// commits first and the other's INSERT meets `UNIQUE (tenant_id, ma)`. That transaction is dead
+	// (PostgreSQL aborts it), so the retry is a NEW transaction which sees the winner's code and
+	// takes the next one. Nothing of the failed attempt was committed.
+	k := &khoGia{takenCodes: map[string]bool{}, insertConflicts: 1}
+	uc, ctx := dungUseCase(t, k)
+
+	moi, err := uc.Them(ctx, YeuCauThemHangMuc{Nhan: "Vốn đầu tư"}, nguoiThu())
+	if err != nil {
+		t.Fatalf("Them lỗi sau một lần trùng: %v", err)
+	}
+	if moi.Ma != "von-dau-tu-2" {
+		t.Errorf("mã cấp = %q, muốn von-dau-tu-2", moi.Ma)
+	}
+	if k.batDau != 2 || k.daRollback != 1 || k.daCommit != 1 {
+		t.Errorf("begin=%d rollback=%d commit=%d, muốn 2/1/1", k.batDau, k.daRollback, k.daCommit)
+	}
+	if n := len(k.cau("INSERT INTO audit_log")); n != 1 {
+		t.Errorf("ghi %d vết, muốn đúng 1 — lần hỏng không được để vết", n)
+	}
+}
+
+func TestCreateWithTypedCodeDoesNotRetryOnConflict(t *testing.T) {
+	// A TYPED code is the person's choice: on a conflict it is refused with code_taken, never
+	// silently replaced by another value they did not type.
+	k := &khoGia{takenCodes: map[string]bool{}, insertConflicts: 1}
+	uc, ctx := dungUseCase(t, k)
+
+	if _, err := uc.Them(ctx, themMau(), nguoiThu()); !errors.Is(err, docstore.ErrMaDaTonTai) {
+		t.Fatalf("lỗi = %v, muốn ErrMaDaTonTai", err)
+	}
+	if k.batDau != 1 {
+		t.Errorf("mã gõ tay mà vẫn thử lại %d giao dịch", k.batDau)
+	}
+}
+
+func TestCreateWithoutCodeRefusesWhenSeriesExhausted(t *testing.T) {
+	// Past the prototype's 99 suffixes the auto path REFUSES rather than inventing a random code: a
+	// commune with a hundred rows of one label is a mistake to surface, not to paper over.
+	taken := map[string]bool{"von-dau-tu": true}
+	for n := 2; n <= domain.CategoryCodeSuffixLimit; n++ {
+		taken[domain.CategoryCodeCandidate("von-dau-tu", n)] = true
+	}
+	k := &khoGia{takenCodes: taken}
+	uc, ctx := dungUseCase(t, k)
+
+	if _, err := uc.Them(ctx, YeuCauThemHangMuc{Nhan: "Vốn đầu tư"}, nguoiThu()); !errors.Is(err, domain.ErrCategoryCodeSeriesBlocked) {
+		t.Fatalf("lỗi = %v, muốn ErrCategoryCodeSeriesBlocked", err)
+	}
+	if k.coCau("INSERT INTO") {
+		t.Error("hết mã mà vẫn chèn")
 	}
 }
 

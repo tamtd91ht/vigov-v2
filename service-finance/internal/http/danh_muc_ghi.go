@@ -77,8 +77,8 @@ func nguoiThucHien(r *http.Request) (audit.Actor, bool) {
 // that drifts is the one that answers 500 where it meant 409 — which reads to an operator as a
 // broken server rather than as a rule doing its job.
 //
-// WHY 409 AND NOT 403 FOR A TIER REFUSAL: the caller holds `admin.lookup` and is allowed to manage
-// the catalogue. What is refused is this operation on THIS row, because of what the row is. 403
+// WHY 409 AND NOT 403 FOR A TIER REFUSAL: the caller holds `admin.lookup` or `budget.update` and is
+// allowed to manage the catalogue. What is refused is this operation on THIS row, because of what the row is. 403
 // would send an administrator to the Phân quyền screen to grant a permission that would change
 // nothing.
 func (h *Handler) traLoiLoiGhi(w http.ResponseWriter, r *http.Request, viec string, err error) {
@@ -92,6 +92,11 @@ func (h *Handler) traLoiLoiGhi(w http.ResponseWriter, r *http.Request, viec stri
 		httpx.WriteError(w, http.StatusConflict, "code_taken",
 			"Mã này đã được dùng trong xã — kể cả khi dòng mang mã đó đã bị xoá. "+
 				"Mã đã cấp thì không cấp lại. Hãy chọn một mã khác.", "")
+	case errors.Is(err, domain.ErrCategoryCodeSeriesBlocked):
+		// The auto path found every code of this label's series already used (soft-deleted rows
+		// included). A state of the data, so 409; the sentence says what the person can do.
+		httpx.WriteError(w, http.StatusConflict, "code_series_blocked",
+			"Đã dùng hết mã tự sinh cho tên hạng mục này. Hãy nhập mã riêng hoặc đặt tên khác.", "")
 	case errors.Is(err, docstore.ErrDanhMucDayTran):
 		httpx.WriteError(w, http.StatusConflict, "catalogue_full",
 			"Danh mục loại văn bản của xã đã đạt số mục tối đa. Hãy tắt hoặc xoá bớt mục không dùng.", "")
@@ -125,7 +130,7 @@ func laLoiDauVao(err error) bool {
 		domain.ErrMaTrong, domain.ErrMaSaiDinhDang, domain.ErrMaQuaDai,
 		domain.ErrNhanTrong, domain.ErrNhanQuaDai,
 		domain.ErrThuTuNgoaiKhoang,
-		domain.ErrThieuLyDoXoa, domain.ErrLyDoXoaQuaDai,
+		domain.ErrLyDoXoaQuaDai,
 		domain.ErrMaBatBien, domain.ErrNguonDoTuClient,
 	} {
 		if errors.Is(err, mot) {

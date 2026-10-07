@@ -1995,7 +1995,7 @@
         }
       },
       "post": {
-        "summary": "Thêm một hạng mục kế hoạch vốn của riêng xã vào danh mục",
+        "summary": "Thêm một hạng mục kế hoạch vốn của riêng xã vào danh mục; để trống mã thì hệ thống tự cấp mã từ tên hạng mục",
         "operationId": "finance_post_capital_plan_categories",
         "tags": [
           "finance"
@@ -2003,7 +2003,10 @@
         "x-vigov-screen": "14-cau-hinh §5",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.lookup"
+          "any_of": [
+            "admin.lookup",
+            "budget.update"
+          ]
         },
         "x-vigov-task": "0ae9ff14745e",
         "x-vigov-idempotency": {
@@ -2081,7 +2084,12 @@
                   "$ref": "#/components/schemas/httpx.Error"
                 }
               }
-            }
+            },
+            "x-vigov-error-codes": [
+              "catalogue_full",
+              "code_series_blocked",
+              "code_taken"
+            ]
           },
           "500": {
             "description": "Internal Server Error",
@@ -2358,7 +2366,7 @@
         }
       ],
       "delete": {
-        "summary": "Xoá mềm một mục danh mục do xã tự thêm, kèm lý do bắt buộc",
+        "summary": "Xoá mềm một mục danh mục do xã tự thêm, lý do không bắt buộc",
         "operationId": "finance_delete_capital_plan_categories_by_id",
         "tags": [
           "finance"
@@ -2366,7 +2374,10 @@
         "x-vigov-screen": "14-cau-hinh §5",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.lookup"
+          "any_of": [
+            "admin.lookup",
+            "budget.update"
+          ]
         },
         "x-vigov-task": "51de803fe49f",
         "requestBody": {
@@ -2454,7 +2465,10 @@
         "x-vigov-screen": "14-cau-hinh §5",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.lookup"
+          "any_of": [
+            "admin.lookup",
+            "budget.update"
+          ]
         },
         "x-vigov-task": "d79d4e617dae",
         "requestBody": {
@@ -28926,6 +28940,114 @@
         }
       }
     },
+    "/api/v1/tasks/{ma}/attachments/{id}": {
+      "parameters": [
+        {
+          "name": "ma",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Gỡ một tệp đính kèm khỏi nhiệm vụ (xoá mềm, lý do bắt buộc) — người đã tải lên hoặc cán bộ có quyền cập nhật nhiệm vụ",
+        "operationId": "petitions_delete_tasks_by_ma_attachments_by_id",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "02-nhiem-vu §5.9",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "task.read"
+        },
+        "x-vigov-task": "9d88e4ff78bd",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/petitions.taskAttachmentRemoveIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/tasks/{ma}/attachments/{id}/completion": {
       "parameters": [
         {
@@ -29147,6 +29269,130 @@
           }
         }
       ],
+      "get": {
+        "summary": "Lịch sử đề nghị lùi hạn của một nhiệm vụ — mọi trạng thái, mới nhất trước, kèm ghi chú của người quyết định, phân trang theo con trỏ",
+        "operationId": "petitions_get_tasks_by_ma_extensions",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "02-nhiem-vu §5.8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "task.read"
+        },
+        "x-vigov-task": "3e5f2bb559a9",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Số bản ghi mỗi trang. Vượt trần thì máy chủ TRẢ VỀ trần kèm con trỏ để đọc tiếp, không báo lỗi.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Con trỏ MỜ ĐỤC do máy chủ phát ra ở `next_cursor`, chuyền lại nguyên văn. Không phải số thứ tự trang; không có `offset`, và không có tổng số bản ghi.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Cột sắp xếp. Danh sách đóng — giá trị ngoài danh sách bị từ chối.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "requested_at"
+              ],
+              "default": "requested_at"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/page.Result_petitions.deNghiLuiHanRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "summary": "Gửi đề nghị lùi hạn cho một nhiệm vụ — hạn mới phải muộn hơn hạn đang có, kèm lý do bắt buộc",
         "operationId": "petitions_post_tasks_by_ma_extensions",
@@ -37213,7 +37459,6 @@
           }
         },
         "required": [
-          "code",
           "label"
         ],
         "additionalProperties": false
@@ -37259,9 +37504,6 @@
             "type": "string"
           }
         },
-        "required": [
-          "reason"
-        ],
         "additionalProperties": false
       },
       "httpx.Error": {
@@ -40607,6 +40849,30 @@
         ],
         "additionalProperties": false
       },
+      "page.Result_petitions.deNghiLuiHanRa": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/petitions.deNghiLuiHanRa"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "empty when has_more is false"
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "has_more",
+          "items",
+          "next_cursor"
+        ],
+        "additionalProperties": false
+      },
       "page.Result_petitions.nhatKyNhiemVuRa": {
         "type": "object",
         "properties": {
@@ -41206,10 +41472,17 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "decision_note": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
           "decided_at",
+          "decision_note",
           "id",
           "new_due_at",
           "reason",
@@ -43241,6 +43514,18 @@
           "mime_type",
           "size_bytes",
           "status"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.taskAttachmentRemoveIn": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
         ],
         "additionalProperties": false
       },

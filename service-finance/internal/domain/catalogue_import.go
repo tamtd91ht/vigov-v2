@@ -315,10 +315,17 @@ var vietnameseBaseLetter = func() map[rune]rune {
 // diacritics stripped (đ → d), every run of anything else one '-', cut at MaToiDa on a word boundary,
 // then checked with the form's own validator so a derived code is always a code the form accepts.
 // false when nothing usable remains. NOT guaranteed free: that is the planner's check.
+//
+// COMBINING MARKS ARE SKIPPED, not treated as separators: a label typed in decomposed form (NFD —
+// "a" + U+0302) would otherwise become "xa-y" where the composed "Xây" gives "xay". There is no
+// normaliser in the standard library, so the marks are dropped one by one.
 func DeriveCatalogueCode(label string) (string, bool) {
 	var b strings.Builder
 	sep := false
 	for _, r := range label {
+		if unicode.Is(unicode.Mn, r) {
+			continue
+		}
 		r = unicode.ToLower(r)
 		if base, ok := vietnameseBaseLetter[r]; ok {
 			r = base

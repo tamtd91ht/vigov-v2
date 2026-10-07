@@ -78,6 +78,15 @@ type khoGia struct {
 	// have already run.
 	loiSau string
 	daNo   bool
+
+	// takenCodes, when non-nil, answers the duplicate check PER CODE instead of maTrung — the auto
+	// code path asks about several candidates and must be told which ones are taken.
+	takenCodes map[string]bool
+
+	// insertConflicts makes the next N catalogue INSERTs fail the way PostgreSQL reports
+	// `UNIQUE (tenant_id, ma)` through a hash partition, and marks that code taken: the shape of a
+	// concurrent create that committed the same code between our check and our insert.
+	insertConflicts int
 }
 
 func (k *khoGia) ghi(q string, args []driver.NamedValue) {
@@ -152,6 +161,22 @@ func (c *connGia) ExecContext(_ context.Context, q string, args []driver.NamedVa
 	if err := c.k.kiemLoi(q); err != nil {
 		return nil, err
 	}
+	if strings.Contains(q, "INSERT INTO hang_muc_ke_hoach_von") {
+		c.k.mu.Lock()
+		conflict := c.k.insertConflicts > 0
+		if conflict {
+			c.k.insertConflicts--
+			if c.k.takenCodes == nil {
+				c.k.takenCodes = map[string]bool{}
+			}
+			c.k.takenCodes[fmt.Sprint(args[2].Value)] = true
+		}
+		c.k.mu.Unlock()
+		if conflict {
+			return nil, errors.New(`ERROR: duplicate key value violates unique constraint ` +
+				`"hang_muc_ke_hoach_von_p07_tenant_id_ma_key" (SQLSTATE 23505)`)
+		}
+	}
 	// ONE ROW AFFECTED, ALWAYS. store.doiMotDong turns zero into "not found", and a fake returning
 	// zero would make every update look like a missing row — hiding the case this actually tests.
 	return driver.RowsAffected(1), nil
@@ -165,7 +190,16 @@ func (c *connGia) QueryContext(_ context.Context, q string, args []driver.NamedV
 	switch {
 	// ORDER MATTERS: the duplicate check is also a count(*), so it has to be recognised first.
 	case strings.Contains(q, "count(*)") && strings.Contains(q, "ma = $2"):
-		return &rowsGia{cot: []string{"count"}, hang: [][]driver.Value{{int64(c.k.maTrung)}}}, nil
+		c.k.mu.Lock()
+		n := int64(c.k.maTrung)
+		if c.k.takenCodes != nil {
+			n = 0
+			if c.k.takenCodes[fmt.Sprint(args[1].Value)] {
+				n = 1
+			}
+		}
+		c.k.mu.Unlock()
+		return &rowsGia{cot: []string{"count"}, hang: [][]driver.Value{{n}}}, nil
 	case strings.Contains(q, "count(*)"):
 		return &rowsGia{cot: []string{"count"}, hang: [][]driver.Value{{int64(c.k.dem)}}}, nil
 	case strings.Contains(q, "FOR UPDATE"):

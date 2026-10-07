@@ -22,7 +22,9 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/store"
@@ -105,20 +107,37 @@ type YeuCauSuaHangMuc struct {
 	LaMacDinh *bool
 }
 
+// categoryCreateAttempts bounds how many TRANSACTIONS an auto-coded create may take. A retry happens
+// only when another request committed the very code this one chose between its check and its
+// insert; each retry re-reads the taken codes, so a third collision in a row would mean a burst of
+// identical labels, and refusing then is better than looping.
+const categoryCreateAttempts = 3
+
 // Them adds one row the commune owns.
 //
 // ORDER OF THE THREE REFUSALS, and it is not arbitrary: shape first (cheap, no lock), then the
 // ceiling, then the duplicate code. The ceiling before the duplicate because a full catalogue is a
 // condition of the whole list while a duplicate is a condition of one value — and the caller can
 // act on the first without knowing anything about the second.
+//
+// `Ma` BLANK → THE SERVER ISSUES THE CODE (user decision 07/10/2026; the prototype's dialog sends a
+// label only, CategoryManagerDialog.tsx:64-80). The code is the label's slug, then -2, -3 … until
+// one has NEVER been used in this commune — MaDaDung counts soft-deleted rows, so an issued code is
+// never issued again (rule 7, invariant 3). NO COUNTER TABLE, unlike projects (migration 0014): a
+// project number is a series the commune reads in order, a slug is not, and the race a counter
+// would serialise is closed here by `UNIQUE (tenant_id, ma)` plus a retry in a fresh transaction.
 func (uc *DanhMucHangMuc) Them(ctx context.Context, yc YeuCauThemHangMuc,
 	nguoi audit.Actor) (domain.HangMucKeHoachVon, error) {
 
 	// Validated BEFORE the transaction opens. A request that fails its shape must never hold a row
 	// lock while doing so, and the caller needs the reason rather than a rollback.
-	ma, err := domain.ChuanHoaMa(yc.Ma)
-	if err != nil {
-		return domain.HangMucKeHoachVon{}, err
+	autoCode := strings.TrimSpace(yc.Ma) == ""
+	var ma string
+	if !autoCode {
+		var err error
+		if ma, err = domain.ChuanHoaMa(yc.Ma); err != nil {
+			return domain.HangMucKeHoachVon{}, err
+		}
 	}
 	nhan, err := domain.ChuanHoaNhan(yc.Nhan)
 	if err != nil {
@@ -127,6 +146,29 @@ func (uc *DanhMucHangMuc) Them(ctx context.Context, yc YeuCauThemHangMuc,
 	if err := domain.KiemTraThuTu(yc.ThuTu); err != nil {
 		return domain.HangMucKeHoachVon{}, err
 	}
+
+	attempts := 1
+	if autoCode {
+		attempts = categoryCreateAttempts
+	}
+	for attempt := 1; ; attempt++ {
+		created, err := uc.createOnce(ctx, ma, nhan, yc, autoCode, nguoi)
+		if err == nil {
+			return created, nil
+		}
+		// ONLY the auto path retries, and only on the unique key: a TYPED code that collides is the
+		// person's choice and is refused (409), never silently swapped for one they did not type.
+		if !autoCode || attempt >= attempts || !errors.Is(err, docstore.ErrMaDaTonTai) {
+			return domain.HangMucKeHoachVon{}, err
+		}
+	}
+}
+
+// createOnce is ONE transaction of Them. Split out so a retry is a whole new transaction: after
+// `UNIQUE (tenant_id, ma)` refuses an INSERT, PostgreSQL has aborted the old one and nothing more can
+// run in it.
+func (uc *DanhMucHangMuc) createOnce(ctx context.Context, ma, nhan string, yc YeuCauThemHangMuc,
+	autoCode bool, nguoi audit.Actor) (domain.HangMucKeHoachVon, error) {
 
 	id, err := uc.sinhID()
 	if err != nil {
@@ -152,12 +194,18 @@ func (uc *DanhMucHangMuc) Them(ctx context.Context, yc YeuCauThemHangMuc,
 			return docstore.ErrDanhMucDayTran
 		}
 
-		daDung, err := uc.kho.MaDaDung(ctx, tx, ma)
-		if err != nil {
-			return err
-		}
-		if daDung {
-			return docstore.ErrMaDaTonTai
+		if autoCode {
+			if moi.Ma, err = uc.firstFreeCode(ctx, tx, domain.CategoryCodeFromLabel(nhan)); err != nil {
+				return err
+			}
+		} else {
+			daDung, err := uc.kho.MaDaDung(ctx, tx, ma)
+			if err != nil {
+				return err
+			}
+			if daDung {
+				return docstore.ErrMaDaTonTai
+			}
 		}
 
 		if moi.LaMacDinh {
@@ -171,7 +219,9 @@ func (uc *DanhMucHangMuc) Them(ctx context.Context, yc YeuCauThemHangMuc,
 			return err
 		}
 
-		delta, err := json.Marshal(map[string]any{"sau": tomTatHangMuc(moi)})
+		// `auto_code` says whether a person typed this code or the server issued it — the one fact
+		// about the code an inspection cannot recover from the row (the same key `them_du_an` uses).
+		delta, err := json.Marshal(map[string]any{"sau": tomTatHangMuc(moi), "auto_code": autoCode})
 		if err != nil {
 			return fmt.Errorf("danh_muc_hang_muc_ke_hoach_von: mã hoá delta: %w", err)
 		}
@@ -194,6 +244,23 @@ func (uc *DanhMucHangMuc) Them(ctx context.Context, yc YeuCauThemHangMuc,
 		return domain.HangMucKeHoachVon{}, boc(ctx, "thêm", err)
 	}
 	return moi, nil
+}
+
+// firstFreeCode walks the series base, base-2 … base-99 and returns the first code never used in
+// this commune — soft-deleted rows included, because MaDaDung counts them (rule 7, invariant 3).
+// Past the last suffix it refuses rather than inventing a code nobody can read back to the label.
+func (uc *DanhMucHangMuc) firstFreeCode(ctx context.Context, tx *store.ScopedTx, base string) (string, error) {
+	for n := 1; n <= domain.CategoryCodeSuffixLimit; n++ {
+		candidate := domain.CategoryCodeCandidate(base, n)
+		used, err := uc.kho.MaDaDung(ctx, tx, candidate)
+		if err != nil {
+			return "", err
+		}
+		if !used {
+			return candidate, nil
+		}
+	}
+	return "", domain.ErrCategoryCodeSeriesBlocked
 }
 
 // Sua applies a partial edit, refusing whatever this row's tier does not allow.
@@ -293,6 +360,9 @@ func (uc *DanhMucHangMuc) Sua(ctx context.Context, id string, yc YeuCauSuaHangMu
 // THIS IS NOT A DELETE AND THE NAME IS THE ONLY PLACE THAT COULD SUGGEST OTHERWISE. The row stays,
 // carrying `deleted_at`, `deleted_by` and `delete_reason` (rule 7, invariant 1), and its `ma` stays
 // taken forever: an issued code is never reissued, because business records hold it as a value.
+//
+// THE REASON IS OPTIONAL (user decision 07/10/2026): blank → domain.CategoryRemovalDefaultReason, so
+// `delete_reason` is never empty (domain.ChuanHoaLyDoXoa says why).
 func (uc *DanhMucHangMuc) Xoa(ctx context.Context, id, lyDoTho string, nguoi audit.Actor) error {
 	if id == "" {
 		return docstore.ErrDanhMucKhongTonTai

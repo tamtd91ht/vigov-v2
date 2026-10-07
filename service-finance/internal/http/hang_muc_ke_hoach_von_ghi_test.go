@@ -256,14 +256,23 @@ func (m *mayChuGhi) goiThan(t *testing.T, method, host, path string, p *authz.Pr
 
 const duongGhiHangMuc = "/api/v1/capital-plan-categories"
 
-// QuyenDanhMuc is the key the three write routes declare. It lives HERE, in the test, and not in
-// routes.go — tools/apidoc refuses a key that is not a string literal at the RequirePermission call
-// site, so the routes spell it out three times (see the block above Register).
+// QuyenDanhMuc and permBudgetUpdate are the TWO keys the three write routes accept, either one
+// (authz.RequireAnyPermission, user decision 07/10/2026): `admin.lookup` for the Cấu hình §5 tab,
+// `budget.update` for the Giải ngân screen's Hạng mục dialog, as the prototype has it. They live
+// HERE, in the test, and not in routes.go — tools/apidoc refuses a key that is not a string literal
+// at the call site, so the routes spell both out three times (see the block above Register).
 //
 // A second spelling is a second place to drift, so the drift itself is what
-// TestKhoaQuyenDungChuoiCuaBangQuyen asserts: it reads the key the ROUTE asked for and compares it
-// with the literal, rather than with this constant.
-const QuyenDanhMuc authz.Perm = "admin.lookup"
+// TestKhoaQuyenDungChuoiCuaBangQuyen asserts: it reads the keys the ROUTE asked for and compares
+// them with literals, rather than with these constants.
+const (
+	QuyenDanhMuc     authz.Perm = "admin.lookup"
+	permBudgetUpdate authz.Perm = "budget.update"
+)
+
+// categoryWriteKeys is each key the routes accept, so every case that grants a key is run once per
+// key — a route that silently dropped one of them would lock one of the two screens out with a 403.
+func categoryWriteKeys() []authz.Perm { return []authz.Perm{QuyenDanhMuc, permBudgetUpdate} }
 
 func duongMot(id string) string { return duongGhiHangMuc + "/" + id }
 
@@ -301,18 +310,18 @@ func baTuyenGhi() []motTuyen {
 // --- the permission key itself ------------------------------------------------------------------------
 
 func TestKhoaQuyenDungChuoiCuaBangQuyen(t *testing.T) {
-	// THE KEY EACH ROUTE ACTUALLY ASKS FOR, COMPARED AGAINST A LITERAL — and that is the whole point.
+	// THE KEYS EACH ROUTE ACTUALLY ASKS FOR, COMPARED AGAINST LITERALS — and that is the whole point.
 	//
-	// Every other assertion in this file grants QuyenDanhMuc and then expects that same value to be
-	// accepted, so changing the key to ANY string at all leaves them all green: the fake checker
-	// grants whatever it was handed. That is not hypothetical. This repository carried three invented
-	// keys — `finance.read`, `map.read`, `document.approve` — through several sessions with every
-	// suite green, because a route holding a key the `quyen` table lacks answers 403 to EVERY
+	// Every other assertion in this file grants one of the two constants and then expects that same
+	// value to be accepted, so changing a key to ANY string at all leaves them all green: the fake
+	// checker grants whatever it was handed. That is not hypothetical. This repository carried three
+	// invented keys — `finance.read`, `map.read`, `document.approve` — through several sessions with
+	// every suite green, because a route holding a key the `quyen` table lacks answers 403 to EVERY
 	// account, forever, and nothing says so (rule 5, invariant 3c).
 	//
-	// `admin.lookup` is seeded at service-identity/migrations/0001_init.sql:274 and listed as
-	// "Quản lý danh mục" at docs/ui-ux/14-cau-hinh.md:109 — the permission matrix row for the very
-	// `Danh mục` tab (§5) these routes serve.
+	// `admin.lookup` is seeded at service-identity/migrations/0001_init.sql:274 ("Quản lý danh mục",
+	// docs/ui-ux/14-cau-hinh.md:109); `budget.update` at :284. An account holding NEITHER is asked
+	// about both, in that order, and refused — so the full list the route asks is observable here.
 	//
 	// tools/check_quyen.py scans the WHOLE repository against that table on every `make check` and
 	// is the guard a fixture cannot fool. This is the cheap half that turns red in `go test` too.
@@ -321,9 +330,10 @@ func TestKhoaQuyenDungChuoiCuaBangQuyen(t *testing.T) {
 			m := dungMayChuGhi(t)
 			m.goiThan(t, tc.method, hostA, tc.duong, canBoGhi(xaA), tc.than)
 
-			if got := m.checker.hoiKhoaCuoi(); got != "admin.lookup" {
-				t.Fatalf("tuyến hỏi khoá %q, muốn \"admin.lookup\" — một khoá bảng `quyen` không có "+
-					"là một tuyến trả 403 với MỌI tài khoản, mãi mãi, và không phép kiểm nào đỏ", got)
+			got := m.checker.hoiGi
+			if len(got) != 2 || got[0] != "admin.lookup" || got[1] != "budget.update" {
+				t.Fatalf("tuyến hỏi các khoá %q, muốn [admin.lookup budget.update] — một khoá bảng `quyen` "+
+					"không có là một tuyến trả 403 với MỌI tài khoản, mãi mãi, và không phép kiểm nào đỏ", got)
 			}
 		})
 	}
@@ -360,9 +370,11 @@ func TestGhiHangMuc_403SaiQuyen(t *testing.T) {
 			if m.ghi.tongGoi() != 0 {
 				t.Error("sai quyền mà use case ghi vẫn chạy")
 			}
-			if m.checker.hoiKhoaCuoi() != QuyenDanhMuc {
-				t.Errorf("tuyến hỏi khoá %q, muốn %q — một khoá khác là một quyền khác",
-					m.checker.hoiKhoaCuoi(), QuyenDanhMuc)
+			// NEITHER key is held, so the route must have asked about BOTH before refusing. Asking
+			// only one would mean the other screen's holders are refused too.
+			if got := m.checker.hoiGi; len(got) != 2 || got[0] != QuyenDanhMuc || got[1] != permBudgetUpdate {
+				t.Errorf("tuyến hỏi các khoá %q, muốn [%s %s] — một khoá khác là một quyền khác",
+					got, QuyenDanhMuc, permBudgetUpdate)
 			}
 		})
 	}
@@ -379,17 +391,19 @@ func TestGhiHangMuc_403DungQuyenSaiXa(t *testing.T) {
 	// That is rule 5, invariant 3 in one sentence: a permission missing its commune is
 	// cross-commune escalation, not a lesser bug. And it answers 403 rather than 401 because the
 	// session is perfectly valid — it is the authority that is absent.
-	for _, tc := range baTuyenGhi() {
-		t.Run(tc.ten, func(t *testing.T) {
-			m := dungMayChuGhi(t)
-			m.capQuyen(xaA, QuyenDanhMuc)
+	for _, key := range categoryWriteKeys() {
+		for _, tc := range baTuyenGhi() {
+			t.Run(string(key)+" "+tc.ten, func(t *testing.T) {
+				m := dungMayChuGhi(t)
+				m.capQuyen(xaA, key)
 
-			w := m.goiThan(t, tc.method, hostB, tc.duong, canBoGhi(xaB), tc.than)
-			doiMa(t, w, http.StatusForbidden)
-			if m.ghi.tongGoi() != 0 {
-				t.Error("quyền cấp ở xã khác mà vẫn ghi được vào xã này")
-			}
-		})
+				w := m.goiThan(t, tc.method, hostB, tc.duong, canBoGhi(xaB), tc.than)
+				doiMa(t, w, http.StatusForbidden)
+				if m.ghi.tongGoi() != 0 {
+					t.Error("quyền cấp ở xã khác mà vẫn ghi được vào xã này")
+				}
+			})
+		}
 	}
 }
 
@@ -415,38 +429,47 @@ func TestGhiHangMuc_401PhienCuaXaKhac(t *testing.T) {
 }
 
 func TestGhiHangMuc_DungQuyenDungXa(t *testing.T) {
-	for _, tc := range baTuyenGhi() {
-		t.Run(tc.ten, func(t *testing.T) {
-			m := dungMayChuGhi(t)
-			m.capQuyen(xaA, QuyenDanhMuc)
+	// ONCE PER KEY: `admin.lookup` alone and `budget.update` alone must each be enough (user decision
+	// 07/10/2026). A route that kept only one would leave the other screen's dialog answering 403.
+	for _, key := range categoryWriteKeys() {
+		for _, tc := range baTuyenGhi() {
+			t.Run(string(key)+" "+tc.ten, func(t *testing.T) {
+				m := dungMayChuGhi(t)
+				m.capQuyen(xaA, key)
+				assertCategoryWriteServed(t, m, tc)
+			})
+		}
+	}
+}
 
-			w := m.goiThan(t, tc.method, hostA, tc.duong, canBoGhi(xaA), tc.than)
-			doiMa(t, w, tc.ok)
-			if m.ghi.tongGoi() != 1 {
-				t.Fatalf("use case ghi chạy %d lần, muốn 1", m.ghi.tongGoi())
-			}
-			// Rule 6, invariant 2: WHO, and IN WHICH COMMUNE. Both have to reach the layer that
-			// writes the entry, or the trail cannot answer the only question it exists for.
-			if m.ghi.xaCuoi != xaA {
-				t.Errorf("use case chạy trong xã %q, muốn %q", m.ghi.xaCuoi, xaA)
-			}
-			// THE TRAIL CARRIES THE BUSINESS CODE, AND THE SECOND CHECK NAMES THE WRONG VALUE
-			// OUTRIGHT. Asserting only "equals the code" would stay green the day somebody made
-			// the two constants the same string, and it was green on 2026-09-22 while this route
-			// wrote the INTERNAL id into `audit_log.actor_id` — a column nobody can then query,
-			// because it held two kinds of identifier at once (rule 6, invariant 2).
-			if m.ghi.nguoiCuoi.ID != maCanBoGhi || m.ghi.nguoiCuoi.Kind != "staff" {
-				t.Errorf("chủ thể vết = %+v, muốn MÃ CÁN BỘ %q", m.ghi.nguoiCuoi, maCanBoGhi)
-			}
-			if m.ghi.nguoiCuoi.ID == idCanBoGhi {
-				t.Errorf("vết mang ID NỘI BỘ %q — luật 6 bất biến 2 đòi mã nghiệp vụ", idCanBoGhi)
-			}
-			// The IP is taken from this process's own socket, never from X-Forwarded-For: rule 6
-			// wants the address the request really arrived from.
-			if m.ghi.nguoiCuoi.IP != "10.0.0.7" {
-				t.Errorf("IP trong vết = %q, muốn 10.0.0.7", m.ghi.nguoiCuoi.IP)
-			}
-		})
+// assertCategoryWriteServed is the body of the 200 case, shared by both keys.
+func assertCategoryWriteServed(t *testing.T, m *mayChuGhi, tc motTuyen) {
+	t.Helper()
+	w := m.goiThan(t, tc.method, hostA, tc.duong, canBoGhi(xaA), tc.than)
+	doiMa(t, w, tc.ok)
+	if m.ghi.tongGoi() != 1 {
+		t.Fatalf("use case ghi chạy %d lần, muốn 1", m.ghi.tongGoi())
+	}
+	// Rule 6, invariant 2: WHO, and IN WHICH COMMUNE. Both have to reach the layer that writes the
+	// entry, or the trail cannot answer the only question it exists for.
+	if m.ghi.xaCuoi != xaA {
+		t.Errorf("use case chạy trong xã %q, muốn %q", m.ghi.xaCuoi, xaA)
+	}
+	// THE TRAIL CARRIES THE BUSINESS CODE, AND THE SECOND CHECK NAMES THE WRONG VALUE OUTRIGHT.
+	// Asserting only "equals the code" would stay green the day somebody made the two constants the
+	// same string, and it was green on 2026-09-22 while this route wrote the INTERNAL id into
+	// `audit_log.actor_id` — a column nobody can then query, because it held two kinds of identifier
+	// at once (rule 6, invariant 2).
+	if m.ghi.nguoiCuoi.ID != maCanBoGhi || m.ghi.nguoiCuoi.Kind != "staff" {
+		t.Errorf("chủ thể vết = %+v, muốn MÃ CÁN BỘ %q", m.ghi.nguoiCuoi, maCanBoGhi)
+	}
+	if m.ghi.nguoiCuoi.ID == idCanBoGhi {
+		t.Errorf("vết mang ID NỘI BỘ %q — luật 6 bất biến 2 đòi mã nghiệp vụ", idCanBoGhi)
+	}
+	// The IP is taken from this process's own socket, never from X-Forwarded-For: rule 6 wants the
+	// address the request really arrived from.
+	if m.ghi.nguoiCuoi.IP != "10.0.0.7" {
+		t.Errorf("IP trong vết = %q, muốn 10.0.0.7", m.ghi.nguoiCuoi.IP)
 	}
 }
 
@@ -525,9 +548,12 @@ func TestGhiHangMucAnhXaLoiSangMaTrangThai(t *testing.T) {
 		"đầy trần":      {dmstore.ErrDanhMucDayTran, http.StatusConflict, "catalogue_full"},
 		"mục hệ thống":  {domain.ErrKhongXoaDuocMucHeThong, http.StatusConflict, "system_row"},
 		"mục rẽ nhánh":  {domain.ErrKhongTatDuocMucReNhanh, http.StatusConflict, "code_branch_row"},
-		"thiếu lý do":   {domain.ErrThieuLyDoXoa, http.StatusBadRequest, "invalid_request"},
+		"lý do quá dài": {domain.ErrLyDoXoaQuaDai, http.StatusBadRequest, "invalid_request"},
 		"mã sai dạng":   {domain.ErrMaSaiDinhDang, http.StatusBadRequest, "invalid_request"},
-		"kho hỏng":      {errors.New("cơ sở dữ liệu không phản hồi"), http.StatusInternalServerError, "internal"},
+		// The auto path ran out of free suffixes for this label — a state of the data, not of the
+		// request's shape, so 409 like `code_taken`.
+		"hết mã tự sinh": {domain.ErrCategoryCodeSeriesBlocked, http.StatusConflict, "code_series_blocked"},
+		"kho hỏng":       {errors.New("cơ sở dữ liệu không phản hồi"), http.StatusInternalServerError, "internal"},
 	} {
 		t.Run(ten, func(t *testing.T) {
 			m := dungMayChuGhi(t)
@@ -646,6 +672,65 @@ func TestXoaHangMucChuyenLyDoVaTra204KhongThan(t *testing.T) {
 	// has just taken off the screen.
 	if w.Body.Len() != 0 {
 		t.Errorf("204 mà vẫn có thân: %q", w.Body.String())
+	}
+}
+
+func TestCreateCategoryWithoutCodeReachesUseCaseBlank(t *testing.T) {
+	// `code` IS OPTIONAL (user decision 07/10/2026, the prototype's CategoryManagerDialog.tsx:64-80
+	// sends a label only). Omitted and blank must both arrive at the use case as "", which is what
+	// tells it to issue the code — the handler decides nothing about the code itself.
+	for name, body := range map[string]string{
+		"absent": `{"label":"Vốn sự nghiệp có tính chất đầu tư"}`,
+		"blank":  `{"code":"  ","label":"Vốn sự nghiệp có tính chất đầu tư"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := dungMayChuGhi(t)
+			m.capQuyen(xaA, permBudgetUpdate)
+
+			w := m.goiThan(t, http.MethodPost, hostA, duongGhiHangMuc, canBoGhi(xaA), body)
+			doiMa(t, w, http.StatusCreated)
+			if m.ghi.themGoi != 1 {
+				t.Fatalf("use case chạy %d lần, muốn 1", m.ghi.themGoi)
+			}
+			if strings.TrimSpace(m.ghi.themCuoi.Ma) != "" {
+				t.Errorf("mã tới use case = %q, muốn rỗng để máy chủ tự cấp", m.ghi.themCuoi.Ma)
+			}
+			if m.ghi.themCuoi.Nhan != "Vốn sự nghiệp có tính chất đầu tư" {
+				t.Errorf("nhãn tới use case = %q", m.ghi.themCuoi.Nhan)
+			}
+		})
+	}
+}
+
+func TestDeleteCategoryReasonIsOptional(t *testing.T) {
+	// THE REASON IS OPTIONAL (user decision 07/10/2026; the prototype's CategoryManagerDialog.tsx
+	// :170-182 deletes with no reason), the same shape DELETE /api/v1/investment-projects/{id} took
+	// on 06/10/2026: no body, an empty object and a blank reason are all served. What the column
+	// then holds is the use case's decision, not the handler's.
+	for name, body := range map[string]string{
+		"no body":      "",
+		"empty object": `{}`,
+		"blank":        `{"reason":"  "}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := dungMayChuGhi(t)
+			m.capQuyen(xaA, QuyenDanhMuc)
+
+			w := m.goiThan(t, http.MethodDelete, hostA, duongMot("hm-001"), canBoGhi(xaA), body)
+			doiMa(t, w, http.StatusNoContent)
+			if m.ghi.xoaGoi != 1 || m.ghi.idCuoi != "hm-001" {
+				t.Fatalf("use case xoá: gọi %d lần, id %q", m.ghi.xoaGoi, m.ghi.idCuoi)
+			}
+		})
+	}
+
+	// Anything that IS sent must still be JSON — an optional body is not a body nobody reads.
+	m := dungMayChuGhi(t)
+	m.capQuyen(xaA, QuyenDanhMuc)
+	doiMa(t, m.goiThan(t, http.MethodDelete, hostA, duongMot("hm-001"), canBoGhi(xaA), `{"reason":`),
+		http.StatusBadRequest)
+	if m.ghi.xoaGoi != 0 {
+		t.Error("thân hỏng mà vẫn xoá")
 	}
 }
 

@@ -39,32 +39,48 @@ import (
 	fistore "github.com/vihat/vigov/service-finance/internal/store"
 )
 
-// THE PERMISSION ON THE THREE WRITE ROUTES BELOW IS `admin.lookup`, WRITTEN OUT AT EVERY CALL SITE.
+// THE THREE CATALOGUE WRITE ROUTES BELOW ACCEPT EITHER `admin.lookup` OR `budget.update`
+// (authz.RequireAnyPermission), WRITTEN OUT AT EVERY CALL SITE.
 //
-// A CONSTANT WOULD READ BETTER AND IS DELIBERATELY NOT USED: tools/apidoc resolves the key from the
-// authz.RequirePermission call and refuses anything that is not a string literal there — "khóa
-// quyền không phải hằng chuỗi — không ghi vào hợp đồng được". A route whose key it cannot read is a
-// route absent from kb/20-contracts/openapi.json, which is the contract the admin web builds
-// against (ADR 0014). Three literals that a whole-repository scan checks beat one constant the
-// generator cannot see.
+// WHY TWO KEYS — user decision 07/10/2026. The same rows are written from TWO screens whose
+// specifications name different keys:
 //
-// `admin.lookup` — "Quản lý danh mục" — IS THE KEY THE SPECIFICATION ALREADY NAMES FOR THIS EXACT
-// SCREEN, checked rather than assumed: docs/ui-ux/14-cau-hinh.md:109 lists it in the permission
-// matrix, and §5 of that same file (:148-182) is the `Danh mục` tab these routes serve — the one
-// with `+ Thêm mục`, the `✎` / `Tắt` / `🗑` actions and the `Nguồn` column. The key is seeded at
-// service-identity/migrations/0001_init.sql:274, so a commune administrator can actually tick it.
+//	Cấu hình §5, the `Danh mục` tab   `admin.lookup` — "Quản lý danh mục", docs/ui-ux/14-cau-hinh.md:109;
+//	                                  §5 (:148-182) is the tab with `+ Thêm mục`, `✎` / `Tắt` / `🗑`
+//	Giải ngân, the Hạng mục dialog    `budget.update` — the key the prototype opens that dialog on
+//	                                  (vigov-require BudgetWorkspace.tsx:64,154-156), because "người
+//	                                  sửa danh mục này là kế toán đang lập báo cáo, không phải quản trị
+//	                                  viên" (CategoryManagerDialog.tsx:35-48)
 //
-// NO NEW KEY WAS INVENTED, and that is rule 5, invariant 3c: a key no migration seeds is a right
-// nobody can grant, so the route would answer 403 to every account forever while the tests stayed
-// green. Had `admin.lookup` not existed, the correct move is a finding for open question #27 — not
-// an INSERT. tools/check_quyen.py scans the whole repository against the `quyen` table on every
-// `make check`.
+// THE PROTOTYPE CONTRADICTS ITSELF HERE, and this is the resolution: its API guards the same writes
+// with `admin.lookup` only (apps/api/app/modules/admin/router.py:252,264,295), so an accountant
+// holding `budget.update` alone is shown the dialog and refused by the server. Picking one key would
+// answer 403 to one screen's users with nothing an administrator could grant around; two routes for
+// one resource would be two contracts that drift. An OR of whole keys
+// is neither: each key is still checked as a whole, inside this commune (core/authz
+// RequireAnyPermission). THE COST, STATED: an accountant holding only `budget.update` can now add,
+// relabel, disable and soft delete catalogue rows — the commune's classification of its capital plan
+// — which was administration-only before. Every such write is audited with who, when and where.
+//
+// BOTH KEYS ARE SEEDED — `admin.lookup` at service-identity/migrations/0001_init.sql:274,
+// `budget.update` at :284 — and NO NEW KEY WAS INVENTED (rule 5, invariant 3c): a key no migration
+// seeds is a right nobody can grant, so the route would answer 403 to every account forever while the
+// tests stayed green. tools/check_quyen.py scans the whole repository against the `quyen` table on
+// every `make check`.
+//
+// A CONSTANT WOULD READ BETTER AND IS DELIBERATELY NOT USED: tools/apidoc resolves the keys from the
+// authz.* call and refuses anything that is not a string literal there — "khóa quyền không phải hằng
+// chuỗi — không ghi vào hợp đồng được". A route whose key it cannot read is a route absent from
+// kb/20-contracts/openapi.json, which is the contract the admin web builds against (ADR 0014).
+//
+// THE EXCEL IMPORT (routes_catalogue_import.go) IS NOT PART OF THIS DECISION and stays
+// `admin.lookup` only: the prototype's dialog has no import.
 //
 // WHY THE WRITE ROUTES ARE GUARDED WHILE THE READ ROUTE IS AnyAuthenticated: they answer different
 // questions. Reading the list is what fills a box on nearly every screen, so a configuration
 // permission there would empty those screens for everybody who is not an administrator (the
 // argument accepted for GET /api/v1/org-units and for all eight catalogue reads). Changing the list
-// is administration of the commune's own configuration, which is precisely what this key is for.
+// is administration of the commune's own configuration or the accountant's own report structure.
 
 // HangMucKeHoachVonDanhMuc is the commune's capital plan category catalogue, for
 // GET /api/v1/capital-plan-categories.
@@ -901,33 +917,45 @@ func Register(mux *http.ServeMux, d Deps) {
 	// handler additionally answers 400 to a body naming `source` or `tier` — not as the defence,
 	// but so a client learns it may not decide provenance instead of watching the field vanish.
 	//
-	// idem.Required(MoKhiHong), AND WHICH LAYER IS ACTUALLY PROTECTING THIS — the question
-	// skills/rest-api-design §4 says to answer at the route. The real guard is
-	// `UNIQUE (tenant_id, ma)`, which counts soft-deleted rows: a second row with the same code
-	// CANNOT EXIST, whatever happens to Redis. The idempotency key is the second, independent
-	// layer — it is what stops a double-submitted form from producing one row and one confusing
-	// 409 instead of one row and a replayed 201.
+	// `code` OPTIONAL (user decision 07/10/2026; the prototype's dialog sends a label only,
+	// CategoryManagerDialog.tsx:64-80): omitted or blank → the label's slug in the prototype's format
+	// (vigov-require admin/service.py:300, `slugify(payload.label)`), then -2, -3 … (budget/service.py
+	// :269-279) until one has never been used in this commune — soft-deleted rows included, so an
+	// issued code is never issued again (rule 7, invariant 3). A typed code still works and still must
+	// never have been used.
 	//
-	// MoKhiHong and not DongKhiHong for exactly that reason: with the unique key underneath, a
-	// cache outage cannot produce a duplicate catalogue row, so refusing a commune administrator
-	// mid-configuration would be paying with an outage for a risk that is already covered. The
+	// idem.Required(MoKhiHong), AND WHICH LAYER IS ACTUALLY PROTECTING THIS — the question
+	// skills/rest-api-design §4 says to answer at the route. THE ANSWER DIFFERS BY PATH:
+	//
+	//	TYPED code   `UNIQUE (tenant_id, ma)`, which counts soft-deleted rows: a second row with the
+	//	             same code CANNOT EXIST, whatever happens to Redis. The key is a second layer that
+	//	             turns a double submit into a replayed 201 instead of a confusing 409.
+	//	NO code      the unique key protects NOTHING against a double submit — the second request is
+	//	             simply issued the next code (`von-dau-tu-2`). The idempotency key is the ONLY
+	//	             layer, which is why it stays Required: without it every double click would add a
+	//	             twin row.
+	//
+	// MoKhiHong STILL, unlike POST /api/v1/investment-projects which moved to DongKhiHong for the same
+	// change: a twin catalogue row created while Redis is down carries no money and no issued document
+	// number — it is visible on the very dialog that made it and can be soft deleted there (tier 1).
+	// Refusing every catalogue edit during a cache outage would pay with an outage for that. The
 	// legal-consequence cases the skill reserves DongKhiHong for — money, issued document numbers,
 	// closing a commitment to a citizen — are not this.
 	//
-	// 409 AND NOT 403 for a full catalogue or a taken code: the caller holds `admin.lookup` and is
-	// allowed to manage the list. What is refused is this value against the state of the data.
+	// 409 AND NOT 403 for a full catalogue, a taken code or an exhausted series: the caller holds one
+	// of the two keys and may manage the list. What is refused is this value against the data.
 	//
-	// @summary  Thêm một hạng mục kế hoạch vốn của riêng xã vào danh mục
+	// @summary  Thêm một hạng mục kế hoạch vốn của riêng xã vào danh mục; để trống mã thì hệ thống tự cấp mã từ tên hạng mục
 	// @screen   14-cau-hinh §5
 	// @request  themHangMucVao
 	// @reply    201 hangMucRa
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
-	// @reply    409 httpx.Error
+	// @reply    409 httpx.Error code_taken catalogue_full code_series_blocked
 	// @reply    500 httpx.Error
 	mux.Handle("POST /api/v1/capital-plan-categories",
-		authz.RequirePermission(d.Checker, "admin.lookup")(
+		authz.RequireAnyPermission(d.Checker, "admin.lookup", "budget.update")(
 			idem.Required(idem.MoKhiHong)(
 				http.HandlerFunc(h.ThemHangMuc))))
 
@@ -957,7 +985,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    409 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("PATCH /api/v1/capital-plan-categories/{id}",
-		authz.RequirePermission(d.Checker, "admin.lookup")(
+		authz.RequireAnyPermission(d.Checker, "admin.lookup", "budget.update")(
 			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; app.Sua không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
 				http.HandlerFunc(h.SuaHangMuc))))
 
@@ -972,13 +1000,17 @@ func Register(mux *http.ServeMux, d Deps) {
 	// TIER 1 ONLY. A `he-thong` row answers 409 and is told to use `Tắt` instead — the same
 	// refusal the trigger makes, arriving first and in a sentence somebody can act on.
 	//
-	// A BODY ON A DELETE, and the alternative was worse: the reason is mandatory, and the query
-	// string would put free text about a government record into every access log and proxy cache.
+	// THE BODY IS OPTIONAL (user decision 07/10/2026; the prototype deletes with a confirm and no
+	// reason, CategoryManagerDialog.tsx:170-182 — the shape ADR 0075 #4a gave project removal):
+	// `reason` omitted, blank, or no body → `delete_reason` is the fixed "Xoá khỏi danh mục hạng mục
+	// kế hoạch vốn" (domain.CategoryRemovalDefaultReason), so rule 7 invariant 1's column is never
+	// empty. A reason that is given travels in the body, never the query string, which would put
+	// free text about a government record into every access log and proxy cache.
 	//
 	// idem.KhongCan — deleting an already-deleted row is a 404 either way, and the second request
 	// cannot overwrite who deleted it or why: the UPDATE carries `AND deleted_at IS NULL`.
 	//
-	// @summary  Xoá mềm một mục danh mục do xã tự thêm, kèm lý do bắt buộc
+	// @summary  Xoá mềm một mục danh mục do xã tự thêm, lý do không bắt buộc
 	// @screen   14-cau-hinh §5
 	// @request  xoaHangMucVao
 	// @reply    204 -
@@ -989,7 +1021,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    409 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("DELETE /api/v1/capital-plan-categories/{id}",
-		authz.RequirePermission(d.Checker, "admin.lookup")(
+		authz.RequireAnyPermission(d.Checker, "admin.lookup", "budget.update")(
 			idem.KhongCan("xoá một dòng đã xoá cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người xoá và lý do")(
 				http.HandlerFunc(h.XoaHangMuc))))
 

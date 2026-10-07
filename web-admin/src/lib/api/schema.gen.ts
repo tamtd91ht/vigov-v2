@@ -1769,7 +1769,7 @@ export type finance_themDuAnVao = {
 };
 
 export type finance_themHangMucVao = {
-  "code": string;
+  "code"?: string;
   "label": string;
   "order"?: number;
   "is_default"?: boolean;
@@ -1789,7 +1789,7 @@ export type finance_xoaDuAnVao = {
 };
 
 export type finance_xoaHangMucVao = {
-  "reason": string;
+  "reason"?: string;
 };
 
 export type httpx_Error = {
@@ -2709,6 +2709,13 @@ export type page_Result_petitions_deNghiChoDuyetRa = {
   "has_more": boolean;
 };
 
+export type page_Result_petitions_deNghiLuiHanRa = {
+  "items": Array<petitions_deNghiLuiHanRa>;
+  /** empty when has_more is false */
+  "next_cursor": string;
+  "has_more": boolean;
+};
+
 export type page_Result_petitions_nhatKyNhiemVuRa = {
   "items": Array<petitions_nhatKyNhiemVuRa>;
   /** empty when has_more is false */
@@ -2865,6 +2872,7 @@ export type petitions_deNghiLuiHanRa = {
   "status": string;
   "requested_at": string;
   "decided_at": string | null;
+  "decision_note": string | null;
 };
 
 export type petitions_deNghiLuiHanVao = {
@@ -3368,6 +3376,10 @@ export type petitions_taskAttachmentOut = {
   "mime_type": string;
   "size_bytes": number;
   "status": string;
+};
+
+export type petitions_taskAttachmentRemoveIn = {
+  "reason": string;
 };
 
 export type petitions_taskAttachmentUploadIn = {
@@ -3985,7 +3997,7 @@ export type finance_get_capital_plan_categories = {
   };
 };
 
-/** POST /api/v1/capital-plan-categories — Thêm một hạng mục kế hoạch vốn của riêng xã vào danh mục */
+/** POST /api/v1/capital-plan-categories — Thêm một hạng mục kế hoạch vốn của riêng xã vào danh mục; để trống mã thì hệ thống tự cấp mã từ tên hạng mục */
 export type finance_post_capital_plan_categories = {
   duongDan: "/api/v1/capital-plan-categories";
   phuongThuc: "POST";
@@ -4001,6 +4013,9 @@ export type finance_post_capital_plan_categories = {
     403: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;
+  };
+  errorCodes: {
+    409: "catalogue_full" | "code_series_blocked" | "code_taken";
   };
 };
 
@@ -4083,7 +4098,7 @@ export type finance_patch_capital_plan_categories_by_id = {
   };
 };
 
-/** DELETE /api/v1/capital-plan-categories/{id} — Xoá mềm một mục danh mục do xã tự thêm, kèm lý do bắt buộc */
+/** DELETE /api/v1/capital-plan-categories/{id} — Xoá mềm một mục danh mục do xã tự thêm, lý do không bắt buộc */
 export type finance_delete_capital_plan_categories_by_id = {
   duongDan: "/api/v1/capital-plan-categories/{id}";
   phuongThuc: "DELETE";
@@ -9890,6 +9905,28 @@ export type petitions_post_tasks_by_ma_attachments = {
   };
 };
 
+/** DELETE /api/v1/tasks/{ma}/attachments/{id} — Gỡ một tệp đính kèm khỏi nhiệm vụ (xoá mềm, lý do bắt buộc) — người đã tải lên hoặc cán bộ có quyền cập nhật nhiệm vụ */
+export type petitions_delete_tasks_by_ma_attachments_by_id = {
+  duongDan: "/api/v1/tasks/{ma}/attachments/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "ma": string;
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: petitions_taskAttachmentRemoveIn;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** POST /api/v1/tasks/{ma}/attachments/{id}/completion — Hoàn tất tải lên tệp đính kèm — dò kiểu, quét mã độc, lưu vào kho hồ sơ */
 export type petitions_post_tasks_by_ma_attachments_by_id_completion = {
   duongDan: "/api/v1/tasks/{ma}/attachments/{id}/completion";
@@ -9931,6 +9968,30 @@ export type petitions_get_tasks_by_ma_attachments_by_id_download = {
     404: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
+  };
+};
+
+/** GET /api/v1/tasks/{ma}/extensions — Lịch sử đề nghị lùi hạn của một nhiệm vụ — mọi trạng thái, mới nhất trước, kèm ghi chú của người quyết định, phân trang theo con trỏ */
+export type petitions_get_tasks_by_ma_extensions = {
+  duongDan: "/api/v1/tasks/{ma}/extensions";
+  phuongThuc: "GET";
+  thamSo: {
+    "ma": string;
+  };
+  truyVan: {
+    "limit"?: number;
+    "cursor"?: string;
+    "sort"?: "requested_at";
+    "order"?: "asc" | "desc";
+  };
+  than: never;
+  phanHoi: {
+    200: page_Result_petitions_deNghiLuiHanRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
   };
 };
 

@@ -1,7 +1,9 @@
 package http
 
 import (
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 
 	"github.com/vihat/vigov/core/httpx"
@@ -195,8 +197,12 @@ func (h *Handler) DanhSachHangMucKeHoachVon(w http.ResponseWriter, r *http.Reque
 // Unknown fields are IGNORED rather than refused, which is deliberate: a screen that reads a row
 // and posts it back carries `id`, and rejecting that would make the obvious client wrong for no
 // benefit. The fields that MUST NOT be silently dropped are the ones named above.
+//
+// `Code` IS OPTIONAL (user decision 07/10/2026): omitted or blank → the server issues the label's
+// slug, stepping over every code the commune ever used (app.DanhMucHangMuc.Them). The Giải ngân
+// dialog sends a label only, as the prototype does; the Cấu hình tab may still send its own code.
 type themHangMucVao struct {
-	Code      string `json:"code"`
+	Code      string `json:"code,omitempty"`
 	Label     string `json:"label"`
 	Order     int    `json:"order,omitempty"`
 	IsDefault bool   `json:"is_default,omitempty"`
@@ -229,12 +235,14 @@ type suaHangMucVao struct {
 
 // xoaHangMucVao is the body of DELETE /api/v1/capital-plan-categories/{id}.
 //
-// A DELETE WITH A BODY, and the alternative was worse. Rule 7, invariant 1 names three columns —
-// `deleted_at`, `deleted_by`, `delete_reason` — so the reason is not optional, and the only other
-// place to put it is the query string, where it would land in every access log and proxy cache of
-// a free-text sentence somebody typed about a government record.
+// A DELETE WITH AN OPTIONAL BODY. The reason is OPTIONAL since 07/10/2026 (user decision, following
+// the prototype's CategoryManagerDialog.tsx:170-182, which deletes with no reason — the shape ADR 0075
+// #4a gave project removal): omitted, blank, or no body at all → `delete_reason` is the fixed
+// domain.CategoryRemovalDefaultReason, so rule 7 invariant 1's column is never empty. When given, it
+// travels in the body and never in the query string, where a free-text sentence about a government
+// record would land in every access log and proxy cache.
 type xoaHangMucVao struct {
-	Reason string `json:"reason"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // ThemHangMuc adds one document type the commune owns. POST /api/v1/capital-plan-categories
@@ -319,8 +327,14 @@ func (h *Handler) SuaHangMuc(w http.ResponseWriter, r *http.Request) {
 // `delete_reason` and its code stays taken forever — but there is nothing the caller can do with it
 // and returning it would invite a client to display a row it has just removed from the screen.
 func (h *Handler) XoaHangMuc(w http.ResponseWriter, r *http.Request) {
+	// AN EMPTY BODY IS ACCEPTED HERE, unlike docThan: the reason is optional, and a client deleting
+	// without one may well send no body at all — the XoaDuAn precedent. Anything that IS sent must
+	// still be valid JSON.
 	var vao xoaHangMucVao
-	if !docThan(w, r, &vao) {
+	r.Body = http.MaxBytesReader(w, r.Body, thanToiDa)
+	if err := json.NewDecoder(r.Body).Decode(&vao); err != nil && !errors.Is(err, io.EOF) {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Nội dung gửi lên không phải JSON hợp lệ hoặc quá lớn.", "")
 		return
 	}
 

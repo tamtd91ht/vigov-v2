@@ -141,18 +141,69 @@ func TestKiemTraThuTuTuChoiAmVaQuaLon(t *testing.T) {
 	}
 }
 
-func TestChuanHoaLyDoXoaBatBuoc(t *testing.T) {
-	// Rule 7, invariant 1 names `delete_reason` beside `deleted_at` and `deleted_by`. A row that
-	// vanished from every screen with no reason attached is a row nobody can explain — and the row
-	// is still there, so the question will be asked.
+func TestDeleteReasonOptionalButNeverEmpty(t *testing.T) {
+	// OPTIONAL ON THE WAY IN SINCE 07/10/2026 (user decision, following the prototype), NEVER EMPTY
+	// IN THE ROW: rule 7, invariant 1 names `delete_reason`, so a blank becomes the fixed sentence —
+	// the shape ADR 0075 #4a gave project removal.
 	if got, err := ChuanHoaLyDoXoa("  gộp vào loại khác "); err != nil || got != "gộp vào loại khác" {
 		t.Errorf("ChuanHoaLyDoXoa = %q, %v", got, err)
 	}
-	if _, err := ChuanHoaLyDoXoa(" "); !errors.Is(err, ErrThieuLyDoXoa) {
-		t.Errorf("lỗi = %v, muốn ErrThieuLyDoXoa", err)
+	for _, blank := range []string{"", " ", "\t\n"} {
+		if got, err := ChuanHoaLyDoXoa(blank); err != nil || got != CategoryRemovalDefaultReason {
+			t.Errorf("ChuanHoaLyDoXoa(%q) = %q, %v — muốn câu mặc định", blank, got, err)
+		}
 	}
 	if _, err := ChuanHoaLyDoXoa(strings.Repeat("a", LyDoXoaToiDa+1)); !errors.Is(err, ErrLyDoXoaQuaDai) {
 		t.Error("lý do quá dài phải bị từ chối")
+	}
+}
+
+func TestCategoryCodeFromLabel(t *testing.T) {
+	// The prototype's slugify (vigov-require apps/api/app/core/text.py:9-25) as this service's import
+	// already derives it (DeriveCatalogueCode): lower case, diacritics stripped, `đ` → `d`, every run
+	// of anything else one '-', none at the ends, at most MaToiDa on a word boundary, `muc` when
+	// nothing usable remains. Every output must pass ChuanHoaMa, because the generated code goes
+	// through the same door as a typed one.
+	for label, want := range map[string]string{
+		"Vốn sự nghiệp có tính chất đầu tư": "von-su-nghiep-co-tinh-chat-dau-tu",
+		"  Đường giao thông  nông thôn ":    "duong-giao-thong-nong-thon",
+		"Vốn kéo dài (năm 2025)":            "von-keo-dai-nam-2025",
+		"XÂY DỰNG MỚI":                      "xay-dung-moi",
+		// Decomposed input (NFD): the combining marks are dropped, not turned into separators.
+		"Xây dựng":              "xay-dung",
+		"???":                      "muc",
+		"":                         "muc",
+		strings.Repeat("abc ", 30): strings.TrimSuffix(strings.Repeat("abc-", 16), "-"),
+	} {
+		got := CategoryCodeFromLabel(label)
+		if got != want {
+			t.Errorf("CategoryCodeFromLabel(%q) = %q, muốn %q", label, got, want)
+		}
+		if _, err := ChuanHoaMa(got); err != nil {
+			t.Errorf("mã sinh ra %q không qua ChuanHoaMa: %v", got, err)
+		}
+	}
+}
+
+func TestCategoryCodeCandidate(t *testing.T) {
+	// The prototype's `_free_code` series (budget/service.py:269-279): base, base-2, base-3 … and the
+	// longest candidate still fits MaToiDa.
+	if got := CategoryCodeCandidate("von", 1); got != "von" {
+		t.Errorf("ứng viên 1 = %q", got)
+	}
+	if got := CategoryCodeCandidate("von", 2); got != "von-2" {
+		t.Errorf("ứng viên 2 = %q", got)
+	}
+	// A base already at MaToiDa is shortened to make room for the suffix — and a cut that lands on a
+	// '-' drops it, since `abc--99` would be refused.
+	for _, base := range []string{strings.Repeat("a", MaToiDa), strings.Repeat("abc-", 15) + "abc"} {
+		longest := CategoryCodeCandidate(base, CategoryCodeSuffixLimit)
+		if _, err := ChuanHoaMa(longest); err != nil {
+			t.Errorf("ứng viên dài nhất %q không qua ChuanHoaMa: %v", longest, err)
+		}
+		if !strings.HasSuffix(longest, "-99") {
+			t.Errorf("ứng viên dài nhất %q mất hậu tố", longest)
+		}
 	}
 }
 

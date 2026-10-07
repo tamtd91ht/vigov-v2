@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/service-finance/internal/domain"
@@ -66,7 +65,7 @@ func (s *HangMucKeHoachVonStore) ImportSnapshot(ctx context.Context, tx *store.S
 // partitions PostgreSQL names it `hang_muc_ke_hoach_von_pNN_tenant_id_ma_key` — the suffix is the same.
 func (s *HangMucKeHoachVonStore) InsertImported(ctx context.Context, tx *store.ScopedTx, hm domain.HangMucKeHoachVon) error {
 	err := s.Chen(ctx, tx, hm)
-	if err != nil && strings.Contains(err.Error(), "tenant_id_ma_key") {
+	if errors.Is(err, ErrMaDaTonTai) {
 		return fmt.Errorf("hang_muc_ke_hoach_von: chèn khi nhập: %w", ErrMaDaTonTai)
 	}
 	return err

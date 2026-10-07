@@ -130,7 +130,6 @@ var (
 	ErrNhanTrong        = errors.New("danh_muc: thiếu `label`")
 	ErrNhanQuaDai       = errors.New("danh_muc: `label` quá dài")
 	ErrThuTuNgoaiKhoang = errors.New("danh_muc: `order` ngoài khoảng cho phép")
-	ErrThieuLyDoXoa     = errors.New("danh_muc: thiếu lý do xoá")
 	ErrLyDoXoaQuaDai    = errors.New("danh_muc: lý do xoá quá dài")
 )
 
@@ -222,19 +221,83 @@ func KiemTraThuTu(thuTu int) error {
 	return nil
 }
 
-// ChuanHoaLyDoXoa validates the reason recorded beside a soft delete.
+// CategoryRemovalDefaultReason is `delete_reason` when the person removing a catalogue row gives none.
 //
-// MANDATORY, AND THAT IS RULE 7, INVARIANT 1: `deleted_at`, `deleted_by` AND `delete_reason`. A
-// row that disappeared from every screen with no reason attached is a row nobody can explain when
-// somebody asks why a document type vanished — and the row is still there, so the question WILL be
-// asked.
+// THE REASON IS OPTIONAL ON THE WAY IN (user decision 07/10/2026, following the prototype, whose
+// CategoryManagerDialog.tsx:170-182 deletes with a confirm and no reason) AND STILL NEVER EMPTY IN
+// THE ROW: rule 7, invariant 1 names `delete_reason`, so a blank is replaced by this fixed text rather
+// than stored as nothing — the shape ADR 0075 #4a gave project removal
+// (ProjectRemovalDefaultReason). Who removed it and when are in `deleted_by`, `deleted_at` and the
+// audit entry exactly as before.
+const CategoryRemovalDefaultReason = "Xoá khỏi danh mục hạng mục kế hoạch vốn"
+
+// ChuanHoaLyDoXoa validates the reason recorded beside a soft delete; a blank one becomes
+// CategoryRemovalDefaultReason.
+//
+// THIS COPY NOW DIFFERS FROM THE OTHER SERVICES' danh_muc_ba_tang.go, ON PURPOSE: the user decision
+// above is about THIS catalogue. A reason that IS given is still bounded.
 func ChuanHoaLyDoXoa(lyDo string) (string, error) {
 	lyDo = strings.TrimSpace(lyDo)
 	switch {
 	case lyDo == "":
-		return "", ErrThieuLyDoXoa
+		return CategoryRemovalDefaultReason, nil
 	case len([]rune(lyDo)) > LyDoXoaToiDa:
 		return "", fmt.Errorf("%w (tối đa %d ký tự)", ErrLyDoXoaQuaDai, LyDoXoaToiDa)
 	}
 	return lyDo, nil
+}
+
+// --- the auto-issued code (user decision 07/10/2026) ------------------------------------------------
+
+// ErrCategoryCodeSeriesBlocked — every candidate of one label's series is already taken.
+var ErrCategoryCodeSeriesBlocked = errors.New(
+	"danh_muc: đã dùng hết mã tự sinh cho nhãn này — hãy nhập `code` riêng hoặc đổi nhãn")
+
+const (
+	// CategoryCodeSuffixLimit is the last suffix tried — the prototype's `range(2, 100)`
+	// (budget/service.py:275). The prototype then falls back to a random hex suffix; this service
+	// refuses instead (ErrCategoryCodeSeriesBlocked), because a random code is one nobody can read
+	// back to the label, and a hundred rows of one label is a mistake to surface.
+	CategoryCodeSuffixLimit = 99
+
+	// categoryCodeFallback is the prototype's `fallback: str = "muc"` for a label with no letter or
+	// digit left after stripping.
+	categoryCodeFallback = "muc"
+)
+
+// CategoryCodeFromLabel is the base of an auto-issued code: the label without diacritics, kebab-case
+// — the prototype's format, `slugify(payload.label)` at vigov-require
+// apps/api/app/modules/admin/service.py:300 (app/core/text.py:9-25): "Vốn sự nghiệp có tính chất đầu
+// tư" → "von-su-nghiep-co-tinh-chat-dau-tu".
+//
+// IT IS DeriveCatalogueCode, THE EXCEL IMPORT'S OWN DERIVATION, and not a second slug function: the
+// same label must give the same code whether a commune types it into the dialog or imports it from
+// a sheet. The one place this differs from the prototype is the length — DeriveCatalogueCode cuts at
+// MaToiDa (64) on a word boundary where the prototype cuts at 48 mid-word — and agreeing with this
+// service's import matters more than agreeing with a prototype nobody runs in production.
+//
+// `muc` when nothing usable remains — the prototype's `fallback: str = "muc"` (text.py:9).
+//
+// THE RESULT IS NOT GUARANTEED FREE — the use case steps over taken codes with CategoryCodeCandidate.
+func CategoryCodeFromLabel(label string) string {
+	if code, ok := DeriveCatalogueCode(label); ok {
+		return code
+	}
+	return categoryCodeFallback
+}
+
+// CategoryCodeCandidate is the n-th code of one base's series: base, base-2, base-3 … — the
+// prototype's `_free_code` (vigov-require apps/api/app/modules/budget/service.py:269-279).
+//
+// The base is shortened (and any trailing '-' dropped) when base plus suffix would pass MaToiDa, so
+// every candidate is a code ChuanHoaMa accepts.
+func CategoryCodeCandidate(base string, n int) string {
+	if n <= 1 {
+		return base
+	}
+	suffix := fmt.Sprintf("-%d", n)
+	if len(base)+len(suffix) > MaToiDa {
+		base = strings.TrimRight(base[:MaToiDa-len(suffix)], "-")
+	}
+	return base + suffix
 }
