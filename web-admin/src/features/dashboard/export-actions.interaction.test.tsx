@@ -137,11 +137,20 @@ describe("Tổng quan export — the gate", () => {
     for (const b of exportButtons(el)) expect(b.disabled).toBe(true);
   });
 
-  it("Trình chiếu stays the pending '?'", () => {
-    const el = view(loaded());
+  it("Trình chiếu is a live toggle beside the export buttons, no longer the pending '?'", () => {
+    const el = mount(
+      <DashboardView
+        data={loaded()}
+        visible={TASK_KEYS}
+        onPeriodChange={() => {}}
+        exportAccess={ACCESS}
+        presentation={{ on: false, onChange: () => {} }}
+      />,
+    );
     const show = [...el.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Trình chiếu");
-    expect(show?.disabled).toBe(true);
-    expect(show?.closest("[data-pending]")).not.toBeNull();
+    expect(show?.disabled).toBe(false);
+    expect(show?.getAttribute("aria-pressed")).toBe("false");
+    expect(show?.closest("[data-pending]")).toBeNull();
   });
 });
 

@@ -74,14 +74,25 @@ describe("Tổng quan — unbuilt parts at their spec position (ADR 0068 §14)",
     for (const p of PHAN_CHUA_DUNG) expect(marker(el, p.ten)).not.toBeNull();
   });
 
-  it("without an export source PDF / XLSX / PPTX are DISABLED; Trình chiếu is DISABLED; Tính lại ngay has no spot (ADR 0053)", () => {
+  it("without an export source PDF / XLSX / PPTX are DISABLED; Tính lại ngay has no spot (ADR 0053)", () => {
     const el = page();
-    for (const label of ["PDF", "XLSX", "PPTX", "Trình chiếu"]) {
+    for (const label of ["PDF", "XLSX", "PPTX"]) {
       const b = [...el.querySelectorAll("button")].find((x) => x.textContent?.trim() === label);
       expect(b?.disabled).toBe(true);
     }
     expect(el.textContent).not.toContain("Tính lại ngay");
     expect(el.textContent).not.toContain("cũ hơn 10 phút");
+  });
+
+  it("Trình chiếu is BUILT (user decision 07/10/2026): a live toggle with no '?', no PHAN_CHUA_DUNG entry", () => {
+    const el = mount(
+      <DashboardView data={DATA} visible={ALL_KEYS} onPeriodChange={() => {}} presentation={{ on: false, onChange: () => {} }} />,
+    );
+    const b = [...el.querySelectorAll("button")].find((x) => x.textContent?.trim() === "Trình chiếu");
+    expect(b?.disabled).toBe(false);
+    expect(b?.closest("[data-pending]")).toBeNull();
+    expect(marker(el, "Chế độ trình chiếu phòng họp")).toBeNull();
+    expect(PHAN_CHUA_DUNG.some((p) => p.ten === "Chế độ trình chiếu phòng họp")).toBe(false);
   });
 
   it("the unbuilt KPI card shows '—', never a figure and never a link", () => {
@@ -105,14 +116,15 @@ describe("Tổng quan — unbuilt parts at their spec position (ADR 0068 §14)",
     expect(marker(el, "Kinh tế & Tài nguyên")).not.toBeNull();
   });
 
-  it("pressing a '?' opens its description (Phase 2 said where it is) and calls no server", () => {
+  it("pressing a '?' opens its description and calls no server", () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
     const el = page();
-    act(() => marker(el, "Chế độ trình chiếu phòng họp")!.click());
+    act(() => marker(el, "Kinh tế & Tài nguyên")!.click());
     const dialog = document.body.querySelector('[role="dialog"]');
-    expect(dialog?.textContent).toContain(PHAN_CHUA_DUNG.find((p) => p.ten === "Chế độ trình chiếu phòng họp")!.viSao);
-    expect(dialog?.textContent).toContain(PHASE_2_NOTE);
+    expect(dialog?.textContent).toContain(PHAN_CHUA_DUNG.find((p) => p.ten === "Kinh tế & Tài nguyên")!.viSao);
+    // a block placeholder is not marked Phase 2 — the Phase-2 note belonged to Trình chiếu, now built
+    expect(dialog?.textContent).not.toContain(PHASE_2_NOTE);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

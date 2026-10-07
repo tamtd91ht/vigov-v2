@@ -534,14 +534,15 @@ describe("layout — the prototype frame (owner, 05/10/2026)", () => {
     }
   });
 
-  it("the header: period buttons, the BUILT PDF/XLSX/PPTX (no '?'), Trình chiếu still '?' — no refresh, no stale badge", () => {
+  it("the header: period buttons, the BUILT PDF/XLSX/PPTX and Trình chiếu (no '?') — no refresh, no stale badge", () => {
     const html = all();
     for (const label of ["Tuần này", "Tháng này", "Quý này", "Năm nay"]) expect(html).toContain(`>${label}</button>`);
     expect(html).toMatch(/aria-pressed="true"[^>]*>Tháng này</);
     expect(html).toContain(">Tổng quan điều hành</h1>");
     expect(html).toContain('aria-label="Xuất báo cáo"');
     expect(html).not.toContain(pendingMarkerLabel("Xuất báo cáo PDF, XLSX, PPTX"));
-    expect(html).toContain(pendingMarkerLabel("Chế độ trình chiếu phòng họp"));
+    expect(html).toContain('aria-label="Chế độ trình chiếu phòng họp"');
+    expect(html).not.toContain(pendingMarkerLabel("Chế độ trình chiếu phòng họp"));
     expect(html).not.toContain("Tính lại ngay");
     expect(html).not.toContain("số liệu cũ");
     expect(html).not.toContain("cũ hơn 10 phút");

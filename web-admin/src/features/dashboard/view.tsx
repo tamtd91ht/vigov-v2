@@ -74,6 +74,8 @@ import type { DashboardExport, ExportBlock, ExportCommune, ExportFigure } from "
 import { DashboardHeaderActions } from "./header-actions";
 import type { ExportSource } from "./header-actions";
 import { PENDING_BLOCK_METRICS, pendingPart } from "./labels";
+import { PresentationContext, PresentationFrame } from "./presentation";
+import type { PresentationControl, PresentationState } from "./presentation";
 import {
   comparisonNote,
   formatDateTime,
@@ -92,7 +94,7 @@ import type { PeriodKind, PeriodWindows } from "./period";
  *
  * LAYOUT (owner, 05/10/2026 — the prototype's `DashboardWorkspace` frame, new UI language of
  * ADR 0068 §"Sửa đổi 05/10/2026 (lần 2)"):
- *   header  title · "Kỳ …: … · tính đến …" · period buttons · PDF/XLSX/PPTX (live) · Trình chiếu
+ *   header  title · "Kỳ …: … · tính đến …" · period buttons · PDF/XLSX/PPTX · Trình chiếu (both live)
  *   body    ONE grid — 1 column, 2 from 1024px, 3 from 1536px — of six blocks in the prototype's
  *           order (Nhiệm vụ · Văn bản & Đơn thư · Giải ngân ngân sách · Thu – Chi ngân sách ·
  *           Phản ánh người dân · Kinh tế & Tài nguyên), then "Cần xử lý ngay" as the 7th cell.
@@ -366,6 +368,19 @@ export type BlockLayout = "dashboard" | "report";
 
 const BlockLayoutContext = createContext<BlockLayout>("dashboard");
 
+const NOT_PRESENTING: PresentationState = { on: false, current: null };
+
+/**
+ * Trình chiếu as the blocks see it (`presentation.tsx`). A context READ, not state: this file stays
+ * props-only. `layout="report"` always reads "off" — `/bao-cao` has no Trình chiếu (spec 13 §1), and a
+ * report grid rendered under a presenting frame by mistake must still not take its type sizes.
+ */
+function usePresenting(): PresentationState {
+  const layout = useContext(BlockLayoutContext);
+  const presentation = useContext(PresentationContext);
+  return layout === "dashboard" && presentation.on ? presentation : NOT_PRESENTING;
+}
+
 /**
  * One block of the grid — the prototype's `Panel`: a white card (no shadow — ADR 0068 lần 2 #4) with a
  * small upper-case muted title row and its body under it. `count` given and above 0 = the alarm
@@ -390,20 +405,33 @@ function Panel({
   children: ReactNode;
 }) {
   const layout = useContext(BlockLayoutContext);
+  const presenting = usePresenting();
   const alarm = count !== undefined && count > 0;
+  const current = presenting.current === blockKey;
   return (
     <Card
       as="section"
       aria-label={title}
       data-block={blockKey}
+      // Trình chiếu: each block is a keyboard stop (`presentation.tsx` moves focus here). The ring, not
+      // the browser outline, marks the current one — it stays while Tab walks the block's own tiles.
+      tabIndex={presenting.on ? -1 : undefined}
+      data-current={current ? "" : undefined}
       className={cn(
         "flex min-h-0 flex-col",
-        layout === "report" ? "p-4" : "p-3.5",
+        layout === "report" ? "p-4" : presenting.on ? "p-5" : "p-3.5",
         alarm && "border border-danger-200",
+        presenting.on && "scroll-m-6 outline-none",
+        current && "ring-2 ring-brand-500 ring-offset-2 ring-offset-canvas",
       )}
     >
-      <div className={cn("flex shrink-0 items-center gap-2", layout === "report" ? "mb-3" : "mb-2")}>
-        <h2 className="m-0 min-w-0 text-[11.5px] leading-snug font-bold tracking-wide text-ink-500 uppercase">
+      <div className={cn("flex shrink-0 items-center gap-2", layout === "report" || presenting.on ? "mb-3" : "mb-2")}>
+        <h2
+          className={cn(
+            "m-0 min-w-0 leading-snug font-bold tracking-wide text-ink-500 uppercase",
+            presenting.on ? "text-[15px]" : "text-[11.5px]",
+          )}
+        >
           {title}
         </h2>
         {alarm && (
@@ -424,15 +452,18 @@ function Panel({
  * The tiles of a block. Tổng quan: 2 columns, 3 when the block has more than four figures AND its card
  * is wide enough (`@md` = 28rem of card body) — three columns of a 288px phone card would cut
  * "91,30%" in half, so the prototype's rule ("3 when > 4") holds wherever it fits. Báo cáo: always 2.
+ * Trình chiếu: always 2 — the type is half as large again, and three columns of it run "108,1%" into
+ * "4.317 tỷ" as one number that does not exist (prototype `DashboardWorkspace.tsx:226-236`).
  */
 function TileGrid({ count, children }: { count: number; children: ReactNode }) {
   const layout = useContext(BlockLayoutContext);
+  const presenting = usePresenting().on;
   return (
     <ul
       className={cn(
         "m-0 grid list-none grid-cols-2 p-0",
-        layout === "report" ? "gap-3" : "gap-x-4 gap-y-2",
-        layout === "dashboard" && count > 4 && "@md:grid-cols-3",
+        layout === "report" ? "gap-3" : presenting ? "gap-x-5 gap-y-3" : "gap-x-4 gap-y-2",
+        layout === "dashboard" && !presenting && count > 4 && "@md:grid-cols-3",
       )}
     >
       {children}
@@ -487,11 +518,30 @@ function FigureValue({
  * with no percentage ("Kỳ trước: 0") has no arrow — there is no direction to point.
  */
 function ComparisonCaption({ figure }: { figure: Figure }) {
+  const presenting = usePresenting().on;
   if (figure.comparison === null) return null;
+  // Trình chiếu drops the lines with NOTHING TO COMPARE — "Kỳ trước: —" and "Kỳ trước: 0", the only
+  // ones with no movement (`comparisonLine`, figures.ts). On a projector a dozen of them only thin out
+  // the figures (prototype `MetricTile.tsx:81-87`). A failed previous call is still said by
+  // `PairErrors`; a real change, "không đổi" included, stays.
+  if (presenting && (figure.movement ?? "none") === "none") return null;
   const Icon = MOVEMENT_ICON[figure.movement ?? "none"];
   return (
-    <span className={cn("mt-1 flex items-center gap-1 text-[11px] leading-snug", TONE_TEXT[figure.comparison.tone])}>
-      {Icon !== null && <Icon aria-hidden="true" focusable="false" strokeWidth={2} className="size-3 shrink-0" />}
+    <span
+      className={cn(
+        "mt-1 flex items-center gap-1 leading-snug",
+        presenting ? "text-[13px]" : "text-[11px]",
+        TONE_TEXT[figure.comparison.tone],
+      )}
+    >
+      {Icon !== null && (
+        <Icon
+          aria-hidden="true"
+          focusable="false"
+          strokeWidth={2}
+          className={cn("shrink-0", presenting ? "size-3.5" : "size-3")}
+        />
+      )}
       <span className="min-w-0">{figure.comparison.text}</span>
     </span>
   );
@@ -578,8 +628,22 @@ const TILE_BODY = "block h-full min-w-0 overflow-hidden rounded-[10px] px-1 py-0
  */
 const VALUE_TEXT = "text-[clamp(16px,12cqi,26px)] leading-tight font-bold tabular-nums";
 
+/**
+ * Trình chiếu's value size: the SAME 12cqi of the tile, with a higher floor and ceiling. Not the
+ * prototype's `clamp(24px,2.1vw,40px)`: a window-based size is exactly what outran the tile before
+ * (412409a1). The figure grows because the tile does — always 2 tiles across here — up to 40px.
+ */
+const VALUE_TEXT_PRESENTING = "text-[clamp(18px,12cqi,40px)] leading-[1.1] font-bold tabular-nums";
+
 /** The label under the value, then the extra lines (note, delta) under it. */
 const LABEL_TEXT = "mt-0.5 block text-[12px] leading-snug text-ink-500";
+const LABEL_TEXT_PRESENTING = "mt-0.5 block text-[15px] leading-snug text-ink-500";
+
+function tileText(presenting: boolean): { value: string; label: string; note: string } {
+  return presenting
+    ? { value: VALUE_TEXT_PRESENTING, label: LABEL_TEXT_PRESENTING, note: "text-[13px]" }
+    : { value: VALUE_TEXT, label: LABEL_TEXT, note: "text-[11px]" };
+}
 
 /**
  * One figure, in the order of the prototype's `MetricTile`: VALUE (large, bold) · label · note ·
@@ -600,6 +664,7 @@ function FigureTile({ figure, value }: { figure: Figure; value?: ReactNode }) {
   const valueId = `${figure.id}-value`;
   const alert = figure.alert === true;
   const sentence = figure.sentence === true;
+  const text = tileText(usePresenting().on);
   return (
     <li className={cn("@container min-w-0", sentence && "col-span-full")}>
       <Link
@@ -617,7 +682,7 @@ function FigureTile({ figure, value }: { figure: Figure; value?: ReactNode }) {
         <span
           className={cn(
             "block",
-            sentence ? "text-[13px] leading-snug font-medium" : VALUE_TEXT,
+            sentence ? "text-[13px] leading-snug font-medium" : text.value,
             // A figure never wraps — a sum is shortened (`compactDong`) so it fits instead. Only a
             // server SENTENCE wraps.
             !sentence && "whitespace-nowrap",
@@ -632,9 +697,9 @@ function FigureTile({ figure, value }: { figure: Figure; value?: ReactNode }) {
             <FigureValue id={valueId} text={figure.display} sentence={sentence} />
           )}
         </span>
-        <span className={LABEL_TEXT}>{figure.label}</span>
+        <span className={text.label}>{figure.label}</span>
         {figure.note !== undefined && (
-          <span className="mt-1 block text-[11px] leading-snug text-ink-500">{figure.note}</span>
+          <span className={cn("mt-1 block leading-snug text-ink-500", text.note)}>{figure.note}</span>
         )}
         <ComparisonCaption figure={figure} />
       </Link>
@@ -644,13 +709,14 @@ function FigureTile({ figure, value }: { figure: Figure; value?: ReactNode }) {
 
 /** A figure with no source data in wave 1: "Chưa có dữ liệu", never a 0, never a link. */
 function NoSourceTile({ label }: { label: string }) {
+  const text = tileText(usePresenting().on);
   return (
     <li className={TILE_BODY} title={NO_SOURCE_DATA}>
       <span className="flex min-h-[26px] items-center gap-1 text-[13px] text-ink-500">
         <Database aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-3.5 shrink-0" />
         {NO_DATA_CAPTION}
       </span>
-      <span className={LABEL_TEXT}>{label}</span>
+      <span className={text.label}>{label}</span>
     </li>
   );
 }
@@ -661,22 +727,26 @@ function NoSourceTile({ label }: { label: string }) {
  * the "?" is the block's (a whole unbuilt block has one "?" in its header, not one per tile).
  */
 function PendingTile({ label, info }: { label: string; info?: PendingFeatureInfo }) {
+  const text = tileText(usePresenting().on);
   return (
     <li className={TILE_BODY} data-pending="">
       <span className="flex items-center gap-2">
-        <span aria-hidden="true" className={cn(VALUE_TEXT, "text-ink-400")}>
+        <span aria-hidden="true" className={cn(text.value, "text-ink-400")}>
           —
         </span>
         <span className="sr-only">{PENDING_HOVER_TEXT}</span>
         {info !== undefined && <PendingMarker info={info} />}
       </span>
-      <span className={LABEL_TEXT}>{label}</span>
+      <span className={text.label}>{label}</span>
     </li>
   );
 }
 
 function SmallNote({ children }: { children: ReactNode }) {
-  return <p className="m-0 text-xs leading-relaxed text-ink-500">{children}</p>;
+  const presenting = usePresenting().on;
+  return (
+    <p className={cn("m-0 leading-relaxed text-ink-500", presenting ? "text-sm" : "text-xs")}>{children}</p>
+  );
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
@@ -1108,6 +1178,8 @@ const URGENT_ROW_FRAME = "block rounded-[9px] border border-line px-2.5 py-1.5";
  * whole register would promise a record it does not open.
  */
 function UrgentRowView({ row, category }: { row: UrgentRow; category: string | null }) {
+  // Trình chiếu: the prototype's 15px / 13px rows (`DashboardWorkspace.tsx:301`).
+  const presenting = usePresenting().on;
   const body = (
     <span className="flex items-start gap-2">
       <AlertTriangle
@@ -1117,10 +1189,17 @@ function UrgentRowView({ row, category }: { row: UrgentRow; category: string | n
         className={cn("mt-0.5 size-3.5 shrink-0", row.critical ? "text-danger-600" : "text-warning-600")}
       />
       <span className="block min-w-0 flex-1">
-        <span className="line-clamp-1 text-[12.5px] font-medium text-ink-900">
+        <span
+          className={cn("line-clamp-1 font-medium text-ink-900", presenting ? "text-[15px]" : "text-[12.5px]")}
+        >
           {MODULE_LABEL[row.module]} <span className="tabular-nums">{row.code}</span>
         </span>
-        <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-ink-500">
+        <span
+          className={cn(
+            "flex flex-wrap items-center gap-x-2 gap-y-0.5 text-ink-500",
+            presenting ? "text-[13px]" : "text-[11px]",
+          )}
+        >
           <span
             className={cn(
               "rounded border px-1.5",
@@ -1247,8 +1326,9 @@ export const DASHBOARD_TITLE = "Tổng quan điều hành";
 
 /**
  * The page header, prototype frame: title; "Kỳ …: … · tính đến …" under it; on the right the period
- * buttons, then PDF/XLSX/PPTX (built 06/10/2026, `export-actions.tsx`) and the unbuilt Trình chiếu
- * (disabled, "?").
+ * buttons, then PDF/XLSX/PPTX (built 06/10/2026, `export-actions.tsx`) and the Trình chiếu toggle
+ * (built 07/10/2026, `presentation.tsx`). In Trình chiếu the header stays — inside the overlay, with
+ * the toggle that leaves it — and its title grows to the prototype's 28px.
  *
  * `context` absent = the account cannot read the page (`report.read`), or its session is still being
  * read: the title and the disabled actions only — a disabled control with no data behind it reveals
@@ -1265,14 +1345,17 @@ export function DashboardHeader({
     onPeriodChange: (k: PeriodKind) => void;
     /** absent = no export possible (no commune configuration passed) — the buttons stay disabled */
     exportSource?: ExportSource;
+    /** absent = the toggle stays disabled */
+    presentation?: PresentationControl;
   };
 }) {
+  const presenting = usePresenting().on;
   return (
     <PageHeader
       icon={LayoutDashboard}
       title={DASHBOARD_TITLE}
       // The prototype's header and grid sit `gap-3` apart (`DashboardWorkspace` "flex flex-col gap-3").
-      className="mb-3"
+      className={cn("mb-3", presenting && "[&_h1]:text-[28px]")}
       subtitle={
         context === undefined ? undefined : (
           <span className="inline-flex items-center gap-1.5">
@@ -1286,7 +1369,7 @@ export function DashboardHeader({
           {context !== undefined && (
             <PeriodPicker kind={context.windows.kind} onChange={context.onPeriodChange} />
           )}
-          <DashboardHeaderActions exportSource={context?.exportSource} />
+          <DashboardHeaderActions exportSource={context?.exportSource} presentation={context?.presentation} />
         </>
       }
     />
@@ -1324,28 +1407,34 @@ function exportSourceOf(data: DashboardData, visible: BlockVisibility, access: E
  *
  * Under the grid, ONE line says what "kỳ trước" means — it explains every comparison caption of
  * every block above, so it belongs to none of them. Drawn only when a compared block is shown.
+ *
+ * `presentation` = Trình chiếu's on/off, owned by the hook half; the whole body sits in its frame
+ * (`presentation.tsx`) so header, grid and note go full-screen together. Absent = toggle disabled.
  */
 export function DashboardView({
   data,
   visible,
   onPeriodChange,
   exportAccess,
+  presentation,
 }: {
   data: DashboardData;
   visible: BlockVisibility;
   onPeriodChange: (k: PeriodKind) => void;
   exportAccess?: ExportAccess;
+  presentation?: PresentationControl;
 }) {
   const reload = () => onPeriodChange(data.windows.kind);
   const compared = visible.tasks || visible.incomingDocuments || visible.citizenReports;
   return (
-    <>
+    <PresentationFrame control={presentation}>
       <DashboardHeader
         context={{
           windows: data.windows,
           fetchedAt: data.fetchedAt,
           onPeriodChange,
           exportSource: exportAccess === undefined ? undefined : exportSourceOf(data, visible, exportAccess),
+          presentation,
         }}
       />
       <DashboardBlocks data={data} visible={visible} onReload={reload} />
@@ -1355,7 +1444,7 @@ export function DashboardView({
           <span className="min-w-0">{comparisonNote(data.windows)}</span>
         </p>
       )}
-    </>
+    </PresentationFrame>
   );
 }
 

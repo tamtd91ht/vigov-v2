@@ -1,10 +1,7 @@
-import { Maximize2 } from "lucide-react";
-
-import { PendingButton } from "@/components/ui/pending-feature";
-
 import { DashboardExportActions } from "./export-actions";
 import type { ExportSource } from "./export-actions";
-import { pendingPart } from "./labels";
+import { PresentationToggle } from "./presentation";
+import type { PresentationControl } from "./presentation";
 
 export type { ExportSource };
 
@@ -16,26 +13,27 @@ export type { ExportSource };
  * `exportSource` absent = the gate is closed, the session still being read, or no commune
  * configuration was passed — the three buttons are drawn disabled, which reveals nothing.
  *
- * "Trình chiếu" stays Phase 2: disabled with its "?" (`labels.ts`).
+ * "TRÌNH CHIẾU" IS BUILT TOO (user decision 07/10/2026, same override): a live toggle
+ * (`presentation.tsx`). `presentation` absent = the gate is closed — the toggle is drawn disabled,
+ * as the export buttons are, and there is no page behind it to present.
  *
  * NOT HERE, ON PURPOSE: `⟳ Tính lại ngay` — the owner decided not to build it (ADR 0053), and a
  * placeholder for it would announce a feature the authority refused.
  *
  * `/bao-cao`'s export is NOT this component: it is still unbuilt there and has its own pending row
- * (`features/report/export-pending-actions.tsx`).
+ * (`features/report/export-pending-actions.tsx`); `/bao-cao` has no Trình chiếu (spec 13 §1).
  */
-export function DashboardHeaderActions({ exportSource }: { exportSource?: ExportSource }) {
+export function DashboardHeaderActions({
+  exportSource,
+  presentation,
+}: {
+  exportSource?: ExportSource;
+  presentation?: PresentationControl;
+}) {
   return (
     <>
       <DashboardExportActions source={exportSource} />
-      <PendingButton
-        info={pendingPart("Chế độ trình chiếu phòng họp")}
-        phase2
-        size="sm"
-        icon={<Maximize2 aria-hidden="true" focusable="false" />}
-      >
-        Trình chiếu
-      </PendingButton>
+      <PresentationToggle control={presentation} />
     </>
   );
 }

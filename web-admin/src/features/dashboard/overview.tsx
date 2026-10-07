@@ -123,6 +123,9 @@ function DashboardOverview() {
   // The commune printed on the export files: the runtime configuration the server resolved from
   // `Host` (rule 1 inv. 10) — the same value the page header prints. Never a constant.
   const commune = useCauHinhXa();
+  // Trình chiếu: page state, never the URL — a drill-down navigates away and the page comes back
+  // normal (`presentation.tsx`).
+  const [presenting, setPresenting] = useState(false);
 
   return (
     <DashboardView
@@ -133,6 +136,7 @@ function DashboardOverview() {
         commune: { displayName: commune.displayName, parentAuthority: commune.parentAuthority },
         canExport: coQuyen(permissions, REPORT_EXPORT_PERMISSION),
       }}
+      presentation={{ on: presenting, onChange: setPresenting }}
     />
   );
 }

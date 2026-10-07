@@ -40,12 +40,7 @@ export const PHAN_CHUA_DUNG: readonly PendingFeatureInfo[] = [
   },
   // "Xuất báo cáo PDF, XLSX, PPTX" was built on 06/10/2026 (`export-actions.tsx`) and left this list;
   // `/bao-cao`'s still-unbuilt export keeps its own entry in `features/report/labels.ts`.
-  {
-    ten: "Chế độ trình chiếu phòng họp",
-    viSao:
-      "Hiện màn Tổng quan toàn màn hình cho phòng họp giao ban: ẩn thanh bên và đầu trang, chữ lớn, " +
-      "nền tối, chuyển khối bằng phím.",
-  },
+  // "Chế độ trình chiếu phòng họp" was built on 07/10/2026 (`presentation.tsx`) and left it too.
 ];
 
 /**

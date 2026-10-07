@@ -262,6 +262,54 @@
   }
 
   /*
+   * TRÌNH CHIẾU — Tổng quan's meeting-room overlay (`features/dashboard/presentation.tsx`, user decision
+   * 07/10/2026: "nền tối"). The dark tokens above, SCOPED TO THE OVERLAY ELEMENT: the app-wide dark
+   * theme stays off (owner 02/10/2026) and nothing here sets `data-theme`. Utilities read these through
+   * `@theme inline`, so everything drawn inside the overlay re-themes; portals on `<body>` (a "?"
+   * description) stay light.
+   *
+   * THE DARK SET ALONE IS NOT ENOUGH HERE, so a few roles get their own dark values, each measured
+   * (WCAG 2.x) against `--surface` #162033, the card behind every figure:
+   *   status text  the light reds/greens/ambers are 2.6–2.9:1 on it. #ff8a80 7.14 (6.61 on its tint) ·
+   *                #7ee2a0 10.30 (8.84) · #f6b955 9.30 (7.90)
+   *   alarm frame  `--red-200` #c4606a 4.06 (a non-text border, 3:1 needed)
+   *   brand 600    the dark set's #4c8fe6 carries white at 3.29 — the selected period button and the
+   *                pressed toggle are white text on it. #2f6fc4: white 5.01; hover #275a9f 6.89
+   *   brand 500    focus ring / current block ring #38bdf8: 7.61 on the card, 8.44 on `--bg`
+   *   accent       hover tints = the dark brand tints; `--accent-700` (link text) #7cc8f8 8.90
+   *   subtle fills navy 5% vanishes on navy: the secondary buttons get light 8% / 16% (text 10.88)
+   */
+  [data-presentation="on"] {
+    --bg: #0e1626;
+    --surface: #162033;
+    --surface-muted: #1a2639;
+    --line: #24314a;
+    --line-strong: #33425e;
+    --ink-900: #e6edf7;
+    --ink-700: #c3cfdf;
+    --ink-500: #aebbcc;
+    --ink-400: #8ea0b8;
+    --brand-50: #16294a;
+    --brand-100: #1d3560;
+    --brand-600: #2f6fc4;
+    --brand-700: #275a9f;
+    --brand-500: #38bdf8;
+    --accent-50: #16294a;
+    --accent-100: #1d3560;
+    --accent-700: #7cc8f8;
+    --surface-subtle: rgba(230, 237, 247, 0.08);
+    --surface-subtle-2: rgba(230, 237, 247, 0.16);
+    --red-600: #ff8a80;
+    --red-200: #c4606a;
+    --red-50: #3b1d27;
+    --green-600: #7ee2a0;
+    --green-50: #12321f;
+    --amber-600: #f6b955;
+    --amber-50: #3a2a10;
+    color-scheme: dark;
+  }
+
+  /*
    * The font variable, set by the class `src/app/layout.tsx` puts on `<html>`. The faces come from
    * `@fontsource/roboto` (guide §3, owner decision 05/10/2026), bundled and served from this app's
    * own host: no request leaves for a font CDN, so a commune's staff page loads the same on a
