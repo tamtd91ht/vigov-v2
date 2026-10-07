@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1.7
 #
 # Ảnh của web quản trị xã. Tệp này thuộc về ứng dụng này.
 #

@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1.7
 #
 # Ảnh của bàn điều khiển vận hành ViHAT (khu vận hành, ADR 0048). Tệp này thuộc về ứng dụng này.
 #
