@@ -80,9 +80,9 @@ describe("G4a — tooltip with the exact amounts of one month", () => {
     hover(hit);
     const tip = tooltip(el)!;
     expect(tip).not.toBeNull();
-    expect(tip.textContent).toContain("Tháng 5");
-    expect(tip.textContent).toContain("Kế hoạch luỹ kế: 50.000.000 đ");
-    expect(tip.textContent).toContain("Thực hiện luỹ kế: 10.000.000 đ");
+    expect(tip.textContent).toContain("T5");
+    expect(tip.textContent).toContain("Kế hoạch: 50.000.000 đ");
+    expect(tip.textContent).toContain("Thực hiện: 10.000.000 đ");
     // The month being read is marked on the chart too.
     expect(el.querySelectorAll("[data-active-month]")).toHaveLength(1);
 
@@ -93,7 +93,7 @@ describe("G4a — tooltip with the exact amounts of one month", () => {
   it("a month not yet begun says so — never `0 đ` for the actual", () => {
     const el = mount(<CumulativeChart points={POINTS} caption="c" emptyText="trống" />);
     hover(el.querySelector('[data-chart-hit="6"]')!);
-    expect(tooltip(el)!.textContent).toContain("Thực hiện luỹ kế: Chưa đến tháng này");
+    expect(tooltip(el)!.textContent).toContain("Thực hiện: Chưa đến tháng này");
   });
 
   it("keyboard: focus shows the first month, arrows / Home / End move, Escape and blur hide", () => {
@@ -102,24 +102,24 @@ describe("G4a — tooltip with the exact amounts of one month", () => {
     expect(target.tabIndex).toBe(0);
 
     act(() => target.focus());
-    expect(tooltip(el)!.textContent).toContain("Tháng 4");
-    expect(tooltip(el)!.textContent).toContain("Kế hoạch luỹ kế: 25.000.000 đ");
+    expect(tooltip(el)!.textContent).toContain("T4");
+    expect(tooltip(el)!.textContent).toContain("Kế hoạch: 25.000.000 đ");
 
     press(target, "ArrowRight");
-    expect(tooltip(el)!.textContent).toContain("Tháng 5");
+    expect(tooltip(el)!.textContent).toContain("T5");
     press(target, "End");
-    expect(tooltip(el)!.textContent).toContain("Tháng 6");
+    expect(tooltip(el)!.textContent).toContain("T6");
     press(target, "ArrowRight"); // stays on the last month, never wraps to an empty reading
-    expect(tooltip(el)!.textContent).toContain("Tháng 6");
+    expect(tooltip(el)!.textContent).toContain("T6");
     press(target, "Home");
-    expect(tooltip(el)!.textContent).toContain("Tháng 4");
+    expect(tooltip(el)!.textContent).toContain("T4");
     press(target, "ArrowLeft");
-    expect(tooltip(el)!.textContent).toContain("Tháng 4");
+    expect(tooltip(el)!.textContent).toContain("T4");
 
     press(target, "Escape");
     expect(tooltip(el)).toBeNull();
     press(target, "ArrowRight");
-    expect(tooltip(el)!.textContent).toContain("Tháng 5");
+    expect(tooltip(el)!.textContent).toContain("T5");
 
     act(() => target.blur());
     expect(tooltip(el)).toBeNull();
@@ -130,6 +130,32 @@ describe("G4a — tooltip with the exact amounts of one month", () => {
     expect(focusTarget(el).getAttribute("aria-label")).toContain("Luỹ kế của dự án");
     expect(el.querySelector("table caption")?.textContent).toBe("Luỹ kế của dự án");
     expect(el.querySelectorAll("table tbody tr")).toHaveLength(3);
+  });
+});
+
+describe("spec 02 §4 look (ADR 0068 lần 6 #11: SVG kept, restyled)", () => {
+  it("drawn in pixels: the SVG's coordinate width IS its width, so an 11px tick stays 11px at any card width", () => {
+    const el = mount(<CumulativeChart points={POINTS} caption="c" emptyText="trống" />);
+    const svg = el.querySelector("svg[aria-hidden]")!;
+    const width = svg.getAttribute("width");
+    expect(svg.getAttribute("viewBox")).toBe(`0 0 ${width} 260`);
+    expect(svg.getAttribute("height")).toBe("260");
+    expect(svg.getAttribute("class")).not.toContain("w-full");
+    for (const t of svg.querySelectorAll("text:not([data-expected-end-label])")) {
+      expect(t.getAttribute("font-size")).toBe("11");
+    }
+  });
+
+  it("dashed `3 3` grid, plan dashed `5 4` 2px, actual 2.5px with r=2.5 dots", () => {
+    const el = mount(<CumulativeChart points={POINTS} caption="c" emptyText="trống" />);
+    const grid = [...el.querySelectorAll("line[data-grid]")];
+    expect(grid.length).toBeGreaterThan(0);
+    expect(grid.every((l) => l.getAttribute("stroke-dasharray") === "3 3")).toBe(true);
+    const plan = el.querySelector("polyline[data-line=plan]")!;
+    expect(plan.getAttribute("stroke-dasharray")).toBe("5 4");
+    expect(plan.getAttribute("stroke-width")).toBe("2");
+    expect(el.querySelector("polyline[data-line=actual]")!.getAttribute("stroke-width")).toBe("2.5");
+    expect([...el.querySelectorAll("circle[data-dot]")].every((c) => c.getAttribute("r") === "2.5")).toBe(true);
   });
 });
 

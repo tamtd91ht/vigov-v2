@@ -1,16 +1,14 @@
 "use client";
 
-import { ArrowDown, CircleAlert, CircleCheck, FolderKanban, Search, SearchX, Trash2, TrendingDown } from "lucide-react";
+import { ArrowDown, CircleAlert, CircleCheck, Search, Trash2, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
-import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
-import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
-import { Field } from "@/components/ui/field";
-import { SkeletonRows } from "@/components/ui/skeleton";
+import { controlClass } from "@/components/ui/field";
+import { Skeleton } from "@/components/ui/skeleton";
 import { getProjectSummary, layDanhSachDuAn } from "@/lib/api/du-an";
 import type { KetQua } from "@/lib/api/goi";
 import type {
@@ -24,13 +22,12 @@ import type {
 import { cn } from "@/lib/cn";
 
 import {
+  delayPointsLabel,
   hangMucDuAn,
-  lopHangMuc,
   nhanHangMuc,
   nhanNamRong,
   nhanNgay,
   nhanTien,
-  nhanTienDo,
   nhanTyLeGiaiNgan,
   shortDongLabel,
   tienDoDuAn,
@@ -45,11 +42,22 @@ import { sortProjects, type ProjectSort } from "./project-sort";
 import { Glyph } from "./project-ui";
 import { PROGRESS_BAR_CLASS, PROGRESS_TEXT_CLASS, progressTone } from "./progress-tone";
 import { ScopeNotice } from "./scope-notice";
+import {
+  CHECKBOX_CLASS,
+  CHECKBOX_LABEL_CLASS,
+  PANEL_CLASS,
+  SELECT_CLASS,
+  TABLE_CLASS,
+  TD_CLASS,
+  TH_CLASS,
+  TR_CLASS,
+  TRACK_CLASS,
+} from "./spec-classes";
 
 /**
- * The register of the Giải ngân screen, in the prototype's order (`BudgetWorkspace.tsx:185-407`, ADR
- * 0068 lần 5): scope banner · four KPI cards · cumulative chart · per-category table · per-source
- * block · ONE filter row · the project table.
+ * The register of the Giải ngân screen, in the prototype's order (`BudgetWorkspace.tsx:185-407`, spec
+ * 02, ADR 0068 lần 6): scope notice · four KPI cards · cumulative chart · per-category table ·
+ * per-source block · ONE filter row · the project table.
  *
  * THE YEAR BLOCK (§3 cards, §4 chart, §5 table) READS `GET /api/v1/investment-project-summary`
  * (`disbursement-overview.tsx`), separately from the list and UNFILTERED: its figures are the year's,
@@ -62,11 +70,9 @@ import { ScopeNotice } from "./scope-notice";
  * at-risk count stays a "?" (`pending-parts.tsx`): no rule defines it. `Đơn vị / phụ trách` is names
  * resolved from identity's two catalogues, read once per mount (`project-people.ts`).
  *
- * COMING BACK FROM A PROJECT PAGE MOUNTS THIS SCREEN ANEW (a different App Router page), so the list
- * and the summary are read again — an issue recorded or resolved there shows here with no extra signal.
- *
  * `GỘP THEO HẠNG MỤC` (on by default, §7.1): group headers carry the SERVER's `by_category` totals, and
- * only while the rows under a header are that whole category — see `project-groups.ts`.
+ * only while the rows under a header are that whole category — see `project-groups.ts` (ADR 0068 lần 6
+ * #11 keeps this against the prototype's browser sum).
  *
  * THE SEARCH BOX FILTERS THE LIST ALREADY LOADED, and that is exact, not an approximation: the list
  * route returns the WHOLE year or refuses (`lib/api/du-an.ts`, no pagination), and the box only hides
@@ -224,17 +230,25 @@ export function BangDuAn({
       : undefined;
 
   /**
-   * A category chosen from the §5 table may be one the catalogue no longer lists (`in_catalogue:
-   * false`): it still gets an option, named as the table names it, so the select shows what filters
-   * the list instead of falling back to its first option.
+   * Category options = the summary's `by_category` rows that can filter (prototype
+   * `BudgetWorkspace.tsx:288-294`: the same source as the §5 table, so the two can never name a
+   * category differently). Until the summary is read, the catalogue stands in. A chosen category neither
+   * lists still gets an option, so the select shows what filters the list.
    */
+  const categoryOptions: { id: string; label: string }[] =
+    summary !== null
+      ? summary.by_category
+          .filter((r) => r.category_id !== undefined && r.category_id !== "")
+          .map((r) => ({ id: r.category_id!, label: categoryRowLabel(r) }))
+      : danhMuc.map((h) => ({ id: h.id, label: h.label }));
   const strayCategoryLabel =
-    hangMucId !== "" && !danhMuc.some((h) => h.id === hangMucId)
-      ? (() => {
-          const row = summary?.by_category.find((r) => r.category_id === hangMucId);
-          return row !== undefined ? categoryRowLabel(row) : nhanHangMuc(hangMucDuAn(hangMucId, danhMuc));
-        })()
+    hangMucId !== "" && !categoryOptions.some((o) => o.id === hangMucId)
+      ? nhanHangMuc(hangMucDuAn(hangMucId, danhMuc))
       : null;
+
+  /** The mandatory notice (§1), in the server's words — the summary's, else the list's. */
+  const scopeNotice =
+    summary?.scope_notice ?? (trangThai.pha === "xong" ? trangThai.duLieu.scope_notice : undefined);
 
   // From the WHOLE loaded list, not only the rows the search box leaves: a ticked row hidden by a
   // keyword is still selected, and the confirm dialog lists it by name before anything is sent.
@@ -266,11 +280,11 @@ export function BangDuAn({
 
   return (
     <section className="flex min-w-0 flex-col" aria-label="Theo dõi giải ngân theo dự án">
-      {/* BANNER BẮT BUỘC (§1) — câu của MÁY CHỦ (`scope_notice`, xã sửa được ở Lời hệ thống), nên nó
-          chỉ hiện khi danh sách đã về. Không câu dự phòng ở client: xem `scope-notice.tsx`. */}
-      {trangThai.pha === "xong" && (
+      {/* BANNER BẮT BUỘC (§1) — câu của MÁY CHỦ (`scope_notice`, xã sửa được ở Lời hệ thống). Không câu
+          dự phòng ở client: xem `scope-notice.tsx`. */}
+      {scopeNotice !== undefined && scopeNotice.trim() !== "" && (
         <div className="mb-5">
-          <ScopeNotice text={trangThai.duLieu.scope_notice} />
+          <ScopeNotice text={scopeNotice} />
         </div>
       )}
 
@@ -282,53 +296,60 @@ export function BangDuAn({
       />
       {fundingProgress}
 
-      {/* ONE filter row (prototype `:271-359`): search, category, the two checkboxes. The budget
-          year is in the page header, as the prototype puts it. */}
+      {/* ONE filter row (spec 02 §7): search, category, unit, the two checkboxes, the bulk bar. */}
       <div className="mb-4 flex min-w-0 flex-wrap items-center gap-2.5">
-        <Field label="Tìm dự án" hideLabel htmlFor="tim-du-an" icon={Search} grow="auto" className="w-64 max-w-full">
+        <div className="relative w-64 max-w-full">
+          <Search
+            aria-hidden="true"
+            focusable="false"
+            className="text-ink-muted pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
+          />
           <input
             id="tim-du-an"
             type="search"
+            aria-label="Tìm dự án"
             value={keyword}
             autoComplete="off"
             placeholder="Tìm theo tên hoặc mã dự án…"
+            className={cn(controlClass, "h-9 bg-white pl-9 text-[12.5px] md:text-[12.5px]")}
             onChange={(e) => setKeyword(e.target.value)}
           />
-        </Field>
+        </div>
 
-        <Field label="Lọc theo hạng mục" hideLabel htmlFor="loc-hang-muc" kind="select" grow="auto">
-          <select
-            id="loc-hang-muc"
-            value={hangMucId}
-            onChange={(e) => datHangMucId(e.target.value)}
-            // Danh mục rỗng là đường THÔNG THƯỜNG hôm nay (danh mục ship rỗng), nên ô chọn chỉ còn
-            // một lựa chọn "Tất cả" — tắt nó đi để không mời cán bộ bấm vào một ô không lọc được gì.
-            disabled={danhMuc.length === 0 && strayCategoryLabel === null}
-          >
-            <option value="">Tất cả hạng mục</option>
-            {danhMuc.map((h) => (
-              <option key={h.id} value={h.id}>
-                {h.label}
-              </option>
-            ))}
-            {strayCategoryLabel !== null && <option value={hangMucId}>{strayCategoryLabel}</option>}
-          </select>
-        </Field>
+        <select
+          id="loc-hang-muc"
+          aria-label="Lọc theo hạng mục"
+          className={SELECT_CLASS}
+          value={hangMucId}
+          onChange={(e) => datHangMucId(e.target.value)}
+        >
+          <option value="">Tất cả hạng mục</option>
+          {categoryOptions.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.label}
+            </option>
+          ))}
+          {strayCategoryLabel !== null && <option value={hangMucId}>{strayCategoryLabel}</option>}
+        </select>
 
         {/* Unit filter (G3), hidden while no loaded project names a unit — as the prototype hides it. It
             narrows the rows already loaded; the list route takes no unit parameter, and needs none: it
             returned the whole year. */}
         {unitOptions.length > 0 && (
-          <Field label="Lọc theo đơn vị phụ trách" hideLabel htmlFor="loc-don-vi" kind="select" grow="auto">
-            <select id="loc-don-vi" value={activeUnitId} onChange={(e) => setUnitId(e.target.value)}>
-              <option value="">Tất cả đơn vị phụ trách</option>
-              {unitOptions.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name}
-                </option>
-              ))}
-            </select>
-          </Field>
+          <select
+            id="loc-don-vi"
+            aria-label="Lọc theo đơn vị phụ trách"
+            className={SELECT_CLASS}
+            value={activeUnitId}
+            onChange={(e) => setUnitId(e.target.value)}
+          >
+            <option value="">Tất cả đơn vị phụ trách</option>
+            {unitOptions.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </select>
         )}
 
         <FilterCheckbox id="loc-chi-du-an-cham" checked={delayedOnly} onChange={setDelayedOnly}>
@@ -342,12 +363,13 @@ export function BangDuAn({
             (`:343-358`): after ticking rows the eye is on the table, not at the foot of the page. */}
         {canDelete && selectedRows.length > 0 && (
           <div className="ml-auto flex items-center gap-2" data-bulk-bar="">
-            <span className="text-[13px] text-ink-500">{selectedProjectsLabel(selectedRows.length)}</span>
+            <span className="text-ink-muted text-[12px]">{selectedProjectsLabel(selectedRows.length)}</span>
             <Button
               type="button"
-              variant="danger"
+              variant="outline"
               size="sm"
-              icon={<Glyph icon={Trash2} />}
+              className="text-danger hover:not-disabled:text-danger"
+              icon={<Glyph icon={Trash2} className="size-3.5" />}
               aria-haspopup="dialog"
               onClick={() =>
                 setBulkRows(
@@ -362,19 +384,19 @@ export function BangDuAn({
       </div>
 
       {trangThai.pha === "dangTai" && (
-        // FIRST LOAD (spec §8b): the sentence stays the live region, read out as before; the eye
-        // gets row-shaped placeholders so the page does not jump when the list arrives.
-        <div className="rounded-card bg-surface">
+        // Spec 02 §8 "Loading": two `Skeleton h-28` in `space-y-3`; the sentence stays the live region.
+        <div className="flex flex-col gap-3">
           <p role="status" className="an-thi-giac">
             Đang tải danh sách dự án…
           </p>
-          <SkeletonRows />
+          <Skeleton className="h-28 w-full" />
+          <Skeleton className="h-28 w-full" />
         </div>
       )}
 
       {/* LỖI: hiện đúng `message` của máy chủ, không diễn giải và không rẽ nhánh theo `code`. */}
       {trangThai.pha === "loi" && (
-        <div className="rounded-card bg-surface">
+        <div className={PANEL_CLASS}>
           <ErrorState
             title="Chưa tải được danh sách dự án"
             message={<span role="alert">{trangThai.thongBao}</span>}
@@ -386,33 +408,19 @@ export function BangDuAn({
       {trangThai.pha === "xong" && shown !== null && (
         <>
           {trangThai.duLieu.items.length === 0 && delayedOnly ? (
-            // "No late project" is good news, not an empty year: never the `Thêm dự án` invitation.
-            <div className="rounded-card bg-surface">
-              <EmptyState
-                icon={SearchX}
-                tone="neutral"
-                title="Không có dự án nào đang chậm"
-                description="Bỏ chọn “Chỉ dự án chậm” để xem mọi dự án của năm."
-              />
-            </div>
+            // "No late project" is good news, not an empty year: never the `Thêm dự án` invitation
+            // (a state the prototype does not draw; kept by ADR 0068 lần 6 #11, in the spec's card).
+            <EmptyCard
+              title="Không có dự án nào đang chậm"
+              description="Bỏ chọn “Chỉ dự án chậm” để xem mọi dự án của năm."
+            />
           ) : trangThai.duLieu.items.length === 0 ? (
-            <div className="rounded-card bg-surface">
-              <EmptyState
-                icon={FolderKanban}
-                title="Chưa có dự án nào"
-                description={nhanNamRong(trangThai.duLieu.year)}
-                action={emptyAction ?? undefined}
-              />
-            </div>
+            <EmptyCard title="Chưa có dự án nào" description={nhanNamRong(trangThai.duLieu.year)} action={emptyAction} />
           ) : shown.items.length === 0 ? (
-            <div className="rounded-card bg-surface">
-              <EmptyState
-                icon={SearchX}
-                tone="neutral"
-                title="Không có dự án nào khớp từ khoá"
-                description="Thử tên hoặc mã dự án khác, hoặc xoá từ khoá để xem cả danh sách."
-              />
-            </div>
+            <EmptyCard
+              title="Không có dự án nào khớp từ khoá"
+              description="Thử tên hoặc mã dự án khác, hoặc xoá từ khoá để xem cả danh sách."
+            />
           ) : (
             <BangDanhSach
               duLieu={shown}
@@ -428,7 +436,6 @@ export function BangDuAn({
               onOpenProject={(id) => router.push(projectPath(id))}
             />
           )}
-          {/* The delay threshold the server applied is in the third KPI card's sub-line (prototype). */}
         </>
       )}
 
@@ -450,7 +457,18 @@ export function BangDuAn({
 
 const EMPTY_IDS: ReadonlySet<string> = new Set();
 
-/** A live §7.1 checkbox, same box and spacing as the "?" ones of `pending-parts.tsx`. */
+/** Spec 02 §8 "Rỗng": a white card, the 14px title, one 12.5px line, the action under it. */
+function EmptyCard({ title, description, action }: { title: string; description: string; action?: ReactNode }) {
+  return (
+    <div className="border-line shadow-card rounded-card border border-solid bg-white p-10 text-center" data-empty-card="">
+      <p className="text-navy m-0 text-[14px] font-semibold">{title}</p>
+      <p className="text-ink-muted m-0 mt-1.5 text-[12.5px]">{description}</p>
+      {action !== undefined && action !== null && <div className="mt-4 flex justify-center">{action}</div>}
+    </div>
+  );
+}
+
+/** A live §7.1 checkbox: spec 00 §4 "Checkbox native", the label wrapping the box. */
 function FilterCheckbox({
   id,
   checked,
@@ -463,12 +481,10 @@ function FilterCheckbox({
   children: ReactNode;
 }) {
   return (
-    <div className="flex h-10 items-center gap-2">
-      <input id={id} type="checkbox" className="size-4" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-      <label htmlFor={id} className="text-sm text-ink-700">
-        {children}
-      </label>
-    </div>
+    <label htmlFor={id} className={CHECKBOX_LABEL_CLASS}>
+      <input id={id} type="checkbox" className={CHECKBOX_CLASS} checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      {children}
+    </label>
   );
 }
 
@@ -511,31 +527,29 @@ function matchKeyword(items: readonly finance_duAnRa[], keyword: string): financ
 }
 
 /**
- * Bảng dự án — prototype columns (`BudgetItemTable.tsx:191-216, 276-393`): Mã · Dự án · Đơn vị /
- * phụ trách · KH vốn năm · Đã giải ngân · Tiến độ · Nguồn vốn · Thời hạn giải ngân · Vướng mắc mới
- * nhất. Draws the rows in the order given (the server's code order, or the header sort the screen
- * applied — `project-sort.ts`) and drops none; inside each group too, when `groups` is passed — the
- * groups follow their first row (`project-groups.ts`).
+ * Bảng dự án — spec 02 §8 / prototype `BudgetItemTable.tsx`: Mã · Dự án · Đơn vị / phụ trách · KH vốn
+ * năm · Đã giải ngân · Tiến độ · Nguồn vốn · Thời hạn giải ngân · Vướng mắc mới nhất. Draws the rows in
+ * the order given (the server's code order, or the header sort the screen applied — `project-sort.ts`)
+ * and drops none; inside each group too, when `groups` is passed — the groups follow their first row
+ * (`project-groups.ts`). The `Nguồn vốn` header stays (spec 02 §8: the prototype forgot it).
  *
- * THE WHOLE ROW OPENS THE PROJECT (user decision 07/10/2026, prototype `BudgetItemTable.tsx:245-262`;
- * a deliberate departure from spec `06-giai-ngan.md:156` "Bấm tên"). The name stays a real `<Link>`:
- * the row is not focusable, so the keyboard and screen readers reach the project through the link.
- * The checkbox cell stops the click — a mis-click there must not navigate away from a selection.
+ * THE WHOLE ROW OPENS THE PROJECT (user decision 07/10/2026, prototype `BudgetItemTable.tsx:245-262`).
+ * The name stays a real `<Link>` (ADR 0068 lần 6 #11): the row is not focusable, so the keyboard and
+ * screen readers reach the project through the link. It is drawn as the prototype's plain bold name, no
+ * underline. The checkbox cell stops the click — a mis-click there must not navigate away from a
+ * selection.
  *
- * NO "CÒN LẠI" COLUMN, as in the prototype: the remainder is on the project page, and an over-plan
- * disbursement still shows here as a ratio above 100% — never clamped (spec §13 rule 2).
+ * MONEY SHORT IN `KH vốn năm` / `Đã giải ngân` ("7,5 tỷ", `shortDongLabel`) — spec 02 §8, as the
+ * prototype prints them. The full đồng stays in the cell's `title` and in visually-hidden text, and on
+ * the project page, which is where a figure is copied into a report.
  *
- * MONEY SHORT IN `KH vốn năm` / `Đã giải ngân` ("7,5 tỷ", `shortDongLabel`) — user decision 07/10/2026,
- * as the prototype prints them (`BudgetItemTable.tsx:306-311`). The full đồng stays in the cell's
- * `title` and in visually-hidden text, and on the project page, which is where a figure is copied
- * into a report. Group headers and the funding shortfall keep full đồng.
+ * THE DEADLINE IS NEVER RED (spec 02 §8 says red when passed): ADR 0077 #5.
  *
  * `year` lấy từ PHẢN HỒI chứ không từ trạng thái của ô chọn: một phản hồi không nói nó thuộc năm
  * nào thì không phân biệt được với phản hồi của năm khác (`du_an.go`, `danhSachDuAnRa.Year`).
  */
 export function BangDanhSach({
   duLieu,
-  danhMuc,
   selection,
   groups,
   people = PEOPLE_LOADING,
@@ -545,6 +559,7 @@ export function BangDanhSach({
   onOpenProject,
 }: {
   duLieu: finance_danhSachDuAnRa;
+  /** Kept for callers; the row no longer prints its category (spec 02 §8: no category sub-line). */
   danhMuc: readonly finance_hangMucRa[];
   /** Checkbox column + select-all; only passed for an account holding `budget.update`. */
   selection?: RowSelection;
@@ -569,15 +584,18 @@ export function BangDanhSach({
 
   function renderRow(d: finance_duAnRa) {
     const tienDo = tienDoDuAn(d.delay_score, d.is_delayed);
-    const hangMuc = hangMucDuAn(d.category_id, danhMuc);
     const late = tienDo.loai === "cham";
     return (
-      // Red left edge for a project the SERVER flagged late (prototype `:252-254`): the eye
-      // scanning for late projects passes the left edge first. The words say it too.
+      // Red left edge + faint red fill for a project the SERVER flagged late (prototype `:252-254`):
+      // the eye scanning for late projects passes the left edge first. The words say it too.
       <tr
         key={d.id}
         data-project-row={d.id}
-        className={cn(onOpenProject !== undefined && "cursor-pointer", late && "border-l-[3px] border-l-danger-500")}
+        className={cn(
+          TR_CLASS,
+          onOpenProject !== undefined && "cursor-pointer",
+          late && "border-l-danger bg-danger/3 border-l-[3px]",
+        )}
         onClick={
           onOpenProject === undefined
             ? undefined
@@ -589,52 +607,49 @@ export function BangDanhSach({
         }
       >
         {selection !== undefined && (
-          <td onClick={(e) => e.stopPropagation()}>
+          <td className={TD_CLASS} onClick={(e) => e.stopPropagation()}>
             <input
               type="checkbox"
-              className="size-4"
+              className="accent-brand m-0 size-4"
               aria-label={`Chọn dự án ${d.code}`}
               checked={selection.has(d.id)}
               onChange={() => selection.toggle(d.id)}
             />
           </td>
         )}
-        <td className="ma-muc text-xs font-semibold text-ink-500">{d.code}</td>
-        <td className="whitespace-normal">
+        {/* `ma-muc` kept as the hook tests select; its legacy monospace is overridden — the spec prints the code sans. */}
+        <td className={cn(TD_CLASS, "ma-muc text-ink-muted text-[11.5px] [font-family:inherit] font-semibold")}>{d.code}</td>
+        <td className={cn(TD_CLASS, "whitespace-normal")}>
           {/* Đường dẫn con đúng như đặc tả ghi ở đầu chương: `/giai-ngan/du-an/:id`. */}
-          <Link
-            href={projectPath(d.id)}
-            className="leading-snug font-semibold text-ink-900 no-underline hover:underline"
-          >
+          <Link href={projectPath(d.id)} className="text-navy text-[12.5px] leading-snug font-semibold no-underline">
             {d.name}
           </Link>
-          <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-500">
+          <span className="text-ink-muted mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10.5px]">
             {late && (
-              <span className="inline-flex items-center gap-0.5 font-semibold text-danger-600">
-                <Glyph icon={TrendingDown} className="size-3 shrink-0" />
-                {nhanTienDo(tienDo)}
+              <span className="text-danger flex items-center gap-0.5 font-semibold" data-late="">
+                <Glyph icon={TriangleAlert} className="size-3 shrink-0" />
+                chậm {delayPointsLabel(tienDo.diem)}
               </span>
             )}
-            <span className={lopHangMuc(hangMuc)}>{nhanHangMuc(hangMuc)}</span>
           </span>
         </td>
-        <td className="text-xs whitespace-normal text-ink-500" data-unit-owner="">
+        <td className={cn(TD_CLASS, "text-ink-muted text-[11.5px] whitespace-normal")} data-unit-owner="">
           {unitOwnerLabel(d, people)}
         </td>
-        <td className="text-right tabular-nums" data-money="planned">
+        <td className={cn(TD_CLASS, "text-right text-[11.5px] tabular-nums")} data-money="planned">
           <ShortMoney dong={d.planned_amount} />
         </td>
-        <td className="text-right tabular-nums" data-money="disbursed">
+        <td className={cn(TD_CLASS, "text-right text-[11.5px] tabular-nums")} data-money="disbursed">
           <ShortMoney dong={d.disbursed_amount} />
         </td>
-        <td>
+        <td className={TD_CLASS}>
           <ProgressCell ratio={d.disbursed_ratio} timeElapsedRatio={timeElapsedRatio} />
         </td>
-        <td className="whitespace-normal">
+        <td className={TD_CLASS}>
           <FundingChip status={d.funding_status} names={d.funding_source_names} />
         </td>
-        <td className="tabular-nums">{nhanNgay(d.disbursement_deadline)}</td>
-        <td className="whitespace-normal">
+        <td className={cn(TD_CLASS, "text-[11.5px] tabular-nums")}>{nhanNgay(d.disbursement_deadline)}</td>
+        <td className={cn(TD_CLASS, "text-[11.5px] whitespace-normal")}>
           <LatestIssueCell issue={d.latest_issue} />
         </td>
       </tr>
@@ -642,15 +657,18 @@ export function BangDanhSach({
   }
 
   return (
-    <TableScroll sticky aria-label={`Danh sách dự án đầu tư năm ${duLieu.year}`}>
-      <table className={cn("bang-danh-muc", DATA_TABLE_CLASS)}>
-        <caption className="an-thi-giac">
-          Dự án đầu tư của đơn vị trong năm ngân sách {duLieu.year}
-        </caption>
+    <div
+      role="region"
+      tabIndex={0}
+      aria-label={`Danh sách dự án đầu tư năm ${duLieu.year}`}
+      className="border-line shadow-card rounded-card overflow-x-auto border border-solid bg-white"
+    >
+      <table className={TABLE_CLASS} data-project-table="">
+        <caption className="an-thi-giac">Dự án đầu tư của đơn vị trong năm ngân sách {duLieu.year}</caption>
         <thead>
-          <tr>
+          <tr className={TR_CLASS}>
             {selection !== undefined && (
-              <th scope="col" className="w-10">
+              <th scope="col" className={cn(TH_CLASS, "w-10")}>
                 <SelectAllBox
                   checked={allChecked}
                   indeterminate={ticked > 0 && !allChecked}
@@ -658,24 +676,26 @@ export function BangDanhSach({
                 />
               </th>
             )}
-            <th scope="col" className="w-20">
+            <th scope="col" className={cn(TH_CLASS, "w-20")}>
               Mã
             </th>
-            <th scope="col" className="min-w-64">
+            <th scope="col" className={cn(TH_CLASS, "min-w-64")}>
               Dự án
             </th>
-            <th scope="col" className="w-36">
+            <th scope="col" className={cn(TH_CLASS, "w-36")}>
               Đơn vị / phụ trách
             </th>
-            {/* Money columns right-aligned so the digits of every row line up (spec §6.7). */}
-            <SortHead value="planned_amount" label="KH vốn năm" alignEnd sort={sort} onSort={onSort} />
-            <SortHead value="disbursed_amount" label="Đã giải ngân" alignEnd sort={sort} onSort={onSort} />
+            {/* Money columns right-aligned so the digits of every row line up. */}
+            <SortHead value="planned_amount" label="KH vốn năm" alignEnd className="w-28" sort={sort} onSort={onSort} />
+            <SortHead value="disbursed_amount" label="Đã giải ngân" alignEnd className="w-28" sort={sort} onSort={onSort} />
             <SortHead value="disbursed_ratio" label="Tiến độ" className="w-44" sort={sort} onSort={onSort} />
-            <th scope="col" className="w-44">
+            <th scope="col" className={cn(TH_CLASS, "w-36")}>
               Nguồn vốn
             </th>
-            <th scope="col">Thời hạn giải ngân</th>
-            <th scope="col" className="min-w-52">
+            <th scope="col" className={cn(TH_CLASS, "w-24")}>
+              Thời hạn giải ngân
+            </th>
+            <th scope="col" className={cn(TH_CLASS, "min-w-52")}>
               Vướng mắc mới nhất
             </th>
           </tr>
@@ -685,10 +705,14 @@ export function BangDanhSach({
             ? duLieu.items.map(renderRow)
             : groups.map((g) => (
                 <Fragment key={`group-${g.key}`}>
-                  <tr data-group-header={g.key} className="bg-surface-subtle">
-                    <th scope="colgroup" colSpan={columnCount} className="text-left whitespace-normal">
-                      <span className="font-semibold text-ink-900">{g.title}</span>
-                      <span className="font-normal text-ink-500"> — {g.detail}</span>
+                  <tr data-group-header={g.key} className={cn(TR_CLASS, "bg-canvas hover:bg-canvas")}>
+                    <th
+                      scope="colgroup"
+                      colSpan={columnCount}
+                      className={cn(TD_CLASS, "text-navy py-2 text-left text-[12px] font-bold whitespace-normal")}
+                    >
+                      {g.title}
+                      <span className="text-ink-muted ml-2 font-normal">{g.detail}</span>
                     </th>
                   </tr>
                   {g.items.map(renderRow)}
@@ -696,7 +720,7 @@ export function BangDanhSach({
               ))}
         </tbody>
       </table>
-    </TableScroll>
+    </div>
   );
 }
 
@@ -721,7 +745,7 @@ function SelectAllBox({
     <input
       ref={ref}
       type="checkbox"
-      className="size-4"
+      className="accent-brand m-0 size-4"
       aria-label="Chọn tất cả dự án đang hiện"
       checked={checked}
       onChange={onToggle}
@@ -731,12 +755,12 @@ function SelectAllBox({
 
 /**
  * Whether a project's funding is declared, and declared in full (prototype `SourceState`,
- * `BudgetItemTable.tsx:404-436`; spec §7.2). Three states because they lead to three different jobs:
+ * `BudgetItemTable.tsx:404-436`; spec 02 §8). Three states because they lead to three different jobs:
  * none → open the project and declare; short → declare the rest; full → nothing to do.
  *
  * THE STATE AND THE SHORTFALL ARE THE SERVER'S (`funding_status`), never re-derived from the names.
- * The shortfall is in full đồng (only `KH vốn năm` / `Đã giải ngân` are short, G6). An unknown state shows the raw
- * string: guessing a friendly label would hide a contract drift.
+ * The shortfall is short (`Thiếu 300 triệu`), as the prototype prints it, the full đồng on hover. An
+ * unknown state shows the raw string: guessing a friendly label would hide a contract drift.
  */
 export function FundingChip({
   status,
@@ -745,53 +769,53 @@ export function FundingChip({
   status: finance_fundingStatusOut | null | undefined;
   names: readonly string[] | undefined;
 }) {
-  if (status === null || status === undefined) return <span className="text-ink-500">—</span>;
+  if (status === null || status === undefined) return <span className="text-ink-muted text-[11.5px]">—</span>;
   let chip: ReactNode;
   switch (status.status) {
     case "chua-gan-nguon":
-      chip = <span className="font-semibold text-warning-600">Chưa gắn nguồn</span>;
-      break;
+      return (
+        <span className="text-tangerine text-[11.5px] font-semibold" data-funding-status={status.status}>
+          Chưa gắn nguồn
+        </span>
+      );
     case "chua-du":
-      chip = <span className="font-semibold text-warning-600">Thiếu {nhanTien(status.shortfall_amount)}</span>;
+      chip = (
+        <span className="text-tangerine font-semibold" title={nhanTien(status.shortfall_amount)}>
+          Thiếu {shortDongLabel(status.shortfall_amount)}
+        </span>
+      );
       break;
     case "du":
-      chip = <span className="font-semibold text-success-600">Đủ · {status.source_count} nguồn</span>;
+      chip = <span className="text-leaf font-semibold">Đủ · {status.source_count} nguồn</span>;
       break;
     default:
-      chip = <span className="font-semibold text-ink-700">{status.status}</span>;
+      chip = <span className="text-ink font-semibold">{status.status}</span>;
   }
   const joined = (names ?? []).join(", ");
   return (
-    <span className="block text-xs" data-funding-status={status.status}>
+    <span className="block text-[11.5px]" data-funding-status={status.status} title={joined === "" ? undefined : joined}>
       {chip}
-      {joined !== "" && (
-        <span className="block max-w-44 truncate text-ink-500" title={joined}>
-          {joined}
-        </span>
-      )}
+      {joined !== "" && <span className="text-ink-muted block truncate">{joined}</span>}
     </span>
   );
 }
 
 /**
  * §7.2 `Vướng mắc mới nhất` (prototype `BudgetItemTable.tsx:365-393`): the newest issue's text, then
- * `27/8/2026 · đã gỡ` — amber while open, grey once resolved, icon + words, never colour alone. "—" for a
- * project with none: the server fills the column from its own read, so absent means none, not unknown.
- * Long text is clamped to two lines; the whole of it stays in `title` and on the project page.
+ * `27/8/2026 · đã gỡ` — tangerine while open, grey once resolved, icon + words, never colour alone. "—"
+ * for a project with none: the server fills the column from its own read, so absent means none.
  */
 export function LatestIssueCell({ issue }: { issue: finance_latestIssueOut | null | undefined }) {
-  if (issue === null || issue === undefined) return <span className="text-ink-500">—</span>;
+  if (issue === null || issue === undefined) return <span className="text-ink-muted">—</span>;
   return (
     <span
-      className={cn("flex items-start gap-1 text-xs", issue.resolved ? "text-ink-500" : "text-warning-600")}
+      className={cn("flex items-start gap-1", issue.resolved ? "text-ink-muted" : "text-tangerine")}
       data-latest-issue={issue.resolved ? "resolved" : "open"}
     >
       <Glyph icon={issue.resolved ? CircleCheck : CircleAlert} className="mt-0.5 size-3 shrink-0" />
-      <span className="min-w-0 leading-snug">
-        <span className="line-clamp-2 break-words" title={issue.text}>
-          {issue.text}
-        </span>
-        <span className="block text-ink-500 tabular-nums">{latestIssueDateLine(issue)}</span>
+      <span className="min-w-0 leading-snug break-words">
+        {issue.text}
+        <span className="text-ink-muted block text-[10.5px] tabular-nums">{latestIssueDateLine(issue)}</span>
       </span>
     </span>
   );
@@ -819,7 +843,7 @@ function SortHead({
 }) {
   const active = sort === value;
   return (
-    <th scope="col" className={cn(alignEnd && "text-right", className)} aria-sort={active ? "descending" : undefined}>
+    <th scope="col" className={cn(TH_CLASS, alignEnd && "text-right", className)} aria-sort={active ? "descending" : undefined}>
       {onSort === undefined ? (
         label
       ) : (
@@ -827,9 +851,9 @@ function SortHead({
           type="button"
           onClick={() => onSort(active ? "code" : value)}
           className={cn(
-            "inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 [font:inherit] hover:text-ink-900 focus-visible:outline-2 focus-visible:outline-brand-500",
+            "hover:text-navy inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 [font:inherit] text-inherit focus-visible:outline-2 focus-visible:outline-brand",
             alignEnd && "w-full justify-end",
-            active && "font-bold text-brand-600",
+            active && "text-brand font-bold",
           )}
         >
           {label}
@@ -854,30 +878,28 @@ function ShortMoney({ dong }: { dong: number }) {
 }
 
 /**
- * The prototype's bar + percent (`BudgetItemTable.tsx:313-342`). The ratio is the SERVER's
+ * The prototype's bar + percent (`BudgetItemTable.tsx:313-342`, spec 02 §8). The ratio is the SERVER's
  * (`disbursed_ratio`, hundredths of a percent); the bar only draws it, capped at full width while the
  * words keep the real figure.
  *
- * COLOUR BY THE 80/50/30 TIERS (`progress-tone.ts`, user decision 07/10/2026) — bar and figure, as the
- * prototype does. Whether the project is LATE is not said here: that is the server's flag, drawn as the
- * row's red edge and the "Chậm x điểm" words.
+ * COLOUR BY THE 80/50/30 TIERS (`progress-tone.ts`) — bar and figure, as the prototype does. Whether the
+ * project is LATE is not said here: that is the server's flag, drawn as the row's red edge and the
+ * "chậm x điểm" words.
  *
  * THE ELAPSED-TIME MARKER (prototype `:325-331`) is the year summary's `time_elapsed_ratio`, passed in
- * only when that summary is of the list's year. The prototype reads a per-row `time_percent`; the
- * server's per-project figure is the SAME calendar-year share for every project of a year
- * (`service-finance/internal/http/du_an.go`, `TimeElapsedRatio`, detail route only), so the year's one
- * value draws the same line with no read per row — and never from the browser's clock.
+ * only when that summary is of the list's year — the same calendar-year share for every project of a
+ * year (`service-finance/internal/http/du_an.go`, `TimeElapsedRatio`), never the browser's clock.
  */
 function ProgressCell({ ratio, timeElapsedRatio }: { ratio: number | null; timeElapsedRatio: number | null }) {
   // `null` = no capital allocated: words, never a 0% bar (it would read as the worst project).
   if (ratio === null || !Number.isFinite(ratio)) {
-    return <span className="text-[13px] text-ink-500">{nhanTyLeGiaiNgan(ratio)}</span>;
+    return <span className="text-ink-muted text-[11.5px]">{nhanTyLeGiaiNgan(ratio)}</span>;
   }
   const width = Math.min(100, Math.max(0, ratio / 100));
   const tone = progressTone(ratio);
   return (
     <div className="flex items-center gap-2">
-      <div aria-hidden="true" className="relative h-1.5 min-w-16 flex-1 overflow-hidden rounded-full bg-surface-subtle-2">
+      <div aria-hidden="true" className={cn("relative h-1.5 min-w-16 flex-1 overflow-hidden rounded-full", TRACK_CLASS)}>
         <div
           data-progress-tone={tone}
           className={cn("h-full rounded-full", PROGRESS_BAR_CLASS[tone])}
@@ -887,12 +909,12 @@ function ProgressCell({ ratio, timeElapsedRatio }: { ratio: number | null; timeE
           <span
             aria-hidden="true"
             data-elapsed-marker=""
-            className="absolute top-0 h-full w-[2px] bg-ink-700"
+            className="bg-navy/55 absolute top-0 h-full w-[2px]"
             style={{ left: `${Math.min(100, Math.max(0, timeElapsedRatio / 100))}%` }}
           />
         )}
       </div>
-      <span className={cn("shrink-0 text-right text-[13px] font-semibold tabular-nums", PROGRESS_TEXT_CLASS[tone])}>
+      <span className={cn("w-11 shrink-0 text-right text-[11.5px] font-bold tabular-nums", PROGRESS_TEXT_CLASS[tone])}>
         {nhanTyLeGiaiNgan(ratio)}
       </span>
     </div>

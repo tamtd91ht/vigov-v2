@@ -145,13 +145,18 @@ describe("§9 selects — add form", () => {
       "— Chưa xác định —",
       "Địa chính – Xây dựng",
       "Văn phòng UBND",
+      // Spec 04's free-text choice, last and disabled: a backend dependency (ADR 0068 lần 6 #11).
+      "— Đơn vị khác, nhập tay —",
     ]);
+    expect([...unit.options].at(-1)!.disabled).toBe(true);
     expect([...officer.options].map((o) => o.textContent)).toEqual([
       "— Chưa phân công —",
-      "Nguyễn Văn An — Công chức địa chính",
+      // Spec 04: the officer's name only.
+      "Nguyễn Văn An",
       "Trần Thị Bình",
     ]);
-    expect(el.querySelector("[data-pending]")).toBeNull();
+    // The only "?" in the form is the free-text unit's.
+    expect([...el.querySelectorAll("[data-pending]")].map((p) => p.textContent)).toEqual(["— Đơn vị khác, nhập tay —?"]);
   });
 
   it("the chosen unit id and staff CODE reach the POST body; unset selects send nothing", () => {

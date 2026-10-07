@@ -2,10 +2,10 @@
 
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
-import { BUSY_DELETING, BusyLabel } from "@/features/danh-ba/busy-label";
 import { xoaDuAn } from "@/lib/api/giai-ngan"; // vi-name-ok: existing delete call (rule 12, invariant 3)
 
 import { nhanTien } from "./nhan-du-an"; // vi-name-ok: existing formatter (rule 12, invariant 3)
@@ -13,11 +13,10 @@ import {
   BULK_DELETE_NOTE,
   bulkDeleteConfirmLabel,
   bulkDeleteTitle,
+  bulkFailureToasts,
   bulkProgressText,
-  bulkResultLine,
-  bulkSummary,
+  bulkSuccessToast,
   deleteProjectsInTurn,
-  type ProjectDeleteResult,
   type SelectedProject,
 } from "./project-bulk-delete";
 import { Glyph } from "./project-ui";
@@ -25,14 +24,17 @@ import { Glyph } from "./project-ui";
 const TITLE_ID = "tieu-de-xoa-du-an-da-chon";
 
 /**
- * The confirm dialog of `Xoá đã chọn` (prototype `BulkDeleteDialog`, `BudgetWorkspace.tsx:409-422`):
- * the specific question, the consequence, every selected project as `name` over `code · plan`, then
- * the run — progress while it goes, one line per project when it is done.
+ * The confirm dialog of `Xoá đã chọn` (spec 02 §9, prototype `BulkDeleteDialog`): the specific question,
+ * the consequence, every selected project in ONE bordered list as `name` + `code · plan`, then
+ * `[Huỷ] [Xoá N dự án]` with the delete button solid red.
+ *
+ * AFTER THE RUN THE DIALOG CLOSES and the outcome is a toast, as the prototype does: "Đã xoá N dự án."
+ * for what went, and one error toast per distinct refusal — "N dự án không xoá được: {the server's
+ * sentence}". Every project is still deleted ONE BY ONE and reported by the server one by one
+ * (`project-bulk-delete.ts`); nothing is summed into a success that did not happen.
  *
  * `projects` IS A SNAPSHOT taken when the dialog opened: the register re-reads as soon as the run ends
- * (`onFinished`), and the result lines must keep naming the projects that were sent, not the new list.
- *
- * Stays open after the run so the per-project result can be read; `Đóng` closes it.
+ * (`onFinished`).
  */
 export function ProjectBulkDeleteDialog({
   projects,
@@ -48,66 +50,58 @@ export function ProjectBulkDeleteDialog({
   softDelete?: (id: string) => ReturnType<typeof xoaDuAn>;
 }) {
   const [progress, setProgress] = useState<number | null>(null);
-  const [results, setResults] = useState<readonly ProjectDeleteResult[] | null>(null);
   const running = progress !== null;
   const total = projects.length;
 
   async function run(): Promise<void> {
-    if (running || results !== null || total === 0) return;
+    if (running || total === 0) return;
     setProgress(0);
     const out = await deleteProjectsInTurn(projects, (id) => softDelete(id), setProgress);
     setProgress(null);
-    setResults(out);
+    const ok = bulkSuccessToast(out);
+    if (ok !== null) toast.success(ok);
+    for (const line of bulkFailureToasts(out)) toast.error(line);
     onFinished();
+    onClose();
   }
 
   return (
-    <ModalDialog titleId={TITLE_ID} onDismiss={() => !running && onClose()}>
+    <ModalDialog titleId={TITLE_ID} className="max-w-125" onDismiss={() => !running && onClose()}>
       <ModalDialogHeader titleId={TITLE_ID} title={bulkDeleteTitle(total)} description={BULK_DELETE_NOTE} />
 
-      <div className="min-h-0 overflow-y-auto">
-        {results === null ? (
-          <ul className="m-0 flex list-none flex-col gap-1.5 p-0" aria-label="Các dự án sẽ xoá">
-            {projects.map((p) => (
-              <li key={p.id} className="rounded-control border border-solid border-line px-3 py-2">
-                <span className="block text-sm font-semibold text-ink-900">{p.name}</span>
-                <span className="block text-xs text-ink-500 tabular-nums">
-                  {p.code} · {nhanTien(p.planned_amount)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <ul className="m-0 flex list-none flex-col gap-1 p-0" aria-label="Kết quả xoá từng dự án">
-            {results.map((r) => (
-              <li key={r.code} data-result={r.ok ? "ok" : "refused"} className={r.ok ? "text-sm text-ink-700" : "thong-bao-loi m-0"}>
-                {bulkResultLine(r)}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <ul
+        className="border-line m-0 max-h-56 list-none space-y-1.5 overflow-y-auto rounded-md border border-solid p-3 text-[12.5px]"
+        aria-label="Các dự án sẽ xoá"
+      >
+        {projects.map((p) => (
+          <li key={p.id} className="flex flex-wrap items-baseline justify-between gap-x-3">
+            <span className="text-navy font-medium">{p.name}</span>
+            <span className="text-ink-muted text-[11.5px] tabular-nums">
+              {p.code} · {nhanTien(p.planned_amount)}
+            </span>
+          </li>
+        ))}
+      </ul>
 
       {/* ALWAYS IN THE DOM: a live region inserted later is one not every screen reader announces. */}
-      <p role="status" className="m-0 text-sm text-ink-700 empty:hidden">
-        {progress !== null ? bulkProgressText(progress, total) : results !== null ? bulkSummary(results) : ""}
+      <p role="status" className="text-ink-muted m-0 text-[12px] empty:hidden">
+        {progress !== null ? bulkProgressText(progress, total) : ""}
       </p>
 
       <div className="flex shrink-0 flex-wrap justify-end gap-2">
-        {results === null && (
-          <Button
-            type="button"
-            variant="danger"
-            icon={<Glyph icon={Trash2} />}
-            disabled={running || total === 0}
-            aria-busy={running || undefined}
-            onClick={() => void run()}
-          >
-            <BusyLabel busy={running} label={bulkDeleteConfirmLabel(total)} busyText={BUSY_DELETING} />
-          </Button>
-        )}
-        <Button type="button" variant="secondary" disabled={running} onClick={onClose}>
-          {results === null ? "Huỷ" : "Đóng"}
+        <Button type="button" variant="outline" disabled={running} onClick={onClose}>
+          Huỷ
+        </Button>
+        <Button
+          type="button"
+          variant="primary"
+          className="bg-danger hover:not-disabled:bg-danger/90 text-white"
+          icon={<Glyph icon={Trash2} className="size-4" />}
+          disabled={running || total === 0}
+          aria-busy={running || undefined}
+          onClick={() => void run()}
+        >
+          {bulkDeleteConfirmLabel(total)}
         </Button>
       </div>
     </ModalDialog>

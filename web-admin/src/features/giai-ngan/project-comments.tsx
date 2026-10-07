@@ -1,15 +1,14 @@
 "use client";
 
-import { MessagesSquare, Send } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { Send } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { toast } from "sonner";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba"; // vi-name-ok: existing idempotency-key helper (rule 12 invariant 3)
 import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { controlClass } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
-import { BusyLabel } from "@/features/danh-ba/busy-label";
 import type { KetQua } from "@/lib/api/goi"; // vi-name-ok: existing shared result type of goi.ts (rule 12 invariant 3)
 import { getProjectComments, postProjectComment } from "@/lib/api/project-discussion";
 import type {
@@ -21,33 +20,26 @@ import { cn } from "@/lib/cn";
 
 import { nhanMocKhoa } from "./nhan-ghi-giai-ngan";
 import { MentionNoticePending } from "./pending-parts";
-import {
-  COMMENT_PLACEHOLDER,
-  COMMENTS_DENIED,
-  insertMention,
-  matchingStaff,
-  mentionedCodes,
-  mentionQueryAt,
-  mentionSegments,
-  staffLabel,
-  type PickedMention,
-} from "./project-discussion-labels";
+import { COMMENT_PLACEHOLDER, MENTION_PICKER_LIMIT, mentionLine, staffLabel } from "./project-discussion-labels";
 import type { PeopleCatalogue } from "./project-people";
-import { DeniedNote, Glyph } from "./project-ui";
+import { Glyph } from "./project-ui";
 
 /**
- * §8.4 "Trao đổi" — a free discussion between staff about one project (prototype
+ * §8.4 "Trao đổi" — a free discussion between staff about one project (spec 07, prototype
  * `BudgetItemDetail.tsx:611-679`): messages oldest first, then the composer.
  *
- * MENTIONS: typing `@` opens a list of up to eight matching staff from the commune's directory; picking
- * one writes `@Full Name` into the text and remembers the CODE. What is sent is the codes whose
- * `@Full Name` is still in the text — so the body keeps the words a reader sees, and the server keeps
- * who was meant. Nobody is notified yet (`MentionNoticePending`).
+ * MENTIONS AS THE PROTOTYPE DRAWS THEM (ADR 0068 lần 6, row D35): a row of at most eight `@Tên` chips
+ * under the box, the first eight of the commune's staff directory; pressing one toggles it. What is
+ * sent is the CODES of the chips on (`mentioned_staff_codes`); the body stays exactly what was typed.
+ * A message's mentions are listed under it as "Nhắc: @A, @B". Nobody is notified yet
+ * (`MentionNoticePending`).
  *
- * THE BODY IS RENDERED AS TEXT, NEVER HTML (rule 13): mentions are highlighted by cutting the string
- * into React text nodes (`mentionSegments`), so a message holding `<b>` shows `<b>`.
+ * KNOWN COST of following the prototype: only the first eight staff of the directory can be mentioned.
+ *
+ * THE BODY IS RENDERED AS TEXT, NEVER HTML (rule 13): React text nodes only.
  *
  * `budget.read` is the route's key, as in the prototype: anyone who can see the project can discuss it.
+ * Without it the composer is simply absent (spec 07); the route checks the key on every call.
  */
 
 type CommentList =
@@ -80,7 +72,7 @@ export function ProjectCommentsPanel({
   canComment,
 }: {
   projectId: string;
-  /** The staff directory (`useProjectPeople().staff`): names for authors, and the mention picker. */
+  /** The staff directory (`useProjectPeople().staff`): names for authors, and the mention chips. */
   staff: PeopleCatalogue<identity_canBoChonNguoiRa>;
   /** `budget.read` held. UX only — the route checks its key on every call. */
   canComment: boolean;
@@ -90,15 +82,13 @@ export function ProjectCommentsPanel({
   const reload = () => setReloads((n) => n + 1);
 
   return (
-    <div className="flex min-w-0 flex-col gap-3" data-comments-panel="">
+    <div className="flex min-w-0 flex-col" data-comments-panel="">
       {comments.phase === "loading" && (
         <div>
           <p role="status" className="an-thi-giac">
             Đang tải trao đổi…
           </p>
-          <div aria-hidden="true" className="flex flex-col gap-2">
-            <Skeleton className="h-14 w-full" />
-          </div>
+          <Skeleton className="h-14 w-full" />
         </div>
       )}
       {comments.phase === "error" && (
@@ -110,11 +100,7 @@ export function ProjectCommentsPanel({
       )}
       {comments.phase === "ready" && <CommentList items={comments.items} staff={staff} />}
 
-      {canComment ? (
-        <CommentComposer projectId={projectId} staff={staff} onPosted={reload} />
-      ) : (
-        <DeniedNote>{COMMENTS_DENIED}</DeniedNote>
-      )}
+      {canComment && <CommentComposer projectId={projectId} staff={staff} onPosted={reload} />}
     </div>
   );
 }
@@ -128,38 +114,30 @@ export function CommentList({
   staff: PeopleCatalogue<identity_canBoChonNguoiRa>;
 }) {
   if (items.length === 0) {
-    return <EmptyState icon={MessagesSquare} title="Chưa có ý kiến trao đổi nào." />;
+    return <p className="text-ink-muted m-0 text-[12.5px]">Chưa có ý kiến trao đổi nào.</p>;
   }
   return (
-    <ol className="m-0 flex list-none flex-col gap-3 p-0" aria-label="Trao đổi về dự án">
+    <ol className="m-0 list-none p-0" aria-label="Trao đổi về dự án">
       {items.map((c) => {
-        // Only names the directory resolves are highlighted; an unresolved code leaves the text plain.
-        const names =
-          staff.phase === "ready"
-            ? c.mentioned_staff_codes.flatMap((code) => {
-                const n = staff.names.get(code);
-                return n === undefined ? [] : [n];
-              })
-            : [];
+        const mentions = mentionLine(c.mentioned_staff_codes, staff);
         return (
-          <li key={c.id} data-comment={c.id} className="rounded-xl border border-line bg-surface-subtle px-3 py-2.5">
+          <li
+            key={c.id}
+            data-comment={c.id}
+            className="border-line bg-canvas mb-3 rounded-[10px] border border-solid px-3 py-2.5"
+          >
             <div className="mb-1 flex flex-wrap items-baseline gap-x-2">
-              <b className="text-[13px] text-ink-900">{staffLabel(c.author_code, staff)}</b>
-              <time dateTime={c.created_at} className="text-xs text-ink-500 tabular-nums">
+              <b className="text-navy text-[12.5px]">{staffLabel(c.author_code, staff)}</b>
+              <time dateTime={c.created_at} className="text-ink-muted text-[11px] tabular-nums">
                 {nhanMocKhoa(c.created_at)}
               </time>
             </div>
-            <p className="m-0 text-sm break-words whitespace-pre-line text-ink-900">
-              {mentionSegments(c.body, names).map((s, i) =>
-                s.mention ? (
-                  <span key={i} data-mention="" className="font-semibold text-brand-700">
-                    {s.text}
-                  </span>
-                ) : (
-                  s.text
-                ),
-              )}
-            </p>
+            <p className="m-0 text-[12.5px] break-words whitespace-pre-line">{c.body}</p>
+            {mentions !== null && (
+              <p className="text-brand m-0 mt-1 text-[11px]" data-mentions="">
+                {mentions}
+              </p>
+            )}
           </li>
         );
       })}
@@ -176,62 +154,30 @@ function CommentComposer({
   staff: PeopleCatalogue<identity_canBoChonNguoiRa>;
   onPosted: () => void;
 }) {
-  const box = useRef<HTMLTextAreaElement>(null);
   const [text, setText] = useState("");
-  /** Caret position; `null` closes the picker (after a pick, on Escape). */
-  const [caret, setCaret] = useState<number | null>(null);
-  const [picked, setPicked] = useState<readonly PickedMention[]>([]);
+  /** Codes of the chips switched on, in the order they were pressed. */
+  const [picked, setPicked] = useState<readonly string[]>([]);
   const [idempotencyKey, setIdempotencyKey] = useState(khoaChongTrungMoi);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  /** Where the caret goes once a pick has re-rendered the text. */
-  const restoreCaret = useRef<number | null>(null);
-
-  useEffect(() => {
-    const at = restoreCaret.current;
-    if (at === null || box.current === null) return;
-    restoreCaret.current = null;
-    box.current.focus();
-    box.current.setSelectionRange(at, at);
-  }, [text]);
-
-  const query = caret === null ? null : mentionQueryAt(text, caret);
-  const options = query !== null && staff.phase === "ready" ? matchingStaff(staff.items, query.query) : [];
+  const chips = staff.phase === "ready" ? staff.items.slice(0, MENTION_PICKER_LIMIT) : [];
   const empty = text.trim() === "";
 
-  function pick(s: identity_canBoChonNguoiRa): void {
-    if (query === null) return;
-    const next = insertMention(text, query, s.full_name);
-    restoreCaret.current = next.caret;
-    setText(next.text);
-    setCaret(null);
-    setPicked((p) => [...p, { code: s.code, name: s.full_name }]);
-  }
-
-  function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>): void {
-    if (e.key === "Escape" && options.length > 0) {
-      e.preventDefault();
-      setCaret(null);
-    }
+  function toggle(code: string): void {
+    setPicked((p) => (p.includes(code) ? p.filter((c) => c !== code) : [...p, code]));
   }
 
   function submit(e: FormEvent): void {
     e.preventDefault();
     if (empty || busy) return;
     setBusy(true);
-    postProjectComment(
-      projectId,
-      { body: text, mentioned_staff_codes: mentionedCodes(text, picked) },
-      idempotencyKey,
-    ).then((r) => {
+    postProjectComment(projectId, { body: text, mentioned_staff_codes: [...picked] }, idempotencyKey).then((r) => {
       setBusy(false);
       if (!r.ok) {
-        setError(r.thongBao);
+        // The server's sentence; the spec's generic "Không gửi được ý kiến trao đổi." would hide why.
+        toast.error(r.thongBao);
         return;
       }
-      setError(null);
       setText("");
-      setCaret(null);
       setPicked([]);
       setIdempotencyKey(khoaChongTrungMoi());
       onPosted();
@@ -239,72 +185,56 @@ function CommentComposer({
   }
 
   return (
-    <form onSubmit={submit} aria-label="Gửi ý kiến trao đổi" className="flex min-w-0 flex-col gap-2">
+    <form onSubmit={submit} aria-label="Gửi ý kiến trao đổi" className="mt-3 flex min-w-0 flex-col gap-2">
       <label htmlFor="trao-doi-moi" className="an-thi-giac">
         Ý kiến trao đổi
       </label>
       <textarea
         id="trao-doi-moi"
         name="trao-doi-moi"
-        ref={box}
         rows={2}
         value={text}
         placeholder={COMMENT_PLACEHOLDER}
-        className={cn(controlClass, "h-auto min-h-16 w-full min-w-0 resize-y py-2")}
-        aria-controls={options.length > 0 ? "chon-nguoi-nhac-ten" : undefined}
-        onChange={(e) => {
-          setText(e.target.value);
-          setCaret(e.target.selectionStart);
-        }}
-        onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
-        onKeyDown={onKeyDown}
+        className={cn(controlClass, "h-auto min-h-16 w-full min-w-0 resize-y bg-white py-2 text-[12.5px] md:text-[12.5px]")}
+        onChange={(e) => setText(e.target.value)}
       />
 
-      {options.length > 0 && (
-        <div
-          id="chon-nguoi-nhac-ten"
-          role="group"
-          aria-label="Chọn cán bộ để nhắc tên"
-          className="flex flex-wrap gap-1.5"
-          data-mention-picker=""
-        >
-          {options.map((s) => (
-            <button
-              key={s.code}
-              type="button"
-              data-staff-code={s.code}
-              className="inline-flex min-h-8 items-center gap-1 rounded-full border border-line bg-surface px-2.5 text-xs text-ink-700 hover:border-brand-500 hover:text-brand-700"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => pick(s)}
-            >
-              @{s.full_name}
-              {s.position !== "" && <span className="text-ink-500">· {s.position}</span>}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {staff.phase === "error" && (
-        <p className="m-0 text-xs text-ink-500">Chưa tải được danh bạ cán bộ, nên chưa nhắc tên được.</p>
-      )}
-
-      {error !== null && (
-        <p className="thong-bao-loi m-0" role="alert">
-          {error}
-        </p>
-      )}
-
       <div className="flex flex-wrap items-center gap-2">
+        {chips.length > 0 && (
+          <div role="group" aria-label="Chọn cán bộ để nhắc tên" className="flex flex-wrap gap-2" data-mention-picker="">
+            {chips.map((s) => {
+              const on = picked.includes(s.code);
+              return (
+                <button
+                  key={s.code}
+                  type="button"
+                  aria-pressed={on}
+                  data-staff-code={s.code}
+                  className={cn(
+                    "border-line cursor-pointer rounded-full border border-solid px-2 py-0.5 [font-family:inherit] text-[11px]",
+                    on ? "bg-brand/12 text-brand border-brand/25 font-semibold" : "text-ink-muted hover:bg-canvas bg-white",
+                  )}
+                  onClick={() => toggle(s.code)}
+                >
+                  @{s.full_name}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {staff.phase === "error" && (
+          <p className="text-ink-muted m-0 text-[11px]">Chưa tải được danh bạ cán bộ, nên chưa nhắc tên được.</p>
+        )}
         <MentionNoticePending />
         <Button
           type="submit"
           variant="primary"
           className="ml-auto"
-          icon={busy ? undefined : <Glyph icon={Send} />}
+          icon={<Glyph icon={Send} />}
           disabled={empty || busy}
           aria-busy={busy || undefined}
         >
-          <BusyLabel busy={busy} label="Gửi" busyText="Đang gửi…" />
+          Gửi
         </Button>
       </div>
     </form>

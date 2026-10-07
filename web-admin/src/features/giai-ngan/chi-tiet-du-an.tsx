@@ -19,13 +19,14 @@ import { coQuyen, QUYEN_GHI_NGAN_SACH, QUYEN_XAC_NHAN_NGAN_SACH, QUYEN_XEM_GIAI_
 import { KhoiChungTu, useProjectVouchers } from "./chung-tu-du-an";
 import { ProjectEditPanel, ProjectHeaderActions, ProjectRemoveDialog } from "./ghi-du-an";
 import { nhanNgay, nhanTien, nhanTienDo, nhanTyLeGiaiNgan, percentLabel, tienDoDuAn } from "./nhan-du-an";
+import { PROGRESS_BAR_CLASS, progressTone } from "./progress-tone";
 import { ProjectRecordTabs } from "./pending-parts";
 import { ProjectCommentsPanel } from "./project-comments";
 import { ProjectCurvePanel } from "./project-curve";
 import { ProjectIssuesPanel, useProjectIssues } from "./project-issues";
 import { officerLabel, PEOPLE_LOADING, unitLabel, useProjectPeople, type ProjectPeople } from "./project-people";
 import { Glyph, ProgressBadge } from "./project-ui";
-import { ScopeNotice } from "./scope-notice";
+import { TRACK_CLASS } from "./spec-classes";
 
 /**
  * Trang chi tiết một dự án in the prototype's composition (`BudgetItemDetail.tsx`, ADR 0068 lần 5):
@@ -114,19 +115,13 @@ export function ChiTietDuAn({ id }: { id: string }) {
     <section className="flex min-w-0 flex-col" aria-label="Chi tiết dự án">
       <Link
         href="/giai-ngan"
-        className="mb-3 inline-flex w-fit items-center gap-1.5 text-[13px] text-ink-500 no-underline hover:text-ink-900"
+        className="text-ink-muted hover:text-navy mb-3 inline-flex w-fit items-center gap-1.5 text-[12.5px] no-underline"
       >
         <Glyph icon={ArrowLeft} className="size-3.5 shrink-0" />
         Theo dõi giải ngân
       </Link>
 
-      {/* Câu của máy chủ trên chính dự án (`scope_notice`), chỉ khi dự án đã về — `scope-notice.tsx`.
-          Not in the prototype's detail page; kept because the banner is mandatory (§1). */}
-      {trangThai.pha === "xong" && !daXoa && (
-        <div className="mb-4">
-          <ScopeNotice text={trangThai.duAn.scope_notice} />
-        </div>
-      )}
+      {/* No scope notice here (spec 07, row D2): the list page carries it. */}
 
       {/* DỰ ÁN VỪA BỊ GỠ THÌ KHÔNG DỰNG LẠI NÓ. Máy chủ trả 204 không thân, và đọc lại sẽ ra 404 —
           một câu "Không tìm thấy dự án" ngay sau một thao tác thành công đọc như một lỗi. */}
@@ -257,7 +252,6 @@ export function ThongTinDuAn({
   children?: ReactNode;
 }) {
   const tienDo = tienDoDuAn(duAn.delay_score, duAn.is_delayed);
-  const late = tienDo.loai === "cham";
   const ratio = duAn.disbursed_ratio;
   /** The server's share of the budget year gone; absent on an older reply → no marker, no words. */
   const elapsed =
@@ -269,14 +263,13 @@ export function ThongTinDuAn({
     <Card as="article" aria-labelledby="ten-du-an-chi-tiet">
       <header className="flex items-start gap-3 border-b border-line px-5 py-4">
         <div className="min-w-0 flex-1">
-          <p className="ma-muc m-0 text-xs font-semibold text-ink-500">{duAn.code}</p>
-          <h2 id="ten-du-an-chi-tiet" className="m-0 mt-0.5 text-base leading-snug font-bold text-ink-900">
+          <p className="ma-muc text-ink-muted m-0 [font-family:inherit] text-[11px] font-semibold">{duAn.code}</p>
+          <h2 id="ten-du-an-chi-tiet" className="text-navy m-0 mt-0.5 text-[16px] leading-snug font-bold">
             {duAn.name}
           </h2>
-          {/* The prototype's line names the funding sources and the officer (spec §8 "· phụ trách
-              Chưa phân công"); the budget year stays, it is the set the project belongs to. */}
-          <p className="m-0 mt-1 text-xs text-ink-500" data-funding-sources="">
-            {sourceNamesLine(duAn)} · Năm ngân sách {duAn.year}
+          {/* Spec 07 header line: the funding sources and the officer, nothing else (row D5). */}
+          <p className="text-ink-muted m-0 mt-1 text-[11.5px]" data-funding-sources="">
+            {sourceNamesLine(duAn)}
             <span data-project-officer=""> · phụ trách {officerLabel(duAn, people)}</span>
           </p>
         </div>
@@ -298,41 +291,33 @@ export function ThongTinDuAn({
           <Figure label="Còn lại">{nhanTien(duAn.remaining_amount)}</Figure>
           <Figure label="Thời gian thực hiện">{executionPeriod(duAn.start_date, duAn.completion_date)}</Figure>
           <Figure label="Đơn vị thực hiện">{unitLabel(duAn, people)}</Figure>
-          {/* HAI MỐC KHÁC NHAU, CỐ Ý ĐỂ CẠNH NHAU. §9 nói rõ: công trình xong tháng 3 vẫn có thể
-              phải giải ngân trước 31/12, nên "ngày hoàn thành" không thay được "thời hạn giải
-              ngân". Not in the prototype's grid; kept because it is the date asked at settlement. */}
-          <Figure label="Thời hạn giải ngân">{nhanNgay(duAn.disbursement_deadline)}</Figure>
+          {/* Six cells as spec 07 (row D8). The disbursement deadline is in the edit form and the list. */}
         </dl>
 
         <div className="mt-4">
           {ratio !== null && Number.isFinite(ratio) && (
-            // The marker is a SIBLING of the track, not inside it: the track clips (`overflow-hidden`)
-            // and the marker stands a little above and below it, as the prototype draws it.
-            <div aria-hidden="true" className="relative">
-              <div className="h-2.5 overflow-hidden rounded-full bg-surface-subtle-2">
-                <div
-                  className={cn("h-full rounded-full", late ? "bg-danger-500" : "bg-success-500")}
-                  style={{ width: `${Math.min(100, Math.max(0, ratio / 100))}%` }}
-                />
-              </div>
+            // Spec 07 §Body 3: the fill in the 80/50/30 tier (not the late flag — that is the badge), the
+            // elapsed-time marker INSIDE the track, full track height.
+            <div aria-hidden="true" className={cn("relative h-2.5 overflow-hidden rounded-full", TRACK_CLASS)}>
+              <div
+                className={cn("h-full rounded-full", PROGRESS_BAR_CLASS[progressTone(ratio)])}
+                data-progress-tone={progressTone(ratio)}
+                style={{ width: `${Math.min(100, Math.max(0, ratio / 100))}%` }}
+              />
               {elapsed !== null && (
                 <span
                   data-elapsed-marker=""
-                  className="absolute -top-1 -bottom-1 w-0.5 -translate-x-1/2 rounded-full bg-ink-900"
+                  className="bg-navy/55 absolute top-0 h-full w-[2px]"
                   style={{ left: `${Math.min(100, Math.max(0, elapsed / 100))}%` }}
                 />
               )}
             </div>
           )}
-          <p className="m-0 mt-1.5 text-xs text-ink-500" data-progress-caption="">
+          <p className="text-ink-muted m-0 mt-1.5 text-[11.5px]" data-progress-caption="">
             {ratio === null ? nhanTyLeGiaiNgan(ratio) : `Giải ngân ${nhanTyLeGiaiNgan(ratio)}`}
             {elapsed !== null && ` · thời gian đã trôi qua ${percentLabel(elapsed)}`}
           </p>
         </div>
-
-        {duAn.description !== undefined && duAn.description !== "" && (
-          <p className="m-0 mt-3 text-sm whitespace-pre-line text-ink-700">{duAn.description}</p>
-        )}
 
         <ProjectFundingBlock
           allocations={duAn.funding_allocations}
@@ -375,10 +360,10 @@ export function ProjectFundingBlock({
   return (
     <section
       aria-labelledby="tieu-de-giai-ngan-theo-nguon"
-      className="mt-4 rounded-xl border border-line p-3"
+      className="border-line mt-4 rounded-[10px] border border-solid bg-white p-3"
       data-project-funding=""
     >
-      <h3 id="tieu-de-giai-ngan-theo-nguon" className="m-0 mb-2 text-xs font-bold tracking-wide text-ink-500 uppercase">
+      <h3 id="tieu-de-giai-ngan-theo-nguon" className="text-ink-muted m-0 mb-2 text-[10.5px] font-bold tracking-wide uppercase">
         Giải ngân theo nguồn vốn
       </h3>
       <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
@@ -388,24 +373,27 @@ export function ProjectFundingBlock({
           const width = known ? Math.min(100, Math.max(0, ratio / 100)) : 0;
           return (
             <li key={a.funding_source_id} className="min-w-0" data-allocation={a.funding_source_id}>
-              <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-[13px]">
-                <span className="min-w-0 font-semibold text-ink-900">{a.name}</span>
-                <span className="text-ink-500 tabular-nums">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-[12px]">
+                <span className="text-navy min-w-0 font-semibold">{a.name}</span>
+                <span className="text-ink-muted tabular-nums">
                   {nhanTien(a.disbursed_amount)} / {nhanTien(a.amount)} ·{" "}
-                  <span className="font-semibold text-ink-900">
+                  <span className="text-navy font-semibold">
                     {known ? nhanTyLeGiaiNgan(ratio) : "—"}
                   </span>
                 </span>
               </div>
-              <div aria-hidden="true" className="mt-1 h-2 overflow-hidden rounded-full bg-surface-subtle-2">
-                <div className="h-full rounded-full bg-success-500" style={{ width: `${width}%` }} />
+              <div aria-hidden="true" className={cn("relative mt-1 h-2 overflow-hidden rounded-full", TRACK_CLASS)}>
+                <div
+                  className={cn("h-full rounded-full", known ? PROGRESS_BAR_CLASS[progressTone(ratio)] : "")}
+                  style={{ width: `${width}%` }}
+                />
               </div>
             </li>
           );
         })}
       </ul>
       {unallocatedPlanAmount !== null && unallocatedPlanAmount !== undefined && unallocatedPlanAmount > 0 && (
-        <p className="m-0 mt-2 text-[13px] text-warning-600">
+        <p className="text-tangerine m-0 mt-2 text-[11.5px]">
           Còn {nhanTien(unallocatedPlanAmount)} của kế hoạch vốn năm chưa gắn nguồn nào.
         </p>
       )}
@@ -428,8 +416,8 @@ function executionPeriod(start: string | undefined, end: string | undefined): st
 function Figure({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
-      <dt className="text-xs font-semibold text-ink-500">{label}</dt>
-      <dd className="m-0 text-sm font-semibold break-words text-ink-900 tabular-nums">{children}</dd>
+      <dt className="text-ink-muted text-[10.5px] font-semibold tracking-wide uppercase">{label}</dt>
+      <dd className="text-navy m-0 text-[12.5px] font-semibold break-words tabular-nums">{children}</dd>
     </div>
   );
 }

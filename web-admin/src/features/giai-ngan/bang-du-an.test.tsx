@@ -55,7 +55,7 @@ describe("bảng dự án kết xuất ra trang", () => {
     // in the cell (hover title + visually-hidden text), no longer as the visible figure.
     expect(html).toContain(">100 triệu<");
     expect(html).toContain("100.000.000 đ");
-    expect(html).toContain("90,00%");
+    expect(html).toContain(">90%<");
   });
 
   it("dự án chậm: chip điểm chậm CÓ MẶT, nguyên văn", () => {
@@ -63,11 +63,13 @@ describe("bảng dự án kết xuất ra trang", () => {
       <BangDanhSach duLieu={danhSach([duAn({ delay_score: 3136, is_delayed: true })])} danhMuc={[]} />,
     );
 
-    expect(html).toContain("Chậm 31,36 điểm");
-    // Presentational pin (ADR 0068 lần 5): the prototype's red left edge on the row and red words
-    // under the name. Only a late project paints red on this table.
-    expect(html).toContain("border-l-danger-500");
-    expect(html).toContain("text-danger-600");
+    // Spec 02 §8: lowercase "chậm x điểm" with the triangle, small red words under the name.
+    expect(html).toContain("chậm 31,36 điểm");
+    expect(html).toContain("lucide-triangle-alert");
+    // The prototype's red left edge + faint red fill on the row. Only a late project paints red here.
+    expect(html).toContain("border-l-danger");
+    expect(html).toContain("bg-danger/3");
+    expect(html).toContain("text-danger");
   });
 
   it("dự án bám sát tiến độ KHÔNG mang dấu chậm — viền đỏ và chữ 'Chậm' chỉ dành cho dự án máy chủ báo chậm", () => {
@@ -82,9 +84,9 @@ describe("bảng dự án kết xuất ra trang", () => {
     // project page); a project with no capital still says so in words. The bar's colour is the 80/50/30
     // tier since 07/10/2026 (`progress-tone.ts`) — 90% here, so green; the LATE signal is the edge.
     expect(html).toContain("Chưa bố trí vốn");
-    expect(html).not.toContain("border-l-danger-500");
-    expect(html).not.toContain("text-danger-600");
-    expect(html).not.toContain("bg-danger-500");
+    expect(html).not.toContain("border-l-danger");
+    expect(html).not.toContain("text-danger");
+    expect(html).not.toContain("bg-danger");
   });
 
   it("dự án chưa bố trí vốn KHÔNG bao giờ hiện thành 0%", () => {
@@ -112,11 +114,11 @@ describe("bảng dự án kết xuất ra trang", () => {
       />,
     );
 
-    expect(html).toContain("110,00%");
+    expect(html).toContain(">110%<");
     expect(html).toContain("width:100%");
   });
 
-  it("hạng mục của dự án ra tới dòng của nó (thay cho dòng gộp theo hạng mục)", () => {
+  it("spec 02 §8: NO category sub-line under the name (the group row names it)", () => {
     const html = renderToStaticMarkup(
       <BangDanhSach
         duLieu={danhSach([duAn({ category_id: "01JHM1" })])}
@@ -134,7 +136,7 @@ describe("bảng dự án kết xuất ra trang", () => {
         ]}
       />,
     );
-    expect(html).toContain("Các công trình chuyển tiếp");
+    expect(html).not.toContain("Các công trình chuyển tiếp");
   });
 
   it("năm trên bảng lấy từ PHẢN HỒI, không từ ô chọn", () => {
@@ -166,19 +168,17 @@ describe("trang chi tiết dự án kết xuất ra trang", () => {
     expect(html).not.toContain(COMMUNE_WORDING);
   });
 
-  it("hai mốc ngày đứng RIÊNG: thời hạn giải ngân không thay được ngày hoàn thành", () => {
-    // §9 nói thẳng: công trình xong tháng 3 vẫn có thể phải giải ngân trước 31/12. Gộp hai dòng
-    // là mất đúng mốc bị hỏi khi quyết toán.
+  it("spec 07 figure grid: SIX cells; `Thời gian thực hiện` is start → completion, never the deadline", () => {
+    // The disbursement deadline is not a cell of the project card (spec 07 §Body 2); it stays on the
+    // list and in the edit form. The completion date is therefore never shown as if it were it.
     const html = renderToStaticMarkup(
       <ThongTinDuAn duAn={duAn({ completion_date: "2026-03-20", disbursement_deadline: "2026-12-31" })} />,
     );
 
-    expect(html).toContain("Thời hạn giải ngân");
-    // Prototype figure "Thời gian thực hiện": start → completion, beside — never instead of — the
-    // disbursement deadline.
+    expect(html.match(/<dt /g)).toHaveLength(6);
     expect(html).toContain("Thời gian thực hiện");
-    expect(html).toContain("Chưa đặt → 20/03/2026");
-    expect(html).toContain("31/12/2026");
+    expect(html).toContain("Chưa đặt → 20/3/2026");
+    expect(html).not.toContain("31/12/2026");
   });
 
   it("giải ngân vượt kế hoạch: số còn lại ÂM ra tới trang, không bị kẹp về 0", () => {

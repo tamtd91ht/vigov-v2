@@ -22,18 +22,22 @@ export function progressTone(hundredths: number): ProgressTone {
   return "danger";
 }
 
-/** Bar fill per tier. Literal class names so Tailwind finds them. */
+/**
+ * Bar fill per tier — the spec's `disbursementColor` (spec 00 §6: leaf / brand / tangerine / danger).
+ * Literal class names, not an inline `var(--color-…)`: Tailwind finds them, and the colour cannot point
+ * at a variable the build did not emit.
+ */
 export const PROGRESS_BAR_CLASS: Record<ProgressTone, string> = {
-  success: "bg-success-500",
-  brand: "bg-brand-500",
-  warning: "bg-warning-500",
-  danger: "bg-danger-500",
+  success: "bg-leaf",
+  brand: "bg-brand",
+  warning: "bg-tangerine",
+  danger: "bg-danger",
 };
 
-/** Figure colour per tier — the 600 shades, readable as text on white. */
+/** Figure colour per tier — the same four spec colours (contrast: owner-accepted debt, lần 6 #7). */
 export const PROGRESS_TEXT_CLASS: Record<ProgressTone, string> = {
-  success: "text-success-600",
-  brand: "text-brand-600",
-  warning: "text-warning-600",
-  danger: "text-danger-600",
+  success: "text-leaf",
+  brand: "text-brand",
+  warning: "text-tangerine",
+  danger: "text-danger",
 };

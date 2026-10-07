@@ -6,6 +6,7 @@
 
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { toast } from "sonner";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type {
@@ -23,6 +24,9 @@ import { CHUNG_TU_DA_XAC_NHAN, CHUNG_TU_KE_TOAN_NHAP, MISSING_FUNDING_SOURCE } f
  * voucher's funding source (decision 06/10/2026: project with allocation lines → source required and
  * one of them; project without → no source at all).
  */
+
+// Outcomes are toasts (ADR 0068 lần 6 #4).
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 const fakeSession = {
   ok: true as const,
@@ -165,7 +169,7 @@ describe("§8.2 list — read from the server", () => {
     await settle();
 
     expect(el.querySelector("#tab-chung-tu-du-an")?.textContent).toBe("Chứng từ (2)");
-    const rows = [...el.querySelectorAll('table[class*="bang-danh-muc"] tbody tr')];
+    const rows = [...el.querySelectorAll('[aria-label="Chứng từ giải ngân của dự án"] table tbody tr')];
     expect(rows).toHaveLength(2);
     // Column order: Ngày chi · Số tiền · Nguồn vốn · ...
     expect(rows.map((r) => r.querySelectorAll("td")[2]?.textContent)).toEqual(["Ngân sách tỉnh", "—"]);
@@ -204,12 +208,13 @@ describe("§8.2 list — read from the server", () => {
       voucher({ id: "OTHER", description: "Khoản chi người khác vừa ghi" }),
     ];
     await act(async () => {
-      el.querySelector<HTMLButtonElement>('button[aria-label="Xác nhận chứng từ ngày 07/09/2026"]')!.click();
+      el.querySelector<HTMLButtonElement>('button[aria-label="Xác nhận chứng từ ngày 7/9/2026"]')!.click();
     });
     await settle();
 
     expect(seen.some((s) => s.method === "POST" && s.url === "/api/v1/disbursements/01JCT1/confirmation")).toBe(true);
     expect(listReads(seen)).toBe(2);
+    expect(toast.success).toHaveBeenCalledWith("Đã xác nhận.");
     expect(el.querySelector("#tab-chung-tu-du-an")?.textContent).toBe("Chứng từ (2)");
     expect(el.textContent).toContain("Khoản chi người khác vừa ghi");
   });
@@ -273,8 +278,8 @@ describe("§8.2 form — `Rút từ nguồn vốn`", () => {
     expect([...select.options].map((o) => o.value)).toEqual(["", "S1", "S2"]);
     expect([...select.options].map((o) => o.textContent)).toEqual([
       "— Chọn nguồn vốn —",
-      "Ngân sách tỉnh — còn 1,2 tỷ đồng",
-      "Ngân sách xã — còn 500 triệu đồng",
+      "Ngân sách tỉnh — còn 1,2 tỷ",
+      "Ngân sách xã — còn 500 triệu",
     ]);
     expect(select.value).toBe("");
 
@@ -316,7 +321,7 @@ describe("§8.2 form — `Rút từ nguồn vốn`", () => {
     fillVoucher(el);
     await save(el, "Lưu khoản chi");
 
-    expect(el.querySelector('[role="alert"]')?.textContent).toBe(
+    expect(toast.error).toHaveBeenCalledWith(
       "Nguồn vốn này không được phân bổ cho dự án. Hãy chọn một nguồn đã phân bổ cho dự án, hoặc bỏ trống nếu dự án chưa khai nguồn vốn nào.",
     );
     expect(written).not.toHaveBeenCalled();
@@ -327,13 +332,13 @@ describe("§8.2 form — `Rút từ nguồn vốn`", () => {
     const filed = voucher({ funding_source_id: "S1", funding_source_name: "Ngân sách tỉnh" });
     const { el } = block(TWO_LINES, [filed]);
 
-    act(() => el.querySelector<HTMLButtonElement>('button[aria-label="Sửa chứng từ ngày 07/09/2026"]')!.click());
+    act(() => el.querySelector<HTMLButtonElement>('button[aria-label="Sửa chứng từ ngày 7/9/2026"]')!.click());
     expect(sourceSelect(el)!.value).toBe("S1");
     enter(el.querySelector<HTMLInputElement>("#noi-dung-chung-tu")!, "Thanh toán đợt 4");
     await save(el, "Lưu thay đổi");
     expect(seen.find((s) => s.method === "PATCH")?.body).toEqual({ description: "Thanh toán đợt 4" });
 
-    act(() => el.querySelector<HTMLButtonElement>('button[aria-label="Sửa chứng từ ngày 07/09/2026"]')!.click());
+    act(() => el.querySelector<HTMLButtonElement>('button[aria-label="Sửa chứng từ ngày 7/9/2026"]')!.click());
     enter(sourceSelect(el)!, "S2");
     await save(el, "Lưu thay đổi");
     expect(seen.filter((s) => s.method === "PATCH")[1]?.body).toEqual({ funding_source_id: "S2" });
@@ -344,9 +349,68 @@ describe("§8.2 form — `Rút từ nguồn vốn`", () => {
     const filed = voucher({ funding_source_id: "OLD", funding_source_name: "Vốn chương trình mục tiêu" });
     const { el } = block(TWO_LINES, [filed]);
 
-    act(() => el.querySelector<HTMLButtonElement>('button[aria-label="Sửa chứng từ ngày 07/09/2026"]')!.click());
+    act(() => el.querySelector<HTMLButtonElement>('button[aria-label="Sửa chứng từ ngày 7/9/2026"]')!.click());
     const select = sourceSelect(el)!;
     expect(select.value).toBe("OLD");
     expect(select.selectedOptions[0]?.textContent).toBe("Vốn chương trình mục tiêu — không còn phân bổ cho dự án");
+  });
+});
+
+describe("§8.2 row — spec 07 presentation, status codes unchanged", () => {
+  it("labels per spec 00 §6 over the UNCHANGED codes (ADR 0011)", () => {
+    stubServer({ vouchers: [] });
+    const { el } = block(TWO_LINES, [
+      voucher({ id: "A", status: CHUNG_TU_KE_TOAN_NHAP }),
+      voucher({ id: "B", status: CHUNG_TU_DA_XAC_NHAN }),
+      voucher({ id: "C", status: "da-khoa" }),
+    ]);
+    const badges = [...el.querySelectorAll("[data-voucher-status]")].map((b) => [
+      b.getAttribute("data-voucher-status"),
+      b.textContent,
+    ]);
+    expect(badges).toEqual([
+      ["ke-toan-nhap", "Kế toán nhập"],
+      ["da-xac-nhan", "Lãnh đạo đã xác nhận"],
+      ["da-khoa", "Đã khoá"],
+    ]);
+    // No lifecycle sentence, no "Khoá lúc" line (spec 07 rows D14, D19).
+    expect(el.textContent).not.toContain("Vòng đời");
+    expect(el.textContent).not.toContain("Khoá lúc");
+  });
+
+  it("a DRAFT row draws `Khoá` disabled with its '?' — the one-call confirm+lock is a backend dependency", () => {
+    stubServer({ vouchers: [] });
+    const { el } = block(TWO_LINES, [voucher({ status: CHUNG_TU_KE_TOAN_NHAP })]);
+    const spot = el.querySelector<HTMLElement>("tbody [data-pending]")!;
+    expect(spot).not.toBeNull();
+    const button = [...spot.querySelectorAll("button")].find((b) => b.textContent === "Khoá")!;
+    expect(button.disabled).toBe(true);
+    expect(spot.querySelector("button[data-pending-marker]")?.getAttribute("aria-label")).toContain(
+      "Khoá khoản chi chưa xác nhận",
+    );
+    // After `Xác nhận`, as the prototype orders the buttons.
+    const words = [...el.querySelectorAll("tbody button")].map((b) => b.textContent?.trim()).filter(Boolean);
+    expect(words.indexOf("Khoá")).toBe(words.indexOf("Xác nhận") + 1);
+  });
+
+  it("a CONFIRMED row has the live `Khoá` (no '?'), and the lock outcome is the spec's toast", async () => {
+    stubServer({ vouchers: [] });
+    const { el } = block(TWO_LINES, [voucher({ status: CHUNG_TU_DA_XAC_NHAN })]);
+    expect(el.querySelector("tbody [data-pending]")).toBeNull();
+    await act(async () => {
+      el.querySelector<HTMLButtonElement>('button[aria-label="Khoá chứng từ ngày 7/9/2026"]')!.click();
+    });
+    await settle();
+    expect(toast.success).toHaveBeenCalledWith("Đã xác nhận và khoá.");
+  });
+
+  it("without the keys the buttons are simply absent — no denial notes (spec 07)", () => {
+    stubServer({ vouchers: [] });
+    const vouchers: ProjectVoucherList = { phase: "ready", items: [voucher()], count: 1 };
+    const el = mount(
+      <KhoiChungTu duAnID="01JDA1" allocations={[]} vouchers={vouchers} coGhi={false} coXacNhan={false} daGhiXong={() => {}} />,
+    );
+    expect(el.querySelectorAll("tbody button")).toHaveLength(0);
+    expect(el.textContent).not.toContain("chưa được cấp quyền");
   });
 });

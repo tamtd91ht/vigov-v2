@@ -59,24 +59,34 @@ export function bulkDeleteConfirmLabel(n: number): string {
   return `Xoá ${n} dự án`;
 }
 
+/**
+ * Spec 02 §9's description, MADE TRUE FOR OUR SERVER (ADR 0068 lần 6 #9 brief): the spec says the
+ * projects leave "cùng với các khoản chi đã ghi" and that only projects with LOCKED vouchers are
+ * refused; our server refuses ANY project that still has vouchers (409 `project_has_vouchers`, ADR 0075
+ * #4a), so no voucher ever leaves with a project.
+ */
 export const BULK_DELETE_NOTE =
-  "Từng dự án được xoá lần lượt. Dự án sẽ không còn trong danh sách và trong số liệu của năm, nhưng " +
-  "bản ghi vẫn được giữ trong hệ thống cùng người xoá, và mã dự án không được cấp lại. Dự án nào máy " +
-  "chủ từ chối thì vẫn còn trong danh sách, kèm câu trả lời của máy chủ.";
+  "Những dự án này sẽ khuất khỏi danh sách và khỏi báo cáo tiến độ. Bản ghi vẫn được giữ trong hệ " +
+  "thống, nhưng giao diện không có nút hoàn tác. Dự án đã có phiếu chi sẽ bị từ chối.";
 
 export function bulkProgressText(done: number, total: number): string {
-  return `Đang xoá ${done}/${total}… Mỗi dự án chờ máy chủ trả lời rồi mới sang dự án kế tiếp.`;
+  return `Đang xoá ${done}/${total}…`;
 }
 
-/** One line per project — which went, which did not and why, in the server's own words. */
-export function bulkResultLine(r: ProjectDeleteResult): string {
-  return r.ok ? `${r.code} — đã xoá.` : `${r.code} — chưa xoá: ${r.message}`;
-}
-
-export function bulkSummary(results: readonly ProjectDeleteResult[]): string {
+/** Spec 02 §9 success toast, counting only what the server accepted; `null` when nothing went. */
+export function bulkSuccessToast(results: readonly ProjectDeleteResult[]): string | null {
   const ok = results.filter((r) => r.ok).length;
-  const failed = results.length - ok;
-  return failed === 0
-    ? `Đã xoá ${ok}/${results.length} dự án.`
-    : `Đã xoá ${ok}/${results.length} dự án; ${failed} dự án chưa xoá được — xem từng dòng bên dưới.`;
+  return ok === 0 ? null : `Đã xoá ${ok} dự án.`;
+}
+
+/**
+ * Spec 02 §9 error toasts, one per distinct refusal: "{n} dự án không xoá được: {lý do}". The reason
+ * is THE SERVER'S sentence — the spec's own reasons are keyed by code, and `KetQua` carries none.
+ */
+export function bulkFailureToasts(results: readonly ProjectDeleteResult[]): string[] {
+  const byReason = new Map<string, number>();
+  for (const r of results) {
+    if (!r.ok) byReason.set(r.message, (byReason.get(r.message) ?? 0) + 1);
+  }
+  return [...byReason].map(([message, n]) => `${n} dự án không xoá được: ${message}`);
 }

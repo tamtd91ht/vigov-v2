@@ -1,16 +1,15 @@
 "use client";
 
-import { CircleCheck, Send, TriangleAlert } from "lucide-react";
+import { CircleCheck, Send } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
+import { toast } from "sonner";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba"; // vi-name-ok: existing idempotency-key helper (rule 12 invariant 3)
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { controlClass } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
-import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 import type { KetQua } from "@/lib/api/goi"; // vi-name-ok: existing shared result type of goi.ts (rule 12 invariant 3)
 import { getProjectIssues, recordProjectIssue, resolveProjectIssue } from "@/lib/api/project-discussion";
 import type { finance_projectIssueOut, finance_projectIssuesOut, identity_canBoChonNguoiRa } from "@/lib/api/schema.gen";
@@ -18,9 +17,9 @@ import { cn } from "@/lib/cn";
 
 import { nhanMocKhoa } from "./nhan-ghi-giai-ngan";
 import { TrackingTaskPending } from "./pending-parts";
-import { ISSUE_PLACEHOLDER, ISSUES_DENIED, staffLabel } from "./project-discussion-labels";
+import { ISSUE_PLACEHOLDER, staffLabel } from "./project-discussion-labels";
 import type { PeopleCatalogue } from "./project-people";
-import { DeniedNote, Glyph } from "./project-ui";
+import { Glyph } from "./project-ui";
 
 /**
  * §8.1 "Vướng mắc" — the prototype's one-box form (`IssueForm.tsx`) and its timeline
@@ -80,15 +79,15 @@ export function ProjectIssuesPanel({
   onChanged: () => void;
 }) {
   const [resolving, setResolving] = useState<string | null>(null);
-  const [resolveError, setResolveError] = useState<string | null>(null);
 
   function resolve(issue: finance_projectIssueOut): void {
     setResolving(issue.id);
-    setResolveError(null);
     resolveProjectIssue(issue.id).then((r) => {
       setResolving(null);
-      // The server's sentence verbatim — its 409 says the issue was already resolved and what to do.
-      if (!r.ok) setResolveError(r.thongBao);
+      // Spec 07 toast on success; on refusal the server's sentence verbatim — its 409 says the issue was
+      // already resolved and what to do.
+      if (r.ok) toast.success("Đã đóng vướng mắc.");
+      else toast.error(r.thongBao);
       // Re-read on failure too: a 409 means somebody else resolved it, and the timeline should say so.
       onChanged();
     });
@@ -96,13 +95,8 @@ export function ProjectIssuesPanel({
 
   return (
     <div className="flex min-w-0 flex-col gap-3" data-issues-panel="">
-      {canRecord ? <IssueForm projectId={projectId} onRecorded={onChanged} /> : <DeniedNote>{ISSUES_DENIED}</DeniedNote>}
-
-      {resolveError !== null && (
-        <p className="thong-bao-loi m-0" role="alert">
-          {resolveError}
-        </p>
-      )}
+      {/* Without `budget.update` the form is simply absent (spec 07); the routes check the key. */}
+      {canRecord && <IssueForm projectId={projectId} onRecorded={onChanged} />}
 
       {issues.phase === "loading" && (
         <div>
@@ -144,7 +138,6 @@ function IssueForm({ projectId, onRecorded }: { projectId: string; onRecorded: (
   // Minted when the form opens and kept across a failed send: a retry must reuse it (`recordProjectIssue`).
   const [idempotencyKey, setIdempotencyKey] = useState(khoaChongTrungMoi);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const empty = text.trim() === "";
 
   function submit(e: FormEvent): void {
@@ -154,10 +147,10 @@ function IssueForm({ projectId, onRecorded }: { projectId: string; onRecorded: (
     recordProjectIssue(projectId, text, idempotencyKey).then((r) => {
       setBusy(false);
       if (!r.ok) {
-        setError(r.thongBao);
+        toast.error(r.thongBao);
         return;
       }
-      setError(null);
+      toast.success("Đã ghi nhận vướng mắc.");
       setText("");
       setIdempotencyKey(khoaChongTrungMoi());
       onRecorded();
@@ -175,26 +168,20 @@ function IssueForm({ projectId, onRecorded }: { projectId: string; onRecorded: (
         rows={2}
         value={text}
         placeholder={ISSUE_PLACEHOLDER}
-        className={cn(controlClass, "h-auto min-h-16 w-full min-w-0 resize-y py-2")}
+        className={cn(controlClass, "h-auto min-h-16 w-full min-w-0 resize-y bg-white py-2 text-[12.5px] md:text-[12.5px]")}
         onChange={(e) => setText(e.target.value)}
       />
-      {error !== null && (
-        <p className="thong-bao-loi m-0" role="alert">
-          {error}
-        </p>
-      )}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="m-0 text-xs text-ink-500">Dòng đầu là tiêu đề, các dòng sau là diễn giải.</span>
         <TrackingTaskPending />
         <Button
           type="submit"
           variant="primary"
           className="ml-auto"
-          icon={busy ? undefined : <Glyph icon={Send} />}
+          icon={<Glyph icon={Send} />}
           disabled={empty || busy}
           aria-busy={busy || undefined}
         >
-          <BusyLabel busy={busy} label="Ghi nhận" busyText={BUSY_SAVING} />
+          Ghi nhận
         </Button>
       </div>
     </form>
@@ -217,7 +204,7 @@ export function IssueTimeline({
   onResolve: (issue: finance_projectIssueOut) => void;
 }) {
   if (items.length === 0) {
-    return <EmptyState icon={TriangleAlert} title="Chưa ghi nhận vướng mắc nào ở dự án này." />;
+    return <p className="text-ink-muted m-0 mt-1 text-[12.5px]">Chưa ghi nhận vướng mắc nào ở dự án này.</p>;
   }
   return (
     <ol className="m-0 flex list-none flex-col gap-3 p-0" aria-label="Dòng thời gian vướng mắc">
@@ -227,13 +214,13 @@ export function IssueTimeline({
           data-issue={issue.id}
           data-resolved={issue.resolved ? "" : undefined}
           className={cn(
-            "rounded-xl border border-line px-3 py-2.5",
-            issue.resolved ? "bg-surface-subtle opacity-75" : "bg-surface",
+            "border-line rounded-[10px] border border-solid px-3 py-2.5",
+            issue.resolved ? "bg-canvas opacity-75" : "bg-white",
           )}
         >
           <div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <b className="text-[13px] text-ink-900">{staffLabel(issue.recorded_by, staff)}</b>
-            <time dateTime={issue.recorded_at} className="text-xs text-ink-500 tabular-nums">
+            <b className="text-navy text-[12.5px]">{staffLabel(issue.recorded_by, staff)}</b>
+            <time dateTime={issue.recorded_at} className="text-ink-muted text-[11px] tabular-nums">
               {nhanMocKhoa(issue.recorded_at)}
             </time>
             {issue.resolved && (
@@ -242,31 +229,24 @@ export function IssueTimeline({
               </Badge>
             )}
           </div>
-          <p className={cn("m-0 text-sm whitespace-pre-line text-ink-900", issue.resolved && "line-through")}>
+          <p className={cn("m-0 text-[12.5px] whitespace-pre-line", issue.resolved && "line-through")}>
             {issue.title}
           </p>
           {issue.description !== undefined && issue.description !== "" && (
             <p
               className={cn(
-                "m-0 mt-1 text-[13px] whitespace-pre-line text-ink-500",
-                issue.resolved && "line-through",
+                "text-ink-muted m-0 mt-1 text-[12px] whitespace-pre-line",
               )}
             >
               {issue.description}
             </p>
           )}
-          {issue.resolved && (
-            <p className="m-0 mt-1 text-xs text-ink-500" data-resolved-by="">
-              Gỡ lúc {nhanMocKhoa(issue.resolved_at)}
-              {issue.resolved_by !== undefined && issue.resolved_by !== "" && ` · ${staffLabel(issue.resolved_by, staff)}`}
-            </p>
-          )}
           {canRecord && !issue.resolved && (
             <Button
               type="button"
-              variant="secondary"
+              variant="outline"
               size="sm"
-              className="mt-2"
+              className="text-leaf hover:not-disabled:text-leaf mt-2"
               icon={<Glyph icon={CircleCheck} />}
               disabled={resolving !== null}
               aria-busy={resolving === issue.id || undefined}

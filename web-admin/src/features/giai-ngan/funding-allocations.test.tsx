@@ -6,7 +6,11 @@
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
+import { toast } from "sonner";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+
+// Outcomes are toasts (ADR 0068 lần 6 #4).
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import type {
   finance_duAnRa,
@@ -152,7 +156,8 @@ describe("§9 funding list — add form", () => {
     const el = addForm(READY);
     act(() => buttonByText(el, "Thêm nguồn vốn").click());
     enter(sourceSelects(el)[0]!, "S1");
-    expect(el.textContent).toContain("Nguồn này còn 5 tỷ đồng chưa phân bổ trên tổng 9 tỷ đồng được giao năm 2026.");
+    // Spec 04 verbatim, short amounts.
+    expect(el.textContent).toContain("Nguồn này còn 5 tỷ chưa phân bổ trên tổng 9 tỷ được giao.");
   });
 
   it("live line: thiếu → khớp → vượt as the clerk types; vượt disables saving and says so", () => {
@@ -191,11 +196,10 @@ describe("§9 funding list — add form", () => {
     expect(el.textContent).toContain("Chưa gắn nguồn nào.");
   });
 
-  it("empty catalogue for the year: no rows, no add button, and where sources are declared", () => {
+  it("empty catalogue for the year: the whole `Nguồn vốn` block is absent (spec 04: only when the commune has sources)", () => {
     const el = addForm({ phase: "ready", items: [] });
     expect([...el.querySelectorAll("button")].some((b) => b.textContent?.trim() === "Thêm nguồn vốn")).toBe(false);
-    expect(el.textContent).toContain("Xã chưa khai báo nguồn vốn nào");
-    expect(el.textContent).toContain("Quản lý nguồn vốn");
+    expect(el.querySelector("[data-funding-allocations]")).toBeNull();
   });
 
   it("catalogue failed to load: the server's sentence, no editable row", () => {
@@ -325,8 +329,7 @@ describe("§8 edit — funding_allocations in the PATCH", () => {
     const el = await mountEdit(onSaved);
     act(() => el.querySelector<HTMLButtonElement>('button[aria-label="Bỏ nguồn vốn Ngân sách tỉnh"]')!.click());
     await submit(el);
-    const alert = el.querySelector('[role="alert"]');
-    expect(alert?.textContent).toBe(
+    expect(toast.error).toHaveBeenCalledWith(
       "Nguồn vốn muốn gỡ đã có chứng từ giải ngân của dự án này. Hãy chuyển các chứng từ ấy sang nguồn khác hoặc gỡ chúng trước, rồi mới gỡ nguồn vốn.",
     );
     expect(onSaved).not.toHaveBeenCalled();
@@ -343,15 +346,16 @@ describe("§7.2 funding chip — the server's state, three variants", () => {
   it("chua-gan-nguon → orange 'Chưa gắn nguồn'", () => {
     const html = chip({ status: "chua-gan-nguon", source_count: 0, allocated_total: 0, shortfall_amount: 100 });
     expect(html).toContain("Chưa gắn nguồn");
-    expect(html).toContain("text-warning-600");
+    expect(html).toContain("text-tangerine");
   });
 
-  it("chua-du → 'Thiếu {shortfall}' in full đồng, plus the source names", () => {
+  it("chua-du → 'Thiếu {shortfall}' short (spec 02 §8), full đồng on hover, plus the source names", () => {
     const html = chip(
       { status: "chua-du", source_count: 1, allocated_total: 60_000_000, shortfall_amount: 40_000_000 },
       ["Ngân sách tỉnh"],
     );
-    expect(html).toContain("Thiếu 40.000.000 đ");
+    expect(html).toContain("Thiếu 40 triệu");
+    expect(html).toContain('title="40.000.000 đ"');
     expect(html).toContain("Ngân sách tỉnh");
   });
 
@@ -361,7 +365,7 @@ describe("§7.2 funding chip — the server's state, three variants", () => {
       ["Ngân sách tỉnh", "Ngân sách xã", "Xã hội hoá"],
     );
     expect(html).toContain("Đủ · 3 nguồn");
-    expect(html).toContain("text-success-600");
+    expect(html).toContain("text-leaf");
     expect(html).toContain("Ngân sách tỉnh, Ngân sách xã, Xã hội hoá");
   });
 
@@ -380,7 +384,9 @@ describe("§8 'Giải ngân theo nguồn vốn' block", () => {
     );
     expect(html).toContain("Giải ngân theo nguồn vốn");
     expect(html).toContain("30.000.000 đ / 60.000.000 đ");
-    expect(html).toContain("50,00%");
+    expect(html).toContain(">50%<");
+    // The bar takes the 80/50/30 tier (spec 07 §Body 4): 50% → brand.
+    expect(html).toContain("bg-brand");
     expect(html).toContain("Còn 10.000.000 đ của kế hoạch vốn năm chưa gắn nguồn nào.");
   });
 
@@ -395,8 +401,8 @@ describe("§8 'Giải ngân theo nguồn vốn' block", () => {
       />,
     );
     expect(html).toMatch(/0 đ \/ 0 đ ·[^<]*<span[^>]*>—<\/span>/);
-    expect(html).not.toContain(">0,00%<");
-    expect(html).toContain("120,00%");
+    expect(html).not.toContain(">0%<");
+    expect(html).toContain("120%");
     expect(html).toContain("width:100%");
     expect(html).not.toContain("chưa gắn nguồn nào");
   });
@@ -407,10 +413,37 @@ describe("§8 'Giải ngân theo nguồn vốn' block", () => {
 
   it("header line names the sources, or 'Chưa gắn nguồn vốn'", () => {
     const named = renderToStaticMarkup(<ThongTinDuAn duAn={PROJECT} />);
-    expect(named).toContain("Ngân sách tỉnh · Ngân sách xã · Năm ngân sách 2026");
+    // Spec 07: sources · officer — no budget year in the line (row D5).
+    expect(named).toContain("Ngân sách tỉnh · Ngân sách xã<");
+    expect(named).not.toContain("Năm ngân sách");
     const none = renderToStaticMarkup(
       <ThongTinDuAn duAn={{ ...PROJECT, funding_allocations: undefined, funding_source_names: undefined }} />,
     );
-    expect(none).toContain("Chưa gắn nguồn vốn · Năm ngân sách 2026");
+    expect(none).toContain("Chưa gắn nguồn vốn<");
+  });
+});
+
+describe("§8 edit — the funding catalogue is read for the PROJECT's year", () => {
+  it("a 2025 project's form asks `funding-sources?year=2025`, never the current year (spec 07 prototype bug not copied)", async () => {
+    const urls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        urls.push(url);
+        return new Response(JSON.stringify({ year: 2025, items: SOURCES, unattributed_disbursed_amount: 0 }), { status: 200 });
+      }),
+    );
+    mount(
+      <ProjectEditPanel
+        duAn={{ ...PROJECT, year: 2025 }}
+        danhMuc={CATEGORIES}
+        people={PEOPLE_LOADING}
+        onClose={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+    await act(async () => {});
+    const reads = urls.filter((u) => u.startsWith("/api/v1/funding-sources"));
+    expect(reads).toEqual(["/api/v1/funding-sources?year=2025"]);
   });
 });

@@ -1,6 +1,5 @@
 "use client";
 
-import { ChartLine, MessagesSquare, ReceiptText, TriangleAlert } from "lucide-react";
 import { useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { PendingMarker } from "@/components/ui/pending-feature";
@@ -59,8 +58,8 @@ export function AttentionCaption({ openIssueCount }: { openIssueCount: number | 
  */
 export function TrackingTaskPending() {
   return (
-    <span className="inline-flex min-w-0 items-center gap-1.5 text-xs" data-pending="">
-      <span className="text-ink-400">{TRACKING_TASK}</span>
+    <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px]" data-pending="">
+      <span className="text-ink-muted">{TRACKING_TASK}</span>
       <PendingMarker info={pendingPart(TRACKING_TASK)} />
     </span>
   );
@@ -69,8 +68,8 @@ export function TrackingTaskPending() {
 /** §8.4: a mention is stored, but nobody is notified yet — said beside the composer, with its "?". */
 export function MentionNoticePending() {
   return (
-    <span className="inline-flex min-w-0 items-center gap-1.5 text-xs" data-pending="">
-      <span className="text-ink-400">{MENTION_NOTICE} — chưa có</span>
+    <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px]" data-pending="">
+      <span className="text-ink-muted">{MENTION_NOTICE} — chưa có</span>
       <PendingMarker info={pendingPart(MENTION_NOTICE)} />
     </span>
   );
@@ -79,7 +78,8 @@ export function MentionNoticePending() {
 type ProjectTab = "issues" | "vouchers" | "chart" | "discussion";
 
 const TAB_ORDER: readonly ProjectTab[] = ["issues", "vouchers", "chart", "discussion"];
-const TAB_ID: Record<ProjectTab, string> = {
+/** Exported for the dev-only preview (`dev-preview/`), which opens a tab by these ids for a screenshot. */
+export const TAB_ID: Record<ProjectTab, string> = {
   issues: "tab-vuong-mac-du-an",
   vouchers: "tab-chung-tu-du-an",
   chart: "tab-bieu-do-du-an",
@@ -146,14 +146,14 @@ export function ProjectRecordTabs({
     document.getElementById(TAB_ID[tab])?.focus();
   }
 
-  function tab(id: ProjectTab, icon: typeof TriangleAlert, label: string) {
+  // No icons (spec 07 §Body 5, shadcn TabsTrigger with words only).
+  function tab(id: ProjectTab, label: string) {
     return (
       <Tab
         selected={selected === id}
         id={TAB_ID[id]}
         aria-controls={PANEL_ID[id]}
         tabIndex={selected === id ? 0 : -1}
-        icon={icon}
         onClick={() => setSelected(id)}
       >
         {label}
@@ -172,10 +172,10 @@ export function ProjectRecordTabs({
   return (
     <div className="flex min-w-0 flex-col gap-4">
       <TabList aria-label="Hồ sơ dự án" onKeyDown={onKeyDown}>
-        {tab("issues", TriangleAlert, counted("Vướng mắc", issueCount))}
-        {tab("vouchers", ReceiptText, counted("Chứng từ", voucherCount))}
-        {tab("chart", ChartLine, "Biểu đồ")}
-        {tab("discussion", MessagesSquare, "Trao đổi")}
+        {tab("issues", counted("Vướng mắc", issueCount))}
+        {tab("vouchers", counted("Chứng từ", voucherCount))}
+        {tab("chart", "Biểu đồ")}
+        {tab("discussion", "Trao đổi")}
       </TabList>
       {kept("issues", issues)}
       {kept("vouchers", children)}

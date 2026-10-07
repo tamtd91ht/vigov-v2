@@ -12,9 +12,7 @@
 
 import type { SuaChungTuVao, SuaDuAnVao, ThemChungTuVao, ThemDuAnVao } from "@/lib/api/giai-ngan";
 import type { finance_phanBoVao, finance_projectAllocationOut } from "@/lib/api/schema.gen";
-import { compactDong } from "@/lib/compact-dong";
-
-import { nhanTien } from "./nhan-du-an"; // vi-name-ok: existing formatter of nhan-du-an.ts (rule 12, invariant 3)
+import { nhanTien, shortDongLabel } from "./nhan-du-an"; // vi-name-ok: existing formatter of nhan-du-an.ts (rule 12, invariant 3)
 
 /* ── Trần độ dài, chép từ máy chủ ──────────────────────────────────────────────────────────── */
 
@@ -94,7 +92,8 @@ export const CHUNG_TU_DA_KHOA = "da-khoa";
 
 const NHAN_TRANG_THAI: Readonly<Record<string, string>> = {
   [CHUNG_TU_KE_TOAN_NHAP]: "Kế toán nhập",
-  [CHUNG_TU_DA_XAC_NHAN]: "Đã xác nhận",
+  // Spec 00 §6 `DISBURSEMENT_STATUS_META` wording (ADR 0068 lần 6); the CODE stays `da-xac-nhan`.
+  [CHUNG_TU_DA_XAC_NHAN]: "Lãnh đạo đã xác nhận",
   [CHUNG_TU_DA_KHOA]: "Đã khoá",
 };
 
@@ -295,7 +294,7 @@ export const MISSING_FUNDING_SOURCE =
  * remainder stays negative — an overdrawn line must be visible where the next payment is chosen.
  */
 export function allocationOptionLabel(line: finance_projectAllocationOut): string {
-  return `${line.name} — còn ${compactDong(line.amount - line.disbursed_amount)}`;
+  return `${line.name} — còn ${shortDongLabel(line.amount - line.disbursed_amount)}`;
 }
 
 /** The select's starting value on ADD: the only source when there is exactly one, else none. */
@@ -805,25 +804,6 @@ export function lyDoDuDung(lyDo: string): boolean {
   return lyDo.trim() !== "";
 }
 
-/* ── Câu cho các cổng quyền ────────────────────────────────────────────────────────────────── */
-
-/**
- * Câu hiện thay cho nhóm nút GHI khi tài khoản thiếu khoá.
- *
- * GỌI ĐÚNG TÊN QUYỀN, và gọi đúng quyền NÀO cho việc NÀO: "bạn không có quyền" trống trơn là câu
- * khiến cán bộ gọi lên huyện hỏi mình thiếu quyền gì, và ở màn này câu trả lời có hai khả năng
- * khác hẳn nhau. Tên là tên màn Phân quyền hiện (`quyen.ten`, migration 0001 của identity), không
- * phải khoá máy `budget.*` (tester report GN-07).
- */
-export const CAU_THIEU_QUYEN_GHI =
-  "Tài khoản của bạn chưa được cấp quyền “Cập nhật giải ngân”, nên phần thêm và sửa " +
-  "không hiển thị. Liên hệ quản trị viên của đơn vị nếu bạn cần quyền này.";
-
-export const CAU_THIEU_QUYEN_XAC_NHAN =
-  "Tài khoản của bạn chưa được cấp quyền “Xác nhận, khoá khoản giải ngân”, nên các thao tác xác " +
-  "nhận, khoá, mở khoá và gỡ không hiển thị. Đây là quyền của người chịu trách nhiệm, tách khỏi " +
-  "quyền nhập liệu có chủ ý.";
-
 /* ── Phần chưa dựng ────────────────────────────────────────────────────────────────────────── */
 
 /**
@@ -885,6 +865,22 @@ export const PHAN_CHUA_DUNG_GHI: readonly PhanChuaDung[] = [
   },
   // §8.4: the server stores the mentioned staff codes but sends nobody anything — the notification
   // belongs to `comms` and arrives later as an event (same decision).
+  // Spec 04 `Đơn vị thực hiện` ends with "— Đơn vị khác, nhập tay —" + a free-text box. Our contract
+  // stores `org_unit_id` only (ADR 0068 lần 6 #11: a "?" option + BACKEND DEPENDENCY).
+  {
+    ten: "Đơn vị khác, nhập tay",
+    viSao:
+      "Đơn vị thực hiện hiện chỉ chọn được trong sơ đồ tổ chức của xã. Nhập tay tên một đơn vị ngoài " +
+      "danh sách (ví dụ nhà thầu) cần máy chủ lưu thêm trường chữ, phần này chưa có.",
+  },
+  // Spec 07 `Khoá` on a draft voucher = confirm and lock in ONE call. Our lifecycle confirms first,
+  // then locks (two routes, two audit entries); lần 6 #9 makes the one-call lock a BACKEND DEPENDENCY.
+  {
+    ten: "Khoá khoản chi chưa xác nhận",
+    viSao:
+      "Khoá ngay một khoản chi còn ở trạng thái Kế toán nhập (xác nhận và khoá trong một lần bấm) cần " +
+      "máy chủ hỗ trợ. Hiện phải bấm Xác nhận trước, rồi mới Khoá được.",
+  },
   {
     ten: "Thông báo cho người được nhắc tên",
     viSao:

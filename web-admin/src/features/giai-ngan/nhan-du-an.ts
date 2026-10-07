@@ -18,11 +18,12 @@ import type { finance_hangMucRa } from "@/lib/api/schema.gen";
  */
 const DINH_DANG_SO = new Intl.NumberFormat("vi-VN");
 
-/** Hai chữ số thập phân, đúng đơn vị đặc tả in ra: `10,33%` · `chậm 31,36 điểm`. */
-const DINH_DANG_PHAN_VAN = new Intl.NumberFormat("vi-VN", {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+/**
+ * A percent or a point figure as the owner's spec prints it (spec 00 §6: `n.toLocaleString("vi-VN")`):
+ * `50%`, `32,59%`, `chậm 31,36 điểm` — no forced decimals. The server's unit is hundredths, so at most
+ * two decimals ever appear; a trailing `,00` is not printed (ADR 0068 lần 6, reviewer row G8).
+ */
+const DINH_DANG_PHAN_VAN = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 });
 
 /**
  * Số tiền đồng → `100.000.000 đ`.
@@ -119,8 +120,15 @@ export function nhanTienDo(t: TienDoDuAn): string {
       // Đúng chữ đặc tả §8 in trong chip xanh.
       return "Bám sát tiến độ";
     case "cham":
-      return `Chậm ${DINH_DANG_PHAN_VAN.format(t.diem / 100)} điểm`;
+      // The project page's badge, spec 07 §Body 1 verbatim. The list writes its own lowercase
+      // "chậm x điểm" (`delayPointsLabel`), as spec 02 §8 does.
+      return `Chậm ${delayPointsLabel(t.diem)} so với tiến độ thời gian`;
   }
+}
+
+/** `31,36 điểm` from the server's `delay_score` (hundredths of a point). */
+export function delayPointsLabel(hundredths: number): string {
+  return `${DINH_DANG_PHAN_VAN.format(hundredths / 100)} điểm`;
 }
 
 /** Lớp CSS đi theo LOẠI kết quả, không theo câu chữ. Màu không phải tín hiệu duy nhất: chữ đã nói rõ. */
@@ -150,12 +158,20 @@ export function nhanNgay(ngayISO: string): string {
   if (ngayISO === "") return "Chưa đặt";
   const phan = ngayISO.split("-");
   const [nam, thang, ngay] = phan;
-  if (phan.length !== 3 || nam === undefined || thang === undefined || ngay === undefined) {
+  if (
+    phan.length !== 3 ||
+    nam === undefined ||
+    thang === undefined ||
+    ngay === undefined ||
+    !/^\d+$/.test(thang) ||
+    !/^\d+$/.test(ngay)
+  ) {
     // Không đúng khuôn hợp đồng: hiện NGUYÊN chuỗi máy chủ gửi, đừng đoán. Một ngày đoán sai
     // trông y hệt một ngày đúng.
     return ngayISO;
   }
-  return `${ngay}/${thang}/${nam}`;
+  // Unpadded, as the spec's `toLocaleDateString("vi-VN")` prints it: `27/8/2026` (spec 00 §6, row G9).
+  return `${Number(ngay)}/${Number(thang)}/${nam}`;
 }
 
 /**
@@ -185,7 +201,8 @@ export function hangMucDuAn(
 export function nhanHangMuc(h: HangMucDuAn): string {
   switch (h.loai) {
     case "chuaGan":
-      return "Chưa gắn hạng mục";
+      // The prototype's words for the projects with no category (`BudgetItemTable.tsx:132`).
+      return "Chưa xếp hạng mục";
     case "coNhan":
       return h.nhan;
     case "chiCoMa":
@@ -221,17 +238,12 @@ export function nhanNguongCham(phanVan: number): string {
 // câu ấy là `budget.scope_notice` do máy chủ gửi (`scope_notice`), xã sửa được — xem `scope-notice.tsx`.
 
 /**
- * Trạng thái rỗng: năm ngân sách chưa có dự án nào. Bình thường, không phải lỗi. The first sentence
- * is the prototype's (`BudgetWorkspace.tsx:371-374`, under the title "Chưa có dự án nào").
- *
- * Quyền gọi bằng TÊN trên màn Phân quyền ("Cập nhật giải ngân"), không bằng khoá máy `budget.update`
- * (tester report GN-07): cán bộ đọc tên ấy cho quản trị viên, và đó là chữ quản trị viên tìm thấy.
+ * Trạng thái rỗng: năm ngân sách chưa có dự án nào. Bình thường, không phải lỗi. The prototype's
+ * sentence verbatim (spec 02 §8 "Rỗng", `BudgetWorkspace.tsx:371-374`). The extra line naming the
+ * permission left with ADR 0068 lần 6: the spec card has none.
  */
 export function nhanNamRong(nam: number): string {
-  return (
-    `Thêm dự án và xếp vào hạng mục để bắt đầu theo dõi giải ngân năm ${nam}. Nút “Thêm dự án” chỉ ` +
-    "hiện với tài khoản có quyền “Cập nhật giải ngân”."
-  );
+  return `Thêm dự án và xếp vào hạng mục để bắt đầu theo dõi giải ngân năm ${nam}.`;
 }
 
 /**

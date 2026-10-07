@@ -1,5 +1,3 @@
-import { ShieldCheck } from "lucide-react";
-
 import { Notice } from "@/components/ui/notice";
 
 /**
@@ -12,7 +10,10 @@ import { Notice } from "@/components/ui/notice";
  * thống tab, and nothing would say so.
  *
  * NO FALLBACK TEXT: absent or blank renders nothing. Inventing the sentence client-side is exactly
- * the second copy this component exists to remove; the server always sends it.
+ * the second copy this component exists to remove; the server always sends it. The prototype's
+ * fallback ("ViGov là công cụ…", spec 02 §2) is therefore NOT copied (ADR 0068 lần 6 owner brief).
+ *
+ * LOOK = the spec's grey notice (spec 00 §4): `Notice` draws exactly that box with the `Info` icon.
  *
  * Not `role="alert"`: it is always there, not an event that just happened. Drawn as the neutral
  * scope note of spec §7 ("không phải phần mềm kế toán" is its own example), not as a warning.
@@ -20,7 +21,7 @@ import { Notice } from "@/components/ui/notice";
 export function ScopeNotice({ text }: { text: string | undefined }) {
   if (text === undefined || text.trim() === "") return null;
   return (
-    <Notice tone="neutral" icon={ShieldCheck}>
+    <Notice tone="neutral" data-scope-notice="">
       {text}
     </Notice>
   );

@@ -1,23 +1,23 @@
 "use client";
 
-import { Landmark, Plus, Settings2 } from "lucide-react";
+import { Plus, Settings2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { listFundingSources } from "@/lib/api/funding-sources";
 import type { KetQua } from "@/lib/api/goi"; // vi-name-ok: existing result type of goi.ts (rule 12 invariant 3)
 import type { finance_fundingSourceOut, finance_fundingSourcesOut } from "@/lib/api/schema.gen";
 import { cn } from "@/lib/cn";
-import { compactDong } from "@/lib/compact-dong";
 
+import { Panel } from "./disbursement-overview";
 import { FundingSourceProjectsDialog, ManageFundingSourcesDialog } from "./funding-source-dialogs";
 // vi-name-ok: existing formatters of nhan-du-an.ts, imported unchanged (rule 12, invariant 3)
-import { nhanTien, nhanTyLeGiaiNgan } from "./nhan-du-an";
+import { nhanTien, shortDongLabel } from "./nhan-du-an";
+import { PROGRESS_BAR_CLASS, progressTone } from "./progress-tone";
 import { Glyph } from "./project-ui";
+import { TRACK_CLASS } from "./spec-classes";
 
 /**
  * §6 "Tiến độ theo nguồn vốn" for the selected budget year, in the prototype's composition
@@ -38,6 +38,10 @@ import { Glyph } from "./project-ui";
  *
  * NO SCOPE BANNER HERE: the same `scope_notice` is already drawn once above the screen by the project
  * register (`bang-du-an.tsx`). Two copies of one banner is noise, not emphasis.
+ *
+ * LOOK = spec 06 §A (ADR 0068 lần 6): `Quản lý nguồn vốn` in the BODY above the grid (small outline),
+ * the empty state ONE line + `+ Thêm nguồn vốn`, short amounts (`shortDongLabel`, the spec's
+ * `formatDongShort`), the allocation meter #8AA2B8 and the two disbursed meters in the 80/50/30 tier.
  */
 export function FundingSourceProgress({ year, canManage }: { year: number; canManage: boolean }) {
   /** Bumped after every write and by "Tải lại": the cards re-read, never patched from a write reply. */
@@ -64,50 +68,30 @@ export function FundingSourceProgress({ year, canManage }: { year: number; canMa
   const reload = () => setReloads((n) => n + 1);
 
   return (
-    <Card as="section" className="mb-5" aria-labelledby="tieu-de-tien-do-nguon-von">
-      <CardHeader>
-        <CardTitle id="tieu-de-tien-do-nguon-von">Tiến độ theo nguồn vốn</CardTitle>
-        {/* Prototype `SourceReportPanel.tsx:75-82`: the way back to a source's yearly figure, drawn
-            once the catalogue has a source (the empty state carries `+ Thêm nguồn vốn` instead). */}
-        {canManage && data !== null && data.items.length > 0 && (
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className="ml-auto"
-            icon={<Glyph icon={Settings2} />}
-            aria-haspopup="dialog"
-            onClick={() => setManaging(true)}
-          >
-            Quản lý nguồn vốn
-          </Button>
-        )}
-      </CardHeader>
-      <CardContent>
-        {current === null && (
-          <>
-            <p role="status" className="an-thi-giac">
-              Đang tải tiến độ theo nguồn vốn…
-            </p>
-            <Skeleton className="h-32 w-full" />
-          </>
-        )}
-        {current !== null && !current.ok && (
-          <ErrorState
-            title="Chưa tải được tiến độ theo nguồn vốn"
-            message={<span role="alert">{current.thongBao}</span>}
-            onRetry={reload}
-          />
-        )}
-        {data !== null && (
-          <FundingSourceCards
-            data={data}
-            canManage={canManage}
-            onOpenSource={setDrill}
-            onManage={() => setManaging(true)}
-          />
-        )}
-      </CardContent>
+    <Panel title="Tiến độ theo nguồn vốn" titleId="tieu-de-tien-do-nguon-von" className="mb-5">
+      {current === null && (
+        <>
+          <p role="status" className="an-thi-giac">
+            Đang tải tiến độ theo nguồn vốn…
+          </p>
+          <Skeleton className="h-64 w-full" />
+        </>
+      )}
+      {current !== null && !current.ok && (
+        <ErrorState
+          title="Chưa tải được tiến độ theo nguồn vốn"
+          message={<span role="alert">{current.thongBao}</span>}
+          onRetry={reload}
+        />
+      )}
+      {data !== null && (
+        <FundingSourceCards
+          data={data}
+          canManage={canManage}
+          onOpenSource={setDrill}
+          onManage={() => setManaging(true)}
+        />
+      )}
 
       {drill !== null && data !== null && (
         <FundingSourceProjectsDialog source={drill} year={data.year} onClose={() => setDrill(null)} />
@@ -120,7 +104,7 @@ export function FundingSourceProgress({ year, canManage }: { year: number; canMa
           onClose={() => setManaging(false)}
         />
       )}
-    </Card>
+    </Panel>
   );
 }
 
@@ -141,45 +125,64 @@ export function FundingSourceCards({
   onOpenSource: (source: finance_fundingSourceOut) => void;
   onManage: () => void;
 }) {
+  if (data.items.length === 0) {
+    // Spec 06 §A "Chưa có nguồn": one line and one button, no explanation box.
+    return (
+      <div>
+        <p className="text-ink-muted m-0 text-[12.5px]">Chưa khai báo nguồn vốn nào.</p>
+        {canManage && (
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-3"
+            icon={<Glyph icon={Plus} />}
+            aria-haspopup="dialog"
+            onClick={onManage}
+          >
+            Thêm nguồn vốn
+          </Button>
+        )}
+        <UnattributedLine amount={data.unattributed_disbursed_amount} />
+      </div>
+    );
+  }
   return (
     <div className="flex min-w-0 flex-col gap-4">
-      {data.items.length === 0 ? (
-        <EmptyState
-          icon={Landmark}
-          title="Chưa khai báo nguồn vốn nào"
-          description="Khai các nguồn vốn của xã để theo dõi số được giao, số đã phân bổ vào dự án và số đã giải ngân theo từng nguồn."
-          action={
-            canManage ? (
-              <Button
-                type="button"
-                variant="secondary"
-                icon={<Glyph icon={Plus} />}
-                aria-haspopup="dialog"
-                onClick={onManage}
-              >
-                Thêm nguồn vốn
-              </Button>
-            ) : undefined
-          }
-          className="py-6"
-        />
-      ) : (
-        <ul className="m-0 grid min-w-0 list-none gap-4 p-0 lg:grid-cols-2" aria-label={`Nguồn vốn năm ${data.year}`}>
-          {data.items.map((source) => (
-            <SourceCard key={source.id} source={source} onOpen={onOpenSource} />
-          ))}
-        </ul>
+      {canManage && (
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            icon={<Glyph icon={Settings2} className="size-3.5" />}
+            aria-haspopup="dialog"
+            onClick={onManage}
+          >
+            Quản lý nguồn vốn
+          </Button>
+        </div>
       )}
-
-      {/* §13 rule 6, said and not hidden: the cards alone do not add up to the year's disbursed total,
-          and a reader who finds that out alone concludes one of the two figures is wrong. */}
-      {data.unattributed_disbursed_amount > 0 && (
-        <p className="m-0 text-[13px] text-warning-600" data-unattributed="">
-          Còn <Money amount={data.unattributed_disbursed_amount} /> đã chi nhưng chưa ghi rút từ nguồn nào — thuộc các
-          dự án chưa khai phân bổ nguồn vốn.
-        </p>
-      )}
+      <ul className="m-0 grid min-w-0 list-none gap-4 p-0 lg:grid-cols-2" aria-label={`Nguồn vốn năm ${data.year}`}>
+        {data.items.map((source) => (
+          <SourceCard key={source.id} source={source} onOpen={onOpenSource} />
+        ))}
+      </ul>
+      <UnattributedLine amount={data.unattributed_disbursed_amount} />
     </div>
+  );
+}
+
+/**
+ * §13 rule 6, said and not hidden (spec 06 §A): the cards alone do not add up to the year's disbursed
+ * total, and a reader who finds that out alone concludes one of the two figures is wrong.
+ */
+function UnattributedLine({ amount }: { amount: number }) {
+  if (!(amount > 0)) return null;
+  return (
+    <p className="text-tangerine m-0 mt-3 text-[12px]" data-unattributed="">
+      Còn <Money amount={amount} /> đã chi nhưng chưa ghi rút từ nguồn nào — thuộc các dự án chưa khai phân bổ
+      nguồn vốn.
+    </p>
   );
 }
 
@@ -202,56 +205,56 @@ function SourceCard({
   const over = source.overallocated_amount > 0;
 
   return (
-    <li className="min-w-0 rounded-[10px] border border-line p-3" data-funding-source={source.id}>
+    <li className="border-line min-w-0 rounded-[10px] border border-solid p-3" data-funding-source={source.id}>
       <div className="flex items-baseline justify-between gap-2">
-        <span className="min-w-0 text-[14px] font-semibold text-ink-900">{source.name}</span>
-        <span className="shrink-0 text-xs text-ink-500">{source.project_count} dự án</span>
+        <span className="text-navy min-w-0 text-[13px] font-semibold">{source.name}</span>
+        <span className="text-ink-muted shrink-0 text-[11px]">{source.project_count} dự án</span>
       </div>
 
       {/* 1 — allocated into projects. The allocated figure opens the projects behind it. */}
-      <p className="m-0 mt-1.5 text-[13px] text-ink-700">
+      <p className="text-ink m-0 mt-1.5 text-[12px]">
         Đã phân bổ{" "}
         <button
           type="button"
           aria-haspopup="dialog"
           title="Xem các dự án đang lấy vốn từ nguồn này"
           onClick={() => onOpen(source)}
-          className="cursor-pointer border-0 bg-transparent p-0 font-semibold text-ink-900 underline decoration-dotted underline-offset-2 hover:text-brand-600"
+          className="text-navy decoration-brand/50 cursor-pointer border-0 bg-transparent p-0 [font:inherit] font-bold underline decoration-dotted underline-offset-2"
         >
           <Money amount={source.allocated_amount} />
         </button>
         {knowsGrant ? (
           <>
-            {" / tổng "}
-            <b className="text-ink-900">
+            {" / "}
+            <b className="text-navy">
               <Money amount={source.granted_amount} />
             </b>
             {over ? (
-              <span className="font-semibold text-danger-600" data-overallocated="">
+              <span className="text-danger font-semibold" data-overallocated="">
                 {" · vượt nguồn "}
                 <Money amount={source.overallocated_amount} />
               </span>
             ) : (
-              <span className={cn(source.unallocated_amount > 0 ? "font-semibold text-warning-600" : "text-ink-500")}>
+              <span className={cn(source.unallocated_amount > 0 ? "text-tangerine font-semibold" : "text-ink-muted")}>
                 {" · còn "}
                 <Money amount={source.unallocated_amount} /> chưa phân bổ
               </span>
             )}
           </>
         ) : (
-          <span className="text-ink-500"> · chưa nhập số được giao</span>
+          <span className="text-ink-muted"> · chưa nhập số được giao</span>
         )}
       </p>
-      {knowsGrant && <Meter ratio={source.allocated_ratio} label="Tỷ lệ đã phân bổ trên tổng nguồn" danger={over} muted />}
+      {knowsGrant && <Meter ratio={source.allocated_ratio} label="Tỷ lệ đã phân bổ trên tổng nguồn" allocation />}
 
       {/* 2 — disbursed over what was allocated: are the projects moving. */}
-      <p className="m-0 mt-2.5 text-[13px] text-ink-700">
+      <p className="text-ink m-0 mt-2.5 text-[12px]">
         Đã giải ngân{" "}
-        <b className="text-ink-900">
+        <b className="text-navy">
           <Money amount={source.disbursed_amount} />
         </b>
         {" / "}
-        <b className="text-ink-900">
+        <b className="text-navy">
           <Money amount={source.allocated_amount} />
         </b>{" "}
         đã phân bổ
@@ -261,13 +264,13 @@ function SourceCard({
       {/* 3 — disbursed over the whole grant: has the money actually gone out. */}
       {knowsGrant && (
         <>
-          <p className="m-0 mt-2 text-[13px] text-ink-700">
+          <p className="text-ink m-0 mt-2 text-[12px]">
             Đã giải ngân{" "}
-            <b className="text-ink-900">
+            <b className="text-navy">
               <Money amount={source.disbursed_amount} />
             </b>
             {" / "}
-            <b className="text-ink-900">
+            <b className="text-navy">
               <Money amount={source.granted_amount} />
             </b>{" "}
             tổng nguồn
@@ -279,40 +282,41 @@ function SourceCard({
   );
 }
 
-/** A short amount ("9,2 tỷ đồng", `compactDong`), the exact đồng on hover — the tile convention. */
+/** A short amount ("9,2 tỷ", `shortDongLabel` = the spec's `formatDongShort`), the exact đồng on hover. */
 function Money({ amount }: { amount: number }) {
-  return <span title={nhanTien(amount)}>{compactDong(amount)}</span>;
+  return <span title={nhanTien(amount)}>{shortDongLabel(amount)}</span>;
 }
 
+/** Spec 06 §A `Bar`'s percent: at most one decimal, `vi-VN`. */
+const METER_PERCENT = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1 });
+
 /**
- * Bar + percent. The bar is capped at full width; the WORDS keep the real figure, above 100% included
- * (§13 rule 2). `null` (no denominator) is "—" over an empty track, never "0%": 0% claims a
- * denominator existed and nothing moved.
+ * Spec 06 §A `Bar`: an `h-1.5` track, the percent `w-11` 11.5px bold. The allocation bar is #8AA2B8;
+ * the disbursed bars take the 80/50/30 tier. The bar is capped at full width; the WORDS keep the real
+ * figure, above 100% included (§13 rule 2). `null` (no denominator) is "—" over an empty track, never
+ * "0%": 0% claims a denominator existed and nothing moved.
  */
 function Meter({
   ratio,
   label,
-  danger = false,
-  muted = false,
+  allocation = false,
 }: {
   ratio: number | null;
   label: string;
-  danger?: boolean;
-  muted?: boolean;
+  /** The "đã phân bổ / được giao" bar: the spec's fixed #8AA2B8, not a progress tier. */
+  allocation?: boolean;
 }) {
   const known = ratio !== null && Number.isFinite(ratio);
   const width = known ? Math.min(100, Math.max(0, ratio / 100)) : 0;
+  const fill = allocation ? "bg-[#8AA2B8]" : known ? PROGRESS_BAR_CLASS[progressTone(ratio)] : "";
   return (
     <div className="mt-1 flex items-center gap-2" data-meter="">
-      <div aria-hidden="true" className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-subtle-2">
-        <div
-          className={cn("h-full rounded-full", danger ? "bg-danger-500" : muted ? "bg-ink-400" : "bg-brand-500")}
-          style={{ width: `${width}%` }}
-        />
+      <div aria-hidden="true" className={cn("h-1.5 min-w-0 flex-1 overflow-hidden rounded-full", TRACK_CLASS)}>
+        <div className={cn("h-full rounded-full", fill)} style={{ width: `${width}%` }} />
       </div>
-      <span title={label} className="w-16 shrink-0 text-right text-xs font-semibold text-ink-900 tabular-nums">
+      <span title={label} className="text-navy w-11 shrink-0 text-right text-[11.5px] font-bold tabular-nums">
         <span className="an-thi-giac">{label}: </span>
-        {known ? nhanTyLeGiaiNgan(ratio) : "—"}
+        {known ? `${METER_PERCENT.format(ratio / 100)}%` : "—"}
       </span>
     </div>
   );

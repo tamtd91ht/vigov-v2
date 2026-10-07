@@ -1,7 +1,8 @@
 "use client";
 
-import { ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { toast } from "sonner";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,8 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Field } from "@/components/ui/field";
 import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
 import { Notice } from "@/components/ui/notice";
-import { BUSY_DELETING, BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
+import { PendingMarker } from "@/components/ui/pending-feature";
+import { BUSY_DELETING, BusyLabel } from "@/features/danh-ba/busy-label";
 import { listFundingSources } from "@/lib/api/funding-sources";
 import { suaDuAn, themDuAn, xoaDuAn } from "@/lib/api/giai-ngan";
 import type {
@@ -19,15 +21,15 @@ import type {
   finance_projectAllocationOut,
 } from "@/lib/api/schema.gen";
 import { cn } from "@/lib/cn";
-import { compactDong } from "@/lib/compact-dong";
 
-import { nhanTien } from "./nhan-du-an";
+import { nhanTien, shortDongLabel } from "./nhan-du-an";
 import {
   allocationBlocksSave,
   docSoTien,
   FORM_DU_AN_TRONG,
   MA_DU_AN_TOI_DA,
   MO_TA_DU_AN_TOI_DA,
+  pendingPart,
   summarizeAllocations,
   TEN_DU_AN_TOI_DA,
   thanSuaDuAn,
@@ -47,6 +49,10 @@ import {
   type ProjectPeople,
 } from "./project-people";
 import { Glyph } from "./project-ui";
+import { CHECKBOX_CLASS, CHECKBOX_LABEL_CLASS } from "./spec-classes";
+
+/** The spec 04 option the contract cannot store yet (ADR 0068 lần 6 #11): drawn disabled with its "?". */
+const UNIT_FREE_TEXT = "Đơn vị khác, nhập tay";
 
 /**
  * Ba tuyến GHI của dự án đầu tư — thêm, sửa, xoá mềm kèm lý do — in the prototype's composition
@@ -144,13 +150,6 @@ export function FormDuAn({
 
   return (
     <form onSubmit={guiNgay} aria-label={tieuDeForm} className="flex min-w-0 flex-col gap-3.5">
-      {isEdit && (
-        <p className="m-0 text-[13px] text-ink-500">
-          Mã dự án: <span className="ma-muc text-ink-700">{maChiDoc}</span> — mã đã cấp thì không
-          đánh lại, nên ô này chỉ để đọc.
-        </p>
-      )}
-
       {thieuDanhMuc && (
         <Notice tone="info">
           Danh mục hạng mục kế hoạch vốn của xã đang rỗng, mà mỗi dự án phải thuộc đúng một hạng
@@ -161,7 +160,8 @@ export function FormDuAn({
       {/* Category, code, name and amount in one two-column grid from md (prototype `:297`). */}
       <div className="grid min-w-0 gap-3.5 md:grid-cols-2">
         <Field
-          label="Hạng mục *"
+          label="Hạng mục"
+          required
           htmlFor="hang-muc-du-an"
           kind="select"
           grow="auto"
@@ -190,7 +190,7 @@ export function FormDuAn({
                 DA-number of this commune (9f0a0187). What was typed before ticking is kept, not sent. */}
             <div className="flex min-w-0 items-end gap-3">
               <Field
-                label={gt.autoCode ? "Mã dự án" : "Mã dự án *"}
+                label="Mã dự án"
                 htmlFor="ma-du-an"
                 grow="auto"
                 className="min-w-0 flex-1"
@@ -202,34 +202,32 @@ export function FormDuAn({
                   disabled={gt.autoCode}
                   maxLength={MA_DU_AN_TOI_DA}
                   autoComplete="off"
-                  placeholder={gt.autoCode ? "Hệ thống cấp khi lưu" : "DA01"}
+                  placeholder={gt.autoCode ? "Hệ thống sẽ tự sinh" : "DA01"}
                   onChange={(e) => datGT({ ...gt, ma: e.target.value })}
                 />
               </Field>
-              <div className="flex h-10 shrink-0 items-center gap-2">
+              <label htmlFor="tu-sinh-ma-du-an" className={cn(CHECKBOX_LABEL_CLASS, "h-8 shrink-0")}>
                 <input
                   id="tu-sinh-ma-du-an"
                   type="checkbox"
-                  className="size-4"
+                  className={CHECKBOX_CLASS}
                   checked={gt.autoCode}
                   onChange={(e) => datGT({ ...gt, autoCode: e.target.checked })}
                 />
-                <label htmlFor="tu-sinh-ma-du-an" className="text-sm text-ink-700">
-                  Tự sinh mã
-                </label>
-              </div>
+                Tự sinh mã
+              </label>
             </div>
             {/* MÃ ĐÃ CẤP THÌ KHÔNG CẤP LẠI, KỂ CẢ KHI DỰ ÁN MANG MÃ ẤY ĐÃ RÚT KHỎI DANH SÁCH — nói
                 trước, vì nếu không thì câu 409 của máy chủ đọc như một lỗi trước mặt người vừa xem
                 hết danh sách và không thấy mã ấy ở đâu. Spec §9 wording. */}
-            <p className="m-0 text-xs text-ink-500">
-              Tự sinh sẽ cấp số tiếp theo trong dãy DA01, DA02… Mã tự nhập chỉ gồm chữ cái, chữ số và
-              dấu gạch nối, và phải chưa từng được dùng, kể cả bởi dự án đã rút khỏi danh sách.
+            <p className="text-ink-muted m-0 text-[12px]">
+              Tự sinh sẽ cấp số tiếp theo trong dãy DA01, DA02… Mã tự nhập phải chưa từng được dùng, kể cả
+              bởi dự án đã rút khỏi danh sách.
             </p>
           </div>
         )}
 
-        <Field label="Tên dự án *" htmlFor="ten-du-an" grow="auto" className="min-w-0">
+        <Field label="Tên dự án" required htmlFor="ten-du-an" grow="auto" className="min-w-0">
           <input
             id="ten-du-an"
             name="ten-du-an"
@@ -242,7 +240,8 @@ export function FormDuAn({
         </Field>
 
         <Field
-          label={`Số tiền bố trí năm ${budgetYear} (đồng) *`}
+          label={`Số tiền bố trí năm ${budgetYear} (đồng)`}
+          required
           htmlFor="ke-hoach-von-du-an"
           grow="auto"
           className="min-w-0"
@@ -278,7 +277,7 @@ export function FormDuAn({
         aria-expanded={showMore}
         aria-controls="thong-tin-them-du-an"
         onClick={() => setShowMore((v) => !v)}
-        className="flex w-fit cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-[13px] text-ink-500 hover:text-ink-900"
+        className="text-ink-muted hover:text-navy flex w-fit cursor-pointer items-center gap-1 border-0 bg-transparent p-0 [font-family:inherit] text-[12.5px]"
       >
         <Glyph icon={showMore ? ChevronDown : ChevronRight} className="size-4" />
         Thông tin thêm (không bắt buộc)
@@ -287,7 +286,7 @@ export function FormDuAn({
       <div
         id="thong-tin-them-du-an"
         hidden={!showMore}
-        className="flex min-w-0 flex-col gap-3 rounded-xl border border-line p-3"
+        className="border-line flex min-w-0 flex-col gap-3 rounded-[10px] border border-solid p-3"
       >
         <Field
           label="Tổng mức được duyệt cả dự án (đồng)"
@@ -317,6 +316,7 @@ export function FormDuAn({
             notListed={UNIT_NOT_LISTED}
             catalogue={people.units}
             optionsOf={(units) => units.map((u) => ({ value: u.id, label: u.name }))}
+            pendingOption={UNIT_FREE_TEXT}
             value={gt.orgUnitId}
             onChange={(orgUnitId) => datGT({ ...gt, orgUnitId })}
           />
@@ -328,7 +328,8 @@ export function FormDuAn({
             notListed={OFFICER_NOT_LISTED}
             catalogue={people.staff}
             optionsOf={(staff) =>
-              staff.map((c) => ({ value: c.code, label: c.position !== "" ? `${c.full_name} — ${c.position}` : c.full_name }))
+              // Spec 04 / prototype: the officer's name only (row F14).
+              staff.map((c) => ({ value: c.code, label: c.full_name }))
             }
             value={gt.assigneeId}
             onChange={(assigneeId) => datGT({ ...gt, assigneeId })}
@@ -365,7 +366,7 @@ export function FormDuAn({
           className="min-w-0"
           hint={
             "Mốc phải tiêu hết phần vốn của năm. Khác với ngày hoàn thành công trình: công trình " +
-            "xong tháng 3 vẫn có thể phải giải ngân trước 31/12. Để trống thì lấy mặc định 31/12."
+            "xong tháng 3 vẫn có thể phải giải ngân trước 31/12."
           }
         >
           <input
@@ -397,16 +398,17 @@ export function FormDuAn({
       )}
 
       <div className="flex justify-end gap-2 pt-1">
-        <Button type="button" variant="secondary" disabled={dangGui} onClick={huy}>
+        <Button type="button" variant="outline" disabled={dangGui} onClick={huy}>
           Huỷ
         </Button>
         <Button
           type="submit"
           variant="primary"
+          icon={dangGui ? <Loader2 aria-hidden="true" className="size-4 animate-spin" /> : undefined}
           disabled={dangGui || thieuDanhMuc || allocationBlocked}
           aria-busy={dangGui || undefined}
         >
-          <BusyLabel busy={dangGui} label={isEdit ? "Lưu dự án" : "Thêm dự án"} busyText={BUSY_SAVING} />
+          {isEdit ? "Lưu dự án" : "Thêm dự án"}
         </Button>
       </div>
     </form>
@@ -433,6 +435,7 @@ function ReferenceSelect<T>({
   optionsOf,
   value,
   onChange,
+  pendingOption,
 }: {
   id: string;
   label: string;
@@ -444,6 +447,11 @@ function ReferenceSelect<T>({
   optionsOf: (items: readonly T[]) => { value: string; label: string }[];
   value: string;
   onChange: (value: string) => void;
+  /**
+   * A spec option the contract cannot store yet (`PHAN_CHUA_DUNG_GHI` name): drawn as the LAST option,
+   * disabled, and named again under the select with its "?" — a native `<option>` cannot hold a button.
+   */
+  pendingOption?: string;
 }) {
   const ready = catalogue.phase === "ready";
   const options = ready ? optionsOf(catalogue.items) : [];
@@ -453,7 +461,14 @@ function ReferenceSelect<T>({
       ? `Đang tải ${what}…`
       : catalogue.phase === "error"
         ? `Chưa tải được ${what}: ${catalogue.message} Mục này được giữ nguyên; các mục khác vẫn lưu được.`
-        : undefined;
+        : pendingOption !== undefined
+          ? (
+              <span className="inline-flex items-center gap-1.5" data-pending="">
+                <span className="text-ink-muted">— {pendingOption} —</span>
+                <PendingMarker info={pendingPart(pendingOption)} />
+              </span>
+            )
+          : undefined;
   return (
     <Field label={label} htmlFor={id} kind="select" grow="auto" className="min-w-0" hint={hint}>
       <select id={id} value={value} disabled={!ready} onChange={(e) => onChange(e.target.value)}>
@@ -464,6 +479,11 @@ function ReferenceSelect<T>({
             {o.label}
           </option>
         ))}
+        {pendingOption !== undefined && (
+          <option value="" disabled data-pending-option="">
+            — {pendingOption} —
+          </option>
+        )}
       </select>
     </Field>
   );
@@ -518,7 +538,6 @@ function allocationRowsOf(allocations: readonly finance_projectAllocationOut[] |
  * (no row can change, so a PATCH omits the field).
  */
 export function FundingAllocationList({
-  year,
   catalogue,
   rows,
   summary,
@@ -532,7 +551,8 @@ export function FundingAllocationList({
   currentAllocations?: readonly finance_projectAllocationOut[];
   onChange: (rows: AllocationRow[]) => void;
 }) {
-  const legend = <legend className="mb-1.5 p-0 text-xs leading-tight font-medium text-ink-700">Nguồn vốn</legend>;
+  // The Field label look (spec 00 §5): navy 13px semibold.
+  const legend = <legend className="text-navy mb-1.5 p-0 text-[13px] leading-tight font-semibold">Nguồn vốn</legend>;
   const fieldset = (body: ReactNode) => (
     <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0" data-funding-allocations="">
       {legend}
@@ -558,14 +578,9 @@ export function FundingAllocationList({
   }
 
   const sources = catalogue.items;
-  if (sources.length === 0 && rows.length === 0) {
-    return fieldset(
-      <p className="m-0 text-[13px] text-ink-500">
-        Xã chưa khai báo nguồn vốn nào nên chưa gắn được nguồn cho dự án. Khai nguồn vốn ở khối “Tiến độ
-        theo nguồn vốn” của trang Theo dõi giải ngân (nút Quản lý nguồn vốn), rồi sửa dự án để gắn nguồn.
-      </p>,
-    );
-  }
+  // Spec 04: the block shows ONLY when the commune has sources (row F7). A saved line on a year with no
+  // catalogue still shows, so it can be seen and removed.
+  if (sources.length === 0 && rows.length === 0) return null;
 
   const byId = new Map(sources.map((s) => [s.id, s]));
   const used = new Set(rows.map((r) => r.sourceId).filter((id) => id !== ""));
@@ -582,7 +597,7 @@ export function FundingAllocationList({
   return fieldset(
     <>
       {rows.length === 0 ? (
-        <p className="m-0 text-[13px] text-ink-500">
+        <p className="text-ink-muted m-0 text-[11.5px]">
           Chưa gắn nguồn nào. Xã theo dõi kế hoạch vốn theo hạng mục thì để trống cũng được.
         </p>
       ) : (
@@ -594,7 +609,7 @@ export function FundingAllocationList({
             return (
               <li
                 key={row.key}
-                className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-2 rounded-[10px] border border-line p-2 sm:grid-cols-[minmax(0,1fr)_11rem_auto]"
+                className="border-line grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-2 rounded-[10px] border border-solid bg-white p-2 sm:grid-cols-[minmax(0,1fr)_11rem_auto]"
               >
                 <Field
                   label={`Nguồn vốn ${label}`}
@@ -603,7 +618,7 @@ export function FundingAllocationList({
                   kind="select"
                   grow="auto"
                   className="min-w-0"
-                  hint={source !== undefined ? <SourceHint source={source} year={year} /> : undefined}
+                  hint={source !== undefined ? <SourceHint source={source} /> : undefined}
                 >
                   <select
                     id={`nguon-von-du-an-${row.key}`}
@@ -623,10 +638,11 @@ export function FundingAllocationList({
                 </Field>
                 <Button
                   type="button"
-                  variant="icon"
+                  variant="outline"
                   size="md"
                   aria-label={`Bỏ nguồn vốn ${label}`}
-                  className="sm:col-start-3 sm:row-start-1"
+                  title="Bỏ nguồn vốn này"
+                  className="size-8 px-0 sm:col-start-3 sm:row-start-1"
                   onClick={() => onChange(rows.filter((r) => r.key !== row.key))}
                 >
                   <Glyph icon={Trash2} className="size-4" />
@@ -657,7 +673,7 @@ export function FundingAllocationList({
 
       <Button
         type="button"
-        variant="secondary"
+        variant="outline"
         size="sm"
         className="self-start"
         icon={<Glyph icon={Plus} />}
@@ -673,29 +689,33 @@ export function FundingAllocationList({
   );
 }
 
-/** "Nguồn này còn X chưa phân bổ trên tổng Y được giao năm N." — the server's figures for the year. */
-function SourceHint({ source, year }: { source: finance_fundingSourceOut; year: number }) {
-  if (source.granted_amount <= 0) return <>Nguồn này chưa nhập số vốn được giao năm {year}.</>;
+/**
+ * Spec 04: "Nguồn này còn **{short}** chưa phân bổ trên tổng {short} được giao." — the server's figures
+ * for the form's year. Two states the spec does not draw keep their own words: no figure entered for the
+ * year, and already over-allocated (a "còn" there would be a negative amount).
+ */
+function SourceHint({ source }: { source: finance_fundingSourceOut }) {
+  if (source.granted_amount <= 0) return <span className="text-[11px]">Nguồn này chưa nhập số vốn được giao.</span>;
   if (source.overallocated_amount > 0) {
     return (
-      <>
+      <span className="text-[11px]">
         Nguồn này đã phân bổ vượt số được giao{" "}
-        <b className="font-semibold text-danger-600" title={nhanTien(source.overallocated_amount)}>
-          {compactDong(source.overallocated_amount)}
+        <b className="text-danger font-semibold" title={nhanTien(source.overallocated_amount)}>
+          {shortDongLabel(source.overallocated_amount)}
         </b>{" "}
-        (tổng được giao <span title={nhanTien(source.granted_amount)}>{compactDong(source.granted_amount)}</span>).
-      </>
+        (tổng {shortDongLabel(source.granted_amount)} được giao).
+      </span>
     );
   }
   return (
-    <>
+    <span className="text-[11px]">
       Nguồn này còn{" "}
-      <b className="font-semibold text-warning-600" title={nhanTien(source.unallocated_amount)}>
-        {compactDong(source.unallocated_amount)}
+      <b className="text-tangerine font-semibold" title={nhanTien(source.unallocated_amount)}>
+        {shortDongLabel(source.unallocated_amount)}
       </b>{" "}
-      chưa phân bổ trên tổng <span title={nhanTien(source.granted_amount)}>{compactDong(source.granted_amount)}</span>{" "}
-      được giao năm {year}.
-    </>
+      chưa phân bổ trên tổng <span title={nhanTien(source.granted_amount)}>{shortDongLabel(source.granted_amount)}</span>{" "}
+      được giao.
+    </span>
   );
 }
 
@@ -710,32 +730,32 @@ export function AllocationSummaryLine({ summary }: { summary: AllocationSummary 
   switch (summary.state) {
     case "noPlan":
       text = `Đã phân bổ ${nhanTien(summary.allocated)} · nhập số tiền bố trí ở trên để đối chiếu`;
-      tone = "bg-surface-subtle text-ink-700";
+      tone = "bg-canvas text-ink";
       break;
     case "unsafe":
       text = "Tổng phân bổ quá lớn để trình duyệt giữ chính xác từng đồng, không lưu được";
-      tone = "bg-danger-50 font-semibold text-danger-600";
+      tone = "bg-danger/10 font-semibold text-danger";
       break;
     case "short":
       text =
         `Đã phân bổ ${nhanTien(summary.allocated)} / số tiền bố trí ${nhanTien(summary.planned)}` +
         ` · còn thiếu ${nhanTien(summary.gap)} chưa gắn nguồn`;
-      tone = "bg-warning-50 text-warning-600";
+      tone = "bg-tangerine/10 text-tangerine";
       break;
     case "over":
       text =
         `Đã phân bổ ${nhanTien(summary.allocated)} / số tiền bố trí ${nhanTien(summary.planned)}` +
         ` · vượt ${nhanTien(summary.gap)}, không lưu được`;
-      tone = "bg-danger-50 font-semibold text-danger-600";
+      tone = "bg-danger/10 font-semibold text-danger";
       break;
     case "match":
       text = `Đã phân bổ ${nhanTien(summary.allocated)} / số tiền bố trí ${nhanTien(summary.planned)} · khớp`;
-      tone = "bg-success-50 text-success-600";
+      tone = "bg-leaf/10 text-leaf";
       break;
   }
   return (
     <p
-      className={cn("m-0 rounded-lg px-2.5 py-1.5 text-[13px] tabular-nums", tone)}
+      className={cn("m-0 rounded-[8px] px-2.5 py-1.5 text-[11.5px] tabular-nums", tone)}
       aria-live="polite"
       data-allocation-state={summary.state}
     >
@@ -771,7 +791,7 @@ export function KhoiThemDuAn({
       <Button
         type="button"
         variant="primary"
-        icon={<Glyph icon={Plus} />}
+        icon={<Glyph icon={Plus} className="size-4" />}
         aria-haspopup="dialog"
         onClick={() => datDangMo(true)}
       >
@@ -811,12 +831,14 @@ function AddProjectDialog({
     themDuAn(than.than, khoa).then((kq) => {
       datDangGui(false);
       if (!kq.ok) {
-        // NGUYÊN VĂN câu máy chủ. 409 của tuyến này nói rõ vì sao một mã không thấy trên màn hình
-        // vẫn bị coi là đã dùng, và 404 của nó gọi đúng tên trường sai. A failed POST keeps the
-        // dialog, the typed values AND the idempotency key (`khoaChongTrung`) for the retry.
-        datLoi(kq.thongBao);
+        // NGUYÊN VĂN câu máy chủ, as a toast (ADR 0068 lần 6 #4: outcomes are toasts; a form's own
+        // check stays inline). 409 của tuyến này nói rõ vì sao một mã không thấy trên màn hình vẫn bị
+        // coi là đã dùng. A failed POST keeps the dialog, the typed values AND the idempotency key.
+        datLoi(null);
+        toast.error(kq.thongBao);
         return;
       }
+      toast.success("Đã thêm dự án.");
       // ĐỌC LẠI CẢ DANH SÁCH, KHÔNG VÁ HÀNG MỚI VÀO: phản hồi của tuyến thêm cố ý không mang các
       // con số suy ra (`disbursed_amount`, `delay_score`…) — `bang-du-an.tsx`.
       onClose();
@@ -828,7 +850,7 @@ function AddProjectDialog({
     <ModalDialog
       titleId={ADD_TITLE_ID}
       size="lg"
-      className="max-w-[64rem]"
+      className="max-h-[88vh] max-w-[64rem]"
       // Closing while the POST is in flight would hide whether a project code was issued.
       onDismiss={() => {
         if (!dangGui) onClose();
@@ -910,7 +932,7 @@ export function ProjectHeaderActions({
     <div className="flex shrink-0 flex-wrap items-center gap-2">
       <Button
         type="button"
-        variant={editing ? "primary" : "secondary"}
+        variant={editing ? "primary" : "outline"}
         size="sm"
         icon={<Glyph icon={Pencil} />}
         aria-expanded={editing}
@@ -966,9 +988,11 @@ export function ProjectEditPanel({
     suaDuAn(duAn.id, than.than).then((kq) => {
       datDangGui(false);
       if (!kq.ok) {
-        datLoi(kq.thongBao);
+        datLoi(null);
+        toast.error(kq.thongBao);
         return;
       }
+      toast.success("Đã lưu dự án.");
       // ĐỌC LẠI DỰ ÁN chứ không vá bằng phản hồi: `duAnGhiRa` cố ý không mang `disbursed_amount`,
       // `disbursed_ratio`, `delay_score` hay `is_delayed` — tuyến ghi không đọc chúng. Vá bằng nó
       // sẽ đặt bốn con số 0 lên màn hình, và chúng trông y hệt số thật.
@@ -981,10 +1005,10 @@ export function ProjectEditPanel({
     <section
       id="sua-du-an"
       aria-labelledby="tieu-de-sua-du-an"
-      className="mb-4 rounded-card border border-l-4 border-brand-100 border-l-brand-500 bg-surface p-5"
+      className="border-brand/35 shadow-card rounded-card border-l-brand mb-4 border border-l-4 border-solid bg-white p-5"
     >
-      <h3 id="tieu-de-sua-du-an" className="m-0 mb-4 flex items-center gap-2 text-[15px] font-semibold text-ink-900">
-        <Glyph icon={Pencil} className="size-4 text-brand-600" />
+      <h3 id="tieu-de-sua-du-an" className="text-navy m-0 mb-4 flex items-center gap-2 text-[13.5px] font-bold">
+        <Glyph icon={Pencil} className="text-brand size-4" />
         Sửa dự án
       </h3>
       <FormDuAn

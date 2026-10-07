@@ -23,7 +23,8 @@ describe("câu về quyền — gọi bằng TÊN trên màn Phân quyền, khô
   it("danh sách rỗng nêu năm và quyền cần để thấy nút Thêm dự án", () => {
     const text = nhanNamRong(2026);
     expect(text).toContain("năm 2026");
-    expect(text).toContain("“Cập nhật giải ngân”");
+    // The prototype sentence only (spec 02 §8): the permission line left with ADR 0068 lần 6.
+    expect(text).toBe("Thêm dự án và xếp vào hạng mục để bắt đầu theo dõi giải ngân năm 2026.");
     expect(text).not.toContain("budget.update");
   });
 
@@ -58,21 +59,21 @@ describe("tỷ lệ giải ngân", () => {
   });
 
   it("trên 100% thì HIỆN, không chặn (§13 #2)", () => {
-    expect(nhanTyLeGiaiNgan(17650)).toBe("176,50%");
+    expect(nhanTyLeGiaiNgan(17650)).toBe("176,5%");
   });
 
   it("`null` KHÔNG hiện thành 0% — hai câu khác hẳn nhau", () => {
     // `null` = chưa bố trí vốn, không có mẫu số để chia. `0%` = đã bố trí mà chưa chi đồng nào.
     // Hiện 0% cho dự án chưa ai bố trí vốn là báo cáo nó như dự án tệ nhất của xã.
     expect(nhanTyLeGiaiNgan(null)).toBe("Chưa bố trí vốn");
-    expect(nhanTyLeGiaiNgan(0)).toBe("0,00%");
+    expect(nhanTyLeGiaiNgan(0)).toBe("0%");
   });
 });
 
 describe("chip tiến độ", () => {
   it("đang chậm: hiện điểm chậm theo đúng đơn vị đặc tả in ra", () => {
     const t = tienDoDuAn(3136, true);
-    expect(nhanTienDo(t)).toBe("Chậm 31,36 điểm");
+    expect(nhanTienDo(t)).toBe("Chậm 31,36 điểm so với tiến độ thời gian");
     expect(lopTienDo(t)).toBe("chip chip-cham");
   });
 
@@ -101,6 +102,8 @@ describe("chip tiến độ", () => {
 describe("ngày", () => {
   it("YYYY-MM-DD đọc thành dd/MM/yyyy", () => {
     expect(nhanNgay("2026-12-31")).toBe("31/12/2026");
+    // Unpadded, as spec 00 §6 `toLocaleDateString("vi-VN")` prints it.
+    expect(nhanNgay("2026-08-07")).toBe("7/8/2026");
   });
 
   it("KHÔNG dựng `Date` ở đâu trong module này", () => {
@@ -173,7 +176,7 @@ describe("tra hạng mục kế hoạch vốn", () => {
     const chuaGan = hangMucDuAn("", danhMuc);
     const chiCoMa = hangMucDuAn("01JKHONGCO", danhMuc);
 
-    expect(nhanHangMuc(chuaGan)).toBe("Chưa gắn hạng mục");
+    expect(nhanHangMuc(chuaGan)).toBe("Chưa xếp hạng mục");
     expect(nhanHangMuc(chiCoMa)).toContain("01JKHONGCO");
     expect(lopHangMuc(chuaGan)).not.toBe(lopHangMuc(chiCoMa));
   });
@@ -192,6 +195,6 @@ describe("tra hạng mục kế hoạch vốn", () => {
 
 describe("ngưỡng cảnh báo chậm", () => {
   it("hiện ngưỡng MÁY CHỦ ĐÃ ÁP DỤNG, để người đọc biết chữ 'chậm' đang đo bằng gì", () => {
-    expect(nhanNguongCham(1000)).toBe("Ngưỡng cảnh báo chậm: 10,00 điểm");
+    expect(nhanNguongCham(1000)).toBe("Ngưỡng cảnh báo chậm: 10 điểm");
   });
 });

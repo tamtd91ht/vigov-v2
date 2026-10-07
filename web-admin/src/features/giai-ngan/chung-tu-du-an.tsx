@@ -1,18 +1,17 @@
 "use client";
 
-import { CircleCheck, LockKeyhole, LockKeyholeOpen, Pencil, Plus, ReceiptText, Trash2, TriangleAlert } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import { LockKeyholeOpen, Pencil, Plus, Trash2, TriangleAlert } from "lucide-react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { toast } from "sonner";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import { Button } from "@/components/ui/button";
-import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Field } from "@/components/ui/field";
+import { controlClass } from "@/components/ui/field";
 import { ModalDialog } from "@/components/ui/modal-dialog";
 import { ErrorState } from "@/components/ui/error-state";
 import { Notice } from "@/components/ui/notice";
+import { PendingMarker } from "@/components/ui/pending-feature";
 import { Skeleton } from "@/components/ui/skeleton";
-import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 import type { KetQua } from "@/lib/api/goi";
 import { cn } from "@/lib/cn";
 import {
@@ -36,24 +35,54 @@ import {
   allocationOptionLabel,
   CANH_BAO_KHOA,
   CANH_BAO_SUA_VE_NHAP,
-  CAU_THIEU_QUYEN_GHI,
-  CAU_THIEU_QUYEN_XAC_NHAN,
   CHUNG_TU_DA_XAC_NHAN,
+  CHUNG_TU_KE_TOAN_NHAP,
   DAU_GACH,
   docSoTien,
   DOI_TAC_TOI_DA,
   FORM_CHUNG_TU_TRONG,
   initialFundingSource,
   NOI_DUNG_CHUNG_TU_TOI_DA,
-  nhanMocKhoa,
   nhanTrangThaiChungTu,
+  pendingPart,
   SO_CHUNG_TU_TOI_DA,
   thaoTacChungTu,
   thanSuaChungTu,
   thanThemChungTu,
   type GiaTriFormChungTu,
 } from "./nhan-ghi-giai-ngan";
-import { DeniedNote, Glyph, VoucherStatusBadge } from "./project-ui";
+import { Glyph, VoucherStatusBadge } from "./project-ui";
+import { SUB_TABLE_HEAD_ROW_CLASS } from "./spec-classes";
+
+/** The spec 07 behaviour the server lacks (ADR 0068 lần 6 #9): `Khoá` on a draft = confirm + lock at once. */
+const LOCK_DRAFT = "Khoá khoản chi chưa xác nhận";
+
+/** Spec 07 entry-box field: 11.5px label, `mt-1 h-9 bg-white text-[12.5px]` control, no `*`. */
+const VOUCHER_CONTROL = cn(controlClass, "mt-1 h-9 bg-white text-[12.5px] md:text-[12.5px]");
+
+function VoucherField({
+  id,
+  label,
+  hint,
+  className,
+  children,
+}: {
+  id: string;
+  label: string;
+  hint?: ReactNode;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={cn("min-w-0", className)}>
+      <label htmlFor={id} className="text-navy block text-[11.5px] font-semibold">
+        {label}
+      </label>
+      {children}
+      {hint !== undefined && <p className="text-ink-muted m-0 mt-1 text-[11px] tabular-nums">{hint}</p>}
+    </div>
+  );
+}
 
 /**
  * Tab "Chứng từ" của §8.2 — sáu tuyến ghi của vòng đời chứng từ giải ngân, in the prototype's
@@ -151,12 +180,12 @@ export function FormChungTu({
       onSubmit={guiNgay}
       aria-label={tieuDeForm}
       className={cn(
-        "flex min-w-0 flex-col gap-3 rounded-xl border p-3",
-        // Prototype: the entry box sits on the muted fill; the edit box is white with the accent bar.
-        isEdit ? "border-brand-100 border-l-4 border-l-brand-500 bg-surface" : "border-line bg-surface-muted",
+        "flex min-w-0 flex-col gap-3 rounded-[10px] border border-solid p-3",
+        // Spec 07: the entry box sits on the page grey; the edit box is white with the accent bar.
+        isEdit ? "border-brand/35 border-l-brand border-l-4 bg-white" : "border-line bg-canvas",
       )}
     >
-      {isEdit && <p className="m-0 text-[13px] font-semibold text-ink-900">{tieuDeForm}</p>}
+      {isEdit && <p className="text-navy m-0 text-[12.5px] font-semibold">{tieuDeForm}</p>}
 
       {trangThaiHienTai === CHUNG_TU_DA_XAC_NHAN && (
         <Notice tone="legal" icon={TriangleAlert}>
@@ -164,12 +193,13 @@ export function FormChungTu({
         </Notice>
       )}
 
-      <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+      <div className="grid min-w-0 grid-cols-2 gap-3">
         {allocations.length > 0 && (
-          <Field label="Rút từ nguồn vốn *" htmlFor="nguon-von-chung-tu" grow="auto" className="min-w-0 sm:col-span-2">
+          <VoucherField id="nguon-von-chung-tu" label="Rút từ nguồn vốn" className="col-span-2">
             <select
               id="nguon-von-chung-tu"
               name="nguon-von-chung-tu"
+              className={VOUCHER_CONTROL}
               value={gt.fundingSourceId}
               onChange={(e) => datGT({ ...gt, fundingSourceId: e.target.value })}
             >
@@ -189,26 +219,25 @@ export function FormChungTu({
                 </option>
               ))}
             </select>
-          </Field>
+          </VoucherField>
         )}
 
         {/* HAI NGÀY KHÁC NHAU, và xã nhập chứng từ tuần trước vào sáng thứ Hai là chuyện thường —
             mọi biểu đồ luỹ kế của §4 xếp theo ngày CHI, không theo ngày gõ. */}
-        <Field label="Ngày chi *" htmlFor="ngay-chi-chung-tu" grow="auto" className="min-w-0">
+        <VoucherField id="ngay-chi-chung-tu" label="Ngày chi">
           <input
             id="ngay-chi-chung-tu"
             name="ngay-chi-chung-tu"
             type="date"
+            className={VOUCHER_CONTROL}
             value={gt.ngayChi}
             onChange={(e) => datGT({ ...gt, ngayChi: e.target.value })}
           />
-        </Field>
+        </VoucherField>
 
-        <Field
-          label="Số tiền (đồng) *"
-          htmlFor="so-tien-chung-tu"
-          grow="auto"
-          className="min-w-0"
+        <VoucherField
+          id="so-tien-chung-tu"
+          label="Số tiền (đồng)"
           hint={amount.loai === "so" ? nhanTien(amount.dong) : DAU_GACH}
         >
           <input
@@ -218,12 +247,12 @@ export function FormChungTu({
             inputMode="numeric"
             autoComplete="off"
             placeholder="250.000.000"
-            className="tabular-nums"
+            className={cn(VOUCHER_CONTROL, "tabular-nums")}
             onChange={(e) => datGT({ ...gt, soTien: e.target.value })}
           />
-        </Field>
+        </VoucherField>
 
-        <Field label="Nội dung chi *" htmlFor="noi-dung-chung-tu" grow="auto" className="min-w-0 sm:col-span-2">
+        <VoucherField id="noi-dung-chung-tu" label="Nội dung chi" className="col-span-2">
           <input
             id="noi-dung-chung-tu"
             name="noi-dung-chung-tu"
@@ -231,31 +260,34 @@ export function FormChungTu({
             maxLength={NOI_DUNG_CHUNG_TU_TOI_DA}
             autoComplete="off"
             placeholder="Thanh toán khối lượng đợt 1"
+            className={VOUCHER_CONTROL}
             onChange={(e) => datGT({ ...gt, noiDung: e.target.value })}
           />
-        </Field>
+        </VoucherField>
 
-        <Field label="Đơn vị thụ hưởng" htmlFor="doi-tac-chung-tu" grow="auto" className="min-w-0">
+        <VoucherField id="doi-tac-chung-tu" label="Đơn vị thụ hưởng">
           <input
             id="doi-tac-chung-tu"
             name="doi-tac-chung-tu"
             value={gt.doiTac}
             maxLength={DOI_TAC_TOI_DA}
             autoComplete="off"
+            className={VOUCHER_CONTROL}
             onChange={(e) => datGT({ ...gt, doiTac: e.target.value })}
           />
-        </Field>
+        </VoucherField>
 
-        <Field label="Số chứng từ" htmlFor="so-chung-tu" grow="auto" className="min-w-0">
+        <VoucherField id="so-chung-tu" label="Số chứng từ">
           <input
             id="so-chung-tu"
             name="so-chung-tu"
             value={gt.soChungTu}
             maxLength={SO_CHUNG_TU_TOI_DA}
             autoComplete="off"
+            className={VOUCHER_CONTROL}
             onChange={(e) => datGT({ ...gt, soChungTu: e.target.value })}
           />
-        </Field>
+        </VoucherField>
       </div>
 
       {loi !== null && (
@@ -266,9 +298,9 @@ export function FormChungTu({
 
       <div className="flex gap-2">
         <Button type="submit" variant="primary" disabled={dangGui} aria-busy={dangGui || undefined}>
-          <BusyLabel busy={dangGui} label={isEdit ? "Lưu thay đổi" : "Lưu khoản chi"} busyText={BUSY_SAVING} />
+          {isEdit ? "Lưu thay đổi" : "Lưu khoản chi"}
         </Button>
-        <Button type="button" variant="secondary" disabled={dangGui} onClick={huy}>
+        <Button type="button" variant="outline" disabled={dangGui} onClick={huy}>
           Huỷ
         </Button>
       </div>
@@ -314,24 +346,38 @@ export function BangChungTu({
   khoa: (id: string) => void;
 }) {
   if (ds.length === 0) {
-    // The server's list, so an empty table is a fact about the project, said as one.
-    return <EmptyState icon={ReceiptText} title="Dự án này chưa có chứng từ giải ngân nào." />;
+    // The server's list, so an empty table is a fact about the project, said as one (spec 07 words).
+    return <p className="text-ink-muted m-0 text-[12.5px]">Chưa có khoản chi nào được ghi nhận.</p>;
   }
 
+  const th = "py-2 pr-3 text-left font-semibold";
+  const td = "py-2.5 pr-3 align-top";
+  // Spec 07 row buttons: `size="sm" h-7 px-2 text-[11px]`.
+  const rowButton = "h-7 px-2 text-[11px]";
   return (
-    <TableScroll sticky aria-label="Chứng từ giải ngân của dự án" className="rounded-none border-0 shadow-none">
-      <table className={cn("bang-danh-muc", DATA_TABLE_CLASS)}>
+    <div role="region" tabIndex={0} aria-label="Chứng từ giải ngân của dự án" className="overflow-x-auto">
+      <table className="w-full min-w-[640px] border-collapse text-[12px]">
         <caption className="an-thi-giac">Chứng từ giải ngân của dự án, ngày chi mới nhất trước</caption>
         <thead>
-          <tr>
-            <th scope="col">Ngày chi</th>
-            <th scope="col" className="text-right">
+          <tr className={SUB_TABLE_HEAD_ROW_CLASS}>
+            <th scope="col" className={th}>
+              Ngày chi
+            </th>
+            <th scope="col" className={cn(th, "text-right")}>
               Số tiền
             </th>
-            <th scope="col">Nguồn vốn</th>
-            <th scope="col">Nội dung</th>
-            <th scope="col">Chứng từ</th>
-            <th scope="col">Trạng thái</th>
+            <th scope="col" className={th}>
+              Nguồn vốn
+            </th>
+            <th scope="col" className={th}>
+              Nội dung
+            </th>
+            <th scope="col" className={th}>
+              Chứng từ
+            </th>
+            <th scope="col" className={th}>
+              Trạng thái
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -343,9 +389,9 @@ export function BangChungTu({
                 <Button
                   key="xac-nhan"
                   type="button"
-                  variant="secondary"
+                  variant="outline"
                   size="sm"
-                  icon={<Glyph icon={CircleCheck} />}
+                  className={rowButton}
                   disabled={dangGui}
                   onClick={() => xacNhan(ct.id)}
                   aria-label={`Xác nhận chứng từ ngày ${ngay}`}
@@ -353,13 +399,23 @@ export function BangChungTu({
                   Xác nhận
                 </Button>
               ),
+              // Spec 07 draws `Khoá` on a draft too (confirm + lock in one call). The server cannot yet:
+              // the control stands in the prototype's place, disabled, with its "?" (lần 6 #9).
+              coXacNhan && ct.status === CHUNG_TU_KE_TOAN_NHAP && (
+                <span key="khoa-nhap" className="relative inline-flex" data-pending="">
+                  <Button type="button" variant="primary" size="sm" className={cn(rowButton, "pr-7")} disabled>
+                    Khoá
+                  </Button>
+                  <PendingMarker info={pendingPart(LOCK_DRAFT)} placement="end" className="right-1" />
+                </span>
+              ),
               coXacNhan && cho.khoa && (
                 <Button
                   key="khoa"
                   type="button"
                   variant="primary"
                   size="sm"
-                  icon={<Glyph icon={LockKeyhole} />}
+                  className={rowButton}
                   disabled={dangGui}
                   onClick={() => khoa(ct.id)}
                   aria-label={`Khoá chứng từ ngày ${ngay}`}
@@ -372,9 +428,10 @@ export function BangChungTu({
                 <Button
                   key="mo-khoa"
                   type="button"
-                  variant="secondary"
+                  variant="outline"
                   size="sm"
-                  icon={<Glyph icon={LockKeyholeOpen} />}
+                  className={rowButton}
+                  icon={<Glyph icon={LockKeyholeOpen} className="size-3" />}
                   disabled={dangGui}
                   onClick={() => moMoKhoa(ct.id)}
                   aria-label={`Mở khoá chứng từ ngày ${ngay}`}
@@ -386,9 +443,10 @@ export function BangChungTu({
                 <Button
                   key="sua"
                   type="button"
-                  variant="secondary"
+                  variant="outline"
                   size="sm"
-                  icon={<Glyph icon={Pencil} />}
+                  className={rowButton}
+                  icon={<Glyph icon={Pencil} className="size-3" />}
                   disabled={dangGui}
                   onClick={() => moSua(ct.id)}
                   aria-label={`Sửa chứng từ ngày ${ngay}`}
@@ -396,14 +454,15 @@ export function BangChungTu({
                   Sửa
                 </Button>
               ),
-              // Gỡ sits last, in the danger look (prototype `:498-508`).
+              // Gỡ sits last: outline with the danger word (spec 07).
               coXacNhan && cho.go && (
                 <Button
                   key="go"
                   type="button"
-                  variant="danger"
+                  variant="outline"
                   size="sm"
-                  icon={<Glyph icon={Trash2} />}
+                  className={cn(rowButton, "text-danger hover:not-disabled:text-danger")}
+                  icon={<Glyph icon={Trash2} className="size-3" />}
                   disabled={dangGui}
                   onClick={() => moGo(ct.id)}
                   aria-label={`Gỡ chứng từ ngày ${ngay}`}
@@ -413,36 +472,30 @@ export function BangChungTu({
               ),
             ].filter(Boolean);
             return (
-              <tr key={ct.id} className="align-top">
-                <td className="tabular-nums whitespace-nowrap">{ngay}</td>
+              <tr key={ct.id} className="border-line border-b last:border-b-0" data-voucher={ct.status}>
+                <td className={cn(td, "tabular-nums whitespace-nowrap")}>{ngay}</td>
                 {/* IN ĐÚNG CON SỐ MÁY CHỦ TRẢ. Không đổi đơn vị, không làm tròn: một con số sai ở
                     đây đi thẳng vào báo cáo ngân sách. */}
-                <td className="text-right font-semibold whitespace-nowrap text-ink-900 tabular-nums">
+                <td className={cn(td, "text-navy text-right font-semibold whitespace-nowrap tabular-nums")}>
                   {nhanTien(ct.amount)}
                 </td>
                 {/* The server's name for the source; "—" for a voucher drawn on none (§13 rule 6). */}
-                <td className="whitespace-normal">
+                <td className={cn(td, "text-ink-muted whitespace-normal")}>
                   {ct.funding_source_name === undefined || ct.funding_source_name === ""
                     ? DAU_GACH
                     : ct.funding_source_name}
                 </td>
-                <td className="whitespace-normal">
+                <td className={cn(td, "whitespace-normal")}>
                   {ct.description}
                   {ct.counterparty !== undefined && ct.counterparty !== "" && (
-                    <span className="dong-phu">{ct.counterparty}</span>
+                    <span className="text-ink-muted block text-[11px]">{ct.counterparty}</span>
                   )}
                 </td>
-                <td className="whitespace-nowrap text-ink-500">
+                <td className={cn(td, "text-ink-muted whitespace-nowrap")}>
                   {ct.voucher_no === undefined || ct.voucher_no === "" ? DAU_GACH : ct.voucher_no}
                 </td>
-                <td>
+                <td className={td}>
                   <VoucherStatusBadge status={ct.status}>{nhanTrangThaiChungTu(ct.status)}</VoucherStatusBadge>
-                  {/* MỐC KHOÁ VÀ SỐ LẦN MỞ KHOÁ ĐỀU HIỆN, và `unlock_count` là con số nói rằng đã
-                      có những lần mở khoá KHÁC — bốn trường mở khoá chỉ mô tả lần gần nhất. */}
-                  {ct.locked_at !== undefined && ct.locked_at !== "" && (
-                    <span className="dong-phu mt-1 tabular-nums">Khoá lúc {nhanMocKhoa(ct.locked_at)}</span>
-                  )}
-                  {ct.unlock_count > 0 && <span className="dong-phu">Đã mở khoá {ct.unlock_count} lần</span>}
                   {actions.length > 0 && <span className="mt-1.5 flex flex-wrap gap-1.5">{actions}</span>}
                 </td>
               </tr>
@@ -450,7 +503,7 @@ export function BangChungTu({
           })}
         </tbody>
       </table>
-    </TableScroll>
+    </div>
   );
 }
 
@@ -542,15 +595,18 @@ export function KhoiChungTu({
    * `daGhiXong` — tức bảng chứng từ và bốn con số suy ra của dự án ở ngay trên đều cũ, mà không có gì
    * nói ra rằng chúng cũ.
    */
-  function ketThuc<T>(kq: KetQua<T>): void {
+  function ketThuc<T>(kq: KetQua<T>, done: string): void {
     datDangGui(false);
     if (!kq.ok) {
-      // NGUYÊN VĂN câu máy chủ, kể cả 409 của vòng đời, 409 "người vừa khoá không tự mở lại được"
-      // và 409 `source_required` / `source_not_allocated`. Những câu ấy mang tên thao tác và mang
-      // đường ra — nuốt chúng thành "Có lỗi xảy ra" là lấy mất đúng thứ cán bộ cần để biết phải làm gì.
-      datLoi(kq.thongBao);
+      // NGUYÊN VĂN câu máy chủ, as a toast (ADR 0068 lần 6 #4), kể cả 409 của vòng đời, 409 "người vừa
+      // khoá không tự mở lại được" và 409 `source_required` / `source_not_allocated`. Những câu ấy mang
+      // tên thao tác và mang đường ra — nuốt chúng thành "Có lỗi xảy ra" là lấy mất đúng thứ cán bộ cần.
+      // The spec's own sentences for those codes cannot be chosen here: `KetQua` carries no code.
+      datLoi(null);
+      toast.error(kq.thongBao);
       return;
     }
+    toast.success(done);
     datLoi(null);
     datDangMo(null);
     datLanGhiXong((n) => n + 1);
@@ -564,7 +620,7 @@ export function KhoiChungTu({
       return;
     }
     datDangGui(true);
-    themChungTu(than.than, khoa).then(ketThuc);
+    themChungTu(than.than, khoa).then((kq) => ketThuc(kq, "Đã ghi nhận khoản chi. Chờ lãnh đạo xác nhận."));
   }
 
   function sua(ct: finance_chungTuRa, gt: GiaTriFormChungTu): void {
@@ -574,29 +630,31 @@ export function KhoiChungTu({
       return;
     }
     datDangGui(true);
-    suaChungTu(ct.id, than.than).then(ketThuc);
+    suaChungTu(ct.id, than.than).then((kq) => ketThuc(kq, "Đã sửa khoản chi. Cần lãnh đạo xác nhận lại."));
   }
 
   function xacNhan(id: string): void {
     datDangGui(true);
-    xacNhanChungTu(id).then(ketThuc);
+    xacNhanChungTu(id).then((kq) => ketThuc(kq, "Đã xác nhận."));
   }
 
   function khoa(id: string): void {
     datDangGui(true);
-    khoaChungTu(id).then(ketThuc);
+    // Spec 07's sentence for a lock; true here too — the voucher is now confirmed AND locked.
+    khoaChungTu(id).then((kq) => ketThuc(kq, "Đã xác nhận và khoá."));
   }
 
   function moKhoa(ct: finance_chungTuRa, lyDo: string): void {
     datDangGui(true);
-    moKhoaChungTu(ct.id, lyDo).then(ketThuc);
+    // No spec sentence (the spec has no unlock); the shortest true one.
+    moKhoaChungTu(ct.id, lyDo).then((kq) => ketThuc(kq, "Đã mở khoá."));
   }
 
   function go(ct: finance_chungTuRa, lyDo: string): void {
     datDangGui(true);
     // 204 KHÔNG THÂN. Hàng vẫn còn ở CSDL kèm người gỡ và lý do (xoá mềm); danh sách đọc lại không
     // còn nó vì tuyến đọc chỉ trả chứng từ còn hiệu lực.
-    goChungTu(ct.id, lyDo).then(ketThuc);
+    goChungTu(ct.id, lyDo).then((kq) => ketThuc(kq, "Đã gỡ khoản chi."));
   }
 
   function timHang(id: string): finance_chungTuRa | undefined {
@@ -616,7 +674,7 @@ export function KhoiChungTu({
         <div>
           <Button
             type="button"
-            variant="secondary"
+            variant="outline"
             icon={<Glyph icon={Plus} />}
             onClick={() => {
               datLoi(null);
@@ -658,21 +716,8 @@ export function KhoiChungTu({
         />
       )}
 
-      {/* VÒNG ĐỜI NÓI RA NGAY TRÊN BẢNG, không để cán bộ suy từ việc nút nào hiện nút nào không. */}
-      <p className="m-0 text-[13px] text-ink-500">
-        Vòng đời: Kế toán nhập → Đã xác nhận → Đã khoá. Nhập và sửa cần quyền “Cập nhật giải ngân”;
-        xác nhận, khoá, mở khoá và gỡ cần quyền “Xác nhận, khoá khoản giải ngân”.
-      </p>
-
-      {!coGhi && <DeniedNote>{CAU_THIEU_QUYEN_GHI}</DeniedNote>}
-      {!coXacNhan && <DeniedNote>{CAU_THIEU_QUYEN_XAC_NHAN}</DeniedNote>}
-
-      {/* LỖI CỦA MỘT THAO TÁC KHÔNG MỞ BIỂU MẪU NÀO (xác nhận, khoá) vẫn phải ra màn hình. */}
-      {loi !== null && dangMo === null && (
-        <p className="thong-bao-loi m-0" role="alert">
-          {loi}
-        </p>
-      )}
+      {/* Spec 07: no lifecycle sentence, and buttons an account cannot use are simply absent — the
+          server checks both keys on every call (rule 5). */}
 
       {vouchers.phase === "loading" && (
         <div>

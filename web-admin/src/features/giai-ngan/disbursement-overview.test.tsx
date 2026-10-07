@@ -18,7 +18,7 @@ import type {
 import { BangDuAn } from "./bang-du-an";
 import { ChiTietDuAn, ThongTinDuAn } from "./chi-tiet-du-an";
 import { actualSegments, axisMoneyLabel, chartScale, CumulativeChart } from "./cumulative-chart";
-import { KpiCards, yearIsBehind } from "./disbursement-overview";
+import { KpiCards } from "./disbursement-overview";
 import { pendingPart } from "./nhan-ghi-giai-ngan";
 import { groupProjects } from "./project-groups";
 
@@ -216,7 +216,7 @@ const groupHeaders = (el: ParentNode) =>
 /* ── §3 KPI cards ────────────────────────────────────────────────────────────────────────── */
 
 describe("§3 KPI cards — the server's figures, formatted, never re-derived", () => {
-  it("draws the four cards with §3's worked example, and paints the year red when behind", () => {
+  it("draws the four cards with §3's worked example; the disbursed value takes its 80/50/30 tier", () => {
     const el = mount(<KpiCards summary={summary()} />);
     const text = el.textContent ?? "";
     expect(text).toContain("33.230.000.000 đ");
@@ -224,20 +224,26 @@ describe("§3 KPI cards — the server's figures, formatted, never re-derived", 
     expect(text).toContain("3.433.990.000 đ");
     expect(text).toContain("10,33% kế hoạch · thời gian đã qua 70,96%");
     expect(text).toContain("29.796.010.000 đ");
-    expect(text).toContain("Ngưỡng cảnh báo chậm: 10,00 điểm");
+    expect(text).toContain("Ngưỡng cảnh báo chậm: 10 điểm");
     expect(text).toContain("29 dự án chậm");
-    // 70,96 − 10,33 = 60,63 > 10: the disbursed figure and the late count are red.
-    expect(yearIsBehind(summary())).toBe(true);
-    expect(el.querySelectorAll("p.text-danger-600")).toHaveLength(2);
+    // Spec 02 §3: 10,33% is below 30 → the danger tier; 29 late projects → danger + the triangle.
+    const values = [...el.querySelectorAll("[data-kpi-value]")];
+    expect(values[1]!.className).toContain("text-danger");
+    expect(values[3]!.className).toContain("text-danger");
+    // No icon tile on any card; uppercase labels (spec 02 §3).
+    expect(el.querySelectorAll("[data-kpi] > svg")).toHaveLength(0);
+    expect(el.querySelector("[data-kpi] p")!.className).toContain("uppercase");
   });
 
   it("a year with no plan says so in words — never `0%`, never red", () => {
     const s = summary({ planned_total: 0, project_count: 0, disbursed_total: 0, disbursed_ratio: null, delayed_project_count: 0 });
     const el = mount(<KpiCards summary={s} />);
     expect(el.textContent).toContain("Chưa bố trí vốn · thời gian đã qua 70,96%");
-    expect(el.textContent).not.toContain("0,00%");
-    expect(yearIsBehind(s)).toBe(false);
-    expect(el.querySelectorAll("p.text-danger-600")).toHaveLength(0);
+    expect(el.textContent).not.toMatch(/(^|[^\d,])0%/);
+    // No plan → no tier (navy); no late project → leaf.
+    const values = [...el.querySelectorAll("[data-kpi-value]")];
+    expect(values[1]!.className).toContain("text-navy");
+    expect(values[3]!.className).toContain("text-leaf");
   });
 
   it("an over-disbursed year: remainder NEGATIVE and ratio above 100%, not clamped", () => {
@@ -245,12 +251,22 @@ describe("§3 KPI cards — the server's figures, formatted, never re-derived", 
       <KpiCards summary={summary({ disbursed_total: 11_000, planned_total: 10_000, remaining_total: -1_000, disbursed_ratio: 11000 })} />,
     );
     expect(el.textContent).toContain("-1.000 đ");
-    expect(el.textContent).toContain("110,00% kế hoạch");
+    expect(el.textContent).toContain("110% kế hoạch");
   });
 
-  it("on the threshold exactly is NOT behind (strictly greater, as `domain.LaCham`)", () => {
-    expect(yearIsBehind(summary({ time_elapsed_ratio: 2033, disbursed_ratio: 1033, delay_threshold: 1000 }))).toBe(false);
-    expect(yearIsBehind(summary({ time_elapsed_ratio: 2034, disbursed_ratio: 1033, delay_threshold: 1000 }))).toBe(true);
+  it("the disbursed value's colour is the ratio tier (spec `disbursementColor`), not the late rule", () => {
+    for (const [ratio, cls] of [
+      [8000, "text-leaf"],
+      [5366, "text-brand"],
+      [3676, "text-tangerine"],
+      [1033, "text-danger"],
+    ] as const) {
+      const el = mount(<KpiCards summary={summary({ disbursed_ratio: ratio })} />);
+      expect(el.querySelectorAll("[data-kpi-value]")[1]!.className).toContain(cls);
+      act(() => root?.unmount());
+      host?.remove();
+      root = null;
+    }
   });
 
   it("fourth card: the server's open-issue count; the at-risk half stays a '?' with no number", () => {
@@ -330,7 +346,7 @@ describe("register with the year summary", () => {
     expect(total.textContent).toContain("Tổng cộng");
     expect(total.textContent).toContain("900.000.000 đ");
     expect(table.textContent).toContain("-20.000.000 đ");
-    expect(table.textContent).toContain("120,00%");
+    expect(table.textContent).toContain("120%");
     expect(el.textContent).toContain("Chạm một hạng mục để lọc danh sách dự án bên dưới.");
   });
 
@@ -396,8 +412,8 @@ describe("register with the year summary", () => {
     await settle();
     expect(el.querySelector<HTMLInputElement>("#loc-gop-hang-muc")!.checked).toBe(true);
     expect(groupHeaders(el)).toEqual([
-      "Các công trình chuyển tiếp — 2 dự án · kế hoạch 800.000.000 đ · đã giải ngân 260.690.000 đ",
-      "Vốn đầu tư các công trình xây dựng mới — 1 dự án · kế hoạch 100.000.000 đ · đã giải ngân 120.000.000 đ",
+      "Các công trình chuyển tiếp2 dự án · kế hoạch 800.000.000 đ · đã giải ngân 260.690.000 đ",
+      "Vốn đầu tư các công trình xây dựng mới1 dự án · kế hoạch 100.000.000 đ · đã giải ngân 120.000.000 đ",
     ]);
     // Rows under their header: DA1 and DA3 (HM-A) before DA2 (HM-B), server order kept inside a group.
     const codes = [...el.querySelectorAll("tbody tr:not([data-group-header]) td.ma-muc")].map((c) => c.textContent);
@@ -413,7 +429,7 @@ describe("register with the year summary", () => {
     const el = mount(<BangDuAn nam={2026} danhMuc={[]} reloadSignal={0} />);
     await settle();
     typeInto(el.querySelector<HTMLInputElement>("#tim-du-an")!, "DA3");
-    expect(groupHeaders(el)).toEqual(["Các công trình chuyển tiếp — 1 dự án khớp bộ lọc"]);
+    expect(groupHeaders(el)).toEqual(["Các công trình chuyển tiếp1 dự án khớp bộ lọc"]);
   });
 
   it("summary failed: the list still works, headers count rows, the summary says why and retries", async () => {
@@ -482,7 +498,7 @@ describe("groupProjects — when the server's totals may stand over a group", ()
       totalsApply: true,
       filtered: false,
     });
-    expect(groups.map((g) => g.title)).toEqual(["Chưa gắn hạng mục", "Hạng mục không còn trong danh mục"]);
+    expect(groups.map((g) => g.title)).toEqual(["Chưa xếp hạng mục", "Hạng mục không còn trong danh mục"]);
   });
 });
 
@@ -494,21 +510,21 @@ describe("§8 detail: elapsed-time marker", () => {
     const marker = el.querySelector<HTMLElement>("[data-elapsed-marker]")!;
     expect(marker.style.left).toBe("70.96%");
     expect(el.querySelector("[data-progress-caption]")?.textContent).toBe(
-      "Giải ngân 90,00% · thời gian đã trôi qua 70,96%",
+      "Giải ngân 90% · thời gian đã trôi qua 70,96%",
     );
   });
 
   it("no `time_elapsed_ratio` → no marker and no invented figure", () => {
     const el = mount(<ThongTinDuAn duAn={project("DA1", "HM-A")} />);
     expect(el.querySelector("[data-elapsed-marker]")).toBeNull();
-    expect(el.querySelector("[data-progress-caption]")?.textContent).toBe("Giải ngân 90,00%");
+    expect(el.querySelector("[data-progress-caption]")?.textContent).toBe("Giải ngân 90%");
   });
 
   it("no plan: the words say so, still with the elapsed share", () => {
     const el = mount(<ThongTinDuAn duAn={project("DA1", "HM-A", { disbursed_ratio: null, time_elapsed_ratio: 10000 })} />);
     expect(el.querySelector("[data-elapsed-marker]")).toBeNull();
     expect(el.querySelector("[data-progress-caption]")?.textContent).toBe(
-      "Chưa bố trí vốn · thời gian đã trôi qua 100,00%",
+      "Chưa bố trí vốn · thời gian đã trôi qua 100%",
     );
   });
 });

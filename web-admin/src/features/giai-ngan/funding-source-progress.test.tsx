@@ -3,6 +3,7 @@
 // jsdom for this file: the dialogs are driven by clicks and typed values, and what matters is WHICH
 // request each press sends and that the cards are re-read after it — events a markup string cannot show.
 
+import { toast } from "sonner";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -112,17 +113,25 @@ function stubServer(handler: (c: Call) => Response): Call[] {
 
 const listGets = (calls: Call[]) => calls.filter((c) => c.method === "GET" && c.url.startsWith("/api/v1/funding-sources?"));
 
+// Outcomes are toasts (ADR 0068 lần 6 #4).
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+
 describe("FundingSourceCards — the three bars", () => {
   it("granted > 0: three bars, 'còn … chưa phân bổ', no 'vượt nguồn'", () => {
     const el = cards(reply([source()]));
     const card = el.querySelector("[data-funding-source]")!;
     expect(card.querySelectorAll("[data-meter]")).toHaveLength(3);
     expect(card.textContent).toContain("2 dự án");
-    expect(card.textContent).toContain("Đã phân bổ 70 triệu đồng / tổng 9,2 tỷ đồng");
-    expect(card.textContent).toContain("còn 9,13 tỷ đồng chưa phân bổ");
+    // Spec 06 §A verbatim: short amounts (1 decimal, rounded down), no "tổng".
+    expect(card.textContent).toContain("Đã phân bổ 70 triệu / 9,2 tỷ");
+    expect(card.textContent).toContain("còn 9,1 tỷ chưa phân bổ");
     expect(card.textContent).toContain("tổng nguồn");
     // Ratios are the server's hundredths of a percent, drawn as they come.
-    expect(card.textContent).toContain("18,86%");
+    expect(card.textContent).toContain("18,9%");
+    // The allocation bar is #8AA2B8; the disbursed bars take the 80/50/30 tier.
+    const fills = [...card.querySelectorAll("[data-meter] > div > div")].map((d) => d.className);
+    expect(fills[0]).toContain("bg-[#8AA2B8]");
+    expect(fills[1]).toMatch(/bg-(leaf|brand|tangerine|danger)/);
     expect(card.querySelector("[data-overallocated]")).toBeNull();
   });
 
@@ -158,10 +167,10 @@ describe("FundingSourceCards — the three bars", () => {
       ]),
     );
     const over = el.querySelector("[data-overallocated]")!;
-    expect(over.textContent).toContain("vượt nguồn 20 triệu đồng");
-    expect(over.className).toContain("text-danger-600");
+    expect(over.textContent).toContain("vượt nguồn 20 triệu");
+    expect(over.className).toContain("text-danger");
     expect(el.textContent).not.toContain("chưa phân bổ");
-    expect(el.textContent).toContain("140,00%");
+    expect(el.textContent).toContain("140%");
   });
 
   it("a null ratio is '—', never '0%'", () => {
@@ -175,9 +184,9 @@ describe("FundingSourceCards — the three bars", () => {
     const el = cards(reply([source()], 3_400_000_000));
     const note = el.querySelector("[data-unattributed]")!;
     expect(note.textContent).toBe(
-      "Còn 3,4 tỷ đồng đã chi nhưng chưa ghi rút từ nguồn nào — thuộc các dự án chưa khai phân bổ nguồn vốn.",
+      "Còn 3,4 tỷ đã chi nhưng chưa ghi rút từ nguồn nào — thuộc các dự án chưa khai phân bổ nguồn vốn.",
     );
-    expect(note.className).toContain("text-warning-600");
+    expect(note.className).toContain("text-tangerine");
 
     act(() => root?.unmount());
     host?.remove();
@@ -189,7 +198,8 @@ describe("FundingSourceCards — empty catalogue and the permission gate", () =>
   it("empty catalogue WITH budget.update: friendly empty state + '+ Thêm nguồn vốn' that opens management", () => {
     const onManage = vi.fn();
     const el = cards(reply([]), true, onManage);
-    expect(el.textContent).toContain("Chưa khai báo nguồn vốn nào");
+    // Spec 06 §A: one line and one button.
+    expect(el.textContent).toContain("Chưa khai báo nguồn vốn nào.");
     act(() => buttonByText(el, "Thêm nguồn vốn")!.click());
     expect(onManage).toHaveBeenCalledOnce();
   });
@@ -259,7 +269,7 @@ describe("FundingSourceProgress — read, gate, dialogs", () => {
     await settle();
 
     const allocated = el.querySelector<HTMLButtonElement>('[data-funding-source] button[aria-haspopup="dialog"]')!;
-    expect(allocated.textContent).toBe("70 triệu đồng");
+    expect(allocated.textContent).toBe("70 triệu");
     act(() => allocated.click());
     await settle();
 
@@ -267,7 +277,8 @@ describe("FundingSourceProgress — read, gate, dialogs", () => {
     const dialog = document.body.querySelector("dialog")!;
     expect(dialog.textContent).toContain("Ngân sách xã, phường");
     expect(dialog.textContent).toContain("40.000.000 đ");
-    expect(dialog.textContent).toContain("25,00%");
+    // Spec 06 §C: one decimal at most, in the 80/50/30 tier.
+    expect(dialog.textContent).toContain("25%");
     expect(dialog.querySelector("a")?.getAttribute("href")).toBe("/giai-ngan/du-an/01JPRJ");
   });
 });
@@ -298,7 +309,9 @@ describe("Quản lý nguồn vốn — add and edit", () => {
     expect(post.body).toEqual({ name: "Nguồn xã hội hoá", year: 2026, granted_amount: 1_100_000_000 });
     expect(post.headers["Idempotency-Key"]).toMatch(/.+/);
     expect(listGets(calls)).toHaveLength(2);
-    expect(dialog.textContent).toContain("Đã thêm nguồn vốn “Nguồn xã hội hoá”.");
+    // Spec 06 §B: toast, reset, close.
+    expect(toast.success).toHaveBeenCalledWith("Đã thêm nguồn vốn.");
+    expect(document.body.querySelector("dialog")).toBeNull();
   });
 
   it("add with a blank amount sends NO granted_amount; a blank name is refused before any request", async () => {
@@ -321,7 +334,7 @@ describe("Quản lý nguồn vốn — add and edit", () => {
     typeInto(dialog.querySelector<HTMLInputElement>("#ten-nguon-von")!, "Nguồn mới");
     act(() => buttonByText(dialog, "Thêm nguồn vốn")!.click());
     await settle();
-    expect(dialog.querySelector('[role="alert"]')?.textContent).toBe(sentence);
+    expect(toast.error).toHaveBeenCalledWith(sentence);
     expect(dialog.querySelector<HTMLInputElement>("#ten-nguon-von")!.value).toBe("Nguồn mới");
     expect(listGets(calls)).toHaveLength(1);
 

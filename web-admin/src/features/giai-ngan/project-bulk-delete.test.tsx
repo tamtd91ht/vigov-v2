@@ -5,6 +5,7 @@
 
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { toast } from "sonner";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { KetQua } from "@/lib/api/goi";
@@ -15,6 +16,8 @@ import { PROJECT_REMOVE_NOTE, ProjectRemoveDialog } from "./ghi-du-an";
 import { deleteProjectsInTurn, type SelectedProject } from "./project-bulk-delete";
 
 // The list opens a project on a row click through the App Router (G5); no router is mounted here.
+// Outcomes are toasts (ADR 0068 lần 6 #4).
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => {} }) }));
 
 beforeAll(() => {
@@ -280,21 +283,16 @@ describe("Xoá đã chọn — confirm, sequential DELETEs, per-row result, re-r
     ]);
     for (const d of deletes(calls)) expect(d.body).toEqual({});
 
-    const results = [...el.querySelectorAll('ul[aria-label="Kết quả xoá từng dự án"] li')];
-    expect(results.map((li) => li.textContent)).toEqual([
-      "DA01 — đã xoá.",
-      `DA02 — chưa xoá: ${LOCKED}`,
-      "DA03 — đã xoá.",
-    ]);
-    expect(el.querySelector('dialog [role="status"]')?.textContent).toContain("Đã xoá 2/3 dự án; 1 dự án chưa xoá được");
+    // Spec 02 §9: the dialog closes; the outcome is a toast for what went and one per refusal reason,
+    // the reason being the server's own sentence.
+    expect(el.querySelector("dialog")).toBeNull();
+    expect(toast.success).toHaveBeenCalledWith("Đã xoá 2 dự án.");
+    expect(toast.error).toHaveBeenCalledWith(`1 dự án không xoá được: ${LOCKED}`);
     // The list is read again, and the selection made on the old list is gone.
     expect(listGets(calls)).toHaveLength(2);
     // The year totals are read again too: a deleted project leaves every total it was in.
     expect(summaryGets(calls)).toHaveLength(2);
     expect(el.querySelector("[data-bulk-bar]")).toBeNull();
-
-    act(() => buttonByText(el.querySelector("dialog")!, "Đóng")!.click());
-    expect(el.querySelector("dialog")).toBeNull();
   });
 
   it("the second DELETE leaves only after the first has answered", async () => {

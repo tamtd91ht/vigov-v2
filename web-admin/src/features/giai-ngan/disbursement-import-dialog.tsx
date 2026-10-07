@@ -1,14 +1,13 @@
 "use client";
 
-import { CircleCheck, Download, FileSpreadsheet, TriangleAlert, Upload, X } from "lucide-react";
+import { CircleCheck, Download, FileSpreadsheet, Loader2, TriangleAlert, Upload } from "lucide-react";
 import { useRef, useState, type DragEvent } from "react";
+import { toast } from "sonner";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba"; // vi-name-ok: existing idempotency-key helper (rule 12 invariant 3)
 import { Button } from "@/components/ui/button";
 import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
-import { CLOSE_BUTTON, errorRows, keyAfterAttempt, keyForAttempt } from "@/features/cau-hinh/excel-import-flow";
-import { ErrorsTable } from "@/features/cau-hinh/excel-import-panel";
-import { BusyLabel } from "@/features/danh-ba/busy-label";
+import { CLOSE_BUTTON, errorRows, keyAfterAttempt, keyForAttempt, type ErrorRow } from "@/features/cau-hinh/excel-import-flow";
 import {
   commitDisbursementImport,
   DISBURSEMENT_TEMPLATE_FILE_NAME,
@@ -16,11 +15,11 @@ import {
   previewDisbursementImport,
 } from "@/lib/api/disbursement-import";
 import type { DisbursementImportCreatedRow, DisbursementImportPreview } from "@/lib/api/disbursement-import";
+import type { ImportError } from "@/lib/api/excel-import";
 import type { ImportResult } from "@/lib/api/excel-import";
 import type { KetQua } from "@/lib/api/goi"; // vi-name-ok: existing result type of goi.ts (rule 12 invariant 3)
 import { cn } from "@/lib/cn";
 
-import { nhanTien } from "./nhan-du-an";
 
 /**
  * `[Nhập giải ngân]` of the Giải ngân header and its §10 modal — prototype `BudgetWorkspace.tsx:424-431`
@@ -36,7 +35,14 @@ import { nhanTien } from "./nhan-du-an";
  * the Cấu hình imports (`excel-import-flow.ts`).
  *
  * WHAT THE KEY CANNOT DO: tell a second, deliberate import of the same file from a new batch. Each
- * successful import is a new batch, so the modal says so in one line before the button.
+ * successful import is a new batch, so the modal says so in one line before the button (kept against
+ * the prototype by the main session's resolution of row E8).
+ *
+ * LOOK AND WORDS = spec 05 (ADR 0068 lần 6): 42rem, `Tải mẫu giải ngân` as a brand-coloured link, the
+ * dashed box with its `Chọn tệp .xlsx` button, the green / red result box, `[Đóng] [Nhập N lần giải
+ * ngân]`. A success is a toast and closes the dialog; a refusal is the server's sentence as a toast —
+ * except "Tệp còn dòng sai, chưa ghi dòng nào.", the one spec sentence that names an outcome this
+ * screen can recognise (the server returned row errors).
  *
  * Shown only with `budget.update` (the caller's `canRecord`), as the prototype does. UX only — the
  * three routes check `budget.read` / `budget.update` themselves (rule 5).
@@ -56,8 +62,8 @@ export function DisbursementImportButton({
     <>
       <Button
         type="button"
-        variant="secondary"
-        icon={<Upload aria-hidden="true" />}
+        variant="outline"
+        icon={<Upload aria-hidden="true" className="size-4" />}
         aria-haspopup="dialog"
         onClick={() => setOpen(true)}
       >
@@ -76,17 +82,31 @@ export const DROP_ZONE_LABEL = "Chọn tệp .xlsx";
 export const CHECKING = "Đang kiểm tệp…";
 export const IMPORT_CONFIRM = "Nhập";
 export const DUPLICATE_CAUTION = "Mỗi lần nhập là một đợt mới — nhập lại cùng tệp sẽ ghi trùng chứng từ.";
-export const INVALID_HEADING = "Tệp còn dòng sai nên chưa có chứng từ nào được nhận. Sửa các dòng dưới đây rồi chọn lại tệp.";
 export const NO_VOUCHER = "Tệp không có dòng chứng từ nào để nhập.";
+/** Spec 05 toast when the import comes back with row errors. */
+export const ROWS_STILL_WRONG = "Tệp còn dòng sai, chưa ghi dòng nào.";
 
-/** The preview's two numbers, in the units the accountant checks them against: vouchers and full đồng. */
-export function previewSummary(p: DisbursementImportPreview): string {
-  return `${p.rowCount} chứng từ · tổng ${nhanTien(p.totalAmount)}`;
+/** Spec 05: `Nhập {total} lần giải ngân` once a preview is read; `Nhập` before. */
+export function importButtonLabel(preview: KetQua<DisbursementImportPreview> | null): string {
+  return preview !== null && preview.ok ? `${IMPORT_CONFIRM} ${preview.duLieu.rowCount} lần giải ngân` : IMPORT_CONFIRM;
 }
 
-/** `null` = the server replayed an earlier success of the same key; the count is then unknown. */
-export function importedSentence(created: readonly DisbursementImportCreatedRow[] | null): string {
-  return created === null ? "Đã nhập tệp chứng từ." : `Đã nhập ${created.length} chứng từ.`;
+/** Spec 05 result heading: "{n} dòng hợp lệ, sẵn sàng nhập" or "{e} dòng sai trên tổng số {t} dòng". */
+export function previewHeading(p: DisbursementImportPreview): string {
+  return p.valid ? `${p.rowCount} dòng hợp lệ, sẵn sàng nhập` : `${wrongRowCount(p.errors)} dòng sai trên tổng số ${p.rowCount} dòng`;
+}
+
+/** Distinct rows named by the errors: one row with three wrong cells is one wrong row. */
+export function wrongRowCount(errors: readonly ImportError[]): number {
+  return new Set(errors.map((e) => e.row)).size;
+}
+
+/**
+ * Spec 05 success toast: `Đã nhập {n} lần giải ngân.` `created` is `null` when the server replayed an
+ * earlier success of the same key — the count then comes from the preview of the same file.
+ */
+export function importedSentence(created: readonly DisbursementImportCreatedRow[] | null, previewed: number): string {
+  return `Đã nhập ${created === null ? previewed : created.length} lần giải ngân.`;
 }
 
 /** Whether `Nhập` may be pressed: a valid preview of this file with at least one voucher. */
@@ -107,7 +127,6 @@ export function DisbursementImportDialog({ onClose, onImported }: { onClose: () 
   const [importKey, setImportKey] = useState<string | null>(null);
   const [result, setResult] = useState<ImportResult<DisbursementImportCreatedRow> | null>(null);
   const [busy, setBusy] = useState<Busy>("");
-  const [templateError, setTemplateError] = useState("");
   // Bumped on every choice: a preview that answers after ANOTHER file was chosen is dropped, or the
   // first file's "valid" would enable `Nhập` for the second.
   const choice = useRef(0);
@@ -131,11 +150,10 @@ export function DisbursementImportDialog({ onClose, onImported }: { onClose: () 
 
   async function downloadTemplate() {
     setBusy("template");
-    setTemplateError("");
     const r = await downloadDisbursementImportTemplate();
     setBusy("");
     if (!r.ok) {
-      setTemplateError(r.thongBao);
+      toast.error(r.thongBao);
       return;
     }
     const url = URL.createObjectURL(r.duLieu);
@@ -147,7 +165,8 @@ export function DisbursementImportDialog({ onClose, onImported }: { onClose: () 
   }
 
   async function commit() {
-    if (file === null || !canCommit(preview) || busy !== "") return;
+    if (file === null || !canCommit(preview) || busy !== "" || preview === null || !preview.ok) return;
+    const previewed = preview.duLieu.rowCount;
     const key = keyForAttempt(importKey, khoaChongTrungMoi);
     setImportKey(key);
     setBusy("import");
@@ -155,74 +174,84 @@ export function DisbursementImportDialog({ onClose, onImported }: { onClose: () 
     const r = await commitDisbursementImport(file.blob, file.name, key);
     setBusy("");
     setImportKey(keyAfterAttempt(key, r.ok));
+    if (r.ok) {
+      // Re-read at once; the vouchers exist on the server. Then close, as spec 05 does.
+      toast.success(importedSentence(r.created, previewed));
+      onImported();
+      onClose();
+      return;
+    }
     setResult(r);
-    // Re-read at once, not on close: the vouchers exist on the server whether or not the box stays open.
-    if (r.ok) onImported();
+    toast.error(r.errors.length > 0 ? ROWS_STILL_WRONG : r.message);
   }
 
-  function onDrop(e: DragEvent<HTMLLabelElement>) {
+  function onDrop(e: DragEvent<HTMLDivElement>) {
     e.preventDefault();
     void choose(e.dataTransfer.files[0] ?? null);
   }
 
-  const locked = busy === "import" || done;
+  const locked = busy === "import";
+  const fileInput = useRef<HTMLInputElement>(null);
 
   return (
     // Esc while the import is in flight does nothing: the answer must have somewhere to show.
-    <ModalDialog titleId={TITLE_ID} size="lg" onDismiss={() => busy !== "import" && onClose()}>
+    <ModalDialog titleId={TITLE_ID} className="max-w-[42rem]" onDismiss={() => busy !== "import" && onClose()}>
       <ModalDialogHeader titleId={TITLE_ID} title={IMPORT_TITLE} description={IMPORT_DESCRIPTION} />
 
-      <div className="flex min-h-0 min-w-0 flex-col gap-3 overflow-y-auto [&>*]:my-0">
-        <p className="m-0">
+      <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto">
+        <div>
           <Button
             type="button"
             variant="ghost"
-            icon={busy === "template" ? undefined : <Download aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+            size="sm"
+            className="text-brand hover:not-disabled:text-brand h-auto self-start px-0 hover:not-disabled:bg-transparent"
+            icon={
+              busy === "template" ? (
+                <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+              ) : (
+                <Download aria-hidden="true" className="size-4" />
+              )
+            }
             onClick={() => void downloadTemplate()}
             disabled={busy !== ""}
             aria-busy={busy === "template"}
           >
-            <BusyLabel busy={busy === "template"} label={TEMPLATE_LINK} busyText="Đang tải mẫu…" />
+            {TEMPLATE_LINK}
           </Button>
-        </p>
-        {templateError !== "" && (
-          <p className="thong-bao-loi m-0" role="alert">
-            {templateError}
-          </p>
-        )}
+        </div>
 
-        {!done && (
-          <label
-            htmlFor={FILE_INPUT_ID}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={onDrop}
-            className={cn(
-              "flex min-w-0 cursor-pointer flex-col items-center gap-2 rounded-card border border-dashed border-line p-5 text-center",
-              "focus-within:outline-2 focus-within:outline-brand-600",
-              locked && "cursor-not-allowed opacity-60",
-            )}
-          >
-            <Upload aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-6 text-ink-400" />
-            <span className="font-medium text-ink-900">{DROP_ZONE_LABEL}</span>
-            {file !== null && <span className="max-w-full truncate text-xs text-ink-500">{file.name}</span>}
-            <input
-              id={FILE_INPUT_ID}
-              type="file"
-              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              className="sr-only"
-              disabled={locked}
-              onChange={(e) => {
-                const f = e.target.files?.[0] ?? null;
-                // Cleared so choosing the SAME file again (after fixing it) fires `change` again.
-                e.target.value = "";
-                void choose(f);
-              }}
-            />
-          </label>
-        )}
+        {/* Spec 05 drop box: the muted Upload icon, the outline `Chọn tệp .xlsx` button, the file name.
+            Dropping a file on the box still works — it changes nothing in the picture. */}
+        <div
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={onDrop}
+          className="border-line rounded-[10px] border border-dashed p-5 text-center"
+        >
+          <Upload aria-hidden="true" focusable="false" className="text-ink-muted mx-auto mb-2 block size-6" />
+          <input
+            ref={fileInput}
+            id={FILE_INPUT_ID}
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            className="hidden"
+            aria-label={DROP_ZONE_LABEL}
+            disabled={locked}
+            onChange={(e) => {
+              const f = e.target.files?.[0] ?? null;
+              // Cleared so choosing the SAME file again (after fixing it) fires `change` again.
+              e.target.value = "";
+              void choose(f);
+            }}
+          />
+          <Button type="button" variant="outline" disabled={locked} onClick={() => fileInput.current?.click()}>
+            {DROP_ZONE_LABEL}
+          </Button>
+          {file !== null && <p className="text-ink-muted m-0 mt-2 truncate text-[12px]">{file.name}</p>}
+        </div>
 
         {busy === "preview" && (
-          <p className="m-0 text-sm text-ink-500" role="status">
+          <p className="text-ink-muted m-0 flex items-center gap-2 text-[12.5px]" role="status">
+            <Loader2 aria-hidden="true" className="size-4 animate-spin" />
             {CHECKING}
           </p>
         )}
@@ -234,52 +263,37 @@ export function DisbursementImportDialog({ onClose, onImported }: { onClose: () 
           </p>
         )}
 
-        {preview !== null && preview.ok && !done && <PreviewBody preview={preview.duLieu} />}
-
-        {result !== null && !result.ok && (
-          <div className="thong-bao-loi [&_p]:m-0 [&>p]:mb-2" role="alert">
-            <p>{result.message}</p>
-            {result.errors.length > 0 && <ErrorsTable rows={errorRows(result.errors)} />}
-          </div>
+        {result !== null && !result.ok && result.errors.length > 0 ? (
+          <ResultBox ok={false} heading={`${wrongRowCount(result.errors)} dòng sai`} rows={errorRows(result.errors)} />
+        ) : (
+          preview !== null && preview.ok && <PreviewBody preview={preview.duLieu} />
         )}
-
-        {done && (
-          <p role="status" className="m-0 flex items-center gap-2 font-medium text-success-600">
-            <CircleCheck aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0" />
-            {importedSentence(result.created)}
+        {result !== null && !result.ok && result.errors.length === 0 && (
+          <p className="thong-bao-loi m-0" role="alert">
+            {result.message}
           </p>
         )}
 
-        {!done && (
-          <p className="m-0 flex items-start gap-1.5 text-xs text-ink-500" data-duplicate-caution="">
-            <TriangleAlert aria-hidden="true" focusable="false" strokeWidth={1.8} className="mt-px size-3.5 shrink-0" />
-            {DUPLICATE_CAUTION}
-          </p>
-        )}
-      </div>
+        <p className="text-ink-muted m-0 flex items-start gap-1.5 text-[11.5px]" data-duplicate-caution="">
+          <TriangleAlert aria-hidden="true" focusable="false" className="mt-px size-3.5 shrink-0" />
+          {DUPLICATE_CAUTION}
+        </p>
 
-      <div className="flex shrink-0 flex-wrap justify-end gap-2">
-        <Button
-          type="button"
-          variant="ghost"
-          icon={<X aria-hidden="true" focusable="false" strokeWidth={1.8} />}
-          onClick={onClose}
-          disabled={busy === "import"}
-        >
-          {CLOSE_BUTTON}
-        </Button>
-        {!done && (
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onClose} disabled={busy === "import"}>
+            {CLOSE_BUTTON}
+          </Button>
           <Button
             type="button"
             variant="primary"
-            icon={busy === "import" ? undefined : <Upload aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+            icon={busy === "import" ? <Loader2 aria-hidden="true" className="size-4 animate-spin" /> : undefined}
             onClick={() => void commit()}
             disabled={!canCommit(preview) || busy !== ""}
             aria-busy={busy === "import"}
           >
-            <BusyLabel busy={busy === "import"} label={IMPORT_CONFIRM} busyText="Đang nhập…" />
+            {importButtonLabel(preview)}
           </Button>
-        )}
+        </div>
       </div>
     </ModalDialog>
   );
@@ -288,25 +302,62 @@ export function DisbursementImportDialog({ onClose, onImported }: { onClose: () 
 function PreviewBody({ preview }: { preview: DisbursementImportPreview }) {
   if (preview.valid && preview.rowCount === 0) {
     return (
-      <p className="m-0 flex items-center gap-2 text-sm text-ink-500">
-        <FileSpreadsheet aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-4 shrink-0" />
+      <p className="text-ink-muted m-0 flex items-center gap-2 text-[12.5px]">
+        <FileSpreadsheet aria-hidden="true" focusable="false" className="size-4 shrink-0" />
         {NO_VOUCHER}
       </p>
     );
   }
-  if (preview.valid) {
-    return (
-      <p className="m-0 flex items-center gap-2 font-medium text-ink-900" data-preview-summary="">
-        <CircleCheck aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-success-600" />
-        {previewSummary(preview)} — sẵn sàng nhập.
-      </p>
-    );
-  }
+  return <ResultBox ok={preview.valid} heading={previewHeading(preview)} rows={errorRows(preview.errors)} />;
+}
+
+/** Spec 05 result box: green or red, the heading, then `Dòng | Cột | Vấn đề` when there are errors. */
+function ResultBox({ ok, heading, rows }: { ok: boolean; heading: string; rows: readonly ErrorRow[] }) {
   return (
-    <div className="thong-bao-loi [&_p]:m-0 [&>p]:mb-2" role="alert">
-      <p>{INVALID_HEADING}</p>
-      <p data-preview-summary="">Đọc được {previewSummary(preview)}.</p>
-      <ErrorsTable rows={errorRows(preview.errors)} />
+    <div
+      role={ok ? undefined : "alert"}
+      data-preview-summary=""
+      className={cn(
+        "rounded-[10px] border border-solid p-3",
+        ok ? "border-leaf/25 bg-leaf/8" : "border-danger/25 bg-danger/8",
+      )}
+    >
+      <p className="m-0 flex items-center gap-2 text-[12.5px] font-semibold">
+        {ok ? (
+          <CircleCheck aria-hidden="true" focusable="false" className="text-leaf size-4 shrink-0" />
+        ) : (
+          <TriangleAlert aria-hidden="true" focusable="false" className="text-danger size-4 shrink-0" />
+        )}
+        <span className="text-navy">{heading}</span>
+      </p>
+      {rows.length > 0 && (
+        <div className="mt-2 max-h-52 overflow-y-auto">
+          <table className="w-full border-collapse text-[12px]">
+            <thead>
+              <tr className="text-ink-muted text-left text-[10.5px] uppercase">
+                <th scope="col" className="py-1.5 pr-3 text-left font-semibold">
+                  Dòng
+                </th>
+                <th scope="col" className="py-1.5 pr-3 text-left font-semibold">
+                  Cột
+                </th>
+                <th scope="col" className="py-1.5 text-left font-semibold">
+                  Vấn đề
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={`${r.row}-${i}`} className="border-line border-t">
+                  <td className="text-danger py-1.5 pr-3 font-semibold">{r.row}</td>
+                  <td className="text-ink-muted py-1.5 pr-3">{r.column}</td>
+                  <td className="py-1.5">{r.message}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

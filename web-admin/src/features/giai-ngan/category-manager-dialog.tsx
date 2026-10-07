@@ -1,21 +1,20 @@
 "use client";
 
-import { Layers, Plus, Trash2 } from "lucide-react";
+import { Layers, Loader2, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
+import { toast } from "sonner";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba"; // vi-name-ok: existing idempotency-key helper (rule 12 invariant 3)
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/error-state";
-import { Field } from "@/components/ui/field";
-import { IconButton } from "@/components/ui/icon-button";
+import { controlClass } from "@/components/ui/field";
 import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
-import { SkeletonRows } from "@/components/ui/skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 // vi-name-ok: existing words of the Cấu hình catalogue tab, imported unchanged (rule 12, invariant 3)
 import { giaiThichKhongThaoTac } from "@/features/cau-hinh/nhan-danh-muc";
 // vi-name-ok: existing tier rules, imported unchanged (rule 12, invariant 3)
 import { choBatLai, laMucGhi, thaoTacCuaMuc } from "@/features/cau-hinh/tang-danh-muc";
-import { BUSY_DELETING, BusyLabel } from "@/features/danh-ba/busy-label";
 import { addCapitalPlanCategory, deleteCapitalPlanCategory } from "@/lib/api/capital-plan-categories";
 // vi-name-ok: existing write function of danh-muc.ts, imported unchanged (rule 12, invariant 3)
 import { CAPITAL_PLAN_CATEGORY_WRITES, suaMuc } from "@/lib/api/danh-muc";
@@ -26,7 +25,7 @@ import { cn } from "@/lib/cn";
 import { coQuyen, QUYEN_GHI_NGAN_SACH, QUYEN_QUAN_LY_DANH_MUC } from "@/lib/quyen";
 
 /**
- * `☰ Hạng mục` of the Giải ngân header — prototype `CategoryManagerDialog.tsx:56-173`: list the
+ * `☰ Hạng mục` of the Giải ngân header — prototype `CategoryManagerDialog.tsx`, spec 03: list the
  * commune's capital-plan categories, add one, rename in place, turn off / on, soft delete.
  *
  * WHY HERE AND NOT ONLY IN CẤU HÌNH (the prototype's own reason): the person who re-words a category
@@ -35,19 +34,23 @@ import { coQuyen, QUYEN_GHI_NGAN_SACH, QUYEN_QUAN_LY_DANH_MUC } from "@/lib/quye
  * `cau-hinh/tang-danh-muc.ts`. Nothing about a category is decided twice.
  *
  * THE KEYS ARE `budget.update` OR `admin.lookup` (`canManageCategories`): the write routes accept
- * either since e9f669f1 (user decision 07/10/2026). Hiding is UX — the route checks (rule 5); a
- * refusal is the server's sentence, shown verbatim.
+ * either since e9f669f1 (ADR 0077 #1). Hiding is UX — the route checks (rule 5).
  *
  * AS THE PROTOTYPE SINCE 07/10/2026 (backend e9f669f1):
  *   - Add asks the LABEL only; the server derives the code and never reissues a used one (rule 7,
- *     invariant 3). The generated code is shown on the row. Its 409s are re-worded around the label
+ *     invariant 3). The code is not shown (spec 03 row). Its 409s are re-worded around the label
  *     (`lib/api/capital-plan-categories.ts`), since there is no code box to fix.
  *   - Delete is the inline `Xoá hẳn / Thôi` confirm, with no reason: the route's reason is optional and
  *     the server records its fixed default (rule 7, invariant 1 still holds server-side).
  *
- * ONE DIFFERENCE KEPT: delete is offered on tier 1 only, off on tiers 1-2, rename on all —
- * `thaoTacCuaMuc`, the same function Cấu hình draws from. The prototype's "Đi kèm phần mềm" badge
- * marks tiers 2-3, which are never deletable.
+ * OUTCOMES ARE TOASTS (spec 03 §Toast, ADR 0068 lần 6 #4): a success says the spec's sentence; a
+ * refusal says THE SERVER'S sentence verbatim — the spec's generic "Không … được hạng mục." would hide
+ * why (a 409 about the label, a 403), and its one code-specific line (`system_lookup`) is for a delete
+ * this dialog never offers on a shipped row.
+ *
+ * ONE DIFFERENCE KEPT (ADR 0068 lần 6 #11): delete is offered on tier 1 only, off on tiers 1-2, rename
+ * on all — `thaoTacCuaMuc`, the same function Cấu hình draws from. The prototype's "Đi kèm phần mềm"
+ * badge marks tiers 2-3, which are never deletable.
  *
  * ROWS IN THE SERVER'S ORDER, NOT SORTED: the server returns them by `order`, and the Cấu hình tab
  * relies on that same order. A turned-off category stays listed — a project filed under it must still
@@ -76,8 +79,8 @@ export function CategoryManagerButton({
     <>
       <Button
         type="button"
-        variant="secondary"
-        icon={<Layers aria-hidden="true" />}
+        variant="outline"
+        icon={<Layers aria-hidden="true" className="size-4" />}
         aria-haspopup="dialog"
         onClick={() => setOpen(true)}
       >
@@ -97,8 +100,7 @@ export function CategoryManagerDialog({ onClose, onChanged }: { onClose: () => v
   const [reads, setReads] = useState(0);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [busy, setBusy] = useState(false);
-  const [serverError, setServerError] = useState("");
-  const [done, setDone] = useState("");
+  const [adding, setAdding] = useState(false);
 
   const [label, setLabel] = useState("");
   // MINTED WHEN THE FORM OPENS, REUSED ON RETRY, renewed only after a success: a retry after a network
@@ -121,19 +123,21 @@ export function CategoryManagerDialog({ onClose, onChanged }: { onClose: () => v
   const current = loaded !== null && loaded.key === reads ? loaded.result : null;
   const rows: readonly finance_hangMucRa[] = current !== null && current.ok ? current.duLieu.items : [];
 
-  /** One write at a time; on success re-read here AND tell the page, whose filter holds its own copy. */
-  function run(write: Promise<KetQua<unknown>>, sentence: string, after?: () => void): void {
+  /**
+   * One write at a time; on success re-read here AND tell the page, whose filter holds its own copy.
+   * `done` is the spec's success sentence, or `null` where the spec has none (turning on / off).
+   */
+  function run(write: Promise<KetQua<unknown>>, done: string | null, after?: () => void): void {
     setBusy(true);
-    setServerError("");
-    setDone("");
     void write.then((kq) => {
       setBusy(false);
+      setAdding(false);
       if (!kq.ok) {
-        setServerError(kq.thongBao);
+        toast.error(kq.thongBao);
         return;
       }
       after?.();
-      setDone(sentence);
+      if (done !== null) toast.success(done);
       setReads((n) => n + 1);
       onChanged();
     });
@@ -145,74 +149,67 @@ export function CategoryManagerDialog({ onClose, onChanged }: { onClose: () => v
     // Last in the list, as the prototype does: the commune's familiar order (I…VI) is not broken by a
     // new row landing in the middle.
     const order = rows.reduce((max, r) => Math.max(max, r.order), 0) + 1;
-    run(addCapitalPlanCategory(label.trim(), order, addKey), `Đã thêm hạng mục “${label.trim()}”.`, () => {
+    setAdding(true);
+    run(addCapitalPlanCategory(label.trim(), order, addKey), "Đã thêm hạng mục.", () => {
       setLabel("");
       setAddKey(khoaChongTrungMoi());
     });
   }
 
   function rename(row: finance_hangMucRa, next: string): void {
-    run(suaMuc(CAPITAL_PLAN_CATEGORY_WRITES, row.id, { label: next }), `Đã đổi tên hạng mục thành “${next}”.`);
+    run(suaMuc(CAPITAL_PLAN_CATEGORY_WRITES, row.id, { label: next }), "Đã đổi tên hạng mục.");
   }
 
   function setActive(row: finance_hangMucRa, active: boolean): void {
-    run(
-      suaMuc(CAPITAL_PLAN_CATEGORY_WRITES, row.id, { active }),
-      active ? `Đã bật lại hạng mục “${row.label}”.` : `Đã tắt hạng mục “${row.label}”.`,
-    );
+    run(suaMuc(CAPITAL_PLAN_CATEGORY_WRITES, row.id, { active }), null);
   }
 
   function confirmDelete(row: finance_hangMucRa): void {
     if (busy) return;
-    run(deleteCapitalPlanCategory(row.id), `Đã xoá hạng mục “${row.label}”.`, () => setDeletingId(null));
+    run(deleteCapitalPlanCategory(row.id), "Đã xoá hạng mục.", () => setDeletingId(null));
   }
 
   return (
-    <ModalDialog titleId={TITLE_ID} size="lg" onDismiss={() => !busy && onClose()}>
+    <ModalDialog titleId={TITLE_ID} className="max-w-[44rem]" onDismiss={() => !busy && onClose()}>
       <ModalDialogHeader
         titleId={TITLE_ID}
         title="Hạng mục kế hoạch vốn"
         description="Báo cáo tiến độ cộng dồn theo hạng mục. Mỗi dự án thuộc đúng một hạng mục ở đây."
       />
 
-      <form className="flex min-w-0 shrink-0 flex-wrap items-end gap-2" aria-label="Thêm hạng mục" onSubmit={add}>
-        <Field label="Thêm hạng mục" htmlFor="ten-hang-muc-moi" grow="auto" className="min-w-0 flex-1 basis-56">
+      <form className="flex min-w-0 shrink-0 items-end gap-2" aria-label="Thêm hạng mục" onSubmit={add}>
+        <div className="min-w-0 flex-1">
+          <label htmlFor="ten-hang-muc-moi" className="text-navy block text-[11.5px] font-semibold">
+            Thêm hạng mục
+          </label>
           <input
             id="ten-hang-muc-moi"
             value={label}
             autoComplete="off"
             placeholder="Vốn sự nghiệp có tính chất đầu tư"
             disabled={busy}
+            className={cn(controlClass, "mt-1 h-9 bg-white text-[12.5px] md:text-[12.5px]")}
             onChange={(e) => setLabel(e.target.value)}
           />
-        </Field>
+        </div>
         <Button
           type="submit"
           variant="primary"
-          icon={<Plus aria-hidden="true" />}
+          icon={adding ? <Loader2 aria-hidden="true" className="size-4 animate-spin" /> : <Plus aria-hidden="true" className="size-4" />}
           disabled={busy || label.trim() === ""}
+          aria-busy={adding || undefined}
         >
           Thêm
         </Button>
       </form>
 
-      {/* Two live lines, always in the DOM: one for what was done, one for the server's refusal. */}
-      <p role="status" className="m-0 text-sm font-medium text-success-600 empty:hidden">
-        {done}
-      </p>
-      {serverError !== "" && (
-        <p role="alert" className="thong-bao-loi m-0">
-          {serverError}
-        </p>
-      )}
-
-      <div className="min-h-0 overflow-y-auto pr-1">
+      <div className="max-h-[26rem] min-h-0 overflow-y-auto pr-1">
         {current === null && (
           <>
             <p role="status" className="an-thi-giac">
               Đang tải danh mục hạng mục…
             </p>
-            <SkeletonRows rows={4} />
+            <Skeleton className="h-40 w-full" />
           </>
         )}
         {current !== null && !current.ok && (
@@ -223,7 +220,7 @@ export function CategoryManagerDialog({ onClose, onChanged }: { onClose: () => v
           />
         )}
         {current !== null && current.ok && rows.length === 0 && (
-          <p className="m-0 py-6 text-center text-sm text-ink-500">Chưa có hạng mục nào.</p>
+          <p className="text-ink-muted m-0 py-6 text-center text-[12.5px]">Chưa có hạng mục nào.</p>
         )}
         {rows.length > 0 && (
           <ul className="m-0 flex list-none flex-col gap-1.5 p-0" aria-label="Các hạng mục kế hoạch vốn">
@@ -236,10 +233,7 @@ export function CategoryManagerDialog({ onClose, onChanged }: { onClose: () => v
                 confirming={deletingId === row.id}
                 onRename={(next) => rename(row, next)}
                 onSetActive={(active) => setActive(row, active)}
-                onAskDelete={() => {
-                  setServerError("");
-                  setDeletingId(row.id);
-                }}
+                onAskDelete={() => setDeletingId(row.id)}
                 onConfirmDelete={() => confirmDelete(row)}
                 onCancelDelete={() => setDeletingId(null)}
               />
@@ -247,19 +241,15 @@ export function CategoryManagerDialog({ onClose, onChanged }: { onClose: () => v
           </ul>
         )}
       </div>
-
-      <div className="flex shrink-0 justify-end">
-        <Button type="button" variant="secondary" disabled={busy} onClick={onClose}>
-          Đóng
-        </Button>
-      </div>
     </ModalDialog>
   );
 }
 
 /**
- * One category: label edited in place, saved on leaving the box (Enter leaves it, Esc reverts) — the
- * prototype's reason: ten rows each with its own Save button make the eye hunt for the right one.
+ * One category (spec 03 "Một dòng hạng mục"): label edited in place, saved on leaving the box (Enter
+ * leaves it, Esc reverts) — the prototype's reason: ten rows each with its own Save button make the eye
+ * hunt for the right one. A turned-off row is grey and struck through; that, and its `Bật` button, say
+ * it is off — no separate badge.
  */
 function CategoryRow({
   row,
@@ -287,6 +277,7 @@ function CategoryRow({
   const canReactivate = choBatLai(row);
   const writable = laMucGhi(row);
   const inputId = `nhan-hang-muc-${row.id}`;
+  const smallButton = "h-8 shrink-0 px-2 text-[11.5px]";
 
   function save(): void {
     const next = draft.trim();
@@ -300,101 +291,103 @@ function CategoryRow({
   return (
     <li
       data-category-row={row.code}
+      data-active={row.active ? "" : undefined}
       className={cn(
-        "flex min-w-0 flex-col gap-2 rounded-control border border-solid border-line px-2.5 py-2",
-        row.active ? "bg-surface" : "bg-surface-subtle",
+        "border-line flex min-w-0 items-center gap-2 rounded-[10px] border border-solid px-2.5 py-2",
+        row.active ? "bg-white" : "bg-canvas",
       )}
     >
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <label htmlFor={inputId} className="an-thi-giac">
-          Tên hạng mục {row.code}
-        </label>
-        <input
-          id={inputId}
-          value={draft}
-          readOnly={!allowed.doiNhan}
-          disabled={busy}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => allowed.doiNhan && save()}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") e.currentTarget.blur();
-            if (e.key === "Escape") {
-              // The dialog's own Esc would close it with the draft still typed; here Esc means "undo".
-              e.preventDefault();
-              e.stopPropagation();
-              setDraft(row.label);
-            }
-          }}
-          className={cn(
-            "h-8 min-w-40 flex-1 rounded-control border border-solid border-transparent bg-transparent px-1.5 text-sm",
-            "focus:border-line",
-            !row.active && "text-ink-500 line-through",
-          )}
-        />
-        <span className="ma-muc shrink-0 text-xs text-ink-500">{row.code}</span>
-        {writable && row.tier !== 1 && (
-          <Badge tone="neutral" title={giaiThichKhongThaoTac(row.tier)}>
-            Đi kèm phần mềm
-          </Badge>
+      <label htmlFor={inputId} className="an-thi-giac">
+        Tên hạng mục {row.label}
+      </label>
+      <input
+        id={inputId}
+        value={draft}
+        readOnly={!allowed.doiNhan}
+        disabled={busy}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => allowed.doiNhan && save()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Escape") {
+            // The dialog's own Esc would close it with the draft still typed; here Esc means "undo".
+            e.preventDefault();
+            e.stopPropagation();
+            setDraft(row.label);
+          }
+        }}
+        className={cn(
+          "text-ink h-8 min-w-0 flex-1 rounded-md border border-solid border-transparent bg-transparent px-1.5 [font-family:inherit] text-[12.5px] shadow-none outline-none",
+          "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+          !row.active && "text-ink-muted line-through",
         )}
-        {!row.active && <Badge tone="neutral">Đã tắt</Badge>}
+      />
+      {writable && row.tier !== 1 && (
+        <Badge tone="neutral" className="bg-canvas text-ink-muted" title={giaiThichKhongThaoTac(row.tier)}>
+          Đi kèm phần mềm
+        </Badge>
+      )}
 
-        {allowed.tat && row.active && (
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            aria-label={`Tắt hạng mục ${row.label}`}
-            disabled={busy}
-            onClick={() => onSetActive(false)}
-          >
-            Tắt
-          </Button>
-        )}
-        {canReactivate && (
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            aria-label={`Bật lại hạng mục ${row.label}`}
-            disabled={busy}
-            onClick={() => onSetActive(true)}
-          >
-            Bật lại
-          </Button>
-        )}
-        {/* The prototype's inline confirm (`CategoryManagerDialog.tsx:221-253`): the trash icon turns
-            into `Xoá hẳn / Thôi` in place — no reason, no second form. */}
-        {allowed.xoa &&
-          (confirming ? (
-            <span className="flex shrink-0 gap-1.5">
-              <Button
-                type="button"
-                size="sm"
-                variant="danger"
-                disabled={busy}
-                aria-busy={busy || undefined}
-                onClick={onConfirmDelete}
-              >
-                <BusyLabel busy={busy} label="Xoá hẳn" busyText={BUSY_DELETING} />
-              </Button>
-              <Button type="button" size="sm" variant="secondary" disabled={busy} onClick={onCancelDelete}>
-                Thôi
-              </Button>
-            </span>
-          ) : (
-            <IconButton
+      {allowed.tat && row.active && (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className={smallButton}
+          aria-label={`Tắt hạng mục ${row.label}`}
+          disabled={busy}
+          onClick={() => onSetActive(false)}
+        >
+          Tắt
+        </Button>
+      )}
+      {canReactivate && (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className={smallButton}
+          aria-label={`Bật hạng mục ${row.label}`}
+          disabled={busy}
+          onClick={() => onSetActive(true)}
+        >
+          Bật
+        </Button>
+      )}
+      {/* The prototype's inline confirm (`CategoryManagerDialog.tsx:221-253`): the trash icon turns
+          into `Xoá hẳn / Thôi` in place — no reason, no second form. */}
+      {allowed.xoa &&
+        (confirming ? (
+          <span className="flex shrink-0 gap-1.5">
+            <Button
               type="button"
-              variant="secondary"
-              className="text-danger-600 hover:not-disabled:border-danger-600 hover:not-disabled:text-danger-600"
-              label={`Xoá hạng mục ${row.label}`}
+              size="sm"
+              variant="primary"
+              className={cn(smallButton, "bg-danger hover:not-disabled:bg-danger/90 text-white")}
               disabled={busy}
-              onClick={onAskDelete}
+              aria-busy={busy || undefined}
+              onClick={onConfirmDelete}
             >
-              <Trash2 aria-hidden="true" focusable="false" strokeWidth={1.8} />
-            </IconButton>
-          ))}
-      </div>
+              Xoá hẳn
+            </Button>
+            <Button type="button" size="sm" variant="outline" className={smallButton} disabled={busy} onClick={onCancelDelete}>
+              Thôi
+            </Button>
+          </span>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="text-danger hover:not-disabled:text-danger h-8 shrink-0 px-2"
+            aria-label={`Xoá hạng mục ${row.label}`}
+            title={`Xoá hạng mục ${row.label}`}
+            disabled={busy}
+            onClick={onAskDelete}
+          >
+            <Trash2 aria-hidden="true" focusable="false" className="size-3.5" />
+          </Button>
+        ))}
     </li>
   );
 }

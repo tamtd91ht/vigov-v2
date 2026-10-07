@@ -8,8 +8,6 @@ import { BangChungTu, FormChungTu, giaTriTuChungTu, KhoiChungTu, type ProjectVou
 import { FormDuAn, giaTriTuDuAn, KhoiThemDuAn, ProjectHeaderActions, type FundingCatalogue } from "./ghi-du-an";
 import {
   CANH_BAO_SUA_VE_NHAP,
-  CAU_THIEU_QUYEN_GHI,
-  CAU_THIEU_QUYEN_XAC_NHAN,
   CHUNG_TU_DA_KHOA,
   CHUNG_TU_DA_XAC_NHAN,
   CHUNG_TU_KE_TOAN_NHAP,
@@ -18,6 +16,7 @@ import {
   PHAN_CHUA_DUNG_GHI,
 } from "./nhan-ghi-giai-ngan";
 import { BangDanhSach } from "./bang-du-an";
+import type { ProjectPeople } from "./project-people";
 import {
   AttentionCaption,
   MentionNoticePending,
@@ -30,6 +29,12 @@ const EMPTY_LIST: ProjectVoucherList = { phase: "ready", items: [], count: 0 };
 
 /** The funding catalogue of a commune that declared no source yet. */
 const NO_SOURCES: FundingCatalogue = { phase: "ready", items: [] };
+
+/** Both identity catalogues read and empty — the form's selects are live. */
+const PEOPLE_READY: ProjectPeople = {
+  units: { phase: "ready", items: [], names: new Map() },
+  staff: { phase: "ready", items: [], names: new Map() },
+};
 
 /**
  * Canh những QUYẾT ĐỊNH CÓ RA TỚI TRANG hay không — bổ cho `nhan-ghi-giai-ngan.test.ts`, vốn chỉ
@@ -78,7 +83,7 @@ function chungTu(sua: Partial<finance_chungTuRa> = {}): finance_chungTuRa {
   };
 }
 
-const NGAY = "07/09/2026";
+const NGAY = "7/9/2026";
 // Presentational pins (ADR 0068 §5): the `✎` / `🗑` glyphs left the accessible names when they became
 // lucide icons; the names still carry the action and the voucher's date, so each still names ONE
 // button and the permission assertions below are unchanged.
@@ -170,11 +175,12 @@ describe("BANG CHỨNG TỪ — ranh giới budget.update / budget.confirm", () 
 });
 
 describe("BANG CHỨNG TỪ — vòng đời quyết định nút nào có nghĩa", () => {
-  it("`Kế toán nhập`: có Xác nhận, KHÔNG có Khoá (chưa xác nhận thì chưa khoá được)", () => {
+  it("`Kế toán nhập`: có Xác nhận; `Khoá` chỉ là control '?' vô hiệu (chưa xác nhận thì máy chủ chưa khoá được)", () => {
     const html = veBang(true, true, [chungTu()]);
 
     expect(html).toContain(nhuTrongHTML(NHAN_XAC_NHAN));
     expect(html).not.toContain(nhuTrongHTML(NHAN_KHOA));
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Khoá<\/button>/);
     expect(html).not.toContain(nhuTrongHTML(NHAN_MO_KHOA));
   });
 
@@ -194,9 +200,9 @@ describe("BANG CHỨNG TỪ — vòng đời quyết định nút nào có nghĩ
     expect(html).toContain(nhuTrongHTML(NHAN_MO_KHOA));
     expect(html).not.toContain(nhuTrongHTML(NHAN_SUA));
     expect(html).not.toContain(nhuTrongHTML(NHAN_GO));
-    // Mốc khoá in theo giờ Việt Nam dù máy chạy `TZ=UTC`, và số lần mở khoá là một CON SỐ có nghĩa.
-    expect(html).toContain("14:05 22/09/2026");
-    expect(html).toContain("Đã mở khoá 2 lần");
+    // Spec 07: no "Khoá lúc …" / "Đã mở khoá N lần" lines under the badge (row D19).
+    expect(html).not.toContain("Khoá lúc");
+    expect(html).not.toContain("Đã mở khoá");
   });
 
   it("trạng thái LẠ: không nút nào, kể cả với đủ quyền — fail closed đi ra tới trang", () => {
@@ -212,7 +218,7 @@ describe("BANG CHỨNG TỪ — vòng đời quyết định nút nào có nghĩ
   it("bảng rỗng là danh sách CỦA MÁY CHỦ: nói thẳng dự án chưa có chứng từ, không còn câu 'phiên làm việc'", () => {
     const html = veBang(true, true, []);
 
-    expect(html).toContain("Dự án này chưa có chứng từ giải ngân nào.");
+    expect(html).toContain("Chưa có khoản chi nào được ghi nhận.");
     expect(html).not.toContain("phiên làm việc");
     expect(html).not.toContain("chưa xem lại được");
   });
@@ -223,10 +229,9 @@ describe("BANG CHỨNG TỪ — vòng đời quyết định nút nào có nghĩ
       chungTu({ id: "B" }),
     ]);
 
-    expect(html).toContain("<td class=\"whitespace-normal\">Ngân sách tỉnh</td>");
-    expect(html).toContain("<td class=\"whitespace-normal\">—</td>");
-    expect(html).toContain('<th scope="col">Nguồn vốn</th>');
-    expect(html).not.toContain("data-pending");
+    expect(html).toMatch(/<td class="[^"]*">Ngân sách tỉnh<\/td>/);
+    expect(html).toMatch(/<td class="[^"]*">—<\/td>/);
+    expect(html).toMatch(/<th scope="col"[^>]*>Nguồn vốn<\/th>/);
   });
 });
 
@@ -358,8 +363,8 @@ describe("SỬA / GỠ DỰ ÁN — cùng cổng budget.update (quyết định 
   });
 });
 
-describe("TAB CHỨNG TỪ — câu từ chối gọi đúng TÊN quyền", () => {
-  it("thiếu cả hai khoá: hai câu, bằng tên trên màn Phân quyền, không bằng khoá máy", () => {
+describe("TAB CHỨNG TỪ — thiếu quyền thì control vắng mặt (spec 07)", () => {
+  it("thiếu cả hai khoá: không nút ghi, không câu từ chối, không khoá máy trên trang", () => {
     const html = renderToStaticMarkup(
       <KhoiChungTu
         duAnID={DU_AN.id}
@@ -370,8 +375,7 @@ describe("TAB CHỨNG TỪ — câu từ chối gọi đúng TÊN quyền", () =
         daGhiXong={() => {}}
       />,
     );
-    expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_GHI));
-    expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_XAC_NHAN));
+    expect(html).not.toContain("chưa được cấp quyền");
     expect(html).not.toContain(">Ghi nhận khoản chi<");
     expect(html).not.toContain("budget.update");
     expect(html).not.toContain("budget.confirm");
@@ -411,7 +415,7 @@ describe("BIỂU MẪU DỰ ÁN", () => {
     expect(html).toMatch(/<button class="nut-chinh [^"]*" type="submit" disabled="">Thêm dự án<\/button>/);
   });
 
-  it("khi SỬA: mã dự án chỉ ĐỌC, không có ô nhập mã", () => {
+  it("khi SỬA: không có ô nhập mã, và không dòng mã chỉ-đọc (spec 04 row F2)", () => {
     const html = renderToStaticMarkup(
       <FormDuAn
         budgetYear={2026}
@@ -429,7 +433,7 @@ describe("BIỂU MẪU DỰ ÁN", () => {
 
     // Mã đã cấp thì không đánh lại (luật 7, cấm #4) — một ô nhập ở đây là một lời mời sửa nó.
     expect(html).not.toContain('id="ma-du-an"');
-    expect(html).toContain(DU_AN.code);
+    expect(html).not.toContain(DU_AN.code);
   });
 
   it("khi THÊM: có ô mã, và nói rõ mã đã cấp thì không cấp lại", () => {
@@ -451,7 +455,11 @@ describe("BIỂU MẪU DỰ ÁN", () => {
     expect(html).toContain("kể cả bởi dự án đã rút khỏi danh sách");
     // §9: `Tự sinh mã` checked by default, the code box disabled and saying who fills it.
     expect(html).toMatch(/<input id="tu-sinh-ma-du-an" type="checkbox"[^>]* checked=""/);
-    expect(html).toMatch(/<input id="ma-du-an"[^>]* disabled=""[^>]* placeholder="Hệ thống cấp khi lưu"/);
+    expect(html).toMatch(/<input id="ma-du-an"[^>]* disabled=""[^>]* placeholder="Hệ thống sẽ tự sinh"/);
+    // Spec 04 hint verbatim (row F5).
+    expect(html).toContain(
+      "Tự sinh sẽ cấp số tiếp theo trong dãy DA01, DA02… Mã tự nhập phải chưa từng được dùng, kể cả bởi dự án đã rút khỏi danh sách.",
+    );
   });
 
   it("giá trị ban đầu của biểu mẫu SỬA là SỐ THÔ, không phải chuỗi đã định dạng", () => {
@@ -485,6 +493,7 @@ function allPlaceholders(): string {
         giaTriDau={FORM_DU_AN_TRONG}
         danhMuc={HANG_MUC}
         fundingCatalogue={NO_SOURCES}
+        people={PEOPLE_READY}
         dangGui={false}
         loi={null}
         huy={() => {}}
@@ -557,7 +566,8 @@ describe("PHẦN CHƯA DỰNG — dấu '?' đúng vị trí đặc tả (ADR 00
     expect(html).not.toContain(marker("Tự sinh mã"));
     expect(html).not.toContain('id="tu-sinh-ma-du-an"');
     expect(html).not.toContain(marker("Thêm nguồn vốn cho dự án"));
-    expect(html).toContain("data-funding-allocations");
+    // Spec 04: the funding block shows only when the commune has sources (NO_SOURCES here).
+    expect(html).not.toContain("data-funding-allocations");
     expect(html).not.toContain(marker("Đơn vị thực hiện và Cán bộ phụ trách"));
     expect(html).toContain('<select id="don-vi-du-an"');
     expect(html).toContain('<select id="can-bo-du-an"');
@@ -570,5 +580,30 @@ describe("PHẦN CHƯA DỰNG — dấu '?' đúng vị trí đặc tả (ADR 00
     const pending = /<span[^>]*data-pending=""[^>]*>(.*)<\/span><\/span>$/.exec(html);
     expect(pending).not.toBeNull();
     expect(pending![1]!.replace(/<[^>]*>/g, "")).not.toMatch(/\d/);
+  });
+});
+
+describe("BIỂU MẪU DỰ ÁN — `Đơn vị khác, nhập tay` là lựa chọn '?' (backend dependency)", () => {
+  it("the option is LAST, disabled, and its '?' names the pending part", () => {
+    const html = renderToStaticMarkup(
+      <FormDuAn
+        budgetYear={2026}
+        tieuDeForm="Thêm dự án"
+        giaTriDau={FORM_DU_AN_TRONG}
+        danhMuc={HANG_MUC}
+        fundingCatalogue={NO_SOURCES}
+        people={PEOPLE_READY}
+        dangGui={false}
+        loi={null}
+        huy={() => {}}
+        luu={() => {}}
+      />,
+    );
+    const select = /<select id="don-vi-du-an"[^>]*>(.*?)<\/select>/.exec(html)![1]!;
+    const last = select.slice(select.lastIndexOf("<option"));
+    expect(last).toContain('disabled=""');
+    expect(last).toContain("data-pending-option");
+    expect(last).toContain(">— Đơn vị khác, nhập tay —</option>");
+    expect(html).toContain(`aria-label="${nhuTrongHTML(pendingMarkerLabel("Đơn vị khác, nhập tay"))}"`);
   });
 });

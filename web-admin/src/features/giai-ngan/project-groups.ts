@@ -29,7 +29,8 @@ import { hangMucDuAn, nhanHangMuc, nhanTien } from "./nhan-du-an";
  */
 export function categoryRowLabel(row: finance_categoryProgressOut): string {
   if (row.label !== undefined && row.label !== "") return row.label;
-  if (row.category_id === undefined || row.category_id === "") return "Chưa gắn hạng mục";
+  // The prototype's words for this group (`BudgetItemTable.tsx:132`), same as `nhanHangMuc`.
+  if (row.category_id === undefined || row.category_id === "") return "Chưa xếp hạng mục";
   return "Hạng mục không còn trong danh mục";
 }
 

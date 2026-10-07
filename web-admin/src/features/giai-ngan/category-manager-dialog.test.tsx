@@ -6,11 +6,20 @@
 
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { finance_hangMucRa } from "@/lib/api/schema.gen";
 
 import { CategoryManagerButton, canManageCategories } from "./category-manager-dialog";
+
+// Outcomes are toasts (ADR 0068 lần 6 #4): the test reads what was announced, not a DOM line.
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+
+beforeEach(() => {
+  vi.mocked(toast.success).mockClear();
+  vi.mocked(toast.error).mockClear();
+});
 
 beforeAll(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -184,11 +193,23 @@ describe("☰ Hạng mục — the list and the tier rules", () => {
     expect(buttonByLabel(shipped, "Xoá hạng mục Công trình xây dựng mới")).toBeUndefined();
     expect(shipped.textContent).toContain("Đi kèm phần mềm");
 
-    // Turned off: Bật lại, no Tắt.
+    // Turned off: `Bật` (spec 03), no Tắt, no separate "Đã tắt" badge — the struck-through name says it.
     const off = row(el, "keo-dai");
-    expect(off.textContent).toContain("Đã tắt");
-    expect(buttonByLabel(off, "Bật lại hạng mục Vốn kéo dài")).toBeDefined();
+    expect(off.textContent).not.toContain("Đã tắt");
+    expect(off.hasAttribute("data-active")).toBe(false);
+    expect(buttonByLabel(off, "Bật hạng mục Vốn kéo dài")!.textContent).toBe("Bật");
     expect(buttonByLabel(off, "Tắt hạng mục Vốn kéo dài")).toBeUndefined();
+  });
+});
+
+describe("☰ Hạng mục — spec 03 presentation (ADR 0068 §5 pins)", () => {
+  it("no footer `Đóng`, no category code on the rows, the 44rem width", async () => {
+    server();
+    const el = await openDialog();
+    const dialog = el.querySelector("dialog")!;
+    expect(dialog.className).toContain("max-w-[44rem]");
+    expect(buttonByText(dialog, "Đóng")).toBeUndefined();
+    expect(row(el, "von-tra-no").textContent).not.toContain("von-tra-no");
   });
 });
 
@@ -214,7 +235,7 @@ describe("☰ Hạng mục — writes", () => {
     expect(post.headers.get("Idempotency-Key")).toBeTruthy();
     expect(gets(calls)).toHaveLength(2);
     expect(onChanged).toHaveBeenCalledTimes(1);
-    expect(el.querySelector('[role="status"]')?.textContent).toContain("Đã thêm hạng mục");
+    expect(toast.success).toHaveBeenCalledWith("Đã thêm hạng mục.");
     // Cleared for the next one.
     expect(el.querySelector<HTMLInputElement>("#ten-hang-muc-moi")!.value).toBe("");
   });
@@ -234,6 +255,7 @@ describe("☰ Hạng mục — writes", () => {
     expect(patch.url).toBe(`${LIST}/01JHM1`);
     expect(patch.body).toEqual({ label: "Vốn trả nợ đọng XDCB" });
     expect(onChanged).toHaveBeenCalledTimes(1);
+    expect(toast.success).toHaveBeenCalledWith("Đã đổi tên hạng mục.");
   });
 
   it("rename: an unchanged or blank label sends nothing", async () => {
@@ -254,7 +276,7 @@ describe("☰ Hạng mục — writes", () => {
 
     act(() => buttonByLabel(el, "Tắt hạng mục Vốn trả nợ")!.click());
     await settle();
-    act(() => buttonByLabel(el, "Bật lại hạng mục Vốn kéo dài")!.click());
+    act(() => buttonByLabel(el, "Bật hạng mục Vốn kéo dài")!.click());
     await settle();
 
     const patches = calls.filter((c) => c.method === "PATCH");
@@ -283,7 +305,7 @@ describe("☰ Hạng mục — writes", () => {
     expect(del.url).toBe(`${LIST}/01JHM1`);
     expect(del.body).toBeUndefined();
     expect(onChanged).toHaveBeenCalledTimes(1);
-    expect(el.querySelector('[role="status"]')?.textContent).toContain("Đã xoá hạng mục");
+    expect(toast.success).toHaveBeenCalledWith("Đã xoá hạng mục.");
   });
 
   it("delete: Thôi closes the confirm and sends nothing", async () => {
@@ -339,7 +361,7 @@ describe("☰ Hạng mục — writes", () => {
     act(() => buttonByText(el, "Thêm")!.click());
     await settle();
 
-    expect(el.querySelector('dialog [role="alert"]')?.textContent).toBe(sentence);
+    expect(toast.error).toHaveBeenCalledWith(sentence);
     expect(el.querySelector<HTMLInputElement>("#ten-hang-muc-moi")!.value).toBe("Vốn trả nợ");
     expect(onChanged).not.toHaveBeenCalled();
   });
@@ -353,7 +375,7 @@ describe("☰ Hạng mục — writes", () => {
     act(() => buttonByText(el, "Thêm")!.click());
     await settle();
 
-    expect(el.querySelector('dialog [role="alert"]')?.textContent).toBe(sentence);
+    expect(toast.error).toHaveBeenCalledWith(sentence);
   });
 
   it("a refusal (e.g. 403 when the key was withdrawn mid-session) is the server's sentence, verbatim; nothing re-read", async () => {
@@ -365,7 +387,7 @@ describe("☰ Hạng mục — writes", () => {
     act(() => buttonByLabel(el, "Tắt hạng mục Vốn trả nợ")!.click());
     await settle();
 
-    expect(el.querySelector('dialog [role="alert"]')?.textContent).toBe(sentence);
+    expect(toast.error).toHaveBeenCalledWith(sentence);
     expect(onChanged).not.toHaveBeenCalled();
     expect(gets(calls)).toHaveLength(1);
   });

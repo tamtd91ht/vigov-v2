@@ -166,7 +166,7 @@ describe("thaoTacChungTu — vòng đời là một dây xích", () => {
 describe("Nhãn trạng thái", () => {
   it("ba nhãn đúng chữ đặc tả §8.2", () => {
     expect(nhanTrangThaiChungTu(CHUNG_TU_KE_TOAN_NHAP)).toBe("Kế toán nhập");
-    expect(nhanTrangThaiChungTu(CHUNG_TU_DA_XAC_NHAN)).toBe("Đã xác nhận");
+    expect(nhanTrangThaiChungTu(CHUNG_TU_DA_XAC_NHAN)).toBe("Lãnh đạo đã xác nhận");
     expect(nhanTrangThaiChungTu(CHUNG_TU_DA_KHOA)).toBe("Đã khoá");
   });
 
@@ -309,8 +309,8 @@ describe("voucher funding source — decided by the project's allocation lines (
 
   it("option label: name — còn (allocated − drawn), short form; overdrawn stays negative", () => {
     const line = { funding_source_id: "S1", name: "Ngân sách tỉnh", amount: 1_500_000_000, disbursed_amount: 300_000_000, disbursed_ratio: 2000 };
-    expect(allocationOptionLabel(line)).toBe("Ngân sách tỉnh — còn 1,2 tỷ đồng");
-    expect(allocationOptionLabel({ ...line, disbursed_amount: 1_600_000_000 })).toBe("Ngân sách tỉnh — còn -100 triệu đồng");
+    expect(allocationOptionLabel(line)).toBe("Ngân sách tỉnh — còn 1,2 tỷ");
+    expect(allocationOptionLabel({ ...line, disbursed_amount: 1_600_000_000 })).toBe("Ngân sách tỉnh — còn -100 triệu");
   });
 
   it("preselected only when the project has exactly one line", () => {

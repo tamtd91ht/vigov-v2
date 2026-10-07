@@ -5,7 +5,11 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { toast } from "sonner";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+
+// Outcomes are toasts (ADR 0068 lần 6 #4).
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import type { finance_hangMucRa } from "@/lib/api/schema.gen";
 
@@ -121,7 +125,7 @@ describe("§9 Tự sinh mã — what leaves the browser", () => {
     expect(autoBox(el).checked).toBe(true);
     const code = el.querySelector<HTMLInputElement>("#ma-du-an")!;
     expect(code.disabled).toBe(true);
-    expect(code.placeholder).toBe("Hệ thống cấp khi lưu");
+    expect(code.placeholder).toBe("Hệ thống sẽ tự sinh");
 
     await submit(el);
     expect(captured.posts).toHaveLength(1);
@@ -159,7 +163,7 @@ describe("§9 Tự sinh mã — what leaves the browser", () => {
     enter(el.querySelector<HTMLInputElement>("#ma-du-an")!, "DA01");
     await submit(el);
 
-    expect(el.querySelector('[role="alert"]')?.textContent).toBe(sentence);
+    expect(toast.error).toHaveBeenCalledWith(sentence);
     expect(el.querySelector<HTMLInputElement>("#ma-du-an")!.value).toBe("DA01");
     expect(onSaved).not.toHaveBeenCalled();
   });

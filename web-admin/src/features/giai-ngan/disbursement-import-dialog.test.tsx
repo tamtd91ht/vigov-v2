@@ -5,7 +5,11 @@
 
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { toast } from "sonner";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+// Outcomes are toasts (ADR 0068 lần 6 #4).
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 const api = vi.hoisted(() => ({
   previewDisbursementImport: vi.fn(),
@@ -24,10 +28,9 @@ import {
   DisbursementImportButton,
   IMPORT_DESCRIPTION,
   IMPORT_TITLE,
-  INVALID_HEADING,
+  ROWS_STILL_WRONG,
   TEMPLATE_LINK,
 } from "./disbursement-import-dialog";
-import { nhanTien } from "./nhan-du-an";
 
 beforeAll(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -40,6 +43,8 @@ beforeEach(() => {
   api.previewDisbursementImport.mockReset();
   api.commitDisbursementImport.mockReset();
   api.downloadDisbursementImportTemplate.mockReset();
+  vi.mocked(toast.success).mockClear();
+  vi.mocked(toast.error).mockClear();
 });
 
 afterEach(() => {
@@ -70,6 +75,13 @@ async function settle() {
 function buttonByText(el: ParentNode, text: string): HTMLButtonElement {
   const b = [...el.querySelectorAll<HTMLButtonElement>("button")].find((x) => x.textContent?.trim() === text);
   if (b === undefined) throw new Error(`no button "${text}"`);
+  return b;
+}
+
+/** Spec 05's confirm button: `Nhập`, then `Nhập {n} lần giải ngân` once a preview is read. */
+function importButton(dialog: ParentNode): HTMLButtonElement {
+  const b = [...dialog.querySelectorAll<HTMLButtonElement>("button")].find((x) => /^Nhập( \d+ lần giải ngân)?$/.test(x.textContent?.trim() ?? ""));
+  if (b === undefined) throw new Error("no import button");
   return b;
 }
 
@@ -127,7 +139,7 @@ describe("Nhập giải ngân — permission gating", () => {
     expect(dialog.textContent).toContain(DUPLICATE_CAUTION);
     expect(dialog.querySelector("[data-pending]")).toBeNull();
     // Nothing chosen yet: `Nhập` is off, and nothing was sent.
-    expect(buttonByText(dialog, "Nhập").disabled).toBe(true);
+    expect(importButton(dialog).disabled).toBe(true);
     expect(api.previewDisbursementImport).not.toHaveBeenCalled();
   });
 });
@@ -138,17 +150,18 @@ describe("Nhập giải ngân — preview", () => {
     const { dialog } = openDialog();
     const file = await chooseFile(dialog);
     expect(api.previewDisbursementImport).toHaveBeenCalledWith(file, "giai-ngan.xlsx");
-    expect(dialog.querySelector("[data-preview-summary]")?.textContent).toContain(
-      `3 chứng từ · tổng ${nhanTien(1234567890)}`,
-    );
-    expect(buttonByText(dialog, "Nhập").disabled).toBe(false);
+    // Spec 05: the green box and the count on the button.
+    expect(dialog.querySelector("[data-preview-summary]")?.textContent).toContain("3 dòng hợp lệ, sẵn sàng nhập");
+    expect(importButton(dialog).textContent).toBe("Nhập 3 lần giải ngân");
+    expect(importButton(dialog).disabled).toBe(false);
   });
 
   it("an invalid file renders every error (row, column, message) and Nhập stays DISABLED", async () => {
     api.previewDisbursementImport.mockResolvedValue(INVALID);
     const { dialog } = openDialog();
     await chooseFile(dialog);
-    expect(dialog.textContent).toContain(INVALID_HEADING);
+    // Two errors on two distinct rows (row 0 = the whole file).
+    expect(dialog.querySelector("[data-preview-summary]")?.textContent).toContain("2 dòng sai trên tổng số 2 dòng");
     const rows = [...dialog.querySelectorAll("tbody tr")].map((tr) =>
       [...tr.querySelectorAll("td")].map((td) => td.textContent),
     );
@@ -156,8 +169,8 @@ describe("Nhập giải ngân — preview", () => {
       ["4", "Mã dự án", "Không có dự án mã này trong năm."],
       ["Cả tệp", "—", "Thiếu cột Nguồn vốn."],
     ]);
-    expect(buttonByText(dialog, "Nhập").disabled).toBe(true);
-    act(() => buttonByText(dialog, "Nhập").click());
+    expect(importButton(dialog).disabled).toBe(true);
+    act(() => importButton(dialog).click());
     expect(api.commitDisbursementImport).not.toHaveBeenCalled();
   });
 
@@ -166,7 +179,7 @@ describe("Nhập giải ngân — preview", () => {
     const { dialog } = openDialog();
     await chooseFile(dialog);
     expect(dialog.querySelector('[role="alert"]')?.textContent).toBe("Tệp lớn hơn 2 MB nên chưa nhận.");
-    expect(buttonByText(dialog, "Nhập").disabled).toBe(true);
+    expect(importButton(dialog).disabled).toBe(true);
   });
 
   it("a valid file with zero vouchers offers nothing to import", async () => {
@@ -176,7 +189,7 @@ describe("Nhập giải ngân — preview", () => {
     });
     const { dialog } = openDialog();
     await chooseFile(dialog);
-    expect(buttonByText(dialog, "Nhập").disabled).toBe(true);
+    expect(importButton(dialog).disabled).toBe(true);
   });
 });
 
@@ -189,12 +202,12 @@ describe("Nhập giải ngân — import", () => {
     const { dialog, onImported } = openDialog();
     const file = await chooseFile(dialog);
 
-    act(() => buttonByText(dialog, "Nhập").click());
+    act(() => importButton(dialog).click());
     await settle();
-    expect(dialog.textContent).toContain("Không kết nối được máy chủ.");
+    expect(toast.error).toHaveBeenCalledWith("Không kết nối được máy chủ.");
     expect(onImported).not.toHaveBeenCalled();
 
-    act(() => buttonByText(dialog, "Nhập").click());
+    act(() => importButton(dialog).click());
     await settle();
     expect(api.commitDisbursementImport).toHaveBeenCalledTimes(2);
     const [first, second] = api.commitDisbursementImport.mock.calls as [Blob, string, string][];
@@ -204,9 +217,9 @@ describe("Nhập giải ngân — import", () => {
     expect(second![2]).toBe(first![2]);
 
     expect(onImported).toHaveBeenCalledTimes(1);
-    expect(dialog.querySelector('[role="status"]')?.textContent).toContain("Đã nhập 3 chứng từ.");
-    // The attempt is over: no second `Nhập` on the same box.
-    expect([...dialog.querySelectorAll("button")].some((b) => b.textContent?.trim() === "Nhập")).toBe(false);
+    expect(toast.success).toHaveBeenCalledWith("Đã nhập 3 lần giải ngân.");
+    // The attempt is over: the dialog closes, as spec 05 does.
+    expect(document.body.querySelector("dialog")).toBeNull();
   });
 
   it("a NEW file is a new attempt: a new key", async () => {
@@ -214,10 +227,10 @@ describe("Nhập giải ngân — import", () => {
     api.commitDisbursementImport.mockResolvedValue({ ok: false, message: "Lỗi.", errors: [] });
     const { dialog } = openDialog();
     await chooseFile(dialog, "a.xlsx");
-    act(() => buttonByText(dialog, "Nhập").click());
+    act(() => importButton(dialog).click());
     await settle();
     await chooseFile(dialog, "b.xlsx");
-    act(() => buttonByText(dialog, "Nhập").click());
+    act(() => importButton(dialog).click());
     await settle();
     const keys = (api.commitDisbursementImport.mock.calls as [Blob, string, string][]).map((c) => c[2]);
     expect(keys).toHaveLength(2);
@@ -233,9 +246,10 @@ describe("Nhập giải ngân — import", () => {
     });
     const { dialog, onImported } = openDialog();
     await chooseFile(dialog);
-    act(() => buttonByText(dialog, "Nhập").click());
+    act(() => importButton(dialog).click());
     await settle();
-    expect(dialog.textContent).toContain("Tệp còn dòng sai.");
+    // Row errors = spec 05's sentence as the toast; the rows stay in the red box.
+    expect(toast.error).toHaveBeenCalledWith(ROWS_STILL_WRONG);
     expect(dialog.textContent).toContain("Phải là số dương.");
     expect(onImported).not.toHaveBeenCalled();
   });
@@ -245,10 +259,11 @@ describe("Nhập giải ngân — import", () => {
     api.commitDisbursementImport.mockResolvedValue({ ok: true, created: null });
     const { dialog, onImported } = openDialog();
     await chooseFile(dialog);
-    act(() => buttonByText(dialog, "Nhập").click());
+    act(() => importButton(dialog).click());
     await settle();
     expect(onImported).toHaveBeenCalledTimes(1);
-    expect(dialog.querySelector('[role="status"]')?.textContent).toContain("Đã nhập tệp chứng từ.");
+    // The count comes from the preview of the same file — never "0".
+    expect(toast.success).toHaveBeenCalledWith("Đã nhập 3 lần giải ngân.");
   });
 });
 
@@ -283,6 +298,6 @@ describe("Nhập giải ngân — template", () => {
     const { dialog } = openDialog();
     act(() => buttonByText(dialog, TEMPLATE_LINK).click());
     await settle();
-    expect(dialog.querySelector('[role="alert"]')?.textContent).toBe("Bạn không có quyền xem giải ngân.");
+    expect(toast.error).toHaveBeenCalledWith("Bạn không có quyền xem giải ngân.");
   });
 });

@@ -424,11 +424,11 @@ describe("G8 — 80/50/30 colour tiers (prototype `budget-display.ts:62-67`)", (
     expect(tone("DA2")).toBe("success");
     expect(tone("DA3")).toBe("brand");
     expect(tone("DA4")).toBe("warning");
-    expect(el.querySelector('tr[data-project-row="DA2"] [data-progress-tone]')!.className).toContain("bg-success-500");
+    expect(el.querySelector('tr[data-project-row="DA2"] [data-progress-tone]')!.className).toContain("bg-leaf");
     // The late flag is the server's, unchanged: red left edge and "Chậm x điểm" only on DA4.
-    expect(el.querySelector('tr[data-project-row="DA4"]')!.className).toContain("border-l-danger-500");
-    expect(el.querySelector('tr[data-project-row="DA1"]')!.className).not.toContain("border-l-danger-500");
-    expect(el.querySelector('tr[data-project-row="DA4"]')!.textContent).toContain("Chậm 35,96 điểm");
+    expect(el.querySelector('tr[data-project-row="DA4"]')!.className).toContain("border-l-danger");
+    expect(el.querySelector('tr[data-project-row="DA1"]')!.className).not.toContain("border-l-danger");
+    expect(el.querySelector('tr[data-project-row="DA4"]')!.textContent).toContain("chậm 35,96 điểm");
   });
 
   it("category table: the disbursed `Tỷ lệ` (rows and total) takes the tier colour; `—` and the undisbursed one do not", () => {
@@ -451,6 +451,6 @@ describe("G8 — 80/50/30 colour tiers (prototype `budget-display.ts:62-67`)", (
     );
     const tones = [...el.querySelectorAll<HTMLElement>("td[data-ratio-tone]")].map((c) => c.dataset.ratioTone);
     expect(tones).toEqual(["success", "danger", "warning"]);
-    expect(el.querySelector<HTMLElement>('td[data-ratio-tone="success"]')!.className).toContain("text-success-600");
+    expect(el.querySelector<HTMLElement>('td[data-ratio-tone="success"]')!.className).toContain("text-leaf");
   });
 });

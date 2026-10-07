@@ -1,15 +1,13 @@
 "use client";
 
-import { Banknote } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { Field } from "@/components/ui/field";
-import { PageHeader } from "@/components/ui/page-header";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 import { CongQuyen } from "@/features/quyen/cong-quyen";
 import { layHangMucKeHoachVon } from "@/lib/api/danh-muc-nghiep-vu";
 import type { finance_hangMucRa } from "@/lib/api/schema.gen";
 import { danhSachNam, namTheoDongHoMay } from "@/lib/nam";
+import { cn } from "@/lib/cn";
 import { coQuyen, QUYEN_GHI_NGAN_SACH, QUYEN_XEM_GIAI_NGAN } from "@/lib/quyen";
 
 import { BangDuAn } from "./bang-du-an";
@@ -18,6 +16,7 @@ import { FundingSourceProgress } from "./funding-source-progress";
 import { KhoiThemDuAn } from "./ghi-du-an";
 import { DISBURSEMENT_READ_DENIED } from "./nhan-du-an";
 import { DisbursementImportButton } from "./disbursement-import-dialog";
+import { SELECT_CLASS } from "./spec-classes";
 
 /**
  * The Giải ngân list screen in the prototype's frame (`BudgetWorkspace.tsx`, ADR 0068 lần 5): the page
@@ -67,19 +66,24 @@ export function DisbursementWorkspace() {
     <KhoiThemDuAn nam={year} danhMuc={categories} coGhi={canRecord} daGhiXong={() => setSaves((n) => n + 1)} />
   );
 
+  const canManage = canManageCategories(permissions);
+  const hasActions = canManage || canRecord;
+
   return (
     <>
-      <PageHeader
-        icon={Banknote}
-        title="Theo dõi giải ngân"
-        subtitle="Tiến độ giải ngân theo dự án, chứng từ và vướng mắc cần tháo gỡ."
-        actions={
-          <>
+      {/* Spec 02 §1 verbatim: no icon tile, the button group `ml-auto`, the year select last — and
+          `ml-auto` on the select itself when there is no button group to push it right. */}
+      <div className="mb-3 flex flex-wrap items-end gap-4">
+        <div>
+          <h1 className="text-navy m-0 text-[22px] font-bold">Theo dõi giải ngân</h1>
+          <p className="text-ink-muted m-0 mt-1 text-[13px]">
+            Tiến độ giải ngân theo dự án, chứng từ và vướng mắc cần tháo gỡ.
+          </p>
+        </div>
+        {hasActions && (
+          <div className="ml-auto flex flex-wrap items-center gap-2">
             {/* `budget.update` OR `admin.lookup`: the category write routes accept either (e9f669f1). */}
-            <CategoryManagerButton
-              canManage={canManageCategories(permissions)}
-              onChanged={() => setCategoryReads((n) => n + 1)}
-            />
+            <CategoryManagerButton canManage={canManage} onChanged={() => setCategoryReads((n) => n + 1)} />
             {canRecord && (
               <>
                 {/* An import adds vouchers to many projects at once: the same full re-read as an add. */}
@@ -93,18 +97,22 @@ export function DisbursementWorkspace() {
                 {addProject}
               </>
             )}
-            <Field label="Năm ngân sách" hideLabel htmlFor="nam-ngan-sach" kind="select" grow="auto">
-              <select id="nam-ngan-sach" value={year} onChange={(e) => setYear(Number(e.target.value))}>
-                {danhSachNam(anchorYear).map((n) => (
-                  <option key={n} value={n}>
-                    Năm ngân sách {n}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </>
-        }
-      />
+          </div>
+        )}
+        <select
+          id="nam-ngan-sach"
+          aria-label="Năm ngân sách"
+          className={cn(SELECT_CLASS, !hasActions && "ml-auto")}
+          value={year}
+          onChange={(e) => setYear(Number(e.target.value))}
+        >
+          {danhSachNam(anchorYear).map((n) => (
+            <option key={n} value={n}>
+              Năm ngân sách {n}
+            </option>
+          ))}
+        </select>
+      </div>
       <CongQuyen khoa={QUYEN_XEM_GIAI_NGAN} cauThieuQuyen={DISBURSEMENT_READ_DENIED}>
         {/* The empty list repeats `+ Thêm dự án` (prototype `:375-380`); `null` without the key. */}
         <BangDuAn

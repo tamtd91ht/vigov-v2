@@ -6,7 +6,8 @@
 import { act, useState, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
   finance_duAnRa,
@@ -18,19 +19,7 @@ import type {
 import { BangDanhSach, LatestIssueCell } from "./bang-du-an";
 import { ChiTietDuAn } from "./chi-tiet-du-an";
 import { CommentList, ProjectCommentsPanel } from "./project-comments";
-import {
-  COMMENTS_DENIED,
-  insertMention,
-  ISSUES_DENIED,
-  latestIssueDateLine,
-  matchingStaff,
-  MENTION_PICKER_LIMIT,
-  mentionedCodes,
-  mentionQueryAt,
-  mentionSegments,
-  openIssuesLabel,
-  staffLabel,
-} from "./project-discussion-labels";
+import { latestIssueDateLine, MENTION_PICKER_LIMIT, mentionLine, openIssuesLabel, staffLabel } from "./project-discussion-labels";
 import { ProjectIssuesPanel, useProjectIssues } from "./project-issues";
 import { staffCatalogue, type PeopleCatalogue } from "./project-people";
 
@@ -39,6 +28,14 @@ import { staffCatalogue, type PeopleCatalogue } from "./project-people";
  * The silent failures: a write that leaves the timeline stale, a 409 swallowed, a form shown to an
  * account that cannot write, a mention whose code never leaves the browser, a body rendered as HTML.
  */
+
+// Outcomes are toasts (ADR 0068 lần 6 #4).
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+
+beforeEach(() => {
+  vi.mocked(toast.success).mockClear();
+  vi.mocked(toast.error).mockClear();
+});
 
 const fakeSession = {
   ok: true as const,
@@ -209,48 +206,9 @@ describe("labels", () => {
 });
 
 describe("mentions — pure rules", () => {
-  it("an @ counts at the start or after whitespace; never inside a word or across a line", () => {
-    expect(mentionQueryAt("@Ngu", 4)).toEqual({ start: 0, end: 4, query: "Ngu" });
-    expect(mentionQueryAt("xem @Nguyễn Văn", 15)).toEqual({ start: 4, end: 15, query: "Nguyễn Văn" });
-    expect(mentionQueryAt("a@b", 3)).toBeNull();
-    expect(mentionQueryAt("@An\nxem", 7)).toBeNull();
-    expect(mentionQueryAt("không có", 8)).toBeNull();
-  });
-
-  it("matching folds case and diacritics, also matches the code, and stops at eight", () => {
-    expect(matchingStaff(STAFF_ITEMS, "nguyen").map((s) => s.code)).toEqual(["CB-00001", "CB-00003"]);
-    expect(matchingStaff(STAFF_ITEMS, "BINH").map((s) => s.code)).toEqual(["CB-00002"]);
-    expect(matchingStaff(STAFF_ITEMS, "00002").map((s) => s.code)).toEqual(["CB-00002"]);
-    const many = Array.from({ length: 12 }, (_, i) => ({ ...STAFF_ITEMS[0]!, code: `CB-${i}` }));
-    expect(matchingStaff(many, "")).toHaveLength(MENTION_PICKER_LIMIT);
-  });
-
-  it("inserting writes '@Full Name ' over the query and puts the caret after it", () => {
-    const q = mentionQueryAt("xem @ngu giúp", 8)!;
-    expect(insertMention("xem @ngu giúp", q, "Nguyễn Văn An")).toEqual({
-      text: "xem @Nguyễn Văn An  giúp",
-      caret: 19,
-    });
-  });
-
-  it("only codes whose '@Name' is still in the body are sent, once each", () => {
-    const picked = [
-      { code: "CB-00001", name: "Nguyễn Văn An" },
-      { code: "CB-00002", name: "Trần Thị Bình" },
-      { code: "CB-00001", name: "Nguyễn Văn An" },
-    ];
-    expect(mentionedCodes("@Nguyễn Văn An xem", picked)).toEqual(["CB-00001"]);
-    expect(mentionedCodes("không nhắc ai", picked)).toEqual([]);
-  });
-
-  it("segments: longest name first, plain text kept as text", () => {
-    const segs = mentionSegments("@Nguyễn Văn An và @Nguyễn Văn A <b>x</b>", ["Nguyễn Văn A", "Nguyễn Văn An"]);
-    expect(segs).toEqual([
-      { text: "@Nguyễn Văn An", mention: true },
-      { text: " và ", mention: false },
-      { text: "@Nguyễn Văn A", mention: true },
-      { text: " <b>x</b>", mention: false },
-    ]);
+  it("spec 07 'Nhắc: @A, @B' line: directory names, the code when unresolved, nothing when nobody", () => {
+    expect(mentionLine(["CB-00001", "CB-99999"], STAFF)).toBe("Nhắc: @Nguyễn Văn An, @CB-99999");
+    expect(mentionLine([], STAFF)).toBeNull();
   });
 });
 
@@ -286,7 +244,8 @@ describe("§8.1 issues — timeline", () => {
     expect(done.textContent).toContain("Nguyễn Văn An");
     expect(done.textContent).toContain("Đã gỡ");
     expect(done.querySelector("p.line-through")?.textContent).toBe("Vướng giải phóng mặt bằng");
-    expect(done.querySelector("[data-resolved-by]")?.textContent).toBe("Gỡ lúc 10:00 01/09/2026 · Trần Thị Bình");
+    // Spec 07: no "Gỡ lúc … · người gỡ" line (row D31).
+    expect(done.querySelector("[data-resolved-by]")).toBeNull();
     expect([...done.querySelectorAll("button")].some((b) => b.textContent?.includes("Đã gỡ xong"))).toBe(false);
   });
 
@@ -334,6 +293,7 @@ describe("§8.1 issues — record and resolve", () => {
     expect(post.body).toEqual({ text: "Chờ Sở thẩm định\nHồ sơ nộp 20/8" });
     expect(post.key).not.toBeNull();
     expect(reads(seen, "/issues")).toBe(2);
+    expect(toast.success).toHaveBeenCalledWith("Đã ghi nhận vướng mắc.");
     expect(el.querySelector('[data-issue="NEW"]')).not.toBeNull();
     expect(el.querySelector<HTMLTextAreaElement>("#vuong-mac-moi")!.value).toBe("");
   });
@@ -350,7 +310,7 @@ describe("§8.1 issues — record and resolve", () => {
     type(box, "dài");
     await act(async () => buttonByText(el, "Ghi nhận").click());
     await settle();
-    expect(el.querySelector('[role="alert"]')?.textContent).toBe("Dòng đầu của `text` quá dài (tối đa 500 ký tự)");
+    expect(toast.error).toHaveBeenCalledWith("Dòng đầu của `text` quá dài (tối đa 500 ký tự)");
     expect(box.value).toBe("dài");
     expect(reads(seen, "/issues")).toBe(1);
 
@@ -376,7 +336,8 @@ describe("§8.1 issues — record and resolve", () => {
     expect(post.body).toBeNull();
     expect(reads(seen, "/issues")).toBe(2);
     expect(el.querySelector('[data-issue="VM1"]')?.hasAttribute("data-resolved")).toBe(true);
-    expect(el.querySelector('[role="alert"]')).toBeNull();
+    expect(toast.success).toHaveBeenCalledWith("Đã đóng vướng mắc.");
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it("409 issue_already_resolved: the server's sentence is shown, and the timeline is re-read", async () => {
@@ -397,21 +358,21 @@ describe("§8.1 issues — record and resolve", () => {
     await act(async () => buttonByText(el, "Đã gỡ xong").click());
     await settle();
 
-    expect(el.querySelector('[role="alert"]')?.textContent).toBe(
+    expect(toast.error).toHaveBeenCalledWith(
       "Vướng mắc này đã được ghi là đã gỡ — nếu vướng mắc quay lại, hãy ghi nhận một vướng mắc mới",
     );
     expect(reads(seen, "/issues")).toBe(2);
     expect(el.querySelector('[data-issue="VM1"]')?.hasAttribute("data-resolved")).toBe(true);
   });
 
-  it("DENIED (no budget.update): no form, no 'Đã gỡ xong', the reason said — the timeline still shows", async () => {
+  it("DENIED (no budget.update): no form, no 'Đã gỡ xong', no denial note (spec 07) — the timeline still shows", async () => {
     const seen = stubServer({ issues: [issue()] });
     const el = mount(<IssuesHarness canRecord={false} />);
     await settle();
     expect(el.querySelector("#vuong-mac-moi")).toBeNull();
     expect([...el.querySelectorAll("button")].some((b) => b.textContent?.includes("Ghi nhận"))).toBe(false);
     expect([...el.querySelectorAll("button")].some((b) => b.textContent?.includes("Đã gỡ xong"))).toBe(false);
-    expect(el.textContent).toContain(ISSUES_DENIED);
+    expect(el.textContent).not.toContain("chưa được cấp quyền");
     expect(el.querySelector('[data-issue="VM1"]')).not.toBeNull();
     expect(seen.some((s) => s.method === "POST")).toBe(false);
   });
@@ -430,67 +391,61 @@ describe("§8.1 issues — record and resolve", () => {
 /* ── §8.4 Trao đổi ──────────────────────────────────────────────────────────────────────────── */
 
 describe("§8.4 discussion", () => {
-  it("lists oldest first with the author's name and time; mentions highlighted; NEVER raw HTML", () => {
+  it("lists oldest first with the author's name and time; mentions as 'Nhắc: …'; NEVER raw HTML", () => {
     const html = renderToStaticMarkup(
       <CommentList
         staff={STAFF}
         items={[
-          comment({ id: "A", body: "@Nguyễn Văn An xem <img src=x onerror=alert(1)>", mentioned_staff_codes: ["CB-00001"] }),
+          comment({ id: "A", body: "Nhờ xem <img src=x onerror=alert(1)>", mentioned_staff_codes: ["CB-00001"] }),
           comment({ id: "B", body: "Đã xem", author_code: "CB-00001" }),
         ]}
       />,
     );
     expect(html).toContain("Trần Thị Bình");
     expect(html).toContain("09:05 27/08/2026");
-    expect(html).toMatch(/<span data-mention=""[^>]*>@Nguyễn Văn An<\/span>/);
+    expect(html).toMatch(/<p[^>]*data-mentions=""[^>]*>Nhắc: @Nguyễn Văn An<\/p>/);
     // Escaped: the body is text, so a tag in it is shown, never parsed.
     expect(html).toContain("&lt;img src=x onerror=alert(1)&gt;");
     expect(html).not.toContain("<img");
     expect(html.indexOf('data-comment="A"')).toBeLessThan(html.indexOf('data-comment="B"'));
   });
 
-  it("typing '@' opens up to eight matching staff; picking one writes '@Name' and SENDS ITS CODE", async () => {
+  it("spec 07 chips: the first eight staff under the box; a chip toggles, and the chips ON are the codes SENT", async () => {
     const state = { issues: [] as finance_projectIssueOut[], comments: [] as finance_projectCommentOut[] };
     const seen = stubServer(state);
-    const el = mount(<ProjectCommentsPanel projectId="DA1" staff={STAFF} canComment />);
+    const many = staffCatalogue({
+      ok: true,
+      duLieu: { items: Array.from({ length: 10 }, (_, k) => ({ ...STAFF_ITEMS[0]!, code: `CB-1000${k}`, full_name: `Cán bộ ${k}` })) },
+    });
+    const el = mount(<ProjectCommentsPanel projectId="DA1" staff={many} canComment />);
     await settle();
     expect(el.textContent).toContain("Chưa có ý kiến trao đổi nào.");
-
     const box = el.querySelector<HTMLTextAreaElement>("#trao-doi-moi")!;
-    type(box, "Nhờ @nguyen");
+    expect(box.placeholder).toBe("Nhập ý kiến trao đổi về dự án này…");
+
     const picker = el.querySelector<HTMLElement>("[data-mention-picker]")!;
-    expect([...picker.querySelectorAll("button")].map((b) => b.dataset.staffCode)).toEqual(["CB-00001", "CB-00003"]);
+    expect(picker.querySelectorAll("button")).toHaveLength(MENTION_PICKER_LIMIT);
+    const chip = (code: string) => picker.querySelector<HTMLButtonElement>(`[data-staff-code="${code}"]`)!;
+    act(() => chip("CB-10002").click());
+    act(() => chip("CB-10005").click());
+    act(() => chip("CB-10005").click()); // toggled off again
+    expect(chip("CB-10002").getAttribute("aria-pressed")).toBe("true");
+    expect(chip("CB-10005").getAttribute("aria-pressed")).toBe("false");
 
-    act(() => picker.querySelector<HTMLButtonElement>('[data-staff-code="CB-00001"]')!.click());
-    expect(box.value).toBe("Nhờ @Nguyễn Văn An ");
-    expect(el.querySelector("[data-mention-picker]")).toBeNull();
-    type(box, "Nhờ @Nguyễn Văn An xem hồ sơ");
-
-    state.comments = [comment({ id: "NEW", body: "Nhờ @Nguyễn Văn An xem hồ sơ", mentioned_staff_codes: ["CB-00001"] })];
+    type(box, "Nhờ xem hồ sơ");
+    state.comments = [comment({ id: "NEW", body: "Nhờ xem hồ sơ", mentioned_staff_codes: ["CB-10002"] })];
     await act(async () => buttonByText(el, "Gửi").click());
     await settle();
 
     const post = seen.find((s) => s.method === "POST")!;
     expect(post.url).toBe("/api/v1/investment-projects/DA1/comments");
-    expect(post.body).toEqual({ body: "Nhờ @Nguyễn Văn An xem hồ sơ", mentioned_staff_codes: ["CB-00001"] });
+    expect(post.body).toEqual({ body: "Nhờ xem hồ sơ", mentioned_staff_codes: ["CB-10002"] });
     expect(post.key).not.toBeNull();
-    // Re-read after the write; the box is emptied.
+    // Re-read after the write; the box and the chips are cleared.
     expect(reads(seen, "/comments")).toBe(2);
-    expect(el.querySelector('[data-comment="NEW"] [data-mention]')?.textContent).toBe("@Nguyễn Văn An");
+    expect(el.querySelector('[data-comment="NEW"] [data-mentions]')?.textContent).toBe("Nhắc: @Cán bộ 2");
     expect(box.value).toBe("");
-  });
-
-  it("deleting the '@Name' un-mentions the person: no code is sent", async () => {
-    const seen = stubServer({ issues: [], comments: [] });
-    const el = mount(<ProjectCommentsPanel projectId="DA1" staff={STAFF} canComment />);
-    await settle();
-    const box = el.querySelector<HTMLTextAreaElement>("#trao-doi-moi")!;
-    type(box, "@Trần");
-    act(() => el.querySelector<HTMLButtonElement>('[data-staff-code="CB-00002"]')!.click());
-    type(box, "đổi ý, không nhắc ai");
-    await act(async () => buttonByText(el, "Gửi").click());
-    await settle();
-    expect(seen.find((s) => s.method === "POST")!.body).toEqual({ body: "đổi ý, không nhắc ai", mentioned_staff_codes: [] });
+    expect(chip("CB-10002").getAttribute("aria-pressed")).toBe("false");
   });
 
   it("a refused post keeps the text and shows the server's sentence", async () => {
@@ -505,7 +460,7 @@ describe("§8.4 discussion", () => {
     type(box, "dài");
     await act(async () => buttonByText(el, "Gửi").click());
     await settle();
-    expect(el.querySelector('[role="alert"]')?.textContent).toBe("`body` quá dài (tối đa 4000 ký tự)");
+    expect(toast.error).toHaveBeenCalledWith("`body` quá dài (tối đa 4000 ký tự)");
     expect(box.value).toBe("dài");
   });
 
@@ -518,12 +473,12 @@ describe("§8.4 discussion", () => {
     expect(spot.querySelector("button[data-pending-marker]")).not.toBeNull();
   });
 
-  it("DENIED (no budget.read): no composer, the reason said", async () => {
+  it("DENIED (no budget.read): no composer, no denial note (spec 07)", async () => {
     const seen = stubServer({ issues: [], comments: [comment()] });
     const el = mount(<ProjectCommentsPanel projectId="DA1" staff={STAFF} canComment={false} />);
     await settle();
     expect(el.querySelector("#trao-doi-moi")).toBeNull();
-    expect(el.textContent).toContain(COMMENTS_DENIED);
+    expect(el.textContent).not.toContain("chưa được cấp quyền");
     expect(seen.some((s) => s.method === "POST")).toBe(false);
   });
 });
@@ -564,7 +519,6 @@ describe("project page", () => {
     await settle();
     expect(el.querySelector('[data-issue="VM1"]')).not.toBeNull();
     expect(el.querySelector("#vuong-mac-moi")).toBeNull();
-    expect(el.textContent).toContain(ISSUES_DENIED);
     expect(el.querySelector("#trao-doi-moi")).not.toBeNull();
   });
 });
