@@ -13,7 +13,8 @@
  *     describe.
  *
  * Otherwise the header carries the COUNT OF ROWS SHOWN only, worded so it is not read as the
- * category's size when a filter is on ("N dự án khớp bộ lọc"). Counting visible rows is not summing
+ * category's size when a filter is on ("N dự án khớp bộ lọc" — keyword, unit, `Chỉ dự án chậm`).
+ * Sorting is not a filter: every row is still there, so the server's totals still stand. Counting visible rows is not summing
  * money; there is no figure on it that could be reported upward.
  */
 
@@ -67,15 +68,11 @@ export function groupProjects(
 
   const rowOf = (id: string) => byCategory?.find((r) => (r.category_id ?? "") === id);
 
-  // The summary's order (the catalogue's own), then any category it does not list, as first met.
-  const order: string[] = [];
-  for (const r of byCategory ?? []) {
-    const id = r.category_id ?? "";
-    if (buckets.has(id) && !order.includes(id)) order.push(id);
-  }
-  for (const id of buckets.keys()) if (!order.includes(id)) order.push(id);
-
-  return order.map((key) => {
+  // Groups in the order their FIRST ROW appears (user decision 07/10/2026, prototype
+  // `BudgetItemTable.tsx:101-106`): sorted by money or progress, the category holding the leading
+  // project leads, so the table still answers the question the header press asked. In code order
+  // that is the category of the lowest code. A `Map` iterates in insertion order.
+  return [...buckets.keys()].map((key) => {
     const rows = buckets.get(key)!;
     const row = rowOf(key);
     const title = row !== undefined ? categoryRowLabel(row) : nhanHangMuc(hangMucDuAn(key, danhMuc));

@@ -39,6 +39,32 @@ export function nhanTien(dong: number): string {
 }
 
 /**
+ * A list amount, short as the prototype prints it (`budget-display.ts:28-54`, `formatDongShort`):
+ * `7,5 tỷ` · `100 triệu`. User decision 07/10/2026, for the list's `KH vốn năm` / `Đã giải ngân` only —
+ * the full đồng stays beside it (hover, screen reader) and on the project page.
+ *
+ * ONE DECIMAL, ROUNDED DOWN, as the prototype does: rounding up would print a project as having
+ * spent money it has not. Computed in `BigInt`, so the digit dropped is the real one. Under a million
+ * the amount is written in full (`nhanTien`). NOT `lib/compact-dong`: that form is "9,64 tỷ đồng",
+ * two decimals, rounded — a second format for the same column would read differently from the
+ * prototype the user chose.
+ */
+export function shortDongLabel(dong: number): string {
+  if (!Number.isSafeInteger(dong)) return "Không đọc được";
+  const amount = BigInt(dong);
+  const sign = amount < 0n ? "-" : "";
+  const abs = amount < 0n ? -amount : amount;
+  const tenths = (value: bigint, unit: bigint): string => {
+    const whole = value / unit;
+    const tenth = ((value % unit) * 10n) / unit;
+    return tenth === 0n ? DINH_DANG_SO.format(whole) : `${DINH_DANG_SO.format(whole)},${tenth}`;
+  };
+  if (abs >= 1_000_000_000n) return `${sign}${tenths(abs, 1_000_000_000n)} tỷ`;
+  if (abs >= 1_000_000n) return `${sign}${tenths(abs, 1_000_000n)} triệu`;
+  return nhanTien(dong);
+}
+
+/**
  * Tỷ lệ giải ngân — `disbursed_ratio`, đơn vị **phần vạn của phần trăm** (1033 ⇒ `10,33%`).
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────

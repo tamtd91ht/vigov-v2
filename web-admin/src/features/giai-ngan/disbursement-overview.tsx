@@ -11,6 +11,7 @@ import type { finance_categoryProgressOut, finance_projectSummaryOut } from "@/l
 import { cn } from "@/lib/cn";
 
 import { CumulativeChart } from "./cumulative-chart";
+import { PROGRESS_TEXT_CLASS, progressTone } from "./progress-tone";
 import { nhanNgay, nhanNguongCham, nhanTien, nhanTyLeGiaiNgan, percentLabel } from "./nhan-du-an";
 import { AttentionCaption } from "./pending-parts";
 import { categoryRowLabel } from "./project-groups";
@@ -159,9 +160,9 @@ export function AfterYearNote({ amount, year }: { amount: number; year: number }
  * `CategoryReportPanel`, `onSelect`); pressing the selected row again clears it.
  *
  * A row with no `category_id` (projects with no category) cannot filter — the list route reads an
- * empty `category` as no filter at all — so it is not a button. The `Tỷ lệ` columns are not
- * coloured: §5 says "màu theo ngưỡng" but no threshold for a category exists, and inventing one here
- * would colour a public report by a rule nobody set.
+ * empty `category` as no filter at all — so it is not a button. The disbursed `Tỷ lệ` (rows and
+ * `Tổng cộng`) takes the 80/50/30 colour tier (`progress-tone.ts`, user decision 07/10/2026, as
+ * prototype `CategoryReportPanel.tsx:111-116,155-159`); the undisbursed `Tỷ lệ` stays plain, as there.
  */
 export function CategoryProgressTable({
   year,
@@ -273,7 +274,7 @@ function CategoryFigures({ row }: { row: finance_categoryProgressOut }) {
       <td className="text-right tabular-nums">{row.project_count}</td>
       <td className="text-right tabular-nums">{nhanTien(row.planned)}</td>
       <td className="text-right tabular-nums">{nhanTien(row.disbursed)}</td>
-      <td className="text-right tabular-nums">{ratioCell(row.disbursed_ratio)}</td>
+      <DisbursedRatioCell hundredths={row.disbursed_ratio} />
       <td className="text-right tabular-nums">{nhanTien(row.undisbursed)}</td>
       <td className="text-right tabular-nums">{ratioCell(row.undisbursed_ratio)}</td>
       <td className="tabular-nums">
@@ -282,6 +283,19 @@ function CategoryFigures({ row }: { row: finance_categoryProgressOut }) {
           : nhanNgay(row.disbursement_deadline)}
       </td>
     </>
+  );
+}
+
+/** The disbursed ratio in its tier colour; `null` ("—") is not a figure and is not coloured. */
+function DisbursedRatioCell({ hundredths }: { hundredths: number | null }) {
+  if (hundredths === null || !Number.isFinite(hundredths)) {
+    return <td className="text-right tabular-nums">{ratioCell(hundredths)}</td>;
+  }
+  const tone = progressTone(hundredths);
+  return (
+    <td className={cn("text-right font-semibold tabular-nums", PROGRESS_TEXT_CLASS[tone])} data-ratio-tone={tone}>
+      {ratioCell(hundredths)}
+    </td>
   );
 }
 

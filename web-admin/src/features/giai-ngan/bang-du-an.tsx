@@ -1,7 +1,8 @@
 "use client";
 
-import { CircleAlert, CircleCheck, FolderKanban, Search, SearchX, Trash2, TrendingDown } from "lucide-react";
+import { ArrowDown, CircleAlert, CircleCheck, FolderKanban, Search, SearchX, Trash2, TrendingDown } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -31,15 +32,18 @@ import {
   nhanTien,
   nhanTienDo,
   nhanTyLeGiaiNgan,
+  shortDongLabel,
   tienDoDuAn,
 } from "./nhan-du-an";
 import { DisbursementOverview, type SummaryState } from "./disbursement-overview";
 import { latestIssueDateLine } from "./project-discussion-labels";
 import { ProjectBulkDeleteDialog } from "./project-bulk-delete-dialog";
-import { PEOPLE_LOADING, unitOwnerLabel, useProjectPeople, type ProjectPeople } from "./project-people";
+import { PEOPLE_LOADING, UNIT_NOT_LISTED, unitOwnerLabel, useProjectPeople, type ProjectPeople } from "./project-people";
 import { BULK_DELETE_BUTTON, selectedProjectsLabel, type SelectedProject } from "./project-bulk-delete";
 import { categoryRowLabel, groupProjects, type ProjectGroup } from "./project-groups";
+import { sortProjects, type ProjectSort } from "./project-sort";
 import { Glyph } from "./project-ui";
+import { PROGRESS_BAR_CLASS, PROGRESS_TEXT_CLASS, progressTone } from "./progress-tone";
 import { ScopeNotice } from "./scope-notice";
 
 /**
@@ -106,6 +110,11 @@ export function BangDuAn({
   const [grouped, setGrouped] = useState(true);
   /** Org units + staff for the `Đơn vị / phụ trách` column: one read each per mount, not per year or row. */
   const people = useProjectPeople();
+  /** Header sort (G1, user decision 07/10/2026). Presentation only: no re-read. */
+  const [sort, setSort] = useState<ProjectSort>("code");
+  /** `Tất cả đơn vị phụ trách` (G3): an `org_unit_id`, filtered on the loaded rows. "" = every unit. */
+  const [unitId, setUnitId] = useState("");
+  const router = useRouter();
 
   /**
    * KẾT QUẢ ĐƯỢC LƯU KÈM BỘ LỌC ĐÃ SINH RA NÓ, và "đang tải" được SUY RA từ chỗ hai bộ lọc lệch
@@ -186,12 +195,24 @@ export function BangDuAn({
         ? { pha: "xong", duLieu: daTai.kq.duLieu }
         : { pha: "loi", thongBao: daTai.kq.thongBao };
 
+  /**
+   * Unit options = the distinct units the LOADED rows name (prototype `BudgetWorkspace.tsx:297-319`
+   * lists what the data holds, not a catalogue), named from identity's org-unit catalogue. A chosen
+   * unit the current load no longer names (another year, another category) reads as "" — derived, so
+   * no effect has to clear it and no hidden filter empties the table.
+   */
+  const unitOptions = trangThai.pha === "xong" ? unitOptionsOf(trangThai.duLieu.items, people) : [];
+  const activeUnitId = unitOptions.some((u) => u.id === unitId) ? unitId : "";
+
   const shown =
     trangThai.pha === "xong"
-      ? { ...trangThai.duLieu, items: matchKeyword(trangThai.duLieu.items, keyword) }
+      ? {
+          ...trangThai.duLieu,
+          items: sortProjects(matchKeyword(matchUnit(trangThai.duLieu.items, activeUnitId), keyword), sort),
+        }
       : null;
 
-  const filtered = keyword.trim() !== "" || delayedOnly;
+  const filtered = keyword.trim() !== "" || delayedOnly || activeUnitId !== "";
   const groups: ProjectGroup[] | undefined =
     grouped && shown !== null
       ? groupProjects(shown.items, {
@@ -294,9 +315,21 @@ export function BangDuAn({
           </select>
         </Field>
 
-        {/* The prototype's unit filter (shown once a project names a unit) is not built: the list
-            route has no unit parameter, and filtering only the loaded rows by a resolved name is a
-            separate card. */}
+        {/* Unit filter (G3), hidden while no loaded project names a unit — as the prototype hides it. It
+            narrows the rows already loaded; the list route takes no unit parameter, and needs none: it
+            returned the whole year. */}
+        {unitOptions.length > 0 && (
+          <Field label="Lọc theo đơn vị phụ trách" hideLabel htmlFor="loc-don-vi" kind="select" grow="auto">
+            <select id="loc-don-vi" value={activeUnitId} onChange={(e) => setUnitId(e.target.value)}>
+              <option value="">Tất cả đơn vị phụ trách</option>
+              {unitOptions.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
 
         <FilterCheckbox id="loc-chi-du-an-cham" checked={delayedOnly} onChange={setDelayedOnly}>
           Chỉ dự án chậm
@@ -381,7 +414,19 @@ export function BangDuAn({
               />
             </div>
           ) : (
-            <BangDanhSach duLieu={shown} danhMuc={danhMuc} selection={selection} groups={groups} people={people} />
+            <BangDanhSach
+              duLieu={shown}
+              danhMuc={danhMuc}
+              selection={selection}
+              groups={groups}
+              people={people}
+              sort={sort}
+              onSort={setSort}
+              // The marker only when the summary is of the list's own year: a 2025 share drawn over 2026
+              // bars would be a wrong figure read as a right one.
+              timeElapsedRatio={summary !== null && summary.year === shown.year ? summary.time_elapsed_ratio : null}
+              onOpenProject={(id) => router.push(projectPath(id))}
+            />
           )}
           {/* The delay threshold the server applied is in the third KPI card's sub-line (prototype). */}
         </>
@@ -435,6 +480,27 @@ export type RowSelection = {
   readonly toggleAll: () => void;
 };
 
+/** Rows of one org unit; "" = every row. */
+function matchUnit(items: readonly finance_duAnRa[], unitId: string): finance_duAnRa[] {
+  return unitId === "" ? [...items] : items.filter((d) => (d.org_unit_id ?? "") === unitId);
+}
+
+/**
+ * Distinct `org_unit_id`s of the loaded rows with the name shown, sorted by name. While the catalogue
+ * is not ready the option says so rather than printing an internal id.
+ */
+function unitOptionsOf(items: readonly finance_duAnRa[], people: ProjectPeople): { id: string; name: string }[] {
+  const ids = [...new Set(items.map((d) => (d.org_unit_id ?? "").trim()).filter((id) => id !== ""))];
+  const nameOf = (id: string): string =>
+    people.units.phase === "ready" ? (people.units.names.get(id) ?? UNIT_NOT_LISTED) : "—";
+  return ids.map((id) => ({ id, name: nameOf(id) })).sort((a, b) => a.name.localeCompare(b.name, "vi"));
+}
+
+/** The project page, `/giai-ngan/du-an/:id` (spec chapter head), id encoded. */
+function projectPath(id: string): string {
+  return `/giai-ngan/du-an/${encodeURIComponent(id)}`;
+}
+
 /** Rows whose name or code contains the typed words, case- and accent-sensitive as typed. */
 function matchKeyword(items: readonly finance_duAnRa[], keyword: string): finance_duAnRa[] {
   const needle = keyword.trim().toLocaleLowerCase("vi");
@@ -447,14 +513,22 @@ function matchKeyword(items: readonly finance_duAnRa[], keyword: string): financ
 /**
  * Bảng dự án — prototype columns (`BudgetItemTable.tsx:191-216, 276-393`): Mã · Dự án · Đơn vị /
  * phụ trách · KH vốn năm · Đã giải ngân · Tiến độ · Nguồn vốn · Thời hạn giải ngân · Vướng mắc mới
- * nhất. Giữ NGUYÊN thứ tự máy chủ trả về và không lọc bỏ dòng nào — inside each group too, when
- * `groups` is passed; the groups themselves follow the catalogue's order (`project-groups.ts`).
+ * nhất. Draws the rows in the order given (the server's code order, or the header sort the screen
+ * applied — `project-sort.ts`) and drops none; inside each group too, when `groups` is passed — the
+ * groups follow their first row (`project-groups.ts`).
+ *
+ * THE WHOLE ROW OPENS THE PROJECT (user decision 07/10/2026, prototype `BudgetItemTable.tsx:245-262`;
+ * a deliberate departure from spec `06-giai-ngan.md:156` "Bấm tên"). The name stays a real `<Link>`:
+ * the row is not focusable, so the keyboard and screen readers reach the project through the link.
+ * The checkbox cell stops the click — a mis-click there must not navigate away from a selection.
  *
  * NO "CÒN LẠI" COLUMN, as in the prototype: the remainder is on the project page, and an over-plan
  * disbursement still shows here as a ratio above 100% — never clamped (spec §13 rule 2).
  *
- * MONEY IN FULL ĐỒNG, not the prototype's short form ("7,5 tỷ"): a rounded figure here goes straight
- * into a budget report.
+ * MONEY SHORT IN `KH vốn năm` / `Đã giải ngân` ("7,5 tỷ", `shortDongLabel`) — user decision 07/10/2026,
+ * as the prototype prints them (`BudgetItemTable.tsx:306-311`). The full đồng stays in the cell's
+ * `title` and in visually-hidden text, and on the project page, which is where a figure is copied
+ * into a report. Group headers and the funding shortfall keep full đồng.
  *
  * `year` lấy từ PHẢN HỒI chứ không từ trạng thái của ô chọn: một phản hồi không nói nó thuộc năm
  * nào thì không phân biệt được với phản hồi của năm khác (`du_an.go`, `danhSachDuAnRa.Year`).
@@ -465,6 +539,10 @@ export function BangDanhSach({
   selection,
   groups,
   people = PEOPLE_LOADING,
+  sort,
+  onSort,
+  timeElapsedRatio = null,
+  onOpenProject,
 }: {
   duLieu: finance_danhSachDuAnRa;
   danhMuc: readonly finance_hangMucRa[];
@@ -477,6 +555,13 @@ export function BangDanhSach({
   groups?: readonly ProjectGroup[];
   /** Names for the `Đơn vị / phụ trách` column. Absent = not loaded: "—" for an assigned row, never an id. */
   people?: ProjectPeople;
+  /** Header sort in force. With `onSort`, the three money/progress headers become buttons. */
+  sort?: ProjectSort;
+  onSort?: (sort: ProjectSort) => void;
+  /** The year's elapsed share (hundredths of a percent), from the summary of THIS list's year; `null` = no marker. */
+  timeElapsedRatio?: number | null;
+  /** Called with the project id when a row is clicked. Absent = rows are not clickable (the name link still is). */
+  onOpenProject?: (id: string) => void;
 }) {
   const columnCount = (selection !== undefined ? 1 : 0) + 9;
   const ticked = selection === undefined ? 0 : duLieu.items.filter((d) => selection.has(d.id)).length;
@@ -489,9 +574,22 @@ export function BangDanhSach({
     return (
       // Red left edge for a project the SERVER flagged late (prototype `:252-254`): the eye
       // scanning for late projects passes the left edge first. The words say it too.
-      <tr key={d.id} className={cn(late && "border-l-[3px] border-l-danger-500")}>
+      <tr
+        key={d.id}
+        data-project-row={d.id}
+        className={cn(onOpenProject !== undefined && "cursor-pointer", late && "border-l-[3px] border-l-danger-500")}
+        onClick={
+          onOpenProject === undefined
+            ? undefined
+            : (e) => {
+                // The link navigates on its own; letting the row push too would navigate twice.
+                if ((e.target as Element).closest("a")) return;
+                onOpenProject(d.id);
+              }
+        }
+      >
         {selection !== undefined && (
-          <td>
+          <td onClick={(e) => e.stopPropagation()}>
             <input
               type="checkbox"
               className="size-4"
@@ -505,7 +603,7 @@ export function BangDanhSach({
         <td className="whitespace-normal">
           {/* Đường dẫn con đúng như đặc tả ghi ở đầu chương: `/giai-ngan/du-an/:id`. */}
           <Link
-            href={`/giai-ngan/du-an/${encodeURIComponent(d.id)}`}
+            href={projectPath(d.id)}
             className="leading-snug font-semibold text-ink-900 no-underline hover:underline"
           >
             {d.name}
@@ -523,10 +621,14 @@ export function BangDanhSach({
         <td className="text-xs whitespace-normal text-ink-500" data-unit-owner="">
           {unitOwnerLabel(d, people)}
         </td>
-        <td className="text-right tabular-nums">{nhanTien(d.planned_amount)}</td>
-        <td className="text-right tabular-nums">{nhanTien(d.disbursed_amount)}</td>
+        <td className="text-right tabular-nums" data-money="planned">
+          <ShortMoney dong={d.planned_amount} />
+        </td>
+        <td className="text-right tabular-nums" data-money="disbursed">
+          <ShortMoney dong={d.disbursed_amount} />
+        </td>
         <td>
-          <ProgressCell ratio={d.disbursed_ratio} late={late} />
+          <ProgressCell ratio={d.disbursed_ratio} timeElapsedRatio={timeElapsedRatio} />
         </td>
         <td className="whitespace-normal">
           <FundingChip status={d.funding_status} names={d.funding_source_names} />
@@ -566,15 +668,9 @@ export function BangDanhSach({
               Đơn vị / phụ trách
             </th>
             {/* Money columns right-aligned so the digits of every row line up (spec §6.7). */}
-            <th scope="col" className="text-right">
-              KH vốn năm
-            </th>
-            <th scope="col" className="text-right">
-              Đã giải ngân
-            </th>
-            <th scope="col" className="w-44">
-              Tiến độ
-            </th>
+            <SortHead value="planned_amount" label="KH vốn năm" alignEnd sort={sort} onSort={onSort} />
+            <SortHead value="disbursed_amount" label="Đã giải ngân" alignEnd sort={sort} onSort={onSort} />
+            <SortHead value="disbursed_ratio" label="Tiến độ" className="w-44" sort={sort} onSort={onSort} />
             <th scope="col" className="w-44">
               Nguồn vốn
             </th>
@@ -639,7 +735,7 @@ function SelectAllBox({
  * none → open the project and declare; short → declare the rest; full → nothing to do.
  *
  * THE STATE AND THE SHORTFALL ARE THE SERVER'S (`funding_status`), never re-derived from the names.
- * The shortfall is in full đồng, like every amount of this table. An unknown state shows the raw
+ * The shortfall is in full đồng (only `KH vốn năm` / `Đã giải ngân` are short, G6). An unknown state shows the raw
  * string: guessing a friendly label would hide a contract drift.
  */
 export function FundingChip({
@@ -702,28 +798,101 @@ export function LatestIssueCell({ issue }: { issue: finance_latestIssueOut | nul
 }
 
 /**
+ * A sortable header (G1, prototype `SortHead`, `BudgetItemTable.tsx:51-87`): one direction, largest
+ * first; pressing the active one returns to code order. The arrow is faint until active. Without
+ * `onSort` it is a plain header. `aria-sort` only on the active column.
+ */
+function SortHead({
+  value,
+  label,
+  alignEnd = false,
+  className,
+  sort,
+  onSort,
+}: {
+  value: ProjectSort;
+  label: string;
+  alignEnd?: boolean;
+  className?: string;
+  sort: ProjectSort | undefined;
+  onSort: ((sort: ProjectSort) => void) | undefined;
+}) {
+  const active = sort === value;
+  return (
+    <th scope="col" className={cn(alignEnd && "text-right", className)} aria-sort={active ? "descending" : undefined}>
+      {onSort === undefined ? (
+        label
+      ) : (
+        <button
+          type="button"
+          onClick={() => onSort(active ? "code" : value)}
+          className={cn(
+            "inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 [font:inherit] hover:text-ink-900 focus-visible:outline-2 focus-visible:outline-brand-500",
+            alignEnd && "w-full justify-end",
+            active && "font-bold text-brand-600",
+          )}
+        >
+          {label}
+          <Glyph icon={ArrowDown} className={cn("size-3 shrink-0", !active && "opacity-25")} />
+        </button>
+      )}
+    </th>
+  );
+}
+
+/** "7,5 tỷ" for the eye, the full đồng on hover and for screen readers (the short form is hidden from them). */
+function ShortMoney({ dong }: { dong: number }) {
+  const full = nhanTien(dong);
+  return (
+    <>
+      <span aria-hidden="true" title={full}>
+        {shortDongLabel(dong)}
+      </span>
+      <span className="an-thi-giac">{full}</span>
+    </>
+  );
+}
+
+/**
  * The prototype's bar + percent (`BudgetItemTable.tsx:313-342`). The ratio is the SERVER's
  * (`disbursed_ratio`, hundredths of a percent); the bar only draws it, capped at full width while the
- * words keep the real figure. The elapsed-time marker is drawn on the project page only (§8,
- * `chi-tiet-du-an.tsx`, from the server's `time_elapsed_ratio`) — never from the browser's clock.
+ * words keep the real figure.
  *
- * Red only for a project the server flagged late, green otherwise — no colour thresholds of our own.
+ * COLOUR BY THE 80/50/30 TIERS (`progress-tone.ts`, user decision 07/10/2026) — bar and figure, as the
+ * prototype does. Whether the project is LATE is not said here: that is the server's flag, drawn as the
+ * row's red edge and the "Chậm x điểm" words.
+ *
+ * THE ELAPSED-TIME MARKER (prototype `:325-331`) is the year summary's `time_elapsed_ratio`, passed in
+ * only when that summary is of the list's year. The prototype reads a per-row `time_percent`; the
+ * server's per-project figure is the SAME calendar-year share for every project of a year
+ * (`service-finance/internal/http/du_an.go`, `TimeElapsedRatio`, detail route only), so the year's one
+ * value draws the same line with no read per row — and never from the browser's clock.
  */
-function ProgressCell({ ratio, late }: { ratio: number | null; late: boolean }) {
+function ProgressCell({ ratio, timeElapsedRatio }: { ratio: number | null; timeElapsedRatio: number | null }) {
   // `null` = no capital allocated: words, never a 0% bar (it would read as the worst project).
   if (ratio === null || !Number.isFinite(ratio)) {
     return <span className="text-[13px] text-ink-500">{nhanTyLeGiaiNgan(ratio)}</span>;
   }
   const width = Math.min(100, Math.max(0, ratio / 100));
+  const tone = progressTone(ratio);
   return (
     <div className="flex items-center gap-2">
       <div aria-hidden="true" className="relative h-1.5 min-w-16 flex-1 overflow-hidden rounded-full bg-surface-subtle-2">
         <div
-          className={cn("h-full rounded-full", late ? "bg-danger-500" : "bg-success-500")}
+          data-progress-tone={tone}
+          className={cn("h-full rounded-full", PROGRESS_BAR_CLASS[tone])}
           style={{ width: `${width}%` }}
         />
+        {timeElapsedRatio !== null && Number.isFinite(timeElapsedRatio) && (
+          <span
+            aria-hidden="true"
+            data-elapsed-marker=""
+            className="absolute top-0 h-full w-[2px] bg-ink-700"
+            style={{ left: `${Math.min(100, Math.max(0, timeElapsedRatio / 100))}%` }}
+          />
+        )}
       </div>
-      <span className={cn("shrink-0 text-right text-[13px] font-semibold tabular-nums", late && "text-danger-600")}>
+      <span className={cn("shrink-0 text-right text-[13px] font-semibold tabular-nums", PROGRESS_TEXT_CLASS[tone])}>
         {nhanTyLeGiaiNgan(ratio)}
       </span>
     </div>

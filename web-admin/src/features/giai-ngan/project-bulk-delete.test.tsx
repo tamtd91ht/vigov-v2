@@ -14,6 +14,9 @@ import { BangDuAn } from "./bang-du-an";
 import { PROJECT_REMOVE_NOTE, ProjectRemoveDialog } from "./ghi-du-an";
 import { deleteProjectsInTurn, type SelectedProject } from "./project-bulk-delete";
 
+// The list opens a project on a row click through the App Router (G5); no router is mounted here.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => {} }) }));
+
 beforeAll(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   if (!("ResizeObserver" in globalThis)) {

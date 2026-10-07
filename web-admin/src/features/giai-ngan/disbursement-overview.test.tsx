@@ -28,6 +28,9 @@ import { groupProjects } from "./project-groups";
  * the screen adds no money up.
  */
 
+// The list opens a project on a row click through the App Router (G5); no router is mounted here.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => {} }) }));
+
 const fakeSession = { ok: true as const, duLieu: { permissions: ["budget.read"] } };
 vi.mock("@/features/phien/phien-hien-tai", () => ({
   usePhien: () => fakeSession,
@@ -387,7 +390,7 @@ describe("register with the year summary", () => {
     expect(el.textContent).not.toContain("Chưa có dự án nào");
   });
 
-  it("`Gộp theo hạng mục` is ON by default: headers in catalogue order with the SERVER's totals", async () => {
+  it("`Gộp theo hạng mục` is ON by default: headers in first-row order with the SERVER's totals", async () => {
     stubFinance();
     const el = mount(<BangDuAn nam={2026} danhMuc={[]} reloadSignal={0} />);
     await settle();

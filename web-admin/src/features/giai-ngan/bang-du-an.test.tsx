@@ -51,6 +51,9 @@ describe("bảng dự án kết xuất ra trang", () => {
   it("số tiền và tỷ lệ ra tới trang ở dạng đã định dạng, không phải số thô", () => {
     const html = renderToStaticMarkup(<BangDanhSach duLieu={danhSach([duAn()])} danhMuc={[]} />);
 
+    // G6 (user decision 07/10/2026): the list prints the prototype's short form; the full đồng stays
+    // in the cell (hover title + visually-hidden text), no longer as the visible figure.
+    expect(html).toContain(">100 triệu<");
     expect(html).toContain("100.000.000 đ");
     expect(html).toContain("90,00%");
   });
@@ -67,7 +70,7 @@ describe("bảng dự án kết xuất ra trang", () => {
     expect(html).toContain("text-danger-600");
   });
 
-  it("dự án bám sát tiến độ KHÔNG mang màu đỏ — đỏ chỉ dành cho dự án máy chủ báo chậm", () => {
+  it("dự án bám sát tiến độ KHÔNG mang dấu chậm — viền đỏ và chữ 'Chậm' chỉ dành cho dự án máy chủ báo chậm", () => {
     const html = renderToStaticMarkup(
       <BangDanhSach
         duLieu={danhSach([duAn({ delay_score: 500, is_delayed: false }), duAn({ id: "01JDUAN2", disbursed_ratio: null })])}
@@ -76,7 +79,8 @@ describe("bảng dự án kết xuất ra trang", () => {
     );
 
     // The prototype's list says nothing for an on-track project ("Bám sát tiến độ" is on the
-    // project page); a project with no capital still says so in words.
+    // project page); a project with no capital still says so in words. The bar's colour is the 80/50/30
+    // tier since 07/10/2026 (`progress-tone.ts`) — 90% here, so green; the LATE signal is the edge.
     expect(html).toContain("Chưa bố trí vốn");
     expect(html).not.toContain("border-l-danger-500");
     expect(html).not.toContain("text-danger-600");
