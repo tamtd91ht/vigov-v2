@@ -1205,7 +1205,8 @@ describe("form Giao việc mới §7", () => {
     // scrolling area, after `Ghi chú` — not pinned below it.
     expect(html.lastIndexOf(">Giao việc</button>")).toBeGreaterThan(html.lastIndexOf('id="giao-ghi-chu"'));
     expect(html).toMatch(/<\/textarea><\/div><\/div><div class="cum-nut justify-end">/);
-    expect(html).toMatch(/>Giao việc<\/button><\/div><\/div><\/form><\/dialog>$/);
+    // After the form, only the dialog's own ✕ (ADR 0068 lần 6, prototype `dialog.tsx:83-95`).
+    expect(html).toMatch(/>Giao việc<\/button><\/div><\/div><\/form><button [^>]*aria-label="Đóng"[^>]*>[\s\S]*?<\/button><\/dialog>$/);
   });
 
   it("07/10: `Theo văn bản` — the prototype's full field order, title marked required", () => {

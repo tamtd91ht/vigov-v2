@@ -1,8 +1,9 @@
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import Link from "next/link";
+import type { ReactNode } from "react";
 
-import { PendingMarker } from "@/components/ui/pending-feature";
+import { PENDING_HOVER_TEXT } from "@/components/ui/pending-feature";
 import { Tooltip } from "@/components/ui/tooltip";
 
 import { MenuIcon } from "./menu-icons";
@@ -11,20 +12,21 @@ import {
   dangChon,
   isMenuParent,
   parentRoute,
-  PENDING_SCREENS,
   type MenuParent,
   type MucMenu,
   type NhomMenu,
 } from "./muc-menu";
 
 /**
- * The LEFT sidebar — module navigation, vertical, icon + word, grouped under the headings of `NHOM_MENU`
- * (owner, 05/10/2026: "giữ ô menu bên trái … giữ cả nút icon nhưng là nằm dọc bên trái thay vì nằm ngang
- * phía trên, hãy xem prototype"). It replaces the header's icon row of ADR 0068 §Sửa đổi 05/10/2026
- * (lần 2) #6; navigation lives in ONE place. Shape from the prototype (`vigov-require` `AppSidebar.tsx`:
- * groups with headings, active item, one level of children indented under their parent behind a guide
- * line, collapse to icons with the choice remembered); look from the OMICALL tokens of lần 2 — white
- * surface, navy ink, the cyan accent only as a FILL.
+ * The LEFT sidebar — module navigation, vertical, icon + word, grouped under the headings of `NHOM_MENU`.
+ * Shape AND look from the owner's Giải ngân spec 01 (ADR 0068 §Sửa đổi 07/10/2026 lần 6 #2, #3, #8),
+ * itself transcribed from the prototype's `AppSidebar.tsx`: navy, full viewport height, the
+ * "VG · ViGov · Điều hành số cấp xã" brand block on top, groups with headings, the active item lit with
+ * a 3px bar on the left edge, collapsible to a 64px icon strip, a version footer.
+ *
+ * WHY "ViGov" IS PRINTED HERE AND NOWHERE ELSE: ADR 0068 §13 kept the product name off every staff
+ * screen; lần 6 #3 lifted that for THIS block only, on the owner's "Theo spec". The commune's own
+ * identity stays in the header (`commune-identity.tsx`), read at runtime from `Host`.
  *
  * WHAT THIS FILE DOES NOT DECIDE: which items exist, their order and who sees them. `groups` arrives
  * already filtered by `locMenu` (`muc-menu.ts`). Hiding an item is UX; every route still checks its key
@@ -32,11 +34,15 @@ import {
  *
  * COLLAPSED = ICONS ONLY, BUT NEVER NAMELESS: the item's word stays in the DOM, visually hidden, so the
  * link keeps its accessible name; the tooltip only repeats it for a mouse (`tooltip.tsx`). Group headings
- * become thin dividers, so the groups still read as runs.
+ * become thin dividers, one per group, as the prototype draws them.
  *
  * A PARENT ROW, COLLAPSED: the prototype hides the children and keeps the parent icon, which reaches the
  * first child only. Here the parent icon opens a flyout listing its children, so every child screen stays
  * one press away at either width — collapsing changes the look, never what a person can reach.
+ *
+ * AN ITEM WITH NO SCREEN YET (`duong: null`): muted, not a link, not focusable, hover says
+ * "Tính năng đang phát triển" — and NO "?" beside it (lần 6 #11: the "?" left the sidebar; it stays on
+ * unbuilt controls inside a screen, §14).
  *
  * Below 768px this is not drawn (`globals.css`, `.side-nav`): the header's menu button opens the nav
  * sheet with the same items and words (`nav-sheet.tsx`).
@@ -47,6 +53,19 @@ import {
 export const SIDEBAR_COLLAPSE_LABEL = "Thu gọn menu";
 export const SIDEBAR_EXPAND_LABEL = "Mở rộng menu";
 export const SIDE_NAV_LABEL = "Điều hướng chính";
+
+/** Brand block words — spec 01 verbatim (ADR 0068 lần 6 #8). Platform constants, never per commune. */
+export const PRODUCT_MARK = "VG";
+export const PRODUCT_NAME = "ViGov";
+export const PRODUCT_TAGLINE = "Điều hành số cấp xã";
+
+/**
+ * The footer line, spec 01 minus "Môi trường phát triển" (lần 6 #8: that line was false on a commune's
+ * live site). Written here rather than read from `package.json`: importing that file into a client
+ * component ships the whole dependency list, with versions, to every browser — the same reason the
+ * server sends no `X-Powered-By`. Bump it with the package version.
+ */
+export const APP_VERSION_LABEL = "Phiên bản 0.1.0";
 
 export type SideNavProps = {
   groups: readonly NhomMenu[];
@@ -63,45 +82,77 @@ const ICON_STROKE = 1.8;
 export function SideNav({ groups, pathname, collapsed, onToggle }: SideNavProps) {
   const toggleLabel = collapsed ? SIDEBAR_EXPAND_LABEL : SIDEBAR_COLLAPSE_LABEL;
   const ToggleIcon = collapsed ? PanelLeftOpen : PanelLeftClose;
+  const toggle = (
+    <Tooltip content={toggleLabel} side={TOOLTIP_SIDE} enabled={collapsed}>
+      <button
+        type="button"
+        className="side-nav-toggle"
+        aria-label={toggleLabel}
+        aria-expanded={!collapsed}
+        title={collapsed ? undefined : toggleLabel}
+        onClick={onToggle}
+      >
+        <ToggleIcon aria-hidden="true" focusable="false" strokeWidth={ICON_STROKE} />
+      </button>
+    </Tooltip>
+  );
   return (
-    <div className={collapsed ? "side-nav is-collapsed" : "side-nav"}>
-      {/* The outer box stretches the full height of the page body (one white strip); the inner one sticks
-          under the header and scrolls on its own, so a long page never carries the menu away. */}
-      <div className="side-nav-inner">
-        <div className="side-nav-head">
-          <Tooltip content={toggleLabel} side={TOOLTIP_SIDE} enabled={collapsed}>
-            <button type="button" className="side-nav-toggle" aria-label={toggleLabel} aria-expanded={!collapsed} onClick={onToggle}>
-              <ToggleIcon aria-hidden="true" focusable="false" strokeWidth={ICON_STROKE} />
-            </button>
-          </Tooltip>
-        </div>
-        {groups.length > 0 && (
-          <nav className="side-nav-nav" aria-label={SIDE_NAV_LABEL}>
-            {groups.map((g, i) => (
-              <div key={g.ten === "" ? `untitled-${i}` : g.ten} className="side-nav-group">
-                {collapsed || g.ten === "" ? (
-                  i > 0 && <span className="side-nav-divider" aria-hidden="true" />
-                ) : (
-                  <p className="side-nav-group-label">{g.ten}</p>
+    <aside className={collapsed ? "side-nav is-collapsed" : "side-nav"}>
+      {/* Expanded: the toggle sits at the right end of the brand row. Collapsed: the row keeps only the
+          tile, and the toggle moves under it (spec 01). */}
+      <SidebarBrand collapsed={collapsed}>{collapsed ? null : toggle}</SidebarBrand>
+      {collapsed && toggle}
+      {groups.length > 0 && (
+        <nav className="side-nav-nav" aria-label={SIDE_NAV_LABEL}>
+          {groups.map((g, i) => (
+            <div key={g.ten === "" ? `untitled-${i}` : g.ten} className="side-nav-group">
+              {collapsed || g.ten === "" ? (
+                <span className="side-nav-divider" aria-hidden="true" />
+              ) : (
+                <p className="side-nav-group-label">{g.ten}</p>
+              )}
+              <ul aria-label={g.ten === "" ? undefined : g.ten}>
+                {g.muc.map((m) =>
+                  isMenuParent(m) ? (
+                    <li key={m.nhan} className="side-nav-item has-children">
+                      {collapsed ? <SideNavParentFlyout parent={m} pathname={pathname} /> : <SideNavParent parent={m} pathname={pathname} />}
+                    </li>
+                  ) : (
+                    <li key={m.nhan} className={m.duong === null ? "side-nav-item is-pending" : "side-nav-item"}>
+                      <SideNavItem item={m} collapsed={collapsed} active={dangChon(m.duong, pathname)} />
+                    </li>
+                  ),
                 )}
-                <ul aria-label={g.ten === "" ? undefined : g.ten}>
-                  {g.muc.map((m) =>
-                    isMenuParent(m) ? (
-                      <li key={m.nhan} className="side-nav-item has-children">
-                        {collapsed ? <SideNavParentFlyout parent={m} pathname={pathname} /> : <SideNavParent parent={m} pathname={pathname} />}
-                      </li>
-                    ) : (
-                      <li key={m.nhan} className={m.duong === null ? "side-nav-item is-pending" : "side-nav-item"}>
-                        <SideNavItem item={m} collapsed={collapsed} active={dangChon(m.duong, pathname)} />
-                      </li>
-                    ),
-                  )}
-                </ul>
-              </div>
-            ))}
-          </nav>
-        )}
-      </div>
+              </ul>
+            </div>
+          ))}
+        </nav>
+      )}
+      {/* The prototype drops the footer when collapsed: a 64px strip has no room for the words. */}
+      {!collapsed && <p className="side-nav-footer">{APP_VERSION_LABEL}</p>}
+    </aside>
+  );
+}
+
+/**
+ * The "VG · ViGov · Điều hành số cấp xã" block (spec 01). Shared with the narrow-screen sheet
+ * (`nav-sheet.tsx`) so the two never drift; `children` is the control at the row's right end (the
+ * collapse toggle here, the close button there). Decorative words, no link: the prototype's block is
+ * not a link either, and "home" already has its menu item.
+ */
+export function SidebarBrand({ collapsed = false, children }: { collapsed?: boolean; children?: ReactNode }) {
+  return (
+    <div className={collapsed ? "side-nav-brand is-collapsed" : "side-nav-brand"}>
+      <span className="side-nav-brand-mark" aria-hidden="true">
+        {PRODUCT_MARK}
+      </span>
+      {!collapsed && (
+        <span className="side-nav-brand-text">
+          <span className="side-nav-brand-name">{PRODUCT_NAME}</span>
+          <span className="side-nav-brand-tagline">{PRODUCT_TAGLINE}</span>
+        </span>
+      )}
+      {children}
     </div>
   );
 }
@@ -201,25 +252,18 @@ function SideNavItem({ item, collapsed, active }: { item: MucMenu; collapsed: bo
   const label = <span className={collapsed ? "an-thi-giac" : "side-nav-label"}>{item.nhan}</span>;
 
   if (item.duong === null) {
-    // An item listed before its screen exists (ADR 0068 §14): NOT a link and NOT a `<button disabled>` —
-    // both take focus and then do nothing. The one focusable thing is the "?", whose accessible name
-    // already names the item; collapsed, its hover also says the item's name, since no word is visible.
-    const info = PENDING_SCREENS[item.nhan];
+    // An item listed before its screen exists: NOT a link and NOT a `<button disabled>` — both take
+    // focus and then do nothing. Its word stays (visible, or hidden when collapsed) so a screen reader
+    // still reads the full menu; the native `title` carries the owner's hover sentence (lần 6 #11).
+    // Collapsed, the title also names the item, since no word is visible.
     return (
-      <span className="side-nav-pending">
-        <span aria-disabled="true" className="side-nav-link">
-          {icon}
-          {label}
-        </span>
-        {info !== undefined && (
-          <PendingMarker
-            info={info}
-            side={TOOLTIP_SIDE}
-            placement={collapsed ? "corner" : "inline"}
-            nameInHover={collapsed}
-            className={collapsed ? undefined : "ml-auto"}
-          />
-        )}
+      <span
+        aria-disabled="true"
+        className="side-nav-link"
+        title={collapsed ? `${item.nhan} — ${PENDING_HOVER_TEXT}` : PENDING_HOVER_TEXT}
+      >
+        {icon}
+        {label}
       </span>
     );
   }

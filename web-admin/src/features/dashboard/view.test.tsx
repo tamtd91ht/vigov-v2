@@ -684,7 +684,8 @@ describe("composition — the prototype's Panel / MetricTile / alert row (ADR 00
       <DashboardView data={emptyData()} visible={TASK_KEYS} onPeriodChange={() => {}} />,
     );
     const pressed = /<button class="([^"]*)" type="button" aria-pressed="true"/.exec(html)?.[1] ?? "";
-    expect(pressed).toContain("bg-brand-600");
+    // Presentation pin (ADR 0068 §5): solid navy is shadcn `bg-primary` since spec 00 §5 (lần 6).
+    expect(pressed).toContain("bg-primary");
     expect(html).toContain('role="group" aria-label="Kỳ báo cáo"');
     for (const f of ["PDF", "XLSX", "PPTX"]) expect(html).toMatch(new RegExp(`<button[^>]*disabled=""[^>]*><svg[^>]*>.*?</svg>${f}</button>`));
   });

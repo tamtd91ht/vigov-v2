@@ -32,6 +32,17 @@ const nextConfig: NextConfig = {
 
   // React strict mode: cảnh báo sớm những mẫu sẽ hỏng khi render đồng thời.
   reactStrictMode: true,
+
+  // Next 16 otherwise writes `AGENTS.md` + `CLAUDE.md` into this directory on every `next dev`
+  // (`next/dist/server/lib/start-server.js`, gated on this flag). A `CLAUDE.md` inside the repo is
+  // loaded as instructions by the AI agents that build this project, so a file nobody wrote would
+  // silently steer them — and it reappears as an uncommitted change after every dev run.
+  agentRules: false,
+
+  // `next dev` only: the floating "N" indicator sat over the sidebar footer in every screenshot the
+  // dev preview (ADR 0068 lần 6 #10) exists to take. No effect on a production build, which never
+  // draws it; build errors still show in the dev overlay.
+  devIndicators: false,
 };
 
 export default nextConfig;

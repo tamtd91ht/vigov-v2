@@ -6,10 +6,12 @@ import { cn } from "@/lib/cn";
 /**
  * Notice — spec §7 "Ghi chú pháp lý" and the informational boxes around it.
  *
- *   info     brand-blue tint, `Info` icon — a neutral explanation
+ *   info     the spec's grey notice (spec 00 §4): `line` border, page-colour fill, `ink` text, a
+ *            muted `Info` icon — a neutral explanation. Since ADR 0068 lần 6 it is no longer a
+ *            blue tint: the prototype draws its explanations grey.
  *   legal    gold-50 + `#F5E1A4` border, `LockKeyhole` icon — Decree 13/2023 and similar legal
  *            reminders, 1–2 lines (spec §8.1)
- *   neutral  grey surface — scope notes ("không phải phần mềm kế toán")
+ *   neutral  the same grey notice — scope notes ("không phải phần mềm kế toán")
  *
  * There is deliberately NO red tone: red is for an error or an overdue item, and a red note that is
  * neither is the "báo động giả" the spec removes. Errors keep their own `role="alert"` markup.
@@ -19,9 +21,9 @@ import { cn } from "@/lib/cn";
 export type NoticeTone = "info" | "legal" | "neutral";
 
 const TONE: Record<NoticeTone, { box: string; icon: string; Icon: LucideIcon }> = {
-  info: { box: "border-brand-100 bg-brand-50 text-ink-700", icon: "text-brand-600", Icon: Info },
-  legal: { box: "border-legal-200 bg-legal-50 text-legal-800", icon: "text-warning-600", Icon: LockKeyhole },
-  neutral: { box: "border-line bg-surface-muted text-ink-700", icon: "text-ink-500", Icon: Info },
+  info: { box: "border-line bg-canvas text-ink", icon: "text-ink-muted", Icon: Info },
+  legal: { box: "border-legal-200 bg-legal-50 text-legal-800", icon: "text-legal-800", Icon: LockKeyhole },
+  neutral: { box: "border-line bg-canvas text-ink", icon: "text-ink-muted", Icon: Info },
 };
 
 export type NoticeProps = Omit<ComponentProps<"div">, "title"> & {
@@ -37,10 +39,10 @@ export function Notice({ tone = "info", icon, title, className, children, ...pro
   const Icon = icon ?? t.Icon;
   return (
     <div
-      className={cn("flex items-start gap-3 rounded-xl border px-3.5 py-3 text-[13px] leading-relaxed", t.box, className)}
+      className={cn("flex items-start gap-2 rounded-[10px] border border-solid px-3.5 py-2.5 text-[12px] leading-relaxed", t.box, className)}
       {...props}
     >
-      <Icon aria-hidden="true" focusable="false" strokeWidth={1.8} className={cn("mt-0.5 size-[18px] shrink-0", t.icon)} />
+      <Icon aria-hidden="true" focusable="false" strokeWidth={1.8} className={cn("mt-0.5 size-4 shrink-0", t.icon)} />
       <div className="min-w-0">
         {title !== undefined && <strong className="font-semibold">{title} </strong>}
         {children}

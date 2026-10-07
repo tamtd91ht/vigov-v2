@@ -4,7 +4,7 @@ import { KeyRound, Menu, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import { PendingMarker } from "@/components/ui/pending-feature";
+import { PENDING_HOVER_TEXT } from "@/components/ui/pending-feature";
 import { NutDangXuat } from "@/features/auth/nut-dang-xuat";
 import { DUONG_DAN_DOI_MAT_KHAU } from "@/features/mat-khau/bat-doi-mat-khau";
 import type { KhoiNguoiDung } from "@/features/phien/khoi-nguoi-dung";
@@ -15,16 +15,18 @@ import {
   dangChon,
   isMenuParent,
   parentRoute,
-  PENDING_SCREENS,
   type MucMenu,
   type NhomMenu,
 } from "./muc-menu";
 import { RolePill } from "./role-pill";
+import { SidebarBrand } from "./side-nav";
 import { userInitials } from "./user-initials";
 
 /**
  * The narrow-screen navigation: a "menu" button in the header opening a full-height sheet, below 768px
- * (`globals.css`, `.header-narrow`), where the left sidebar (`side-nav.tsx`) is hidden.
+ * (`globals.css`, `.header-narrow`), where the left sidebar (`side-nav.tsx`) is hidden. Navy with the
+ * sidebar's brand row, so it reads as the same menu (ADR 0068 lần 6 #2 keeps the sheet; the spec is
+ * silent below 768px).
  *
  * WHY 768px: below it the page is one column (`15-phu-luc §7`), and a 240px sidebar would leave a phone
  * too little room for the content. From 768px the sidebar fits beside the page and is the one place for
@@ -128,12 +130,17 @@ export function NavSheetContent({
 }: NavSheetProps & { onNavigate: () => void }) {
   return (
     <div className="nav-sheet-body">
-      <div className="nav-sheet-head">
-        <h2 id="nav-sheet-title">{NAV_SHEET_TITLE}</h2>
+      {/* The sidebar's own brand row, navy like it (ADR 0068 lần 6 #2): the sheet IS the sidebar below
+          768px. The dialog's name stays the word "Menu", visually hidden — the brand words name the
+          product, not what this dialog is. */}
+      <SidebarBrand>
         <button type="button" className="nav-sheet-close" aria-label={NAV_SHEET_CLOSE_LABEL} onClick={onNavigate}>
           <X aria-hidden="true" focusable="false" strokeWidth={1.8} />
         </button>
-      </div>
+      </SidebarBrand>
+      <h2 id="nav-sheet-title" className="an-thi-giac">
+        {NAV_SHEET_TITLE}
+      </h2>
 
       {groups.length > 0 && (
         <nav className="nav-sheet-nav" aria-label="Điều hướng chính">
@@ -212,17 +219,18 @@ export function NavSheetContent({
   );
 }
 
-/** One screen row of the sheet — a link, or the disabled placeholder with its "?" (ADR 0068 §14). */
+/**
+ * One screen row of the sheet — a link, or the muted placeholder of an unbuilt screen: no "?", the
+ * owner's hover sentence as its `title`, exactly as in the sidebar (ADR 0068 lần 6 #11).
+ */
 function NavSheetItem({ item, active, onNavigate }: { item: MucMenu; active: boolean; onNavigate: () => void }) {
   if (item.duong === null) {
-    const info = PENDING_SCREENS[item.nhan];
     return (
       <li className="nav-sheet-item is-pending">
-        <span aria-disabled="true" className="nav-sheet-link">
+        <span aria-disabled="true" className="nav-sheet-link" title={PENDING_HOVER_TEXT}>
           <MenuIcon label={item.nhan} />
           <span className="nav-sheet-label">{item.nhan}</span>
         </span>
-        {info !== undefined && <PendingMarker info={info} side="bottom" className="ml-auto" />}
       </li>
     );
   }

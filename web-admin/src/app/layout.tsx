@@ -1,25 +1,29 @@
 import type { ReactNode } from "react";
 
-// Roboto, SELF-HOSTED (OMICALL tokens, owner decision 05/10/2026): the three weights the guide
-// uses (400/500/600), from `@fontsource/roboto`. Import the COMBINED per-weight file, never the
-// per-subset ones (`vietnamese-400.css`): only the combined file gives each face its
-// `unicode-range`. Without it the last-declared subset face claims every character, and letters
-// it lacks fall through to the system font mid-word. With it a browser downloads only the
-// subsets a page uses — vietnamese, latin-ext, latin here. A 700 request resolves to the 600 face.
+// Inter, SELF-HOSTED (spec 00 §1; ADR 0068 lần 6 #6): the five weights the spec's classes use —
+// font-normal/medium/semibold/bold/extrabold = 400/500/600/700/800 — from `@fontsource/inter`.
+// Import the COMBINED per-weight file, never the per-subset ones (`vietnamese-400.css`): only the
+// combined file gives each face its `unicode-range`. Without it the last-declared subset face claims
+// every character, and letters it lacks fall through to the system font mid-word. With it a browser
+// downloads only the subsets a page uses — vietnamese, latin-ext, latin here.
 // The fonts are bundled into this app's static assets and served from the commune's own host —
-// NOT `next/font/google`, which would make the build (and a staff member's browser, on a cache
-// miss) depend on a Google request.
-import "@fontsource/roboto/400.css";
-import "@fontsource/roboto/500.css";
-import "@fontsource/roboto/600.css";
+// NOT `next/font/google` as the spec writes, which would make the build (and a staff member's
+// browser, on a cache miss) depend on a Google request.
+import "@fontsource/inter/400.css";
+import "@fontsource/inter/500.css";
+import "@fontsource/inter/600.css";
+import "@fontsource/inter/700.css";
+import "@fontsource/inter/800.css";
 
 import "./globals.css";
 
+import { Toaster } from "@/components/ui/toaster";
+
 /**
- * Class that sets `--font-roboto` (`globals.css`, layer `base`) — the same shape as a
+ * Class that sets `--font-inter` (`globals.css`, layer `base`) — the same shape as a
  * `next/font` `variable`, so the body font is one CSS variable with a system fallback behind it.
  */
-const FONT_VARIABLE_CLASS = "font-roboto";
+const FONT_VARIABLE_CLASS = "font-inter";
 
 /**
  * Bố cục gốc. Cố ý MỎNG: nó không suy ra xã.
@@ -44,7 +48,10 @@ export const metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="vi" className={FONT_VARIABLE_CLASS}>
-      <body>{children}</body>
+      <body>
+        {children}
+        <Toaster />
+      </body>
     </html>
   );
 }

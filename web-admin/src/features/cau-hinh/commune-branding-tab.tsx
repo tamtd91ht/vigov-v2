@@ -217,7 +217,7 @@ export function BrandingCardView({
               />
             </div>
           ) : (
-            // eslint-disable-next-line @next/next/no-img-element -- public URL, see commune-banner.tsx
+            // eslint-disable-next-line @next/next/no-img-element -- public URL, see CommuneLogoImage in commune-identity.tsx
             <img
               src={currentUrl}
               alt={t.previewLabel}

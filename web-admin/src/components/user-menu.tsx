@@ -1,7 +1,7 @@
 "use client";
 
 import * as PopoverPrimitive from "@radix-ui/react-popover";
-import { ChevronDown, KeyRound, UserRound } from "lucide-react";
+import { KeyRound, UserRound } from "lucide-react";
 import Link from "next/link";
 
 import { NutDangXuat } from "@/features/auth/nut-dang-xuat";
@@ -14,8 +14,9 @@ import { userInitials } from "./user-initials";
 export const PERSONAL_PAGE_PATH = "/ca-nhan";
 
 /**
- * The header's person block — avatar + name (15/500) + caret (guide §7, §8.9) — opening the person's own
- * menu: who they are, the role they act with, `Đổi mật khẩu`, `Đăng xuất`. These are the same controls
+ * The header's person block — spec 01: navy avatar circle with the initials, the name (13px, 600, navy)
+ * and the position under it (11.5px, ink-muted), no caret, as the prototype's `AppTopbar` — opening the
+ * person's own menu: who they are, the role they act with, `Đổi mật khẩu`, `Đăng xuất`. These are the same controls
  * the old topbar drew inline; only where they sit moved.
  *
  * Drawn ONLY with a read session (`khoiNguoiDung`): no fallback name, no fallback role — the caller
@@ -49,7 +50,6 @@ export function UserMenu({ fullName, position, roleName }: { fullName: string; p
             <span className="ho-ten">{fullName}</span>
             {position !== "" && <span className="header-user-role">{position}</span>}
           </span>
-          <ChevronDown aria-hidden="true" focusable="false" strokeWidth={1.8} className="header-user-caret" />
         </button>
       </PopoverPrimitive.Trigger>
       <PopoverPrimitive.Portal>

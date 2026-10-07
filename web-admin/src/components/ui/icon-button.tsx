@@ -45,4 +45,5 @@ export function IconButton({ label, children, variant = "icon", size = "sm", cla
   );
 }
 
-const sizeSquare = { sm: "w-[34px]", md: "w-10", lg: "w-[46px]" } as const;
+// Square at the Button heights (spec 00 §5: icon-sm size-7, icon size-8, icon-lg size-9).
+const sizeSquare = { sm: "w-7", md: "w-8", lg: "w-9" } as const;

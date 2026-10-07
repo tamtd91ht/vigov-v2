@@ -53,14 +53,18 @@ function mount(): HTMLDivElement {
 }
 
 describe("DauTrang — system-wide search placeholder (00 §3.1, Phase 2, ADR 0068 §14)", () => {
-  // Presentation pin moved 05/10/2026 (ADR 0068 §Sửa đổi lần 2): in the navy header the placeholder is
-  // the guide's search ICON, disabled; the disabled FIELD lives in the narrow-screen sheet (nav-sheet).
-  it("is a DISABLED search icon button with the spec's name, inside no form, no search landmark", () => {
+  // Presentation pin moved 07/10/2026 (spec 01, ADR 0068 lần 6 #11): the header draws the FIELD again —
+  // always visible from 768px, spec 01's shape — and it stays disabled with its "?" (no route yet).
+  it("is a DISABLED search field with the spec's name and placeholder, in the header, inside no form, no search landmark", () => {
     const el = mount();
-    const button = el.querySelector<HTMLButtonElement>('header button[aria-label="Tìm kiếm toàn hệ thống"]');
-    expect(button).not.toBeNull();
-    expect(button!.disabled).toBe(true);
-    expect(button!.closest("form")).toBeNull();
+    const input = el.querySelector<HTMLInputElement>('header input[aria-label="Tìm kiếm toàn hệ thống"]');
+    expect(input).not.toBeNull();
+    expect(input!.disabled).toBe(true);
+    expect(input!.type).toBe("search");
+    expect(input!.placeholder).toBe("Tìm nhiệm vụ, văn bản, phản ánh…");
+    for (const c of ["h-10", "bg-canvas", "pl-9", "text-[13px]"]) expect(input!.className.split(" "), c).toContain(c);
+    expect(input!.closest("form")).toBeNull();
+    expect(input!.closest(".header-search")!.className.split(" ")).toEqual(expect.arrayContaining(["max-w-100", "w-full"]));
     expect(el.querySelector('[role="search"]')).toBeNull();
   });
 
@@ -80,7 +84,7 @@ describe("DauTrang — system-wide search placeholder (00 §3.1, Phase 2, ADR 00
     vi.stubGlobal("fetch", fetchSpy);
     const el = mount();
     const marker = el.querySelector<HTMLButtonElement>(
-      `button[aria-label="${pendingMarkerLabel("Tìm kiếm toàn hệ thống")}"]`,
+      `header button[aria-label="${pendingMarkerLabel("Tìm kiếm toàn hệ thống")}"]`,
     );
     expect(marker).not.toBeNull();
     act(() => marker!.click());

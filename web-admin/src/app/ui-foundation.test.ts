@@ -86,7 +86,7 @@ describe("globals.css layering", () => {
     expect(close).toBeGreaterThan(open);
     // Nothing but whitespace after the legacy block: a rule appended below it would be outside.
     expect(CSS.slice(close + "} /* end @layer legacy */".length).trim()).toBe("");
-    for (const cls of [".nut-chinh {", ".nut-phu {", ".bang-cuon {", ".khung-trang {", ".dau-trang {"]) {
+    for (const cls of [".nut-chinh {", ".nut-phu {", ".bang-cuon {", ".khung-trang {", ".side-nav {"]) {
       const at = CSS.indexOf("\n" + cls);
       expect(at, cls).toBeGreaterThan(open);
       expect(at, cls).toBeLessThan(close);
@@ -141,13 +141,15 @@ describe("globals.css layering", () => {
  * nothing else would catch coming back — a blur or a gradient tile is invisible to every other test.
  */
 describe("spec v2 shell", () => {
-  // Presentation pins (ADR 0068 §5): rows and motion follow the OMICALL tokens of 05/10/2026.
-  it("declares the v2 tokens: 240/72px sidebar, 60px topbar, 64px rows, 4/8px spacing, motion", () => {
+  // Presentation pins (ADR 0068 §5). Rows: spec 00 §5 (ADR 0068 lần 6) — a `p-2` cell floored at the
+  // `h-10` header, replacing the 64px OMICALL row of 05/10/2026. Sidebar 240 / 64 (`w-60` / `w-16`) and
+  // header 64 (`h-16`): spec 01. Motion unchanged.
+  it("declares the tokens: 240/64px sidebar, 64px topbar, 40px rows, 4/8px spacing, motion", () => {
     for (const decl of [
       "--sidebar-w: 240px;",
-      "--sidebar-w-collapsed: 72px;",
-      "--topbar-h: 60px;",
-      "--row-h: 64px;",
+      "--sidebar-w-collapsed: 64px;",
+      "--topbar-h: 64px;",
+      "--row-h: 40px;",
       "--space-1: 4px;",
       "--space-6: 32px;",
       "--dur-fast: 250ms;",
@@ -164,50 +166,76 @@ describe("spec v2 shell", () => {
     expect(block).toContain("--dur-slow: 0.01ms;");
   });
 
-  it("no frosted glass anywhere: no backdrop-filter, no blur()", () => {
+  // ADR 0068 lần 6 #3 lifted §11's blur ban for exactly two places, both spec text: the modal's own
+  // overlay (spec 00 §5, `bg-black/10 backdrop-blur-xs`) and the white header (spec 01, `bg-white/95
+  // backdrop-blur`). Everywhere else the ban still holds, so a blur that turns up in another component is
+  // a decision nobody took.
+  it("no frosted glass except the modal overlay and the header: no backdrop-filter in CSS, one blur class each", () => {
     expect(stripComments(CSS)).not.toMatch(/backdrop-filter|blur\(/);
-    for (const f of NEW_UI) expect(f.text, f.path).not.toMatch(/backdrop-blur|backdrop-filter/);
+    for (const f of NEW_UI) {
+      const blurs = f.text.match(/[\w:-]*backdrop-blur[\w-]*|backdrop-filter/g) ?? [];
+      if (f.path === "components/ui/modal-dialog.tsx") expect(blurs, f.path).toEqual(["backdrop:backdrop-blur-xs"]);
+      else if (f.path === "components/dau-trang.tsx") expect(blurs, f.path).toEqual(["backdrop-blur"]);
+      else expect(blurs, f.path).toEqual([]);
+    }
   });
 
   it("no gradient in the shared components (the PageHeader tile is flat)", () => {
     for (const f of NEW_UI) expect(f.text, f.path).not.toMatch(/bg-linear|bg-gradient|from-brand-|linear-gradient/);
   });
 
-  // Presentation pins (guide §7, §8.9; ADR 0068 §Sửa đổi 05/10/2026 lần 2).
-  it("app shell: grey outside, 8px margin, radius 16, `--bg` inside, corners clipped without breaking sticky", () => {
+  // Presentation pins (spec 01; ADR 0068 §Sửa đổi 07/10/2026 lần 6 #2): edge to edge on the page colour —
+  // no grey frame, margin or radius any more — and still no `overflow` on the shell, or the sticky header
+  // and sidebar would stick to a box that never scrolls.
+  it("app shell: edge to edge, `--bg`, full height, no frame, nothing that breaks sticky", () => {
     const shell = RULES.find((r) => r.selector === ".khung-trang")?.body ?? "";
-    for (const decl of ["margin: 8px;", "border-radius: var(--r-lg);", "background: var(--bg);", "overflow: clip;", "min-height: calc(100dvh - 16px);"])
-      expect(shell, decl).toContain(decl);
-    expect(RULES.find((r) => r.selector.includes("body:has(.khung-trang)"))?.body).toContain("background: var(--bg-outer);");
+    for (const decl of ["background: var(--bg);", "min-height: 100dvh;"]) expect(shell, decl).toContain(decl);
+    for (const banned of [/margin/, /border-radius/, /overflow/]) expect(shell).not.toMatch(banned);
+    expect(CSS).not.toMatch(/:has\(\.khung-trang\)/);
   });
 
-  it("header: 68px navy, sticky, header shadow, WHITE focus ring on navy (the app ring is 3.18:1 there)", () => {
-    const h = RULES.find((r) => r.selector === ".dau-trang")?.body ?? "";
-    for (const decl of ["position: sticky;", "top: 0;", "height: 68px;", "background: var(--brand-600);", "box-shadow: var(--shadow-header);"])
-      expect(h, decl).toContain(decl);
-    expect(RULES.find((r) => r.selector === ".dau-trang :focus-visible")?.body).toContain("outline: 2px solid #fff;");
-    const icon = RULES.find((r) => r.selector === ".header-icon-button")?.body ?? "";
-    for (const decl of ["width: 36px;", "height: 36px;", "border-radius: var(--r-md);"]) expect(icon, decl).toContain(decl);
+  // The header's look is spec 01's utilities on the element (`dau-trang.test.tsx` pins them); no legacy
+  // rule may draw it again — a `.dau-trang { background }` outside them would win nothing (layer order)
+  // but would put the navy header's values back in front of the next reader.
+  it("header: no legacy rule draws it; the menu button matches the bell (40px, hairline, page fill)", () => {
+    expect(RULES.find((r) => r.selector === ".dau-trang")).toBeUndefined();
+    expect(CSS).not.toMatch(/--shadow-header/);
+    for (const sel of [".header-icon-button", ".nut-chuong"]) {
+      const body = RULES.find((r) => r.selector === sel)?.body ?? "";
+      for (const decl of ["width: 40px;", "height: 40px;", "border: 1px solid var(--line);", "background: var(--bg);"]) expect(body, `${sel} ${decl}`).toContain(decl);
+    }
   });
 
   it("the old white text sidebar stays gone, and no shell rule draws a gradient", () => {
     expect(CSS).not.toMatch(/\.thanh-ben/);
     expect(CSS).not.toMatch(/\.header-modules/);
+    expect(CSS).not.toMatch(/\.commune-banner/);
     for (const r of RULES.filter((x) => /dau-trang|header-|nav-sheet|side-nav|khung-trang|user-menu/.test(x.selector)))
       expect(r.body, r.selector).not.toMatch(/gradient/);
   });
 
-  // Presentation pins (owner 05/10/2026; ADR 0068 lần 2 #1): the sidebar is hidden below 768px (the nav
-  // sheet takes over), the accent #00B1FF never becomes its text colour, and it sticks under the header.
-  it("left sidebar: hidden by default, 240/72px from 768px, sticky under the 68px header, accent never text", () => {
+  // Presentation pins (spec 01): hidden below 768px (the nav sheet takes over); from 768px navy, the
+  // full height of the window, sticky at the top, beside the header (first column, every row), 240/64px.
+  // Z 30: under the economic map's full-screen view and Tổng quan's presentation overlay (both z-40).
+  it("left sidebar: hidden by default; from 768px navy, full height, sticky, first column over every row, z under 40", () => {
     expect(RULES.find((r) => r.selector === ".side-nav" && r.body.includes("display: none;"))).toBeDefined();
-    const wide = RULES.find((r) => r.selector === ".side-nav" && r.body.includes("display: block;"))?.body ?? "";
-    expect(wide).toContain("width: var(--sidebar-w);");
+    const wide = RULES.find((r) => r.selector === ".side-nav" && r.body.includes("display: flex;"))?.body ?? "";
+    for (const decl of [
+      "width: var(--sidebar-w);",
+      "background: var(--sidebar);",
+      "position: sticky;",
+      "top: 0;",
+      "height: 100dvh;",
+      "grid-column: 1;",
+      "grid-row: 1 / -1;",
+      "z-index: 30;",
+    ])
+      expect(wide, decl).toContain(decl);
     expect(RULES.find((r) => r.selector === ".side-nav.is-collapsed")?.body).toContain("width: var(--sidebar-w-collapsed);");
-    const inner = RULES.find((r) => r.selector === ".side-nav-inner")?.body ?? "";
-    for (const decl of ["position: sticky;", "top: 68px;"]) expect(inner, decl).toContain(decl);
-    for (const r of RULES.filter((x) => /side-nav/.test(x.selector)))
-      expect(r.body, r.selector).not.toMatch(/(^|[\s;])color:\s*(var\(--accent-500\)|#00b1ff)/i);
+    expect(RULES.find((r) => r.selector === ".khung-trang:has(> .side-nav) > .dau-trang")?.body).toContain("grid-column: 2;");
+    expect(RULES.find((r) => r.selector === ".khung-trang:has(> .side-nav) > .than-trang")?.body).toContain("grid-column: 2;");
+    const active = RULES.find((r) => r.selector === ".side-nav .side-nav-link.is-active::before")?.body ?? "";
+    for (const decl of ["left: -12px;", "width: 3px;", "background: var(--sidebar-primary);"]) expect(active, decl).toContain(decl);
   });
 
   it("page width classes exist: data none, form 880px, detail 1120px", () => {
@@ -233,7 +261,7 @@ describe("global select frame", () => {
     expect(at).toBeLessThan(CSS.lastIndexOf("} /* end @layer legacy */"));
   });
 
-  it("is the controlClass look: 36px, line-strong hairline, control radius, chevron, no native arrow", () => {
+  it("is the controlClass look: control height, line-strong hairline, control radius, chevron, no native arrow", () => {
     const b = frame?.body ?? "";
     for (const decl of [
       "height: var(--control-h);",
@@ -268,9 +296,10 @@ describe("font", () => {
       expect(f.text, f.path).not.toMatch(/fonts\.googleapis|fonts\.gstatic|cdn\.jsdelivr/);
     }
     const layout = readFileSync(join(SRC, "app", "layout.tsx"), "utf8");
-    // Presentation pin (ADR 0068 §5): the OMICALL tokens of 05/10/2026 use Roboto 400/500/600.
-    expect(layout).toContain('import "@fontsource/roboto/400.css";');
-    expect(layout).toContain('import "@fontsource/roboto/600.css";');
+    // Presentation pin (ADR 0068 §5): spec 00 §1 (ADR 0068 lần 6) — Inter, the five weights the spec's
+    // classes use, self-hosted through @fontsource (lần 6 #6), replacing Roboto 400/500/600.
+    for (const w of [400, 500, 600, 700, 800]) expect(layout).toContain(`import "@fontsource/inter/${w}.css";`);
+    expect(layout).not.toContain("@fontsource/roboto");
   });
 });
 
@@ -351,5 +380,53 @@ describe("kanban board carries the prototype's layout values", () => {
     expect(card).toContain("padding: 0;");
     expect(card).toContain("border-radius: 10px;");
     expect(card).not.toContain("border-left");
+  });
+});
+
+// ADR 0068 lần 6 review round 1 — each one a rendered defect a class-level test could not see.
+describe("lần 6 review: hidden, tables, bell badge", () => {
+  // T1-16: without preflight a `flex` class beat the UA's `[hidden]`. The rule must sit in `base` (its
+  // `!important` then beats every later layer) and keep `until-found`.
+  it("[hidden] hides, from the base layer, with !important", () => {
+    const base = CSS.slice(CSS.indexOf("@layer base {"), CSS.indexOf("@layer legacy {"));
+    expect(base).toMatch(/\[hidden\]:where\(:not\(\[hidden="until-found"\]\)\) \{\s*display: none !important;/);
+  });
+
+  // T1-17: shadcn `Table` is `w-full`; footer cells take the body cell's box; a scroller inside a card is
+  // not a second frame, and nothing on it sets a shadow.
+  it("data-table is full width; tfoot cells padded like body cells", () => {
+    expect(RULES.find((r) => r.selector === ".data-table")?.body).toContain("width: 100%;");
+    const foot = RULES.find((r) => r.selector === ".data-table tfoot th,\n.data-table tfoot td")?.body ?? "";
+    expect(foot).toContain("padding: 0.5rem;");
+    expect(foot).toContain("vertical-align: middle;");
+  });
+
+  it("bang-cuon: framed standing alone, frameless inside a card, never a box-shadow", () => {
+    const own = RULES.find((r) => r.selector === ".bang-cuon")?.body ?? "";
+    expect(own).toContain("overflow-x: auto;");
+    expect(own).toContain("border: 1px solid var(--line);");
+    const inCard = RULES.find((r) => r.selector === ':is([data-slot="card"], .shadow-card) .bang-cuon')?.body ?? "";
+    expect(inCard).toContain("border: 0;");
+    expect(inCard).toContain("border-radius: 0;");
+    for (const r of RULES.filter((x) => /\.bang-cuon\b(?!-)/.test(x.selector))) expect(r.body, r.selector).not.toContain("box-shadow");
+    expect(readFileSync(join(SRC, "components", "ui", "card.tsx"), "utf8")).toContain('data-slot="card"');
+  });
+
+  // T2-12: the prototype's badge (`NotificationBell.tsx:57`) in the spec's brand colour.
+  it("bell badge: brand fill, 18px round, white 2px ring, -6px offsets, 10.5px bold", () => {
+    const b = RULES.find((r) => r.selector === ".huy-hieu-chuong")?.body ?? "";
+    for (const decl of [
+      "top: -6px;",
+      "right: -6px;",
+      "min-width: 18px;",
+      "height: 18px;",
+      "border: 2px solid #fff;",
+      "border-radius: 9999px;",
+      "background: var(--brand-500);",
+      "color: #fff;",
+      "font-size: 10.5px;",
+      "font-weight: 700;",
+    ])
+      expect(b, decl).toContain(decl);
   });
 });

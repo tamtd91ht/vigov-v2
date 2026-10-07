@@ -1,10 +1,19 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { pendingMarkerLabel } from "./ui/pending-feature";
+import { PENDING_HOVER_TEXT } from "./ui/pending-feature";
 import { MENU_ICONS } from "./menu-icons";
 import { flattenMenu, isMenuParent, locMenu, NHOM_MENU, PENDING_SCREENS, type MucMenu, type NhomMenu } from "./muc-menu";
-import { SIDE_NAV_LABEL, SideNav, SIDEBAR_COLLAPSE_LABEL, SIDEBAR_EXPAND_LABEL } from "./side-nav";
+import {
+  APP_VERSION_LABEL,
+  PRODUCT_MARK,
+  PRODUCT_NAME,
+  PRODUCT_TAGLINE,
+  SIDE_NAV_LABEL,
+  SideNav,
+  SIDEBAR_COLLAPSE_LABEL,
+  SIDEBAR_EXPAND_LABEL,
+} from "./side-nav";
 
 /**
  * The left sidebar (owner, 05/10/2026: module navigation back on the left, vertical, icon + word; ADR 0068
@@ -126,7 +135,7 @@ describe("sidebar — what it draws (expanded)", () => {
     for (const p of [[], null, ["admin.user.delete", "report.export"]]) {
       const html = sidebar(p);
       expect(html).not.toContain("<a ");
-      expect(html.match(/data-pending-marker/g)).toHaveLength(3);
+      expect(html.match(/aria-disabled="true"/g)).toHaveLength(3);
       expect(html).toContain('class="side-nav"');
       expect(html).toContain(`aria-label="${SIDEBAR_COLLAPSE_LABEL}"`);
     }
@@ -212,10 +221,12 @@ describe("sidebar — collapsed to icons", () => {
     expect(sidebar(ALL_PERMISSIONS, { collapsed: true, pathname: "/cau-hinh" })).not.toContain("side-nav-parent is-active");
   });
 
-  it("group headings become dividers between groups (none above the first)", () => {
+  // Presentation pin moved 07/10/2026 (ADR 0068 lần 6, spec 01 / prototype `AppSidebar.tsx`): one divider
+  // per group, the first included — it replaces the heading the group had.
+  it("group headings become one divider per group", () => {
     const html = sidebar(ALL_PERMISSIONS, { collapsed: true });
     expect(html).not.toContain("side-nav-group-label");
-    expect(html.match(/class="side-nav-divider"/g)).toHaveLength(NHOM_MENU.length - 1);
+    expect(html.match(/class="side-nav-divider"/g)).toHaveLength(NHOM_MENU.length);
   });
 
   it("same items either way — collapsing changes the look, never who sees what (children: the flyout test)", () => {
@@ -226,18 +237,24 @@ describe("sidebar — collapsed to icons", () => {
   });
 });
 
-describe("items with no screen (ADR 0068 §14)", () => {
+/**
+ * ADR 0068 lần 6 #11 (owner did not object, 07/10/2026): the unbuilt items are muted, not clickable,
+ * hover "Tính năng đang phát triển" — and carry NO "?" any more (the "?" stays on unbuilt controls
+ * inside a screen, §14). Their word stays, so a screen reader still hears the whole menu.
+ */
+describe("items with no screen", () => {
   const PENDING = ["Danh bạ người dân", "Gửi tin ZNS / SMS", "Hướng dẫn sử dụng"];
 
-  it("the prototype's three unbuilt items: disabled, their word, a '?' each — expanded and collapsed", () => {
+  it("the prototype's three unbuilt items: disabled, their word, the hover sentence, no '?' — expanded and collapsed", () => {
     for (const collapsed of [false, true]) {
       const html = sidebar(ALL_PERMISSIONS, { collapsed });
-      expect(html.match(/data-pending-marker/g)).toHaveLength(3);
-      for (const nhan of PENDING) {
-        expect(html, nhan).toContain(`aria-label="${esc(pendingMarkerLabel(nhan))}"`);
-        expect(html, nhan).toContain(collapsed ? `<span class="an-thi-giac">${nhan}</span>` : `<span class="side-nav-label">${nhan}</span>`);
-      }
+      expect(html).not.toContain("data-pending-marker");
       expect(html.match(/class="side-nav-item is-pending"/g)).toHaveLength(3);
+      for (const nhan of PENDING) {
+        expect(html, nhan).toContain(collapsed ? `<span class="an-thi-giac">${nhan}</span>` : `<span class="side-nav-label">${nhan}</span>`);
+        const title = collapsed ? `${nhan} — ${PENDING_HOVER_TEXT}` : PENDING_HOVER_TEXT;
+        expect(html, nhan).toContain(`aria-disabled="true" class="side-nav-link" title="${title}"`);
+      }
     }
   });
 
@@ -246,23 +263,47 @@ describe("items with no screen (ADR 0068 §14)", () => {
     for (const info of Object.values(PENDING_SCREENS)) expect(info.viSao).not.toContain("Sắp có");
   });
 
-  it("an item listed with `duong: null` is DISABLED: no link, aria-disabled, its word, '?' beside it — both widths", () => {
+  it("an item listed with `duong: null` is DISABLED: no link, aria-disabled, its word, not focusable — both widths", () => {
     const item: MucMenu = { nhan: "Báo cáo", duong: null, khoa: null };
     const groups: NhomMenu[] = [{ ten: "Quản trị", muc: [item] }];
-    // The marker needs a description to open; "Báo cáo" has a screen, so give it one for the test.
-    (PENDING_SCREENS as Record<string, { ten: string; viSao: string }>)["Báo cáo"] = { ten: "Báo cáo", viSao: "x" };
-    try {
-      for (const collapsed of [false, true]) {
-        const html = renderToStaticMarkup(<SideNav groups={groups} pathname="/mini-app" collapsed={collapsed} onToggle={() => {}} />);
-        expect(html).not.toContain("<a ");
-        expect(html).toContain('aria-disabled="true"');
-        expect(html).toContain(collapsed ? '<span class="an-thi-giac">Báo cáo</span>' : '<span class="side-nav-label">Báo cáo</span>');
-        // Focusable: the toggle, and the "?" whose name says the whole sentence.
-        expect(html.match(/<button/g)).toHaveLength(2);
-        expect(html).toContain(`aria-label="${pendingMarkerLabel("Báo cáo")}"`);
-      }
-    } finally {
-      delete (PENDING_SCREENS as Record<string, unknown>)["Báo cáo"];
+    for (const collapsed of [false, true]) {
+      const html = renderToStaticMarkup(<SideNav groups={groups} pathname="/mini-app" collapsed={collapsed} onToggle={() => {}} />);
+      expect(html).not.toContain("<a ");
+      expect(html).toContain('aria-disabled="true"');
+      expect(html).toContain(collapsed ? '<span class="an-thi-giac">Báo cáo</span>' : '<span class="side-nav-label">Báo cáo</span>');
+      // The only focusable thing left is the collapse toggle.
+      expect(html.match(/<button/g)).toHaveLength(1);
+      expect(html).not.toContain("tabindex");
     }
+  });
+});
+
+/**
+ * Spec 01 / ADR 0068 lần 6 #3, #8: the brand block "VG · ViGov · Điều hành số cấp xã" on top, the
+ * version footer at the bottom ("Môi trường phát triển" dropped). Collapsed: the tile alone, the toggle
+ * under it, no footer — the prototype's `AppSidebar.tsx`.
+ */
+describe("sidebar — brand block and footer", () => {
+  it("expanded: tile, product name, tagline, the toggle at the row's end; the version footer — and no environment line", () => {
+    const html = sidebar(ALL_PERMISSIONS);
+    expect(html).toMatch(
+      new RegExp(
+        `^<aside class="side-nav"><div class="side-nav-brand"><span class="side-nav-brand-mark" aria-hidden="true">${PRODUCT_MARK}</span>` +
+          `<span class="side-nav-brand-text"><span class="side-nav-brand-name">${PRODUCT_NAME}</span>` +
+          `<span class="side-nav-brand-tagline">${PRODUCT_TAGLINE}</span></span><button type="button" class="side-nav-toggle"`,
+      ),
+    );
+    expect(html).toMatch(new RegExp(`<p class="side-nav-footer">${APP_VERSION_LABEL}</p></aside>$`));
+    expect(APP_VERSION_LABEL).toBe("Phiên bản 0.1.0");
+    expect(html).not.toContain("Môi trường");
+  });
+
+  it("collapsed: the tile alone in the brand row, the toggle right after it, no footer", () => {
+    const html = sidebar(ALL_PERMISSIONS, { collapsed: true });
+    expect(html).toContain(
+      `<div class="side-nav-brand is-collapsed"><span class="side-nav-brand-mark" aria-hidden="true">${PRODUCT_MARK}</span></div><button type="button" class="side-nav-toggle"`,
+    );
+    expect(html).not.toContain(PRODUCT_NAME);
+    expect(html).not.toContain("side-nav-footer");
   });
 });

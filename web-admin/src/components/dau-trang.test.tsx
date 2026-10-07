@@ -9,10 +9,10 @@ import { DauTrang } from "./dau-trang";
 import { userInitials } from "./user-initials";
 
 /**
- * The navy header carries the commune's identity on EVERY signed-in page since it replaced the text
- * sidebar (ADR 0068 §Sửa đổi 05/10/2026 (lần 2)): one place, so no page is without the body's name and
- * none prints it twice. The failure guarded is silent and public: a string-built "UBND " + name reads
- * right for "xã Tân Phú" and wrong — "UBND UBND xã Tân Phú" — for a commune that declared the prefix.
+ * The WHITE header carries the commune's identity on EVERY signed-in page (spec 01, ADR 0068 §Sửa đổi
+ * 07/10/2026 lần 6 #2, #11): one place, so no page is without the body's name and none prints it twice.
+ * The failure guarded is silent and public: a string-built "UBND " + name reads right for "xã Tân Phú"
+ * and wrong — "UBND UBND xã Tân Phú" — for a commune that declared the prefix.
  */
 const COMMUNE = { displayName: "Xã Tân Phú", parentAuthority: "Tỉnh Đồng Nai", logoUrl: "", webAdminBannerUrl: "" };
 
@@ -26,42 +26,50 @@ function render(commune: Partial<typeof COMMUNE> = {}, navigation = true) {
   );
 }
 
+const headerOf = (html: string) => html.slice(html.indexOf("<header"), html.indexOf("</header>"));
+const sidebarOf = (html: string) => html.slice(html.indexOf('<aside class="side-nav"'), html.indexOf("</aside>"));
+
 describe("DauTrang — commune identity", () => {
-  it("prints the authority kind, then displayName verbatim, then the province — once, with and without menu", () => {
+  it("the authority kind and displayName as TWO elements on one line, verbatim, upper-cased by CSS; then the province", () => {
     for (const navigation of [true, false]) {
-      const html = render({ displayName: "UBND xã Tân Phú" }, navigation);
-      expect(html.indexOf(AUTHORITY_KIND)).toBeLessThan(html.indexOf("UBND xã Tân Phú"));
-      expect(html.match(/<p class="ten-co-quan">UBND xã Tân Phú<\/p>/g)).toHaveLength(1);
-      expect(html).not.toContain("UBND UBND");
-      expect(html).toContain('<p class="co-quan-cap-tren">Tỉnh Đồng Nai</p>');
-      expect(html.indexOf("commune-identity")).toBeLessThan(html.indexOf("header-end"));
+      const header = headerOf(render({ displayName: "UBND xã Tân Phú" }, navigation));
+      const line = /<p class="([^"]*)"><span class="commune-authority-kind">([^<]*)<\/span> <span class="ten-co-quan">([^<]*)<\/span><\/p>/.exec(header);
+      expect(line, "one line, two elements").not.toBeNull();
+      expect(line![1]).toContain("uppercase");
+      expect(line![2]).toBe(AUTHORITY_KIND);
+      // Printed as declared — the capitals are CSS, never a rebuilt string.
+      expect(line![3]).toBe("UBND xã Tân Phú");
+      expect(header.match(/UBND xã Tân Phú/g)).toHaveLength(1);
+      expect(header).not.toContain("UBND UBND");
+      expect(header).toMatch(/<p class="co-quan-cap-tren[^"]*">Tỉnh Đồng Nai<\/p>/);
+      expect(header.indexOf("commune-identity")).toBeLessThan(header.indexOf("header-end"));
     }
   });
 
-  it("names no product and no vendor (ADR 0068 §13, §Sửa đổi lần 2 #9)", () => {
+  // ADR 0068 lần 6 #3 lifted §13 for the sidebar's brand block ONLY: the product name is required there
+  // and still absent from the header, where the commune's identity is.
+  it("the product name sits in the sidebar's brand block, and nowhere in the header (ADR 0068 lần 6 #3)", () => {
     const html = render();
-    for (const s of ["ViGov", "ViHAT", "OMICALL", "Omicall", "Điều hành số cấp xã"]) expect(html).not.toContain(s);
+    const sidebar = sidebarOf(html);
+    expect(sidebar).toContain('<span class="side-nav-brand-name">ViGov</span>');
+    expect(sidebar).toContain('<span class="side-nav-brand-tagline">Điều hành số cấp xã</span>');
+    const header = headerOf(html);
+    for (const s of ["ViGov", "ViHAT", "OMICALL", "Omicall", "Điều hành số cấp xã", "VG<"]) expect(header).not.toContain(s);
+    // `navigation={false}` draws no sidebar, so no product name at all.
+    for (const s of ["ViGov", "Điều hành số cấp xã"]) expect(render({}, false)).not.toContain(s);
   });
 
   it("a commune that declared no parent authority gets no line — never a guess", () => {
     expect(render({ parentAuthority: "" })).not.toContain("co-quan-cap-tren");
   });
 
-  it("no logo uploaded: the building icon in the tile, no image (ADR 0069 #7)", () => {
-    const html = render();
-    expect(html).toContain('<span class="commune-emblem" aria-hidden="true">');
-    expect(html).toContain("lucide-landmark");
-    expect(html).not.toContain("<img");
-  });
-
-  it("logo uploaded: the commune's own image replaces the icon, contained, decorative beside the name", () => {
-    const url = "https://media.example.test/vigov-public/t_01JXA/logo-512.png";
-    const html = render({ logoUrl: url });
-    expect(html).toContain('<span class="commune-emblem has-logo" aria-hidden="true">');
-    expect(html.match(/<img /g)).toHaveLength(1);
-    expect(html).toContain(`src="${url}"`);
-    expect(html).toContain('alt=""');
-    expect(html).not.toContain("lucide-landmark");
+  // Presentation pin moved (lần 6 #8): spec 01's header has no tile; the sidebar's "VG" tile is the brand.
+  it("no logo tile and no image in the shell, uploaded logo or not", () => {
+    for (const logoUrl of ["", "https://media.example.test/vigov-public/t_01JXA/logo-512.png"]) {
+      const html = render({ logoUrl });
+      expect(html).not.toContain("commune-emblem");
+      expect(html).not.toContain("<img");
+    }
   });
 });
 
@@ -74,13 +82,12 @@ describe("DauTrang — session not read yet", () => {
   });
 
   it("draws the sidebar frame with no screen link (every screen needs a key) — the menu never shows then withdraws", () => {
-    const html = render();
-    expect(html).toContain('class="side-nav"');
-    const sidebar = html.slice(html.indexOf('class="side-nav"'));
-    // Only the unbuilt placeholders (ADR 0068 §14): they open no data, so they need no key.
+    const sidebar = sidebarOf(render());
+    expect(sidebar).toContain('class="side-nav"');
+    // Only the unbuilt placeholders: they open no data, so they need no key.
     expect(sidebar).not.toContain("<a ");
     expect(sidebar.match(/class="side-nav-item is-pending"/g)).toHaveLength(3);
-    expect(html).not.toContain("Cấu hình");
+    expect(sidebar).not.toContain("Cấu hình");
   });
 
   it("keeps the sign-out control — the way out needs no name", () => {
@@ -93,45 +100,43 @@ describe("DauTrang — session not read yet", () => {
 });
 
 /**
- * ADR 0069 #5: the commune's web-admin banner is a strip under the header on EVERY signed-in page —
- * drawn here, once, so no page can forget it. No banner = no strip at all (ADR 0069 #7).
+ * ADR 0068 lần 6 #8: the commune's web-admin banner strip (ADR 0069 #5) is gone from the shell — the
+ * prototype has none. A banner the commune uploaded must not reappear under the header.
  */
-describe("DauTrang — banner strip", () => {
-  const URL_BANNER = "https://media.example.test/vigov-public/t_01JXA/banner-1600.jpg";
-
-  it("no banner: no strip, no image, no empty frame", () => {
-    for (const navigation of [true, false]) {
-      const html = render({}, navigation);
-      expect(html).not.toContain("commune-banner");
-      expect(html).not.toContain("<img");
+describe("DauTrang — no banner strip", () => {
+  it("draws no banner, with or without one configured", () => {
+    for (const webAdminBannerUrl of ["", "https://media.example.test/vigov-public/t_01JXA/banner-1600.jpg"]) {
+      for (const navigation of [true, false]) {
+        const html = render({ webAdminBannerUrl }, navigation);
+        expect(html).not.toContain("banner");
+        expect(html).not.toContain("<img");
+      }
     }
-  });
-
-  it("a banner: one decorative image AFTER the header (sibling, so the sticky header does not carry it)", () => {
-    const html = render({ webAdminBannerUrl: URL_BANNER });
-    expect(html.match(/<img /g)).toHaveLength(1);
-    expect(html).toContain(`src="${URL_BANNER}"`);
-    expect(html.indexOf('<div class="commune-banner">')).toBeGreaterThan(html.indexOf("</header>"));
   });
 });
 
 /**
- * Owner, 05/10/2026: module navigation lives in ONE place, the left sidebar — the header's horizontal
- * icon row is gone. The sidebar is a SIBLING after the header and banner (the shell grid places it).
+ * Navigation lives in ONE place, the left sidebar. Spec 01: the sidebar runs the full height beside the
+ * header, so it comes FIRST (prototype DOM order) and the shell grid places it (`.khung-trang`).
  */
 describe("DauTrang — navigation lives in the left sidebar, not in the header", () => {
   it("the header holds no module navigation", () => {
-    const html = render();
-    const header = html.slice(html.indexOf("<header"), html.indexOf("</header>"));
+    const header = headerOf(render());
     expect(header).not.toContain("<nav");
     expect(header).not.toContain("header-modules");
     expect(header).not.toContain("side-nav");
   });
 
-  it("the sidebar follows the header (and the banner), outside it", () => {
-    const html = render({ webAdminBannerUrl: "https://media.example.test/vigov-public/t_01JXA/banner-1600.jpg" });
-    expect(html.indexOf('class="side-nav"')).toBeGreaterThan(html.indexOf("</header>"));
-    expect(html.indexOf('class="side-nav"')).toBeGreaterThan(html.indexOf('<div class="commune-banner">'));
+  it("the sidebar comes before the header, outside it", () => {
+    const html = render();
+    expect(html.indexOf('<aside class="side-nav"')).toBe(0);
+    expect(html.indexOf("</aside>")).toBeLessThan(html.indexOf("<header"));
+  });
+
+  it("the header is spec 01's: white, 64px, sticky, hairline, the blurred 95% white", () => {
+    const tag = /<header class="([^"]*)"/.exec(render())![1]!.split(" ");
+    for (const c of ["dau-trang", "sticky", "top-0", "z-30", "h-16", "border-b", "border-line", "bg-white/95", "backdrop-blur", "md:px-7"])
+      expect(tag, c).toContain(c);
   });
 
   it("`navigation={false}`: no sidebar at all", () => {

@@ -217,11 +217,14 @@ describe("PageHeader meta / Toolbar end / EmptyState tone", () => {
     expect(renderToStaticMarkup(<PageHeaderMeta at="hôm nay" />)).not.toContain("—");
   });
 
-  it("PageHeader's icon tile is flat: no gradient, no shadow", () => {
+  // Presentation pin (ADR 0068 §5). Spec 02 §1 / ADR 0068 lần 6: the prototype's header has no icon
+  // tile, so the `icon` a caller still passes draws nothing — and nothing decorative replaces it.
+  it("PageHeader draws no icon tile, no gradient, no shadow — the icon prop is ignored", () => {
     const html = renderToStaticMarkup(<PageHeader icon={Pencil} title="T" />);
     expect(html).not.toContain("bg-linear");
     expect(html).not.toContain("shadow");
-    expect(html).toContain("bg-brand-50");
+    expect(html).not.toContain("<svg");
+    expect(html).toContain('class="m-0 text-[22px] leading-tight font-bold text-navy"');
   });
 
   it("Toolbar's `end` slot comes after the filters; absent = nothing extra", () => {

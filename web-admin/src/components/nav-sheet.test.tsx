@@ -91,11 +91,19 @@ describe("nav sheet content — small screens show TEXT labels (touch has no too
     for (const p of [["task.read"], [], null]) expect(content(p, PERSON)).not.toContain(esc(PARENT));
   });
 
-  it("the three unbuilt items: disabled, their word, a '?' each", () => {
+  // ADR 0068 lần 6 #11: as in the sidebar — muted, the hover sentence, no "?".
+  it("the three unbuilt items: disabled, their word, the hover sentence, no '?'", () => {
     const html = content([], PERSON);
-    expect(html.match(/data-pending-marker/g)).toHaveLength(3);
+    expect(html).not.toContain("data-pending-marker");
+    expect(html.match(/<span aria-disabled="true" class="nav-sheet-link" title="Tính năng đang phát triển">/g)).toHaveLength(3);
     for (const nhan of PENDING) expect(html).toContain(`<span class="nav-sheet-label">${nhan}</span>`);
     expect(html).not.toMatch(/<a href="(?!\/doi-mat-khau)/);
+  });
+
+  it("opens on the sidebar's brand row (navy sheet = the sidebar below 768px); the dialog is still named 'Menu'", () => {
+    const html = content([], PERSON);
+    expect(html).toMatch(/^<div class="nav-sheet-body"><div class="side-nav-brand">.*ViGov.*Điều hành số cấp xã.*aria-label="Đóng menu"/);
+    expect(html).toContain('<h2 id="nav-sheet-title" class="an-thi-giac">Menu</h2>');
   });
 
   it("marks the current page with aria-current, once", () => {

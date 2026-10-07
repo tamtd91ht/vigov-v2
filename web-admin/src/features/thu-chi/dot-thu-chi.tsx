@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleCheck, ListOrdered, LockKeyhole, PencilLine, Plus, Trash2, X } from "lucide-react";
+import { CircleCheck, ListOrdered, LockKeyhole, PencilLine, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
@@ -140,17 +140,12 @@ export function HopDotThuChi({
   const monthsHint = closedMonthsHint(closes, sheetYear);
 
   // The prototype's `FiscalEntriesDialog`: a centred modal 52rem wide, title = the line, the entry form
-  // on top and the list under it. Esc and `Đóng` both close it; nothing is lost — every entry is
-  // saved by its own submit.
+  // on top and the list under it. Esc and the dialog's own ✕ (ModalDialog draws it, ADR 0068 lần 6)
+  // both close it; nothing is lost — every entry is saved by its own submit.
   return (
     <ModalDialog titleId="tieu-de-hop-dot" size="lg" className="max-w-[52rem]" onDismiss={dong}>
-      <div className="flex min-w-0 shrink-0 items-start justify-between gap-3">
-        <div className="min-w-0">
-          <ModalDialogHeader titleId="tieu-de-hop-dot" title={tieuDeHopDot(tenKhoanMuc)} />
-        </div>
-        <Button type="button" variant="icon" size="sm" aria-label="Đóng" title="Đóng" onClick={dong}>
-          <X aria-hidden="true" focusable="false" strokeWidth={1.8} />
-        </Button>
+      <div className="min-w-0 shrink-0">
+        <ModalDialogHeader titleId="tieu-de-hop-dot" title={tieuDeHopDot(tenKhoanMuc)} />
       </div>
 
       <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto">

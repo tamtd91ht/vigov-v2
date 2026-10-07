@@ -7,12 +7,14 @@ import { NutDangXuat } from "@/features/auth/nut-dang-xuat";
 import { khoiNguoiDung } from "@/features/phien/khoi-nguoi-dung";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 
+import { cn } from "@/lib/cn";
+
 import { useCauHinhXa } from "./cau-hinh-xa";
-import { CommuneBanner } from "./commune-banner";
 import { CommuneIdentity } from "./commune-identity";
 import { locMenu, NHOM_MENU } from "./muc-menu";
 import { NavSheet } from "./nav-sheet";
 import { NotificationBell } from "./notification-bell";
+import { controlClass } from "./ui/field";
 import { PendingMarker, type PendingFeatureInfo } from "./ui/pending-feature";
 import { sessionRoleName } from "./role-pill";
 import { SideNav } from "./side-nav";
@@ -20,17 +22,22 @@ import { useSidebarCollapsed } from "./sidebar-state";
 import { UserMenu } from "./user-menu";
 
 /**
- * The signed-in shell's chrome: the navy header (68px, sticky — ADR 0068 §Sửa đổi 05/10/2026 (lần 2);
- * guide §7, §8.9), the commune's banner strip, and the LEFT sidebar carrying the module navigation
- * (owner, 05/10/2026: navigation back on the left, vertical — `side-nav.tsx`). The header no longer
- * carries module buttons: navigation lives in one place.
+ * The signed-in shell's chrome (spec 01, ADR 0068 §Sửa đổi 07/10/2026 lần 6 #2): the navy LEFT sidebar
+ * running the full height of the window (`side-nav.tsx`), and beside it, on top of the page, the WHITE
+ * 64px sticky header. Navigation lives in one place, the sidebar; the header carries who and where.
  *
- * HEADER LEFT: the commune's identity — "Ủy ban nhân dân", the commune's name verbatim, its logo when it
- * uploaded one (`CommuneIdentity`, ADR 0069). Never a product or vendor name (ADR 0068 §13). The name is
- * read at runtime from the commune's configuration, never a constant.
+ * HEADER LEFT: the commune's identity — "Ủy ban nhân dân" + the commune's name, verbatim, upper-cased by
+ * CSS, the province under it (`CommuneIdentity`). Read at runtime from the commune's configuration,
+ * never a constant. No product name here: "ViGov" lives only in the sidebar's brand block (lần 6 #3).
  *
- * HEADER RIGHT: the Phase-2 search placeholder, the bell, a divider, the person block opening their own
- * menu. Below 768px the sidebar is hidden and these (except the bell) collapse into the nav sheet.
+ * HEADER MIDDLE: the system-wide search field, always visible from 768px — DISABLED with its "?",
+ * because no route searches across modules yet (lần 5 #5, lần 6 #11: never a fake control).
+ *
+ * HEADER RIGHT: the bell, then the person block opening their own menu. Below 768px the sidebar is
+ * hidden and the search and the person block move into the nav sheet; the bell stays.
+ *
+ * NO BANNER STRIP: the commune's web-admin banner under the header (ADR 0069 #5) is gone from the shell
+ * — the prototype has none (lần 6 #8). The upload stays in Cấu hình until the owner decides (lần 6 f).
  *
  * WHO SEES WHICH MENU ITEM is `locMenu`'s decision on the session's permissions, unchanged by where the
  * menu is drawn. `null` permissions = session NOT READ YET (three states, not two): only items needing no
@@ -44,14 +51,20 @@ import { UserMenu } from "./user-menu";
  * `navigation={false}`: the page draws no menu and no sidebar (`/doi-mat-khau`, where a forced change
  * must come first and every other screen would answer 403). Identity, bell and person block stay.
  *
- * ORDER OF SIBLINGS = the grid's order (`globals.css`, `.khung-trang`): header, banner, sidebar, then the
- * page's `<main>`. The banner follows the header as its SIBLING, not inside it: the header is sticky, and
- * a 112 px picture inside it would stay over every scrolled page.
+ * PLACEMENT is the shell grid's (`globals.css`, `.khung-trang`): the sidebar takes the first column over
+ * every row, the header and the page's `<main>` share the second. The sidebar comes FIRST in the DOM, as
+ * in the prototype, so Tab reaches the menu before the header's controls.
+ *
+ * `backdrop-blur` on the header: spec 01's `bg-white/95 backdrop-blur`, allowed by lần 6 #3 for this one
+ * element (and the modal overlay) — `ui-foundation.test.ts` pins that it is nowhere else.
  */
-export function DauTrang({ navigation = true }: { navigation?: boolean }) {
+export function DauTrang({ navigation = true, menuPath }: { navigation?: boolean; menuPath?: string }) {
   const xa = useCauHinhXa();
   const phien = usePhien();
-  const pathname = usePathname() ?? "/";
+  const routerPath = usePathname() ?? "/";
+  // `menuPath`: the path the menu marks as current, when it is not the URL's. ONLY the dev preview passes
+  // it — its URL is `/xem-thu/<real path>` and its menu must light the real item (`dev-preview/`).
+  const pathname = menuPath ?? routerPath;
   const nguoi = khoiNguoiDung(phien);
   const roleName = sessionRoleName(phien);
 
@@ -61,17 +74,15 @@ export function DauTrang({ navigation = true }: { navigation?: boolean }) {
 
   return (
     <>
-      <header className="dau-trang">
-        <div className="header-start">
-          <CommuneIdentity commune={xa} />
+      {navigation && <SideNav groups={groups} pathname={pathname} collapsed={sidebar.collapsed} onToggle={sidebar.toggle} />}
+      <header className="dau-trang sticky top-0 z-30 flex h-16 min-w-0 items-center gap-3 border-b border-line bg-white/95 px-4 backdrop-blur md:gap-5 md:px-7">
+        <CommuneIdentity commune={xa} />
+        <div className="header-search relative ml-2 hidden w-full max-w-100 min-w-40 md:block">
+          <SystemSearchPlaceholder />
         </div>
-        <div className="header-end">
-          <div className="header-wide">
-            <SystemSearchPlaceholder />
-          </div>
+        <div className="header-end ml-auto flex shrink-0 items-center gap-2">
           {nguoi.hien && <NotificationBell />}
           <div className="header-wide">
-            <span className="header-divider" aria-hidden="true" />
             {nguoi.hien ? (
               <UserMenu fullName={nguoi.hoTen} position={nguoi.chucVu} roleName={roleName} />
             ) : (
@@ -80,11 +91,9 @@ export function DauTrang({ navigation = true }: { navigation?: boolean }) {
               </div>
             )}
           </div>
-          <NavSheet groups={groups} pathname={pathname} person={nguoi} roleName={roleName} search={<SystemSearchPlaceholder inSheet />} />
+          <NavSheet groups={groups} pathname={pathname} person={nguoi} roleName={roleName} search={<SystemSearchPlaceholder />} />
         </div>
       </header>
-      <CommuneBanner src={xa.webAdminBannerUrl} />
-      {navigation && <SideNav groups={groups} pathname={pathname} collapsed={sidebar.collapsed} onToggle={sidebar.toggle} />}
     </>
   );
 }
@@ -107,38 +116,30 @@ export const SYSTEM_SEARCH_PENDING: PendingFeatureInfo = {
 };
 
 /**
- * The Phase-2 system-wide search (`docs/ui-ux/00` §3.1, `ROADMAP_PHASE2.md` item 1), drawn per ADR 0068
- * §14 as the control it will be, DISABLED, with its "?". In the navy header it is the guide's search
- * ICON (a field there would crowd the commune's name); in the narrow-screen sheet it is the
- * disabled field. Either way: a DISABLED native control, never a `<form>` or `role="search"` — there is
- * nothing to submit, and a search landmark that searches nothing misleads a screen-reader user. Nothing
- * here calls a server or stores anything.
+ * The Phase-2 system-wide search (`docs/ui-ux/00` §3.1, `ROADMAP_PHASE2.md` item 1) in spec 01's
+ * position and shape — the field with its magnifier, `h-10`, page-colour fill, 13px — drawn per ADR 0068
+ * §14 DISABLED, with its "?". The same field in the header and in the narrow-screen sheet.
+ *
+ * A DISABLED native control, never a `<form>` or `role="search"` — there is nothing to submit, and a
+ * search landmark that searches nothing misleads a screen-reader user. Nothing here calls a server or
+ * stores anything. `bg-canvas`: the spec's `bg-surface` is the PAGE colour, which this app names
+ * `canvas` (`globals.css`, `@theme`).
  */
-function SystemSearchPlaceholder({ inSheet = false }: { inSheet?: boolean }) {
-  if (!inSheet) {
-    return (
-      <span className="header-module-pending" data-pending="">
-        <button type="button" disabled aria-label={SYSTEM_SEARCH_PENDING.ten} className="header-icon-button is-disabled">
-          <Search aria-hidden="true" focusable="false" strokeWidth={1.8} />
-        </button>
-        <PendingMarker info={SYSTEM_SEARCH_PENDING} phase2 placement="corner" side="bottom" nameInHover />
-      </span>
-    );
-  }
+function SystemSearchPlaceholder() {
   return (
     <div className="relative flex min-w-0 items-center" data-pending="">
       <Search
         aria-hidden="true"
         focusable="false"
         strokeWidth={1.8}
-        className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-400"
+        className="pointer-events-none absolute top-1/2 left-3 z-[1] size-4 -translate-y-1/2 text-ink-muted"
       />
       <input
         type="search"
         disabled
         aria-label={SYSTEM_SEARCH_PENDING.ten}
         placeholder="Tìm nhiệm vụ, văn bản, phản ánh…"
-        className="h-9 w-full min-w-0 cursor-not-allowed rounded-pill border-0 bg-canvas pr-9 pl-9 text-sm text-ink-500 placeholder:text-ink-400"
+        className={cn(controlClass, "h-10 bg-canvas pr-9 pl-9 text-[13px] disabled:bg-canvas md:text-[13px]")}
       />
       <PendingMarker info={SYSTEM_SEARCH_PENDING} phase2 placement="end" side="bottom" />
     </div>

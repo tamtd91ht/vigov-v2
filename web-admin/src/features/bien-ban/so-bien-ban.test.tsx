@@ -352,7 +352,8 @@ describe("nút `Tách thành nhiệm vụ` §3", () => {
     const dialog = html.slice(html.indexOf("<dialog"));
     expect(dialog).toMatch(/^<dialog aria-labelledby="tieu-de-giao-viec-moi" aria-modal="true" class="[^"]*max-w-\[500px\]/);
     expect(dialog).toContain(`>${SPLIT_DIALOG_TITLE}</h2>`);
-    expect(dialog).toContain('<p class="m-0 text-sm text-ink-500">Giao Tài chính đối chiếu số liệu.</p>');
+    // Presentation pin (ADR 0068 §5): description colour = shadcn `text-muted-foreground` (spec 00 §5, lần 6).
+    expect(dialog).toContain('<p class="m-0 text-sm text-muted-foreground">Giao Tài chính đối chiếu số liệu.</p>');
     expect(dialog.indexOf(">Huỷ</button>")).toBeLessThan(dialog.indexOf(`>${SPLIT_SUBMIT_LABEL}</button>`));
     expect(dialog).not.toContain(">Giao việc</button>");
   });
@@ -596,7 +597,7 @@ describe("prototype composition", () => {
       />,
     );
     expect(html).toMatch(/^<dialog aria-labelledby="tieu-de-nhap-bien-ban" aria-modal="true" class="[^"]*max-w-\[500px\]/);
-    expect(html).toContain(`<h2 id="tieu-de-nhap-bien-ban" tabindex="-1" class="m-0 text-lg leading-snug font-semibold text-ink-900">${CREATE_MEETING_TITLE}</h2>`);
+    expect(html).toContain(`<h2 id="tieu-de-nhap-bien-ban" tabindex="-1" class="m-0 font-heading outline-none text-base leading-none font-medium text-popover-foreground">${CREATE_MEETING_TITLE}</h2>`);
     expect(html).toContain(CREATE_MEETING_DESCRIPTION);
     expect(html).toContain('placeholder="Giao ban tuần 34 năm 2026"');
     expect(html).toContain('placeholder="12/BB-UBND"');
@@ -759,7 +760,9 @@ describe("biểu mẫu nhập biên bản §4", () => {
     expect(html).toContain("Toàn văn đã lưu.");
     expect(html).toContain("Đại diện thôn Hà Lam");
     expect(html).not.toContain('id="cac-ket-luan"');
-    const nut = html.slice(html.lastIndexOf("<button"), html.lastIndexOf("</button>"));
+    // The form's last button — inside `</form>`; the dialog's own ✕ (ADR 0068 lần 6) comes after it.
+    const form = html.slice(0, html.lastIndexOf("</form>"));
+    const nut = form.slice(form.lastIndexOf("<button"), form.lastIndexOf("</button>"));
     expect(nut).toContain("disabled");
     expect(nut).toContain(NHAN_NUT_LUU_SUA);
   });
@@ -945,10 +948,11 @@ describe("dòng kết luận — chip trạng thái từ MÁY CHỦ và các nú
       veDong(ketLuan({ status: "hoan-thanh", task_count: 1, task_done_count: 1 })),
     ).toContain(">Hoàn thành<");
     // Quá hạn là huy hiệu ĐỎ (tông `danger`) — và chữ đã nói rõ, màu không là tín hiệu duy nhất.
+    // Presentation pin (ADR 0068 §5): the danger chip is `text-danger` since spec 00 §4 (lần 6).
     const overdue = veDong(ketLuan({ status: "qua-han", task_count: 1 }));
-    expect(pillClassOf(overdue, "Quá hạn")).toContain("text-danger-600");
+    expect(pillClassOf(overdue, "Quá hạn")).toContain("text-danger");
     expect(pillClassOf(veDong(ketLuan({ status: "chua-giao" })), "Chưa giao")).not.toContain(
-      "text-danger-600",
+      "text-danger",
     );
   });
 

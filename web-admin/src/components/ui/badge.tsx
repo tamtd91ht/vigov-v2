@@ -11,28 +11,29 @@ import type { ComponentProps, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 /**
- * Status tag — guide §8.6 (05/10/2026): a 6px-radius tag on the tone's 10% tint, 14px icon +
- * 12px/500 word (never below 11px). Each tone's word is its TEXT-safe shade on its own tint:
- * green 5.54:1, amber 5.52:1, red 5.01:1, cyan 5.40:1, navy-muted ≥4.62:1.
+ * Status tag — shadcn's Badge with the spec's chip colours (spec 00 §4–§5, ADR 0068 lần 6): a 20px
+ * pill, 12px/500 word, 12px icon, the tone at 12% fill / full word / 25% border
+ * (`bg-{c}/12 text-{c} border-{c}/25`). The tone colours are the spec's as written — their contrast
+ * is the owner-accepted debt recorded beside the tokens in `globals.css`.
  *
  * ICON + WORD, NEVER COLOUR ALONE. The spec measured orange vs green at ΔE 4.2 for red-blind
  * readers, so every tone carries a default icon of its own shape and the caller supplies the word.
  * Pass `icon` to pick a more specific one (`EyeOff` for "Chưa hiện", `AlarmClock` for "Quá hạn").
  *
- *   success  green  — đang hiện, hoàn thành
- *   neutral  grey   — chưa hiện, ngừng
- *   warning  amber  — chờ, sắp hạn
- *   danger   red    — quá hạn (only for something actually late or wrong)
- *   info     blue   — đơn vị, thông tin
+ *   success  leaf       — đang hiện, hoàn thành
+ *   neutral  ink-muted  — chưa hiện, ngừng (the spec's `draft` chip)
+ *   warning  tangerine  — chờ, sắp hạn
+ *   danger   danger     — quá hạn (only for something actually late or wrong)
+ *   info     brand      — đơn vị, thông tin
  */
 export type BadgeTone = "success" | "neutral" | "warning" | "danger" | "info";
 
 const TONE_CLASS: Record<BadgeTone, string> = {
-  success: "bg-success-50 text-success-600",
-  neutral: "bg-surface-subtle text-ink-500",
-  warning: "bg-warning-50 text-warning-600",
-  danger: "bg-danger-50 text-danger-600",
-  info: "bg-accent-50 text-accent-700",
+  success: "border-leaf/25 bg-leaf/12 text-leaf",
+  neutral: "border-line bg-ink-muted/12 text-ink",
+  warning: "border-tangerine/25 bg-tangerine/12 text-tangerine",
+  danger: "border-danger/25 bg-danger/12 text-danger",
+  info: "border-brand/25 bg-brand/12 text-brand",
 };
 
 const TONE_ICON: Record<BadgeTone, LucideIcon> = {
@@ -55,13 +56,13 @@ export function Badge({ tone = "neutral", icon, className, children, ...props }:
   return (
     <span
       className={cn(
-        "inline-flex h-6 items-center gap-[5px] rounded-xs px-2 text-xs leading-none font-medium whitespace-nowrap",
+        "inline-flex h-5 w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-4xl border border-solid px-2 py-0.5 text-xs leading-none font-medium whitespace-nowrap",
         TONE_CLASS[tone],
         className,
       )}
       {...props}
     >
-      <Icon aria-hidden="true" focusable="false" className="size-3.5 shrink-0" strokeWidth={2} />
+      <Icon aria-hidden="true" focusable="false" className="size-3 shrink-0" strokeWidth={2} />
       {children}
     </span>
   );
