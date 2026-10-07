@@ -301,10 +301,10 @@ export function cauGiaiThichTrangThai(ma: string): string {
 export type NguonGiao = "truc-tiep" | "ket-luan-hop" | "van-ban-den" | "phan-anh";
 
 const NHAN_NGUON_GIAO: Readonly<Record<NguonGiao, string>> = {
-  // NOT "Giao trực tiếp": testers read it as "assigned to a person" (report 05/10/2026, NV-11). The
-  // code means the task was entered on the register itself, not split from a meeting, a document or
-  // a petition — it says nothing about who holds it.
-  "truc-tiep": "Tạo trên sổ nhiệm vụ",
+  // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (ADR 0076 lần 2 #2, "theo spec toàn bộ"): the spec's "Giao trực
+  // tiếp" again, reversing tester report NV-11 ("Tạo trên sổ nhiệm vụ"). The code still means "entered
+  // on the register itself", not "assigned to a person".
+  "truc-tiep": "Giao trực tiếp",
   "ket-luan-hop": "Từ kết luận họp",
   "van-ban-den": "Từ văn bản đến",
   "phan-anh": "Từ phản ánh",
@@ -703,7 +703,10 @@ export function danhBaChoNhatKy(kq: KetQua<identity_danhBaChonNguoiRa> | null): 
  * đọc hỏng đều rơi vào nhánh "không có trong danh bạ" — và ô ấy vẫn phải chỉ ra được đúng một người,
  * tức là hiện mã. Một ô trống đọc ra là "chưa giao cho ai", đúng điều ngược lại.
  *
- * Ô CHẬT THÌ CHỈ HỌ TÊN; drawer thì `Họ tên (CB-…)` qua `nhanNguoiNhatKy` — xem `nhanCanBoDrawer`.
+ * HỌ TÊN MỘT MÌNH ở mọi chỗ của menu Nhiệm vụ — thẻ, bảng, drawer và nhật ký (prototype
+ * `TaskDetailDrawer.tsx:407-417`, `TaskActivityPanel.tsx:302`; main session 07/10/2026). Luật 6 bất
+ * biến 8 canh KHO nhật ký (mã `CB-…` lưu ở máy chủ), không canh chữ hiện ra. `nhanCanBoDrawer` /
+ * `nhanNguoiNhatKy` (`Họ tên (CB-…)`) còn cho hàng chờ duyệt lùi hạn của Sổ tay lãnh đạo.
  */
 export function nhanCanBoNgan(ma: string, danhBa: DanhBaTheoMa | null, rong: string): string {
   if (ma === "") return rong;
@@ -1305,11 +1308,11 @@ export function hienDongNhatKy(
     id: d.id,
     luc: d.at,
     thoiDiem: nhanThoiDiem(d.at),
-    nguoi: nhanNguoiNhatKy(d.actor_code, danhBa),
+    nguoi: nhanCanBoNgan(d.actor_code, danhBa, O_TRONG),
     trangThai: nhanTrangThai(nhanTT, d.status),
     phanCong: coPhanCong
       ? `${d.unit === "" ? CHUA_GIAO_BO_PHAN : (tenBoPhan.get(d.unit) ?? d.unit)} · ${
-          d.assignee === "" ? CHUA_PHAN_CONG : nhanNguoiNhatKy(d.assignee, danhBa)
+          d.assignee === "" ? CHUA_PHAN_CONG : nhanCanBoNgan(d.assignee, danhBa, CHUA_PHAN_CONG)
         }`
       : null,
     ghiChu: d.note,

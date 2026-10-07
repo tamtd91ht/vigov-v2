@@ -22,6 +22,7 @@ import type {
 import {
   BANG_NHAN_MAC_DINH,
   CANH_BAO_NHAN_MAC_DINH,
+  MOI_TRANG_THAI,
   PHAN_CHUA_DUNG,
   SAP_XEP_MAC_DINH,
   TRANG_THAI_CHINH,
@@ -32,6 +33,7 @@ import {
   type BangNhanTrangThai,
 } from "./nhan-nhiem-vu";
 import { NOT_SENT, serverTransitions } from "./task-transitions.fixture";
+import { SPEC_STATUS_LABELS, withSpecLabels } from "./task-spec";
 import {
   BangKanban,
   BangNhiemVu,
@@ -178,7 +180,6 @@ function veChiTiet(nhanTT: BangNhanTrangThai, status: string): string {
       maNguoiDangNhap=""
       quyen={DU_QUYEN}
       dangGui={false}
-      loiGhi={null}
       dong={() => {}}
       doiTrangThai={NOT_SENT}
       xoa={NOT_SENT}
@@ -189,8 +190,6 @@ function veChiTiet(nhanTT: BangNhanTrangThai, status: string): string {
       extensionRefreshKey="0"
       onExtensionDecided={() => {}}
       openTask={() => {}}
-      openTaskByCode={KHONG_SUA}
-      saveParent={KHONG_SUA}
       addChild={null}
       reassign={KHONG_SUA}
     />,
@@ -266,10 +265,10 @@ describe("màn Nhiệm vụ dùng NHÃN CỦA XÃ ở mọi chỗ hiện trạng
     );
   });
 
-  it("câu dưới Kanban gọi hai trạng thái rẽ nhánh bằng nhãn của xã", () => {
+  it("ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (spec 03): the note under the board is gone; its helper still reads the table", () => {
     const html = veKanban(bangXa());
     expect(ghiChuKanbanReNhanh(bangXa())).toContain("Tạm hoãn");
-    expect(html).toContain(nhuTrongHTML(ghiChuKanbanReNhanh(bangXa())));
+    expect(html).not.toContain(nhuTrongHTML(ghiChuKanbanReNhanh(bangXa())));
   });
 
   it("chip trạng thái ở bảng Danh sách", () => {
@@ -313,9 +312,9 @@ describe("màn Nhiệm vụ dùng NHÃN CỦA XÃ ở mọi chỗ hiện trạng
     expect(html).toContain(">Việc mới về xã</span>");
     expect(html).toContain("Chuyển sang Tạm hoãn");
     // DẢI BƯỚC GIỮ THỨ TỰ VÒNG ĐỜI §6, không theo `order`: `dang-thuc-hien` vẫn đứng trước
-    // `cho-duyet` dù xã đã đưa `cho-duyet` lên trước ở Kanban. Read from `dang-thuc-hien`: since
-    // 07/10/2026 (prototype) `Chờ duyệt` sits on the strip only when current or a move.
-    const fromWork = veChiTiet(bangXa(), "dang-thuc-hien");
+    // `cho-duyet` dù xã đã đưa `cho-duyet` lên trước ở Kanban. Read from `cho-duyet`: since
+    // 07/10/2026 (spec 07 §2) `Chờ duyệt` sits on the strip only while it is the current step.
+    const fromWork = veChiTiet(bangXa(), "cho-duyet");
     const buoc = fromWork.slice(fromWork.indexOf("<ol"), fromWork.indexOf("</ol>"));
     expect(buoc.indexOf("Đang thực hiện")).toBeLessThan(buoc.indexOf("Chờ duyệt"));
   });
@@ -360,12 +359,10 @@ describe("không chỗ vẽ nào còn đọc nhãn mặc định khi xã đã đ
     });
   }
 
-  it("Kanban: năm tiêu đề cột và câu rẽ nhánh — không một nhãn mặc định", () => {
+  it("Kanban: năm tiêu đề cột — không một nhãn mặc định", () => {
     const html = veKanban(bangDoiHet());
     expect(chuMacDinhLot(html)).toEqual([]);
     for (const ma of TRANG_THAI_CHINH) expect(html).toContain(`Xã đặt ${ma}`);
-    expect(html).toContain("Xã đặt tam-dung");
-    expect(html).toContain("Xã đặt chuyen-tiep");
   });
 
   it("bảng Danh sách: chip của MỖI mã, không chỉ `moi-giao`", () => {
@@ -445,6 +442,35 @@ describe("chip hoàn thành trễ hạn theo nhãn `hoan-thanh` của xã", () =
       expect(html).toContain(">Xã đặt hoan-thanh trễ hạn</span>");
       expect(html).not.toContain("Hoàn thành trễ hạn");
     }
+  });
+});
+
+/**
+ * THE SCREEN'S TABLE (owner 07/10/2026, ADR 0076 lần 2 #2): the Nhiệm vụ screens draw the SPEC's
+ * fixed words; the commune's table still gives the ORDER, and the codes never change. Every
+ * component above draws the table it is handed — this is the table `SoNhiemVu` hands them.
+ */
+describe("Nhiệm vụ screen: the spec's FIXED words over the commune's order (`withSpecLabels`)", () => {
+  it("words = spec 10; order and codes = the commune's table, untouched", () => {
+    const screen = withSpecLabels(bangXa());
+    expect(screen.nhan).toEqual(SPEC_STATUS_LABELS);
+    expect(screen.nhan["moi-giao"]).toBe("Chưa thực hiện");
+    expect(screen.thuTu).toEqual(bangXa().thuTu);
+    expect(Object.keys(screen.nhan).sort()).toEqual([...MOI_TRANG_THAI].sort());
+  });
+
+  it("the board under the screen's table: spec words in the commune's column order; the commune's own words nowhere", () => {
+    const html = veKanban(withSpecLabels(bangXa()));
+    expect(html).toContain("Chưa thực hiện");
+    expect(html).not.toContain("Việc mới về xã");
+    expect(html.indexOf('id="cot-kanban-cho-duyet"')).toBeLessThan(html.indexOf('id="cot-kanban-dang-thuc-hien"'));
+  });
+
+  it("a status move still SENDS the Vietnamese code (ADR 0011) — the words never reach the wire", () => {
+    const html = veChiTiet(withSpecLabels(bangXa()), "moi-giao");
+    expect(html).toContain('data-step="current">Chưa thực hiện</span>');
+    expect(html).toContain('id="task-status-chip-da-tiep-nhan"');
+    expect(html).not.toContain('"accepted"');
   });
 });
 

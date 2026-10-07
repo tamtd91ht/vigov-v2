@@ -117,7 +117,9 @@ describe("timeline row — name, size, type and a download action; nothing for n
         attachments={[{ id: "f1", file_name: "bien-ban.pdf", mime_type: "application/pdf", size_bytes: 2048, status: "stored" }]}
       />,
     );
-    expect(html).toContain("bien-ban.pdf · 2 KB · PDF");
+    // Spec 08 `FileRow` (compact): the name (its type in the tooltip), the size, a Download icon.
+    expect(html).toContain('title="PDF">bien-ban.pdf</button>');
+    expect(html).toContain(">2 KB</span>");
     expect(html).toContain('aria-label="Tải về bien-ban.pdf"');
     expect(renderToStaticMarkup(<TimelineAttachments taskCode="NV19" attachments={[]} />)).toBe("");
   });
@@ -148,6 +150,6 @@ describe("wiring (source)", () => {
   it("the entry waits for files in flight, sends stored ids, clears the list after 201; rows render files", () => {
     expect(LOG).toContain("disabled={sending || waiting || note === null}");
     expect(LOG).toContain("files.clear();");
-    expect(LOG).toContain("<TimelineAttachments taskCode={maNhiemVu} attachments={d.attachments ?? []} />");
+    expect(LOG).toContain("<TimelineAttachments taskCode={maNhiemVu} attachments={d.attachments ?? []} onRemove={onRemoveFile} />");
   });
 });

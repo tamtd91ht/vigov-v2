@@ -5,7 +5,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import type { KetQua } from "@/lib/api/goi";
-import { cn } from "@/lib/cn";
 import {
   QUYEN_CAP_NHAT_NHIEM_VU,
   QUYEN_DUYET_GIA_HAN,
@@ -24,8 +23,6 @@ import type {
 
 import {
   BANG_NHAN_MAC_DINH,
-  CAU_CHUA_GHI_LANH_DAO_GIAO_VIEC,
-  CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC,
   GHI_CHU_LANH_DAO_GIAO_VIEC,
   GHI_CHU_TU_SINH_MA,
   MO_TA_FORM_GIAO_VIEC,
@@ -42,7 +39,6 @@ import {
   DECISION_NOTE_LABEL,
   TASK_EXTENSIONS_EMPTY,
   TASK_EXTENSIONS_LOADING,
-  TASK_EXTENSIONS_TITLE,
   extensionBlockNote,
   hienDongHangCho,
   CHUA_PHAN_CONG,
@@ -56,7 +52,6 @@ import {
   KHOA_SUA_NHOM_LA,
   KHONG_DOC_DUOC_VAN_BAN,
   KHONG_SO,
-  DUE_EDIT_NOTE,
   NHAN_NUT_SUA,
   NHAT_KY_RONG,
   O_TRONG,
@@ -67,6 +62,7 @@ import {
   SO_RONG,
   TIEU_DE_KHOI_VAN_BAN,
   CAU_KHONG_AI_CO_QUYEN_DUYET_GIA_HAN,
+  CAU_KHONG_AI_DUYET_DUOC,
   NHAN_NUT_TRA_LAI,
   REOPEN_BUTTON,
   SAP_XEP_MAC_DINH,
@@ -83,20 +79,27 @@ import {
 import { TRANG_DAU } from "@/features/cau-hinh/ngan-xep-con-tro";
 import { nhanThoiDiem } from "@/features/phan-anh/nhan-phieu";
 import { duongDanHangChoLuiHan, duongDanSoNhiemVu } from "@/lib/api/nhiem-vu";
-import { TaskExtensionList, taskExtensionsQuery } from "./task-extension-block";
-import { STAFF_COMBOBOX_HINT } from "@/components/staff-combobox";
+import {
+  EXTENSION_REASON_PLACEHOLDER,
+  EXTENSION_SEND,
+  EXTENSION_TITLE,
+  EXTENSION_WAITING,
+  TaskExtensionView,
+  taskExtensionsQuery,
+} from "./task-extension-block";
+import { PERSON_PICKER_PLACEHOLDER } from "./task-person-picker";
+import { INPUT_CLASS, LABEL_CLASS } from "./task-spec";
 import {
   BangNhiemVu,
   ChiTietNhiemVu,
   CREATE_TASK_BODY_CLASS,
-  CREATE_TASK_CONTROL_TEXT,
   CREATE_TASK_DIALOG_CLASS,
-  CREATE_TASK_TYPE_SCALE,
   FormGiaoViec,
   FormSuaKhoiVanBan,
   HangLoc,
   KhoiChuaDung,
-  KhoiLuiHan,
+  LEADER_EMPTY_LABEL,
+  LEADER_HINT_SPEC,
   TASK_DELETE_BUTTON,
   TASK_INFO_EDIT_LABEL,
   bamSapXep,
@@ -269,8 +272,6 @@ const PASS2_DRAWER_PROPS = {
   extensionRefreshKey: "0",
   onExtensionDecided: () => {},
   openTask: () => {},
-  openTaskByCode: KHONG_SUA,
-  saveParent: KHONG_SUA,
   addChild: null,
   reassign: KHONG_SUA,
 } as const;
@@ -306,7 +307,6 @@ function veChiTiet(
       maNguoiDangNhap={maNguoiDangNhap}
       quyen={quyen}
       dangGui={false}
-      loiGhi={null}
       dong={() => {}}
       doiTrangThai={NOT_SENT}
       xoa={NOT_SENT}
@@ -323,47 +323,38 @@ function veChiTiet(
 const NUT_DUYET = "Duyệt lùi hạn";
 
 describe("ADR 0038 — lớp hai chạy TRÊN MÀN, không chỉ trong hàm thuần", () => {
-  it("không phải lãnh đạo giao việc: KHÔNG có nút duyệt, và câu từ chối nói rõ vì sao", () => {
+  // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (spec 07 §6f, owner decision #2 lần 2): the drawer's extension
+  // section draws ONE state — the pending request (from `GET /task-extensions?task=`) or the form to
+  // ask. Before the read returns there is no row, so the drawer itself never shows a decide button;
+  // the gate cases run on `TaskExtensionView` below, where a row is present.
+  it("không phải lãnh đạo giao việc: KHÔNG có nút duyệt trong drawer", () => {
     const html = veChiTiet({}, NGUOI_KHAC);
-
-    // Canh bằng chính nhãn nút. Câu từ chối KHÔNG chứa chuỗi ấy, nên phép `not.toContain` này
-    // không thể xanh vì lý do sai.
     expect(html).not.toContain(nhuTrongHTML(NUT_DUYET));
-    expect(html).toContain(nhuTrongHTML(CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC));
   });
 
   it("nhiệm vụ CHƯA GHI lãnh đạo giao việc: không ai duyệt được, kể cả người đang xem", () => {
-    // Đây là chỗ một dòng thiếu gây hỏng rộng nhất: không có phép kiểm chuỗi rỗng thì `"" === ""`
-    // là đúng, và MỌI tài khoản duyệt được MỌI đề nghị trên MỌI nhiệm vụ chưa ghi lãnh đạo.
+    // `"" === ""` is true: without the empty-string check EVERY account could decide every request
+    // on every task with no recorded assigner.
     const html = veChiTiet({ assigner: "" }, "");
-
     expect(html).not.toContain(nhuTrongHTML(NUT_DUYET));
-    expect(html).toContain(nhuTrongHTML(CAU_CHUA_GHI_LANH_DAO_GIAO_VIEC));
   });
 
   it("phiên chưa đọc được (không có mã cán bộ): FAIL CLOSED, không mở nút", () => {
     const html = veChiTiet({}, "");
     expect(html).not.toContain(nhuTrongHTML(NUT_DUYET));
-    expect(html).toContain(nhuTrongHTML(CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC));
   });
 
   it("một ULID KHÔNG khớp một mã cán bộ — hai loại định danh khác nhau", () => {
-    // Cả hai đều là chuỗi khác rỗng trông rất hợp lý, nên phép so sai KHÔNG làm đỏ gì ngoài ca này.
     const html = veChiTiet({}, "01JBGQ3M4K5N6P7Q8R9S0T1U2V");
     expect(html).not.toContain(nhuTrongHTML(NUT_DUYET));
   });
 
-  it("ĐÚNG lãnh đạo giao việc: drawer có khối đề nghị CỦA CHÍNH nhiệm vụ này, không còn chỉ đường", () => {
-    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (TASK-03 lượt web 2, #11): tuyến nay nhận `task=NV19`, nên drawer
-    // đọc đề nghị của chính việc này thay vì chỉ đường tới hàng chờ đầu sổ.
+  it("drawer có khối `Đề nghị lùi hạn` của CHÍNH nhiệm vụ này, đang tải — không chỉ đường tới hàng chờ", () => {
     const html = veChiTiet({}, LANH_DAO);
-    expect(html).toContain(nhuTrongHTML(TASK_EXTENSIONS_TITLE));
+    expect(html).toContain(`>${EXTENSION_TITLE}</h3>`);
     expect(html).toContain(nhuTrongHTML(TASK_EXTENSIONS_LOADING));
     expect(html).not.toContain(`href="#${ID_HANG_CHO}"`);
-    // Still loading ⇒ no row ⇒ no button yet.
     expect(html).not.toContain(nhuTrongHTML(NUT_DUYET));
-    // Và KHÔNG hiện câu "không phải lãnh đạo" — người này ĐÚNG là lãnh đạo giao việc.
-    expect(html).not.toContain(nhuTrongHTML(CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC));
   });
 
   it("(#11) khối đề nghị: cùng đường gọi với hàng chờ — `task=` của đúng một nhiệm vụ", () => {
@@ -386,56 +377,70 @@ describe("ADR 0038 — lớp hai chạy TRÊN MÀN, không chỉ trong hàm thu�
       requested_by: NGUOI_KHAC,
       requested_at: "2026-06-18T02:00:00Z",
     };
-    function list(
-      session: string,
-      canApprove: boolean,
-      rows: readonly petitions_deNghiChoDuyetRa[] = [row],
-      assigner = LANH_DAO,
+    function extensionView(
+      p: Partial<Parameters<typeof TaskExtensionView>[0]> = {},
     ): string {
       return renderToStaticMarkup(
-        <TaskExtensionList
-          load={{ phase: "done", rows: rows.map((r) => ({ ...r, task_assigner: assigner })) }}
-          assigner={assigner}
+        <TaskExtensionView
+          load={{ phase: "done", rows: [row] }}
+          dueAt="2026-06-20T23:59:59+07:00"
           directory={null}
-          sessionStaffCode={session}
-          canApproveExtension={canApprove}
-          deciding={null}
-          rowError={null}
-          notes={{}}
+          sessionStaffCode={LANH_DAO}
+          canApproveExtension
+          canRequest
+          deciding={false}
+          note=""
           setNote={() => {}}
           decide={() => {}}
+          newDue=""
+          setNewDue={() => {}}
+          reason=""
+          setReason={() => {}}
+          sending={false}
+          send={() => {}}
+          {...p}
         />,
       );
     }
+    function list(session: string, canApprove: boolean, assigner = LANH_DAO): string {
+      return extensionView({
+        load: { phase: "done", rows: [{ ...row, task_assigner: assigner }] },
+        sessionStaffCode: session,
+        canApproveExtension: canApprove,
+      });
+    }
 
-    it("đúng lãnh đạo giao việc + `task.extend`: đề nghị hiện, HAI nút và ô ghi chú tuỳ chọn", () => {
+    it("đúng lãnh đạo giao việc + `task.extend`: hộp cam `Xin lùi hạn tới …`, lý do, HAI nút và ô ghi chú tuỳ chọn", () => {
       const html = list(LANH_DAO, true);
+      expect(html).toContain('class="border-tangerine/30 bg-tangerine/6 rounded-[10px] border p-3"');
+      expect(html).toContain(">Xin lùi hạn tới 20/7/2026</p>");
       expect(html).toContain("Chờ số liệu của thôn");
       expect(html).toContain('aria-label="Duyệt lùi hạn NV19"');
       expect(html).toContain('aria-label="Từ chối lùi hạn NV19"');
       expect(html).toContain(nhuTrongHTML(DECISION_NOTE_LABEL));
-      expect(html).not.toContain(nhuTrongHTML(CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC));
+      // A pending request REPLACES the form (spec 07 §6f: one state at a time).
+      expect(html).not.toContain('id="han-moi-lui-han"');
     });
 
-    it("người KHÁC: đề nghị vẫn hiện CHỈ ĐỌC, không nút, và câu nói vì sao", () => {
+    it("DENIED — người KHÁC: đề nghị vẫn hiện CHỈ ĐỌC, không nút, `Đang chờ lãnh đạo duyệt.`", () => {
       const html = list(NGUOI_KHAC, true);
       expect(html).toContain("Chờ số liệu của thôn");
       expect(html).not.toContain(NUT_DUYET);
       expect(html).not.toContain("Từ chối lùi hạn");
-      expect(html).toContain(nhuTrongHTML(CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC));
+      expect(html).toContain(`>${EXTENSION_WAITING}</p>`);
     });
 
-    it("đúng người nhưng THIẾU `task.extend`: chỉ đọc, kèm câu thiếu quyền — lớp một đóng", () => {
+    it("DENIED — đúng người nhưng THIẾU `task.extend`: chỉ đọc, kèm câu thiếu quyền — lớp một đóng", () => {
       const html = list(LANH_DAO, false);
       expect(html).not.toContain(NUT_DUYET);
       expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_DUYET_GIA_HAN));
     });
 
-    it("phiên chưa đọc được và nhiệm vụ không ghi lãnh đạo: FAIL CLOSED, `\"\" === \"\"` không mở nút", () => {
+    it("DENIED — phiên chưa đọc được và nhiệm vụ không ghi lãnh đạo: FAIL CLOSED, `\"\" === \"\"` không mở nút", () => {
       expect(list("", true)).not.toContain(NUT_DUYET);
-      const html = list("", true, [row], "");
+      const html = list("", true, "");
       expect(html).not.toContain(NUT_DUYET);
-      expect(html).toContain(nhuTrongHTML(CAU_CHUA_GHI_LANH_DAO_GIAO_VIEC));
+      expect(html).toContain(nhuTrongHTML(CAU_KHONG_AI_DUYET_DUOC));
     });
 
     it("gate is the queue's own `hienDongHangCho` — same answer for every session", () => {
@@ -450,24 +455,50 @@ describe("ADR 0038 — lớp hai chạy TRÊN MÀN, không chỉ trong hàm thu�
       }
     });
 
-    it("đọc HỎNG: câu máy chủ nguyên văn, KHÔNG nói `không có đề nghị nào`", () => {
+    it("đọc HỎNG: câu máy chủ nguyên văn, KHÔNG nói `không có đề nghị nào`, không vẽ form gửi", () => {
       const cau = "không đủ quyền: thiếu task.read";
-      const html = renderToStaticMarkup(
-        <TaskExtensionList
-          load={{ phase: "error", message: cau }}
-          assigner={LANH_DAO}
-          directory={null}
-          sessionStaffCode={LANH_DAO}
-          canApproveExtension
-          deciding={null}
-          rowError={null}
-          notes={{}}
-          setNote={() => {}}
-          decide={() => {}}
-        />,
-      );
+      const html = extensionView({ load: { phase: "error", message: cau } });
       expect(html).toContain(`role="alert">${nhuTrongHTML(cau)}</p>`);
       expect(html).not.toContain(nhuTrongHTML(TASK_EXTENSIONS_EMPTY));
+      expect(html).not.toContain('id="han-moi-lui-han"');
+    });
+
+    it("không có đề nghị + `task.update`: form hỏi `Hạn mới` / `Lý do` + `Gửi đề nghị lùi hạn` — KHÔNG nút quyết định nào", () => {
+      const html = extensionView({ load: { phase: "done", rows: [] } });
+      expect(html).toContain('id="han-moi-lui-han"');
+      expect(html).toContain('type="datetime-local"');
+      expect(html).toContain(`placeholder="${EXTENSION_REASON_PLACEHOLDER}"`);
+      expect(html).toContain(`${EXTENSION_SEND}</button>`);
+      expect(html).toContain(nhuTrongHTML(GHI_CHU_LUI_HAN));
+      expect(html).not.toContain(NUT_DUYET);
+      expect(html).not.toContain(">Từ chối<");
+    });
+
+    it("ô đề nghị lùi hạn LUÔN hiện với người đang làm việc — KHÔNG bị gắn sau khoá duyệt", () => {
+      // VẾ CHỊU LỰC: "merging the two halves" would take asking away from every non-leader.
+      for (const [session, canApprove] of [
+        [LANH_DAO, true],
+        [NGUOI_KHAC, false],
+        ["", false],
+      ] as const) {
+        const html = extensionView({
+          load: { phase: "done", rows: [] },
+          sessionStaffCode: session,
+          canApproveExtension: canApprove,
+        });
+        expect(html).toContain('id="han-moi-lui-han"');
+      }
+    });
+
+    it("DENIED — không `task.update` và không đề nghị nào: không vẽ gì cả (không form rỗng)", () => {
+      expect(extensionView({ load: { phase: "done", rows: [] }, canRequest: false })).toBe("");
+      expect(extensionView({ load: { phase: "loading" }, canRequest: false })).toBe("");
+    });
+
+    it("nhiệm vụ KHÔNG CÓ HẠN: không form — một câu nói vì sao", () => {
+      const html = extensionView({ load: { phase: "done", rows: [] }, dueAt: null });
+      expect(html).not.toContain('id="han-moi-lui-han"');
+      expect(html).toContain(nhuTrongHTML(EXTENSION_NO_DUE));
     });
 
     it("`extensionBlockNote`: thiếu `task.extend` chỉ đáng nói khi CÓ đề nghị", () => {
@@ -478,32 +509,7 @@ describe("ADR 0038 — lớp hai chạy TRÊN MÀN, không chỉ trong hàm thu�
     });
   });
 
-  it("ô gửi đề nghị KHÔNG còn nút quyết định nào của riêng nó — một cổng, một chỗ", () => {
-    const html = renderToStaticMarkup(
-      <KhoiLuiHan
-        coQuyenDeNghi
-        hanHienTai="2026-06-20T23:59:59+07:00"
-        dangGui={false}
-        guiDeNghi={KHONG_GOI}
-      />,
-    );
-    expect(html).toContain("Gửi đề nghị lùi hạn");
-    expect(html).not.toContain(NUT_DUYET);
-    expect(html).not.toContain("Từ chối");
-  });
-
-  it("ô đề nghị lùi hạn LUÔN hiện với người đang làm việc — KHÔNG bị gắn sau khoá duyệt", () => {
-    // VẾ CHỊU LỰC. Bài này đỏ đúng vào ngày ai đó "gộp cho gọn" hai nửa của khối lùi hạn — thao
-    // tác trông hợp lý, và lấy mất khả năng XIN lùi hạn của mọi cán bộ không phải lãnh đạo.
-    for (const ai of [LANH_DAO, NGUOI_KHAC, ""]) {
-      const html = veChiTiet({}, ai);
-      expect(html).toContain('id="han-moi-lui-han"');
-      expect(html).toContain("Gửi đề nghị lùi hạn");
-      expect(html).toContain(nhuTrongHTML(GHI_CHU_LUI_HAN));
-    }
-  });
-
-  it("nhiệm vụ KHÔNG CÓ HẠN: không vẽ ô đề nghị lùi hạn — không có gì để lùi", () => {
+  it("nhiệm vụ KHÔNG CÓ HẠN: drawer không vẽ ô đề nghị lùi hạn — không có gì để lùi", () => {
     const html = veChiTiet({ due_at: null, original_due_at: null });
     expect(html).not.toContain('id="han-moi-lui-han"');
   });
@@ -519,7 +525,9 @@ describe("vòng đời — chỉ vẽ bước máy chủ liệt kê", () => {
     // `POST …/assignment`), và `…/status` nay trả 400 cho đích ấy (764bb92) — một nút ở đây là một
     // nút chắc chắn hỏng.
     const html = veChiTiet({ status: "dang-thuc-hien" });
-    expect(html).toContain("Chuyển sang Chờ duyệt");
+    // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (spec 07 §2): `Chờ duyệt` is drawn only while current; the move
+    // into it stays on the Kanban (menu and drop) — `kanban-move.test.tsx`.
+    expect(html).not.toContain("Chuyển sang Chờ duyệt");
     expect(html).toContain("Chuyển sang Tạm dừng");
     expect(html).not.toContain("Chuyển sang Chuyển tiếp");
     expect(html).toContain("Chuyển sang Hoàn thành");
@@ -545,73 +553,19 @@ describe("vòng đời — chỉ vẽ bước máy chủ liệt kê", () => {
 });
 
 describe("câu từ chối của máy chủ vẽ THẲNG, không nuốt thành 'có lỗi xảy ra'", () => {
-  it("danh sách mã việc con đi nguyên văn ra trang", () => {
-    const cau =
-      "còn 3 việc con (NV20, NV21, NV22) — hoàn thành hết việc con rồi mới hoàn thành việc cha";
-    const html = renderToStaticMarkup(
-      <ChiTietNhiemVu
-        nhiemVu={nhiemVu({ status: "cho-duyet" })}
-        vanBan={{ pha: "dangTai" }}
-        danhMuc={DANH_MUC}
-        nhanTT={BANG_NHAN_MAC_DINH}
-        tenBoPhan={TEN_BO_PHAN}
-        bayGio={BAY_GIO}
-        maNguoiDangNhap={LANH_DAO}
-        quyen={DU_QUYEN}
-        dangGui={false}
-        loiGhi={cau}
-        dong={() => {}}
-        doiTrangThai={NOT_SENT}
-        xoa={NOT_SENT}
-        guiDeNghiLuiHan={KHONG_GOI}
-        quyetDinh={KHONG_GOI}
-        suaKhoiVanBan={KHONG_SUA}
-        docLaiChiTiet={KHONG_SUA}
-        {...PASS2_DRAWER_PROPS}
-      />,
-    );
-    expect(html).toContain(nhuTrongHTML(cau));
-    expect(html).toContain("NV20");
-    expect(html).toContain("NV21");
-    expect(html).toContain("NV22");
-    // Và KHÔNG có một câu chung chung nào thay thế nó.
-    expect(html).not.toContain("Có lỗi xảy ra");
+  // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (owner #12): a refused status move is the ERROR TOAST with the
+  // server's sentence verbatim — the child-code list and the `parent_completed` sentence included.
+  // The drawer no longer carries an error line (`loiGhi`), and `Việc cha` left the drawer (owner #6),
+  // so the `Mở việc cha` button beside the 409 is gone with it. The DOM case (`task-detail-dialog`)
+  // pins `toast.error(<sentence>)`; here the source is read so no wrapper can reword it.
+  it("a refused status move: `toast.error(r.thongBao)` — verbatim, never a generic sentence", () => {
+    const src = readFileSync(fileURLToPath(new URL("./task-status-pipeline.tsx", import.meta.url)), "utf8");
+    expect(src).toContain("toast.error(r.thongBao);");
+    expect(src).not.toContain("Có lỗi xảy ra");
   });
 
-  it("409 `parent_completed` (ADR 0065 NV2): câu nêu mã việc cha ra nguyên văn, kèm nút mở đúng việc cha", () => {
-    const cau = "việc cha NV19 đã hoàn thành — mở lại việc cha trước rồi mới mở lại việc con";
-    const html = renderToStaticMarkup(
-      <ChiTietNhiemVu
-        nhiemVu={nhiemVu({ status: "hoan-thanh", parent: "NV19", completed_at: "2026-06-25T02:00:00Z" })}
-        vanBan={{ pha: "dangTai" }}
-        danhMuc={DANH_MUC}
-        nhanTT={BANG_NHAN_MAC_DINH}
-        tenBoPhan={TEN_BO_PHAN}
-        bayGio={BAY_GIO}
-        maNguoiDangNhap={LANH_DAO}
-        quyen={DU_QUYEN}
-        dangGui={false}
-        loiGhi={cau}
-        dong={() => {}}
-        doiTrangThai={NOT_SENT}
-        xoa={NOT_SENT}
-        guiDeNghiLuiHan={KHONG_GOI}
-        quyetDinh={KHONG_GOI}
-        suaKhoiVanBan={KHONG_SUA}
-        docLaiChiTiet={KHONG_SUA}
-        {...PASS2_DRAWER_PROPS}
-      />,
-    );
-    expect(html).toMatch(new RegExp(`role="alert">${nhuTrongHTML(cau)}<`));
-    // The one act that unblocks the refusal sits in the same drawer: `ParentTaskField` opens the
-    // parent by its register code — no second copy of the parent's code parsed out of the sentence.
-    expect(html).toMatch(/Mở việc cha (<!-- -->)?NV19/);
-    expect(html).not.toContain("Có lỗi xảy ra");
-  });
-
-  it("xoá: một nút ở dải bên phải mở hộp xác nhận — ô lý do chưa vẽ khi chưa bấm", () => {
-    // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (user decision 1, prototype): no `Xoá` tab; the rail opens the
-    // existing confirm. The mandatory reason and the disabled button are pinned in a DOM case
+  it("xoá: một nút ở ĐẦU hộp chi tiết mở hộp xác nhận — ô lý do chưa vẽ khi chưa bấm", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (owner #7): no rail; the header's `Xoá` opens the existing confirm. The mandatory reason and the disabled button are pinned in a DOM case
     // (`task-detail-dialog.test.tsx`), where the dialog can be opened.
     const html = veChiTiet();
     expect(html).toMatch(new RegExp(`<button[^>]*aria-label="${TASK_DELETE_BUTTON}"[^>]*aria-haspopup="dialog"`));
@@ -635,8 +589,8 @@ describe("bảng danh sách §4.2", () => {
       />,
     );
     expect(html).toContain("20/6/2026");
-    expect(html).toContain('class="nhan-lech"');
-    expect(html).toContain("trễ 86 ngày");
+    // Spec 03 §2: the whole Hạn cell is red on a late row, the days said in words beside the date.
+    expect(html).toMatch(/<td class="[^"]*text-danger font-semibold">20\/6\/2026 \(trễ 86 ngày\)<\/td>/);
     // Dòng phụ nguồn giao, §4.2.
     expect(html).toContain("Từ kết luận họp");
   });
@@ -897,7 +851,7 @@ describe("form Giao việc mới §7", () => {
     );
     expect(oChon(html, "giao-loai")).toContain('<option value="theo-van-ban" selected="">');
     expect(html).toContain('id="giao-nhom-van-ban-san-pham-dau-ra"');
-    expect(html).toContain('<label for="giao-ghi-chu">Ghi chú</label>');
+    expect(html).toMatch(/<label for="giao-ghi-chu"[^>]*>Ghi chú<\/label>/);
   });
 
   it("NV-01: xã CÓ loại mặc định — không dòng trống, không câu lý do", () => {
@@ -940,9 +894,7 @@ describe("form Giao việc mới §7", () => {
       expect(html).not.toContain(">Giờ</label>");
       expect(html).not.toContain("23:59");
       // Prototype row: [Hạn hoàn thành | Mức ưu tiên] in two halves.
-      expect(html).toMatch(
-        /<div class="grid gap-3 sm:grid-cols-2 \[&amp;&gt;\*\]:my-0"><div class="o-nhap"><label for="giao-han">Hạn hoàn thành<\/label>/,
-      );
+      expect(html).toMatch(/<div class="grid grid-cols-1 gap-3 sm:grid-cols-2"><div><label for="giao-han"[^>]*>Hạn hoàn thành<\/label>/);
     } finally {
       vi.useRealTimers();
     }
@@ -987,7 +939,7 @@ describe("form Giao việc mới §7", () => {
     expect(html).toContain("Văn bản cấp trên giao");
     expect(html).toContain(nhuTrongHTML("Văn bản chỉ đạo của Đảng uỷ"));
     expect(html).toContain("Văn bản sản phẩm đầu ra");
-    expect(html.split("+ Thêm văn bản</button>").length - 1).toBe(3);
+    expect(html.split("Thêm văn bản</button>").length - 1).toBe(3);
     expect(html).toContain('id="giao-them-van-ban-cap-tren-giao"');
     expect(html).toContain("Nội dung nhiệm vụ / Trích yếu văn bản");
     // ADR 0065 NV5: no SEPARATE lead unit / monitor fields — they ARE the unit and the assignee. Since
@@ -995,7 +947,7 @@ describe("form Giao việc mới §7", () => {
     // names; same ids, same values sent.
     expect(html).not.toContain('id="giao-co-quan-chu-tri"');
     expect(html).not.toContain('id="giao-chuyen-vien"');
-    expect(html).toContain('<label for="giao-bo-phan">Cơ quan chủ trì tham mưu (cơ quan thực hiện)</label>');
+    expect(html).toMatch(/<label for="giao-bo-phan"[^>]*>Cơ quan chủ trì tham mưu \(cơ quan thực hiện\)<\/label>/);
     expect(html).toContain("Chuyên viên tham mưu / theo dõi (người thực hiện)");
     // The prototype's order: upper + party documents BEFORE the deadline, output AFTER it.
     const at = (s: string) => html.indexOf(s);
@@ -1003,7 +955,7 @@ describe("form Giao việc mới §7", () => {
     expect(at('id="giao-han"')).toBeLessThan(at('id="giao-them-van-ban-san-pham-dau-ra"'));
     // ĐỔI CHIỀU CÓ CHỦ Ý 27/09/2026 (TASK-04): `POST /api/v1/tasks` nay nhận `note`, nên ô
     // `Ghi chú` §7.2 có mặt — có nhãn, sau ba danh sách, dừng ở cùng giới hạn với form `✎ Sửa`.
-    expect(html).toContain('<label for="giao-ghi-chu">Ghi chú</label>');
+    expect(html).toMatch(/<label for="giao-ghi-chu"[^>]*>Ghi chú<\/label>/);
     expect(html).toMatch(/<textarea id="giao-ghi-chu"[^>]*maxLength="5000"/);
     expect(html.indexOf('id="giao-ghi-chu"')).toBeGreaterThan(
       html.indexOf('id="giao-them-van-ban-san-pham-dau-ra"'),
@@ -1025,7 +977,7 @@ describe("form Giao việc mới §7", () => {
       />,
     );
     // 07/10/2026: the prototype's required mark follows the words (`Field required`).
-    expect(html).toContain('>Tên nhiệm vụ<span class="login-field-mark" aria-hidden="true">*</span></label>');
+    expect(html).toContain('>Tên nhiệm vụ<span class="text-danger ml-1" aria-hidden="true">*</span></label>');
     expect(html).not.toContain("Trích yếu văn bản");
     expect(html).not.toContain('id="giao-co-quan-chu-tri"');
     expect(html).not.toContain('id="giao-chuyen-vien"');
@@ -1067,7 +1019,7 @@ describe("form Giao việc mới §7", () => {
       ">Giao việc</button>",
     ];
     for (let i = 1; i < order.length; i++) expect(at(order[i - 1]!)).toBeLessThan(at(order[i]!));
-    expect(html).toContain('<label for="giao-bo-phan">Đơn vị thực hiện</label>');
+    expect(html).toMatch(/<label for="giao-bo-phan"[^>]*>Đơn vị thực hiện<\/label>/);
   });
 
   it("`dialog` + `Theo văn bản`: the wide 800px box (three document lists)", () => {
@@ -1087,12 +1039,13 @@ describe("form Giao việc mới §7", () => {
     expect(html).toMatch(/^<dialog [^>]*class="[^"]*max-w-\[800px\]/);
   });
 
-  // Tester 07/10/2026 (menu Nhiệm vụ, popup thêm mới): width, spacing from the top edge, field
-  // order, one type scale. Each assertion names the prototype value it follows.
+  // THE NHIỆM VỤ SCREEN'S DIALOG (`taskScreen`, spec 06, owner 07/10/2026 #2 #9). Each assertion names
+  // the spec rule it follows; Biên bản / Phản ánh (no `taskScreen`) keep their rules — cases above.
   const dialogMarkup = (danhMuc: DanhMucNhiemVu) =>
     renderToStaticMarkup(
       <FormGiaoViec
         dialog
+        taskScreen
         danhMuc={danhMuc}
         danhBa={DANH_BA}
         danhBaLanhDao={DANH_BA}
@@ -1105,111 +1058,143 @@ describe("form Giao việc mới §7", () => {
       />,
     );
   const dialogClass = (html: string) => /^<dialog [^>]*class="([^"]*)"/.exec(html)?.[1]?.split(" ") ?? [];
+  const typeRow = (code: string, label: string, is_default: boolean, active = true, order = 1) => ({
+    id: `01J${code}`,
+    code,
+    label,
+    is_default,
+    active,
+    order,
+    source: "he-thong",
+    tier: 1,
+  });
 
-  it("07/10: the create dialog keeps clear of the top edge and pads like the prototype (p-4)", () => {
-    // Every type — and no type chosen yet (NV-01: nothing auto-selected) — is 800px on this screen.
-    for (const danhMuc of [DANH_MUC_CO_BAN, DANH_MUC, { ...DANH_MUC, loai: DANH_MUC.loai.map((l) => ({ ...l, is_default: false })) }]) {
+  it("owner #9: 500px for a basic task, 800px for `Theo văn bản` — the width follows the TYPE", () => {
+    expect(dialogClass(dialogMarkup(DANH_MUC_CO_BAN))).toContain("max-w-[500px]");
+    expect(dialogClass(dialogMarkup(DANH_MUC_CO_BAN))).not.toContain("max-w-[800px]");
+    expect(dialogClass(dialogMarkup(DANH_MUC))).toContain("max-w-[800px]");
+    expect(dialogClass(dialogMarkup(DANH_MUC))).not.toContain("max-w-[500px]");
+  });
+
+  it("the dialog keeps clear of the top edge and pads like the prototype (p-4); `m-auto!` centres it", () => {
+    for (const danhMuc of [DANH_MUC_CO_BAN, DANH_MUC]) {
       const cls = dialogClass(dialogMarkup(danhMuc));
-      expect(cls).toContain("max-w-[800px]");
-      expect(cls).not.toContain("max-w-[500px]");
-      // Full width minus 1rem gutters on a narrow screen.
       expect(cls).toContain("w-[calc(100vw-2rem)]");
       // The variant REPLACES `ModalDialog`'s defaults (cn → last utility wins), it does not stack.
       expect(cls).toContain("max-h-[calc(100dvh-6rem)]");
       expect(cls).not.toContain("max-h-[90dvh]");
       expect(cls).toContain("p-4");
       expect(cls).not.toContain("p-6");
-      // Centred by an IMPORTANT auto margin: the page mounts this dialog as a child of
-      // `[&>*]:my-0`, whose `margin-block: 0` beat plain `m-auto` and pinned it to the top (prod).
       expect(cls).toContain("m-auto!");
-      expect(cls).not.toContain("m-auto");
       expect(cls.some((c) => /^(top|mt|my|inset|translate)-/.test(c))).toBe(false);
     }
     expect(CREATE_TASK_DIALOG_CLASS).toBe("max-h-[calc(100dvh-6rem)] p-4");
   });
 
-  it("07/10: other callers of the form (Biên bản / Phản ánh: no `staffSearch`) keep 500px until `Theo văn bản`", () => {
-    const html = renderToStaticMarkup(
-      <FormGiaoViec
-        dialog
-        danhMuc={DANH_MUC_CO_BAN}
-        danhBa={DANH_BA}
-        danhBaLanhDao={DANH_BA}
-        dangGui={false}
-        loi={null}
-        huy={() => {}}
-        giaoViec={() => {}}
-      />,
-    );
-    expect(dialogClass(html)).toContain("max-w-[500px]");
-    expect(html).not.toContain(CREATE_TASK_CONTROL_TEXT.split(" ")[0]!.replaceAll("&", "&amp;"));
+  it("owner #2: the type starts on `is_default`, else on the FIRST active row — never `— Chọn loại —`", () => {
+    const withDefault = dialogMarkup({
+      ...DANH_MUC,
+      loai: [typeRow("co-ban", "Nhiệm vụ cơ bản", false), typeRow("theo-van-ban", "Theo văn bản", true, true, 2)],
+    });
+    expect(oChon(withDefault, "giao-loai")).toContain('<option value="theo-van-ban" selected="">');
+    const noDefault = dialogMarkup({
+      ...DANH_MUC,
+      loai: [typeRow("co-ban", "Nhiệm vụ cơ bản", false), typeRow("theo-van-ban", "Theo văn bản", false, true, 2)],
+    });
+    expect(oChon(noDefault, "giao-loai")).toContain('<option value="co-ban" selected="">');
+    expect(noDefault).not.toContain(TASK_TYPE_PLACEHOLDER);
+    // A retired default is not chosen, and a retired row is not offered at all.
+    const retired = dialogMarkup({
+      ...DANH_MUC,
+      loai: [typeRow("theo-van-ban", "Theo văn bản", true, false), typeRow("co-ban", "Nhiệm vụ cơ bản", false, true, 2)],
+    });
+    expect(oChon(retired, "giao-loai")).toContain('<option value="co-ban" selected="">');
+    expect(oChon(retired, "giao-loai")).not.toContain('value="theo-van-ban"');
   });
 
-  it("07/10: the page mounts the create dialog under `[&>*]:my-0` — the reason `m-auto!` exists", () => {
-    // If this ever stops being true the `!` is still harmless; if the `!` is ever dropped while this
-    // holds, the dialog sits on the top edge again with every other test green.
+  it("spec 06 §5: a BASIC task has no unit / assignee fields (assigned in the detail); `Theo văn bản` has both", () => {
+    const basic = dialogMarkup(DANH_MUC_CO_BAN);
+    expect(basic).not.toContain('id="giao-bo-phan"');
+    expect(basic).not.toContain('id="giao-nguoi-thuc-hien"');
+    expect(basic).toContain('id="giao-lanh-dao"');
+    const vb = dialogMarkup(DANH_MUC);
+    expect(vb).toContain('id="giao-bo-phan"');
+    expect(vb).toContain('id="giao-nguoi-thuc-hien"');
+  });
+
+  it("owner #2: `Lãnh đạo giao việc` empty line and hint are the spec's words, verbatim", () => {
+    const html = dialogMarkup(DANH_MUC_CO_BAN);
+    expect(LEADER_EMPTY_LABEL).toBe("— Người đang tạo nhiệm vụ —");
+    expect(LEADER_HINT_SPEC).toBe("Đề nghị lùi hạn sẽ gửi tới người này, qua chuông và qua thư.");
+    expect(html).toContain(nhuTrongHTML(LEADER_HINT_SPEC));
+    expect(comboboxListbox(html, "giao-lanh-dao")).toContain(nhuTrongHTML(LEADER_EMPTY_LABEL));
+  });
+
+  it("spec 06: `Mức ưu tiên` has no empty choice — the commune's default row, else its first", () => {
+    const priority = (is_default: boolean) =>
+      oChon(
+        dialogMarkup({
+          ...DANH_MUC_CO_BAN,
+          mucUuTien: [
+            { ...DANH_MUC.mucUuTien[0]!, code: "khan", label: "Khẩn", is_default: false },
+            { ...DANH_MUC.mucUuTien[0]!, code: "thuong", label: "Thường", is_default },
+          ],
+        }),
+        "giao-uu-tien",
+      );
+    expect(priority(true)).toContain('<option value="thuong" selected="">');
+    expect(priority(false)).toContain('<option value="khan" selected="">');
+    expect(priority(false)).not.toContain('<option value="">');
+  });
+
+  it("the page mounts the create dialog under `[&>*]:my-0` — the reason `m-auto!` exists", () => {
     const page = readFileSync(new URL("./so-nhiem-vu.tsx", import.meta.url), "utf8");
     const section = page.indexOf('className="man-nhiem-vu mt-0 flex min-w-0 flex-col gap-4 [&>*]:my-0"');
     expect(section).toBeGreaterThan(-1);
-    expect(page.indexOf("<FormGiaoViec\n          dialog", section)).toBeGreaterThan(section);
+    expect(page.indexOf("<FormGiaoViec\n          dialog\n          taskScreen", section)).toBeGreaterThan(section);
     const modal = readFileSync(new URL("../../components/ui/modal-dialog.tsx", import.meta.url), "utf8");
     expect(modal).toContain('"m-auto! box-border');
   });
 
-  it("07/10: controls 14px from 768px like the prototype's `md:text-sm`, 16px below (iOS zoom)", () => {
-    const html = dialogMarkup(DANH_MUC_CO_BAN);
-    const attr = cn(CREATE_TASK_BODY_CLASS, CREATE_TASK_TYPE_SCALE, CREATE_TASK_CONTROL_TEXT)
-      .replaceAll("&", "&amp;")
-      .replaceAll(">", "&gt;");
-    expect(html).toContain(`<div class="${attr}">`);
-    for (const c of [
-      "md:[&_input:not([type=checkbox]):not([type=radio])]:text-sm",
-      "md:[&_select]:text-sm",
-      "md:[&_textarea]:text-sm",
-    ]) {
-      expect(CREATE_TASK_CONTROL_TEXT.split(" ")).toContain(c);
-    }
-    // Only `md:` — nothing shrinks a control below 16px on a phone.
-    expect(CREATE_TASK_CONTROL_TEXT.split(" ").every((c) => c.startsWith("md:"))).toBe(true);
-    expect(CREATE_TASK_TYPE_SCALE).toContain("md:[&_.hop-tim-can-bo_input]:text-sm");
-    expect(CREATE_TASK_TYPE_SCALE).not.toContain("text-[0.9375rem]");
+  it("controls: 16px below 768px (iOS zoom), 14px from 768px — one input class for every box", () => {
+    expect(INPUT_CLASS.split(" ")).toContain("text-base");
+    expect(INPUT_CLASS.split(" ")).toContain("md:text-sm");
+    expect(INPUT_CLASS.split(" ")).toContain("h-9");
+    expect(LABEL_CLASS).toBe("text-ink mb-1.5 block text-[13px] font-semibold");
+    const html = dialogMarkup(DANH_MUC);
+    expect(html).toContain(`<label for="giao-tieu-de" class="${LABEL_CLASS}">`);
   });
 
-  it("07/10: staff boxes are ONE field with the ⇕ icon inside, keyboard line kept for screen readers only", () => {
-    const html = dialogMarkup(DANH_MUC_CO_BAN);
+  it("staff boxes (spec 06 `UserCombobox`): ONE input with the ⇕ icon inside, the spec placeholder, a listbox", () => {
+    const html = dialogMarkup(DANH_MUC);
     for (const id of ["giao-nguoi-thuc-hien", "giao-lanh-dao"]) {
-      // The hint is still the input's description…
-      expect(html).toContain(`aria-describedby="${id}-goi-y"`);
-      // …but drawn sr-only, not as a visible line.
-      expect(html).toContain(`<p id="${id}-goi-y" class="goi-y-tim sr-only">${STAFF_COMBOBOX_HINT}</p>`);
-      // The toggle survives, inside the field, without the separate square button.
-      expect(html).toMatch(new RegExp(`aria-label="Mở danh sách [^"]*" aria-controls="${id}-danh-sach"`));
+      const input = /<input [^>]*>/.exec(html.slice(html.indexOf(`<input id="${id}"`)))?.[0] ?? "";
+      expect(input).toContain('role="combobox"');
+      expect(input).toContain(`aria-controls="${id}-danh-sach"`);
+      expect(input).toContain(`placeholder="${PERSON_PICKER_PLACEHOLDER}"`);
+      expect(html).toContain(`<ul id="${id}-danh-sach" role="listbox"`);
     }
+    expect(PERSON_PICKER_PLACEHOLDER).toBe("Gõ tên để tìm…");
     expect(html).not.toContain('class="nut-phu nut-mo-danh-sach"');
     expect(html).not.toContain(">▾<");
-    expect(html).toContain('class="hop-tim-can-bo relative"');
     expect(html).toContain("lucide-chevrons-up-down");
   });
 
-  it("07/10: the fields AND the buttons scroll — capped at the prototype's 70vh, header outside", () => {
+  it("the fields AND the buttons scroll — capped at the prototype's 70vh, header outside", () => {
     const html = dialogMarkup(DANH_MUC);
-    const attr = cn(CREATE_TASK_BODY_CLASS, CREATE_TASK_TYPE_SCALE, CREATE_TASK_CONTROL_TEXT)
-      .replaceAll("&", "&amp;")
-      .replaceAll(">", "&gt;");
-    const body = html.indexOf(`<div class="${attr}">`);
+    const body = html.indexOf(`<div class="${CREATE_TASK_BODY_CLASS.replaceAll("&", "&amp;").replaceAll(">", "&gt;")}">`);
     expect(body).toBeGreaterThan(-1);
     expect(CREATE_TASK_BODY_CLASS).toContain("max-h-[70vh]");
     expect(CREATE_TASK_BODY_CLASS).toContain("overflow-y-auto");
     expect(html.indexOf('<h2 id="tieu-de-giao-viec-moi"')).toBeLessThan(body);
-    // 07/10 (screenshot pro-nhiem-vu-them-moi-02): `Huỷ / Giao việc` are the LAST child of the
-    // scrolling area, after `Ghi chú` — not pinned below it.
+    // `Huỷ / Giao việc` are the LAST child of the scrolling area, after `Ghi chú`.
     expect(html.lastIndexOf(">Giao việc</button>")).toBeGreaterThan(html.lastIndexOf('id="giao-ghi-chu"'));
-    expect(html).toMatch(/<\/textarea><\/div><\/div><div class="cum-nut justify-end">/);
+    expect(html).toMatch(/<\/textarea><\/div><\/div><div class="flex justify-end gap-2 pt-1">/);
     // After the form, only the dialog's own ✕ (ADR 0068 lần 6, prototype `dialog.tsx:83-95`).
     expect(html).toMatch(/>Giao việc<\/button><\/div><\/div><\/form><button [^>]*aria-label="Đóng"[^>]*>[\s\S]*?<\/button><\/dialog>$/);
   });
 
-  it("07/10: `Theo văn bản` — the prototype's full field order, title marked required", () => {
+  it("`Theo văn bản` — the prototype's full field order, title marked required", () => {
     const html = dialogMarkup(DANH_MUC);
     const at = (s: string) => html.indexOf(s);
     const order = [
@@ -1217,9 +1202,9 @@ describe("form Giao việc mới §7", () => {
       'id="giao-khoi"',
       'id="giao-ma"',
       'id="giao-tu-sinh-ma"',
-      'for="giao-tieu-de">Nội dung nhiệm vụ / Trích yếu văn bản<span class="login-field-mark" aria-hidden="true">*</span></label>',
+      '>Nội dung nhiệm vụ / Trích yếu văn bản<span class="text-danger ml-1" aria-hidden="true">*</span></label>',
       'id="giao-mo-ta"',
-      'for="giao-bo-phan">Cơ quan chủ trì tham mưu (cơ quan thực hiện)</label>',
+      '>Cơ quan chủ trì tham mưu (cơ quan thực hiện)</label>',
       'id="giao-nguoi-thuc-hien"',
       'id="giao-lanh-dao"',
       'id="giao-them-van-ban-cap-tren-giao"',
@@ -1234,27 +1219,10 @@ describe("form Giao việc mới §7", () => {
     for (const s of order) expect(at(s), s).toBeGreaterThan(-1);
     for (let i = 1; i < order.length; i++) expect(at(order[i - 1]!), order[i]).toBeLessThan(at(order[i]!));
     // Only the title carries the mark, as in the prototype.
-    expect(html.match(/class="login-field-mark"/g)).toHaveLength(1);
+    expect(html.match(/<span class="text-danger ml-1" aria-hidden="true">\*<\/span>/g)).toHaveLength(1);
   });
 
-  it("07/10: one type scale — labels 13px, controls 36px, help text 12px, no 12rem select floor", () => {
-    for (const c of [
-      "[&_label]:text-[0.8125rem]",
-      "[&_h5]:text-[0.8125rem]",
-      "[&_select]:min-w-0",
-      "[&_input:not([type=checkbox]):not([type=radio])]:h-(--control-h)",
-      "[&_.hop-tim-can-bo_input]:min-h-(--control-h)",
-      "[&_.nut-mo-danh-sach]:min-h-(--control-h)",
-      "[&_.goi-y-tim]:text-xs",
-    ]) {
-      expect(CREATE_TASK_TYPE_SCALE.split(" ")).toContain(c);
-    }
-    // tailwind-merge must not drop any of them against the body's own utilities.
-    const merged = cn(CREATE_TASK_BODY_CLASS, CREATE_TASK_TYPE_SCALE).split(" ");
-    for (const c of CREATE_TASK_TYPE_SCALE.split(" ")) expect(merged, c).toContain(c);
-  });
-
-  it("07/10: the screenshots' words, where our field exists (both task types)", () => {
+  it("the screenshots' words, where our field exists (both task types)", () => {
     for (const danhMuc of [DANH_MUC, DANH_MUC_CO_BAN]) {
       const html = dialogMarkup(danhMuc);
       expect(html).toContain(nhuTrongHTML(MO_TA_FORM_GIAO_VIEC));
@@ -1267,18 +1235,21 @@ describe("form Giao việc mới §7", () => {
         "Tự sinh sẽ cấp số tiếp theo trong dãy NV01, NV02… Nhập từ Excel cũng được đánh số tự động " +
           "theo dãy này.",
       );
-      // Both staff search boxes: the prototype's placeholder (`PersonPicker.tsx:30`).
-      for (const id of ["giao-nguoi-thuc-hien", "giao-lanh-dao"]) {
-        expect(/<input [^>]*>/.exec(html.slice(html.indexOf(`<input id="${id}"`)))?.[0]).toContain(
-          'placeholder="Gõ tên để tìm…"',
-        );
-      }
     }
     const vb = dialogMarkup(DANH_MUC);
     expect(vb).toContain('<option value="" selected="">— Chọn cơ quan —</option>');
     expect(vb).toContain(
       nhuTrongHTML("Người này là người thực hiện chính: nhiệm vụ hiện trong mục “Giao cho tôi” của họ ngay khi lưu."),
     );
+  });
+
+  it("the submit is the spec's primary button; the directory still loading locks it (and only that)", () => {
+    const ready = dialogMarkup(DANH_MUC);
+    expect(ready).toMatch(/<button class="nut-chinh[^"]*" type="submit">Giao việc<\/button>/);
+    const loading = renderToStaticMarkup(
+      <FormGiaoViec dialog taskScreen danhMuc={DANH_MUC} danhBa={null} danhBaLanhDao={null} coDanhSachVanBan staffSearch dangGui={false} loi={null} huy={() => {}} giaoViec={() => {}} />,
+    );
+    expect(loading).toMatch(/<button class="nut-chinh[^"]*" type="submit" disabled="">Giao việc<\/button>/);
   });
 
   it("màn Biên bản (không truyền prop): loại `theo-van-ban` mà KHÔNG có ba danh sách", () => {
@@ -1459,6 +1430,16 @@ const NHAN_BA_NHOM = [
   "Văn bản sản phẩm đầu ra",
 ];
 
+/** One document line of the read-only block: reference in bold, then ` · date`. */
+function docLine(reference: string, date: string): string {
+  return `<span class="font-semibold">${reference}</span><span class="text-ink-muted"> · ${date}</span>`;
+}
+
+/** An EMPTY group of the read-only block — its label, then a dash. */
+function emptyGroup(label: string): string {
+  return `${nhuTrongHTML(label)}</p><div class="m-0 text-[13px]">—</div>`;
+}
+
 function veTuDrawer(d: DrawerNhiemVu | null): string {
   if (d === null) throw new Error("drawer phải đang mở");
   return veChiTiet(d.nhiemVu, LANH_DAO, d.vanBan);
@@ -1496,11 +1477,11 @@ describe("§5.4 — drawer đọc TUYẾN CHI TIẾT, không đọc dòng của 
     const html = veTuDrawer(d);
     expect(html).toContain(nhuTrongHTML(TIEU_DE_KHOI_VAN_BAN));
     for (const nhan of NHAN_BA_NHOM) expect(html).toContain(nhuTrongHTML(nhan));
-    expect(html).toContain("1742-CV/BTCTU · 9/6/2026");
+    expect(html).toContain(docLine("1742-CV/BTCTU", "9/6/2026"));
     expect(html).toContain(nhuTrongHTML("Công văn của Ban Tổ chức Thành uỷ"));
-    expect(html).toContain("324-BC/ĐU · 15/6/2026");
+    expect(html).toContain(docLine("324-BC/ĐU", "15/6/2026"));
     // Nhóm giữa rỗng thật — máy chủ ĐÃ nói thế — nên nó là dấu gạch.
-    expect(html).toContain("Văn bản chỉ đạo của Đảng uỷ</dt><dd>—</dd>");
+    expect(html).toContain(emptyGroup("Văn bản chỉ đạo của Đảng uỷ"));
   });
 
   it("đọc chi tiết HỎNG: câu lỗi hiện ra, và KHÔNG có nhóm nào — không một danh sách rỗng", () => {
@@ -1573,7 +1554,7 @@ describe("§5.4 — một lần đổi trạng thái KHÔNG làm rơi khối vă
     expect(sau?.luotDoc).toBe((truoc?.luotDoc ?? 0) + 1);
 
     const html = veTuDrawer(sau);
-    expect(html).toContain("1742-CV/BTCTU · 9/6/2026");
+    expect(html).toContain(docLine("1742-CV/BTCTU", "9/6/2026"));
     expect(html).not.toContain(nhuTrongHTML(DANG_TAI_VAN_BAN));
   });
 
@@ -1623,8 +1604,9 @@ describe("§5.4 — chỉ với loại `Theo văn bản`, và câu chữ của t
     expect(html).not.toContain(nhuTrongHTML(TIEU_DE_KHOI_VAN_BAN));
     for (const nhan of NHAN_BA_NHOM) expect(html).not.toContain(nhuTrongHTML(nhan));
     expect(html).not.toContain("1742-CV/BTCTU");
-    // Các trường §5.4 vô hướng vẫn giữ nguyên, cùng chú thích bắt buộc.
-    expect(html).toContain(nhuTrongHTML(CHU_THICH_HAI_O_TICK));
+    // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (spec 07 §6a): a basic task with no result, note or tick shows
+    // `Thông tin nhiệm vụ` — the two ticks and their note belong to the directive block.
+    expect(html).not.toContain(nhuTrongHTML(CHU_THICH_HAI_O_TICK));
   });
 
   it("loại `theo-van-ban` với cùng dữ liệu: khối CÓ — bài trên không xanh vì lý do sai", () => {
@@ -1636,14 +1618,14 @@ describe("§5.4 — chỉ với loại `Theo văn bản`, và câu chữ của t
       pha: "xong",
       duLieu: [vb({ reference: "", date: "" })],
     });
-    expect(html).toContain(`<li>${KHONG_SO}<span`);
-    expect(html).not.toContain(`${KHONG_SO} · `);
+    expect(html).toContain(`<span class="font-semibold">${KHONG_SO}</span><div`);
+    expect(html).not.toContain(`${KHONG_SO}</span><span class="text-ink-muted"> · `);
   });
 
   it("chi tiết trả mảng RỖNG: lúc này ba nhóm `—` là đúng — máy chủ đã nói không có dòng nào", () => {
     const html = veChiTiet({}, LANH_DAO, { pha: "xong", duLieu: [] });
     for (const nhan of NHAN_BA_NHOM) {
-      expect(html).toContain(`${nhuTrongHTML(nhan)}</dt><dd>—</dd>`);
+      expect(html).toContain(emptyGroup(nhan));
     }
   });
 
@@ -1678,10 +1660,10 @@ describe("§5.4 — nút `✎ Sửa`: chỉ `Theo văn bản`, và KHOÁ khi ch�
     const html = veChiTiet({}, LANH_DAO, { pha: "xong", duLieu: BA_VAN_BAN });
     const nut = theNutSua(html);
     expect(nut).not.toBeNull();
-    expect(nut).not.toContain("disabled");
+    expect(nut).not.toContain('disabled=""');
     // ADR 0068: `✎` is a lucide icon now; the visible word is `Sửa` (NHAN_NUT_SUA, shared with
     // the Nội dung screen, keeps its glyph there). The accessible name is the aria-label above.
-    expect(html).toMatch(/aria-label="Sửa sổ theo dõi văn bản chỉ đạo"><svg[^>]*aria-hidden="true"[^>]*>.*?<\/svg>Sửa<\/button>/);
+    expect(html).toMatch(/aria-label="Sửa sổ theo dõi văn bản chỉ đạo"[^>]*><svg[^>]*aria-hidden="true"[^>]*>.*?<\/svg>Sửa<\/button>/);
   });
 
   it("loại `co-ban`: KHÔNG có nút sửa khối văn bản, kể cả khi đã có văn bản trong tay", () => {
@@ -1739,7 +1721,7 @@ describe("§5.4 — phản hồi PATCH cập nhật drawer", () => {
 
     const html = veTuDrawer(sau);
     expect(html).not.toContain("1742-CV/BTCTU");
-    expect(html).toContain("324-BC/ĐU · 15/6/2026");
+    expect(html).toContain(docLine("324-BC/ĐU", "15/6/2026"));
   });
 
   it("phản hồi PATCH gỡ hết văn bản (`documents: []`): khối là ba nhóm `—`, không phải khối cũ", () => {
@@ -1761,6 +1743,8 @@ describe("§5.4 — form `✎ Sửa`", () => {
       <FormSuaKhoiVanBan
         nhiemVu={nhiemVu(sua)}
         vanBan={BA_VAN_BAN}
+        unitName="VĂN PHÒNG ĐẢNG ỦY"
+        assigneeName="Nguyễn Thị Thực"
         luu={KHONG_SUA}
         docLai={KHONG_SUA}
         xong={() => {}}
@@ -1768,53 +1752,45 @@ describe("§5.4 — form `✎ Sửa`", () => {
     );
   }
 
-  // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3): ca này ghim "Mã, Hạn HIỆN mà KHÔNG có ô nhập". Chủ đầu tư
-  // khi ấy cho sửa cả hai (3c3525f, f27fd6e). ĐỔI CHIỀU CÓ CHỦ Ý 30/09/2026 (ADR 0065 NV3, NV5): mã đã
-  // cấp KHÔNG sửa nữa (máy chủ trả 400), và Cơ quan chủ trì / Chuyên viên không còn là trường riêng.
-  it("Hạn (ngày + giờ) là Ô NHẬP có nhãn và câu giải thích; KHÔNG có ô Mã, KHÔNG có Cơ quan chủ trì / Chuyên viên", () => {
+  // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (spec 07 §6a, owner #8 #10): the first row is [Mã | Tên | Hạn] — the
+  // code SHOWN, never an input (ADR 0065 NV3); the deadline ONE `datetime-local` box. `Cơ quan chủ trì
+  // tham mưu` / `Chuyên viên Văn phòng…` are shown READ-ONLY (the unit and the assignee, changed in
+  // `Giao việc, chuyển việc` — ADR 0065 NV5: no separate field is sent).
+  it("[Mã (text) | Tên | Hạn (datetime-local)]; unit and assignee shown read-only, never inputs", () => {
     const html = veForm();
     expect(html).not.toContain('id="sua-ma-nhiem-vu"');
     expect(html).not.toContain(">Mã nhiệm vụ</label>");
-    expect(html).not.toContain("Cơ quan chủ trì");
-    expect(html).not.toContain("Chuyên viên");
-    expect(html).toContain("<legend>Hạn xử lý</legend>");
-    expect(html).toMatch(/<input id="sua-han-ngay"[^>]*type="date"[^>]*value="2026-06-20"/);
-    // The time is REQUIRED once a date is there — the server defaults no hour.
-    expect(html).toMatch(/<input id="sua-han-gio"[^>]*type="time"[^>]*required=""[^>]*value="23:59"/);
-    expect(html).toContain(nhuTrongHTML(DUE_EDIT_NOTE));
+    expect(html).toMatch(/>Mã nhiệm vụ<\/p><p class="m-0 mt-2 text-\[13px\] font-semibold">NV19<\/p>/);
+    expect(html).toMatch(/<input id="sua-han"[^>]*type="datetime-local"[^>]*value="2026-06-20T23:59"/);
+    expect(html).toContain(`Cơ quan chủ trì tham mưu</p><div class="m-0 text-[13px]">VĂN PHÒNG ĐẢNG ỦY</div>`);
+    expect(html).toContain(`Chuyên viên Văn phòng tham mưu / theo dõi</p><div class="m-0 text-[13px]">Nguyễn Thị Thực</div>`);
     expect(html).not.toContain("<select");
-    // One date field for the deadline, plus one per document.
-    expect(html.split('type="date"').length - 1).toBe(BA_VAN_BAN.length + 1);
+    // One date field per document — the deadline is the datetime box.
+    expect(html.split('type="date"').length - 1).toBe(BA_VAN_BAN.length);
   });
 
-  it("việc CHƯA CÓ HẠN: hai ô trống, ô giờ CHƯA bắt buộc khi chưa chọn ngày; không có giờ gõ cứng", () => {
+  it("việc CHƯA CÓ HẠN: the deadline box is empty — no hour typed in for the clerk", () => {
     const html = veForm({ due_at: null, original_due_at: null });
-    expect(html).toMatch(/<input id="sua-han-ngay"[^>]*value=""/);
-    expect(html).toMatch(/<input id="sua-han-gio"[^>]*value=""/);
-    expect(html).not.toMatch(/<input id="sua-han-gio"[^>]*required=""/);
+    expect(html).toMatch(/<input id="sua-han"[^>]*value=""/);
     expect(html).not.toContain("17:00");
   });
 
-  it("dây nối: lịch làm việc đọc từ `layLichLamViec`, giờ điền sẵn chỉ vào ô TRỐNG, lỗi lưu đọc lại (đọc mã)", () => {
-    // No DOM: the effect and the change handler never run here. Pinned by source instead.
+  it("dây nối: a refusal re-reads and says the task moved on; `Lưu` with nothing changed just leaves (đọc mã)", () => {
     const src = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
-    expect(src).toContain("layLichLamViec().then((r) => {");
-    expect(src).toContain(
-      'cu.dueTime === "" && calendar.pha === "xong" ? defaultDueTime(calendar.shifts, date) : cu.dueTime',
-    );
-    expect(src).toContain("setStaleNote(changedSince(await docLai(), goc.nhiemVu.updated_at));");
+    expect(src).toContain("const stale = changedSince(await docLai(), goc.nhiemVu.updated_at);");
+    expect(src).toContain("toast.error(stale ? `${kq.thongBao} ${TASK_CHANGED_NOTE}` : kq.thongBao);");
+    expect(src).toContain("if (than === null) {\n      xong();\n      return;\n    }");
     expect(src).toContain('guiDrawer({ loai: "docLai", ma: code });');
     expect(src).not.toMatch(/dueTime: "1\d:\d\d"/);
   });
 
-  it("năm ô sửa được có nhãn thật, và chú thích BẮT BUỘC của hai ô tick vẫn hiện", () => {
+  it("the editable fields have real labels; the two ticks are NOT in the form (ticked in view, spec 07 §6a)", () => {
     const html = veForm();
-    expect(html).toContain('<label for="sua-tieu-de">Nội dung nhiệm vụ / Trích yếu văn bản</label>');
+    expect(html).toMatch(/<label for="sua-tieu-de"[^>]*>Nội dung nhiệm vụ \/ Trích yếu văn bản<\/label>/);
     expect(html).toContain('id="sua-tom-tat-ket-qua"');
-    expect(html).toContain('<label for="sua-ghi-chu">Ghi chú</label>');
-    expect(html).toContain('id="sua-lanh-dao-phe-duyet"');
-    expect(html).toContain('id="sua-cap-tren-cong-nhan"');
-    expect(html).toContain(nhuTrongHTML(CHU_THICH_HAI_O_TICK));
+    expect(html).toMatch(/<label for="sua-ghi-chu"[^>]*>Ghi chú<\/label>/);
+    expect(html).not.toContain('id="sua-lanh-dao-phe-duyet"');
+    expect(html).not.toContain('id="sua-cap-tren-cong-nhan"');
   });
 
   it("mọi dòng đã có hiện ra để sửa, dùng CÙNG ô của form tạo; không có lối chuyển nhóm", () => {
@@ -1824,16 +1800,16 @@ describe("§5.4 — form `✎ Sửa`", () => {
     expect(html).toContain("Công văn của Ban Tổ chức Thành uỷ");
     expect(html).toContain('value="1742-CV/BTCTU"');
     expect(html).toContain('value="2026-06-09"');
-    expect(html.split("+ Thêm văn bản</button>").length - 1).toBe(3);
+    expect(html.split("Thêm văn bản</button>").length - 1).toBe(3);
     // Id không đụng form tạo khi hai form cùng mở.
     expect(html).not.toContain('id="giao-');
   });
 
-  it("vừa mở, chưa đổi gì: nút `Lưu` KHOÁ và câu nói vì sao", () => {
+  it("`Huỷ` · `Lưu` (spec 07 §6a); `Lưu` is not locked by 'nothing changed' — it just leaves", () => {
     const html = veForm();
-    expect(html).toMatch(/<button type="submit"[^>]*disabled=""[^>]*>Lưu<\/button>/);
-    expect(html).toContain("Chưa có gì thay đổi để lưu.");
+    expect(html).toMatch(/type="submit">Lưu<\/button>/);
     expect(html).toContain(">Huỷ</button>");
+    expect(html).not.toContain("Chưa có gì thay đổi để lưu.");
   });
 });
 
@@ -1861,24 +1837,21 @@ describe("§5.9 Nhật ký & Trao đổi — khối trong drawer", () => {
   it("drawer có khối, và lúc mở nó ĐANG TẢI (role=status) — chưa nói rỗng khi chưa biết", () => {
     const html = veChiTiet();
     expect(html).toContain("Nhật ký &amp; Trao đổi");
-    expect(html).toContain('role="status">Đang tải nhật ký…');
+    expect(html).toMatch(/role="status"[^>]*>Đang tải nhật ký…/);
     expect(html).not.toContain(nhuTrongHTML(NHAT_KY_RONG));
   });
 
   // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W2): ca này ghim "KHÔNG có ô ghi tay — tuyến ghi chưa dựng". Tuyến
   // nay có (60011e8), nên ô hiện cho người được ghi và VẮNG cho người không được — cả hai chiều dưới.
-  it("CÓ ô ghi tay cho người cầm `task.update`: nhãn, gợi ý §5.9, nút khoá khi trống, và `📎 Đính kèm`", () => {
+  it("CÓ ô ghi tay cho người cầm `task.update`: nhãn (ẩn), gợi ý trong ô, nút khoá khi trống, và `Đính kèm`", () => {
     const html = veChiTiet();
-    expect(html).toContain('<label for="ghi-nhat-ky-NV19">Ghi vào nhật ký của nhiệm vụ</label>');
+    // Spec 08: no visible title over the box — the accessible name stays.
+    expect(html).toContain('<label for="ghi-nhat-ky-NV19" class="an-thi-giac">Ghi vào nhật ký của nhiệm vụ</label>');
     expect(html).toContain('placeholder="Đã làm được gì, còn vướng gì…"');
     expect(html).toMatch(/<textarea id="ghi-nhat-ky-NV19"[^>]*maxLength="5000"/);
-    // ADR 0068: `➤` is a decorative lucide icon before the word now.
-    expect(html).toMatch(/<button type="submit" class="nut-chinh" disabled=""><svg[^>]*aria-hidden="true"[^>]*>.*?<\/svg>Ghi nhật ký<\/button>/);
-    expect(html).toContain("Dòng đã ghi không sửa, không xoá được");
-    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (A4): this pinned "no 📎" — the server had no file store. It has
-    // one now (ADR 0052, b37ec2d); the picker is part of the form, behind the same gate.
-    // ADR 0068: `📎` is a lucide icon now; the label still says `Đính kèm`.
-    expect(html).toMatch(/<label for="ghi-nhat-ky-NV19-dinh-kem" class="nut-phu"><svg[^>]*>.*?<\/svg>Đính kèm/);
+    expect(html).toMatch(/type="submit" disabled=""><svg[^>]*lucide-send[^>]*>.*?<\/svg>Ghi nhật ký<\/button>/);
+    // `Đính kèm` is a button that opens the hidden native file input.
+    expect(html).toMatch(/<svg[^>]*lucide-paperclip[^>]*>.*?<\/svg>Đính kèm<\/button>/);
     expect(html).toMatch(/<input id="ghi-nhat-ky-NV19-dinh-kem"[^>]*type="file"[^>]*multiple=""/);
     // The form sits INSIDE the §5.9 block, above the timeline.
     const khoi = html.slice(html.indexOf('aria-labelledby="tieu-de-nhat-ky-nhiem-vu-NV19"'));
@@ -1910,9 +1883,11 @@ describe("§5.9 Nhật ký & Trao đổi — khối trong drawer", () => {
     expect(src).toContain("onWritten={() => setWritten((n) => n + 1)}");
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (A4): the entry now carries the STORED attachment ids.
     expect(src).toContain("addTaskLogEntry(taskCode, note, key, storedIds(files.items))");
-    const ok = src.indexOf("setRefusal(null);");
-    expect(src.indexOf("setKey(crypto.randomUUID());")).toBeGreaterThan(ok);
-    expect(src.indexOf("setRefusal(r.thongBao);")).toBeLessThan(ok);
+    // Outcomes are toasts (spec 08): the refusal returns BEFORE the key is replaced.
+    const refused = src.indexOf("toast.error(r.thongBao);");
+    expect(refused).toBeGreaterThan(-1);
+    expect(src.indexOf("setKey(crypto.randomUUID());")).toBeGreaterThan(refused);
+    expect(src.indexOf("toast.success(LOG_ENTRY_DONE);")).toBeGreaterThan(src.indexOf("setKey(crypto.randomUUID());"));
   });
 
   it("rỗng: câu §5.9 nguyên văn, không danh sách, không `Xem thêm`", () => {
@@ -1922,7 +1897,7 @@ describe("§5.9 Nhật ký & Trao đổi — khối trong drawer", () => {
     expect(html).not.toContain("Xem thêm");
   });
 
-  it("có dòng: thời điểm, họ tên kèm mã, nhãn trạng thái, bộ phận/phụ trách, ghi chú", () => {
+  it("có dòng: thời điểm, HỌ TÊN (prototype — không kèm mã), nhãn trạng thái, bàn giao, ghi chú", () => {
     const html = veNhatKy({
       pha: "xong",
       dong: [
@@ -1951,12 +1926,18 @@ describe("§5.9 Nhật ký & Trao đổi — khối trong drawer", () => {
     });
     expect(html).toContain('dateTime="2026-09-09T07:20:00Z"');
     expect(html).toContain("14:20");
-    expect(html).toContain("Trần Thị B (CB-2026-3H8N2W)");
+    expect(html).toContain('<b class="text-navy text-[12.5px]">Trần Thị B</b>');
+    expect(html).not.toContain("Trần Thị B (CB-2026-3H8N2W)");
     // Người không có trong danh bạ: chỉ mã.
-    expect(html).toContain("<strong>CB-00007</strong>");
-    expect(html).toContain("Đang thực hiện");
-    expect(html).toContain("Mới giao");
-    expect(html).toContain("VĂN PHÒNG ĐẢNG ỦY · Trần Thị B (CB-2026-3H8N2W)");
+    expect(html).toContain(">CB-00007</b>");
+    // Spec 08: a status pill only on the row that CHANGED it (vs. the older row loaded); the first
+    // row ever (creation) gets none.
+    expect(html).toContain(nhuTrongHTML("Chuyển sang “Đang thực hiện”"));
+    expect(html).not.toContain(nhuTrongHTML("Chuyển sang “Mới giao”"));
+    // The hand-over box: no OLDER assignment row loaded → the new holder only, NO arrow before it.
+    expect(html).toContain('Bộ phận: </span><b class="text-navy font-semibold">VĂN PHÒNG ĐẢNG ỦY</b>');
+    expect(html).toContain('Người thực hiện: </span><b class="text-navy font-semibold">Trần Thị B</b>');
+    expect(html).not.toContain(": → ");
     // Ghi chú là TEXT, không phải HTML: thẻ trong đó bị thoát.
     expect(html).toContain("&lt;b&gt;văn phòng&lt;/b&gt;");
     expect(html).not.toContain("<b>văn phòng</b>");
@@ -2028,23 +2009,25 @@ describe("họ tên thay mã `CB-…` — danh bạ đọc MỘT LẦN, mã lạ
 
   it("cột `Người thực hiện`: họ tên khi danh bạ có, KHÔNG còn mã trần", () => {
     const html = veBang(NGUOI_KHAC, DANH_BA_MA);
-    expect(html).toContain("<td>Nguyễn Thị Thực</td>");
-    expect(html).not.toContain(`<td>${NGUOI_KHAC}</td>`);
+    expect(html).toContain(">Nguyễn Thị Thực</td>");
+    expect(html).not.toContain(`>${NGUOI_KHAC}</td>`);
   });
 
   it("mã KHÔNG có trong danh bạ: hiện MÃ, không bao giờ để trống", () => {
     // VẾ CHỊU LỰC. Một ô trống đọc ra là "chưa giao cho ai" — với đúng người đã làm việc ấy.
     const html = veBang(NGUOI_DA_NGHI, DANH_BA_MA);
-    expect(html).toContain(`<td>${NGUOI_DA_NGHI}</td>`);
-    expect(html).not.toContain("<td></td>");
+    expect(html).toContain(`>${NGUOI_DA_NGHI}</td>`);
+    expect(html).not.toMatch(/<td[^>]*><\/td>/);
   });
 
   it("danh bạ chưa về (hoặc hỏng): hiện MÃ; chưa phân công vẫn là `Chưa phân công`", () => {
-    expect(veBang(NGUOI_KHAC, null)).toContain(`<td>${NGUOI_KHAC}</td>`);
+    expect(veBang(NGUOI_KHAC, null)).toContain(`>${NGUOI_KHAC}</td>`);
     expect(veBang("", DANH_BA_MA)).toContain(nhuTrongHTML(CHUA_PHAN_CONG));
   });
 
-  it("drawer: người thực hiện, lãnh đạo giao việc — `Họ tên (CB-…)`, mã lạ là mã", () => {
+  // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (main session, prototype `TaskDetailDrawer.tsx:407-417`): the name
+  // alone; a code absent from the directory is still shown as the code.
+  it("drawer: người thực hiện, lãnh đạo giao việc — HỌ TÊN, mã lạ là mã", () => {
     const html = veChiTiet(
       { assignee: NGUOI_KHAC, assigner: NGUOI_DA_NGHI },
       LANH_DAO,
@@ -2052,18 +2035,27 @@ describe("họ tên thay mã `CB-…` — danh bạ đọc MỘT LẦN, mã lạ
       DU_QUYEN,
       DANH_BA,
     );
-    expect(html).toContain(`Nguyễn Thị Thực (${NGUOI_KHAC})`);
+    expect(html).toContain(">Nguyễn Thị Thực</p>");
+    expect(html).not.toContain(`Nguyễn Thị Thực (${NGUOI_KHAC})`);
     // The assigner sits under the assignee in the fact row (prototype, 06/10/2026).
-    expect(html).toContain(`Lãnh đạo giao việc: ${NGUOI_DA_NGHI}</dd>`);
+    expect(html).toContain(`Lãnh đạo giao việc: ${NGUOI_DA_NGHI}</p>`);
     const khac = veChiTiet({ assigner: LANH_DAO }, LANH_DAO, { pha: "dangTai" }, DU_QUYEN, DANH_BA);
-    expect(khac).toContain(`Lãnh đạo giao việc: Trần Văn Lãnh (${LANH_DAO})</dd>`);
+    expect(khac).toContain(`Lãnh đạo giao việc: Trần Văn Lãnh</p>`);
   });
 
-  it("drawer KHÔNG còn `Cơ quan chủ trì tham mưu` / `Chuyên viên theo dõi` (ADR 0065 NV5)", () => {
+  // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (owner #8, ADR 0076 lần 2): the directive block shows `Cơ quan chủ
+  // trì tham mưu` and `Chuyên viên Văn phòng tham mưu / theo dõi` again — as DISPLAY of the same unit and
+  // assignee (ADR 0065 NV5 still holds: no separate fields, nothing separate is sent).
+  it("drawer: `Cơ quan chủ trì tham mưu` / `Chuyên viên Văn phòng…` show the SAME unit and assignee", () => {
     const html = veChiTiet({ assignee: NGUOI_KHAC }, LANH_DAO, { pha: "dangTai" }, DU_QUYEN, DANH_BA);
-    expect(html).not.toContain("Cơ quan chủ trì");
-    expect(html).not.toContain("Chuyên viên theo dõi");
-    expect(html).not.toContain("Chuyên viên Văn phòng");
+    expect(html).toContain(`Cơ quan chủ trì tham mưu</p><div class="m-0 text-[13px]">VĂN PHÒNG ĐẢNG ỦY</div>`);
+    expect(html).toContain(
+      // The short name, as the register's column (the code only when the directory lacks the person).
+      `Chuyên viên Văn phòng tham mưu / theo dõi</p><div class="m-0 text-[13px]">Nguyễn Thị Thực</div>`,
+    );
+    // A basic task with nothing in the directive block does not show them.
+    const basic = veChiTiet({ type: "co-ban", assignee: NGUOI_KHAC }, LANH_DAO, { pha: "dangTai" }, DU_QUYEN, DANH_BA);
+    expect(basic).not.toContain("Chuyên viên Văn phòng");
   });
 });
 
@@ -2086,8 +2078,8 @@ describe("§4.2 — hàng quá hạn tô nền hồng rất nhạt, SUY RA từ 
 
   it("quá hạn: nền hồng, VÀ chữ `(trễ N ngày)` cùng dòng — màu không đứng một mình", () => {
     const html = veMotDong({});
-    // LỚP, không còn giá trị inline — `.dong-qua-han` ở `globals.css`.
-    expect(html).toMatch(/<tr data-tre-han="" class="[^"]*\bdong-qua-han\b[^"]*">/);
+    // A class, never an inline value (spec 03 §2: `bg-danger/6`).
+    expect(html).toMatch(/<tr data-tre-han="" class="[^"]*\bbg-danger\/6\b[^"]*">/);
     expect(html).not.toContain("style=");
     expect(html).toContain("(trễ 86 ngày)");
   });
@@ -2098,7 +2090,7 @@ describe("§4.2 — hàng quá hạn tô nền hồng rất nhạt, SUY RA từ 
       { due_at: null, original_due_at: null },
     ]) {
       const html = veMotDong(sua);
-      expect(html).not.toContain("dong-qua-han");
+      expect(html).not.toContain("bg-danger/6");
       expect(html).not.toContain("data-tre-han");
     }
   });
@@ -2178,32 +2170,8 @@ describe("`Trả lại để làm tiếp` — chỉ ở `cho-duyet`, chỉ với
   // The press and the send (reason required, trimmed, target `dang-thuc-hien`) run in a DOM in
   // `task-detail-dialog.test.tsx`; this file renders strings only.
 
-  it("câu từ chối của máy chủ (403/400) ra NGUYÊN VĂN trong drawer", () => {
-    const cau = "Trả lại để làm tiếp phải ghi lý do — người thực hiện cần biết còn thiếu gì.";
-    const html = renderToStaticMarkup(
-      <ChiTietNhiemVu
-        nhiemVu={nhiemVu({ status: "cho-duyet" })}
-        vanBan={{ pha: "dangTai" }}
-        danhMuc={DANH_MUC}
-        nhanTT={BANG_NHAN_MAC_DINH}
-        tenBoPhan={TEN_BO_PHAN}
-        bayGio={BAY_GIO}
-        maNguoiDangNhap={NGUOI_KHAC}
-        quyen={Q_DUYET}
-        dangGui={false}
-        loiGhi={cau}
-        dong={() => {}}
-        doiTrangThai={NOT_SENT}
-        xoa={NOT_SENT}
-        guiDeNghiLuiHan={KHONG_GOI}
-        quyetDinh={KHONG_GOI}
-        suaKhoiVanBan={KHONG_SUA}
-        docLaiChiTiet={KHONG_SUA}
-        {...PASS2_DRAWER_PROPS}
-      />,
-    );
-    expect(html).toContain(`role="alert">${nhuTrongHTML(cau)}</p>`);
-  });
+  // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (owner #12): the server's 403/400 sentence is the error toast, verbatim
+  // — `task-detail-dialog.test.tsx` presses the chip and reads `toast.error`.
 });
 
 describe("ô `Lãnh đạo giao việc` — chỉ người cầm quyền duyệt gia hạn", () => {
@@ -2326,33 +2294,41 @@ describe("§4.2 — tiêu đề sắp được: Mã, Tên việc, Ngày giao, Ư
   // ĐỔI CHIỀU CÓ CHỦ Ý 06/10/2026 (prototype columns): FOUR — `Ngày giao` left the table.
   it("đúng BỐN nút sắp, `aria-sort` đúng chiều ở cột đang sắp, `none` ở các cột kia", () => {
     const html = veBangSapXep({ cot: "code", chieu: "asc" });
-    expect(html.split('class="nut-sap-xep"').length - 1).toBe(4);
-    expect(html).toContain('<th scope="col" aria-sort="ascending"><button type="button" class="nut-sap-xep">Mã ↑</button></th>');
-    expect(html).toContain('aria-sort="none"><button type="button" class="nut-sap-xep">Tên việc ⇅</button>');
+    // Owner #5: server-side sort. A column the server cannot sort draws its control DISABLED with a
+    // "?" (lần 2 #12) — seven arrows, three of them on disabled buttons.
+    expect(html.split("lucide-arrow-up-down").length - 1).toBe(7);
+    expect(html.split('<button type="button" disabled=""').length - 1).toBe(3);
+    expect(html.split('aria-label="Sắp xếp theo cột này').length - 1).toBe(3);
+    const sortable = [...html.matchAll(/<th scope="col" aria-sort="(\w+)"[^>]*><button[^>]*>([^<]+)</g)].map((m) => [m[2], m[1]]);
+    expect(sortable).toEqual([
+      ["Mã", "ascending"],
+      ["Tên việc", "none"],
+      ["Ưu tiên", "none"],
+      ["Hạn", "none"],
+    ]);
     expect(html).not.toContain("Ngày giao");
-    expect(html).toContain('aria-sort="none"><button type="button" class="nut-sap-xep">Ưu tiên ⇅</button>');
-    expect(html).toContain('aria-sort="none"><button type="button" class="nut-sap-xep">Hạn ⇅</button>');
-    // Các cột còn lại là chữ thường — không mũi tên nào hứa một cách sắp máy chủ không có.
-    expect(html).toContain('<th scope="col">Người thực hiện</th>');
-    expect(html).toContain('<th scope="col">Trạng thái</th>');
+    // The active column's arrow is full strength; the others are faded.
+    expect(html.split("size-3 opacity-100").length - 1).toBe(1);
+    // The three others: no `aria-sort` (nothing was asked of the server for them).
+    expect(html).toMatch(/<th scope="col" class="[^"]*"><span[^>]*><button type="button" disabled=""[^>]*>Người thực hiện</);
+    expect(html).toMatch(/<th scope="col" class="[^"]*"><span[^>]*><button type="button" disabled=""[^>]*>Trạng thái</);
   });
 
-  it("đang sắp theo Ưu tiên giảm dần: mũi tên xuống ở đúng cột ấy; câu `chưa có mức ưu tiên nằm cuối` có sẵn", () => {
+  it("đang sắp theo Ưu tiên giảm dần: `aria-sort=\"descending\"` ở đúng cột ấy", () => {
     const html = veBangSapXep({ cot: "priority", chieu: "desc" });
-    expect(html).toContain('aria-sort="descending"><button type="button" class="nut-sap-xep">Ưu tiên ↓</button>');
-    const src = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
-    expect(src).toContain('<p className="ghi-chu">{NO_PRIORITY_LAST_NOTE}</p>');
+    expect(html).toMatch(/aria-sort="descending"[^>]*><button[^>]*>Ưu tiên</);
+    expect(html.match(/aria-sort="(ascending|descending)"/g)).toHaveLength(1);
   });
 
   it("prototype columns, in order: Mã · Tên việc · Người thực hiện · Bộ phận · Ưu tiên · Hạn · Trạng thái", () => {
     const html = veBangSapXep(SAP_XEP_MAC_DINH);
-    const heads = [...html.matchAll(/<th scope="col"[^>]*>(?:<button[^>]*>)?([^<⇅↑↓]+)/g)].map((m) => m[1]!.trim());
+    const heads = [...html.matchAll(/<th scope="col"[^>]*>(?:<span[^>]*>)?(?:<button[^>]*>)?([^<]+)/g)].map((m) => m[1]!.trim());
     expect(heads).toEqual(["Mã", "Tên việc", "Người thực hiện", "Bộ phận", "Ưu tiên", "Hạn", "Trạng thái"]);
     // The default order (newest first) has no column of its own: no arrow anywhere.
     expect(html).not.toMatch(/aria-sort="(ascending|descending)"/);
     // The whole row opens the task; the code cell is the keyboard's button. No `Mở NV…` column.
     expect(html).not.toContain("Mở NV");
-    expect(html).toMatch(/<td class="ma-muc"><button type="button"[^>]*aria-expanded="false">NV19<\/button><\/td>/);
+    expect(html).toMatch(/<td class="[^"]*"><button type="button"[^>]*aria-expanded="false">NV19<\/button><\/td>/);
   });
 
   it("đổi cách sắp là VỀ TRANG ĐẦU — con trỏ cũ thuộc cách sắp cũ, máy chủ trả 400", () => {
@@ -2503,18 +2479,20 @@ describe("cổng nút theo khoá `task.*` — CA BỊ TỪ CHỐI, không chỉ 
     const html = veChiTiet({}, LANH_DAO, { pha: "dangTai" }, quyenNhiemVu([QUYEN_CAP_NHAT_NHIEM_VU]));
     expect(html).not.toContain(`href="#${ID_HANG_CHO}"`);
     expect(html).not.toContain(nhuTrongHTML(NUT_DUYET));
-    // ADR 0038: ô XIN lùi hạn không đứng sau khoá duyệt — người cầm `task.update` vẫn gửi được.
-    expect(html).toContain('id="han-moi-lui-han"');
+    // ADR 0038: asking is not behind the decide key — the section is there for `task.update` (its
+    // form shows once the read returns no pending request: `TaskExtensionView` cases above).
+    expect(html).toContain(`>${EXTENSION_TITLE}</h3>`);
   });
 
   it("có `task.extend` nhưng KHÔNG phải lãnh đạo ghi trên bản ghi: lớp hai vẫn chặn", () => {
     // Khoá thật KHÔNG thay được phép so mã của ADR 0038 — lớp hai chạy SAU lớp khoá, không thay nó.
     const html = veChiTiet({}, NGUOI_KHAC, { pha: "dangTai" }, DU_QUYEN);
     expect(html).not.toContain(`href="#${ID_HANG_CHO}"`);
-    expect(html).toContain(nhuTrongHTML(CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC));
+    expect(html).not.toContain(nhuTrongHTML(NUT_DUYET));
+    // The row-level sentence is pinned on `TaskExtensionView` (`người KHÁC: … Đang chờ lãnh đạo duyệt.`).
   });
 
-  it("`task.delete` một mình: chỉ nút xoá ở dải bên phải hiện", () => {
+  it("`task.delete` một mình: chỉ nút xoá ở đầu hộp chi tiết hiện", () => {
     const html = veChiTiet({}, NGUOI_KHAC, { pha: "dangTai" }, quyenNhiemVu([QUYEN_XOA_NHIEM_VU]));
     expect(html).toContain(`aria-label="${TASK_DELETE_BUTTON}"`);
     expect(html).not.toContain(`aria-label="${TASK_INFO_EDIT_LABEL}"`);
@@ -2541,7 +2519,7 @@ describe("khối Chuyển trạng thái — người thực hiện, danh sách m
   it("ĐƯỢC — người thực hiện, KHÔNG có `task.update`: khối hiện, đúng các bước máy chủ liệt kê", () => {
     const html = veChiTiet({ status: "dang-thuc-hien" }, NGUOI_THUC_HIEN, { pha: "dangTai" }, KHONG_KHOA);
     expect(html).not.toContain(nhuTrongHTML(STATUS_MOVE_DENIED));
-    expect(html).toContain("Chuyển sang Chờ duyệt");
+    // `Chờ duyệt` is drawn only while current (spec 07 §2); the move into it is on the Kanban.
     expect(html).toContain("Chuyển sang Tạm dừng");
     // ĐỔI CHIỀU CÓ CHỦ Ý 30/09/2026 (ADR 0065 NV1): người thực hiện hoàn thành thẳng, không cần
     // `task.approve` — máy chủ quyết lại trên dòng (và vẫn đòi mọi việc con đã xong).
@@ -2621,24 +2599,18 @@ describe("khối Chuyển trạng thái — người thực hiện, danh sách m
 describe("W5 — tab `Liên quan đến tôi` và ô `Sắp đến hạn` trên hàng lọc", () => {
   const SRC = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
 
-  it("the Kanban counts are read with the SAME `loc` as the cards", () => {
-    // `getTaskCounts(loc)` shares the filter builder with the list — see lib/api/nhiem-vu.test.ts.
-    expect(SRC).toContain("getTaskCounts(loc).then(");
+  it("the counts are read with the SAME filter as the rows (`viewLoc`) — on EVERY view", () => {
+    // `getTaskCounts` shares the filter builder with the list — see lib/api/nhiem-vu.test.ts. Since
+    // 07/10/2026 the footer total of all three views comes from it, never from the page length
+    // (owner #5); Sổ theo dõi forces `Theo văn bản` into `viewLoc`, so its total counts its rows.
+    expect(SRC).toContain("getTaskCounts(viewLoc).then(");
+    expect(SRC).not.toContain("getTaskCounts(loc)");
   });
 });
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * 06/10/2026 — ADR 0068 §Sửa đổi lần 5: the screen follows the prototype (`TaskWorkspace.tsx`)
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
-
-/** Every element in a tree built WITHOUT rendering — `HangLoc` has no hooks, so its props can be called. */
-function elementsOf(node: unknown): { type: unknown; props: Record<string, unknown> }[] {
-  if (node === null || typeof node !== "object") return [];
-  if (Array.isArray(node)) return node.flatMap(elementsOf);
-  const el = node as { type?: unknown; props?: Record<string, unknown> };
-  if (el.props === undefined) return [];
-  return [{ type: el.type, props: el.props }, ...elementsOf(el.props.children), ...elementsOf(el.props.end)];
-}
 
 describe("the filter row — ONE row in the prototype's order, no `Bộ lọc` panel", () => {
   const row = (loc: Parameters<typeof HangLoc>[0]["loc"] = {}, extra: Partial<Parameters<typeof HangLoc>[0]> = {}) =>
@@ -2690,32 +2662,12 @@ describe("the filter row — ONE row in the prototype's order, no `Bộ lọc` p
 
   it("drill-down: every control drawn but disabled", () => {
     const html = row({}, { disabled: true });
-    expect(html).toMatch(/<select id="loc-bo-phan" disabled=""/);
+    expect(html).toMatch(/<select id="loc-bo-phan" aria-label="Lọc theo bộ phận" disabled=""/);
     expect(html).toMatch(/id="loc-qua-han"[^>]*disabled=""/);
   });
 
-  it("scope values: `` / `mine` / `related` — never a staff code (rule 1, forbidden #2)", () => {
-    const datLoc = vi.fn();
-    const tree = HangLoc({ loc: {}, tim: "", datTim: () => {}, datLoc, danhMuc: DANH_MUC, danhBa: null });
-    const seg = elementsOf(tree).find((e) => e.props.name === "pham-vi")!;
-    const onChange = seg.props.onChange as (v: string) => void;
-    onChange("related");
-    onChange("mine");
-    onChange("");
-    expect(datLoc.mock.calls.map((c) => (c[0] as { phamVi?: string }).phamVi)).toEqual(["related", "mine", undefined]);
-  });
-
-  it("`Chỉ việc quá hạn` and `Sắp đến hạn` exclude each other; off = ABSENT, never `false`", () => {
-    const datLoc = vi.fn();
-    const click = (loc: Parameters<typeof HangLoc>[0]["loc"], id: string) => {
-      const tree = HangLoc({ loc, tim: "", datTim: () => {}, datLoc, danhMuc: DANH_MUC, danhBa: null });
-      (elementsOf(tree).find((e) => e.props.id === id)!.props.onClick as () => void)();
-      return datLoc.mock.calls.at(-1)![0] as { chiTreHan?: boolean; dueSoon?: boolean };
-    };
-    expect(click({ dueSoon: true }, "loc-qua-han")).toEqual({ chiTreHan: true, dueSoon: undefined });
-    expect(click({ chiTreHan: true }, "loc-sap-den-han")).toEqual({ chiTreHan: undefined, dueSoon: true });
-    expect(click({ chiTreHan: true }, "loc-qua-han")).toEqual({ chiTreHan: undefined, dueSoon: undefined });
-  });
+  // `scope values` and the two exclusive toggles are clicks now (the row holds the search debounce,
+  // an effect) — `task-filter-row.interaction.test.tsx`.
 
   it("page wiring: the selection bar and the view switch are the row's right end; drill-down banner under it", () => {
     const src = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
@@ -2740,17 +2692,25 @@ describe("the filter row — ONE row in the prototype's order, no `Bộ lọc` p
 });
 
 describe("the detail — one view, the prototype's order", () => {
-  it("status block → fact row (Hạn xử lý · Cơ quan thực hiện · Người thực hiện · Mức ưu tiên) → left column → Nhật ký", () => {
+  it("status strip → fact grid (spec 07 §4: four cells) → left column → Nhật ký on the right", () => {
     const html = veChiTiet({ description: "Mô tả giả" });
     const at = (s: string) => html.indexOf(s);
-    expect(at('aria-label="Trạng thái nhiệm vụ"')).toBeLessThan(at('aria-label="Tóm tắt nhiệm vụ"'));
-    const facts = html.slice(at('aria-label="Tóm tắt nhiệm vụ"'), html.indexOf("</dl>", at('aria-label="Tóm tắt nhiệm vụ"')));
-    const dts = [...facts.matchAll(/<dt[^>]*>([^<]+)<\/dt>/g)].map((m) => m[1]);
-    expect(dts).toEqual(["Hạn xử lý", "Cơ quan thực hiện", "Người thực hiện", "Mức ưu tiên"]);
-    expect(at('aria-label="Tóm tắt nhiệm vụ"')).toBeLessThan(at('id="task-detail-info"'));
+    const facts = [...html.matchAll(/<p class="text-ink-muted m-0 mb-1 text-\[10.5px\] font-bold tracking-wide uppercase">([^<]+)<\/p>/g)].map(
+      (m) => m[1],
+    );
+    expect(facts).toEqual([
+      "Hạn xử lý",
+      "Cơ quan thực hiện (chủ trì tham mưu)",
+      "Người thực hiện (chuyên viên tham mưu)",
+      "Mức ưu tiên",
+    ]);
+    expect(at('aria-label="Các bước của vòng đời nhiệm vụ"')).toBeLessThan(at(">Hạn xử lý</p>"));
+    expect(at(">Mức ưu tiên</p>")).toBeLessThan(at('id="task-detail-info"'));
     expect(at('id="task-detail-info"')).toBeLessThan(at('id="task-detail-description"'));
     expect(at('id="task-detail-description"')).toBeLessThan(at('id="task-detail-deadlines"'));
     expect(at('id="task-detail-deadlines"')).toBeLessThan(at('id="task-detail-extensions"'));
+    // The timeline is the right column, after the left one.
+    expect(at('id="task-detail-extensions"')).toBeLessThan(at('aria-labelledby="tieu-de-nhat-ky-nhiem-vu-NV19"'));
   });
 
   it("no description: no empty `Mô tả` card", () => {
@@ -2771,7 +2731,7 @@ describe("NV-04 — hạn xử lý sửa/đặt được ở MỌI loại, sau c
 
   it("loại `co-ban`, cầm `task.update`: khối `Thông tin nhiệm vụ` có `✎ Sửa`", () => {
     const html = veChiTiet({ type: "co-ban" }, LANH_DAO, { pha: "dangTai" }, ONLY_UPDATE);
-    expect(html).toMatch(new RegExp(`aria-label="${TASK_INFO_EDIT_LABEL}"><svg[^>]*>.*?</svg>Sửa</button>`));
+    expect(html).toMatch(new RegExp(`aria-label="${TASK_INFO_EDIT_LABEL}"[^>]*><svg[^>]*>.*?</svg>Sửa</button>`));
   });
 
   it("việc tạo ra KHÔNG có hạn: vẫn sửa được (đặt hạn trong `✎ Sửa`), và khối lùi hạn chỉ tới đó", () => {
@@ -2782,7 +2742,8 @@ describe("NV-04 — hạn xử lý sửa/đặt được ở MỌI loại, sau c
       ONLY_UPDATE,
     );
     expect(html).toContain(`aria-label="${TASK_INFO_EDIT_LABEL}"`);
-    expect(html).toContain(nhuTrongHTML(EXTENSION_NO_DUE));
+    // No deadline ⇒ no request form (the sentence itself is pinned on `TaskExtensionView`).
+    expect(html).not.toContain('id="han-moi-lui-han"');
     expect(html).not.toContain("Hạn chỉ đặt được một lần");
   });
 
@@ -2814,21 +2775,18 @@ describe("NV-04 — hạn xử lý sửa/đặt được ở MỌI loại, sau c
   });
 });
 
-describe("NV-08 — tiến độ: ô vô hiệu kèm dấu \"?\", không còn `0% tiến độ ghi nhận` trần", () => {
-  it("drawer vẽ giá trị đang lưu trong ô DISABLED, cạnh nút \"?\" mang mô tả", () => {
+describe("NV-08 → spec 07 §4: the priority cell carries the STORED progress as its second line", () => {
+  // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (owner, ADR 0076 lần 2: the drawer follows spec 07): NV-08 (05/10)
+  // replaced `0% tiến độ ghi nhận` with a disabled box and a "?". Spec 07 §4 draws `{n}% tiến độ ghi
+  // nhận` under the priority — the STORED figure, never computed here (sub-task weights are a
+  // BACKEND DEPENDENCY). The disabled box and its "?" are gone.
+  it("the fact grid's priority cell: `Cao`, then `40% tiến độ ghi nhận`", () => {
     const html = veChiTiet({ progress: 40 });
-    expect(html).not.toContain("tiến độ ghi nhận");
-    expect(html).toMatch(/<input id="chi-tiet-tien-do"[^>]*disabled=""[^>]*value="40%"/);
-    expect(html).toContain(nhuTrongHTML(TASK_PROGRESS_PENDING.ten));
-    expect(html).toContain("data-pending-marker");
-  });
-
-  it("ô `Mức ưu tiên` (§5.3) mang dòng phụ `N% tiến độ` — con số ĐANG LƯU, không thay mức ưu tiên", () => {
-    const html = veChiTiet({ progress: 40 });
-    const at = html.indexOf('aria-label="Tóm tắt nhiệm vụ"');
-    const facts = html.slice(at, html.indexOf("</dl>", at));
-    expect(facts).toContain(`>${progressFactText(40)}</dd>`);
-    expect(progressFactText(0)).toBe("0% tiến độ");
+    expect(html).toContain(`>Mức ưu tiên</p><p class="text-navy m-0 text-[12.5px]">Cao</p>`);
+    expect(html).toContain(`>${progressFactText(40)}</p>`);
+    expect(progressFactText(0)).toBe("0% tiến độ ghi nhận");
+    expect(html).not.toContain('id="chi-tiet-tien-do"');
+    expect(html).not.toContain(nhuTrongHTML(TASK_PROGRESS_PENDING.ten));
   });
 });
 
@@ -2853,10 +2811,13 @@ describe("NV-09 → hộp chi tiết lớn (ADR 0068 §Sửa đổi 05/10/2026):
     expect(SRC).not.toContain("scrollIntoView");
   });
 
-  it("dòng bảng, thẻ Kanban, Sổ theo dõi, việc con, việc cha và Back/Forward đều qua `openDrawer`", () => {
-    expect(SRC.split("openDrawer(n);").length - 1).toBe(4);
-    // 3 → 2 on 06/10/2026: the on-page extension queue (one of the three) is gone (prototype).
-    expect(SRC.split("openDrawer(kq.duLieu);").length - 1).toBe(2);
+  it("dòng bảng, thẻ Kanban, Sổ theo dõi, việc con và Back/Forward đều qua `openDrawer`", () => {
+    // The three views and the child list hand `openDrawer` itself down (07/10/2026: the views'
+    // wrappers went with the rewrite).
+    expect(SRC.split("moNhiemVu={openDrawer}").length - 1).toBe(3);
+    expect(SRC.split("openTask={openDrawer}").length - 1).toBe(1);
+    // 2 → 1 on 07/10/2026: `Việc cha` (open by code) left the drawer (owner #6); Back/Forward remains.
+    expect(SRC.split("openDrawer(kq.duLieu);").length - 1).toBe(1);
   });
 
   it("thanh địa chỉ theo MÃ ĐANG MỞ, ở một chỗ; chi tiết vẽ trong `LargeDialog`", () => {
@@ -2882,8 +2843,11 @@ describe("NV-11 — thẻ Kanban nói bộ phận đang giữ việc; nhãn ngu�
     expect(cardHolderText({ assignee: "", unit: "" }, null, UNITS)).toBe(CHUA_PHAN_CONG);
   });
 
-  it("nhãn nguồn `truc-tiep` không còn là `Giao trực tiếp`", () => {
-    expect(nhanNguonGiao("truc-tiep")).not.toContain("trực tiếp");
+  // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (owner #2: the wording is the spec's, entirely): NV-11 (05/10)
+  // renamed `truc-tiep` away from `Giao trực tiếp`; spec 10 uses `Giao trực tiếp`. The card's holder
+  // line (above) still says the unit, so the reading NV-11 feared does not come back.
+  it("nhãn nguồn `truc-tiep` là `Giao trực tiếp` (spec 10)", () => {
+    expect(nhanNguonGiao("truc-tiep")).toBe("Giao trực tiếp");
   });
 });
 

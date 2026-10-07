@@ -89,7 +89,7 @@ function moveWith(permissions: readonly string[]): KanbanMove {
 }
 
 function card(): HTMLElement {
-  const el = host!.querySelector<HTMLElement>("article.the-nhiem-vu");
+  const el = host!.querySelector<HTMLElement>("article[data-task-card]");
   expect(el).not.toBeNull();
   return el!;
 }
@@ -158,22 +158,21 @@ describe("keyboard drag (a11y)", () => {
 
     // `dang-thuc-hien` → cho-duyet, hoan-thanh are columns; moi-giao, da-tiep-nhan are not moves.
     for (const allowed of ["cho-duyet", "hoan-thanh"]) {
-      expect(column(allowed).className).toContain("cot-nhan-tha");
+      expect(column(allowed).getAttribute("data-drop")).toBe("allowed");
       expect(column(allowed).textContent).toContain(kanbanDropHint(BANG_NHAN_MAC_DINH, allowed));
     }
     for (const refused of ["moi-giao", "da-tiep-nhan"]) {
-      expect(column(refused).className).toContain("cot-khong-nhan");
+      expect(column(refused).getAttribute("data-drop")).toBe("refused");
       expect(column(refused).textContent).toContain(KANBAN_DROP_REFUSED_HINT);
     }
     // The real card stays in its column, dimmed, while the copy is dragged.
-    expect(column("dang-thuc-hien").querySelector("article.the-dang-keo")).not.toBeNull();
+    expect(column("dang-thuc-hien").querySelector("article[data-dragging]")).not.toBeNull();
 
     act(() => {
       document.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, code: "Escape", key: "Escape" }));
     });
     await tick();
-    expect(host!.querySelector(".cot-nhan-tha")).toBeNull();
-    expect(host!.querySelector(".cot-khong-nhan")).toBeNull();
+    expect(host!.querySelector("[data-drop]")).toBeNull();
     expect(move.move).not.toHaveBeenCalled();
   });
 
@@ -183,6 +182,6 @@ describe("keyboard drag (a11y)", () => {
       openButton().dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, code: "Space", key: " " }));
     });
     await tick();
-    expect(host!.querySelector(".cot-nhan-tha")).toBeNull();
+    expect(host!.querySelector("[data-drop]")).toBeNull();
   });
 });

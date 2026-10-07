@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -27,9 +30,13 @@ import {
   ASSIGNMENT_BLOCK_ID,
   ASSIGNMENT_NO_CHANGE,
   ASSIGNMENT_NOTE_LABEL,
+  ASSIGNMENT_NOTHING_CHOSEN,
+  assignmentOutcomeText,
+  assignmentSubmitLabel,
+  staffInUnit,
+  unitWouldBeCleared,
   ASSIGNMENT_TITLE,
   ASSIGNMENT_UNIT_FIELD_ID,
-  ASSIGNMENT_UNIT_REQUIRED,
   assignmentBody,
   assignmentEffectNote,
   assignmentFormFromTask,
@@ -221,7 +228,6 @@ function drawer(t: petitions_nhiemVuRa, permissions: QuyenNhiemVu): string {
       maNguoiDangNhap=""
       quyen={permissions}
       dangGui={false}
-      loiGhi={null}
       dong={() => {}}
       doiTrangThai={NOT_SENT}
       xoa={NOT_SENT}
@@ -232,8 +238,6 @@ function drawer(t: petitions_nhiemVuRa, permissions: QuyenNhiemVu): string {
       extensionRefreshKey="0"
       onExtensionDecided={() => {}}
       openTask={() => {}}
-      openTaskByCode={NOT_CALLED}
-      saveParent={NOT_CALLED}
       addChild={null}
       reassign={NOT_CALLED}
     />,
@@ -247,11 +251,13 @@ describe("the drawer — block present / absent, and the stepper's `Chuyển ti�
   it("ALLOWED: `task.assign` on an active task ⇒ the block with the §5.7 labels", () => {
     const html = drawer(task(), quyenNhiemVu([TASK_ASSIGN_PERMISSION]));
     expect(html).toContain(BLOCK_MARK);
-    expect(html).toContain(`>${ASSIGNMENT_TITLE}</h4>`);
-    expect(html).toContain(`<label for="${ASSIGNMENT_UNIT_FIELD_ID}">Bộ phận</label>`);
+    // Spec 07 §6e: the drawer's section card carries the title; the block is the page-grey box.
+    expect(html).toContain(`id="tieu-de-giao-viec-chuyen-viec" class="text-navy m-0 mb-2.5 text-[12.5px] font-bold">${ASSIGNMENT_TITLE}</h3>`);
+    expect(html).toContain(`<label for="${ASSIGNMENT_UNIT_FIELD_ID}" class="text-ink block text-[11.5px] font-medium">Bộ phận</label>`);
     expect(html).toContain(">Người thực hiện</label>");
     expect(html).toContain(`>${ASSIGNMENT_NOTE_LABEL}</label>`);
-    expect(html).toMatch(/<button type="submit" class="nut-chinh"[^>]*>Giao việc<\/button>/);
+    // `[UserPlus] Giao việc` — a primary button (`nut-chinh` is the legacy hook it still carries).
+    expect(html).toMatch(/<button class="nut-chinh[^"]*" type="submit"[^>]*><svg[^>]*lucide-user-plus[^>]*>.*?<\/svg>Giao việc<\/button>/);
   });
 
   it("DENIED — every other write key but not `task.assign` ⇒ no block, no stepper button", () => {
@@ -312,7 +318,7 @@ describe("the drawer — block present / absent, and the stepper's `Chuyển ti�
 function renderForm(
   t: petitions_nhiemVuRa,
   f: AssignmentForm = assignmentFormFromTask(t),
-  extra: { error?: string | null; directory?: KetQua<identity_danhBaChonNguoiRa> | null } = {},
+  extra: { directory?: KetQua<identity_danhBaChonNguoiRa> | null } = {},
 ): string {
   return renderToStaticMarkup(
     <TaskAssignmentForm
@@ -323,26 +329,48 @@ function renderForm(
       form={f}
       change={() => {}}
       sending={false}
-      error={extra.error ?? null}
-      done={null}
       submit={() => {}}
     />,
   );
 }
 
 describe("the block — what each state says", () => {
-  it("opens with nothing changed: button off, and the sentence says why", () => {
+  // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (spec 07 §6e): the button is no longer greyed out with a sentence
+  // above it; a press with nothing to hand over says so by toast, as the prototype does.
+  const BLOCK_SRC = readFileSync(fileURLToPath(new URL("./task-assignment-block.tsx", import.meta.url)), "utf8");
+
+  it("opens with nothing changed: the button is ON; the press says what to choose (toast), nothing is sent", () => {
     const html = renderForm(task());
-    expect(html).toMatch(/<button type="submit" class="nut-chinh" disabled=""[^>]*>Giao việc/);
-    expect(html).toContain(asInHtml(ASSIGNMENT_NO_CHANGE));
+    expect(html).not.toMatch(/<button class="nut-chinh[^"]*" type="submit" disabled=""/);
+    expect(html).not.toContain(asInHtml(ASSIGNMENT_NO_CHANGE));
+    expect(assignmentBody(assignmentFormFromTask(task()), task())).toBeNull();
+    expect(ASSIGNMENT_NOTHING_CHOSEN).toBe("Chọn bộ phận hoặc người nhận việc.");
+    expect(BLOCK_SRC).toContain("if (body === null) {\n      toast.error(ASSIGNMENT_NOTHING_CHOSEN);\n      return;");
   });
 
-  it("unit cleared: button off, the unit sentence — not the no-change one", () => {
+  it("unit cleared: the press says the unit sentence (toast) — never sends a hand-over to nobody", () => {
     const t = task();
-    const html = renderForm(t, form(t, { unit: "" }));
-    expect(html).toContain(asInHtml(ASSIGNMENT_UNIT_REQUIRED));
-    expect(html).not.toContain(asInHtml(ASSIGNMENT_NO_CHANGE));
-    expect(html).toMatch(/<button type="submit" class="nut-chinh" disabled=""/);
+    expect(unitWouldBeCleared(form(t, { unit: "" }), t)).toBe(true);
+    expect(assignmentBody(form(t, { unit: "" }), t)).toBeNull();
+    expect(BLOCK_SRC).toContain("if (unitWouldBeCleared(form, task)) {\n      toast.error(ASSIGNMENT_UNIT_REQUIRED);");
+  });
+
+  it("the button reads `Chuyển việc` once a reason is typed; the toast names what happened", () => {
+    const t = task();
+    expect(renderForm(t, form(t, { unit: UNIT_B, note: "Nghỉ phép" }))).toMatch(/<\/svg>Chuyển việc<\/button>/);
+    expect(assignmentSubmitLabel({ note: "  " })).toBe("Giao việc");
+    expect(assignmentOutcomeText({ unit: UNIT_B })).toBe("Đã giao việc.");
+    expect(assignmentOutcomeText({ unit: UNIT_B, note: "Nghỉ phép" })).toBe("Đã chuyển việc và ghi vết.");
+  });
+
+  it("the person list follows the chosen unit (spec 07 §6e); an empty unit says so", () => {
+    const staff = [
+      { code: STAFF_A, full_name: "A", position: "", department_id: UNIT_A },
+      { code: STAFF_B, full_name: "B", position: "", department_id: UNIT_B },
+    ];
+    expect(staffInUnit(staff, UNIT_A).map((c) => c.code)).toEqual([STAFF_A]);
+    expect(staffInUnit(staff, "").map((c) => c.code)).toEqual([STAFF_A, STAFF_B]);
+    expect(staffInUnit(staff, "01JKHONGAI")).toEqual([]);
   });
 
   it("a real change: button on, no blocking sentence", () => {
@@ -352,11 +380,8 @@ describe("the block — what each state says", () => {
     expect(html).not.toContain(asInHtml(ASSIGNMENT_NO_CHANGE));
   });
 
-  it("the server's refusal VERBATIM, `role=alert`", () => {
-    const refusal = "Cán bộ được chọn không nhận được việc. Hãy chọn người khác trong danh sách.";
-    expect(renderForm(task(), undefined, { error: refusal })).toContain(
-      `<p class="thong-bao-loi" role="alert">${refusal}</p>`,
-    );
+  it("the server's refusal VERBATIM — the error toast (lần 6 #4)", () => {
+    expect(BLOCK_SRC).toContain("if (!result.ok) {\n        toast.error(result.thongBao);");
   });
 
   it("no lead unit / monitor field on ANY type — only `Bộ phận` and `Người thực hiện` (ADR 0065 NV5)", () => {
@@ -389,7 +414,8 @@ describe("the block — what each state says", () => {
     expect(note).toContain("Hạn xử lý giữ nguyên");
     expect(assignmentEffectNote(BANG_NHAN_MAC_DINH)).not.toContain("cơ quan chủ trì");
     expect(assignmentEffectNote(BANG_NHAN_MAC_DINH)).not.toContain("theo dõi");
-    expect(renderForm(task())).toContain(asInHtml(assignmentEffectNote(BANG_NHAN_MAC_DINH)));
+    // The form no longer draws the note: the prototype box has none (review r2 F-1, 07/10/2026).
+    expect(renderForm(task())).not.toContain(asInHtml(assignmentEffectNote(BANG_NHAN_MAC_DINH)));
   });
 
   it("a unit no longer in the catalogue still shows as the current value, not as `Chưa xác định`", () => {

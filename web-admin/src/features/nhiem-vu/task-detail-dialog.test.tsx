@@ -9,6 +9,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { toast } from "sonner";
+
 import { LargeDialog } from "@/components/ui/large-dialog";
 import type { KetQua } from "@/lib/api/goi";
 import type { petitions_nhiemVuRa, petitions_suaNhiemVuVao } from "@/lib/api/schema.gen";
@@ -32,8 +34,11 @@ import {
 import { ChiTietNhiemVu, SoNhiemVu, TASK_DELETE_BUTTON, TASK_INFO_EDIT_LABEL } from "./so-nhiem-vu";
 import { readTaskParam, searchWithTask, useTaskDialogUrl } from "./task-dialog-url";
 import {
+  STATUS_ATTACH_BUTTON,
   STATUS_COMPOSE_ID,
   STATUS_CONFIRM_BUTTON,
+  STATUS_CONFIRM_HANDOVER,
+  TaskStatusPipeline,
   STATUS_MOVE_DENIED,
   STATUS_NOTE_LABEL,
   reasonMoveName,
@@ -51,6 +56,9 @@ const ALL_KEYS = [
   QUYEN_XOA_NHIEM_VU,
   QUYEN_DUYET_GIA_HAN,
 ];
+
+// Outcomes are toasts (ADR 0068 lần 6 #4): the calls are what these cases read.
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 // The session: a staff code and the five write keys. The screen only reads these two fields.
 vi.mock("@/features/phien/phien-hien-tai", async (original) => ({
@@ -114,7 +122,6 @@ function detail(permissions: Permissions, patch: Partial<petitions_nhiemVuRa> = 
       maNguoiDangNhap="CB-2026-7K3M9Q"
       quyen={permissions}
       dangGui={false}
-      loiGhi={null}
       dong={() => {}}
       doiTrangThai={writes.move ?? NOT_SENT}
       xoa={writes.remove ?? NOT_SENT}
@@ -125,8 +132,6 @@ function detail(permissions: Permissions, patch: Partial<petitions_nhiemVuRa> = 
       extensionRefreshKey="0"
       onExtensionDecided={() => {}}
       openTask={() => {}}
-      openTaskByCode={NOT_CALLED}
-      saveParent={NOT_CALLED}
       addChild={null}
       reassign={NOT_CALLED}
     />
@@ -345,11 +350,14 @@ describe("the register opens the detail as a dialog", () => {
 
     const dialog = document.querySelector("dialog");
     expect(dialog).not.toBeNull();
-    expect(document.getElementById(dialog!.getAttribute("aria-labelledby")!)?.textContent).toContain("[NV19]");
+    // Spec 07 §1: the code chip and the title share the header; the title names the dialog.
+    const title = document.getElementById(dialog!.getAttribute("aria-labelledby")!)!;
+    expect(title.textContent).toBe("Rà soát danh sách hộ nghèo quý III");
+    expect(title.closest("header")?.textContent).toContain("NV19");
     expect(push).toHaveBeenCalledTimes(1);
     expect(window.location.search).toBe("?task=NV19");
 
-    const close = document.querySelector<HTMLButtonElement>('dialog button[aria-label="Đóng chi tiết nhiệm vụ"]')!;
+    const close = document.querySelector<HTMLButtonElement>('dialog header button[aria-label="Đóng"]')!;
     await act(async () => close.click());
     expect(document.querySelector("dialog")).toBeNull();
     expect(back).toHaveBeenCalledTimes(1);
@@ -393,25 +401,29 @@ describe("the detail — one view (user decision 07/10/2026): no action tabs", (
     expect(html).not.toContain('id="sua-tieu-de"');
   });
 
-  it("header (spec §5.1): `[mã] tiêu đề`, then `bộ phận · người thực hiện`; creator kept in the status card", () => {
+  it("header (spec 07 §1): code chip + title, then `bộ phận · người thực hiện`, [Xoá], ✕ — no `Tạo bởi` line", () => {
     const html = detailHtml(ALL);
-    expect(html).toMatch(/<h2 id="tieu-de-chi-tiet-nhiem-vu"[^>]*><span[^>]*>\[NV19\]<\/span>Rà soát danh sách hộ nghèo quý III<\/h2>/);
+    expect(html).toMatch(
+      /<span class="border-line text-ink-muted mt-0.5 shrink-0 rounded border bg-\[#F7FAFC\] px-1.5 py-0.5 text-\[10.5px\] font-semibold">NV19<\/span><h2 id="tieu-de-chi-tiet-nhiem-vu" class="text-navy m-0 min-w-0 text-\[16px\] leading-snug font-bold[^"]*">Rà soát danh sách hộ nghèo quý III<\/h2>/,
+    );
     expect(html).toContain(`${O_TRONG} · ${CHUA_PHAN_CONG}</p>`);
-    expect(html).toContain("Tạo bởi CB-2026-VANTHU");
+    expect(html).not.toContain("Tạo bởi");
+    // `border-b` alone — never with `border-solid` (preflight off: the other three sides go 3px).
+    expect(html).toContain('<header class="border-line flex shrink-0 items-start gap-3 border-b px-5 py-4">');
+    expect(html).not.toMatch(/border-b border-solid/);
+    const header = html.slice(html.indexOf("<header"), html.indexOf("</header>"));
+    expect(header.indexOf(`aria-label="${TASK_DELETE_BUTTON}"`)).toBeLessThan(header.indexOf('aria-label="Đóng"'));
   });
 
-  it("every rail button has an accessible name; the link and attach buttons follow the task", () => {
-    const html = detailHtml(ALL);
-    const rail = html.slice(html.indexOf('aria-label="Thao tác phụ"'));
-    expect(rail).toContain('aria-label="Sao chép liên kết"');
-    // The assigner writes in the log (`canWriteLogEntry`), so the attach shortcut is offered.
-    expect(rail).toContain('aria-label="Đính kèm vào nhật ký"');
-    // A basic task has no document block and no source minutes.
-    expect(rail).not.toContain('aria-label="Xem văn bản chỉ đạo"');
-    expect(rail).not.toContain('aria-label="Mở biên bản nguồn"');
-    expect(rail.match(/<button[^>]*>/g)?.every((b) => b.includes("aria-label="))).toBe(true);
-    const withDocs = detailHtml(ALL, { type: "theo-van-ban" });
-    expect(withDocs).toContain('aria-label="Xem văn bản chỉ đạo"');
+  it("NO right icon rail (spec 07, owner 07/10/2026 #7): no copy-link / source / attach shortcuts; Xoá is in the header", () => {
+    for (const html of [detailHtml(ALL), detailHtml(ALL, { type: "theo-van-ban" })]) {
+      expect(html).not.toContain('aria-label="Thao tác phụ"');
+      expect(html).not.toContain('aria-label="Sao chép liên kết"');
+      expect(html).not.toContain('aria-label="Đính kèm vào nhật ký"');
+      expect(html).not.toContain('aria-label="Xem văn bản chỉ đạo"');
+      const header = html.slice(html.indexOf("<header"), html.indexOf("</header>"));
+      expect(header).toContain(`aria-label="${TASK_DELETE_BUTTON}"`);
+    }
   });
 });
 
@@ -424,22 +436,30 @@ describe("status pipeline — a chip is a button ONLY for a move this account ma
     return [...steps.matchAll(/<button[^>]*aria-label="([^"]+)"/g)].map((m) => m[1]!);
   }
 
-  it("ALLOWED: `dang-thuc-hien` — exactly the server's plain moves are buttons; the current step is text", () => {
+  it("ALLOWED: `dang-thuc-hien` — exactly the server's plain moves on the flow are pressable; the rest are disabled", () => {
     const html = detailHtml(ALL, { status: "dang-thuc-hien" });
-    expect(stepButtons(html)).toEqual([statusMoveName("Chờ duyệt"), statusMoveName("Hoàn thành")]);
+    // Spec 07 §2: `Chờ duyệt` is drawn only while current — the move into it stays on the Kanban.
+    expect(stepButtons(html)).toEqual([statusMoveName("Hoàn thành")]);
     expect(html).toContain('aria-current="step" data-step="current">Đang thực hiện</span>');
-    // Not listed by the server from here ⇒ text, never a button.
+    // The current step is filled with its status colour (spec 07 §2), a disabled button.
+    expect(html).toMatch(/<button type="button" disabled="" title="Trạng thái hiện tại" class="[^"]*border-transparent text-white bg-brand"/);
+    // Not listed by the server from here ⇒ a DISABLED step with the spec's title, never pressable.
     expect(stepButtons(html).join(" ")).not.toContain("Mới giao");
+    expect(html).toMatch(/<button type="button" disabled="" title="Không chuyển thẳng sang bước này được" class="[^"]*border-line\/60 text-ink-muted\/60/);
     // The branch is offered only because it is a move (prototype: branch chips only when clickable).
     expect(html).toContain(`aria-label="${statusMoveName("Tạm dừng")}"`);
     // The old row of `Chuyển sang …` buttons is gone.
     expect(html).not.toContain(">Chuyển trạng thái</h4>");
   });
 
-  it("`Chờ duyệt` sits on the flow only when current or a move; `Tạm dừng` only when current or a move", () => {
+  it("`Chờ duyệt` sits on the flow only when current (spec 07 §2); `Tạm dừng` only when current or a move", () => {
     const fresh = detailHtml(ALL, { status: "moi-giao" });
     const steps = fresh.slice(fresh.indexOf("<ol"), fresh.indexOf("</ol>"));
     expect(steps).not.toContain("Chờ duyệt");
+    const working = detailHtml(ALL, { status: "dang-thuc-hien" });
+    expect(working.slice(working.indexOf("<ol"), working.indexOf("</ol>"))).not.toContain("Chờ duyệt");
+    const waiting = detailHtml(ALL, { status: "cho-duyet" });
+    expect(waiting.slice(waiting.indexOf("<ol"), waiting.indexOf("</ol>"))).toContain('data-step="current">Chờ duyệt</span>');
     const done = detailHtml(ALL, { status: "hoan-thanh" });
     expect(done).not.toContain(">Tạm dừng</span>");
   });
@@ -451,16 +471,16 @@ describe("status pipeline — a chip is a button ONLY for a move this account ma
     expect(html).toContain(STATUS_MOVE_DENIED);
   });
 
-  it("a plain move: the press opens the compose box; a refusal stays IN the box with the note kept; success clears it", async () => {
+  it("a plain move: the press opens the compose box; a refusal is the error toast, the box and note kept; success clears it", async () => {
     stubQuietServer();
     const move = vi
       .fn<(target: string, note?: string) => Promise<KetQua<petitions_nhiemVuRa>>>()
       .mockResolvedValueOnce({ ok: false, thongBao: "Máy chủ từ chối bước này." })
-      .mockResolvedValueOnce({ ok: true, duLieu: task({ status: "cho-duyet" }) });
+      .mockResolvedValueOnce({ ok: true, duLieu: task({ status: "hoan-thanh" }) });
     mount(detail(ALL, { status: "dang-thuc-hien" }, { move }));
     await settle();
 
-    await act(async () => byLabel(statusMoveName("Chờ duyệt")).click());
+    await act(async () => byLabel(statusMoveName("Hoàn thành")).click());
     const box = document.getElementById(STATUS_COMPOSE_ID)!;
     expect(box).not.toBeNull();
     const note = box.querySelector<HTMLTextAreaElement>("textarea")!;
@@ -471,18 +491,16 @@ describe("status pipeline — a chip is a button ONLY for a move this account ma
     typeInto(note, "  Đã gửi bản dự thảo  ");
     await act(async () => (box as HTMLFormElement).requestSubmit());
     await settle();
-    expect(move).toHaveBeenLastCalledWith("cho-duyet", "Đã gửi bản dự thảo");
-    expect(document.getElementById(STATUS_COMPOSE_ID)?.querySelector('[role="alert"]')?.textContent).toBe(
-      "Máy chủ từ chối bước này.",
-    );
+    // No hand-over chosen and no file: the extras carry nothing (the client then sends neither).
+    expect(move).toHaveBeenLastCalledWith("hoan-thanh", "Đã gửi bản dự thảo", { handover: undefined, attachments: [] });
+    expect(toast.error).toHaveBeenCalledWith("Máy chủ từ chối bước này.");
     expect(document.getElementById(STATUS_COMPOSE_ID)?.querySelector("textarea")?.value).toBe("  Đã gửi bản dự thảo  ");
 
     await act(async () => (document.getElementById(STATUS_COMPOSE_ID) as HTMLFormElement).requestSubmit());
     await settle();
     expect(move).toHaveBeenCalledTimes(2);
     expect(document.getElementById(STATUS_COMPOSE_ID)).toBeNull();
-    const status = Array.from(host!.querySelectorAll('[role="status"]')).map((n) => n.textContent);
-    expect(status).toContain(statusMoveDoneText("Chờ duyệt"));
+    expect(toast.success).toHaveBeenCalledWith(statusMoveDoneText("Hoàn thành"));
   });
 
   it("return for rework: the reason is MANDATORY — `Xác nhận` stays disabled on blank, the note is trimmed", async () => {
@@ -507,7 +525,7 @@ describe("status pipeline — a chip is a button ONLY for a move this account ma
     expect(confirm.disabled).toBe(false);
     await act(async () => confirm.click());
     await settle();
-    expect(move).toHaveBeenCalledWith("dang-thuc-hien", "Thiếu số liệu thôn 3");
+    expect(move).toHaveBeenCalledWith("dang-thuc-hien", "Thiếu số liệu thôn 3", { handover: undefined, attachments: [] });
   });
 
   it("reopen: same mandatory reason, its own label and note", async () => {
@@ -560,7 +578,7 @@ describe("information block — inline `✎ Sửa` (task.update)", () => {
     expect(document.activeElement).toBe(byLabel(TASK_INFO_EDIT_LABEL));
   });
 
-  it("a refusal (409) stays in the form, verbatim, with the typed title kept", async () => {
+  it("a refusal (409) is the error toast, verbatim; the form stays with the typed title kept", async () => {
     stubQuietServer();
     const refusal = "Nhiệm vụ vừa được người khác sửa — mở lại để xem bản mới.";
     const save = vi
@@ -574,12 +592,12 @@ describe("information block — inline `✎ Sửa` (task.update)", () => {
     typeInto(title, "Tên mới");
     await act(async () => title.form!.requestSubmit());
     await settle();
-    expect(title.form!.querySelector('[role="alert"]')?.textContent).toContain(refusal);
+    expect(toast.error).toHaveBeenCalledWith(refusal);
     expect(document.querySelector<HTMLInputElement>("#sua-tieu-de")!.value).toBe("Tên mới");
   });
 });
 
-describe("delete — a rail button behind `task.delete`, the existing confirm with a mandatory reason", () => {
+describe("delete — the header's button behind `task.delete`, the existing confirm with a mandatory reason", () => {
   const ALL = quyenNhiemVu(ALL_KEYS);
 
   it("DENIED: without `task.delete` there is no delete button and no delete form", () => {
@@ -588,7 +606,7 @@ describe("delete — a rail button behind `task.delete`, the existing confirm wi
     expect(html).not.toContain('id="ly-do-xoa-nhiem-vu"');
   });
 
-  it("ALLOWED: the rail opens the confirm; `Xoá` disabled until a reason; a refusal shows in the dialog", async () => {
+  it("ALLOWED: the header button opens the confirm; `Xoá` disabled until a reason; a refusal shows in the dialog", async () => {
     stubQuietServer();
     const remove = vi
       .fn<(reason: string) => Promise<KetQua<unknown>>>()
@@ -645,3 +663,60 @@ function typeInto(el: HTMLInputElement | HTMLTextAreaElement, value: string): vo
     el.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
+
+describe("compose box hand-over and files (prototype `TaskStatusPipeline.tsx:261-355`, `…/status` cebe0d47)", () => {
+  const UNITS = [
+    { id: "01JA", code: "a", name: "Văn phòng", parent_id: "", order: 0, staff_count: 1 },
+    { id: "01JB", code: "b", name: "Địa chính", parent_id: "", order: 1, staff_count: 1 },
+  ];
+  const DIRECTORY = {
+    ok: true as const,
+    duLieu: { items: [{ code: "CB-2026-0P4X1Z", full_name: "Nguyễn Thị Thực", position: "", department_id: "01JB" }] },
+  };
+
+  function pipeline(staffCode: string, move: (t: string, n?: string, e?: unknown) => Promise<KetQua<petitions_nhiemVuRa>>) {
+    return (
+      <TaskStatusPipeline
+        task={task({ status: "dang-thuc-hien", unit: "01JA", assignee: "CB-2026-7K3M9Q" })}
+        labels={BANG_NHAN_MAC_DINH}
+        permissions={quyenNhiemVu([QUYEN_CAP_NHAT_NHIEM_VU])}
+        staffCode={staffCode}
+        showAssignment={false}
+        sending={false}
+        move={move}
+        now={new Date("2026-09-15T03:00:00Z")}
+        units={UNITS}
+        directory={DIRECTORY}
+      />
+    );
+  }
+
+  it("DENIED — neither `task.assign` nor the assignee: no hand-over fields in the box", async () => {
+    stubQuietServer();
+    mount(pipeline("CB-2026-NGUOIKHAC", NOT_SENT));
+    await act(async () => byLabel(statusMoveName("Hoàn thành")).click());
+    expect(document.getElementById(`${STATUS_COMPOSE_ID}-bo-phan`)).toBeNull();
+    expect(document.getElementById(STATUS_COMPOSE_ID)?.textContent).toContain(STATUS_ATTACH_BUTTON);
+  });
+
+  it("ALLOWED — the assignee: a new unit relabels `Xác nhận` and is SENT as `handover`", async () => {
+    stubQuietServer();
+    const move = vi.fn(async () => ({ ok: true as const, duLieu: task({ status: "hoan-thanh" }) }));
+    mount(pipeline("CB-2026-7K3M9Q", move));
+    await act(async () => byLabel(statusMoveName("Hoàn thành")).click());
+    const unit = document.querySelector<HTMLSelectElement>(`#${STATUS_COMPOSE_ID}-bo-phan`)!;
+    expect(unit.value).toBe("01JA");
+    act(() => {
+      unit.value = "01JB";
+      unit.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const submit = document.querySelector<HTMLButtonElement>(`#${STATUS_COMPOSE_ID} button[type="submit"]`)!;
+    expect(submit.textContent).toBe(STATUS_CONFIRM_HANDOVER);
+    await act(async () => (document.getElementById(STATUS_COMPOSE_ID) as HTMLFormElement).requestSubmit());
+    await settle();
+    expect(move).toHaveBeenCalledWith("hoan-thanh", "", {
+      handover: { unit: "01JB", assignee: undefined },
+      attachments: [],
+    });
+  });
+});

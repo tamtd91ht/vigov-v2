@@ -3,6 +3,7 @@ import type {
   identity_danhSachCaLamViecRa,
   identity_danhSachKhoiNhiemVuRa,
   page_Result_petitions_deNghiChoDuyetRa,
+  page_Result_petitions_deNghiLuiHanRa,
   page_Result_petitions_nhatKyNhiemVuRa,
   page_Result_petitions_nhiemVuRa,
   petitions_danhSachLoaiNhiemVuRa,
@@ -18,8 +19,8 @@ import { PREVIEW_UNITS } from "./disbursement.fixture";
 
 /**
  * FIXTURE — what the dev-only screenshot preview answers for the Nhiệm vụ routes (`fixture-fetch.ts`).
- * Twelve tasks over all seven statuses and both task types, priorities mixed, one overdue, one due
- * tomorrow; one parent (`PREVIEW_TASK_CODE`) carrying everything the detail draws — three directive
+ * Twelve tasks over all seven statuses and both task types, priorities mixed, one overdue (a directive
+ * task, so the Sổ theo dõi has it), one leader-approved but not upper-approved (NV107), one due tomorrow; one parent (`PREVIEW_TASK_CODE`) carrying everything the detail draws — three directive
  * documents, a timeline with comments and an attachment, a pending deadline-extension request and two
  * sub-tasks. Every type comes from the contract (`schema.gen.ts`), so a contract change turns this file
  * red instead of letting the preview draw a shape the server no longer sends.
@@ -142,6 +143,8 @@ type TaskSeed = {
   childCount?: number;
   result?: string;
   meeting?: { id: string; title: string; conclusion: number };
+  /** `leader_approved` ticked by hand (default: only a finished task). */
+  leaderApproved?: boolean;
 };
 
 const SEEDS: readonly TaskSeed[] = [
@@ -157,7 +160,7 @@ const SEEDS: readonly TaskSeed[] = [
     meeting: { id: "01PREVIEWMTG0000000000001", title: "Giao ban UBND xã tháng này", conclusion: 2 },
   },
   {
-    code: "NV103", type: TYPE_BASIC, bloc: "khoi-uy-ban", priority: "khan", status: "dang-thuc-hien", source: "phan-anh",
+    code: "NV103", type: TYPE_BY_DOCUMENT, bloc: "khoi-uy-ban", priority: "khan", status: "dang-thuc-hien", source: "phan-anh",
     title: "Khắc phục đèn chiếu sáng hỏng trên tuyến đường liên thôn", unit: UNIT_ECONOMY, assignee: STAFF_B, assigner: STAFF_A,
     due: -3, created: -12, progress: 60,
   },
@@ -182,7 +185,7 @@ const SEEDS: readonly TaskSeed[] = [
   {
     code: "NV107", type: TYPE_BY_DOCUMENT, bloc: "khoi-uy-ban", priority: "cao", status: "cho-duyet", source: "van-ban-den",
     title: "Báo cáo kết quả thực hiện chương trình mục tiêu quốc gia 9 tháng", unit: UNIT_ECONOMY, assignee: STAFF_B, assigner: STAFF_C,
-    due: 2, originalDue: -1, created: -20, progress: 100,
+    due: 2, originalDue: -1, created: -20, progress: 100, leaderApproved: true,
     result: "Đã hoàn thành báo cáo, gửi kèm biểu số liệu.",
   },
   {
@@ -266,7 +269,7 @@ function build(seed: TaskSeed, now: Date, withDocuments: boolean): petitions_nhi
     progress: seed.progress,
     result_summary: seed.result ?? "",
     note: "",
-    leader_approved: seed.status === "hoan-thanh",
+    leader_approved: seed.leaderApproved ?? seed.status === "hoan-thanh",
     superior_acknowledged: false,
     parent: seed.parent ?? "",
     child_count: seed.childCount ?? 0,
@@ -400,4 +403,53 @@ export function previewTaskExtensions(task: string | null, now: Date = new Date(
     requested_at: at(now, -1, 8),
   };
   return { items: task === null || task === seed.code ? [pending] : [], next_cursor: "", has_more: false };
+}
+
+/**
+ * `GET /api/v1/tasks/{code}/extensions` — the task's extension history, newest first (every status,
+ * the server's Vietnamese codes). `PREVIEW_TASK_CODE` has its pending request plus an earlier one
+ * approved; NV107 has the approved request that moved its deadline. Others: none (the section hides).
+ */
+export function previewTaskExtensionHistory(code: string, now: Date = new Date()): page_Result_petitions_deNghiLuiHanRa {
+  const seed = SEEDS.find((s) => s.code === code);
+  if (seed === undefined) return { items: [], next_cursor: "", has_more: false };
+  const pending = previewTaskExtensions(code, now).items[0];
+  const items: page_Result_petitions_deNghiLuiHanRa["items"] = [];
+  if (code === PREVIEW_TASK_CODE && pending !== undefined) {
+    items.push({
+      id: pending.id,
+      requested_by: pending.requested_by,
+      new_due_at: pending.new_due_at,
+      reason: pending.reason,
+      status: "cho-duyet",
+      requested_at: pending.requested_at,
+      decided_at: null,
+      decision_note: null,
+    });
+    items.push({
+      id: "01PREVIEWEXT0000000000002",
+      requested_by: seed.assignee,
+      decided_by: seed.assigner,
+      new_due_at: day(now, seed.due ?? 0),
+      reason: "Bổ sung tiêu chí rà soát theo hướng dẫn mới của thành phố.",
+      status: "da-duyet",
+      requested_at: at(now, -9, 2),
+      decided_at: at(now, -8, 3),
+      decision_note: "Đồng ý lùi hạn một lần.",
+    });
+  }
+  if (code === "NV107") {
+    items.push({
+      id: "01PREVIEWEXT0000000000003",
+      requested_by: seed.assignee,
+      decided_by: seed.assigner,
+      new_due_at: day(now, seed.due ?? 0),
+      reason: "Chờ số liệu quyết toán của các thôn.",
+      status: "da-duyet",
+      requested_at: at(now, -3, 2),
+      decided_at: at(now, -2, 3),
+      decision_note: null,
+    });
+  }
+  return { items, next_cursor: "", has_more: false };
 }

@@ -1250,7 +1250,9 @@ describe("§5.9 Nhật ký & Trao đổi — nửa đọc", () => {
     expect(h.thoiDiem).toContain("09/09/2026");
     expect(h.luc).toBe("2026-09-09T07:20:00Z");
     expect(h.trangThai).toBe("Đang làm");
-    expect(h.nguoi).toBe("Nguyễn Văn A (CB-00311)");
+    // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (main session, prototype `TaskActivityPanel.tsx:302`): the name
+    // alone on the Nhiệm vụ log; the code stays in the store (rule 6 inv 8 governs storage).
+    expect(h.nguoi).toBe("Nguyễn Văn A");
     expect(h.ghiChu).toBe("Bắt đầu thực hiện.");
   });
 
@@ -1262,7 +1264,7 @@ describe("§5.9 Nhật ký & Trao đổi — nửa đọc", () => {
     expect(
       hienDongNhatKy(dong({ unit: "bp-vpdu", assignee: CB }), BANG_NHAN_MAC_DINH, DANH_BA, TEN_BO_PHAN)
         .phanCong,
-    ).toBe("VĂN PHÒNG ĐẢNG ỦY · Nguyễn Văn A (CB-00311)");
+    ).toBe("VĂN PHÒNG ĐẢNG ỦY · Nguyễn Văn A");
     expect(
       hienDongNhatKy(dong({ unit: "bp-vpdu" }), BANG_NHAN_MAC_DINH, DANH_BA, TEN_BO_PHAN).phanCong,
     ).toBe(`VĂN PHÒNG ĐẢNG ỦY · ${CHUA_PHAN_CONG}`);

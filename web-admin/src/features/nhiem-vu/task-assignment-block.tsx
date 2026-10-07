@@ -1,8 +1,11 @@
 "use client";
 
+import { Loader2, UserPlus } from "lucide-react";
 import { useState, type FormEvent } from "react";
+import { toast } from "sonner";
 
-import { StaffCombobox } from "@/components/staff-combobox";
+import { Button } from "@/components/ui/button";
+import { luaChonCanBo } from "@/features/bien-ban/nhan-bien-ban";
 import type { KetQua } from "@/lib/api/goi";
 import type {
   identity_boPhanRa,
@@ -21,36 +24,44 @@ import type { BangNhanTrangThai } from "./nhan-nhiem-vu"; // vi-name-ok: existin
 import {
   ASSIGNMENT_ASSIGNEE_LABEL,
   ASSIGNMENT_BLOCK_ID,
-  ASSIGNMENT_BUTTON,
-  ASSIGNMENT_NO_CHANGE,
   ASSIGNMENT_NOTE_LABEL,
   ASSIGNMENT_NOTE_MAX,
-  ASSIGNMENT_SENDING,
-  ASSIGNMENT_TITLE,
   ASSIGNMENT_UNIT_FIELD_ID,
   ASSIGNMENT_UNIT_LABEL,
   ASSIGNMENT_UNIT_REQUIRED,
   assignmentBody,
   assignmentDirectoryError,
-  assignmentDoneText,
-  assignmentEffectNote,
   assignmentFormFromTask,
+  assignmentOutcomeText,
+  assignmentSubmitLabel,
+  ASSIGNMENT_NOTHING_CHOSEN,
+  UNIT_HAS_NO_STAFF,
+  staffInUnit,
   unitOptions,
   unitWouldBeCleared,
   type AssignmentForm,
 } from "./task-assignment";
+import { INPUT_CLASS } from "./task-spec";
+
+/** The prototype's `HandoverFields` select (`HandoverFields.tsx:6-7`). */
+const HANDOVER_SELECT_CLASS =
+  "border-line focus-visible:ring-ring/50 mt-1 h-9 w-full rounded-md border bg-white px-2.5 text-[12.5px] text-ink [font-family:inherit] outline-none focus-visible:ring-[3px]";
+const HANDOVER_LABEL_CLASS = "text-ink block text-[11.5px] font-medium";
 
 /**
- * §5.7 "Giao việc, chuyển việc" in the drawer — `POST /api/v1/tasks/{ma}/assignment`, `task.assign`.
+ * §5.7 "Giao việc, chuyển việc" in the drawer — spec 07 §6e: a page-grey box holding the two
+ * `HandoverFields` selects (unit, then the person — filtered by that unit), the reason, and
+ * `[UserPlus] Giao việc` (`Chuyển việc` once a reason is typed). `POST /api/v1/tasks/{ma}/assignment`,
+ * `task.assign` — ONE route for both words (ADR 0076 #4c keeps the 28/09 rule on this route: the task
+ * goes back to "Chưa thực hiện" for the new holder, which the hint line under the button says).
  *
- * THE CALLER DECIDES WHETHER IT IS DRAWN (`canShowAssignment`: the key and a non-terminal task).
- * This component does not re-check: a second gate here is a second copy that drifts.
+ * THE CALLER DECIDES WHETHER IT IS DRAWN (`canShowAssignment`) and draws its heading (the drawer's
+ * `Section`, id `tieu-de-giao-viec-chuyen-viec`). No second gate here.
  *
- * NO OPTIMISTIC UPDATE. The fields keep what the officer chose until the server answers; on success
- * the drawer re-reads the task and the timeline (`reassign` resolves after the caller has queued
- * that), and the form restarts from the task the server returned. On refusal the choice stays and
- * the server's sentence is shown VERBATIM — "Cán bộ được chọn không nhận được việc…", the 409 of a
- * task that just ended, the 503 when identity could not be asked.
+ * NO OPTIMISTIC UPDATE: on success the drawer re-reads the task and the timeline, the form restarts
+ * from the task the server returned, and a toast says what happened ("Đã giao việc." / "Đã chuyển
+ * việc và ghi vết."). A refusal keeps the choice; its sentence — the server's, verbatim — is the
+ * error toast. Pressing with nothing to hand over says so by toast (spec 07 §6e).
  */
 export function TaskAssignmentBlock({
   task,
@@ -69,21 +80,27 @@ export function TaskAssignmentBlock({
 }) {
   const [form, setForm] = useState<AssignmentForm>(() => assignmentFormFromTask(task));
   const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<string | null>(null);
 
-  function submit(body: petitions_taskAssignmentIn): void {
+  function submit(): void {
+    if (sending) return;
+    if (unitWouldBeCleared(form, task)) {
+      toast.error(ASSIGNMENT_UNIT_REQUIRED);
+      return;
+    }
+    const body = assignmentBody(form, task);
+    if (body === null) {
+      toast.error(ASSIGNMENT_NOTHING_CHOSEN);
+      return;
+    }
     setSending(true);
-    setError(null);
-    setDone(null);
     reassign(body).then((result) => {
       setSending(false);
       if (!result.ok) {
-        setError(result.thongBao);
+        toast.error(result.thongBao);
         return;
       }
+      toast.success(assignmentOutcomeText(body));
       setForm(assignmentFormFromTask(result.duLieu));
-      setDone(assignmentDoneText(result.duLieu.code));
     });
   }
 
@@ -94,13 +111,8 @@ export function TaskAssignmentBlock({
       directory={directory}
       labels={labels}
       form={form}
-      change={(patch) => {
-        setDone(null);
-        setForm((f) => ({ ...f, ...patch }));
-      }}
+      change={(patch) => setForm((f) => ({ ...f, ...patch }))}
       sending={sending}
-      error={error}
-      done={done}
       submit={submit}
     />
   );
@@ -111,12 +123,11 @@ export function TaskAssignmentForm({
   task,
   units,
   directory,
-  labels,
+  // Kept on the props: callers and tests pass it; the status note it fed is gone (review r2 F-1).
+  labels: _labels,
   form,
   change,
   sending,
-  error,
-  done,
   submit,
 }: {
   task: petitions_nhiemVuRa;
@@ -126,100 +137,114 @@ export function TaskAssignmentForm({
   form: AssignmentForm;
   change: (patch: Partial<AssignmentForm>) => void;
   sending: boolean;
-  error: string | null;
-  done: string | null;
-  submit: (body: petitions_taskAssignmentIn) => void;
+  submit: () => void;
 }) {
   const staff = docDanhBaChonNguoi(directory);
-  const body = assignmentBody(form, task);
-  const blocked = unitWouldBeCleared(form, task)
-    ? ASSIGNMENT_UNIT_REQUIRED
-    : body === null
-      ? ASSIGNMENT_NO_CHANGE
-      : null;
+  // Unit chosen → only its staff (spec 07 §6e); the person recorded today keeps a line even when
+  // outside it, so the select never shows "nobody" for a task that has someone.
+  const reachable = staffInUnit(staff.ds, form.unit);
+  const people = luaChonCanBo(reachable, form.assignee);
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (body !== null && !sending) submit(body);
+    submit();
   }
 
   return (
     <form
       id={ASSIGNMENT_BLOCK_ID}
-      className="form-danh-muc"
+      className="border-line bg-canvas m-0 space-y-3 rounded-[10px] border p-3"
       aria-labelledby="tieu-de-giao-viec-chuyen-viec"
       onSubmit={onSubmit}
     >
-      <h4 id="tieu-de-giao-viec-chuyen-viec">{ASSIGNMENT_TITLE}</h4>
-      <p className="ghi-chu">{assignmentEffectNote(labels)}</p>
-
-      <div className="o-chon">
-        <label htmlFor={ASSIGNMENT_UNIT_FIELD_ID}>{ASSIGNMENT_UNIT_LABEL}</label>
-        <select
-          id={ASSIGNMENT_UNIT_FIELD_ID}
-          value={form.unit}
-          onChange={(e) => change({ unit: e.target.value })}
-        >
-          <option value="">{CHUA_XAC_DINH}</option>
-          {unitOptions(units, task.unit).map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.name}
-            </option>
-          ))}
-        </select>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div>
+          <label htmlFor={ASSIGNMENT_UNIT_FIELD_ID} className={HANDOVER_LABEL_CLASS}>
+            {ASSIGNMENT_UNIT_LABEL}
+          </label>
+          <select
+            id={ASSIGNMENT_UNIT_FIELD_ID}
+            value={form.unit}
+            className={HANDOVER_SELECT_CLASS}
+            onChange={(e) => {
+              const unit = e.target.value;
+              // The person chosen is not in the new unit: drop them, rather than keep a name that just
+              // vanished from the list below.
+              const stays = form.assignee === "" || staffInUnit(staff.ds, unit).some((c) => c.code === form.assignee);
+              change(stays ? { unit } : { unit, assignee: "" });
+            }}
+          >
+            <option value="">{CHUA_XAC_DINH}</option>
+            {unitOptions(units, task.unit).map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="giao-lai-nguoi-thuc-hien" className={HANDOVER_LABEL_CLASS}>
+            {ASSIGNMENT_ASSIGNEE_LABEL}
+          </label>
+          <select
+            id="giao-lai-nguoi-thuc-hien"
+            value={form.assignee}
+            disabled={staff.dangTai}
+            className={HANDOVER_SELECT_CLASS}
+            onChange={(e) => change({ assignee: e.target.value })}
+          >
+            <option value="">{nhanTrongOChonCanBo(staff, DE_BO_PHAN_TU_PHAN_CONG)}</option>
+            {people.map((o) => (
+              <option key={o.ma} value={o.ma}>
+                {o.nhan}
+              </option>
+            ))}
+          </select>
+          {form.unit !== "" && !staff.dangTai && staff.loi === null && reachable.length === 0 && (
+            <p className="text-tangerine m-0 mt-1 text-[11px]">{UNIT_HAS_NO_STAFF}</p>
+          )}
+        </div>
       </div>
 
       {staff.loi !== null && (
-        <p className="thong-bao-loi" role="alert">
+        <p className="thong-bao-loi m-0" role="alert">
           {assignmentDirectoryError(staff.loi)}
         </p>
       )}
-      <StaffCombobox
-        id="giao-lai-nguoi-thuc-hien"
-        label={ASSIGNMENT_ASSIGNEE_LABEL}
-        emptyLabel={nhanTrongOChonCanBo(staff, DE_BO_PHAN_TU_PHAN_CONG)}
-        value={form.assignee}
-        directory={staff.ds}
-        disabled={staff.dangTai}
-        onChange={(code) => change({ assignee: code })}
-      />
 
-      <div className="o-nhap">
-        <label htmlFor="giao-lai-ly-do">{ASSIGNMENT_NOTE_LABEL}</label>
+      <div>
+        <label htmlFor="giao-lai-ly-do" className={HANDOVER_LABEL_CLASS}>
+          {ASSIGNMENT_NOTE_LABEL}
+        </label>
         <input
           id="giao-lai-ly-do"
           name="giao-lai-ly-do"
           value={form.note}
           maxLength={ASSIGNMENT_NOTE_MAX}
           autoComplete="off"
+          className={`${INPUT_CLASS} mt-1 text-[12.5px] md:text-[12.5px]`}
           onChange={(e) => change({ note: e.target.value })}
         />
       </div>
 
-      {/* NOT `role="alert"`: it shows on first render (nothing chosen yet), and it is the reason
-          the button is off — so it sits right above the button and is linked to it. */}
-      {blocked !== null && (
-        <p id="giao-lai-ly-do-khoa" className="ghi-chu">
-          {blocked}
-        </p>
-      )}
-      {error !== null && (
-        <p className="thong-bao-loi" role="alert">
-          {error}
-        </p>
-      )}
-      {done !== null && <p role="status">{done}</p>}
-
-      <div className="cum-nut">
-        <button
-          type="submit"
-          className="nut-chinh"
-          disabled={sending || body === null}
-          aria-describedby={blocked !== null ? "giao-lai-ly-do-khoa" : undefined}
-        >
-          {sending ? ASSIGNMENT_SENDING : ASSIGNMENT_BUTTON}
-        </button>
-      </div>
+      <Button
+        type="submit"
+        variant="primary"
+        disabled={sending}
+        aria-busy={sending || undefined}
+        icon={
+          sending ? (
+            <Loader2 aria-hidden="true" focusable="false" className="size-4 animate-spin" />
+          ) : (
+            <UserPlus aria-hidden="true" focusable="false" className="size-4" />
+          )
+        }
+      >
+        {assignmentSubmitLabel(form)}
+      </Button>
+      {/* No line about what the act does to the status: the prototype's box has none
+          (TaskDetailDrawer.tsx:498-536), and the owner's 07/10 rule is "follow the prototype" (review
+          r2 F-1). The 28/09 status reset still happens on the server (ADR 0076 #4c). */}
     </form>
   );
 }

@@ -37,7 +37,8 @@ describe("page header — `Nhập từ Excel` · `Giao việc mới` stay behind
     expect(actions.indexOf('variant="outline"')).toBeLessThan(actions.indexOf('variant="primary"'));
     expect(actions.indexOf("{IMPORT_OPEN_BUTTON}")).toBeLessThan(actions.indexOf("Giao việc mới"));
     expect(actions).toContain("onClick={() => setImportOpen(true)}");
-    expect(actions).toContain("datMoFormTao(true);");
+    expect(actions).toContain("onClick={openCreate}");
+    expect(PAGE).toContain("const openCreate = () => {\n    datMoFormTao(true);");
   });
 
   it("the section keeps its accessible name; only the visual heading moved to the `<h1>`", () => {
@@ -94,8 +95,9 @@ describe("empty list (spec §8b) — the screen picks the sentence; the table ne
     expect(html).not.toContain(SO_RONG);
   });
 
-  it("the screen says `Chưa có nhiệm vụ nào` only with no filter, no drill-down, first page", () => {
-    expect(PAGE).toContain("!drillDownActive &&\n    !coTrangTruoc(nganXep) &&");
+  it("the screen says `Chưa có nhiệm vụ nào` only with no filter and no drill-down", () => {
+    // `Xem thêm` appends to the first page (owner 07/10/2026 #5): there is no "later page" to exclude.
+    expect(PAGE).toContain("const noFilter =\n    !drillDownActive &&\n    Object.entries(loc)");
     expect(PAGE).toContain('k === "sapXep" || k === "chieu" || v === undefined');
   });
 });

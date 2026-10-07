@@ -7,18 +7,24 @@ import { describe, expect, it } from "vitest";
 import type { KetQua } from "@/lib/api/goi";
 import type { page_Result_petitions_nhiemVuRa, petitions_nhiemVuRa } from "@/lib/api/schema.gen";
 
-import { BatchDeleteBar } from "./batch-delete-bar";
+import { BatchDeleteDialog } from "./batch-delete-bar";
 import {
-  BATCH_DELETE_BUTTON,
+  BATCH_NOTE,
   EMPTY_SELECTION,
+  SELECT_ALL_LABEL,
+  batchDeleteConfirmLabel,
+  batchDeleteTitle,
+  batchFailureToasts,
   batchProgressText,
-  batchResultLine,
-  batchSummary,
+  batchSuccessToast,
   deleteOrder,
   keepFailed,
   runBatchDelete,
+  selectAllState,
   selectedCountLabel,
+  toggleAllSelected,
   toggleSelected,
+  type SelectedTask,
   type TaskSelection,
 } from "./batch-delete";
 import { BANG_NHAN_MAC_DINH, PHAN_CHUA_DUNG, TRANG_THAI_CHINH } from "./nhan-nhiem-vu";
@@ -38,11 +44,16 @@ import {
 
 const REFUSAL = "còn 2 việc con chưa xoá — xử lý hoặc xoá các việc con trước";
 
+/** A selected row: code, parent, and the title + assignee the confirm dialog lists. */
+function picked(code: string, parent = ""): SelectedTask {
+  return { code, parent, title: `Việc ${code}`, assignee: "" };
+}
+
 describe("selection — a new map every time", () => {
   it("tick then untick; the old map is never edited", () => {
-    const a = toggleSelected(EMPTY_SELECTION, { code: "NV19", parent: "" });
+    const a = toggleSelected(EMPTY_SELECTION, picked("NV19"));
     expect([...a.keys()]).toEqual(["NV19"]);
-    const b = toggleSelected(a, { code: "NV19", parent: "" });
+    const b = toggleSelected(a, picked("NV19"));
     expect(b.size).toBe(0);
     expect(a.size).toBe(1);
     expect(EMPTY_SELECTION.size).toBe(0);
@@ -50,8 +61,8 @@ describe("selection — a new map every time", () => {
 
   it("after a run, ONLY the failed stay selected", () => {
     const sel = [
-      { code: "NV1", parent: "" },
-      { code: "NV2", parent: "" },
+      picked("NV1"),
+      picked("NV2"),
     ].reduce(toggleSelected, EMPTY_SELECTION);
     const kept = keepFailed(sel, [
       { code: "NV1", ok: true },
@@ -64,18 +75,18 @@ describe("selection — a new map every time", () => {
 describe("order — children before parents, within the selection", () => {
   it("a parent selected before its child (and grandchild) goes LAST", () => {
     const order = deleteOrder([
-      { code: "NV10", parent: "" },
-      { code: "NV11", parent: "NV10" },
-      { code: "NV12", parent: "NV11" },
-      { code: "NV30", parent: "" },
+      picked("NV10"),
+      picked("NV11", "NV10"),
+      picked("NV12", "NV11"),
+      picked("NV30"),
     ]);
     expect(order.map((t) => t.code)).toEqual(["NV12", "NV11", "NV10", "NV30"]);
   });
 
   it("an unselected parent changes nothing; ties keep the order of selection", () => {
     const order = deleteOrder([
-      { code: "NV2", parent: "NV99" },
-      { code: "NV1", parent: "" },
+      picked("NV2", "NV99"),
+      picked("NV1"),
     ]);
     expect(order.map((t) => t.code)).toEqual(["NV2", "NV1"]);
   });
@@ -83,8 +94,8 @@ describe("order — children before parents, within the selection", () => {
   it("bad data with a cycle terminates", () => {
     expect(
       deleteOrder([
-        { code: "A", parent: "B" },
-        { code: "B", parent: "A" },
+        picked("A", "B"),
+        picked("B", "A"),
       ])
         .map((t) => t.code)
         .sort(),
@@ -108,9 +119,9 @@ describe("the run — one call per task, one at a time, never stopping at a refu
     };
     const results = await runBatchDelete(
       [
-        { code: "NV10", parent: "" },
-        { code: "NV20", parent: "" },
-        { code: "NV30", parent: "" },
+        picked("NV10"),
+        picked("NV20"),
+        picked("NV30"),
       ],
       "Nhập trùng",
       softDelete,
@@ -131,54 +142,61 @@ describe("the run — one call per task, one at a time, never stopping at a refu
     ]);
   });
 
-  it("the words: per-task line with the server's sentence; summary never claims more than happened", () => {
-    expect(batchResultLine({ code: "NV10", ok: false, message: REFUSAL })).toBe(`NV10 — chưa xoá: ${REFUSAL}`);
-    expect(batchResultLine({ code: "NV20", ok: true })).toBe("NV20 — đã xoá.");
-    expect(batchSummary([{ code: "A", ok: true }])).toBe("Đã xoá 1/1 nhiệm vụ.");
-    expect(
-      batchSummary([
-        { code: "A", ok: true },
-        { code: "B", ok: false, message: "x" },
-      ]),
-    ).toContain("Đã xoá 1/2 nhiệm vụ; 1 việc chưa xoá được");
+  it("the toasts (spec 02 §4): only what the server confirmed; ONE line per distinct refusal, verbatim", () => {
+    const results = [
+      { code: "A", ok: true as const },
+      { code: "B", ok: false as const, message: REFUSAL },
+      { code: "C", ok: false as const, message: REFUSAL },
+      { code: "D", ok: false as const, message: "x" },
+    ];
+    expect(batchSuccessToast(results)).toBe("Đã xoá 1 nhiệm vụ.");
+    expect(batchSuccessToast([{ code: "B", ok: false, message: "x" }])).toBeNull();
+    expect(batchFailureToasts(results)).toEqual([`2 nhiệm vụ không xoá được: ${REFUSAL}`, "1 nhiệm vụ không xoá được: x"]);
     expect(selectedCountLabel(3)).toBe("Đã chọn 3 nhiệm vụ");
+    expect(batchDeleteTitle(3)).toBe("Xoá 3 nhiệm vụ khỏi sổ?");
+    expect(batchDeleteConfirmLabel(3)).toBe("Xoá 3 nhiệm vụ");
   });
 });
 
-describe("the bar", () => {
-  const render = (p: Partial<Parameters<typeof BatchDeleteBar>[0]> = {}) =>
-    renderToStaticMarkup(
-      <BatchDeleteBar count={2} progress={null} results={null} onRun={() => {}} onClear={() => {}} {...p} />,
-    );
+describe("the confirm dialog (spec 02 §4)", () => {
+  const ROWS = [
+    { code: "NV10", title: "Rà soát hộ nghèo", holder: "Cán bộ B" },
+    { code: "NV20", title: "Kiểm kê tài sản", holder: "Chưa phân công" },
+  ];
+  const render = (p: Partial<Parameters<typeof BatchDeleteDialog>[0]> = {}) =>
+    renderToStaticMarkup(<BatchDeleteDialog tasks={ROWS} progress={null} onRun={() => {}} onClose={() => {}} {...p} />);
 
-  it("`Đã chọn {N} nhiệm vụ` + the red button, disabled while the shared reason is empty", () => {
+  it("the question, the consequence, every task listed (title + assignee), the MANDATORY reason, Huỷ / red `Xoá N nhiệm vụ`", () => {
     const html = render();
-    expect(html).toContain(">Đã chọn 2 nhiệm vụ</h3>");
+    expect(html).toContain(">Xoá 2 nhiệm vụ khỏi sổ?</h2>");
+    expect(html).toContain(BATCH_NOTE);
+    expect(html).toContain("Rà soát hộ nghèo</span>");
+    expect(html).toContain("Cán bộ B</span>");
+    expect(html).toContain("Kiểm kê tài sản</span>");
     expect(html).toMatch(/<input id="ly-do-xoa-da-chon"[^>]*required=""/);
-    // ADR 0068: the `🗑` glyph is a decorative lucide icon before the word now; the button, its
-    // type, its class and its disabled state are what this pins.
-    expect(html).toMatch(
-      new RegExp(`<button type="submit" class="nut-xoa" disabled=""><svg[^>]*aria-hidden="true"[^>]*>.*?</svg>${BATCH_DELETE_BUTTON}</button>`),
-    );
+    expect(html.indexOf(">Huỷ</button>")).toBeLessThan(html.indexOf(">Xoá 2 nhiệm vụ</button>"));
+    // Presentation pin (ADR 0068 §5): the confirm is solid red, off until the reason has text.
+    expect(html).toMatch(/<button class="[^"]*bg-danger[^"]*text-white[^"]*" type="submit" disabled=""><svg[^>]*>.*?<[/]svg>Xoá 2 nhiệm vụ<[/]button>/);
   });
 
   it("running: progress in the live region, every control off", () => {
     const html = render({ progress: { done: 1, total: 2 } });
     expect(html).toContain(batchProgressText(1, 2));
     expect(html).toMatch(/<input id="ly-do-xoa-da-chon"[^>]*disabled=""/);
+    expect(html).toMatch(/<button class="[^"]*" type="button" disabled="">Huỷ<[/]button>/);
   });
+});
 
-  it("after a run: one line per task, the refused one marked as an error, shown even with nothing left selected", () => {
-    const html = render({
-      count: 0,
-      results: [
-        { code: "NV10", ok: false, message: REFUSAL },
-        { code: "NV20", ok: true },
-      ],
-    });
-    expect(html).toContain(`<li class="thong-bao-loi">NV10 — chưa xoá: ${REFUSAL}</li>`);
-    expect(html).toContain("<li>NV20 — đã xoá.</li>");
-    expect(html).not.toContain('id="ly-do-xoa-da-chon"');
+describe("select all (spec 04 `SelectAllBox`)", () => {
+  it("ticks every row shown; all ticked → unticks them; the state says all / some / none", () => {
+    const rows = [picked("NV1"), picked("NV2")];
+    const some = toggleSelected(EMPTY_SELECTION, rows[0]!);
+    expect(selectAllState(some, rows)).toBe("some");
+    const all = toggleAllSelected(some, rows);
+    expect([...all.keys()].sort()).toEqual(["NV1", "NV2"]);
+    expect(selectAllState(all, rows)).toBe("all");
+    expect(toggleAllSelected(all, rows).size).toBe(0);
+    expect(selectAllState(EMPTY_SELECTION, rows)).toBe("none");
   });
 });
 
@@ -216,7 +234,7 @@ function task(code: string, patch: Partial<petitions_nhiemVuRa> = {}): petitions
 
 const CATALOGUES: DanhMucNhiemVu = { loai: [], mucUuTien: [], khoi: [], boPhan: [] };
 const SELECTION: TaskSelection = {
-  selected: toggleSelected(EMPTY_SELECTION, { code: "NV19", parent: "" }),
+  selected: toggleSelected(EMPTY_SELECTION, picked("NV19")),
   toggle: () => {},
   disabled: false,
 };
@@ -266,9 +284,16 @@ describe("checkboxes — allowed and DENIED", () => {
   it("list with `task.delete`: a `☐` column, one named checkbox per row, ticked ones checked", () => {
     const html = list(SELECTION);
     expect(html.split('type="checkbox"').length - 1).toBe(2);
-    expect(html).toMatch(/<input type="checkbox" aria-label="Chọn NV19" checked=""/);
+    expect(html).toMatch(/<input type="checkbox" class="accent-brand m-0 size-3.5" aria-label="Chọn NV19" checked=""/);
     expect(html).not.toMatch(/aria-label="Chọn NV20" checked=""/);
     expect(html).toContain('<span class="an-thi-giac">Chọn</span>');
+  });
+
+  it("with `toggleAll`: the header box (prototype `SelectAllBox`), half-ticked rows read as not all", () => {
+    const html = list({ ...SELECTION, toggleAll: () => {} });
+    expect(html.split('type="checkbox"').length - 1).toBe(3);
+    expect(html).toContain(`aria-label="${SELECT_ALL_LABEL}"`);
+    expect(html).not.toMatch(new RegExp(`aria-label="${SELECT_ALL_LABEL}"[^>]*checked=""`));
   });
 
   it("DENIED — list without `task.delete` (`selection` null): no column, no checkbox", () => {
@@ -298,9 +323,11 @@ describe("page wiring (source) and PHAN_CHUA_DUNG", () => {
     expect(SRC).toContain("const taskSelection: TaskSelection | null = quyen.xoa");
     // 06/10/2026 (prototype): `Đã chọn N · Xoá đã chọn` sits in the filter row; the reason — still
     // MANDATORY (rule 7) — is asked in the dialog it opens.
-    expect(SRC).toContain("{quyen.xoa && selection.size > 0 && (");
+    expect(SRC).toContain("const selectionOn = quyen.xoa && selection.size > 0;");
     expect(SRC).toContain("{quyen.xoa && batchOpen && (");
-    expect(SRC).toMatch(/<BatchDeleteBar\s+count=\{selection\.size\}/);
+    expect(SRC).toMatch(/<BatchDeleteDialog\s+tasks=\{\[\.\.\.selection\.values\(\)\]/);
+    // The outcome is told by toasts (spec 02 §4), one per distinct refusal.
+    expect(SRC).toContain("for (const line of batchFailureToasts(results)) toast.error(line);");
   });
 
   it("`Xoá đã chọn` left PHAN_CHUA_DUNG; no Excel entry remains either", () => {

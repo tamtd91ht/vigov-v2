@@ -39,8 +39,11 @@ describe("SoNhiemVu nối bảng nhãn xã tới MỌI chỗ vẽ", () => {
     expect(NGUON).toMatch(/layTrangThaiNhiemVu\(\),?\s*\]\)\.then\(/);
     expect(NGUON).toContain("datKqNhanTT(nhanTT)");
     expect(NGUON).toContain(
-      "const { bang: nhanTT, canhBao: canhBaoNhanTT } = docBangNhanTrangThai(kqNhanTT);",
+      "const { bang: bangNhanXa, canhBao: canhBaoNhanTT } = docBangNhanTrangThai(kqNhanTT);",
     );
+    // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (ADR 0076 lần 2 #2): the WORDS are the spec's, fixed; the ORDER is
+    // still the commune's table — `withSpecLabels` keeps `thuTu` and swaps only `nhan`.
+    expect(NGUON).toContain("const nhanTT = withSpecLabels(bangNhanXa);");
   });
 
   it("câu cảnh báo đường lui LÊN TRANG, mang đúng cảnh báo vừa đọc", () => {
@@ -57,7 +60,10 @@ describe("SoNhiemVu nối bảng nhãn xã tới MỌI chỗ vẽ", () => {
   it("mọi lời gọi `nhanTrangThai(` đọc bảng `nhanTT` — không bảng nào khác", () => {
     const doiSoDau = [...NGUON.matchAll(/nhanTrangThai\(\s*([^,)]*)/g)].map((m) => m[1]);
     expect(doiSoDau.length).toBeGreaterThan(0);
-    expect(doiSoDau.filter((v) => v !== "nhanTT")).toEqual([]);
+    // `labels` is the parameter of the two toast helpers; their callers hand them `nhanTT`.
+    expect(doiSoDau.filter((v) => v !== "nhanTT" && v !== "labels")).toEqual([]);
+    expect(NGUON).toContain("kanbanMoveToast(nhanTT, target)");
+    expect(NGUON).toContain("kanbanDropRefusedToast(nhanTT, task.status, allowed)");
   });
 
   it("`nhanTrangThai` không có tham số mặc định — quên truyền bảng phải là lỗi, không phải chữ mặc định", () => {

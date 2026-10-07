@@ -8,6 +8,7 @@ import {
   duongDanNhatKyNhiemVu,
   duongDanSoNhiemVu,
   getTaskCounts,
+  getTaskExtensionHistory,
   layHangChoLuiHan,
   layNhatKyNhiemVu,
   layNhiemVu,
@@ -18,8 +19,10 @@ import {
   registerFileName,
   REGISTER_EXPORT_FALLBACK_NAME,
   quyetDinhLuiHan,
+  removeTaskAttachment,
   suaNhiemVu,
   taoNhiemVu,
+  taskExtensionHistoryPath,
   xoaNhiemVu,
 } from "./nhiem-vu";
 import type { petitions_post_tasks_by_ma_status } from "./schema.gen";
@@ -751,4 +754,50 @@ describe("Sổ theo dõi (W6) — `include=documents` và `register-export`", ()
       expect(await downloadTaskRegister()).toEqual({ ok: false, thongBao: cau });
     });
   }
+});
+
+describe("07/10/2026 — extension history, attachment removal, a status move carrying a hand-over", () => {
+  it("GET …/extensions: the task code in the path, `limit` / `cursor` by the contract's names, no empty cursor", async () => {
+    expect(taskExtensionHistoryPath("NV 19")).toBe("/api/v1/tasks/NV%2019/extensions");
+    expect(taskExtensionHistoryPath("NV19", { limit: 20, cursor: "" })).toBe("/api/v1/tasks/NV19/extensions?limit=20");
+    expect(taskExtensionHistoryPath("NV19", { cursor: "c1" })).toBe("/api/v1/tasks/NV19/extensions?cursor=c1");
+    const fake = batFetch(
+      new Response('{"items":[],"next_cursor":"","has_more":false}', {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    expect(await getTaskExtensionHistory("NV19", { limit: 20 })).toEqual({
+      ok: true,
+      duLieu: { items: [], next_cursor: "", has_more: false },
+    });
+    expect(fake.mock.calls[0]?.[0]).toBe("/api/v1/tasks/NV19/extensions?limit=20");
+  });
+
+  it("DELETE …/attachments/{id}: the reason in the BODY (never the URL), 204 without body is success", async () => {
+    const fake = batFetch(new Response(null, { status: 204 }));
+    const r = await removeTaskAttachment("NV19", "01JTEP/1", "tải nhầm tệp");
+    expect(fake.mock.calls[0]?.[0]).toBe("/api/v1/tasks/NV19/attachments/01JTEP%2F1");
+    expect(fake.mock.calls[0]?.[1]?.method).toBe("DELETE");
+    expect(than(fake)).toEqual({ reason: "tải nhầm tệp" });
+    expect(r.ok).toBe(true);
+  });
+
+  it("POST …/status: `handover` only with a value, `attachments` only when non-empty", async () => {
+    const fake = batFetch(OK_JSON());
+    await doiTrangThaiNhiemVu("NV19", "dang-thuc-hien", "giao lại", {
+      handover: { unit: "01JBOPHAN", assignee: "" },
+      attachments: ["01JTEP"],
+    });
+    expect(than(fake)).toEqual({
+      status: "dang-thuc-hien",
+      note: "giao lại",
+      handover: { unit: "01JBOPHAN" },
+      attachments: ["01JTEP"],
+    });
+    vi.unstubAllGlobals();
+    const fake2 = batFetch(OK_JSON());
+    await doiTrangThaiNhiemVu("NV19", "dang-thuc-hien", "", { handover: { unit: "", assignee: "" }, attachments: [] });
+    expect(than(fake2)).toEqual({ status: "dang-thuc-hien" });
+  });
 });

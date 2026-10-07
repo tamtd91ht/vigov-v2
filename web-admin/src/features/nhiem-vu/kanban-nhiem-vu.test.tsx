@@ -158,21 +158,29 @@ describe("năm cột §4.1", () => {
     // Inside `.bang-cuon`'s white frame the columns showed a white band between every two of them.
     const html = veBang(namCot());
     expect(html).not.toContain("bang-cuon");
-    expect(html).toContain('<div class="bang-kanban xl:grid-cols-5">');
-    expect(html).toMatch(/<section class="cot-kanban" aria-labelledby="cot-kanban-moi-giao">/);
+    // Spec 03 `Lưới cột`: five equal columns from 1280px, fixed 232px columns scrolling sideways below
+    // — at every narrower width (the legacy `.bang-kanban` stacked them on phones).
+    expect(html).toContain(
+      '<div class="grid auto-cols-[232px] grid-flow-col gap-3.5 xl:auto-cols-auto xl:grid-flow-row xl:grid-cols-5">',
+    );
+    expect(html).toMatch(
+      /<section class="border-line bg-canvas min-h-45 min-w-0 rounded-\[12px\] border p-3 transition-colors" aria-labelledby="cot-kanban-moi-giao">/,
+    );
     // The count is the prototype's small white tag, not the `.chip` pill whose unlayered padding won.
     expect(html).not.toMatch(/class="chip[^"]*">0<\/span>/);
-    expect(html).toContain('class="kanban-count ml-auto rounded-[10px]');
+    expect(html).toContain(
+      'class="kanban-count border-line text-ink-muted ml-auto rounded-[10px] border bg-white px-2 text-[11px] font-semibold"',
+    );
     // Header = decorative dot + the commune's label; the dot is hidden from screen readers.
     expect(html).toMatch(
-      /<h3 id="cot-kanban-dang-thuc-hien"[^>]*><span class="size-2 shrink-0 rounded-full bg-\[#2fb1f9\]" aria-hidden="true"><\/span>/,
+      /<h3 id="cot-kanban-dang-thuc-hien"[^>]*><span class="size-2 shrink-0 rounded-full bg-brand" aria-hidden="true"><\/span>/,
     );
   });
 
-  it("câu nói ra rằng Tạm dừng và Chuyển tiếp không hiện ở bảng này", () => {
-    // Không có câu này thì một việc vừa sang `tam-dung` biến mất khỏi Kanban không dấu vết, và
-    // người giao việc kết luận nhiệm vụ đã bị xoá.
-    expect(veBang(namCot())).toContain(nhuTrongHTML(ghiChuKanbanReNhanh(BANG_NHAN_MAC_DINH)));
+  it("ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (spec 03): no note under the board about the two branch states", () => {
+    // The prototype's board has only the footer `Hiển thị N nhiệm vụ.` (drawn by the page from the
+    // server's count); paused and transferred tasks are in the list view, which counts them.
+    expect(veBang(namCot())).not.toContain(nhuTrongHTML(ghiChuKanbanReNhanh(BANG_NHAN_MAC_DINH)));
   });
 });
 
@@ -285,24 +293,27 @@ describe("thẻ nhiệm vụ §4.1", () => {
     const html = veThe();
     expect(html).toContain("NV19");
     expect(html).toContain("Trễ 86 ngày");
-    expect(html).toMatch(/class="[^"]*\bnhan-lech\b[^"]*"/);
+    expect(html).toMatch(/class="flex items-center gap-1 text-danger font-semibold"/);
     expect(html).toContain("CB-2026-3H8N2W");
   });
 
-  it("prototype card (06/10/2026): priority strip on top, then code → title → deadline → assignee", () => {
+  it("prototype card (spec 03): priority strip on top, then code → title → sub-tasks → deadline → assignee", () => {
     const html = veThe({ child_count: 2 });
     const at = (s: string) => html.indexOf(s);
     // Rank 0 of the commune's scale is the top of the scale — the red strip; colour is never alone.
-    expect(html).toMatch(/<div class="h-\[3px\] rounded-t-\[10px\] bg-[a-z0-9-]+" aria-hidden="true">/);
+    expect(html).toMatch(/<div class="h-\[3px\] rounded-t-\[9px\] bg-[a-z0-9-]+" aria-hidden="true">/);
     expect(at("h-[3px]")).toBeLessThan(at(">NV19<"));
     expect(at(">NV19<")).toBeLessThan(at("Báo cáo tổng kết"));
-    // Deadline and sub-task count share ONE meta line (equal card heights, 06/10/2026).
-    expect(at("Báo cáo tổng kết")).toBeLessThan(at("Trễ 86 ngày"));
-    expect(at("Trễ 86 ngày")).toBeLessThan(at("2 việc con"));
-    expect(at("2 việc con")).toBeLessThan(at("CB-2026-3H8N2W"));
-    // The title reserves and clamps to two lines; the full title stays on hover.
-    expect(html).toContain("min-h-[2.75em]");
-    expect(html).toContain('title="Báo cáo tổng kết');
+    // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (spec 03): row 1 the sub-tasks, row 2 the deadline; the title is not
+    // clamped (06/10's equal-height cards were a preference the prototype replaces).
+    expect(at("Báo cáo tổng kết")).toBeLessThan(at("2 việc con"));
+    expect(at("2 việc con")).toBeLessThan(at("Trễ 86 ngày"));
+    expect(at("Trễ 86 ngày")).toBeLessThan(at("CB-2026-3H8N2W"));
+    expect(html).not.toContain("min-h-[2.75em]");
+    // Presentation pins (ADR 0068 §5): the spec's card frame and type sizes.
+    expect(html).toContain('class="border-line shadow-card relative rounded-[10px] border bg-white transition"');
+    expect(html).toContain('<span class="text-ink-muted mb-0.5 block text-[10.5px] font-semibold">NV19</span>');
+    expect(html).toContain('class="text-navy block text-[12.8px] leading-snug font-semibold"');
     // No extension count: the list contract carries none (schema.gen.ts `petitions_nhiemVuRa`).
     expect(html).not.toContain("đã gia hạn");
   });
@@ -386,7 +397,7 @@ describe("thẻ nhiệm vụ §4.1", () => {
   });
 
   it("thẻ mở drawer — cả thân thẻ là MỘT nút (prototype), `aria-expanded` nói thẻ nào đang mở", () => {
-    expect(veThe()).toMatch(/<button type="button" class="[^"]*" aria-expanded="false"><span class="ma-muc/);
+    expect(veThe()).toMatch(/<button type="button" class="[^"]*" aria-expanded="false"><span class="text-ink-muted mb-0.5/);
     expect(veThe({}, "NV19")).toContain('aria-expanded="true"');
   });
 
@@ -428,5 +439,16 @@ describe("phần chưa dựng được của lượt này ra tới danh sách, k
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W6): ca này ghim mục `Chế độ xem Sổ theo dõi` CÓ MẶT với lý do
     // "tuyến sổ không trả `documents`". `include=documents` (90d12ff) và màn Sổ theo dõi nay có.
     expect(PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Chế độ xem `Sổ theo dõi`"))).toBeUndefined();
+  });
+});
+
+describe("B-1 (review 07/10/2026) — the card's meta row carries the `đã gia hạn n lần` \"?\"", () => {
+  it("one disabled-figure marker per card, OUTSIDE the open button (never a button in a button)", () => {
+    const html = veBang(namCot({ "dang-thuc-hien": trang([nhiemVu({ child_count: 2 })]) }));
+    const card = html.slice(html.indexOf("data-task-card"));
+    expect(card).toContain('aria-label="Số lần gia hạn — tính năng đang phát triển. Bấm để xem mô tả"');
+    const openButton = card.slice(card.indexOf('<button type="button" class="text-ink'), card.indexOf("</button>"));
+    expect(openButton).not.toContain("data-pending-marker");
+    expect(card.indexOf("2 việc con")).toBeLessThan(card.indexOf("data-pending-marker"));
   });
 });

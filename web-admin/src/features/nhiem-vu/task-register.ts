@@ -3,10 +3,9 @@
  * directive documents. Pure half: the column order, the per-row document split, the words.
  *
  * THE ROWS ARE THE LIST'S ROWS (`GET /api/v1/tasks`, same filters, sort and paging) READ WITH
- * `include=documents` (90d12ff). The export (`GET /api/v1/tasks/register-export`) writes the same
- * columns in the same order on the server — "Xuất Excel của bảng này phải giữ đúng thứ tự cột" (§4.3,
- * `docs/ui-ux/02-nhiem-vu.md:128`) — so this file's order and the file's order are one spec, pinned in
- * a test against the spec lines, not copied from the server.
+ * `include=documents` (90d12ff), the type forced to `Theo văn bản` (spec 02 §State). The export
+ * (`GET /api/v1/tasks/register-export`) writes ITS OWN columns on the server — since 07/10/2026 the
+ * screen draws the prototype's thirteen and the file keeps the server's set (see `REGISTER_COLUMNS`).
  */
 
 import type { petitions_nhiemVuRa, petitions_nhiemVuVanBanRa } from "@/lib/api/schema.gen";
@@ -21,24 +20,31 @@ import {
 export const REGISTER_VIEW_LABEL = "Sổ theo dõi";
 
 /**
- * §4.3's columns IN ORDER (`02-nhiem-vu.md:117-126`), after the `☐` column (drawn only with
- * `task.delete`, like the list). The three document columns take their labels from the ONE source of
- * group labels, `nhanNhomVanBan`, so a header cannot disagree with the drawer's §5.4 block.
+ * The Sổ theo dõi's columns IN ORDER — spec 05, THIRTEEN with the `☐` column (drawn only with
+ * `task.delete`): label and the prototype's width (`TaskRegisterTable.tsx:70-103`).
  *
- * ELEVEN COLUMNS, not thirteen (ADR 0065 NV5, user decision 30/09/2026): "Cơ quan chủ trì tham mưu"
- * and "Chuyên viên VP tham mưu / theo dõi" ARE the unit and the assignee, both printed in "Đơn vị
- * thực hiện" — the same order the server's export writes (`task_register_export.go`).
+ * ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (owner, ADR 0076 lần 2 #8): eleven columns became the prototype's
+ * thirteen. "Cơ quan chủ trì tham mưu" and "Chuyên viên VP tham mưu / theo dõi" are drawn again — and
+ * they show the SAME data as "Đơn vị thực hiện" (unit) and its assignee line (ADR 0065 NV5: one role,
+ * one field; display only, no data-model change). The EXCEL EXPORT is unchanged: its columns are the
+ * server's (`task_register_export.go`), so the file and the screen no longer share one column list.
+ *
+ * The two document columns take their labels from the ONE source of group labels, `nhanNhomVanBan`,
+ * so a header cannot disagree with the drawer's §5.4 block.
  */
-export const REGISTER_COLUMNS: readonly string[] = [
-  "Mã",
-  "Nội dung nhiệm vụ / Trích yếu văn bản",
-  "Đơn vị thực hiện",
-  ...MOI_NHOM_VAN_BAN.map(nhanNhomVanBan),
-  "Hạn xử lý",
-  "Tóm tắt kết quả",
-  "Ghi chú",
-  "Lãnh đạo xã đã phê duyệt hoàn thành",
-  "Cấp trên đã công nhận hoàn thành",
+export const REGISTER_COLUMNS: readonly { readonly label: string; readonly width: string }[] = [
+  { label: "Mã", width: "w-16" },
+  { label: "Nội dung nhiệm vụ / Trích yếu văn bản", width: "w-96" },
+  { label: "Cơ quan chủ trì tham mưu", width: "w-40" },
+  { label: "Chuyên viên VP tham mưu / theo dõi", width: "w-36" },
+  { label: "Đơn vị thực hiện", width: "w-40" },
+  { label: nhanNhomVanBan("cap-tren-giao"), width: "w-64" },
+  { label: nhanNhomVanBan("chi-dao-dang-uy"), width: "w-64" },
+  { label: "Hạn hoàn thành", width: "w-28" },
+  { label: "Trạng thái", width: "w-28" },
+  { label: "Kết quả thực hiện / Sản phẩm đầu ra", width: "w-64" },
+  { label: "Lãnh đạo phê duyệt", width: "w-28 text-center" },
+  { label: "Ghi chú", width: "w-56" },
 ];
 
 /** One row's documents, split into §4.3's three columns. */
@@ -68,9 +74,11 @@ export function registerRowDocuments(
 export const REGISTER_DOCS_MISSING = "Máy chủ không gửi kèm văn bản của dòng này.";
 export const REGISTER_UNKNOWN_GROUP =
   "Có văn bản thuộc một nhóm màn hình này chưa biết — mở nhiệm vụ để xem đủ.";
-export const APPROVAL_TICKED = "Đã đánh dấu";
-export const APPROVAL_UNTICKED = "Chưa đánh dấu";
-
+/** Accessible words of the `Lãnh đạo phê duyệt` cell's icon (spec 05: `Check` / `Minus`). */
+export const APPROVAL_TICKED = "Lãnh đạo đã phê duyệt";
+export const APPROVAL_UNTICKED = "Lãnh đạo chưa phê duyệt";
+/** Spec 05: under the tick when the leader approved and the superior did not. */
+export const SUPERIOR_NOT_YET = "Cấp trên chưa duyệt";
 /* ── Xuất Excel ─────────────────────────────────────────────────────────────────────────────── */
 
 export const REGISTER_EXPORT_BUTTON = "Xuất Excel";

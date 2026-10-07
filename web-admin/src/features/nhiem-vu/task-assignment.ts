@@ -122,6 +122,31 @@ export const ASSIGNMENT_UNIT_REQUIRED =
 export const ASSIGNMENT_NO_CHANGE =
   "Chưa có gì thay đổi so với phân công hiện tại, nên chưa có gì để giao.";
 
+/** Spec 07 §6e: a press with nothing to hand over (nothing chosen differs from the task as read). */
+export const ASSIGNMENT_NOTHING_CHOSEN = "Chọn bộ phận hoặc người nhận việc.";
+/** Spec 07 §6e (`HandoverFields`): the chosen unit has nobody to pick. */
+export const UNIT_HAS_NO_STAFF = "Bộ phận này chưa có cán bộ nào đang hoạt động.";
+/** Spec 07 §6e: the button reads `Chuyển việc` once a reason is typed. */
+export const ASSIGNMENT_TRANSFER_BUTTON = "Chuyển việc";
+
+/** The button's words: a reason makes it a transfer (spec 07 §6e). One route either way. */
+export function assignmentSubmitLabel(form: Pick<AssignmentForm, "note">): string {
+  return form.note.trim() === "" ? ASSIGNMENT_BUTTON : ASSIGNMENT_TRANSFER_BUTTON;
+}
+
+/** Spec 07 §6e success toast: `Đã chuyển việc và ghi vết.` with a reason, else `Đã giao việc.` */
+export function assignmentOutcomeText(body: petitions_taskAssignmentIn): string {
+  return body.note !== undefined && body.note !== "" ? "Đã chuyển việc và ghi vết." : "Đã giao việc.";
+}
+
+/**
+ * The staff of one unit (spec 07 §6e: the person list follows the chosen unit); every active
+ * officer while no unit is chosen — one may remember the name before the unit.
+ */
+export function staffInUnit<T extends { readonly department_id: string }>(staff: readonly T[], unit: string): T[] {
+  return unit === "" ? [...staff] : staff.filter((c) => c.department_id === unit);
+}
+
 /** The stepper's `Chuyển tiếp` branch, as a control: its accessible name says where it leads. */
 export const ASSIGNMENT_STEPPER_HINT = "đến khối Giao việc, chuyển việc";
 

@@ -66,13 +66,16 @@ import type {
   page_Result_petitions_nhiemVuRa,
   petitions_deNghiLuiHanRa,
   petitions_deNghiLuiHanVao,
+  page_Result_petitions_deNghiLuiHanRa,
   petitions_delete_tasks_by_ma,
+  petitions_delete_tasks_by_ma_attachments_by_id,
   petitions_doiTrangThaiVao,
   petitions_get_task_counts,
   petitions_get_task_extension_counts,
   petitions_get_task_extensions,
   petitions_get_tasks,
   petitions_get_tasks_by_ma,
+  petitions_get_tasks_by_ma_extensions,
   petitions_get_tasks_by_ma_log_entries,
   petitions_get_tasks_register_export,
   petitions_nhatKyNhiemVuRa,
@@ -88,6 +91,7 @@ import type {
   petitions_suaNhiemVuVao,
   petitions_taoNhiemVuVao,
   petitions_taskAssignmentIn,
+  petitions_taskAttachmentRemoveIn,
   petitions_taskCountsOut,
   petitions_taskExtensionCountOut,
   petitions_taskLogEntryIn,
@@ -484,6 +488,33 @@ export function layHangChoLuiHan(
 }
 
 /**
+ * Path of `GET /api/v1/tasks/{ma}/extensions` — the task's extension HISTORY (every status, newest
+ * first, with the decider's note). Parameter names go through `thamSoTheoHopDong`, so a renamed
+ * query parameter turns `tsc` red here. An empty cursor is never sent (the server answers 400).
+ */
+export function taskExtensionHistoryPath(
+  code: string,
+  page: { limit?: number; cursor?: string | null } = {},
+): string {
+  const template: petitions_get_tasks_by_ma_extensions["duongDan"] = "/api/v1/tasks/{ma}/extensions";
+  const query = new URLSearchParams();
+  const set = thamSoTheoHopDong<petitions_get_tasks_by_ma_extensions["truyVan"]>(query);
+  set("limit", page.limit);
+  set("cursor", page.cursor);
+  const text = query.toString();
+  const path = duongDanNhiemVu(template, code);
+  return text === "" ? path : `${path}?${text}`;
+}
+
+/** GET /api/v1/tasks/{ma}/extensions — `task.read`. The drawer's `Lịch sử gia hạn` (spec 07 §6g). */
+export function getTaskExtensionHistory(
+  code: string,
+  page: { limit?: number; cursor?: string | null } = {},
+): Promise<KetQua<page_Result_petitions_deNghiLuiHanRa>> {
+  return docJSON<page_Result_petitions_deNghiLuiHanRa>(taskExtensionHistoryPath(code, page));
+}
+
+/**
  * Path of `GET /api/v1/task-extension-counts` — the server's count of pending extension requests
  * under the SAME filters as the queue (`approver`, `task`). Paging is dropped: a total does not
  * depend on the page, and the route declares no paging parameter.
@@ -670,16 +701,34 @@ export function doiTrangThaiNhiemVu(
   ma: string,
   trangThai: string,
   ghiChu?: string,
+  extra: StatusMoveExtras = {},
 ): Promise<KetQua<petitions_nhiemVuRa>> {
   const mau: petitions_post_tasks_by_ma_status["duongDan"] = "/api/v1/tasks/{ma}/status";
   const than: petitions_doiTrangThaiVao =
     ghiChu !== undefined && ghiChu !== ""
       ? { status: trangThai, note: ghiChu }
       : { status: trangThai };
+  // `handover` (cebe0d47) only when it changes something — field by field, as `reassignTask`: an
+  // absent field means "leave it", so an empty object is never sent.
+  const h = extra.handover;
+  if (h !== undefined) {
+    const sent: petitions_taskAssignmentIn = {};
+    if (h.unit !== undefined && h.unit !== null && h.unit !== "") sent.unit = h.unit;
+    if (h.assignee !== undefined && h.assignee !== null && h.assignee !== "") sent.assignee = h.assignee;
+    if (sent.unit !== undefined || sent.assignee !== undefined) than.handover = sent;
+  }
+  // Ids of COMPLETED uploads, absent when none — same rule as `addTaskLogEntry`.
+  if (extra.attachments !== undefined && extra.attachments.length > 0) than.attachments = [...extra.attachments];
   return docThanLoiGoi<petitions_nhiemVuRa>(
     goiGhi(duongDanNhiemVu(mau, ma), "POST", than, 200),
   );
 }
+
+/** What a status move may carry besides the note (spec 07 §2 compose box, ADR 0076 #4c). */
+export type StatusMoveExtras = {
+  readonly handover?: petitions_taskAssignmentIn;
+  readonly attachments?: readonly string[];
+};
 
 /**
  * POST /api/v1/tasks/{ma}/log-entries — §5.9 manual timeline entry (60011e8). 201, the new row.
@@ -756,6 +805,21 @@ export function xoaNhiemVu(ma: string, lyDo: string): Promise<KetQua<void>> {
   const than: petitions_xoaNhiemVuVao = { reason: lyDo };
   return goiGhi(duongDanNhiemVu(mau, ma), "DELETE", than, 204).then((kq) =>
     kq.ok ? ({ ok: true, duLieu: undefined } as KetQua<void>) : kq,
+  );
+}
+
+/**
+ * DELETE /api/v1/tasks/{ma}/attachments/{id} — soft-removes a task attachment, reason REQUIRED
+ * (ADR 0076 #4b; rule 7). 204, no body. The uploader or `task.update` decide on the server; its
+ * refusal comes back verbatim.
+ */
+export function removeTaskAttachment(code: string, id: string, reason: string): Promise<KetQua<void>> {
+  const template: petitions_delete_tasks_by_ma_attachments_by_id["duongDan"] =
+    "/api/v1/tasks/{ma}/attachments/{id}";
+  const path = duongDanNhiemVu(template, code).replace("{id}", encodeURIComponent(id));
+  const body: petitions_taskAttachmentRemoveIn = { reason };
+  return goiGhi(path, "DELETE", body, 204).then((r) =>
+    r.ok ? ({ ok: true, duLieu: undefined } as KetQua<void>) : r,
   );
 }
 

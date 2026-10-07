@@ -16,7 +16,7 @@ import {
   QUYEN_TAO_NHIEM_VU,
 } from "@/lib/quyen";
 
-import { ChildTaskList, ParentTaskField, childTasksQuery, childTickLabel } from "./child-tasks";
+import { ChildTaskList, childTasksQuery, childTickLabel } from "./child-tasks";
 import {
   ADD_CHILD_BUTTON,
   BANG_NHAN_MAC_DINH,
@@ -28,9 +28,8 @@ import {
   DETACH_PARENT_BODY,
   KANBAN_COUNTS_ERROR,
   NO_DEADLINE_LAST_NOTE,
-  PARENT_DETACH_BUTTON,
   PARENT_NONE,
-  PARENT_SAVE_BUTTON,
+  PARENT_TITLE,
   childCountLabel,
   childFormNote,
   mergeChildPages,
@@ -100,7 +99,7 @@ const NOT_CALLED = (): Promise<KetQua<petitions_nhiemVuRa>> =>
   Promise.resolve({ ok: false, thongBao: "not called in tests" });
 const TREE_REFUSAL = "Việc cha NV99 không tồn tại trong sổ của xã.";
 
-describe("(#6) chip `{n} việc con` on list rows", () => {
+describe("(#6) `{n} việc con` — on the Kanban card only (spec 04: the list's second line is the source)", () => {
   function list(childCount: number): string {
     return html(
       <BangNhiemVu
@@ -117,10 +116,13 @@ describe("(#6) chip `{n} việc con` on list rows", () => {
     );
   }
 
-  it("shown only when `child_count > 0`, with the server's number", () => {
-    // Under the title, after the source — the prototype's second line of the `Tên việc` cell.
-    expect(list(2)).toMatch(/<span class="dong-phu">[^<]* · 2 việc con<\/span>/);
-    expect(list(0)).not.toContain("việc con");
+  it("the list's second line is the source label alone; the count is the card's (`childCountLabel`)", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (spec 04): `nguồn · đã gia hạn n lần` — no child count in the list.
+    // `{nguồn} · đã gia hạn n lần` — the count is a "?" (BACKEND DEPENDENCY, lần 2 #19).
+    expect(list(2)).toContain('<span class="text-ink-muted flex items-center gap-1 text-[11px]">Giao trực tiếp<span aria-hidden="true">·</span>');
+    expect(list(2)).not.toContain("việc con");
+    expect(childCountLabel(2)).toBe("2 việc con");
+    expect(childCountLabel(0)).toBeNull();
     expect(childCountLabel(-1)).toBeNull();
   });
 });
@@ -139,9 +141,6 @@ describe("(#6) the drawer's `Nhiệm vụ con` block", () => {
     return html(
       <ChildTaskList
         load={load}
-        labels={BANG_NHAN_MAC_DINH}
-        directory={null}
-        now={NOW}
         openTask={() => {}}
         loadingMore={false}
         moreError={null}
@@ -150,20 +149,22 @@ describe("(#6) the drawer's `Nhiệm vụ con` block", () => {
     );
   }
 
-  it("each child: code, title, status, assignee, deadline — and a button opening its drawer", () => {
+  it("each child (spec 07 §6d): its title — a button opening its drawer — and the weight; done = struck", () => {
     const out = block({
       phase: "done",
       rows: [
         task({ code: "NV25", title: "Khảo sát thôn 3", status: "moi-giao", assignee: "CB-2026-3H8N2W" }),
+        task({ code: "NV26", title: "Tổng hợp phiếu", status: "hoan-thanh" }),
       ],
       more: false,
     });
-    expect(out).toContain(asHtml(CHILD_TASKS_TITLE));
+    expect(out).toContain(asHtml(childTasksHeading(1, 2)));
     expect(out).toContain('aria-label="Mở NV25: Khảo sát thôn 3"');
-    expect(out).toContain("Mới giao");
-    expect(out).toContain("CB-2026-3H8N2W");
-    expect(out).toContain("Hạn 20/6/2026");
-    expect(out).toContain("(trễ 86 ngày)");
+    expect(out).toMatch(/text-ink-muted line-through"[^>]*>Tổng hợp phiếu<\/button>/);
+    // Presentation pin (ADR 0068 §5): the prototype's bordered row, no status chip / assignee / deadline.
+    expect(out).toContain('class="border-line mb-2 flex items-start gap-2.5 rounded-[9px] border bg-white px-3 py-2.5"');
+    expect(out).not.toContain("Chưa thực hiện");
+    expect(out).not.toContain("CB-2026-3H8N2W");
     expect(out).not.toContain("Xem thêm");
   });
 
@@ -196,47 +197,19 @@ describe("(#6) the drawer's `Nhiệm vụ con` block", () => {
     expect(merged.map((t) => t.code)).toEqual(["NV25", "NV26"]);
   });
 
-  it("three phases, three screens: loading, verbatim error (never `no children`), empty", () => {
-    expect(block({ phase: "loading" })).toContain(asHtml(CHILD_TASKS_LOADING));
+  it("drawn only when there ARE children (spec 07 §6d); a failed read is the server's sentence, never `no children`", () => {
+    expect(block({ phase: "loading" })).toBe("");
+    expect(block({ phase: "done", rows: [], more: false })).toBe("");
     const err = block({ phase: "error", message: TREE_REFUSAL });
     expect(err).toContain(`role="alert">${asHtml(TREE_REFUSAL)}</p>`);
+    expect(err).toContain(asHtml(CHILD_TASKS_TITLE));
     expect(err).not.toContain(asHtml(CHILD_TASKS_EMPTY));
-    expect(block({ phase: "done", rows: [], more: false })).toContain(asHtml(CHILD_TASKS_EMPTY));
+    expect(err).not.toContain(asHtml(CHILD_TASKS_LOADING));
   });
 });
 
-describe("(#10) `Việc cha` field — set and detach, server's 409 verbatim", () => {
-  function field(parent: string, canEdit: boolean): string {
-    return html(
-      <ParentTaskField
-        code="NV25"
-        parent={parent}
-        canEdit={canEdit}
-        save={NOT_CALLED}
-        openParent={NOT_CALLED}
-      />,
-    );
-  }
-
-  it("with `task.update`: a code box and a save button; detach only when there IS a parent", () => {
-    const root = field("", true);
-    expect(root).toContain(asHtml(PARENT_NONE));
-    expect(root).toContain(PARENT_SAVE_BUTTON);
-    expect(root).not.toContain(PARENT_DETACH_BUTTON);
-    const child = field("NV19", true);
-    expect(child).toContain("Mở việc cha NV19");
-    expect(child).toContain(PARENT_DETACH_BUTTON);
-  });
-
-  it("DENIED: without `task.update` the parent is shown, nothing to change it", () => {
-    const out = field("NV19", false);
-    expect(out).toContain("Mở việc cha NV19");
-    expect(out).not.toContain(PARENT_SAVE_BUTTON);
-    expect(out).not.toContain(PARENT_DETACH_BUTTON);
-    expect(out).not.toContain("<input");
-  });
-
-  it("bodies: set = trimmed register code; unchanged/empty = nothing to send; detach = `\"\"`", () => {
+describe("(#10) `Việc cha` — REMOVED from the drawer (owner 07/10/2026, ADR 0076 lần 2 #6)", () => {
+  it("the parent-body helpers stay for the API client: set = trimmed register code; detach = `\"\"`", () => {
     expect(parentPatchBody("  NV19 ", "")).toEqual({ parent: "NV19" });
     expect(parentPatchBody("NV19", "NV19")).toBeNull();
     expect(parentPatchBody("   ", "NV19")).toBeNull();
@@ -245,10 +218,16 @@ describe("(#10) `Việc cha` field — set and detach, server's 409 verbatim", (
     expect(DETACH_PARENT_BODY).toEqual({ parent: "" });
   });
 
-  it("the 409 sentence reaches the field unchanged (source wiring: `setError(result.thongBao)`)", () => {
-    const src = readFileSync(fileURLToPath(new URL("./child-tasks.tsx", import.meta.url)), "utf8");
-    expect(src).toContain("setError(result.thongBao);");
-    expect(src).toMatch(/role="alert">\s*\{error\}/);
+  it("no parent field, no parent link, no `ParentTaskField` anywhere in the screen", () => {
+    const out = drawerFor(task({ parent: "NV19" }), [QUYEN_CAP_NHAT_NHIEM_VU, QUYEN_TAO_NHIEM_VU]);
+    expect(out).not.toContain(asHtml(PARENT_TITLE));
+    expect(out).not.toContain(asHtml(PARENT_NONE));
+    expect(out).not.toContain("Mở việc cha");
+    const src = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
+    expect(src).not.toContain("ParentTaskField");
+    expect(src).not.toContain("saveParent");
+    const child = readFileSync(fileURLToPath(new URL("./child-tasks.tsx", import.meta.url)), "utf8");
+    expect(child).not.toContain("export function ParentTaskField");
   });
 });
 
@@ -308,10 +287,33 @@ describe("(#10) `+ Thêm việc con` — the create form, prefilled with the par
   });
 
   function drawer(keys: readonly string[], open: boolean): string {
-    const q = quyenNhiemVu(keys);
-    return html(
+    return drawerFor(task(), keys, open);
+  }
+
+  it("with `task.create`: the button in the drawer; open → the form slot renders there", () => {
+    expect(drawer([QUYEN_TAO_NHIEM_VU], false)).toContain(">Thêm việc con</button>");
+    expect(ADD_CHILD_BUTTON).toBe("+ Thêm việc con");
+    expect(drawer([QUYEN_TAO_NHIEM_VU], false)).not.toContain("FORM-SLOT");
+    expect(drawer([QUYEN_TAO_NHIEM_VU], true)).toContain("FORM-SLOT");
+  });
+
+  it("DENIED: `task.update` + `task.extend` without `task.create` → no button", () => {
+    const out = drawer([QUYEN_CAP_NHAT_NHIEM_VU, QUYEN_DUYET_GIA_HAN], false);
+    expect(out).not.toContain(">Thêm việc con</button>");
+  });
+
+  it("`SoNhiemVu` gates the button on `quyen.giaoViec` — the key of `+ Giao việc mới`", () => {
+    const src = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
+    expect(src).toMatch(/addChild=\{[\s\S]*?quyen\.giaoViec\s*\?/);
+    expect(src).toContain("maChaCoSan={drawer.nhiemVu.code}");
+  });
+});
+
+function drawerFor(t: petitions_nhiemVuRa, keys: readonly string[], open = false): string {
+  const q = quyenNhiemVu(keys);
+  return html(
       <ChiTietNhiemVu
-        nhiemVu={task()}
+        nhiemVu={t}
         vanBan={{ pha: "dangTai" }}
         danhMuc={CATALOGUES}
         nhanTT={BANG_NHAN_MAC_DINH}
@@ -320,7 +322,6 @@ describe("(#10) `+ Thêm việc con` — the create form, prefilled with the par
         maNguoiDangNhap=""
         quyen={q}
         dangGui={false}
-        loiGhi={null}
         dong={() => {}}
         doiTrangThai={NOT_SENT}
         xoa={NOT_SENT}
@@ -331,38 +332,12 @@ describe("(#10) `+ Thêm việc con` — the create form, prefilled with the par
         extensionRefreshKey="0"
         onExtensionDecided={() => {}}
         openTask={() => {}}
-        openTaskByCode={NOT_CALLED}
-        saveParent={NOT_CALLED}
         reassign={NOT_CALLED}
         // What `SoNhiemVu` passes: `null` without `task.create` (see its `addChild` prop).
-        addChild={
-          q.giaoViec
-            ? { open, toggle: () => {}, form: <p>FORM-SLOT</p>, created: null }
-            : null
-        }
+        addChild={q.giaoViec ? { open, toggle: () => {}, form: <p>FORM-SLOT</p> } : null}
       />,
-    );
-  }
-
-  it("with `task.create`: the button in the drawer; open → the form slot renders there", () => {
-    expect(drawer([QUYEN_TAO_NHIEM_VU], false)).toContain(asHtml(ADD_CHILD_BUTTON));
-    expect(drawer([QUYEN_TAO_NHIEM_VU], false)).not.toContain("FORM-SLOT");
-    expect(drawer([QUYEN_TAO_NHIEM_VU], true)).toContain("FORM-SLOT");
-  });
-
-  it("DENIED: `task.update` + `task.extend` without `task.create` → no button", () => {
-    const out = drawer([QUYEN_CAP_NHAT_NHIEM_VU, QUYEN_DUYET_GIA_HAN], false);
-    expect(out).not.toContain(asHtml(ADD_CHILD_BUTTON));
-    // The block itself stays — reading children needs no write key.
-    expect(out).toContain(asHtml(CHILD_TASKS_TITLE));
-  });
-
-  it("`SoNhiemVu` gates the button on `quyen.giaoViec` — the key of `+ Giao việc mới`", () => {
-    const src = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
-    expect(src).toMatch(/addChild=\{[\s\S]*?quyen\.giaoViec\s*\?/);
-    expect(src).toContain("maChaCoSan={drawer.nhiemVu.code}");
-  });
-});
+  );
+}
 
 describe("(#13) `Hạn` sortable — `sort=due_at`, with the note about tasks without a deadline", () => {
   it("the list sends `sort=due_at&order=asc|desc`", () => {
@@ -390,13 +365,14 @@ describe("(#13) `Hạn` sortable — `sort=due_at`, with the note about tasks wi
     );
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3b): 3 → 5 — `Tên việc` and `Ưu tiên` sort too (backend P9).
     // 06/10/2026 (prototype columns): 5 → 4 — the `Ngày giao` column is gone.
-    expect(out.split('class="nut-sap-xep"').length - 1).toBe(4);
-    expect(out).toContain('aria-sort="ascending"><button type="button" class="nut-sap-xep">Hạn ↑</button>');
+    // 07/10/2026 (spec 04): the label + `ArrowUpDown`; the active column's icon at full opacity.
+    expect(out.split("aria-sort=").length - 1).toBe(4);
+    expect(out).toMatch(/aria-sort="ascending"[^>]*><button type="button"[^>]*>Hạn<svg[^>]*lucide-arrow-up-down[^>]*opacity-100/);
   });
 
-  it("the no-deadline note is on the list view", () => {
+  it("ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026: the sort notes are gone from the list (spec 04 has none); the rule stays the server's", () => {
     const src = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
-    expect(src).toContain("<p className=\"ghi-chu\">{NO_DEADLINE_LAST_NOTE}</p>");
+    expect(src).not.toContain("{NO_DEADLINE_LAST_NOTE}");
     expect(NO_DEADLINE_LAST_NOTE).toContain("không có hạn luôn nằm cuối");
   });
 });
@@ -440,12 +416,12 @@ describe("(#15) Kanban counts use the SAME filter builder as the list", () => {
     );
   });
 
-  it("`SoNhiemVu` counts with the board's own `loc`, inside the Kanban effect only", () => {
+  it("`SoNhiemVu` counts with the VIEW's own query — the board's `loc` on Kanban, the forced type on Sổ theo dõi", () => {
     const src = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
-    expect(src).toContain("getTaskCounts(loc).then(");
-    const effect = src.slice(src.indexOf('if (!daDocDuongDan || viewMode !== "kanban") return;'));
-    expect(effect.indexOf("getTaskCounts(loc)")).toBeGreaterThan(0);
-    expect(effect.indexOf("getTaskCounts(loc)")).toBeLessThan(effect.indexOf("}, [loc, khoaKanban"));
+    expect(src).toContain("getTaskCounts(viewLoc).then(");
+    expect(src).toContain('() => (viewMode === "so-theo-doi" ? { ...loc, loai: LOAI_THEO_VAN_BAN } : loc),');
+    const effect = src.slice(src.indexOf("getTaskCounts(viewLoc).then("));
+    expect(effect.indexOf("}, [viewLoc, khoaCounts, daDocDuongDan]);")).toBeGreaterThan(0);
   });
 });
 

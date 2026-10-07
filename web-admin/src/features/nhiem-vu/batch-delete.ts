@@ -14,8 +14,12 @@
 import type { KetQua } from "@/lib/api/goi";
 import type { petitions_nhiemVuRa } from "@/lib/api/schema.gen";
 
-/** What the selection keeps of a row: the code, and its parent's code for the order of the run. */
-export type SelectedTask = Pick<petitions_nhiemVuRa, "code" | "parent">;
+/**
+ * What the selection keeps of a row: the code, its parent's code for the order of the run, and the
+ * title + assignee the confirm dialog lists (spec 02 §4: "Mỗi dòng gồm tên nhiệm vụ và tên người
+ * thực hiện") — kept with the tick, because the row may be on a page no longer on screen.
+ */
+export type SelectedTask = Pick<petitions_nhiemVuRa, "code" | "parent" | "title" | "assignee">;
 
 /** Selection keyed by register code. A `ReadonlyMap` so a render can never mutate it in place. */
 export type TaskSelectionState = ReadonlyMap<string, SelectedTask>;
@@ -30,6 +34,11 @@ export const EMPTY_SELECTION: TaskSelectionState = new Map();
 export type TaskSelection = {
   readonly selected: TaskSelectionState;
   readonly toggle: (task: SelectedTask) => void;
+  /**
+   * The header box of the list (spec 04 `SelectAllBox`): ticks every row shown, or unticks them all
+   * when every one is ticked. Absent = no header box.
+   */
+  readonly toggleAll?: (tasks: readonly SelectedTask[]) => void;
   /** A batch is running: the selection is frozen until every call has answered. */
   readonly disabled: boolean;
 };
@@ -37,7 +46,31 @@ export type TaskSelection = {
 /** Tick or untick one row — always a NEW map built from the old one, never the old one edited. */
 export function toggleSelected(sel: TaskSelectionState, task: SelectedTask): TaskSelectionState {
   if (sel.has(task.code)) return new Map([...sel].filter(([code]) => code !== task.code));
-  return new Map([...sel, [task.code, { code: task.code, parent: task.parent }]]);
+  return new Map([...sel, [task.code, keptOf(task)]]);
+}
+
+/** Only the four fields — never the whole row object, which would pin a page's answer in memory. */
+function keptOf(task: SelectedTask): SelectedTask {
+  return { code: task.code, parent: task.parent, title: task.title, assignee: task.assignee };
+}
+
+/** The header box: all shown rows ticked → untick them; otherwise tick every shown row. */
+export function toggleAllSelected(sel: TaskSelectionState, tasks: readonly SelectedTask[]): TaskSelectionState {
+  if (tasks.length === 0) return sel;
+  const all = tasks.every((t) => sel.has(t.code));
+  if (all) {
+    const shown = new Set(tasks.map((t) => t.code));
+    return new Map([...sel].filter(([code]) => !shown.has(code)));
+  }
+  const next = new Map(sel);
+  for (const t of tasks) if (!next.has(t.code)) next.set(t.code, keptOf(t));
+  return next;
+}
+
+/** `checked` / `indeterminate` of the header box over the rows shown. */
+export function selectAllState(sel: TaskSelectionState, tasks: readonly SelectedTask[]): "all" | "some" | "none" {
+  const n = tasks.filter((t) => sel.has(t.code)).length;
+  return n === 0 ? "none" : n === tasks.length ? "all" : "some";
 }
 
 /** Keep only the codes that FAILED — they stay selected so the clerk can see and retry them. */
@@ -114,11 +147,22 @@ export async function runBatchDelete(
 /** The spec's `🗑` is drawn as a lucide `Trash2` beside the word (ADR 0068). */
 export const BATCH_DELETE_BUTTON = "Xoá đã chọn";
 export const BATCH_REASON_LABEL = "Lý do xoá (bắt buộc, dùng chung cho mọi nhiệm vụ đã chọn)";
-export const BATCH_CLEAR_BUTTON = "Bỏ chọn tất cả";
+/** Spec 02 §4 — the dialog's description, verbatim. */
 export const BATCH_NOTE =
-  "Mỗi nhiệm vụ được xoá riêng, lần lượt từng việc, cùng một lý do. Xoá mềm: dòng ở lại cùng người " +
-  "xoá và lý do, mã đã cấp không bao giờ cấp lại. Việc nào máy chủ từ chối thì vẫn được chọn, kèm " +
-  "câu trả lời của máy chủ.";
+  "Những nhiệm vụ này sẽ khuất khỏi sổ theo dõi và khỏi báo cáo. Bản ghi và nhật ký vẫn được giữ trong " +
+  "hệ thống, nhưng giao diện không có nút hoàn tác. Nhiệm vụ còn việc con sẽ bị từ chối.";
+/** Accessible name of the header box (prototype `SelectAllBox`). */
+export const SELECT_ALL_LABEL = "Chọn tất cả dòng đang hiển thị";
+
+/** Spec 02 §4: `Xoá {n} nhiệm vụ khỏi sổ?` */
+export function batchDeleteTitle(n: number): string {
+  return `Xoá ${n} nhiệm vụ khỏi sổ?`;
+}
+
+/** Spec 02 §4: the confirm button, `Xoá {n} nhiệm vụ`. */
+export function batchDeleteConfirmLabel(n: number): string {
+  return `Xoá ${n} nhiệm vụ`;
+}
 
 /** `Đã chọn {N} nhiệm vụ` — verbatim §2. */
 export function selectedCountLabel(n: number): string {
@@ -129,17 +173,21 @@ export function batchProgressText(done: number, total: number): string {
   return `Đang xoá ${done}/${total}… Mỗi việc chờ máy chủ trả lời rồi mới sang việc kế tiếp.`;
 }
 
-/** One line per task — which went, which did not and why, in the server's own words. */
-export function batchResultLine(r: BatchDeleteResult): string {
-  return r.ok ? `${r.code} — đã xoá.` : `${r.code} — chưa xoá: ${r.message}`;
+/** Spec 02 §4 success toast: `Đã xoá {n} nhiệm vụ.` — only what the server confirmed; `null` for none. */
+export function batchSuccessToast(results: readonly BatchDeleteResult[]): string | null {
+  const ok = results.filter((r) => r.ok).length;
+  return ok === 0 ? null : `Đã xoá ${ok} nhiệm vụ.`;
 }
 
-export function batchSummary(results: readonly BatchDeleteResult[]): string {
-  const ok = results.filter((r) => r.ok).length;
-  const failed = results.length - ok;
-  return failed === 0
-    ? `Đã xoá ${ok}/${results.length} nhiệm vụ.`
-    : `Đã xoá ${ok}/${results.length} nhiệm vụ; ${failed} việc chưa xoá được — xem từng dòng bên dưới.`;
+/**
+ * Spec 02 §4 failure toasts: `{k} nhiệm vụ không xoá được: {lý do}` — ONE per distinct refusal, the
+ * server's sentence verbatim (it carries the number of child tasks still alive, ADR 0037 decision 3).
+ * The contract returns a sentence, not a code, so the spec's per-code wording is not rebuilt here.
+ */
+export function batchFailureToasts(results: readonly BatchDeleteResult[]): string[] {
+  const byReason = new Map<string, number>();
+  for (const r of results) if (!r.ok) byReason.set(r.message, (byReason.get(r.message) ?? 0) + 1);
+  return [...byReason].map(([message, count]) => `${count} nhiệm vụ không xoá được: ${message}`);
 }
 
 /** Accessible name of a row's / card's checkbox: which task, among twenty. */

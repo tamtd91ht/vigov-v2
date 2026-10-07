@@ -1,48 +1,39 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import { PendingMarker } from "@/components/ui/pending-feature";
-
-import type { DanhBaTheoMa } from "@/features/phan-anh/nhan-phieu"; // vi-name-ok: existing type, imported not declared (rule 12 inv 3)
 import type { KetQua } from "@/lib/api/goi";
 import { laySoNhiemVu } from "@/lib/api/nhiem-vu";
 import type { LocNhiemVu } from "@/lib/api/nhiem-vu"; // vi-name-ok: existing type, imported not declared (rule 12 inv 3)
-import type {
-  page_Result_petitions_nhiemVuRa,
-  petitions_nhiemVuRa,
-  petitions_suaNhiemVuVao,
-} from "@/lib/api/schema.gen";
+import type { page_Result_petitions_nhiemVuRa, petitions_nhiemVuRa } from "@/lib/api/schema.gen";
+import { cn } from "@/lib/cn";
 
 import {
   CHILD_TASK_WEIGHT_NONE,
   CHILD_TASK_WEIGHT_PENDING,
-  CHILD_TASKS_EMPTY,
-  CHILD_TASKS_LOADING,
   CHILD_TASKS_TITLE,
   childTasksHeading,
-  CHUA_PHAN_CONG,
-  DETACH_PARENT_BODY,
-  NHAN_XEM_THEM_NHAT_KY_NHIEM_VU,
-  PARENT_DETACH_BUTTON,
-  PARENT_INPUT_LABEL,
-  PARENT_NONE,
-  PARENT_SAVE_BUTTON,
-  PARENT_TITLE,
   mergeChildPages,
-  nhanCanBoNgan,
-  nhanTrangThai,
-  oHan,
-  parentPatchBody,
+  NHAN_XEM_THEM_NHAT_KY_NHIEM_VU,
 } from "./nhan-nhiem-vu";
-import type { BangNhanTrangThai } from "./nhan-nhiem-vu"; // vi-name-ok: existing type, imported not declared (rule 12 inv 3)
+import { CHECKBOX_CLASS, SECTION_CLASS, SECTION_TITLE_CLASS } from "./task-spec";
 
 /**
- * §5.10 — the drawer's `Nhiệm vụ con` block and the `Việc cha` field (ADR 0037, ad7f821).
+ * §5.10 — the drawer's `Nhiệm vụ con` block (ADR 0037, ad7f821), drawn as spec 07 §6d: a card titled
+ * `Nhiệm vụ con (k/n hoàn thành)`, one bordered row per child — the completion tick and the weight at
+ * the prototype's place, both a DISABLED "?" control (ADR 0076 #2: no weight is stored, and completing
+ * a child is a status move made in its own detail). The title opens the child's detail.
  *
- * THE LIST COMES FROM `GET /api/v1/tasks?parent=NV19`, the server's direct LIVE children. It is
- * never filtered out of the page the register happens to show: that page is sliced by the
- * screen's filters, and a child outside the slice would simply be missing from its parent.
+ * DRAWN ONLY WHEN THERE ARE CHILDREN (spec 07 §6d): an empty card says nothing. `+ Thêm việc con`
+ * (kept, owner 07/10/2026 #6) is the drawer's own button under this block.
+ *
+ * THE LIST COMES FROM `GET /api/v1/tasks?parent=NV19`, the server's direct LIVE children — never
+ * filtered out of the page the register happens to show (that page is sliced by the screen's filters).
+ *
+ * `Việc cha` (the parent field and its link) is GONE from the drawer (owner 07/10/2026 #6); the
+ * `parent` support of `PATCH /api/v1/tasks/{ma}` stays in the API client.
  */
 
 /** Rows per page. The server accepts 1–100. */
@@ -81,17 +72,11 @@ function toPage(key: string, result: KetQua<page_Result_petitions_nhiemVuRa>): C
 export function ChildTasks({
   parentCode,
   refreshKey,
-  labels,
-  directory,
-  now,
   openTask,
 }: {
   parentCode: string;
   /** Changes when the drawer re-reads (open, every write) — a child may have been added. */
   refreshKey: number;
-  labels: BangNhanTrangThai;
-  directory: DanhBaTheoMa | null;
-  now: Date;
   /** Open the child's drawer. The row is a register row (no `documents`) — `chuyenDrawer` knows. */
   openTask: (task: petitions_nhiemVuRa) => void;
 }) {
@@ -146,9 +131,6 @@ export function ChildTasks({
             ? { phase: "done", rows: current.rows, more: current.more && current.cursor !== "" }
             : { phase: "error", message: current.message }
       }
-      labels={labels}
-      directory={directory}
-      now={now}
       openTask={openTask}
       loadingMore={loadingMore}
       moreError={moreError !== null && moreError.key === key ? moreError.message : null}
@@ -170,211 +152,90 @@ export type ChildTasksLoad =
 /**
  * Rendering only — exported for `renderToStaticMarkup`.
  *
- * A FAILED READ IS NOT DRAWN AS "NO CHILDREN": that sentence would tell a clerk a parent can be
- * completed or deleted, and the server would then refuse with the list of children. The server's
- * sentence shows verbatim, `role="alert"`.
+ * A FAILED READ IS NOT DRAWN AS "NO CHILDREN": that would tell a clerk a parent can be completed or
+ * deleted, and the server would then refuse with the list of children. The server's sentence shows
+ * verbatim, `role="alert"`, in the card. Loading or no children → nothing at all.
  */
 export function ChildTaskList({
   load,
-  labels,
-  directory,
-  now,
   openTask,
   loadingMore,
   moreError,
   loadMore,
 }: {
   load: ChildTasksLoad;
-  labels: BangNhanTrangThai;
-  directory: DanhBaTheoMa | null;
-  now: Date;
   openTask: (task: petitions_nhiemVuRa) => void;
   loadingMore: boolean;
   moreError: string | null;
   loadMore: () => void;
 }) {
+  if (load.phase === "loading") return null;
+  if (load.phase === "done" && load.rows.length === 0) return null;
   // The prototype's `(k/n hoàn thành)` only when every page is in hand: a count over the first page
   // of a longer list is a figure nobody can check.
   const heading =
-    load.phase === "done" && load.rows.length > 0 && !load.more
+    load.phase === "done" && !load.more
       ? childTasksHeading(load.rows.filter((t) => t.status === "hoan-thanh").length, load.rows.length)
       : CHILD_TASKS_TITLE;
   return (
-    <div className="form-danh-muc" aria-labelledby="tieu-de-viec-con">
-      <div className="flex items-center gap-2">
-        <h4 id="tieu-de-viec-con">{heading}</h4>
+    <section className={SECTION_CLASS} aria-labelledby="tieu-de-viec-con">
+      <h3 id="tieu-de-viec-con" className={cn(SECTION_TITLE_CLASS, "flex items-center gap-1.5")}>
+        {heading}
         {/* ONE "?" for the tick and the weight of every row — not one per row (ADR 0068 §14). */}
-        {load.phase === "done" && load.rows.length > 0 && <PendingMarker info={CHILD_TASK_WEIGHT_PENDING} />}
-      </div>
-      {load.phase === "loading" && <p role="status">{CHILD_TASKS_LOADING}</p>}
+        {load.phase === "done" && <PendingMarker info={CHILD_TASK_WEIGHT_PENDING} />}
+      </h3>
       {load.phase === "error" && (
-        <p className="thong-bao-loi" role="alert">
+        <p className="thong-bao-loi m-0" role="alert">
           {load.message}
         </p>
       )}
-      {load.phase === "done" && load.rows.length === 0 && (
-        <p className="trang-thai-rong">{CHILD_TASKS_EMPTY}</p>
-      )}
-      {load.phase === "done" && load.rows.length > 0 && (
-        <ul className="danh-sach-viec-con">
+      {load.phase === "done" && (
+        <ul className="m-0 list-none p-0">
           {load.rows.map((t) => {
-            const due = oHan(t.due_at, now);
+            const done = t.status === "hoan-thanh";
             return (
-              <li key={t.code}>
-                <div className="flex items-start gap-2.5">
-                  {/* The prototype's completion tick — DISABLED: completing a child is a status move
-                      of that child, made in its own detail (see `CHILD_TASK_WEIGHT_PENDING`). */}
-                  <input
-                    type="checkbox"
-                    className="mt-2.5"
-                    disabled
-                    readOnly
-                    checked={t.status === "hoan-thanh"}
-                    aria-label={childTickLabel(t.code)}
-                  />
+              <li
+                key={t.code}
+                className="border-line mb-2 flex items-start gap-2.5 rounded-[9px] border bg-white px-3 py-2.5"
+              >
+                {/* The prototype's completion tick — DISABLED (`CHILD_TASK_WEIGHT_PENDING`). */}
+                <input
+                  type="checkbox"
+                  className={cn(CHECKBOX_CLASS, "mt-0.5")}
+                  disabled
+                  readOnly
+                  checked={done}
+                  aria-label={childTickLabel(t.code)}
+                />
+                <span className="min-w-0 text-[12.5px]">
                   <button
                     type="button"
-                    className="nut-phu"
-                    onClick={() => openTask(t)}
+                    className={cn(
+                      "cursor-pointer border-0 bg-transparent p-0 text-left text-[12.5px] [font-family:inherit] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500",
+                      done ? "text-ink-muted line-through" : "text-ink",
+                    )}
                     aria-label={`Mở ${t.code}: ${t.title}`}
+                    onClick={() => openTask(t)}
                   >
-                    <span className="ma-muc">{t.code}</span> {t.title}
+                    {t.title}
                   </button>
-                  <span className="mt-2 text-xs whitespace-nowrap text-ink-500">({CHILD_TASK_WEIGHT_NONE})</span>
-                </div>
-                <p className="dong-phu">
-                  <span className="chip chip-ngung">{nhanTrangThai(labels, t.status)}</span>{" "}
-                  {nhanCanBoNgan(t.assignee, directory, CHUA_PHAN_CONG)} · Hạn {due.ngay}
-                  {due.phanTre !== "" && <span className="nhan-lech"> {due.phanTre}</span>}
-                </p>
+                  <span className="text-ink-muted ml-1.5 text-[11px]">({CHILD_TASK_WEIGHT_NONE})</span>
+                </span>
               </li>
             );
           })}
         </ul>
       )}
       {load.phase === "done" && moreError !== null && (
-        <p className="thong-bao-loi" role="alert">
+        <p className="thong-bao-loi m-0" role="alert">
           {moreError}
         </p>
       )}
       {load.phase === "done" && load.more && (
-        <button type="button" className="nut-phu" disabled={loadingMore} onClick={loadMore}>
+        <Button type="button" variant="outline" size="sm" disabled={loadingMore} onClick={loadMore}>
           {NHAN_XEM_THEM_NHAT_KY_NHIEM_VU}
-        </button>
+        </Button>
       )}
-    </div>
-  );
-}
-
-/**
- * `Việc cha` — shown to every reader; the change controls only with `task.update` (the key of
- * `PATCH /api/v1/tasks/{ma}`). Hiding them is convenience, not the control: the server checks the
- * key and the whole tree rule (rule 5, forbidden #1).
- *
- * WHY ITS OWN SMALL FORM AND NOT A FIELD OF `✎ Sửa`: that form sits on the §5.4 block, which only
- * the `Theo văn bản` type has. A parent field there would be unreachable for every basic task.
- *
- * THE SERVER'S 409 `task_tree` SENTENCE IS THE WHOLE ANSWER — unknown, another commune's, deleted,
- * a cycle, too deep (ADR 0037). It shows verbatim; the box keeps what was typed.
- */
-export function ParentTaskField({
-  code,
-  parent,
-  canEdit,
-  save,
-  openParent,
-}: {
-  code: string;
-  /** Register code of the parent, `""` for a root. */
-  parent: string;
-  canEdit: boolean;
-  /** `PATCH /api/v1/tasks/{code}` with `{ parent }`. The caller refreshes the drawer on success. */
-  save: (body: petitions_suaNhiemVuVao) => Promise<KetQua<petitions_nhiemVuRa>>;
-  /** Open the parent's drawer; the answer's sentence shows here when it fails. */
-  openParent: (code: string) => Promise<KetQua<unknown>>;
-}) {
-  const [input, setInput] = useState("");
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const body = parentPatchBody(input, parent);
-  const inputId = `viec-cha-moi-${code}`;
-
-  function send(b: petitions_suaNhiemVuVao): void {
-    setSending(true);
-    setError(null);
-    save(b).then((result) => {
-      setSending(false);
-      if (!result.ok) {
-        setError(result.thongBao);
-        return;
-      }
-      setInput("");
-    });
-  }
-
-  function submit(e: FormEvent): void {
-    e.preventDefault();
-    if (body !== null && !sending) send(body);
-  }
-
-  return (
-    <div className="form-danh-muc" aria-labelledby={`tieu-de-viec-cha-${code}`}>
-      <h4 id={`tieu-de-viec-cha-${code}`}>{PARENT_TITLE}</h4>
-      {parent === "" ? (
-        <p className="ghi-chu">{PARENT_NONE}</p>
-      ) : (
-        <p>
-          <button
-            type="button"
-            className="nut-phu"
-            onClick={() => {
-              setError(null);
-              openParent(parent).then((result) => {
-                if (!result.ok) setError(result.thongBao);
-              });
-            }}
-          >
-            Mở việc cha {parent}
-          </button>
-        </p>
-      )}
-
-      {canEdit && (
-        <form onSubmit={submit}>
-          <div className="o-nhap">
-            <label htmlFor={inputId}>{PARENT_INPUT_LABEL}</label>
-            <input
-              id={inputId}
-              name={inputId}
-              value={input}
-              autoComplete="off"
-              maxLength={100}
-              onChange={(e) => setInput(e.target.value)}
-            />
-          </div>
-          <div className="cum-nut">
-            <button type="submit" className="nut-phu" disabled={sending || body === null}>
-              {PARENT_SAVE_BUTTON}
-            </button>
-            {parent !== "" && (
-              <button
-                type="button"
-                className="nut-phu"
-                disabled={sending}
-                onClick={() => send(DETACH_PARENT_BODY)}
-              >
-                {PARENT_DETACH_BUTTON}
-              </button>
-            )}
-          </div>
-        </form>
-      )}
-
-      {error !== null && (
-        <p className="thong-bao-loi" role="alert">
-          {error}
-        </p>
-      )}
-    </div>
+    </section>
   );
 }

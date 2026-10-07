@@ -276,7 +276,7 @@ describe("the board — allowed, denied, pending, refused, done", () => {
     expect(html).not.toMatch(/<article[^>]*tabindex=/);
     expect(html).not.toContain(KANBAN_MOVE_BUTTON);
     // The card body is its open button (prototype, 06/10/2026).
-    expect(html).toMatch(/aria-expanded="false"><span class="ma-muc[^"]*">NV19</);
+    expect(html).toMatch(/aria-expanded="false"><span class="text-ink-muted[^"]*">NV19</);
   });
 
   it("ALLOWED — the ASSIGNEE without `task.update` gets the drag handle and the menu", () => {
@@ -300,14 +300,15 @@ describe("the board — allowed, denied, pending, refused, done", () => {
     // No optimistic move: NV19 is still under `dang-thuc-hien`, not under `cho-duyet`.
     expect(column(html, "dang-thuc-hien")).toContain("NV19");
     expect(column(html, "cho-duyet")).not.toContain("NV19");
+    // Said in the (visually hidden) focus target of the board; the card itself is busy and dimmed.
     expect(html).toContain(pending);
-    expect(html).toMatch(/role="status"[^>]*>[^<]*Đang chuyển NV19/);
+    expect(html).toMatch(/<article[^>]*opacity-50[^>]*aria-busy="true"/);
     expect(html).not.toContain("draggable");
     expect(html).not.toContain(KANBAN_CARD_ROLE);
     expect(html).toMatch(/aria-haspopup="menu"[^>]*disabled=""/);
   });
 
-  it("REFUSED: the server's sentence VERBATIM, `role=alert`, on the card that did not move", () => {
+  it("REFUSED: the card did not move; the server's sentence VERBATIM is the error toast (spec 03)", () => {
     const html = board(
       at("cho-duyet"),
       moveWith({
@@ -315,12 +316,14 @@ describe("the board — allowed, denied, pending, refused, done", () => {
         result: { code: "NV19", target: "hoan-thanh", via: "menu", ok: false, message: CHILDREN_LEFT },
       }),
     );
-    const own = column(html, "cho-duyet");
-    expect(own).toContain('role="alert"');
-    expect(own).toContain(
-      `${asInHtml(kanbanMoveRefusedPrefix(BANG_NHAN_MAC_DINH, "hoan-thanh"))} ${CHILDREN_LEFT}`,
-    );
+    expect(column(html, "cho-duyet")).toContain("NV19");
     expect(column(html, "hoan-thanh")).not.toContain("NV19");
+    // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (lần 6 #4): the outcome is a toast, no longer a line on the card.
+    expect(column(html, "cho-duyet")).not.toContain(CHILDREN_LEFT);
+    const source = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
+    expect(source).toContain("if (!r.ok) {\n        toast.error(r.message);");
+    expect(source).toContain("toast.success(kanbanMoveToast(nhanTT, target));");
+    expect(kanbanMoveRefusedPrefix(BANG_NHAN_MAC_DINH, "hoan-thanh")).toContain("Hoàn thành");
   });
 
   it("DONE: the live region says where the card went", () => {
@@ -392,7 +395,7 @@ describe("both paths call the SAME function (source wiring)", () => {
 
   it("the Kanban renders only in Kanban view — which a drill-down never is", () => {
     expect(SOURCE).toContain('const viewMode: CheDoXem = drillDownActive ? "danh-sach" : cheDoXem;');
-    expect(SOURCE).toContain('{viewMode === "kanban" && (');
+    expect(SOURCE).toContain('{viewMode === "kanban" && !kanbanLoading && (');
   });
 });
 
@@ -405,8 +408,10 @@ describe("drill-down: forced list view, so no Kanban and no move controls", () =
     expect(html).not.toContain(KANBAN_MOVE_BUTTON);
   });
 
-  it("without one, the board is the default view", () => {
-    expect(render(<SoNhiemVu />)).toContain('aria-label="Bảng Kanban nhiệm vụ"');
+  it("without one, the board is the default view (pressed; five grey blocks while its columns load)", () => {
+    const html = render(<SoNhiemVu />);
+    expect(html).toMatch(/aria-pressed="true"[^>]*>(<svg[^>]*>[\s\S]*?<\/svg>)?Kanban<\/button>/);
+    expect(html).toContain('class="grid grid-cols-5 gap-3.5" aria-hidden="true"');
   });
 });
 

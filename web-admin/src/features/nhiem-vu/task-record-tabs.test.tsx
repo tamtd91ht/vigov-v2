@@ -124,7 +124,9 @@ function button(text: string): HTMLButtonElement {
 
 const tabs = () => Array.from(document.querySelectorAll<HTMLButtonElement>('dialog [role="tab"][id^="task-record-tab"]'));
 const activeTab = () => tabs().find((t) => t.getAttribute("aria-selected") === "true");
-const heading = () => document.getElementById("tieu-de-chi-tiet-nhiem-vu")?.textContent ?? "";
+// Spec 07 §1: the header holds the code chip and the title (`<h2>`); its text names the record.
+const heading = () =>
+  document.getElementById("tieu-de-chi-tiet-nhiem-vu")?.closest("header")?.textContent ?? "";
 const storageKey = () => taskTabsStorageKey(window.location.host, STAFF)!;
 
 async function click(el: HTMLElement): Promise<void> {
@@ -133,7 +135,7 @@ async function click(el: HTMLElement): Promise<void> {
 }
 
 async function hidePanel(): Promise<void> {
-  await click(document.querySelector<HTMLButtonElement>('dialog button[aria-label="Đóng chi tiết nhiệm vụ"]')!);
+  await click(document.querySelector<HTMLButtonElement>('dialog header button[aria-label="Đóng"]')!);
 }
 
 beforeEach(() => {
@@ -169,7 +171,7 @@ describe("record tabs on the task panel", () => {
       expect.stringContaining("[NV20]"),
     ]);
     expect(activeTab()!.textContent).toContain("[NV20]");
-    expect(heading()).toContain("[NV20]");
+    expect(heading()).toContain("NV20");
     // Opening from the list still PUSHES one entry.
     expect(push).toHaveBeenCalledTimes(1);
     expect(window.location.search).toBe("?task=NV20");
@@ -187,7 +189,7 @@ describe("record tabs on the task panel", () => {
     const replace = vi.spyOn(window.history, "replaceState");
     await click(tabs()[0]!);
     expect(activeTab()!.textContent).toContain("[NV19]");
-    expect(heading()).toContain("[NV19]");
+    expect(heading()).toContain("NV19");
     expect(window.location.search).toBe("?task=NV19");
     expect(push).not.toHaveBeenCalled();
     expect(replace).toHaveBeenCalled();
@@ -209,7 +211,7 @@ describe("record tabs on the task panel", () => {
     await click(document.querySelector<HTMLButtonElement>('button[aria-label="Đóng tab NV20"]')!);
     // Right neighbour first.
     expect(activeTab()!.textContent).toContain("[NV21]");
-    expect(heading()).toContain("[NV21]");
+    expect(heading()).toContain("NV21");
     expect(window.location.search).toBe("?task=NV21");
     await click(document.querySelector<HTMLButtonElement>('button[aria-label="Đóng tab NV21"]')!);
     // No right neighbour: the left one.
@@ -242,11 +244,11 @@ describe("record tabs on the task panel", () => {
     await settle();
     await click(button("Mở NV20"));
     await click(tabs()[0]!);
-    expect(heading()).toContain("[NV19]");
+    expect(heading()).toContain("NV19");
     expect(document.querySelector('dialog [role="alert"]')?.textContent).toBeTruthy();
     await click(document.querySelector<HTMLButtonElement>('button[aria-label="Đóng tab NV19"]')!);
     expect(tabs()).toHaveLength(1);
-    expect(heading()).toContain("[NV20]");
+    expect(heading()).toContain("NV20");
   });
 
   it("tabs survive in sessionStorage, keyed by host + staff code, holding codes and labels only", async () => {
@@ -301,7 +303,7 @@ describe("record tabs on the task panel", () => {
     await hidePanel();
     await click(button("Mở NV20"));
     expect(tabs()).toHaveLength(2);
-    expect(heading()).toContain("[NV20]");
+    expect(heading()).toContain("NV20");
   });
 
   it("`?task=` on load becomes the active tab, above the stored ones", async () => {
@@ -332,6 +334,6 @@ describe("record tabs on the task panel", () => {
     await settle();
     expect(activeTab()!.textContent).toContain("[NV19]");
     expect(document.activeElement).toBe(activeTab());
-    expect(heading()).toContain("[NV19]");
+    expect(heading()).toContain("NV19");
   });
 });

@@ -16,18 +16,34 @@ import {
   type DanhMucNhiemVu, // vi-name-ok: existing type, imported not declared (rule 12 inv 3)
 } from "./so-nhiem-vu";
 import {
+  APPROVAL_TICKED,
   REGISTER_COLUMNS,
   REGISTER_DOCS_MISSING,
   REGISTER_UNKNOWN_GROUP,
+  SUPERIOR_NOT_YET,
   registerRowDocuments,
 } from "./task-register";
 
 /**
- * Sổ theo dõi §4.3 (W6). No DOM: what the table RENDERS for a row read with `include=documents`,
- * the column order against the spec's own lines, and — by source — the page wiring.
+ * Sổ theo dõi — spec 05 (W6, redrawn 07/10/2026). No DOM: what the table RENDERS for a row read with
+ * `include=documents`, the thirteen columns in the prototype's order, and — by source — the page wiring.
  */
 
-const SPEC = readFileSync(fileURLToPath(new URL("../../../../docs/ui-ux/02-nhiem-vu.md", import.meta.url)), "utf8");
+/** Spec 05 `Cột`, verbatim (the owner's spec files are outside git, so the list is written here). */
+const SPEC_COLUMNS = [
+  "Mã",
+  "Nội dung nhiệm vụ / Trích yếu văn bản",
+  "Cơ quan chủ trì tham mưu",
+  "Chuyên viên VP tham mưu / theo dõi",
+  "Đơn vị thực hiện",
+  "Văn bản cấp trên giao",
+  "Văn bản chỉ đạo của Đảng uỷ",
+  "Hạn hoàn thành",
+  "Trạng thái",
+  "Kết quả thực hiện / Sản phẩm đầu ra",
+  "Lãnh đạo phê duyệt",
+  "Ghi chú",
+];
 
 const ROW: petitions_nhiemVuRa = {
   code: "NV33",
@@ -81,6 +97,7 @@ function table(rows: readonly petitions_nhiemVuRa[], withSelection = false): str
       nhiemVu={rows}
       danhMuc={CATALOGUES}
       danhBa={DIRECTORY}
+      nhanTT={BANG_NHAN_MAC_DINH}
       tenBoPhan={UNITS}
       bayGio={new Date("2026-09-15T03:00:00Z")}
       maDangMo={null}
@@ -94,50 +111,51 @@ function table(rows: readonly petitions_nhiemVuRa[], withSelection = false): str
   );
 }
 
-describe("§4.3 columns — exactly the spec's order", () => {
-  it("every column named in `02-nhiem-vu.md` §4.3 appears, in that order", () => {
-    const section = SPEC.slice(SPEC.indexOf("### 4.3 Sổ theo dõi"), SPEC.indexOf("## 5. Chi tiết"));
-    for (const c of REGISTER_COLUMNS) {
-      // The spec abbreviates two: "Tóm tắt kết quả", and the two approval ticks as "các ô tick phê duyệt".
-      if (c.startsWith("Lãnh đạo xã") || c.startsWith("Cấp trên")) continue;
-      expect(section).toContain(c);
-    }
-    const pos = REGISTER_COLUMNS.slice(0, -2).map((c) => section.indexOf(c));
-    expect([...pos].sort((a, b) => a - b)).toEqual(pos);
+describe("spec 05 columns — the prototype's thirteen, in order", () => {
+  it("the twelve data columns after `☐`, verbatim and in order, with the prototype's widths", () => {
+    expect(REGISTER_COLUMNS.map((c) => c.label)).toEqual(SPEC_COLUMNS);
+    expect(REGISTER_COLUMNS.map((c) => c.width)).toEqual([
+      "w-16", "w-96", "w-40", "w-36", "w-40", "w-64", "w-64", "w-28", "w-28", "w-64", "w-28 text-center", "w-56",
+    ]);
   });
 
-  it("ELEVEN columns — no `Cơ quan chủ trì` / `Chuyên viên … theo dõi` (ADR 0065 NV5, same as the export)", () => {
-    expect(REGISTER_COLUMNS).toHaveLength(11);
-    expect(REGISTER_COLUMNS.some((c) => c.includes("chủ trì") || c.includes("theo dõi"))).toBe(false);
-    // Every cell of a row is one column: 11 `<td>` per row without the `☐` column.
-    const row = table([ROW]).split("<tbody>")[1] ?? "";
-    expect(row.match(/<td[ >]/g)?.length).toBe(11);
-  });
-
-  it("the table draws those headers in that order; `☐` only with `task.delete`", () => {
+  it("the table draws those headers in that order, fixed 1700px; `☐` only with `task.delete` (13 with it)", () => {
     const html = table([ROW]);
-    const heads = [...html.matchAll(/<th scope="col">([^<]*)<\/th>/g)].map((m) => m[1]);
-    expect(heads).toEqual(REGISTER_COLUMNS);
+    const heads = [...html.matchAll(/<th scope="col" class="[^"]*">([^<]*)<\/th>/g)].map((m) => m[1]);
+    expect(heads).toEqual(SPEC_COLUMNS);
+    expect(html).toContain("min-w-[1700px] table-fixed");
     expect(html).not.toContain('type="checkbox"');
-    expect(table([ROW], true)).toMatch(/aria-label="Chọn NV33" checked=""/);
+    const row = html.split("<tbody>")[1] ?? "";
+    expect(row.match(/<td[ >]/g)?.length).toBe(12);
+    const withBox = table([ROW], true);
+    expect(withBox).toMatch(/aria-label="Chọn NV33" checked=""/);
+    expect((withBox.split("<tbody>")[1] ?? "").match(/<td[ >]/g)?.length).toBe(13);
+  });
+
+  it("`Cơ quan chủ trì` / `Chuyên viên VP` show the SAME data as `Đơn vị thực hiện` (owner 07/10/2026 #8)", () => {
+    const cells = [...(table([ROW]).split("<tbody>")[1] ?? "").matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((m) => m[1] ?? "");
+    expect(cells[2]).toBe("BỘ PHẬN GIẢ THỰC HIỆN");
+    expect(cells[3]).toBe("Nguyễn Văn Giả");
+    expect(cells[4]).toContain("BỘ PHẬN GIẢ THỰC HIỆN");
+    expect(cells[4]).toContain("Nguyễn Văn Giả");
   });
 });
 
 describe("a row — names resolved, documents split, nothing blank that is not empty", () => {
-  it("title + description + bloc label; unit + assignee NAMES", () => {
+  it("title + description (3 lines) + bloc label; unit + assignee NAMES", () => {
     const html = table([ROW]);
-    expect(html).toContain("Triển khai thông báo kết luận của Thành uỷ");
-    expect(html).toContain('<span class="dong-phu">Mô tả giả</span>');
-    expect(html).toContain('<span class="chip chip-ngung">Khối Uỷ ban</span>');
+    expect(html).toContain('<div class="text-navy font-semibold">Triển khai thông báo kết luận của Thành uỷ</div>');
+    expect(html).toContain('<div class="text-ink-muted mt-0.5 line-clamp-3 text-[11.5px]">Mô tả giả</div>');
+    expect(html).toContain('<div class="text-ink-muted mt-1 text-[11px]">Khối Uỷ ban</div>');
     expect(html).toContain("BỘ PHẬN GIẢ THỰC HIỆN");
     expect(html).toContain("Nguyễn Văn Giả");
   });
 
-  it("documents: `90-TB/TU · 30/11/2026` + summary; `Không số` when unnumbered; `—` for an empty group", () => {
+  it("documents (spec 05 `RefList`): number bold, ` · date`, summary on 2 lines; `Không số`; `—` for none", () => {
     const html = table([ROW]);
-    expect(html).toContain("90-TB/TU · 30/11/2026");
-    expect(html).toContain('<span class="dong-phu">Thông báo giả</span>');
-    expect(html).toContain("Không số");
+    expect(html).toContain('<span class="text-navy font-semibold">90-TB/TU</span><span class="text-ink-muted"> · 30/11/2026</span>');
+    expect(html).toContain('<div class="text-ink-muted line-clamp-2 text-[11.5px]">Thông báo giả</div>');
+    expect(html).toContain('<span class="text-navy font-semibold">Không số</span>');
     const d = registerRowDocuments(ROW);
     expect(d?.byGroup["chi-dao-dang-uy"]).toEqual([]);
     expect(d?.unknown).toBe(0);
@@ -157,11 +175,34 @@ describe("a row — names resolved, documents split, nothing blank that is not e
     expect(table([odd])).toContain(REGISTER_UNKNOWN_GROUP);
   });
 
-  it("deadline with the late part, result, note `—`, and the two approval ticks as words", () => {
+  it("deadline, the status badge, result + output, ONE approval column (tick / `Cấp trên chưa duyệt`), note `—`", () => {
     const html = table([ROW]);
     expect(html).toContain("20/12/2026");
-    expect(html).toContain("<td>Đã báo cáo giả</td>");
-    expect(html).toContain("<td>Đã đánh dấu</td><td>Chưa đánh dấu</td>");
+    expect(html).toMatch(/data-status="dang-thuc-hien" data-tone="status">[\s\S]*?Đang thực hiện<\/span>/);
+    expect(html).toContain('<div class="mb-1">Đã báo cáo giả</div>');
+    expect(html).toMatch(/lucide-check text-leaf mx-auto block size-4/);
+    expect(html).toContain(`<span class="an-thi-giac">${APPROVAL_TICKED}</span>`);
+    expect(html).toContain(`>${SUPERIOR_NOT_YET}</div>`);
+    const none = table([{ ...ROW, leader_approved: false }]);
+    expect(none).toMatch(/lucide-minus text-ink-muted mx-auto block size-4/);
+    expect(none).not.toContain(SUPERIOR_NOT_YET);
+  });
+
+  it("an overdue row: pink tint, the deadline cell red with `trễ N ngày` under the date", () => {
+    const html = renderToStaticMarkup(
+      <BangSoTheoDoi
+        nhiemVu={[{ ...ROW, due_at: "2026-09-10T10:00:00+07:00" }]}
+        danhMuc={CATALOGUES}
+        danhBa={DIRECTORY}
+        nhanTT={BANG_NHAN_MAC_DINH}
+        tenBoPhan={UNITS}
+        bayGio={new Date("2026-09-15T03:00:00Z")}
+        maDangMo={null}
+        moNhiemVu={() => {}}
+      />,
+    );
+    expect(html).toMatch(/<tr data-tre-han="" class="[^"]*bg-danger\/6/);
+    expect(html).toMatch(/text-danger font-semibold">10\/9\/2026<div class="text-\[11px\]">trễ 5 ngày<\/div>/);
   });
 });
 
@@ -212,15 +253,21 @@ describe("page wiring (source)", () => {
   const SRC = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
 
   it("third view button; register view reads the page with `include=documents` under its own key", () => {
-    expect(SRC).toContain('["so-theo-doi", REGISTER_VIEW_LABEL, BookOpen],');
-    expect(SRC).toContain("onClick={() => datCheDoXem(value)}");
+    expect(SRC).toContain('["so-theo-doi", REGISTER_VIEW_LABEL, ClipboardList],');
+    expect(SRC).toContain("onClick={() => onChange(v)}");
     expect(SRC).toContain('includeDocuments: viewMode === "so-theo-doi",');
     expect(SRC).toContain('|${viewMode === "so-theo-doi" ? "docs" : ""}');
   });
 
-  it("export: the SAME filters and sort as the screen; refusal verbatim; saved without navigating", () => {
-    expect(SRC).toContain("downloadTaskRegister({ ...loc, sapXep: sx.cot, chieu: sx.chieu })");
-    expect(SRC).toContain("{REGISTER_EXPORT_REFUSED} {exportResult.thongBao}");
+  it("the book's query forces the `Theo văn bản` type (spec 02 §State) — rows, counts AND the export", () => {
+    expect(SRC).toContain('() => (viewMode === "so-theo-doi" ? { ...loc, loai: LOAI_THEO_VAN_BAN } : loc),');
+    expect(SRC).toContain("getTaskCounts(viewLoc)");
+    expect(SRC).toContain("hideType={viewMode === \"so-theo-doi\"}");
+  });
+
+  it("export (kept, owner 07/10/2026 #5): the SAME query and sort as the screen; refusal verbatim as a toast", () => {
+    expect(SRC).toContain("downloadTaskRegister({ ...viewLoc, sapXep: sx.cot, chieu: sx.chieu })");
+    expect(SRC).toContain("toast.error(`${REGISTER_EXPORT_REFUSED} ${r.thongBao}`);");
     expect(SRC).toContain("saveFile(r.duLieu.blob, r.duLieu.fileName);");
   });
 });
