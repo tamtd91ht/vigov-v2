@@ -1,16 +1,8 @@
 "use client";
 
-import {
-  CircleCheck,
-  CloudOff,
-  FileOutput,
-  Pencil,
-  Plus,
-  RefreshCw,
-  SearchX,
-  Trash2,
-} from "lucide-react";
+import { CloudOff, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { toast } from "sonner";
 
 import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
@@ -36,6 +28,7 @@ import type {
 } from "@/lib/api/schema.gen";
 import { capSoVanBanDi, laySoVanBanDi, suaVanBanDi, type LocVanBanDi } from "@/lib/api/van-ban";
 import { namTheoDongHoMay } from "@/lib/nam";
+import { cn } from "@/lib/cn";
 import { QUYEN_GHI_SO_VAN_BAN, quyetDinhTheoKhoa } from "@/lib/quyen";
 
 import {
@@ -61,7 +54,7 @@ import {
   nhanSoVaoSo,
 } from "./nhan-van-ban";
 import {
-  ChonThuTu,
+  FilterSelect,
   GOI_Y_TIM_DI,
   OTimVanBan,
   RegisterYearSelect,
@@ -69,14 +62,17 @@ import {
   sapXepTheoThuTu,
   type MaThuTu,
 } from "./loc-so-van-ban";
+import { Glyph, plainFrame, type RegisterFrame } from "./document-ui";
 import {
-  Glyph,
-  REGISTER_TABLE_SCROLLER,
-  RegisterRowsSkeleton,
-  plainFrame,
-  type RegisterFrame,
-} from "./document-ui";
-import { DieuHuongTrang } from "./so-van-ban-den";
+  DieuHuongTrang,
+  REGISTER_HEAD_ROW,
+  REGISTER_ROW,
+  REGISTER_TD,
+  REGISTER_TH,
+  RegisterEmpty,
+  RegisterLoading,
+  SortHeader,
+} from "./so-van-ban-den";
 import { guiGoVanBanDi } from "./thao-tac-van-ban";
 
 /**
@@ -177,7 +173,6 @@ export function SoVanBanDi({ frame = plainFrame }: { frame?: RegisterFrame } = {
   const [ban, datBan] = useState<BanNhapDi>(BAN_DI_TRONG);
   const [loi, datLoi] = useState("");
   const [dangGui, datDangGui] = useState(false);
-  const [cauDaXong, datCauDaXong] = useState("");
 
   const phien = usePhien();
   const quyetDinhGhi = phien === null ? null : quyetDinhTheoKhoa(phien, QUYEN_GHI_SO_VAN_BAN);
@@ -228,7 +223,6 @@ export function SoVanBanDi({ frame = plainFrame }: { frame?: RegisterFrame } = {
     datDangMo(m);
     datBan(banDau);
     datLoi("");
-    datCauDaXong("");
   }, []);
 
   const dong = useCallback(() => {
@@ -249,17 +243,18 @@ export function SoVanBanDi({ frame = plainFrame }: { frame?: RegisterFrame } = {
 
   const thucHien = useCallback(function <T>(goi: Promise<KetQua<T>>, cau: string) {
     datLoi("");
-    datCauDaXong("");
     datDangGui(true);
     void goi.then((k) => {
       datDangGui(false);
       if (!k.ok) {
+        // The refusal stays IN the dialog, under the fields (ADR 0068 lần 6 #4).
         datLoi(k.thongBao);
         return;
       }
       datDangMo(null);
       datBan(BAN_DI_TRONG);
-      datCauDaXong(cau);
+      // The dialog is closed: the outcome is a toast (lần 6 #4).
+      toast.success(cau);
       datLanDoc((n) => n + 1);
     });
   }, []);
@@ -323,7 +318,6 @@ export function SoVanBanDi({ frame = plainFrame }: { frame?: RegisterFrame } = {
         quyetDinhGhi !== null && !quyetDinhGhi.hien && quyetDinhGhi.vi === "khong-du-quyen"
       }
       thaoTac={thaoTac}
-      cauDaXong={cauDaXong}
       loiNgoaiForm={dangMo === null ? loi : ""}
       nganXep={nganXep}
       diToiTrang={datNganXep}
@@ -364,7 +358,6 @@ export function ManSoVanBanDi({
   coQuyenGhi,
   thieuQuyenGhi,
   thaoTac,
-  cauDaXong,
   loiNgoaiForm,
   nganXep,
   diToiTrang,
@@ -387,7 +380,6 @@ export function ManSoVanBanDi({
   coQuyenGhi: boolean;
   thieuQuyenGhi: boolean;
   thaoTac: ThaoTacDi;
-  cauDaXong: string;
   loiNgoaiForm: string;
   nganXep: NganXepConTro;
   diToiTrang: (toi: NganXepConTro) => void;
@@ -397,45 +389,46 @@ export function ManSoVanBanDi({
   // "Nothing at all" vs "nothing under these filters" (spec §8b), read off the props already held.
   const filtered = nam !== namGoc || loaiLoc !== "" || tim !== "" || coTrangTruoc(nganXep);
 
+  // The incoming tab's header button, the prototype's 40px (`DocumentWorkspace.tsx:127-133`).
   const headerActions = coQuyenGhi ? (
-    <Button type="button" variant="primary" icon={<Glyph icon={Plus} />} aria-haspopup="dialog" onClick={thaoTac.them}>
+    <Button
+      type="button"
+      variant="primary"
+      className="h-10 justify-center px-4 text-[13px]"
+      icon={<Glyph icon={Plus} />}
+      aria-haspopup="dialog"
+      onClick={thaoTac.them}
+    >
       {NUT_CAP_SO}
     </Button>
   ) : null;
 
+  // Dialogs are siblings of the section — see `ManSoVanBanDen`.
   const body = (
-    <section
-      className="man-van-ban mt-0 flex min-w-0 flex-col gap-4 [&>*]:my-0"
-      aria-labelledby="tieu-de-so-di"
-    >
-      <h2 id="tieu-de-so-di" className="an-thi-giac">
-        Sổ văn bản đi
-      </h2>
-      {/* One line about the register, where the prototype's petition tab puts its own. */}
-      <p className="m-0 max-w-3xl text-[13px] text-ink-500">{DAN_SO_DI}</p>
+    <>
+      <section className="flex min-w-0 flex-col gap-4 [&>*]:my-0" aria-labelledby="tieu-de-so-di">
+        <h2 id="tieu-de-so-di" className="an-thi-giac">
+          Sổ văn bản đi
+        </h2>
+        {/* One line about the register, where the prototype's petition tab puts its own. */}
+        <p className="m-0 max-w-3xl text-[12.5px] text-ink-muted">{DAN_SO_DI}</p>
 
-      {thieuQuyenGhi && (
-        <Notice tone="neutral">
-          Tài khoản của bạn không có quyền cấp số, sửa hay gỡ văn bản đi. Sổ dưới đây vẫn xem được.
-        </Notice>
-      )}
-      {cauDaXong !== "" && (
-        <p role="status" className="flex items-center gap-2 text-sm font-medium text-success-600">
-          <Glyph icon={CircleCheck} className="size-[18px] shrink-0" />
-          {cauDaXong}
-        </p>
-      )}
-      {loiNgoaiForm !== "" && (
-        <p className="thong-bao-loi" role="alert">
-          {loiNgoaiForm}
-        </p>
-      )}
+        {thieuQuyenGhi && (
+          <Notice tone="neutral">
+            Tài khoản của bạn không có quyền cấp số, sửa hay gỡ văn bản đi. Sổ dưới đây vẫn xem được.
+          </Notice>
+        )}
+        {loiNgoaiForm !== "" && (
+          <p className="thong-bao-loi" role="alert">
+            {loiNgoaiForm}
+          </p>
+        )}
 
-      {/* ONE filter row, the incoming tab's shape: search, type, the register's year, the order. */}
-      <div id="outgoing-document-filters" className="flex min-w-0 flex-wrap items-center gap-2.5 [&>*]:my-0">
-        <OTimVanBan id="tim-van-ban-di" goiY={GOI_Y_TIM_DI} tim={tim} datTim={datTim} />
-        <Field label="Loại văn bản" htmlFor="loc-loai-di" kind="select" hideLabel grow="auto">
-          <select id="loc-loai-di" value={loaiLoc} onChange={(e) => datLoaiLoc(e.target.value)}>
+        {/* ONE filter row, the incoming tab's shape and classes: search, type, the register's year.
+            The order is the "Số đi" header, as on the incoming table. */}
+        <div id="outgoing-document-filters" className="flex min-w-0 flex-wrap items-center gap-2.5 [&>*]:my-0">
+          <OTimVanBan id="tim-van-ban-di" goiY={GOI_Y_TIM_DI} tim={tim} datTim={datTim} />
+          <FilterSelect id="loc-loai-di" label="Lọc theo loại văn bản" value={loaiLoc} onChange={datLoaiLoc}>
             <option value="">Tất cả loại</option>
             {traLoai.pha === "xong" &&
               [...traLoai.ten].map(([ma, ten]) => (
@@ -443,43 +436,44 @@ export function ManSoVanBanDi({
                   {ten}
                 </option>
               ))}
-          </select>
-        </Field>
-        <RegisterYearSelect id="nam-so-van-ban-di" year={nam} anchorYear={namGoc} onYear={datNam} />
-        <ChonThuTu id="thu-tu-so-di" thuTu={thuTu} datThuTu={datThuTu} />
-      </div>
+          </FilterSelect>
+          <RegisterYearSelect id="nam-so-van-ban-di" year={nam} anchorYear={namGoc} onYear={datNam} />
+        </div>
 
-      <Card>
-        <BangVanBanDi
-          kq={kq}
-          traLoai={traLoai}
-          coQuyenGhi={coQuyenGhi}
-          thaoTac={thaoTac}
-          soCuTruoc={thuTu === "so-tang"}
-          filtered={filtered}
-          onReload={onReload}
-        />
-        {kq !== null && kq.ok && (
-          <CardFooter className="justify-end">
-            <DieuHuongTrang
-              nganXep={nganXep}
-              conTroTiep={kq.duLieu.next_cursor}
-              conTrangSau={kq.duLieu.has_more}
-              diToiTrang={diToiTrang}
-            />
-          </CardFooter>
-        )}
-      </Card>
-
+        <Card className="bg-white">
+          <BangVanBanDi
+            kq={kq}
+            traLoai={traLoai}
+            coQuyenGhi={coQuyenGhi}
+            thaoTac={thaoTac}
+            soCuTruoc={thuTu === "so-tang"}
+            onToggleSort={() => datThuTu(thuTu === "so-tang" ? "" : "so-tang")}
+            filtered={filtered}
+            onReload={onReload}
+          />
+          {kq !== null && kq.ok && (kq.duLieu.has_more || coTrangTruoc(nganXep)) && (
+            <CardFooter className="justify-end">
+              <DieuHuongTrang
+                nganXep={nganXep}
+                conTroTiep={kq.duLieu.next_cursor}
+                conTrangSau={kq.duLieu.has_more}
+                diToiTrang={diToiTrang}
+              />
+            </CardFooter>
+          )}
+        </Card>
+      </section>
       {form}
-    </section>
+    </>
   );
 
   return frame(headerActions, body);
 }
 
 /**
- * Bảng sổ văn bản đi.
+ * Bảng sổ văn bản đi — the incoming table's look (`DocumentTable.tsx` classes, spec 00): 11px caps
+ * header, 12.5px rows, 16px cell sides, a hairline per row, "Số đi" sortable, the summary and the
+ * recipient cut to one line. Its own columns: there is no prototype for this register.
  *
  * ⚠ `recipient` CÓ THỂ MANG TÊN MỘT CÔNG DÂN — "Ông Nguyễn Văn A, thôn Bình Trị" là điều một xã
  * viết trên một công văn trả lời (`van_ban_di.go:36`). Nó hiện nguyên văn cho cán bộ của chính xã
@@ -492,6 +486,7 @@ export function BangVanBanDi({
   coQuyenGhi,
   thaoTac,
   soCuTruoc = false,
+  onToggleSort,
   filtered = false,
   onReload,
 }: {
@@ -501,26 +496,21 @@ export function BangVanBanDi({
   thaoTac: ThaoTacDi;
   /** Chú thích bảng nói đúng thứ tự đang xem — xem `BangVanBanDen`. */
   soCuTruoc?: boolean;
+  /** Flips the number order from the "Số đi" header. Absent → a plain header. */
+  onToggleSort?: () => void;
   /** A filter or a later page is on: an empty answer is "nothing matches", not "nothing yet". */
   filtered?: boolean;
   /** "Tải lại" on a failed read. Absent → no button. */
   onReload?: () => void;
 }) {
   if (kq === null) {
-    // FIRST LOAD (spec §8b) — same shape as `BangVanBanDen`.
-    return (
-      <>
-        <p role="status" className="an-thi-giac">
-          Đang tải sổ văn bản đi…
-        </p>
-        <RegisterRowsSkeleton />
-      </>
-    );
+    return <RegisterLoading sentence="Đang tải sổ văn bản đi…" />;
   }
   if (!kq.ok) {
     return (
       <EmptyState
         icon={CloudOff}
+        tone="neutral"
         title="Chưa tải được sổ văn bản đi"
         description={
           <span className="text-danger-600" role="alert">
@@ -538,31 +528,35 @@ export function BangVanBanDi({
     );
   }
   if (kq.duLieu.items.length === 0) {
-    return (
-      <EmptyState
-        icon={filtered ? SearchX : FileOutput}
-        title={SO_DI_RONG}
-        description={filtered ? "Thử đổi hoặc bỏ bớt bộ lọc." : undefined}
-      />
-    );
+    return <RegisterEmpty sentence={SO_DI_RONG} filtered={filtered} />;
   }
 
   return (
-    <div className={REGISTER_TABLE_SCROLLER} role="region" aria-label="Sổ văn bản đi" tabIndex={0}>
-      <table className="bang-danh-muc bang-van-ban">
+    <div className="overflow-x-auto" role="region" aria-label="Sổ văn bản đi" tabIndex={0}>
+      <table className="w-full min-w-[900px] border-collapse text-[12.5px]">
         <caption className="an-thi-giac">
           Các văn bản xã đã phát hành, {soCuTruoc ? "số cũ nhất trước" : "số mới nhất trước"}
         </caption>
         <thead>
-          <tr>
-            <th scope="col">Số đi</th>
-            <th scope="col">Ngày văn bản</th>
-            <th scope="col">Loại văn bản</th>
-            <th scope="col">Trích yếu</th>
-            <th scope="col">Nơi nhận</th>
-            <th scope="col">Người ký</th>
+          <tr className={REGISTER_HEAD_ROW}>
+            <SortHeader label="Số đi" ascending={soCuTruoc} onToggle={onToggleSort} />
+            <th scope="col" className={REGISTER_TH}>
+              Ngày văn bản
+            </th>
+            <th scope="col" className={REGISTER_TH}>
+              Loại văn bản
+            </th>
+            <th scope="col" className={REGISTER_TH}>
+              Trích yếu
+            </th>
+            <th scope="col" className={REGISTER_TH}>
+              Nơi nhận
+            </th>
+            <th scope="col" className={REGISTER_TH}>
+              Người ký
+            </th>
             {coQuyenGhi && (
-              <th scope="col">
+              <th scope="col" className={REGISTER_TH}>
                 <span className="an-thi-giac">Thao tác</span>
               </th>
             )}
@@ -572,15 +566,19 @@ export function BangVanBanDi({
           {kq.duLieu.items.map((vb) => {
             const so = nhanSoVaoSo(vb.number, vb.year);
             return (
-              <tr key={vb.id}>
-                <td className="font-semibold text-ink-900">{so}</td>
-                <td>{nhanNgayCoThe(vb.document_date)}</td>
-                <td>{nhanLoaiVanBan(traTen(traLoai, vb.document_type))}</td>
-                <td className="o-trich-yeu">{vb.summary}</td>
-                <td>{vb.recipient}</td>
-                <td>{vb.signer === undefined || vb.signer === "" ? "Không ghi" : vb.signer}</td>
+              <tr key={vb.id} className={REGISTER_ROW}>
+                <td className={cn(REGISTER_TD, "font-semibold text-navy tabular-nums")}>{so}</td>
+                <td className={cn(REGISTER_TD, "whitespace-nowrap tabular-nums")}>{nhanNgayCoThe(vb.document_date)}</td>
+                <td className={cn(REGISTER_TD, "whitespace-nowrap")}>{nhanLoaiVanBan(traTen(traLoai, vb.document_type))}</td>
+                <td className={REGISTER_TD}>
+                  <span className="block max-w-96 truncate text-navy">{vb.summary}</span>
+                </td>
+                <td className={REGISTER_TD}>
+                  <span className="block max-w-56 truncate">{vb.recipient}</span>
+                </td>
+                <td className={cn(REGISTER_TD, "whitespace-nowrap")}>{vb.signer === undefined || vb.signer === "" ? "Không ghi" : vb.signer}</td>
                 {coQuyenGhi && (
-                  <td>
+                  <td className={cn(REGISTER_TD, "py-1.5 align-middle")}>
                     {/* Sửa as an icon, "Gỡ khỏi sổ" with its words in "⋯" (spec v2 §7). Both labels
                         name the row by its NUMBER, never by recipient or summary (rule 3, #4). */}
                     <span className="flex items-center justify-end gap-1">

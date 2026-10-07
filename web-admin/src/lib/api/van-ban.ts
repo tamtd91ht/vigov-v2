@@ -279,8 +279,9 @@ export function vaoSoVanBanDen(
     urgency: than.urgency,
   };
 
+  // `withCode`: the intake dialog shows the way to Cấu hình only on `sla_chua_cau_hinh` (`goi.ts`, KetQua).
   return docThanLoiGoi<documents_vanBanDenRa>(
-    goiGhi(duongDan, "POST", thanGui, 201, { "Idempotency-Key": khoaChongTrung }),
+    goiGhi(duongDan, "POST", thanGui, 201, { "Idempotency-Key": khoaChongTrung }, { withCode: true }),
   );
 }
 

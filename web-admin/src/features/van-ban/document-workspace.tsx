@@ -25,19 +25,38 @@ export const DOCUMENT_PAGE_TITLE = "Văn bản & đơn thư";
 export const DOCUMENT_PAGE_SUBTITLE = "Vào sổ, phân công xử lý và theo dõi hạn giải quyết.";
 
 /**
- * The Văn bản & Đơn thư screen — the prototype's `DocumentWorkspace` frame (ADR 0068 lần 5): the page
- * header with the ACTIVE tab's buttons on the right, the tab bar, the active tab's body.
+ * The tab the page opens on (ADR 0078 #5, an ASSUMPTION awaiting the owner): `Đơn thư công dân`, as in
+ * the prototype (`DocumentWorkspace.tsx:156`, `defaultValue="don-thu"`) — EXCEPT when the address
+ * carries an Overview filter (`metric=…`, valid or not): that filter applies to `Văn bản đến`, and
+ * opening another tab would hide it (or hide the "invalid filter" sentence) behind a tab nobody chose.
+ */
+export function initialDocumentTab(drillDown: DrillDown<"incoming-documents">): DocumentTabId {
+  return drillDown.kind === "none" ? "petitions" : "incoming";
+}
+
+/**
+ * Header-button look of the prototype (`DocumentWorkspace.tsx:126-143`): 40px tall, 13px words, 12px
+ * gap with the "hoặc" between them. Given here, by descendant selector, so the disabled "?" buttons of
+ * the petition tab (drawn by the shared `PendingButton`, which sizes itself) take the same height
+ * without a variant added to a shared component. The "?" marker keeps its own size.
+ */
+const HEADER_ACTIONS_CLASS =
+  "flex flex-wrap items-center gap-3 [&_button:not([data-pending-marker])]:h-10 [&_button:not([data-pending-marker])]:text-[13px]";
+
+/**
+ * The Văn bản & Đơn thư screen — the prototype's `DocumentWorkspace` frame (`DocumentWorkspace.tsx:
+ * 105-166`): the page header (22px navy title, one subtitle line, the ACTIVE tab's 40px buttons on the
+ * right), the tab bar, the active tab's body 16px under it.
  *
  * WHY THE HEADER BUTTONS CHANGE WITH THE TAB: in the prototype the header pair belongs to the petition
  * register, its main tab. Here each register has a working create button of its own, so each tab
- * puts its own pair in the header (`RegisterFrame`): Văn bản đến `[+ Vào sổ văn bản đến] hoặc [Quét
- * & OCR ?]`, Văn bản đi `[+ Cấp số văn bản đi]`, Đơn thư and Báo cáo the prototype's `[+ Vào sổ đơn
- * thư ?] hoặc [Nhập từ Excel ?]`.
+ * puts its own buttons in the header (`RegisterFrame`): Văn bản đến `[+ Vào sổ văn bản đến]`, Văn bản đi
+ * `[+ Cấp số văn bản đi]`, Đơn thư and Báo cáo the prototype's `[+ Vào sổ đơn thư ?] hoặc [Nhập từ
+ * Excel ?]`. No "Quét & OCR": the prototype has none (ADR 0078 #5).
  *
- * THE FIRST TAB IS SELECTED ON ARRIVAL — `Văn bản đến`, a working register. The prototype opens on
- * `Đơn thư công dân` because its demo commune hid `Văn bản đến` (17/09/2026); neither applies here.
- * Only the selected tab is mounted, as in the prototype: switching tabs starts the other register
- * from its first page.
+ * Tab order is the prototype's with `Văn bản đi` after `Văn bản đến`; the opening tab is
+ * `initialDocumentTab`. The tab is NOT in the URL (see `app/van-ban/page.tsx`). Only the selected tab is
+ * mounted, as in the prototype: switching tabs starts the other register from its first page.
  */
 export function DocumentWorkspace({
   drillDown = NO_DRILL_DOWN,
@@ -45,7 +64,7 @@ export function DocumentWorkspace({
   /** Overview filter, read on the SERVER (`app/van-ban/page.tsx`) — it applies to Văn bản đến. */
   drillDown?: DrillDown<"incoming-documents">;
 }) {
-  const [tab, setTab] = useState<DocumentTabId>("incoming");
+  const [tab, setTab] = useState<DocumentTabId>(() => initialDocumentTab(drillDown));
   // Each tab's body renders its own frame, so switching tabs REMOUNTS the tab bar with it and the
   // pressed tab's node is gone. Focus is put back on the newly selected tab once the new tree is
   // committed — only after a switch the user asked for, never on arrival.
@@ -68,7 +87,8 @@ export function DocumentWorkspace({
         icon={Mail}
         title={DOCUMENT_PAGE_TITLE}
         subtitle={DOCUMENT_PAGE_SUBTITLE}
-        actions={headerActions === null ? undefined : <div className="flex flex-wrap items-center gap-3">{headerActions}</div>}
+        className="mb-5"
+        actions={headerActions === null ? undefined : <div className={HEADER_ACTIONS_CLASS}>{headerActions}</div>}
       />
       <DocumentTabBar selected={tab} onSelect={selectTab} />
       <div

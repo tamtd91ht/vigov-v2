@@ -25,6 +25,65 @@ export type TaskPreviewModal = (typeof TASK_PREVIEW_MODALS)[number];
 
 export type PreviewSearchParams = Promise<Record<string, string | string[] | undefined>>;
 
+/**
+ * `?tab=` of `/xem-thu/van-ban` — the four tabs of Văn bản & Đơn thư. The real screen keeps its tab in
+ * state, not in the URL, so the preview presses the real `[role=tab]`. Absent or unknown: nothing is
+ * pressed, and the screen opens on its own default tab.
+ */
+export const DOCUMENT_PREVIEW_TABS = ["den", "di", "don-thu", "bao-cao"] as const;
+export type DocumentPreviewTab = (typeof DOCUMENT_PREVIEW_TABS)[number];
+
+/** `?modal=` of `/xem-thu/van-ban` — the intake of Văn bản đến, the issue of Văn bản đi. */
+export const DOCUMENT_PREVIEW_MODALS = ["vao-so-den", "cap-so-di"] as const;
+export type DocumentPreviewModal = (typeof DOCUMENT_PREVIEW_MODALS)[number];
+
+/** `?state=` of `/xem-thu/van-ban` — what the two register reads answer (`documents.fixture.ts`). */
+export const DOCUMENT_PREVIEW_STATES = ["loading", "empty", "error"] as const;
+export type DocumentPreviewStateWord = (typeof DOCUMENT_PREVIEW_STATES)[number];
+
+export function previewDocumentTab(value: string | string[] | undefined): DocumentPreviewTab | null {
+  const v = first(value);
+  return DOCUMENT_PREVIEW_TABS.find((x) => x === v) ?? null;
+}
+
+export function previewDocumentModal(value: string | string[] | undefined): DocumentPreviewModal | null {
+  const v = first(value);
+  return DOCUMENT_PREVIEW_MODALS.find((x) => x === v) ?? null;
+}
+
+export function previewDocumentState(value: string | string[] | undefined): DocumentPreviewStateWord | null {
+  const v = first(value);
+  return DOCUMENT_PREVIEW_STATES.find((x) => x === v) ?? null;
+}
+
+/**
+ * Three screenshot helpers of `/xem-thu/van-ban`, each one fixed word:
+ *   `?scroll=right`  the register's own horizontal scroller pushed fully right (the last columns)
+ *   `?them=1`        the intake dialog's "Thông tin thêm" fold opened (with `?modal=vao-so-den`)
+ *   `?do-cao=1`      once a dialog is open, its measured height and the window's are written to
+ *                    `<body data-preview-measure>` — read with `--dump-dom`, never drawn
+ */
+export function previewDocumentScrollRight(value: string | string[] | undefined): boolean {
+  return first(value) === "right";
+}
+
+export function previewDocumentFoldOpen(value: string | string[] | undefined): boolean {
+  return first(value) === "1";
+}
+
+export function previewDocumentMeasure(value: string | string[] | undefined): boolean {
+  return first(value) === "1";
+}
+
+/**
+ * `?drawer=<id>` — open the detail of one incoming document. Only an id SHAPE is accepted (the
+ * fixtures' ULID-like ids): the value goes into a CSS selector, and anything else opens nothing.
+ */
+export function previewDocumentDrawer(value: string | string[] | undefined): string | null {
+  const v = first(value);
+  return v !== undefined && /^[0-9A-Z]{10,40}$/.test(v) ? v : null;
+}
+
 /** Unknown or absent: Kanban, the real screen's own default. */
 export function previewTaskView(value: string | string[] | undefined): TaskPreviewView {
   const v = first(value);

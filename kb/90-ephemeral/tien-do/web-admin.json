@@ -983,6 +983,15 @@
       "bang_chung": "5686de28 (kèm sửa 2 fixture test cau-hinh, leader-notebook làm main đỏ tsc sau khi hợp đồng sinh lại). tsc sạch, vitest xanh.",
       "no_confirm": [],
       "tiep_theo": "roots=true chưa bật mặc định (giữ khớp số với Tổng quan) — prototype bật; cần chủ dự án nếu muốn theo. Trọng số việc con vẫn '?' (chờ chủ dự án)."
+    },
+    {
+      "id": "van-ban-don-thu-theo-prototype-08-10",
+      "viec": "Văn bản & Đơn thư theo prototype + hướng dẫn tmp/web/van-ban/vigov-van-ban-spec (ADR 0078) — /fix-web-admin van-ban-don-thu, lượt đêm 07→08/10/2026",
+      "trang_thai": "dang_lam",
+      "menu": "van-ban-don-thu",
+      "bang_chung": "W1 (khung trang, Văn bản đến danh sách/hộp vào sổ/ngăn chi tiết, Văn bản đi; trang xem thử /xem-thu/van-ban): ui-ux-reviewer PASS vòng 3 trên ảnh render scratchpad vb/cur-w1r2-*.png + cur-w1r3-den-drawer-0.png (1440). Quá hạn chỉ tính cho văn bản còn mở. goiGhi có tuỳ chọn withCode, chỉ vaoSoVanBanDen dùng (lỗi sla_chua_cau_hinh). Tìm theo cơ quan ban hành: febf4cd3. Test web-admin 4570/4570, build xanh.",
+      "no_confirm": [],
+      "tiep_theo": "CHỜ CHỦ DỰ ÁN DUYỆT (giả định của phiên, ADR 0078 #5 + đêm 08/10): tab mặc định Đơn thư công dân trừ khi có lọc Tổng quan; tiêu đề 'Văn bản & đơn thư'; bỏ 'Quét & OCR'; Q1 độ khẩn chỉ còn ô nhập trong 'Thông tin thêm'; Q2 giữ Sửa/Gỡ ở ngăn; Q3 giữ 'Sổ năm'; Q4 không số đếm trên tab (API không có tổng); Q5 chỉ Số đến sắp được; Q7 nút 'Vào sổ văn bản đến'. CÒN: W2 tab Đơn thư + modal + ngăn + Báo cáo nối /api/v1/citizen-letters; định dạng ngày '8/10/2026' của prototype (toàn app, để sau); kiểm trang không tràn ngang ở 1440."
     }
   ]
 }

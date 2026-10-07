@@ -284,7 +284,9 @@ describe("câu của máy chủ ra NGUYÊN VĂN, không rẽ nhánh theo `code`"
     ghiGia(409, { code: "sla_chua_cau_hinh", message: cauCuaMayChu, trace_id: "tr-1" });
 
     const kq = await vaoSoVanBanDen(VAO_SO, "k");
-    expect(kq).toEqual({ ok: false, thongBao: cauCuaMayChu });
+    // The sentence verbatim; the machine code rides along on THIS route only (`withCode`), so the intake
+    // dialog can show the way to Cấu hình without matching the wording.
+    expect(kq).toEqual({ ok: false, thongBao: cauCuaMayChu, code: "sla_chua_cau_hinh" });
     expect(JSON.stringify(kq)).not.toContain("409");
     expect(JSON.stringify(kq)).not.toContain("tr-1");
   });

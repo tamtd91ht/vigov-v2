@@ -122,12 +122,12 @@ const DANH_BA = danhBaTheoMa([
 ]);
 
 describe("phần đầu và các ô thông tin", () => {
-  it("tiêu đề mang số/năm và ngày nhận; tiêu đề KHÔNG mang trích yếu", () => {
+  it("tiêu đề mang số/năm và ngày đến (câu chữ prototype); tiêu đề KHÔNG mang trích yếu", () => {
     const html = ve();
 
-    expect(html).toMatch(
-      /<h2 id="tieu-de-ngan-van-ban-den"[^>]*>Văn bản đến số 7\/2026 · nhận ngày 22\/09\/2026<\/h2>/,
-    );
+    expect(html).toMatch(/<h2 id="tieu-de-ngan-van-ban-den"[^>]*>Số đến 7\/2026 · đến ngày 22\/09\/2026<\/h2>/);
+    // The prototype's 72rem drawer, passed to the shared panel as a size.
+    expect(html).toContain("xl:w-[min(72rem,98vw)]");
     // The prototype's drawer is a dialog named by that heading (`LargeDialog`).
     expect(html).toMatch(/<dialog aria-labelledby="tieu-de-ngan-van-ban-den"/);
     // Trích yếu hiện ngay dưới, chữ lớn, nhưng KHÔNG trong tiêu đề — tiêu đề đi vào cây trợ năng.
@@ -135,19 +135,33 @@ describe("phần đầu và các ô thông tin", () => {
     expect(html).not.toMatch(/<h2[^>]*>[^<]*rà soát/);
   });
 
-  it("ba chip, cơ quan ban hành, số/ký hiệu + ngày, bộ phận đang giữ tra ra TÊN", () => {
+  it("trạng thái đang ghi, loại, cơ quan ban hành, số/ký hiệu + ngày, bộ phận đang giữ tra ra TÊN", () => {
     const html = ve();
 
     expect(html).toContain("Đã phân công");
     expect(html).toContain("Công văn");
-    expect(html).toContain("Khẩn");
+    // Owner Q1: urgency is shown nowhere but the intake fold.
+    expect(html).not.toContain("Khẩn");
+    // Under the strip: the stored status only — no type or urgency chip.
+    const line = /<p[^>]*aria-label="Trạng thái đang ghi"[^>]*>([\s\S]*?)<\/p>/.exec(html)?.[1] ?? "";
+    expect(line).toContain("Đã phân công");
+    expect(line).not.toContain("Công văn");
     expect(html).toContain("Ban Tổ chức Tỉnh uỷ");
     expect(html).toContain("1742-CV/BTCTU");
     expect(html).toContain("18/09/2026");
     expect(html).toContain("VĂN PHÒNG ĐẢNG UỶ");
-    // Chưa có danh bạ (đang tải / tải hỏng): cán bộ hiện bằng MÃ.
-    expect(html).toContain("CB-00123");
-    expect(html).toContain("Để bộ phận tự phân công");
+    // No assignee: the prototype's sentence (`DocumentDetailDrawer.tsx:365-367`).
+    expect(html).toContain("Chưa chỉ định người xử lý");
+  });
+
+  it("ô Hạn xử lý: dòng hai là “Hạn cuối {ngày}”, hoặc “Loại văn bản này chưa đặt hạn” khi không có hạn", () => {
+    expect(ve()).toContain("Hạn cuối 25/09/2026");
+    expect(ve({ vb: { ok: true, duLieu: vanBan({ due_at: "" }) } })).toContain("Loại văn bản này chưa đặt hạn");
+  });
+
+  it("văn bản ĐÃ KẾT THÚC không “Quá hạn” ở ngăn, kể cả sau hạn", () => {
+    expect(ve({ bayGio: SAU_HAN, vb: { ok: true, duLieu: vanBan({ status: "da-giai-quyet" }) } })).not.toContain("Quá hạn");
+    expect(ve({ bayGio: SAU_HAN })).toContain("Quá hạn");
   });
 
   it("quá hạn SUY RA từ due_at: cùng dữ liệu, trước hạn không có, sau hạn có", () => {
@@ -159,12 +173,11 @@ describe("phần đầu và các ô thông tin", () => {
 });
 
 describe("VBD-07 — cán bộ hiện họ tên, tra từ danh bạ đọc một lần", () => {
-  it("`Người vào sổ` hiện `Họ tên (CB-…)`", () => {
-    const html = ve({ danhBa: DANH_BA });
-    expect(html).toContain("Trần Thị B (CB-00123)");
+  it("ngăn KHÔNG còn ô “Người vào sổ” (không có trong sáu ô của prototype)", () => {
+    expect(ve({ danhBa: DANH_BA })).not.toContain("Người vào sổ");
   });
 
-  it("dòng thời gian: người chuyển và người phụ trách hiện họ tên; mã ngoài danh bạ hiện nguyên mã", () => {
+  it("dòng thời gian: người chuyển hiện họ tên; mã ngoài danh bạ hiện nguyên mã; không còn dòng “Phụ trách”", () => {
     const html = ve({
       danhBa: DANH_BA,
       ls: lichSu([
@@ -173,14 +186,15 @@ describe("VBD-07 — cán bộ hiện họ tên, tra từ danh bạ đọc một
       ]),
     });
     expect(html).toContain("Trần Thị B (CB-00123)</strong>");
-    expect(html).toContain("Phụ trách: Lê Văn C (CB-00456)");
     // Not in the directory (e.g. an account no longer active): the bare code, never an empty cell.
     expect(html).toContain(">CB-00999</strong>");
-    expect(html).toContain("Phụ trách: CB-00999");
+    expect(html).not.toContain("Phụ trách");
   });
 
-  it("chưa giao cán bộ: vẫn là câu tự phân công, có danh bạ hay không", () => {
-    expect(ve({ danhBa: DANH_BA })).toContain("Để bộ phận tự phân công");
+  it("chưa giao cán bộ / chưa bộ phận nào giữ: câu của prototype, có danh bạ hay không", () => {
+    const html = ve({ danhBa: DANH_BA, vb: { ok: true, duLieu: vanBan({ holding_unit: "", assignee: "" }) } });
+    expect(html).toContain("Chưa chỉ định người xử lý");
+    expect(html).toContain("Chưa chuyển cho ai");
   });
 });
 
@@ -222,10 +236,12 @@ describe("dòng thời gian chuyển tiếp — chỉ đọc", () => {
       ]),
     });
 
-    expect(html).toContain("Chưa bộ phận nào giữ → BỘ PHẬN MỘT CỬA");
-    expect(html).toContain("BỘ PHẬN MỘT CỬA → VĂN PHÒNG ĐẢNG UỶ");
+    // The prototype's line: from, an arrow (read as "đến"), to.
+    const tu = (a: string, b: string) => new RegExp(`<span>${a}</span><svg[^>]*>[\\s\\S]*?</svg><span class="an-thi-giac">đến</span><span>${b}</span>`);
+    // First routing: nobody held it — the prototype's "Văn thư".
+    expect(html).toMatch(tu("Văn thư", "BỘ PHẬN MỘT CỬA"));
+    expect(html).toMatch(tu("BỘ PHẬN MỘT CỬA", "VĂN PHÒNG ĐẢNG UỶ"));
     expect(html).toContain("CB-00999");
-    expect(html).toContain("Phụ trách: CB-00456");
     // Mốc giờ theo múi giờ Việt Nam đã ghim: 03:00Z là 10:00 giờ ta.
     expect(html).toMatch(/10:00 22\/09\/2026/);
   });
@@ -234,7 +250,7 @@ describe("dòng thời gian chuyển tiếp — chỉ đọc", () => {
     const html = ve({ ls: lichSu([]) });
 
     expect(html).toContain(LICH_SU_RONG);
-    expect(LICH_SU_RONG).toBe("Chưa chuyển xử lý lần nào.");
+    expect(LICH_SU_RONG).toBe("Chưa chuyển cho bộ phận nào.");
     expect(html).not.toContain("<ol");
   });
 
@@ -297,12 +313,12 @@ describe("khối chuyển xử lý — cổng `document.route`", () => {
   it("CÓ quyền: đủ ba ô, câu 'không sửa được', và nút Chuyển và ghi vết", () => {
     const html = ve({ coQuyenChuyen: true });
 
-    expect(html).toContain("Chuyển cho bộ phận khác");
+    // The prototype's title, verbatim; no extra paragraph under the reason.
+    expect(html).toContain(">Chuyển cho bộ phận khác, không đổi trạng thái</h3>");
     expect(html).toContain(">Chuyển đến</label>");
     expect(html).toContain("Người xử lý (không bắt buộc)");
     expect(html).toContain("Lý do chuyển");
-    expect(html).toMatch(/KHÔNG sửa được/);
-    expect(html).toMatch(/hai lần chuyển/);
+    expect(html).not.toMatch(/KHÔNG sửa được/);
     expect(html).toContain("Chuyển và ghi vết");
   });
 
@@ -383,17 +399,28 @@ describe("lý do chuyển không rò ra ngoài (luật 3)", () => {
   });
 });
 
-describe("hàng chuyển trạng thái (chỗ giữ “?”, ADR 0068 §14)", () => {
-  it("đứng sau trích yếu, trước hàng chip; bốn nút đều vô hiệu, có dấu “?”", () => {
+describe("dải trạng thái C2 (chỗ giữ “?”, ADR 0068 §14)", () => {
+  it("đứng sau trích yếu, trước hàng chip; năm bước C2, bước đang đứng sáng, mọi nút vô hiệu, một “?”", () => {
     const html = ve();
     const hang = html.indexOf('aria-labelledby="nhan-chuyen-trang-thai"');
 
     expect(hang).toBeGreaterThan(html.indexOf("Về việc rà soát hồ sơ cán bộ"));
-    expect(hang).toBeLessThan(html.indexOf('aria-label="Trạng thái và thuộc tính"'));
+    expect(hang).toBeLessThan(html.indexOf('aria-label="Trạng thái đang ghi"'));
+    // `da-phan-cong` stands on "Đã chuyển xử lý"; the four other steps are "chuyển sang".
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*aria-current="step"[^>]*aria-label="Đã chuyển xử lý, đang ở đây"/);
     const nut = html.match(/<button[^>]*aria-label="Chuyển sang [^"]*"[^>]*>/g) ?? [];
     expect(nut).toHaveLength(4);
     for (const n of nut) expect(n).toContain('disabled=""');
     expect(html).toContain("Chuyển trạng thái văn bản đến — tính năng đang phát triển");
+  });
+
+  it("mã không có bước C2 (chuyen-cap-tren, luu-khong-thu-ly): KHÔNG bước nào sáng; trạng thái vẫn ghi bằng chữ", () => {
+    for (const status of ["chuyen-cap-tren", "luu-khong-thu-ly"]) {
+      const html = ve({ vb: { ok: true, duLieu: vanBan({ status }) } });
+      expect(html).not.toContain('aria-current="step"');
+      expect((html.match(/aria-label="Chuyển sang /g) ?? []).length).toBe(5);
+    }
+    expect(ve({ vb: { ok: true, duLieu: vanBan({ status: "luu-khong-thu-ly" }) } })).toContain("Lưu, không thụ lý");
   });
 
   it("chưa đọc được văn bản thì không có hàng ấy", () => {
@@ -412,14 +439,16 @@ describe("ngăn theo prototype (ADR 0068 lần 5)", () => {
     expect(allowed).toContain("Gỡ khỏi sổ");
   });
 
-  it("hàng ba ô dưới dải trạng thái: Hạn xử lý · Bộ phận đang giữ · Người vào sổ", () => {
+  it("hàng ba ô dưới dải trạng thái: Hạn xử lý · Bộ phận đang giữ · Nguồn vào sổ (“?”)", () => {
     const html = ve();
     const a = html.indexOf(">Hạn xử lý<");
     const b = html.indexOf(">Bộ phận đang giữ<");
-    const c = html.indexOf(">Người vào sổ<");
+    const c = html.indexOf(">Nguồn vào sổ<");
     expect(a).toBeGreaterThan(-1);
     expect(b).toBeGreaterThan(a);
     expect(c).toBeGreaterThan(b);
+    expect(html).toContain("Nguồn nhập văn bản đến — tính năng đang phát triển");
+    expect(html).toContain("Ghi chú văn bản đến — tính năng đang phát triển");
   });
 
   it("“Chuyển thành nhiệm vụ” có mặt, vô hiệu, có “?” — không gọi tuyến nào", () => {

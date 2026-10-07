@@ -42,6 +42,10 @@ const { SIDEBAR_STORAGE_KEY } = await import("@/components/sidebar-state");
 const { DisbursementPreview, ProjectDetailPreview } = await import("./disbursement-preview");
 const { TaskPreview } = await import("./tasks-preview");
 const { PREVIEW_TASK_PERMISSIONS } = await import("./shell.fixture");
+const { DocumentsPreview } = await import("./documents-preview");
+const { PREVIEW_DOCUMENT_PERMISSIONS } = await import("./shell.fixture");
+const { PREVIEW_DOCUMENT_WITH_ROUTINGS, PREVIEW_DOCUMENT_NO_ROUTING, PREVIEW_REGISTER_ERROR, setDocumentPreviewState } =
+  await import("./documents.fixture");
 type PreviewPerson = import("./shell.fixture").PreviewPerson;
 
 let root: Root | null = null;
@@ -206,6 +210,95 @@ describe("preview — Nhiệm vụ", () => {
     expect(dialog.textContent).toContain("bao-cao-tien-do-dot-1.pdf");
     expect(network).not.toHaveBeenCalled();
   });
+});
+
+describe("preview — Văn bản & Đơn thư", () => {
+  const docs = (props: Partial<Parameters<typeof DocumentsPreview>[0]> = {}) => (
+    <DocumentsPreview tab={null} modal={null} drawer={null} state={null} {...props} />
+  );
+  const mountDocs = (body: React.ReactNode) =>
+    mount("/xem-thu/van-ban", body, false, "", PREVIEW_DOCUMENT_PERMISSIONS, "lanh-dao");
+  const selected = (el: ParentNode) => el.querySelector('[role="tab"][aria-selected="true"]')?.textContent;
+
+  // Several mounts and fixture round-trips per case: under the full parallel run the 5 s default is
+  // too short, and a case that times out keeps running into the next one.
+  const SLOW = 20_000;
+
+  afterEach(() => setDocumentPreviewState(null));
+
+  it("no word: the real screen on its own default tab (Đơn thư công dân), Văn bản lit, no network", async () => {
+    const el = await mountDocs(docs());
+    await settle(600);
+    expect(el.querySelector('.side-nav a[aria-current="page"]')!.getAttribute("href")).toBe("/van-ban");
+    expect(el.querySelector("h1")!.textContent).toBe("Văn bản & đơn thư");
+    expect(selected(el)).toBe("Đơn thư công dân");
+    expect(network).not.toHaveBeenCalled();
+  }, SLOW);
+
+  it("?tab=den presses the real tab: the fixture register with its overdue and long rows", async () => {
+    const el = await mountDocs(docs({ tab: "den" }));
+    await settle(800);
+    expect(selected(el)).toBe("Văn bản đến");
+    expect(el.querySelectorAll("tbody tr")).toHaveLength(7);
+    expect(el.textContent).toContain("V/v rà soát, cập nhật hồ sơ cán bộ, công chức cấp xã");
+    expect(el.textContent).toContain("Văn phòng Ban Chỉ đạo phòng, chống thiên tai");
+    expect(el.querySelectorAll("tbody tr.bg-danger\\/4")).toHaveLength(1);
+    expect(network).not.toHaveBeenCalled();
+  }, SLOW);
+
+  it("?tab=di presses the real tab: four outgoing rows", async () => {
+    const el = await mountDocs(docs({ tab: "di" }));
+    await settle(800);
+    expect(selected(el)).toBe("Văn bản đi");
+    expect(el.querySelectorAll("tbody tr")).toHaveLength(4);
+    expect(el.textContent).toContain("Ông Nguyễn Văn A, thôn Bình An");
+  }, SLOW);
+
+  it("?modal=vao-so-den opens the real intake dialog; ?modal=cap-so-di the real issue dialog", async () => {
+    await mountDocs(docs({ modal: "vao-so-den" }));
+    await settle(800);
+    expect(document.querySelector("dialog[open]")!.textContent).toContain("Nhập tay — vào sổ văn bản đến");
+    act(() => root?.unmount());
+    host?.remove();
+    await mountDocs(docs({ modal: "cap-so-di" }));
+    await settle(800);
+    expect(document.querySelector("dialog[open]")!.textContent).toContain("Cấp số văn bản đi");
+    expect(network).not.toHaveBeenCalled();
+  }, SLOW);
+
+  it("?drawer=<id> opens the real detail with its three routings", async () => {
+    await mountDocs(docs({ drawer: PREVIEW_DOCUMENT_WITH_ROUTINGS }));
+    await settle(1000);
+    const dialog = document.querySelector("dialog[open]")!;
+    expect(dialog.textContent).toContain("Số đến 11/");
+    expect(dialog.querySelectorAll('section[aria-labelledby="tieu-de-dong-thoi-gian"] li')).toHaveLength(3);
+    expect(dialog.textContent).toContain("Giao Cán bộ B tổng hợp hồ sơ, báo cáo trước hạn.");
+    expect(network).not.toHaveBeenCalled();
+  }, SLOW);
+
+  it("?drawer=<id> of a never-routed document: the timeline says so", async () => {
+    await mountDocs(docs({ drawer: PREVIEW_DOCUMENT_NO_ROUTING }));
+    await settle(1000);
+    expect(document.querySelector("dialog[open]")!.textContent).toContain("Chưa chuyển cho bộ phận nào.");
+  }, SLOW);
+
+  it("?state=empty|error|loading: the register's real empty, error (+ Tải lại) and first-load states", async () => {
+    let el = await mountDocs(docs({ tab: "den", state: "empty" }));
+    await settle(800);
+    expect(el.textContent).toContain("Sổ chưa có văn bản nào.");
+    act(() => root?.unmount());
+    host?.remove();
+    el = await mountDocs(docs({ tab: "den", state: "error" }));
+    await settle(800);
+    expect(el.textContent).toContain(PREVIEW_REGISTER_ERROR);
+    expect([...el.querySelectorAll("button")].some((b) => b.textContent?.trim() === "Tải lại")).toBe(true);
+    act(() => root?.unmount());
+    host?.remove();
+    el = await mountDocs(docs({ tab: "den", state: "loading" }));
+    await settle(800);
+    expect(el.textContent).toContain("Đang tải sổ văn bản đến");
+    expect(network).not.toHaveBeenCalled();
+  }, SLOW);
 });
 
 describe("preview — shell states for screenshots", () => {

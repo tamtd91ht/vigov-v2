@@ -26,7 +26,21 @@ import type { httpx_Error } from "./schema.gen";
  * Cố ý KHÔNG mang theo mã lỗi ra tới giao diện. Giao diện chỉ có đúng một chuỗi để hiển thị,
  * nên không có chỗ nào để rẽ nhánh theo `code` — xem `thongBaoLoi`.
  */
-export type KetQua<T> = { ok: true; duLieu: T } | { ok: false; thongBao: string };
+export type KetQua<T> =
+  | { ok: true; duLieu: T }
+  | {
+      ok: false;
+      thongBao: string;
+      /**
+       * The server's machine `code`, set ONLY on a refused WRITE whose caller passed `withCode` to
+       * `goiGhi`, and whose body is `httpx.Error`.
+       * Present for ONE documented use, not as a licence to branch: the intake of an incoming document
+       * shows the way to Cấu hình only when the refusal is `sla_chua_cau_hinh` — the remedy lives on
+       * another screen, and matching the WORDING would break silently the day the sentence changes.
+       * The sentence shown is still `thongBao`, verbatim; every other screen ignores this field.
+       */
+      code?: string;
+    };
 
 /** Câu trả lời khi không đọc nổi thân lỗi của máy chủ. Không bao giờ lộ chi tiết kỹ thuật. */
 export const LOI_KHONG_RO = "Không kết nối được máy chủ. Vui lòng thử lại.";
@@ -207,6 +221,8 @@ export async function goiGhi(
   than: unknown | undefined,
   maMongDoi: number,
   headerThem?: Readonly<Record<string, string>>,
+  /** `withCode`: also return the server's `code` on a refusal — ONE documented caller, see `KetQua`. */
+  options?: { readonly withCode?: boolean },
 ): Promise<KetQua<Response>> {
   let phanHoi: Response;
   try {
@@ -223,8 +239,26 @@ export async function goiGhi(
     return { ok: false, thongBao: LOI_KHONG_RO };
   }
 
-  if (phanHoi.status !== maMongDoi) return { ok: false, thongBao: await thongBaoLoi(phanHoi) };
+  if (phanHoi.status !== maMongDoi) {
+    return options?.withCode === true ? refusedWrite(phanHoi) : { ok: false, thongBao: await thongBaoLoi(phanHoi) };
+  }
   return { ok: true, duLieu: phanHoi };
+}
+
+/**
+ * A refused write for a caller that asked for the code: the sentence exactly as `thongBaoLoi` gives it,
+ * plus the server's `code` when the body carries one (see `KetQua`). A clone feeds the sentence.
+ */
+async function refusedWrite(res: Response): Promise<{ ok: false; thongBao: string; code?: string }> {
+  const message = await thongBaoLoi(res.clone());
+  try {
+    const body = (await res.json()) as httpx_Error;
+    return typeof body?.code === "string" && body.code !== ""
+      ? { ok: false, thongBao: message, code: body.code }
+      : { ok: false, thongBao: message };
+  } catch {
+    return { ok: false, thongBao: message };
+  }
 }
 
 /**

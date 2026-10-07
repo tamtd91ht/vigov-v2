@@ -1,16 +1,16 @@
 "use client";
 
-import { Download, FileSpreadsheet, ListChecks, Plus, ScanLine } from "lucide-react";
+import { Download, FileSpreadsheet, ListChecks, Plus } from "lucide-react";
 import type { KeyboardEvent, ReactNode } from "react";
 
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
 import { PendingButton, PendingMarker } from "@/components/ui/pending-feature";
 import { Segmented } from "@/components/ui/segmented";
 import { Tab, TabList } from "@/components/ui/tabs";
+import { cn } from "@/lib/cn";
 
-import { PHAN_CHUA_DUNG, type PendingPart } from "./nhan-van-ban";
+import { INCOMING_STATUS_STEPS, PHAN_CHUA_DUNG, type PendingPart } from "./nhan-van-ban";
 
 /**
  * The parts of the Văn bản & Đơn thư screen that cannot be built yet, drawn at the PROTOTYPE's
@@ -22,7 +22,7 @@ import { PHAN_CHUA_DUNG, type PendingPart } from "./nhan-van-ban";
  * Descriptions come from `PHAN_CHUA_DUNG` by name, never a second sentence written here: two copies
  * of one reason drift, and the stale one is what a staff member reads.
  */
-function part(name: string): PendingPart {
+export function pendingPart(name: string): PendingPart {
   const found = PHAN_CHUA_DUNG.find((p) => p.ten === name);
   // A renamed entry must fail loudly in tests, not draw a "?" that explains nothing.
   if (found === undefined) throw new Error(`PHAN_CHUA_DUNG has no entry named "${name}"`);
@@ -100,14 +100,9 @@ export function DocumentTabBar({
 
 /* ---- header actions --------------------------------------------------------------------------- */
 
-/** The prototype's "or" between two ways of entering one register. */
+/** The prototype's "or" between two ways of entering one register (`DocumentWorkspace.tsx:134`). */
 export function HeaderOr() {
-  return <span className="text-[12px] text-ink-500">hoặc</span>;
-}
-
-/** Spec §2 / §3.4: the "Quét & OCR" button, disabled — sending scans out is the authority's call. */
-export function ScanOcrButton() {
-  return <PendingButton info={part("Quét & OCR")} icon={<ScanLine aria-hidden="true" />} />;
+  return <span className="text-[12px] text-ink-muted">hoặc</span>;
 }
 
 /**
@@ -115,7 +110,7 @@ export function ScanOcrButton() {
  * — both disabled with the register's one reason.
  */
 export function PetitionHeaderActions() {
-  const info = part("Đơn thư công dân");
+  const info = pendingPart("Đơn thư công dân");
   return (
     <>
       <PendingButton info={info} variant="primary" icon={<Plus aria-hidden="true" />}>
@@ -132,88 +127,153 @@ export function PetitionHeaderActions() {
 /* ---- pieces of the incoming register ---------------------------------------------------------- */
 
 /**
- * The prototype's `ScopeFilter`, first in the incoming filter row: `Toàn xã` is what the register
- * shows today (selected, nothing to change), the two personal scopes are disabled with "?".
+ * The prototype's `ScopeFilter` (`components/common/ScopeFilter.tsx`), first in the incoming filter
+ * row, drawn with its own classes: `Toàn xã` is what the register shows today (pressed, nothing to
+ * change); the two personal scopes are disabled, with ONE "?" after the group — both wait on the same
+ * missing route parameter, and two markers would say the same sentence twice.
  */
 export function IncomingScopeFilter() {
-  const info = part("Lọc Giao cho tôi / Liên quan đến tôi");
+  const choices = [
+    { label: "Toàn xã", active: true },
+    { label: "Giao cho tôi", active: false },
+    { label: "Liên quan đến tôi", active: false },
+  ] as const;
   return (
-    <Segmented
-      mode="buttons"
-      legend="Lọc nhanh theo người xử lý"
-      name="pham-vi-van-ban-den"
-      value=""
-      onChange={() => {}}
-      options={[
-        { value: "", label: "Toàn xã" },
-        { value: "assigned", label: "Giao cho tôi", pending: info },
-        { value: "involved", label: "Liên quan đến tôi", pending: info },
-      ]}
-    />
+    <span className="inline-flex items-center gap-1.5">
+      <span
+        role="group"
+        aria-label="Lọc nhanh theo người xử lý"
+        className="inline-flex overflow-hidden rounded-md border border-solid border-line bg-white"
+      >
+        {choices.map((c) => (
+          <button
+            key={c.label}
+            type="button"
+            aria-pressed={c.active}
+            disabled={!c.active}
+            className={cn(
+              "h-9 border-0 border-r border-solid border-line px-3 [font-family:inherit] text-[12.5px] font-semibold last:border-r-0",
+              c.active ? "bg-navy text-white" : "cursor-not-allowed bg-white text-ink opacity-50",
+            )}
+          >
+            {c.label}
+          </button>
+        ))}
+      </span>
+      <PendingMarker info={pendingPart("Lọc Giao cho tôi / Liên quan đến tôi")} />
+    </span>
   );
 }
 
-/** Right end of the incoming filter row: `Nhập hàng loạt từ Excel` and `Xuất sổ {năm}`, disabled. */
+/**
+ * A link-shaped control of the prototype's filter row (`DocumentWorkspace.tsx:225-244`), disabled,
+ * with its "?" beside it — a `<button>`, since a disabled `<a>` does not exist.
+ */
+function PendingRowLink({
+  info,
+  icon,
+  tone,
+  className,
+  children,
+}: {
+  info: PendingPart;
+  icon: ReactNode;
+  tone: "brand" | "muted";
+  className?: string;
+  children?: ReactNode;
+}) {
+  return (
+    <span className={cn("inline-flex items-center gap-1.5", className)} data-pending="">
+      <button
+        type="button"
+        disabled
+        className={cn(
+          "inline-flex cursor-not-allowed items-center gap-1.5 border-0 bg-transparent p-0 [font-family:inherit] text-[12.5px] opacity-60",
+          "[&_svg]:size-4 [&_svg]:shrink-0",
+          tone === "brand" ? "text-brand" : "text-ink-muted",
+        )}
+      >
+        {icon}
+        {children ?? info.ten}
+      </button>
+      <PendingMarker info={info} />
+    </span>
+  );
+}
+
+/**
+ * Right end of the incoming filter row: `Nhập hàng loạt từ Excel` (brand link, `ml-auto`) and
+ * `Xuất sổ {năm}` (muted link) — both disabled with "?" (ADR 0078 #6).
+ */
 export function IncomingRowLinks({ year }: { year: number }) {
   return (
-    <div className="ml-auto flex flex-wrap items-center gap-2">
-      <PendingButton
-        info={part("Nhập hàng loạt từ Excel")}
-        variant="ghost"
-        size="sm"
+    <>
+      <PendingRowLink
+        info={pendingPart("Nhập hàng loạt từ Excel")}
+        tone="brand"
+        className="ml-auto"
         icon={<FileSpreadsheet aria-hidden="true" />}
       />
-      <PendingButton info={part("Xuất sổ văn bản đến")} variant="ghost" size="sm" icon={<Download aria-hidden="true" />}>
+      <PendingRowLink info={pendingPart("Xuất sổ văn bản đến")} tone="muted" icon={<Download aria-hidden="true" />}>
         Xuất sổ {year}
-      </PendingButton>
-    </div>
+      </PendingRowLink>
+    </>
   );
 }
 
-/** The detail's `Chuyển thành nhiệm vụ` (prototype `DocumentDetailDrawer`), disabled. */
+/** The detail's `Chuyển thành nhiệm vụ` (prototype `DocumentDetailDrawer.tsx:404-418`), disabled. */
 export function RaiseTaskButton() {
   return (
-    <PendingButton info={part("Chuyển thành nhiệm vụ")} variant="primary" icon={<ListChecks aria-hidden="true" />} />
+    <PendingButton info={pendingPart("Chuyển thành nhiệm vụ")} variant="primary" icon={<ListChecks aria-hidden="true" />} />
   );
 }
 
 /**
- * Target statuses of the incoming-document lifecycle the customer settled on 30/09/2026 (Nghị định
- * 30/2020: Đã vào sổ → Chờ trình/phân luồng → Đã chuyển xử lý → Đang xử lý → Hoàn thành) — the four
- * after "Đã vào sổ". NOT the petition-letter labels the spec drew (§3.5): that decision says incoming
- * documents do not borrow them. Labels only — no status code is sent anywhere from here.
+ * The prototype's chip colour of the CURRENT step (`DOCUMENT_ACTIVE_TONE`, `lib/document-display.ts`),
+ * by step index of `INCOMING_STATUS_STEPS`.
  */
-const STATUS_TARGETS = ["Chờ trình/phân luồng", "Đã chuyển xử lý", "Đang xử lý", "Hoàn thành"] as const;
+const STEP_ACTIVE_TONE = ["bg-ink-muted", "bg-tangerine", "bg-brand", "bg-teal", "bg-leaf"] as const;
 
 /**
- * The prototype's status strip: one chip per step, `flex-1` with a 6.5rem floor, "chuyển sang" under
- * the label — all disabled, ONE "?" for the row (four identical markers would say the same sentence
- * four times and crowd the row at 320px).
+ * The prototype's status strip (`DocumentDetailDrawer.tsx:239-264`, `StatusChip` :543-590): one chip per
+ * C2 step, `flex-1` with a 6.5rem floor, the current one filled with "đang ở đây" under it, the others
+ * white with "—". EVERY CHIP IS DISABLED and the row carries ONE "?": the server has no route that
+ * moves an incoming document between these steps yet (ADR 0078, Hệ quả). `current` comes from
+ * `incomingStatusStep` — `null` lights no chip (see there for why).
+ *
+ * The prototype's second row ("Kết thúc khác:") is not drawn: C2 lists no other ending.
  */
-export function StatusChangeRow() {
+export function StatusChangeRow({ current }: { current: number | null }) {
   return (
-    <div role="group" aria-labelledby="nhan-chuyen-trang-thai" className="flex min-w-0 flex-col gap-2" data-pending="">
-      <div className="flex items-center gap-1.5">
-        <span id="nhan-chuyen-trang-thai" className="text-xs font-semibold text-ink-500">
-          Chuyển trạng thái
-        </span>
-        <PendingMarker info={part("Chuyển trạng thái văn bản đến")} />
-      </div>
+    <div role="group" aria-labelledby="nhan-chuyen-trang-thai" className="flex min-w-0 flex-col" data-pending="">
+      <span id="nhan-chuyen-trang-thai" className="an-thi-giac">
+        Các bước của văn bản đến
+      </span>
       <div className="flex min-w-0 flex-wrap items-stretch gap-1.5">
-        {STATUS_TARGETS.map((s) => (
-          // The prototype draws the status above "chuyển sang"; the name reads in speaking order.
-          <Button
-            key={s}
-            type="button"
-            variant="secondary"
-            disabled
-            aria-label={`Chuyển sang ${s}`}
-            className="h-auto min-w-[6.5rem] flex-1 flex-col items-start gap-0.5 px-2.5 py-1.5 text-left"
-          >
-            <span className="text-[13px] font-semibold whitespace-normal">{s}</span>
-            <span className="text-[11px] font-normal text-ink-500">chuyển sang</span>
-          </Button>
-        ))}
+        {INCOMING_STATUS_STEPS.map((step, i) => {
+          const here = i === current;
+          return (
+            <button
+              key={step}
+              type="button"
+              disabled
+              aria-current={here ? "step" : undefined}
+              aria-label={here ? `${step}, đang ở đây` : `Chuyển sang ${step}`}
+              className={cn(
+                "min-w-[6.5rem] flex-1 cursor-not-allowed rounded-[8px] border border-solid px-2.5 py-1.5 text-left [font-family:inherit]",
+                here ? cn("border-transparent text-white", STEP_ACTIVE_TONE[i]) : "border-line/60 bg-white text-ink-muted/60",
+              )}
+            >
+              <span className="block text-[12px] font-semibold">{step}</span>
+              <span className={cn("block text-[10.5px]", here ? "text-white/80" : "text-ink-muted/70")}>
+                {here ? "đang ở đây" : "—"}
+              </span>
+            </button>
+          );
+        })}
+        <span className="inline-flex items-center self-center px-1">
+          <PendingMarker info={pendingPart("Chuyển trạng thái văn bản đến")} />
+        </span>
       </div>
     </div>
   );
@@ -243,7 +303,7 @@ export const PETITION_COLUMNS = [
  * is not drawn: it describes a duplicate check that does not exist.
  */
 export function PendingPetitionRegister() {
-  const info = part("Đơn thư công dân");
+  const info = pendingPart("Đơn thư công dân");
   return (
     <section aria-labelledby="tieu-de-don-thu" className="flex min-w-0 flex-col gap-3 [&>*]:my-0" data-pending="">
       <h2 id="tieu-de-don-thu" className="an-thi-giac">
@@ -345,7 +405,7 @@ const REPORT_TABLES = [
  * a 0 would be a figure, and the commune would report it upward.
  */
 export function PendingPetitionReport({ year }: { year: number }) {
-  const info = part("Báo cáo");
+  const info = pendingPart("Báo cáo");
   return (
     <section aria-labelledby="tieu-de-bao-cao-don-thu" className="flex min-w-0 flex-col gap-5 [&>*]:my-0" data-pending="">
       <div className="flex flex-wrap items-center gap-3">

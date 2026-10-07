@@ -12,12 +12,13 @@ import { pendingMarkerLabel } from "@/components/ui/pending-feature";
 import {
   DOCUMENT_TABS,
   DocumentTabBar,
+  IncomingRowLinks,
+  IncomingScopeFilter,
   PETITION_COLUMNS,
   PendingPetitionRegister,
   PendingPetitionReport,
   PetitionHeaderActions,
   RaiseTaskButton,
-  ScanOcrButton,
   StatusChangeRow,
   documentTabDomId,
   type DocumentTabId,
@@ -70,16 +71,19 @@ function dialogText(): string {
 }
 
 describe("PHAN_CHUA_DUNG của màn Văn bản", () => {
-  it("đúng tám phần, mỗi mục có lý do", () => {
+  it("đúng mười một phần, mỗi mục có lý do; “Quét & OCR” đã rời màn (ADR 0078 #5)", () => {
     expect(PHAN_CHUA_DUNG.map((p) => p.ten)).toEqual([
       "Đơn thư công dân",
       "Báo cáo",
-      "Quét & OCR",
       "Chuyển trạng thái văn bản đến",
       "Lọc Giao cho tôi / Liên quan đến tôi",
       "Nhập hàng loạt từ Excel",
       "Xuất sổ văn bản đến",
       "Chuyển thành nhiệm vụ",
+      "Nguồn nhập văn bản đến",
+      "Gợi ý cơ quan ban hành",
+      "Chuyển ngay khi vào sổ",
+      "Ghi chú văn bản đến",
     ]);
     for (const p of PHAN_CHUA_DUNG) expect(p.viSao.trim()).not.toBe("");
   });
@@ -120,13 +124,23 @@ describe("thanh tab theo prototype", () => {
 });
 
 describe("chỗ giữ “?” của màn Văn bản & Đơn thư (ADR 0068 §14)", () => {
-  it("nút Quét & OCR: nút thật vô hiệu, “?” mở lý do chờ cơ quan quyết", () => {
-    const el = mount(<ScanOcrButton />);
-    const real = realButtons(el)[0]!;
-    expect(real.disabled).toBe(true);
-    expect(real.textContent).toBe("Quét & OCR");
+  it("phạm vi của prototype: “Toàn xã” đang bấm, hai lựa chọn kia vô hiệu, MỘT “?”", () => {
+    const el = mount(<IncomingScopeFilter />);
+    const buttons = realButtons(el);
+    expect(buttons.map((b) => b.textContent)).toEqual(["Toàn xã", "Giao cho tôi", "Liên quan đến tôi"]);
+    expect(buttons.map((b) => b.getAttribute("aria-pressed"))).toEqual(["true", "false", "false"]);
+    expect(buttons.map((b) => b.disabled)).toEqual([false, true, true]);
+    expect(markers(el)).toHaveLength(1);
     act(() => markers(el)[0]!.click());
-    expect(dialogText()).toContain("chờ cơ quan quyết định");
+    expect(dialogText()).toContain("Sổ đang hiện toàn bộ văn bản của xã");
+  });
+
+  it("hai liên kết cuối hàng lọc: Nhập hàng loạt từ Excel · Xuất sổ {năm} — vô hiệu, mỗi cái một “?”", () => {
+    const el = mount(<IncomingRowLinks year={2026} />);
+    const buttons = realButtons(el);
+    expect(buttons.map((b) => b.textContent)).toEqual(["Nhập hàng loạt từ Excel", "Xuất sổ 2026"]);
+    for (const b of buttons) expect(b.disabled).toBe(true);
+    expect(markers(el)).toHaveLength(2);
   });
 
   it("đầu trang tab Đơn thư: [Vào sổ đơn thư] hoặc [Nhập từ Excel] — cả hai vô hiệu", () => {
@@ -164,15 +178,18 @@ describe("chỗ giữ “?” của màn Văn bản & Đơn thư (ADR 0068 §14)
     expect(realButtons(el).find((b) => b.textContent === "Xuất Excel")?.disabled).toBe(true);
   });
 
-  it("hàng chuyển trạng thái: bốn nút vô hiệu theo bộ trạng thái riêng của văn bản đến, một “?”", () => {
-    const el = mount(<StatusChangeRow />);
+  it("dải trạng thái: năm bước C2 của văn bản đến, bước đang đứng sáng, mọi nút vô hiệu, một “?”", () => {
+    const el = mount(<StatusChangeRow current={0} />);
     const buttons = realButtons(el);
     expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual([
+      "Đã vào sổ, đang ở đây",
       "Chuyển sang Chờ trình/phân luồng",
       "Chuyển sang Đã chuyển xử lý",
       "Chuyển sang Đang xử lý",
       "Chuyển sang Hoàn thành",
     ]);
+    expect(buttons[0]!.getAttribute("aria-current")).toBe("step");
+    expect(buttons[0]!.textContent).toContain("đang ở đây");
     for (const b of buttons) expect(b.disabled).toBe(true);
     // Not the petition-letter labels the spec drew: the customer gave incoming documents their own.
     expect(el.textContent).not.toContain("Chuyển cấp trên");
@@ -193,11 +210,12 @@ describe("chỗ giữ “?” của màn Văn bản & Đơn thư (ADR 0068 §14)
     const setItem = vi.spyOn(Storage.prototype, "setItem");
     const el = mount(
       <>
-        <ScanOcrButton />
+        <IncomingScopeFilter />
+        <IncomingRowLinks year={2026} />
         <PetitionHeaderActions />
         <PendingPetitionRegister />
         <PendingPetitionReport year={2026} />
-        <StatusChangeRow />
+        <StatusChangeRow current={null} />
         <RaiseTaskButton />
       </>,
     );

@@ -194,6 +194,32 @@ export function nhanHanVanBan(h: HanVanBan): string {
   }
 }
 
+/**
+ * The three stored codes that END an incoming document (`van_ban.go:33`). A document past its deadline
+ * is overdue only while it is still OPEN — the server's own definition (`metric=overdue`: open AND past
+ * `han_xu_ly_xong`). An unknown code is NOT treated as closed: guessing "closed" would hide a late
+ * document, the costlier mistake of the two.
+ */
+const CLOSED_INCOMING_STATUSES: ReadonlySet<string> = new Set(["da-giai-quyet", "chuyen-cap-tren", "luu-khong-thu-ly"]);
+
+/**
+ * `trangThaiHanVanBan` for a RECORD: derived from the stored deadline vs now, and only for an open
+ * document (rule 10, invariant 3). A closed one keeps its deadline in words, never "Quá hạn".
+ */
+export function incomingDeadlineState(dueISO: string, status: string, now: Date): HanVanBan {
+  const state = trangThaiHanVanBan(dueISO, now);
+  return state.loai === "quaHan" && CLOSED_INCOMING_STATUSES.has(status) ? { loai: "conHan", moc: state.moc } : state;
+}
+
+/**
+ * The DAY of a deadline instant, `dd/MM/yyyy`, in the pinned Vietnamese time zone — the date half of
+ * `nhanThoiDiem` (one formatter, not a second one that forgets the zone).
+ */
+export function deadlineDay(dueISO: string): string {
+  const full = nhanThoiDiem(dueISO);
+  return full.slice(full.lastIndexOf(" ") + 1);
+}
+
 export function lopHanVanBan(h: HanVanBan): string | undefined {
   return h.loai === "quaHan" ? "chip chip-cham" : undefined;
 }
@@ -289,22 +315,61 @@ export const DAN_CHUYEN_XU_LY =
 /* ---- ngăn chi tiết văn bản đến -------------------------------------------------------------- */
 
 /**
- * Tiêu đề ngăn chi tiết: `Văn bản đến số 7/2026 · nhận ngày 22/09/2026`.
+ * Tiêu đề ngăn chi tiết: `Số đến 7/2026 · đến ngày 22/09/2026` — the prototype's first header line
+ * (`DocumentDetailDrawer.tsx:217-220`), word for word.
  *
  * SỐ VÀ NGÀY, KHÔNG TRÍCH YẾU: tiêu đề này đi vào `aria-labelledby` — tức vào cây trợ năng — còn
  * trích yếu là chữ tự do có thể nhắc tên một công dân (luật 3, cấm #4). Ngày dùng `nhanNgay` như cột
  * "Ngày đến" của bảng, để một văn bản không mang hai cách viết ngày trên cùng một màn hình.
  */
 export function nhanTieuDeVanBanDen(so: number, nam: number, ngayDenISO: string): string {
-  return `Văn bản đến số ${nhanSoVaoSo(so, nam)} · nhận ngày ${nhanNgayCoThe(ngayDenISO)}`;
+  return `Số đến ${nhanSoVaoSo(so, nam)} · đến ngày ${nhanNgayCoThe(ngayDenISO)}`;
 }
 
 /**
- * Bộ phận chuyển ĐI của một dòng lịch sử. Rỗng ở lần chuyển đầu — chưa bộ phận nào giữ văn bản —
- * và câu ấy khác câu "Chưa chuyển bộ phận nào" của ô đang giữ: dòng này CHÍNH LÀ một lần chuyển.
+ * The incoming-document lifecycle the customer settled on 30/09/2026 (C2, Nghị định 30/2020), in its
+ * order — the prototype's status strip draws one chip per step (`DocumentDetailDrawer.tsx:239-264`).
+ * NOT the petition-letter labels: C2 gives incoming documents their own.
+ */
+export const INCOMING_STATUS_STEPS = [
+  "Đã vào sổ",
+  "Chờ trình/phân luồng",
+  "Đã chuyển xử lý",
+  "Đang xử lý",
+  "Hoàn thành",
+] as const;
+
+/**
+ * Which C2 step a STORED status code stands on, for the strip's "đang ở đây" chip — or `null`.
+ *
+ * Only the four codes whose meaning is the same step are mapped. The other two have no C2 step:
+ * `chuyen-cap-tren` ("Chuyển cấp trên") and `luu-khong-thu-ly` ("Lưu, không thụ lý") are ends that C2
+ * does not list, so placing them on "Hoàn thành" would tell the officer the document was handled
+ * when it was sent away or filed. No step is lit for them; the stored status still shows, in words,
+ * on the line under the strip. An unknown code is likewise `null` — never a guessed step.
+ */
+export function incomingStatusStep(code: string): number | null {
+  switch (code) {
+    case "moi-vao-so":
+      return 0;
+    case "da-phan-cong":
+      return 2;
+    case "dang-xu-ly":
+      return 3;
+    case "da-giai-quyet":
+      return 4;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Bộ phận chuyển ĐI của một dòng lịch sử. Rỗng ở lần chuyển đầu — chưa bộ phận nào giữ văn bản, tức
+ * văn bản còn ở chỗ người vào sổ: the prototype's word for that place is "Văn thư"
+ * (`DocumentDetailDrawer.tsx:489`, `from_org_unit_name ?? "Văn thư"`).
  */
 export function nhanTuBoPhan(ket: KetTra): string {
-  return ket.loai === "chuaGan" ? "Chưa bộ phận nào giữ" : nhanBoPhanDangGiu(ket);
+  return ket.loai === "chuaGan" ? "Văn thư" : nhanBoPhanDangGiu(ket);
 }
 
 /**
@@ -319,14 +384,16 @@ export function nhanCanBo(ma: string, danhBa: DanhBaTheoMa | null): string {
 }
 
 export const TIEU_DE_DONG_THOI_GIAN = "Dòng thời gian chuyển tiếp";
-export const TIEU_DE_KHOI_CHUYEN = "Chuyển cho bộ phận khác";
+// The prototype's title, verbatim (`DocumentDetailDrawer.tsx:428`) — its own transfer moves the status
+// too (comment at :420-426), so the words name the act, not a promise about the status.
+export const TIEU_DE_KHOI_CHUYEN = "Chuyển cho bộ phận khác, không đổi trạng thái";
 
 /**
  * Dòng thời gian rỗng là một CÂU TRẢ LỜI của máy chủ (`items: []`), không phải thiếu dữ liệu — và
  * nó phải nói ra thành chữ. Một danh sách trống trơn không phân biệt được "chưa chuyển lần nào"
  * với "chưa tải xong" hay "tải hỏng".
  */
-export const LICH_SU_RONG = "Chưa chuyển xử lý lần nào.";
+export const LICH_SU_RONG = "Chưa chuyển cho bộ phận nào.";
 export const DANG_TAI_CHI_TIET = "Đang tải văn bản…";
 export const DANG_TAI_LICH_SU = "Đang tải dòng thời gian chuyển tiếp…";
 export const NUT_DONG_CHI_TIET = "Đóng chi tiết văn bản";
@@ -394,6 +461,12 @@ export const SAVE_AND_NEXT_LABEL = "Lưu & nhập tiếp";
 export const QUICK_SAVE_HINT = "Ctrl + Enter để lưu nhanh";
 export const ROUTING_REASON_PLACEHOLDER = "Thuộc thẩm quyền của bộ phận Địa chính";
 export const ROUTING_PERSON_PLACEHOLDER = "— Để bộ phận tự phân công —";
+/** The prototype's issuing-body placeholder (`DocumentEntryForm.tsx:432`). */
+export const ISSUER_PLACEHOLDER = "UBND thành phố Đà Nẵng";
+/** Read-only cells of the intake dialog: the SERVER allocates the number and fixes the deadline. */
+export const ARRIVAL_NO_BY_SERVER = "Hệ thống cấp khi lưu";
+export const DUE_BY_SERVER = "Hệ thống tính khi lưu";
+export const DUE_BY_SERVER_HINT = "Theo thời hạn xử lý và lịch làm việc của xã, tính một lần lúc vào sổ.";
 /** Checkbox of the incoming filter row — `metric=overdue`, the same rows as the overview's red figure. */
 export const OVERDUE_ONLY_LABEL = "Chỉ văn bản quá hạn";
 export const O_LY_DO_CHUYEN = "Lý do chuyển";
@@ -405,13 +478,15 @@ export const O_LY_DO_GO = "Lý do gỡ";
  * Sổ rỗng là trạng thái BÌNH THƯỜNG của một xã vừa nhận hệ thống, không phải một sự cố — nên câu
  * này nói việc phải làm tiếp, không báo động.
  */
-export const SO_DEN_RONG =
-  "Chưa có văn bản đến nào trong sổ theo bộ lọc đang chọn. Bấm “Vào sổ văn bản đến” để nhập văn " +
-  "bản đầu tiên.";
+// The prototype's sentence (`DocumentTable.tsx:543`) with OUR button's real label in place of its
+// "Nhập tay", which no button on this screen is called.
+export const SO_DEN_RONG = "Sổ chưa có văn bản nào. Bấm “Vào sổ văn bản đến” để vào sổ văn bản đầu tiên.";
 
-export const SO_DI_RONG =
-  "Chưa có văn bản đi nào trong sổ theo bộ lọc đang chọn. Bấm “Cấp số văn bản đi” khi phát hành " +
-  "văn bản đầu tiên.";
+export const SO_DI_RONG = "Sổ chưa có văn bản đi nào. Bấm “Cấp số văn bản đi” khi phát hành văn bản đầu tiên.";
+
+/** Empty under a filter, a later page or a drill-down: nothing MATCHES, the register is not empty. */
+export const NO_MATCH_TEXT = "Không có văn bản nào khớp bộ lọc đang chọn.";
+export const FILTER_HINT = "Thử đổi hoặc bỏ bớt bộ lọc.";
 
 /**
  * ⚠ SỔ VĂN BẢN ĐI KHÔNG CÓ ĐẶC TẢ, và câu này nói ra đúng điều máy chủ làm thay vì bịa một quy
@@ -459,14 +534,8 @@ export const PHAN_CHUA_DUNG: readonly PendingPart[] = [
       "Báo cáo tiến độ tiếp nhận và xử lý đơn thư lấy số liệu từ sổ đơn thư công dân, mà sổ ấy " +
       "hệ thống chưa có.",
   },
-  // No OCR adapter. Sending scans (which may carry citizens' personal data) to an external OCR
-  // service for the first time is rule 3 stop condition 2 — the authority's call, not ours.
-  {
-    ten: "Quét & OCR",
-    viSao:
-      "Hệ thống chưa có phần đọc chữ từ bản quét. Gửi bản quét — có thể chứa thông tin cá nhân " +
-      "của công dân — tới một dịch vụ nhận dạng chữ bên ngoài là việc chờ cơ quan quyết định.",
-  },
+  // "Quét & OCR" LEFT THIS LIST 08/10/2026 (ADR 0078 #5): the prototype has no such button (the
+  // commune asked for it to go, 17/09/2026), so the screen no longer draws a "?" for it.
   // The C2 lifecycle is decided, but no route moves an incoming document between those statuses;
   // forwarding to another unit is a separate, built route.
   {
@@ -501,5 +570,32 @@ export const PHAN_CHUA_DUNG: readonly PendingPart[] = [
     viSao:
       "Tạo nhiệm vụ thẳng từ một văn bản đến cần sổ văn bản và sổ nhiệm vụ trao đổi với nhau, việc " +
       "ấy hệ thống chưa có. Hôm nay vẫn giao việc được ở màn Nhiệm vụ.",
+  },
+  // The incoming record has no source field (manual / Excel / scan): the prototype's "Nguồn nhập"
+  // column and "Nguồn vào sổ" cell (ADR 0078 #6).
+  {
+    ten: "Nguồn nhập văn bản đến",
+    viSao:
+      "Sổ văn bản đến chưa ghi văn bản được vào sổ bằng cách nào (nhập tay, từ tệp Excel, từ bản " +
+      "quét), nên cột và ô này chưa có dữ liệu. Hôm nay mọi văn bản đều được nhập tay.",
+  },
+  // No route suggests issuing bodies from the commune's own history (ADR 0078 #6).
+  {
+    ten: "Gợi ý cơ quan ban hành",
+    viSao:
+      "Hệ thống chưa gợi ý tên cơ quan ban hành từ những văn bản xã đã vào sổ. Hôm nay gõ đầy đủ " +
+      "tên cơ quan.",
+  },
+  // The intake body carries no unit or assignee: routing is its own route, with a required reason.
+  {
+    ten: "Chuyển ngay khi vào sổ",
+    viSao:
+      "Lúc vào sổ chưa chuyển ngay được cho bộ phận hay người xử lý. Vào sổ xong, mở văn bản và " +
+      "chuyển ở khối “Chuyển cho bộ phận khác”, kèm lý do chuyển.",
+  },
+  // The incoming record has no note field (ADR 0078 #6).
+  {
+    ten: "Ghi chú văn bản đến",
+    viSao: "Sổ văn bản đến chưa có ô ghi chú, nên chưa ghi được ghi chú kèm văn bản.",
   },
 ];

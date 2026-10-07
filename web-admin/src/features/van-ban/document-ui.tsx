@@ -12,7 +12,6 @@ import {
 import type { ReactNode } from "react";
 
 import { Badge, type BadgeTone } from "@/components/ui/badge";
-import { cn } from "@/lib/cn";
 
 // vi-name-ok: existing exports of nhan-van-ban.ts, imported unchanged (rule 12, invariant 3)
 import { nhanHanVanBan, type HanVanBan } from "./nhan-van-ban";
@@ -69,46 +68,36 @@ export function UrgencyBadge({ urgency, children }: { urgency: string; children:
  * SAME words `nhanHanVanBan` always wrote ("Quá hạn · hạn xử lý …") — the words say it, the colour
  * and the icon are the second and third signal. Otherwise the plain sentence.
  */
-export function DeadlineMark({ deadline }: { deadline: HanVanBan }) {
+export function DeadlineMark({
+  deadline,
+  compact = false,
+}: {
+  deadline: HanVanBan;
+  /**
+   * Under a header that already says "Hạn xử lý" (the register's column): the instant alone, and
+   * "Quá hạn · <instant>" past it — the words the cell would otherwise repeat on every row are what
+   * pushed the prototype's last columns off a 1440px screen.
+   */
+  compact?: boolean;
+}) {
   if (deadline.loai === "quaHan") {
+    // The register's cell is the prototype's plain red words (`DocumentTable.tsx:73-74`, tone
+    // `danger` = `font-semibold text-danger`); the words say "Quá hạn", the colour is the second signal.
+    if (compact) {
+      return (
+        <span className="font-semibold whitespace-nowrap text-danger tabular-nums">{`Quá hạn · ${deadline.moc}`}</span>
+      );
+    }
     return (
       <Badge tone="danger" icon={AlarmClock}>
         {nhanHanVanBan(deadline)}
       </Badge>
     );
   }
-  return <span className="whitespace-nowrap tabular-nums">{nhanHanVanBan(deadline)}</span>;
-}
-
-/**
- * A register table inside its card (spec §6.7, v2 §8.1): flush with the card, its OWN scroller both
- * ways so the header row stays put (`sticky` inside the scroller), 48px rows, thin horizontal rules
- * only — `.bang-danh-muc` already draws those. Same shape as the Nhiệm vụ list.
- */
-export const REGISTER_TABLE_SCROLLER = cn(
-  "bang-cuon max-h-[70vh] overflow-auto rounded-none border-0 shadow-none",
-  "[&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-[1] [&_thead_th]:shadow-[inset_0_-1px_0_var(--line)]",
-  "[&_tbody_td]:h-12",
-);
-
-/**
- * First-load placeholder (spec §8b): grey bars in the shape of register rows. LOCAL ON PURPOSE — a
- * shared `Skeleton` is being built by another work item; this one is replaced by it then.
- * Decorative: the screen's own `role="status"` sentence is what announces the load.
- */
-export function RegisterRowsSkeleton({ rows = 5 }: { rows?: number }) {
   return (
-    <div aria-hidden="true" className="divide-y divide-line">
-      {Array.from({ length: rows }, (_, i) => (
-        <div key={i} className="flex h-12 items-center gap-4 px-4">
-          <span className="h-3 w-12 shrink-0 rounded bg-line motion-safe:animate-pulse" />
-          <span className="h-3 w-20 shrink-0 rounded bg-line motion-safe:animate-pulse" />
-          <span className="h-3 min-w-0 flex-1 rounded bg-line motion-safe:animate-pulse" />
-          <span className="hidden h-3 w-28 shrink-0 rounded bg-line motion-safe:animate-pulse sm:block" />
-          <span className="h-[22px] w-24 shrink-0 rounded-full bg-line motion-safe:animate-pulse" />
-        </div>
-      ))}
-    </div>
+    <span className="whitespace-nowrap tabular-nums">
+      {compact && deadline.loai === "conHan" ? deadline.moc : nhanHanVanBan(deadline)}
+    </span>
   );
 }
 

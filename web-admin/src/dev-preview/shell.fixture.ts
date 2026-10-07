@@ -2,6 +2,9 @@ import { flattenMenu, NHOM_MENU } from "@/components/muc-menu";
 import type { CauHinhXaHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import type { identity_phienHienTaiRa } from "@/lib/api/schema.gen";
 import {
+  QUYEN_CHUYEN_VAN_BAN,
+  QUYEN_GHI_SO_VAN_BAN,
+  QUYEN_XEM_VAN_BAN,
   QUYEN_CAP_NHAT_NHIEM_VU,
   QUYEN_DUYET_GIA_HAN,
   QUYEN_DUYET_HOAN_THANH_NHIEM_VU,
@@ -60,6 +63,16 @@ export const PREVIEW_TASK_PERMISSIONS: readonly string[] = [
   QUYEN_DUYET_GIA_HAN,
   QUYEN_DUYET_HOAN_THANH_NHIEM_VU,
   TASK_ASSIGN_PERMISSION,
+];
+
+/**
+ * The Văn bản & Đơn thư preview's keys — read both registers, write them, route an incoming document:
+ * every control the screen gates is drawn. Real `quyen` keys, through their constants (rule 5, 3c).
+ */
+export const PREVIEW_DOCUMENT_PERMISSIONS: readonly string[] = [
+  QUYEN_XEM_VAN_BAN,
+  QUYEN_GHI_SO_VAN_BAN,
+  QUYEN_CHUYEN_VAN_BAN,
 ];
 
 /** Who the session is. The accountant opens Giải ngân; the leader opens Nhiệm vụ. */

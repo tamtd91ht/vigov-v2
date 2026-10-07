@@ -91,7 +91,7 @@ describe("bảng sổ văn bản đi — đúng sáu cột của hợp đồng, 
   });
 
   it("người ký để trống là một câu trả lời, không phải một ô trống", () => {
-    expect(veBang(trang([dong({ signer: "" })]))).toContain("<td>Không ghi</td>");
+    expect(veBang(trang([dong({ signer: "" })]))).toMatch(/<td class="[^"]*">Không ghi<\/td>/);
   });
 
   it("thiếu quyền ghi: bảng VẪN hiện đủ dòng, chỉ mất cụm nút", () => {
@@ -122,7 +122,7 @@ describe("bảng sổ văn bản đi — đúng sáu cột của hợp đồng, 
     // lời. Nó hiện trong ô cho cán bộ của chính xã ấy; nhãn trợ năng dùng SỐ ĐI (luật 3, cấm #4).
     const html = veBang(trang([dong({ recipient: "Ông Nguyễn Văn A, thôn Bình Trị" })]));
 
-    expect(html).toContain("<td>Ông Nguyễn Văn A, thôn Bình Trị</td>");
+    expect(html).toContain(">Ông Nguyễn Văn A, thôn Bình Trị</span>");
     expect(html).not.toMatch(/aria-label="[^"]*Nguyễn Văn A/);
     expect(html).not.toMatch(/title="[^"]*Nguyễn Văn A/);
     // Both row controls name the row by its NUMBER: the Sửa icon and the "⋯" trigger.
@@ -218,7 +218,6 @@ describe("màn sổ văn bản đi", () => {
         coQuyenGhi={coQuyenGhi}
         thieuQuyenGhi={thieuQuyenGhi}
         thaoTac={KHONG_LAM_GI}
-        cauDaXong=""
         loiNgoaiForm=""
         nganXep={TRANG_DAU}
         diToiTrang={() => {}}
@@ -262,7 +261,9 @@ describe("màn sổ văn bản đi", () => {
     expect(GOI_Y_TIM_DI).not.toMatch(/ký hiệu/);
   });
 
-  it("có ô thứ tự; chú thích bảng nói đúng thứ tự đang xem", () => {
+  it("thứ tự ở đầu cột “Số đi”; chú thích bảng nói đúng thứ tự đang xem", () => {
+    expect(veMan(true, false)).toMatch(/aria-sort="descending"[^>]*><button[^>]*>Số đi<svg/);
+    expect(veMan(true, false, "so-tang")).toMatch(/aria-sort="ascending"/);
     expect(veMan(true, false)).toMatch(/<caption[^>]*>[^<]*số mới nhất trước/);
     expect(veMan(true, false, "so-tang")).toMatch(/<caption[^>]*>[^<]*số cũ nhất trước/);
   });
@@ -296,7 +297,6 @@ describe("sổ văn bản đi theo khuôn tab văn bản đến (ADR 0068 lần 
         coQuyenGhi
         thieuQuyenGhi={false}
         thaoTac={KHONG_LAM_GI}
-        cauDaXong=""
         loiNgoaiForm=""
         nganXep={TRANG_DAU}
         diToiTrang={() => {}}

@@ -16,6 +16,15 @@ import {
   previewSummary,
   previewVouchers,
 } from "./disbursement.fixture";
+import {
+  PREVIEW_DOCUMENT_TYPES,
+  PREVIEW_REGISTER_ERROR,
+  documentPreviewStateNow,
+  previewIncomingDocument,
+  previewIncomingDocuments,
+  previewOutgoingDocuments,
+  previewRoutings,
+} from "./documents.fixture";
 import { devPreviewEnabled, isDevPreviewPath } from "./preview-gate";
 import {
   PREVIEW_EXTENSION_APPROVERS,
@@ -69,6 +78,11 @@ export function installFixtureFetch(previewSession: identity_phienHienTaiRa): vo
     const url = new URL(raw, window.location.origin);
     if (url.origin !== window.location.origin || !url.pathname.startsWith("/api/")) return realFetch(input, init);
     const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
+    // `?state=loading` of the Văn bản preview: the register read never settles (no stream involved —
+    // headless Chrome's virtual clock never runs out while a body stream is pending).
+    if (method === "GET" && isDocumentRegisterPath(url.pathname) && documentPreviewStateNow() === "loading") {
+      return new Promise<Response>(() => {});
+    }
     return Promise.resolve(answer(method, url));
   };
 }
@@ -99,6 +113,8 @@ export function answer(method: string, url: URL): Response {
   if (p === "/api/v1/staff-directory") return json(staffDirectory(url.searchParams));
   const tasks = answerTasks(p, url.searchParams);
   if (tasks !== null) return tasks;
+  const documents = answerDocuments(p, url.searchParams);
+  if (documents !== null) return documents;
   if (p === "/api/v1/investment-projects") return json(previewProjects(year));
   if (p === "/api/v1/investment-project-summary") return json(previewSummary(year));
   if (p === "/api/v1/funding-sources") return json(previewFundingSources(year));
@@ -165,6 +181,48 @@ function answerTasks(p: string, q: URLSearchParams): Response | null {
   // `…/attachments/{id}/download`: there is no stored object behind the fixture — said, not faked.
   if (/^\/attachments\/[^/]+\/download$/.test(m[2])) return refuse(409, PREVIEW_NO_FILE);
   return refuse(404, NO_FIXTURE);
+}
+
+/**
+ * The Văn bản reads (`lib/api/van-ban.ts`, `layLoaiVanBan`); `null` = not a document route. The two
+ * REGISTER lists follow `?state=` of the preview (`documentPreviewStateNow`): `loading` is held unsettled
+ * by the fetch wrapper above — the screen's real first-load state, kept for the screenshot — `empty` with
+ * no row, `error` with a refusal in the server's error shape. Single reads and the timeline stay as they
+ * are, so the drawer still opens in every state.
+ */
+function isDocumentRegisterPath(p: string): boolean {
+  return p === "/api/v1/incoming-documents" || p === "/api/v1/outgoing-documents";
+}
+
+function answerDocuments(p: string, q: URLSearchParams): Response | null {
+  if (p === "/api/v1/document-types") return json(PREVIEW_DOCUMENT_TYPES);
+  const year = Number(q.get("year")) || new Date().getFullYear();
+  const one = (name: string) => q.get(name) ?? undefined;
+  const ascending = q.get("order") === "asc";
+  if (p === "/api/v1/incoming-documents" || p === "/api/v1/outgoing-documents") {
+    const state = documentPreviewStateNow();
+    // `loading` never reaches here in the browser: the fetch wrapper holds those reads unsettled.
+    if (state === "error") return refuse(503, PREVIEW_REGISTER_ERROR);
+    if (state === "empty") return json({ items: [], next_cursor: "", has_more: false });
+    return p === "/api/v1/incoming-documents"
+      ? json(
+          previewIncomingDocuments({
+            year,
+            status: one("status"),
+            unit: one("holding_unit"),
+            type: one("document_type"),
+            q: one("q"),
+            metric: one("metric"),
+            ascending,
+          }),
+        )
+      : json(previewOutgoingDocuments({ year, type: one("document_type"), q: one("q"), ascending }));
+  }
+  const m = /^\/api\/v1\/incoming-documents\/([^/]+)(\/routings)?$/.exec(p);
+  if (m === null) return null;
+  const id = decodeURIComponent(m[1]!);
+  const found = m[2] === undefined ? previewIncomingDocument(id) : previewRoutings(id);
+  return found === null ? refuse(404, "Không tìm thấy văn bản đến này.") : json(found);
 }
 
 function taskQuery(q: URLSearchParams): PreviewTaskQuery {
