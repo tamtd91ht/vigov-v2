@@ -128,7 +128,7 @@ func TestPgCitizenLetterNumberImmutableAndNotReissued(t *testing.T) {
 	mustRefuse(t, err, "a hard delete of an archival letter")
 }
 
-// The statuses bind their timestamps and the closing result; optional sender fields are NULL, never ''.
+// The statuses bind their timestamps and the closing result; optional sender fields are NULL, never ”.
 func TestPgCitizenLetterBindings(t *testing.T) {
 	db := moKetNoi(t)
 	a, _ := xaRieng(t)

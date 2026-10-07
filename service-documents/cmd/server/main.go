@@ -229,7 +229,10 @@ func run(log *slog.Logger) error {
 		OverdueQueue:    app.NewIncomingDashboard(vanBanDen, dinhDanh),
 		// This service's OWN audit_log, on its own handle — never another service's (ADR 0054 §1).
 		AuditLog: audit.NewLog(kho),
-		Log:      log,
+		// Sổ đơn thư (ADR 0078): the SAME counter as the two document registers (series 'don-thu'),
+		// and the SAME identity client — units and assignees are checked live in the commune.
+		CitizenLetters: app.NewCitizenLetters(kho, docstore.NewCitizenLetterStore(kho), daySo, dinhDanh),
+		Log:            log,
 	})
 
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.

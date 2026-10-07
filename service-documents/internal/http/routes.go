@@ -154,6 +154,24 @@ type OverdueQueueReader interface {
 	OverdueQueue(ctx context.Context, now time.Time, limit int) ([]app.OverdueQueueItem, error)
 }
 
+// CitizenLetterService is SỔ ĐƠN THƯ CÔNG DÂN's use cases (routes_citizen_letter.go). ONE interface
+// for reads and writes, unlike the incoming register's three: here the reads WRITE too — a detail read
+// that discloses a denunciation is audited in its own transaction — so the "writes audit, reads don't"
+// split the other registers draw does not hold. *app.CitizenLetters satisfies it.
+type CitizenLetterService interface {
+	Book(ctx context.Context, req app.BookLetterRequest, caller app.LetterCaller) (domain.CitizenLetter, error)
+	Route(ctx context.Context, id string, req app.RouteLetterRequest, caller app.LetterCaller) (domain.CitizenLetter, error)
+	Move(ctx context.Context, id string, req app.MoveLetterRequest, caller app.LetterCaller) (domain.CitizenLetter, error)
+	RecordResult(ctx context.Context, id string, req app.LetterResultRequest, caller app.LetterCaller) (domain.CitizenLetter, error)
+	CorrectSender(ctx context.Context, id string, req app.SenderCorrection, caller app.LetterCaller) (domain.CitizenLetter, error)
+	AddNote(ctx context.Context, id, content string, caller app.LetterCaller) (domain.LetterLogEntry, error)
+	Detail(ctx context.Context, id string, viewer app.LetterCaller) (domain.CitizenLetter, domain.LetterDisclosure, error)
+	Log(ctx context.Context, id string) ([]domain.LetterLogEntry, error)
+	List(ctx context.Context, q app.LetterListQuery, req page.Request) (page.Result[domain.CitizenLetter], error)
+	Duplicates(ctx context.Context, q app.DuplicateQuery) ([]domain.DuplicateCandidate, error)
+	Report(ctx context.Context, year int) (domain.LetterReport, error)
+}
+
 // Deps are everything the routes need. Kept explicit so wiring stays in cmd/server.
 type Deps struct {
 	// Checker guards the routes declared with authz.RequirePermission. THREE ROUTES NOW USE ONE,
@@ -180,6 +198,9 @@ type Deps struct {
 	// AuditLog reads this service's own `audit_log` for the "Xem nhật ký hệ thống" screen (ADR 0054).
 	// *audit.Log in production. Refused at construction when missing.
 	AuditLog AuditLogReader
+
+	// CitizenLetters is the citizen-letter register (ADR 0078). Refused at construction when missing.
+	CitizenLetters CitizenLetterService
 
 	// Clock is the instant `overdue` is judged at, for the summary, the queue and the drill-down.
 	// A TEST SEAM: nil in production means the real clock, UTC.
@@ -217,11 +238,16 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("documents/http: thiếu use case hàng đợi quá hạn — GET /api/v1/incoming-document-overdue-queue sẽ panic khi có người gọi")
 	case d.AuditLog == nil:
 		panic("documents/http: thiếu bộ đọc nhật ký hệ thống — GET /api/v1/documents-audit-entries sẽ panic khi có người gọi")
+	case d.CitizenLetters == nil:
+		panic("documents/http: thiếu use case sổ đơn thư — các tuyến /api/v1/citizen-letters sẽ panic khi có người gọi")
 	case d.Checker == nil:
 		panic("documents/http: thiếu authz.Checker — mọi tuyến ghi sẽ không kiểm được quyền")
 	}
 
 	h := NewHandler(d)
+
+	// SỔ ĐƠN THƯ CÔNG DÂN — eleven routes, `petition.create` / `petition.read` (routes_citizen_letter.go).
+	registerCitizenLetterRoutes(mux, d, h)
 
 	// The document-type Excel import — three routes, all `admin.lookup` (routes_document_type_import.go).
 	registerDocumentTypeImportRoutes(mux, d, h)

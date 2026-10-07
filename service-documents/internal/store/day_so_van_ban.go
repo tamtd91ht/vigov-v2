@@ -43,6 +43,11 @@ type SoSach string
 const (
 	SoSachDen SoSach = "den"
 	SoSachDi  SoSach = "di"
+
+	// SeriesCitizenLetter is the citizen-letter register's series (migration 0006 widened the CHECK to
+	// admit it): ONE continuous series per commune per year for all four letter types — splitting it by
+	// type would split an archival series (ubiquitous-language.md:142).
+	SeriesCitizenLetter SoSach = "don-thu"
 )
 
 // TranSoMotNam is the ceiling on one commune's series in one year.

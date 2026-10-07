@@ -142,6 +142,9 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		IncomingSummary:  docstore.NewVanBanDenStore(nil),
 		OverdueQueue:     app.NewIncomingDashboard(docstore.NewVanBanDenStore(nil), nil),
 		AuditLog:         audit.NewLog(store.New(nil)),
+		// The citizen-letter register — same reason, equally unused here; its own suite is in
+		// internal/http and internal/app.
+		CitizenLetters: app.NewCitizenLetters(nil, nil, nil, nil),
 
 		Log: log,
 	})
