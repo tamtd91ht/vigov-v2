@@ -3,10 +3,10 @@ id: 0076-ngan-chi-tiet-nhiem-vu-theo-prototype
 tier: T1
 source: CURATED
 owner: domain
-derived_from_commit: e2a08b47
+derived_from_commit: cca90b98
 expires: null
 owns_facts:
-  - "ngăn chi tiết nhiệm vụ KHÔNG còn 3 tab thao tác Xem chi tiết · Chỉnh sửa · Xoá: sửa tại chỗ bằng '✎ Sửa' trong khối thông tin, Xoá (xoá mềm, có lý do) ở cột thao tác; ngăn phải + tab bản ghi giữ (chốt 07/10/2026)"
+  - "ngăn chi tiết nhiệm vụ KHÔNG còn 3 tab thao tác Xem chi tiết · Chỉnh sửa · Xoá: sửa tại chỗ bằng '✎ Sửa' trong khối thông tin, Xoá (xoá mềm, có lý do) ở cột thao tác; ngăn phải + tab bản ghi giữ (chốt 07/10/2026) — vế 'Xoá ở cột thao tác' THAY bởi §Sửa đổi 07/10/2026 (lần 2) #15: không còn cột thao tác, Xoá ở đầu ngăn"
   - "ô tick + trọng số việc con vẽ như prototype nhưng là control vô hiệu dấu '?' tới khi máy chủ có trọng số (chốt 07/10/2026)"
   - "hai ô phê duyệt nhiệm vụ (lãnh đạo xã phê duyệt hoàn thành · cấp trên công nhận) khoá bằng task.update ở cả máy chủ và giao diện, tick thẳng ở chế độ xem, mỗi lần đổi có vết trước/sau + một dòng nhật ký (chốt 07/10/2026)"
   - "gỡ tệp đính kèm nhiệm vụ: người tải lên hoặc task.update; gỡ được cả tệp đã gắn nhật ký; lý do bắt buộc; xoá mềm; tệp giữ pháp lý → 409; dòng nhật ký 'đã gỡ' KHÔNG chép tên tệp (chốt 07/10/2026)"
@@ -17,6 +17,12 @@ owns_facts:
   - "câu gợi ý trạng thái nhiệm vụ hiện NGUYÊN VĂN spec 10 dù nói luật hệ thống không áp (hoàn thành không cần duyệt, chờ duyệt không bắt minh chứng) — luật máy chủ không đổi (chốt 07/10/2026 lần 2 #3)"
   - "bộ lọc phạm vi trang Nhiệm vụ = 3 lựa chọn của spec 02; 'Tôi đã giao' bỏ khỏi trang này, Sổ tay lãnh đạo giữ cột của nó (chốt 07/10/2026 lần 2 #4)"
   - "phần spec Nhiệm vụ cần máy chủ (extension_count/pending_extension trên dòng, collaborator_ids, trọng số việc con, tổng danh sách, sắp xếp máy chủ theo người/bộ phận/trạng thái, nguồn recurring, tệp chưa gắn, email trong ô chọn cán bộ, requires_directive) = control '?' + BACKEND DEPENDENCY; không thêm react-hook-form/zod/@tanstack/react-table/@dnd-kit/sortable (07/10/2026 lần 2)"
+  - "menu Nhiệm vụ GIỮ ba thứ prototype không có — menu 'Chuyển sang cột…' trên thẻ Kanban, nút 'Xuất Excel' Sổ theo dõi, phân trang máy chủ + 'Xem thêm' — vẽ lại theo UI chung (chốt 07/10/2026 lần 2 #13)"
+  - "ngăn chi tiết nhiệm vụ KHÔNG có ô 'Việc cha' và không có liên kết lên việc cha, như prototype; API PATCH {parent}, luật cây ADR 0037 và '+ Thêm việc con' trong ngăn của việc cha giữ (chốt 07/10/2026 lần 2 #14)"
+  - "ngăn chi tiết nhiệm vụ không có cột thao tác bên phải; Xoá (xoá mềm, có lý do) ở đầu ngăn; dòng 'Tạo bởi …' bỏ nếu prototype không có (chốt 07/10/2026 lần 2 #15)"
+  - "Sổ theo dõi nhiệm vụ vẽ đủ 13 cột prototype, ngăn chi tiết có ô 'Cơ quan chủ trì tham mưu' và 'Chuyên viên VP tham mưu/theo dõi' — hiện CÙNG dữ liệu với Đơn vị thực hiện / Người thực hiện; chỉ trình bày, mô hình dữ liệu ADR 0065 NV5 giữ (chốt 07/10/2026 lần 2 #16)"
+  - "hộp 'Giao việc mới' rộng 500px, 800px khi loại 'Theo văn bản' (spec 06) — thay chốt 07/10/2026 'luôn 800px' vốn chỉ nằm ở sổ tiến độ và mã (chốt 07/10/2026 lần 2 #17)"
+  - "menu Nhiệm vụ: trạng thái trống/lỗi của danh sách giữ cách xử lý hiện có; số liệu chỉ đọc cần máy chủ (vd 'đã gia hạn n lần') = control vô hiệu '?' đúng vị trí prototype (mặc định phiên 07/10/2026 lần 2 #18–#19)"
 ---
 
 # 0076. Ngăn chi tiết nhiệm vụ theo prototype và bốn thao tác máy chủ
@@ -25,7 +31,8 @@ owns_facts:
 `/fix-web-admin --menu=nhiem-vu` · **Bổ sung** ADR 0068 *Sửa đổi 06/10/2026 (lần 5)* cho riêng menu
 Nhiệm vụ, **thay một phần** 0068 *Sửa đổi 05/10/2026* #3 — xem §*Quan hệ với ADR khác* ·
 **Sửa đổi 07/10/2026 (lần 2)** (menu Nhiệm vụ theo spec 02–10; giữ tab nhiều hồ sơ; bốn chỗ chữ theo
-spec đảo NV-11, câu #21 trên web, `a1e5e64f` — §*Sửa đổi 07/10/2026 (lần 2)*).
+spec đảo NV-11, câu #21 trên web, `a1e5e64f`; lô hai #13–#19: bỏ ô Việc cha, Xoá lên đầu ngăn, Sổ theo dõi
+13 cột, hộp giao việc 500/800 — §*Sửa đổi 07/10/2026 (lần 2)*).
 
 ## Bối cảnh
 
@@ -165,3 +172,32 @@ Câu trả lời của chủ dự án (chọn trong câu hỏi của phiên, ngu
 | d | Nhãn nguồn `truc-tiep` | Sửa theo báo cáo kiểm thử **NV-11** ("Tạo trên sổ nhiệm vụ") **bị đảo** — về "Giao trực tiếp" |
 | e | Loại nhiệm vụ mặc định | Chốt 07/10 "không có loại mặc định thì để trống" (`a1e5e64f`, sổ tiến độ NV-01) **bị đảo**: mặc định = loại `is_default`, không có thì **dòng đầu** (spec 06) |
 | f | "Tôi đã giao" | Bỏ khỏi trang Nhiệm vụ. Cột *Việc tôi đã giao* của Sổ tay lãnh đạo (ADR 0071) **giữ**; tham số `scope=assigned-by-me` của API giữ |
+| g | Gợi ý ô *Lãnh đạo giao việc* "…qua chuông và qua thư" (spec 06) | Phiên đưa lại câu này theo spec, **cách đọc của phiên** từ hai câu trả lời "Theo spec toàn bộ" và "Nguyên văn spec" (chủ dự án không nêu riêng câu này). Câu ấy từng bị bỏ có chủ ý (bbcaf3c7): gửi đề nghị lùi hạn hiện **không** phát thông báo chuông hay thư — màn hình hứa một việc hệ thống không làm. Chủ dự án phủ quyết thì bỏ lại |
+
+### Lô câu trả lời thứ hai (cùng phiên, 07/10/2026)
+
+Cùng người quyết, cùng phiên. Nguyên văn lựa chọn của chủ dự án:
+
+| # | Câu hỏi của phiên | Lựa chọn nguyên văn | Chốt |
+|---|---|---|---|
+| 13 | Prototype **không có** bốn thứ web đang chạy: menu "Chuyển sang cột…" trên thẻ Kanban (đường dùng bàn phím/cảm ứng), nút "Xuất Excel" Sổ theo dõi, ô "Việc cha" (ADR 0037), phân trang máy chủ + "Xem thêm" | Trả lời tự do: **"tôi lăn tăn mục ô Việc cha, hãy đánh giá thêm chỗ này, ngoài ra 3 cái kia cho phép giữ lại nhưng phải chuẩn UI UX chung nhé"** | Menu chuyển cột Kanban, "Xuất Excel", phân trang máy chủ + "Xem thêm" **giữ**, vẽ lại theo UI chung. Ô Việc cha → #14 |
+| 14 | Sau khi phiên đánh giá (prototype có dữ liệu `parent_id` nhưng không có ô đặt nó, form tạo luôn gửi `parent_id` null; spec khách hàng `docs/ui-ux/02-nhiem-vu.md` §5.10 chỉ nêu danh sách việc con + thêm, không nêu ô cha): "Ô 'Việc cha' trong ngăn chi tiết xử lý thế nào?" | **"Bỏ hẳn như prototype"** | Ngăn chi tiết **không có** ô Việc cha và **không có** liên kết lên việc cha. API `PATCH {parent}`, luật cây ADR 0037 và "+ Thêm việc con" trong ngăn của việc cha **giữ**. Phiên đã đề xuất giữ một liên kết chỉ đọc — **bị bác**. Hệ quả (h), (j) |
+| 15 | Spec 07 không có cột nút tròn bên phải; #1 trên đặt Xoá ở "cột thao tác" | **"Bỏ cột, Xoá vào đầu ngăn"** | Không còn cột thao tác; Xoá ở **đầu ngăn**, vẫn xoá mềm có lý do (luật 7). Dòng "Tạo bởi …" bỏ nếu prototype không có. **Thay** vế "Xoá ở cột thao tác" của #1 |
+| 16 | Sổ theo dõi và ngăn chi tiết prototype có "Cơ quan chủ trì tham mưu" và "Chuyên viên VP tham mưu/theo dõi"; ADR 0065 NV5 đã gộp hai vai này vào "Đơn vị thực hiện" / "Người thực hiện" (dữ liệu như nhau) | **"Theo đúng prototype"** | Sổ theo dõi vẽ đủ **13 cột**, ngăn có hai ô ấy; hai ô thêm hiện **CÙNG dữ liệu** với Đơn vị thực hiện / Người thực hiện. **Chỉ trình bày** — mô hình dữ liệu NV5 không đổi. **Thay** mặc định #5 trên ("Sổ theo dõi giữ 11 cột"). Hệ quả (i) |
+| 17 | Hộp "Giao việc mới" hiện luôn rộng 800px (chốt 07/10, chỉ ghi ở sổ tiến độ và mã, chưa có ADR); spec 06: 500px bình thường, 800px khi loại "Theo văn bản" | **"Theo spec 500/800"** | Rộng **500px**; **800px** khi loại nhiệm vụ là "Theo văn bản". Chốt "luôn 800px" **hết hiệu lực** |
+
+**Mặc định phiên nêu, chủ dự án không phản đối:**
+
+| # | Giữ | Chủ sở hữu |
+|---|---|---|
+| 18 | Trạng thái trống / lỗi của danh sách giữ cách xử lý hiện có | Như ADR 0068 *lần 6* #11 cho Giải ngân |
+| 19 | Số liệu chỉ đọc cần máy chủ (vd "đã gia hạn n lần") → control vô hiệu dấu "?" **đúng vị trí prototype** | ADR 0068 *lần 5* #5 · #12 trên |
+
+**Hệ quả lô hai** (chủ dự án **không nêu** lý do cho #14–#17 — đừng suy thêm):
+
+| # | Điểm | Thực tế |
+|---|---|---|
+| h | Từ việc con | **Không có** đường trên màn hình để tới việc cha. Cây vẫn đúng ở máy chủ (ADR 0037); việc gắn/đổi cha chỉ còn qua API hoặc "+ Thêm việc con" ở ngăn của việc cha |
+| i | Hai ô chủ trì / theo dõi | Người đọc thấy **cùng một giá trị hai lần** và có thể nghĩ hệ thống có hai vai riêng — trong khi ADR 0065 NV5 nói là **một** vai |
+| j | ADR 0068 *05/10* dòng "URL theo hộp" | Vế "đi tới việc **cha** trong hộp thay mục lịch sử" không còn chỗ dùng (#14); vế đi tới việc **con** giữ |
+| k | Mặc định #5 lô một | "Không thêm ô bộ phận chủ trì / người theo dõi; Sổ theo dõi giữ 11 cột" **bị thay** bởi #16 |

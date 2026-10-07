@@ -10,7 +10,7 @@ owns_facts:
   - "mở lại nhiệm vụ đã hoàn thành cần task.approve và lý do bắt buộc; không mở lại việc con khi việc cha đã hoàn thành"
   - "mã nhiệm vụ không bao giờ sửa sau khi cấp — lệch có chủ ý khỏi vigov-require 7764c8a"
   - "hạn nhiệm vụ sửa thẳng được trong form sửa, không chỉ qua đề nghị lùi hạn"
-  - "chủ trì và người thực hiện là MỘT vai trò: chuyên viên theo dõi ≡ người thực hiện, cơ quan chủ trì tham mưu ≡ bộ phận thực hiện"
+  - "chủ trì và người thực hiện là MỘT vai trò: chuyên viên theo dõi ≡ người thực hiện, cơ quan chủ trì tham mưu ≡ bộ phận thực hiện — vế TRÌNH BÀY THAY bởi ADR 0076 §Sửa đổi 07/10/2026 (lần 2) #16: menu Nhiệm vụ web-admin vẫn vẽ hai ô 'Cơ quan chủ trì tham mưu' / 'Chuyên viên VP tham mưu/theo dõi' với cùng dữ liệu; mô hình một vai giữ"
   - "hạn nhiệm vụ mặc định 17:00, điền sẵn +7 ngày"
   - "luật người giữ việc của nhiệm vụ: người được giao làm mọi việc, người liên quan chỉ ghi nhật ký, người giữ task.update vẫn làm được"
   - "nhãn mặc định cột Kanban đầu tiên là Mới giao, xã đổi được — trên các màn menu Nhiệm vụ web-admin, nhãn hiện là nhãn CỐ ĐỊNH của spec: THAY bởi ADR 0076 §Sửa đổi 07/10/2026 (lần 2) #2 (danh mục /task-statuses và API giữ)"
