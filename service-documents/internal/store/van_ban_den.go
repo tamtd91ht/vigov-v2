@@ -83,7 +83,7 @@ type LocVanBanDen struct {
 	TrangThai  string // "" = every state
 	LoaiVanBan string // "" = every type
 	BoPhan     string // "" = every department, including none
-	Tim        string // "" = no text search
+	Tim        string // "" = no text search; else summary · reference no. · issuing body, literal
 
 	// Metric narrows the list to exactly one dashboard figure's rows (zero Metric = no such filter).
 	// It is built by metricPredicate — the SAME function CountIncomingSummary counts with — so the
@@ -194,13 +194,21 @@ func locThanhSQL(loc LocVanBanDen) (string, []any, error) {
 		them(" AND bo_phan_dang_giu_id = $%d", loc.BoPhan)
 	}
 	if loc.Tim != "" {
-		// ILIKE ON TWO COLUMNS AND NO MORE. `trich_yeu` is what a clerk remembers and `so_ky_hieu`
-		// is what they were read over the telephone. A leading wildcard cannot use an index, which
-		// is affordable HERE and only here: the scan is already bounded to one commune and — in the
-		// ordinary case — one year, which is a few thousand rows.
-		args = append(args, "%"+loc.Tim+"%")
-		dieuKien += fmt.Sprintf(" AND (trich_yeu ILIKE $%d OR COALESCE(so_ky_hieu,'') ILIKE $%d)",
-			len(args)+1, len(args)+1)
+		// ILIKE ON THREE COLUMNS AND NO MORE. `trich_yeu` is what a clerk remembers, `so_ky_hieu`
+		// is what they were read over the telephone, and `co_quan_ban_hanh` is who sent it — the
+		// register screen promises all three ("Tìm theo trích yếu, cơ quan, số ký hiệu…", owner
+		// decision 08/10/2026, ADR 0078 prototype parity); a placeholder naming a column the query
+		// does not read tells the clerk a document is absent when it is not. A leading wildcard cannot
+		// use an index, which is affordable HERE and only here: the scan is already bounded to one
+		// commune and — in the ordinary case — one year, which is a few thousand rows.
+		//
+		// ESCAPED: a `%` or `_` the clerk typed (`15/2026/QĐ_UBND`) is a character, not a wildcard —
+		// unescaped, `_` matched any character and `%` matched everything. ILIKE folds case only;
+		// diacritics are NOT folded, so "ubnd xa" does not find "UBND xã".
+		args = append(args, "%"+escapeLike(loc.Tim)+"%")
+		n := len(args) + 1 // $1 is the commune
+		dieuKien += fmt.Sprintf(" AND (trich_yeu ILIKE $%d OR COALESCE(so_ky_hieu,'') ILIKE $%d"+
+			" OR co_quan_ban_hanh ILIKE $%d)", n, n, n)
 	}
 	if loc.Metric.Metric != "" {
 		// The same binder numbering as `them` above ($1 is the commune), and the same predicate the
