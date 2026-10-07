@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { devPreviewEnabled, isDevPreviewPath } from "@/dev-preview/preview-gate";
 import { SESSION_COOKIE } from "@/lib/session";
 
 /**
@@ -34,6 +35,12 @@ export default function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
 
   if (CONG_KHAI.has(pathname)) return NextResponse.next();
+
+  // The dev-only screenshot preview (`dev-preview/preview-gate.ts`, ADR 0068 lần 6 #10) opens without a
+  // session cookie IN DEVELOPMENT ONLY. `devPreviewEnabled()` is false in every production build
+  // (NODE_ENV is inlined by `next build`), so there the path falls through to the guard below like any
+  // other — and its pages 404 anyway. It reads no commune data: fixtures only, no API call leaves.
+  if (devPreviewEnabled() && isDevPreviewPath(pathname)) return NextResponse.next();
 
   if (request.cookies.has(SESSION_COOKIE)) return NextResponse.next();
 
