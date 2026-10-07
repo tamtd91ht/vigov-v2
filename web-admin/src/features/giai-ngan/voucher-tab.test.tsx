@@ -378,19 +378,49 @@ describe("§8.2 row — spec 07 presentation, status codes unchanged", () => {
     expect(el.textContent).not.toContain("Khoá lúc");
   });
 
-  it("a DRAFT row draws `Khoá` disabled with its '?' — the one-call confirm+lock is a backend dependency", () => {
-    stubServer({ vouchers: [] });
-    const { el } = block(TWO_LINES, [voucher({ status: CHUNG_TU_KE_TOAN_NHAP })]);
-    const spot = el.querySelector<HTMLElement>("tbody [data-pending]")!;
-    expect(spot).not.toBeNull();
-    const button = [...spot.querySelectorAll("button")].find((b) => b.textContent === "Khoá")!;
-    expect(button.disabled).toBe(true);
-    expect(spot.querySelector("button[data-pending-marker]")?.getAttribute("aria-label")).toContain(
-      "Khoá khoản chi chưa xác nhận",
-    );
+  it("a DRAFT row has a LIVE `Khoá` (356a5a9f): POST /lockout with no body, the spec's toast, a re-read", async () => {
+    const seen = stubServer({ vouchers: [] });
+    const { el, written } = block(TWO_LINES, [voucher({ status: CHUNG_TU_KE_TOAN_NHAP })]);
+    expect(el.querySelector("tbody [data-pending]")).toBeNull();
+    const button = el.querySelector<HTMLButtonElement>('button[aria-label="Khoá chứng từ ngày 7/9/2026"]')!;
+    expect(button.disabled).toBe(false);
+    // Spec 07: default (solid) variant, `h-7 px-2 text-[11px]`.
+    expect(button.className).toContain("h-7");
+    expect(button.className).toContain("text-[11px]");
     // After `Xác nhận`, as the prototype orders the buttons.
     const words = [...el.querySelectorAll("tbody button")].map((b) => b.textContent?.trim()).filter(Boolean);
     expect(words.indexOf("Khoá")).toBe(words.indexOf("Xác nhận") + 1);
+
+    await act(async () => {
+      button.click();
+    });
+    await settle();
+    const lock = seen.find((s) => s.method === "POST" && s.url === "/api/v1/disbursements/01JCT1/lockout");
+    expect(lock).toBeDefined();
+    expect(lock?.body).toBeNull();
+    expect(toast.success).toHaveBeenCalledWith("Đã xác nhận và khoá.");
+    expect(written).toHaveBeenCalledTimes(1);
+  });
+
+  it("409 `self_confirmation` on Khoá / Xác nhận: the server's sentence (prefix removed) is the error toast", async () => {
+    stubServer({
+      vouchers: [],
+      writeReply: () =>
+        json(409, {
+          code: "self_confirmation",
+          message: "chung_tu: Không thể tự xác nhận khoản do chính mình nhập",
+        }),
+    });
+    const { el, written } = block(TWO_LINES, [voucher({ status: CHUNG_TU_KE_TOAN_NHAP })]);
+    for (const label of ["Khoá chứng từ ngày 7/9/2026", "Xác nhận chứng từ ngày 7/9/2026"]) {
+      vi.mocked(toast.error).mockClear();
+      await act(async () => {
+        el.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!.click();
+      });
+      await settle();
+      expect(toast.error).toHaveBeenCalledWith("Không thể tự xác nhận khoản do chính mình nhập");
+    }
+    expect(written).not.toHaveBeenCalled();
   });
 
   it("a CONFIRMED row has the live `Khoá` (no '?'), and the lock outcome is the spec's toast", async () => {
@@ -402,6 +432,39 @@ describe("§8.2 row — spec 07 presentation, status codes unchanged", () => {
     });
     await settle();
     expect(toast.success).toHaveBeenCalledWith("Đã xác nhận và khoá.");
+  });
+
+  it("Gỡ: `budget.update` holds it — confirm dialog with NO reason field, then DELETE with NO body", async () => {
+    const seen = stubServer({ vouchers: [], writeReply: () => new Response(null, { status: 204 }) });
+    const vouchers: ProjectVoucherList = { phase: "ready", items: [voucher()], count: 1 };
+    const written = vi.fn();
+    const el = mount(
+      <KhoiChungTu duAnID="01JDA1" allocations={[]} vouchers={vouchers} coGhi coXacNhan={false} daGhiXong={written} />,
+    );
+    act(() => el.querySelector<HTMLButtonElement>('button[aria-label="Gỡ chứng từ ngày 7/9/2026"]')!.click());
+    const dialog = el.querySelector<HTMLFormElement>("form#form-go-chung-tu")!;
+    expect(dialog).not.toBeNull();
+    expect(dialog.textContent).toContain("Gỡ khoản chi ngày 7/9/2026, số tiền 30.000.000 đ?");
+    expect(dialog.querySelector("textarea, input")).toBeNull();
+    await act(async () => {
+      buttonByText(dialog, "Gỡ khoản chi").click();
+    });
+    await settle();
+    const del = seen.find((s) => s.method === "DELETE" && s.url === "/api/v1/disbursements/01JCT1");
+    expect(del).toBeDefined();
+    expect(del?.body).toBeNull();
+    expect(toast.success).toHaveBeenCalledWith("Đã gỡ khoản chi.");
+    expect(written).toHaveBeenCalledTimes(1);
+  });
+
+  it("Gỡ DENIED: `budget.confirm` alone draws no Gỡ (the route takes `budget.update` since 356a5a9f)", () => {
+    stubServer({ vouchers: [] });
+    const vouchers: ProjectVoucherList = { phase: "ready", items: [voucher()], count: 1 };
+    const el = mount(
+      <KhoiChungTu duAnID="01JDA1" allocations={[]} vouchers={vouchers} coGhi={false} coXacNhan daGhiXong={() => {}} />,
+    );
+    expect(el.querySelector('button[aria-label="Gỡ chứng từ ngày 7/9/2026"]')).toBeNull();
+    expect(el.querySelector('button[aria-label="Khoá chứng từ ngày 7/9/2026"]')).not.toBeNull();
   });
 
   it("without the keys the buttons are simply absent — no denial notes (spec 07)", () => {

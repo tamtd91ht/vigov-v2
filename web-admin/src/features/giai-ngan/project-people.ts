@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { layDanhBaChonNguoi } from "@/lib/api/danh-ba-chon-nguoi"; // vi-name-ok: existing staff-directory client
 import { layDanhMucBoPhan } from "@/lib/api/danh-muc"; // vi-name-ok: existing org-unit catalogue client
+import { listImplementingUnits } from "@/lib/api/du-an";
 import type { KetQua } from "@/lib/api/goi";
 import type {
   finance_duAnRa,
@@ -29,6 +30,9 @@ import type {
  * is drawn as "not assigned", never as the raw string.
  *
  * ONE READ PER CATALOGUE PER SCREEN, mapped by key — never one per row.
+ *
+ * A THIRD SOURCE, NO LOOKUP: `implementing_unit` (65afbdcd) is free text typed for a unit outside the
+ * org chart (a contractor). It IS the name, so it is shown as stored and needs no catalogue.
  */
 
 /** One catalogue as a screen holds it: `names` maps the stored reference to the name shown. */
@@ -88,6 +92,72 @@ export function useProjectPeople(): ProjectPeople {
   return { units, staff };
 }
 
+/** The year's typed implementing units (`GET /api/v1/implementing-units`) as a form holds them. */
+export type KnownUnits =
+  | { readonly phase: "loading" }
+  | { readonly phase: "error"; readonly message: string }
+  | { readonly phase: "ready"; readonly items: readonly string[] };
+
+/** What a form holds before the typed-unit read has answered. */
+export const KNOWN_UNITS_LOADING: KnownUnits = { phase: "loading" };
+
+/**
+ * Reads the typed units of `year` once per year. Kept with the year that produced it, as the funding
+ * catalogue is. A failure is not shown as an error: the select still offers the org units and manual
+ * entry, so it only means fewer suggestions.
+ */
+export function useImplementingUnits(year: number): KnownUnits {
+  const [loaded, setLoaded] = useState<{ year: number; units: KnownUnits } | null>(null);
+  useEffect(() => {
+    let dropped = false;
+    listImplementingUnits(year).then((r) => {
+      if (dropped) return;
+      setLoaded({
+        year,
+        units: r.ok ? { phase: "ready", items: r.duLieu.items } : { phase: "error", message: r.thongBao },
+      });
+    });
+    return () => {
+      dropped = true;
+    };
+  }, [year]);
+  return loaded !== null && loaded.year === year ? loaded.units : { phase: "loading" };
+}
+
+/** Option values of the §9 `Đơn vị thực hiện` select. */
+export const UNIT_ORG_PREFIX = "org:";
+export const UNIT_TEXT_PREFIX = "text:";
+export const UNIT_MANUAL = "manual";
+
+/**
+ * The §9 `Đơn vị thực hiện` options (prototype `BudgetItemForm.tsx:99-113`): the commune's org units
+ * first, then the typed units already used this year, NO NAME TWICE — a typed unit spelled exactly as
+ * an org unit is dropped, so picking that name stores the org unit. Org units by id, typed units by
+ * their text. The manual-entry option is the select's own, not listed here.
+ */
+export function implementingUnitOptions(
+  units: readonly identity_boPhanRa[],
+  known: KnownUnits,
+): { value: string; label: string }[] {
+  const seen = new Set<string>();
+  const out: { value: string; label: string }[] = [];
+  for (const u of units) {
+    const name = u.name.trim();
+    if (name === "" || seen.has(name)) continue;
+    seen.add(name);
+    out.push({ value: UNIT_ORG_PREFIX + u.id, label: name });
+  }
+  if (known.phase === "ready") {
+    for (const t of known.items) {
+      const name = t.trim();
+      if (name === "" || seen.has(name)) continue;
+      seen.add(name);
+      out.push({ value: UNIT_TEXT_PREFIX + name, label: name });
+    }
+  }
+  return out;
+}
+
 /**
  * One reference resolved: `none` = nothing stored; `name`; `unknown` = stored but not in the commune's
  * catalogue; `unavailable` = stored, but the catalogue is still loading or failed — we do not know.
@@ -106,19 +176,61 @@ function resolve<T>(ref: string | undefined, catalogue: PeopleCatalogue<T>): Res
   return name === undefined ? { kind: "unknown" } : { kind: "name", name };
 }
 
+/** The typed `implementing_unit` (65afbdcd), trimmed; "" when none. The server stores blank as NULL. */
+function typedUnit(project: finance_duAnRa): string {
+  return (project.implementing_unit ?? "").trim();
+}
+
 /**
- * §7.2 list cell `Đơn vị / phụ trách`: the unit first, the officer when no unit names — prototype
- * `BudgetItemTable.tsx:299-304` ("ở cấp xã một công trình thuộc về một đơn vị, còn cán bộ theo dõi thì
- * đổi"). "—" when a stored reference cannot be resolved because a catalogue did not load: saying
- * "Chưa phân công" then would state something nobody checked.
+ * §7.2 list cell `Đơn vị / phụ trách` (spec 02 §8): typed `implementing_unit` ?? org-unit name ??
+ * officer name ?? "Chưa phân công" — prototype `BudgetItemTable.tsx:299-304` ("ở cấp xã một công trình
+ * thuộc về một đơn vị, còn cán bộ theo dõi thì đổi"). The typed unit comes first because it needs no
+ * catalogue: it is the name. "—" when a stored reference cannot be resolved because a catalogue did not
+ * load: saying "Chưa phân công" then would state something nobody checked.
  */
 export function unitOwnerLabel(project: finance_duAnRa, people: ProjectPeople): string {
+  const typed = typedUnit(project);
+  if (typed !== "") return typed;
   const unit = resolve(project.org_unit_id, people.units);
   if (unit.kind === "name") return unit.name;
   const officer = resolve(project.assignee_id, people.staff);
   if (officer.kind === "name") return officer.name;
   if (unit.kind === "unavailable" || officer.kind === "unavailable") return "—";
   return UNASSIGNED;
+}
+
+/** One option of the list's `Tất cả đơn vị phụ trách` filter. `key` is `org:<id>` or `text:<unit>`. */
+export type UnitFilterOption = { readonly key: string; readonly name: string };
+
+/**
+ * The unit filter's options: the distinct org units AND typed units the LOADED rows name (prototype
+ * `BudgetWorkspace.tsx:297-319` lists what the data holds), sorted by name. Two key spaces, because an
+ * org unit is matched by its id and a typed unit by its exact text — the server's `?implementing_unit=`
+ * is exact too. While the org-unit catalogue is not ready its options say "—" rather than an id.
+ */
+export function unitFilterOptions(items: readonly finance_duAnRa[], people: ProjectPeople): UnitFilterOption[] {
+  const ids = [...new Set(items.map((d) => (d.org_unit_id ?? "").trim()).filter((id) => id !== ""))];
+  const texts = [...new Set(items.map(typedUnit).filter((t) => t !== ""))];
+  const nameOf = (id: string): string =>
+    people.units.phase === "ready" ? (people.units.names.get(id) ?? UNIT_NOT_LISTED) : "—";
+  return [
+    ...ids.map((id) => ({ key: UNIT_ORG_PREFIX + id, name: nameOf(id) })),
+    ...texts.map((t) => ({ key: UNIT_TEXT_PREFIX + t, name: t })),
+  ].sort((a, b) => a.name.localeCompare(b.name, "vi"));
+}
+
+/** Rows a `unitFilterOptions` key selects; "" = every row. An unknown key selects nothing (fail closed). */
+export function matchUnitFilter(items: readonly finance_duAnRa[], key: string): finance_duAnRa[] {
+  if (key === "") return [...items];
+  if (key.startsWith(UNIT_ORG_PREFIX)) {
+    const id = key.slice(UNIT_ORG_PREFIX.length);
+    return items.filter((d) => (d.org_unit_id ?? "").trim() === id);
+  }
+  if (key.startsWith(UNIT_TEXT_PREFIX)) {
+    const text = key.slice(UNIT_TEXT_PREFIX.length);
+    return items.filter((d) => typedUnit(d) === text);
+  }
+  return [];
 }
 
 /** §8 header line `phụ trách …` (prototype `BudgetItemDetail.tsx:261`). */
@@ -128,8 +240,13 @@ export function officerLabel(project: finance_duAnRa, people: ProjectPeople): st
   return officer.kind === "unavailable" ? "—" : UNASSIGNED;
 }
 
-/** §8 figure `ĐƠN VỊ THỰC HIỆN`: the unit's name, or "—" (spec §8 draws "—" for an unset unit). */
+/**
+ * §8 figure `ĐƠN VỊ THỰC HIỆN`: the typed unit, else the org unit's name, or "—" (spec §8 draws "—" for
+ * an unset unit).
+ */
 export function unitLabel(project: finance_duAnRa, people: ProjectPeople): string {
+  const typed = typedUnit(project);
+  if (typed !== "") return typed;
   const unit = resolve(project.org_unit_id, people.units);
   return unit.kind === "name" ? unit.name : "—";
 }

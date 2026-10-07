@@ -6,12 +6,13 @@ import { toast } from "sonner";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { controlClass } from "@/components/ui/field";
 import { ModalDialog } from "@/components/ui/modal-dialog";
 import { ErrorState } from "@/components/ui/error-state";
 import { Notice } from "@/components/ui/notice";
-import { PendingMarker } from "@/components/ui/pending-feature";
 import { Skeleton } from "@/components/ui/skeleton";
+import { BUSY_DELETING, BusyLabel } from "@/features/danh-ba/busy-label";
 import type { KetQua } from "@/lib/api/goi";
 import { cn } from "@/lib/cn";
 import {
@@ -36,7 +37,6 @@ import {
   CANH_BAO_KHOA,
   CANH_BAO_SUA_VE_NHAP,
   CHUNG_TU_DA_XAC_NHAN,
-  CHUNG_TU_KE_TOAN_NHAP,
   DAU_GACH,
   docSoTien,
   DOI_TAC_TOI_DA,
@@ -44,7 +44,6 @@ import {
   initialFundingSource,
   NOI_DUNG_CHUNG_TU_TOI_DA,
   nhanTrangThaiChungTu,
-  pendingPart,
   SO_CHUNG_TU_TOI_DA,
   thaoTacChungTu,
   thanSuaChungTu,
@@ -53,9 +52,6 @@ import {
 } from "./nhan-ghi-giai-ngan";
 import { Glyph, VoucherStatusBadge } from "./project-ui";
 import { SUB_TABLE_HEAD_ROW_CLASS } from "./spec-classes";
-
-/** The spec 07 behaviour the server lacks (ADR 0068 lần 6 #9): `Khoá` on a draft = confirm + lock at once. */
-const LOCK_DRAFT = "Khoá khoản chi chưa xác nhận";
 
 /** Spec 07 entry-box field: 11.5px label, `mt-1 h-9 bg-white text-[12.5px]` control, no `*`. */
 const VOUCHER_CONTROL = cn(controlClass, "mt-1 h-9 bg-white text-[12.5px] md:text-[12.5px]");
@@ -98,9 +94,9 @@ function VoucherField({
  * and source name, and it is what a reload used to empty.
  * ═══════════════════════════════════════════════════════════════════════════════════════════
  *
- * HAI KHOÁ, CHIA THEO TRỤC NGUY HIỂM (§8.2): `budget.update` NHẬP và SỬA; `budget.confirm` XÁC
- * NHẬN, KHOÁ, MỞ KHOÁ và GỠ. Đây là cách xã tách người nhập liệu khỏi người chịu trách nhiệm, nên
- * bốn nút dưới không bao giờ được đi chung một cổng với hai nút trên.
+ * HAI KHOÁ, CHIA THEO TRỤC NGUY HIỂM (§8.2): `budget.update` NHẬP, SỬA và GỠ (prototype `canRecord`,
+ * route since 356a5a9f); `budget.confirm` XÁC NHẬN, KHOÁ và MỞ KHOÁ. Đây là cách xã tách người nhập
+ * liệu khỏi người chịu trách nhiệm, nên ba nút sau không bao giờ được đi chung một cổng với ba nút đầu.
  *
  * KHÔNG GHI LOG GÌ: nội dung chi, đối tác và lý do gỡ là chữ cán bộ vừa gõ về tiền công quỹ.
  */
@@ -317,7 +313,7 @@ export function FormChungTu({
  *
  *   1. TRẠNG THÁI cho phép gì (`thaoTacChungTu`) — vòng đời là một dây xích: chưa xác nhận thì
  *      chưa khoá được, đã khoá thì không sửa và không gỡ.
- *   2. TÀI KHOẢN có khoá nào — `budget.update` cho Sửa, `budget.confirm` cho bốn nút còn lại.
+ *   2. TÀI KHOẢN có khoá nào — `budget.update` cho Sửa và Gỡ, `budget.confirm` cho ba nút còn lại.
  *
  * Thiếu vế 1 thì màn hình vẽ những nút chắc chắn nhận 409. Thiếu vế 2 thì màn hình mở thao tác xác
  * nhận cho người chỉ được nhập liệu. Không vế nào thay được vế nào, và không vế nào là biện pháp:
@@ -399,16 +395,7 @@ export function BangChungTu({
                   Xác nhận
                 </Button>
               ),
-              // Spec 07 draws `Khoá` on a draft too (confirm + lock in one call). The server cannot yet:
-              // the control stands in the prototype's place, disabled, with its "?" (lần 6 #9).
-              coXacNhan && ct.status === CHUNG_TU_KE_TOAN_NHAP && (
-                <span key="khoa-nhap" className="relative inline-flex" data-pending="">
-                  <Button type="button" variant="primary" size="sm" className={cn(rowButton, "pr-7")} disabled>
-                    Khoá
-                  </Button>
-                  <PendingMarker info={pendingPart(LOCK_DRAFT)} placement="end" className="right-1" />
-                </span>
-              ),
+              // On a draft too: the server confirms AND locks in one call (356a5a9f), as spec 07 draws.
               coXacNhan && cho.khoa && (
                 <Button
                   key="khoa"
@@ -454,8 +441,9 @@ export function BangChungTu({
                   Sửa
                 </Button>
               ),
-              // Gỡ sits last: outline with the danger word (spec 07).
-              coXacNhan && cho.go && (
+              // Gỡ sits last: outline with the danger word (spec 07). `budget.update`, as the prototype's
+              // `canRecord` and the route since 356a5a9f.
+              coGhi && cho.go && (
                 <Button
                   key="go"
                   type="button"
@@ -515,6 +503,10 @@ type DangMo =
   | null;
 
 const REASON_FORM_ID = "form-ly-do-chung-tu";
+const REMOVE_VOUCHER_FORM_ID = "form-go-chung-tu";
+
+/** The consequence line of `Gỡ` (prototype `drop()`'s second sentence). Exported for its test. */
+export const VOUCHER_REMOVE_NOTE = "Phiếu sẽ không còn tính vào tiến độ giải ngân.";
 
 /** The project's voucher list as the tab sees it. `count` is the server's, not `items.length`. */
 export type ProjectVoucherList =
@@ -556,8 +548,11 @@ export function useProjectVouchers(projectId: string, reloadKey: string): Projec
  * Khối "Chứng từ" của trang chi tiết dự án — nối cả sáu tuyến ghi. Rendered as the tab panel's
  * content, not as a card of its own (the prototype's tab content sits inside the project card).
  *
- * GỠ AND MỞ KHOÁ ASK FOR THEIR REASON IN A DIALOG — the prototype confirms a removal in a dialog; the
- * server requires the reason for both (rule 7, open question #29).
+ * GỠ IS A BARE CONFIRMATION (prototype `drop()`; the server's reason is optional and defaults to its
+ * own sentence, 356a5a9f). MỞ KHOÁ ASKS FOR ITS REASON — required by the server (open question #29).
+ *
+ * KHOÁ / XÁC NHẬN BY THE VOUCHER'S RECORDER is refused by the server (409 `self_confirmation`); the
+ * screen does not pre-check it — the server's sentence arrives as the error toast (`ketThuc`).
  *
  * MỖI LẦN GHI XONG GỌI `daGhiXong`, và trang cha ĐỌC LẠI cả dự án lẫn danh sách chứng từ:
  * `disbursed_amount`, `remaining_amount`, `disbursed_ratio` và `delay_score` đều SUY RA từ chứng từ,
@@ -650,11 +645,11 @@ export function KhoiChungTu({
     moKhoaChungTu(ct.id, lyDo).then((kq) => ketThuc(kq, "Đã mở khoá."));
   }
 
-  function go(ct: finance_chungTuRa, lyDo: string): void {
+  function go(ct: finance_chungTuRa): void {
     datDangGui(true);
     // 204 KHÔNG THÂN. Hàng vẫn còn ở CSDL kèm người gỡ và lý do (xoá mềm); danh sách đọc lại không
     // còn nó vì tuyến đọc chỉ trả chứng từ còn hiệu lực.
-    goChungTu(ct.id, lyDo).then((kq) => ketThuc(kq, "Đã gỡ khoản chi."));
+    goChungTu(ct.id).then((kq) => ketThuc(kq, "Đã gỡ khoản chi."));
   }
 
   function timHang(id: string): finance_chungTuRa | undefined {
@@ -770,25 +765,36 @@ export function KhoiChungTu({
       />
       )}
 
-      {dangMo?.kieu === "go" && coXacNhan && (
-        <ModalDialog titleId={REASON_FORM_ID} onDismiss={dong} className="p-0">
-          <FormLyDo
-            formId={REASON_FORM_ID}
+      {/* No reason field (prototype `drop()`: a bare confirm): the server writes its fixed sentence into
+          `delete_reason` when none is sent, so the soft delete still names one (rule 7). */}
+      {dangMo?.kieu === "go" && coGhi && (
+        <ModalDialog titleId={REMOVE_VOUCHER_FORM_ID} onDismiss={dong} className="p-0">
+          <ConfirmDialog
+            as="form"
+            id={REMOVE_VOUCHER_FORM_ID}
             className="shadow-none"
-            tieuDe={`Gỡ chứng từ ngày ${nhanNgay(dangMo.ct.payment_date)}?`}
-            busyText="Đang gỡ…"
-            moTa={
-              "Chứng từ được gỡ MỀM: hàng vẫn còn kèm người gỡ và lý do, nhưng nó thôi cộng vào số " +
-              "đã giải ngân của dự án — tức là một con số đã báo cáo vừa thay đổi."
-            }
-            nhanNut="Gỡ chứng từ"
-            dangGui={dangGui}
-            loi={loi}
-            huy={dong}
-            xacNhan={(lyDo) => {
-              go(dangMo.ct, lyDo);
+            tone="danger"
+            icon={Trash2}
+            title={`Gỡ khoản chi ngày ${nhanNgay(dangMo.ct.payment_date)}, số tiền ${nhanTien(dangMo.ct.amount)}?`}
+            titleAs="h4"
+            aria-label={`Gỡ khoản chi ngày ${nhanNgay(dangMo.ct.payment_date)}?`}
+            onSubmit={(e: FormEvent<HTMLFormElement>) => {
+              e.preventDefault();
+              if (!dangGui) go(dangMo.ct);
             }}
-          />
+            actions={
+              <>
+                <Button type="submit" variant="danger" disabled={dangGui} aria-busy={dangGui || undefined}>
+                  <BusyLabel busy={dangGui} label="Gỡ khoản chi" busyText={BUSY_DELETING} />
+                </Button>
+                <Button type="button" variant="secondary" disabled={dangGui} onClick={dong}>
+                  Huỷ
+                </Button>
+              </>
+            }
+          >
+            <p className="m-0">{VOUCHER_REMOVE_NOTE}</p>
+          </ConfirmDialog>
         </ModalDialog>
       )}
 

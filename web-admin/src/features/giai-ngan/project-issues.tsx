@@ -17,7 +17,7 @@ import { cn } from "@/lib/cn";
 
 import { nhanMocKhoa } from "./nhan-ghi-giai-ngan";
 import { TrackingTaskPending } from "./pending-parts";
-import { ISSUE_PLACEHOLDER, staffLabel } from "./project-discussion-labels";
+import { ISSUE_PLACEHOLDER, issueFollowUpLine, staffLabel } from "./project-discussion-labels";
 import type { PeopleCatalogue } from "./project-people";
 import { Glyph } from "./project-ui";
 
@@ -188,6 +188,16 @@ function IssueForm({ projectId, onRecorded }: { projectId: string; onRecorded: (
   );
 }
 
+/** "Người theo dõi: … · hạn …" under an issue (prototype `BudgetItemDetail.tsx:583-589`); nothing when null. */
+function FollowUpLine({ text }: { text: string | null }) {
+  if (text === null) return null;
+  return (
+    <p className="text-ink-muted m-0 mt-1 text-[11px]" data-issue-follow-up="">
+      {text}
+    </p>
+  );
+}
+
 /** Newest first, as the server orders it. Presentational: renders in tests without the network. */
 export function IssueTimeline({
   items,
@@ -241,6 +251,7 @@ export function IssueTimeline({
               {issue.description}
             </p>
           )}
+          <FollowUpLine text={issueFollowUpLine(issue, staff)} />
           {canRecord && !issue.resolved && (
             <Button
               type="button"

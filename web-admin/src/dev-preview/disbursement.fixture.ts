@@ -7,6 +7,7 @@ import type {
   finance_duAnRa,
   finance_fundingSourceProjectsOut,
   finance_fundingSourcesOut,
+  finance_implementingUnitsOut,
   finance_projectCommentsOut,
   finance_projectCurveOut,
   finance_projectIssuesOut,
@@ -85,6 +86,8 @@ type ProjectSeed = {
   disbursed: number;
   delayScore: number | null;
   unit: string;
+  /** `implementing_unit`: a contractor typed by hand, outside the org chart (65afbdcd). */
+  implementingUnit?: string;
   assignee: string;
   deadlineMonthDay: string;
   allocations: { source: string; amount: number; disbursed: number }[];
@@ -157,7 +160,8 @@ const SEEDS: readonly ProjectSeed[] = [
     planned: 600_000_000,
     disbursed: 540_000_000,
     delayScore: -1500,
-    unit: UNIT_OFFICE,
+    unit: "",
+    implementingUnit: "Công ty TNHH Viễn thông mẫu",
     assignee: "CB-00001",
     deadlineMonthDay: "10-31",
     allocations: [{ source: SOURCE_PROVINCE, amount: 600_000_000, disbursed: 540_000_000 }],
@@ -215,6 +219,7 @@ function project(seed: ProjectSeed, year: number): finance_duAnRa {
     delay_score: seed.delayScore,
     is_delayed: seed.delayScore !== null && seed.delayScore > DELAY_THRESHOLD,
     org_unit_id: seed.unit === "" ? undefined : seed.unit,
+    implementing_unit: seed.implementingUnit ?? null,
     assignee_id: seed.assignee === "" ? undefined : seed.assignee,
     start_date: `${year}-02-15`,
     completion_date: `${year}-${seed.deadlineMonthDay}`,
@@ -253,6 +258,12 @@ export function previewProjects(year: number): finance_danhSachDuAnRa {
     delay_threshold_source: "mac_dinh",
     scope_notice: SCOPE_NOTICE,
   };
+}
+
+/** `GET /api/v1/implementing-units?year=`: the distinct typed units of the year's projects. */
+export function previewImplementingUnits(year: number): finance_implementingUnitsOut {
+  const items = [...new Set(SEEDS.flatMap((s) => (s.implementingUnit === undefined ? [] : [s.implementingUnit])))];
+  return { year, items: items.sort((a, b) => a.localeCompare(b, "vi")) };
 }
 
 /** One project of the preview year, or `null` (the route then answers 404, as the server would). */
@@ -457,6 +468,8 @@ export function previewIssues(projectId: string, year: number): finance_projectI
             recorded_by: "CB-00002",
             recorded_at: `${year}-09-28T02:30:00Z`,
             resolved: false,
+            owner_code: "CB-00002",
+            due_on: `${year}-10-31`,
           },
           {
             id: "01PREVIEWISS0000000000002",

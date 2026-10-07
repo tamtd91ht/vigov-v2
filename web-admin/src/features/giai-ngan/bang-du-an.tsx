@@ -35,7 +35,14 @@ import {
 import { DisbursementOverview, type SummaryState } from "./disbursement-overview";
 import { latestIssueDateLine } from "./project-discussion-labels";
 import { ProjectBulkDeleteDialog } from "./project-bulk-delete-dialog";
-import { PEOPLE_LOADING, UNIT_NOT_LISTED, unitOwnerLabel, useProjectPeople, type ProjectPeople } from "./project-people";
+import {
+  matchUnitFilter,
+  PEOPLE_LOADING,
+  unitFilterOptions,
+  unitOwnerLabel,
+  useProjectPeople,
+  type ProjectPeople,
+} from "./project-people";
 import { BULK_DELETE_BUTTON, selectedProjectsLabel, type SelectedProject } from "./project-bulk-delete";
 import { categoryRowLabel, groupProjects, type ProjectGroup } from "./project-groups";
 import { sortProjects, type ProjectSort } from "./project-sort";
@@ -118,7 +125,7 @@ export function BangDuAn({
   const people = useProjectPeople();
   /** Header sort (G1, user decision 07/10/2026). Presentation only: no re-read. */
   const [sort, setSort] = useState<ProjectSort>("code");
-  /** `Tất cả đơn vị phụ trách` (G3): an `org_unit_id`, filtered on the loaded rows. "" = every unit. */
+  /** `Tất cả đơn vị phụ trách` (G3): a `unitFilterOptions` key, filtered on the loaded rows. "" = every unit. */
   const [unitId, setUnitId] = useState("");
   const router = useRouter();
 
@@ -207,14 +214,14 @@ export function BangDuAn({
    * unit the current load no longer names (another year, another category) reads as "" — derived, so
    * no effect has to clear it and no hidden filter empties the table.
    */
-  const unitOptions = trangThai.pha === "xong" ? unitOptionsOf(trangThai.duLieu.items, people) : [];
-  const activeUnitId = unitOptions.some((u) => u.id === unitId) ? unitId : "";
+  const unitOptions = trangThai.pha === "xong" ? unitFilterOptions(trangThai.duLieu.items, people) : [];
+  const activeUnitId = unitOptions.some((u) => u.key === unitId) ? unitId : "";
 
   const shown =
     trangThai.pha === "xong"
       ? {
           ...trangThai.duLieu,
-          items: sortProjects(matchKeyword(matchUnit(trangThai.duLieu.items, activeUnitId), keyword), sort),
+          items: sortProjects(matchKeyword(matchUnitFilter(trangThai.duLieu.items, activeUnitId), keyword), sort),
         }
       : null;
 
@@ -333,8 +340,9 @@ export function BangDuAn({
         </select>
 
         {/* Unit filter (G3), hidden while no loaded project names a unit — as the prototype hides it. It
-            narrows the rows already loaded; the list route takes no unit parameter, and needs none: it
-            returned the whole year. */}
+            narrows the rows already loaded, org units AND typed units alike (`unitFilterOptions`): the
+            list route returned the whole year, so the server's `?implementing_unit=` would re-read
+            what is already on screen. */}
         {unitOptions.length > 0 && (
           <select
             id="loc-don-vi"
@@ -345,7 +353,7 @@ export function BangDuAn({
           >
             <option value="">Tất cả đơn vị phụ trách</option>
             {unitOptions.map((u) => (
-              <option key={u.id} value={u.id}>
+              <option key={u.key} value={u.key}>
                 {u.name}
               </option>
             ))}
@@ -495,22 +503,6 @@ export type RowSelection = {
   /** Ticks every row on screen, or unticks them all when every one is already ticked. */
   readonly toggleAll: () => void;
 };
-
-/** Rows of one org unit; "" = every row. */
-function matchUnit(items: readonly finance_duAnRa[], unitId: string): finance_duAnRa[] {
-  return unitId === "" ? [...items] : items.filter((d) => (d.org_unit_id ?? "") === unitId);
-}
-
-/**
- * Distinct `org_unit_id`s of the loaded rows with the name shown, sorted by name. While the catalogue
- * is not ready the option says so rather than printing an internal id.
- */
-function unitOptionsOf(items: readonly finance_duAnRa[], people: ProjectPeople): { id: string; name: string }[] {
-  const ids = [...new Set(items.map((d) => (d.org_unit_id ?? "").trim()).filter((id) => id !== ""))];
-  const nameOf = (id: string): string =>
-    people.units.phase === "ready" ? (people.units.names.get(id) ?? UNIT_NOT_LISTED) : "—";
-  return ids.map((id) => ({ id, name: nameOf(id) })).sort((a, b) => a.name.localeCompare(b.name, "vi"));
-}
 
 /** The project page, `/giai-ngan/du-an/:id` (spec chapter head), id encoded. */
 function projectPath(id: string): string {

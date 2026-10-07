@@ -7,10 +7,9 @@ import { toast } from "sonner";
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Field } from "@/components/ui/field";
+import { controlClass, Field } from "@/components/ui/field";
 import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
 import { Notice } from "@/components/ui/notice";
-import { PendingMarker } from "@/components/ui/pending-feature";
 import { BUSY_DELETING, BusyLabel } from "@/features/danh-ba/busy-label";
 import { listFundingSources } from "@/lib/api/funding-sources";
 import { suaDuAn, themDuAn, xoaDuAn } from "@/lib/api/giai-ngan";
@@ -19,6 +18,7 @@ import type {
   finance_fundingSourceOut,
   finance_hangMucRa,
   finance_projectAllocationOut,
+  identity_boPhanRa,
 } from "@/lib/api/schema.gen";
 import { cn } from "@/lib/cn";
 
@@ -27,9 +27,9 @@ import {
   allocationBlocksSave,
   docSoTien,
   FORM_DU_AN_TRONG,
+  IMPLEMENTING_UNIT_MAX,
   MA_DU_AN_TOI_DA,
   MO_TA_DU_AN_TOI_DA,
-  pendingPart,
   summarizeAllocations,
   TEN_DU_AN_TOI_DA,
   thanSuaDuAn,
@@ -39,20 +39,24 @@ import {
   type GiaTriFormDuAn,
 } from "./nhan-ghi-giai-ngan";
 import {
+  implementingUnitOptions,
+  KNOWN_UNITS_LOADING,
   OFFICER_NOT_LISTED,
   OFFICER_PLACEHOLDER,
   PEOPLE_LOADING,
+  UNIT_MANUAL,
   UNIT_NOT_LISTED,
+  UNIT_ORG_PREFIX,
   UNIT_PLACEHOLDER,
+  UNIT_TEXT_PREFIX,
+  useImplementingUnits,
   useProjectPeople,
+  type KnownUnits,
   type PeopleCatalogue,
   type ProjectPeople,
 } from "./project-people";
 import { Glyph } from "./project-ui";
 import { CHECKBOX_CLASS, CHECKBOX_LABEL_CLASS } from "./spec-classes";
-
-/** The spec 04 option the contract cannot store yet (ADR 0068 lần 6 #11): drawn disabled with its "?". */
-const UNIT_FREE_TEXT = "Đơn vị khác, nhập tay";
 
 /**
  * Ba tuyến GHI của dự án đầu tư — thêm, sửa, xoá mềm kèm lý do — in the prototype's composition
@@ -99,6 +103,7 @@ export function FormDuAn({
   fundingCatalogue,
   currentAllocations,
   people = PEOPLE_LOADING,
+  knownUnits = KNOWN_UNITS_LOADING,
   dangGui,
   loi,
   huy,
@@ -121,6 +126,8 @@ export function FormDuAn({
    * still loading: both selects stay disabled on their saved value, so nothing about them is sent.
    */
   people?: ProjectPeople;
+  /** The year's typed units for the `Đơn vị thực hiện` select. Absent = loading: fewer options, no block. */
+  knownUnits?: KnownUnits;
   dangGui: boolean;
   loi: string | null;
   huy: () => void;
@@ -308,17 +315,12 @@ export function FormDuAn({
         </Field>
 
         <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-          <ReferenceSelect
-            id="don-vi-du-an"
-            label="Đơn vị thực hiện"
-            what="danh mục bộ phận"
-            placeholder={UNIT_PLACEHOLDER}
-            notListed={UNIT_NOT_LISTED}
+          <ImplementingUnitSelect
             catalogue={people.units}
-            optionsOf={(units) => units.map((u) => ({ value: u.id, label: u.name }))}
-            pendingOption={UNIT_FREE_TEXT}
-            value={gt.orgUnitId}
-            onChange={(orgUnitId) => datGT({ ...gt, orgUnitId })}
+            known={knownUnits}
+            orgUnitId={gt.orgUnitId}
+            implementingUnit={gt.implementingUnit}
+            onChange={(unit) => datGT({ ...gt, ...unit })}
           />
           <ReferenceSelect
             id="can-bo-du-an"
@@ -435,7 +437,6 @@ function ReferenceSelect<T>({
   optionsOf,
   value,
   onChange,
-  pendingOption,
 }: {
   id: string;
   label: string;
@@ -447,30 +448,12 @@ function ReferenceSelect<T>({
   optionsOf: (items: readonly T[]) => { value: string; label: string }[];
   value: string;
   onChange: (value: string) => void;
-  /**
-   * A spec option the contract cannot store yet (`PHAN_CHUA_DUNG_GHI` name): drawn as the LAST option,
-   * disabled, and named again under the select with its "?" — a native `<option>` cannot hold a button.
-   */
-  pendingOption?: string;
 }) {
   const ready = catalogue.phase === "ready";
   const options = ready ? optionsOf(catalogue.items) : [];
   const stray = value !== "" && !options.some((o) => o.value === value);
-  const hint =
-    catalogue.phase === "loading"
-      ? `Đang tải ${what}…`
-      : catalogue.phase === "error"
-        ? `Chưa tải được ${what}: ${catalogue.message} Mục này được giữ nguyên; các mục khác vẫn lưu được.`
-        : pendingOption !== undefined
-          ? (
-              <span className="inline-flex items-center gap-1.5" data-pending="">
-                <span className="text-ink-muted">— {pendingOption} —</span>
-                <PendingMarker info={pendingPart(pendingOption)} />
-              </span>
-            )
-          : undefined;
   return (
-    <Field label={label} htmlFor={id} kind="select" grow="auto" className="min-w-0" hint={hint}>
+    <Field label={label} htmlFor={id} kind="select" grow="auto" className="min-w-0" hint={catalogueHint(catalogue, what)}>
       <select id={id} value={value} disabled={!ready} onChange={(e) => onChange(e.target.value)}>
         <option value="">{placeholder}</option>
         {stray && <option value={value}>{ready ? notListed : "…"}</option>}
@@ -479,13 +462,124 @@ function ReferenceSelect<T>({
             {o.label}
           </option>
         ))}
-        {pendingOption !== undefined && (
-          <option value="" disabled data-pending-option="">
-            — {pendingOption} —
-          </option>
-        )}
       </select>
     </Field>
+  );
+}
+
+/** The loading / failure sentence under a select fed by an identity catalogue. */
+function catalogueHint<T>(catalogue: PeopleCatalogue<T>, what: string): string | undefined {
+  if (catalogue.phase === "loading") return `Đang tải ${what}…`;
+  if (catalogue.phase === "error") {
+    return `Chưa tải được ${what}: ${catalogue.message} Mục này được giữ nguyên; các mục khác vẫn lưu được.`;
+  }
+  return undefined;
+}
+
+/** Words of the manual-entry option (spec 04 / prototype `BudgetItemForm.tsx:588`). */
+export const UNIT_MANUAL_LABEL = "— Đơn vị khác, nhập tay —";
+
+/**
+ * §9 `Đơn vị thực hiện` (prototype `BudgetItemForm.tsx:566-599`): one select listing the commune's org
+ * units, then the typed units already used this year, then "— Đơn vị khác, nhập tay —", which opens a
+ * text box under the select.
+ *
+ * WHAT IS SENT, EXACTLY ONE OF TWO FIELDS:
+ *   an org unit             → `org_unit_id` = its id, `implementing_unit` cleared
+ *   a known or typed unit   → `implementing_unit` = the text (trimmed), `org_unit_id` cleared
+ *   `— Chưa xác định —`     → both cleared
+ * "Cleared" is `""` in a PATCH (the server stores NULL) and ABSENT on create. A field that did not
+ * change is not sent at all (`thanSuaDuAn`).
+ *
+ * A SAVED TYPED UNIT NOT IN THIS YEAR'S LIST opens with the text box filled (prototype `:155-160`), so
+ * it never vanishes behind the placeholder. `manual` is only the user's last choice in this select;
+ * before any choice it is derived from the saved value.
+ *
+ * Disabled while the org-unit catalogue is loading or failed, as before: the field is then left out
+ * of the PATCH. A failed typed-unit read only means fewer suggestions.
+ */
+function ImplementingUnitSelect({
+  catalogue,
+  known,
+  orgUnitId,
+  implementingUnit,
+  onChange,
+}: {
+  catalogue: PeopleCatalogue<identity_boPhanRa>;
+  known: KnownUnits;
+  orgUnitId: string;
+  implementingUnit: string;
+  onChange: (unit: { orgUnitId: string; implementingUnit: string }) => void;
+}) {
+  const [manualChoice, setManualChoice] = useState<boolean | null>(null);
+  const ready = catalogue.phase === "ready";
+  const options = ready ? implementingUnitOptions(catalogue.items, known) : [];
+  const typed = implementingUnit.trim();
+  const typedListed = options.some((o) => o.value === UNIT_TEXT_PREFIX + typed);
+  const manual = manualChoice ?? (typed !== "" && !typedListed);
+  const orgValue = UNIT_ORG_PREFIX + orgUnitId;
+  const strayOrg = orgUnitId !== "" && typed === "" && !options.some((o) => o.value === orgValue);
+
+  const value = manual
+    ? UNIT_MANUAL
+    : typed !== ""
+      ? UNIT_TEXT_PREFIX + typed
+      : orgUnitId !== ""
+        ? orgValue
+        : "";
+
+  function pick(picked: string): void {
+    if (picked === UNIT_MANUAL) {
+      setManualChoice(true);
+      // Keep a text already typed (switching back and forth loses nothing); an org unit is replaced.
+      onChange({ orgUnitId: "", implementingUnit: typed !== "" ? implementingUnit : "" });
+      return;
+    }
+    setManualChoice(false);
+    if (picked.startsWith(UNIT_ORG_PREFIX)) {
+      onChange({ orgUnitId: picked.slice(UNIT_ORG_PREFIX.length), implementingUnit: "" });
+    } else if (picked.startsWith(UNIT_TEXT_PREFIX)) {
+      onChange({ orgUnitId: "", implementingUnit: picked.slice(UNIT_TEXT_PREFIX.length) });
+    } else {
+      onChange({ orgUnitId: "", implementingUnit: "" });
+    }
+  }
+
+  return (
+    // The text box sits OUTSIDE the Field: Field centres its chevron on everything it wraps.
+    <div className="flex min-w-0 flex-col gap-2">
+      <Field
+        label="Đơn vị thực hiện"
+        htmlFor="don-vi-du-an"
+        kind="select"
+        grow="auto"
+        className="min-w-0"
+        hint={catalogueHint(catalogue, "danh mục bộ phận")}
+      >
+        <select id="don-vi-du-an" value={value} disabled={!ready} onChange={(e) => pick(e.target.value)}>
+          <option value="">{UNIT_PLACEHOLDER}</option>
+          {strayOrg && <option value={orgValue}>{ready ? UNIT_NOT_LISTED : "…"}</option>}
+          {options.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+          <option value={UNIT_MANUAL}>{UNIT_MANUAL_LABEL}</option>
+        </select>
+      </Field>
+      {manual && ready && (
+        <input
+          id="don-vi-du-an-nhap-tay"
+          aria-label="Tên đơn vị thực hiện (nhập tay)"
+          className={controlClass}
+          value={implementingUnit}
+          maxLength={IMPLEMENTING_UNIT_MAX}
+          autoComplete="off"
+          placeholder="Công ty TNHH Xây dựng Trường Giang"
+          onChange={(e) => onChange({ orgUnitId: "", implementingUnit: e.target.value })}
+        />
+      )}
+    </div>
   );
 }
 
@@ -820,6 +914,7 @@ function AddProjectDialog({
   const [loi, datLoi] = useState<string | null>(null);
   const fundingCatalogue = useFundingCatalogue(nam);
   const people = useProjectPeople();
+  const knownUnits = useImplementingUnits(nam);
 
   function them(gt: GiaTriFormDuAn, khoa: string): void {
     const than = thanThemDuAn(nam, gt);
@@ -869,6 +964,7 @@ function AddProjectDialog({
           danhMuc={danhMuc}
           fundingCatalogue={fundingCatalogue}
           people={people}
+          knownUnits={knownUnits}
           dangGui={dangGui}
           loi={loi}
           huy={onClose}
@@ -900,6 +996,7 @@ export function giaTriTuDuAn(duAn: finance_duAnRa): GiaTriFormDuAn {
     thoiHanGiaiNgan: duAn.disbursement_deadline,
     allocations: allocationRowsOf(duAn.funding_allocations),
     orgUnitId: duAn.org_unit_id ?? "",
+    implementingUnit: duAn.implementing_unit ?? "",
     assigneeId: duAn.assignee_id ?? "",
   };
 }
@@ -910,7 +1007,8 @@ export function giaTriTuDuAn(duAn: finance_duAnRa): GiaTriFormDuAn {
  * ONE KEY FOR BOTH, BY USER DECISION 06/10/2026 (follow the prototype, where `canRecord` gates edit
  * and delete alike). This reverses the earlier split that put project deletion under `budget.confirm`;
  * the route follows in a server card, and until it lands a `budget.update`-only account gets the
- * server's 403 sentence in the dialog. Voucher confirm / lock / unlock / remove stay `budget.confirm`.
+ * server's 403 sentence in the dialog. Voucher confirm / lock / unlock stay `budget.confirm`; voucher
+ * removal moved to `budget.update` too (356a5a9f).
  * Hiding is UX only — the server checks the key on its route (rule 5).
  *
  * While the edit panel is open the edit button reads `Đang sửa` in the solid look and closes it
@@ -977,6 +1075,7 @@ export function ProjectEditPanel({
   const [dangGui, datDangGui] = useState(false);
   const [loi, datLoi] = useState<string | null>(null);
   const fundingCatalogue = useFundingCatalogue(duAn.year);
+  const knownUnits = useImplementingUnits(duAn.year);
 
   function sua(gt: GiaTriFormDuAn): void {
     const than = thanSuaDuAn(giaTriTuDuAn(duAn), gt);
@@ -1020,6 +1119,7 @@ export function ProjectEditPanel({
         fundingCatalogue={fundingCatalogue}
         currentAllocations={duAn.funding_allocations}
         people={people}
+        knownUnits={knownUnits}
         dangGui={dangGui}
         loi={loi}
         huy={onClose}

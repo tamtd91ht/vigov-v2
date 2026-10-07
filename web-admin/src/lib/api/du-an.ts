@@ -1,7 +1,8 @@
 /**
  * Các tuyến đọc của màn "Theo dõi giải ngân": `GET /api/v1/investment-projects`,
  * `GET /api/v1/investment-projects/{id}`, `GET /api/v1/investment-projects/{id}/disbursements`,
- * `GET /api/v1/investment-project-summary` và `GET /api/v1/investment-projects/{id}/disbursement-curve`.
+ * `GET /api/v1/investment-project-summary`, `GET /api/v1/investment-projects/{id}/disbursement-curve`
+ * và `GET /api/v1/implementing-units`.
  * Máy chủ đòi `budget.read` trên cả năm.
  *
  * KIỂU LẤY TỪ HỢP ĐỒNG, KHÔNG GÕ TAY: `finance_danhSachDuAnRa` và `finance_duAnRa` đến từ
@@ -30,11 +31,13 @@ import { docJSON, type KetQua } from "./goi";
 import type {
   finance_danhSachDuAnRa,
   finance_duAnRa,
+  finance_get_implementing_units,
   finance_get_investment_projects,
   finance_get_investment_projects_by_id,
   finance_get_investment_projects_by_id_disbursement_curve,
   finance_get_investment_projects_by_id_disbursements,
   finance_get_investment_project_summary,
+  finance_implementingUnitsOut,
   finance_projectCurveOut,
   finance_projectSummaryOut,
   finance_projectVouchersOut,
@@ -139,6 +142,23 @@ export function projectSummaryPath(year: number): string {
  */
 export function getProjectSummary(year: number): Promise<KetQua<finance_projectSummaryOut>> {
   return docJSON<finance_projectSummaryOut>(projectSummaryPath(year));
+}
+
+/** Path of the year's typed implementing units; split from the call so it is testable without `fetch`. */
+export function implementingUnitsPath(year: number): string {
+  const path: finance_get_implementing_units["duongDan"] = "/api/v1/implementing-units";
+  const query: finance_get_implementing_units["truyVan"] = { year: String(year) };
+  return `${path}?${new URLSearchParams(query).toString()}`;
+}
+
+/**
+ * GET /api/v1/implementing-units?year= — the distinct typed `implementing_unit` values of the commune's
+ * live projects in ONE budget year (65afbdcd, `budget.read`). The §9 `Đơn vị thực hiện` select lists
+ * them after the org units (prototype `BudgetItemForm.tsx:98-113`), so a contractor typed once is
+ * picked, not re-spelled, the next time — one spelling per unit is what keeps the list filter whole.
+ */
+export function listImplementingUnits(year: number): Promise<KetQua<finance_implementingUnitsOut>> {
+  return docJSON<finance_implementingUnitsOut>(implementingUnitsPath(year));
 }
 
 /**

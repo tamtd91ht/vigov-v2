@@ -36,7 +36,9 @@ import {
 function batFetch(tra: Response) {
   // Tham số được khai rõ để `mock.calls[0][0]` có kiểu — một `vi.fn(async () => …)` không tham số
   // làm TypeScript coi danh sách đối số là tuple rỗng.
-  const gia = vi.fn(async (_duongDan: string, _tuyChon?: RequestInit) => tra);
+  // A CLONE per call: a refused write reads its body (`goi.ts` `refusedWrite`), and one Response object
+  // handed to several calls would be consumed by the first.
+  const gia = vi.fn(async (_duongDan: string, _tuyChon?: RequestInit) => tra.clone());
   vi.stubGlobal("fetch", gia);
   return gia;
 }
@@ -265,6 +267,22 @@ describe("Ba tuyến vòng đời — xác nhận · khoá · mở khoá", () =>
     expect(goi.header.get("Content-Type")).toBeNull();
   });
 
+  it("409 `self_confirmation` (người nhập tự xác nhận / tự khoá): câu máy chủ, bỏ tiền tố, ra nguyên văn", async () => {
+    // 356a5a9f: the server refuses the voucher's RECORDER on both routes; the client does not pre-check.
+    for (const call of [xacNhanChungTu, khoaChungTu]) {
+      batFetch(
+        traJSON(409, {
+          code: "self_confirmation",
+          message: "chung_tu: Không thể tự xác nhận khoản do chính mình nhập",
+          trace_id: "t",
+        }),
+      );
+      const kq = await call("01JCT1");
+      expect(kq.ok).toBe(false);
+      if (!kq.ok) expect(kq.thongBao).toBe("Không thể tự xác nhận khoản do chính mình nhập");
+    }
+  });
+
   it("khoá: POST `/lockout`, KHÔNG thân", async () => {
     const gia = batFetch(traJSON(200, { ...CHUNG_TU, status: "da-khoa" }));
 
@@ -310,21 +328,36 @@ describe("Ba tuyến vòng đời — xác nhận · khoá · mở khoá", () =>
 });
 
 describe("DELETE /api/v1/disbursements/{id} — gỡ mềm", () => {
-  it("204 KHÔNG THÂN là THÀNH CÔNG, không phải 'không đọc được'", async () => {
+  it("KHÔNG lý do (356a5a9f, như prototype): KHÔNG thân, KHÔNG `Content-Type`; 204 là thành công", async () => {
     const gia = batFetch(traTrong(204));
 
-    const kq = await goChungTu("01JCT1", "Nhập trùng với chứng từ CT-2026-0911");
+    const kq = await goChungTu("01JCT1");
 
-    expect(loiGoi(gia, 0).tuyChon.method).toBe("DELETE");
-    expect(thanDaGui(gia, 0)).toEqual({ reason: "Nhập trùng với chứng từ CT-2026-0911" });
+    const goi = loiGoi(gia, 0);
+    expect(goi.duongDan).toBe("/api/v1/disbursements/01JCT1");
+    expect(goi.tuyChon.method).toBe("DELETE");
+    // The handler accepts an empty body and writes "Gỡ khoản chi nhập nhầm" itself.
+    expect(goi.tuyChon.body).toBeUndefined();
+    expect(goi.header.get("Content-Type")).toBeNull();
     expect(kq.ok).toBe(true);
     if (kq.ok) expect(kq.duLieu).toBeNull();
+  });
+
+  it("lý do toàn dấu cách cũng không đi lên; lý do có chữ đi trong THÂN, đã cắt trắng", async () => {
+    let gia = batFetch(traTrong(204));
+    await goChungTu("01JCT1", "   ");
+    expect(loiGoi(gia, 0).tuyChon.body).toBeUndefined();
+
+    gia = batFetch(traTrong(204));
+    await goChungTu("01JCT1", " Nhập trùng với chứng từ CT-2026-0911 ");
+    expect(loiGoi(gia, 0).duongDan).not.toMatch(/reason/);
+    expect(thanDaGui(gia, 0)).toEqual({ reason: "Nhập trùng với chứng từ CT-2026-0911" });
   });
 
   it("200 thay vì 204 là HỎNG: mã mong đợi của tuyến này là 204", async () => {
     batFetch(traJSON(200, {}));
 
-    const kq = await goChungTu("01JCT1", "lý do");
+    const kq = await goChungTu("01JCT1");
 
     expect(kq.ok).toBe(false);
   });
@@ -383,6 +416,17 @@ describe("Ba tuyến dự án", () => {
     expect(than).not.toHaveProperty("code");
     expect(than).not.toHaveProperty("year");
     expect(than.name).toBe("Tên mới");
+  });
+
+  it("`implementing_unit` (65afbdcd): đi lên khi thêm, và `\"\"` khi sửa là XOÁ TRẮNG", async () => {
+    let gia = batFetch(traJSON(201, DU_AN_GHI_RA));
+    await themDuAn({ ...THEM_DU_AN_DAY_DU, org_unit_id: undefined, implementing_unit: "Công ty Xây dựng Thành Long" }, "k");
+    expect(thanDaGui(gia, 0).implementing_unit).toBe("Công ty Xây dựng Thành Long");
+    expect(thanDaGui(gia, 0)).not.toHaveProperty("org_unit_id");
+
+    gia = batFetch(traJSON(200, DU_AN_GHI_RA));
+    await suaDuAn("01JDA1", { org_unit_id: "01JBP1", implementing_unit: "" });
+    expect(thanDaGui(gia, 0)).toEqual({ org_unit_id: "01JBP1", implementing_unit: "" });
   });
 
   it("PATCH không mang `Idempotency-Key`, và mong 200", async () => {

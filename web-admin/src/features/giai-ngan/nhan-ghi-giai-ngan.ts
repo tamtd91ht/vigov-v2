@@ -125,7 +125,7 @@ export function lopTrangThaiChungTu(ma: string): string {
  *
  * ⚠ ĐÂY KHÔNG PHẢI LỚP CHẶN, VÀ KHÔNG ĐƯỢC ĐỌC NHƯ MỘT LỚP CHẶN. Máy chủ vẫn kiểm từng lần, và nó
  * trả **409** kèm nguyên câu vòng đời khi thao tác không hợp trạng thái. Bảng này chỉ để không vẽ
- * ra một cái nút chắc chắn 409 — ví dụ nút `Khoá` trên một chứng từ chưa ai xác nhận.
+ * ra một cái nút chắc chắn 409 — ví dụ nút `Khoá` trên một chứng từ đã khoá.
  *
  * TRẠNG THÁI LẠ THÌ ĐÓNG HẾT (fail closed, luật 1 cấm #1): một trạng thái thứ tư máy chủ thêm vào
  * mai này không được lặng lẽ thừa hưởng bộ nút của trạng thái nào cả.
@@ -154,8 +154,9 @@ const KHONG_THAO_TAC: ThaoTacChungTu = {
 export function thaoTacChungTu(trangThai: string): ThaoTacChungTu {
   switch (trangThai) {
     case CHUNG_TU_KE_TOAN_NHAP:
-      // Chưa xác nhận thì chưa khoá được — vòng đời là một dây xích, không phải ba nút song song.
-      return { sua: true, go: true, xacNhan: true, khoa: false, moKhoa: false };
+      // `Khoá` on a draft confirms AND locks in one call (356a5a9f, `domain.ChoKhoa` takes the draft
+      // state; two audit entries, one transaction) — spec 07 / prototype draw it on every unlocked row.
+      return { sua: true, go: true, xacNhan: true, khoa: true, moKhoa: false };
     case CHUNG_TU_DA_XAC_NHAN:
       // Sửa VẪN ĐƯỢC, và chính vì thế phải cảnh báo: nó kéo chứng từ về `Kế toán nhập` (ADR 0036).
       return { sua: true, go: true, xacNhan: false, khoa: true, moKhoa: false };
@@ -467,6 +468,12 @@ export type GiaTriFormDuAn = {
   /** §9 `Đơn vị thực hiện`: an org unit's `id` (`GET /api/v1/org-units`), `""` = not set. */
   readonly orgUnitId: string;
   /**
+   * §9 `Đơn vị thực hiện` as FREE TEXT (`implementing_unit`, 65afbdcd): a known typed unit picked from
+   * the select, or one typed under "— Đơn vị khác, nhập tay —". `""` = not set. The select sets this
+   * OR `orgUnitId`, never both (`ImplementingUnitSelect`).
+   */
+  readonly implementingUnit: string;
+  /**
    * §9 `Cán bộ phụ trách`: the staff BUSINESS CODE (`CB-00123`) from the staff directory, `""` = not
    * assigned. The contract field is `assignee_id`; why it holds the code: `project-people.ts`.
    */
@@ -487,8 +494,12 @@ export const FORM_DU_AN_TRONG: GiaTriFormDuAn = {
   thoiHanGiaiNgan: "",
   allocations: [],
   orgUnitId: "",
+  implementingUnit: "",
   assigneeId: "",
 };
+
+/** `domain.ImplementingUnitMax` — 255 characters; the server refuses longer with its own sentence. */
+export const IMPLEMENTING_UNIT_MAX = 255;
 
 /* ── Phân bổ nguồn vốn §9 ─────────────────────────────────────────────────────────────────── */
 
@@ -676,6 +687,7 @@ export function thanThemDuAn(nam: number, gt: GiaTriFormDuAn): ThanDung<ThemDuAn
   }
 
   const moTa = gt.moTa.trim();
+  const implementingUnit = gt.implementingUnit.trim();
 
   return {
     ok: true,
@@ -692,6 +704,7 @@ export function thanThemDuAn(nam: number, gt: GiaTriFormDuAn): ThanDung<ThemDuAn
       disbursement_deadline: gt.thoiHanGiaiNgan === "" ? undefined : gt.thoiHanGiaiNgan,
       funding_allocations: lines,
       org_unit_id: gt.orgUnitId === "" ? undefined : gt.orgUnitId,
+      implementing_unit: implementingUnit === "" ? undefined : implementingUnit,
       assignee_id: gt.assigneeId === "" ? undefined : gt.assigneeId,
     },
   };
@@ -718,6 +731,7 @@ export function thanSuaDuAn(dau: GiaTriFormDuAn, moi: GiaTriFormDuAn): ThanDung<
     disbursement_deadline?: string;
     funding_allocations?: finance_phanBoVao[];
     org_unit_id?: string;
+    implementing_unit?: string;
     assignee_id?: string;
   } = {};
 
@@ -775,6 +789,11 @@ export function thanSuaDuAn(dau: GiaTriFormDuAn, moi: GiaTriFormDuAn): ThanDung<
   // `""` CLEARS: the server stores NULL for a blank reference (`ChuanHoaThamChieu`), which is how a
   // project goes back to `Chưa phân công`. Unchanged = absent, so an untouched select writes nothing.
   if (moi.orgUnitId !== dau.orgUnitId) than.org_unit_id = moi.orgUnitId;
+  // Same rule for the typed unit: `""` clears to NULL. Switching between an org unit and a typed one
+  // changes BOTH fields, so both are sent — the one chosen and the other cleared.
+  if (moi.implementingUnit.trim() !== dau.implementingUnit.trim()) {
+    than.implementing_unit = moi.implementingUnit.trim();
+  }
   if (moi.assigneeId !== dau.assigneeId) than.assignee_id = moi.assigneeId;
 
   // FUNDING: ABSENT = unchanged, `[]` = remove all, a list = full replacement (8245698b). So it is
@@ -863,24 +882,11 @@ export const PHAN_CHUA_DUNG_GHI: readonly PhanChuaDung[] = [
       "hồ sơ nhiệm vụ. Phần này chưa có: hiện vướng mắc chỉ được ghi vào dòng thời gian của dự án, " +
       "chưa sinh nhiệm vụ nào.",
   },
+  // Spec 04 `Đơn vị thực hiện` "— Đơn vị khác, nhập tay —": BUILT (65afbdcd, `implementing_unit`,
+  // `GET /api/v1/implementing-units`; `ghi-du-an.tsx`).
+  // Spec 07 `Khoá` on a draft voucher (confirm + lock in one call): BUILT (356a5a9f; `chung-tu-du-an.tsx`).
   // §8.4: the server stores the mentioned staff codes but sends nobody anything — the notification
   // belongs to `comms` and arrives later as an event (same decision).
-  // Spec 04 `Đơn vị thực hiện` ends with "— Đơn vị khác, nhập tay —" + a free-text box. Our contract
-  // stores `org_unit_id` only (ADR 0068 lần 6 #11: a "?" option + BACKEND DEPENDENCY).
-  {
-    ten: "Đơn vị khác, nhập tay",
-    viSao:
-      "Đơn vị thực hiện hiện chỉ chọn được trong sơ đồ tổ chức của xã. Nhập tay tên một đơn vị ngoài " +
-      "danh sách (ví dụ nhà thầu) cần máy chủ lưu thêm trường chữ, phần này chưa có.",
-  },
-  // Spec 07 `Khoá` on a draft voucher = confirm and lock in ONE call. Our lifecycle confirms first,
-  // then locks (two routes, two audit entries); lần 6 #9 makes the one-call lock a BACKEND DEPENDENCY.
-  {
-    ten: "Khoá khoản chi chưa xác nhận",
-    viSao:
-      "Khoá ngay một khoản chi còn ở trạng thái Kế toán nhập (xác nhận và khoá trong một lần bấm) cần " +
-      "máy chủ hỗ trợ. Hiện phải bấm Xác nhận trước, rồi mới Khoá được.",
-  },
   {
     ten: "Thông báo cho người được nhắc tên",
     viSao:

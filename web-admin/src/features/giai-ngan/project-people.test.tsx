@@ -20,11 +20,16 @@ import { ThongTinDuAn } from "./chi-tiet-du-an";
 import { FormDuAn, giaTriTuDuAn } from "./ghi-du-an";
 import { FORM_DU_AN_TRONG, PHAN_CHUA_DUNG_GHI, pendingPart, thanSuaDuAn, thanThemDuAn } from "./nhan-ghi-giai-ngan";
 import {
+  implementingUnitOptions,
+  matchUnitFilter,
   OFFICER_NOT_LISTED,
   staffCatalogue,
   UNASSIGNED,
+  unitFilterOptions,
   unitsCatalogue,
+  useImplementingUnits,
   useProjectPeople,
+  type KnownUnits,
   type ProjectPeople,
 } from "./project-people";
 
@@ -61,6 +66,13 @@ function mount(node: ReactNode): HTMLDivElement {
   return host;
 }
 
+function typeInto(el: HTMLInputElement, value: string): void {
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(el, value);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
 function choose(el: HTMLSelectElement, value: string): void {
   act(() => {
     Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(el, value);
@@ -81,6 +93,7 @@ const READY: ProjectPeople = {
   units: unitsCatalogue({ ok: true, duLieu: { items: UNITS } }),
   staff: staffCatalogue({ ok: true, duLieu: { items: STAFF } }),
 };
+const KNOWN: KnownUnits = { phase: "ready", items: ["Công ty Xây dựng Thành Long", "Văn phòng UBND"] };
 const DENIED_SENTENCE = "Bạn không có quyền xem mục này.";
 const DENIED: ProjectPeople = {
   units: unitsCatalogue({ ok: false, thongBao: DENIED_SENTENCE }),
@@ -118,7 +131,7 @@ function unitOwnerCells(html: string): string[] {
 }
 
 describe("§9 selects — add form", () => {
-  function addForm(people: ProjectPeople, save = vi.fn()) {
+  function addForm(people: ProjectPeople, save = vi.fn(), knownUnits?: KnownUnits) {
     return mount(
       <FormDuAn
         tieuDeForm="Thêm dự án"
@@ -127,6 +140,7 @@ describe("§9 selects — add form", () => {
         danhMuc={[{ id: "01JHM1", code: "a", label: "A", is_default: true, active: true, order: 1, source: "he-thong", tier: 1 }]}
         fundingCatalogue={{ phase: "ready", items: [] }}
         people={people}
+        knownUnits={knownUnits}
         dangGui={false}
         loi={null}
         huy={() => {}}
@@ -145,35 +159,78 @@ describe("§9 selects — add form", () => {
       "— Chưa xác định —",
       "Địa chính – Xây dựng",
       "Văn phòng UBND",
-      // Spec 04's free-text choice, last and disabled: a backend dependency (ADR 0068 lần 6 #11).
+      // Spec 04's free-text choice, last and LIVE since 65afbdcd.
       "— Đơn vị khác, nhập tay —",
     ]);
-    expect([...unit.options].at(-1)!.disabled).toBe(true);
+    expect([...unit.options].at(-1)!.disabled).toBe(false);
     expect([...officer.options].map((o) => o.textContent)).toEqual([
       "— Chưa phân công —",
       // Spec 04: the officer's name only.
       "Nguyễn Văn An",
       "Trần Thị Bình",
     ]);
-    // The only "?" in the form is the free-text unit's.
-    expect([...el.querySelectorAll("[data-pending]")].map((p) => p.textContent)).toEqual(["— Đơn vị khác, nhập tay —?"]);
+    // No "?" left in the form.
+    expect(el.querySelectorAll("[data-pending]")).toHaveLength(0);
+  });
+
+  it("the year's typed units follow the org units, a name already listed is not repeated", () => {
+    const el = addForm(READY, vi.fn(), KNOWN);
+    const unit = el.querySelector<HTMLSelectElement>("#don-vi-du-an")!;
+    expect([...unit.options].map((o) => o.textContent)).toEqual([
+      "— Chưa xác định —",
+      "Địa chính – Xây dựng",
+      "Văn phòng UBND",
+      "Công ty Xây dựng Thành Long",
+      "— Đơn vị khác, nhập tay —",
+    ]);
+  });
+
+  it("a known typed unit is sent as `implementing_unit`, with NO `org_unit_id`", () => {
+    const save = vi.fn();
+    const el = addForm(READY, save, KNOWN);
+    choose(el.querySelector<HTMLSelectElement>("#don-vi-du-an")!, "text:Công ty Xây dựng Thành Long");
+    act(() => el.querySelector<HTMLButtonElement>('button[type="submit"]')!.click());
+    const body = thanThemDuAn(2026, save.mock.calls[0]![0]);
+    expect(body.ok && body.than.implementing_unit).toBe("Công ty Xây dựng Thành Long");
+    expect(body.ok && body.than.org_unit_id).toBeUndefined();
+  });
+
+  it("'Đơn vị khác, nhập tay' opens a text box; the typed name (trimmed) is sent, the org unit chosen before is not", () => {
+    const save = vi.fn();
+    const el = addForm(READY, save, KNOWN);
+    const unit = el.querySelector<HTMLSelectElement>("#don-vi-du-an")!;
+    choose(unit, "org:01JUNIT_DIACHINH");
+    expect(el.querySelector("#don-vi-du-an-nhap-tay")).toBeNull();
+    choose(unit, "manual");
+    const box = el.querySelector<HTMLInputElement>("#don-vi-du-an-nhap-tay")!;
+    expect(box).not.toBeNull();
+    expect(box.maxLength).toBe(255);
+    typeInto(box, "  Công ty TNHH Trường Giang ");
+    // Still in manual mode while typing — the box does not vanish under the cursor.
+    expect(unit.value).toBe("manual");
+    act(() => el.querySelector<HTMLButtonElement>('button[type="submit"]')!.click());
+    const body = thanThemDuAn(2026, save.mock.calls[0]![0]);
+    expect(body.ok && body.than.implementing_unit).toBe("Công ty TNHH Trường Giang");
+    expect(body.ok && body.than.org_unit_id).toBeUndefined();
   });
 
   it("the chosen unit id and staff CODE reach the POST body; unset selects send nothing", () => {
     const save = vi.fn();
     const el = addForm(READY, save);
-    choose(el.querySelector<HTMLSelectElement>("#don-vi-du-an")!, "01JUNIT_DIACHINH");
+    choose(el.querySelector<HTMLSelectElement>("#don-vi-du-an")!, "org:01JUNIT_DIACHINH");
     choose(el.querySelector<HTMLSelectElement>("#can-bo-du-an")!, "CB-00101");
     act(() => el.querySelector<HTMLButtonElement>('button[type="submit"]')!.click());
 
     expect(save).toHaveBeenCalledTimes(1);
     const body = thanThemDuAn(2026, save.mock.calls[0]![0]);
     expect(body.ok && body.than.org_unit_id).toBe("01JUNIT_DIACHINH");
+    expect(body.ok && body.than.implementing_unit).toBeUndefined();
     expect(body.ok && body.than.assignee_id).toBe("CB-00101");
 
     const blank = thanThemDuAn(2026, { ...FORM_DU_AN_TRONG, hangMucID: "01JHM1", ten: "B", keHoachVon: "1" });
     expect(blank.ok).toBe(true);
     expect(blank.ok && blank.than.org_unit_id).toBeUndefined();
+    expect(blank.ok && blank.than.implementing_unit).toBeUndefined();
     expect(blank.ok && blank.than.assignee_id).toBeUndefined();
   });
 
@@ -211,6 +268,52 @@ describe("§9 selects — edit (PATCH only what changed)", () => {
       than: { assignee_id: "CB-00102" },
     });
     expect(thanSuaDuAn(start, { ...start, orgUnitId: "" })).toEqual({ ok: true, than: { org_unit_id: "" } });
+  });
+
+  it("switching org unit -> typed unit sends BOTH: the typed text and `org_unit_id: \"\"`; and back", () => {
+    const start = giaTriTuDuAn(assigned);
+    expect(start.implementingUnit).toBe("");
+    expect(thanSuaDuAn(start, { ...start, orgUnitId: "", implementingUnit: "Công ty Thành Long" })).toEqual({
+      ok: true,
+      than: { org_unit_id: "", implementing_unit: "Công ty Thành Long" },
+    });
+    const typed = giaTriTuDuAn(project({ implementing_unit: "Công ty Thành Long" }));
+    expect(typed.implementingUnit).toBe("Công ty Thành Long");
+    expect(thanSuaDuAn(typed, { ...typed, orgUnitId: "01JUNIT_VANPHONG", implementingUnit: "" })).toEqual({
+      ok: true,
+      than: { org_unit_id: "01JUNIT_VANPHONG", implementing_unit: "" },
+    });
+  });
+
+  function editForm(saved: finance_duAnRa) {
+    return mount(
+      <FormDuAn
+        tieuDeForm="Sửa dự án"
+        budgetYear={2026}
+        giaTriDau={giaTriTuDuAn(saved)}
+        maChiDoc={saved.code}
+        danhMuc={[]}
+        fundingCatalogue={{ phase: "ready", items: [] }}
+        people={READY}
+        knownUnits={KNOWN}
+        dangGui={false}
+        loi={null}
+        huy={() => {}}
+        luu={() => {}}
+      />,
+    );
+  }
+
+  it("a saved typed unit NOT in this year's list opens with the text box filled (prototype :155-160)", () => {
+    const el = editForm(project({ implementing_unit: "Hợp tác xã Hà Lam" }));
+    expect(el.querySelector<HTMLSelectElement>("#don-vi-du-an")!.value).toBe("manual");
+    expect(el.querySelector<HTMLInputElement>("#don-vi-du-an-nhap-tay")!.value).toBe("Hợp tác xã Hà Lam");
+  });
+
+  it("a saved typed unit IN the list is selected as that option, no text box", () => {
+    const el = editForm(project({ implementing_unit: "Công ty Xây dựng Thành Long" }));
+    expect(el.querySelector<HTMLSelectElement>("#don-vi-du-an")!.value).toBe("text:Công ty Xây dựng Thành Long");
+    expect(el.querySelector("#don-vi-du-an-nhap-tay")).toBeNull();
   });
 
   it("a saved officer no longer in the directory keeps an option of its own — never the placeholder, never the code", () => {
@@ -254,6 +357,29 @@ describe("§7.2 list column `Đơn vị / phụ trách`", () => {
     expect(html).not.toContain('aria-label="Đơn vị và cán bộ phụ trách');
   });
 
+  it("precedence (spec 02 §8): implementing_unit ?? org-unit name ?? officer ?? 'Chưa phân công'", () => {
+    const html = renderToStaticMarkup(
+      <BangDanhSach
+        duLieu={list([
+          project({ id: "P1", implementing_unit: "Công ty Thành Long", org_unit_id: "01JUNIT_VANPHONG", assignee_id: "CB-00101" }),
+          project({ id: "P2", org_unit_id: "01JUNIT_VANPHONG", assignee_id: "CB-00101" }),
+          project({ id: "P3", assignee_id: "CB-00102" }),
+          project({ id: "P4" }),
+        ])}
+        danhMuc={[]}
+        people={READY}
+      />,
+    );
+    expect(unitOwnerCells(html)).toEqual(["Công ty Thành Long", "Văn phòng UBND", "Trần Thị Bình", UNASSIGNED]);
+  });
+
+  it("a typed unit needs no catalogue: shown even when the lookups were refused", () => {
+    const html = renderToStaticMarkup(
+      <BangDanhSach duLieu={list([project({ implementing_unit: "Công ty Thành Long" })])} danhMuc={[]} people={DENIED} />,
+    );
+    expect(unitOwnerCells(html)).toEqual(["Công ty Thành Long"]);
+  });
+
   it("references the commune's catalogues do not list read 'Chưa phân công', and are not printed", () => {
     const html = renderToStaticMarkup(
       <BangDanhSach
@@ -290,6 +416,12 @@ describe("§8 detail — `Đơn vị thực hiện` and `phụ trách …`", () 
     const unitFigure = [...el.querySelectorAll("dt")].find((dt) => dt.textContent === "Đơn vị thực hiện");
     expect(unitFigure?.nextElementSibling?.textContent).toBe("Địa chính – Xây dựng");
     expect(el.querySelector("[data-pending]")).toBeNull();
+  });
+
+  it("a typed unit is the `Đơn vị thực hiện` figure", () => {
+    const el = mount(<ThongTinDuAn duAn={project({ implementing_unit: "Công ty Thành Long" })} people={READY} />);
+    const unitFigure = [...el.querySelectorAll("dt")].find((dt) => dt.textContent === "Đơn vị thực hiện");
+    expect(unitFigure?.nextElementSibling?.textContent).toBe("Công ty Thành Long");
   });
 
   it("nobody assigned: '—' for the unit, 'Chưa phân công' for the officer (spec §8)", () => {
@@ -333,6 +465,56 @@ describe("useProjectPeople — one read per catalogue", () => {
     const people = seen as unknown as ProjectPeople;
     expect(people.units.phase).toBe("ready");
     expect(people.staff.phase).toBe("error");
+  });
+});
+
+describe("unit options and the list's unit filter — pure rules", () => {
+  it("implementingUnitOptions: org units by id, then typed units by text, no name twice; loading = org units only", () => {
+    expect(implementingUnitOptions(UNITS, KNOWN)).toEqual([
+      { value: "org:01JUNIT_DIACHINH", label: "Địa chính – Xây dựng" },
+      { value: "org:01JUNIT_VANPHONG", label: "Văn phòng UBND" },
+      { value: "text:Công ty Xây dựng Thành Long", label: "Công ty Xây dựng Thành Long" },
+    ]);
+    expect(implementingUnitOptions(UNITS, { phase: "loading" })).toHaveLength(2);
+  });
+
+  it("unitFilterOptions + matchUnitFilter: org units and typed units both filter, exact; an unknown key selects nothing", () => {
+    const rows = [
+      project({ id: "P1", org_unit_id: "01JUNIT_VANPHONG" }),
+      project({ id: "P2", implementing_unit: "Công ty Thành Long" }),
+      project({ id: "P3", implementing_unit: "Công ty Thành Long 2" }),
+      project({ id: "P4" }),
+    ];
+    expect(unitFilterOptions(rows, READY)).toEqual([
+      { key: "text:Công ty Thành Long", name: "Công ty Thành Long" },
+      { key: "text:Công ty Thành Long 2", name: "Công ty Thành Long 2" },
+      { key: "org:01JUNIT_VANPHONG", name: "Văn phòng UBND" },
+    ]);
+    const ids = (key: string) => matchUnitFilter(rows, key).map((r) => r.id);
+    expect(ids("org:01JUNIT_VANPHONG")).toEqual(["P1"]);
+    expect(ids("text:Công ty Thành Long")).toEqual(["P2"]);
+    expect(ids("")).toEqual(["P1", "P2", "P3", "P4"]);
+    expect(ids("bogus")).toEqual([]);
+  });
+});
+
+describe("useImplementingUnits — GET /api/v1/implementing-units?year=", () => {
+  function Probe({ year, onUnits }: { year: number; onUnits: (u: KnownUnits) => void }) {
+    onUnits(useImplementingUnits(year));
+    return null;
+  }
+
+  it("reads the year's typed units once, by year", async () => {
+    const fetchSpy = vi.fn(
+      async (_url: string) => new Response(JSON.stringify({ year: 2026, items: ["Công ty Thành Long"] }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+    let seen: KnownUnits | null = null;
+    mount(<Probe year={2026} onUnits={(u) => (seen = u)} />);
+    await act(async () => {});
+    await act(async () => {});
+    expect(fetchSpy.mock.calls.map((c) => c[0])).toEqual(["/api/v1/implementing-units?year=2026"]);
+    expect(seen).toEqual({ phase: "ready", items: ["Công ty Thành Long"] });
   });
 });
 

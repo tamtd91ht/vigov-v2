@@ -303,13 +303,33 @@ describe("G3 — `Tất cả đơn vị phụ trách` filter", () => {
       "Văn phòng UBND",
     ]);
 
-    choose(select, "U-VP");
+    choose(select, "org:U-VP");
     expect(rowCodes(el)).toEqual(["DA1"]);
     // A subset of the category is on screen: the header counts rows, it carries no money.
     expect(el.querySelector('tr[data-group-header="HM-A"]')!.textContent).toContain("1 dự án khớp bộ lọc");
 
     choose(select, "");
     expect(rowCodes(el)).toEqual(["DA1", "DA3", "DA2"]);
+  });
+
+  it("a typed `implementing_unit` is an option too, and filters the loaded rows by its exact text", async () => {
+    stub({ items: [DA1, { ...DA3, implementing_unit: "Công ty Thành Long" }, DA2] });
+    const el = mount(<BangDuAn nam={2026} danhMuc={[]} reloadSignal={0} />);
+    await settle();
+    const select = el.querySelector<HTMLSelectElement>("#loc-don-vi")!;
+    expect([...select.options].map((o) => o.textContent)).toEqual([
+      "Tất cả đơn vị phụ trách",
+      "Công ty Thành Long",
+      "Địa chính – Xây dựng",
+      "Văn phòng UBND",
+    ]);
+    const fetchSpy = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    const before = fetchSpy.mock.calls.length;
+    choose(select, "text:Công ty Thành Long");
+    expect(rowCodes(el)).toEqual(["DA3"]);
+    // Client-side over the whole year already loaded: no re-read with `?implementing_unit=`.
+    await settle();
+    expect(fetchSpy.mock.calls.length).toBe(before);
   });
 
   it("hidden when no loaded project names a unit", async () => {

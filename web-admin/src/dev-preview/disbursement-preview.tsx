@@ -13,7 +13,13 @@ import { ProjectBulkDeleteDialog } from "@/features/giai-ngan/project-bulk-delet
 import { CongQuyen } from "@/features/quyen/cong-quyen";
 import { QUYEN_XEM_GIAI_NGAN } from "@/lib/quyen";
 
-import { PREVIEW_PROJECT_ID, previewFundingSources, previewProjects } from "./disbursement.fixture";
+import {
+  PREVIEW_PROJECT_ID,
+  previewFundingSources,
+  previewImplementingUnits,
+  previewProjects,
+} from "./disbursement.fixture";
+import { isDevPreviewPath } from "./preview-gate";
 import type { PreviewModal, PreviewTab } from "./preview-params";
 import { usePressWhenReady } from "./preview-shell";
 
@@ -36,6 +42,10 @@ const TAB_IDS: Record<PreviewTab, string> = {
  * Closing a dialog closes it; a write inside one is refused by the answering machine.
  */
 export function DisbursementPreview({ modal }: { modal: PreviewModal | null }) {
+  useState(() => {
+    if (typeof window !== "undefined") installImplementingUnitsAnswer();
+    return true;
+  });
   const [open, setOpen] = useState<PreviewModal | null>(modal);
   const close = () => setOpen(null);
   const noop = () => {};
@@ -66,6 +76,10 @@ export function DisbursementPreview({ modal }: { modal: PreviewModal | null }) {
  * issues and two comments. `tab` presses the REAL tab button (its state is internal).
  */
 export function ProjectDetailPreview({ tab }: { tab: PreviewTab }) {
+  useState(() => {
+    if (typeof window !== "undefined") installImplementingUnitsAnswer();
+    return true;
+  });
   usePressWhenReady(tab === "vuong-mac" ? null : `#${TAB_IDS[tab]}`);
   return (
     <div className="mx-auto w-full max-w-[76rem] min-w-0">
@@ -75,4 +89,35 @@ export function ProjectDetailPreview({ tab }: { tab: PreviewTab }) {
       </CongQuyen>
     </div>
   );
+}
+
+let unitsAnswerInstalled = false;
+
+/**
+ * `GET /api/v1/implementing-units?year=` (the project form's typed-unit suggestions, 65afbdcd) answered
+ * HERE from `disbursement.fixture.ts`: the shared answering machine (`fixture-fetch.ts`) has no route for
+ * it and is another session's file. A wrapper over the installed fixture fetch, set once in the first
+ * render — after `PreviewShell` installed its own — answering only that GET on a preview path and
+ * delegating every other call unchanged (the `tasks-preview.tsx` extension-history pattern).
+ */
+function installImplementingUnitsAnswer(): void {
+  if (unitsAnswerInstalled) return;
+  unitsAnswerInstalled = true;
+  const next = window.fetch.bind(window);
+  window.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const raw = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    const url = new URL(raw, window.location.origin);
+    const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
+    if (
+      !isDevPreviewPath(window.location.pathname) ||
+      url.origin !== window.location.origin ||
+      url.pathname !== "/api/v1/implementing-units" ||
+      method !== "GET"
+    ) {
+      return next(input, init);
+    }
+    const year = Number(url.searchParams.get("year")) || new Date().getFullYear();
+    const body = JSON.stringify(previewImplementingUnits(year));
+    return Promise.resolve(new Response(body, { status: 200, headers: { "Content-Type": "application/json" } }));
+  };
 }

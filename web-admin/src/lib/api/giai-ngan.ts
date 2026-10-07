@@ -4,9 +4,9 @@
  *
  *   POST   /api/v1/disbursements                    budget.update   + Idempotency-Key BẮT BUỘC
  *   PATCH  /api/v1/disbursements/{id}                budget.update
- *   DELETE /api/v1/disbursements/{id}                budget.confirm  (lý do BẮT BUỘC)
+ *   DELETE /api/v1/disbursements/{id}                budget.update   (lý do tuỳ chọn, 356a5a9f)
  *   POST   /api/v1/disbursements/{id}/confirmation   budget.confirm  (không thân)
- *   POST   /api/v1/disbursements/{id}/lockout        budget.confirm  (không thân)
+ *   POST   /api/v1/disbursements/{id}/lockout        budget.confirm  (không thân; từ nháp = xác nhận + khoá)
  *   DELETE /api/v1/disbursements/{id}/lockout        budget.confirm  (lý do BẮT BUỘC)
  *   POST   /api/v1/investment-projects               budget.update   + Idempotency-Key BẮT BUỘC
  *   PATCH  /api/v1/investment-projects/{id}          budget.update
@@ -14,8 +14,8 @@
  *                                                     budget.update, lý do tuỳ chọn (06/10/2026, `xoaDuAn`)
  *
  * ⚠ HAI KHOÁ, KHÔNG MỘT. Bảng trên chia đôi đúng theo trục nguy hiểm mà đặc tả §8.2 vạch ra
- * (`06-giai-ngan.md:202`): **sửa** thì `budget.update`, còn **xoá · xác nhận · khoá/mở khoá** thì
- * `budget.confirm`. Đó là cách xã tách người NHẬP LIỆU khỏi người CHỊU TRÁCH NHIỆM. Gộp hai khoá ở
+ * (`06-giai-ngan.md:202`): **sửa** thì `budget.update`, còn **xác nhận · khoá/mở khoá** thì
+ * `budget.confirm`. (Gỡ chứng từ và xoá dự án chuyển sang `budget.update` theo prototype, 06–07/10/2026.) Đó là cách xã tách người NHẬP LIỆU khỏi người CHỊU TRÁCH NHIỆM. Gộp hai khoá ở
  * giao diện là mở một thao tác xác nhận cho người chỉ được nhập số — và không có gì trên màn hình
  * nói ra điều đó, vì máy chủ vẫn trả 403 đúng lúc bấm, tức là sau khi người ta đã tin là mình làm
  * được.
@@ -184,18 +184,23 @@ export function suaChungTu(id: string, than: SuaChungTuVao): Promise<KetQua<fina
 /**
  * DELETE /api/v1/disbursements/{id} — §8.2 `🗑 Gỡ`. 204 KHÔNG THÂN.
  *
- * ĐỨNG SAU `budget.confirm`, KHÔNG SAU `budget.update`, và đó là chỗ dễ gắn cổng nhầm nhất của cả
- * màn: gỡ một chứng từ lấy một khoản tiền ra khỏi tổng đã giải ngân mà lãnh đạo đã đọc.
+ * `budget.update` SINCE 356a5a9f (was `budget.confirm`), as the prototype's `canRecord` gates it: the
+ * clerk who typed a wrong voucher takes it back. A LOCKED voucher still cannot be removed (409).
  *
- * LÝ DO LÀ BẮT BUỘC, và đặc tả không biết điều đó — §8.2 chỉ vẽ một cái nút. Máy chủ đòi `reason`
- * trong THÂN (luật 7 bất biến 1 kể tên `delete_reason`), nên hộp xác nhận phải có MỘT Ô LÝ DO chứ
- * không chỉ một nút Đồng ý. Lý do đi trong thân chứ không trong chuỗi truy vấn: chữ tự do về chi
- * tiêu của một cơ quan nhà nước mà nằm trong URL là chữ nằm lại trong mọi nhật ký truy cập.
+ * THE REASON IS OPTIONAL and the screen asks none (prototype `drop()` is a bare confirm). The server
+ * writes `domain.VoucherRemovalDefaultReason` ("Gỡ khoản chi nhập nhầm") into `delete_reason` when it
+ * is absent, so rule 7's three columns are still filled — by the server, not by a default typed here.
+ * A reason given IS sent in the body, never in the query: free text about public spending in a URL
+ * stays in every access log.
+ *
+ * NO BODY AT ALL WHEN THERE IS NO REASON: unlike `xoaDuAn`, this handler tolerates an empty body
+ * (`service-finance/internal/http/chung_tu_giai_ngan.go` `GoChungTu`, `io.EOF` accepted).
  *
  * XOÁ MỀM: hàng còn nguyên kèm `deleted_at`, `deleted_by`, `delete_reason` (luật 7, bất biến 1).
  */
-export async function goChungTu(id: string, lyDo: string): Promise<KetQua<null>> {
-  const thanGui: finance_goChungTuVao = { reason: lyDo };
+export async function goChungTu(id: string, lyDo?: string): Promise<KetQua<null>> {
+  const reason = lyDo?.trim() ?? "";
+  const thanGui: finance_goChungTuVao | undefined = reason === "" ? undefined : { reason };
   const kq = await goiGhi(duongDanMot(MAU_GO_CHUNG_TU, id), "DELETE", thanGui, 204);
   return kq.ok ? { ok: true, duLieu: null } : kq;
 }
@@ -215,14 +220,19 @@ export function xacNhanChungTu(id: string): Promise<KetQua<finance_chungTuRa>> {
 }
 
 /**
- * POST /api/v1/disbursements/{id}/lockout — `Đã xác nhận` → `Đã khoá`. 200, KHÔNG THÂN gửi đi.
+ * POST /api/v1/disbursements/{id}/lockout — `Kế toán nhập` or `Đã xác nhận` → `Đã khoá`. 200, KHÔNG
+ * THÂN gửi đi.
  *
  * KHOÁ NGHĨA LÀ GÌ TRÊN MÀN (§8.2 + `domain.ErrChungTuDaKhoa`): chứng từ đã khoá thì **không sửa,
  * không gỡ** — muốn sửa phải mở khoá trước. Đây là bước cuối của vòng đời, không phải một cái cờ
  * trang trí.
  *
- * CHƯA XÁC NHẬN THÌ KHÔNG KHOÁ ĐƯỢC: máy chủ trả 409 kèm nguyên câu vòng đời. Giao diện không dựng
- * lại luật ấy bằng cách tự ẩn nút theo trạng thái nó đoán — nó ẩn theo `status` máy chủ vừa trả.
+ * FROM A DRAFT IT CONFIRMS AND LOCKS IN ONE CALL (356a5a9f): two audit entries in one transaction, the
+ * confirmer recorded only if none was (spec 07 `Khoá`).
+ *
+ * THE RECORDER CANNOT CONFIRM OR LOCK THEIR OWN VOUCHER — 409 `self_confirmation` (here and on
+ * `xacNhanChungTu`). Not pre-checked here: the server's sentence ("Không thể tự xác nhận khoản do chính
+ * mình nhập") reaches the screen through `thongBaoLoi`.
  */
 export function khoaChungTu(id: string): Promise<KetQua<finance_chungTuRa>> {
   return docThanLoiGoi<finance_chungTuRa>(goiGhi(duongDanMot(MAU_KHOA, id), "POST", undefined, 200));
@@ -298,6 +308,8 @@ export function themDuAn(
     approved_amount: than.approved_amount,
     org_unit_id: than.org_unit_id,
     assignee_id: than.assignee_id,
+    // Free text for a unit outside the org chart (65afbdcd); the form sends it XOR `org_unit_id`.
+    implementing_unit: than.implementing_unit,
     start_date: than.start_date,
     completion_date: than.completion_date,
     disbursement_deadline: than.disbursement_deadline,
@@ -352,6 +364,8 @@ export function suaDuAn(id: string, than: SuaDuAnVao): Promise<KetQua<finance_du
     approved_amount: than.approved_amount,
     org_unit_id: than.org_unit_id,
     assignee_id: than.assignee_id,
+    // `""` clears it to NULL on the server, like `org_unit_id`; absent = unchanged.
+    implementing_unit: than.implementing_unit,
     start_date: than.start_date,
     completion_date: than.completion_date,
     disbursement_deadline: than.disbursement_deadline,

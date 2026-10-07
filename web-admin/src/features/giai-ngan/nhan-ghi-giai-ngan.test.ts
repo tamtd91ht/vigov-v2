@@ -80,6 +80,7 @@ const DU_AN_MAU: GiaTriFormDuAn = {
   thoiHanGiaiNgan: "2026-12-31",
   allocations: [],
   orgUnitId: "",
+  implementingUnit: "",
   assigneeId: "",
 };
 
@@ -113,12 +114,12 @@ describe("docSoTien — tiền vào hệ thống bằng đúng con số người
 });
 
 describe("thaoTacChungTu — vòng đời là một dây xích", () => {
-  it("`Kế toán nhập`: sửa · gỡ · xác nhận. KHÔNG khoá, KHÔNG mở khoá", () => {
+  it("`Kế toán nhập`: sửa · gỡ · xác nhận · khoá (xác nhận + khoá một lần, 356a5a9f). KHÔNG mở khoá", () => {
     expect(thaoTacChungTu(CHUNG_TU_KE_TOAN_NHAP)).toEqual({
       sua: true,
       go: true,
       xacNhan: true,
-      khoa: false,
+      khoa: true,
       moKhoa: false,
     });
   });

@@ -1,5 +1,10 @@
-import type { finance_latestIssueOut, identity_canBoChonNguoiRa } from "@/lib/api/schema.gen";
+import type {
+  finance_latestIssueOut,
+  finance_projectIssueOut,
+  identity_canBoChonNguoiRa,
+} from "@/lib/api/schema.gen";
 
+import { nhanNgay } from "./nhan-du-an"; // vi-name-ok: existing date formatter (rule 12, invariant 3)
 import { shortDayLabel } from "./nhan-ghi-giai-ngan";
 import type { PeopleCatalogue } from "./project-people";
 
@@ -26,6 +31,28 @@ export const MENTION_PICKER_LIMIT = 8;
 export function staffLabel(code: string, staff: PeopleCatalogue<identity_canBoChonNguoiRa>): string {
   if (staff.phase !== "ready") return code;
   return staff.names.get(code) ?? code;
+}
+
+/**
+ * The issue's follow-up line (prototype `BudgetItemDetail.tsx:583-589`): "Người theo dõi: {name} · hạn
+ * {dd/mm/yyyy}", either half alone, `null` when neither (65afbdcd: `owner_code` defaults to the
+ * project's officer at the time of recording; `due_on` is optional).
+ *
+ * THE NAME ONLY, NEVER THE CODE: an owner the directory cannot name (not loaded, or no longer listed)
+ * drops the owner half rather than printing `CB-…` where the prototype prints a person.
+ */
+export function issueFollowUpLine(
+  issue: Pick<finance_projectIssueOut, "owner_code" | "due_on">,
+  staff: PeopleCatalogue<identity_canBoChonNguoiRa>,
+): string | null {
+  const code = (issue.owner_code ?? "").trim();
+  const name = code !== "" && staff.phase === "ready" ? staff.names.get(code) : undefined;
+  const due = (issue.due_on ?? "").trim();
+  const parts = [
+    name !== undefined ? `Người theo dõi: ${name}` : null,
+    due !== "" ? `hạn ${nhanNgay(due)}` : null,
+  ].filter((p): p is string => p !== null);
+  return parts.length === 0 ? null : parts.join(" · ");
 }
 
 /** §7.2 second line: `27/8/2026 · đã gỡ`, or the day alone for an open issue. */

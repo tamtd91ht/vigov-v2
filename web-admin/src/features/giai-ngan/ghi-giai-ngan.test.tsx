@@ -48,8 +48,8 @@ const PEOPLE_READY: ProjectPeople = {
  * làm đỏ một bài kiểm chức năng nào, không làm đỏ `tsc`, và không có gì trên màn hình nói ra: máy
  * chủ vẫn 403 đúng lúc bấm, tức là sau khi cán bộ đã tin là mình làm được việc ấy.
  *
- * Nên bốn nút `budget.confirm` (Xác nhận · Khoá · Mở khoá · Gỡ) được kiểm RIÊNG với một tài khoản
- * chỉ có `budget.update`, và ngược lại.
+ * Nên ba nút `budget.confirm` (Xác nhận · Khoá · Mở khoá) được kiểm RIÊNG với một tài khoản chỉ có
+ * `budget.update`, và ngược lại. Gỡ chứng từ đứng sau `budget.update` từ 356a5a9f (prototype `canRecord`).
  * ═══════════════════════════════════════════════════════════════════════════════════════════
  */
 
@@ -153,34 +153,36 @@ describe("BANG CHỨNG TỪ — ranh giới budget.update / budget.confirm", () 
     expect(html).toContain("Kế toán nhập");
   });
 
-  it("`budget.update` MỘT MÌNH mở SỬA và KHÔNG mở xác nhận · khoá · gỡ", () => {
-    // BÀI KIỂM ĐẮT NHẤT CỦA TỆP. Xác nhận là hành vi của người chịu trách nhiệm, gỡ lấy một khoản
-    // tiền ra khỏi tổng lãnh đạo đã đọc — cả hai đứng sau `budget.confirm` ở máy chủ. Gắn chúng vào
-    // quyền nhập liệu là xoá mất ranh giới xã dựng ra giữa hai con người.
+  it("`budget.update` MỘT MÌNH mở SỬA và GỠ, KHÔNG mở xác nhận · khoá", () => {
+    // BÀI KIỂM ĐẮT NHẤT CỦA TỆP. Xác nhận và khoá là hành vi của người chịu trách nhiệm — đứng sau
+    // `budget.confirm` ở máy chủ. Gắn chúng vào quyền nhập liệu là xoá mất ranh giới xã dựng ra giữa
+    // hai con người. Gỡ một khoản nhập nhầm là việc của người nhập (356a5a9f, prototype `canRecord`).
     const html = veBang(true, false, [chungTu()]);
 
     expect(html).toContain(nhuTrongHTML(NHAN_SUA));
+    expect(html).toContain(nhuTrongHTML(NHAN_GO));
     expect(html).not.toContain(nhuTrongHTML(NHAN_XAC_NHAN));
     expect(html).not.toContain(nhuTrongHTML(NHAN_KHOA));
-    expect(html).not.toContain(nhuTrongHTML(NHAN_GO));
   });
 
-  it("`budget.confirm` MỘT MÌNH mở xác nhận và gỡ, KHÔNG mở sửa", () => {
+  it("`budget.confirm` MỘT MÌNH mở xác nhận và khoá, KHÔNG mở sửa, KHÔNG mở gỡ (denied case of Gỡ)", () => {
     const html = veBang(false, true, [chungTu()]);
 
     expect(html).toContain(nhuTrongHTML(NHAN_XAC_NHAN));
-    expect(html).toContain(nhuTrongHTML(NHAN_GO));
+    expect(html).toContain(nhuTrongHTML(NHAN_KHOA));
     expect(html).not.toContain(nhuTrongHTML(NHAN_SUA));
+    expect(html).not.toContain(nhuTrongHTML(NHAN_GO));
   });
 });
 
 describe("BANG CHỨNG TỪ — vòng đời quyết định nút nào có nghĩa", () => {
-  it("`Kế toán nhập`: có Xác nhận; `Khoá` chỉ là control '?' vô hiệu (chưa xác nhận thì máy chủ chưa khoá được)", () => {
+  it("`Kế toán nhập`: có Xác nhận VÀ Khoá thật (xác nhận + khoá một lần, 356a5a9f), không '?'", () => {
     const html = veBang(true, true, [chungTu()]);
 
     expect(html).toContain(nhuTrongHTML(NHAN_XAC_NHAN));
-    expect(html).not.toContain(nhuTrongHTML(NHAN_KHOA));
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Khoá<\/button>/);
+    expect(html).toContain(nhuTrongHTML(NHAN_KHOA));
+    expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>Khoá<\/button>/);
+    expect(html).not.toContain("data-pending");
     expect(html).not.toContain(nhuTrongHTML(NHAN_MO_KHOA));
   });
 
@@ -583,8 +585,8 @@ describe("PHẦN CHƯA DỰNG — dấu '?' đúng vị trí đặc tả (ADR 00
   });
 });
 
-describe("BIỂU MẪU DỰ ÁN — `Đơn vị khác, nhập tay` là lựa chọn '?' (backend dependency)", () => {
-  it("the option is LAST, disabled, and its '?' names the pending part", () => {
+describe("BIỂU MẪU DỰ ÁN — `Đơn vị khác, nhập tay` là lựa chọn thật (65afbdcd)", () => {
+  it("the option is LAST, enabled, with no '?' and no pending entry left", () => {
     const html = renderToStaticMarkup(
       <FormDuAn
         budgetYear={2026}
@@ -601,9 +603,10 @@ describe("BIỂU MẪU DỰ ÁN — `Đơn vị khác, nhập tay` là lựa ch�
     );
     const select = /<select id="don-vi-du-an"[^>]*>(.*?)<\/select>/.exec(html)![1]!;
     const last = select.slice(select.lastIndexOf("<option"));
-    expect(last).toContain('disabled=""');
-    expect(last).toContain("data-pending-option");
+    expect(last).not.toContain('disabled=""');
     expect(last).toContain(">— Đơn vị khác, nhập tay —</option>");
-    expect(html).toContain(`aria-label="${nhuTrongHTML(pendingMarkerLabel("Đơn vị khác, nhập tay"))}"`);
+    expect(html).not.toContain("data-pending");
+    expect(PHAN_CHUA_DUNG_GHI.map((p) => p.ten)).not.toContain("Đơn vị khác, nhập tay");
+    expect(PHAN_CHUA_DUNG_GHI.map((p) => p.ten)).not.toContain("Khoá khoản chi chưa xác nhận");
   });
 });

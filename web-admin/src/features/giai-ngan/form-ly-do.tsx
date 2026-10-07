@@ -11,8 +11,8 @@ import { BusyLabel } from "@/features/danh-ba/busy-label";
 import { CAU_THIEU_LY_DO, LY_DO_TOI_DA, lyDoDuDung } from "./nhan-ghi-giai-ngan";
 
 /**
- * Hộp xác nhận KÈM Ô LÝ DO, dùng chung cho hai thao tác `budget.confirm` có thân:
- * gỡ chứng từ · mở khoá chứng từ. (Xoá dự án không còn hỏi lý do — quyết định 06/10/2026, `xoaDuAn`.)
+ * Hộp xác nhận KÈM Ô LÝ DO, nay chỉ còn cho MỞ KHOÁ chứng từ (`budget.confirm`). Xoá dự án (06/10/2026,
+ * `xoaDuAn`) và gỡ chứng từ (356a5a9f, `goChungTu`) không còn hỏi lý do: máy chủ tự ghi câu cố định.
  *
  * ═══════════════════════════════════════════════════════════════════════════════════════════
  * VÌ SAO LÀ MỘT Ô NHẬP CHỨ KHÔNG PHẢI MỘT NÚT `Đồng ý`. Đặc tả không biết điều này — §8.2 chỉ vẽ

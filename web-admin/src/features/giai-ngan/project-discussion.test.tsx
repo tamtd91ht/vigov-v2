@@ -19,8 +19,15 @@ import type {
 import { BangDanhSach, LatestIssueCell } from "./bang-du-an";
 import { ChiTietDuAn } from "./chi-tiet-du-an";
 import { CommentList, ProjectCommentsPanel } from "./project-comments";
-import { latestIssueDateLine, MENTION_PICKER_LIMIT, mentionLine, openIssuesLabel, staffLabel } from "./project-discussion-labels";
-import { ProjectIssuesPanel, useProjectIssues } from "./project-issues";
+import {
+  issueFollowUpLine,
+  latestIssueDateLine,
+  MENTION_PICKER_LIMIT,
+  mentionLine,
+  openIssuesLabel,
+  staffLabel,
+} from "./project-discussion-labels";
+import { IssueTimeline, ProjectIssuesPanel, useProjectIssues } from "./project-issues";
 import { staffCatalogue, type PeopleCatalogue } from "./project-people";
 
 /**
@@ -563,5 +570,34 @@ describe("§7.2 'Vướng mắc mới nhất'", () => {
     const rows = html.split("<tr").filter((r) => r.includes("<td"));
     expect(rows).toHaveLength(2);
     expect(rows[1]!.replace(/<[^>]*>/g, "").endsWith("—")).toBe(true);
+  });
+});
+
+describe("§8.1 issue follow-up line — `owner_code` + `due_on` (65afbdcd)", () => {
+  it("issueFollowUpLine: name and date, either alone, null when neither; never the code", () => {
+    expect(issueFollowUpLine({ owner_code: "CB-00002", due_on: "2026-10-15" }, STAFF)).toBe(
+      "Người theo dõi: Trần Thị Bình · hạn 15/10/2026",
+    );
+    expect(issueFollowUpLine({ owner_code: "CB-00002" }, STAFF)).toBe("Người theo dõi: Trần Thị Bình");
+    expect(issueFollowUpLine({ due_on: "2026-10-15" }, STAFF)).toBe("hạn 15/10/2026");
+    expect(issueFollowUpLine({}, STAFF)).toBeNull();
+    // Directory not loaded, or the code no longer listed: the owner half is dropped, no `CB-…` printed.
+    expect(issueFollowUpLine({ owner_code: "CB-00002", due_on: "2026-10-15" }, LOADING)).toBe("hạn 15/10/2026");
+    expect(issueFollowUpLine({ owner_code: "CB-09999" }, STAFF)).toBeNull();
+  });
+
+  it("the timeline draws the line under the issue text, and none for an issue without either", () => {
+    const html = renderToStaticMarkup(
+      <IssueTimeline
+        items={[issue({ id: "A", owner_code: "CB-00001", due_on: "2026-11-02" }), issue({ id: "B" })]}
+        staff={STAFF}
+        canRecord={false}
+        resolving={null}
+        onResolve={() => {}}
+      />,
+    );
+    const lines = [...html.matchAll(/data-issue-follow-up="">([^<]*)</g)].map((m) => m[1]);
+    expect(lines).toEqual(["Người theo dõi: Nguyễn Văn An · hạn 2/11/2026"]);
+    expect(html).not.toContain("CB-00001");
   });
 });
