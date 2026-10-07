@@ -20,6 +20,7 @@ owns_facts:
 
 **Trạng thái:** đã chốt · **Ngày:** 2026-10-06 · **Người quyết:** chủ dự án, 06/10/2026, trong phiên
 chính · **Bổ sung** ADR 0068 *Sửa đổi lần 5* cho riêng menu Giải ngân — xem §*Quan hệ với ADR 0068*.
+· **#4b bị thay một phần bởi [0077](0077-giai-ngan-hang-muc-hai-quyen-ma-tu-cap.md) (07/10/2026): ghi hạng mục nay nhận `admin.lookup` hoặc `budget.update`, trừ nhập Excel**
 
 ## Bối cảnh
 

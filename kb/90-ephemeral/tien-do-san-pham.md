@@ -3,8 +3,8 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 9ad4e016
-expires: 2027-01-04
+derived_from_commit: ccef7ab3
+expires: 2027-01-05
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
 ---
@@ -17,7 +17,7 @@ không dòng nào viết tay (luật 9, bất biến 1).
 Trục ở đây là **phân hệ sản phẩm**. Trục theo **module kho mã** nằm ở `kb/90-ephemeral/tien-do.md`;
 hai tệp trả lời hai câu khác nhau và không chép của nhau.
 
-Sinh ngày **2026-10-06** · hết hạn **2027-01-04**.
+Sinh ngày **2026-10-07** · hết hạn **2027-01-05**.
 
 ## 1 · Theo chương đặc tả
 
@@ -30,7 +30,7 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 |---|---|---|---|
 | **00** ViGov — Tổng quan hệ thống | — | — | — |
 | **01** Tổng quan điều hành | 6 | 6/6 | ✓ |
-| **02** Quản lý nhiệm vụ | 20 | 20/20 | ✓ |
+| **02** Quản lý nhiệm vụ | 22 | 21/22 | ✓ |
 | **03** Sổ tay lãnh đạo | 1 | 1/1 | ✓ |
 | **04** Biên bản và kết luận họp | 13 | 13/13 | ✓ |
 | **05** Văn bản đến & Đơn thư | 7 | 7/7 | ✓ |
@@ -45,7 +45,7 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **14** Cấu hình hệ thống | 119 | 118/119 | ✓ |
 | **15** Phụ lục: giao diện dùng chung & xác thực | 9 | 9/9 | ✓ |
 
-Tổng **324 tuyến** trong hợp đồng. **15** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
+Tổng **327 tuyến** trong hợp đồng. **16** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
 
 ## 2 · web-admin, theo từng mục menu
 
@@ -118,18 +118,18 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | Module | xong | đang làm | chưa làm | treo |
 |---|---|---|---|---|
 | `_chung` | 22 | 3 | 8 | 6 |
-| `citizen-app` | 40 | 19 | 3 | 0 |
+| `citizen-app` | 40 | 20 | 3 | 0 |
 | `core` | 31 | 3 | 1 | 1 |
 | `deploy` | 19 | 12 | 1 | 0 |
 | `platform-admin` | 8 | 3 | 0 | 0 |
 | `proto` | 16 | 1 | 0 | 0 |
 | `service-comms` | 21 | 12 | 4 | 3 |
 | `service-documents` | 10 | 3 | 4 | 0 |
-| `service-finance` | 27 | 2 | 4 | 0 |
+| `service-finance` | 28 | 2 | 4 | 0 |
 | `service-identity` | 43 | 13 | 2 | 1 |
-| `service-petitions` | 42 | 18 | 5 | 0 |
-| `service-platform` | 15 | 16 | 5 | 1 |
+| `service-petitions` | 43 | 18 | 5 | 0 |
+| `service-platform` | 15 | 17 | 5 | 1 |
 | `service-reporting` | 3 | 0 | 1 | 0 |
 | `tools` | 20 | 0 | 0 | 0 |
-| `web-admin` | 64 | 34 | 3 | 1 |
+| `web-admin` | 66 | 35 | 3 | 1 |
 

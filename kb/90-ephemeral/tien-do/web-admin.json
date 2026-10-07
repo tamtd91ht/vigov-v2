@@ -893,7 +893,7 @@
       "trang_thai": "xong",
       "bang_chung": "Tám commit 06/10/2026, đều trong web-admin/src/features/giai-ngan + lib/api: cc76427c (funding-source-dialogs.tsx, funding-source-progress.tsx, lib/api/funding-sources.ts) · 4338918a (funding-allocations.test.tsx, ghi-du-an.tsx) · 2d4d4c55 (chung-tu-du-an.tsx, voucher-tab.test.tsx) · 56980d00 (category-manager-dialog.tsx, project-bulk-delete*.ts[x]) · 95d84ff0 (disbursement-overview.tsx, cumulative-chart.tsx, project-curve.tsx, project-groups.ts) · 2d01c386 (project-auto-code.test.tsx) · 744582d7 (project-people.ts) · b0a880e0 (project-issues.tsx, project-comments.tsx, lib/api/project-discussion.ts). Thẻ việc web đã sang tasks/web/done. Phiên chính báo make check rc=0 (trừ golangci-lint chưa cài trên máy).",
       "no_confirm": [],
-      "tiep_theo": "Chưa xem bằng mắt trên trình duyệt. assignee_id của dự án đang nhận MÃ cán bộ (744582d7) trong khi đặc tả §11 ghi uuid — câu còn mở #5 của ADR 0075. Hộp Hạng mục hiện với budget.update nhưng ghi cần admin.lookup (ADR 0075 #4b): người chỉ có budget.update mở được hộp mà lưu sẽ bị 403 — kiểm câu lỗi trên màn có nói rõ điều ấy không."
+      "tiep_theo": "Chưa xem bằng mắt trên trình duyệt. assignee_id của dự án đang nhận MÃ cán bộ (744582d7) trong khi đặc tả §11 ghi uuid — câu còn mở #5 của ADR 0075. SỬA 07/10/2026: lỗi 403 của hộp Hạng mục với người chỉ có budget.update ĐÃ HẾT — tuyến ghi nay nhận admin.lookup hoặc budget.update (e9f669f1, 21177f29; mục giai-ngan-hoan-thien-prototype-07-10)."
     },
     {
       "id": "giai-ngan-nhap-excel-hop-thoai",
@@ -903,6 +903,15 @@
       "bang_chung": "eb4d53e3 — hộp Nhập giải ngân từ Excel; npx vitest run src/features/giai-ngan src/lib/api 57 tệp/1008 ca xanh; make check rc=0 (golangci-lint chưa cài trên máy)",
       "no_confirm": [],
       "tiep_theo": "—"
+    },
+    {
+      "id": "giai-ngan-hoan-thien-prototype-07-10",
+      "menu": "giai-ngan",
+      "viec": "/fix-web-admin --menu=giai-ngan --des=Hoàn thiện chức năng theo prototype — đóng các khoảng hở còn lại so với prototype (vigov-require apps/admin components/budget), người dùng chốt 07/10/2026: sắp xếp cột KH vốn/Đã giải ngân/Tiến độ (trên trình duyệt, nhóm theo thứ tự dòng đầu như BIT:101-106) · vạch thời gian đã qua trong thanh tiến độ từng dòng (summary.time_elapsed_ratio) · lọc 'Tất cả đơn vị phụ trách' · bấm cả dòng mở dự án (lệch đặc tả 06 :156 'Bấm tên' — người dùng chọn prototype; giữ liên kết tên) · số tiền rút gọn ở danh sách ('7,5 tỷ', đủ đồng trong title) · màu tiến độ 4 bậc 80/50/30 (progress-tone.ts) ở thanh danh sách và cột Tỷ lệ bảng hạng mục · tooltip số tiền trên biểu đồ luỹ kế (chuột + bàn phím) · vạch 'Hoàn thành dự kiến' ở tab Biểu đồ · hộp Hạng mục thêm chỉ bằng tên, xoá không lý do, mở cho budget.update hoặc admin.lookup",
+      "trang_thai": "xong",
+      "bang_chung": "82771384 (biểu đồ) · 4425e297 (danh sách) · 21177f29 (hộp Hạng mục) · máy chủ e9f669f1 + 6af73b8f. vitest giai-ngan 17 tệp/310 ca xanh sau 4425e297; giai-ngan+cau-hinh 65 tệp/950 ca xanh (TASK-03); tsc sạch; eslint sạch. npm run test toàn bộ: 4234 xanh, 2 đỏ ở dashboard/export.test.ts (XLSX/PPTX quá giờ khi chạy cả bộ; chạy riêng 15/15) — không thuộc lượt này.",
+      "no_confirm": [],
+      "tiep_theo": "KHÔNG LÀM, người dùng chốt: tô đỏ thời hạn đã qua (cần đồng hồ trình duyệt). VẪN CHẶN ở máy chủ/khách: cờ 'nguy cơ không giải ngân hết' (ADR 0075 còn mở #3), tự sinh nhiệm vụ theo dõi và thông báo nhắc tên (sự kiện), đơn vị nhập tay tự do. Không chép: toast (cần thành phần dùng chung mới). Chưa xem bằng mắt trên trình duyệt ở 320/768/1280px. Số dưới 1 triệu in đủ có dấu chấm ('950.000 đ'), prototype in chữ số liền."
     },
     {
       "id": "kanban-keo-tha-dnd-kit-06-10",

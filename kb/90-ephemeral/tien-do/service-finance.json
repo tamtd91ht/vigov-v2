@@ -292,6 +292,15 @@
       "bang_chung": "Sáu điểm liệt kê tại kb/10-decisions/0075-giai-ngan-nguon-von-ma-du-an-quyen-xoa.md §Còn mở: cột nguồn khi nhập Excel (f181bb76) · nhập lại cùng tệp ghi hai lần · cờ nguy cơ không giải ngân hết · vạch thời gian theo năm ngân sách · assignee_id giữ mã cán bộ (744582d7) · kế hoạch/thời hạn hạng mục suy ra từ dự án (a3fdcac2). Chưa câu nào có trong kb/00-foundation/open-questions.json.",
       "no_confirm": [],
       "tiep_theo": "Hỏi chủ dự án theo lô. #6 đụng câu mở #34 (đã chốt 22/09: 'màn hình KHÔNG được hiện' hai cột ấy) — cần nói rõ đây là cách đọc mới hay là lệch. Câu nào chủ dự án muốn giữ là câu hỏi khách thì đưa vào open-questions.json (#40 trở đi) để drift_guard canh, rồi gắn số vào no_confirm."
+    },
+    {
+      "id": "danh-muc-hang-muc-theo-prototype-07-10",
+      "menu": "giai-ngan",
+      "viec": "Ba tuyến GHI danh mục hạng mục kế hoạch vốn (POST/PATCH/DELETE /api/v1/capital-plan-categories) theo prototype — người dùng chốt 07/10/2026: quyền admin.lookup HOẶC budget.update (authz.RequireAnyPermission, 6af73b8f); thêm không cần mã — máy chủ cấp mã kebab-case từ tên như slugify của prototype, trùng thì -2…-99, không cấp lại mã đã dùng kể cả dòng xoá mềm; xoá không bắt buộc lý do",
+      "trang_thai": "xong",
+      "bang_chung": "e9f669f1 (+ 6af73b8f lõi authz/apidoc/rào quyền); go test -count=1 ./... service-finance xanh; go vet sạch; check_quyen PASS 37 khoá; check_audit_actor PASS; test_hooks 314/314; make kb + npm run gen:api đã sinh lại openapi.json/schema.gen.ts",
+      "no_confirm": [],
+      "tiep_theo": "CẦN NGƯỜI DÙNG XÁC NHẬN (agent tự chọn): (1) lý do xoá để trống lưu câu cố định 'Xoá khỏi danh mục hạng mục kế hoạch vốn' (domain.CategoryRemovalDefaultReason) theo tiền lệ xoá dự án; (2) POST không mã giữ idem.Required(MoKhiHong) — Redis sập thì cho qua, gửi đôi sinh dòng '-2' xoá mềm được; tuyến dự án chọn DongKhiHong; (3) ba tuyến nhập Excel danh mục (routes_catalogue_import.go) VẪN chỉ admin.lookup. Hệ quả đã ghi ở routes.go: kế toán chỉ có budget.update nay thêm/sửa/tắt/xoá được hạng mục — API prototype tự canh admin.lookup (router.py:252) dù giao diện mở cho budget.update. CHƯA CHẠY trên PostgreSQL thật: tên ràng buộc unique và thử lại sau giao dịch hỏng (VIGOV_TEST_DSN trống)."
     }
   ]
 }
