@@ -13,7 +13,7 @@ owns_facts:
   - "chủ trì và người thực hiện là MỘT vai trò: chuyên viên theo dõi ≡ người thực hiện, cơ quan chủ trì tham mưu ≡ bộ phận thực hiện"
   - "hạn nhiệm vụ mặc định 17:00, điền sẵn +7 ngày"
   - "luật người giữ việc của nhiệm vụ: người được giao làm mọi việc, người liên quan chỉ ghi nhật ký, người giữ task.update vẫn làm được"
-  - "nhãn mặc định cột Kanban đầu tiên là Mới giao, xã đổi được"
+  - "nhãn mặc định cột Kanban đầu tiên là Mới giao, xã đổi được — trên các màn menu Nhiệm vụ web-admin, nhãn hiện là nhãn CỐ ĐỊNH của spec: THAY bởi ADR 0076 §Sửa đổi 07/10/2026 (lần 2) #2 (danh mục /task-statuses và API giữ)"
 ---
 
 # 0065. Vòng đời nhiệm vụ theo kho yêu cầu

@@ -3,7 +3,7 @@ id: 0076-ngan-chi-tiet-nhiem-vu-theo-prototype
 tier: T1
 source: CURATED
 owner: domain
-derived_from_commit: 49056d72
+derived_from_commit: e2a08b47
 expires: null
 owns_facts:
   - "ngăn chi tiết nhiệm vụ KHÔNG còn 3 tab thao tác Xem chi tiết · Chỉnh sửa · Xoá: sửa tại chỗ bằng '✎ Sửa' trong khối thông tin, Xoá (xoá mềm, có lý do) ở cột thao tác; ngăn phải + tab bản ghi giữ (chốt 07/10/2026)"
@@ -12,13 +12,20 @@ owns_facts:
   - "gỡ tệp đính kèm nhiệm vụ: người tải lên hoặc task.update; gỡ được cả tệp đã gắn nhật ký; lý do bắt buộc; xoá mềm; tệp giữ pháp lý → 409; dòng nhật ký 'đã gỡ' KHÔNG chép tên tệp (chốt 07/10/2026)"
   - "'Cập nhật và giao việc' trong một lần chuyển trạng thái: nhiệm vụ về ĐÚNG trạng thái đã chọn, không về moi-giao; người có task.assign HOẶC người đang thực hiện được giao — đảo quyết định 28/09/2026 CHỈ cho đường gộp; POST /tasks/{ma}/assignment giữ luật cũ (chốt 07/10/2026)"
   - "luật prototype 'phải có ≥1 tệp trước khi sang Chờ duyệt' KHÔNG áp dụng — chưa ai chốt (07/10/2026)"
+  - "từ 07/10/2026 (lần 2) menu Nhiệm vụ web-admin theo spec Nhiệm vụ 02–10 của chủ dự án (tmp/web/nhiem-vu/vigov-nhiem-vu-spec/vigov-nhiem-vu-spec/, ngoài git); ngăn chi tiết theo spec 07 TRỪ thanh tab nhiều hồ sơ + 'Đóng tất cả' (giữ); cột icon dọc bên phải bỏ"
+  - "menu Nhiệm vụ theo chữ spec ở bốn chỗ (chốt 07/10/2026 lần 2 #2): nguồn 'Giao trực tiếp' (đảo NV-11), nhãn trạng thái CỐ ĐỊNH của spec (nhãn riêng của xã không hiện ở menu này — đảo câu #21 trên web, cần xác nhận với khách hàng), ô trống Lãnh đạo giao việc '— Người đang tạo nhiệm vụ —' (máy chủ vẫn không lưu người giao), loại mặc định = is_default hoặc dòng đầu (đảo a1e5e64f)"
+  - "câu gợi ý trạng thái nhiệm vụ hiện NGUYÊN VĂN spec 10 dù nói luật hệ thống không áp (hoàn thành không cần duyệt, chờ duyệt không bắt minh chứng) — luật máy chủ không đổi (chốt 07/10/2026 lần 2 #3)"
+  - "bộ lọc phạm vi trang Nhiệm vụ = 3 lựa chọn của spec 02; 'Tôi đã giao' bỏ khỏi trang này, Sổ tay lãnh đạo giữ cột của nó (chốt 07/10/2026 lần 2 #4)"
+  - "phần spec Nhiệm vụ cần máy chủ (extension_count/pending_extension trên dòng, collaborator_ids, trọng số việc con, tổng danh sách, sắp xếp máy chủ theo người/bộ phận/trạng thái, nguồn recurring, tệp chưa gắn, email trong ô chọn cán bộ, requires_directive) = control '?' + BACKEND DEPENDENCY; không thêm react-hook-form/zod/@tanstack/react-table/@dnd-kit/sortable (07/10/2026 lần 2)"
 ---
 
 # 0076. Ngăn chi tiết nhiệm vụ theo prototype và bốn thao tác máy chủ
 
 **Trạng thái:** đã chốt · **Ngày:** 2026-10-07 · **Người quyết:** chủ dự án, 07/10/2026, trong lượt
 `/fix-web-admin --menu=nhiem-vu` · **Bổ sung** ADR 0068 *Sửa đổi 06/10/2026 (lần 5)* cho riêng menu
-Nhiệm vụ, **thay một phần** 0068 *Sửa đổi 05/10/2026* #3 — xem §*Quan hệ với ADR khác*.
+Nhiệm vụ, **thay một phần** 0068 *Sửa đổi 05/10/2026* #3 — xem §*Quan hệ với ADR khác* ·
+**Sửa đổi 07/10/2026 (lần 2)** (menu Nhiệm vụ theo spec 02–10; giữ tab nhiều hồ sơ; bốn chỗ chữ theo
+spec đảo NV-11, câu #21 trên web, `a1e5e64f` — §*Sửa đổi 07/10/2026 (lần 2)*).
 
 ## Bối cảnh
 
@@ -112,3 +119,49 @@ ADR không bao giờ sửa; các ADR dưới đây giữ nguyên chữ, ADR này
 
 → ADR 0068 (*Sửa đổi 05/10/2026* #3/#4/#6, *lần 5* #3–#5) · ADR 0065 NV3 · ADR 0038
 → Sổ tiến độ: `python tools/tien_do.py --menu nhiem-vu`
+
+## Sửa đổi 07/10/2026 (lần 2) — Nhiệm vụ theo spec
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. **Người quyết:** chủ dự án,
+07/10/2026, trong phiên chính (lệnh `/fix-web-admin --menu=nhiem-vu`, mô tả *"cập nhật UI UX theo
+prototype, tham khảo thêm nội dung hướng dẫn trong ./tmp/web/giai-ngan/vigov-nhiem-vu-spec/*.md"*).
+**Chưa dựng** — mỗi dòng là điều phải đúng khi dựng.
+
+Nguồn: bản spec Nhiệm vụ của chủ dự án, thư mục thật
+`tmp/web/nhiem-vu/vigov-nhiem-vu-spec/vigov-nhiem-vu-spec/` (ngoài git; lệnh ghi đường dẫn khác),
+tệp **02–10**. Tệp 00/01 trùng spec Giải ngân, đã áp bởi ADR 0068 *lần 6*. Nội dung spec **không chép
+vào đây** (luật 9) — spec là nguồn lúc dựng; thứ tự nguồn giữ như ADR 0068 *lần 6* (luật cứng lần 5 #4
+thắng, trừ điểm nói rõ thay).
+
+Câu trả lời của chủ dự án (chọn trong câu hỏi của phiên, nguyên văn lựa chọn):
+
+| # | Câu hỏi của phiên | Lựa chọn nguyên văn | Chốt |
+|---|---|---|---|
+| 1 | Spec 07 dùng **một** ngăn chi tiết, không thanh tab nhiều hồ sơ / "Đóng tất cả"; ADR này (#1) giữ ngăn phải + tab nhiều hồ sơ | **"Giữ tab nhiều hồ sơ"** | Thanh tab nhiều hồ sơ + "Đóng tất cả" **giữ** (ADR 0068 *05/10* dòng tab nhiều bản ghi vẫn đúng). **Phần còn lại** của ngăn theo spec 07 — gồm việc bỏ cột icon dọc bên phải mà spec 07 dòng 3 nêu tên |
+| 2 | Bốn chỗ spec đặt chữ khác chỗ đã chốt: nguồn "Giao trực tiếp" (đã sửa thành "Tạo trên sổ nhiệm vụ" theo báo cáo kiểm thử NV-11) · nhãn trạng thái cố định (xã tự đặt nhãn, câu mở #21) · ô trống "Lãnh đạo giao việc" = "— Người đang tạo nhiệm vụ —" (máy chủ không tự lấy người tạo) · loại mặc định = dòng đầu (chốt 07/10: để trống) | **"Theo spec toàn bộ"** | Đổi **cả bốn** theo spec 02/04/06/10, kể cả câu nói sai hành vi máy chủ — hệ quả (a), (b), (d), (e) |
+| 3 | Câu gợi ý trạng thái của spec nói sai luật của ta: "Hoàn thành: Lãnh đạo đã duyệt" (ADR 0065 cho người thực hiện tự hoàn thành) · "Chờ duyệt: Phải có minh chứng" (#5 trên chưa áp luật ≥1 tệp) · "Chuyển tiếp: chờ người mới tiếp nhận" | **"Nguyên văn spec"** | Câu gợi ý hiện **đúng chữ spec 10**. Luật máy chủ **không đổi** — hệ quả (c) |
+| 4 | Bộ lọc phạm vi: spec 3 lựa chọn (Tất cả / Được giao / Liên quan), web 4 (thêm "Tôi đã giao") | **"3 như spec"** | Trang Nhiệm vụ còn 3 lựa chọn theo spec 02; "Tôi đã giao" **bỏ khỏi trang này** — hệ quả (f) |
+
+**Mặc định phiên nêu, chủ dự án không phản đối** — giữ nguyên vì luật hoặc ADR khác sở hữu:
+
+| # | Giữ | Chủ sở hữu |
+|---|---|---|
+| 5 | Không thêm ô bộ phận chủ trì / người theo dõi; Sổ theo dõi giữ 11 cột | ADR 0065 NV5 |
+| 6 | Mã nhiệm vụ không sửa được | ADR 0065 NV3 · #1 trên |
+| 7 | Lùi hạn do người ghi trên bản ghi quyết, khoá `task.extend` | ADR 0038 |
+| 8 | Gỡ tệp đính kèm phải có lý do | #4b trên |
+| 9 | Xoá hàng loạt cần **một** lý do chung | Luật 7 |
+| 10 | Mức ưu tiên lấy từ danh mục của xã; màu vạch theo hạng | Luật 1 bất biến 10 |
+| 11 | Không thêm thư viện (`react-hook-form`, `zod`, `@tanstack/react-table`, `@dnd-kit/sortable`): hành vi đã dựng; sắp xếp **phải ở máy chủ** vì danh sách phân trang bằng con trỏ | — (lựa chọn kỹ thuật của phiên) |
+| 12 | Phần spec cần máy chủ → control vô hiệu dấu "?" + **BACKEND DEPENDENCY** (ADR 0068 *lần 6* #9): `extension_count` / `pending_extension` trên dòng danh sách · `collaborator_ids` · trọng số việc con · tổng của danh sách (số đếm vẫn lấy từ `/task-counts`) · sắp xếp ở máy chủ theo người thực hiện / bộ phận / trạng thái · nguồn `recurring` · danh sách tệp chưa gắn · email trong ô chọn cán bộ · thuộc tính `requires_directive` của loại nhiệm vụ | ADR 0068 *lần 5* #5 · *lần 6* #9 |
+
+**Còn mở / hệ quả** (chủ dự án **không nêu** lý do cho bốn lựa chọn trên — đừng suy thêm):
+
+| # | Điểm | Thực tế |
+|---|---|---|
+| a | Nhãn trạng thái của xã | Câu mở **#21** đã **DECIDED**: xã tự đặt nhãn qua `/task-statuses`. Lựa chọn #2 làm web hiện **nhãn cố định của spec** trên các màn menu Nhiệm vụ, nên nhãn riêng của xã **không còn hiện ở menu này**; API và danh mục giữ nguyên. Đây là **đảo một câu khách hàng đã chốt** — phải nêu lại với khách hàng để xác nhận. `open-questions.json` **chưa sửa** |
+| b | Ô trống "Lãnh đạo giao việc" | Chữ "— Người đang tạo nhiệm vụ —" nói người tạo là lãnh đạo giao việc, nhưng để trống thì máy chủ **không lưu** người giao việc — **bản ghi và màn hình nói khác nhau**. Ai duyệt lùi hạn khi ô này trống: ADR 0038 |
+| c | Câu gợi ý trạng thái | Hiện nguyên văn luật hệ thống **không áp**: hoàn thành **không** cần duyệt (ADR 0065), Chờ duyệt **không** bắt minh chứng (#5). Cán bộ có thể đọc một nhiệm vụ "Hoàn thành" là **đã được lãnh đạo duyệt** khi thực tế không |
+| d | Nhãn nguồn `truc-tiep` | Sửa theo báo cáo kiểm thử **NV-11** ("Tạo trên sổ nhiệm vụ") **bị đảo** — về "Giao trực tiếp" |
+| e | Loại nhiệm vụ mặc định | Chốt 07/10 "không có loại mặc định thì để trống" (`a1e5e64f`, sổ tiến độ NV-01) **bị đảo**: mặc định = loại `is_default`, không có thì **dòng đầu** (spec 06) |
+| f | "Tôi đã giao" | Bỏ khỏi trang Nhiệm vụ. Cột *Việc tôi đã giao* của Sổ tay lãnh đạo (ADR 0071) **giữ**; tham số `scope=assigned-by-me` của API giữ |
