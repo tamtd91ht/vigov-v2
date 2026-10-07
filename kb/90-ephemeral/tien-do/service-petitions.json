@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-petitions",
-  "cap_nhat": "2026-10-04",
+  "cap_nhat": "2026-10-07",
   "muc": [
     {
       "id": "so-tay-lanh-dao-bo-loc-may-chu",
@@ -582,6 +582,15 @@
       "bang_chung": "Chưa có consumer nào trong service-petitions cho sự kiện của finance; phía phát cũng chưa có (sổ service-finance → `giai-ngan-su-kien-vuong-mac-nhac-ten`). Kiểm 06/10/2026.",
       "no_confirm": [],
       "tiep_theo": "Chờ thiết kế sự kiện (lượt bị chặn quyền 06/10/2026, chờ chủ dự án). Khi dựng: tiêu thụ luỹ đẳng (luật 2 bất biến 5), tenant_id trong thông điệp — thiếu thì từ chối (luật 1 bất biến 9), vết theo chủ thể hệ thống (luật 6 bất biến 6). Câu cần chốt cùng lượt: loại nhiệm vụ, người giao (chủ thể hệ thống hay người ghi vướng mắc), hạn mặc định (ADR 0065 NV6: 17:00, +7 ngày?), và khi vướng mắc đã gỡ thì nhiệm vụ ra sao."
+    },
+    {
+      "id": "bon-thao-tac-ngan-nhiem-vu-07-10",
+      "viec": "Bốn thao tác máy chủ cho ngăn chi tiết nhiệm vụ (ADR 0076 #3, #4): lịch sử gia hạn, gỡ tệp đính kèm, vết hai ô phê duyệt, chuyển trạng thái kèm giao việc + tệp",
+      "trang_thai": "xong",
+      "bang_chung": "07bfeef2 migration 0031 decision_note; 9a1a1644 GET /api/v1/tasks/{ma}/extensions (task.read) + lưu ghi chú cùng UPDATE quyết định, kiểm toán chỉ độ dài; 9d4b2684 DELETE /api/v1/tasks/{ma}/attachments/{id} (người tải lên hoặc task.update, bắt lý do, legal_hold 409, nhật ký không chép tên tệp); 49056d72 kiểm toán trước/sau hai ô + dòng nhật ký; cebe0d47 POST /tasks/{ma}/status + handover/attachments một giao dịch, về trạng thái đã chọn, task.assign hoặc người đang thực hiện. go vet + go test ./... service-petitions xanh; check_audit_actor PASS.",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA CHẠY trên PostgreSQL thật (thiếu VIGOV_TEST_DSN): trigger/CHECK 0031, TestPgStoredFileSoftDelete, pg test lịch sử. Còn mở: đề nghị lùi hạn đang chờ khi đổi người giữ (giao-lai-nhiem-vu mục 6, đường gộp giữ nguyên như Reassign); luật '≥1 tệp trước Chờ duyệt' chưa chốt; trọng số việc con chưa có. Hai dòng nhật ký (giao lại + trạng thái) cùng mốc giờ có thể hiện lệch thứ tự. Ngoài phạm vi: trigger 0006 không khoá trang_thai/nguoi_duyet_ma sau quyết định.",
+      "menu": "nhiem-vu"
     }
   ]
 }

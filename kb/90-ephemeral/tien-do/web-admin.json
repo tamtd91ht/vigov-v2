@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "web-admin",
-  "cap_nhat": "2026-10-06",
+  "cap_nhat": "2026-10-07",
   "muc": [
     {
       "id": "tam-viec-web-tu-hop-dong",
@@ -915,11 +915,20 @@
     },
     {
       "id": "tong-quan-xuat-pdf-xlsx-pptx-06-10",
-      "menu": "tong-quan",
+      "menu": "tong-quan-dieu-hanh",
       "viec": "Tổng quan — nút PDF/XLSX/PPTX chạy thật: dựng tệp trong trình duyệt từ đúng số liệu máy chủ trả cho màn (người dùng chốt 06/10/2026, thay ADR 0053 B4 / ADR 0068 §14 'giai đoạn 2' cho riêng Tổng quan). Báo cáo vẫn là ô '?'.",
       "trang_thai": "xong",
       "bang_chung": "commit 'feat(web-admin): Tổng quan — xuất PDF, XLSX, PPTX'; vitest dashboard+report 183 ca xanh; tsc sạch; npm run build xanh; make check rc=0 (golangci-lint chưa cài). Chưa mở thử tệp bằng Excel/PowerPoint; PDF kiểm bằng trích chữ pdfjs.",
       "tiep_theo": "(1) NỢ MÁY CHỦ: chưa có route ghi nhật ký lần xuất (luật 3 bất biến 4) — cần POST ở identity hoặc reporting. (2) Nút cần report.read VÀ report.export (agent chọn, khoá có sẵn ở identity 0001:304) — người dùng chưa xác nhận. (3) make vuln đỏ vì source-map-js (GHSA-68fv-2mgg-jv7q) có từ trước. (4) 'Cần xử lý ngay' chỉ ghi số đếm, không ghi từng việc."
+    },
+    {
+      "id": "ngan-chi-tiet-nhiem-vu-theo-prototype-07-10",
+      "viec": "Ngăn chi tiết nhiệm vụ làm lại theo prototype (ADR 0076) — /fix-web-admin --menu=nhiem-vu 'Chỉnh sửa lại toàn bộ drawer này. Gắn action hoàn chỉnh vào.'",
+      "trang_thai": "dang_lam",
+      "bang_chung": "ab8f9160: bỏ 3 tab Xem/Sửa/Xoá; ✎ Sửa trong khối thông tin (co-ban: tiêu đề + hạn, không gửi code); Xoá có lý do ở cột thao tác; chip bước bấm được theo clickableTransitions + hộp soạn (trả lại/mở lại bắt lý do); N% tiến độ ở ô ưu tiên; tick + trọng số việc con vô hiệu '?' (task-status-pipeline.tsx mới). tsc + eslint sạch, vitest nhiem-vu+leader-notebook 594/594 (agent báo toàn web-admin 4388/4388).",
+      "no_confirm": [],
+      "tiep_theo": "TASK-07 CHƯA LÀM: nối 4 thao tác máy chủ đã có (9a1a1644 lịch sử gia hạn GET /tasks/{ma}/extensions; 9d4b2684 gỡ tệp DELETE …/attachments/{id}; 49056d72 hai ô phê duyệt tick thẳng ở chế độ xem qua PATCH task.update, NHỚ gửi expected_updated_at; cebe0d47 hộp soạn chuyển trạng thái nhận handover + attachments) — cần `make kb` sinh lại schema.gen.ts trước. Chủ dự án duyệt trên trình duyệt 5 lựa chọn agent tự quyết: Chờ duyệt vẫn hiện trên dải bước; lỗi chuyển hiện 2 chỗ; bỏ pill trạng thái lớn; tick việc con theo hoan-thanh (prototype: tiến độ 100); hai nút Lưu khi sửa (Lưu + Lưu việc cha).",
+      "menu": "nhiem-vu"
     }
   ]
 }
