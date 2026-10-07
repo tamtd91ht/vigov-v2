@@ -38,6 +38,7 @@ import {
   type AssignmentForm,
 } from "./task-assignment";
 import { TaskAssignmentForm } from "./task-assignment-block";
+import { NOT_SENT } from "./task-transitions.fixture";
 
 /**
  * §5.7 "Giao việc, chuyển việc" (owner decision 28/09/2026, 764bb92) and the removal of
@@ -222,8 +223,8 @@ function drawer(t: petitions_nhiemVuRa, permissions: QuyenNhiemVu): string {
       dangGui={false}
       loiGhi={null}
       dong={() => {}}
-      doiTrangThai={() => {}}
-      xoa={() => {}}
+      doiTrangThai={NOT_SENT}
+      xoa={NOT_SENT}
       guiDeNghiLuiHan={() => Promise.resolve({ ok: false, thongBao: "" })}
       quyetDinh={() => Promise.resolve({ ok: false, thongBao: "" })}
       suaKhoiVanBan={NOT_CALLED}
@@ -292,7 +293,8 @@ describe("the drawer — block present / absent, and the stepper's `Chuyển ti�
     expect(html).toMatch(
       new RegExp(
         `<button type="button" class="[^"]*" aria-controls="${ASSIGNMENT_UNIT_FIELD_ID}"[^>]*>` +
-          '<span class="[^"]*" data-step="branch">Chuyển tiếp</span></button>',
+          // The chip's second line (time in status, a dash) follows the label inside the button.
+        '<span class="[^"]*" data-step="branch">Chuyển tiếp</span><span[^>]*>—</span></button>',
       ),
     );
     // And the status block no longer offers it as a move.

@@ -2,6 +2,8 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 
+import { PendingMarker } from "@/components/ui/pending-feature";
+
 import type { DanhBaTheoMa } from "@/features/phan-anh/nhan-phieu"; // vi-name-ok: existing type, imported not declared (rule 12 inv 3)
 import type { KetQua } from "@/lib/api/goi";
 import { laySoNhiemVu } from "@/lib/api/nhiem-vu";
@@ -13,9 +15,12 @@ import type {
 } from "@/lib/api/schema.gen";
 
 import {
+  CHILD_TASK_WEIGHT_NONE,
+  CHILD_TASK_WEIGHT_PENDING,
   CHILD_TASKS_EMPTY,
   CHILD_TASKS_LOADING,
   CHILD_TASKS_TITLE,
+  childTasksHeading,
   CHUA_PHAN_CONG,
   DETACH_PARENT_BODY,
   NHAN_XEM_THEM_NHAT_KY_NHIEM_VU,
@@ -152,6 +157,11 @@ export function ChildTasks({
   );
 }
 
+/** Accessible name of a child's (disabled) completion tick — which child, among twenty. */
+export function childTickLabel(code: string): string {
+  return `Đã hoàn thành ${code}`;
+}
+
 export type ChildTasksLoad =
   | { phase: "loading" }
   | { phase: "error"; message: string }
@@ -183,9 +193,19 @@ export function ChildTaskList({
   moreError: string | null;
   loadMore: () => void;
 }) {
+  // The prototype's `(k/n hoàn thành)` only when every page is in hand: a count over the first page
+  // of a longer list is a figure nobody can check.
+  const heading =
+    load.phase === "done" && load.rows.length > 0 && !load.more
+      ? childTasksHeading(load.rows.filter((t) => t.status === "hoan-thanh").length, load.rows.length)
+      : CHILD_TASKS_TITLE;
   return (
     <div className="form-danh-muc" aria-labelledby="tieu-de-viec-con">
-      <h4 id="tieu-de-viec-con">{CHILD_TASKS_TITLE}</h4>
+      <div className="flex items-center gap-2">
+        <h4 id="tieu-de-viec-con">{heading}</h4>
+        {/* ONE "?" for the tick and the weight of every row — not one per row (ADR 0068 §14). */}
+        {load.phase === "done" && load.rows.length > 0 && <PendingMarker info={CHILD_TASK_WEIGHT_PENDING} />}
+      </div>
       {load.phase === "loading" && <p role="status">{CHILD_TASKS_LOADING}</p>}
       {load.phase === "error" && (
         <p className="thong-bao-loi" role="alert">
@@ -201,14 +221,27 @@ export function ChildTaskList({
             const due = oHan(t.due_at, now);
             return (
               <li key={t.code}>
-                <button
-                  type="button"
-                  className="nut-phu"
-                  onClick={() => openTask(t)}
-                  aria-label={`Mở ${t.code}: ${t.title}`}
-                >
-                  <span className="ma-muc">{t.code}</span> {t.title}
-                </button>
+                <div className="flex items-start gap-2.5">
+                  {/* The prototype's completion tick — DISABLED: completing a child is a status move
+                      of that child, made in its own detail (see `CHILD_TASK_WEIGHT_PENDING`). */}
+                  <input
+                    type="checkbox"
+                    className="mt-2.5"
+                    disabled
+                    readOnly
+                    checked={t.status === "hoan-thanh"}
+                    aria-label={childTickLabel(t.code)}
+                  />
+                  <button
+                    type="button"
+                    className="nut-phu"
+                    onClick={() => openTask(t)}
+                    aria-label={`Mở ${t.code}: ${t.title}`}
+                  >
+                    <span className="ma-muc">{t.code}</span> {t.title}
+                  </button>
+                  <span className="mt-2 text-xs whitespace-nowrap text-ink-500">({CHILD_TASK_WEIGHT_NONE})</span>
+                </div>
                 <p className="dong-phu">
                   <span className="chip chip-ngung">{nhanTrangThai(labels, t.status)}</span>{" "}
                   {nhanCanBoNgan(t.assignee, directory, CHUA_PHAN_CONG)} · Hạn {due.ngay}

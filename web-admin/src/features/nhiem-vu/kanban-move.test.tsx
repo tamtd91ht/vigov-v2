@@ -245,7 +245,9 @@ describe("which moves a card offers — the SERVER's list, one source", () => {
     expect(source).toContain("const allowedTargets = dragging === null ? [] : dragTargets(dragging, move);");
     const drag = readFileSync(fileURLToPath(new URL("./kanban-drag.ts", import.meta.url)), "utf8");
     expect(drag).toContain("return clickableTransitions(task, gate.permissions, gate.staffCode);");
-    expect(source).toContain("const buocBamDuoc = clickableTransitions(nhiemVu, quyen, maNguoiDangNhap);");
+    // The drawer's chips (since 07/10/2026 the prototype pipeline, `task-status-pipeline.tsx`).
+    const pipeline = readFileSync(fileURLToPath(new URL("./task-status-pipeline.tsx", import.meta.url)), "utf8");
+    expect(pipeline).toContain("if ((clickableTransitions(task, permissions, staffCode) as readonly string[]).includes(code)) {");
     expect(source).toContain("staffCode: maNguoiDangNhap,");
     // No second lifecycle map may come back.
     expect(source).not.toContain("CHUYEN_DUOC");

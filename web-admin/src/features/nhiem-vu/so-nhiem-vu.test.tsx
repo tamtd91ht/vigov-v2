@@ -27,8 +27,6 @@ import {
   CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC,
   NEW_TASK_DUE_LATER_NOTE,
   NEW_TASK_DUE_PREFILLED_NOTE,
-  DUE_EDIT_BUTTON,
-  DUE_SET_BUTTON,
   EXTENSION_NO_DUE,
   TASK_PROGRESS_PENDING,
   TASK_TYPE_MISSING,
@@ -69,13 +67,12 @@ import {
   CAU_KHONG_AI_CO_QUYEN_DUYET_GIA_HAN,
   NHAN_NUT_TRA_LAI,
   REOPEN_BUTTON,
-  REOPEN_REASON_LABEL,
-  reopenNote,
   SAP_XEP_MAC_DINH,
   cauLoiDanhBaLanhDao,
-  ghiChuTraLai,
   mocCuoiNgay,
   ngayChoONhap,
+  basicTaskEditBody,
+  formSuaTuChiTiet,
   quyetDinhDuyetLuiHan,
   quyenNhiemVu,
   type QuyenNhiemVu,
@@ -93,15 +90,23 @@ import {
   HangLoc,
   KhoiChuaDung,
   KhoiLuiHan,
-  KhoiTraLai,
+  TASK_DELETE_BUTTON,
+  TASK_INFO_EDIT_LABEL,
   bamSapXep,
   chuyenDrawer,
+  progressFactText,
   type DanhMucNhiemVu,
   type DrawerNhiemVu,
   type TrangThaiTai,
 } from "./so-nhiem-vu";
 import { KhoiNhatKyNhiemVu, type TaiNhatKyNhiemVu } from "./nhat-ky-nhiem-vu";
-import { serverTransitions } from "./task-transitions.fixture";
+import { NOT_SENT, serverTransitions } from "./task-transitions.fixture";
+import {
+  STATUS_MOVE_DENIED,
+  STATUS_NO_EXIT,
+  chipMove,
+  reasonMoveName,
+} from "./task-status-pipeline";
 
 /**
  * Canh những QUYẾT ĐỊNH CÓ RA TỚI TRANG hay không.
@@ -296,8 +301,8 @@ function veChiTiet(
       dangGui={false}
       loiGhi={null}
       dong={() => {}}
-      doiTrangThai={() => {}}
-      xoa={() => {}}
+      doiTrangThai={NOT_SENT}
+      xoa={NOT_SENT}
       guiDeNghiLuiHan={KHONG_GOI}
       quyetDinh={KHONG_GOI}
       suaKhoiVanBan={KHONG_SUA}
@@ -516,10 +521,12 @@ describe("vòng đời — chỉ vẽ bước máy chủ liệt kê", () => {
   it("`hoan-thanh`: không nút thường nào — lối ra duy nhất là ô mở lại có lý do", () => {
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: bài này ghim `hoan-thanh` là ngõ cụt ("không có lối ra"). Máy
     // chủ nay liệt kê bước mở lại (`nhiem_vu.go:104`); nó đi qua ô lý do, không qua hàng nút.
+    // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (prototype pipeline): the reopen is the `Đang thực hiện` chip,
+    // named for the act; its reason box opens on the press (DOM case in `task-detail-dialog.test.tsx`).
     const html = veChiTiet({ status: "hoan-thanh", completed_at: "2026-06-25T02:00:00Z" });
     expect(html).not.toContain("Chuyển sang");
     expect(html).not.toContain("không liệt kê lối ra nào");
-    expect(html).toContain('id="ly-do-mo-lai"');
+    expect(html).toContain(`aria-label="${reasonMoveName("reopen", "Đang thực hiện")}"`);
   });
 
   it("bước `hoan-thanh` VẪN HIỆN dù có thể còn việc con — máy chủ mới là nơi liệt kê mã", () => {
@@ -547,8 +554,8 @@ describe("câu từ chối của máy chủ vẽ THẲNG, không nuốt thành '
         dangGui={false}
         loiGhi={cau}
         dong={() => {}}
-        doiTrangThai={() => {}}
-        xoa={() => {}}
+        doiTrangThai={NOT_SENT}
+        xoa={NOT_SENT}
         guiDeNghiLuiHan={KHONG_GOI}
         quyetDinh={KHONG_GOI}
         suaKhoiVanBan={KHONG_SUA}
@@ -579,8 +586,8 @@ describe("câu từ chối của máy chủ vẽ THẲNG, không nuốt thành '
         dangGui={false}
         loiGhi={cau}
         dong={() => {}}
-        doiTrangThai={() => {}}
-        xoa={() => {}}
+        doiTrangThai={NOT_SENT}
+        xoa={NOT_SENT}
         guiDeNghiLuiHan={KHONG_GOI}
         quyetDinh={KHONG_GOI}
         suaKhoiVanBan={KHONG_SUA}
@@ -595,12 +602,13 @@ describe("câu từ chối của máy chủ vẽ THẲNG, không nuốt thành '
     expect(html).not.toContain("Có lỗi xảy ra");
   });
 
-  it("ô lý do xoá là BẮT BUỘC — nút xoá tắt khi chưa gõ lý do", () => {
+  it("xoá: một nút ở dải bên phải mở hộp xác nhận — ô lý do chưa vẽ khi chưa bấm", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (user decision 1, prototype): no `Xoá` tab; the rail opens the
+    // existing confirm. The mandatory reason and the disabled button are pinned in a DOM case
+    // (`task-detail-dialog.test.tsx`), where the dialog can be opened.
     const html = veChiTiet();
-    expect(html).toContain('id="ly-do-xoa-nhiem-vu"');
-    expect(html).toContain("Xoá nhiệm vụ</button>");
-    // `disabled` có mặt vì ô lý do rỗng: xoá mà không ghi lý do là một hồ sơ mất vết (luật 7).
-    expect(html).toMatch(/disabled=""[^>]*>Xoá nhiệm vụ|Xoá nhiệm vụ/);
+    expect(html).toMatch(new RegExp(`<button[^>]*aria-label="${TASK_DELETE_BUTTON}"[^>]*aria-haspopup="dialog"`));
+    expect(html).not.toContain('id="ly-do-xoa-nhiem-vu"');
   });
 });
 
@@ -1413,11 +1421,13 @@ describe("§5.4 — nút `✎ Sửa`: chỉ `Theo văn bản`, và KHOÁ khi ch�
     expect(html).toMatch(/aria-label="Sửa sổ theo dõi văn bản chỉ đạo"><svg[^>]*aria-hidden="true"[^>]*>.*?<\/svg>Sửa<\/button>/);
   });
 
-  it("loại `co-ban`: KHÔNG có nút, kể cả khi đã có văn bản trong tay", () => {
+  it("loại `co-ban`: KHÔNG có nút sửa khối văn bản, kể cả khi đã có văn bản trong tay", () => {
+    // Its `✎ Sửa` is the information block's (title + deadline), never the document block's.
     const html = veChiTiet({ type: "co-ban" }, LANH_DAO, { pha: "xong", duLieu: BA_VAN_BAN });
     expect(theNutSua(html)).toBeNull();
     expect(html).not.toContain(NHAN_NUT_SUA);
     expect(html).not.toContain("aria-label=\"Sửa sổ theo dõi văn bản chỉ đạo\"");
+    expect(html).toContain(`aria-label="${TASK_INFO_EDIT_LABEL}"`);
   });
 
   it("khối ĐANG TẢI: nút KHOÁ, và lý do khoá ra tới trang", () => {
@@ -1841,16 +1851,18 @@ describe("`Trả lại để làm tiếp` — chỉ ở `cho-duyet`, chỉ với
   const Q_CAP_NHAT = quyenNhiemVu([QUYEN_CAP_NHAT_NHIEM_VU]);
   const NHAN_NUT = nhuTrongHTML(NHAN_NUT_TRA_LAI);
 
-  it("`cho-duyet` + `task.approve`: ô lý do bắt buộc, có nhãn, và nút KHOÁ khi ô còn trống", () => {
+  it("`cho-duyet` + `task.approve`: chip `Đang thực hiện` mang tên hành vi TRẢ LẠI, không phải bước thường", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (prototype pipeline): the reason field, its label, `required` and
+    // the disabled `Xác nhận` appear on the press — pinned in a DOM case (`task-detail-dialog.test.tsx`).
     const html = veChiTiet({ status: "cho-duyet" }, NGUOI_KHAC, { pha: "dangTai" }, Q_DUYET);
     expect(html).toContain(NHAN_NUT);
-    expect(html).toContain('<label for="ly-do-tra-lai">Lý do trả lại (bắt buộc)</label>');
-    expect(html).toMatch(/<textarea id="ly-do-tra-lai"[^>]*required=""/);
-    expect(html).toMatch(/<button type="submit" class="nut-phu" disabled="">Trả lại để làm tiếp<\/button>/);
+    expect(html).toContain(`aria-label="${reasonMoveName("return", "Đang thực hiện")}"`);
     // KHÔNG có nút thường `Chuyển sang Đang thực hiện` — cú bấm ấy sẽ gửi lý do rỗng, tức 400.
     expect(html).not.toContain("Chuyển sang Đang thực hiện");
-    // Câu giải thích lấy tên trạng thái đích từ bảng nhãn, không gõ cứng.
-    expect(html).toContain(nhuTrongHTML(ghiChuTraLai(BANG_NHAN_MAC_DINH)));
+    expect(chipMove(nhiemVu({ status: "cho-duyet" }), Q_DUYET, NGUOI_KHAC, "dang-thuc-hien")).toEqual({
+      target: "dang-thuc-hien",
+      kind: "return",
+    });
   });
 
   it("`cho-duyet`, THIẾU `task.approve`: không có ô trả lại — và câu nói vì sao", () => {
@@ -1880,20 +1892,28 @@ describe("`Trả lại để làm tiếp` — chỉ ở `cho-duyet`, chỉ với
     expect(html).not.toContain('id="ly-do-tra-lai"');
   });
 
-  it("thành phần `KhoiTraLai` vẽ riêng: đúng một ô, một nút khoá lúc đầu", () => {
-    const html = renderToStaticMarkup(
-      <KhoiTraLai kind="return" nhanTT={BANG_NHAN_MAC_DINH} dangGui={false} gui={() => {}} />,
-    );
-    expect(html.split('id="ly-do-tra-lai"').length - 1).toBe(1);
-    expect(html).toContain('maxLength="5000"');
-    expect(html).toContain('disabled=""');
+  it("`chipMove`: a chip opens ONLY the moves `clickableTransitions` / `reasonMove` allow", () => {
+    // The pipeline's single gate. Plain moves are exactly the Kanban's list; the reason moves are
+    // the return and the reopen; everything else — the current status, an unlisted step, a step
+    // the account may not take — is text.
+    const t = nhiemVu({ status: "dang-thuc-hien" });
+    expect(chipMove(t, Q_CAP_NHAT, NGUOI_KHAC, "cho-duyet")).toEqual({ target: "cho-duyet", kind: "plain" });
+    expect(chipMove(t, Q_CAP_NHAT, NGUOI_KHAC, "dang-thuc-hien")).toBeNull();
+    expect(chipMove(t, Q_CAP_NHAT, NGUOI_KHAC, "moi-giao")).toBeNull();
+    // `chuyen-tiep` is never a status move (`…/status` answers 400 for it).
+    expect(chipMove(t, Q_DUYET, NGUOI_KHAC, "chuyen-tiep")).toBeNull();
+    // DENIED: no `task.update` and not the assignee ⇒ no chip is a move, listed or not.
+    for (const code of ["cho-duyet", "hoan-thanh", "tam-dung"]) {
+      expect(chipMove(t, quyenNhiemVu([]), NGUOI_KHAC, code)).toBeNull();
+    }
+    // The reopen needs `task.approve` (ADR 0065 NV2).
+    const done = nhiemVu({ status: "hoan-thanh" });
+    expect(chipMove(done, Q_CAP_NHAT, NGUOI_KHAC, "dang-thuc-hien")).toBeNull();
+    expect(chipMove(done, Q_DUYET, NGUOI_KHAC, "dang-thuc-hien")).toEqual({ target: "dang-thuc-hien", kind: "reopen" });
   });
 
-  // ⚠ LẦN BẤM GỬI KHÔNG ĐƯỢC CANH Ở ĐÂY: môi trường kiểm là Node không DOM, nên `onSubmit` của
-  // `KhoiTraLai` không chạy được. Hai mắt xích hai bên nó có bài riêng — `yeuCauTraLai` (lý do → đích
-  // `dang-thuc-hien` + `note` đã cắt, `nhan-nhiem-vu.test.ts`) và thân `{status, note}` của
-  // `doiTrangThaiNhiemVu` (`lib/api/nhiem-vu.test.ts`). Dây nối giữa là một dòng
-  // `gui(yeuCau.trangThai, yeuCau.ghiChu)` không bài nào chạy qua.
+  // The press and the send (reason required, trimmed, target `dang-thuc-hien`) run in a DOM in
+  // `task-detail-dialog.test.tsx`; this file renders strings only.
 
   it("câu từ chối của máy chủ (403/400) ra NGUYÊN VĂN trong drawer", () => {
     const cau = "Trả lại để làm tiếp phải ghi lý do — người thực hiện cần biết còn thiếu gì.";
@@ -1910,8 +1930,8 @@ describe("`Trả lại để làm tiếp` — chỉ ở `cho-duyet`, chỉ với
         dangGui={false}
         loiGhi={cau}
         dong={() => {}}
-        doiTrangThai={() => {}}
-        xoa={() => {}}
+        doiTrangThai={NOT_SENT}
+        xoa={NOT_SENT}
         guiDeNghiLuiHan={KHONG_GOI}
         quyetDinh={KHONG_GOI}
         suaKhoiVanBan={KHONG_SUA}
@@ -2167,9 +2187,9 @@ describe("cổng nút theo khoá `task.*` — CA BỊ TỪ CHỐI, không chỉ 
       quyenNhiemVu([]),
     );
     expect(html).not.toContain("Chuyển sang");
-    expect(html).not.toContain(">Chuyển trạng thái</h4>");
+    expect(html).toContain(nhuTrongHTML(STATUS_MOVE_DENIED));
     expect(html).not.toContain('id="han-moi-lui-han"');
-    expect(html).not.toContain('id="ly-do-xoa-nhiem-vu"');
+    expect(html).not.toContain(`aria-label="${TASK_DELETE_BUTTON}"`);
     // ADR 0068: the button no longer shows the `✎ Sửa` glyph text, so absence is checked on the
     // button itself — a not-contains on the old text would pass whatever this page drew.
     expect(theNutSua(html)).toBeNull();
@@ -2231,9 +2251,10 @@ describe("cổng nút theo khoá `task.*` — CA BỊ TỪ CHỐI, không chỉ 
     expect(html).toContain(nhuTrongHTML(CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC));
   });
 
-  it("`task.delete` một mình: chỉ ô xoá hiện", () => {
+  it("`task.delete` một mình: chỉ nút xoá ở dải bên phải hiện", () => {
     const html = veChiTiet({}, NGUOI_KHAC, { pha: "dangTai" }, quyenNhiemVu([QUYEN_XOA_NHIEM_VU]));
-    expect(html).toContain('id="ly-do-xoa-nhiem-vu"');
+    expect(html).toContain(`aria-label="${TASK_DELETE_BUTTON}"`);
+    expect(html).not.toContain(`aria-label="${TASK_INFO_EDIT_LABEL}"`);
     expect(html).not.toContain("Chuyển sang");
     expect(html).not.toContain('id="han-moi-lui-han"');
   });
@@ -2256,7 +2277,7 @@ describe("khối Chuyển trạng thái — người thực hiện, danh sách m
 
   it("ĐƯỢC — người thực hiện, KHÔNG có `task.update`: khối hiện, đúng các bước máy chủ liệt kê", () => {
     const html = veChiTiet({ status: "dang-thuc-hien" }, NGUOI_THUC_HIEN, { pha: "dangTai" }, KHONG_KHOA);
-    expect(html).toContain(">Chuyển trạng thái</h4>");
+    expect(html).not.toContain(nhuTrongHTML(STATUS_MOVE_DENIED));
     expect(html).toContain("Chuyển sang Chờ duyệt");
     expect(html).toContain("Chuyển sang Tạm dừng");
     // ĐỔI CHIỀU CÓ CHỦ Ý 30/09/2026 (ADR 0065 NV1): người thực hiện hoàn thành thẳng, không cần
@@ -2267,7 +2288,7 @@ describe("khối Chuyển trạng thái — người thực hiện, danh sách m
 
   it("BỊ TỪ CHỐI — người thực hiện ở `cho-duyet`, thiếu `task.approve`: không tự duyệt, không trả lại", () => {
     const html = veChiTiet({ status: "cho-duyet" }, NGUOI_THUC_HIEN, { pha: "dangTai" }, KHONG_KHOA);
-    expect(html).toContain(">Chuyển trạng thái</h4>");
+    expect(html).not.toContain(nhuTrongHTML(STATUS_MOVE_DENIED));
     expect(html).not.toContain("Chuyển sang Hoàn thành");
     expect(html).not.toContain('id="ly-do-tra-lai"');
     expect(html).not.toContain("Chuyển sang Đang thực hiện");
@@ -2277,7 +2298,7 @@ describe("khối Chuyển trạng thái — người thực hiện, danh sách m
   it("BỊ TỪ CHỐI — không phải người thực hiện, không `task.update`: không khối, kể cả có `task.approve`", () => {
     for (const q of [KHONG_KHOA, CHI_DUYET]) {
       const html = veChiTiet({ status: "dang-thuc-hien" }, NGUOI_KHAC, { pha: "dangTai" }, q);
-      expect(html).not.toContain(">Chuyển trạng thái</h4>");
+      expect(html).toContain(nhuTrongHTML(STATUS_MOVE_DENIED));
       expect(html).not.toContain("Chuyển sang");
       expect(html).not.toContain(nhuTrongHTML(CAU_THIEU_QUYEN_DUYET_HOAN_THANH));
     }
@@ -2285,13 +2306,14 @@ describe("khối Chuyển trạng thái — người thực hiện, danh sách m
 
   it("BỊ TỪ CHỐI — phiên chưa đọc (mã rỗng) trên việc CHƯA phân công: không khớp, không khối", () => {
     const html = veChiTiet({ status: "dang-thuc-hien", assignee: "" }, "", { pha: "dangTai" }, KHONG_KHOA);
-    expect(html).not.toContain(">Chuyển trạng thái</h4>");
+    expect(html).toContain(nhuTrongHTML(STATUS_MOVE_DENIED));
+    expect(html).not.toContain("Chuyển sang");
   });
 
   it("chỉ vẽ bước MÁY CHỦ liệt kê: danh sách rỗng ⇒ không nút nào, và câu nói vì sao", () => {
     const html = veChiTiet({ status: "dang-thuc-hien", allowed_transitions: [] }, NGUOI_KHAC, { pha: "dangTai" }, DU_QUYEN);
     expect(html).not.toContain("Chuyển sang");
-    expect(html).toContain("Máy chủ không liệt kê lối ra nào khỏi trạng thái này.");
+    expect(html).toContain(STATUS_NO_EXIT);
   });
 
   it("`Tiếp tục` sau tạm dừng: đúng ba bước máy chủ trả, không còn `Chờ duyệt`", () => {
@@ -2304,18 +2326,17 @@ describe("khối Chuyển trạng thái — người thực hiện, danh sách m
     expect(html).not.toContain("Chuyển sang Chờ duyệt");
   });
 
-  it("`hoan-thanh` + `task.approve`: ô MỞ LẠI với lý do bắt buộc, nút khoá khi trống — không nút thường", () => {
+  it("`hoan-thanh` + `task.approve`: chip MỞ LẠI (lý do bắt buộc khi bấm) — không nút thường", () => {
     const html = veChiTiet(
       { status: "hoan-thanh", completed_at: "2026-06-25T02:00:00Z" },
       NGUOI_KHAC,
       { pha: "dangTai" },
       DU_QUYEN,
     );
-    expect(html).toContain(`<h4>${REOPEN_BUTTON}</h4>`);
-    expect(html).toContain(`<label for="ly-do-mo-lai">${REOPEN_REASON_LABEL}</label>`);
-    expect(html).toMatch(/<textarea id="ly-do-mo-lai"[^>]*required=""/);
-    expect(html).toMatch(new RegExp(`<button type="submit" class="nut-phu" disabled="">${REOPEN_BUTTON}</button>`));
-    expect(html).toContain(nhuTrongHTML(reopenNote(BANG_NHAN_MAC_DINH)));
+    // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (prototype pipeline): the reason box opens on the press — its
+    // label, `required`, the disabled `Xác nhận` and `reopenNote` are pinned in a DOM case
+    // (`task-detail-dialog.test.tsx`).
+    expect(html).toContain(`aria-label="${reasonMoveName("reopen", "Đang thực hiện")}"`);
     // Không phải bước trả lại, và không phải một nút `Chuyển sang …` gửi lý do rỗng.
     expect(html).not.toContain('id="ly-do-tra-lai"');
     expect(html).not.toContain("Chuyển sang Đang thực hiện");
@@ -2330,7 +2351,7 @@ describe("khối Chuyển trạng thái — người thực hiện, danh sách m
 
   it("người thực hiện cầm `task.approve` (không `task.update`): mở lại được việc của mình", () => {
     const html = veChiTiet({ status: "hoan-thanh" }, NGUOI_THUC_HIEN, { pha: "dangTai" }, CHI_DUYET);
-    expect(html).toContain('id="ly-do-mo-lai"');
+    expect(html).toContain(`aria-label="${reasonMoveName("reopen", "Đang thực hiện")}"`);
   });
 });
 
@@ -2455,7 +2476,7 @@ describe("the filter row — ONE row in the prototype's order, no `Bộ lọc` p
   });
 });
 
-describe("the detail's `Xem chi tiết` — the prototype's order", () => {
+describe("the detail — one view, the prototype's order", () => {
   it("status block → fact row (Hạn xử lý · Cơ quan thực hiện · Người thực hiện · Mức ưu tiên) → left column → Nhật ký", () => {
     const html = veChiTiet({ description: "Mô tả giả" });
     const at = (s: string) => html.indexOf(s);
@@ -2479,35 +2500,54 @@ describe("the detail's `Xem chi tiết` — the prototype's order", () => {
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
 describe("NV-04 — hạn xử lý sửa/đặt được ở MỌI loại, sau cùng khoá `task.update`", () => {
+  // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (user decision 1, prototype): the separate `Sửa hạn xử lý` /
+  // `Đặt hạn xử lý` button is gone. The deadline is edited in the information block's inline
+  // `✎ Sửa` — with the title for a basic task, inside the document form for `Theo văn bản`.
   const ONLY_UPDATE = quyenNhiemVu([QUYEN_CAP_NHAT_NHIEM_VU]);
   const READ_ONLY = quyenNhiemVu(["task.read"]);
 
-  it("loại `co-ban`, cầm `task.update`: có nút `Sửa hạn xử lý`", () => {
+  it("loại `co-ban`, cầm `task.update`: khối `Thông tin nhiệm vụ` có `✎ Sửa`", () => {
     const html = veChiTiet({ type: "co-ban" }, LANH_DAO, { pha: "dangTai" }, ONLY_UPDATE);
-    expect(html).toContain(`</svg>${DUE_EDIT_BUTTON}</button>`);
+    expect(html).toMatch(new RegExp(`aria-label="${TASK_INFO_EDIT_LABEL}"><svg[^>]*>.*?</svg>Sửa</button>`));
   });
 
-  it("việc tạo ra KHÔNG có hạn: nút là `Đặt hạn xử lý`, và khối lùi hạn chỉ tới đó", () => {
+  it("việc tạo ra KHÔNG có hạn: vẫn sửa được (đặt hạn trong `✎ Sửa`), và khối lùi hạn chỉ tới đó", () => {
     const html = veChiTiet(
       { type: "co-ban", due_at: null, original_due_at: null },
       LANH_DAO,
       { pha: "dangTai" },
       ONLY_UPDATE,
     );
-    expect(html).toContain(`</svg>${DUE_SET_BUTTON}</button>`);
+    expect(html).toContain(`aria-label="${TASK_INFO_EDIT_LABEL}"`);
     expect(html).toContain(nhuTrongHTML(EXTENSION_NO_DUE));
     expect(html).not.toContain("Hạn chỉ đặt được một lần");
   });
 
-  it("CA BỊ TỪ CHỐI — thiếu `task.update`: không có nút sửa/đặt hạn", () => {
+  it("CA BỊ TỪ CHỐI — thiếu `task.update`: không có `✎ Sửa` nào", () => {
     const html = veChiTiet({ type: "co-ban", due_at: null }, LANH_DAO, { pha: "dangTai" }, READ_ONLY);
-    expect(html).not.toContain(DUE_EDIT_BUTTON);
-    expect(html).not.toContain(DUE_SET_BUTTON);
+    expect(html).not.toContain(`aria-label="${TASK_INFO_EDIT_LABEL}"`);
+    expect(theNutSua(html)).toBeNull();
   });
 
-  it("loại `theo-van-ban`: KHÔNG có nút riêng — hạn sửa trong `✎ Sửa` của khối văn bản", () => {
+  it("loại `theo-van-ban`: một `✎ Sửa` — của khối văn bản, không có nút thứ hai", () => {
     const html = veChiTiet({}, LANH_DAO, { pha: "xong", duLieu: BA_VAN_BAN }, ONLY_UPDATE);
-    expect(html).not.toContain(DUE_EDIT_BUTTON);
+    expect(theNutSua(html)).not.toBeNull();
+    expect(html).not.toContain(`aria-label="${TASK_INFO_EDIT_LABEL}"`);
+  });
+
+  it("`basicTaskEditBody`: chỉ tiêu đề và hạn đã đổi, kèm khoá lạc quan — KHÔNG BAO GIỜ `code`", () => {
+    const opened = nhiemVu({ type: "co-ban", title: "Rà soát hộ nghèo", note: "ghi chú có dấu cách cuối " });
+    const unchanged = formSuaTuChiTiet(opened, []);
+    expect(basicTaskEditBody(unchanged, opened)).toBeNull();
+
+    const body = basicTaskEditBody({ ...unchanged, tieuDe: "  Rà soát hộ nghèo quý IV  " }, opened);
+    expect(body).toEqual({ title: "Rà soát hộ nghèo quý IV", expected_updated_at: opened.updated_at });
+    // The note the form never showed is NOT re-sent, even though trimming it would differ.
+    expect(body).not.toHaveProperty("note");
+    expect(body).not.toHaveProperty("code");
+
+    const due = basicTaskEditBody({ ...unchanged, dueDate: "2026-07-01", dueTime: "17:00" }, opened);
+    expect(due).toEqual({ due_at: "2026-07-01T17:00:00+07:00", expected_updated_at: opened.updated_at });
   });
 });
 
@@ -2518,6 +2558,14 @@ describe("NV-08 — tiến độ: ô vô hiệu kèm dấu \"?\", không còn `0
     expect(html).toMatch(/<input id="chi-tiet-tien-do"[^>]*disabled=""[^>]*value="40%"/);
     expect(html).toContain(nhuTrongHTML(TASK_PROGRESS_PENDING.ten));
     expect(html).toContain("data-pending-marker");
+  });
+
+  it("ô `Mức ưu tiên` (§5.3) mang dòng phụ `N% tiến độ` — con số ĐANG LƯU, không thay mức ưu tiên", () => {
+    const html = veChiTiet({ progress: 40 });
+    const at = html.indexOf('aria-label="Tóm tắt nhiệm vụ"');
+    const facts = html.slice(at, html.indexOf("</dl>", at));
+    expect(facts).toContain(`>${progressFactText(40)}</dd>`);
+    expect(progressFactText(0)).toBe("0% tiến độ");
   });
 });
 

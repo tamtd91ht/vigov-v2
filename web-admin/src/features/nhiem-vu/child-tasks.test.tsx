@@ -16,10 +16,12 @@ import {
   QUYEN_TAO_NHIEM_VU,
 } from "@/lib/quyen";
 
-import { ChildTaskList, ParentTaskField, childTasksQuery } from "./child-tasks";
+import { ChildTaskList, ParentTaskField, childTasksQuery, childTickLabel } from "./child-tasks";
 import {
   ADD_CHILD_BUTTON,
   BANG_NHAN_MAC_DINH,
+  CHILD_TASK_WEIGHT_NONE,
+  childTasksHeading,
   CHILD_TASKS_EMPTY,
   CHILD_TASKS_LOADING,
   CHILD_TASKS_TITLE,
@@ -38,6 +40,7 @@ import {
 } from "./nhan-nhiem-vu";
 import { BangNhiemVu, ChiTietNhiemVu, FormGiaoViec, SoNhiemVu } from "./so-nhiem-vu";
 import type { DanhMucNhiemVu } from "./so-nhiem-vu"; // vi-name-ok: existing type, imported not declared (rule 12 inv 3)
+import { NOT_SENT } from "./task-transitions.fixture";
 
 /**
  * TASK-03 web pass 2 (28/09/2026): #6 children, #10 add child / move parent, #13 due-date sort,
@@ -162,6 +165,27 @@ describe("(#6) the drawer's `Nhiệm vụ con` block", () => {
     expect(out).toContain("Hạn 20/6/2026");
     expect(out).toContain("(trễ 86 ngày)");
     expect(out).not.toContain("Xem thêm");
+  });
+
+  it("prototype tick + weight per child: DISABLED, one `?` marker, the count only when every page is in", () => {
+    // User decision 07/10/2026: drawn at the prototype's place, never working — the server stores no
+    // weight, and completing a child is that child's own status move (ADR 0068 §14).
+    const rows = [
+      task({ code: "NV25", status: "hoan-thanh" }),
+      task({ code: "NV26", status: "dang-thuc-hien" }),
+    ];
+    const out = block({ phase: "done", rows, more: false });
+    const ticks = out.match(/<input[^>]*type="checkbox"[^>]*>/g) ?? [];
+    expect(ticks).toHaveLength(2);
+    expect(ticks.every((t) => t.includes('disabled=""'))).toBe(true);
+    expect(ticks[0]).toContain('checked=""');
+    expect(ticks[1]).not.toContain('checked=""');
+    expect(out).toContain(`aria-label="${childTickLabel("NV25")}"`);
+    expect(out.split("data-pending-marker").length - 1).toBe(1);
+    expect(out).toContain(`(${CHILD_TASK_WEIGHT_NONE})`);
+    expect(out).toContain(asHtml(childTasksHeading(1, 2)));
+    // A partial list carries no count — a figure over the first page nobody can check.
+    expect(block({ phase: "done", rows, more: true })).not.toContain("hoàn thành)");
   });
 
   it("`has_more` gives `Xem thêm`; pages merge by code without duplicates", () => {
@@ -298,8 +322,8 @@ describe("(#10) `+ Thêm việc con` — the create form, prefilled with the par
         dangGui={false}
         loiGhi={null}
         dong={() => {}}
-        doiTrangThai={() => {}}
-        xoa={() => {}}
+        doiTrangThai={NOT_SENT}
+        xoa={NOT_SENT}
         guiDeNghiLuiHan={() => Promise.resolve({ ok: false, thongBao: "" })}
         quyetDinh={() => Promise.resolve({ ok: false, thongBao: "" })}
         suaKhoiVanBan={NOT_CALLED}

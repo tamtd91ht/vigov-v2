@@ -31,7 +31,7 @@ import {
   quyenNhiemVu,
   type BangNhanTrangThai,
 } from "./nhan-nhiem-vu";
-import { serverTransitions } from "./task-transitions.fixture";
+import { NOT_SENT, serverTransitions } from "./task-transitions.fixture";
 import {
   BangKanban,
   BangNhiemVu,
@@ -180,8 +180,8 @@ function veChiTiet(nhanTT: BangNhanTrangThai, status: string): string {
       dangGui={false}
       loiGhi={null}
       dong={() => {}}
-      doiTrangThai={() => {}}
-      xoa={() => {}}
+      doiTrangThai={NOT_SENT}
+      xoa={NOT_SENT}
       guiDeNghiLuiHan={KHONG_GOI}
       quyetDinh={KHONG_GOI}
       suaKhoiVanBan={KHONG_SUA}
@@ -313,8 +313,10 @@ describe("màn Nhiệm vụ dùng NHÃN CỦA XÃ ở mọi chỗ hiện trạng
     expect(html).toContain(">Việc mới về xã</span>");
     expect(html).toContain("Chuyển sang Tạm hoãn");
     // DẢI BƯỚC GIỮ THỨ TỰ VÒNG ĐỜI §6, không theo `order`: `dang-thuc-hien` vẫn đứng trước
-    // `cho-duyet` dù xã đã đưa `cho-duyet` lên trước ở Kanban.
-    const buoc = html.slice(html.indexOf("<ol"), html.indexOf("</ol>"));
+    // `cho-duyet` dù xã đã đưa `cho-duyet` lên trước ở Kanban. Read from `dang-thuc-hien`: since
+    // 07/10/2026 (prototype) `Chờ duyệt` sits on the strip only when current or a move.
+    const fromWork = veChiTiet(bangXa(), "dang-thuc-hien");
+    const buoc = fromWork.slice(fromWork.indexOf("<ol"), fromWork.indexOf("</ol>"));
     expect(buoc.indexOf("Đang thực hiện")).toBeLessThan(buoc.indexOf("Chờ duyệt"));
   });
 });

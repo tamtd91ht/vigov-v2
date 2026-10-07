@@ -868,7 +868,7 @@ export function mayTakeTransition(
 
 /**
  * The plain `Chuyển sang …` steps this account may take on this task — the server's list, minus the
- * steps needing a reason (their own form, `KhoiTraLai`), minus what `mayTakeTransition` refuses.
+ * steps needing a reason (their own chip, `reasonMove`), minus what `mayTakeTransition` refuses.
  *
  * ONE LIST FOR THE DRAWER AND THE KANBAN. Two filters would drift, and the drifted one would offer a
  * Kanban move the drawer hides — or hide one the drawer offers. Order is `MOI_TRANG_THAI`; a code the
@@ -974,7 +974,7 @@ export function laBuocTraLai(tu: string, sang: string): boolean {
   return tu === "cho-duyet" && sang === "dang-thuc-hien";
 }
 
-/** Reopen form texts (`KhoiTraLai kind="reopen"`). */
+/** Reopen texts — the chip's accessible name and its reason box (`task-status-pipeline.tsx`). */
 export const REOPEN_BUTTON = "Mở lại để làm tiếp";
 export const REOPEN_REASON_LABEL = "Lý do mở lại (bắt buộc)";
 
@@ -1646,11 +1646,6 @@ export const NEW_TASK_DUE_LATER_NOTE =
   "Bỏ trống thì nhiệm vụ chưa có hạn. Người có quyền cập nhật nhiệm vụ đặt hoặc sửa hạn về sau " +
   "trong phần chi tiết nhiệm vụ.";
 
-/** Drawer button that opens the deadline editor of a task whose type has no document block. */
-export const DUE_EDIT_BUTTON = "Sửa hạn xử lý";
-/** Same button on a task created without a deadline. */
-export const DUE_SET_BUTTON = "Đặt hạn xử lý";
-
 /** The extension block of a task without a deadline: nothing to extend, and where to set one. */
 export const EXTENSION_NO_DUE =
   "Nhiệm vụ này chưa có hạn, nên chưa có gì để lùi. Người có quyền cập nhật nhiệm vụ đặt hạn ngay " +
@@ -1674,6 +1669,26 @@ export const TASK_PROGRESS_PENDING = {
     "Chưa có ô nhập phần trăm tiến độ trên màn hình này. Con số đang hiện là giá trị đang lưu của " +
     "nhiệm vụ; muốn theo dõi tiến độ, ghi vào nhật ký nhiệm vụ.",
 } as const;
+
+/**
+ * The prototype's per-child completion tick and weight (`TaskDetailDrawer.tsx:465-496`), drawn
+ * DISABLED with a "?" (ADR 0068 §14, lần 5 #5; user decision 07/10/2026): the server stores no weight
+ * and the parent's progress is not computed from its children, so a working tick would be a fake.
+ */
+export const CHILD_TASK_WEIGHT_PENDING = {
+  ten: "Đánh dấu việc con và trọng số",
+  viSao:
+    "Chưa đánh dấu hoàn thành việc con ngay tại đây, và chưa có trọng số cho từng việc con để tính " +
+    "tiến độ của việc cha. Mở việc con để đổi trạng thái của nó.",
+} as const;
+
+/** Under a child's title where the prototype shows its weight; no weight is stored yet. */
+export const CHILD_TASK_WEIGHT_NONE = "trọng số —";
+
+/** The title of the children block, with the count of finished ones once every page is loaded. */
+export function childTasksHeading(done: number, total: number): string {
+  return `${CHILD_TASKS_TITLE} (${done}/${total} hoàn thành)`;
+}
 
 /** §5.10 — việc con có hạn RIÊNG (ADR 0037 quyết định 2), không thừa kế hạn cha. */
 export const GHI_CHU_HAN_VIEC_CON =
@@ -2387,10 +2402,39 @@ export function thanSuaNhiemVu(
 }
 
 /**
+ * PATCH body of the inline `✎ Sửa` of a task WITHOUT the document block: the title and the deadline
+ * only — or `null` when neither changed (`Lưu` disabled).
+ *
+ * BUILT FROM `thanSuaNhiemVu`, THEN NARROWED TO THE TWO FIELDS THE FORM SHOWS. Anything else the
+ * full builder might pick up (a stored note with trailing spaces re-trimmed, say) is a field the
+ * clerk never saw on this form — sending it would be a silent edit. Never `code` (ADR 0065 NV3: an
+ * issued code is immutable, the server answers 400). Carries the optimistic-lock token of the task
+ * as the form opened it, so a concurrent write is a 409 instead of an overwrite.
+ */
+export function basicTaskEditBody(
+  f: FormSuaNhiemVu,
+  goc: petitions_nhiemVuRa,
+): petitions_suaNhiemVuVao | null {
+  const full = thanSuaNhiemVu(f, goc, []);
+  if (full === null) return null;
+  const body: petitions_suaNhiemVuVao = {};
+  if (full.title !== undefined) body.title = full.title;
+  if (full.due_at !== undefined) body.due_at = full.due_at;
+  if (Object.keys(body).length === 0) return null;
+  if (goc.updated_at !== "") body.expected_updated_at = goc.updated_at;
+  return body;
+}
+
+/**
  * Câu chặn nút `Lưu`, hoặc `null`. Cùng phép kiểm dòng văn bản với form tạo (`canhBaoVanBan`),
  * cộng hai điều chỉ form sửa gặp: tiêu đề bị xoá trắng, và một ngày văn bản sai khuôn đọc từ máy chủ.
  */
-export function canhBaoSua(f: FormSuaNhiemVu, goc?: Pick<petitions_nhiemVuRa, "due_at">): string | null {
+export function canhBaoSua(
+  f: FormSuaNhiemVu,
+  goc?: Pick<petitions_nhiemVuRa, "due_at">,
+  /** The title field's label as the form shows it (`nhanOTieuDe`), so the sentence names that field. */
+  titleLabel: string = NHAN_TIEU_DE_THEO_VAN_BAN,
+): string | null {
   if (f.dueDate === "" && f.dueTime === "") {
     // A deadline cannot be cleared (`due_at` null = "leave it"), so emptying both fields would look
     // saved while nothing changed. Refuse and say so.
@@ -2403,7 +2447,7 @@ export function canhBaoSua(f: FormSuaNhiemVu, goc?: Pick<petitions_nhiemVuRa, "d
     return "Nhập giờ của hạn xử lý.";
   }
   if (f.tieuDe.trim() === "") {
-    return `Ô ${NHAN_TIEU_DE_THEO_VAN_BAN} không được để trống.`;
+    return `Ô ${titleLabel} không được để trống.`;
   }
   const i = f.vanBan.findIndex((d) => d.ngay !== "" && !KHUON_NGAY.test(d.ngay));
   if (i >= 0) {

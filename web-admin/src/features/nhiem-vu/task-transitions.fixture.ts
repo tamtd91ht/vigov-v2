@@ -1,3 +1,5 @@
+import type { KetQua } from "@/lib/api/goi";
+
 /**
  * TEST DATA ONLY — imported by `*.test.ts(x)` files, never by the screen.
  *
@@ -18,6 +20,13 @@ export const SERVER_TRANSITIONS: Readonly<Record<string, readonly string[]>> = {
   "chuyen-tiep": ["da-tiep-nhan", "dang-thuc-hien"],
   "hoan-thanh": ["dang-thuc-hien"],
 };
+
+/**
+ * A write callback a static render never reaches (status move, soft delete): the drawer's props
+ * return the server's answer, so a stub must too. A refusal, never a fake success.
+ */
+export const NOT_SENT = (): Promise<KetQua<never>> =>
+  Promise.resolve({ ok: false, thongBao: "không gửi trong bài kiểm" });
 
 /** The server's list for `status` — a fresh array; `[]` for a code the server does not know. */
 export function serverTransitions(status: string): string[] {

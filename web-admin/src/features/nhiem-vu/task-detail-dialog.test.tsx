@@ -11,7 +11,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 
 import { LargeDialog } from "@/components/ui/large-dialog";
 import type { KetQua } from "@/lib/api/goi";
-import type { petitions_nhiemVuRa } from "@/lib/api/schema.gen";
+import type { petitions_nhiemVuRa, petitions_suaNhiemVuVao } from "@/lib/api/schema.gen";
 import {
   QUYEN_CAP_NHAT_NHIEM_VU,
   QUYEN_DUYET_GIA_HAN,
@@ -20,10 +20,27 @@ import {
   QUYEN_XOA_NHIEM_VU,
 } from "@/lib/quyen";
 
-import { BANG_NHAN_MAC_DINH, quyenNhiemVu } from "./nhan-nhiem-vu";
-import { ChiTietNhiemVu, SoNhiemVu, type TaskDetailTab } from "./so-nhiem-vu";
+import {
+  BANG_NHAN_MAC_DINH,
+  CHUA_PHAN_CONG,
+  NHAN_LY_DO_TRA_LAI,
+  O_TRONG,
+  REOPEN_REASON_LABEL,
+  quyenNhiemVu,
+  reopenNote,
+} from "./nhan-nhiem-vu";
+import { ChiTietNhiemVu, SoNhiemVu, TASK_DELETE_BUTTON, TASK_INFO_EDIT_LABEL } from "./so-nhiem-vu";
 import { readTaskParam, searchWithTask, useTaskDialogUrl } from "./task-dialog-url";
-import { serverTransitions } from "./task-transitions.fixture";
+import {
+  STATUS_COMPOSE_ID,
+  STATUS_CONFIRM_BUTTON,
+  STATUS_MOVE_DENIED,
+  STATUS_NOTE_LABEL,
+  reasonMoveName,
+  statusMoveDoneText,
+  statusMoveName,
+} from "./task-status-pipeline";
+import { NOT_SENT, serverTransitions } from "./task-transitions.fixture";
 
 type Permissions = ReturnType<typeof quyenNhiemVu>;
 
@@ -79,8 +96,14 @@ function task(patch: Partial<petitions_nhiemVuRa> = {}): petitions_nhiemVuRa {
 
 const NOT_CALLED = (): Promise<KetQua<never>> => Promise.resolve({ ok: false, thongBao: "không gọi" });
 
-function detailHtml(permissions: Permissions, patch: Partial<petitions_nhiemVuRa> = {}, tab?: TaskDetailTab) {
-  return renderToStaticMarkup(
+type Writes = {
+  move?: (target: string, note?: string) => Promise<KetQua<petitions_nhiemVuRa>>;
+  remove?: (reason: string) => Promise<KetQua<unknown>>;
+  save?: (body: petitions_suaNhiemVuVao) => Promise<KetQua<petitions_nhiemVuRa>>;
+};
+
+function detail(permissions: Permissions, patch: Partial<petitions_nhiemVuRa> = {}, writes: Writes = {}) {
+  return (
     <ChiTietNhiemVu
       nhiemVu={task(patch)}
       vanBan={{ pha: "dangTai" }}
@@ -93,11 +116,11 @@ function detailHtml(permissions: Permissions, patch: Partial<petitions_nhiemVuRa
       dangGui={false}
       loiGhi={null}
       dong={() => {}}
-      doiTrangThai={() => {}}
-      xoa={() => {}}
+      doiTrangThai={writes.move ?? NOT_SENT}
+      xoa={writes.remove ?? NOT_SENT}
       guiDeNghiLuiHan={NOT_CALLED}
       quyetDinh={NOT_CALLED}
-      suaKhoiVanBan={NOT_CALLED}
+      suaKhoiVanBan={writes.save ?? NOT_CALLED}
       docLaiChiTiet={NOT_CALLED}
       extensionRefreshKey="0"
       onExtensionDecided={() => {}}
@@ -106,9 +129,12 @@ function detailHtml(permissions: Permissions, patch: Partial<petitions_nhiemVuRa
       saveParent={NOT_CALLED}
       addChild={null}
       reassign={NOT_CALLED}
-      initialTab={tab}
-    />,
+    />
   );
+}
+
+function detailHtml(permissions: Permissions, patch: Partial<petitions_nhiemVuRa> = {}) {
+  return renderToStaticMarkup(detail(permissions, patch));
 }
 
 let root: Root | null = null;
@@ -355,46 +381,23 @@ describe("the register opens the detail as a dialog", () => {
   });
 });
 
-describe("the dialog's tabs, chips and rail", () => {
+describe("the detail — one view (user decision 07/10/2026): no action tabs", () => {
   const ALL = quyenNhiemVu(ALL_KEYS);
-  const READ_ONLY = quyenNhiemVu(["task.read"]);
 
-  it("ALLOWED: `task.delete` ⇒ a `Xoá` tab and the soft-delete form with its mandatory reason", () => {
-    const html = detailHtml(ALL, {}, "delete");
-    expect(html).toContain('id="task-detail-tab-delete"');
-    expect(html).toContain('id="ly-do-xoa-nhiem-vu"');
-    expect(html).toMatch(/id="task-detail-panel-delete" role="tabpanel" aria-labelledby="task-detail-tab-delete">/);
-  });
-
-  it("DENIED: without `task.delete` there is no `Xoá` tab and no delete form", () => {
-    const html = detailHtml(quyenNhiemVu(ALL_KEYS.filter((k) => k !== QUYEN_XOA_NHIEM_VU)));
-    expect(html).not.toContain('id="task-detail-tab-delete"');
-    expect(html).not.toContain('id="ly-do-xoa-nhiem-vu"');
-  });
-
-  it("DENIED: without `task.update` there is no `Chỉnh sửa` tab and no edit block", () => {
-    const html = detailHtml(READ_ONLY);
-    expect(html).not.toContain('id="task-detail-tab-edit"');
-    expect(html).not.toContain('id="task-detail-panel-edit"');
-    // `Xem chi tiết` is always there, and selected.
-    const viewTab = html.match(/<button[^>]*id="task-detail-tab-view"[^>]*>/)?.[0] ?? "";
-    expect(viewTab).toContain('aria-selected="true"');
-  });
-
-  it("only the selected panel is shown; the others are mounted but `hidden`", () => {
+  it("no `Xem chi tiết` / `Chỉnh sửa` / `Xoá` tabs, no panels — every block drawn once", () => {
     const html = detailHtml(ALL);
-    expect(html).toMatch(/id="task-detail-panel-view" role="tabpanel" aria-labelledby="task-detail-tab-view" class=/);
-    expect(html).toMatch(/id="task-detail-panel-edit"[^>]*hidden=""/);
-    expect(html).toMatch(/id="task-detail-panel-delete"[^>]*hidden=""/);
+    expect(html).not.toContain('role="tablist"');
+    expect(html).not.toContain('role="tabpanel"');
+    expect(html).not.toContain("task-detail-tab-");
+    // One title field id at most — the inline form is closed, so none.
+    expect(html).not.toContain('id="sua-tieu-de"');
   });
 
-  it("step chips are text, never buttons — no move outside `allowed_transitions`", () => {
-    const html = detailHtml(ALL, { status: "dang-thuc-hien" });
-    const steps = html.slice(html.indexOf('<ol aria-label="Các bước'), html.indexOf("</ol>"));
-    expect(steps).toContain('aria-current="step" data-step="current">Đang thực hiện</span>');
-    expect(steps).not.toContain("<button");
-    // The moves stay the server's list, as buttons with words.
-    expect(html).toContain("Chuyển sang Chờ duyệt");
+  it("header (spec §5.1): `[mã] tiêu đề`, then `bộ phận · người thực hiện`; creator kept in the status card", () => {
+    const html = detailHtml(ALL);
+    expect(html).toMatch(/<h2 id="tieu-de-chi-tiet-nhiem-vu"[^>]*><span[^>]*>\[NV19\]<\/span>Rà soát danh sách hộ nghèo quý III<\/h2>/);
+    expect(html).toContain(`${O_TRONG} · ${CHUA_PHAN_CONG}</p>`);
+    expect(html).toContain("Tạo bởi CB-2026-VANTHU");
   });
 
   it("every rail button has an accessible name; the link and attach buttons follow the task", () => {
@@ -410,9 +413,235 @@ describe("the dialog's tabs, chips and rail", () => {
     const withDocs = detailHtml(ALL, { type: "theo-van-ban" });
     expect(withDocs).toContain('aria-label="Xem văn bản chỉ đạo"');
   });
+});
 
-  it("the header names who created the task and when", () => {
-    const html = detailHtml(ALL);
-    expect(html).toContain("Tạo bởi CB-2026-VANTHU");
+describe("status pipeline — a chip is a button ONLY for a move this account may take", () => {
+  const ALL = quyenNhiemVu(ALL_KEYS);
+  const READ_ONLY = quyenNhiemVu(["task.read"]);
+
+  function stepButtons(html: string): string[] {
+    const steps = html.slice(html.indexOf('<ol tabindex="-1" aria-label="Các bước'), html.indexOf("</ol>"));
+    return [...steps.matchAll(/<button[^>]*aria-label="([^"]+)"/g)].map((m) => m[1]!);
+  }
+
+  it("ALLOWED: `dang-thuc-hien` — exactly the server's plain moves are buttons; the current step is text", () => {
+    const html = detailHtml(ALL, { status: "dang-thuc-hien" });
+    expect(stepButtons(html)).toEqual([statusMoveName("Chờ duyệt"), statusMoveName("Hoàn thành")]);
+    expect(html).toContain('aria-current="step" data-step="current">Đang thực hiện</span>');
+    // Not listed by the server from here ⇒ text, never a button.
+    expect(stepButtons(html).join(" ")).not.toContain("Mới giao");
+    // The branch is offered only because it is a move (prototype: branch chips only when clickable).
+    expect(html).toContain(`aria-label="${statusMoveName("Tạm dừng")}"`);
+    // The old row of `Chuyển sang …` buttons is gone.
+    expect(html).not.toContain(">Chuyển trạng thái</h4>");
+  });
+
+  it("`Chờ duyệt` sits on the flow only when current or a move; `Tạm dừng` only when current or a move", () => {
+    const fresh = detailHtml(ALL, { status: "moi-giao" });
+    const steps = fresh.slice(fresh.indexOf("<ol"), fresh.indexOf("</ol>"));
+    expect(steps).not.toContain("Chờ duyệt");
+    const done = detailHtml(ALL, { status: "hoan-thanh" });
+    expect(done).not.toContain(">Tạm dừng</span>");
+  });
+
+  it("DENIED: without `task.update` and not the assignee — no chip is a button, and the sentence says why", () => {
+    const html = detailHtml(READ_ONLY, { status: "dang-thuc-hien" });
+    expect(stepButtons(html)).toEqual([]);
+    expect(html).not.toContain("Chuyển sang");
+    expect(html).toContain(STATUS_MOVE_DENIED);
+  });
+
+  it("a plain move: the press opens the compose box; a refusal stays IN the box with the note kept; success clears it", async () => {
+    stubQuietServer();
+    const move = vi
+      .fn<(target: string, note?: string) => Promise<KetQua<petitions_nhiemVuRa>>>()
+      .mockResolvedValueOnce({ ok: false, thongBao: "Máy chủ từ chối bước này." })
+      .mockResolvedValueOnce({ ok: true, duLieu: task({ status: "cho-duyet" }) });
+    mount(detail(ALL, { status: "dang-thuc-hien" }, { move }));
+    await settle();
+
+    await act(async () => byLabel(statusMoveName("Chờ duyệt")).click());
+    const box = document.getElementById(STATUS_COMPOSE_ID)!;
+    expect(box).not.toBeNull();
+    const note = box.querySelector<HTMLTextAreaElement>("textarea")!;
+    expect(box.querySelector(`label[for="${note.id}"]`)?.textContent).toBe(STATUS_NOTE_LABEL);
+    expect(note.required).toBe(false);
+    expect(document.activeElement).toBe(note);
+
+    typeInto(note, "  Đã gửi bản dự thảo  ");
+    await act(async () => (box as HTMLFormElement).requestSubmit());
+    await settle();
+    expect(move).toHaveBeenLastCalledWith("cho-duyet", "Đã gửi bản dự thảo");
+    expect(document.getElementById(STATUS_COMPOSE_ID)?.querySelector('[role="alert"]')?.textContent).toBe(
+      "Máy chủ từ chối bước này.",
+    );
+    expect(document.getElementById(STATUS_COMPOSE_ID)?.querySelector("textarea")?.value).toBe("  Đã gửi bản dự thảo  ");
+
+    await act(async () => (document.getElementById(STATUS_COMPOSE_ID) as HTMLFormElement).requestSubmit());
+    await settle();
+    expect(move).toHaveBeenCalledTimes(2);
+    expect(document.getElementById(STATUS_COMPOSE_ID)).toBeNull();
+    const status = Array.from(host!.querySelectorAll('[role="status"]')).map((n) => n.textContent);
+    expect(status).toContain(statusMoveDoneText("Chờ duyệt"));
+  });
+
+  it("return for rework: the reason is MANDATORY — `Xác nhận` stays disabled on blank, the note is trimmed", async () => {
+    stubQuietServer();
+    const move = vi.fn<(target: string, note?: string) => Promise<KetQua<petitions_nhiemVuRa>>>(NOT_SENT);
+    mount(detail(ALL, { status: "cho-duyet" }, { move }));
+    await settle();
+
+    await act(async () => byLabel(reasonMoveName("return", "Đang thực hiện")).click());
+    const reason = document.querySelector<HTMLTextAreaElement>("#ly-do-tra-lai")!;
+    expect(document.querySelector('label[for="ly-do-tra-lai"]')?.textContent).toBe(NHAN_LY_DO_TRA_LAI);
+    expect(reason.required).toBe(true);
+    const confirm = buttonByText(STATUS_CONFIRM_BUTTON);
+    expect(confirm.disabled).toBe(true);
+    typeInto(reason, "    ");
+    expect(confirm.disabled).toBe(true);
+    // A submit forced on a blank reason sends nothing.
+    await act(async () => (document.getElementById(STATUS_COMPOSE_ID) as HTMLFormElement).requestSubmit());
+    expect(move).not.toHaveBeenCalled();
+
+    typeInto(reason, "  Thiếu số liệu thôn 3  ");
+    expect(confirm.disabled).toBe(false);
+    await act(async () => confirm.click());
+    await settle();
+    expect(move).toHaveBeenCalledWith("dang-thuc-hien", "Thiếu số liệu thôn 3");
+  });
+
+  it("reopen: same mandatory reason, its own label and note", async () => {
+    stubQuietServer();
+    mount(detail(ALL, { status: "hoan-thanh", completed_at: "2026-06-25T02:00:00Z" }));
+    await settle();
+    await act(async () => byLabel(reasonMoveName("reopen", "Đang thực hiện")).click());
+    expect(document.querySelector('label[for="ly-do-mo-lai"]')?.textContent).toBe(REOPEN_REASON_LABEL);
+    expect(document.querySelector<HTMLTextAreaElement>("#ly-do-mo-lai")!.required).toBe(true);
+    expect(document.getElementById(STATUS_COMPOSE_ID)?.textContent).toContain(reopenNote(BANG_NHAN_MAC_DINH));
+    expect(buttonByText(STATUS_CONFIRM_BUTTON).disabled).toBe(true);
   });
 });
+
+describe("information block — inline `✎ Sửa` (task.update)", () => {
+  const ALL = quyenNhiemVu(ALL_KEYS);
+  const READ_ONLY = quyenNhiemVu(["task.read"]);
+
+  it("DENIED: without `task.update` there is no `✎ Sửa`", () => {
+    expect(detailHtml(READ_ONLY)).not.toContain(`aria-label="${TASK_INFO_EDIT_LABEL}"`);
+    expect(detailHtml(ALL)).toContain(`aria-label="${TASK_INFO_EDIT_LABEL}"`);
+  });
+
+  it("co-ban: the form edits the title (and deadline); PATCH carries the title and the lock, NEVER `code`", async () => {
+    stubQuietServer();
+    const save = vi
+      .fn<(body: petitions_suaNhiemVuVao) => Promise<KetQua<petitions_nhiemVuRa>>>()
+      .mockResolvedValue({ ok: true, duLieu: task({ title: "Rà soát hộ nghèo quý IV" }) });
+    mount(detail(ALL, { type: "co-ban" }, { save }));
+    await settle();
+
+    await act(async () => byLabel(TASK_INFO_EDIT_LABEL).click());
+    await settle();
+    const title = document.querySelector<HTMLInputElement>("#sua-tieu-de")!;
+    expect(title.value).toBe("Rà soát danh sách hộ nghèo quý III");
+    // The code is shown as text, never an input (ADR 0065 NV3).
+    expect(Array.from(document.querySelectorAll("input")).some((i) => i.value === "NV19")).toBe(false);
+    // One title field in the page — the read view is replaced, not duplicated.
+    expect(document.querySelectorAll("#sua-tieu-de")).toHaveLength(1);
+
+    typeInto(title, "Rà soát hộ nghèo quý IV");
+    await act(async () => title.form!.requestSubmit());
+    await settle();
+    expect(save).toHaveBeenCalledTimes(1);
+    const body = save.mock.calls[0]![0];
+    expect(body).toEqual({ title: "Rà soát hộ nghèo quý IV", expected_updated_at: "2026-06-01T02:00:00Z" });
+    expect(body).not.toHaveProperty("code");
+    // Saved: back to the read view, focus on `✎ Sửa`.
+    expect(document.querySelector("#sua-tieu-de")).toBeNull();
+    expect(document.activeElement).toBe(byLabel(TASK_INFO_EDIT_LABEL));
+  });
+
+  it("a refusal (409) stays in the form, verbatim, with the typed title kept", async () => {
+    stubQuietServer();
+    const refusal = "Nhiệm vụ vừa được người khác sửa — mở lại để xem bản mới.";
+    const save = vi
+      .fn<(body: petitions_suaNhiemVuVao) => Promise<KetQua<petitions_nhiemVuRa>>>()
+      .mockResolvedValue({ ok: false, thongBao: refusal });
+    mount(detail(ALL, { type: "co-ban" }, { save }));
+    await settle();
+    await act(async () => byLabel(TASK_INFO_EDIT_LABEL).click());
+    await settle();
+    const title = document.querySelector<HTMLInputElement>("#sua-tieu-de")!;
+    typeInto(title, "Tên mới");
+    await act(async () => title.form!.requestSubmit());
+    await settle();
+    expect(title.form!.querySelector('[role="alert"]')?.textContent).toContain(refusal);
+    expect(document.querySelector<HTMLInputElement>("#sua-tieu-de")!.value).toBe("Tên mới");
+  });
+});
+
+describe("delete — a rail button behind `task.delete`, the existing confirm with a mandatory reason", () => {
+  const ALL = quyenNhiemVu(ALL_KEYS);
+
+  it("DENIED: without `task.delete` there is no delete button and no delete form", () => {
+    const html = detailHtml(quyenNhiemVu(ALL_KEYS.filter((k) => k !== QUYEN_XOA_NHIEM_VU)));
+    expect(html).not.toContain(`aria-label="${TASK_DELETE_BUTTON}"`);
+    expect(html).not.toContain('id="ly-do-xoa-nhiem-vu"');
+  });
+
+  it("ALLOWED: the rail opens the confirm; `Xoá` disabled until a reason; a refusal shows in the dialog", async () => {
+    stubQuietServer();
+    const remove = vi
+      .fn<(reason: string) => Promise<KetQua<unknown>>>()
+      .mockResolvedValue({ ok: false, thongBao: "còn 2 việc con chưa xoá — xử lý hoặc xoá các việc con trước" });
+    mount(detail(ALL, {}, { remove }));
+    await settle();
+    expect(document.querySelector("#ly-do-xoa-nhiem-vu")).toBeNull();
+
+    await act(async () => byLabel(TASK_DELETE_BUTTON).click());
+    const dialog = document.querySelector("dialog")!;
+    expect(dialog).not.toBeNull();
+    expect(document.getElementById(dialog.getAttribute("aria-labelledby")!)?.textContent).toBe(
+      "Xoá nhiệm vụ NV19 khỏi sổ?",
+    );
+    const reason = dialog.querySelector<HTMLInputElement>("#ly-do-xoa-nhiem-vu")!;
+    const confirm = dialog.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    expect(confirm.disabled).toBe(true);
+    typeInto(reason, "   ");
+    expect(confirm.disabled).toBe(true);
+    typeInto(reason, "  Nhập trùng  ");
+    expect(confirm.disabled).toBe(false);
+    await act(async () => confirm.click());
+    await settle();
+    expect(remove).toHaveBeenCalledWith("Nhập trùng");
+    expect(dialog.querySelector('[role="alert"]')?.textContent).toContain("còn 2 việc con chưa xoá");
+  });
+});
+
+/** Every read the detail makes on mount answers an empty page — enough for its blocks to settle. */
+function stubQuietServer(): void {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(JSON.stringify({ items: [], next_cursor: "", has_more: false }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    ),
+  );
+}
+
+function byLabel(label: string): HTMLButtonElement {
+  const b = document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+  if (b === null) throw new Error(`no button labelled "${label}"`);
+  return b;
+}
+
+/** A React-controlled field: set through the native setter, then the `input` event React listens to. */
+function typeInto(el: HTMLInputElement | HTMLTextAreaElement, value: string): void {
+  const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(el, value);
+  act(() => {
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
