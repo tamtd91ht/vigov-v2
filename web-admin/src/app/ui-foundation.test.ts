@@ -300,12 +300,19 @@ describe("new UI code", () => {
   });
 });
 
-// Tester screenshot 06/10/2026: Kanban cards spilled over the next column at ≥1280px. The legacy
-// `.cot-kanban { min-width: 15rem }` is unlayered, so it beat Tailwind's `xl:min-w-0` and each column
-// grew past its 1fr track. The rule must stay bounded below the 1280px grid breakpoint.
+/** The body of the FIRST unlayered `<selector> {` rule. */
+function ruleBody(selector: string): string {
+  const start = CSS.indexOf(`\n${selector} {`);
+  expect(start, selector).toBeGreaterThan(-1);
+  return CSS.slice(start, CSS.indexOf("}", start));
+}
+
+// Tester screenshot 06/10/2026: Kanban cards spilled over the next column at ≥1280px. An unlayered
+// fixed-width column rule beats Tailwind's layered `xl:grid-cols-5`, so it must stay bounded below
+// the 1280px grid breakpoint.
 describe("kanban board does not overlap at the grid breakpoint", () => {
-  it("the fixed-width column rule is limited to 768–1279px", () => {
-    const i = CSS.indexOf("min-width: 15rem;");
+  it("the fixed-width (232px) column rule is limited to 768–1279px", () => {
+    const i = CSS.indexOf("grid-auto-columns: 232px;");
     expect(i).toBeGreaterThan(-1);
     const media = CSS.lastIndexOf("@media", i);
     expect(CSS.slice(media, i)).toMatch(/@media \(min-width: 768px\) and \(max-width: 1279\.98px\)/);
@@ -315,5 +322,34 @@ describe("kanban board does not overlap at the grid breakpoint", () => {
     const list = CSS.slice(CSS.indexOf(".danh-sach-the {"), CSS.indexOf("}", CSS.indexOf(".danh-sach-the {")));
     expect(list).toContain("grid-template-columns: minmax(0, 1fr)");
     expect(CSS).toMatch(/\.danh-sach-the > li \{\s*min-width: 0;/);
+  });
+});
+
+// Tester 07/10/2026: "khoảng hở giữa 2 cột". These rules are unlayered, so whatever they say wins
+// over the prototype's utilities on the element — they must carry the prototype's values themselves
+// (`vigov-require/.../TaskKanbanBoard.tsx:106,146`, `TaskCard.tsx:42`).
+describe("kanban board carries the prototype's layout values", () => {
+  it("board: 14px gap, no padding of its own", () => {
+    const board = ruleBody(".bang-kanban");
+    expect(board).toContain("gap: 0.875rem;");
+    expect(board).toContain("padding: 0;");
+  });
+
+  it("column: page-colour panel, hairline border, 12px radius, 12px padding, 180px tall", () => {
+    const column = ruleBody(".cot-kanban");
+    expect(column).toContain("background: var(--nen);");
+    expect(column).toContain("border: 1px solid var(--line);");
+    expect(column).toContain("border-radius: 12px;");
+    expect(column).toContain("padding: 0.75rem;");
+    expect(column).toContain("min-height: 11.25rem;");
+    expect(column).not.toContain("var(--xam-vien)");
+  });
+
+  it("cards 10px apart; a card has no padding and no thick left border", () => {
+    expect(ruleBody(".danh-sach-the")).toContain("gap: 0.625rem;");
+    const card = ruleBody(".the-nhiem-vu");
+    expect(card).toContain("padding: 0;");
+    expect(card).toContain("border-radius: 10px;");
+    expect(card).not.toContain("border-left");
   });
 });

@@ -338,6 +338,7 @@ import { TaskExtensionBlock } from "./task-extension-block";
 import { isTaskTabId, parseTaskTabData, taskTabsStorageKey, type TaskTabData } from "./task-tabs";
 import {
   Glyph,
+  kanbanDotClass,
   LoadingBar,
   TaskRowsSkeleton,
   TaskStatusBadge,
@@ -2469,24 +2470,28 @@ export function BangKanban({
           dropOnKanban(task, e.over?.id ?? null, move);
         }}
       >
-        <div className="bang-cuon" role="region" aria-label="Bảng Kanban nhiệm vụ" tabIndex={0}>
-          {/* The prototype's board: five equal columns side by side on a wide screen (`grid-cols-5`,
-              14px gaps). Narrower, the legacy layout holds — stacked on a phone, a scrolling row from
-              768px (reason in `globals.css`). */}
-          <div className="bang-kanban p-0 xl:grid xl:grid-cols-5 xl:gap-3.5">
+        {/* A bare scroller, NOT `.bang-cuon`: that class frames a white card, and the prototype's
+            columns sit straight on the page — inside the card the white showed as a band between
+            every two columns (tester 07/10/2026). */}
+        <div className="max-w-full overflow-x-auto" role="region" aria-label="Bảng Kanban nhiệm vụ" tabIndex={0}>
+          {/* The prototype's board (`TaskKanbanBoard.tsx:106`): five equal columns, 14px gaps, from
+              1280px; below, fixed 232px columns in a scrolling row from 768px; stacked on a phone
+              (reason in `globals.css`). All of it lives in `.bang-kanban`. */}
+          <div className="bang-kanban xl:grid-cols-5">
             {cotSap.map((c) => (
               <KanbanColumn key={c.ma} status={c.ma} drop={dropState(c.ma)} droppable={move !== null}>
                 <h3
                   id={`cot-kanban-${c.ma}`}
-                  className="mb-3 flex items-center gap-2 px-1 text-[13px] font-semibold text-ink-900"
+                  className="mb-3 flex items-center gap-2 px-1 text-[12.5px] font-bold text-ink-900"
                 >
+                  <span className={cn("size-2 shrink-0 rounded-full", kanbanDotClass(c.ma))} aria-hidden="true" />
                   {/* NHÃN CỘT LÀ NHÃN CỦA XÃ — cùng một chữ với chip và ô lọc. Chữ "Chưa thực hiện"
                       của §4.1 là thứ xã tự đặt cho `moi-giao` ở tab Danh mục (xem `nhan-nhiem-vu.ts`). */}
                   {nhanTrangThai(nhanTT, c.ma)}{" "}
                   {/* THE REAL TOTAL (#15), not the cards loaded. Unreadable or missing → `—`, never
                       a `0` that reads as "nothing here". Still loading → no chip yet. */}
                   {counts.pha !== "dangTai" && (
-                    <span className="chip chip-ngung ml-auto rounded-[10px] border border-solid border-line bg-surface px-2 text-[11px] font-semibold text-ink-500">
+                    <span className="kanban-count ml-auto rounded-[10px] border border-solid border-line bg-surface px-2 text-[11px] font-semibold text-ink-500">
                       {totalOf(c.ma) === null ? O_TRONG : String(totalOf(c.ma))}
                     </span>
                   )}
@@ -2506,7 +2511,9 @@ export function BangKanban({
                   </p>
                 )}
                 {c.tai.pha === "xong" && c.tai.duLieu.items.length === 0 && (
-                  <p className="trang-thai-rong m-0 px-1 py-6 text-center text-[12px] text-ink-500">{COT_RONG}</p>
+                  // Plain text as in the prototype (`TaskKanbanBoard.tsx:163`) — not `.trang-thai-rong`,
+                  // whose dashed box and 1rem margins drew a frame inside the column.
+                  <p className="m-0 px-1 py-6 text-center text-[11.5px] text-ink-500">{COT_RONG}</p>
                 )}
                 {c.tai.pha === "xong" && c.tai.duLieu.items.length > 0 && (
                   <ul className="danh-sach-the gap-2.5">
@@ -2602,7 +2609,6 @@ function KanbanColumn({
         drop === "allowed" && "cot-nhan-tha",
         drop === "allowed" && isOver && "cot-dang-tren",
         drop === "refused" && "cot-khong-nhan",
-        "min-h-45 rounded-card border-line bg-surface-subtle p-3 xl:min-w-0",
       )}
       aria-labelledby={`cot-kanban-${status}`}
     >

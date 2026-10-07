@@ -42,6 +42,23 @@ export function taskStatusIcon(status: string): LucideIcon {
   return STATUS_LOOK[status]?.icon ?? CircleDot;
 }
 
+/**
+ * The 8px dot before a Kanban column title — the prototype's `TASK_STATUS_META[...].dot`
+ * (`vigov-require/.../lib/task-display.ts:8-31`), its hex values verbatim because this palette has no
+ * teal or violet token. Decorative only: the column title beside it is the word that carries meaning.
+ */
+const KANBAN_DOT: Readonly<Record<string, string>> = {
+  "moi-giao": "bg-[#8aa2b8]",
+  "da-tiep-nhan": "bg-[#12b5c9]",
+  "dang-thuc-hien": "bg-[#2fb1f9]",
+  "cho-duyet": "bg-[#6e59e8]",
+  "hoan-thanh": "bg-[#86b940]",
+};
+
+export function kanbanDotClass(status: string): string {
+  return KANBAN_DOT[status] ?? "bg-ink-400";
+}
+
 /** Status pill for the list table. `label` is the commune's label for `status`, passed verbatim. */
 export function TaskStatusBadge({ status, children }: { status: string; children: ReactNode }) {
   const look = STATUS_LOOK[status];

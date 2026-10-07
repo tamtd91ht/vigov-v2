@@ -154,6 +154,21 @@ describe("năm cột §4.1", () => {
     expect(html).not.toContain("Chưa thực hiện");
   });
 
+  it("layout của bản mẫu: cột nằm thẳng trên trang, không trong khung trắng `.bang-cuon` (07/10/2026)", () => {
+    // Inside `.bang-cuon`'s white frame the columns showed a white band between every two of them.
+    const html = veBang(namCot());
+    expect(html).not.toContain("bang-cuon");
+    expect(html).toContain('<div class="bang-kanban xl:grid-cols-5">');
+    expect(html).toMatch(/<section class="cot-kanban" aria-labelledby="cot-kanban-moi-giao">/);
+    // The count is the prototype's small white tag, not the `.chip` pill whose unlayered padding won.
+    expect(html).not.toMatch(/class="chip[^"]*">0<\/span>/);
+    expect(html).toContain('class="kanban-count ml-auto rounded-[10px]');
+    // Header = decorative dot + the commune's label; the dot is hidden from screen readers.
+    expect(html).toMatch(
+      /<h3 id="cot-kanban-dang-thuc-hien"[^>]*><span class="size-2 shrink-0 rounded-full bg-\[#2fb1f9\]" aria-hidden="true"><\/span>/,
+    );
+  });
+
   it("câu nói ra rằng Tạm dừng và Chuyển tiếp không hiện ở bảng này", () => {
     // Không có câu này thì một việc vừa sang `tam-dung` biến mất khỏi Kanban không dấu vết, và
     // người giao việc kết luận nhiệm vụ đã bị xoá.
@@ -174,7 +189,7 @@ describe("(#15) con số đầu cột — TỔNG THẬT từ `/task-counts`, kh�
       namCot({ "dang-thuc-hien": trang([nhiemVu(), nhiemVu({ code: "NV20" })], true) }),
       { pha: "xong", duLieu: allCounts({ "dang-thuc-hien": 57 }) },
     );
-    expect(html).toMatch(/<span class="chip chip-ngung[^"]*">57<\/span>/);
+    expect(html).toMatch(/<span class="kanban-count[^"]*">57<\/span>/);
     expect(html).not.toContain(">2+<");
     expect(html).toContain(nhuTrongHTML(kanbanPartialNote(2, 57)));
     // The old "cards loaded, not a total" disclaimer is gone — it would now be false.
@@ -183,7 +198,7 @@ describe("(#15) con số đầu cột — TỔNG THẬT từ `/task-counts`, kh�
 
   it("đang đọc số: chưa có chip số nào — không vẽ một số chưa biết", () => {
     const html = veBang(namCot(), { pha: "dangTai" });
-    expect(html).not.toMatch(/<span class="chip chip-ngung[^"]*">0<\/span>/);
+    expect(html).not.toContain("kanban-count");
     expect(html).not.toContain(KANBAN_COUNTS_ERROR);
   });
 
@@ -193,8 +208,8 @@ describe("(#15) con số đầu cột — TỔNG THẬT từ `/task-counts`, kh�
       pha: "loi",
       thongBao: cau,
     });
-    expect(html).toMatch(/<span class="chip chip-ngung[^"]*">—<\/span>/);
-    expect(html).not.toMatch(/<span class="chip chip-ngung[^"]*">0<\/span>/);
+    expect(html).toMatch(/<span class="kanban-count[^"]*">—<\/span>/);
+    expect(html).not.toMatch(/<span class="kanban-count[^"]*">0<\/span>/);
     expect(html).toContain(`role="alert">${KANBAN_COUNTS_ERROR} ${nhuTrongHTML(cau)}</p>`);
     expect(html).toContain('aria-labelledby="the-nhiem-vu-NV19"');
     // `has_more` still says the column goes on, even without a total.
