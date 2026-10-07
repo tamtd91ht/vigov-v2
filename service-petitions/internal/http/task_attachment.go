@@ -6,6 +6,7 @@ package http
 //	POST /api/v1/tasks/{ma}/attachments                  task.read gate; the log-entry right in the use case
 //	POST /api/v1/tasks/{ma}/attachments/{id}/completion  task.read gate; the uploader, with the log-entry right
 //	GET  /api/v1/tasks/{ma}/attachments/{id}/download    task.read; domain.MayDownload in the use case
+//	DELETE /api/v1/tasks/{ma}/attachments/{id}           task.read gate; uploader or task.update in the use case
 //
 // THESE HANDLERS DECIDE NOTHING, the shape of AddTaskLogEntry: they read whether the caller holds
 // `task.update` (the one fact the log-entry rule takes) and translate the use case's answer.
@@ -151,6 +152,33 @@ func (h *Handler) TaskAttachmentDownload(w http.ResponseWriter, r *http.Request)
 	vietJSON(w, http.StatusOK, taskAttachmentDownloadOut{URL: d.URL.URL(), ExpiresAt: d.ExpiresAt})
 }
 
+// taskAttachmentRemoveIn is the body of DELETE /api/v1/tasks/{ma}/attachments/{id}.
+//
+// A BODY ON A DELETE, xoaNhiemVuVao's reason: the reason is mandatory (rule 7, invariant 1), and the
+// query string would put free text about a government record into every access log and proxy cache.
+type taskAttachmentRemoveIn struct {
+	Reason string `json:"reason"`
+}
+
+// RemoveTaskAttachment soft-deletes one file of the task. DELETE /api/v1/tasks/{ma}/attachments/{id}
+func (h *Handler) RemoveTaskAttachment(w http.ResponseWriter, r *http.Request) {
+	var in taskAttachmentRemoveIn
+	if !docThan(w, r, &in) {
+		return
+	}
+	actor, ok := nguoiThucHien(r)
+	if !ok {
+		h.thieuChuTheNhiemVu(w, r)
+		return
+	}
+	if err := h.d.TaskAttachments.Remove(r.Context(), r.PathValue("ma"), r.PathValue("id"), in.Reason, actor,
+		h.hasTaskUpdate(r)); err != nil {
+		h.answerTaskAttachmentError(w, r, "gỡ tệp đính kèm", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // rejectionSentences is the officer-facing sentence per app.Reject* reason.
 var rejectionSentences = map[string]string{
 	app.RejectMalware:        "Tệp bị từ chối vì phát hiện mã độc và không được lưu.",
@@ -179,6 +207,19 @@ func (h *Handler) answerTaskAttachmentError(w http.ResponseWriter, r *http.Reque
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", cauTuChoi(err,
 			domain.ErrAttachmentNameInvalid, domain.ErrAttachmentSizeInvalid,
 			domain.ErrAttachmentListInvalid, domain.ErrAttachmentNotUsable), "")
+	case errors.Is(err, domain.ErrAttachmentRemovalReasonMissing),
+		errors.Is(err, domain.ErrAttachmentRemovalReasonTooLong):
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", cauTuChoi(err,
+			domain.ErrAttachmentRemovalReasonMissing, domain.ErrAttachmentRemovalReasonTooLong), "")
+	case errors.Is(err, domain.ErrAttachmentRemovalNotAllowed):
+		httpx.WriteError(w, http.StatusForbidden, "forbidden",
+			cauTuChoi(err, domain.ErrAttachmentRemovalNotAllowed), "")
+	case errors.Is(err, domain.ErrAttachmentUnderLegalHold):
+		// Its own code: the client can say "held for a complaint or an inspection" rather than a generic
+		// conflict, and nothing the officer reloads will change it.
+		httpx.WriteError(w, http.StatusConflict, "legal_hold",
+			"Tệp đang được giữ để phục vụ khiếu nại hoặc thanh tra nên chưa thể gỡ. "+
+				"Khi việc giữ tệp kết thúc, bạn mới gỡ được.", "")
 	case errors.Is(err, app.ErrAttachmentTypeNotAllowed):
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
 			"Loại tệp này không được phép đính kèm vào nhật ký nhiệm vụ.", "")

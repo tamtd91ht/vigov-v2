@@ -141,6 +141,28 @@ func (s *StoredFileStore) MarkStored(ctx context.Context, tx *store.ScopedTx, id
 	return oneStoredFileRow(res, "ghi tệp đã lưu")
 }
 
+// SoftDelete hides one live row from every read path (rule 7, invariant 1): `deleted_at`, `deleted_by`
+// and `delete_reason` together, as migration 0021's stored_file_delete_complete demands. The STATUS IS
+// NOT TOUCHED and THE OBJECT IS NOT REMOVED: a records file is disposed of by the records schedule,
+// never by a command (ADR 0052 §6, §7), and the link to its log entry stays true (task_log_attachment
+// is append-only).
+//
+// `by` IS A STAFF BUSINESS CODE (rule 6, invariant 8). `AND deleted_at IS NULL` makes a second removal
+// find nothing (ErrStoredFileMoved) instead of overwriting who removed it and why — the trigger refuses
+// that rewrite too; this is the sentence before it.
+func (s *StoredFileStore) SoftDelete(ctx context.Context, tx *store.ScopedTx, id, by, reason string,
+	at time.Time) error {
+
+	const stmt = `UPDATE stored_file SET deleted_at = $3, deleted_by = $4, delete_reason = $5, updated_at = $3
+		WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
+	res, err := tx.Exec(ctx, stmt, string(tx.TenantID()), id, at, by, reason)
+	if err != nil {
+		// NOT the reason: free text about a record, and an UPDATE error can quote the row (rule 3).
+		return fmt.Errorf("stored_file: gỡ tệp: %w", err)
+	}
+	return oneStoredFileRow(res, "gỡ tệp")
+}
+
 func oneStoredFileRow(res sql.Result, what string) error {
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -310,6 +332,28 @@ func (s *StoredFileStore) ByID(ctx context.Context, id string) (*domain.StoredFi
 // most one entry (primary key (tenant_id, stored_file_id)), so there is no list to choose from.
 func (s *StoredFileStore) LinkedLogEntry(ctx context.Context, fileID string) (string, error) {
 	return s.linkedLogEntry(ctx, taskLinkTable, fileID)
+}
+
+// LinkedLogEntryTx is LinkedLogEntry INSIDE the caller's transaction — the removal, which holds the
+// file row FOR UPDATE and must read its link on the same connection (a second connection would wait on
+// the pool while this transaction holds its only one).
+func (s *StoredFileStore) LinkedLogEntryTx(ctx context.Context, tx *store.ScopedTx, fileID string) (string, error) {
+	// ScopedTx.Query prefixes `WHERE tenant_id = $1` and binds the commune from the transaction.
+	rows, err := tx.Query(ctx, "log_entry_id", taskLinkTable, "AND stored_file_id = $2", fileID)
+	if err != nil {
+		return "", fmt.Errorf("%s: đọc dòng gắn tệp: %w", taskLinkTable, err)
+	}
+	defer rows.Close()
+	var entry string
+	if rows.Next() {
+		if err := rows.Scan(&entry); err != nil {
+			return "", fmt.Errorf("task_log_attachment: quét dòng gắn tệp: %w", err)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return "", fmt.Errorf("task_log_attachment: duyệt dòng gắn tệp: %w", err)
+	}
+	return entry, nil
 }
 
 // LinkedPetitionLogEntry is LinkedLogEntry for a petition log attachment (migration 0027).

@@ -244,6 +244,68 @@ func TestPgStoredFileGuard(t *testing.T) {
 	}
 }
 
+// SoftDelete against the real CHECK and trigger: the three columns land together, the row vanishes from
+// every read, a second removal finds nothing, the link stays, the other commune's same id is untouched.
+func TestPgStoredFileSoftDelete(t *testing.T) {
+	db := moKetNoi(t)
+	commune, other := xaRieng(t)
+	h := pkgstore.New(db)
+	s := NewStoredFileStore(h)
+	logs := NewNhiemVuStore(h)
+	at := time.Date(2026, 10, 7, 2, 0, 0, 0, time.UTC)
+	ctx := ctxXa(tenant.ID(commune))
+	const id = "01JBPG0000000000000000FD01"
+	pgStoredFile(t, h, s, commune, pgFile(commune, id, "nv-d1", "CB-00311", at))
+	pgStoredFile(t, h, s, other, pgFile(other, id, "nv-d1", "CB-00311", at))
+	if err := h.For(ctx).Tx(ctx, func(tx *pkgstore.ScopedTx) error {
+		if err := logs.GhiNhatKy(ctx, tx, pgEntry("nk-d1", "nv-d1", "CB-00311", at)); err != nil {
+			return err
+		}
+		return s.LinkToLogEntry(ctx, tx, "nk-d1", []string{id})
+	}); err != nil {
+		t.Fatalf("entry with attachment: %v", err)
+	}
+
+	// A blank reason is refused by the CHECK (stored_file_delete_complete).
+	if err := h.For(ctx).Tx(ctx, func(tx *pkgstore.ScopedTx) error {
+		return s.SoftDelete(ctx, tx, id, "CB-00311", "  ", at)
+	}); err == nil {
+		t.Error("a soft delete with a blank reason was accepted")
+	}
+
+	if err := h.For(ctx).Tx(ctx, func(tx *pkgstore.ScopedTx) error {
+		if linked, err := s.LinkedLogEntryTx(ctx, tx, id); err != nil || linked != "nk-d1" {
+			t.Errorf("LinkedLogEntryTx = %q, %v", linked, err)
+		}
+		return s.SoftDelete(ctx, tx, id, "CB-00311", "tải nhầm tệp", at)
+	}); err != nil {
+		t.Fatalf("SoftDelete: %v", err)
+	}
+	var by, reason string
+	if err := db.QueryRow(`SELECT deleted_by, delete_reason FROM stored_file WHERE tenant_id = $1 AND id = $2`,
+		commune, id).Scan(&by, &reason); err != nil || by != "CB-00311" || reason != "tải nhầm tệp" {
+		t.Errorf("row = %q / %q, %v", by, reason, err)
+	}
+	if f, err := s.ByID(ctx, id); err != nil || f != nil {
+		t.Errorf("ByID after removal = %+v, %v — want nothing", f, err)
+	}
+	if got, err := s.AttachmentsByLogEntries(ctx, []string{"nk-d1"}); err != nil || len(got) != 0 {
+		t.Errorf("timeline after removal = %+v, %v", got, err)
+	}
+	if linked, err := s.LinkedLogEntry(ctx, id); err != nil || linked != "nk-d1" {
+		t.Errorf("the link went with the file: %q, %v", linked, err)
+	}
+	err := h.For(ctx).Tx(ctx, func(tx *pkgstore.ScopedTx) error {
+		return s.SoftDelete(ctx, tx, id, "CB-00999", "lần hai", at)
+	})
+	if !errors.Is(err, ErrStoredFileMoved) {
+		t.Errorf("second removal: err = %v, want ErrStoredFileMoved", err)
+	}
+	if f, err := s.ByID(ctxXa(tenant.ID(other)), id); err != nil || f == nil {
+		t.Errorf("the other commune's row of the same id was removed too: %+v, %v", f, err)
+	}
+}
+
 // forUpdateOutsideTest reads one row in its own transaction — for assertions only.
 func (s *StoredFileStore) forUpdateOutsideTest(ctx context.Context, h *pkgstore.DB, id string) (*domain.StoredFile, error) {
 	var f *domain.StoredFile

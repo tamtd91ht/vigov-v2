@@ -282,6 +282,7 @@ type (
 		Complete(ctx context.Context, ma, id string, nguoi audit.Actor, update app.TaskUpdateRight) (
 			domain.StoredFile, error)
 		DownloadLink(ctx context.Context, ma, id string, reader audit.Actor) (app.AttachmentDownload, error)
+		Remove(ctx context.Context, ma, id, reason string, nguoi audit.Actor, update app.TaskUpdateRight) error
 	}
 
 	// TaskLogAttachmentReader reads the attachments of ONE PAGE of timeline entries in one statement,
@@ -1858,6 +1859,39 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/tasks/{ma}/attachments/{id}/download",
 		authz.RequirePermission(d.Checker, "task.read")(
 			http.HandlerFunc(h.TaskAttachmentDownload)))
+
+	// GỠ TỆP (user decision 07/10/2026) — a SOFT DELETE of the file's stored_file row with a mandatory
+	// reason, plus a timeline line saying which file went and why, in ONE transaction with the audit
+	// entry (`go_tep_nhiem_vu`). The object is NOT removed (ADR 0052 §6, §7; rule 7) and the link to its
+	// log entry stays (append-only); every read path already skips a deleted row.
+	//
+	// `task.read` AT THE GATE, and who may actually remove is decided on the locked row
+	// (domain.AttachmentRemovalRightFor): THE UPLOADER, OR A HOLDER OF `task.update` — attached to an
+	// entry or not. A file the caller cannot see (another task's, another commune's, somebody else's
+	// draft, unknown, already removed) is 404, one answer; a visible file without the right is 403; a file
+	// under legal hold is 409. `task.read` and `task.update` are seeded (service-identity/migrations/
+	// 0001_init.sql:304, :305); NO KEY WAS INVENTED (rule 5, invariant 3c).
+	//
+	// A BODY ON A DELETE, DELETE /api/v1/tasks/{ma}'s reason: the reason is mandatory, and the query
+	// string would put free text about a government record into every access log and proxy cache.
+	//
+	// idem.KhongCan — the locked read sees only live rows, so a second removal is a 404 and cannot
+	// overwrite who removed the file or why; it writes no second timeline line.
+	//
+	// @summary  Gỡ một tệp đính kèm khỏi nhiệm vụ (xoá mềm, lý do bắt buộc) — người đã tải lên hoặc cán bộ có quyền cập nhật nhiệm vụ
+	// @screen   02-nhiem-vu §5.9
+	// @request  taskAttachmentRemoveIn
+	// @reply    204 -
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/tasks/{ma}/attachments/{id}",
+		authz.RequirePermission(d.Checker, "task.read")(
+			idem.KhongCan("gỡ lần hai một tệp đã gỡ trả 404: câu đọc khoá dòng chỉ thấy tệp chưa gỡ nên không ghi đè người gỡ, lý do, và không thêm dòng nhật ký thứ hai")(
+				http.HandlerFunc(h.RemoveTaskAttachment))))
 
 	// GIAO VIỆC MỚI (§7) — `task.create`, seeded at 0001_init.sql:301 ("Tạo nhiệm vụ").
 	//

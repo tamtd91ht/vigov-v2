@@ -8,7 +8,9 @@ package app
 //	c. Complete       POST /api/v1/tasks/{ma}/attachments/{id}/completion   sniff · scan · hash · copy → stored
 //
 // and then the file rides on the NEXT log entry the same officer writes (AddLogEntry, task_log_entry.go),
-// linked in THAT entry's transaction. DownloadLink hands out a short-lived presigned GET.
+// linked in THAT entry's transaction. DownloadLink hands out a short-lived presigned GET. Remove
+// soft-deletes a file (`Gỡ`) with a mandatory reason and a timeline line — the uploader's or a
+// `task.update` holder's act, not the log-entry right (user decision 07/10/2026).
 //
 // # WHO
 //
@@ -47,6 +49,7 @@ import (
 	"fmt"
 	"io"
 	"time"
+	"unicode/utf8"
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/malwarescan"
@@ -54,6 +57,7 @@ import (
 	"github.com/vihat/vigov/core/storage"
 	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/core/ulid"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
 )
 
@@ -63,6 +67,7 @@ const (
 	ActionTaskAttachmentStored    = "luu_tep_nhiem_vu"
 	ActionTaskAttachmentRejected  = "tu_choi_tep_nhiem_vu"
 	ActionTaskAttachmentExpired   = "tep_nhiem_vu_het_han_tai"
+	ActionTaskAttachmentRemoved   = "go_tep_nhiem_vu"
 )
 
 // Rejection reasons — the `ly_do` of a `tu_choi_tep_nhiem_vu` entry and the key the handler picks its
@@ -157,13 +162,18 @@ type TaskAttachmentFiles interface {
 		pendingSince time.Time) (int, error)
 	ByID(ctx context.Context, id string) (*domain.StoredFile, error)
 	LinkedLogEntry(ctx context.Context, fileID string) (string, error)
+	LinkedLogEntryTx(ctx context.Context, tx *store.ScopedTx, fileID string) (string, error)
+	SoftDelete(ctx context.Context, tx *store.ScopedTx, id, by, reason string, at time.Time) error
 }
 
-// TaskRows is the two task reads this use case needs — *store.NhiemVuStore satisfies it.
+// TaskRows is the task reads (and the one timeline write) this use case needs — *store.NhiemVuStore
+// satisfies it.
 type TaskRows interface {
 	LiveByCode(ctx context.Context, code string) (domain.NhiemVu, error)
 	// vi-name-ok: mirrors the existing NhiemVuStore method; rule 12 invariant 3 keeps existing names
 	TheoMaDeSua(ctx context.Context, tx *store.ScopedTx, ma string) (domain.NhiemVu, error)
+	// vi-name-ok: mirrors the existing NhiemVuStore method; rule 12 invariant 3 keeps existing names
+	GhiNhatKy(ctx context.Context, tx *store.ScopedTx, e domain.NhatKyNhiemVu) error
 }
 
 // TaskAttachments owns the three attachment acts.
@@ -180,7 +190,10 @@ type TaskAttachments struct {
 	policies UploadPolicies
 
 	newID func() (string, error)
-	now   func() time.Time
+	// newLogID mints the timeline row a removal appends — the same generator every other task log
+	// row is minted with (GhiNhiemVu.sinhID), never the object-id one.
+	newLogID func() (string, error)
+	now      func() time.Time
 }
 
 // NewTaskAttachments builds the use case. Pass UNTYPED nil for a dependency that is not configured —
@@ -188,7 +201,7 @@ type TaskAttachments struct {
 func NewTaskAttachments(db *store.DB, tasks TaskRows, files TaskAttachmentFiles, objects ObjectStore,
 	scanner MalwareScanner, policies UploadPolicies) *TaskAttachments {
 	return &TaskAttachments{db: db, tasks: tasks, files: files, objects: objects, scanner: scanner,
-		policies: policies, newID: storage.NewObjectID}
+		policies: policies, newID: storage.NewObjectID, newLogID: ulid.Moi}
 }
 
 func (uc *TaskAttachments) clock() time.Time {
@@ -723,4 +736,116 @@ func (uc *TaskAttachments) DownloadLink(ctx context.Context, ma, id string, read
 		return AttachmentDownload{}, storageErr("ký liên kết tải về", err)
 	}
 	return AttachmentDownload{URL: u, ExpiresAt: now.Add(storage.MaxDownloadTTL)}, nil
+}
+
+// --- remove (`Gỡ`, user decision 07/10/2026) ---------------------------------------------------------
+
+// Remove soft-deletes one file of the task: it disappears from the timeline, the drafts and the
+// download, and the record keeps who removed it, when and why. Route permission: `task.read`; the real
+// condition is domain.AttachmentRemovalRightFor — the uploader, or a holder of `task.update`, on a file
+// the caller can see. A file already on a log entry MAY be removed (the owner's decision); the link row
+// stays, because task_log_attachment is append-only and "this entry was written with this file" stays
+// true.
+//
+// ONE TRANSACTION, FOUR STATEMENTS AND TWO LOCKS: the task row FOR UPDATE (the same order Complete and
+// AddLogEntry take, task then file, so the three cannot deadlock on each other), the file row FOR
+// UPDATE, the soft delete, the timeline line, the audit entry. A refusal writes nothing.
+//
+// THE OBJECT IS NOT TOUCHED. A records file is disposed of by the records schedule, never by a command
+// (ADR 0052 §6, §7; rule 7). Removing is hiding.
+//
+// A SECOND REMOVAL IS A 404 (ErrAttachmentNotFound), the convention DELETE /api/v1/tasks/{ma} follows:
+// the locked read sees only live rows, so the repeat finds nothing and cannot overwrite who removed the
+// file or why.
+//
+// THE TRAIL CARRIES the file id, the entry it was on, the door the caller came through and the reason's
+// LENGTH — never the reason's text nor the file name (rule 6, forbidden #4; rule 3). Both live in the
+// business rows written in this transaction.
+func (uc *TaskAttachments) Remove(ctx context.Context, ma, id, reasonRaw string, actor audit.Actor,
+	update TaskUpdateRight) error {
+
+	reason, err := domain.CheckAttachmentRemovalReason(reasonRaw)
+	if err != nil {
+		return err
+	}
+	if err := coCanBoThucHien(actor); err != nil {
+		return err
+	}
+	now := uc.clock()
+
+	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		n, err := uc.tasks.TheoMaDeSua(ctx, tx, ma)
+		if err != nil {
+			return err
+		}
+		f, err := uc.files.ForUpdate(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if f == nil || f.Purpose != string(storage.PurposeTaskAttachment) {
+			return ErrAttachmentNotFound
+		}
+		linked, err := uc.files.LinkedLogEntryTx(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		right := domain.AttachmentRemovalRightFor(*f, n.ID, linked, actor.ID, bool(update))
+		switch right {
+		case domain.AttachmentRemovalNone:
+			return ErrAttachmentNotFound
+		case domain.AttachmentRemovalRefused:
+			return domain.ErrAttachmentRemovalNotAllowed
+		}
+		if f.LegalHold {
+			return domain.ErrAttachmentUnderLegalHold
+		}
+
+		// `deleted_by` IS THE STAFF BUSINESS CODE (rule 6, invariant 8) — coCanBoThucHien refused an
+		// empty one above; there is no fallback.
+		if err := uc.files.SoftDelete(ctx, tx, id, actor.ID, reason, now); err != nil {
+			return err
+		}
+
+		logID, err := uc.newLogID()
+		if err != nil {
+			return fmt.Errorf("nhat_ky_nhiem_vu: sinh mã nội bộ: %w", err)
+		}
+		// THE SAME ROW SHAPE ghiNhatKy WRITES FOR EVERY OTHER ACT: the status the task stands in, and the
+		// holder copied from the task.
+		// NO FILE NAME in the line (domain.AttachmentRemovalLogText says why); the audit entry names the id.
+		text, err := domain.KiemNoiDungNhatKy(domain.AttachmentRemovalLogText(reason))
+		if err != nil {
+			return err
+		}
+		if err := uc.tasks.GhiNhatKy(ctx, tx, domain.NhatKyNhiemVu{
+			ID: logID, NhiemVuID: n.ID, NguoiMa: actor.ID, ThoiDiem: now,
+			TrangThaiTaiThoiDiem: n.TrangThai, BoPhanID: n.BoPhanID, NguoiPhuTrachMa: n.NguoiThucHienMa,
+			NoiDung: text,
+		}); err != nil {
+			return err
+		}
+
+		return writeAttachmentAudit(ctx, tx, actor, n.Ma, ActionTaskAttachmentRemoved, now, map[string]any{
+			"tep_id":       id,
+			"nhat_ky_id":   logID,
+			"gan_nhat_ky":  linked, // "" when the file was a draft on no entry
+			"quyen_go":     attachmentRemovalRightCode(right),
+			"do_dai_ly_do": utf8.RuneCountInString(reason),
+			"truoc":        map[string]any{"trang_thai": string(f.Status), "da_go": false},
+			"sau":          map[string]any{"trang_thai": string(f.Status), "da_go": true},
+		})
+	})
+	if err != nil {
+		return bocNhiemVu(ctx, "gỡ tệp đính kèm", err)
+	}
+	return nil
+}
+
+// attachmentRemovalRightCode names the door in the trail. Values, so Vietnamese without diacritics
+// (ADR 0011).
+func attachmentRemovalRightCode(r domain.AttachmentRemovalRight) string {
+	if r == domain.AttachmentRemovalUploader {
+		return "nguoi-tai-len"
+	}
+	return "cap-nhat-nhiem-vu"
 }

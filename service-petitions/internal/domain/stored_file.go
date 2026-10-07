@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 	"unicode"
@@ -230,4 +231,90 @@ func MayDownload(f StoredFile, taskID, linkedTo, reader string) bool {
 		return false
 	}
 	return linkedTo != "" || (reader != "" && f.UploadedBy == reader)
+}
+
+// --- removing a file (`Gỡ`, user decision 07/10/2026) ---------------------------------------------
+
+// MaxAttachmentRemovalReasonRunes bounds the mandatory reason. LyDoNhiemVuToiDa — the bound of every
+// other mandatory reason on a task — so one limit applies to "why" across the drawer. With the file
+// name (≤ MaxOriginalNameRunes) and the fixed words, the log line stays far below NoiDungNhatKyToiDa.
+const MaxAttachmentRemovalReasonRunes = LyDoNhiemVuToiDa
+
+var (
+	// ErrAttachmentRemovalReasonMissing: removing a file without saying why. Rule 7 invariant 1 names
+	// `delete_reason` beside `deleted_at`, and migration 0021's stored_file_delete_complete refuses a
+	// blank one — this is the sentence before the CHECK's 500.
+	ErrAttachmentRemovalReasonMissing = errors.New(
+		"tệp đính kèm: phải ghi lý do gỡ tệp — tệp đính kèm là một phần hồ sơ nhiệm vụ")
+	// ErrAttachmentRemovalReasonTooLong: the reason is longer than MaxAttachmentRemovalReasonRunes.
+	ErrAttachmentRemovalReasonTooLong = fmt.Errorf(
+		"tệp đính kèm: lý do gỡ tệp quá dài (tối đa %d ký tự)", MaxAttachmentRemovalReasonRunes)
+	// ErrAttachmentRemovalNotAllowed: the caller can SEE the file but is neither its uploader nor a
+	// holder of `task.update`. 403 — the file is visible to them, so hiding its existence would hide
+	// nothing.
+	ErrAttachmentRemovalNotAllowed = errors.New(
+		"tệp đính kèm: chỉ người đã tải tệp lên hoặc cán bộ có quyền cập nhật nhiệm vụ mới gỡ được tệp này")
+	// ErrAttachmentUnderLegalHold: the file is held for a complaint or an inspection (stored_file
+	// .legal_hold, ADR 0052 §5). 409 — the request is fine, the record's state forbids it.
+	ErrAttachmentUnderLegalHold = errors.New(
+		"tệp đính kèm: tệp đang được giữ phục vụ khiếu nại hoặc thanh tra, chưa được gỡ")
+)
+
+// CheckAttachmentRemovalReason trims and bounds the reason. Whitespace is no reason.
+func CheckAttachmentRemovalReason(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	switch {
+	case s == "":
+		return "", ErrAttachmentRemovalReasonMissing
+	case utf8.RuneCountInString(s) > MaxAttachmentRemovalReasonRunes:
+		return "", ErrAttachmentRemovalReasonTooLong
+	}
+	return s, nil
+}
+
+// AttachmentRemovalRight is which door a removal came through — named in the audit delta, because an
+// inspection asks "was this the officer who uploaded it, or somebody overriding them".
+type AttachmentRemovalRight int
+
+const (
+	AttachmentRemovalNone     AttachmentRemovalRight = iota // not visible: answer as unknown (404)
+	AttachmentRemovalRefused                                // visible, but no right to remove (403)
+	AttachmentRemovalUploader                               // the officer who uploaded it
+	AttachmentRemovalUpdater                                // a holder of the commune-wide `task.update`
+)
+
+// AttachmentRemovalRightFor decides who may remove one file of one task (user decision 07/10/2026):
+// THE UPLOADER, OR A HOLDER OF `task.update` — whether or not the file is already on a log entry.
+//
+// ONLY A FILE THE CALLER CAN SEE CAN BE REMOVED, and "see" is MayDownload's rule: the file belongs to
+// THIS task, reached the destination, and is on a log entry or was uploaded by the caller. Everything
+// else — unknown, another task's, not yet stored, somebody else's unattached draft — is
+// AttachmentRemovalNone and answers exactly like an unknown id (rule 4, forbidden #2, applied to
+// staff). A `task.update` holder therefore cannot remove another officer's draft: they cannot read it
+// either, and a draft is not part of the task's record.
+//
+// The uploader door is checked first, so an uploader who also holds `task.update` is recorded as the
+// uploader — the narrower, truer reason.
+func AttachmentRemovalRightFor(f StoredFile, taskID, linkedTo, actor string, update bool) AttachmentRemovalRight {
+	if actor == "" || !MayDownload(f, taskID, linkedTo, actor) {
+		return AttachmentRemovalNone
+	}
+	switch {
+	case f.UploadedBy == actor:
+		return AttachmentRemovalUploader
+	case update:
+		return AttachmentRemovalUpdater
+	}
+	return AttachmentRemovalRefused
+}
+
+// AttachmentRemovalLogText is the timeline line a removal appends (user decision 07/10/2026): that a
+// file went, and why.
+//
+// THE FILE NAME IS DELIBERATELY NOT IN IT. `original_name` is the one column of stored_file an
+// anonymisation under Decree 13 may rewrite (migration 0021); a copy in the append-only
+// `nhat_ky_nhiem_vu` could never be rewritten, and would outlive the anonymisation. Which file it was
+// stays traceable through the audit entry of the same transaction (`tep_id`).
+func AttachmentRemovalLogText(reason string) string {
+	return "Đã gỡ một tệp đính kèm. Lý do: " + reason
 }

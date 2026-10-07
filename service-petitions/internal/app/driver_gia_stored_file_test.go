@@ -104,6 +104,15 @@ func (k *khoNhiemVuGia) execStoredFile(q string, named []driver.NamedValue) (dri
 			"stored", args[2], args[3], args[4], args[5]
 		return driver.RowsAffected(1), true, nil
 
+	case strings.Contains(q, "UPDATE stored_file SET deleted_at"):
+		// SoftDelete: tenant, id, at, by, reason — only a live row, as `AND deleted_at IS NULL` says.
+		r := k.storedFiles[fmt.Sprint(args[1])]
+		if r == nil || r["tenant_id"] != args[0] || r["deleted_at"] != nil {
+			return driver.RowsAffected(0), true, nil
+		}
+		r["deleted_at"], r["deleted_by"], r["delete_reason"], r["updated_at"] = args[2], args[3], args[4], args[2]
+		return driver.RowsAffected(1), true, nil
+
 	case strings.Contains(q, "UPDATE stored_file"):
 		// Transition: tenant, id, from, to, at.
 		r := k.storedFiles[fmt.Sprint(args[1])]
@@ -137,9 +146,10 @@ func (k *khoNhiemVuGia) doStoredFile(q string, cot []string, args []driver.Value
 		return nil, fmt.Errorf("driver giả: câu đọc tệp chỉ mang %d tham số — xã phải là $1: %q", len(args), q)
 	}
 	commune := args[0]
+	// Every read of the store carries `deleted_at IS NULL` (rule 7, invariant 2); so does this one.
 	live := func(id string) map[string]driver.Value {
 		r := k.storedFiles[id]
-		if r == nil || r["tenant_id"] != commune {
+		if r == nil || r["tenant_id"] != commune || r["deleted_at"] != nil {
 			return nil
 		}
 		return r

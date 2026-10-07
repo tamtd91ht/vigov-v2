@@ -18,7 +18,7 @@ import (
 	petstore "github.com/vihat/vigov/service-petitions/internal/store"
 )
 
-// Tests for §5.9's three attachment routes, and the attachment half of the two log-entry routes, at the
+// Tests for §5.9's four attachment routes (request, completion, download, remove), and the attachment half of the two log-entry routes, at the
 // HTTP boundary.
 //
 //	PROVED HERE   each route's four cases (rule 5, invariant 7): 401 no session · 403 without
@@ -41,7 +41,15 @@ type taskAttachmentsFake struct {
 	fileID  string
 	update  app.TaskUpdateRight
 	req     app.AttachmentUploadRequest
+	reason  string
 	err     error
+}
+
+func (f *taskAttachmentsFake) Remove(ctx context.Context, ma, id, reason string, actor audit.Actor,
+	update app.TaskUpdateRight) error {
+	f.record(ctx, ma, id, actor)
+	f.reason, f.update = reason, update
+	return f.err
 }
 
 func (f *taskAttachmentsFake) record(ctx context.Context, code, fileID string, actor audit.Actor) {
@@ -136,7 +144,14 @@ func attachmentRouteCases() []attachmentRouteCase {
 		{"request upload", http.MethodPost, attachmentsPath(maNVThu), uploadIn(), http.StatusCreated},
 		{"completion", http.MethodPost, completionPath(maNVThu, fileIDHTTP), nil, http.StatusOK},
 		{"download", http.MethodGet, attachmentDownloadPath(maNVThu, fileIDHTTP), nil, http.StatusOK},
+		{"remove", http.MethodDelete, attachmentPath(maNVThu, fileIDHTTP), removeIn(), http.StatusNoContent},
 	}
+}
+
+func attachmentPath(ma, id string) string { return attachmentsPath(ma) + "/" + id }
+
+func removeIn() taskAttachmentRemoveIn {
+	return taskAttachmentRemoveIn{Reason: "Tải nhầm tệp, đã thay bằng bản đúng."}
 }
 
 func TestAttachmentRoutes_NoSession401(t *testing.T) {
@@ -298,6 +313,63 @@ func TestTaskAttachmentRefusalsMap(t *testing.T) {
 				if strings.Contains(w.Body.String(), xaBocThu) {
 					t.Errorf("%s: body leaks the commune id: %s", rc.name, w.Body.String())
 				}
+			}
+		})
+	}
+}
+
+// The removal: the reason and the `task.update` fact reach the use case; 204 with no body.
+func TestRemoveTaskAttachment_ReasonAndFactsReachUseCase(t *testing.T) {
+	for _, c := range []struct {
+		perms []authz.Perm
+		want  bool
+	}{
+		{[]authz.Perm{"task.read"}, false},
+		{[]authz.Perm{"task.read", "task.update"}, true},
+	} {
+		m := dungMayChu(t)
+		m.capQuyen(t, c.perms...)
+		w := m.goiGhiNV(t, http.MethodDelete, hostA, attachmentPath(maNVThu, fileIDHTTP), canBoCuaXa(xaA), removeIn())
+		doiMa(t, w, http.StatusNoContent)
+		f := m.taskAttachments
+		if bool(f.update) != c.want || f.reason != removeIn().Reason || f.fileID != fileIDHTTP || f.code != maNVThu {
+			t.Errorf("%v: update=%v reason=%q file=%q task=%q", c.perms, f.update, f.reason, f.fileID, f.code)
+		}
+		if w.Body.Len() != 0 {
+			t.Errorf("204 with a body: %s", w.Body.String())
+		}
+	}
+}
+
+// The removal's own refusals: status, code, the domain's sentence, never the commune id.
+func TestRemoveTaskAttachment_RefusalsMap(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		err  error
+		want int
+		code string
+	}{
+		{"reason missing", domain.ErrAttachmentRemovalReasonMissing, http.StatusBadRequest, "invalid_request"},
+		{"reason too long", domain.ErrAttachmentRemovalReasonTooLong, http.StatusBadRequest, "invalid_request"},
+		{"neither uploader nor task.update", domain.ErrAttachmentRemovalNotAllowed, http.StatusForbidden, "forbidden"},
+		{"legal hold", domain.ErrAttachmentUnderLegalHold, http.StatusConflict, "legal_hold"},
+		{"unknown / other task / already removed", app.ErrAttachmentNotFound, http.StatusNotFound, "not_found"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			m := dungMayChu(t)
+			m.capQuyen(t, authz.Perm("task.read"))
+			m.taskAttachments.err = bocNhuApp(c.err)
+			w := m.goiGhiNV(t, http.MethodDelete, hostA, attachmentPath(maNVThu, fileIDHTTP), canBoCuaXa(xaA), removeIn())
+			doiMa(t, w, c.want)
+			e := loiTra(t, w)
+			if e.Code != c.code || e.Message == "" {
+				t.Errorf("error = %q / %q, want code %q", e.Code, e.Message, c.code)
+			}
+			if c.code != "not_found" && c.code != "legal_hold" && e.Message != c.err.Error() {
+				t.Errorf("sentence = %q, want the domain's %q", e.Message, c.err.Error())
+			}
+			if strings.Contains(w.Body.String(), xaBocThu) {
+				t.Errorf("body leaks the commune id: %s", w.Body.String())
 			}
 		})
 	}
