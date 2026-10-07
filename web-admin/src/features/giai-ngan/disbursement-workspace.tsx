@@ -13,7 +13,7 @@ import { danhSachNam, namTheoDongHoMay } from "@/lib/nam";
 import { coQuyen, QUYEN_GHI_NGAN_SACH, QUYEN_XEM_GIAI_NGAN } from "@/lib/quyen";
 
 import { BangDuAn } from "./bang-du-an";
-import { CategoryManagerButton } from "./category-manager-dialog";
+import { CategoryManagerButton, canManageCategories } from "./category-manager-dialog";
 import { FundingSourceProgress } from "./funding-source-progress";
 import { KhoiThemDuAn } from "./ghi-du-an";
 import { DISBURSEMENT_READ_DENIED } from "./nhan-du-an";
@@ -25,8 +25,9 @@ import { DisbursementImportButton } from "./disbursement-import-dialog";
  * the title row, then the register (`BangDuAn`).
  *
  * THE HEADER IS DRAWN FOR EVERY ACCOUNT, the register only behind `budget.read` (`CongQuyen`). The
- * three buttons appear only with `budget.update`, as the prototype draws them (`canRecord`) — UX only,
- * `finance` checks both keys on every call (rule 5).
+ * three buttons appear only with `budget.update`, as the prototype draws them (`canRecord`) — except
+ * `Hạng mục`, which `admin.lookup` also opens (its routes accept either key). UX only, `finance` checks
+ * the keys on every call (rule 5).
  *
  * THE YEAR IS ON SCREEN, NEVER IMPLIED: the list route requires `year` and refuses to default it
  * (`lib/nam.ts`). The anchor year is read ONCE at mount, so the list of years does not jump under an
@@ -74,9 +75,13 @@ export function DisbursementWorkspace() {
         subtitle="Tiến độ giải ngân theo dự án, chứng từ và vướng mắc cần tháo gỡ."
         actions={
           <>
+            {/* `budget.update` OR `admin.lookup`: the category write routes accept either (e9f669f1). */}
+            <CategoryManagerButton
+              canManage={canManageCategories(permissions)}
+              onChanged={() => setCategoryReads((n) => n + 1)}
+            />
             {canRecord && (
               <>
-                <CategoryManagerButton canManage={canRecord} onChanged={() => setCategoryReads((n) => n + 1)} />
                 {/* An import adds vouchers to many projects at once: the same full re-read as an add. */}
                 <DisbursementImportButton
                   canImport={canRecord}

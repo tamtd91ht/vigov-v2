@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 //
 // jsdom for this file: what matters is WHICH request each press sends, that the list is re-read and
-// the page told after a write, and that nothing is drawn without `budget.update` — events a markup
+// the page told after a write, and that nothing is drawn without `budget.update` / `admin.lookup` — events a markup
 // string cannot show.
 
 import { act, type ReactNode } from "react";
@@ -10,7 +10,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { finance_hangMucRa } from "@/lib/api/schema.gen";
 
-import { CategoryManagerButton } from "./category-manager-dialog";
+import { CategoryManagerButton, canManageCategories } from "./category-manager-dialog";
 
 beforeAll(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -124,7 +124,20 @@ function row(el: ParentNode, code: string): HTMLElement {
   return el.querySelector<HTMLElement>(`[data-category-row="${code}"]`)!;
 }
 
-describe("☰ Hạng mục — permission gating (budget.update)", () => {
+describe("canManageCategories — which keys open the dialog", () => {
+  it("budget.update OR admin.lookup — the two keys the write routes accept (e9f669f1)", () => {
+    expect(canManageCategories(["budget.update"])).toBe(true);
+    expect(canManageCategories(["admin.lookup"])).toBe(true);
+    expect(canManageCategories(["budget.read", "admin.lookup"])).toBe(true);
+  });
+
+  it("denied: neither key — reading the budget is not managing its categories; no session holds nothing", () => {
+    expect(canManageCategories([])).toBe(false);
+    expect(canManageCategories(["budget.read", "budget.confirm", "admin.user"])).toBe(false);
+  });
+});
+
+describe("☰ Hạng mục — permission gating", () => {
   it("without the key: nothing is drawn, nothing is read", () => {
     const calls = server();
     const el = mount(<CategoryManagerButton canManage={false} onChanged={() => {}} />);
@@ -180,21 +193,24 @@ describe("☰ Hạng mục — the list and the tier rules", () => {
 });
 
 describe("☰ Hạng mục — writes", () => {
-  it("add: POST with code, label, order = last + 1 and an Idempotency-Key; then re-read and tell the page", async () => {
+  it("add by LABEL only: no Mã box; POST label + order = last + 1, no `code`, an Idempotency-Key; re-read, tell the page", async () => {
     const onChanged = vi.fn();
-    const calls = server(() => json(category({ id: "01JHM9" }), 201));
+    const calls = server(() => json(category({ id: "01JHM9", code: "von-su-nghiep-co-tinh-chat-dau-tu" }), 201));
     const el = await openDialog(onChanged);
 
+    // The server derives the code from the label (e9f669f1): there is nothing to type.
+    expect(el.querySelector("#ma-hang-muc-moi")).toBeNull();
     const add = buttonByText(el, "Thêm")!;
     expect(add.disabled).toBe(true);
-    typeInto(el.querySelector<HTMLInputElement>("#ma-hang-muc-moi")!, " von-su-nghiep ");
-    typeInto(el.querySelector<HTMLInputElement>("#ten-hang-muc-moi")!, "Vốn sự nghiệp có tính chất đầu tư");
+    typeInto(el.querySelector<HTMLInputElement>("#ten-hang-muc-moi")!, " Vốn sự nghiệp có tính chất đầu tư ");
+    expect(buttonByText(el, "Thêm")!.disabled).toBe(false);
     act(() => buttonByText(el, "Thêm")!.click());
     await settle();
 
     const post = calls.find((c) => c.method === "POST")!;
     expect(post.url).toBe(LIST);
-    expect(post.body).toEqual({ code: "von-su-nghiep", label: "Vốn sự nghiệp có tính chất đầu tư", order: 6 });
+    expect(post.body).toEqual({ label: "Vốn sự nghiệp có tính chất đầu tư", order: 6 });
+    expect(post.body).not.toHaveProperty("code");
     expect(post.headers.get("Idempotency-Key")).toBeTruthy();
     expect(gets(calls)).toHaveLength(2);
     expect(onChanged).toHaveBeenCalledTimes(1);
@@ -248,31 +264,99 @@ describe("☰ Hạng mục — writes", () => {
     ]);
   });
 
-  it("delete: asks a reason (the category route requires one); blank sends nothing; then DELETE with it", async () => {
+  it("delete: the prototype's inline confirm (Xoá hẳn / Thôi), no reason asked, DELETE with no body", async () => {
     const onChanged = vi.fn();
     const calls = server(() => new Response(null, { status: 204 }));
     const el = await openDialog(onChanged);
 
-    act(() => buttonByLabel(el, "Xoá hạng mục Vốn trả nợ")!.click());
-    const form = el.querySelector<HTMLFormElement>('form[aria-label="Xoá hạng mục Vốn trả nợ"]')!;
-    expect(form).not.toBeNull();
-
-    act(() => buttonByText(form, "Xoá hạng mục")!.click());
-    await settle();
+    const own = row(el, "von-tra-no");
+    act(() => buttonByLabel(own, "Xoá hạng mục Vốn trả nợ")!.click());
+    // No reason form, no reason box — the route's reason is optional (e9f669f1).
+    expect(el.querySelector('form[aria-label="Xoá hạng mục Vốn trả nợ"]')).toBeNull();
+    expect(el.querySelector("#ly-do-xoa-hang-muc-01JHM1")).toBeNull();
     expect(calls.filter((c) => c.method === "DELETE")).toHaveLength(0);
-    expect(form.querySelector('[role="alert"]')?.textContent).toContain("Vui lòng nhập lý do xoá");
 
-    typeInto(form.querySelector<HTMLInputElement>("#ly-do-xoa-hang-muc-01JHM1")!, "Nhập trùng");
-    act(() => buttonByText(form, "Xoá hạng mục")!.click());
+    act(() => buttonByText(own, "Xoá hẳn")!.click());
     await settle();
 
     const del = calls.find((c) => c.method === "DELETE")!;
     expect(del.url).toBe(`${LIST}/01JHM1`);
-    expect(del.body).toEqual({ reason: "Nhập trùng" });
+    expect(del.body).toBeUndefined();
     expect(onChanged).toHaveBeenCalledTimes(1);
+    expect(el.querySelector('[role="status"]')?.textContent).toContain("Đã xoá hạng mục");
   });
 
-  it("a refusal (e.g. 403 until the route takes budget.update) is the server's sentence, verbatim; nothing re-read", async () => {
+  it("delete: Thôi closes the confirm and sends nothing", async () => {
+    const calls = server(() => new Response(null, { status: 204 }));
+    const el = await openDialog();
+
+    const own = row(el, "von-tra-no");
+    act(() => buttonByLabel(own, "Xoá hạng mục Vốn trả nợ")!.click());
+    act(() => buttonByText(own, "Thôi")!.click());
+    await settle();
+
+    expect(calls.filter((c) => c.method === "DELETE")).toHaveLength(0);
+    expect(buttonByText(own, "Xoá hẳn")).toBeUndefined();
+    expect(buttonByLabel(own, "Xoá hạng mục Vốn trả nợ")).toBeDefined();
+  });
+
+  it("a row shipped with the software (tier 2-3) has no delete control at all", async () => {
+    stubServer((c) =>
+      c.method === "GET"
+        ? json(
+            {
+              items: [
+                category({ id: "01JHS2", code: "tra-no", label: "Vốn trả nợ XDCB", source: "he-thong", tier: 2 }),
+                category({ id: "01JHS3", code: "nen", label: "Hạng mục nền", source: "he-thong", tier: 3, order: 2 }),
+              ],
+            },
+            200,
+          )
+        : json(category(), 200),
+    );
+    const el = await openDialog();
+    for (const [code, label] of [
+      ["tra-no", "Vốn trả nợ XDCB"],
+      ["nen", "Hạng mục nền"],
+    ] as const) {
+      const r = row(el, code);
+      expect(buttonByLabel(r, `Xoá hạng mục ${label}`)).toBeUndefined();
+      expect(buttonByText(r, "Xoá hẳn")).toBeUndefined();
+    }
+  });
+
+  it.each([
+    ["code_series_blocked", "Tên này đã dùng quá nhiều lần, hãy đặt tên khác."],
+    ["code_taken", "Tên này trùng với một hạng mục đã có hoặc đã xoá, hãy đặt tên khác."],
+    ["catalogue_full", "Danh mục hạng mục kế hoạch vốn đã đủ số mục tối đa. Hãy tắt hoặc xoá bớt hạng mục không dùng."],
+  ])("add refused 409 `%s`: a sentence about the LABEL (there is no Mã box to fix); the form keeps the label", async (code, sentence) => {
+    const onChanged = vi.fn();
+    // The server's own sentence for these codes talks about typing a code — a box this dialog no longer has.
+    server(() => json({ code, message: "Hãy nhập mã riêng hoặc đặt tên khác.", trace_id: "t1" }, 409));
+    const el = await openDialog(onChanged);
+
+    typeInto(el.querySelector<HTMLInputElement>("#ten-hang-muc-moi")!, "Vốn trả nợ");
+    act(() => buttonByText(el, "Thêm")!.click());
+    await settle();
+
+    expect(el.querySelector('dialog [role="alert"]')?.textContent).toBe(sentence);
+    expect(el.querySelector<HTMLInputElement>("#ten-hang-muc-moi")!.value).toBe("Vốn trả nợ");
+    expect(onChanged).not.toHaveBeenCalled();
+  });
+
+  it("add refused with any OTHER code: the server's sentence, verbatim", async () => {
+    const sentence = "Tài khoản của bạn không có quyền thực hiện thao tác này.";
+    server(() => json({ code: "forbidden", message: sentence, trace_id: "t1" }, 403));
+    const el = await openDialog();
+
+    typeInto(el.querySelector<HTMLInputElement>("#ten-hang-muc-moi")!, "Vốn trả nợ");
+    act(() => buttonByText(el, "Thêm")!.click());
+    await settle();
+
+    expect(el.querySelector('dialog [role="alert"]')?.textContent).toBe(sentence);
+  });
+
+  it("a refusal (e.g. 403 when the key was withdrawn mid-session) is the server's sentence, verbatim; nothing re-read", async () => {
     const onChanged = vi.fn();
     const sentence = "Tài khoản của bạn không có quyền thực hiện thao tác này.";
     const calls = server(() => json({ code: "forbidden", message: sentence, trace_id: "t1" }, 403));

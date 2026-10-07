@@ -11,17 +11,19 @@ import { Field } from "@/components/ui/field";
 import { IconButton } from "@/components/ui/icon-button";
 import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
 import { SkeletonRows } from "@/components/ui/skeleton";
-// vi-name-ok: existing words and tier rules of the Cấu hình catalogue tab, imported unchanged (rule 12, invariant 3)
-import { CANH_BAO_XOA, GIAI_THICH_O_MA, giaiThichKhongThaoTac } from "@/features/cau-hinh/nhan-danh-muc";
+// vi-name-ok: existing words of the Cấu hình catalogue tab, imported unchanged (rule 12, invariant 3)
+import { giaiThichKhongThaoTac } from "@/features/cau-hinh/nhan-danh-muc";
 // vi-name-ok: existing tier rules, imported unchanged (rule 12, invariant 3)
-import { choBatLai, kiemLyDoXoa, laMucGhi, thaoTacCuaMuc } from "@/features/cau-hinh/tang-danh-muc";
+import { choBatLai, laMucGhi, thaoTacCuaMuc } from "@/features/cau-hinh/tang-danh-muc";
 import { BUSY_DELETING, BusyLabel } from "@/features/danh-ba/busy-label";
-// vi-name-ok: existing write functions of danh-muc.ts, imported unchanged (rule 12, invariant 3)
-import { CAPITAL_PLAN_CATEGORY_WRITES, suaMuc, themMuc, xoaMuc } from "@/lib/api/danh-muc";
+import { addCapitalPlanCategory, deleteCapitalPlanCategory } from "@/lib/api/capital-plan-categories";
+// vi-name-ok: existing write function of danh-muc.ts, imported unchanged (rule 12, invariant 3)
+import { CAPITAL_PLAN_CATEGORY_WRITES, suaMuc } from "@/lib/api/danh-muc";
 import { layHangMucKeHoachVon } from "@/lib/api/danh-muc-nghiep-vu"; // vi-name-ok: existing read function (rule 12, invariant 3)
 import type { KetQua } from "@/lib/api/goi"; // vi-name-ok: existing result type of goi.ts (rule 12 invariant 3)
 import type { finance_danhSachHangMucRa, finance_hangMucRa } from "@/lib/api/schema.gen";
 import { cn } from "@/lib/cn";
+import { coQuyen, QUYEN_GHI_NGAN_SACH, QUYEN_QUAN_LY_DANH_MUC } from "@/lib/quyen";
 
 /**
  * `☰ Hạng mục` of the Giải ngân header — prototype `CategoryManagerDialog.tsx:56-173`: list the
@@ -32,27 +34,38 @@ import { cn } from "@/lib/cn";
  * through `lib/api/danh-muc.ts` (`CAPITAL_PLAN_CATEGORY_WRITES`), the tier rules through
  * `cau-hinh/tang-danh-muc.ts`. Nothing about a category is decided twice.
  *
- * THE KEY IS `budget.update` (user decision 06/10/2026): the button shows only with it. The category
- * write routes say `admin.lookup` until the server card that accepts either key lands; until then a
- * refusal is the server's sentence, shown verbatim. Hiding is UX — the route checks (rule 5).
+ * THE KEYS ARE `budget.update` OR `admin.lookup` (`canManageCategories`): the write routes accept
+ * either since e9f669f1 (user decision 07/10/2026). Hiding is UX — the route checks (rule 5); a
+ * refusal is the server's sentence, shown verbatim.
  *
- * THREE DIFFERENCES FROM THE PROTOTYPE, each forced by the contract:
- *   - `Mã` is asked on add: the route requires `code` and the server never generates one; a code typed
- *     by the browser from the label would be an ISSUED code nobody chose (rule 7, invariant 3).
- *   - Delete asks a reason: the category DELETE route requires it (`finance_xoaHangMucVao`). The
- *     06/10 "no reason" decision is about PROJECTS only.
- *   - Delete is offered on tier 1 only, off on tiers 1-2, rename on all — `thaoTacCuaMuc`, the same
- *     function Cấu hình draws from. The prototype's "Đi kèm phần mềm" badge marks tiers 2-3.
+ * AS THE PROTOTYPE SINCE 07/10/2026 (backend e9f669f1):
+ *   - Add asks the LABEL only; the server derives the code and never reissues a used one (rule 7,
+ *     invariant 3). The generated code is shown on the row. Its 409s are re-worded around the label
+ *     (`lib/api/capital-plan-categories.ts`), since there is no code box to fix.
+ *   - Delete is the inline `Xoá hẳn / Thôi` confirm, with no reason: the route's reason is optional and
+ *     the server records its fixed default (rule 7, invariant 1 still holds server-side).
+ *
+ * ONE DIFFERENCE KEPT: delete is offered on tier 1 only, off on tiers 1-2, rename on all —
+ * `thaoTacCuaMuc`, the same function Cấu hình draws from. The prototype's "Đi kèm phần mềm" badge
+ * marks tiers 2-3, which are never deletable.
  *
  * ROWS IN THE SERVER'S ORDER, NOT SORTED: the server returns them by `order`, and the Cấu hình tab
  * relies on that same order. A turned-off category stays listed — a project filed under it must still
  * find its name.
  */
+/**
+ * Whether the session's keys open the dialog: `budget.update` OR `admin.lookup`, the two keys the
+ * category write routes accept. UX only — fail closed on an empty list (no session = no key).
+ */
+export function canManageCategories(permissions: readonly string[]): boolean {
+  return coQuyen(permissions, QUYEN_GHI_NGAN_SACH) || coQuyen(permissions, QUYEN_QUAN_LY_DANH_MUC);
+}
+
 export function CategoryManagerButton({
   canManage,
   onChanged,
 }: {
-  /** `budget.update` held. `false` → nothing is drawn (the prototype's `canRecord`). */
+  /** `canManageCategories(...)`. `false` → nothing is drawn (the prototype's `canRecord`). */
   canManage: boolean;
   /** After any successful write: the page re-reads the categories its filter and forms use. */
   onChanged: () => void;
@@ -87,14 +100,13 @@ export function CategoryManagerDialog({ onClose, onChanged }: { onClose: () => v
   const [serverError, setServerError] = useState("");
   const [done, setDone] = useState("");
 
-  const [code, setCode] = useState("");
   const [label, setLabel] = useState("");
   // MINTED WHEN THE FORM OPENS, REUSED ON RETRY, renewed only after a success: a retry after a network
   // error must carry the SAME key, or it becomes a second category (`danh-muc.ts`, `themMuc`).
   const [addKey, setAddKey] = useState(khoaChongTrungMoi);
 
-  /** The row whose delete confirmation is open, with its reason as typed. */
-  const [deleting, setDeleting] = useState<{ id: string; reason: string; localError: string } | null>(null);
+  /** Id of the row whose `Xoá hẳn / Thôi` confirm is open. One at a time. */
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     let dropped = false;
@@ -129,19 +141,14 @@ export function CategoryManagerDialog({ onClose, onChanged }: { onClose: () => v
 
   function add(e: FormEvent<HTMLFormElement>): void {
     e.preventDefault();
-    if (busy || code.trim() === "" || label.trim() === "") return;
+    if (busy || label.trim() === "") return;
     // Last in the list, as the prototype does: the commune's familiar order (I…VI) is not broken by a
     // new row landing in the middle.
     const order = rows.reduce((max, r) => Math.max(max, r.order), 0) + 1;
-    run(
-      themMuc(CAPITAL_PLAN_CATEGORY_WRITES, { code: code.trim(), label: label.trim(), order }, addKey),
-      `Đã thêm hạng mục “${label.trim()}”.`,
-      () => {
-        setCode("");
-        setLabel("");
-        setAddKey(khoaChongTrungMoi());
-      },
-    );
+    run(addCapitalPlanCategory(label.trim(), order, addKey), `Đã thêm hạng mục “${label.trim()}”.`, () => {
+      setLabel("");
+      setAddKey(khoaChongTrungMoi());
+    });
   }
 
   function rename(row: finance_hangMucRa, next: string): void {
@@ -156,15 +163,8 @@ export function CategoryManagerDialog({ onClose, onChanged }: { onClose: () => v
   }
 
   function confirmDelete(row: finance_hangMucRa): void {
-    if (deleting === null || busy) return;
-    const check = kiemLyDoXoa(deleting.reason);
-    if (!check.ok) {
-      setDeleting({ ...deleting, localError: check.loi });
-      return;
-    }
-    run(xoaMuc(CAPITAL_PLAN_CATEGORY_WRITES, row.id, check.giaTri), `Đã xoá hạng mục “${row.label}”.`, () =>
-      setDeleting(null),
-    );
+    if (busy) return;
+    run(deleteCapitalPlanCategory(row.id), `Đã xoá hạng mục “${row.label}”.`, () => setDeletingId(null));
   }
 
   return (
@@ -176,16 +176,6 @@ export function CategoryManagerDialog({ onClose, onChanged }: { onClose: () => v
       />
 
       <form className="flex min-w-0 shrink-0 flex-wrap items-end gap-2" aria-label="Thêm hạng mục" onSubmit={add}>
-        <Field label="Mã" htmlFor="ma-hang-muc-moi" grow="auto" className="w-40 max-w-full" hint={GIAI_THICH_O_MA}>
-          <input
-            id="ma-hang-muc-moi"
-            value={code}
-            autoComplete="off"
-            placeholder="von-su-nghiep"
-            disabled={busy}
-            onChange={(e) => setCode(e.target.value)}
-          />
-        </Field>
         <Field label="Thêm hạng mục" htmlFor="ten-hang-muc-moi" grow="auto" className="min-w-0 flex-1 basis-56">
           <input
             id="ten-hang-muc-moi"
@@ -200,7 +190,7 @@ export function CategoryManagerDialog({ onClose, onChanged }: { onClose: () => v
           type="submit"
           variant="primary"
           icon={<Plus aria-hidden="true" />}
-          disabled={busy || code.trim() === "" || label.trim() === ""}
+          disabled={busy || label.trim() === ""}
         >
           Thêm
         </Button>
@@ -243,16 +233,15 @@ export function CategoryManagerDialog({ onClose, onChanged }: { onClose: () => v
                 key={`${row.id}|${row.label}`}
                 row={row}
                 busy={busy}
-                deleting={deleting !== null && deleting.id === row.id ? deleting : null}
+                confirming={deletingId === row.id}
                 onRename={(next) => rename(row, next)}
                 onSetActive={(active) => setActive(row, active)}
                 onAskDelete={() => {
                   setServerError("");
-                  setDeleting({ id: row.id, reason: "", localError: "" });
+                  setDeletingId(row.id);
                 }}
-                onReasonChange={(reason) => deleting !== null && setDeleting({ ...deleting, reason, localError: "" })}
                 onConfirmDelete={() => confirmDelete(row)}
-                onCancelDelete={() => setDeleting(null)}
+                onCancelDelete={() => setDeletingId(null)}
               />
             ))}
           </ul>
@@ -275,21 +264,20 @@ export function CategoryManagerDialog({ onClose, onChanged }: { onClose: () => v
 function CategoryRow({
   row,
   busy,
-  deleting,
+  confirming,
   onRename,
   onSetActive,
   onAskDelete,
-  onReasonChange,
   onConfirmDelete,
   onCancelDelete,
 }: {
   row: finance_hangMucRa;
   busy: boolean;
-  deleting: { reason: string; localError: string } | null;
+  /** The `Xoá hẳn / Thôi` confirm is open on this row. */
+  confirming: boolean;
   onRename: (next: string) => void;
   onSetActive: (active: boolean) => void;
   onAskDelete: () => void;
-  onReasonChange: (reason: string) => void;
   onConfirmDelete: () => void;
   onCancelDelete: () => void;
 }) {
@@ -299,7 +287,6 @@ function CategoryRow({
   const canReactivate = choBatLai(row);
   const writable = laMucGhi(row);
   const inputId = `nhan-hang-muc-${row.id}`;
-  const reasonId = `ly-do-xoa-hang-muc-${row.id}`;
 
   function save(): void {
     const next = draft.trim();
@@ -376,55 +363,38 @@ function CategoryRow({
             Bật lại
           </Button>
         )}
-        {allowed.xoa && deleting === null && (
-          <IconButton
-            type="button"
-            variant="secondary"
-            className="text-danger-600 hover:not-disabled:border-danger-600 hover:not-disabled:text-danger-600"
-            label={`Xoá hạng mục ${row.label}`}
-            disabled={busy}
-            onClick={onAskDelete}
-          >
-            <Trash2 aria-hidden="true" focusable="false" strokeWidth={1.8} />
-          </IconButton>
-        )}
-      </div>
-
-      {deleting !== null && (
-        <form
-          className="flex min-w-0 flex-col gap-2 border-t border-solid border-line pt-2"
-          aria-label={`Xoá hạng mục ${row.label}`}
-          onSubmit={(e) => {
-            e.preventDefault();
-            onConfirmDelete();
-          }}
-        >
-          <p className="m-0 text-[13px] text-ink-700">{CANH_BAO_XOA}</p>
-          <Field label="Lý do xoá *" htmlFor={reasonId} grow="auto">
-            <input
-              id={reasonId}
-              value={deleting.reason}
-              autoComplete="off"
+        {/* The prototype's inline confirm (`CategoryManagerDialog.tsx:221-253`): the trash icon turns
+            into `Xoá hẳn / Thôi` in place — no reason, no second form. */}
+        {allowed.xoa &&
+          (confirming ? (
+            <span className="flex shrink-0 gap-1.5">
+              <Button
+                type="button"
+                size="sm"
+                variant="danger"
+                disabled={busy}
+                aria-busy={busy || undefined}
+                onClick={onConfirmDelete}
+              >
+                <BusyLabel busy={busy} label="Xoá hẳn" busyText={BUSY_DELETING} />
+              </Button>
+              <Button type="button" size="sm" variant="secondary" disabled={busy} onClick={onCancelDelete}>
+                Thôi
+              </Button>
+            </span>
+          ) : (
+            <IconButton
+              type="button"
+              variant="secondary"
+              className="text-danger-600 hover:not-disabled:border-danger-600 hover:not-disabled:text-danger-600"
+              label={`Xoá hạng mục ${row.label}`}
               disabled={busy}
-              aria-invalid={deleting.localError !== ""}
-              onChange={(e) => onReasonChange(e.target.value)}
-            />
-          </Field>
-          {deleting.localError !== "" && (
-            <p role="alert" className="thong-bao-loi m-0">
-              {deleting.localError}
-            </p>
-          )}
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button type="submit" size="sm" variant="danger" disabled={busy} aria-busy={busy || undefined}>
-              <BusyLabel busy={busy} label="Xoá hạng mục" busyText={BUSY_DELETING} />
-            </Button>
-            <Button type="button" size="sm" variant="secondary" disabled={busy} onClick={onCancelDelete}>
-              Huỷ
-            </Button>
-          </div>
-        </form>
-      )}
+              onClick={onAskDelete}
+            >
+              <Trash2 aria-hidden="true" focusable="false" strokeWidth={1.8} />
+            </IconButton>
+          ))}
+      </div>
     </li>
   );
 }
