@@ -354,6 +354,14 @@ CASES = [
      w("petitions/internal/http/routes.go",
        'mux.Handle("POST /api/v1/citizen-reports",\n'
        '\tauthz.RequirePermission(d.Checker, "feedback.create")(http.HandlerFunc(h.Create)))')),
+    ("rbac_guard", "route with an any-of permission", PASS,
+     w("finance/internal/http/routes.go",
+       'mux.Handle("POST /api/v1/capital-plan-categories",\n'
+       '\tauthz.RequireAnyPermission(d.Checker, "admin.lookup", "budget.update")(http.HandlerFunc(h.Create)))')),
+    ("rbac_guard", "any-of permission naming fewer than two keys", BLOCK,
+     w("finance/internal/http/routes.go",
+       'mux.Handle("POST /api/v1/capital-plan-categories",\n'
+       '\tauthz.RequireAnyPermission(d.Checker, "admin.lookup")(http.HandlerFunc(h.Create)))')),
     # The operator realm (ADR 0048, service-platform/internal/opauth). PASS cases are the three
     # shapes operator_routes.go really uses; BLOCK cases are the same shapes with the reason or
     # key removed, the realm mixed, or a commune file borrowing the operator guard.
@@ -789,6 +797,12 @@ CASES = [
     ("quyen_key_guard", "RequirePermission với khoá bảng có thật", PASS,
      w("service-finance/internal/http/routes.go",
        'mux.Handle("GET /x", authz.RequirePermission(d.Checker, "budget.read")(h))')),
+    ("quyen_key_guard", "RequireAnyPermission với một khoá bảng không có", BLOCK,
+     w("service-finance/internal/http/routes.go",
+       'mux.Handle("POST /x", authz.RequireAnyPermission(d.Checker, "admin.lookup", "finance.update")(h))')),
+    ("quyen_key_guard", "RequireAnyPermission với hai khoá bảng có thật", PASS,
+     w("service-finance/internal/http/routes.go",
+       'mux.Handle("POST /x", authz.RequireAnyPermission(d.Checker, "admin.lookup", "budget.update")(h))')),
     ("quyen_key_guard", "bộ đồ thử cấp khoá bảng không có", BLOCK,
      w("service-comms/cmd/server/main_test.go",
        'p := staffauth.Principal{PermissionKeys: []authz.Perm{"map.read"}}')),
@@ -1278,6 +1292,12 @@ KHOA_QUYEN_CASES = [
     # Cùng ba vị trí, khoá THẬT. Không có nhóm này thì một rào "chặn tất" vẫn xanh ở trên.
     ('mux.Handle("GET /x", authz.RequirePermission(d.Checker, "budget.read")(h))',
      set(), "budget.read — bảng CÓ, phải im"),
+    # authz.RequireAnyPermission: MỖI khoá trong lời gọi đều là khoá tuyến đòi, nên mỗi khoá đều
+    # bị đem so. Thiếu ca này thì tuyến dùng dạng "một trong" lọt khỏi rào im lặng.
+    ('mux.Handle("POST /x", authz.RequireAnyPermission(d.Checker, "admin.lookup", "finance.update")(h))',
+     {"finance.update"}, "RequireAnyPermission — khoá thứ hai bịa"),
+    ('mux.Handle("POST /x", authz.RequireAnyPermission(d.Checker, "admin.lookup", "budget.update")(h))',
+     set(), "RequireAnyPermission — hai khoá bảng đều có, phải im"),
     ('p := staffauth.Principal{PermissionKeys: []authz.Perm{"budget.read", "task.read"}}',
      set(), "hai khoá bảng đều có, phải im"),
     ('var quyenKhac = authz.Perm("document.route")',

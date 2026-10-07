@@ -121,6 +121,12 @@ type quyenDecl struct {
 	Key    string // the flat permission key, for Kind == "permission"; the opauth.Key names for operator-key
 	LyDo   string // the mandatory reason for public / any-authenticated / operator-signed-in / operator-public
 	NguonF string // file it was read from, for error messages
+
+	// AnyOf holds the keys of authz.RequireAnyPermission (Kind stays "permission", Key stays empty).
+	// Kind is NOT a new value on purpose: every reader that sorts routes by kind (tools/ingress,
+	// the progress reports, the web task queue) already treats "permission" as a staff route, which
+	// this is. Key stays empty so a reader of the single key never takes one alternative for THE key.
+	AnyOf []string
 }
 
 // THE OPERATOR REALM (ADR 0048). service-platform's operator edge declares its routes with
@@ -482,7 +488,7 @@ func kiemTuyen(t *tuyen) error {
 	}
 	if t.Quyen.Kind == "" {
 		return fmt.Errorf("không có khai báo quyền trong cùng câu lệnh — " +
-			"cần authz.RequirePermission / Public / AnyAuthenticated / CitizenOnly (luật 5)")
+			"cần authz.RequirePermission / RequireAnyPermission / Public / AnyAuthenticated / CitizenOnly (luật 5)")
 	}
 	// --- LỚP XÃ CỦA TUYẾN CÔNG DÂN — ADR 0022 ----------------------------------------------
 	//
@@ -598,6 +604,26 @@ func khaiBaoTrong(call *ast.CallExpr) (quyenDecl, idemDecl, xaDecl, error) {
 				return true
 			}
 			q = quyenDecl{Kind: "permission", Key: key}
+		case "authz.RequireAnyPermission":
+			// Same literal-only discipline as RequirePermission, for each key. The runtime guard
+			// panics on fewer than two keys or an empty one; refusing the same shapes here keeps the
+			// two readers of one declaration from disagreeing.
+			if len(c.Args) < 3 {
+				loi = errors.Join(loi, fmt.Errorf(
+					"authz.RequireAnyPermission cần ít nhất hai khóa — một khóa thì dùng authz.RequirePermission"))
+				return true
+			}
+			var keys []string
+			for _, a := range c.Args[1:] {
+				key, ok := chuoiLit(a)
+				if !ok || key == "" {
+					loi = errors.Join(loi, fmt.Errorf(
+						"authz.RequireAnyPermission: khóa quyền không phải hằng chuỗi khác rỗng — không ghi vào hợp đồng được"))
+					return true
+				}
+				keys = append(keys, key)
+			}
+			q = quyenDecl{Kind: "permission", AnyOf: keys}
 		case "authz.Public":
 			ly, _ := chuoiLit(argDau(c))
 			q = quyenDecl{Kind: "public", LyDo: ly}

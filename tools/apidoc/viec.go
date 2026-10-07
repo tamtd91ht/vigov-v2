@@ -300,7 +300,7 @@ func dungViec(t tuyen, id string) viec {
 		Summary:     t.Summary,
 		Screen:      t.Screen,
 		QuyenKieu:   t.Quyen.Kind,
-		Quyen:       t.Quyen.Key,
+		Quyen:       permissionText(t.Quyen),
 		QuyenLyDo:   t.Quyen.LyDo,
 		Idem:        t.Idem.Kind,
 		IdemMode:    t.Idem.Mode,

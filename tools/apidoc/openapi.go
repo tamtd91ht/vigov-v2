@@ -305,7 +305,7 @@ func dungTaiLieu(tuyens []tuyen, gm *giaiMa) (*om, *beMat, error) {
 			Summary:     t.Summary,
 			Screen:      t.Screen,
 			QuyenKieu:   t.Quyen.Kind,
-			Quyen:       t.Quyen.Key,
+			Quyen:       permissionText(t.Quyen),
 			QuyenLyDo:   t.Quyen.LyDo,
 			Consumer:    t.Consumer,
 			XaLop:       t.Xa.Kind,
@@ -385,10 +385,29 @@ func (b *boSchema) refTheoTen(pkgDir, ten string, nghiem bool) (string, error) {
 	return b.refCua(k, nghiem)
 }
 
+// permissionText is the single-string form of a declaration's keys, for the FLAT outputs
+// (api-surface.json, the tasks/web queue) whose `permission` field is one string. Any-of keys are
+// joined with `|` — read "or" — so the value can never be mistaken for one real key of `quyen`.
+func permissionText(q quyenDecl) string {
+	if len(q.AnyOf) > 0 {
+		return strings.Join(q.AnyOf, "|")
+	}
+	return q.Key
+}
+
 func quyenJSON(q quyenDecl) *om {
 	o := newOM().set("kind", q.Kind)
 	if q.Key != "" {
 		o.set("key", q.Key)
+	}
+	// authz.RequireAnyPermission: `any_of` instead of `key`, so every single-key route keeps its
+	// exact shape and no reader of `.key` is handed one of two alternatives as the requirement.
+	if len(q.AnyOf) > 0 {
+		keys := make([]any, len(q.AnyOf))
+		for i, k := range q.AnyOf {
+			keys[i] = k
+		}
+		o.set("any_of", keys)
 	}
 	if q.LyDo != "" {
 		o.set("reason", q.LyDo)

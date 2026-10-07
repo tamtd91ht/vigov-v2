@@ -194,7 +194,11 @@ def ma_thuc_thi_go(src: str) -> str:
     return "".join(ra)
 
 
-RE_REQUIRE = re.compile(r"\bRequirePermission\s*\(")
+# `RequireAnyPermission(c, "a", "b")` là cùng một vị trí quyền, nhân lên: MỖI khoá trong đó là
+# một khoá tuyến đòi. Không nhận nó ở đây thì một khoá bịa trong dạng "một trong" lọt khỏi rào —
+# và tuyến ấy vẫn 403 với người chỉ giữ khoá bịa, im lặng như mọi ca của lớp lỗi này.
+RE_REQUIRE = re.compile(r"\b(RequirePermission|RequireAnyPermission)\s*\(")
+LOAI_TUYEN = {"RequirePermission", "RequireAnyPermission"}
 RE_EP_KIEU = re.compile(r"\b(?:authz\.)?Perm\s*\(")
 # `const QuyenHanChe authz.Perm = "feedback.restricted"` và mọi biến thể trong khối
 # `const ( ... )`, nơi từ khoá `const` nằm ở dòng khác.
@@ -404,7 +408,7 @@ def khoa_trong_go(src: str, phu_tro: dict[str, tuple[set[int], int]] | None = No
         # rỗng không khớp gì", tức đúng điều rào này muốn. Báo đỏ ở đó là phạt lời khẳng định
         # đang bảo vệ mình. Nhưng `RequirePermission(c, "")` thì là một tuyến 403 vĩnh viễn
         # thật, nên ở riêng vị trí ấy chuỗi rỗng vẫn bị chấm.
-        if chuoi == "" and loai != "RequirePermission":
+        if chuoi == "" and loai not in LOAI_TUYEN:
             return
         thay.setdefault((chuoi, ma.count("\n", 0, off) + 1), loai)
 
@@ -416,7 +420,7 @@ def khoa_trong_go(src: str, phu_tro: dict[str, tuple[set[int], int]] | None = No
             continue
         khoi = ma[m.end() - 1:het]
         for s, off in _chuoi_trong(khoi, chi_cap_mot=True):
-            ghi(s, m.end() - 1 + off, "RequirePermission")
+            ghi(s, m.end() - 1 + off, m.group(1))
 
     # 2. Ép kiểu `authz.Perm("...")`.
     for m in RE_EP_KIEU.finditer(ma):

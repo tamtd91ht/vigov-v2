@@ -250,8 +250,9 @@ def thu_thap() -> dict:
                 "pt": pt.upper(), "duong": duong,
                 "service": "service-" + ((op.get("tags") or ["?"])[0]),
                 "chuc_nang": op.get("summary", ""), "kind": nhan_kiem_soat(kind, consumer),
-                "khoa": quyen.get("key") or (ly_do if len(ly_do) <= 110
-                                             else ly_do[:107].rsplit(" ", 1)[0] + " …"),
+                # `any_of`: authz.RequireAnyPermission — giữ MỘT trong các khoá là đủ.
+                "khoa": quyen.get("key") or " hoặc ".join(quyen.get("any_of") or []) or (
+                    ly_do if len(ly_do) <= 110 else ly_do[:107].rsplit(" ", 1)[0] + " …"),
                 "chong_trung": "Bắt buộc" if op.get("x-vigov-idempotency") else "",
                 "goi": goi,
             })

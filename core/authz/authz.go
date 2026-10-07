@@ -136,6 +136,40 @@ func xacNhanXa(ctx context.Context, p Principal) bool {
 
 // RequirePermission guards a route. This is the normal case.
 func RequirePermission(c Checker, perm Perm) func(http.Handler) http.Handler {
+	return requireOneOf(c, []Perm{perm})
+}
+
+// RequireAnyPermission guards a route that a holder of ANY of the listed keys may call.
+//
+// WHY IT EXISTS: one route can serve two screens whose specifications name different keys. The
+// capital-plan category writes are the case that created it (owner decision, 07/10/2026): the
+// Cấu hình tab manages the catalogue under `admin.lookup`, while the Giải ngân screen's Hạng mục
+// dialog writes the same rows under `budget.update`, as the prototype shows. Picking one key locks
+// the other screen out with a 403 nobody can grant around; duplicating the route makes two
+// contracts for one resource.
+//
+// IT IS AN OR OF WHOLE KEYS, NEVER A WIDENING: each key is still a flat key checked as a whole
+// (Perm's comment), the commune is still checked first and identically (xacNhanXa), and a missing
+// principal is still 401. A holder of neither key gets the same 403 RequirePermission gives.
+//
+// Fewer than two keys, or an empty key, panics at wiring time. An empty list must never mean
+// "every signed-in account" — that is AnyAuthenticated, which demands a reason — and one key is
+// RequirePermission's spelling; two spellings of one declaration are two things to audit.
+func RequireAnyPermission(c Checker, perms ...Perm) func(http.Handler) http.Handler {
+	if len(perms) < 2 {
+		panic("authz: RequireAnyPermission needs at least two keys — one key is RequirePermission")
+	}
+	for _, p := range perms {
+		if p == "" {
+			panic("authz: RequireAnyPermission given an empty key")
+		}
+	}
+	return requireOneOf(c, append([]Perm(nil), perms...))
+}
+
+// requireOneOf is the single body behind both permission guards, so the 401/403 and commune
+// semantics cannot drift between them.
+func requireOneOf(c Checker, perms []Perm) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
@@ -152,12 +186,14 @@ func RequirePermission(c Checker, perm Perm) func(http.Handler) http.Handler {
 					"Phiên làm việc không hợp lệ hoặc đã kết thúc. Vui lòng đăng nhập lại.", "")
 				return
 			}
-			if !c.Allows(ctx, p, perm) {
-				httpx.WriteError(w, http.StatusForbidden, "forbidden",
-					"Tài khoản của bạn không có quyền thực hiện thao tác này.", "")
-				return
+			for _, perm := range perms {
+				if c.Allows(ctx, p, perm) {
+					next.ServeHTTP(w, r)
+					return
+				}
 			}
-			next.ServeHTTP(w, r)
+			httpx.WriteError(w, http.StatusForbidden, "forbidden",
+				"Tài khoản của bạn không có quyền thực hiện thao tác này.", "")
 		})
 	}
 }

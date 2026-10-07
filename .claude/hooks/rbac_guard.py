@@ -30,8 +30,13 @@ ROUTE = re.compile(
     r"""\.\s*(HandleFunc|Handle|Get|Post|Put|Patch|Delete|Head|Options|Method)\s*\(\s*["'`]""")
 
 AUTH_DECL = re.compile(
-    r"(RequirePermission\s*\(|RequireRole\s*\(|Public\s*\(|AnyAuthenticated\s*\(|"
-    r"CitizenOnly\s*\(|RequireScope\s*\()")
+    r"(RequirePermission\s*\(|RequireAnyPermission\s*\(|RequireRole\s*\(|Public\s*\(|"
+    r"AnyAuthenticated\s*\(|CitizenOnly\s*\(|RequireScope\s*\()")
+
+# authz.RequireAnyPermission panics at wiring on fewer than two keys, and tools/apidoc refuses
+# the same shape; this catches it at the write. One key is RequirePermission's spelling.
+ANY_PERMISSION_ONE_KEY = re.compile(
+    r"RequireAnyPermission\s*\(\s*[\w.]*\s*(?:,\s*\"[^\"]*\"\s*)?\)")
 
 # Public()/AnyAuthenticated() must state a REASON — without one, nobody dares remove it later
 REASON_REQUIRED = re.compile(r"(Public|AnyAuthenticated)\s*\(\s*\)")
@@ -102,6 +107,9 @@ def main() -> None:
             hits.append(f"line {lineno}: {stmt[:70]} — NO permission declared")
         elif REASON_REQUIRED.search(stmt):
             hits.append(f"line {lineno}: Public()/AnyAuthenticated() states NO reason")
+        elif ANY_PERMISSION_ONE_KEY.search(stmt):
+            hits.append(f"line {lineno}: RequireAnyPermission() names fewer than two keys — "
+                        "use RequirePermission for one")
         elif OPAUTH_PUBLIC_EMPTY.search(stmt) or OPAUTH_SIGNED_IN_NO_REASON.search(stmt):
             hits.append(f"line {lineno}: opauth.Public()/SignedIn() states NO reason")
         elif OPAUTH_NO_KEY.search(stmt):
@@ -120,6 +128,8 @@ def main() -> None:
              "",
              "  Declare EXPLICITLY, one of four:",
              "    mux.Handle(\"GET /phan-anh\", authz.RequirePermission(c, \"feedback.read\")(h.List))",
+             "      (one route, two screens whose specs name different keys:",
+             "       authz.RequireAnyPermission(c, \"admin.lookup\", \"budget.update\") — any one key suffices)",
              "    mux.Handle(\"GET /...\", authz.AnyAuthenticated(\"<why any account must reach this>\")(h))",
              "    mux.Handle(\"GET /cong-dan/phan-anh\", authz.CitizenOnly()(h.MyList))",
              "    mux.Handle(\"GET /tra-cuu\", authz.Public(\"<specific reason it is public>\")(h.Lookup))",
