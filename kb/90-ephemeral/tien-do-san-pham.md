@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 
+derived_from_commit: 0b51d3cb
 expires: 2027-01-05
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -60,7 +60,7 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 | 3 | Sổ tay lãnh đạo | `/nhiem-vu/so-tay` | `QUYEN_XEM_NHIEM_VU` | ✓ | **không khai** |
 | 4 | Biên bản họp | `/nhiem-vu/bien-ban` | `QUYEN_XEM_NHIEM_VU` | ✓ | 2 |
 | 5 | Văn bản & Đơn thư | `/van-ban` | `QUYEN_XEM_VAN_BAN` | ✓ | 8 |
-| 6 | Giải ngân | `/giai-ngan` | `QUYEN_XEM_GIAI_NGAN` | ✓ | 3 |
+| 6 | Giải ngân | `/giai-ngan` | `QUYEN_XEM_GIAI_NGAN` | ✓ | 5 |
 | 7 | Thu - Chi ngân sách | `/giai-ngan/thu-chi` | `QUYEN_XEM_GIAI_NGAN` | ✓ | 1 |
 | 8 | Thông báo nội bộ | `/thong-bao` | `QUYEN_SOAN_THONG_BAO` | ✓ | 9 |
 | 9 | Danh bạ người dân | — | — | ✗ | |
@@ -74,7 +74,7 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 | 17 | Hướng dẫn sử dụng | — | — | ✗ | |
 | 18 | Cấu hình | `/cau-hinh` | `KHOA_MO_CAU_HINH` | ✓ | 2 |
 
-**15/18** mục menu có màn thật. **56** phần chưa dựng đang hiện trên các màn ấy.
+**15/18** mục menu có màn thật. **58** phần chưa dựng đang hiện trên các màn ấy.
 
 ⚠ **1 màn KHÔNG KHAI khối `PHAN_CHUA_DUNG`**, và ô của chúng đọc là `không khai` chứ không phải `0` —
 hai thứ khác hẳn nhau. `0` nghĩa là màn có khai một danh sách và danh sách ấy rỗng, tức mọi phần
@@ -126,10 +126,10 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `service-comms` | 21 | 12 | 4 | 3 |
 | `service-documents` | 10 | 3 | 4 | 0 |
 | `service-finance` | 28 | 2 | 4 | 0 |
-| `service-identity` | 43 | 13 | 2 | 1 |
+| `service-identity` | 44 | 13 | 2 | 1 |
 | `service-petitions` | 43 | 18 | 5 | 0 |
 | `service-platform` | 15 | 17 | 5 | 1 |
 | `service-reporting` | 3 | 0 | 1 | 0 |
 | `tools` | 20 | 0 | 0 | 0 |
-| `web-admin` | 67 | 35 | 3 | 1 |
+| `web-admin` | 68 | 35 | 3 | 1 |
 

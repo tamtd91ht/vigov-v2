@@ -6320,7 +6320,7 @@
     },
     "domain.SessionIdleExpired": {
       "kind": "func",
-      "at": "service-identity/internal/domain/session_idle.go:42"
+      "at": "service-identity/internal/domain/session_idle.go:46"
     },
     "domain.SetsAudioField": {
       "kind": "func",
