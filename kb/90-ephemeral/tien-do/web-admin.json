@@ -965,6 +965,24 @@
       "bang_chung": "597630d7 (màn) · cca90b98 (trang xem thử /xem-thu/nhiem-vu) · ADR 10b27db5, 0ea08ec2. tsc sạch, eslint sạch, vitest 255 tệp/4526 ca xanh. ui-ux-reviewer trên ảnh render (Chrome headless 1440px, dữ liệu mẫu): vòng 1 FAIL A B C F G (hàng lọc vỡ do luật CSS cũ 'label + select'), vòng 2 PASS A B C E G, D-1 (badge tràn cột) và F-1 (câu thừa dưới Giao việc) sửa tay + chụp lại xác nhận. make check dừng ở gofmt các tệp citizen_letter chưa commit của phiên Văn bản — không thuộc lượt này.",
       "no_confirm": [],
       "tiep_theo": "(1) Chưa chụp được 2 trạng thái kết quả của hộp Nhập Excel (POST kiểm thử bị fixture-fetch dùng chung từ chối — tệp đó phiên Văn bản đang giữ). (2) Chưa kiểm trên prod (cần người dùng đăng nhập). (3) Hệ quả đã ghi ở ADR 0076 lần 2 (a)–(k): nhãn trạng thái cố định đảo câu #21 (cần hỏi khách), các câu theo spec nói khác hành vi máy chủ ('— Người đang tạo nhiệm vụ —', câu gợi ý 'Hoàn thành: Lãnh đạo đã duyệt', 'qua chuông và qua thư'), bỏ Việc cha (không còn đường lên việc cha), hai cột Sổ theo dõi lặp dữ liệu. (4) Khi make kb chạy sạch: thay '?' số lần gia hạn bằng extension_count thật (backend 9f3a21c4 đã có). (5) Câu dưới nút Giao việc (đổi người → về 'Chưa thực hiện') bỏ theo prototype; máy chủ vẫn đổi trạng thái."
+    },
+    {
+      "id": "giai-ngan-noi-backend-moi-08-10",
+      "menu": "giai-ngan",
+      "viec": "Nối giao diện Giải ngân với backend mới (356a5a9f, 65afbdcd): Khoá chứng từ nháp, câu chặn tự xác nhận của máy chủ, Gỡ theo budget.update không lý do, đơn vị thực hiện nhập tay + danh sách đơn vị đã nhập, người theo dõi + hạn vướng mắc",
+      "trang_thai": "xong",
+      "bang_chung": "8f4ed979; ingress/định tuyến 031c022e. vitest toàn bộ 256 tệp/4570 ca, lint sạch, build; ảnh xem thử (Chrome headless) dòng chứng từ nháp có Khoá thật, Gỡ viền đỏ.",
+      "no_confirm": [],
+      "tiep_theo": "Chưa kiểm trên prod (cần người dùng đăng nhập). Còn '?': cờ nguy cơ không giải ngân hết (chờ chủ dự án — ADR 0075 còn mở #3), tự sinh nhiệm vụ theo dõi + thông báo nhắc tên (sự kiện). Chú thích đầu ghi-du-an.tsx (~58–74) còn nói budget.confirm/lý do cho xoá dự án — lỗi thời từ 06/10, chưa sửa."
+    },
+    {
+      "id": "nhiem-vu-noi-backend-moi-08-10",
+      "menu": "nhiem-vu",
+      "viec": "Nối giao diện Nhiệm vụ với extension_count / pending_extension / requires_directive / roots (9f3a21c4)",
+      "trang_thai": "xong",
+      "bang_chung": "5686de28 (kèm sửa 2 fixture test cau-hinh, leader-notebook làm main đỏ tsc sau khi hợp đồng sinh lại). tsc sạch, vitest xanh.",
+      "no_confirm": [],
+      "tiep_theo": "roots=true chưa bật mặc định (giữ khớp số với Tổng quan) — prototype bật; cần chủ dự án nếu muốn theo. Trọng số việc con vẫn '?' (chờ chủ dự án)."
     }
   ]
 }
