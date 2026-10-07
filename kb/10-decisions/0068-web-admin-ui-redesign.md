@@ -3,34 +3,42 @@ id: 0068-web-admin-ui-redesign
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: 05510b7d
+derived_from_commit: b91b2827
 expires: null
 owns_facts:
   - "làm mới giao diện web-admin chỉ đổi phần trình bày: không đổi đường dẫn, lời gọi API, state, logic lọc/phân trang/phân quyền, tên trường, name/id ô nhập, handler, thứ tự bước nghiệp vụ; không thêm tính năng 'cho hiện đại' (chốt 02/10/2026) — NGOẠI LỆ DUY NHẤT 05/10/2026: URL theo hộp chi tiết lớn (?task=<mã>)"
   - "nền tảng giao diện web-admin là Tailwind CSS v4 + shadcn/ui, icon lucide-react, phông tự phục vụ qua @fontsource (không gọi Google lúc build hay lúc chạy); đỏ/vàng chỉ làm điểm nhấn nhận diện; token chế độ tối chuẩn bị sẵn nhưng chưa bật (màu chính #1565C0 và phông Be Vietnam Pro đã bị thay — xem §Sửa đổi 05/10/2026 (lần 2))"
-  - "ngôn ngữ hình ảnh web-admin từ 05/10/2026 (lần 2) theo bản quy chuẩn OMICALL CRM (§1–§11 của bản ấy) trừ 4 điều chỉnh chữ cho WCAG AA và 2 điểm loại trừ: navy #1E3150 cho chữ/icon/header/tab đang chọn; accent #00B1FF chỉ làm nền hover/trạng thái chọn/mảng tô, KHÔNG làm chữ; vòng focus dùng accent ĐẬM đạt ≥3:1 (#00B1FF chỉ 2.40:1, WCAG 1.4.11); nút chính xanh lá chữ trắng #1d853c (#56CC6E chỉ làm nền nhạt/viền); đỏ #FF5955, cam #FEA220; nền ngoài #D1D1D1, app #F5F6FA, thẻ #FFFFFF, nền phụ navy 5%/10%; bóng nhuộm navy, thẻ trên nền app không bóng; Roboto 15px, phân cấp bằng độ đậm 400/500/600, chú thích 12px; bo góc 6/8/12/16/32/50%; control cao 36px; header navy 68px dính trên cùng (điều hướng module KHÔNG còn ở header — xem §Sửa đổi 05/10/2026 (lần 4)); thanh lọc 48px nền navy 5%; dòng bảng 64px không kẻ sọc; áp một lần cho toàn web-admin, không theo xã (thay bảng màu #102b43/#2fb1f9 của §Sửa đổi 05/10/2026)"
-  - "chữ mờ web-admin = navy ở độ mờ ≈0.72 (≥4.5:1); độ mờ 0.5 CHỈ cho trạng thái vô hiệu; chữ liên kết #0369a1; huy hiệu thông báo đỏ #D93A36 chữ trắng ≥11px (chốt 05/10/2026 lần 2)"
+  - "ngôn ngữ hình ảnh web-admin từ 05/10/2026 (lần 2) theo bản quy chuẩn OMICALL CRM (§1–§11 của bản ấy) trừ 4 điều chỉnh chữ cho WCAG AA (bỏ ở lần 6 #7) và 2 điểm loại trừ: navy #1E3150 cho chữ/icon/header/tab đang chọn; accent #00B1FF chỉ làm nền hover/trạng thái chọn/mảng tô, KHÔNG làm chữ; vòng focus dùng accent ĐẬM đạt ≥3:1 (#00B1FF chỉ 2.40:1, WCAG 1.4.11); nút chính xanh lá chữ trắng #1d853c (#56CC6E chỉ làm nền nhạt/viền); đỏ #FF5955, cam #FEA220; nền ngoài #D1D1D1, app #F5F6FA, thẻ #FFFFFF, nền phụ navy 5%/10%; bóng nhuộm navy, thẻ trên nền app không bóng; Roboto 15px, phân cấp bằng độ đậm 400/500/600, chú thích 12px; bo góc 6/8/12/16/32/50%; control cao 36px; header navy 68px dính trên cùng (điều hướng module KHÔNG còn ở header — xem §Sửa đổi 05/10/2026 (lần 4)); thanh lọc 48px nền navy 5%; dòng bảng 64px không kẻ sọc; áp một lần cho toàn web-admin, không theo xã (thay bảng màu #102b43/#2fb1f9 của §Sửa đổi 05/10/2026) — toàn bộ dòng này bị THAY bởi §Sửa đổi 07/10/2026 (lần 6) #1"
+  - "chữ mờ web-admin = navy ở độ mờ ≈0.72 (≥4.5:1); độ mờ 0.5 CHỈ cho trạng thái vô hiệu; chữ liên kết #0369a1; huy hiệu thông báo đỏ #D93A36 chữ trắng ≥11px (chốt 05/10/2026 lần 2) — THAY bởi §Sửa đổi 07/10/2026 (lần 6) #7: web-admin dùng đúng mã màu spec, tương phản dưới AA là nợ trợ năng chủ dự án chấp nhận"
   - "web-admin không có nút nổi (FAB) chat/gọi; không có tên hay logo OMICALL/ViHAT trên màn cán bộ — chỉ mượn ngôn ngữ hình ảnh (chốt 05/10/2026 lần 2)"
-  - "'sống động hơn' (chủ dự án 05/10/2026) = điểm nhấn màu + thẻ trắng bo góc trên nền xám nhạt + icon/ảnh đại diện + phản hồi khi tương tác; vẫn không blur/gradient/hình trang trí (§11 giữ)"
+  - "'sống động hơn' (chủ dự án 05/10/2026) = điểm nhấn màu + thẻ trắng bo góc trên nền xám nhạt + icon/ảnh đại diện + phản hồi khi tương tác; vẫn không blur/gradient/hình trang trí (§11 giữ) — vế không blur bị bỏ ở §Sửa đổi 07/10/2026 (lần 6) #3"
   - "mọi màn chi tiết web-admin mở dạng HỘP LỚN đè lên trang danh sách, mỗi đợt một màn, Nhiệm vụ thí điểm trước (rồi Đơn thư, Phản ánh): thanh tab thao tác trên (Xem chi tiết · Chỉnh sửa · Xoá) + 'Tạo bởi … lúc …' bên phải; khối trạng thái nổi bật; thân hai cột (thông tin trái, nhật ký/trao đổi phải); dải nút tròn bên phải CHỈ cho thao tác phụ, mỗi nút có tooltip; thao tác chính giữ nút có chữ; chip bước không bấm để chuyển trạng thái ngoài allowed_transitions (chốt 05/10/2026)"
   - "tab 'Xoá' của hộp chi tiết mở đúng luồng xoá mềm kèm lý do đang có (quyền task.delete), chỉ hiện khi có quyền (chốt 05/10/2026)"
   - "URL theo hộp chi tiết: mở hộp đẩy MỘT mục lịch sử /nhiem-vu?task=<mã>, Back đóng hộp về danh sách cùng bộ lọc; đi tới việc cha/con trong hộp THAY mục lịch sử; đổi bộ lọc giữ ?task= (chốt 05/10/2026)"
   - "tab nhiều bản ghi trong ngăn chi tiết: mở bản ghi mới thêm tab và chuyển sang nó, đóng ngăn giữ tab, ✕ đóng từng tab, 'Đóng tất cả'; giữ trong phiên trình duyệt theo xã + người dùng, tối đa 8 (cũ nhất tự đóng); ?task= = tab đang xem, đổi tab thay mục lịch sử (chốt 05/10/2026, làm ngay — thay 'hoãn')"
   - "globals.css cũ nằm trong cascade layer `legacy` để tiện ích Tailwind thắng; preflight của Tailwind KHÔNG bật ở đợt 1"
-  - "không dùng component shadcn vi phạm rào chắn của kho: sidebar (document.cookie, Math.random), chart (dangerouslySetInnerHTML), sonner (chèn <style> lúc chạy); component bọc button/select/input gốc, không thay chúng"
+  - "không dùng component shadcn vi phạm rào chắn của kho: sidebar (document.cookie, Math.random), chart (dangerouslySetInnerHTML), sonner (chèn <style> lúc chạy — dòng sonner bị THAY bởi §Sửa đổi 07/10/2026 (lần 6) #4); component bọc button/select/input gốc, không thay chúng"
   - "khi làm mới giao diện, kỳ vọng trình bày trong test (chuỗi class, ký tự emoji, markup bao ngoài) được đổi theo; khẳng định hành vi thì không"
-  - "mục menu chưa có màn (Sổ tay lãnh đạo, Bản đồ kinh tế số, Báo cáo) mang dấu '?' như mọi phần chưa dựng (thay huy hiệu 'Chưa có' từ 02/10/2026), không có trang khung — không bao giờ 'Sắp có'"
+  - "mục menu chưa có màn (Sổ tay lãnh đạo, Bản đồ kinh tế số, Báo cáo) mang dấu '?' như mọi phần chưa dựng (thay huy hiệu 'Chưa có' từ 02/10/2026), không có trang khung — không bao giờ 'Sắp có' (dấu '?' cạnh mục sidebar bị bỏ ở §Sửa đổi 07/10/2026 (lần 6) #3; 'Sắp có' vẫn cấm)"
   - "topbar hiện 'Ủy ban nhân dân' làm dòng chú thích phía trên displayName của xã giữ nguyên văn — tên xã không bao giờ được ghép chuỗi"
   - "đặc tả giao diện chủ dự án cung cấp 02/10/2026 thay docs/ui-ux/15 về mặt hình thức (sidebar trắng thay navy); docs/ui-ux là bản sao yêu cầu, không sửa"
   - "làm mới giao diện được ưu tiên hơn mọi việc web-admin khác; Phản ánh đứng đầu đợt 2; đợt 1 = nền móng + Danh bạ, Tổng quan, Nhiệm vụ, Đăng nhập; đợt 2 = 9 màn còn lại + bố cục thẻ trên điện thoại + rà căn hàng/trợ năng"
-  - "đặc tả giao diện v2 (02/10/2026): hiện đại = ít ma sát, không trang trí — không backdrop-blur, không gradient làm phong cách chính; quyết định đã chốt (@fontsource, topbar 'Ủy ban nhân dân'; dấu '?' thay 'Chưa có' theo §14) thắng chỗ v2 viết khác; mục ROADMAP_PHASE2 không làm trong đợt này"
+  - "đặc tả giao diện v2 (02/10/2026): hiện đại = ít ma sát, không trang trí — không backdrop-blur, không gradient làm phong cách chính; quyết định đã chốt (@fontsource, topbar 'Ủy ban nhân dân'; dấu '?' thay 'Chưa có' theo §14) thắng chỗ v2 viết khác; mục ROADMAP_PHASE2 không làm trong đợt này — vế không backdrop-blur bị bỏ ở §Sửa đổi 07/10/2026 (lần 6) #3"
   - "mọi thanh lọc web-admin: ô tìm đứng đầu bên trái, tối đa 2 bộ lọc chính hiện sẵn, còn lại sau nút 'Bộ lọc' hiện số bộ lọc ẩn đang khác mặc định và mở sẵn khi số ấy > 0; mọi ô cao bằng nhau, nhãn trên ô (chốt 02/10/2026)"
-  - "web-admin không hiện chữ 'ViGov' ở bất cứ chỗ nào cán bộ nhìn thấy; chỗ đứng tên sản phẩm thay bằng tên xã đang đăng nhập (đọc lúc chạy theo tên miền), câu 'hệ thống ViGov' thành 'hệ thống'; đăng nhập = tên xã + 'Hệ thống điều hành số', tab mặc định 'Hệ thống điều hành số cấp xã', tab màn '<Màn> · <tên xã>'; định danh mã, chú thích, tên gói, tên biến môi trường và tên miền vigov.vn giữ nguyên; issuer TOTP 'ViGov' của tài khoản vận hành nhà cung cấp giữ nguyên vì cán bộ xã không thấy (chốt 02/10/2026)"
+  - "web-admin không hiện chữ 'ViGov' ở bất cứ chỗ nào cán bộ nhìn thấy; chỗ đứng tên sản phẩm thay bằng tên xã đang đăng nhập (đọc lúc chạy theo tên miền), câu 'hệ thống ViGov' thành 'hệ thống'; đăng nhập = tên xã + 'Hệ thống điều hành số', tab mặc định 'Hệ thống điều hành số cấp xã', tab màn '<Màn> · <tên xã>'; định danh mã, chú thích, tên gói, tên biến môi trường và tên miền vigov.vn giữ nguyên; issuer TOTP 'ViGov' của tài khoản vận hành nhà cung cấp giữ nguyên vì cán bộ xã không thấy (chốt 02/10/2026) — khối brand 'ViGov' ở sidebar được đưa lại bởi §Sửa đổi 07/10/2026 (lần 6) #3"
   - "phần đặc tả màn web-admin chưa dựng hiện đúng vị trí đặc tả dưới dạng control nó sẽ là, bị vô hiệu, mang dấu '?': di chuột hiện 'Tính năng đang phát triển', bấm mở mô tả; không gọi máy chủ, không lưu gì; việc chủ dự án quyết không làm thì không có chỗ giữ, mục ROADMAP_PHASE2 thì có (mô tả ghi giai đoạn 2); khối gập 'phần chưa dựng' cuối màn bị bỏ; bảng vị trí từng màn chủ dự án đã duyệt, kèm bảng điều chỉnh khi dựng thắng dòng tương ứng — Điểm hài lòng Tổng quan dựng số thật, không còn là chỗ giữ (chốt 02/10/2026)"
   - "bố cục màn Tổng quan web-admin từ 05/10/2026 (lần 3) theo KHUNG prototype DashboardWorkspace.tsx: header 'Tổng quan điều hành' + dòng kỳ + nút kỳ bên phải, PDF/XLSX/PPTX, Trình chiếu; MỘT lưới 1/2/3 cột gồm sáu khối bằng nhau (Nhiệm vụ · Văn bản & Đơn thư · Giải ngân · Thu – chi · Phản ánh · Kinh tế & Tài nguyên) + ô thứ bảy 'Cần xử lý ngay' cuộn trong ô; thay bố cục 3 hàng của đặc tả v2 (02/10) RIÊNG cho Tổng quan; chi tiết hình ảnh theo §Sửa đổi 05/10/2026 (lần 2), không theo CSS prototype"
-  - "điều hướng module web-admin từ 05/10/2026 (lần 4) là THANH DỌC BÊN TRÁI theo khung prototype AppSidebar.tsx: icon + chữ, chia nhóm, mục đang mở nổi bật, thu gọn được về dải chỉ icon (tooltip); thay header navy với nút module chỉ icon của lần 2 #6; header navy giữ tên xã, chuông, menu người dùng; dưới 768px giữ ngăn điều hướng có chữ; hình ảnh vẫn theo lần 2"
+  - "điều hướng module web-admin từ 05/10/2026 (lần 4) là THANH DỌC BÊN TRÁI theo khung prototype AppSidebar.tsx: icon + chữ, chia nhóm, mục đang mở nổi bật, thu gọn được về dải chỉ icon (tooltip); thay header navy với nút module chỉ icon của lần 2 #6; header navy giữ tên xã, chuông, menu người dùng; dưới 768px giữ ngăn điều hướng có chữ; hình ảnh vẫn theo lần 2 — header navy và hình ảnh bị THAY bởi §Sửa đổi 07/10/2026 (lần 6) #1–#2"
   - "sau đợt 2 giữ nguyên: thanh lọc Phản ánh hiện sẵn Tìm + Phạm vi + Trạng thái; nút thanh soạn thảo Nội dung 36px; 'Thông báo' ở nhóm Công việc của menu; câu 'Ngừng dùng <tên>?' và 'Xác nhận khôi phục câu mặc định' (chốt 02/10/2026)"
-  - "từ 06/10/2026 (lần 5) cấu trúc MỌI màn web-admin theo ../vigov-require/apps/admin (không theo vigov-prototype.html): bố cục, nhãn, thứ tự, nút, cột, trường, hộp thoại hay tại chỗ — từng màn một; CSS giữ lần 2 + lần 4; điểm sở thích trình bày ghi trước đó mà prototype nói khác thì bị prototype THAY (mỗi điểm thay ghi ở mục sổ của màn đổi nó); luật cứng và quyết định chủ dự án liệt kê ở §Sửa đổi 06/10/2026 (lần 5) #4 giữ nguyên; chỉ front-end, phần cần tuyến backend mới là control vô hiệu dấu '?' (§14)"
+  - "từ 06/10/2026 (lần 5) cấu trúc MỌI màn web-admin theo ../vigov-require/apps/admin (không theo vigov-prototype.html): bố cục, nhãn, thứ tự, nút, cột, trường, hộp thoại hay tại chỗ — từng màn một; CSS giữ lần 2 + lần 4; điểm sở thích trình bày ghi trước đó mà prototype nói khác thì bị prototype THAY (mỗi điểm thay ghi ở mục sổ của màn đổi nó); luật cứng và quyết định chủ dự án liệt kê ở §Sửa đổi 06/10/2026 (lần 5) #4 giữ nguyên; chỉ front-end, phần cần tuyến backend mới là control vô hiệu dấu '?' (§14) — vế 'CSS giữ lần 2 + lần 4' bị THAY bởi §Sửa đổi 07/10/2026 (lần 6)"
+  - "từ 07/10/2026 (lần 6) design system TOÀN web-admin theo spec Giải ngân của chủ dự án (tmp/web/giai-ngan/vigov-giai-ngan-spec/00-design-system.md, 01-layout-shell.md — ngoài git): phông Inter, bảng token + biến shadcn spec 00 §2, thang chữ 00 §3, mặc định shadcn bản mới 00 §5; THAY lần 2 (token OMICALL, control 36px, header 68px, dòng 64px) và phần hình ảnh của lần 4; giá trị token sống trong mã khi dựng, không chép vào kb"
+  - "khung web-admin từ 07/10/2026 (lần 6): sidebar navy cố định thu gọn w-60/w-16 (PanelLeftClose/Open), khối brand 'VG · ViGov · Điều hành số cấp xã', footer CHỈ 'Phiên bản …' (không dòng môi trường); header TRẮNG 64px dính trên, bên trái hai phần tử 'Ủy ban nhân dân' + displayName in hoa bằng CSS, không ghép chuỗi (§7 giữ), + tỉnh/thành (vẫn đọc lúc chạy theo Host, không ghi cứng), ô tìm luôn hiện nhưng VÔ HIỆU dấu '?', chuông, menu người dùng; KHÔNG còn dải banner xã dưới header (bỏ ADR 0069 #5 trên web-admin); dưới 768px giữ ngăn điều hướng có chữ"
+  - "lần 6 bỏ §11 (cấm blur: overlay hộp thoại backdrop-blur-xs, header bg-white/95 backdrop-blur) và §13 (khối brand ViGov ở sidebar); bỏ dấu '?' cạnh mục sidebar, nhưng control vô hiệu '?' trong thân màn cho phần chưa dựng (§14) giữ"
+  - "web-admin dùng toast sonner chung (một Toaster ở khung app) từ 07/10/2026 (lần 6) — thay dòng sonner của §4; Giải ngân dùng câu chữ của spec; lỗi trong biểu mẫu vẫn hiện tại chỗ"
+  - "phông Inter của web-admin nạp bằng @fontsource/inter (tự phục vụ), không next/font/google như spec ghi — lựa chọn kỹ thuật của phiên 07/10/2026, ghi để chủ dự án phủ quyết"
+  - "thứ tự nguồn web-admin sau lần 6: luật cứng lần 5 #4 thắng (trừ điểm lần 6 nói rõ thay); cấu trúc = ../vigov-require/apps/admin + spec 02–07; CSS = spec 00/01. Lượt đầu = khung + design system + màn Giải ngân; Thu – Chi (/giai-ngan/thu-chi) lượt riêng"
+  - "web-admin dùng ĐÚNG mã màu spec Giải ngân (chủ dự án 07/10/2026, lần 6 #7) — thay yêu cầu AA cho chữ của §Bối cảnh và 4 điều chỉnh AA của lần 2 #7; tương phản dưới AA (chữ phụ #8aa2b8 2.64:1, chữ/focus #2fb1f9 2.39:1, viền ô #dde7ef 1.25:1 …) là NỢ TRỢ NĂNG đã biết, chủ dự án chấp nhận"
+  - "hành vi spec Giải ngân trái luật máy chủ hiện tại (Gỡ chứng từ không lý do, Khoá nháp = xác nhận + khoá một lần, không Mở khoá, chặn tự xác nhận, câu xoá hàng loạt / một dự án một nguồn) = BACKEND DEPENDENCY (lần 6 #9): lượt này đặt control '?' ở đó; control đang chạy đúng luật máy chủ (Gỡ kèm lý do, Mở khoá kèm lý do) GIỮ tới khi máy chủ đổi"
 ---
 
 # 0068. Làm mới giao diện web-admin — chỉ trình bày, Tailwind v4 + shadcn/ui
@@ -41,7 +49,10 @@ OMICALL CRM: màu, phông Roboto, bo góc — §*Sửa đổi 05/10/2026 (lần 
 sidebar của lần ấy đã bị thay) · **Sửa đổi 05/10/2026 (lần 3)** (Tổng quan theo khung prototype —
 §*Sửa đổi 05/10/2026 (lần 3)*) · **Sửa đổi 05/10/2026 (lần 4)** (điều hướng về thanh dọc bên trái —
 §*Sửa đổi 05/10/2026 (lần 4)*) · **Sửa đổi 06/10/2026 (lần 5)** (cấu trúc mọi màn giống prototype
-nhất có thể, CSS giữ lần 2 + lần 4 — §*Sửa đổi 06/10/2026 (lần 5)*; đang dựng từng màn) · **Ngày:** 2026-10-02 · **Người quyết:** chủ dự án, 02/10/2026 · **Thay**
+nhất có thể, CSS giữ lần 2 + lần 4 — §*Sửa đổi 06/10/2026 (lần 5)*; đang dựng từng màn; vế CSS đã bị
+lần 6 thay) · **Sửa đổi 07/10/2026 (lần 6)** (design system theo spec Giải ngân cho toàn web-admin:
+Inter, bảng màu spec, header trắng, sidebar thu gọn; bỏ §11, §13, dấu "?" ở sidebar — §*Sửa đổi
+07/10/2026 (lần 6)*) · **Ngày:** 2026-10-02 · **Người quyết:** chủ dự án, 02/10/2026 · **Thay**
 `docs/ui-ux/15-phu-luc-giao-dien-chung.md` về **hình thức** (không thay về hành vi, xem §8)
 
 ## Bối cảnh
@@ -524,3 +535,72 @@ mẫu ui mới"* (lần 3).
 trước đây chỉ là sở thích đều nhường prototype. Các điểm ở #4 không phải sở thích: mỗi điểm có luật
 hoặc ADR sở hữu, và prototype viết trước hoặc ngoài các ràng buộc ấy. Ngoài lời trên, chủ dự án
 **không nêu** lý do — đừng suy thêm.
+
+## Sửa đổi 07/10/2026 (lần 6) — design system theo spec Giải ngân cho toàn web-admin
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác — kể cả **lần 2** (token OMICALL
+CRM) và **phần hình ảnh của lần 4**, nay **bị thay**. **Người quyết:** chủ dự án, 07/10/2026, trong
+phiên chính (lệnh `/fix-web-admin --menu=giai-ngan`). **Chưa dựng** — mỗi dòng là điều phải đúng khi
+dựng.
+
+Nguồn: bản spec Giải ngân chủ dự án viết từ mã prototype, `tmp/web/giai-ngan/vigov-giai-ngan-spec/`
+(ngoài git), chủ yếu `00-design-system.md` và `01-layout-shell.md`; prototype
+`../vigov-require/apps/admin`. Giá trị token **không chép vào đây** (luật 9) — chúng sống trong mã khi
+dựng; spec là nguồn lúc dựng.
+
+Câu trả lời của chủ dự án (chọn trong câu hỏi của phiên, nguyên văn lựa chọn): phạm vi design system →
+**"Đổi toàn app theo spec"** (Inter + bảng màu spec + header trắng + sidebar thu gọn cho cả 14 menu;
+thay lần 2/4); các điểm spec đi ngược quyết định cứng (chữ/logo "ViGov" + footer "Môi trường phát
+triển", bỏ dấu "?" ở mục chưa dựng, blur nền hộp thoại) → **"Theo spec"**; spec 08 (`/giai-ngan/thu-chi`)
+→ **"Để lượt riêng"**; toast → **"Thêm sonner, dùng chung"**.
+
+| # | Điểm | Chốt |
+|---|---|---|
+| 1 | Design system | Spec 00/01 cho **toàn web-admin**: phông **Inter**; bảng token (navy, surface, line, ink, ink-muted, brand, leaf, tangerine, violet, teal, danger, các nền nhạt) và biến shadcn theo spec 00 §2; thang chữ spec 00 §3; mặc định shadcn bản mới spec 00 §5 (Button `h-8` …). **Thay** lần 2 (token OMICALL, control 36px, header 68px, dòng bảng 64px) và phần hình ảnh của lần 4. Vẫn một lần cho toàn web-admin, không theo xã (ADR 0069) |
+| 2 | Khung | Sidebar navy **cố định**, thu gọn `w-60` / `w-16` (`PanelLeftClose` / `PanelLeftOpen`), khối brand **"VG · ViGov · Điều hành số cấp xã"**, footer phiên bản. Header **TRẮNG** 64px dính trên: bên trái tên xã in hoa + tỉnh/thành — **vẫn đọc lúc chạy theo `Host`** (luật 1 bất biến 10; `web-admin/src/lib/tenant-config.ts:168`); "Thăng Bình" / "Đà Nẵng" trong spec chỉ là dữ liệu mẫu, **không** ghi cứng. Ô tìm luôn hiện, chuông, menu người dùng. **Thay** header navy của lần 2 / lần 4. Dưới 768px: **giữ** ngăn điều hướng có chữ (lần 4 #3) — spec không nói, chưa ai chốt khác |
+| 3 | Bỏ §11, §13, một phần §14 | **§11 (cấm blur) bỏ:** overlay hộp thoại `backdrop-blur-xs`, header `bg-white/95 backdrop-blur` theo spec. **§13 (không chữ ViGov) bỏ ở khối brand sidebar.** **§14:** bỏ dấu "?" **cạnh mục sidebar**; control vô hiệu "?" **trong thân màn** cho phần chưa dựng **giữ** — spec không nói tới phần ấy. Ranh giới này là **cách phiên đọc phạm vi câu trả lời** "Theo spec", không phải chủ dự án nói thêm. "Sắp có" vẫn cấm (§6) |
+| 4 | Toast | `sonner` dùng chung, **một** `Toaster` ở khung app — **thay** dòng `sonner` của §4. Giải ngân dùng câu chữ của spec; lỗi trong biểu mẫu **vẫn hiện tại chỗ** |
+| 5 | Phạm vi lượt đầu | Khung + design system + màn Giải ngân (`/giai-ngan`, chi tiết dự án, các hộp thoại, nguồn vốn). Thu – Chi (`/giai-ngan/thu-chi`, spec 08) **lượt riêng**. Các menu khác **đổi hình ngay** theo token / khung (hệ quả tự nhiên của token toàn cục); cấu trúc từng màn của chúng **chưa sửa** |
+| 6 | Cách nạp phông | `@fontsource/inter` (tự phục vụ), **không** `next/font/google` như spec ghi — cùng phông, khác cách nạp. Lý do của §2 giữ: bản dựng Jenkins không phụ thuộc mạng ngoài (commit `ccef7ab3`, `7aa5fe23`: bản dựng đỏ khi phải kéo từ Internet), và hợp với CSP chặt sau này (web-admin chưa gửi CSP — mục `missing-security-headers` trong `tools/security_debt.json`). **Lựa chọn kỹ thuật của phiên**, ghi để chủ dự án phủ quyết |
+
+**Lô câu trả lời thứ hai, cùng phiên 07/10/2026** (nguyên văn lựa chọn): tương phản → **"Đúng mã màu
+spec"**; footer / logo → **"Bỏ dòng môi trường, giữ logo VG"**; hành vi spec trái luật máy chủ → **"Đổi
+theo spec (cần backend)"**; kiểm thử → **"Khung dựng tĩnh + kiểm lại trên prod"**.
+
+| # | Điểm | Chốt |
+|---|---|---|
+| 7 | Tương phản | **Đúng mã màu spec**, giống prototype từng điểm ảnh. **Thay**, cho web-admin, yêu cầu AA cho chữ của §Bối cảnh, 4 điều chỉnh AA của lần 2 #7 (chữ mờ ≈0.72, `#1d853c`, `#0369a1`, `#D93A36`) và vòng focus ≥3:1 của lần 2 #1. Chủ dự án chấp nhận chữ phụ nhạt khó đọc: đây là **nợ trợ năng đã biết** — bảng đo dưới. Trạng thái vẫn **icon + chữ, không bao giờ chỉ bằng màu** (lần 2 #8b giữ) |
+| 8 | Footer · logo · banner | Khối brand **"VG · ViGov · Điều hành số cấp xã"** như spec. Footer **chỉ** "Phiên bản 0.1.0" — dòng "Môi trường phát triển" **bỏ** (sai trên site thật của xã). **Dải banner xã dưới header (ADR 0069 #5) bị BỎ** trên web-admin — prototype không có |
+| 9 | Hành vi spec trái luật máy chủ | Gỡ chứng từ **không** lý do · Khoá chứng từ nháp = xác nhận + khoá **một lần gọi** · **không** "Mở khoá" · chặn tự xác nhận ("Không thể tự xác nhận khoản do chính mình nhập") · câu spec về xoá hàng loạt "phiếu chi được khoá" và "mỗi dự án thuộc về một nguồn" → **BACKEND DEPENDENCY**, đề xuất `/develop-backend-api giai-ngan` sau; lượt này đặt control "?" (§14) ở các chỗ ấy. **Cách phiên đọc, không phải chủ dự án nói:** control đang chạy đúng luật máy chủ hiện tại (Gỡ kèm lý do + `budget.confirm`, Mở khoá kèm lý do) **giữ** tới khi máy chủ đổi — bỏ chúng bây giờ là bỏ một khả năng máy chủ vẫn đòi; chỉ hành vi spec mà máy chủ **chưa có** mới thành "?". Lượt backend sẽ gặp luật 7 (`delete_reason`, xoá mềm) và câu mở **#29** (DECIDED: mở khoá phải có lý do, người khoá không tự mở) — đó là **STOP CONDITION** của lượt ấy, **không** được quyết ở đây |
+| 10 | Kiểm thử thị giác | Trang xem trước tĩnh, **chỉ ở dev**, dựng khung + component Giải ngân với dữ liệu mẫu và CSS đã build để chụp ảnh trước mỗi commit; sau khi Jenkins triển khai, kiểm lại trên `thangbinh-danang.vigov.vn` |
+| 11 | Mặc định phiên nêu, chủ dự án **không phản đối** | Dòng header = **hai phần tử** "Ủy ban nhân dân" + `displayName`, in hoa bằng CSS, **không ghép chuỗi** (§7 giữ) · ô tìm ở header **luôn hiện nhưng vô hiệu, dấu "?"** (chưa có tuyến tìm — lần 5 #5) · 3 mục sidebar chưa có màn: **mờ, không bấm, không "?"**, di chuột hiện "Tính năng đang phát triển" · biểu đồ luỹ kế giữ **SVG tự vẽ**, đổi kiểu (không recharts; `chart` của shadcn vẫn cấm, §4) · ô "Đơn vị thực hiện" nhập tự do = lựa chọn "?" + BACKEND DEPENDENCY · **giữ như hiện tại:** cách hiện lỗi / rỗng theo bộ lọc, tổng của dòng nhóm (tổng máy chủ chỉ khi không lọc), tiêu đề cột "Nguồn vốn", "Gỡ dự án" ở chi tiết, "Đổi mật khẩu" + nhãn vai trò trong menu tài khoản, chặn Tắt/Bật hạng mục theo cấp, tên dự án vẫn là liên kết |
+
+**Nợ trợ năng (#7)** — tỉ lệ đo khi chuẩn bị câu hỏi (WCAG 2.x); ngưỡng chữ thường 4.5:1, thành phần
+giao diện 3:1:
+
+| Màu spec | Dùng cho | Tương phản |
+|---|---|---|
+| `#8aa2b8` (ink-muted) | Chữ phụ, nhãn | 2.64:1 trên trắng · 2.48:1 trên `#f4f8fb` |
+| `#2fb1f9` (brand) | Liên kết · vòng focus | 2.39:1 (chữ) · 2.39:1 (focus, cần 3.0) |
+| `#86b940` (leaf) | Chữ "tốt / đã xong" | 2.33:1 |
+| `#ff7a1a` (tangerine) | Chữ cảnh báo | 2.61:1 |
+| `#12b5c9` (teal) | Chữ chip | 2.48:1 |
+| `#e5484d` (danger) | Chữ nhỏ · chữ trắng trên nút nguy hiểm | 3.91:1 · 3.91:1 |
+| `#dde7ef` (line / input) | Viền ô nhập | 1.25:1 (cần 3.0) |
+
+**Thứ tự nguồn sau lần 6:** luật cứng của lần 5 #4 vẫn thắng (trừ điểm lần 6 nói rõ thay) · **cấu trúc**
+= prototype `../vigov-require/apps/admin` + spec 02–07 · **CSS** = spec 00/01 — thay vế "CSS giữ lần 2
++ lần 4" của lần 5 #2.
+
+**Còn mở / hệ quả:**
+
+| # | Điểm | Thực tế |
+|---|---|---|
+| a | Chữ phụ `#8aa2b8` và các màu chữ dưới AA | **Đã chốt (#7):** giữ đúng mã màu spec; nợ trợ năng chủ dự án chấp nhận — bảng đo ở #7 |
+| b | Footer "Môi trường phát triển" | **Đã đóng (#8):** dòng ấy bỏ, footer chỉ còn phiên bản |
+| c | Mọi menu khác đổi hình cùng lúc | Ảnh chụp / kiểm thử thị giác các màn ấy **chưa làm** |
+| d | Tên xã in hoa | §7 viết "không viết HOA". Spec 01 in hoa cả dòng "Uỷ ban nhân dân xã …". **Đã rõ (#11):** hai phần tử, in hoa bằng CSS, `displayName` nguyên văn, không ghép chuỗi |
+| e | `sonner` và CSP | §4 loại `sonner` vì chèn `<style>` lúc chạy. Lần 6 #4 nhận điểm ấy; một CSP nghiêm sau này phải tính tới nó, như thuộc tính `style` của Radix (§Hệ quả) |
+| f | ADR 0069 nói khác | ADR 0069 #5 (dải banner dưới topbar ở mọi trang) và dòng "logo xã dùng chung: thanh bên" của ADR ấy nay trái #8 (khối brand VG thay logo xã ở thanh bên). ADR 0069 đã có dòng trỏ sang đây (07/10/2026). **Câu hỏi cho chủ dự án:** ảnh banner xã vẫn tải lên được ở Cấu hình › Nhận diện xã nhưng không còn chỗ hiện trên web-admin — giữ ô tải lên hay gỡ nó? Chưa ai chốt |
+
+**Vì sao:** ngoài các lựa chọn trên, chủ dự án **không nêu** lý do — đừng suy thêm.

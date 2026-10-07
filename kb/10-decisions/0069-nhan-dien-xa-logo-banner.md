@@ -7,7 +7,7 @@ derived_from_commit: f2e802a9
 expires: null
 owns_facts:
   - "logo xã và banner web-admin do CHÍNH XÃ tải lên trong web-admin (Cấu hình › Nhận diện xã), quyền admin.org; không có đường sửa ở platform-admin — thay hướng 'cấu hình ở platform-admin' của ADR 0047:246 và đợt 2 'hồ sơ hiển thị + logo' của ADR 0048 (chốt 02/10/2026)"
-  - "logo xã dùng chung: thanh bên + màn đăng nhập web-admin và Mini App của xã; banner web-admin là ảnh riêng, hiện thành dải dưới topbar ở MỌI trang web-admin; banner Mini App vẫn là loại nội dung banner của ADR 0067 §5, không gộp (chốt 02/10/2026)"
+  - "logo xã dùng chung: thanh bên + màn đăng nhập web-admin và Mini App của xã; banner web-admin là ảnh riêng, hiện thành dải dưới topbar ở MỌI trang web-admin; banner Mini App vẫn là loại nội dung banner của ADR 0067 §5, không gộp (chốt 02/10/2026) — vế 'logo xã ở thanh bên' và vế 'dải banner dưới topbar ở MỌI trang web-admin' THAY bởi 0068 lần 6 #8 (thanh bên đứng khối brand VG; không còn dải banner); logo ở màn đăng nhập và Mini App giữ"
   - "tải lên là hiện ngay, không qua duyệt; mọi lần đặt/gỡ ghi nhật ký cùng giao dịch, người làm là mã CB-; ảnh qua quét mã độc và chuẩn hoá trước khi công khai (chốt 02/10/2026)"
   - "logo: PNG/WebP/JPEG ≤ 2 MB, không HEIC; máy chủ chuẩn hoá về PNG vuông 512px giữ nền trong suốt; banner web-admin: PNG/WebP/JPEG ≤ 2 MB, chuẩn hoá về rộng 1600px (chốt 02/10/2026)"
   - "chưa có logo thì hiện biểu tượng toà nhà (Landmark) — không ảnh nào cơ quan chưa ban hành; chưa có banner thì không có dải (chốt 02/10/2026)"
@@ -18,7 +18,8 @@ owns_facts:
 
 **Trạng thái:** đã chốt · **Ngày:** 2026-10-02 · **Người quyết:** chủ dự án, 02/10/2026 · **Thay**
 hướng "logo cấu hình ở platform-admin" của ADR 0047 (dòng 246) và mục đợt 2 "hồ sơ hiển thị + logo" của
-ADR 0048.
+ADR 0048. · **Sửa bởi ADR 0068 §*Sửa đổi 07/10/2026 (lần 6)* #8:** thanh bên web-admin đứng khối brand
+VG thay logo xã, và dải banner dưới topbar (#5) bị bỏ — logo ở màn đăng nhập và Mini App không đổi.
 
 ## Bối cảnh
 
@@ -33,8 +34,8 @@ tuyến công khai cố ý không trả logo. Mini App dùng logo và banner ch�
 | 1 | Ai sửa | **Chỉ xã**, trong web-admin. Không có đường sửa ở platform-admin |
 | 2 | Quyền | `admin.org` (khoá đã có trong `quyen`) |
 | 3 | Duyệt | Không — lưu là hiện; ghi nhật ký cùng giao dịch, mã `CB-` |
-| 4 | Logo | Dùng chung web-admin (thanh bên, màn đăng nhập) và Mini App. PNG/WebP/JPEG ≤ 2 MB, không HEIC → PNG vuông 512px **giữ nền trong** |
-| 5 | Banner web-admin | Ảnh **riêng**, dải dưới topbar ở **mọi trang** web-admin. PNG/WebP/JPEG ≤ 2 MB → rộng 1600px |
+| 4 | Logo | Dùng chung web-admin (thanh bên — THAY bởi 0068 lần 6 #8; màn đăng nhập) và Mini App. PNG/WebP/JPEG ≤ 2 MB, không HEIC → PNG vuông 512px **giữ nền trong** |
+| 5 | Banner web-admin | Ảnh **riêng**, dải dưới topbar ở **mọi trang** web-admin — THAY bởi 0068 lần 6 #8 (không còn dải). PNG/WebP/JPEG ≤ 2 MB → rộng 1600px |
 | 6 | Banner Mini App | **Giữ** loại nội dung `banner` (ADR 0067 §5) ở Nội dung Mini App; không gộp với banner web-admin |
 | 7 | Chưa có logo | Biểu tượng toà nhà; chưa có banner thì không có dải |
 | 8 | Đường ra | Thêm trường vào tuyến công khai sẵn có `GET /api/v1/communes/current` (màn đăng nhập đọc trước phiên) và `/commune-profiles` (Mini App) — không mở tuyến mới |
