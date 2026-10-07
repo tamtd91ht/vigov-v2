@@ -6,8 +6,8 @@
 > again. Any design where one agent "coordinates the others" does not run — v1 had exactly
 > that design and it could never have worked.
 
-Fourteen agents: **eight that write, six read-only** (`context-scout`, `cross-context-scout`,
-`isolation-reviewer`, `security-reviewer`, `domain-expert`, `progress-reviewer`). Each has a **write boundary**; two
+Fifteen agents: **eight that write, seven read-only** (`context-scout`, `cross-context-scout`,
+`isolation-reviewer`, `security-reviewer`, `domain-expert`, `progress-reviewer`, `ui-ux-reviewer`). Each has a **write boundary**; two
 agents never own the same path.
 
 ---
@@ -276,6 +276,7 @@ top to bottom; **the first match wins**.
 | 5 | Changing a table that **already holds data**, a backfill, an index, soft delete | `data-migration-builder` |
 | 6 | Adding or changing a **backend use case, endpoint, query, repository** | `go-service-builder` |
 | 7 | Adding or changing a **staff-facing screen, form, table, subsystem** | `admin-web-builder` |
+| 7b | A web-admin screen must **match the prototype** (`../vigov-require/apps/admin`) — a UI fix, "giống prototype", a layout/label/position defect | `ui-ux-reviewer` (read-only, BASELINE) → `admin-web-builder` → `ui-ux-reviewer` (VALIDATE on a rendered screenshot) until PASS |
 | 8 | Adding or changing a **citizen-facing screen or submission flow** | `citizen-app-builder` |
 | 9 | Business behaviour: **status, SLA, workflow, terminology, figures** | `domain-expert` (read-only) → then the relevant builder |
 | 10 | Suspected **data leak**, wrong permission, wrong 401/403 | `isolation-reviewer` |
@@ -435,8 +436,8 @@ Go and runs no repo-wide command can still go alongside it.
 and `petitions/**` are disjoint, but both may write `go.mod` and `go.sum`. Parallel
 only when neither touches `core/**` or adds a dependency.
 
-The six **read-only** agents (`context-scout`, `cross-context-scout`, `isolation-reviewer`,
-`security-reviewer`, `domain-expert`, `progress-reviewer`) hold no write tool and conflict with nothing — they run
+The seven **read-only** agents (`context-scout`, `cross-context-scout`, `isolation-reviewer`,
+`security-reviewer`, `domain-expert`, `progress-reviewer`, `ui-ux-reviewer`) hold no write tool and conflict with nothing — they run
 alongside anything, including each other.
 
 → Decision procedure, shared state, and why verification stays serial:
@@ -466,6 +467,7 @@ work that has to be redone. Never run two builders on the same change in paralle
 | 401/403 wrong, or a role can do too much | `isolation-reviewer` |
 | Figures wrong, status wrong, deadline wrong | `domain-expert` |
 | A field is missing on screen but present in the API | `contract-designer` (contract drift) |
+| A screen differs from the prototype — position, size, label, order, dialog vs inline | `ui-ux-reviewer` (needs a rendered screenshot from the main session) |
 | A list is short, or an old record is missing | `data-migration-builder` (soft-delete filter) |
 | Tests red | `test-designer` |
 | An event is not reaching a consumer | `contract-designer` |
@@ -567,6 +569,7 @@ Dispatching costs a context switch and loses the thread. Do it directly when:
 | `isolation-reviewer` | **read only** | Three isolation dimensions, including cross-file relations |
 | `security-reviewer` | **read only** | Rule 13 and TCVN 14423 in code — above all the ABSENCES no hook sees: lockout, idle lock, rate limit, security events |
 | `domain-expert` | **read only** | Vietnamese public administration business correctness |
+| `ui-ux-reviewer` | **read only** | Web Admin screens against the prototype: writes the baseline before a UI change, judges rendered screenshots after (PASS / FAIL / UNVERIFIABLE) |
 | `progress-reviewer` | **read only** | The progress ledger as a record: lost items, `xong` without evidence, modules gone quiet |
 | `context-scout` | **read only** | Discovery 1 (§0.2): the request's own area — symbols, call paths, recent commits, current behaviour |
 | `cross-context-scout` | **read only** | Discovery 2 (§0.2): other modules, `../vigov-require`, earlier sessions — tags each requirement NEW · CHANGED · DONE · PARTIAL · CONFLICT · UNKNOWN |

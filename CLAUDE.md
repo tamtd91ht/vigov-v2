@@ -176,7 +176,7 @@ own: if you see a risk, **state the risk**, then do what was asked.
 | `hooks/` | **25 hooks**: 15 rule hooks + 10 cross-cutting |
 | `skills/` | Skills, lazily loaded by keyword |
 | `commands/` | Procedures invoked as `/command-name` |
-| `agents/` | **14 agents** — 5 build, 6 review, 2 discovery scouts, 1 theo dõi kho yêu cầu. Entry point: `agents/ROUTING.md` |
+| `agents/` | **15 agents** — 5 build, 7 review, 2 discovery scouts, 1 theo dõi kho yêu cầu. Entry point: `agents/ROUTING.md` |
 | `logs/guard.jsonl` | Guard log — evidence the enforcement layer actually ran |
 
 **Brain invariants.** Every rule names at least one enforcing hook: a rule you cannot write a

@@ -87,7 +87,7 @@ done while tests are red" is a **more common** failure than "wrote a secret into
 
 ## Agents — `agents/ROUTING.md` is the entry point
 
-Fourteen agents: eight that write, six read-only. The main session reads `agents/ROUTING.md`,
+Fifteen agents: eight that write, seven read-only. The main session reads `agents/ROUTING.md`,
 runs the development workflow of its §0 (discover → synthesize → gate → decompose → implement →
 validate → commit → document), catches the event, dispatches, and runs the mandatory follow-up.
 The table below lists the original nine; the full index is ROUTING §9.
