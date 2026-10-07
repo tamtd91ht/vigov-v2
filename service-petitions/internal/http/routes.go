@@ -250,7 +250,8 @@ type (
 			domain.NhiemVu, error)
 		// `update` is "does the caller hold `task.update`" — a37ec96's commune-wide "full" case, which
 		// together with being the assignee decides who may move the status at all (the route is gated
-		// by `task.read`). `duyet` then narrows the moves that need `task.approve`.
+		// by `task.read`). `duyet` then narrows the moves that need `task.approve`. The optional handover
+		// carries its own `task.assign` fact INSIDE yc (yc.AssignRight), read only when yc.Handover is set.
 		DoiTrangThai(ctx context.Context, ma string, yc app.YeuCauDoiTrangThai, nguoi audit.Actor,
 			duyet app.QuyenDuyetHoanThanh, update app.TaskUpdateRight) (domain.NhiemVu, error)
 		Xoa(ctx context.Context, ma, lyDo string, nguoi audit.Actor) error
@@ -2003,10 +2004,21 @@ func Register(mux *http.ServeMux, d Deps) {
 	// the server to choose — what the server owns is the MAP, published per task as
 	// `allowed_transitions`, and a move the map does not have is refused with a 409.
 	//
-	// idem.KhongCan: the UPDATE carries the expected status, so a double click moves the task exactly
-	// one step and the second request answers 409.
+	// "CẬP NHẬT VÀ GIAO VIỆC" (user decision 07/10/2026): the body may carry an OPTIONAL `handover` —
+	// the shape of POST …/assignment's body — and OPTIONAL `attachments` (completed uploads of the same
+	// officer for this task). Both ride in the move's ONE transaction (app/task_status_handover.go). The
+	// handover lands the task in `status`, NOT `moi-giao` (the standalone assignment act is unchanged);
+	// it is allowed to a holder of `task.assign` — asked here with Checker.Allows, a seeded key — OR the
+	// task's current assignee, 403 otherwise; a finished task is refused 409 `task_state` as the
+	// assignment act refuses it; identity refusing the unit/assignee is 400, identity down 503. The files
+	// are linked to the move's own timeline row. Neither field = the move exactly as before.
 	//
-	// @summary  Chuyển trạng thái một nhiệm vụ theo vòng đời, kèm ghi nhật ký — hoàn thành cần mọi việc con đã xong, và cần quyền duyệt nếu việc đang chờ duyệt; trả lại để làm tiếp cần quyền duyệt và lý do; mở lại việc đã hoàn thành cần quyền duyệt, lý do, và việc cha chưa hoàn thành
+	// idem.KhongCan: the UPDATE carries the expected status, so a double click moves the task exactly
+	// one step and the second request answers 409 — WITH a handover or files too: the second request is
+	// refused (409, or 403 once the holder moved) before anything is written, and a file can be linked
+	// only once.
+	//
+	// @summary  Chuyển trạng thái một nhiệm vụ theo vòng đời, kèm ghi nhật ký — hoàn thành cần mọi việc con đã xong, và cần quyền duyệt nếu việc đang chờ duyệt; trả lại để làm tiếp cần quyền duyệt và lý do; mở lại việc đã hoàn thành cần quyền duyệt, lý do, và việc cha chưa hoàn thành; tuỳ chọn kèm giao việc (`handover`, cho người có quyền giao nhiệm vụ hoặc người đang thực hiện — nhiệm vụ sang đúng trạng thái đã chọn, không về `moi-giao`) và tệp đính kèm (`attachments`) gắn vào dòng nhật ký của lần chuyển này, tất cả trong một giao dịch
 	// @screen   02-nhiem-vu §6
 	// @request  doiTrangThaiVao
 	// @reply    200 nhiemVuRa
@@ -2016,6 +2028,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    404 httpx.Error
 	// @reply    409 httpx.Error parent_completed task_state task_tree
 	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
 	mux.Handle("POST /api/v1/tasks/{ma}/status",
 		authz.RequirePermission(d.Checker, "task.read")(
 			idem.KhongCan("câu UPDATE mang trạng thái đang chờ, nên bấm hai lần vẫn chỉ chuyển đúng một bước và lần thứ hai trả 409")(

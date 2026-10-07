@@ -20,6 +20,16 @@ package domain
 //	                                    (ADR 0038); nothing here reads or writes `han_*`
 //	who                                 `task.assign`, declared on the route
 //
+// # THE ONE EXCEPTION — A HANDOVER CARRIED BY A STATUS MOVE (user decision 07/10/2026)
+//
+// POST /api/v1/tasks/{ma}/status may carry an optional `handover` (the prototype's "Cập nhật và giao
+// việc", vigov-require service.py report_progress_with_files). On THAT path, and only there:
+//
+//	the status       is the one the officer CHOSE, never `moi-giao` — ResetStatus is not called
+//	who              a holder of `task.assign` OR the current assignee (CheckMayHandOver)
+//
+// The standalone assignment act above keeps both of its rules unchanged.
+//
 // # TWO ASSUMPTIONS STATED BY THE MAIN SESSION (28/09/2026), implemented and named as such
 //
 //	not a FINISHED task       `hoan-thanh` is signed-off work; handing it to somebody new would reopen it
@@ -66,7 +76,29 @@ var (
 	// ErrTaskClosedForAssignment — the task is `hoan-thanh` (first assumption above). 409.
 	ErrTaskClosedForAssignment = errors.New(
 		"nhiệm vụ: nhiệm vụ đã hoàn thành nên không giao lại được — mở lại nhiệm vụ trước nếu cần giao tiếp")
+
+	// ErrHandoverNotAllowed — a status move carried a `handover`, and the caller neither holds
+	// `task.assign` nor is the task's current assignee. 403: it is about the person, not the body.
+	ErrHandoverNotAllowed = errors.New(
+		"nhiệm vụ: chỉ cán bộ có quyền giao nhiệm vụ hoặc người đang thực hiện nhiệm vụ mới giao tiếp được việc")
 )
+
+// CheckMayHandOver is the rule for a handover carried by a status move (user decision 07/10/2026,
+// prototype service.py:863-873): the commune-wide `task.assign`, or being the CURRENT assignee of THIS
+// row. Decided on the row read under the lock, so a holder change committing concurrently cannot let
+// the previous assignee hand the work on after it.
+//
+// WHY THE ASSIGNEE WITHOUT THE KEY: the specialist finishes their part and passes the work to the next
+// person; refusing them means asking a leader to click on their behalf (the prototype's own reason).
+func CheckMayHandOver(n NhiemVu, staffCode string, assignRight bool) error {
+	if assignRight {
+		return nil
+	}
+	if staffCode != "" && n.NguoiThucHienMa == staffCode {
+		return nil
+	}
+	return ErrHandoverNotAllowed
+}
 
 // TaskAssignmentChange is the request after validation. A nil pointer is "not mentioned" and leaves
 // the column alone; a pointer to "" clears it (never allowed for Unit — CheckTaskAssignment).

@@ -1348,6 +1348,24 @@ type YeuCauDoiTrangThai struct {
 	// `dang-thuc-hien`, domain.CheckReopenReason, P12). One field rather than a second one, because on
 	// those moves the reason IS the timeline line — two fields would be two texts for one row.
 	GhiChu string
+
+	// Handover is the OPTIONAL "Cập nhật và giao việc" (user decision 07/10/2026): the same unit /
+	// assignee change the assignment act takes, applied in THIS transaction, landing the task in the
+	// status chosen above rather than `moi-giao`. nil = no handover, and the move is exactly what it was
+	// before the field existed. Rules: task_status_handover.go.
+	Handover *TaskAssignmentRequest
+
+	// AssignRight is the caller's answer to "does this account hold `task.assign`" — a FACT the handler
+	// reads from the checker, never from the body. Consulted only when Handover is non-nil, and it only
+	// WIDENS the handover to people other than the current assignee.
+	//
+	// A FIELD AND NOT A PARAMETER: DoiTrangThai's signature is called from ~35 places and implemented by
+	// the handler's fake; the fact belongs to the optional handover and travels with it.
+	AssignRight TaskAssignRight
+
+	// Attachments are OPTIONAL completed uploads (same rules as a manual log entry's, task_log_entry.go)
+	// linked to the status move's own timeline row, in this transaction. nil/empty = none.
+	Attachments []string
 }
 
 // DoiTrangThai moves the task. Every step INTO `hoan-thanh` needs an entirely finished sub-tree; the
@@ -1381,6 +1399,12 @@ type YeuCauDoiTrangThai struct {
 // THE ORDER IS DELIBERATE. 2 before 3 keeps a caller who may not complete the task from learning,
 // from the error message, which of its sub-tasks are still open — routing information about work
 // they were just refused.
+//
+// # OPTIONAL HANDOVER AND ATTACHMENTS (user decision 07/10/2026)
+//
+// yc.Handover and yc.Attachments ride in the same transaction; every rule above is unchanged and
+// still evaluated against the CALLER on the row as locked. The rules of the two additions, and the
+// choices made for them, are in task_status_handover.go. Neither present = the move as before.
 func (uc *GhiNhiemVu) DoiTrangThai(ctx context.Context, ma string, yc YeuCauDoiTrangThai,
 	nguoi audit.Actor, duyet QuyenDuyetHoanThanh, update TaskUpdateRight) (domain.NhiemVu, error) {
 
@@ -1398,6 +1422,12 @@ func (uc *GhiNhiemVu) DoiTrangThai(ctx context.Context, ma string, yc YeuCauDoiT
 	if err := coCanBoThucHien(nguoi); err != nil {
 		return domain.NhiemVu{}, err
 	}
+	// The optional handover and attachments (task_status_handover.go): shape, then identity — BEFORE
+	// the transaction, exactly as Reassign. Absent, this asks nothing and changes nothing.
+	extras, err := uc.prepareStatusExtras(ctx, yc)
+	if err != nil {
+		return domain.NhiemVu{}, err
+	}
 
 	bayGio := uc.nayHoac()
 	var sau domain.NhiemVu
@@ -1408,9 +1438,15 @@ func (uc *GhiNhiemVu) DoiTrangThai(ctx context.Context, ma string, yc YeuCauDoiT
 			return err
 		}
 
-		// a37ec96's holder rule, on the locked row — see the note above the function.
+		// a37ec96's holder rule, on the locked row — see the note above the function. WITH A HANDOVER
+		// it is still evaluated on the row AS LOCKED, i.e. against the holder BEFORE the handover: the
+		// current assignee handing the work on is exactly the caller this path exists for, and after the
+		// handover they are no longer the holder (task_status_handover.go, "WHICH HOLDER").
 		if err := domain.CheckMayChangeStatus(
 			domain.TaskWorkRightFor(truoc, nguoi.ID, bool(update))); err != nil {
+			return err
+		}
+		if err := extras.checkHandover(truoc, nguoi); err != nil {
 			return err
 		}
 
@@ -1485,11 +1521,25 @@ func (uc *GhiNhiemVu) DoiTrangThai(ctx context.Context, ma string, yc YeuCauDoiT
 			}
 		}
 
+		// The attachments, read under lock and checked LAST AMONG THE CHECKS, so every refusal above
+		// and here leaves nothing written.
+		if err := uc.checkStatusAttachments(ctx, tx, extras, truoc, nguoi); err != nil {
+			return err
+		}
+
+		// THE HANDOVER IS WRITTEN FIRST, with its own timeline row and audit entry, and keeps the status
+		// as it was — so the status UPDATE below still finds the status it expects. `held` is the row with
+		// the new holder; it is what the status timeline row copies (the state AFTER the act).
+		held, handedOver, err := uc.writeStatusHandover(ctx, tx, extras, truoc, moiTT, bayGio, nguoi)
+		if err != nil {
+			return err
+		}
+
 		if err := uc.kho.DoiTrangThai(ctx, tx, truoc.ID, truoc.TrangThai, moiTT, xongLuc); err != nil {
 			return err
 		}
 
-		sau = truoc
+		sau = held
 		sau.TrangThai = moiTT
 		sau.NgayHoanThanh = xongLuc
 		if err := uc.attachReplyTreeFacts(ctx, tx, &sau); err != nil {
@@ -1511,7 +1561,11 @@ func (uc *GhiNhiemVu) DoiTrangThai(ctx context.Context, ma string, yc YeuCauDoiT
 				return err
 			}
 		}
-		if err := uc.ghiNhatKy(ctx, tx, sau, bayGio, nguoi.ID, noiDung); err != nil {
+		logID, err := uc.writeLogEntry(ctx, tx, sau, bayGio, nguoi.ID, noiDung)
+		if err != nil {
+			return err
+		}
+		if err := uc.linkStatusAttachments(ctx, tx, extras, logID); err != nil {
 			return err
 		}
 
@@ -1549,6 +1603,9 @@ func (uc *GhiNhiemVu) DoiTrangThai(ctx context.Context, ma string, yc YeuCauDoiT
 			vet["mo_lai"] = true
 			vet["do_dai_ly_do"] = len([]rune(ghiChu))
 		}
+		// KEYS ADDED ONLY WHEN THE OPTIONAL PARTS WERE USED, so a move without them files the entry it
+		// filed before 07/10/2026, byte for byte.
+		statusExtrasAudit(vet, extras, handedOver, logID)
 		delta, err := json.Marshal(vet)
 		if err != nil {
 			return fmt.Errorf("nhiem_vu: mã hoá delta: %w", err)
@@ -2004,15 +2061,25 @@ func idVanBanDaGo(xoa []domain.NhiemVuVanBan) []string {
 func (uc *GhiNhiemVu) ghiNhatKy(ctx context.Context, tx *store.ScopedTx, n domain.NhiemVu,
 	luc time.Time, nguoiMa, noiDung string) error {
 
+	_, err := uc.writeLogEntry(ctx, tx, n, luc, nguoiMa, noiDung)
+	return err
+}
+
+// writeLogEntry is ghiNhatKy returning the new row's id — for the one act that must link files to the
+// entry it writes (a status move carrying `attachments`, migration 0021: a link is accepted only in the
+// transaction that wrote the entry).
+func (uc *GhiNhiemVu) writeLogEntry(ctx context.Context, tx *store.ScopedTx, n domain.NhiemVu,
+	luc time.Time, nguoiMa, noiDung string) (string, error) {
+
 	noiDung, err := domain.KiemNoiDungNhatKy(noiDung)
 	if err != nil {
-		return err
+		return "", err
 	}
 	id, err := uc.sinhID()
 	if err != nil {
-		return fmt.Errorf("nhat_ky_nhiem_vu: sinh mã nội bộ: %w", err)
+		return "", fmt.Errorf("nhat_ky_nhiem_vu: sinh mã nội bộ: %w", err)
 	}
-	return uc.kho.GhiNhatKy(ctx, tx, domain.NhatKyNhiemVu{
+	return id, uc.kho.GhiNhatKy(ctx, tx, domain.NhatKyNhiemVu{
 		ID:                   id,
 		NhiemVuID:            n.ID,
 		NguoiMa:              nguoiMa,

@@ -283,6 +283,18 @@ type doiTrangThaiVao struct {
 	// no schema of this body can express, and marking it required would break every other move of a
 	// published contract (rule 2, invariant 4).
 	Note string `json:"note,omitempty"`
+
+	// Handover is the OPTIONAL "Cập nhật và giao việc" (user decision 07/10/2026): THE SAME SHAPE as the
+	// body of POST …/assignment (`unit`, `assignee`, `note`; absent = leave, "" = clear, `unit` may not be
+	// cleared; `lead_unit` / `monitor` refused 400 inside it too). Applied in the same transaction, and
+	// the task lands in `status`, NOT `moi-giao`. Allowed to a holder of `task.assign` or the task's
+	// current assignee; anybody else 403. Absent = no handover, the move as before (rule 2, invariant 4).
+	Handover *taskAssignmentIn `json:"handover,omitempty"`
+
+	// Attachments are OPTIONAL ids returned by POST /api/v1/tasks/{ma}/attachments and COMPLETED, by the
+	// same officer, for this task — the rules of the log entry's `attachments`. Linked to this move's
+	// timeline row in its transaction; they can never be added to that row later.
+	Attachments []string `json:"attachments,omitempty"`
 }
 
 // xoaNhiemVuVao is the body of DELETE /api/v1/tasks/{ma}.
@@ -614,8 +626,12 @@ func (h *Handler) SuaNhiemVu(w http.ResponseWriter, r *http.Request) {
 // (with being the assignee, who may move at all) and `task.approve` (which moves need it); both facts
 // are handed down, and the decisions are app.DoiTrangThai's, inside the transaction.
 func (h *Handler) DoiTrangThaiNhiemVu(w http.ResponseWriter, r *http.Request) {
+	var raw json.RawMessage
+	if !docThan(w, r, &raw) {
+		return
+	}
 	var vao doiTrangThaiVao
-	if !docThan(w, r, &vao) {
+	if !decodeStatusBody(w, raw, &vao) {
 		return
 	}
 	nguoi, ok := nguoiThucHien(r)
@@ -624,15 +640,85 @@ func (h *Handler) DoiTrangThaiNhiemVu(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	n, err := h.d.GhiNhiemVu.DoiTrangThai(r.Context(), r.PathValue("ma"),
-		app.YeuCauDoiTrangThai{TrangThai: vao.Status, GhiChu: vao.Note},
+	yc := app.YeuCauDoiTrangThai{TrangThai: vao.Status, GhiChu: vao.Note}
+	if vao.Handover != nil {
+		yc.Handover = &app.TaskAssignmentRequest{
+			Change: domain.TaskAssignmentChange{Unit: vao.Handover.Unit, Assignee: vao.Handover.Assignee},
+			Note:   vao.Handover.Note,
+		}
+		// Asked ONLY when a handover is present, so a plain move consults nothing it did not before.
+		yc.AssignRight = h.hasTaskAssign(r)
+	}
+	if len(vao.Attachments) > 0 {
+		yc.Attachments = vao.Attachments
+	}
+
+	n, err := h.d.GhiNhiemVu.DoiTrangThai(r.Context(), r.PathValue("ma"), yc,
 		nguoi, h.coQuyenDuyetHoanThanh(r), h.hasTaskUpdate(r))
 	if err != nil {
-		h.traLoiLoiNhiemVu(w, r, "chuyển trạng thái", err)
+		h.writeStatusError(w, r, err)
 		return
 	}
 	vietJSON(w, http.StatusOK, nhiemVuRaNgoai(n))
 }
+
+// decodeStatusBody decodes the status body and refuses `lead_unit` / `monitor` INSIDE `handover`, the
+// way POST …/assignment refuses them at its top level — the same shape must not accept, and silently
+// ignore, keys its twin refuses. Answers the response itself; false means "stop".
+func decodeStatusBody(w http.ResponseWriter, raw json.RawMessage, vao *doiTrangThaiVao) bool {
+	var top struct {
+		Handover json.RawMessage `json:"handover"`
+	}
+	if json.Unmarshal(raw, vao) != nil || json.Unmarshal(raw, &top) != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Nội dung gửi lên không phải JSON hợp lệ hoặc quá lớn.", "")
+		return false
+	}
+	if vao.Handover == nil {
+		return true
+	}
+	var keys map[string]json.RawMessage
+	if json.Unmarshal(top.Handover, &keys) != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Nội dung gửi lên không phải JSON hợp lệ hoặc quá lớn.", "")
+		return false
+	}
+	if sentence := refusedKeySent(keys, retiredRoleKeys); sentence != "" {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", sentence, "")
+		return false
+	}
+	return true
+}
+
+// writeStatusError maps the refusals only the optional handover / attachments raise, then hands every
+// other refusal to the attachment mapper, which ends in traLoiLoiNhiemVu — so a move without the new
+// fields answers exactly as before.
+func (h *Handler) writeStatusError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, domain.ErrHandoverNotAllowed):
+		httpx.WriteError(w, http.StatusForbidden, "forbidden",
+			cauTuChoi(err, domain.ErrHandoverNotAllowed), "")
+	case errors.Is(err, app.ErrAssignmentStaffInvalid), errors.Is(err, app.ErrAssignmentStaffUnchecked),
+		errors.Is(err, domain.ErrTaskClosedForAssignment):
+		h.writeAssignmentError(w, r, err)
+	default:
+		h.answerTaskAttachmentError(w, r, "chuyển trạng thái", err)
+	}
+}
+
+// hasTaskAssign: does this account hold `task.assign`? FAIL CLOSED — no principal is `false`.
+func (h *Handler) hasTaskAssign(r *http.Request) app.TaskAssignRight {
+	principal, ok := authz.From(r.Context())
+	if !ok {
+		return false
+	}
+	return app.TaskAssignRight(h.d.Checker.Allows(r.Context(), principal, PermTaskAssign))
+}
+
+// PermTaskAssign is the commune-wide "Giao nhiệm vụ" key (service-identity/migrations/0001_init.sql:307),
+// asked with Checker.Allows on the status route when it carries a handover. A constant for the reason
+// PermTaskUpdate is one.
+const PermTaskAssign authz.Perm = "task.assign"
 
 // XoaNhiemVu soft-deletes the task. DELETE /api/v1/tasks/{ma}
 //
