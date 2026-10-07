@@ -18,7 +18,7 @@ import { AfterYearNote } from "./disbursement-overview";
  * Mounted only while the tab is selected (`ProjectRecordTabs`), so it reads on every opening — after a
  * voucher write on the Chứng từ tab, the next look at the chart is that write's curve. The plan line is
  * the SERVER's, from the project's own dates: it may start after January and flatten at the expected
- * completion month (`expected_end_month`), which is said in words under the chart.
+ * completion month (`expected_end_month`), marked by the chart's dashed `Hoàn thành dự kiến` line.
  */
 export function ProjectCurvePanel({ projectId }: { projectId: string }) {
   const [reads, setReads] = useState(0);
@@ -67,9 +67,12 @@ export function ProjectCurveView({ curve }: { curve: finance_projectCurveOut }) 
         height={230}
         caption={`Luỹ kế giải ngân của dự án năm ${curve.year} so với kế hoạch, theo tháng`}
         emptyText="Dự án chưa có kế hoạch vốn năm hay khoản chi nào để vẽ."
+        expectedEndMonth={end}
       />
+      {/* The dashed `Hoàn thành dự kiến` line now shows this month; the SVG is aria-hidden, so the
+          words stay for a screen reader only. */}
       {end !== undefined && end !== null && (
-        <p className="m-0 mt-2 text-xs text-ink-500">
+        <p className="an-thi-giac" data-expected-end-note="">
           Đường kế hoạch đạt đủ kế hoạch vốn năm ở T{end}, tháng dự kiến hoàn thành của dự án.
         </p>
       )}
