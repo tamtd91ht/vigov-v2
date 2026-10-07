@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1.7
 #
 # Ảnh của dịch vụ `identity`. Tệp này thuộc về DỊCH VỤ NÀY.
 #
