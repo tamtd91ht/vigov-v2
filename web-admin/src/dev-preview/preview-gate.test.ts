@@ -3,9 +3,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import ProjectDetailPreviewPage from "@/app/(dev)/xem-thu/giai-ngan/du-an/page";
 import DisbursementPreviewPage from "@/app/(dev)/xem-thu/giai-ngan/page";
+import TaskPreviewPage from "@/app/(dev)/xem-thu/nhiem-vu/page";
 import proxy from "@/proxy";
 
-import { answer, PREVIEW_WRITE_REFUSAL } from "./fixture-fetch";
+import { answer, PREVIEW_NO_FILE, PREVIEW_WRITE_REFUSAL } from "./fixture-fetch";
 import { isDevPreviewPath } from "./preview-gate";
 
 /**
@@ -22,6 +23,7 @@ afterEach(() => {
 const PAGES = [
   ["/xem-thu/giai-ngan", DisbursementPreviewPage],
   ["/xem-thu/giai-ngan/du-an", ProjectDetailPreviewPage],
+  ["/xem-thu/nhiem-vu", TaskPreviewPage],
 ] as const;
 
 const params = (q: Record<string, string> = {}) => ({ searchParams: Promise.resolve(q) });
@@ -30,7 +32,7 @@ describe("preview pages", () => {
   it("DENIED in production: every preview page is a 404 — notFound(), before anything renders", async () => {
     vi.stubEnv("NODE_ENV", "production");
     for (const [path, Page] of PAGES) {
-      const err = await Page(params({ modal: "hang-muc", tab: "chung-tu" })).then(
+      const err = await Page(params({ modal: "hang-muc", tab: "chung-tu", task: "NV105" })).then(
         () => null,
         (e: unknown) => e as { digest?: string },
       );
@@ -74,7 +76,7 @@ describe("session guard (proxy.ts) on the preview path", () => {
 
   it("in development, a real page is still guarded — the exception is the preview path only", () => {
     vi.stubEnv("NODE_ENV", "development");
-    for (const path of ["/giai-ngan", "/xem-thu-khac", "/giai-ngan/du-an/01PREVIEWPRJ0000000000001"]) {
+    for (const path of ["/giai-ngan", "/xem-thu-khac", "/giai-ngan/du-an/01PREVIEWPRJ0000000000001", "/nhiem-vu"]) {
       expect(proxy(request(path)).status, path).toBe(307);
     }
   });
@@ -110,8 +112,59 @@ describe("fixture answering machine", () => {
   });
 
   it("an unknown route is a 404 answered locally, never passed to the network", () => {
-    expect(at("/api/v1/tasks").status).toBe(404);
+    expect(at("/api/v1/documents").status).toBe(404);
     expect(at("/api/v1/investment-projects/khong-co").status).toBe(404);
+    expect(at("/api/v1/tasks/NV999").status).toBe(404);
+    expect(at("/api/v1/tasks/NV105/khong-co").status).toBe(404);
+  });
+
+  it("answers the Nhiệm vụ reads: all seven statuses, both types, one overdue, the detail's parts", async () => {
+    const all = (await at("/api/v1/tasks?limit=20").json()) as { items: { code: string; status: string; type: string; due_at: string | null; documents?: unknown }[] };
+    expect(all.items).toHaveLength(12);
+    expect(new Set(all.items.map((t) => t.status)).size).toBe(7);
+    expect(new Set(all.items.map((t) => t.type))).toEqual(new Set(["theo-van-ban", "co-ban"]));
+    const now = Date.now();
+    expect(all.items.filter((t) => t.status !== "hoan-thanh" && t.due_at !== null && Date.parse(t.due_at) < now)).toHaveLength(1);
+    // The register route omits `documents` unless asked (`include=documents`) — like the server.
+    expect(all.items.every((t) => t.documents === undefined)).toBe(true);
+    const register = await at("/api/v1/tasks?include=documents").json();
+    expect(register.items.flatMap((t: { documents: unknown[] }) => t.documents)).toHaveLength(6);
+
+    const column = await at("/api/v1/tasks?status=moi-giao&limit=20").json();
+    expect(column.items.map((t: { code: string }) => t.code)).toEqual(["NV101", "NV102", "NV111"]);
+    const counts = await at("/api/v1/task-counts").json();
+    expect(counts.by_status.reduce((n: number, c: { count: number }) => n + c.count, 0)).toBe(12);
+
+    const detail = await at("/api/v1/tasks/NV105").json();
+    expect(detail.documents).toHaveLength(3);
+    expect(detail.child_count).toBe(2);
+    const children = await at("/api/v1/tasks?parent=NV105&limit=20").json();
+    expect(children.items.map((t: { code: string }) => t.code)).toEqual(["NV111", "NV112"]);
+    const log = await at("/api/v1/tasks/NV105/log-entries?limit=20").json();
+    expect(log.items.length).toBeGreaterThanOrEqual(5);
+    expect(log.items.flatMap((e: { attachments: unknown[] }) => e.attachments)).toHaveLength(1);
+    const extensions = await at("/api/v1/task-extensions?task=NV105&limit=20").json();
+    expect(extensions.items).toHaveLength(1);
+    expect((await at("/api/v1/task-extensions?task=NV101").json()).items).toHaveLength(0);
+    // The leader picker: only who holds `task.extend`.
+    const leaders = await at("/api/v1/staff-directory?permission=task.extend").json();
+    expect(leaders.items.map((s: { code: string }) => s.code)).toEqual(["CB-00001", "CB-00003"]);
+  });
+
+  it("DENIED: a task write is refused, and an attachment download says there is no file", async () => {
+    for (const [method, path] of [
+      ["POST", "/api/v1/tasks"],
+      ["POST", "/api/v1/tasks/NV105/status"],
+      ["DELETE", "/api/v1/tasks/NV101"],
+      ["POST", "/api/v1/tasks/NV105/extensions/01PREVIEWEXT0000000000001/decision"],
+    ] as const) {
+      const res = at(path, method);
+      expect(res.status, path).toBe(409);
+      expect((await res.json()).message, path).toBe(PREVIEW_WRITE_REFUSAL);
+    }
+    const file = at("/api/v1/tasks/NV105/attachments/01PREVIEWATT0000000000001/download");
+    expect(file.status).toBe(409);
+    expect((await file.json()).message).toBe(PREVIEW_NO_FILE);
   });
 
   it("the fixture holds no real person: staff are 'Cán bộ …', no phone field", async () => {

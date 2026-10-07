@@ -40,6 +40,9 @@ const { PreviewShell } = await import("./preview-shell");
 const { Toaster } = await import("@/components/ui/toaster");
 const { SIDEBAR_STORAGE_KEY } = await import("@/components/sidebar-state");
 const { DisbursementPreview, ProjectDetailPreview } = await import("./disbursement-preview");
+const { TaskPreview } = await import("./tasks-preview");
+const { PREVIEW_TASK_PERMISSIONS } = await import("./shell.fixture");
+type PreviewPerson = import("./shell.fixture").PreviewPerson;
 
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;
@@ -52,7 +55,14 @@ afterEach(() => {
   H.search = "";
 });
 
-async function mount(path: string, body: React.ReactNode, fullMenu = false, search = ""): Promise<HTMLDivElement> {
+async function mount(
+  path: string,
+  body: React.ReactNode,
+  fullMenu = false,
+  search = "",
+  permissions?: readonly string[],
+  person?: PreviewPerson,
+): Promise<HTMLDivElement> {
   H.path = path;
   H.search = search;
   window.history.pushState({}, "", path);
@@ -64,7 +74,9 @@ async function mount(path: string, body: React.ReactNode, fullMenu = false, sear
   await act(async () =>
     r.render(
       <>
-        <PreviewShell fullMenu={fullMenu}>{body}</PreviewShell>
+        <PreviewShell fullMenu={fullMenu} permissions={permissions} person={person}>
+          {body}
+        </PreviewShell>
         <Toaster />
       </>,
     ),
@@ -125,6 +137,73 @@ describe("preview — project detail", () => {
     expect(el.textContent).toContain("Nhà văn hoá thôn Bình An");
     expect(el.querySelector("#tab-trao-doi-du-an")!.getAttribute("aria-selected")).toBe("true");
     expect(el.textContent).toContain("Đã liên hệ, đơn vị hẹn nộp trong tuần này.");
+    expect(network).not.toHaveBeenCalled();
+  });
+});
+
+describe("preview — Nhiệm vụ", () => {
+  const tasks = (props: Partial<Parameters<typeof TaskPreview>[0]> = {}) => (
+    <TaskPreview view="kanban" modal={null} select={false} openTask={null} {...props} />
+  );
+  const mountTasks = (body: React.ReactNode) =>
+    mount("/xem-thu/nhiem-vu", body, false, "", PREVIEW_TASK_PERMISSIONS, "lanh-dao");
+
+  it("the real board on the fixture: Kanban by default, Nhiệm vụ lit, the leader's session, no network", async () => {
+    const el = await mountTasks(tasks());
+    await settle(600);
+    expect(el.querySelector(".side-nav-brand-name")!.textContent).toBe("ViGov");
+    expect(el.querySelector('.side-nav a[aria-current="page"]')!.getAttribute("href")).toBe("/nhiem-vu");
+    expect(el.querySelector(".header-user")!.textContent).toContain("Cán bộ C");
+    expect(el.textContent).toContain("Quản lý nhiệm vụ");
+    expect(el.textContent).toContain("Chuẩn bị hội trường tiếp xúc cử tri quý IV");
+    expect(el.querySelector('[aria-label="Chế độ xem"] button[aria-pressed="true"]')!.textContent).toBe("Kanban");
+    expect(network).not.toHaveBeenCalled();
+  });
+
+  it("?che-do=danh-sach and ?che-do=so-theo-doi press the real view switch", async () => {
+    let el = await mountTasks(tasks({ view: "danh-sach" }));
+    await settle(600);
+    expect(el.querySelector('[aria-label="Chế độ xem"] button[aria-pressed="true"]')!.textContent).toBe("Danh sách");
+    // A branch state has no Kanban column: seen only in the list.
+    expect(el.textContent).toContain("Khảo sát nhu cầu lắp đặt camera an ninh tại các thôn");
+    act(() => root?.unmount());
+    host?.remove();
+    el = await mountTasks(tasks({ view: "so-theo-doi" }));
+    await settle(600);
+    expect(el.querySelector('[aria-label="Chế độ xem"] button[aria-pressed="true"]')!.textContent).toBe("Sổ theo dõi");
+    expect(el.textContent).toContain("45/KH-UBND");
+    expect(network).not.toHaveBeenCalled();
+  });
+
+  it("?modal=giao-viec opens the real create dialog; ?modal=nhap-excel the real import", async () => {
+    await mountTasks(tasks({ modal: "giao-viec" }));
+    await settle(600);
+    expect(document.querySelector("dialog[open]")!.textContent).toContain("Giao việc mới");
+    act(() => root?.unmount());
+    host?.remove();
+    await mountTasks(tasks({ modal: "nhap-excel" }));
+    await settle(600);
+    expect(document.querySelector("dialog[open]")).not.toBeNull();
+    expect(network).not.toHaveBeenCalled();
+  });
+
+  it("?chon=2 ticks two tasks and the real bulk-delete bar shows", async () => {
+    const el = await mountTasks(tasks({ select: true }));
+    await settle(600);
+    expect(el.textContent).toContain("Đã chọn 2 nhiệm vụ");
+    expect([...el.querySelectorAll("button")].some((b) => b.textContent?.trim() === "Xoá đã chọn")).toBe(true);
+  });
+
+  it("?task=NV105 opens the real detail: documents, children, pending extension, comments, attachment", async () => {
+    await mountTasks(tasks({ openTask: "NV105" }));
+    await settle(800);
+    const dialog = document.querySelector("dialog[open]")!;
+    expect(dialog.textContent).toContain("[NV105]");
+    expect(dialog.textContent).toContain("12-CV/ĐU");
+    expect(dialog.textContent).toContain("Thu thập phiếu rà soát hộ gia đình thôn Bình An");
+    expect(dialog.textContent).toContain("Còn hai thôn chưa nộp phiếu rà soát");
+    expect(dialog.textContent).toContain("Đề nghị gửi bản tổng hợp trước ngày họp giao ban");
+    expect(dialog.textContent).toContain("bao-cao-tien-do-dot-1.pdf");
     expect(network).not.toHaveBeenCalled();
   });
 });

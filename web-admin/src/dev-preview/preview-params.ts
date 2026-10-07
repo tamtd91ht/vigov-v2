@@ -12,7 +12,38 @@ export type PreviewModal = (typeof PREVIEW_MODALS)[number];
 export const PREVIEW_TAB_NAMES = ["vuong-mac", "chung-tu", "bieu-do", "trao-doi"] as const;
 export type PreviewTab = (typeof PREVIEW_TAB_NAMES)[number];
 
+/**
+ * `?che-do=` of `/xem-thu/nhiem-vu` — the screen's own three view codes (`CheDoXem` of `SoNhiemVu`).
+ * The real screen keeps its view in state, not in the URL, so the preview presses its real switch.
+ */
+export const TASK_PREVIEW_VIEWS = ["kanban", "danh-sach", "so-theo-doi"] as const;
+export type TaskPreviewView = (typeof TASK_PREVIEW_VIEWS)[number];
+
+/** `?modal=` of `/xem-thu/nhiem-vu` — Giao việc mới, the Excel import, the bulk-delete confirm. */
+export const TASK_PREVIEW_MODALS = ["giao-viec", "nhap-excel", "xoa-nhieu"] as const;
+export type TaskPreviewModal = (typeof TASK_PREVIEW_MODALS)[number];
+
 export type PreviewSearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+/** Unknown or absent: Kanban, the real screen's own default. */
+export function previewTaskView(value: string | string[] | undefined): TaskPreviewView {
+  const v = first(value);
+  return TASK_PREVIEW_VIEWS.find((x) => x === v) ?? "kanban";
+}
+
+export function previewTaskModal(value: string | string[] | undefined): TaskPreviewModal | null {
+  const v = first(value);
+  return TASK_PREVIEW_MODALS.find((x) => x === v) ?? null;
+}
+
+/**
+ * `?chon=2` — tick two tasks so the bulk-delete bar shows. Only `2` is a word: the fixture names
+ * exactly two codes to tick (`PREVIEW_SELECTED_CODES`), and any other count would be a guess.
+ * `?modal=xoa-nhieu` implies it — the confirm has nothing to confirm without a selection.
+ */
+export function previewTaskSelect(value: string | string[] | undefined, modal: TaskPreviewModal | null): boolean {
+  return first(value) === "2" || modal === "xoa-nhieu";
+}
 
 function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;

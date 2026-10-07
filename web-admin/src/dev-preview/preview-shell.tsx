@@ -12,7 +12,13 @@ import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { installFixtureFetch } from "./fixture-fetch";
 import { DEV_PREVIEW_PREFIX } from "./preview-gate";
 import { PREVIEW_TOAST, previewShellState } from "./preview-params";
-import { fullMenuPermissions, PREVIEW_COMMUNE, PREVIEW_PERMISSIONS, previewSession } from "./shell.fixture";
+import {
+  fullMenuPermissions,
+  PREVIEW_COMMUNE,
+  PREVIEW_PERMISSIONS,
+  previewSession,
+  type PreviewPerson,
+} from "./shell.fixture";
 
 /**
  * The REAL signed-in shell — `khung-trang`, `DauTrang` (sidebar + header), `<main class="than-trang">` —
@@ -33,11 +39,22 @@ import { fullMenuPermissions, PREVIEW_COMMUNE, PREVIEW_PERMISSIONS, previewSessi
  * The account menu and the bell are opened by pressing their REAL buttons; the toast goes through the
  * REAL `Toaster` of the root layout. Real pages read none of these words.
  */
-export function PreviewShell({ fullMenu, children }: { fullMenu: boolean; children: ReactNode }) {
+export function PreviewShell({
+  fullMenu,
+  permissions = PREVIEW_PERMISSIONS,
+  person = "ke-toan",
+  children,
+}: {
+  fullMenu: boolean;
+  /** The session's keys; `?menu=day-du` adds every menu key on top. Giải ngân's when left out. */
+  permissions?: readonly string[];
+  person?: PreviewPerson;
+  children: ReactNode;
+}) {
   const params = useSearchParams();
   const shell = previewShellState((name) => params.get(name));
   useState(() => {
-    installFixtureFetch(previewSession(fullMenu ? fullMenuPermissions() : PREVIEW_PERMISSIONS));
+    installFixtureFetch(previewSession(fullMenu ? fullMenuPermissions(permissions) : permissions, person));
     if (typeof window !== "undefined") {
       try {
         window.localStorage.setItem(SIDEBAR_STORAGE_KEY, shell.sidebarCollapsed ? "1" : "0");

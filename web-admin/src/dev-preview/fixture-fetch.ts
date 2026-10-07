@@ -1,4 +1,5 @@
-import type { identity_phienHienTaiRa } from "@/lib/api/schema.gen";
+import type { identity_danhBaChonNguoiRa, identity_phienHienTaiRa } from "@/lib/api/schema.gen";
+import { QUYEN_DUYET_GIA_HAN } from "@/lib/quyen";
 
 import {
   PREVIEW_CATEGORIES,
@@ -16,6 +17,20 @@ import {
   previewVouchers,
 } from "./disbursement.fixture";
 import { devPreviewEnabled, isDevPreviewPath } from "./preview-gate";
+import {
+  PREVIEW_EXTENSION_APPROVERS,
+  PREVIEW_TASK_BLOCS,
+  PREVIEW_TASK_PRIORITIES,
+  PREVIEW_TASK_STATUSES,
+  PREVIEW_TASK_TYPES,
+  PREVIEW_WORKING_HOURS,
+  previewTask,
+  previewTaskCounts,
+  previewTaskExtensions,
+  previewTaskLog,
+  previewTasks,
+  type PreviewTaskQuery,
+} from "./tasks.fixture";
 
 /**
  * The preview's ANSWERING MACHINE: while the browser is on a `/xem-thu/**` page, every same-origin
@@ -81,7 +96,9 @@ export function answer(method: string, url: URL): Response {
   if (p === "/api/v1/notifications") return json(previewNotifications(year));
   if (p === "/api/v1/capital-plan-categories") return json(PREVIEW_CATEGORIES);
   if (p === "/api/v1/org-units") return json(PREVIEW_UNITS);
-  if (p === "/api/v1/staff-directory") return json(PREVIEW_STAFF);
+  if (p === "/api/v1/staff-directory") return json(staffDirectory(url.searchParams));
+  const tasks = answerTasks(p, url.searchParams);
+  if (tasks !== null) return tasks;
   if (p === "/api/v1/investment-projects") return json(previewProjects(year));
   if (p === "/api/v1/investment-project-summary") return json(previewSummary(year));
   if (p === "/api/v1/funding-sources") return json(previewFundingSources(year));
@@ -107,4 +124,61 @@ export function answer(method: string, url: URL): Response {
     }
   }
   return refuse(404, NO_FIXTURE);
+}
+
+/** `?unit=` narrows to one department; `?permission=task.extend` to who holds it (the leader picker). */
+function staffDirectory(q: URLSearchParams): identity_danhBaChonNguoiRa {
+  const unit = q.get("unit");
+  const permission = q.get("permission");
+  return {
+    items: PREVIEW_STAFF.items.filter(
+      (s) =>
+        (unit === null || s.department_id === unit) &&
+        (permission === null || (permission === QUYEN_DUYET_GIA_HAN && PREVIEW_EXTENSION_APPROVERS.includes(s.code))),
+    ),
+  };
+}
+
+export const PREVIEW_NO_FILE = "Trang xem thử không có tệp thật để tải về.";
+
+/** The Nhiệm vụ reads (`lib/api/nhiem-vu.ts`, the catalogues the screen loads); `null` = not a task route. */
+function answerTasks(p: string, q: URLSearchParams): Response | null {
+  if (p === "/api/v1/task-types") return json(PREVIEW_TASK_TYPES);
+  if (p === "/api/v1/task-priorities") return json(PREVIEW_TASK_PRIORITIES);
+  if (p === "/api/v1/task-blocs") return json(PREVIEW_TASK_BLOCS);
+  if (p === "/api/v1/task-statuses") return json(PREVIEW_TASK_STATUSES);
+  if (p === "/api/v1/working-hours") return json(PREVIEW_WORKING_HOURS);
+  if (p === "/api/v1/tasks") return json(previewTasks(taskQuery(q)));
+  if (p === "/api/v1/task-counts") return json(previewTaskCounts(taskQuery(q)));
+  if (p === "/api/v1/task-extensions") return json(previewTaskExtensions(q.get("task")));
+  const m = /^\/api\/v1\/tasks\/([^/]+)(\/.*)?$/.exec(p);
+  if (m === null) return null;
+  const code = decodeURIComponent(m[1]!);
+  if (m[2] === undefined) {
+    const task = previewTask(code);
+    return task === null ? refuse(404, "Không tìm thấy nhiệm vụ.") : json(task);
+  }
+  if (m[2] === "/log-entries") {
+    const log = previewTaskLog(code);
+    return log === null ? refuse(404, "Không tìm thấy nhiệm vụ.") : json(log);
+  }
+  // `…/attachments/{id}/download`: there is no stored object behind the fixture — said, not faked.
+  if (/^\/attachments\/[^/]+\/download$/.test(m[2])) return refuse(409, PREVIEW_NO_FILE);
+  return refuse(404, NO_FIXTURE);
+}
+
+function taskQuery(q: URLSearchParams): PreviewTaskQuery {
+  const one = (name: string) => q.get(name) ?? undefined;
+  return {
+    status: one("status"),
+    parent: one("parent"),
+    type: one("type"),
+    priority: one("priority"),
+    bloc: one("bloc"),
+    unit: one("unit"),
+    assignee: one("assignee"),
+    source: one("source"),
+    late: q.get("late") === "true",
+    documents: q.get("include") === "documents",
+  };
 }
