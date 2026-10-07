@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import type { identity_canBoChonNguoiRa } from "@/lib/api/schema.gen";
 
-import { StaffCombobox, STAFF_COMBOBOX_HINT, noMatchText } from "./staff-combobox";
+import { StaffCombobox, STAFF_COMBOBOX_HINT, STAFF_SEARCH_PLACEHOLDER, noMatchText } from "./staff-combobox";
 import {
   COMBOBOX_CLOSED,
   comboboxKey,
@@ -191,5 +191,27 @@ describe("markup — label above, ARIA roles, codes as values", () => {
     );
     expect(loading).toMatch(/<input id="x"[^>]* disabled=""/);
     expect(loading).toContain('<p id="x-goi-y" class="goi-y-tim">Đang tải danh bạ cán bộ…</p>');
+  });
+
+  it("`placeholder` (07/10, prototype `Gõ tên để tìm…`): in the empty box; the empty choice stays in the list", () => {
+    const box = (props: { value: string; disabled?: boolean; placeholder?: string }) =>
+      renderToStaticMarkup(
+        <StaffCombobox id="p" label="Người thực hiện" emptyLabel={EMPTY} directory={DIRECTORY} onChange={() => {}} {...props} />,
+      );
+    const input = (html: string) => /<input [^>]*>/.exec(html)?.[0] ?? "";
+    const empty = box({ value: "", placeholder: STAFF_SEARCH_PLACEHOLDER });
+    expect(STAFF_SEARCH_PLACEHOLDER).toBe("Gõ tên để tìm…");
+    expect(input(empty)).toContain(`placeholder="${STAFF_SEARCH_PLACEHOLDER}"`);
+    expect(empty).toMatch(new RegExp(`data-value="">(<span aria-hidden="true">✓ </span>)?${EMPTY}</li>`));
+    // Without the prop: unchanged — the empty choice is the placeholder.
+    expect(input(box({ value: "" }))).toContain(`placeholder="${EMPTY}"`);
+    // Loading: says it is loading, not "type to search".
+    expect(input(box({ value: "", disabled: true, placeholder: STAFF_SEARCH_PLACEHOLDER }))).toContain(
+      `placeholder="${EMPTY}"`,
+    );
+    // A chosen person: no placeholder at all.
+    expect(input(box({ value: "CB-2026-0000A2", placeholder: STAFF_SEARCH_PLACEHOLDER }))).not.toContain(
+      "placeholder=",
+    );
   });
 });

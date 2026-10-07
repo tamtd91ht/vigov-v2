@@ -18,6 +18,12 @@ export const STAFF_COMBOBOX_HINT =
   "Gõ một phần họ tên, có dấu hay không dấu đều được. Dùng phím mũi tên để chọn, Enter để xác " +
   "nhận, Esc để đóng.";
 
+/**
+ * The prototype's placeholder of a type-to-search staff box (`PersonPicker.tsx:30`). Opt-in per
+ * caller: a box without it keeps showing its empty choice, as before.
+ */
+export const STAFF_SEARCH_PLACEHOLDER = "Gõ tên để tìm…";
+
 /** Said when typing matches nobody — an empty list alone reads as "the directory is empty". */
 export function noMatchText(query: string): string {
   return `Không có cán bộ nào có họ tên khớp “${query.trim()}”.`;
@@ -46,6 +52,7 @@ export function StaffCombobox({
   value,
   directory,
   disabled = false,
+  placeholder,
   onChange,
 }: {
   id: string;
@@ -56,6 +63,11 @@ export function StaffCombobox({
   directory: readonly identity_canBoChonNguoiRa[];
   /** Directory still loading. */
   disabled?: boolean;
+  /**
+   * Shown in the empty box instead of `emptyLabel` (which stays the list's "nobody" line). Not while
+   * `disabled`: a loading box says it is loading, not "type to search".
+   */
+  placeholder?: string;
   onChange: (code: string) => void;
 }) {
   const [state, setState] = useState<ComboboxState>(COMBOBOX_CLOSED);
@@ -95,7 +107,7 @@ export function StaffCombobox({
           aria-describedby={hintId}
           autoComplete="off"
           value={shown}
-          placeholder={value === "" ? emptyLabel : undefined}
+          placeholder={value === "" ? (disabled ? emptyLabel : (placeholder ?? emptyLabel)) : undefined}
           disabled={disabled}
           onChange={(e) => setState(comboboxTyped(e.target.value, options, emptyLabel))}
           onKeyDown={(e) => {

@@ -57,8 +57,12 @@ import {
   DEFAULT_DUE_TIME,
   defaultDueTime,
   defaultNewTaskDue,
+  defaultNewTaskDueInput,
+  NEW_TASK_DUE_INCOMPLETE,
   NEW_TASK_DUE_TIME_MISSING,
+  newTaskDueInputProblem,
   newTaskDueProblem,
+  splitNewTaskDue,
   dueAtFromInputs,
   dueTimeFilledNote,
   dueTimeHint,
@@ -1654,6 +1658,51 @@ describe("hạn điền sẵn của form tạo — +7 ngày lịch, 17:00 (ADR 0
     expect(newTaskDueProblem("2026-10-07", "5pm")).toBe(NEW_TASK_DUE_TIME_MISSING);
     expect(newTaskDueProblem("2026-10-07", "17:00")).toBeNull();
     expect(newTaskDueProblem("", "")).toBeNull();
+  });
+});
+
+describe("07/10: ONE datetime-local box (prototype) — same pre-fill, same check, same instant sent", () => {
+  const now = new Date("2026-09-30T03:00:00Z"); // Wed 30/09/2026 10:00 ICT
+
+  it("pre-fill is `defaultNewTaskDue` joined: +7 calendar days, 17:00, commune's day", () => {
+    expect(defaultNewTaskDueInput(now)).toBe("2026-10-07T17:00");
+    // 00:30 ICT on 01/01 — still read in the commune's zone, not the machine's.
+    expect(defaultNewTaskDueInput(new Date("2026-12-31T17:30:00Z"))).toBe("2027-01-08T17:00");
+  });
+
+  it("split gives back the date + time the old two boxes held; empty stays empty", () => {
+    expect(splitNewTaskDue("2026-10-07T17:00")).toEqual({ date: "2026-10-07", time: "17:00" });
+    // A browser adds seconds only when asked to; the deadline is set to the minute.
+    expect(splitNewTaskDue("2026-10-07T09:30:15")).toEqual({ date: "2026-10-07", time: "09:30" });
+    expect(splitNewTaskDue("")).toEqual({ date: "", time: "" });
+    expect(splitNewTaskDue("2026-10-07")).toEqual({ date: "2026-10-07", time: "" });
+  });
+
+  it("the instant sent is byte-for-byte the one the date + time pair sent", () => {
+    const { date, time } = defaultNewTaskDue(now);
+    const before = thanGiaoViec(formDay({ han: date, dueTime: time }), { coDanhSachVanBan: false }).due_at;
+    const parts = splitNewTaskDue(defaultNewTaskDueInput(now));
+    const after = thanGiaoViec(formDay({ han: parts.date, dueTime: parts.time }), { coDanhSachVanBan: false });
+    expect(after.due_at).toBe(before);
+    expect(after.due_at).toBe("2026-10-07T17:00:00+07:00");
+    const edited = splitNewTaskDue("2026-10-20T08:15");
+    expect(
+      thanGiaoViec(formDay({ han: edited.date, dueTime: edited.time }), { coDanhSachVanBan: false }).due_at,
+    ).toBe("2026-10-20T08:15:00+07:00");
+    // Cleared box ⇒ no deadline, a real state.
+    const cleared = splitNewTaskDue("");
+    expect(
+      thanGiaoViec(formDay({ han: cleared.date, dueTime: cleared.time }), { coDanhSachVanBan: false }),
+    ).not.toHaveProperty("due_at");
+  });
+
+  it("validation: the old rule on the parts, plus a HALF-typed box blocks (it reads as empty)", () => {
+    expect(newTaskDueInputProblem("2026-10-07T17:00", false)).toBeNull();
+    expect(newTaskDueInputProblem("", false)).toBeNull();
+    expect(newTaskDueInputProblem("2026-10-07", false)).toBe(NEW_TASK_DUE_TIME_MISSING);
+    expect(newTaskDueInputProblem("2026-10-07T5pm", false)).toBe(NEW_TASK_DUE_TIME_MISSING);
+    // The browser's value of a half-typed box is "" — without the flag it would send no deadline.
+    expect(newTaskDueInputProblem("", true)).toBe(NEW_TASK_DUE_INCOMPLETE);
   });
 });
 

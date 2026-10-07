@@ -58,7 +58,7 @@ import {
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import { OChonCanBo } from "@/components/o-chon-can-bo";
-import { StaffCombobox } from "@/components/staff-combobox";
+import { STAFF_SEARCH_PLACEHOLDER, StaffCombobox } from "@/components/staff-combobox";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -158,7 +158,6 @@ import {
   DE_BO_PHAN_TU_PHAN_CONG,
   DANG_TAI_VAN_BAN,
   DUE_COLUMN_LABEL,
-  GHI_CHU_HAN_VIEC_CON,
   GHI_CHU_NHIEM_VU_TOI_DA,
   GHI_CHU_LANH_DAO_GIAO_VIEC,
   GHI_CHU_LUI_HAN,
@@ -220,10 +219,9 @@ import {
   chiaNhomVanBan,
   changedSince,
   defaultDueTime,
-  defaultNewTaskDue,
-  NEW_TASK_DUE_PREFILLED_NOTE,
-  NEW_TASK_DUE_LATER_NOTE,
-  newTaskDueProblem,
+  defaultNewTaskDueInput,
+  newTaskDueInputProblem,
+  splitNewTaskDue,
   DUE_EDIT_NOTE,
   basicTaskEditBody,
   dueTimeHint,
@@ -4760,10 +4758,12 @@ export function FormGiaoViec({
   const [nguoiThucHien, datNguoiThucHien] = useState("");
   const [lanhDaoGiaoViec, datLanhDaoGiaoViec] = useState("");
   // ADR 0065 NV6: pre-filled +7 calendar days at 17:00, computed ONCE when the form opens (lazy
-  // initialiser) — the clerk may change or clear it.
-  const [dueDefault] = useState(defaultNewTaskDue);
-  const [han, datHan] = useState(dueDefault.date);
-  const [dueTime, setDueTime] = useState(dueDefault.time);
+  // initialiser) — the clerk may change or clear it. ONE `datetime-local` value, as the prototype's
+  // box; `han` / `dueTime` are derived from it so the body sent is unchanged (`thanGiaoViec`).
+  const [dueInput, setDueInput] = useState(() => defaultNewTaskDueInput());
+  // The box half typed: its value reads "" (= no deadline), so this flag is what blocks sending.
+  const [dueIncomplete, setDueIncomplete] = useState(false);
+  const { date: han, time: dueTime } = splitNewTaskDue(dueInput);
   const [vanBan, datVanBan] = useState<readonly DongVanBanNhap[]>([]);
   const [ghiChu, datGhiChu] = useState("");
   const demKhoaVanBan = useRef(0);
@@ -4786,7 +4786,7 @@ export function FormGiaoViec({
   const theoVanBan = coKhoiVanBanChiDao(loaiChon);
   const hienVanBan = theoVanBan && coDanhSachVanBan;
   const chanVanBan = hienVanBan ? canhBaoVanBan(vanBan) : null;
-  const chanHan = newTaskDueProblem(han, dueTime);
+  const chanHan = newTaskDueInputProblem(dueInput, dueIncomplete);
   const db = docDanhBaChonNguoi(danhBa);
   const dbLanhDao = docDanhBaChonNguoi(danhBaLanhDao);
   // Đọc được mà rỗng: không ai trong xã cầm `task.extend`. Một câu thay cho một ô chọn rỗng.
@@ -5068,33 +5068,22 @@ export function FormGiaoViec({
         </div>
       )}
 
-      {/* 3fr | 2fr, not halves: the prototype's half holds ONE datetime-local box, ours holds date +
-          time. Halves of the 500px dialog left the date box ~90px wide — "dd/mm/yyyy" clipped. */}
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] [&>*]:my-0">
-        {/* Date AND time: a deadline "tomorrow" read as 00:00 counts work done tomorrow as late.
-            Two native inputs (the contract's `due_at` is built from both by `thanGiaoViec`). */}
-        <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-2 [&>*]:my-0">
-          <div className="o-nhap">
-            <label htmlFor="giao-han">Hạn hoàn thành</label>
-            <input
-              id="giao-han"
-              name="giao-han"
-              type="date"
-              value={han}
-              onChange={(e) => datHan(e.target.value)}
-            />
-          </div>
-          <div className="o-nhap">
-            <label htmlFor="giao-han-gio">Giờ</label>
-            <input
-              id="giao-han-gio"
-              name="giao-han-gio"
-              type="time"
-              value={dueTime}
-              required={han !== ""}
-              onChange={(e) => setDueTime(e.target.value)}
-            />
-          </div>
+      {/* [Hạn hoàn thành | Mức ưu tiên], halves, ONE `datetime-local` box — the prototype's row
+          (`TaskAssignForm.tsx:375-400`), with no help line under it. Date AND time: a deadline
+          "tomorrow" read as 00:00 counts work done tomorrow as late. */}
+      <div className="grid gap-3 sm:grid-cols-2 [&>*]:my-0">
+        <div className="o-nhap">
+          <label htmlFor="giao-han">Hạn hoàn thành</label>
+          <input
+            id="giao-han"
+            name="giao-han"
+            type="datetime-local"
+            value={dueInput}
+            onChange={(e) => {
+              setDueInput(e.target.value);
+              setDueIncomplete(e.target.validity.badInput);
+            }}
+          />
         </div>
 
         <div className="o-chon">
@@ -5112,11 +5101,6 @@ export function FormGiaoViec({
             ))}
           </select>
         </div>
-      </div>
-      <div className="[&>*]:my-0">
-        <p className="ghi-chu">{NEW_TASK_DUE_PREFILLED_NOTE}</p>
-        <p className="ghi-chu">{NEW_TASK_DUE_LATER_NOTE}</p>
-        {hasParent && <p className="ghi-chu">{GHI_CHU_HAN_VIEC_CON}</p>}
       </div>
 
       {hienVanBan && (
@@ -5199,7 +5183,8 @@ export function FormGiaoViec({
 
   // THE PROTOTYPE'S DIALOG: 500px, 800px when the three document lists are drawn (`hienVanBan` —
   // a `Theo văn bản` type on a caller without them, Biên bản, has nothing to widen for). The header
-  // and the buttons stay in sight; the fields scroll between them. Esc asks `huy`, as `Huỷ` does.
+  // stays in sight; the fields AND `Huỷ / Giao việc` scroll under it — the buttons close the
+  // scrolling form, as in the prototype (`TaskAssignForm.tsx:206-429`). Esc asks `huy`, as `Huỷ` does.
   return (
     <ModalDialog
       titleId={CREATE_TASK_TITLE_ID}
@@ -5212,9 +5197,11 @@ export function FormGiaoViec({
         title={dialogTitle}
         description={dialogDescription}
       />
-      <form className="m-0 flex min-h-0 flex-col gap-4" onSubmit={gui}>
-        <div className={cn(CREATE_TASK_BODY_CLASS, CREATE_TASK_TYPE_SCALE)}>{fields}</div>
-        {buttons}
+      <form className="m-0 flex min-h-0 flex-col" onSubmit={gui}>
+        <div className={cn(CREATE_TASK_BODY_CLASS, CREATE_TASK_TYPE_SCALE)}>
+          {fields}
+          {buttons}
+        </div>
       </form>
     </ModalDialog>
   );
@@ -5232,10 +5219,11 @@ export function FormGiaoViec({
 export const CREATE_TASK_DIALOG_CLASS = "max-h-[calc(100dvh-6rem)] p-4";
 
 /**
- * The scrolling field area between the header and the buttons. `max-h-[70vh]` is the prototype's own
- * cap on the form (`TaskAssignForm.tsx:208`): on a tall screen the box stops there and stays centred
- * with room around it, rather than growing to the dialog's limit. On a short screen the dialog's cap
- * above is reached first and this area scrolls; the header and the buttons stay in sight.
+ * The scrolling area under the header: the fields, then `Huỷ / Giao việc` at its END (prototype,
+ * `TaskAssignForm.tsx:208`, `:416`). `max-h-[70vh]` is the prototype's own cap on the form: on a tall
+ * screen the box stops there and stays centred with room around it, rather than growing to the
+ * dialog's limit. On a short screen the dialog's cap above is reached first and this area scrolls;
+ * the header stays in sight.
  */
 export const CREATE_TASK_BODY_CLASS = "flex max-h-[70vh] min-h-0 flex-col gap-4 overflow-y-auto pr-1 [&>*]:my-0";
 
@@ -5289,6 +5277,7 @@ function StaffPicker({
   disabled,
   onChange,
 }: {
+  /** Type-to-search box, with the prototype's `Gõ tên để tìm…` placeholder (`PersonPicker.tsx:30`). */
   search: boolean;
   id: string;
   label: string;
@@ -5306,6 +5295,7 @@ function StaffPicker({
       value={value}
       directory={directory}
       disabled={disabled}
+      placeholder={STAFF_SEARCH_PLACEHOLDER}
       onChange={onChange}
     />
   ) : (

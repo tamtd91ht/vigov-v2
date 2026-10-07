@@ -26,8 +26,9 @@ import {
   BANG_NHAN_MAC_DINH,
   CAU_CHUA_GHI_LANH_DAO_GIAO_VIEC,
   CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC,
-  NEW_TASK_DUE_LATER_NOTE,
-  NEW_TASK_DUE_PREFILLED_NOTE,
+  GHI_CHU_LANH_DAO_GIAO_VIEC,
+  GHI_CHU_TU_SINH_MA,
+  MO_TA_FORM_GIAO_VIEC,
   EXTENSION_NO_DUE,
   TASK_PROGRESS_PENDING,
   TASK_TYPE_MISSING,
@@ -789,9 +790,10 @@ describe("form Giao việc mới §7", () => {
     expect(html.indexOf('id="giao-ma"')).toBeLessThan(html.indexOf('id="giao-tu-sinh-ma"'));
   });
 
-  it("cạnh ô ngày: bỏ trống được, hạn ĐẶT/SỬA được về sau — không còn câu 'chỉ đặt một lần'", () => {
-    // ĐỔI CHIỀU CÓ CHỦ Ý 05/10/2026 (NV-04): ca này ghim `CANH_BAO_HAN_MOT_LAN` ("không đặt được về
-    // sau"). ADR 0065 NV4 cho PATCH đặt/sửa `due_at`, kể cả việc tạo ra không có hạn.
+  it("07/10: ô hạn KHÔNG có dòng chú thích nào (prototype không có) — và không câu 'chỉ đặt một lần'", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026: ca này từng ghim câu "Bỏ trống thì nhiệm vụ chưa có hạn…" và
+    // "Điền sẵn 7 ngày nữa…" dưới ô hạn. Người dùng: theo prototype, không thêm gì — prototype không
+    // có dòng nào dưới [Hạn | Mức ưu tiên]. Câu cũ "không đặt được về sau" vẫn sai (ADR 0065 NV4).
     const html = renderToStaticMarkup(
       <FormGiaoViec
         danhMuc={DANH_MUC}
@@ -804,7 +806,11 @@ describe("form Giao việc mới §7", () => {
       />,
     );
     expect(html).toContain('id="giao-han"');
-    expect(html).toContain(nhuTrongHTML(NEW_TASK_DUE_LATER_NOTE));
+    expect(html).not.toContain("Bỏ trống thì nhiệm vụ chưa có hạn");
+    expect(html).not.toContain("Điền sẵn");
+    expect(html).not.toContain("Việc con có hạn riêng");
+    // The row's next sibling is not a help paragraph.
+    expect(html).not.toMatch(/id="giao-uu-tien"[\s\S]*?<\/select><\/div><\/div><p class="ghi-chu/);
     expect(html).not.toContain("chỉ đặt được một lần");
     expect(html).not.toContain("không đặt được về sau");
   });
@@ -866,7 +872,7 @@ describe("form Giao việc mới §7", () => {
     expect(html).not.toContain(TASK_TYPE_MISSING);
   });
 
-  it("hạn ĐIỀN SẴN +7 ngày lúc 17:00 (ADR 0065 NV6), ô giờ bắt buộc khi có ngày, câu nói sửa được", () => {
+  it("hạn ĐIỀN SẴN +7 ngày lúc 17:00 (ADR 0065 NV6) trong MỘT ô datetime-local, không ô `Giờ` riêng", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-09-30T03:00:00Z")); // Wed 30/09/2026 10:00 ICT
     try {
@@ -881,16 +887,21 @@ describe("form Giao việc mới §7", () => {
           giaoViec={() => {}}
         />,
       );
-      expect(html).toMatch(/<input id="giao-han"[^>]*type="date"[^>]*value="2026-10-07"/);
-      expect(html).toMatch(/<input id="giao-han-gio"[^>]*type="time"[^>]*required=""[^>]*value="17:00"/);
-      expect(html).toContain(nhuTrongHTML(NEW_TASK_DUE_PREFILLED_NOTE));
+      expect(html).toMatch(/<input id="giao-han"[^>]*type="datetime-local"[^>]*value="2026-10-07T17:00"/);
+      expect(html).not.toContain('id="giao-han-gio"');
+      expect(html).not.toContain('type="time"');
+      expect(html).not.toContain(">Giờ</label>");
       expect(html).not.toContain("23:59");
+      // Prototype row: [Hạn hoàn thành | Mức ưu tiên] in two halves.
+      expect(html).toMatch(
+        /<div class="grid gap-3 sm:grid-cols-2 \[&amp;&gt;\*\]:my-0"><div class="o-nhap"><label for="giao-han">Hạn hoàn thành<\/label>/,
+      );
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it("ô `Lãnh đạo giao việc` nói ra hệ quả ADR 0038 của việc bỏ trống", () => {
+  it("ô `Lãnh đạo giao việc` nói ra hệ quả ADR 0038 của việc bỏ trống — và không hứa chuông/thư", () => {
     const html = renderToStaticMarkup(
       <FormGiaoViec
         danhMuc={DANH_MUC}
@@ -903,6 +914,12 @@ describe("form Giao việc mới §7", () => {
       />,
     );
     expect(html).toContain("không ai duyệt được đề nghị lùi hạn");
+    // 07/10: the prototype's "qua chuông và qua thư" is NOT drawn — filing an extension request sends
+    // no notice (`DeNghiLuiHan`, service-petitions/internal/app/nhiem_vu.go).
+    expect(GHI_CHU_LANH_DAO_GIAO_VIEC).toBe("Đề nghị lùi hạn sẽ gửi tới người này.");
+    expect(html).toContain(nhuTrongHTML(GHI_CHU_LANH_DAO_GIAO_VIEC));
+    expect(html).not.toContain("chuông");
+    expect(html).not.toContain("qua thư");
   });
 
   it("màn Nhiệm vụ, loại `theo-van-ban`: vẽ BA danh sách văn bản §7.2, mỗi nhóm một nút thêm", () => {
@@ -1061,7 +1078,7 @@ describe("form Giao việc mới §7", () => {
     expect(CREATE_TASK_DIALOG_CLASS).toBe("max-h-[calc(100dvh-6rem)] p-4");
   });
 
-  it("07/10: only the fields scroll — capped at the prototype's 70vh, header and buttons outside", () => {
+  it("07/10: the fields AND the buttons scroll — capped at the prototype's 70vh, header outside", () => {
     const html = dialogMarkup(DANH_MUC);
     const attr = cn(CREATE_TASK_BODY_CLASS, CREATE_TASK_TYPE_SCALE).replaceAll("&", "&amp;").replaceAll(">", "&gt;");
     const body = html.indexOf(`<div class="${attr}">`);
@@ -1069,9 +1086,11 @@ describe("form Giao việc mới §7", () => {
     expect(CREATE_TASK_BODY_CLASS).toContain("max-h-[70vh]");
     expect(CREATE_TASK_BODY_CLASS).toContain("overflow-y-auto");
     expect(html.indexOf('<h2 id="tieu-de-giao-viec-moi"')).toBeLessThan(body);
-    // The buttons follow the scrolling area's closing tag, as siblings — not inside it.
+    // 07/10 (screenshot pro-nhiem-vu-them-moi-02): `Huỷ / Giao việc` are the LAST child of the
+    // scrolling area, after `Ghi chú` — not pinned below it.
     expect(html.lastIndexOf(">Giao việc</button>")).toBeGreaterThan(html.lastIndexOf('id="giao-ghi-chu"'));
-    expect(html).toMatch(/<\/textarea><\/div><\/div><\/div><div class="cum-nut justify-end">/);
+    expect(html).toMatch(/<\/textarea><\/div><\/div><div class="cum-nut justify-end">/);
+    expect(html).toMatch(/>Giao việc<\/button><\/div><\/div><\/form><\/dialog>$/);
   });
 
   it("07/10: `Theo văn bản` — the prototype's full field order, title marked required", () => {
@@ -1090,7 +1109,6 @@ describe("form Giao việc mới §7", () => {
       'id="giao-them-van-ban-cap-tren-giao"',
       'id="giao-them-van-ban-chi-dao-dang-uy"',
       'id="giao-han"',
-      'id="giao-han-gio"',
       'id="giao-uu-tien"',
       'id="giao-them-van-ban-san-pham-dau-ra"',
       'id="giao-ghi-chu"',
@@ -1120,9 +1138,31 @@ describe("form Giao việc mới §7", () => {
     for (const c of CREATE_TASK_TYPE_SCALE.split(" ")) expect(merged, c).toContain(c);
   });
 
-  it("07/10: the date box keeps room in the 500px dialog — 3fr|2fr row, 7rem time column", () => {
-    const html = dialogMarkup(DANH_MUC_CO_BAN);
-    expect(html).toContain('class="grid gap-3 sm:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] [&amp;&gt;*]:my-0"><div class="grid grid-cols-[minmax(0,1fr)_7rem]');
+  it("07/10: the screenshots' words, where our field exists (both task types)", () => {
+    for (const danhMuc of [DANH_MUC, DANH_MUC_CO_BAN]) {
+      const html = dialogMarkup(danhMuc);
+      expect(html).toContain(nhuTrongHTML(MO_TA_FORM_GIAO_VIEC));
+      expect(MO_TA_FORM_GIAO_VIEC).toBe(
+        "Giao cho một bộ phận hoặc trực tiếp cho cán bộ. Giao cho bộ phận mà quá lâu chưa phân công " +
+          "người thì hệ thống báo lên lãnh đạo.",
+      );
+      expect(html).toContain(nhuTrongHTML(GHI_CHU_TU_SINH_MA));
+      expect(GHI_CHU_TU_SINH_MA).toBe(
+        "Tự sinh sẽ cấp số tiếp theo trong dãy NV01, NV02… Nhập từ Excel cũng được đánh số tự động " +
+          "theo dãy này.",
+      );
+      // Both staff search boxes: the prototype's placeholder (`PersonPicker.tsx:30`).
+      for (const id of ["giao-nguoi-thuc-hien", "giao-lanh-dao"]) {
+        expect(/<input [^>]*>/.exec(html.slice(html.indexOf(`<input id="${id}"`)))?.[0]).toContain(
+          'placeholder="Gõ tên để tìm…"',
+        );
+      }
+    }
+    const vb = dialogMarkup(DANH_MUC);
+    expect(vb).toContain('<option value="" selected="">— Chọn cơ quan —</option>');
+    expect(vb).toContain(
+      nhuTrongHTML("Người này là người thực hiện chính: nhiệm vụ hiện trong mục “Giao cho tôi” của họ ngay khi lưu."),
+    );
   });
 
   it("màn Biên bản (không truyền prop): loại `theo-van-ban` mà KHÔNG có ba danh sách", () => {

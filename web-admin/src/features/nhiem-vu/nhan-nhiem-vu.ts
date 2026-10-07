@@ -1618,9 +1618,15 @@ export function cauLoiDanhBaLanhDao(thongBao: string): string {
 export const GHI_CHU_LUI_HAN =
   "Hạn gốc vẫn được giữ lại để báo cáo đúng hạn không bị lùi theo.";
 
-/** §7.1 — chú thích dưới ô `Lãnh đạo giao việc`. */
-export const GHI_CHU_LANH_DAO_GIAO_VIEC =
-  "Đề nghị lùi hạn sẽ gửi tới người này, qua chuông và qua thư.";
+/**
+ * §7.1 — chú thích dưới ô `Lãnh đạo giao việc`, BỎ vế "qua chuông và qua thư" của prototype
+ * (`TaskAssignForm.tsx:356`): nộp đề nghị lùi hạn KHÔNG phát thông báo nào — `DeNghiLuiHan`
+ * (`service-petitions/internal/app/nhiem_vu.go`) chỉ ghi đề nghị + vết, và thông báo cán bộ của
+ * `service-petitions` chỉ đến từ các việc tự động (`automation_jobs.go`). Hứa chuông và thư thì lãnh
+ * đạo chờ một tin không bao giờ tới. Đề nghị vẫn GỬI TỚI người này đúng nghĩa: chỉ người này duyệt
+ * được (ADR 0038, vết ghi `gui_toi`).
+ */
+export const GHI_CHU_LANH_DAO_GIAO_VIEC = "Đề nghị lùi hạn sẽ gửi tới người này.";
 
 /** §7.1 — chú thích dưới ô `Tự sinh mã`. */
 export const GHI_CHU_TU_SINH_MA =
@@ -1635,16 +1641,6 @@ export const CHU_THICH_HAI_O_TICK =
 export const MO_TA_FORM_GIAO_VIEC =
   "Giao cho một bộ phận hoặc trực tiếp cho cán bộ. Giao cho bộ phận mà quá lâu chưa phân công " +
   "người thì hệ thống báo lên lãnh đạo.";
-
-/**
- * Under the create form's deadline fields. Replaces `CANH_BAO_HAN_MOT_LAN` ("set once, never
- * later"), which stopped being true with ADR 0065 NV4: `PATCH /api/v1/tasks/{code}` sets or corrects
- * `due_at`, including on a task created without one (`service-petitions/internal/app/nhiem_vu.go`).
- * Keeping the old sentence pushed clerks to invent a deadline rather than leave it empty.
- */
-export const NEW_TASK_DUE_LATER_NOTE =
-  "Bỏ trống thì nhiệm vụ chưa có hạn. Người có quyền cập nhật nhiệm vụ đặt hoặc sửa hạn về sau " +
-  "trong phần chi tiết nhiệm vụ.";
 
 /** The extension block of a task without a deadline: nothing to extend, and where to set one. */
 export const EXTENSION_NO_DUE =
@@ -1689,10 +1685,6 @@ export const CHILD_TASK_WEIGHT_NONE = "trọng số —";
 export function childTasksHeading(done: number, total: number): string {
   return `${CHILD_TASKS_TITLE} (${done}/${total} hoàn thành)`;
 }
-
-/** §5.10 — việc con có hạn RIÊNG (ADR 0037 quyết định 2), không thừa kế hạn cha. */
-export const GHI_CHU_HAN_VIEC_CON =
-  "Việc con có hạn riêng, không lấy theo hạn của việc cha.";
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * Ô NGÀY ↔ MỐC CỦA HỢP ĐỒNG
@@ -2289,11 +2281,16 @@ export const DEFAULT_DUE_DAYS = 7;
 /** …at 17:00 — the same hour as tasks generated from đơn thư (decision C9). */
 export const DEFAULT_DUE_TIME = "17:00";
 
-/** Under the create form's deadline fields: says the value was pre-filled and can be changed. */
-export const NEW_TASK_DUE_PREFILLED_NOTE = `Điền sẵn ${DEFAULT_DUE_DAYS} ngày nữa, lúc ${DEFAULT_DUE_TIME}. Sửa được.`;
-
 /** Blocks `Giao việc` when a date is chosen but the time field is empty or malformed. */
 export const NEW_TASK_DUE_TIME_MISSING = "Nhập giờ của hạn hoàn thành.";
+
+/**
+ * Blocks `Giao việc` while the single date-time box is HALF typed. The browser reports such a box
+ * as an EMPTY value (`validity.badInput`), and an empty value is "no deadline" — so without this a
+ * clerk who erased only the hour would create a task with no deadline at all, silently.
+ */
+export const NEW_TASK_DUE_INCOMPLETE =
+  "Nhập đủ ngày và giờ của hạn hoàn thành, hoặc xoá hẳn để giao việc chưa có hạn.";
 
 /**
  * The pre-filled deadline of the `Giao việc mới` form (and every screen reusing it): today in the
@@ -2319,6 +2316,35 @@ export function defaultNewTaskDue(now: Date = new Date()): { readonly date: stri
 export function newTaskDueProblem(date: string, time: string): string | null {
   if (date === "") return null;
   return TIME_PATTERN.test(time) ? null : NEW_TASK_DUE_TIME_MISSING;
+}
+
+/**
+ * The create form's ONE `<input type="datetime-local">` (the prototype's box, `TaskAssignForm.tsx:382`)
+ * pre-filled with `defaultNewTaskDue`: `YYYY-MM-DDTHH:MM`. The value is wall-clock time with no zone;
+ * `dueAtFromInputs` pins it to the commune's `+07:00`, exactly as the former date + time pair did.
+ */
+export function defaultNewTaskDueInput(now: Date = new Date()): string {
+  const { date, time } = defaultNewTaskDue(now);
+  return `${date}T${time}`;
+}
+
+/**
+ * Splits that box's value into the date and time `thanGiaoViec` / `newTaskDueProblem` already take,
+ * so the instant sent and its validation stay the ones the two-box form had. Seconds, which a
+ * browser adds only when asked to, are dropped: the deadline is set to the minute.
+ */
+export function splitNewTaskDue(value: string): { readonly date: string; readonly time: string } {
+  if (value === "") return { date: "", time: "" };
+  const at = value.indexOf("T");
+  if (at < 0) return { date: value, time: "" };
+  return { date: value.slice(0, at), time: value.slice(at + 1, at + 6) };
+}
+
+/** Why the single box's deadline cannot be sent, or `null` — `badInput` is the box half typed. */
+export function newTaskDueInputProblem(value: string, badInput: boolean): string | null {
+  if (badInput) return NEW_TASK_DUE_INCOMPLETE;
+  const { date, time } = splitNewTaskDue(value);
+  return newTaskDueProblem(date, time);
 }
 
 /** Ba danh sách có khác tập đã đọc hay không — so theo `id`, sau khi cắt khoảng trắng. */
