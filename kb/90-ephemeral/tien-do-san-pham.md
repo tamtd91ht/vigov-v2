@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: ccef7ab3
+derived_from_commit: 
 expires: 2027-01-05
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -55,7 +55,7 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 
 | # | Mục menu | Đường dẫn | Khoá quyền | Màn | Chưa dựng |
 |---|---|---|---|---|---|
-| 1 | Tổng quan | `/tong-quan` | `REPORT_READ_PERMISSION` | ✓ | 4 |
+| 1 | Tổng quan | `/tong-quan` | `REPORT_READ_PERMISSION` | ✓ | 3 |
 | 2 | Nhiệm vụ | `/nhiem-vu` | `QUYEN_XEM_NHIEM_VU` | ✓ | 0 |
 | 3 | Sổ tay lãnh đạo | `/nhiem-vu/so-tay` | `QUYEN_XEM_NHIEM_VU` | ✓ | **không khai** |
 | 4 | Biên bản họp | `/nhiem-vu/bien-ban` | `QUYEN_XEM_NHIEM_VU` | ✓ | 2 |
@@ -74,7 +74,7 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 | 17 | Hướng dẫn sử dụng | — | — | ✗ | |
 | 18 | Cấu hình | `/cau-hinh` | `KHOA_MO_CAU_HINH` | ✓ | 2 |
 
-**15/18** mục menu có màn thật. **57** phần chưa dựng đang hiện trên các màn ấy.
+**15/18** mục menu có màn thật. **56** phần chưa dựng đang hiện trên các màn ấy.
 
 ⚠ **1 màn KHÔNG KHAI khối `PHAN_CHUA_DUNG`**, và ô của chúng đọc là `không khai` chứ không phải `0` —
 hai thứ khác hẳn nhau. `0` nghĩa là màn có khai một danh sách và danh sách ấy rỗng, tức mọi phần
@@ -131,5 +131,5 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `service-platform` | 15 | 17 | 5 | 1 |
 | `service-reporting` | 3 | 0 | 1 | 0 |
 | `tools` | 20 | 0 | 0 | 0 |
-| `web-admin` | 66 | 35 | 3 | 1 |
+| `web-admin` | 67 | 35 | 3 | 1 |
 

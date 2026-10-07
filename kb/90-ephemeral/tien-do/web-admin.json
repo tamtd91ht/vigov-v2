@@ -819,7 +819,7 @@
       "trang_thai": "xong",
       "bang_chung": "web-admin/src/features/dashboard/{view.tsx (Panel/TileGrid/FigureTile/UrgentRowView/PeriodButtons, BlockLayout 'dashboard'|'report'), figures.ts (NOTHING_URGENT, chữ comparisonLine), header-actions.tsx (ExportPendingActions size/labelPrefix), view.test.tsx (nhóm 'composition'), figures.test.ts} · features/report/{report-view.tsx (ReportHeader, CustomPeriodBox, ComparisonPendingSection), report-overview.tsx, report-view.test.tsx, header-actions.tsx (xoá)} · app/bao-cao/page.tsx. tsc + eslint tệp đổi sạch, vitest 224 tệp / 4022 ca xanh, make web xanh (06/10/2026). Chưa commit. Chưa mở trình duyệt.",
       "no_confirm": [],
-      "tiep_theo": "Không chép được: tiêu đề việc trên dòng 'Cần xử lý ngay' (quyết định người dùng + luật 3 — thay bằng phân hệ + mã) và 'quá hạn N ngày M giờ' (luật 10 — giữ 'quá hạn từ <hạn>'); tên bộ phận trên dòng (hàng đợi không trả); dòng phản ánh/văn bản không phải liên kết (hai sổ chưa có đường mở một bản ghi); 'chưa có kỳ trước để so' dưới số tồn (quyết định cũ: số tồn không có dòng so sánh) và 'Kỳ trước: 0/—' giữ thay vì câu ấy; ô số không mở hộp thoại (ADR 0053 §7); không 'Tính lại ngay'/nhãn cũ; khung Tuỳ chọn có nút Xem + kiểm khoảng (prototype áp ngay khi đủ hai ngày); Báo cáo 1 cột dưới 768px (prototype 2 cột mọi bề rộng); ô icon 48px của PageHeader giữ như mọi màn; viền/bóng thẻ (thẻ token không viền không bóng — chỉ viền đỏ khi báo động); viên số đỏ dùng danger-solid 11px (lần 2 #7). CÒN MỞ: biểu đồ So sánh với kỳ trước; xuất PDF/XLSX/PPTX; Trình chiếu; Giải ngân; Kinh tế & Tài nguyên; sổ đơn thư. Chỉ kiểm được trên trình duyệt: lưới 3 cột ở 1536px, ô số clamp ở 320px, cuộn danh sách 256px."
+      "tiep_theo": "Không chép được: tiêu đề việc trên dòng 'Cần xử lý ngay' (quyết định người dùng + luật 3 — thay bằng phân hệ + mã) và 'quá hạn N ngày M giờ' (luật 10 — giữ 'quá hạn từ <hạn>'); tên bộ phận trên dòng (hàng đợi không trả); dòng phản ánh/văn bản không phải liên kết (hai sổ chưa có đường mở một bản ghi); 'chưa có kỳ trước để so' dưới số tồn (quyết định cũ: số tồn không có dòng so sánh) và 'Kỳ trước: 0/—' giữ thay vì câu ấy; ô số không mở hộp thoại (ADR 0053 §7); không 'Tính lại ngay'/nhãn cũ; khung Tuỳ chọn có nút Xem + kiểm khoảng (prototype áp ngay khi đủ hai ngày); Báo cáo 1 cột dưới 768px (prototype 2 cột mọi bề rộng); ô icon 48px của PageHeader giữ như mọi màn; viền/bóng thẻ (thẻ token không viền không bóng — chỉ viền đỏ khi báo động); viên số đỏ dùng danger-solid 11px (lần 2 #7). CÒN MỞ: biểu đồ So sánh với kỳ trước; xuất PDF/XLSX/PPTX (SỬA: đã có ae894ce4); Trình chiếu (SỬA 07/10/2026: đã có b59cf968, mục tong-quan-trinh-chieu-07-10); Giải ngân; Kinh tế & Tài nguyên; sổ đơn thư. Chỉ kiểm được trên trình duyệt: lưới 3 cột ở 1536px, ô số clamp ở 320px, cuộn danh sách 256px."
     },
     {
       "id": "phan-anh-theo-prototype-06-10",
@@ -903,6 +903,15 @@
       "bang_chung": "eb4d53e3 — hộp Nhập giải ngân từ Excel; npx vitest run src/features/giai-ngan src/lib/api 57 tệp/1008 ca xanh; make check rc=0 (golangci-lint chưa cài trên máy)",
       "no_confirm": [],
       "tiep_theo": "—"
+    },
+    {
+      "id": "tong-quan-trinh-chieu-07-10",
+      "menu": "tong-quan-dieu-hanh",
+      "viec": "Tổng quan — nút '⤢ Trình chiếu' chạy thật (người dùng chốt 07/10/2026: prototype DashboardWorkspace/MetricTile + đủ đặc tả 01 :46; thay 'giai đoạn 2' của ADR 0053:160 / 0068:280,470 cho riêng nút này, như tiền lệ xuất báo cáo ae894ce4): lớp phủ fixed z-40 che thanh bên + đầu trang (inert, khoá cuộn), chữ to theo cqi, lưới số luôn 2 cột, ẩn 'Kỳ trước: —/0', nền tối CHỈ trong lớp phủ ([data-presentation=\"on\"], độ tương phản đã tính), chuyển khối ←/→ PageUp/PageDown Home/End, Esc thoát và trả focus về nút. Không giữ trong URL; /bao-cao không có.",
+      "trang_thai": "xong",
+      "bang_chung": "b59cf968; vitest dashboard+report+app 18 tệp/248 ca xanh (presentation.interaction.test.tsx viết trước, đỏ rồi xanh); tsc sạch; eslint sạch",
+      "no_confirm": [],
+      "tiep_theo": "Chỉ kiểm được trên trình duyệt: lớp phủ che đúng .dau-trang và thanh bên; Tab không lọt ra vỏ (inert); số 40px không tràn ở 1366/1920px; vòng khối hiện tại trên nền tối. Đã biết: khung xương lúc tải dùng màu cứng #eef1f5 nên sáng trên nền tối; mô tả '?' mở nền sáng trên lớp phủ. Không dùng Fullscreen API (15-phu-luc :114 có nhắc) — giữ được popover '?'."
     },
     {
       "id": "giai-ngan-hoan-thien-prototype-07-10",
