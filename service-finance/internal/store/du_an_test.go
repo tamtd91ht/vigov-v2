@@ -49,6 +49,7 @@ type dongDuAnGia struct {
 	donVi, canBo      string
 	khoiCong, hoanTat any // nil or time.Time
 	thoiHan           time.Time
+	implementingUnit  string // COALESCE(implementing_unit, '') — 0016, after the three dates
 	daGiaiNgan        int64
 }
 
@@ -56,7 +57,7 @@ func (d dongDuAnGia) giaTri() []driver.Value {
 	return []driver.Value{
 		d.id, d.ma, d.nam, d.hangMucID, d.ten, d.moTa,
 		d.keHoach, d.tongMuc, d.donVi, d.canBo,
-		d.khoiCong, d.hoanTat, d.thoiHan, d.daGiaiNgan,
+		d.khoiCong, d.hoanTat, d.thoiHan, d.implementingUnit, d.daGiaiNgan,
 	}
 }
 
@@ -64,6 +65,9 @@ type khoDuAnGia struct {
 	lenh []lenhGia
 	hang []dongDuAnGia
 	loi  error
+
+	// units answers the `DISTINCT implementing_unit` read — one column, already in the store's order.
+	units []string
 }
 
 func (k *khoDuAnGia) Connect(context.Context) (driver.Conn, error) { return &connDuAnGia{k: k}, nil }
@@ -94,13 +98,20 @@ func (c *connDuAnGia) QueryContext(_ context.Context, q string, args []driver.Na
 	if c.k.loi != nil {
 		return nil, c.k.loi
 	}
+	if strings.Contains(q, "DISTINCT implementing_unit") {
+		dong := make([][]driver.Value, 0, len(c.k.units))
+		for _, u := range c.k.units {
+			dong = append(dong, []driver.Value{u})
+		}
+		return &rowsGia{cot: []string{"implementing_unit"}, hang: dong}, nil
+	}
 	dong := make([][]driver.Value, 0, len(c.k.hang))
 	for _, h := range c.k.hang {
 		dong = append(dong, h.giaTri())
 	}
-	// 14 unnamed columns: cotDuAn's thirteen plus the aggregate. The fake does not parse the
+	// 15 unnamed columns: cotDuAn's fourteen plus the aggregate. The fake does not parse the
 	// column list — see the NOT PROVED note at the top.
-	cot := make([]string, 14)
+	cot := make([]string, 15)
 	return &rowsGia{cot: cot, hang: dong}, nil
 }
 
@@ -116,7 +127,8 @@ func mauDuAn() []dongDuAnGia {
 		// each other and from the total, so a swap between them cannot pass.
 		keHoach: 100_000_000, tongMuc: 120_000_000,
 		donVi: "bp-001", canBo: "cb-001",
-		thoiHan: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC),
+		thoiHan:          time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC),
+		implementingUnit: "Công ty Xây dựng Thành Long",
 		// NOT a column of du_an: the aggregate over the project's live vouchers.
 		daGiaiNgan: 90_000_000,
 	}}
@@ -307,6 +319,88 @@ func TestChiTietDuAnChiDocXaTrongContext(t *testing.T) {
 	}
 	if got := k.lenh[0].args[1]; got != "da-001" {
 		t.Fatalf("$2 = %v, muốn id dự án", got)
+	}
+}
+
+// --- migration 0016: implementing_unit ----------------------------------------------------------------
+
+func TestProjectListReadsImplementingUnitAfterTheDates(t *testing.T) {
+	// Positional: a scan that put the unit anywhere but after thoi_han_giai_ngan would fail or swap here.
+	got, err := dungKhoDuAn(&khoDuAnGia{hang: mauDuAn()}).DanhSach(ctxXa(xaThu), LocDuAn{Nam: 2026})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if got[0].DuAn.ImplementingUnit != "Công ty Xây dựng Thành Long" || got[0].DaGiaiNgan != 90_000_000 {
+		t.Fatalf("unit %q, disbursed %d", got[0].DuAn.ImplementingUnit, got[0].DaGiaiNgan)
+	}
+	if !strings.Contains(cotDuAn, "da.thoi_han_giai_ngan, COALESCE(da.implementing_unit, '')") {
+		t.Fatalf("cotDuAn must end with the unit after the deadline: %s", cotDuAn)
+	}
+}
+
+func TestProjectListImplementingUnitIsAnExactMatchParameter(t *testing.T) {
+	k := &khoDuAnGia{hang: mauDuAn()}
+	if _, err := dungKhoDuAn(k).DanhSach(ctxXa(xaThu),
+		LocDuAn{Nam: 2026, ImplementingUnit: "Công ty Xây dựng Thành Long"}); err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	q, args := k.lenh[0].sql, k.lenh[0].args
+	if !strings.Contains(q, "($4 = '' OR da.implementing_unit = $4)") || args[3] != "Công ty Xây dựng Thành Long" {
+		t.Fatalf("filter missing or not exact: %s %v", q, args)
+	}
+	// Still the commune first and the ceiling+1 last.
+	if args[0] != string(xaThu) || args[len(args)-1] != int64(TranDuAnMotNam+1) {
+		t.Fatalf("args = %v", args)
+	}
+}
+
+func TestImplementingUnitsOfYearStatement(t *testing.T) {
+	k := &khoDuAnGia{units: []string{"Ban QLDA", "Công ty A"}}
+	got, err := dungKhoDuAn(k).ImplementingUnitsOfYear(ctxXa(xaThu), 2026)
+	if err != nil {
+		t.Fatalf("ImplementingUnitsOfYear: %v", err)
+	}
+	if len(got) != 2 || got[0] != "Ban QLDA" {
+		t.Fatalf("got %v", got)
+	}
+	q, args := k.lenh[0].sql, k.lenh[0].args
+	for _, must := range []string{
+		"SELECT DISTINCT implementing_unit FROM du_an WHERE tenant_id = $1", // the commune, from Scoped.Query
+		"deleted_at IS NULL",             // live projects only (rule 7, invariant 2)
+		"nam = $2",                       // one budget year (§13 rule 8)
+		"implementing_unit IS NOT NULL",  // no empty option
+		"btrim(implementing_unit) <> ''", //
+		"ORDER BY implementing_unit",     // sorted
+		"LIMIT $3",                       // bounded
+	} {
+		if !strings.Contains(q, must) {
+			t.Fatalf("statement lacks %q:\n%s", must, q)
+		}
+	}
+	if args[0] != string(xaThu) || args[1] != int64(2026) || args[2] != int64(TranDuAnMotNam+1) {
+		t.Fatalf("args = %v", args)
+	}
+}
+
+func TestImplementingUnitsOfYearRefusals(t *testing.T) {
+	k := &khoDuAnGia{}
+	if _, err := dungKhoDuAn(k).ImplementingUnitsOfYear(ctxXa(xaThu), 0); !errors.Is(err, ErrThieuNamNganSach) {
+		t.Fatalf("err = %v, want ErrThieuNamNganSach", err)
+	}
+	if len(k.lenh) != 0 {
+		t.Fatal("no year, yet a statement ran")
+	}
+	over := make([]string, TranDuAnMotNam+1)
+	for i := range over {
+		over[i] = "u"
+	}
+	got, err := dungKhoDuAn(&khoDuAnGia{units: over}).ImplementingUnitsOfYear(ctxXa(xaThu), 2026)
+	if !errors.Is(err, ErrTooManyImplementingUnits) || got != nil {
+		t.Fatalf("err = %v, rows %d — refuse, never truncate", err, len(got))
+	}
+	boom := errors.New("store down")
+	if _, err := dungKhoDuAn(&khoDuAnGia{loi: boom}).ImplementingUnitsOfYear(ctxXa(xaThu), 2026); !errors.Is(err, boom) {
+		t.Fatalf("err = %v — must wrap with %%w", err)
 	}
 }
 

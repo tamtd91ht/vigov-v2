@@ -53,6 +53,8 @@ type hangDA struct {
 	khoiCong     *time.Time
 	hoanThanh    *time.Time
 	hanGiaiNgan  time.Time
+	// implementingUnit is `COALESCE(implementing_unit, '')` (0016) — "" = NULL.
+	implementingUnit string
 }
 
 type khoDAGia struct {
@@ -314,6 +316,7 @@ func (c *connDAGia) QueryContext(_ context.Context, q string, args []driver.Name
 			h.keHoach, tongHoacKhong(h.tongMuc),
 			h.donVi, h.canBo,
 			gioHoacNil(h.khoiCong), gioHoacNil(h.hoanThanh), h.hanGiaiNgan,
+			h.implementingUnit,
 		}}}, nil
 	}
 	return nil, fmt.Errorf("driver giả: không biết trả gì cho %q", q)
@@ -345,6 +348,7 @@ func cotDA() []string {
 		"ke_hoach_von_nam", "tong_muc_duoc_duyet",
 		"don_vi_thuc_hien_id", "can_bo_phu_trach_id",
 		"ngay_khoi_cong", "ngay_hoan_thanh", "thoi_han_giai_ngan",
+		"implementing_unit",
 	}
 }
 

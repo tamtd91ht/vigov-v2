@@ -47,6 +47,7 @@ import (
 // TRANSACTION, so a row and its audit entry cannot be written in two.
 type ProjectDiscussionStore interface {
 	LiveProjectCode(ctx context.Context, tx *store.ScopedTx, projectID string) (string, error)
+	LiveProjectForIssue(ctx context.Context, tx *store.ScopedTx, projectID string) (code, assignee string, err error)
 	InsertIssue(ctx context.Context, tx *store.ScopedTx, i domain.ProjectIssue) (time.Time, error)
 	IssueForUpdate(ctx context.Context, tx *store.ScopedTx, id string) (domain.ProjectIssue, error)
 	ResolveIssue(ctx context.Context, tx *store.ScopedTx, id, by string) (time.Time, error)
@@ -80,19 +81,44 @@ type ProjectCommentRequest struct {
 	MentionedStaffCodes []string
 }
 
+// ProjectIssueRequest is one obstacle as the form sends it (migration 0016 added the last two).
+type ProjectIssueRequest struct {
+	// Text is exactly as typed — first line the title, the rest the description.
+	Text string
+
+	// OwnerCode is who follows the issue, a STAFF BUSINESS CODE. Blank = take the project's officer in
+	// charge at this moment (prototype budget/service.py:949), or nobody if it has none.
+	OwnerCode string
+
+	// DueOn is by when; zero = no date. No "not in the past" rule — the prototype has none.
+	DueOn time.Time
+}
+
 // RecordIssue records one obstacle on one live project of this commune.
 //
 // RECORDING NEVER DEPENDS ON ANYTHING ELSE, deliberately, as the prototype argues
 // (budget/service.py:936-940): a clerk who typed "chưa bàn giao mặt bằng" told the commune something
-// true, and refusing to store it until somebody is assigned is how obstacles end up in a notebook.
-func (uc *ProjectDiscussion) RecordIssue(ctx context.Context, projectID, text string,
+// true, and refusing to store it until somebody is assigned is how obstacles end up in a notebook. So an
+// owner is OPTIONAL, and a project officer whose stored value is not code-shaped yields NO owner rather
+// than a refusal.
+//
+// THE OWNER IS A SNAPSHOT: the officer in charge when the issue is recorded, frozen with the row (0016's
+// guard). Re-assigning the project later does not move who was asked to follow an issue already raised.
+func (uc *ProjectDiscussion) RecordIssue(ctx context.Context, projectID string, req ProjectIssueRequest,
 	actor audit.Actor) (domain.ProjectIssue, error) {
 
 	if projectID == "" {
 		return domain.ProjectIssue{}, fistore.ErrKhongThayDuAn
 	}
-	title, description, err := domain.SplitIssueText(text)
+	title, description, err := domain.SplitIssueText(req.Text)
 	if err != nil {
+		return domain.ProjectIssue{}, err
+	}
+	owner, err := domain.NormaliseIssueOwnerCode(req.OwnerCode)
+	if err != nil {
+		return domain.ProjectIssue{}, err
+	}
+	if err := domain.CheckIssueDueOn(req.DueOn); err != nil {
 		return domain.ProjectIssue{}, err
 	}
 	if err := coNguoiThucHien(actor); err != nil {
@@ -105,21 +131,42 @@ func (uc *ProjectDiscussion) RecordIssue(ctx context.Context, projectID, text st
 
 	issue := domain.ProjectIssue{
 		ID: id, ProjectID: projectID, Title: title, Description: description, RecordedBy: actor.ID,
+		OwnerCode: owner, DueOn: req.DueOn,
 	}
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
-		code, err := uc.store.LiveProjectCode(ctx, tx, projectID)
+		code, assignee, err := uc.store.LiveProjectForIssue(ctx, tx, projectID)
 		if err != nil {
 			return err
+		}
+		ownerFromProject := false
+		if issue.OwnerCode == "" {
+			// THE PROJECT'S OFFICER, read under the project's share lock in this transaction. Its value is
+			// the staff code the web stores in `assignee_id` (web-admin project-people.ts:25), which the
+			// server does not enforce — so it passes the same shape check a typed owner does, and a value
+			// that fails it gives no owner instead of refusing the record.
+			if snap, err := domain.NormaliseIssueOwnerCode(assignee); err == nil && snap != "" {
+				issue.OwnerCode, ownerFromProject = snap, true
+			}
 		}
 		if issue.RecordedAt, err = uc.store.InsertIssue(ctx, tx, issue); err != nil {
 			return err
 		}
-		delta, err := json.Marshal(map[string]any{"sau": map[string]any{
+		after := map[string]any{
 			"issue_id":           issue.ID,
 			"project_id":         projectID,
 			"title_length":       len([]rune(title)),
 			"description_length": len([]rune(description)),
-		}})
+			// A staff business code and a date: neither is free text nor personal data (rule 3). ""
+			// means nobody was named and the project had no officer.
+			"owner_code": issue.OwnerCode,
+			"due_on":     ngayDelta(issue.DueOn),
+		}
+		if ownerFromProject {
+			// WHO CHOSE THE OWNER: the clerk, or the project's officer by default. The two look identical
+			// in the row, and years later "why was CB-00123 chasing this" has two different answers.
+			after["owner_from_project"] = true
+		}
+		delta, err := json.Marshal(map[string]any{"sau": after})
 		if err != nil {
 			return fmt.Errorf("vuong_mac: mã hoá delta: %w", err)
 		}

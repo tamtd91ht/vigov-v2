@@ -64,6 +64,9 @@ var (
 
 	ErrMentionsTooMany = fmt.Errorf("trao_doi: `mentioned_staff_codes` nhắc quá nhiều người (tối đa %d)", MentionsMax)
 	ErrMentionInvalid  = errors.New("trao_doi: `mentioned_staff_codes` có phần tử rỗng hoặc không phải mã cán bộ")
+
+	ErrIssueOwnerInvalid = errors.New("vuong_mac: `owner_code` không phải mã cán bộ")
+	ErrIssueDueOnInvalid = errors.New("vuong_mac: `due_on` ngoài khoảng năm hợp lệ (2000..2100)")
 )
 
 // ProjectIssue is one obstacle recorded against one project (§8.1, §11 `vuong_mac`).
@@ -88,6 +91,50 @@ type ProjectIssue struct {
 	// TrackingTaskID is §13 rule 4's link to the task chasing this issue. ALWAYS "" UNTIL THE TASK
 	// EVENT EXISTS (user decision 06/10/2026); the column is in 0015 so that day needs no migration.
 	TrackingTaskID string
+
+	// OwnerCode is who follows the issue — a STAFF BUSINESS CODE, "" = nobody (migration 0016). DueOn is
+	// by when, zero = no date. BOTH ARE SET AT INSERT AND NEVER AGAIN: 0016's guard freezes them, as
+	// the prototype UI never edits them.
+	OwnerCode string
+	DueOn     time.Time
+}
+
+// NormaliseIssueOwnerCode trims and checks the shape of a staff code typed for `owner_code`. "" is a
+// legitimate answer — "not named here", which the use case then fills from the project's assignee.
+//
+// SHAPE ONLY, EXACTLY AS NormaliseMentions: the code is NOT checked against identity (a synchronous
+// call to another service this round does not make — user decision 06/10/2026). A code naming nobody
+// in this commune is stored as typed; the screen resolves codes from this commune's staff directory and
+// shows nothing for one it cannot find.
+func NormaliseIssueOwnerCode(code string) (string, error) {
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return "", nil
+	}
+	if !staffCodeShapeOK(code) {
+		return "", ErrIssueOwnerInvalid
+	}
+	return code, nil
+}
+
+// CheckIssueDueOn bounds an optional due date to the window every other date of this register uses
+// (KiemTraNgayDuAn). NO "NOT IN THE PAST" CHECK, deliberately: the prototype has none
+// (budget/service.py:930-992), and an obstacle recorded late may well carry a deadline already gone.
+func CheckIssueDueOn(due time.Time) error {
+	if due.IsZero() {
+		return nil
+	}
+	if y := due.Year(); y < NamDuAnSom || y > NamDuAnMuon {
+		return ErrIssueDueOnInvalid
+	}
+	return nil
+}
+
+// staffCodeShapeOK is the shape every staff code here must have: at most StaffCodeMax characters, no
+// whitespace, no control character. Not a format: it does not fix a pattern a commune may not use.
+func staffCodeShapeOK(code string) bool {
+	return code != "" && len([]rune(code)) <= StaffCodeMax &&
+		!strings.ContainsFunc(code, unicode.IsSpace) && !hasControlExcept(code, "")
 }
 
 // Resolved reports whether the issue has been marked "Đã gỡ".
@@ -163,8 +210,7 @@ func NormaliseMentions(codes []string) ([]string, error) {
 	seen := make(map[string]bool, len(codes))
 	for _, raw := range codes {
 		code := strings.TrimSpace(raw)
-		if code == "" || len([]rune(code)) > StaffCodeMax || strings.ContainsFunc(code, unicode.IsSpace) ||
-			hasControlExcept(code, "") {
+		if !staffCodeShapeOK(code) {
 			return nil, ErrMentionInvalid
 		}
 		if seen[code] {

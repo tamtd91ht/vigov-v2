@@ -64,10 +64,13 @@ var ErrKhongThayDuAn = errors.New("du_an: không có dự án này")
 // That is why this is a constant rather than a column list written inline at each call site.
 // `da_giai_ngan` is NOT in it: it is not a column anywhere, it is the aggregate the statements
 // below compute, and it is appended after this list.
+//
+// `implementing_unit` (0016) IS LAST, after the three dates, so no existing position moved.
 const cotDuAn = `da.id, da.ma, da.nam, da.hang_muc_id, da.ten, COALESCE(da.mo_ta, ''), ` +
 	`da.ke_hoach_von_nam, COALESCE(da.tong_muc_duoc_duyet, 0), ` +
 	`COALESCE(da.don_vi_thuc_hien_id, ''), COALESCE(da.can_bo_phu_trach_id, ''), ` +
-	`da.ngay_khoi_cong, da.ngay_hoan_thanh, da.thoi_han_giai_ngan`
+	`da.ngay_khoi_cong, da.ngay_hoan_thanh, da.thoi_han_giai_ngan, ` +
+	`COALESCE(da.implementing_unit, '')`
 
 // tongChungTu is the subquery that produces "đã giải ngân" for every project of one commune.
 //
@@ -107,7 +110,7 @@ func quetDuAn(rows *sql.Rows) (domain.TienDoDuAn, error) {
 	)
 	err := rows.Scan(&t.DuAn.ID, &t.DuAn.Ma, &t.DuAn.Nam, &t.DuAn.HangMucID, &t.DuAn.Ten, &t.DuAn.MoTa,
 		&keHoach, &tong, &t.DuAn.DonViThucHienID, &t.DuAn.CanBoPhuTrachID,
-		&khoiCong, &hoanThanh, &thoiHan, &daGiaiNgan)
+		&khoiCong, &hoanThanh, &thoiHan, &t.DuAn.ImplementingUnit, &daGiaiNgan)
 	if err != nil {
 		return domain.TienDoDuAn{}, err
 	}
@@ -144,6 +147,11 @@ type LocDuAn struct {
 
 	// HangMucID empty means every category. This is a filter, not an isolation boundary.
 	HangMucID string
+
+	// ImplementingUnit empty means every unit; otherwise an EXACT match on `implementing_unit` — the
+	// prototype's filter (budget/repository.py:147-149), whose values come from
+	// ImplementingUnitsOfYear. A filter inside the commune, not an isolation boundary.
+	ImplementingUnit string
 }
 
 // ErrThieuNamNganSach is a caller that did not say which budget year it wants.
@@ -175,10 +183,12 @@ func (s *DuAnStore) DanhSach(ctx context.Context, loc LocDuAn) ([]domain.TienDoD
 		       ON ct.tenant_id = da.tenant_id AND ct.du_an_id = da.id
 		WHERE da.tenant_id = $1 AND da.deleted_at IS NULL AND da.nam = $2
 		  AND ($3 = '' OR da.hang_muc_id = $3)
+		  AND ($4 = '' OR da.implementing_unit = $4)
 		ORDER BY da.ma
-		LIMIT $4`
+		LIMIT $5`
 
-	rows, err := s.db.For(ctx).QueryJoin(ctx, stmt, loc.Nam, loc.HangMucID, TranDuAnMotNam+1)
+	rows, err := s.db.For(ctx).QueryJoin(ctx, stmt, loc.Nam, loc.HangMucID, loc.ImplementingUnit,
+		TranDuAnMotNam+1)
 	if err != nil {
 		return nil, fmt.Errorf("du_an: đọc danh sách: %w", err)
 	}
@@ -237,6 +247,55 @@ func (s *DuAnStore) ChiTiet(ctx context.Context, id string) (domain.TienDoDuAn, 
 		return domain.TienDoDuAn{}, fmt.Errorf("du_an: duyệt kết quả: %w", err)
 	}
 	return mot, nil
+}
+
+// ErrTooManyImplementingUnits — more distinct units in one year than TranDuAnMotNam, which cannot
+// happen without the project ceiling being broken too. REFUSED, NOT TRUNCATED: a short filter list is a
+// unit nobody can select, with nothing saying so.
+var ErrTooManyImplementingUnits = errors.New("du_an: vượt trần số đơn vị thực hiện một năm")
+
+// ImplementingUnitsOfYear lists the distinct "Đơn vị thực hiện" typed on this commune's LIVE projects of
+// one budget year — the options of the list's filter (prototype budget/repository.py:355-366).
+//
+// THE YEAR IS REQUIRED, unlike the prototype's (`budget_year` optional there): §13 rule 8 makes each
+// year its own set of projects, and the list it filters is year-scoped, so an "every year" option list
+// would offer units that match nothing on the screen.
+//
+// ONE TABLE, so Scoped.Query, which writes `WHERE tenant_id = $1` itself (rule 1, invariant 5). Blank
+// values cannot be stored (0016's CHECK); the `btrim` predicate is kept so a row written before that
+// CHECK by another writer still never offers an empty option.
+//
+// SORTED BY THE DATABASE'S COLLATION — this repository has no Vietnamese collation helper, and inventing
+// one here would be a second sort order nobody else uses. Exact-match filter values, so the order is
+// display only.
+func (s *DuAnStore) ImplementingUnitsOfYear(ctx context.Context, year int) ([]string, error) {
+	if year == 0 {
+		return nil, ErrThieuNamNganSach
+	}
+	rows, err := s.db.For(ctx).Query(ctx, "DISTINCT implementing_unit", "du_an",
+		`AND deleted_at IS NULL AND nam = $2
+		   AND implementing_unit IS NOT NULL AND btrim(implementing_unit) <> ''
+		 ORDER BY implementing_unit
+		 LIMIT $3`, year, TranDuAnMotNam+1)
+	if err != nil {
+		return nil, fmt.Errorf("du_an: đọc đơn vị thực hiện theo năm: %w", err)
+	}
+	defer rows.Close()
+	out := make([]string, 0, 16)
+	for rows.Next() {
+		var unit string
+		if err := rows.Scan(&unit); err != nil {
+			return nil, fmt.Errorf("du_an: đọc dòng đơn vị thực hiện: %w", err)
+		}
+		out = append(out, unit)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("du_an: duyệt đơn vị thực hiện: %w", err)
+	}
+	if len(out) > TranDuAnMotNam {
+		return nil, ErrTooManyImplementingUnits
+	}
+	return out, nil
 }
 
 // TranPhanBoMotNam bounds the allocation lines read for ONE budget year's project list.

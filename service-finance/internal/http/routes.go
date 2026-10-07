@@ -122,6 +122,9 @@ type DuAnTienDo interface {
 	// DisbursedByMonth feeds the cumulative curves (§4 for the whole year when projectID is "", §8.3
 	// for one project): ONE read of at most 13 buckets, never a read per project.
 	DisbursedByMonth(ctx context.Context, year int, projectID string) (domain.DisbursedByMonth, error)
+	// ImplementingUnitsOfYear feeds GET /api/v1/implementing-units: the distinct "Đơn vị thực hiện" of
+	// one year's live projects, sorted.
+	ImplementingUnitsOfYear(ctx context.Context, year int) ([]string, error)
 }
 
 // GhiDuAn is the WRITE half of the investment project register, and it is its own interface rather
@@ -489,6 +492,35 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/investment-projects/{id}",
 		authz.RequirePermission(d.Checker, "budget.read")(
 			http.HandlerFunc(h.ChiTietDuAn)))
+
+	// The options of §7.1's "Đơn vị thực hiện" filter: the distinct free-text units typed on this
+	// commune's live projects of one budget year (migration 0016; prototype budget/router.py:117-128,
+	// service.py:682-691, repository.py:355-366 — owner instruction 07/10/2026).
+	//
+	// `implementing-units`, TOP LEVEL, plural, kebab-case — the English the contract already uses for
+	// the field (`implementing_unit`). NOT nested under `investment-projects`: there `{id}` would make
+	// `investment-projects/implementing-units` one path segment away from meaning a project, the
+	// reason `investment-project-summary` gives for the same choice.
+	//
+	// `budget.read`, the prototype's key for this list and the key of the project list it filters —
+	// seeded at service-identity/migrations/0001_init.sql:282-284; no key invented (rule 5, invariant
+	// 3c). The units are read off the commune's projects, so they are exactly as readable as the list.
+	//
+	// `year` IS REQUIRED (the prototype's is optional): §13 rule 8 makes each budget year its own set
+	// of projects, and an "every year" option list would offer units matching nothing on the screen.
+	//
+	// NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Các đơn vị thực hiện (nhập tay) của dự án còn hiệu lực trong một năm ngân sách — dùng cho bộ lọc danh sách dự án
+	// @screen   06-giai-ngan §7.1
+	// @reply    200 implementingUnitsOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/implementing-units",
+		authz.RequirePermission(d.Checker, "budget.read")(
+			http.HandlerFunc(h.ImplementingUnits)))
 
 	// §8.2's voucher tab: one project's live vouchers, newest `payment_date` first (ties: newest id).
 	//

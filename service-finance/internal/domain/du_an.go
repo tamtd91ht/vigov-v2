@@ -78,6 +78,12 @@ type DuAn struct {
 	DonViThucHienID string
 	CanBoPhuTrachID string
 
+	// ImplementingUnit is "Đơn vị thực hiện" AS TYPED — free text, often a contractor rather than a
+	// unit of the commune (prototype models.py:302-304, migration 0016). "" = not named (NULL). It sits
+	// BESIDE DonViThucHienID, which names a unit of the commune by id; the two are not the same fact.
+	// Free text a clerk may fill with a person's name, so it is never logged (rule 3).
+	ImplementingUnit string
+
 	NgayKhoiCong  time.Time // zero when not set
 	NgayHoanThanh time.Time // zero when not set
 

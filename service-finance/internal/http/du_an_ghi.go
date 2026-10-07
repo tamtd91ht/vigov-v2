@@ -80,6 +80,9 @@ type themDuAnVao struct {
 	OrgUnitID  string `json:"org_unit_id,omitempty"`
 	AssigneeID string `json:"assignee_id,omitempty"`
 
+	// ImplementingUnit is "Đơn vị thực hiện" as typed (migration 0016), at most 255 characters. Optional.
+	ImplementingUnit string `json:"implementing_unit,omitempty"`
+
 	StartDate      string `json:"start_date,omitempty"`      // YYYY-MM-DD
 	CompletionDate string `json:"completion_date,omitempty"` // YYYY-MM-DD
 
@@ -124,6 +127,10 @@ type suaDuAnVao struct {
 
 	OrgUnitID  *string `json:"org_unit_id,omitempty"`
 	AssigneeID *string `json:"assignee_id,omitempty"`
+
+	// ImplementingUnit: absent = unchanged, "" = cleared — the same semantics as every other text field
+	// of this body (JSON null decodes to absent here, as it does for them).
+	ImplementingUnit *string `json:"implementing_unit,omitempty"`
 
 	StartDate            *string `json:"start_date,omitempty"`
 	CompletionDate       *string `json:"completion_date,omitempty"`
@@ -185,6 +192,9 @@ type duAnGhiRa struct {
 	StartDate      string `json:"start_date,omitempty"`
 	CompletionDate string `json:"completion_date,omitempty"`
 
+	// ImplementingUnit — absent when not named (migration 0016).
+	ImplementingUnit *string `json:"implementing_unit,omitempty"`
+
 	DisbursementDeadline string `json:"disbursement_deadline"`
 
 	// FundingAllocations is the project's live lines after the write — on create what was written, on
@@ -222,6 +232,7 @@ func duAnGhiRaNgoai(d domain.DuAn, phanBo []domain.PhanBoNguonVon) duAnGhiRa {
 		AssigneeID:           d.CanBoPhuTrachID,
 		StartDate:            ngayRa(d.NgayKhoiCong),
 		CompletionDate:       ngayRa(d.NgayHoanThanh),
+		ImplementingUnit:     optionalText(d.ImplementingUnit),
 		DisbursementDeadline: ngayRa(d.ThoiHanGiaiNgan),
 	}
 	for _, pb := range phanBo {
@@ -301,6 +312,7 @@ func (h *Handler) ThemDuAn(w http.ResponseWriter, r *http.Request) {
 		TongMucDuocDuyet: domain.Dong(vao.ApprovedAmount),
 		DonViThucHienID:  vao.OrgUnitID,
 		CanBoPhuTrachID:  vao.AssigneeID,
+		ImplementingUnit: vao.ImplementingUnit,
 		NgayKhoiCong:     khoiCong,
 		NgayHoanThanh:    hoanThanh,
 		ThoiHanGiaiNgan:  hanGiaiNgan,
@@ -340,11 +352,12 @@ func (h *Handler) SuaDuAn(w http.ResponseWriter, r *http.Request) {
 		// THE POINTERS ARE PASSED THROUGH UNTOUCHED, including pointers to "". Dereferencing one here
 		// to "decide" whether the client meant it would collapse "leave alone" and "clear" into one
 		// value at the only layer that can still tell them apart.
-		HangMucID:       vao.CategoryID,
-		Ten:             vao.Name,
-		MoTa:            vao.Description,
-		DonViThucHienID: vao.OrgUnitID,
-		CanBoPhuTrachID: vao.AssigneeID,
+		HangMucID:        vao.CategoryID,
+		Ten:              vao.Name,
+		MoTa:             vao.Description,
+		DonViThucHienID:  vao.OrgUnitID,
+		CanBoPhuTrachID:  vao.AssigneeID,
+		ImplementingUnit: vao.ImplementingUnit,
 	}
 	if vao.PlannedAmount != nil {
 		so := domain.Dong(*vao.PlannedAmount)
@@ -563,6 +576,7 @@ func laLoiDauVaoDuAn(err error) bool {
 		domain.ErrKeHoachVonAm, domain.ErrKeHoachVonQuaLon,
 		domain.ErrTongMucAm, domain.ErrTongMucQuaLon,
 		domain.ErrNgayDuAnNgoaiLich, domain.ErrThamChieuQuaDai,
+		domain.ErrImplementingUnitTooLong, domain.ErrImplementingUnitInvalid,
 		domain.ErrThieuLyDoXoaDuAn, domain.ErrLyDoXoaDuAnQuaDai,
 		domain.ErrThieuNguonVonPhanBo,
 		domain.ErrPhanBoAm, domain.ErrPhanBoQuaLon, domain.ErrQuaNhieuDongPhanBo,

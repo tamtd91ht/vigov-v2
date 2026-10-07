@@ -56,21 +56,27 @@ func NewProjectDiscussionStore(db *store.DB) *ProjectDiscussionStore {
 }
 
 // cotIssue IS READ BY POSITION in scanIssue. Nullable columns are COALESCEd to "" except resolved_at,
-// whose NULL is the meaning "still open".
+// whose NULL is the meaning "still open", and due_on (0016), whose NULL is "no date". The two 0016
+// columns are LAST, so no existing position moved.
 const cotIssue = `pi.id, pi.project_id, pi.title, COALESCE(pi.description, ''), pi.recorded_by, ` +
-	`pi.recorded_at, pi.resolved_at, COALESCE(pi.resolved_by, ''), COALESCE(pi.tracking_task_id, '')`
+	`pi.recorded_at, pi.resolved_at, COALESCE(pi.resolved_by, ''), COALESCE(pi.tracking_task_id, ''), ` +
+	`COALESCE(pi.owner_code, ''), pi.due_on`
 
 func scanIssue(scan func(dest ...any) error) (domain.ProjectIssue, error) {
 	var (
 		i        domain.ProjectIssue
 		resolved sql.NullTime
+		due      sql.NullTime
 	)
 	if err := scan(&i.ID, &i.ProjectID, &i.Title, &i.Description, &i.RecordedBy,
-		&i.RecordedAt, &resolved, &i.ResolvedBy, &i.TrackingTaskID); err != nil {
+		&i.RecordedAt, &resolved, &i.ResolvedBy, &i.TrackingTaskID, &i.OwnerCode, &due); err != nil {
 		return domain.ProjectIssue{}, err
 	}
 	if resolved.Valid {
 		i.ResolvedAt = resolved.Time
+	}
+	if due.Valid {
+		i.DueOn = due.Time
 	}
 	return i, nil
 }
@@ -287,11 +293,36 @@ func (s *ProjectDiscussionWriteStore) LiveProjectCode(ctx context.Context, tx *s
 	return code, nil
 }
 
+// projectForIssue is projectForDiscussion plus the project's officer in charge — the owner an issue
+// takes when the request names none (prototype budget/service.py:949). Same FOR SHARE, same reason.
+const projectForIssue = `SELECT ma, COALESCE(can_bo_phu_trach_id, '') FROM du_an
+	WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL FOR SHARE`
+
+// LiveProjectForIssue returns the code and the officer in charge ("" = nobody) of one live project of
+// this commune; ErrKhongThayDuAn otherwise. Read inside the issue's transaction, so the owner snapshot
+// is the officer at the moment the issue is recorded.
+func (s *ProjectDiscussionWriteStore) LiveProjectForIssue(ctx context.Context, tx *store.ScopedTx,
+	projectID string) (code, assignee string, err error) {
+
+	err = tx.Underlying().QueryRowContext(ctx, projectForIssue, string(tx.TenantID()), projectID).
+		Scan(&code, &assignee)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", ErrKhongThayDuAn
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("du_an: đọc dự án cho vướng mắc: %w", err)
+	}
+	return code, assignee, nil
+}
+
 // insertIssue — recorded_at is the DATABASE's clock, returned, so the reply and the row agree to the
 // microsecond and two replicas with skewed clocks cannot order one project's timeline wrongly.
+//
+// owner_code / due_on (0016) are written HERE AND ONLY HERE: 0016's guard freezes them after insert.
+// "" and the zero date go in as NULL — 0016's CHECK refuses a blank owner_code.
 const insertIssue = `INSERT INTO project_issues
-	(tenant_id, id, project_id, title, description, recorded_by)
-	VALUES ($1, $2, $3, $4, NULLIF($5, ''), $6)
+	(tenant_id, id, project_id, title, description, recorded_by, owner_code, due_on)
+	VALUES ($1, $2, $3, $4, NULLIF($5, ''), $6, $7, $8)
 	RETURNING recorded_at`
 
 // InsertIssue records one issue and returns the moment it was recorded.
@@ -300,7 +331,8 @@ func (s *ProjectDiscussionWriteStore) InsertIssue(ctx context.Context, tx *store
 
 	var at time.Time
 	err := tx.Underlying().QueryRowContext(ctx, insertIssue, string(tx.TenantID()),
-		i.ID, i.ProjectID, i.Title, i.Description, i.RecordedBy).Scan(&at)
+		i.ID, i.ProjectID, i.Title, i.Description, i.RecordedBy,
+		rongThanhNil(i.OwnerCode), ngayThanhNil(i.DueOn)).Scan(&at)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("vuong_mac: ghi nhận: %w", err)
 	}

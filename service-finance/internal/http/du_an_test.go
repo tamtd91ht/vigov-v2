@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -67,6 +68,29 @@ type duAnGia struct {
 	byMonth    map[tenant.ID]map[string]map[int]domain.DisbursedByMonth
 	monthReads int
 	monthErr   error
+
+	// unitReads / unitErr — GET /api/v1/implementing-units. The units are DERIVED from `theo` of the
+	// context's commune, as the store derives them from that commune's rows.
+	unitReads int
+	unitErr   error
+}
+
+func (d *duAnGia) ImplementingUnitsOfYear(ctx context.Context, year int) ([]string, error) {
+	d.unitReads++
+	if d.unitErr != nil {
+		return nil, d.unitErr
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, p := range d.theo[tenant.MustFrom(ctx)] {
+		if p.DuAn.Nam != year || p.DuAn.ImplementingUnit == "" || seen[p.DuAn.ImplementingUnit] {
+			continue
+		}
+		seen[p.DuAn.ImplementingUnit] = true
+		out = append(out, p.DuAn.ImplementingUnit)
+	}
+	sort.Strings(out)
+	return out, nil
 }
 
 func (d *duAnGia) DisbursedByMonth(ctx context.Context, year int, projectID string) (domain.DisbursedByMonth, error) {
@@ -127,6 +151,9 @@ func (d *duAnGia) DanhSach(ctx context.Context, loc fistore.LocDuAn) ([]domain.T
 			continue
 		}
 		if loc.HangMucID != "" && mot.DuAn.HangMucID != loc.HangMucID {
+			continue
+		}
+		if loc.ImplementingUnit != "" && mot.DuAn.ImplementingUnit != loc.ImplementingUnit {
 			continue
 		}
 		ra = append(ra, mot)

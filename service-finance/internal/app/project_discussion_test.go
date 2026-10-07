@@ -47,6 +47,10 @@ type fakeDiscussionDB struct {
 
 	projectCode string // "" = no live project with that id in this commune
 
+	// projectAssignee is the project's `can_bo_phu_trach_id` as COALESCEd ("" = nobody) — the owner an
+	// issue takes when the request names none.
+	projectAssignee string
+
 	// issue is what IssueForUpdate finds; nil = none in this commune.
 	issue *domain.ProjectIssue
 
@@ -118,8 +122,15 @@ func (c *fakeDiscussionConn) QueryContext(_ context.Context, q string, args []dr
 		return &rowsGia{cot: []string{col}, hang: [][]driver.Value{{v}}}
 	}
 	issueCols := []string{"id", "project_id", "title", "description", "recorded_by",
-		"recorded_at", "resolved_at", "resolved_by", "tracking_task_id"}
+		"recorded_at", "resolved_at", "resolved_by", "tracking_task_id", "owner_code", "due_on"}
 	switch {
+	case strings.Contains(q, "FROM du_an") && strings.Contains(q, "FOR SHARE") &&
+		strings.Contains(q, "can_bo_phu_trach_id"):
+		if c.k.projectCode == "" {
+			return &rowsGia{cot: []string{"ma", "can_bo_phu_trach_id"}}, nil
+		}
+		return &rowsGia{cot: []string{"ma", "can_bo_phu_trach_id"},
+			hang: [][]driver.Value{{c.k.projectCode, c.k.projectAssignee}}}, nil
 	case strings.Contains(q, "FROM du_an") && strings.Contains(q, "FOR SHARE"):
 		if c.k.projectCode == "" {
 			return &rowsGia{cot: []string{"ma"}}, nil
@@ -132,12 +143,15 @@ func (c *fakeDiscussionConn) QueryContext(_ context.Context, q string, args []dr
 			return &rowsGia{cot: issueCols}, nil
 		}
 		i := c.k.issue
-		var resolved driver.Value
+		var resolved, due driver.Value
 		if i.Resolved() {
 			resolved = i.ResolvedAt
 		}
+		if !i.DueOn.IsZero() {
+			due = i.DueOn
+		}
 		return &rowsGia{cot: issueCols, hang: [][]driver.Value{{i.ID, i.ProjectID, i.Title, i.Description,
-			i.RecordedBy, i.RecordedAt, resolved, i.ResolvedBy, i.TrackingTaskID}}}, nil
+			i.RecordedBy, i.RecordedAt, resolved, i.ResolvedBy, i.TrackingTaskID, i.OwnerCode, due}}}, nil
 	case strings.Contains(q, "UPDATE project_issues"):
 		return one("resolved_at", at.Add(time.Hour)), nil
 	case strings.Contains(q, "INSERT INTO project_comments"):
@@ -208,7 +222,8 @@ func TestRecordIssueWritesRowAndEntryInOneTransaction(t *testing.T) {
 	k := &fakeDiscussionDB{projectCode: "DA07"}
 	uc, ctx := buildDiscussion(t, k)
 
-	got, err := uc.RecordIssue(ctx, "da-001", "Chưa bàn giao mặt bằng\nHộ ông A chưa đồng ý.", clerk())
+	got, err := uc.RecordIssue(ctx, "da-001",
+		ProjectIssueRequest{Text: "Chưa bàn giao mặt bằng\nHộ ông A chưa đồng ý."}, clerk())
 	if err != nil {
 		t.Fatalf("RecordIssue: %v", err)
 	}
@@ -251,7 +266,7 @@ func TestRecordIssueRefusalsCommitNothing(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			uc, ctx := buildDiscussion(t, c.k)
-			_, err := uc.RecordIssue(ctx, c.project, c.text, c.actor)
+			_, err := uc.RecordIssue(ctx, c.project, ProjectIssueRequest{Text: c.text}, c.actor)
 			if err == nil || (c.want != nil && !errors.Is(err, c.want)) {
 				t.Fatalf("err = %v, muốn %v", err, c.want)
 			}
@@ -259,6 +274,99 @@ func TestRecordIssueRefusalsCommitNothing(t *testing.T) {
 				t.Fatal("bị từ chối mà vẫn commit")
 			}
 		})
+	}
+}
+
+// --- owner and due date (migration 0016) -------------------------------------------------------------
+
+func TestRecordIssueOwnerIsTypedThenProjectOfficerThenNobody(t *testing.T) {
+	due := time.Date(2026, 10, 31, 0, 0, 0, 0, time.UTC)
+	for name, c := range map[string]struct {
+		typed, assignee string
+		wantOwner       any // the INSERT's $7: nil = NULL
+		wantFromProject bool
+	}{
+		"typed wins over the officer":           {" CB-00042 ", "CB-00007", "CB-00042", false},
+		"blank takes the officer (snapshot)":    {"", "CB-00007", "CB-00007", true},
+		"no officer either — nobody":            {"", "", nil, false},
+		"officer not code-shaped — nobody":      {"", "CB 7\n", nil, false},
+		"typed and no officer — still typed":    {"CB-00042", "", "CB-00042", false},
+		"typed blank-with-spaces — the officer": {"   ", "CB-00007", "CB-00007", true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			k := &fakeDiscussionDB{projectCode: "DA07", projectAssignee: c.assignee}
+			uc, ctx := buildDiscussion(t, k)
+			got, err := uc.RecordIssue(ctx, "da-001",
+				ProjectIssueRequest{Text: "Vướng", OwnerCode: c.typed, DueOn: due}, clerk())
+			if err != nil {
+				t.Fatalf("RecordIssue: %v", err)
+			}
+			assertOneCommitAndScoped(t, k)
+			ins := k.stmts("INSERT INTO project_issues")
+			if len(ins) != 1 || ins[0].args[6] != c.wantOwner || ins[0].args[7] != due {
+				t.Fatalf("INSERT owner %v due %v — want %v, %v", ins[0].args[6], ins[0].args[7], c.wantOwner, due)
+			}
+			wantReturned, _ := c.wantOwner.(string)
+			if got.OwnerCode != wantReturned || !got.DueOn.Equal(due) {
+				t.Fatalf("returned owner %q due %v", got.OwnerCode, got.DueOn)
+			}
+			_, delta := discussionEntry(t, k)
+			after := delta["sau"].(map[string]any)
+			if after["owner_code"] != wantReturned || after["due_on"] != "2026-10-31" {
+				t.Fatalf("delta = %v", after)
+			}
+			if _, from := after["owner_from_project"]; from != c.wantFromProject {
+				t.Fatalf("owner_from_project present = %v, want %v", from, c.wantFromProject)
+			}
+		})
+	}
+}
+
+func TestRecordIssueNoDueIsNullAndEmptyInDelta(t *testing.T) {
+	k := &fakeDiscussionDB{projectCode: "DA07"}
+	uc, ctx := buildDiscussion(t, k)
+	if _, err := uc.RecordIssue(ctx, "da-001", ProjectIssueRequest{Text: "Vướng"}, clerk()); err != nil {
+		t.Fatalf("RecordIssue: %v", err)
+	}
+	if ins := k.stmts("INSERT INTO project_issues"); ins[0].args[6] != nil || ins[0].args[7] != nil {
+		t.Fatalf("owner/due must be NULL, got %v / %v", ins[0].args[6], ins[0].args[7])
+	}
+	_, delta := discussionEntry(t, k)
+	if after := delta["sau"].(map[string]any); after["owner_code"] != "" || after["due_on"] != "" {
+		t.Fatalf("delta = %v", after)
+	}
+}
+
+func TestRecordIssueOwnerAndDueRefusalsCommitNothing(t *testing.T) {
+	for name, c := range map[string]struct {
+		req  ProjectIssueRequest
+		want error
+	}{
+		"owner with a space": {ProjectIssueRequest{Text: "Vướng", OwnerCode: "CB 00042"}, domain.ErrIssueOwnerInvalid},
+		"owner too long":     {ProjectIssueRequest{Text: "Vướng", OwnerCode: strings.Repeat("C", domain.StaffCodeMax+1)}, domain.ErrIssueOwnerInvalid},
+		"due in year 1":      {ProjectIssueRequest{Text: "Vướng", DueOn: time.Date(1, 1, 2, 0, 0, 0, 0, time.UTC)}, domain.ErrIssueDueOnInvalid},
+	} {
+		t.Run(name, func(t *testing.T) {
+			k := &fakeDiscussionDB{projectCode: "DA07"}
+			uc, ctx := buildDiscussion(t, k)
+			if _, err := uc.RecordIssue(ctx, "da-001", c.req, clerk()); !errors.Is(err, c.want) {
+				t.Fatalf("err = %v, want %v", err, c.want)
+			}
+			if k.begun != 0 || k.committed != 0 {
+				t.Fatal("a refused shape opened or committed a transaction")
+			}
+		})
+	}
+}
+
+func TestRecordIssueDueInThePastIsAccepted(t *testing.T) {
+	// The prototype has no "not in the past" rule (budget/service.py:930-992); an obstacle recorded late
+	// may carry a deadline already gone.
+	k := &fakeDiscussionDB{projectCode: "DA07"}
+	uc, ctx := buildDiscussion(t, k)
+	past := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	if _, err := uc.RecordIssue(ctx, "da-001", ProjectIssueRequest{Text: "Vướng", DueOn: past}, clerk()); err != nil {
+		t.Fatalf("RecordIssue: %v", err)
 	}
 }
 

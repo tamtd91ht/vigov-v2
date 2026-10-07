@@ -126,6 +126,7 @@ type projectDiscussionWritesFake struct {
 	lastActor   audit.Actor
 	lastID      string
 	lastText    string
+	lastIssue   app.ProjectIssueRequest
 	lastComment app.ProjectCommentRequest
 }
 
@@ -134,16 +135,16 @@ func (g *projectDiscussionWritesFake) note(ctx context.Context, id string, a aud
 	g.lastTenant, g.lastID, g.lastActor = tenant.MustFrom(ctx), id, a
 }
 
-func (g *projectDiscussionWritesFake) RecordIssue(ctx context.Context, projectID, text string,
-	actor audit.Actor) (domain.ProjectIssue, error) {
+func (g *projectDiscussionWritesFake) RecordIssue(ctx context.Context, projectID string,
+	req app.ProjectIssueRequest, actor audit.Actor) (domain.ProjectIssue, error) {
 	g.note(ctx, projectID, actor)
-	g.lastText = text
+	g.lastText, g.lastIssue = req.Text, req
 	if g.err != nil {
 		return domain.ProjectIssue{}, g.err
 	}
-	title, desc, _ := domain.SplitIssueText(text)
+	title, desc, _ := domain.SplitIssueText(req.Text)
 	return domain.ProjectIssue{ID: "vm-created", ProjectID: projectID, Title: title, Description: desc,
-		RecordedBy: actor.ID, RecordedAt: issueAt}, nil
+		RecordedBy: actor.ID, RecordedAt: issueAt, OwnerCode: req.OwnerCode, DueOn: req.DueOn}, nil
 }
 
 func (g *projectDiscussionWritesFake) ResolveIssue(ctx context.Context, issueID string,
@@ -174,6 +175,8 @@ type discussionServer struct {
 	read    *projectDiscussionFake
 	write   *projectDiscussionWritesFake
 	checker *checkerDanhMucGia
+	// projects is the project store behind the same mux — implementing_units_test.go counts its reads.
+	projects *duAnGia
 }
 
 // newDiscussionServer mounts the REAL routes through Register behind the REAL edge chain, with a
@@ -183,10 +186,11 @@ func newDiscussionServer(t *testing.T) *discussionServer {
 	read, write := newProjectDiscussionFake(), &projectDiscussionWritesFake{}
 	checker := &checkerDanhMucGia{}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	projects := duAnMau()
 
 	mux := http.NewServeMux()
 	Register(mux, Deps{
-		Checker: checker, HangMuc: hangMucMau(), GhiHangMuc: &ghiDanhMucGia{}, DuAn: duAnMau(),
+		Checker: checker, HangMuc: hangMucMau(), GhiHangMuc: &ghiDanhMucGia{}, DuAn: projects,
 		GhiDuAn: &ghiDuAnGia{}, GhiChungTu: &ghiChungTuGia{}, Nguong: nguongMau(),
 		NganSach: &nganSachGia{}, GhiNganSach: &ghiNganSachGia{}, AuditLog: &auditLogFake{},
 		SystemMessages: &systemMessagesFake{}, Nay: func() time.Time { return lucDaQua7096 }, Log: logger,
@@ -200,7 +204,7 @@ func newDiscussionServer(t *testing.T) *discussionServer {
 	h = httpx.TenantMiddleware(thuMucMau())(h)
 	h = httpx.Recover(func(context.Context) string { return "test-trace" })(h)
 	h = httpx.StripTenantHeaders(h)
-	return &discussionServer{h: h, read: read, write: write, checker: checker}
+	return &discussionServer{h: h, read: read, write: write, checker: checker, projects: projects}
 }
 
 func (m *discussionServer) grant(commune tenant.ID, perm ...authz.Perm) {

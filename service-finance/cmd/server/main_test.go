@@ -382,6 +382,10 @@ func (khoDuAnTrong) DisbursedByMonth(context.Context, int, string) (domain.Disbu
 	return domain.DisbursedByMonth{}, nil
 }
 
+func (khoDuAnTrong) ImplementingUnitsOfYear(context.Context, int) ([]string, error) {
+	return nil, nil
+}
+
 // emptyDiscussionStore holds no issue and no comment — the project list route reads its latest
 // issues, and this file is about the edge, not about issues.
 type emptyDiscussionStore struct{}

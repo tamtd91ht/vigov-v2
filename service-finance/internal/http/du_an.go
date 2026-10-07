@@ -75,6 +75,11 @@ type duAnRa struct {
 	StartDate      string `json:"start_date,omitempty"`
 	CompletionDate string `json:"completion_date,omitempty"`
 
+	// ImplementingUnit is "Đơn vị thực hiện" as typed (migration 0016) — free text, often a contractor,
+	// beside `org_unit_id` which names a unit of the commune. Absent when not named. OPTIONAL in the
+	// contract because it was added to a published reply (rule 2, forbidden #4's principle).
+	ImplementingUnit *string `json:"implementing_unit,omitempty"`
+
 	// DisbursementDeadline is the date THIS YEAR'S MONEY must be disbursed by. §9 is explicit that
 	// it is not the completion date: works finished in March may still have to be disbursed before
 	// 31/12. Two different dates, deliberately two different fields.
@@ -225,6 +230,14 @@ func ngayRa(t time.Time) string {
 	return t.Format("2006-01-02")
 }
 
+// optionalText is nil for "" — a column that is NULL reaches the wire absent, never as "".
+func optionalText(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
 // duAnRaNgoai converts one project, applying every derived rule in ONE place.
 //
 // `nay` IS PASSED IN RATHER THAN READ FROM time.Now() HERE: the delay score depends on the clock,
@@ -254,6 +267,7 @@ func duAnRaNgoai(t domain.TienDoDuAn, nay time.Time, nguong domain.NguongCanhBao
 		AssigneeID:           t.DuAn.CanBoPhuTrachID,
 		StartDate:            ngayRa(t.DuAn.NgayKhoiCong),
 		CompletionDate:       ngayRa(t.DuAn.NgayHoanThanh),
+		ImplementingUnit:     optionalText(t.DuAn.ImplementingUnit),
 		DisbursementDeadline: ngayRa(t.DuAn.ThoiHanGiaiNgan),
 	}
 	if ty, ok := t.TyLeGiaiNgan(); ok {
@@ -316,11 +330,21 @@ func (h *Handler) DanhSachDuAn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// `implementing_unit` is an EXACT match (prototype budget/repository.py:147-149) against the values
+	// GET /api/v1/implementing-units offers — a filter WITHIN the commune, like `category`. Bounded like
+	// the column, so an unbounded client string is never carried into a query parameter.
+	implementingUnit := r.URL.Query().Get("implementing_unit")
+	if len([]rune(implementingUnit)) > domain.ImplementingUnitMax {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_argument", "`implementing_unit` quá dài.", "")
+		return
+	}
+
 	ds, err := h.d.DuAn.DanhSach(ctx, fistore.LocDuAn{
 		Nam: nam,
 		// `category` filters WITHIN the commune; tenant_id still comes only from the context, and
 		// the store binds it from there (rule 1, invariant 5).
-		HangMucID: thamSo.Get("category"),
+		HangMucID:        thamSo.Get("category"),
+		ImplementingUnit: implementingUnit,
 	})
 	if err != nil {
 		if errors.Is(err, fistore.ErrQuaNhieuDuAn) {
@@ -494,6 +518,41 @@ func (h *Handler) ChiTietDuAn(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	vietJSON(w, http.StatusOK, ra)
+}
+
+// implementingUnitsOut is GET /api/v1/implementing-units — the options of the project list's
+// "Đơn vị thực hiện" filter. `items` is never null.
+type implementingUnitsOut struct {
+	// Year is echoed for the reason danhSachDuAnRa.Year gives.
+	Year  int      `json:"year"`
+	Items []string `json:"items"`
+}
+
+// ImplementingUnits serves the distinct "Đơn vị thực hiện" of this commune's live projects of one budget
+// year, sorted. GET /api/v1/implementing-units?year=2026
+//
+// `year` IS REQUIRED AND NEVER DEFAULTED, as on the project list it filters (§13 rule 8). NO AUDIT
+// ENTRY, for the reason DanhSachDuAn gives.
+func (h *Handler) ImplementingUnits(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	year, err := strconv.Atoi(r.URL.Query().Get("year"))
+	if err != nil || year < domain.NamDuAnSom || year > domain.NamDuAnMuon {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_argument",
+			"Thiếu hoặc sai năm ngân sách. Ví dụ: ?year=2026", "")
+		return
+	}
+	units, err := h.d.DuAn.ImplementingUnitsOfYear(ctx, year)
+	if err != nil {
+		// The units are free text; the log line carries the commune and the year, never a value.
+		h.d.Log.Error("đơn vị thực hiện theo năm: lỗi hệ thống",
+			"xa", string(tenant.MustFrom(ctx)), "nam", year, "err", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal",
+			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return
+	}
+	out := implementingUnitsOut{Year: year, Items: make([]string, 0, len(units))}
+	out.Items = append(out.Items, units...)
+	vietJSON(w, http.StatusOK, out)
 }
 
 // scopeNotice reads `budget.scope_notice` for the request's commune, through app.SystemMessages —

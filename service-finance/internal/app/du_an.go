@@ -136,6 +136,9 @@ type YeuCauThemDuAn struct {
 	DonViThucHienID string
 	CanBoPhuTrachID string
 
+	// ImplementingUnit is "Đơn vị thực hiện" as typed (0016). Optional: blank = not named.
+	ImplementingUnit string
+
 	NgayKhoiCong  time.Time
 	NgayHoanThanh time.Time
 
@@ -177,6 +180,9 @@ type YeuCauSuaDuAn struct {
 
 	DonViThucHienID *string
 	CanBoPhuTrachID *string
+
+	// ImplementingUnit: nil = leave alone, a pointer to "" (after trimming) = clear to NULL.
+	ImplementingUnit *string
 
 	NgayKhoiCong    *time.Time
 	NgayHoanThanh   *time.Time
@@ -252,6 +258,10 @@ func (uc *DuAn) Them(ctx context.Context, yc YeuCauThemDuAn,
 	if err != nil {
 		return KetQuaThemDuAn{}, err
 	}
+	implementingUnit, err := domain.NormaliseImplementingUnit(yc.ImplementingUnit)
+	if err != nil {
+		return KetQuaThemDuAn{}, err
+	}
 	for _, ngay := range []time.Time{yc.NgayKhoiCong, yc.NgayHoanThanh, yc.ThoiHanGiaiNgan} {
 		if err := domain.KiemTraNgayDuAn(ngay); err != nil {
 			return KetQuaThemDuAn{}, err
@@ -295,6 +305,7 @@ func (uc *DuAn) Them(ctx context.Context, yc YeuCauThemDuAn,
 		TongMucDuocDuyet: yc.TongMucDuocDuyet,
 		DonViThucHienID:  donVi,
 		CanBoPhuTrachID:  canBo,
+		ImplementingUnit: implementingUnit,
 		NgayKhoiCong:     yc.NgayKhoiCong,
 		NgayHoanThanh:    yc.NgayHoanThanh,
 		ThoiHanGiaiNgan:  hanGiaiNgan,
@@ -460,8 +471,13 @@ func (uc *DuAn) Sua(ctx context.Context, id string, yc YeuCauSuaDuAn,
 	}
 
 	// Shape first, outside the transaction, for the same reason as Them.
-	var hangMucID, ten, moTa, donVi, canBo string
+	var hangMucID, ten, moTa, donVi, canBo, implementingUnit string
 	var err error
+	if yc.ImplementingUnit != nil {
+		if implementingUnit, err = domain.NormaliseImplementingUnit(*yc.ImplementingUnit); err != nil {
+			return ProjectEditResult{}, err
+		}
+	}
 	if yc.HangMucID != nil {
 		if hangMucID, err = domain.ChuanHoaHangMucID(*yc.HangMucID); err != nil {
 			return ProjectEditResult{}, err
@@ -556,6 +572,9 @@ func (uc *DuAn) Sua(ctx context.Context, id string, yc YeuCauSuaDuAn,
 		}
 		if yc.CanBoPhuTrachID != nil {
 			sau.CanBoPhuTrachID = canBo
+		}
+		if yc.ImplementingUnit != nil {
+			sau.ImplementingUnit = implementingUnit
 		}
 		if yc.NgayKhoiCong != nil {
 			sau.NgayKhoiCong = *yc.NgayKhoiCong
@@ -910,6 +929,9 @@ func tomTatDuAn(d domain.DuAn, phanBo []domain.PhanBoNguonVon) map[string]any {
 		"tong_muc_duoc_duyet": int64(d.TongMucDuocDuyet),
 		"thoi_han_giai_ngan":  d.ThoiHanGiaiNgan.Format("2006-01-02"),
 	}
+	if d.ImplementingUnit != "" {
+		ra["implementing_unit"] = d.ImplementingUnit
+	}
 	if len(phanBo) == 0 {
 		return ra
 	}
@@ -951,6 +973,11 @@ func tomTatDoiDuAn(truoc, sau domain.DuAn, ben bool) map[string]any {
 	if truoc.CanBoPhuTrachID != sau.CanBoPhuTrachID {
 		ra["can_bo_phu_trach_id"] = chon(ben, truoc.CanBoPhuTrachID, sau.CanBoPhuTrachID)
 	}
+	// Free text of the same class as a voucher's `doi_tac` (0016's header): fine in the delta, which is
+	// the commune's own record of who changed what; never in a log line (rule 3).
+	if truoc.ImplementingUnit != sau.ImplementingUnit {
+		ra["implementing_unit"] = chon(ben, truoc.ImplementingUnit, sau.ImplementingUnit)
+	}
 	if !truoc.NgayKhoiCong.Equal(sau.NgayKhoiCong) {
 		ra["ngay_khoi_cong"] = ngayDelta(chon(ben, truoc.NgayKhoiCong, sau.NgayKhoiCong))
 	}
@@ -986,6 +1013,7 @@ func khongDoiDuAn(truoc, sau domain.DuAn) bool {
 		truoc.TongMucDuocDuyet == sau.TongMucDuocDuyet &&
 		truoc.DonViThucHienID == sau.DonViThucHienID &&
 		truoc.CanBoPhuTrachID == sau.CanBoPhuTrachID &&
+		truoc.ImplementingUnit == sau.ImplementingUnit &&
 		truoc.NgayKhoiCong.Equal(sau.NgayKhoiCong) &&
 		truoc.NgayHoanThanh.Equal(sau.NgayHoanThanh) &&
 		truoc.ThoiHanGiaiNgan.Equal(sau.ThoiHanGiaiNgan)

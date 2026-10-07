@@ -49,7 +49,8 @@ type ProjectDiscussionReading interface {
 // read half for the reason GhiDuAn gives: each method opens a transaction and writes an audit entry
 // inside it.
 type ProjectDiscussionWriting interface {
-	RecordIssue(ctx context.Context, projectID, text string, actor audit.Actor) (domain.ProjectIssue, error)
+	RecordIssue(ctx context.Context, projectID string, req app.ProjectIssueRequest,
+		actor audit.Actor) (domain.ProjectIssue, error)
 	ResolveIssue(ctx context.Context, issueID string, actor audit.Actor) (domain.ProjectIssue, error)
 	AddComment(ctx context.Context, projectID string, req app.ProjectCommentRequest,
 		actor audit.Actor) (domain.ProjectComment, error)
@@ -75,6 +76,12 @@ type projectIssueOut struct {
 	// event (user decision 06/10/2026). Published now, optional, so the screen can draw the link the
 	// day it appears without a contract change.
 	TrackingTaskID string `json:"tracking_task_id,omitempty"`
+
+	// OwnerCode is who follows the issue — a staff business code, resolved to a name by the screen from
+	// the staff directory, like `recorded_by`. DueOn is YYYY-MM-DD. Both absent when not set, both
+	// fixed at recording (migration 0016).
+	OwnerCode string `json:"owner_code,omitempty"`
+	DueOn     string `json:"due_on,omitempty"`
 }
 
 func projectIssueOutOf(i domain.ProjectIssue) projectIssueOut {
@@ -83,6 +90,7 @@ func projectIssueOutOf(i domain.ProjectIssue) projectIssueOut {
 		RecordedBy: i.RecordedBy, RecordedAt: lucRa(i.RecordedAt),
 		Resolved: i.Resolved(), ResolvedAt: lucRa(i.ResolvedAt), ResolvedBy: i.ResolvedBy,
 		TrackingTaskID: i.TrackingTaskID,
+		OwnerCode:      i.OwnerCode, DueOn: ngayRa(i.DueOn),
 	}
 }
 
@@ -100,6 +108,14 @@ type projectIssuesOut struct {
 // first line the title, the rest the description (domain.SplitIssueText).
 type projectIssueIn struct {
 	Text string `json:"text"`
+
+	// OwnerCode is who should follow the issue — a staff business code (the `code` of GET
+	// /api/v1/staff-directory), checked for SHAPE ONLY, as `mentioned_staff_codes` are. Omitted or
+	// blank: the project's officer in charge at this moment, or nobody (prototype budget/service.py:949).
+	OwnerCode string `json:"owner_code,omitempty"`
+
+	// DueOn is YYYY-MM-DD, optional. No "not in the past" rule (the prototype has none).
+	DueOn string `json:"due_on,omitempty"`
 }
 
 // projectCommentOut is one message of §8.4's thread.
@@ -186,12 +202,18 @@ func (h *Handler) RecordProjectIssue(w http.ResponseWriter, r *http.Request) {
 	if !docThan(w, r, &in) {
 		return
 	}
+	due, ok := ngayDuAnVao(in.DueOn)
+	if !ok {
+		h.ngaySai(w, "due_on")
+		return
+	}
 	actor, ok := nguoiThucHien(r)
 	if !ok {
 		h.thieuChuThe(w, r)
 		return
 	}
-	got, err := h.d.ProjectDiscussionWrites.RecordIssue(r.Context(), r.PathValue("id"), in.Text, actor)
+	got, err := h.d.ProjectDiscussionWrites.RecordIssue(r.Context(), r.PathValue("id"),
+		app.ProjectIssueRequest{Text: in.Text, OwnerCode: in.OwnerCode, DueOn: due}, actor)
 	if err != nil {
 		h.writeDiscussionError(w, r, "ghi nhận vướng mắc", err)
 		return
@@ -260,7 +282,7 @@ func (h *Handler) AddProjectComment(w http.ResponseWriter, r *http.Request) {
 // never quotes the value.
 var discussionInputErrors = []error{
 	domain.ErrIssueTextMissing, domain.ErrIssueTitleTooLong, domain.ErrIssueDescriptionTooLong,
-	domain.ErrIssueTextInvalid,
+	domain.ErrIssueTextInvalid, domain.ErrIssueOwnerInvalid, domain.ErrIssueDueOnInvalid,
 	domain.ErrCommentBodyMissing, domain.ErrCommentBodyTooLong, domain.ErrCommentBodyInvalid,
 	domain.ErrMentionsTooMany, domain.ErrMentionInvalid,
 }

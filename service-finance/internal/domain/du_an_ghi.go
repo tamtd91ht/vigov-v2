@@ -92,6 +92,11 @@ var (
 	ErrNgayDuAnNgoaiLich = errors.New("du_an: ngày ngoài khoảng năm hợp lệ (2000..2100)")
 	ErrThamChieuQuaDai   = errors.New("du_an: mã tham chiếu (đơn vị / cán bộ) quá dài")
 
+	// The bound is in the sentinel's own text, so the handler can answer with it unchanged. Neither
+	// sentence quotes the value: it is free text that may name a person (rule 3).
+	ErrImplementingUnitTooLong = fmt.Errorf("du_an: `implementing_unit` quá dài (tối đa %d ký tự)", ImplementingUnitMax)
+	ErrImplementingUnitInvalid = errors.New("du_an: `implementing_unit` chứa ký tự điều khiển không hợp lệ")
+
 	// ErrProjectStartAfterCompletion — `ngay_khoi_cong` later than `ngay_hoan_thanh` (tester report
 	// 05/10/2026, GN-03). Such a row draws a negative duration on §8's timeline and nothing on the
 	// screen says which of the two dates is the typo.
@@ -148,6 +153,9 @@ const (
 	ThamChieuToiDa = 64
 
 	LyDoXoaDuAnToiDa = 500
+
+	// ImplementingUnitMax is the prototype's String(255) and migration 0016's CHECK, in characters.
+	ImplementingUnitMax = 255
 
 	NamDuAnSom  = 2000
 	NamDuAnMuon = 2100
@@ -298,6 +306,23 @@ func ChuanHoaThamChieu(s string) (string, error) {
 		return "", fmt.Errorf("%w (tối đa %d ký tự)", ErrThamChieuQuaDai, ThamChieuToiDa)
 	case coKyTuDieuKhien(s):
 		return "", ErrThamChieuQuaDai
+	}
+	return s, nil
+}
+
+// NormaliseImplementingUnit trims and validates "Đơn vị thực hiện" as typed. OPTIONAL: "" means "not
+// named" and the store writes NULL — 0016's CHECK refuses a blank string, because an empty string
+// reads as "set" while saying nothing.
+//
+// REFUSED PAST THE BOUND, NOT TRUNCATED: a silently shortened contractor name is a different name on a
+// record that is filtered by exact match (GET /api/v1/investment-projects?implementing_unit=).
+func NormaliseImplementingUnit(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	switch {
+	case len([]rune(s)) > ImplementingUnitMax:
+		return "", ErrImplementingUnitTooLong
+	case coKyTuDieuKhien(s):
+		return "", ErrImplementingUnitInvalid
 	}
 	return s, nil
 }
