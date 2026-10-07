@@ -6,7 +6,7 @@
 # phải sửa tệp này: khai route trong Go, chạy `make kb`. Quên sinh lại thì
 # `go test ./tools/ingress` ĐỎ.
 #
-#     241 tuyến của 7 dịch vụ — petitions 72 · identity 62 · comms 48 · finance 36 · documents 13 · platform 8 · reporting 2
+#     252 tuyến của 7 dịch vụ — petitions 72 · identity 62 · comms 48 · finance 37 · documents 23 · platform 8 · reporting 2
 #
 # MÔ HÌNH TÊN MIỀN — chủ dự án chốt 26/09/2026:
 #   <xã>.vigov.vn          → web-admin, chỉ một luật `/`. Web tự chuyển tiếp /api/v1/* tới
@@ -72,7 +72,8 @@ spec:
                 name: comms
                 port: { name: rest }
     #
-    # documents — 6 tài nguyên: /api/v1/document-types · /api/v1/documents-audit-entries
+    # documents — 8 tài nguyên: /api/v1/citizen-letter-report · /api/v1/citizen-letters
+    #   /api/v1/document-types · /api/v1/documents-audit-entries
     #   /api/v1/incoming-document-overdue-queue · /api/v1/incoming-document-summary
     #   /api/v1/incoming-documents · /api/v1/outgoing-documents
     - host: "documents.api.vigov.vn"
@@ -85,10 +86,10 @@ spec:
                 name: documents
                 port: { name: rest }
     #
-    # finance — 13 tài nguyên: /api/v1/budget-entries · /api/v1/budget-indicators
+    # finance — 14 tài nguyên: /api/v1/budget-entries · /api/v1/budget-indicators
     #   /api/v1/budget-lines · /api/v1/budget-period-closes · /api/v1/budget-sheets
     #   /api/v1/capital-plan-categories · /api/v1/disbursements · /api/v1/finance-audit-entries
-    #   /api/v1/finance-system-messages · /api/v1/funding-sources
+    #   /api/v1/finance-system-messages · /api/v1/funding-sources · /api/v1/implementing-units
     #   /api/v1/investment-project-summary · /api/v1/investment-projects · /api/v1/project-issues
     - host: "finance.api.vigov.vn"
       http:

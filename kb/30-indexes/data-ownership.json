@@ -117,6 +117,20 @@
       "source": "service-identity/migrations/0004_kenh_cong_dan.sql:93"
     },
     {
+      "entity": "CitizenLetter",
+      "service": "documents",
+      "scope": "tenant",
+      "table": "citizen_letter",
+      "source": "service-documents/migrations/0006_citizen_letter.sql:172"
+    },
+    {
+      "entity": "CitizenLetterLogEntry",
+      "service": "documents",
+      "scope": "tenant",
+      "table": "citizen_letter_log",
+      "source": "service-documents/migrations/0006_citizen_letter.sql:403"
+    },
+    {
       "entity": "CitizenNotification",
       "service": "comms",
       "scope": "tenant",
