@@ -30,6 +30,7 @@ import {
   RefreshCw,
   Search,
   SearchX,
+  TimerReset,
   Trash2,
   Upload,
   X,
@@ -145,7 +146,6 @@ import {
   kanbanSharedError,
   KHONG_DOC_DUOC_VAN_BAN,
   KHONG_SO,
-  LOAI_THEO_VAN_BAN,
   MOI_BO_PHAN_NHAN,
   MOI_KHOI_NHAN,
   MOI_LOAI_NHAN,
@@ -207,7 +207,10 @@ import {
   kanbanDropHint,
   kanbanMoveDoneText,
   kanbanMovePendingText,
-  coKhoiVanBanChiDao,
+  needsDirective,
+  directiveTaskType,
+  extensionCountText,
+  REGISTER_NO_DIRECTIVE_TYPE,
   cotPhaiDoc,
   docBangNhanTrangThai,
   docDanhBaChonNguoi,
@@ -847,17 +850,30 @@ export function SoNhiemVu({
   // Kanban không cho số dòng bằng con số: một trang mỗi cột, không có cột rẽ nhánh. Lọc Tổng quan bật
   // thì luôn là Danh sách.
   const viewMode: CheDoXem = drillDownActive ? "danh-sach" : cheDoXem;
+  const [danhMuc, datDanhMuc] = useState<DanhMucNhiemVu>(KHONG_DANH_MUC);
+  // The catalogues have been answered (well or not) — `danhMuc` alone cannot tell "not read yet"
+  // from "read, empty".
+  const [typesRead, setTypesRead] = useState(false);
+  /**
+   * The type the Sổ theo dõi reads: `undefined` while the catalogue is being read, `null` when it
+   * holds no `requires_directive` row (or failed) — `directiveTaskType`.
+   */
+  const directiveType = typesRead ? directiveTaskType(danhMuc.loai) : undefined;
   /**
    * THE QUERY OF THE VIEW ON SCREEN. The Sổ theo dõi is the book of DIRECTIVE tasks (spec 02 §State):
-   * its query forces the `Theo văn bản` type, whatever the `Loại` filter of the other views holds
-   * (that filter is hidden there). Keyed on the type CODE, as everything else on this screen
-   * (`LOAI_THEO_VAN_BAN`) — the catalogue has no `requires_directive` attribute yet (BACKEND
-   * DEPENDENCY). The counts and the export read the same query, so the footer and the file say what
-   * the table shows.
+   * its query forces the type the catalogue flags `requires_directive`, whatever the `Loại` filter of
+   * the other views holds (that filter is hidden there). The counts and the export read the same
+   * query, so the footer and the file say what the table shows.
+   *
+   * NO DIRECTIVE TYPE KNOWN = NO READ (`registerHeld`). Reading the book without the type would show
+   * basic tasks under eleven directive columns, and the figure in the footer would be the commune's
+   * whole register under the book's name.
    */
+  const registerHeld = viewMode === "so-theo-doi" && typeof directiveType !== "string";
   const viewLoc = useMemo<BoLoc>(
-    () => (viewMode === "so-theo-doi" ? { ...loc, loai: LOAI_THEO_VAN_BAN } : loc),
-    [loc, viewMode],
+    () =>
+      viewMode === "so-theo-doi" && typeof directiveType === "string" ? { ...loc, loai: directiveType } : loc,
+    [loc, viewMode, directiveType],
   );
 
   const [daTai, datDaTai] = useState<{
@@ -868,7 +884,6 @@ export function SoNhiemVu({
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreError, setMoreError] = useState<{ khoa: string; message: string } | null>(null);
   const [daTaiKanban, datDaTaiKanban] = useState<DaTaiKanban | null>(null);
-  const [danhMuc, datDanhMuc] = useState<DanhMucNhiemVu>(KHONG_DANH_MUC);
   /** `null` = chưa đọc xong. Xem `docBangNhanTrangThai` cho ba nhánh. */
   const [kqNhanTT, datKqNhanTT] = useState<KetQua<petitions_danhSachTrangThaiNhiemVuRa> | null>(
     null,
@@ -952,6 +967,7 @@ export function SoNhiemVu({
     // CHỈ ĐỌC CHẾ ĐỘ ĐANG XEM. Không có dòng này thì mỗi lần đổi bộ lọc trên Kanban là SÁU lời gọi
     // thay vì năm, và lời gọi thứ sáu đọc một trang không ai vẽ ra.
     if (viewMode === "kanban") return;
+    if (registerHeld) return;
     let bo = false;
     // CÁCH SẮP LUÔN ĐI TRÊN DÂY, kể cả khi cán bộ chưa bấm cột nào: mũi tên trên đầu cột vẽ từ
     // `sapXepDayDu(loc)`, nên gửi đúng giá trị ấy là điều kiện để mũi tên nói thật về câu hỏi đã gửi.
@@ -968,7 +984,7 @@ export function SoNhiemVu({
     return () => {
       bo = true;
     };
-  }, [viewLoc, khoa, viewMode, daDocDuongDan]);
+  }, [viewLoc, khoa, viewMode, daDocDuongDan, registerHeld]);
 
   /**
    * KANBAN ĐỌC CÙNG TUYẾN VÀ CÙNG BỘ LỌC VỚI DANH SÁCH — qua đúng `laySoNhiemVu`, nên mười tên
@@ -1000,7 +1016,7 @@ export function SoNhiemVu({
   // headers and the footer's `Hiển thị {n} nhiệm vụ.` A total is never the length of a page. Read
   // separately: a failed count must not hold the rows back, nor the other way round.
   useEffect(() => {
-    if (!daDocDuongDan) return;
+    if (!daDocDuongDan || registerHeld) return;
     let bo = false;
     getTaskCounts(viewLoc).then((kq) => {
       if (!bo) setCountsLoaded({ khoa: khoaCounts, kq });
@@ -1008,7 +1024,7 @@ export function SoNhiemVu({
     return () => {
       bo = true;
     };
-  }, [viewLoc, khoaCounts, daDocDuongDan]);
+  }, [viewLoc, khoaCounts, daDocDuongDan, registerHeld]);
 
   // NĂM DANH MỤC, ĐỌC MỘT LẦN CHO CẢ MÀN. Một danh mục hỏng thì ô lọc tương ứng rỗng — KHÔNG làm
   // hỏng quyển sổ: năm câu trả lời rời nhau, mỗi cái nói chuyện của nó. Bảng trạng thái hỏng thì lui
@@ -1029,6 +1045,7 @@ export function SoNhiemVu({
         khoi: khoiNV.ok ? khoiNV.duLieu.items : [],
         boPhan: boPhan.ok ? boPhan.duLieu.items : [],
       });
+      setTypesRead(true);
       datKqNhanTT(nhanTT);
     });
     // DANH BẠ CHỌN NGƯỜI — MỘT LẦN CHO CẢ MÀN, dùng chung cho ô lọc §3 và form Giao việc §7. Đọc
@@ -1167,8 +1184,15 @@ export function SoNhiemVu({
   // Không gọi mạng thêm lần nào: danh bạ đã đọc một lần cho cả màn ở khối danh mục trên.
   const danhBaMa = useMemo(() => danhBaChoNhatKy(kqDanhBa), [kqDanhBa]);
 
-  const so = taiTu(daTai, khoa);
-  const counts = taiTu(countsLoaded, khoaCounts);
+  // A held register is "loading" while the catalogue is read, and says why once it is read without a
+  // directive type — never an endless loading bar, never another view's rows.
+  const held: TrangThaiTai<never> | null = !registerHeld
+    ? null
+    : directiveType === null
+      ? { pha: "loi", thongBao: REGISTER_NO_DIRECTIVE_TYPE }
+      : { pha: "dangTai" };
+  const so = held ?? taiTu(daTai, khoa);
+  const counts = held ?? taiTu(countsLoaded, khoaCounts);
   const cotKanban: readonly CotKanban[] = cotPhaiDoc(loc.trangThai).map((ma) => ({
     ma,
     tai: taiCot(daTaiKanban, khoaKanban, ma),
@@ -1277,7 +1301,7 @@ export function SoNhiemVu({
    * nothing is downloaded then.
    */
   function exportRegister(): void {
-    if (exporting) return;
+    if (exporting || registerHeld) return;
     setExporting(true);
     const sx = sapXepDayDu(viewLoc);
     downloadTaskRegister({ ...viewLoc, sapXep: sx.cot, chieu: sx.chieu }).then((r) => {
@@ -1765,7 +1789,13 @@ export function SoNhiemVu({
           }}
           guiDeNghiLuiHan={(hanMoi, lyDo) =>
             deNghiLuiHan(drawer.nhiemVu.code, hanMoi, lyDo).then((kq) => {
-              if (kq.ok) datLanHangCho((n) => n + 1);
+              if (kq.ok) {
+                // `pending_extension` of the task row changed: the drawer's strip and the register
+                // read it from the task, so both are read again — never set by hand here.
+                guiDrawer({ loai: "docLai", ma: drawer.nhiemVu.code });
+                datLanTai((n) => n + 1);
+                datLanHangCho((n) => n + 1);
+              }
               return kq;
             })
           }
@@ -2967,6 +2997,7 @@ export function TheNhiemVu({
   const completedLate = hoanThanhTreHan(nhiemVu.completed_at, nhiemVu.original_due_at);
   const late = !completedLate && isOverdueNow(nhiemVu, bayGio);
   const children = childCountLabel(nhiemVu.child_count);
+  const extensions = extensionCountText(nhiemVu.extension_count);
 
   return (
     <article
@@ -3042,12 +3073,12 @@ export function TheNhiemVu({
         </span>
         {priorityLabel !== "" && <span className="an-thi-giac"> · Mức ưu tiên {priorityLabel}</span>}
       </button>
-      {/* The rest of the card sits OUTSIDE the open button: the meta row carries the "?" of
-          `đã gia hạn n lần` (a button — never nested in a button). A pointer press anywhere here
-          opens the task too; the keyboard path is the button above. */}
+      {/* The rest of the card sits outside the open button, as it did when the meta row carried a
+          "?" button. A pointer press anywhere here opens the task too; the keyboard path is the
+          button above. */}
       <div className="cursor-pointer px-3 pb-3" onClick={() => moNhiemVu(nhiemVu)}>
-        {/* Spec 03 / prototype `TaskCard.tsx:85-90`: `n việc con` · `đã gia hạn n lần`. The count is
-            not on the task row (BACKEND DEPENDENCY, ADR 0076 lần 2 #19) — a disabled "?". */}
+        {/* Spec 03 / prototype `TaskCard.tsx:78-91`: `n việc con` · `đã gia hạn n lần`, each only when
+            its figure is above zero. The card draws no pending-extension marker (prototype). */}
         <span className="text-ink-muted mt-2 flex flex-wrap items-center gap-2 text-[10.5px]">
           {children !== null && (
             <span className="flex items-center gap-1">
@@ -3055,10 +3086,12 @@ export function TheNhiemVu({
               {children}
             </span>
           )}
-          <span className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-            {EXTENSION_COUNT_PENDING.ten}
-            <PendingMarker info={EXTENSION_COUNT_PENDING} />
-          </span>
+          {extensions !== null && (
+            <span className="text-tangerine flex items-center gap-1 font-semibold">
+              <TimerReset aria-hidden="true" focusable="false" className="size-3" />
+              {extensions}
+            </span>
+          )}
         </span>
         {/* Late (red) ≠ finished late (amber): a finished task owes nothing, so red would be wrong,
             but it came in after its deadline, so a plain date would hide it. Both DERIVED from the
@@ -3223,6 +3256,7 @@ export function BangNhiemVu({
               // SUY RA từ `due_at` so với bây giờ (luật 10, bất biến 3) — the tint, the red cell and
               // the `Trễ hạn` badge come from the same comparison, so they never disagree.
               const late = isOverdueNow(n, bayGio);
+              const extensions = extensionCountText(n.extension_count);
               return (
                 <tr
                   key={n.code}
@@ -3251,15 +3285,11 @@ export function BangNhiemVu({
                   </td>
                   <td className={TD_CLASS}>
                     <span className="text-navy block font-semibold">{n.title}</span>
-                    {/* `{nguồn} · đã gia hạn n lần` (prototype `TaskListTable.tsx:86-88`): the count is not
-                        on the row (BACKEND DEPENDENCY) — a "?" that does not open the row. */}
-                    <span className="text-ink-muted flex items-center gap-1 text-[11px]">
+                    {/* `{nguồn} · đã gia hạn n lần` (prototype `TaskListTable.tsx:83-89`): the second part
+                        only when the count is above zero. */}
+                    <span className="text-ink-muted block text-[11px]">
                       {nhanNguonGiao(n.source)}
-                      <span aria-hidden="true">·</span>
-                      <span className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                        {EXTENSION_COUNT_PENDING.ten}
-                        <PendingMarker info={EXTENSION_COUNT_PENDING} />
-                      </span>
+                      {extensions !== null && ` · ${extensions}`}
                     </span>
                   </td>
                   <td className={TD_CLASS}>{nhanCanBoNgan(n.assignee, danhBa, CHUA_PHAN_CONG)}</td>
@@ -3308,14 +3338,6 @@ export function progressFactText(progress: number): string {
 
 /** Initials of the timeline's avatar — `task-spec.ts`, re-exported for the callers of this module. */
 export { staffInitials } from "./task-spec";
-
-/** "Đã gia hạn n lần" needs a figure the task row does not carry yet (BACKEND DEPENDENCY). */
-export const EXTENSION_COUNT_PENDING = {
-  ten: "Số lần gia hạn",
-  viSao:
-    "Dòng nhiệm vụ chưa mang số lần đã gia hạn, nên chưa hiện được “đã gia hạn n lần”. Cần máy chủ trả " +
-    "thêm trường này.",
-} as const;
 
 /** One cell of the fact grid (spec 07 §4). */
 function Fact({ label, children }: { label: string; children: ReactNode }) {
@@ -3454,8 +3476,6 @@ export function ChiTietNhiemVu({
   /** GET /api/v1/tasks/{ma} — đọc lại ngay trước một lần lưu CÓ `documents`. */
   docLaiChiTiet: () => Promise<KetQua<petitions_nhiemVuRa>>;
 }) {
-  // Whether the `Đề nghị lùi hạn` block's own read found a pending request — drives the strip.
-  const [hasPendingExtension, setHasPendingExtension] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   // The timeline rows the log has loaded — the strip derives the time in status from them (no second
   // read). Keyed by code: another task's rows never time this one.
@@ -3476,6 +3496,7 @@ export function ChiTietNhiemVu({
   // Assignee / `task.update` / assigner / creator — convenience; the row decides.
   const canWriteLog = canWriteLogEntry(quyen, nhiemVu, maNguoiDangNhap);
   const late = isOverdueNow(nhiemVu, bayGio);
+  const extensions = extensionCountText(nhiemVu.extension_count);
 
   const unitName = nhiemVu.unit === "" ? null : (tenBoPhan.get(nhiemVu.unit) ?? nhiemVu.unit);
   const meetingLink =
@@ -3542,9 +3563,10 @@ export function ChiTietNhiemVu({
           directory={danhBa}
         />
 
-        {/* ── PENDING EXTENSION: a strip, not a status (spec 07 §3). Known from the same read the
-            `Đề nghị lùi hạn` block below makes — no second call. */}
-        {hasPendingExtension && (
+        {/* ── PENDING EXTENSION: a strip, not a status (spec 07 §3, prototype
+            `TaskDetailDrawer.tsx:351-356`). The task's own `pending_extension` — what every reader of
+            the task sees, whatever their right to read the queue. */}
+        {nhiemVu.pending_extension && (
           <p
             className="border-tangerine/25 bg-tangerine/8 text-tangerine m-0 flex shrink-0 items-center gap-2 border-b px-5 py-2 text-[12px] font-semibold"
             role="status"
@@ -3561,9 +3583,9 @@ export function ChiTietNhiemVu({
             <p className={cn("m-0 text-[12.5px]", late ? "text-danger font-semibold" : "text-navy")}>
               {late ? nhanHanThe(nhiemVu.due_at, bayGio) : nhanNgay(nhiemVu.due_at)}
             </p>
-            <p className="text-ink-muted m-0 mt-0.5 flex items-center gap-1 text-[11px]">
+            <p className="text-ink-muted m-0 mt-0.5 text-[11px]">
               {late ? `Hạn ${nhanNgay(nhiemVu.due_at)}` : nhiemVu.due_at === null ? "Chưa đặt hạn" : "Còn trong hạn"}
-              <PendingMarker info={EXTENSION_COUNT_PENDING} />
+              {extensions !== null && ` · ${extensions}`}
             </p>
           </Fact>
           {/* One field, two names (ADR 0065 NV5): "cơ quan chủ trì tham mưu" IS the unit. */}
@@ -3600,6 +3622,7 @@ export function ChiTietNhiemVu({
             <TaskInfoBlock
               key={`thong-tin-${nhiemVu.code}`}
               task={nhiemVu}
+              types={danhMuc.loai}
               documents={vanBan}
               unitName={unitName ?? O_TRONG}
               assigneeName={nhanCanBoNgan(nhiemVu.assignee, danhBaMa, CHUA_PHAN_CONG)}
@@ -3692,7 +3715,6 @@ export function ChiTietNhiemVu({
               decide={quyetDinh}
               request={guiDeNghiLuiHan}
               onDecided={onExtensionDecided}
-              onPendingChange={setHasPendingExtension}
             />
             {/* Spec 07 §6g / prototype `TaskDetailDrawer.tsx:615-643`: every request, newest first —
                 drawn only when there is one. `GET /api/v1/tasks/{ma}/extensions` (ADR 0076 #4a). */}
@@ -3837,12 +3859,16 @@ function InfoField({ label, children }: { label: string; children: ReactNode }) 
 const EDIT_LABEL_CLASS = "text-ink mb-1 block text-[11.5px] font-semibold";
 
 /**
- * Whether the information block is the "Sổ theo dõi văn bản chỉ đạo" (spec 07 §6a): a `Theo văn bản`
- * task, or a task that already carries a result, a note or an approval tick.
+ * Whether the information block is the "Sổ theo dõi văn bản chỉ đạo" (spec 07 §6a): a task whose
+ * type the catalogue flags `requires_directive`, or a task that already carries a result, a note or
+ * an approval tick (prototype `TaskDetailDrawer.tsx:179-186`).
  */
-export function showsDirectiveBlock(task: petitions_nhiemVuRa): boolean {
+export function showsDirectiveBlock(
+  task: petitions_nhiemVuRa,
+  types: readonly petitions_loaiNhiemVuRa[],
+): boolean {
   return (
-    coKhoiVanBanChiDao(task.type) ||
+    needsDirective(types, task.type) ||
     task.result_summary !== "" ||
     task.note !== "" ||
     task.leader_approved ||
@@ -3867,6 +3893,7 @@ export function showsDirectiveBlock(task: petitions_nhiemVuRa): boolean {
  */
 function TaskInfoBlock({
   task,
+  types,
   documents,
   unitName,
   assigneeName,
@@ -3876,6 +3903,8 @@ function TaskInfoBlock({
   reread,
 }: {
   task: petitions_nhiemVuRa;
+  /** The commune's task types — `requires_directive` decides the directive block. */
+  types: readonly petitions_loaiNhiemVuRa[];
   documents: TrangThaiTai<readonly petitions_nhiemVuVanBanRa[]>;
   unitName: string;
   assigneeName: string;
@@ -3895,8 +3924,8 @@ function TaskInfoBlock({
     editButton.current?.focus();
   }, [editing]);
 
-  const hasDocuments = coKhoiVanBanChiDao(task.type);
-  const directive = showsDirectiveBlock(task);
+  const hasDocuments = needsDirective(types, task.type);
+  const directive = showsDirectiveBlock(task, types);
   const lock = hasDocuments ? lyDoKhoaSua(documents) : null;
   // ALL THREE AT ONCE. A `Theo văn bản` block that leaves the `xong` phase mid-edit (a failed
   // re-read) hides the form — no editing on a set the server just failed to confirm.
@@ -3974,7 +4003,7 @@ function TaskInfoBlock({
               <InfoField label="Mã nhiệm vụ">
                 <span className="font-semibold">{task.code === "" ? O_TRONG : task.code}</span>
               </InfoField>
-              <InfoField label={nhanOTieuDe(directive ? LOAI_THEO_VAN_BAN : task.type)}>
+              <InfoField label={nhanOTieuDe(directive)}>
                 <span className="font-semibold">{task.title}</span>
               </InfoField>
               <InfoField label="Hạn xử lý">
@@ -4414,7 +4443,8 @@ function BasicTaskEditForm({
     document.getElementById("sua-tieu-de")?.focus();
   }, []);
 
-  const titleLabel = nhanOTieuDe(opened.type);
+  // Drawn only for a type without the directive block (`TaskInfoBlock`'s `hasDocuments`).
+  const titleLabel = nhanOTieuDe(false);
   const body = basicTaskEditBody(f, opened);
   const block = canhBaoSua(f, opened, titleLabel);
 
@@ -4460,8 +4490,8 @@ function BasicTaskEditForm({
  * (`Tách thành nhiệm vụ`) and Phản ánh (`Tạo nhiệm vụ`): the look changes for all three; the
  * Nhiệm vụ-only rules hang on `taskScreen`.
  *
- * HAI LOẠI, HAI BỘ TRƯỜNG (§7.2 / §7.3), rẽ nhánh trên MÃ `theo-van-ban` (mã tầng 3, xem
- * `LOAI_THEO_VAN_BAN`). Loại nào khác thì ô tiêu đề thành `Tên nhiệm vụ`, và ba nhóm văn bản BIẾN
+ * HAI LOẠI, HAI BỘ TRƯỜNG (§7.2 / §7.3), rẽ nhánh trên cờ `requires_directive` của danh mục loại
+ * (`needsDirective`), không trên một mã gõ trong mã nguồn. Loại nào khác thì ô tiêu đề thành `Tên nhiệm vụ`, và ba nhóm văn bản BIẾN
  * KHỎI MÀN và KHÔNG LÊN DÂY — phần "không lên dây" ở `thanGiaoViec`, nơi có bài kiểm. Ô `Ghi chú`
  * §7.2 đi cùng cổng với ba danh sách văn bản (`hienVanBan`): tuyến tách kết luận của màn Biên bản
  * không nhận `note`.
@@ -4608,7 +4638,7 @@ export function FormGiaoViec({
     ? mucUuTienMacDinh(danhMuc.mucUuTien) || (danhMuc.mucUuTien.find((m) => m.active)?.code ?? "")
     : mucUuTienMacDinh(danhMuc.mucUuTien);
   const mucUuTien = mucUuTienDaChon ?? priorityDefault;
-  const theoVanBan = coKhoiVanBanChiDao(loaiChon);
+  const theoVanBan = needsDirective(danhMuc.loai, loaiChon);
   const hienVanBan = theoVanBan && coDanhSachVanBan;
   // Nhiệm vụ: the unit and assignee fields belong to the `Theo văn bản` form only (spec 06 §5).
   const showUnitAndAssignee = !taskScreen || theoVanBan;
@@ -4616,6 +4646,7 @@ export function FormGiaoViec({
   // nothing is red before the clerk has tried, and each error clears as its field is fixed.
   const errors = createTaskErrors({
     type: loaiChon,
+    directive: theoVanBan,
     title: tieuDe,
     dueInput,
     dueIncomplete,
@@ -4691,7 +4722,7 @@ export function FormGiaoViec({
         vanBan,
         ghiChu,
       },
-      { coDanhSachVanBan, maCha: maChaCoSan },
+      { coDanhSachVanBan, directive: theoVanBan, maCha: maChaCoSan },
     );
 
     giaoViec(than, khoaChongTrung);
@@ -4794,7 +4825,7 @@ export function FormGiaoViec({
 
       <div>
         <label htmlFor={CREATE_TASK_FIELD_IDS.title} className={LABEL_CLASS}>
-          {nhanOTieuDe(loaiChon)}
+          {nhanOTieuDe(theoVanBan)}
           <span className="text-danger ml-1" aria-hidden="true">
             *
           </span>

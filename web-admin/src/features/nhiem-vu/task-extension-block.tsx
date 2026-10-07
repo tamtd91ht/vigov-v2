@@ -94,7 +94,6 @@ export function TaskExtensionSection({
   decide,
   request,
   onDecided,
-  onPendingChange,
 }: {
   taskCode: string;
   /** `due_at` of the task: no deadline, nothing to push back. */
@@ -112,11 +111,6 @@ export function TaskExtensionSection({
   request: (newDueISO: string, reason: string) => Promise<KetQua<petitions_deNghiLuiHanRa>>;
   /** A decision succeeded — the task's deadline may have moved. */
   onDecided: (taskCode: string) => void;
-  /**
-   * Told whether this read found a pending request — the detail's `Chờ duyệt lùi hạn` strip uses it
-   * instead of reading the same route a second time. A failed read says `false`.
-   */
-  onPendingChange?: (pending: boolean) => void;
 }) {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [deciding, setDeciding] = useState(false);
@@ -137,10 +131,6 @@ export function TaskExtensionSection({
   }, [taskCode, key]);
 
   const current = loaded !== null && loaded.key === key ? loaded : null;
-  const pending = current !== null && current.ok && current.rows.length > 0;
-  useEffect(() => {
-    onPendingChange?.(pending);
-  }, [pending, onPendingChange]);
 
   function decideRow(row: petitions_deNghiChoDuyetRa, approve: boolean): void {
     setDeciding(true);

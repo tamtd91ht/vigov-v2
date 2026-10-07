@@ -36,6 +36,8 @@ function task(code: string, title: string): petitions_nhiemVuRa {
   return {
     code,
     child_count: 0,
+    extension_count: 0,
+    pending_extension: false,
     allowed_transitions: serverTransitions("moi-giao"),
     updated_at: "2026-06-01T02:00:00Z",
     type: "co-ban",

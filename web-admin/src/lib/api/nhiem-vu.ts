@@ -192,6 +192,13 @@ export type LocNhiemVu = {
    */
   parent?: string;
   /**
+   * `roots=true` — root tasks only, no sub-task (the prototype's `roots_only`). NO SCREEN TURNS IT ON
+   * YET, deliberately: it would hide sub-tasks from the register and break the equality between a
+   * Tổng quan figure and its drill-down list, which count every task. The server accepts ONLY the
+   * string `true` (400 otherwise), so `false` sends nothing.
+   */
+  roots?: boolean;
+  /**
    * `include=documents` (90d12ff) — the three §5.4 document lists on EVERY row, for the Sổ theo dõi
    * view (§4.3) only. A PROJECTION, not a filter: it never goes to `/task-counts` (`appendTaskFilters`
    * does not know it), and Kanban / Danh sách never ask for it — payload two of three views ignore.
@@ -271,6 +278,8 @@ function appendTaskFilters(truyVan: URLSearchParams, loc: LocNhiemVu): void {
   dat("parent", loc.parent);
   // Same rule as `late`: only `true` exists on the wire (`nhiem_vu.go:758-760`).
   if (loc.incomplete === true) dat("incomplete", "true");
+  // Same rule again: only `true` exists on the wire (`nhiem_vu.go:741-746`).
+  if (loc.roots === true) dat("roots", "true");
 
   // SỐ LIỆU CỦA TỔNG QUAN. Kỳ đi lên CHỈ khi số liệu đếm theo kỳ: máy chủ bỏ qua kỳ ở số liệu tồn
   // (`summary.go:182-185`), nên gửi nó là gửi một câu hỏi máy chủ không trả lời — và `from`/`to` mà

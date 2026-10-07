@@ -43,6 +43,8 @@ function nhiemVu(sua: Partial<petitions_nhiemVuRa> = {}): petitions_nhiemVuRa {
   return {
     code: "NV19",
     child_count: 0,
+    extension_count: 0,
+    pending_extension: false,
     allowed_transitions: [],
     updated_at: "2026-06-01T02:00:00Z",
     type: "theo-van-ban",
@@ -314,7 +316,7 @@ describe("thẻ nhiệm vụ §4.1", () => {
     expect(html).toContain('class="border-line shadow-card relative rounded-[10px] border bg-white transition"');
     expect(html).toContain('<span class="text-ink-muted mb-0.5 block text-[10.5px] font-semibold">NV19</span>');
     expect(html).toContain('class="text-navy block text-[12.8px] leading-snug font-semibold"');
-    // No extension count: the list contract carries none (schema.gen.ts `petitions_nhiemVuRa`).
+    // `extension_count` 0: no extension chip (prototype `TaskCard.tsx:85`).
     expect(html).not.toContain("đã gia hạn");
   });
 
@@ -442,13 +444,32 @@ describe("phần chưa dựng được của lượt này ra tới danh sách, k
   });
 });
 
-describe("B-1 (review 07/10/2026) — the card's meta row carries the `đã gia hạn n lần` \"?\"", () => {
-  it("one disabled-figure marker per card, OUTSIDE the open button (never a button in a button)", () => {
-    const html = veBang(namCot({ "dang-thuc-hien": trang([nhiemVu({ child_count: 2 })]) }));
-    const card = html.slice(html.indexOf("data-task-card"));
-    expect(card).toContain('aria-label="Số lần gia hạn — tính năng đang phát triển. Bấm để xem mô tả"');
-    const openButton = card.slice(card.indexOf('<button type="button" class="text-ink'), card.indexOf("</button>"));
-    expect(openButton).not.toContain("data-pending-marker");
-    expect(card.indexOf("2 việc con")).toBeLessThan(card.indexOf("data-pending-marker"));
+describe("the card's `đã gia hạn n lần` — the server's `extension_count` (prototype `TaskCard.tsx:85-90`)", () => {
+  const card = (sua: Partial<petitions_nhiemVuRa>) => {
+    const html = veBang(namCot({ "dang-thuc-hien": trang([nhiemVu(sua)]) }));
+    return html.slice(html.indexOf("data-task-card"));
+  };
+
+  it("n = 0: no chip, and no \"?\" marker any more", () => {
+    const html = card({ child_count: 2, extension_count: 0 });
+    expect(html).not.toContain("đã gia hạn");
+    expect(html).not.toContain("data-pending-marker");
+    expect(html).not.toContain("Số lần gia hạn");
+  });
+
+  it("n > 0: `đã gia hạn n lần` in tangerine, after `n việc con`, outside the open button", () => {
+    const html = card({ child_count: 2, extension_count: 2 });
+    expect(html).toMatch(
+      /<span class="text-tangerine flex items-center gap-1 font-semibold"><svg[^>]*>.*?<\/svg>đã gia hạn 2 lần<\/span>/,
+    );
+    expect(html.indexOf("2 việc con")).toBeLessThan(html.indexOf("đã gia hạn 2 lần"));
+    const openButton = html.slice(html.indexOf('<button type="button" class="text-ink'), html.indexOf("</button>"));
+    expect(openButton).not.toContain("đã gia hạn");
+  });
+
+  it("a pending request draws NO marker on the card — the prototype card has none", () => {
+    const pending = card({ extension_count: 0, pending_extension: true });
+    expect(pending).not.toContain("lùi hạn");
+    expect(pending).toBe(card({ extension_count: 0, pending_extension: false }));
   });
 });

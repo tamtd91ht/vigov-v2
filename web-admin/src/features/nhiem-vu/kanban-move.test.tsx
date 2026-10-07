@@ -55,6 +55,8 @@ const OTHER = "CB-2026-0P4X1Z";
 const TASK: petitions_nhiemVuRa = {
   code: "NV19",
   child_count: 0,
+  extension_count: 0,
+  pending_extension: false,
   allowed_transitions: ["cho-duyet", "hoan-thanh", "tam-dung"],
   updated_at: "2026-06-01T02:00:00Z",
   type: "co-ban",

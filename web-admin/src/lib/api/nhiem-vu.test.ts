@@ -115,6 +115,20 @@ describe("MƯỜI TÊN THAM SỐ — đọc lại từng cái một", () => {
     expect(q.get("soon")).toBe("true");
   });
 
+  it("`roots=true` goes only when asked, to the list, the counts and the export alike; never by default", () => {
+    // The server accepts ONLY `true` (`nhiem_vu.go:741-746`): `false` and absent send nothing.
+    expect(duongDanSoNhiemVu({})).toBe("/api/v1/tasks");
+    expect(duongDanSoNhiemVu({ roots: false })).toBe("/api/v1/tasks");
+    expect(taskCountsPath({})).toBe("/api/v1/task-counts");
+    for (const path of [
+      duongDanSoNhiemVu({ roots: true }),
+      taskCountsPath({ roots: true }),
+      registerExportPath({ roots: true }),
+    ]) {
+      expect(new URLSearchParams(path.split("?")[1]).get("roots")).toBe("true");
+    }
+  });
+
   it("409 `due_soon_not_configured`: the server's sentence comes back VERBATIM", async () => {
     const cau =
       "Xã chưa cấu hình ngưỡng sắp đến hạn cho nhiệm vụ, nên chưa lọc được việc sắp đến hạn. " +

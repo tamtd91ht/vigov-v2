@@ -52,8 +52,8 @@ const TYPE_BASIC = "co-ban";
 
 export const PREVIEW_TASK_TYPES: petitions_danhSachLoaiNhiemVuRa = {
   items: [
-    { id: "01PREVIEWTTY0000000000001", code: TYPE_BY_DOCUMENT, label: "Theo văn bản", is_default: false, active: true, order: 1, source: "he-thong", tier: 3 },
-    { id: "01PREVIEWTTY0000000000002", code: TYPE_BASIC, label: "Cơ bản", is_default: true, active: true, order: 2, source: "he-thong", tier: 2 },
+    { id: "01PREVIEWTTY0000000000001", code: TYPE_BY_DOCUMENT, label: "Theo văn bản", is_default: false, active: true, order: 1, source: "he-thong", tier: 3, requires_directive: true },
+    { id: "01PREVIEWTTY0000000000002", code: TYPE_BASIC, label: "Cơ bản", is_default: true, active: true, order: 2, source: "he-thong", tier: 2, requires_directive: false },
   ],
 };
 
@@ -145,6 +145,10 @@ type TaskSeed = {
   meeting?: { id: string; title: string; conclusion: number };
   /** `leader_approved` ticked by hand (default: only a finished task). */
   leaderApproved?: boolean;
+  /** Approved extensions — matches `previewTaskExtensionHistory` (default 0). */
+  extensions?: number;
+  /** A request is waiting — matches `previewTaskExtensions` (default false). */
+  pendingExtension?: boolean;
 };
 
 const SEEDS: readonly TaskSeed[] = [
@@ -175,7 +179,7 @@ const SEEDS: readonly TaskSeed[] = [
     description:
       "Rà soát theo bộ tiêu chí hiện hành; lập biểu tổng hợp theo từng thôn; báo cáo UBND xã trước khi trình cấp trên.",
     unit: UNIT_OFFICE, assignee: STAFF_B, assigner: STAFF_C,
-    due: 4, created: -15, progress: 45, childCount: 2,
+    due: 4, created: -15, progress: 45, childCount: 2, extensions: 1, pendingExtension: true,
   },
   {
     code: "NV106", type: TYPE_BASIC, bloc: "khoi-uy-ban", priority: "thuong", status: "dang-thuc-hien", source: "truc-tiep",
@@ -185,7 +189,7 @@ const SEEDS: readonly TaskSeed[] = [
   {
     code: "NV107", type: TYPE_BY_DOCUMENT, bloc: "khoi-uy-ban", priority: "cao", status: "cho-duyet", source: "van-ban-den",
     title: "Báo cáo kết quả thực hiện chương trình mục tiêu quốc gia 9 tháng", unit: UNIT_ECONOMY, assignee: STAFF_B, assigner: STAFF_C,
-    due: 2, originalDue: -1, created: -20, progress: 100, leaderApproved: true,
+    due: 2, originalDue: -1, created: -20, progress: 100, leaderApproved: true, extensions: 1,
     result: "Đã hoàn thành báo cáo, gửi kèm biểu số liệu.",
   },
   {
@@ -273,6 +277,8 @@ function build(seed: TaskSeed, now: Date, withDocuments: boolean): petitions_nhi
     superior_acknowledged: false,
     parent: seed.parent ?? "",
     child_count: seed.childCount ?? 0,
+    extension_count: seed.extensions ?? 0,
+    pending_extension: seed.pendingExtension ?? false,
     created_by: STAFF_C,
     created_at: at(now, seed.created, 2),
     updated_at: at(now, Math.min(seed.created + 2, 0), 3),

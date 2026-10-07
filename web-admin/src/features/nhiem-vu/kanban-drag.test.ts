@@ -28,6 +28,8 @@ function at(status: string, patch: Partial<petitions_nhiemVuRa> = {}): petitions
   return {
     code: "NV19",
     child_count: 0,
+    extension_count: 0,
+    pending_extension: false,
     allowed_transitions: serverTransitions(status),
     updated_at: "2026-06-01T02:00:00Z",
     type: "co-ban",

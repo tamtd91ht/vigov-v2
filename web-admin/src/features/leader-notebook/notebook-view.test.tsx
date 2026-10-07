@@ -50,6 +50,8 @@ function task(patch: Partial<petitions_nhiemVuRa> = {}): petitions_nhiemVuRa {
     superior_acknowledged: false,
     parent: "",
     child_count: 0,
+    extension_count: 0,
+    pending_extension: false,
     created_by: ASSIGNEE,
     created_at: "2026-09-01T02:00:00Z",
     updated_at: "2026-09-01T02:00:00Z",

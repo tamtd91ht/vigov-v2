@@ -65,6 +65,8 @@ function task(patch: Partial<petitions_nhiemVuRa> = {}): petitions_nhiemVuRa {
   return {
     code: "NV19",
     child_count: 0,
+    extension_count: 0,
+    pending_extension: false,
     allowed_transitions: [],
     updated_at: "2026-06-01T02:00:00Z",
     type: "co-ban",
@@ -118,8 +120,8 @@ describe("(#6) `{n} việc con` — on the Kanban card only (spec 04: the list's
 
   it("the list's second line is the source label alone; the count is the card's (`childCountLabel`)", () => {
     // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (spec 04): `nguồn · đã gia hạn n lần` — no child count in the list.
-    // `{nguồn} · đã gia hạn n lần` — the count is a "?" (BACKEND DEPENDENCY, lần 2 #19).
-    expect(list(2)).toContain('<span class="text-ink-muted flex items-center gap-1 text-[11px]">Giao trực tiếp<span aria-hidden="true">·</span>');
+    // `extension_count` 0 ⇒ the source alone (prototype `TaskListTable.tsx:86-88`).
+    expect(list(2)).toContain('<span class="text-ink-muted block text-[11px]">Giao trực tiếp</span>');
     expect(list(2)).not.toContain("việc con");
     expect(childCountLabel(2)).toBe("2 việc con");
     expect(childCountLabel(0)).toBeNull();
@@ -265,7 +267,7 @@ describe("(#10) `+ Thêm việc con` — the create form, prefilled with the par
         vanBan: [],
         ghiChu: "",
       },
-      { coDanhSachVanBan: true, maCha: "NV19" },
+      { coDanhSachVanBan: true, directive: false, maCha: "NV19" },
     );
     expect(body.parent).toBe("NV19");
   });
@@ -419,9 +421,11 @@ describe("(#15) Kanban counts use the SAME filter builder as the list", () => {
   it("`SoNhiemVu` counts with the VIEW's own query — the board's `loc` on Kanban, the forced type on Sổ theo dõi", () => {
     const src = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
     expect(src).toContain("getTaskCounts(viewLoc).then(");
-    expect(src).toContain('() => (viewMode === "so-theo-doi" ? { ...loc, loai: LOAI_THEO_VAN_BAN } : loc),');
+    expect(src).toContain(
+      'viewMode === "so-theo-doi" && typeof directiveType === "string" ? { ...loc, loai: directiveType } : loc,',
+    );
     const effect = src.slice(src.indexOf("getTaskCounts(viewLoc).then("));
-    expect(effect.indexOf("}, [viewLoc, khoaCounts, daDocDuongDan]);")).toBeGreaterThan(0);
+    expect(effect.indexOf("}, [viewLoc, khoaCounts, daDocDuongDan, registerHeld]);")).toBeGreaterThan(0);
   });
 });
 

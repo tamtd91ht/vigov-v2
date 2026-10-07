@@ -149,6 +149,8 @@ function nhiemVu(sua: Partial<petitions_nhiemVuRa> = {}): petitions_nhiemVuRa {
   return {
     code: "NV19",
     child_count: 0,
+    extension_count: 0,
+    pending_extension: false,
     allowed_transitions: serverTransitions(sua.status ?? "dang-thuc-hien"),
     updated_at: "2026-06-01T02:00:00Z",
     type: "theo-van-ban",
@@ -192,6 +194,7 @@ const DANH_MUC: DanhMucNhiemVu = {
       order: 1,
       source: "he-thong",
       tier: 1,
+      requires_directive: true,
     },
   ],
   mucUuTien: [
@@ -234,6 +237,7 @@ const DANH_MUC_CO_BAN: DanhMucNhiemVu = {
       order: 2,
       source: "he-thong",
       tier: 1,
+      requires_directive: false,
     },
   ],
 };
@@ -786,6 +790,7 @@ describe("form Giao việc mới §7", () => {
       order: 1,
       source: "he-thong",
       tier: 1,
+      requires_directive: code === "theo-van-ban",
     });
     const noDefaultType: DanhMucNhiemVu = {
       ...DANH_MUC,
@@ -1067,6 +1072,7 @@ describe("form Giao việc mới §7", () => {
     order,
     source: "he-thong",
     tier: 1,
+    requires_directive: code === "theo-van-ban",
   });
 
   it("owner #9: 500px for a basic task, 800px for `Theo văn bản` — the width follows the TYPE", () => {

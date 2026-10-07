@@ -48,6 +48,8 @@ const SPEC_COLUMNS = [
 const ROW: petitions_nhiemVuRa = {
   code: "NV33",
   child_count: 0,
+  extension_count: 0,
+  pending_extension: false,
   allowed_transitions: [],
   updated_at: "2026-06-01T02:00:00Z",
   type: "theo-van-ban",
@@ -259,10 +261,25 @@ describe("page wiring (source)", () => {
     expect(SRC).toContain('|${viewMode === "so-theo-doi" ? "docs" : ""}');
   });
 
-  it("the book's query forces the `Theo văn bản` type (spec 02 §State) — rows, counts AND the export", () => {
-    expect(SRC).toContain('() => (viewMode === "so-theo-doi" ? { ...loc, loai: LOAI_THEO_VAN_BAN } : loc),');
+  it("the book's query forces the catalogue's `requires_directive` type (spec 02 §State) — rows, counts AND the export", () => {
+    // The type comes from the catalogue (`directiveTaskType`), never a code typed in the bundle.
+    expect(SRC).toContain("const directiveType = typesRead ? directiveTaskType(danhMuc.loai) : undefined;");
+    expect(SRC).toContain(
+      'viewMode === "so-theo-doi" && typeof directiveType === "string" ? { ...loc, loai: directiveType } : loc,',
+    );
+    expect(SRC).not.toContain("LOAI_THEO_VAN_BAN");
     expect(SRC).toContain("getTaskCounts(viewLoc)");
     expect(SRC).toContain("hideType={viewMode === \"so-theo-doi\"}");
+  });
+
+  it("no directive type known ⇒ the book reads NOTHING (rows, counts, export) and says why once the catalogue is read", () => {
+    expect(SRC).toContain('const registerHeld = viewMode === "so-theo-doi" && typeof directiveType !== "string";');
+    expect(SRC).toContain("if (registerHeld) return;");
+    expect(SRC).toContain("if (!daDocDuongDan || registerHeld) return;");
+    expect(SRC).toContain("if (exporting || registerHeld) return;");
+    expect(SRC).toContain('? { pha: "loi", thongBao: REGISTER_NO_DIRECTIVE_TYPE }');
+    expect(SRC).toContain("const so = held ?? taiTu(daTai, khoa);");
+    expect(SRC).toContain("const counts = held ?? taiTu(countsLoaded, khoaCounts);");
   });
 
   it("export (kept, owner 07/10/2026 #5): the SAME query and sort as the screen; refusal verbatim as a toast", () => {

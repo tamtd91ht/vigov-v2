@@ -36,7 +36,18 @@ const DIRECTORY: KetQua<identity_danhBaChonNguoiRa> = {
 };
 
 function typeRow(code: string, label: string, isDefault: boolean, active = true): petitions_loaiNhiemVuRa {
-  return { id: `01J${code}`, code, label, is_default: isDefault, active, order: 1, source: "he-thong", tier: 1 };
+  // `requires_directive` as the server derives it (true for `theo-van-ban` only).
+  return {
+    id: `01J${code}`,
+    code,
+    label,
+    is_default: isDefault,
+    active,
+    order: 1,
+    source: "he-thong",
+    tier: 1,
+    requires_directive: code === "theo-van-ban",
+  };
 }
 
 function catalogue(loai: petitions_loaiNhiemVuRa[]): DanhMucNhiemVu {

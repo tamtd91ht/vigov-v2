@@ -20,7 +20,9 @@ import {
   MOI_NHOM_VAN_BAN,
   MOI_TRANG_THAI,
   chiaNhomVanBan,
-  coKhoiVanBanChiDao,
+  needsDirective,
+  directiveTaskType,
+  extensionCountText,
   dongVanBan,
   ngayVanBan,
   nhanNhomVanBan,
@@ -489,10 +491,53 @@ describe("phần chưa dựng được", () => {
 });
 
 describe("§5.4 — câu chữ của khối văn bản chỉ đạo", () => {
-  it("chỉ loại `theo-van-ban` có khối", () => {
-    expect(coKhoiVanBanChiDao("theo-van-ban")).toBe(true);
-    expect(coKhoiVanBanChiDao("co-ban")).toBe(false);
-    expect(coKhoiVanBanChiDao("")).toBe(false);
+  it("the block follows the catalogue's `requires_directive` flag, never the type code", () => {
+    const row = (code: string, requires_directive: boolean) => ({
+      id: `01J${code}`,
+      code,
+      label: code,
+      is_default: false,
+      active: true,
+      order: 1,
+      source: "he-thong",
+      tier: 3,
+      requires_directive,
+    });
+    const types = [row("theo-van-ban", true), row("co-ban", false)];
+    expect(needsDirective(types, "theo-van-ban")).toBe(true);
+    expect(needsDirective(types, "co-ban")).toBe(false);
+    expect(needsDirective(types, "")).toBe(false);
+    // A code outside the catalogue — or a catalogue not read yet — is the plain form.
+    expect(needsDirective(types, "loai-la")).toBe(false);
+    expect(needsDirective([], "theo-van-ban")).toBe(false);
+    // Not green for the wrong reason: the flag, not the spelling, decides.
+    expect(needsDirective([row("theo-van-ban", false), row("co-ban", true)], "co-ban")).toBe(true);
+    expect(needsDirective([row("theo-van-ban", false)], "theo-van-ban")).toBe(false);
+  });
+
+  it("the Sổ theo dõi's type: the first flagged row, active or not; none ⇒ `null`, never a fallback", () => {
+    const row = (code: string, requires_directive: boolean, active = true) => ({
+      id: `01J${code}`,
+      code,
+      label: code,
+      is_default: code === "co-ban",
+      active,
+      order: 1,
+      source: "he-thong",
+      tier: 3,
+      requires_directive,
+    });
+    expect(directiveTaskType([row("co-ban", false), row("theo-van-ban", true)])).toBe("theo-van-ban");
+    expect(directiveTaskType([row("theo-van-ban", true, false)])).toBe("theo-van-ban");
+    // The default type is NOT a stand-in (the prototype falls back to it; this screen does not).
+    expect(directiveTaskType([row("co-ban", false)])).toBeNull();
+    expect(directiveTaskType([])).toBeNull();
+  });
+
+  it("`đã gia hạn n lần` only above zero — the prototype draws nothing at 0", () => {
+    expect(extensionCountText(0)).toBeNull();
+    expect(extensionCountText(1)).toBe("đã gia hạn 1 lần");
+    expect(extensionCountText(3)).toBe("đã gia hạn 3 lần");
   });
 
   it("ba nhãn nhóm NGUYÊN VĂN §5.4, đúng thứ tự; mã lạ hiện nguyên văn", () => {
@@ -594,15 +639,14 @@ function formDay(sua: Partial<FormGiaoViecNhap> = {}): FormGiaoViecNhap {
 
 describe("§7.2 / §7.3 — nhãn ô tiêu đề theo loại", () => {
   it("`theo-van-ban` ⇒ `Nội dung nhiệm vụ / Trích yếu văn bản`; loại khác ⇒ `Tên nhiệm vụ`", () => {
-    expect(nhanOTieuDe("theo-van-ban")).toBe("Nội dung nhiệm vụ / Trích yếu văn bản");
-    expect(nhanOTieuDe("co-ban")).toBe("Tên nhiệm vụ");
-    expect(nhanOTieuDe("")).toBe("Tên nhiệm vụ");
+    expect(nhanOTieuDe(true)).toBe("Nội dung nhiệm vụ / Trích yếu văn bản");
+    expect(nhanOTieuDe(false)).toBe("Tên nhiệm vụ");
   });
 });
 
 describe("thân `Giao việc mới` — ba nhóm văn bản", () => {
   it("`theo-van-ban`: `documents` mang ĐÚNG group/summary/reference/date, gom theo nhóm, giữ thứ tự trên màn", () => {
-    const than = thanGiaoViec(formDay(), { coDanhSachVanBan: true });
+    const than = thanGiaoViec(formDay(), { coDanhSachVanBan: true, directive: true });
     expect(than.documents).toEqual([
       {
         group: "cap-tren-giao",
@@ -620,7 +664,7 @@ describe("thân `Giao việc mới` — ba nhóm văn bản", () => {
   });
 
   it("ô tuỳ chọn bỏ trống KHÔNG thành rác: không `reference: \"\"`, không `date: \"\"`, không `id`/`position`", () => {
-    const than = thanGiaoViec(formDay(), { coDanhSachVanBan: true });
+    const than = thanGiaoViec(formDay(), { coDanhSachVanBan: true, directive: true });
     for (const d of than.documents ?? []) {
       expect(Object.keys(d).every((k) => ["group", "summary", "reference", "date"].includes(k))).toBe(true);
       expect(Object.values(d)).not.toContain("");
@@ -633,14 +677,14 @@ describe("thân `Giao việc mới` — ba nhóm văn bản", () => {
   it("ngày văn bản đi NGUYÊN `YYYY-MM-DD`, không bao giờ là một mốc RFC 3339", () => {
     // Máy chủ TỪ CHỐI RFC 3339 có chủ ý (`nhiem_vu_ghi.go:335-337`): múi giờ trình duyệt không
     // được quyết văn bản ký ngày nào. Ghim TZ=UTC nên một phép đi vòng qua `Date` sẽ lộ ra.
-    const than = thanGiaoViec(formDay(), { coDanhSachVanBan: true });
+    const than = thanGiaoViec(formDay(), { coDanhSachVanBan: true, directive: true });
     const ngay = (than.documents ?? []).flatMap((d) => (d.date === undefined ? [] : [d.date]));
     expect(ngay).toEqual(["2026-01-30", "2026-06-15"]);
     for (const n of ngay) expect(n).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
   it("KHÔNG có dòng nào ⇒ `documents` vắng mặt, không gửi mảng rỗng", () => {
-    expect(thanGiaoViec(formDay({ vanBan: [] }), { coDanhSachVanBan: true })).not.toHaveProperty(
+    expect(thanGiaoViec(formDay({ vanBan: [] }), { coDanhSachVanBan: true, directive: true })).not.toHaveProperty(
       "documents",
     );
   });
@@ -648,7 +692,7 @@ describe("thân `Giao việc mới` — ba nhóm văn bản", () => {
   it("gỡ một dòng giữa ⇒ đúng dòng ấy biến khỏi thân, các dòng còn lại giữ thứ tự", () => {
     const f = formDay();
     const sauKhiGo = formDay({ vanBan: f.vanBan.filter((d) => d.khoa !== "b") });
-    const than = thanGiaoViec(sauKhiGo, { coDanhSachVanBan: true });
+    const than = thanGiaoViec(sauKhiGo, { coDanhSachVanBan: true, directive: true });
     expect(than.documents?.map((d) => d.summary)).toEqual([
       "Kế hoạch giả thứ hai",
       "Công văn giả",
@@ -661,22 +705,23 @@ describe("thân `Giao việc mới` — ô `Ghi chú` §7.2", () => {
   it("gõ ghi chú ⇒ `note` lên dây, đã cắt khoảng trắng", () => {
     const than = thanGiaoViec(formDay({ ghiChu: "  Ghi chú giả khi giao việc  " }), {
       coDanhSachVanBan: true,
+      directive: true,
     });
     expect(than.note).toBe("Ghi chú giả khi giao việc");
   });
 
   it("bỏ trống hoặc toàn khoảng trắng ⇒ `note` VẮNG MẶT, không gửi `\"\"`", () => {
-    expect(thanGiaoViec(formDay(), { coDanhSachVanBan: true })).not.toHaveProperty("note");
+    expect(thanGiaoViec(formDay(), { coDanhSachVanBan: true, directive: true })).not.toHaveProperty("note");
     const toanKhoangTrang = formDay({ ghiChu: "  \n\t  " });
-    expect(thanGiaoViec(toanKhoangTrang, { coDanhSachVanBan: true })).not.toHaveProperty("note");
+    expect(thanGiaoViec(toanKhoangTrang, { coDanhSachVanBan: true, directive: true })).not.toHaveProperty("note");
   });
 
   it("loại `co-ban` (§7.3 bỏ ô) và màn Biên bản (tuyến không có `note`) ⇒ KHÔNG gửi `note`", () => {
     const f = formDay({ ghiChu: "Ghi chú giả" });
-    expect(thanGiaoViec({ ...f, loai: "co-ban" }, { coDanhSachVanBan: true })).not.toHaveProperty(
+    expect(thanGiaoViec({ ...f, loai: "co-ban" }, { coDanhSachVanBan: true, directive: false })).not.toHaveProperty(
       "note",
     );
-    expect(thanGiaoViec(f, { coDanhSachVanBan: false })).not.toHaveProperty("note");
+    expect(thanGiaoViec(f, { coDanhSachVanBan: false, directive: true })).not.toHaveProperty("note");
   });
 });
 
@@ -694,7 +739,7 @@ describe("thân `Giao việc mới` — hai ô cán bộ lên ĐÚNG trường, 
         nguoiThucHien: ` ${THUC_HIEN} `,
         lanhDaoGiaoViec: ` ${LANH_DAO} `,
       }),
-      { coDanhSachVanBan: true },
+      { coDanhSachVanBan: true, directive: true },
     );
     expect(than.assignee).toBe(THUC_HIEN);
     expect(than.assigner).toBe(LANH_DAO);
@@ -704,13 +749,14 @@ describe("thân `Giao việc mới` — hai ô cán bộ lên ĐÚNG trường, 
   it("bỏ trống hoặc toàn khoảng trắng ⇒ trường VẮNG MẶT, không gửi `\"\"`", () => {
     const than = thanGiaoViec(formDay({ nguoiThucHien: "", lanhDaoGiaoViec: "  " }), {
       coDanhSachVanBan: true,
+      directive: true,
     });
     expect(than).not.toHaveProperty("assignee");
     expect(than).not.toHaveProperty("assigner");
   });
 
   it("màn Biên bản (Tách kết luận) dùng cùng hàm: lãnh đạo giao việc vẫn lên `assigner`", () => {
-    const than = thanGiaoViec(formDay({ lanhDaoGiaoViec: LANH_DAO }), { coDanhSachVanBan: false });
+    const than = thanGiaoViec(formDay({ lanhDaoGiaoViec: LANH_DAO }), { coDanhSachVanBan: false, directive: true });
     expect(than.assigner).toBe(LANH_DAO);
   });
 });
@@ -719,7 +765,7 @@ describe("thân `Giao việc mới` — trường ĐANG ẨN không lên dây", 
   it("`co-ban` SAU KHI đã gõ ba văn bản: không `documents`", () => {
     // Đúng thao tác thật: gõ đủ ở `Theo văn bản` rồi mới đổi loại. State vẫn giữ chữ đã gõ (đổi
     // lại thì hiện lại) — nên chỗ cắt PHẢI là hàm dựng thân này.
-    const than = thanGiaoViec(formDay({ loai: "co-ban" }), { coDanhSachVanBan: true }) as Record<
+    const than = thanGiaoViec(formDay({ loai: "co-ban" }), { coDanhSachVanBan: true, directive: false }) as Record<
       string,
       unknown
     >;
@@ -729,7 +775,7 @@ describe("thân `Giao việc mới` — trường ĐANG ẨN không lên dây", 
 
   it("màn Biên bản (`coDanhSachVanBan: false`) KHÔNG gửi `documents` kể cả với loại `theo-van-ban`", () => {
     // `petitions.tachKetLuanVao` không có `documents`.
-    const than = thanGiaoViec(formDay(), { coDanhSachVanBan: false });
+    const than = thanGiaoViec(formDay(), { coDanhSachVanBan: false, directive: true });
     expect(than).not.toHaveProperty("documents");
   });
 
@@ -737,7 +783,7 @@ describe("thân `Giao việc mới` — trường ĐANG ẨN không lên dây", 
     const f = formDay({ boPhan: "01JBOPHANGIA", nguoiThucHien: "CB-2026-GIA001" });
     for (const loai of ["theo-van-ban", "co-ban"]) {
       for (const coDanhSachVanBan of [true, false]) {
-        const than = thanGiaoViec({ ...f, loai }, { coDanhSachVanBan, maCha: "NV01" });
+        const than = thanGiaoViec({ ...f, loai }, { coDanhSachVanBan, directive: loai === "theo-van-ban", maCha: "NV01" });
         expect(than).not.toHaveProperty("lead_unit");
         expect(than).not.toHaveProperty("monitor");
         // "Cơ quan chủ trì" IS `unit`, "chuyên viên theo dõi" IS `assignee`.
@@ -787,6 +833,8 @@ function chiTiet(sua: Partial<petitions_nhiemVuRa> = {}): petitions_nhiemVuRa {
   return {
     code: "NV19",
     child_count: 0,
+    extension_count: 0,
+    pending_extension: false,
     allowed_transitions: [],
     updated_at: "2026-06-01T02:00:00Z",
     type: "theo-van-ban",
@@ -1643,14 +1691,14 @@ describe("hạn điền sẵn của form tạo — +7 ngày lịch, 17:00 (ADR 0
 
   it("thân gửi đi: ngày + giờ ⇒ một mốc `+07:00`; không có ngày ⇒ không có `due_at`", () => {
     const { date, time } = defaultNewTaskDue(new Date("2026-09-30T03:00:00Z"));
-    expect(thanGiaoViec(formDay({ han: date, dueTime: time }), { coDanhSachVanBan: false }).due_at).toBe(
+    expect(thanGiaoViec(formDay({ han: date, dueTime: time }), { coDanhSachVanBan: false, directive: true }).due_at).toBe(
       "2026-10-07T17:00:00+07:00",
     );
     // The clerk changed the hour: what they typed goes, not the default.
-    expect(thanGiaoViec(formDay({ han: date, dueTime: "09:30" }), { coDanhSachVanBan: false }).due_at).toBe(
+    expect(thanGiaoViec(formDay({ han: date, dueTime: "09:30" }), { coDanhSachVanBan: false, directive: true }).due_at).toBe(
       "2026-10-07T09:30:00+07:00",
     );
-    expect(thanGiaoViec(formDay({ han: "", dueTime: time }), { coDanhSachVanBan: false })).not.toHaveProperty(
+    expect(thanGiaoViec(formDay({ han: "", dueTime: time }), { coDanhSachVanBan: false, directive: true })).not.toHaveProperty(
       "due_at",
     );
   });
@@ -1682,19 +1730,19 @@ describe("07/10: ONE datetime-local box (prototype) — same pre-fill, same chec
 
   it("the instant sent is byte-for-byte the one the date + time pair sent", () => {
     const { date, time } = defaultNewTaskDue(now);
-    const before = thanGiaoViec(formDay({ han: date, dueTime: time }), { coDanhSachVanBan: false }).due_at;
+    const before = thanGiaoViec(formDay({ han: date, dueTime: time }), { coDanhSachVanBan: false, directive: true }).due_at;
     const parts = splitNewTaskDue(defaultNewTaskDueInput(now));
-    const after = thanGiaoViec(formDay({ han: parts.date, dueTime: parts.time }), { coDanhSachVanBan: false });
+    const after = thanGiaoViec(formDay({ han: parts.date, dueTime: parts.time }), { coDanhSachVanBan: false, directive: true });
     expect(after.due_at).toBe(before);
     expect(after.due_at).toBe("2026-10-07T17:00:00+07:00");
     const edited = splitNewTaskDue("2026-10-20T08:15");
     expect(
-      thanGiaoViec(formDay({ han: edited.date, dueTime: edited.time }), { coDanhSachVanBan: false }).due_at,
+      thanGiaoViec(formDay({ han: edited.date, dueTime: edited.time }), { coDanhSachVanBan: false, directive: true }).due_at,
     ).toBe("2026-10-20T08:15:00+07:00");
     // Cleared box ⇒ no deadline, a real state.
     const cleared = splitNewTaskDue("");
     expect(
-      thanGiaoViec(formDay({ han: cleared.date, dueTime: cleared.time }), { coDanhSachVanBan: false }),
+      thanGiaoViec(formDay({ han: cleared.date, dueTime: cleared.time }), { coDanhSachVanBan: false, directive: true }),
     ).not.toHaveProperty("due_at");
   });
 

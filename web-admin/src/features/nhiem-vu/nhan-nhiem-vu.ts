@@ -1672,7 +1672,7 @@ export const EXTENSION_NO_DUE =
 export const TASK_TYPE_MISSING = "Chọn loại nhiệm vụ để giao việc.";
 /** The title field's error after a submit attempt — the prototype's sentence (`TaskAssignForm.tsx:46`). */
 export const TASK_TITLE_MISSING = "Vui lòng nhập tên nhiệm vụ.";
-/** The same, when the field is labelled `Nội dung nhiệm vụ / Trích yếu văn bản` (type `theo-van-ban`). */
+/** The same, when the field is labelled `Nội dung nhiệm vụ / Trích yếu văn bản` (a type flagged `requires_directive`). */
 export const TASK_CONTENT_MISSING = "Vui lòng nhập nội dung nhiệm vụ.";
 /** Under ONE document row whose summary is empty — the row itself says which one. */
 export const DOCUMENT_SUMMARY_MISSING = "Nhập trích yếu, hoặc bấm ✕ để gỡ dòng này.";
@@ -1755,18 +1755,43 @@ export function ngayChoONhap(mocISO: string | null): string {
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
 /**
- * Mã loại nhiệm vụ DUY NHẤT có khối §5.4 (*"chỉ với loại `Theo văn bản`"*).
+ * Whether a task type carries the §5.4 directive block — the catalogue's `requires_directive` flag
+ * (prototype `lib/task-kinds.ts:21-28`), never a type code typed into this bundle.
  *
- * Gõ thẳng mã này vào trình duyệt là HỢP LỆ, khác hẳn nhãn của nó: `theo-van-ban` là mã TẦNG 3 —
- * mã nguồn rẽ nhánh trên đúng chuỗi ấy (`service-petitions/migrations/0003_danh_muc_nhiem_vu.sql:
- * 205-215`). Xã đổi được NHÃN `Theo văn bản`, không đổi được mã.
+ * The server DERIVES the flag (true for the tier-3 `theo-van-ban` row, `GET /api/v1/task-types`), so
+ * today's behaviour is the old code comparison; the difference is WHERE the answer lives — one
+ * place on the server instead of a copy here that drifts. A code missing from the catalogue (not
+ * read yet, read failed, unknown) answers `false`: the plain form, which sends no documents.
  */
-export const LOAI_THEO_VAN_BAN = "theo-van-ban";
-
-/** Loại nhiệm vụ này có khối §5.4 hay không. */
-export function coKhoiVanBanChiDao(loai: string): boolean {
-  return loai === LOAI_THEO_VAN_BAN;
+export function needsDirective(types: readonly petitions_loaiNhiemVuRa[], code: string): boolean {
+  if (code === "") return false;
+  return types.find((t) => t.code === code)?.requires_directive === true;
 }
+
+/**
+ * The code of the type the Sổ theo dõi reads — the FIRST catalogue row flagged `requires_directive`
+ * (prototype `TaskWorkspace.tsx:72-77`), active or not: a retired type still has tasks in the book.
+ * `null` = the catalogue holds no such row (or could not be read). Unlike the prototype there is NO
+ * fallback to the default type: that would fill the eleven directive columns with basic tasks.
+ */
+export function directiveTaskType(types: readonly petitions_loaiNhiemVuRa[]): string | null {
+  return types.find((t) => t.requires_directive)?.code ?? null;
+}
+
+/**
+ * `đã gia hạn n lần` — the card, the list's sub-line and the drawer's `Hạn xử lý` cell (prototype
+ * `TaskCard.tsx:85-90`, `TaskListTable.tsx:86-88`, `TaskDetailDrawer.tsx:372-374`); `null` at 0, where
+ * the prototype draws nothing. The figure is the server's `extension_count` — approved extensions,
+ * the same predicate that locks the original deadline — never counted here from a history page.
+ */
+export function extensionCountText(count: number): string | null {
+  return count > 0 ? `đã gia hạn ${count} lần` : null;
+}
+
+/** The Sổ theo dõi cannot be read: no type of the catalogue carries the directive block. */
+export const REGISTER_NO_DIRECTIVE_TYPE =
+  "Chưa đọc được loại nhiệm vụ theo văn bản trong danh mục của xã, nên chưa hiện được Sổ theo dõi. " +
+  "Vui lòng tải lại trang.";
 
 /** Tiêu đề khối — chữ của §5.4, viết hoa đầu câu như mọi tiêu đề khối khác trong drawer. */
 export const TIEU_DE_KHOI_VAN_BAN = "Sổ theo dõi văn bản chỉ đạo";
@@ -1892,8 +1917,9 @@ export function chiaNhomVanBan(ds: readonly petitions_nhiemVuVanBanRa[]): readon
 export const NHAN_TIEU_DE_THEO_VAN_BAN = "Nội dung nhiệm vụ / Trích yếu văn bản";
 export const NHAN_TIEU_DE_CO_BAN = "Tên nhiệm vụ";
 
-export function nhanOTieuDe(loai: string): string {
-  return coKhoiVanBanChiDao(loai) ? NHAN_TIEU_DE_THEO_VAN_BAN : NHAN_TIEU_DE_CO_BAN;
+/** `directive` = the type carries the §5.4 block (`needsDirective`). */
+export function nhanOTieuDe(directive: boolean): string {
+  return directive ? NHAN_TIEU_DE_THEO_VAN_BAN : NHAN_TIEU_DE_CO_BAN;
 }
 
 /** Placeholder từng nhóm — NGUYÊN VĂN §7.2 (`02-nhiem-vu.md:263-265`). */
@@ -2015,9 +2041,14 @@ export function canhBaoVanBan(
  */
 export function thanGiaoViec(
   f: FormGiaoViecNhap,
-  tuyChon: { readonly coDanhSachVanBan: boolean; readonly maCha?: string },
+  tuyChon: {
+    readonly coDanhSachVanBan: boolean;
+    /** The chosen type carries the §5.4 block (`needsDirective` on the commune's catalogue). */
+    readonly directive: boolean;
+    readonly maCha?: string;
+  },
 ): petitions_taoNhiemVuVao {
-  const theoVanBan = coKhoiVanBanChiDao(f.loai);
+  const theoVanBan = tuyChon.directive;
   const than: petitions_taoNhiemVuVao = {
     auto_code: f.tuSinhMa,
     type: f.loai,
@@ -2415,6 +2446,8 @@ export type CreateTaskErrors = {
  */
 export function createTaskErrors(f: {
   readonly type: string;
+  /** The type carries the §5.4 block (`needsDirective`) — the title field is then `Nội dung…`. */
+  readonly directive: boolean;
   readonly title: string;
   readonly dueInput: string;
   readonly dueIncomplete: boolean;
@@ -2424,7 +2457,7 @@ export function createTaskErrors(f: {
 }): CreateTaskErrors {
   const type = f.type === "" ? TASK_TYPE_MISSING : null;
   const title =
-    f.title.trim() === "" ? (coKhoiVanBanChiDao(f.type) ? TASK_CONTENT_MISSING : TASK_TITLE_MISSING) : null;
+    f.title.trim() === "" ? (f.directive ? TASK_CONTENT_MISSING : TASK_TITLE_MISSING) : null;
   const due = newTaskDueInputProblem(f.dueInput, f.dueIncomplete);
   const documents = f.documentsShown ? f.documents : [];
   const documentLimit = documents.length > VAN_BAN_MOT_LAN_TOI_DA ? canhBaoVanBan(documents) : null;

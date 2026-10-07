@@ -327,7 +327,8 @@ function bayDanhMuc(dong: MucDanhMucGhi): BayDanhMuc {
     loaiVanBan: kq,
     loaiDonViDanCu: kq,
     khoiNhiemVu: kq,
-    loaiNhiemVu: kq,
+    // Task types now carry the derived `requires_directive` flag (9f3a21c4); this catalogue row is not one.
+    loaiNhiemVu: { ok: true as const, duLieu: { items: [{ ...dong, requires_directive: false }] } },
     mucUuTienNhiemVu: kq,
   };
 }
