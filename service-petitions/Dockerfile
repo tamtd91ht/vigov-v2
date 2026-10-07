@@ -27,7 +27,7 @@ ARG GO_VERSION=1.26.6
 ARG RUNTIME=gcr.io/distroless/static-debian12:nonroot   #[bat-bien] khong shell, khong root
 
 # ---------------------------------------------------------------------------------------
-FROM golang:${GO_VERSION}-bookworm AS build
+FROM harbor.omicrm.services/image_fixnetworkqt/golang:${GO_VERSION}-bookworm AS build
 ARG VERSION=dev
 WORKDIR /src
 
