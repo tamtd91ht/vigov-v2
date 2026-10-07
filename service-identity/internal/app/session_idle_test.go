@@ -57,23 +57,23 @@ func TestIdleRevocationAndItsEntryShareOneTransaction(t *testing.T) {
 	if err := json.Unmarshal(entry.args[7].([]byte), &delta); err != nil {
 		t.Fatal(err)
 	}
-	if delta["idle_timeout_minutes"] != float64(15) {
-		t.Errorf("an admin session's entry records limit %v, want 15", delta["idle_timeout_minutes"])
+	if delta["idle_timeout_minutes"] != float64(60) {
+		t.Errorf("an admin session's entry records limit %v, want 60 (#38, changed 2026-10-07)", delta["idle_timeout_minutes"])
 	}
 	if !strings.Contains(logBuf.String(), "event=session.idle_expired") || strings.Contains(logBuf.String(), "sid-0001") {
 		t.Errorf("security log must carry the event and never the sid:\n%s", logBuf.String())
 	}
 }
 
-func TestIdleStaffLimitRecordedAsThirty(t *testing.T) {
+func TestIdleStaffLimitRecordedAsSixty(t *testing.T) {
 	uc, g, _ := idleHarness(t)
 	if err := uc.RevokeIdle(ctxXa(xaThu), "sid-0001", maCanBo, "", time.Now().UTC(), false); err != nil {
 		t.Fatal(err)
 	}
 	var delta map[string]any
 	_ = json.Unmarshal(g.tim("INSERT INTO audit_log").args[7].([]byte), &delta)
-	if delta["idle_timeout_minutes"] != float64(30) {
-		t.Errorf("staff limit recorded %v, want 30", delta["idle_timeout_minutes"])
+	if delta["idle_timeout_minutes"] != float64(60) {
+		t.Errorf("staff limit recorded %v, want 60 (#38, changed 2026-10-07)", delta["idle_timeout_minutes"])
 	}
 }
 

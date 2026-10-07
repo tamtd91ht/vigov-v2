@@ -8,6 +8,10 @@ import "time"
 // chục lần mỗi ngày. So với cột dung_gan_nhat. Phiên công dân Mini App KHÔNG áp. Hạn tuyệt đối 12 giờ
 // giữ nguyên."
 //
+// CHANGED 2026-10-07 by the project owner: both limits are 60 minutes, in every environment — the
+// 15-minute admin lock kept cutting debugging sessions short. Recorded on #38 in open-questions.json.
+// The two constants stay separate so a later decision can split them again without new plumbing.
+//
 // THE DEVIATION FROM THE STANDARD'S 15/5 IS THE OWNER'S, ON THE RECORD, WITH ITS REASON. Tightening
 // these toward 15/5 is a new decision, not a fix; so is loosening them (rule 13, forbidden #4).
 //
@@ -18,13 +22,13 @@ import "time"
 // CITIZEN SESSIONS ARE OUT OF SCOPE by the same decision — they live in `phien_cong_dan`, with their
 // own lifetime (CITIZEN_SESSION_TTL), and nothing here is read on that path.
 const (
-	StaffSessionIdleTimeout = 30 * time.Minute
+	StaffSessionIdleTimeout = 60 * time.Minute
 
 	// AdminSessionIdleTimeout applies to a session whose account holds AdminSessionPermission at the
 	// moment of the request. Read LIVE, not stamped on the session at sign-in: a person granted the
 	// key mid-session gets the shorter limit on the next request, and one who loses it gets the
 	// longer one — the same "permissions are read on every request" rule the whole edge follows.
-	AdminSessionIdleTimeout = 15 * time.Minute
+	AdminSessionIdleTimeout = 60 * time.Minute
 
 	// AdminSessionPermission is what makes a session "phiên có quyền quản trị". It is `admin.user`
 	// because that is the key that makes somebody the commune's administrator everywhere else in

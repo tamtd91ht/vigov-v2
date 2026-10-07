@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-identity",
-  "cap_nhat": "2026-10-06",
+  "cap_nhat": "2026-10-07",
   "muc": [
     {
       "id": "store-crosstenant",
@@ -513,6 +513,14 @@
       "trang_thai": "xong",
       "bang_chung": "e2a4f2f3 migration 0025 + domain.OperatorPermissions tám khoá; TestPermissionCheckMatchesDomainList xanh.",
       "tiep_theo": "Job Jenkins tao-tai-khoan-van-hanh cấp 8 khoá (deploy/Jenkinsfile:1514) — thẻ 05."
+    },
+    {
+      "id": "khoa-phien-60-phut-07-10",
+      "viec": "Khoá phiên cán bộ khi không dùng nâng lên 60 phút cho cả cán bộ và quản trị (câu #38 sửa 07/10/2026)",
+      "trang_thai": "xong",
+      "bang_chung": "service-identity/internal/domain/session_idle.go: StaffSessionIdleTimeout = AdminSessionIdleTimeout = 60*time.Minute; test domain/grpc/http/app cập nhật theo; go vet + go test ./... service-identity xanh; tools/check_security.py PASS.",
+      "no_confirm": [],
+      "tiep_theo": "Hai mốc bằng nhau nên quyền admin.user không còn được hỏi khi xét khoá (vết kiểm toán ghi admin=false, giới hạn 60). Tách lại hai mốc thì test TestIdleNonAdminSession61MinutesRevokedLikeAdmin trở về vai đối chứng. Phiên khu vận hành ViHAT giữ 5 phút."
     }
   ]
 }

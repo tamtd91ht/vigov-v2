@@ -52,24 +52,24 @@ func withoutAdmin(t *testing.T, m *mayChu) {
 	})
 }
 
-func TestIdleStaffSession29MinutesStillWorks(t *testing.T) {
+func TestIdleStaffSession59MinutesStillWorks(t *testing.T) {
 	m := dungMayChu(t)
 	withoutAdmin(t, m)
-	idleFor(m, 29*time.Minute)
+	idleFor(m, 59*time.Minute)
 
 	doiMa(t, m.goi(t, "GET", hostA, mauXemPhienHienTai[len("GET "):], "", m.tokenCho(t, xaA, sidA)), http.StatusOK)
 	if len(m.idleSessions.calls) != 0 {
-		t.Fatalf("a staff session idle 29 minutes was revoked: %+v", m.idleSessions.calls)
+		t.Fatalf("a staff session idle 59 minutes was revoked: %+v", m.idleSessions.calls)
 	}
 	if m.phien.soLanDung != 1 {
 		t.Errorf("last-activity stamp written %d times, want 1 — a live session must be kept alive", m.phien.soLanDung)
 	}
 }
 
-func TestIdleStaffSession31MinutesRevokedAndAnswersLikeExpired(t *testing.T) {
+func TestIdleStaffSession61MinutesRevokedAndAnswersLikeExpired(t *testing.T) {
 	m := dungMayChu(t)
 	withoutAdmin(t, m)
-	last := idleFor(m, 31*time.Minute)
+	last := idleFor(m, 61*time.Minute)
 	tok := m.tokenCho(t, xaA, sidA)
 
 	w := m.goi(t, "GET", hostA, mauXemPhienHienTai[len("GET "):], "", tok)
@@ -99,35 +99,39 @@ func TestIdleStaffSession31MinutesRevokedAndAnswersLikeExpired(t *testing.T) {
 	}
 }
 
-func TestIdleAdminSession14MinutesStillWorks(t *testing.T) {
+func TestIdleAdminSession59MinutesStillWorks(t *testing.T) {
 	m := dungMayChu(t) // the default checker grants admin.user in commune A
-	idleFor(m, 14*time.Minute)
+	idleFor(m, 59*time.Minute)
 
 	doiMa(t, m.goi(t, "GET", hostA, "/api/v1/staff", "", m.tokenCho(t, xaA, sidA)), http.StatusOK)
 	if len(m.idleSessions.calls) != 0 {
-		t.Fatalf("an admin session idle 14 minutes was revoked: %+v", m.idleSessions.calls)
+		t.Fatalf("an admin session idle 59 minutes was revoked: %+v", m.idleSessions.calls)
 	}
 }
 
-func TestIdleAdminSession16MinutesRevoked(t *testing.T) {
+func TestIdleAdminSession61MinutesRevoked(t *testing.T) {
 	m := dungMayChu(t)
-	idleFor(m, 16*time.Minute)
+	idleFor(m, 61*time.Minute)
 
 	doiMa(t, m.goi(t, "GET", hostA, "/api/v1/staff", "", m.tokenCho(t, xaA, sidA)), http.StatusUnauthorized)
-	if len(m.idleSessions.calls) != 1 || !m.idleSessions.calls[0].admin {
-		t.Fatalf("revocations = %+v, want one, judged as an ADMIN session", m.idleSessions.calls)
+	// Not asserting `admin` here: with both limits at 60 minutes the staff limit is reached first,
+	// so admin.user is never consulted (SessionIdleExpired asks it only between the two limits).
+	if len(m.idleSessions.calls) != 1 {
+		t.Fatalf("revocations = %+v, want one", m.idleSessions.calls)
 	}
 }
 
-func TestIdleNonAdminSession16MinutesStillWorks(t *testing.T) {
-	// The control for the test above: the same 16 minutes, the one difference being admin.user.
+func TestIdleNonAdminSession61MinutesRevokedLikeAdmin(t *testing.T) {
+	// Since 2026-10-07 both limits are 60 minutes, so admin.user no longer changes the answer: the
+	// same 61 minutes revokes a session without it too. Re-split the limits and this becomes the
+	// control again.
 	m := dungMayChu(t)
 	withoutAdmin(t, m)
-	idleFor(m, 16*time.Minute)
+	idleFor(m, 61*time.Minute)
 
-	doiMa(t, m.goi(t, "GET", hostA, mauXemPhienHienTai[len("GET "):], "", m.tokenCho(t, xaA, sidA)), http.StatusOK)
-	if len(m.idleSessions.calls) != 0 {
-		t.Fatalf("a non-admin session idle 16 minutes was revoked: %+v", m.idleSessions.calls)
+	doiMa(t, m.goi(t, "GET", hostA, mauXemPhienHienTai[len("GET "):], "", m.tokenCho(t, xaA, sidA)), http.StatusUnauthorized)
+	if len(m.idleSessions.calls) != 1 || m.idleSessions.calls[0].admin {
+		t.Fatalf("revocations = %+v, want one, judged as a NON-admin session", m.idleSessions.calls)
 	}
 }
 
@@ -136,13 +140,13 @@ func TestIdleNeverUsedSessionMeasuredFromCreation(t *testing.T) {
 	// counter is exactly the one this lock exists for.
 	m := dungMayChu(t)
 	ph := m.phien.phien[sidA]
-	ph.TaoLuc = time.Now().UTC().Add(-31 * time.Minute)
+	ph.TaoLuc = time.Now().UTC().Add(-61 * time.Minute)
 	ph.DungGanNhat = nil
 	m.phien.phien[sidA] = ph
 
 	doiMa(t, m.goi(t, "GET", hostA, "/api/v1/staff", "", m.tokenCho(t, xaA, sidA)), http.StatusUnauthorized)
 	if len(m.idleSessions.calls) != 1 {
-		t.Fatal("a never-used session 31 minutes old was not revoked")
+		t.Fatal("a never-used session 61 minutes old was not revoked")
 	}
 }
 
@@ -150,7 +154,7 @@ func TestIdleRevocationFailureStillRefuses(t *testing.T) {
 	// Fail closed: the refusal is decided from the timestamp, not from whether the revocation landed.
 	m := dungMayChu(t)
 	m.idleSessions.err = context.DeadlineExceeded
-	idleFor(m, 31*time.Minute)
+	idleFor(m, 61*time.Minute)
 
 	doiMa(t, m.goi(t, "GET", hostA, "/api/v1/staff", "", m.tokenCho(t, xaA, sidA)), http.StatusUnauthorized)
 }

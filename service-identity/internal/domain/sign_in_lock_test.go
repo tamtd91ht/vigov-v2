@@ -11,8 +11,8 @@ func TestDecidedFigures(t *testing.T) {
 	if MaxConsecutiveFailedSignIns != 5 || SignInLockDuration != 12*time.Hour {
 		t.Errorf("#39 decided 5 failures / 12 hours; code has %d / %v", MaxConsecutiveFailedSignIns, SignInLockDuration)
 	}
-	if StaffSessionIdleTimeout != 30*time.Minute || AdminSessionIdleTimeout != 15*time.Minute {
-		t.Errorf("#38 decided 30 / 15 minutes; code has %v / %v", StaffSessionIdleTimeout, AdminSessionIdleTimeout)
+	if StaffSessionIdleTimeout != 60*time.Minute || AdminSessionIdleTimeout != 60*time.Minute {
+		t.Errorf("#38 changed 2026-10-07 to 60 / 60 minutes; code has %v / %v", StaffSessionIdleTimeout, AdminSessionIdleTimeout)
 	}
 	if AdminSessionPermission != "admin.user" {
 		t.Errorf("admin session key = %q", AdminSessionPermission)
@@ -58,13 +58,12 @@ func TestSessionIdleExpired(t *testing.T) {
 		isAdmin bool
 		want    bool
 	}{
-		{29 * time.Minute, false, false},
-		{30 * time.Minute, false, true},
-		{31 * time.Minute, false, true},
-		{14 * time.Minute, true, false},
-		{15 * time.Minute, true, true},
-		{16 * time.Minute, true, true},
-		{16 * time.Minute, false, false},
+		{59 * time.Minute, false, false},
+		{60 * time.Minute, false, true},
+		{61 * time.Minute, false, true},
+		{59 * time.Minute, true, false},
+		{60 * time.Minute, true, true},
+		{61 * time.Minute, true, true},
 	} {
 		if got := SessionIdleExpired(now.Add(-c.idle), now, admin(c.isAdmin)); got != c.want {
 			t.Errorf("idle %v admin %v: expired = %v, want %v", c.idle, c.isAdmin, got, c.want)
@@ -72,9 +71,9 @@ func TestSessionIdleExpired(t *testing.T) {
 	}
 	asked = 0
 	SessionIdleExpired(now.Add(-time.Minute), now, admin(true))
-	SessionIdleExpired(now.Add(-time.Hour), now, admin(true))
+	SessionIdleExpired(now.Add(-2*time.Hour), now, admin(true))
 	if asked != 0 {
-		t.Errorf("admin permission asked %d times outside the 15–30 minute window — a query per request for nothing", asked)
+		t.Errorf("admin permission asked %d times outside the admin–staff window — a query per request for nothing", asked)
 	}
 }
 

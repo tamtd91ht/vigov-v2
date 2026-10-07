@@ -76,11 +76,10 @@ func TestGRPCIdleLock(t *testing.T) {
 		grants  []authz.Perm
 		revoked bool
 	}{
-		{"staff 29m ok", 29 * time.Minute, staff, false},
-		{"staff 31m revoked", 31 * time.Minute, staff, true},
-		{"staff 16m ok", 16 * time.Minute, staff, false},
-		{"admin 14m ok", 14 * time.Minute, admin, false},
-		{"admin 16m revoked", 16 * time.Minute, admin, true},
+		{"staff 59m ok", 59 * time.Minute, staff, false},
+		{"staff 61m revoked", 61 * time.Minute, staff, true},
+		{"admin 59m ok", 59 * time.Minute, admin, false},
+		{"admin 61m revoked", 61 * time.Minute, admin, true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			res, fake := resolveIdle(t, c.idle, c.grants)
