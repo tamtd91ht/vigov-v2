@@ -545,8 +545,10 @@ func (uc *ChungTuGiaiNgan) Sua(ctx context.Context, id string, yc YeuCauSuaChung
 // `da_giai_ngan` because every read path excludes soft-deleted rows, not because anything was
 // destroyed. `ho_so_luu_tru_cam_xoa_cung` refuses a hard DELETE on this table outright.
 //
-// THE REASON IS MANDATORY. A voucher that vanished from a project's total with no reason attached
-// is money nobody can account for — and the row is still there, so the question WILL be asked.
+// THE REASON IS OPTIONAL ON THE WAY IN AND NEVER EMPTY IN THE ROW (task card G2, the owner's
+// instruction of 07/10/2026 to follow the prototype): a blank becomes
+// domain.VoucherRemovalDefaultReason, so `delete_reason` always answers and the audit delta carries
+// the same text.
 func (uc *ChungTuGiaiNgan) Go(ctx context.Context, id, lyDoTho string, nguoi audit.Actor) error {
 	if id == "" {
 		return fistore.ErrKhongThayChungTu
@@ -603,13 +605,17 @@ func (uc *ChungTuGiaiNgan) Go(ctx context.Context, id, lyDoTho string, nguoi aud
 	return nil
 }
 
-// XacNhan moves a voucher from `Kế toán nhập` to `Đã xác nhận` (§8.2, `budget.confirm`).
+// XacNhan moves a voucher from `Kế toán nhập` to `Đã xác nhận` (§8.2, `budget.confirm`). Never by
+// the person who recorded it — domain.ErrSelfConfirmation.
 func (uc *ChungTuGiaiNgan) XacNhan(ctx context.Context, id string,
 	nguoi audit.Actor) (domain.ChungTuGiaiNgan, error) {
 
 	return uc.doiTrangThai(ctx, id, nguoi, HanhViXacNhanChungTu,
-		func(tx *store.ScopedTx, truoc domain.ChungTuGiaiNgan) (domain.ChungTuGiaiNgan, map[string]any, error) {
-			if err := truoc.ChoXacNhan(); err != nil {
+		func(tx *store.ScopedTx, truoc domain.ChungTuGiaiNgan) (domain.ChungTuGiaiNgan, []lifecycleEntry, error) {
+			// `nguoi.ID` IS THE STAFF BUSINESS CODE (the handler reads `Principal.Ma`), the same kind of
+			// value `nguoi_nhap_id` holds — see MoKhoa for why comparing anything else silently never
+			// matches.
+			if err := truoc.ChoXacNhan(nguoi.ID); err != nil {
 				return domain.ChungTuGiaiNgan{}, nil, err
 			}
 			if err := uc.kho.XacNhan(ctx, tx, truoc.ID, nguoi.ID); err != nil {
@@ -618,25 +624,27 @@ func (uc *ChungTuGiaiNgan) XacNhan(ctx context.Context, id string,
 			sau := truoc
 			sau.TrangThai = domain.ChungTuDaXacNhan
 			sau.NguoiXacNhanID = nguoi.ID
-			return sau, map[string]any{
-				"chung_tu_id": truoc.ID,
-				"truoc":       map[string]any{"trang_thai": string(truoc.TrangThai)},
-				"sau":         map[string]any{"trang_thai": string(sau.TrangThai)},
-				"so_tien":     int64(truoc.SoTien),
-			}, nil
+			return sau, []lifecycleEntry{{HanhViXacNhanChungTu,
+				stateDelta(truoc, truoc.TrangThai, sau.TrangThai)}}, nil
 		})
 }
 
-// Khoa freezes a voucher (§8.2, `budget.confirm`). From `Đã xác nhận` only — see
-// domain.ErrChuaXacNhanThiChuaKhoaDuoc for why the chain is required even though the screen draws
-// both buttons on a `Kế toán nhập` row.
+// Khoa freezes a voucher (§8.2, `budget.confirm`), from `Kế toán nhập` or `Đã xác nhận`.
+//
+// FROM `Kế toán nhập` IT CONFIRMS AND LOCKS IN ONE CALL (task card G1, the owner's instruction of
+// 07/10/2026 to follow the prototype's `confirm` with `lock: true`). Two facts happened, so TWO
+// entries are written, in the same transaction as the one UPDATE (rule 6, invariant 3): a confirm
+// entry and a lock entry, same actor. An inspection reading the ledger then finds the confirmation
+// exactly where it would find one made through the confirm route — not hidden inside a lock.
+//
+// THE RECORDER MAY NOT LOCK, from either state (domain.ErrSelfConfirmation).
 func (uc *ChungTuGiaiNgan) Khoa(ctx context.Context, id string,
 	nguoi audit.Actor) (domain.ChungTuGiaiNgan, error) {
 
 	luc := uc.nayHoac()
 	return uc.doiTrangThai(ctx, id, nguoi, HanhViKhoaChungTu,
-		func(tx *store.ScopedTx, truoc domain.ChungTuGiaiNgan) (domain.ChungTuGiaiNgan, map[string]any, error) {
-			if err := truoc.ChoKhoa(); err != nil {
+		func(tx *store.ScopedTx, truoc domain.ChungTuGiaiNgan) (domain.ChungTuGiaiNgan, []lifecycleEntry, error) {
+			if err := truoc.ChoKhoa(nguoi.ID); err != nil {
 				return domain.ChungTuGiaiNgan{}, nil, err
 			}
 			if err := uc.kho.Khoa(ctx, tx, truoc.ID, nguoi.ID, luc); err != nil {
@@ -646,13 +654,41 @@ func (uc *ChungTuGiaiNgan) Khoa(ctx context.Context, id string,
 			sau.TrangThai = domain.ChungTuDaKhoa
 			sau.NguoiKhoaID = nguoi.ID
 			sau.ThoiDiemKhoa = luc
-			return sau, map[string]any{
-				"chung_tu_id": truoc.ID,
-				"truoc":       map[string]any{"trang_thai": string(truoc.TrangThai)},
-				"sau":         map[string]any{"trang_thai": string(sau.TrangThai)},
-				"so_tien":     int64(truoc.SoTien),
-			}, nil
+
+			var entries []lifecycleEntry
+			lockedFrom := truoc.TrangThai
+			if truoc.LockConfirmsToo() {
+				// MIRRORS THE STORE'S COALESCE: the confirmer is set only where there was none.
+				sau.NguoiXacNhanID = nguoi.ID
+				entries = append(entries, lifecycleEntry{HanhViXacNhanChungTu,
+					stateDelta(truoc, truoc.TrangThai, domain.ChungTuDaXacNhan)})
+				// The lock entry starts from the confirmed state the confirm entry just recorded, so the
+				// two read as the chain they are: ke-toan-nhap → da-xac-nhan → da-khoa.
+				lockedFrom = domain.ChungTuDaXacNhan
+			}
+			entries = append(entries, lifecycleEntry{HanhViKhoaChungTu,
+				stateDelta(truoc, lockedFrom, sau.TrangThai)})
+			return sau, entries, nil
 		})
+}
+
+// lifecycleEntry is one audit entry a lifecycle move writes: the action and its delta. A move
+// returns a LIST because a lock from `Kế toán nhập` is two facts — a confirmation and a lock.
+type lifecycleEntry struct {
+	action string
+	delta  map[string]any
+}
+
+// stateDelta is the delta of a confirm or lock entry. ONE SHAPE for both routes, so a query over
+// `xac_nhan_chung_tu_giai_ngan` entries reads the same fields whether the confirm route or a lock
+// from `Kế toán nhập` produced them.
+func stateDelta(v domain.ChungTuGiaiNgan, from, to domain.TrangThaiChungTu) map[string]any {
+	return map[string]any{
+		"chung_tu_id": v.ID,
+		"truoc":       map[string]any{"trang_thai": string(from)},
+		"sau":         map[string]any{"trang_thai": string(to)},
+		"so_tien":     int64(v.SoTien),
+	}
 }
 
 // MoKhoa reopens a frozen voucher (ADR 0035 §B, `budget.confirm`).
@@ -689,7 +725,7 @@ func (uc *ChungTuGiaiNgan) MoKhoa(ctx context.Context, id, lyDoTho string,
 
 	luc := uc.nayHoac()
 	return uc.doiTrangThai(ctx, id, nguoi, HanhViMoKhoaChungTu,
-		func(tx *store.ScopedTx, truoc domain.ChungTuGiaiNgan) (domain.ChungTuGiaiNgan, map[string]any, error) {
+		func(tx *store.ScopedTx, truoc domain.ChungTuGiaiNgan) (domain.ChungTuGiaiNgan, []lifecycleEntry, error) {
 			// `nguoi.ID` IS THE STAFF BUSINESS CODE and `truoc.NguoiKhoaID` holds the same kind of
 			// value (migration 0005:52-59). Comparing anything else here — an internal id, a display
 			// name — compares two things that are not the same kind of identifier, and the comparison
@@ -707,7 +743,7 @@ func (uc *ChungTuGiaiNgan) MoKhoa(ctx context.Context, id, lyDoTho string,
 			sau.ThoiDiemMoKhoa = luc
 			sau.LyDoMoKhoa = lyDo
 			sau.SoLanMoKhoa = truoc.SoLanMoKhoa + 1
-			return sau, map[string]any{
+			return sau, []lifecycleEntry{{HanhViMoKhoaChungTu, map[string]any{
 				"chung_tu_id": truoc.ID,
 				"truoc": map[string]any{
 					"trang_thai":    string(truoc.TrangThai),
@@ -717,7 +753,7 @@ func (uc *ChungTuGiaiNgan) MoKhoa(ctx context.Context, id, lyDoTho string,
 				"ly_do":          lyDo,
 				"so_lan_mo_khoa": sau.SoLanMoKhoa,
 				"so_tien":        int64(truoc.SoTien),
-			}, nil
+			}}}, nil
 		})
 }
 
@@ -728,9 +764,14 @@ func (uc *ChungTuGiaiNgan) MoKhoa(ctx context.Context, id, lyDoTho string,
 // INSIDE the same transaction. What differs — which transition is admissible, what is written, what
 // the delta says — is the closure, so a new lifecycle move cannot accidentally reuse another's
 // decision.
+//
+// THE CLOSURE RETURNS ITS ENTRIES, ALL WRITTEN HERE IN ORDER, INSIDE THE SAME TRANSACTION, same
+// actor, same subject. A list because a lock from `Kế toán nhập` is two facts (Khoa). An empty list
+// is refused: a lifecycle move with no entry is a write with no trail (rule 6, invariant 1).
+// `hanhVi` names the operation for the error wrap only.
 func (uc *ChungTuGiaiNgan) doiTrangThai(ctx context.Context, id string, nguoi audit.Actor,
 	hanhVi string,
-	ap func(tx *store.ScopedTx, truoc domain.ChungTuGiaiNgan) (domain.ChungTuGiaiNgan, map[string]any, error),
+	ap func(tx *store.ScopedTx, truoc domain.ChungTuGiaiNgan) (domain.ChungTuGiaiNgan, []lifecycleEntry, error),
 ) (domain.ChungTuGiaiNgan, error) {
 
 	if id == "" {
@@ -750,22 +791,30 @@ func (uc *ChungTuGiaiNgan) doiTrangThai(ctx context.Context, id string, nguoi au
 		if err != nil {
 			return err
 		}
-		moi, than, err := ap(tx, truoc)
+		moi, entries, err := ap(tx, truoc)
 		if err != nil {
 			return err
 		}
+		if len(entries) == 0 {
+			return fmt.Errorf("chung_tu_giai_ngan: %s không có dòng vết nào", hanhVi)
+		}
 		sau = moi
 
-		delta, err := json.Marshal(than)
-		if err != nil {
-			return fmt.Errorf("chung_tu_giai_ngan: mã hoá delta: %w", err)
+		for _, e := range entries {
+			delta, err := json.Marshal(e.delta)
+			if err != nil {
+				return fmt.Errorf("chung_tu_giai_ngan: mã hoá delta: %w", err)
+			}
+			if err := audit.Write(ctx, tx, audit.Entry{
+				Actor:   nguoi,
+				Action:  e.action,
+				Subject: maDuAn,
+				Delta:   delta,
+			}); err != nil {
+				return err
+			}
 		}
-		return audit.Write(ctx, tx, audit.Entry{
-			Actor:   nguoi,
-			Action:  hanhVi,
-			Subject: maDuAn,
-			Delta:   delta,
-		})
+		return nil
 	})
 	if err != nil {
 		return domain.ChungTuGiaiNgan{}, bocChungTu(ctx, hanhVi, err)

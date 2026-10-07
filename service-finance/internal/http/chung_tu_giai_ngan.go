@@ -3,9 +3,10 @@ package http
 // The WRITE routes of the disbursement voucher register (docs/ui-ux/06-giai-ngan.md §8.2).
 //
 // SIX ROUTES, THREE PERMISSIONS, AND THE SPLIT IS THE SPECIFICATION'S OWN (06-giai-ngan.md:202):
-// `budget.update` enters and corrects, `budget.confirm` confirms and freezes. The seventh thing a
-// screen needs — LISTING a project's vouchers — is GET /api/v1/investment-projects/{id}/disbursements
-// (ListProjectVouchers, below; added 06/10/2026). The questions it was deferred over are answered
+// `budget.update` enters, corrects and removes (removal moved here from `budget.confirm` on
+// 07/10/2026, following the prototype — routes.go says why), `budget.confirm` confirms and
+// freezes. The seventh thing a screen needs — LISTING a project's vouchers — is
+// GET /api/v1/investment-projects/{id}/disbursements (ListProjectVouchers, below; added 06/10/2026). The questions it was deferred over are answered
 // there: every state, no paging (one PROJECT's vouchers, not a commune's year), a hard ceiling that
 // refuses rather than truncates.
 //
@@ -13,7 +14,8 @@ package http
 //
 //	POST   /api/v1/disbursements                    -> Kế toán nhập
 //	POST   /api/v1/disbursements/{id}/confirmation  -> Đã xác nhận
-//	POST   /api/v1/disbursements/{id}/lockout       -> Đã khoá
+//	POST   /api/v1/disbursements/{id}/lockout       -> Đã khoá (from Kế toán nhập too: confirms and
+//	                                                   locks in one call, 07/10/2026)
 //	DELETE /api/v1/disbursements/{id}/lockout       -> back to Đã xác nhận, with a reason, by
 //	                                                   somebody OTHER than the person who locked it
 //
@@ -27,7 +29,9 @@ package http
 // finding in the hand-over, not a decision hidden in a route.
 
 import (
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"time"
 
@@ -206,14 +210,15 @@ type suaChungTuVao struct {
 	Status    *string `json:"status,omitempty"`
 }
 
-// goChungTuVao is the body of DELETE /api/v1/disbursements/{id}.
+// goChungTuVao is the OPTIONAL body of DELETE /api/v1/disbursements/{id}.
 //
-// A DELETE WITH A BODY, and the alternative was worse. Rule 7, invariant 1 names three columns —
-// `deleted_at`, `deleted_by`, `delete_reason` — so the reason is not optional, and the only other
-// place to put it is the query string, where free text about a public authority's spending would
-// land in every access log and proxy cache.
+// THE REASON IS OPTIONAL (task card G2, 07/10/2026, following the prototype): absent or blank, the
+// row records domain.VoucherRemovalDefaultReason, so rule 7 invariant 1's `delete_reason` is never
+// empty. When given it rides in a BODY rather than the query string, where free text about a public
+// authority's spending would land in every access log and proxy cache. `omitempty` so the generated
+// contract does not mark it required.
 type goChungTuVao struct {
-	Reason string `json:"reason"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // moKhoaVao is the body of DELETE /api/v1/disbursements/{id}/lockout.
@@ -350,8 +355,14 @@ func (h *Handler) SuaChungTu(w http.ResponseWriter, r *http.Request) {
 // `delete_reason` — but there is nothing the caller can do with it, and returning it would invite a
 // client to display a voucher it has just taken off the screen.
 func (h *Handler) GoChungTu(w http.ResponseWriter, r *http.Request) {
+	// AN EMPTY BODY IS ACCEPTED HERE, unlike docThan — the same shape as XoaDuAn: the reason is
+	// optional, and a client removing a voucher without one may send no body at all. Anything that IS
+	// sent must still be valid JSON.
 	var vao goChungTuVao
-	if !docThan(w, r, &vao) {
+	r.Body = http.MaxBytesReader(w, r.Body, thanToiDa)
+	if err := json.NewDecoder(r.Body).Decode(&vao); err != nil && !errors.Is(err, io.EOF) {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Nội dung gửi lên không phải JSON hợp lệ hoặc quá lớn.", "")
 		return
 	}
 	nguoi, ok := nguoiThucHien(r)
@@ -537,9 +548,13 @@ func (h *Handler) traLoiLoiChungTu(w http.ResponseWriter, r *http.Request, viec 
 		errors.Is(err, domain.ErrChungTuChuaKhoa),
 		errors.Is(err, domain.ErrChungTuDaXacNhan),
 		errors.Is(err, domain.ErrChungTuDaKhoaRoi),
-		errors.Is(err, domain.ErrChuaXacNhanThiChuaKhoaDuoc),
 		errors.Is(err, domain.ErrTuMoKhoaChungTuMinhVuaKhoa):
 		httpx.WriteError(w, http.StatusConflict, "voucher_state", err.Error(), "")
+	case errors.Is(err, domain.ErrSelfConfirmation):
+		// ITS OWN CODE, the prototype's (`self_confirmation`, service.py:845), so a client can tell
+		// "somebody else must confirm this" from "this voucher is in the wrong state". 409 and not 403
+		// for the reason above: the caller holds `budget.confirm`; the rule is about the person.
+		httpx.WriteError(w, http.StatusConflict, "self_confirmation", err.Error(), "")
 	case errors.Is(err, domain.ErrSourceRequired):
 		// 409, NOT 400 — the repository's convention for the allocation refusals (8245698b): the body
 		// is well formed; what refuses it is the state of THIS project (it has allocation lines). The

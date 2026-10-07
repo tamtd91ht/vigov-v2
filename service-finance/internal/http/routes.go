@@ -1124,35 +1124,26 @@ func Register(mux *http.ServeMux, d Deps) {
 			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; app.Sua không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
 				http.HandlerFunc(h.SuaChungTu))))
 
-	// `budget.confirm` ON A REMOVAL, AND THE SPECIFICATION ASSIGNS NONE — this is the decision
-	// migration 0005:39-42 deferred to the route, so here it is.
+	// `budget.update` ON A REMOVAL — the prototype's key (../vigov-require apps/api/app/modules/
+	// budget/router.py:183-192), taken on the owner's instruction of 07/10/2026 ("nếu đụng backend
+	// cho phép xây dựng backend luôn cho đồng bộ, còn lại mọi việc đều phải tuân thủ prototype"),
+	// task card G2. Same move ADR 0075 #4a made for a project's removal.
 	//
-	// 06-giai-ngan.md:202 covers `budget.update` for entry/edit and `budget.confirm` for
-	// confirm/lock; the `🗑 Gỡ` button on the same screen is listed with no key at all. The choice is
-	// between the two that exist:
+	// IT WAS `budget.confirm` UNTIL THEN, chosen by this project because a voucher's money is inside
+	// "đã giải ngân" from the moment it is entered (§11 counts `ke-toan-nhap`), so removing one moves
+	// a figure that may already have been read. What still holds that line: a LOCKED voucher cannot be
+	// removed by anybody (domain.ChoGo, and the `chung_tu_da_khoa` trigger underneath) — it must be
+	// unlocked first, which stays `budget.confirm` with a reason and by somebody other than the
+	// locker. Every removal leaves an entry naming who, with the reason.
 	//
-	//	budget.update    "the person who entered it can take it back". True for a typo caught in the
-	//	                 same minute — and it is also the key every accountant holds, so it makes
-	//	                 removing a payment record the same authority as typing one.
-	//	budget.confirm   CHOSEN. A voucher's money is already inside "đã giải ngân" from the moment
-	//	                 it is entered (§11 counts `ke-toan-nhap`), so removing one CHANGES A FIGURE
-	//	                 THAT HAS ALREADY BEEN READ off a screen and possibly reported upward. That
-	//	                 is the same class of act as freezing one, which is what this key is for.
-	//
-	// CHOSEN IN THE DIRECTION THAT CAN BE LOOSENED LATER WITH ONE LINE and cannot be tightened later
-	// at all: widening it to `budget.update` the day the customer says so costs one edit, while
-	// narrowing it afterwards means every removal already made was made under the wrong authority.
-	// Needing a third key — a `budget.delete` the `quyen` table does not have — would be a finding
-	// for open question #27, never an INSERT (rule 5, invariant 3c).
-	//
-	// A BODY ON A DELETE, and the alternative was worse: the reason is mandatory (rule 7, invariant
-	// 1 names `delete_reason`), and the query string would put free text about a public authority's
-	// spending into every access log and proxy cache.
+	// THE REASON IS OPTIONAL, as in the prototype: blank → domain.VoucherRemovalDefaultReason, so
+	// rule 7 invariant 1's `delete_reason` is never empty. When given it rides in the BODY — the query
+	// string would put free text about a public authority's spending into every access log.
 	//
 	// idem.KhongCan — removing an already-removed voucher is a 404 either way, and the second
 	// request cannot overwrite who removed it or why: the UPDATE carries `AND deleted_at IS NULL`.
 	//
-	// @summary  Gỡ mềm một chứng từ giải ngân, kèm lý do bắt buộc
+	// @summary  Gỡ mềm một chứng từ giải ngân chưa khoá; lý do tuỳ chọn (bỏ trống thì ghi `Gỡ khoản chi nhập nhầm`)
 	// @screen   06-giai-ngan §8.2
 	// @request  goChungTuVao
 	// @reply    204 -
@@ -1163,7 +1154,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    409 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("DELETE /api/v1/disbursements/{id}",
-		authz.RequirePermission(d.Checker, "budget.confirm")(
+		authz.RequirePermission(d.Checker, "budget.update")(
 			idem.KhongCan("gỡ một chứng từ đã gỡ cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người gỡ và lý do")(
 				http.HandlerFunc(h.GoChungTu))))
 
@@ -1176,16 +1167,20 @@ func Register(mux *http.ServeMux, d Deps) {
 	// fact (rule 7, forbidden #5). The way back from `Đã xác nhận` does not exist and is not being
 	// invented here; the way back from `Đã khoá` does, and it is the route below.
 	//
+	// THE PERSON WHO RECORDED THE VOUCHER MAY NOT CONFIRM IT — 409 `self_confirmation`, the
+	// prototype's rule and code (service.py:843-846, task card G1). 409 and not 403: the caller holds
+	// `budget.confirm`; what is refused is this person against THIS row.
+	//
 	// idem.KhongCan — the second identical request finds the voucher already `Đã xác nhận` and
 	// answers 409 without writing anything. One confirmation, one entry, whatever the network did.
 	//
-	// @summary  Xác nhận một chứng từ giải ngân (`Kế toán nhập` → `Đã xác nhận`)
+	// @summary  Xác nhận một chứng từ giải ngân (`Kế toán nhập` → `Đã xác nhận`); người nhập không tự xác nhận được
 	// @screen   06-giai-ngan §8.2
 	// @reply    200 chungTuRa
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    404 httpx.Error
-	// @reply    409 httpx.Error
+	// @reply    409 httpx.Error voucher_state self_confirmation
 	// @reply    500 httpx.Error
 	mux.Handle("POST /api/v1/disbursements/{id}/confirmation",
 		authz.RequirePermission(d.Checker, "budget.confirm")(
@@ -1203,20 +1198,23 @@ func Register(mux *http.ServeMux, d Deps) {
 	// the hand-over as a finding, not buried in a route — and it is still free to change, because no
 	// commune is live on this path.
 	//
-	// LOCKING FROM `Kế toán nhập` IS REFUSED (409) even though §8.2's screen draws both buttons on
-	// such a row, and domain.ErrChuaXacNhanThiChuaKhoaDuoc carries the reason: unlocking has to put
-	// the voucher back in the state it was in BEFORE the lock, and the row does not store what that
-	// was. Requiring the chain makes "before the lock" always `Đã xác nhận`, so an unlock restores
-	// exactly what was there and invents nothing. The alternative is one more column that exists
-	// only to remember a shortcut the specification does not describe.
+	// LOCKING FROM `Kế toán nhập` CONFIRMS AND LOCKS IN ONE CALL — the prototype's `confirm` with
+	// `lock: true` (service.py:848-854), taken on the owner's instruction of 07/10/2026, task card
+	// G1. It was refused (409) until then. The one UPDATE also sets `nguoi_xac_nhan_id` to the locker
+	// where it was empty — COALESCE, never overwriting a confirmation already made (rule 7, forbidden
+	// #5; a deliberate departure from the prototype, which overwrites) — and the use case writes a
+	// confirm entry and a lock entry in the same transaction. So "before the lock" is still
+	// `Đã xác nhận` with a named confirmer, which is what an unlock restores (unchanged, #29).
 	//
-	// @summary  Khoá một chứng từ giải ngân (`Đã xác nhận` → `Đã khoá`)
+	// THE RECORDER MAY NOT LOCK, from either state — 409 `self_confirmation`, as on the confirm route.
+	//
+	// @summary  Khoá một chứng từ giải ngân (`Kế toán nhập` hoặc `Đã xác nhận` → `Đã khoá`; từ `Kế toán nhập` là xác nhận và khoá một lần); người nhập không tự khoá được
 	// @screen   06-giai-ngan §8.2
 	// @reply    200 chungTuRa
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    404 httpx.Error
-	// @reply    409 httpx.Error
+	// @reply    409 httpx.Error voucher_state self_confirmation
 	// @reply    500 httpx.Error
 	mux.Handle("POST /api/v1/disbursements/{id}/lockout",
 		authz.RequirePermission(d.Checker, "budget.confirm")(

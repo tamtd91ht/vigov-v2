@@ -180,3 +180,77 @@ func TestPgNguonVonConSongKhongThayNguonDaXoaMem(t *testing.T) {
 		t.Fatalf("nguồn đã xoá mềm trả %v, muốn ErrKhongThayNguonVonCuaChungTu", loi)
 	}
 }
+
+// --- task card G1 (07/10/2026): a lock from `Kế toán nhập` fills the confirmer, never overwrites one ---
+//
+// WHY A REAL DATABASE: the fake driver accepts any SQL. What is asserted here is what PostgreSQL does
+// with `COALESCE(nguoi_xac_nhan_id, $3)` — that a draft gains the locker as its confirmer, and that a
+// voucher another officer already confirmed KEEPS that officer (rule 7, forbidden #5). It is also
+// the first run of the lock statement against the real constraints (0004/0005) since it changed.
+
+// confirmerAndLocker reads both staff-code columns back as *string, so NULL stays distinguishable.
+func confirmerAndLocker(t *testing.T, xa, id string) (confirmer, locker *string) {
+	t.Helper()
+	err := moKetNoi(t).QueryRow(
+		`SELECT nguoi_xac_nhan_id, nguoi_khoa_id FROM chung_tu_giai_ngan WHERE tenant_id = $1 AND id = $2`,
+		xa, id).Scan(&confirmer, &locker)
+	if err != nil {
+		t.Fatalf("đọc người xác nhận/khoá của %q: %v", id, err)
+	}
+	return confirmer, locker
+}
+
+func TestPgLockFromDraftFillsConfirmer(t *testing.T) {
+	db := moKetNoi(t)
+	xa, _ := xaRieng(t)
+	ctx := ctxXa(tenant.ID(xa))
+	themDuAnToiThieu(t, db, xa, "da-1", "DA01", 2026, 100_000_000)
+
+	kho := pkgstore.New(db)
+	s := NewChungTuGiaiNganStore(kho)
+	at := time.Date(2026, 10, 7, 8, 0, 0, 0, time.UTC)
+	if err := kho.For(ctx).Tx(ctx, func(tx *pkgstore.ScopedTx) error {
+		if err := s.Chen(ctx, tx, chungTuMauDeGhi("ct-draft", "da-1", "")); err != nil {
+			return err
+		}
+		return s.Khoa(ctx, tx, "ct-draft", "CB-00999", at)
+	}); err != nil {
+		t.Fatalf("khoá từ nháp bị từ chối: %v", err)
+	}
+	confirmer, locker := confirmerAndLocker(t, xa, "ct-draft")
+	if confirmer == nil || *confirmer != "CB-00999" {
+		t.Fatalf("nguoi_xac_nhan_id = %v, muốn CB-00999 — khoá từ nháp là xác nhận và khoá một lần", confirmer)
+	}
+	if locker == nil || *locker != "CB-00999" {
+		t.Fatalf("nguoi_khoa_id = %v, muốn CB-00999", locker)
+	}
+}
+
+func TestPgLockKeepsExistingConfirmer(t *testing.T) {
+	db := moKetNoi(t)
+	xa, _ := xaRieng(t)
+	ctx := ctxXa(tenant.ID(xa))
+	themDuAnToiThieu(t, db, xa, "da-1", "DA01", 2026, 100_000_000)
+
+	kho := pkgstore.New(db)
+	s := NewChungTuGiaiNganStore(kho)
+	at := time.Date(2026, 10, 7, 8, 0, 0, 0, time.UTC)
+	if err := kho.For(ctx).Tx(ctx, func(tx *pkgstore.ScopedTx) error {
+		if err := s.Chen(ctx, tx, chungTuMauDeGhi("ct-confirmed", "da-1", "")); err != nil {
+			return err
+		}
+		if err := s.XacNhan(ctx, tx, "ct-confirmed", "CB-00555"); err != nil {
+			return err
+		}
+		return s.Khoa(ctx, tx, "ct-confirmed", "CB-00999", at)
+	}); err != nil {
+		t.Fatalf("xác nhận rồi khoá bị từ chối: %v", err)
+	}
+	confirmer, locker := confirmerAndLocker(t, xa, "ct-confirmed")
+	if confirmer == nil || *confirmer != "CB-00555" {
+		t.Fatalf("nguoi_xac_nhan_id = %v, muốn GIỮ CB-00555 — khoá không được ghi đè người đã xác nhận", confirmer)
+	}
+	if locker == nil || *locker != "CB-00999" {
+		t.Fatalf("nguoi_khoa_id = %v, muốn CB-00999", locker)
+	}
+}

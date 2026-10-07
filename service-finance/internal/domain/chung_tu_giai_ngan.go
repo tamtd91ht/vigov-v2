@@ -147,19 +147,21 @@ var (
 	// it and when, which is editing a historical fact (rule 7, forbidden #5).
 	ErrChungTuDaXacNhan = errors.New("chung_tu: chứng từ này đã được xác nhận rồi")
 
-	// ErrChuaXacNhanThiChuaKhoaDuoc — the lifecycle of §8.2 is a CHAIN, and locking straight from
-	// `Kế toán nhập` is refused.
-	//
-	// WHY, because the screen draws both buttons on a `Kế toán nhập` row and this will look like a
-	// bug: unlocking has to put the voucher back in the state it was in BEFORE the lock, and the
-	// row does not store what that state was. Requiring the chain makes "before the lock" always
-	// `Đã xác nhận`, so an unlock restores exactly what was there and invents nothing. The
-	// alternative — one more column remembering the pre-lock state — is a column that exists only
-	// to record a shortcut the specification does not describe.
-	ErrChuaXacNhanThiChuaKhoaDuoc = errors.New("chung_tu: phải xác nhận chứng từ trước khi khoá — vòng đời là `Kế toán nhập` → `Đã xác nhận` → `Đã khoá`")
-
 	// ErrChungTuDaKhoaRoi — locking a locked voucher. Would overwrite who locked it and when.
 	ErrChungTuDaKhoaRoi = errors.New("chung_tu: chứng từ này đã khoá rồi")
+
+	// ErrSelfConfirmation — the person who RECORDED the voucher (`nguoi_nhap_id`) confirms or locks
+	// it. The prototype's rule, word for word (../vigov-require apps/api/app/modules/budget/
+	// service.py:836-846, code `self_confirmation`): "the review is only worth something if a second
+	// pair of eyes did it". Locking counts as confirming because a lock from `Kế toán nhập` confirms
+	// in the same act (ChoKhoa).
+	//
+	// THE RECORDER ONLY, as the prototype: a colleague who later corrected the figures does not
+	// become the recorder, because the row keeps `nguoi_nhap_id` and nothing else.
+	//
+	// ITS OWN ERROR AND A 409, NOT A 403, for the reason ErrTuMoKhoaChungTuMinhVuaKhoa gives: the
+	// caller HOLDS `budget.confirm`; what is refused is this person against THIS row.
+	ErrSelfConfirmation = errors.New("chung_tu: Không thể tự xác nhận khoản do chính mình nhập")
 )
 
 // --- what a client may actually supply ----------------------------------------------------------
@@ -368,12 +370,24 @@ func ChuanHoaLyDoMoKhoa(s string) (string, error) {
 	return chuanHoaLyDo(s, LyDoMoKhoaToiDa, ErrThieuLyDoMoKhoa, ErrLyDoMoKhoaQuaDai)
 }
 
-// ChuanHoaLyDoGo validates the reason recorded beside a soft delete.
+// VoucherRemovalDefaultReason is `delete_reason` when the person removing a voucher gives none.
 //
-// MANDATORY, AND THAT IS RULE 7, INVARIANT 1: `deleted_at`, `deleted_by` AND `delete_reason`. A
-// voucher that vanished from a project's total with no reason attached is money nobody can account
-// for — and the row is still there, so the question WILL be asked.
+// THE REASON IS OPTIONAL ON THE WAY IN (the owner's instruction of 07/10/2026 to follow the
+// prototype, whose `🗑 Gỡ` takes no reason — ../vigov-require apps/api/app/modules/budget/
+// router.py:183-192) AND STILL NEVER EMPTY IN THE ROW: rule 7, invariant 1 names `delete_reason`, so
+// a blank becomes this fixed text. The wording is the prototype's own docstring for the act
+// ("Withdraw a payment entered by mistake"). Same shape as ProjectRemovalDefaultReason (ADR 0075 #4a)
+// and CategoryRemovalDefaultReason (ADR 0077). Who removed it and when are in `deleted_by`,
+// `deleted_at` and the audit entry.
+const VoucherRemovalDefaultReason = "Gỡ khoản chi nhập nhầm"
+
+// ChuanHoaLyDoGo validates the reason recorded beside a soft delete; a blank one becomes
+// VoucherRemovalDefaultReason. A reason that IS given is still bounded and refused when it carries
+// control characters.
 func ChuanHoaLyDoGo(s string) (string, error) {
+	if strings.TrimSpace(s) == "" {
+		return VoucherRemovalDefaultReason, nil
+	}
 	return chuanHoaLyDo(s, LyDoGoChungTuToiDa, ErrThieuLyDoGo, ErrLyDoGoQuaDai)
 }
 
@@ -426,29 +440,58 @@ func (c ChungTuGiaiNgan) ChoGo() error {
 	return nil
 }
 
-// ChoXacNhan reports whether this voucher may be confirmed. From `Kế toán nhập` only.
-func (c ChungTuGiaiNgan) ChoXacNhan() error {
+// ChoXacNhan reports whether `actorCode` may confirm this voucher. From `Kế toán nhập` only, and
+// never by the person who recorded it (ErrSelfConfirmation).
+//
+// THE STATE IS ASKED FIRST, as the prototype does (service.py:841-846): a voucher already confirmed
+// or locked answers that, whoever is asking.
+func (c ChungTuGiaiNgan) ChoXacNhan(actorCode string) error {
 	switch c.TrangThai {
 	case ChungTuDaXacNhan:
 		return ErrChungTuDaXacNhan
 	case ChungTuDaKhoa:
 		return ErrChungTuDaKhoa
 	}
-	return nil
+	return c.refuseRecorder(actorCode)
 }
 
-// ChoKhoa reports whether this voucher may be locked. From `Đã xác nhận` only — see
-// ErrChuaXacNhanThiChuaKhoaDuoc for why the chain is required even though the screen draws both
-// buttons at once.
-func (c ChungTuGiaiNgan) ChoKhoa() error {
+// ChoKhoa reports whether `actorCode` may lock this voucher. From `Kế toán nhập` OR `Đã xác nhận`.
+//
+// LOCKING FROM `Kế toán nhập` IS ONE CALL THAT CONFIRMS AND LOCKS (the owner's instruction of
+// 07/10/2026 to follow the prototype: `POST …/confirm` with `lock: true`, service.py:848-854). The
+// store writes the confirmer in the same statement (`nguoi_xac_nhan_id = COALESCE(…)`) and the use
+// case writes a confirm entry and a lock entry in the same transaction — so "before the lock" is
+// still `Đã xác nhận` in substance, which is what TrangThaiSauKhiMoKhoa restores.
+//
+// THE RECORDER MAY NOT LOCK, from either state: a lock is a confirmation that also freezes, and the
+// prototype applies the self-confirmation rule to both (service.py:843).
+func (c ChungTuGiaiNgan) ChoKhoa(actorCode string) error {
 	switch c.TrangThai {
 	case ChungTuDaKhoa:
 		return ErrChungTuDaKhoaRoi
-	case ChungTuDaXacNhan:
-		return nil
+	case ChungTuKeToanNhap, ChungTuDaXacNhan:
+		return c.refuseRecorder(actorCode)
 	default:
-		return ErrChuaXacNhanThiChuaKhoaDuoc
+		// A STATE THIS FILE DOES NOT KNOW IS REFUSED, never admitted: the CHECK on the column allows
+		// three values, and a fourth reaching here means the two have drifted.
+		return fmt.Errorf("chung_tu: trạng thái %q không khoá được", c.TrangThai)
 	}
+}
+
+// LockConfirmsToo reports whether locking this voucher also confirms it — true from `Kế toán nhập`.
+// The use case asks it to decide whether the lock leaves one audit entry or two.
+func (c ChungTuGiaiNgan) LockConfirmsToo() bool { return c.TrangThai == ChungTuKeToanNhap }
+
+// refuseRecorder refuses the person who recorded the voucher.
+//
+// AN EMPTY `actorCode` IS REFUSED, for the reason ChoMoKhoa gives: a caller that cannot name who is
+// acting must not perform an act whose whole point is that a second person performed it. Comparing
+// a blank against a blank recorder would otherwise wave it through.
+func (c ChungTuGiaiNgan) refuseRecorder(actorCode string) error {
+	if actorCode == "" || actorCode == c.NguoiNhapID {
+		return ErrSelfConfirmation
+	}
+	return nil
 }
 
 // ChoMoKhoa reports whether `maCanBo` may unlock this voucher.
@@ -499,8 +542,10 @@ func TrangThaiSauKhiSua(truoc TrangThaiChungTu) TrangThaiChungTu {
 
 // TrangThaiSauKhiMoKhoa is where an unlocked voucher lands: back in `Đã xác nhận`.
 //
-// EXACT RATHER THAN CHOSEN. ChoKhoa only admits a lock from `Đã xác nhận`, so that IS the state the
-// voucher was in immediately before, and restoring it invents nothing. Returning it to
+// EXACT RATHER THAN CHOSEN. Every lock passes through a confirmation: from `Đã xác nhận` it already
+// had one, and from `Kế toán nhập` the lock writes the confirmer and a confirm entry in the same
+// transaction (ChoKhoa). So `Đã xác nhận`, with `nguoi_xac_nhan_id` set, IS the state the voucher was
+// in immediately before, and restoring it invents nothing. Returning it to
 // `Kế toán nhập` instead would erase a confirmation that really happened — including who made it,
 // since `nguoi_xac_nhan_id` would then describe a state the row is no longer in.
 func TrangThaiSauKhiMoKhoa() TrangThaiChungTu { return ChungTuDaXacNhan }

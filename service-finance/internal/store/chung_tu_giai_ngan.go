@@ -447,8 +447,22 @@ func (s *ChungTuGiaiNganStore) XacNhan(ctx context.Context, tx *store.ScopedTx,
 // timestamp violates `chung_tu_giai_ngan_khoa_co_thoi_diem` (0004:308) and `Đã khoá` with nobody
 // attached violates `chung_tu_giai_ngan_khoa_co_nguoi` (0005:158-161). Written as two statements,
 // the first one would simply be refused.
+//
+// `nguoi_xac_nhan_id = COALESCE(nguoi_xac_nhan_id, $3)` IS THE LOCK FROM `Kế toán nhập` (task card
+// G1, the owner's instruction of 07/10/2026 to follow the prototype): one call confirms and locks,
+// so the locker becomes the confirmer of a voucher nobody had confirmed. COALESCE AND NOT `= $3` IS
+// A DELIBERATE DEPARTURE FROM THE PROTOTYPE, which overwrites `confirmed_by_id` on every lock
+// (service.py:852): here an existing confirmation is a historical fact naming another officer, and
+// overwriting it is editing that fact (rule 7, forbidden #5). A voucher in `Kế toán nhập` always
+// carries NULL here — the INSERT never sets it and veNhapSauKhiSua clears it — so the COALESCE
+// fills exactly the drafts and leaves every confirmed row as it was.
+//
+// THERE IS NO "CONFIRMED AT" COLUMN on this table (0004:290 has `nguoi_xac_nhan_id` alone), so the
+// confirmation's instant lives in the confirm entry the use case writes in the same transaction.
 const khoaChungTu = `UPDATE chung_tu_giai_ngan
-	SET trang_thai = 'da-khoa', nguoi_khoa_id = $3, thoi_diem_khoa = $4, cap_nhat_luc = now()
+	SET trang_thai = 'da-khoa', nguoi_khoa_id = $3, thoi_diem_khoa = $4,
+	    nguoi_xac_nhan_id = COALESCE(nguoi_xac_nhan_id, $3),
+	    cap_nhat_luc = now()
 	WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
 
 func (s *ChungTuGiaiNganStore) Khoa(ctx context.Context, tx *store.ScopedTx,

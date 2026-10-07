@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -279,15 +280,52 @@ func TestGoChungTu_DangKhoaThiTuChoi(t *testing.T) {
 	}
 }
 
-func TestGoChungTu_ThieuLyDoThiTuChoi(t *testing.T) {
-	// Rule 7, invariant 1 names THREE columns — `deleted_at`, `deleted_by`, `delete_reason`. A
-	// voucher that vanished from a project's total with no reason attached is money nobody can
-	// account for, and the row is still there, so the question WILL be asked.
+func TestRemoveVoucher_BlankReasonRecordsDefault(t *testing.T) {
+	// FLIPPED BY TASK CARD G2 (07/10/2026). This asserted ErrThieuLyDoGo on a blank reason; the owner's
+	// instruction to follow the prototype makes the reason OPTIONAL. Rule 7, invariant 1 still names
+	// `delete_reason`, so a blank becomes domain.VoucherRemovalDefaultReason — in the COLUMN and in the
+	// audit delta, in the same transaction — and is never stored empty.
+	for ten, blank := range map[string]string{"rỗng": "", "toàn khoảng trắng": "   "} {
+		t.Run(ten, func(t *testing.T) {
+			k := &khoCTGia{maDuAn: maDuAnMau, hang: hangOTrangThai(domain.ChungTuKeToanNhap)}
+			uc, ctx := dungUseCaseChungTu(t, k)
+
+			if err := uc.Go(ctx, idChungTu, blank, canBoCT(maKeToan)); err != nil {
+				t.Fatalf("Go lỗi: %v", err)
+			}
+			xoa := k.cau("deleted_at = now()")
+			if len(xoa) != 1 {
+				t.Fatalf("có %d câu xoá mềm, muốn 1", len(xoa))
+			}
+			if got := xoa[0].args[3]; got != domain.VoucherRemovalDefaultReason {
+				t.Errorf("delete_reason = %v, muốn %q", got, domain.VoucherRemovalDefaultReason)
+			}
+			vet := k.cau("INSERT INTO audit_log")
+			if len(vet) != 1 {
+				t.Fatalf("có %d dòng vết, muốn 1", len(vet))
+			}
+			if than := thanVet(t, vet[0]); !strings.Contains(than, domain.VoucherRemovalDefaultReason) {
+				t.Errorf("vết không mang lý do: %s", than)
+			}
+			if k.batDau != 1 || k.daCommit != 1 {
+				t.Fatalf("giao dịch: mở %d commit %d, muốn 1/1", k.batDau, k.daCommit)
+			}
+		})
+	}
+}
+
+func TestRemoveVoucher_ReasonWithControlCharIsStillRefused(t *testing.T) {
+	// OPTIONAL IS NOT UNCHECKED: a reason that IS given keeps its bound and its control-character
+	// refusal, before any transaction opens.
 	k := &khoCTGia{maDuAn: maDuAnMau, hang: hangOTrangThai(domain.ChungTuKeToanNhap)}
 	uc, ctx := dungUseCaseChungTu(t, k)
 
-	if err := uc.Go(ctx, idChungTu, "   ", canBoCT(maKeToan)); !errors.Is(err, domain.ErrThieuLyDoGo) {
+	if err := uc.Go(ctx, idChungTu, "nhập\x00trùng", canBoCT(maKeToan)); !errors.Is(err, domain.ErrThieuLyDoGo) {
 		t.Fatalf("lỗi = %v, muốn ErrThieuLyDoGo", err)
+	}
+	if err := uc.Go(ctx, idChungTu, strings.Repeat("a", domain.LyDoGoChungTuToiDa+1),
+		canBoCT(maKeToan)); !errors.Is(err, domain.ErrLyDoGoQuaDai) {
+		t.Fatalf("lỗi = %v, muốn ErrLyDoGoQuaDai", err)
 	}
 	if k.batDau != 0 {
 		t.Errorf("mở %d giao dịch, muốn 0", k.batDau)
@@ -323,20 +361,143 @@ func TestGoChungTu_XoaMemGhiDuBaCot(t *testing.T) {
 
 // --- (5) the lifecycle is a chain -----------------------------------------------------------------
 
-func TestKhoa_ChuaXacNhanThiChuaKhoaDuoc(t *testing.T) {
-	// §8.2's screen draws `Xác nhận` and `Khoá` on the same `Kế toán nhập` row, so this WILL look
-	// like a bug from the outside. It is not: unlocking has to restore the state before the lock,
-	// and the row does not store what that was. Requiring the chain makes "before the lock" always
-	// `Đã xác nhận`, so an unlock invents nothing.
+func TestLockFromDraft_ConfirmsAndLocksWithTwoEntries(t *testing.T) {
+	// FLIPPED BY TASK CARD G1 (07/10/2026). This asserted ErrChuaXacNhanThiChuaKhoaDuoc; the owner's
+	// instruction to follow the prototype (`confirm` with `lock: true`) makes a lock from
+	// `Kế toán nhập` one call that confirms AND locks. Three things must hold:
+	//
+	//  1. the ONE lock UPDATE fills the confirmer with COALESCE — never `= $3`, which would overwrite
+	//     a confirmation already made (rule 7, forbidden #5);
+	//  2. TWO entries, confirm then lock, same actor (the staff CODE), same transaction (rule 6);
+	//  3. the value returned names the confirmer, so the reply does not show a locked row nobody
+	//     confirmed.
 	k := &khoCTGia{maDuAn: maDuAnMau, hang: hangOTrangThai(domain.ChungTuKeToanNhap)}
 	uc, ctx := dungUseCaseChungTu(t, k)
 
-	_, err := uc.Khoa(ctx, idChungTu, canBoCT(maLanhDao))
-	if !errors.Is(err, domain.ErrChuaXacNhanThiChuaKhoaDuoc) {
-		t.Fatalf("lỗi = %v, muốn ErrChuaXacNhanThiChuaKhoaDuoc", err)
+	after, err := uc.Khoa(ctx, idChungTu, canBoCT(maLanhDao))
+	if err != nil {
+		t.Fatalf("Khoa lỗi: %v", err)
 	}
-	if k.coCau("trang_thai = 'da-khoa'") {
-		t.Error("chưa xác nhận mà vẫn gửi câu khoá")
+	if after.TrangThai != domain.ChungTuDaKhoa || after.NguoiKhoaID != maLanhDao || after.NguoiXacNhanID != maLanhDao {
+		t.Fatalf("sau khi khoá: %q, khoá bởi %q, xác nhận bởi %q — muốn da-khoa, cả hai là %q",
+			after.TrangThai, after.NguoiKhoaID, after.NguoiXacNhanID, maLanhDao)
+	}
+
+	locks := k.cau("trang_thai = 'da-khoa'")
+	if len(locks) != 1 {
+		t.Fatalf("có %d câu khoá, muốn 1", len(locks))
+	}
+	if !strings.Contains(locks[0].sql, "nguoi_xac_nhan_id = COALESCE(nguoi_xac_nhan_id, $3)") {
+		t.Fatalf("câu khoá không điền người xác nhận bằng COALESCE:\n%s", locks[0].sql)
+	}
+	if got := locks[0].args[2]; got != maLanhDao {
+		t.Errorf("$3 = %v, muốn mã cán bộ %q", got, maLanhDao)
+	}
+	// NO SEPARATE CONFIRM STATEMENT: one UPDATE, so the row is never seen half-way.
+	if k.coCau("trang_thai = 'da-xac-nhan'") {
+		t.Error("khoá từ nháp mà gửi thêm câu xác nhận riêng")
+	}
+
+	if k.batDau != 1 || k.daCommit != 1 || k.daRollback != 0 {
+		t.Fatalf("giao dịch: mở %d commit %d rollback %d, muốn 1/1/0", k.batDau, k.daCommit, k.daRollback)
+	}
+	entries := k.cau("INSERT INTO audit_log")
+	if len(entries) != 2 {
+		t.Fatalf("có %d dòng vết, muốn 2 — xác nhận rồi khoá", len(entries))
+	}
+	for i, want := range []string{HanhViXacNhanChungTu, HanhViKhoaChungTu} {
+		if got := entries[i].args[4]; got != want {
+			t.Errorf("vết %d: action = %v, muốn %q", i, got, want)
+		}
+		if got := entries[i].args[1]; got != maLanhDao {
+			t.Errorf("vết %d: actor_id = %v, muốn MÃ CÁN BỘ %q", i, got, maLanhDao)
+		}
+	}
+	// The two entries read as the chain: ke-toan-nhap → da-xac-nhan, then da-xac-nhan → da-khoa.
+	if body := thanVet(t, entries[0]); !strings.Contains(body, `"truoc":{"trang_thai":"ke-toan-nhap"}`) ||
+		!strings.Contains(body, `"sau":{"trang_thai":"da-xac-nhan"}`) {
+		t.Errorf("vết xác nhận sai chuỗi trạng thái: %s", body)
+	}
+	if body := thanVet(t, entries[1]); !strings.Contains(body, `"truoc":{"trang_thai":"da-xac-nhan"}`) ||
+		!strings.Contains(body, `"sau":{"trang_thai":"da-khoa"}`) {
+		t.Errorf("vết khoá sai chuỗi trạng thái: %s", body)
+	}
+}
+
+func TestLockConfirmed_OneEntryAndExistingConfirmerKept(t *testing.T) {
+	// A voucher ALREADY confirmed by somebody else: the lock leaves ONE entry, and the confirmer the
+	// row names stays that somebody — the COALESCE leaves it, and so does the returned value.
+	const priorConfirmer = "CB-00555"
+	row := hangOTrangThai(domain.ChungTuDaXacNhan)
+	row.nguoiXacNhan = priorConfirmer
+	k := &khoCTGia{maDuAn: maDuAnMau, hang: row}
+	uc, ctx := dungUseCaseChungTu(t, k)
+
+	after, err := uc.Khoa(ctx, idChungTu, canBoCT(maLanhDao))
+	if err != nil {
+		t.Fatalf("Khoa lỗi: %v", err)
+	}
+	if after.NguoiXacNhanID != priorConfirmer {
+		t.Errorf("người xác nhận = %q, muốn giữ %q", after.NguoiXacNhanID, priorConfirmer)
+	}
+	entries := k.cau("INSERT INTO audit_log")
+	if len(entries) != 1 || entries[0].args[4] != HanhViKhoaChungTu {
+		t.Fatalf("có %d dòng vết, muốn đúng 1 dòng khoá", len(entries))
+	}
+}
+
+func TestSelfConfirmation_RefusedOnConfirmAndLock(t *testing.T) {
+	// THE RECORDER (`nguoi_nhap_id` = maKeToan in hangOTrangThai) MAY NEITHER CONFIRM NOR LOCK — the
+	// prototype's rule (service.py:843-846). Refused inside the transaction, nothing written.
+	confirm := func(uc *ChungTuGiaiNgan, ctx context.Context) error {
+		_, err := uc.XacNhan(ctx, idChungTu, canBoCT(maKeToan))
+		return err
+	}
+	lock := func(uc *ChungTuGiaiNgan, ctx context.Context) error {
+		_, err := uc.Khoa(ctx, idChungTu, canBoCT(maKeToan))
+		return err
+	}
+	for _, tc := range []struct {
+		name  string
+		state domain.TrangThaiChungTu
+		op    func(uc *ChungTuGiaiNgan, ctx context.Context) error
+	}{
+		{"confirm", domain.ChungTuKeToanNhap, confirm},
+		{"lock from draft", domain.ChungTuKeToanNhap, lock},
+		{"lock confirmed", domain.ChungTuDaXacNhan, lock},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			k := &khoCTGia{maDuAn: maDuAnMau, hang: hangOTrangThai(tc.state)}
+			uc, ctx := dungUseCaseChungTu(t, k)
+
+			if err := tc.op(uc, ctx); !errors.Is(err, domain.ErrSelfConfirmation) {
+				t.Fatalf("lỗi = %v, muốn ErrSelfConfirmation", err)
+			}
+			if k.coCau("UPDATE chung_tu_giai_ngan") || k.coCau("INSERT INTO audit_log") {
+				t.Error("tự xác nhận mà vẫn ghi")
+			}
+			if k.daCommit != 0 || k.daRollback != 1 {
+				t.Fatalf("commit %d, rollback %d — muốn 0/1", k.daCommit, k.daRollback)
+			}
+		})
+	}
+}
+
+func TestConfirm_OtherStaffThanRecorderSucceeds(t *testing.T) {
+	// The other side of the rule: somebody OTHER than the recorder confirms, one entry, their code.
+	k := &khoCTGia{maDuAn: maDuAnMau, hang: hangOTrangThai(domain.ChungTuKeToanNhap)}
+	uc, ctx := dungUseCaseChungTu(t, k)
+
+	after, err := uc.XacNhan(ctx, idChungTu, canBoCT(maLanhDao))
+	if err != nil {
+		t.Fatalf("XacNhan lỗi: %v", err)
+	}
+	if after.TrangThai != domain.ChungTuDaXacNhan || after.NguoiXacNhanID != maLanhDao {
+		t.Fatalf("sau khi xác nhận: %q bởi %q", after.TrangThai, after.NguoiXacNhanID)
+	}
+	entries := k.cau("INSERT INTO audit_log")
+	if len(entries) != 1 || entries[0].args[1] != maLanhDao || entries[0].args[4] != HanhViXacNhanChungTu {
+		t.Fatalf("vết xác nhận sai: %d dòng", len(entries))
 	}
 }
 
@@ -444,8 +605,9 @@ func TestMoKhoa_CanBoKhacMoDuoc_DemTangTrongSQL_VetCungGiaoDich(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MoKhoa lỗi: %v", err)
 	}
-	// BACK TO `Đã xác nhận`, EXACTLY — not chosen, derived: ChoKhoa only admits a lock from that
-	// state, so it IS where the voucher was immediately before.
+	// BACK TO `Đã xác nhận`, EXACTLY — not chosen, derived: every lock passes through a confirmation
+	// (a lock from `Kế toán nhập` confirms in the same act, task card G1), so it IS where the voucher
+	// was immediately before.
 	if sau.TrangThai != domain.ChungTuDaXacNhan {
 		t.Errorf("trạng thái sau khi mở = %q, muốn %q", sau.TrangThai, domain.ChungTuDaXacNhan)
 	}

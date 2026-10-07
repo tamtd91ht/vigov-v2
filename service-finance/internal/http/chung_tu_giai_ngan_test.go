@@ -360,8 +360,11 @@ func sauTuyenGhiChungTu() []motTuyenChungTu {
 			"budget.update", http.StatusCreated, func(g *ghiChungTuGia) int { return g.themGoi }},
 		{"PATCH", http.MethodPatch, duongChungTuMot(""), `{"description":"Thanh toán đợt 4"}`,
 			"budget.update", http.StatusOK, func(g *ghiChungTuGia) int { return g.suaGoi }},
+		// `budget.update` SINCE 07/10/2026 (task card G2): the prototype's key for its `🗑 Gỡ`
+		// (router.py:183-192). It was `budget.confirm` before; TestVoucherRemoval_BudgetConfirmAloneIs403
+		// keeps the old key from creeping back.
 		{"DELETE", http.MethodDelete, duongChungTuMot(""), `{"reason":"nhập trùng"}`,
-			"budget.confirm", http.StatusNoContent, func(g *ghiChungTuGia) int { return g.goGoi }},
+			"budget.update", http.StatusNoContent, func(g *ghiChungTuGia) int { return g.goGoi }},
 		{"POST confirmation", http.MethodPost, duongChungTuMot("/confirmation"), "",
 			"budget.confirm", http.StatusOK, func(g *ghiChungTuGia) int { return g.xacNhanGoi }},
 		{"POST lockout", http.MethodPost, duongChungTuMot("/lockout"), "",
@@ -439,9 +442,9 @@ func TestGhiChungTu_403SaiQuyen(t *testing.T) {
 func TestGhiChungTu_403NguoiNhapKhongKhoaDuoc(t *testing.T) {
 	// THE SPLIT THE SPECIFICATION DRAWS, ASSERTED AS A SEPARATE CASE because it is the one an
 	// ordinary "grant the module's permissions" fixture would paper over: an accountant holding
-	// `budget.update` may enter and correct vouchers and may NOT confirm, freeze or remove one
-	// (06-giai-ngan.md:202). Freezing a figure and taking one out of a reported total are acts of
-	// a different weight, and this is where that is enforced.
+	// `budget.update` may enter, correct and (since 07/10/2026, task card G2) remove vouchers, and may
+	// NOT confirm, freeze or unlock one (06-giai-ngan.md:202). Freezing a figure is an act of a
+	// different weight, and this is where that is enforced.
 	m := dungMayChuChungTu(t)
 	m.capQuyen(xaA, "budget.update")
 
@@ -888,10 +891,11 @@ func TestThemChungTu_NgaySaiDinhDangThi400(t *testing.T) {
 }
 
 func TestGoChungTu_LyDoDiTuThanChuKhongPhaiQueryString(t *testing.T) {
-	// The reason is mandatory (rule 7, invariant 1) and travels in the BODY: a query string would
-	// put free text about a public authority's spending into every access log and proxy cache.
+	// When given, the reason travels in the BODY: a query string would put free text about a public
+	// authority's spending into every access log and proxy cache. The key is `budget.update` since
+	// 07/10/2026 (task card G2) — it was `budget.confirm`.
 	m := dungMayChuChungTu(t)
-	m.capQuyen(xaA, "budget.confirm")
+	m.capQuyen(xaA, "budget.update")
 
 	const lyDo = "kế toán nhập trùng hai lần"
 	doiMa(t, m.goi(t, http.MethodDelete, hostA, duongChungTuMot(""), canBoGhi(xaA),
@@ -992,5 +996,106 @@ func TestPATCHTraVeTrangThaiUseCaseTraRa_veNhapThiThanNoiRa(t *testing.T) {
 	}
 	if strings.Contains(w.Body.String(), "da-xac-nhan") {
 		t.Fatalf("thân vẫn mang `da-xac-nhan`: %s", w.Body.String())
+	}
+}
+
+// --- task card G1+G2 (07/10/2026): the voucher lifecycle brought to the prototype ---------------------
+//
+// The owner's instruction of 07/10/2026: "nếu đụng backend cho phép xây dựng backend luôn cho đồng bộ,
+// còn lại mọi việc đều phải tuân thủ prototype". The rules themselves — who may confirm, what a lock
+// from `Kế toán nhập` writes, the default removal reason — are proved in internal/app over the real
+// store; what is proved HERE is that each one reaches the client with the right status and code.
+
+func TestVoucherRemoval_NoBodyIs204(t *testing.T) {
+	// THE REASON IS OPTIONAL, so a client may send NO BODY AT ALL — the prototype's `🗑 Gỡ` does. Before
+	// G2 this was a 400 from docThan. The handler hands "" to the use case, which records
+	// domain.VoucherRemovalDefaultReason (TestRemoveVoucher_BlankReasonRecordsDefault in internal/app).
+	m := dungMayChuChungTu(t)
+	m.capQuyen(xaA, "budget.update")
+
+	doiMa(t, m.goi(t, http.MethodDelete, hostA, duongChungTuMot(""), canBoGhi(xaA), ""),
+		http.StatusNoContent)
+	if m.ghi.goGoi != 1 {
+		t.Fatalf("use case gỡ chạy %d lần, muốn 1", m.ghi.goGoi)
+	}
+	if m.ghi.lyDoCuoi != "" {
+		t.Errorf("handler tự bịa lý do %q — câu mặc định là việc của domain, một nguồn", m.ghi.lyDoCuoi)
+	}
+}
+
+func TestVoucherRemoval_MalformedBodyIs400(t *testing.T) {
+	// OPTIONAL IS NOT "ANYTHING GOES": a body that IS sent must be valid JSON.
+	m := dungMayChuChungTu(t)
+	m.capQuyen(xaA, "budget.update")
+
+	doiMa(t, m.goi(t, http.MethodDelete, hostA, duongChungTuMot(""), canBoGhi(xaA), `{"reason":`),
+		http.StatusBadRequest)
+	if m.ghi.goGoi != 0 {
+		t.Error("thân hỏng mà use case vẫn chạy")
+	}
+}
+
+func TestVoucherRemoval_BudgetConfirmAloneIs403(t *testing.T) {
+	// THE OLD KEY, ALONE, NO LONGER OPENS THE ROUTE. A route that still asked for `budget.confirm` — or
+	// accepted either key — would stay green on every case that grants both; this one grants the old
+	// key only.
+	m := dungMayChuChungTu(t)
+	m.capQuyen(xaA, "budget.confirm")
+
+	doiMa(t, m.goi(t, http.MethodDelete, hostA, duongChungTuMot(""), canBoGhi(xaA), ""),
+		http.StatusForbidden)
+	if m.ghi.goGoi != 0 {
+		t.Error("chỉ có `budget.confirm` mà vẫn gỡ được — tuyến vẫn đòi khoá cũ")
+	}
+}
+
+func TestSelfConfirmation_409OnConfirmAndLock(t *testing.T) {
+	// 409 `self_confirmation` AND NOT 403, on BOTH routes that confirm. The caller holds
+	// `budget.confirm`; what is refused is this person against THIS row — the prototype's rule and
+	// code (service.py:843-846). The message is the prototype's sentence, which the web shows.
+	for _, duoi := range []string{"/confirmation", "/lockout"} {
+		t.Run(duoi, func(t *testing.T) {
+			m := dungMayChuChungTu(t)
+			m.capQuyen(xaA, "budget.confirm")
+			m.ghi.loi = domain.ErrSelfConfirmation
+
+			w := m.goi(t, http.MethodPost, hostA, duongChungTuMot(duoi), canBoGhi(xaA), "")
+			doiMa(t, w, http.StatusConflict)
+			e := loiTra(t, w)
+			if e.Code != "self_confirmation" {
+				t.Errorf("code = %q, muốn self_confirmation", e.Code)
+			}
+			if !strings.Contains(e.Message, "Không thể tự xác nhận khoản do chính mình nhập") {
+				t.Errorf("thông báo = %q, muốn câu của prototype", e.Message)
+			}
+		})
+	}
+}
+
+func TestLockFromDraft_200CarriesConfirmerAndLocker(t *testing.T) {
+	// A LOCK FROM `Kế toán nhập` IS NOW 200 (it was 409 `voucher_state` before G1). The body is what the
+	// screen draws its buttons from, so it must say `da-khoa` AND name the confirmer the same call set
+	// — a screen that saw `confirmed_by` empty on a locked row would show a figure nobody confirmed.
+	m := dungMayChuChungTu(t)
+	m.capQuyen(xaA, "budget.confirm")
+	m.ghi.ra = domain.ChungTuGiaiNgan{
+		ID: idChungTuMau, DuAnID: "01JDUANCUAXAA000000000000",
+		NgayChi: time.Date(2026, 9, 7, 0, 0, 0, 0, time.UTC),
+		SoTien:  30_000_000, NoiDung: "Thanh toán đợt 3",
+		// What app.Khoa returns for a draft locked by somebody other than its recorder.
+		TrangThai: domain.ChungTuDaKhoa, NguoiNhapID: "CB-00777", // a different recorder
+		NguoiXacNhanID: maCanBoGhi, NguoiKhoaID: maCanBoGhi,
+		ThoiDiemKhoa: time.Date(2026, 10, 7, 8, 0, 0, 0, time.UTC),
+	}
+
+	w := m.goi(t, http.MethodPost, hostA, duongChungTuMot("/lockout"), canBoGhi(xaA), "")
+	doiMa(t, w, http.StatusOK)
+	var ra chungTuRa
+	if err := json.Unmarshal(w.Body.Bytes(), &ra); err != nil {
+		t.Fatalf("thân không phải JSON: %v", err)
+	}
+	if ra.Status != string(domain.ChungTuDaKhoa) || ra.ConfirmedBy != maCanBoGhi || ra.LockedBy != maCanBoGhi {
+		t.Fatalf("status %q, confirmed_by %q, locked_by %q — muốn da-khoa và cùng một người",
+			ra.Status, ra.ConfirmedBy, ra.LockedBy)
 	}
 }
