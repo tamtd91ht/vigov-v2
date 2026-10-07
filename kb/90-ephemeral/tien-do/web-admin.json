@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "web-admin",
-  "cap_nhat": "2026-10-07",
+  "cap_nhat": "2026-10-08",
   "muc": [
     {
       "id": "tam-viec-web-tu-hop-dong",
@@ -956,6 +956,15 @@
       "no_confirm": [],
       "tiep_theo": "TASK-07 CHƯA LÀM: nối 4 thao tác máy chủ đã có (9a1a1644 lịch sử gia hạn GET /tasks/{ma}/extensions; 9d4b2684 gỡ tệp DELETE …/attachments/{id}; 49056d72 hai ô phê duyệt tick thẳng ở chế độ xem qua PATCH task.update, NHỚ gửi expected_updated_at; cebe0d47 hộp soạn chuyển trạng thái nhận handover + attachments) — cần `make kb` sinh lại schema.gen.ts trước. Chủ dự án duyệt trên trình duyệt 5 lựa chọn agent tự quyết: Chờ duyệt vẫn hiện trên dải bước; lỗi chuyển hiện 2 chỗ; bỏ pill trạng thái lớn; tick việc con theo hoan-thanh (prototype: tiến độ 100); hai nút Lưu khi sửa (Lưu + Lưu việc cha). || 07/10 phản hồi kiểm thử: popup Giao việc mới theo prototype + ảnh tmp/web/pro-nhiem-vu-them-moi-*.png (9898a14d + lượt hai: một ô datetime-local, nút ở cuối vùng cuộn, chữ khớp ảnh); Kanban bỏ khoảng hở giữa cột (b4726b15). KHÁC PROTOTYPE CÓ CHỦ Ý: câu 'qua chuông và qua thư' dưới Lãnh đạo giao việc bị bỏ vì gửi đề nghị lùi hạn KHÔNG gửi thông báo nào (service-petitions/internal/app/nhiem_vu.go DeNghiLuiHan) — khoảng trống máy chủ chưa ai ghi; ô trống của Lãnh đạo giao việc giữ '— Chưa xác định —' (ADR 0038). Câu gợi ý 'Việc con có hạn riêng…' đã bỏ theo prototype. || 07/10 lượt 3 (đối chiếu ảnh prod tmp/web/cur-nhiem-vu-*.png): popup dính mép trên do [&>*]:my-0 của section man-nhiem-vu đè m-auto của ModalDialog (cùng lớp utilities, sinh sau thắng) — sửa m-auto! trong components/ui/modal-dialog.tsx, ảnh hưởng mọi ModalDialog con trực tiếp của khối [&>*]:m*; đo bằng Chrome headless trên CSS đã build: cách trên/dưới 88–110px. Popup Nhiệm vụ rộng 800px mọi loại; ô tìm cán bộ một ô liền icon ⇕ bên trong (prop compact), gợi ý phím sr-only; chữ ô 14px từ 768px; vạch màu thẻ Kanban theo hạng ưu tiên như prototype (hạng 0 đỏ, 1 cam, còn lại xanh). CHƯA đối chiếu ảnh prod sau khi triển khai — chờ người dùng chụp lại. || 07/10 lượt 4: popup Giao việc mới chọn sẵn loại nhiệm vụ MẶC ĐỊNH của xã (dòng is_default còn hoạt động; không có thì '— Chọn loại —', không lấy dòng đầu — NV-01 giữ) — người dùng chốt 07/10; bấm Giao việc khi thiếu thì lỗi dưới từng ô + tiêu điểm vào ô thiếu đầu tiên, nút không còn khoá vì thiếu nhập; khung báo lỗi máy chủ hết bị ép thấp ([&>*]:shrink-0, đo Chrome headless trên CSS đã build). Áp chung cho Biên bản/Phản ánh. CÒN: danh mục loại vẫn liệt kê loại đã tắt (prototype ẩn); kiểm prod xã đã đặt loại mặc định chưa.",
       "menu": "nhiem-vu"
+    },
+    {
+      "id": "nhiem-vu-theo-prototype-spec-07-10",
+      "menu": "nhiem-vu",
+      "viec": "/fix-web-admin --menu=nhiem-vu --des=cập nhật UI UX theo prototype, tham khảo thêm nội dung hướng dẫn trong ./tmp/web/giai-ngan/vigov-nhiem-vu-spec/*.md (thư mục thật tmp/web/nhiem-vu/vigov-nhiem-vu-spec/vigov-nhiem-vu-spec/) — theo ADR 0076 §Sửa đổi 07/10/2026 lần 2 #1–#19",
+      "trang_thai": "xong",
+      "bang_chung": "597630d7 (màn) · cca90b98 (trang xem thử /xem-thu/nhiem-vu) · ADR 10b27db5, 0ea08ec2. tsc sạch, eslint sạch, vitest 255 tệp/4526 ca xanh. ui-ux-reviewer trên ảnh render (Chrome headless 1440px, dữ liệu mẫu): vòng 1 FAIL A B C F G (hàng lọc vỡ do luật CSS cũ 'label + select'), vòng 2 PASS A B C E G, D-1 (badge tràn cột) và F-1 (câu thừa dưới Giao việc) sửa tay + chụp lại xác nhận. make check dừng ở gofmt các tệp citizen_letter chưa commit của phiên Văn bản — không thuộc lượt này.",
+      "no_confirm": [],
+      "tiep_theo": "(1) Chưa chụp được 2 trạng thái kết quả của hộp Nhập Excel (POST kiểm thử bị fixture-fetch dùng chung từ chối — tệp đó phiên Văn bản đang giữ). (2) Chưa kiểm trên prod (cần người dùng đăng nhập). (3) Hệ quả đã ghi ở ADR 0076 lần 2 (a)–(k): nhãn trạng thái cố định đảo câu #21 (cần hỏi khách), các câu theo spec nói khác hành vi máy chủ ('— Người đang tạo nhiệm vụ —', câu gợi ý 'Hoàn thành: Lãnh đạo đã duyệt', 'qua chuông và qua thư'), bỏ Việc cha (không còn đường lên việc cha), hai cột Sổ theo dõi lặp dữ liệu. (4) Khi make kb chạy sạch: thay '?' số lần gia hạn bằng extension_count thật (backend 9f3a21c4 đã có). (5) Câu dưới nút Giao việc (đổi người → về 'Chưa thực hiện') bỏ theo prototype; máy chủ vẫn đổi trạng thái."
     }
   ]
 }

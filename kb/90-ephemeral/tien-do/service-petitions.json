@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-petitions",
-  "cap_nhat": "2026-10-07",
+  "cap_nhat": "2026-10-08",
   "muc": [
     {
       "id": "so-tay-lanh-dao-bo-loc-may-chu",
@@ -591,6 +591,15 @@
       "no_confirm": [],
       "tiep_theo": "CHƯA CHẠY trên PostgreSQL thật (thiếu VIGOV_TEST_DSN): trigger/CHECK 0031, TestPgStoredFileSoftDelete, pg test lịch sử. Còn mở: đề nghị lùi hạn đang chờ khi đổi người giữ (giao-lai-nhiem-vu mục 6, đường gộp giữ nguyên như Reassign); luật '≥1 tệp trước Chờ duyệt' chưa chốt; trọng số việc con chưa có. Hai dòng nhật ký (giao lại + trạng thái) cùng mốc giờ có thể hiện lệch thứ tự. Ngoài phạm vi: trigger 0006 không khoá trang_thai/nguoi_duyet_ma sau quyết định.",
       "menu": "nhiem-vu"
+    },
+    {
+      "id": "nhiem-vu-backend-theo-prototype-07-10",
+      "menu": "nhiem-vu",
+      "viec": "Backend Nhiệm vụ theo prototype (chủ dự án giao 07/10/2026): extension_count + pending_extension trên mọi bản đọc nhiệm vụ (một câu GROUP BY mỗi trang, cùng điều kiện trigger 0016), lọc roots=true dùng chung danh sách/đếm/xuất sổ, requires_directive chỉ đọc trên loại nhiệm vụ",
+      "trang_thai": "xong",
+      "bang_chung": "9f3a21c4. go build/vet/test -p 1 ./... xanh, gofmt sạch, tools/apidoc ok; ca pg bỏ qua (không VIGOV_TEST_DSN).",
+      "no_confirm": [],
+      "tiep_theo": "(1) make kb chưa sinh lại hợp đồng (cây có tuyến chưa commit của phiên Văn bản) → web chưa dùng extension_count/pending_extension/roots/requires_directive; thẻ và dòng vẫn hiện 'Số lần gia hạn ?'. (2) CẦN CHỦ DỰ ÁN, không làm: trọng số việc con + tick (đổi cách tính tiến độ việc cha trên tuyến đã công bố — ADR 0076 còn mở #3), người cùng thực hiện collaborator_ids (mở rộng quyền ghi nhật ký; prototype không có giao diện đặt), email trong ô chọn cán bộ (luật 3 điều kiện dừng #1), nguồn 'Định kỳ' (prototype không có bộ sinh), tệp chưa gắn nhật ký (nghĩa khác prototype), mặc định roots ở trang Nhiệm vụ (lệch số với Tổng quan)."
     }
   ]
 }
