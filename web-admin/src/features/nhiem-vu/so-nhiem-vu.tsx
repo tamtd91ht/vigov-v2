@@ -502,19 +502,25 @@ function nhanDanhMuc(
 /**
  * Colour of the Kanban card's top strip, from the task's RANK on the commune's own priority scale —
  * never from a hard-coded code: the scale is a commune catalogue whose order IS its meaning
- * (`muc_uu_tien_nhiem_vu.go`, first = most urgent). Top rank red, bottom rank brand, anything between
- * amber; no priority or a code not on the scale is the neutral line colour. The colour is the
- * SECOND signal: the card says the priority in words too.
+ * (`muc_uu_tien_nhiem_vu.go`, first = most urgent; `0003_danh_muc_nhiem_vu.sql:293` — no branch is
+ * keyed on a priority code).
+ *
+ * THE PROTOTYPE'S RULE, by rank (`TaskCard.tsx:35,46` + `lib/task-display.ts:114-118`): `khan` red,
+ * `cao` tangerine, `thuong` brand — and EVERYTHING ELSE falls back to `thuong`, i.e. brand: no
+ * priority, an unknown code, any lower level. On the shipped scale `khan · cao · thuong` that is
+ * rank 0 red, rank 1 amber, the rest brand; a two-level scale has no amber (its rank 1 is its last,
+ * which is `thuong`'s place). Before 07/10/2026 a missing priority drew a grey strip and every middle
+ * rank amber, so a board read mostly red/amber where the prototype's reads mostly blue. The colour
+ * is the SECOND signal: the card says the priority in words too.
  */
 export function priorityStripClass(
   scale: readonly { readonly code: string }[],
   code: string,
 ): string {
   const rank = code === "" ? -1 : scale.findIndex((m) => m.code === code);
-  if (rank < 0) return "bg-line-strong";
   if (rank === 0) return "bg-danger-500";
-  if (rank === scale.length - 1) return "bg-brand-500";
-  return "bg-warning-500";
+  if (rank === 1 && scale.length > 2) return "bg-warning-500";
+  return "bg-brand-500";
 }
 
 /**
@@ -5181,14 +5187,16 @@ export function FormGiaoViec({
     );
   }
 
-  // THE PROTOTYPE'S DIALOG: 500px, 800px when the three document lists are drawn (`hienVanBan` —
-  // a `Theo văn bản` type on a caller without them, Biên bản, has nothing to widen for). The header
+  // THE PROTOTYPE'S DIALOG: on the Nhiệm vụ screen (`staffSearch`, set by that screen only) ALWAYS
+  // 800px — the prototype's `sm:max-w-200` for every type, including before a type is chosen
+  // (user 07/10/2026: "phải mở rộng chiều ngang ra"). Elsewhere 500px, 800px when the three document
+  // lists are drawn (`hienVanBan` — Biên bản has nothing to widen for). The header
   // stays in sight; the fields AND `Huỷ / Giao việc` scroll under it — the buttons close the
   // scrolling form, as in the prototype (`TaskAssignForm.tsx:206-429`). Esc asks `huy`, as `Huỷ` does.
   return (
     <ModalDialog
       titleId={CREATE_TASK_TITLE_ID}
-      size={hienVanBan ? "lg" : "md"}
+      size={staffSearch || hienVanBan ? "lg" : "md"}
       className={CREATE_TASK_DIALOG_CLASS}
       onDismiss={huy}
     >
@@ -5198,7 +5206,9 @@ export function FormGiaoViec({
         description={dialogDescription}
       />
       <form className="m-0 flex min-h-0 flex-col" onSubmit={gui}>
-        <div className={cn(CREATE_TASK_BODY_CLASS, CREATE_TASK_TYPE_SCALE)}>
+        <div
+          className={cn(CREATE_TASK_BODY_CLASS, CREATE_TASK_TYPE_SCALE, staffSearch && CREATE_TASK_CONTROL_TEXT)}
+        >
           {fields}
           {buttons}
         </div>
@@ -5214,7 +5224,9 @@ export function FormGiaoViec({
  * - `p-4`: the prototype's `DialogContent` padding (`components/ui/dialog.tsx:77`). Our default
  *   `p-6` took 16px more out of the same 500/800px box, so the fields sat narrower than the prototype's.
  * - `max-h-[calc(100dvh-6rem)]`: at least 48px clear above and below at every height, where `90dvh`
- *   left ~30px on a laptop screen — the box looked stuck to the top edge.
+ *   left ~30px on a laptop screen. NOTE: this cap was NOT why the box sat on the top edge in prod —
+ *   that was the page's `[&>*]:my-0` zeroing the dialog's centring margin, fixed in `ModalDialog`
+ *   (`m-auto!`). The cap only bounds the box on short screens.
  */
 export const CREATE_TASK_DIALOG_CLASS = "max-h-[calc(100dvh-6rem)] p-4";
 
@@ -5254,10 +5266,26 @@ export const CREATE_TASK_TYPE_SCALE = [
   // and priority boxes, side by side, did not share a bottom edge. One height, as `Field` draws it.
   "[&_input:not([type=checkbox]):not([type=radio])]:h-(--control-h) [&_input:not([type=checkbox]):not([type=radio])]:py-0",
   "[&_.o-tim-can-bo]:mb-0",
-  "[&_.hop-tim-can-bo_input]:min-h-(--control-h) md:[&_.hop-tim-can-bo_input]:text-[0.9375rem]",
+  // The staff box exists only with `staffSearch` (Nhiệm vụ), so its 14px is that screen's alone.
+  "[&_.hop-tim-can-bo_input]:min-h-(--control-h) md:[&_.hop-tim-can-bo_input]:text-sm",
   "[&_.nut-mo-danh-sach]:min-h-(--control-h) [&_.nut-mo-danh-sach]:min-w-(--control-h)",
-  "md:[&_.danh-sach-goi-y_li]:text-[0.9375rem]",
+  "md:[&_.danh-sach-goi-y_li]:text-sm",
   "[&_.goi-y-tim]:text-xs",
+].join(" ");
+
+/**
+ * CONTROL TEXT 14px FROM 768px on the Nhiệm vụ create form — the prototype's `Input`/`Select`
+ * (`components/ui/input.tsx:11`: `text-base … md:text-sm`). User 07/10/2026: our 15–16px controls
+ * read visibly larger than the prototype's. BELOW 768px the controls stay at 16px on purpose: iOS
+ * Safari zooms the page into any focused field under 16px, and the prototype does the same.
+ *
+ * Height is already the prototype's `h-9` (36px, `--control-h`, in `CREATE_TASK_TYPE_SCALE`).
+ * Applied only with `staffSearch` (the Nhiệm vụ screen); Biên bản / Phản ánh keep theirs.
+ */
+export const CREATE_TASK_CONTROL_TEXT = [
+  "md:[&_input:not([type=checkbox]):not([type=radio])]:text-sm",
+  "md:[&_select]:text-sm",
+  "md:[&_textarea]:text-sm",
 ].join(" ");
 
 /** Id of the create dialog's heading — its accessible name. */
@@ -5296,6 +5324,8 @@ function StaffPicker({
       directory={directory}
       disabled={disabled}
       placeholder={STAFF_SEARCH_PLACEHOLDER}
+      // The prototype's one-field picker, no visible keyboard line (user 07/10/2026).
+      compact
       onChange={onChange}
     />
   ) : (

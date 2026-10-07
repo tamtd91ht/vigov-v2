@@ -17,6 +17,9 @@ import { cn } from "@/lib/cn";
  * MOUNTED = OPEN; unmounting returns focus to whatever opened it. jsdom has no `showModal`: the
  * `open` attribute is the fallback there, so tests can still read the content.
  *
+ * CENTRED WHEREVER IT IS MOUNTED: see `m-auto!` below — the parent's child-margin utilities cannot
+ * pin it to the top of the window.
+ *
  * LAYOUT CONTRACT: a flex column capped at 90dvh with no scroll of its own; the caller puts an
  * `overflow-y-auto` region inside so the header and the buttons stay in sight.
  */
@@ -58,7 +61,14 @@ export function ModalDialog({
       aria-modal="true"
       className={cn(
         // `open:` only: a `flex` that applied while closed would override the UA's `display: none`.
-        "m-auto box-border max-h-[90dvh] w-[calc(100vw-2rem)] overflow-hidden rounded-card border border-solid border-line bg-surface p-6 text-ink-900 shadow-md open:flex open:flex-col open:gap-4",
+        //
+        // `m-auto!` (important), NOT `m-auto`: the vertical centring IS the auto margin (the UA puts a
+        // modal dialog at `position: fixed; inset-block: 0; height: fit-content`). Pages wrap their
+        // children in `[&>*]:my-0`, and that rule (`.\[\&\>\*\]\:my-0>*{margin-block:0}`) is emitted
+        // AFTER `.m-auto` at equal specificity — so every dialog rendered as such a child was pinned
+        // to the top edge of the window (Nhiệm vụ's `Giao việc mới`, prod 07/10/2026). A parent's
+        // spacing rule has no business moving a top-layer box; important makes that structural.
+        "m-auto! box-border max-h-[90dvh] w-[calc(100vw-2rem)] overflow-hidden rounded-card border border-solid border-line bg-surface p-6 text-ink-900 shadow-md open:flex open:flex-col open:gap-4",
         size === "lg" ? "max-w-[800px]" : "max-w-[500px]",
         "backdrop:bg-brand-600/50",
         className,

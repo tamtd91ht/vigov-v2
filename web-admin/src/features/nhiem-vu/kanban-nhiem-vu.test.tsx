@@ -312,8 +312,24 @@ describe("thẻ nhiệm vụ §4.1", () => {
     expect(priorityStripClass(scale, "a")).toBe("bg-danger-500");
     expect(priorityStripClass(scale, "b")).toBe("bg-warning-500");
     expect(priorityStripClass(scale, "c")).toBe("bg-brand-500");
-    expect(priorityStripClass(scale, "")).toBe("bg-line-strong");
-    expect(priorityStripClass(scale, "khong-co")).toBe("bg-line-strong");
+  });
+
+  // 07/10/2026: the prototype's TaskCard falls back to `thuong` (brand) for everything that is not
+  // `khan` / `cao` (`TaskCard.tsx:35`, `task-display.ts:114-118`) — so does ours, by rank.
+  it("`priorityStripClass`: no / unknown priority and lower levels are brand, as in the prototype", () => {
+    const shipped = [{ code: "khan" }, { code: "cao" }, { code: "thuong" }];
+    expect(priorityStripClass(shipped, "khan")).toBe("bg-danger-500");
+    expect(priorityStripClass(shipped, "cao")).toBe("bg-warning-500");
+    expect(priorityStripClass(shipped, "thuong")).toBe("bg-brand-500");
+    expect(priorityStripClass(shipped, "")).toBe("bg-brand-500");
+    expect(priorityStripClass(shipped, "khong-co")).toBe("bg-brand-500");
+    // A fourth, lower level is `thuong`'s fallback in the prototype: brand, not amber.
+    expect(priorityStripClass([...shipped, { code: "thap" }], "thuong")).toBe("bg-brand-500");
+    expect(priorityStripClass([...shipped, { code: "thap" }], "thap")).toBe("bg-brand-500");
+    // Two levels: the second is the last — brand, no amber.
+    expect(priorityStripClass([{ code: "khan" }, { code: "thuong" }], "thuong")).toBe("bg-brand-500");
+    // No catalogue loaded yet: brand, never a red guess.
+    expect(priorityStripClass([], "khan")).toBe("bg-brand-500");
   });
 
   it("không có hạn thì `Hạn —`, không phải một ô trống và không phải `Trễ 0 ngày`", () => {

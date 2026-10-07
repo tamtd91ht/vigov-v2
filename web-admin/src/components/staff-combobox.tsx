@@ -1,8 +1,10 @@
 "use client";
 
+import { ChevronsUpDown } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import type { identity_canBoChonNguoiRa } from "@/lib/api/schema.gen";
+import { cn } from "@/lib/cn";
 
 import {
   COMBOBOX_CLOSED,
@@ -53,6 +55,7 @@ export function StaffCombobox({
   directory,
   disabled = false,
   placeholder,
+  compact = false,
   onChange,
 }: {
   id: string;
@@ -68,6 +71,16 @@ export function StaffCombobox({
    * `disabled`: a loading box says it is loading, not "type to search".
    */
   placeholder?: string;
+  /**
+   * The prototype's `PersonPicker` look (`PersonPicker.tsx:102-114`): ONE field with a small ⇕ icon
+   * inside it on the right, and no visible keyboard line under it. Opt-in per caller (the Nhiệm vụ
+   * create form); every other box keeps the separate ▾ button and the visible line.
+   *
+   * Only the DRAWING changes. The icon is still the toggle button (same label, same click, out of the
+   * tab order), and the keyboard line stays the input's `aria-describedby` — hidden visually with
+   * `sr-only`, not removed, so a screen-reader user still hears how the box works.
+   */
+  compact?: boolean;
   onChange: (code: string) => void;
 }) {
   const [state, setState] = useState<ComboboxState>(COMBOBOX_CLOSED);
@@ -93,7 +106,7 @@ export function StaffCombobox({
   return (
     <div className="o-nhap o-tim-can-bo">
       <label htmlFor={id}>{label}</label>
-      <div className="hop-tim-can-bo">
+      <div className={cn("hop-tim-can-bo", compact && "relative")}>
         <input
           id={id}
           type="text"
@@ -106,6 +119,8 @@ export function StaffCombobox({
           }
           aria-describedby={hintId}
           autoComplete="off"
+          // Room for the ⇕ toggle drawn inside the field.
+          className={compact ? "pr-8" : undefined}
           value={shown}
           placeholder={value === "" ? (disabled ? emptyLabel : (placeholder ?? emptyLabel)) : undefined}
           disabled={disabled}
@@ -123,7 +138,11 @@ export function StaffCombobox({
         />
         <button
           type="button"
-          className="nut-phu nut-mo-danh-sach"
+          className={
+            compact
+              ? "absolute inset-y-0 right-0 m-0 flex w-8 cursor-pointer items-center justify-center rounded-r-control border-0 bg-transparent p-0 text-ink-500 hover:text-ink-900 disabled:cursor-not-allowed disabled:opacity-50"
+              : "nut-phu nut-mo-danh-sach"
+          }
           // Out of the tab order (APG): the input already opens the list by keyboard.
           tabIndex={-1}
           aria-label={`Mở danh sách ${label}`}
@@ -137,10 +156,15 @@ export function StaffCombobox({
             (e.currentTarget.previousElementSibling as HTMLInputElement | null)?.focus();
           }}
         >
-          <span aria-hidden="true">▾</span>
+          {compact ? (
+            <ChevronsUpDown aria-hidden="true" className="size-3.5" />
+          ) : (
+            <span aria-hidden="true">▾</span>
+          )}
         </button>
       </div>
-      <p id={hintId} className="goi-y-tim">
+      {/* `compact` hides only the keyboard line; the loading line of a disabled box stays visible. */}
+      <p id={hintId} className={cn("goi-y-tim", compact && !disabled && "sr-only")}>
         {disabled ? emptyLabel : STAFF_COMBOBOX_HINT}
       </p>
       <ul id={listId} role="listbox" aria-label={label} className="danh-sach-goi-y" hidden={!state.open}>

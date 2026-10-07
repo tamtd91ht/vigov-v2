@@ -193,6 +193,28 @@ describe("markup — label above, ARIA roles, codes as values", () => {
     expect(loading).toContain('<p id="x-goi-y" class="goi-y-tim">Đang tải danh bạ cán bộ…</p>');
   });
 
+  it("`compact` (07/10, prototype PersonPicker): one field, ⇕ toggle inside, keyboard line sr-only", () => {
+    const box = (props: { compact?: boolean; disabled?: boolean }) =>
+      renderToStaticMarkup(
+        <StaffCombobox id="c" label="Người thực hiện" emptyLabel={EMPTY} value="" directory={DIRECTORY} onChange={() => {}} {...props} />,
+      );
+    const compact = box({ compact: true });
+    // Same input contract: role, description, list control.
+    expect(compact).toMatch(/<input id="c" type="text" role="combobox"[^>]* aria-describedby="c-goi-y"[^>]* class="pr-8"/);
+    expect(compact).toContain(`<p id="c-goi-y" class="goi-y-tim sr-only">${STAFF_COMBOBOX_HINT}</p>`);
+    // The toggle is still a button with its label, out of the tab order, inside the relative box.
+    expect(compact).toMatch(/<div class="hop-tim-can-bo relative"><input [^>]*><button type="button" class="absolute inset-y-0 right-0 [^"]*" tabindex="-1" aria-label="Mở danh sách Người thực hiện" aria-controls="c-danh-sach" aria-expanded="false">/);
+    expect(compact).toContain("lucide-chevrons-up-down");
+    expect(compact).not.toContain("nut-mo-danh-sach");
+    // Loading: the line says why, visibly, in both variants.
+    expect(box({ compact: true, disabled: true })).toContain(`<p id="c-goi-y" class="goi-y-tim">${EMPTY}</p>`);
+    // Default unchanged.
+    const plain = box({});
+    expect(plain).toContain('<div class="hop-tim-can-bo">');
+    expect(plain).toContain('class="nut-phu nut-mo-danh-sach"');
+    expect(plain).toContain(`<p id="c-goi-y" class="goi-y-tim">${STAFF_COMBOBOX_HINT}</p>`);
+  });
+
   it("`placeholder` (07/10, prototype `Gõ tên để tìm…`): in the empty box; the empty choice stays in the list", () => {
     const box = (props: { value: string; disabled?: boolean; placeholder?: string }) =>
       renderToStaticMarkup(

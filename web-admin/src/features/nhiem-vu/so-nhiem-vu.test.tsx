@@ -84,10 +84,12 @@ import { TRANG_DAU } from "@/features/cau-hinh/ngan-xep-con-tro";
 import { nhanThoiDiem } from "@/features/phan-anh/nhan-phieu";
 import { duongDanHangChoLuiHan, duongDanSoNhiemVu } from "@/lib/api/nhiem-vu";
 import { TaskExtensionList, taskExtensionsQuery } from "./task-extension-block";
+import { STAFF_COMBOBOX_HINT } from "@/components/staff-combobox";
 import {
   BangNhiemVu,
   ChiTietNhiemVu,
   CREATE_TASK_BODY_CLASS,
+  CREATE_TASK_CONTROL_TEXT,
   CREATE_TASK_DIALOG_CLASS,
   CREATE_TASK_TYPE_SCALE,
   FormGiaoViec,
@@ -1060,27 +1062,95 @@ describe("form Giao việc mới §7", () => {
   const dialogClass = (html: string) => /^<dialog [^>]*class="([^"]*)"/.exec(html)?.[1]?.split(" ") ?? [];
 
   it("07/10: the create dialog keeps clear of the top edge and pads like the prototype (p-4)", () => {
-    for (const [danhMuc, width] of [
-      [DANH_MUC_CO_BAN, "max-w-[500px]"],
-      [DANH_MUC, "max-w-[800px]"],
-    ] as const) {
+    // Every type — and no type chosen yet (NV-01: nothing auto-selected) — is 800px on this screen.
+    for (const danhMuc of [DANH_MUC_CO_BAN, DANH_MUC, { ...DANH_MUC, loai: DANH_MUC.loai.map((l) => ({ ...l, is_default: false })) }]) {
       const cls = dialogClass(dialogMarkup(danhMuc));
-      expect(cls).toContain(width);
+      expect(cls).toContain("max-w-[800px]");
+      expect(cls).not.toContain("max-w-[500px]");
+      // Full width minus 1rem gutters on a narrow screen.
+      expect(cls).toContain("w-[calc(100vw-2rem)]");
       // The variant REPLACES `ModalDialog`'s defaults (cn → last utility wins), it does not stack.
       expect(cls).toContain("max-h-[calc(100dvh-6rem)]");
       expect(cls).not.toContain("max-h-[90dvh]");
       expect(cls).toContain("p-4");
       expect(cls).not.toContain("p-6");
-      // Still centred by the browser's top layer — no top pin.
-      expect(cls).toContain("m-auto");
-      expect(cls.some((c) => /^(top|mt)-/.test(c))).toBe(false);
+      // Centred by an IMPORTANT auto margin: the page mounts this dialog as a child of
+      // `[&>*]:my-0`, whose `margin-block: 0` beat plain `m-auto` and pinned it to the top (prod).
+      expect(cls).toContain("m-auto!");
+      expect(cls).not.toContain("m-auto");
+      expect(cls.some((c) => /^(top|mt|my|inset|translate)-/.test(c))).toBe(false);
     }
     expect(CREATE_TASK_DIALOG_CLASS).toBe("max-h-[calc(100dvh-6rem)] p-4");
   });
 
+  it("07/10: other callers of the form (Biên bản / Phản ánh: no `staffSearch`) keep 500px until `Theo văn bản`", () => {
+    const html = renderToStaticMarkup(
+      <FormGiaoViec
+        dialog
+        danhMuc={DANH_MUC_CO_BAN}
+        danhBa={DANH_BA}
+        danhBaLanhDao={DANH_BA}
+        dangGui={false}
+        loi={null}
+        huy={() => {}}
+        giaoViec={() => {}}
+      />,
+    );
+    expect(dialogClass(html)).toContain("max-w-[500px]");
+    expect(html).not.toContain(CREATE_TASK_CONTROL_TEXT.split(" ")[0]!.replaceAll("&", "&amp;"));
+  });
+
+  it("07/10: the page mounts the create dialog under `[&>*]:my-0` — the reason `m-auto!` exists", () => {
+    // If this ever stops being true the `!` is still harmless; if the `!` is ever dropped while this
+    // holds, the dialog sits on the top edge again with every other test green.
+    const page = readFileSync(new URL("./so-nhiem-vu.tsx", import.meta.url), "utf8");
+    const section = page.indexOf('className="man-nhiem-vu mt-0 flex min-w-0 flex-col gap-4 [&>*]:my-0"');
+    expect(section).toBeGreaterThan(-1);
+    expect(page.indexOf("<FormGiaoViec\n          dialog", section)).toBeGreaterThan(section);
+    const modal = readFileSync(new URL("../../components/ui/modal-dialog.tsx", import.meta.url), "utf8");
+    expect(modal).toContain('"m-auto! box-border');
+  });
+
+  it("07/10: controls 14px from 768px like the prototype's `md:text-sm`, 16px below (iOS zoom)", () => {
+    const html = dialogMarkup(DANH_MUC_CO_BAN);
+    const attr = cn(CREATE_TASK_BODY_CLASS, CREATE_TASK_TYPE_SCALE, CREATE_TASK_CONTROL_TEXT)
+      .replaceAll("&", "&amp;")
+      .replaceAll(">", "&gt;");
+    expect(html).toContain(`<div class="${attr}">`);
+    for (const c of [
+      "md:[&_input:not([type=checkbox]):not([type=radio])]:text-sm",
+      "md:[&_select]:text-sm",
+      "md:[&_textarea]:text-sm",
+    ]) {
+      expect(CREATE_TASK_CONTROL_TEXT.split(" ")).toContain(c);
+    }
+    // Only `md:` — nothing shrinks a control below 16px on a phone.
+    expect(CREATE_TASK_CONTROL_TEXT.split(" ").every((c) => c.startsWith("md:"))).toBe(true);
+    expect(CREATE_TASK_TYPE_SCALE).toContain("md:[&_.hop-tim-can-bo_input]:text-sm");
+    expect(CREATE_TASK_TYPE_SCALE).not.toContain("text-[0.9375rem]");
+  });
+
+  it("07/10: staff boxes are ONE field with the ⇕ icon inside, keyboard line kept for screen readers only", () => {
+    const html = dialogMarkup(DANH_MUC_CO_BAN);
+    for (const id of ["giao-nguoi-thuc-hien", "giao-lanh-dao"]) {
+      // The hint is still the input's description…
+      expect(html).toContain(`aria-describedby="${id}-goi-y"`);
+      // …but drawn sr-only, not as a visible line.
+      expect(html).toContain(`<p id="${id}-goi-y" class="goi-y-tim sr-only">${STAFF_COMBOBOX_HINT}</p>`);
+      // The toggle survives, inside the field, without the separate square button.
+      expect(html).toMatch(new RegExp(`aria-label="Mở danh sách [^"]*" aria-controls="${id}-danh-sach"`));
+    }
+    expect(html).not.toContain('class="nut-phu nut-mo-danh-sach"');
+    expect(html).not.toContain(">▾<");
+    expect(html).toContain('class="hop-tim-can-bo relative"');
+    expect(html).toContain("lucide-chevrons-up-down");
+  });
+
   it("07/10: the fields AND the buttons scroll — capped at the prototype's 70vh, header outside", () => {
     const html = dialogMarkup(DANH_MUC);
-    const attr = cn(CREATE_TASK_BODY_CLASS, CREATE_TASK_TYPE_SCALE).replaceAll("&", "&amp;").replaceAll(">", "&gt;");
+    const attr = cn(CREATE_TASK_BODY_CLASS, CREATE_TASK_TYPE_SCALE, CREATE_TASK_CONTROL_TEXT)
+      .replaceAll("&", "&amp;")
+      .replaceAll(">", "&gt;");
     const body = html.indexOf(`<div class="${attr}">`);
     expect(body).toBeGreaterThan(-1);
     expect(CREATE_TASK_BODY_CLASS).toContain("max-h-[70vh]");
