@@ -41,6 +41,7 @@ import type {
   identity_caLamViecRa,
   identity_canBoChonNguoiRa,
   identity_danhBaChonNguoiRa,
+  petitions_loaiNhiemVuRa,
   petitions_mucUuTienRa,
   petitions_danhSachTrangThaiNhiemVuRa,
   petitions_deNghiChoDuyetRa,
@@ -1049,6 +1050,19 @@ export function mucUuTienMacDinh(ds: readonly petitions_mucUuTienRa[]): string {
   return ds.find((m) => m.is_default && m.active)?.code ?? "";
 }
 
+/**
+ * The task type the `Giao việc mới` form pre-selects: the commune's ACTIVE row marked `is_default`,
+ * or `""` (= `— Chọn loại —`) when it has none. User decision 07/10/2026, as the prototype
+ * (`TaskAssignForm.tsx:108-125`, `fallbackKind` over the active kinds).
+ *
+ * NEVER THE FIRST ROW. A commune with no default row gets the empty choice and must pick: tester
+ * report NV-01 (05/10/2026) is a form that showed its first type as if chosen. And an inactive default
+ * row is ignored — pre-selecting a type the commune has retired is choosing for it what it dropped.
+ */
+export function defaultTaskType(ds: readonly petitions_loaiNhiemVuRa[]): string {
+  return ds.find((l) => l.is_default && l.active)?.code ?? "";
+}
+
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * §3 — BỘ LỌC ĐỒNG BỘ VÀO ĐƯỜNG DẪN ("nên đồng bộ vào query string để chia sẻ link")
  *
@@ -1648,10 +1662,17 @@ export const EXTENSION_NO_DUE =
   "trong phần chi tiết này.";
 
 /**
- * Reason `Giao việc` is disabled while no task type is chosen (report 05/10/2026, NV-01). Without
- * it the button simply greyed out, and the select showed its first option while the value was `""`.
+ * The type select's error when `Giao việc` is pressed with no type chosen (report 05/10/2026, NV-01:
+ * the button had greyed out with no reason, while the select showed its first option and the value
+ * was `""`). Since 07/10/2026 it is shown UNDER the select, after a submit attempt — not as a box.
  */
 export const TASK_TYPE_MISSING = "Chọn loại nhiệm vụ để giao việc.";
+/** The title field's error after a submit attempt — the prototype's sentence (`TaskAssignForm.tsx:46`). */
+export const TASK_TITLE_MISSING = "Vui lòng nhập tên nhiệm vụ.";
+/** The same, when the field is labelled `Nội dung nhiệm vụ / Trích yếu văn bản` (type `theo-van-ban`). */
+export const TASK_CONTENT_MISSING = "Vui lòng nhập nội dung nhiệm vụ.";
+/** Under ONE document row whose summary is empty — the row itself says which one. */
+export const DOCUMENT_SUMMARY_MISSING = "Nhập trích yếu, hoặc bấm ✕ để gỡ dòng này.";
 /** Empty first option of the type select while nothing is chosen. */
 export const TASK_TYPE_PLACEHOLDER = "— Chọn loại —";
 
@@ -2345,6 +2366,83 @@ export function newTaskDueInputProblem(value: string, badInput: boolean): string
   if (badInput) return NEW_TASK_DUE_INCOMPLETE;
   const { date, time } = splitNewTaskDue(value);
   return newTaskDueProblem(date, time);
+}
+
+/** Element ids of the create form's checked fields — the targets focus moves to. */
+export const CREATE_TASK_FIELD_IDS = {
+  type: "giao-loai",
+  title: "giao-tieu-de",
+  due: "giao-han",
+  /** The over-limit sentence above the document lists (focusable, `tabIndex=-1`). */
+  documentLimit: "giao-van-ban-gioi-han",
+} as const;
+
+/** Id of the summary box of ONE document row of the create form (`NhomVanBanNhap`, prefix `giao`). */
+export function createTaskDocumentId(rowKey: string): string {
+  return `giao-van-ban-${rowKey}`;
+}
+
+/** Every reason the create form refuses to send, each attached to the field that causes it. */
+export type CreateTaskErrors = {
+  readonly type: string | null;
+  readonly title: string | null;
+  readonly due: string | null;
+  /** More rows than one request takes — no single row is at fault. */
+  readonly documentLimit: string | null;
+  /** Row key (`DongVanBanNhap.khoa`) → its error. */
+  readonly documentRows: ReadonlyMap<string, string>;
+  /** Ids of the invalid fields IN FORM ORDER; the first is where focus goes. Empty = can send. */
+  readonly order: readonly string[];
+};
+
+/**
+ * The create form's validation (user 07/10/2026, the prototype's `react-hook-form` + zod behaviour):
+ * `Giao việc` stays clickable, and a press with a problem sends NOTHING, draws each error under its
+ * field and moves focus to the FIRST invalid one. Called on every render, so once errors are shown
+ * they clear as the clerk fixes each field.
+ *
+ * THE SAME RULES THAT USED TO DISABLE THE BUTTON, none added and none dropped: a type, a title, a
+ * deadline that is whole or absent (`newTaskDueInputProblem`), and — only when the document lists
+ * are drawn — no empty summary row and no more than `VAN_BAN_MOT_LAN_TOI_DA` rows (`canhBaoVanBan`'s
+ * two rules, here per row). Hidden lists are not checked: `thanGiaoViec` does not send them.
+ *
+ * `order` follows the form as drawn: type → title → the upper-level and Party document lists →
+ * deadline → the output list. Focus landing on a later field while an earlier one is also wrong is
+ * a clerk scrolling back up for no reason.
+ */
+export function createTaskErrors(f: {
+  readonly type: string;
+  readonly title: string;
+  readonly dueInput: string;
+  readonly dueIncomplete: boolean;
+  readonly documents: readonly DongVanBanNhap[];
+  /** The three lists are on screen (`hienVanBan`). */
+  readonly documentsShown: boolean;
+}): CreateTaskErrors {
+  const type = f.type === "" ? TASK_TYPE_MISSING : null;
+  const title =
+    f.title.trim() === "" ? (coKhoiVanBanChiDao(f.type) ? TASK_CONTENT_MISSING : TASK_TITLE_MISSING) : null;
+  const due = newTaskDueInputProblem(f.dueInput, f.dueIncomplete);
+  const documents = f.documentsShown ? f.documents : [];
+  const documentLimit = documents.length > VAN_BAN_MOT_LAN_TOI_DA ? canhBaoVanBan(documents) : null;
+  const documentRows = new Map<string, string>();
+  for (const d of documents) {
+    if (d.trichYeu.trim() === "") documentRows.set(d.khoa, DOCUMENT_SUMMARY_MISSING);
+  }
+
+  const rowIds = (group: NhomVanBan) =>
+    dongCuaNhom(documents, group)
+      .filter((d) => documentRows.has(d.khoa))
+      .map((d) => createTaskDocumentId(d.khoa));
+  const order: string[] = [];
+  if (type !== null) order.push(CREATE_TASK_FIELD_IDS.type);
+  if (title !== null) order.push(CREATE_TASK_FIELD_IDS.title);
+  if (documentLimit !== null) order.push(CREATE_TASK_FIELD_IDS.documentLimit);
+  order.push(...rowIds("cap-tren-giao"), ...rowIds("chi-dao-dang-uy"));
+  if (due !== null) order.push(CREATE_TASK_FIELD_IDS.due);
+  order.push(...rowIds("san-pham-dau-ra"));
+
+  return { type, title, due, documentLimit, documentRows, order };
 }
 
 /** Ba danh sách có khác tập đã đọc hay không — so theo `id`, sau khi cắt khoảng trắng. */

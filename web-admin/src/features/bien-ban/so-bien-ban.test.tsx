@@ -48,7 +48,7 @@ import {
   type PhepTach,
   type PhepVongDoi,
 } from "./so-bien-ban";
-import { BANG_NHAN_MAC_DINH, TASK_TYPE_PLACEHOLDER } from "@/features/nhiem-vu/nhan-nhiem-vu";
+import { BANG_NHAN_MAC_DINH, TASK_TYPE_MISSING, TASK_TYPE_PLACEHOLDER } from "@/features/nhiem-vu/nhan-nhiem-vu";
 
 /**
  * Canh những QUYẾT ĐỊNH CÓ RA TỚI TRANG hay không.
@@ -357,12 +357,51 @@ describe("nút `Tách thành nhiệm vụ` §3", () => {
     expect(dialog).not.toContain(">Giao việc</button>");
   });
 
-  it("hộp Tách giữ ô Loại — KHÔNG tự chọn loại: xã chưa có loại mặc định thì `— Chọn loại —` và nút tắt (NV-01)", () => {
-    const html = veDong(ketLuan({ id: "k7" }), phepTach({ moOKetLuan: "k7" }));
+  // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026: this pinned "nút tắt" with no type chosen. The button no longer
+  // greys out for missing input (a press shows the error under the field), and the type now starts
+  // on the commune's active default row — the same `FormGiaoViec` rule as the Nhiệm vụ screen.
+  const DIRECTORY_READ = { ok: true as const, duLieu: { items: [] } };
+  const typeRow = (code: string, label: string, is_default: boolean, active = true) =>
+    ({ id: `01J${code}`, code, label, is_default, active, order: 1, source: "he-thong", tier: 1 }) as petitions_loaiNhiemVuRa;
+  const submitTag = (html: string) => {
+    const submit = html.slice(html.lastIndexOf("<button", html.indexOf(`>${SPLIT_SUBMIT_LABEL}</button>`)));
+    return submit.slice(0, submit.indexOf(">"));
+  };
+
+  it("hộp Tách, xã CHƯA có loại mặc định: `— Chọn loại —` (không lấy dòng đầu, NV-01), nút vẫn bấm được", () => {
+    const html = veDong(
+      ketLuan({ id: "k7" }),
+      phepTach({
+        moOKetLuan: "k7",
+        danhBa: DIRECTORY_READ,
+        danhBaLanhDao: DIRECTORY_READ,
+        danhMuc: { loai: [typeRow("co-ban", "Nhiệm vụ cơ bản", false)], mucUuTien: [], khoi: [], boPhan: [] },
+      }),
+    );
     expect(html).toContain('id="giao-loai"');
     expect(html).toContain(`<option value="" selected="">${TASK_TYPE_PLACEHOLDER}</option>`);
-    const submit = html.slice(html.lastIndexOf("<button", html.indexOf(`>${SPLIT_SUBMIT_LABEL}</button>`)));
-    expect(submit.slice(0, submit.indexOf(">"))).toContain('disabled=""');
+    expect(html).not.toMatch(/<option value="co-ban" selected="">/);
+    expect(submitTag(html)).not.toContain("disabled");
+    expect(html).not.toContain(TASK_TYPE_MISSING);
+  });
+
+  it("hộp Tách, xã CÓ loại mặc định đang dùng: chọn sẵn đúng dòng ấy", () => {
+    const html = veDong(
+      ketLuan({ id: "k7" }),
+      phepTach({
+        moOKetLuan: "k7",
+        danhBa: DIRECTORY_READ,
+        danhBaLanhDao: DIRECTORY_READ,
+        danhMuc: {
+          loai: [typeRow("theo-van-ban", "Theo văn bản", false), typeRow("co-ban", "Nhiệm vụ cơ bản", true)],
+          mucUuTien: [],
+          khoi: [],
+          boPhan: [],
+        },
+      }),
+    );
+    expect(html).toContain('<option value="co-ban" selected="">Nhiệm vụ cơ bản</option>');
+    expect(html).not.toContain(TASK_TYPE_PLACEHOLDER);
   });
 
   it("hộp Tách vẫn rộng 500px khi loại mặc định là `Theo văn bản` — không có ba danh sách văn bản để nới", () => {

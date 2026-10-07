@@ -208,7 +208,8 @@ import {
   cauLoiDanhBaLanhDao,
   cauLoiDanhBaLoc,
   canhBaoSua,
-  canhBaoVanBan,
+  createTaskErrors,
+  CREATE_TASK_FIELD_IDS,
   childCountLabel,
   childCreatedText,
   childFormNote,
@@ -220,7 +221,7 @@ import {
   changedSince,
   defaultDueTime,
   defaultNewTaskDueInput,
-  newTaskDueInputProblem,
+  defaultTaskType,
   splitNewTaskDue,
   DUE_EDIT_NOTE,
   basicTaskEditBody,
@@ -228,7 +229,6 @@ import {
   EXTENSION_NO_DUE,
   TASK_CHANGED_NOTE,
   TASK_PROGRESS_PENDING,
-  TASK_TYPE_MISSING,
   TASK_TYPE_PLACEHOLDER,
   type CalendarLoad,
   canWriteLogEntry,
@@ -4772,6 +4772,8 @@ export function FormGiaoViec({
   const { date: han, time: dueTime } = splitNewTaskDue(dueInput);
   const [vanBan, datVanBan] = useState<readonly DongVanBanNhap[]>([]);
   const [ghiChu, datGhiChu] = useState("");
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [focusRequest, setFocusRequest] = useState(0);
   const demKhoaVanBan = useRef(0);
   // Id ô cần nhận tiêu điểm SAU lần vẽ kế tiếp: dòng vừa thêm chưa có trong DOM lúc bấm nút.
   const oCanTieuDiem = useRef<string | null>(null);
@@ -4782,17 +4784,43 @@ export function FormGiaoViec({
     oCanTieuDiem.current = null;
   }, [vanBan]);
 
-  // Loại mặc định lấy từ DANH MỤC CỦA XÃ (`is_default`), không gõ cứng `theo-van-ban`: §7.1 nói
-  // loại `Theo văn bản` là mặc định, nhưng đó là một dòng danh mục xã sửa được.
-  const loaiMacDinh = danhMuc.loai.find((l) => l.is_default)?.code ?? "";
-  const loaiChon = loai === "" ? loaiMacDinh : loai;
+  // THE DEFAULT TYPE IS DERIVED, NOT COPIED INTO STATE (user 07/10/2026, `defaultTaskType`): `loai`
+  // stays `""` until the clerk picks, and while it is `""` the select shows the commune's ACTIVE
+  // `is_default` row — never the first row (NV-01). Derived, so a catalogue that arrives AFTER the
+  // form opened still pre-selects, and a type the clerk picked is never overwritten by it. No caller
+  // passes a type of its own: Nhiệm vụ, Biên bản and Phản ánh all open on the commune's default.
+  const loaiChon = loai === "" ? defaultTaskType(danhMuc.loai) : loai;
   // §7.1 `Thường (mặc định)` — nhưng "Thường" là một dòng danh mục CỦA XÃ, không phải một chữ nung
   // vào đây. Xã chưa đặt dòng mặc định nào thì ô đứng ở `— Chưa xác định —`.
   const mucUuTien = mucUuTienDaChon ?? mucUuTienMacDinh(danhMuc.mucUuTien);
   const theoVanBan = coKhoiVanBanChiDao(loaiChon);
   const hienVanBan = theoVanBan && coDanhSachVanBan;
-  const chanVanBan = hienVanBan ? canhBaoVanBan(vanBan) : null;
-  const chanHan = newTaskDueInputProblem(dueInput, dueIncomplete);
+  // Recomputed every render; SHOWN only after the first press of `Giao việc` (`submitAttempted`), so
+  // nothing is red before the clerk has tried, and each error clears as its field is fixed.
+  const errors = createTaskErrors({
+    type: loaiChon,
+    title: tieuDe,
+    dueInput,
+    dueIncomplete,
+    documents: vanBan,
+    documentsShown: hienVanBan,
+  });
+  const shown = submitAttempted ? errors : null;
+  const firstInvalidId = errors.order[0];
+
+  // One refused press = one focus move, to the FIRST invalid field in form order. Keyed on the press
+  // count, not on the errors: fixing a field must not drag focus to the next one while typing.
+  const focusHandled = useRef(0);
+  useEffect(() => {
+    if (focusRequest === focusHandled.current) return;
+    focusHandled.current = focusRequest;
+    if (firstInvalidId === undefined) return;
+    // A plain `focus()` scrolls the field into view inside the dialog's scroll area (and the page,
+    // for an inline form). No explicit scroll call: the NV-09 test of this file bans one, rightly —
+    // it would also scroll the page under the modal.
+    document.getElementById(firstInvalidId)?.focus();
+  }, [focusRequest, firstInvalidId]);
+
   const db = docDanhBaChonNguoi(danhBa);
   const dbLanhDao = docDanhBaChonNguoi(danhBaLanhDao);
   // Đọc được mà rỗng: không ai trong xã cầm `task.extend`. Một câu thay cho một ô chọn rỗng.
@@ -4819,13 +4847,13 @@ export function FormGiaoViec({
 
   function gui(e: FormEvent) {
     e.preventDefault();
-    if (
-      tieuDe.trim() === "" ||
-      loaiChon === "" ||
-      chanVanBan !== null ||
-      chanHan !== null ||
-      dangTaiDanhBa
-    ) {
+    // The button is disabled for both; Enter in a field still submits, so check again.
+    if (dangGui || dangTaiDanhBa) return;
+    if (errors.order.length > 0) {
+      // Nothing is sent. Errors appear under their fields, and focus moves AFTER that render (the
+      // `focusRequest` effect) — the error text and `aria-describedby` must exist when focus lands.
+      setSubmitAttempted(true);
+      setFocusRequest((n) => n + 1);
       return;
     }
 
@@ -4861,6 +4889,7 @@ export function FormGiaoViec({
       them={() => themVanBan(group)}
       go={goVanBan}
       sua={suaVanBan}
+      rowErrors={shown?.documentRows}
     />
   );
 
@@ -4878,14 +4907,13 @@ export function FormGiaoViec({
       <div className="grid gap-3 sm:grid-cols-2 [&>*]:my-0">
       <div className="o-chon">
         <label htmlFor="giao-loai">Loại nhiệm vụ</label>
-        {/* THE EMPTY OPTION WHENEVER NOTHING IS CHOSEN, not only when the catalogue is empty: a
-            commune with no default row otherwise showed its FIRST type while the value was `""`,
-            and `Giao việc` stayed grey for no visible reason (report 05/10/2026, NV-01). The first
-            row is NOT picked for the clerk — the default is the commune's catalogue choice. */}
+        {/* PRE-SELECTED: the commune's ACTIVE `is_default` row (`defaultTaskType`, user 07/10/2026).
+            NO SUCH ROW → the empty option `— Chọn loại —`, never the first row: a select with no
+            empty option shows its FIRST type while the value is `""` (report 05/10/2026, NV-01). */}
         <select
-          id="giao-loai"
+          id={CREATE_TASK_FIELD_IDS.type}
           value={loaiChon}
-          aria-describedby={loaiChon === "" ? "giao-loai-thieu" : undefined}
+          {...fieldErrorProps(CREATE_TASK_FIELD_IDS.type, shown?.type)}
           onChange={(e) => datLoai(e.target.value)}
         >
           {loaiChon === "" && <option value="">{TASK_TYPE_PLACEHOLDER}</option>}
@@ -4895,6 +4923,7 @@ export function FormGiaoViec({
             </option>
           ))}
         </select>
+        <FieldError forId={CREATE_TASK_FIELD_IDS.type} message={shown?.type} />
       </div>
 
       <div className="o-chon">
@@ -4954,13 +4983,15 @@ export function FormGiaoViec({
           </span>
         </label>
         <input
-          id="giao-tieu-de"
+          id={CREATE_TASK_FIELD_IDS.title}
           name="giao-tieu-de"
           value={tieuDe}
           required
           autoComplete="off"
+          {...fieldErrorProps(CREATE_TASK_FIELD_IDS.title, shown?.title)}
           onChange={(e) => datTieuDe(e.target.value)}
         />
+        <FieldError forId={CREATE_TASK_FIELD_IDS.title} message={shown?.title} />
       </div>
 
       <div className="o-nhap">
@@ -5070,6 +5101,17 @@ export function FormGiaoViec({
           after it, beside `Ghi chú` — the prototype's order, which is the tracking book's columns. */}
       {hienVanBan && (
         <div className="flex flex-col gap-3 [&>*]:my-0">
+          {/* Too many rows is no single row's fault: the sentence stands above the lists and takes
+              the focus itself (`tabIndex={-1}`). */}
+          {shown?.documentLimit != null && (
+            <p
+              id={CREATE_TASK_FIELD_IDS.documentLimit}
+              tabIndex={-1}
+              className={FIELD_ERROR_CLASS}
+            >
+              {shown.documentLimit}
+            </p>
+          )}
           {MOI_NHOM_VAN_BAN.filter((g) => g !== "san-pham-dau-ra").map((g) => documentGroup(g))}
         </div>
       )}
@@ -5081,15 +5123,17 @@ export function FormGiaoViec({
         <div className="o-nhap">
           <label htmlFor="giao-han">Hạn hoàn thành</label>
           <input
-            id="giao-han"
+            id={CREATE_TASK_FIELD_IDS.due}
             name="giao-han"
             type="datetime-local"
             value={dueInput}
+            {...fieldErrorProps(CREATE_TASK_FIELD_IDS.due, shown?.due)}
             onChange={(e) => {
               setDueInput(e.target.value);
               setDueIncomplete(e.target.validity.badInput);
             }}
           />
+          <FieldError forId={CREATE_TASK_FIELD_IDS.due} message={shown?.due} />
         </div>
 
         <div className="o-chon">
@@ -5128,17 +5172,8 @@ export function FormGiaoViec({
         </div>
       )}
 
-      {/* KHÔNG `role="alert"`: câu này hiện ngay khi bấm `+ Thêm văn bản` (dòng mới còn trống), và
-          một vùng thông báo khẩn sẽ cắt ngang đúng lúc tiêu điểm vừa sang ô trích yếu. Nó là lý do
-          nút `Giao việc` đang khoá, nên đứng ngay trên nút ấy. */}
-      {loaiChon === "" && (
-        <p id="giao-loai-thieu" className="thong-bao-loi">
-          {TASK_TYPE_MISSING}
-        </p>
-      )}
-      {chanVanBan !== null && <p className="thong-bao-loi">{chanVanBan}</p>}
-      {chanHan !== null && <p className="thong-bao-loi">{chanHan}</p>}
-
+      {/* Field errors stand under their fields (`createTaskErrors`); only the SERVER's answer is
+          here, beside the buttons, as one message. */}
       {loi !== null && (
         <p className="thong-bao-loi" role="alert">
           {loi}
@@ -5159,14 +5194,10 @@ export function FormGiaoViec({
         // ấy mang `Lãnh đạo giao việc` rỗng VĨNH VIỄN (`PATCH` không sửa cột ấy). Tải HỎNG thì
         // không khoá — câu lỗi ngay trên nói hệ quả, và việc giao cho bộ phận vẫn phải làm được
         // khi `identity` trục trặc (cùng chiều màn Phản ánh).
-        disabled={
-          dangGui ||
-          tieuDe.trim() === "" ||
-          loaiChon === "" ||
-          chanVanBan !== null ||
-          chanHan !== null ||
-          dangTaiDanhBa
-        }
+        // MISSING OR INVALID INPUT DOES NOT DISABLE IT (user 07/10/2026, as the prototype): a grey
+        // button says nothing about which field is wrong. The press is refused in `gui`, which
+        // shows each error under its field and moves focus to the first.
+        disabled={dangGui || dangTaiDanhBa}
       >
         {submitLabel}
       </button>
@@ -5176,7 +5207,7 @@ export function FormGiaoViec({
   if (!dialog) {
     // Inline callers: the same fields in the same order, in the screen's own frame.
     return (
-      <form className={cn("form-danh-muc flex flex-col gap-4 [&>*]:my-0", CREATE_TASK_TYPE_SCALE)} onSubmit={gui}>
+      <form className={cn("form-danh-muc flex flex-col gap-4 [&>*]:my-0", CREATE_TASK_TYPE_SCALE)} noValidate onSubmit={gui}>
         <div className="[&>*]:my-0">
           <h4>Giao việc mới</h4>
           <p className="ghi-chu">{MO_TA_FORM_GIAO_VIEC}</p>
@@ -5205,7 +5236,9 @@ export function FormGiaoViec({
         title={dialogTitle}
         description={dialogDescription}
       />
-      <form className="m-0 flex min-h-0 flex-col" onSubmit={gui}>
+      {/* `noValidate`: the browser's own bubble would answer the `required` fields before `gui`
+          runs, in its words and only for the first — `createTaskErrors` covers every rule. */}
+      <form className="m-0 flex min-h-0 flex-col" noValidate onSubmit={gui}>
         <div
           className={cn(CREATE_TASK_BODY_CLASS, CREATE_TASK_TYPE_SCALE, staffSearch && CREATE_TASK_CONTROL_TEXT)}
         >
@@ -5236,8 +5269,51 @@ export const CREATE_TASK_DIALOG_CLASS = "max-h-[calc(100dvh-6rem)] p-4";
  * screen the box stops there and stays centred with room around it, rather than growing to the
  * dialog's limit. On a short screen the dialog's cap above is reached first and this area scrolls;
  * the header stays in sight.
+ *
+ * `[&>*]:shrink-0`: this area is a height-capped flex COLUMN, so once its content is taller than the
+ * cap the browser SHRINKS its children before it scrolls. A child keeps its content height only
+ * through `min-height: auto`; `.thong-bao-loi` sets `min-height: 1.25rem`, so it was squeezed to
+ * that and its sentence spilt out under the pink frame (user screenshot 07/10/2026). No child of a
+ * scrolling form should ever shrink — they scroll.
  */
-export const CREATE_TASK_BODY_CLASS = "flex max-h-[70vh] min-h-0 flex-col gap-4 overflow-y-auto pr-1 [&>*]:my-0";
+export const CREATE_TASK_BODY_CLASS =
+  "flex max-h-[70vh] min-h-0 flex-col gap-4 overflow-y-auto pr-1 [&>*]:my-0 [&>*]:shrink-0";
+
+/**
+ * A field's error line, under the field — the prototype's `Field` error (`components/ui/field.tsx`:
+ * 12px, medium, danger colour). `m-0 mt-1.5`: the legacy `p` margins of the page do not apply here.
+ * `[.o-chon>&]:mt-0`: a select's block (`.o-chon:has(> select)`) is a flex column that already puts
+ * its 6px `gap` between children — measured 12px under the type select against 6px under the title
+ * (headless Chrome, built CSS, 07/10/2026) before this.
+ */
+const FIELD_ERROR_CLASS = "m-0 mt-1.5 text-xs font-medium text-danger-600 [.o-chon>&]:mt-0";
+
+/** Id of the error line of the field `forId`. */
+function fieldErrorId(forId: string): string {
+  return `${forId}-loi`;
+}
+
+/** `aria-invalid` + `aria-describedby` of a field that has an error shown; nothing otherwise. */
+function fieldErrorProps(
+  forId: string,
+  message: string | null | undefined,
+): { "aria-invalid"?: true; "aria-describedby"?: string } {
+  return message == null ? {} : { "aria-invalid": true, "aria-describedby": fieldErrorId(forId) };
+}
+
+/**
+ * NO `role="alert"`, unlike the prototype: focus moves to the first invalid field, whose
+ * `aria-describedby` reads this line — an alert as well would read it twice, and would read every
+ * OTHER field's error at the same moment.
+ */
+function FieldError({ forId, message }: { forId: string; message: string | null | undefined }) {
+  if (message == null) return null;
+  return (
+    <p id={fieldErrorId(forId)} className={FIELD_ERROR_CLASS}>
+      {message}
+    </p>
+  );
+}
 
 /**
  * ONE label size, ONE control text size, ONE help-text size across the create form (tester
@@ -5271,6 +5347,8 @@ export const CREATE_TASK_TYPE_SCALE = [
   "[&_.nut-mo-danh-sach]:min-h-(--control-h) [&_.nut-mo-danh-sach]:min-w-(--control-h)",
   "md:[&_.danh-sach-goi-y_li]:text-sm",
   "[&_.goi-y-tim]:text-xs",
+  // A field with an error shown gets the danger frame, as the prototype's invalid control does.
+  "[&_[aria-invalid=true]]:border-danger-500",
 ].join(" ");
 
 /**
@@ -5359,7 +5437,13 @@ function NhomVanBanNhap({
   them,
   go,
   sua,
+  rowErrors,
 }: {
+  /**
+   * Errors to draw under a row, by row key — the create form after a refused press
+   * (`createTaskErrors`). Absent on the `✎ Sửa` form, which keeps its own sentence (`canhBaoSua`).
+   */
+  rowErrors?: ReadonlyMap<string, string>;
   /**
    * Tiền tố của mọi `id` trong nhóm. Form tạo và form `✎ Sửa` có thể CÙNG MỞ trên một trang; chung
    * tiền tố thì hai ô mang cùng `id`, và `<label htmlFor>` trỏ nhầm sang ô của form kia.
@@ -5377,10 +5461,13 @@ function NhomVanBanNhap({
       <h5 id={idTieuDe}>{nhanNhomVanBan(nhom)}</h5>
       {dong.map((d, i) => {
         const id = `${tienTo}-van-ban-${d.khoa}`;
+        const rowError = rowErrors?.get(d.khoa);
         return (
           <div key={d.khoa} role="group" aria-label={`${nhanNhomVanBan(nhom)} — văn bản thứ ${i + 1}`}>
             <div className="o-nhap">
               <label htmlFor={id}>Trích yếu (văn bản thứ {i + 1})</label>
+              {/* The summary is the row's one required box, so its error sits under it and focus
+                  lands in it. */}
               <textarea
                 id={id}
                 name={id}
@@ -5389,8 +5476,10 @@ function NhomVanBanNhap({
                 maxLength={TRICH_YEU_VAN_BAN_TOI_DA}
                 placeholder={placeholderNhomVanBan(nhom)}
                 value={d.trichYeu}
+                {...fieldErrorProps(id, rowError)}
                 onChange={(e) => sua(d.khoa, { trichYeu: e.target.value })}
               />
+              <FieldError forId={id} message={rowError} />
             </div>
             <div className="o-nhap">
               <label htmlFor={`${id}-so`}>Số, ký hiệu (không bắt buộc)</label>

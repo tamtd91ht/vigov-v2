@@ -817,9 +817,12 @@ describe("form Giao việc mới §7", () => {
     expect(html).not.toContain("không đặt được về sau");
   });
 
-  it("NV-01: xã KHÔNG có loại mặc định — ô loại đứng ở `— Chọn loại —`, nút khoá KÈM lý do", () => {
+  it("NV-01: xã KHÔNG có loại mặc định — ô loại đứng ở `— Chọn loại —`; nút KHÔNG khoá, chưa đỏ gì trước lần bấm", () => {
     // Trước: không có dòng trống, trình duyệt hiện loại ĐẦU TIÊN trong khi giá trị là "" — nút
     // `Giao việc` mờ mà không nói vì sao (báo cáo kiểm thử 05/10/2026).
+    // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026: ca này ghim "nút khoá KÈM lý do" (hộp hồng trên nút). Người dùng:
+    // bấm thì báo lỗi DƯỚI Ô và đưa tiêu điểm tới ô thiếu, như prototype — xem
+    // `create-task-form.interaction.test.tsx`. Ở đây chỉ còn trạng thái TRƯỚC lần bấm.
     const typeRow = (code: string, label: string) => ({
       id: `01J${code}`,
       code,
@@ -850,9 +853,51 @@ describe("form Giao việc mới §7", () => {
     expect(o).toContain(`<option value="" selected="">${TASK_TYPE_PLACEHOLDER}</option>`);
     // Không tự chọn dòng đầu thay cán bộ — mặc định là lựa chọn của danh mục xã.
     expect(o).not.toMatch(/<option value="theo-van-ban" selected="">/);
-    expect(o).toContain('aria-describedby="giao-loai-thieu"');
-    expect(html).toContain(`<p id="giao-loai-thieu" class="thong-bao-loi">${TASK_TYPE_MISSING}</p>`);
-    expect(html).toMatch(/<button type="submit" class="nut-chinh" disabled="">Giao việc<\/button>/);
+    expect(o).not.toContain("aria-invalid");
+    expect(o).not.toContain("aria-describedby");
+    expect(html).not.toContain(TASK_TYPE_MISSING);
+    expect(html).toMatch(/<button type="submit" class="nut-chinh">Giao việc<\/button>/);
+  });
+
+  it("07/10: loại mặc định đã NGỪNG dùng thì không chọn sẵn — `— Chọn loại —`", () => {
+    const html = renderToStaticMarkup(
+      <FormGiaoViec
+        danhMuc={{
+          ...DANH_MUC,
+          loai: [
+            { ...DANH_MUC.loai[0]!, active: false },
+            { ...DANH_MUC_CO_BAN.loai[0]!, is_default: false },
+          ],
+        }}
+        danhBa={DANH_BA}
+        danhBaLanhDao={DANH_BA}
+        dangGui={false}
+        loi={null}
+        huy={() => {}}
+        giaoViec={() => {}}
+      />,
+    );
+    const o = oChon(html, "giao-loai");
+    expect(o).toContain(`<option value="" selected="">${TASK_TYPE_PLACEHOLDER}</option>`);
+    expect(o).not.toMatch(/value="(theo-van-ban|co-ban)" selected=""/);
+  });
+
+  it("07/10: loại mặc định `theo-van-ban` → form mở ra đã có `Văn bản sản phẩm đầu ra` và `Ghi chú`", () => {
+    const html = renderToStaticMarkup(
+      <FormGiaoViec
+        danhMuc={{ ...DANH_MUC, loai: [{ ...DANH_MUC_CO_BAN.loai[0]!, is_default: false }, DANH_MUC.loai[0]!] }}
+        danhBa={DANH_BA}
+        danhBaLanhDao={DANH_BA}
+        coDanhSachVanBan
+        dangGui={false}
+        loi={null}
+        huy={() => {}}
+        giaoViec={() => {}}
+      />,
+    );
+    expect(oChon(html, "giao-loai")).toContain('<option value="theo-van-ban" selected="">');
+    expect(html).toContain('id="giao-nhom-van-ban-san-pham-dau-ra"');
+    expect(html).toContain('<label for="giao-ghi-chu">Ghi chú</label>');
   });
 
   it("NV-01: xã CÓ loại mặc định — không dòng trống, không câu lý do", () => {
