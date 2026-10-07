@@ -675,6 +675,13 @@ type DeNghiLuiHan struct {
 
 	ThoiDiem time.Time
 	DuyetLuc time.Time
+
+	// DecisionNote is the decider's note (`decision_note`, migration 0031), written ONLY in the
+	// statement that decides the request and frozen afterwards. "" = no note — stored as NULL, never
+	// as '' (the column's CHECK refuses a blank). Always "" on a pending request, and on every request
+	// decided before 0031: their note, if any, lives only in the task log. Staff free text that may
+	// name people (rule 3): never logged, never quoted in an error.
+	DecisionNote string
 }
 
 // DeNghiLuiHanChoDuyet is ONE ROW OF THE APPROVAL QUEUE (§5.8, GET /api/v1/task-extensions): a

@@ -42,6 +42,16 @@ type deNghiChoDuyetGia struct {
 	xa   tenant.ID
 	loc  petstore.LocDeNghiChoDuyet
 	yc   page.Request
+
+	// The per-task history (GET /api/v1/tasks/{ma}/extensions) — task_extension_history_test.go.
+	// Keyed by commune, then by the task's INTERNAL id, as the SQL binds them.
+	history      map[tenant.ID]map[string][]domain.DeNghiLuiHan
+	historyNext  string
+	historyErr   error
+	historyCalls int
+	historyTask  string
+	historyComm  tenant.ID
+	historyReq   page.Request
 }
 
 func (g *deNghiChoDuyetGia) ChoDuyet(ctx context.Context, loc petstore.LocDeNghiChoDuyet, yc page.Request) (

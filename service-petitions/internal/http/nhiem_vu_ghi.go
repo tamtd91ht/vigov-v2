@@ -338,6 +338,12 @@ type deNghiLuiHanRa struct {
 
 	RequestedAt time.Time  `json:"requested_at"`
 	DecidedAt   *time.Time `json:"decided_at"`
+
+	// DecisionNote is the decider's note (migration 0031) — null when there is none: on a pending
+	// request, on a decision taken without a note, and on every decision taken before 0031 (their note,
+	// if any, is only in the task's log-entries). ADDED, OPTIONAL-READ (rule 2, invariant 4): the two
+	// POST replies carry it too — null on filing, the note just written on deciding.
+	DecisionNote *string `json:"decision_note"`
 }
 
 func deNghiRaNgoai(d domain.DeNghiLuiHan) deNghiLuiHanRa {
@@ -355,6 +361,11 @@ func deNghiRaNgoai(d domain.DeNghiLuiHan) deNghiLuiHanRa {
 	if !d.DuyetLuc.IsZero() {
 		t := d.DuyetLuc
 		ra.DecidedAt = &t
+	}
+	// "" IS "NO NOTE" and travels as null, never as "" — the column holds NULL for it.
+	if d.DecisionNote != "" {
+		n := d.DecisionNote
+		ra.DecisionNote = &n
 	}
 	return ra
 }

@@ -843,15 +843,23 @@ func (s *DeNghiLuiHanStore) TheoIDDeSua(ctx context.Context, tx *store.ScopedTx,
 //
 // THE WHERE CLAUSE CARRIES `trang_thai = 'cho-duyet'`, so a second decision on one request matches
 // no row. One request, one answer, one audit entry.
+//
+// THE NOTE TRAVELS IN THIS SAME STATEMENT, and it has to: migration 0031's trigger accepts a change
+// to `decision_note` ONLY in the UPDATE that moves `cho-duyet` → `da-duyet`/`tu-choi`. A second
+// UPDATE writing the note afterwards would be refused (P0001) and roll back the whole decision.
+// `note` arrives trimmed; "" becomes NULL — the CHECK refuses a blank, and NULL is what "no note"
+// means on this column (the `rating_comment` convention of 0017).
 func (s *DeNghiLuiHanStore) QuyetDinh(ctx context.Context, tx *store.ScopedTx, id string,
-	sang domain.TrangThaiDeNghi, nguoiDuyetMa string, luc time.Time) error {
+	sang domain.TrangThaiDeNghi, nguoiDuyetMa string, luc time.Time, note string) error {
 
 	const stmt = `UPDATE de_nghi_lui_han
-		SET trang_thai = $3, nguoi_duyet_ma = $4, duyet_luc = $5, cap_nhat_luc = now()
+		SET trang_thai = $3, nguoi_duyet_ma = $4, duyet_luc = $5, decision_note = $6, cap_nhat_luc = now()
 		WHERE tenant_id = $1 AND id = $2 AND trang_thai = 'cho-duyet' AND deleted_at IS NULL`
 
-	kq, err := tx.Exec(ctx, stmt, string(tx.TenantID()), id, string(sang), nguoiDuyetMa, luc)
+	kq, err := tx.Exec(ctx, stmt, string(tx.TenantID()), id, string(sang), nguoiDuyetMa, luc,
+		rongThanhNull(note))
 	if err != nil {
+		// NOT the note text (rule 3, forbidden #3).
 		return fmt.Errorf("de_nghi_lui_han: ghi quyết định: %w", err)
 	}
 	n, err := kq.RowsAffected()

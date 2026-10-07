@@ -217,6 +217,14 @@ type (
 		// GET /api/v1/task-extension-counts. On THIS interface so the count cannot be wired to a
 		// reader other than the one the queue pages through.
 		CountPending(ctx context.Context, loc petstore.LocDeNghiChoDuyet) (int, error)
+
+		// TaskHistory is ONE task's requests, every status, newest first, with the decider's note —
+		// GET /api/v1/tasks/{ma}/extensions. Keyed by the task's INTERNAL id, which the handler has only
+		// after NhiemVuDoc.TheoMa, so that read's soft-delete and commune checks cannot be skipped. On
+		// this interface because it is the same read-only reader over the same table; it does NOT
+		// share the queue's predicate builder, so the queue and its badge are untouched.
+		TaskHistory(ctx context.Context, taskID string, yc page.Request) (
+			page.Result[domain.DeNghiLuiHan], error)
 	}
 
 	// GhiNhiemVuUseCase is the six STAFF acts on a task, each of which opens a transaction and
@@ -1693,7 +1701,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	// THE `Theo văn bản` DOCUMENT BLOCK OF §5.4 IS IN THE REPLY (`documents`, migration 0009). The
 	// progress log (§5.9) is NOT — it has its own paged route, …/{ma}/log-entries, below. The
 	// PENDING extension requests (§5.8) are read commune-wide through GET /api/v1/task-extensions,
-	// further down; a per-task history of decided requests still has no read route.
+	// further down; the per-task history of every request, decided ones with their note, is
+	// GET /api/v1/tasks/{ma}/extensions, beside the two extension writes.
 	//
 	// @reply    200 nhiemVuRa
 	// @reply    401 httpx.Error
@@ -2074,6 +2083,32 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "task.update")(
 			idem.KhongCan("mỗi nhiệm vụ chỉ có một đề nghị đang chờ duyệt — khoá duy nhất `(tenant_id, nhiem_vu_id, moc_cho_duyet)` làm lần gửi thứ hai trả 409 chứ không sinh đề nghị thứ hai")(
 				http.HandlerFunc(h.DeNghiLuiHanNhiemVu))))
+
+	// LỊCH SỬ LÙI HẠN (§5.8, user decision 07/10/2026) — every request of ONE task, every status,
+	// newest first, each with the decider's note (`decision_note`, migration 0031; null before it).
+	// The READ half of the two writes around it; the drawer shows it.
+	//
+	// `task.read`, THE KEY OF THE TASK READS (seeded at service-identity/migrations/0001_init.sql:304)
+	// — the user's decision, and the key the queue already opened `reason` to. NO KEY WAS INVENTED
+	// (rule 5, invariant 3c).
+	//
+	// 404 is the single answer GET /api/v1/tasks/{ma} gives, for the same three causes — the task is
+	// read first through the same reader, and the requests only after. 401 is RequirePermission's answer
+	// to no session AND to a session of another commune. Soft-deleted requests are excluded (rule 7).
+	// The pending queue GET /api/v1/task-extensions and its count are NOT affected. NO idem.*
+	// DECLARATION: a GET changes no state. NO AUDIT ENTRY.
+	//
+	// @summary  Lịch sử đề nghị lùi hạn của một nhiệm vụ — mọi trạng thái, mới nhất trước, kèm ghi chú của người quyết định, phân trang theo con trỏ
+	// @screen   02-nhiem-vu §5.8
+	// @reply    200 page.Result[deNghiLuiHanRa]
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/tasks/{ma}/extensions",
+		authz.RequirePermission(d.Checker, "task.read")(
+			http.HandlerFunc(h.TaskExtensionHistory)))
 
 	// QUYẾT ĐỊNH LÙI HẠN (§5.8, ADR 0038) — `task.extend`, seeded at 0001_init.sql:303.
 	//

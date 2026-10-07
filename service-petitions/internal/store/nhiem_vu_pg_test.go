@@ -102,6 +102,8 @@ func TestPgCotNhiemVuTrongMaKhopVoiLuocDoThat(t *testing.T) {
 		{"de_nghi_lui_han", []string{
 			"tenant_id", "id", "nhiem_vu_id", "nguoi_de_nghi_ma", "nguoi_duyet_ma",
 			"han_moi", "ly_do", "trang_thai", "thoi_diem", "duyet_luc", "deleted_at",
+			// 0031 — written by QuyetDinh, read by TaskHistory (task_extension_history.go).
+			"decision_note",
 		}},
 	} {
 		for _, c := range tr.cot {

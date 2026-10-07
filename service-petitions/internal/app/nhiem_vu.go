@@ -166,8 +166,9 @@ type KhoDeNghiLuiHan interface {
 	DangChoDuyet(ctx context.Context, tx *store.ScopedTx, nhiemVuID string) (bool, error)
 	TheoIDDeSua(ctx context.Context, tx *store.ScopedTx, nhiemVuID, id string) (
 		domain.DeNghiLuiHan, error)
+	// QuyetDinh writes the decision AND its note (migration 0031) in ONE statement; note "" = NULL.
 	QuyetDinh(ctx context.Context, tx *store.ScopedTx, id string, sang domain.TrangThaiDeNghi,
-		nguoiDuyetMa string, luc time.Time) error
+		nguoiDuyetMa string, luc time.Time, note string) error
 	// ApprovedCount — requests on this task ever approved, soft-deleted ones included. A deadline
 	// correction lets `han_ban_dau` follow only when it is zero (migration 0016).
 	ApprovedCount(ctx context.Context, tx *store.ScopedTx, nhiemVuID string) (int, error)
@@ -1770,7 +1771,9 @@ func (uc *GhiNhiemVu) QuyetDinhLuiHan(ctx context.Context, ma, deNghiID string,
 			}
 		}
 
-		if err := uc.deNghi.QuyetDinh(ctx, tx, dn.ID, sangTT, nguoi.ID, bayGio); err != nil {
+		// THE NOTE GOES ON THE REQUEST ROW, IN THE DECIDING STATEMENT (migration 0031's trigger allows
+		// it there and nowhere else). `ghiChu` is already trimmed; "" is stored as NULL by the store.
+		if err := uc.deNghi.QuyetDinh(ctx, tx, dn.ID, sangTT, nguoi.ID, bayGio, ghiChu); err != nil {
 			return err
 		}
 
@@ -1778,6 +1781,7 @@ func (uc *GhiNhiemVu) QuyetDinhLuiHan(ctx context.Context, ma, deNghiID string,
 		sau.TrangThai = sangTT
 		sau.NguoiDuyetMa = nguoi.ID
 		sau.DuyetLuc = bayGio
+		sau.DecisionNote = ghiChu
 
 		// THE TIMELINE RECORDS IT TOO, because §5.9's drawer is where an officer finds out their
 		// request was answered. The task's status did not move, so the entry carries the status it
@@ -1798,9 +1802,14 @@ func (uc *GhiNhiemVu) QuyetDinhLuiHan(ctx context.Context, ma, deNghiID string,
 				"trang_thai_de_nghi": string(dn.TrangThai),
 				"han_xu_ly":          lucRaVet(n.HanXuLy),
 			},
+			// THE NOTE'S LENGTH, NOT ITS TEXT — the convention DeNghiLuiHan applies to `ly_do`
+			// (`do_dai_ly_do`). The text is on the request row, which is the record; `audit_log` is
+			// append-only and never deleted, so a copy of free text that may name people would be a
+			// permanent personal-data store (rule 6, forbidden #4). 0 = no note (stored NULL).
 			"sau": map[string]any{
 				"trang_thai_de_nghi": string(sangTT),
 				"han_xu_ly":          lucRaVet(hanSauQuyetDinh(n, dn, yc.Duyet)),
+				"do_dai_ghi_chu":     len([]rune(ghiChu)),
 			},
 			// THE ORIGINAL COMMITMENT, RESTATED IN THE ENTRY THAT MOVED THE CURRENT ONE. It is the
 			// denominator of §11.3, and an inspection reading this entry should not have to open the
