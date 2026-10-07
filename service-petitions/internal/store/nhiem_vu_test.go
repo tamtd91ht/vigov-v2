@@ -95,6 +95,13 @@ func dongNhiemVu(sua map[string]driver.Value) map[string]driver.Value {
 		// What the batching and mapping do is asserted with a fake of its own in
 		// task_tree_facts_test.go.
 		"count(*)": int64(2),
+
+		// The extension-facts statement's columns (store.attachExtensionFacts): (`nhiem_vu_id`, approved,
+		// pending). `nhiem_vu_id` IS THIS TASK'S id, so the mapping attaches the answer to it; 3 and 1 are
+		// distinct from each other and from the child count, so a swapped Scan reads as wrong data.
+		"nhiem_vu_id":         "nv-001",
+		extensionApprovedItem: int64(3),
+		extensionPendingItem:  int64(1),
 	}
 	for k, v := range sua {
 		d[k] = v
@@ -111,10 +118,11 @@ func TestTheoMaBuocXaVaLoaiDongDaXoa(t *testing.T) {
 	if _, err := s.TheoMa(ctxXa(xaThu), maNhiemVuThu); err != nil {
 		t.Fatalf("đọc nhiệm vụ: %v", err)
 	}
-	// FOUR statements: the task, its meeting back-link (the fixture task is `ket-luan-hop`), and the two
-	// tree facts — its child count and its parent's register number (the fixture has a parent).
-	if len(k.lenh) != 4 {
-		t.Fatalf("chạy %d câu lệnh, muốn 4", len(k.lenh))
+	// FIVE statements: the task, its meeting back-link (the fixture task is `ket-luan-hop`), the two
+	// tree facts — its child count and its parent's register number (the fixture has a parent) — and the
+	// extension facts.
+	if len(k.lenh) != 5 {
+		t.Fatalf("chạy %d câu lệnh, muốn 5", len(k.lenh))
 	}
 	l := k.lenh[0]
 
@@ -146,15 +154,16 @@ func TestTheoMaXaTrongContextQuyetDinhChuKhongPhaiThamSo(t *testing.T) {
 	if _, err := s.TheoMa(ctxXa(xaKhac), maNhiemVuThu); err != nil {
 		t.Fatal(err)
 	}
-	// Four statements per call (task + back-link + child count + parent code): [0..3] are commune A's,
-	// [4..7] commune B's. EVERY one of B's must carry B — the back-link is a join, the half that could
-	// name A's meeting, and the two tree statements are the ones that could count or name A's tasks.
-	if len(k.lenh) != 8 {
-		t.Fatalf("chạy %d câu lệnh, muốn 8", len(k.lenh))
+	// Five statements per call (task + back-link + child count + parent code + extension facts): [0..4]
+	// are commune A's, [5..9] commune B's. EVERY one of B's must carry B — the back-link is a join, the
+	// half that could name A's meeting, and the tree and extension statements are the ones that could
+	// count or name A's tasks and requests.
+	if len(k.lenh) != 10 {
+		t.Fatalf("chạy %d câu lệnh, muốn 10", len(k.lenh))
 	}
 	for i, l := range k.lenh {
 		muon := string(xaThu)
-		if i >= 4 {
+		if i >= 5 {
 			muon = string(xaKhac)
 		}
 		if l.args[0] != muon {
@@ -286,10 +295,10 @@ func chayDanhSachNhiemVu(t *testing.T, loc LocNhiemVu) lenhGia {
 		t.Fatalf("DanhSach: %v", err)
 	}
 	// The page, then ONE back-link statement for the whole page (the fixture task is
-	// `ket-luan-hop`), then the two tree-fact statements. The page statement is the one these cases
-	// inspect.
-	if len(k.lenh) != 4 {
-		t.Fatalf("chạy %d câu lệnh, muốn 4", len(k.lenh))
+	// `ket-luan-hop`), then the two tree-fact statements and the extension-facts statement. The page
+	// statement is the one these cases inspect.
+	if len(k.lenh) != 5 {
+		t.Fatalf("chạy %d câu lệnh, muốn 5", len(k.lenh))
 	}
 	return k.lenh[0]
 }

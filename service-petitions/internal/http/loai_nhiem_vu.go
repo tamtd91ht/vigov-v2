@@ -96,6 +96,15 @@ type loaiNhiemVuRa struct {
 	// after what a screen does with it (ADR 0017). Capability flags would also have to be kept in
 	// step with the trigger from a second place.
 	Tier int `json:"tier"`
+
+	// RequiresDirective is true for the type whose tasks are filed against a directing document —
+	// `theo-van-ban` — and false for every other row (the prototype's `requires_directive`,
+	// vigov-require org/data/default_config.json:517-536). ADDED 07/10/2026, additive.
+	//
+	// DERIVED FROM THE CODE, like Tier (domain.LoaiNhiemVu.RequiresDirective) — not a column, and NOT
+	// WRITABLE: no write body declares it, so a POST/PATCH carrying it is ignored like any unknown field.
+	// `theo-van-ban` is a tier-3 code (migration 0003:205-208), so the code this reads cannot change.
+	RequiresDirective bool `json:"requires_directive"`
 }
 
 // danhSachLoaiNhiemVuRa wraps the list in an OBJECT rather than returning a bare JSON array.
@@ -119,6 +128,7 @@ func loaiNhiemVuRaNgoai(l domain.LoaiNhiemVu) loaiNhiemVuRa {
 	return loaiNhiemVuRa{
 		ID: l.ID, Code: l.Ma, Label: l.Nhan, IsDefault: l.LaMacDinh, Active: l.DangDung,
 		Order: l.ThuTu, Source: l.Nguon, Tier: int(l.Tang()),
+		RequiresDirective: l.RequiresDirective(),
 	}
 }
 

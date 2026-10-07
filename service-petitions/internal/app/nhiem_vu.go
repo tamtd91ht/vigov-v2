@@ -149,9 +149,10 @@ type KhoNhiemVuGhi interface {
 	XoaMemVanBan(ctx context.Context, tx *store.ScopedTx, nhiemVuID, id, nguoiMa string,
 		luc time.Time) error
 
-	// AttachTreeFactsTx fills the parent's register number and the live child count on the tasks a
-	// reply is about to carry, inside the act's transaction — so a PATCH or status reply states the
-	// same `parent` and `child_count` the reads do, instead of "" and 0 for a task that has both.
+	// AttachTreeFactsTx fills the parent's register number, the live child count and the two extension
+	// facts (`extension_count`, `pending_extension`) on the tasks a reply is about to carry, inside the
+	// act's transaction — so a PATCH or status reply states what the reads do, instead of "", 0 and
+	// false for a task that has them.
 	AttachTreeFactsTx(ctx context.Context, tx *store.ScopedTx, ds []domain.NhiemVu) error
 }
 
@@ -467,8 +468,9 @@ func (uc *GhiNhiemVu) refreshUpdatedAt(ctx context.Context, tx *store.ScopedTx, 
 	return nil
 }
 
-// attachReplyTreeFacts fills `parent` (register number) and `child_count` on the task an act is about
-// to reply with, inside that act's transaction. One task, so at most two statements.
+// attachReplyTreeFacts fills `parent` (register number), `child_count` and the two extension facts on
+// the task an act is about to reply with, inside that act's transaction. One task, so at most three
+// statements.
 func (uc *GhiNhiemVu) attachReplyTreeFacts(ctx context.Context, tx *store.ScopedTx, n *domain.NhiemVu) error {
 	one := []domain.NhiemVu{*n}
 	if err := uc.kho.AttachTreeFactsTx(ctx, tx, one); err != nil {
@@ -1170,7 +1172,7 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 			return err
 		}
 		// THE TREE FACTS OF BOTH SIDES IN ONE BATCH: `sau` for the reply, `truoc` so the trail can name
-		// the OLD parent by its register number too. Same two statements as for one task.
+		// the OLD parent by its register number too. Same statements as for one task (one id, deduplicated).
 		both := []domain.NhiemVu{truoc, sau}
 		if err := uc.kho.AttachTreeFactsTx(ctx, tx, both); err != nil {
 			return err

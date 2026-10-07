@@ -194,13 +194,17 @@ func eachRow(ctx context.Context, q treeQuery, stmt string, args []any, f func(t
 	return rows.Err()
 }
 
-// AttachTreeFactsTx is attachTreeFacts inside a write transaction — for the reply of an act that
-// changed the task (PATCH, status), so the reply carries the same two facts the reads do.
+// AttachTreeFactsTx is attachTaskFacts inside a write transaction — for the reply of an act that
+// changed the task (PATCH, status, assignment), so the reply carries the same facts the reads do.
+//
+// THE NAME PREDATES THE EXTENSION FACTS (07/10/2026) and is kept because app.KhoNhiemVuGhi names it;
+// it attaches all four — the two tree facts and `extension_count` / `pending_extension`
+// (task_extension_facts.go) — so a write reply never answers 0 / false for a task that has either.
 //
 // INSIDE THE TRANSACTION, like the document block the same replies re-read: the reply describes the
 // state the act committed, and a read after the commit could describe a later one.
 func (s *NhiemVuStore) AttachTreeFactsTx(ctx context.Context, tx *store.ScopedTx, ds []domain.NhiemVu) error {
-	return attachTreeFacts(ctx, txTreeQuery(tx), ds)
+	return attachTaskFacts(ctx, txTreeQuery(tx), ds)
 }
 
 // Compile-time check that *sql.Rows is what the two readers hand back.

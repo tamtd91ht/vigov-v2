@@ -229,7 +229,7 @@ func lookupChunked[V any](ctx context.Context, keys []string,
 }
 
 // registerFilterSummary is the filter as the trail records it: WHICH filters were set and their CODED
-// values — status, type, bloc, priority, unit, source, assignee (a staff code), parent, metric,
+// values — status, type, bloc, priority, unit, source, assignee (a staff code), parent, roots, metric,
 // period, the checkboxes and the scope. The free-text search is recorded as PRESENT ONLY: `q` is
 // whatever a clerk typed, which may quote a citizen's complaint, and `audit_log` is permanent (rule 3,
 // forbidden #5).
@@ -248,6 +248,9 @@ func registerFilterSummary(loc petstore.LocNhiemVu) map[string]any {
 	set("source", loc.NguonGiao)
 	set("assignee", loc.NguoiThucHienMa)
 	set("parent", loc.ParentCode)
+	if loc.Roots {
+		out["roots"] = true
+	}
 	set("metric", string(loc.Metric))
 	if !loc.Period.From.IsZero() || !loc.Period.To.IsZero() {
 		out["from"], out["to"] = loc.Period.From, loc.Period.To

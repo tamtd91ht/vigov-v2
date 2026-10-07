@@ -309,6 +309,17 @@ type NhiemVu struct {
 	// itself: a count taken from the rows on screen changes with the page the reader is on.
 	ChildCount int
 
+	// ExtensionCount is how many extension requests on this task were ever APPROVED — the prototype's
+	// `extension_count` (vigov-require tasks/schemas.py:286), the "đã lùi hạn {n} lần" of §5.6/§5.8.
+	// PendingExtension is whether one request is awaiting a decision right now (schemas.py:293) — NOT
+	// a status of the task: the work stays in its own status while a letter sits on a leader's desk.
+	//
+	// NEITHER IS A COLUMN, AND NEITHER IS STORED. Both are counted from `de_nghi_lui_han` by the store
+	// for a whole page in one statement (store.attachExtensionFacts); a stored counter would be a second
+	// copy of a fact the request table already holds, and the copy that drifts is the one on the screen.
+	ExtensionCount   int
+	PendingExtension bool
+
 	// PriorityRank is the keyset anchor of a register page sorted by `priority`: this commune's
 	// catalogue position (`muc_uu_tien_nhiem_vu.thu_tu`) of the task's priority, or the direction's
 	// no-priority sentinel — read by the store in the same statement. ZERO ON EVERY OTHER READ, and

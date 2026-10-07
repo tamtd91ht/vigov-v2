@@ -195,6 +195,26 @@ type nhiemVuRa struct {
 	// happens to hold: the same task would read `2 việc con` on one page and `3` on the next.
 	ChildCount int `json:"child_count"`
 
+	// ExtensionCount is how many extension requests on this task were ever APPROVED — §5.6/§5.8's "đã
+	// lùi hạn {n} lần", the prototype's `extension_count` (vigov-require tasks/schemas.py:286). 0 when
+	// none. ADDED 07/10/2026, additive to a published reply.
+	//
+	// SOFT-DELETED APPROVALS ARE COUNTED, deliberately: this is the very predicate migration 0016's
+	// trigger uses to freeze `original_due_at`, so `extension_count > 0` and "the original deadline can
+	// no longer follow a correction" are one fact and never disagree (store/task_extension_facts.go).
+	ExtensionCount int `json:"extension_count"`
+
+	// PendingExtension is true while ONE extension request awaits the assigner's decision (at most one
+	// can — migration 0006's `moc_cho_duyet`). The prototype's `pending_extension` (schemas.py:293).
+	//
+	// ⚠ NOT A STATUS OF THE TASK: the work stays in Status while the request sits on a desk, and folding
+	// the two together would count an in-progress task as `cho-duyet` on the board. The request itself
+	// is GET /api/v1/tasks/{ma}/extensions; this flag only says one is open.
+	//
+	// Both extension fields are counted by the server for the whole page in ONE statement, on every
+	// surface that answers this shape — list, detail, the meeting's task list and the write replies.
+	PendingExtension bool `json:"pending_extension"`
+
 	CreatedBy string    `json:"created_by"`
 	CreatedAt time.Time `json:"created_at"`
 
@@ -361,6 +381,8 @@ func nhiemVuRaNgoai(n domain.NhiemVu) nhiemVuRa {
 		SuperiorAcknowledged: n.CapTrenCongNhanHoanThanh,
 		Parent:               n.ParentCode,
 		ChildCount:           n.ChildCount,
+		ExtensionCount:       n.ExtensionCount,
+		PendingExtension:     n.PendingExtension,
 		CreatedBy:            n.NguoiTaoMa,
 		CreatedAt:            n.TaoLuc,
 		UpdatedAt:            n.UpdatedAt,
@@ -713,6 +735,16 @@ func locNhiemVuTuQuery(q map[string][]string) (petstore.LocNhiemVu, taskFilterNe
 		return loc, needs, errParentCodeTooLong
 	}
 
+	// `roots=true`: root tasks only — no parent on the row (the prototype's `roots_only`). THE ONLY
+	// ACCEPTED SPELLING, for the reason `late` has one below: a `roots=1` silently dropped is a board
+	// flooded with sub-tasks while the client believes it asked for roots. Absent = every task.
+	if s := lay("roots"); s != "" {
+		if s != "true" {
+			return loc, needs, errTaskRootsInvalid
+		}
+		loc.Roots = true
+	}
+
 	// `late=true` IS THE ONLY ACCEPTED SPELLING, and anything else is refused rather than read as
 	// false. A checkbox whose value arrived as `1` or `yes` and was silently dropped shows an officer
 	// the whole register while the box on their screen is ticked.
@@ -791,6 +823,8 @@ var (
 		"`scope` chỉ nhận `all`, `mine`, `related` hoặc `assigned-by-me`")
 	errTaskIncompleteInvalid = errors.New(
 		"`incomplete` chỉ nhận giá trị `true`; bỏ hẳn tham số nếu không lọc việc chưa hoàn thành")
+	errTaskRootsInvalid = errors.New(
+		"`roots` chỉ nhận giá trị `true`; bỏ hẳn tham số nếu không lọc việc gốc")
 	errTaskSoonInvalid = errors.New(
 		"`soon` chỉ nhận giá trị `true`; bỏ hẳn tham số nếu không lọc việc sắp đến hạn")
 	errParentCodeTooLong = fmt.Errorf(

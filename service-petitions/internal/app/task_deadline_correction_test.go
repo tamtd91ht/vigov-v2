@@ -127,6 +127,11 @@ func TestCorrectDeadline_ApprovedCountIncludesSoftDeleted(t *testing.T) {
 	}
 	var found bool
 	for _, l := range k.cau("FROM de_nghi_lui_han") {
+		// The reply's extension facts (store.attachExtensionFacts) name `deleted_at` inside the PENDING
+		// item only; their approved item is asserted on its own in TestReplyCarriesExtensionFacts.
+		if strings.Contains(l.sql, "GROUP BY nhiem_vu_id") {
+			continue
+		}
 		if strings.Contains(l.sql, "'da-duyet'") {
 			found = true
 			if strings.Contains(l.sql, "deleted_at") {

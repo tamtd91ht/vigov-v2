@@ -744,8 +744,11 @@ func Register(mux *http.ServeMux, d Deps) {
 	// NO idem.* DECLARATION on either: a GET changes no state, and declaring a duplicate-request
 	// protection here would claim a protection with nothing to protect.
 
-	// @summary  Danh mục loại nhiệm vụ của xã — dùng cho ô chọn loại trên biểu mẫu nhiệm vụ và bộ lọc
+	// @summary  Danh mục loại nhiệm vụ của xã — dùng cho ô chọn loại trên biểu mẫu nhiệm vụ và bộ lọc; mỗi dòng kèm cờ chỉ đọc `requires_directive` (đúng với `theo-van-ban`)
 	// @screen   14-cau-hinh §5
+	// `requires_directive` is DERIVED from the code (domain.LoaiNhiemVu.RequiresDirective), never stored
+	// and never writable — the write bodies below do not declare it.
+	//
 	// 500 covers two causes and says so honestly: an ordinary store failure, and the commune's
 	// catalogue exceeding petstore.TranDanhMucLoaiNhiemVu — which this route REFUSES rather than
 	// truncating, because a silently short list is a missing option in a form.
@@ -1557,7 +1560,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// POST /api/v1/tasks/{ma}/assignment, below. PATCH still cannot move `bo_phan_id` or
 	// `nguoi_thuc_hien_ma` — folding it in would hand assignment to every holder of `task.update`.
 
-	// @summary  Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo phạm vi (`all` · `mine` · `related` · `assigned-by-me` = tôi tạo hoặc tôi là lãnh đạo giao việc) · trạng thái · chưa hoàn thành (`incomplete=true`, mọi trạng thái trừ `hoan-thanh`) · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · sắp đến hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối) · `priority` (theo thứ tự danh mục mức ưu tiên của xã, việc không có mức ở cuối) · `title`
+	// @summary  Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo phạm vi (`all` · `mine` · `related` · `assigned-by-me` = tôi tạo hoặc tôi là lãnh đạo giao việc) · trạng thái · chưa hoàn thành (`incomplete=true`, mọi trạng thái trừ `hoan-thanh`) · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · sắp đến hạn · việc con của một mã (`parent=NV19`) · chỉ việc gốc (`roots=true`); mỗi dòng kèm số lần đã lùi hạn (`extension_count`) và cờ đang có đề nghị lùi hạn chờ duyệt (`pending_extension`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối) · `priority` (theo thứ tự danh mục mức ưu tiên của xã, việc không có mức ở cuối) · `title`
 	// @screen   02-nhiem-vu §3, §4, §5.10
 	// 400 covers a filter the server REFUSES rather than ignores.
 	//
@@ -1570,8 +1573,13 @@ func Register(mux *http.ServeMux, d Deps) {
 	// `parent=<register number>` lists the DIRECT children of that task; a number matching nothing
 	// in this commune is an empty page, the same answer a childless task gets. `sort=due_at` puts the
 	// tasks WITHOUT a deadline LAST in both directions, and the cursor stays exact across that
-	// boundary (petstore.SapXepNhiemVu, petstore.DanhSach). Every row carries `parent` as a register number and
-	// `child_count`, both resolved for the whole page in two statements.
+	// boundary (petstore.SapXepNhiemVu, petstore.DanhSach). Every row carries `parent` as a register number,
+	// `child_count`, `extension_count` (approved requests, soft-deleted included — migration 0016's
+	// predicate) and `pending_extension`, resolved for the whole page in three statements at most.
+	//
+	// `roots=true` keeps only tasks with no parent (the prototype's `roots_only`); absent = every task.
+	// Any other value is 400. It is one more field of the shared filter, so /task-counts and the
+	// register export apply it too. With `parent=` it is an empty page — a child is never a root.
 	//
 	// 500 additionally covers `scope=mine` / `scope=related` / `scope=assigned-by-me` on a principal
 	// with no staff business code — a wiring fault, refused rather than silently widened to the whole
@@ -1690,7 +1698,7 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "task.read")(
 			http.HandlerFunc(h.TaskCounts)))
 
-	// @summary  Một nhiệm vụ, tra theo mã nhiệm vụ của xã (NV19)
+	// @summary  Một nhiệm vụ, tra theo mã nhiệm vụ của xã (NV19) — kèm số lần đã lùi hạn và cờ đang có đề nghị lùi hạn chờ duyệt
 	// @screen   02-nhiem-vu §5
 	// 404 is the single answer to three causes — no such number, another commune's number, and a
 	// soft-deleted task. Telling them apart tells a caller which numbers exist in a register they

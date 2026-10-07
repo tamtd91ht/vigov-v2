@@ -541,6 +541,34 @@ func (k *khoNhiemVuGia) doDeNghi(q string, cot []string, args []driver.Value) (d
 	k.mu.Lock()
 	defer k.mu.Unlock()
 
+	// THE REPLY'S TWO EXTENSION FACTS (store.attachExtensionFacts), ABOVE the `count(*)` branch, which
+	// would otherwise answer this three-column GROUP BY with one value. Computed from the same rows the
+	// decision path reads: approved counts EVERY `da-duyet` row (soft-deleted included, as migration 0016
+	// does); pending counts live `cho-duyet` rows only. A row with no `deleted_at` key is live.
+	if strings.Contains(q, "GROUP BY nhiem_vu_id") {
+		var hang [][]driver.Value
+		for _, taskID := range args[1:] {
+			var approved, pending int64
+			for _, r := range k.deNghi {
+				if r["nhiem_vu_id"] != taskID {
+					continue
+				}
+				switch r["trang_thai"] {
+				case "da-duyet":
+					approved++
+				case "cho-duyet":
+					if r["deleted_at"] == nil {
+						pending++
+					}
+				}
+			}
+			if approved > 0 || pending > 0 {
+				hang = append(hang, []driver.Value{taskID, approved, pending})
+			}
+		}
+		return &rowsNVGia{cot: cot, hang: hang}, nil
+	}
+
 	if strings.Contains(q, "count(*)") {
 		// TWO COUNTS READ THIS TABLE: the pending check (DangChoDuyet) and the approved count a deadline
 		// correction asks (ApprovedCount). The status literal in the statement says which.

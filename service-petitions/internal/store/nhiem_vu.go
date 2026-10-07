@@ -311,6 +311,18 @@ type LocNhiemVu struct {
 	// the caller cannot see.
 	ParentCode string
 
+	// Roots restricts the page to ROOT tasks — `nhiem_vu_cha_id IS NULL` (`roots=true`, the prototype's
+	// `roots_only`, vigov-require tasks/repository.py:114-115) — so a board is not flooded with
+	// sub-tasks, which §5.10 shows under their parent. false = every task, the default unchanged.
+	//
+	// ANDed WITH ParentCode like every other filter, as the prototype does: both together is an empty
+	// page (a child is never a root), which is a true answer rather than a refusal.
+	//
+	// ⚠ A ROOT IS A TASK WITH NO PARENT ON THE ROW — a live child under a soft-deleted parent is NOT a
+	// root here (its column still names the parent), the state ADR 0037 decision 3 keeps the write path
+	// from creating. task_tree_facts.go renders its `parent` as "" all the same.
+	Roots bool
+
 	// DueSoonFrom and DueSoonUntil are §3's "Sắp đến hạn": `DueSoonFrom < han_xu_ly <= DueSoonUntil`,
 	// unfinished work only. BOTH ZERO = no filter; the store refuses one without the other
 	// (ErrTaskDueSoonWindow), because a half-open window is a different question.
@@ -432,6 +444,11 @@ func locNhiemVuThanhSQL(loc LocNhiemVu) (string, []any) {
 		// same answer a childless task gets. Served by `nhiem_vu_cha` (migration 0008).
 		them(" AND nhiem_vu_cha_id = (SELECT p.id FROM nhiem_vu p"+
 			" WHERE p.tenant_id = $1 AND p.ma = $%d AND p.deleted_at IS NULL)", loc.ParentCode)
+	}
+	if loc.Roots {
+		// No bound value: the predicate is fixed text. Unqualified so it binds to the task relation
+		// under both shapes DanhSach reads (`nhiem_vu` and the aliased sort tables).
+		dieuKien += " AND nhiem_vu_cha_id IS NULL"
 	}
 	if loc.Tim != "" {
 		// ILIKE ON TWO COLUMNS — the register number a clerk remembers and the title. A leading
@@ -736,8 +753,9 @@ func (s *NhiemVuStore) DanhSach(ctx context.Context, loc LocNhiemVu, yc page.Req
 	if err := s.ganNguonHop(ctx, kq.Items); err != nil {
 		return page.NewResult[domain.NhiemVu](), err
 	}
-	// `parent` (the register number) and `child_count` for the WHOLE PAGE, two statements at most.
-	if err := attachTreeFacts(ctx, scopedTreeQuery(s.db.For(ctx)), kq.Items); err != nil {
+	// `parent` (the register number), `child_count`, `extension_count` and `pending_extension` for the
+	// WHOLE PAGE, three statements at most (attachTaskFacts).
+	if err := attachTaskFacts(ctx, scopedTreeQuery(s.db.For(ctx)), kq.Items); err != nil {
 		return page.NewResult[domain.NhiemVu](), err
 	}
 	return kq, nil
@@ -905,7 +923,7 @@ func (s *NhiemVuStore) TheoMa(ctx context.Context, ma string) (domain.NhiemVu, e
 	if err := s.ganNguonHop(ctx, mot); err != nil {
 		return domain.NhiemVu{}, err
 	}
-	if err := attachTreeFacts(ctx, scopedTreeQuery(s.db.For(ctx)), mot); err != nil {
+	if err := attachTaskFacts(ctx, scopedTreeQuery(s.db.For(ctx)), mot); err != nil {
 		return domain.NhiemVu{}, err
 	}
 	return mot[0], nil

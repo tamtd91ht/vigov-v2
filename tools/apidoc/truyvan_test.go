@@ -539,9 +539,10 @@ func TestHaiSoLonCoDuThamSoLoc(t *testing.T) {
 		// mã sổ của việc cha (§5.10) — một thay đổi hợp đồng có chủ ý, không phải trích nhầm.
 		// `include` THÊM 28/09/2026 (P7): `include=documents` kèm khối văn bản cho Sổ theo dõi (§4.3).
 		// `incomplete` THÊM 04/10/2026 (ADR 0071, Sổ tay lãnh đạo): mọi trạng thái trừ `hoan-thanh`.
+		// `roots` THÊM 07/10/2026 (lọc nhiệm vụ gốc theo prototype, chủ dự án giao dựng backend).
 		{"GET /api/v1/tasks", []string{
 			"assignee", "bloc", "from", "include", "incomplete", "late", "metric", "parent", "priority", "q",
-			"scope", "soon", "source", "status", "to", "type", "unit"}},
+			"roots", "scope", "soon", "source", "status", "to", "type", "unit"}},
 		// `rating_max` thêm ở 7359484 (lọc theo số sao dân chấm, ADR 0050 điểm 2).
 		{"GET /api/v1/citizen-reports", []string{
 			"channel", "field", "from", "hamlet", "late", "metric", "q", "rating_max", "scope", "status", "to", "unit"}},
@@ -597,7 +598,8 @@ func TestBaTuyenThatCoThamSoNam(t *testing.T) {
 		khoa string
 		ten  []string
 	}{
-		{"GET /api/v1/investment-projects", []string{"category", "delayed_only", "year"}},
+		// `implementing_unit` thêm ở 65afbdcd (đơn vị thực hiện nhập tay theo prototype).
+		{"GET /api/v1/investment-projects", []string{"category", "delayed_only", "implementing_unit", "year"}},
 		{"GET /api/v1/public-holidays", []string{"year"}},
 		{"GET /api/v1/swap-working-days", []string{"year"}},
 	} {

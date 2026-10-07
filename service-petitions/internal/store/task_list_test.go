@@ -325,10 +325,35 @@ func TestParentFilterIsResolvedInsideTheStatement(t *testing.T) {
 	}
 }
 
+// --- ?roots=true -------------------------------------------------------------------------------------
+
+// TestRootsFilterIsFixedTextAndOptIn — `roots=true` adds `nhiem_vu_cha_id IS NULL` and no bound value;
+// absent, the predicate has no trace of it (default unchanged: every task). Combined with `parent` both
+// are ANDed, which is an empty page and not a refusal (the prototype's shape).
+func TestRootsFilterIsFixedTextAndOptIn(t *testing.T) {
+	cond, args := locNhiemVuThanhSQL(LocNhiemVu{Roots: true})
+	if cond != " AND nhiem_vu_cha_id IS NULL" || len(args) != 0 {
+		t.Errorf("roots = %q %v, muốn đúng một điều kiện không tham số", cond, args)
+	}
+	if cond, _ := locNhiemVuThanhSQL(LocNhiemVu{}); strings.Contains(cond, "IS NULL") {
+		t.Errorf("không lọc roots mà vẫn sinh điều kiện: %q", cond)
+	}
+	cond, args = locNhiemVuThanhSQL(LocNhiemVu{Roots: true, ParentCode: "NV19", Loai: "co-ban"})
+	if !strings.Contains(cond, " AND nhiem_vu_cha_id = (SELECT") || !strings.Contains(cond, " AND nhiem_vu_cha_id IS NULL") ||
+		len(args) != 2 {
+		t.Errorf("roots + parent + type = %q %v", cond, args)
+	}
+	if l := chayDanhSachNhiemVu(t, LocNhiemVu{Roots: true}); !strings.Contains(l.sql, "AND deleted_at IS NULL AND nhiem_vu_cha_id IS NULL") {
+		t.Errorf("câu danh sách không mang điều kiện việc gốc: %q", l.sql)
+	}
+}
+
 // --- the per-status count --------------------------------------------------------------------------
 
 func TestCountByStatusSharesTheListPredicate(t *testing.T) {
-	loc := LocNhiemVu{Loai: "theo-van-ban", ParentCode: "NV19", ChiTreHan: true, Tim: "Hà Lam"}
+	// `Roots` ADDED 07/10/2026: the list, the counts and the register export (which pages DanhSach)
+	// must all carry it through this one builder.
+	loc := LocNhiemVu{Loai: "theo-van-ban", ParentCode: "NV19", ChiTreHan: true, Tim: "Hà Lam", Roots: true}
 
 	k := &khoGia{hangTheoCot: []map[string]driver.Value{
 		{"trang_thai": "moi-giao", "count(*)": int64(3)},
@@ -358,6 +383,14 @@ func TestCountByStatusSharesTheListPredicate(t *testing.T) {
 	}
 	if !strings.Contains(l.sql, "WHERE tenant_id = $1") {
 		t.Errorf("câu đếm không buộc xã: %q", l.sql)
+	}
+	// The LIST side of the same filter: the page statement carries the identical predicate, so the
+	// Kanban header and the cards under it — and the export, which pages DanhSach — count one set.
+	if !strings.Contains(listPredicate, " AND nhiem_vu_cha_id IS NULL") {
+		t.Errorf("điều kiện chung thiếu việc gốc: %q", listPredicate)
+	}
+	if list := chayDanhSachNhiemVu(t, loc); !strings.Contains(list.sql, "AND deleted_at IS NULL"+listPredicate) {
+		t.Errorf("câu danh sách không dùng đúng điều kiện:\n%q\nmuốn chứa %q", list.sql, listPredicate)
 	}
 }
 

@@ -23,3 +23,13 @@ func TestRegisterFilterSummaryRecordsLeaderNotebookFilters(t *testing.T) {
 		t.Errorf("tóm tắt bộ lọc = %v, muốn đúng hai khoá", out)
 	}
 }
+
+// `roots=true` narrows the exported file, so the trail says it was set; absent, no key at all.
+func TestRegisterFilterSummaryRecordsRoots(t *testing.T) {
+	if out := registerFilterSummary(petstore.LocNhiemVu{Roots: true}); out["roots"] != true || len(out) != 1 {
+		t.Errorf("tóm tắt bộ lọc = %v, muốn đúng roots=true", out)
+	}
+	if out := registerFilterSummary(petstore.LocNhiemVu{}); len(out) != 0 {
+		t.Errorf("tóm tắt bộ lọc khi không lọc = %v, muốn rỗng", out)
+	}
+}

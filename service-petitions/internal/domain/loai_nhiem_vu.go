@@ -60,3 +60,18 @@ type LoaiNhiemVu struct {
 	Nguon          string
 	MaNguonReNhanh bool
 }
+
+// TaskTypeByDocument is the `theo-van-ban` code — the one task type the specification attaches a
+// directive-document record to (docs/ui-ux/00-tong-quan-he-thong.md:175). Migration 0003:205-208 sows
+// it as a TIER-3 code precisely because the source branches on it: a commune may relabel the row, never
+// remove or re-code it.
+const TaskTypeByDocument = "theo-van-ban"
+
+// RequiresDirective says whether a task of this type is filed against a directing document (the
+// prototype's `requires_directive`, vigov-require org/data/default_config.json:517-536: true for
+// `theo-van-ban`, false for `co-ban`).
+//
+// DERIVED FROM THE CODE, NEVER STORED, like Tang. A stored flag would be a second copy of a fact the
+// immutable code already carries, and a commune could then flip it on `co-ban` while the source still
+// branches on the code — two answers to one question, and the screen would read the wrong one.
+func (l LoaiNhiemVu) RequiresDirective() bool { return l.Ma == TaskTypeByDocument }
