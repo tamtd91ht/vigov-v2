@@ -6939,7 +6939,7 @@
       "path": "/api/v1/tasks/{ma}/status",
       "operation_id": "petitions_post_tasks_by_ma_status",
       "task_id": "bf5719ad43c6",
-      "summary": "Chuyển trạng thái một nhiệm vụ theo vòng đời, kèm ghi nhật ký — hoàn thành cần mọi việc con đã xong, và cần quyền duyệt nếu việc đang chờ duyệt; trả lại để làm tiếp cần quyền duyệt và lý do; mở lại việc đã hoàn thành cần quyền duyệt, lý do, và việc cha chưa hoàn thành",
+      "summary": "Chuyển trạng thái một nhiệm vụ theo vòng đời, kèm ghi nhật ký — hoàn thành cần mọi việc con đã xong, và cần quyền duyệt nếu việc đang chờ duyệt; trả lại để làm tiếp cần quyền duyệt và lý do; mở lại việc đã hoàn thành cần quyền duyệt, lý do, và việc cha chưa hoàn thành; tuỳ chọn kèm giao việc (`handover`, cho người có quyền giao nhiệm vụ hoặc người đang thực hiện — nhiệm vụ sang đúng trạng thái đã chọn, không về `moi-giao`) và tệp đính kèm (`attachments`) gắn vào dòng nhật ký của lần chuyển này, tất cả trong một giao dịch",
       "screen": "02-nhiem-vu §6",
       "permission_kind": "permission",
       "permission": "task.read",
@@ -6953,7 +6953,8 @@
         "403": "httpx.Error",
         "404": "httpx.Error",
         "409": "httpx.Error",
-        "500": "httpx.Error"
+        "500": "httpx.Error",
+        "503": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes.go"
     },
