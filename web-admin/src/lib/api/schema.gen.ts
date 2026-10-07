@@ -851,6 +851,24 @@ export type comms_zaloUpdateAck = {
   "ok": boolean;
 };
 
+export type documents_bookLetterIn = {
+  /** YYYY-MM-DD */
+  "received_date": string;
+  "letter_type": string;
+  "sender_name"?: string;
+  "sender_phone"?: string;
+  "sender_address"?: string;
+  "summary": string;
+  /** the duplicate the clerk CONFIRMED */
+  "related_letter_id"?: string;
+  /** "Chuyển ngay cho bộ phận" */
+  "holding_unit_id"?: string;
+  "number"?: number | null;
+  "status"?: string | null;
+  "processing_due_at"?: string | null;
+  "resolution_due_at"?: string | null;
+};
+
 export type documents_capSoVanBanDiVao = {
   /** YYYY-MM-DD */
   "document_date": string;
@@ -865,6 +883,76 @@ export type documents_chuyenVanBanVao = {
   "to_unit": string;
   "assignee"?: string;
   "reason": string;
+};
+
+export type documents_citizenLetterItemOut = {
+  "id": string;
+  "number": number;
+  "year": number;
+  /** YYYY-MM-DD */
+  "received_date": string;
+  /** kien-nghi-phan-anh · khieu-nai · to-cao · de-nghi */
+  "letter_type": string;
+  "sender_name": string | null;
+  "sender_phone": string | null;
+  "identity_withheld": boolean;
+  "summary": string | null;
+  "summary_withheld": boolean;
+  /** identity's `bo_phan.id` */
+  "holding_unit_id"?: string;
+  /** a staff business code */
+  "assignee_code"?: string;
+  "status": string;
+  /** RFC 3339; null = no deadline set */
+  "processing_due_at": string | null;
+  /** RFC 3339; null = no deadline set */
+  "resolution_due_at": string | null;
+  "days_open": number;
+  /** da-giai-quyet / dinh-chi */
+  "is_resolved": boolean;
+  /** any finishing status */
+  "is_closed": boolean;
+  "related_letter_id"?: string;
+};
+
+export type documents_citizenLetterOut = {
+  "id": string;
+  "number": number;
+  "year": number;
+  "received_date": string;
+  "letter_type": string;
+  "sender_name": string | null;
+  /** MASKED, always */
+  "sender_phone": string | null;
+  "has_sender_address": boolean;
+  "sender_unknown": boolean | null;
+  "identity_withheld": boolean;
+  "summary": string | null;
+  "summary_withheld": boolean;
+  "status": string;
+  /** C3's arrows out of the current status */
+  "next_statuses": Array<string>;
+  "holding_unit_id"?: string;
+  "assignee_code"?: string;
+  "processing_due_at": string | null;
+  "resolution_due_at": string | null;
+  "accepted_at": string | null;
+  "resolved_at": string | null;
+  "closed_at": string | null;
+  "days_open": number;
+  "is_resolved": boolean;
+  "is_closed": boolean;
+  "related_letter_id"?: string;
+  "result_document_no"?: string;
+  /** YYYY-MM-DD */
+  "result_document_date"?: string;
+  "result_signer"?: string;
+  "result_issuer"?: string;
+  /** null when none, or withheld with the summary */
+  "result_summary": string | null;
+  "created_by_code": string;
+  "created_at": string;
+  "updated_at": string;
 };
 
 export type documents_danhSachLichSuChuyenRa = {
@@ -909,6 +997,27 @@ export type documents_documentTypeImportRowOut = {
   "order": number;
 };
 
+export type documents_duplicateCandidateOut = {
+  "id": string;
+  "number": number;
+  "year": number;
+  "received_date": string;
+  /** 0..1 */
+  "similarity": number;
+  "summary": string | null;
+};
+
+export type documents_duplicateCheckIn = {
+  "sender_name"?: string;
+  "summary": string;
+  /** when `to-cao`, no candidate summary is returned */
+  "letter_type"?: string;
+};
+
+export type documents_duplicatesOut = {
+  "items": Array<documents_duplicateCandidateOut>;
+};
+
 export type documents_goVanBanVao = {
   "reason": string;
 };
@@ -923,6 +1032,87 @@ export type documents_incomingSummaryOut = {
   "arrived": number;
   "open": number;
   "overdue": number;
+};
+
+export type documents_letterLogEntryOut = {
+  "id": string;
+  "letter_id": string;
+  /** RFC 3339 */
+  "at": string;
+  "actor_code": string;
+  /** chuyen-trang-thai · luan-chuyen · ghi-chu · ket-qua · sua-nguoi-gui */
+  "kind": string;
+  "from_status"?: string;
+  "to_status"?: string;
+  "from_unit_id"?: string;
+  "to_unit_id"?: string;
+  "assignee_code"?: string;
+  "content"?: string;
+};
+
+export type documents_letterLogOut = {
+  "items": Array<documents_letterLogEntryOut>;
+};
+
+export type documents_letterNoteIn = {
+  "content": string;
+};
+
+export type documents_letterReportMonthOut = {
+  "month": number;
+  "received": number;
+  "resolved": number;
+};
+
+export type documents_letterReportOut = {
+  "year": number;
+  "received": number;
+  "resolved": number;
+  "closed_in_processing": number;
+  "in_progress": number;
+  "overdue": number;
+  "on_time_percent": number | null;
+  "average_days": number | null;
+  "by_type": Array<documents_letterReportTypeOut>;
+  "by_unit": Array<documents_letterReportUnitOut>;
+  "by_month": Array<documents_letterReportMonthOut>;
+};
+
+export type documents_letterReportTypeOut = {
+  "letter_type": string;
+  "total": number;
+  "resolved": number;
+  "in_progress": number;
+  "overdue": number;
+};
+
+export type documents_letterReportUnitOut = {
+  "unit_id": string | null;
+  "total": number;
+  "in_progress": number;
+  "resolved": number;
+  "overdue": number;
+  "on_time_percent": number | null;
+};
+
+export type documents_letterResultIn = {
+  "result_document_no": string;
+  /** YYYY-MM-DD */
+  "result_document_date": string;
+  "result_signer": string;
+  "result_issuer": string;
+  "result_summary": string;
+};
+
+export type documents_letterRoutingIn = {
+  "to_unit": string;
+  "assignee"?: string;
+  "reason": string;
+};
+
+export type documents_letterStatusIn = {
+  "status": string;
+  "note"?: string;
 };
 
 export type documents_lichSuChuyenRa = {
@@ -972,6 +1162,12 @@ export type documents_overdueQueueOut = {
   "items": Array<documents_overdueQueueItemOut>;
   /** RFC 3339 — the instant "overdue" and "critical" were judged at */
   "as_of": string;
+};
+
+export type documents_senderCorrectionIn = {
+  "sender_name"?: string | null;
+  "sender_phone"?: string | null;
+  "sender_address"?: string | null;
 };
 
 export type documents_suaLoaiVanBanVao = {
@@ -1348,6 +1544,7 @@ export type finance_duAnGhiRa = {
   "assignee_id"?: string;
   "start_date"?: string;
   "completion_date"?: string;
+  "implementing_unit"?: string | null;
   "disbursement_deadline": string;
   "funding_allocations"?: Array<finance_phanBoRa>;
   "funding_allocated_total": number;
@@ -1377,6 +1574,7 @@ export type finance_duAnRa = {
   "assignee_id"?: string;
   "start_date"?: string;
   "completion_date"?: string;
+  "implementing_unit"?: string | null;
   "disbursement_deadline": string;
   "delay_threshold": number;
   "delay_threshold_source": string;
@@ -1465,7 +1663,7 @@ export type finance_ghiDotVao = {
 };
 
 export type finance_goChungTuVao = {
-  "reason": string;
+  "reason"?: string;
 };
 
 export type finance_goVao = {
@@ -1494,6 +1692,11 @@ export type finance_hangMucRa = {
   "order": number;
   "source": string;
   "tier": number;
+};
+
+export type finance_implementingUnitsOut = {
+  "year": number;
+  "items": Array<string>;
 };
 
 export type finance_latestIssueOut = {
@@ -1569,6 +1772,8 @@ export type finance_projectCurveOut = {
 
 export type finance_projectIssueIn = {
   "text": string;
+  "owner_code"?: string;
+  "due_on"?: string;
 };
 
 export type finance_projectIssueOut = {
@@ -1585,6 +1790,8 @@ export type finance_projectIssueOut = {
   /** staff business code */
   "resolved_by"?: string;
   "tracking_task_id"?: string;
+  "owner_code"?: string;
+  "due_on"?: string;
 };
 
 export type finance_projectIssuesOut = {
@@ -1676,6 +1883,7 @@ export type finance_suaDuAnVao = {
   "approved_amount"?: number | null;
   "org_unit_id"?: string | null;
   "assignee_id"?: string | null;
+  "implementing_unit"?: string | null;
   "start_date"?: string | null;
   "completion_date"?: string | null;
   "disbursement_deadline"?: string | null;
@@ -1759,6 +1967,7 @@ export type finance_themDuAnVao = {
   "approved_amount"?: number;
   "org_unit_id"?: string;
   "assignee_id"?: string;
+  "implementing_unit"?: string;
   /** YYYY-MM-DD */
   "start_date"?: string;
   /** YYYY-MM-DD */
@@ -2674,6 +2883,13 @@ export type page_Result_comms_tinXaRa = {
   "has_more": boolean;
 };
 
+export type page_Result_documents_citizenLetterItemOut = {
+  "items": Array<documents_citizenLetterItemOut>;
+  /** empty when has_more is false */
+  "next_cursor": string;
+  "has_more": boolean;
+};
+
 export type page_Result_documents_vanBanDenRa = {
   "items": Array<documents_vanBanDenRa>;
   /** empty when has_more is false */
@@ -2948,6 +3164,7 @@ export type petitions_loaiNhiemVuRa = {
   "order": number;
   "source": string;
   "tier": number;
+  "requires_directive": boolean;
 };
 
 export type petitions_mucUuTienRa = {
@@ -3014,6 +3231,8 @@ export type petitions_nhiemVuRa = {
   "superior_acknowledged": boolean;
   "parent": string;
   "child_count": number;
+  "extension_count": number;
+  "pending_extension": boolean;
   "created_by": string;
   "created_at": string;
   "updated_at": string;
@@ -4112,6 +4331,237 @@ export type finance_delete_capital_plan_categories_by_id = {
   than: finance_xoaHangMucVao;
   phanHoi: {
     204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/citizen-letter-report — Báo cáo sổ đơn thư một năm: nhận, đã giải quyết, đang xử lý (gồm năm trước chuyển sang), quá hạn, tỷ lệ đúng hạn, số ngày trung bình, theo loại · bộ phận · tháng */
+export type documents_get_citizen_letter_report = {
+  duongDan: "/api/v1/citizen-letter-report";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "year": string;
+  };
+  than: never;
+  phanHoi: {
+    200: documents_letterReportOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/citizen-letters — Sổ đơn thư công dân, phân trang theo con trỏ, mới vào sổ trước; lọc năm · trạng thái · loại · bộ phận · cán bộ · khoảng ngày nhận · từ khoá · phạm vi */
+export type documents_get_citizen_letters = {
+  duongDan: "/api/v1/citizen-letters";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "limit"?: number;
+    "cursor"?: string;
+    "sort"?: "created_at" | "number";
+    "order"?: "asc" | "desc";
+    "assignee"?: string;
+    "holding_unit"?: string;
+    "letter_type"?: string;
+    "q"?: string;
+    "received_from"?: string;
+    "received_to"?: string;
+    "scope"?: string;
+    "status"?: string;
+    "year"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: page_Result_documents_citizenLetterItemOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-letters — Vào sổ một đơn thư công dân; hệ thống cấp số theo dãy của xã trong năm, chưa đặt hạn (ADR 0078 #3) */
+export type documents_post_citizen_letters = {
+  duongDan: "/api/v1/citizen-letters";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: documents_bookLetterIn;
+  phanHoi: {
+    201: documents_citizenLetterOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-letters/duplicates — Kiểm đơn có thể trùng trước khi vào sổ: cùng họ tên người gửi (nếu nhập) trong 365 ngày, xếp theo độ giống trích yếu — chỉ cảnh báo */
+export type documents_post_citizen_letters_duplicates = {
+  duongDan: "/api/v1/citizen-letters/duplicates";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: documents_duplicateCheckIn;
+  phanHoi: {
+    200: documents_duplicatesOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/citizen-letters/{id} — Một đơn thư cho ngăn chi tiết, kèm kết quả giải quyết; SĐT luôn che, địa chỉ không trả về; đơn tố cáo chỉ cán bộ được giao thấy danh tính */
+export type documents_get_citizen_letters_by_id = {
+  duongDan: "/api/v1/citizen-letters/{id}";
+  phuongThuc: "GET";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: documents_citizenLetterOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/citizen-letters/{id}/log — Nhật ký xử lý của một đơn thư, mới nhất trước — chỉ đọc */
+export type documents_get_citizen_letters_by_id_log = {
+  duongDan: "/api/v1/citizen-letters/{id}/log";
+  phuongThuc: "GET";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: documents_letterLogOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-letters/{id}/log-entries — Ghi một dòng nhật ký (ghi chú) cho đơn thư — cán bộ được giao hoặc người có quyền tiếp nhận */
+export type documents_post_citizen_letters_by_id_log_entries = {
+  duongDan: "/api/v1/citizen-letters/{id}/log-entries";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: documents_letterNoteIn;
+  phanHoi: {
+    201: documents_letterLogEntryOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PUT /api/v1/citizen-letters/{id}/result — Ghi kết quả giải quyết: văn bản đã ban hành (số, ngày, người ký, cơ quan) và tóm tắt — khi đơn đang Thụ lý hoặc Đang giải quyết */
+export type documents_put_citizen_letters_by_id_result = {
+  duongDan: "/api/v1/citizen-letters/{id}/result";
+  phuongThuc: "PUT";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: documents_letterResultIn;
+  phanHoi: {
+    200: documents_citizenLetterOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-letters/{id}/routings — Chuyển đơn thư cho một bộ phận (và cán bộ, nếu chọn) kèm lý do — không đổi trạng thái, ghi nhật ký */
+export type documents_post_citizen_letters_by_id_routings = {
+  duongDan: "/api/v1/citizen-letters/{id}/routings";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: documents_letterRoutingIn;
+  phanHoi: {
+    200: documents_citizenLetterOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/citizen-letters/{id}/sender — Sửa họ tên / SĐT / địa chỉ người gửi (trường vắng giữ nguyên, null hoặc rỗng là xoá); nhật ký và vết không ghi giá trị */
+export type documents_patch_citizen_letters_by_id_sender = {
+  duongDan: "/api/v1/citizen-letters/{id}/sender";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: documents_senderCorrectionIn;
+  phanHoi: {
+    200: documents_citizenLetterOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-letters/{id}/status — Đổi trạng thái đơn thư theo TT 05/2021 (C3); cán bộ được giao hoặc người có quyền tiếp nhận; Đã giải quyết cần kết quả trước */
+export type documents_post_citizen_letters_by_id_status = {
+  duongDan: "/api/v1/citizen-letters/{id}/status";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: documents_letterStatusIn;
+  phanHoi: {
+    200: documents_citizenLetterOut;
     400: httpx_Error;
     401: httpx_Error;
     403: httpx_Error;
@@ -5445,7 +5895,7 @@ export type finance_patch_disbursements_by_id = {
   };
 };
 
-/** DELETE /api/v1/disbursements/{id} — Gỡ mềm một chứng từ giải ngân, kèm lý do bắt buộc */
+/** DELETE /api/v1/disbursements/{id} — Gỡ mềm một chứng từ giải ngân chưa khoá; lý do tuỳ chọn (bỏ trống thì ghi `Gỡ khoản chi nhập nhầm`) */
 export type finance_delete_disbursements_by_id = {
   duongDan: "/api/v1/disbursements/{id}";
   phuongThuc: "DELETE";
@@ -5466,7 +5916,7 @@ export type finance_delete_disbursements_by_id = {
   };
 };
 
-/** POST /api/v1/disbursements/{id}/confirmation — Xác nhận một chứng từ giải ngân (`Kế toán nhập` → `Đã xác nhận`) */
+/** POST /api/v1/disbursements/{id}/confirmation — Xác nhận một chứng từ giải ngân (`Kế toán nhập` → `Đã xác nhận`); người nhập không tự xác nhận được */
 export type finance_post_disbursements_by_id_confirmation = {
   duongDan: "/api/v1/disbursements/{id}/confirmation";
   phuongThuc: "POST";
@@ -5484,9 +5934,12 @@ export type finance_post_disbursements_by_id_confirmation = {
     409: httpx_Error;
     500: httpx_Error;
   };
+  errorCodes: {
+    409: "self_confirmation" | "voucher_state";
+  };
 };
 
-/** POST /api/v1/disbursements/{id}/lockout — Khoá một chứng từ giải ngân (`Đã xác nhận` → `Đã khoá`) */
+/** POST /api/v1/disbursements/{id}/lockout — Khoá một chứng từ giải ngân (`Kế toán nhập` hoặc `Đã xác nhận` → `Đã khoá`; từ `Kế toán nhập` là xác nhận và khoá một lần); người nhập không tự khoá được */
 export type finance_post_disbursements_by_id_lockout = {
   duongDan: "/api/v1/disbursements/{id}/lockout";
   phuongThuc: "POST";
@@ -5503,6 +5956,9 @@ export type finance_post_disbursements_by_id_lockout = {
     404: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;
+  };
+  errorCodes: {
+    409: "self_confirmation" | "voucher_state";
   };
 };
 
@@ -5952,6 +6408,25 @@ export type identity_get_identity_audit_entries = {
   };
 };
 
+/** GET /api/v1/implementing-units — Các đơn vị thực hiện (nhập tay) của dự án còn hiệu lực trong một năm ngân sách — dùng cho bộ lọc danh sách dự án */
+export type finance_get_implementing_units = {
+  duongDan: "/api/v1/implementing-units";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "year": string;
+  };
+  than: never;
+  phanHoi: {
+    200: finance_implementingUnitsOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/incoming-document-overdue-queue — Văn bản đến quá hạn cần xử lý ngay (tối đa 10), trễ lâu nhất trước, kèm cờ nghiêm trọng */
 export type documents_get_incoming_document_overdue_queue = {
   duongDan: "/api/v1/incoming-document-overdue-queue";
@@ -6169,6 +6644,7 @@ export type finance_get_investment_projects = {
   truyVan: {
     "category"?: string;
     "delayed_only"?: string;
+    "implementing_unit": string;
     "year": string;
   };
   than: never;
@@ -9253,6 +9729,7 @@ export type petitions_get_task_counts = {
     "parent"?: string;
     "priority"?: string;
     "q"?: string;
+    "roots"?: string;
     "scope"?: string;
     "soon"?: string;
     "source"?: string;
@@ -9508,7 +9985,7 @@ export type petitions_get_task_summary = {
   };
 };
 
-/** GET /api/v1/task-types — Danh mục loại nhiệm vụ của xã — dùng cho ô chọn loại trên biểu mẫu nhiệm vụ và bộ lọc */
+/** GET /api/v1/task-types — Danh mục loại nhiệm vụ của xã — dùng cho ô chọn loại trên biểu mẫu nhiệm vụ và bộ lọc; mỗi dòng kèm cờ chỉ đọc `requires_directive` (đúng với `theo-van-ban`) */
 export type petitions_get_task_types = {
   duongDan: "/api/v1/task-types";
   phuongThuc: "GET";
@@ -9663,7 +10140,7 @@ export type petitions_get_task_unit_summary = {
   };
 };
 
-/** GET /api/v1/tasks — Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo phạm vi (`all` · `mine` · `related` · `assigned-by-me` = tôi tạo hoặc tôi là lãnh đạo giao việc) · trạng thái · chưa hoàn thành (`incomplete=true`, mọi trạng thái trừ `hoan-thanh`) · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · sắp đến hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối) · `priority` (theo thứ tự danh mục mức ưu tiên của xã, việc không có mức ở cuối) · `title` */
+/** GET /api/v1/tasks — Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo phạm vi (`all` · `mine` · `related` · `assigned-by-me` = tôi tạo hoặc tôi là lãnh đạo giao việc) · trạng thái · chưa hoàn thành (`incomplete=true`, mọi trạng thái trừ `hoan-thanh`) · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · sắp đến hạn · việc con của một mã (`parent=NV19`) · chỉ việc gốc (`roots=true`); mỗi dòng kèm số lần đã lùi hạn (`extension_count`) và cờ đang có đề nghị lùi hạn chờ duyệt (`pending_extension`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối) · `priority` (theo thứ tự danh mục mức ưu tiên của xã, việc không có mức ở cuối) · `title` */
 export type petitions_get_tasks = {
   duongDan: "/api/v1/tasks";
   phuongThuc: "GET";
@@ -9684,6 +10161,7 @@ export type petitions_get_tasks = {
     "parent"?: string;
     "priority"?: string;
     "q"?: string;
+    "roots"?: string;
     "scope"?: string;
     "soon"?: string;
     "source"?: string;
@@ -9780,6 +10258,7 @@ export type petitions_get_tasks_register_export = {
     "parent"?: string;
     "priority"?: string;
     "q"?: string;
+    "roots"?: string;
     "scope"?: string;
     "soon"?: string;
     "sort"?: string;
@@ -9802,7 +10281,7 @@ export type petitions_get_tasks_register_export = {
   };
 };
 
-/** GET /api/v1/tasks/{ma} — Một nhiệm vụ, tra theo mã nhiệm vụ của xã (NV19) */
+/** GET /api/v1/tasks/{ma} — Một nhiệm vụ, tra theo mã nhiệm vụ của xã (NV19) — kèm số lần đã lùi hạn và cờ đang có đề nghị lùi hạn chờ duyệt */
 export type petitions_get_tasks_by_ma = {
   duongDan: "/api/v1/tasks/{ma}";
   phuongThuc: "GET";

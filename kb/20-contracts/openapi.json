@@ -2555,6 +2555,1165 @@
         }
       }
     },
+    "/api/v1/citizen-letter-report": {
+      "get": {
+        "summary": "Báo cáo sổ đơn thư một năm: nhận, đã giải quyết, đang xử lý (gồm năm trước chuyển sang), quá hạn, tỷ lệ đúng hạn, số ngày trung bình, theo loại · bộ phận · tháng",
+        "operationId": "documents_get_citizen_letter_report",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "05-van-ban-don-thu §4",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "petition.read"
+        },
+        "x-vigov-task": "2069849481cc",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documents.letterReportOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/citizen-letters": {
+      "get": {
+        "summary": "Sổ đơn thư công dân, phân trang theo con trỏ, mới vào sổ trước; lọc năm · trạng thái · loại · bộ phận · cán bộ · khoảng ngày nhận · từ khoá · phạm vi",
+        "operationId": "documents_get_citizen_letters",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "05-van-ban-don-thu §3.1",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "petition.read"
+        },
+        "x-vigov-task": "261af67566b4",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Số bản ghi mỗi trang. Vượt trần thì máy chủ TRẢ VỀ trần kèm con trỏ để đọc tiếp, không báo lỗi.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Con trỏ MỜ ĐỤC do máy chủ phát ra ở `next_cursor`, chuyền lại nguyên văn. Không phải số thứ tự trang; không có `offset`, và không có tổng số bản ghi.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Cột sắp xếp. Danh sách đóng — giá trị ngoài danh sách bị từ chối.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "created_at",
+                "number"
+              ],
+              "default": "created_at"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc"
+            }
+          },
+          {
+            "name": "assignee",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "holding_unit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "letter_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "received_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "received_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "year",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/page.Result_documents.citizenLetterItemOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Vào sổ một đơn thư công dân; hệ thống cấp số theo dãy của xã trong năm, chưa đặt hạn (ADR 0078 #3)",
+        "operationId": "documents_post_citizen_letters",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "05-van-ban-don-thu §3.4",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "petition.create"
+        },
+        "x-vigov-task": "93038b1ad805",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "DongKhiHong",
+          "on_store_failure_effect": "Store không tới được -> trả 503"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/documents.bookLetterIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documents.citizenLetterOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/citizen-letters/duplicates": {
+      "post": {
+        "summary": "Kiểm đơn có thể trùng trước khi vào sổ: cùng họ tên người gửi (nếu nhập) trong 365 ngày, xếp theo độ giống trích yếu — chỉ cảnh báo",
+        "operationId": "documents_post_citizen_letters_duplicates",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "05-van-ban-don-thu §3.4",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "petition.create"
+        },
+        "x-vigov-task": "bfe4c36adecd",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/documents.duplicateCheckIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documents.duplicatesOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/citizen-letters/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Một đơn thư cho ngăn chi tiết, kèm kết quả giải quyết; SĐT luôn che, địa chỉ không trả về; đơn tố cáo chỉ cán bộ được giao thấy danh tính",
+        "operationId": "documents_get_citizen_letters_by_id",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "05-van-ban-don-thu §3.5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "petition.read"
+        },
+        "x-vigov-task": "ddcc86065b3f",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documents.citizenLetterOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/citizen-letters/{id}/log": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Nhật ký xử lý của một đơn thư, mới nhất trước — chỉ đọc",
+        "operationId": "documents_get_citizen_letters_by_id_log",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "05-van-ban-don-thu §3.5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "petition.read"
+        },
+        "x-vigov-task": "f665af2831a1",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documents.letterLogOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/citizen-letters/{id}/log-entries": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Ghi một dòng nhật ký (ghi chú) cho đơn thư — cán bộ được giao hoặc người có quyền tiếp nhận",
+        "operationId": "documents_post_citizen_letters_by_id_log_entries",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "05-van-ban-don-thu §3.5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "petition.read"
+        },
+        "x-vigov-task": "97362e01cc9a",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "MoKhiHong",
+          "on_store_failure_effect": "Store không tới được -> cho qua và ghi cảnh báo"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/documents.letterNoteIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documents.letterLogEntryOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/citizen-letters/{id}/result": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "put": {
+        "summary": "Ghi kết quả giải quyết: văn bản đã ban hành (số, ngày, người ký, cơ quan) và tóm tắt — khi đơn đang Thụ lý hoặc Đang giải quyết",
+        "operationId": "documents_put_citizen_letters_by_id_result",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "05-van-ban-don-thu §3.5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "petition.read"
+        },
+        "x-vigov-task": "1da151322abb",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/documents.letterResultIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documents.citizenLetterOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/citizen-letters/{id}/routings": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Chuyển đơn thư cho một bộ phận (và cán bộ, nếu chọn) kèm lý do — không đổi trạng thái, ghi nhật ký",
+        "operationId": "documents_post_citizen_letters_by_id_routings",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "05-van-ban-don-thu §3.5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "petition.create"
+        },
+        "x-vigov-task": "51962360470e",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/documents.letterRoutingIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documents.citizenLetterOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/citizen-letters/{id}/sender": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "patch": {
+        "summary": "Sửa họ tên / SĐT / địa chỉ người gửi (trường vắng giữ nguyên, null hoặc rỗng là xoá); nhật ký và vết không ghi giá trị",
+        "operationId": "documents_patch_citizen_letters_by_id_sender",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "05-van-ban-don-thu §3.5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "petition.create"
+        },
+        "x-vigov-task": "06e90a9c0a8d",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/documents.senderCorrectionIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documents.citizenLetterOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/citizen-letters/{id}/status": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Đổi trạng thái đơn thư theo TT 05/2021 (C3); cán bộ được giao hoặc người có quyền tiếp nhận; Đã giải quyết cần kết quả trước",
+        "operationId": "documents_post_citizen_letters_by_id_status",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "05-van-ban-don-thu §3.5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "petition.read"
+        },
+        "x-vigov-task": "da3ac736e6b7",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/documents.letterStatusIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documents.citizenLetterOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/citizen-report-fields": {
       "get": {
         "summary": "Danh mục lĩnh vực phản ánh của xã — đủ mọi mã nền tảng cấp, kèm nhãn, thứ tự, bật/tắt của xã (màn hình cấu hình)",
@@ -8847,7 +10006,7 @@
         }
       ],
       "delete": {
-        "summary": "Gỡ mềm một chứng từ giải ngân, kèm lý do bắt buộc",
+        "summary": "Gỡ mềm một chứng từ giải ngân chưa khoá; lý do tuỳ chọn (bỏ trống thì ghi `Gỡ khoản chi nhập nhầm`)",
         "operationId": "finance_delete_disbursements_by_id",
         "tags": [
           "finance"
@@ -8855,7 +10014,7 @@
         "x-vigov-screen": "06-giai-ngan §8.2",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "budget.confirm"
+          "key": "budget.update"
         },
         "x-vigov-task": "e48345103511",
         "requestBody": {
@@ -9047,7 +10206,7 @@
         }
       ],
       "post": {
-        "summary": "Xác nhận một chứng từ giải ngân (`Kế toán nhập` → `Đã xác nhận`)",
+        "summary": "Xác nhận một chứng từ giải ngân (`Kế toán nhập` → `Đã xác nhận`); người nhập không tự xác nhận được",
         "operationId": "finance_post_disbursements_by_id_confirmation",
         "tags": [
           "finance"
@@ -9107,7 +10266,11 @@
                   "$ref": "#/components/schemas/httpx.Error"
                 }
               }
-            }
+            },
+            "x-vigov-error-codes": [
+              "self_confirmation",
+              "voucher_state"
+            ]
           },
           "500": {
             "description": "Internal Server Error",
@@ -9229,7 +10392,7 @@
         }
       },
       "post": {
-        "summary": "Khoá một chứng từ giải ngân (`Đã xác nhận` → `Đã khoá`)",
+        "summary": "Khoá một chứng từ giải ngân (`Kế toán nhập` hoặc `Đã xác nhận` → `Đã khoá`; từ `Kế toán nhập` là xác nhận và khoá một lần); người nhập không tự khoá được",
         "operationId": "finance_post_disbursements_by_id_lockout",
         "tags": [
           "finance"
@@ -9289,7 +10452,11 @@
                   "$ref": "#/components/schemas/httpx.Error"
                 }
               }
-            }
+            },
+            "x-vigov-error-codes": [
+              "self_confirmation",
+              "voucher_state"
+            ]
           },
           "500": {
             "description": "Internal Server Error",
@@ -11201,6 +12368,83 @@
         }
       }
     },
+    "/api/v1/implementing-units": {
+      "get": {
+        "summary": "Các đơn vị thực hiện (nhập tay) của dự án còn hiệu lực trong một năm ngân sách — dùng cho bộ lọc danh sách dự án",
+        "operationId": "finance_get_implementing_units",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "06-giai-ngan §7.1",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.read"
+        },
+        "x-vigov-task": "33529f12f206",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.implementingUnitsOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/incoming-document-overdue-queue": {
       "get": {
         "summary": "Văn bản đến quá hạn cần xử lý ngay (tối đa 10), trễ lâu nhất trước, kèm cờ nghiêm trọng",
@@ -12180,6 +13424,14 @@
             "name": "delayed_only",
             "in": "query",
             "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "implementing_unit",
+            "in": "query",
+            "required": true,
             "schema": {
               "type": "string"
             }
@@ -25789,6 +27041,14 @@
             }
           },
           {
+            "name": "roots",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "scope",
             "in": "query",
             "required": false,
@@ -26960,7 +28220,7 @@
     },
     "/api/v1/task-types": {
       "get": {
-        "summary": "Danh mục loại nhiệm vụ của xã — dùng cho ô chọn loại trên biểu mẫu nhiệm vụ và bộ lọc",
+        "summary": "Danh mục loại nhiệm vụ của xã — dùng cho ô chọn loại trên biểu mẫu nhiệm vụ và bộ lọc; mỗi dòng kèm cờ chỉ đọc `requires_directive` (đúng với `theo-van-ban`)",
         "operationId": "petitions_get_task_types",
         "tags": [
           "petitions"
@@ -27638,7 +28898,7 @@
     },
     "/api/v1/tasks": {
       "get": {
-        "summary": "Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo phạm vi (`all` · `mine` · `related` · `assigned-by-me` = tôi tạo hoặc tôi là lãnh đạo giao việc) · trạng thái · chưa hoàn thành (`incomplete=true`, mọi trạng thái trừ `hoan-thanh`) · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · sắp đến hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối) · `priority` (theo thứ tự danh mục mức ưu tiên của xã, việc không có mức ở cuối) · `title`",
+        "summary": "Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo phạm vi (`all` · `mine` · `related` · `assigned-by-me` = tôi tạo hoặc tôi là lãnh đạo giao việc) · trạng thái · chưa hoàn thành (`incomplete=true`, mọi trạng thái trừ `hoan-thanh`) · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · sắp đến hạn · việc con của một mã (`parent=NV19`) · chỉ việc gốc (`roots=true`); mỗi dòng kèm số lần đã lùi hạn (`extension_count`) và cờ đang có đề nghị lùi hạn chờ duyệt (`pending_extension`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối) · `priority` (theo thứ tự danh mục mức ưu tiên của xã, việc không có mức ở cuối) · `title`",
         "operationId": "petitions_get_tasks",
         "tags": [
           "petitions"
@@ -27775,6 +29035,14 @@
           },
           {
             "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "roots",
             "in": "query",
             "required": false,
             "schema": {
@@ -28289,6 +29557,14 @@
             }
           },
           {
+            "name": "roots",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "scope",
             "in": "query",
             "required": false,
@@ -28530,7 +29806,7 @@
         }
       },
       "get": {
-        "summary": "Một nhiệm vụ, tra theo mã nhiệm vụ của xã (NV19)",
+        "summary": "Một nhiệm vụ, tra theo mã nhiệm vụ của xã (NV19) — kèm số lần đã lùi hạn và cờ đang có đề nghị lùi hạn chờ duyệt",
         "operationId": "petitions_get_tasks_by_ma",
         "tags": [
           "petitions"
@@ -34116,6 +35392,68 @@
         ],
         "additionalProperties": false
       },
+      "documents.bookLetterIn": {
+        "type": "object",
+        "properties": {
+          "received_date": {
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          "letter_type": {
+            "type": "string"
+          },
+          "sender_name": {
+            "type": "string"
+          },
+          "sender_phone": {
+            "type": "string"
+          },
+          "sender_address": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "related_letter_id": {
+            "type": "string",
+            "description": "the duplicate the clerk CONFIRMED"
+          },
+          "holding_unit_id": {
+            "type": "string",
+            "description": "\"Chuyển ngay cho bộ phận\""
+          },
+          "number": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "processing_due_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolution_due_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "letter_type",
+          "received_date",
+          "summary"
+        ],
+        "additionalProperties": false
+      },
       "documents.capSoVanBanDiVao": {
         "type": "object",
         "properties": {
@@ -34166,6 +35504,280 @@
         "required": [
           "reason",
           "to_unit"
+        ],
+        "additionalProperties": false
+      },
+      "documents.citizenLetterItemOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "number": {
+            "type": "integer"
+          },
+          "year": {
+            "type": "integer"
+          },
+          "received_date": {
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          "letter_type": {
+            "type": "string",
+            "description": "kien-nghi-phan-anh · khieu-nai · to-cao · de-nghi"
+          },
+          "sender_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sender_phone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "identity_withheld": {
+            "type": "boolean"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "summary_withheld": {
+            "type": "boolean"
+          },
+          "holding_unit_id": {
+            "type": "string",
+            "description": "identity's `bo_phan.id`"
+          },
+          "assignee_code": {
+            "type": "string",
+            "description": "a staff business code"
+          },
+          "status": {
+            "type": "string"
+          },
+          "processing_due_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "RFC 3339; null = no deadline set"
+          },
+          "resolution_due_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "RFC 3339; null = no deadline set"
+          },
+          "days_open": {
+            "type": "integer"
+          },
+          "is_resolved": {
+            "type": "boolean",
+            "description": "da-giai-quyet / dinh-chi"
+          },
+          "is_closed": {
+            "type": "boolean",
+            "description": "any finishing status"
+          },
+          "related_letter_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "days_open",
+          "id",
+          "identity_withheld",
+          "is_closed",
+          "is_resolved",
+          "letter_type",
+          "number",
+          "processing_due_at",
+          "received_date",
+          "resolution_due_at",
+          "sender_name",
+          "sender_phone",
+          "status",
+          "summary",
+          "summary_withheld",
+          "year"
+        ],
+        "additionalProperties": false
+      },
+      "documents.citizenLetterOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "number": {
+            "type": "integer"
+          },
+          "year": {
+            "type": "integer"
+          },
+          "received_date": {
+            "type": "string"
+          },
+          "letter_type": {
+            "type": "string"
+          },
+          "sender_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sender_phone": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "MASKED, always"
+          },
+          "has_sender_address": {
+            "type": "boolean"
+          },
+          "sender_unknown": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "identity_withheld": {
+            "type": "boolean"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "summary_withheld": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          },
+          "next_statuses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "C3's arrows out of the current status"
+          },
+          "holding_unit_id": {
+            "type": "string"
+          },
+          "assignee_code": {
+            "type": "string"
+          },
+          "processing_due_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolution_due_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "accepted_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolved_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "closed_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "days_open": {
+            "type": "integer"
+          },
+          "is_resolved": {
+            "type": "boolean"
+          },
+          "is_closed": {
+            "type": "boolean"
+          },
+          "related_letter_id": {
+            "type": "string"
+          },
+          "result_document_no": {
+            "type": "string"
+          },
+          "result_document_date": {
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          "result_signer": {
+            "type": "string"
+          },
+          "result_issuer": {
+            "type": "string"
+          },
+          "result_summary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "null when none, or withheld with the summary"
+          },
+          "created_by_code": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "accepted_at",
+          "closed_at",
+          "created_at",
+          "created_by_code",
+          "days_open",
+          "has_sender_address",
+          "id",
+          "identity_withheld",
+          "is_closed",
+          "is_resolved",
+          "letter_type",
+          "next_statuses",
+          "number",
+          "processing_due_at",
+          "received_date",
+          "resolution_due_at",
+          "resolved_at",
+          "result_summary",
+          "sender_name",
+          "sender_phone",
+          "sender_unknown",
+          "status",
+          "summary",
+          "summary_withheld",
+          "updated_at",
+          "year"
         ],
         "additionalProperties": false
       },
@@ -34317,6 +35929,76 @@
         ],
         "additionalProperties": false
       },
+      "documents.duplicateCandidateOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "number": {
+            "type": "integer"
+          },
+          "year": {
+            "type": "integer"
+          },
+          "received_date": {
+            "type": "string"
+          },
+          "similarity": {
+            "type": "number",
+            "description": "0..1"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "received_date",
+          "similarity",
+          "summary",
+          "year"
+        ],
+        "additionalProperties": false
+      },
+      "documents.duplicateCheckIn": {
+        "type": "object",
+        "properties": {
+          "sender_name": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "letter_type": {
+            "type": "string",
+            "description": "when `to-cao`, no candidate summary is returned"
+          }
+        },
+        "required": [
+          "summary"
+        ],
+        "additionalProperties": false
+      },
+      "documents.duplicatesOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/documents.duplicateCandidateOut"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
       "documents.goVanBanVao": {
         "type": "object",
         "properties": {
@@ -34361,6 +36043,297 @@
           "open",
           "overdue",
           "to"
+        ],
+        "additionalProperties": false
+      },
+      "documents.letterLogEntryOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "letter_id": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string",
+            "description": "RFC 3339"
+          },
+          "actor_code": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "description": "chuyen-trang-thai · luan-chuyen · ghi-chu · ket-qua · sua-nguoi-gui"
+          },
+          "from_status": {
+            "type": "string"
+          },
+          "to_status": {
+            "type": "string"
+          },
+          "from_unit_id": {
+            "type": "string"
+          },
+          "to_unit_id": {
+            "type": "string"
+          },
+          "assignee_code": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "actor_code",
+          "at",
+          "id",
+          "kind",
+          "letter_id"
+        ],
+        "additionalProperties": false
+      },
+      "documents.letterLogOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/documents.letterLogEntryOut"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "documents.letterNoteIn": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "additionalProperties": false
+      },
+      "documents.letterReportMonthOut": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": "integer"
+          },
+          "received": {
+            "type": "integer"
+          },
+          "resolved": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "month",
+          "received",
+          "resolved"
+        ],
+        "additionalProperties": false
+      },
+      "documents.letterReportOut": {
+        "type": "object",
+        "properties": {
+          "year": {
+            "type": "integer"
+          },
+          "received": {
+            "type": "integer"
+          },
+          "resolved": {
+            "type": "integer"
+          },
+          "closed_in_processing": {
+            "type": "integer"
+          },
+          "in_progress": {
+            "type": "integer"
+          },
+          "overdue": {
+            "type": "integer"
+          },
+          "on_time_percent": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "average_days": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "by_type": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/documents.letterReportTypeOut"
+            }
+          },
+          "by_unit": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/documents.letterReportUnitOut"
+            }
+          },
+          "by_month": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/documents.letterReportMonthOut"
+            }
+          }
+        },
+        "required": [
+          "average_days",
+          "by_month",
+          "by_type",
+          "by_unit",
+          "closed_in_processing",
+          "in_progress",
+          "on_time_percent",
+          "overdue",
+          "received",
+          "resolved",
+          "year"
+        ],
+        "additionalProperties": false
+      },
+      "documents.letterReportTypeOut": {
+        "type": "object",
+        "properties": {
+          "letter_type": {
+            "type": "string"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "resolved": {
+            "type": "integer"
+          },
+          "in_progress": {
+            "type": "integer"
+          },
+          "overdue": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "in_progress",
+          "letter_type",
+          "overdue",
+          "resolved",
+          "total"
+        ],
+        "additionalProperties": false
+      },
+      "documents.letterReportUnitOut": {
+        "type": "object",
+        "properties": {
+          "unit_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "total": {
+            "type": "integer"
+          },
+          "in_progress": {
+            "type": "integer"
+          },
+          "resolved": {
+            "type": "integer"
+          },
+          "overdue": {
+            "type": "integer"
+          },
+          "on_time_percent": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "in_progress",
+          "on_time_percent",
+          "overdue",
+          "resolved",
+          "total",
+          "unit_id"
+        ],
+        "additionalProperties": false
+      },
+      "documents.letterResultIn": {
+        "type": "object",
+        "properties": {
+          "result_document_no": {
+            "type": "string"
+          },
+          "result_document_date": {
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          "result_signer": {
+            "type": "string"
+          },
+          "result_issuer": {
+            "type": "string"
+          },
+          "result_summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result_document_date",
+          "result_document_no",
+          "result_issuer",
+          "result_signer",
+          "result_summary"
+        ],
+        "additionalProperties": false
+      },
+      "documents.letterRoutingIn": {
+        "type": "object",
+        "properties": {
+          "to_unit": {
+            "type": "string"
+          },
+          "assignee": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "to_unit"
+        ],
+        "additionalProperties": false
+      },
+      "documents.letterStatusIn": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
         ],
         "additionalProperties": false
       },
@@ -34509,6 +36482,30 @@
           "as_of",
           "items"
         ],
+        "additionalProperties": false
+      },
+      "documents.senderCorrectionIn": {
+        "type": "object",
+        "properties": {
+          "sender_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sender_phone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sender_address": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
         "additionalProperties": false
       },
       "documents.suaLoaiVanBanVao": {
@@ -35840,6 +37837,12 @@
           "completion_date": {
             "type": "string"
           },
+          "implementing_unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "disbursement_deadline": {
             "type": "string"
           },
@@ -35939,6 +37942,12 @@
           },
           "completion_date": {
             "type": "string"
+          },
+          "implementing_unit": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "disbursement_deadline": {
             "type": "string"
@@ -36305,9 +38314,6 @@
             "type": "string"
           }
         },
-        "required": [
-          "reason"
-        ],
         "additionalProperties": false
       },
       "finance.goVao": {
@@ -36399,6 +38405,25 @@
           "order",
           "source",
           "tier"
+        ],
+        "additionalProperties": false
+      },
+      "finance.implementingUnitsOut": {
+        "type": "object",
+        "properties": {
+          "year": {
+            "type": "integer"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "items",
+          "year"
         ],
         "additionalProperties": false
       },
@@ -36660,6 +38685,12 @@
         "properties": {
           "text": {
             "type": "string"
+          },
+          "owner_code": {
+            "type": "string"
+          },
+          "due_on": {
+            "type": "string"
           }
         },
         "required": [
@@ -36701,6 +38732,12 @@
             "description": "staff business code"
           },
           "tracking_task_id": {
+            "type": "string"
+          },
+          "owner_code": {
+            "type": "string"
+          },
+          "due_on": {
             "type": "string"
           }
         },
@@ -37105,6 +39142,12 @@
               "null"
             ]
           },
+          "implementing_unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "start_date": {
             "type": [
               "string",
@@ -37411,6 +39454,9 @@
             "type": "string"
           },
           "assignee_id": {
+            "type": "string"
+          },
+          "implementing_unit": {
             "type": "string"
           },
           "start_date": {
@@ -40739,6 +42785,30 @@
         ],
         "additionalProperties": false
       },
+      "page.Result_documents.citizenLetterItemOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/documents.citizenLetterItemOut"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "empty when has_more is false"
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "has_more",
+          "items",
+          "next_cursor"
+        ],
+        "additionalProperties": false
+      },
       "page.Result_documents.vanBanDenRa": {
         "type": "object",
         "properties": {
@@ -41794,6 +43864,9 @@
           },
           "tier": {
             "type": "integer"
+          },
+          "requires_directive": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -41803,6 +43876,7 @@
           "is_default",
           "label",
           "order",
+          "requires_directive",
           "source",
           "tier"
         ],
@@ -42044,6 +44118,12 @@
           "child_count": {
             "type": "integer"
           },
+          "extension_count": {
+            "type": "integer"
+          },
+          "pending_extension": {
+            "type": "boolean"
+          },
           "created_by": {
             "type": "string"
           },
@@ -42086,10 +44166,12 @@
           "created_by",
           "description",
           "due_at",
+          "extension_count",
           "leader_approved",
           "note",
           "original_due_at",
           "parent",
+          "pending_extension",
           "priority",
           "progress",
           "result_summary",
