@@ -74,6 +74,7 @@ import (
 	"errors"
 	"fmt"
 	"time"
+	"unicode/utf8"
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/store"
@@ -1145,6 +1146,16 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 				return err
 			}
 		}
+		// ONE TIMELINE ROW PER APPROVAL MARK THAT MOVED (user decision 07/10/2026). The drawer toggles
+		// each mark with one click, and §5.9's timeline is where an officer reads who ticked it and when;
+		// without a row a mark that appears or disappears has no visible author outside audit_log. A
+		// mark sent with its current value writes nothing — the row would claim an act that did not
+		// happen. The status is untouched: the marks change no status (migration 0006:302-304).
+		for _, text := range approvalMarkLogLines(truoc, sau) {
+			if err := uc.ghiNhatKy(ctx, tx, sau, bayGio, nguoi.ID, text); err != nil {
+				return err
+			}
+		}
 
 		// THE BLOCK IS APPLIED IN THE SAME TRANSACTION AS THE COLUMNS. §5.4 draws one `✎ Sửa` over
 		// the whole block, so one Save is ONE administrative act: a commit that moved the title but
@@ -1185,18 +1196,32 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 				"nhiem_vu_cha_id": truoc.NhiemVuChaID,
 				"ma_nhiem_vu_cha": truoc.ParentCode,
 				"so_dong_van_ban": len(vanBanTruoc),
+				// THE TWO APPROVAL MARKS AS BOOLEANS (rule 6, invariant 5): "who ticked the leader's
+				// approval, and when" is exactly what an inspection of a completed task asks. Same keys
+				// as the Excel import's entry (task_import.go), so one query reads both.
+				"lanh_dao_phe_duyet": truoc.LanhDaoPheDuyetHoanThanh,
+				"cap_tren_cong_nhan": truoc.CapTrenCongNhanHoanThanh,
+				// THE RESULT SUMMARY AND THE NOTE BY LENGTH ONLY, in characters. Both are free text that
+				// may name a citizen's case, and audit_log is permanent (rule 6, forbidden #4) — the
+				// `do_dai_*` convention. The length still shows that one was written, cleared or edited.
+				"do_dai_tom_tat_ket_qua": utf8.RuneCountInString(truoc.TomTatKetQua),
+				"do_dai_ghi_chu":         utf8.RuneCountInString(truoc.GhiChu),
 			},
 			"sau": map[string]any{
-				"ma":              sau.Ma,
-				"han_xu_ly":       lucRaVet(sau.HanXuLy),
-				"han_ban_dau":     lucRaVet(sau.HanBanDau),
-				"tieu_de":         sau.TieuDe,
-				"khoi":            sau.Khoi,
-				"muc_uu_tien":     sau.MucUuTien,
-				"tien_do":         sau.TienDo,
-				"nhiem_vu_cha_id": sau.NhiemVuChaID,
-				"ma_nhiem_vu_cha": sau.ParentCode,
-				"so_dong_van_ban": len(sau.VanBan),
+				"ma":                     sau.Ma,
+				"han_xu_ly":              lucRaVet(sau.HanXuLy),
+				"han_ban_dau":            lucRaVet(sau.HanBanDau),
+				"tieu_de":                sau.TieuDe,
+				"khoi":                   sau.Khoi,
+				"muc_uu_tien":            sau.MucUuTien,
+				"tien_do":                sau.TienDo,
+				"nhiem_vu_cha_id":        sau.NhiemVuChaID,
+				"ma_nhiem_vu_cha":        sau.ParentCode,
+				"so_dong_van_ban":        len(sau.VanBan),
+				"lanh_dao_phe_duyet":     sau.LanhDaoPheDuyetHoanThanh,
+				"cap_tren_cong_nhan":     sau.CapTrenCongNhanHoanThanh,
+				"do_dai_tom_tat_ket_qua": utf8.RuneCountInString(sau.TomTatKetQua),
+				"do_dai_ghi_chu":         utf8.RuneCountInString(sau.GhiChu),
 			},
 			// WHAT HAPPENED TO THE BLOCK, IN COUNTS AND IDS — NEVER IN TEXT. `trich_yeu` is the
 			// subject line of an administrative document and routinely names a citizen's case, and
@@ -1229,6 +1254,30 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 		return domain.NhiemVu{}, bocNhiemVu(ctx, "sửa nhiệm vụ", err)
 	}
 	return sau, nil
+}
+
+// Labels of §5.4's two approval marks, worded as the drawer shows them, so the timeline row reads
+// as the box the officer clicked.
+const (
+	leaderApprovedLabel       = "Lãnh đạo xã đã phê duyệt hoàn thành"
+	superiorAcknowledgedLabel = "Cấp trên đã công nhận"
+)
+
+// approvalMarkLogLines returns one timeline sentence per approval mark whose value differs between
+// before and after, leader's mark first. Empty when neither moved — the caller writes no row then.
+func approvalMarkLogLines(before, after domain.NhiemVu) []string {
+	var lines []string
+	mark := func(was, is bool, label string) {
+		switch {
+		case !was && is:
+			lines = append(lines, "Đánh dấu: "+label)
+		case was && !is:
+			lines = append(lines, "Bỏ đánh dấu: "+label)
+		}
+	}
+	mark(before.LanhDaoPheDuyetHoanThanh, after.LanhDaoPheDuyetHoanThanh, leaderApprovedLabel)
+	mark(before.CapTrenCongNhanHoanThanh, after.CapTrenCongNhanHoanThanh, superiorAcknowledgedLabel)
+	return lines
 }
 
 // chuanHoaSuaNhiemVu trims and bounds the fields that were actually sent. A nil pointer is "not
