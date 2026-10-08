@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/error-state";
 import { NoAccess } from "@/components/ui/no-access";
 import { Notice } from "@/components/ui/notice";
-import { PendingMarker } from "@/components/ui/pending-feature";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 
@@ -40,6 +39,7 @@ import {
   TEST_RECIPIENT_PLACEHOLDER,
   TEST_SENT_TOAST,
   draftFromSettings,
+  lastTestSentence,
   saveBody,
   saveRefusalMessage,
   testFailedToast,
@@ -47,14 +47,7 @@ import {
   testSentSentence,
 } from "./mail-settings-form";
 import type { MailDraft } from "./mail-settings-form";
-import { PHAN_CHUA_DUNG } from "./nhan-cau-hinh";
 import { mailServerTabDecision } from "./quyen-tab";
-
-/**
- * The part of §10 the server does not store yet (ADR 0079 #5): drawn as "?" at the spec's place, its
- * sentence taken from `PHAN_CHUA_DUNG` as-is — never a second copy here.
- */
-const LAST_TEST = PHAN_CHUA_DUNG.find((p) => p.ten === "Lần thử gần nhất");
 
 /** The save form's id: "Lưu cấu hình" sits in the action row beside the test form, outside it. */
 const SAVE_FORM_ID = "form-may-chu-thu";
@@ -147,19 +140,32 @@ export function MailServerTab() {
     setTestResult(null);
     const r = await sendTestMail(to, a.key);
     setTesting(false);
+    // `LOI_KHONG_RO` / `TEST_UNREACHABLE_FALLBACK` are what `sendTestMail` returns when service-comms
+    // itself gave no answer — not a sentence from the commune's mail server, and nothing was stored.
+    const unreachable = !r.ok && (r.thongBao === LOI_KHONG_RO || r.thongBao === TEST_UNREACHABLE_FALLBACK);
     if (!r.ok) {
-      // `LOI_KHONG_RO` / `TEST_UNREACHABLE_FALLBACK` are what `sendTestMail` returns when service-comms
-      // itself gave no answer — not a sentence from the commune's mail server.
-      const unreachable = r.thongBao === LOI_KHONG_RO || r.thongBao === TEST_UNREACHABLE_FALLBACK;
-      const text = unreachable ? CALL_FAILED : r.thongBao;
       toast.error(unreachable ? CALL_FAILED : testFailedToast(r.thongBao));
-      setTestResult({ ok: false, text });
-      return;
+      setTestResult({ ok: false, text: unreachable ? CALL_FAILED : r.thongBao });
+    } else {
+      // Done: the next click is a new send, with a new key.
+      setAttempt(null);
+      toast.success(TEST_SENT_TOAST);
+      setTestResult({ ok: true, text: testSentSentence(to) });
     }
-    // Done: the next click is a new send, with a new key.
-    setAttempt(null);
-    toast.success(TEST_SENT_TOAST);
-    setTestResult({ ok: true, text: testSentSentence(to) });
+    await refreshLastTest(unreachable);
+  }
+
+  /**
+   * Re-read after a test so "Lần thử gần nhất" is the STORED result, not a guess from this click. Only
+   * `loaded` is replaced — the draft keeps whatever staff typed and has not saved. When the stored
+   * line now carries this attempt, the session line is dropped (it would say the same thing twice);
+   * it stays when the re-read failed or the attempt never reached service-comms (nothing was stored).
+   */
+  async function refreshLastTest(unreachable: boolean) {
+    const fresh = await getMailSettings();
+    if (!fresh.ok) return;
+    setLoaded(fresh);
+    if (!unreachable && fresh.duLieu.last_test !== null) setTestResult(null);
   }
 
   return (
@@ -247,7 +253,7 @@ export function MailServerView({
   recipient: string;
   setRecipient: (s: string) => void;
   testing: boolean;
-  /** This session's test send, if any. Not persisted by the server (see `LAST_TEST`). */
+  /** This session's test send, if any — until the re-read stored result replaces it. */
   testResult: { ok: boolean; text: string } | null;
   onTest: () => void;
   /** The signed-in commune's `displayName`, verbatim — the sender-name placeholder. */
@@ -475,11 +481,21 @@ export function MailServerView({
         </p>
       )}
 
-      {/* Spec 10 #7's persisted "Lần thử gần nhất …": the server does not store it yet (ADR 0079 #5). */}
-      {LAST_TEST !== undefined && (
-        <p className="text-ink-muted m-0 mt-2 flex items-center gap-1.5 text-[11.5px]" data-pending="">
-          <span>{LAST_TEST.ten}</span>
-          <PendingMarker info={LAST_TEST} />
+      {/* Spec 10 #7: the STORED last test (migration 0019); nothing when there has been none. No live
+          role: it is state read on load, not news — the session line above is the announcement. */}
+      {saved.last_test !== null && (
+        <p
+          className={cn(
+            "m-0 mt-2 flex items-center gap-1.5 text-[11.5px]",
+            saved.last_test.ok ? "text-leaf" : "text-danger",
+          )}
+        >
+          {saved.last_test.ok ? (
+            <CheckCircle2 aria-hidden="true" focusable="false" className="size-3.5 shrink-0" />
+          ) : (
+            <TriangleAlert aria-hidden="true" focusable="false" className="size-3.5 shrink-0" />
+          )}
+          {lastTestSentence(saved.last_test)}
         </p>
       )}
     </section>

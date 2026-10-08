@@ -10,7 +10,8 @@
  *      is never sent somewhere new), and the screen says so in place with §10's sentence.
  */
 
-import type { comms_mailSettingsIn, comms_mailSettingsOut } from "@/lib/api/schema.gen";
+import { formatDateTime } from "@/features/dashboard/period";
+import type { comms_mailLastTestOut, comms_mailSettingsIn, comms_mailSettingsOut } from "@/lib/api/schema.gen";
 
 /**
  * The two security modes, as the spec's two tick boxes. ONE server field (`security`), so the boxes
@@ -138,6 +139,41 @@ export const CALL_FAILED = "Không gọi được máy chủ.";
 export const HOST_PLACEHOLDER = "smtp.ten-mien-xa.gov.vn";
 export const FROM_ADDRESS_PLACEHOLDER = "ubnd@ten-mien-xa.gov.vn";
 export const TEST_RECIPIENT_PLACEHOLDER = "canbo@ten-mien-xa.gov.vn";
+
+/**
+ * One short sentence per `error_class` the server stores (`service-comms/internal/domain/mail_settings.go`
+ * `MailTestError*`, CHECK of migration 0019). Each is the first clause of the advice sentence the test
+ * route returns for the same category (`internal/http/mail_settings.go` `mailSendFailures`): the stored
+ * line names WHAT failed; the full advice was shown when the test ran.
+ */
+export const LAST_TEST_ERRORS: Readonly<Record<string, string>> = {
+  "khong-ket-noi": "không kết nối được tới máy chủ thư",
+  "het-thoi-gian": "máy chủ thư không trả lời kịp",
+  "chung-chi-khong-hop-le": "chứng chỉ của máy chủ thư không xác minh được",
+  "loi-tls": "không thiết lập được kết nối mã hoá",
+  "khong-co-starttls": "máy chủ thư không hỗ trợ START TLS ở cổng này",
+  "tu-choi-khong-ma-hoa": "hệ thống không gửi thư qua kết nối không mã hoá",
+  "khong-ho-tro-dang-nhap": "máy chủ thư không cho đăng nhập bằng tài khoản và mật khẩu",
+  "sai-tai-khoan": "máy chủ thư từ chối tài khoản hoặc mật khẩu",
+  "tu-choi-dia-chi": "máy chủ thư từ chối địa chỉ gửi hoặc địa chỉ nhận",
+  "sai-giao-thuc": "máy chủ thư trả lời không đúng giao thức SMTP",
+  khac: "không gửi được",
+};
+
+export const LAST_TEST_OK = "gửi được";
+
+/**
+ * "Lần thử gần nhất {thời gian} tới {email}: gửi được | {lỗi}" (spec 10 #7). `to` is the server's
+ * MASKED recipient, shown as is (rule 3). A class this screen does not know reads as "không gửi được" —
+ * still a failure, never "gửi được", so a new server class cannot turn into a false success line.
+ * An `at` that does not parse is shown verbatim rather than as "NaN:NaN".
+ */
+export function lastTestSentence(t: comms_mailLastTestOut): string {
+  const instant = Date.parse(t.at);
+  const when = Number.isNaN(instant) ? t.at : formatDateTime(instant);
+  const outcome = t.ok ? LAST_TEST_OK : (LAST_TEST_ERRORS[t.error_class ?? "khac"] ?? LAST_TEST_ERRORS.khac);
+  return `Lần thử gần nhất ${when} tới ${t.to}: ${outcome}`;
+}
 
 export function testFailedToast(error: string): string {
   return `Không gửi được: ${error}`;

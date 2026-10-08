@@ -11,6 +11,9 @@ import {
   PASSWORD_NEW_DESTINATION,
   destinationChanged,
   draftFromSettings,
+  LAST_TEST_ERRORS,
+  LAST_TEST_OK,
+  lastTestSentence,
   saveBody,
   saveRefusalMessage,
   testKey,
@@ -193,18 +196,14 @@ describe("states", () => {
     expect(html).toContain("587 dùng STARTTLS, 465 dùng TLS ngay từ đầu.");
   });
 
-  it("this session's test result: leaf + check on success, danger on failure; persisted last test is a '?'", () => {
+  it("this session's test result: leaf + check on success, danger on failure", () => {
     const ok = view(SAVED, undefined, { testResult: { ok: true, text: "gửi được" } });
     expect(ok).toMatch(/<p role="status" class="m-0 mt-2 flex items-center gap-1.5 text-\[11.5px\] text-leaf">/);
     const bad = view(SAVED, undefined, { testResult: { ok: false, text: "hỏng" } });
     expect(bad).toMatch(/<p role="alert" class="m-0 mt-2 flex items-center gap-1.5 text-\[11.5px\] text-danger">/);
-    // Prototype words (`EmailSettingPanel.tsx:277`): "Lần thử gần nhất".
-    expect(view(SAVED)).toMatch(/aria-label="Lần thử gần nhất — tính năng đang phát triển/);
-    expect(view(SAVED)).toContain("<span>Lần thử gần nhất</span>");
   });
 
-  it("registry: 'Lần thử gần nhất' is an entry; no entry for a platform mail fallback (decided: none)", () => {
-    expect(PHAN_CHUA_DUNG.filter((p) => p.ten === "Lần thử gần nhất")).toHaveLength(1);
+  it("registry: no entry for a platform mail fallback (decided: none)", () => {
     expect(PHAN_CHUA_DUNG.some((p) => /Lần thử gửi thư gần nhất|dự phòng|máy chủ thư của nền tảng/i.test(`${p.ten} ${p.viSao}`))).toBe(false);
   });
 
@@ -212,6 +211,57 @@ describe("states", () => {
     const html = renderToStaticMarkup(<MailServerLoading />);
     expect(html).toContain("h-80");
     expect(html).toContain('role="status"');
+  });
+});
+
+/**
+ * Spec 10 #7 — the STORED last test (`last_test`, migration 0019). Failed before: the line was a
+ * disabled "Lần thử gần nhất" with a "?", whatever the server returned.
+ */
+describe("last test (spec 10 #7)", () => {
+  const AT = "2026-10-08T02:05:00Z"; // 09:05 in Viet Nam
+  const OK_TEST = { at: AT, to: "c***@xa.gov.vn", ok: true, error_class: null };
+
+  it("ok → leaf line with CheckCircle2: 'Lần thử gần nhất {time} tới {masked}: gửi được'", () => {
+    const html = view({ ...SAVED, last_test: OK_TEST });
+    expect(html).toMatch(
+      /<p class="m-0 mt-2 flex items-center gap-1.5 text-\[11.5px\] text-leaf"><svg[^>]*lucide-circle-check[^>]*>.*<\/svg>Lần thử gần nhất 09:05 08\/10\/2026 tới c\*\*\*@xa.gov.vn: gửi được<\/p>/,
+    );
+    expect(html).not.toContain("tính năng đang phát triển");
+  });
+
+  it("failed → danger line with TriangleAlert and the class's sentence", () => {
+    const html = view({ ...SAVED, last_test: { ...OK_TEST, ok: false, error_class: "sai-tai-khoan" } });
+    expect(html).toMatch(
+      /<p class="m-0 mt-2 flex items-center gap-1.5 text-\[11.5px\] text-danger"><svg[^>]*lucide-triangle-alert[^>]*>.*<\/svg>Lần thử gần nhất 09:05 08\/10\/2026 tới c\*\*\*@xa.gov.vn: máy chủ thư từ chối tài khoản hoặc mật khẩu<\/p>/,
+    );
+  });
+
+  it("null → nothing at all", () => {
+    expect(view(SAVED)).not.toContain("Lần thử gần nhất");
+  });
+
+  it("every class the server's CHECK allows has its own sentence; an unknown one is still a FAILURE", () => {
+    const classes = [
+      "khong-ket-noi", "het-thoi-gian", "chung-chi-khong-hop-le", "loi-tls", "khong-co-starttls",
+      "tu-choi-khong-ma-hoa", "khong-ho-tro-dang-nhap", "sai-tai-khoan", "tu-choi-dia-chi", "sai-giao-thuc", "khac",
+    ];
+    expect(Object.keys(LAST_TEST_ERRORS).sort()).toEqual([...classes].sort());
+    expect(new Set(Object.values(LAST_TEST_ERRORS)).size).toBe(classes.length);
+    for (const c of classes) {
+      expect(lastTestSentence({ ...OK_TEST, ok: false, error_class: c })).toMatch(new RegExp(`: ${LAST_TEST_ERRORS[c]}$`));
+    }
+    for (const unknown of ["moi-them", null]) {
+      const line = lastTestSentence({ ...OK_TEST, ok: false, error_class: unknown });
+      expect(line.endsWith(`: ${LAST_TEST_ERRORS.khac}`)).toBe(true);
+      expect(line.endsWith(`: ${LAST_TEST_OK}`)).toBe(false);
+    }
+  });
+
+  it("an unparsable time is shown as sent, never 'NaN'", () => {
+    expect(lastTestSentence({ ...OK_TEST, at: "khong-phai-gio" })).toBe(
+      "Lần thử gần nhất khong-phai-gio tới c***@xa.gov.vn: gửi được",
+    );
   });
 });
 

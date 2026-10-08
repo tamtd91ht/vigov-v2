@@ -42,6 +42,8 @@ type Reply = { status: number; body: unknown } | "network";
 let calls: { method: string; url: string; body?: string }[] = [];
 let putReply: Reply = { status: 200, body: SAVED };
 let testReply: Reply = { status: 200, body: { sent: true } };
+/** What GET answers; a test send may change it (the server stores the result). */
+let getReply: { status: number; body: unknown } = { status: 200, body: SAVED };
 
 const json = (r: { status: number; body: unknown }) =>
   new Response(JSON.stringify(r.body), { status: r.status, headers: { "Content-Type": "application/json" } });
@@ -54,6 +56,7 @@ beforeEach(() => {
   calls = [];
   putReply = { status: 200, body: SAVED };
   testReply = { status: 200, body: { sent: true } };
+  getReply = { status: 200, body: SAVED };
   T.success.mockReset();
   T.error.mockReset();
   vi.stubGlobal(
@@ -61,7 +64,7 @@ beforeEach(() => {
     vi.fn(async (url: string, init: RequestInit = {}) => {
       const method = String(init.method ?? "GET");
       calls.push({ method, url, body: typeof init.body === "string" ? init.body : undefined });
-      const reply = url.endsWith("/test-messages") ? testReply : method === "PUT" ? putReply : { status: 200, body: SAVED };
+      const reply = url.endsWith("/test-messages") ? testReply : method === "PUT" ? putReply : getReply;
       if (reply === "network") throw new TypeError("Failed to fetch");
       return json(reply);
     }),
@@ -206,6 +209,25 @@ describe("test send", () => {
     await sendTo(el, "a@b.vn");
     expect(T.error).toHaveBeenCalledWith("Không gửi được: Máy chủ thư từ chối đăng nhập.");
     expect(el.querySelector('[role="alert"].text-danger')?.textContent).toBe("Máy chủ thư từ chối đăng nhập.");
+  });
+
+  it("after a send the settings are READ AGAIN: the stored last test replaces the session line", async () => {
+    // Failed before: no GET followed the send, and the stored line was a "?".
+    H.phien = session(["admin.lookup"]);
+    const el = await mount();
+    getReply = {
+      status: 200,
+      body: { ...SAVED, last_test: { at: "2026-10-08T02:05:00Z", to: "a***@b.vn", ok: false, error_class: "het-thoi-gian" } },
+    };
+    testReply = { status: 502, body: { code: "mail_timeout", message: "Máy chủ thư không trả lời kịp.", trace_id: "t" } };
+    type(box(el, "host"), "smtp.dang-go.gov.vn");
+    await sendTo(el, "a@b.vn");
+    expect(calls.filter((c) => c.method === "GET")).toHaveLength(2);
+    expect(el.textContent).toContain("Lần thử gần nhất 09:05 08/10/2026 tới a***@b.vn: máy chủ thư không trả lời kịp");
+    // One line, not two saying the same thing.
+    expect(el.querySelector('[role="alert"].text-danger')).toBeNull();
+    // The re-read replaced the saved state only: what staff typed and did not save is still there.
+    expect(box(el, "host").value).toBe("smtp.dang-go.gov.vn");
   });
 
   it("network failure → 'Không gọi được máy chủ.'", async () => {
