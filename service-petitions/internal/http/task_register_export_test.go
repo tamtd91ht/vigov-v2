@@ -171,6 +171,20 @@ func TestRegisterExportIs200WithARealWorkbook(t *testing.T) {
 	}
 }
 
+// ADR 0082: the export follows the on-screen order, so `sort=status` (with `roots=true`) reaches the use
+// case exactly as the list receives it.
+func TestRegisterExportCarriesTheStatusSort(t *testing.T) {
+	m := dungMayChu(t)
+	m.registerExport.data = registerSampleData()
+
+	doiMa(t, m.goi(t, http.MethodGet, hostA, registerExportPath+"?roots=true&sort=status&order=asc",
+		canBoCuaXa(xaA)), http.StatusOK)
+	f := m.registerExport
+	if f.calls != 1 || f.req.Sort != "status" || f.req.Order != "asc" || !f.req.Filter.Roots {
+		t.Errorf("xuất %d lần, yêu cầu %+v — muốn sort=status asc, roots", f.calls, f.req)
+	}
+}
+
 // --- what is refused before any export --------------------------------------------------------------
 
 func TestRegisterExportBadSortIs400(t *testing.T) {

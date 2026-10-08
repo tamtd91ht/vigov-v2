@@ -326,6 +326,11 @@ type NhiemVu struct {
 	// never on the wire: it is a position in one sorted read, not a fact about the task.
 	PriorityRank int64
 
+	// StatusRank is the same thing for a page sorted by `status`: the commune's effective status
+	// position folded with the default one (store.taskByStatusTable). Zero on every other read, never
+	// on the wire.
+	StatusRank int64
+
 	TomTatKetQua string
 	GhiChu       string
 

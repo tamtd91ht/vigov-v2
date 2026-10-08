@@ -10,6 +10,7 @@ import (
 
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/store"
+	"github.com/vihat/vigov/service-petitions/internal/domain"
 )
 
 // Tests for `sort=priority` and `sort=title` on the task register (P9, 28/09/2026).
@@ -132,6 +133,70 @@ func TestTitleSortCursorCarriesNoTitleAndLooksItUp(t *testing.T) {
 	for _, a := range l.args {
 		if s, ok := a.(string); ok && strings.Contains(s, "tổ dân phố") {
 			t.Errorf("tiêu đề bị ràng buộc làm tham số: %v", l.args)
+		}
+	}
+}
+
+// Tests for `sort=status` (ADR 0082, 08/10/2026).
+//
+//	PROVED HERE   status pages the status-catalogue join with the join bound to the commune, the key is
+//	              the override position else the DEFAULT position read from domain (never the code), the
+//	              ONE key serves both directions, it is scanned into the anchor and bound on page two.
+//
+//	NOT PROVED    PostgreSQL's evaluation of the key — TestPgStatusSortWalk, which SKIPS without
+//	              VIGOV_TEST_DSN.
+func TestStatusSortPagesTheCatalogueOrderAndCarriesTheRank(t *testing.T) {
+	k := &khoGia{hangTheoCot: twoTaskRows(map[string]driver.Value{statusSortColumn: int64(51)})}
+	s := NewNhiemVuStore(store.New(moKhoGia(k)))
+
+	kq, err := s.DanhSach(ctxXa(xaThu), LocNhiemVu{}, sortRequest(t, url.Values{"sort": {"status"}, "limit": {"1"}}))
+	if err != nil {
+		t.Fatalf("DanhSach: %v", err)
+	}
+	q := k.lenh[0].sql
+	for _, want := range []string{
+		"LEFT JOIN nhan_trang_thai_nhiem_vu s ON s.tenant_id = $1 AND s.ma = nhiem_vu.trang_thai",
+		"COALESCE(s.thu_tu, CASE nhiem_vu.trang_thai WHEN 'moi-giao' THEN 1",
+		"WHEN 'chuyen-tiep' THEN 7 ELSE 0 END",
+		"ORDER BY " + statusSortColumn + " DESC, id DESC",
+		", " + statusSortColumn + " FROM ",
+	} {
+		if !strings.Contains(q, want) {
+			t.Errorf("câu lệnh thiếu %q: %s", want, q)
+		}
+	}
+	if strings.Contains(q, "ORDER BY trang_thai") {
+		t.Errorf("sắp theo MÃ trạng thái (thứ tự chữ cái), không theo thứ tự của xã: %s", q)
+	}
+	if !kq.HasMore || kq.Items[0].StatusRank != 51 || kq.Items[0].PriorityRank != 0 {
+		t.Fatalf("trang = %+v, muốn còn trang sau và hạng trạng thái 51 đã quét", kq)
+	}
+
+	// Page two, ASCENDING, from a cursor of the same direction: the SAME key, the rank bound as anchor.
+	pub, _ := columnOf(SapXepNhiemVu, "status")
+	cursor := page.Encode(pub, page.Asc, page.Anchor{Key: page.IntKey(51), ID: "nv-001"})
+	k2 := &khoGia{hangTheoCot: twoTaskRows(map[string]driver.Value{statusSortColumn: int64(68)})}
+	s2 := NewNhiemVuStore(store.New(moKhoGia(k2)))
+	if _, err := s2.DanhSach(ctxXa(xaThu), LocNhiemVu{},
+		sortRequest(t, url.Values{"sort": {"status"}, "order": {"asc"}, "cursor": {cursor}})); err != nil {
+		t.Fatalf("DanhSach trang 2: %v", err)
+	}
+	l := k2.lenh[0]
+	if !strings.Contains(l.sql, "("+statusSortColumn+", id) > ($2, $3)") ||
+		!strings.Contains(l.sql, "ORDER BY "+statusSortColumn+" ASC, id ASC") {
+		t.Errorf("trang 2 không sắp tăng theo khoá trạng thái: %s", l.sql)
+	}
+	if l.args[1] != int64(51) || l.args[2] != "nv-001" {
+		t.Errorf("mốc trang 2 = %v, muốn (51, nv-001)", l.args[1:3])
+	}
+}
+
+// The status key folds the effective position over the default one; the stride must exceed every
+// default position or two statuses would share a key and order by id instead of by the catalogue.
+func TestStatusSortStrideExceedsEveryDefaultPosition(t *testing.T) {
+	for _, md := range domain.MacDinhTrangThaiNhiemVu() {
+		if md.ThuTu >= statusSortStride || md.ThuTu < 1 {
+			t.Errorf("vị trí mặc định %d của %s nằm ngoài [1, %d)", md.ThuTu, md.Ma, statusSortStride)
 		}
 	}
 }

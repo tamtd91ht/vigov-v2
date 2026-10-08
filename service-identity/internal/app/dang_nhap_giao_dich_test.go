@@ -253,6 +253,15 @@ func (c *connGia) QueryContext(_ context.Context, q string, args []driver.NamedV
 	if !strings.Contains(q, "nguoi_dung") {
 		return &rowsGia{}, nil
 	}
+	if strings.HasPrefix(q, "SELECT email FROM nguoi_dung") {
+		// store.EmailForReveal — one column. khongCoNguoiDung stands for "no such person here".
+		c.g.mu.Lock()
+		defer c.g.mu.Unlock()
+		if c.g.khongCoNguoiDung {
+			return &rowsGia{cot: []string{"email"}}, nil
+		}
+		return &rowsGia{cot: []string{"email"}, hang: [][]driver.Value{{emailCB}}}, nil
+	}
 
 	c.g.mu.Lock()
 	// Each flag is applied ONLY where the WHERE clause names it — that is the whole point of

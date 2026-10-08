@@ -433,7 +433,7 @@ func TestSapXepNhiemVuKhongNhanCotCoTheNULL(t *testing.T) {
 				t.Errorf("nhận sắp xếp theo %q — cột đó NULL được, và dòng NULL sẽ biến mất từ trang 2", cot)
 			}
 		}
-		for _, cot := range []string{"created_at", "code", "due_at", "priority", "title"} {
+		for _, cot := range []string{"created_at", "code", "due_at", "priority", "title", "status"} {
 			if _, err := page.Parse(url.Values{"sort": {cot}}, list); err != nil {
 				t.Errorf("từ chối sắp xếp theo %q: %v", cot, err)
 			}
@@ -441,7 +441,7 @@ func TestSapXepNhiemVuKhongNhanCotCoTheNULL(t *testing.T) {
 		// `due_at` MUST NOT reach the statement as the raw nullable column.
 		for _, c := range list.Columns() {
 			if c.SQL == "han_xu_ly" || c.SQL == "ngay_hoan_thanh" || c.SQL == "han_ban_dau" ||
-				c.SQL == "muc_uu_tien" {
+				c.SQL == "muc_uu_tien" || c.SQL == "trang_thai" {
 				t.Errorf("tham số %q trỏ thẳng vào cột NULL được %q", c.Param, c.SQL)
 			}
 		}

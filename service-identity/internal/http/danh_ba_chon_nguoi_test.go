@@ -165,8 +165,8 @@ func TestChonNguoi_200(t *testing.T) {
 // --- what AnyAuthenticated is allowed to carry ------------------------------------------------
 
 func TestChonNguoiChiCoBonKhoaKhongSoDienThoaiKhongEmail(t *testing.T) {
-	// The KEYS, asserted exactly. Adding `phone`, `mobile`, `email`, `id` or an account flag to this
-	// response turns this red — each of them would go to every account of the commune.
+	// The KEYS, asserted exactly. Adding `phone`, `mobile`, a raw `email`, `id` or an account flag to
+	// this response turns this red — each of them would go to every account of the commune.
 	m := dungMayChu(t)
 
 	w := m.goi(t, "GET", hostA, duongChonNguoi, "", m.tokenCho(t, xaA, sidA))
@@ -191,8 +191,9 @@ func TestChonNguoiChiCoBonKhoaKhongSoDienThoaiKhongEmail(t *testing.T) {
 			khoa = append(khoa, k)
 		}
 		sort.Strings(khoa)
-		if got := strings.Join(khoa, ","); got != "code,department_id,full_name,position" {
-			t.Errorf("khoá của một người = %s, muốn đúng code,department_id,full_name,position", got)
+		// `email_masked` joined on 08/10/2026 (ADR 0082 §3) — MASKED, never the raw address.
+		if got := strings.Join(khoa, ","); got != "code,department_id,email_masked,full_name,position" {
+			t.Errorf("khoá của một người = %s, muốn đúng code,department_id,email_masked,full_name,position", got)
 		}
 	}
 	for _, cam := range []string{`"phone"`, `"mobile"`, `"email"`, `"id"`, `"has_account"`, `"active"`} {

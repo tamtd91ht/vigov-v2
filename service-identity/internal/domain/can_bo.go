@@ -220,8 +220,13 @@ type TenCanBo struct {
 //
 // A FIFTH STAFF TYPE, AND IT MUST STAY THIS NARROW. The route is AnyAuthenticated (user decision
 // 2026-09-24): every account of the commune reads it. CanBoTomTat would put both telephone numbers,
-// the email and the account flags in hand on a path every role reaches; a type with no field for
+// the raw email and the account flags in hand on a path every role reaches; a type with no field for
 // them cannot send them, whatever a later edit to the handler does.
+//
+// THE EMAIL IS HERE ONLY MASKED (owner decision 08/10/2026, ADR 0082 §3). EmailMasked is filled by
+// the store, which masks the address the moment it is scanned — the raw value never reaches this
+// type, so no handler can send it by mistake. The full address is a separate, audited read
+// (store.CanBoStore.EmailForReveal via app.StaffEmailReveal).
 //
 // NO INTERNAL ID. Ma is the value every assignment route compares — service-petitions matches
 // `can_bo_xu_ly_id` against Principal.Ma — so the picker hands back exactly what the next request
@@ -232,6 +237,10 @@ type CanBoChonNguoi struct {
 	HoTen    string
 	ChucVu   string
 	BoPhanID string // "" when the person sits in no unit
+
+	// EmailMasked is privacy.MaskEmail of `nguoi_dung.email` — "" when the person has no address
+	// (migration 0019 makes it optional). NEVER the raw address.
+	EmailMasked string
 }
 
 // LocChonNguoi is the picker's two OPTIONAL narrowings. The zero value is the whole picker list.

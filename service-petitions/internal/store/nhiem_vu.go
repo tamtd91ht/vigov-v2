@@ -118,14 +118,21 @@ const cotNhiemVu = `id, ma, loai, khoi, tieu_de, mo_ta, trang_thai, muc_uu_tien,
 //	          Order is the database collation's; if the anchor's title is edited between two pages
 //	          the walk resumes from its new position (page.KindRef states the cost).
 //
+// `status` IS OFFERED SINCE 08/10/2026 (ADR 0082) and, like `priority`, is NOT the code: it is the
+// commune's own status order (override `thu_tu`, else the default), tie-broken by the default
+// position — taskByStatusTable. One key serves both directions; `trang_thai` is never NULL.
+//
 // WHAT IS STILL DELIBERATELY ABSENT: `han_xu_ly` as a raw column, for the NULL reason above — `due_at`
-// is the only way in.
+// is the only way in. And the assignee and unit columns: this service stores only the staff CODE and
+// the unit ID, and the NAMES a reader would expect them sorted by live in service-identity (rule 2 —
+// no join across that boundary). Sorting by code or id would be a column that looks sorted and is not.
 var SapXepNhiemVu = page.NewAllowlist(page.Desc,
 	page.Col("created_at", "tao_luc", page.KindTime),
 	page.Col("code", "ma", page.KindText),
 	page.Col("due_at", dueSortDescColumn, page.KindTime),
 	page.Col("priority", prioritySortDescColumn, page.KindInt),
 	page.Col("title", "tieu_de", page.KindRef),
+	page.Col("status", statusSortColumn, page.KindInt),
 )
 
 // taskSortAscAllowlist is SapXepNhiemVu for `order=asc`: identical but for the keys `due_at` and
@@ -137,6 +144,7 @@ var taskSortAscAllowlist = page.NewAllowlist(page.Desc,
 	page.Col("due_at", dueSortAscColumn, page.KindTime),
 	page.Col("priority", prioritySortAscColumn, page.KindInt),
 	page.Col("title", "tieu_de", page.KindRef),
+	page.Col("status", statusSortColumn, page.KindInt),
 )
 
 // ascendingParamOf names the params whose ascending key differs from the descending one.
@@ -249,6 +257,59 @@ var taskByPriorityTable = `(SELECT nhiem_vu.*, COALESCE(m.thu_tu::bigint, 922337
 	prioritySortAscColumn + `, COALESCE(m.thu_tu::bigint, -9223372036854775808) AS ` + prioritySortDescColumn +
 	` FROM nhiem_vu LEFT JOIN muc_uu_tien_nhiem_vu m ON m.tenant_id = $1 AND m.ma = nhiem_vu.muc_uu_tien` +
 	` WHERE nhiem_vu.tenant_id = $1) AS nv`
+
+// statusSortColumn is the ONE computed STATUS key, shared by both directions: `trang_thai` is NOT NULL
+// and constrained to the seven lifecycle codes (migration 0006), so there is no "no status" row to
+// push last and no per-direction sentinel to choose.
+const statusSortColumn = "status_sort"
+
+// statusSortStride separates the effective position from the default one inside the single integer
+// key: key = effective*stride + default. Any stride above the largest default position keeps the
+// two-part order intact, and effective positions are bounded by ThuTuToiDa (9999), so the product is
+// far inside a bigint.
+const statusSortStride = 16
+
+// taskByStatusTable is the relation a `sort=status` page is cut from (ADR 0082): every column of
+// `nhiem_vu` plus one NOT NULL key — THE COMMUNE'S OWN STATUS ORDER, exactly as the Kanban board and
+// the status catalogue show it (domain.GopNhanTrangThai), never the alphabetical code. Alphabetically
+// `cho-duyet` sorts before `moi-giao`, a column that looks sorted and is not.
+//
+//	effective position  the commune's override `nhan_trang_thai_nhiem_vu.thu_tu`, else the SOFTWARE
+//	                    default — the model is an override (migration 0010), and today most communes
+//	                    have no row at all, so a plain JOIN would sort nothing
+//	tie on it           broken by the DEFAULT position, the same total tie-break GopNhanTrangThai uses:
+//	                    0010 deliberately allows two statuses at one position. Folded into the one key
+//	                    (statusSortStride) because page.QueryPage keysets on ONE column plus `id`
+//	tie on both         `id`, added by QueryPage like every other key
+//
+// THE DEFAULT POSITIONS ARE READ FROM domain.MacDinhTrangThaiNhiemVu, NOT RETYPED HERE: a second copy
+// of the default order in SQL is a copy that drifts from the board the day one of them is edited.
+// `ELSE 0` is unreachable under migration 0006's CHECK; it exists so the key can never be NULL, because
+// a NULL key would silently drop that row from page two onward instead of showing it.
+//
+// `s.tenant_id = $1` binds the joined catalogue to the commune (QueryJoin's contract); its primary key
+// (tenant_id, ma) makes the join at most one row per task. The catalogue has no soft delete (0010).
+//
+// ⚠ NO INDEX SERVES THIS ORDER; the commune's live rows are sorted in memory, as for `due_at`.
+var taskByStatusTable = func() string {
+	var def strings.Builder
+	def.WriteString("CASE nhiem_vu.trang_thai")
+	for _, md := range domain.MacDinhTrangThaiNhiemVu() {
+		code := string(md.Ma)
+		// The codes are compile-time constants of the closed lifecycle set, never request data. The
+		// check keeps it that way should one ever gain a character that would end the literal.
+		if strings.ContainsAny(code, `'\`) {
+			panic("nhiem_vu: mã trạng thái không dùng được làm literal SQL: " + code)
+		}
+		fmt.Fprintf(&def, " WHEN '%s' THEN %d", code, md.ThuTu)
+	}
+	def.WriteString(" ELSE 0 END")
+	defaultPos := def.String()
+	return `(SELECT nhiem_vu.*, (COALESCE(s.thu_tu, ` + defaultPos + `)::bigint * ` +
+		strconv.Itoa(statusSortStride) + ` + (` + defaultPos + `)) AS ` + statusSortColumn +
+		` FROM nhiem_vu LEFT JOIN nhan_trang_thai_nhiem_vu s ON s.tenant_id = $1 AND s.ma = nhiem_vu.trang_thai` +
+		` WHERE nhiem_vu.tenant_id = $1) AS nv`
+}()
 
 // ErrTaskSortDirection means a `due_at` key reached DanhSach with the direction it was not built for —
 // a caller parsed against SapXepNhiemVu while asking for `asc`, or the reverse. Refused rather than
@@ -660,6 +721,7 @@ var mocNhiemVu = store.NewMoc[domain.NhiemVu](SapXepNhiemVu,
 		"due_at":     dueDescKey,
 		"priority":   priorityKey,
 		"title":      titleKey,
+		"status":     statusKey,
 	})
 
 // taskAscAnchors is mocNhiemVu for taskSortAscAllowlist. Only `due_at` differs: `priority` reads the
@@ -671,7 +733,11 @@ var taskAscAnchors = store.NewMoc[domain.NhiemVu](taskSortAscAllowlist,
 		"due_at":     dueAscKey,
 		"priority":   priorityKey,
 		"title":      titleKey,
+		"status":     statusKey,
 	})
+
+// statusKey reads the status key the page statement scanned into StatusRank (taskByStatusTable).
+func statusKey(n domain.NhiemVu) page.Key { return page.IntKey(n.StatusRank) }
 
 // priorityKey reads the priority key the page statement scanned into PriorityRank — the catalogue
 // position, or the sentinel of the direction being read (taskByPriorityTable).
@@ -722,6 +788,9 @@ func taskPageShape(yc page.Request) (string, store.Moc[domain.NhiemVu], string, 
 		return taskByPriorityTable, taskAscAnchors, col, nil
 	case prioritySortDescColumn:
 		return taskByPriorityTable, mocNhiemVu, col, nil
+	case statusSortColumn:
+		// One key for both directions, and the same reader in both anchor sets.
+		return taskByStatusTable, mocNhiemVu, col, nil
 	}
 	// Every other key is a real NOT NULL column of the plain table, identical in both allowlists —
 	// `title` included, which MUST page the plain table: its anchor is looked up by name there.
@@ -788,7 +857,12 @@ func (s *NhiemVuStore) DanhSach(ctx context.Context, loc LocNhiemVu, yc page.Req
 		if err != nil {
 			return domain.NhiemVu{}, "", err
 		}
-		n.PriorityRank = rank
+		// The tail is whichever key this page sorts on; it lands in the field that key's reader reads.
+		if rankColumn == statusSortColumn {
+			n.StatusRank = rank
+		} else {
+			n.PriorityRank = rank
+		}
 		return n, n.ID, nil
 	})
 	if err != nil {

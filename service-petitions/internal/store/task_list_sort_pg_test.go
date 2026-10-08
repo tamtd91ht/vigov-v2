@@ -85,3 +85,73 @@ func TestPgPriorityAndTitleSortWalk(t *testing.T) {
 		}
 	}
 }
+
+// pgSortWalk pages the register two rows at a time under one sort and returns the codes in order.
+func pgSortWalk(t *testing.T, s *NhiemVuStore, xa, sortParam, order string, loc LocNhiemVu) string {
+	t.Helper()
+	ctx := ctxXa(tenant.ID(xa))
+	var got []string
+	cursor := ""
+	for guard := 0; guard < 10; guard++ {
+		q := url.Values{"sort": {sortParam}, "order": {order}, "limit": {"2"}}
+		if cursor != "" {
+			q.Set("cursor", cursor)
+		}
+		yc, err := page.Parse(q, SapXepNhiemVu)
+		if err != nil {
+			t.Fatalf("page.Parse: %v", err)
+		}
+		kq, err := s.DanhSach(ctx, loc, yc)
+		if err != nil {
+			t.Fatalf("DanhSach %s %s: %v", sortParam, order, err)
+		}
+		for _, n := range kq.Items {
+			got = append(got, n.Ma)
+		}
+		if !kq.HasMore {
+			break
+		}
+		cursor = kq.NextCursor
+	}
+	return strings.Join(got, ",")
+}
+
+// TestPgStatusSortWalk — `sort=status` (ADR 0082) against the real schema: the commune's own order
+// (an override moves `tam-dung` to position 1, TYING with `moi-giao`'s default 1, which has no row),
+// the tie broken by the DEFAULT position (moi-giao 1 before tam-dung 6), equal statuses by id, and a
+// two-row-per-page walk that visits every task exactly once both ways. Alphabetical code order would
+// be cho-duyet, dang-thuc-hien, moi-giao, tam-dung — asserted to be NOT what comes back.
+func TestPgStatusSortWalk(t *testing.T) {
+	db := moKetNoi(t)
+	xa, _ := xaRieng(t)
+	danhMucChoXa(t, db, xa)
+	if err := themNhanTrangThai(db, xa, "tam-dung", "Tạm dừng", 1, "CB-00123"); err != nil {
+		t.Fatalf("ghi đè thứ tự tam-dung: %v", err)
+	}
+
+	for _, r := range []struct{ id, ma, status string }{
+		{"nv-ss-a", "NV91", "dang-thuc-hien"}, // 3*16+3
+		{"nv-ss-b", "NV92", "tam-dung"},       // 1*16+6 (override)
+		{"nv-ss-c", "NV93", "moi-giao"},       // 1*16+1
+		{"nv-ss-d", "NV94", "cho-duyet"},      // 4*16+4
+		{"nv-ss-e", "NV95", "moi-giao"},       // 1*16+1, tie with NV93 → id
+	} {
+		if err := themNhiemVu(db, xa, r.id, r.ma, "theo-van-ban", r.status, nil, nil, nil); err != nil {
+			t.Fatalf("thêm %s: %v", r.id, err)
+		}
+	}
+
+	s := NewNhiemVuStore(pkgstore.New(db))
+	for _, tc := range []struct{ order, want string }{
+		{"asc", "NV93,NV95,NV92,NV91,NV94"},
+		{"desc", "NV94,NV91,NV92,NV95,NV93"},
+	} {
+		if got := pgSortWalk(t, s, xa, "status", tc.order, LocNhiemVu{}); got != tc.want {
+			t.Errorf("sort=status order=%s: %s, muốn %s", tc.order, got, tc.want)
+		}
+	}
+	// The same key under `roots=true` — every task above is a root, so the order is unchanged.
+	if got := pgSortWalk(t, s, xa, "status", "asc", LocNhiemVu{Roots: true}); got != "NV93,NV95,NV92,NV91,NV94" {
+		t.Errorf("sort=status roots=true: %s", got)
+	}
+}

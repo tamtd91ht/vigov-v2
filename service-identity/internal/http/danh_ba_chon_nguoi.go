@@ -1,11 +1,13 @@
 package http
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-identity/internal/app"
 	"github.com/vihat/vigov/service-identity/internal/domain"
 	idstore "github.com/vihat/vigov/service-identity/internal/store"
 )
@@ -17,16 +19,24 @@ import (
 //
 // THE JSON NAMES ARE canBoTomTat's (`code`, `full_name`, `position`, `department_id`), so the web
 // types of the register and of the picker line up field for field. WHAT IS ABSENT IS THE CONTRACT:
-// no `id`, no `email`, no `phone`/`mobile`, no `has_account`/`active`. There is no field to put
+// no `id`, no raw email, no `phone`/`mobile`, no `has_account`/`active`. There is no field to put
 // them in, here or in domain.CanBoChonNguoi, and the store does not select them.
+//
+// `email_masked` (owner decision 08/10/2026, ADR 0082 §3): the address MASKED by core/privacy
+// MaskEmail, so the task drawer and the picker can show whom they are mailing without disclosing it
+// to every account of the commune. The FULL address is GET /api/v1/staff-directory/{code}/email,
+// behind `task.read`, one audit entry per read (rule 6, invariant 7). It used to be absent
+// altogether — the reason was that this route is AnyAuthenticated; the mask is what keeps that
+// reason true. null when the person has no address (migration 0019).
 //
 // `code` IS THE IDENTIFIER A CLIENT SENDS BACK when it assigns work: every holder check compares the
 // assignee against Principal.Ma, the staff business code — never the internal ULID.
 type canBoChonNguoiRa struct {
-	Code         string `json:"code"`
-	FullName     string `json:"full_name"`
-	Position     string `json:"position"`
-	DepartmentID string `json:"department_id"` // "" when the person sits in no unit
+	Code         string  `json:"code"`
+	FullName     string  `json:"full_name"`
+	Position     string  `json:"position"`
+	DepartmentID string  `json:"department_id"` // "" when the person sits in no unit
+	EmailMasked  *string `json:"email_masked"`  // null when the person has no address; NEVER the raw value
 }
 
 // danhBaChonNguoiRa is an OBJECT, not a bare array — the same shape as danhSachBoPhanRa and for the
@@ -51,8 +61,8 @@ type danhBaChonNguoiRa struct {
 // never the unfiltered list.
 //
 // NO AUDIT ENTRY: rule 6, invariant 7 audits reading FULL personal data or reading ACROSS communes.
-// This is neither — names and positions of the commune's own staff, which already appear on every
-// record they handle, read inside the commune the request arrived in.
+// This is neither — names, positions and MASKED addresses of the commune's own staff, read inside the
+// commune the request arrived in. The full address is RevealStaffEmail, which is audited.
 func (h *Handler) DanhBaChonNguoi(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -140,5 +150,58 @@ func kiemQuyenLoc(w http.ResponseWriter, gt []string) (string, bool) {
 }
 
 func chonNguoiRaNgoai(cb domain.CanBoChonNguoi) canBoChonNguoiRa {
-	return canBoChonNguoiRa{Code: cb.Ma, FullName: cb.HoTen, Position: cb.ChucVu, DepartmentID: cb.BoPhanID}
+	ra := canBoChonNguoiRa{Code: cb.Ma, FullName: cb.HoTen, Position: cb.ChucVu, DepartmentID: cb.BoPhanID}
+	if cb.EmailMasked != "" {
+		m := cb.EmailMasked
+		ra.EmailMasked = &m
+	}
+	return ra
+}
+
+// StaffEmailRevealer discloses one staff member's full email with its audit entry in the same
+// transaction. *app.StaffEmailReveal in production.
+type StaffEmailRevealer interface {
+	Reveal(ctx context.Context, code string, actor app.NguoiThucHien) (string, error)
+}
+
+// staffEmailOut is the reveal's whole answer: the address and nothing else — no name, no code echo.
+type staffEmailOut struct {
+	Email string `json:"email"`
+}
+
+// RevealStaffEmail serves one staff member's FULL email. GET /api/v1/staff-directory/{code}/email
+//
+// `task.read`, declared in routes.go (owner decision 08/10/2026, ADR 0082 §3). Keyed by the staff
+// BUSINESS code — the same `code` the picker hands out — never the internal id, which the picker
+// deliberately does not carry.
+//
+// 404 `staff_not_found` FOR FOUR CAUSES: unknown code, another commune's code, a soft-deleted row and
+// a person with no address. One answer, so the route confirms nothing about another commune
+// (rule 4, forbidden #2); and a person without an address has `email_masked: null` on the picker, so
+// a client has no reason to ask.
+//
+// 500 WHEN THE AUDIT ENTRY CANNOT BE WRITTEN, with nothing disclosed: rule 6 does not permit the
+// disclosure without its trail.
+//
+// NEITHER THE ADDRESS NOR THE CODE IS LOGGED (rule 3) — the commune only.
+func (h *Handler) RevealStaffEmail(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	actor, ok := nguoiThucHienCanBo(r)
+	if !ok {
+		h.thieuNguoiThucHien(w, r)
+		return
+	}
+
+	email, err := h.d.StaffEmails.Reveal(ctx, r.PathValue("code"), actor)
+	if err != nil {
+		if errors.Is(err, idstore.ErrCanBoKhongTonTai) {
+			httpx.WriteError(w, http.StatusNotFound, "staff_not_found", "Không tìm thấy cán bộ.", "")
+			return
+		}
+		h.d.Log.Error("xem email cán bộ: lỗi hệ thống", "xa", string(tenant.MustFrom(ctx)), "err", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal",
+			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return
+	}
+	vietJSON(w, http.StatusOK, staffEmailOut{Email: email})
 }

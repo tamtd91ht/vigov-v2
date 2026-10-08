@@ -545,6 +545,9 @@ func run(log *slog.Logger) error {
 		// narrow interface: this route is AnyAuthenticated, and a field typed CanBoDanhBa would hand
 		// it the register's phone numbers. See the note on DanhBaChonNguoi.
 		ChonNguoi: canBo,
+		// The audited full-email read beside the picker's masked address (ADR 0082 §3). A use case:
+		// the read and its audit entry share one transaction (rule 6, invariant 7).
+		StaffEmails: app.NewStaffEmailReveal(kho, canBo),
 		// The three credential routes. Register panics without it, and the panic says why: an
 		// account carrying a temporary password would have no route by which to clear the flag, so
 		// the forced-change gate in XacThuc would refuse that person everything, permanently.

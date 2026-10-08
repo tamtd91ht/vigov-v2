@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/vihat/vigov/core/privacy"
+	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/service-identity/internal/domain"
 )
 
@@ -37,9 +39,14 @@ var ErrQuaNhieuCanBoChonNguoi = errors.New("can_bo: danh bạ chọn người v�
 // cotChonNguoi — POSITIONAL, in lockstep with the Scan in chonNguoi. `ho_ten` and `chuc_vu` are
 // adjacent TEXT columns; a swap errors nowhere and prints every position as a name.
 //
-// WHAT IS NOT SELECTED IS THE CONTRACT: no id, no email, no telephone number, no account or lock
-// flag, no password hash. A value never read cannot leak through a handler that forgot to drop it.
-const cotChonNguoi = `ma, ho_ten, chuc_vu, coalesce(bo_phan_id,'')`
+// WHAT IS NOT SELECTED IS THE CONTRACT: no id, no telephone number, no account or lock flag, no
+// password hash. A value never read cannot leak through a handler that forgot to drop it.
+//
+// THE EMAIL IS SELECTED SINCE 08/10/2026 (owner decision, ADR 0082 §3) AND IS MASKED IN THE SCAN,
+// before the row leaves this file: the picker and the task drawer show `t***@domain` with a "Xem"
+// button behind `task.read` and an audit entry (EmailForReveal). Masking here rather than in the
+// handler keeps the raw address out of domain.CanBoChonNguoi altogether.
+const cotChonNguoi = `ma, ho_ten, chuc_vu, coalesce(bo_phan_id,''), coalesce(email,'')`
 
 // locChonNguoi is the picker's predicate. EACH CONDITION IS A DECISION, stated where it is paid:
 //
@@ -123,10 +130,14 @@ func (s *CanBoStore) chonNguoi(ctx context.Context, loc domain.LocChonNguoi, tra
 	ra := make([]domain.CanBoChonNguoi, 0, 32)
 	for rows.Next() {
 		var cb domain.CanBoChonNguoi
-		// NEVER LOG A SCANNED ROW: HoTen is a person's name (rule 3, forbidden #1).
-		if err := rows.Scan(&cb.Ma, &cb.HoTen, &cb.ChucVu, &cb.BoPhanID); err != nil {
+		var email string
+		// NEVER LOG A SCANNED ROW: HoTen is a person's name, email an address (rule 3, forbidden #1).
+		if err := rows.Scan(&cb.Ma, &cb.HoTen, &cb.ChucVu, &cb.BoPhanID, &email); err != nil {
 			return nil, fmt.Errorf("can_bo: đọc dòng danh bạ chọn người: %w", err)
 		}
+		// "" stays "": migration 0019 stores no address as NULL, coalesced above, and MaskEmail("")
+		// is "" — the wire then says null, never a row of stars standing for nothing.
+		cb.EmailMasked = privacy.MaskEmail(email)
 		ra = append(ra, cb)
 	}
 	if err := rows.Err(); err != nil {
@@ -138,4 +149,49 @@ func (s *CanBoStore) chonNguoi(ctx context.Context, loc domain.LocChonNguoi, tra
 		return nil, ErrQuaNhieuCanBoChonNguoi
 	}
 	return ra, nil
+}
+
+// revealEmailFilter is the predicate of the full-email read (EmailForReveal): one live row of the commune,
+// by business code, that HAS an address.
+//
+// NOT locChonNguoi: the task drawer shows the assignee of an existing task, who may since have been
+// locked (#10 — retired or moved) or lost the account. Their address is still the one somebody needs
+// to reach them about that task. A soft-deleted row is a duplicate kept for the trail (rule 7) and is
+// excluded, as on every read of the register.
+//
+// `email IS NOT NULL` IS IN THE PREDICATE, so "no address" is the same answer as "no such person":
+// there is nothing to disclose, so nothing is audited, and the caller answers 404 for both.
+const revealEmailFilter = `AND ma = $2 AND deleted_at IS NULL AND email IS NOT NULL`
+
+// EmailForReveal reads ONE staff member's FULL email, INSIDE the caller's transaction — the
+// transaction its audit entry is written in (rule 6, invariants 3 and 7). The ONLY read of this
+// package that returns an unmasked address to a non-`admin.user` route; its caller is
+// app.StaffEmailReveal and nothing else.
+//
+// WHY THE READ IS IN THE TRANSACTION AND NOT BEFORE IT: the value returned is the value the entry
+// records as disclosed. Reading first and auditing afterwards in a separate statement would let the
+// entry fail with the address already in hand — exactly the order rule 6 forbids.
+//
+// The commune is $1, bound by ScopedTx.Query from the transaction (rule 1, invariant 5): another
+// commune's code matches nothing and answers ErrCanBoKhongTonTai, the same as an invented one.
+func (s *CanBoStore) EmailForReveal(ctx context.Context, tx *store.ScopedTx, code string) (string, error) {
+	rows, err := tx.Query(ctx, "email", "nguoi_dung", revealEmailFilter, code)
+	if err != nil {
+		// The code is a business code, not personal data; it is still left out — the caller logs
+		// the commune, and one wrapped error per failure is enough.
+		return "", fmt.Errorf("can_bo: đọc email đầy đủ: %w", err)
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return "", fmt.Errorf("can_bo: đọc email đầy đủ: %w", err)
+		}
+		return "", ErrCanBoKhongTonTai
+	}
+	var email string
+	// NEVER LOG email (rule 3, forbidden #1).
+	if err := rows.Scan(&email); err != nil {
+		return "", fmt.Errorf("can_bo: đọc dòng email đầy đủ: %w", err)
+	}
+	return email, nil
 }

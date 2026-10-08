@@ -2303,6 +2303,8 @@ export type identity_canBoChonNguoiRa = {
   "position": string;
   /** "" when the person sits in no unit */
   "department_id": string;
+  /** null when the person has no address; NEVER the raw value */
+  "email_masked": string | null;
 };
 
 export type identity_canBoCongKhaiRa = {
@@ -2751,6 +2753,10 @@ export type identity_staffCountsOut = {
   "published": number;
   "no_department": identity_staffTallyOut;
   "departments": Array<identity_departmentCountOut>;
+};
+
+export type identity_staffEmailOut = {
+  "email": string;
 };
 
 export type identity_staffImportCreatedOut = {
@@ -9655,7 +9661,7 @@ export type identity_get_staff_counts = {
   };
 };
 
-/** GET /api/v1/staff-directory — Danh bạ chọn người nhận việc của xã — mã cán bộ, họ tên, chức vụ, bộ phận; chỉ người có tài khoản đang hoạt động, không số điện thoại, không email */
+/** GET /api/v1/staff-directory — Danh bạ chọn người nhận việc của xã — mã cán bộ, họ tên, chức vụ, bộ phận, email đã che; chỉ người có tài khoản đang hoạt động, không số điện thoại */
 export type identity_get_staff_directory = {
   duongDan: "/api/v1/staff-directory";
   phuongThuc: "GET";
@@ -9671,6 +9677,28 @@ export type identity_get_staff_directory = {
     400: httpx_Error;
     401: httpx_Error;
     500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/staff-directory/{code}/email — Email đầy đủ của một cán bộ trong xã — mỗi lần xem ghi nhật ký kiểm toán */
+export type identity_get_staff_directory_by_code_email = {
+  duongDan: "/api/v1/staff-directory/{code}/email";
+  phuongThuc: "GET";
+  thamSo: {
+    "code": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_staffEmailOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    404: "staff_not_found";
   };
 };
 
@@ -10661,7 +10689,7 @@ export type petitions_get_tasks = {
   truyVan: {
     "limit"?: number;
     "cursor"?: string;
-    "sort"?: "created_at" | "code" | "due_at" | "priority" | "title";
+    "sort"?: "created_at" | "code" | "due_at" | "priority" | "title" | "status";
     "order"?: "asc" | "desc";
     "assignee"?: string;
     "bloc"?: string;

@@ -261,7 +261,10 @@ func TestTaskListDueSortReachesTheStoreWithItsDirection(t *testing.T) {
 // Still refused: the raw nullable column, the raw priority code column, an unknown key, and a bad
 // order. `title` and `priority` are ACCEPTED since 28/09/2026 (P9) — TestTaskListPriorityAndTitleSorts.
 func TestTaskListSortsStillRefused(t *testing.T) {
-	for _, q := range []string{"?sort=han_xu_ly", "?sort=muc_uu_tien", "?sort=tieu_de", "?sort=due_at&order=ngang"} {
+	// `assignee` / `unit`: the names live in identity, so there is no honest server order (ADR 0082);
+	// `trang_thai`: the raw code would sort alphabetically, not in the commune's order.
+	for _, q := range []string{"?sort=han_xu_ly", "?sort=muc_uu_tien", "?sort=tieu_de", "?sort=due_at&order=ngang",
+		"?sort=trang_thai", "?sort=assignee", "?sort=unit"} {
 		t.Run(q, func(t *testing.T) {
 			m := dungMayChu(t)
 			doiMa(t, m.goi(t, http.MethodGet, hostA, "/api/v1/tasks"+q, canBoCuaXa(xaA)), http.StatusBadRequest)
@@ -283,6 +286,10 @@ func TestTaskListPriorityAndTitleSorts(t *testing.T) {
 		{"?sort=priority", "priority", page.Desc},
 		{"?sort=title&order=asc", "title", page.Asc},
 		{"?sort=title&order=desc", "title", page.Desc},
+		// ADR 0082: the commune's status order, both directions, and together with `roots=true`.
+		{"?sort=status&order=asc", "status", page.Asc},
+		{"?sort=status", "status", page.Desc},
+		{"?sort=status&order=asc&roots=true", "status", page.Asc},
 	} {
 		t.Run(tc.q, func(t *testing.T) {
 			m := dungMayChu(t)

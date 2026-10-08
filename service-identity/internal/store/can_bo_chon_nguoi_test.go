@@ -96,10 +96,33 @@ func TestChonNguoiKhongChonCotNhayCam(t *testing.T) {
 
 	l := b.ghi.chua("FROM nguoi_dung")
 	cot := l.sql[:strings.Index(l.sql, " FROM ")]
-	for _, cam := range []string{"email", "dien_thoai_co_quan", "di_dong_ca_nhan", "mat_khau_hash", " id,", "vai_tro_id"} {
+	// `email` IS selected since 08/10/2026 (ADR 0082 §3) — and masked in the scan; see the next test.
+	for _, cam := range []string{"dien_thoai_co_quan", "di_dong_ca_nhan", "mat_khau_hash", " id,", "vai_tro_id"} {
 		if strings.Contains(cot, cam) {
 			t.Errorf("danh bạ chọn người chọn cột %q: %s", cam, cot)
 		}
+	}
+}
+
+func TestPickerEmailIsMaskedInTheStore(t *testing.T) {
+	// The raw address never leaves this package on the picker path: domain.CanBoChonNguoi carries only
+	// privacy.MaskEmail of it. Scanning it raw into EmailMasked turns this red.
+	b := moBanThuDS(t)
+
+	ds, err := b.kho.ChonNguoi(ctxXa(xaMau), domain.LocChonNguoi{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ds) == 0 {
+		t.Fatal("no pickable rows")
+	}
+	for _, cb := range ds {
+		if strings.Contains(cb.EmailMasked, "@") && !strings.Contains(cb.EmailMasked, "***@") {
+			t.Errorf("%s: EmailMasked = %q is not masked", cb.Ma, cb.EmailMasked)
+		}
+	}
+	if ds[0].Ma != "CB-001" || ds[0].EmailMasked != "a***@example.gov.vn" {
+		t.Errorf("CB-001 masked = %q, want a***@example.gov.vn", ds[0].EmailMasked)
 	}
 }
 

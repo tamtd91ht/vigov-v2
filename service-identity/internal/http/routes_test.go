@@ -662,6 +662,8 @@ type mayChu struct {
 	ghiDanhBa *ghiDanhBaGia
 	// chonNguoi is the staff picker — see chonNguoiGia in danh_ba_chon_nguoi_test.go.
 	chonNguoi *chonNguoiGia
+	// staffEmails is the audited full-email read — see staffEmailsFake in staff_email_reveal_test.go.
+	staffEmails *staffEmailsFake
 	// taiKhoan is the CREDENTIAL surface: the two administrator routes and the self-change route.
 	// See taiKhoanGia in tai_khoan_can_bo_test.go.
 	taiKhoan *taiKhoanGia
@@ -744,6 +746,7 @@ func dungMayChu(t *testing.T) *mayChu {
 	danhBa := danhBaMau()
 	ghiDanhBa := ghiDanhBaMau()
 	chonNguoi := chonNguoiMau()
+	staffEmails := staffEmailsSample()
 	taiKhoan := taiKhoanMau()
 	quyen := quyenMau()
 	vaiTro := vaiTroMau()
@@ -845,6 +848,8 @@ func dungMayChu(t *testing.T) *mayChu {
 		GhiDanhBa: ghiDanhBa,
 		// The staff picker — danh_ba_chon_nguoi_test.go.
 		ChonNguoi: chonNguoi,
+		// The full-email read — staff_email_reveal_test.go. Register panics without it.
+		StaffEmails: staffEmails,
 		// The three credential routes (#9, #17). Register panics without it, and the panic says why:
 		// an account under the forced change would have no route by which to clear the flag.
 		TaiKhoan: taiKhoan,
@@ -875,12 +880,14 @@ func dungMayChu(t *testing.T) *mayChu {
 		ghiDanhBa: ghiDanhBa,
 		chonNguoi: chonNguoi,
 		taiKhoan:  taiKhoan,
-		idem:      khoIdemMau(),
-		quyen:     quyen,
-		vaiTro:    vaiTro,
-		boPhan:    boPhan,
-		ghiBoPhan: ghiBoPhan,
-		vaiTroMuc: vaiTroMuc,
+
+		staffEmails: staffEmails,
+		idem:        khoIdemMau(),
+		quyen:       quyen,
+		vaiTro:      vaiTro,
+		boPhan:      boPhan,
+		ghiBoPhan:   ghiBoPhan,
+		vaiTroMuc:   vaiTroMuc,
 
 		orgUnitImports: orgUnitImports,
 		maTran:         maTran,

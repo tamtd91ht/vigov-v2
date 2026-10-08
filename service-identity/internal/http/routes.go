@@ -580,6 +580,9 @@ type Deps struct {
 	GhiDanhBa    CanBoGhiDanhBa
 	// ChonNguoi — the narrow picker behind GET /api/v1/staff-directory. See DanhBaChonNguoi.
 	ChonNguoi DanhBaChonNguoi
+	// StaffEmails — GET /api/v1/staff-directory/{code}/email, the audited full-email read (ADR 0082
+	// §3). See RevealStaffEmail.
+	StaffEmails StaffEmailRevealer
 	// TaiKhoan is the credential surface: POST /api/v1/staff/{id}/account,
 	// PUT /api/v1/staff/{id}/password and PUT /api/v1/staff/current/password. A use case, not a
 	// store — every method opens the transaction the write and its audit entry share.
@@ -625,6 +628,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("identity/http: thiếu use case ghi danh bạ cán bộ — năm tuyến ghi cán bộ sẽ panic khi có người gọi")
 	case d.ChonNguoi == nil:
 		panic("identity/http: thiếu kho danh bạ chọn người — GET /api/v1/staff-directory sẽ panic khi có người gọi, và mọi ô phân công sẽ trống")
+	case d.StaffEmails == nil:
+		panic("identity/http: thiếu use case xem email cán bộ — GET /api/v1/staff-directory/{code}/email sẽ panic khi có người gọi")
 	case d.TaiKhoan == nil:
 		// Refused at construction, like every other dependency here — and this one has a second
 		// consequence worth naming: without the three credential routes, an account whose
@@ -948,22 +953,49 @@ func Register(mux *http.ServeMux, d Deps) {
 	// AnyAuthenticated, APPROVED BY THE USER on 2026-09-24 (rule 5, stop condition #1): every member
 	// of staff must be able to pick a colleague to hand a petition, a task, a notice or a document
 	// to, and those screens belong to far more roles than `admin.user` does. What makes that safe is
-	// the narrow row, not the declaration — no phone, no email, no account data (domain.CanBoChonNguoi)
-	// — and the commune bound by Scoped from the context, so the list never crosses communes.
+	// the narrow row, not the declaration — no phone, no raw email (only `email_masked`, ADR 0082 §3),
+	// no account data (domain.CanBoChonNguoi) — and the commune bound by Scoped from the context, so
+	// the list never crosses communes.
 	//
 	// NO 403 IN @reply: an AnyAuthenticated route has no permission to be wrong about. A token of
 	// another commune is refused as 401 `tenant_mismatch` before any handler runs.
 	//
 	// NO idem.* DECLARATION: a GET changes no state.
 	//
-	// @summary  Danh bạ chọn người nhận việc của xã — mã cán bộ, họ tên, chức vụ, bộ phận; chỉ người có tài khoản đang hoạt động, không số điện thoại, không email
+	// @summary  Danh bạ chọn người nhận việc của xã — mã cán bộ, họ tên, chức vụ, bộ phận, email đã che; chỉ người có tài khoản đang hoạt động, không số điện thoại
 	// @reply    200 danhBaChonNguoiRa
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("GET /api/v1/staff-directory",
-		authz.AnyAuthenticated("mọi cán bộ của xã phải chọn được đồng nghiệp để giao phản ánh, nhiệm vụ, thông báo, văn bản — người dùng duyệt 24/09/2026; chỉ trả mã cán bộ, họ tên, chức vụ, bộ phận, KHÔNG số điện thoại, email hay dữ liệu tài khoản; không chéo xã vì Scoped buộc tenant_id")(
+		authz.AnyAuthenticated("mọi cán bộ của xã phải chọn được đồng nghiệp để giao phản ánh, nhiệm vụ, thông báo, văn bản — người dùng duyệt 24/09/2026; chỉ trả mã cán bộ, họ tên, chức vụ, bộ phận và email ĐÃ CHE (chủ dự án duyệt 08/10/2026, ADR 0082), KHÔNG số điện thoại, email đầy đủ hay dữ liệu tài khoản; không chéo xã vì Scoped buộc tenant_id")(
 			http.HandlerFunc(h.DanhBaChonNguoi)))
+
+	// One staff member's FULL email — the "Xem" button beside the masked address (owner decision
+	// 08/10/2026, ADR 0082 §3). A sub-resource of `staff-directory` and keyed by the staff BUSINESS
+	// code, because that is the identifier the picker and the task drawer hold; `staff/{id}` is the
+	// register's internal id behind `admin.user`.
+	//
+	// `task.read`, THE OWNER'S CHOICE: whoever may read tasks may open the address of the people on
+	// them. Seeded by migration 0001; NO KEY WAS INVENTED (rule 5, invariant 3c).
+	//
+	// EVERY READ IS AUDITED (rule 6, invariant 7) — `xem_email_can_bo`, actor = the reader's staff
+	// code, subject = the staff code read, IP, commune — in the same transaction as the read; a
+	// failed entry answers 500 with nothing disclosed. NO idem.* DECLARATION: a GET changes no
+	// business state, and two reads are two disclosures, two rows.
+	//
+	// 404 for another commune's code, an unknown one, a deleted row and a person with no address —
+	// one answer (rule 4, forbidden #2). Another commune's TOKEN is 401 tenant_mismatch at the edge.
+	//
+	// @summary  Email đầy đủ của một cán bộ trong xã — mỗi lần xem ghi nhật ký kiểm toán
+	// @reply    200 staffEmailOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error staff_not_found
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/staff-directory/{code}/email",
+		authz.RequirePermission(d.Checker, "task.read")(
+			http.HandlerFunc(h.RevealStaffEmail)))
 
 	// --- the staff register: the WRITE routes ---------------------------------------------------
 	//
