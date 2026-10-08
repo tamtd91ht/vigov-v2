@@ -160,6 +160,15 @@
       "bang_chung": "7c0e55c9. buf lint + buf breaking xanh; go build 9 module.",
       "no_confirm": [],
       "tiep_theo": "Không."
+    },
+    {
+      "id": "resolve-citizen-contact-phone",
+      "menu": "phan-anh-nguoi-dan",
+      "viec": "IdentityService.ResolveCitizenContactPhone(session_id, citizen_id) → verified_phone — đường DUY NHẤT số đầy đủ của công dân rời identity, chỉ cho petitions gắn vào phiếu (ADR 0050 §Sửa đổi 08/10/2026). Đòi phiên đang sống của đúng công dân; mọi ca không có số trả OK rỗng; identity ghi vết mỗi lần trả số.",
+      "trang_thai": "xong",
+      "bang_chung": "proto/vigov/identity/v1/identity.proto 08/10/2026. buf lint sạch, buf breaking --against .git#ref=HEAD sạch (chỉ thêm), buf generate, go build + vet 7 module.",
+      "no_confirm": [],
+      "tiep_theo": "Không."
     }
   ]
 }

@@ -290,6 +290,118 @@ service IdentityService {
   // second token could arrive, so a batched form would be a shape no caller can fill.
   rpc ResolveCitizenSession(ResolveCitizenSessionRequest) returns (ResolveCitizenSessionResponse);
 
+  // ResolveCitizenContactPhone hands the FULL verified phone number of the citizen behind ONE LIVE
+  // citizen session to the service filing a petition for that session — and to nothing else.
+  //
+  // WHY IT EXISTS (owner, 08/10/2026, ADR 0050 §Sửa đổi 08/10/2026 point 2): a petition sent from a
+  // PHONE-VERIFIED session, not anonymous, with the phone box left EMPTY, carries the session's
+  // verified phone as its contact number — stored in `NguoiGuiDienThoai` exactly like a typed one,
+  // masked on every staff read, masked in the trail's before/after, never logged. The number lives in
+  // `dinh_danh_cong_dan.so_dien_thoai` (migration 0004), and rule 2 forbids service-petitions that
+  // database. Before this RPC no path returned it: CitizenIdentity carries `phone_masked` only, and
+  // CitizenSessionPrincipal carries no personal data by construction (see ResolveCitizenSession).
+  //
+  // THIS IS THE FIRST RPC IN THIS SERVICE THAT RETURNS UNMASKED PERSONAL DATA, and that fact is the
+  // reason for every constraint below. It is NOT a widening of ResolveCitizenSession: that RPC runs on
+  // every citizen request and stays free of personal data. This one runs ONCE PER INTAKE, only in the
+  // one case the owner named, and its answer is consumed by one statement — the INSERT of the petition.
+  //
+  // # It is keyed on a LIVE SESSION, not on a citizen id alone — the expensive decision of this RPC
+  //
+  // The rejected shape is `citizen_id -> phone`. Every petition row stores its citizen id forever, and
+  // one shared caller key is held by every service in the cluster (ADR 0025, which proves a call came
+  // from inside the deployment and NEVER which service made it). That shape would therefore be an
+  // oracle turning any stored citizen id — on any record, in any service, years later — into a phone
+  // number, for any process holding the key. Requiring the SESSION the citizen is acting through
+  // bounds the exposure to what the owner decided: the phone of a citizen who is, at this instant,
+  // submitting through a session the server issued. A sid is a server-minted ULID that lives no longer
+  // than its session; once revoked or expired it answers nothing.
+  //
+  // `citizen_id` is required BESIDE the session and must MATCH it. It is not the key, it is the
+  // caller's statement of whose petition it is about to file (the CitizenID the edge resolved from
+  // the same session). A mismatch — the session re-bound, or a caller wiring the wrong value — answers
+  // "no phone" rather than a phone belonging to somebody other than the petition's owner.
+  //
+  // # Which caller — stated honestly, because the wiring cannot enforce it
+  //
+  // ONE INTENDED CALLER: service-petitions, at citizen intake (internal/app/gui_phan_anh.go), only
+  // when the session carries a citizen id, `an_danh` is false and the phone box is empty. NOTHING IN
+  // THE WIRING ENFORCES THAT, and this comment will not pretend otherwise: the RPC is served on the
+  // inter-service port behind the one shared caller key, as operator.proto states for its own single
+  // caller. What bounds a stray caller is the session requirement above, not an allow-list. Per-service
+  // caller identity (mTLS or a mesh) is still owed (service-identity/internal/grpc/server.go, #3); when
+  // it exists, this RPC is the first to restrict to one caller. A SECOND CALLER is a contract change:
+  // it is a sentence written here first, and an owner's decision before that (rule 3, stop #2 in
+  // spirit — a new destination for a full phone number).
+  //
+  // # The commune travels in metadata, and is never exempt
+  //
+  // "x-tenant-id" is the commune the citizen edge took FROM THE SESSION (core/httpx.XaTuPhien), which
+  // the caller holds in context by the time it files a petition. The session is looked up by
+  // (tenant_id, id) — `phien_cong_dan`'s primary key — so a session of ANOTHER commune matches nothing
+  // and answers exactly like an unknown one. This method must never be added to
+  // core/grpcx.methodsWithoutTenant: it reads a commune's session row and writes that commune's trail.
+  //
+  // # Every answer that discloses a phone is audited, in identity, in one transaction with the read
+  //
+  // Rule 6, invariant 7: reading FULL personal data is itself audited. The entry is written by THIS
+  // service in the SAME transaction as the read, and the number leaves only after that entry commits
+  // (the ordering of service-identity/internal/app/staff_email_reveal.go, ADR 0082). An answer with no
+  // phone disclosed nothing and writes nothing. The entry, in the commune of metadata:
+  //
+  //   actor    kind "citizen", id = citizen_id. The act is the CITIZEN's: their live session is the
+  //            authority, they pressed send. NOT the calling service — ADR 0025's shared key cannot
+  //            name it, which is exactly why server.go #3 kept every earlier RPC here unaudited.
+  //   ip       EMPTY. identity does not observe the citizen's socket, and a caller-relayed address
+  //            stored as "from which IP" records a claim with the authority of a government record
+  //            (the argument on ResolveStaffPrincipalRequest.client_ip). The observed IP of the same
+  //            act sits on service-petitions' intake entry, written in its own transaction.
+  //   action   one Vietnamese snake_case verb (ADR 0011 convention, like `xem_email_can_bo`).
+  //   subject  citizen_id — a citizen has no business code; an opaque id is what citizen entries carry.
+  //   delta    the FIELD opened, never its value (rule 6, forbidden #4), the purpose, and session_id so
+  //            the entry can be matched to the intake entry of the same act.
+  //
+  // A disclosure whose petition then fails to be stored still has its entry, and that is true: the
+  // number did leave this service. It is not compensated — an audit entry is never deleted.
+  //
+  // # Never logged, at either end
+  //
+  // The generated String() of the RESPONSE prints the number in full, and `debug_redact` is a no-op in
+  // protobuf-go v1.36.12 (measured 2026-09-20, ResolveStaffPrincipalRequest.session_token). NEVER log
+  // either message, never put the number in an error, a metric label or a span attribute. Log the
+  // commune and, at most, whether a phone came back.
+  //
+  // # Failure has exactly one answer
+  //
+  // Unknown session, revoked session, expired session, a session of another commune, a session with no
+  // verified phone (cong_dan_id NULL, ADR 0080), a session whose citizen is not `citizen_id`: ALL return
+  // OK with an EMPTY `verified_phone`. Not NOT_FOUND: NOT_FOUND here would be the one status in this
+  // contract that varies with whether a session id exists — the probe rule 4, forbidden #2 forbids —
+  // and the empty answer matches ResolveCitizenSession's "no session" for the same reasons.
+  //
+  //   OK + verified_phone   the number, already disclosed and audited. The caller stores it as the
+  //                         petition's contact number, unchanged except for the trim and length bound
+  //                         every typed number gets (domain.ChuanHoaDienThoai).
+  //   OK + ""               no usable session for this citizen at this instant. The session the edge
+  //                         resolved a moment ago is no longer live, so the caller FAILS THE INTAKE as
+  //                         "no session" (401, nothing written, no code minted) — it NEVER files the
+  //                         petition without the number the citizen's screen promised would be attached.
+  //   INVALID_ARGUMENT      `session_id` or `citizen_id` empty, or no "x-tenant-id". The caller must
+  //                         not call without a verified session: a wiring fault, answered loudly.
+  //   UNAUTHENTICATED       NEVER produced by this RPC — the caller-key interceptor's code (ADR 0025).
+  //   UNIMPLEMENTED         an identity older than this RPC (rolling deploy): deploy identity FIRST.
+  //   UNAVAILABLE etc.      the call did not happen. NOT "no phone": the intake fails with 503, as it
+  //                         already does when ResolveDeadlines cannot be reached. No new outage mode.
+  //
+  // # Not batched, not cached
+  //
+  // One intake, one session, one number: there is no list a second session could arrive from. Nothing
+  // is cached on either side — a cached number outlives the session that justified disclosing it, and
+  // a cache of phone numbers in another service is a second personal-data store (rule 3).
+  //
+  // Declared in kb/30-indexes/transaction-boundaries.json, `gan_so_da_xac_thuc_cua_phien_khi_tiep_nhan`.
+  rpc ResolveCitizenContactPhone(ResolveCitizenContactPhoneRequest) returns (ResolveCitizenContactPhoneResponse);
+
   // BatchGetStaff resolves staff by id — plural by design, there is no singular form.
   //
   // WHY BATCHED AND NOT GetStaff(id): the caller is always a list screen decorating rows
@@ -1317,6 +1429,94 @@ service IdentityService {
   // audit entry. The audited act is the INTAKE, written by the caller in its own transaction.
   rpc ResolveDeadlines(ResolveDeadlinesRequest) returns (ResolveDeadlinesResponse);
 
+  // ResolveCitizenLetterDeadline answers, for ONE commune and ONE citizen letter, the instant ONE of
+  // the letter's two deadlines falls due — OR THAT THE COMMUNE HAS NOT CONFIGURED ONE.
+  //
+  // WHAT IT IS (ADR 0084 #3, ADR 0064, ADR 0085): a letter's deadline is auto-filled from the
+  // commune's per-LETTER-TYPE configuration — the processing deadline when the letter is booked,
+  // counted from the day it was received; for a complaint or denunciation, the resolution deadline
+  // when it is accepted (`thu-ly`), counted from that act. The number is the commune's; the UNIT is
+  // the row's — calendar days where the statute says "ngày", working days where it says "ngày làm
+  // việc", the commune's working calendar for the other two types (ADR 0064 #1-#3). The arithmetic
+  // for all three units lives here and nowhere else (ADR 0064 #4; rule 10, forbidden #2).
+  //
+  // # WHY A SEPARATE RPC AND NOT WORK_KIND_DON_THU ON ResolveDeadlines — the decision this records
+  //
+  // ADR 0064 proposed ResolveDeadlines as the entrance. Two facts decided later make that the wrong
+  // shape, and both are about what a caller does with the answer:
+  //
+  //   1. "NOT CONFIGURED" MEANS THE OPPOSITE THING. ResolveDeadlines answers an unconfigured commune
+  //      with FAILED_PRECONDITION and its caller FAILS THE INTAKE — a petition must never exist without
+  //      its commitment (transaction-boundaries `tinh_han_xu_ly_luc_tiep_nhan`). ADR 0084 #3 decided
+  //      the opposite for letters: no configuration → the letter is booked with NO deadline
+  //      ("Không đặt hạn"). One RPC whose meaning of one status code depended on the work kind is the
+  //      shape where a caller of the other kind reads the wrong one; and keeping FAILED_PRECONDITION
+  //      would make "not configured" indistinguishable from a BROKEN configuration or calendar, where
+  //      storing no deadline is wrong (ADR 0084 #4 counts a letter with no deadline as ON TIME, so a
+  //      deadline silently dropped inflates the on-time ratio sent upward). Here "not configured" is an
+  //      OK ANSWER with its own shape, and every error still means "do not book".
+  //   2. THE CLOCKS ARE NOT `han_tiep_nhan` / `han_xu_ly_xong`. DeadlineKind names a petition's two
+  //      columns, both counted from ONE start; a letter's two deadlines are `processing_due_at` /
+  //      `resolution_due_at`, counted from TWO different acts, each in a unit the row carries. Reusing
+  //      DeadlineKind would put two names on one column — where the two get swapped.
+  //
+  // THE `don-thu` DEFAULT ROW OF `sla` IS NOT READ HERE AND NOTHING FALLS BACK TO IT. That row exists
+  // for the reminder thresholds (ADR 0079 Q18, ResolveDueSoonCutoff with WORK_KIND_DON_THU), in working
+  // hours, and is unchanged. A letter type with no rule of its own has NO deadline (ADR 0084 #3) — a
+  // fallback to a row the commune filled in for reminders would be a commitment nobody chose for that
+  // type, and for a complaint it would be in the wrong unit as well.
+  //
+  // # `count_from` — what the caller sends, and why it never chooses an hour
+  //
+  //   PROCESSING   00:00 Asia/Ho_Chi_Minh of `citizen_letter.received_date`. The letter's receipt is
+  //                a DATE; this is its lossless encoding as an instant, NOT a choice of hour. Which day
+  //                is "day one", what hour the last day ends at, and whether a last day that falls on
+  //                a holiday moves (ADR 0064 open #3, #4) are decided HERE for every caller, never by
+  //                the caller adding or trimming anything. A working-hours row walks from that instant,
+  //                so ADR 0007 decision 8 starts it at the first working session of the received day.
+  //   RESOLUTION   `citizen_letter.accepted_at` as stored — the instant of the `thu-ly` act.
+  //
+  // UNSET IS INVALID_ARGUMENT; there is no "from now" default (AdvanceWorkingHoursRequest.count_from).
+  //
+  // # WHAT THE CALLER DOES WITH EACH ANSWER — fail closed
+  //
+  //   OK + deadline         store `due_at` AS GIVEN in the column of `kind`, in the transaction of
+  //                         the act. Staff may still change it afterwards (ADR 0079 Q18).
+  //   OK + not_configured   store NULL — "Không đặt hạn". The ONE answer that books without a deadline.
+  //   any error             REFUSE THE ACT (booking, or the move to `thu-ly`): 503 for UNAVAILABLE,
+  //                         the configuration fault for FAILED_PRECONDITION. NEVER store NULL for an
+  //                         error — that is the silent on-time inflation described above.
+  //
+  // CALLED ONCE, AT THE ACT THAT FIXES THE CLOCK (rule 10, invariant 2), and never to "re-derive" a
+  // stored deadline: a configuration change is not retroactive (ADR 0007 decision 6). Letters booked
+  // before a rule existed keep NULL. Not cached by the caller, for the reason ResolveDeadlines gives.
+  //
+  // # The commune travels in metadata; never exempt
+  //
+  // "x-tenant-id" names whose rules and whose calendar are read. Not on
+  // core/grpcx.methodsWithoutTenant and never to be (ADR 0012, decision 1).
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK                  exactly one of `deadline` / `not_configured` is set. Neither set is a
+  //                       contract fault: the caller refuses, as for an error.
+  //   INVALID_ARGUMENT    the CALLER is wrong: `letter_type` or `kind` UNSPECIFIED, no or invalid
+  //                       `count_from`, no "x-tenant-id".
+  //   FAILED_PRECONDITION the commune HAS a rule for this type and kind but it is unusable — an amount
+  //                       that is not positive or is over the ceiling, a unit the statute does not
+  //                       allow for this type and kind (ADR 0064 "khoá đơn vị") — or the commune's
+  //                       working calendar has a fault a working-hours / working-days row needs. NOT
+  //                       "not configured": a person must fix the configuration, and the act waits.
+  //   NOT_FOUND           NEVER produced. No rule is the OK `not_configured` answer.
+  //   UNAUTHENTICATED     NEVER produced by this RPC — the caller-key interceptor's code (ADR 0025).
+  //   UNIMPLEMENTED       an identity older than this RPC: deploy identity BEFORE documents.
+  //   UNAVAILABLE etc.    the call did not happen. Refuse the act.
+  //
+  // RETRYING IS SAFE: it writes nothing, publishes nothing, and leaves no audit entry. The audited act
+  // is the caller's booking / status change. Declared in kb/30-indexes/transaction-boundaries.json,
+  // `tinh_han_don_thu_theo_loai_don`.
+  rpc ResolveCitizenLetterDeadline(ResolveCitizenLetterDeadlineRequest) returns (ResolveCitizenLetterDeadlineResponse);
+
   // ResolveDueSoonCutoff answers, for ONE commune, ONE kind of work and ONE instant, the LATEST
   // deadline that counts as "sắp đến hạn" at that instant.
   //
@@ -2165,6 +2365,39 @@ message CitizenSessionPrincipal {
   string zalo_account_id = 4;
 }
 
+message ResolveCitizenContactPhoneRequest {
+  // The session the citizen is submitting through — CitizenSessionPrincipal.session_id, i.e.
+  // `core/httpx.CitizenSession.ID` as the citizen edge resolved it for THIS request. Never a value
+  // from the request body or the client (rule 4, invariant 2).
+  //
+  // A SESSION ID, NOT THE BEARER TOKEN: the token never leaves the citizen edge, and a second service
+  // holding it would hold a whole citizen session (rule 8). The sid is what an audit entry quotes;
+  // it is not a credential on its own — it opens nothing at the edge.
+  //
+  // Empty is INVALID_ARGUMENT.
+  string session_id = 1;
+
+  // The citizen whose petition is being filed — `core/httpx.CitizenSession.CitizenID` from the SAME
+  // session. Must equal the session's `cong_dan_id`; otherwise the answer is empty (see the RPC).
+  //
+  // Empty is INVALID_ARGUMENT: a session with no verified phone has no number to attach (ADR 0050
+  // §Sửa đổi 08/10/2026 point 3b), so the caller must not call for one.
+  string citizen_id = 2;
+}
+
+// Wrapped, not a bare string: adding a field later must not change the RPC signature.
+message ResolveCitizenContactPhoneResponse {
+  // THE FULL PHONE NUMBER, UNMASKED — personal data under Decree 13/2023 (rule 3), exactly as
+  // `dinh_danh_cong_dan.so_dien_thoai` holds it (verified by Zalo, ADR 0020). The only field in this
+  // contract that carries an unmasked personal datum.
+  //
+  // "" IS A REAL ANSWER and means "no phone disclosed" — for every reason the RPC lists, deliberately
+  // indistinguishable. The caller maps it to a refused intake, never to a petition without a number.
+  //
+  // NEVER LOG THIS MESSAGE. Generated String() prints this field in full; see the RPC comment.
+  string verified_phone = 1;
+}
+
 // CitizenIdentity is one citizen, once for the whole platform (ADR 0002).
 //
 // NAMED AFTER WHAT THE RECORD HOLDS, NOT AFTER THE PERSON — ADR 0023 decided this, and the
@@ -2184,7 +2417,9 @@ message CitizenSessionPrincipal {
 message CitizenIdentity {
   string id = 1;
   // Phone is unique PLATFORM-WIDE. It is never returned unmasked unless the caller holds
-  // explicit full-view permission, and every such read is audited.
+  // explicit full-view permission, and every such read is audited. The ONE unmasked path across this
+  // boundary is ResolveCitizenContactPhone (08/10/2026) — bound to a live session, audited per read;
+  // it is not a field here and must not become one.
   string phone_masked = 2;
 }
 
@@ -3056,6 +3291,78 @@ message Deadline {
   // while looking like it respected the unit. That is rule 10, forbidden #2, and it is the exact
   // shape this whole RPC exists to make unnecessary.
 }
+
+// CitizenLetterType — the four letter types of the citizen-letter register (C4, 24/09/2026), owned by
+// service-documents (`citizen_letter.letter_type`, CHECK `citizen_letter_type_valid`).
+//
+// VALUES IN VIETNAMESE, mirroring the stored strings byte for byte (ADR 0011; WorkKind gives the
+// reason). An enum and not a string because the set is CLOSED and each member carries a different
+// statutory procedure: a fifth type is a contract change on purpose, and a misspelled code is
+// INVALID_ARGUMENT at the boundary instead of a silent "not configured" — the one wrong answer here
+// that looks exactly like a right one.
+enum CitizenLetterType {
+  CITIZEN_LETTER_TYPE_UNSPECIFIED = 0;
+  CITIZEN_LETTER_TYPE_KIEN_NGHI_PHAN_ANH = 1; // vi-name-ok: enum VALUE mirroring citizen_letter.letter_type 'kien-nghi-phan-anh' (ADR 0011)
+  CITIZEN_LETTER_TYPE_KHIEU_NAI = 2; // vi-name-ok: enum VALUE mirroring 'khieu-nai' (ADR 0011)
+  CITIZEN_LETTER_TYPE_TO_CAO = 3; // vi-name-ok: enum VALUE mirroring 'to-cao' (ADR 0011)
+  CITIZEN_LETTER_TYPE_DE_NGHI = 4; // vi-name-ok: enum VALUE mirroring 'de-nghi' (ADR 0011)
+}
+
+// CitizenLetterDeadlineKind names WHICH of a letter's two deadlines is asked for. Named after the
+// two columns of service-documents that store them, for the reason DeadlineKind gives: the answer
+// goes into the column of the same name, and swapping the two raises no error anywhere.
+enum CitizenLetterDeadlineKind {
+  CITIZEN_LETTER_DEADLINE_KIND_UNSPECIFIED = 0;
+
+  // `processing_due_at` — "hạn xử lý đơn". Fixed when the letter is BOOKED, counted from the day it
+  // was received. For kien-nghi-phan-anh and de-nghi it is the letter's only deadline.
+  CITIZEN_LETTER_DEADLINE_KIND_PROCESSING = 1;
+
+  // `resolution_due_at` — "hạn giải quyết". Fixed at the `thu-ly` act, counted from it (ADR 0064,
+  // C8). The schema refuses it on a letter never accepted (citizen_letter CHECK, migration 0006).
+  CITIZEN_LETTER_DEADLINE_KIND_RESOLUTION = 2;
+}
+
+message ResolveCitizenLetterDeadlineRequest {
+  // UNSPECIFIED is INVALID_ARGUMENT — there is no default type, and guessing one applies another
+  // statutory procedure's numbers.
+  CitizenLetterType letter_type = 1;
+
+  // UNSPECIFIED is INVALID_ARGUMENT. One deadline per call: the two are fixed at two different acts,
+  // so there is no call that could legitimately ask for both.
+  CitizenLetterDeadlineKind kind = 2;
+
+  // The instant the deadline counts from — see the RPC for exactly what the caller sends per `kind`.
+  // UNSET IS INVALID_ARGUMENT.
+  google.protobuf.Timestamp count_from = 3;
+}
+
+// Wrapped, and a oneof, so "no deadline" can never be read off a zero value.
+message ResolveCitizenLetterDeadlineResponse {
+  oneof outcome {
+    // The commune has a usable rule: the deadline, computed.
+    CitizenLetterDeadline deadline = 1;
+
+    // The commune has NO live rule for this letter type and kind. Store no deadline.
+    CitizenLetterDeadlineNotConfigured not_configured = 2;
+  }
+}
+
+message CitizenLetterDeadline {
+  // The instant the deadline falls due, stored by the caller AS GIVEN (no zone, no rounding), as
+  // Deadline.due_at. NEVER UNSET inside a set `deadline`: absence is `not_configured`, never a zero
+  // instant a caller could store as a deadline in year 1.
+  google.protobuf.Timestamp due_at = 1;
+
+  // THERE IS NO `unit` AND NO `amount` FIELD, AND THAT IS DELIBERATE (ADR 0021: a contract records
+  // what exists). Both are on the commune's rule, owned here and shown on identity's own SLA screen.
+  // The day a letter screen must say "trễ N ngày LỊCH" (ADR 0064 §Hệ quả), adding the unit is
+  // additive — and whoever adds it states which screen reads it.
+}
+
+// Empty on purpose: "not configured" carries no detail a caller may act on. Which rule is missing is
+// visible on identity's SLA screen, not something documents should reason about.
+message CitizenLetterDeadlineNotConfigured {}
 
 message ResolveDueSoonCutoffRequest {
   // Which kind of work the threshold is read for. UNSPECIFIED is INVALID_ARGUMENT — there is no
