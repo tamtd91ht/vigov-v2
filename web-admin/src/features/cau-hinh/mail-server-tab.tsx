@@ -1,46 +1,66 @@
 "use client";
 
-import { Mail, Save, Send, TriangleAlert } from "lucide-react";
+import { CheckCircle2, LockKeyhole, Mail, Save, TriangleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import { useCauHinhXa } from "@/components/cau-hinh-xa";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/error-state";
 import { NoAccess } from "@/components/ui/no-access";
 import { Notice } from "@/components/ui/notice";
+import { PendingMarker } from "@/components/ui/pending-feature";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 
 import { usePhien } from "@/features/phien/phien-hien-tai";
+import { cn } from "@/lib/cn";
+import { LOI_KHONG_RO } from "@/lib/api/goi";
 import type { KetQua } from "@/lib/api/goi";
-import { getMailSettings, saveMailSettings, sendTestMail } from "@/lib/api/mail-settings";
+import { TEST_UNREACHABLE_FALLBACK, getMailSettings, saveMailSettings, sendTestMail } from "@/lib/api/mail-settings";
 import type { comms_mailSettingsOut } from "@/lib/api/schema.gen";
 
+import { ConfigField, formInputCls } from "./config-ui";
 import {
+  CALL_FAILED,
+  ENABLE_LABEL,
   ENCRYPTION_MISSING,
+  FROM_ADDRESS_PLACEHOLDER,
+  HOST_PLACEHOLDER,
   MAIL_DESCRIPTION,
-  MAIL_PORTS,
   MAIL_SECURITY,
   MAIL_TITLE,
   NOT_CONFIGURED_WARNING,
-  PASSWORD_SAVED,
+  PASSWORD_KEPT_PLACEHOLDER,
   PORT_HINT,
   SAVED_SENTENCE,
   SAVE_BUTTON,
   TEST_BUTTON,
   TEST_LABEL,
-  TEST_SAVED_ONLY,
+  TEST_RECIPIENT_PLACEHOLDER,
+  TEST_SENT_TOAST,
   draftFromSettings,
-  passwordNote,
   saveBody,
+  saveRefusalMessage,
+  testFailedToast,
   testKey,
   testSentSentence,
 } from "./mail-settings-form";
 import type { MailDraft } from "./mail-settings-form";
+import { PHAN_CHUA_DUNG } from "./nhan-cau-hinh";
 import { mailServerTabDecision } from "./quyen-tab";
 
 /**
- * "Cấu hình → Máy chủ thư" (§10). One key, `admin.lookup`, for read and write — the server declares
+ * The part of §10 the server does not store yet (ADR 0079 #5): drawn as "?" at the spec's place, its
+ * sentence taken from `PHAN_CHUA_DUNG` as-is — never a second copy here.
+ */
+const LAST_TEST = PHAN_CHUA_DUNG.find((p) => p.ten === "Lần thử gần nhất");
+
+/** The save form's id: "Lưu cấu hình" sits in the action row beside the test form, outside it. */
+const SAVE_FORM_ID = "form-may-chu-thu";
+
+/**
+ * "Cấu hình → Máy chủ thư" (spec 10). One key, `admin.lookup`, for read and write — the server declares
  * it on all three routes, so the tab hides as a whole without it (convenience; the server refuses).
  *
  * AFTER A SAVE THE FORM IS REBUILT FROM THE SERVER'S ANSWER, password box emptied: the answer is the
@@ -57,12 +77,12 @@ export function MailServerTab() {
   const [loaded, setLoaded] = useState<KetQua<comms_mailSettingsOut> | null>(null);
   const [draft, setDraft] = useState<MailDraft | null>(null);
   const [saving, setSaving] = useState(false);
-  const [saveMessage, setSaveMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const [recipient, setRecipient] = useState("");
   const [attempt, setAttempt] = useState<{ key: string; recipient: string } | null>(null);
   const [testing, setTesting] = useState(false);
-  const [testMessage, setTestMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
     if (!allowed) return;
@@ -93,38 +113,29 @@ export function MailServerTab() {
       </div>
     );
   }
-  if (loaded === null)
-    return (
-      // FIRST LOAD (spec §8b): the sentence stays the live region; the eye gets form-shaped bars.
-      <div className="page--form flex flex-col gap-3 rounded-card border border-line bg-surface p-4">
-        <p role="status" className="an-thi-giac">
-          Đang tải cấu hình máy chủ thư…
-        </p>
-        <Skeleton className="h-5 w-48" />
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-10 w-2/3" />
-      </div>
-    );
+  if (loaded === null) return <MailServerLoading />;
   if (!loaded.ok) {
     return <ErrorState role="alert" title="Chưa tải được cấu hình máy chủ thư" message={loaded.thongBao} />;
   }
   if (draft === null) return null;
+  const saved = loaded.duLieu;
 
   async function save() {
     if (draft === null || saving) return;
+    const sent = draft;
     setSaving(true);
-    setSaveMessage(null);
-    const r = await saveMailSettings(saveBody(draft));
+    setSaveError(null);
+    const r = await saveMailSettings(saveBody(sent));
     setSaving(false);
     if (!r.ok) {
-      // The typed password stays in the box: the refusal may be about another field.
-      setSaveMessage({ ok: false, text: r.thongBao });
+      // In place (ADR 0079: form errors stay at the form). The typed password stays in the box: the
+      // refusal may be about another field.
+      setSaveError(saveRefusalMessage(saved, sent, r.thongBao));
       return;
     }
     setLoaded(r);
     setDraft(draftFromSettings(r.duLieu));
-    setSaveMessage({ ok: true, text: SAVED_SENTENCE });
+    toast.success(SAVED_SENTENCE);
   }
 
   async function test() {
@@ -133,51 +144,96 @@ export function MailServerTab() {
     const a = testKey(attempt, to, () => crypto.randomUUID());
     setAttempt(a);
     setTesting(true);
-    setTestMessage(null);
+    setTestResult(null);
     const r = await sendTestMail(to, a.key);
     setTesting(false);
     if (!r.ok) {
-      setTestMessage({ ok: false, text: r.thongBao });
+      // `LOI_KHONG_RO` / `TEST_UNREACHABLE_FALLBACK` are what `sendTestMail` returns when service-comms
+      // itself gave no answer — not a sentence from the commune's mail server.
+      const unreachable = r.thongBao === LOI_KHONG_RO || r.thongBao === TEST_UNREACHABLE_FALLBACK;
+      const text = unreachable ? CALL_FAILED : r.thongBao;
+      toast.error(unreachable ? CALL_FAILED : testFailedToast(r.thongBao));
+      setTestResult({ ok: false, text });
       return;
     }
     // Done: the next click is a new send, with a new key.
     setAttempt(null);
-    setTestMessage({ ok: true, text: testSentSentence(to) });
+    toast.success(TEST_SENT_TOAST);
+    setTestResult({ ok: true, text: testSentSentence(to) });
   }
 
   return (
     <MailServerView
-      saved={loaded.duLieu}
+      saved={saved}
       draft={draft}
       setDraft={setDraft}
       saving={saving}
-      saveMessage={saveMessage}
+      saveError={saveError}
       onSave={() => void save()}
       recipient={recipient}
       setRecipient={setRecipient}
       testing={testing}
-      testMessage={testMessage}
+      testResult={testResult}
       onTest={() => void test()}
       communeName={commune.displayName}
     />
   );
 }
 
+/** First load (spec 10): one `Skeleton h-80`; the sentence stays the live region. */
+export function MailServerLoading() {
+  return (
+    <div className="max-w-3xl">
+      <p role="status" className="an-thi-giac">
+        Đang tải cấu hình máy chủ thư…
+      </p>
+      <Skeleton className="h-80 w-full rounded-[12px]" />
+    </div>
+  );
+}
+
+/** A tick box of the muted box (spec 10 #5): native checkbox, 16px like the prototype's shadcn Checkbox. */
+function TickBox({
+  name,
+  checked,
+  onChange,
+  children,
+}: {
+  name: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  children: string;
+}) {
+  return (
+    <label className="text-ink m-0 flex cursor-pointer items-center gap-2 font-normal">
+      <input
+        type="checkbox"
+        name={name}
+        className="accent-brand m-0 size-4 shrink-0"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      {children}
+    </label>
+  );
+}
+
 /**
  * Pure rendering, exported so the tests read the markup: the password input's `value` must be
- * empty whatever was saved, and the encryption banner must disable the form.
+ * empty whatever was saved, the encryption banner must disable the form, and the two security boxes
+ * must never be both off.
  */
 export function MailServerView({
   saved,
   draft,
   setDraft,
   saving,
-  saveMessage,
+  saveError,
   onSave,
   recipient,
   setRecipient,
   testing,
-  testMessage,
+  testResult,
   onTest,
   communeName,
 }: {
@@ -185,47 +241,54 @@ export function MailServerView({
   draft: MailDraft;
   setDraft: (d: MailDraft) => void;
   saving: boolean;
-  saveMessage: { ok: boolean; text: string } | null;
+  /** The refused save's sentence, shown in place; null when none. */
+  saveError: string | null;
   onSave: () => void;
   recipient: string;
   setRecipient: (s: string) => void;
   testing: boolean;
-  testMessage: { ok: boolean; text: string } | null;
+  /** This session's test send, if any. Not persisted by the server (see `LAST_TEST`). */
+  testResult: { ok: boolean; text: string } | null;
   onTest: () => void;
   /** The signed-in commune's `displayName`, verbatim — the sender-name placeholder. */
   communeName: string;
 }) {
   const readOnly = !saved.encryption_configured;
-  const note = passwordNote(saved, draft);
+  // There is no other mail path (no platform fallback in service-comms), so mail goes nowhere unless
+  // the commune's server is saved AND switched on. Read from the SAVED state: ticking the box without
+  // saving changes nothing on the server.
+  const noMailPath = !saved.configured || !saved.is_enabled;
+  const testDisabled = readOnly || testing || !saved.configured;
   return (
-    // The prototype's `EmailSettingPanel` (ADR 0068 lần 5): ONE white card, 768px wide, its title inside
-    // (icon + 13px bold), the fields in two columns with host and sender name full width, the switches
-    // in one muted box, then "Lưu cấu hình" and — right-aligned — the test send.
-    <section
-      className="tab-danh-muc flex max-w-3xl min-w-0 flex-col gap-3 rounded-card border border-line bg-surface p-4 [&>*]:my-0"
-      aria-labelledby="tieu-de-may-chu-thu"
-    >
-      <div className="min-w-0">
-        <h2 id="tieu-de-may-chu-thu" className="m-0 flex items-center gap-1.5 text-[13px] font-bold text-ink-900">
-          <Mail aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-4 shrink-0 text-brand-600" />
-          {MAIL_TITLE}
-        </h2>
-        <p className="ghi-chu m-0 mt-1 text-xs text-ink-500">{MAIL_DESCRIPTION}</p>
-      </div>
+    // Spec 10 (prototype `EmailSettingPanel.tsx:75`): one white card, max 3xl, NO shadow.
+    <section className="border-line max-w-3xl rounded-[12px] border border-solid bg-white p-4" aria-labelledby="tieu-de-may-chu-thu">
+      <h3 id="tieu-de-may-chu-thu" className="text-navy m-0 flex items-center gap-1.5 text-[13px] font-bold">
+        <Mail aria-hidden="true" focusable="false" className="size-4 shrink-0" />
+        {MAIL_TITLE}
+      </h3>
+      <p className="text-ink-muted m-0 mt-1 text-[12px]">{MAIL_DESCRIPTION}</p>
 
       {readOnly && (
-        <p className="khoi-chua-khai" role="alert">
+        // ADR 0009 server state: without the platform key nothing can be saved or sent.
+        <Notice role="alert" icon={LockKeyhole} className="mt-2">
           {ENCRYPTION_MISSING}
-        </p>
-      )}
-      {!saved.configured && (
-        <Notice tone="neutral" icon={TriangleAlert} className="canh-bao-pham-vi">
-          {NOT_CONFIGURED_WARNING}
         </Notice>
+      )}
+      {/* ONLY the warning: the owner decided there is no platform mail fallback (ADR 0079 lô 2 Q1 #8,
+          `platform_fallback` always false), and with fallback=false the prototype draws only this line
+          (`EmailSettingPanel.tsx:85-95`) — no "Đang dùng máy chủ thư của nền tảng.", no "?" for it. */}
+      {noMailPath && (
+        <>
+          <p className="text-tangerine m-0 mt-2 flex items-center gap-1.5 text-[11.5px]">
+            <TriangleAlert aria-hidden="true" focusable="false" className="size-3.5 shrink-0" />
+            {NOT_CONFIGURED_WARNING}
+          </p>
+        </>
       )}
 
       <form
-        className="form-danh-muc m-0 border-0 bg-transparent p-0"
+        id={SAVE_FORM_ID}
+        className="m-0"
         aria-label="Cấu hình máy chủ thư"
         onSubmit={(e) => {
           e.preventDefault();
@@ -234,204 +297,191 @@ export function MailServerView({
       >
         {/* One `disabled` on the fieldset disables every control inside — the read-only state
             cannot forget a field. */}
-        <fieldset disabled={readOnly || saving}>
-          {/* Layout lives on this inner div, NOT on the fieldset: the tab's test counts the bare
-              `<fieldset disabled="">` tags. Two columns from 640px for the short paired fields. */}
-          <div className="grid min-w-0 gap-3 sm:grid-cols-2 [&>*]:m-0 [&>.cum-nut]:col-span-full">
-          <div className="o-nhap sm:col-span-2">
-            <label htmlFor="o-smtp-host">Máy chủ SMTP</label>
-            <input
-              id="o-smtp-host"
-              name="host"
-              value={draft.host}
-              placeholder="smtp.danang.gov.vn"
-              autoComplete="off"
-              onChange={(e) => setDraft({ ...draft, host: e.target.value })}
-            />
-          </div>
-
-          <div className="o-nhap">
-            <label htmlFor="o-smtp-port">Cổng</label>
-            <select
-              id="o-smtp-port"
-              name="port"
-              value={String(draft.port)}
-              onChange={(e) => setDraft({ ...draft, port: Number(e.target.value) })}
-              aria-describedby="giai-thich-cong-smtp"
-            >
-              {/* The saved port is kept selectable even if it is not one of the four — shown as sent. */}
-              {(MAIL_PORTS.includes(draft.port) ? MAIL_PORTS : [draft.port, ...MAIL_PORTS]).map((p) => (
-                <option key={p} value={String(p)}>
-                  {p}
-                </option>
-              ))}
-            </select>
-            <p className="ghi-chu" id="giai-thich-cong-smtp">
-              {PORT_HINT}
-            </p>
-          </div>
-
-          <div className="o-nhap">
-            <label htmlFor="o-smtp-tai-khoan">Tài khoản</label>
-            <input
-              id="o-smtp-tai-khoan"
-              name="username"
-              value={draft.username}
-              autoComplete="off"
-              onChange={(e) => setDraft({ ...draft, username: e.target.value })}
-            />
-          </div>
-
-          <div className="o-nhap">
-            <label htmlFor="o-smtp-mat-khau">Mật khẩu</label>
-            {/* WRITE-ONLY: `value` is the draft's, which starts "" and is never filled from the
-                server. `new-password` keeps the browser from offering the staff member's own
-                login password here. */}
-            <input
-              id="o-smtp-mat-khau"
-              name="password"
-              type="password"
-              autoComplete="new-password"
-              value={draft.password}
-              onChange={(e) => setDraft({ ...draft, password: e.target.value })}
-              aria-describedby="giai-thich-mat-khau-smtp"
-            />
-            <p className="ghi-chu" id="giai-thich-mat-khau-smtp">
-              {saved.password_set ? PASSWORD_SAVED : ""}
-              {note !== "" && (
-                <>
-                  {saved.password_set ? " " : ""}
-                  <strong>{note}</strong>
-                </>
-              )}
-            </p>
-          </div>
-
-          <div className="o-nhap">
-            <label htmlFor="o-smtp-dia-chi-gui">Địa chỉ gửi</label>
-            <input
-              id="o-smtp-dia-chi-gui"
-              name="from_address"
-              type="email"
-              value={draft.fromAddress}
-              placeholder="ubnd@xa.danang.gov.vn"
-              onChange={(e) => setDraft({ ...draft, fromAddress: e.target.value })}
-            />
-          </div>
-
-          <div className="o-nhap sm:col-span-2">
-            <label htmlFor="o-smtp-ten-gui">Tên hiển thị của người gửi</label>
-            <input
-              id="o-smtp-ten-gui"
-              name="from_name"
-              value={draft.fromName}
-              placeholder={communeName}
-              onChange={(e) => setDraft({ ...draft, fromName: e.target.value })}
-            />
-          </div>
-
-          {/* The prototype's muted box of switches: "use this server", then the connection security.
-              Security stays ONE choice of three (the contract's enum), not two independent boxes. */}
-          <div className="col-span-full flex min-w-0 flex-col gap-1 rounded-[10px] border border-line bg-surface-muted p-3">
-            <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 text-[13px]">
+        <fieldset disabled={readOnly || saving} className="m-0 min-w-0 border-0 p-0">
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <ConfigField label="Máy chủ SMTP" htmlFor="o-smtp-host" className="sm:col-span-2">
               <input
-                type="checkbox"
-                name="is_enabled"
-                checked={draft.isEnabled}
-                onChange={(e) => setDraft({ ...draft, isEnabled: e.target.checked })}
-              />{" "}
-              Dùng máy chủ thư này cho xã
-            </label>
-            <fieldset className="o-nhap m-0 flex min-w-0 flex-wrap gap-x-6 gap-y-1 border-0 p-0">
-              <legend className="p-0 text-xs font-semibold text-ink-700">Bảo mật kết nối</legend>
-              {MAIL_SECURITY.map((s) => (
-                <label key={s.value} className="inline-flex min-h-10 cursor-pointer items-center gap-2 text-[13px]">
-                  <input
-                    type="radio"
-                    name="security"
-                    value={s.value}
-                    checked={draft.security === s.value}
-                    onChange={() => setDraft({ ...draft, security: s.value })}
-                  />{" "}
-                  {s.label}
-                </label>
-              ))}
-            </fieldset>
-          </div>
-
-          <div className="cum-nut flex">
-            <Button
-              type="submit"
-              variant="primary"
-              icon={saving ? undefined : <Save aria-hidden="true" focusable="false" strokeWidth={1.8} />}
-              aria-busy={saving}
-            >
-              <BusyLabel busy={saving} label={SAVE_BUTTON} busyText={BUSY_SAVING} />
-            </Button>
-          </div>
-          </div>
-        </fieldset>
-        {saveMessage !== null &&
-          (saveMessage.ok ? (
-            <p role="status" className="mt-3 text-sm font-medium text-success-600">
-              {saveMessage.text}
-            </p>
-          ) : (
-            <p className="thong-bao-loi" role="alert">
-              {saveMessage.text}
-            </p>
-          ))}
-      </form>
-
-      <form
-        className="form-danh-muc m-0 border-0 bg-transparent p-0"
-        aria-label="Gửi thư thử"
-        onSubmit={(e) => {
-          e.preventDefault();
-          onTest();
-        }}
-      >
-        <fieldset disabled={readOnly || testing || !saved.configured}>
-          {/* Right-aligned, as the prototype's: the address box then the outline "Gửi thử". */}
-          <div className="flex min-w-0 flex-wrap items-end justify-end gap-2">
-            <div className="o-nhap m-0 min-w-0 flex-[0_1_16rem]">
-              <label htmlFor="o-gui-thu-toi">{TEST_LABEL}</label>
-              <input
-                id="o-gui-thu-toi"
-                name="recipient"
-                type="email"
-                value={recipient}
-                placeholder="ten@xa.danang.gov.vn"
-                onChange={(e) => setRecipient(e.target.value)}
-                aria-describedby="giai-thich-gui-thu"
+                id="o-smtp-host"
+                name="host"
+                className={formInputCls}
+                value={draft.host}
+                placeholder={HOST_PLACEHOLDER}
+                autoComplete="off"
+                onChange={(e) => setDraft({ ...draft, host: e.target.value })}
               />
-            </div>
-            <Button
-              type="submit"
-              variant="outline"
-              icon={<Send aria-hidden="true" focusable="false" strokeWidth={1.8} />}
-              disabled={recipient.trim() === ""}
-              aria-busy={testing}
-            >
-              {TEST_BUTTON}
-            </Button>
-            <p className="ghi-chu m-0 w-full text-right text-xs text-ink-500" id="giai-thich-gui-thu">
-              {TEST_SAVED_ONLY}
-            </p>
+            </ConfigField>
+
+            <ConfigField label="Cổng" htmlFor="o-smtp-port">
+              {/* Free number (spec 10 #4); the server keeps the list of accepted ports and refuses
+                  any other with its own sentence. Empty box = 0, which it refuses too. */}
+              <input
+                id="o-smtp-port"
+                name="port"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={65535}
+                className={formInputCls}
+                value={draft.port === 0 ? "" : String(draft.port)}
+                onChange={(e) => setDraft({ ...draft, port: e.target.value === "" ? 0 : Number(e.target.value) })}
+                aria-describedby="giai-thich-cong-smtp"
+              />
+              <p id="giai-thich-cong-smtp" className="text-ink-muted m-0 mt-1 text-[11px]">
+                {PORT_HINT}
+              </p>
+            </ConfigField>
+
+            <ConfigField label="Tài khoản" htmlFor="o-smtp-tai-khoan">
+              <input
+                id="o-smtp-tai-khoan"
+                name="username"
+                className={formInputCls}
+                value={draft.username}
+                autoComplete="off"
+                onChange={(e) => setDraft({ ...draft, username: e.target.value })}
+              />
+            </ConfigField>
+
+            <ConfigField label="Mật khẩu" htmlFor="o-smtp-mat-khau">
+              {/* WRITE-ONLY: `value` is the draft's, which starts "" and is never filled from the
+                  server. `new-password` keeps the browser from offering the staff member's own
+                  login password here. */}
+              <input
+                id="o-smtp-mat-khau"
+                name="password"
+                type="password"
+                autoComplete="new-password"
+                className={formInputCls}
+                value={draft.password}
+                placeholder={saved.password_set ? PASSWORD_KEPT_PLACEHOLDER : undefined}
+                onChange={(e) => setDraft({ ...draft, password: e.target.value })}
+              />
+            </ConfigField>
+
+            <ConfigField label="Địa chỉ gửi" htmlFor="o-smtp-dia-chi-gui">
+              <input
+                id="o-smtp-dia-chi-gui"
+                name="from_address"
+                type="email"
+                className={formInputCls}
+                value={draft.fromAddress}
+                placeholder={FROM_ADDRESS_PLACEHOLDER}
+                onChange={(e) => setDraft({ ...draft, fromAddress: e.target.value })}
+              />
+            </ConfigField>
+
+            <ConfigField label="Tên hiển thị của người gửi" htmlFor="o-smtp-ten-gui" className="sm:col-span-2">
+              <input
+                id="o-smtp-ten-gui"
+                name="from_name"
+                className={formInputCls}
+                value={draft.fromName}
+                placeholder={communeName}
+                onChange={(e) => setDraft({ ...draft, fromName: e.target.value })}
+              />
+            </ConfigField>
+          </div>
+
+          {/* TOKEN TRAP: the spec's `bg-surface` is the page colour, `bg-background` in this app. */}
+          {/* `flex-col gap-2`, not the spec's `space-y-2`: Tailwind v4 emits space-y under :where(), so the
+              rows' own `m-0` (needed against legacy label margins) would win and pack them at 0 gap. */}
+          <div className="border-line bg-background mt-3 flex flex-col gap-2 rounded-[10px] border border-solid p-3 text-[12.5px]">
+            <TickBox name="is_enabled" checked={draft.isEnabled} onChange={(on) => setDraft({ ...draft, isEnabled: on })}>
+              {ENABLE_LABEL}
+            </TickBox>
+            {/* ONE field, two boxes: ticking a box selects it; un-ticking the selected one is ignored,
+                so exactly one is always on — never plaintext (rule 13). */}
+            {MAIL_SECURITY.map((s) => (
+              <TickBox
+                key={s.value}
+                name={`security-${s.value}`}
+                checked={draft.security === s.value}
+                onChange={() => setDraft({ ...draft, security: s.value })}
+              >
+                {s.label}
+              </TickBox>
+            ))}
           </div>
         </fieldset>
-        {testMessage !== null &&
-          (testMessage.ok ? (
-            <p role="status" className="mt-3 text-sm font-medium text-success-600">
-              {testMessage.text}
-            </p>
-          ) : (
-            // For 502 this is the server's sentence per SMTP failure, saying what to check.
-            <p className="thong-bao-loi" role="alert">
-              {testMessage.text}
-            </p>
-          ))}
       </form>
+
+      <div className="mt-3 flex flex-wrap items-end gap-2">
+        <Button
+          type="submit"
+          form={SAVE_FORM_ID}
+          variant="primary"
+          disabled={readOnly || saving}
+          icon={saving ? undefined : <Save aria-hidden="true" focusable="false" />}
+          aria-busy={saving}
+        >
+          <BusyLabel busy={saving} label={SAVE_BUTTON} busyText={BUSY_SAVING} />
+        </Button>
+
+        {/* From 640px: right-aligned, the box `w-56` (spec 10 #6). Below: the full row, the box
+            shrinking — 224px + the button do not fit a 320px screen's card. */}
+        <form
+          className="m-0 flex w-full min-w-0 items-end gap-2 sm:ml-auto sm:w-auto"
+          aria-label="Gửi thư thử"
+          onSubmit={(e) => {
+            e.preventDefault();
+            onTest();
+          }}
+        >
+          <ConfigField label={TEST_LABEL} htmlFor="o-gui-thu-toi" className="flex-1 sm:flex-none">
+            <input
+              id="o-gui-thu-toi"
+              name="recipient"
+              type="email"
+              className={cn(formInputCls, "sm:w-56")}
+              value={recipient}
+              placeholder={TEST_RECIPIENT_PLACEHOLDER}
+              disabled={readOnly || !saved.configured}
+              onChange={(e) => setRecipient(e.target.value)}
+            />
+          </ConfigField>
+          <Button
+            type="submit"
+            variant="outline"
+            icon={<Mail aria-hidden="true" focusable="false" />}
+            disabled={testDisabled || recipient.trim() === ""}
+            aria-busy={testing}
+          >
+            {TEST_BUTTON}
+          </Button>
+        </form>
+      </div>
+
+      {saveError !== null && (
+        <p role="alert" className="text-danger m-0 mt-2 flex items-center gap-1.5 text-[11.5px]">
+          <TriangleAlert aria-hidden="true" focusable="false" className="size-3.5 shrink-0" />
+          {saveError}
+        </p>
+      )}
+
+      {testResult !== null && (
+        <p
+          role={testResult.ok ? "status" : "alert"}
+          className={cn(
+            "m-0 mt-2 flex items-center gap-1.5 text-[11.5px]",
+            testResult.ok ? "text-leaf" : "text-danger",
+          )}
+        >
+          {testResult.ok ? (
+            <CheckCircle2 aria-hidden="true" focusable="false" className="size-3.5 shrink-0" />
+          ) : (
+            <TriangleAlert aria-hidden="true" focusable="false" className="size-3.5 shrink-0" />
+          )}
+          {testResult.text}
+        </p>
+      )}
+
+      {/* Spec 10 #7's persisted "Lần thử gần nhất …": the server does not store it yet (ADR 0079 #5). */}
+      {LAST_TEST !== undefined && (
+        <p className="text-ink-muted m-0 mt-2 flex items-center gap-1.5 text-[11.5px]" data-pending="">
+          <span>{LAST_TEST.ten}</span>
+          <PendingMarker info={LAST_TEST} />
+        </p>
+      )}
     </section>
   );
 }

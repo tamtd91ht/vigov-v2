@@ -1,23 +1,25 @@
 /**
- * The decision half of the "Máy chủ thư" tab (`docs/ui-ux/14-cau-hinh.md §10`). Pure, so the rules
+ * The decision half of the "Máy chủ thư" tab (spec `10-may-chu-thu.md`, ADR 0079). Pure, so the rules
  * about the password — the one field of this screen that must never travel the wrong way — have tests:
  *
  *   1. the password box is NEVER pre-filled: no response carries the password, and the draft built
  *      from a response starts it at "" whatever the response holds;
  *   2. a blank box is NEVER sent (it means "keep the stored password");
  *   3. changing host, port or username with a password already stored means it must be typed
- *      again — said BEFORE saving, because the server refuses otherwise (400
- *      `password_required_for_new_host`: the old password is never sent somewhere new).
+ *      again — the server refuses otherwise (400 `password_required_for_new_host`: the old password
+ *      is never sent somewhere new), and the screen says so in place with §10's sentence.
  */
 
 import type { comms_mailSettingsIn, comms_mailSettingsOut } from "@/lib/api/schema.gen";
 
-/** The four ports the server accepts (`service-comms/internal/domain/mail_settings.go`, `allowedMailPorts`). */
-export const MAIL_PORTS: readonly number[] = [587, 465, 25, 2525];
-
-/** The two security modes; there is no plaintext one. Labels from §10. */
+/**
+ * The two security modes, as the spec's two tick boxes. ONE server field (`security`), so the boxes
+ * are exclusive BY CONSTRUCTION: each box is "checked" when the field holds its value, and ticking a
+ * box writes its value. There is no third state to reach — no plaintext SMTP (rule 13), which the
+ * server also refuses (`ErrMailSecurityUnknown`).
+ */
 export const MAIL_SECURITY: readonly { readonly value: string; readonly label: string }[] = [
-  { value: "starttls", label: "START TLS (thường dùng với cổng 587)" },
+  { value: "starttls", label: "STARTTLS (thường dùng với cổng 587)" },
   { value: "tls", label: "TLS ngay từ đầu (thường dùng với cổng 465)" },
 ];
 
@@ -50,25 +52,28 @@ export function draftFromSettings(s: comms_mailSettingsOut): MailDraft {
   };
 }
 
-/** Host, port or username differ from what is saved — the three that decide where the password goes. */
+/**
+ * Host, port or username differ from what is saved — the three that decide where the password goes.
+ * Compared AFTER the server's own normalisation (`NormalizeMailSettings`: host trimmed and lower-cased,
+ * username trimmed), so retyping the same host in capitals is not "a new destination".
+ */
 export function destinationChanged(saved: comms_mailSettingsOut, d: MailDraft): boolean {
-  return d.host.trim() !== saved.host || d.port !== saved.port || d.username.trim() !== saved.username;
+  return (
+    d.host.trim().toLowerCase() !== saved.host || d.port !== saved.port || d.username.trim() !== saved.username
+  );
 }
 
 /**
- * The note under the password box, or "" for none:
- *   - nothing stored yet → the first save needs it;
- *   - stored, and the destination changed, and nothing typed → it must be typed again.
+ * The in-place sentence for a refused save. When the draft is exactly the server's
+ * `password_required_for_new_host` case (a password stored, the destination changed, nothing typed),
+ * §10's sentence; otherwise the server's own sentence, verbatim.
+ *
+ * DECIDED FROM THE DRAFT, NOT FROM THE RESPONSE'S `code`: `saveMailSettings` (lib/api) does not ask
+ * `goiGhi` for the code, and `KetQua.code` is reserved for one documented caller. The condition is the
+ * server's own (`app/mail_settings.go` Save), so the two cannot disagree on a request this screen sent.
  */
-export function passwordNote(saved: comms_mailSettingsOut, d: MailDraft): string {
-  if (!saved.password_set) return "Lần lưu đầu tiên phải nhập mật khẩu của tài khoản thư.";
-  if (destinationChanged(saved, d) && d.password === "") {
-    return (
-      "Bạn đã đổi máy chủ, cổng hoặc tài khoản nên phải nhập lại mật khẩu. Mật khẩu đã lưu không " +
-      "được gửi tới một nơi chưa từng dùng nó."
-    );
-  }
-  return "";
+export function saveRefusalMessage(saved: comms_mailSettingsOut, d: MailDraft, serverMessage: string): string {
+  return saved.password_set && d.password === "" && destinationChanged(saved, d) ? PASSWORD_NEW_DESTINATION : serverMessage;
 }
 
 /** PUT body. Built field by field; `password` only when typed (see `saveMailSettings`). */
@@ -98,24 +103,45 @@ export function testKey(
   return current !== null && current.recipient === recipient ? current : { key: mint(), recipient };
 }
 
-// No emoji in these three: the screen draws lucide `Mail` / `Save` / `Send` (ADR 0068 §2).
+// No emoji: the screen draws lucide `Mail` / `Save` / `TriangleAlert` (ADR 0068 §2).
 export const MAIL_TITLE = "Máy chủ thư của xã";
+/**
+ * Spec §10 #2, FIRST SENTENCE ONLY. Its second sentence ("Chưa khai thì hệ thống dùng máy chủ thư của
+ * nền tảng nếu có.") is not true of this system: service-comms has no platform mail server and no
+ * fallback path — the mail sender is wired to the commune's own settings only (`cmd/server/main.go`).
+ * And the owner decided none will be built this round (ADR 0079 lô 2 Q1 #8: `platform_fallback` false).
+ */
 export const MAIL_DESCRIPTION =
-  "Thông báo nội bộ gửi từ hộp thư của cán bộ bằng chính địa chỉ công vụ của xã. Chưa khai thì hệ " +
-  "thống dùng máy chủ thư của tỉnh nếu tỉnh có.";
-export const NOT_CONFIGURED_WARNING =
-  "Chưa có máy chủ thư nào. Thông báo vẫn đúng đường nhưng chưa thật sự gửi đi."; // ⚠ is drawn as a lucide icon (ADR 0068 §2)
+  "Thông báo nội bộ gửi tới hộp thư cán bộ bằng chính địa chỉ công vụ của xã.";
+/** True whenever the commune's server is not saved or not switched on: there is no other mail path. */
+export const NOT_CONFIGURED_WARNING = "Chưa có máy chủ thư nào. Thông báo vẫn đăng được nhưng thư sẽ không đi.";
 export const ENCRYPTION_MISSING =
   "Nền tảng chưa cấu hình khoá mã hoá bí mật, nên chưa lưu được mật khẩu máy chủ thư và chưa gửi thử " +
   "được. Biểu mẫu tạm chỉ để xem. Hãy báo đơn vị vận hành hệ thống.";
-export const PASSWORD_SAVED = "Đã lưu mật khẩu. Để trống ô này nếu không đổi mật khẩu.";
-export const PORT_HINT = "587 dùng START TLS, 465 dùng TLS ngay từ đầu.";
+export const PORT_HINT = "587 dùng STARTTLS, 465 dùng TLS ngay từ đầu.";
+export const PASSWORD_KEPT_PLACEHOLDER = "Giữ nguyên mật khẩu cũ";
+export const PASSWORD_NEW_DESTINATION =
+  "Đổi máy chủ, cổng hoặc tài khoản thì phải gõ lại mật khẩu. Mật khẩu cũ không đi theo sang máy chủ mới.";
+export const ENABLE_LABEL = "Dùng máy chủ thư này cho xã";
 export const SAVE_BUTTON = "Lưu cấu hình";
 export const SAVED_SENTENCE = "Đã lưu cấu hình máy chủ thư.";
 export const TEST_LABEL = "Gửi thư thử tới";
 export const TEST_BUTTON = "Gửi thử";
-export const TEST_SAVED_ONLY =
-  "Thư thử được gửi bằng cấu hình ĐÃ LƯU — hãy lưu trước nếu vừa sửa biểu mẫu.";
+export const TEST_SENT_TOAST = "Đã gửi. Kiểm tra hộp thư.";
+/** The request never reached an answer from service-comms (network, or a proxy page instead of it). */
+export const CALL_FAILED = "Không gọi được máy chủ.";
+
+/**
+ * Placeholders name NO commune and NO vendor (rule 1 inv 10, ADR 0068 lần 6 #2): one bundle serves
+ * every commune, so a real domain here is one commune's address shown to all the others.
+ */
+export const HOST_PLACEHOLDER = "smtp.ten-mien-xa.gov.vn";
+export const FROM_ADDRESS_PLACEHOLDER = "ubnd@ten-mien-xa.gov.vn";
+export const TEST_RECIPIENT_PLACEHOLDER = "canbo@ten-mien-xa.gov.vn";
+
+export function testFailedToast(error: string): string {
+  return `Không gửi được: ${error}`;
+}
 
 export function testSentSentence(recipient: string): string {
   return `Máy chủ thư đã nhận thư thử gửi tới ${recipient}. Hãy kiểm tra hộp thư (kể cả mục thư rác).`;
