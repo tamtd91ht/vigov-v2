@@ -1128,6 +1128,48 @@ export type documents_letterDeadlineIn = {
   "due_at": string | null;
 };
 
+export type documents_letterImportCreatedOut = {
+  "created": Array<documents_letterImportRowOut>;
+};
+
+export type documents_letterImportErrorOut = {
+  /** spreadsheet row (header = 1); 0 = the whole file */
+  "row": number;
+  /** the template's column header; "" = the whole row or file */
+  "column": string;
+  "message": string;
+};
+
+export type documents_letterImportPreviewOut = {
+  "valid": boolean;
+  "letters": Array<documents_letterImportRowOut>;
+  "errors": Array<documents_letterImportErrorOut>;
+};
+
+export type documents_letterImportRejectedOut = {
+  "code": string;
+  "message": string;
+  "trace_id": string;
+  "errors": Array<documents_letterImportErrorOut>;
+};
+
+export type documents_letterImportRowOut = {
+  "row": number;
+  /** once booked */
+  "id"?: string;
+  /** once booked */
+  "number"?: number;
+  "year": number;
+  "letter_type": string;
+  /** YYYY-MM-DD */
+  "received_date": string;
+  "holding_unit_id": string | null;
+  /** null = "Không đặt hạn" */
+  "processing_due_at": string | null;
+  /** the row said "Không rõ" */
+  "sender_unknown": boolean;
+};
+
 export type documents_letterLogEntryOut = {
   "id": string;
   "letter_id": string;
@@ -3342,6 +3384,23 @@ export type petitions_citizenFieldOut = {
   "tone": string | null;
 };
 
+export type petitions_citizenLetterTaskIn = {
+  "letter_id": string;
+  "code"?: string;
+  "auto_code": boolean;
+  "type": string;
+  "bloc"?: string;
+  "title": string;
+  "description"?: string;
+  "priority"?: string;
+  "note"?: string;
+  "unit"?: string;
+  "assignee"?: string;
+  "assigner"?: string;
+  "parent"?: string;
+  "documents"?: Array<petitions_vanBanNhiemVuVao>;
+};
+
 export type petitions_citizenReportSummaryOut = {
   "received": number;
   "in_progress": number;
@@ -4853,6 +4912,51 @@ export type documents_get_citizen_letter_report = {
   };
 };
 
+/** GET /api/v1/citizen-letter-report/exports — Xuất báo cáo sổ đơn thư một năm ra Excel: sáu số liệu, theo loại đơn, theo bộ phận (có dòng Chưa phân công), theo tháng — chỉ số liệu tổng hợp, có ghi vết */
+export type documents_get_citizen_letter_report_exports = {
+  duongDan: "/api/v1/citizen-letter-report/exports";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-letter-tasks — Chuyển đơn thư thành nhiệm vụ — nguồn, hạn và người giữ suy ra ở máy chủ theo đơn; đơn tố cáo bị từ chối */
+export type petitions_post_citizen_letter_tasks = {
+  duongDan: "/api/v1/citizen-letter-tasks";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: petitions_citizenLetterTaskIn;
+  phanHoi: {
+    201: petitions_nhiemVuRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    409: "code_taken" | "request_in_progress" | "task_document" | "task_tree";
+    422: "assignment_required" | "denunciation_no_task";
+  };
+};
+
 /** GET /api/v1/citizen-letters — Sổ đơn thư công dân, phân trang theo con trỏ, mới vào sổ trước; lọc năm · trạng thái · nhóm trạng thái hiển thị (status_group) · loại · bộ phận · cán bộ · khoảng ngày nhận · từ khoá · phạm vi */
 export type documents_get_citizen_letters = {
   duongDan: "/api/v1/citizen-letters";
@@ -4921,6 +5025,66 @@ export type documents_post_citizen_letters_duplicates = {
     401: httpx_Error;
     403: httpx_Error;
     500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-letters/import-previews — Kiểm tra một tệp Excel sổ đơn thư trước khi nhập — không ghi gì, không cấp số */
+export type documents_post_citizen_letters_import_previews = {
+  duongDan: "/api/v1/citizen-letters/import-previews";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: documents_letterImportPreviewOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** GET /api/v1/citizen-letters/import-template — Tải tệp Excel mẫu để nhập sổ đơn thư (Ngày đến, Họ tên người gửi, Địa chỉ, Số điện thoại, Loại đơn, Nội dung đơn, Bộ phận xử lý (mã)) */
+export type documents_get_citizen_letters_import_template = {
+  duongDan: "/api/v1/citizen-letters/import-template";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: void;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-letters/imports — Nhập sổ đơn thư từ tệp Excel — mỗi dòng vào sổ như nhập tay (cấp số, tự tính hạn, ghi vết), nguồn Nhập từ Excel; toàn bộ tệp hoặc không gì cả */
+export type documents_post_citizen_letters_imports = {
+  duongDan: "/api/v1/citizen-letters/imports";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    201: documents_letterImportCreatedOut;
+    400: documents_letterImportRejectedOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
   };
 };
 

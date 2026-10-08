@@ -230,11 +230,22 @@ func writeUploadError(w http.ResponseWriter, err error) {
 func (h *Handler) parseDocumentTypeUpload(w http.ResponseWriter, r *http.Request, data []byte) (
 	[]domain.DocumentTypeImportRow, []domain.DocumentTypeImportError, bool) {
 
+	sheet, ok := h.readUploadedSheet(w, r, data)
+	if !ok {
+		return nil, nil, false
+	}
+	rows, errs := domain.ReadDocumentTypeSheet(sheet)
+	return rows, errs, true
+}
+
+// readUploadedSheet reads the first sheet of an uploaded workbook, or answers the refusal of the FILE
+// and returns false. Shared by every import of this service (document types, citizen letters) so the
+// sentences and statuses cannot drift between them. EVERY SENTENCE IS FIXED.
+func (h *Handler) readUploadedSheet(w http.ResponseWriter, r *http.Request, data []byte) ([][]string, bool) {
 	sheet, err := xlsx.ReadSheet(bytes.NewReader(data), int64(len(data)), xlsx.DefaultLimits)
 	switch {
 	case err == nil:
-		rows, errs := domain.ReadDocumentTypeSheet(sheet)
-		return rows, errs, true
+		return sheet, true
 	case errors.Is(err, xlsx.ErrTooLarge):
 		writeXLSXTooLarge(w)
 	case errors.Is(err, xlsx.ErrMacroEnabled):
@@ -253,10 +264,10 @@ func (h *Handler) parseDocumentTypeUpload(w http.ResponseWriter, r *http.Request
 		httpx.WriteError(w, http.StatusBadRequest, "empty_file",
 			"Trang tính đầu của tệp trống. Hãy tải tệp mẫu và nhập vào đó.", "")
 	default:
-		h.d.Log.Error("nhập loại văn bản: đọc tệp lỗi", "xa", string(tenant.MustFrom(r.Context())), "err", err)
+		h.d.Log.Error("nhập Excel: đọc tệp lỗi", "xa", string(tenant.MustFrom(r.Context())), "err", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
 	}
-	return nil, nil, false
+	return nil, false
 }
 
 // PreviewDocumentTypeImport serves POST /api/v1/document-types/import-previews. 200 whether or not the

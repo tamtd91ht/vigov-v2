@@ -144,7 +144,9 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		AuditLog:         audit.NewLog(store.New(nil)),
 		// The citizen-letter register — same reason, equally unused here; its own suite is in
 		// internal/http and internal/app.
-		CitizenLetters: app.NewCitizenLetters(nil, nil, nil, nil),
+		CitizenLetters:      app.NewCitizenLetters(nil, nil, nil, nil),
+		CitizenLetterImport: app.NewCitizenLetterImport(nil, nil),
+		CitizenLetterExport: app.NewCitizenLetterReportExport(nil, nil),
 
 		Log: log,
 	})

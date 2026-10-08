@@ -789,6 +789,53 @@
     {
       "service": "documents",
       "method": "GET",
+      "path": "/api/v1/citizen-letter-report/exports",
+      "operation_id": "documents_get_citizen_letter_report_exports",
+      "task_id": "677330c2cb70",
+      "summary": "Xuất báo cáo sổ đơn thư một năm ra Excel: sáu số liệu, theo loại đơn, theo bộ phận (có dòng Chưa phân công), theo tháng — chỉ số liệu tổng hợp, có ghi vết",
+      "screen": "05-van-ban-don-thu §4",
+      "permission_kind": "permission",
+      "permission": "petition.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-documents/internal/http/routes_citizen_letter_import.go"
+    },
+    {
+      "service": "petitions",
+      "method": "POST",
+      "path": "/api/v1/citizen-letter-tasks",
+      "operation_id": "petitions_post_citizen_letter_tasks",
+      "task_id": "6b79d209479c",
+      "summary": "Chuyển đơn thư thành nhiệm vụ — nguồn, hạn và người giữ suy ra ở máy chủ theo đơn; đơn tố cáo bị từ chối",
+      "screen": "05-van-ban-don-thu §3.5",
+      "permission_kind": "permission",
+      "permission": "petition.read",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "MoKhiHong",
+      "request_schema": "petitions.citizenLetterTaskIn",
+      "reply_schemas": {
+        "201": "petitions.nhiemVuRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "422": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "documents",
+      "method": "GET",
       "path": "/api/v1/citizen-letters",
       "operation_id": "documents_get_citizen_letters",
       "task_id": "261af67566b4",
@@ -852,6 +899,74 @@
         "500": "httpx.Error"
       },
       "declared_in": "service-documents/internal/http/routes_citizen_letter.go"
+    },
+    {
+      "service": "documents",
+      "method": "POST",
+      "path": "/api/v1/citizen-letters/import-previews",
+      "operation_id": "documents_post_citizen_letters_import_previews",
+      "task_id": "5ea882cbb5a2",
+      "summary": "Kiểm tra một tệp Excel sổ đơn thư trước khi nhập — không ghi gì, không cấp số",
+      "screen": "05-van-ban-don-thu §3.1",
+      "permission_kind": "permission",
+      "permission": "petition.create",
+      "idempotency": "khong-can",
+      "idempotency_reason": "xem trước không ghi gì, không cấp số và không kiểm toán gì — gửi lại bao nhiêu lần cũng cho đúng một câu trả lời trên cùng trạng thái sổ",
+      "reply_schemas": {
+        "200": "documents.letterImportPreviewOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "413": "httpx.Error",
+        "415": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-documents/internal/http/routes_citizen_letter_import.go"
+    },
+    {
+      "service": "documents",
+      "method": "GET",
+      "path": "/api/v1/citizen-letters/import-template",
+      "operation_id": "documents_get_citizen_letters_import_template",
+      "task_id": "f20e712adebf",
+      "summary": "Tải tệp Excel mẫu để nhập sổ đơn thư (Ngày đến, Họ tên người gửi, Địa chỉ, Số điện thoại, Loại đơn, Nội dung đơn, Bộ phận xử lý (mã))",
+      "screen": "05-van-ban-don-thu §3.1",
+      "permission_kind": "permission",
+      "permission": "petition.create",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-documents/internal/http/routes_citizen_letter_import.go"
+    },
+    {
+      "service": "documents",
+      "method": "POST",
+      "path": "/api/v1/citizen-letters/imports",
+      "operation_id": "documents_post_citizen_letters_imports",
+      "task_id": "56e0402bca68",
+      "summary": "Nhập sổ đơn thư từ tệp Excel — mỗi dòng vào sổ như nhập tay (cấp số, tự tính hạn, ghi vết), nguồn Nhập từ Excel; toàn bộ tệp hoặc không gì cả",
+      "screen": "05-van-ban-don-thu §3.1",
+      "permission_kind": "permission",
+      "permission": "petition.create",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "DongKhiHong",
+      "reply_schemas": {
+        "201": "documents.letterImportCreatedOut",
+        "400": "documents.letterImportRejectedOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "409": "httpx.Error",
+        "413": "httpx.Error",
+        "415": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-documents/internal/http/routes_citizen_letter_import.go"
     },
     {
       "service": "documents",

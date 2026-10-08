@@ -212,6 +212,10 @@ func run(log *slog.Logger) error {
 	// THIS request and put in its context, and it holds no state of its own. THE THREE WRITE ROUTES
 	// OF THE CATALOGUE DECLARE authz.RequirePermission("admin.lookup"), so this is now read on every
 	// one of them — Register panics on a nil Checker rather than letting them 403 or panic later.
+	// Sổ đơn thư (ADR 0078): the SAME counter as the two document registers (series 'don-thu'), and the
+	// SAME identity client — units and assignees are checked live in the commune.
+	citizenLetters := app.NewCitizenLetters(kho, docstore.NewCitizenLetterStore(kho), daySo, dinhDanh)
+
 	mux := http.NewServeMux()
 	svchttp.Register(mux, svchttp.Deps{
 		Checker:       staffauth.Checker{},
@@ -228,11 +232,14 @@ func run(log *slog.Logger) error {
 		IncomingSummary: vanBanDen,
 		OverdueQueue:    app.NewIncomingDashboard(vanBanDen, dinhDanh),
 		// This service's OWN audit_log, on its own handle — never another service's (ADR 0054 §1).
-		AuditLog: audit.NewLog(kho),
-		// Sổ đơn thư (ADR 0078): the SAME counter as the two document registers (series 'don-thu'),
-		// and the SAME identity client — units and assignees are checked live in the commune.
-		CitizenLetters: app.NewCitizenLetters(kho, docstore.NewCitizenLetterStore(kho), daySo, dinhDanh),
-		Log:            log,
+		AuditLog:       audit.NewLog(kho),
+		CitizenLetters: citizenLetters,
+		// Its Excel import books every row through the SAME use case (and so the same counter and
+		// identity client); unit codes are resolved by identity. The report export names units through
+		// identity as well — removed units included.
+		CitizenLetterImport: app.NewCitizenLetterImport(citizenLetters, dinhDanh),
+		CitizenLetterExport: app.NewCitizenLetterReportExport(citizenLetters, dinhDanh),
+		Log:                 log,
 	})
 
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.

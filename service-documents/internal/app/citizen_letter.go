@@ -223,17 +223,42 @@ func (uc *CitizenLetters) clock() time.Time {
 // Asia/Ho_Chi_Minh of `received_date`, fixed here once and stored (rule 10, invariant 2). Not
 // configured → NULL, "Không đặt hạn". Any error → the booking is refused before a number is taken.
 func (uc *CitizenLetters) Book(ctx context.Context, req BookLetterRequest, caller LetterCaller) (domain.CitizenLetter, error) {
-	now := uc.clock()
-	l, err := normaliseBooking(req, now)
+	b, err := uc.prepareBooking(ctx, req, caller)
 	if err != nil {
 		return domain.CitizenLetter{}, err
 	}
+	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		return uc.bookInTx(ctx, tx, &b, caller)
+	})
+	if err != nil {
+		return domain.CitizenLetter{}, wrapLetter(ctx, "vào sổ đơn thư", err)
+	}
+	return b.letter, nil
+}
+
+// preparedBooking is one letter Book's first half made ready: shape checked, unit checked live,
+// deadline fixed by identity, ids drawn — everything that happens OUTSIDE the transaction.
+type preparedBooking struct {
+	letter domain.CitizenLetter
+	logID  string // "" unless a unit was chosen at booking
+	at     time.Time
+}
+
+// prepareBooking is Book's first half, and the Excel import's (citizen_letter_import.go): ONE copy of
+// the booking rules, so a letter booked from a file cannot differ from one typed at the counter. Every
+// identity round trip happens here, before any transaction opens (the file header's reason).
+func (uc *CitizenLetters) prepareBooking(ctx context.Context, req BookLetterRequest, caller LetterCaller) (preparedBooking, error) {
+	now := uc.clock()
+	l, err := normaliseBooking(req, now)
+	if err != nil {
+		return preparedBooking{}, err
+	}
 	if err := requireActor(caller.Actor); err != nil {
-		return domain.CitizenLetter{}, err
+		return preparedBooking{}, err
 	}
 	if l.HoldingUnitID != "" {
 		if err := uc.checkUnit(ctx, l.HoldingUnitID); err != nil {
-			return domain.CitizenLetter{}, err
+			return preparedBooking{}, err
 		}
 	}
 	// The received DATE carries no zone of its own (a DATE column, parsed as a calendar day): its
@@ -242,59 +267,59 @@ func (uc *CitizenLetters) Book(ctx context.Context, req BookLetterRequest, calle
 	countFrom := time.Date(y, m, d, 0, 0, 0, 0, domain.AutomationZone)
 	if l.ProcessingDueAt, err = uc.letterDeadline(ctx, l.Type,
 		identityv1.CitizenLetterDeadlineKind_CITIZEN_LETTER_DEADLINE_KIND_PROCESSING, countFrom); err != nil {
-		return domain.CitizenLetter{}, wrapLetter(ctx, "tính hạn xử lý đơn thư", err)
+		return preparedBooking{}, wrapLetter(ctx, "tính hạn xử lý đơn thư", err)
 	}
 	if l.ID, err = uc.newID(); err != nil {
-		return domain.CitizenLetter{}, fmt.Errorf("citizen_letter: sinh mã: %w", err)
+		return preparedBooking{}, fmt.Errorf("citizen_letter: sinh mã: %w", err)
 	}
 	var logID string
 	if l.HoldingUnitID != "" {
 		if logID, err = uc.newID(); err != nil {
-			return domain.CitizenLetter{}, fmt.Errorf("citizen_letter: sinh mã nhật ký: %w", err)
+			return preparedBooking{}, fmt.Errorf("citizen_letter: sinh mã nhật ký: %w", err)
 		}
 	}
 	l.Year = now.In(domain.AutomationZone).Year()
 	l.Status = domain.LetterStatusNew
 	l.CreatedByCode = caller.Actor.ID
 	l.CreatedAt, l.UpdatedAt = now, now
+	return preparedBooking{letter: l, logID: logID, at: now}, nil
+}
 
-	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
-		// THE LINK IS CHECKED BEFORE THE NUMBER IS TAKEN — a booking that will be refused does not
-		// touch the counter at all.
-		if l.RelatedLetterID != "" {
-			if _, err := uc.repo.ByID(ctx, tx, l.RelatedLetterID); err != nil {
-				if errors.Is(err, docstore.ErrCitizenLetterNotFound) {
-					return domain.ErrLetterRelatedNotFound
-				}
-				return err
+// bookInTx is Book's second half, inside the caller's transaction: link check, number, row, log row,
+// audit entry. b.letter carries the number when it returns nil.
+func (uc *CitizenLetters) bookInTx(ctx context.Context, tx *store.ScopedTx, b *preparedBooking, caller LetterCaller) error {
+	l := &b.letter
+	// THE LINK IS CHECKED BEFORE THE NUMBER IS TAKEN — a booking that will be refused does not
+	// touch the counter at all.
+	if l.RelatedLetterID != "" {
+		if _, err := uc.repo.ByID(ctx, tx, l.RelatedLetterID); err != nil {
+			if errors.Is(err, docstore.ErrCitizenLetterNotFound) {
+				return domain.ErrLetterRelatedNotFound
 			}
-		}
-		// The counter row is (tenant_id from tx.TenantID(), 'don-thu', year) — one series per commune.
-		n, err := uc.series.CapSo(ctx, tx, docstore.SeriesCitizenLetter, l.Year)
-		if err != nil {
 			return err
 		}
-		l.Number = n
-		// The store binds tenant_id = tx.TenantID() as $1.
-		if err := uc.repo.Insert(ctx, tx, l); err != nil {
-			return err
-		}
-		if l.HoldingUnitID != "" {
-			if err := uc.repo.InsertLog(ctx, tx, domain.LetterLogEntry{
-				ID: logID, LetterID: l.ID, At: now, ActorCode: caller.Actor.ID,
-				Kind: domain.LetterLogRouting, ToUnitID: l.HoldingUnitID, Content: logAssignedAtBooking,
-			}); err != nil {
-				return err
-			}
-		}
-		return writeLetterAudit(ctx, tx, caller.Actor, ActionBookCitizenLetter, l, map[string]any{
-			"sau": bookingSummary(l),
-		})
-	})
-	if err != nil {
-		return domain.CitizenLetter{}, wrapLetter(ctx, "vào sổ đơn thư", err)
 	}
-	return l, nil
+	// The counter row is (tenant_id from tx.TenantID(), 'don-thu', year) — one series per commune.
+	n, err := uc.series.CapSo(ctx, tx, docstore.SeriesCitizenLetter, l.Year)
+	if err != nil {
+		return err
+	}
+	l.Number = n
+	// The store binds tenant_id = tx.TenantID() as $1.
+	if err := uc.repo.Insert(ctx, tx, *l); err != nil {
+		return err
+	}
+	if l.HoldingUnitID != "" {
+		if err := uc.repo.InsertLog(ctx, tx, domain.LetterLogEntry{
+			ID: b.logID, LetterID: l.ID, At: b.at, ActorCode: caller.Actor.ID,
+			Kind: domain.LetterLogRouting, ToUnitID: l.HoldingUnitID, Content: logAssignedAtBooking,
+		}); err != nil {
+			return err
+		}
+	}
+	return writeLetterAudit(ctx, tx, caller.Actor, ActionBookCitizenLetter, *l, map[string]any{
+		"sau": bookingSummary(*l),
+	})
 }
 
 func normaliseBooking(req BookLetterRequest, now time.Time) (domain.CitizenLetter, error) {
