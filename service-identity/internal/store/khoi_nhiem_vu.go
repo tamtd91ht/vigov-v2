@@ -69,14 +69,14 @@ func (s *KhoiNhiemVuStore) DanhSach(ctx context.Context) ([]domain.KhoiNhiemVu, 
 func khoiNhiemVuTuDong(d dongDanhMuc) domain.KhoiNhiemVu {
 	return domain.KhoiNhiemVu{
 		ID: d.ID, Ma: d.Ma, Nhan: d.Nhan, LaMacDinh: d.LaMacDinh, DangDung: d.DangDung,
-		ThuTu: d.ThuTu, Nguon: d.Nguon, MaNguonReNhanh: d.MaNguonReNhanh,
+		ThuTu: d.ThuTu, Nguon: d.Nguon, MaNguonReNhanh: d.MaNguonReNhanh, Color: d.Color,
 	}
 }
 
 func dongTuKhoiNhiemVu(k domain.KhoiNhiemVu) dongDanhMuc {
 	return dongDanhMuc{
 		ID: k.ID, Ma: k.Ma, Nhan: k.Nhan, LaMacDinh: k.LaMacDinh, DangDung: k.DangDung,
-		ThuTu: k.ThuTu, Nguon: k.Nguon, MaNguonReNhanh: k.MaNguonReNhanh,
+		ThuTu: k.ThuTu, Nguon: k.Nguon, MaNguonReNhanh: k.MaNguonReNhanh, Color: k.Color,
 	}
 }
 

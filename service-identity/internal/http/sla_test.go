@@ -85,11 +85,13 @@ func (s *slaGia) soLanGoi() int {
 type ghiSLAGia struct {
 	mu sync.Mutex
 
-	goi       int
-	nguoiCuoi app.NguoiThucHien
-	xaCuoi    tenant.ID
-	idCuoi    string
-	suaCuoi   app.YeuCauSuaSLA
+	goi        int
+	nguoiCuoi  app.NguoiThucHien
+	xaCuoi     tenant.ID
+	idCuoi     string
+	suaCuoi    app.YeuCauSuaSLA
+	addLast    app.AddFieldRuleRequest
+	reasonLast string
 
 	kq   domain.DongSLA
 	gieo app.KetQuaGieo
@@ -132,6 +134,19 @@ func (g *ghiSLAGia) GieoMacDinh(ctx context.Context, nguoi app.NguoiThucHien) (a
 	return g.gieo, g.loi
 }
 
+func (g *ghiSLAGia) AddFieldRule(ctx context.Context, req app.AddFieldRuleRequest,
+	nguoi app.NguoiThucHien) (domain.DongSLA, error) {
+	g.ghiNhan(ctx, nguoi)
+	g.addLast = req
+	return g.kq, g.loi
+}
+
+func (g *ghiSLAGia) RemoveFieldRule(ctx context.Context, id, reason string, nguoi app.NguoiThucHien) error {
+	g.ghiNhan(ctx, nguoi)
+	g.idCuoi, g.reasonLast = id, reason
+	return g.loi
+}
+
 // --- harness --------------------------------------------------------------------------------------
 
 // tuyenSLA is every route of this screen with a body that satisfies it. ONE TABLE, so a case written
@@ -150,6 +165,8 @@ func moiTuyenSLA() []tuyenSLA {
 		{"đọc bảng thời hạn", "GET", "/api/v1/sla", "", http.StatusOK},
 		{"sửa một dòng", "PATCH", "/api/v1/sla/" + idDongSLAThu, `{"resolve_hours":12}`, http.StatusOK},
 		{"gieo mặc định", "POST", "/api/v1/sla/defaults", "", http.StatusOK},
+		{"thêm dòng riêng", "POST", "/api/v1/sla", addSLAFieldRowBody, http.StatusCreated},
+		{"xoá dòng riêng", "DELETE", "/api/v1/sla/" + idDongSLAThu, `{"reason":"Gộp vào dòng mặc định"}`, http.StatusNoContent},
 	}
 }
 
@@ -170,8 +187,12 @@ func dungMayChuSLA(t *testing.T) *mayChu {
 
 func (m *mayChu) goiSLA(t *testing.T, tg tuyenSLA, host, tok string) *httptest.ResponseRecorder {
 	t.Helper()
-	return m.goi(t, tg.method, host, tg.duong, tg.than, tok)
+	// goiIdem: POST /api/v1/sla declares idem.Required; the other routes ignore the header.
+	return m.goiIdem(t, tg.method, host, tg.duong, tg.than, tok)
 }
+
+const addSLAFieldRowBody = `{"work_kind":"phan-anh","field":"an-ninh","acknowledge_hours":2,` +
+	`"resolve_hours":12,"due_soon_hours":4,"escalate_leader_hours":8,"escalate_president_hours":17}`
 
 // --- rule 5, invariant 7: four cases, every route --------------------------------------------------
 

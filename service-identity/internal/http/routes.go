@@ -202,14 +202,16 @@ type (
 		DanhSach(ctx context.Context) ([]domain.DongSLA, error)
 	}
 
-	// SLAGhi is the WRITE surface of the deadline table: PATCH /api/v1/sla/{id} and
-	// POST /api/v1/sla/defaults. A use case, not a store.
+	// SLAGhi is the WRITE surface of the deadline table: PATCH /api/v1/sla/{id},
+	// POST /api/v1/sla/defaults, POST /api/v1/sla and DELETE /api/v1/sla/{id}. A use case, not a store.
 	//
-	// NEITHER METHOD TAKES A FIELD CODE, and that is what keeps these routes clear of ADR 0026
-	// stop condition #2 — see internal/http/sla.go and internal/store/sla_ghi.go.
+	// ONLY AddFieldRule TAKES A FIELD CODE, and the use case checks it with the list's owner before
+	// writing (app/sla_field_rule.go, ADR 0079 lô 2 Q4).
 	SLAGhi interface {
 		Sua(ctx context.Context, id string, yc app.YeuCauSuaSLA, nguoi app.NguoiThucHien) (domain.DongSLA, error)
 		GieoMacDinh(ctx context.Context, nguoi app.NguoiThucHien) (app.KetQuaGieo, error)
+		AddFieldRule(ctx context.Context, req app.AddFieldRuleRequest, nguoi app.NguoiThucHien) (domain.DongSLA, error)
+		RemoveFieldRule(ctx context.Context, id, reason string, nguoi app.NguoiThucHien) error
 	}
 
 	// QuyenDoc lists the caller's OWN permission keys, for GET /api/v1/sessions/current.
@@ -2789,6 +2791,57 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "admin.sla")(
 			idem.KhongCan("bộ gieo chỉ CHÈN những dòng xã chưa có, quyết định bên trong đúng giao dịch ghi, và khoá duy nhất (tenant_id, loai_viec, linh_vuc_khoa) chặn dòng thứ hai — nên lần bấm thứ hai không ghi gì, không ghi đè con số xã đã sửa, và trả seeded: 0")(
 				http.HandlerFunc(h.GieoSLAMacDinh))))
+
+	// ADD AND REMOVE A FIELD'S OWN ROW — ADR 0079 lô 2 Q4 ("Theo prototype"): every kind of work but
+	// `don-thu`, no approval step, a reason on removal, the default row never removable. `admin.sla`,
+	// the key the three routes above already use (migration 0001:277) — no key invented.
+	//
+	// POST idem.Required(idem.MoKhiHong), AND TWO LAYERS PROTECT IT: the key replays the 201 (and the
+	// row id) to a retry, and `UNIQUE (tenant_id, loai_viec, linh_vuc_khoa)` refuses a second live row
+	// for the same field whether or not the header was sent — so a cache outage cannot produce a
+	// duplicate, which is why the cache failing OPEN costs nothing. DELETE idem.KhongCan, the calendar
+	// deletes' reason.
+	//
+	// @summary  Thêm dòng thời hạn riêng cho một lĩnh vực — KHÔNG hồi tố lên hồ sơ đã cố định hạn
+	// @screen   14-cau-hinh §8
+	// 400 is a body that is not JSON, `don-thu` (default row only), an empty or malformed field, a
+	// figure outside 0 < giờ <= domain.GioToiDa, escalate_president_hours below escalate_leader_hours,
+	// a `phan-anh` field that is not an active tier-1 code (`sla_field_unknown`), or `van-ban-den` /
+	// `nhiem-vu` (`sla_field_unverifiable` — no contract yet lets identity check a document-type or
+	// task-priority code, rule 2 stop condition #2).
+	// 409 `sla_rule_exists` is a live row for this kind and field already.
+	// 503 `sla_field_check_unavailable` is the platform not answering; nothing was written.
+	//
+	// @request  addSLAFieldRowIn
+	// @reply    201 dongSLARa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("POST /api/v1/sla",
+		authz.RequirePermission(d.Checker, "admin.sla")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.AddSLAFieldRow))))
+
+	// @summary  Xoá mềm một dòng thời hạn riêng, kèm lý do bắt buộc — dòng mặc định không xoá được
+	// @screen   14-cau-hinh §8
+	// 404 is an id matching no live row OF THIS COMMUNE — one answer for an invented id, a removed row
+	// and another authority's row. 409 `default_sla_rule` is the default row.
+	//
+	// @request  removeSLAFieldRowIn
+	// @reply    204 -
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/sla/{id}",
+		authz.RequirePermission(d.Checker, "admin.sla")(
+			idem.KhongCan("xoá một dòng đã xoá trả 404 ở cả hai lần vì câu lệnh mang `deleted_at IS NULL`; lần gửi thứ hai không ghi đè người xoá và lý do của lần xoá thật")(
+				http.HandlerFunc(h.RemoveSLAFieldRow))))
 
 	// ---- Cấu hình → Tự động hoá (14-cau-hinh.md §9, migration 0017, ADR 0058) -------------------
 	//

@@ -78,7 +78,7 @@ func (s *LoaiDonViDanCuStore) DanhSach(ctx context.Context) ([]domain.LoaiDonViD
 func loaiDonViDanCuTuDong(d dongDanhMuc) domain.LoaiDonViDanCu {
 	return domain.LoaiDonViDanCu{
 		ID: d.ID, Ma: d.Ma, Nhan: d.Nhan, LaMacDinh: d.LaMacDinh, DangDung: d.DangDung,
-		ThuTu: d.ThuTu, Nguon: d.Nguon, MaNguonReNhanh: d.MaNguonReNhanh,
+		ThuTu: d.ThuTu, Nguon: d.Nguon, MaNguonReNhanh: d.MaNguonReNhanh, Color: d.Color,
 	}
 }
 
@@ -87,7 +87,7 @@ func loaiDonViDanCuTuDong(d dongDanhMuc) domain.LoaiDonViDanCu {
 func dongTuLoaiDonViDanCu(l domain.LoaiDonViDanCu) dongDanhMuc {
 	return dongDanhMuc{
 		ID: l.ID, Ma: l.Ma, Nhan: l.Nhan, LaMacDinh: l.LaMacDinh, DangDung: l.DangDung,
-		ThuTu: l.ThuTu, Nguon: l.Nguon, MaNguonReNhanh: l.MaNguonReNhanh,
+		ThuTu: l.ThuTu, Nguon: l.Nguon, MaNguonReNhanh: l.MaNguonReNhanh, Color: l.Color,
 	}
 }
 

@@ -9,7 +9,8 @@ package app
 // nothing else; the store knows SQL and nothing else.
 //
 // =================================================================================================
-// TWO OPERATIONS, AND THE SECOND ONE IS THE EXPENSIVE ONE TO GET WRONG.
+// TWO OPERATIONS HERE, AND THE SECOND ONE IS THE EXPENSIVE ONE TO GET WRONG. Adding and removing a
+// field's own row live in sla_field_rule.go (ADR 0079 lô 2 Q4).
 //
 //	Sua          change the five hour figures of ONE existing row.
 //	GieoMacDinh  write the rows of domain.BoGieoSLA() that this commune does not have yet.
@@ -63,6 +64,7 @@ type KhoSLA interface {
 	TheoIDDeGhi(ctx context.Context, tx *store.ScopedTx, id string) (domain.DongSLA, error)
 	CapNhatGio(ctx context.Context, tx *store.ScopedTx, d domain.DongSLA) error
 	Chen(ctx context.Context, tx *store.ScopedTx, d domain.DongSLA) error
+	SoftDelete(ctx context.Context, tx *store.ScopedTx, id, by, reason string) error
 }
 
 // The business verbs written into the trail. Vietnamese snake_case, like every other action this
@@ -93,6 +95,10 @@ type SLA struct {
 
 	// Injected so a test can pin it. In production: ulid.Moi.
 	sinhID func() (string, error)
+
+	// petitionFields checks a `phan-anh` field code on AddFieldRule (sla_field_rule.go). Nil = every
+	// such add is refused as unavailable, never accepted unchecked.
+	petitionFields PetitionFieldSource
 }
 
 func NewSLA(db *store.DB, kho KhoSLA) *SLA {

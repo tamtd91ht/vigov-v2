@@ -47,6 +47,9 @@ type khoiNhiemVuRa struct {
 	Order  int    `json:"order"`
 	Source string `json:"source"`
 	Tier   int    `json:"tier"`
+
+	// Color — same meaning as on loaiDonViDanCuRa.
+	Color *string `json:"color"`
 }
 
 // danhSachKhoiNhiemVuRa wraps the list in an OBJECT rather than a bare JSON array — same reasoning
@@ -58,7 +61,7 @@ type danhSachKhoiNhiemVuRa struct {
 func khoiNhiemVuRaNgoai(k domain.KhoiNhiemVu) khoiNhiemVuRa {
 	return khoiNhiemVuRa{
 		ID: k.ID, Code: k.Ma, Label: k.Nhan, IsDefault: k.LaMacDinh, Active: k.DangDung,
-		Order: k.ThuTu, Source: k.Nguon, Tier: int(k.Tang()),
+		Order: k.ThuTu, Source: k.Nguon, Tier: int(k.Tang()), Color: colorOut(k.Color),
 	}
 }
 

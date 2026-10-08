@@ -40,6 +40,7 @@ type hangDanhMuc struct {
 	nguon    string
 	reNhanh  bool
 	daXoa    bool
+	color    any // nil = NULL, as PostgreSQL hands it back (migration 0026)
 }
 
 type khoDanhMucGia struct {
@@ -135,7 +136,7 @@ func (c *connDanhMucGia) QueryContext(_ context.Context, q string, args []driver
 
 	switch {
 	case strings.Contains(q, "FOR UPDATE"):
-		cot := []string{"id", "ma", "nhan", "la_mac_dinh", "dang_dung", "thu_tu", "nguon", "ma_nguon_re_nhanh"}
+		cot := []string{"id", "ma", "nhan", "la_mac_dinh", "dang_dung", "thu_tu", "nguon", "ma_nguon_re_nhanh", "color"}
 		theoXa := strings.Contains(q, "tenant_id = $1 AND id = $2")
 		id := chuoiThu(args, 1)
 		if !theoXa {
@@ -145,7 +146,7 @@ func (c *connDanhMucGia) QueryContext(_ context.Context, q string, args []driver
 			if h.bang == bang && h.id == id && (!theoXa || h.xa == xa) &&
 				(!strings.Contains(q, "deleted_at IS NULL") || !h.daXoa) {
 				return &rowsGia{cot: cot, hang: [][]driver.Value{
-					{h.id, h.ma, h.nhan, h.macDinh, h.dangDung, int64(h.thuTu), h.nguon, h.reNhanh},
+					{h.id, h.ma, h.nhan, h.macDinh, h.dangDung, int64(h.thuTu), h.nguon, h.reNhanh, h.color},
 				}}, nil
 			}
 		}

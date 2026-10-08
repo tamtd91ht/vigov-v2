@@ -64,6 +64,10 @@ type loaiDonViDanCuRa struct {
 	// Tier is 1, 2 or 3 (domain.Tang) — tier 3 has no `Tắt`, tiers 2 and 3 have no `Xoá`. DERIVED,
 	// never stored.
 	Tier int `json:"tier"`
+
+	// Color is the display colour, `#rrggbb` lower-case, or null when none was chosen (migration 0026).
+	// Presentation only; the screen draws a neutral chip for null.
+	Color *string `json:"color"`
 }
 
 // danhSachLoaiDonViDanCuRa wraps the list in an OBJECT rather than returning a bare JSON array —
@@ -76,8 +80,17 @@ type danhSachLoaiDonViDanCuRa struct {
 func loaiDonViDanCuRaNgoai(l domain.LoaiDonViDanCu) loaiDonViDanCuRa {
 	return loaiDonViDanCuRa{
 		ID: l.ID, Code: l.Ma, Label: l.Nhan, IsDefault: l.LaMacDinh, Active: l.DangDung,
-		Order: l.ThuTu, Source: l.Nguon, Tier: int(l.Tang()),
+		Order: l.ThuTu, Source: l.Nguon, Tier: int(l.Tang()), Color: colorOut(l.Color),
 	}
+}
+
+// colorOut renders a catalogue colour: "" (NULL) leaves as null, never as an empty string a client
+// could hand to a style attribute.
+func colorOut(color string) *string {
+	if color == "" {
+		return nil
+	}
+	return &color
 }
 
 // DanhSachLoaiDonViDanCu serves the commune's residential-unit-type catalogue.

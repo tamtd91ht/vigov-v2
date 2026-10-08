@@ -55,4 +55,8 @@ type LoaiDonViDanCu struct {
 	// request: the store writes them as literals on insert and names them in no UPDATE.
 	Nguon          string
 	MaNguonReNhanh bool
+
+	// Color is the display colour, `#rrggbb` lower-case, "" when none was chosen (NULL, migration
+	// 0026). Presentation only — see catalogue_color.go.
+	Color string
 }

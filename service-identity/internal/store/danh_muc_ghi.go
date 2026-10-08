@@ -102,10 +102,10 @@ func demDanhMucDangSong(ctx context.Context, tx *store.ScopedTx, bang string) (i
 // There is no function here that writes a `he-thong` row — that is commune onboarding (0005:38).
 func chenDanhMuc(ctx context.Context, tx *store.ScopedTx, bang string, d dongDanhMuc) error {
 	stmt := `INSERT INTO ` + bang +
-		` (tenant_id, id, ma, nhan, thu_tu, la_mac_dinh, dang_dung, nguon, ma_nguon_re_nhanh)` +
-		` VALUES ($1, $2, $3, $4, $5, $6, $7, 'don-vi', false)`
+		` (tenant_id, id, ma, nhan, thu_tu, la_mac_dinh, dang_dung, color, nguon, ma_nguon_re_nhanh)` +
+		` VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'don-vi', false)`
 	if _, err := tx.Exec(ctx, stmt, string(tx.TenantID()),
-		d.ID, d.Ma, d.Nhan, d.ThuTu, d.LaMacDinh, d.DangDung); err != nil {
+		d.ID, d.Ma, d.Nhan, d.ThuTu, d.LaMacDinh, d.DangDung, colorArg(d.Color)); err != nil {
 		return dichLoiGhiDanhMuc(bang, "chèn", err)
 	}
 	return nil
@@ -125,18 +125,27 @@ func boMacDinhDanhMucKhac(ctx context.Context, tx *store.ScopedTx, bang, trongID
 	return nil
 }
 
-// capNhatDanhMuc writes the four fields a commune may change. `ma`, `nguon` AND `ma_nguon_re_nhanh`
+// capNhatDanhMuc writes the five fields a commune may change (the colour since migration 0026). `ma`, `nguon` AND `ma_nguon_re_nhanh`
 // APPEAR NOWHERE in the statement; the trigger refuses all three as well (0005:168-188), and both
 // layers are meant — the floor, and the absence that makes the floor unreachable from here.
 func capNhatDanhMuc(ctx context.Context, tx *store.ScopedTx, bang string, d dongDanhMuc) error {
 	stmt := `UPDATE ` + bang +
-		` SET nhan = $3, thu_tu = $4, dang_dung = $5, la_mac_dinh = $6, cap_nhat_luc = now()` +
+		` SET nhan = $3, thu_tu = $4, dang_dung = $5, la_mac_dinh = $6, color = $7, cap_nhat_luc = now()` +
 		` WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
-	kq, err := tx.Exec(ctx, stmt, string(tx.TenantID()), d.ID, d.Nhan, d.ThuTu, d.DangDung, d.LaMacDinh)
+	kq, err := tx.Exec(ctx, stmt, string(tx.TenantID()), d.ID, d.Nhan, d.ThuTu, d.DangDung, d.LaMacDinh,
+		colorArg(d.Color))
 	if err != nil {
 		return dichLoiGhiDanhMuc(bang, "cập nhật", err)
 	}
 	return doiMotDongDanhMuc(kq, bang, "cập nhật")
+}
+
+// colorArg writes "" as NULL — "no colour chosen" (migration 0026). The CHECK refuses an empty string.
+func colorArg(color string) any {
+	if color == "" {
+		return nil
+	}
+	return color
 }
 
 // xoaMemDanhMuc writes all THREE columns rule 7, invariant 1 names in one statement. `boi` is the

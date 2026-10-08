@@ -156,7 +156,8 @@ func TestKhoiNhiemVuTraDungNhungTruongCuaHopDong(t *testing.T) {
 	// `label`; entities with a `ten` column answer `name`. `active` beside `is_default` is the same
 	// pair the four sibling services ship; the asymmetry is deliberate (khoiNhiemVuRa.Active).
 	muon := map[string]bool{"id": true, "code": true, "label": true, "is_default": true, "active": true,
-		"order": true, "source": true, "tier": true}
+		"order": true, "source": true, "tier": true,
+		"color": true} // color: migration 0026, ADR 0079 — null when none chosen
 	for _, mot := range tho.Items {
 		for khoa := range mot {
 			if !muon[khoa] {

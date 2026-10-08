@@ -74,6 +74,10 @@ type khoSLAGia struct {
 	// have already run.
 	loiSau string
 	daNo   bool
+
+	// loiSauLa, when set, is the error loiSau's statement fails with — so a case can hand back what
+	// PostgreSQL would say (a unique-key violation) and prove how the store translates it.
+	loiSauLa error
 }
 
 func (k *khoSLAGia) ghi(q string, args []driver.NamedValue) {
@@ -107,6 +111,9 @@ func (k *khoSLAGia) kiemLoi(q string) error {
 	defer k.mu.Unlock()
 	if k.loiSau != "" && !k.daNo && strings.Contains(q, k.loiSau) {
 		k.daNo = true
+		if k.loiSauLa != nil {
+			return k.loiSauLa
+		}
 		return errors.New("driver giả: câu lệnh này được dựng để hỏng")
 	}
 	return nil

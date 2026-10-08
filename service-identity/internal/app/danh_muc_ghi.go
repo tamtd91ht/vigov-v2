@@ -55,6 +55,7 @@ type mucDanhMuc struct {
 	LaMacDinh, DangDung bool
 	Nguon               string
 	MaNguonReNhanh      bool
+	Color               string // "" = none (NULL)
 }
 
 func (m mucDanhMuc) tang() domain.Tang { return domain.TangCua(m.Nguon, m.MaNguonReNhanh) }
@@ -99,11 +100,11 @@ func NewDanhMucLoaiDonViDanCu(db *store.DB, kho KhoDanhMuc[domain.LoaiDonViDanCu
 		tran: idstore.TranDanhMucLoaiDonViDanCu,
 		sangMuc: func(l domain.LoaiDonViDanCu) mucDanhMuc {
 			return mucDanhMuc{ID: l.ID, Ma: l.Ma, Nhan: l.Nhan, ThuTu: l.ThuTu, LaMacDinh: l.LaMacDinh,
-				DangDung: l.DangDung, Nguon: l.Nguon, MaNguonReNhanh: l.MaNguonReNhanh}
+				DangDung: l.DangDung, Nguon: l.Nguon, MaNguonReNhanh: l.MaNguonReNhanh, Color: l.Color}
 		},
 		tuMuc: func(m mucDanhMuc) domain.LoaiDonViDanCu {
 			return domain.LoaiDonViDanCu{ID: m.ID, Ma: m.Ma, Nhan: m.Nhan, ThuTu: m.ThuTu, LaMacDinh: m.LaMacDinh,
-				DangDung: m.DangDung, Nguon: m.Nguon, MaNguonReNhanh: m.MaNguonReNhanh}
+				DangDung: m.DangDung, Nguon: m.Nguon, MaNguonReNhanh: m.MaNguonReNhanh, Color: m.Color}
 		},
 	}}
 }
@@ -116,11 +117,11 @@ func NewDanhMucKhoiNhiemVu(db *store.DB, kho KhoDanhMuc[domain.KhoiNhiemVu]) *Da
 		tran: idstore.TranDanhMucKhoiNhiemVu,
 		sangMuc: func(k domain.KhoiNhiemVu) mucDanhMuc {
 			return mucDanhMuc{ID: k.ID, Ma: k.Ma, Nhan: k.Nhan, ThuTu: k.ThuTu, LaMacDinh: k.LaMacDinh,
-				DangDung: k.DangDung, Nguon: k.Nguon, MaNguonReNhanh: k.MaNguonReNhanh}
+				DangDung: k.DangDung, Nguon: k.Nguon, MaNguonReNhanh: k.MaNguonReNhanh, Color: k.Color}
 		},
 		tuMuc: func(m mucDanhMuc) domain.KhoiNhiemVu {
 			return domain.KhoiNhiemVu{ID: m.ID, Ma: m.Ma, Nhan: m.Nhan, ThuTu: m.ThuTu, LaMacDinh: m.LaMacDinh,
-				DangDung: m.DangDung, Nguon: m.Nguon, MaNguonReNhanh: m.MaNguonReNhanh}
+				DangDung: m.DangDung, Nguon: m.Nguon, MaNguonReNhanh: m.MaNguonReNhanh, Color: m.Color}
 		},
 	}}
 }
@@ -135,6 +136,9 @@ type YeuCauThemDanhMuc struct {
 	Nhan      string
 	ThuTu     int
 	LaMacDinh bool
+
+	// Color is the display colour (migration 0026); nil = none chosen.
+	Color *string
 }
 
 // YeuCauSuaDanhMuc is a PARTIAL edit: nil = leave alone. Three of the four fields have a meaningful
@@ -144,6 +148,16 @@ type YeuCauSuaDanhMuc struct {
 	ThuTu     *int
 	DangDung  *bool
 	LaMacDinh *bool
+
+	// Color has THREE states, like the SLA's optional threshold: nil = leave it; a change with Color nil
+	// = clear it; a change with a value = set it. Editable on every tier — presentation only (ADR 0079
+	// lô 2 Q1 #9); the tier trigger names no colour (0026:27-31).
+	Color *CatalogueColorChange
+}
+
+// CatalogueColorChange is one edit of a row's colour. Color nil clears it.
+type CatalogueColorChange struct {
+	Color *string
 }
 
 // Them adds one row the commune owns (tier 1).
@@ -165,13 +179,19 @@ func (uc *DanhMucGhi[T]) Them(ctx context.Context, yc YeuCauThemDanhMuc, nguoi N
 	if err := domain.KiemTraThuTuDanhMuc(yc.ThuTu); err != nil {
 		return rong, err
 	}
+	var color string
+	if yc.Color != nil {
+		if color, err = domain.NormalizeCatalogueColor(*yc.Color); err != nil {
+			return rong, err
+		}
+	}
 	id, err := uc.sinhID()
 	if err != nil {
 		return rong, fmt.Errorf("%s: sinh id: %w", uc.mo.ten, err)
 	}
 
 	moi := mucDanhMuc{
-		ID: id, Ma: ma, Nhan: nhan, ThuTu: yc.ThuTu, LaMacDinh: yc.LaMacDinh, DangDung: true,
+		ID: id, Ma: ma, Nhan: nhan, ThuTu: yc.ThuTu, LaMacDinh: yc.LaMacDinh, DangDung: true, Color: color,
 		// Set only so the value RETURNED describes the row written. The store writes both as literals.
 		Nguon: domain.NguonDonVi, MaNguonReNhanh: false,
 	}
@@ -240,6 +260,13 @@ func (uc *DanhMucGhi[T]) Sua(ctx context.Context, id string, yc YeuCauSuaDanhMuc
 			return rong, err
 		}
 	}
+	var color string
+	if c := yc.Color; c != nil && c.Color != nil {
+		var err error
+		if color, err = domain.NormalizeCatalogueColor(*c.Color); err != nil {
+			return rong, err
+		}
+	}
 
 	var sau mucDanhMuc
 	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
@@ -261,6 +288,9 @@ func (uc *DanhMucGhi[T]) Sua(ctx context.Context, id string, yc YeuCauSuaDanhMuc
 		}
 		if yc.LaMacDinh != nil {
 			sau.LaMacDinh = *yc.LaMacDinh
+		}
+		if yc.Color != nil {
+			sau.Color = color // "" when the change clears it
 		}
 
 		if truoc.DangDung && !sau.DangDung {
@@ -347,7 +377,16 @@ func vetDanhMuc(m mucDanhMuc) map[string]any {
 	return map[string]any{
 		"ma": m.Ma, "nhan": m.Nhan, "thu_tu": m.ThuTu,
 		"dang_dung": m.DangDung, "la_mac_dinh": m.LaMacDinh, "nguon": m.Nguon,
+		"color": colorDelta(m.Color),
 	}
+}
+
+// colorDelta renders the colour for the trail: nil when none, so "cleared" reads as null.
+func colorDelta(color string) any {
+	if color == "" {
+		return nil
+	}
+	return color
 }
 
 // vetDoiDanhMuc returns only the fields that moved, from whichever side is asked for.
@@ -370,6 +409,9 @@ func vetDoiDanhMuc(truoc, sau mucDanhMuc, benTruoc bool) map[string]any {
 	}
 	if truoc.LaMacDinh != sau.LaMacDinh {
 		ra["la_mac_dinh"] = chon(truoc.LaMacDinh, sau.LaMacDinh)
+	}
+	if truoc.Color != sau.Color {
+		ra["color"] = chon(colorDelta(truoc.Color), colorDelta(sau.Color))
 	}
 	return ra
 }
@@ -398,6 +440,7 @@ func LaLoiDauVaoDanhMuc(err error) bool {
 		domain.ErrThuTuDanhMucNgoaiKhoang,
 		domain.ErrThieuLyDoXoaDanhMuc, domain.ErrLyDoXoaDanhMucQuaDai,
 		domain.ErrMaBatBien, domain.ErrNguonDoTuClient,
+		domain.ErrCatalogueColorInvalid,
 	} {
 		if errors.Is(err, e) {
 			return true

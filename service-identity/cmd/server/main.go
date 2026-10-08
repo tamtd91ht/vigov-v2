@@ -292,7 +292,11 @@ func run(log *slog.Logger) error {
 	// IT IS GIVEN THE SAME *idstore.SLAStore the read field and the gRPC server carry. One store,
 	// because the seeding decision READS the very rows it then writes, inside one transaction — a
 	// second store would be a second connection and the read would not see the transaction.
-	ghiSLA := app.NewSLA(kho, sla)
+	//
+	// The tier-1 petition-field reader checks a `phan-anh` field code before POST /api/v1/sla stores
+	// it (ADR 0060, ADR 0079 lô 2 Q4) — the same reader and the same platform connection
+	// service-petitions uses for intake.
+	ghiSLA := app.NewSLA(kho, sla).WithPetitionFields(platformclient.NewPetitionFields(nenTang.Client(), log))
 	// Cấu hình → Tự động hoá (migration 0017, ADR 0058): the REST routes and the two runner RPCs share
 	// ONE use case, so the screen and the claim read the same settings through the same store.
 	automation := app.NewAutomation(kho, idstore.NewAutomationStore(kho))

@@ -53,7 +53,7 @@ func motVetDanhMuc(t *testing.T, ten string, k *khoDanhMucGia, hanhVi, chuDe str
 // --- Them ---------------------------------------------------------------------------------------
 
 // A COMMUNE'S ROW IS TIER 1, AND `nguon` IS A LITERAL. The INSERT goes to THIS catalogue's table,
-// carries seven bound values (no $n for `nguon` / `ma_nguon_re_nhanh`), and shares its transaction
+// carries eight bound values — seven plus `color`, migration 0026 — (no $n for `nguon` / `ma_nguon_re_nhanh`), and shares its transaction
 // with the audit entry.
 func TestThemDanhMucGhiTang1VaVetCungGiaoDich(t *testing.T) {
 	for i := range dungCatalogue(t, &khoDanhMucGia{}) {
@@ -72,7 +72,7 @@ func TestThemDanhMucGhiTang1VaVetCungGiaoDich(t *testing.T) {
 		if len(chen) != 1 {
 			t.Fatalf("%s: có %d INSERT vào %s, muốn 1", c.ten, len(chen), c.bang)
 		}
-		if !strings.Contains(chen[0].sql, "'don-vi', false") || len(chen[0].args) != 7 {
+		if !strings.Contains(chen[0].sql, "'don-vi', false") || len(chen[0].args) != 8 {
 			t.Errorf("%s: nguon/ma_nguon_re_nhanh phải là HẰNG trong câu INSERT, không phải tham số: %s %v",
 				c.ten, chen[0].sql, chen[0].args)
 		}

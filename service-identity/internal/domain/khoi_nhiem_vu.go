@@ -40,4 +40,7 @@ type KhoiNhiemVu struct {
 	ThuTu          int
 	Nguon          string
 	MaNguonReNhanh bool
+
+	// Color — reason on LoaiDonViDanCu.Color.
+	Color string
 }

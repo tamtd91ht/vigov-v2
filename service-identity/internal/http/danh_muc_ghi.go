@@ -8,8 +8,8 @@ package http
 // documents, finance and comms), so the admin web drives all seven catalogues with one piece of
 // generic code:
 //
-//	POST   body  code · label · order? · is_default?          201 row   (idem.Required MoKhiHong)
-//	PATCH  body  label? · order? · active? · is_default?      200 row   (idem.KhongCan)
+//	POST   body  code · label · order? · is_default? · color?            201 row   (idem.Required MoKhiHong)
+//	PATCH  body  label? · order? · active? · is_default? · color?(null)  200 row   (idem.KhongCan)
 //	DELETE body  reason                                       204       (idem.KhongCan)
 //	any    body  naming `source` or `tier`                    400 invalid_request
 //	PATCH  body  naming `code`                                400 invalid_request
@@ -51,6 +51,9 @@ type themDanhMucVao struct {
 	Order     int    `json:"order,omitempty"`
 	IsDefault bool   `json:"is_default,omitempty"`
 
+	// Color is `#RRGGBB` (stored lower-case); absent or null = no colour (migration 0026).
+	Color *string `json:"color,omitempty"`
+
 	Source *string `json:"source,omitempty"`
 	Tier   *int    `json:"tier,omitempty"`
 }
@@ -65,9 +68,42 @@ type suaDanhMucVao struct {
 	Active    *bool   `json:"active,omitempty"`
 	IsDefault *bool   `json:"is_default,omitempty"`
 
+	// Color has THREE states: absent = leave it; null = clear it; `#RRGGBB` = set it.
+	Color optionalColorIn `json:"color,omitempty"`
+
 	Code   *string `json:"code,omitempty"`
 	Source *string `json:"source,omitempty"`
 	Tier   *int    `json:"tier,omitempty"`
+}
+
+// optionalColorIn records whether `color` was present at all, and its value when it was a string.
+// encoding/json calls UnmarshalJSON for a present field INCLUDING an explicit null, never for an absent
+// one — the same device as optionalHoursIn.
+type optionalColorIn struct {
+	present bool
+	color   *string
+}
+
+func (o *optionalColorIn) UnmarshalJSON(b []byte) error {
+	o.present = true
+	if string(b) == "null" {
+		o.color = nil
+		return nil
+	}
+	var c string
+	if err := json.Unmarshal(b, &c); err != nil {
+		return err
+	}
+	o.color = &c
+	return nil
+}
+
+// change turns the wire state into the use case's: nil when absent.
+func (o optionalColorIn) change() *app.CatalogueColorChange {
+	if !o.present {
+		return nil
+	}
+	return &app.CatalogueColorChange{Color: o.color}
 }
 
 // xoaDanhMucVao is the body of DELETE …/{id}. A DELETE WITH A BODY: the reason is mandatory (rule 7,
@@ -147,7 +183,7 @@ func themDanhMuc[T any](h *Handler, w http.ResponseWriter, r *http.Request, ten 
 		return
 	}
 	moi, err := them(r.Context(), app.YeuCauThemDanhMuc{
-		Ma: vao.Code, Nhan: vao.Label, ThuTu: vao.Order, LaMacDinh: vao.IsDefault,
+		Ma: vao.Code, Nhan: vao.Label, ThuTu: vao.Order, LaMacDinh: vao.IsDefault, Color: vao.Color,
 	}, nguoi)
 	if err != nil {
 		h.traLoiLoiGhiDanhMuc(w, r, ten, "thêm", err)
@@ -183,6 +219,7 @@ func suaDanhMuc[T any](h *Handler, w http.ResponseWriter, r *http.Request, ten s
 	}
 	sau, err := sua(r.Context(), r.PathValue("id"), app.YeuCauSuaDanhMuc{
 		Nhan: vao.Label, ThuTu: vao.Order, DangDung: vao.Active, LaMacDinh: vao.IsDefault,
+		Color: vao.Color.change(),
 	}, nguoi)
 	if err != nil {
 		h.traLoiLoiGhiDanhMuc(w, r, ten, "sửa", err)

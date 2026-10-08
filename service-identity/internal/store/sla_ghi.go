@@ -14,28 +14,13 @@ import (
 // The WRITE paths of the commune's processing-deadline table (migration 0008, ADR 0029).
 //
 // =================================================================================================
-// WHAT CHANGED SINCE sla.go SAID "NO WRITE PATH", AND WHY IT IS NOT THAT STOP CONDITION BEING
-// ROUTED AROUND.
+// WHERE A FIELD CODE ENTERS, AND WHO CHECKED IT.
 //
-// sla.go and migration 0008 both refuse a write path FOR ONE NAMED REASON: writing a row means
-// accepting a `linh_vuc`, and a field code has to be checked at write time against the closed
-// tier-1 code set in service `platform` — a read path whose shape (gRPC or event-fed replica) has
-// no ADR, and writing it without one is ADR 0026 stop condition #2.
-//
-// NEITHER METHOD HERE ACCEPTS A FIELD CODE FROM A CALLER:
-//
-//	CapNhatGio   changes the FIVE HOUR COLUMNS of a row identified by id. `linh_vuc` and
-//	             `loai_viec` do not appear in the UPDATE at all, so there is no parameter through
-//	             which a code could enter — and a code already in the table is one that was already
-//	             there.
-//	Chen         writes a row of domain.BoGieoSLA(), a FIXED LIST IN SOURCE that is the twelve
-//	             tier-1 codes verbatim. Nothing a client sends reaches it.
-//
-// So no unvalidated code can enter `sla` through this file, and no cross-service read path is
-// created. WHAT REMAINS BLOCKED IS THE SPECIFICATION'S `+ Thêm thời hạn cho một lĩnh vực` BUTTON
-// (14-cau-hinh.md:293): a route that lets a commune name a field needs exactly the check ADR 0026
-// stop condition #2 governs, and it is not built. Do not add a `linh_vuc` parameter to CapNhatGio
-// as a shortcut to it — that is the same route through a different door.
+// Chen writes either a row of domain.BoGieoSLA() (a fixed list in source) or a field's own row added
+// through POST /api/v1/sla (ADR 0079 lô 2 Q4). THE SECOND IS CHECKED BEFORE IT GETS HERE, by the use
+// case, against the list's owner — app.SLA.AddFieldRule. This file does not, and must not, decide
+// whether a code is real: it only knows SQL (rule 5 of the service pattern). CapNhatGio still names
+// no `linh_vuc`, so an existing row cannot be re-pointed at another field.
 //
 // =================================================================================================
 // FOUR THINGS HOLD ACROSS BOTH METHODS, each a defect class rather than a style:
@@ -51,9 +36,8 @@ import (
 //  3. NEITHER STATEMENT NAMES `loai_viec` OR `linh_vuc` IN A SET CLAUSE. What a row applies to is
 //     fixed when the row is created; changing it would silently re-point a commitment at a
 //     different field, and the unique key would then be wrong with nothing on screen to say so.
-//  4. THERE IS NO DELETE, SOFT OR OTHERWISE. An SLA row is the basis of commitments already issued
-//     (migration 0008 §RETENTION), and removing one is a policy act nobody has specified a screen
-//     for. The columns exist; no method here writes them.
+//  4. THERE IS NO HARD DELETE. SoftDelete writes the three columns rule 7 names, and only on a
+//     field's own row — the default row is refused in SQL as well as in the use case.
 
 // ErrDongSLAKhongTonTai is an id that matches no live row of this commune.
 //
@@ -214,7 +198,8 @@ func (s *SLAStore) CapNhatGio(ctx context.Context, tx *store.ScopedTx, d domain.
 	return doiMotDongSLA(kq, "cập nhật số giờ")
 }
 
-// Chen writes one seed row.
+// Chen writes one row: a seed row, or a field's own row whose code the use case has already checked
+// with the list's owner (app.SLA.AddFieldRule).
 //
 // THE ID IS MINTED BY THE CALLER AND PASSED IN, not generated here: the use case pins it in tests,
 // and a store that minted its own ids would make every assertion about which row was written an
@@ -249,6 +234,31 @@ func (s *SLAStore) Chen(ctx context.Context, tx *store.ScopedTx, d domain.DongSL
 		return fmt.Errorf("sla: chèn dòng thời hạn: %w", dichLoiGhiSLA(err))
 	}
 	return nil
+}
+
+// SoftDelete removes one field's own row: the three columns rule 7, invariant 1 names, in one
+// statement. `by` is the remover's STAFF CODE (rule 6, invariant 8), never the internal id.
+//
+// `linh_vuc IS NOT NULL` IS IN THE PREDICATE: the default row is refused here too, not only by the use
+// case — removing it leaves every field of that kind with nothing to fall back on. A default row
+// matched by id therefore affects zero rows and reads as not found.
+//
+// `deleted_at IS NULL` makes a second delete a 404 rather than a rewrite of who removed the row and
+// why (rule 7, forbidden #5). Setting `deleted_at` turns the generated `linh_vuc_khoa` NULL (0008:213),
+// which is what lets the commune add a row for the same field again later.
+func (s *SLAStore) SoftDelete(ctx context.Context, tx *store.ScopedTx, id, by, reason string) error {
+	if id == "" {
+		return ErrDongSLAKhongTonTai
+	}
+	const stmt = `UPDATE sla SET deleted_at = now(), deleted_by = $3, delete_reason = $4,
+			cap_nhat_luc = now()
+		WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL AND linh_vuc IS NOT NULL`
+
+	kq, err := tx.Exec(ctx, stmt, string(tx.TenantID()), id, by, reason)
+	if err != nil {
+		return fmt.Errorf("sla: xoá mềm dòng thời hạn riêng: %w", err)
+	}
+	return doiMotDongSLA(kq, "xoá mềm")
 }
 
 // optionalHoursArg writes the optional threshold: 0 in Go is NULL in the column ("do not report"),

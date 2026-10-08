@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 
 	"github.com/vihat/vigov/core/store"
@@ -46,6 +47,10 @@ type dongDanhMuc struct {
 	ThuTu          int
 	Nguon          string
 	MaNguonReNhanh bool
+
+	// Color is "" for NULL (migration 0026). Folded on the way out and back on the way in, in this
+	// package only.
+	Color string
 }
 
 // cotDanhMuc IS READ BY POSITION in quetDongDanhMuc. `ma` and `nhan` are adjacent TEXT columns and
@@ -53,12 +58,14 @@ type dongDanhMuc struct {
 // produces no error at all. The first swap shows slugs where labels belong; the second pre-selects
 // a row the commune has taken out of use. The write path (danh_muc_ghi.go) reads the same list
 // through the same Scan, so the two cannot drift apart.
-const cotDanhMuc = `id, ma, nhan, la_mac_dinh, dang_dung, thu_tu, nguon, ma_nguon_re_nhanh`
+const cotDanhMuc = `id, ma, nhan, la_mac_dinh, dang_dung, thu_tu, nguon, ma_nguon_re_nhanh, color`
 
 // quetDongDanhMuc is the ONE Scan of cotDanhMuc — positional, in lockstep with it.
 func quetDongDanhMuc(quet func(...any) error) (dongDanhMuc, error) {
 	var d dongDanhMuc
-	err := quet(&d.ID, &d.Ma, &d.Nhan, &d.LaMacDinh, &d.DangDung, &d.ThuTu, &d.Nguon, &d.MaNguonReNhanh)
+	var color sql.NullString
+	err := quet(&d.ID, &d.Ma, &d.Nhan, &d.LaMacDinh, &d.DangDung, &d.ThuTu, &d.Nguon, &d.MaNguonReNhanh, &color)
+	d.Color = color.String
 	return d, err
 }
 

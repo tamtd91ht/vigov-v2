@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/vihat/vigov/core/httpx"
+	"github.com/vihat/vigov/core/idem"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-identity/internal/app"
 	"github.com/vihat/vigov/service-identity/internal/domain"
@@ -14,11 +15,13 @@ import (
 
 // The READ and WRITE routes behind Cấu hình → Thời hạn xử lý (14-cau-hinh.md §8).
 //
-//	GET   /api/v1/sla            the commune's whole deadline table, with its problems
-//	PATCH /api/v1/sla/{id}       change the five figures of one row
-//	POST  /api/v1/sla/defaults   sow the rows a commune that has none needs
+//	GET    /api/v1/sla            the commune's whole deadline table, with its problems
+//	PATCH  /api/v1/sla/{id}       change the five figures of one row
+//	POST   /api/v1/sla/defaults   sow the rows a commune that has none needs
+//	POST   /api/v1/sla            add a field's own row (ADR 0079 lô 2 Q4)
+//	DELETE /api/v1/sla/{id}       soft delete a field's own row, with a reason (ADR 0079 lô 2 Q4)
 //
-// ALL THREE DECLARE `admin.sla`. The key already exists in the `quyen` table (migration 0001:277,
+// ALL FIVE DECLARE `admin.sla`. The key already exists in the `quyen` table (migration 0001:277,
 // "Cấu hình thời hạn xử lý") and ADR 0029 §"Một bằng chứng phụ" reads its presence as evidence that
 // configuring deadlines was understood as ONE job of ONE person before the question was asked.
 // Nothing here invents a key — rule 5, invariant 3c: a key no migration seeds is a right no
@@ -64,22 +67,10 @@ import (
 // contract. **This needs the user's decision before the contract is published to the admin web.**
 //
 // =================================================================================================
-// WHAT IS DELIBERATELY NOT HERE — absences that are findings, not omissions.
-//
-//	`+ Thêm thời hạn cho một lĩnh vực`   14-cau-hinh.md:293. A route that lets a commune name a
-//	                                     FIELD must validate that code against the closed tier-1
-//	                                     code set in service `platform`, and whether that read is
-//	                                     gRPC or an event-fed replica HAS NO ADR — writing it
-//	                                     without one is ADR 0026 stop condition #2. The two routes
-//	                                     here accept no field code at all (see app.YeuCauSuaSLA),
-//	                                     which is exactly why they are not that stop condition.
-//	DELETING A ROW                       no screen specifies it, and an SLA row is the basis of
-//	                                     commitments already issued (migration 0008 §RETENTION).
-//	AN APPROVAL STEP                     ADR 0029 stop condition #4: `admin.sla` answers WHO may
-//	                                     press the button, but nobody has asked the customer whether
-//	                                     changing a figure needs a leader's sign-off. These routes
-//	                                     apply the change immediately. If the answer turns out to be
-//	                                     "yes", this is a new state on the write path, not a tweak.
+// WHAT CHANGED ON 2026-10-08 (ADR 0079 lô 2 Q4, "Theo prototype"): adding a field's own row and
+// removing one with a reason are built, and there is NO approval step (ADR 0029 stop condition #4
+// closed by that answer). The field code is checked with the owner of its list — app/sla_field_rule.go
+// says which kinds can be checked today and why the other two are refused.
 
 // thanSLAToiDa bounds the request body. 4 KiB is far past five integers and far short of anything
 // worth streaming: an unbounded body is memory a client chooses, on a process serving 200+ communes.
@@ -411,6 +402,95 @@ func (h *Handler) GieoSLAMacDinh(w http.ResponseWriter, r *http.Request) {
 	vietJSON(w, http.StatusOK, gieoSLARa{Seeded: kq.DaGieo, Kept: kq.DaCo})
 }
 
+// addSLAFieldRowIn is the body of POST /api/v1/sla.
+//
+// ALL FIVE FIGURES ARE REQUIRED — a new row inherits nothing — and so carry no `omitempty`
+// (tools/apidoc marks a field required unless it does). `unassigned_hold_hours` is optional: absent or
+// null = "do not report".
+type addSLAFieldRowIn struct {
+	WorkKind string `json:"work_kind"`
+	Field    string `json:"field"`
+
+	AcknowledgeHours       int `json:"acknowledge_hours"`
+	ResolveHours           int `json:"resolve_hours"`
+	DueSoonHours           int `json:"due_soon_hours"`
+	EscalateLeaderHours    int `json:"escalate_leader_hours"`
+	EscalatePresidentHours int `json:"escalate_president_hours"`
+
+	UnassignedHoldHours *int `json:"unassigned_hold_hours,omitempty"`
+}
+
+// removeSLAFieldRowIn is the body of DELETE /api/v1/sla/{id}. A DELETE WITH A BODY: the reason is
+// mandatory (rule 7, invariant 1), and a query string would put free text into every access log.
+type removeSLAFieldRowIn struct {
+	Reason string `json:"reason"`
+}
+
+// AddSLAFieldRow adds a field's own deadline row. POST /api/v1/sla
+//
+// 201 WITH THE ROW. It changes no deadline already fixed on any record (rule 10, invariant 2): the
+// row is read by the NEXT act that fixes a deadline, never applied backwards.
+func (h *Handler) AddSLAFieldRow(w http.ResponseWriter, r *http.Request) {
+	nguoi, ok := nguoiThucHienCanBo(r)
+	if !ok {
+		h.thieuNguoiThucHien(w, r)
+		return
+	}
+	var in addSLAFieldRowIn
+	r.Body = http.MaxBytesReader(w, r.Body, thanSLAToiDa)
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Nội dung gửi lên không phải JSON hợp lệ hoặc quá lớn.", "")
+		return
+	}
+	req := app.AddFieldRuleRequest{
+		Kind: domain.LoaiViec(in.WorkKind), Field: in.Field,
+		AcknowledgeHours: in.AcknowledgeHours, ResolveHours: in.ResolveHours, DueSoonHours: in.DueSoonHours,
+		EscalateLeaderHours: in.EscalateLeaderHours, EscalatePresidentHours: in.EscalatePresidentHours,
+	}
+	if in.UnassignedHoldHours != nil {
+		// An explicit 0 is refused rather than read as "do not report" — same rule as PATCH; null says
+		// "do not report".
+		if *in.UnassignedHoldHours <= 0 {
+			httpx.WriteError(w, http.StatusBadRequest, "invalid_request", domain.ErrGioPhaiDuong.Error(), "")
+			return
+		}
+		req.UnassignedHoldHours = *in.UnassignedHoldHours
+	}
+
+	row, err := h.d.GhiSLA.AddFieldRule(r.Context(), req, nguoi)
+	if err != nil {
+		h.traLoiLoiGhiSLA(w, r, "thêm dòng thời hạn riêng", err)
+		return
+	}
+	// What a retry with the same Idempotency-Key is told: the row id, never the body.
+	idem.RecordCode(r.Context(), row.ID)
+	vietJSON(w, http.StatusCreated, dongSLARaNgoai(row))
+}
+
+// RemoveSLAFieldRow soft deletes a field's own deadline row. DELETE /api/v1/sla/{id}
+//
+// 204 AND NO BODY. The row stays, with its three soft-delete columns (rule 7).
+func (h *Handler) RemoveSLAFieldRow(w http.ResponseWriter, r *http.Request) {
+	nguoi, ok := nguoiThucHienCanBo(r)
+	if !ok {
+		h.thieuNguoiThucHien(w, r)
+		return
+	}
+	var in removeSLAFieldRowIn
+	r.Body = http.MaxBytesReader(w, r.Body, thanSLAToiDa)
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Nội dung gửi lên không phải JSON hợp lệ hoặc quá lớn.", "")
+		return
+	}
+	if err := h.d.GhiSLA.RemoveFieldRule(r.Context(), r.PathValue("id"), in.Reason, nguoi); err != nil {
+		h.traLoiLoiGhiSLA(w, r, "xoá dòng thời hạn riêng", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // traLoiLoiGhiSLA maps one use-case failure onto a status and a sentence.
 //
 // ONE FUNCTION FOR BOTH ROUTES: two copies of this mapping would drift, and the copy that drifts
@@ -432,6 +512,30 @@ func (h *Handler) traLoiLoiGhiSLA(w http.ResponseWriter, r *http.Request, viec s
 		httpx.WriteError(w, http.StatusConflict, "sla_row_exists",
 			"Cấu hình thời hạn của xã vừa được người khác thay đổi. Hãy tải lại trang rồi thử lại.", "")
 
+	case errors.Is(err, app.ErrSLAFieldRowExists):
+		httpx.WriteError(w, http.StatusConflict, "sla_rule_exists",
+			"Lĩnh vực này đã có thời hạn riêng — hãy sửa dòng sẵn có.", "")
+
+	case errors.Is(err, domain.ErrSLADefaultRowNotRemovable):
+		// 409 AND NOT 403: the caller holds `admin.sla`; what is refused is this act on THIS row.
+		httpx.WriteError(w, http.StatusConflict, "default_sla_rule",
+			"Không xoá được thời hạn mặc định — mọi lĩnh vực chưa có quy định riêng đều dựa vào nó.", "")
+
+	case errors.Is(err, app.ErrSLAFieldUnverifiable):
+		httpx.WriteError(w, http.StatusBadRequest, "sla_field_unverifiable",
+			"Chưa đối chiếu được mã của loại việc này với danh mục gốc, nên chưa thêm được dòng thời hạn riêng cho loại việc này.", "")
+
+	case errors.Is(err, app.ErrSLAFieldNotInList):
+		httpx.WriteError(w, http.StatusBadRequest, "sla_field_unknown",
+			"Mã lĩnh vực không có trong danh mục lĩnh vực phản ánh, hoặc đã ngừng dùng.", "")
+
+	case errors.Is(err, app.ErrSLAFieldListUnavailable):
+		// 503, retryable. The cause stays in the log; nothing was written.
+		h.d.Log.Warn("thêm dòng thời hạn riêng: chưa hỏi được danh mục lĩnh vực",
+			"xa", string(tenant.MustFrom(r.Context())), "err", err)
+		httpx.WriteError(w, http.StatusServiceUnavailable, "sla_field_check_unavailable",
+			"Chưa kiểm tra được mã lĩnh vực lúc này. Vui lòng thử lại sau ít phút.", "")
+
 	case errors.Is(err, idstore.ErrLoaiViecLa):
 		// 500: the CHECK constraint should have made this impossible (sla_loai_viec_hop_le), so
 		// reaching it means the database is not the schema this code was built against. It is an
@@ -441,7 +545,7 @@ func (h *Handler) traLoiLoiGhiSLA(w http.ResponseWriter, r *http.Request, viec s
 		httpx.WriteError(w, http.StatusInternalServerError, "internal",
 			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
 
-	case app.LaLoiDauVaoSLA(err):
+	case app.IsSLAFieldRuleInputError(err):
 		// The domain's own sentence is returned: it names the rule, holds no personal data and no
 		// internal detail, and a second sentence written here would drift from it.
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
