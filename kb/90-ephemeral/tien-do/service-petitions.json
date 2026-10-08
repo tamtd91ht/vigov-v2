@@ -609,6 +609,15 @@
       "bang_chung": "52d436dd (migration), commit C3 này. go vet + go test -count=1 ./... service-petitions và tools/apidoc xanh; make kb + gen:api + check:api khớp. make check ĐẦY ĐỦ CHƯA CHẠY XONG (hệ thống dừng vì thiếu RAM). Migration chưa áp lên PG thật (không VIGOV_TEST_DSN, không Docker).",
       "no_confirm": [],
       "tiep_theo": "(1) make check đầy đủ + go run ./tools/schema-smoke trên PG16. (2) Ngày dùng domain.AutomationZone (+07:00). (3) verification-photos vẫn chỉ cho phiên có số (phiếu chưa xác thực không có bước công dân xác nhận đóng)."
+    },
+    {
+      "id": "cau-hinh-loi-he-thong-loai-nhan-08-10",
+      "menu": "cau-hinh",
+      "trang_thai": "xong",
+      "viec": "Lời hệ thống Tắt/Bật + câu xã tự thêm, màu loại nhiệm vụ/mức ưu tiên, RPC ResolveTaskPriorityCodes, gửi thông báo theo loại phân hệ, ngưỡng nhắc nhiệm vụ theo mức ưu tiên (ADR 0079)",
+      "bang_chung": "9fff0136, 1ec4fe3a, ffdb719a, 5781298d; migration c4e2f0c7 (0033). isolation-reviewer không mục chặn; go test ./service-petitions/... xanh.",
+      "no_confirm": [],
+      "tiep_theo": "SỬA LỖI đảo cờ dang_dung/la_mac_dinh (từ 14e4819b 22/09) đã sửa mã — dữ liệu đã ghi sai trên môi trường thật CHƯA sửa, chờ chủ dự án cho đọc audit_log (luật 7). Nợ: mức đã xoá mềm (danh sách vs lời nhắc), 1+N lời gọi identity khi lọc soon=true; CHECK delete_complete của 0020."
     }
   ]
 }
