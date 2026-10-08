@@ -98,6 +98,42 @@ service PetitionsService {
   //
   // RETRYING IS SAFE: it writes nothing, publishes nothing, and leaves no audit entry.
   rpc CountOrgUnitHoldings(CountOrgUnitHoldingsRequest) returns (CountOrgUnitHoldingsResponse);
+
+  // ResolveTaskPriorityCodes answers, for each TASK PRIORITY CODE asked (`muc_uu_tien_nhiem_vu.ma`,
+  // `khan` / `cao` / `thuong` and whatever the commune added), whether a live row of the commune named
+  // by "x-tenant-id" carries it, and whether the commune has it switched on (`dang_dung`).
+  //
+  // THE SAME QUESTION, THE SAME SHAPE, THE SAME CALLER RULES AND THE SAME STATUS CODES AS
+  // vigov.documents.v1.DocumentsService.ResolveDocumentTypeCodes — read the reasoning there (why it
+  // exists, why resolve-not-list, exact match, fail closed, point-in-time, not cached, not audited).
+  // Only the catalogue differs: this service owns `muc_uu_tien_nhiem_vu` (data-ownership.json,
+  // TaskPriority), and ADR 0079 lô 2 Q4 lets a commune add a deadline row per task priority — which
+  // replaces ADR 0029's "tasks read the default row only".
+  //
+  // Its caller today: service-identity, SLA.AddFieldRule, kind `nhiem-vu`, ONE code per call.
+  //
+  // # THE PREDICATE
+  //
+  //   a `muc_uu_tien_nhiem_vu` row of this commune carries exactly that `ma`, and `deleted_at IS NULL`.
+  //   `active` is that row's `dang_dung`. `(tenant_id, ma)` is UNIQUE across soft-deleted rows
+  //   (migration 0003), so a removed priority's code is never re-issued.
+  //
+  //   answered, active     accept.
+  //   answered, !active    REFUSE (a priority switched off is not assigned to new tasks).
+  //   absent               REFUSE. Unknown, soft-deleted and another commune's code are one answer.
+  //   any error            REFUSE as retryable (503). Never "valid", never "unknown".
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK                  zero or more items, each for a requested code, each at most once. Fewer
+  //                       than requested is ordinary. An empty request answers empty.
+  //   INVALID_ARGUMENT    more than 50 codes, or a blank code.
+  //   NOT_FOUND           NEVER produced.
+  //   UNAUTHENTICATED     NEVER produced by this RPC — it belongs to the caller-key interceptor.
+  //   UNAVAILABLE etc.    the call did not happen. The caller refuses, retryably.
+  //
+  // RETRYING IS SAFE: it writes nothing, publishes nothing, and leaves no audit entry.
+  rpc ResolveTaskPriorityCodes(ResolveTaskPriorityCodesRequest) returns (ResolveTaskPriorityCodesResponse);
 }
 
 message HealthRequest {}
@@ -129,4 +165,25 @@ message CountOrgUnitHoldingsResponse {
   // Live tasks not in `hoan-thanh` whose `bo_phan_id` or `co_quan_chu_tri_id` is the unit —
   // each task once.
   uint32 open_tasks = 2;
+}
+
+message ResolveTaskPriorityCodesRequest {
+  // `muc_uu_tien_nhiem_vu.ma` values, exactly as the caller will store them. 0 to 50; duplicates
+  // answered once. A blank entry is INVALID_ARGUMENT.
+  repeated string codes = 1;
+}
+
+// Wrapped: adding a field later (a label, an order) must not change the RPC signature.
+message ResolveTaskPriorityCodesResponse {
+  // Only for codes that a live priority of this commune carries. Order is not significant.
+  repeated TaskPriorityCode items = 1;
+}
+
+message TaskPriorityCode {
+  // Echoed exactly as requested — the key the caller maps by.
+  string code = 1;
+
+  // The commune has the priority switched on (`dang_dung`). False is still a live row: answered, but
+  // the caller refuses it for a new SLA row.
+  bool active = 2;
 }

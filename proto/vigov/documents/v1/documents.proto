@@ -54,6 +54,83 @@ service DocumentsService {
   //
   // RETRYING IS SAFE: it writes nothing, publishes nothing, and leaves no audit entry.
   rpc CountOrgUnitHoldings(CountOrgUnitHoldingsRequest) returns (CountOrgUnitHoldingsResponse);
+
+  // ResolveDocumentTypeCodes answers, for each DOCUMENT TYPE CODE asked (`loai_van_ban.ma`, the slug
+  // `cong-van`), whether a live row of the commune named by "x-tenant-id" carries it, and whether the
+  // commune has it switched on (`dang_dung`).
+  //
+  // # WHY IT EXISTS (ADR 0079 lô 2 Q4, 08/10/2026)
+  //
+  // A commune may add its own deadline row for one document type. identity owns the `sla` table
+  // (ADR 0029) and stores the type code there AS A VALUE (`sla.linh_vuc`); this service owns
+  // `loai_van_ban` (data-ownership.json, DocumentType). No foreign key crosses that boundary, and
+  // identity's ResolveDeadlines answers a misspelled code with the DEFAULT row, silently — so the
+  // membership check at the write of the SLA row is the ONLY thing keeping a code outside the list out
+  // of `sla`. identity may not read this service's database (rule 2, forbidden #2). This is the
+  // question it asks instead. Until it existed identity refused every `van-ban-den` row with
+  // ErrSLAFieldUnverifiable (service-identity/internal/app/sla_field_rule.go, checkFieldWithOwner).
+  //
+  // Its caller today: service-identity, SLA.AddFieldRule, kind `van-ban-den`, ONE code per call.
+  //
+  // # WHY "RESOLVE THESE CODES" AND NOT "LIST THE CATALOGUE"
+  //
+  // The caller holds the code it is about to write and needs one bit about it. A list would hand
+  // identity a copy of a commune's catalogue it has no other use for — a second reader of tier-2 data
+  // whose next use nobody reviews — and would bring a page size and a "did I get the whole list"
+  // question no caller needs. Same family and same shape as identity's ResolveLiveOrgUnitCodes. The
+  // screen that LISTS types reads GET /api/v1/document-types from this service directly.
+  //
+  // # THE PREDICATE — a code is ANSWERED when
+  //
+  //   a `loai_van_ban` row of this commune carries exactly that `ma`, and `deleted_at IS NULL`.
+  //   `active` is that row's `dang_dung`.
+  //
+  // EXACT MATCH. The server does not trim, lowercase or otherwise normalise: the caller stores the
+  // code it SENT, so a match on a normalised form would approve a string other than the one written.
+  // The caller normalises first (domain.NormalizeSLAField) and asks with the result.
+  //
+  // `(tenant_id, ma)` is UNIQUE across soft-deleted rows (migration 0003), so one code names at most
+  // one row and a removed type's code is never re-issued to a different type.
+  //
+  // # WHAT THE CALLER DOES WITH EACH ANSWER — fail closed
+  //
+  //   answered, active     accept: the SLA row may be written.
+  //   answered, !active    REFUSE (ErrSLAFieldNotInList, "đã ngừng dùng"): a commune that switched a
+  //                        type off is not issuing documents under it; a deadline row for it is a
+  //                        typo-shaped mistake waiting. Same rule as a retired petition field
+  //                        (ListPetitionFields: refuse for new intake).
+  //   absent               REFUSE (ErrSLAFieldNotInList). Unknown, soft-deleted and another commune's
+  //                        code are ONE answer, indistinguishable (rule 1).
+  //   any error            REFUSE as ErrSLAFieldListUnavailable (503, retryable). NEVER "valid", NEVER
+  //                        "unknown", NEVER a write unchecked.
+  //
+  // NOT CACHED by the caller: adding an SLA row is a rare administrative act, and a cached "active"
+  // would let one through for a type switched off a moment ago.
+  //
+  // # A POINT-IN-TIME ANSWER, NOT A LOCK
+  //
+  // The type may be switched off or soft-deleted a millisecond after the answer. The SLA row then
+  // names a type nobody issues under any more — harmless (it is only read when a document of that
+  // type fixes its deadline) and declared in kb/30-indexes/transaction-boundaries.json under
+  // `them_dong_thoi_han_rieng_kiem_ma`.
+  //
+  // # The commune travels in metadata; no personal data; not audited
+  //
+  // Codes in, codes and a flag out. Not exempt from "x-tenant-id" (ADR 0012, decision 1): the
+  // commune is what scopes the answer. The audited act is identity's insert of the SLA row.
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK                  zero or more items, each for a code that WAS requested, each code at most
+  //                       once. FEWER THAN REQUESTED IS ORDINARY — it is "no live type carries this
+  //                       code". An empty request answers empty, never "every type".
+  //   INVALID_ARGUMENT    more than 50 codes, or a blank code. Never a silent truncation.
+  //   NOT_FOUND           NEVER produced. An unknown code is an ABSENT ITEM.
+  //   UNAUTHENTICATED     NEVER produced by this RPC — it belongs to the caller-key interceptor.
+  //   UNAVAILABLE etc.    the call did not happen. See "fail closed" above.
+  //
+  // RETRYING IS SAFE: it writes nothing, publishes nothing, and leaves no audit entry.
+  rpc ResolveDocumentTypeCodes(ResolveDocumentTypeCodesRequest) returns (ResolveDocumentTypeCodesResponse);
 }
 
 message HealthRequest {}
@@ -74,4 +151,25 @@ message CountOrgUnitHoldingsRequest {
 message CountOrgUnitHoldingsResponse {
   // Live incoming documents, not finished, whose `bo_phan_dang_giu_id` is the unit.
   uint32 open_incoming_documents = 1;
+}
+
+message ResolveDocumentTypeCodesRequest {
+  // `loai_van_ban.ma` values, exactly as the caller will store them. 0 to 50; duplicates answered
+  // once. A blank entry is INVALID_ARGUMENT — it would match nothing, and asking for it is a caller bug.
+  repeated string codes = 1;
+}
+
+// Wrapped: adding a field later (a label, an order) must not change the RPC signature.
+message ResolveDocumentTypeCodesResponse {
+  // Only for codes that a live type of this commune carries. Order is not significant.
+  repeated DocumentTypeCode items = 1;
+}
+
+message DocumentTypeCode {
+  // Echoed exactly as requested — the key the caller maps by.
+  string code = 1;
+
+  // The commune has the type switched on (`dang_dung`). False is still a live row: answered, but the
+  // caller refuses it for a new SLA row — see the RPC.
+  bool active = 2;
 }

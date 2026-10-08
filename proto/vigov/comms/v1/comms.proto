@@ -110,26 +110,114 @@ message HealthResponse {
   bool ok = 1;
 }
 
-// What a notice is about — what the bell draws as its icon and what a filter groups by. Named for
-// the four notices the automation jobs send today; the other bell items of 08-thong-bao.md §8
-// (extension request, task assigned) are added when a producer exists, never reserved ahead.
+// What a notice is about — what the bell draws as its icon, what a filter groups by, and (since
+// ADR 0079 Q3) which Zalo on/off box of the commune it answers to. Values are added when a producer
+// exists, never reserved ahead: the other bell items of 08-thong-bao.md §8 and the ten spec-11 events
+// with no producer (task assigned, extension request, …) are phase 2 of ADR 0079 Q3.
 //
 // English identifiers on the wire; the value comms stores in its inbox column follows ADR 0011
-// (Vietnamese enum values) and is comms' mapping.
+// (Vietnamese enum values) and is comms' mapping — one wire value, one stored value, listed beside
+// each value below (service-comms/migrations/0021_zalo_kinds_per_domain.sql).
+//
+// # TWO GENERATIONS, ONE ENUM (08/10/2026)
+//
+// Values 1–3 carry no domain: "due soon" for a task, a document and a petition is one value, and an
+// unassigned-unit notice travelled as OVERDUE because no value of its own existed. ADR 0079 Q3 makes
+// each (domain, shape) a box a commune switches separately, so values 5–16 name the domain IN THE
+// VALUE. A domain FIELD beside `kind` was rejected: (a) it makes illegal pairs representable — a
+// domain on WEEKLY_DIGEST, an UNASSIGNED with no domain — and comms would need a pair table and a
+// refusal rule for each; (b) a value with no field is exactly what old producers already send, so the
+// field buys no compatibility the enum does not; (c) one wire value per stored value is the mapping
+// the inbox, the Zalo dispatcher and 0021's CHECKs already speak.
+//
+// # WHAT COMMS DOES WITH THE OLD VALUES — they stay valid, for as long as a producer may send them
+//
+//   DUE_SOON   (1) → stored `sap-den-han`
+//   OVERDUE    (2) → stored `qua-han`        (old producers also send unassigned notices under it;
+//                                            comms cannot tell, and does not try)
+//   ESCALATION (3) → stored `leo-thang`
+//
+// They are NOT translated to a per-domain value: comms does not know the domain, and guessing one from
+// `link` or the key would be inventing a classification into rows that can never be edited (0010
+// guard). A commune's Zalo box set is mapped AT READ (0021 header, "THE READ-TIME MAP"): `qua-han`
+// ticked means every `*.qua-han` and `*.chua-cu-nguoi` — exactly what it received before.
+//
+// # ROLLOUT ORDER — comms FIRST, producers second
+//
+// A comms build that predates values 5–16 maps them to "" and refuses the WHOLE batch with
+// INVALID_ARGUMENT (service-comms/internal/grpc/server.go kindFromWire). So: deploy comms that knows
+// 5–16; then switch service-petitions and service-documents. A producer switched first fails its runs
+// (outcome recorded, nothing delivered) until comms catches up — loud, not silent, and nothing is lost
+// because the next run sends the same idempotency keys. Switching kind mid-day does NOT re-deliver:
+// deduplication is per (commune, key, recipient) and the first delivery wins — `kind` is not in it.
+//
+// Retiring 1–3 (and narrowing 0021's settings CHECK) is a later, separate change, after every producer
+// sends 5–16 — never in the change that adds them. They are then `reserved`, never renumbered.
 enum StaffNotificationKind {
   STAFF_NOTIFICATION_KIND_UNSPECIFIED = 0;
 
-  // "Bạn có N việc sắp đến hạn" — one per person per day, pointing at the filtered list.
+  // LEGACY, no domain → `sap-den-han`. "Bạn có N việc sắp đến hạn". Producers move to 5 / 9 / 13.
   STAFF_NOTIFICATION_KIND_DUE_SOON = 1;
 
-  // One late record, once per day late.
+  // LEGACY, no domain → `qua-han`. One late record, once per day late — and, from old producers, an
+  // unassigned-unit notice too. Producers move to 6 / 10 / 14 (late) and 7 / 11 / 15 (unassigned).
   STAFF_NOTIFICATION_KIND_OVERDUE = 2;
 
-  // One late record crossing a threshold of ResolveEscalationInstants, once per level.
+  // LEGACY, no domain → `leo-thang`. One late record crossing a threshold of ResolveEscalationInstants,
+  // once per level. Producers move to 8 / 12 / 16.
   STAFF_NOTIFICATION_KIND_ESCALATION = 3;
 
-  // The Monday summary for leadership.
+  // The Monday summary for leadership → `ban-tin-tuan`. NOT legacy and NOT split per domain: spec 11
+  // has one digest event, and the three digests are told apart by their idempotency key, not by a
+  // kind a commune could switch separately (0021 header).
   STAFF_NOTIFICATION_KIND_WEEKLY_DIGEST = 4;
+
+  // --- Task (`nhiem_vu`, producer service-petitions, work kind `nhiem-vu`) ---------------------------
+
+  // → `nhiem-vu.sap-den-han`. The daily "N việc sắp đến hạn" digest for tasks.
+  STAFF_NOTIFICATION_KIND_TASK_DUE_SOON = 5;
+
+  // → `nhiem-vu.qua-han`. One late task, once per day late.
+  STAFF_NOTIFICATION_KIND_TASK_OVERDUE = 6;
+
+  // → `nhiem-vu.chua-cu-nguoi`. The holding unit has assigned nobody past `sla.unassigned_hold_hours`
+  // (ResolveUnassignedHoldInstants). Spec 11 "Bộ phận chưa cử người làm"; split OUT of OVERDUE.
+  STAFF_NOTIFICATION_KIND_TASK_UNASSIGNED = 7;
+
+  // → `nhiem-vu.leo-thang`. One late task crossing an escalation threshold, once per level.
+  STAFF_NOTIFICATION_KIND_TASK_ESCALATION = 8;
+
+  // --- Document (`van-ban` family, producer service-documents) ----------------------------------------
+  //
+  // DOCUMENT, not INCOMING_DOCUMENT: spec 11 groups "Văn bản, đơn thư" as ONE event family and 0021
+  // stores `van-ban.*`, so the đơn thư register, when it gets a producer, sends these same values
+  // instead of a fourth family.
+
+  // → `van-ban.sap-den-han`.
+  STAFF_NOTIFICATION_KIND_DOCUMENT_DUE_SOON = 9;
+
+  // → `van-ban.qua-han`.
+  STAFF_NOTIFICATION_KIND_DOCUMENT_OVERDUE = 10;
+
+  // → `van-ban.chua-cu-nguoi`.
+  STAFF_NOTIFICATION_KIND_DOCUMENT_UNASSIGNED = 11;
+
+  // → `van-ban.leo-thang`.
+  STAFF_NOTIFICATION_KIND_DOCUMENT_ESCALATION = 12;
+
+  // --- Petition (`phieu_phan_anh`, producer service-petitions, work kind `phan-anh`) ------------------
+
+  // → `phan-anh.sap-den-han`.
+  STAFF_NOTIFICATION_KIND_PETITION_DUE_SOON = 13;
+
+  // → `phan-anh.qua-han`.
+  STAFF_NOTIFICATION_KIND_PETITION_OVERDUE = 14;
+
+  // → `phan-anh.chua-cu-nguoi`.
+  STAFF_NOTIFICATION_KIND_PETITION_UNASSIGNED = 15;
+
+  // → `phan-anh.leo-thang`.
+  STAFF_NOTIFICATION_KIND_PETITION_ESCALATION = 16;
 }
 
 message DeliverStaffNotificationsRequest {
