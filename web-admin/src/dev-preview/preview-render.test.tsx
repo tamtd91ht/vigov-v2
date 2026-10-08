@@ -47,6 +47,7 @@ const { PREVIEW_DOCUMENT_PERMISSIONS } = await import("./shell.fixture");
 const { PREVIEW_DOCUMENT_WITH_ROUTINGS, PREVIEW_DOCUMENT_NO_ROUTING, PREVIEW_REGISTER_ERROR, setDocumentPreviewState } =
   await import("./documents.fixture");
 const { PREVIEW_LETTER_OVERDUE } = await import("./letters.fixture");
+const { SettingsPreview } = await import("./settings-preview");
 type PreviewPerson = import("./shell.fixture").PreviewPerson;
 
 let root: Root | null = null;
@@ -336,6 +337,34 @@ describe("preview — Văn bản & Đơn thư", () => {
     expect(el.textContent).toContain("Đang tải sổ văn bản đến");
     expect(network).not.toHaveBeenCalled();
   }, SLOW);
+});
+
+describe("preview — Cấu hình", () => {
+  const keys = ["admin.org", "admin.lookup", "admin.sla", "asset.read", "admin.audit"];
+
+  it("the real tab frame on the fixture: the three-level org tree, no network", async () => {
+    const el = await mount("/xem-thu/cau-hinh", <SettingsPreview tab={null} />, false, "", keys, "lanh-dao");
+    await settle(600);
+    expect(el.textContent).toContain("Văn phòng HĐND – UBND");
+    expect(el.textContent).toContain("Tổ Văn thư – Lưu trữ");
+    expect(network).not.toHaveBeenCalled();
+  });
+
+  it("?tab= presses the real tab button", async () => {
+    const el = await mount("/xem-thu/cau-hinh", <SettingsPreview tab="lich-lam-viec" />, false, "", keys, "lanh-dao");
+    await settle(600);
+    expect(el.querySelector("#tab-cau-hinh-lich-lam-viec")!.getAttribute("aria-selected")).toBe("true");
+    expect(network).not.toHaveBeenCalled();
+  });
+
+  it("the Cấu hình org tree never leaks into another preview's /org-units", async () => {
+    window.history.pushState({}, "", "/xem-thu/nhiem-vu");
+    const { answer } = await import("./fixture-fetch");
+    const body = (await answer("GET", new URL("https://xa.example.test/api/v1/org-units")).json()) as {
+      items: { name: string }[];
+    };
+    expect(body.items.map((u) => u.name)).not.toContain("Tổ Văn thư – Lưu trữ");
+  });
 });
 
 describe("preview — shell states for screenshots", () => {

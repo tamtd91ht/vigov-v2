@@ -32,7 +32,8 @@ import {
   previewLetterReport,
   previewLetters,
 } from "./letters.fixture";
-import { devPreviewEnabled, isDevPreviewPath } from "./preview-gate";
+import { DEV_PREVIEW_PREFIX, devPreviewEnabled, isDevPreviewPath } from "./preview-gate";
+import { answerSettings, isSettingsReadPath, settingsPreviewState } from "./settings.fixture";
 import {
   PREVIEW_EXTENSION_APPROVERS,
   PREVIEW_TASK_BLOCS,
@@ -90,12 +91,20 @@ export function installFixtureFetch(previewSession: identity_phienHienTaiRa): vo
     if (method === "GET" && isDocumentRegisterPath(url.pathname) && documentPreviewStateNow() === "loading") {
       return new Promise<Response>(() => {});
     }
+    // `?state=loading` of the Cấu hình preview: every read of that screen never settles.
+    if (method === "GET" && onSettingsPreview() && settingsPreviewState() === "loading" && isSettingsReadPath(url.pathname)) {
+      return new Promise<Response>(() => {});
+    }
     return Promise.resolve(answer(method, url));
   };
 }
 
 export const PREVIEW_WRITE_REFUSAL = "Trang xem thử chỉ có dữ liệu mẫu — không ghi được gì.";
 const NO_FIXTURE = "Trang xem thử chưa có dữ liệu mẫu cho tuyến này.";
+
+function onSettingsPreview(): boolean {
+  return typeof window !== "undefined" && window.location.pathname === `${DEV_PREVIEW_PREFIX}/cau-hinh`;
+}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -111,6 +120,12 @@ export function answer(method: string, url: URL): Response {
   // (rule 3, forbidden #4) and writes nothing — so the preview answers it instead of refusing it.
   if (method === "POST" && url.pathname === "/api/v1/citizen-letters/duplicates") return json(previewLetterDuplicates());
   if (method !== "GET") return refuse(409, PREVIEW_WRITE_REFUSAL);
+  // Cấu hình answers first, and only on its own page: its `/org-units` is a three-level tree that must not
+  // replace the two-unit list every other preview draws.
+  if (onSettingsPreview()) {
+    const settings = answerSettings(method, url);
+    if (settings !== null) return settings;
+  }
   const year = Number(url.searchParams.get("year")) || new Date().getFullYear();
   const p = url.pathname;
   let m: RegExpExecArray | null;
