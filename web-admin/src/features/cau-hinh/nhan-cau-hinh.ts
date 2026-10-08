@@ -70,7 +70,7 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "chủ chưa lưu kết quả này; hiện chỉ thấy kết quả của lần thử ngay trên màn (ADR 0079).",
   },
   {
-    ten: "Máy chủ thư của nền tảng",
+    ten: "Đường thư dự phòng của nền tảng",
     viSao:
       "Cho biết khi xã chưa khai máy chủ thư thì thư có đi bằng máy chủ chung của nền tảng hay không. Máy " +
       "chủ chưa trả thông tin này (ADR 0079).",
