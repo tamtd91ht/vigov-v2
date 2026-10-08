@@ -124,6 +124,13 @@
       "source": "service-documents/migrations/0006_citizen_letter.sql:172"
     },
     {
+      "entity": "CitizenLetterDeadlineRule",
+      "service": "identity",
+      "scope": "tenant",
+      "table": "citizen_letter_deadline_rule",
+      "source": "service-identity/migrations/0027_citizen_letter_deadline_rule.sql:87"
+    },
+    {
       "entity": "CitizenLetterLogEntry",
       "service": "documents",
       "scope": "tenant",
