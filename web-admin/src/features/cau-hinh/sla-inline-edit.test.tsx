@@ -9,9 +9,15 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { identity_danhSachSLARa, identity_dongSLARa } from "@/lib/api/schema.gen";
 
-import { banTuDong } from "./sua-thoi-han";
+import { banTuDong, newAddDraft } from "./sua-thoi-han";
 // vi-name-ok: imports the existing exports of tab-thoi-han-xu-ly.tsx unchanged (rule 12 invariant 3)
-import { ManThoiHanXuLy, type InlineEdit, type ThaoTacThoiHan } from "./tab-thoi-han-xu-ly";
+import {
+  ManThoiHanXuLy,
+  type AddForm,
+  type InlineEdit,
+  type InlineRemove,
+  type ThaoTacThoiHan,
+} from "./tab-thoi-han-xu-ly";
 
 beforeAll(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -42,11 +48,18 @@ afterEach(() => {
   host = null;
 });
 
-function actions(startEdit: (d: identity_dongSLARa) => void = () => {}): ThaoTacThoiHan {
-  return { gieoThoiHan: () => {}, suaThoiHan: startEdit };
+function actions(
+  startEdit: (d: identity_dongSLARa) => void = () => {},
+  more: Partial<ThaoTacThoiHan> = {},
+): ThaoTacThoiHan {
+  return { gieoThoiHan: () => {}, suaThoiHan: startEdit, toggleAdd: () => {}, startRemove: () => {}, ...more };
 }
 
-function mount(rowActions: ThaoTacThoiHan, edit: InlineEdit | null): void {
+function mount(
+  rowActions: ThaoTacThoiHan,
+  edit: InlineEdit | null,
+  extra: { add?: AddForm | null; remove?: InlineRemove | null } = {},
+): void {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -59,9 +72,47 @@ function mount(rowActions: ThaoTacThoiHan, edit: InlineEdit | null): void {
         loiMayChuNgoaiForm=""
         dangGui={false}
         edit={edit}
+        add={extra.add ?? null}
+        remove={extra.remove ?? null}
       />,
     ),
   );
+}
+
+function addOf(more: Partial<AddForm>): AddForm {
+  return {
+    draft: newAddDraft(),
+    localError: "",
+    serverError: "",
+    busy: false,
+    setDraft: () => {},
+    onSubmit: () => {},
+    onCancel: () => {},
+    ...more,
+  };
+}
+
+function removeOf(more: Partial<InlineRemove>): InlineRemove {
+  return {
+    rowId: ROW.id,
+    reason: "",
+    localError: "",
+    serverError: "",
+    busy: false,
+    setReason: () => {},
+    onConfirm: () => {},
+    onCancel: () => {},
+    ...more,
+  };
+}
+
+/** Sets a native control's value the way React's change tracking sees it, then fires the event. */
+function setValue(el: HTMLInputElement | HTMLSelectElement, value: string, event: "input" | "change"): void {
+  const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+  act(() => {
+    Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(el, value);
+    el.dispatchEvent(new Event(event, { bubbles: true }));
+  });
 }
 
 function editOf(more: Partial<InlineEdit>): InlineEdit {
@@ -134,5 +185,83 @@ describe("sửa tại chỗ — phím và nút", () => {
       el.dispatchEvent(new Event("input", { bubbles: true }));
     });
     expect(setDraft).toHaveBeenCalledWith({ ...banTuDong(ROW), resolve_hours: "24" });
+  });
+});
+
+describe("thêm thời hạn cho một lĩnh vực — nút và hàng thêm", () => {
+  it("nút '+ Thêm thời hạn cho một lĩnh vực' gọi toggleAdd", () => {
+    const toggleAdd = vi.fn();
+    mount(actions(undefined, { toggleAdd }), null);
+
+    const button = [...host!.querySelectorAll("button")].find((b) =>
+      b.textContent?.includes("Thêm thời hạn cho một lĩnh vực"),
+    )!;
+    act(() => button.click());
+    expect(toggleAdd).toHaveBeenCalledTimes(1);
+  });
+
+  it("đổi Loại việc → bản nháp mang loại mới và Lĩnh vực về rỗng", () => {
+    const setDraft = vi.fn();
+    mount(actions(), null, { add: addOf({ setDraft, draft: { ...newAddDraft(), field: "an-ninh-trat-tu" } }) });
+
+    setValue(host!.querySelector<HTMLSelectElement>("#sla-add-kind")!, "van-ban-den", "change");
+    expect(setDraft).toHaveBeenCalledWith({ ...newAddDraft(), workKind: "van-ban-den", field: "" });
+  });
+
+  it("gõ Xử lý xong chỉ đổi đúng ô ấy", () => {
+    const setDraft = vi.fn();
+    mount(actions(), null, { add: addOf({ setDraft }) });
+
+    setValue(host!.querySelector<HTMLInputElement>("#sla-add-resolve")!, "24", "input");
+    expect(setDraft).toHaveBeenCalledWith({ ...newAddDraft(), resolveHours: "24" });
+  });
+
+  it("bấm Thêm gửi biểu mẫu (onSubmit), Huỷ đóng (onCancel), Esc trong hàng cũng đóng", () => {
+    const onSubmit = vi.fn();
+    const onCancel = vi.fn();
+    mount(actions(), null, { add: addOf({ onSubmit, onCancel }) });
+
+    const form = host!.querySelector("form")!;
+    const buttons = [...form.querySelectorAll("button")];
+    act(() => buttons.find((b) => b.textContent === "Thêm")!.click());
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+
+    act(() => buttons.find((b) => b.textContent === "Huỷ")!.click());
+    expect(onCancel).toHaveBeenCalledTimes(1);
+
+    press(host!.querySelector<HTMLInputElement>("#sla-add-acknowledge")!, "Escape");
+    expect(onCancel).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("xoá thời hạn riêng — thùng rác và bước lý do", () => {
+  it("bấm thùng rác mở bước lý do của ĐÚNG dòng ấy", () => {
+    const startRemove = vi.fn();
+    mount(actions(undefined, { startRemove }), null);
+
+    act(() => host!.querySelector<HTMLButtonElement>('button[title="Xoá thời hạn riêng"]')!.click());
+    expect(startRemove).toHaveBeenCalledWith(ROW);
+  });
+
+  it("gõ lý do → setReason; Enter → xác nhận; Esc → huỷ; nút Xoá / Huỷ gọi đúng việc", () => {
+    const setReason = vi.fn();
+    const onConfirm = vi.fn();
+    const onCancel = vi.fn();
+    mount(actions(), null, { remove: removeOf({ setReason, onConfirm, onCancel }) });
+
+    const reason = box("reason");
+    setValue(reason, "Trùng với dòng mặc định", "input");
+    expect(setReason).toHaveBeenCalledWith("Trùng với dòng mặc định");
+
+    press(reason, "Enter");
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    press(reason, "Escape");
+    expect(onCancel).toHaveBeenCalledTimes(1);
+
+    const buttons = [...host!.querySelectorAll("button")];
+    act(() => buttons.find((b) => b.textContent === "Xoá")!.click());
+    act(() => buttons.find((b) => b.textContent === "Huỷ")!.click());
+    expect(onConfirm).toHaveBeenCalledTimes(2);
+    expect(onCancel).toHaveBeenCalledTimes(2);
   });
 });

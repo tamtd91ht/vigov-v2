@@ -1,9 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  addSlaFieldRow,
   gieoThoiHanMacDinh,
   layThoiHanXuLy,
-  readCitizenReportFieldLabels,
+  readDocumentTypeOptions,
+  readPetitionFieldOptions,
+  readTaskPriorityOptions,
+  removeSlaFieldRow,
   suaThoiHanXuLy,
 } from "./thoi-han-xu-ly";
 
@@ -166,25 +170,111 @@ describe("POST /api/v1/sla/defaults", () => {
   });
 });
 
-describe("GET /api/v1/citizen-report-fields — nhãn cột Lĩnh vực (SLA-03)", () => {
+describe("ba danh mục lĩnh vực — nhãn cột Lĩnh vực (SLA-03) và ô chọn của hàng thêm", () => {
   const field = (code: string, label: string, active = true) => ({
     code, label, order: 1, default_label: label, default_order: 1, icon: "", tone: "", active, enabled: active, customised: false,
   });
+  const entry = (code: string, label: string, active = true) => ({ id: `01J${code}`, code, label, is_default: false, active });
 
-  it("đường dẫn tương đối; mọi mã — kể cả mã đã tắt — thành code → nhãn", async () => {
+  it("lĩnh vực phản ánh: đường dẫn tương đối; mọi mã — kể cả mã đã tắt — giữ cờ `active`", async () => {
     const gia = ghiGia(200, { items: [field("an-ninh-trat-tu", "An ninh, trật tự"), field("cu", "Lĩnh vực cũ", false)] });
-    const m = await readCitizenReportFieldLabels();
+    const kq = await readPetitionFieldOptions();
     expect(loiGoi(gia, 0).duongDan).toBe("/api/v1/citizen-report-fields");
-    expect(m.get("an-ninh-trat-tu")).toBe("An ninh, trật tự");
-    expect(m.get("cu")).toBe("Lĩnh vực cũ");
+    expect(kq).toEqual({
+      ok: true,
+      duLieu: [
+        { code: "an-ninh-trat-tu", label: "An ninh, trật tự", active: true },
+        { code: "cu", label: "Lĩnh vực cũ", active: false },
+      ],
+    });
   });
 
-  it("403 / 503 / mạng hỏng → bảng rỗng (màn hình hiện mã thô), không ném lỗi", async () => {
+  it("loại văn bản và mức ưu tiên: đúng tuyến của từng danh mục, giữ thứ tự máy chủ trả", async () => {
+    const gia = ghiGia(200, { items: [entry("khan", "Khẩn"), entry("thuong", "Thường", false)] });
+    const documents = await readDocumentTypeOptions();
+    const tasks = await readTaskPriorityOptions();
+
+    expect(loiGoi(gia, 0).duongDan).toBe("/api/v1/document-types");
+    expect(loiGoi(gia, 1).duongDan).toBe("/api/v1/task-priorities");
+    expect(tasks).toEqual({
+      ok: true,
+      duLieu: [
+        { code: "khan", label: "Khẩn", active: true },
+        { code: "thuong", label: "Thường", active: false },
+      ],
+    });
+    expect(documents.ok).toBe(true);
+  });
+
+  it("đọc hỏng → câu máy chủ, không ném lỗi (cột Lĩnh vực khi đó hiện mã thô)", async () => {
     ghiGia(403, { code: "forbidden", message: "Bạn không có quyền thực hiện thao tác này." });
-    expect((await readCitizenReportFieldLabels()).size).toBe(0);
-    ghiGia(503, { code: "field_catalogue_unavailable", message: "x" });
-    expect((await readCitizenReportFieldLabels()).size).toBe(0);
+    expect(await readPetitionFieldOptions()).toEqual({ ok: false, thongBao: "Bạn không có quyền thực hiện thao tác này." });
     vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("network"); }));
-    expect((await readCitizenReportFieldLabels()).size).toBe(0);
+    expect((await readDocumentTypeOptions()).ok).toBe(false);
+  });
+});
+
+describe("POST /api/v1/sla — thêm thời hạn riêng cho một lĩnh vực", () => {
+  const BODY = {
+    work_kind: "phan-anh",
+    field: "an-ninh-trat-tu",
+    acknowledge_hours: 8,
+    resolve_hours: 48,
+    due_soon_hours: 24,
+    escalate_leader_hours: 24,
+    escalate_president_hours: 48,
+    unassigned_hold_hours: null,
+  };
+
+  it("POST, đường dẫn tương đối, mang `Idempotency-Key` của biểu mẫu, đủ sáu con số, mong 201", async () => {
+    const gia = ghiGia(201, { ...DONG, id: "01J00000000000000000NEW", ...BODY, is_default: false });
+    const kq = await addSlaFieldRow(BODY, "khoa-bieu-mau-1");
+
+    const { duongDan, tuyChon, header } = loiGoi(gia, 0);
+    expect(duongDan).toBe("/api/v1/sla");
+    expect(tuyChon.method).toBe("POST");
+    expect(header.get("Idempotency-Key")).toBe("khoa-bieu-mau-1");
+    expect(JSON.parse(String(tuyChon.body))).toEqual(BODY);
+    expect(kq.ok).toBe(true);
+  });
+
+  it("không khoá lạ nào đi kèm thân, kể cả khi bên gọi trao thừa", async () => {
+    const gia = ghiGia(201, DONG);
+    await addSlaFieldRow({ ...BODY, tenant_id: "x", id: "y" } as typeof BODY, "k");
+    const than = JSON.parse(String(loiGoi(gia, 0).tuyChon.body)) as Record<string, unknown>;
+    expect(than).not.toHaveProperty("tenant_id");
+    expect(than).not.toHaveProperty("id");
+  });
+
+  it("409 sla_rule_exists / 400 sla_field_unknown / 503: câu máy chủ về NGUYÊN VĂN", async () => {
+    const exists = "Lĩnh vực này đã có thời hạn riêng — hãy sửa dòng sẵn có.";
+    ghiGia(409, { code: "sla_rule_exists", message: exists, trace_id: "" });
+    expect(await addSlaFieldRow(BODY, "k")).toEqual({ ok: false, thongBao: exists });
+
+    ghiGia(400, { code: "sla_field_unknown", message: "Mã lĩnh vực không có trong danh mục.", trace_id: "" });
+    expect(await addSlaFieldRow(BODY, "k")).toEqual({ ok: false, thongBao: "Mã lĩnh vực không có trong danh mục." });
+
+    ghiGia(503, { code: "sla_field_check_unavailable", message: "Chưa đối chiếu được danh mục.", trace_id: "" });
+    expect(await addSlaFieldRow(BODY, "k")).toEqual({ ok: false, thongBao: "Chưa đối chiếu được danh mục." });
+  });
+});
+
+describe("DELETE /api/v1/sla/{id} — xoá thời hạn riêng", () => {
+  it("DELETE, id đã mã hoá, thân CHỈ có lý do, 204 không thân là thành công", async () => {
+    const gia = ghiGia(204, null);
+    const kq = await removeSlaFieldRow("a/b", "Gộp vào dòng mặc định");
+
+    const { duongDan, tuyChon, header } = loiGoi(gia, 0);
+    expect(duongDan).toBe("/api/v1/sla/a%2Fb");
+    expect(tuyChon.method).toBe("DELETE");
+    expect(JSON.parse(String(tuyChon.body))).toEqual({ reason: "Gộp vào dòng mặc định" });
+    expect(header.get("Idempotency-Key")).toBeNull();
+    expect(kq).toEqual({ ok: true, duLieu: null });
+  });
+
+  it("409 default_sla_rule: câu của spec 08, nguyên văn từ máy chủ", async () => {
+    const cau = "Không xoá được thời hạn mặc định — mọi lĩnh vực chưa có quy định riêng đều dựa vào nó.";
+    ghiGia(409, { code: "default_sla_rule", message: cau, trace_id: "" });
+    expect(await removeSlaFieldRow(DONG.id, "x")).toEqual({ ok: false, thongBao: cau });
   });
 });

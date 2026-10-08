@@ -143,7 +143,8 @@ export function nhanLoaiViec(ma: string): string {
 
 /**
  * Cột Lĩnh vực: dòng mặc định nói rõ nó là mặc định; dòng có lĩnh vực hiện **nhãn của xã**, lấy từ
- * `labels` — bảng `petitions` trả về (`GET /api/v1/citizen-report-fields`, đọc một lần cho cả màn).
+ * `labels` — danh mục của ĐÚNG loại việc của dòng (lĩnh vực phản ánh, loại văn bản, mức ưu tiên
+ * nhiệm vụ; đọc một lần cho cả màn). Mỗi loại một bảng: hai danh mục có thể trùng mã.
  *
  * KHÔNG CÓ BẢNG TRA GÕ TAY Ở ĐÂY: nhãn là của danh mục xã, một bản chép trong tệp này trôi mà không
  * bài test nào đỏ (luật 9, cấm #2). Mã không có trong `labels` — đọc hỏng, tài khoản thiếu
@@ -319,3 +320,40 @@ export const LOI_SO_GIO_LA = "Số giờ phải là một số nguyên lớn hơ
 
 /** Spec 08's own sentence for "Xử lý xong" typed as zero or below — the column a citizen is promised. */
 export const RESOLVE_HOURS_ERROR = "Thời hạn xử lý phải lớn hơn 0 giờ.";
+
+/* ---- thêm / xoá thời hạn riêng của một lĩnh vực (spec 08, ADR 0079 lô 2 Q4) ------------------ */
+
+/** The add button. `nhan-cau-hinh.ts` reports the same words; the spec names the button so. */
+export const ADD_SLA_BUTTON = "Thêm thời hạn cho một lĩnh vực";
+/** Title of the row's trash button — non-default rows only. */
+export const REMOVE_SLA_TITLE = "Xoá thời hạn riêng";
+
+export const ADD_KIND_LABEL = "Loại việc";
+export const ADD_FIELD_LABEL = "Lĩnh vực áp dụng";
+export const ADD_ACKNOWLEDGE_LABEL = "Tiếp nhận (giờ)";
+export const ADD_RESOLVE_LABEL = "Xử lý xong (giờ)";
+export const ADD_FIELD_PLACEHOLDER = "— Chọn lĩnh vực —";
+export const ADD_SUBMIT = "Thêm";
+export const BUSY_ADDING = "Đang thêm…";
+
+/** Spec 08, in place: the form was sent with no field picked. */
+export const FIELD_REQUIRED_ERROR = "Vui lòng chọn lĩnh vực áp dụng.";
+
+/**
+ * The kind has no default row to take the four unshown figures from (the server's `problems` already
+ * names this table fault). Refused here rather than inventing figures — an invented threshold would be
+ * an SLA written into source (rule 10 forbidden #3).
+ */
+export const NO_DEFAULT_ROW_ERROR =
+  "Loại việc này chưa có dòng mặc định nên chưa lấy được các con số còn lại — hãy gieo hoặc khai dòng " +
+  "mặc định trước.";
+
+/**
+ * The `phan-anh` list is read through `admin.lookup`, which this tab (`admin.sla`) does not imply. An
+ * account without it gets this sentence instead of an empty select that looks like an empty catalogue.
+ */
+export const PETITION_FIELDS_NOT_READABLE =
+  "Tài khoản này chưa được xem danh mục lĩnh vực phản ánh, nên chưa chọn được lĩnh vực.";
+
+export const ADDED_SLA = "Đã thêm thời hạn cho lĩnh vực này.";
+export const REMOVED_SLA = "Đã xoá thời hạn riêng của lĩnh vực này.";

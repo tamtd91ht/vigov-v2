@@ -28,14 +28,18 @@
 
 import {
   UNASSIGNED_HOLD_KEY,
+  type FieldRowKind,
   type RequiredHoursKey,
   type SuaGioVao,
 } from "@/lib/api/thoi-han-xu-ly";
-import type { identity_dongSLARa, identity_suaSLAVao } from "@/lib/api/schema.gen";
+import type { identity_addSLAFieldRowIn, identity_dongSLARa, identity_suaSLAVao } from "@/lib/api/schema.gen";
 
 import {
+  FIELD_REQUIRED_ERROR,
   LOI_KHONG_DOI_GI,
   LOI_SO_GIO_LA,
+  LOI_THIEU_LY_DO,
+  NO_DEFAULT_ROW_ERROR,
   PRESIDENT_BELOW_LEADER_ERROR,
   RESOLVE_HOURS_ERROR,
   UNASSIGNED_HOLD_LABEL,
@@ -143,4 +147,79 @@ export function soanSua(goc: identity_dongSLARa, ban: BanNhapGio): KetQuaSoan {
 
   if (Object.keys(than).length === 0) return { ok: false, loi: LOI_KHONG_DOI_GI };
   return { ok: true, than };
+}
+
+/* ---- thêm thời hạn riêng cho một lĩnh vực --------------------------------------------------- */
+
+/** The add row as typed: the two figures the spec row shows, as strings from the boxes. */
+export type AddDraft = {
+  readonly workKind: FieldRowKind;
+  readonly field: string;
+  readonly acknowledgeHours: string;
+  readonly resolveHours: string;
+};
+
+/**
+ * The form as it opens. "8" and "48" are spec 08's prefill of two EDITABLE boxes, kept by the owner
+ * (ADR 0079 lô 2 Q4) — nothing is stored until the officer presses Thêm, and the boxes show the figure
+ * they are about to commit. They are not a commune's SLA: every other figure comes from the commune's
+ * own default row (`composeAdd`).
+ */
+export function newAddDraft(): AddDraft {
+  return { workKind: "phan-anh", field: "", acknowledgeHours: "8", resolveHours: "48" };
+}
+
+/** Changing the kind clears the field: a document-type code is not a petition field (spec 08). */
+export function changeAddKind(draft: AddDraft, workKind: FieldRowKind): AddDraft {
+  return { ...draft, workKind, field: "" };
+}
+
+export type AddComposed = { ok: true; body: identity_addSLAFieldRowIn } | { ok: false; error: string };
+
+/**
+ * Draft + the table → the `POST /api/v1/sla` body.
+ *
+ * THE FOUR FIGURES THE ROW DOES NOT SHOW come from THIS kind's default row: the spec row has two
+ * boxes, the contract requires five figures (six with the hold). A field row with the commune's own
+ * thresholds is what "a field differs only in its deadlines" means; any constant here would be an SLA
+ * written into source (rule 10 forbidden #3). No default row → refused, never guessed. The officer
+ * edits the other figures in place afterwards. Bounds and the ordering rule stay the server's; this
+ * checks only what would otherwise send nonsense (no field, a non-number).
+ */
+export function composeAdd(draft: AddDraft, rows: readonly identity_dongSLARa[]): AddComposed {
+  if (draft.field === "") return { ok: false, error: FIELD_REQUIRED_ERROR };
+
+  const acknowledge = positiveInteger(draft.acknowledgeHours.trim());
+  if (acknowledge === null) return { ok: false, error: LOI_SO_GIO_LA };
+
+  const resolveText = draft.resolveHours.trim();
+  const resolve = positiveInteger(resolveText);
+  if (resolve === null) {
+    const zeroOrBelow = resolveText !== "" && Number(resolveText) <= 0;
+    return { ok: false, error: zeroOrBelow ? RESOLVE_HOURS_ERROR : LOI_SO_GIO_LA };
+  }
+
+  const base = rows.find((r) => r.is_default && r.work_kind === draft.workKind);
+  if (base === undefined) return { ok: false, error: NO_DEFAULT_ROW_ERROR };
+
+  return {
+    ok: true,
+    body: {
+      work_kind: draft.workKind,
+      field: draft.field,
+      acknowledge_hours: acknowledge,
+      resolve_hours: resolve,
+      due_soon_hours: base.due_soon_hours,
+      escalate_leader_hours: base.escalate_leader_hours,
+      escalate_president_hours: base.escalate_president_hours,
+      // `null` = "không báo", the default row's own choice — carried, not replaced by a number.
+      unassigned_hold_hours: base.unassigned_hold_hours,
+    },
+  };
+}
+
+/** The reason of a removal, trimmed; empty is refused here — the server refuses it too (rule 7). */
+export function composeRemoveReason(text: string): { ok: true; reason: string } | { ok: false; error: string } {
+  const reason = text.trim();
+  return reason === "" ? { ok: false, error: LOI_THIEU_LY_DO } : { ok: true, reason };
 }

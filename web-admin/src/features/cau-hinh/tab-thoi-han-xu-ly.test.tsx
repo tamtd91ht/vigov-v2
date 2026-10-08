@@ -9,11 +9,23 @@ import type {
 } from "@/lib/api/schema.gen";
 
 import { pendingMarkerLabel } from "@/components/ui/pending-feature";
+import type { SlaFieldCatalogues, SlaFieldOption } from "@/lib/api/thoi-han-xu-ly";
 
-import { RESOLVE_HOURS_ERROR } from "./nhan-thoi-han";
+import {
+  FIELD_REQUIRED_ERROR,
+  PETITION_FIELDS_NOT_READABLE,
+  RESOLVE_HOURS_ERROR,
+} from "./nhan-thoi-han";
 import { quyetDinhGhiThoiHan, slaFieldLabelReadDecision } from "./quyen-tab";
-import { banTuDong } from "./sua-thoi-han";
-import { ManThoiHanXuLy, type DuLieuTab, type InlineEdit, type ThaoTacThoiHan } from "./tab-thoi-han-xu-ly";
+import { banTuDong, newAddDraft } from "./sua-thoi-han";
+import {
+  ManThoiHanXuLy,
+  type AddForm,
+  type DuLieuTab,
+  type InlineEdit,
+  type InlineRemove,
+  type ThaoTacThoiHan,
+} from "./tab-thoi-han-xu-ly";
 
 /**
  * Tab "Thời hạn xử lý" since ADR 0079 D2 holds the SLA table only; the three calendar tables and their
@@ -22,8 +34,9 @@ import { ManThoiHanXuLy, type DuLieuTab, type InlineEdit, type ThaoTacThoiHan } 
  * WHAT THIS FILE GUARDS — each is a one-line edit away from breaking with nothing else turning red:
  *
  * 1. KHỐI CẢNH BÁO CÓ MẶT KHI XÃ CHƯA KHAI XONG, VÀ NÓI RA HẬU QUẢ — and is ABSENT once configured.
- * 2. "+ Thêm thời hạn cho một lĩnh vực" and "Xoá thời hạn riêng" are only disabled "?" placeholders
- *    (ADR 0068 §14, ADR 0026 stop condition #2) — no clickable button to a route that does not exist.
+ * 2. "+ Thêm thời hạn cho một lĩnh vực" and "Xoá thời hạn riêng" are LIVE (ADR 0079 lô 2 Q4): the add
+ *    row offers only the kind's own ACTIVE list, never `don-thu`; removal asks a reason (rule 7) and
+ *    never appears on the default row.
  * 3. The banner states the unit "giờ làm việc" — the cells say only "{n} giờ" (spec 08), so the banner
  *    is now the one place the unit is said — and never a hardcoded SLA figure (rule 10 forbidden #3).
  * 4. Nothing beyond the prototype (owner 08/10/2026): no re-seed button once rows exist, no footnote.
@@ -33,7 +46,45 @@ import { ManThoiHanXuLy, type DuLieuTab, type InlineEdit, type ThaoTacThoiHan } 
 const KHONG_LAM_GI: ThaoTacThoiHan = {
   gieoThoiHan: () => {},
   suaThoiHan: () => {},
+  toggleAdd: () => {},
+  startRemove: () => {},
 };
+
+const option = (code: string, label: string, active = true): SlaFieldOption => ({ code, label, active });
+
+/** The three lists as a commune would have them: one retired entry in each, to prove it is filtered. */
+const CATALOGUES: SlaFieldCatalogues = {
+  "phan-anh": { ok: true, duLieu: [option("an-ninh-trat-tu", "An ninh, trật tự"), option("cu", "Lĩnh vực cũ", false)] },
+  "van-ban-den": { ok: true, duLieu: [option("cong-van", "Công văn"), option("to-trinh-cu", "Tờ trình cũ", false)] },
+  "nhiem-vu": { ok: true, duLieu: [option("khan", "Khẩn"), option("thuong", "Thường")] },
+};
+
+function addOf(more: Partial<AddForm> = {}): AddForm {
+  return {
+    draft: newAddDraft(),
+    localError: "",
+    serverError: "",
+    busy: false,
+    setDraft: () => {},
+    onSubmit: () => {},
+    onCancel: () => {},
+    ...more,
+  };
+}
+
+function removeOf(row: identity_dongSLARa, more: Partial<InlineRemove> = {}): InlineRemove {
+  return {
+    rowId: row.id,
+    reason: "",
+    localError: "",
+    serverError: "",
+    busy: false,
+    setReason: () => {},
+    onConfirm: () => {},
+    onCancel: () => {},
+    ...more,
+  };
+}
 
 const DONG_SLA: identity_dongSLARa = {
   id: "01J0000000000000000000SLA",
@@ -95,8 +146,10 @@ function ve(
   du: Partial<DuLieuTab> = {},
   them: {
     coQuyenGhi?: boolean;
-    fieldLabels?: ReadonlyMap<string, string>;
+    catalogues?: SlaFieldCatalogues;
     edit?: InlineEdit | null;
+    add?: AddForm | null;
+    remove?: InlineRemove | null;
     seedError?: string;
   } = {},
 ) {
@@ -107,13 +160,26 @@ function ve(
         ...du,
       }}
       coQuyenGhi={them.coQuyenGhi ?? true}
-      fieldLabels={them.fieldLabels}
+      catalogues={them.catalogues}
       thaoTac={KHONG_LAM_GI}
       loiMayChuNgoaiForm={them.seedError ?? ""}
       dangGui={false}
       edit={them.edit ?? null}
+      add={them.add ?? null}
+      remove={them.remove ?? null}
     />,
   );
+}
+
+/** The one `<input>` tag carrying `name="…"`, whatever the attribute order. */
+function inputNamed(html: string, name: string): string {
+  return inputs(html).find((b) => b.includes(`name="${name}"`)) ?? "";
+}
+
+/** The `<option>`s of one select, as `value|text`. */
+function optionsOf(html: string, selectId: string): string[] {
+  const select = html.match(new RegExp(`<select[^>]*id="${selectId}"[^>]*>(.*?)</select>`))?.[1] ?? "";
+  return [...select.matchAll(/<option value="([^"]*)"[^>]*>([^<]*)<\/option>/g)].map((m) => `${m[1]}|${m[2]}`);
 }
 
 /** Every `<input>` tag of the markup. */
@@ -205,15 +271,15 @@ describe("hộp giải thích (spec 08)", () => {
 });
 
 describe("bảng thời hạn xử lý", () => {
-  it("thêm thời hạn cho một lĩnh vực: CHỈ là chỗ giữ vô hiệu có dấu '?' (ADR 0068 §14), không một nút bấm được", () => {
+  it("nút 'Thêm thời hạn cho một lĩnh vực' BẤM ĐƯỢC, không còn dấu '?' (ADR 0079 lô 2 Q4)", () => {
     const html = ve();
 
-    expect(html).toContain(pendingMarkerLabel("Thêm thời hạn cho một lĩnh vực"));
-    const buttons = html.match(/<button[^>]*>(?:(?!<\/button>).)*Thêm thời hạn(?:(?!<\/button>).)*<\/button>/g) ?? [];
-    expect(buttons.length).toBeGreaterThan(0);
-    for (const b of buttons) expect(b).toContain('disabled=""');
+    expect(html).not.toContain(pendingMarkerLabel("Thêm thời hạn cho một lĩnh vực"));
+    const button = html.match(/<button[^>]*>(?:(?!<\/button>).)*Thêm thời hạn cho một lĩnh vực<\/button>/)?.[0] ?? "";
+    expect(button).not.toBe("");
+    expect(button).not.toContain('disabled=""');
+    expect(button).toContain('aria-expanded="false"');
     expect(html).not.toContain("lĩnh vực mới");
-    expect(html).not.toContain("Thêm lĩnh vực");
   });
 
   it("ô số nói '{n} giờ', Xử lý xong in đậm, ba cột báo nói 'sau {n} giờ'", () => {
@@ -322,7 +388,7 @@ describe("sửa tại chỗ (spec 08)", () => {
     expect(html).toMatch(/<button[^>]*>Huỷ<\/button>/);
     // The pencil and the trash of the row being edited are gone.
     expect(html).not.toContain('title="Sửa thời hạn"');
-    expect(html).not.toContain(pendingMarkerLabel("Xoá thời hạn riêng"));
+    expect(html).not.toContain('title="Xoá thời hạn riêng"');
   });
 
   it("không ô nào trỏ tới một ghi chú đã bỏ (aria-describedby treo là id không tồn tại)", () => {
@@ -352,18 +418,132 @@ describe("sửa tại chỗ (spec 08)", () => {
   });
 });
 
-describe("xoá thời hạn riêng: chỗ giữ '?' (ADR 0079 #5)", () => {
-  it("dòng có lĩnh vực: nút thùng rác VÔ HIỆU, có dấu '?'", () => {
+describe("xoá thời hạn riêng (ADR 0079 lô 2 Q4)", () => {
+  it("dòng có lĩnh vực: nút thùng rác BẤM ĐƯỢC, không còn dấu '?'", () => {
     const html = ve();
 
-    expect(html).toContain(pendingMarkerLabel("Xoá thời hạn riêng"));
-    expect(html).toMatch(/<button[^>]*title="Xoá thời hạn riêng"[^>]*disabled=""/);
+    expect(html).not.toContain(pendingMarkerLabel("Xoá thời hạn riêng"));
+    const trash = html.match(/<button[^>]*title="Xoá thời hạn riêng"[^>]*>/)?.[0] ?? "";
+    expect(trash).not.toBe("");
+    expect(trash).not.toContain('disabled=""');
+    expect(trash).toContain('aria-label="Xoá thời hạn riêng Phản ánh của người dân — an-ninh-trat-tu"');
   });
 
   it("dòng mặc định: KHÔNG có nút xoá — mọi lĩnh vực chưa có dòng riêng dựa vào nó", () => {
     const html = ve({ thoiHan: rowsOf(DEFAULT_ROW) });
     expect(html).not.toContain("Xoá thời hạn riêng");
     expect(html).toContain('title="Sửa thời hạn"');
+  });
+
+  it("bước lý do: ô lý do + Xoá + Huỷ trong ô thao tác, thay bút và thùng rác của dòng ấy", () => {
+    const html = ve({ thoiHan: rowsOf(DONG_SLA, DEFAULT_ROW) }, { remove: removeOf(DONG_SLA) });
+
+    expect(inputNamed(html, "reason")).toContain('placeholder="Lý do xoá"');
+    expect(html).toContain('aria-label="Lý do xoá — Phản ánh của người dân — an-ninh-trat-tu"');
+    expect(html).toMatch(/<button[^>]*>Xoá<\/button>/);
+    expect(html).toMatch(/<button[^>]*>Huỷ<\/button>/);
+    expect(html).not.toContain('title="Xoá thời hạn riêng"');
+    // The other row keeps its pencil; the figures stay text, not boxes.
+    expect(html).toContain('aria-label="Sửa thời hạn Phản ánh của người dân — Mặc định cho mọi lĩnh vực"');
+    expect(inputs(html)).toHaveLength(1);
+  });
+
+  it("thiếu lý do và câu máy chủ (409 dòng mặc định) hiện ngay dưới dòng, tách hai câu", () => {
+    const server = "Không xoá được thời hạn mặc định — mọi lĩnh vực chưa có quy định riêng đều dựa vào nó.";
+    const html = ve({}, { remove: removeOf(DONG_SLA, { localError: "Hãy nêu lý do xoá.", serverError: server }) });
+
+    expect(html).toContain('<p role="alert" class="text-danger m-0 text-[12.5px]">Hãy nêu lý do xoá.</p>');
+    expect(html).toContain(`<p role="alert" class="text-danger m-0 text-[12.5px]">${server}</p>`);
+  });
+
+  it("một `remove` trỏ vào dòng mặc định vẫn không vẽ bước xoá", () => {
+    const html = ve({ thoiHan: rowsOf(DEFAULT_ROW) }, { remove: removeOf(DEFAULT_ROW) });
+    expect(html).not.toContain('name="reason"');
+  });
+
+  it("đang xoá: nút báo bận, ô lý do khoá", () => {
+    const html = ve({}, { remove: removeOf(DONG_SLA, { busy: true, reason: "Trùng" }) });
+    expect(html).toContain("Đang xoá…");
+    expect(inputNamed(html, "reason")).toContain('disabled=""');
+  });
+});
+
+describe("hàng thêm thời hạn cho một lĩnh vực (spec 08)", () => {
+  it("hàng xám ConfigFormRow, lưới 14rem_1fr_8rem_8rem_auto từ sm; nút Thêm báo đang mở", () => {
+    const html = ve({}, { add: addOf(), catalogues: CATALOGUES });
+
+    expect(html).toMatch(/<form[^>]*class="[^"]*bg-background[^"]*sm:grid-cols-\[14rem_1fr_8rem_8rem_auto\]/);
+    expect(html).toContain('aria-expanded="true"');
+    expect(html).toContain('aria-controls="sla-add-row"');
+    expect(html).toContain('id="sla-add-row"');
+  });
+
+  it("Loại việc: đúng ba loại, KHÔNG có Đơn thư (ADR 0079 lô 3)", () => {
+    expect(optionsOf(ve({}, { add: addOf() }), "sla-add-kind")).toEqual([
+      "phan-anh|Phản ánh của người dân",
+      "van-ban-den|Văn bản đến",
+      "nhiem-vu|Nhiệm vụ",
+    ]);
+  });
+
+  it("Lĩnh vực: '— Chọn lĩnh vực —' rồi các mục CÒN DÙNG của đúng danh mục loại việc", () => {
+    const petition = optionsOf(ve({}, { add: addOf(), catalogues: CATALOGUES }), "sla-add-field");
+    expect(petition).toEqual(["|— Chọn lĩnh vực —", "an-ninh-trat-tu|An ninh, trật tự"]);
+
+    const document = optionsOf(
+      ve({}, { add: addOf({ draft: { ...newAddDraft(), workKind: "van-ban-den" } }), catalogues: CATALOGUES }),
+      "sla-add-field",
+    );
+    expect(document).toEqual(["|— Chọn lĩnh vực —", "cong-van|Công văn"]);
+
+    const task = optionsOf(
+      ve({}, { add: addOf({ draft: { ...newAddDraft(), workKind: "nhiem-vu" } }), catalogues: CATALOGUES }),
+      "sla-add-field",
+    );
+    // Scale order kept as the server gives it.
+    expect(task).toEqual(["|— Chọn lĩnh vực —", "khan|Khẩn", "thuong|Thường"]);
+  });
+
+  it("Tiếp nhận 8, Xử lý xong 48 khi mở; nút Thêm / Huỷ", () => {
+    const html = ve({}, { add: addOf() });
+
+    expect(inputNamed(html, "acknowledge_hours")).toContain('value="8"');
+    const resolve = inputNamed(html, "resolve_hours");
+    expect(resolve).toContain('value="48"');
+    expect(resolve).toContain('min="1"');
+    expect(html).toContain("Tiếp nhận (giờ)");
+    expect(html).toContain("Xử lý xong (giờ)");
+    expect(html).toMatch(/<button[^>]*type="submit"[^>]*>Thêm<\/button>/);
+  });
+
+  it("lỗi tại chỗ và câu máy chủ hiện TRONG hàng thêm, tách hai câu", () => {
+    const server = "Lĩnh vực này đã có thời hạn riêng — hãy sửa dòng sẵn có.";
+    const html = ve({}, { add: addOf({ localError: FIELD_REQUIRED_ERROR, serverError: server }) });
+
+    expect(html).toContain(`<p role="alert" class="text-danger col-span-full m-0 text-[12.5px]">${FIELD_REQUIRED_ERROR}</p>`);
+    expect(html).toContain(`<p role="alert" class="text-danger col-span-full m-0 text-[12.5px]">${server}</p>`);
+    expect(html).toMatch(/<select[^>]*id="sla-add-field"[^>]*aria-invalid="true"/);
+  });
+
+  it("danh mục không đọc được (thiếu `admin.lookup`) → nói lý do, không để một ô chọn rỗng câm", () => {
+    const html = ve(
+      {},
+      { add: addOf(), catalogues: { ...CATALOGUES, "phan-anh": { ok: false, thongBao: PETITION_FIELDS_NOT_READABLE } } },
+    );
+    expect(html).toContain(PETITION_FIELDS_NOT_READABLE);
+    expect(optionsOf(html, "sla-add-field")).toEqual(["|— Chọn lĩnh vực —"]);
+  });
+
+  it("CA BỊ TỪ CHỐI: thiếu `admin.sla` thì một `add` lọt vào vẫn không vẽ hàng thêm", () => {
+    const html = ve({}, { coQuyenGhi: false, add: addOf() });
+    expect(html).not.toContain("<form");
+    expect(html).not.toContain("Lĩnh vực áp dụng");
+  });
+
+  it("đang gửi: nút báo 'Đang thêm…', mọi ô khoá", () => {
+    const html = ve({}, { add: addOf({ busy: true }) });
+    expect(html).toContain("Đang thêm…");
+    for (const b of inputs(html)) expect(b).toContain('disabled=""');
   });
 });
 
@@ -404,7 +584,7 @@ describe("nút ghi đi theo `admin.sla`", () => {
 
 describe("cột Lĩnh vực (SLA-03)", () => {
   it("có nhãn của xã → hiện nhãn, cả trong tên nút Sửa; không còn nhắc câu hỏi mở #4", () => {
-    const html = ve({}, { fieldLabels: new Map([["an-ninh-trat-tu", "An ninh, trật tự"]]) });
+    const html = ve({}, { catalogues: CATALOGUES });
     expect(html).toContain("An ninh, trật tự");
     expect(html).not.toContain(">an-ninh-trat-tu<");
     expect(html).toContain('aria-label="Sửa thời hạn Phản ánh của người dân — An ninh, trật tự"');
@@ -413,6 +593,31 @@ describe("cột Lĩnh vực (SLA-03)", () => {
 
   it("không đọc được nhãn → hiện nguyên mã", () => {
     expect(ve()).toContain(">an-ninh-trat-tu<");
+  });
+
+  it("dòng văn bản đến và nhiệm vụ hiện NHÃN loại văn bản / mức ưu tiên, không mã thô", () => {
+    const html = ve(
+      {
+        thoiHan: rowsOf(
+          { ...DONG_SLA, id: "01J00000000000000000000VB", work_kind: "van-ban-den", field: "cong-van" },
+          { ...DONG_SLA, id: "01J00000000000000000000NV", work_kind: "nhiem-vu", field: "khan" },
+        ),
+      },
+      { catalogues: CATALOGUES },
+    );
+    expect(html).toContain("<td>Công văn</td>");
+    expect(html).toContain("<td>Khẩn</td>");
+    expect(html).not.toContain(">cong-van<");
+    expect(html).not.toContain(">khan<");
+  });
+
+  it("nhãn tra theo ĐÚNG loại việc của dòng: một mã trùng ở danh mục khác không mượn nhãn", () => {
+    const html = ve(
+      { thoiHan: rowsOf({ ...DONG_SLA, work_kind: "nhiem-vu", field: "an-ninh-trat-tu" }) },
+      { catalogues: CATALOGUES },
+    );
+    expect(html).toContain(">an-ninh-trat-tu<");
+    expect(html).not.toContain("An ninh, trật tự");
   });
 
   it("slaFieldLabelReadDecision: chỉ admin.lookup mới đọc danh mục lĩnh vực; admin.sla thôi thì không", () => {

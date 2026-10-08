@@ -13,8 +13,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/error-state";
 import { controlClass } from "@/components/ui/field";
-import { PendingButton, PendingFeature } from "@/components/ui/pending-feature";
-import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
+import { BUSY_DELETING, BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 
 import { usePhien } from "@/features/phien/phien-hien-tai";
 import type { KetQua } from "@/lib/api/goi";
@@ -23,26 +22,50 @@ import type {
   identity_dongSLARa,
 } from "@/lib/api/schema.gen";
 import {
+  FIELD_ROW_KINDS,
   UNASSIGNED_HOLD_KEY,
+  addSlaFieldRow,
   gieoThoiHanMacDinh,
   layThoiHanXuLy,
-  readCitizenReportFieldLabels,
+  readDocumentTypeOptions,
+  readPetitionFieldOptions,
+  readTaskPriorityOptions,
+  removeSlaFieldRow,
   suaThoiHanXuLy,
+  type FieldRowKind,
+  type SlaFieldCatalogues,
 } from "@/lib/api/thoi-han-xu-ly";
 import { cn } from "@/lib/cn";
 
 import { khoiCanhBao, tinhTrangBang } from "./chua-cau-hinh";
 import {
+  ConfigField,
+  ConfigFormRow,
   ConfigLoading,
   ConfigTable,
   RowActions,
   SMALL_BUTTON_CLASS,
+  formInputCls,
+  formSelectCls,
 } from "./config-ui";
-import { PHAN_CHUA_DUNG } from "./nhan-cau-hinh";
 import {
+  ADDED_SLA,
+  ADD_ACKNOWLEDGE_LABEL,
+  ADD_FIELD_LABEL,
+  ADD_FIELD_PLACEHOLDER,
+  ADD_KIND_LABEL,
+  ADD_RESOLVE_LABEL,
+  ADD_SLA_BUTTON,
+  ADD_SUBMIT,
+  BUSY_ADDING,
   DA_LUU_THOI_HAN,
   NUT_HUY,
   NUT_LUU,
+  NUT_XOA,
+  O_LY_DO_XOA,
+  PETITION_FIELDS_NOT_READABLE,
+  REMOVED_SLA,
+  REMOVE_SLA_TITLE,
   SLA_BANNER_APPLIES,
   SLA_BANNER_DUE_SOON_COLUMN,
   SLA_BANNER_DUE_SOON_LEAD,
@@ -63,7 +86,12 @@ import {
   COT_GIO,
   NHAN_COT,
   banTuDong,
+  changeAddKind,
+  composeAdd,
+  composeRemoveReason,
+  newAddDraft,
   soanSua,
+  type AddDraft,
   type BanNhapGio,
   type KhoaGio,
 } from "./sua-thoi-han";
@@ -88,24 +116,16 @@ import { KhoiChuaKhai } from "./working-calendar-tab";
  * không tồn tại; ở tab này nó chỉ nói về bảng thời hạn, ở tab Lịch làm việc thì về lịch tuần.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  *
- * "+ Thêm thời hạn cho một lĩnh vực" AND "Xoá thời hạn riêng" ARE DISABLED "?" PLACEHOLDERS (ADR 0068
- * §14, ADR 0079 #5): no route adds a field row — a field code from the client must be matched against
- * the tier-1 codes in `platform`, and that read has no ADR (ADR 0026 stop condition #2) — and no route
- * deletes one. Each stands where the prototype draws it.
+ * "+ Thêm thời hạn cho một lĩnh vực" AND "Xoá thời hạn riêng" ARE LIVE (ADR 0079 lô 2 Q4): `POST
+ * /api/v1/sla` and `DELETE /api/v1/sla/{id}`. The server checks the field code against the list's
+ * owner (`service-identity/internal/app/sla_field_rule.go`); the select here only offers that list.
+ * The add row toggles above the table, never a modal (spec 02); removal is a reason typed in the row.
  *
  * ẨN NÚT LÀ TIỆN DỤNG, KHÔNG PHẢI BIỆN PHÁP: các tuyến ghi khai `RequirePermission("admin.sla")` và
  * kiểm trên TỪNG yêu cầu (luật 5, cấm #1).
  *
  * KHÔNG MỘT PHÉP CỘNG GIỜ LÀM VIỆC NÀO Ở ĐÂY. `identity` sở hữu bảng và sở hữu phép cộng (ADR 0007).
  */
-
-/** Looked up by name so a renamed entry fails a test rather than drawing `undefined`. */
-const ADD_FIELD_SLA = PHAN_CHUA_DUNG.find(
-  (p) => p.ten === "Thêm thời hạn cho một lĩnh vực",
-)!;
-const DELETE_FIELD_SLA = PHAN_CHUA_DUNG.find(
-  (p) => p.ten === "Xoá thời hạn riêng",
-)!;
 
 /** Spec 08's pencil title — also the start of each pencil's accessible name. */
 const EDIT_TITLE = "Sửa thời hạn";
@@ -138,11 +158,57 @@ function readNumberBox(el: HTMLInputElement): string {
   return el.validity.badInput ? BAD_NUMBER : el.value;
 }
 
-/** Hai thao tác mà một dòng hoặc khối cảnh báo có thể yêu cầu. */
+/** Các thao tác mà một dòng, nút Thêm hoặc khối cảnh báo có thể yêu cầu. */
 export type ThaoTacThoiHan = {
   readonly gieoThoiHan: () => void;
   readonly suaThoiHan: (d: identity_dongSLARa) => void;
+  /** Opens the add row, or closes it when open (spec 08: the button toggles). */
+  readonly toggleAdd: () => void;
+  /** Opens the reason step of one non-default row. */
+  readonly startRemove: (d: identity_dongSLARa) => void;
 };
+
+/** No field list read yet — the select then offers only its placeholder. */
+export const NO_CATALOGUES: SlaFieldCatalogues = {
+  "phan-anh": null,
+  "van-ban-den": null,
+  "nhiem-vu": null,
+};
+
+/** The add row above the table. Two error slots, as for `InlineEdit`. */
+export type AddForm = {
+  readonly draft: AddDraft;
+  readonly localError: string;
+  readonly serverError: string;
+  readonly busy: boolean;
+  readonly setDraft: (d: AddDraft) => void;
+  readonly onSubmit: () => void;
+  readonly onCancel: () => void;
+};
+
+/** The row whose removal reason is being typed (rule 7: the server keeps the row and requires why). */
+export type InlineRemove = {
+  readonly rowId: string;
+  readonly reason: string;
+  readonly localError: string;
+  readonly serverError: string;
+  readonly busy: boolean;
+  readonly setReason: (reason: string) => void;
+  readonly onConfirm: () => void;
+  readonly onCancel: () => void;
+};
+
+/**
+ * Code → label for ONE row's kind. Per kind, never merged: a document-type code and a priority code may
+ * coincide, and the wrong label on a commitment row is worse than the raw code. A kind with no list
+ * (`don-thu`) or a failed read gives an empty map — `nhanLinhVuc` then shows the code.
+ */
+function labelsFor(catalogues: SlaFieldCatalogues, workKind: string): ReadonlyMap<string, string> {
+  const kq = (FIELD_ROW_KINDS as readonly string[]).includes(workKind)
+    ? catalogues[workKind as FieldRowKind]
+    : null;
+  return kq !== null && kq.ok ? new Map(kq.duLieu.map((o) => [o.code, o.label])) : new Map();
+}
 
 /** Lượt đọc của tab. `null` là CHƯA đọc xong — khác hẳn "đọc xong và rỗng". */
 export type DuLieuTab = {
@@ -188,26 +254,51 @@ export function TabThoiHanXuLy() {
   const coQuyenGhi = phien !== null && quyetDinhGhiThoiHan(phien).hien;
 
   /**
-   * Field code → the commune's label, for the "Lĩnh vực" column only (SLA-03). Read ONCE per screen,
-   * and only by an account holding `admin.lookup` — the key that route declares; this tab is
-   * `admin.sla`, so many accounts here lack it, and for them the column keeps the raw code rather
-   * than sending a request bound to answer 403. Not re-read after a write: no SLA write changes it.
+   * The three field lists — labels for the "Lĩnh vực" column (SLA-03) and the options of the add row.
+   * Read ONCE per screen; not re-read after a write: no SLA write changes them.
+   *
+   * Document types and task priorities are `any-authenticated`. The petition fields declare
+   * `admin.lookup`, which this tab (`admin.sla`) does not imply: an account without it is not sent a
+   * request bound to answer 403 — its column keeps the raw code and the add row says why the list is
+   * empty. "Session not read yet" reads nothing and says nothing (three states, not two).
    */
+  const sessionKnown = phien !== null;
   const canReadFieldLabels =
     phien !== null && slaFieldLabelReadDecision(phien).hien;
-  const [fieldLabels, setFieldLabels] = useState<ReadonlyMap<string, string>>(
-    () => new Map(),
-  );
+  const [catalogues, setCatalogues] = useState<SlaFieldCatalogues>(NO_CATALOGUES);
+  useEffect(() => {
+    let bo = false;
+    void Promise.all([readDocumentTypeOptions(), readTaskPriorityOptions()]).then(([documents, tasks]) => {
+      if (!bo) setCatalogues((c) => ({ ...c, "van-ban-den": documents, "nhiem-vu": tasks }));
+    });
+    return () => {
+      bo = true;
+    };
+  }, []);
   useEffect(() => {
     if (!canReadFieldLabels) return;
     let bo = false;
-    readCitizenReportFieldLabels().then((m) => {
-      if (!bo) setFieldLabels(m);
+    void readPetitionFieldOptions().then((kq) => {
+      if (!bo) setCatalogues((c) => ({ ...c, "phan-anh": kq }));
     });
     return () => {
       bo = true;
     };
   }, [canReadFieldLabels]);
+  // Derived, not stored: the session decides it, and a second copy in state could disagree with it.
+  const shownCatalogues: SlaFieldCatalogues =
+    sessionKnown && !canReadFieldLabels
+      ? { ...catalogues, "phan-anh": { ok: false, thongBao: PETITION_FIELDS_NOT_READABLE } }
+      : catalogues;
+
+  /** The open add row and the key it holds for every retry of this one add (`Idempotency-Key`). */
+  const [adding, setAdding] = useState<{ draft: AddDraft; key: string } | null>(null);
+  const [addLocalError, setAddLocalError] = useState("");
+  const [addServerError, setAddServerError] = useState("");
+
+  const [removing, setRemoving] = useState<{ row: identity_dongSLARa; reason: string } | null>(null);
+  const [removeLocalError, setRemoveLocalError] = useState("");
+  const [removeServerError, setRemoveServerError] = useState("");
 
   useEffect(() => {
     let bo = false;
@@ -219,12 +310,24 @@ export function TabThoiHanXuLy() {
     };
   }, [lanDoc]);
 
-  const startEdit = useCallback((d: identity_dongSLARa) => {
-    setEditing(d);
-    setDraft(banTuDong(d));
-    setLocalError("");
-    setServerError("");
+  const cancelRemove = useCallback(() => {
+    setRemoving(null);
+    setRemoveLocalError("");
+    setRemoveServerError("");
   }, []);
+
+  const startEdit = useCallback(
+    (d: identity_dongSLARa) => {
+      // One row in one mode at a time: a reason step left open on another row would be a second
+      // pending act the officer no longer sees.
+      cancelRemove();
+      setEditing(d);
+      setDraft(banTuDong(d));
+      setLocalError("");
+      setServerError("");
+    },
+    [cancelRemove],
+  );
 
   const cancelEdit = useCallback(() => {
     setEditing(null);
@@ -272,14 +375,107 @@ export function TabThoiHanXuLy() {
     });
   }, [busy, draft, editing]);
 
+  const toggleAdd = useCallback(() => {
+    setAddLocalError("");
+    setAddServerError("");
+    // A fresh key per opening: one opening is one intended row, and every retry of it replays.
+    setAdding((open) =>
+      open !== null ? null : { draft: newAddDraft(), key: crypto.randomUUID() },
+    );
+  }, []);
+
+  const submitAdd = useCallback(() => {
+    if (adding === null || busy) return;
+    setAddServerError("");
+    const rows = thoiHan !== null && thoiHan.ok ? thoiHan.duLieu.items : [];
+    const composed = composeAdd(adding.draft, rows);
+    if (!composed.ok) {
+      setAddLocalError(composed.error);
+      return;
+    }
+    setAddLocalError("");
+    setBusy(true);
+    void addSlaFieldRow(composed.body, adding.key).then((kq) => {
+      setBusy(false);
+      if (!kq.ok) {
+        setAddServerError(kq.thongBao);
+        return;
+      }
+      setAdding(null);
+      toast.success(ADDED_SLA);
+      datLanDoc((n) => n + 1);
+    });
+  }, [adding, busy, thoiHan]);
+
+  const startRemove = useCallback(
+    (d: identity_dongSLARa) => {
+      cancelEdit();
+      setRemoving({ row: d, reason: "" });
+      setRemoveLocalError("");
+      setRemoveServerError("");
+    },
+    [cancelEdit],
+  );
+
+  const confirmRemove = useCallback(() => {
+    if (removing === null || busy) return;
+    setRemoveServerError("");
+    const composed = composeRemoveReason(removing.reason);
+    if (!composed.ok) {
+      setRemoveLocalError(composed.error);
+      return;
+    }
+    setRemoveLocalError("");
+    setBusy(true);
+    void removeSlaFieldRow(removing.row.id, composed.reason).then((kq) => {
+      setBusy(false);
+      if (!kq.ok) {
+        // 409 `default_sla_rule` included: the server's sentence is spec 08's, verbatim.
+        setRemoveServerError(kq.thongBao);
+        return;
+      }
+      setRemoving(null);
+      toast.success(REMOVED_SLA);
+      datLanDoc((n) => n + 1);
+    });
+  }, [busy, removing]);
+
   return (
     <ManThoiHanXuLy
       du={{ thoiHan }}
       coQuyenGhi={coQuyenGhi}
-      fieldLabels={fieldLabels}
-      thaoTac={{ gieoThoiHan: seed, suaThoiHan: startEdit }}
+      catalogues={shownCatalogues}
+      thaoTac={{ gieoThoiHan: seed, suaThoiHan: startEdit, toggleAdd, startRemove }}
       loiMayChuNgoaiForm={seedError}
       dangGui={busy}
+      add={
+        adding === null
+          ? null
+          : {
+              draft: adding.draft,
+              localError: addLocalError,
+              serverError: addServerError,
+              busy,
+              setDraft: (d) => setAdding((open) => (open === null ? null : { ...open, draft: d })),
+              onSubmit: submitAdd,
+              onCancel: toggleAdd,
+            }
+      }
+      remove={
+        removing === null
+          ? null
+          : {
+              rowId: removing.row.id,
+              reason: removing.reason,
+              localError: removeLocalError,
+              serverError: removeServerError,
+              busy,
+              setReason: (reason) =>
+                setRemoving((open) => (open === null ? null : { ...open, reason })),
+              onConfirm: confirmRemove,
+              onCancel: cancelRemove,
+            }
+      }
       edit={
         editing === null
           ? null
@@ -310,22 +506,28 @@ export function TabThoiHanXuLy() {
 export function ManThoiHanXuLy({
   du,
   coQuyenGhi,
-  fieldLabels = new Map(),
+  catalogues = NO_CATALOGUES,
   thaoTac,
   loiMayChuNgoaiForm,
   dangGui,
   edit = null,
+  add = null,
+  remove = null,
 }: {
   du: DuLieuTab;
   coQuyenGhi: boolean;
-  /** Field code → label for the "Lĩnh vực" column; empty map = show raw codes. Omitted = empty. */
-  fieldLabels?: ReadonlyMap<string, string>;
+  /** The three field lists: labels of the "Lĩnh vực" column, options of the add row. Omitted = none. */
+  catalogues?: SlaFieldCatalogues;
   thaoTac: ThaoTacThoiHan;
   /** Lỗi của nút gieo — the one action that opens no row. */
   loiMayChuNgoaiForm: string;
   dangGui: boolean;
   /** The row being edited in place, or `null`. */
   edit?: InlineEdit | null;
+  /** The open add row, or `null`. */
+  add?: AddForm | null;
+  /** The row whose removal reason is being typed, or `null`. */
+  remove?: InlineRemove | null;
 }) {
   // Only the SLA table here; the weekly-hours half of the block lives on "Lịch làm việc" (ADR 0079 D2).
   const khoi = khoiCanhBao(tinhTrangBang(du.thoiHan), "chuaBiet");
@@ -368,17 +570,24 @@ export function ManThoiHanXuLy({
         // NO RE-SEED BUTTON once the table has rows (owner, 08/10/2026: "Bỏ hết, đúng prototype"). The
         // only seed button is the empty table's, inside `KhoiChuaKhai`.
         <div className="flex justify-end">
-          {/* `SlaTable.tsx:80-87`, disabled "?" (ADR 0068 §14). The class reaches the inner button. */}
-          <PendingButton
-            info={ADD_FIELD_SLA}
+          {/* `SlaTable.tsx:80-87`: toggles the add row. */}
+          <Button
+            type="button"
             variant="primary"
             size="sm"
-            className="[&>button]:min-h-0"
-            icon={
-              <Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />
-            }
-          />
+            className={SMALL_BUTTON_CLASS}
+            aria-expanded={add !== null}
+            aria-controls={add !== null ? ADD_FORM_ID : undefined}
+            onClick={thaoTac.toggleAdd}
+          >
+            <Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />
+            {ADD_SLA_BUTTON}
+          </Button>
         </div>
+      )}
+
+      {coQuyenGhi && add !== null && (
+        <AddRow add={add} catalogues={catalogues} />
       )}
 
       {loiMayChuNgoaiForm !== "" && (
@@ -416,10 +625,11 @@ export function ManThoiHanXuLy({
         <SlaTable
           rows={rows}
           coQuyenGhi={coQuyenGhi}
-          fieldLabels={fieldLabels}
+          catalogues={catalogues}
           thaoTac={thaoTac}
           dangGui={dangGui}
           edit={edit}
+          remove={remove}
         />
       )}
     </section>
@@ -454,17 +664,19 @@ function FigureText({
 function SlaTable({
   rows,
   coQuyenGhi,
-  fieldLabels,
+  catalogues,
   thaoTac,
   dangGui,
   edit,
+  remove,
 }: {
   rows: readonly identity_dongSLARa[];
   coQuyenGhi: boolean;
-  fieldLabels: ReadonlyMap<string, string>;
+  catalogues: SlaFieldCatalogues;
   thaoTac: ThaoTacThoiHan;
   dangGui: boolean;
   edit: InlineEdit | null;
+  remove: InlineRemove | null;
 }) {
   const columnCount = 2 + COT_GIO.length + (coQuyenGhi ? 1 : 0);
 
@@ -498,9 +710,24 @@ function SlaTable({
         <tbody>
           {rows.map((d) => {
             const kindText = nhanLoaiViec(d.work_kind);
-            const fieldText = nhanLinhVuc(d.field, d.is_default, fieldLabels);
+            const fieldText = nhanLinhVuc(
+              d.field,
+              d.is_default,
+              labelsFor(catalogues, d.work_kind),
+            );
             const editing =
               coQuyenGhi && edit !== null && edit.rowId === d.id ? edit : null;
+            // Never on the default row, even if a stale state names it: the server refuses it anyway.
+            const removing =
+              coQuyenGhi && editing === null && !d.is_default && remove !== null && remove.rowId === d.id
+                ? remove
+                : null;
+            const rowErrors =
+              editing !== null
+                ? [editing.localError, editing.serverError]
+                : removing !== null
+                  ? [removing.localError, removing.serverError]
+                  : [];
             return (
               <Fragment key={d.id}>
                 <tr>
@@ -551,6 +778,11 @@ function SlaTable({
                               {NUT_HUY}
                             </Button>
                           </>
+                        ) : removing !== null ? (
+                          <RemoveStep
+                            remove={removing}
+                            rowName={`${kindText} — ${fieldText}`}
+                          />
                         ) : (
                           <>
                             <Button
@@ -569,28 +801,24 @@ function SlaTable({
                               />
                             </Button>
                             {/* Hidden on the default row (spec 08): every field without its own row
-                              falls back to it. Disabled "?" elsewhere — no delete route yet. */}
+                              falls back to it. */}
                             {!d.is_default && (
-                              <PendingFeature info={DELETE_FIELD_SLA}>
-                                <Button
-                                  type="button"
-                                  variant="secondary"
-                                  size="sm"
-                                  className={cn(
-                                    SMALL_BUTTON_CLASS,
-                                    "text-danger",
-                                  )}
-                                  title={DELETE_FIELD_SLA.ten}
-                                  aria-label={`${DELETE_FIELD_SLA.ten} ${kindText} — ${fieldText}`}
-                                  disabled
-                                >
-                                  <Trash2
-                                    aria-hidden="true"
-                                    focusable="false"
-                                    className="size-3.5"
-                                  />
-                                </Button>
-                              </PendingFeature>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                className="text-danger"
+                                title={REMOVE_SLA_TITLE}
+                                aria-label={`${REMOVE_SLA_TITLE} ${kindText} — ${fieldText}`}
+                                disabled={dangGui}
+                                onClick={() => thaoTac.startRemove(d)}
+                              >
+                                <Trash2
+                                  aria-hidden="true"
+                                  focusable="false"
+                                  className="size-3.5"
+                                />
+                              </Button>
                             )}
                           </>
                         )}
@@ -598,31 +826,25 @@ function SlaTable({
                     </td>
                   )}
                 </tr>
-                {editing !== null &&
-                  (editing.localError !== "" || editing.serverError !== "") && (
-                    <tr>
-                      <td colSpan={columnCount}>
-                        <div className="space-y-1 whitespace-normal">
-                          {editing.localError !== "" && (
+                {rowErrors.some((e) => e !== "") && (
+                  <tr>
+                    <td colSpan={columnCount}>
+                      <div className="space-y-1 whitespace-normal">
+                        {rowErrors
+                          .filter((e) => e !== "")
+                          .map((e, i) => (
                             <p
+                              key={i}
                               role="alert"
                               className="text-danger m-0 text-[12.5px]"
                             >
-                              {editing.localError}
+                              {e}
                             </p>
-                          )}
-                          {editing.serverError !== "" && (
-                            <p
-                              role="alert"
-                              className="text-danger m-0 text-[12.5px]"
-                            >
-                              {editing.serverError}
-                            </p>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )}
+                          ))}
+                      </div>
+                    </td>
+                  </tr>
+                )}
               </Fragment>
             );
           })}
@@ -660,5 +882,180 @@ function HoursInput({ column, edit }: { column: KhoaGio; edit: InlineEdit }) {
       }
       onKeyDown={onKeyDown}
     />
+  );
+}
+
+/** The id of the add row — the add button's `aria-controls`. */
+const ADD_FORM_ID = "sla-add-row";
+
+/**
+ * The reason step of one row's removal, inside the action cell: compact (spec 08 draws only a trash
+ * button), but never a one-click delete — the server keeps the row and records why (rule 7). Enter
+ * confirms, Esc cancels. Refusals show in the row below, like the edit's.
+ */
+function RemoveStep({ remove, rowName }: { remove: InlineRemove; rowName: string }) {
+  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      remove.onConfirm();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      remove.onCancel();
+    }
+  };
+  return (
+    <>
+      <input
+        name="reason"
+        autoFocus
+        aria-label={`${O_LY_DO_XOA} — ${rowName}`}
+        aria-invalid={remove.localError !== ""}
+        placeholder={O_LY_DO_XOA}
+        className={cn(controlClass, "h-8 w-44 text-[12.5px]")}
+        value={remove.reason}
+        disabled={remove.busy}
+        onChange={(e) => remove.setReason(e.currentTarget.value)}
+        onKeyDown={onKeyDown}
+      />
+      <Button
+        type="button"
+        variant="danger"
+        size="sm"
+        disabled={remove.busy}
+        aria-busy={remove.busy}
+        onClick={remove.onConfirm}
+      >
+        <BusyLabel busy={remove.busy} label={NUT_XOA} busyText={BUSY_DELETING} />
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={remove.busy}
+        onClick={remove.onCancel}
+      >
+        {NUT_HUY}
+      </Button>
+    </>
+  );
+}
+
+/**
+ * The grey add row (spec 08, `SlaTable.tsx:294-409`). Only the two figures the spec shows are typed;
+ * the other four come from the kind's default row (`composeAdd`). The field select offers the ACTIVE
+ * entries of the kind's own list — the server refuses a switched-off code (`sla_field_unknown`).
+ */
+function AddRow({ add, catalogues }: { add: AddForm; catalogues: SlaFieldCatalogues }) {
+  const list = catalogues[add.draft.workKind];
+  const options = list !== null && list.ok ? list.duLieu.filter((o) => o.active) : [];
+  const listError = list !== null && !list.ok ? list.thongBao : "";
+  const fieldMissing = add.localError !== "" && add.draft.field === "";
+
+  return (
+    <ConfigFormRow
+      id={ADD_FORM_ID}
+      columns="sm:grid-cols-[14rem_1fr_8rem_8rem_auto]"
+      aria-label={ADD_SLA_BUTTON}
+      onSubmit={(e) => {
+        e.preventDefault();
+        add.onSubmit();
+      }}
+      onKeyDown={(e) => {
+        // Esc closes like `Huỷ` — except while sending, so a send in flight stays in view.
+        if (e.key === "Escape" && !add.busy) add.onCancel();
+      }}
+    >
+      <ConfigField label={ADD_KIND_LABEL} htmlFor="sla-add-kind">
+        <select
+          id="sla-add-kind"
+          name="work_kind"
+          autoFocus
+          className={formSelectCls}
+          value={add.draft.workKind}
+          disabled={add.busy}
+          onChange={(e) => {
+            const kind = FIELD_ROW_KINDS.find((k) => k === e.currentTarget.value);
+            if (kind !== undefined) add.setDraft(changeAddKind(add.draft, kind));
+          }}
+        >
+          {FIELD_ROW_KINDS.map((k) => (
+            <option key={k} value={k}>
+              {nhanLoaiViec(k)}
+            </option>
+          ))}
+        </select>
+      </ConfigField>
+
+      <ConfigField label={ADD_FIELD_LABEL} htmlFor="sla-add-field">
+        <select
+          id="sla-add-field"
+          name="field"
+          className={formSelectCls}
+          value={add.draft.field}
+          disabled={add.busy}
+          aria-invalid={fieldMissing}
+          onChange={(e) => add.setDraft({ ...add.draft, field: e.currentTarget.value })}
+        >
+          <option value="">{ADD_FIELD_PLACEHOLDER}</option>
+          {options.map((o) => (
+            <option key={o.code} value={o.code}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </ConfigField>
+
+      <ConfigField label={ADD_ACKNOWLEDGE_LABEL} htmlFor="sla-add-acknowledge">
+        <input
+          id="sla-add-acknowledge"
+          name="acknowledge_hours"
+          type="number"
+          min={1}
+          step={1}
+          className={formInputCls}
+          value={add.draft.acknowledgeHours}
+          disabled={add.busy}
+          onChange={(e) => add.setDraft({ ...add.draft, acknowledgeHours: readNumberBox(e.currentTarget) })}
+        />
+      </ConfigField>
+
+      <ConfigField label={ADD_RESOLVE_LABEL} htmlFor="sla-add-resolve">
+        <input
+          id="sla-add-resolve"
+          name="resolve_hours"
+          type="number"
+          min={1}
+          step={1}
+          className={formInputCls}
+          value={add.draft.resolveHours}
+          disabled={add.busy}
+          onChange={(e) => add.setDraft({ ...add.draft, resolveHours: readNumberBox(e.currentTarget) })}
+        />
+      </ConfigField>
+
+      <div className="flex gap-2">
+        <Button type="submit" variant="primary" disabled={add.busy} aria-busy={add.busy}>
+          <BusyLabel busy={add.busy} label={ADD_SUBMIT} busyText={BUSY_ADDING} />
+        </Button>
+        <Button type="button" variant="outline" disabled={add.busy} onClick={add.onCancel}>
+          {NUT_HUY}
+        </Button>
+      </div>
+
+      {/* The list's own read failure (or why it cannot be read), then the two error slots apart. */}
+      {listError !== "" && (
+        <p className="text-ink-muted col-span-full m-0 text-[12.5px]">{listError}</p>
+      )}
+      {add.localError !== "" && (
+        <p role="alert" className="text-danger col-span-full m-0 text-[12.5px]">
+          {add.localError}
+        </p>
+      )}
+      {add.serverError !== "" && (
+        <p role="alert" className="text-danger col-span-full m-0 text-[12.5px]">
+          {add.serverError}
+        </p>
+      )}
+    </ConfigFormRow>
   );
 }

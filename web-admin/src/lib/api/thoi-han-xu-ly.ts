@@ -1,6 +1,7 @@
 /**
- * Ba tuyến của **bảng thời hạn xử lý** một xã — `GET /api/v1/sla`, `PATCH /api/v1/sla/{id}`,
- * `POST /api/v1/sla/defaults`.
+ * Năm tuyến của **bảng thời hạn xử lý** một xã — `GET /api/v1/sla`, `PATCH /api/v1/sla/{id}`,
+ * `POST /api/v1/sla/defaults`, `POST /api/v1/sla`, `DELETE /api/v1/sla/{id}` — plus the three
+ * field lists a row's `field` code comes from.
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
  * BẢNG NÀY RỖNG THÌ XÃ KHÔNG VÀO SỔ ĐƯỢC VĂN BẢN ĐẾN VÀ KHÔNG NHẬN ĐƯỢC PHẢN ÁNH. Không phải
@@ -12,7 +13,7 @@
  * giờ làm việc (ADR 0007, luật 10 bất biến 4). Con số ở đây chỉ để HIỆN và để SỬA.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  *
- * CẢ BA TUYẾN ĐÒI `admin.sla`, KỂ CẢ TUYẾN ĐỌC — khác hẳn ba tuyến đọc lịch làm việc
+ * CẢ NĂM TUYẾN `/api/v1/sla*` ĐÒI `admin.sla`, KỂ CẢ TUYẾN ĐỌC — khác hẳn ba tuyến đọc lịch làm việc
  * (`lich-lam-viec.ts`), vốn là `any-authenticated`. Sự khác nhau đến từ máy chủ và có lý do ghi
  * thẳng trên mã (`service-identity/internal/http/sla.go`): lịch làm việc được đọc ĐỂ VẼ mọi hạn
  * hiện trên màn hình, còn bảng này được đọc ĐỂ CẤU HÌNH — không màn hình nghiệp vụ nào vẽ
@@ -25,14 +26,19 @@
  * ấy đúng cho MỌI tuyến và được nói một lần ở `goi.ts`.
  */
 
-import { docJSON, docThanKetQua, goiGhi, type KetQua } from "./goi";
+import { layLoaiVanBan, layMucUuTienNhiemVu } from "./danh-muc-nghiep-vu";
+import { docJSON, docThanKetQua, docThanLoiGoi, goiGhi, type KetQua } from "./goi";
 import type {
+  identity_addSLAFieldRowIn,
   identity_danhSachSLARa,
+  identity_delete_sla_by_id,
   identity_dongSLARa,
   identity_get_sla,
   identity_gieoSLARa,
   identity_patch_sla_by_id,
+  identity_post_sla,
   identity_post_sla_defaults,
+  identity_removeSLAFieldRowIn,
   identity_suaSLAVao,
   petitions_get_citizen_report_fields,
   petitions_petitionFieldListOut,
@@ -56,19 +62,96 @@ export function layThoiHanXuLy(): Promise<KetQua<identity_danhSachSLARa>> {
 }
 
 /**
- * GET /api/v1/citizen-report-fields (owned by `petitions`, `admin.lookup`) — code → label of the
- * commune's petition field catalogue, ONLY to name the "Lĩnh vực" column of the SLA table.
- *
- * Every code is kept, disabled and retired ones included: an SLA row may point at a field the commune
- * has since switched off, and it still deserves its name. A failed read gives an EMPTY map, never an
- * error on screen — the column then shows the raw code, which is what it showed before (SLA-03). No
- * module-level cache: the catalogue is one commune's (`danh-muc.ts`).
+ * The kinds of work that take a field's own row (ADR 0079 lô 2 Q4). `don-thu` is absent ON PURPOSE:
+ * it has only its default row (lô 3), and the server refuses a field row for it
+ * (`domain.CheckSLAKindTakesFieldRows`). The contract types `work_kind` as a bare string, so this list
+ * is the one place the three are named for the add form; the server still decides.
  */
-export async function readCitizenReportFieldLabels(): Promise<ReadonlyMap<string, string>> {
+export const FIELD_ROW_KINDS = ["phan-anh", "van-ban-den", "nhiem-vu"] as const;
+export type FieldRowKind = (typeof FIELD_ROW_KINDS)[number];
+
+/**
+ * One entry of the list a kind's field codes come from, as the SLA tab needs it: the code stored on
+ * the row, the commune's label, and whether the owner still accepts it on a write.
+ */
+export type SlaFieldOption = { readonly code: string; readonly label: string; readonly active: boolean };
+
+/**
+ * Per kind, the read of its field list: `null` = not read (yet, or not readable by this account).
+ * Labels for the "Lĩnh vực" column AND the options of the add form come from the same read.
+ */
+export type SlaFieldCatalogues = Readonly<Record<FieldRowKind, KetQua<readonly SlaFieldOption[]> | null>>;
+
+function toOptions<T extends { code: string; label: string; active: boolean }>(
+  kq: KetQua<{ items: T[] }>,
+): KetQua<readonly SlaFieldOption[]> {
+  if (!kq.ok) return kq;
+  return { ok: true, duLieu: kq.duLieu.items.map((i) => ({ code: i.code, label: i.label, active: i.active })) };
+}
+
+/**
+ * GET /api/v1/citizen-report-fields (owned by `petitions`, `admin.lookup`) — the field list of
+ * `phan-anh` rows. `active` is the tier-1 flag the server checks on the write (`CheckForIntake`).
+ *
+ * Every code is kept, retired ones included: an SLA row may point at a field since retired, and it
+ * still deserves its name in the table. Only the add form filters to `active`. No module-level cache:
+ * the catalogue is one commune's (`danh-muc.ts`).
+ */
+export async function readPetitionFieldOptions(): Promise<KetQua<readonly SlaFieldOption[]>> {
   const path: petitions_get_citizen_report_fields["duongDan"] = "/api/v1/citizen-report-fields";
-  const kq = await docJSON<petitions_petitionFieldListOut>(path);
-  if (!kq.ok) return new Map();
-  return new Map(kq.duLieu.items.map((f) => [f.code, f.label]));
+  return toOptions(await docJSON<petitions_petitionFieldListOut>(path));
+}
+
+/** GET /api/v1/document-types — the field list of `van-ban-den` rows. Reuses the catalogue reader. */
+export async function readDocumentTypeOptions(): Promise<KetQua<readonly SlaFieldOption[]>> {
+  return toOptions(await layLoaiVanBan());
+}
+
+/** GET /api/v1/task-priorities — the field list of `nhiem-vu` rows. Order kept: it is the scale. */
+export async function readTaskPriorityOptions(): Promise<KetQua<readonly SlaFieldOption[]>> {
+  return toOptions(await layMucUuTienNhiemVu());
+}
+
+/**
+ * POST /api/v1/sla — a field's own row. All six figures travel: the contract requires five, and the
+ * screen fills those it does not show from the kind's default row (`sua-thoi-han.ts`).
+ *
+ * `Idempotency-Key` REQUIRED (`idem.Required`), held by the open form so a retry replays the 201
+ * instead of meeting `sla_rule_exists`; a refusal releases it server-side, so the same key may carry
+ * the corrected request. Every refusal — 409 `sla_rule_exists`, 400 `sla_field_unknown`, 503 when the
+ * owner of the list cannot be asked — is the server's sentence, verbatim.
+ */
+export async function addSlaFieldRow(
+  body: identity_addSLAFieldRowIn,
+  idempotencyKey: string,
+): Promise<KetQua<identity_dongSLARa>> {
+  // Built field by field, never spread: a key the contract lacks must not ride along.
+  const sent: identity_addSLAFieldRowIn = {
+    work_kind: body.work_kind,
+    field: body.field,
+    acknowledge_hours: body.acknowledge_hours,
+    resolve_hours: body.resolve_hours,
+    due_soon_hours: body.due_soon_hours,
+    escalate_leader_hours: body.escalate_leader_hours,
+    escalate_president_hours: body.escalate_president_hours,
+    unassigned_hold_hours: body.unassigned_hold_hours,
+  };
+  const path: identity_post_sla["duongDan"] = "/api/v1/sla";
+  return docThanLoiGoi<identity_dongSLARa>(
+    goiGhi(path, "POST", sent, 201, { "Idempotency-Key": idempotencyKey }),
+  );
+}
+
+/**
+ * DELETE /api/v1/sla/{id} — soft delete of a field's own row, with the reason the trail keeps
+ * (rule 7). 204, no body. No `Idempotency-Key` (`idem.KhongCan`): a second send is a 404.
+ * 409 `default_sla_rule` is the default row; its sentence comes back verbatim.
+ */
+export async function removeSlaFieldRow(id: string, reason: string): Promise<KetQua<null>> {
+  const body: identity_removeSLAFieldRowIn = { reason };
+  const template: identity_delete_sla_by_id["duongDan"] = "/api/v1/sla/{id}";
+  const kq = await goiGhi(template.replace("{id}", encodeURIComponent(id)), "DELETE", body, 204);
+  return kq.ok ? { ok: true, duLieu: null } : kq;
 }
 
 /**

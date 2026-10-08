@@ -2,8 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import type { identity_dongSLARa } from "@/lib/api/schema.gen";
 
-import { LOI_KHONG_DOI_GI, LOI_SO_GIO_LA, PRESIDENT_BELOW_LEADER_ERROR, RESOLVE_HOURS_ERROR } from "./nhan-thoi-han";
-import { banTuDong, soanSua } from "./sua-thoi-han";
+import {
+  FIELD_REQUIRED_ERROR,
+  LOI_KHONG_DOI_GI,
+  LOI_SO_GIO_LA,
+  LOI_THIEU_LY_DO,
+  NO_DEFAULT_ROW_ERROR,
+  PRESIDENT_BELOW_LEADER_ERROR,
+  RESOLVE_HOURS_ERROR,
+} from "./nhan-thoi-han";
+import { banTuDong, changeAddKind, composeAdd, composeRemoveReason, newAddDraft, soanSua } from "./sua-thoi-han";
 
 /**
  * `PATCH /api/v1/sla/{id}` đọc "không nhắc tới" là "giữ nguyên". Tệp này canh đúng một điều, và
@@ -198,5 +206,102 @@ describe("soanSua — Báo Chủ tịch không nhỏ hơn Báo lãnh đạo tr�
       escalate_president_hours: "48",
     });
     expect(kq).toEqual({ ok: true, than: { escalate_leader_hours: 24, escalate_president_hours: 48 } });
+  });
+});
+
+describe("composeAdd — thân POST /api/v1/sla", () => {
+  /** The `phan-anh` default row: where the four unshown figures come from. */
+  const PETITION_DEFAULT: identity_dongSLARa = {
+    ...DONG,
+    id: "01J0000000000000000000DEF",
+    field: "",
+    is_default: true,
+    due_soon_hours: 6,
+    escalate_leader_hours: 10,
+    escalate_president_hours: 20,
+    unassigned_hold_hours: null,
+  };
+  const DOCUMENT_DEFAULT: identity_dongSLARa = {
+    ...PETITION_DEFAULT,
+    id: "01J00000000000000000DEFVB",
+    work_kind: "van-ban-den",
+    due_soon_hours: 72,
+    escalate_leader_hours: 24,
+    escalate_president_hours: 48,
+    unassigned_hold_hours: 16,
+  };
+  const ROWS = [DONG, PETITION_DEFAULT, DOCUMENT_DEFAULT];
+
+  it("mở ra: Phản ánh, chưa chọn lĩnh vực, 8 / 48 (spec 08)", () => {
+    expect(newAddDraft()).toEqual({ workKind: "phan-anh", field: "", acknowledgeHours: "8", resolveHours: "48" });
+  });
+
+  it("đổi loại việc thì lĩnh vực về rỗng, hai con số giữ nguyên", () => {
+    const d = { ...newAddDraft(), field: "an-ninh-trat-tu", resolveHours: "24" };
+    expect(changeAddKind(d, "nhiem-vu")).toEqual({ ...d, workKind: "nhiem-vu", field: "" });
+  });
+
+  it("chưa chọn lĩnh vực → câu của spec, không gửi", () => {
+    expect(composeAdd(newAddDraft(), ROWS)).toEqual({ ok: false, error: FIELD_REQUIRED_ERROR });
+  });
+
+  it("bốn con số không hiện lấy từ DÒNG MẶC ĐỊNH CỦA ĐÚNG LOẠI VIỆC, kể cả `null` của ô giữ việc", () => {
+    const petition = composeAdd({ ...newAddDraft(), field: "cap-thoat-nuoc" }, ROWS);
+    expect(petition).toEqual({
+      ok: true,
+      body: {
+        work_kind: "phan-anh",
+        field: "cap-thoat-nuoc",
+        acknowledge_hours: 8,
+        resolve_hours: 48,
+        due_soon_hours: 6,
+        escalate_leader_hours: 10,
+        escalate_president_hours: 20,
+        unassigned_hold_hours: null,
+      },
+    });
+
+    const document = composeAdd(
+      { workKind: "van-ban-den", field: "cong-van", acknowledgeHours: "4", resolveHours: "16" },
+      ROWS,
+    );
+    expect(document).toEqual({
+      ok: true,
+      body: {
+        work_kind: "van-ban-den",
+        field: "cong-van",
+        acknowledge_hours: 4,
+        resolve_hours: 16,
+        due_soon_hours: 72,
+        escalate_leader_hours: 24,
+        escalate_president_hours: 48,
+        unassigned_hold_hours: 16,
+      },
+    });
+  });
+
+  it("loại việc chưa có dòng mặc định → từ chối, KHÔNG tự đặt con số nào", () => {
+    const kq = composeAdd({ ...newAddDraft(), workKind: "nhiem-vu", field: "khan" }, ROWS);
+    expect(kq).toEqual({ ok: false, error: NO_DEFAULT_ROW_ERROR });
+  });
+
+  it("Xử lý xong 0 hoặc âm → câu của spec; ô lạ → câu chung; Tiếp nhận trống → câu chung", () => {
+    const base = { ...newAddDraft(), field: "cap-thoat-nuoc" };
+    expect(composeAdd({ ...base, resolveHours: "0" }, ROWS)).toEqual({ ok: false, error: RESOLVE_HOURS_ERROR });
+    expect(composeAdd({ ...base, resolveHours: "-3" }, ROWS)).toEqual({ ok: false, error: RESOLVE_HOURS_ERROR });
+    expect(composeAdd({ ...base, resolveHours: "1.5" }, ROWS)).toEqual({ ok: false, error: LOI_SO_GIO_LA });
+    expect(composeAdd({ ...base, resolveHours: "?" }, ROWS)).toEqual({ ok: false, error: LOI_SO_GIO_LA });
+    expect(composeAdd({ ...base, acknowledgeHours: "" }, ROWS)).toEqual({ ok: false, error: LOI_SO_GIO_LA });
+  });
+});
+
+describe("composeRemoveReason — lý do xoá bắt buộc (luật 7)", () => {
+  it("trống hoặc chỉ khoảng trắng → từ chối tại chỗ", () => {
+    expect(composeRemoveReason("")).toEqual({ ok: false, error: LOI_THIEU_LY_DO });
+    expect(composeRemoveReason("   ")).toEqual({ ok: false, error: LOI_THIEU_LY_DO });
+  });
+
+  it("có lý do → đã cắt khoảng trắng hai đầu", () => {
+    expect(composeRemoveReason("  Gộp vào mặc định ")).toEqual({ ok: true, reason: "Gộp vào mặc định" });
   });
 });
