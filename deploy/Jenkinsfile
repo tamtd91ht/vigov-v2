@@ -91,8 +91,16 @@ pipeline {
                                   'tao-khoa-ma-hoa-identity', 'mo-netpol-identity-zalo', 'bo-sung-cau-hinh-identity',
                                   'kiem-tra-dang-nhap-app-rieng',
                                   'dat-secret-mini-app',
-                                  'dung-clamav', 'tao-tai-khoan-van-hanh'],
+                                  'dung-clamav', 'tao-tai-khoan-van-hanh',
+                                  'di-tru-vihat-miniapp', 'bat-cau-phien-miniapp'],
            description:'kiem-tra: chỉ đọc · xem-log: log + sự kiện của DICH_VU · ' +
+                        'di-tru-vihat-miniapp: chạy migration của kho vihat-miniapp (main) vào CSDL trong ' +
+                        'vihat-miniapp-bi-mat, chỉ những tệp chưa có trong sổ schema_migrations; CSDL trùng CSDL của một dịch vụ ' +
+                        'ViGov thì DỪNG (MT=prod, XAC_NHAN=vigov-prod) · ' +
+                        'bat-cau-phien-miniapp: chép khoá đầu của CITIZEN_SESSION_BRIDGE_KEYS (identity-secrets) sang ' +
+                        'VIGOV_CITIZEN_SESSION_BRIDGE_KEY (vihat-miniapp-bi-mat), đặt VIGOV_CITIZEN_SESSION_BRIDGE_ADDRESS ' +
+                        '(vihat-miniapp-cau-hinh), mở cổng 9091 trên Service identity nếu thiếu, gắn hai biến vào deploy ' +
+                        'vihat-miniapp, khởi động lại và kiểm log "cầu phiên ViGov" bat=true (MT=prod, XAC_NHAN=vigov-prod) · ' +
                         'tao-khoa-ma-hoa-identity: (app riêng, bước 1) sinh SECRET_ENCRYPTION_KEYS vào identity-secrets ' +
                         'của vigov-prod VÀ cùng giá trị vào vigov-staging (chung CSDL); đã có thì DỪNG, không đổi gì ' +
                         '(MT=prod; chạy TRƯỚC job service-identity) · ' +
@@ -131,7 +139,7 @@ pipeline {
            description: 'Chỉ dùng cho xem-log')
     string(name: 'XAC_NHAN', defaultValue: '',
            description: 'Cho doi-ten-mien-thang-binh / tao-xa-thang-binh / gan-mini-app-thang-binh / doi-app-id-thang-binh / ' +
-                        'tao-khoa-ma-hoa-identity / dat-secret-mini-app: gõ đúng vigov-prod. ' +
+                        'tao-khoa-ma-hoa-identity / dat-secret-mini-app / di-tru-vihat-miniapp / bat-cau-phien-miniapp: gõ đúng vigov-prod. ' +
                         'Cho mo-netpol-identity-zalo / bo-sung-cau-hinh-identity / dung-clamav: gõ đúng namespace của MT ' +
                         '(vigov-prod hoặc vigov-staging).')
     string(name: 'TENANT_ID', defaultValue: '01M3CS7HHK72V71CGRRJHGR8E8',
@@ -184,7 +192,8 @@ pipeline {
                                   'tao-khoa-ma-hoa-identity', 'mo-netpol-identity-zalo', 'bo-sung-cau-hinh-identity',
                                   'kiem-tra-dang-nhap-app-rieng',
                                   'dat-secret-mini-app',
-                                  'dung-clamav', 'tao-tai-khoan-van-hanh'])) {
+                                  'dung-clamav', 'tao-tai-khoan-van-hanh',
+                                  'di-tru-vihat-miniapp', 'bat-cau-phien-miniapp'])) {
             error("HANH_DONG '${params.HANH_DONG}' không còn trong job này (đã gỡ). " +
                   'Bấm "Build with Parameters" và chọn lại trong danh sách — đừng "Rebuild" một lượt cũ.')
           }
@@ -1692,6 +1701,196 @@ OBJECT_STORAGE_ACCESS_KEY · OBJECT_STORAGE_SECRET_KEY (petitions-secrets) — t
 Trần quét của clamd: StreamMaxLength = 50M (CLAMD_CONF_StreamMaxLength, chủ dự án chốt 01/10/2026).
 Tệp lớn hơn 50 MB bị TỪ CHỐI tải lên, không bao giờ coi là sạch — đầu tệp deploy/cluster/clamav.yaml.
 EOF
+        '''
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    // vihat-miniapp (kho riêng, cùng cụm, cùng máy chủ CSDL — deploy/README.md mục 13.6). Hai việc
+    // chủ dự án yêu cầu 08/10/2026 chạy qua job này thay vì máy trạm:
+    //   di-tru-vihat-miniapp   lược đồ của nó chưa từng được áp (POST /api/v1/sessions trả 500)
+    //   bat-cau-phien-miniapp  cầu phiên tới identity đang tắt (log khởi động "cầu phiên ViGov" bat=false)
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    stage('Di trú CSDL vihat-miniapp') {
+      when { expression { params.HANH_DONG == 'di-tru-vihat-miniapp' } }
+      steps {
+        script {
+          if (params.MT != 'prod') { error('di-tru-vihat-miniapp: vihat-miniapp chỉ chạy ở vigov-prod — chọn MT=prod.') }
+          if (params.XAC_NHAN != 'vigov-prod') { error("XAC_NHAN phải là đúng 'vigov-prod'. Không làm gì cả.") }
+        }
+        sh '''
+          set -eu
+          umask 077
+          TMP_DIR=$(mktemp -d)
+          trap 'rm -f "$TMP_DIR"/*; rmdir "$TMP_DIR"' EXIT
+          SEC=vihat-miniapp-bi-mat
+
+          # ── 0. ĐỌC — chưa ghi gì.
+          kubectl -n "$NS" get secret "$SEC" >/dev/null 2>&1 || {
+            echo "DỪNG: không thấy secret/$SEC trong $NS — tạo nó trước (vihat-miniapp/deploy/README.md)."; exit 1; }
+          has=$(kubectl -n "$NS" get secret "$SEC" \
+                  -o go-template='{{range $k, $v := .data}}{{if eq $k "DATABASE_DSN"}}yes{{end}}{{end}}')
+          [ -n "$has" ] || { echo "DỪNG: secret/$SEC không có key DATABASE_DSN."; exit 1; }
+
+          # CSDL của vihat-miniapp KHÔNG được là CSDL của một dịch vụ ViGov (luật 2: mỗi dịch vụ một CSDL;
+          # migration ở đây sẽ tạo bảng của kho khác trong CSDL ấy). So TÊN CSDL, không in DSN nào.
+          db_of() {
+            kubectl -n "$NS" get secret "$1" -o go-template='{{index .data "DATABASE_DSN"}}' 2>/dev/null \\
+              | base64 -d 2>/dev/null > "$TMP_DIR/dsn" || true
+            if grep -q 'dbname=' "$TMP_DIR/dsn"; then
+              sed -n 's/.*dbname=\\([^ ]*\\).*/\\1/p' "$TMP_DIR/dsn"
+            else
+              d=$(cat "$TMP_DIR/dsn"); d=${d%%\\?*}; printf '%s' "${d##*/}"
+            fi
+            rm -f "$TMP_DIR/dsn"
+          }
+          mine=$(db_of "$SEC")
+          [ -n "$mine" ] || { echo "DỪNG: không đọc được tên CSDL trong DATABASE_DSN của $SEC."; exit 1; }
+          for s in platform identity comms documents finance petitions reporting; do
+            other=$(db_of "$s-secrets")
+            if [ -n "$other" ] && [ "$other" = "$mine" ]; then
+              echo "DỪNG: DATABASE_DSN của $SEC trỏ vào CÙNG CSDL '$mine' với $s-secrets."
+              echo "vihat-miniapp phải có CSDL RIÊNG trên cùng máy chủ (vd vihat_miniapp) — sửa DSN rồi chạy lại."
+              exit 1
+            fi
+          done
+          echo "CSDL đích: $mine (riêng, không trùng dịch vụ ViGov nào)"
+
+          # ── 1. Lấy migration từ kho vihat-miniapp, nhánh main — MỘT tệp tarball, đọc thẳng từng tệp trong
+          # nó (tar -O), không giải nén ra cây thư mục.
+          TGZ="$TMP_DIR/src.tgz"
+          curl -fsSL -o "$TGZ" https://codeload.github.com/tamtd91ht/vihat-miniapp/tar.gz/refs/heads/main
+          echo "vihat-miniapp commit: $(gzip -dc "$TGZ" | git get-tar-commit-id 2>/dev/null || echo '(không đọc được)')"
+          tar -tzf "$TGZ" > "$TMP_DIR/names"
+          script_path=$(grep '/deploy/migrate.sh$' "$TMP_DIR/names" || true)
+          [ -n "$script_path" ] || { echo "DỪNG: kho vihat-miniapp chưa có deploy/migrate.sh."; exit 1; }
+
+          # ── 2. Pod một lượt: postgres:16-alpine, DSN từ Secret, tệp SQL qua biến môi trường base64
+          # (cùng cách chay_psql ở đầu tệp — không attach, không stdin).
+          list=""; envs=""; i=0
+          for p in $(grep '/migrations/[^/]*[.]sql$' "$TMP_DIR/names" | sort); do
+            i=$((i + 1))
+            list="$list ${p##*/}"
+            envs="$envs,{\\"name\\":\\"MIG_$i\\",\\"value\\":\\"$(tar -xzOf "$TGZ" "$p" | base64 -w0)\\"}"
+          done
+          [ "$i" -gt 0 ] || { echo "DỪNG: không có tệp migration nào."; exit 1; }
+          echo "migration trong kho:$list"
+          script_b64=$(tar -xzOf "$TGZ" "$script_path" | base64 -w0)
+          pod="vihat-miniapp-migrate-$BUILD_NUMBER"
+          printf '%s' '{"apiVersion":"v1","spec":{"restartPolicy":"Never",
+            "imagePullSecrets":[{"name":"dockerhub-omicrm"}],
+            "containers":[{"name":"psql","image":"postgres:16-alpine",
+              "envFrom":[{"secretRef":{"name":"'"$SEC"'"}}],
+              "env":[{"name":"MIG_LIST","value":"'"${list# }"'"},{"name":"SCRIPT_B64","value":"'"$script_b64"'"}'"$envs"'],
+              "command":["sh","-c","echo \\"$SCRIPT_B64\\" | base64 -d > /tmp/migrate.sh && sh /tmp/migrate.sh"]}]}}' \\
+            > "$TMP_DIR/overrides.json"
+          kubectl -n "$NS" run "$pod" --restart=Never --image=postgres:16-alpine \\
+              --overrides="$(cat "$TMP_DIR/overrides.json")" --quiet
+          pha=""; n=0
+          while [ $n -lt 60 ]; do
+            pha=$(kubectl -n "$NS" get pod "$pod" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+            case "$pha" in Succeeded|Failed) break ;; esac
+            sleep 5; n=$((n + 1))
+          done
+          kubectl -n "$NS" logs "$pod" 2>&1 || true
+          if [ "$pha" != "Succeeded" ]; then
+            echo "── pod $pod kết thúc ở pha '$pha' — sự kiện:"
+            kubectl -n "$NS" describe pod "$pod" 2>/dev/null | sed -n '/^Events:/,$p' || true
+          fi
+          kubectl -n "$NS" delete pod "$pod" --ignore-not-found --wait=false || true
+          [ "$pha" = "Succeeded" ]
+          echo "✓ CSDL $mine đã ở lược đồ mới nhất của vihat-miniapp."
+        '''
+      }
+    }
+
+    stage('Bật cầu phiên vihat-miniapp') {
+      when { expression { params.HANH_DONG == 'bat-cau-phien-miniapp' } }
+      steps {
+        script {
+          if (params.MT != 'prod') { error('bat-cau-phien-miniapp: vihat-miniapp chỉ chạy ở vigov-prod — chọn MT=prod.') }
+          if (params.XAC_NHAN != 'vigov-prod') { error("XAC_NHAN phải là đúng 'vigov-prod'. Không làm gì cả.") }
+        }
+        sh '''
+          set -eu
+          umask 077
+          TMP_DIR=$(mktemp -d)
+          trap 'rm -f "$TMP_DIR"/*; rmdir "$TMP_DIR"' EXIT
+          ID_DEP=vigov-service-identity
+          ID_SVC=vigov-service-identity
+          MA_DEP=vihat-miniapp
+          MA_SEC=vihat-miniapp-bi-mat
+          MA_CM=vihat-miniapp-cau-hinh
+          ADDR="$ID_SVC:9091"
+
+          # ── 0. ĐỌC — chưa ghi gì. Thiếu một điều kiện = DỪNG.
+          kubectl patch --help 2>/dev/null | grep -q -- '--patch-file' || {
+            echo "DỪNG: kubectl không có 'patch --patch-file'. Không đổi gì."; exit 1; }
+          for o in "deploy/$ID_DEP" "svc/$ID_SVC" "secret/identity-secrets" "deploy/$MA_DEP" "secret/$MA_SEC" "configmap/$MA_CM"; do
+            kubectl -n "$NS" get "$o" >/dev/null 2>&1 || { echo "DỪNG: không thấy $o trong $NS. Không đổi gì."; exit 1; }
+          done
+          keys=$(kubectl -n "$NS" get secret identity-secrets \
+                   -o go-template='{{range $k, $v := .data}}{{if eq $k "CITIZEN_SESSION_BRIDGE_KEYS"}}yes{{end}}{{end}}')
+          listen=$(kubectl -n "$NS" get deploy "$ID_DEP" \
+                   -o go-template='{{range (index .spec.template.spec.containers 0).env}}{{if eq .name "CITIZEN_SESSION_BRIDGE_LISTEN_ADDR"}}{{.value}}{{end}}{{end}}')
+          if [ -z "$keys" ] || [ -z "$listen" ]; then
+            echo "DỪNG: identity chưa mở cổng cầu (thiếu CITIZEN_SESSION_BRIDGE_KEYS trong identity-secrets hoặc"
+            echo "CITIZEN_SESSION_BRIDGE_LISTEN_ADDR trên deploy/$ID_DEP). Chạy HANH_DONG=bo-sung-cau-hinh-identity trước."
+            exit 1
+          fi
+          case "$listen" in *:9091) ;; *)
+            echo "DỪNG: identity nghe cầu ở '$listen', không phải :9091 — job này chỉ nối tới 9091. Không đổi gì."; exit 1 ;;
+          esac
+
+          # ── 1. Service identity phải mở 9091 (cầu đi qua Service, không qua Ingress — KHÔNG bao giờ ra Ingress).
+          ports=$(kubectl -n "$NS" get svc "$ID_SVC" -o go-template='{{range .spec.ports}} {{.port}}{{end}}')
+          case " $ports " in
+            *" 9091 "*) echo "svc/$ID_SVC đã có cổng 9091" ;;
+            *) echo "svc/$ID_SVC chưa có 9091 → thêm cổng 'bridge' 9091 → 9091"
+               kubectl -n "$NS" patch svc "$ID_SVC" --type=json \
+                 -p='[{"op":"add","path":"/spec/ports/-","value":{"name":"bridge","port":9091,"targetPort":9091,"protocol":"TCP"}}]' ;;
+          esac
+
+          # ── 2. Khoá: khoá ĐẦU của danh sách identity (khoá mới nhất) → Secret của vihat-miniapp. Qua tệp, không in.
+          kubectl -n "$NS" get secret identity-secrets -o go-template='{{index .data "CITIZEN_SESSION_BRIDGE_KEYS"}}' \\
+            | base64 -d | cut -d, -f1 | tr -d ' \\n' > "$TMP_DIR/key"
+          [ "$(wc -c < "$TMP_DIR/key")" -ge 32 ] || { echo "DỪNG: khoá đầu của identity ngắn hơn 32 ký tự. Không đổi gì."; exit 1; }
+          { printf '{"data":{"VIGOV_CITIZEN_SESSION_BRIDGE_KEY":"'; base64 -w0 < "$TMP_DIR/key"; printf '"}}'; } > "$TMP_DIR/sec.json"
+          kubectl -n "$NS" patch secret "$MA_SEC" --type=merge --patch-file "$TMP_DIR/sec.json" >/dev/null
+          kubectl -n "$NS" get secret "$MA_SEC" -o go-template='{{index .data "VIGOV_CITIZEN_SESSION_BRIDGE_KEY"}}' \\
+            | base64 -d > "$TMP_DIR/back"
+          cmp -s "$TMP_DIR/key" "$TMP_DIR/back" || { echo "DỪNG: đọc lại khoá ở $MA_SEC không khớp — kiểm tay (không in)."; exit 1; }
+          echo "✓ $MA_SEC: VIGOV_CITIZEN_SESSION_BRIDGE_KEY = khoá đầu của identity (so bằng cmp, không in)"
+
+          # ── 3. Địa chỉ (không bí mật).
+          printf '{"data":{"VIGOV_CITIZEN_SESSION_BRIDGE_ADDRESS":"%s"}}' "$ADDR" > "$TMP_DIR/cm.json"
+          kubectl -n "$NS" patch configmap "$MA_CM" --type=merge --patch-file "$TMP_DIR/cm.json" >/dev/null
+          echo "✓ $MA_CM: VIGOV_CITIZEN_SESSION_BRIDGE_ADDRESS=$ADDR"
+
+          # ── 4. Gắn hai biến vào deploy vihat-miniapp bằng valueFrom (dù Deployment đang dùng envFrom
+          # hay env từng biến — env tường minh thắng envFrom, cùng giá trị).
+          kubectl -n "$NS" set env deploy/"$MA_DEP" --from=secret/"$MA_SEC" --keys=VIGOV_CITIZEN_SESSION_BRIDGE_KEY >/dev/null
+          kubectl -n "$NS" set env deploy/"$MA_DEP" --from=configmap/"$MA_CM" --keys=VIGOV_CITIZEN_SESSION_BRIDGE_ADDRESS >/dev/null
+
+          # ── 5. NetworkPolicy: chỉ CẢNH BÁO. Quy tắc 8 chọn pod theo nhãn app.kubernetes.io/name; Deployment
+          # dựng tay trong Rancher thường không mang nhãn ấy.
+          if [ -n "$(kubectl -n "$NS" get netpol -o name 2>/dev/null)" ]; then
+            for d in "$MA_DEP:vihat-miniapp" "$ID_DEP:identity"; do
+              lbl=$(kubectl -n "$NS" get deploy "${d%%:*}" -o go-template='{{index .spec.template.metadata.labels "app.kubernetes.io/name"}}' 2>/dev/null || true)
+              [ "$lbl" = "${d#*:}" ] || echo "⚠ $NS có NetworkPolicy nhưng pod của deploy/${d%%:*} không mang nhãn app.kubernetes.io/name=${d#*:} — cầu 9091 có thể bị chặn."
+            done
+          fi
+
+          # ── 6. Khởi động lại và kiểm log khởi động.
+          kubectl -n "$NS" rollout restart deploy/"$MA_DEP"
+          kubectl -n "$NS" rollout status deploy/"$MA_DEP" --timeout=180s
+          sleep 3
+          line=$(kubectl -n "$NS" logs deploy/"$MA_DEP" --tail=200 2>/dev/null | grep 'cầu phiên ViGov' | tail -1 || true)
+          echo "log: ${line:-(không thấy dòng 'cầu phiên ViGov')}"
+          case "$line" in
+            *'"bat":true'*) echo "✓ cầu phiên ViGov đã BẬT trên vihat-miniapp." ;;
+            *) echo "✗ chưa thấy bat=true — xem log khởi động của pod vihat-miniapp trong Rancher."; exit 1 ;;
+          esac
         '''
       }
     }

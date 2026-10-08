@@ -909,6 +909,14 @@ và probe là của kho kia: **`../vihat-miniapp/deploy/README.md`**. Đọc ở
 | Cổng | 8080 | Quy tắc 9 chỉ mở 8080 từ ingress controller |
 | Ra ngoài | identity **9091** (cầu phiên) · 443 tới Zalo | Quy tắc 8 và 9. Khoá cầu: `VIGOV_CITIZEN_SESSION_BRIDGE_KEY` bên kia phải nằm trong `CITIZEN_SESSION_BRIDGE_KEYS` của `identity-secrets` (`deploy/cau-hinh/README.md`) |
 
+**Hai việc của job `vigov-deploy` cho pod này** (MT=prod, XAC_NHAN=vigov-prod; chi tiết ở mô tả tham số
+`HANH_DONG` trong `deploy/Jenkinsfile`):
+
+| Việc | Làm gì |
+|---|---|
+| `di-tru-vihat-miniapp` | Áp migration của nhánh `main` vào CSDL trong `vihat-miniapp-bi-mat`, chỉ những tệp chưa có trong sổ `schema_migrations`. DỪNG nếu CSDL ấy trùng CSDL của một dịch vụ ViGov, hoặc đã có bảng mà chưa có sổ |
+| `bat-cau-phien-miniapp` | Chép khoá đầu của `CITIZEN_SESSION_BRIDGE_KEYS` sang `VIGOV_CITIZEN_SESSION_BRIDGE_KEY`, đặt `VIGOV_CITIZEN_SESSION_BRIDGE_ADDRESS=vigov-service-identity:9091`, mở 9091 trên Service identity nếu thiếu, khởi động lại và kiểm log `"cầu phiên ViGov","bat":true`. Cần `bo-sung-cau-hinh-identity` đã chạy |
+
 **Ingress — host là `VIGOV_API_HOST` của Mini App, không có trong `deploy/hosts.yaml`.** App chung gắn
 cứng host này lúc dựng (`citizen-app/src/api/dia-chi.ts`). Giá trị nằm ở credential Jenkins
 `citizen-app-vigov-api-host` (`citizen-app/Jenkinsfile`), hoặc trong `citizen-app/.env.local` khi đẩy bản
