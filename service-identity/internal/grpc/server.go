@@ -9,14 +9,22 @@
 //
 // # What this server is deliberately incapable of
 //
-//	IT RETURNS NO PERSONAL DATA. Not a name, not a phone number, not an email, not a national id.
-//	`message Staff` and `message StaffPrincipal` declare none of them, and the read paths behind
-//	this file (domain.CanBoVaiTro, store.TheoNhieuID) do not even LOAD them. Having nothing in
-//	hand is a stronger guarantee than remembering not to send it — and the day somebody widens
-//	the wire type, the read path still has nothing to put in the new field, so the change cannot
-//	pass unnoticed. Widening toward a name is BLOCKED anyway: open question #11 (is a staff
+//	IT RETURNS NO PERSONAL DATA — WITH ONE NAMED EXCEPTION. Not a name, not an email, not a
+//	national id. `message Staff` and `message StaffPrincipal` declare none of them, and the read
+//	paths behind this file (domain.CanBoVaiTro, store.TheoNhieuID) do not even LOAD them. Having
+//	nothing in hand is a stronger guarantee than remembering not to send it — and the day somebody
+//	widens the wire type, the read path still has nothing to put in the new field, so the change
+//	cannot pass unnoticed. Widening toward a name is BLOCKED anyway: open question #11 (is a staff
 //	member's mobile number masked from other staff) decides what "staff personal data" may cross
 //	a boundary at all, and the customer has not answered it.
+//
+//	THE EXCEPTION (owner, 08/10/2026, ADR 0050 §Sửa đổi 08/10/2026 point 2) is
+//	ResolveCitizenContactPhone (citizen_contact_phone.go): the FULL verified phone of the citizen
+//	behind ONE LIVE session, for the one caller that files that citizen's petition. It is bound to
+//	the session, not to a citizen id, and every disclosure is audited in the read's own transaction
+//	(below). It is a separate RPC and a separate read path on purpose — ResolveCitizenSession, which
+//	runs on every citizen request, still carries no personal data. A second such RPC, or a second
+//	caller of this one, is the owner's decision first (rule 3, stop #2).
 //
 //	IT MINTS NOTHING. ResolveStaffPrincipal READS a credential the caller relayed; it never
 //	issues one. There is no path here by which a caller obtains a session, extends one, or names
@@ -43,12 +51,20 @@
 // calling service's, so #3's missing caller identity does not bite (automation.go, app/automation.go).
 // Any OTHER write here is still the stop condition.
 //
+// #2 BELOW WAS ANSWERED ON 08/10/2026, FOR ONE RPC: ResolveCitizenContactPhone returns an unmasked
+// phone, so it IS audited — one entry per disclosure, in the read's transaction, before the number
+// leaves (app.CitizenContactPhoneReveal). #3 does not bite there either, for the reason it does not
+// bite the automation outcome: the "who" is not the calling service but the CITIZEN whose live
+// session is the authority for the act (actor kind "citizen", their opaque id, IP empty — the
+// contract argues each choice). Any OTHER RPC returning unmasked personal data is still the stop
+// condition.
+//
 // THREE THINGS WOULD CHANGE THAT ANSWER, and each is a stop condition rather than a judgement
 // call for whoever hits it:
 //
 //  1. the first RPC here that WRITES anything;
 //  2. an RPC that returns UNMASKED personal data, or reads across communes — rule 6, invariant 7
-//     audits both explicitly, regardless of them being reads;
+//     audits both explicitly, regardless of them being reads (answered once, see above);
 //  3. attribution becoming possible. Today it is NOT: ADR 0025's one shared caller key proves a
 //     call came from inside the deployment and never WHICH service made it, so an audit entry
 //     written here could not name a "who" (rule 6, invariant 2). Per-service identity — mTLS or
@@ -239,6 +255,10 @@ type Deps struct {
 	// entry in the same transaction. Declared in automation.go. *app.Automation in production.
 	Automation AutomationRuns
 
+	// The disclosure behind ResolveCitizenContactPhone — a USE CASE (read + audit entry in one
+	// transaction), *app.CitizenContactPhoneReveal in production. Declared in citizen_contact_phone.go.
+	ContactPhones CitizenContactPhoneReveal
+
 	Log *slog.Logger
 }
 
@@ -301,6 +321,8 @@ func NewServer(d Deps) *Server {
 		panic("identity/grpc: thiếu kho người nhận thông báo — ResolveOrgUnitPermissionHolders và ResolveLeadershipStaff sẽ panic, và việc nền leo thang không báo được ai")
 	case d.Automation == nil:
 		panic("identity/grpc: thiếu use case tự động hoá — ClaimDueAutomationRuns và RecordAutomationRunOutcome sẽ panic, và không việc nền nào chạy được")
+	case d.ContactPhones == nil:
+		panic("identity/grpc: thiếu use case mở số điện thoại công dân — ResolveCitizenContactPhone sẽ panic, và mọi phản ánh gửi từ phiên đã xác thực số mà để trống ô điện thoại không tiếp nhận được")
 	}
 	if d.Log == nil {
 		d.Log = slog.Default()

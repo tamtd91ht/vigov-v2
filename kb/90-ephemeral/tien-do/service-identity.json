@@ -556,6 +556,15 @@
       "bang_chung": "4b0b9ce3 (mã + test) · 40b46898 (openapi, api-surface, schema.gen.ts, dinh-tuyen.gen.ts, ingress sinh trong worktree sạch). Test viết trước, đỏ trước khi sửa: TestStaffSortWalksEveryNewSortInOrder, TestStaffSortEmptyValuesAreOnALaterPageNotLost, TestStaffSortCursorNeverCarriesThePersonalValue, TestStaffSearchMatchesEmail, TestStaffSearchDepartmentNameStaysInItsCommune, TestStaffCountMatchingEqualsTheWalk, TestStaffCountQueries_401/403/403 sai xã/200…; test chặn cũ viết lại thành TestStaffSortAllowlistKeepsPersonalValuesOutOfTheCursor. Kiểm 08/10: go vet + go test -p 1 ./... service-identity xanh (13 gói ok); check_quyen, check_security, check_audit_actor xanh. TestStaffRegisterSortSearchCountPg BỎ QUA (máy không có VIGOV_TEST_DSN/Docker) — SQL thật chưa chạy trên Postgres.",
       "no_confirm": [],
       "tiep_theo": "Chạy TestStaffRegisterSortSearchCountPg trên Postgres thật (khoá ngày 0001-01-01, thứ tự tiền tố theo collation). Chức danh / máy bàn rỗng ('') xếp đầu khi tăng dần — muốn đẩy cuối phải đổi core/page (con trỏ id trên biểu thức), chờ chủ dự án. Tuyến đếm bắt buộc q: tổng theo bộ phận không có chữ tìm dùng GET /staff-counts. Sửa tên/chức danh giữa hai trang có thể lặp/lỡ vài dòng (giá của con trỏ chỉ mang id). Chưa có chỉ mục cho các thứ tự mới — ổn ở vài trăm dòng/xã."
+    },
+    {
+      "id": "resolve-citizen-contact-phone-08-10",
+      "menu": "phan-anh-nguoi-dan",
+      "trang_thai": "xong",
+      "viec": "gRPC IdentityService.ResolveCitizenContactPhone(session_id, citizen_id) → verified_phone cho service-petitions gắn số đã xác thực vào phiếu (chủ dự án 08/10/2026 chọn 'Thêm RPC mới', ADR 0050 §Sửa đổi 08/10/2026). Phải có phiên đang sống của đúng công dân; mọi ca không có số (phiên lạ, thu hồi, hết hạn, xã khác, chưa xác thực, công dân khác) trả OK rỗng; mỗi lần trả số ghi một vết mo_so_dien_thoai_cong_dan (actor công dân, delta không mang số) trong cùng giao dịch.",
+      "bang_chung": "proto/vigov/identity/v1/identity.proto (buf lint + buf breaking --against HEAD sạch); internal/store/citizen_contact_phone.go (@cross-tenant: dinh_danh_cong_dan không có cột xã, neo trên phiên của xã), internal/app/citizen_contact_phone_reveal.go, internal/grpc/citizen_contact_phone.go, cmd/server/main.go nối Deps.ContactPhones. go vet + go test ./service-identity/... xanh 08/10; check_audit_actor + check_security PASS. TestContactPhoneForRevealPg BỎ QUA — chưa có VIGOV_TEST_DSN; kb/30-indexes/transaction-boundaries.json gan_so_da_xac_thuc_cua_phien_khi_tiep_nhan.",
+      "no_confirm": [],
+      "tiep_theo": "Chạy TestContactPhoneForRevealPg trên PG16 thật. Chỉ một khoá chung cho mọi bên gọi gRPC (ADR 0025) — giới hạn thật là đòi phiên đang sống; định danh theo dịch vụ (mTLS) vẫn nợ. Triển khai identity trước petitions."
     }
   ]
 }

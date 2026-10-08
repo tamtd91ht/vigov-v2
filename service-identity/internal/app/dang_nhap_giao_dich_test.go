@@ -95,6 +95,11 @@ type ghiChep struct {
 	// through the real store SQL.
 	failedCount int64
 	lockedUntil *time.Time
+
+	// noContactPhone stands for "this session discloses nothing" (store.ContactPhoneForReveal):
+	// unknown, revoked, expired, another commune's, unverified or another citizen's — the SQL owns
+	// that predicate; this driver only answers row or no row.
+	noContactPhone bool
 }
 
 func moDB(t *testing.T) (*store.DB, *ghiChep) {
@@ -249,6 +254,15 @@ func (c *connGia) QueryContext(_ context.Context, q string, args []driver.NamedV
 		hang := []driver.Value{c.g.failedCount, until}
 		c.g.mu.Unlock()
 		return &rowsGia{cot: []string{"failed_sign_in_count", "sign_in_locked_until"}, hang: [][]driver.Value{hang}}, nil
+	}
+	if strings.HasPrefix(q, "SELECT d.so_dien_thoai FROM phien_cong_dan") {
+		// store.ContactPhoneForReveal — one column, the agreed fake number (rule 3, invariant 5).
+		c.g.mu.Lock()
+		defer c.g.mu.Unlock()
+		if c.g.noContactPhone {
+			return &rowsGia{cot: []string{"so_dien_thoai"}}, nil
+		}
+		return &rowsGia{cot: []string{"so_dien_thoai"}, hang: [][]driver.Value{{dienThoaiGia}}}, nil
 	}
 	if !strings.Contains(q, "nguoi_dung") {
 		return &rowsGia{}, nil

@@ -187,8 +187,18 @@ func noiDayGia(t *testing.T) svcgrpc.Deps {
 		Recipients:     automationWiringFake{},
 		PermissionKeys: automationWiringFake{},
 		Automation:     automationWiringFake{},
-		Log:            slog.New(slog.NewTextHandler(io.Discard, nil)),
+		// Required, or NewServer refuses to build (svcgrpc.Deps.ContactPhones).
+		ContactPhones: contactPhoneWiringFake{},
+		Log:           slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
+}
+
+// contactPhoneWiringFake discloses nothing — these wiring tests never resolve a contact phone; the
+// handler is defended in internal/grpc, the transaction in internal/app.
+type contactPhoneWiringFake struct{}
+
+func (contactPhoneWiringFake) Reveal(context.Context, string, string) (string, error) {
+	return "", idstore.ErrNoContactPhone
 }
 
 // communesWiringFake answers every commune as unknown — these wiring tests never resolve a citizen

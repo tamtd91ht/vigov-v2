@@ -153,7 +153,10 @@ func may(t *testing.T, sua func(*Deps)) (*Server, *bytes.Buffer) {
 		Recipients:     &recipientsFake{},
 		PermissionKeys: &keysFake{known: map[string]bool{"task.assign": true}},
 		Automation:     &automationFake{},
-		Log:            slog.New(slog.NewTextHandler(nhatKy, nil)),
+		// The contact-phone disclosure — fake in citizen_contact_phone_test.go. It answers "no phone"
+		// by default, so a test has to say out loud that a number was disclosed.
+		ContactPhones: &contactPhoneFake{},
+		Log:           slog.New(slog.NewTextHandler(nhatKy, nil)),
 	}
 	if sua != nil {
 		sua(&d)
@@ -603,6 +606,7 @@ func TestNewServerTuChoiNoiDayKhongDu(t *testing.T) {
 			Recipients:     &recipientsFake{},
 			PermissionKeys: &keysFake{},
 			Automation:     &automationFake{},
+			ContactPhones:  &contactPhoneFake{},
 			Log:            slog.New(slog.NewTextHandler(io.Discard, nil)),
 		}
 	}
@@ -647,6 +651,8 @@ func TestNewServerTuChoiNoiDayKhongDu(t *testing.T) {
 		"missing recipients":      func(d *Deps) { d.Recipients = nil },
 		"missing permission keys": func(d *Deps) { d.PermissionKeys = nil },
 		"missing automation":      func(d *Deps) { d.Automation = nil },
+		// Missing it is every petition from a phone-verified session with an empty phone box refused.
+		"missing contact-phone reveal": func(d *Deps) { d.ContactPhones = nil },
 	}
 	for ten, sua := range ca {
 		t.Run(ten, func(t *testing.T) {

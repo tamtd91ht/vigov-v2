@@ -707,7 +707,11 @@ func run(log *slog.Logger) error {
 		Recipients:     canBo,
 		PermissionKeys: maTranQuyen,
 		Automation:     automation,
-		Log:            log,
+		// ResolveCitizenContactPhone (owner decision 08/10/2026, ADR 0050): the read of the verified
+		// phone runs on the SAME citizen session registry ResolveCitizenSession reads, through a use
+		// case that writes the disclosure's audit entry in the read's transaction.
+		ContactPhones: app.NewCitizenContactPhoneReveal(kho, phienCongDan),
+		Log:           log,
 	}, log)
 
 	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr())
