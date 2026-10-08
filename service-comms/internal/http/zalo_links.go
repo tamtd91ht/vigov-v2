@@ -101,15 +101,18 @@ type zaloLinkedStaffList struct {
 // per-domain kinds and the weekly digest, in display order (spec Cấu hình 11 §2 "Chỉ hiện các sự kiện có
 // trong supported_events"); the ten spec events with no producer yet are not in it (ADR 0079 Q3).
 type zaloChannelSettingsOut struct {
-	IsEnabled              bool       `json:"is_enabled"`
-	Kinds                  []string   `json:"kinds"`
-	QuietStart             string     `json:"quiet_start"`
-	QuietEnd               string     `json:"quiet_end"`
-	OverdueStartAfterDays  *int       `json:"overdue_start_after_days"`
-	OverdueRepeatEveryDays *int       `json:"overdue_repeat_every_days"`
-	UpdatedAt              *time.Time `json:"updated_at,omitempty"`
-	UpdatedBy              string     `json:"updated_by,omitempty"`
-	SupportedEvents        []string   `json:"supported_events"`
+	IsEnabled              bool     `json:"is_enabled"`
+	Kinds                  []string `json:"kinds"`
+	QuietStart             string   `json:"quiet_start"`
+	QuietEnd               string   `json:"quiet_end"`
+	OverdueStartAfterDays  *int     `json:"overdue_start_after_days"`
+	OverdueRepeatEveryDays *int     `json:"overdue_repeat_every_days"`
+	// DueSoonDays is the "Sắp đến hạn: nhắc trước" box, 1–14 days; null = no Zalo filter (0024, ADR 0079
+	// lô 5 Q13). It narrows the Zalo copy of a due-soon digest only — the bell keeps the SLA column.
+	DueSoonDays     *int       `json:"due_soon_days"`
+	UpdatedAt       *time.Time `json:"updated_at,omitempty"`
+	UpdatedBy       string     `json:"updated_by,omitempty"`
+	SupportedEvents []string   `json:"supported_events"`
 	// PlatformReady (GET only) is spec 11 §0's `platform_ready`: false = no bot can serve the commune —
 	// neither its own live bot nor the shared bot with a token — so nothing can be sent yet.
 	PlatformReady *bool `json:"platform_ready,omitempty"`
@@ -117,6 +120,7 @@ type zaloChannelSettingsOut struct {
 
 // zaloChannelSettingsIn — ZaloChannelSettingsChange in zalo.ts: the whole form. is_enabled, kinds and the
 // two quiet times are required; the two overdue numbers are null unless a `*.qua-han` kind is chosen.
+// due_soon_days is 1–14 or null/absent — PUT replaces the whole form, so absent clears the lead (no filter).
 // `kinds` takes supported_events values; one of the four OLD values is still accepted and saved as the
 // per-domain kinds it means (0021).
 type zaloChannelSettingsIn struct {
@@ -126,6 +130,7 @@ type zaloChannelSettingsIn struct {
 	QuietEnd               *string  `json:"quiet_end"`
 	OverdueStartAfterDays  *int     `json:"overdue_start_after_days"`
 	OverdueRepeatEveryDays *int     `json:"overdue_repeat_every_days"`
+	DueSoonDays            *int     `json:"due_soon_days"`
 }
 
 func settingsToOut(s domain.ZaloChannelSetting) zaloChannelSettingsOut {
@@ -133,6 +138,7 @@ func settingsToOut(s domain.ZaloChannelSetting) zaloChannelSettingsOut {
 		IsEnabled: s.IsEnabled, Kinds: s.Kinds,
 		QuietStart: domain.FormatClock(s.QuietStartMinute), QuietEnd: domain.FormatClock(s.QuietEndMinute),
 		OverdueStartAfterDays: s.OverdueStartAfterDays, OverdueRepeatEveryDays: s.OverdueRepeatEveryDays,
+		DueSoonDays: s.DueSoonDays,
 	}
 	if out.Kinds == nil {
 		out.Kinds = []string{}
@@ -244,7 +250,7 @@ func RegisterZaloLinks(mux *http.ServeMux, d ZaloLinkDeps) {
 
 	// NO idem.* DECLARATION: a GET. No row = is_enabled false with the defaults.
 	//
-	// @summary  Cấu hình kênh nhắc việc Zalo của xã — bật/tắt, các loại nhắc theo từng phân hệ (supported_events là danh sách được chọn), giờ yên tĩnh (giờ Việt Nam), nhịp nhắc việc quá hạn, platform_ready (đã có bot phục vụ xã chưa); xã chưa lưu thì là tắt
+	// @summary  Cấu hình kênh nhắc việc Zalo của xã — bật/tắt, các loại nhắc theo từng phân hệ (supported_events là danh sách được chọn), giờ yên tĩnh (giờ Việt Nam), nhịp nhắc việc quá hạn, số ngày nhắc trước khi đến hạn của tin Zalo (due_soon_days, null = không lọc), platform_ready (đã có bot phục vụ xã chưa); xã chưa lưu thì là tắt
 	// @screen   ADR 0074 — Cấu hình → tab Kênh Zalo
 	// @reply    200 zaloChannelSettingsOut
 	// @reply    401 httpx.Error
@@ -260,14 +266,14 @@ func RegisterZaloLinks(mux *http.ServeMux, d ZaloLinkDeps) {
 	//	400 invalid_request  not JSON, or is_enabled / kinds / quiet_start / quiet_end missing
 	//	422 <code>           a value 0018's CHECKs refuse — the code and sentence say which
 	//
-	// @summary  Lưu cấu hình kênh nhắc việc Zalo của xã — bật thì phải chọn ít nhất một loại; chọn quá hạn thì phải đặt đủ nhịp nhắc; giờ yên tĩnh HH:MM không trùng nhau; có ghi vết trước/sau
+	// @summary  Lưu cấu hình kênh nhắc việc Zalo của xã — bật thì phải chọn ít nhất một loại; chọn quá hạn thì phải đặt đủ nhịp nhắc; giờ yên tĩnh HH:MM không trùng nhau; số ngày nhắc trước 1–14 hoặc để trống (chỉ thu hẹp tin Zalo sắp đến hạn, chuông giữ cột SLA); có ghi vết trước/sau
 	// @screen   ADR 0074 — Cấu hình → tab Kênh Zalo
 	// @request  zaloChannelSettingsIn
 	// @reply    200 zaloChannelSettingsOut
 	// @reply    400 httpx.Error invalid_request
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
-	// @reply    422 httpx.Error unknown_kind enabled_without_kind invalid_quiet_time empty_quiet_window overdue_cadence_incomplete overdue_cadence_required overdue_start_out_of_range overdue_repeat_out_of_range
+	// @reply    422 httpx.Error unknown_kind enabled_without_kind invalid_quiet_time empty_quiet_window overdue_cadence_incomplete overdue_cadence_required overdue_start_out_of_range overdue_repeat_out_of_range due_soon_days_out_of_range
 	// @reply    500 httpx.Error
 	mux.Handle("PUT /api/v1/zalo-channel-settings",
 		authz.RequirePermission(d.Checker, "admin.lookup")(
@@ -416,6 +422,7 @@ func (h *zaloLinkHandler) PutZaloChannelSettings(w http.ResponseWriter, r *http.
 	s, err := h.d.Writer.SaveSettings(r.Context(), domain.ZaloChannelSetting{
 		IsEnabled: *in.IsEnabled, Kinds: in.Kinds, QuietStartMinute: qs, QuietEndMinute: qe,
 		OverdueStartAfterDays: in.OverdueStartAfterDays, OverdueRepeatEveryDays: in.OverdueRepeatEveryDays,
+		DueSoonDays: in.DueSoonDays,
 	}, actor)
 	if err != nil {
 		h.fail(w, r, "lưu cấu hình", err)

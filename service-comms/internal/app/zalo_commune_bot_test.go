@@ -804,8 +804,8 @@ func TestZaloLinksUseTheBotThatServesTheCommune(t *testing.T) {
 	f := &sqlFake{query: func(q string, _ []driver.Value) ([]string, [][]driver.Value, error) {
 		switch {
 		case strings.Contains(q, "FROM zalo_channel_setting"):
-			return []string{"e", "k", "qs", "qe", "sd", "rd", "ua", "ub"},
-				[][]driver.Value{{true, "nhiem-vu.qua-han", "21:00", "06:00", int64(1), int64(1), botClock, "CB-1"}}, nil
+			return []string{"e", "k", "qs", "qe", "sd", "rd", "ua", "ub", "dsd"},
+				[][]driver.Value{{true, "nhiem-vu.qua-han", "21:00", "06:00", int64(1), int64(1), botClock, "CB-1", nil}}, nil
 		case strings.Contains(q, "FROM zalo_link"):
 			return []string{"staff_code", "id", "chat_id"}, nil, nil
 		}
@@ -933,12 +933,12 @@ func TestDispatcherSendsEachCommuneThroughItsOwnBot(t *testing.T) {
 		xa := fmt.Sprint(args[0])
 		switch {
 		case strings.Contains(q, "FROM zalo_delivery d"):
-			return []string{"id", "staff_code", "kind", "attempts", "title", "body", "link"},
-				[][]driver.Value{{"01JDELIV" + xa[:6], "CB-00001", "qua-han", int64(0), "Việc quá hạn", "", ""}}, nil
+			return []string{"id", "staff_code", "kind", "attempts", "title", "body", "link", "due_soon_items"},
+				[][]driver.Value{{"01JDELIV" + xa[:6], "CB-00001", "qua-han", int64(0), "Việc quá hạn", "", "", nil}}, nil
 		case strings.Contains(q, "FROM zalo_channel_setting"):
 			// Per-domain selection; the notice is the OLD kind producers still send (0021's map).
-			return []string{"e", "k", "qs", "qe", "sd", "rd", "ua", "ub"},
-				[][]driver.Value{{true, "phan-anh.qua-han", "21:00", "06:00", int64(1), int64(1), botClock, "CB-1"}}, nil
+			return []string{"e", "k", "qs", "qe", "sd", "rd", "ua", "ub", "dsd"},
+				[][]driver.Value{{true, "phan-anh.qua-han", "21:00", "06:00", int64(1), int64(1), botClock, "CB-1", nil}}, nil
 		case strings.Contains(q, "FROM zalo_link"):
 			return []string{"staff_code", "id", "chat_id"},
 				[][]driver.Value{{"CB-00001", "01JLINK" + xa[:6], "chat-of-" + xa}}, nil
@@ -985,13 +985,13 @@ func TestDispatcherRoutesAPerDomainKindBySelection(t *testing.T) {
 		xa := fmt.Sprint(args[0])
 		switch {
 		case strings.Contains(q, "FROM zalo_delivery d"):
-			return []string{"id", "staff_code", "kind", "attempts", "title", "body", "link"},
+			return []string{"id", "staff_code", "kind", "attempts", "title", "body", "link", "due_soon_items"},
 				[][]driver.Value{{"01JDELIV" + xa[:6], "CB-00001", domain.ZaloKindPetitionOverdue, int64(0),
-					"Phản ánh quá hạn", "", ""}}, nil
+					"Phản ánh quá hạn", "", "", nil}}, nil
 		case strings.Contains(q, "FROM zalo_channel_setting"):
 			sel := map[string]string{string(xaA): "phan-anh.qua-han", string(xaB): "nhiem-vu.qua-han"}[xa]
-			return []string{"e", "k", "qs", "qe", "sd", "rd", "ua", "ub"},
-				[][]driver.Value{{true, sel, "21:00", "06:00", int64(1), int64(1), botClock, "CB-1"}}, nil
+			return []string{"e", "k", "qs", "qe", "sd", "rd", "ua", "ub", "dsd"},
+				[][]driver.Value{{true, sel, "21:00", "06:00", int64(1), int64(1), botClock, "CB-1", nil}}, nil
 		case strings.Contains(q, "FROM zalo_link"):
 			return []string{"staff_code", "id", "chat_id"},
 				[][]driver.Value{{"CB-00001", "01JLINK" + xa[:6], "chat-of-" + xa}}, nil

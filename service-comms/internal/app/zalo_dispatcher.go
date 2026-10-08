@@ -11,7 +11,8 @@ package app
 //
 //  1. one transaction: claim the due rows (SKIP LOCKED); decide each, in ADR 0074's order —
 //     kenh-tat → loai-tat → bot-chua-cau-hinh → chua-lien-ket → quiet hours (POSTPONE to their end, never
-//     skip) — and lease the rest (attempts + 1, link chosen); one audit entry
+//     skip) → the commune's due-soon lead (ngoai-nhac-truoc, 0024) — and lease the rest (attempts + 1,
+//     link chosen); one audit entry
 //  2. the sends, outside any transaction
 //  3. one transaction: each outcome — da-gui; a retryable class (429 / 408 / 5xx / network) owed again
 //     after a back-off; anything else, or the last attempt, that-bai with its class; one audit entry
@@ -277,12 +278,25 @@ func (z *ZaloDispatcher) decide(ctx context.Context, tx *store.ScopedTx, d docst
 	if until, quiet := domain.QuietUntil(now, s.QuietStartMinute, s.QuietEndMinute); quiet && s.Saved {
 		return "hoan_gio_yen_tinh", z.d.Repo.PostponeDelivery(ctx, tx, d.ID, until, now)
 	}
-	if err := z.d.Repo.StartAttempt(ctx, tx, d.ID, chat.LinkID, now.Add(zaloSendLease), now); err != nil {
-		return "", err
-	}
 	text := domain.ZaloTestMessageText
 	if !test {
-		text = domain.ZaloReminderText(d.Title, d.Body, domain.AbsoluteStaffLink(host, d.Link))
+		link := domain.AbsoluteStaffLink(host, d.Link)
+		text = domain.ZaloReminderText(d.Title, d.Body, link)
+		// THE COMMUNE'S ZALO LEAD — a deliberate SECOND threshold that only NARROWS the bell's due-soon set
+		// (ADR 0079 lô 5 Q13, owner: "Zalo thu hẹp, chuông giữ cột SLA"; domain.ZaloDueSoonCutoff says why
+		// it never computes a deadline). Applied HERE, after the quiet-hours wait, so the cut-off is measured
+		// when the message leaves: later can only keep more. No items (an old producer) or no lead set is
+		// today's message, unfiltered — never "send nothing".
+		if s.DueSoonDays != nil && len(d.DueSoonItems) > 0 && domain.IsDueSoonKind(d.Kind) {
+			kept := domain.NarrowDueSoonItems(d.DueSoonItems, domain.ZaloDueSoonCutoff(now, *s.DueSoonDays))
+			if len(kept) == 0 {
+				return skip(domain.ZaloSkipOutsideDueSoonLead)
+			}
+			text = domain.ZaloDueSoonText(d.Kind, kept, link)
+		}
+	}
+	if err := z.d.Repo.StartAttempt(ctx, tx, d.ID, chat.LinkID, now.Add(zaloSendLease), now); err != nil {
+		return "", err
 	}
 	*jobs = append(*jobs, zaloJob{id: d.ID, chatID: chat.ChatID, text: text, attempts: d.Attempts + 1})
 	return "dang_gui", nil

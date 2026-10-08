@@ -443,5 +443,6 @@ func settingDelta(s domain.ZaloChannelSetting) map[string]any {
 		"is_enabled": s.IsEnabled, "kinds": s.Kinds,
 		"quiet_start": domain.FormatClock(s.QuietStartMinute), "quiet_end": domain.FormatClock(s.QuietEndMinute),
 		"overdue_start_after_days": s.OverdueStartAfterDays, "overdue_repeat_every_days": s.OverdueRepeatEveryDays,
+		"due_soon_days": s.DueSoonDays,
 	}
 }

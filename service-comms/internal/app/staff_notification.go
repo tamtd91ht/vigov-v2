@@ -69,11 +69,13 @@ type StaffNotifications struct {
 	log  *slog.Logger
 }
 
-// ZaloOutbox queues the Zalo copies of the notices one Deliver call created. *store.ZaloLinkStore
-// satisfies it. Its failure is rolled back to a savepoint INSIDE it and reported, never propagated into
+// ZaloOutbox queues the Zalo copies of the notices one Deliver call created, with the due-soon items each
+// notice carried (keyed by idempotency key; ADR 0079 lô 5 Q13) — the Zalo copy is the only place they go.
+// *store.ZaloLinkStore satisfies it. Its failure is rolled back to a savepoint INSIDE it and reported, never propagated into
 // the bell's transaction (ADR 0074 #1: Zalo is an extra channel; the bell is delivered regardless).
 type ZaloOutbox interface {
-	EnqueueZaloDeliveries(ctx context.Context, tx *store.ScopedTx, keys []string, createdAt time.Time) (int, error)
+	EnqueueZaloDeliveries(ctx context.Context, tx *store.ScopedTx, keys []string,
+		items map[string][]domain.DueSoonItem, createdAt time.Time) (int, error)
 }
 
 func NewStaffNotifications(db *store.DB, repo StaffNotificationRepo) *StaffNotifications {
@@ -134,13 +136,19 @@ func (uc *StaffNotifications) Deliver(ctx context.Context, in []domain.Notificat
 			out = append(out, domain.DeliveryOutcome{
 				IdempotencyKey: n.IdempotencyKey, Created: created, AlreadyDelivered: already,
 			})
-			items = append(items, map[string]any{
+			item := map[string]any{
 				"khoa":          n.IdempotencyKey,
 				"loai":          n.Kind,
 				"nguoi_nhan_ma": n.RecipientCodes,
 				"tao_moi":       created,
 				"da_co":         already,
-			})
+			}
+			if len(n.DueSoonItems) > 0 {
+				// A count, like the rest of this entry: the codes are the producer's and already name
+				// exactly what the bell's body counts.
+				item["so_muc_sap_den_han"] = len(n.DueSoonItems)
+			}
+			items = append(items, item)
 		}
 		if totalCreated == 0 {
 			// A pure retry: nothing was written, so there is nothing to record. Same discipline as
@@ -155,10 +163,14 @@ func (uc *StaffNotifications) Deliver(ctx context.Context, in []domain.Notificat
 		}
 		if uc.zalo != nil {
 			keys := make([]string, len(clean))
+			dueSoon := map[string][]domain.DueSoonItem{}
 			for i, n := range clean {
 				keys[i] = n.IdempotencyKey
+				if len(n.DueSoonItems) > 0 {
+					dueSoon[n.IdempotencyKey] = n.DueSoonItems
+				}
 			}
-			queued, err := uc.zalo.EnqueueZaloDeliveries(ctx, tx, keys, at)
+			queued, err := uc.zalo.EnqueueZaloDeliveries(ctx, tx, keys, dueSoon, at)
 			if err != nil {
 				// NOT returned: the bell is delivered without its Zalo copies, and the trail says so. The
 				// error names the statement, never a title, a body or a recipient.

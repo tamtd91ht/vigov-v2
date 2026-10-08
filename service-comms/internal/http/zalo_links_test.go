@@ -330,7 +330,10 @@ func TestZaloShapesMatchTheWebContract(t *testing.T) {
 	checkKeys("/api/v1/zalo-links/current", http.MethodGet, "linked", "linked_at", "bot_name", "chat_url", "channel_enabled")
 	checkKeys("/api/v1/zalo-links/current/pairing-codes", http.MethodPost, "code", "expires_at", "chat_url")
 	set := checkKeys("/api/v1/zalo-channel-settings", http.MethodGet, "is_enabled", "kinds", "quiet_start", "quiet_end",
-		"overdue_start_after_days", "overdue_repeat_every_days", "supported_events", "platform_ready")
+		"overdue_start_after_days", "overdue_repeat_every_days", "due_soon_days", "supported_events", "platform_ready")
+	if set["due_soon_days"] != nil {
+		t.Errorf("unsaved due_soon_days = %v, want null (no Zalo filter)", set["due_soon_days"])
+	}
 	if set["quiet_start"] != "21:00" || set["quiet_end"] != "06:00" || set["is_enabled"] != false {
 		t.Errorf("unsaved settings = %v, want off with 21:00–06:00", set)
 	}
@@ -392,6 +395,40 @@ func TestZaloSettingsPutValidation(t *testing.T) {
 	_ = json.Unmarshal(w.Body.Bytes(), &out)
 	if out.UpdatedBy != maCanBoGhi || out.UpdatedAt == nil || !out.IsEnabled {
 		t.Errorf("reply = %+v", out)
+	}
+	if s.fake.lastSave.DueSoonDays != nil || out.DueSoonDays != nil {
+		t.Errorf("absent due_soon_days saved as %v — PUT replaces the form, absent is no lead", s.fake.lastSave.DueSoonDays)
+	}
+}
+
+// ADR 0079 lô 5 Q13: the Zalo lead is 1–14 days or null, carried both ways.
+func TestZaloSettingsPutDueSoonDays(t *testing.T) {
+	s := newZaloLinkServer(t)
+	s.grant(xaA, "admin.lookup")
+	body := func(v string) string {
+		return `{"is_enabled":true,"kinds":["nhiem-vu.sap-den-han"],"quiet_start":"21:00","quiet_end":"06:00",` +
+			`"due_soon_days":` + v + `}`
+	}
+	for _, bad := range []string{"0", "15", "-2"} {
+		w := s.call(t, http.MethodPut, "/api/v1/zalo-channel-settings", hostA, canBoGhi(xaA), body(bad))
+		doiMa(t, w, http.StatusUnprocessableEntity)
+		if e := loiTra(t, w); e.Code != "due_soon_days_out_of_range" || e.Message == "" {
+			t.Errorf("%s: error = %+v", bad, e)
+		}
+	}
+	w := s.call(t, http.MethodPut, "/api/v1/zalo-channel-settings", hostA, canBoGhi(xaA), body("3"))
+	doiMa(t, w, http.StatusOK)
+	var out zaloChannelSettingsOut
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if s.fake.lastSave.DueSoonDays == nil || *s.fake.lastSave.DueSoonDays != 3 || out.DueSoonDays == nil || *out.DueSoonDays != 3 {
+		t.Errorf("saved %v, replied %v — want 3 both ways", s.fake.lastSave.DueSoonDays, out.DueSoonDays)
+	}
+	w = s.call(t, http.MethodPut, "/api/v1/zalo-channel-settings", hostA, canBoGhi(xaA), body("null"))
+	doiMa(t, w, http.StatusOK)
+	if s.fake.lastSave.DueSoonDays != nil {
+		t.Errorf("null saved as %v", *s.fake.lastSave.DueSoonDays)
 	}
 }
 

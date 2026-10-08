@@ -16,6 +16,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -49,15 +50,18 @@ const MaxZaloLinksListed = 2000
 // ---- channel settings ------------------------------------------------------------------------------
 
 const zaloSettingColumns = `is_enabled, array_to_string(kinds, ','), to_char(quiet_start, 'HH24:MI'),
-	to_char(quiet_end, 'HH24:MI'), overdue_start_after_days, overdue_repeat_every_days, updated_at, updated_by`
+	to_char(quiet_end, 'HH24:MI'), overdue_start_after_days, overdue_repeat_every_days, updated_at, updated_by,
+	due_soon_days`
 
 func scanZaloSetting(scan func(...any) error) (domain.ZaloChannelSetting, error) {
 	var (
 		s                   domain.ZaloChannelSetting
 		kinds, qs, qe       string
 		startDays, everyDay sql.NullInt64
+		dueSoonDays         sql.NullInt64
 	)
-	if err := scan(&s.IsEnabled, &kinds, &qs, &qe, &startDays, &everyDay, &s.UpdatedAt, &s.UpdatedBy); err != nil {
+	if err := scan(&s.IsEnabled, &kinds, &qs, &qe, &startDays, &everyDay, &s.UpdatedAt, &s.UpdatedBy,
+		&dueSoonDays); err != nil {
 		return domain.ZaloChannelSetting{}, err
 	}
 	stored := []string{}
@@ -79,6 +83,10 @@ func scanZaloSetting(scan func(...any) error) (domain.ZaloChannelSetting, error)
 	if everyDay.Valid {
 		v := int(everyDay.Int64)
 		s.OverdueRepeatEveryDays = &v
+	}
+	if dueSoonDays.Valid {
+		v := int(dueSoonDays.Int64)
+		s.DueSoonDays = &v
 	}
 	s.Saved = true
 	return s, nil
@@ -123,12 +131,13 @@ func firstZaloSetting(rows *sql.Rows) (domain.ZaloChannelSetting, error) {
 
 // saveZaloSetting overwrites the commune's one row in place (0018: no soft delete on this table).
 const saveZaloSetting = `INSERT INTO zalo_channel_setting (tenant_id, is_enabled, kinds, quiet_start, quiet_end,
-		overdue_start_after_days, overdue_repeat_every_days, created_at, updated_at, updated_by)
-	VALUES ($1, $2, string_to_array($3, ','), $4::time, $5::time, $6, $7, $8, $8, $9)
+		overdue_start_after_days, overdue_repeat_every_days, created_at, updated_at, updated_by, due_soon_days)
+	VALUES ($1, $2, string_to_array($3, ','), $4::time, $5::time, $6, $7, $8, $8, $9, $10)
 	ON CONFLICT (tenant_id) DO UPDATE SET is_enabled = EXCLUDED.is_enabled, kinds = EXCLUDED.kinds,
 		quiet_start = EXCLUDED.quiet_start, quiet_end = EXCLUDED.quiet_end,
 		overdue_start_after_days = EXCLUDED.overdue_start_after_days,
 		overdue_repeat_every_days = EXCLUDED.overdue_repeat_every_days,
+		due_soon_days = EXCLUDED.due_soon_days,
 		updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by`
 
 // SaveChannelSetting writes the commune's settings row. by is the saver's business code.
@@ -137,7 +146,8 @@ func (s *ZaloLinkStore) SaveChannelSetting(ctx context.Context, tx *store.Scoped
 
 	if _, err := tx.Exec(ctx, saveZaloSetting, string(tx.TenantID()), v.IsEnabled, strings.Join(v.Kinds, ","),
 		domain.FormatClock(v.QuietStartMinute), domain.FormatClock(v.QuietEndMinute),
-		nullableInt(v.OverdueStartAfterDays), nullableInt(v.OverdueRepeatEveryDays), at.UTC(), by); err != nil {
+		nullableInt(v.OverdueStartAfterDays), nullableInt(v.OverdueRepeatEveryDays), at.UTC(), by,
+		nullableInt(v.DueSoonDays)); err != nil {
 		return fmt.Errorf("zalo_channel_setting: save: %w", err)
 	}
 	return nil
@@ -470,17 +480,24 @@ func (s *ZaloLinkStore) LiveChatsOf(ctx context.Context, tx *store.ScopedTx, bot
 // notice a commune switched off; Zalo never carries it (ADR 0081 #5), and 0023 keeps zalo_delivery.kind
 // closed to it, so without this filter the INSERT would fail and lose every other row of the call.
 //
-// Everything else — the bot's configuration (platform scope), quiet hours, the send — is the sender's,
-// which re-checks all three at send time as well.
+// Everything else — the bot's configuration (platform scope), quiet hours, the commune's due-soon lead,
+// the send — is the sender's, which re-checks the three above at send time as well.
+//
+// DUE-SOON ITEMS ($7, 0024): a JSON object {idempotency_key: [{code, deadline}, …]} holding only the
+// notices that carried items. A QUEUED row of such a notice takes its list (`->` yields NULL for a key
+// that is absent); a skipped row takes none — it never sends. Only the Zalo row carries them: the bell
+// row is written by AddDelivery and never sees them.
 const enqueueZaloDeliveries = `INSERT INTO zalo_delivery
-		(tenant_id, id, notification_id, staff_code, kind, status, skip_reason, next_attempt_at, created_at, updated_at)
+		(tenant_id, id, notification_id, staff_code, kind, status, skip_reason, next_attempt_at, created_at, updated_at,
+		 due_soon_items)
 	SELECT c.tenant_id, c.id, c.id, c.recipient_code, c.kind,
 		CASE WHEN c.reason IS NULL THEN 'cho-gui' ELSE 'bo-qua' END,
 		c.reason,
 		CASE WHEN c.reason IS NULL THEN $3::timestamptz END,
-		$3, $3
+		$3, $3,
+		CASE WHEN c.reason IS NULL THEN $7::jsonb -> c.idempotency_key END
 	FROM (
-		SELECT n.tenant_id, n.id, n.recipient_code, n.kind,
+		SELECT n.tenant_id, n.id, n.recipient_code, n.kind, n.idempotency_key,
 			CASE
 				WHEN s.tenant_id IS NULL OR NOT s.is_enabled THEN 'kenh-tat'
 				WHEN NOT (n.kind = ANY (s.kinds) OR EXISTS (
@@ -499,17 +516,22 @@ const enqueueZaloDeliveries = `INSERT INTO zalo_delivery
 	ON CONFLICT (tenant_id, notification_id) DO NOTHING`
 
 // EnqueueZaloDeliveries runs enqueueZaloDeliveries for the keys of one DeliverStaffNotifications call.
-// Returns how many rows were written (queued and skipped together).
+// items maps a key to the due-soon items its notice carried (absent or empty = none). Returns how many
+// rows were written (queued and skipped together).
 //
 // INSIDE A SAVEPOINT, AND THAT IS THE POINT: "Zalo là kênh thêm … người chưa ghép nối vẫn phải nhận đủ"
 // (ADR 0074 #1). A failure here is rolled back to the savepoint and returned, leaving the caller's
 // transaction — the bell notices and their audit entry — intact and committable. Without it, one bad
 // Zalo row would take every bell notice of the call down with it.
 func (s *ZaloLinkStore) EnqueueZaloDeliveries(ctx context.Context, tx *store.ScopedTx, keys []string,
-	createdAt time.Time) (int, error) {
+	items map[string][]domain.DueSoonItem, createdAt time.Time) (int, error) {
 
 	if len(keys) == 0 {
 		return 0, nil
+	}
+	byKey, err := encodeDueSoonItemsByKey(items)
+	if err != nil {
+		return 0, err
 	}
 	// A savepoint INSIDE this commune's ScopedTx (tenant_id is bound by the transaction).
 	if _, err := tx.Exec(ctx, `SAVEPOINT zalo_delivery_enqueue`); err != nil {
@@ -517,7 +539,7 @@ func (s *ZaloLinkStore) EnqueueZaloDeliveries(ctx context.Context, tx *store.Sco
 	}
 	legacy, perDomain := domain.ZaloLegacyKindPairs()
 	res, err := tx.Exec(ctx, enqueueZaloDeliveries, string(tx.TenantID()), keys, createdAt.UTC(), legacy, perDomain,
-		domain.ZaloQueueableKinds())
+		domain.ZaloQueueableKinds(), byKey)
 	var n int64
 	if err == nil {
 		n, err = res.RowsAffected()
@@ -534,6 +556,49 @@ func (s *ZaloLinkStore) EnqueueZaloDeliveries(ctx context.Context, tx *store.Sco
 		return 0, fmt.Errorf("zalo_delivery: release savepoint: %w", err)
 	}
 	return int(n), nil
+}
+
+// dueSoonItemJSON is one element of zalo_delivery.due_soon_items. The deadline is RFC 3339 in UTC, as
+// stored by the producer — no zone conversion that could shift it.
+type dueSoonItemJSON struct {
+	Code     string    `json:"code"`
+	Deadline time.Time `json:"deadline"`
+}
+
+// encodeDueSoonItemsByKey is $7 of the enqueue: {key: [items]} for the keys that carry any, as text.
+func encodeDueSoonItemsByKey(items map[string][]domain.DueSoonItem) (string, error) {
+	out := make(map[string][]dueSoonItemJSON, len(items))
+	for k, list := range items {
+		if len(list) == 0 {
+			continue
+		}
+		enc := make([]dueSoonItemJSON, len(list))
+		for i, it := range list {
+			enc[i] = dueSoonItemJSON{Code: it.Code, Deadline: it.Deadline.UTC()}
+		}
+		out[k] = enc
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return "", fmt.Errorf("zalo_delivery: encode due-soon items: %w", err)
+	}
+	return string(b), nil
+}
+
+// decodeDueSoonItems reads zalo_delivery.due_soon_items; NULL = none.
+func decodeDueSoonItems(raw sql.NullString) ([]domain.DueSoonItem, error) {
+	if !raw.Valid || raw.String == "" {
+		return nil, nil
+	}
+	var enc []dueSoonItemJSON
+	if err := json.Unmarshal([]byte(raw.String), &enc); err != nil {
+		return nil, fmt.Errorf("zalo_delivery: decode due-soon items: %w", err)
+	}
+	out := make([]domain.DueSoonItem, len(enc))
+	for i, it := range enc {
+		out[i] = domain.DueSoonItem{Code: it.Code, Deadline: it.Deadline.UTC()}
+	}
+	return out, nil
 }
 
 const insertTestDelivery = `INSERT INTO zalo_delivery (tenant_id, id, notification_id, staff_code, kind, status, link_id,
@@ -563,6 +628,8 @@ type DueZaloDelivery struct {
 	Title     string
 	Body      string
 	Link      string
+	// DueSoonItems: what a due-soon digest named, for the commune's Zalo lead (0024). nil = none.
+	DueSoonItems []domain.DueSoonItem
 }
 
 // MaxZaloDeliveryBatch bounds one commune's claim: the rows locked in one transaction.
@@ -571,7 +638,7 @@ const MaxZaloDeliveryBatch = 50
 // claimDueDeliveries — the joined notice is constrained to the SAME commune ($1) in its ON clause, as
 // core/store.QueryJoin requires of every joined table.
 const claimDueDeliveries = `SELECT d.id, d.staff_code, d.kind, d.attempts,
-		COALESCE(n.title, ''), COALESCE(n.body, ''), COALESCE(n.link, '')
+		COALESCE(n.title, ''), COALESCE(n.body, ''), COALESCE(n.link, ''), d.due_soon_items::text
 	FROM zalo_delivery d
 	LEFT JOIN staff_notification n ON n.tenant_id = $1 AND n.id = d.notification_id
 	WHERE d.tenant_id = $1 AND d.status = 'cho-gui' AND d.deleted_at IS NULL AND d.next_attempt_at <= $2
@@ -594,9 +661,16 @@ func (s *ZaloLinkStore) ClaimDueDeliveries(ctx context.Context, tx *store.Scoped
 	defer rows.Close()
 	var out []DueZaloDelivery
 	for rows.Next() {
-		var d DueZaloDelivery
-		if err := rows.Scan(&d.ID, &d.StaffCode, &d.Kind, &d.Attempts, &d.Title, &d.Body, &d.Link); err != nil {
+		var (
+			d     DueZaloDelivery
+			items sql.NullString
+		)
+		if err := rows.Scan(&d.ID, &d.StaffCode, &d.Kind, &d.Attempts, &d.Title, &d.Body, &d.Link, &items); err != nil {
 			return nil, fmt.Errorf("zalo_delivery: scan: %w", err)
+		}
+		var err error
+		if d.DueSoonItems, err = decodeDueSoonItems(items); err != nil {
+			return nil, err
 		}
 		out = append(out, d)
 	}

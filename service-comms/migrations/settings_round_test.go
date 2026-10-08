@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// Schema-TEXT checks for migrations 0019–0023 (ADR 0079, ADR 0081 #5, owner answers 08/10/2026). They assert the
+// Schema-TEXT checks for migrations 0019–0024 (ADR 0079, ADR 0081 #5, owner answers 08/10/2026). They assert the
 // columns, CHECKs, keys and triggers are WRITTEN; they do not prove PostgreSQL enforces them — the pg
 // suites need VIGOV_TEST_DSN for that.
 
@@ -16,7 +16,55 @@ const (
 	file0021 = "0021_zalo_kinds_per_domain.sql"
 	file0022 = "0022_zalo_commune_bot.sql"
 	file0023 = "0023_staff_notification_disbursement_mention.sql"
+	file0024 = "0024_zalo_due_soon_lead.sql"
 )
+
+// THE MUTATIONS THAT MUST TURN THIS RED (ADR 0079 lô 5 Q13): a vendor default on the lead (NULL must stay
+// "no filter"); the 1–14 bound loosened; items admitted on a non-due-soon kind or unbounded; an old skip
+// reason dropped (finished rows keep theirs forever); the old CHECK dropped before the new one exists; the
+// guard no longer freezing the items — or no longer freezing what 0018 froze.
+func TestMigration0024ZaloDueSoonLead(t *testing.T) {
+	sql := executableSQL(t, file0024)
+	for _, c := range []struct{ want, why string }{
+		{"alter table zalo_channel_setting add column if not exists due_soon_days smallint;", "nullable, no default"},
+		{"check (due_soon_days between 1 and 14)", "the prototype's 1–14 box"},
+		{"alter table zalo_delivery add column if not exists due_soon_items jsonb;", "items on the Zalo row only"},
+		{"jsonb_array_length(due_soon_items) between 1 and 500", "comms.proto's bound"},
+		{"kind in ('sap-den-han', 'nhiem-vu.sap-den-han', 'van-ban.sap-den-han', 'phan-anh.sap-den-han')", "due-soon kinds only"},
+		{"skip_reason in ('chua-lien-ket', 'kenh-tat', 'loai-tat', 'bot-chua-cau-hinh', 'ngoai-nhac-truoc')", "0018's four kept + the lead's"},
+	} {
+		if !strings.Contains(sql, c.want) {
+			t.Errorf("0024 lacks %q — %s", c.want, c.why)
+		}
+	}
+	if strings.Contains(sql, "default") {
+		t.Error("0024 sets a default — the lead is the commune's choice; NULL is today's behaviour")
+	}
+	if strings.Contains(sql, "staff_notification") {
+		t.Error("0024 touches staff_notification — the bell row is unchanged by Q13")
+	}
+	drop := strings.Index(sql, "drop constraint if exists zalo_delivery_skip_reason_known;")
+	add := strings.Index(sql, "add constraint zalo_delivery_skip_reason_with_lead ")
+	if drop < 0 || add < 0 || drop < add {
+		t.Error("0024 must add the widened skip-reason CHECK before dropping 0018's")
+	}
+	guard := functionBody(t, sql, "zalo_delivery_guard")
+	for _, want := range []string{
+		"if tg_op = 'delete' then raise exception",
+		"if old.deleted_at is not null then raise exception",
+		"or new.notification_id is distinct from old.notification_id",
+		"or new.kind is distinct from old.kind",
+		"or new.due_soon_items is distinct from old.due_soon_items",
+		"if old.status <> 'cho-gui'",
+		"or new.skip_reason is distinct from old.skip_reason",
+		"if new.attempts < old.attempts then raise exception",
+	} {
+		if !strings.Contains(guard, want) {
+			t.Errorf("zalo_delivery_guard lacks %q", want)
+		}
+	}
+	noDestruction(t, file0024, sql)
+}
 
 // noDestruction fails when an additive migration drops a table or a column, deletes or seeds rows.
 func noDestruction(t *testing.T, name, sql string) {

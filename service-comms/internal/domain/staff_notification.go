@@ -58,7 +58,28 @@ const (
 	MaxRecipientCodeLen     = 64 // not in the proto: the point past which a "code" is not one
 	notificationKeyMinPrint = 0x20
 	notificationKeyMaxPrint = 0x7e
+
+	// StaffNotification.due_soon_items (comms.proto, ADR 0079 lô 5 Q13).
+	MaxDueSoonItems       = 500
+	MaxDueSoonItemCodeLen = 100
 )
+
+// DueSoonItem is one record a due-soon digest names: its business code and its STORED deadline, copied by
+// the producer as read (rule 10, invariant 2). Comms never derives a deadline or an overdue state from it;
+// it only compares Deadline with the commune's Zalo lead (ZaloDueSoonCutoff).
+type DueSoonItem struct {
+	Code     string
+	Deadline time.Time
+}
+
+// DueSoonKinds are the kinds a due_soon_items list may ride on (comms.proto: DUE_SOON 1, TASK_DUE_SOON 5,
+// DOCUMENT_DUE_SOON 9, PETITION_DUE_SOON 13 — stored values here). Migration 0024's
+// zalo_delivery_due_soon_items_shape CHECK names the same four.
+var DueSoonKinds = []string{StaffNotificationDueSoon, ZaloKindTaskDueSoon, ZaloKindDocumentDueSoon,
+	ZaloKindPetitionDueSoon}
+
+// IsDueSoonKind reports whether kind is one of DueSoonKinds.
+func IsDueSoonKind(kind string) bool { return slices.Contains(DueSoonKinds, kind) }
 
 // StaffNotification is one row as the store reads it.
 type StaffNotification struct {
@@ -86,6 +107,9 @@ type NotificationDelivery struct {
 	Title          string
 	Body           string
 	Link           string
+	// DueSoonItems shape the ZALO copy only (comms.proto StaffNotification.due_soon_items); the bell row
+	// never sees them. Empty = an old producer: today's Zalo copy, never "drop it".
+	DueSoonItems []DueSoonItem
 }
 
 // DeliveryOutcome is what one notice produced: rows created, and recipients who already had the key.
@@ -159,6 +183,11 @@ func ValidateDeliveries(in []NotificationDelivery) ([]NotificationDelivery, erro
 			return nil, invalid("notifications[%d].link %s", i, err.Error())
 		}
 
+		items, err := validateDueSoonItems(n.Kind, n.DueSoonItems)
+		if err != nil {
+			return nil, invalid("notifications[%d].due_soon_items%s", i, err.Error())
+		}
+
 		out = append(out, NotificationDelivery{
 			IdempotencyKey: n.IdempotencyKey,
 			Kind:           n.Kind,
@@ -166,6 +195,7 @@ func ValidateDeliveries(in []NotificationDelivery) ([]NotificationDelivery, erro
 			Title:          title,
 			Body:           body,
 			Link:           n.Link,
+			DueSoonItems:   items,
 		})
 	}
 	return out, nil
@@ -176,6 +206,57 @@ func ValidateDeliveries(in []NotificationDelivery) ([]NotificationDelivery, erro
 // list for both, so the bell and the Zalo selection can never disagree on what a kind is.
 func knownKind(k string) bool {
 	return slices.Contains(ZaloQueueableKinds(), k) || slices.Contains(BellOnlyKinds, k)
+}
+
+// validateDueSoonItems is comms.proto's VALIDATION for StaffNotification.due_soon_items: none, or — on a
+// due-soon kind only — at most 500 items, each code 1–100 printable characters and unique within the
+// notice, each deadline set. The error text starts with the item's index or a space and names no code:
+// a code is the producer's text, and the status message lands in the producer's logs.
+//
+// Codes are NOT trimmed or rewritten: the code is what the bell's body names, and a changed one would name
+// a record that does not exist. Deadlines are kept as sent (UTC) — compared, never recomputed.
+func validateDueSoonItems(kind string, in []DueSoonItem) ([]DueSoonItem, error) {
+	if len(in) == 0 {
+		return nil, nil
+	}
+	if !IsDueSoonKind(kind) {
+		return nil, errors.New(" is set on a kind that is not due soon")
+	}
+	if len(in) > MaxDueSoonItems {
+		return nil, fmt.Errorf(" has %d items, at most %d", len(in), MaxDueSoonItems)
+	}
+	out := make([]DueSoonItem, 0, len(in))
+	seen := make(map[string]int, len(in))
+	for j, it := range in {
+		n := utf8.RuneCountInString(it.Code)
+		switch {
+		case n == 0:
+			return nil, fmt.Errorf("[%d].code is empty", j)
+		case n > MaxDueSoonItemCodeLen:
+			return nil, fmt.Errorf("[%d].code is longer than %d characters", j, MaxDueSoonItemCodeLen)
+		case !utf8.ValidString(it.Code) || !allPrintable(it.Code):
+			return nil, fmt.Errorf("[%d].code holds a character that is not printable", j)
+		}
+		if first, dup := seen[it.Code]; dup {
+			return nil, fmt.Errorf("[%d].code repeats [%d]", j, first)
+		}
+		seen[it.Code] = j
+		if it.Deadline.IsZero() {
+			return nil, fmt.Errorf("[%d].deadline is not set", j)
+		}
+		out = append(out, DueSoonItem{Code: it.Code, Deadline: it.Deadline.UTC()})
+	}
+	return out, nil
+}
+
+// allPrintable: every rune is a graphic character or the ASCII space (unicode.IsPrint).
+func allPrintable(s string) bool {
+	for _, r := range s {
+		if !unicode.IsPrint(r) {
+			return false
+		}
+	}
+	return true
 }
 
 // validateIdempotencyKey: 1–200 printable ASCII characters, NOT trimmed — the key is opaque, and a

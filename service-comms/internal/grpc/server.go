@@ -17,6 +17,7 @@ import (
 	"log/slog"
 	"net"
 	"strings"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
@@ -133,6 +134,7 @@ func (s *Server) DeliverStaffNotifications(ctx context.Context, req *commsv1.Del
 			Title:          n.GetTitle(),
 			Body:           n.GetBody(),
 			Link:           n.GetLink(),
+			DueSoonItems:   dueSoonItemsFromWire(n.GetDueSoonItems()),
 		})
 	}
 
@@ -165,6 +167,23 @@ func (s *Server) DeliverStaffNotifications(ctx context.Context, req *commsv1.Del
 	s.d.Log.InfoContext(ctx, "comms/grpc: đã giao thông báo chuông",
 		"xa", string(tenant.MustFrom(ctx)), "so_thong_bao", len(out), "tao_moi", created)
 	return res, nil
+}
+
+// dueSoonItemsFromWire copies StaffNotification.due_soon_items. An unset or out-of-range deadline becomes
+// the zero time, which domain.ValidateDeliveries refuses ("every deadline set") — never a default instant.
+func dueSoonItemsFromWire(in []*commsv1.DueSoonItem) []domain.DueSoonItem {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]domain.DueSoonItem, 0, len(in))
+	for _, it := range in {
+		var at time.Time
+		if ts := it.GetDeadline(); ts != nil && ts.CheckValid() == nil {
+			at = ts.AsTime()
+		}
+		out = append(out, domain.DueSoonItem{Code: it.GetCode(), Deadline: at})
+	}
+	return out
 }
 
 // systemActor is the "who" of a delivery: the system principal (core/audit.SystemActor), because the

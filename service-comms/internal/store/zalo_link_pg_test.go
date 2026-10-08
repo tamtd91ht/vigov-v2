@@ -251,7 +251,7 @@ func TestPgZaloEnqueueDecidesTheThreeLocalSkips(t *testing.T) {
 				return err
 			}
 			var err error
-			n, err = s.EnqueueZaloDeliveries(ctx, tx, []string{key}, at)
+			n, err = s.EnqueueZaloDeliveries(ctx, tx, []string{key}, nil, at)
 			return err
 		}); err != nil {
 			t.Fatal(err)
@@ -348,4 +348,100 @@ func contains(ids []tenant.ID, want string) bool {
 		}
 	}
 	return false
+}
+
+// 0024 (ADR 0079 lô 5 Q13): the lead round-trips and is bounded by the database; the due-soon items land on
+// the QUEUED Zalo row only, come back from the claim as sent, are frozen by the guard; and the new skip
+// reason is admitted.
+func TestPgZaloDueSoonLeadAndItems(t *testing.T) {
+	h, s, z, c1, _ := zaloRig(t)
+	ctx := ctxXa(tenant.ID(c1))
+	three, fifteen := 3, 15
+	save := func(days *int) error {
+		return h.For(ctx).Tx(ctx, func(tx *pkgstore.ScopedTx) error {
+			return s.SaveChannelSetting(ctx, tx, domain.ZaloChannelSetting{IsEnabled: true,
+				Kinds: []string{domain.ZaloKindTaskDueSoon}, QuietStartMinute: 21 * 60, QuietEndMinute: 6 * 60,
+				DueSoonDays: days}, "CB-9", zaloAt)
+		})
+	}
+	if err := save(&three); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.ChannelSetting(ctx); err != nil || got.DueSoonDays == nil || *got.DueSoonDays != 3 {
+		t.Fatalf("lead round trip: %+v %v", got, err)
+	}
+	if err := save(&fifteen); err == nil {
+		t.Error("a lead of 15 days was stored — 0024's CHECK must refuse it")
+	}
+	if err := save(nil); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.ChannelSetting(ctx); got.DueSoonDays != nil {
+		t.Errorf("NULL lead read back as %v", *got.DueSoonDays)
+	}
+
+	notices := NewStaffNotificationStore(h)
+	// Fixed instants, as a producer would copy them from storage.
+	items := []domain.DueSoonItem{{Code: "NV-2026-0001", Deadline: time.Date(2026, 10, 6, 5, 0, 0, 0, time.UTC)},
+		{Code: "NV-2026-0002", Deadline: time.Date(2026, 10, 10, 3, 0, 0, 0, time.UTC)}}
+	deliver := func(key string, staff ...string) {
+		at := zaloAt.Add(time.Duration(len(key)) * time.Millisecond)
+		if err := h.For(ctx).Tx(ctx, func(tx *pkgstore.ScopedTx) error {
+			ids := make([]string, len(staff))
+			for i := range ids {
+				ids[i] = fmt.Sprintf("%s-%s-%d", c1[:10], key, i)
+			}
+			if _, err := notices.AddDelivery(ctx, tx, domain.NotificationDelivery{IdempotencyKey: key,
+				Kind: domain.ZaloKindTaskDueSoon, RecipientCodes: staff, Title: "T"}, ids, at); err != nil {
+				return err
+			}
+			_, err := s.EnqueueZaloDeliveries(ctx, tx, []string{key}, map[string][]domain.DueSoonItem{key: items}, at)
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	itemsOf := func(staff string) (string, bool) {
+		var raw *string
+		if err := moKetNoi(t).QueryRow(`SELECT due_soon_items::text FROM zalo_delivery
+			WHERE tenant_id = $1 AND staff_code = $2`, c1, staff).Scan(&raw); err != nil {
+			t.Fatalf("%s: %v", staff, err)
+		}
+		if raw == nil {
+			return "", false
+		}
+		return *raw, true
+	}
+	pairStaff(t, h, s, z, c1, "CB-00001", "chat-ds-"+c1, "link-ds")
+	deliver("ds1", "CB-00001", "CB-00002") // CB-00002 is not linked: skipped at enqueue, carries none
+	if _, ok := itemsOf("CB-00001"); !ok {
+		t.Error("the queued row has no due-soon items")
+	}
+	if raw, ok := itemsOf("CB-00002"); ok {
+		t.Errorf("a skipped row carries items: %s", raw)
+	}
+
+	if err := h.For(ctx).Tx(ctx, func(tx *pkgstore.ScopedTx) error {
+		due, err := s.ClaimDueDeliveries(ctx, tx, zaloAt.Add(time.Hour), 10)
+		if err != nil || len(due) != 1 || len(due[0].DueSoonItems) != 2 {
+			return fmt.Errorf("claim = %+v %w", due, err)
+		}
+		for i, it := range due[0].DueSoonItems {
+			if it.Code != items[i].Code || !it.Deadline.Equal(items[i].Deadline) {
+				return fmt.Errorf("item %d = %+v, want %+v", i, it, items[i])
+			}
+		}
+		return s.SkipDelivery(ctx, tx, due[0].ID, domain.ZaloSkipOutsideDueSoonLead, zaloAt)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// The guard freezes what the row was about.
+	err := h.For(ctx).Tx(ctx, func(tx *pkgstore.ScopedTx) error {
+		_, err := tx.Exec(ctx, `UPDATE zalo_delivery SET due_soon_items = '[]'::jsonb
+			WHERE tenant_id = $1 AND staff_code = 'CB-00001'`, c1)
+		return err
+	})
+	if err == nil {
+		t.Error("due_soon_items was rewritten after the row was queued")
+	}
 }

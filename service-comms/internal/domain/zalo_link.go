@@ -273,9 +273,12 @@ type ZaloChannelSetting struct {
 	QuietEndMinute         int
 	OverdueStartAfterDays  *int
 	OverdueRepeatEveryDays *int
-	UpdatedAt              time.Time
-	UpdatedBy              string
-	Saved                  bool
+	// DueSoonDays is the Zalo "Sắp đến hạn: nhắc trước" lead, 1–14 days (0024, ADR 0079 lô 5 Q13). nil =
+	// no Zalo filter: a due-soon digest's Zalo copy is the bell's title and body, as before 0024.
+	DueSoonDays *int
+	UpdatedAt   time.Time
+	UpdatedBy   string
+	Saved       bool
 	// LegacyKindsStored: the stored row still holds one of the four OLD values, and Kinds is its
 	// read-time expansion (0021). A save is then never a no-op, so the next save writes per-domain values.
 	LegacyKindsStored bool
@@ -307,7 +310,8 @@ func (s ZaloChannelSetting) Same(o ZaloChannelSetting) bool {
 	return s.IsEnabled == o.IsEnabled && slices.Equal(s.Kinds, o.Kinds) &&
 		s.QuietStartMinute == o.QuietStartMinute && s.QuietEndMinute == o.QuietEndMinute &&
 		eqIntPtr(s.OverdueStartAfterDays, o.OverdueStartAfterDays) &&
-		eqIntPtr(s.OverdueRepeatEveryDays, o.OverdueRepeatEveryDays)
+		eqIntPtr(s.OverdueRepeatEveryDays, o.OverdueRepeatEveryDays) &&
+		eqIntPtr(s.DueSoonDays, o.DueSoonDays)
 }
 
 func eqIntPtr(a, b *int) bool {
@@ -337,6 +341,13 @@ func settingErr(code, msg string) error { return &ZaloSettingError{Code: code, M
 const (
 	MaxOverdueStartAfterDays  = 365
 	MaxOverdueRepeatEveryDays = 365
+)
+
+// The Zalo lead's box, 1 to 14 days — the prototype's range, adopted by the owner (ADR 0079 lô 5 Q13) and
+// mirrored by 0024's zalo_channel_setting_due_soon_days_range. A bound of the box, not a deadline figure.
+const (
+	MinDueSoonDays = 1
+	MaxDueSoonDays = 14
 )
 
 // NormalizeZaloChannelSetting validates a save and returns it with the kinds de-duplicated in the
@@ -380,6 +391,10 @@ func NormalizeZaloChannelSetting(in ZaloChannelSetting) (ZaloChannelSetting, err
 	if d := out.OverdueRepeatEveryDays; d != nil && (*d < 1 || *d > MaxOverdueRepeatEveryDays) {
 		return ZaloChannelSetting{}, settingErr("overdue_repeat_out_of_range",
 			fmt.Sprintf("Số ngày nhắc lại việc quá hạn phải từ 1 đến %d.", MaxOverdueRepeatEveryDays))
+	}
+	if d := out.DueSoonDays; d != nil && (*d < MinDueSoonDays || *d > MaxDueSoonDays) {
+		return ZaloChannelSetting{}, settingErr("due_soon_days_out_of_range",
+			fmt.Sprintf("Số ngày nhắc trước khi đến hạn phải từ %d đến %d, hoặc để trống.", MinDueSoonDays, MaxDueSoonDays))
 	}
 	return out, nil
 }
@@ -455,7 +470,103 @@ const (
 	ZaloSkipChannelOff       = "kenh-tat"
 	ZaloSkipKindOff          = "loai-tat"
 	ZaloSkipBotNotConfigured = "bot-chua-cau-hinh"
+	// ZaloSkipOutsideDueSoonLead (0024): a due-soon digest whose records all fall outside the commune's
+	// Zalo lead — nothing to say on Zalo; the bell row is delivered regardless.
+	ZaloSkipOutsideDueSoonLead = "ngoai-nhac-truoc"
 )
+
+// ---- the Zalo due-soon lead (ADR 0079 lô 5 Q13, migration 0024) ------------------------------------------
+//
+// A DELIBERATE SECOND THRESHOLD, AND IT ONLY NARROWS. The bell's due-soon set is each row's SLA column, in
+// working hours (identity.v1.ResolveDueSoonCutoff); the producer sends that set, with each record's STORED
+// deadline. The owner chose "Zalo thu hẹp, chuông giữ cột SLA": the commune's "nhắc trước N ngày" box
+// decides which of THOSE records the Zalo message names — never which records are due soon on the bell.
+// A record outside the bell's window never reaches comms, so a lead longer than the window keeps all.
+//
+// NOTHING HERE COMPUTES A DEADLINE OR AN OVERDUE STATE (rule 10, invariants 2–3). The cut-off is "now plus
+// the lead", compared with deadlines the producer read from storage. An item whose deadline has already
+// passed by the time the message leaves (a quiet-hours postponement) is kept — it is ≤ the cut-off — and is
+// not relabelled: comms does not decide overdue.
+//
+// NO SCHEDULE OF ITS OWN (ADR 0079 "Bổ sung 08/10/2026"): the digest runs daily and the lead is counted in
+// days, so a record due within N days is inside at least one digest's lead before its deadline. The sender
+// applies the lead when the message LEAVES (after any quiet-hours wait) — never earlier than receipt, so it
+// can only keep more than a filter at receipt would.
+
+// ZaloDueSoonCutoff is the latest deadline the commune's Zalo lead keeps: now plus `days` CALENDAR days in
+// Asia/Ho_Chi_Minh. Calendar, not working, days: the box counts days of the calendar the staff member reads
+// on the phone ("nhắc trước N ngày"); the working-hours unit belongs to the bell's SLA, which this does not
+// replace.
+func ZaloDueSoonCutoff(now time.Time, days int) time.Time {
+	// @sla-ok: not a deadline — the commune's Zalo display lead (ADR 0079 lô 5 Q13), compared with stored deadlines
+	return now.In(VietnamTime).AddDate(0, 0, days).UTC()
+}
+
+// NarrowDueSoonItems keeps the items whose stored deadline is at or before the cut-off, in their order.
+func NarrowDueSoonItems(items []DueSoonItem, cutoff time.Time) []DueSoonItem {
+	out := make([]DueSoonItem, 0, len(items))
+	for _, it := range items {
+		if !it.Deadline.After(cutoff) {
+			out = append(out, it)
+		}
+	}
+	return out
+}
+
+// dueSoonNoun names the records of one due-soon kind, as the producers' titles do: service-petitions
+// "nhiệm vụ" / "phiếu phản ánh" (domain/automation.go noun). DOCUMENT is "văn bản", not the documents
+// producer's "văn bản đến": the DOCUMENT kinds also carry the đơn thư register (comms.proto, ADR 0079 Q18),
+// so the narrower noun would misname a letter. The OLD kind carries no domain: "việc", comms.proto's own
+// wording for it ("Bạn có N việc sắp đến hạn").
+func dueSoonNoun(kind string) string {
+	switch kind {
+	case ZaloKindTaskDueSoon:
+		return "nhiệm vụ"
+	case ZaloKindPetitionDueSoon:
+		return "phiếu phản ánh"
+	case ZaloKindDocumentDueSoon:
+		return "văn bản"
+	}
+	return "việc"
+}
+
+// ZaloDueSoonText is the Zalo message of a due-soon digest NARROWED to the commune's lead: worded from the
+// KEPT items only — never from the bell's title/body, which count the wider bell set. It mirrors the
+// producer's digest: "Bạn có N … sắp đến hạn xử lý", then "Gồm: " and the codes sorted, cut with
+// " và K mục khác." past the bell body's length, then the link. kept must be non-empty.
+func ZaloDueSoonText(kind string, kept []DueSoonItem, link string) string {
+	codes := make([]string, 0, len(kept))
+	for _, it := range kept {
+		codes = append(codes, it.Code)
+	}
+	slices.Sort(codes)
+	title := fmt.Sprintf("Bạn có %d %s sắp đến hạn xử lý", len(codes), dueSoonNoun(kind))
+	return ZaloReminderText(title, dueSoonCodeList(codes), link)
+}
+
+// dueSoonCodeList is the producers' codeList (service-petitions domain/automation.go), bounded by the
+// bell body's length so the Zalo message is never longer than the digest it narrows.
+func dueSoonCodeList(codes []string) string {
+	if len(codes) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("Gồm: ")
+	for i, c := range codes {
+		sep := ""
+		if i > 0 {
+			sep = ", "
+		}
+		tail := fmt.Sprintf(" và %d mục khác.", len(codes)-i)
+		if utf8.RuneCountInString(b.String()+sep+c)+utf8.RuneCountInString(tail) > MaxNotificationBodyLen {
+			b.WriteString(tail)
+			return b.String()
+		}
+		b.WriteString(sep + c)
+	}
+	b.WriteString(".")
+	return b.String()
+}
 
 // The sender's retry policy — VENDOR choices, not customer figures (ADR 0074 fixes only WHICH failures are
 // retried: 429 / 408 / 5xx). Six attempts with doubling back-off from one minute cover a Zalo outage of
