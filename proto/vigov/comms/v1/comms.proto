@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package vigov.comms.v1;
 
+import "google/protobuf/timestamp.proto";
+
 // comms — Thông tin – truyền thông.
 //
 // Contract rules that apply to every RPC here:
@@ -266,6 +268,64 @@ message StaffNotification {
   // is an open redirect waiting in every recipient's bell. No personal data in it (rule 3,
   // forbidden #4). At most 300 characters.
   string link = 6;
+
+  // The records a due-soon digest names, each with its deadline — so comms can apply the commune's
+  // Zalo "Sắp đến hạn: nhắc trước" lead (ADR 0079 lô 5 Q13) to the ZALO copy only. Added 08/10/2026.
+  //
+  // WHY A FIELD, NOT THE BODY: the digest today carries its codes in `body` and no deadline, so comms
+  // cannot tell which of them fall inside a Zalo lead narrower than the bell's due-soon window (the
+  // producer's set comes from identity.v1.ResolveDueSoonCutoff). Parsing `body` would make free text a
+  // contract; asking the producer to know the Zalo lead would put a comms setting in two services.
+  //
+  // WHICH KINDS: set ONLY on a due-soon kind — DUE_SOON (1), TASK_DUE_SOON (5), DOCUMENT_DUE_SOON (9),
+  // PETITION_DUE_SOON (13). Non-empty on any other kind is INVALID_ARGUMENT (the whole batch, as for
+  // every other refusal): a deadline list on an OVERDUE notice is an illegal pair, not a hint.
+  //
+  // EMPTY = AN OLD PRODUCER, NOT "NOTHING IS DUE": comms keeps TODAY's behaviour for that notice — the
+  // Zalo copy is the bell's title and body, unfiltered. Never read empty as "drop the Zalo copy".
+  //
+  // WHAT COMMS DOES WITH IT:
+  //   * the BELL row is unchanged — same `title`, `body`, `link`, same one row per recipient. The
+  //     items never narrow, re-word or re-count the bell.
+  //   * the ZALO copy keeps only the items inside the commune's Zalo lead, and comms composes the Zalo
+  //     text from the KEPT items (count and codes), never from `title`/`body`, which count the wider
+  //     bell set. No kept item → no Zalo message for that notice (the bell row still exists).
+  //   * the Zalo lead can only NARROW: the producer sends the bell's set, so a Zalo lead longer than
+  //     the bell window cannot reach records the producer never sent.
+  //   * WHEN the window is measured is comms' decision and has a trap: this digest is delivered ONCE
+  //     per recipient per day (key `sla_reminders:due_soon:<work_kind>:<YYYY-MM-DD>`, first delivery
+  //     wins). Filtering only at the moment of delivery drops every item that enters the Zalo lead
+  //     later that day — it is never sent again before it is overdue. Comms must schedule against
+  //     the deadline, not just filter at receipt.
+  //
+  // VALIDATION (INVALID_ARGUMENT, nothing written): at most 500 items; every `code` 1 to 100
+  // printable characters, unique within the notice; every `deadline` set. A producer with more than
+  // 500 sends the 500 EARLIEST deadlines — the ones a narrower Zalo lead keeps first.
+  //
+  // ROLLOUT ORDER — proto, then comms, then producers. Unlike kinds 5–16 the order is not load-bearing:
+  // a comms build that predates this field ignores it as an unknown field and sends today's Zalo copy.
+  // Producers (service-petitions, service-documents automation_jobs) fill it when they switch.
+  //
+  // Same rule 3 as `body`: the items name exactly the records `body` counts — business codes only,
+  // and never a record the recipient may not see (an ADR 0030 `can-bo` petition reaches only
+  // recipients holding `feedback.restricted` — the producer's recipient chain decides that per record,
+  // and the items follow the same per-recipient list as `body`). Not logged, like the rest of the
+  // request.
+  repeated DueSoonItem due_soon_items = 7;
+}
+
+// One record in a due-soon digest.
+message DueSoonItem {
+  // The business code the digest shows — a task's `ma`, a petition's `ma_tra_cuu`, an incoming
+  // document's `MaVanBanDen`. Never an internal id, never citizen personal data.
+  string code = 1;
+
+  // The record's STORED deadline (`han_xu_ly`, `han_xu_ly_xong`), copied as read — rule 10,
+  // invariant 2: fixed once, at the act that fixes it, never recomputed. A producer that computes a
+  // deadline here moves a commitment already made. Comms only compares it with the Zalo lead; it never
+  // derives a deadline or an overdue state from it. Unset is INVALID_ARGUMENT — a due-soon record
+  // always has one (DueSoonAt requires it).
+  google.protobuf.Timestamp deadline = 2;
 }
 
 // Wrapped: adding a field later must not change the RPC signature.

@@ -24,11 +24,19 @@ owns_facts:
   - "18 loại nhắn Zalo chia hai giai đoạn: loại đã có nơi phát làm ngay, 10 loại chưa có nơi phát giữ '?' và mỗi loại một ADR + outbox (lô thứ hai Q3, 08/10/2026)"
   - "dòng thời hạn riêng cho mọi loại việc (phản ánh theo lĩnh vực, văn bản theo loại văn bản, nhiệm vụ theo mức ưu tiên), không bước duyệt, tra lúc cố định hạn — thay ADR 0029 điểm nhiệm vụ dùng dòng mặc định (lô thứ hai Q4, 08/10/2026)"
   - "lời dẫn tab Lời hệ thống chỉ nói trang quản trị, không nói Mini App; menu Cấu hình bỏ các phần web có mà prototype không có (dòng Sửa lần cuối, ghi chú chưa dùng, chú thích hai cột báo lãnh đạo, nút gieo khi bảng đã có dòng, hộp xác nhận Khôi phục lời gốc — thay ADR 0068 §15 ở điểm này); Nhập từ Excel luôn ở đầu tab Danh mục; thanh tab xuống dòng khi tràn (lô thứ ba Q6–Q9, 08/10/2026)"
+  - "luật thường trực của menu Cấu hình: mọi việc phải tham khảo prototype (chủ dự án, lô thứ năm, 08/10/2026)"
+  - "'Sắp đến hạn: nhắc trước' của Zalo chỉ THU HẸP tin Zalo sắp đến hạn về các hồ sơ có hạn đã lưu nằm trong số ngày ấy; chuông và danh sách giữ cột SLA; comms lọc theo due_soon_items {code, deadline} do bên phát gửi, không tính hay đổi hạn — làm rõ lô thứ tư Q10 (lô thứ năm Q13, 08/10/2026)"
+  - "nút 'Gieo thời hạn mặc định' khi bảng thời hạn đã có dòng chỉ hiện khi máy chủ báo thiếu dòng mặc định (lô thứ năm Q14, 08/10/2026)"
+  - "ngưỡng webhook Zalo 600 lần/phút mỗi xã là con số của chủ dự án, không còn tạm (lô thứ năm Q15, 08/10/2026)"
+  - "quyền thay bot của xã giữ admin.lookup (lô thứ năm Q16, 08/10/2026)"
+  - "lỗi đọc đảo cờ dang_dung/la_mac_dinh không sửa dữ liệu hàng loạt; xã tự kiểm/sửa cờ ở màn Danh mục (lô thứ năm Q17, 08/10/2026)"
+  - "nhắc việc cho đơn thư làm theo prototype: dùng hạn đã lưu và dòng SLA mặc định của đơn thư, gửi bằng loại DOCUMENT_* (lô thứ năm Q18, 08/10/2026)"
+  - "câu chữ menu Cấu hình: lời prototype thắng nguyên văn khi prototype có câu (lô thứ năm Q19, 08/10/2026)"
 ---
 
 # 0079. Menu Cấu hình theo spec Cấu hình 02–12
 
-**Trạng thái:** đã chốt; lô câu trả lời thứ hai 08/10/2026 đóng phần lớn điều kiện dừng backend, còn dòng 9 (§*Còn mở*); lô thứ ba (chấm ảnh vòng 1) chốt phần trình bày; lô thứ tư (chấm ảnh vòng 4) thay lô 2 Q1 #7 · **Ngày:** 2026-10-08 ·
+**Trạng thái:** đã chốt; lô câu trả lời thứ hai 08/10/2026 đóng phần lớn điều kiện dừng backend, còn dòng 9 (§*Còn mở*); lô thứ ba (chấm ảnh vòng 1) chốt phần trình bày; lô thứ tư (chấm ảnh vòng 4) thay lô 2 Q1 #7; lô thứ năm đóng các câu còn mở Q13–Q19 · **Ngày:** 2026-10-08 ·
 **Người quyết:** chủ dự án, 08/10/2026, phiên chính, lệnh `/fix-web-admin --menu=cau-hinh --des=Cập
 nhật lại ui ux toàn bộ view và action trong menu cấu hình này, tham khảo hướng dẫn tại
 .\tmp\web\cau-hinh\vigov-cau-hinh-spec\*.md` · **Bổ sung** ADR 0068 §*Sửa đổi 06/10/2026 (lần 5)* và
@@ -224,3 +232,48 @@ Hệ quả của Q10:
 | Điểm | Quyết | Căn cứ |
 |---|---|---|
 | Ô "Nhóm" ở biểu mẫu thêm câu Lời hệ thống | Không có. Nhóm lấy từ tiền tố mã (`chung.` / `phan-anh.` / `giai-ngan.`), như prototype | Lô 3 Q7 **"Bỏ hết, đúng prototype"** |
+
+## Lô câu trả lời thứ năm — các câu còn mở (08/10/2026)
+
+Chủ dự án trả lời bảy câu còn mở của menu Cấu hình, 08/10/2026. Lựa chọn ghi nguyên văn trong ngoặc kép.
+
+**Luật thường trực của menu này.** Chủ dự án dặn kèm: **"lưu ý phải tham khảo prototype nhé"**. Mọi
+việc tiếp theo ở menu Cấu hình đối chiếu prototype
+`../vigov-require/apps/admin/src/components/admin/ConfigWorkspace.tsx` và các component cùng thư mục
+trước khi quyết. Luật cứng và §*Giữ bất kể spec* vẫn thắng.
+
+| # | Câu hỏi | Chốt | Nghĩa |
+|---|---|---|---|
+| Q13 | Kênh Zalo, ô "Sắp đến hạn: nhắc trước". Prototype tự mâu thuẫn: spec 11 nói số ngày điều khiển cả chuông; spec 08 nói cột SLA theo giờ của từng dòng điều khiển chuông | **"Zalo thu hẹp, chuông giữ cột SLA"** | Ô sửa được 1–14 ngày như prototype. Tin Zalo "sắp đến hạn" chỉ gồm hồ sơ có **hạn đã lưu** nằm trong số ngày ấy. Chuông và danh sách giữ cột SLA. **Làm rõ** lô 4 Q10 — xem hệ quả dưới bảng |
+| Q14 | Nút "Gieo thời hạn mặc định" khi bảng đã có dòng mà máy chủ báo thiếu dòng mặc định | **"Hiện nút CHỈ khi máy chủ báo thiếu"** | Bảng đã có dòng và đủ dòng mặc định: không có nút (lô 3 Q7 (d) giữ). Máy chủ báo thiếu: hiện nút |
+| Q15 | Ngưỡng webhook Zalo | **"Giữ 600 lần/phút mỗi xã"** | Con số 600/phút (`core/ratelimit/ratelimit.go:96`, `ZaloBotWebhookLimit`) thôi là số tạm; đóng điều kiện dừng luật 13 về ngưỡng của tuyến này. Đếm: webhook của **bot riêng xã** (afe3be2d) dùng `PublicHostIPKey` — theo xã + host + mạng khách, tức "mỗi xã"; webhook **bot chung** vẫn `WebhookIPKey` theo mạng khách (`ratelimit.go:312-318`). Chú thích "PROVISIONAL" ở `core/ratelimit/ratelimit.go:89-94` đã cũ — sửa ở lượt đụng tệp ấy |
+| Q16 | Quyền thay bot của xã | **"Giữ admin.lookup"** | ADR 0074 #6 giữ nguyên |
+| Q17 | Lỗi đọc đảo cờ `dang_dung`/`la_mac_dinh` ở loại nhiệm vụ / mức ưu tiên (lỗi từ `14e4819b` 22/09, đã sửa ở `9fff0136`) | **"tuân thủ prototype nhé"** | Xem đoạn *Cách phiên chính hiểu Q17* dưới bảng |
+| Q18 | Nhắc việc cho đơn thư | **"Làm, theo prototype"** | Nhắc việc đơn thư dùng **hạn đã lưu** và dòng SLA mặc định của đơn thư; gửi bằng các loại `DOCUMENT_*`, như dòng Zalo gộp "Văn bản, đơn thư …" của prototype. Không tính lại hạn nào. Đóng luật 10 điều kiện dừng #1 cho điểm này |
+| Q19 | Câu chữ do builder tự đặt | **"Đối chiếu prototype, thay chỗ prototype có câu"** | Chỗ prototype có câu: lời prototype thắng, nguyên văn. Chỗ prototype không có: giữ lời hiện tại và liệt kê lại |
+
+Hệ quả của Q13:
+
+| Điểm | Hệ quả |
+|---|---|
+| Hợp đồng | Proto `StaffNotification` thêm `due_soon_items {code, deadline}`; các bên phát gửi kèm danh sách này |
+| comms | Lưu `due_soon_days` (lô 4 Q10) và **lọc** `due_soon_items` theo số ngày ấy. Không tính và không đổi hạn (luật 10 bất biến 2) |
+| Lô 4 Q10 | Không bị thay. Q13 nói rõ phạm vi: `due_soon_days` chỉ thu hẹp tin Zalo, không quyết hồ sơ nào là "sắp đến hạn" ở chuông. Độ lệch hai ngưỡng chủ dự án đã chấp nhận ở Q10 giữ nguyên |
+
+### Cách phiên chính hiểu Q17 — không phải câu trả lời của chủ dự án
+
+Chủ dự án chỉ trả lời **"tuân thủ prototype nhé"**. Phiên chính hiểu như sau:
+
+| Điểm | Cách hiểu |
+|---|---|
+| Prototype có gì | Không có thao tác sửa dữ liệu hàng loạt; chỉ có màn Danh mục |
+| Hệ quả | Không chạy truy vấn, không đổi dữ liệu. Xã tự kiểm và sửa cờ ở màn Danh mục |
+| Luật 7 | Giữ: không bản ghi nào bị sửa ngoài thao tác của cán bộ xã |
+
+
+### Bổ sung 08/10/2026 — Q18 đọc theo prototype, và Q13 không cần lập lịch
+
+| Điểm | Ghi nhận |
+|---|---|
+| Q18 — hạn của đơn thư | Hạn đơn thư hiện **chưa bao giờ được lưu** (`service-documents/migrations/0006_citizen_letter.sql:72-75,215-216`; ADR 0064 #3–#5 còn mở về ngày lịch/giờ làm việc cho khiếu nại, tố cáo). Hỏi lại, chủ dự án trả lời **"theo prototype"**. Prototype (`../vigov-require/apps/admin/src/components/documents/PetitionDetailDrawer.tsx:519-523, 329`): ô **"Hạn xử lý" do cán bộ tự đặt** khi sửa đơn, được để **"Không đặt"** — không tự tính. Vậy: hạn đơn thư là ngày cán bộ nhập (lưu tại hành vi đặt, luật 10 bất biến 2); **nhắc việc chỉ chạy với đơn đã có hạn**; không tính hạn theo luật, nên câu ngày lịch/giờ làm việc của ADR 0064 không bị quyết ở đây. Màn đơn thư thuộc menu Văn bản & Đơn thư (ADR 0078) |
+| Q13 — tin tổng hợp mỗi ngày | Ô "Nhắc trước" tính theo **ngày** (1–14) và bản tin sắp đến hạn chạy mỗi ngày: một hồ sơ có hạn trong N ngày luôn nằm trong ít nhất một bản tin trước hạn, nên comms chỉ lọc lúc nhận, **không cần lập lịch gửi riêng**. Ngưỡng Zalo chỉ thu hẹp được ngưỡng của chuông (hồ sơ ngoài ngưỡng chuông không tới comms) — ghi rõ dưới ô |
