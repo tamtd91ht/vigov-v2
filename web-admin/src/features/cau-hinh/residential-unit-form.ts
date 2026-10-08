@@ -14,8 +14,9 @@
  *    and every record pointing at it keeps printing its name (`residential_unit_write.go:20-24`).
  * 3. THE SERVER'S SENTENCE IS SHOWN VERBATIM. Name/code taken, list full, type or head not found —
  *    the rules live on the server with a Vietnamese sentence each; this file never re-checks them and
- *    never branches on `code` (`lib/api/goi.ts`). Only what cannot be SENT is checked here: a count or
- *    an order that is not a whole number.
+ *    never branches on `code` (`lib/api/goi.ts`). Only what cannot be SENT is checked here: an empty
+ *    name and an order that is not a whole number. A count that is not a whole number ≥ 0 is sent as
+ *    "chưa nhập" (`null`) — spec `04-thon-to-dan-pho.md` (ADR 0079) — never as 0, so rule 1 holds.
  * ─────────────────────────────────────────────────────────────────────────────────────────────
  */
 
@@ -79,10 +80,6 @@ export function draftFromUnit(u: Unit): ResidentialUnitDraft {
   };
 }
 
-export const COUNT_ERROR_HOUSEHOLDS = "Số hộ phải là một số nguyên không âm, ví dụ: 284. Để trống nếu chưa có số liệu.";
-export const COUNT_ERROR_POPULATION =
-  "Nhân khẩu phải là một số nguyên không âm, ví dụ: 1.132. Để trống nếu chưa có số liệu.";
-
 type Parsed<T> = { readonly ok: true; readonly value: T } | { readonly ok: false };
 
 /**
@@ -120,14 +117,16 @@ type ParsedNumbers = {
   readonly order: number | undefined;
 };
 
+/** Spec 04: an invalid count is sent as `null` ("chưa nhập") — the absence of a figure, never a 0. */
+function countOrNull(box: string): number | null {
+  const parsed = parseCount(box);
+  return parsed.ok ? parsed.value : null;
+}
+
 function parseNumbers(d: ResidentialUnitDraft): { ok: true; v: ParsedNumbers } | { ok: false; message: string } {
-  const households = parseCount(d.households);
-  if (!households.ok) return { ok: false, message: COUNT_ERROR_HOUSEHOLDS };
-  const population = parseCount(d.population);
-  if (!population.ok) return { ok: false, message: COUNT_ERROR_POPULATION };
   const order = parseOrder(d.order);
   if (!order.ok) return { ok: false, message: LOI_THU_TU };
-  return { ok: true, v: { households: households.value, population: population.value, order: order.value } };
+  return { ok: true, v: { households: countOrNull(d.households), population: countOrNull(d.population), order: order.value } };
 }
 
 /**
@@ -216,19 +215,20 @@ export async function submitResidentialUnitForm(
   d: ResidentialUnitDraft,
   api: ResidentialUnitApi,
 ): Promise<SubmitResult> {
+  if (d.name.trim() === "") return { kind: "localError", message: NAME_REQUIRED };
   if (open.kind === "create") {
     const b = createBody(d);
     if (b.kind === "error") return { kind: "localError", message: b.message };
     if (b.kind === "unchanged") return { kind: "localError", message: CHUA_CO_THAY_DOI };
     // The key minted at open — never one minted here (see `openCreate`).
     const r = await api.create(b.body, open.idempotencyKey);
-    return r.ok ? { kind: "done", sentence: addedSentence(r.duLieu.name) } : { kind: "serverError", message: r.thongBao };
+    return r.ok ? { kind: "done", sentence: ADDED_TOAST } : { kind: "serverError", message: r.thongBao };
   }
   const b = updateBody(open.unit, d);
   if (b.kind === "error") return { kind: "localError", message: b.message };
   if (b.kind === "unchanged") return { kind: "localError", message: CHUA_CO_THAY_DOI };
   const r = await api.update(open.unit.id, b.body);
-  return r.ok ? { kind: "done", sentence: savedSentence(r.duLieu.name) } : { kind: "serverError", message: r.thongBao };
+  return r.ok ? { kind: "done", sentence: SAVED_TOAST } : { kind: "serverError", message: r.thongBao };
 }
 
 export async function toggleResidentialUnitActive(u: Unit, api: ResidentialUnitApi): Promise<SubmitResult> {
@@ -305,26 +305,20 @@ export function reactivateButtonLabel(name: string): string {
 }
 
 export const FIELD_NAME = "Tên";
-export const FIELD_CODE = "Mã";
 export const FIELD_TYPE = "Loại";
 export const FIELD_HEAD = "Trưởng thôn / Tổ trưởng";
 export const FIELD_HOUSEHOLDS = "Số hộ";
 export const FIELD_POPULATION = "Nhân khẩu";
 export const FIELD_ORDER = "Thứ tự";
 
-export const TYPE_NONE = "Chưa phân loại";
+// The spec's first option. On edit it also CLEARS the type (`type_code: ""`): Loại stays editable
+// after create (ADR 0079 decision 3).
+export const TYPE_NONE = "— Chọn loại —";
 export const HEAD_NONE = "Chưa có";
 
-export const NAME_HELP = "Ví dụ: Thôn Bình An, Tổ dân phố 5. Giữ nguyên chữ hoa, chữ thường như đã gõ.";
-export const CODE_HELP_CREATE =
-  "Để trống thì hệ thống tự sinh mã từ tên. Mã đã cấp thì không đổi được, kể cả khi địa bàn ngừng dùng.";
-export function codeReadOnly(code: string): string {
-  return `Mã ${code} — mã đã cấp thì không đổi được.`;
-}
-export const COUNT_HELP = "Để trống nếu chưa có số liệu. Để trống khác với 0: 0 nghĩa là đã đếm và không có.";
-export const ORDER_HELP = "Số nhỏ đứng trước. Để trống thì giữ nguyên.";
-export const TYPE_HELP = "Chỉ hiện các loại đang dùng ở tab Danh mục.";
-export const HEAD_HELP = "Chỉ hiện cán bộ đang làm việc của xã, có tài khoản đang mở.";
+export const NAME_PLACEHOLDER = "Ví dụ: Tổ dân phố 5";
+/** A cell with no value (null count, unclassified, no head) — spec 04 "rỗng thì —". */
+export const EMPTY_CELL = "—";
 
 /**
  * Said before `Ngừng dùng` is confirmed — the one thing staff need to know before pressing it: nothing
@@ -337,20 +331,15 @@ export function retireConfirmSentence(name: string): string {
   );
 }
 
-export function addedSentence(name: string): string {
-  return `Đã thêm ${name}.`;
-}
-export function savedSentence(name: string): string {
-  return `Đã lưu ${name}.`;
-}
+// Spec 04's sentences: toasts on success, in place in the form on failure.
+export const ADDED_TOAST = "Đã thêm đơn vị dân cư mới.";
+export const SAVED_TOAST = "Đã lưu.";
+export const NAME_REQUIRED = "Vui lòng nhập tên thôn hoặc tổ dân phố.";
+/** Said before the server's own sentence, when there is one. */
+export const SAVE_FAILED = "Không lưu được đơn vị dân cư.";
 export function retiredSentence(name: string): string {
   return `Đã ngừng dùng ${name}. Hồ sơ đã lập ở địa bàn này vẫn giữ nguyên tên địa bàn.`;
 }
 export function reactivatedSentence(name: string): string {
   return `Đã đưa ${name} vào dùng lại.`;
 }
-
-/** Said to an account without `admin.org` — why there is no button, not that the screen is broken. */
-export const NO_WRITE_PERMISSION =
-  "Tài khoản của bạn chỉ xem được danh sách thôn / tổ dân phố. Việc thêm, sửa, ngừng dùng và nhập từ " +
-  "Excel cần quyền Quản lý sơ đồ tổ chức.";

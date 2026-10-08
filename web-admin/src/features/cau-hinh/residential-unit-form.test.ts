@@ -4,8 +4,9 @@ import type { identity_loaiDonViDanCuRa, identity_thonToDanPhoRa } from "@/lib/a
 
 import { CHUA_CO_THAY_DOI, LOI_THU_TU } from "./nhan-so-do";
 import {
-  COUNT_ERROR_HOUSEHOLDS,
-  COUNT_ERROR_POPULATION,
+  ADDED_TOAST,
+  NAME_REQUIRED,
+  SAVED_TOAST,
   activeToggleBody,
   createBody,
   draftForCreate,
@@ -98,14 +99,14 @@ describe("create body", () => {
     });
   });
 
-  it("a mistyped box is a local error — nothing sent", () => {
+  it("an invalid count is sent as not entered (spec 04: invalid → null), never 0; a bad order is a local error", () => {
     expect(createBody({ ...draftForCreate(), name: "X", households: "nhiều" })).toEqual({
-      kind: "error",
-      message: COUNT_ERROR_HOUSEHOLDS,
+      kind: "send",
+      body: { name: "X" },
     });
     expect(createBody({ ...draftForCreate(), name: "X", population: "-3" })).toEqual({
-      kind: "error",
-      message: COUNT_ERROR_POPULATION,
+      kind: "send",
+      body: { name: "X" },
     });
     expect(createBody({ ...draftForCreate(), name: "X", order: "ba" })).toEqual({ kind: "error", message: LOI_THU_TU });
   });
@@ -140,6 +141,14 @@ describe("edit body — only what changed", () => {
     const u = unit();
     const r = updateBody(u, { ...draftFromUnit(u), typeCode: "", headStaffCode: "", order: "", code: "doi-ma" });
     expect(r).toEqual({ kind: "send", body: { type_code: "", head_staff_code: "" } });
+  });
+
+  it("an invalid count on edit clears it (null), never 0", () => {
+    const u = unit();
+    expect(updateBody(u, { ...draftFromUnit(u), households: "-1" })).toEqual({
+      kind: "send",
+      body: { household_count: null },
+    });
   });
 
   it("rename + new count", () => {
@@ -192,7 +201,7 @@ describe("submit — create and edit", () => {
     const d = { ...draftForCreate(), name: "Thôn Mới" };
 
     expect(await submitResidentialUnitForm(open, d, api)).toEqual({ kind: "serverError", message: taken });
-    expect(await submitResidentialUnitForm(open, d, api)).toEqual({ kind: "done", sentence: "Đã thêm Thôn Mới." });
+    expect(await submitResidentialUnitForm(open, d, api)).toEqual({ kind: "done", sentence: ADDED_TOAST });
     expect(create.mock.calls.map((c) => c[1])).toEqual(["khoa-1", "khoa-1"]);
     expect(mint).toHaveBeenCalledTimes(1);
   });
@@ -212,7 +221,28 @@ describe("submit — create and edit", () => {
     const u = unit();
     const r = await submitResidentialUnitForm({ kind: "edit", unit: u }, { ...draftFromUnit(u), households: "300" }, api);
     expect(api.updateMock).toHaveBeenCalledWith("01JTHON1", { household_count: 300 });
-    expect(r).toEqual({ kind: "done", sentence: "Đã lưu Thôn Bình An." });
+    expect(r).toEqual({ kind: "done", sentence: SAVED_TOAST });
+  });
+
+  it("the spec's toast sentences", () => {
+    expect(ADDED_TOAST).toBe("Đã thêm đơn vị dân cư mới.");
+    expect(SAVED_TOAST).toBe("Đã lưu.");
+  });
+
+  it("an empty name is refused locally, on create and on edit — nothing sent", async () => {
+    const api = fakeApi();
+    expect(await submitResidentialUnitForm(openCreate(() => "k"), { ...draftForCreate(), name: "   " }, api)).toEqual({
+      kind: "localError",
+      message: NAME_REQUIRED,
+    });
+    const u = unit();
+    expect(await submitResidentialUnitForm({ kind: "edit", unit: u }, { ...draftFromUnit(u), name: "" }, api)).toEqual({
+      kind: "localError",
+      message: NAME_REQUIRED,
+    });
+    expect(NAME_REQUIRED).toBe("Vui lòng nhập tên thôn hoặc tổ dân phố.");
+    expect(api.createMock).not.toHaveBeenCalled();
+    expect(api.updateMock).not.toHaveBeenCalled();
   });
 
   it("each server refusal is shown as the server wrote it", async () => {

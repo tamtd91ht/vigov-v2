@@ -6,21 +6,22 @@ import type { identity_thonToDanPhoRa } from "@/lib/api/schema.gen";
 import {
   ADD_BUTTON,
   CONFIRM_RETIRE_BUTTON,
-  NO_WRITE_PERMISSION,
+  NAME_REQUIRED,
   REACTIVATE_BUTTON,
   RETIRE_BUTTON,
+  SAVE_FAILED,
   draftForCreate,
   draftFromUnit,
   openCreate,
 } from "./residential-unit-form";
-import { IMPORT_BUTTON } from "./excel-import-flow";
 import { ResidentialUnitForm, ResidentialUnitsView } from "./tab-thon-to-dan-pho";
 import type { ResidentialUnitActions } from "./tab-thon-to-dan-pho";
 
 /**
- * The Thôn / Tổ dân phố tab reaches the page as decided: write buttons only with `admin.org` (allowed
- * AND denied), out-of-use units listed and marked with `Dùng lại`, no delete anywhere, the edit form
- * has no code box, and the server's refusal is shown verbatim. `react-dom/server` in Node, no jsdom.
+ * The Thôn / Tổ dân phố tab reaches the page as decided: spec `04-thon-to-dan-pho.md` in the shared
+ * table pattern (`config-ui.tsx`), write buttons only with `admin.org` (allowed AND denied), out-of-use
+ * units listed and marked with `Dùng lại`, no delete anywhere, no code box, and the server's refusal
+ * shown in place. `react-dom/server` in Node, no jsdom.
  */
 
 const NOOP: ResidentialUnitActions = {
@@ -30,7 +31,7 @@ const NOOP: ResidentialUnitActions = {
   confirmRetire: () => {},
   cancelRetire: () => {},
   reactivate: () => {},
-  openImport: () => {},
+  reload: () => {},
 };
 
 function unit(over: Partial<identity_thonToDanPhoRa> = {}): identity_thonToDanPhoRa {
@@ -50,23 +51,21 @@ function unit(over: Partial<identity_thonToDanPhoRa> = {}): identity_thonToDanPh
   };
 }
 
-const UNITS = [unit(), unit({ id: "01JB", code: "thon-cu", name: "Thôn Cũ", active: false })];
+const UNITS = [unit(), unit({ id: "01JB", code: "thon-cu", name: "Thôn Cũ", active: false, type_code: "", type_label: "" })];
 
 function view(
   canWrite: boolean,
-  missingPermission = !canWrite,
   retiring: identity_thonToDanPhoRa | null = null,
   rowError: { id: string; message: string } | null = null,
+  units: readonly identity_thonToDanPhoRa[] = UNITS,
 ) {
   return renderToStaticMarkup(
     <ResidentialUnitsView
-      load={{ phase: "ready", units: UNITS }}
+      load={{ phase: "ready", units }}
       canWrite={canWrite}
-      missingPermission={missingPermission}
       actions={NOOP}
       sending={false}
-      doneSentence=""
-      topPanel={null}
+      form={null}
       retiring={retiring}
       rowError={rowError}
     />,
@@ -74,53 +73,116 @@ function view(
 }
 
 describe("list and write buttons", () => {
-  it("with admin.org: add, import, edit on each row; Ngừng dùng on the active one, Dùng lại on the other", () => {
+  it("with admin.org: import, add, edit on each row; Ngừng dùng on the active one, Dùng lại on the other", () => {
     const html = view(true);
     expect(html).toContain(ADD_BUTTON);
-    expect(html).toContain(IMPORT_BUTTON);
+    expect(html).toContain("Nhập từ Excel");
     expect(html).toContain('aria-label="Sửa Thôn Bình An"');
+    expect(html).toContain('title="Sửa"');
     expect(html).toContain('aria-label="Ngừng dùng Thôn Bình An"');
     expect(html).toContain('aria-label="Dùng lại Thôn Cũ"');
     expect(html).not.toContain('aria-label="Ngừng dùng Thôn Cũ"');
-    expect(html).not.toContain(NO_WRITE_PERMISSION);
   });
 
-  it("DENIED (no admin.org): the list is still there, NO button at all, and the reason is said", () => {
+  it("the import button comes before the add button (spec 02: Nhập từ Excel heads the tab)", () => {
+    const html = view(true);
+    expect(html.indexOf("Nhập từ Excel")).toBeLessThan(html.indexOf(ADD_BUTTON));
+  });
+
+  it("DENIED (no admin.org): the list is still there, NO button at all, and no read-only notice", () => {
     const html = view(false);
     expect(html).toContain("Thôn Bình An");
     expect(html).toContain("Thôn Cũ");
     expect(html).not.toContain("<button");
-    expect(html).toContain(NO_WRITE_PERMISSION);
+    expect(html).not.toContain("chỉ xem được");
+    // No action column either: 7 heads, not 8.
+    expect(html.match(/<th /g)).toHaveLength(7);
   });
 
-  it("session not read yet: no button, and no 'missing permission' sentence either", () => {
-    const html = view(false, false);
-    expect(html).not.toContain("<button");
-    expect(html).not.toContain(NO_WRITE_PERMISSION);
-  });
-
-  it("no delete anywhere — the only way out of use is Ngừng dùng", () => {
+  it("no delete anywhere — the only way out of use is Ngừng dùng; no note about it beside the import", () => {
     const html = view(true);
     expect(html).not.toMatch(/Xoá|🗑/);
+    expect(html).not.toContain("Không có thao tác xoá");
   });
 
-  it("an out-of-use unit stays listed, marked; a null count is 'Chưa nhập', never 0", () => {
+  it("spec columns, the actions head is empty (no 'Thao tác' word on screen)", () => {
+    const html = view(true);
+    for (const head of ["Tên", "Mã", "Loại", "Trưởng thôn / Tổ trưởng", "Số hộ", "Nhân khẩu", "Trạng thái"]) {
+      expect(html).toContain(`<th scope="col">${head}</th>`);
+    }
+    expect(html).not.toContain('<th scope="col">Thao tác</th>');
+  });
+
+  it("name navy, code in <code>, null count and missing type are '—', numbers vi-VN", () => {
     const html = view(false);
-    expect(html).toContain("Đã tắt");
-    expect(html).toContain("<td>Chưa nhập</td>");
+    expect(html).toContain('<td class="text-navy font-medium">Thôn Bình An</td>');
+    expect(html).toContain('<code class="text-[11.5px]">thon-binh-an</code>');
     expect(html).toContain("<td>1.132</td>");
+    expect(html).not.toContain("Chưa nhập");
+    expect(html).not.toContain("Chưa phân loại");
+    expect(html).toContain("<td>—</td>");
+  });
+
+  it("status says Đang dùng / Ngừng dùng, never 'Đã tắt'", () => {
+    const html = view(false);
+    expect(html).toContain("Đang dùng");
+    expect(html).toContain("Ngừng dùng");
+    expect(html).not.toContain("Đã tắt");
+  });
+
+  it("empty list: the spec's sentence inside the table", () => {
+    expect(view(true, null, null, [])).toContain("Chưa khai báo thôn hoặc tổ dân phố nào.");
+  });
+
+  it("loading: the shared skeleton, no table", () => {
+    const html = renderToStaticMarkup(
+      <ResidentialUnitsView
+        load={{ phase: "loading" }}
+        canWrite={false}
+        actions={NOOP}
+        sending={false}
+        form={null}
+        retiring={null}
+        rowError={null}
+      />,
+    );
+    expect(html).toContain("h-11 w-full");
+    expect(html).not.toContain("<table");
+  });
+
+  it("loading with admin.org: the import row stays, the add button waits (prototype ConfigWorkspace.tsx:99)", () => {
+    const html = renderToStaticMarkup(
+      <ResidentialUnitsView
+        load={{ phase: "loading" }}
+        canWrite={true}
+        actions={NOOP}
+        sending={false}
+        form={null}
+        retiring={null}
+        rowError={null}
+      />,
+    );
+    expect(html).toContain("Nhập từ Excel");
+    expect(html).not.toContain(ADD_BUTTON);
   });
 
   it("Ngừng dùng asks once, saying old records keep the name", () => {
-    const html = view(true, false, UNITS[0]!);
+    const html = view(true, UNITS[0]!);
     expect(html).toContain(CONFIRM_RETIRE_BUTTON);
     expect(html).toContain("mọi hồ sơ, phản ánh đã lập ở đây vẫn giữ nguyên tên địa bàn");
     expect(view(true)).not.toContain(CONFIRM_RETIRE_BUTTON);
   });
 
   it("a refused toggle: the server's sentence under that row, verbatim", () => {
-    const html = view(true, false, null, { id: "01JB", message: "Không tìm thấy thôn / tổ dân phố." });
-    expect(html).toContain('role="alert">Không tìm thấy thôn / tổ dân phố.</p>');
+    const html = view(true, null, { id: "01JB", message: "Không tìm thấy thôn / tổ dân phố." });
+    expect(html).toContain('role="alert" class="text-danger m-0 text-[12px] font-medium">Không tìm thấy thôn / tổ dân phố.</p>');
+  });
+
+  it("no legacy class names in the new markup", () => {
+    const html = view(true);
+    for (const legacy of ["bang-danh-muc", "o-thao-tac", "ma-muc", "cum-nut", "ghi-chu", "thong-bao-loi"]) {
+      expect(html).not.toContain(legacy);
+    }
   });
 
   it("the Ngừng dùng / Dùng lại words are the ones the user asked for", () => {
@@ -149,32 +211,41 @@ function form(open: Parameters<typeof ResidentialUnitForm>[0]["open"], serverErr
   );
 }
 
-describe("the add / edit form", () => {
-  it("create: a code box, type and head pickers with a 'none' option each, three number boxes", () => {
+describe("the add / edit form — the spec's grey row", () => {
+  it("create: no code box (the server derives it), the spec's fields, 'Thêm' and 'Huỷ'", () => {
     const html = form(openCreate(() => "k"));
-    expect(html).toContain("Thêm thôn / tổ dân phố");
-    expect(html).toContain('id="o-ma-thon"');
-    expect(html).toContain('<option value="" selected="">Chưa phân loại</option><option value="thon">Thôn</option>');
+    expect(html).toMatch(/^<form[^>]*class="[^"]*bg-background[^"]*sm:grid-cols-\[1fr_12rem_8rem_8rem_auto\]/);
+    expect(html).not.toContain('id="o-ma-thon"');
+    expect(html).toContain('placeholder="Ví dụ: Tổ dân phố 5"');
+    expect(html).toContain('<option value="" selected="">— Chọn loại —</option><option value="thon">Thôn</option>');
     expect(html).toContain('<option value="" selected="">Chưa có</option><option value="CB-002">');
-    expect(html).toContain('id="o-so-ho"');
+    expect(html).toMatch(/id="o-so-ho"[^>]*type="number"[^>]*min="0"|type="number"[^>]*min="0"[^>]*id="o-so-ho"/);
     expect(html).toContain('id="o-nhan-khau"');
-    // A blank count must stay blank: no `type="number"`.
-    expect(html).not.toContain('type="number"');
+    expect(html).toContain('id="o-thu-tu-thon"');
+    expect(html).toContain(">Thêm</button>");
+    expect(html).toContain(">Huỷ</button>");
+    expect(html).not.toContain("<h4");
   });
 
-  it("edit: NO code box — the code is text, and a null count opens as an empty box", () => {
+  it("edit: same row prefilled, Loại still editable, 'Lưu'; a null count opens as an empty box", () => {
     const html = form({ kind: "edit", unit: unit() });
-    expect(html).toContain("Sửa Thôn Bình An");
+    expect(html).toContain('value="Thôn Bình An"');
+    expect(html).not.toMatch(/<select[^>]*id="o-loai-thon"[^>]*disabled/);
+    expect(html).toContain(">Lưu</button>");
     expect(html).not.toContain('id="o-ma-thon"');
-    expect(html).toContain("Mã thon-binh-an — mã đã cấp thì không đổi được.");
     expect(html).toMatch(/id="o-so-ho"[^>]* value=""/);
   });
 
-  it("the server's refusal and a local error each reach the page verbatim", () => {
-    const taken = "Mã này đã được cấp trong xã (kể cả cho đơn vị đã ngưng dùng — mã đã cấp không cấp lại). Hãy chọn mã khác.";
-    expect(form(openCreate(() => "k"), taken)).toContain(`role="alert">${taken}</p>`);
-    expect(form(openCreate(() => "k"), "", "Thứ tự phải là một số nguyên, ví dụ: 3.")).toContain(
-      'role="alert">Thứ tự phải là một số nguyên, ví dụ: 3.</p>',
-    );
+  it("the server's refusal is said in place after the spec's sentence; a local error verbatim", () => {
+    const taken = "Xã đã có một thôn / tổ dân phố cùng tên.";
+    expect(form(openCreate(() => "k"), taken)).toContain(`${SAVE_FAILED} ${taken}</p>`);
+    expect(form(openCreate(() => "k"), "", NAME_REQUIRED)).toContain(`role="alert" class="text-danger m-0 text-[12px] font-medium">${NAME_REQUIRED}</p>`);
+  });
+
+  it("no legacy class names in the form", () => {
+    const html = form(openCreate(() => "k"));
+    for (const legacy of ["form-danh-muc", "o-nhap", "cum-nut", "ghi-chu", "thong-bao-loi"]) {
+      expect(html).not.toContain(legacy);
+    }
   });
 });

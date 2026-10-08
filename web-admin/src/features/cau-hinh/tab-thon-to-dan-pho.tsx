@@ -1,16 +1,12 @@
 "use client";
 
-import { Pencil, Plus, PowerOff, RotateCcw, Upload } from "lucide-react";
+import { Pencil, Plus, PowerOff, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
 import { ErrorState } from "@/components/ui/error-state";
-import { IconButton } from "@/components/ui/icon-button";
-import { Notice } from "@/components/ui/notice";
-import { SkeletonRows } from "@/components/ui/skeleton";
 import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 
 import { layDanhBaChonNguoi } from "@/lib/api/danh-ba-chon-nguoi";
@@ -26,42 +22,41 @@ import { QUYEN_QUAN_LY_SO_DO, quyetDinhTheoKhoa } from "@/lib/quyen";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 
 import { ConfigDialog } from "./config-dialog";
-import { IMPORT_BUTTON } from "./excel-import-flow";
-import { ExcelImportPanel } from "./excel-import-panel";
+import { ConfigImportButton } from "./config-import-button";
+import {
+  ConfigField,
+  ConfigFormRow,
+  ConfigLoading,
+  ConfigTable,
+  EmptyRow,
+  RowActions,
+  SMALL_BUTTON_CLASS,
+  StatusBadge,
+  formInputCls,
+  formSelectCls,
+} from "./config-ui";
 import { RESIDENTIAL_UNIT_IMPORT_TARGET } from "./excel-import-targets";
 import { NUT_HUY, NUT_LUU } from "./nhan-so-do";
-import {
-  loaiDonVi,
-  lopLoaiDonVi,
-  nhanLoaiDonVi,
-  nhanSoDem,
-  nhanTrangThaiDiaBan,
-  GHI_CHU_CHI_XEM_THON,
-  THON_RONG,
-} from "./nhan-thon";
+import { THON_RONG, loaiDonVi, nhanLoaiDonVi } from "./nhan-thon";
 import {
   ADD_BUTTON,
-  CODE_HELP_CREATE,
   CONFIRM_RETIRE_BUTTON,
-  COUNT_HELP,
   CREATE_TITLE,
-  FIELD_CODE,
+  EDIT_BUTTON,
+  EMPTY_CELL,
   FIELD_HEAD,
   FIELD_HOUSEHOLDS,
   FIELD_NAME,
   FIELD_ORDER,
   FIELD_POPULATION,
   FIELD_TYPE,
-  HEAD_HELP,
   HEAD_NONE,
-  NAME_HELP,
-  NO_WRITE_PERMISSION,
-  ORDER_HELP,
+  NAME_PLACEHOLDER,
+  REACTIVATE_BUTTON,
   RESIDENTIAL_UNIT_API,
   RETIRE_BUTTON,
-  TYPE_HELP,
+  SAVE_FAILED,
   TYPE_NONE,
-  codeReadOnly,
   draftForCreate,
   draftFromUnit,
   editButtonLabel,
@@ -80,8 +75,13 @@ import {
 } from "./residential-unit-form";
 
 /**
- * Tab "Thôn / Tổ dân phố" — `docs/ui-ux/14-cau-hinh.md §2`: danh sách địa bàn của đơn vị; thêm, sửa,
- * Ngừng dùng / Dùng lại, và nhập từ Excel (người dùng chốt 29/09/2026, ADR 0059 §2).
+ * Tab "Thôn / Tổ dân phố" — spec `04-thon-to-dan-pho.md` in the shared table pattern of spec 02
+ * (`config-ui.tsx`, ADR 0079), prototype `HamletTable.tsx`: import button, add button, the grey
+ * add/edit row above the table, the framed table.
+ *
+ * WHAT THE SPEC DROPS AND THIS TAB KEEPS (ADR 0079 decision 3, "Giữ, trình bày theo spec"): the
+ * `Trưởng thôn / Tổ trưởng` picker and column, the `Thứ tự` box, and `Loại` editable after create —
+ * the server serves all three. They sit as a second line of the same grey row.
  *
  * TAB RIÊNG, KHÔNG NHẬP VÀO TAB DANH MỤC, dù cả hai cùng đọc một tuyến kiểu danh sách: một thôn
  * không phải một mục danh mục. Hợp đồng nói ra điều đó bằng chính tên trường (`name` chứ không
@@ -94,9 +94,10 @@ import {
  * phản ánh), còn hai tuyến ghi và ba tuyến nhập khai `RequirePermission("admin.org")`. Ẩn nút là TIỆN
  * DỤNG, không phải biện pháp: máy chủ kiểm khoá trên TỪNG yêu cầu (luật 5, cấm #1).
  *
- * KHÔNG CÓ XOÁ, CÓ CHỦ Ý. "Ngừng dùng" là `active: false`; địa bàn ở lại danh sách, hồ sơ đang trỏ
- * vào nó vẫn in được tên (`residential_unit_write.go:20-24`). Ngừng dùng hỏi xác nhận một lần, nói rõ
- * điều ấy; Dùng lại thì không — nó chỉ đưa một địa bàn trở lại ô chọn.
+ * KHÔNG CÓ XOÁ, CÓ CHỦ Ý (ADR 0059 §2, ADR 0068 §15). The prototype's Trash2 position is "Ngừng dùng"
+ * (`active: false`); the unit stays listed and records pointing at it keep printing its name
+ * (`residential_unit_write.go:20-24`). Ngừng dùng asks once; Dùng lại does not — it only puts a unit
+ * back in the pickers.
  *
  * ĐỌC LẠI SAU MỖI LẦN GHI, KHÔNG VÁ TẠI CHỖ: thứ tự và nhãn loại là của máy chủ.
  * ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -108,7 +109,7 @@ export type ResidentialUnitsLoad =
   | { readonly phase: "error"; readonly message: string }
   | { readonly phase: "ready"; readonly units: readonly identity_thonToDanPhoRa[] };
 
-/** What a row's buttons call. */
+/** What the tab's buttons call. */
 export type ResidentialUnitActions = {
   readonly add: () => void;
   readonly edit: (u: identity_thonToDanPhoRa) => void;
@@ -116,10 +117,12 @@ export type ResidentialUnitActions = {
   readonly confirmRetire: () => void;
   readonly cancelRetire: () => void;
   readonly reactivate: (u: identity_thonToDanPhoRa) => void;
-  readonly openImport: () => void;
+  /** Read the list again — after an Excel import, whose rows exist only on the server. */
+  readonly reload: () => void;
 };
 
 const NAME_INPUT_ID = "o-ten-thon";
+const ADD_BUTTON_ID = "nut-them-thon";
 
 export function TabThonToDanPho() {
   const [load, setLoad] = useState<ResidentialUnitsLoad>({ phase: "loading" });
@@ -130,12 +133,10 @@ export function TabThonToDanPho() {
   const [localError, setLocalError] = useState("");
   const [serverError, setServerError] = useState("");
   const [sending, setSending] = useState(false);
-  const [doneSentence, setDoneSentence] = useState("");
 
   const [retiring, setRetiring] = useState<identity_thonToDanPhoRa | null>(null);
   /** A toggle refused by the server, said under the row it was pressed on. */
   const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
-  const [importOpen, setImportOpen] = useState(false);
 
   const [types, setTypes] = useState<KetQua<identity_danhSachLoaiDonViDanCuRa> | null>(null);
   const [directory, setDirectory] = useState<KetQua<identity_danhBaChonNguoiRa> | null>(null);
@@ -143,7 +144,7 @@ export function TabThonToDanPho() {
   const openedBy = useRef<string | null>(null);
 
   const phien = usePhien();
-  /** Ba trạng thái: chưa đọc xong phiên thì chưa vẽ nút ghi nào, cũng chưa nói "thiếu quyền". */
+  /** Ba trạng thái: chưa đọc xong phiên thì chưa vẽ nút ghi nào. */
   const decision = phien === null ? null : quyetDinhTheoKhoa(phien, QUYEN_QUAN_LY_SO_DO);
   const canWrite = decision !== null && decision.hien;
 
@@ -178,7 +179,7 @@ export function TabThonToDanPho() {
     };
   }, [canWrite]);
 
-  // Focus: into the name box when the form opens; back to the opening button when it closes.
+  // Focus: into the name box when the form opens (or switches row); back to the opener when it closes.
   useEffect(() => {
     if (open !== null) {
       document.getElementById(NAME_INPUT_ID)?.focus();
@@ -193,16 +194,25 @@ export function TabThonToDanPho() {
   const clearMessages = useCallback(() => {
     setLocalError("");
     setServerError("");
-    setDoneSentence("");
     setRowError(null);
   }, []);
 
+  /** A done write: the sentence as a toast, then READ AGAIN. */
+  const done = useCallback((sentence: string) => {
+    toast.success(sentence);
+    setReads((n) => n + 1);
+  }, []);
+
   const actions: ResidentialUnitActions = {
+    // The add button TOGGLES the create row (spec 02); on an open edit row it switches to create.
     add: () => {
-      openedBy.current = ADD_BUTTON_ID;
       clearMessages();
       setRetiring(null);
-      setImportOpen(false);
+      if (open !== null && open.kind === "create") {
+        setOpen(null);
+        return;
+      }
+      openedBy.current = ADD_BUTTON_ID;
       setOpen(openCreate(() => crypto.randomUUID()));
       setDraft(draftForCreate());
     },
@@ -210,7 +220,6 @@ export function TabThonToDanPho() {
       openedBy.current = editButtonId(u.id);
       clearMessages();
       setRetiring(null);
-      setImportOpen(false);
       setOpen({ kind: "edit", unit: u });
       setDraft(draftFromUnit(u));
     },
@@ -227,12 +236,8 @@ export function TabThonToDanPho() {
       void toggleResidentialUnitActive(u, RESIDENTIAL_UNIT_API).then((r) => {
         setSending(false);
         setRetiring(null);
-        if (r.kind === "done") {
-          setDoneSentence(r.sentence);
-          setReads((n) => n + 1);
-        } else if (r.kind === "serverError") {
-          setRowError({ id: u.id, message: r.message });
-        }
+        if (r.kind === "done") done(r.sentence);
+        else if (r.kind === "serverError") setRowError({ id: u.id, message: r.message });
       });
     },
     reactivate: (u) => {
@@ -243,20 +248,11 @@ export function TabThonToDanPho() {
       setSending(true);
       void toggleResidentialUnitActive(u, RESIDENTIAL_UNIT_API).then((r) => {
         setSending(false);
-        if (r.kind === "done") {
-          setDoneSentence(r.sentence);
-          setReads((n) => n + 1);
-        } else if (r.kind === "serverError") {
-          setRowError({ id: u.id, message: r.message });
-        }
+        if (r.kind === "done") done(r.sentence);
+        else if (r.kind === "serverError") setRowError({ id: u.id, message: r.message });
       });
     },
-    openImport: () => {
-      clearMessages();
-      setOpen(null);
-      setRetiring(null);
-      setImportOpen(true);
-    },
+    reload: () => setReads((n) => n + 1),
   };
 
   const submit = () => {
@@ -277,8 +273,7 @@ export function TabThonToDanPho() {
         return;
       }
       setOpen(null);
-      setDoneSentence(r.sentence);
-      setReads((n) => n + 1);
+      done(r.sentence);
     });
   };
 
@@ -286,6 +281,9 @@ export function TabThonToDanPho() {
   const form =
     open === null ? null : (
       <ResidentialUnitForm
+        // A new key per row: switching from one row's edit to another's remounts the form, so
+        // `autoFocus` and the draft both belong to the row now open.
+        key={open.kind === "edit" ? open.unit.id : "create"}
         open={open}
         draft={draft}
         setDraft={setDraft}
@@ -312,35 +310,20 @@ export function TabThonToDanPho() {
     );
 
   return (
-    // No card, no visible title: the tab IS the section, as in the prototype (ADR 0068 lần 5).
-    <section className="tab-thon-to-dan-pho flex min-w-0 flex-col gap-3 [&>*]:my-0" aria-labelledby="tieu-de-thon">
+    // No card, no visible title: the tab IS the section, as in the prototype.
+    <section className="min-w-0" aria-labelledby="tieu-de-thon">
       <h2 id="tieu-de-thon" className="an-thi-giac">
         Thôn / Tổ dân phố
       </h2>
       {decision !== null && !decision.hien && decision.vi === "khong-doc-duoc" && (
-        <p className="thong-bao-loi" role="alert">
-          {decision.thongBao}
-        </p>
+        <InlineError>{decision.thongBao}</InlineError>
       )}
       <ResidentialUnitsView
         load={load}
         canWrite={canWrite}
-        missingPermission={decision !== null && !decision.hien && decision.vi === "khong-du-quyen"}
         actions={actions}
         sending={sending}
-        doneSentence={doneSentence}
-        topPanel={
-          importOpen && canWrite ? (
-            <ExcelImportPanel
-              asDialog
-              target={RESIDENTIAL_UNIT_IMPORT_TARGET}
-              onImported={() => setReads((n) => n + 1)}
-              onClose={() => setImportOpen(false)}
-            />
-          ) : (
-            form
-          )
-        }
+        form={form}
         retiring={retiring}
         rowError={rowError}
       />
@@ -348,107 +331,93 @@ export function TabThonToDanPho() {
   );
 }
 
-const ADD_BUTTON_ID = "nut-them-thon";
-
 /** `id` of a row's edit button — focus returns there when the form closes. */
 export function editButtonId(unitId: string): string {
   return `nut-sua-thon-${unitId}`;
 }
 
+/** A sentence in place, in the spec's error type. */
+function InlineError({ children }: { children: ReactNode }) {
+  return (
+    <p role="alert" className="text-danger m-0 text-[12px] font-medium">
+      {children}
+    </p>
+  );
+}
+
+/** Spec 04: `toLocaleString("vi-VN")`, empty → "—". `null` is "chưa nhập", never shown as 0. */
+function countCell(n: number | null): string {
+  return n === null ? EMPTY_CELL : n.toLocaleString("vi-VN");
+}
+
 /**
- * The tab's body: guidance, buttons, the list. PURE PRESENTATION and EXPORTED so the test renders the
- * allowed AND the denied case with `react-dom/server` — "no write button without `admin.org`" is a
- * fact of this JSX, not of a pure function.
+ * The tab's body: import, add, the open form, the list. PURE PRESENTATION and EXPORTED so the test
+ * renders the allowed AND the denied case with `react-dom/server` — "no write button without
+ * `admin.org`" is a fact of this JSX, not of a pure function.
  */
 export function ResidentialUnitsView({
   load,
   canWrite,
-  missingPermission,
   actions,
   sending,
-  doneSentence,
-  topPanel,
+  form,
   retiring,
   rowError,
 }: {
   load: ResidentialUnitsLoad;
   canWrite: boolean;
-  missingPermission: boolean;
   actions: ResidentialUnitActions;
   sending: boolean;
-  doneSentence: string;
-  topPanel: ReactNode;
+  /** The open add/edit row, or `null`. It opens ABOVE the table — never a dialog (spec 02). */
+  form: ReactNode;
   retiring: identity_thonToDanPhoRa | null;
   rowError: { id: string; message: string } | null;
 }) {
   return (
     <>
-      {/* Prototype order: "Nhập từ Excel" (outline) right-aligned on the first row — here beside the
-          no-delete note the user asked for (ADR 0059 §2) — then "Thêm thôn / tổ dân phố" (primary). */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="ghi-chu m-0 min-w-0 flex-1 basis-64 text-[13px] text-ink-500">{GHI_CHU_CHI_XEM_THON}</p>
-        {canWrite && (
-          <p className="cum-nut m-0 flex">
-            <Button type="button" variant="outline" size="sm" icon={<Upload aria-hidden="true" focusable="false" strokeWidth={1.8} />} onClick={actions.openImport}>
-              {IMPORT_BUTTON}
+      {/* Spec 02: "Nhập từ Excel" heads the tab, right-aligned (`mb-3 flex justify-end`). */}
+      {canWrite && <ConfigImportButton target={RESIDENTIAL_UNIT_IMPORT_TARGET} onImported={actions.reload} />}
+
+      <div className="flex min-w-0 flex-col gap-3">
+        {/* Not while loading: the prototype draws the add button only once the list has arrived
+            (`ConfigWorkspace.tsx:99`). The import row above stays. */}
+        {canWrite && load.phase !== "loading" && (
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              id={ADD_BUTTON_ID}
+              className={SMALL_BUTTON_CLASS}
+              icon={<Plus aria-hidden="true" focusable="false" className="size-4" />}
+              onClick={actions.add}
+            >
+              {ADD_BUTTON}
             </Button>
-          </p>
+          </div>
+        )}
+
+        {canWrite && form}
+
+        {load.phase === "loading" && <ConfigLoading label="Đang tải danh sách địa bàn…" />}
+
+        {/* LỖI: hiện đúng `message` của máy chủ, không diễn giải và không rẽ nhánh theo `code`. */}
+        {load.phase === "error" && (
+          <ErrorState role="alert" title="Chưa tải được danh sách thôn / tổ dân phố" message={load.message} />
+        )}
+
+        {/* TRẠNG THÁI RỖNG, KHÔNG PHẢI LỖI: máy chủ trả `items: []`, nói trong khung bảng. */}
+        {load.phase === "ready" && (
+          <UnitsTable
+            units={load.units}
+            canWrite={canWrite}
+            actions={actions}
+            sending={sending}
+            retiring={retiring}
+            rowError={rowError}
+          />
         )}
       </div>
-      {canWrite && (
-        <p className="cum-nut m-0 flex justify-end">
-          <Button
-            type="button"
-            variant="primary"
-            size="sm"
-            id={ADD_BUTTON_ID}
-            icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
-            onClick={actions.add}
-          >
-            {ADD_BUTTON}
-          </Button>
-        </p>
-      )}
-      {/* Read-only is a normal state of an account: a neutral note, no role. */}
-      {missingPermission && (
-        <Notice tone="neutral" className="m-0">
-          {NO_WRITE_PERMISSION}
-        </Notice>
-      )}
-      {doneSentence !== "" && (
-        <p role="status" className="text-sm font-medium text-success-600">
-          {doneSentence}
-        </p>
-      )}
-
-      {topPanel}
-
-      {load.phase === "loading" && (
-        <>
-          <p role="status" className="an-thi-giac">
-            Đang tải danh sách địa bàn…
-          </p>
-          <SkeletonRows rows={4} className="rounded-xl border border-line" />
-        </>
-      )}
-
-      {/* LỖI: hiện đúng `message` của máy chủ, không diễn giải và không rẽ nhánh theo `code`. */}
-      {load.phase === "error" && (
-        <ErrorState role="alert" title="Chưa tải được danh sách thôn / tổ dân phố" message={load.message} />
-      )}
-
-      {/* TRẠNG THÁI RỖNG, KHÔNG PHẢI TRẠNG THÁI LỖI. Máy chủ trả `items: []`, không bao giờ `null` — and,
-          as in the prototype, it is said inside the table frame, under the column heads. */}
-      {load.phase === "ready" && (
-        <UnitsTable
-          units={load.units}
-          canWrite={canWrite}
-          actions={actions}
-          sending={sending}
-          retiring={retiring}
-          rowError={rowError}
-        />
-      )}
     </>
   );
 }
@@ -475,97 +444,96 @@ function UnitsTable({
   const columns = canWrite ? 8 : 7;
   return (
     <>
-    {canWrite && retiring !== null && <RetireDialog unit={retiring} sending={sending} actions={actions} />}
-    <TableScroll sticky aria-label="Danh sách thôn / tổ dân phố">
-      <table className={`bang-danh-muc ${DATA_TABLE_CLASS}`}>
-        <caption className="an-thi-giac">Danh sách thôn và tổ dân phố của đơn vị</caption>
+      {canWrite && retiring !== null && <RetireDialog unit={retiring} sending={sending} actions={actions} />}
+      <ConfigTable label="Danh sách thôn / tổ dân phố" caption="Danh sách thôn và tổ dân phố của đơn vị">
         <thead>
           <tr>
             <th scope="col">Tên</th>
             <th scope="col">Mã</th>
-            <th scope="col">Loại</th>
+            <th scope="col">{FIELD_TYPE}</th>
             <th scope="col">{FIELD_HEAD}</th>
-            <th scope="col">Số hộ</th>
-            <th scope="col">Nhân khẩu</th>
+            <th scope="col">{FIELD_HOUSEHOLDS}</th>
+            <th scope="col">{FIELD_POPULATION}</th>
             <th scope="col">Trạng thái</th>
-            {canWrite && <th scope="col">Thao tác</th>}
+            {/* The prototype's head is empty; the word stays for a screen reader only. */}
+            {canWrite && (
+              <th scope="col">
+                <span className="an-thi-giac">Thao tác</span>
+              </th>
+            )}
           </tr>
         </thead>
         <tbody>
-          {units.length === 0 && (
-            <tr>
-              <td colSpan={columns} className="py-10 text-center whitespace-normal text-ink-500">
-                {THON_RONG}
-              </td>
-            </tr>
-          )}
+          {units.length === 0 && <EmptyRow colSpan={columns}>{THON_RONG}</EmptyRow>}
           {units.map((t) => {
-            // Ba ca của cột Loại (`nhan-thon.ts`): không ca nào để lại một ô trống.
             const loai = loaiDonVi(t.type_code, t.type_label);
             return (
               <UnitRows key={t.id}>
                 <tr>
-                  <td>{t.name}</td>
-                  {/* Mã font mono: một slug được gõ lại và đọc qua điện thoại. */}
-                  <td className="ma-muc">{t.code}</td>
+                  <td className="text-navy font-medium">{t.name}</td>
                   <td>
-                    <span className={lopLoaiDonVi(loai)}>{nhanLoaiDonVi(loai)}</span>
+                    <code className="text-[11.5px]">{t.code}</code>
                   </td>
-                  <td>{t.head_staff_code === "" ? HEAD_NONE : t.head_staff_name}</td>
-                  {/* `null` KHÔNG hiện thành `0` (`nhan-thon.ts`). */}
-                  <td>{nhanSoDem(t.household_count)}</td>
-                  <td>{nhanSoDem(t.population_count)}</td>
+                  {/* Unclassified is "—" (spec 04). A code whose label left the catalogue still says so:
+                      that is drift only an administrator can fix, not an empty cell (`nhan-thon.ts`). */}
+                  <td>{loai.loai === "chuaPhanLoai" ? EMPTY_CELL : nhanLoaiDonVi(loai)}</td>
+                  <td>{t.head_staff_code === "" ? EMPTY_CELL : t.head_staff_name}</td>
+                  <td>{countCell(t.household_count)}</td>
+                  <td>{countCell(t.population_count)}</td>
                   <td>
-                    {/* Tone by the CODE (`active`); icon + word, never colour alone. */}
-                    <Badge tone={t.active ? "success" : "neutral"}>{nhanTrangThaiDiaBan(t.active)}</Badge>
+                    <StatusBadge active={t.active} />
                   </td>
                   {canWrite && (
-                    <td className="o-thao-tac">
-                      {/* The prototype's right-aligned icon buttons. Its 🗑 is "Ngừng dùng" here: a hamlet is
-                          never deleted (ADR 0059). Each button's words are its accessible name and title. */}
-                      <span className="cum-nut flex flex-wrap items-center justify-end gap-1.5">
-                        <IconButton
+                    <td>
+                      {/* The prototype's Pencil + Trash2. Trash2's place is "Ngừng dùng" / "Dùng lại": a
+                          hamlet is never deleted (ADR 0059 §2). The words are the title and the name. */}
+                      <RowActions>
+                        <Button
                           type="button"
-                          variant="secondary"
+                          variant="outline"
+                          size="sm"
                           id={editButtonId(t.id)}
-                          label={editButtonLabel(t.name)}
+                          title={EDIT_BUTTON}
+                          aria-label={editButtonLabel(t.name)}
                           onClick={() => actions.edit(t)}
                           disabled={sending}
                         >
-                          <Pencil aria-hidden="true" focusable="false" strokeWidth={1.8} />
-                        </IconButton>
+                          <Pencil aria-hidden="true" focusable="false" className="size-3.5" />
+                        </Button>
                         {t.active ? (
-                          <IconButton
+                          <Button
                             type="button"
-                            variant="secondary"
-                            className="text-danger-600 hover:not-disabled:border-danger-600 hover:not-disabled:text-danger-600"
-                            label={retireButtonLabel(t.name)}
+                            variant="outline"
+                            size="sm"
+                            className="text-danger"
+                            title={RETIRE_BUTTON}
+                            aria-label={retireButtonLabel(t.name)}
                             onClick={() => actions.askRetire(t)}
                             disabled={sending}
                           >
-                            <PowerOff aria-hidden="true" focusable="false" strokeWidth={1.8} />
-                          </IconButton>
+                            <PowerOff aria-hidden="true" focusable="false" className="size-3.5" />
+                          </Button>
                         ) : (
-                          <IconButton
+                          <Button
                             type="button"
-                            variant="secondary"
-                            label={reactivateButtonLabel(t.name)}
+                            variant="outline"
+                            size="sm"
+                            title={REACTIVATE_BUTTON}
+                            aria-label={reactivateButtonLabel(t.name)}
                             onClick={() => actions.reactivate(t)}
                             disabled={sending}
                           >
-                            <RotateCcw aria-hidden="true" focusable="false" strokeWidth={1.8} />
-                          </IconButton>
+                            <RotateCcw aria-hidden="true" focusable="false" className="size-3.5" />
+                          </Button>
                         )}
-                      </span>
+                      </RowActions>
                     </td>
                   )}
                 </tr>
                 {rowError !== null && rowError.id === t.id && (
                   <tr>
-                    <td colSpan={columns}>
-                      <p className="thong-bao-loi" role="alert">
-                        {rowError.message}
-                      </p>
+                    <td colSpan={columns} className="whitespace-normal">
+                      <InlineError>{rowError.message}</InlineError>
                     </td>
                   </tr>
                 )}
@@ -573,15 +541,14 @@ function UnitsTable({
             );
           })}
         </tbody>
-      </table>
-    </TableScroll>
+      </ConfigTable>
     </>
   );
 }
 
 /**
- * "Ngừng dùng" asks once (ADR 0059), in a dialog over the list. The question is the visible title; the
- * dialog's own header only names it for assistive technology.
+ * "Ngừng dùng" asks once (ADR 0059, ADR 0068 §15), in a dialog over the list. The question is the
+ * visible title; the dialog's own header only names it for assistive technology.
  */
 function RetireDialog({
   unit,
@@ -610,7 +577,7 @@ function RetireDialog({
             <Button type="button" variant="primary" onClick={actions.confirmRetire} disabled={sending} aria-busy={sending}>
               <BusyLabel busy={sending} label={CONFIRM_RETIRE_BUTTON} busyText={BUSY_SAVING} />
             </Button>
-            <Button type="button" variant="secondary" onClick={actions.cancelRetire} disabled={sending}>
+            <Button type="button" variant="outline" onClick={actions.cancelRetire} disabled={sending}>
               {NUT_HUY}
             </Button>
           </>
@@ -622,18 +589,22 @@ function RetireDialog({
   );
 }
 
-/** A keyed fragment for one unit's row and the rows under it (confirm, error). */
+/** A keyed fragment for one unit's row and the row under it (error). */
 function UnitRows({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
 /**
- * The add / edit form. PURE PRESENTATION — every value in through `draft`, every change out through
- * `setDraft`; bodies are built in `residential-unit-form.ts`. EXPORTED so the server's refusal is
- * rendered VERBATIM in a test.
+ * The add / edit row — spec 04's grey row: Tên · Loại · Số hộ · Nhân khẩu · buttons, then (ADR 0079
+ * decision 3) Trưởng thôn / Tổ trưởng and Thứ tự on a second line of the same box. PURE PRESENTATION —
+ * every value in through `draft`, every change out through `setDraft`; bodies are built in
+ * `residential-unit-form.ts`. EXPORTED so the server's refusal is rendered in a test.
  *
- * `Mã` IS AN INPUT ONLY WHEN ADDING. On edit it is text: an editable code box promises what the server
- * refuses with 400 `code_not_editable` (rule 7, invariant 3).
+ * NO CODE BOX: on create the server derives the code from the name (`residential_unit_write.go:32`);
+ * on edit it refuses one with 400 `code_not_editable` (rule 7, invariant 3). The code is in the table.
+ *
+ * The second-line fields come BEFORE the buttons in the DOM — so Tab reaches them before `Thêm`, and
+ * below `sm` they stack above the buttons — and are placed on row 2 by the grid from `sm` up.
  */
 export function ResidentialUnitForm({
   open,
@@ -662,11 +633,11 @@ export function ResidentialUnitForm({
   onSubmit: () => void;
   onCancel: () => void;
 }) {
-  const title = open.kind === "edit" ? editTitle(open.unit.name) : CREATE_TITLE;
+  const editing = open.kind === "edit";
   return (
-    <form
-      className="form-danh-muc grid min-w-0 gap-4 sm:grid-cols-2 [&>*]:m-0 [&>.cum-nut]:col-span-full [&>.thong-bao-loi]:col-span-full [&>h4]:col-span-full"
-      aria-label={title}
+    <ConfigFormRow
+      columns="sm:grid-cols-[1fr_12rem_8rem_8rem_auto]"
+      aria-label={editing ? editTitle(open.unit.name) : CREATE_TITLE}
       onSubmit={(e) => {
         e.preventDefault();
         onSubmit();
@@ -676,23 +647,26 @@ export function ResidentialUnitForm({
         if (e.key === "Escape" && !sending) onCancel();
       }}
     >
-      <h4 className="text-[15px] font-semibold text-ink-900">{title}</h4>
+      <ConfigField label={FIELD_NAME} htmlFor={NAME_INPUT_ID}>
+        <input
+          id={NAME_INPUT_ID}
+          name="name"
+          autoFocus
+          className={formInputCls}
+          placeholder={NAME_PLACEHOLDER}
+          value={draft.name}
+          onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+          aria-invalid={localError !== ""}
+        />
+      </ConfigField>
 
-      <TextBox id={NAME_INPUT_ID} label={FIELD_NAME} help={NAME_HELP} value={draft.name} onChange={(v) => setDraft({ ...draft, name: v })} />
-
-      {open.kind === "create" ? (
-        <TextBox id="o-ma-thon" label={FIELD_CODE} help={CODE_HELP_CREATE} value={draft.code} onChange={(v) => setDraft({ ...draft, code: v })} />
-      ) : (
-        <p className="ghi-chu">{codeReadOnly(open.unit.code)}</p>
-      )}
-
-      <div className="o-nhap">
-        <label htmlFor="o-loai-thon">{FIELD_TYPE}</label>
+      <ConfigField label={FIELD_TYPE} htmlFor="o-loai-thon">
         <select
           id="o-loai-thon"
+          name="type"
+          className={formSelectCls}
           value={draft.typeCode}
           onChange={(e) => setDraft({ ...draft, typeCode: e.target.value })}
-          aria-describedby="giai-thich-loai-thon"
         >
           <option value="">{TYPE_NONE}</option>
           {typeChoices.map((o) => (
@@ -701,23 +675,43 @@ export function ResidentialUnitForm({
             </option>
           ))}
         </select>
-        <p className="ghi-chu" id="giai-thich-loai-thon">
-          {TYPE_HELP}
-        </p>
-        {typesError !== "" && (
-          <p className="thong-bao-loi" role="alert">
-            {typesError}
-          </p>
-        )}
-      </div>
+      </ConfigField>
 
-      <div className="o-nhap">
-        <label htmlFor="o-truong-thon">{FIELD_HEAD}</label>
+      {/* `type="number" min=0` (spec 04): a blank box stays blank ("chưa nhập"), never 0; whatever
+          is not a whole number ≥ 0 is sent as null (`residential-unit-form.ts`). */}
+      <ConfigField label={FIELD_HOUSEHOLDS} htmlFor="o-so-ho">
+        <input
+          id="o-so-ho"
+          name="households"
+          type="number"
+          min={0}
+          step={1}
+          className={formInputCls}
+          value={draft.households}
+          onChange={(e) => setDraft({ ...draft, households: e.target.value })}
+        />
+      </ConfigField>
+
+      <ConfigField label={FIELD_POPULATION} htmlFor="o-nhan-khau">
+        <input
+          id="o-nhan-khau"
+          name="population"
+          type="number"
+          min={0}
+          step={1}
+          className={formInputCls}
+          value={draft.population}
+          onChange={(e) => setDraft({ ...draft, population: e.target.value })}
+        />
+      </ConfigField>
+
+      <ConfigField label={FIELD_HEAD} htmlFor="o-truong-thon" className="sm:col-start-1 sm:row-start-2">
         <select
           id="o-truong-thon"
+          name="head"
+          className={formSelectCls}
           value={draft.headStaffCode}
           onChange={(e) => setDraft({ ...draft, headStaffCode: e.target.value })}
-          aria-describedby="giai-thich-truong-thon"
         >
           <option value="">{HEAD_NONE}</option>
           {headChoices.map((o) => (
@@ -726,74 +720,51 @@ export function ResidentialUnitForm({
             </option>
           ))}
         </select>
-        <p className="ghi-chu" id="giai-thich-truong-thon">
-          {HEAD_HELP}
-        </p>
-        {directoryError !== "" && (
-          <p className="thong-bao-loi" role="alert">
-            {directoryError}
-          </p>
-        )}
-      </div>
+      </ConfigField>
 
-      {/* `inputMode="numeric"`, not `type="number"`: a scroll wheel over a number box changes the value
-          without the user noticing — and a blank box must stay blank ("chưa nhập"), never become 0. */}
-      <TextBox id="o-so-ho" label={FIELD_HOUSEHOLDS} help={COUNT_HELP} numeric value={draft.households} onChange={(v) => setDraft({ ...draft, households: v })} />
-      <TextBox id="o-nhan-khau" label={FIELD_POPULATION} help={COUNT_HELP} numeric value={draft.population} onChange={(v) => setDraft({ ...draft, population: v })} />
-      <TextBox id="o-thu-tu-thon" label={FIELD_ORDER} help={ORDER_HELP} numeric value={draft.order} onChange={(v) => setDraft({ ...draft, order: v })} />
+      <ConfigField label={FIELD_ORDER} htmlFor="o-thu-tu-thon" className="sm:col-start-2 sm:row-start-2">
+        <input
+          id="o-thu-tu-thon"
+          name="order"
+          type="number"
+          step={1}
+          className={formInputCls}
+          value={draft.order}
+          onChange={(e) => setDraft({ ...draft, order: e.target.value })}
+        />
+      </ConfigField>
 
-      {/* TWO ERROR AREAS: a local one (nothing sent) and the server's sentence, verbatim. */}
-      {localError !== "" && (
-        <p className="thong-bao-loi" role="alert">
-          {localError}
-        </p>
-      )}
-      {serverError !== "" && (
-        <p className="thong-bao-loi" role="alert">
-          {serverError}
-        </p>
-      )}
-
-      <div className="cum-nut flex flex-wrap justify-end gap-2">
+      <div className="flex gap-2 sm:col-start-5 sm:row-start-1">
         <Button type="submit" variant="primary" disabled={sending} aria-busy={sending}>
-          <BusyLabel busy={sending} label={NUT_LUU} busyText={BUSY_SAVING} />
+          <BusyLabel busy={sending} label={editing ? NUT_LUU : "Thêm"} busyText={BUSY_SAVING} />
         </Button>
-        <Button type="button" variant="secondary" onClick={onCancel} disabled={sending}>
+        <Button type="button" variant="outline" onClick={onCancel} disabled={sending}>
           {NUT_HUY}
         </Button>
       </div>
-    </form>
-  );
-}
 
-function TextBox({
-  id,
-  label,
-  help,
-  value,
-  onChange,
-  numeric = false,
-}: {
-  id: string;
-  label: string;
-  help: string;
-  value: string;
-  onChange: (v: string) => void;
-  numeric?: boolean;
-}) {
-  return (
-    <div className="o-nhap">
-      <label htmlFor={id}>{label}</label>
-      <input
-        id={id}
-        value={value}
-        inputMode={numeric ? "numeric" : undefined}
-        onChange={(e) => onChange(e.target.value)}
-        aria-describedby={`${id}-giai-thich`}
-      />
-      <p className="ghi-chu" id={`${id}-giai-thich`}>
-        {help}
-      </p>
-    </div>
+      {/* The pickers' own read failures, then TWO error regions: the local one (nothing was sent) and
+          the server's refusal, after the spec's sentence. Merged, one overwrites the other. */}
+      {typesError !== "" && (
+        <div className="col-span-full">
+          <InlineError>{typesError}</InlineError>
+        </div>
+      )}
+      {directoryError !== "" && (
+        <div className="col-span-full">
+          <InlineError>{directoryError}</InlineError>
+        </div>
+      )}
+      {localError !== "" && (
+        <div className="col-span-full">
+          <InlineError>{localError}</InlineError>
+        </div>
+      )}
+      {serverError !== "" && (
+        <div className="col-span-full">
+          <InlineError>{`${SAVE_FAILED} ${serverError}`}</InlineError>
+        </div>
+      )}
+    </ConfigFormRow>
   );
 }
