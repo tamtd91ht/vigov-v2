@@ -446,14 +446,23 @@ func automationPages(notices []domain.StaffNotice) ([][]commsclient.Notice, erro
 	return pages, nil
 }
 
+// commsKind names the wire kind. Every notice of this service is a DOCUMENT kind (9–12), so a commune
+// can switch documents' reminders apart from tasks' and petitions' (ADR 0079 lô 2 Q3); never the
+// legacy 1–3. A comms build older than 9–12 refuses the batch: the run fails loudly and the next one
+// resends the SAME keys. The kind is not part of comms' dedup (commune, key, recipient), so a notice
+// delivered under the legacy kind earlier the same day is not delivered again.
+//
+// The weekly digest stays WEEKLY_DIGEST: comms does not split it per domain; the key tells the digests apart.
 func commsKind(k domain.NoticeKind) (commsv1.StaffNotificationKind, bool) {
 	switch k {
 	case domain.NoticeDueSoon:
-		return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DUE_SOON, true
+		return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_DUE_SOON, true
 	case domain.NoticeOverdue:
-		return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_OVERDUE, true
+		return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_OVERDUE, true
+	case domain.NoticeUnassigned:
+		return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_UNASSIGNED, true
 	case domain.NoticeEscalation:
-		return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_ESCALATION, true
+		return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_ESCALATION, true
 	case domain.NoticeWeeklyDigest:
 		return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_WEEKLY_DIGEST, true
 	}

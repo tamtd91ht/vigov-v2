@@ -87,7 +87,8 @@ const (
 )
 
 // NoticeKind mirrors comms' StaffNotificationKind without importing it (domain imports only the
-// standard library).
+// standard library). Every kind here is a DOCUMENT one on the wire (app.commsKind, ADR 0079 lô 2 Q3)
+// except the weekly digest, which comms does not split per domain.
 type NoticeKind int
 
 const (
@@ -95,6 +96,9 @@ const (
 	NoticeOverdue
 	NoticeEscalation
 	NoticeWeeklyDigest
+	// NoticeUnassigned is the holding unit having named nobody past the commune's threshold — its own
+	// kind since comms split it out of OVERDUE, so a commune can switch it separately.
+	NoticeUnassigned
 )
 
 // StaffNotice is one notice before delivery.
@@ -252,11 +256,12 @@ func OverdueNotice(r AutomationRecord, day string, recipients []string) StaffNot
 }
 
 // UnassignedNotice reports a unit holding the document with nobody named past the commune's
-// threshold. Kind OVERDUE: comms has no kind of its own for it — the petitions runner's reading.
+// threshold. Its own kind (DOCUMENT_UNASSIGNED on the wire); the key is the one it had when it was
+// sent as OVERDUE, so a run straddling the switch does not tell anybody twice.
 func UnassignedNotice(r AutomationRecord, recipients []string) StaffNotice {
 	return StaffNotice{
 		Key:        UnassignedKey(AutomationIncomingDocument, r.ID, r.HoldStartedAt),
-		Kind:       NoticeOverdue,
+		Kind:       NoticeUnassigned,
 		Recipients: recipients,
 		Title:      clip("Văn bản đến "+r.Code+" chưa được phân công người xử lý", noticeTitleMax),
 		Body: "Bộ phận nhận từ " + FormatLocalInstant(r.HoldStartedAt) +

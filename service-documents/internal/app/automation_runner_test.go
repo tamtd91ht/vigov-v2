@@ -498,6 +498,94 @@ func TestEscalationLevels(t *testing.T) {
 	}
 }
 
+// Every notice shape → its per-domain wire kind (ADR 0079 lô 2 Q3), under the SAME keys it had when it
+// went out as the legacy DUE_SOON / OVERDUE / ESCALATION. The keys are literals on purpose: comms
+// deduplicates on (commune, key, recipient), so a key that moved with the kind would re-deliver every
+// notice already sent that day.
+var documentNoticeShapes = map[string]commsv1.StaffNotificationKind{
+	"sla_reminders:due_soon:van-ban-den:2026-09-29:CB-001":    commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_DUE_SOON,
+	"sla_reminders:overdue:van-ban-den:vb-unit:2026-09-29":    commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_OVERDUE,
+	"sla_reminders:unassigned:van-ban-den:vb-unit:1789869600": commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_UNASSIGNED,
+	"escalation:van-ban-den:vb-unit:unit_head":                commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_ESCALATION,
+	"weekly_digest:van-ban-den:2026-W40":                      commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_WEEKLY_DIGEST,
+}
+
+// documentShapesHarness has one document of each shape and one run of each job claimed.
+func documentShapesHarness(t *testing.T) *harness {
+	t.Helper()
+	h := newHarness(t, communeA)
+	h.identity.holders[communeA] = map[string][]string{"bp-1": {"CB-ROUTE"}}
+	h.identity.leaders[communeA] = []string{"CB-LD"}
+	soon := doc("vb-soon", 2, soonDue)
+	soon.AssigneeMa = "CB-001"
+	held := doc("vb-unit", 1, missed)
+	held.OrgUnitID, held.HoldStartedAt = "bp-1", holdStart
+	h.incoming.byCommune[communeA] = []domain.AutomationRecord{soon, held}
+	h.claim(communeA, "run-sla", jobSLA)
+	h.claim(communeA, "run-esc", jobEscalate)
+	h.claim(communeA, "run-dig", jobDigest)
+	return h
+}
+
+func TestEveryNoticeGoesOutUnderItsDocumentKind(t *testing.T) {
+	h := documentShapesHarness(t)
+	h.runner.Tick(context.Background())
+
+	got := map[string]commsv1.StaffNotificationKind{}
+	for _, d := range h.comms.delivered {
+		got[d.n.IdempotencyKey] = d.n.Kind
+	}
+	if len(got) != len(documentNoticeShapes) {
+		t.Errorf("giao %d khoá, muốn %d: %v", len(got), len(documentNoticeShapes), got)
+	}
+	for key, want := range documentNoticeShapes {
+		if k, ok := got[key]; !ok || k != want {
+			t.Errorf("khoá %s: loại = %v (có=%v), muốn %v", key, k, ok, want)
+		}
+	}
+}
+
+// A commune told under the legacy kinds this morning is not told again after the switch: the keys and
+// recipients are what comms already holds.
+func TestSwitchingKindMidDayDoesNotRedeliver(t *testing.T) {
+	h := documentShapesHarness(t)
+	h.comms.seen = map[string]bool{}
+	for key, ma := range map[string]string{
+		"sla_reminders:due_soon:van-ban-den:2026-09-29:CB-001":    "CB-001",
+		"sla_reminders:overdue:van-ban-den:vb-unit:2026-09-29":    "CB-ROUTE",
+		"sla_reminders:unassigned:van-ban-den:vb-unit:1789869600": "CB-ROUTE",
+		"escalation:van-ban-den:vb-unit:unit_head":                "CB-ROUTE",
+		"weekly_digest:van-ban-den:2026-W40":                      "CB-LD",
+	} {
+		h.comms.seen[string(communeA)+"|"+key+"|"+ma] = true
+	}
+	h.runner.Tick(context.Background())
+
+	for _, run := range []string{"run-sla", "run-esc", "run-dig"} {
+		if o := h.identity.recorded[run]; o.Outcome != succeeded || o.NoticesDelivered != 0 {
+			t.Errorf("%s sau khi đổi loại: %+v, muốn 0 thông báo mới", run, o)
+		}
+	}
+}
+
+func TestCommsKindNeverSendsLegacyKinds(t *testing.T) {
+	legacy := map[commsv1.StaffNotificationKind]bool{
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DUE_SOON:   true,
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_OVERDUE:    true,
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_ESCALATION: true,
+	}
+	for _, k := range []domain.NoticeKind{domain.NoticeDueSoon, domain.NoticeOverdue, domain.NoticeUnassigned,
+		domain.NoticeEscalation, domain.NoticeWeeklyDigest} {
+		w, ok := commsKind(k)
+		if !ok || legacy[w] {
+			t.Errorf("loại %d → %v (ok=%v)", k, w, ok)
+		}
+	}
+	if _, ok := commsKind(domain.NoticeKind(0)); ok {
+		t.Error("loại 0 được nhận")
+	}
+}
+
 func TestWeeklyDigestContent(t *testing.T) {
 	h := newHarness(t, communeA)
 	h.identity.leaders[communeA] = []string{"CB-LD1", "CB-LD2"}
