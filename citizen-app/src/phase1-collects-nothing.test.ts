@@ -270,11 +270,13 @@ const TRIPWIRES: readonly Tripwire[] = [
     // Console vẫn là chín: `index.d.ts` dòng 3009 ghi rằng từ SDK 2.35.0 lời gọi này không cần
     // người dùng xác nhận.
     // `getUserInfo` LÀ TÊN THỨ MƯỜI MỘT (28/09/2026) — xem lệnh cấm tuyệt đối ngay trên.
+    // `chooseImage` and `configAppView` are the twelfth and thirteenth (08/10/2026): the phone's own camera for
+    // "Chụp ảnh", and the commune name on Zalo's top bar (`zalo-api.ts` `takeScenePhoto`, `setCommuneActionBar`).
     what:
-      'a platform call outside "src/features/tinh-nang/" — those eleven are the ONLY platform ' +
+      'a platform call outside "src/features/tinh-nang/" — those thirteen are the ONLY platform ' +
       "calls this app makes, and they live in exactly one directory",
     pattern:
-      /\b(getPhoneNumber|getAccessToken|getLocation|scanQRCode|getNetworkType|keepScreen|vibrate|requestCameraPermission|openMediaPicker|downloadFile|getUserInfo)\s*\(/,
+      /\b(getPhoneNumber|getAccessToken|getLocation|scanQRCode|getNetworkType|keepScreen|vibrate|requestCameraPermission|openMediaPicker|downloadFile|getUserInfo|chooseImage|configAppView)\s*\(/,
     chi_trong: [THU_MUC_TINH_NANG],
   },
   {

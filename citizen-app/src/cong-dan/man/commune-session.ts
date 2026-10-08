@@ -34,6 +34,13 @@
  * What a phone-less session may run (`runsWithoutPhone`): sending, and looking up one's own petition by code.
  * "Phản ánh của tôi" and rating need a verified phone; with a phone-less session they ask for the number, or —
  * once Zalo has given none in this open — say so (`chua-xac-thuc-so`) without asking again.
+ *
+ * WHEN ZALO REFUSES THE ACCESS TOKEN (ADR 0083, 08/10/2026, TEMPORARY): no session of any kind can open — the
+ * phone-less one needs the access token too. Measured on a real phone: App ViHAT opened from a commune QR gets
+ * -1401 for `access-token` whether the name card was accepted or declined. Then, for sending and looking up
+ * only, the result screen offers the ACCOUNTLESS path (`offersAccountless`) — the screen leaves the gate and opens
+ * the accountless send / lookup, which call no session route. A NON-transient refusal is remembered for this
+ * open (`accessRefused`): the next act shows that result at once instead of asking Zalo for the same refusal.
  */
 import {
   type CommuneAppSessionOutcome,
@@ -104,6 +111,21 @@ export function offersManualSend(
 }
 
 /**
+ * Whether the accountless path (ADR 0083 #1) is offered under this outcome: ONLY when Zalo refused the
+ * ACCESS-TOKEN step — so neither a session with a number nor a phone-less one can open — and only for sending
+ * and looking up by code. Never for a refused PHONE step (the typed-contact path of ADR 0080 still works there),
+ * never for a network failure, a closed channel, another commune, or outside Zalo. PURE.
+ */
+export function offersAccountless(
+  outcome: SessionGateStop,
+  task: PhoneVerificationTask | undefined,
+  zalo?: ZaloFailure,
+): boolean {
+  if (task !== "submit" && task !== "lookup") return false;
+  return outcome === "thu-lai" && zalo?.capability === "access-token";
+}
+
+/**
  * `communeName` is read at call time — the name on the header, from the public lookup of this build's
  * domain. It is the name the session must match (`openCommuneAppSession`). Without an opener (tests,
  * outside Zalo in development) every act ends in `chua-ket-noi` and nothing is called.
@@ -122,6 +144,11 @@ export function createSessionGate(
    * for an act that needs the number would only repeat that — so such an act is told so instead.
    */
   let phoneUnavailable = false;
+  /**
+   * Zalo refused the ACCESS TOKEN with a non-transient code in this open (ADR 0083). Asking again repeats the same
+   * refusal, so the next act shows it at once — with the accountless offer where `offersAccountless` says.
+   */
+  let accessRefused: ZaloFailure | null = null;
   /** An open is in flight. Only one at a time: two would be two Zalo/server exchanges for one tap. */
   let busy = false;
   /**
@@ -163,6 +190,9 @@ export function createSessionGate(
       busy = false;
     }
     if (outcome.kieu === "no-phone" && phone === "ask") phoneUnavailable = true;
+    if (outcome.kieu === "thu-lai" && outcome.zalo?.capability === "access-token" && !outcome.zalo.transient) {
+      accessRefused = outcome.zalo;
+    }
     if (!waiting) {
       // The citizen left while it ran. A session is already stored (the next act runs at once); a final
       // outcome is remembered so the next act says it; nothing runs and nothing is shown now.
@@ -207,6 +237,18 @@ export function createSessionGate(
         pending = null;
         finalOutcome = "chua-ket-noi";
         setState({ kieu: "ket-qua", outcome: "chua-ket-noi" });
+        return;
+      }
+      if (session === null && accessRefused !== null) {
+        // No session can open in this open (ADR 0083). The act waits only where the accountless path can serve
+        // it; the screen leaves the gate for that path, so `pending` itself never runs.
+        if (offersAccountless("thu-lai", task, accessRefused)) {
+          pending = run;
+          pendingTask = task;
+        } else {
+          pending = null;
+        }
+        show("thu-lai", accessRefused);
         return;
       }
       if (session !== null && phoneUnavailable) {

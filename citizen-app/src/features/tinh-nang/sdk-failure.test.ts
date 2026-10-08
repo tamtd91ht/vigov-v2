@@ -21,6 +21,8 @@ const sdk = vi.hoisted(() => ({
   getUserInfo: vi.fn<() => Promise<{ userInfo: { name?: string } }>>(),
 }));
 vi.mock("zmp-sdk", () => sdk);
+// Coded failures here would POST a real report on a machine whose `.env.local` sets the API host.
+vi.mock("../dang-nhap/goi-may-chu", () => ({ reportClientError: async () => {} }));
 
 import { layTenZalo, requestLocationCodes, xinMaDangNhap, xinTokenSoDienThoai, xinTokenViTri } from "./zalo-api";
 

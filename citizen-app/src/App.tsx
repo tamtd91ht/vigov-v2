@@ -39,6 +39,7 @@ import {
   chooseScenePhotos,
   type ScenePhotoPick,
   type SdkFailure,
+  setCommuneActionBar,
   takeScenePhoto,
 } from "./features/tinh-nang/zalo-api";
 import { NhaCungCapPhien } from "./features/dang-nhap/kho-phien";
@@ -587,6 +588,9 @@ export function openSharedAppSession(
  *                     key would offer one commune's draft — name and phone included — inside another (rule 1)
  * The rest (name, scene photos, video, links) is app-independent and the same as `AppRieng`.
  *
+ *   onCommuneShown    Zalo's own top bar takes the commune's name (`nameNativeBar`); a commune app's own App ID
+ *                     has its own title, so `AppRieng` passes nothing
+ *
  * Both per-host values are memoised: `TrangXa` keys its session gate and effects on them.
  */
 function QrCommuneApp({ ten_mien }: { ten_mien: string }) {
@@ -602,6 +606,25 @@ function QrCommuneApp({ ten_mien }: { ten_mien: string }) {
       openSession={openSession}
       openVideo={openCommuneVideo}
       openLink={openCommuneLink}
+      onCommuneShown={nameNativeBar}
     />
   );
+}
+
+/**
+ * THE COLOUR AT THE TOP EDGE OF THE COMMUNE HEADER — `styles.css` `--xa-brand-dark`, the 0% stop of `.xa-header`'s
+ * 160deg gradient, i.e. the colour of its top-left corner where Zalo's bar meets it. Zalo's bar takes a hex string,
+ * not a CSS variable, so the value is copied here; `native-bar.test.ts` reads the stylesheet and fails the day the
+ * two drift. Same red for every commune today (no per-commune theme exists); white text on it is measured in
+ * `accessibility.test.ts` ("chữ trắng trên header đỏ (đầu sẫm)").
+ */
+export const COMMUNE_HEADER_TOP_COLOR = "#96060f";
+
+/**
+ * Zalo's own top bar (owner, 08/10/2026): "ViHAT Group" → the commune the citizen is looking at, once its PUBLIC
+ * lookup returned a name (`TrangXa` calls this only then). Never a default name: no lookup, no call. Fire and
+ * forget — a failure leaves "ViHAT Group", and the page's own header still names the commune.
+ */
+export function nameNativeBar(communeName: string): void {
+  void setCommuneActionBar(communeName, COMMUNE_HEADER_TOP_COLOR);
 }

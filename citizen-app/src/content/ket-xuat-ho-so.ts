@@ -26,6 +26,8 @@ import {
   DUONG_DAN_PHIEN,
   LOCATION_FIELDS,
   LOCATION_PATH,
+  CLIENT_ERROR_FIELDS,
+  CLIENT_ERROR_PATH,
   TRUONG_GUI_DI_CAU_VIGOV,
   TRUONG_GUI_DI_PHIEN,
 } from "../features/dang-nhap/hop-dong";
@@ -364,6 +366,13 @@ export function khoiRoiKhoiMay(duong: readonly DuongRoiKhoiMay[], options: { com
     "Không đường nào ở trên mang theo một trường nói \"tôi là ai\": máy chủ lấy người dùng từ phiên",
     "đăng nhập trong tiêu đề `Authorization`, không từ thân yêu cầu.",
   );
+  // ADR 0083: the accountless send has NO session — said, since the sentence above would otherwise be false of it.
+  if (duong.some((d) => d.tuyen === ACCOUNTLESS_SEND_PATH)) {
+    dong.push(
+      "Riêng đường gửi phản ánh không cần tài khoản không có phiên đăng nhập nào: họ tên và số điện thoại",
+      "người dùng tự nhập ở đó chỉ là thông tin liên hệ, không được xác nhận, và không gắn phản ánh với ai.",
+    );
+  }
 
   return dong.join("\n");
 }
@@ -533,6 +542,104 @@ const SCENE_PHOTO_ROUTES: readonly DuongRoiKhoiMay[] = [
   },
 ];
 
+/* ---------------------------------------------------------------------------------------------
+   PHẢN ÁNH KHÔNG TÀI KHOẢN (ADR 0083, 08/10/2026, TẠM) — three routes of BOTH apps, copied, not imported
+   ---------------------------------------------------------------------------------------------
+
+   Run only when Zalo refuses the access token, so no session can open, and only on the citizen's tap on
+   "Gửi phản ánh không cần tài khoản" / "Tra cứu bằng mã phiếu". No `Authorization`, no Zalo token: the commune
+   is named by its domain. Same boundary as the public routes above — the paths and the body live in
+   `cong-dan/api/hop-dong-phan-anh.ts` (`publicReportFieldsAddress`, `accountlessReportBody`,
+   `publicReportAddress`), which this file may not import; `ket-xuat-ho-so.test.ts` locks each copy to the real
+   address and body, both ways. The privacy-policy paragraph is a DRAFT marked "chờ duyệt" (`chinh-sach-rieng-tu.ts`,
+   section `phan-anh`). REMOVE these rows with the path (ADR 0083 §"Gỡ bỏ"). */
+
+export const ACCOUNTLESS_FIELDS_PATH = "/api/v1/public-citizen-report-fields";
+export const ACCOUNTLESS_SEND_PATH = "/api/v1/public-citizen-reports";
+export const ACCOUNTLESS_LOOKUP_PATH = "/api/v1/public-citizen-reports/{code}";
+/** The lookup screen's title, copied from `cong-dan/man/noi-dung.ts` `XA_PA.tra_cuu_tieu_de`; the test pins it. */
+export const ACCOUNTLESS_LOOKUP_SCREEN = "Tra cứu phiếu";
+
+/**
+ * Every key of `accountlessReportBody` — measured on the widest body (field present). NO `lat`/`lng`: the
+ * location exchange needs the access token this path does not have, so the button is hidden and the builder
+ * drops any pair (owner, 08/10/2026).
+ */
+export const ACCOUNTLESS_SEND_FIELDS: readonly TruongGuiDi[] = [
+  { khoa: "content", trong_chinh_sach: "nội dung phản ánh bạn viết" },
+  { khoa: "address", trong_chinh_sach: "địa chỉ nơi xảy ra sự việc bạn điền" },
+  {
+    khoa: "reporter_name",
+    trong_chinh_sach: "họ tên bạn tự nhập, chỉ để xã liên hệ lại; không được xác nhận qua Zalo",
+  },
+  {
+    khoa: "reporter_phone",
+    trong_chinh_sach: "số điện thoại bạn tự nhập, chỉ để xã liên hệ lại; không được xác nhận qua Zalo, và không nhận thông báo nào",
+  },
+  { khoa: "anonymous", trong_chinh_sach: "luôn là “không”: cách gửi này không cho gửi ẩn danh, vì họ tên và số điện thoại là cách duy nhất để xã liên hệ lại" },
+  { khoa: "field", trong_chinh_sach: "mã lĩnh vực bạn chọn trong danh sách của xã" },
+  HOST_CONG_KHAI,
+];
+
+export const ACCOUNTLESS_LOOKUP_FIELDS: readonly TruongGuiDi[] = [
+  {
+    khoa: "code",
+    trong_chinh_sach:
+      "mã tra cứu bạn nhập, nằm trên đường dẫn; hệ thống chỉ trả tình trạng, thời hạn và kết quả trả lời — không trả họ tên, số điện thoại, nội dung hay địa chỉ",
+  },
+  HOST_CONG_KHAI,
+];
+
+const ACCOUNTLESS_WHEN = "Zalo không cho ứng dụng mã phiên Zalo (không mở được phiên làm việc với xã)";
+
+const ACCOUNTLESS_ROUTES: readonly DuongRoiKhoiMay[] = [
+  {
+    tuyen: ACCOUNTLESS_FIELDS_PATH,
+    may_chu: "ViGov — dịch vụ `petitions`, không mang phiên làm việc nào",
+    khi_nao: `${ACCOUNTLESS_WHEN}, người dùng tự bấm “Gửi phản ánh không cần tài khoản”, hoặc bấm “Thử lại” khi danh sách lĩnh vực chưa tải được`,
+    nguoi_dung_bam: true,
+    man: SEND_SCREEN_NAME,
+    truong: [HOST_CONG_KHAI],
+    app: "both",
+    commune_app: {
+      man: `Ứng dụng của xã: ${SEND_SCREEN_NAME}`,
+      khi_nao: `trong ứng dụng riêng của một xã, ${ACCOUNTLESS_WHEN}, người dùng tự bấm “Gửi phản ánh không cần tài khoản”, hoặc bấm “Thử lại” khi danh sách lĩnh vực chưa tải được`,
+      nguoi_dung_bam: true,
+    },
+  },
+  {
+    tuyen: ACCOUNTLESS_SEND_PATH,
+    may_chu:
+      "ViGov — dịch vụ `petitions`, không mang phiên làm việc nào; kèm một mã ngẫu nhiên chống gửi trùng; hệ thống dùng địa chỉ mạng (IP) của lần gửi để giới hạn số phản ánh gửi theo cách này",
+    khi_nao: `${ACCOUNTLESS_WHEN}, người dùng tự bấm gửi phản ánh không cần tài khoản`,
+    nguoi_dung_bam: true,
+    man: SEND_SCREEN_NAME,
+    truong: ACCOUNTLESS_SEND_FIELDS,
+    app: "both",
+    commune_app: {
+      man: `Ứng dụng của xã: ${SEND_SCREEN_NAME}`,
+      khi_nao: `trong ứng dụng riêng của một xã, ${ACCOUNTLESS_WHEN}, người dùng tự bấm gửi phản ánh không cần tài khoản`,
+      nguoi_dung_bam: true,
+    },
+  },
+  {
+    tuyen: ACCOUNTLESS_LOOKUP_PATH,
+    may_chu: "ViGov — dịch vụ `petitions`, không mang phiên làm việc nào",
+    khi_nao:
+      "người dùng tự bấm “Tra cứu phiếu này” sau khi gửi phản ánh không cần tài khoản, hoặc tự bấm “Tra cứu bằng mã phiếu” rồi nhập mã",
+    nguoi_dung_bam: true,
+    man: ACCOUNTLESS_LOOKUP_SCREEN,
+    truong: ACCOUNTLESS_LOOKUP_FIELDS,
+    app: "both",
+    commune_app: {
+      man: `Ứng dụng của xã: ${ACCOUNTLESS_LOOKUP_SCREEN}`,
+      khi_nao:
+        "trong ứng dụng riêng của một xã, người dùng tự bấm “Tra cứu phiếu này” sau khi gửi phản ánh không cần tài khoản, hoặc tự bấm “Tra cứu bằng mã phiếu” rồi nhập mã",
+      nguoi_dung_bam: true,
+    },
+  },
+];
+
 export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
   {
     tuyen: "/api/v1/communes",
@@ -680,7 +787,10 @@ export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
  * ⚠ CHƯA KHAI Ở ĐÂY: các tuyến phản ánh của ViGov (`petitions`) — gửi phản ánh, "Phản ánh của tôi",
  * tra cứu. Chúng mang nội dung phản ánh, họ tên và số điện thoại — và từ 29/09/2026 cả toạ độ `lat`/`lng`
  * khi công dân đã bấm lấy vị trí. Việc khai chúng chưa thuộc lượt nào. The four SCENE-PHOTO routes (02/10/2026)
- * ARE declared (`SCENE_PHOTO_ROUTES`); their policy section is still owed (see that block).
+ * ARE declared (`SCENE_PHOTO_ROUTES`); their policy section is still owed (see that block). The three
+ * ACCOUNTLESS routes (ADR 0083, 08/10/2026, temporary) ARE declared too (`ACCOUNTLESS_ROUTES`): they carry the
+ * petition and the typed name and number with no session at all, so leaving them out would hide exactly the
+ * flow a reviewer most needs to see. The SESSION petition routes remain owed.
  */
 export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
   {
@@ -784,6 +894,27 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
     app: "commune",
   },
   {
+    // 08/10/2026 (owner): a Zalo call that failed with a code is reported so the SDK's message can be read in
+    // the server log (`vihat-miniapp` `client_errors.go`). No tap of its own, but always AFTER the tap that made
+    // the failing call — the two calls made without a tap (the commune app's silent name check at open, the
+    // keep-screen switch-off on leaving "Danh thiếp") do not report (`zalo-api.ts` `layTenZalo`,
+    // `giuManHinhSang`). Carries the SDK's error, never a token, a name or a number.
+    // ⚠ Policy sentence owed, same stance as the location rows above.
+    tuyen: CLIENT_ERROR_PATH,
+    may_chu: "`vihat-miniapp` — máy chủ của Tập đoàn ViHAT Group, chỉ ghi một dòng nhật ký kỹ thuật, không lưu",
+    khi_nao: "một chức năng của Zalo mà người dùng vừa dùng (đăng nhập, chia sẻ số điện thoại, vị trí, tên…) báo lỗi có mã",
+    nguoi_dung_bam: true,
+    man: "Mọi màn có dùng chức năng của Zalo",
+    truong: CLIENT_ERROR_FIELDS,
+    app: "both",
+    commune_app: {
+      man: "Ứng dụng của xã: mọi màn có dùng chức năng của Zalo",
+      khi_nao:
+        "trong ứng dụng riêng của một xã, một chức năng của Zalo mà người dùng vừa dùng (chia sẻ số điện thoại, vị trí, tên…) báo lỗi có mã",
+      nguoi_dung_bam: true,
+    },
+  },
+  {
     // 29/09/2026 (service-petitions af3fff0): the commune's field list for step 1 of "Gửi phản ánh". The
     // FIRST `petitions` route declared here (the send/read routes, which carry the petition itself, are
     // still owed — see the header of this table): it carries NO field at all — no query, no body — only the
@@ -808,6 +939,8 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
   },
   // 02/10/2026: the commune app's scene photos — slot, upload, completion, the citizen's own list.
   ...SCENE_PHOTO_ROUTES,
+  // 08/10/2026 (ADR 0083, temporary): the accountless send, its field list and its public lookup.
+  ...ACCOUNTLESS_ROUTES,
   ...DUONG_CONG_KHAI.slice(1),
 ];
 

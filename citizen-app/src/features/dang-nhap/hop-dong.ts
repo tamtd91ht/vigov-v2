@@ -509,6 +509,57 @@ export function readLocation(body: unknown): ExchangedLocation | null {
   return { latitude, longitude };
 }
 
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+ * ZALO SDK FAILURE REPORT — `POST /api/v1/client-errors` (`vihat-miniapp` `internal/httpapi/client_errors.go`)
+ *
+ *   send   : { "capability", "code", "message", "appId"?, "host"? }
+ *   receive: 204, nothing read — 400 / 405 / 429 are ignored too
+ *
+ * WHY (owner, 08/10/2026): zmp-sdk answers -1401 for several causes of a failed `getAccessToken`, and only
+ * the SDK's `message` tells them apart (`zmp-sdk/apis/common/token.js`). The server writes ONE log line,
+ * prefix `[ZALO_SDK_ERROR]`, read in Rancher. Same host as the two routes above.
+ *
+ * ⚠ NOTHING PERSONAL: the SDK's message is its own fixed English text; no token, no name, no number is
+ *   sent. `host` is the commune domain printed on the public QR; `appId` is the running Mini App's id.
+ * ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Path of the failure report. Carries nothing of the user (rule 3, forbidden #4). */
+export const CLIENT_ERROR_PATH = "/api/v1/client-errors";
+
+/** Full address of the route, or EMPTY when the build has no host — nothing is sent then. */
+export function clientErrorAddress(): string {
+  return diaChiApi(CLIENT_ERROR_PATH);
+}
+
+/** What a failed Zalo SDK call reports. `app_id` / `host` null = unknown, left out of the body. */
+export type ClientErrorReport = {
+  capability: string;
+  code: number;
+  message: string;
+  app_id: string | null;
+  host: string | null;
+};
+
+/** The fields this route takes off the phone, and the sentence declaring each (same shape as above). */
+export const CLIENT_ERROR_FIELDS: readonly TruongGuiDi[] = [
+  { khoa: "capability", trong_chinh_sach: "tên chức năng Zalo vừa gọi không thành công (ví dụ: mã phiên, số điện thoại)" },
+  { khoa: "code", trong_chinh_sach: "mã lỗi do Zalo trả về" },
+  { khoa: "message", trong_chinh_sach: "câu báo lỗi kỹ thuật do Zalo trả về — không chứa tên hay số điện thoại của bạn" },
+  { khoa: "appId", trong_chinh_sach: "mã của ứng dụng đang chạy" },
+  { khoa: "host", trong_chinh_sach: "tên miền của xã in trên mã QR bạn đã quét" },
+];
+
+/** The report → the request body. THE ONLY PLACE its wire names are written. */
+export function clientErrorBody(r: ClientErrorReport): string {
+  return JSON.stringify({
+    capability: r.capability,
+    code: r.code,
+    message: r.message.slice(0, 200),
+    ...(r.app_id === null ? {} : { appId: r.app_id }),
+    ...(r.host === null ? {} : { host: r.host }),
+  });
+}
+
 /**
  * HOST ĐỌC LÚC DỰNG, KHÔNG PHẢI LÚC CHẠY — nay ở `api/dia-chi.ts`, một chỗ cho cả hai hợp đồng.
  *

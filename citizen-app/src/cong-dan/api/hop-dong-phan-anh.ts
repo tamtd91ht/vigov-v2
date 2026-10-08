@@ -212,9 +212,17 @@ export type PhanAnhMoi = {
  * server keeps them like `address` (b5d17bb), and they exist only because the citizen tapped for them.
  */
 export function thanGuiPhanAnh(pa: PhanAnhMoi): string {
+  return JSON.stringify(reportBodyFields(pa));
+}
+
+/**
+ * The keys of a send body, as an object — shared by the session send (`thanGuiPhanAnh`) and the accountless
+ * send (`accountlessReportBody`), so the two bodies cannot drift: the accountless one is THIS plus `host`.
+ */
+function reportBodyFields(pa: PhanAnhMoi): Record<string, unknown> {
   const location = isSceneLocation(pa.scene_location) ? pa.scene_location : null;
   const field = typeof pa.field === "string" ? pa.field.trim() : "";
-  return JSON.stringify({
+  return {
     content: pa.noi_dung.trim(),
     address: pa.dia_chi.trim(),
     reporter_name: pa.an_danh ? "" : pa.ho_ten.trim(),
@@ -222,7 +230,7 @@ export function thanGuiPhanAnh(pa: PhanAnhMoi): string {
     anonymous: pa.an_danh,
     ...(location === null ? {} : { lat: location.lat, lng: location.lng }),
     ...(field === "" ? {} : { [OPTIONAL_FIELD_KEY]: field }),
-  });
+  };
 }
 
 /**
@@ -759,4 +767,131 @@ export function readScenePhotoList(body: unknown): readonly ScenePhotoLink[] | n
     out.push({ id: r["id"], url, url_expires_at: r["url_expires_at"] });
   }
   return out;
+}
+
+/* ────────────────────────────────────────────────────────────────────────────────────────────
+ * ACCOUNTLESS PETITIONS — ADR 0083, a TEMPORARY path while App ViHAT is not approved by Zalo
+ *
+ *   GET  /api/v1/public-citizen-report-fields?host=<domain>         no bearer → 200 same body as
+ *                                                                    `my-citizen-report-fields`
+ *   POST /api/v1/public-citizen-reports       no bearer + Idempotency-Key
+ *        body = the session send body without `lat`/`lng`, + `host` → 201 {code, status,
+ *        acknowledge_due, resolve_due} · 400 · 404 `commune_not_found` · 429 `rate_limited` (5/hour/IP) ·
+ *        429 `commune_daily_limit` (200/day/commune) · 503
+ *   GET  /api/v1/public-citizen-reports/{code}?host=<domain>        no bearer → 200 {code, status,
+ *        acknowledge_due, resolve_due, result, reason} · 404 for anything not found · 429 (30/hour/IP)
+ *
+ * WHY `host` IS ACCEPTED HERE AND NOWHERE ELSE (ADR 0083 §"Vì sao luật 1 cấm #2 được nới"): the sender only
+ * chooses the commune they send TO and reads nothing of it; the server resolves exactly one ACTIVE commune from
+ * the domain or answers 404. It is the commune domain of THIS open (the QR's, or the commune app's build), the
+ * same lookup key the public reads use — never a `tenant_id`.
+ *
+ * NO PHOTOS (ADR 0083 #5): there is no photo route for these petitions, and no body key for one.
+ *
+ * REMOVAL (ADR 0083 §"Gỡ bỏ"): when App ViHAT passes Zalo's review, delete this block, its callers in
+ * `goi-vigov.ts`, and the accountless branch of `commune-session.ts` / `TrangXa.tsx` / `PhanAnhAppXa.tsx`.
+ * ──────────────────────────────────────────────────────────────────────────────────────────── */
+
+export const PUBLIC_REPORT_FIELDS_PATH = "/api/v1/public-citizen-report-fields";
+export const PUBLIC_REPORTS_PATH = "/api/v1/public-citizen-reports";
+
+/** 429 codes of the accountless send — each a different next step for the citizen (ADR 0083 #3). */
+export const RATE_LIMITED_CODE = "rate_limited";
+export const COMMUNE_DAILY_LIMIT_CODE = "commune_daily_limit";
+
+/** The commune domain as `?host=`, encoded by `URLSearchParams` — never concatenated by hand. */
+function withHost(base: string, host: string): string {
+  return base === "" ? "" : `${base}?${new URLSearchParams({ host }).toString()}`;
+}
+
+export function publicReportFieldsAddress(host: string): string {
+  return withHost(diaChiViGov("petitions", PUBLIC_REPORT_FIELDS_PATH), host);
+}
+
+/** The send route — no query: the domain travels in the body (`accountlessReportBody`). */
+export function publicReportsAddress(): string {
+  return diaChiViGov("petitions", PUBLIC_REPORTS_PATH);
+}
+
+/** One petition by its lookup code. The code is a business code, not personal data; encoded once. */
+export function publicReportAddress(code: string, host: string): string {
+  const base = diaChiViGov("petitions", PUBLIC_REPORTS_PATH);
+  return base === "" ? "" : withHost(`${base}/${encodeURIComponent(code)}`, host);
+}
+
+/**
+ * The accountless send body: the session send body WITHOUT `lat`/`lng`, plus the commune domain of this open.
+ *
+ * NO LOCATION (owner, 08/10/2026): the location exchange needs `getAccessToken`, the very call whose refusal opens
+ * this path — so on it the "Lấy vị trí hiện tại" button could only ever fail, and the screen hides it. Dropped
+ * here too, so no caller can send a pair this path never obtains.
+ */
+export function accountlessReportBody(pa: PhanAnhMoi, host: string): string {
+  return JSON.stringify({ ...reportBodyFields({ ...pa, scene_location: null }), host });
+}
+
+/** The `host` an accountless body carries, or `null` — read back so the caller's domain gate covers the body. */
+export function accountlessBodyHost(body: string): string | null {
+  try {
+    const parsed: unknown = JSON.parse(body);
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const h = (parsed as Record<string, unknown>)["host"];
+    return typeof h === "string" ? h : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The 201 of an accountless send. Only the lookup code and the lookup's own fields (ADR 0083 #12) — no name,
+ * number, content or address ever comes back, and this type has no place for them.
+ */
+export type AccountlessReceipt = {
+  readonly code: string;
+  readonly status: string;
+  /** Stored by the server at the act that fixed it — shown verbatim, never computed here (rule 10 #2). */
+  readonly acknowledgeDue: string | null;
+  readonly resolveDue: string | null;
+};
+
+/** The public lookup of one accountless petition (ADR 0083 #4, #12): status, deadlines, the commune's answer. */
+export type AccountlessReport = AccountlessReceipt & {
+  readonly result: string;
+  /** The reason the commune wrote for `khong-tiep-nhan` / `chuyen-cap-tren`; "" in every other status. */
+  readonly reason: string;
+};
+
+/** The four keys both bodies share, field by field — `null` when any is missing or of the wrong type. */
+function readReceiptFields(t: Record<string, unknown>): AccountlessReceipt | null {
+  const code = t["code"];
+  const status = t["status"];
+  const due = (k: string): string | null | undefined =>
+    t[k] === null ? null : typeof t[k] === "string" ? (t[k] as string) : undefined;
+  const acknowledgeDue = due("acknowledge_due");
+  const resolveDue = due("resolve_due");
+  if (typeof code !== "string" || code === "" || typeof status !== "string" || status === "") return null;
+  if (acknowledgeDue === undefined || resolveDue === undefined) return null;
+  return { code, status, acknowledgeDue, resolveDue };
+}
+
+/** 201 body → the receipt, or `null` if malformed. Never cast: a missing code would show "undefined". */
+export function readAccountlessReceipt(body: unknown): AccountlessReceipt | null {
+  if (typeof body !== "object" || body === null) return null;
+  return readReceiptFields(body as Record<string, unknown>);
+}
+
+/**
+ * 200 body of the public lookup → the report, or `null` if malformed. `result` is required (as on
+ * `docPhieu`); `reason` may be omitted, and is kept only for the two terminal branches (`laNhanhKetThuc`) —
+ * a refusal reason shown on a petition still being handled is a false sentence spoken by a public authority.
+ */
+export function readAccountlessReport(body: unknown): AccountlessReport | null {
+  if (typeof body !== "object" || body === null) return null;
+  const t = body as Record<string, unknown>;
+  const receipt = readReceiptFields(t);
+  const result = t["result"];
+  const reason = t["reason"] === undefined ? "" : t["reason"];
+  if (receipt === null || typeof result !== "string") return null;
+  if (typeof reason !== "string" || soKyTu(reason) > DO_DAI_NHANH_KET_THUC.ly_do) return null;
+  return { ...receipt, result, reason: laNhanhKetThuc(receipt.status) ? reason : "" };
 }

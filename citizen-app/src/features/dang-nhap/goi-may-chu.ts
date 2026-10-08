@@ -35,6 +35,9 @@ import type { LocationCodes, MaDangNhap } from "../tinh-nang/zalo-api";
 import {
   type BridgeRequestWithPhone,
   bridgeBodyWithPhone,
+  clientErrorAddress,
+  clientErrorBody,
+  type ClientErrorReport,
   type CommuneAppSessionRequest,
   communeAppSessionBody,
   diaChiPhien,
@@ -244,6 +247,29 @@ export async function exchangeLocation(
     }
   } catch {
     return { kieu: "khong-goi-duoc" };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Send one Zalo SDK failure report (`hop-dong.ts` `clientErrorBody`). FIRE AND FORGET: never throws, never
+ * awaited by a screen, the answer is not read — a report that cannot be delivered must never become a
+ * second failure in front of the citizen. `address` is only for tests, like `phatHanhPhien`.
+ */
+export async function reportClientError(r: ClientErrorReport, address: string = clientErrorAddress()): Promise<void> {
+  if (address === "") return;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), HAN_CHO_MS);
+  try {
+    await fetch(address, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: clientErrorBody(r),
+      signal: controller.signal,
+    });
+  } catch {
+    // Nothing to do: the report is a diagnostic, not part of the citizen's act.
   } finally {
     clearTimeout(timer);
   }

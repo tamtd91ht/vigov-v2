@@ -52,8 +52,20 @@ import type { PhieuCuaToi } from "../api/hop-dong-phan-anh";
 import { layPhienViGov } from "../api/phien-vigov";
 
 import { GuiPhanAnhScreen, ID_DAU_BUOC } from "./GuiPhanAnhScreen";
-import { CUA_TOI, GUI, KENH_CHUA_MO, LOI_GUI, PHONE_VERIFICATION, QUAY_LAI, TYPED_CONTACT, XA_PA } from "./noi-dung";
-import { CommuneSendScreen } from "./PhanAnhAppXa";
+import {
+  ACCOUNTLESS,
+  CUA_TOI,
+  GUI,
+  KENH_CHUA_MO,
+  LOI_GUI,
+  PHONE_VERIFICATION,
+  QUAY_LAI,
+  SCENE_PHOTOS,
+  TYPED_CONTACT,
+  XA_PA,
+  XA_TN,
+} from "./noi-dung";
+import { CommuneSendScreen, SERVER_ATTACHES_SESSION_PHONE } from "./PhanAnhAppXa";
 import { PhanAnhCuaToiScreen } from "./PhanAnhCuaToiScreen";
 import { TraCuuPhieuScreen } from "./TraCuuPhieuScreen";
 
@@ -788,6 +800,309 @@ describe("app xã — phiên chưa xác thực số: họ tên + số bắt bu�
     await press(buttonsNamed(khung, GUI.tieu_de)[0]!);
     const [first, second] = vi.mocked(guiPhanAnh).mock.calls.map((c) => c[0]);
     expect(second!.khoa).not.toBe(first!.khoa);
+    await go();
+  });
+});
+
+/* ═════════════════ 08/10/2026 (owner) — a verified session folds the name; a late Zalo name; the growing box ═════════════════ */
+
+describe("app xã — phiên đã xác thực số: họ tên gọn một dòng + 'Sửa', số điện thoại vẫn là ô tuỳ chọn", () => {
+  const NAME = "Nguyễn Văn An";
+  const doc = () => (globalThis as unknown as { document: TaiLieuGia }).document;
+
+  beforeEach(() => {
+    trang.phien = { token: "tok-thu-nghiem", ten_xa: "Xã Thử Nghiệm", phone_verified: true };
+    vi.mocked(guiPhanAnh).mockReset();
+    vi.mocked(citizenReportFields).mockReset();
+    vi.mocked(citizenReportFields).mockResolvedValue({ kieu: "xong", fields: FIELDS });
+  });
+
+  type SendProps = Partial<Parameters<typeof CommuneSendScreen>[0]>;
+  const screen = (props: SendProps) =>
+    createElement(CommuneSendScreen, {
+      ten_xa: "Xã Thử Nghiệm",
+      ho_ten: NAME,
+      verifiedPhone: true,
+      onBack: () => {},
+      onSessionLost: () => {},
+      onSent: () => {},
+      onOpenPetition: () => {},
+      ...props,
+    });
+
+  /** Mounted with a handle to render it again with new props — a name that arrives late is a new prop. */
+  async function mountSend(props: SendProps) {
+    const khung = doc().createElement("div");
+    doc().body.appendChild(khung);
+    const goc = taoGoc(khung as unknown as Element);
+    const render = async (p: SendProps) => {
+      await act(async () => {
+        goc.render(createElement(StrictMode, null, screen(p)));
+      });
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 0));
+      });
+    };
+    await render(props);
+    await press(tatCaPhanTu(khung).filter((p) => p.getAttribute("role") === "radio")[0]!);
+    return { khung, render, go: () => act(() => goc.unmount()) };
+  }
+
+  it("verified + a name, server NOT attaching the number: one line with the name and 'Sửa'; the number box stays, optional", async () => {
+    const { khung, go } = await mountSend({ sessionPhoneAttached: false });
+    expect(khung.textContent).toContain(XA_PA.sender_summary(NAME));
+    expect(khung.textContent).not.toContain(XA_PA.sender_summary_with_phone(NAME));
+    expect(doc().getElementById("xa-ho-ten")).toBeNull();
+    const phone = doc().getElementById("xa-dien-thoai")!;
+    expect(phone).not.toBeNull();
+    expect(phone.getAttribute("aria-required")).toBeNull();
+    const edit = buttonsNamed(khung, XA_PA.sender_edit);
+    expect(edit).toHaveLength(1);
+    // The accessible name starts with the visible word (WCAG 2.5.3) and says WHAT is edited.
+    expect(edit[0]!.getAttribute("aria-label")).toBe(XA_PA.sender_edit_label);
+    expect(XA_PA.sender_edit_label.startsWith(XA_PA.sender_edit)).toBe(true);
+    await go();
+  });
+
+  it("'Sửa' opens the name box with the name in it, focused; the line is gone", async () => {
+    const { khung, go } = await mountSend({});
+    await press(buttonsNamed(khung, XA_PA.sender_edit)[0]!);
+    expect(boxText("xa-ho-ten")).toBe(NAME);
+    expect(doc().activeElement?.getAttribute("id")).toBe("xa-ho-ten");
+    expect(khung.textContent).not.toContain(XA_PA.sender_summary(NAME));
+    // Cleared after "Sửa": the box stays open (the name is required, as before), it does not fold back.
+    await typeInto(doc().getElementById("xa-ho-ten")!, "");
+    expect(doc().getElementById("xa-ho-ten")).not.toBeNull();
+    await go();
+  });
+
+  it("sent folded: the name goes as it reads, the number EMPTY when not typed (anonymous off)", async () => {
+    const { khung, go } = await mountSend({});
+    await typeInto(doc().getElementById("xa-noi-dung")!, "Rác tồn đọng đầu ngõ 12");
+    vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "xong", phieu: SENT });
+    await press(buttonsNamed(khung, GUI.tieu_de)[0]!);
+    expect(guiPhanAnh).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(vi.mocked(guiPhanAnh).mock.calls[0]![0].than) as Record<string, unknown>;
+    expect(body).toMatchObject({ reporter_name: NAME, reporter_phone: "", anonymous: false });
+    await go();
+  });
+
+  it("no fold: session not verified (or unknown), an empty name, anonymous on, the typed-contact path", async () => {
+    for (const props of [{ verifiedPhone: undefined }, { verifiedPhone: false }, { ho_ten: null }, { typedContact: true }]) {
+      const { khung, go } = await mountSend(props);
+      expect(doc().getElementById("xa-ho-ten"), JSON.stringify(props)).not.toBeNull();
+      expect(buttonsNamed(khung, XA_PA.sender_edit)).toEqual([]);
+      await go();
+    }
+    const { khung, go } = await mountSend({});
+    await press(tatCaPhanTu(khung).find((p) => p.getAttribute("role") === "switch")!);
+    expect(doc().getElementById("xa-ho-ten")).toBeNull();
+    expect(doc().getElementById("xa-dien-thoai")).toBeNull();
+    expect(khung.textContent).not.toContain(XA_PA.sender_summary(NAME));
+    await go();
+  });
+
+  it("the day the server attaches the number (the one switch): both fold, 'Sửa' opens both", async () => {
+    expect(SERVER_ATTACHES_SESSION_PHONE).toBe(true);
+    const { khung, go } = await mountSend({ sessionPhoneAttached: true });
+    expect(khung.textContent).toContain(XA_PA.sender_summary_with_phone(NAME));
+    expect(doc().getElementById("xa-dien-thoai")).toBeNull();
+    const edit = buttonsNamed(khung, XA_PA.sender_edit)[0]!;
+    expect(edit.getAttribute("aria-label")).toBe(XA_PA.sender_edit_label_with_phone);
+    await press(edit);
+    expect(doc().getElementById("xa-ho-ten")).not.toBeNull();
+    expect(doc().getElementById("xa-dien-thoai")).not.toBeNull();
+    await go();
+  });
+
+  it("a Zalo name that arrives AFTER the screen opened fills the empty, untouched box", async () => {
+    const { render, go } = await mountSend({ ho_ten: null, verifiedPhone: false });
+    expect(boxText("xa-ho-ten")).toBe("");
+    await render({ ho_ten: NAME, verifiedPhone: false });
+    expect(boxText("xa-ho-ten")).toBe(NAME);
+    await go();
+    // On a verified session the same late name folds into the line.
+    const folded = await mountSend({ ho_ten: null });
+    expect(doc().getElementById("xa-ho-ten")).not.toBeNull();
+    await folded.render({ ho_ten: NAME });
+    // The server attaches the verified number (SERVER_ATTACHES_SESSION_PHONE), so the line names both.
+    expect(folded.khung.textContent).toContain(XA_PA.sender_summary_with_phone(NAME));
+    await folded.go();
+  });
+
+  it("…but never overwrites what the citizen typed — nor a box they emptied themselves", async () => {
+    const typed = await mountSend({ ho_ten: null, verifiedPhone: false });
+    await typeInto(doc().getElementById("xa-ho-ten")!, "Trần Thị Bình");
+    await typed.render({ ho_ten: NAME, verifiedPhone: false });
+    expect(boxText("xa-ho-ten")).toBe("Trần Thị Bình");
+    await typed.go();
+
+    const emptied = await mountSend({ ho_ten: null, verifiedPhone: false });
+    await typeInto(doc().getElementById("xa-ho-ten")!, "T");
+    await typeInto(doc().getElementById("xa-ho-ten")!, "");
+    await emptied.render({ ho_ten: NAME, verifiedPhone: false });
+    expect(boxText("xa-ho-ten")).toBe("");
+    await emptied.go();
+  });
+
+  it("the description box: three lines, grows with the text; the shared app's box keeps six lines", async () => {
+    const { go } = await mountSend({});
+    const box = doc().getElementById("xa-noi-dung")!;
+    expect(box.getAttribute("class")).toContain("cd-o__nhap--grow");
+    expect(box.getAttribute("rows")).toBe("3");
+    // The shim has no layout: give the box the measures a browser would, then type.
+    Object.defineProperties(box, {
+      scrollHeight: { get: () => 168 },
+      offsetHeight: { get: () => 100 },
+      clientHeight: { get: () => 96 },
+    });
+    await typeInto(box, "Dòng một\nDòng hai\nDòng ba\nDòng bốn\nDòng năm");
+    expect(box.style["height"]).toBe("172px");
+    await go();
+
+    const shared = await gan(createElement(GuiPhanAnhScreen, { onQuayLai: () => {} }));
+    await press(tatCaPhanTu(shared.khung).filter((p) => p.getAttribute("role") === "radio")[0]!);
+    await press(buttonsNamed(shared.khung, GUI.nut_tiep)[0]!);
+    const sharedBox = doc().getElementById("cd-noi-dung")!;
+    expect(sharedBox.getAttribute("rows")).toBe("6");
+    expect(sharedBox.getAttribute("class")).not.toContain("cd-o__nhap--grow");
+    await shared.go();
+  });
+});
+
+/* ═════════════════ ADR 0083 — ACCOUNTLESS SEND, mounted for real, through the REAL client and a fake `fetch` ═════════════════ */
+
+describe("app xã — gửi không tài khoản (ADR 0083): cùng biểu mẫu, không ảnh, không phiên, cùng khoá khi gửi lại", () => {
+  const DOMAIN = "xa-thu-nghiem.vigov.example";
+  const doc = () => (globalThis as unknown as { document: TaiLieuGia }).document;
+  type Call = { url: string; method: string; headers: Record<string, string>; body: string | undefined };
+  let calls: Call[];
+  /** The POST answers, in order; the GET of the field list always answers the catalogue. */
+  let postAnswers: Array<{ status: number; body: unknown }>;
+  const locate = vi.fn();
+
+  beforeEach(() => {
+    // A session EXISTS on this phone: the accountless calls must still carry no bearer (ADR 0083 STOP #5).
+    trang.phien = { token: "tok-must-not-leave", ten_xa: "Xã Thử Nghiệm", phone_verified: false };
+    calls = [];
+    postAnswers = [];
+    fetch_gia.mockImplementation(async (url: string, init: { method: string; headers: Record<string, string>; body?: string }) => {
+      calls.push({ url, method: init.method, headers: init.headers, body: init.body });
+      const answer =
+        init.method === "GET" ? { status: 200, body: { items: FIELDS } } : (postAnswers.shift() ?? { status: 500, body: {} });
+      return { status: answer.status, ok: answer.status < 300, json: async () => answer.body };
+    });
+  });
+
+  const mount = () =>
+    gan(
+      createElement(CommuneSendScreen, {
+        ten_xa: "Xã Thử Nghiệm",
+        ho_ten: null,
+        accountless: { domain: DOMAIN },
+        // Injected on purpose: the accountless path must NOT offer photos or a location button even when the
+        // shell provides them (the location exchange needs the access token Zalo refused).
+        pickScenePhotos: vi.fn(),
+        getSceneLocation: locate,
+        onBack: () => {},
+        onSessionLost: () => {
+          throw new Error("the accountless path has no session to lose");
+        },
+        onSent: () => {
+          throw new Error("the accountless path never reports a session petition");
+        },
+        onOpenPetition: () => {},
+      }),
+    );
+
+  async function fill(khung: PhanTuGia) {
+    await press(tatCaPhanTu(khung).filter((p) => p.getAttribute("role") === "radio")[0]!);
+    await typeInto(doc().getElementById("xa-noi-dung")!, "Rác tồn đọng đầu ngõ 12");
+    await typeInto(doc().getElementById("xa-ho-ten")!, "Nguyễn Văn An");
+    await typeInto(doc().getElementById("xa-dien-thoai")!, "0900000000");
+  }
+
+  it("the field list comes from the PUBLIC route by domain; no photo buttons; the cost is said before sending", async () => {
+    const { khung, go } = await mount();
+    expect(citizenReportFields).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(1);
+    const fields = new URL(calls[0]!.url);
+    expect(fields.pathname).toBe("/api/v1/public-citizen-report-fields");
+    expect(fields.searchParams.get("host")).toBe(DOMAIN);
+    expect(calls[0]!.headers["Authorization"]).toBeUndefined();
+    expect(khung.textContent).toContain(FIELDS[0].label);
+    await press(tatCaPhanTu(khung).filter((p) => p.getAttribute("role") === "radio")[0]!);
+    expect(khung.textContent).toContain(ACCOUNTLESS.form_note);
+    expect(khung.textContent).toContain(ACCOUNTLESS.no_photos);
+    expect(buttonsNamed(khung, SCENE_PHOTOS.take)).toEqual([]);
+    expect(buttonsNamed(khung, SCENE_PHOTOS.pick)).toEqual([]);
+    // No location button; the address box stays, and the hint says to write the place there.
+    expect(buttonsNamed(khung, XA_TN.vi_tri_nut)).toEqual([]);
+    expect(khung.textContent).not.toContain(XA_TN.vi_tri_nut);
+    expect(doc().getElementById("xa-dia-chi")).not.toBeNull();
+    expect(khung.textContent).toContain(XA_PA.location_without_button);
+    expect(locate).not.toHaveBeenCalled();
+    // Name and number required, anonymous off and disabled — the typed-contact rules (ADR 0083 #7).
+    const toggle = tatCaPhanTu(khung).find((p) => p.getAttribute("role") === "switch")!;
+    expect(toggle.hasAttribute("disabled")).toBe(true);
+    expect(doc().getElementById("xa-dien-thoai")!.getAttribute("aria-required")).toBe("true");
+    // The commune is read again at the last step (README non-negotiable #5).
+    expect(khung.textContent).toContain(XA_PA.gui_toi("Xã Thử Nghiệm"));
+    await go();
+  });
+
+  it("429 `rate_limited` → the plain sentence, words kept; 'Gửi lại' re-sends the SAME key and body; 201 → the code", async () => {
+    const { khung, go } = await mount();
+    await fill(khung);
+    postAnswers.push({ status: 429, body: { code: "rate_limited", message: "x" } });
+    postAnswers.push({
+      status: 201,
+      body: { code: "PB9M3K7Q2XTD", status: "da-tiep-nhan", acknowledge_due: null, resolve_due: null },
+    });
+    await press(buttonsNamed(khung, GUI.tieu_de)[0]!);
+    expect(khung.textContent).toContain(LOI_GUI["rate-limited"].cau);
+    expect(khung.textContent).not.toContain("rate_limited");
+    expect(boxText("xa-noi-dung")).toBe("Rác tồn đọng đầu ngõ 12");
+    await press(buttonsNamed(khung, GUI.nut_gui_lai)[0]!);
+
+    const posts = calls.filter((c) => c.method === "POST");
+    expect(posts).toHaveLength(2);
+    for (const c of posts) {
+      expect(new URL(c.url).pathname).toBe("/api/v1/public-citizen-reports");
+      expect(new URL(c.url).search).toBe("");
+      expect(c.headers["Authorization"]).toBeUndefined();
+      expect(c.headers["Idempotency-Key"]).toMatch(/^[0-9a-f]{32}$/);
+    }
+    expect(posts[1]!.headers["Idempotency-Key"]).toBe(posts[0]!.headers["Idempotency-Key"]);
+    expect(posts[1]!.body).toBe(posts[0]!.body);
+    const body = JSON.parse(posts[0]!.body!) as Record<string, unknown>;
+    expect(body).toEqual({
+      content: "Rác tồn đọng đầu ngõ 12",
+      address: "",
+      reporter_name: "Nguyễn Văn An",
+      reporter_phone: "0900000000",
+      anonymous: false,
+      field: FIELDS[0].code,
+      host: DOMAIN,
+    });
+    expect(body).not.toHaveProperty("lat");
+    expect(body).not.toHaveProperty("lng");
+    expect(guiPhanAnh).not.toHaveBeenCalled();
+    // The done screen: the code, and the sentence that no notification will ever come.
+    expect(khung.textContent).toContain("#PB9M3K7Q2XTD");
+    expect(khung.textContent).toContain(ACCOUNTLESS.done_notice);
+    expect(buttonsNamed(khung, ACCOUNTLESS.follow)).toHaveLength(1);
+    await go();
+  });
+
+  it("429 `commune_daily_limit` → its own sentence pointing to the reception desk; the draft stays", async () => {
+    const { khung, go } = await mount();
+    await fill(khung);
+    postAnswers.push({ status: 429, body: { code: "commune_daily_limit" } });
+    await press(buttonsNamed(khung, GUI.tieu_de)[0]!);
+    expect(khung.textContent).toContain(LOI_GUI["commune-daily-limit"].cau);
+    expect(LOI_GUI["commune-daily-limit"].cau).toContain("Bộ phận tiếp nhận của Ủy ban nhân dân xã");
+    expect(boxText("xa-ho-ten")).toBe("Nguyễn Văn An");
     await go();
   });
 });

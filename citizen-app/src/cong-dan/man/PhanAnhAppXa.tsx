@@ -26,14 +26,22 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  type AccountlessLookupResult,
+  type AccountlessSendResult,
   citizenReportFields,
   guiPhanAnh, // vi-name-ok: existing export, not renamed (rule 12 #3)
   type KetQuaDanhSach, // vi-name-ok: existing export, not renamed (rule 12 #3)
   type KetQuaGoi, // vi-name-ok: existing export, not renamed (rule 12 #3)
+  lookupAccountlessReport,
   phanAnhCuaToi, // vi-name-ok: existing export, not renamed (rule 12 #3)
+  publicReportFields,
+  sendAccountlessReport,
   traCuuPhieu, // vi-name-ok: existing export, not renamed (rule 12 #3)
 } from "../api/goi-vigov";
 import {
+  type AccountlessReceipt,
+  type AccountlessReport,
+  accountlessReportBody,
   DO_DAI_TOI_DA,
   MAX_SCENE_PHOTOS,
   type PhieuCuaToi, // vi-name-ok: existing contract type, not renamed (rule 12 #3)
@@ -56,6 +64,7 @@ import {
 import { nhanLinhVuc } from "./khung";
 import { DauManCon, KhoiTrangThai, type Tone, TrangCon } from "./khung-xa";
 import {
+  ACCOUNTLESS,
   COMMUNE_APP_SESSION,
   CUA_TOI,
   GUI,
@@ -803,6 +812,12 @@ export function catalogueOutcome(kq: CatalogueAnswer): Catalogue | "session" {
   }
 }
 
+/** The public catalogue's answer (ADR 0083) → the next state. No gate exists on this path. PURE. */
+export function accountlessCatalogueOutcome(kq: CatalogueAnswer): Catalogue {
+  const next = catalogueOutcome(kq);
+  return next === "session" ? { kind: "failed", failure: "server" } : next;
+}
+
 export function catalogueFailureText(f: CatalogueFailure): string {
   switch (f) {
     case "unavailable":
@@ -816,8 +831,12 @@ export function catalogueFailureText(f: CatalogueFailure): string {
   }
 }
 
-/** The catalogue of this send screen. Loaded once on mount (ref guard: StrictMode runs effects twice). */
-function useFieldCatalogue(onSessionLost: OnSessionLost) {
+/**
+ * The catalogue of this send screen. Loaded once on mount (ref guard: StrictMode runs effects twice).
+ * `accountlessDomain` (ADR 0083): read by the commune domain from the public route instead — no session, so a
+ * session-shaped answer there is a server failure, never a trip through the gate.
+ */
+function useFieldCatalogue(onSessionLost: OnSessionLost, accountlessDomain?: string) {
   const [catalogue, setCatalogue] = useState<Catalogue>({ kind: "loading" });
   const busy = useRef(false);
 
@@ -825,7 +844,10 @@ function useFieldCatalogue(onSessionLost: OnSessionLost) {
     if (busy.current) return;
     busy.current = true;
     setCatalogue({ kind: "loading" });
-    const next = catalogueOutcome(await citizenReportFields());
+    const next =
+      accountlessDomain === undefined
+        ? catalogueOutcome(await citizenReportFields())
+        : accountlessCatalogueOutcome(await publicReportFields(accountlessDomain));
     busy.current = false;
     if (next === "session") {
       onSessionLost(() => void load());
@@ -957,6 +979,44 @@ export function sendBody(form: NhapPhieu, location: SceneLocation | null, typedC
   });
 }
 
+/**
+ * The ACCOUNTLESS request body (ADR 0083): the same form → the same keys as `sendBody` on the typed-contact
+ * path (anonymous always off: name and number are the commune's only way back), WITHOUT a location (the
+ * location exchange needs the access token this path does not have — `accountlessReportBody`), plus the commune
+ * domain of this open. PURE.
+ */
+export function accountlessSendBody(form: NhapPhieu, domain: string): string {
+  return accountlessReportBody(
+    {
+      noi_dung: form.noi_dung,
+      dia_chi: form.dia_chi,
+      ho_ten: form.ho_ten,
+      dien_thoai: form.dien_thoai,
+      an_danh: false,
+      field: form.linh_vuc,
+    },
+    domain,
+  );
+}
+
+/** One accountless send's result → what the screen does next. No `session` branch: there is no session. PURE. */
+export type AccountlessSendOutcome =
+  | { readonly kind: "sent"; readonly receipt: AccountlessReceipt }
+  | { readonly kind: "failed"; readonly failure: SendFailure };
+
+export function accountlessSendOutcome(kq: AccountlessSendResult): AccountlessSendOutcome {
+  switch (kq.kieu) {
+    case "xong":
+      return { kind: "sent", receipt: kq.receipt };
+    case "khong-thay":
+    case "chua-cau-hinh":
+      // 404 `commune_not_found`, or nothing sent: the citizen cannot fix either here — go to the commune.
+      return { kind: "failed", failure: "kenh-chua-mo" };
+    default:
+      return { kind: "failed", failure: kq.kieu };
+  }
+}
+
 /** The commune app's typed-contact checks, in "bà con" (`kiemNhapPhieu`). */
 const COMMUNE_TYPED_CONTACT = {
   name_missing: XA_PA.contact_name_missing,
@@ -1051,6 +1111,15 @@ export function FieldStep(props: {
   );
 }
 
+/**
+ * THE ONE SWITCH for the number box on a verified session (owner, 08/10/2026). `true` since `service-petitions`
+ * attaches the session's verified number to a petition whose number box is empty (identity
+ * `ResolveCitizenContactPhone`, ADR 0050 §Sửa đổi 08/10/2026): the box folds into the name line ("Gửi bằng: <tên>
+ * · số Zalo đã xác thực"), and "Sửa" opens both. Back to `false` only if that server step is removed — otherwise a
+ * hidden box sends petitions with NO number for the commune to call back. Needs identity deployed before petitions.
+ */
+export const SERVER_ATTACHES_SESSION_PHONE = true;
+
 export function CommuneSendScreen(props: {
   ten_xa: string;
   /** Họ tên lấy từ Zalo lúc mở app, hoặc `null`. CHỈ để điền sẵn — màn này không gọi Zalo. */
@@ -1069,14 +1138,37 @@ export function CommuneSendScreen(props: {
    * anonymous is off. Read by `TrangXa` from the session on each render; the screen never decides it.
    */
   typedContact?: boolean;
+  /**
+   * The session's Zalo number IS verified (`phone_verified === true`) — read by `TrangXa` from the session, as
+   * `typedContact` is. Only then may a filled name fold into one line (`senderFolded`). Absent (no session yet,
+   * tests) = not verified: the boxes stay, and the screen never claims a verification it was not told about.
+   */
+  verifiedPhone?: boolean;
+  /**
+   * Whether the server attaches the session's verified number to the petition by itself — then the number box
+   * folds into the name line too. Tests only; production reads `SERVER_ATTACHES_SESSION_PHONE`.
+   */
+  sessionPhoneAttached?: boolean;
+  /**
+   * THE ACCOUNTLESS PATH (ADR 0083, TEMPORARY): Zalo refused the access token, so there is no session. The same
+   * form (field picker included), sent by the commune `domain` of this open to the public route; name and number
+   * required, anonymous off, NO photos, NO location button (it needs the refused access token), no gate loop. After the 201 the citizen gets the code and the public
+   * lookup (`onOpenPetition`). `onSessionLost` and `onSent` are never called on this path.
+   */
+  accountless?: { readonly domain: string };
   onBack: () => void;
   onSessionLost: OnSessionLost;
   /** 201 — the petition as the server recorded it. */
   onSent: (petition: PhieuCuaToi) => void;
   onOpenPetition: (code: string) => void;
 }) {
-  const { draftStore } = props;
-  const typedContact = props.typedContact === true;
+  const { draftStore, accountless } = props;
+  const typedContact = props.typedContact === true || accountless !== undefined;
+  // No picker on the accountless path (ADR 0083 #5): there is no photo route for these petitions.
+  const pickScenePhotos = accountless === undefined ? props.pickScenePhotos : undefined;
+  // No location button either (owner, 08/10/2026): the exchange needs `getAccessToken`, whose refusal is what
+  // opened this path, so the button could only fail. The address box stays.
+  const getSceneLocation = accountless === undefined ? props.getSceneLocation : undefined;
   const [step, setStep] = useState<1 | 2 | 3>(1);
   /**
    * A draft found when the screen opened, until the citizen picks "Tiếp tục" or "Bỏ nháp". While it is
@@ -1095,6 +1187,8 @@ export function CommuneSendScreen(props: {
   /** The server's own sentence for the failure, when it sent one we show (`unverified-daily-limit` only). */
   const [failureMessage, setFailureMessage] = useState<string | null>(null);
   const [sent, setSent] = useState<PhieuCuaToi | null>(null);
+  /** The accountless 201 (ADR 0083) — the code and the stored deadlines, nothing else. */
+  const [receipt, setReceipt] = useState<AccountlessReceipt | null>(null);
   /** The server said the picked field is no longer offered: say so on step 1 while the citizen re-picks. */
   const [fieldChanged, setFieldChanged] = useState(false);
   /**
@@ -1103,8 +1197,8 @@ export function CommuneSendScreen(props: {
    * form the citizen has not looked at yet.
    */
   const [focusDescribe, setFocusDescribe] = useState(false);
-  const { catalogue, reload } = useFieldCatalogue(props.onSessionLost);
-  const sceneLocation = useSceneLocation(props.getSceneLocation, (l) => {
+  const { catalogue, reload } = useFieldCatalogue(props.onSessionLost, accountless?.domain);
+  const sceneLocation = useSceneLocation(getSceneLocation, (l) => {
     setLocation(l);
     setAttempt(null);
   });
@@ -1118,7 +1212,7 @@ export function CommuneSendScreen(props: {
   photosRef.current = photos;
   const photoKey = useRef(0);
   const photoPicking = usePhotoPicking(
-    props.pickScenePhotos,
+    pickScenePhotos,
     () => MAX_SCENE_PHOTOS - photosRef.current.length,
     (paths) =>
       setPhotos((prev) =>
@@ -1140,14 +1234,41 @@ export function CommuneSendScreen(props: {
   const pickedLabel =
     catalogue.kind === "ready" ? (catalogue.fields.find((f) => f.code === form.linh_vuc)?.label ?? "") : "";
 
+  /** The citizen typed in the name box at least once — from then on the box is theirs, never refilled. */
+  const nameTouched = useRef(false);
+  /** "Sửa" was pressed on the folded name line: the boxes stay open for the rest of this screen. */
+  const [editingSender, setEditingSender] = useState(false);
+
   const edit = (k: "noi_dung" | "dia_chi" | "ho_ten" | "dien_thoai") => (v: string) => {
+    if (k === "ho_ten") nameTouched.current = true;
     setForm((t) => ({ ...t, [k]: v }));
     setAttempt(null);
     setFailure(null);
     setFailureMessage(null);
   };
+
+  /**
+   * THE ZALO NAME THAT ARRIVES AFTER THE SCREEN OPENED. `blankForm(props.ho_ten)` reads it once, in the state
+   * initialiser — a name settled later (the check at entry still running, or "Đồng ý" pressed meanwhile) never
+   * reached the box. Filled only while the box is EMPTY and UNTOUCHED, so a name the citizen typed or cleared is
+   * never overwritten; and not while an attempt is held, whose body was built without it (`lan-gui.ts`).
+   */
+  useEffect(() => {
+    const late = props.ho_ten;
+    if (late === null || late.trim() === "" || nameTouched.current || attempt !== null) return;
+    setForm((t) => (t.ho_ten === "" ? { ...t, ho_ten: late } : t));
+  }, [props.ho_ten, attempt]);
+
   /** Anonymous as it applies: never on the typed-contact path, whatever a restored draft held. */
   const anonymous = !typedContact && form.an_danh;
+  /**
+   * The name as one line to read (owner, 08/10/2026): a VERIFIED session, not the typed-contact or accountless
+   * path (their boxes are required and stay), not anonymous, a name present, "Sửa" not pressed. An empty name
+   * keeps the box — the citizen must type it.
+   */
+  const senderFolded =
+    props.verifiedPhone === true && !typedContact && !anonymous && form.ho_ten.trim() !== "" && !editingSender;
+  const phoneFolded = senderFolded && (props.sessionPhoneAttached ?? SERVER_ATTACHES_SESSION_PHONE);
   const hasContent = form.linh_vuc !== "" || form.noi_dung.trim() !== "" || form.dia_chi.trim() !== "";
 
   // Save as the citizen types, on the writing step only (the prototype's rule, `NewFeedbackPage.tsx:124`).
@@ -1176,7 +1297,34 @@ export function CommuneSendScreen(props: {
     props.onBack();
   }
 
+  /** The accountless send (ADR 0083): same key on "Gửi lại", the draft kept on every refusal. */
+  async function sendAccountless(a: LanGui, domain: string) {
+    setSending(true);
+    setFailure(null);
+    setFailureMessage(null);
+    const out = accountlessSendOutcome(await sendAccountlessReport(domain, a));
+    setSending(false);
+    if (out.kind === "failed" && out.failure === "field-not-offered") {
+      setAttempt(null);
+      setForm((t) => ({ ...t, linh_vuc: "" }));
+      setFieldChanged(true);
+      setStep(1);
+      reload();
+      return;
+    }
+    if (out.kind === "failed") {
+      // The attempt is KEPT (one key per composed draft, ADR 0083 #10): sending the same draft later reuses it.
+      setFailure(out.failure);
+      return;
+    }
+    setAttempt(null);
+    draftStore?.clear();
+    setReceipt(out.receipt);
+    setStep(3);
+  }
+
   async function send(a: LanGui) {
+    if (accountless !== undefined) return sendAccountless(a, accountless.domain);
     setSending(true);
     setFailure(null);
     setFailureMessage(null);
@@ -1231,7 +1379,11 @@ export function CommuneSendScreen(props: {
     let a = attempt;
     if (a === null) {
       try {
-        a = taoLanGui(sendBody(form, location, typedContact));
+        a = taoLanGui(
+          accountless === undefined
+            ? sendBody(form, location, typedContact)
+            : accountlessSendBody(form, accountless.domain),
+        );
       } catch {
         setFailure("khong-tao-duoc-khoa");
         return;
@@ -1309,6 +1461,7 @@ export function CommuneSendScreen(props: {
               toi_da={DO_DAI_TOI_DA.noi_dung}
               bat_buoc
               autoFocus={focusDescribe}
+              autoGrow
               onDoi={edit("noi_dung")}
             />
             {errors.noi_dung && <p className="xa-loi-o" role="alert">{errors.noi_dung}</p>}
@@ -1328,7 +1481,12 @@ export function CommuneSendScreen(props: {
                 only — the owner's decision replaces SRS M4.2's "bắt buộc ảnh/video". Never blocks the send button
                 (`kiemNhapPhieu` does not look at them). Only with the shell's picker (`AppRieng`); without it the
                 label says the app cannot attach photos here. Vị trí: lấy được vị trí hiện tại, chưa có bản đồ. */}
-            {props.pickScenePhotos ? (
+            {accountless !== undefined ? (
+              <>
+                <p className="xa-nhan-o">{XA_PA.anh_bat_buoc}</p>
+                <p className="xa-phu">{ACCOUNTLESS.no_photos}</p>
+              </>
+            ) : pickScenePhotos ? (
               <ScenePhotoField
                 photos={photos}
                 onRemove={(key) => setPhotos((prev) => prev.filter((p) => p.key !== key))}
@@ -1342,10 +1500,10 @@ export function CommuneSendScreen(props: {
               </>
             )}
             <p className="xa-nhan-o">{XA_PA.vi_tri_bat_buoc}</p>
-            <p className="xa-phu">{props.getSceneLocation ? XA_PA.vi_tri_sap_co : XA_PA.location_without_button}</p>
+            <p className="xa-phu">{getSceneLocation ? XA_PA.vi_tri_sap_co : XA_PA.location_without_button}</p>
             <ONhapDong id="xa-dia-chi" nhan={XA_PA.dia_chi} goi_y={XA_PA.goi_y_dia_chi} gia_tri={form.dia_chi} toi_da={DO_DAI_TOI_DA.dia_chi} onDoi={edit("dia_chi")} />
             {errors.dia_chi && <p className="xa-loi-o" role="alert">{errors.dia_chi}</p>}
-            {props.getSceneLocation && (
+            {getSceneLocation && (
               <SceneLocationControl
                 words={COMMUNE_LOCATION_WORDS}
                 look="commune"
@@ -1361,7 +1519,8 @@ export function CommuneSendScreen(props: {
             {typedContact && (
               <div className="xa-ghi-chu" role="note">
                 <BieuTuong ten="info" co={22} />
-                <p>{XA_PA.contact_note}</p>
+                {/* Accountless: said BEFORE sending — no notification, keep the code (ADR 0080 cost #2). */}
+                <p>{accountless !== undefined ? ACCOUNTLESS.form_note : XA_PA.contact_note}</p>
               </div>
             )}
             <div className="xa-hang xa-hang--tinh xa-hang--sat">
@@ -1386,27 +1545,50 @@ export function CommuneSendScreen(props: {
             </div>
             {!anonymous && (
               <>
-                <ONhapDong
-                  id="xa-ho-ten"
-                  nhan={XA_PA.ten_nguoi_pa}
-                  goi_y={XA_PA.goi_y_ten}
-                  gia_tri={form.ho_ten}
-                  toi_da={DO_DAI_TOI_DA.ho_ten}
-                  required={typedContact || undefined}
-                  onDoi={edit("ho_ten")}
-                />
-                {errors.ho_ten && <p className="xa-loi-o" role="alert">{errors.ho_ten}</p>}
-                <ONhapDong
-                  id="xa-dien-thoai"
-                  nhan={typedContact ? XA_PA.phone_required_label : XA_PA.so_dien_thoai}
-                  goi_y={XA_PA.goi_y_so}
-                  gia_tri={form.dien_thoai}
-                  toi_da={DO_DAI_TOI_DA.dien_thoai}
-                  kieu_ban_phim="tel"
-                  required={typedContact || undefined}
-                  onDoi={edit("dien_thoai")}
-                />
-                {errors.dien_thoai && <p className="xa-loi-o" role="alert">{errors.dien_thoai}</p>}
+                {senderFolded ? (
+                  <div className="xa-field-picked">
+                    <span className="xa-field-picked__text">
+                      {phoneFolded ? XA_PA.sender_summary_with_phone(form.ho_ten.trim()) : XA_PA.sender_summary(form.ho_ten.trim())}
+                    </span>
+                    <button
+                      type="button"
+                      className="xa-field-change"
+                      aria-label={phoneFolded ? XA_PA.sender_edit_label_with_phone : XA_PA.sender_edit_label}
+                      onClick={() => setEditingSender(true)}
+                    >
+                      {XA_PA.sender_edit}
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <ONhapDong
+                      id="xa-ho-ten"
+                      nhan={XA_PA.ten_nguoi_pa}
+                      goi_y={XA_PA.goi_y_ten}
+                      gia_tri={form.ho_ten}
+                      toi_da={DO_DAI_TOI_DA.ho_ten}
+                      required={typedContact || undefined}
+                      autoFocus={editingSender}
+                      onDoi={edit("ho_ten")}
+                    />
+                    {errors.ho_ten && <p className="xa-loi-o" role="alert">{errors.ho_ten}</p>}
+                  </>
+                )}
+                {!phoneFolded && (
+                  <>
+                    <ONhapDong
+                      id="xa-dien-thoai"
+                      nhan={typedContact ? XA_PA.phone_required_label : XA_PA.so_dien_thoai}
+                      goi_y={XA_PA.goi_y_so}
+                      gia_tri={form.dien_thoai}
+                      toi_da={DO_DAI_TOI_DA.dien_thoai}
+                      kieu_ban_phim="tel"
+                      required={typedContact || undefined}
+                      onDoi={edit("dien_thoai")}
+                    />
+                    {errors.dien_thoai && <p className="xa-loi-o" role="alert">{errors.dien_thoai}</p>}
+                  </>
+                )}
               </>
             )}
             <p className="xa-phu">
@@ -1418,6 +1600,14 @@ export function CommuneSendScreen(props: {
               <p>{KHAN_CAP}</p>
             </div>
           </div>
+        )}
+
+        {step === 3 && receipt !== null && (
+          <AccountlessSendDone
+            receipt={receipt}
+            onFollow={() => props.onOpenPetition(receipt.code)}
+            onHome={props.onBack}
+          />
         )}
 
         {step === 3 && sent !== null && (
@@ -1513,5 +1703,174 @@ export function SendDone(props: {
         {XA_TN.nut_ve_trang_chu}
       </button>
     </div>
+  );
+}
+
+/* ═══════════════════════════════ KHÔNG TÀI KHOẢN — ADR 0083, TEMPORARY ═══════════════════════════════ */
+
+/**
+ * Step 3 of the ACCOUNTLESS send (ADR 0083): the code the server issued (rule 10 #1), the stored deadlines
+ * verbatim (rule 10 #2), and — always, since no accountless petition is ever notified — the sentence that says
+ * so and how to follow it. "Tra cứu phiếu này" opens the PUBLIC lookup. Exported for tests.
+ */
+export function AccountlessSendDone(props: { receipt: AccountlessReceipt; onFollow: () => void; onHome: () => void }) {
+  const r = props.receipt;
+  const acknowledge = r.acknowledgeDue !== null ? thoiDiemVN(r.acknowledgeDue) : null;
+  const resolve = r.resolveDue !== null ? thoiDiemVN(r.resolveDue) : null;
+  return (
+    <div className="xa-ket-qua">
+      <span className="xa-ket-qua__dau xa-pop" aria-hidden="true">
+        <BieuTuong ten="check-circle" co={64} />
+      </span>
+      <h2 className="xa-bai__tieu-de">{XA_PA.xong_tieu_de}</h2>
+      <p className="xa-phu">{XA_PA.xong_mo_ta}</p>
+      <div className="xa-the xa-the--dem xa-ket-qua__ma" role="status">
+        <p className="xa-phu">{XA_PA.ma_phieu_cua_ba_con}</p>
+        <strong className="xa-ket-qua__code">#{r.code}</strong>
+      </div>
+      <div className="xa-ghi-chu xa-ket-qua__notice" role="note">
+        <BieuTuong ten="info" co={22} />
+        <p>{ACCOUNTLESS.done_notice}</p>
+      </div>
+      {(acknowledge !== null || resolve !== null) && (
+        <div className="xa-deadline-band">
+          {acknowledge !== null && <p>{XA_PA.acknowledge_by(acknowledge)}</p>}
+          {resolve !== null && <p>{XA_PA.resolve_by(resolve)}</p>}
+        </div>
+      )}
+      <button type="button" className="xa-nut" onClick={props.onFollow}>
+        {ACCOUNTLESS.follow}
+      </button>
+      <button type="button" className="xa-nut xa-nut--phu" onClick={props.onHome}>
+        {XA_TN.nut_ve_trang_chu}
+      </button>
+    </div>
+  );
+}
+
+/** One public lookup's result → what the screen shows. One sentence for every "not found" (rule 4). PURE. */
+export type AccountlessLookupOutcome =
+  | { readonly kind: "found"; readonly report: AccountlessReport }
+  | { readonly kind: "failed"; readonly text: string };
+
+export function accountlessLookupOutcome(kq: AccountlessLookupResult): AccountlessLookupOutcome {
+  switch (kq.kieu) {
+    case "xong":
+      return { kind: "found", report: kq.report };
+    case "khong-thay":
+      return { kind: "failed", text: XA_PA.khong_thay_phieu };
+    case "rate-limited":
+      return { kind: "failed", text: ACCOUNTLESS.lookup_rate_limited };
+    case "chua-cau-hinh":
+      return { kind: "failed", text: KENH_CHUA_MO.cau };
+    case "loi-mang":
+      return { kind: "failed", text: TRA_CUU.loi_mang };
+    default:
+      return { kind: "failed", text: TRA_CUU.loi_may_chu };
+  }
+}
+
+/**
+ * What the public lookup shows (ADR 0083 #4): status in WORDS (the chip, and its explanation), the stored
+ * deadlines, the commune's result and — for the two terminal branches — its reason. Nothing else exists in the
+ * answer: no name, number, content or address. Exported for tests.
+ */
+export function AccountlessReportCard({ report }: { report: AccountlessReport }) {
+  const explain = giaiThichTrangThai(report.status);
+  return (
+    <>
+      <div className="xa-the xa-the--dem xa-khoi">
+        <div className="xa-summary-head">
+          <strong className="xa-summary-head__field">{ACCOUNTLESS.status_label}</strong>
+          <ChipTrangThai tt={report.status} />
+        </div>
+        {explain && <p>{explain}</p>}
+        <p className="xa-phu">
+          {XA_PA.ma_phieu}: <strong className="xa-ma">#{report.code}</strong>
+        </p>
+        {report.acknowledgeDue !== null && <p>{XA_PA.acknowledge_by(at(report.acknowledgeDue))}</p>}
+        <p>
+          {XA_PA.du_kien_xong}: {report.resolveDue !== null ? at(report.resolveDue) : THE_PHIEU.han_xu_ly_chua_co}
+        </p>
+        {report.status === "khong-tiep-nhan" && (
+          <Row label={THE_PHIEU.ly_do_khong_tiep_nhan}>{report.reason || XA_PA.chua_ghi}</Row>
+        )}
+        {report.status === "chuyen-cap-tren" && <Row label={THE_PHIEU.ly_do_chuyen}>{report.reason || XA_PA.chua_ghi}</Row>}
+        <p className="xa-phu">{ACCOUNTLESS.lookup_scope}</p>
+      </div>
+      {report.result !== "" && (
+        <section className="xa-result-box" aria-labelledby="xa-ket-qua-khong-tk">
+          <h2 className="xa-dau-khoi__tieu-de" id="xa-ket-qua-khong-tk">
+            {THE_PHIEU.ket_qua}
+          </h2>
+          <p className="xa-giu-dong">{report.result}</p>
+        </section>
+      )}
+    </>
+  );
+}
+
+/**
+ * The PUBLIC lookup of an accountless petition (ADR 0083 #4), by the commune domain of this open — no session,
+ * no gate. `initialCode` (from the done screen) is looked up at once; otherwise the citizen types it.
+ */
+export function AccountlessLookup(props: { domain: string; initialCode?: string; onBack: () => void }) {
+  const [code, setCode] = useState(props.initialCode ?? "");
+  const [state, setState] = useState<
+    AccountlessLookupOutcome | { readonly kind: "loading" } | { readonly kind: "missing" } | null
+  >(null);
+  const busy = useRef(false);
+
+  async function search(value: string) {
+    if (busy.current) return;
+    if (value === "") {
+      setState({ kind: "missing" });
+      return;
+    }
+    busy.current = true;
+    setState({ kind: "loading" });
+    const out = accountlessLookupOutcome(await lookupAccountlessReport(props.domain, value));
+    busy.current = false;
+    setState(out);
+  }
+
+  // Opened from the done screen with its code: look it up once (ref guard — StrictMode runs effects twice).
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    const first = normaliseCode(props.initialCode ?? "");
+    if (first !== "") void search(first);
+  }, []);
+
+  return (
+    <>
+      <DauManCon tieu_de={XA_PA.tra_cuu_tieu_de} onQuayLai={props.onBack} />
+      <TrangCon>
+        <div className="xa-the xa-the--dem xa-khoi">
+          <ONhapDong
+            id="xa-ma-tra-cuu-khong-tk"
+            nhan={XA_PA.ma_phieu}
+            goi_y={ACCOUNTLESS.lookup_hint}
+            gia_tri={code}
+            toi_da={40}
+            onDoi={setCode}
+          />
+          <button
+            type="button"
+            className="xa-nut"
+            disabled={state?.kind === "loading"}
+            onClick={() => void search(normaliseCode(code))}
+          >
+            <BieuTuong ten="search" co={20} />
+            {TRA_CUU.nut_tra}
+          </button>
+        </div>
+        {state?.kind === "missing" && <KhoiTrangThai bieu_tuong="info" loi cau={XA_PA.thieu_ma} />}
+        {state?.kind === "loading" && <KhoiTrangThai bieu_tuong="search" cau={TRA_CUU.dang_tra} dang_tai shape="card" />}
+        {state?.kind === "failed" && <KhoiTrangThai bieu_tuong="search" loi cau={state.text} />}
+        {state?.kind === "found" && <AccountlessReportCard report={state.report} />}
+      </TrangCon>
+    </>
   );
 }

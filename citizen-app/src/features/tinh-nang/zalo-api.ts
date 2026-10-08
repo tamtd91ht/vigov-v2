@@ -37,7 +37,13 @@
  * ⚠ KHÔNG `console.log`, KHÔNG `fetch`, KHÔNG CHỖ LƯU NÀO. Nội dung mã QR có thể là bất cứ thứ
  * gì, kể cả dữ liệu cá nhân của NGƯỜI KHÁC (một tấm danh thiếp là dữ liệu cá nhân của chủ nhân
  * nó). Hiện lên màn hình rồi thôi; ghi nó ra log là đưa nó vào một nơi không ai gỡ lại được.
+ *
+ * ⚠ ONE EXCEPTION SINCE 08/10/2026 — a coded SDK FAILURE is reported to `vihat-miniapp` (`reportSdkFailure`).
+ *   The `fetch` itself stays in `dang-nhap/goi-may-chu.ts`; what is sent is the SDK's error, never a result.
  */
+import { thamSoMoApp, thamSoXa } from "../../lib/launch-params";
+import { XA_CO_DINH } from "../../lib/xa-co-dinh";
+import { reportClientError } from "../dang-nhap/goi-may-chu";
 
 /* ==============================================================================================
    KHAI BÁO MỤC ĐÍCH — MỖI LỜI GỌI NỀN TẢNG KHAI TẠI CHỖ NÓ ĐƯỢC VIẾT RA.
@@ -106,7 +112,7 @@ export type KhaiBaoLoiGoi = {
 };
 
 /**
- * MƯỜI HAI LỜI GỌI, MỘT BẢNG. Thứ tự theo màn hình, để màn "Quản lý quyền" đọc xuôi.
+ * MƯỜI LĂM LỜI GỌI (08/10/2026: `chooseImage`, `configAppView`), MỘT BẢNG. Thứ tự theo màn hình, để màn "Quản lý quyền" đọc xuôi.
  *
  * Chín quyền phải xin ở Developer Console; `getAccessToken` là lời gọi thứ mười cần quyền nhưng
  * không hỏi người dùng; `openPhone` và `openWebview` là `@zaloOnly` và không nằm trong số quyền
@@ -212,14 +218,15 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
       tinh_nang: "Ảnh hiện trường",
       de_lam_gi:
         "Hỏi bà con có cho phép dùng máy ảnh hay không, chỉ khi chính bà con bấm “Chụp ảnh” để chụp nơi xảy ra sự việc, sau khi ứng dụng đã nói rõ ảnh dùng để làm gì.",
-      // The question itself sends nothing; the photo's way out is the `openMediaPicker` row below.
+      // The question itself sends nothing; the photo's way out is the `chooseImage` row below.
       roi_khoi_may: "",
     },
   },
   {
-    // `nua` BECAME "ca-hai" ON 02/10/2026 — the scene photos of the commune's own app (`takeScenePhoto`,
-    // `chooseScenePhotos`). In the shared app nothing leaves the phone, as before; in the commune app the photo
-    // the citizen took or picked goes to the commune's system AFTER the petition is sent — said in its view.
+    // `nua` BECAME "ca-hai" ON 02/10/2026 — the scene photos of the commune's own app. SINCE 08/10/2026 (owner)
+    // "Chụp ảnh" no longer goes through this call (it opened Zalo's full-screen camera, `zcamera_photo`): it is
+    // the `chooseImage` row below. This call keeps "Chọn ảnh có sẵn" only (`chooseScenePhotos`). In the shared
+    // app's business-card feature nothing leaves the phone, as before.
     api: "openMediaPicker",
     nua: "ca-hai",
     man: "Danh thiếp",
@@ -232,10 +239,46 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
       man: "Gửi phản ánh · Phản ánh của tôi",
       tinh_nang: "Ảnh hiện trường",
       de_lam_gi:
-        "Mở máy ảnh của Zalo để bà con chụp, hoặc mở cửa sổ chọn ảnh để bà con chọn ảnh có sẵn, chỉ khi chính bà con bấm “Chụp ảnh” hoặc “Chọn ảnh có sẵn”; tối đa 5 ảnh cho một phản ánh. Ứng dụng chỉ nhận những ảnh bà con đã chụp hoặc chọn, không xem các ảnh khác trong máy.",
+        "Mở cửa sổ chọn ảnh để bà con chọn ảnh có sẵn trong máy, chỉ khi chính bà con bấm “Chọn ảnh có sẵn”; tối đa 5 ảnh cho một phản ánh. Ứng dụng chỉ nhận những ảnh bà con đã chọn, không xem các ảnh khác trong máy.",
       roi_khoi_may:
-        "Ảnh bà con đã chụp hoặc chọn, kèm loại ảnh và dung lượng, được gửi tới hệ thống của xã sau khi phản ánh đã được ghi nhận, để đính vào chính phản ánh ấy. Ảnh không được giữ trong bản nháp trên máy.",
+        "Ảnh bà con đã chọn, kèm loại ảnh và dung lượng, được gửi tới hệ thống của xã sau khi phản ánh đã được ghi nhận, để đính vào chính phản ánh ấy. Ảnh không được giữ trong bản nháp trên máy.",
     },
+  },
+  {
+    // ADDED 08/10/2026 (owner): "Chụp ảnh" opens the phone's own camera instead of Zalo's full-screen one
+    // (`takeScenePhoto`). Same feature, same way out as the `openMediaPicker` row above — so the same sentences.
+    // `hoi_nguoi_dung` false: the question is the `requestCameraPermission` row, which runs right before it;
+    // this call opens the camera, it asks nothing.
+    api: "chooseImage",
+    nua: "ca-hai",
+    man: "Trang của một xã mở bằng mã QR · Gửi phản ánh · Phản ánh của tôi",
+    tinh_nang: "Ảnh hiện trường",
+    de_lam_gi:
+      "Mở máy ảnh của điện thoại để bạn chụp một ảnh nơi xảy ra sự việc, chỉ khi chính bạn bấm “Chụp ảnh” lúc gửi phản ánh tới xã; tối đa 5 ảnh cho một phản ánh. Ứng dụng chỉ nhận ảnh bạn vừa chụp.",
+    hoi_nguoi_dung: false,
+    roi_khoi_may:
+      "Ảnh bạn đã chụp, kèm loại ảnh và dung lượng, được gửi tới hệ thống của xã sau khi phản ánh đã được ghi nhận, để đính vào chính phản ánh ấy.",
+    commune_app: {
+      man: "Gửi phản ánh · Phản ánh của tôi",
+      tinh_nang: "Ảnh hiện trường",
+      de_lam_gi:
+        "Mở máy ảnh của điện thoại để bà con chụp một ảnh nơi xảy ra sự việc, chỉ khi chính bà con bấm “Chụp ảnh”; tối đa 5 ảnh cho một phản ánh. Ứng dụng chỉ nhận ảnh bà con vừa chụp.",
+      roi_khoi_may:
+        "Ảnh bà con đã chụp, kèm loại ảnh và dung lượng, được gửi tới hệ thống của xã sau khi phản ánh đã được ghi nhận, để đính vào chính phản ánh ấy. Ảnh không được giữ trong bản nháp trên máy.",
+    },
+  },
+  {
+    // ADDED 08/10/2026 (owner): the shared App ID opened by a commune QR shows THAT commune's name on Zalo's own
+    // top bar instead of "ViHAT Group" (`setCommuneActionBar`, called from `App.tsx` `QrCommuneApp`). The commune
+    // app is not concerned: its own App ID carries its own title. Nothing is read, nothing leaves the phone.
+    api: "configAppView",
+    nua: "thuong-mai",
+    man: "Trang của một xã mở bằng mã QR",
+    tinh_nang: "Tên xã trên thanh tiêu đề của Zalo",
+    de_lam_gi:
+      "Đổi dòng chữ trên thanh tiêu đề của Zalo thành tên xã bạn đang xem, cùng màu với phần đầu trang của xã, để bạn luôn biết mình đang làm việc với xã nào.",
+    hoi_nguoi_dung: false,
+    roi_khoi_may: "",
   },
   {
     api: "vibrate",
@@ -446,6 +489,26 @@ function sdkErrorCode(loi: unknown): number | null {
 }
 
 /**
+ * REPORT A CODED FAILURE TO `vihat-miniapp` (owner, 08/10/2026) — so the SDK's `message`, the only thing that
+ * tells the causes of a -1401 apart, reaches a log line read in Rancher instead of staying on the phone.
+ * Not for a refusal (-201: the citizen's choice, not a fault) and not for a throw without a code.
+ *
+ * The SDK's `message` is technical text: it goes to the server log and NEVER to a screen (README §Error
+ * message shape). Not awaited: the citizen's result does not wait for a diagnostic.
+ */
+function reportSdkFailure(capability: ZaloCapability, code: number, loi: unknown): void {
+  const message = (loi as { message?: unknown }).message;
+  void reportClientError({
+    capability,
+    code,
+    message: typeof message === "string" ? message : "",
+    app_id: readRuntimeAppId(),
+    // Same precedence as the shell (`App.tsx`): a commune's own build is that commune, whatever the link says.
+    host: XA_CO_DINH ?? thamSoXa(thamSoMoApp())?.ten_mien ?? null,
+  });
+}
+
+/**
  * Gọi một API của Zalo và quy mọi đường về bốn nhánh trên.
  *
  * `nap` tách khỏi `goi` vì hai lời hứa khác nhau: nhập mô-đun hỏng nghĩa là KHÔNG Ở TRONG ZALO
@@ -458,6 +521,8 @@ function sdkErrorCode(loi: unknown): number | null {
 async function xin<T>(
   capability: ZaloCapability,
   goi: (sdk: typeof import("zmp-sdk"), step: (next: ZaloCapability) => void) => Promise<T>,
+  /** `false` only for a silent check at open (`layTenZalo(false)`): its expected failure is not a fault. */
+  report = true,
 ): Promise<KetQuaXin<T>> {
   let sdk: typeof import("zmp-sdk");
   try {
@@ -478,6 +543,7 @@ async function xin<T>(
     const code = sdkErrorCode(loi);
     if (code === MA_TU_CHOI) return { kieu: "tu-choi" };
     if (code === null) return { kieu: "khong-lay-duoc" };
+    if (report) reportSdkFailure(current, code, loi);
     return { kieu: "khong-lay-duoc", failure: { capability: current, code, transient: TRANSIENT_CODES.has(code) } };
   }
 }
@@ -566,7 +632,9 @@ export function readRuntimeAppId(): string | null {
  * since 07/10/2026, after the "Chat với chuyên viên" block has said it (`features/yeu-cau/ChatWithSpecialist.tsx`).
  */
 export function layTenZalo(ask: boolean): Promise<KetQuaXin<string>> {
-  return xin("name", async (sdk) => (await sdk.getUserInfo({ autoRequestPermission: ask })).userInfo.name ?? "");
+  // The check-only read (`ask` false) runs at every commune-app open and fails whenever the name was never
+  // allowed — reporting it would send a report per open, before any tap. Only the asked read reports.
+  return xin("name", async (sdk) => (await sdk.getUserInfo({ autoRequestPermission: ask })).userInfo.name ?? "", ask);
 }
 
 /** Token vị trí. Không đọc `latitude`/`longitude` — xem khối chú thích đầu tệp. */
@@ -629,6 +697,29 @@ export function moTrangWeb(duong_dan: string): Promise<KetQuaXin<void>> {
   });
 }
 
+/**
+ * ZALO'S OWN TOP BAR NAMES THE COMMUNE — the shared App ID opened by a commune QR (owner, 08/10/2026). Its title
+ * is otherwise `app-config.json` `app.title`, "ViHAT Group", above a page that is entirely one commune's.
+ *
+ * `configAppView` (`zmp-sdk/index.d.ts:5192-5283`): `actionBar.title`, `headerColor` (hex), `headerTextColor`.
+ * The caller passes the name the commune's PUBLIC lookup returned, never a constant: an empty name calls nothing
+ * (answered `khong-lay-duoc` without loading the SDK), so the bar keeps "ViHAT Group" rather than showing a guessed commune.
+ *
+ * `report` false: it runs when the commune page has loaded, not after a tap, and the failure report is declared
+ * as following a tap (`content/ket-xuat-ho-so.ts`). A failure only leaves the old title in place.
+ */
+export function setCommuneActionBar(title: string, headerColor: string): Promise<KetQuaXin<void>> {
+  const name = title.trim();
+  if (name === "" || !/^#[0-9a-fA-F]{6}$/.test(headerColor)) return Promise.resolve({ kieu: "khong-lay-duoc" });
+  return xin(
+    "other",
+    async (sdk) => {
+      await sdk.configAppView({ actionBar: { title: name }, headerColor, headerTextColor: "white" });
+    },
+    false,
+  );
+}
+
 /* ==============================================================================================
    SÁU QUYỀN XIN THÊM — mỗi lời gọi đã đối chiếu chữ ký trong `node_modules/zmp-sdk/index.d.ts`,
    không lấy từ tài liệu web và không lấy từ trí nhớ.
@@ -639,6 +730,9 @@ export function moTrangWeb(duong_dan: string): Promise<KetQuaXin<void>> {
      requestCameraPermission()     -> { userAllow: boolean; message: string }               :1293, :4002
      openMediaPicker({ type, … })  -> { data: string[] | string }                           :1403, :4804
      downloadFile({ url?, fileBase64Data? }) -> Promise<void>                               :6060–6116
+     chooseImage({ count?, sourceType?, cameraType? }) -> { filePaths: string[]; … }        :1517, :4912–4956
+     configAppView({ actionBar?, headerColor?, headerTextColor?, … }) -> Promise<void>      :5192–5283
+   (the last two were added 08/10/2026 and are not among the six; `configAppView` is `@zaloOnly`.)
 
    Cả sáu đều `@requirePermission` và `@zaloOnly` trong chính `index.d.ts`: chúng cần được cấp
    quyền cho App ID ở trang Quản lý ứng dụng, và ngoài Zalo thì không chạy. Nhánh `ngoai-zalo`
@@ -687,10 +781,16 @@ export async function rungMotNhip(): Promise<void> {
  * trạng thái giả trên màn hình.
  */
 export function giuManHinhSang(bat: boolean): Promise<KetQuaXin<boolean>> {
-  return xin("other", async (sdk) => {
-    await sdk.keepScreen({ keepScreenOn: bat });
-    return bat;
-  });
+  // Turning it OFF runs from an effect cleanup on leaving the screen — no tap — so its failure is not reported
+  // (the dossier declares the failure report as following a tap, `ket-xuat-ho-so.ts`).
+  return xin(
+    "other",
+    async (sdk) => {
+      await sdk.keepScreen({ keepScreenOn: bat });
+      return bat;
+    },
+    bat,
+  );
 }
 
 /**
@@ -778,18 +878,76 @@ function tempPaths(data: readonly string[] | string): readonly string[] {
 const SCENE_PICKER = { editView: { enable: false }, compressLevel: 1 } as const;
 
 /**
+ * How long after the citizen comes BACK from the camera a photo may still arrive before the tap counts as
+ * "closed without a photo". See `untilReturnWithoutPhoto`. ⚠ An assumption, not a measurement: Android usually
+ * delivers the picked file within a few hundred ms of the page regaining focus; 3 s leaves room for a slow phone.
+ */
+const CAMERA_RETURN_GRACE_MS = 3000;
+
+/** The camera closed without a photo — distinct from every SDK answer. */
+const NO_PHOTO = Symbol("no-photo");
+
+/**
+ * WHY THIS EXISTS: `chooseImage` (`zmp-sdk/apis/apis/chooseImage.js`, 2.53.0) is a hidden `<input type="file">`
+ * whose promise settles only on `change`. Closing the camera without a photo fires no `change`, so the promise
+ * NEVER settles — and `usePhotoPicking` would keep both photo buttons disabled until the citizen left the screen.
+ * The page losing focus to the camera and regaining it is the only signal left: once it is visible and focused
+ * again, a photo still not delivered after `CAMERA_RETURN_GRACE_MS` means none is coming. Outside a browser (Node
+ * tests) there is no page to watch and the call is awaited as is.
+ */
+function untilReturnWithoutPhoto<T>(pending: Promise<T>): Promise<T | typeof NO_PHOTO> {
+  if (typeof window === "undefined" || typeof document === "undefined") return pending;
+  return new Promise<T | typeof NO_PHOTO>((resolve, reject) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const onBack = () => {
+      if (document.visibilityState !== "visible" || timer !== undefined) return;
+      timer = setTimeout(() => finish(() => resolve(NO_PHOTO)), CAMERA_RETURN_GRACE_MS);
+    };
+    const finish = (settle: () => void) => {
+      window.removeEventListener("focus", onBack);
+      document.removeEventListener("visibilitychange", onBack);
+      if (timer !== undefined) clearTimeout(timer);
+      settle();
+    };
+    window.addEventListener("focus", onBack);
+    document.addEventListener("visibilitychange", onBack);
+    pending.then(
+      (value) => finish(() => resolve(value)),
+      (error: unknown) => finish(() => reject(error)),
+    );
+  });
+}
+
+/**
  * "Chụp ảnh": the camera permission first (`requestCameraPermission` answers `userAllow`, it does not throw),
- * then Zalo's camera for ONE photo. `userAllow === false` is the citizen's no → `tu-choi`.
+ * then THE PHONE'S OWN CAMERA for ONE photo (owner, 08/10/2026 — it was Zalo's full-screen camera,
+ * `openMediaPicker` `zcamera_photo`). `userAllow === false` is the citizen's no → `tu-choi`; closing the camera
+ * without a photo → `huy`, as closing the picker is.
+ *
+ * `chooseImage` (`zmp-sdk/index.d.ts:4912-4956`): `{ count, sourceType: ["camera"], cameraType }` → `{ filePaths }`.
+ * `cameraType: "back"` because the SDK's default is "front" (`chooseImage.js`), and a selfie is not a scene.
+ * `filePaths` are object URLs of the taken file — read by `cong-dan/api/goi-vigov.ts` `readPickedPhoto` like the
+ * picker's temp paths; nothing is uploaded by this call.
+ *
+ * The permission call is KEPT although `index.d.ts` does not mark `chooseImage` `@requirePermission`: whether
+ * Zalo's webview opens the camera for a Mini App without it has not been measured on a device, and the
+ * explanation card already tells the citizen Zalo will ask. Dropping it is one line once measured.
  */
 export async function takeScenePhoto(): Promise<ScenePhotoPick> {
   const kq = await xin("camera", async (sdk, step) => {
     const { userAllow } = await sdk.requestCameraPermission();
     if (!userAllow) return null;
     step("photos");
-    const { data } = await sdk.openMediaPicker({ type: "zcamera_photo", maxSelectItem: 1, ...SCENE_PICKER });
-    return tempPaths(data);
+    const picked = await untilReturnWithoutPhoto(
+      sdk.chooseImage({ count: 1, sourceType: ["camera"], cameraType: "back" }),
+    );
+    return picked === NO_PHOTO ? NO_PHOTO : tempPaths(picked.filePaths);
   });
-  if (kq.kieu === "xong") return kq.du_lieu === null ? { kieu: "tu-choi" } : { kieu: "xong", du_lieu: kq.du_lieu };
+  if (kq.kieu === "xong") {
+    if (kq.du_lieu === null) return { kieu: "tu-choi" };
+    if (kq.du_lieu === NO_PHOTO) return { kieu: "huy" };
+    return { kieu: "xong", du_lieu: kq.du_lieu };
+  }
   return asPick(kq);
 }
 

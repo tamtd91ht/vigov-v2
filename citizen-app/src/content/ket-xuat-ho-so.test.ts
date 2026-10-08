@@ -18,15 +18,31 @@ import {
 } from "../cong-dan/api/hop-dong-cong-khai";
 import { diaChiViGov } from "../cong-dan/api/dia-chi-vigov";
 import {
+  accountlessReportBody,
   CITIZEN_FIELDS_PATH,
   citizenFieldsAddress,
   PHOTO_UPLOAD_FIELDS,
   photoCompletionAddress,
   photosAddress,
   photoUploadBody,
+  publicReportAddress,
+  publicReportFieldsAddress,
+  publicReportsAddress,
   STORAGE_FILE_FIELD,
 } from "../cong-dan/api/hop-dong-phan-anh";
-import { CUA_TOI, DANH_BA, GUI, KHAN_CAP, RATING, TIN_XA, TRA_CUU, XA_GIAO_DIEN, XA_TN } from "../cong-dan/man/noi-dung";
+import {
+  ACCOUNTLESS,
+  CUA_TOI,
+  DANH_BA,
+  GUI,
+  KHAN_CAP,
+  RATING,
+  TIN_XA,
+  TRA_CUU,
+  XA_GIAO_DIEN,
+  XA_PA,
+  XA_TN,
+} from "../cong-dan/man/noi-dung";
 import { TIEU_DE_XAC_NHAN_XA } from "../features/kham-pha/goi-y";
 import {
   BRIDGE_FIELDS_WITH_PHONE,
@@ -58,6 +74,12 @@ import {
 import { COMPANY } from "./company-profile";
 import { MUC_DIEU_KHOAN, NGAY_HIEU_LUC_DIEU_KHOAN, PHIEN_BAN_DIEU_KHOAN } from "./dieu-khoan";
 import {
+  ACCOUNTLESS_FIELDS_PATH,
+  ACCOUNTLESS_LOOKUP_FIELDS,
+  ACCOUNTLESS_LOOKUP_PATH,
+  ACCOUNTLESS_LOOKUP_SCREEN,
+  ACCOUNTLESS_SEND_FIELDS,
+  ACCOUNTLESS_SEND_PATH,
   canhBaoVanXuoi,
   communeTermsDocument,
   COMMUNE_APP_ROUTES_OWED,
@@ -486,7 +508,9 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
     // step 1 of "Gửi phản ánh" (`/my-citizen-report-fields`) — no field sent, only the session header.
     // + 1 (30/09, card D2): the news category chips (`/commune-news/categories`), on the citizen's tap.
     // + 4 (02/10/2026): the commune app's scene photos — slot, upload to the store, completion, own list.
-    expect(DUONG_ROI_KHOI_MAY).toHaveLength(18);
+    // + 3 (08/10/2026, ADR 0083, temporary): the accountless field list, send and public lookup.
+    // + 1 (08/10/2026, owner): the Zalo SDK failure report (`vihat-miniapp` `/api/v1/client-errors`).
+    expect(DUONG_ROI_KHOI_MAY).toHaveLength(22);
     const fieldsRow = DUONG_ROI_KHOI_MAY.find((d) => d.tuyen === CITIZEN_FIELDS_PATH);
     expect(fieldsRow, "hồ sơ không khai tuyến danh mục lĩnh vực").toBeDefined();
     expect(fieldsRow!.truong).toEqual([]);
@@ -680,6 +704,59 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
     }
   });
 
+  /**
+   * ACCOUNTLESS (ADR 0083, 08/10/2026) — the three rows are COPIES (boundary), locked here to the addresses and
+   * the body the state half really builds: path word for word, and sent keys ⇄ declared keys, both ways.
+   */
+  it("không tài khoản: ba đường, đường dẫn và trường gửi đi khoá với hợp đồng thật, hai chiều", () => {
+    const DOMAIN = "xa-vi-du.vigov.example";
+    const CODE = "PA7K2QX9M4TD";
+    const row = (t: string) => DUONG_ROI_KHOI_MAY.find((d) => d.tuyen === t)!;
+    for (const t of [ACCOUNTLESS_FIELDS_PATH, ACCOUNTLESS_SEND_PATH, ACCOUNTLESS_LOOKUP_PATH]) {
+      expect(row(t), `hồ sơ không khai ${t}`).toBeDefined();
+      expect(row(t).nguoi_dung_bam, t).toBe(true);
+      expect(row(t).app, t).toBe("both");
+    }
+    // Field list: the path, and `host` only.
+    const fields = new URL(publicReportFieldsAddress(DOMAIN));
+    expect(fields.pathname).toBe(ACCOUNTLESS_FIELDS_PATH);
+    expect(row(ACCOUNTLESS_FIELDS_PATH).truong.map((t) => t.khoa)).toEqual([...fields.searchParams.keys()]);
+    // Send: no query; the widest body (field present; a location pair handed in is DROPPED) ⇄ the declared
+    // keys, both ways — so `lat`/`lng` are neither sent nor declared on this path.
+    const send = new URL(publicReportsAddress());
+    expect(send.pathname).toBe(ACCOUNTLESS_SEND_PATH);
+    expect(send.search).toBe("");
+    const body = accountlessReportBody(
+      {
+        noi_dung: "n",
+        dia_chi: "d",
+        ho_ten: "Nguyễn Văn Thử",
+        dien_thoai: "0900000000",
+        an_danh: false,
+        scene_location: { lat: 1, lng: 2 },
+        field: "moi-truong",
+      },
+      DOMAIN,
+    );
+    const keys = Object.keys(JSON.parse(body) as Record<string, unknown>).sort();
+    expect(ACCOUNTLESS_SEND_FIELDS.map((t) => t.khoa).sort()).toEqual(keys);
+    expect(keys).not.toContain("lat");
+    expect(keys).not.toContain("lng");
+    expect(row(ACCOUNTLESS_SEND_PATH).truong).toBe(ACCOUNTLESS_SEND_FIELDS);
+    // Lookup: the code on the path, `host` in the query.
+    const lookup = new URL(publicReportAddress(CODE, DOMAIN));
+    expect(lookup.pathname).toBe(ACCOUNTLESS_LOOKUP_PATH.replace("{code}", CODE));
+    expect(ACCOUNTLESS_LOOKUP_FIELDS.map((t) => t.khoa).sort()).toEqual(["code", ...lookup.searchParams.keys()].sort());
+    // The copied screen name, and the button names the rows quote, are the real ones.
+    expect(ACCOUNTLESS_LOOKUP_SCREEN).toBe(XA_PA.tra_cuu_tieu_de);
+    expect(row(ACCOUNTLESS_FIELDS_PATH).khi_nao).toContain(ACCOUNTLESS.send_button);
+    expect(row(ACCOUNTLESS_LOOKUP_PATH).khi_nao).toContain(ACCOUNTLESS.lookup_button);
+    expect(row(ACCOUNTLESS_LOOKUP_PATH).khi_nao).toContain(ACCOUNTLESS.follow);
+    // The block says the accountless send has no session — only when that row is printed.
+    expect(khoiRoiKhoiMay(DUONG_ROI_KHOI_MAY)).toContain("không có phiên đăng nhập nào");
+    expect(khoiRoiKhoiMay(DUONG_CONG_KHAI)).not.toContain("không có phiên đăng nhập nào");
+  });
+
   it("tên màn chép trong hồ sơ đúng từng chữ tên màn thật", () => {
     expect(TEN_MAN_CONG_KHAI.danh_ba).toBe(DANH_BA.tieu_de);
     expect(TEN_MAN_CONG_KHAI.tin_xa).toBe(TIN_XA.tieu_de);
@@ -694,7 +771,7 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
   it("câu đầu khối KHÔNG còn nói 'không đường nào chạy lúc mở ứng dụng' — tra tên xã chạy lúc mở", () => {
     const khoi = khoiRoiKhoiMay(DUONG_ROI_KHOI_MAY);
     expect(khoi).not.toContain("không đường nào chạy lúc mở ứng dụng");
-    expect(khoi).toContain("16 đường chạy khi chính người dùng bấm; 2 đường chạy mà không cần một cú bấm");
+    expect(khoi).toContain("20 đường chạy khi chính người dùng bấm; 2 đường chạy mà không cần một cú bấm");
     // Và khi mọi đường đều chờ một cú bấm, câu cũ quay lại — cột ấy thật sự được đọc.
     const chi_bam = DUONG_ROI_KHOI_MAY.filter((d) => d.nguoi_dung_bam);
     expect(khoiRoiKhoiMay(chi_bam)).toContain("không đường nào chạy lúc mở ứng dụng");

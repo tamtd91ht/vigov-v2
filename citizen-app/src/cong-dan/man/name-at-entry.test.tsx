@@ -291,6 +291,37 @@ describe("the entry asks Zalo for the name ONCE and passes it down", () => {
   });
 });
 
+/**
+ * The commune's name reaches the shell (owner, 08/10/2026: the shared app puts it on Zalo's own top bar) ONLY from
+ * a successful public lookup — never a default, never on a failed lookup.
+ */
+describe("the entry tells the shell the commune's name — only from a lookup that found it", () => {
+  it("found: the callback gets exactly the looked-up name (StrictMode may repeat it, never another value)", async () => {
+    const shown = vi.fn();
+    const { unmount } = await mount(createElement(TrangXa, { ten_mien: "thu.vigov.vn", onCommuneShown: shown }));
+    expect(shown).toHaveBeenCalled();
+    expect(new Set(shown.mock.calls.map((c) => c[0]))).toEqual(new Set([commune.ten]));
+    await unmount();
+  });
+
+  it("not found / not connected: the callback is never called", async () => {
+    const { traXaTheoTenMien } = await import("../api/goi-vigov");
+    const found = vi.mocked(traXaTheoTenMien).getMockImplementation()!;
+    try {
+      for (const answer of [{ kieu: "khong-thay" as const }, { kieu: "xong" as const, gia_tri: [] }]) {
+        vi.mocked(traXaTheoTenMien).mockImplementation(async () => answer as Awaited<ReturnType<typeof traXaTheoTenMien>>);
+        const shown = vi.fn();
+        const { host, unmount } = await mount(createElement(TrangXa, { ten_mien: "thu.vigov.vn", onCommuneShown: shown }));
+        expect(host.textContent).not.toContain(commune.ten);
+        expect(shown).not.toHaveBeenCalled();
+        await unmount();
+      }
+    } finally {
+      vi.mocked(traXaTheoTenMien).mockImplementation(found);
+    }
+  });
+});
+
 describe("the entry state, step by step (the tap the minimal DOM cannot simulate)", () => {
   it("check: a name settles it; outside Zalo settles on null; anything else offers the card", () => {
     expect(afterNameCheck({ kieu: "xong", ho_ten: NAME })).toEqual({ kind: "settled", name: NAME });

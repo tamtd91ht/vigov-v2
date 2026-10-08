@@ -22,6 +22,10 @@
  *   Cổng của chúng là TÊN MIỀN: không đúng khuôn (`lib/launch-params.ts` `laTenMien`) thì không gọi.
  *   Chúng đi qua CÙNG MỘT `fetch(` ở `goi` bên dưới — tệp này vẫn chỉ có một chỗ gọi mạng.
  *
+ * ⚠ ACCOUNTLESS PETITIONS (ADR 0083, 08/10/2026, TEMPORARY): three more calls with no session and no bearer,
+ *   behind the same DOMAIN gate — the field catalogue, the lookup, and the ONE public write (the send). Offered
+ *   only when Zalo refuses the access token. See the block at the end of this file.
+ *
  * ⚠ SCENE PHOTOS (02/10/2026, commune app only) add the ONLY two `fetch(` outside `goi`, each for a reason
  *   `goi` cannot serve: `readPickedPhoto` reads the picker's LOCAL temp file (no server at all), and
  *   `postPhotoToStorage` posts the bytes to the presigned object-store URL ViGov handed out — no bearer, no
@@ -35,8 +39,12 @@
  * sentence for its branch (`man/noi-dung.ts`) is the whole report.
  */
 import {
+  type AccountlessReceipt,
+  accountlessBodyHost,
+  type AccountlessReport,
   type CitizenField,
   citizenFieldsAddress,
+  COMMUNE_DAILY_LIMIT_CODE,
   diaChiDanhSach,
   diaChiGuiPhanAnh,
   diaChiTraCuu,
@@ -50,6 +58,11 @@ import {
   photoCompletionAddress,
   photosAddress,
   type PhotoSlot,
+  publicReportAddress,
+  publicReportFieldsAddress,
+  publicReportsAddress,
+  readAccountlessReceipt,
+  readAccountlessReport,
   type PhotoUploadForm,
   ratingAddress,
   readCitizenFields,
@@ -149,7 +162,15 @@ export type KetQuaDanhSach = { kieu: "xong"; trang: TrangPhieuCuaToi } | NhanhKh
  * one. Its own branch because "the system is broken, wait minutes" (`loi-may-chu`) is the wrong next step for a
  * citizen who only tapped quickly: the answer is "wait a few seconds".
  */
-export type RateLimited = { kieu: "rate-limited"; retryAfterSeconds: number | null };
+export type RateLimited = {
+  kieu: "rate-limited";
+  retryAfterSeconds: number | null;
+  /**
+   * The body's error `code` — set ONLY for a call made with `limitCode: true` (the accountless send, ADR 0083,
+   * whose two 429 codes mean two different next steps). Absent everywhere else, exactly as before.
+   */
+  code?: string;
+};
 
 /** What one call can become — every route's branches, plus `rate-limited` until the route decides what it means. */
 type CallResult<T> = { kieu: "xong"; gia_tri: T } | NhanhKhongThanh | RateLimited;
@@ -221,6 +242,18 @@ async function goi<T>(
   return kq.kieu === "refused" ? { kieu: "loi-may-chu" } : kq;
 }
 
+/** `goi` for the accountless send: the 429 body's `code` comes back on `rate-limited` (ADR 0083 #3). */
+async function goiWithLimitCode<T>(
+  dia_chi: string,
+  tuy_chon: { method: "POST"; khoa: string; than: string },
+  doc: (than: unknown) => T | null,
+  khi_404: NhanhKhongThanh,
+): Promise<CallResult<T>> {
+  const kq = await callOnce(dia_chi, { ...tuy_chon, limitCode: true }, doc, khi_404);
+  // Unreachable: `refusals` is not set on this path.
+  return kq.kieu === "refused" ? { kieu: "loi-may-chu" } : kq;
+}
+
 /** `goi` for the photo routes: the server's refusal `code` comes back (`Refused`) instead of being folded. */
 async function goiWithRefusals<T>(
   dia_chi: string,
@@ -233,7 +266,15 @@ async function goiWithRefusals<T>(
 /** One call to ViGov — `goi` and `goiWithRefusals` both end here. */
 async function callOnce<T>(
   dia_chi: string,
-  tuy_chon: { method: "GET" | "POST"; token?: string; khoa?: string; than?: string; refusals?: boolean },
+  tuy_chon: {
+    method: "GET" | "POST";
+    token?: string;
+    khoa?: string;
+    than?: string;
+    refusals?: boolean;
+    /** Return the 429 body's `code` on `rate-limited` (`RateLimited.code`). */
+    limitCode?: boolean;
+  },
   doc: (than: unknown) => T | null,
   khi_404: NhanhKhongThanh,
 ): Promise<CallResult<T> | Refused> {
@@ -298,9 +339,11 @@ async function callOnce<T>(
         // (`readLimitMessage`). Nothing is logged.
         const retryAfterSeconds = readRetryAfter(tra_loi);
         const body = await readErrorBody(tra_loi);
-        if (errorCode(body) === UNVERIFIED_DAILY_LIMIT_CODE) {
+        const code = errorCode(body);
+        if (code === UNVERIFIED_DAILY_LIMIT_CODE) {
           return { kieu: "unverified-daily-limit", message: readLimitMessage(body) };
         }
+        if (tuy_chon.limitCode === true && code !== null) return { kieu: "rate-limited", retryAfterSeconds, code };
         return { kieu: "rate-limited", retryAfterSeconds };
       }
       case 503:
@@ -722,4 +765,126 @@ export function baiTinCuaXa(
 ): Promise<NewsReadResult<BaiTinXa>> {
   if (id === "") return Promise.resolve({ kieu: "khong-thay" });
   return goiCongKhai(ten_mien, (t) => diaChiBaiTin(t, id, options), docBaiTin);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+ * ACCOUNTLESS PETITIONS — ADR 0083, TEMPORARY (removed when App ViHAT passes Zalo's review)
+ *
+ * Offered only when Zalo refuses the ACCESS TOKEN (`commune-session.ts` `offersAccountless`), so there is no
+ * session to gate on. These three calls therefore SKIP the session gate (`moCong`) and keep the DOMAIN gate of
+ * the public reads instead: no well-formed commune domain from this open → nothing leaves the phone. They NEVER
+ * carry a bearer, even when a session exists — the server must not tie these petitions to an account (ADR 0083
+ * STOP #5), and a bearer here would be one more place a session token travels.
+ * ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * The commune's field catalogue, read by domain — the same body as `citizenReportFields`, so the send screen
+ * reads both answers through one table (`field-catalogue.ts`). A 401/403 is not in this route's contract: it is
+ * a stray, `loi-may-chu`. 429 is not in it either and stays `loi-may-chu`.
+ */
+export async function publicReportFields(ten_mien: string): Promise<
+  { kieu: "xong"; fields: readonly CitizenField[] } | NhanhKhongThanh
+> {
+  if (!laTenMien(ten_mien)) return { kieu: "chua-cau-hinh" };
+  const url = publicReportFieldsAddress(ten_mien);
+  if (url === "") return { kieu: "chua-cau-hinh" };
+  const kq = withoutRateLimit(await goi(url, { method: "GET" }, readCitizenFields, { kieu: "loi-may-chu" }));
+  if (kq.kieu === "xong") return { kieu: "xong", fields: kq.gia_tri };
+  if (kq.kieu === "het-phien" || kq.kieu === "can-xac-thuc-so") return { kieu: "loi-may-chu" };
+  return kq;
+}
+
+/**
+ * Each branch is a different next step on the send screen:
+ *
+ *   `xong`                 201 — the lookup code and the deadlines the server stored
+ *   `rate-limited`         429 `rate_limited` — this network sent the hour's ceiling; nothing recorded
+ *   `commune-daily-limit`  429 `commune_daily_limit` — the commune's day ceiling; nothing recorded
+ *   `khong-thay`           404 `commune_not_found` — the domain names no active commune; nothing recorded
+ *   `chua-cau-hinh`        no well-formed domain, the body's domain is not this open's, or no host — NOT sent
+ *   the rest               as `KetQuaGoi` (400, 409, 503, 500, network)
+ */
+export type AccountlessSendResult =
+  | { kieu: "xong"; receipt: AccountlessReceipt }
+  | { kieu: "rate-limited" }
+  | { kieu: "commune-daily-limit" }
+  | { kieu: "khong-thay" }
+  | { kieu: "chua-cau-hinh" }
+  | { kieu: "dang-xu-ly-truoc" }
+  | { kieu: "field-not-offered" }
+  | { kieu: "khong-hop-le" }
+  | { kieu: "field-catalogue-unavailable" }
+  | { kieu: "kenh-chua-mo" }
+  | { kieu: "loi-may-chu" }
+  | { kieu: "loi-mang" };
+
+/**
+ * Send ONE accountless attempt. Calling again with the SAME `attempt` is "send again": same body, same
+ * `Idempotency-Key` — the server remembers (commune, key) for 24 hours and answers the first code (ADR 0083 #10).
+ *
+ * The body's `host` must be `ten_mien` (`accountlessReportBody`): the domain gate below is checked on the value
+ * that actually leaves, not on a parameter that could differ from it.
+ */
+export async function sendAccountlessReport(ten_mien: string, attempt: LanGui): Promise<AccountlessSendResult> {
+  if (!laTenMien(ten_mien) || accountlessBodyHost(attempt.than) !== ten_mien) return { kieu: "chua-cau-hinh" };
+  const url = publicReportsAddress();
+  if (url === "") return { kieu: "chua-cau-hinh" };
+  const kq = await goiWithLimitCode(
+    url,
+    { method: "POST", khoa: attempt.khoa, than: attempt.than },
+    readAccountlessReceipt,
+    { kieu: "khong-thay" },
+  );
+  switch (kq.kieu) {
+    case "xong":
+      return { kieu: "xong", receipt: kq.gia_tri };
+    case "rate-limited":
+      return kq.code === COMMUNE_DAILY_LIMIT_CODE ? { kieu: "commune-daily-limit" } : { kieu: "rate-limited" };
+    case "khong-thay":
+    case "chua-cau-hinh":
+    case "dang-xu-ly-truoc":
+    case "field-not-offered":
+    case "khong-hop-le":
+    case "field-catalogue-unavailable":
+    case "kenh-chua-mo":
+    case "loi-may-chu":
+    case "loi-mang":
+      return { kieu: kq.kieu };
+    default:
+      // 401 / 403 / `unverified_daily_limit` are not in this route's contract (no session): a stray.
+      return { kieu: "loi-may-chu" };
+  }
+}
+
+/** The public lookup: found, one 404 for every "not found", the 30/hour/IP ceiling, or a failure. */
+export type AccountlessLookupResult =
+  | { kieu: "xong"; report: AccountlessReport }
+  | { kieu: "khong-thay" }
+  | { kieu: "rate-limited" }
+  | { kieu: "chua-cau-hinh" }
+  | { kieu: "loi-mang" }
+  | { kieu: "loi-may-chu" };
+
+/**
+ * Look ONE accountless petition up by its code, in the commune of this open. An empty code answers
+ * `khong-thay` without a call. A wrong code and another commune's code are the same 404 on the server, and the
+ * same branch here (rule 4, forbidden #2).
+ */
+export async function lookupAccountlessReport(ten_mien: string, code: string): Promise<AccountlessLookupResult> {
+  const ma = code.trim();
+  if (!laTenMien(ten_mien)) return { kieu: "chua-cau-hinh" };
+  if (ma === "") return { kieu: "khong-thay" };
+  const url = publicReportAddress(ma, ten_mien);
+  if (url === "") return { kieu: "chua-cau-hinh" };
+  const kq = await goi(url, { method: "GET" }, readAccountlessReport, { kieu: "khong-thay" });
+  switch (kq.kieu) {
+    case "xong":
+      return { kieu: "xong", report: kq.gia_tri };
+    case "khong-thay":
+    case "rate-limited":
+    case "loi-mang":
+      return { kieu: kq.kieu };
+    default:
+      return { kieu: "loi-may-chu" };
+  }
 }

@@ -1,12 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * THE SHELL'S HALF OF THE SCENE PHOTOS — `takeScenePhoto` / `chooseScenePhotos` in `zalo-api.ts`, and the table
  * in `App.tsx` that turns them into the state half's `ScenePhotoPickResult`.
  *
  * What must hold:
- *   · the camera asks `requestCameraPermission` FIRST; `userAllow: false` is the citizen's no, and Zalo's
- *     camera is then never opened
+ *   · the camera asks `requestCameraPermission` FIRST; `userAllow: false` is the citizen's no, and the camera
+ *     is then never opened. Since 08/10/2026 it is the PHONE'S camera (`chooseImage`), not Zalo's (`zcamera_photo`)
  *   · the picker gets the right type and count, the edit view off — and NEVER `serverUploadUrl`: the picker
  *     uploads nothing, it hands back local temp paths
  *   · the SDK's own citizen codes (`constants.js`: -2002 denied, -2003 cancel) are what they are; any other
@@ -17,8 +17,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const sdk = vi.hoisted(() => ({
   requestCameraPermission: vi.fn<() => Promise<{ userAllow: boolean; message: string }>>(),
   openMediaPicker: vi.fn<(args: Record<string, unknown>) => Promise<{ data: string[] | string }>>(),
+  chooseImage: vi.fn<(args: Record<string, unknown>) => Promise<{ filePaths: string[] }>>(),
 }));
 vi.mock("zmp-sdk", () => sdk);
+// Coded failures here would POST a real report on a machine whose `.env.local` sets the API host.
+vi.mock("../dang-nhap/goi-may-chu", () => ({ reportClientError: async () => {} }));
 
 import { toScenePhotoPickResult } from "../../App";
 
@@ -29,21 +32,29 @@ const zaloError = (code: number) => Object.assign(new Error("platform text that 
 beforeEach(() => {
   sdk.requestCameraPermission.mockReset().mockResolvedValue({ userAllow: true, message: "" });
   sdk.openMediaPicker.mockReset().mockResolvedValue({ data: ["zalo-temp://a.jpg"] });
+  sdk.chooseImage.mockReset().mockResolvedValue({ filePaths: ["blob:camera-1"] });
 });
 
-describe("Chụp ảnh — camera permission, then Zalo's camera for one photo", () => {
-  it("allowed: one zcamera_photo, edit view off, no upload URL", async () => {
-    expect(await takeScenePhoto()).toEqual({ kieu: "xong", du_lieu: ["zalo-temp://a.jpg"] });
+describe("Chụp ảnh — camera permission, then the PHONE'S camera for one photo (owner, 08/10/2026)", () => {
+  it("allowed: `chooseImage` with the camera only, ONE photo, the BACK camera; Zalo's own camera is not used", async () => {
+    expect(await takeScenePhoto()).toEqual({ kieu: "xong", du_lieu: ["blob:camera-1"] });
     expect(sdk.requestCameraPermission).toHaveBeenCalledTimes(1);
-    const args = sdk.openMediaPicker.mock.calls[0]![0];
-    expect(args).toMatchObject({ type: "zcamera_photo", maxSelectItem: 1, editView: { enable: false } });
-    expect(args).not.toHaveProperty("serverUploadUrl");
+    expect(sdk.chooseImage.mock.calls).toEqual([[{ count: 1, sourceType: ["camera"], cameraType: "back" }]]);
+    // The full-screen Zalo camera (`openMediaPicker` `zcamera_photo`) is what the owner asked to replace.
+    expect(sdk.openMediaPicker).not.toHaveBeenCalled();
+  });
+
+  it("empty paths are dropped — an empty answer is `xong` with nothing to keep", async () => {
+    sdk.chooseImage.mockResolvedValue({ filePaths: ["", "blob:camera-2"] });
+    expect(await takeScenePhoto()).toEqual({ kieu: "xong", du_lieu: ["blob:camera-2"] });
+    sdk.chooseImage.mockResolvedValue({ filePaths: [] });
+    expect(await takeScenePhoto()).toEqual({ kieu: "xong", du_lieu: [] });
   });
 
   it("not allowed: tu-choi, and the camera is never opened", async () => {
     sdk.requestCameraPermission.mockResolvedValue({ userAllow: false, message: "denied" });
     expect(await takeScenePhoto()).toEqual({ kieu: "tu-choi" });
-    expect(sdk.openMediaPicker).not.toHaveBeenCalled();
+    expect(sdk.chooseImage).not.toHaveBeenCalled();
   });
 
   it("the permission call refused with a code: the CAMERA capability, the code verbatim", async () => {
@@ -55,8 +66,72 @@ describe("Chụp ảnh — camera permission, then Zalo's camera for one photo",
   });
 
   it("the camera step refused: the capability moves to PHOTOS (the step that failed)", async () => {
-    sdk.openMediaPicker.mockRejectedValue(zaloError(-2004));
+    sdk.chooseImage.mockRejectedValue(zaloError(-2004));
     expect(await takeScenePhoto()).toMatchObject({ kieu: "khong-lay-duoc", failure: { capability: "photos", code: -2004 } });
+  });
+});
+
+/**
+ * THE CAMERA CLOSED WITHOUT A PHOTO. `chooseImage` is a hidden file input that settles only on `change`, so a
+ * closed camera never answers (`zalo-api.ts` `untilReturnWithoutPhoto`). The page coming back visible and focused,
+ * with still no photo after the grace period, is `huy` — the photo buttons are free again. A photo that arrives
+ * within the grace period is kept. A page with a window is faked here: this file runs under Node.
+ */
+describe("Chụp ảnh — the camera closed without a photo is `huy`, never a button stuck disabled", () => {
+  type Listener = () => void;
+  let listeners: Map<string, Listener[]>;
+  const fire = (type: string) => listeners.get(type)?.forEach((l) => l());
+  const target = () => ({
+    addEventListener: (type: string, l: Listener) => listeners.set(type, [...(listeners.get(type) ?? []), l]),
+    removeEventListener: (type: string, l: Listener) =>
+      listeners.set(type, (listeners.get(type) ?? []).filter((x) => x !== l)),
+  });
+
+  beforeEach(() => {
+    listeners = new Map();
+    vi.useFakeTimers();
+    vi.stubGlobal("window", target());
+    vi.stubGlobal("document", { ...target(), visibilityState: "visible" });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("back on the page, nothing after the grace period → huy; the listeners are removed", async () => {
+    sdk.chooseImage.mockReturnValue(new Promise(() => {}));
+    const pick = takeScenePhoto();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sdk.chooseImage).toHaveBeenCalledTimes(1);
+    fire("focus");
+    await vi.advanceTimersByTimeAsync(2999);
+    let settled = false;
+    void pick.then(() => (settled = true));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await pick).toEqual({ kieu: "huy" });
+    expect([...listeners.values()].flat()).toEqual([]);
+  });
+
+  it("a photo delivered just after the page came back is kept", async () => {
+    let deliver: (v: { filePaths: string[] }) => void = () => {};
+    sdk.chooseImage.mockReturnValue(new Promise((r) => (deliver = r)));
+    const pick = takeScenePhoto();
+    await vi.advanceTimersByTimeAsync(0);
+    fire("visibilitychange");
+    await vi.advanceTimersByTimeAsync(500);
+    deliver({ filePaths: ["blob:camera-3"] });
+    expect(await pick).toEqual({ kieu: "xong", du_lieu: ["blob:camera-3"] });
+    expect([...listeners.values()].flat()).toEqual([]);
+  });
+
+  it("no return to the page → no timer: the call is simply still open", async () => {
+    sdk.chooseImage.mockReturnValue(new Promise(() => {}));
+    let settled = false;
+    void takeScenePhoto().then(() => (settled = true));
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(settled).toBe(false);
   });
 });
 

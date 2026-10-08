@@ -565,6 +565,66 @@
       "bang_chung": "citizen-app/scripts/commune-qr.mjs (thuần) + make-qr.mjs (chạy) + commune-qr.test.mjs; package.json `qr`; .gitignore `qr/`; README §Nộp lên Zalo → 'Lệnh — đẩy bản và sinh QR'. Liên kết trùng khuôn service-platform shared_mini_app.go (`?d=<host>&src=qr`; bản thử thêm `env=TESTING&version=<n>` trước). App ID từ platform `mini-app-ids?app=vihat`, xã kiểm qua identity `communes?host=` — không biết thì DỪNG, không lối --app-id. `npx vitest run scripts/` 138 ca xanh; chạy thật 08/10/2026: tên miền không có → dừng; thangbinh-danang.vigov.vn --version=3 → in App ID, tên xã, liên kết, ghi SVG",
       "no_confirm": [],
       "tiep_theo": "QR app RIÊNG của xã (`zalo.me/s/<App ID xã>/?src=qr`) lệnh này không sinh — vẫn lấy ở platform-admin. Chưa quét thử tệp SVG bằng Zalo trên máy thật."
+    },
+    {
+      "id": "do-access-token-1401-app-chung",
+      "viec": "App ViHAT (app chung) mở bằng QR xã: getAccessToken luôn trả -1401 lúc gửi phản ánh — chặn mọi lần gửi qua app chung",
+      "trang_thai": "xong",
+      "bang_chung": "ĐO TRÊN MÁY THẬT 08/10/2026 (người dùng, QR app chung vào thangbinh-danang.vigov.vn): lần A — thẻ tên bấm 'Đồng ý' rồi gửi → màn lỗi 'Zalo chưa cho phép ứng dụng lấy mã phiên đăng nhập Zalo', Mã hỗ trợ -1401; lần B — thẻ tên bấm 'Không, tôi sẽ tự gõ tên' rồi gửi → cùng -1401. Hỏng ở bước đầu của xinMaDangNhap (zalo-api.ts:511-517, capability access-token), trước getPhoneNumber. Hai lần cùng kết quả ⇒ không phụ thuộc lựa chọn ở thẻ tên.",
+      "no_confirm": [],
+      "tiep_theo": "08/10/2026: chủ dự án xác nhận App ViHAT chưa được duyệt; đường tạm ADR 0083 (phiếu không tài khoản) thay cho việc chờ — mục gui-phan-anh-khong-tai-khoan-adr-0083. --- Nguyên nhân nằm NGOÀI kho: App ViHAT chưa được Zalo cấp quyền (README §'Sáu tính năng thật — và chín quyền' + bảng Phase 1: Zalo chỉ cấp quyền sau khi OA Vihat xác thực App ID và bản nộp được duyệt). Việc tiếp: chủ app mở Zalo Developer Console của App ViHAT, đối chiếu trạng thái xác thực OA và danh sách quyền đã cấp; xong thì đo lại lần A/B. Giả thuyết 'access token phụ thuộc quyền tên khi Zalo App có nhiều Mini App' (zmp-sdk index.d.ts:3009) ĐÃ LOẠI bằng lần A. Chưa đo: lần A thẻ tên có điền được tên không (nếu được thì scope.userInfo đã có mà token vẫn hỏng)."
+    },
+    {
+      "id": "bao-loi-zalo-sdk-ve-rancher",
+      "viec": "Lỗi có mã của zmp-sdk (vd -1401) gửi về vihat-miniapp POST /api/v1/client-errors, ghi một dòng log tiền tố [ZALO_SDK_ERROR] để đọc trên Rancher — phân biệt ba nguyên nhân -1401 của getAccessToken",
+      "trang_thai": "dang_lam",
+      "bang_chung": "08/10/2026, chủ dự án chốt: nơi nhận vihat-miniapp, 30 lượt/giờ/IP, message SDK nguyên văn cắt 200 ký tự kèm tiền tố. Người dùng báo App ViHAT ĐÃ GOLIVE mà vẫn -1401 ⇒ giả thuyết 'chưa được duyệt' của ADR 0083 CHƯA ĐƯỢC CHỨNG MINH. zmp-sdk 2.53.0 apis/common/token.js: -1401 = UNAUTHORIZED, ba message 'User Authentication Required' · 'Zalo app has not been activated' · 'Can't get accessToken'. Mã: citizen-app zalo-api.ts reportSdkFailure (không báo -201, không báo lần đọc tên thầm lúc mở), hop-dong.ts CLIENT_ERROR_*, goi-may-chu.ts reportClientError, ket-xuat-ho-so.ts dòng khai thứ 22; vihat-miniapp internal/httpapi/client_errors.go + test. vitest 1817/1817, go test httpapi xanh.",
+      "no_confirm": [],
+      "tiep_theo": "Build + deploy vihat-miniapp và đẩy citizen-app lên Zalo; quét lại QR thangbinh-danang, đọc dòng [ZALO_SDK_ERROR] trên Rancher; theo message mà sửa cấu hình Zalo App, rồi xét lại tiền đề của ADR 0083. Câu chính sách riêng tư cho tuyến mới còn nợ (lời văn pháp lý của chủ dự án)."
+    },
+    {
+      "id": "gui-phan-anh-khong-tai-khoan-adr-0083",
+      "viec": "App chung: khi getAccessToken hỏng (-1401) mời gửi phản ánh KHÔNG TÀI KHOẢN — cùng biểu mẫu (có lĩnh vực), không ảnh, không vị trí; xong hiện mã + tra cứu công khai (ADR 0083, TẠM)",
+      "trang_thai": "xong",
+      "bang_chung": "citizen-app/src: cong-dan/man/commune-session.ts (offersAccountless — chỉ khi access-token bị từ chối, cho gửi và tra cứu; nhớ lần từ chối trong lần mở), TrangXa.tsx (màn gui-khong-tai-khoan, tra-cuu-khong-tai-khoan), PhanAnhAppXa.tsx (CommuneSendScreen accountless, AccountlessSendDone, AccountlessLookup), cong-dan/api/{goi-vigov.ts,hop-dong-phan-anh.ts} (publicReportFields, sendAccountlessReport với Idempotency-Key 32 hex từ crypto.getRandomValues, lookupAccountlessReport; không bao giờ gửi bearer), noi-dung.ts (ACCOUNTLESS, câu 429), content/ket-xuat-ho-so.ts (khai 3 tuyến, 21 tuyến), chinh-sach-rieng-tu.ts (một đoạn [CHỜ DUYỆT]). Test mới accountless-petition.test.tsx + khối trong hieu-ung-khong-phien.test.tsx. tsc sạch; vitest 66 tệp / 1813 ca xanh — 08/10/2026.",
+      "no_confirm": [],
+      "tiep_theo": "Chưa thử trên máy thật. Đoạn chính sách quyền riêng tư về IP còn [CHỜ DUYỆT] — chưa nói IP giữ bao lâu. Lỗ hổng có sẵn chưa sửa: phần 'những gì rời máy' của app chung tự nhận đủ trong khi tuyến phản ánh có phiên chưa khai. GỠ khi App ViHAT được duyệt — ADR 0083 §Gỡ bỏ.",
+      "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "app-chung-thanh-tieu-de-ten-xa",
+      "viec": "App chung (ViHAT) mở từ QR của xã: thanh tiêu đề gốc của Zalo hiện TÊN XÃ đọc lúc chạy từ lượt tra công khai theo tên miền trên QR (cùng nguồn với header trong trang), màu trùng header giao diện xã, đặt bằng configAppView; app-config.json không đổi (chủ dự án 08/10/2026, ADR 0047 §Sửa đổi 08/10/2026 #1)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Quyết định: kb/10-decisions/0047-hai-luong-dung-citizen-app-theo-ten-mien.md §Sửa đổi 08/10/2026 (:369). Mã đang dựng ở phiên khác 08/10/2026 — chưa có bằng chứng chạy. Đã kiểm: zmp-sdk configAppView nhận actionBar.title + headerColor (citizen-app/node_modules/zmp-sdk/index.d.ts:5192-5199); app-config.json:3 title 'ViHAT Group'.",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA CHỐT (không tự chọn mà không ghi ra): thanh tiêu đề hiện gì khi tra xã hỏng hoặc tên miền không ra xã — không bao giờ lấy chữ từ tham số d. Tên lấy từ trả lời máy chủ, không từ d. Thử trên máy thật: QR Thăng Bình → 'Xã Thăng Bình', QR xã khác → tên xã ấy, màu liền header; Zalo cũ hơn 23.02.01 giữ 'ViHAT Group'."
+    },
+    {
+      "id": "gui-phan-anh-nguoi-gui-da-xac-thuc",
+      "viec": "Màn gửi phản ánh, phiên ĐÃ xác thực số: gộp 'Họ và tên' + 'Số điện thoại' thành một dòng 'Gửi bằng: <tên> · số Zalo đã xác thực' có nút 'Sửa'; để trống ô số thì máy chủ gắn số của phiên (chủ dự án 08/10/2026, ADR 0050 §Sửa đổi 08/10/2026)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Quyết định: kb/10-decisions/0050-kenh-cong-dan-theo-kho-yeu-cau.md §Sửa đổi 08/10/2026 (:178). Mã đang dựng ở phiên khác 08/10/2026 — chưa có bằng chứng chạy. Phía máy chủ: sổ service-petitions/gan-so-da-xac-thuc-cua-phien.",
+      "no_confirm": [],
+      "tiep_theo": "Không áp cho phiếu ẩn danh, phiên chưa xác thực số (ADR 0080) và phiếu không tài khoản (ADR 0083) — các màn ấy giữ hai ô như cũ. Client KHÔNG tự điền số rồi gửi lại: để trống, máy chủ gắn. Chính sách quyền riêng tư: soát câu về số điện thoại trên phiếu (lời văn chủ dự án duyệt).",
+      "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "noi-xay-ra-dia-chi-nominatim",
+      "viec": "Ô 'Nơi xảy ra': đổi toạ độ vừa lấy ra địa chỉ (geocoding ngược) bằng Nominatim TỰ HOST trong cụm (dữ liệu OSM Việt Nam); địa chỉ điền sẵn, sửa được; toạ độ giữ riêng (chủ dự án 08/10/2026, ADR 0072 §Sửa đổi 08/10/2026, đóng việc còn mở #3)",
+      "trang_thai": "chua_lam",
+      "bang_chung": "Quyết định: kb/10-decisions/0072-ban-do-kinh-te-so-nen-tu-host.md §Sửa đổi 08/10/2026 (:403); khớp H4 :287 'Geocoding vẫn chỉ nội bộ'. Chưa có mã, chưa có máy Nominatim — kiểm 08/10/2026.",
+      "no_confirm": [],
+      "tiep_theo": "Trước khi dựng phải hỏi chủ dự án (ADR 0072 §Sửa đổi 08/10/2026, bảng 'Còn mở khi dựng'): (1) CSDL PostGIS riêng của Nominatim so với điểm dừng 'Thêm PostGIS' (:185) và ADR 0010; (2) service nào gọi Nominatim + tuyến cho Mini App (luật 2, 5, 13); (3) biến cấu hình mới (luật 11 đk dừng #1); (4) log truy cập Nominatim chứa toạ độ (luật 3); (5) ghi nguồn ODbL + câu chính sách quyền riêng tư; (6) nhịp làm mới dữ liệu OSM. Không bao giờ 'tạm' gọi host Nominatim công cộng.",
+      "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "anh-hien-truong-may-anh-mac-dinh",
+      "viec": "Nút 'Chụp ảnh hiện trường' dùng máy ảnh mặc định của điện thoại (zmp-sdk chooseImage, sourceType camera) thay bộ chọn zcamera_photo của Zalo — cả app riêng lẫn app chung mở từ QR xã (chủ dự án 08/10/2026, ADR 0047 §Sửa đổi 08/10/2026 #2)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Quyết định: kb/10-decisions/0047-hai-luong-dung-citizen-app-theo-ten-mien.md §Sửa đổi 08/10/2026 (:369). Mã đang dựng ở phiên khác 08/10/2026 — chưa có bằng chứng chạy. Đã kiểm: chooseImage nhận sourceType ['camera'] (citizen-app/node_modules/zmp-sdk/index.d.ts:4912-4944); cây làm việc 08/10 còn openMediaPicker zcamera_photo trong takeScenePhoto (src/features/tinh-nang/zalo-api.ts). Mục cũ app-xa-anh-hien-truong giữ 'xong' — đó là cách dựng trước quyết định này.",
+      "no_confirm": [],
+      "tiep_theo": "Cùng lượt dựng: đổi dòng khai KHAI_BAO_LOI_GOI và hồ sơ nộp Zalo (content/ket-xuat-ho-so.ts) sang chooseImage cho nút chụp; soát đoạn chính sách ảnh hiện trường [CHỜ DUYỆT] (mục chinh-sach-anh-hien-truong-nhap). Chưa kiểm quyền Zalo của chooseImage máy ảnh cho App ID app chung và app xã. Thử trên máy thật: fetch đường dẫn tạm của chooseImage trả byte ảnh, mã huỷ khi người dùng đóng máy ảnh. Máy chủ vẫn bỏ EXIF (G3) — ảnh máy ảnh hệ điều hành có thể mang GPS.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }

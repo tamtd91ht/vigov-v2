@@ -185,7 +185,9 @@ export const LOI_GUI: Readonly<
     | "loi-may-chu"
     | "loi-mang"
     | "khong-tao-duoc-khoa"
-    | "unverified-daily-limit",
+    | "unverified-daily-limit"
+    | "rate-limited"
+    | "commune-daily-limit",
     { cau: string; co_the_gui_lai: boolean }
   >
 > = {
@@ -194,6 +196,16 @@ export const LOI_GUI: Readonly<
   // with the same key — the draft stays, and a later send is a new act.
   "unverified-daily-limit": {
     cau: "Hôm nay bạn đã gửi nhiều phản ánh mà chưa xác nhận số điện thoại, nên phản ánh này CHƯA được ghi nhận. Nội dung bạn viết vẫn còn nguyên. Hãy gửi lại vào ngày mai, hoặc gọi điện thoại cho xã.",
+    co_the_gui_lai: false,
+  },
+  // The two 429s of the ACCOUNTLESS send (ADR 0083 #3). Nothing was recorded; the draft stays. No threshold
+  // number is written here — it is the server's and may change. Each points to the commune's reception desk.
+  "rate-limited": {
+    cau: "Từ mạng bạn đang dùng đã có nhiều phản ánh được gửi trong một giờ qua, nên phản ánh này CHƯA được ghi nhận. Nội dung bạn viết vẫn còn nguyên. Hãy chờ khoảng một giờ rồi bấm Gửi lại, hoặc mang nội dung tới Bộ phận tiếp nhận của Ủy ban nhân dân xã.",
+    co_the_gui_lai: true,
+  },
+  "commune-daily-limit": {
+    cau: "Hôm nay xã đã nhận nhiều phản ánh gửi không cần tài khoản, nên phản ánh này CHƯA được ghi nhận. Nội dung bạn viết vẫn còn nguyên. Hãy gửi lại vào ngày mai, hoặc mang nội dung tới Bộ phận tiếp nhận của Ủy ban nhân dân xã.",
     co_the_gui_lai: false,
   },
   "het-phien": {
@@ -399,6 +411,36 @@ export const TYPED_CONTACT = {
   /** The code screen after a 201 with `contact_unverified` — said under the lookup code. */
   done_no_notice:
     "Bạn sẽ KHÔNG nhận được thông báo nào về phản ánh này, vì số điện thoại chưa được xác nhận qua Zalo. Hãy giữ mã tra cứu, rồi mở ứng dụng này bằng chính tài khoản Zalo bạn đang dùng và tra cứu theo mã để biết phản ánh đi tới đâu.",
+} as const;
+
+/**
+ * ACCOUNTLESS PETITIONS (ADR 0083, TEMPORARY) — offered when Zalo refuses the ACCESS TOKEN, so no session can
+ * open at all. Every sentence that leads to it says, BEFORE the citizen chooses, what it costs (ADR 0080 cost #2,
+ * kept by ADR 0083 #7): no notification ever, and the code is the only way to follow it. No error code anywhere.
+ */
+export const ACCOUNTLESS = {
+  /** On the gate's result screen, above the button — sending. */
+  offer:
+    "Bà con vẫn gửi được phản ánh mà không cần tài khoản: điền như thường, kèm họ tên và số điện thoại để cán bộ xã liên hệ lại. Cách này không gửi kèm được ảnh, và bà con sẽ KHÔNG nhận được thông báo nào — bà con giữ mã phiếu để tự tra cứu.",
+  send_button: "Gửi phản ánh không cần tài khoản",
+  /** On the gate's result screen, above the button — looking up. */
+  lookup_offer: "Nếu bà con đã gửi phản ánh không cần tài khoản, bà con vẫn tra cứu được bằng mã phiếu đã nhận.",
+  lookup_button: "Tra cứu bằng mã phiếu",
+  /** In the form, above the contact fields. */
+  form_note:
+    "Bà con đang gửi không cần tài khoản. Bà con nhập họ tên và số điện thoại để cán bộ xã liên hệ lại. Bà con sẽ KHÔNG nhận được thông báo nào về phản ánh này; hãy giữ mã phiếu để tự tra cứu.",
+  /** Where the photo buttons would be. */
+  no_photos: "Gửi không cần tài khoản thì không gửi kèm được ảnh. Bà con mô tả thật rõ sự việc ở ô trên.",
+  /** Under the code after a 201. */
+  done_notice:
+    "Bà con sẽ KHÔNG nhận được thông báo nào về phản ánh này. Bà con chép lại hoặc chụp màn hình mã phiếu, rồi tra cứu theo mã để biết phản ánh đi tới đâu.",
+  follow: "Tra cứu phiếu này",
+  lookup_hint: "Nhập mã phiếu bà con nhận được khi gửi phản ánh không cần tài khoản.",
+  lookup_rate_limited:
+    "Bà con đã tra cứu nhiều lần trong một giờ qua. Bà con chờ một lúc rồi tra cứu lại, hoặc hỏi Bộ phận tiếp nhận của Ủy ban nhân dân xã.",
+  status_label: "Tình trạng",
+  /** The lookup shows no content, name or address — said, so the citizen does not think it was lost. */
+  lookup_scope: "Để giữ kín thông tin, tra cứu theo mã chỉ cho biết tình trạng, thời hạn và kết quả trả lời của xã.",
 } as const;
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
@@ -1074,6 +1116,14 @@ export const XA_PA = {
   location_without_button: "Bà con ghi rõ nơi xảy ra ở ô dưới: thôn, tổ, đường, số nhà.",
   so_dien_thoai: "Số điện thoại",
   goi_y_so: "Để cán bộ liên hệ khi cần",
+  // 08/10/2026 (owner): a session whose Zalo number is verified, with the name already filled, shows the name as
+  // one line to read — "Sửa" opens the box. `sender_summary_with_phone` is for the day the server attaches the
+  // verified number itself (`PhanAnhAppXa.tsx` `SERVER_ATTACHES_SESSION_PHONE`); until then the number box stays.
+  sender_summary: (name: string) => `Gửi với họ tên: ${name}`,
+  sender_summary_with_phone: (name: string) => `Gửi bằng: ${name} · số Zalo đã xác thực`,
+  sender_edit: "Sửa",
+  sender_edit_label: "Sửa họ tên người gửi",
+  sender_edit_label_with_phone: "Sửa họ tên và số điện thoại người gửi",
   // Photos left this list on 02/10/2026 — optional by the owner's decision (`anh_bat_buoc`).
   bat_buoc: "Bắt buộc: lĩnh vực, mô tả, vị trí, họ tên người gửi.",
   bat_buoc_an_danh: "Bắt buộc: lĩnh vực, mô tả, vị trí.",

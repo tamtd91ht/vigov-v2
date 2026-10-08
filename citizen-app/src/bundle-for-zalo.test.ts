@@ -45,6 +45,7 @@ import {
 // tệp test là để lại một cái tên không còn nói đúng việc ở hai tệp sản xuất.
 import { DUONG_DAN_YEU_CAU, thanYeuCau } from "./api/hop-dong-yeu-cau";
 import {
+  CLIENT_ERROR_PATH,
   COMMUNE_APP_SESSION_PATH,
   DUONG_DAN_PHIEN,
   LOCATION_PATH,
@@ -350,6 +351,7 @@ describe("bản đẩy lên Zalo — một bundle, đúng bằng thứ người 
     // 29/09/2026 — `vihat-miniapp` `POST /api/v1/location`. 0 = the location button cannot reach the
     // server; 2+ = a second caller appeared somewhere.
     expect(dem(LOCATION_PATH), "bundle phải nhắc tuyến đổi mã vị trí ĐÚNG MỘT lần").toBe(1);
+    expect(dem(CLIENT_ERROR_PATH), "bundle phải nhắc tuyến báo lỗi Zalo SDK ĐÚNG MỘT lần").toBe(1);
     expect(dem("locationToken"), "bundle không mang tên trường locationToken").toBeGreaterThan(0);
   });
 

@@ -412,7 +412,8 @@ describe("chính sách mô tả đúng thứ ứng dụng thật sự làm", () 
       "nhap-phan-anh": whole("nhap-phan-anh"),
       "anh-hien-truong": whole("anh-hien-truong"),
       "cac-quyen": 5,
-      "tung-quyen": 6,
+      // 08/10/2026 +1: "Chụp ảnh bằng máy ảnh của điện thoại (chooseImage)" — the new camera call (owner).
+      "tung-quyen": 7,
       "ghi-tep": 2,
       "cach-thuc": 7,
       "ben-thu-ba": 2,
@@ -423,7 +424,8 @@ describe("chính sách mô tả đúng thứ ứng dụng thật sự làm", () 
     expect(marked["anh-hien-truong"]).toBe(11);
     expect(marked["trang-xa"]).toBe(5);
     // 08/10/2026 (ADR 0080): phan-anh +1 — the typed-contact paragraph ("NẾU ZALO KHÔNG CHO ỨNG DỤNG SỐ…").
-    expect(marked["phan-anh"]).toBe(9);
+    // 08/10/2026 (ADR 0083): phan-anh +1 — the accountless paragraph ("NẾU ZALO KHÔNG CHO ỨNG DỤNG MÃ PHIÊN ZALO…").
+    expect(marked["phan-anh"]).toBe(10);
     expect(marked["nhap-phan-anh"]).toBe(4);
     expect(marked["chat-sms"]).toBe(6);
     // The opening sentence is a draft too (06/10/2026); it is not in `MUC_CHINH_SACH`, so it is checked here.

@@ -511,7 +511,10 @@ export const DOAN_CHINH_SACH_TUNG_QUYEN: readonly string[] = [
   // DRAFT 02/10/2026 (`PENDING_APPROVAL_MARK`): both permissions gained a second purpose in the commune app
   // (`zalo-api.ts` rows `camera` / `photos`, `nua: "ca-hai"`). "Ảnh không rời khỏi máy" now names its feature.
   "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Máy ảnh (requestCameraPermission) — để chụp lại một tấm danh thiếp giấy; và, trên trang của một xã, để bạn chụp ảnh hiện trường gửi kèm một phản ánh.",
-  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Chọn ảnh (openMediaPicker) — để bạn chọn ảnh tấm danh thiếp từ máy, và ảnh danh thiếp không rời khỏi máy; trên trang của một xã, còn để bạn chụp bằng máy ảnh của Zalo hoặc chọn tối đa 5 ảnh hiện trường gửi kèm một phản ánh, và những ảnh ấy được tải lên hệ thống của xã sau khi phản ánh đã được ghi nhận.",
+  // 08/10/2026: "Chụp ảnh" left this call for `chooseImage` (the phone's own camera, line below) — this one now
+  // only picks existing photos on a commune page.
+  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Chọn ảnh (openMediaPicker) — để bạn chọn ảnh tấm danh thiếp từ máy, và ảnh danh thiếp không rời khỏi máy; trên trang của một xã, còn để bạn chọn tối đa 5 ảnh hiện trường có sẵn gửi kèm một phản ánh, và những ảnh ấy được tải lên hệ thống của xã sau khi phản ánh đã được ghi nhận.",
+  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Chụp ảnh bằng máy ảnh của điện thoại (chooseImage) — trên trang của một xã, để bạn chụp ảnh hiện trường gửi kèm một phản ánh khi chính bạn bấm 'Chụp ảnh'; ảnh ấy được tải lên hệ thống của xã sau khi phản ánh đã được ghi nhận.",
   "Tải tệp (downloadFile) — để ghi tệp danh thiếp của chúng tôi xuống máy bạn.",
   // 06/10/2026 DRAFT: `getUserInfo` was `nua: "nha-nuoc"` (commune app only) when this list was written; the
   // shared App ID calls it too since 3fe60cd0 (`App.tsx` `QrCommuneApp` passes `layTenChoXa`). Only the name is

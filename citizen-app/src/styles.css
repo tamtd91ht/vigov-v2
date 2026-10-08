@@ -2457,6 +2457,18 @@ body {
   resize: vertical;
 }
 
+/* The commune send form's description box only (owner, 08/10/2026 — a six-line box pushed the rest of the form
+   under the keyboard): three lines to start, grown with the text by `o-nhap.tsx` `fitToContent`, capped at ten
+   lines, then it scrolls. `line-height` is fixed here so the ten-line cap in `em` is exact (10 × 1.5em, plus
+   20px padding and 4px border). The touch minimum stays the one every box keeps. */
+.cd-o__nhap--grow {
+  min-height: calc(var(--tap-min) + 4px);
+  max-height: calc(10 * 1.5em + 24px);
+  line-height: 1.5;
+  resize: none;
+  overflow-y: auto;
+}
+
 .cd-o__nhap:focus-visible {
   outline: 3px solid var(--navy);
   outline-offset: 2px;

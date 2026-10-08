@@ -42,6 +42,7 @@ import { layPhienViGov } from "../api/phien-vigov";
 import { BieuTuong, type TenBieuTuong } from "./BieuTuong";
 import {
   createSessionGate,
+  offersAccountless,
   offersManualSend,
   type SessionGate,
   sessionGateMessage,
@@ -53,6 +54,7 @@ import { ThanDanhBaXa, useDanhBaXa } from "./DanhBaXa";
 import { DauManCon, KhoiTrangThai, RootTabHeader, SectionHeader, type SectionAccent, type Tone, TrangCon } from "./khung-xa";
 import { type OpenExternal, useLeaveApp } from "./leave-app";
 import {
+  ACCOUNTLESS,
   APP_RIENG,
   COMMUNE_APP_SESSION,
   COMMUNE_OFFICE,
@@ -69,6 +71,7 @@ import {
   zaloSupportCode,
 } from "./noi-dung";
 import {
+  AccountlessLookup,
   CommuneSendScreen,
   ListStatus,
   type MyPetitions,
@@ -119,6 +122,9 @@ type ManXa =
   | { readonly kieu: "danh-ba" }
   | { readonly kieu: "tra-cuu" }
   | { readonly kieu: "tra-cuu-phieu" }
+  /** ADR 0083 (TEMPORARY): the accountless send, and its public lookup (`ma` "" = the citizen types it). */
+  | { readonly kieu: "gui-khong-tai-khoan" }
+  | { readonly kieu: "tra-cuu-khong-tai-khoan"; readonly ma: string }
   | { readonly kieu: "truyen-thanh" }
   | { readonly kieu: "video" }
   | { readonly kieu: "ban-do" }
@@ -686,6 +692,11 @@ export function SessionGateScreen(props: {
   onDecline: () => void;
   /** "Gửi bằng họ tên và số điện thoại" — absent = never offered (tests that pin the older screen). */
   onManual?: () => void;
+  /**
+   * The accountless path (ADR 0083): "Gửi phản ánh không cần tài khoản" / "Tra cứu bằng mã phiếu" — only where
+   * `offersAccountless` says (Zalo refused the access token). Absent = never offered.
+   */
+  onAccountless?: () => void;
   onClose: () => void;
 }) {
   const { state } = props;
@@ -693,6 +704,10 @@ export function SessionGateScreen(props: {
     state.kieu === "ket-qua" &&
     props.onManual !== undefined &&
     offersManualSend(state.outcome, props.task, state.zalo);
+  const accountless =
+    state.kieu === "ket-qua" &&
+    props.onAccountless !== undefined &&
+    offersAccountless(state.outcome, props.task, state.zalo);
   return (
     <>
       <DauManCon tieu_de={PHONE_VERIFICATION.title} onQuayLai={props.onClose} />
@@ -738,6 +753,15 @@ export function SessionGateScreen(props: {
                 <p id="xa-cong-tu-nhap">{TYPED_CONTACT.offer}</p>
                 <button type="button" className="xa-nut" onClick={props.onManual}>
                   {TYPED_CONTACT.button}
+                </button>
+              </section>
+            )}
+            {/* What the path costs is said ABOVE the button, before the citizen chooses it (ADR 0080 cost #2). */}
+            {accountless && (
+              <section className="xa-the xa-the--dem xa-khoi" aria-labelledby="xa-cong-khong-tk">
+                <p id="xa-cong-khong-tk">{props.task === "lookup" ? ACCOUNTLESS.lookup_offer : ACCOUNTLESS.offer}</p>
+                <button type="button" className="xa-nut" onClick={props.onAccountless}>
+                  {props.task === "lookup" ? ACCOUNTLESS.lookup_button : ACCOUNTLESS.send_button}
                 </button>
               </section>
             )}
@@ -881,6 +905,7 @@ function AppCuaXa(props: {
           pickScenePhotos={props.pickScenePhotos}
           draftStore={props.draftStore}
           typedContact={layPhienViGov()?.phone_verified === false}
+          verifiedPhone={layPhienViGov()?.phone_verified === true}
           onBack={ve}
           onSessionLost={sessionLost("submit")}
           onSent={() => void petitions.load()}
@@ -906,6 +931,26 @@ function AppCuaXa(props: {
       break;
     case "tra-cuu":
       man_con = <TraCuuHoSoXa onQuayLai={ve} />;
+      break;
+    case "gui-khong-tai-khoan":
+      // ADR 0083: no session exists on this path, so nothing here can lose one; `onSessionLost` / `onSent` are
+      // never called by the accountless send (`CommuneSendScreen`). No photo picker (no photo route for these),
+      // no location exchange (it needs the access token Zalo refused) — the screen drops both anyway.
+      man_con = (
+        <CommuneSendScreen
+          ten_xa={xa.ten}
+          ho_ten={shownName}
+          draftStore={props.draftStore}
+          accountless={{ domain: ten_mien }}
+          onBack={ve}
+          onSessionLost={() => {}}
+          onSent={() => {}}
+          onOpenPetition={(ma) => datMan({ kieu: "tra-cuu-khong-tai-khoan", ma })}
+        />
+      );
+      break;
+    case "tra-cuu-khong-tai-khoan":
+      man_con = <AccountlessLookup key={man.ma} domain={ten_mien} initialCode={man.ma} onBack={() => veTab("phan-anh")} />;
       break;
     case "tra-cuu-phieu":
       man_con = (
@@ -994,6 +1039,11 @@ function AppCuaXa(props: {
         onAllow={() => void gate.allow()}
         onDecline={gate.decline}
         onManual={() => void gate.manual()}
+        onAccountless={() => {
+          // Leave the gate for the accountless screen (ADR 0083). The pending act is dropped: it needs a session.
+          gate.reset();
+          datMan(gateTask === "lookup" ? { kieu: "tra-cuu-khong-tai-khoan", ma: "" } : { kieu: "gui-khong-tai-khoan" });
+        }}
         onClose={gate.reset}
       />
     );
@@ -1128,7 +1178,7 @@ export function TrangXa(props: {
    */
   getSceneLocation?: GetSceneLocation;
   /**
-   * Chụp / chọn ảnh hiện trường (`requestCameraPermission` + `openMediaPicker`), do lớp vỏ tiêm — app riêng của
+   * Chụp / chọn ảnh hiện trường (`requestCameraPermission` + `chooseImage` / `openMediaPicker`), do lớp vỏ tiêm — app riêng của
    * xã (`AppRieng`) và app chung qua QR xã (`QrCommuneApp`, owner 06/10/2026). Không truyền thì không có nút ảnh
    * nào (test).
    */
@@ -1157,8 +1207,15 @@ export function TrangXa(props: {
    * là chữ thường và ảnh trỏ ra ngoài không bấm được.
    */
   openLink?: OpenExternal;
+  /**
+   * Told the commune's name once its PUBLIC lookup succeeded — only the shared app's QR path passes it, to put the
+   * name on Zalo's own top bar (owner, 08/10/2026). Never called with an empty name, nor on a failed lookup: the
+   * shell then keeps its own title rather than a guessed commune.
+   */
+  onCommuneShown?: (communeName: string) => void;
 }) {
   const { ten_mien, lay_ten, getSceneLocation, pickScenePhotos, draftStore, openSession, openVideo, openLink } = props;
+  const { onCommuneShown } = props;
   const [trang, datTrang] = useState<TrangTra>({ kieu: "dang-tra" });
   /** Mỗi lần bấm "Thử lại" tăng một — hiệu ứng tra chạy lại đúng một lần cho mỗi giá trị. */
   const [lan, datLan] = useState(0);
@@ -1202,6 +1259,11 @@ export function TrangXa(props: {
     };
     // Tên miền là hằng của bản dựng; chỉ `lan` đổi.
   }, [lan]);
+
+  const communeName = trang.kieu === "xong" ? trang.xa.ten.trim() : "";
+  useEffect(() => {
+    if (communeName !== "") onCommuneShown?.(communeName);
+  }, [communeName, onCommuneShown]);
 
   if (trang.kieu === "xong") {
     return (
