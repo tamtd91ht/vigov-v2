@@ -141,6 +141,17 @@ type StaffNotice struct {
 	Title      string
 	Body       string
 	Link       string
+	// DueSoonItems is set on a due-soon notice only (comms.proto StaffNotification.due_soon_items):
+	// the records Body counts, each with its STORED deadline, so comms can apply the commune's Zalo
+	// lead to the Zalo copy. Built from the very records Body is built from — never a second
+	// selection that could name a record the recipient may not see (ADR 0030).
+	DueSoonItems []DueSoonItem
+}
+
+// DueSoonItem is one record of a due-soon digest: its business code and its deadline as stored.
+type DueSoonItem struct {
+	Code     string
+	Deadline time.Time
 }
 
 // Contract bounds of a notice (comms.proto StaffNotification).
@@ -148,6 +159,9 @@ const (
 	noticeTitleMax = 200
 	noticeBodyMax  = 500
 	noticeKeyMax   = 200
+	// MaxDueSoonItems is comms' bound on due_soon_items. Past it the EARLIEST deadlines are sent —
+	// the ones a Zalo lead narrower than the bell window keeps first (comms.proto).
+	MaxDueSoonItems = 500
 )
 
 // LocalDay is the Asia/Ho_Chi_Minh date of t, "2006-01-02" — the date the key recipes name.
@@ -298,19 +312,52 @@ func capitalise(s string) string {
 	return strings.ToUpper(string(r[0])) + string(r[1:])
 }
 
-// DueSoonNotice is the per-person digest: "Bạn có 3 nhiệm vụ sắp đến hạn", listing the codes.
-func DueSoonNotice(kind AutomationWorkKind, day, recipient string, codes []string) StaffNotice {
-	sorted := append([]string(nil), codes...)
-	sortStrings(sorted)
-	return StaffNotice{
-		Key:        DueSoonKey(kind, day, recipient),
-		Kind:       NoticeDueSoon,
-		Work:       kind,
-		Recipients: []string{recipient},
-		Title:      fmt.Sprintf("Bạn có %d %s sắp đến hạn xử lý", len(sorted), kind.noun()),
-		Body:       codeList("Gồm: ", sorted),
-		Link:       kind.DueSoonLink(),
+// DueSoonNotice is the per-person digest: "Bạn có 3 nhiệm vụ sắp đến hạn", listing the codes. recs are
+// the records the runner chose for THIS recipient; title and body count every one of them, and the
+// items are the same records — so the restricted-petition rule the runner applied holds for both.
+func DueSoonNotice(kind AutomationWorkKind, day, recipient string, recs []AutomationRecord) StaffNotice {
+	codes := make([]string, 0, len(recs))
+	for _, x := range recs {
+		codes = append(codes, x.Code)
 	}
+	sortStrings(codes)
+	return StaffNotice{
+		Key:          DueSoonKey(kind, day, recipient),
+		Kind:         NoticeDueSoon,
+		Work:         kind,
+		Recipients:   []string{recipient},
+		Title:        fmt.Sprintf("Bạn có %d %s sắp đến hạn xử lý", len(codes), kind.noun()),
+		Body:         codeList("Gồm: ", codes),
+		Link:         kind.DueSoonLink(),
+		DueSoonItems: dueSoonItems(recs),
+	}
+}
+
+// dueSoonItems copies each record's code and STORED deadline (rule 10, invariant 2 — nothing is
+// computed), one item per code (comms refuses a repeated code; a repeat keeps its earliest deadline),
+// earliest deadline first, at most MaxDueSoonItems. The order is total (deadline, then code), so a
+// retried run sends the same request.
+func dueSoonItems(recs []AutomationRecord) []DueSoonItem {
+	byCode := make(map[string]time.Time, len(recs))
+	for _, x := range recs {
+		if d, ok := byCode[x.Code]; !ok || x.Deadline.Before(d) {
+			byCode[x.Code] = x.Deadline
+		}
+	}
+	out := make([]DueSoonItem, 0, len(byCode))
+	for c, d := range byCode {
+		out = append(out, DueSoonItem{Code: c, Deadline: d})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if !out[i].Deadline.Equal(out[j].Deadline) {
+			return out[i].Deadline.Before(out[j].Deadline)
+		}
+		return out[i].Code < out[j].Code
+	})
+	if len(out) > MaxDueSoonItems {
+		out = out[:MaxDueSoonItems]
+	}
+	return out
 }
 
 // OverdueNotice is one late record, once per day late.

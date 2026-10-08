@@ -24,6 +24,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	commsv1 "github.com/vihat/vigov/core/gen/vigov/comms/v1"
 	"github.com/vihat/vigov/core/grpcx"
@@ -53,6 +54,17 @@ type Notice struct {
 	Title          string
 	Body           string
 	Link           string
+	// DueSoonItems is set on a due-soon notice only (StaffNotification.due_soon_items): the records
+	// Body counts, each with its STORED deadline, so comms can apply the commune's Zalo lead to the
+	// Zalo copy. Empty is the old producer's shape — comms then sends the bell's text unchanged.
+	DueSoonItems []DueSoonItem
+}
+
+// DueSoonItem is one record of a due-soon notice: its business code and its deadline as stored. The
+// producer copies the deadline; it never computes one here (rule 10, invariant 2).
+type DueSoonItem struct {
+	Code     string
+	Deadline time.Time
 }
 
 // Delivery is comms' answer for one notice, mapped by key.
@@ -139,6 +151,7 @@ func (c *Client) DeliverStaffNotifications(ctx context.Context, notices []Notice
 			Title:          n.Title,
 			Body:           n.Body,
 			Link:           n.Link,
+			DueSoonItems:   dueSoonItemsToWire(n.DueSoonItems),
 		})
 	}
 	if recipients > MaxRecipientsPerCall {
@@ -172,6 +185,19 @@ func (c *Client) DeliverStaffNotifications(ctx context.Context, notices []Notice
 			len(out), len(notices))
 	}
 	return out, nil
+}
+
+// dueSoonItemsToWire maps items one to one, in the caller's order. Nil for none, so a notice without
+// items is byte for byte the request an older producer sent.
+func dueSoonItemsToWire(items []DueSoonItem) []*commsv1.DueSoonItem {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]*commsv1.DueSoonItem, 0, len(items))
+	for _, it := range items {
+		out = append(out, &commsv1.DueSoonItem{Code: it.Code, Deadline: timestamppb.New(it.Deadline)})
+	}
+	return out
 }
 
 func wrapCallError(method string, err error) error {

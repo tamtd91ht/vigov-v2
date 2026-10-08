@@ -173,7 +173,7 @@ func (r *AutomationRunner) slaReminders(ctx context.Context, asOf time.Time) (au
 
 	// 5. THE NOTICES.
 	day := domain.LocalDay(asOf)
-	perPerson := map[string][]string{}
+	perPerson := map[string][]domain.AutomationRecord{}
 	for _, x := range soon {
 		to := book.chain(x)
 		if len(to) == 0 {
@@ -181,7 +181,7 @@ func (r *AutomationRunner) slaReminders(ctx context.Context, asOf time.Time) (au
 			continue
 		}
 		for _, ma := range to {
-			perPerson[ma] = append(perPerson[ma], x.Code)
+			perPerson[ma] = append(perPerson[ma], x)
 		}
 	}
 	for _, ma := range sortedKeys(perPerson) {
@@ -413,10 +413,13 @@ func automationPages(notices []domain.StaffNotice) ([][]commsclient.Notice, erro
 			return nil, fmt.Errorf("việc nền: loại thông báo không biết")
 		}
 		to := domain.CleanRecipients(n.Recipients)
+		items := commsDueSoonItems(n.DueSoonItems)
 		for start := 0; start < len(to); start += maxRecipientsPerNotice {
 			end := min(start+maxRecipientsPerNotice, len(to))
+			// A due-soon notice has one recipient, so it is never split; were it split, every part
+			// speaks for the same documents and carries the same items.
 			parts = append(parts, commsclient.Notice{IdempotencyKey: n.Key, Kind: kind,
-				RecipientMa: to[start:end], Title: n.Title, Body: n.Body, Link: n.Link})
+				RecipientMa: to[start:end], Title: n.Title, Body: n.Body, Link: n.Link, DueSoonItems: items})
 		}
 	}
 
@@ -444,6 +447,19 @@ func automationPages(notices []domain.StaffNotice) ([][]commsclient.Notice, erro
 	}
 	flush()
 	return pages, nil
+}
+
+// commsDueSoonItems copies the plan's items as they are — code and STORED deadline, in the plan's
+// order (domain.DueSoonNotice already de-duplicated, sorted and capped them). Nil for none.
+func commsDueSoonItems(items []domain.DueSoonItem) []commsclient.DueSoonItem {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]commsclient.DueSoonItem, 0, len(items))
+	for _, it := range items {
+		out = append(out, commsclient.DueSoonItem{Code: it.Code, Deadline: it.Deadline})
+	}
+	return out
 }
 
 // commsKind names the wire kind. Every notice of this service is a DOCUMENT kind (9–12), so a commune

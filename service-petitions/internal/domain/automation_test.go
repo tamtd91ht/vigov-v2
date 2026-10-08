@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -48,7 +49,7 @@ func TestNoticesCarryCodeOnly(t *testing.T) {
 		OverdueNotice(AutomationCitizenReport, r, "2026-09-29", []string{"CB-1"}),
 		UnassignedNotice(AutomationCitizenReport, r, []string{"CB-1"}),
 		EscalationNotice(AutomationCitizenReport, r, EscalationChairman, []string{"CB-1"}),
-		DueSoonNotice(AutomationCitizenReport, "2026-09-29", "CB-1", []string{r.Code}),
+		DueSoonNotice(AutomationCitizenReport, "2026-09-29", "CB-1", []AutomationRecord{r}),
 	}
 	for _, n := range notices {
 		text := n.Title + " " + n.Body + " " + n.Link
@@ -73,16 +74,87 @@ func TestNoticesCarryCodeOnly(t *testing.T) {
 }
 
 func TestDueSoonBodyStaysInBound(t *testing.T) {
-	codes := make([]string, 200)
-	for i := range codes {
-		codes[i] = "NV-2026-" + strings.Repeat("9", 6)
+	recs := make([]AutomationRecord, 200)
+	for i := range recs {
+		recs[i] = AutomationRecord{Code: "NV-2026-" + strings.Repeat("9", 6), Deadline: claimedAt}
 	}
-	n := DueSoonNotice(AutomationTask, "2026-09-29", "CB-1", codes)
+	n := DueSoonNotice(AutomationTask, "2026-09-29", "CB-1", recs)
 	if len([]rune(n.Body)) > noticeBodyMax || !strings.Contains(n.Body, "mục khác") {
 		t.Errorf("nội dung %d ký tự, muốn ≤ %d và có phần 'mục khác': %q", len([]rune(n.Body)), noticeBodyMax, n.Body)
 	}
 	if n.Title != "Bạn có 200 nhiệm vụ sắp đến hạn xử lý" || n.Link != "/nhiem-vu?soon=true" {
 		t.Errorf("tiêu đề/đường dẫn = %q %q", n.Title, n.Link)
+	}
+}
+
+// THE ITEMS ARE THE BODY'S RECORDS WITH THEIR STORED DEADLINES — copied, never computed (rule 10,
+// invariant 2); one per code; and the key is the recipe's, unchanged by them.
+func TestDueSoonItemsCopyStoredDeadlines(t *testing.T) {
+	d1 := time.Date(2026, 9, 30, 9, 15, 0, 0, time.UTC)
+	d2 := time.Date(2026, 9, 29, 10, 0, 0, 0, AutomationZone) // a non-UTC location is kept as read
+	recs := []AutomationRecord{
+		{ID: "nv-b", Code: "NV-B", Deadline: d1},
+		{ID: "nv-a", Code: "NV-A", Deadline: d2},
+	}
+	n := DueSoonNotice(AutomationTask, "2026-09-29", "CB-1", recs)
+	if n.Key != "sla_reminders:due_soon:nhiem-vu:2026-09-29:CB-1" {
+		t.Errorf("khoá = %q — các mục không được đổi khoá", n.Key)
+	}
+	want := []DueSoonItem{{Code: "NV-A", Deadline: d2}, {Code: "NV-B", Deadline: d1}}
+	if len(n.DueSoonItems) != len(want) {
+		t.Fatalf("mục = %+v, muốn %+v", n.DueSoonItems, want)
+	}
+	for i, w := range want {
+		g := n.DueSoonItems[i]
+		if g.Code != w.Code || g.Deadline != w.Deadline { // == on purpose: the very value stored, not an equal instant
+			t.Errorf("mục %d = %+v, muốn %+v", i, g, w)
+		}
+	}
+	if n.Title != "Bạn có 2 nhiệm vụ sắp đến hạn xử lý" || n.Body != "Gồm: NV-A, NV-B." {
+		t.Errorf("tiêu đề/nội dung = %q %q", n.Title, n.Body)
+	}
+
+	// A code twice (one recipient through two paths can never happen today, but comms refuses a repeat
+	// outright): one item, the earliest stored deadline of the two.
+	dup := DueSoonNotice(AutomationTask, "2026-09-29", "CB-1", append(recs, AutomationRecord{ID: "nv-b2", Code: "NV-B", Deadline: d2}))
+	if len(dup.DueSoonItems) != 2 || dup.DueSoonItems[1].Code != "NV-B" || !dup.DueSoonItems[1].Deadline.Equal(d2) {
+		t.Errorf("mã lặp = %+v", dup.DueSoonItems)
+	}
+
+	// Only due-soon notices carry items (comms: a non-empty list on another kind is INVALID_ARGUMENT).
+	r := recs[0]
+	for _, other := range []StaffNotice{
+		OverdueNotice(AutomationTask, r, "2026-09-29", []string{"CB-1"}),
+		UnassignedNotice(AutomationTask, r, []string{"CB-1"}),
+		EscalationNotice(AutomationTask, r, EscalationUnitHead, []string{"CB-1"}),
+		TaskDigestNotice("2026-W40", 1, 1, 1, []string{"CB-1"}),
+	} {
+		if len(other.DueSoonItems) != 0 {
+			t.Errorf("%q mang mục sắp đến hạn", other.Title)
+		}
+	}
+}
+
+// More than 500 for one person: the 500 EARLIEST deadlines go as items, while title and body still
+// count every record.
+func TestDueSoonItemsCapKeepsEarliest(t *testing.T) {
+	const n = MaxDueSoonItems + 37
+	recs := make([]AutomationRecord, 0, n)
+	for i := n - 1; i >= 0; i-- { // fed latest first, so the cap cannot pass by input order
+		recs = append(recs, AutomationRecord{ID: fmt.Sprintf("nv-%04d", i), Code: fmt.Sprintf("NV-%04d", i),
+			Deadline: claimedAt.Add(time.Duration(i) * time.Minute)})
+	}
+	got := DueSoonNotice(AutomationTask, "2026-09-29", "CB-1", recs)
+	if len(got.DueSoonItems) != MaxDueSoonItems {
+		t.Fatalf("%d mục, muốn %d", len(got.DueSoonItems), MaxDueSoonItems)
+	}
+	for i, it := range got.DueSoonItems {
+		if it.Code != fmt.Sprintf("NV-%04d", i) {
+			t.Fatalf("mục %d = %s — không phải hạn sớm nhất", i, it.Code)
+		}
+	}
+	if got.Title != fmt.Sprintf("Bạn có %d nhiệm vụ sắp đến hạn xử lý", n) {
+		t.Errorf("tiêu đề phải đếm đủ %d: %q", n, got.Title)
 	}
 }
 

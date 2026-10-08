@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -50,7 +51,7 @@ func TestAutomationNoticesCarryCodeOnly(t *testing.T) {
 		OverdueNotice(r, "2026-09-29", []string{"CB-1"}),
 		UnassignedNotice(r, []string{"CB-1"}),
 		EscalationNotice(r, EscalationChairman, []string{"CB-1"}),
-		DueSoonNotice("2026-09-29", "CB-1", []string{r.Code}),
+		DueSoonNotice("2026-09-29", "CB-1", []AutomationRecord{r}),
 	}
 	for _, n := range notices {
 		text := n.Title + " " + n.Body + " " + n.Link
@@ -75,16 +76,85 @@ func TestAutomationNoticesCarryCodeOnly(t *testing.T) {
 }
 
 func TestAutomationDueSoonBodyStaysInBound(t *testing.T) {
-	codes := make([]string, 200)
-	for i := range codes {
-		codes[i] = MaVanBanDen(2026, i+1)
+	recs := make([]AutomationRecord, 200)
+	for i := range recs {
+		recs[i] = AutomationRecord{Code: MaVanBanDen(2026, i+1), Deadline: claimedAt}
 	}
-	n := DueSoonNotice("2026-09-29", "CB-1", codes)
+	n := DueSoonNotice("2026-09-29", "CB-1", recs)
 	if len([]rune(n.Body)) > noticeBodyMax || !strings.Contains(n.Body, "mục khác") {
 		t.Errorf("nội dung %d ký tự, muốn ≤ %d và có phần 'mục khác'", len([]rune(n.Body)), noticeBodyMax)
 	}
 	if n.Title != "Bạn có 200 văn bản đến sắp đến hạn xử lý" || n.Link != "/van-ban?metric=open" {
 		t.Errorf("tiêu đề/đường dẫn = %q %q", n.Title, n.Link)
+	}
+}
+
+// The items are the documents the body counts, each with the deadline AS STORED (same value, location
+// included — nothing computed), one per code, earliest first; other kinds carry none.
+func TestDueSoonItemsCopyStoredDeadlines(t *testing.T) {
+	d1 := time.Date(2026, 9, 30, 9, 15, 0, 0, time.UTC)
+	d2 := time.Date(2026, 9, 29, 10, 0, 0, 0, AutomationZone) // a non-UTC location is kept as read
+	recs := []AutomationRecord{
+		{ID: "vb-b", Code: "VB-DEN-2026-0002", Deadline: d1},
+		{ID: "vb-a", Code: "VB-DEN-2026-0001", Deadline: d2},
+	}
+	n := DueSoonNotice("2026-09-29", "CB-1", recs)
+	if n.Key != "sla_reminders:due_soon:van-ban-den:2026-09-29:CB-1" {
+		t.Errorf("khoá = %q — các mục không được đổi khoá", n.Key)
+	}
+	want := []DueSoonItem{{Code: "VB-DEN-2026-0001", Deadline: d2}, {Code: "VB-DEN-2026-0002", Deadline: d1}}
+	if len(n.DueSoonItems) != len(want) {
+		t.Fatalf("mục = %+v, muốn %+v", n.DueSoonItems, want)
+	}
+	for i, w := range want {
+		g := n.DueSoonItems[i]
+		if g.Code != w.Code || g.Deadline != w.Deadline { // == on purpose: the very value stored, not an equal instant
+			t.Errorf("mục %d = %+v, muốn %+v", i, g, w)
+		}
+	}
+	if n.Title != "Bạn có 2 văn bản đến sắp đến hạn xử lý" || n.Body != "Gồm: VB-DEN-2026-0001, VB-DEN-2026-0002." {
+		t.Errorf("tiêu đề/nội dung = %q %q", n.Title, n.Body)
+	}
+
+	// A code twice: one item, the earliest stored deadline of the two.
+	dup := DueSoonNotice("2026-09-29", "CB-1", append(recs, AutomationRecord{ID: "vb-b2", Code: "VB-DEN-2026-0002", Deadline: d2}))
+	if len(dup.DueSoonItems) != 2 || dup.DueSoonItems[1].Code != "VB-DEN-2026-0002" || !dup.DueSoonItems[1].Deadline.Equal(d2) {
+		t.Errorf("mã lặp = %+v", dup.DueSoonItems)
+	}
+
+	// Only due-soon notices carry items (comms: a non-empty list on another kind is INVALID_ARGUMENT).
+	r := AutomationRecord{ID: "vb-b", Code: "VB-DEN-2026-0002", Deadline: d1, HoldStartedAt: d2}
+	for _, other := range []StaffNotice{
+		OverdueNotice(r, "2026-09-29", []string{"CB-1"}),
+		UnassignedNotice(r, []string{"CB-1"}),
+		EscalationNotice(r, EscalationUnitHead, []string{"CB-1"}),
+		IncomingDigestNotice("2026-W40", 1, 1, []string{"CB-1"}),
+	} {
+		if len(other.DueSoonItems) != 0 {
+			t.Errorf("%q mang mục sắp đến hạn", other.Title)
+		}
+	}
+}
+
+// Past the contract's 500 the EARLIEST deadlines are kept; the title still counts every document.
+func TestDueSoonItemsCapKeepsEarliest(t *testing.T) {
+	const n = MaxDueSoonItems + 37
+	recs := make([]AutomationRecord, 0, n)
+	for i := n - 1; i >= 0; i-- { // fed latest first, so the cap cannot pass by input order
+		recs = append(recs, AutomationRecord{ID: fmt.Sprintf("vb-%04d", i), Code: MaVanBanDen(2026, i+1),
+			Deadline: claimedAt.Add(time.Duration(i) * time.Minute)})
+	}
+	got := DueSoonNotice("2026-09-29", "CB-1", recs)
+	if len(got.DueSoonItems) != MaxDueSoonItems {
+		t.Fatalf("%d mục, muốn %d", len(got.DueSoonItems), MaxDueSoonItems)
+	}
+	for i, it := range got.DueSoonItems {
+		if it.Code != MaVanBanDen(2026, i+1) {
+			t.Fatalf("mục %d = %s — không phải hạn sớm nhất", i, it.Code)
+		}
+	}
+	if got.Title != fmt.Sprintf("Bạn có %d văn bản đến sắp đến hạn xử lý", n) {
+		t.Errorf("tiêu đề phải đếm đủ %d: %q", n, got.Title)
 	}
 }
 

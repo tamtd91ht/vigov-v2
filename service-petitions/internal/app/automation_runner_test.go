@@ -499,6 +499,109 @@ func TestRestrictedPetitionFailsClosed(t *testing.T) {
 	}
 }
 
+// The due-soon digest's items (ADR 0079 lô 5 Q13) are exactly the records its body counts for THAT
+// recipient, with their stored deadlines: a restricted petition reaches the items of only those its
+// body reaches — never the leadership, never a unit holder without `feedback.restricted`. Keys are the
+// recipe's literals, unchanged by the items. Read from the plan: the wire mapping lives in
+// core/commsclient.
+func TestDueSoonItemsFollowTheBodyAndTheRestrictedRule(t *testing.T) {
+	h := newHarness(t, communeA)
+	h.identity.holders[communeA] = map[string]map[string][]string{
+		permFeedbackAssign:     {"bp-1": {"CB-HEAD", "CB-DEPUTY"}},
+		permFeedbackRestricted: {"bp-1": {"CB-DEPUTY"}},
+	}
+	h.identity.leaders[communeA] = []string{"CB-LD"}
+	dOpen := soonDue
+	dNamed := soonDue.Add(30 * time.Minute)
+	dRestr := soonDue.Add(time.Hour).In(domain.AutomationZone)
+	h.reports.byCommune[communeA] = []domain.AutomationRecord{
+		{ID: "pa-open", Code: "PA-OPEN0001", Field: "moi-truong", Deadline: dOpen, OrgUnitID: "bp-1"},
+		{ID: "pa-named", Code: "PA-NAMED001", Field: "moi-truong", Deadline: dNamed, AssigneeMa: "CB-HEAD"},
+		{ID: "pa-restr", Code: "PA-RESTR001", Field: domain.LinhVucHanChe, Deadline: dRestr, OrgUnitID: "bp-1", Restricted: true},
+		{ID: "pa-orphan", Code: "PA-ORPHAN01", Field: domain.LinhVucHanChe, Deadline: dOpen, Restricted: true},
+		{ID: "pa-late", Code: "PA-LATE0001", Field: "moi-truong", Deadline: missed, AssigneeMa: "CB-HEAD"},
+	}
+	ctx := tenant.Into(context.Background(), communeA)
+	p, err := h.runner.slaReminders(ctx, domain.AutomationCitizenReport, runAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stored := map[string]time.Time{}
+	for _, x := range h.reports.byCommune[communeA] {
+		stored[x.Code] = x.Deadline
+	}
+	want := map[string]string{ // key -> the codes the body and the items both name
+		"sla_reminders:due_soon:phan-anh:2026-09-29:CB-HEAD":   "PA-NAMED001,PA-OPEN0001",
+		"sla_reminders:due_soon:phan-anh:2026-09-29:CB-DEPUTY": "PA-OPEN0001,PA-RESTR001",
+	}
+	got := 0
+	for _, n := range p.notices {
+		if n.Kind != domain.NoticeDueSoon {
+			if len(n.DueSoonItems) != 0 {
+				t.Errorf("%s không phải sắp đến hạn mà mang mục", n.Key)
+			}
+			continue
+		}
+		got++
+		codes, ok := want[n.Key]
+		if !ok {
+			t.Errorf("khoá sắp đến hạn lạ %q — phiếu hạn chế tới người không được xem?", n.Key)
+			continue
+		}
+		var itemCodes []string
+		for _, it := range n.DueSoonItems {
+			itemCodes = append(itemCodes, it.Code)
+			if it.Deadline != stored[it.Code] { // the stored value itself, location included
+				t.Errorf("%s: hạn của %s = %v, muốn hạn đã lưu %v", n.Key, it.Code, it.Deadline, stored[it.Code])
+			}
+		}
+		sort.Strings(itemCodes)
+		if strings.Join(itemCodes, ",") != codes || n.Body != "Gồm: "+strings.ReplaceAll(codes, ",", ", ")+"." {
+			t.Errorf("%s: mục %v, nội dung %q — muốn cùng %s", n.Key, itemCodes, n.Body, codes)
+		}
+	}
+	if got != len(want) {
+		t.Errorf("%d thông báo sắp đến hạn, muốn %d", got, len(want))
+	}
+	if !p.withoutRecipient["pa-orphan"] {
+		t.Errorf("phiếu hạn chế không bộ phận, không người phải là 'không người nhận', không tới lãnh đạo: %v", p.withoutRecipient)
+	}
+}
+
+// End to end through Tick: what comms receives on a due-soon notice is the plan's items, each with
+// the deadline as stored (same instant, nothing recomputed); every other kind carries none.
+func TestDueSoonItemsReachComms(t *testing.T) {
+	h := newHarness(t, communeA)
+	dLater := soonDue.Add(45 * time.Minute)
+	h.tasks.byCommune[communeA] = []domain.AutomationRecord{
+		{ID: "nv-late", Code: "NV-FAKE-01", Status: "dang-thuc-hien", Deadline: missed, AssigneeMa: "CB-001"},
+		{ID: "nv-soon2", Code: "NV-FAKE-03", Status: "dang-thuc-hien", Deadline: dLater, AssigneeMa: "CB-001"},
+		{ID: "nv-soon1", Code: "NV-FAKE-02", Status: "dang-thuc-hien", Deadline: soonDue, AssigneeMa: "CB-001"},
+	}
+	h.claim(communeA, "run-1", jobSLA, kindTask)
+	h.runner.Tick(context.Background())
+
+	dueSoon := 0
+	for _, d := range h.comms.delivered {
+		if d.n.Kind != commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_DUE_SOON {
+			if len(d.n.DueSoonItems) != 0 {
+				t.Errorf("%s không phải sắp đến hạn mà mang %d mục", d.n.IdempotencyKey, len(d.n.DueSoonItems))
+			}
+			continue
+		}
+		dueSoon++
+		it := d.n.DueSoonItems
+		if len(it) != 2 || it[0].Code != "NV-FAKE-02" || !it[0].Deadline.Equal(soonDue) ||
+			it[1].Code != "NV-FAKE-03" || !it[1].Deadline.Equal(dLater) {
+			t.Errorf("mục tới comms = %+v, muốn NV-FAKE-02@%v rồi NV-FAKE-03@%v", it, soonDue, dLater)
+		}
+	}
+	if dueSoon != 1 {
+		t.Fatalf("comms nhận %d thông báo sắp đến hạn, muốn 1", dueSoon)
+	}
+}
+
 // Every notice shape → its per-domain wire kind (ADR 0079 lô 2 Q3), under the SAME keys it had when it
 // went out as the legacy DUE_SOON / OVERDUE / ESCALATION. The keys are literals on purpose: comms
 // deduplicates on (commune, key, recipient), so a key that moved with the kind would re-deliver every

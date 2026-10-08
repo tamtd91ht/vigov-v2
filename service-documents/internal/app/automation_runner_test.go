@@ -447,6 +447,61 @@ func TestRecipientChainAndUnassignedHold(t *testing.T) {
 	}
 }
 
+// End to end through Tick (ADR 0079 lô 5 Q13): each recipient's due-soon notice reaches comms with
+// exactly the documents its body counts — the named holder's own, the unit's routers' unit documents —
+// each with the deadline AS STORED, earliest first; overdue notices carry none.
+func TestDueSoonItemsReachCommsPerRecipient(t *testing.T) {
+	h := newHarness(t, communeA)
+	h.identity.holders[communeA] = map[string][]string{"bp-1": {"CB-ROUTE"}}
+	dLater := soonDue.Add(90 * time.Minute)
+	late := doc("vb-late", 1, missed)
+	late.AssigneeMa = "CB-001"
+	named2, named3 := doc("vb-named2", 2, dLater), doc("vb-named3", 3, soonDue)
+	named2.AssigneeMa, named3.AssigneeMa = "CB-001", "CB-001"
+	unit := doc("vb-unit", 4, dLater)
+	unit.OrgUnitID = "bp-1"
+	h.incoming.byCommune[communeA] = []domain.AutomationRecord{late, named2, named3, unit}
+	h.claim(communeA, "run-1", jobSLA)
+	h.runner.Tick(context.Background())
+
+	type item struct {
+		code string
+		at   time.Time
+	}
+	want := map[string][]item{
+		"sla_reminders:due_soon:van-ban-den:2026-09-29:CB-001":   {{"VB-DEN-2026-0003", soonDue}, {"VB-DEN-2026-0002", dLater}},
+		"sla_reminders:due_soon:van-ban-den:2026-09-29:CB-ROUTE": {{"VB-DEN-2026-0004", dLater}},
+	}
+	seen := 0
+	for _, d := range h.comms.delivered {
+		if d.n.Kind != commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_DUE_SOON {
+			if len(d.n.DueSoonItems) != 0 {
+				t.Errorf("%s không phải sắp đến hạn mà mang %d mục", d.n.IdempotencyKey, len(d.n.DueSoonItems))
+			}
+			continue
+		}
+		seen++
+		w, ok := want[d.n.IdempotencyKey]
+		if !ok {
+			t.Errorf("khoá sắp đến hạn lạ %q", d.n.IdempotencyKey)
+			continue
+		}
+		got := d.n.DueSoonItems
+		if len(got) != len(w) {
+			t.Errorf("%s: mục %+v, muốn %+v", d.n.IdempotencyKey, got, w)
+			continue
+		}
+		for i := range w {
+			if got[i].Code != w[i].code || !got[i].Deadline.Equal(w[i].at) || !strings.Contains(d.n.Body, w[i].code) {
+				t.Errorf("%s: mục %d = %+v, muốn %s@%v (và có trong nội dung %q)", d.n.IdempotencyKey, i, got[i], w[i].code, w[i].at, d.n.Body)
+			}
+		}
+	}
+	if seen != len(want) {
+		t.Errorf("comms nhận %d thông báo sắp đến hạn, muốn %d", seen, len(want))
+	}
+}
+
 func TestNobodyToTellIsCounted(t *testing.T) {
 	h := newHarness(t, communeA) // no holder, no leadership flagged
 	h.incoming.byCommune[communeA] = []domain.AutomationRecord{doc("vb-1", 1, missed)}

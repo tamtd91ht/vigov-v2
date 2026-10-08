@@ -12,6 +12,7 @@ import (
 	"net"
 	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -204,5 +205,32 @@ func TestDialEmptyAddressRefusedByName(t *testing.T) {
 	}
 	if err := New(nil, nil).Close(); err != nil {
 		t.Errorf("Close trên client dựng bằng New: %v", err)
+	}
+}
+
+// Items reach the wire one to one, in order, with the stored instant unchanged; a notice without
+// items sends none — the request an older producer sent.
+func TestDeliverMapsDueSoonItems(t *testing.T) {
+	srv := &fakeServer{}
+	c := startClient(t, srv)
+	d1 := time.Date(2026, 10, 8, 3, 30, 0, 0, time.UTC)
+	d2 := time.Date(2026, 10, 9, 10, 0, 0, 123000000, time.UTC)
+	withItems := notice("k1", "CB-1")
+	withItems.Kind = commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_DUE_SOON
+	withItems.DueSoonItems = []DueSoonItem{{Code: "NV-FAKE-02", Deadline: d1}, {Code: "NV-FAKE-01", Deadline: d2}}
+	if _, err := c.DeliverStaffNotifications(communeCtx(), []Notice{withItems, notice("k2", "CB-2")}); err != nil {
+		t.Fatalf("Deliver: %v", err)
+	}
+	ns := srv.saw.GetNotifications()
+	got := ns[0].GetDueSoonItems()
+	if len(got) != 2 || got[0].GetCode() != "NV-FAKE-02" || !got[0].GetDeadline().AsTime().Equal(d1) ||
+		got[1].GetCode() != "NV-FAKE-01" || !got[1].GetDeadline().AsTime().Equal(d2) {
+		t.Errorf("due_soon_items trên dây = %v", got)
+	}
+	if n := len(ns[1].GetDueSoonItems()); n != 0 {
+		t.Errorf("thông báo không có mục lại mang %d mục", n)
+	}
+	if dueSoonItemsToWire(nil) != nil || dueSoonItemsToWire([]DueSoonItem{}) != nil {
+		t.Error("không có mục phải ra nil")
 	}
 }
