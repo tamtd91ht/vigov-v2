@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-identity",
-  "cap_nhat": "2026-10-07",
+  "cap_nhat": "2026-10-08",
   "muc": [
     {
       "id": "store-crosstenant",
@@ -521,6 +521,15 @@
       "bang_chung": "service-identity/internal/domain/session_idle.go: StaffSessionIdleTimeout = AdminSessionIdleTimeout = 60*time.Minute; test domain/grpc/http/app cập nhật theo; go vet + go test ./... service-identity xanh; tools/check_security.py PASS.",
       "no_confirm": [],
       "tiep_theo": "Hai mốc bằng nhau nên quyền admin.user không còn được hỏi khi xét khoá (vết kiểm toán ghi admin=false, giới hạn 60). Tách lại hai mốc thì test TestIdleNonAdminSession61MinutesRevokedLikeAdmin trở về vai đối chứng. Phiên khu vận hành ViHAT giữ 5 phút."
+    },
+    {
+      "id": "sla-dong-rieng-va-mau-08-10",
+      "menu": "cau-hinh",
+      "viec": "Đường ghi dòng thời hạn riêng (POST/DELETE /api/v1/sla) và màu cho loại đơn vị dân cư, khối nhiệm vụ — ADR 0079 lô 2 Q4, Q1 #9",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Commit 6fc89b98 (Go) + fad0fd41 (migration 0026). go test ./service-identity/... xanh; isolation-reviewer không mục chặn. *_pg_test bỏ qua (không VIGOV_TEST_DSN).",
+      "no_confirm": [],
+      "tiep_theo": "Chủ dự án chốt dòng riêng cho MỌI loại việc nhưng hôm nay chỉ phan-anh thêm được: van-ban-den/nhiem-vu trả 400 sla_field_unverifiable vì chưa có RPC đọc loại văn bản (service-documents) / mức ưu tiên (service-petitions) — thẻ contract đang làm; khi có, chỉ đổi checkFieldWithOwner (app/sla_field_rule.go) và thêm kiểm trần 200 dòng (store/sla.go TranSLA). Nợ: đối chiếu tầng 2 (lĩnh vực xã đã tắt) chưa áp; chú thích cột sla.linh_vuc (0008:261) đã cũ; chưa chạy trên PostgreSQL 16 thật."
     }
   ]
 }
