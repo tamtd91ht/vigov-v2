@@ -96,8 +96,8 @@ export const PREVIEW_RESIDENTIAL_UNITS: identity_danhSachThonToDanPhoRa = {
 // ── Danh mục: map asset types (comms) — the other six catalogues are the shared fixtures' ──────────
 export const PREVIEW_MAP_ASSET_TYPES: comms_danhSachLoaiTaiNguyenRa = {
   items: [
-    { id: "01PREVIEWMAT0000000000001", code: "doanh-nghiep", label: "Doanh nghiệp", is_default: true, active: true, order: 1, source: "he-thong", tier: 2, color: null },
-    { id: "01PREVIEWMAT0000000000002", code: "truong-hoc", label: "Trường học", is_default: false, active: true, order: 2, source: "he-thong", tier: 2, color: null },
+    { id: "01PREVIEWMAT0000000000001", code: "doanh-nghiep", label: "Doanh nghiệp", is_default: true, active: true, order: 1, source: "he-thong", tier: 2, color: "#2fb1f9" },
+    { id: "01PREVIEWMAT0000000000002", code: "truong-hoc", label: "Trường học", is_default: false, active: true, order: 2, source: "he-thong", tier: 2, color: "#86b940" },
     { id: "01PREVIEWMAT0000000000003", code: "tram-y-te", label: "Trạm y tế", is_default: false, active: true, order: 3, source: "he-thong", tier: 2, color: null },
     { id: "01PREVIEWMAT0000000000004", code: "nha-van-hoa", label: "Nhà văn hoá thôn", is_default: false, active: true, order: 4, source: "don-vi", tier: 1, color: null },
     { id: "01PREVIEWMAT0000000000005", code: "camera-an-ninh", label: "Camera an ninh", is_default: false, active: false, order: 5, source: "don-vi", tier: 1, color: null },
@@ -135,7 +135,8 @@ const MESSAGES: Record<"petitions" | "finance" | "reporting", readonly petitions
     { code: "petition.not_found", group_code: "phan-anh", origin: "shipped", description: "Không tìm thấy phản ánh theo mã tra cứu", default_text: "Không tìm thấy phản ánh với mã này.", current_text: "Không tìm thấy phản ánh với mã này. Vui lòng kiểm tra lại mã trên tin nhắn đã nhận.", overridden: true, is_active: true, updated_at: "2026-09-28T02:15:00Z", updated_by: "CB-00003" },
     { code: "petition.closed", group_code: "phan-anh", origin: "shipped", description: "Phản ánh đã đóng, không nhận thêm ý kiến", default_text: "Phản ánh đã được xử lý xong, không thể gửi thêm ý kiến.", current_text: "Phản ánh đã được xử lý xong, không thể gửi thêm ý kiến.", overridden: false, is_active: true },
     { code: "petition.rate_limited", group_code: "phan-anh", origin: "shipped", description: "Gửi quá nhiều phản ánh trong thời gian ngắn", default_text: "Bạn đã gửi nhiều phản ánh liên tiếp. Vui lòng thử lại sau ít phút.", current_text: "Bạn đã gửi nhiều phản ánh liên tiếp. Vui lòng thử lại sau ít phút.", overridden: false, is_active: true },
-    { code: "task.extension_pending", group_code: "phan-anh", origin: "shipped", description: "Nhiệm vụ đang có đề nghị gia hạn chờ duyệt", default_text: "Nhiệm vụ đang có một đề nghị gia hạn chờ duyệt.", current_text: "Nhiệm vụ đang có một đề nghị gia hạn chờ duyệt.", overridden: false, is_active: true },
+    { code: "task.extension_pending", group_code: "phan-anh", origin: "shipped", description: "Nhiệm vụ đang có đề nghị gia hạn chờ duyệt", default_text: "Nhiệm vụ đang có một đề nghị gia hạn chờ duyệt.", current_text: "Nhiệm vụ đang có một đề nghị gia hạn chờ duyệt.", override_text: "Nhiệm vụ đang chờ lãnh đạo duyệt gia hạn, chưa sửa được hạn.", overridden: true, is_active: false, updated_at: "2026-10-02T03:00:00Z", updated_by: "CB-00003" },
+    { code: "chung.loi-chao", group_code: "chung", origin: "commune", description: "Lời chào ở đầu tin gửi người dân", current_text: "UBND xã kính chào ông/bà.", overridden: false, is_active: true, updated_at: "2026-10-08T01:30:00Z", updated_by: "CB-00003" },
   ],
   finance: [
     { code: "budget.voucher_locked", group_code: "giai-ngan", origin: "shipped", description: "Chứng từ đã khoá, không sửa được", default_text: "Chứng từ đã khoá, không sửa được.", current_text: "Chứng từ đã khoá sổ. Liên hệ kế toán để mở khoá nếu cần điều chỉnh.", overridden: true, is_active: true, updated_at: "2026-09-30T08:40:00Z", updated_by: "CB-00001" },
@@ -267,12 +268,19 @@ const MAIL: comms_mailSettingsOut = {
   is_enabled: true,
   password_set: true,
   encryption_configured: true,
-  last_test: null,
+  last_test: { at: "2026-10-08T02:05:00Z", to: "c***@xathangbinh.example", ok: false, error_class: "sai-tai-khoan" },
 };
 
 const ZALO_SETTINGS: ZaloChannelSettings = {
   is_enabled: true,
-  kinds: ["sap-den-han", "qua-han", "leo-thang"],
+  platform_ready: true,
+  supported_events: [
+    "nhiem-vu.sap-den-han", "nhiem-vu.qua-han", "nhiem-vu.chua-cu-nguoi", "nhiem-vu.leo-thang",
+    "van-ban.sap-den-han", "van-ban.qua-han", "van-ban.chua-cu-nguoi", "van-ban.leo-thang",
+    "phan-anh.sap-den-han", "phan-anh.qua-han", "phan-anh.chua-cu-nguoi", "phan-anh.leo-thang",
+    "ban-tin-tuan",
+  ],
+  kinds: ["nhiem-vu.sap-den-han", "nhiem-vu.qua-han", "nhiem-vu.leo-thang", "phan-anh.qua-han"],
   quiet_start: "21:00",
   quiet_end: "07:00",
   overdue_start_after_days: 1,
@@ -366,6 +374,8 @@ const SINGLE_ANSWERS: Record<string, unknown> = {
   "/api/v1/mail-settings": MAIL,
   "/api/v1/zalo-channel-settings": ZALO_SETTINGS,
   "/api/v1/zalo-links/current": ZALO_CURRENT,
+  // The commune still on the shared bot (the common case); live_link_count feeds the switch dialog.
+  "/api/v1/zalo-bots/current": { has_own_bot: false, bot: null, live_link_count: 2 },
   "/api/v1/commune-branding": BRANDING,
 };
 
