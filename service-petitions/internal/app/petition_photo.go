@@ -16,11 +16,12 @@ package app
 //
 // # WHO
 //
-// The citizen who FILED the petition, from the SESSION (rule 4, invariant 2): every petition read
-// here filters by `cong_dan_id = <session citizen>` and the commune of the session, so another
-// citizen's code, another commune's and an unknown one are one ErrPhieuKhongTonTai — one 404 body.
-// `stored_file` does not hold the citizen (migration 0026 says why); a file belongs to the caller
-// because it hangs off a petition that does.
+// The OWNER who filed the petition, from the SESSION (rule 4, invariant 2): every petition read here
+// filters by the owner column — `cong_dan_id = <session citizen>`, or since ADR 0080 decision 8
+// `zalo_account_id = <session Zalo account>` for an unverified petition — and the commune of the
+// session, so another owner's code, another commune's and an unknown one are one ErrPhieuKhongTonTai —
+// one 404 body. `stored_file` does not hold the owner (migrations 0026, 0032 say why); a file belongs to
+// the caller because it hangs off a petition that does.
 //
 // # WHEN — ONLY WHILE THE PETITION IS `da-tiep-nhan` (domain.PhotoUploadOpen)
 //
@@ -43,9 +44,10 @@ package app
 //
 // # NOT CHECKED, BY DECISION — THE APP THE SESSION CAME FROM
 //
-// The citizen session this service sees (core/httpx.CitizenSession: session id, citizen id, commune —
-// "there is no fourth field"; identity.proto CitizenSessionPrincipal) records nothing about which app
-// opened it. Asked 02/10/2026, the owner answered that a photo may come from either app ("mở ở đâu cũng
+// The citizen session this service sees (core/httpx.CitizenSession: session id, citizen id, commune,
+// and since 7c0e55c9 the Zalo account that opened it — ADR 0080; identity.proto CitizenSessionPrincipal)
+// records nothing about which APP opened it: the Zalo account is the session's owner, not its app.
+// Asked 02/10/2026, the owner answered that a photo may come from either app ("mở ở đâu cũng
 // được"): "only the commune's own app" is the scope of the BUTTON (citizen-app `AppRieng`), not a server
 // rule. What still holds here is the sender and the commune — the session's citizen must own the
 // petition, in the session's commune. A field recording the opening app is optional future work
@@ -177,8 +179,18 @@ type PetitionPhotoFiles interface {
 	ByID(ctx context.Context, id string) (*domain.StoredFile, error)
 }
 
-// CitizenPhotoPetitions is the two IDENTITY-FILTERED petition reads — never the staff register's
-// unfiltered one, which this type cannot reach (rule 4, invariant 5).
+// OwnedPhotoPetitions is the two OWNER-FILTERED petition reads the scene photos use — a verified
+// citizen's petition or, since ADR 0080, a Zalo account's — never the staff register's unfiltered one,
+// which this type cannot reach (rule 4, invariant 5).
+type OwnedPhotoPetitions interface {
+	OwnedByCode(ctx context.Context, owner domain.PetitionOwner, ma string) (domain.PhieuPhanAnh, error)
+	OwnedForUpdate(ctx context.Context, tx *store.ScopedTx, owner domain.PetitionOwner, ma string) (
+		domain.PhieuPhanAnh, error)
+}
+
+// CitizenPhotoPetitions is the two CITIZEN-IDENTITY-FILTERED petition reads — never the staff
+// register's unfiltered one, which this type cannot reach (rule 4, invariant 5). The verification-photo
+// read uses it; its route stays verified-phone only (XaTuPhien).
 type CitizenPhotoPetitions interface {
 	// vi-name-ok: mirrors the existing PhieuPhanAnhStore method; rule 12 invariant 3 keeps existing names
 	CuaCongDanTheoMaTraCuu(ctx context.Context, congDanID, ma string) (domain.PhieuPhanAnh, error)
@@ -209,7 +221,7 @@ type PhotoLink struct {
 // CitizenPetitionPhotos owns the citizen's three acts: request a slot, complete it, list their photos.
 type CitizenPetitionPhotos struct {
 	db        *store.DB
-	petitions CitizenPhotoPetitions
+	petitions OwnedPhotoPetitions
 	files     PetitionPhotoFiles
 
 	// ANY OF THE THREE nil means "not configured": every upload is refused with ErrUploadNotConfigured
@@ -259,7 +271,7 @@ type photoCompletion struct {
 
 // NewCitizenPetitionPhotos builds the use case. Pass UNTYPED nil for a dependency that is not configured
 // (a nil *storage.Client inside a non-nil interface would pass the nil check and panic on first use).
-func NewCitizenPetitionPhotos(db *store.DB, petitions CitizenPhotoPetitions, files PetitionPhotoFiles,
+func NewCitizenPetitionPhotos(db *store.DB, petitions OwnedPhotoPetitions, files PetitionPhotoFiles,
 	objects PhotoObjectStore, scanner MalwareScanner, policies UploadPolicies) *CitizenPetitionPhotos {
 	return &CitizenPetitionPhotos{db: db, petitions: petitions, files: files, objects: objects,
 		scanner: scanner, policies: policies, photoSlots: newPhotoSlots(), newID: storage.NewObjectID}
@@ -285,6 +297,28 @@ func citizenOnly(citizen audit.Actor) error {
 			"authz.CitizenOnly hoặc authz.CitizenPrincipal", citizen.Kind)
 	}
 	return nil
+}
+
+// photoOwner is the wall the three scene-photo acts put first: the session actor mapped onto the
+// petition owner it must match — a verified citizen, or a Zalo account (ADR 0080 decision 8: an
+// unverified petition HAS scene photos, owned by its account). Any other actor, or an empty id, means
+// the route was mounted wrong; the kind is printed, the id never is.
+//
+// AN EXPLICIT SWITCH ON THE KIND, never "the id is the id": a Zalo account id read as a citizen id
+// would match no petition and look like "not found" — or, worse, the reverse.
+func photoOwner(actor audit.Actor) (domain.PetitionOwner, error) {
+	o := domain.PetitionOwner{ID: actor.ID}
+	switch actor.Kind {
+	case "citizen":
+		o.Kind = domain.OwnerCitizen
+	case audit.KindZaloAccount:
+		o.Kind = domain.OwnerZaloAccount
+	}
+	if !o.Valid() {
+		return domain.PetitionOwner{}, fmt.Errorf("anh_hien_truong: chủ thể không phải công dân cũng không phải "+
+			"tài khoản Zalo chủ phiếu (kind=%q) — tuyến thiếu authz.CitizenOnly hoặc lớp xã từ phiên", actor.Kind)
+	}
+	return o, nil
 }
 
 // photoPolicy reads platform's limit for petition photos. Not configured, unreachable, and a policy
@@ -363,7 +397,8 @@ func writePhotoAudit(ctx context.Context, tx *store.ScopedTx, citizen audit.Acto
 func (uc *CitizenPetitionPhotos) RequestUpload(ctx context.Context, ma string, req PhotoUploadRequest,
 	citizen audit.Actor) (PhotoUpload, error) {
 
-	if err := citizenOnly(citizen); err != nil {
+	owner, err := photoOwner(citizen)
+	if err != nil {
 		return PhotoUpload{}, err
 	}
 	if req.Size <= 0 {
@@ -404,7 +439,7 @@ func (uc *CitizenPetitionPhotos) RequestUpload(ctx context.Context, ma string, r
 
 	var out PhotoUpload
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
-		p, err := uc.petitions.CitizenPetitionForUpdate(ctx, tx, citizen.ID, ma)
+		p, err := uc.petitions.OwnedForUpdate(ctx, tx, owner, ma)
 		if err != nil {
 			return err
 		}
@@ -471,7 +506,8 @@ type photoInspection struct {
 func (uc *CitizenPetitionPhotos) Complete(ctx context.Context, ma, id string, citizen audit.Actor) (
 	domain.StoredFile, error) {
 
-	if err := citizenOnly(citizen); err != nil {
+	owner, err := photoOwner(citizen)
+	if err != nil {
 		return domain.StoredFile{}, err
 	}
 	if !uc.uploadsConfigured() {
@@ -479,7 +515,7 @@ func (uc *CitizenPetitionPhotos) Complete(ctx context.Context, ma, id string, ci
 	}
 
 	// 1. Lock-free pre-read: the caller's own petition, a photo of it, and something left to do.
-	p, err := uc.petitions.CuaCongDanTheoMaTraCuu(ctx, citizen.ID, ma)
+	p, err := uc.petitions.OwnedByCode(ctx, owner, ma)
 	if err != nil {
 		return domain.StoredFile{}, bocPhieu(ctx, "hoàn tất ảnh hiện trường", err)
 	}
@@ -502,7 +538,7 @@ func (uc *CitizenPetitionPhotos) Complete(ctx context.Context, ma, id string, ci
 	// ONLY NOW, with the caller proved to own this file, may it join another caller's completion: the
 	// shared answer goes to nobody who could not have asked for it.
 	return uc.completeOnce(ctx, id, func(ctx context.Context) (domain.StoredFile, error) {
-		return uc.completePending(ctx, ma, id, citizen, *f)
+		return uc.completePending(ctx, ma, id, citizen, owner, *f)
 	})
 }
 
@@ -550,7 +586,7 @@ func (uc *photoSlots) completeOnce(ctx context.Context, id string,
 
 // completePending is steps 2 and 3 of Complete for a file the caller owns and that was `pending`.
 func (uc *CitizenPetitionPhotos) completePending(ctx context.Context, ma, id string, citizen audit.Actor,
-	f domain.StoredFile) (domain.StoredFile, error) {
+	owner domain.PetitionOwner, f domain.StoredFile) (domain.StoredFile, error) {
 
 	pol, err := uc.photoPolicy(ctx)
 	if err != nil {
@@ -575,7 +611,7 @@ func (uc *CitizenPetitionPhotos) completePending(ctx context.Context, ma, id str
 	var stored domain.StoredFile
 	lateReason := ""
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
-		lp, err := uc.petitions.CitizenPetitionForUpdate(ctx, tx, citizen.ID, ma)
+		lp, err := uc.petitions.OwnedForUpdate(ctx, tx, owner, ma)
 		if err != nil {
 			return err
 		}
@@ -897,13 +933,14 @@ func (uc photoInspector) reject(ctx context.Context, uploadKey, reason, signatur
 //
 // NOT AUDITED: the citizen reading their own petition, as GET /api/v1/my-citizen-reports/{code} is not.
 func (uc *CitizenPetitionPhotos) ListPhotos(ctx context.Context, ma string, citizen audit.Actor) ([]PhotoLink, error) {
-	if err := citizenOnly(citizen); err != nil {
+	owner, err := photoOwner(citizen)
+	if err != nil {
 		return nil, err
 	}
 	if uc.objects == nil {
 		return nil, ErrUploadNotConfigured
 	}
-	p, err := uc.petitions.CuaCongDanTheoMaTraCuu(ctx, citizen.ID, ma)
+	p, err := uc.petitions.OwnedByCode(ctx, owner, ma)
 	if err != nil {
 		return nil, bocPhieu(ctx, "đọc ảnh hiện trường", err)
 	}
@@ -1050,5 +1087,6 @@ var (
 	_ PhotoObjectStore      = (*storage.Client)(nil)
 	_ PetitionPhotoFiles    = (*petstore.StoredFileStore)(nil)
 	_ CitizenPhotoPetitions = (*petstore.PhieuPhanAnhStore)(nil)
+	_ OwnedPhotoPetitions   = (*petstore.PhieuPhanAnhStore)(nil)
 	_ StaffPhotoPetitions   = (*petstore.PhieuPhanAnhStore)(nil)
 )

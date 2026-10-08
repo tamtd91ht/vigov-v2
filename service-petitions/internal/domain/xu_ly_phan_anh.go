@@ -373,6 +373,11 @@ var ErrDongSaiLuc = errors.New(
 //	                                     petition closes straight from `da-xu-ly` and the closing
 //	                                     itself — with its mandatory readable result — is the reason
 //
+// A ZALO-OWNED PETITION (ADR 0080) TAKES THE SECOND POINT TOO, by the same predicate and on purpose:
+// its `cong_dan_id` is empty, nobody can rate or confirm it (decision 8; CHECK
+// `phieu_phan_anh_zalo_owner_no_rating_reopen`), and staff close it straight from `da-xu-ly` "như phiếu
+// cán bộ vào hộ". The citizen reads the result through the lookup by code + same account.
+//
 // THE CITIZEN TEST IS WHAT KEEPS THE SECOND POINT NARROW. A petition WITH a citizen account behind it
 // is still refused from `da-xu-ly`: closing it there would end the matter before the citizen was ever
 // asked to confirm, which is what the `cho-dan-xac-nhan` step exists to prevent. Widening further —

@@ -33,22 +33,31 @@ import (
 // congDanID comes from the SESSION and nowhere else — see CuaCongDanTheoMaTraCuu.
 func (s *PhieuPhanAnhStore) CitizenPetitionForUpdate(ctx context.Context, tx *store.ScopedTx,
 	congDanID, ma string) (domain.PhieuPhanAnh, error) {
+	// FAIL CLOSED, BEFORE THE QUERY, inside OwnedForUpdate — the same refusal and sentinel as
+	// CuaCongDanTheoMaTraCuu.
+	return s.OwnedForUpdate(ctx, tx, domain.PetitionOwner{Kind: domain.OwnerCitizen, ID: congDanID}, ma)
+}
 
-	if congDanID == "" {
-		// FAIL CLOSED, BEFORE THE QUERY — the same refusal and sentinel as CuaCongDanTheoMaTraCuu.
-		return domain.PhieuPhanAnh{}, ErrThieuDinhDanhCongDan
+// OwnedForUpdate is the locking twin of OwnedByCode: ONE live petition of THIS commune belonging to
+// `owner` (a verified citizen, or a Zalo account — ADR 0080), read inside the caller's transaction and
+// held until it ends. The owner filter is ownerFilter's, so the two reads cannot disagree about whose
+// petition is whose; every miss is ErrPhieuKhongTonTai.
+func (s *PhieuPhanAnhStore) OwnedForUpdate(ctx context.Context, tx *store.ScopedTx,
+	owner domain.PetitionOwner, ma string) (domain.PhieuPhanAnh, error) {
+
+	loc, err := ownerFilter(owner)
+	if err != nil {
+		return domain.PhieuPhanAnh{}, err
 	}
+	stmt := `SELECT ` + cotPhieu + ` FROM phieu_phan_anh WHERE tenant_id = $1 ` + loc + ` FOR UPDATE`
 
-	const stmt = `SELECT ` + cotPhieu + ` FROM phieu_phan_anh
-		WHERE tenant_id = $1 AND ma_tra_cuu = $2 AND cong_dan_id = $3 AND deleted_at IS NULL FOR UPDATE`
-
-	p, err := quetPhieu(tx.Underlying().QueryRowContext(ctx, stmt, string(tx.TenantID()), ma, congDanID))
+	p, err := quetPhieu(tx.Underlying().QueryRowContext(ctx, stmt, string(tx.TenantID()), ma, owner.ID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.PhieuPhanAnh{}, ErrPhieuKhongTonTai
 	}
 	if err != nil {
-		// NEITHER THE CODE NOR THE CITIZEN IDENTIFIER IS IN THE WRAPPED MESSAGE (rule 3).
-		return domain.PhieuPhanAnh{}, fmt.Errorf("phieu_phan_anh: đọc phiếu của công dân để đánh giá: %w", err)
+		// NEITHER THE CODE NOR THE OWNER IDENTIFIER IS IN THE WRAPPED MESSAGE (rule 3).
+		return domain.PhieuPhanAnh{}, fmt.Errorf("phieu_phan_anh: đọc phiếu của chủ phiếu để sửa: %w", err)
 	}
 	return p, nil
 }

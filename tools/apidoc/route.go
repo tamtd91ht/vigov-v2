@@ -181,12 +181,16 @@ type idemDecl struct {
 // `tu-phien-chi-xem` (view-only, accepts a session with no phone, reason mandatory). The weaker
 // one is a separate Kind so the contract shows every route that waived the phone.
 //
+// ADR 0080 adds a third: `tu-phien-hoac-tai-khoan-zalo` (httpx.CommuneFromSessionOrZaloAccount) — a
+// verified citizen as in `tu-phien`, OR a session with no verified phone that carries its Zalo account,
+// which then owns the record. Reason mandatory; a separate Kind for the same reason as the view-only one.
+//
 // Kind is empty when a route declares nothing, which kiemTuyen refuses on a citizen route: an
 // undeclared class is deny, not allow (rule 5, invariant 2). The staff path has no class at
 // all — its commune comes from Host, at httpx.TenantMiddleware.
 type xaDecl struct {
-	Kind string // tu-phien | tu-phien-chi-xem | khong-thuoc-xa
-	LyDo string // the mandatory, specific reason for khong-thuoc-xa and tu-phien-chi-xem
+	Kind string // tu-phien | tu-phien-chi-xem | tu-phien-hoac-tai-khoan-zalo | khong-thuoc-xa
+	LyDo string // the mandatory, specific reason for every Kind but tu-phien
 }
 
 // nguoiDung is the closed list of `@consumer` values. A value outside it is an error, not a
@@ -673,6 +677,18 @@ func khaiBaoTrong(call *ast.CallExpr) (quyenDecl, idemDecl, xaDecl, error) {
 				return true
 			}
 			xa = xaDecl{Kind: "tu-phien-chi-xem", LyDo: ly}
+		case "httpx.CommuneFromSessionOrZaloAccount":
+			ly, _ := chuoiLit(argDau(c))
+			// ADR 0080: the class waives the verified phone for a session that carries its Zalo account,
+			// which then OWNS what the route writes or reads. The same discipline as XaTuPhienChiXem —
+			// a waiver whose reason is not a literal cannot be read in the contract (rule 5, forbidden #4).
+			if strings.TrimSpace(ly) == "" {
+				loi = errors.Join(loi, fmt.Errorf(
+					"httpx.CommuneFromSessionOrZaloAccount: thiếu lý do cụ thể dạng hằng chuỗi — tuyến nhận "+
+						"phiên chưa xác thực số phải nói vì sao tài khoản Zalo được làm chủ (ADR 0080)"))
+				return true
+			}
+			xa = xaDecl{Kind: "tu-phien-hoac-tai-khoan-zalo", LyDo: ly}
 		}
 		return true
 	})

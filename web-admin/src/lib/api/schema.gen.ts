@@ -105,6 +105,47 @@ export type comms_bodyImageUploadOut = {
   "upload": comms_presignedUploadOut;
 };
 
+export type comms_communeZaloBotCurrentOut = {
+  "has_own_bot": boolean;
+  "bot": comms_communeZaloBotOut | null;
+  "live_link_count": number;
+};
+
+export type comms_communeZaloBotIn = {
+  "bot_token"?: string;
+  "bot_name": string;
+  "chat_url": string;
+};
+
+export type comms_communeZaloBotOut = {
+  "bot_account_id": string;
+  "bot_name": string;
+  "chat_url": string;
+  "set_at": string;
+  "set_by": string;
+  "webhook_set_at": string | null;
+  "webhook_set_by": string | null;
+  "webhook_pending": boolean;
+  "last_check": comms_zaloBotCheckOut | null;
+};
+
+export type comms_communeZaloBotRetireIn = {
+  "reason": string;
+};
+
+export type comms_communeZaloBotRetiredOut = {
+  "retired": boolean;
+  "ended_link_count": number;
+  "revoke_notice"?: string;
+};
+
+export type comms_communeZaloBotSavedOut = {
+  "bot": comms_communeZaloBotOut;
+  "adopted": boolean;
+  "ended_link_count": number;
+  "revoke_notice"?: string;
+};
+
 export type comms_coverFileOut = {
   "id": string;
   "content_item_id": string;
@@ -256,6 +297,14 @@ export type comms_loaiTaiNguyenRa = {
   "order": number;
   "source": string;
   "tier": number;
+  "color": string | null;
+};
+
+export type comms_mailLastTestOut = {
+  "at": string;
+  "to": string;
+  "ok": boolean;
+  "error_class": string | null;
 };
 
 export type comms_mailSettingsIn = {
@@ -280,6 +329,7 @@ export type comms_mailSettingsOut = {
   "is_enabled": boolean;
   "password_set": boolean;
   "encryption_configured": boolean;
+  "last_test": comms_mailLastTestOut | null;
 };
 
 export type comms_mailTestIn = {
@@ -520,6 +570,8 @@ export type comms_notificationOut = {
   "created_at": string;
 };
 
+export type comms_optionalColorIn = Record<string, never>;
+
 export type comms_pairingCodeOut = {
   "code": string;
   "expires_at": string;
@@ -658,6 +710,7 @@ export type comms_suaLoaiTaiNguyenVao = {
   "order"?: number | null;
   "active"?: boolean | null;
   "is_default"?: boolean | null;
+  "color"?: comms_optionalColorIn;
   "code"?: string | null;
   "source"?: string | null;
   "tier"?: number | null;
@@ -694,6 +747,7 @@ export type comms_themLoaiTaiNguyenVao = {
   "label": string;
   "order"?: number;
   "is_default"?: boolean;
+  "color"?: string;
   "source"?: string | null;
   "tier"?: number | null;
 };
@@ -809,6 +863,26 @@ export type comms_xoaLoaiTaiNguyenVao = {
   "reason": string;
 };
 
+export type comms_zaloBotCheckOut = {
+  "at": string;
+  "result": string;
+};
+
+export type comms_zaloBotCheckResultOut = {
+  "result": string;
+  "checked_at": string;
+  "account_name"?: string;
+};
+
+export type comms_zaloBotWebhookOut = {
+  "result": string;
+  "url": string;
+  "set_at"?: string | null;
+  "set_by"?: string;
+  /** ⚠ BÍ MẬT ĐI RA, CÓ CHỦ Ý — ADR 0079 Q1 #3 — chủ dự án chốt 08/10/2026: secret webhook do hệ thống sinh, hiện MỘT lần trong câu trả lời của lần sinh ra nó để xã tự đăng ký webhook bằng tay nếu cần; không bao giờ đọc lại được */
+  "secret"?: string;
+};
+
 export type comms_zaloChannelSettingsIn = {
   "is_enabled": boolean | null;
   "kinds": Array<string>;
@@ -827,6 +901,8 @@ export type comms_zaloChannelSettingsOut = {
   "overdue_repeat_every_days": number | null;
   "updated_at"?: string | null;
   "updated_by"?: string;
+  "supported_events": Array<string>;
+  "platform_ready"?: boolean | null;
 };
 
 export type comms_zaloLinkCurrentOut = {
@@ -1146,7 +1222,10 @@ export type documents_loaiVanBanRa = {
   "order": number;
   "source": string;
   "tier": number;
+  "color": string | null;
 };
+
+export type documents_optionalColorIn = Record<string, never>;
 
 export type documents_overdueQueueItemOut = {
   "kind": string;
@@ -1175,6 +1254,7 @@ export type documents_suaLoaiVanBanVao = {
   "order"?: number | null;
   "active"?: boolean | null;
   "is_default"?: boolean | null;
+  "color"?: documents_optionalColorIn;
   "code"?: string | null;
   "source"?: string | null;
   "tier"?: number | null;
@@ -1207,6 +1287,7 @@ export type documents_themLoaiVanBanVao = {
   "label": string;
   "order"?: number;
   "is_default"?: boolean;
+  "color"?: string | null;
   "source"?: string | null;
   "tier"?: number | null;
 };
@@ -1297,6 +1378,64 @@ export type finance_bangRa = {
   "source_file"?: string;
   /** RFC 3339 */
   "loaded_at"?: string;
+};
+
+export type finance_budgetImportColumnOut = {
+  "id"?: string;
+  "name": string;
+  /** `so` | `phan_tram` */
+  "type": string;
+  "role"?: string;
+  "numerator_name": string | null;
+  "denominator_name": string | null;
+};
+
+export type finance_budgetImportHeadlineOut = {
+  "no": string;
+  "name": string;
+};
+
+export type finance_budgetImportIssueOut = {
+  "sheet": string;
+  "row": number;
+  "column": string;
+  "message": string;
+};
+
+export type finance_budgetImportOut = {
+  "valid": boolean;
+  "year": number;
+  "source_file": string;
+  "refusal_reason"?: string;
+  "sheets": Array<finance_budgetImportSheetOut>;
+  /** about the file: hidden tabs, tabs with no table */
+  "warnings": Array<finance_budgetImportIssueOut>;
+  "errors": Array<finance_budgetImportIssueOut>;
+};
+
+export type finance_budgetImportRejectedOut = {
+  "code": string;
+  "message": string;
+  "trace_id": string;
+  "errors": Array<finance_budgetImportIssueOut>;
+};
+
+export type finance_budgetImportSheetOut = {
+  "sheet_name": string;
+  /** `thu` | `chi` */
+  "kind": string;
+  "title": string;
+  /** `dong` | `nghin-dong` | `trieu-dong` */
+  "unit": string;
+  "unit_label": string;
+  "line_count": number;
+  "columns": Array<finance_budgetImportColumnOut>;
+  "headline": finance_budgetImportHeadlineOut | null;
+  "action": string;
+  "replaces_code"?: string;
+  "refusal_reason"?: string;
+  "sheet"?: finance_bangRa | null;
+  "warnings": Array<finance_budgetImportIssueOut>;
 };
 
 export type finance_budgetPeriodCloseIn = {
@@ -1449,6 +1588,13 @@ export type finance_cotVao = {
   "denominator_index"?: number | null;
 };
 
+export type finance_createCustomMessageIn = {
+  "group_code": string;
+  "code": string;
+  "text": string;
+  "description"?: string | null;
+};
+
 export type finance_curvePointOut = {
   /** 1..12 */
   "month": number;
@@ -1474,6 +1620,10 @@ export type finance_danhSachDuAnRa = {
 
 export type finance_danhSachHangMucRa = {
   "items": Array<finance_hangMucRa>;
+};
+
+export type finance_deleteCustomMessageIn = {
+  "reason": string;
 };
 
 export type finance_disbursementImportCreatedOut = {
@@ -1546,6 +1696,7 @@ export type finance_duAnGhiRa = {
   "completion_date"?: string;
   "implementing_unit"?: string | null;
   "disbursement_deadline": string;
+  "at_risk"?: boolean | null;
   "funding_allocations"?: Array<finance_phanBoRa>;
   "funding_allocated_total": number;
 };
@@ -1575,6 +1726,7 @@ export type finance_duAnRa = {
   "start_date"?: string;
   "completion_date"?: string;
   "implementing_unit"?: string | null;
+  "at_risk"?: boolean | null;
   "disbursement_deadline": string;
   "delay_threshold": number;
   "delay_threshold_source": string;
@@ -1585,6 +1737,12 @@ export type finance_duAnRa = {
   "unallocated_plan_amount"?: number | null;
   "time_elapsed_ratio"?: number | null;
   "latest_issue"?: finance_latestIssueOut | null;
+};
+
+export type finance_editCustomMessageIn = {
+  "text"?: string | null;
+  "description"?: finance_optionalDescription;
+  "is_active"?: boolean | null;
 };
 
 export type finance_fundingSourceCreateIn = {
@@ -1692,6 +1850,7 @@ export type finance_hangMucRa = {
   "order": number;
   "source": string;
   "tier": number;
+  "color": string | null;
 };
 
 export type finance_implementingUnitsOut = {
@@ -1717,6 +1876,10 @@ export type finance_oTongRa = {
   "value": number | null;
   "unavailable_reason"?: string;
 };
+
+export type finance_optionalColorIn = Record<string, never>;
+
+export type finance_optionalDescription = Record<string, never>;
 
 export type finance_phanBoRa = {
   "id": string;
@@ -1817,6 +1980,7 @@ export type finance_projectSummaryOut = {
   "delay_threshold_source": string;
   "delayed_project_count": number;
   "open_issue_count"?: number | null;
+  "at_risk_count"?: number | null;
   "monthly": Array<finance_curvePointOut>;
   "disbursed_after_year": number;
   "by_category": Array<finance_categoryProgressOut>;
@@ -1887,6 +2051,7 @@ export type finance_suaDuAnVao = {
   "start_date"?: string | null;
   "completion_date"?: string | null;
   "disbursement_deadline"?: string | null;
+  "at_risk"?: boolean | null;
   "funding_allocations"?: Array<finance_phanBoVao> | null;
   "code"?: string | null;
   "year"?: number | null;
@@ -1897,9 +2062,14 @@ export type finance_suaHangMucVao = {
   "order"?: number | null;
   "active"?: boolean | null;
   "is_default"?: boolean | null;
+  "color"?: finance_optionalColorIn;
   "code"?: string | null;
   "source"?: string | null;
   "tier"?: number | null;
+};
+
+export type finance_switchSystemMessageIn = {
+  "is_active": boolean | null;
 };
 
 export type finance_systemMessageListOut = {
@@ -1907,12 +2077,15 @@ export type finance_systemMessageListOut = {
 };
 
 export type finance_systemMessageOut = {
-  /** not "key": apidoc refuses credential-looking response fields (tools/apidoc/schema.go:257) */
   "code": string;
+  "group_code": string;
+  "origin": string;
   "description": string;
-  "default_text": string;
+  "default_text"?: string;
   "current_text": string;
+  "override_text"?: string;
   "overridden": boolean;
+  "is_active": boolean;
   "updated_at"?: string | null;
   /** staff business code (rule 6, inv 8) */
   "updated_by"?: string;
@@ -1982,6 +2155,7 @@ export type finance_themHangMucVao = {
   "label": string;
   "order"?: number;
   "is_default"?: boolean;
+  "color"?: string | null;
   "source"?: string | null;
   "tier"?: number | null;
 };
@@ -2006,6 +2180,17 @@ export type httpx_Error = {
   /** safe for a citizen to read: never personal data, never internals */
   "message": string;
   "trace_id": string;
+};
+
+export type identity_addSLAFieldRowIn = {
+  "work_kind": string;
+  "field": string;
+  "acknowledge_hours": number;
+  "resolve_hours": number;
+  "due_soon_hours": number;
+  "escalate_leader_hours": number;
+  "escalate_president_hours": number;
+  "unassigned_hold_hours"?: number | null;
 };
 
 export type identity_automationJobOut = {
@@ -2373,6 +2558,7 @@ export type identity_khoiNhiemVuRa = {
   "order": number;
   "source": string;
   "tier": number;
+  "color": string | null;
 };
 
 export type identity_loaiDonViDanCuRa = {
@@ -2387,6 +2573,7 @@ export type identity_loaiDonViDanCuRa = {
   "order": number;
   "source": string;
   "tier": number;
+  "color": string | null;
 };
 
 export type identity_luuPhanQuyenVao = {
@@ -2410,6 +2597,8 @@ export type identity_nhomQuyenRa = {
   "name": string;
   "permissions": Array<identity_quyenMucRa>;
 };
+
+export type identity_optionalColorIn = Record<string, never>;
 
 export type identity_optionalCountIn = Record<string, never>;
 
@@ -2492,6 +2681,10 @@ export type identity_quyenMucRa = {
   "code": string;
   /** "Duyệt gia hạn" */
   "label": string;
+};
+
+export type identity_removeSLAFieldRowIn = {
+  "reason": string;
 };
 
 export type identity_residentialUnitImportCreatedOut = {
@@ -2649,6 +2842,7 @@ export type identity_suaDanhMucVao = {
   "order"?: number | null;
   "active"?: boolean | null;
   "is_default"?: boolean | null;
+  "color"?: identity_optionalColorIn;
   "code"?: string | null;
   "source"?: string | null;
   "tier"?: number | null;
@@ -2708,6 +2902,7 @@ export type identity_themDanhMucVao = {
   "label": string;
   "order"?: number;
   "is_default"?: boolean;
+  "color"?: string | null;
   "source"?: string | null;
   "tier"?: number | null;
 };
@@ -3055,6 +3250,13 @@ export type petitions_citizenReportSummaryOut = {
   "publication_pending"?: number | null;
 };
 
+export type petitions_createCustomMessageIn = {
+  "group_code": string;
+  "code": string;
+  "text": string;
+  "description"?: string | null;
+};
+
 export type petitions_danhSachLoaiNhiemVuRa = {
   "items": Array<petitions_loaiNhiemVuRa>;
 };
@@ -3096,6 +3298,10 @@ export type petitions_deNghiLuiHanVao = {
   "reason": string;
 };
 
+export type petitions_deleteCustomMessageIn = {
+  "reason": string;
+};
+
 export type petitions_doiTrangThaiVao = {
   "status": string;
   "note"?: string;
@@ -3106,6 +3312,12 @@ export type petitions_doiTrangThaiVao = {
 export type petitions_dongPhieuVao = {
   "result": string;
   "note"?: string;
+};
+
+export type petitions_editCustomMessageIn = {
+  "text"?: string | null;
+  "description"?: petitions_optionalDescription;
+  "is_active"?: boolean | null;
 };
 
 export type petitions_ghiChuPhieuVao = {
@@ -3165,6 +3377,7 @@ export type petitions_loaiNhiemVuRa = {
   "source": string;
   "tier": number;
   "requires_directive": boolean;
+  "color": string | null;
 };
 
 export type petitions_mucUuTienRa = {
@@ -3178,6 +3391,7 @@ export type petitions_mucUuTienRa = {
   "order": number;
   "source": string;
   "tier": number;
+  "color": string | null;
 };
 
 export type petitions_nhatKyNhiemVuRa = {
@@ -3250,6 +3464,10 @@ export type petitions_nhiemVuVanBanRa = {
   "summary": string;
   "position": number;
 };
+
+export type petitions_optionalColorIn = Record<string, never>;
+
+export type petitions_optionalDescription = Record<string, never>;
 
 export type petitions_overdueItemOut = {
   "kind": string;
@@ -3332,6 +3550,7 @@ export type petitions_phieuCuaToiRa = {
   "receiving_body"?: string;
   "rating"?: number | null;
   "rated_at"?: string | null;
+  "contact_unverified"?: boolean | null;
 };
 
 export type petitions_phieuCuaToiTomTatRa = {
@@ -3374,6 +3593,7 @@ export type petitions_phieuPhanAnhRa = {
   "receiving_body"?: string;
   "branch_ended_at"?: string | null;
   "has_citizen"?: boolean | null;
+  "contact_unverified"?: boolean | null;
   "publication_status"?: string;
   "public": boolean;
   "rating"?: number | null;
@@ -3480,6 +3700,7 @@ export type petitions_suaLoaiNhiemVuVao = {
   "order"?: number | null;
   "active"?: boolean | null;
   "is_default"?: boolean | null;
+  "color"?: petitions_optionalColorIn;
   "code"?: string | null;
   "source"?: string | null;
   "tier"?: number | null;
@@ -3490,6 +3711,7 @@ export type petitions_suaMucUuTienVao = {
   "order"?: number | null;
   "active"?: boolean | null;
   "is_default"?: boolean | null;
+  "color"?: petitions_optionalColorIn;
   "code"?: string | null;
   "source"?: string | null;
   "tier"?: number | null;
@@ -3518,16 +3740,24 @@ export type petitions_suaTrangThaiNhiemVuVao = {
   "active"?: boolean | null;
 };
 
+export type petitions_switchSystemMessageIn = {
+  "is_active": boolean | null;
+};
+
 export type petitions_systemMessageListOut = {
   "items": Array<petitions_systemMessageOut>;
 };
 
 export type petitions_systemMessageOut = {
   "code": string;
+  "group_code": string;
+  "origin": string;
   "description": string;
-  "default_text": string;
+  "default_text"?: string;
   "current_text": string;
+  "override_text"?: string;
   "overridden": boolean;
+  "is_active": boolean;
   "updated_at"?: string | null;
   /** staff business code (rule 6, inv 8) */
   "updated_by"?: string;
@@ -3678,6 +3908,7 @@ export type petitions_themLoaiNhiemVuVao = {
   "label": string;
   "order"?: number;
   "is_default"?: boolean;
+  "color"?: string | null;
   "source"?: string | null;
   "tier"?: number | null;
 };
@@ -3687,6 +3918,7 @@ export type petitions_themMucUuTienVao = {
   "label": string;
   "order"?: number;
   "is_default"?: boolean;
+  "color"?: string | null;
   "source"?: string | null;
   "tier"?: number | null;
 };
@@ -3783,16 +4015,24 @@ export type reporting_rewordSystemMessageIn = {
   "text": string;
 };
 
+export type reporting_switchSystemMessageIn = {
+  "is_active": boolean | null;
+};
+
 export type reporting_systemMessageListOut = {
   "items": Array<reporting_systemMessageOut>;
 };
 
 export type reporting_systemMessageOut = {
   "code": string;
+  "group_code": string;
+  "origin": string;
   "description": string;
-  "default_text": string;
+  "default_text"?: string;
   "current_text": string;
+  "override_text"?: string;
   "overridden": boolean;
+  "is_active": boolean;
   "updated_at"?: string | null;
   /** staff business code (rule 6, inv 8) */
   "updated_by"?: string;
@@ -4157,6 +4397,50 @@ export type finance_post_budget_sheets = {
     401: httpx_Error;
     403: httpx_Error;
     409: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** POST /api/v1/budget-sheets/import-previews — Kiểm tra tệp Excel thu - chi ngân sách trước khi nạp — không ghi gì */
+export type finance_post_budget_sheets_import_previews = {
+  duongDan: "/api/v1/budget-sheets/import-previews";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+    "year": string;
+  };
+  than: never;
+  phanHoi: {
+    200: finance_budgetImportOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/budget-sheets/imports — Nạp bảng thu, chi ngân sách từ tệp Excel của Phòng Tài chính — toàn bộ tệp hoặc không gì cả */
+export type finance_post_budget_sheets_imports = {
+  duongDan: "/api/v1/budget-sheets/imports";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+    "year": string;
+  };
+  than: never;
+  phanHoi: {
+    201: finance_budgetImportOut;
+    400: finance_budgetImportRejectedOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
   };
@@ -5090,7 +5374,7 @@ export type petitions_post_citizen_reports_by_maTraCuu_verification_photos_by_id
   };
 };
 
-/** POST /api/v1/citizen-sessions — App riêng của xã đổi accessToken/phoneToken Zalo lấy phiên công dân ViGov */
+/** POST /api/v1/citizen-sessions — App riêng của xã đổi accessToken (kèm phoneToken nếu công dân chia sẻ số) Zalo lấy phiên công dân ViGov */
 export type identity_post_citizen_sessions = {
   duongDan: "/api/v1/citizen-sessions";
   phuongThuc: "POST";
@@ -5110,7 +5394,7 @@ export type identity_post_citizen_sessions = {
     503: httpx_Error;
   };
   errorCodes: {
-    400: "invalid_body" | "phone_required";
+    400: "invalid_body";
     401: "zalo_token_invalid";
     422: "app_not_ready";
     429: "too_many_attempts";
@@ -6261,6 +6545,67 @@ export type finance_get_finance_system_messages = {
   };
 };
 
+/** POST /api/v1/finance-system-messages — Xã thêm một câu hệ thống của riêng xã (nhóm Giải ngân) */
+export type finance_post_finance_system_messages = {
+  duongDan: "/api/v1/finance-system-messages";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: finance_createCustomMessageIn;
+  phanHoi: {
+    201: finance_systemMessageOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/finance-system-messages/{code} — Sửa lời, mô tả hoặc tắt/bật một câu do xã tự thêm */
+export type finance_patch_finance_system_messages_by_code = {
+  duongDan: "/api/v1/finance-system-messages/{code}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "code": string;
+  };
+  truyVan: {
+  };
+  than: finance_editCustomMessageIn;
+  phanHoi: {
+    200: finance_systemMessageOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/finance-system-messages/{code} — Xoá mềm một câu do xã tự thêm, kèm lý do bắt buộc */
+export type finance_delete_finance_system_messages_by_code = {
+  duongDan: "/api/v1/finance-system-messages/{code}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "code": string;
+  };
+  truyVan: {
+  };
+  than: finance_deleteCustomMessageIn;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** PUT /api/v1/finance-system-messages/{code}/override — Xã sửa lời một câu hệ thống của phân hệ Tài chính */
 export type finance_put_finance_system_messages_by_code_override = {
   duongDan: "/api/v1/finance-system-messages/{code}/override";
@@ -6277,6 +6622,27 @@ export type finance_put_finance_system_messages_by_code_override = {
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/finance-system-messages/{code}/override — Xã tắt hoặc bật lại lời đã sửa của một câu hệ thống (tắt thì dùng lời gốc của phần mềm) */
+export type finance_patch_finance_system_messages_by_code_override = {
+  duongDan: "/api/v1/finance-system-messages/{code}/override";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "code": string;
+  };
+  truyVan: {
+  };
+  than: finance_switchSystemMessageIn;
+  phanHoi: {
+    200: finance_systemMessageOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
     500: httpx_Error;
   };
 };
@@ -7787,12 +8153,14 @@ export type petitions_post_my_citizen_reports = {
     401: httpx_Error;
     403: httpx_Error;
     409: httpx_Error;
+    429: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
   };
   errorCodes: {
     403: "chua_xac_thuc_so";
     409: "request_in_progress";
+    429: "unverified_daily_limit";
   };
 };
 
@@ -8324,6 +8692,67 @@ export type petitions_get_petitions_system_messages = {
   };
 };
 
+/** POST /api/v1/petitions-system-messages — Xã thêm một câu hệ thống của riêng xã (nhóm Phản ánh hoặc Dùng chung) */
+export type petitions_post_petitions_system_messages = {
+  duongDan: "/api/v1/petitions-system-messages";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: petitions_createCustomMessageIn;
+  phanHoi: {
+    201: petitions_systemMessageOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/petitions-system-messages/{code} — Sửa lời, mô tả hoặc tắt/bật một câu do xã tự thêm */
+export type petitions_patch_petitions_system_messages_by_code = {
+  duongDan: "/api/v1/petitions-system-messages/{code}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "code": string;
+  };
+  truyVan: {
+  };
+  than: petitions_editCustomMessageIn;
+  phanHoi: {
+    200: petitions_systemMessageOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/petitions-system-messages/{code} — Xoá mềm một câu do xã tự thêm, kèm lý do bắt buộc */
+export type petitions_delete_petitions_system_messages_by_code = {
+  duongDan: "/api/v1/petitions-system-messages/{code}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "code": string;
+  };
+  truyVan: {
+  };
+  than: petitions_deleteCustomMessageIn;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** PUT /api/v1/petitions-system-messages/{code}/override — Xã sửa lời một câu hệ thống của phân hệ Tiếp dân – Nhiệm vụ */
 export type petitions_put_petitions_system_messages_by_code_override = {
   duongDan: "/api/v1/petitions-system-messages/{code}/override";
@@ -8340,6 +8769,27 @@ export type petitions_put_petitions_system_messages_by_code_override = {
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/petitions-system-messages/{code}/override — Xã tắt hoặc bật lại lời đã sửa của một câu hệ thống (tắt thì dùng lời gốc của phần mềm) */
+export type petitions_patch_petitions_system_messages_by_code_override = {
+  duongDan: "/api/v1/petitions-system-messages/{code}/override";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "code": string;
+  };
+  truyVan: {
+  };
+  than: petitions_switchSystemMessageIn;
+  phanHoi: {
+    200: petitions_systemMessageOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
     500: httpx_Error;
   };
 };
@@ -8633,6 +9083,27 @@ export type reporting_put_reporting_system_messages_by_code_override = {
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/reporting-system-messages/{code}/override — Xã tắt hoặc bật lại lời đã sửa của một câu hệ thống (tắt thì dùng lời gốc của phần mềm) */
+export type reporting_patch_reporting_system_messages_by_code_override = {
+  duongDan: "/api/v1/reporting-system-messages/{code}/override";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "code": string;
+  };
+  truyVan: {
+  };
+  than: reporting_switchSystemMessageIn;
+  phanHoi: {
+    200: reporting_systemMessageOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
     500: httpx_Error;
   };
 };
@@ -9045,6 +9516,26 @@ export type identity_get_sla = {
   };
 };
 
+/** POST /api/v1/sla — Thêm dòng thời hạn riêng cho một lĩnh vực — KHÔNG hồi tố lên hồ sơ đã cố định hạn */
+export type identity_post_sla = {
+  duongDan: "/api/v1/sla";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: identity_addSLAFieldRowIn;
+  phanHoi: {
+    201: identity_dongSLARa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
 /** POST /api/v1/sla/defaults — Gieo bộ thời hạn mặc định cho xã chưa cấu hình — KHÔNG ghi đè con số xã đã sửa */
 export type identity_post_sla_defaults = {
   duongDan: "/api/v1/sla/defaults";
@@ -9079,6 +9570,27 @@ export type identity_patch_sla_by_id = {
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/sla/{id} — Xoá mềm một dòng thời hạn riêng, kèm lý do bắt buộc — dòng mặc định không xoá được */
+export type identity_delete_sla_by_id = {
+  duongDan: "/api/v1/sla/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_removeSLAFieldRowIn;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
     500: httpx_Error;
   };
 };
@@ -10682,7 +11194,7 @@ export type identity_delete_working_hours_by_id = {
   };
 };
 
-/** POST /api/v1/zalo-bot-updates — Webhook của Zalo Bot dùng chung — Zalo gọi khi cán bộ nhắn cho bot (mã ghép nối, /trogiup, /dung); xác thực bằng X-Bot-Api-Secret-Token so thời gian hằng, sai khoá 403 không đọc thân */
+/** POST /api/v1/zalo-bot-updates — Webhook của Zalo Bot — Zalo gọi khi cán bộ nhắn cho bot (mã ghép nối, /trogiup, /dung): bot dùng chung trên tên miền webhook của nền tảng, bot riêng của xã trên tên miền của xã (xã lấy từ Host); xác thực bằng X-Bot-Api-Secret-Token so thời gian hằng, sai khoá 403 không đọc thân */
 export type comms_post_zalo_bot_updates = {
   duongDan: "/api/v1/zalo-bot-updates";
   phuongThuc: "POST";
@@ -10702,7 +11214,120 @@ export type comms_post_zalo_bot_updates = {
   };
 };
 
-/** GET /api/v1/zalo-channel-settings — Cấu hình kênh nhắc việc Zalo của xã — bật/tắt, các loại nhắc, giờ yên tĩnh (giờ Việt Nam), nhịp nhắc việc quá hạn; xã chưa lưu thì là tắt */
+/** GET /api/v1/zalo-bots/current — Bot Zalo riêng của xã — có hay không, tên, đường mở khung chat, mã tài khoản bot (Zalo trả), đặt lúc nào bởi ai, webhook đã đăng ký chưa, lần kiểm gần nhất, số cán bộ đang ghép nối; không bao giờ trả mã bot hay secret webhook */
+export type comms_get_zalo_bots_current = {
+  duongDan: "/api/v1/zalo-bots/current";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_communeZaloBotCurrentOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PUT /api/v1/zalo-bots/current — Lưu bot Zalo riêng của xã — mã bot (chỉ ghi, niêm phong bằng khoá riêng của xã), tên bắt đầu bằng “Bot”, đường mở khung chat; mã tài khoản bot luôn lấy từ Zalo (getMe); đổi từ bot chung hoặc sang bot khác thì mọi ghép nối đang sống chấm dứt trong cùng giao dịch, có ghi vết */
+export type comms_put_zalo_bots_current = {
+  duongDan: "/api/v1/zalo-bots/current";
+  phuongThuc: "PUT";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: comms_communeZaloBotIn;
+  phanHoi: {
+    200: comms_communeZaloBotSavedOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+    502: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_request";
+    409: "zalo_bot_changed" | "zalo_bot_in_use";
+    422: "zalo_token_rejected";
+    502: "zalo_unavailable";
+    503: "encryption_not_configured";
+  };
+};
+
+/** DELETE /api/v1/zalo-bots/current — Quay về bot chung — ngừng dùng bot riêng của xã (xoá mềm, giữ làm lịch sử, cần lý do), mọi ghép nối qua bot ấy chấm dứt trong cùng giao dịch, có ghi vết; câu trả lời nhắc xã thu hồi mã bot cũ trong Zalo Bot Creator */
+export type comms_delete_zalo_bots_current = {
+  duongDan: "/api/v1/zalo-bots/current";
+  phuongThuc: "DELETE";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: comms_communeZaloBotRetireIn;
+  phanHoi: {
+    200: comms_communeZaloBotRetiredOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_request";
+  };
+};
+
+/** POST /api/v1/zalo-bots/current/check — Kiểm tra kết nối bot Zalo riêng của xã — gọi getMe bằng mã đã lưu, ghi kết quả (lớp lỗi, không bao giờ chữ của Zalo) và vết */
+export type comms_post_zalo_bots_current_check = {
+  duongDan: "/api/v1/zalo-bots/current/check";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_zaloBotCheckResultOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    409: "zalo_bot_changed" | "zalo_own_bot_missing";
+    503: "encryption_not_configured";
+  };
+};
+
+/** POST /api/v1/zalo-bots/current/webhook — Đăng ký webhook cho bot Zalo riêng của xã — sinh secret ngẫu nhiên (CSPRNG), lưu chờ rồi gọi setWebhook tới https://<tên miền xã>/api/v1/zalo-bot-updates, Zalo xác nhận thì đưa vào dùng; secret hiện MỘT lần trong câu trả lời này */
+export type comms_post_zalo_bots_current_webhook = {
+  duongDan: "/api/v1/zalo-bots/current/webhook";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_zaloBotWebhookOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    409: "zalo_bot_changed" | "zalo_own_bot_missing";
+    503: "commune_host_unavailable" | "encryption_not_configured";
+  };
+};
+
+/** GET /api/v1/zalo-channel-settings — Cấu hình kênh nhắc việc Zalo của xã — bật/tắt, các loại nhắc theo từng phân hệ (supported_events là danh sách được chọn), giờ yên tĩnh (giờ Việt Nam), nhịp nhắc việc quá hạn, platform_ready (đã có bot phục vụ xã chưa); xã chưa lưu thì là tắt */
 export type comms_get_zalo_channel_settings = {
   duongDan: "/api/v1/zalo-channel-settings";
   phuongThuc: "GET";

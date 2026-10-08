@@ -196,3 +196,41 @@ func TestXaTuPhienChiXemKhongCoLyDoLaLoi(t *testing.T) {
 		t.Fatalf("mong lỗi thiếu lý do, được: %v", errs)
 	}
 }
+
+// ADR 0080: the class that lets a Zalo-account session OWN a record waives the verified phone, so its
+// reason must reach the contract and the contract must say the phone is not required.
+func TestCommuneFromSessionOrZaloAccountMangLyDoVaoHopDong(t *testing.T) {
+	ts, errs := trich(t, dauFileCongDan+`
+	// @summary  Gửi phản ánh
+	// @reply    201 -
+	mux.Handle("POST /api/v1/my-citizen-reports",
+		authz.CitizenOnly()(
+			httpx.CommuneFromSessionOrZaloAccount("phiếu chưa xác thực: chủ là tài khoản Zalo của phiên")(
+				http.HandlerFunc(nil))))
+}
+`)
+	if len(errs) != 0 {
+		t.Fatalf("không mong đợi lỗi: %v", errs)
+	}
+	if ts[0].Xa.Kind != "tu-phien-hoac-tai-khoan-zalo" || !strings.Contains(ts[0].Xa.LyDo, "tài khoản Zalo") {
+		t.Fatalf("lớp tài khoản Zalo đọc sai: %+v", ts[0].Xa)
+	}
+	o := xaJSON(ts[0].Xa)
+	if !o.co("reason") || o.gt["tenant_in_context"] != true || o.gt["phone_verified_required"] != false {
+		t.Fatalf("x-vigov-tenant-class của lớp tài khoản Zalo sai: %+v", o.gt)
+	}
+}
+
+func TestCommuneFromSessionOrZaloAccountKhongCoLyDoLaLoi(t *testing.T) {
+	_, errs := trich(t, dauFileCongDan+`
+	// @summary  Gửi phản ánh
+	// @reply    201 -
+	mux.Handle("POST /api/v1/my-citizen-reports",
+		authz.CitizenOnly()(
+			httpx.CommuneFromSessionOrZaloAccount("")(http.HandlerFunc(nil))))
+}
+`)
+	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "lý do") {
+		t.Fatalf("mong lỗi thiếu lý do, được: %v", errs)
+	}
+}

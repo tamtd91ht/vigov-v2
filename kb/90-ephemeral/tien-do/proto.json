@@ -151,6 +151,15 @@
       "bang_chung": "0bf43b86 — buf lint, buf breaking --against HEAD sạch; transaction-boundaries them_dong_thoi_han_rieng_kiem_ma.",
       "no_confirm": [],
       "tiep_theo": "Thứ tự triển khai: comms (f339b2ff) trước nơi phát (documents 1a7cdd46, petitions). Sau khi mọi nơi phát đã đổi: đặt giá trị 1–3 thành reserved và thu hẹp CHECK cài đặt Zalo — một thay đổi riêng."
+    },
+    {
+      "id": "adr-0080-zalo-account-tren-phien",
+      "menu": "phan-anh-nguoi-dan",
+      "viec": "CitizenSessionPrincipal.zalo_account_id = 4 (tai_khoan_zalo.id) — chủ phiếu và 'ai' của phiên chưa xác thực số (ADR 0080)",
+      "trang_thai": "xong",
+      "bang_chung": "7c0e55c9. buf lint + buf breaking xanh; go build 9 module.",
+      "no_confirm": [],
+      "tiep_theo": "Không."
     }
   ]
 }

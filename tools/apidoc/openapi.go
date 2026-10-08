@@ -434,6 +434,14 @@ func xaJSON(x xaDecl) *om {
 			"hồ sơ của chính công dân (ADR 0045).")
 		return o
 	}
+	if x.Kind == "tu-phien-hoac-tai-khoan-zalo" {
+		o.set("phone_verified_required", false)
+		o.set("reason", x.LyDo)
+		o.set("note", "Nhận phiên đã xác thực số (chủ là công dân) HOẶC phiên chưa xác thực số mang tài "+
+			"khoản Zalo (chủ là tài khoản Zalo — phiếu chưa xác thực). Phiên không có cả hai: 403 "+
+			"chua_xac_thuc_so (ADR 0080).")
+		return o
+	}
 	o.set("phone_verified_required", true)
 	return o
 }

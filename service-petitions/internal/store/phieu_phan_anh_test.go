@@ -87,6 +87,8 @@ func dongPhieu(sua map[string]driver.Value) map[string]driver.Value {
 		"diem_hai_long":  nil,
 		"rating_comment": nil,
 		"danh_gia_luc":   nil,
+		// The Zalo-account owner (migration 0032, ADR 0080) — NULL on a citizen-filed petition.
+		"zalo_account_id": nil,
 		// Only cotPhieuCoTaoLuc asks for it; the map is shared by both shapes, and a value the SELECT
 		// did not ask for is simply not read.
 		"tao_luc": mocVaoSo,

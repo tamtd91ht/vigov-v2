@@ -600,6 +600,15 @@
       "bang_chung": "9f3a21c4. go build/vet/test -p 1 ./... xanh, gofmt sạch, tools/apidoc ok; ca pg bỏ qua (không VIGOV_TEST_DSN).",
       "no_confirm": [],
       "tiep_theo": "(1) make kb chưa sinh lại hợp đồng (cây có tuyến chưa commit của phiên Văn bản) → web chưa dùng extension_count/pending_extension/roots/requires_directive; thẻ và dòng vẫn hiện 'Số lần gia hạn ?'. (2) CẦN CHỦ DỰ ÁN, không làm: trọng số việc con + tick (đổi cách tính tiến độ việc cha trên tuyến đã công bố — ADR 0076 còn mở #3), người cùng thực hiện collaborator_ids (mở rộng quyền ghi nhật ký; prototype không có giao diện đặt), email trong ô chọn cán bộ (luật 3 điều kiện dừng #1), nguồn 'Định kỳ' (prototype không có bộ sinh), tệp chưa gắn nhật ký (nghĩa khác prototype), mặc định roots ở trang Nhiệm vụ (lệch số với Tổng quan)."
+    },
+    {
+      "id": "adr-0080-phieu-chua-xac-thuc",
+      "menu": "phan-anh-nguoi-dan",
+      "viec": "Phiếu từ phiên chưa xác thực số: migration 0032 (zalo_account_id, một chủ, chỉ Mini App, không đánh giá/mở lại, trigger ảnh), gửi qua lớp CommuneFromSessionOrZaloAccount, trần 10 phiếu/ngày/tài khoản Zalo (đếm cả xoá mềm, khoá advisory, 429 unverified_daily_limit), tra cứu theo mã + cùng tài khoản, ảnh hiện trường, contact_unverified trên bản đọc công dân + cán bộ, không ZNS (ADR 0080)",
+      "trang_thai": "xong",
+      "bang_chung": "52d436dd (migration), commit C3 này. go vet + go test -count=1 ./... service-petitions và tools/apidoc xanh; make kb + gen:api + check:api khớp. make check ĐẦY ĐỦ CHƯA CHẠY XONG (hệ thống dừng vì thiếu RAM). Migration chưa áp lên PG thật (không VIGOV_TEST_DSN, không Docker).",
+      "no_confirm": [],
+      "tiep_theo": "(1) make check đầy đủ + go run ./tools/schema-smoke trên PG16. (2) Ngày dùng domain.AutomationZone (+07:00). (3) verification-photos vẫn chỉ cho phiên có số (phiếu chưa xác thực không có bước công dân xác nhận đóng)."
     }
   ]
 }

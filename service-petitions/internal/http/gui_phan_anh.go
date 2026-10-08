@@ -160,13 +160,13 @@ func (h *HandlerCongDan) GuiPhieu(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	congDan, ok := h.congDanThucHien(r)
+	sender, ok := h.channelSender(r)
 	if !ok {
-		// A WIRING FAULT, ANSWERED 500 — the same reasoning as PhieuCuaToi. authz.CitizenOnly
-		// refuses every request without a citizen principal before this function runs, so reaching
-		// here means the route was mounted without that guard. 401 would tell the citizen to sign in
-		// again, which will not help and hides the fault.
-		h.d.Log.Error("tuyến gửi phản ánh chạy mà không có danh tính trong phiên — thiếu " +
+		// A WIRING FAULT, ANSWERED 500 — the same reasoning as PhieuCuaToi. authz.CitizenOnly and
+		// httpx.CommuneFromSessionOrZaloAccount refuse every request without an owner before this
+		// function runs, so reaching here means the route was mounted without them. 401 would tell
+		// the citizen to sign in again, which will not help and hides the fault.
+		h.d.Log.Error("tuyến gửi phản ánh chạy mà không có chủ phiếu trong phiên — thiếu " +
 			"authz.CitizenOnly hoặc authz.CitizenPrincipal trên chuỗi rìa")
 		httpx.WriteError(w, http.StatusInternalServerError, "internal",
 			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
@@ -192,7 +192,7 @@ func (h *HandlerCongDan) GuiPhieu(w http.ResponseWriter, r *http.Request) {
 		Field:     field,
 		Lat:       vao.Lat,
 		Lng:       vao.Lng,
-	}, congDan)
+	}, sender)
 	if err != nil {
 		h.traLoiLoiGui(w, r, err)
 		return
@@ -276,6 +276,31 @@ func (h *HandlerCongDan) congDanThucHien(r *http.Request) (audit.Actor, bool) {
 	return audit.Actor{ID: p.ID, Kind: p.Kind, IP: httpx.ClientIP(r)}, true
 }
 
+// channelSender is congDanThucHien for the routes of class httpx.CommuneFromSessionOrZaloAccount
+// (ADR 0080): the OWNER of what the request writes or reads — a verified citizen, or the Zalo account
+// of a session with no verified phone — from the SESSION and from nothing else (rule 4, invariant 2).
+//
+// IT SWITCHES ON THE PRINCIPAL'S KIND, as authz.CitizenChannelOwner demands of every caller: the two
+// ids come from two tables, and one read as the other would file a petition into a column that names
+// nobody. A kind outside the two is refused, never mapped by its spelling. The IP is this socket's
+// (httpx.ClientIP does not trust X-Forwarded-For).
+func (h *HandlerCongDan) channelSender(r *http.Request) (app.IntakeSender, bool) {
+	p, ok := authz.CitizenChannelOwner(r.Context())
+	if !ok {
+		return app.IntakeSender{}, false
+	}
+	s := app.IntakeSender{Owner: domain.PetitionOwner{ID: p.ID}, IP: httpx.ClientIP(r)}
+	switch p.Kind {
+	case authz.KindCitizen:
+		s.Owner.Kind = domain.OwnerCitizen
+	case authz.KindZaloAccount:
+		s.Owner.Kind = domain.OwnerZaloAccount
+	default:
+		return app.IntakeSender{}, false
+	}
+	return s, s.Owner.Valid()
+}
+
 // traLoiLoiGui maps one intake failure onto a status and a sentence a citizen can act on.
 //
 // THREE BRANCHES, AND THE DEFAULT IS THE NARROW ONE. Listing what counts as the sender's fault
@@ -287,6 +312,19 @@ func (h *HandlerCongDan) traLoiLoiGui(w http.ResponseWriter, r *http.Request, er
 	switch {
 	case errors.Is(err, app.ErrFieldNotOffered):
 		writeFieldNotOffered(w)
+
+	case errors.Is(err, app.ErrUnverifiedDailyLimit):
+		// ADR 0080 decision 7: the Zalo account reached domain.UnverifiedDailyCeiling today. Nothing was
+		// written and no lookup code was issued. NO Retry-After: the allowance refills at the commune's
+		// midnight, and the honest next step for the citizen is to share their Zalo number, which lifts
+		// the ceiling, or to come back tomorrow. The ceiling's number is NOT in the sentence (the
+		// citizen does not need it, and a stated number is a target). Logged with the commune only —
+		// never the account id (rule 3).
+		h.d.Log.Warn("từ chối phiếu chưa xác thực vì tài khoản Zalo đã gửi đủ số phiếu trong ngày",
+			"xa", string(tenant.MustFrom(ctx)))
+		httpx.WriteError(w, http.StatusTooManyRequests, "unverified_daily_limit",
+			"Hôm nay bạn đã gửi nhiều phản ánh khi chưa xác nhận số điện thoại nên phản ánh này CHƯA được "+
+				"ghi nhận. Vui lòng xác nhận số điện thoại Zalo để gửi tiếp, hoặc gửi lại vào ngày mai.", "")
 
 	case errors.Is(err, app.ErrFieldCatalogueUnavailable):
 		// Platform unreachable past the 60-second cache (ADR 0060 §3): nothing was written, no code was

@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/page"
@@ -42,8 +41,13 @@ import (
 // off, so adding the list did not add a way to reach the unfiltered register. See the note at the top
 // of this file, and the long argument on petstore.CuaCongDanTheoMaTraCuu for why these are separate
 // store methods rather than an optional filter on the staff ones.
+//
+// THE BY-CODE READ TAKES AN OWNER WITH A KIND (ADR 0080): a verified citizen, or the Zalo account of a
+// session with no verified phone. THE LIST TAKES A CITIZEN ID ONLY, on purpose: an unverified petition
+// is never in "Phản ánh của tôi" (ADR 0080 decision 3, stop condition #1), so the list has no owner
+// kind to choose.
 type PhieuCuaCongDanDoc interface {
-	CuaCongDanTheoMaTraCuu(ctx context.Context, congDanID, ma string) (domain.PhieuPhanAnh, error)
+	OwnedByCode(ctx context.Context, owner domain.PetitionOwner, ma string) (domain.PhieuPhanAnh, error)
 	DanhSachCuaCongDan(ctx context.Context, congDanID, trangThai string, yc page.Request) (
 		page.Result[domain.PhieuPhanAnh], error)
 }
@@ -61,7 +65,7 @@ type PhieuCuaCongDanDoc interface {
 // on a self-filed petition the person acting IS the owner, so one value serves both and there is no
 // second parameter a handler could fill from a request body.
 type GuiPhanAnhCongDan interface {
-	Gui(ctx context.Context, yc app.YeuCauGuiPhanAnh, congDan audit.Actor) (domain.PhieuPhanAnh, error)
+	Gui(ctx context.Context, yc app.YeuCauGuiPhanAnh, sender app.IntakeSender) (domain.PhieuPhanAnh, error)
 }
 
 // DepsCongDan is everything the CITIZEN routes need — and nothing the staff routes need.
@@ -241,6 +245,17 @@ type phieuCuaToiRa struct {
 	// `reopen_count` is NOT here either — see the note on this type.
 	Rating  *int       `json:"rating,omitempty"`
 	RatedAt *time.Time `json:"rated_at,omitempty"`
+
+	// ContactUnverified is true on a petition sent from a Mini App session WITHOUT a verified phone
+	// (ADR 0080): its contact details were typed by hand, it is owned by the Zalo account, and the
+	// citizen will NOT be notified of its progress — no ZNS to a self-declared number (decision 4) — so
+	// the Mini App can say so and point to the lookup. Never the account id.
+	//
+	// DERIVED from the owner column (domain.PhieuPhanAnh.ContactUnverified), SET ON EVERY RESPONSE. A
+	// pointer with omitempty — the staff `has_citizen` precedent: `false` travels as `false`, and
+	// tools/apidoc declares the key optional so yesterday's fixtures stay valid. Absent therefore means
+	// "this server predates the field".
+	ContactUnverified *bool `json:"contact_unverified,omitempty"`
 }
 
 // phieuCuaToiRaNgoai builds the citizen response.
@@ -295,6 +310,8 @@ func phieuCuaToiRaNgoai(p domain.PhieuPhanAnh, nhan string) phieuCuaToiRa {
 		stars, at := p.Rating, p.RatedAt
 		ra.Rating, ra.RatedAt = &stars, &at
 	}
+	unverified := p.ContactUnverified()
+	ra.ContactUnverified = &unverified
 	return ra
 }
 
@@ -337,11 +354,14 @@ func phieuCuaToiRaNgoai(p domain.PhieuPhanAnh, nhan string) phieuCuaToiRa {
 func (h *HandlerCongDan) PhieuCuaToi(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	congDanID, ok := h.danhTinhTuPhien(ctx)
+	// THE OWNER, NOT ONLY THE CITIZEN (ADR 0080 decision 3): this route also serves the Zalo account
+	// of a session with no verified phone, which follows ITS OWN unverified petition by code + same
+	// account. channelSender switches on the principal's kind; the store binds the matching column.
+	sender, ok := h.channelSender(r)
 	if !ok {
-		// A WIRING FAULT, ANSWERED AS 500 AND NOT AS 401 OR 404. authz.CitizenOnly refuses every
-		// request without a citizen principal before this function runs, so reaching here means
-		// the route was mounted without that guard. 401 would tell the citizen to sign in again,
+		// A WIRING FAULT, ANSWERED AS 500 AND NOT AS 401 OR 404. authz.CitizenOnly and the session
+		// class refuse every request without an owner before this function runs, so reaching here
+		// means the route was mounted without them. 401 would tell the citizen to sign in again,
 		// which will not help and hides the fault; 404 would say their petition is gone. The same
 		// reasoning is on petstore.ErrThieuDinhDanhCongDan.
 		h.d.Log.Error("tuyến công dân chạy mà không có danh tính trong phiên — thiếu authz.CitizenOnly " +
@@ -358,7 +378,7 @@ func (h *HandlerCongDan) PhieuCuaToi(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p, err := h.d.Phieu.CuaCongDanTheoMaTraCuu(ctx, congDanID, ma)
+	p, err := h.d.Phieu.OwnedByCode(ctx, sender.Owner, ma)
 	if err != nil {
 		if errors.Is(err, petstore.ErrPhieuKhongTonTai) {
 			h.khongTimThay(w)

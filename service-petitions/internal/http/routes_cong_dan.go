@@ -103,14 +103,21 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	// soft-deleted petition. The body is identical in all four.
 	//
 	// 403 IS NEVER A PERMISSION REFUSAL — citizens hold no permissions (rule 5, invariant 6). It has
-	// exactly ONE cause: `chua_xac_thuc_so`, a usable session with no verified phone, answered by
-	// httpx.XaTuPhien before this handler runs (ADR 0045). It says nothing about any record — the
-	// session has no citizen identity to filter by yet — and the Mini App needs the distinct code to
-	// ask for the phone; folded into 401 it would reopen a session and loop.
+	// exactly ONE cause: `chua_xac_thuc_so`, a usable session with NEITHER a verified phone NOR a Zalo
+	// account, answered by the session class before this handler runs (ADR 0045, 0080). It says nothing
+	// about any record — the session has no owner to filter by — and the Mini App needs the distinct
+	// code to ask for the phone; folded into 401 it would reopen a session and loop.
+	//
+	// CommuneFromSessionOrZaloAccount AND NOT XaTuPhien (ADR 0080 decision 3): a session with no verified
+	// phone follows ITS OWN unverified petition — by the code AND the same Zalo account, never by the
+	// code alone. Another account's petition, a verified citizen's and an unknown code are the same 404
+	// body (ADR 0080 stop condition #6). A verified session is served exactly as before.
 	//
 	// 200 CARRIES MASKED CONTACT DETAILS EVEN THOUGH THE READER TYPED THEM — the two reasons are
-	// on phieuCuaToiRa.ReporterPhone. No audit entry is written on any branch; the reasoning, and
-	// the condition under which it would stop holding, is on HandlerCongDan.PhieuCuaToi.
+	// on phieuCuaToiRa.ReporterPhone. `contact_unverified` true = sent without a verified phone: the
+	// citizen is not notified of progress (no ZNS, ADR 0080 decision 4). No audit entry is written on
+	// any branch; the reasoning, and the condition under which it would stop holding, is on
+	// HandlerCongDan.PhieuCuaToi.
 	//
 	// 503 `field_catalogue_unavailable`: the petition carries a field and its label (commune wording,
 	// else platform default) cannot be read — refused rather than showing a raw code (ADR 0060 §3).
@@ -123,7 +130,7 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	// @reply    503 httpx.Error
 	mux.Handle("GET /api/v1/my-citizen-reports/{maTraCuu}",
 		authz.CitizenOnly()(
-			httpx.XaTuPhien()(
+			httpx.CommuneFromSessionOrZaloAccount("phiên chưa xác thực số chỉ tra được phiếu chưa xác thực CỦA CHÍNH tài khoản Zalo của phiên, theo mã tra cứu và cùng tài khoản (ADR 0080 #3)")(
 				http.HandlerFunc(h.PhieuCuaToi))))
 
 	// --- the citizen's own petitions, newest first ("Phản ánh của tôi") ------------------------
@@ -238,20 +245,32 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	//	field_catalogue_unavailable  a field was sent and platform could not be read past the 60-second
 	//	                             cache (ADR 0060 §3) — clears by itself
 	//
-	// 403 `chua_xac_thuc_so` only — a session with no verified phone (httpx.XaTuPhien, ADR 0045).
-	// No row is written and no lookup code is issued. Never a permission refusal: citizens hold no
-	// permissions (rule 5, invariant 6).
+	// 403 `chua_xac_thuc_so` only — a session with NEITHER a verified phone NOR a Zalo account (ADR
+	// 0045, 0080). No row is written and no lookup code is issued. Never a permission refusal: citizens
+	// hold no permissions (rule 5, invariant 6).
+	//
+	// A SESSION WITH NO VERIFIED PHONE BUT A ZALO ACCOUNT IS SERVED (ADR 0080, class
+	// CommuneFromSessionOrZaloAccount): the petition is stored UNVERIFIED — owned by the Zalo account,
+	// no citizen identity, the typed name and number kept as contact details only — and the 201 says
+	// `contact_unverified: true`. No ZNS is ever sent for it (decision 4). The idempotency key is the
+	// account's own (`zalo-account:<id>`), never shared with a citizen's.
+	//
+	// 429 `unverified_daily_limit`: that Zalo account already sent the day's ceiling of unverified
+	// petitions in this commune (ADR 0080 decision 7, domain.UnverifiedDailyCeiling — counted from the
+	// commune's midnight, soft-deleted petitions included). Nothing written, no code issued, no
+	// Retry-After. Never answered to a verified session.
 	//
 	// @reply    201 phieuCuaToiRa
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error chua_xac_thuc_so
 	// @reply    409 httpx.Error request_in_progress
+	// @reply    429 httpx.Error unverified_daily_limit
 	// @reply    500 httpx.Error
 	// @reply    503 httpx.Error
 	mux.Handle("POST /api/v1/my-citizen-reports",
 		authz.CitizenOnly()(
-			httpx.XaTuPhien()(
+			httpx.CommuneFromSessionOrZaloAccount("Zalo không cho số: phiên chưa xác thực số được gửi phiếu CHƯA XÁC THỰC, chủ phiếu là tài khoản Zalo của phiên, tối đa 10 phiếu/ngày (ADR 0080 #1, #2, #7)")(
 				idem.Required(idem.MoKhiHong)(
 					http.HandlerFunc(h.GuiPhieu)))))
 
@@ -320,7 +339,8 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	// (rule 13 stop condition) — see core/ratelimit.
 	//
 	// ⚠ NOT ENFORCED: "only the commune's OWN app". The citizen session carries no fact about which app
-	// opened it (httpx.CitizenSession has three fields), so nothing here can refuse a shared-app session.
+	// opened it (httpx.CitizenSession carries the session, citizen, commune and Zalo ACCOUNT — not the app),
+	// so nothing here can refuse a shared-app session.
 	// Reported, not invented — internal/app/petition_photo.go.
 	//
 	// @summary  Công dân xin tải MỘT ảnh hiện trường cho phiếu phản ánh của CHÍNH MÌNH khi phiếu còn "Đã tiếp nhận" — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút)
@@ -351,6 +371,11 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	// the residue of a Redis outage is one unused pending row that stops counting after 15 minutes —
 	// and the rate limit, which fails closed, refuses during that outage anyway.
 	//
+	// ADR 0080 decision 8: an UNVERIFIED petition has scene photos too, owned by its Zalo account — so
+	// all three photo routes take CommuneFromSessionOrZaloAccount, the petition read binding
+	// `zalo_account_id = <session account>` instead of `cong_dan_id`. Same 404 for another owner's
+	// petition. The rate-limit budget is the account's own (`zalo-account:` prefix before the digest).
+	//
 	// @reply    201 photoUploadOut
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
@@ -362,7 +387,7 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	// @reply    503 httpx.Error
 	mux.Handle("POST /api/v1/my-citizen-reports/{maTraCuu}/photos",
 		authz.CitizenOnly()(
-			httpx.XaTuPhien()(
+			httpx.CommuneFromSessionOrZaloAccount("ảnh hiện trường của phiếu chưa xác thực: chủ ảnh là tài khoản Zalo của phiên, chỉ trên phiếu của chính tài khoản ấy (ADR 0080 #8)")(
 				idem.Required(idem.MoKhiHong)(
 					http.HandlerFunc(h.RequestPetitionPhotoUpload)))))
 
@@ -404,7 +429,7 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	// @reply    503 httpx.Error
 	mux.Handle("POST /api/v1/my-citizen-reports/{maTraCuu}/photos/{id}/completion",
 		authz.CitizenOnly()(
-			httpx.XaTuPhien()(
+			httpx.CommuneFromSessionOrZaloAccount("hoàn tất ảnh hiện trường của phiếu chưa xác thực: chỉ trên phiếu của chính tài khoản Zalo của phiên (ADR 0080 #8)")(
 				idem.KhongCan("hoàn tất lần hai trên ảnh đã lưu trả lại đúng ảnh ấy và không ghi gì; hai lượt cùng lúc tuần tự hoá trên khoá dòng phiếu")(
 					http.HandlerFunc(h.CompletePetitionPhoto)))))
 
@@ -428,7 +453,7 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	// @reply    503 httpx.Error
 	mux.Handle("GET /api/v1/my-citizen-reports/{maTraCuu}/photos",
 		authz.CitizenOnly()(
-			httpx.XaTuPhien()(
+			httpx.CommuneFromSessionOrZaloAccount("ảnh hiện trường đã lưu của phiếu chưa xác thực: liên kết ký chỉ cấp cho chính tài khoản Zalo chủ phiếu (ADR 0080 #8)")(
 				http.HandlerFunc(h.ListMyPetitionPhotos))))
 
 	// ẢNH SAU XỬ LÝ CỦA PHIẾU CỦA MÌNH — the "after" half of "Ảnh trước và sau khi xử lý" (owner decision

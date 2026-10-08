@@ -56,6 +56,54 @@ type KhoPhieuGhi interface {
 	Tao(ctx context.Context, tx *store.ScopedTx, p domain.PhieuPhanAnh) error
 }
 
+// CitizenIntakePetitions is KhoPhieuGhi plus the UNVERIFIED-petition ceiling (ADR 0080 decision 7):
+// serialise one Zalo account's intakes in this commune, then count what it already sent today — both
+// inside the intake transaction. A separate interface so the staff-booked intake, which has no Zalo
+// owner, does not depend on it. *petstore.PhieuPhanAnhStore satisfies it.
+type CitizenIntakePetitions interface {
+	KhoPhieuGhi
+	LockZaloAccountIntake(ctx context.Context, tx *store.ScopedTx, zaloAccountID string) error
+	CountZaloAccountPetitionsSince(ctx context.Context, tx *store.ScopedTx, zaloAccountID string,
+		since time.Time) (int, error)
+}
+
+// IntakeSender is who files a petition through the citizen channel — and therefore who OWNS it — plus
+// the address the request arrived from, for the trail (rule 6, invariant 2).
+//
+// AN EXPLICIT OWNER WITH A KIND, never a bare id (domain.PetitionOwner says why). The handler builds it
+// from the SESSION's principal (authz.CitizenChannelOwner) and from nothing else (rule 4, invariant 2);
+// YeuCauGuiPhanAnh has no owner field, so a request body cannot name one.
+type IntakeSender struct {
+	Owner domain.PetitionOwner
+	IP    string
+}
+
+// Actor is the audit "who" of the sender's act: the opaque owner id with its Kind. A citizen has no
+// staff business code, and rule 6 invariant 8 binds staff only (core/authz Principal.Ma); for a Zalo
+// account the "who" is `tai_khoan_zalo.id` — ADR 0080 decision 9. The ONE place in this service that
+// turns a citizen-channel owner into an audit actor; the scene-photo handlers use it too.
+func (s IntakeSender) Actor() (audit.Actor, error) {
+	if !s.Owner.Valid() {
+		return audit.Actor{}, fmt.Errorf("gui_phan_anh: chủ phiếu không hợp lệ (kind=%q) — tuyến thiếu "+
+			"authz.CitizenOnly hoặc lớp xã từ phiên", s.Owner.Kind)
+	}
+	switch s.Owner.Kind {
+	case domain.OwnerCitizen:
+		return audit.Actor{ID: s.Owner.ID, Kind: "citizen", IP: s.IP}, nil
+	case domain.OwnerZaloAccount:
+		// @actor-ok: the "who" of an unverified petition is `tai_khoan_zalo.id` with Kind zalo-account —
+		// ADR 0080 decision 9; rule 6 invariant 8 (business code) binds staff only (core/authz/authz.go
+		// Principal.Ma). Not a staff actor, so there is no business code to use instead.
+		return audit.Actor{ID: s.Owner.ID, Kind: audit.KindZaloAccount, IP: s.IP}, nil
+	}
+	return audit.Actor{}, fmt.Errorf("gui_phan_anh: loại chủ phiếu không được khai (kind=%q)", s.Owner.Kind)
+}
+
+// ErrUnverifiedDailyLimit — the Zalo account already sent domain.UnverifiedDailyCeiling unverified
+// petitions in this commune today (ADR 0080 decision 7). Nothing was written and no code was issued.
+// 429 to the sender.
+var ErrUnverifiedDailyLimit = errors.New("gui_phan_anh: tài khoản Zalo đã gửi đủ số phiếu chưa xác thực trong ngày")
+
 // HanTiepNhanDoc asks identity for the instants this commune's commitments fall due.
 //
 // THE FULL identityclient.Client SIGNATURE, DELIBERATELY, rather than a narrow
@@ -136,7 +184,7 @@ var ErrChuaAnDinhDuocHan = errors.New("gui_phan_anh: chưa ấn định được
 // Rule 4, invariant 2: the citizen's identity comes FROM THE SESSION. A field here is a field a
 // handler can fill from a request body, and the value looks identical in a diff whichever end it
 // came from — which is why rule 4, forbidden #1 is the top entry of that rule's list. The owner of
-// the record is taken from the `congDan` actor argument of Gui, which the handler builds from
+// the record is taken from the `sender` argument of Gui (IntakeSender), which the handler builds from
 // authz.Principal and from nothing else.
 //
 // # Field IS THE CITIZEN'S PICK, AND IT IS THE PETITION'S FIELD (ADR 0050 point 1, 28/09/2026)
@@ -186,7 +234,7 @@ type YeuCauGuiPhanAnh struct {
 // GuiPhanAnh owns the citizen intake.
 type GuiPhanAnh struct {
 	db  *store.DB
-	kho KhoPhieuGhi
+	kho CitizenIntakePetitions
 	han HanTiepNhanDoc
 
 	// suKien records the intake's `petitions.status_changed.v1` (into `da-tiep-nhan`) in the SAME
@@ -208,7 +256,7 @@ type GuiPhanAnh struct {
 	luc func() time.Time
 }
 
-func NewGuiPhanAnh(db *store.DB, kho KhoPhieuGhi, suKien KhoSuKien, han HanTiepNhanDoc,
+func NewGuiPhanAnh(db *store.DB, kho CitizenIntakePetitions, suKien KhoSuKien, han HanTiepNhanDoc,
 	fields CitizenIntakeFields) *GuiPhanAnh {
 	return &GuiPhanAnh{
 		db: db, kho: kho, suKien: suKien, han: han, fields: fields,
@@ -221,22 +269,28 @@ func NewGuiPhanAnh(db *store.DB, kho KhoPhieuGhi, suKien KhoSuKien, han HanTiepN
 // Gui receives one petition from the citizen who filed it, and returns the record — including the
 // lookup code the caller must hand back (rule 10, invariant 1).
 //
-// `congDan` IS BOTH THE ACTOR AND THE OWNER, and that is a property of this route rather than a
+// `sender` IS BOTH THE ACTOR AND THE OWNER, and that is a property of this route rather than a
 // shortcut: on a self-filed petition the person acting IS the person the record belongs to. Taking
 // one value and using it for both is what makes them impossible to get out of step — two parameters
 // would be two things a caller could fill from two places, and one of those places is the request
 // body.
-func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, congDan audit.Actor) (
+//
+// TWO OWNER KINDS, ONE INTAKE (ADR 0080). A verified citizen's petition is stored with `cong_dan_id`
+// exactly as before. A Zalo account's — a Mini App session with no verified phone — is stored with
+// `zalo_account_id` and `cong_dan_id` NULL, the typed name and number kept as contact details only
+// (decision 2), and is refused past domain.UnverifiedDailyCeiling a day (decision 7). Nothing else
+// differs: same channel constant, same deadlines, same trail in the same transaction. Its outbox row is
+// not written — writeStatusChangedEvent has no recipient without `cong_dan_id` (decision 4: no ZNS).
+func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, sender IntakeSender) (
 	domain.PhieuPhanAnh, error) {
 
-	// FAIL CLOSED, BEFORE ANYTHING ELSE. authz.CitizenOnly refuses every request without a citizen
-	// principal before the handler runs, so reaching here without one means the route was mounted
-	// wrong. A petition stored with no owner cannot be found again by the person who filed it, and
-	// core/audit refuses an entry with no actor for the same reason.
-	if congDan.ID == "" || congDan.Kind != "citizen" {
-		return domain.PhieuPhanAnh{}, fmt.Errorf(
-			"gui_phan_anh: chủ thể không phải công dân (kind=%q) — tuyến thiếu authz.CitizenOnly "+
-				"hoặc authz.CitizenPrincipal", congDan.Kind)
+	// FAIL CLOSED, BEFORE ANYTHING ELSE. authz.CitizenOnly and the session class refuse every request
+	// without an owner before the handler runs, so reaching here without one means the route was
+	// mounted wrong. A petition stored with no owner cannot be found again by the person who filed it,
+	// and core/audit refuses an entry with no actor for the same reason.
+	actor, err := sender.Actor()
+	if err != nil {
+		return domain.PhieuPhanAnh{}, err
 	}
 
 	// THE CHANNEL'S OWN PREDICATES ARE CONSULTED, NOT ASSUMED. They are the vocabulary ADR 0028
@@ -381,14 +435,13 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, congDan audi
 	}
 
 	moi := domain.PhieuPhanAnh{
-		ID:        id,
-		MaTraCuu:  maTraCuu,
-		Kenh:      kenhCongDan,
-		CongDanID: congDan.ID,
-		NoiDung:   noiDung,
-		DiaChi:    diaChi,
-		Lat:       lat,
-		Lng:       lng,
+		ID:       id,
+		MaTraCuu: maTraCuu,
+		Kenh:     kenhCongDan,
+		NoiDung:  noiDung,
+		DiaChi:   diaChi,
+		Lat:      lat,
+		Lng:      lng,
 
 		NguoiGuiHoTen:     hoTen,
 		NguoiGuiDienThoai: dienThoai,
@@ -423,9 +476,36 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, congDan audi
 	// but the rule stays tied to the field so the day it can, the petition is still born hidden.
 	moi.PublicationStatus = domain.InitialPublicationStatus(moi.LinhVuc)
 
+	// THE OWNER, IN EXACTLY ONE OF TWO COLUMNS — the other stays "" and the store writes NULL, never ''
+	// (migration 0032: non-blank, single owner). sender.Actor() already refused any other kind.
+	switch sender.Owner.Kind {
+	case domain.OwnerCitizen:
+		moi.CongDanID = sender.Owner.ID
+	case domain.OwnerZaloAccount:
+		moi.ZaloAccountID = sender.Owner.ID
+	}
+
 	// STEP 3 — the row and its trail, in ONE transaction (rule 6, invariant 3). There is no ordering
 	// here in which the petition exists and the trail does not: either both commit or neither does.
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		// THE UNVERIFIED CEILING, INSIDE THE TRANSACTION THAT WRITES THE ROW (ADR 0080 decision 7):
+		// lock this account's intakes in this commune, count today's, refuse at the ceiling. Outside the
+		// transaction two sends at one instant would both pass at 9. Counted from the commune's day
+		// (domain.UnverifiedCountingDayStart) and INCLUDING soft-deleted rows — the store says why.
+		if moi.ZaloAccountID != "" {
+			if err := uc.kho.LockZaloAccountIntake(ctx, tx, moi.ZaloAccountID); err != nil {
+				return err
+			}
+			n, err := uc.kho.CountZaloAccountPetitionsSince(ctx, tx, moi.ZaloAccountID,
+				domain.UnverifiedCountingDayStart(bayGio))
+			if err != nil {
+				return err
+			}
+			if n >= domain.UnverifiedDailyCeiling {
+				return ErrUnverifiedDailyLimit
+			}
+		}
+
 		if err := uc.kho.Tao(ctx, tx, moi); err != nil {
 			return err
 		}
@@ -463,6 +543,9 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, congDan audi
 			"do_dai_noi_dung":    len([]rune(moi.NoiDung)),
 			"publication_status": string(moi.PublicationStatus),
 			"has_scene_location": moi.Lat != nil,
+			// ADR 0080: whether the contact details are self-declared and unverified (a Zalo-account
+			// owner). A boolean — the owner id is the entry's actor already, and nothing else is needed.
+			"contact_unverified": moi.ContactUnverified(),
 		})
 		if err != nil {
 			return fmt.Errorf("gui_phan_anh: mã hoá delta: %w", err)
@@ -474,7 +557,7 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, congDan audi
 		//
 		// Subject is the BUSINESS CODE the citizen holds, never the internal ULID.
 		if err := audit.Write(ctx, tx, audit.Entry{
-			Actor:   congDan,
+			Actor:   actor,
 			Action:  HanhViGuiPhanAnh,
 			Subject: moi.MaTraCuu,
 			Delta:   delta,
@@ -488,9 +571,10 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, congDan audi
 		// back the row and the trail too, and the citizen is told the report was not received (rule 2,
 		// invariant 6). The row is drained after commit by the relay, never published from in here.
 		//
-		// `moi.CongDanID` is never empty on THIS route (refused at the top), so the helper's "no
-		// recipient, no row" branch is the staff-booked channel's, not this one's. Occurrence is 1:
-		// `so_lan_mo_lai` is 0 on a row that was just created.
+		// A VERIFIED citizen's petition always has `moi.CongDanID`, so it gets its row. A ZALO-OWNED
+		// one has none, and the helper's "no recipient, no row" branch writes nothing — ADR 0080
+		// decision 4: no ZNS to a self-declared number. Occurrence is 1: `so_lan_mo_lai` is 0 on a
+		// row that was just created.
 		return ghiSuKienDoiTrangThai(ctx, tx, uc.suKien, uc.sinhID, moi, domain.DaTiepNhan, bayGio)
 	})
 	if err != nil {

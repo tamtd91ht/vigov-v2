@@ -530,6 +530,15 @@
       "bang_chung": "Commit 6fc89b98 (Go) + fad0fd41 (migration 0026). go test ./service-identity/... xanh; isolation-reviewer không mục chặn. *_pg_test bỏ qua (không VIGOV_TEST_DSN).",
       "no_confirm": [],
       "tiep_theo": "Chủ dự án chốt dòng riêng cho MỌI loại việc nhưng hôm nay chỉ phan-anh thêm được: van-ban-den/nhiem-vu trả 400 sla_field_unverifiable vì chưa có RPC đọc loại văn bản (service-documents) / mức ưu tiên (service-petitions) — thẻ contract đang làm; khi có, chỉ đổi checkFieldWithOwner (app/sla_field_rule.go) và thêm kiểm trần 200 dòng (store/sla.go TranSLA). Nợ: đối chiếu tầng 2 (lĩnh vực xã đã tắt) chưa áp; chú thích cột sla.linh_vuc (0008:261) đã cũ; chưa chạy trên PostgreSQL 16 thật."
+    },
+    {
+      "id": "adr-0080-phien-khong-so-app-xa",
+      "menu": "phan-anh-nguoi-dan",
+      "viec": "Phiên mang zalo_account_id; app riêng của xã phát phiên không số khi thiếu phoneToken, không thừa hưởng danh tính đã liên kết; vết cầu phiên Kind zalo-account (ADR 0080)",
+      "trang_thai": "xong",
+      "bang_chung": "357745c3. go vet + go test -count=1 ./... xanh; ca pg bỏ qua (không VIGOV_TEST_DSN). Cái giá đã chấp nhận: phiên không số không chứng minh App ID (ADR 0080 Cái phải trả #6).",
+      "no_confirm": [],
+      "tiep_theo": "Chạy thật trên máy với app xã (chưa gọi Zalo thật). citizen-app phải gửi được thân không phoneToken."
     }
   ]
 }

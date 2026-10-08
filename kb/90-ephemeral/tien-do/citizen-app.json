@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "citizen-app",
-  "cap_nhat": "2026-10-07",
+  "cap_nhat": "2026-10-08",
   "_luu_y_lan_ghi_nay": "GHI 22/09/2026 LAN BA (HO SO XIN QUYEN ZALO). `make kb` KHONG chay (co phien khac dang lam do). Muc moi `ho-so-zalo-khoi-roi-khoi-may`. CANH BAO: HAI CAU SAI DA NAM TRONG HO SO PHAP LY VA DA DUOC GO — doc muc ay truoc khi sua `content/ket-xuat-ho-so.ts` hoac `scripts/ho-so-zalo.mjs`. --- GHI 22/09/2026 LAN HAI (GIAI DOAN B - be mat yeu cau, noi tuyen may chu). `make kb` KHONG chay trong luot nay (phien chinh chay o cuoi). Muc moi `be-mat-yeu-cau-tu-van-bao-gia`. ⚠ DOC MUC AY TRUOC KHI SUA `phase1-collects-nothing.test.ts`: hai day bay vua duoc THU HEP lan dau tien ke tu khi chung ra doi, va `chi_trong` doi tu mot CHUOI sang mot DANH SACH TEP. --- GHI 22/09/2026 (GIAI ĐOẠN A của việc thiết kế lại màn chủ) — `make kb` KHÔNG chạy trong lượt này (phiên chính sẽ chạy ở cuối), nên `kb/90-ephemeral/tien-do.md` còn là bản sinh của lần trước. Mục mới `man-chu-viec-cua-khach-khong-phai-quyen`. Không mục nào bị xoá, không `trang_thai` nào bị hạ. --- BỔ SUNG 21/09/2026 (khuya): mục `man-chu-khop-hero-tab-ban-mau` mới, và `make kb` CŨNG KHÔNG chạy trong lượt ấy (người dùng yêu cầu không chạy) — `kb/90-ephemeral/tien-do.md` vẫn là bản sinh của lần trước. Mục mới ấy khai một SỰ CỐ MẤT MÃ NGUỒN đã khôi phục: đọc `tiep_theo` của nó trước khi tin bất cứ dòng chú thích nào trong citizen-app/src/styles.css. --- Ghi chiều 21/09/2026. `make kb` CHƯA chạy trong phiên này (người dùng yêu cầu không chạy) — `kb/90-ephemeral/tien-do.md` vì thế còn là bản sinh của lần trước. Hai lần ghi tối 21/09 (mục `ho-so-zalo-sinh-tu-nguon` và `man-chu-theo-ban-mau-pm`) cũng KHÔNG chạy `make kb`. Lần ghi cuối còn dọn một chỗ sai lược đồ có SẴN: `no_confirm` của `ho-so-zalo-sinh-tu-nguon` chứa văn xuôi thay vì số hiệu câu hỏi, và `progress_guard` chặn mọi lần ghi vào tệp này cho tới khi nó được dọn; hai đoạn văn ấy CHUYỂN NGUYÊN VĂN xuống `tiep_theo` của chính mục đó, không xoá chữ nào.",
   "muc": [
     {
@@ -548,6 +548,15 @@
       "trang_thai": "dang_lam",
       "bang_chung": "(commit này) — `features/yeu-cau/ChatWithSpecialist.tsx`, `SmsOffers.tsx`, `quick-request.ts` (+36 ca `quick-request.test.tsx`), `features/dang-nhap/ensure-session.ts` dùng lại `xinMaDangNhap` + `phatHanhPhien`. Hợp đồng: `api/hop-dong-yeu-cau.ts` thêm kind chat/sms_promo/sms_optout và `displayName` (chỉ với chat); máy chủ `vihat-miniapp` ea9e814 (migration 0004, webhook REQUEST_WEBHOOK_URL/SECRET có chữ ký HMAC). `KHAI_BAO_LOI_GOI`: getUserInfo thành ca-hai. Chính sách quyền riêng tư: mục `chat-sms` + các câu bị làm sai đều mang dấu CHỜ DUYỆT, giữ phiên bản 1.0. tsc sạch, vitest 62 tệp / 1719 ca xanh.",
       "tiep_theo": "(1) Chủ dự án duyệt các đoạn CHỜ DUYỆT của chính sách (trường nào đi sang webhook, thời hạn giữ tên chat và đăng ký SMS). (2) Pháp lý: SMS quảng cáo — NĐ 91/2020 (đồng ý, từ chối) và tên đơn vị gửi SMS chưa có trong chính sách. (3) Webhook chưa có nơi nhận; sự kiện có thể mất nếu hai lần gửi đều hỏng (không có outbox — nặng nhất với sms_optout), chữ ký không có dấu thời gian (bên nhận phải khử trùng theo requestId) — README vihat-miniapp nợ #17. (4) Migration 0004 chưa chạy trên Postgres thật. (5) 'Tìm văn phòng gần bạn' xếp theo khoảng cách: CHỜ toạ độ 3 văn phòng từ chủ dự án, không tự điền. (6) Chú thích `phase1-collects-nothing.test.ts` dòng ~249 còn nói getUserInfo là nha-nuoc — cũ."
+    },
+    {
+      "id": "adr-0080-nhap-tay-lien-he",
+      "menu": "phan-anh-nguoi-dan",
+      "viec": "Gửi phản ánh khi Zalo không cho số (ADR 0080): mời chia sẻ số TRƯỚC khi gửi nếu phiên chưa có số (máy chủ nay nhận thẳng, không còn 403 nhắc); từ chối / Zalo lỗi → bước nhập họ tên + SĐT (bắt buộc ở đường này), gửi; màn mã báo contact_unverified = sẽ không nhận tin, lưu mã để tra cứu; 429 unverified_daily_limit; app xã: gọi POST /api/v1/citizen-sessions KHÔNG phoneToken khi getPhoneNumber thất bại, giữ phiên phoneVerified:false (mo-phien-vigov.ts:279 đang bỏ); sửa câu PHONE_VERIFICATION.why (noi-dung.ts:253), chú thích hop-dong.ts:276-280",
+      "trang_thai": "chua_lam",
+      "bang_chung": "Máy chủ đã có: 357745c3 (identity), commit C3 (petitions). Ngoài Zalo vẫn từ chối.",
+      "no_confirm": [],
+      "tiep_theo": "citizen-app-builder (lớn); ../vihat-miniapp không cần đổi."
     }
   ]
 }

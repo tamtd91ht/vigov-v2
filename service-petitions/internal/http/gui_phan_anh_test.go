@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
@@ -76,16 +75,16 @@ func soPhieuMoi() *soPhieuGia {
 // Gui mirrors the real use case's CONTRACT rather than its implementation: it mints a code only on
 // the success path, so the "no code on a refused intake" assertion is about the route and not about
 // this fake being lenient.
-func (s *soPhieuGia) Gui(ctx context.Context, yc app.YeuCauGuiPhanAnh, congDan audit.Actor) (
+func (s *soPhieuGia) Gui(ctx context.Context, yc app.YeuCauGuiPhanAnh, sender app.IntakeSender) (
 	domain.PhieuPhanAnh, error) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.demGui++
-	s.thayCongDan = append(s.thayCongDan, congDan.ID)
-	s.thayKind = append(s.thayKind, congDan.Kind)
-	s.thayIP = append(s.thayIP, congDan.IP)
+	s.thayCongDan = append(s.thayCongDan, sender.Owner.ID)
+	s.thayKind = append(s.thayKind, string(sender.Owner.Kind))
+	s.thayIP = append(s.thayIP, sender.IP)
 	s.thayYeuCau = append(s.thayYeuCau, yc)
 	// tenant.MustFrom, never tenant.From with a fallback: a write with no commune must be loud.
 	xa := tenant.MustFrom(ctx)
@@ -93,6 +92,19 @@ func (s *soPhieuGia) Gui(ctx context.Context, yc app.YeuCauGuiPhanAnh, congDan a
 
 	if s.loi != nil {
 		return domain.PhieuPhanAnh{}, s.loi
+	}
+	// THE UNVERIFIED CEILING, as the real use case answers it (ADR 0080 decision 7): per commune and
+	// account, counted over what this fake already holds.
+	if sender.Owner.Kind == domain.OwnerZaloAccount {
+		n := 0
+		for _, pa := range s.theo[xa] {
+			if pa.ZaloAccountID == sender.Owner.ID {
+				n++
+			}
+		}
+		if n >= domain.UnverifiedDailyCeiling {
+			return domain.PhieuPhanAnh{}, app.ErrUnverifiedDailyLimit
+		}
 	}
 	// The scene location goes through the SAME domain rule the real use case applies, so the 400s
 	// asserted in intake_scene_location_test.go are the route mapping a real refusal.
@@ -117,7 +129,6 @@ func (s *soPhieuGia) Gui(ctx context.Context, yc app.YeuCauGuiPhanAnh, congDan a
 		ID:                fmt.Sprintf("pa-%03d", s.dem),
 		MaTraCuu:          fmt.Sprintf("PA-4K7M-92XR-BTV%d", s.dem),
 		Kenh:              domain.KenhZaloMiniApp,
-		CongDanID:         congDan.ID,
 		NoiDung:           yc.NoiDung,
 		DiaChi:            yc.DiaChi,
 		Lat:               lat,
@@ -132,6 +143,15 @@ func (s *soPhieuGia) Gui(ctx context.Context, yc app.YeuCauGuiPhanAnh, congDan a
 		LinhVuc:           yc.Field,
 		HanXuLyXong:       resolveDue,
 	}
+	// The owner in exactly one column, as the real use case writes it.
+	switch sender.Owner.Kind {
+	case domain.OwnerCitizen:
+		p.CongDanID = sender.Owner.ID
+	case domain.OwnerZaloAccount:
+		p.ZaloAccountID = sender.Owner.ID
+	default:
+		return domain.PhieuPhanAnh{}, fmt.Errorf("gửi phiếu giả: loại chủ phiếu không được khai")
+	}
 	if s.theo[xa] == nil {
 		s.theo[xa] = map[string]domain.PhieuPhanAnh{}
 	}
@@ -139,18 +159,18 @@ func (s *soPhieuGia) Gui(ctx context.Context, yc app.YeuCauGuiPhanAnh, congDan a
 	return p, nil
 }
 
-// CuaCongDanTheoMaTraCuu is the SAME read the citizen GET route uses, with the same two filters.
-func (s *soPhieuGia) CuaCongDanTheoMaTraCuu(ctx context.Context, congDanID, ma string) (
+// OwnedByCode is the SAME read the citizen GET route uses, with the same two filters.
+func (s *soPhieuGia) OwnedByCode(ctx context.Context, owner domain.PetitionOwner, ma string) (
 	domain.PhieuPhanAnh, error) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if congDanID == "" {
+	if !owner.Valid() {
 		return domain.PhieuPhanAnh{}, petstore.ErrThieuDinhDanhCongDan
 	}
 	p, co := s.theo[tenant.MustFrom(ctx)][ma]
-	if !co || p.CongDanID != congDanID {
+	if !co || !ownedBy(p, owner) {
 		return domain.PhieuPhanAnh{}, petstore.ErrPhieuKhongTonTai
 	}
 	return p, nil

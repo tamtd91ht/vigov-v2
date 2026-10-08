@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vihat/vigov/core/audit"
 	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
 	pkgstore "github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
@@ -91,6 +90,13 @@ func (h *hanGia) HanXuLy(_ context.Context, loai identityv1.WorkKind, linhVuc st
 type khoPhieuGia struct {
 	thay []domain.PhieuPhanAnh
 	loi  error
+
+	// The unverified ceiling (ADR 0080 decision 7). sentToday is what the count answers; the two
+	// slices record what the use case asked, so the account and the day boundary are assertable.
+	sentToday    int
+	lockedFor    []string
+	countedFor   []string
+	countedSince []time.Time
 }
 
 func (k *khoPhieuGia) Tao(ctx context.Context, tx *pkgstore.ScopedTx, p domain.PhieuPhanAnh) error {
@@ -101,6 +107,25 @@ func (k *khoPhieuGia) Tao(ctx context.Context, tx *pkgstore.ScopedTx, p domain.P
 		return err
 	}
 	return k.loi
+}
+
+// LockZaloAccountIntake and CountZaloAccountPetitionsSince run a REAL statement through the fake
+// driver, so "inside the intake transaction" is asserted against what the driver saw.
+func (k *khoPhieuGia) LockZaloAccountIntake(ctx context.Context, tx *pkgstore.ScopedTx, account string) error {
+	k.lockedFor = append(k.lockedFor, account)
+	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1, $2)`, string(tx.TenantID()), account)
+	return err
+}
+
+func (k *khoPhieuGia) CountZaloAccountPetitionsSince(ctx context.Context, tx *pkgstore.ScopedTx,
+	account string, since time.Time) (int, error) {
+	k.countedFor = append(k.countedFor, account)
+	k.countedSince = append(k.countedSince, since)
+	if _, err := tx.Exec(ctx, `SELECT count(*) FROM phieu_phan_anh WHERE tenant_id = $1 AND zalo_account_id = $2`,
+		string(tx.TenantID()), account); err != nil {
+		return 0, err
+	}
+	return k.sentToday, nil
 }
 
 // --- fixtures --------------------------------------------------------------------------------
@@ -136,8 +161,8 @@ func hanThu() *hanGia {
 	}
 }
 
-func congDanThu() audit.Actor {
-	return audit.Actor{ID: idCongDan, Kind: "citizen", IP: "10.0.0.9"}
+func congDanThu() IntakeSender {
+	return IntakeSender{Owner: domain.PetitionOwner{Kind: domain.OwnerCitizen, ID: idCongDan}, IP: "10.0.0.9"}
 }
 
 func ycThu() YeuCauGuiPhanAnh {
@@ -606,14 +631,13 @@ func TestGuiChuPhieuLaCHUTHE(t *testing.T) {
 }
 
 func TestGuiChuTheKhongPhaiCongDanThiTuChoiTruocMoiThu(t *testing.T) {
-	for ten, nguoi := range map[string]audit.Actor{
+	for ten, nguoi := range map[string]IntakeSender{
 		"không có chủ thể": {},
-		// @actor-ok: DỮ LIỆU THỬ CỐ Ý SAI, không phải một lượt ghi vết. Chính ca này khẳng định
-		// tuyến công dân TỪ CHỐI một chủ thể cán bộ trước khi chạm vào bất cứ thứ gì, nên định
-		// danh nội bộ ở đây là thứ đang BỊ từ chối. Đổi nó sang một mã cán bộ hợp lệ để rào chắn
-		// im đi là làm chính ca kiểm yếu hẳn mà vẫn xanh.
-		"chủ thể là cán bộ": {ID: "nd-01JCANBO", Kind: "staff", IP: "10.0.0.7"},
-		"thiếu định danh":   {Kind: "citizen", IP: "10.0.0.9"},
+		// A kind nobody declared — the shape a staff principal would take if it ever reached here.
+		"chủ thể là cán bộ": {Owner: domain.PetitionOwner{Kind: "staff", ID: "CB-00123"}, IP: "10.0.0.7"},
+		"thiếu định danh":   {Owner: domain.PetitionOwner{Kind: domain.OwnerCitizen}, IP: "10.0.0.9"},
+		"tài khoản Zalo thiếu định danh": {Owner: domain.PetitionOwner{Kind: domain.OwnerZaloAccount, ID: "  "},
+			IP: "10.0.0.9"},
 	} {
 		t.Run(ten, func(t *testing.T) {
 			k, kho, han := &khoGia{}, &khoPhieuGia{}, hanThu()

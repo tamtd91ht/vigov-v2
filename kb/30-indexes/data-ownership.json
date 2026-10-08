@@ -222,6 +222,13 @@
       "source": "service-comms/migrations/0014_external_contacts.sql:106"
     },
     {
+      "entity": "FinanceCustomSystemMessage",
+      "service": "finance",
+      "scope": "tenant",
+      "table": "custom_system_message",
+      "source": "service-finance/migrations/0017_system_message_switch_custom_messages_catalogue_color.sql:72"
+    },
+    {
       "entity": "FundingAllocation",
       "service": "finance",
       "scope": "tenant",
@@ -409,6 +416,13 @@
       "scope": "tenant",
       "table": "petition_settings",
       "source": "service-petitions/migrations/0028_petition_settings.sql:85"
+    },
+    {
+      "entity": "PetitionsCustomSystemMessage",
+      "service": "petitions",
+      "scope": "tenant",
+      "table": "custom_system_message",
+      "source": "service-petitions/migrations/0033_system_message_switch_custom_messages_catalogue_color.sql:85"
     },
     {
       "entity": "PetitionsStoredFile",
@@ -689,6 +703,13 @@
       "scope": "tenant",
       "table": "zalo_channel_setting",
       "source": "service-comms/migrations/0018_zalo_bot.sql:105"
+    },
+    {
+      "entity": "ZaloCommuneBot",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "zalo_commune_bot",
+      "source": "service-comms/migrations/0022_zalo_commune_bot.sql:170"
     },
     {
       "entity": "ZaloDelivery",

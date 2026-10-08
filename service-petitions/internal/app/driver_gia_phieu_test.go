@@ -142,6 +142,7 @@ func dongPhieuMau(sua map[string]any) map[string]driver.Value {
 		"diem_hai_long":        nil,
 		"rating_comment":       nil,
 		"danh_gia_luc":         nil,
+		"zalo_account_id":      nil, // ADR 0080 owner column — NULL on a citizen-filed petition
 		"tao_luc":              mocGocThu,
 	}
 	for k, v := range sua {

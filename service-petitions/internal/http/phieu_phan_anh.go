@@ -191,6 +191,22 @@ type phieuPhanAnhRa struct {
 	// Absent therefore means "this server predates the field", never "no citizen".
 	HasCitizen *bool `json:"has_citizen,omitempty"`
 
+	// ContactUnverified is the EXPLICIT server fact behind Web Admin's label "Số tự khai — chưa xác
+	// thực" (ADR 0080 decision 5): the petition came from a Mini App session WITHOUT a verified phone,
+	// so `reporter_name` / `reporter_phone` were typed by hand and prove nothing; it is owned by a Zalo
+	// account, not by a citizen identity.
+	//
+	// NOT INFERABLE FROM `channel` + `has_citizen`, and that is why it exists: a staff-booked petition
+	// also has no citizen, and so may the next channel — a rule written in the UI would be a second
+	// copy of "does this petition carry an identity" that drifts the day a third shape appears (rule 9).
+	// DERIVED from `zalo_account_id IS NOT NULL` on every response (domain.ContactUnverified), never
+	// stored beside it. A BOOLEAN AND NEVER THE ACCOUNT ID: an internal id on a staff screen would let
+	// staff link one person's anonymous reports together (ADR 0008; migration 0032).
+	//
+	// Pointer + omitempty, SET ON EVERY RESPONSE — the HasCitizen precedent: `false` travels as
+	// `false`, and the key stays optional in the contract. Absent means "this server predates the field".
+	ContactUnverified *bool `json:"contact_unverified,omitempty"`
+
 	// PublicationStatus is `publication_status` (migration 0017, ADR 0050 point 8): the staff
 	// moderation of the public page — `cho-duyet` · `cong-khai` · `an`. Separate from `status`.
 	//
@@ -297,6 +313,8 @@ func phieuRaNgoai(p domain.PhieuPhanAnh, nhan string, xemDayDu bool) phieuPhanAn
 	// cannot disagree about which petitions have somebody to confirm.
 	coCongDan := p.CongDanID != ""
 	ra.HasCitizen = &coCongDan
+	unverified := p.ContactUnverified()
+	ra.ContactUnverified = &unverified
 
 	if p.Rating != 0 {
 		stars, at := p.Rating, p.RatedAt

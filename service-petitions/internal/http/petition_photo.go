@@ -121,8 +121,16 @@ func noStore(w http.ResponseWriter) { w.Header().Set("Cache-Control", "no-store"
 // photoGate counts one photo write against the CITIZEN's budget (ratelimit.CitizenPhotoUpload) and
 // answers the request when it may not proceed. The key is the session's commune and citizen — never a
 // request value. false means the response was written.
+//
+// A ZALO-ACCOUNT OWNER (ADR 0080) COUNTS IN ITS OWN KEY SPACE: its id is prefixed with its kind before
+// the digest, so an account id and a citizen id — two tables, nothing guaranteeing the strings never
+// coincide — can never share one budget (the reason core/idem keys by Kind:ID).
 func (h *HandlerCongDan) photoGate(w http.ResponseWriter, r *http.Request, citizen audit.Actor) bool {
-	key, err := ratelimit.CitizenKey(r.Context(), citizen.ID)
+	subject := citizen.ID
+	if citizen.Kind == audit.KindZaloAccount {
+		subject = audit.KindZaloAccount + ":" + citizen.ID
+	}
+	key, err := ratelimit.CitizenKey(r.Context(), subject)
 	if err != nil {
 		// Unreachable behind CitizenOnly + XaTuPhien, and refused if ever reached: an unscoped or shared
 		// counter on the isolation path is the default rule 1 forbids.
@@ -150,9 +158,37 @@ func (h *HandlerCongDan) citizenPhotoActor(w http.ResponseWriter, r *http.Reques
 	return citizen, ma, true
 }
 
+// ownerPhotoActor is citizenPhotoActor for the three SCENE-photo routes, which since ADR 0080
+// decision 8 also serve the Zalo account owning an unverified petition (class
+// httpx.CommuneFromSessionOrZaloAccount). The owner comes from channelSender — the session, switched
+// on its kind — and the actor from app.IntakeSender.Actor, the one place that turns an owner into an
+// audit actor. The verification-photo route keeps citizenPhotoActor: it stays verified-phone only.
+func (h *HandlerCongDan) ownerPhotoActor(w http.ResponseWriter, r *http.Request) (audit.Actor, string, bool) {
+	fail := func() (audit.Actor, string, bool) {
+		h.d.Log.Error("tuyến ảnh hiện trường chạy mà không có chủ phiếu trong phiên — thiếu " +
+			"authz.CitizenOnly hoặc authz.CitizenPrincipal trên chuỗi rìa")
+		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return audit.Actor{}, "", false
+	}
+	sender, ok := h.channelSender(r)
+	if !ok {
+		return fail()
+	}
+	actor, err := sender.Actor()
+	if err != nil {
+		return fail()
+	}
+	ma := r.PathValue("maTraCuu")
+	if ma == "" {
+		h.khongTimThay(w)
+		return audit.Actor{}, "", false
+	}
+	return actor, ma, true
+}
+
 // RequestPetitionPhotoUpload serves POST /api/v1/my-citizen-reports/{maTraCuu}/photos.
 func (h *HandlerCongDan) RequestPetitionPhotoUpload(w http.ResponseWriter, r *http.Request) {
-	citizen, ma, ok := h.citizenPhotoActor(w, r)
+	citizen, ma, ok := h.ownerPhotoActor(w, r)
 	if !ok || !h.photoGate(w, r, citizen) {
 		return
 	}
@@ -178,7 +214,7 @@ func (h *HandlerCongDan) RequestPetitionPhotoUpload(w http.ResponseWriter, r *ht
 
 // CompletePetitionPhoto serves POST /api/v1/my-citizen-reports/{maTraCuu}/photos/{id}/completion.
 func (h *HandlerCongDan) CompletePetitionPhoto(w http.ResponseWriter, r *http.Request) {
-	citizen, ma, ok := h.citizenPhotoActor(w, r)
+	citizen, ma, ok := h.ownerPhotoActor(w, r)
 	if !ok || !h.photoGate(w, r, citizen) {
 		return
 	}
@@ -194,7 +230,7 @@ func (h *HandlerCongDan) CompletePetitionPhoto(w http.ResponseWriter, r *http.Re
 
 // ListMyPetitionPhotos serves GET /api/v1/my-citizen-reports/{maTraCuu}/photos.
 func (h *HandlerCongDan) ListMyPetitionPhotos(w http.ResponseWriter, r *http.Request) {
-	citizen, ma, ok := h.citizenPhotoActor(w, r)
+	citizen, ma, ok := h.ownerPhotoActor(w, r)
 	if !ok {
 		return
 	}

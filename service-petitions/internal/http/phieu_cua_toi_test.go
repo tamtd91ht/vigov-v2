@@ -79,26 +79,40 @@ type phieuCuaToiGia struct {
 	// from the session: a handler reading it from the query string would record the attacker's
 	// string here, and the assertion would name exactly that.
 	thayCongDan   []string
+	thayKind      []domain.PetitionOwnerKind
 	thayXa        []tenant.ID
 	thayTrangThai []string
 }
 
-func (p *phieuCuaToiGia) CuaCongDanTheoMaTraCuu(ctx context.Context, congDanID, ma string) (
+// ownedBy is the store's ownerFilter in Go: the owner's KIND chooses the column, and a citizen id never
+// matches `zalo_account_id` nor an account id `cong_dan_id` (ADR 0080; migration 0032 single owner).
+func ownedBy(pa domain.PhieuPhanAnh, owner domain.PetitionOwner) bool {
+	switch owner.Kind {
+	case domain.OwnerCitizen:
+		return pa.CongDanID != "" && pa.CongDanID == owner.ID
+	case domain.OwnerZaloAccount:
+		return pa.ZaloAccountID != "" && pa.ZaloAccountID == owner.ID
+	}
+	return false
+}
+
+func (p *phieuCuaToiGia) OwnedByCode(ctx context.Context, owner domain.PetitionOwner, ma string) (
 	domain.PhieuPhanAnh, error) {
 
 	p.goi++
-	p.thayCongDan = append(p.thayCongDan, congDanID)
+	p.thayCongDan = append(p.thayCongDan, owner.ID)
+	p.thayKind = append(p.thayKind, owner.Kind)
 	// tenant.MustFrom, never tenant.From with a fallback: a read with no commune must be loud.
 	p.thayXa = append(p.thayXa, tenant.MustFrom(ctx))
 
-	if congDanID == "" {
+	if !owner.Valid() {
 		return domain.PhieuPhanAnh{}, petstore.ErrThieuDinhDanhCongDan
 	}
 	if p.loi != nil {
 		return domain.PhieuPhanAnh{}, p.loi
 	}
 	pa, co := p.theo[tenant.MustFrom(ctx)][ma]
-	if !co || pa.CongDanID != congDanID {
+	if !co || !ownedBy(pa, owner) {
 		// THE FOUR CAUSES COLLAPSE HERE exactly as they collapse in SQL: unknown code, another
 		// citizen's code, another commune's code, soft deleted.
 		return domain.PhieuPhanAnh{}, petstore.ErrPhieuKhongTonTai
@@ -238,6 +252,11 @@ func (s *soPhienCongDanGia) TraCuu(_ context.Context, token string) (httpx.Citiz
 		// THE SAME CITIZEN, IN COMMUNE B. One person may hold a session in more than one commune
 		// (ADR 0005), so the commune — not the person — has to be what refuses.
 		return httpx.CitizenSession{ID: "sid-3", CitizenID: idToi, TenantID: xaB}, true, nil
+	case tokenZaloA:
+		// ADR 0080: a session with NO verified phone, carrying the Zalo account that opened it.
+		return httpx.CitizenSession{ID: "sid-z1", ZaloAccountID: idZaloA, TenantID: xaA}, true, nil
+	case tokenZaloB:
+		return httpx.CitizenSession{ID: "sid-z2", ZaloAccountID: idZaloB, TenantID: xaA}, true, nil
 	}
 	return httpx.CitizenSession{}, false, nil
 }

@@ -1773,6 +1773,234 @@
         }
       }
     },
+    "/api/v1/budget-sheets/import-previews": {
+      "post": {
+        "summary": "Kiểm tra tệp Excel thu - chi ngân sách trước khi nạp — không ghi gì",
+        "operationId": "finance_post_budget_sheets_import_previews",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "07-thu-chi-ngan-sach §6",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.update"
+        },
+        "x-vigov-task": "d5835209338e",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.budgetImportOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/budget-sheets/imports": {
+      "post": {
+        "summary": "Nạp bảng thu, chi ngân sách từ tệp Excel của Phòng Tài chính — toàn bộ tệp hoặc không gì cả",
+        "operationId": "finance_post_budget_sheets_imports",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "07-thu-chi-ngan-sach §6",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.update"
+        },
+        "x-vigov-task": "f56ef1a66a68",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "DongKhiHong",
+          "on_store_failure_effect": "Store không tới được -> trả 503"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "year",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.budgetImportOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.budgetImportRejectedOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/budget-sheets/{id}": {
       "parameters": [
         {
@@ -6334,7 +6562,7 @@
     },
     "/api/v1/citizen-sessions": {
       "post": {
-        "summary": "App riêng của xã đổi accessToken/phoneToken Zalo lấy phiên công dân ViGov",
+        "summary": "App riêng của xã đổi accessToken (kèm phoneToken nếu công dân chia sẻ số) Zalo lấy phiên công dân ViGov",
         "operationId": "identity_post_citizen_sessions",
         "tags": [
           "identity"
@@ -6376,8 +6604,7 @@
               }
             },
             "x-vigov-error-codes": [
-              "invalid_body",
-              "phone_required"
+              "invalid_body"
             ]
           },
           "401": {
@@ -11702,6 +11929,302 @@
             }
           }
         }
+      },
+      "post": {
+        "summary": "Xã thêm một câu hệ thống của riêng xã (nhóm Giải ngân)",
+        "operationId": "finance_post_finance_system_messages",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "14-cau-hinh §7",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "f5e003e702d5",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "MoKhiHong",
+          "on_store_failure_effect": "Store không tới được -> cho qua và ghi cảnh báo"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/finance.createCustomMessageIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.systemMessageOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/finance-system-messages/{code}": {
+      "parameters": [
+        {
+          "name": "code",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Xoá mềm một câu do xã tự thêm, kèm lý do bắt buộc",
+        "operationId": "finance_delete_finance_system_messages_by_code",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "14-cau-hinh §7",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "4c39fda639d4",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/finance.deleteCustomMessageIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Sửa lời, mô tả hoặc tắt/bật một câu do xã tự thêm",
+        "operationId": "finance_patch_finance_system_messages_by_code",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "14-cau-hinh §7",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "d8e9397eaf4e",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/finance.editCustomMessageIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.systemMessageOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/finance-system-messages/{code}/override": {
@@ -11753,6 +12276,101 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Xã tắt hoặc bật lại lời đã sửa của một câu hệ thống (tắt thì dùng lời gốc của phần mềm)",
+        "operationId": "finance_patch_finance_system_messages_by_code_override",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "14-cau-hinh §7",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "f0cfcb337845",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/finance.switchSystemMessageIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.systemMessageOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -18497,10 +19115,12 @@
           "kind": "citizen-only"
         },
         "x-vigov-tenant-class": {
-          "kind": "tu-phien",
+          "kind": "tu-phien-hoac-tai-khoan-zalo",
           "tenant_in_context": true,
           "source": "phiên công dân — không bao giờ từ Host, header hay query (luật 1 cấm #2)",
-          "phone_verified_required": true
+          "phone_verified_required": false,
+          "reason": "Zalo không cho số: phiên chưa xác thực số được gửi phiếu CHƯA XÁC THỰC, chủ phiếu là tài khoản Zalo của phiên, tối đa 10 phiếu/ngày (ADR 0080 #1, #2, #7)",
+          "note": "Nhận phiên đã xác thực số (chủ là công dân) HOẶC phiên chưa xác thực số mang tài khoản Zalo (chủ là tài khoản Zalo — phiếu chưa xác thực). Phiên không có cả hai: 403 chua_xac_thuc_so (ADR 0080)."
         },
         "x-vigov-task": "1b3efe935db0",
         "x-vigov-idempotency": {
@@ -18586,6 +19206,19 @@
               "request_in_progress"
             ]
           },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "unverified_daily_limit"
+            ]
+          },
           "500": {
             "description": "Internal Server Error",
             "content": {
@@ -18631,10 +19264,12 @@
           "kind": "citizen-only"
         },
         "x-vigov-tenant-class": {
-          "kind": "tu-phien",
+          "kind": "tu-phien-hoac-tai-khoan-zalo",
           "tenant_in_context": true,
           "source": "phiên công dân — không bao giờ từ Host, header hay query (luật 1 cấm #2)",
-          "phone_verified_required": true
+          "phone_verified_required": false,
+          "reason": "phiên chưa xác thực số chỉ tra được phiếu chưa xác thực CỦA CHÍNH tài khoản Zalo của phiên, theo mã tra cứu và cùng tài khoản (ADR 0080 #3)",
+          "note": "Nhận phiên đã xác thực số (chủ là công dân) HOẶC phiên chưa xác thực số mang tài khoản Zalo (chủ là tài khoản Zalo — phiếu chưa xác thực). Phiên không có cả hai: 403 chua_xac_thuc_so (ADR 0080)."
         },
         "x-vigov-task": "6bee0a6a60f3",
         "responses": {
@@ -18726,10 +19361,12 @@
           "kind": "citizen-only"
         },
         "x-vigov-tenant-class": {
-          "kind": "tu-phien",
+          "kind": "tu-phien-hoac-tai-khoan-zalo",
           "tenant_in_context": true,
           "source": "phiên công dân — không bao giờ từ Host, header hay query (luật 1 cấm #2)",
-          "phone_verified_required": true
+          "phone_verified_required": false,
+          "reason": "ảnh hiện trường đã lưu của phiếu chưa xác thực: liên kết ký chỉ cấp cho chính tài khoản Zalo chủ phiếu (ADR 0080 #8)",
+          "note": "Nhận phiên đã xác thực số (chủ là công dân) HOẶC phiên chưa xác thực số mang tài khoản Zalo (chủ là tài khoản Zalo — phiếu chưa xác thực). Phiên không có cả hai: 403 chua_xac_thuc_so (ADR 0080)."
         },
         "x-vigov-task": "d36dd367c5e7",
         "responses": {
@@ -18809,10 +19446,12 @@
           "kind": "citizen-only"
         },
         "x-vigov-tenant-class": {
-          "kind": "tu-phien",
+          "kind": "tu-phien-hoac-tai-khoan-zalo",
           "tenant_in_context": true,
           "source": "phiên công dân — không bao giờ từ Host, header hay query (luật 1 cấm #2)",
-          "phone_verified_required": true
+          "phone_verified_required": false,
+          "reason": "ảnh hiện trường của phiếu chưa xác thực: chủ ảnh là tài khoản Zalo của phiên, chỉ trên phiếu của chính tài khoản ấy (ADR 0080 #8)",
+          "note": "Nhận phiên đã xác thực số (chủ là công dân) HOẶC phiên chưa xác thực số mang tài khoản Zalo (chủ là tài khoản Zalo — phiếu chưa xác thực). Phiên không có cả hai: 403 chua_xac_thuc_so (ADR 0080)."
         },
         "x-vigov-task": "4f6b76686438",
         "x-vigov-idempotency": {
@@ -18971,10 +19610,12 @@
           "kind": "citizen-only"
         },
         "x-vigov-tenant-class": {
-          "kind": "tu-phien",
+          "kind": "tu-phien-hoac-tai-khoan-zalo",
           "tenant_in_context": true,
           "source": "phiên công dân — không bao giờ từ Host, header hay query (luật 1 cấm #2)",
-          "phone_verified_required": true
+          "phone_verified_required": false,
+          "reason": "hoàn tất ảnh hiện trường của phiếu chưa xác thực: chỉ trên phiếu của chính tài khoản Zalo của phiên (ADR 0080 #8)",
+          "note": "Nhận phiên đã xác thực số (chủ là công dân) HOẶC phiên chưa xác thực số mang tài khoản Zalo (chủ là tài khoản Zalo — phiếu chưa xác thực). Phiên không có cả hai: 403 chua_xac_thuc_so (ADR 0080)."
         },
         "x-vigov-task": "2820049dca3b",
         "responses": {
@@ -21032,6 +21673,302 @@
             }
           }
         }
+      },
+      "post": {
+        "summary": "Xã thêm một câu hệ thống của riêng xã (nhóm Phản ánh hoặc Dùng chung)",
+        "operationId": "petitions_post_petitions_system_messages",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "14-cau-hinh §7",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "1794e89465d8",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "MoKhiHong",
+          "on_store_failure_effect": "Store không tới được -> cho qua và ghi cảnh báo"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/petitions.createCustomMessageIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.systemMessageOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/petitions-system-messages/{code}": {
+      "parameters": [
+        {
+          "name": "code",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Xoá mềm một câu do xã tự thêm, kèm lý do bắt buộc",
+        "operationId": "petitions_delete_petitions_system_messages_by_code",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "14-cau-hinh §7",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "4b8394b8c733",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/petitions.deleteCustomMessageIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Sửa lời, mô tả hoặc tắt/bật một câu do xã tự thêm",
+        "operationId": "petitions_patch_petitions_system_messages_by_code",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "14-cau-hinh §7",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "6886994f2cb1",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/petitions.editCustomMessageIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.systemMessageOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/petitions-system-messages/{code}/override": {
@@ -21083,6 +22020,101 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Xã tắt hoặc bật lại lời đã sửa của một câu hệ thống (tắt thì dùng lời gốc của phần mềm)",
+        "operationId": "petitions_patch_petitions_system_messages_by_code_override",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "14-cau-hinh §7",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "82a09b78371b",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/petitions.switchSystemMessageIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.systemMessageOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -22340,6 +23372,101 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Xã tắt hoặc bật lại lời đã sửa của một câu hệ thống (tắt thì dùng lời gốc của phần mềm)",
+        "operationId": "reporting_patch_reporting_system_messages_by_code_override",
+        "tags": [
+          "reporting"
+        ],
+        "x-vigov-screen": "14-cau-hinh §7",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "a7fea7e356ce",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/reporting.switchSystemMessageIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/reporting.systemMessageOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -24051,6 +25178,117 @@
             }
           }
         }
+      },
+      "post": {
+        "summary": "Thêm dòng thời hạn riêng cho một lĩnh vực — KHÔNG hồi tố lên hồ sơ đã cố định hạn",
+        "operationId": "identity_post_sla",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sla"
+        },
+        "x-vigov-task": "c168bc381b13",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "MoKhiHong",
+          "on_store_failure_effect": "Store không tới được -> cho qua và ghi cảnh báo"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.addSLAFieldRowIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.dongSLARa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/sla/defaults": {
@@ -24131,6 +25369,94 @@
           }
         }
       ],
+      "delete": {
+        "summary": "Xoá mềm một dòng thời hạn riêng, kèm lý do bắt buộc — dòng mặc định không xoá được",
+        "operationId": "identity_delete_sla_by_id",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sla"
+        },
+        "x-vigov-task": "397c39bd692d",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.removeSLAFieldRowIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
       "patch": {
         "summary": "Sửa năm con số của một dòng thời hạn — KHÔNG hồi tố lên hồ sơ đã tiếp nhận",
         "operationId": "identity_patch_sla_by_id",
@@ -31625,15 +32951,15 @@
     },
     "/api/v1/zalo-bot-updates": {
       "post": {
-        "summary": "Webhook của Zalo Bot dùng chung — Zalo gọi khi cán bộ nhắn cho bot (mã ghép nối, /trogiup, /dung); xác thực bằng X-Bot-Api-Secret-Token so thời gian hằng, sai khoá 403 không đọc thân",
+        "summary": "Webhook của Zalo Bot — Zalo gọi khi cán bộ nhắn cho bot (mã ghép nối, /trogiup, /dung): bot dùng chung trên tên miền webhook của nền tảng, bot riêng của xã trên tên miền của xã (xã lấy từ Host); xác thực bằng X-Bot-Api-Secret-Token so thời gian hằng, sai khoá 403 không đọc thân",
         "operationId": "comms_post_zalo_bot_updates",
         "tags": [
           "comms"
         ],
-        "x-vigov-screen": "ADR 0074 #5",
+        "x-vigov-screen": "ADR 0074 #5 · ADR 0079 Q1 #2",
         "x-vigov-permission": {
           "kind": "public",
-          "reason": "Zalo gọi webhook của bot dùng chung khi cán bộ nhắn cho bot (ADR 0074 #5): không có phiên và không có xã ở tên miền này; xác thực bằng khoá X-Bot-Api-Secret-Token so thời gian hằng với khoá đang dùng và khoá chờ, sai khoá trả 403 không đọc thân; giới hạn tần suất theo mạng của máy gọi trước khi xem khoá"
+          "reason": "Zalo gọi webhook khi cán bộ nhắn cho bot, không có phiên: bot dùng chung trên tên miền webhook của nền tảng, không có xã (ADR 0074 #5); bot riêng của xã trên chính tên miền của xã, xã lấy từ Host và không đọc chéo xã (ADR 0079 Q1 #2); xác thực bằng khoá X-Bot-Api-Secret-Token so thời gian hằng với khoá đang dùng và khoá chờ của đúng con bot ấy, sai khoá trả 403 không đọc thân; giới hạn tần suất theo mạng của máy gọi (kèm xã và tên miền khi có xã) trước khi xem khoá"
         },
         "x-vigov-task": "227f05c51705",
         "responses": {
@@ -31683,9 +33009,444 @@
         }
       }
     },
+    "/api/v1/zalo-bots/current": {
+      "delete": {
+        "summary": "Quay về bot chung — ngừng dùng bot riêng của xã (xoá mềm, giữ làm lịch sử, cần lý do), mọi ghép nối qua bot ấy chấm dứt trong cùng giao dịch, có ghi vết; câu trả lời nhắc xã thu hồi mã bot cũ trong Zalo Bot Creator",
+        "operationId": "comms_delete_zalo_bots_current",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0079 Q1 #4 #5 — Cấu hình → tab Kênh Zalo (spec 11 §3 \"Quay về bot chung\")",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "b2d5489922c1",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.communeZaloBotRetireIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.communeZaloBotRetiredOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "invalid_request"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Bot Zalo riêng của xã — có hay không, tên, đường mở khung chat, mã tài khoản bot (Zalo trả), đặt lúc nào bởi ai, webhook đã đăng ký chưa, lần kiểm gần nhất, số cán bộ đang ghép nối; không bao giờ trả mã bot hay secret webhook",
+        "operationId": "comms_get_zalo_bots_current",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0079 Q1 #5 — Cấu hình → tab Kênh Zalo (spec 11 §3)",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "fb363d33b3b1",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.communeZaloBotCurrentOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Lưu bot Zalo riêng của xã — mã bot (chỉ ghi, niêm phong bằng khoá riêng của xã), tên bắt đầu bằng “Bot”, đường mở khung chat; mã tài khoản bot luôn lấy từ Zalo (getMe); đổi từ bot chung hoặc sang bot khác thì mọi ghép nối đang sống chấm dứt trong cùng giao dịch, có ghi vết",
+        "operationId": "comms_put_zalo_bots_current",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0079 Q1 #1 #4 — Cấu hình → tab Kênh Zalo (spec 11 §3 \"Lưu con bot\")",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "0f38ff99071e",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.communeZaloBotIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.communeZaloBotSavedOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "invalid_request"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "zalo_bot_changed",
+              "zalo_bot_in_use"
+            ]
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "zalo_token_rejected"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "zalo_unavailable"
+            ]
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "encryption_not_configured"
+            ]
+          }
+        }
+      }
+    },
+    "/api/v1/zalo-bots/current/check": {
+      "post": {
+        "summary": "Kiểm tra kết nối bot Zalo riêng của xã — gọi getMe bằng mã đã lưu, ghi kết quả (lớp lỗi, không bao giờ chữ của Zalo) và vết",
+        "operationId": "comms_post_zalo_bots_current_check",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "Cấu hình → tab Kênh Zalo (spec 11 §3 \"Kiểm tra kết nối\")",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "d574dea34be4",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.zaloBotCheckResultOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "zalo_bot_changed",
+              "zalo_own_bot_missing"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "encryption_not_configured"
+            ]
+          }
+        }
+      }
+    },
+    "/api/v1/zalo-bots/current/webhook": {
+      "post": {
+        "summary": "Đăng ký webhook cho bot Zalo riêng của xã — sinh secret ngẫu nhiên (CSPRNG), lưu chờ rồi gọi setWebhook tới https://<tên miền xã>/api/v1/zalo-bot-updates, Zalo xác nhận thì đưa vào dùng; secret hiện MỘT lần trong câu trả lời này",
+        "operationId": "comms_post_zalo_bots_current_webhook",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0079 Q1 #2 #3 — Cấu hình → tab Kênh Zalo (spec 11 §3 \"Đăng ký webhook\")",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "ff4dc111b591",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.zaloBotWebhookOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "zalo_bot_changed",
+              "zalo_own_bot_missing"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "commune_host_unavailable",
+              "encryption_not_configured"
+            ]
+          }
+        }
+      }
+    },
     "/api/v1/zalo-channel-settings": {
       "get": {
-        "summary": "Cấu hình kênh nhắc việc Zalo của xã — bật/tắt, các loại nhắc, giờ yên tĩnh (giờ Việt Nam), nhịp nhắc việc quá hạn; xã chưa lưu thì là tắt",
+        "summary": "Cấu hình kênh nhắc việc Zalo của xã — bật/tắt, các loại nhắc theo từng phân hệ (supported_events là danh sách được chọn), giờ yên tĩnh (giờ Việt Nam), nhịp nhắc việc quá hạn, platform_ready (đã có bot phục vụ xã chưa); xã chưa lưu thì là tắt",
         "operationId": "comms_get_zalo_channel_settings",
         "tags": [
           "comms"
@@ -32510,6 +34271,166 @@
         ],
         "additionalProperties": false
       },
+      "comms.communeZaloBotCurrentOut": {
+        "type": "object",
+        "properties": {
+          "has_own_bot": {
+            "type": "boolean"
+          },
+          "bot": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/comms.communeZaloBotOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "live_link_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bot",
+          "has_own_bot",
+          "live_link_count"
+        ],
+        "additionalProperties": false
+      },
+      "comms.communeZaloBotIn": {
+        "type": "object",
+        "properties": {
+          "bot_token": {
+            "type": "string",
+            "writeOnly": true
+          },
+          "bot_name": {
+            "type": "string"
+          },
+          "chat_url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "bot_name",
+          "chat_url"
+        ],
+        "additionalProperties": false
+      },
+      "comms.communeZaloBotOut": {
+        "type": "object",
+        "properties": {
+          "bot_account_id": {
+            "type": "string"
+          },
+          "bot_name": {
+            "type": "string"
+          },
+          "chat_url": {
+            "type": "string"
+          },
+          "set_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "set_by": {
+            "type": "string"
+          },
+          "webhook_set_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "webhook_set_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "webhook_pending": {
+            "type": "boolean"
+          },
+          "last_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/comms.zaloBotCheckOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "bot_account_id",
+          "bot_name",
+          "chat_url",
+          "last_check",
+          "set_at",
+          "set_by",
+          "webhook_pending",
+          "webhook_set_at",
+          "webhook_set_by"
+        ],
+        "additionalProperties": false
+      },
+      "comms.communeZaloBotRetireIn": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "comms.communeZaloBotRetiredOut": {
+        "type": "object",
+        "properties": {
+          "retired": {
+            "type": "boolean"
+          },
+          "ended_link_count": {
+            "type": "integer"
+          },
+          "revoke_notice": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ended_link_count",
+          "retired"
+        ],
+        "additionalProperties": false
+      },
+      "comms.communeZaloBotSavedOut": {
+        "type": "object",
+        "properties": {
+          "bot": {
+            "$ref": "#/components/schemas/comms.communeZaloBotOut"
+          },
+          "adopted": {
+            "type": "boolean"
+          },
+          "ended_link_count": {
+            "type": "integer"
+          },
+          "revoke_notice": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "adopted",
+          "bot",
+          "ended_link_count"
+        ],
+        "additionalProperties": false
+      },
       "comms.coverFileOut": {
         "type": "object",
         "properties": {
@@ -33024,17 +34945,52 @@
           },
           "tier": {
             "type": "integer"
+          },
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
           "active",
           "code",
+          "color",
           "id",
           "is_default",
           "label",
           "order",
           "source",
           "tier"
+        ],
+        "additionalProperties": false
+      },
+      "comms.mailLastTestOut": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "error_class": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "at",
+          "error_class",
+          "ok",
+          "to"
         ],
         "additionalProperties": false
       },
@@ -33108,6 +35064,16 @@
           },
           "encryption_configured": {
             "type": "boolean"
+          },
+          "last_test": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/comms.mailLastTestOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -33117,6 +35083,7 @@
           "from_name",
           "host",
           "is_enabled",
+          "last_test",
           "password_set",
           "port",
           "security",
@@ -34025,6 +35992,11 @@
         ],
         "additionalProperties": false
       },
+      "comms.optionalColorIn": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
       "comms.pairingCodeOut": {
         "type": "object",
         "properties": {
@@ -34563,6 +36535,9 @@
               "null"
             ]
           },
+          "color": {
+            "$ref": "#/components/schemas/comms.optionalColorIn"
+          },
           "code": {
             "type": [
               "string",
@@ -34722,6 +36697,9 @@
           },
           "is_default": {
             "type": "boolean"
+          },
+          "color": {
+            "type": "string"
           },
           "source": {
             "type": [
@@ -35214,6 +37192,73 @@
         ],
         "additionalProperties": false
       },
+      "comms.zaloBotCheckOut": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "result"
+        ],
+        "additionalProperties": false
+      },
+      "comms.zaloBotCheckResultOut": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string"
+          },
+          "checked_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "account_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "checked_at",
+          "result"
+        ],
+        "additionalProperties": false
+      },
+      "comms.zaloBotWebhookOut": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "set_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "set_by": {
+            "type": "string"
+          },
+          "secret": {
+            "type": "string",
+            "description": "⚠ BÍ MẬT ĐI RA, CÓ CHỦ Ý — ADR 0079 Q1 #3 — chủ dự án chốt 08/10/2026: secret webhook do hệ thống sinh, hiện MỘT lần trong câu trả lời của lần sinh ra nó để xã tự đăng ký webhook bằng tay nếu cần; không bao giờ đọc lại được"
+          }
+        },
+        "required": [
+          "result",
+          "url"
+        ],
+        "additionalProperties": false
+      },
       "comms.zaloChannelSettingsIn": {
         "type": "object",
         "properties": {
@@ -35303,6 +37348,18 @@
           },
           "updated_by": {
             "type": "string"
+          },
+          "supported_events": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "platform_ready": {
+            "type": [
+              "boolean",
+              "null"
+            ]
           }
         },
         "required": [
@@ -35311,7 +37368,8 @@
           "overdue_repeat_every_days",
           "overdue_start_after_days",
           "quiet_end",
-          "quiet_start"
+          "quiet_start",
+          "supported_events"
         ],
         "additionalProperties": false
       },
@@ -36418,11 +38476,18 @@
           },
           "tier": {
             "type": "integer"
+          },
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
           "active",
           "code",
+          "color",
           "id",
           "is_default",
           "label",
@@ -36430,6 +38495,11 @@
           "source",
           "tier"
         ],
+        "additionalProperties": false
+      },
+      "documents.optionalColorIn": {
+        "type": "object",
+        "properties": {},
         "additionalProperties": false
       },
       "documents.overdueQueueItemOut": {
@@ -36534,6 +38604,9 @@
               "boolean",
               "null"
             ]
+          },
+          "color": {
+            "$ref": "#/components/schemas/documents.optionalColorIn"
           },
           "code": {
             "type": [
@@ -36678,6 +38751,12 @@
           },
           "is_default": {
             "type": "boolean"
+          },
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "source": {
             "type": [
@@ -36977,6 +39056,234 @@
           "unit",
           "unit_label",
           "year"
+        ],
+        "additionalProperties": false
+      },
+      "finance.budgetImportColumnOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "description": "`so` | `phan_tram`"
+          },
+          "role": {
+            "type": "string"
+          },
+          "numerator_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "denominator_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "denominator_name",
+          "name",
+          "numerator_name",
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      "finance.budgetImportHeadlineOut": {
+        "type": "object",
+        "properties": {
+          "no": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "no"
+        ],
+        "additionalProperties": false
+      },
+      "finance.budgetImportIssueOut": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "type": "string"
+          },
+          "row": {
+            "type": "integer"
+          },
+          "column": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "column",
+          "message",
+          "row",
+          "sheet"
+        ],
+        "additionalProperties": false
+      },
+      "finance.budgetImportOut": {
+        "type": "object",
+        "properties": {
+          "valid": {
+            "type": "boolean"
+          },
+          "year": {
+            "type": "integer"
+          },
+          "source_file": {
+            "type": "string"
+          },
+          "refusal_reason": {
+            "type": "string"
+          },
+          "sheets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/finance.budgetImportSheetOut"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/finance.budgetImportIssueOut"
+            },
+            "description": "about the file: hidden tabs, tabs with no table"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/finance.budgetImportIssueOut"
+            }
+          }
+        },
+        "required": [
+          "errors",
+          "sheets",
+          "source_file",
+          "valid",
+          "warnings",
+          "year"
+        ],
+        "additionalProperties": false
+      },
+      "finance.budgetImportRejectedOut": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "trace_id": {
+            "type": "string"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/finance.budgetImportIssueOut"
+            }
+          }
+        },
+        "required": [
+          "code",
+          "errors",
+          "message",
+          "trace_id"
+        ],
+        "additionalProperties": false
+      },
+      "finance.budgetImportSheetOut": {
+        "type": "object",
+        "properties": {
+          "sheet_name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "description": "`thu` | `chi`"
+          },
+          "title": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string",
+            "description": "`dong` | `nghin-dong` | `trieu-dong`"
+          },
+          "unit_label": {
+            "type": "string"
+          },
+          "line_count": {
+            "type": "integer"
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/finance.budgetImportColumnOut"
+            }
+          },
+          "headline": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/finance.budgetImportHeadlineOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "action": {
+            "type": "string"
+          },
+          "replaces_code": {
+            "type": "string"
+          },
+          "refusal_reason": {
+            "type": "string"
+          },
+          "sheet": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/finance.bangRa"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/finance.budgetImportIssueOut"
+            }
+          }
+        },
+        "required": [
+          "action",
+          "columns",
+          "headline",
+          "kind",
+          "line_count",
+          "sheet_name",
+          "title",
+          "unit",
+          "unit_label",
+          "warnings"
         ],
         "additionalProperties": false
       },
@@ -37485,6 +39792,32 @@
         ],
         "additionalProperties": false
       },
+      "finance.createCustomMessageIn": {
+        "type": "object",
+        "properties": {
+          "group_code": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "group_code",
+          "text"
+        ],
+        "additionalProperties": false
+      },
       "finance.curvePointOut": {
         "type": "object",
         "properties": {
@@ -37579,6 +39912,18 @@
         },
         "required": [
           "items"
+        ],
+        "additionalProperties": false
+      },
+      "finance.deleteCustomMessageIn": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
         ],
         "additionalProperties": false
       },
@@ -37846,6 +40191,12 @@
           "disbursement_deadline": {
             "type": "string"
           },
+          "at_risk": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
           "funding_allocations": {
             "type": "array",
             "items": {
@@ -37949,6 +40300,12 @@
               "null"
             ]
           },
+          "at_risk": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
           "disbursement_deadline": {
             "type": "string"
           },
@@ -38026,6 +40383,27 @@
           "remaining_amount",
           "year"
         ],
+        "additionalProperties": false
+      },
+      "finance.editCustomMessageIn": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "$ref": "#/components/schemas/finance.optionalDescription"
+          },
+          "is_active": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
         "additionalProperties": false
       },
       "finance.fundingSourceCreateIn": {
@@ -38394,11 +40772,18 @@
           },
           "tier": {
             "type": "integer"
+          },
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
           "active",
           "code",
+          "color",
           "id",
           "is_default",
           "label",
@@ -38491,6 +40876,16 @@
           "name",
           "value"
         ],
+        "additionalProperties": false
+      },
+      "finance.optionalColorIn": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "finance.optionalDescription": {
+        "type": "object",
+        "properties": {},
         "additionalProperties": false
       },
       "finance.phanBoRa": {
@@ -38825,6 +41220,12 @@
             "type": "integer"
           },
           "open_issue_count": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "at_risk_count": {
             "type": [
               "integer",
               "null"
@@ -39166,6 +41567,12 @@
               "null"
             ]
           },
+          "at_risk": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
           "funding_allocations": {
             "type": [
               "array",
@@ -39217,6 +41624,9 @@
               "null"
             ]
           },
+          "color": {
+            "$ref": "#/components/schemas/finance.optionalColorIn"
+          },
           "code": {
             "type": [
               "string",
@@ -39238,6 +41648,21 @@
         },
         "additionalProperties": false
       },
+      "finance.switchSystemMessageIn": {
+        "type": "object",
+        "properties": {
+          "is_active": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "is_active"
+        ],
+        "additionalProperties": false
+      },
       "finance.systemMessageListOut": {
         "type": "object",
         "properties": {
@@ -39257,8 +41682,13 @@
         "type": "object",
         "properties": {
           "code": {
-            "type": "string",
-            "description": "not \"key\": apidoc refuses credential-looking response fields (tools/apidoc/schema.go:257)"
+            "type": "string"
+          },
+          "group_code": {
+            "type": "string"
+          },
+          "origin": {
+            "type": "string"
           },
           "description": {
             "type": "string"
@@ -39269,7 +41699,13 @@
           "current_text": {
             "type": "string"
           },
+          "override_text": {
+            "type": "string"
+          },
           "overridden": {
+            "type": "boolean"
+          },
+          "is_active": {
             "type": "boolean"
           },
           "updated_at": {
@@ -39287,8 +41723,10 @@
         "required": [
           "code",
           "current_text",
-          "default_text",
           "description",
+          "group_code",
+          "is_active",
+          "origin",
           "overridden"
         ],
         "additionalProperties": false
@@ -39501,6 +41939,12 @@
           "is_default": {
             "type": "boolean"
           },
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "source": {
             "type": [
               "string",
@@ -39580,6 +42024,48 @@
           "code",
           "message",
           "trace_id"
+        ],
+        "additionalProperties": false
+      },
+      "identity.addSLAFieldRowIn": {
+        "type": "object",
+        "properties": {
+          "work_kind": {
+            "type": "string"
+          },
+          "field": {
+            "type": "string"
+          },
+          "acknowledge_hours": {
+            "type": "integer"
+          },
+          "resolve_hours": {
+            "type": "integer"
+          },
+          "due_soon_hours": {
+            "type": "integer"
+          },
+          "escalate_leader_hours": {
+            "type": "integer"
+          },
+          "escalate_president_hours": {
+            "type": "integer"
+          },
+          "unassigned_hold_hours": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "acknowledge_hours",
+          "due_soon_hours",
+          "escalate_leader_hours",
+          "escalate_president_hours",
+          "field",
+          "resolve_hours",
+          "work_kind"
         ],
         "additionalProperties": false
       },
@@ -40908,11 +43394,18 @@
           },
           "tier": {
             "type": "integer"
+          },
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
           "active",
           "code",
+          "color",
           "id",
           "is_default",
           "label",
@@ -40951,11 +43444,18 @@
           },
           "tier": {
             "type": "integer"
+          },
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
           "active",
           "code",
+          "color",
           "id",
           "is_default",
           "label",
@@ -41050,6 +43550,11 @@
           "name",
           "permissions"
         ],
+        "additionalProperties": false
+      },
+      "identity.optionalColorIn": {
+        "type": "object",
+        "properties": {},
         "additionalProperties": false
       },
       "identity.optionalCountIn": {
@@ -41338,6 +43843,18 @@
         "required": [
           "code",
           "label"
+        ],
+        "additionalProperties": false
+      },
+      "identity.removeSLAFieldRowIn": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
         ],
         "additionalProperties": false
       },
@@ -41934,6 +44451,9 @@
               "null"
             ]
           },
+          "color": {
+            "$ref": "#/components/schemas/identity.optionalColorIn"
+          },
           "code": {
             "type": [
               "string",
@@ -42170,6 +44690,12 @@
           },
           "is_default": {
             "type": "boolean"
+          },
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "source": {
             "type": [
@@ -43425,6 +45951,32 @@
         ],
         "additionalProperties": false
       },
+      "petitions.createCustomMessageIn": {
+        "type": "object",
+        "properties": {
+          "group_code": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "group_code",
+          "text"
+        ],
+        "additionalProperties": false
+      },
       "petitions.danhSachLoaiNhiemVuRa": {
         "type": "object",
         "properties": {
@@ -43589,6 +46141,18 @@
         ],
         "additionalProperties": false
       },
+      "petitions.deleteCustomMessageIn": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "additionalProperties": false
+      },
       "petitions.doiTrangThaiVao": {
         "type": "object",
         "properties": {
@@ -43633,6 +46197,27 @@
         "required": [
           "result"
         ],
+        "additionalProperties": false
+      },
+      "petitions.editCustomMessageIn": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "$ref": "#/components/schemas/petitions.optionalDescription"
+          },
+          "is_active": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
         "additionalProperties": false
       },
       "petitions.ghiChuPhieuVao": {
@@ -43867,11 +46452,18 @@
           },
           "requires_directive": {
             "type": "boolean"
+          },
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
           "active",
           "code",
+          "color",
           "id",
           "is_default",
           "label",
@@ -43910,11 +46502,18 @@
           },
           "tier": {
             "type": "integer"
+          },
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
           "active",
           "code",
+          "color",
           "id",
           "is_default",
           "label",
@@ -44218,6 +46817,16 @@
         ],
         "additionalProperties": false
       },
+      "petitions.optionalColorIn": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "petitions.optionalDescription": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
       "petitions.overdueItemOut": {
         "type": "object",
         "properties": {
@@ -44511,6 +47120,12 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "contact_unverified": {
+            "type": [
+              "boolean",
+              "null"
+            ]
           }
         },
         "required": [
@@ -44692,6 +47307,12 @@
             "format": "date-time"
           },
           "has_citizen": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "contact_unverified": {
             "type": [
               "boolean",
               "null"
@@ -45152,6 +47773,9 @@
               "null"
             ]
           },
+          "color": {
+            "$ref": "#/components/schemas/petitions.optionalColorIn"
+          },
           "code": {
             "type": [
               "string",
@@ -45199,6 +47823,9 @@
               "boolean",
               "null"
             ]
+          },
+          "color": {
+            "$ref": "#/components/schemas/petitions.optionalColorIn"
           },
           "code": {
             "type": [
@@ -45340,6 +47967,21 @@
         },
         "additionalProperties": false
       },
+      "petitions.switchSystemMessageIn": {
+        "type": "object",
+        "properties": {
+          "is_active": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "is_active"
+        ],
+        "additionalProperties": false
+      },
       "petitions.systemMessageListOut": {
         "type": "object",
         "properties": {
@@ -45361,6 +48003,12 @@
           "code": {
             "type": "string"
           },
+          "group_code": {
+            "type": "string"
+          },
+          "origin": {
+            "type": "string"
+          },
           "description": {
             "type": "string"
           },
@@ -45370,7 +48018,13 @@
           "current_text": {
             "type": "string"
           },
+          "override_text": {
+            "type": "string"
+          },
           "overridden": {
+            "type": "boolean"
+          },
+          "is_active": {
             "type": "boolean"
           },
           "updated_at": {
@@ -45388,8 +48042,10 @@
         "required": [
           "code",
           "current_text",
-          "default_text",
           "description",
+          "group_code",
+          "is_active",
+          "origin",
           "overridden"
         ],
         "additionalProperties": false
@@ -45900,6 +48556,12 @@
           "is_default": {
             "type": "boolean"
           },
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "source": {
             "type": [
               "string",
@@ -45933,6 +48595,12 @@
           },
           "is_default": {
             "type": "boolean"
+          },
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "source": {
             "type": [
@@ -46268,6 +48936,21 @@
         ],
         "additionalProperties": false
       },
+      "reporting.switchSystemMessageIn": {
+        "type": "object",
+        "properties": {
+          "is_active": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "is_active"
+        ],
+        "additionalProperties": false
+      },
       "reporting.systemMessageListOut": {
         "type": "object",
         "properties": {
@@ -46289,6 +48972,12 @@
           "code": {
             "type": "string"
           },
+          "group_code": {
+            "type": "string"
+          },
+          "origin": {
+            "type": "string"
+          },
           "description": {
             "type": "string"
           },
@@ -46298,7 +48987,13 @@
           "current_text": {
             "type": "string"
           },
+          "override_text": {
+            "type": "string"
+          },
           "overridden": {
+            "type": "boolean"
+          },
+          "is_active": {
             "type": "boolean"
           },
           "updated_at": {
@@ -46316,8 +49011,10 @@
         "required": [
           "code",
           "current_text",
-          "default_text",
           "description",
+          "group_code",
+          "is_active",
+          "origin",
           "overridden"
         ],
         "additionalProperties": false

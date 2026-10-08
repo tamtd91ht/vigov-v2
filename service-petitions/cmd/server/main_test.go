@@ -283,11 +283,11 @@ func (p *phanGiaiGia) ResolveStaff(ctx context.Context, _, _ string) (staffauth.
 // replaced by the staff chain with every test still green.
 type khoPhieuCongDan struct{}
 
-func (khoPhieuCongDan) CuaCongDanTheoMaTraCuu(ctx context.Context, congDanID, ma string) (
+func (khoPhieuCongDan) OwnedByCode(ctx context.Context, owner domain.PetitionOwner, ma string) (
 	domain.PhieuPhanAnh, error) {
 
 	xa := tenant.MustFrom(ctx)
-	if congDanID != idCongDan || xa != xaA || ma != maPhieuCuaToi {
+	if owner.Kind != domain.OwnerCitizen || owner.ID != idCongDan || xa != xaA || ma != maPhieuCuaToi {
 		return domain.PhieuPhanAnh{}, petstore.ErrPhieuKhongTonTai
 	}
 	return domain.PhieuPhanAnh{
@@ -323,17 +323,17 @@ func (khoPhieuCongDan) DanhSachCuaCongDan(ctx context.Context, congDanID, _ stri
 // chain — where it would answer 404 to every citizen — with every test in this file still green.
 type guiPhieuGia struct{ goi int }
 
-func (g *guiPhieuGia) Gui(ctx context.Context, yc app.YeuCauGuiPhanAnh, congDan audit.Actor) (
+func (g *guiPhieuGia) Gui(ctx context.Context, yc app.YeuCauGuiPhanAnh, sender app.IntakeSender) (
 	domain.PhieuPhanAnh, error) {
 
 	g.goi++
 	xa := tenant.MustFrom(ctx)
-	if xa != xaA || congDan.ID != idCongDan || congDan.Kind != "citizen" {
+	if xa != xaA || sender.Owner.ID != idCongDan || sender.Owner.Kind != domain.OwnerCitizen {
 		return domain.PhieuPhanAnh{}, errors.New("gửi phiếu giả: xã hoặc chủ thể không phải của phiên công dân")
 	}
 	return domain.PhieuPhanAnh{
 		MaTraCuu: maPhieuCuaToi, Kenh: domain.KenhZaloMiniApp,
-		CongDanID: congDan.ID, NoiDung: yc.NoiDung,
+		CongDanID: sender.Owner.ID, NoiDung: yc.NoiDung,
 		TrangThai: domain.DaTiepNhan, GocDemHan: mocGui, VaoSoLuc: mocGui,
 		HanTiepNhan: mocGui.Add(0),
 	}, nil

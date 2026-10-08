@@ -195,6 +195,13 @@ type PhieuPhanAnh struct {
 	// see AnDanh.
 	CongDanID string
 
+	// ZaloAccountID is the OWNER of a petition sent from a Mini App session WITHOUT a verified phone
+	// (ADR 0080, migration 0032): `tai_khoan_zalo.id` in service-identity, opaque. Empty on every
+	// citizen-filed and staff-booked petition; never set together with CongDanID (CHECK
+	// `phieu_phan_anh_single_owner`). Written at intake, frozen afterwards. NEVER RETURNED BY THE API
+	// and never logged — staff and citizen responses carry only ContactUnverified (petition_owner.go).
+	ZaloAccountID string
+
 	NoiDung string
 
 	// LinhVuc holds a TIER-1 code AS A VALUE (ADR 0026): no foreign key, no JOIN across the

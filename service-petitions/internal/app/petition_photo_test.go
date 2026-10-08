@@ -174,6 +174,39 @@ func (p *ppPetitions) CitizenPetitionForUpdate(_ context.Context, tx *pkgstore.S
 	return pa, err
 }
 
+// findOwned applies the owner filter by KIND, as the store's ownerFilter does in SQL: a citizen owner
+// matches `cong_dan_id`, a Zalo account `zalo_account_id`, and never the other column (ADR 0080).
+func (p *ppPetitions) findOwned(commune tenant.ID, owner domain.PetitionOwner, code string) (domain.PhieuPhanAnh, error) {
+	if !owner.Valid() {
+		return domain.PhieuPhanAnh{}, petstore.ErrThieuDinhDanhCongDan
+	}
+	pa, ok := p.byCommune[commune][code]
+	if !ok {
+		return domain.PhieuPhanAnh{}, petstore.ErrPhieuKhongTonTai
+	}
+	switch {
+	case owner.Kind == domain.OwnerCitizen && pa.CongDanID == owner.ID:
+	case owner.Kind == domain.OwnerZaloAccount && pa.ZaloAccountID == owner.ID:
+	default:
+		return domain.PhieuPhanAnh{}, petstore.ErrPhieuKhongTonTai
+	}
+	return pa, nil
+}
+
+func (p *ppPetitions) OwnedByCode(ctx context.Context, owner domain.PetitionOwner, ma string) (domain.PhieuPhanAnh, error) {
+	return p.findOwned(tenant.MustFrom(ctx), owner, ma)
+}
+
+func (p *ppPetitions) OwnedForUpdate(_ context.Context, tx *pkgstore.ScopedTx, owner domain.PetitionOwner, ma string) (
+	domain.PhieuPhanAnh, error) {
+	p.locked++
+	pa, err := p.findOwned(tx.TenantID(), owner, ma)
+	if err == nil && p.statusAtLk != nil {
+		pa.TrangThai = *p.statusAtLk
+	}
+	return pa, err
+}
+
 func (p *ppPetitions) TheoMaTraCuu(ctx context.Context, ma string) (domain.PhieuPhanAnh, error) { // vi-name-ok: implements the existing store method
 	pa, ok := p.byCommune[tenant.MustFrom(ctx)][ma]
 	if !ok {

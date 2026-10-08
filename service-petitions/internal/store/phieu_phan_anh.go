@@ -56,7 +56,8 @@ const cotPhieu = `id, ma_tra_cuu, kenh_tiep_nhan, cong_dan_id, noi_dung, linh_vu
 	phan_loai_luc, xu_ly_xong_luc, dong_luc, ket_qua_xu_ly,
 	publication_status, so_lan_mo_lai,
 	ly_do_ket_thuc_nhanh, co_quan_nhan, ket_thuc_nhanh_luc,
-	diem_hai_long, rating_comment, danh_gia_luc`
+	diem_hai_long, rating_comment, danh_gia_luc,
+	zalo_account_id`
 
 // TheoMaTraCuu reads one petition by the code the citizen was handed.
 //
@@ -134,18 +135,55 @@ var ErrThieuDinhDanhCongDan = errors.New("phieu_phan_anh: thiếu định danh c
 // real one, which is the fact the isolation exists to keep.
 func (s *PhieuPhanAnhStore) CuaCongDanTheoMaTraCuu(ctx context.Context, congDanID, ma string) (
 	domain.PhieuPhanAnh, error) {
+	// FAIL CLOSED, BEFORE THE QUERY, inside OwnedByCode. `cong_dan_id = ''` would match no row today,
+	// so the refusal buys nothing against the database — it buys against the NEXT edit, the one that
+	// makes the predicate conditional or the column defaultable. An empty identity on the isolation
+	// path is never a narrower question, it is a caller that lost the session (rule 1, forbidden #1 in
+	// its citizen form).
+	return s.OwnedByCode(ctx, domain.PetitionOwner{Kind: domain.OwnerCitizen, ID: congDanID}, ma)
+}
 
-	if congDanID == "" {
-		// FAIL CLOSED, BEFORE THE QUERY. `cong_dan_id = ''` would match no row today, so this
-		// refusal buys nothing against the database — it buys against the NEXT edit, the one that
-		// makes the predicate conditional or the column defaultable. An empty identity on the
-		// isolation path is never a narrower question, it is a caller that lost the session
-		// (rule 1, forbidden #1 in its citizen form).
-		return domain.PhieuPhanAnh{}, ErrThieuDinhDanhCongDan
+// ownerFilter is the WHERE tail that binds a petition to its owner — $2 the code, $3 the owner id —
+// chosen by the owner's KIND from a closed switch of two literal statements.
+//
+// TWO LITERALS AND NOT A COLUMN NAME SPLICED IN: the shape of each statement is then readable, and
+// testable, as the exact text PostgreSQL runs. An owner that is not Valid — no id, or a kind nobody
+// declared — is ErrThieuDinhDanhCongDan: a wiring fault, answered 500, never a filter switched off.
+//
+// THE OWNER COLUMNS ARE EXCLUSIVE (CHECK `phieu_phan_anh_single_owner`, migration 0032), so a
+// Zalo-owned petition never matches the citizen statement and a citizen's never matches the account
+// one: "Phản ánh của tôi" and the citizen lookup cannot reach an unverified petition (ADR 0080
+// decision 3), and an account cannot reach a citizen's.
+func ownerFilter(o domain.PetitionOwner) (string, error) {
+	if !o.Valid() {
+		return "", ErrThieuDinhDanhCongDan
 	}
+	switch o.Kind {
+	case domain.OwnerCitizen:
+		return `AND ma_tra_cuu = $2 AND cong_dan_id = $3 AND deleted_at IS NULL`, nil
+	case domain.OwnerZaloAccount:
+		return `AND ma_tra_cuu = $2 AND zalo_account_id = $3 AND deleted_at IS NULL`, nil
+	}
+	return "", ErrThieuDinhDanhCongDan
+}
 
-	rows, err := s.db.For(ctx).Query(ctx, cotPhieu, "phieu_phan_anh",
-		`AND ma_tra_cuu = $2 AND cong_dan_id = $3 AND deleted_at IS NULL`, ma, congDanID)
+// OwnedByCode reads ONE live petition of THIS commune that belongs to `owner` — a verified citizen or,
+// since ADR 0080, a Zalo account — by its lookup code.
+//
+// THE SAME ISOLATION AS CuaCongDanTheoMaTraCuu, generalised over the owner kind and nothing else: the
+// commune is $1 from the context (Scoped.Query), the owner $3 a bound parameter, soft-deleted rows
+// excluded. No such code · another owner's code · another commune's · soft deleted are ONE
+// ErrPhieuKhongTonTai — one 404 body (rule 4, forbidden #2; ADR 0080 stop condition #6).
+//
+// `owner` comes from the SESSION and nowhere else — the whole argument is on CuaCongDanTheoMaTraCuu.
+func (s *PhieuPhanAnhStore) OwnedByCode(ctx context.Context, owner domain.PetitionOwner, ma string) (
+	domain.PhieuPhanAnh, error) {
+
+	loc, err := ownerFilter(owner)
+	if err != nil {
+		return domain.PhieuPhanAnh{}, err
+	}
+	rows, err := s.db.For(ctx).Query(ctx, cotPhieu, "phieu_phan_anh", loc, ma, owner.ID)
 	if err != nil {
 		// NEITHER THE CODE NOR THE CITIZEN IDENTIFIER IS IN THE WRAPPED MESSAGE. The code is the
 		// one string that opens a citizen's petition and the identifier names a person; an error
@@ -291,6 +329,10 @@ func quetPhieuThem(r quangKiem, them ...any) (domain.PhieuPhanAnh, error) {
 		ratingComment sql.NullString
 		ratedAt       sql.NullTime
 
+		// The Zalo-account owner (migration 0032, ADR 0080). NULL on every citizen-filed and
+		// staff-booked petition.
+		zaloAccount sql.NullString
+
 		// `publication_status` (migration 0017) is NOT NULL with a default, so a plain string. It sits in
 		// the position `hien_cong_khai` used to hold — that column is superseded and no longer read.
 		publication string
@@ -306,6 +348,7 @@ func quetPhieuThem(r quangKiem, them ...any) (domain.PhieuPhanAnh, error) {
 		&publication, &p.SoLanMoLai,
 		&lyDoKetThuc, &coQuanNhan, &ketThucNhanhLuc,
 		&ratingStars, &ratingComment, &ratedAt,
+		&zaloAccount,
 	}
 	if err := r.Scan(append(dich, them...)...); err != nil {
 		return domain.PhieuPhanAnh{}, fmt.Errorf("phieu_phan_anh: đọc dòng: %w", err)
@@ -315,6 +358,7 @@ func quetPhieuThem(r quangKiem, them ...any) (domain.PhieuPhanAnh, error) {
 	p.TrangThai = domain.TrangThai(tt)
 	p.PublicationStatus = domain.PublicationStatus(publication)
 	p.CongDanID = congDan.String
+	p.ZaloAccountID = zaloAccount.String
 	p.LinhVuc = linhVuc.String
 	p.DiaChi = diaChi.String
 	p.ThonID = thon.String
@@ -374,8 +418,8 @@ func (s *PhieuPhanAnhStore) Tao(ctx context.Context, tx *store.ScopedTx, p domai
 		tenant_id, id, ma_tra_cuu, kenh_tiep_nhan, cong_dan_id, noi_dung, linh_vuc,
 		dia_chi, thon_id, lat, lng, nguoi_gui_ho_ten, nguoi_gui_dien_thoai, an_danh,
 		trang_thai, goc_dem_han, vao_so_luc, han_tiep_nhan, han_xu_ly_xong, han_phan_loai,
-		publication_status)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`
+		publication_status, zalo_account_id)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`
 
 	_, err := tx.Exec(ctx, stmt,
 		string(tx.TenantID()), p.ID, p.MaTraCuu, string(p.Kenh), rongThanhNull(p.CongDanID),
@@ -389,7 +433,9 @@ func (s *PhieuPhanAnhStore) Tao(ctx context.Context, tx *store.ScopedTx, p domai
 		// "KHÔNG ÁP DỤNG" — that channel's form settles the field at booking, so there is no
 		// unclassified interval to bound.
 		khongThanhNull(p.HanPhanLoai),
-		string(p.PublicationStatus))
+		// THE ZALO-ACCOUNT OWNER (ADR 0080): NULL, never '', on every petition that is not one —
+		// migration 0032's CHECKs refuse a blank owner and refuse both owners at once.
+		string(p.PublicationStatus), rongThanhNull(p.ZaloAccountID))
 	if err != nil {
 		// NOT the content, NOT the reporter, NOT the lookup code — an INSERT error message can
 		// carry the whole row on some drivers, and this row is citizen personal data (rule 3).
