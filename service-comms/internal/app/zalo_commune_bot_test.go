@@ -976,3 +976,47 @@ func TestDispatcherSendsEachCommuneThroughItsOwnBot(t *testing.T) {
 		}
 	}
 }
+
+// A per-domain notice (comms.proto 5–16) is routed by the commune's selection exactly: commune A selected
+// `phan-anh.qua-han` and gets the PETITION_OVERDUE notice; commune B selected only `nhiem-vu.qua-han` and
+// the same kind is skipped as loai-tat — per-domain to per-domain never widens.
+func TestDispatcherRoutesAPerDomainKindBySelection(t *testing.T) {
+	f := &sqlFake{query: func(q string, args []driver.Value) ([]string, [][]driver.Value, error) {
+		xa := fmt.Sprint(args[0])
+		switch {
+		case strings.Contains(q, "FROM zalo_delivery d"):
+			return []string{"id", "staff_code", "kind", "attempts", "title", "body", "link"},
+				[][]driver.Value{{"01JDELIV" + xa[:6], "CB-00001", domain.ZaloKindPetitionOverdue, int64(0),
+					"Phản ánh quá hạn", "", ""}}, nil
+		case strings.Contains(q, "FROM zalo_channel_setting"):
+			sel := map[string]string{string(xaA): "phan-anh.qua-han", string(xaB): "nhiem-vu.qua-han"}[xa]
+			return []string{"e", "k", "qs", "qe", "sd", "rd", "ua", "ub"},
+				[][]driver.Value{{true, sel, "21:00", "06:00", int64(1), int64(1), botClock, "CB-1"}}, nil
+		case strings.Contains(q, "FROM zalo_link"):
+			return []string{"staff_code", "id", "chat_id"},
+				[][]driver.Value{{"CB-00001", "01JLINK" + xa[:6], "chat-of-" + xa}}, nil
+		}
+		return nil, nil, fmt.Errorf("fake: no answer for %q", q)
+	}}
+	db := sql.OpenDB(f)
+	db.SetMaxOpenConns(1)
+	t.Cleanup(func() { db.Close() })
+	kho := store.New(db)
+	send := &recordingSend{}
+	z, err := NewZaloDispatcher(ZaloDispatcherDeps{DB: kho, Repo: docstore.NewZaloLinkStore(kho), Locks: twoCommuneLocks{},
+		Registry: activeRegistry{}, Bots: perCommuneSource{}, Send: send,
+		Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	z.now = func() time.Time { return time.Date(2026, 10, 8, 5, 0, 0, 0, time.UTC) }
+	z.Tick(context.Background())
+
+	if len(send.chats) != 1 || send.chats[0] != "chat-of-"+string(xaA) {
+		t.Fatalf("sends = %v, want only commune A's chat", send.chats)
+	}
+	skips := f.with("status = 'bo-qua'")
+	if len(skips) != 1 || skips[0].args[0] != string(xaB) || skips[0].args[2] != domain.ZaloSkipKindOff {
+		t.Fatalf("skips = %v, want one %s in commune B", skips, domain.ZaloSkipKindOff)
+	}
+}

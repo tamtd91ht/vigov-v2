@@ -50,6 +50,10 @@ func TestValidateDeliveries_ContractLimits(t *testing.T) {
 		{"key repeated", []NotificationDelivery{okNotice("same"), okNotice("same")}, false},
 		{"kind unspecified", with(func(n *NotificationDelivery) { n.Kind = "" }), false},
 		{"kind unknown", with(func(n *NotificationDelivery) { n.Kind = "khac" }), false},
+		{"kind per-domain", with(func(n *NotificationDelivery) { n.Kind = ZaloKindPetitionOverdue }), true},
+		{"kind per-domain unassigned", with(func(n *NotificationDelivery) { n.Kind = ZaloKindTaskUnassigned }), true},
+		{"kind unknown domain", with(func(n *NotificationDelivery) { n.Kind = "ho-so.qua-han" }), false},
+		{"kind test message", with(func(n *NotificationDelivery) { n.Kind = ZaloKindTest }), false},
 		{"no recipient", with(func(n *NotificationDelivery) { n.RecipientCodes = nil }), false},
 		{"blank recipient", with(func(n *NotificationDelivery) { n.RecipientCodes = []string{" "} }), false},
 		{"200 recipients", with(func(n *NotificationDelivery) { n.RecipientCodes = codes(200) }), true},
@@ -82,6 +86,20 @@ func TestValidateDeliveries_ContractLimits(t *testing.T) {
 				t.Fatalf("lỗi = %v, muốn ErrInvalidDelivery", err)
 			}
 		})
+	}
+}
+
+// Every kind 0021 admits on staff_notification is accepted, and kept exactly as sent.
+func TestValidateDeliveries_AcceptsEvery0021Kind(t *testing.T) {
+	kinds := append([]string{StaffNotificationDueSoon, StaffNotificationOverdue, StaffNotificationEscalation,
+		StaffNotificationWeeklyDigest}, ZaloReminderKinds...)
+	for _, k := range kinds {
+		n := okNotice("k")
+		n.Kind = k
+		out, err := ValidateDeliveries([]NotificationDelivery{n})
+		if err != nil || out[0].Kind != k {
+			t.Errorf("%s: %v / %+v", k, err, out)
+		}
 	}
 }
 

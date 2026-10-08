@@ -38,8 +38,9 @@ import (
 // never logged on the way out.
 type notificationOut struct {
 	ID string `json:"id"`
-	// Kind is `sap-den-han` · `qua-han` · `leo-thang` · `ban-tin-tuan` (ADR 0011) — what the bell
-	// draws as the icon.
+	// Kind is `sap-den-han` · `qua-han` · `leo-thang` · `ban-tin-tuan`, or since 0021 a per-domain
+	// `<nhiem-vu|van-ban|phan-anh>.<sap-den-han|qua-han|chua-cu-nguoi|leo-thang>` (ADR 0011, 0079) — what
+	// the bell draws as the icon.
 	Kind  string `json:"kind"`
 	Title string `json:"title"`
 	// Body is the second line; "" draws none.

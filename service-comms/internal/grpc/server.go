@@ -57,6 +57,11 @@ func NewServer(d Deps) *Server {
 
 // kindFromWire maps the proto enum onto the value stored (ADR 0011). UNSPECIFIED and any value this
 // build does not know map to "", which domain.ValidateDeliveries refuses — never a default kind.
+//
+// 1–4 are the OLD kinds and keep their 0010 values: a notice stored under them is routed to Zalo through
+// 0021's read-time map (domain.ZaloLegacyKindMap). 5–16 are stored as their per-domain value as-is —
+// mapping one back to an old value would make a commune that selected `phan-anh.qua-han` also receive
+// every task and document overdue notice.
 func kindFromWire(k commsv1.StaffNotificationKind) string {
 	switch k {
 	case commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DUE_SOON:
@@ -67,6 +72,33 @@ func kindFromWire(k commsv1.StaffNotificationKind) string {
 		return domain.StaffNotificationEscalation
 	case commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_WEEKLY_DIGEST:
 		return domain.StaffNotificationWeeklyDigest
+
+	case commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_DUE_SOON:
+		return domain.ZaloKindTaskDueSoon
+	case commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_OVERDUE:
+		return domain.ZaloKindTaskOverdue
+	case commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_UNASSIGNED:
+		return domain.ZaloKindTaskUnassigned
+	case commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_ESCALATION:
+		return domain.ZaloKindTaskEscalation
+
+	case commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_DUE_SOON:
+		return domain.ZaloKindDocumentDueSoon
+	case commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_OVERDUE:
+		return domain.ZaloKindDocumentOverdue
+	case commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_UNASSIGNED:
+		return domain.ZaloKindDocumentUnassigned
+	case commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_ESCALATION:
+		return domain.ZaloKindDocumentEscalation
+
+	case commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_DUE_SOON:
+		return domain.ZaloKindPetitionDueSoon
+	case commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_OVERDUE:
+		return domain.ZaloKindPetitionOverdue
+	case commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_UNASSIGNED:
+		return domain.ZaloKindPetitionUnassigned
+	case commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_ESCALATION:
+		return domain.ZaloKindPetitionEscalation
 	}
 	return ""
 }

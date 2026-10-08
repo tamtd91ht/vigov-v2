@@ -256,6 +256,9 @@ func TestZaloKindSelectedThroughTheMap(t *testing.T) {
 		{[]string{"sap-den-han"}, "van-ban.qua-han", false},
 		// Per-domain to per-domain is exact.
 		{[]string{"van-ban.qua-han"}, "phan-anh.qua-han", false},
+		{[]string{"phan-anh.qua-han"}, "phan-anh.qua-han", true},
+		{[]string{"qua-han"}, "phan-anh.qua-han", true},
+		{[]string{"phan-anh.qua-han"}, "nhiem-vu.qua-han", false},
 		{[]string{}, "qua-han", false},
 		{[]string{"qua-han"}, "thu-nghiem", false},
 	}

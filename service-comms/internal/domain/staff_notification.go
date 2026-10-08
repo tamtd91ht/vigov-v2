@@ -17,14 +17,17 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
 	"unicode/utf8"
 )
 
-// The four kinds, stored Vietnamese without diacritics (ADR 0011). comms.proto names them in English
-// on the wire; the mapping lives in internal/grpc. The CHECK on the table admits no fifth.
+// The four OLD kinds of 0010, stored Vietnamese without diacritics (ADR 0011). comms.proto names them
+// in English on the wire; the mapping lives in internal/grpc. They stay valid: producers send them until
+// they move to the per-domain kinds (comms.proto StaffNotificationKind 5–16, the ZaloKind* constants of
+// zalo_link.go), and 0021's CHECK admits both sets — nothing else.
 const (
 	StaffNotificationDueSoon      = "sap-den-han"
 	StaffNotificationOverdue      = "qua-han"
@@ -157,13 +160,16 @@ func ValidateDeliveries(in []NotificationDelivery) ([]NotificationDelivery, erro
 	return out, nil
 }
 
+// knownKind is the set 0021's staff_notification_kind_per_domain admits: the four old kinds and the
+// twelve per-domain ones (ZaloReminderKinds, which also holds the weekly digest). One list for both, so
+// the bell and the Zalo selection can never disagree on what a kind is.
 func knownKind(k string) bool {
 	switch k {
 	case StaffNotificationDueSoon, StaffNotificationOverdue, StaffNotificationEscalation,
 		StaffNotificationWeeklyDigest:
 		return true
 	}
-	return false
+	return slices.Contains(ZaloReminderKinds, k)
 }
 
 // validateIdempotencyKey: 1–200 printable ASCII characters, NOT trimmed — the key is opaque, and a
