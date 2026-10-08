@@ -5,7 +5,7 @@ package app
 // row, and nobody approves either act. `admin.sla` + the audit entry are the control.
 //
 // =================================================================================================
-// WHICH CODES ARE CHECKED, AND WHY ONE OF THE THREE KINDS IS STILL REFUSED.
+// WHICH CODES ARE CHECKED.
 //
 // A field code is stored as a VALUE (migration 0008, sla.linh_vuc) and read back by every
 // ResolveDeadlines call — which answers a misspelled code with the DEFAULT row, silently. So the code
@@ -14,16 +14,17 @@ package app
 //	phan-anh     tier-1 petition fields, platform, ListPetitionFields (ADR 0060).           CHECKED.
 //	van-ban-den  document types (`loai_van_ban`), service-documents,
 //	             ResolveDocumentTypeCodes (ADR 0079 lô 2 Q4).                              CHECKED.
-//	nhiem-vu     task priorities (`muc_uu_tien_nhiem_vu`), service-petitions.             NOT YET.
+//	nhiem-vu     task priorities (`muc_uu_tien_nhiem_vu`), service-petitions,
+//	             ResolveTaskPriorityCodes (ADR 0079 lô 2 Q4).                              CHECKED.
 //
-// The checked kinds share one rule, fail closed: an active code is accepted; a code the owner does not
-// know, or has switched off, is ErrSLAFieldNotInList (400); the owner not answering — or not wired at
-// all — is ErrSLAFieldListUnavailable (503), never "accept unchecked".
+// All three share one rule, fail closed: an active code is accepted; a code the owner does not know,
+// or has switched off, is ErrSLAFieldNotInList (400); the owner not answering — or not wired at all —
+// is ErrSLAFieldListUnavailable (503), never "accept unchecked". `don-thu` takes no field rows at all
+// (domain.CheckSLAKindTakesFieldRows refuses it before any owner is asked).
 //
-// `nhiem-vu` is refused with ErrSLAFieldUnverifiable until identity is wired to the petitions RPC that
-// answers task-priority codes; identity may not read that database (rule 2, forbidden #2). Accepting it
-// unchecked would store a code that a typo makes permanently wrong — falling back to the default
-// deadline with nothing on any screen to say so.
+// ErrSLAFieldUnverifiable remains for a kind that takes field rows but has no owner check written
+// here: unreachable today, and the refusal a future kind gets until somebody writes its check —
+// rather than falling through to "accept unchecked".
 //
 // =================================================================================================
 // NEITHER ACT TOUCHES A DEADLINE ALREADY ISSUED (rule 10, invariant 2; ADR 0028). A row added or
@@ -48,8 +49,8 @@ const (
 )
 
 var (
-	// ErrSLAFieldUnverifiable — the kind of work's field list has no contract identity can ask (see the
-	// file comment). Nothing is written.
+	// ErrSLAFieldUnverifiable — the kind of work takes field rows but has no owner check written here
+	// (see the file comment; unreachable for the kinds that exist today). Nothing is written.
 	ErrSLAFieldUnverifiable = errors.New("sla: chưa đối chiếu được mã lĩnh vực của loại việc này")
 
 	// ErrSLAFieldNotInList — the owner of the list does not know the code, or has retired it.
@@ -74,6 +75,20 @@ type PetitionFieldSource interface {
 // satisfies it in production.
 type DocumentTypeSource interface {
 	DocumentTypeCodes(ctx context.Context, codes []string) (map[string]bool, error)
+}
+
+// TaskPrioritySource answers which task-priority codes a live priority of the commune in ctx carries,
+// and whether each is switched on (present → `dang_dung`; absent → no live priority).
+// *petitionsclient.Client satisfies it in production.
+type TaskPrioritySource interface {
+	TaskPriorityCodes(ctx context.Context, codes []string) (map[string]bool, error)
+}
+
+// WithTaskPriorities wires the task-priority check. Without it every `nhiem-vu` add answers
+// ErrSLAFieldListUnavailable — fail closed, never "accept unchecked".
+func (uc *SLA) WithTaskPriorities(src TaskPrioritySource) *SLA {
+	uc.taskPriorities = src
+	return uc
 }
 
 // WithDocumentTypes wires the document-type check. Without it every `van-ban-den` add answers
@@ -164,14 +179,16 @@ func (uc *SLA) AddFieldRule(ctx context.Context, req AddFieldRuleRequest, nguoi 
 	return row, nil
 }
 
-// checkFieldWithOwner asks the list's owner whether the code may be written. See the file comment for
-// the kind still refused outright.
+// checkFieldWithOwner asks the list's owner whether the code may be written. A kind with no check here
+// is refused outright (see the file comment).
 func (uc *SLA) checkFieldWithOwner(ctx context.Context, kind domain.LoaiViec, field string) error {
 	switch kind {
 	case domain.LoaiViecPhanAnh:
 		return uc.checkPetitionField(ctx, field)
 	case domain.LoaiViecVanBanDen:
 		return uc.checkDocumentType(ctx, field)
+	case domain.LoaiViecNhiemVu:
+		return uc.checkTaskPriority(ctx, field)
 	default:
 		return ErrSLAFieldUnverifiable
 	}
@@ -187,6 +204,25 @@ func (uc *SLA) checkDocumentType(ctx context.Context, field string) error {
 	answered, err := uc.documentTypes.DocumentTypeCodes(ctx, []string{field})
 	if err != nil {
 		// Including ErrDocumentsUnavailable: documents could not be asked. The wrapped cause stays for
+		// the log; the sentinel decides the status.
+		return fmt.Errorf("%w: %w", ErrSLAFieldListUnavailable, err)
+	}
+	// Absent (unknown, soft-deleted, another commune's) and switched off are one refusal.
+	if active, ok := answered[field]; !ok || !active {
+		return ErrSLAFieldNotInList
+	}
+	return nil
+}
+
+// checkTaskPriority asks service-petitions about ONE code, exactly as it will be stored — the twin of
+// checkDocumentType. Not cached, for the same reason.
+func (uc *SLA) checkTaskPriority(ctx context.Context, field string) error {
+	if uc.taskPriorities == nil {
+		return ErrSLAFieldListUnavailable
+	}
+	answered, err := uc.taskPriorities.TaskPriorityCodes(ctx, []string{field})
+	if err != nil {
+		// Including ErrPetitionsUnavailable: petitions could not be asked. The wrapped cause stays for
 		// the log; the sentinel decides the status.
 		return fmt.Errorf("%w: %w", ErrSLAFieldListUnavailable, err)
 	}

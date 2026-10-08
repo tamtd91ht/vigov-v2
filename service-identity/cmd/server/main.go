@@ -348,12 +348,22 @@ func run(log *slog.Logger) error {
 	} else {
 		log.Warn("thêm thời hạn riêng cho loại văn bản TẮT — thiếu DOCUMENTS_GRPC_ADDR; POST /api/v1/sla loại van-ban-den sẽ trả 503")
 	}
-	if cfg.PetitionsGRPCAddr() != "" && documents != nil {
-		petitions, err := petitionsclient.Dial(cfg.PetitionsGRPCAddr(), cfg.GRPCCallerKey(), log)
+	// The same for petitions: ONE connection serves the delete's holdings count and the SLA write's
+	// task-priority check (ADR 0079 lô 2 Q4). Without PETITIONS_GRPC_ADDR every `nhiem-vu` add on
+	// POST /api/v1/sla answers 503 `sla_field_check_unavailable` — never accepted unchecked.
+	var petitions *petitionsclient.Client
+	if addr := cfg.PetitionsGRPCAddr(); addr != "" {
+		p, err := petitionsclient.Dial(addr, cfg.GRPCCallerKey(), log)
 		if err != nil {
 			return err
 		}
-		defer petitions.Close()
+		defer p.Close()
+		petitions = p
+		ghiSLA.WithTaskPriorities(petitions)
+	} else {
+		log.Warn("thêm thời hạn riêng cho mức ưu tiên nhiệm vụ TẮT — thiếu PETITIONS_GRPC_ADDR; POST /api/v1/sla loại nhiem-vu sẽ trả 503")
+	}
+	if petitions != nil && documents != nil {
 		ghiBoPhan.WithHoldingsSources(petitions, documents)
 	} else {
 		log.Warn("xoá bộ phận TẮT — thiếu PETITIONS_GRPC_ADDR hoặc DOCUMENTS_GRPC_ADDR; DELETE /api/v1/org-units/{id} sẽ trả 503",

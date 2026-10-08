@@ -161,14 +161,12 @@ func TestAddFieldRuleWithoutReaderFailsClosed(t *testing.T) {
 	}
 }
 
-// TASK PRIORITIES ARE NOT YET CHECKED, so that kind is refused — and the platform is not asked about a
-// code that is not its own. `don-thu` has the default row only.
+// `don-thu` has the default row only, and an unknown kind is refused — before any owner is asked.
 func TestAddFieldRuleRefusesUncheckableKinds(t *testing.T) {
 	cases := []struct {
 		kind domain.LoaiViec
 		want error
 	}{
-		{domain.LoaiViecNhiemVu, ErrSLAFieldUnverifiable},
 		{domain.LoaiViecDonThu, domain.ErrSLAKindHasNoFieldRows},
 		{domain.LoaiViec("la"), domain.ErrSLAKindUnknown},
 	}
@@ -387,5 +385,89 @@ func TestRemoveFieldRuleRefusesActorWithoutStaffCode(t *testing.T) {
 	n.Vet.ID = ""
 	if err := uc.RemoveFieldRule(ctx, idDongSLA, "lý do", n); err == nil || k.batDau != 0 {
 		t.Errorf("thiếu mã cán bộ: lỗi %v, giao dịch %d", err, k.batDau)
+	}
+}
+
+// --- nhiem-vu: the task priority is checked with service-petitions -------------------------------
+
+// taskPrioritiesFake answers code → active for the codes it knows; absent otherwise.
+type taskPrioritiesFake struct {
+	known map[string]bool
+	err   error
+	calls int
+	asked []string
+}
+
+func (f *taskPrioritiesFake) TaskPriorityCodes(_ context.Context, codes []string) (map[string]bool, error) {
+	f.calls++
+	f.asked = append([]string(nil), codes...)
+	if f.err != nil {
+		return nil, f.err
+	}
+	out := map[string]bool{}
+	for _, c := range codes {
+		if a, ok := f.known[c]; ok {
+			out[c] = a
+		}
+	}
+	return out, nil
+}
+
+func taskPriorities() *taskPrioritiesFake {
+	return &taskPrioritiesFake{known: map[string]bool{"khan": true, "cao": false}}
+}
+
+// AN ACTIVE PRIORITY IS WRITTEN, with its audit entry, after ONE question carrying the normalised code
+// — and neither the platform nor documents is asked about a code that is not theirs.
+func TestAddFieldRuleAcceptsActiveTaskPriority(t *testing.T) {
+	k := &khoSLAGia{}
+	platform := tier1()
+	uc, ctx := useCaseWithFields(t, k, platform)
+	docs := documentTypes()
+	prios := taskPriorities()
+	uc.WithDocumentTypes(docs).WithTaskPriorities(prios)
+
+	row, err := uc.AddFieldRule(ctx, addReq(domain.LoaiViecNhiemVu, " khan "), nguoiSLA())
+	if err != nil {
+		t.Fatalf("AddFieldRule lỗi: %v", err)
+	}
+	if row.LinhVuc != "khan" || prios.calls != 1 || len(prios.asked) != 1 || prios.asked[0] != "khan" {
+		t.Errorf("row %+v, asked %v (%d calls)", row, prios.asked, prios.calls)
+	}
+	if platform.calls != 0 || docs.calls != 0 {
+		t.Errorf("hỏi platform %d lần, documents %d lần về một mã mức ưu tiên", platform.calls, docs.calls)
+	}
+	if k.soCau("INSERT INTO sla") != 1 || k.soCau("audit_log") != 1 || k.daCommit != 1 {
+		t.Errorf("insert %d, vết %d, commit %d — muốn 1/1/1", k.soCau("INSERT INTO sla"), k.soCau("audit_log"), k.daCommit)
+	}
+}
+
+// EVERY ANSWER OTHER THAN "ACTIVE" WRITES NOTHING: switched off and absent are 400, any error is 503,
+// and no client wired is 503 — fail closed.
+func TestAddFieldRuleTaskPriorityFailsClosed(t *testing.T) {
+	cases := []struct {
+		name  string
+		field string
+		src   *taskPrioritiesFake // nil = not wired
+		want  error
+	}{
+		{"mức đã tắt", "cao", taskPriorities(), ErrSLAFieldNotInList},
+		{"mã không có", "khong-co", taskPriorities(), ErrSLAFieldNotInList},
+		{"petitions không trả lời", "khan", &taskPrioritiesFake{err: errors.New("unavailable")}, ErrSLAFieldListUnavailable},
+		{"chưa nối petitions", "khan", nil, ErrSLAFieldListUnavailable},
+	}
+	for _, c := range cases {
+		k := &khoSLAGia{}
+		uc, ctx := useCaseWithFields(t, k, tier1())
+		if c.src != nil {
+			uc.WithTaskPriorities(c.src)
+		}
+		_, err := uc.AddFieldRule(ctx, addReq(domain.LoaiViecNhiemVu, c.field), nguoiSLA())
+		if !errors.Is(err, c.want) {
+			t.Errorf("%s: lỗi = %v, muốn %v", c.name, err, c.want)
+		}
+		if k.batDau != 0 {
+			t.Errorf("%s: mở %d giao dịch — phải từ chối TRƯỚC", c.name, k.batDau)
+		}
 	}
 }

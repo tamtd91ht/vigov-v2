@@ -1,8 +1,11 @@
 // Package petitionsclient is how another service asks petitions a question over gRPC.
 //
-// Today there is one question and one caller: identity, before it soft-deletes an org unit, asks
-// how many open records of petitions that unit still holds (CountOrgUnitHoldings — the predicate
-// is stated once, in proto/vigov/petitions/v1/petitions.proto, and not repeated here).
+// Two questions, one caller (identity); each predicate is stated once, in
+// proto/vigov/petitions/v1/petitions.proto, and not repeated here:
+//
+//	OrgUnitHoldings     before it soft-deletes an org unit (CountOrgUnitHoldings).
+//	TaskPriorityCodes   before it writes an SLA row for one task priority (ResolveTaskPriorityCodes,
+//	                    task_priority_codes.go).
 //
 // WHY IT LIVES IN core/ AND NOT INSIDE service-identity: the same reason as identityclient. The
 // transport and the reading of a failure are written once; a second caller would otherwise write

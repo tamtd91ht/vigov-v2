@@ -103,6 +103,10 @@ type SLA struct {
 	// documentTypes checks a `van-ban-den` field code the same way, against service-documents. Nil =
 	// refused as unavailable.
 	documentTypes DocumentTypeSource
+
+	// taskPriorities checks a `nhiem-vu` field code the same way, against service-petitions. Nil =
+	// refused as unavailable.
+	taskPriorities TaskPrioritySource
 }
 
 func NewSLA(db *store.DB, kho KhoSLA) *SLA {

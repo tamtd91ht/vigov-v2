@@ -1,8 +1,9 @@
 // Package grpc serves the petitions contract (proto/vigov/petitions/v1) to the other services.
 //
-// ONE question today: CountOrgUnitHoldings, asked by identity before it soft-deletes an org unit.
-// It writes nothing, publishes nothing and is not audited — the audited act is identity's delete,
-// inside identity's own transaction (petitions.proto).
+// Two questions, both from identity, both read-only: CountOrgUnitHoldings, asked before it soft-deletes
+// an org unit, and ResolveTaskPriorityCodes (task_priority_codes.go), asked before it writes an SLA row
+// for one task priority. Neither writes, publishes or audits — the audited act is identity's, inside
+// identity's own transaction (petitions.proto).
 //
 // Health is not implemented, like every other gRPC server in this repository: liveness is the
 // HTTP /healthz, outside the commune chain.
@@ -19,6 +20,7 @@ import (
 
 	petitionsv1 "github.com/vihat/vigov/core/gen/vigov/petitions/v1"
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-petitions/internal/domain"
 )
 
 // OrgUnitHoldingsCounter is one register's "open records this unit holds", in the commune of ctx.
@@ -27,11 +29,18 @@ type OrgUnitHoldingsCounter interface {
 	CountOpenHeldByOrgUnit(ctx context.Context, orgUnitID string) (int, error)
 }
 
+// TaskPriorityCodeReader is "the live task priorities of the commune in ctx carrying these codes".
+// *store.MucUuTienNhiemVuStore satisfies it.
+type TaskPriorityCodeReader interface {
+	StatesByCode(ctx context.Context, codes []string) ([]domain.TaskPriorityCodeState, error)
+}
+
 // Deps are what the server reads. Every field is required.
 type Deps struct {
-	Petitions OrgUnitHoldingsCounter
-	Tasks     OrgUnitHoldingsCounter
-	Log       *slog.Logger
+	Petitions      OrgUnitHoldingsCounter
+	Tasks          OrgUnitHoldingsCounter
+	TaskPriorities TaskPriorityCodeReader
+	Log            *slog.Logger
 }
 
 // Server implements petitionsv1.PetitionsServiceServer.
@@ -43,7 +52,7 @@ type Server struct {
 // NewServer panics on a missing dependency, at construction: a nil one would otherwise surface as
 // a panic on the first call, in production, read by identity as "try again".
 func NewServer(d Deps) *Server {
-	if d.Petitions == nil || d.Tasks == nil || d.Log == nil {
+	if d.Petitions == nil || d.Tasks == nil || d.TaskPriorities == nil || d.Log == nil {
 		panic("petitions grpc: NewServer thiếu phụ thuộc")
 	}
 	return &Server{d: d}

@@ -35,7 +35,8 @@ func (f *fakeCounter) CountOpenHeldByOrgUnit(ctx context.Context, id string) (in
 }
 
 func newTestServer(p, t *fakeCounter) *Server {
-	return NewServer(Deps{Petitions: p, Tasks: t, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	return NewServer(Deps{Petitions: p, Tasks: t, TaskPriorities: &fakePriorities{},
+		Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 }
 
 func TestCountOrgUnitHoldingsAnswersBothCountsInContextCommune(t *testing.T) {
@@ -117,4 +118,13 @@ func TestNewServerRefusesMissingDeps(t *testing.T) {
 		}
 	}()
 	NewServer(Deps{Petitions: &fakeCounter{}})
+}
+
+func TestNewServerRefusesMissingTaskPriorities(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("dựng được máy chủ thiếu bộ đọc mức ưu tiên")
+		}
+	}()
+	NewServer(Deps{Petitions: &fakeCounter{}, Tasks: &fakeCounter{}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 }
