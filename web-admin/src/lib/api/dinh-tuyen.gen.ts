@@ -83,6 +83,7 @@ export const DINH_TUYEN_API: ReadonlyArray<{ readonly tienTo: string; readonly d
   { tienTo: "/api/v1/zalo-links", dichVu: "comms" },
   { tienTo: "/api/v1/map-frame", dichVu: "comms" },
   { tienTo: "/api/v1/org-units", dichVu: "identity" },
+  { tienTo: "/api/v1/zalo-bots", dichVu: "comms" },
   { tienTo: "/api/v1/communes", dichVu: "identity" },
   { tienTo: "/api/v1/meetings", dichVu: "petitions" },
   { tienTo: "/api/v1/sessions", dichVu: "identity" },
