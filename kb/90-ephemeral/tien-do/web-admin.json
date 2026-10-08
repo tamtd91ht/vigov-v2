@@ -1083,6 +1083,15 @@
       "bang_chung": "75988dd6. 19 ca mới đỏ trước, xanh sau (can-bo.test.ts, user-list-prototype.test.tsx, danh-ba-can-bo.tim.test.tsx). Kiểm 08/10: vitest cau-hinh + danh-ba + can-bo + nguoi-dung 70 tệp / 1184 ca xanh; lint sạch; typecheck chỉ đỏ ở lib/api/phieu-phan-anh.test.ts:440, toàn bộ test đỏ ở dev-preview/preview-render (màn van-ban) — đều do việc chưa commit của phiên khác. Chưa kiểm bằng ảnh render.",
       "no_confirm": [],
       "tiep_theo": "Cột đang xếp không có dấu nhìn thấy cho người sáng mắt (icon ArrowUpDown như nhau, hướng chỉ ở aria-sort) — prototype cũng vậy; muốn có dấu thì là việc nhỏ, chờ chủ dự án."
+    },
+    {
+      "id": "van-ban-don-thu-bam-prototype-08-10",
+      "menu": "van-ban-don-thu",
+      "trang_thai": "dang_lam",
+      "viec": "Văn bản & Đơn thư — tab Đơn thư công dân + Báo cáo bám prototype theo tmp/web/updated/van-ban-don-thu-theo-prototype-v2.md (/fix-web-admin 08/10, ADR 0084). 10 card: TASK-01 ADR · 02 web giao diện thuần · 03 hợp đồng · 04/05 migration documents/identity · 06–08 backend · 09/10 web",
+      "bang_chung": "TASK-01 4eb7ef27 (ADR 0084). TASK-02 6f9278f2: H1 theo tab, bảng table-fixed + colgroup (letter-register.tsx), d/m/yyyy (letterDate), một câu bảng trống, báo cáo 'Chưa phân công' + theo loại xếp theo tổng, dòng phụ Chuyển thành nhiệm vụ, ô bộ phận chỉ tên, gợi ý trạng thái + tên người dòng thời gian như prototype. Kiểm: vitest 13 ca đỏ trước sửa; web-admin typecheck · lint · test 275 tệp 5090 ca xanh; make check: mọi target xanh, target web 1 ca dashboard/export.test.ts PPTX quá 5s lúc máy tải nặng — chạy riêng 15/15 xanh. CHƯA kiểm bằng ảnh render (site và prototype cần đăng nhập) — chưa được báo là khớp prototype.",
+      "no_confirm": [],
+      "tiep_theo": "Còn TASK-03…10 (hợp đồng chuyển thành nhiệm vụ + hạn theo loại đơn, migration nguồn vào sổ + ràng buộc kết quả theo loại, SLA theo loại đơn ở identity, backend nhóm trạng thái/đếm/hạn tự điền/quy tắc đúng hạn, nhập/xuất Excel, web thanh 4 bước+2 nhánh, Cấu hình thời hạn theo loại đơn). Không sắp 'sort=number': store/citizen_letter.go:138-141 — không lọc năm thì số hai năm xen nhau; mặc định created_at desc đã ra số mới nhất trước. Dòng 'Phụ trách:' ở dòng thời gian vẫn 'Tên (CB-…)' (spec §4.5 ghi chỉ họ tên). Bảng theo đơn vị chưa xếp theo tổng (prototype service.py:636). Chờ ảnh render 1280/1440 để ui-ux-reviewer VALIDATE."
     }
   ]
 }
