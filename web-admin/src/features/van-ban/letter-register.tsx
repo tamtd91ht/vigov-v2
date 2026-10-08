@@ -37,7 +37,7 @@ import { HeaderOr, LetterImportButton } from "./document-pending";
 import { Glyph, plainFrame, type RegisterFrame } from "./document-ui";
 import {
   DUE_TONE_CLASS,
-  LETTER_STATUS_CODES,
+  LETTER_STATUS_GROUPS,
   WITHHELD_SENDER,
   WITHHELD_SUMMARY,
   activeDue,
@@ -47,7 +47,6 @@ import {
   isPastDue,
   letterDate,
   letterNumber,
-  letterStatusLabel,
   letterTypeLabel,
   mayWorkOnLetter,
   senderView,
@@ -77,10 +76,11 @@ export type LetterFilters = {
   receivedTo: string;
   holdingUnit: string;
   assignee: string;
-  status: string;
+  /** ADR 0084's display group (`status_group`) — the prototype's status filter. */
+  statusGroup: string;
 };
 
-export const NO_FILTERS: LetterFilters = { receivedFrom: "", receivedTo: "", holdingUnit: "", assignee: "", status: "" };
+export const NO_FILTERS: LetterFilters = { receivedFrom: "", receivedTo: "", holdingUnit: "", assignee: "", statusGroup: "" };
 
 /** "Bỏ {n} bộ lọc" counts the second row only — the scope is a view, not a filter (prototype :81-83). */
 export function activeFilterCount(f: LetterFilters): number {
@@ -106,7 +106,14 @@ function todayISO(): string {
  * table, verbatim — a client gate guessing it would be a second place that can disagree with the
  * server. The WRITE controls are gated by key (convenience; the server checks every call).
  */
-export function LetterRegister({ frame = plainFrame }: { frame?: RegisterFrame } = {}) {
+export function LetterRegister({
+  frame = plainFrame,
+  onBooked,
+}: {
+  frame?: RegisterFrame;
+  /** A letter was booked — the workspace re-reads the tab's count. */
+  onBooked?: () => void;
+} = {}) {
   const [scope, setScope] = useState<LetterScope>("all");
   const [filters, setFilters] = useState<LetterFilters>(NO_FILTERS);
   const [stack, setStack] = useState<NganXepConTro>(TRANG_DAU);
@@ -139,7 +146,7 @@ export function LetterRegister({ frame = plainFrame }: { frame?: RegisterFrame }
       receivedTo: filters.receivedTo,
       holdingUnit: filters.holdingUnit,
       assignee: filters.assignee,
-      status: filters.status,
+      statusGroup: filters.statusGroup,
       cursor: stack.hienTai,
     }),
     [scope, filters, stack],
@@ -242,6 +249,7 @@ export function LetterRegister({ frame = plainFrame }: { frame?: RegisterFrame }
                 setEntry(null);
                 toast.success(`Đã vào sổ đơn thư số ${letterNumber(letter.number, letter.year)}.`);
                 setReads((n) => n + 1);
+                onBooked?.();
               }}
             />
           )}
@@ -363,11 +371,12 @@ export function LetterRegisterView({
                 </option>
               ))}
           </FilterSelect>
-          <FilterSelect id="don-thu-loc-trang-thai" label="Lọc theo trạng thái" value={filters.status} onChange={(v) => set({ status: v })}>
+          {/* The prototype's groups, in its order, without "Chờ phân công" (ADR 0084 #5). */}
+          <FilterSelect id="don-thu-loc-trang-thai" label="Lọc theo trạng thái" value={filters.statusGroup} onChange={(v) => set({ statusGroup: v })}>
             <option value="">Tất cả trạng thái</option>
-            {LETTER_STATUS_CODES.map((code) => (
-              <option key={code} value={code}>
-                {letterStatusLabel(code)}
+            {LETTER_STATUS_GROUPS.map((g) => (
+              <option key={g.code} value={g.code}>
+                {g.label}
               </option>
             ))}
           </FilterSelect>
@@ -441,7 +450,7 @@ function DateFilter({
  * and pushed `Trạng thái` out of view. Owner request v2 §4.3: no horizontal scrollbar from 1280px,
  * `Đang giữ` / `Người gửi` at most three lines, `Nội dung` the flexible column cut with "…". So the
  * table is `table-fixed` with these widths (cell padding px-3 included), and `Nội dung` takes the rest.
- * `Trạng thái` is sized for the widest badge ("Đang giải quyết"; the badge never wraps).
+ * `Trạng thái` is sized for the widest badge ("Lưu, không thụ lý"; the badge never wraps).
  * LOCAL on purpose: `REGISTER_TH` / `REGISTER_TD` are shared with Văn bản đến/đi, which keep theirs.
  */
 const LETTER_COLUMNS: readonly { label: string; width?: string }[] = [
@@ -453,7 +462,7 @@ const LETTER_COLUMNS: readonly { label: string; width?: string }[] = [
   { label: "Đang giữ", width: "w-[124px]" },
   { label: "Số ngày xử lý", width: "w-[88px]" },
   { label: "Hạn giải quyết", width: "w-[104px]" },
-  { label: "Trạng thái", width: "w-[148px]" },
+  { label: "Trạng thái", width: "w-[160px]" },
 ];
 /** The prototype's header cell (`PetitionTable.tsx:35-43`): no `nowrap`, so a long label wraps. */
 const LETTER_TH = "px-3 py-2.5 align-bottom font-semibold";
@@ -641,7 +650,7 @@ function LetterRow({
         <span className={DUE_TONE_CLASS[due.tone]}>{due.text}</span>
       </td>
       <td className={LETTER_TD}>
-        <LetterStatusBadge status={row.status} />
+        <LetterStatusBadge group={row.status_group} />
       </td>
     </tr>
   );

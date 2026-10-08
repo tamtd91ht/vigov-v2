@@ -5,11 +5,13 @@
  *
  * THE BUSINESS RULES ARE THE CUSTOMER'S, THE PRESENTATION THE PROTOTYPE'S (ADR 0078 #1). Where they
  * differ the rule wins, drawn in the prototype's place and style:
- *   - statuses are C3's ten (TT 05/2021), not the prototype's seven; assignment is an ATTRIBUTE;
+ *   - the DATA keeps C3's ten statuses (TT 05/2021); the screen DRAWS the prototype's display groups,
+ *     which the server derives and sends as `status_group` (ADR 0084 #2); assignment is an ATTRIBUTE;
  *   - types are C4's four codes;
  *   - the sender is optional (C7);
- *   - deadlines are NEVER computed here — the only one is the clerk's typed "Hạn xử lý" (ADR 0079 lô 5
- *     Q18), stored by the server; unset reads "Không đặt hạn" / "Không đặt" (rule 10); lateness, when a deadline exists, is DERIVED from it against `now`, never stored;
+ *   - deadlines are NEVER computed here — the server fills them at booking / admission by the commune's
+ *     rule per type (ADR 0084 #3, ADR 0085 B) and the clerk may still change them; unset reads "Không đặt
+ *     hạn" / "Không đặt" (rule 10); lateness is DERIVED from the stored instant against `now`, never stored;
  *   - the phone is shown exactly as the server masked it, the address never (ADR 0078 #4, rule 3).
  *
  * ⚠ THE LABEL TABLES ARE HAND COPIES of `service-documents/internal/domain/citizen_letter.go` — the
@@ -23,6 +25,7 @@ import type {
   documents_citizenLetterItemOut,
   documents_citizenLetterOut,
   documents_duplicateCheckIn,
+  documents_letterResultIn,
   documents_letterRoutingIn,
   documents_senderCorrectionIn,
 } from "@/lib/api/schema.gen";
@@ -50,160 +53,215 @@ export function letterTypeLabel(code: string): string {
   return code === "" ? "Không ghi loại đơn" : `${code} (mã loại đơn chưa có nhãn trên màn hình này)`;
 }
 
-/* ---- statuses (C3) ------------------------------------------------------------------------ */
+/* ---- statuses (C3) — the TT 05/2021 codes the DATA keeps ----------------------------------- */
+
+/** Labels of C3's ten codes (glossary / ledger C3) — the step select and the log's pills. */
+const STATUS_LABEL: Readonly<Record<string, string>> = {
+  "moi-vao-so": "Mới vào sổ",
+  "dang-xu-ly-don": "Đang xử lý đơn",
+  "thu-ly": "Thụ lý",
+  "dang-giai-quyet": "Đang giải quyết",
+  "da-giai-quyet": "Đã giải quyết",
+  "khong-thu-ly": "Không thụ lý",
+  "huong-dan": "Hướng dẫn",
+  "chuyen-don": "Chuyển đơn",
+  "luu-don": "Lưu đơn",
+  "dinh-chi": "Đình chỉ",
+};
+
+export function letterStatusLabel(code: string): string {
+  const label = STATUS_LABEL[code];
+  if (label !== undefined) return label;
+  return code === "" ? "Không ghi trạng thái" : `${code} (mã trạng thái chưa có nhãn trên màn hình này)`;
+}
+
+/* ---- display groups (ADR 0084 #2) — what the screen DRAWS ---------------------------------- */
 
 /**
- * The ten statuses: label (glossary / ledger C3), the prototype's chip colours by the nearest step of
- * ITS flow (`document-display.ts:52-84, 167-175`), and one hint line under the strip
- * (`PetitionDetailDrawer.tsx:431-433`). The hint is the prototype's sentence word for word where both
- * sets have the status (`PETITION_STATUS_HINT`, `document-display.ts:156-164`): Mới vào sổ, Đã giải quyết.
+ * The prototype's seven statuses less "Chờ phân công" (ADR 0084 #5): label, chip and "đang ở đây"
+ * colours (`document-display.ts:52-84, 166-175`) and the hint under the strip (`:156-164`), word for word.
+ *
+ * `steps` is the half of ADR 0084 §2's table this screen needs: the TT 05 codes a STATUS MOVE can land
+ * on inside the group. The server's `letterGroupRules` (`service-documents/internal/domain/
+ * citizen_letter.go`) stays the one copy that DERIVES a letter's group (`status_group`); this one only
+ * sorts the server's `next_statuses` arrows onto chips, because the contract carries those as TT 05
+ * codes. The first two groups have none: a letter enters them by booking and by routing, never by a
+ * status move. An arrow this table does not know lands on no chip — it is never guessed onto one.
  */
-type StatusLook = {
+type GroupLook = {
+  readonly code: string;
   readonly label: string;
   /** Pill: `bg-{c}/12 text-{c} border-{c}/25`. */
   readonly chip: string;
   /** The strip's "đang ở đây" chip. */
   readonly active: string;
   readonly hint: string;
+  readonly steps: readonly string[];
 };
 
-const STATUS: Readonly<Record<string, StatusLook>> = {
-  "moi-vao-so": {
+const GROUPS: readonly GroupLook[] = [
+  {
+    code: "moi-vao-so",
     label: "Mới vào sổ",
     chip: "border-line bg-ink-muted/12 text-ink",
     active: "bg-ink-muted text-white",
     hint: "Đã vào sổ, chưa giao cho bộ phận nào.",
+    steps: [],
   },
-  "dang-xu-ly-don": {
-    label: "Đang xử lý đơn",
-    chip: "border-tangerine/25 bg-tangerine/12 text-tangerine",
-    active: "bg-tangerine text-white",
-    hint: "Đang xem xét để thụ lý, hướng dẫn, chuyển đơn hoặc lưu đơn.",
-  },
-  "thu-ly": {
-    label: "Thụ lý",
+  {
+    code: "da-phan-cong",
+    label: "Đã phân công",
     chip: "border-brand/25 bg-brand/12 text-brand",
     active: "bg-brand text-white",
-    hint: "Đã thụ lý đơn để giải quyết.",
+    hint: "Đã giao cho bộ phận, chờ bộ phận bắt tay vào việc.",
+    steps: [],
   },
-  "dang-giai-quyet": {
-    label: "Đang giải quyết",
+  {
+    code: "dang-xu-ly",
+    label: "Đang xử lý",
     chip: "border-teal/25 bg-teal/12 text-teal",
     active: "bg-teal text-white",
-    hint: "Đang giải quyết đơn. Ghi kết quả giải quyết trước khi chuyển sang Đã giải quyết.",
+    hint: "Bộ phận đang xử lý, trong hạn giải quyết.",
+    steps: ["dang-xu-ly-don", "thu-ly", "dang-giai-quyet"],
   },
-  "da-giai-quyet": {
+  {
+    code: "da-giai-quyet",
     label: "Đã giải quyết",
     chip: "border-leaf/25 bg-leaf/12 text-leaf",
     active: "bg-leaf text-white",
     hint: "Đã giải quyết xong và trả lời công dân.",
+    steps: ["da-giai-quyet"],
   },
-  "khong-thu-ly": {
-    label: "Không thụ lý",
-    chip: "border-line bg-ink/12 text-ink",
-    active: "bg-ink text-white",
-    hint: "Đơn không đủ điều kiện thụ lý.",
-  },
-  "huong-dan": {
-    label: "Hướng dẫn",
+  {
+    code: "chuyen-cap-tren",
+    label: "Chuyển cấp trên",
     chip: "border-violet/25 bg-violet/12 text-violet",
     active: "bg-violet text-white",
-    hint: "Đã hướng dẫn người gửi đến cơ quan có thẩm quyền.",
+    hint: "Vượt thẩm quyền xã, đã chuyển lên cấp trên.",
+    steps: ["chuyen-don"],
   },
-  "chuyen-don": {
-    label: "Chuyển đơn",
-    chip: "border-violet/25 bg-violet/12 text-violet",
-    active: "bg-violet text-white",
-    hint: "Đã chuyển đơn đến cơ quan có thẩm quyền giải quyết.",
-  },
-  "luu-don": {
-    label: "Lưu đơn",
+  {
+    code: "luu-khong-thu-ly",
+    label: "Lưu, không thụ lý",
     chip: "border-line bg-ink/12 text-ink",
     active: "bg-ink text-white",
-    hint: "Đơn đã được lưu, không xử lý tiếp.",
+    hint: "Không thuộc thẩm quyền hoặc không đủ điều kiện thụ lý, đã lưu.",
+    steps: ["khong-thu-ly", "huong-dan", "luu-don", "dinh-chi"],
   },
-  "dinh-chi": {
-    label: "Đình chỉ",
-    chip: "border-line bg-ink/12 text-ink",
-    active: "bg-ink text-white",
-    hint: "Việc giải quyết đơn đã bị đình chỉ.",
-  },
-};
-
-/** The ten codes, for the status filter — in the strip's reading order. */
-export const LETTER_STATUS_CODES: readonly string[] = [
-  "moi-vao-so",
-  "dang-xu-ly-don",
-  "thu-ly",
-  "dang-giai-quyet",
-  "da-giai-quyet",
-  "khong-thu-ly",
-  "huong-dan",
-  "chuyen-don",
-  "luu-don",
-  "dinh-chi",
 ];
 
-/** The strip's main row (ADR 0078 C3): the path a letter takes when it is admitted and resolved. */
-export const LETTER_MAIN_FLOW: readonly string[] = [
-  "moi-vao-so",
-  "dang-xu-ly-don",
-  "thu-ly",
-  "dang-giai-quyet",
-  "da-giai-quyet",
-];
+/** The six groups in the filter's order — the server's `LetterStatusGroups()` order, the prototype's. */
+export const LETTER_STATUS_GROUPS: readonly { code: string; label: string }[] = GROUPS.map(({ code, label }) => ({ code, label }));
 
-/** The strip's "Rẽ nhánh:" row — the other ends (four in processing, one in resolution). */
-export const LETTER_BRANCHES: readonly string[] = ["khong-thu-ly", "huong-dan", "chuyen-don", "luu-don", "dinh-chi"];
+/** The strip's main row and its "Rẽ nhánh:" row (`document-display.ts:135-146`). */
+export const LETTER_GROUP_MAIN_FLOW: readonly string[] = ["moi-vao-so", "da-phan-cong", "dang-xu-ly", "da-giai-quyet"];
+export const LETTER_GROUP_BRANCHES: readonly string[] = ["chuyen-cap-tren", "luu-khong-thu-ly"];
 
-export function letterStatusLabel(code: string): string {
-  const look = STATUS[code];
-  if (look !== undefined) return look.label;
-  return code === "" ? "Không ghi trạng thái" : `${code} (mã trạng thái chưa có nhãn trên màn hình này)`;
+function group(code: string): GroupLook | undefined {
+  return GROUPS.find((g) => g.code === code);
+}
+
+export function letterGroupLabel(code: string): string {
+  const found = group(code);
+  if (found !== undefined) return found.label;
+  return code === "" ? "Không ghi trạng thái" : `${code} (mã nhóm trạng thái chưa có nhãn trên màn hình này)`;
 }
 
 /** The pill's colour classes; an unknown code gets the neutral grey. */
-export function letterStatusChip(code: string): string {
-  return STATUS[code]?.chip ?? "border-line bg-ink-muted/12 text-ink";
+export function letterGroupChip(code: string): string {
+  return group(code)?.chip ?? "border-line bg-ink-muted/12 text-ink";
 }
 
-export function letterStatusActiveTone(code: string): string {
-  return STATUS[code]?.active ?? "bg-ink-muted text-white";
+export function letterGroupActiveTone(code: string): string {
+  return group(code)?.active ?? "bg-ink-muted text-white";
 }
 
-export function letterStatusHint(code: string): string {
-  return STATUS[code]?.hint ?? "";
+export function letterGroupHint(code: string): string {
+  return group(code)?.hint ?? "";
 }
+
+/** The prototype's second chip when no unit holds the letter (`PetitionDetailDrawer.tsx:398-407`). */
+export const ASSIGN_CHIP_LABEL = "Phân công";
+export const ASSIGN_CHIP_SUB = "chọn bộ phận xử lý";
 
 /** One chip of the status strip. */
 export type StatusChipModel = {
-  readonly code: string;
+  readonly group: string;
   readonly label: string;
+  /** "đang ở đây" · "chuyển sang" · "—" · or the assign chip's "chọn bộ phận xử lý". */
+  readonly sub: string;
   readonly current: boolean;
   readonly clickable: boolean;
+  /** `move`: the composer posts one of `steps`. `assign`: the routing box — no status moves (C3). */
+  readonly action: "move" | "assign" | "none";
+  /** The server's allowed TT 05 targets that fall in this group, in the group's order. */
+  readonly steps: readonly string[];
+  /** The composer asks which TT 05 step: the group holds several (ADR 0084 §2). */
+  readonly pickStep: boolean;
 };
 
 /**
- * The strip: the main row, and the branch row with ONLY the branches that are the current status or a
- * move the server allows from it (ADR 0078, card W2). A chip is CLICKABLE only when the server's
- * `next_statuses` holds it AND the viewer may work on the letter — the server decides the arrows; this
- * never draws one of its own.
+ * The strip (ADR 0084 #2): the prototype's four steps and two branches, BOTH ROWS ALWAYS DRAWN
+ * (`PetitionDetailDrawer.tsx:392-428`). A chip is reachable only when one of the SERVER's
+ * `next_statuses` falls in its group and the viewer may work on the letter — the server decides the
+ * arrows; this never draws one of its own.
+ *
+ * The CURRENT chip may itself be reachable: "Đang xử lý" holds three TT 05 steps, and Đang xử lý đơn →
+ * Thụ lý → Đang giải quyết are moves inside it. Left unpressable, a letter could never be admitted.
+ *
+ * No unit holds the letter → the second chip is the prototype's "Phân công · chọn bộ phận xử lý": an
+ * ASSIGNMENT (the routing box), pressable by whoever may route (`petition.create`) while the letter is open.
  */
-export function statusStrip(
-  current: string,
-  nextStatuses: readonly string[],
-  mayWork: boolean,
-): { main: StatusChipModel[]; branches: StatusChipModel[] } {
-  const chip = (code: string): StatusChipModel => ({
-    code,
-    label: letterStatusLabel(code),
-    current: code === current,
-    clickable: mayWork && code !== current && nextStatuses.includes(code),
-  });
-  return {
-    main: LETTER_MAIN_FLOW.map(chip),
-    branches: LETTER_BRANCHES.filter((code) => code === current || nextStatuses.includes(code)).map(chip),
+export function statusStrip(input: {
+  group: string;
+  nextStatuses: readonly string[];
+  /** A unit holds the letter (`holding_unit_id`). */
+  held: boolean;
+  closed: boolean;
+  mayWork: boolean;
+  /** May route (`petition.create`) — the "Phân công" chip. */
+  canRoute: boolean;
+}): { main: StatusChipModel[]; branches: StatusChipModel[] } {
+  const chip = (code: string): StatusChipModel => {
+    const look = group(code);
+    if (code === "da-phan-cong" && !input.held) {
+      const clickable = input.mayWork && input.canRoute && !input.closed;
+      return { group: code, label: ASSIGN_CHIP_LABEL, sub: ASSIGN_CHIP_SUB, current: false, clickable, action: clickable ? "assign" : "none", steps: [], pickStep: false };
+    }
+    const steps = (look?.steps ?? []).filter((s) => input.nextStatuses.includes(s));
+    const current = code === input.group;
+    const clickable = input.mayWork && steps.length > 0;
+    return {
+      group: code,
+      label: letterGroupLabel(code),
+      sub: current ? "đang ở đây" : clickable ? "chuyển sang" : "—",
+      current,
+      clickable,
+      action: clickable ? "move" : "none",
+      steps,
+      pickStep: (look?.steps.length ?? 0) > 1,
+    };
   };
+  return { main: LETTER_GROUP_MAIN_FLOW.map(chip), branches: LETTER_GROUP_BRANCHES.map(chip) };
+}
+
+/* ---- source (ADR 0084 #7) — the prototype's `SOURCE_META` (`document-display.ts:194-206`) ---- */
+
+const SOURCES: Readonly<Record<string, { label: string; chip: string }>> = {
+  "nhap-tay": { label: "Nhập tay", chip: "border-brand/25 bg-brand/12 text-brand" },
+  "nhap-excel": { label: "Nhập từ Excel", chip: "border-line bg-ink-muted/12 text-ink" },
+  "mini-app": { label: "Mini App", chip: "border-leaf/25 bg-leaf/12 text-leaf" },
+  "thu-dien-tu": { label: "Thư điện tử", chip: "border-teal/25 bg-teal/12 text-teal" },
+};
+
+export function letterSourceLabel(code: string): string {
+  const found = SOURCES[code];
+  if (found !== undefined) return found.label;
+  return code === "" ? "Không ghi nguồn" : `${code} (mã nguồn chưa có nhãn trên màn hình này)`;
+}
+
+export function letterSourceChip(code: string): string {
+  return SOURCES[code]?.chip ?? "border-line bg-ink-muted/12 text-ink";
 }
 
 /** The result form is open only in these two statuses (`ErrLetterResultNotAllowed`). */
@@ -280,6 +338,17 @@ export function dueLabel(dueISO: string | null, closed: boolean, now: Date): { t
 
 /** The drawer figure's word for no deadline — the prototype's (`PetitionDetailDrawer.tsx:522`). */
 export const DUE_NOT_SET = "Không đặt";
+
+/**
+ * The drawer's ONE "Hạn xử lý" figure (prototype `PetitionDetailDrawer.tsx:519-524`, its single
+ * `sla.due_at`): the resolution deadline once the letter was admitted (`accepted_at`), the processing one
+ * before — whichever phase the letter is in or ended in. Both are STORED by the server; this only picks.
+ */
+export function drawerDueAt(
+  letter: Pick<documents_citizenLetterOut, "accepted_at" | "processing_due_at" | "resolution_due_at">,
+): string | null {
+  return (letter.accepted_at ?? "") !== "" ? letter.resolution_due_at : letter.processing_due_at;
+}
 
 /** The drawer's "Hạn xử lý" figure: the stored date, or "Không đặt" — never a count. */
 export function dueDateText(dueISO: string | null): string {
@@ -517,8 +586,32 @@ export function buildSenderCorrection(draft: SenderDraft): Built<documents_sende
   return { ok: true, body };
 }
 
-/** The result form's draft (C10). Sent as typed; the server says what is missing. */
+/** The reply's draft. Sent as typed; the server says what is missing. */
 export type ResultDraft = { documentNo: string; documentDate: string; signer: string; issuer: string; summary: string };
+
+/**
+ * The two types whose result is an ISSUED DOCUMENT — number, date, signer, issuing body — on top of the
+ * reply (ADR 0084 #2: C10 narrowed to complaints and denunciations). The server requires them; a
+ * feedback letter or a request is answered by the one textarea alone.
+ */
+const RESULT_DOCUMENT_TYPES: readonly string[] = ["khieu-nai", "to-cao"];
+
+export function resultNeedsDocument(letterType: string): boolean {
+  return RESULT_DOCUMENT_TYPES.includes(letterType);
+}
+
+/** PUT …/result's body: the reply, plus the document fields only for the two types that have them. */
+export function buildResult(draft: ResultDraft, letterType: string): documents_letterResultIn {
+  const body: documents_letterResultIn = { result_summary: draft.summary.trim() };
+  if (!resultNeedsDocument(letterType)) return body;
+  return {
+    result_document_no: draft.documentNo.trim(),
+    result_document_date: draft.documentDate,
+    result_signer: draft.signer.trim(),
+    result_issuer: draft.issuer.trim(),
+    ...body,
+  };
+}
 
 export function resultDraftOf(letter: documents_citizenLetterOut): ResultDraft {
   return {

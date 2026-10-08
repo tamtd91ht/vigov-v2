@@ -234,7 +234,8 @@ describe("preview — Văn bản & Đơn thư", () => {
     expect(el.querySelector('.side-nav a[aria-current="page"]')!.getAttribute("href")).toBe("/van-ban");
     // The prototype's H1 on the petition tabs (`DocumentWorkspace.tsx:108`); Văn bản đến/đi keep the page's.
     expect(el.querySelector("h1")!.textContent).toBe("Đơn thư công dân");
-    expect(selected(el)).toBe("Đơn thư công dân");
+    // The tab carries the register's count from the fixture's count route (ADR 0084 #7).
+    expect(selected(el)).toBe("Đơn thư công dân (9)");
     expect(network).not.toHaveBeenCalled();
   }, SLOW);
 
@@ -288,7 +289,7 @@ describe("preview — Văn bản & Đơn thư", () => {
   it("?tab=don-thu: the real citizen-letter register on its fixture rows; the denunciation is masked", async () => {
     const el = await mountDocs(docs({ tab: "don-thu" }));
     await settle(800);
-    expect(selected(el)).toBe("Đơn thư công dân");
+    expect(selected(el)).toBe("Đơn thư công dân (9)");
     expect(el.querySelectorAll("tbody tr")).toHaveLength(9);
     expect(el.textContent).toContain("Người gửi được giữ bí mật");
     expect(el.textContent).toContain("Đã gộp vì trùng đơn trước");

@@ -34,9 +34,9 @@ export function pendingPart(name: string): PendingPart {
 /**
  * The prototype's four tabs, in its order: the registers first, then `Đơn thư công dân`, then
  * `Báo cáo`. The prototype HIDES its `Văn bản đến` tab because ITS demo commune asked (17/09/2026);
- * that request does not apply here, and our two working registers each get their tab. The prototype's
- * counts in brackets are not drawn: every register is paged, so the count of the loaded page is not
- * the register's count.
+ * that request does not apply here, and our two working registers each get their tab. Only
+ * `Đơn thư công dân` carries the prototype's count in brackets (ADR 0084 #7), and only the SERVER's count
+ * (`GET /api/v1/citizen-letter-counts`) — every register is paged, so a loaded page is never counted.
  */
 export const DOCUMENT_TABS = [
   { id: "incoming", label: "Văn bản đến" },
@@ -57,9 +57,12 @@ export function documentTabDomId(id: DocumentTabId): string {
 export function DocumentTabBar({
   selected,
   onSelect,
+  letterCount = null,
 }: {
   selected: DocumentTabId;
   onSelect: (id: DocumentTabId) => void;
+  /** The register's count, `null` while unread or refused: the label then has no bracket, never a 0. */
+  letterCount?: number | null;
 }) {
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
     const at = DOCUMENT_TABS.findIndex((t) => t.id === selected);
@@ -87,7 +90,7 @@ export function DocumentTabBar({
           tabIndex={t.id === selected ? 0 : -1}
           onClick={() => onSelect(t.id)}
         >
-          {t.label}
+          {t.id === "petitions" && letterCount !== null ? `${t.label} (${letterCount})` : t.label}
         </Tab>
       ))}
     </TabList>

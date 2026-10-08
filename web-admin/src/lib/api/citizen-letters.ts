@@ -1,5 +1,5 @@
 /**
- * The twelve routes of the CITIZEN-LETTER register — `service-documents`, `/api/v1/citizen-letters…`
+ * The thirteen routes of the CITIZEN-LETTER register — `service-documents`, `/api/v1/citizen-letters…`
  * (ADR 0078 #2–#4; routes and their keys: `service-documents/internal/http/routes_citizen_letter.go`).
  *
  * WHAT THIS FILE NEVER SENDS, and why each absence is load-bearing:
@@ -23,9 +23,11 @@ import { docJSON, docThanLoiGoi, goiGhi, thamSoTheoHopDong } from "./goi";
 import type { KetQua } from "./goi";
 import type {
   documents_bookLetterIn,
+  documents_citizenLetterCountOut,
   documents_citizenLetterOut,
   documents_duplicateCheckIn,
   documents_duplicatesOut,
+  documents_get_citizen_letter_counts,
   documents_get_citizen_letter_report,
   documents_get_citizen_letters,
   documents_get_citizen_letters_by_id,
@@ -55,6 +57,7 @@ function onePath(template: string, id: string): string {
 /* ---- the register list ------------------------------------------------------------------- */
 
 type ListQuery = documents_get_citizen_letters["truyVan"];
+type CountQuery = documents_get_citizen_letter_counts["truyVan"];
 
 /** `scope` — the server's three words (`letterFilterFromQuery`): anything else is a 400. */
 export type LetterScope = "all" | "mine" | "related";
@@ -70,6 +73,8 @@ export type LetterListFilter = {
   assignee?: string;
   /** `status` — one of the ten C3 codes; an unknown code is refused, never ignored. */
   status?: string;
+  /** `status_group` — one of ADR 0084's six display groups (the screen's status filter). */
+  statusGroup?: string;
   /** `all` is the server's default and is therefore not sent. */
   scope?: LetterScope;
   limit?: number;
@@ -77,19 +82,28 @@ export type LetterListFilter = {
   cursor?: string | null;
 };
 
-/** The list path. Split from the network call so a test can read it without a fake `fetch`. */
-export function citizenLetterListPath(filter: LetterListFilter = {}): string {
-  const path: documents_get_citizen_letters["duongDan"] = "/api/v1/citizen-letters";
-  const query = new URLSearchParams();
-  // Names checked against the CONTRACT (`thamSoTheoHopDong`): a renamed server parameter turns `tsc`
-  // red here instead of the server silently returning the whole register.
-  const set = thamSoTheoHopDong<ListQuery>(query);
+/**
+ * The filter half of the query, shared by the list and its count: ONE builder, so the tab's count and
+ * the page it heads cannot be asked two different questions. Names checked against the CONTRACT
+ * (`thamSoTheoHopDong`) of BOTH routes: a renamed server parameter turns `tsc` red here instead of the
+ * server silently answering for the whole register.
+ */
+function setFilters(set: (name: keyof ListQuery & keyof CountQuery, value: string | undefined) => void, filter: LetterListFilter) {
   set("received_from", filter.receivedFrom);
   set("received_to", filter.receivedTo);
   set("holding_unit", filter.holdingUnit);
   set("assignee", filter.assignee);
   set("status", filter.status);
+  set("status_group", filter.statusGroup);
   set("scope", filter.scope === "all" ? undefined : filter.scope);
+}
+
+/** The list path. Split from the network call so a test can read it without a fake `fetch`. */
+export function citizenLetterListPath(filter: LetterListFilter = {}): string {
+  const path: documents_get_citizen_letters["duongDan"] = "/api/v1/citizen-letters";
+  const query = new URLSearchParams();
+  const set = thamSoTheoHopDong<ListQuery>(query);
+  setFilters(set, filter);
   set("limit", filter.limit);
   set("cursor", filter.cursor);
   const text = query.toString();
@@ -101,6 +115,23 @@ export function listCitizenLetters(
   filter: LetterListFilter = {},
 ): Promise<KetQua<page_Result_documents_citizenLetterItemOut>> {
   return docJSON<page_Result_documents_citizenLetterItemOut>(citizenLetterListPath(filter));
+}
+
+/** The count path: the list's filters, never its paging (`limit`, `cursor` are not the count's). */
+export function citizenLetterCountPath(filter: LetterListFilter = {}): string {
+  const path: documents_get_citizen_letter_counts["duongDan"] = "/api/v1/citizen-letter-counts";
+  const query = new URLSearchParams();
+  setFilters(thamSoTheoHopDong<CountQuery>(query), filter);
+  const text = query.toString();
+  return text === "" ? path : `${path}?${text}`;
+}
+
+/**
+ * GET /api/v1/citizen-letter-counts — how many letters the list would hold under the same filters and
+ * scope (the "Đơn thư công dân (N)" tab, ADR 0084 #7). The server counts; the loaded page never is.
+ */
+export function countCitizenLetters(filter: LetterListFilter = {}): Promise<KetQua<documents_citizenLetterCountOut>> {
+  return docJSON<documents_citizenLetterCountOut>(citizenLetterCountPath(filter));
 }
 
 /* ---- booking and the duplicate warning ---------------------------------------------------- */
@@ -203,19 +234,21 @@ export function moveCitizenLetter(
   return docThanLoiGoi<documents_citizenLetterOut>(goiGhi(onePath(template, id), "POST", body, 200));
 }
 
-/** PUT /api/v1/citizen-letters/{id}/result — C10's result: the issued document and a summary. */
+/**
+ * PUT /api/v1/citizen-letters/{id}/result — the reply, and for a complaint or a denunciation the issued
+ * document (ADR 0084 #2). A document key the caller did not set is NOT sent: a summary-only reply is
+ * exactly `{ result_summary }`. Which keys are required is the server's rule, by the letter's type.
+ */
 export function recordCitizenLetterResult(
   id: string,
   input: documents_letterResultIn,
 ): Promise<KetQua<documents_citizenLetterOut>> {
   const template: documents_put_citizen_letters_by_id_result["duongDan"] = "/api/v1/citizen-letters/{id}/result";
-  const body: documents_letterResultIn = {
-    result_document_no: input.result_document_no,
-    result_document_date: input.result_document_date,
-    result_signer: input.result_signer,
-    result_issuer: input.result_issuer,
-    result_summary: input.result_summary,
-  };
+  const body: documents_letterResultIn = { result_summary: input.result_summary };
+  if (input.result_document_no !== undefined) body.result_document_no = input.result_document_no;
+  if (input.result_document_date !== undefined) body.result_document_date = input.result_document_date;
+  if (input.result_signer !== undefined) body.result_signer = input.result_signer;
+  if (input.result_issuer !== undefined) body.result_issuer = input.result_issuer;
   return docThanLoiGoi<documents_citizenLetterOut>(goiGhi(onePath(template, id), "PUT", body, 200));
 }
 

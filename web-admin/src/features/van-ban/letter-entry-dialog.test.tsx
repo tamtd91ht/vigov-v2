@@ -67,6 +67,15 @@ const form = () => document.querySelector("form")!;
 const bodyOf = (c: Call) => JSON.parse(String(c.init.body)) as Record<string, unknown>;
 
 describe("booking dialog", () => {
+  it("the prototype's description, verbatim (ADR 0084 #3: the deadline now follows the type); “Không rõ người gửi” stays (C7)", () => {
+    mount(vi.fn(), false);
+    const text = document.querySelector("dialog")!.textContent ?? "";
+    expect(text).toContain(
+      "Người gửi, địa chỉ, số điện thoại và nội dung là những mục quy định bắt buộc ghi nhận. Hạn giải quyết tính theo loại đơn.",
+    );
+    expect(text).toContain("Không rõ người gửi");
+  });
+
   it("“Cần nội dung đơn.” in the dialog, and nothing is sent", async () => {
     const calls = stubServer();
     mount(vi.fn(), false);

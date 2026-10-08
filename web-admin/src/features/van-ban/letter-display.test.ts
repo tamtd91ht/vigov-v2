@@ -18,48 +18,154 @@ import {
   duplicateQuery,
   emptyEntryDraft,
   isPastDue,
+  LETTER_STATUS_GROUPS,
+  buildResult,
+  drawerDueAt,
   letterDate,
-  letterStatusHint,
+  letterGroupChip,
+  letterGroupHint,
+  letterGroupLabel,
+  letterSourceLabel,
   letterStatusLabel,
   mayWorkOnLetter,
   canBookLetters,
   reportFigure,
+  resultNeedsDocument,
   senderView,
   statusStrip,
 } from "./letter-display";
 
 const NOW = new Date("2026-10-08T03:00:00Z");
 
-describe("status strip (C3) — only the server's arrows are clickable", () => {
-  it("from Mới vào sổ: one move (Đang xử lý đơn); no branch row", () => {
-    const s = statusStrip("moi-vao-so", ["dang-xu-ly-don"], true);
-    expect(s.main.map((c) => c.label)).toEqual(["Mới vào sổ", "Đang xử lý đơn", "Thụ lý", "Đang giải quyết", "Đã giải quyết"]);
-    expect(s.main.filter((c) => c.clickable).map((c) => c.code)).toEqual(["dang-xu-ly-don"]);
-    expect(s.main.find((c) => c.current)?.code).toBe("moi-vao-so");
-    expect(s.branches).toEqual([]);
+describe("status strip (ADR 0084 #2) — the prototype's four steps + two branches, drawn from the server's arrows", () => {
+  const strip = (over: Partial<Parameters<typeof statusStrip>[0]> = {}) =>
+    statusStrip({ group: "moi-vao-so", nextStatuses: ["dang-xu-ly-don"], held: false, closed: false, mayWork: true, canRoute: true, ...over });
+
+  it("main row and branch row are the prototype's, both always drawn", () => {
+    const s = strip({ group: "da-phan-cong", held: true });
+    expect(s.main.map((c) => c.label)).toEqual(["Mới vào sổ", "Đã phân công", "Đang xử lý", "Đã giải quyết"]);
+    expect(s.branches.map((c) => c.label)).toEqual(["Chuyển cấp trên", "Lưu, không thụ lý"]);
+    expect(s.main.find((c) => c.current)?.group).toBe("da-phan-cong");
   });
 
-  it("from Đang xử lý đơn: Thụ lý on the main row, the four processing ends on the branch row", () => {
-    const next = ["thu-ly", "khong-thu-ly", "huong-dan", "chuyen-don", "luu-don"];
-    const s = statusStrip("dang-xu-ly-don", next, true);
-    expect(s.main.filter((c) => c.clickable).map((c) => c.code)).toEqual(["thu-ly"]);
-    expect(s.branches.map((c) => c.label)).toEqual(["Không thụ lý", "Hướng dẫn", "Chuyển đơn", "Lưu đơn"]);
-    expect(s.branches.every((c) => c.clickable)).toBe(true);
+  it("no holding unit: the second chip is “Phân công · chọn bộ phận xử lý” and is an ASSIGN, not a status move", () => {
+    const s = strip();
+    const assign = s.main[1]!;
+    expect([assign.label, assign.sub, assign.action, assign.clickable]).toEqual(["Phân công", "chọn bộ phận xử lý", "assign", true]);
+    // Without the routing right (or on a finished letter) the chip is not pressable.
+    expect(strip({ canRoute: false }).main[1]!.clickable).toBe(false);
+    expect(strip({ closed: true, nextStatuses: [] }).main[1]!.clickable).toBe(false);
   });
 
-  it("a finished letter: nothing clickable; its branch end shown as current", () => {
-    const s = statusStrip("luu-don", [], true);
-    expect([...s.main, ...s.branches].some((c) => c.clickable)).toBe(false);
-    expect(s.branches.map((c) => [c.code, c.current])).toEqual([["luu-don", true]]);
+  it("a chip is reachable only when some allowed next status maps to it; the sub-lines say so", () => {
+    const s = strip();
+    expect(s.main.map((c) => c.sub)).toEqual(["đang ở đây", "chọn bộ phận xử lý", "chuyển sang", "—"]);
+    expect(s.main[2]!.steps).toEqual(["dang-xu-ly-don"]);
+    expect(s.branches.every((c) => !c.clickable && c.sub === "—")).toBe(true);
+  });
+
+  it("from Đang xử lý đơn: the CURRENT group stays pressable for Thụ lý; the branches carry their steps", () => {
+    const s = strip({ group: "dang-xu-ly", held: true, nextStatuses: ["thu-ly", "khong-thu-ly", "huong-dan", "chuyen-don", "luu-don"] });
+    const here = s.main[2]!;
+    expect([here.current, here.clickable, here.sub, here.steps]).toEqual([true, true, "đang ở đây", ["thu-ly"]]);
+    expect(s.branches.map((c) => [c.group, c.clickable, c.steps])).toEqual([
+      ["chuyen-cap-tren", true, ["chuyen-don"]],
+      ["luu-khong-thu-ly", true, ["khong-thu-ly", "huong-dan", "luu-don"]],
+    ]);
+  });
+
+  it("the step select appears only for a group of several TT 05 statuses", () => {
+    const s = strip({ group: "dang-xu-ly", held: true, nextStatuses: ["da-giai-quyet", "dinh-chi"] });
+    expect(s.main[3]!.pickStep).toBe(false);
+    expect(s.main[2]!.pickStep).toBe(true);
+    expect(s.branches[0]!.pickStep).toBe(false);
+    expect(s.branches[1]!.pickStep).toBe(true);
+    expect(s.branches[1]!.steps).toEqual(["dinh-chi"]);
   });
 
   it("a viewer who may not work on the letter: nothing clickable, whatever the server lists", () => {
-    const s = statusStrip("dang-giai-quyet", ["da-giai-quyet", "dinh-chi"], false);
+    const s = strip({ group: "dang-xu-ly", held: true, nextStatuses: ["da-giai-quyet", "dinh-chi"], mayWork: false });
     expect([...s.main, ...s.branches].some((c) => c.clickable)).toBe(false);
   });
 
-  it("an unknown code is said to have no label, never guessed", () => {
+  it("a finished letter: nothing clickable; its branch shown as current", () => {
+    const s = strip({ group: "luu-khong-thu-ly", held: true, closed: true, nextStatuses: [] });
+    expect([...s.main, ...s.branches].some((c) => c.clickable)).toBe(false);
+    expect(s.branches.map((c) => [c.group, c.current])).toEqual([
+      ["chuyen-cap-tren", false],
+      ["luu-khong-thu-ly", true],
+    ]);
+  });
+
+  it("group labels, filter order (no “Chờ phân công”), hints — the prototype's words", () => {
+    expect(LETTER_STATUS_GROUPS.map((g) => g.label)).toEqual([
+      "Mới vào sổ",
+      "Đã phân công",
+      "Đang xử lý",
+      "Đã giải quyết",
+      "Chuyển cấp trên",
+      "Lưu, không thụ lý",
+    ]);
+    expect(LETTER_STATUS_GROUPS.map((g) => g.code)).toEqual([
+      "moi-vao-so",
+      "da-phan-cong",
+      "dang-xu-ly",
+      "da-giai-quyet",
+      "chuyen-cap-tren",
+      "luu-khong-thu-ly",
+    ]);
+    expect(letterGroupHint("da-phan-cong")).toBe("Đã giao cho bộ phận, chờ bộ phận bắt tay vào việc.");
+    expect(letterGroupHint("moi-vao-so")).toBe("Đã vào sổ, chưa giao cho bộ phận nào.");
+    expect(letterGroupChip("moi-vao-so")).toContain("bg-ink-muted/12");
+    expect(letterGroupChip("da-phan-cong")).toContain("bg-brand/12");
+    expect(letterGroupChip("da-giai-quyet")).toContain("bg-leaf/12");
+    expect(letterGroupLabel("x-y")).toContain("chưa có nhãn");
+  });
+
+  it("an unknown TT 05 code is said to have no label, never guessed", () => {
     expect(letterStatusLabel("x-y")).toContain("chưa có nhãn");
+  });
+});
+
+describe("source (ADR 0084 #7) — the prototype's labels", () => {
+  it("four sources; an unknown code says it has no label", () => {
+    expect(["nhap-tay", "nhap-excel", "mini-app", "thu-dien-tu"].map(letterSourceLabel)).toEqual([
+      "Nhập tay",
+      "Nhập từ Excel",
+      "Mini App",
+      "Thư điện tử",
+    ]);
+    expect(letterSourceLabel("fax")).toContain("chưa có nhãn");
+  });
+});
+
+describe("drawer deadline figure (prototype :513-525) — the stored instant of the current phase", () => {
+  it("resolution once accepted, processing before, null when none", () => {
+    const base = { accepted_at: null, processing_due_at: "2026-10-03T10:00:00Z", resolution_due_at: null };
+    expect(drawerDueAt(base)).toBe("2026-10-03T10:00:00Z");
+    expect(drawerDueAt({ ...base, accepted_at: "2026-10-02T02:00:00Z", resolution_due_at: "2026-10-20T10:00:00Z" })).toBe("2026-10-20T10:00:00Z");
+    expect(drawerDueAt({ ...base, accepted_at: "2026-10-02T02:00:00Z" })).toBeNull();
+    expect(drawerDueAt({ ...base, processing_due_at: null })).toBeNull();
+  });
+});
+
+describe("reply (ADR 0084 #2) — one textarea; the issued document for KN/TC only", () => {
+  const draft = { documentNo: " 12/TB ", documentDate: "2026-10-07", signer: "A", issuer: "B", summary: " Đã xong " };
+  it("kiến nghị-phản ánh / đề nghị: the summary alone", () => {
+    expect(resultNeedsDocument("kien-nghi-phan-anh")).toBe(false);
+    expect(resultNeedsDocument("de-nghi")).toBe(false);
+    expect(buildResult(draft, "de-nghi")).toEqual({ result_summary: "Đã xong" });
+  });
+  it("khiếu nại / tố cáo: the four document fields and the summary", () => {
+    expect(resultNeedsDocument("khieu-nai")).toBe(true);
+    expect(resultNeedsDocument("to-cao")).toBe(true);
+    expect(buildResult(draft, "khieu-nai")).toEqual({
+      result_document_no: "12/TB",
+      result_document_date: "2026-10-07",
+      result_signer: "A",
+      result_issuer: "B",
+      result_summary: "Đã xong",
+    });
   });
 });
 
@@ -183,13 +289,6 @@ describe("dates — d/m/yyyy without zero padding (prototype `formatDay`, vi-VN)
     expect(letterDate("")).toBe("—");
     // Not the contract's shape: shown verbatim, never guessed.
     expect(letterDate("2026/8/23")).toBe("2026/8/23");
-  });
-});
-
-describe("status hints — the prototype's words where the two sets share a status (`document-display.ts:156-164`)", () => {
-  it("Mới vào sổ and Đã giải quyết", () => {
-    expect(letterStatusHint("moi-vao-so")).toBe("Đã vào sổ, chưa giao cho bộ phận nào.");
-    expect(letterStatusHint("da-giai-quyet")).toBe("Đã giải quyết xong và trả lời công dân.");
   });
 });
 

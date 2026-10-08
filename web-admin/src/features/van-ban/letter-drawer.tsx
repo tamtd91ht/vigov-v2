@@ -10,7 +10,7 @@ import { LargeDialog } from "@/components/ui/large-dialog";
 import { traTen } from "@/features/cau-hinh/tra-danh-muc";
 import type { BangTraDanhMuc } from "@/features/cau-hinh/tra-danh-muc";
 import { BusyLabel } from "@/features/danh-ba/busy-label";
-import { nhanThoiDiem, staffNameWithCode } from "@/features/phan-anh/nhan-phieu";
+import { nhanThoiDiem } from "@/features/phan-anh/nhan-phieu";
 import type { DanhBaTheoMa } from "@/features/phan-anh/nhan-phieu";
 import {
   addCitizenLetterNote,
@@ -39,9 +39,11 @@ import {
   WITHHELD_SENDER,
   WITHHELD_SUMMARY,
   activeDue,
+  buildResult,
   buildRouting,
   buildSenderCorrection,
   DUE_NOT_SET,
+  drawerDueAt,
   dueDateText,
   dueInputValue,
   dueInstantOf,
@@ -49,12 +51,15 @@ import {
   dueSettable,
   initialsOf,
   letterDate,
+  letterGroupActiveTone,
+  letterGroupHint,
   letterNumber,
-  letterStatusActiveTone,
-  letterStatusHint,
+  letterSourceChip,
+  letterSourceLabel,
   letterStatusLabel,
   letterTypeLabel,
   resultDraftOf,
+  resultNeedsDocument,
   senderAddressText,
   senderView,
   statusStrip,
@@ -96,13 +101,16 @@ export const DEADLINE_CLEARED = "Đã bỏ hạn xử lý.";
  *            accessibility tree, rule 3 forbidden #4), the summary, the sender line. The phone is the
  *            server's MASKED text — NO `tel:` link (ADR 0078 consequence 1). A denunciation's sender,
  *            when withheld for this viewer, is one fixed sentence.
- *   strip    C3's main row + the "Rẽ nhánh:" row; a chip is clickable only for an arrow the SERVER
- *            lists in `next_statuses`, and only for a viewer who may work on the letter. A click opens
- *            the prototype's composer (note) and posts the status. Routing is NOT a status here.
- *   left     badges, figures (the ADDRESS IS NEVER SHOWN — only whether one exists), the clerk's "Hạn xử
- *            lý" (ADR 0079 lô 5 Q18, `petition.create`, open phases only), sender correction
- *            (an EMPTY form), "Chuyển thành nhiệm vụ" ("?"), "Chuyển cho bộ phận khác" (routing), and the
- *            result form in the place of the prototype's free-text answer (C10).
+ *   strip    the prototype's four display groups + the "Rẽ nhánh:" row (ADR 0084 #2); a chip is
+ *            clickable only when one of the SERVER's `next_statuses` falls in it, and only for a viewer
+ *            who may work on the letter. A click opens the prototype's composer (note, and the concrete
+ *            TT 05 step when the group has several) and posts the status. Routing is NOT a status: with
+ *            no holding unit the "Phân công" chip only takes the clerk to the routing box.
+ *   left     badges (status group · type · source · deadline), figures (the ADDRESS IS NEVER SHOWN —
+ *            only whether one exists), the clerk's "Hạn xử lý" editor (ADR 0079 lô 5 Q18, kept by ADR 0084
+ *            #3, `petition.create`, open phases only), sender correction (an EMPTY form), "Chuyển thành
+ *            nhiệm vụ" ("?"), "Chuyển cho bộ phận khác" (routing), and the reply — one textarea, plus the
+ *            issued document for a complaint or a denunciation (ADR 0084 #2).
  *   right    "Nhật ký & Trao đổi" (one note) and the processing log, newest first, read-only.
  *
  * Every permission gate here is CONVENIENCE: the server checks every write (rule 5, forbidden #1).
@@ -140,6 +148,13 @@ export function LetterDrawer({
   const done = (sentence: string) => {
     setSaved(sentence);
     onChanged();
+  };
+
+  // "Phân công" (no holding unit): assignment is routing, not a status (C3) — take the clerk to the box.
+  const focusRouting = () => {
+    const field = document.getElementById(ROUTING_UNIT_FIELD_ID);
+    field?.scrollIntoView?.({ block: "center" });
+    field?.focus({ preventScroll: true });
   };
 
   return (
@@ -185,7 +200,15 @@ export function LetterDrawer({
 
       {doc !== null && (
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:overflow-hidden">
-          {mayWork && <StatusStrip key={`${doc.id}:${doc.status}`} letter={doc} onMoved={() => done("Đã cập nhật.")} />}
+          {mayWork && (
+            <StatusStrip
+              key={`${doc.id}:${doc.status}:${doc.holding_unit_id ?? ""}`}
+              letter={doc}
+              canRoute={canBook}
+              onMoved={() => done("Đã cập nhật.")}
+              onAssign={focusRouting}
+            />
+          )}
 
           <div className="flex min-w-0 flex-col md:min-h-0 md:flex-1 md:flex-row">
             <div className="min-w-0 flex-1 bg-canvas px-5 py-4 md:overflow-y-auto">
@@ -196,8 +219,8 @@ export function LetterDrawer({
                 <Figure label="Bộ phận đang giữ">
                   {(doc.holding_unit_id ?? "") === "" ? "Chưa chuyển" : unitName(units, doc.holding_unit_id ?? "")}
                 </Figure>
-                {/* The stored date or "Không đặt" — the prototype's figure (`:519-524`), no count. */}
-                <Figure label="Hạn xử lý">{dueDateText(activeDue(doc))}</Figure>
+                {/* The stored date or "Không đặt" — the prototype's ONE figure (`:519-524`), no count. */}
+                <Figure label="Hạn xử lý">{dueDateText(drawerDueAt(doc))}</Figure>
               </dl>
 
               {canBook && dueSettable(doc.status) && (
@@ -268,8 +291,9 @@ function unitName(units: BangTraDanhMuc, id: string): string {
   }
 }
 
+/** A reply is recorded: its summary (every type), or an issued document (complaint, denunciation). */
 function hasResult(letter: documents_citizenLetterOut): boolean {
-  return (letter.result_document_no ?? "") !== "";
+  return (letter.result_summary ?? "") !== "" || (letter.result_document_no ?? "") !== "";
 }
 
 /** Summary (15px bold) and the sender line (`PetitionDetailDrawer.tsx:352-369`), masked. */
@@ -301,13 +325,14 @@ function DrawerHeadline({ letter }: { letter: documents_citizenLetterOut }) {
   );
 }
 
-/** The prototype's badge row (`PetitionDetailDrawer.tsx:489-511`) — no source badge: the record has none. */
+/** The prototype's badge row (`PetitionDetailDrawer.tsx:489-511`): status group · type · source · deadline. */
 function DrawerBadges({ letter, now }: { letter: documents_citizenLetterOut; now: Date }) {
   const due = dueLabel(activeDue(letter), letter.is_closed, now);
   return (
-    <div className="mb-3 flex flex-wrap gap-2">
-      <LetterStatusBadge status={letter.status} />
+    <div className="mb-3 flex flex-wrap gap-2" data-letter-chips="">
+      <LetterStatusBadge group={letter.status_group} />
       <Badge className="border-violet/25 bg-violet/12 text-violet">{letterTypeLabel(letter.letter_type)}</Badge>
+      <Badge className={letterSourceChip(letter.source)}>{letterSourceLabel(letter.source)}</Badge>
       <Badge className="border-line bg-surface text-ink">
         <span className={DUE_TONE_CLASS[due.tone]}>{due.text}</span>
       </Badge>
@@ -331,28 +356,55 @@ function Figure({ label, children }: { label: string; children: ReactNode }) {
 /* ---- the status strip ---------------------------------------------------------------------- */
 
 /**
- * The prototype's strip (`PetitionDetailDrawer.tsx:385-484`) on C3's statuses. Clicking a clickable
- * chip opens the composer — a note, then Huỷ / Xác nhận — and posts the arrow. The server's refusal
- * (e.g. "Đã giải quyết" before a result is recorded) is shown verbatim in the composer.
+ * The prototype's strip (`PetitionDetailDrawer.tsx:385-484`) on ADR 0084's display groups. Clicking a
+ * reachable chip opens the composer — the concrete TT 05 step when the group holds several (ADR 0084
+ * §2: "ô chọn bước cụ thể"), a note, then Huỷ / Xác nhận — and posts that step. The server's refusal
+ * (e.g. "Đã giải quyết" before a result is recorded) is shown verbatim in the composer. The "Phân công"
+ * chip posts nothing: it calls `onAssign`, which takes the clerk to the routing box.
  */
-export function StatusStrip({ letter, onMoved }: { letter: documents_citizenLetterOut; onMoved: () => void }) {
-  const strip = statusStrip(letter.status, letter.next_statuses, true);
-  const [pending, setPending] = useState<string | null>(null);
+export function StatusStrip({
+  letter,
+  canRoute,
+  onMoved,
+  onAssign,
+}: {
+  letter: documents_citizenLetterOut;
+  /** `petition.create` — the "Phân công" chip. UX only; the server checks the routing. */
+  canRoute: boolean;
+  onMoved: () => void;
+  onAssign: () => void;
+}) {
+  const strip = statusStrip({
+    group: letter.status_group,
+    nextStatuses: letter.next_statuses,
+    held: (letter.holding_unit_id ?? "") !== "",
+    closed: letter.is_closed,
+    mayWork: true,
+    canRoute,
+  });
+  const [pending, setPending] = useState<StatusChipModel | null>(null);
+  const [step, setStep] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
 
-  const open = (code: string) => {
-    setPending(code);
+  const open = (chip: StatusChipModel) => {
+    if (chip.action === "assign") {
+      setPending(null);
+      onAssign();
+      return;
+    }
+    setPending(chip);
+    setStep(chip.steps[0] ?? "");
     setNote("");
     setError("");
   };
 
   const confirm = () => {
-    if (pending === null || sending) return;
+    if (pending === null || step === "" || sending) return;
     setError("");
     setSending(true);
-    void moveCitizenLetter(letter.id, { status: pending, note: note.trim() }).then((k) => {
+    void moveCitizenLetter(letter.id, { status: step, note: note.trim() }).then((k) => {
       setSending(false);
       if (!k.ok) {
         setError(k.thongBao);
@@ -368,24 +420,41 @@ export function StatusStrip({ letter, onMoved }: { letter: documents_citizenLett
     <div className="shrink-0 border-0 border-b border-solid border-line bg-white px-5 py-3">
       <div role="group" aria-label="Các bước của đơn thư" className="flex min-w-0 flex-wrap items-stretch gap-1.5">
         {strip.main.map((chip) => (
-          <StatusChip key={chip.code} chip={chip} onClick={() => open(chip.code)} />
+          <StatusChip key={chip.group} chip={chip} onClick={() => open(chip)} />
         ))}
       </div>
-      {strip.branches.length > 0 && (
-        <div role="group" aria-label="Rẽ nhánh" className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5">
-          <span aria-hidden="true" className="mr-1 text-[11px] text-ink-muted">
-            Rẽ nhánh:
-          </span>
-          {strip.branches.map((chip) => (
-            <StatusChip key={chip.code} chip={chip} onClick={() => open(chip.code)} />
-          ))}
-        </div>
-      )}
-      <p className="m-0 mt-2 text-[11.5px] text-ink-muted">{letterStatusHint(letter.status)}</p>
+      <div role="group" aria-label="Rẽ nhánh" className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5">
+        <span aria-hidden="true" className="mr-1 text-[11px] text-ink-muted">
+          Rẽ nhánh:
+        </span>
+        {strip.branches.map((chip) => (
+          <StatusChip key={chip.group} chip={chip} onClick={() => open(chip)} />
+        ))}
+      </div>
+      <p className="m-0 mt-2 text-[11.5px] text-ink-muted">{letterGroupHint(letter.status_group)}</p>
 
       {pending !== null && (
         <div className="mt-2.5 rounded-[10px] border border-l-4 border-solid border-brand/35 border-l-brand bg-white p-3">
-          <p className="m-0 text-[12.5px] font-semibold text-navy">Chuyển sang “{letterStatusLabel(pending)}”</p>
+          <p className="m-0 text-[12.5px] font-semibold text-navy">Chuyển sang “{pending.label}”</p>
+          {pending.pickStep && (
+            <div className="mt-2 flex flex-col sm:max-w-[20rem]">
+              <label htmlFor="don-thu-buoc-cu-the" className="text-[11.5px] font-medium text-ink">
+                Bước cụ thể
+              </label>
+              <select
+                id="don-thu-buoc-cu-the"
+                className={ROUTING_SELECT}
+                value={step}
+                onChange={(e) => setStep(e.target.value)}
+              >
+                {pending.steps.map((code) => (
+                  <option key={code} value={code}>
+                    {letterStatusLabel(code)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="mt-2 flex flex-col">
             <label htmlFor="don-thu-ghi-chu-buoc" className="text-[11.5px] font-medium text-ink">
               Ghi chú
@@ -419,7 +488,10 @@ export function StatusStrip({ letter, onMoved }: { letter: documents_citizenLett
   );
 }
 
-/** One chip (`PetitionDetailDrawer.tsx:902-949`): filled when current, white when clickable, faded otherwise. */
+/**
+ * One chip (`PetitionDetailDrawer.tsx:902-949`): filled when current, white when clickable, faded
+ * otherwise. The current chip may also be clickable (a step inside its own group, see `statusStrip`).
+ */
 function StatusChip({ chip, onClick }: { chip: StatusChipModel; onClick: () => void }) {
   return (
     <button
@@ -427,20 +499,24 @@ function StatusChip({ chip, onClick }: { chip: StatusChipModel; onClick: () => v
       disabled={!chip.clickable}
       onClick={onClick}
       aria-current={chip.current ? "step" : undefined}
-      title={chip.current ? letterStatusHint(chip.code) : chip.clickable ? `Chuyển sang ${chip.label}` : "Không chuyển thẳng sang bước này được"}
+      title={
+        chip.current
+          ? letterGroupHint(chip.group)
+          : chip.clickable
+            ? `Chuyển sang ${chip.label}`
+            : "Không chuyển thẳng sang bước này được"
+      }
       className={cn(
         "min-w-[6.5rem] flex-1 rounded-[8px] border border-solid px-2.5 py-1.5 text-left [font-family:inherit] transition-colors",
         chip.current
-          ? cn("border-transparent", letterStatusActiveTone(chip.code))
+          ? cn("border-transparent", letterGroupActiveTone(chip.group), chip.clickable && "cursor-pointer")
           : chip.clickable
             ? "cursor-pointer border-line bg-white text-ink hover:bg-canvas"
             : "cursor-not-allowed border-line/60 bg-white text-ink-muted/60",
       )}
     >
       <span className="block text-[12px] font-semibold">{chip.label}</span>
-      <span className={cn("block text-[10.5px]", chip.current ? "text-white/80" : "text-ink-muted/70")}>
-        {chip.current ? "đang ở đây" : chip.clickable ? "chuyển sang" : "—"}
-      </span>
+      <span className={cn("block text-[10.5px]", chip.current ? "text-white/80" : "text-ink-muted/70")}>{chip.sub}</span>
     </button>
   );
 }
@@ -756,11 +832,11 @@ function RoutingBox({
         }}
       >
         <div className="min-w-0">
-          <label htmlFor="chuyen-don-thu-bo-phan" className={SMALL_LABEL}>
+          <label htmlFor={ROUTING_UNIT_FIELD_ID} className={SMALL_LABEL}>
             Chuyển đến
           </label>
           <select
-            id="chuyen-don-thu-bo-phan"
+            id={ROUTING_UNIT_FIELD_ID}
             className={cn(ROUTING_SELECT)}
             value={draft.toUnit}
             onChange={(e) => setDraft({ ...draft, toUnit: e.target.value })}
@@ -833,16 +909,21 @@ function RoutingBox({
   );
 }
 
+/** The routing box's first field — where the "Phân công" chip takes the clerk. */
+const ROUTING_UNIT_FIELD_ID = "chuyen-don-thu-bo-phan";
+
 const ROUTING_SELECT =
   "mt-1 box-border h-9 min-h-0 w-full min-w-0 cursor-pointer rounded-md border border-solid border-line bg-white pr-9 pl-3 [font-family:inherit] text-[12.5px] text-navy outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50";
 
-/* ---- the result (C10) ---------------------------------------------------------------------- */
+/* ---- the reply (ADR 0084 #2) --------------------------------------------------------------- */
 
 /**
- * The prototype's "Nội dung trả lời công dân" section (`PetitionDetailDrawer.tsx:705-724`), in the
- * same place and style — but the answer is C10's RESULT: the issued document (number, date, signer,
- * issuing body) and a summary, `PUT …/result`. Enabled only in Thụ lý / Đang giải quyết, for a viewer
- * who may work on the letter; otherwise the saved result is shown, read-only.
+ * The prototype's "Nội dung trả lời công dân" (`PetitionDetailDrawer.tsx:705-724`): ONE textarea and
+ * "Lưu nội dung trả lời" — the textarea IS the result summary, `PUT …/result`. For a complaint or a
+ * denunciation ONLY, the issued document (number, date, signer, issuing body) stays below it: the server
+ * still requires it for those two types (C10 narrowed, ADR 0084 #2). Enabled only in Thụ lý / Đang giải
+ * quyết (the server's rule), for a viewer who may work on the letter; otherwise the saved reply is shown,
+ * read-only.
  */
 export function ResultSection({
   letter,
@@ -854,6 +935,7 @@ export function ResultSection({
   onSaved: () => void;
 }) {
   const editable = mayWork && RESULT_EDITABLE_STATUSES.includes(letter.status);
+  const withDocument = resultNeedsDocument(letter.letter_type);
   const [draft, setDraft] = useState<ResultDraft>(() => resultDraftOf(letter));
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
@@ -862,13 +944,7 @@ export function ResultSection({
     if (!editable || sending) return;
     setError("");
     setSending(true);
-    void recordCitizenLetterResult(letter.id, {
-      result_document_no: draft.documentNo.trim(),
-      result_document_date: draft.documentDate,
-      result_signer: draft.signer.trim(),
-      result_issuer: draft.issuer.trim(),
-      result_summary: draft.summary.trim(),
-    }).then((k) => {
+    void recordCitizenLetterResult(letter.id, buildResult(draft, letter.letter_type)).then((k) => {
       setSending(false);
       if (!k.ok) {
         setError(k.thongBao);
@@ -908,30 +984,28 @@ export function ResultSection({
           save();
         }}
       >
-        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
-          {field("ket-qua-so-van-ban", "Số văn bản", "documentNo")}
-          {field("ket-qua-ngay-ban-hanh", "Ngày ban hành", "documentDate", "date")}
-          {field("ket-qua-nguoi-ky", "Người ký", "signer")}
-          {field("ket-qua-co-quan", "Cơ quan ban hành", "issuer")}
-        </div>
-        <div className="min-w-0">
-          <label htmlFor="ket-qua-tom-tat" className={SMALL_LABEL}>
-            Tóm tắt kết quả
-          </label>
-          <textarea
-            id="ket-qua-tom-tat"
-            rows={4}
-            disabled={!editable}
-            placeholder={
-              letter.summary_withheld && letter.result_summary === null && hasResult(letter)
-                ? WITHHELD_SUMMARY
-                : "Ghi rõ kết quả giải quyết để trả lời người gửi đơn."
-            }
-            className="mt-1 box-border w-full min-w-0 rounded-lg border border-solid border-input bg-white px-2.5 py-2 [font-family:inherit] text-[12.5px] text-navy outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
-            value={draft.summary}
-            onChange={(e) => setDraft({ ...draft, summary: e.target.value })}
-          />
-        </div>
+        <textarea
+          id="ket-qua-tom-tat"
+          rows={4}
+          aria-labelledby="tieu-de-ket-qua-don-thu"
+          disabled={!editable}
+          placeholder={
+            letter.summary_withheld && letter.result_summary === null && hasResult(letter)
+              ? WITHHELD_SUMMARY
+              : "Ghi rõ kết quả giải quyết để trả lời người gửi đơn."
+          }
+          className="box-border w-full min-w-0 rounded-lg border border-solid border-input bg-white px-2.5 py-2 [font-family:inherit] text-[12.5px] text-navy outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+          value={draft.summary}
+          onChange={(e) => setDraft({ ...draft, summary: e.target.value })}
+        />
+        {withDocument && (
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+            {field("ket-qua-so-van-ban", "Số văn bản", "documentNo")}
+            {field("ket-qua-ngay-ban-hanh", "Ngày ban hành", "documentDate", "date")}
+            {field("ket-qua-nguoi-ky", "Người ký", "signer")}
+            {field("ket-qua-co-quan", "Cơ quan ban hành", "issuer")}
+          </div>
+        )}
         {!editable && mayWork && <p className="m-0 text-[11.5px] text-ink-muted">{RESULT_LOCKED_HINT}</p>}
         {error !== "" && (
           <p className="thong-bao-loi m-0" role="alert">
@@ -1121,7 +1195,8 @@ function LogRow({
             <User aria-hidden="true" focusable="false" className="mt-0.5 size-3 shrink-0 text-ink-muted" />
             <span>
               <span className="text-ink-muted">Phụ trách: </span>
-              <b className="font-semibold">{staffNameWithCode(entry.assignee_code ?? "", directory)}</b>
+              {/* The name only, as the actor above (doc §4.5); the bare code when the directory lacks it. */}
+              <b className="font-semibold">{directory?.get(entry.assignee_code ?? "")?.full_name || entry.assignee_code}</b>
             </span>
           </p>
         )}

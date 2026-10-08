@@ -4,6 +4,7 @@ import { Mail } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { PageHeader } from "@/components/ui/page-header";
+import { countCitizenLetters } from "@/lib/api/citizen-letters";
 import { NO_DRILL_DOWN, type DrillDown } from "@/lib/drill-down";
 
 import {
@@ -64,7 +65,8 @@ const HEADER_ACTIONS_CLASS =
  * Excel ?]` (the import has no route, ADR 0078 #6). No "Quét & OCR": the prototype has none (#5).
  *
  * Tab order is the prototype's with `Văn bản đi` after `Văn bản đến`; the opening tab is
- * `initialDocumentTab`. The tab is NOT in the URL (see `app/van-ban/page.tsx`). Only the selected tab is
+ * `initialDocumentTab`. `Đơn thư công dân (N)` is the WHOLE register's count — scope `all`, no filter, as
+ * the prototype's tab (`DocumentWorkspace.tsx:163-165`) — read once here and again after a booking. The tab is NOT in the URL (see `app/van-ban/page.tsx`). Only the selected tab is
  * mounted, as in the prototype: switching tabs starts the other register from its first page.
  */
 export function DocumentWorkspace({
@@ -88,6 +90,20 @@ export function DocumentWorkspace({
     setTab(id);
   };
 
+  // `null` while unread, and on a refusal (no `petition.read`, server down): the tab then reads without
+  // a bracket — a 0 nobody counted would be a figure.
+  const [letterCount, setLetterCount] = useState<number | null>(null);
+  const [countReads, setCountReads] = useState(0);
+  useEffect(() => {
+    let dropped = false;
+    countCitizenLetters().then((k) => {
+      if (!dropped) setLetterCount(k.ok ? k.duLieu.count : null);
+    });
+    return () => {
+      dropped = true;
+    };
+  }, [countReads]);
+
   const frame: RegisterFrame = (headerActions, body, subtitleExtra) => (
     <>
       <PageHeader
@@ -106,7 +122,7 @@ export function DocumentWorkspace({
         className="mb-5"
         actions={headerActions === null ? undefined : <div className={HEADER_ACTIONS_CLASS}>{headerActions}</div>}
       />
-      <DocumentTabBar selected={tab} onSelect={selectTab} />
+      <DocumentTabBar selected={tab} onSelect={selectTab} letterCount={letterCount} />
       <div
         role="tabpanel"
         id={DOCUMENT_PANEL_ID}
@@ -128,7 +144,7 @@ export function DocumentWorkspace({
       content = <SoVanBanDi frame={frame} />;
       break;
     case "petitions":
-      content = <LetterRegister frame={frame} />;
+      content = <LetterRegister frame={frame} onBooked={() => setCountReads((n) => n + 1)} />;
       break;
     default:
       content = <LetterReport frame={frame} />;

@@ -21,8 +21,10 @@ import { PREVIEW_UNITS } from "./disbursement.fixture";
  * processing deadline (ADR 0079 lô 5 Q18); #10 a denunciation (identity + summary withheld on the list;
  * in the drawer the preview's session — Cán bộ C, `petition.create`, not its assignee — sees the summary,
  * not the sender); #9 Đang giải quyết (result form open) with a clerk-set RESOLUTION deadline in 6 days;
- * every other letter has none ("Không đặt"); #8 resolved with its result; #7 a branch end (Chuyển đơn);
- * #6 linked to an earlier letter as a duplicate; #5 a long summary and no sender at all. #12 has an
+ * every other letter has none ("Không đặt"); #8 resolved with its reply (a feedback letter: the summary
+ * alone, ADR 0084 #2); #7 a branch end (Chuyển đơn → "Chuyển cấp trên"); #6 linked to an earlier letter
+ * as a duplicate and booked straight to a unit ("Đã phân công"); #5 a long summary and no sender at all.
+ * Sources (ADR 0084 #7): #11 Mini App, #9 Nhập từ Excel, #6 Thư điện tử, the rest Nhập tay. #12 has an
  * EMPTY log, #11 a three-entry log.
  *
  * The answers follow what `service-documents/internal/http/citizen_letter.go` returns for THIS
@@ -91,6 +93,8 @@ type Seed = {
   related: number | null;
   closedDaysAgo: number | null;
   result: boolean;
+  /** `source` — absent = "nhap-tay". */
+  source?: string;
 };
 
 const SEEDS: readonly Seed[] = [
@@ -103,6 +107,7 @@ const SEEDS: readonly Seed[] = [
     number: 11, received: -9, type: "khieu-nai", name: "Trần Thị B", phone: true, address: true,
     summary: "Khiếu nại việc chậm giải quyết hồ sơ đề nghị cấp giấy chứng nhận quyền sử dụng đất",
     status: "dang-xu-ly-don", unit: UNIT_OFFICE, assignee: VIEWER, processingDue: -2, related: null, closedDaysAgo: null, result: false,
+    source: "mini-app",
   },
   {
     number: 10, received: -6, type: "to-cao", name: "Lê Văn C", phone: true, address: false,
@@ -113,6 +118,7 @@ const SEEDS: readonly Seed[] = [
     number: 9, received: -14, type: "de-nghi", name: "Phạm Thị D", phone: false, address: true,
     summary: "Đề nghị hỗ trợ kinh phí sửa chữa nhà văn hoá thôn Bình Trung",
     status: "dang-giai-quyet", unit: UNIT_ECONOMY, assignee: VIEWER, processingDue: null, resolutionDue: 6, related: null, closedDaysAgo: null, result: false,
+    source: "nhap-excel",
   },
   {
     number: 8, received: -20, type: "kien-nghi-phan-anh", name: "Hoàng Văn E", phone: true, address: true,
@@ -127,7 +133,8 @@ const SEEDS: readonly Seed[] = [
   {
     number: 6, received: -1, type: "kien-nghi-phan-anh", name: "Hoàng Văn E", phone: true, address: true,
     summary: "Phản ánh mương thoát nước tổ 3 vẫn còn tắc sau đợt nạo vét",
-    status: "moi-vao-so", unit: "", assignee: "", processingDue: null, related: 8, closedDaysAgo: null, result: false,
+    status: "moi-vao-so", unit: UNIT_OFFICE, assignee: "", processingDue: null, related: 8, closedDaysAgo: null, result: false,
+    source: "thu-dien-tu",
   },
   {
     number: 5, received: -4, type: "de-nghi", name: null, phone: false, address: false,
@@ -161,7 +168,7 @@ function itemOf(seed: Seed, year: number): documents_citizenLetterItemOut {
     year,
     received_date: day(seed.received),
     letter_type: seed.type,
-    source: "nhap-tay",
+    source: seed.source ?? "nhap-tay",
     sender_name: withheld ? null : seed.name,
     sender_phone: withheld || !seed.phone ? null : MASKED_PHONE,
     identity_withheld: withheld,
@@ -191,6 +198,7 @@ function previewStatusGroup(status: string, unit: string): string {
 
 export type PreviewLetterQuery = {
   status?: string;
+  statusGroup?: string;
   holdingUnit?: string;
   assignee?: string;
   receivedFrom?: string;
@@ -204,6 +212,7 @@ export function previewLetters(query: PreviewLetterQuery): page_Result_documents
   const items = SEEDS.map((s) => itemOf(s, year)).filter(
     (l) =>
       (query.status === undefined || l.status === query.status) &&
+      (query.statusGroup === undefined || l.status_group === query.statusGroup) &&
       (query.holdingUnit === undefined || l.holding_unit_id === query.holdingUnit) &&
       (query.assignee === undefined || l.assignee_code === query.assignee) &&
       (query.receivedFrom === undefined || l.received_date >= query.receivedFrom) &&
@@ -212,6 +221,11 @@ export function previewLetters(query: PreviewLetterQuery): page_Result_documents
       (query.scope !== "related" || l.assignee_code === VIEWER || l.holding_unit_id === UNIT_OFFICE),
   );
   return { items, next_cursor: "", has_more: false };
+}
+
+/** `GET /api/v1/citizen-letter-counts` — the same filters as the list, counted. */
+export function previewLetterCount(query: PreviewLetterQuery): { count: number } {
+  return { count: previewLetters(query).items.length };
 }
 
 /** The drawer's letter, disclosed as `domain.DetailDisclosure` would for Cán bộ C. */
@@ -224,6 +238,7 @@ export function previewLetter(id: string): documents_citizenLetterOut | null {
   // A denunciation: the sender to its assignee alone; the summary also to `petition.create` holders.
   const showIdentity = !denunciation || seed.assignee === VIEWER;
   const closedAt = seed.closedDaysAgo === null ? null : at(-seed.closedDaysAgo);
+  const withDocument = seed.type === "khieu-nai" || seed.type === "to-cao";
   return {
     ...item,
     sender_name: showIdentity ? seed.name : null,
@@ -237,10 +252,11 @@ export function previewLetter(id: string): documents_citizenLetterOut | null {
     accepted_at: ["thu-ly", "dang-giai-quyet", "da-giai-quyet"].includes(seed.status) ? at(seed.received + 2) : null,
     resolved_at: RESOLVED.has(seed.status) ? closedAt : null,
     closed_at: closedAt,
-    result_document_no: seed.result ? "45/TB-UBND" : undefined,
-    result_document_date: seed.result ? day(-3) : undefined,
-    result_signer: seed.result ? "Phó Chủ tịch UBND xã" : undefined,
-    result_issuer: seed.result ? "UBND xã Thăng Bình" : undefined,
+    // The issued document belongs to a complaint or a denunciation only (ADR 0084 #2); #8 is feedback.
+    result_document_no: seed.result && withDocument ? "45/TB-UBND" : undefined,
+    result_document_date: seed.result && withDocument ? day(-3) : undefined,
+    result_signer: seed.result && withDocument ? "Phó Chủ tịch UBND xã" : undefined,
+    result_issuer: seed.result && withDocument ? "UBND xã Thăng Bình" : undefined,
     result_summary: seed.result ? "Đã nạo vét toàn tuyến mương tổ 3; thông báo kết quả cho người gửi đơn." : null,
     created_by_code: "CB-00001",
     created_at: `${day(seed.received)}T01:30:00Z`,

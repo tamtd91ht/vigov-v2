@@ -108,35 +108,85 @@ function button(text: string): HTMLButtonElement | undefined {
   return [...dialog().querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.trim() === text);
 }
 
-describe("letter drawer — status chips", () => {
-  it("only the server's next status is clickable; the current one says “đang ở đây”", () => {
+describe("letter drawer — status strip (ADR 0084 #2, prototype :385-484)", () => {
+  const first = (b: HTMLButtonElement) => b.firstChild?.textContent;
+
+  it("Mới vào sổ, no unit: “Phân công” and “Đang xử lý” are pressable; both rows always drawn with their sub-lines", () => {
     mount(drawer(letter()));
-    const clickable = chips().filter((b) => !b.disabled);
-    expect(clickable.map((b) => b.textContent)).toEqual(["Đang xử lý đơnchuyển sang"]);
-    const current = chips().find((b) => b.getAttribute("aria-current") === "step")!;
-    expect(current.textContent).toContain("Mới vào sổ");
-    expect(current.textContent).toContain("đang ở đây");
-    // No branch row from Mới vào sổ: none of its ends is reachable in one move.
-    expect(dialog().textContent).not.toContain("Rẽ nhánh:");
+    expect(chips().map(first)).toEqual(["Mới vào sổ", "Phân công", "Đang xử lý", "Đã giải quyết", "Chuyển cấp trên", "Lưu, không thụ lý"]);
+    expect(chips().map((b) => b.lastChild?.textContent)).toEqual(["đang ở đây", "chọn bộ phận xử lý", "chuyển sang", "—", "—", "—"]);
+    expect(chips().filter((b) => !b.disabled).map(first)).toEqual(["Phân công", "Đang xử lý"]);
+    expect(dialog().textContent).toContain("Rẽ nhánh:");
+    expect(dialog().textContent).toContain("Đã vào sổ, chưa giao cho bộ phận nào.");
   });
 
-  it("from Đang xử lý đơn the branch row shows its four ends, all clickable", () => {
-    mount(drawer(letter({ status: "dang-xu-ly-don", next_statuses: ["thu-ly", "khong-thu-ly", "huong-dan", "chuyen-don", "luu-don"] })));
-    expect(dialog().textContent).toContain("Rẽ nhánh:");
-    expect(chips().filter((b) => !b.disabled).map((b) => b.firstChild?.textContent)).toEqual([
-      "Thụ lý",
-      "Không thụ lý",
-      "Hướng dẫn",
-      "Chuyển đơn",
-      "Lưu đơn",
+  it("“Phân công” moves nothing: it focuses the “Chuyển cho bộ phận khác” box", () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    mount(drawer(letter()));
+    act(() => chips().find((b) => first(b) === "Phân công")!.click());
+    expect(document.activeElement?.id).toBe("chuyen-don-thu-bo-phan");
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(dialog().textContent).not.toContain("Chuyển sang “");
+  });
+
+  it("Mới vào sổ held by a unit reads “Đã phân công · đang ở đây” with the prototype's hint", () => {
+    mount(drawer(letter({ holding_unit_id: "U1", status_group: "da-phan-cong" })));
+    const current = chips().find((b) => b.getAttribute("aria-current") === "step")!;
+    expect(current.textContent).toBe("Đã phân côngđang ở đây");
+    expect(dialog().textContent).toContain("Đã giao cho bộ phận, chờ bộ phận bắt tay vào việc.");
+  });
+
+  it("Đang xử lý: the composer asks for the concrete TT 05 step, allowed ones only, and posts the one chosen", async () => {
+    const fetchSpy = vi.fn(async () => new Response(JSON.stringify(letter()), { status: 200 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    mount(
+      drawer(
+        letter({
+          status: "dang-xu-ly-don",
+          status_group: "dang-xu-ly",
+          holding_unit_id: "U1",
+          next_statuses: ["thu-ly", "khong-thu-ly", "huong-dan", "chuyen-don", "luu-don"],
+        }),
+      ),
+    );
+    // The current group stays pressable: Thụ lý is a step INSIDE it.
+    expect(chips().filter((b) => !b.disabled).map(first)).toEqual(["Đang xử lý", "Chuyển cấp trên", "Lưu, không thụ lý"]);
+    act(() => chips().find((b) => first(b) === "Lưu, không thụ lý")!.click());
+    expect(dialog().textContent).toContain("Chuyển sang “Lưu, không thụ lý”");
+    const select = dialog().querySelector<HTMLSelectElement>("#don-thu-buoc-cu-the")!;
+    expect([...select.options].map((o) => [o.value, o.textContent])).toEqual([
+      ["khong-thu-ly", "Không thụ lý"],
+      ["huong-dan", "Hướng dẫn"],
+      ["luu-don", "Lưu đơn"],
     ]);
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(select, "huong-dan");
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => button("Xác nhận")!.click());
+    await act(async () => {});
+    const [url, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/v1/citizen-letters/L1/status");
+    expect(JSON.parse(String(init.body))).toEqual({ status: "huong-dan" });
+  });
+
+  it("Chuyển cấp trên has one step: no select, posts chuyen-don", async () => {
+    const fetchSpy = vi.fn(async () => new Response(JSON.stringify(letter()), { status: 200 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    mount(drawer(letter({ status: "dang-xu-ly-don", status_group: "dang-xu-ly", holding_unit_id: "U1", next_statuses: ["thu-ly", "chuyen-don"] })));
+    act(() => chips().find((b) => first(b) === "Chuyển cấp trên")!.click());
+    expect(dialog().querySelector("#don-thu-buoc-cu-the")).toBeNull();
+    await act(async () => button("Xác nhận")!.click());
+    const [, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({ status: "chuyen-don" });
   });
 
   it("Đã giải quyết without a result: the composer posts the status and shows the SERVER's 409 sentence", async () => {
     const sentence = "Chưa ghi kết quả giải quyết (văn bản đã ban hành và tóm tắt) nên chưa chuyển được sang Đã giải quyết. Hãy ghi kết quả trước.";
     const fetchSpy = vi.fn(async () => new Response(JSON.stringify({ code: "letter_state", message: sentence, trace_id: "" }), { status: 409 }));
     vi.stubGlobal("fetch", fetchSpy);
-    mount(drawer(letter({ status: "dang-giai-quyet", next_statuses: ["da-giai-quyet", "dinh-chi"] })));
+    mount(drawer(letter({ status: "dang-giai-quyet", status_group: "dang-xu-ly", holding_unit_id: "U1", next_statuses: ["da-giai-quyet", "dinh-chi"] })));
     act(() => chips().find((b) => b.textContent?.startsWith("Đã giải quyết"))!.click());
     expect(dialog().textContent).toContain("Chuyển sang “Đã giải quyết”");
     await act(async () => button("Xác nhận")!.click());
@@ -148,12 +198,25 @@ describe("letter drawer — status chips", () => {
   });
 
   it("DENIED: a viewer who may not work on the letter gets no strip, no note box, no result form", () => {
-    mount(drawer(letter({ status: "thu-ly", next_statuses: ["dang-giai-quyet"] }), { canBook: false, mayWork: false }));
+    mount(drawer(letter({ status: "thu-ly", status_group: "dang-xu-ly", next_statuses: ["dang-giai-quyet"] }), { canBook: false, mayWork: false }));
     expect(chips().filter((b) => b.getAttribute("aria-current") !== null)).toHaveLength(0);
     expect(dialog().textContent).not.toContain("Ghi nhật ký");
     expect(dialog().textContent).not.toContain("Nội dung trả lời công dân");
     expect(dialog().textContent).not.toContain("Chuyển cho bộ phận khác");
     expect(dialog().textContent).not.toContain("Sửa thông tin người gửi");
+  });
+
+  it("DENIED routing: without petition.create the “Phân công” chip is drawn but not pressable", () => {
+    mount(drawer(letter(), { canBook: false, mayWork: true }));
+    expect(chips().find((b) => first(b) === "Phân công")!.disabled).toBe(true);
+  });
+});
+
+describe("letter drawer — chip row (prototype :489-511)", () => {
+  it("status GROUP · type · source · deadline", () => {
+    mount(drawer(letter({ source: "mini-app", holding_unit_id: "U1", status_group: "da-phan-cong" })));
+    const row = dialog().querySelector("[data-letter-chips]")!;
+    expect(row.textContent).toBe("Đã phân côngKiến nghị, phản ánhMini AppKhông đặt hạn");
   });
 });
 
@@ -221,8 +284,13 @@ describe("letter drawer — the clerk's “Hạn xử lý” (ADR 0079 lô 5 Q18
   });
 
   it("a stored deadline of the CURRENT phase reads as its date (resolution from Thụ lý)", () => {
-    mount(drawer(letter({ status: "thu-ly", next_statuses: ["dang-giai-quyet"], processing_due_at: "2026-10-03T10:00:00Z", resolution_due_at: "2026-10-20T10:00:00Z" })));
+    mount(drawer(letter({ status: "thu-ly", status_group: "dang-xu-ly", accepted_at: "2026-10-02T02:00:00Z", next_statuses: ["dang-giai-quyet"], processing_due_at: "2026-10-03T10:00:00Z", resolution_due_at: "2026-10-20T10:00:00Z" })));
     expect(figure()).toBe("20/10/2026");
+  });
+
+  it("a finished letter still shows the deadline of the phase it ended in (prototype: one figure, its `sla.due_at`)", () => {
+    mount(drawer(letter({ status: "luu-don", status_group: "luu-khong-thu-ly", is_closed: true, next_statuses: [], processing_due_at: "2026-10-03T10:00:00Z" })));
+    expect(figure()).toBe("3/10/2026");
   });
 
   it("set: PATCH …/deadline with exactly { due_at } at 17:00 +07:00 of the chosen day; success says so", async () => {
@@ -304,43 +372,70 @@ describe("letter drawer — the clerk's “Hạn xử lý” (ADR 0079 lô 5 Q18
   });
 });
 
-describe("letter drawer — result (C10)", () => {
+describe("letter drawer — reply “Nội dung trả lời công dân” (ADR 0084 #2)", () => {
+  const type = (id: string, value: string) => {
+    const el = dialog().querySelector<HTMLInputElement | HTMLTextAreaElement>(`#${id}`)!;
+    const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    act(() => {
+      Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(el, value);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  };
+  const resolving = { status: "dang-giai-quyet", status_group: "dang-xu-ly", holding_unit_id: "U1", next_statuses: ["da-giai-quyet", "dinh-chi"] };
+
   it("locked outside Thụ lý / Đang giải quyết, with the server's sentence", () => {
-    mount(drawer(letter({ status: "dang-xu-ly-don", next_statuses: ["thu-ly"] })));
-    const no = dialog().querySelector<HTMLInputElement>("#ket-qua-so-van-ban")!;
-    expect(no.disabled).toBe(true);
+    mount(drawer(letter({ status: "dang-xu-ly-don", status_group: "dang-xu-ly", next_statuses: ["thu-ly"] })));
+    expect(dialog().querySelector<HTMLTextAreaElement>("#ket-qua-tom-tat")!.disabled).toBe(true);
     expect(dialog().textContent).toContain(RESULT_LOCKED_HINT);
     expect(button("Lưu nội dung trả lời")).toBeUndefined();
   });
 
-  it("in Đang giải quyết: the five fields are sent as a PUT", async () => {
-    const fetchSpy = vi.fn(async () => new Response(JSON.stringify(letter({ status: "dang-giai-quyet" })), { status: 200 }));
+  it("kiến nghị-phản ánh: ONE textarea with the prototype's placeholder, no document field, no “Tóm tắt kết quả”; PUT the summary alone", async () => {
+    const fetchSpy = vi.fn(async () => new Response(JSON.stringify(letter(resolving)), { status: 200 }));
     vi.stubGlobal("fetch", fetchSpy);
-    mount(drawer(letter({ status: "dang-giai-quyet", next_statuses: ["da-giai-quyet", "dinh-chi"] })));
-    const type = (id: string, value: string) => {
-      const el = dialog().querySelector<HTMLInputElement | HTMLTextAreaElement>(`#${id}`)!;
-      const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-      act(() => {
-        Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(el, value);
-        el.dispatchEvent(new Event("input", { bubbles: true }));
-      });
-    };
-    type("ket-qua-so-van-ban", "12/TB-UBND");
-    type("ket-qua-ngay-ban-hanh", "2026-10-07");
-    type("ket-qua-nguoi-ky", "Chủ tịch UBND xã");
-    type("ket-qua-co-quan", "UBND xã");
+    mount(drawer(letter(resolving)));
+    const area = dialog().querySelector<HTMLTextAreaElement>("#ket-qua-tom-tat")!;
+    expect(area.placeholder).toBe("Ghi rõ kết quả giải quyết để trả lời người gửi đơn.");
+    expect(dialog().querySelector("#ket-qua-so-van-ban")).toBeNull();
+    expect(dialog().textContent).not.toContain("Tóm tắt kết quả");
     type("ket-qua-tom-tat", "Đã nạo vét mương thoát nước");
     await act(async () => button("Lưu nội dung trả lời")!.click());
     const [url, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("/api/v1/citizen-letters/L1/result");
     expect(init.method).toBe("PUT");
+    expect(JSON.parse(String(init.body))).toEqual({ result_summary: "Đã nạo vét mương thoát nước" });
+  });
+
+  it("khiếu nại: the four document fields BELOW the textarea, all five sent", async () => {
+    const fetchSpy = vi.fn(async () => new Response(JSON.stringify(letter(resolving)), { status: 200 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    mount(drawer(letter({ ...resolving, letter_type: "khieu-nai" })));
+    const html = dialog().innerHTML;
+    expect(html.indexOf('id="ket-qua-tom-tat"')).toBeLessThan(html.indexOf('id="ket-qua-so-van-ban"'));
+    type("ket-qua-tom-tat", "Đã giải quyết khiếu nại");
+    type("ket-qua-so-van-ban", "12/QĐ-UBND");
+    type("ket-qua-ngay-ban-hanh", "2026-10-07");
+    type("ket-qua-nguoi-ky", "Chủ tịch UBND xã");
+    type("ket-qua-co-quan", "UBND xã");
+    await act(async () => button("Lưu nội dung trả lời")!.click());
+    const [, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
     expect(JSON.parse(String(init.body))).toEqual({
-      result_document_no: "12/TB-UBND",
+      result_document_no: "12/QĐ-UBND",
       result_document_date: "2026-10-07",
       result_signer: "Chủ tịch UBND xã",
       result_issuer: "UBND xã",
-      result_summary: "Đã nạo vét mương thoát nước",
+      result_summary: "Đã giải quyết khiếu nại",
     });
+  });
+
+  it("a saved summary-only reply is shown read-only to a viewer who may not work on the letter", () => {
+    mount(
+      drawer(letter({ status: "da-giai-quyet", status_group: "da-giai-quyet", is_closed: true, next_statuses: [], result_summary: "Đã trả lời" }), {
+        canBook: false,
+        mayWork: false,
+      }),
+    );
+    expect(dialog().querySelector<HTMLTextAreaElement>("#ket-qua-tom-tat")!.value).toBe("Đã trả lời");
   });
 });
 
@@ -394,6 +489,36 @@ describe("letter drawer — prototype presentation (TASK-02)", () => {
     const names = [...dialog().querySelectorAll('section[aria-labelledby="tieu-de-dong-thoi-gian-don-thu"] li b')].map((b) => b.textContent);
     expect(names[0]).toBe("CB-00009");
     expect(names[1]).toBe("Trần Thị B");
+  });
+});
+
+describe("letter drawer — timeline “Phụ trách” (doc §4.5)", () => {
+  it("names the person only, like the actor; the bare code when the directory does not know it", () => {
+    mount(
+      <LetterDrawer
+        letter={{ ok: true, duLieu: letter() }}
+        log={{
+          ok: true,
+          duLieu: {
+            items: [
+              { id: "2", letter_id: "L1", at: "2026-10-02T02:00:00Z", actor_code: "CB-00001", kind: "luan-chuyen", to_unit_id: "U1", assignee_code: "CB-00001" },
+              { id: "1", letter_id: "L1", at: "2026-10-01T02:00:00Z", actor_code: "CB-00001", kind: "luan-chuyen", to_unit_id: "U1", assignee_code: "CB-00077" },
+            ],
+          },
+        }}
+        now={new Date("2026-10-08T03:00:00Z")}
+        units={{ pha: "xong", ten: new Map([["U1", "Văn phòng"]]) }}
+        directory={danhBaTheoMa([{ code: "CB-00001", full_name: "Trần Thị B", position: "", department_id: "", email_masked: null }])}
+        canBook
+        mayWork
+        onChanged={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    const rows = [...dialog().querySelectorAll('section[aria-labelledby="tieu-de-dong-thoi-gian-don-thu"] li')];
+    expect(rows[0]!.textContent).toContain("Phụ trách: Trần Thị B");
+    expect(rows[0]!.textContent).not.toContain("CB-00001)");
+    expect(rows[1]!.textContent).toContain("Phụ trách: CB-00077");
   });
 });
 

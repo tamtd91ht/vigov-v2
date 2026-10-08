@@ -103,8 +103,14 @@ describe("thanh tab theo prototype", () => {
     expect(tabs.map((t) => t.textContent)).toEqual(["Văn bản đến", "Văn bản đi", "Đơn thư công dân", "Báo cáo"]);
     expect(tabs.map((t) => t.getAttribute("aria-selected"))).toEqual(["true", "false", "false", "false"]);
     for (const t of tabs) expect(t.disabled).toBe(false);
-    // The prototype's counts are not drawn — a page count is not the register's count.
+    // No count until the server has answered one.
     for (const t of tabs) expect(t.textContent).not.toMatch(/\(\d+\)/);
+  });
+
+  it("“Đơn thư công dân (N)” once the register's count is known (prototype `DocumentWorkspace.tsx:163-165`)", () => {
+    const el = mount(<DocumentTabBar selected="petitions" onSelect={() => {}} letterCount={8} />);
+    const tabs = [...el.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    expect(tabs.map((t) => t.textContent)).toEqual(["Văn bản đến", "Văn bản đi", "Đơn thư công dân (8)", "Báo cáo"]);
   });
 
   it("bấm tab Đơn thư thì chọn tab ấy; mũi tên trái/phải đi vòng", () => {

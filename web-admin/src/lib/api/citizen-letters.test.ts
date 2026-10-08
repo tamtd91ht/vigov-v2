@@ -4,10 +4,12 @@ import {
   addCitizenLetterNote,
   bookCitizenLetter,
   checkLetterDuplicates,
+  citizenLetterCountPath,
   citizenLetterListPath,
   citizenLetterReportPath,
   correctCitizenLetterSender,
   moveCitizenLetter,
+  recordCitizenLetterResult,
   routeCitizenLetter,
   setCitizenLetterDeadline,
 } from "./citizen-letters";
@@ -52,6 +54,26 @@ describe("citizen-letter list path", () => {
     expect(q.get("assignee")).toBe("CB-00002");
     expect(q.get("status")).toBe("thu-ly");
     expect(q.get("cursor")).toBe("abc");
+  });
+
+  it("the display group travels as `status_group` (ADR 0084 #2)", () => {
+    const q = new URL(citizenLetterListPath({ statusGroup: "da-phan-cong" }), "http://x").searchParams;
+    expect(q.get("status_group")).toBe("da-phan-cong");
+    expect(q.get("status")).toBeNull();
+  });
+
+  it("the count path: same filters as the list, no paging; no filter at all is the bare path", () => {
+    expect(citizenLetterCountPath()).toBe("/api/v1/citizen-letter-counts");
+    expect(citizenLetterCountPath({ scope: "all" })).toBe("/api/v1/citizen-letter-counts");
+    const q = new URL(
+      citizenLetterCountPath({ scope: "mine", statusGroup: "dang-xu-ly", holdingUnit: "U1", limit: 50, cursor: "abc" }),
+      "http://x",
+    ).searchParams;
+    expect(q.get("scope")).toBe("mine");
+    expect(q.get("status_group")).toBe("dang-xu-ly");
+    expect(q.get("holding_unit")).toBe("U1");
+    expect(q.get("limit")).toBeNull();
+    expect(q.get("cursor")).toBeNull();
   });
 
   it("the report path always carries the year (the server requires it)", () => {
@@ -125,6 +147,14 @@ describe("citizen-letter writes", () => {
     expect(sentBody(calls[0]!)).toEqual({ due_at: "2026-10-20T17:00:00+07:00" });
     await setCitizenLetterDeadline("L1", { due_at: null });
     expect(sentBody(calls[1]!)).toEqual({ due_at: null });
+  });
+
+  it("result: a summary-only reply sends the summary alone — no empty document keys", async () => {
+    const calls = stubFetch(200, {});
+    await recordCitizenLetterResult("L1", { result_summary: "Đã trả lời" });
+    expect(calls[0]!.url).toBe("/api/v1/citizen-letters/L1/result");
+    expect(calls[0]!.init.method).toBe("PUT");
+    expect(sentBody(calls[0]!)).toEqual({ result_summary: "Đã trả lời" });
   });
 
   it("a note carries the draft's Idempotency-Key (the route requires one)", async () => {

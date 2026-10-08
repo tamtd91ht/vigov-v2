@@ -1,48 +1,35 @@
-import {
-  Archive,
-  ArrowUpRight,
-  CircleCheck,
-  CircleMinus,
-  CirclePause,
-  ClipboardCheck,
-  Compass,
-  Inbox,
-  Loader,
-  Scale,
-  type LucideIcon,
-} from "lucide-react";
+import { Archive, ArrowUpRight, CircleCheck, CircleMinus, Inbox, Loader, UserCheck, type LucideIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/cn";
 
 import type { LetterScope } from "@/lib/api/citizen-letters";
 
-import { letterStatusChip, letterStatusLabel } from "./letter-display";
+import { letterGroupChip, letterGroupLabel } from "./letter-display";
 
 /**
  * Small presentation pieces of the citizen-letter tabs. Hook-free, so a test can render them with
  * `react-dom/server`.
  */
 
-/** ICON + WORD per status code, never colour alone (`Badge`). An unknown code gets the neutral icon. */
-const STATUS_ICON: Readonly<Record<string, LucideIcon>> = {
+/** ICON + WORD per display group, never colour alone (`Badge`). An unknown code gets the neutral icon. */
+const GROUP_ICON: Readonly<Record<string, LucideIcon>> = {
   "moi-vao-so": Inbox,
-  "dang-xu-ly-don": Loader,
-  "thu-ly": ClipboardCheck,
-  "dang-giai-quyet": Scale,
+  "da-phan-cong": UserCheck,
+  "dang-xu-ly": Loader,
   "da-giai-quyet": CircleCheck,
-  "khong-thu-ly": CircleMinus,
-  "huong-dan": Compass,
-  "chuyen-don": ArrowUpRight,
-  "luu-don": Archive,
-  "dinh-chi": CirclePause,
+  "chuyen-cap-tren": ArrowUpRight,
+  "luu-khong-thu-ly": Archive,
 };
 
-/** The prototype's status `Badge` (`PetitionTable.tsx:113-115`), with its chip colours. */
-export function LetterStatusBadge({ status }: { status: string }) {
+/**
+ * The prototype's status `Badge` (`PetitionTable.tsx:113-115`) — the letter's DISPLAY GROUP, the
+ * server's `status_group` (ADR 0084 #2), with the prototype's chip colours.
+ */
+export function LetterStatusBadge({ group }: { group: string }) {
   return (
-    <Badge icon={STATUS_ICON[status] ?? CircleMinus} className={letterStatusChip(status)}>
-      {letterStatusLabel(status)}
+    <Badge icon={GROUP_ICON[group] ?? CircleMinus} className={letterGroupChip(group)}>
+      {letterGroupLabel(group)}
     </Badge>
   );
 }

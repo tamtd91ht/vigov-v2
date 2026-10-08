@@ -30,13 +30,14 @@ export const LETTER_ENTRY_TITLE = "Vào sổ đơn thư công dân";
 export const LETTER_ENTRY_SUBMIT = "Vào sổ đơn thư";
 
 /**
- * The prototype's description says the sender, address and phone are REQUIRED and the deadline is
- * computed by type. Here neither holds: the sender is optional (C7) and no deadline is set yet (ADR 0078
- * #3) — so the sentence says what this register actually does.
+ * The prototype's description, verbatim (`PetitionEntryForm.tsx`; owner request v2 §4.4). Its second
+ * sentence is now what the server does: the deadline is filled at booking from the commune's rule for
+ * the letter's type (ADR 0084 #3, ADR 0085 B). The "Không rõ người gửi" box below stays (C7): a letter
+ * with no known sender is still booked — the sentence names what the law asks to RECORD, not a field
+ * the form refuses without.
  */
 export const LETTER_ENTRY_DESCRIPTION =
-  "Người gửi, địa chỉ, số điện thoại không bắt buộc: đơn không rõ người gửi vẫn vào sổ được. Số đơn do " +
-  "hệ thống cấp khi lưu; sổ đơn thư hiện chưa đặt hạn giải quyết.";
+  "Người gửi, địa chỉ, số điện thoại và nội dung là những mục quy định bắt buộc ghi nhận. Hạn giải quyết tính theo loại đơn.";
 
 /** The prototype's footer sentence of the duplicate box, verbatim (`PetitionEntryForm.tsx:195-197`). */
 export const DUPLICATE_FOOTER = "Vẫn lưu được — hệ thống chỉ nhắc để cán bộ hỏi lại công dân.";

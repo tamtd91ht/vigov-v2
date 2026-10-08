@@ -28,6 +28,7 @@ import {
 } from "./documents.fixture";
 import {
   previewLetter,
+  previewLetterCount,
   previewLetterDuplicates,
   previewLetterLog,
   previewLetterReport,
@@ -227,6 +228,7 @@ function isDocumentRegisterPath(p: string): boolean {
     p === "/api/v1/incoming-documents" ||
     p === "/api/v1/outgoing-documents" ||
     p === "/api/v1/citizen-letters" ||
+    p === "/api/v1/citizen-letter-counts" ||
     p === "/api/v1/citizen-letter-report"
   );
 }
@@ -239,19 +241,23 @@ function isDocumentRegisterPath(p: string): boolean {
 function answerLetters(p: string, q: URLSearchParams): Response | null {
   const one = (name: string) => q.get(name) ?? undefined;
   const state = documentPreviewStateNow();
+  const query = () => ({
+    status: one("status"),
+    statusGroup: one("status_group"),
+    holdingUnit: one("holding_unit"),
+    assignee: one("assignee"),
+    receivedFrom: one("received_from"),
+    receivedTo: one("received_to"),
+    scope: one("scope"),
+  });
   if (p === "/api/v1/citizen-letters") {
     if (state === "error") return refuse(503, PREVIEW_REGISTER_ERROR);
     if (state === "empty") return json({ items: [], next_cursor: "", has_more: false });
-    return json(
-      previewLetters({
-        status: one("status"),
-        holdingUnit: one("holding_unit"),
-        assignee: one("assignee"),
-        receivedFrom: one("received_from"),
-        receivedTo: one("received_to"),
-        scope: one("scope"),
-      }),
-    );
+    return json(previewLetters(query()));
+  }
+  if (p === "/api/v1/citizen-letter-counts") {
+    if (state === "error") return refuse(503, PREVIEW_REGISTER_ERROR);
+    return json(state === "empty" ? { count: 0 } : previewLetterCount(query()));
   }
   if (p === "/api/v1/citizen-letter-report") {
     if (state === "error") return refuse(503, PREVIEW_REGISTER_ERROR);

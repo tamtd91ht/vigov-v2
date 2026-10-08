@@ -103,6 +103,14 @@ describe("letter table — masking and rows", () => {
     expect(heads).toEqual(["Số", "Ngày nhận", "Người gửi", "Loại đơn", "Nội dung", "Đang giữ", "Số ngày xử lý", "Hạn giải quyết", "Trạng thái"]);
   });
 
+  it("the status badge shows the display GROUP (ADR 0084 #2), icon + word, in the prototype's colour", () => {
+    const rows = el().querySelectorAll("tbody tr");
+    const badge = rows[0]!.querySelectorAll("td")[8]!;
+    expect(badge.textContent).toBe("Đang xử lý");
+    expect(badge.querySelector("svg")).not.toBeNull();
+    expect(badge.innerHTML).toContain("bg-teal/12");
+  });
+
   it("received date reads d/m/yyyy without zero padding (prototype `formatDay`)", () => {
     const cells = [...el().querySelectorAll("tbody tr")][0]!.querySelectorAll("td");
     expect(cells[1]!.textContent).toBe("1/10/2026");
@@ -146,7 +154,7 @@ describe("letter table — masking and rows", () => {
         now={new Date()}
         scope="mine"
         onScope={() => {}}
-        filters={{ ...NO_FILTERS, status: "thu-ly" }}
+        filters={{ ...NO_FILTERS, statusGroup: "dang-xu-ly" }}
         onFilters={() => {}}
         units={{ pha: "dangDoc" }}
         directory={null}
@@ -208,6 +216,32 @@ async function mountRegister(): Promise<HTMLDivElement> {
 }
 
 const bookButton = (el: HTMLElement) => [...el.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Vào sổ đơn thư");
+
+describe("letter register — status filter (ADR 0084 #5)", () => {
+  it("the prototype's group labels in its order, no “Chờ phân công”; choosing one sends status_group", async () => {
+    const urls = stubServer([PETITION_READ_PERMISSION]);
+    const el = await mountRegister();
+    const select = el.querySelector<HTMLSelectElement>("#don-thu-loc-trang-thai")!;
+    expect([...select.options].map((o) => o.textContent)).toEqual([
+      "Tất cả trạng thái",
+      "Mới vào sổ",
+      "Đã phân công",
+      "Đang xử lý",
+      "Đã giải quyết",
+      "Chuyển cấp trên",
+      "Lưu, không thụ lý",
+    ]);
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(select, "da-phan-cong");
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => {});
+    const last = urls.filter((u) => u.startsWith("/api/v1/citizen-letters")).at(-1)!;
+    const q = new URL(last, "http://x").searchParams;
+    expect(q.get("status_group")).toBe("da-phan-cong");
+    expect(q.get("status")).toBeNull();
+  });
+});
 
 describe("letter register — permission gating (UX only; the server decides)", () => {
   it("ALLOWED: petition.create draws “Vào sổ đơn thư” and the disabled “Nhập từ Excel ?”", async () => {
