@@ -312,6 +312,15 @@ describe("rating — the block on the petition", () => {
     }
   });
 
+  it("unverified petition (ADR 0080 #8): no block at all, even when resolved", () => {
+    for (const status of Object.keys(TRANG_THAI).filter((s) => isRateable(s))) {
+      const p = petition({ status, contact_unverified: true });
+      expect(p.contact_unverified, status).toBe(true);
+      expect(showsRating(p), status).toBe(false);
+      expect(render({ petition: p }), status).toBe("");
+    }
+  });
+
   it("rated, then reopened by the server: 'Bạn đã đánh giá n sao', read-only, no form, no button", () => {
     const html = render({ petition: petition({ status: "dang-xu-ly", rating: 2, rated_at: RATED_AT }) });
     expect(html).toContain(RATING.your_rating);

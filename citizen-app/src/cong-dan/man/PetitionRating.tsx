@@ -89,8 +89,13 @@ export function attemptFor(current: LanGui | null, stars: number, comment: strin
   }
 }
 
-/** Whether the block appears at all for this petition. */
+/**
+ * Whether the block appears at all for this petition. Never for an unverified petition (ADR 0080 #8: no
+ * rating, no reopen — the database refuses it too): the rating route needs a verified phone, so showing the
+ * block would only lead the citizen into a phone request they already could not complete.
+ */
 export function showsRating(p: PhieuCuaToi): boolean {
+  if (p.contact_unverified === true) return false;
   return isRateable(p.trang_thai) || p.rating !== null;
 }
 
