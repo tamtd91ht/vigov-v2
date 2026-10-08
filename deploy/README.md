@@ -902,7 +902,7 @@ và probe là của kho kia: **`../vihat-miniapp/deploy/README.md`**. Đọc ở
 
 | Điều | Giá trị | Vì sao / nguồn |
 |---|---|---|
-| Ảnh | `harbor.omicrm.services/ci/vihat-miniapp:<thẻ>` | Từ 08/10/2026 job của `../vihat-miniapp/Jenkinsfile` **đóng ảnh rồi đặt lên cụm** như các job `vigov-svc-*` (`set image` + `rollout status`, đỏ thì `rollout undo`), trên Deployment tên `vihat-miniapp` ở `vigov-prod`. Deployment mang tên khác thì job dừng ở stage đầu và chỉ cách sửa |
+| Ảnh | `harbor.omicrm.services/ci/vihat-miniapp:<thẻ>` | Từ 08/10/2026 job của `../vihat-miniapp/Jenkinsfile` **đóng ảnh rồi đặt lên cụm** như các job `vigov-svc-*` (`set image` + `rollout status`, đỏ thì `rollout undo`), trên Deployment tên `vihat-zalo-miniapp` ở `vigov-prod` (tên thật trong Rancher, đo 08/10/2026). Deployment mang tên khác thì job dừng ở stage đầu và chỉ cách sửa |
 | Manifest | `../vihat-miniapp/deploy/{deployment,service,cronjob-don-nhat-ky}.yaml` | Điền `<dien-vao-namespace>` thành `vigov-prod`. Secret `vihat-miniapp-bi-mat` và ConfigMap `vihat-miniapp-cau-hinh` phải có **trước** Deployment |
 | Namespace | **`vigov-prod`**, cùng namespace với ViGov | Cầu phiên tới identity đi không TLS, nên chỉ chấp nhận được khi hai bên cùng cụm, cùng namespace (ADR 0045) |
 | Nhãn pod | **`app.kubernetes.io/name: vihat-miniapp`**, đúng chữ | NetworkPolicy chọn pod theo nhãn này. Sai nhãn thì `deny-all` chặn cả vào lẫn ra: pod xanh nhưng không ai gọi tới được |
@@ -914,7 +914,7 @@ và probe là của kho kia: **`../vihat-miniapp/deploy/README.md`**. Đọc ở
 
 | Việc | Làm gì |
 |---|---|
-| `di-tru-vihat-miniapp` | Áp migration của nhánh `main` vào CSDL trong `vihat-miniapp-bi-mat`, chỉ những tệp chưa có trong sổ `schema_migrations`. DỪNG nếu CSDL ấy trùng CSDL của một dịch vụ ViGov, hoặc đã có bảng mà chưa có sổ |
+| `di-tru-vihat-miniapp` | Áp migration của nhánh `main` vào CSDL trong `vihat-miniapp-bi-mat`, chỉ những tệp chưa có trong sổ `vihat_miniapp_migrations`. DỪNG nếu CSDL đã có bảng mà chưa có sổ. Chủ dự án 08/10/2026 **cho phép** CSDL ấy là CSDL của một dịch vụ ViGov (đang là `vigov_comms`) — lệch luật 2, đã nêu cái giá |
 | `bat-cau-phien-miniapp` | Chép khoá đầu của `CITIZEN_SESSION_BRIDGE_KEYS` sang `VIGOV_CITIZEN_SESSION_BRIDGE_KEY`, đặt `VIGOV_CITIZEN_SESSION_BRIDGE_ADDRESS=vigov-service-identity:9091`, mở 9091 trên Service identity nếu thiếu, khởi động lại và kiểm log `"cầu phiên ViGov","bat":true`. Cần `bo-sung-cau-hinh-identity` đã chạy |
 
 **Ingress — host là `VIGOV_API_HOST` của Mini App, không có trong `deploy/hosts.yaml`.** App chung gắn
