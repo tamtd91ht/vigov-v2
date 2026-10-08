@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package vigov.documents.v1;
 
+import "google/protobuf/timestamp.proto";
+
 // documents — Văn thư.
 //
 // Contract rules that apply to every RPC here:
@@ -131,6 +133,83 @@ service DocumentsService {
   //
   // RETRYING IS SAFE: it writes nothing, publishes nothing, and leaves no audit entry.
   rpc ResolveDocumentTypeCodes(ResolveDocumentTypeCodesRequest) returns (ResolveDocumentTypeCodesResponse);
+
+  // ResolveCitizenLetterForTask answers, for ONE citizen letter of the commune named by "x-tenant-id",
+  // whether a task may be created from it, and the facts the task inherits — "Chuyển thành nhiệm vụ"
+  // (C9, ADR 0084 #6, ADR 0085).
+  //
+  // # WHY A READ IN THIS DIRECTION, AND NOT documents CALLING petitions TO CREATE THE TASK
+  //
+  // The task is the only record written, and it belongs to service-petitions (`nhiem_vu`). The browser
+  // route therefore lives there, and petitions asks the OWNER of the letter for the facts instead of
+  // accepting them from anybody: the source pair, the inherited deadline and the holder fallback are
+  // derived ON THE SERVER, never taken from the client (C9; ledger
+  // service-documents/tao-nhiem-vu-tu-ho-so-khac-service). The opposite shape — documents calling a
+  // petitions "create task" RPC — would make petitions write a task on a caller-declared letter id,
+  // deadline AND acting staff code, all three claims of whoever holds the one shared caller key
+  // (ADR 0025 proves "inside the deployment", never "which service"). Here the only claim petitions
+  // relies on is the commune in metadata, and the actor is its own session principal.
+  //
+  // ONE WRITE, ONE TRANSACTION, NOTHING TO COMPENSATE: nothing is written on the letter. The link is
+  // the task's `nguon_giao = 'don-thu'` + `nguon_id = letter id` — one fact, one owner. Declared in
+  // kb/30-indexes/transaction-boundaries.json, `tao_nhiem_vu_tu_don_thu`.
+  //
+  // # A DENUNCIATION NEVER CROSSES — and that is enforced HERE, by the owner of the letter
+  //
+  // C9 and ADR 0084 #6: a `to-cao` letter is not converted, and nothing of it — the denouncer's
+  // identity, the summary, not even its register number — may reach the task register (Luật Tố cáo
+  // 2018 Đ.8 confidentiality, ADR 0078 #4). The answer for a `to-cao` letter is the bare eligibility
+  // DENUNCIATION with `letter` UNSET. The rule lives in the one service that knows the letter types;
+  // petitions only maps the answer to its refusal.
+  //
+  // # NO PERSONAL DATA IN THE ANSWER, AT ALL
+  //
+  // No sender name, phone or address, and NOT THE SUMMARY. A summary quotes the letter (it is marked
+  // as possibly personal in migration 0006), and `nhiem_vu` holds no citizen personal data by
+  // construction (service-petitions/internal/domain/nhiem_vu.go, NhiemVu). The task title the
+  // prototype pre-fills from the summary is pre-filled BY THE SCREEN, which already shows the summary
+  // to a reader holding `petition.read`; the person confirming the dialog is the one who decides what
+  // text crosses, and it reaches petitions as their typed title. Because nothing personal is returned,
+  // this read is not audited (rule 6, invariant 7 covers FULL personal data).
+  //
+  // # THE PREDICATE
+  //
+  //   NOT_FOUND     no row of this commune with this id, or the row is soft-deleted (rule 7,
+  //                 invariant 2). Unknown, deleted and another commune's id are ONE answer (rule 1).
+  //   DENUNCIATION  a live row with `letter_type = 'to-cao'`. `letter` unset.
+  //   ELIGIBLE      any other live row. NO STATUS FILTER: the prototype converts a letter in any
+  //                 status (../vigov-require/apps/api/app/modules/documents/service.py:641-686) and
+  //                 ADR 0084 #6 decided "bật, theo prototype, trừ tố cáo". A status rule added later is
+  //                 a new eligibility value — additive — never a silent NOT_FOUND.
+  //
+  // # A POINT-IN-TIME ANSWER, NOT A LOCK
+  //
+  // petitions calls this BEFORE its transaction opens (a network round trip held inside a database
+  // transaction is a row lock held for as long as another service chooses). Between the answer and
+  // the commit the letter may be soft-deleted or have its deadline edited; the task then keeps what
+  // it inherited AT THE ACT THAT FIXED IT (rule 10, invariant 2), exactly as a task outlives a
+  // soft-deleted petition. `letter_type` is fixed at booking — no write path edits it — so a letter
+  // cannot BECOME a denunciation in that window. The day a path that edits `letter_type` is written,
+  // it must refuse a change into `to-cao` for a letter some task points at, or this guarantee is gone.
+  //
+  // # The commune travels in metadata; never exempt
+  //
+  // Not on core/grpcx.methodsWithoutTenant and never to be (ADR 0012, decision 1): the commune scopes
+  // the row read.
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK                  `eligibility` is never UNSPECIFIED in an OK answer; `letter` is set iff
+  //                       ELIGIBLE. A caller seeing anything else treats it as a contract fault (refuse).
+  //   INVALID_ARGUMENT    `letter_id` blank or longer than 64. No "x-tenant-id".
+  //   NOT_FOUND           NEVER produced — "no such letter" is the NOT_FOUND ELIGIBILITY in an OK answer.
+  //   UNAUTHENTICATED     NEVER produced by this RPC — the caller-key interceptor's code (ADR 0025).
+  //   UNIMPLEMENTED       a documents older than this RPC: deploy documents BEFORE petitions.
+  //   UNAVAILABLE etc.    the call did not happen. NOT "not found" and NOT "eligible": the caller
+  //                       refuses with 503 and writes nothing.
+  //
+  // RETRYING IS SAFE: it writes nothing, publishes nothing, and leaves no audit entry.
+  rpc ResolveCitizenLetterForTask(ResolveCitizenLetterForTaskRequest) returns (ResolveCitizenLetterForTaskResponse);
 }
 
 message HealthRequest {}
@@ -172,4 +251,66 @@ message DocumentTypeCode {
   // The commune has the type switched on (`dang_dung`). False is still a live row: answered, but the
   // caller refuses it for a new SLA row — see the RPC.
   bool active = 2;
+}
+
+message ResolveCitizenLetterForTaskRequest {
+  // `citizen_letter.id` — the id in `/api/v1/citizen-letters/{id}`. It reaches petitions from the
+  // browser, so it is a CLAIM until this RPC answers it within the commune of metadata. Blank or over
+  // 64 characters is INVALID_ARGUMENT.
+  string letter_id = 1;
+}
+
+// Wrapped: adding a field later must not change the RPC signature.
+message ResolveCitizenLetterForTaskResponse {
+  // Never UNSPECIFIED in an OK answer.
+  CitizenLetterTaskEligibility eligibility = 1;
+
+  // SET IF AND ONLY IF `eligibility` is ELIGIBLE. Unset for a denunciation by design — see the RPC.
+  CitizenLetterTaskSource letter = 2;
+}
+
+// Whether a task may be created from the letter. A closed set; a new refusal (a status rule, say) is a
+// new value, and a caller that does not know it REFUSES — never treats it as ELIGIBLE.
+enum CitizenLetterTaskEligibility {
+  CITIZEN_LETTER_TASK_ELIGIBILITY_UNSPECIFIED = 0;
+
+  // A live letter of this commune, not a denunciation. `letter` is set.
+  CITIZEN_LETTER_TASK_ELIGIBILITY_ELIGIBLE = 1;
+
+  // Unknown, soft-deleted or another commune's id — one answer, indistinguishable (rule 1).
+  CITIZEN_LETTER_TASK_ELIGIBILITY_NOT_FOUND = 2;
+
+  // A live `to-cao` letter. Never converted (C9, ADR 0084 #6); nothing about it is returned.
+  CITIZEN_LETTER_TASK_ELIGIBILITY_DENUNCIATION = 3;
+}
+
+// The facts a task inherits from a letter. CODES, IDS AND ONE INSTANT — NO PERSONAL DATA (see the RPC).
+message CitizenLetterTaskSource {
+  // Echo of the request: what petitions stores in `nhiem_vu.nguon_id`.
+  string letter_id = 1;
+
+  // The register number and its year (`citizen_letter.number`, `.year`) — the letter's BUSINESS
+  // identifier. Read by petitions for its audit entry, so the trail names "đơn số 12/2026" and not a
+  // ULID nobody can read years later (rule 6, invariant 2).
+  uint32 number = 2;
+  uint32 year = 3;
+
+  // `citizen_letter.holding_unit_id` (identity's `bo_phan.id`) and `.assignee_code` (a STAFF BUSINESS
+  // CODE, `CB-…`). "" = none. The FALLBACK the prototype uses when the dialog names neither a unit nor
+  // a person (service.py:658-662). Not validated here — petitions re-checks both with identity before
+  // writing, exactly as for any assignment (ResolveLiveOrgUnits / ResolveAssignableStaff).
+  string holding_unit_id = 4;
+  string assignee_code = 5;
+
+  // THE DEADLINE THE LETTER SHOWS RIGHT NOW — the one "Hạn giải quyết" box of ADR 0084 #3: the
+  // resolution deadline once the letter is accepted (`accepted_at` set), the processing deadline
+  // before. Chosen HERE, by the one service that maps a stage to a column; petitions never picks.
+  //
+  // UNSET = THE LETTER HAS NO DEADLINE ("Không đặt hạn"), and the task is then created with none. It
+  // is never replaced by a default anywhere downstream.
+  //
+  // AN INSTANT, as stored. petitions turns it into the task deadline itself: the Asia/Ho_Chi_Minh DATE
+  // of this instant at 17:00 (C9, 24/09/2026). That is pinning a time of day on a date, not counting a
+  // duration — rule 10, forbidden #2 is not involved.
+  google.protobuf.Timestamp current_due_at = 6;
 }
