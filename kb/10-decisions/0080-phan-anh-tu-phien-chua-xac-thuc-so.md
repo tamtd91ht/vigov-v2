@@ -60,7 +60,7 @@ khớp `zalo_user_id` (`:544-558`).
 | 6 | App riêng của xã | Zalo không cho số → identity phát **phiên không số** (`accessToken` xác minh bằng secret của chính app xã, ADR 0066). Phiên ấy **chỉ** được gửi và theo dõi phiếu chưa xác thực |
 | 7 | Chống lạm dụng | **10 phiếu chưa xác thực / ngày / tài khoản Zalo** — ngưỡng bảo mật do chủ dự án chọn (luật 13) |
 | 8 | Ảnh, đánh giá, mở lại, đóng | **Có ảnh hiện trường** (chủ ảnh là tài khoản Zalo; trigger của `service-petitions/migrations/0026_petition_scene_photo.sql:119-175` phải đổi). **Không đánh giá, không mở lại.** Cán bộ đóng thẳng từ `da-xu-ly` như phiếu cán bộ vào hộ (`service-petitions/internal/domain/xu_ly_phan_anh.go:372-390`); công dân đọc kết quả qua tra cứu |
-| 9 | "Ai" của vết và chủ thể idem | **Mã tài khoản Zalo** — ADR 0045:242-244 đã dự liệu đúng trường hợp này |
+| 9 | "Ai" của vết và chủ thể idem | **`tai_khoan_zalo.id`** (ULID sẵn có) — ADR 0045:242-244 đã dự liệu đúng trường hợp này. **Không** cấp mã nghiệp vụ riêng: luật 6 bất biến 8 (mã nghiệp vụ) chỉ áp cho cán bộ; vết công dân ghi mã định danh mờ kèm `Kind` (`core/authz/authz.go:86-88`), và migration `service-identity/migrations/0011_tai_khoan_zalo_va_phien_chua_co_so.sql:99` đã chỉ định cột này làm "ai". Chủ dự án chốt lại 08/10/2026 sau khi phiên chính sửa một tiền đề sai đã hỏi trước đó |
 
 **Phiên chính chọn (không phải lời chủ dự án), ghi rõ:** **ngoài Zalo vẫn từ chối**. Không có phiên
 thì không có xã, và nhận xã từ client là luật 1 cấm #2. Phiếu chưa xác thực không phải cửa công khai —
@@ -94,8 +94,7 @@ và một kênh mới mai sau cũng vậy. Quy tắc suy luận ở giao diện 
 
 | # | Câu | Vì sao không tự chọn |
 |---|---|---|
-| 1 | Luật 6 bất biến 8 đòi "ai" là **mã nghiệp vụ**, nhưng `tai_khoan_zalo.id` là ULID (`0011_…sql:98-100`, ghi chú cột nói nó chính là "ai" của vết). Điểm 9 có cần một mã nghiệp vụ riêng cho tài khoản Zalo không | Đổi hình dạng một khoá đã dùng ở vết phiên; người dùng chốt |
-| 2 | Phiếu chưa xác thực có vào thống kê / báo cáo lên trên chung với phiếu có danh tính, hay tách dòng | Là cách xã báo cáo, không phải thiết kế phần mềm |
+| 1 | Phiếu chưa xác thực có vào thống kê / báo cáo lên trên chung với phiếu có danh tính, hay tách dòng | Là cách xã báo cáo, không phải thiết kế phần mềm |
 
 ## Quan hệ với ADR cũ
 
