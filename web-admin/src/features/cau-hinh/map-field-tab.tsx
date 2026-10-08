@@ -175,9 +175,10 @@ export function MapFieldTab() {
     setFormError("");
   }
 
-  function finish(sentence: string) {
+  /** A done write: close the form, toast the sentence when there is one, READ AGAIN. */
+  function finish(sentence: string | null) {
     setOpen(null);
-    toast.success(sentence);
+    if (sentence !== null) toast.success(sentence);
     setReload((n) => n + 1);
   }
 
@@ -224,7 +225,9 @@ export function MapFieldTab() {
     setRowError("");
     const r = await updateMapField(row.id, { is_active: !row.is_active });
     if (!r.ok) return setRowError(r.thongBao);
-    finish(FIELD_SAVED);
+    // No toast: the switch changing IS the confirmation (prototype `AssetFieldTable.tsx:236-238` toasts
+    // only the error; ADR 0079 lô 6 #3). A refusal still shows, under the table.
+    finish(null);
   }
 
   return (

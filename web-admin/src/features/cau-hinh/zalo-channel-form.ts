@@ -442,17 +442,38 @@ export function lastCheckText(at: string, result: string): string {
   return `Lần kiểm gần nhất: ${at} · ${outcome(result).short}`;
 }
 
+const WEBHOOK_NOT_REGISTERED = "Chưa đăng ký được.";
+
+/**
+ * The prototype's sentence (`ZaloChannelPanel.tsx:479`), kept for the ONE failure the bot code causes
+ * (ADR 0079 lô 6 #4). That cause is `token-bi-tu-choi` and only that: comms' adapter returns it for a
+ * token of the wrong shape or Zalo's 401/404 on the bot path (`service-comms/internal/zalobot/client.go`
+ * `call` / `classifyStatus`), and `RegisterWebhook` sends the class as `result` in a 200.
+ */
+export const WEBHOOK_BOT_CODE_FAILED = `${WEBHOOK_NOT_REGISTERED} Kiểm tra lại mã bot.`;
+
 /**
  * After "Đăng ký webhook". `khong-kha-dung` / `phan-hoi-sai-dang` are AMBIGUOUS: Zalo may already hold
  * the new secret (comms keeps it pending and REUSES it on the next press), so staff are told to press
- * again, not that it failed.
+ * again, not that it failed. A refusal NOT caused by the bot code says its real reason — "check the bot
+ * code" there would send staff to fix something that is not broken.
  */
 export function webhookResultText(result: string): string {
   if (isOutcomeOk(result)) return "Đã đăng ký webhook với Zalo. Tin cán bộ nhắn cho bot từ giờ về hệ thống.";
   if (result === "khong-kha-dung" || result === "phan-hoi-sai-dang") {
     return `${outcome(result).long} Chưa rõ Zalo đã nhận đăng ký hay chưa: bấm “Đăng ký webhook” lần nữa.`;
   }
-  return `Chưa đăng ký được. ${outcome(result).long}`;
+  if (result === "token-bi-tu-choi") return WEBHOOK_BOT_CODE_FAILED;
+  return `${WEBHOOK_NOT_REGISTERED} ${outcome(result).long}`;
+}
+
+/**
+ * The request itself refused (not a 200): no Zalo call was classified, so the bot code is not the
+ * cause — comms' sentence (no own bot, bot changed, host unknown, encryption missing) or the
+ * unreachable-server one, after "Chưa đăng ký được." (ADR 0079 lô 6 #4).
+ */
+export function webhookRequestFailedText(reason: string): string {
+  return `${WEBHOOK_NOT_REGISTERED} ${reason}`;
 }
 
 /** The one-time secret box (ADR 0079 Q1 #3). Says it BEFORE it is too late. */

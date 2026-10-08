@@ -31,6 +31,7 @@ const {
   relinkSentence,
   rowKinds,
   toggleKind,
+  webhookRequestFailedText,
   webhookResultText,
   ZALO_EVENT_GROUPS,
 } = await import("./zalo-channel-form");
@@ -364,8 +365,23 @@ describe("bot form check (mirrors comms' communeBotRefusals; comms re-checks)", 
 
   it("webhook: ambiguous outcomes say 'press again', refusals say 'Chưa đăng ký được.', unknown is never a success", () => {
     expect(webhookResultText("khong-kha-dung")).toContain("bấm “Đăng ký webhook” lần nữa");
-    expect(webhookResultText("token-bi-tu-choi")).toMatch(/^Chưa đăng ký được\. /);
     expect(webhookResultText("toString")).toMatch(/^Chưa đăng ký được\. Không rõ kết quả/);
+  });
+
+  it("webhook (ADR 0079 lô 6 #4): the bot code's failure is the prototype's sentence verbatim; other refusals say their real reason", () => {
+    // ZaloChannelPanel.tsx:479 — only for `token-bi-tu-choi`, the one class the bot code causes.
+    expect(webhookResultText("token-bi-tu-choi")).toBe("Chưa đăng ký được. Kiểm tra lại mã bot.");
+    for (const other of ["bi-tu-choi", "gioi-han-tan-suat", "chua-cau-hinh", "toString"]) {
+      const text = webhookResultText(other);
+      expect(text).toMatch(/^Chưa đăng ký được\. /);
+      expect(text).not.toContain("Kiểm tra lại mã bot");
+    }
+    expect(webhookResultText("gioi-han-tan-suat")).toBe(
+      "Chưa đăng ký được. Zalo đang giới hạn số lần gọi. Vui lòng thử lại sau ít phút.",
+    );
+    expect(webhookRequestFailedText("Xã đang dùng bot chung của nền tảng, chưa có bot riêng.")).toBe(
+      "Chưa đăng ký được. Xã đang dùng bot chung của nền tảng, chưa có bot riêng.",
+    );
   });
 });
 
@@ -960,7 +976,37 @@ describe("§3 Con bot của xã — zalo-bots/current (ADR 0079 Q1)", () => {
     act(() => button(botSection(el), "Đăng ký webhook").click());
     await settle();
     expect(el.querySelector("[data-webhook-secret]")).toBeNull();
-    expect(H.toast.error).toHaveBeenCalledWith(expect.stringMatching(/^Chưa đăng ký được\. /));
+    expect(H.toast.error).toHaveBeenCalledWith("Chưa đăng ký được. Kiểm tra lại mã bot.");
+  });
+
+  it("webhook refused for another reason: 'Chưa đăng ký được.' + the real reason, never 'Kiểm tra lại mã bot.'", async () => {
+    H.phien = session(["admin.lookup"]);
+    botNow = OWN_BOT;
+    botAnswers["POST /api/v1/zalo-bots/current/webhook"] = {
+      status: 200,
+      body: { result: "bi-tu-choi", url: "https://xa.example.test/api/v1/zalo-bot-updates" },
+    };
+    const el = await mount();
+    act(() => button(botSection(el), "Đăng ký webhook").click());
+    await settle();
+    expect(H.toast.error).toHaveBeenCalledWith(
+      "Chưa đăng ký được. Zalo từ chối yêu cầu. Kiểm tra cấu hình bot trong Mini App “Zalo Bot Creator”.",
+    );
+  });
+
+  it("webhook request refused by comms (409): 'Chưa đăng ký được.' + comms' sentence", async () => {
+    H.phien = session(["admin.lookup"]);
+    botNow = OWN_BOT;
+    botAnswers["POST /api/v1/zalo-bots/current/webhook"] = {
+      status: 409,
+      body: { code: "zalo_bot_changed", message: "Bot của xã vừa được thay đổi ở nơi khác. Vui lòng tải lại trang rồi thử lại." },
+    };
+    const el = await mount();
+    act(() => button(botSection(el), "Đăng ký webhook").click());
+    await settle();
+    expect(H.toast.error).toHaveBeenCalledWith(
+      "Chưa đăng ký được. Bot của xã vừa được thay đổi ở nơi khác. Vui lòng tải lại trang rồi thử lại.",
+    );
   });
 
   it("Quay về bot chung: count shown, reason REQUIRED, DELETE {reason}, revoke_notice shown", async () => {

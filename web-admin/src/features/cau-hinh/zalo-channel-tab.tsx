@@ -72,6 +72,7 @@ import {
   SAVED_TOAST,
   toggleKind,
   WEBHOOK_SECRET_ONCE,
+  webhookRequestFailedText,
   webhookResultText,
   WHEN_DESCRIPTION,
   ZALO_EVENT_GROUPS,
@@ -749,7 +750,7 @@ function CommuneBotSection({ onSwitched }: { onSwitched: () => void }) {
     const r = await registerCommuneZaloWebhook();
     setBusy(null);
     if (!r.ok) {
-      toast.error(r.thongBao);
+      toast.error(webhookRequestFailedText(r.thongBao));
       return;
     }
     const text = webhookResultText(r.duLieu.result);

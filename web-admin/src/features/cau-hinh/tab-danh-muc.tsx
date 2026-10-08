@@ -160,10 +160,10 @@ export function TabDanhMuc() {
   }, []);
 
   /**
-   * One write: clear old messages, send, then either toast what was done and READ AGAIN, or show the
-   * server's sentence AS WRITTEN — no branching on `code`, no `trace_id`.
+   * One write: clear old messages, send, then either toast what was done (`null` = no toast) and READ
+   * AGAIN, or show the server's sentence AS WRITTEN — no branching on `code`, no `trace_id`.
    */
-  const run = useCallback(function <T>(call: Promise<KetQua<T>>, sentence: string) {
+  const run = useCallback(function <T>(call: Promise<KetQua<T>>, sentence: string | null) {
     setLocalError("");
     setServerError("");
     setBusy(true);
@@ -175,7 +175,7 @@ export function TabDanhMuc() {
       }
       setOpen(null);
       setDraft(EMPTY_DRAFT);
-      toast.success(sentence);
+      if (sentence !== null) toast.success(sentence);
       setReads((n) => n + 1);
     });
   }, []);
@@ -214,7 +214,9 @@ export function TabDanhMuc() {
     setActive: (row, active) => {
       if (busy || row.kind !== "lookup" || row.group.ghi === null) return;
       close();
-      run(suaMuc(row.group.ghi, row.item.id, { active }), SAVED);
+      // No toast on success: the switch changing IS the confirmation (prototype `LookupTable.tsx:188-194`
+      // toasts only the error; ADR 0079 lô 6 #3). A refusal still shows, as every write's does.
+      run(suaMuc(row.group.ghi, row.item.id, { active }), null);
     },
     makeDefault: (row) => {
       if (busy || row.kind !== "lookup" || row.group.ghi === null) return;

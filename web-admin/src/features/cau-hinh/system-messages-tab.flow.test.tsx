@@ -244,7 +244,21 @@ describe("Tắt / Bật lại", () => {
     expect(card.className).toContain("opacity-60");
     expect(card.textContent).toContain("Đang tắt");
     expect(button(card, "Bật lại")).toBeDefined();
-    expect(T.success).toHaveBeenCalledWith("Đã tắt câu này.");
+    // ADR 0079 lô 6 #3 / prototype `MessageTemplateTable.tsx:107-116`: the switch changing is the
+    // confirmation — no success toast.
+    expect(T.success).not.toHaveBeenCalled();
+  });
+
+  it("a refused switch: the server's sentence on the card, the card unchanged, no success toast", async () => {
+    H.phien = session(["admin.lookup"]);
+    const el = await mount();
+    writeReply = { status: 403, body: { code: "forbidden", message: "Bạn không có quyền thực hiện thao tác này." } };
+    act(() => button(cardOf(el, "chung.loi-chao"), "Tắt").click());
+    await settle();
+    const card = cardOf(el, "chung.loi-chao");
+    expect(card.textContent).toContain("Bạn không có quyền thực hiện thao tác này.");
+    expect(button(card, "Tắt")).toBeDefined();
+    expect(T.success).not.toHaveBeenCalled();
   });
 
   it("a reworded shipped sentence: PATCH …/{code}/override; the box keeps the commune's words", async () => {

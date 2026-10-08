@@ -119,9 +119,8 @@ export const SAVED_SENTENCE = "Đã lưu lời mới.";
 export const RESTORED_SENTENCE = "Đã khôi phục lời gốc.";
 export const ADDED_SENTENCE = "Đã thêm câu mới.";
 export const DELETED_SENTENCE = "Đã xoá câu này.";
-// Neither spec 07 nor the prototype toasts the switch; short neutral sentences of this card.
-export const SWITCHED_OFF_SENTENCE = "Đã tắt câu này.";
-export const SWITCHED_ON_SENTENCE = "Đã bật lại câu này.";
+// No switch sentence: a successful Tắt / Bật lại is not toasted (prototype `MessageTemplateTable.tsx:107-116`,
+// ADR 0079 lô 6 #3).
 
 export const ADD_CODE_LABEL = "Mã câu";
 export const ADD_DESCRIPTION_LABEL = "Giải thích câu này dùng ở đâu";

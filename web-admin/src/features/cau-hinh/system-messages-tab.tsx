@@ -63,8 +63,6 @@ import {
   SWITCH_ON_BUTTON,
   SWITCHED_OFF_BADGE,
   SWITCHED_OFF_COMMUNE_BADGE,
-  SWITCHED_OFF_SENTENCE,
-  SWITCHED_ON_SENTENCE,
   switchMessageFlow,
   SYSTEM_MESSAGE_MAX,
   SYSTEM_MESSAGE_SECTIONS,
@@ -443,8 +441,9 @@ function SystemMessageCard({
       return;
     }
     // The words being typed are kept: the switch and the words are two acts on the server too.
+    // No toast: the switch changing IS the confirmation (prototype `MessageTemplateTable.tsx:107-116`
+    // toasts only the error; ADR 0079 lô 6 #3). A refusal still shows, in place on the card.
     setMessage(r.duLieu);
-    toast.success(r.duLieu.is_active ? SWITCHED_ON_SENTENCE : SWITCHED_OFF_SENTENCE);
   }
 
   async function remove() {
