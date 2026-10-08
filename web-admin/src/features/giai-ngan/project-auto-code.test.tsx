@@ -116,6 +116,30 @@ function autoBox(el: HTMLElement): HTMLInputElement {
   return el.querySelector<HTMLInputElement>("#tu-sinh-ma-du-an")!;
 }
 
+describe("Thêm dự án — opening focus (brief §3.4, prototype autoFocus)", () => {
+  function openWith(danhMuc: finance_hangMucRa[]): HTMLDivElement {
+    stubServer(CREATED);
+    host = document.createElement("div");
+    document.body.append(host);
+    const r = createRoot(host);
+    root = r;
+    act(() => r.render(<KhoiThemDuAn nam={2026} danhMuc={danhMuc} coGhi daGhiXong={vi.fn()} />));
+    act(() => host!.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]')!.click());
+    return host;
+  }
+
+  it("the dialog opens with the focus on `Hạng mục`", () => {
+    openWith(CATEGORIES);
+    expect(document.activeElement?.id).toBe("hang-muc-du-an");
+  });
+
+  it("empty catalogue → the select is disabled and is not forced to take the focus", () => {
+    const el = openWith([]);
+    expect(el.querySelector<HTMLSelectElement>("#hang-muc-du-an")!.disabled).toBe(true);
+    expect(document.activeElement?.id).not.toBe("hang-muc-du-an");
+  });
+});
+
 describe("§9 Tự sinh mã — what leaves the browser", () => {
   it("default: checked, code box disabled, and the POST carries NO `code`", async () => {
     const captured = stubServer(CREATED);

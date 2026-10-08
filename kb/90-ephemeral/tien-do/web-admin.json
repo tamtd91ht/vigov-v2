@@ -1010,6 +1010,15 @@
       "bang_chung": "Migration đã commit f5c78d29 (comms 0019–0022), c4e2f0c7 (petitions 0033, finance 0017, reporting 0004, documents 0007), fad0fd41 (identity 0026) — qua isolation-reviewer + security-reviewer; CHƯA chạy trên PostgreSQL 16 thật.",
       "no_confirm": [],
       "tiep_theo": "Go: service-identity (POST/DELETE /sla, màu) xong chờ review; service-comms, petitions/finance/reporting/documents đang dựng. Contract: RPC đọc loại văn bản / mức ưu tiên để identity đối chiếu mã dòng thời hạn van-ban-den/nhiem-vu (hiện trả 400 sla_field_unverifiable) + domain cho loại nhắn Zalo. Giai đoạn 2: 10 loại nhắn chưa có nơi phát, mỗi loại một ADR + outbox. Nợ cũ: CHECK system_message_override_delete_complete (petitions 0020, finance 0010, reporting 0003) cho qua khi delete_reason NULL — cần migration NOT VALID rồi VALIDATE."
+    },
+    {
+      "id": "giai-ngan-cap-nhat-theo-prototype-08-10",
+      "viec": "Giải ngân cập nhật theo tài liệu giao việc 08/10 (tmp/web/updated/giai-ngan-update-theo-prototype.md, ADR 0081)",
+      "trang_thai": "dang_lam",
+      "menu": "giai-ngan",
+      "bang_chung": "GW1: biểu đồ luỹ kế cong mượt (monotone-path.ts, không thêm thư viện), đường Thực hiện vẫn dừng ở tháng hiện tại (ADR 0081 #4); ModalDialog có initialFocusId — con trỏ vào 'Thêm hạng mục' và 'Hạng mục' khi mở; §3.2 khoảng trắng/sidebar trôi: bảng ẩn của biểu đồ mang lớp an-thi-giac ngay trên <table> (table bỏ qua height 1px) → chuyển lớp sang div bọc. ui-ux-reviewer PASS trên ảnh render scratchpad gn/cur-gw1-*.png. Test giai-ngan + ui 444/444.",
+      "no_confirm": [],
+      "tiep_theo": "CÒN: GW2 giao diện cờ nguy cơ (chờ C3 của phiên khác vào main để commit hợp đồng); thông báo nhắc tên (chờ service-comms của phiên Cấu hình); nạp Excel Thu - Chi (backend GB2 đang làm, web sau)."
     }
   ]
 }

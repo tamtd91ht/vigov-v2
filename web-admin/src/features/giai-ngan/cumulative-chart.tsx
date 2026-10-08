@@ -4,6 +4,7 @@ import { type KeyboardEvent, type RefObject, useEffect, useId, useRef, useState 
 
 import type { finance_curvePointOut } from "@/lib/api/schema.gen";
 
+import { monotoneXPath } from "./monotone-path";
 import { nhanTien } from "./nhan-du-an";
 
 /**
@@ -26,6 +27,11 @@ import { nhanTien } from "./nhan-du-an";
  * THE ACTUAL LINE STOPS AT A `null` MONTH: the server sends `null` for a month that has not begun, and
  * drawing it flat to December would read as a forecast nobody made (`disbursement_summary.go`). A gap
  * breaks the line rather than bridging it.
+ *
+ * BOTH LINES ARE MONOTONE CUBICS (ADR 0081 #4, prototype `CumulativeChart.tsx:101-117` `type="monotone"`):
+ * smooth like the prototype, yet never dipping below a figure already reached (`monotone-path.ts`).
+ * Each actual run is curved on its own, so a gap still breaks the line and it still stops at the
+ * current month — the curve smooths what was paid, it does not extend it.
  *
  * The SVG is `aria-hidden`; a visually hidden table under it carries the same figures, in full đồng,
  * for a screen reader.
@@ -80,7 +86,7 @@ export function axisMoneyLabel(dong: number): string {
 }
 
 /**
- * Runs of consecutive months that HAVE an actual figure — one polyline each. Exported for the test
+ * Runs of consecutive months that HAVE an actual figure — one path each. Exported for the test
  * that pins "the line stops at a null month".
  */
 export function actualSegments(
@@ -159,7 +165,7 @@ export function CumulativeChart({
   const plotH = height - PAD.top - PAD.bottom;
   const x = (i: number) => (points.length === 1 ? PAD.left + plotW / 2 : PAD.left + (i * plotW) / (points.length - 1));
   const y = (v: number) => PAD.top + plotH - (v / top) * plotH;
-  const plan = points.map((p, i) => `${x(i)},${y(p.planned_cumulative)}`).join(" ");
+  const plan = monotoneXPath(points.map((p, i) => ({ x: x(i), y: y(p.planned_cumulative) })));
   const segments = actualSegments(points);
   const last = points.length - 1;
   const endIndex =
@@ -239,11 +245,11 @@ export function CumulativeChart({
                 T{p.month}
               </text>
             ))}
-            <polyline points={plan} fill="none" className="stroke-ink-muted" strokeWidth={2} strokeDasharray="5 4" data-line="plan" />
+            <path d={plan} fill="none" className="stroke-ink-muted" strokeWidth={2} strokeDasharray="5 4" data-line="plan" />
             {segments.map((run) => (
-              <polyline
+              <path
                 key={`line-${run[0]!.index}`}
-                points={run.map((r) => `${x(r.index)},${y(r.value)}`).join(" ")}
+                d={monotoneXPath(run.map((r) => ({ x: x(r.index), y: y(r.value) })))}
                 fill="none"
                 className="stroke-brand"
                 strokeWidth={2.5}
@@ -360,25 +366,32 @@ export function CumulativeChart({
           Thực hiện
         </span>
       </figcaption>
-      <table className="an-thi-giac">
-        <caption>{caption}</caption>
-        <thead>
-          <tr>
-            <th scope="col">Tháng</th>
-            <th scope="col">Kế hoạch luỹ kế</th>
-            <th scope="col">Thực hiện luỹ kế</th>
-          </tr>
-        </thead>
-        <tbody>
-          {points.map((p) => (
-            <tr key={p.month}>
-              <th scope="row">Tháng {p.month}</th>
-              <td>{nhanTien(p.planned_cumulative)}</td>
-              <td>{p.disbursed_cumulative === null ? "Chưa đến tháng này" : nhanTien(p.disbursed_cumulative)}</td>
+      {/* The visually-hidden class sits on a WRAPPING DIV, never on the <table>: a table ignores
+          `height: 1px` and `overflow: hidden`, so the absolutely positioned table kept its full twelve
+          rows (~340px) and pushed the page's scroll height past the body — a blank band under the
+          `Biểu đồ` tab, and the sticky sidebar scrolling away once the page outgrew its grid (brief
+          §3.2, measured 08/10/2026: scrollHeight 1253 vs body 909). */}
+      <div className="an-thi-giac" data-chart-table="">
+        <table>
+          <caption>{caption}</caption>
+          <thead>
+            <tr>
+              <th scope="col">Tháng</th>
+              <th scope="col">Kế hoạch luỹ kế</th>
+              <th scope="col">Thực hiện luỹ kế</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {points.map((p) => (
+              <tr key={p.month}>
+                <th scope="row">Tháng {p.month}</th>
+                <td>{nhanTien(p.planned_cumulative)}</td>
+                <td>{p.disbursed_cumulative === null ? "Chưa đến tháng này" : nhanTien(p.disbursed_cumulative)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </figure>
   );
 }

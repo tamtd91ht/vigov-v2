@@ -305,9 +305,20 @@ describe("§4 cumulative chart", () => {
   it("the actual line STOPS at a null month: one run Jan–Sep, nine dots, no point after", () => {
     expect(actualSegments(MONTHLY).map((r) => r.length)).toEqual([9]);
     const el = mount(<CumulativeChart points={MONTHLY} caption="c" emptyText="trống" />);
-    expect(el.querySelectorAll('polyline[data-line="actual"]')).toHaveLength(1);
-    expect(el.querySelectorAll("circle[data-dot]")).toHaveLength(9);
-    expect(el.querySelectorAll('polyline[data-line="plan"]')).toHaveLength(1);
+    const actual = el.querySelectorAll('path[data-line="actual"]');
+    expect(actual).toHaveLength(1);
+    // ADR 0081 #4: curved (8 cubic segments for 9 months), and it ends ON September's dot, not later.
+    const d = actual[0]!.getAttribute("d")!;
+    expect(d.match(/C/g)).toHaveLength(8);
+    const dots = [...el.querySelectorAll("circle[data-dot]")];
+    expect(dots).toHaveLength(9);
+    const sep = dots[8]!;
+    const [endX, endY] = d.split(",").slice(-2).map(Number);
+    expect(endX).toBeCloseTo(Number(sep.getAttribute("cx")), 1);
+    expect(endY).toBeCloseTo(Number(sep.getAttribute("cy")), 1);
+    const plan = el.querySelectorAll('path[data-line="plan"]');
+    expect(plan).toHaveLength(1);
+    expect(plan[0]!.getAttribute("d")!.match(/C/g)).toHaveLength(11);
     // The hidden table says the future months are not reached — never "0 đ".
     const rows = [...el.querySelectorAll("table tbody tr")];
     expect(rows).toHaveLength(12);

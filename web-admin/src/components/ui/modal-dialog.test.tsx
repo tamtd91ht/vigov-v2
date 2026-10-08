@@ -66,6 +66,65 @@ describe("ModalDialog ✕", () => {
   });
 });
 
+describe("ModalDialog initialFocusId (brief §3.3 / §3.4: the cursor waits in the one field)", () => {
+  function open(props: Partial<Parameters<typeof ModalDialog>[0]>, field = <input id="f" />): void {
+    host = document.createElement("div");
+    document.body.append(host);
+    const r = createRoot(host);
+    root = r;
+    act(() =>
+      r.render(
+        <ModalDialog titleId="t" onDismiss={() => {}} {...props}>
+          <ModalDialogHeader titleId="t" title="Thêm hạng mục" />
+          {field}
+        </ModalDialog>,
+      ),
+    );
+  }
+
+  it("focuses the named control once the box is open", () => {
+    open({ initialFocusId: "f" });
+    expect(document.activeElement?.id).toBe("f");
+  });
+
+  it("absent → unchanged: no field is focused by the dialog", () => {
+    open({});
+    expect(document.activeElement?.id).not.toBe("f");
+  });
+
+  it("a disabled control is not forced — the default stands", () => {
+    open({ initialFocusId: "f" }, <input id="f" disabled />);
+    expect(document.activeElement?.id).not.toBe("f");
+  });
+
+  it("an id outside the box is never focused (it sits behind the backdrop)", () => {
+    const outside = document.createElement("input");
+    outside.id = "outside";
+    document.body.append(outside);
+    try {
+      open({ initialFocusId: "outside" });
+      expect(document.activeElement).not.toBe(outside);
+    } finally {
+      outside.remove();
+    }
+  });
+
+  it("closing still returns focus to the opener", () => {
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    opener.focus();
+    try {
+      open({ initialFocusId: "f" });
+      expect(document.activeElement?.id).toBe("f");
+      act(() => root?.unmount());
+      root = null;
+      expect(document.activeElement).toBe(opener);
+    } finally {
+      opener.remove();
+    }
+  });
+});
+
 describe("ModalDialogHeader", () => {
   it("the title takes the opening focus but draws no ring (programmatic target, not a control)", () => {
     const out = html();

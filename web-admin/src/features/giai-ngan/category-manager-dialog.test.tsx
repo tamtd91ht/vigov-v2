@@ -211,6 +211,12 @@ describe("☰ Hạng mục — spec 03 presentation (ADR 0068 §5 pins)", () => 
     expect(buttonByText(dialog, "Đóng")).toBeUndefined();
     expect(row(el, "von-tra-no").textContent).not.toContain("von-tra-no");
   });
+
+  it("opens with the cursor in `Thêm hạng mục` (brief §3.3, prototype autoFocus)", async () => {
+    server();
+    await openDialog();
+    expect(document.activeElement?.id).toBe("ten-hang-muc-moi");
+  });
 });
 
 describe("☰ Hạng mục — writes", () => {

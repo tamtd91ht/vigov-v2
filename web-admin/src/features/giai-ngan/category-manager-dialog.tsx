@@ -170,7 +170,13 @@ export function CategoryManagerDialog({ onClose, onChanged }: { onClose: () => v
   }
 
   return (
-    <ModalDialog titleId={TITLE_ID} className="max-w-[44rem]" onDismiss={() => !busy && onClose()}>
+    <ModalDialog
+      titleId={TITLE_ID}
+      className="max-w-[44rem]"
+      // The prototype opens with the cursor in `Thêm hạng mục` (brief §3.3).
+      initialFocusId="ten-hang-muc-moi"
+      onDismiss={() => !busy && onClose()}
+    >
       <ModalDialogHeader
         titleId={TITLE_ID}
         title="Hạng mục kế hoạch vốn"

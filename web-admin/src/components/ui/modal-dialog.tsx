@@ -41,6 +41,7 @@ export function ModalDialog({
   closeLabel = "Đóng",
   showClose = true,
   closeDisabled = false,
+  initialFocusId,
   className,
   children,
 }: {
@@ -55,10 +56,20 @@ export function ModalDialog({
   showClose?: boolean;
   /** Greys the ✕ out, for a dialog whose `onDismiss` already refuses while a send is in flight. */
   closeDisabled?: boolean;
+  /**
+   * Id of a control INSIDE the box that takes the opening focus instead of the title — for a dialog
+   * whose whole point is typing into one field (the prototype's `autoFocus` on `Thêm hạng mục`).
+   * React's own `autoFocus` cannot do it here: it fires on mount, BEFORE this effect's `showModal()`,
+   * which then moves focus to the box's first focusable element (the title). Absent, not found
+   * inside the box, or disabled → the title keeps it, as for every other dialog.
+   */
+  initialFocusId?: string;
   className?: string;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  // Read once, at opening: the effect below runs on mount only, as the opening itself does.
+  const initialFocus = useRef(initialFocusId);
 
   useEffect(() => {
     const el = ref.current;
@@ -68,6 +79,12 @@ export function ModalDialog({
       if (!el.open) el.showModal();
     } else {
       el.setAttribute("open", "");
+    }
+    const id = initialFocus.current;
+    if (id !== undefined) {
+      const target = document.getElementById(id);
+      // Only inside THIS box: an id elsewhere on the page sits behind the inert backdrop.
+      if (target !== null && el.contains(target) && !target.matches(":disabled")) target.focus();
     }
     return () => {
       if (opener !== null && opener.isConnected) opener.focus();
@@ -129,7 +146,8 @@ export function ModalDialog({
  *
  * THE TITLE TAKES THE OPENING FOCUS (`tabIndex={-1}`, first focusable element in the box, so
  * `showModal()` lands there): a screen reader starts by reading what the box is, and a confirm box never
- * opens with its destructive button already focused. It is a programmatic focus target, not a
+ * opens with its destructive button already focused (a dialog may name one field instead —
+ * `ModalDialog`'s `initialFocusId`). It is a programmatic focus target, not a
  * control, so it draws no ring (`outline-none`): Chrome matches `:focus-visible` on it after
  * `showModal()`, and the global ring (`globals.css`, `:focus-visible`) painted a blue box round the
  * title of every dialog (ADR 0068 lần 6 review, T1-15). Real controls keep that ring.

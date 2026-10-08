@@ -131,6 +131,16 @@ describe("G4a — tooltip with the exact amounts of one month", () => {
     expect(el.querySelector("table caption")?.textContent).toBe("Luỹ kế của dự án");
     expect(el.querySelectorAll("table tbody tr")).toHaveLength(3);
   });
+
+  it("the hidden class wraps the table in a div, never sits on the <table> (brief §3.2 blank band)", () => {
+    // A table ignores `height: 1px` / `overflow: hidden`, so a hidden TABLE kept its full height and
+    // stretched the page under the `Biểu đồ` tab. jsdom has no layout: pin the structure instead.
+    const el = mount(<CumulativeChart points={POINTS} caption="c" emptyText="trống" />);
+    const table = el.querySelector("table")!;
+    expect(table.classList.contains("an-thi-giac")).toBe(false);
+    expect(table.parentElement!.tagName).toBe("DIV");
+    expect(table.parentElement!.classList.contains("an-thi-giac")).toBe(true);
+  });
 });
 
 describe("spec 02 §4 look (ADR 0068 lần 6 #11: SVG kept, restyled)", () => {
@@ -151,10 +161,10 @@ describe("spec 02 §4 look (ADR 0068 lần 6 #11: SVG kept, restyled)", () => {
     const grid = [...el.querySelectorAll("line[data-grid]")];
     expect(grid.length).toBeGreaterThan(0);
     expect(grid.every((l) => l.getAttribute("stroke-dasharray") === "3 3")).toBe(true);
-    const plan = el.querySelector("polyline[data-line=plan]")!;
+    const plan = el.querySelector("path[data-line=plan]")!;
     expect(plan.getAttribute("stroke-dasharray")).toBe("5 4");
     expect(plan.getAttribute("stroke-width")).toBe("2");
-    expect(el.querySelector("polyline[data-line=actual]")!.getAttribute("stroke-width")).toBe("2.5");
+    expect(el.querySelector("path[data-line=actual]")!.getAttribute("stroke-width")).toBe("2.5");
     expect([...el.querySelectorAll("circle[data-dot]")].every((c) => c.getAttribute("r") === "2.5")).toBe(true);
   });
 });

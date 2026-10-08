@@ -946,6 +946,9 @@ function AddProjectDialog({
       titleId={ADD_TITLE_ID}
       size="lg"
       className="max-h-[88vh] max-w-[64rem]"
+      // The prototype opens with the focus on `Hạng mục` (brief §3.4). Disabled (empty catalogue) →
+      // the title keeps it, and the notice above the form is what is read first.
+      initialFocusId="hang-muc-du-an"
       // Closing while the POST is in flight would hide whether a project code was issued.
       onDismiss={() => {
         if (!dangGui) onClose();
