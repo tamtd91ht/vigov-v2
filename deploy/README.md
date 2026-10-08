@@ -888,3 +888,49 @@ việc `dat-secret-mini-app`.
 3. Dựng lại và đẩy Mini App; đóng lại ảnh các dịch vụ Go bị ảnh hưởng.
 4. Nhập lại Ingress vào Rancher từ `kubectl kustomize deploy/overlays/<mt>`; DNS, chứng thư TLS và danh
    sách tên miền cho phép của App ID trên console Zalo là việc **ngoài kho**.
+
+### 13.6 Pod `vihat-miniapp` — máy chủ của app chung, kho riêng
+
+**Trạng thái 08/10/2026:** cụm **chưa có** Deployment này. Người dùng báo không thấy pod nào tên
+`vihat-miniapp` trong Rancher. Trong khi đó NetworkPolicy của kho này đã chừa chỗ cho nó (quy tắc 8 và 9
+của `base/mang/netpol.yaml`). Thiếu pod này thì **mọi tuyến dưới đây của app chung (App ViHAT) đều hỏng**.
+Pod xanh hay không không phải là điều kiện; điều kiện là có pod.
+
+Đây là máy chủ của **App ViHAT** (Mini App dùng chung). Mã nằm ở kho riêng `vihat-miniapp`, đặt cạnh
+`vigov-v2` (xem CLAUDE.md). Kho này **không có** manifest hay job nào của nó. Bảng biến, Secret, ConfigMap
+và probe là của kho kia: **`../vihat-miniapp/deploy/README.md`**. Đọc ở đó, không chép sang đây.
+
+| Điều | Giá trị | Vì sao / nguồn |
+|---|---|---|
+| Ảnh | `harbor.omicrm.services/ci/vihat-miniapp:<thẻ>` | Từ 08/10/2026 job của `../vihat-miniapp/Jenkinsfile` **đóng ảnh rồi đặt lên cụm** như các job `vigov-svc-*` (`set image` + `rollout status`, đỏ thì `rollout undo`), trên Deployment tên `vihat-miniapp` ở `vigov-prod`. Deployment mang tên khác thì job dừng ở stage đầu và chỉ cách sửa |
+| Manifest | `../vihat-miniapp/deploy/{deployment,service,cronjob-don-nhat-ky}.yaml` | Điền `<dien-vao-namespace>` thành `vigov-prod`. Secret `vihat-miniapp-bi-mat` và ConfigMap `vihat-miniapp-cau-hinh` phải có **trước** Deployment |
+| Namespace | **`vigov-prod`**, cùng namespace với ViGov | Cầu phiên tới identity đi không TLS, nên chỉ chấp nhận được khi hai bên cùng cụm, cùng namespace (ADR 0045) |
+| Nhãn pod | **`app.kubernetes.io/name: vihat-miniapp`**, đúng chữ | NetworkPolicy chọn pod theo nhãn này. Sai nhãn thì `deny-all` chặn cả vào lẫn ra: pod xanh nhưng không ai gọi tới được |
+| Cổng | 8080 | Quy tắc 9 chỉ mở 8080 từ ingress controller |
+| Ra ngoài | identity **9091** (cầu phiên) · 443 tới Zalo | Quy tắc 8 và 9. Khoá cầu: `VIGOV_CITIZEN_SESSION_BRIDGE_KEY` bên kia phải nằm trong `CITIZEN_SESSION_BRIDGE_KEYS` của `identity-secrets` (`deploy/cau-hinh/README.md`) |
+
+**Ingress — host là `VIGOV_API_HOST` của Mini App, không có trong `deploy/hosts.yaml`.** App chung gắn
+cứng host này lúc dựng (`citizen-app/src/api/dia-chi.ts`). Giá trị nằm ở credential Jenkins
+`citizen-app-vigov-api-host` (`citizen-app/Jenkinsfile`), hoặc trong `citizen-app/.env.local` khi đẩy bản
+từ máy local. Ingress phải trỏ **đúng host đó** tới Service `vihat-miniapp` cổng 8080, có TLS. Các
+đường cần mở:
+
+| Đường | Ai gọi | Quên thì |
+|---|---|---|
+| `/api/v1/sessions` | App chung: đăng nhập, xác nhận xã, mở lại phiên kèm số điện thoại | Không gửi được phản ánh qua app chung |
+| `/api/v1/location` | Nút "Lấy vị trí hiện tại", ở cả hai app | Không lấy được vị trí |
+| `/api/v1/requests` | Tư vấn, gọi lại, chat, ưu đãi SMS | Các nút ấy chết |
+| `/api/v1/client-errors` | Mini App báo một lỗi có mã của Zalo SDK (08/10/2026) | Mất log chẩn đoán; người dân không thấy gì khác |
+| `/webhooks/zalo` | Hạ tầng Zalo | Zalo **tắt webhook** sau vài lần 404, không báo ai |
+
+Gộp lại là `/api/v1/` cộng `/webhooks/zalo`. CORS do chính dịch vụ trả, theo `CORS_ALLOWED_ORIGINS`
+trong ConfigMap của nó. Nếu ingress-nginx cũng bật CORS thì xem cái bẫy ở 13.2.
+
+**Đọc log trên Rancher:** vào pod `vihat-miniapp`, tìm **`[ZALO_SDK_ERROR]`**. Mỗi dòng mang
+`capability`, `code`, `sdk_message`, `app_id`, `host`; không có IP, không có dữ liệu cá nhân. Ba message
+có thể gặp khi `getAccessToken` trả -1401, và việc phải làm với từng message:
+`../vihat-miniapp/README.md` §`POST /api/v1/client-errors`.
+
+**Giới hạn đã biết:** pod đọc IP từ `RemoteAddr`, chưa khai proxy tin cậy (NỢ trong README của kho kia).
+Vì vậy đứng sau ingress thì mọi người dân chung **một xô** giới hạn trong mỗi pod. Chủ dự án chấp nhận
+tạm ngày 08/10/2026.
