@@ -49,8 +49,9 @@ import (
 // citizenLetterItemOut is one row of the register list.
 //
 // THERE IS NO `overdue` FIELD (rule 10, invariant 3 — vanBanDenRa says why a boolean beside the
-// deadline is a second copy of one fact). The two due instants are the facts, each as a clerk set it
-// (PATCH …/deadline); null is "Không đặt". The one that applies is the CURRENT phase's —
+// deadline is a second copy of one fact). The two due instants are the facts, each as fixed at its act
+// — computed by identity from the commune's rule at booking / `thu-ly` (ADR 0085 B), or set by a clerk
+// later (PATCH …/deadline); null is "Không đặt". The one that applies is the CURRENT phase's —
 // `processing_due_at` before `thu-ly`, `resolution_due_at` from it (domain.CitizenLetter.ActiveDueAt).
 //
 // `days_open` IS NOT A DEADLINE: it counts days already spent (C16/C17), so it is computed on read.
@@ -910,6 +911,15 @@ func (h *Handler) letterError(w http.ResponseWriter, r *http.Request, op string,
 	case errors.Is(err, app.ErrLetterDirectoryUnavailable):
 		httpx.WriteError(w, http.StatusServiceUnavailable, "directory_unavailable",
 			"Chưa kiểm được bộ phận / cán bộ với danh bạ của xã. Vui lòng thử lại sau ít phút.", "")
+	case errors.Is(err, app.ErrLetterDeadlineUnusable):
+		// 409 AND NOT 503: retrying cannot help — the commune's rule must be fixed. Nothing was written
+		// (no number taken, no status moved); a NULL deadline here would count the letter on time.
+		httpx.WriteError(w, http.StatusConflict, "letter_deadline_misconfigured",
+			"Quy tắc thời hạn đơn thư của xã cho loại đơn này đang không dùng được, nên chưa thực hiện được. "+
+				"Hãy báo quản trị xã kiểm tra lại cấu hình thời hạn đơn thư, rồi thực hiện lại.", "")
+	case errors.Is(err, app.ErrLetterDeadlineUnavailable):
+		httpx.WriteError(w, http.StatusServiceUnavailable, "deadline_unavailable",
+			"Chưa tính được hạn của đơn thư theo cấu hình của xã, nên chưa thực hiện được. Vui lòng thử lại sau ít phút.", "")
 	default:
 		h.d.Log.Error("đơn thư: "+op+" lỗi hệ thống",
 			"xa", string(tenant.MustFrom(r.Context())), "err", err)

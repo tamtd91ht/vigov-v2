@@ -386,10 +386,12 @@ func (s *CitizenLetterStore) ForUpdate(ctx context.Context, tx *store.ScopedTx, 
 // a fact of the booking act (domain.LetterSource).
 const insertCitizenLetter = `INSERT INTO citizen_letter
 	(tenant_id, id, number, year, received_date, letter_type, sender_name, sender_phone, sender_address,
-	 summary, status, holding_unit_id, related_letter_id, created_by_code, source)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'moi-vao-so', $11, $12, $13, $14)`
+	 summary, status, holding_unit_id, related_letter_id, created_by_code, source, processing_due_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'moi-vao-so', $11, $12, $13, $14, $15)`
 
 // Insert books one letter. `Number` comes from DaySoStore.CapSo in the same transaction.
+// `ProcessingDueAt` is the instant identity computed for this booking (ADR 0085 B) or zero for "Không
+// đặt hạn" — written as given, no arithmetic here (rule 10, invariant 2).
 func (s *CitizenLetterStore) Insert(ctx context.Context, tx *store.ScopedTx, l domain.CitizenLetter) error {
 	// Refused here as the last wall before 0008's CHECK: an empty source would otherwise be a
 	// constraint error with the commune's partition name in it, not a sentence.
@@ -400,7 +402,7 @@ func (s *CitizenLetterStore) Insert(ctx context.Context, tx *store.ScopedTx, l d
 		l.ID, l.Number, l.Year, l.ReceivedDate, string(l.Type),
 		rongThanhNil(l.SenderName), rongThanhNil(l.SenderPhone), rongThanhNil(l.SenderAddress),
 		l.Summary, rongThanhNil(l.HoldingUnitID), rongThanhNil(l.RelatedLetterID), l.CreatedByCode,
-		string(l.Source))
+		string(l.Source), timeOrNil(l.ProcessingDueAt))
 	if err != nil {
 		return fmt.Errorf("citizen_letter: chèn: %w", err)
 	}
@@ -415,13 +417,18 @@ func (s *CitizenLetterStore) UpdateHolder(ctx context.Context, tx *store.ScopedT
 	return s.exec(ctx, tx, "chuyển đơn", stmt, id, rongThanhNil(unitID), rongThanhNil(assigneeCode), actorCode)
 }
 
-// UpdateStatus writes the status and the two instants 0006 binds to it in ONE statement.
+// UpdateStatus writes the status, the two instants 0006 binds to it and the resolution deadline in ONE
+// statement. The deadline is the one fixed at `thu-ly` (ADR 0085 B) — on every other move it is the
+// value the caller read under the same row lock, so it is rewritten unchanged. One statement because
+// 0006's CHECK binds `resolution_due_at` to `accepted_at`: two UPDATEs would pass through a row the
+// CHECK refuses, or need an order nobody remembers.
 func (s *CitizenLetterStore) UpdateStatus(ctx context.Context, tx *store.ScopedTx, l domain.CitizenLetter, actorCode string) error {
 	const stmt = `UPDATE citizen_letter
-		SET status = $3, accepted_at = $4, resolved_at = $5, updated_by_code = $6, updated_at = now()
+		SET status = $3, accepted_at = $4, resolved_at = $5, resolution_due_at = $6, updated_by_code = $7,
+		    updated_at = now()
 		WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
 	return s.exec(ctx, tx, "đổi trạng thái", stmt, l.ID, string(l.Status),
-		timeOrNil(l.AcceptedAt), timeOrNil(l.ResolvedAt), actorCode)
+		timeOrNil(l.AcceptedAt), timeOrNil(l.ResolvedAt), timeOrNil(l.ResolutionDueAt), actorCode)
 }
 
 // UpdateResult writes C10's five result fields.

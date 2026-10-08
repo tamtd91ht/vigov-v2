@@ -17,6 +17,7 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -65,6 +66,7 @@ type citizenLettersFake struct {
 	lastDue    *time.Time
 	lastBook   app.BookLetterRequest
 	lastResult app.LetterResultRequest
+	bookErr    error // when set, Book refuses with it — the edge's mapping is what is under test
 }
 
 func citizenLettersSample() *citizenLettersFake {
@@ -107,6 +109,9 @@ func (f *citizenLettersFake) Book(ctx context.Context, req app.BookLetterRequest
 	f.note(ctx, c)
 	f.books++
 	f.lastBook = req
+	if f.bookErr != nil {
+		return domain.CitizenLetter{}, f.bookErr
+	}
 	return domain.CitizenLetter{ID: "dt-moi", Number: 4, Year: 2026, ReceivedDate: req.ReceivedDate, Type: req.Type,
 		Source:     req.Source,
 		SenderName: req.SenderName, SenderPhone: req.SenderPhone, SenderAddress: req.SenderAddress,
@@ -479,6 +484,28 @@ func TestCitizenLetter_BookingRefusesNumberStatusAndDeadline(t *testing.T) {
 		doiMa(t, m.goiThan(t, http.MethodPost, hostA, pathLetters, canBoCua(xaA), body), http.StatusBadRequest)
 		if m.letters.books != 0 {
 			t.Fatalf("%s được nhận thay vì bị từ chối", extra)
+		}
+	}
+}
+
+// ADR 0085 B3: a deadline identity could not give refuses the booking — 503 for an outage (retry), 409
+// for a rule the commune must fix — and the client never sees the chain (it carries the commune id).
+func TestCitizenLetter_BookingDeadlineFailuresMapToRefusals(t *testing.T) {
+	for _, c := range []struct {
+		err    error
+		status int
+		code   string
+	}{
+		{fmt.Errorf("don_thu: x: %w: identity sập", app.ErrLetterDeadlineUnavailable), http.StatusServiceUnavailable, "deadline_unavailable"},
+		{fmt.Errorf("don_thu: x: %w: quy tắc hỏng", app.ErrLetterDeadlineUnusable), http.StatusConflict, "letter_deadline_misconfigured"},
+	} {
+		m := dungMayChuCoIdem(t)
+		m.capQuyen(xaA, "petition.create")
+		m.letters.bookErr = c.err
+		w := m.goiThan(t, http.MethodPost, hostA, pathLetters, canBoCua(xaA), bookBody)
+		doiMa(t, w, c.status)
+		if e := loiTra(t, w); e.Code != c.code || strings.Contains(e.Message, "don_thu") {
+			t.Fatalf("lỗi trả về: %+v, muốn mã %s và câu tiếng Việt không lộ chuỗi lỗi", e, c.code)
 		}
 	}
 }

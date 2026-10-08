@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/vihat/vigov/core/audit"
+	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
@@ -121,6 +122,31 @@ type directoryFake struct {
 	myUnits      []string
 	err          error
 	askedCode    string
+
+	// ResolveCitizenLetterDeadline: dueAt nil and dueErr nil = "the commune has no rule" — the
+	// ordinary answer while no commune has configured one (ADR 0085 câu 4: nothing seeded).
+	dueAt       *time.Time
+	dueErr      error
+	deadlineAsk []deadlineAsk
+}
+
+type deadlineAsk struct {
+	letterType identityv1.CitizenLetterType
+	kind       identityv1.CitizenLetterDeadlineKind
+	countFrom  time.Time
+}
+
+func (d *directoryFake) ResolveCitizenLetterDeadline(_ context.Context, letterType identityv1.CitizenLetterType,
+	kind identityv1.CitizenLetterDeadlineKind, countFrom time.Time) (*time.Time, bool, error) {
+	d.deadlineAsk = append(d.deadlineAsk, deadlineAsk{letterType, kind, countFrom})
+	if d.dueErr != nil {
+		return nil, false, d.dueErr
+	}
+	if d.dueAt == nil {
+		return nil, false, nil
+	}
+	t := *d.dueAt
+	return &t, true, nil
 }
 
 func (d *directoryFake) LiveOrgUnits(_ context.Context, ids []string) (map[string]struct{}, error) {
@@ -278,7 +304,7 @@ func TestBookTakesTheCommunesLetterSeriesNumberForTheYearOfTheAct(t *testing.T) 
 		t.Fatalf("dòng lưu chưa được cắt khoảng trắng hoặc sai người tạo: %+v", got)
 	}
 	if !got.ProcessingDueAt.IsZero() || !got.ResolutionDueAt.IsZero() || got.Status != domain.LetterStatusNew {
-		t.Fatal("đơn mới phải `moi-vao-so` và CHƯA có hạn — hạn do cán bộ đặt sau, bằng SetDeadline (ADR 0079 lô 5 Q18)")
+		t.Fatal("đơn mới phải `moi-vao-so`; xã chưa cấu hình hạn cho loại đơn → không hạn (ADR 0085 B3)")
 	}
 }
 

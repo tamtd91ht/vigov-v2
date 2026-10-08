@@ -28,6 +28,8 @@ import (
 	"time"
 
 	"github.com/vihat/vigov/core/audit"
+	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
+	"github.com/vihat/vigov/core/identityclient"
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
@@ -66,11 +68,26 @@ type LetterDirectory interface {
 	// vi-name-ok: mirrors the existing core/identityclient.Client method so *Client satisfies this interface
 	CanBoGiaoViecDuoc(ctx context.Context, ma []string) (map[string]struct{}, error)
 	StaffOrgUnits(ctx context.Context, staffCode string) ([]string, error)
+	// ResolveCitizenLetterDeadline is ADR 0085 B: (due, true, nil) a deadline; (nil, false, nil) the
+	// commune has no rule — "Không đặt hạn"; any error REFUSES the act (letterDeadline below).
+	ResolveCitizenLetterDeadline(ctx context.Context, letterType identityv1.CitizenLetterType,
+		kind identityv1.CitizenLetterDeadlineKind, countFrom time.Time) (*time.Time, bool, error)
 }
 
 // ErrLetterDirectoryUnavailable: identity could not answer, so the check did not happen and nothing
 // was written. The edge answers 503 (retryable). The cause rides in the wrapped chain.
 var ErrLetterDirectoryUnavailable = errors.New("citizen_letter: không kiểm được bộ phận / cán bộ với identity")
+
+// ErrLetterDeadlineUnavailable: identity could not say when the letter falls due, so the act (booking,
+// or the move to `thu-ly`) was refused and nothing was written — no number taken, no status moved. The
+// edge answers 503 (retryable). NEVER turned into "no deadline": a letter without a deadline counts as
+// ON TIME in the report (ADR 0084 #4), so storing NULL on an outage would inflate the figure.
+var ErrLetterDeadlineUnavailable = errors.New("citizen_letter: chưa hỏi được hạn đơn thư với identity")
+
+// ErrLetterDeadlineUnusable: the commune HAS a deadline rule for this letter type but it cannot be used
+// (identityclient.ErrCitizenLetterDeadlineUnusable). A configuration fault, not an outage: the edge
+// answers 409 with a sentence sending the clerk to the configuration, and nothing was written.
+var ErrLetterDeadlineUnusable = errors.New("citizen_letter: quy tắc hạn đơn thư của xã không dùng được")
 
 // ErrLetterScopeInvalid — a `scope` outside all/mine/related. The edge validates first; this is the
 // second wall.
@@ -111,8 +128,9 @@ type LetterCaller struct {
 }
 
 // BookLetterRequest is one letter as it arrives. NO number, year, status or due field: the number is
-// the counter's, the year is the year of the act, the status a literal, and the deadline is set by a
-// clerk afterwards, by its own act (SetDeadline).
+// the counter's, the year is the year of the act, the status a literal, and the processing deadline
+// is identity's answer for the commune's rule of this letter type (ADR 0084 #3, ADR 0085 B) — never
+// the client's. A clerk may change it afterwards, by its own act (SetDeadline).
 //
 // Source is NOT the client's: each booking PATH states its own (the booking route `nhap-tay`, the
 // Excel import `nhap-excel`). Required — an empty one is refused, never defaulted.
@@ -200,6 +218,10 @@ func (uc *CitizenLetters) clock() time.Time {
 //
 // `year` IS THE YEAR OF THE BOOKING ACT in Asia/Ho_Chi_Minh, not of `received_date` (C-list; 0006:32-36):
 // a letter received 30/12 and booked 02/01 takes the new year's series.
+//
+// THE PROCESSING DEADLINE IS ASKED BEFORE THE TRANSACTION (ADR 0085 B): counted from 00:00
+// Asia/Ho_Chi_Minh of `received_date`, fixed here once and stored (rule 10, invariant 2). Not
+// configured → NULL, "Không đặt hạn". Any error → the booking is refused before a number is taken.
 func (uc *CitizenLetters) Book(ctx context.Context, req BookLetterRequest, caller LetterCaller) (domain.CitizenLetter, error) {
 	now := uc.clock()
 	l, err := normaliseBooking(req, now)
@@ -213,6 +235,14 @@ func (uc *CitizenLetters) Book(ctx context.Context, req BookLetterRequest, calle
 		if err := uc.checkUnit(ctx, l.HoldingUnitID); err != nil {
 			return domain.CitizenLetter{}, err
 		}
+	}
+	// The received DATE carries no zone of its own (a DATE column, parsed as a calendar day): its
+	// Y-M-D is the Vietnamese calendar day, so midnight is built in Vietnam's zone, never converted.
+	y, m, d := l.ReceivedDate.Date()
+	countFrom := time.Date(y, m, d, 0, 0, 0, 0, domain.AutomationZone)
+	if l.ProcessingDueAt, err = uc.letterDeadline(ctx, l.Type,
+		identityv1.CitizenLetterDeadlineKind_CITIZEN_LETTER_DEADLINE_KIND_PROCESSING, countFrom); err != nil {
+		return domain.CitizenLetter{}, wrapLetter(ctx, "tính hạn xử lý đơn thư", err)
 	}
 	if l.ID, err = uc.newID(); err != nil {
 		return domain.CitizenLetter{}, fmt.Errorf("citizen_letter: sinh mã: %w", err)
@@ -398,10 +428,16 @@ func (uc *CitizenLetters) Move(ctx context.Context, id string, req MoveLetterReq
 	if err := requireActor(caller.Actor); err != nil {
 		return domain.CitizenLetter{}, err
 	}
-	now := uc.clock()
+	// Truncated to the database's precision: `accepted_at` is the count origin of the resolution
+	// deadline, and the instant identity counts from must be the instant stored (ADR 0085 B2).
+	now := uc.clock().Truncate(time.Microsecond)
 	logID, err := uc.newID()
 	if err != nil {
 		return domain.CitizenLetter{}, fmt.Errorf("citizen_letter: sinh mã nhật ký: %w", err)
+	}
+	admission, err := uc.prepareAdmission(ctx, id, req.Status, caller, now)
+	if err != nil {
+		return domain.CitizenLetter{}, wrapLetter(ctx, "đổi trạng thái đơn thư", err)
 	}
 
 	var after domain.CitizenLetter
@@ -423,6 +459,14 @@ func (uc *CitizenLetters) Move(ctx context.Context, id string, req MoveLetterReq
 		after.Status, after.UpdatedAt = req.Status, now
 		if req.Status == domain.LetterStatusAdmitted {
 			after.AcceptedAt = now
+			if before.Type.HasResolutionDeadline() {
+				// The type is fixed at booking and no UPDATE names it; checked anyway, because a
+				// deadline asked for one type and stored on another is a commitment nobody made.
+				if !admission.asked || admission.letterType != before.Type {
+					return fmt.Errorf("citizen_letter: loại đơn đổi giữa lúc hỏi hạn và lúc thụ lý")
+				}
+				after.ResolutionDueAt = admission.resolutionDue
+			}
 		}
 		if req.Status.EndsResolution() {
 			after.ResolvedAt, after.ClosedAt = now, now
@@ -438,9 +482,17 @@ func (uc *CitizenLetters) Move(ctx context.Context, id string, req MoveLetterReq
 		}); err != nil {
 			return err
 		}
+		beforeView := map[string]any{"trang_thai": string(before.Status)}
+		afterView := map[string]any{"trang_thai": string(req.Status)}
+		if req.Status == domain.LetterStatusAdmitted {
+			// The resolution deadline fixed at this act ("" = none: a feedback letter / request, or a
+			// commune with no rule). Recorded in full, as SetDeadline records a deadline.
+			beforeView["han_giai_quyet"] = instantText(before.ResolutionDueAt)
+			afterView["han_giai_quyet"] = instantText(after.ResolutionDueAt)
+		}
 		return writeLetterAudit(ctx, tx, caller.Actor, ActionMoveCitizenLetter, before, map[string]any{
-			"truoc":      map[string]any{"trang_thai": string(before.Status)},
-			"sau":        map[string]any{"trang_thai": string(req.Status)},
+			"truoc":      beforeView,
+			"sau":        afterView,
 			"co_ghi_chu": note != "",
 		})
 	})
@@ -448,6 +500,96 @@ func (uc *CitizenLetters) Move(ctx context.Context, id string, req MoveLetterReq
 		return domain.CitizenLetter{}, wrapLetter(ctx, "đổi trạng thái đơn thư", err)
 	}
 	return after, nil
+}
+
+// admissionDeadline is what prepareAdmission learned before Move's transaction.
+type admissionDeadline struct {
+	asked         bool
+	letterType    domain.LetterType
+	resolutionDue time.Time // zero = the commune has no rule ("Không đặt hạn")
+}
+
+// prepareAdmission asks identity for the RESOLUTION deadline of a complaint / denunciation moving to
+// `thu-ly`, counted from `acceptedAt` (ADR 0085 B2) — BEFORE the transaction, so no network round trip
+// holds the row lock. The letter's type is only known from the row, so it is read first in a short
+// read transaction; the who-may-act and C3 checks run on that read too, so a refused move answers with
+// its own sentence instead of a 503 when identity is down. Move re-checks all of it under the lock.
+// Any other target status, or a feedback letter / request, asks nothing.
+func (uc *CitizenLetters) prepareAdmission(ctx context.Context, id string, to domain.LetterStatus,
+	caller LetterCaller, acceptedAt time.Time) (admissionDeadline, error) {
+	if to != domain.LetterStatusAdmitted {
+		return admissionDeadline{}, nil
+	}
+	var cur domain.CitizenLetter
+	if err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		var err error
+		cur, err = uc.repo.ByID(ctx, tx, id)
+		return err
+	}); err != nil {
+		return admissionDeadline{}, err
+	}
+	if err := mayWorkOn(cur, caller); err != nil {
+		return admissionDeadline{}, err
+	}
+	if err := domain.CheckLetterTransition(cur.Status, to); err != nil {
+		return admissionDeadline{}, err
+	}
+	if !cur.Type.HasResolutionDeadline() {
+		return admissionDeadline{}, nil
+	}
+	due, err := uc.letterDeadline(ctx, cur.Type,
+		identityv1.CitizenLetterDeadlineKind_CITIZEN_LETTER_DEADLINE_KIND_RESOLUTION, acceptedAt)
+	if err != nil {
+		return admissionDeadline{}, err
+	}
+	return admissionDeadline{asked: true, letterType: cur.Type, resolutionDue: due}, nil
+}
+
+// letterDeadline asks identity ONE deadline of a letter of this commune (ADR 0085 B). Zero = the
+// commune has no rule for this type and kind ("Không đặt hạn", B3). EVERY error refuses the act —
+// never zero on an error, because a letter without a deadline counts as on time (ADR 0084 #4):
+//
+//	identityclient.ErrCitizenLetterDeadlineUnusable   → ErrLetterDeadlineUnusable   (409, fix the rule)
+//	anything else (ErrIdentityUnavailable included)   → ErrLetterDeadlineUnavailable (503, retry)
+func (uc *CitizenLetters) letterDeadline(ctx context.Context, t domain.LetterType,
+	kind identityv1.CitizenLetterDeadlineKind, countFrom time.Time) (time.Time, error) {
+	wire, err := letterTypeOnWire(t)
+	if err != nil {
+		return time.Time{}, err
+	}
+	due, configured, err := uc.dir.ResolveCitizenLetterDeadline(ctx, wire, kind, countFrom)
+	switch {
+	case errors.Is(err, identityclient.ErrCitizenLetterDeadlineUnusable):
+		return time.Time{}, fmt.Errorf("%w: %w", ErrLetterDeadlineUnusable, err)
+	case err != nil:
+		return time.Time{}, fmt.Errorf("%w: %w", ErrLetterDeadlineUnavailable, err)
+	case !configured:
+		if due != nil {
+			// Outside the client's contract: refused rather than guessing which half is true.
+			return time.Time{}, fmt.Errorf("%w: identity trả hạn kèm 'chưa cấu hình'", ErrLetterDeadlineUnavailable)
+		}
+		return time.Time{}, nil
+	case due == nil || due.IsZero():
+		// A zero deadline would read as "Không đặt hạn" — the very confusion B3 exists to prevent.
+		return time.Time{}, fmt.Errorf("%w: identity trả 'đã cấu hình' mà không có hạn", ErrLetterDeadlineUnavailable)
+	}
+	return due.UTC(), nil
+}
+
+// letterTypeOnWire maps the register's letter type onto identity.proto's enum. An unknown type is
+// refused, never sent as UNSPECIFIED.
+func letterTypeOnWire(t domain.LetterType) (identityv1.CitizenLetterType, error) {
+	switch t {
+	case domain.LetterTypeFeedback:
+		return identityv1.CitizenLetterType_CITIZEN_LETTER_TYPE_KIEN_NGHI_PHAN_ANH, nil
+	case domain.LetterTypeComplaint:
+		return identityv1.CitizenLetterType_CITIZEN_LETTER_TYPE_KHIEU_NAI, nil
+	case domain.LetterTypeDenunciation:
+		return identityv1.CitizenLetterType_CITIZEN_LETTER_TYPE_TO_CAO, nil
+	case domain.LetterTypeRequest:
+		return identityv1.CitizenLetterType_CITIZEN_LETTER_TYPE_DE_NGHI, nil
+	}
+	return identityv1.CitizenLetterType_CITIZEN_LETTER_TYPE_UNSPECIFIED, domain.ErrLetterTypeInvalid
 }
 
 // --- result -----------------------------------------------------------------------------------------
@@ -977,6 +1119,9 @@ func bookingSummary(l domain.CitizenLetter) map[string]any {
 		"don_lien_quan": l.RelatedLetterID,
 		"bo_phan_giu":   l.HoldingUnitID,
 		"trang_thai":    string(l.Status),
+		// The deadline identity fixed at this act ("" = the commune has no rule, "Không đặt hạn"). An
+		// instant, not personal data: recorded in full as SetDeadline records it.
+		"han_xu_ly": instantText(l.ProcessingDueAt),
 	}
 }
 

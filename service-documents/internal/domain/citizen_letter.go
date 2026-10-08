@@ -149,6 +149,14 @@ func (t LetterType) RequiresIssuedResult() bool {
 	return t == LetterTypeComplaint || t == LetterTypeDenunciation
 }
 
+// HasResolutionDeadline is ADR 0084 #3 / ADR 0064: a complaint or a denunciation keeps TWO deadlines,
+// and the second — the resolution deadline — is fixed at `thu-ly`, counted from `accepted_at`. A
+// feedback letter or a request has one deadline only (the processing one, fixed at booking); identity
+// is never asked a resolution deadline for it.
+func (t LetterType) HasResolutionDeadline() bool {
+	return t == LetterTypeComplaint || t == LetterTypeDenunciation
+}
+
 // LetterSource is HOW a letter entered the register — the "nguồn vào sổ" chip (ADR 0084 #7, migration
 // 0008). A FACT OF THE BOOKING ACT: written once by the path that booked the letter, never by a client
 // and never by a later edit. No UPDATE in store/citizen_letter.go names the column, and no method here
@@ -538,8 +546,10 @@ func LetterDueColumn(s LetterStatus) string {
 // clears it ("Không đặt"). Nothing here adds an hour or reads a calendar: the clerk's instant IS the
 // commitment, which is why ADR 0064's working-day questions are not decided by this path.
 //
-// AFTER `thu-ly` THE PROCESSING DEADLINE STOPS APPLYING and the resolution one is "Không đặt" until a
-// clerk sets it — TT 05/2021's two phases (C8), which 0006 already drew as two columns.
+// AFTER `thu-ly` THE PROCESSING DEADLINE STOPS APPLYING and the resolution one applies — the one
+// identity fixed at `thu-ly` for a complaint / denunciation (ADR 0085 B), "Không đặt" otherwise until
+// a clerk sets it — TT 05/2021's two phases (C8), which 0006 already drew as two columns. Either way a
+// clerk's value set here replaces the computed one (ADR 0084 #3: "cán bộ vẫn sửa được").
 func (l CitizenLetter) SetActiveDue(due time.Time) (CitizenLetter, error) {
 	if !due.IsZero() && (due.Year() < 2000 || due.Year() > 2200) {
 		return l, ErrLetterDueTooFar
