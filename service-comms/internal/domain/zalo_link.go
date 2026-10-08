@@ -117,6 +117,8 @@ type ZaloLink struct {
 	ID        string
 	StaffCode string
 	LinkedAt  time.Time
+	// BotRef is the bot the link was made through: SharedZaloBotRef, or a commune bot's Ref (0022).
+	BotRef string
 }
 
 // The `zalo_link.unlink_reason` sentences (≤ 200 characters, 0018 CHECK) — fixed, like
@@ -139,9 +141,107 @@ const (
 
 // ---- the commune's channel settings ----------------------------------------------------------------
 
-// The four reminder kinds a commune may select — staff_notification.kind's own values (0010).
+// The per-domain reminder kinds of migration 0021 (ADR 0079 Q3 phase 1: every kind that ALREADY has a
+// producer). VALUES, Vietnamese without diacritics, `<domain>.<shape>` (ADR 0011, 0051). The web maps
+// each onto spec Cấu hình 11's event code where one exists (ADR 0079 Q1 #6).
+const (
+	ZaloKindTaskDueSoon        = "nhiem-vu.sap-den-han"
+	ZaloKindTaskOverdue        = "nhiem-vu.qua-han"
+	ZaloKindTaskUnassigned     = "nhiem-vu.chua-cu-nguoi"
+	ZaloKindTaskEscalation     = "nhiem-vu.leo-thang"
+	ZaloKindDocumentDueSoon    = "van-ban.sap-den-han"
+	ZaloKindDocumentOverdue    = "van-ban.qua-han"
+	ZaloKindDocumentUnassigned = "van-ban.chua-cu-nguoi"
+	ZaloKindDocumentEscalation = "van-ban.leo-thang"
+	ZaloKindPetitionDueSoon    = "phan-anh.sap-den-han"
+	ZaloKindPetitionOverdue    = "phan-anh.qua-han"
+	ZaloKindPetitionUnassigned = "phan-anh.chua-cu-nguoi"
+	ZaloKindPetitionEscalation = "phan-anh.leo-thang"
+	ZaloKindWeeklyDigest       = StaffNotificationWeeklyDigest // unchanged value: one digest event
+)
+
+// ZaloReminderKinds is what a commune may SELECT and SAVE, in the canonical order the settings are
+// stored and shown in: 0021's twelve per-domain kinds, then the weekly digest. The four OLD values of
+// 0010/0018 are not here: they stay valid in the database and are mapped at read (ZaloLegacyKindMap).
 var ZaloReminderKinds = []string{
-	StaffNotificationDueSoon, StaffNotificationOverdue, StaffNotificationEscalation, StaffNotificationWeeklyDigest,
+	ZaloKindTaskDueSoon, ZaloKindTaskOverdue, ZaloKindTaskUnassigned, ZaloKindTaskEscalation,
+	ZaloKindDocumentDueSoon, ZaloKindDocumentOverdue, ZaloKindDocumentUnassigned, ZaloKindDocumentEscalation,
+	ZaloKindPetitionDueSoon, ZaloKindPetitionOverdue, ZaloKindPetitionUnassigned, ZaloKindPetitionEscalation,
+	ZaloKindWeeklyDigest,
+}
+
+// zaloOverdueKinds need the commune's overdue cadence (0021 zalo_channel_setting_overdue_kinds_need_cadence).
+// Unassigned and escalation notices are one-shot per hold / per level and need none.
+var zaloOverdueKinds = []string{ZaloKindTaskOverdue, ZaloKindDocumentOverdue, ZaloKindPetitionOverdue}
+
+// ZaloLegacyKindMap is 0021's READ-TIME MAP — ONE table, used by the settings read, the dispatcher's kind
+// test and the enqueue statement: an OLD value (stored in a settings row, or carried by a notice the
+// producers still send until comms.proto changes) means exactly these per-domain kinds. `qua-han`
+// includes the three unassigned kinds because unassigned notices were SENT as qua-han: a commune that
+// ticked qua-han was receiving them, and the map keeps exactly what it was getting.
+var ZaloLegacyKindMap = map[string][]string{
+	StaffNotificationDueSoon: {ZaloKindTaskDueSoon, ZaloKindDocumentDueSoon, ZaloKindPetitionDueSoon},
+	StaffNotificationOverdue: {ZaloKindTaskOverdue, ZaloKindDocumentOverdue, ZaloKindPetitionOverdue,
+		ZaloKindTaskUnassigned, ZaloKindDocumentUnassigned, ZaloKindPetitionUnassigned},
+	StaffNotificationEscalation:   {ZaloKindTaskEscalation, ZaloKindDocumentEscalation, ZaloKindPetitionEscalation},
+	StaffNotificationWeeklyDigest: {ZaloKindWeeklyDigest},
+}
+
+// zaloKindMeanings is the set of per-domain kinds one value stands for: its expansion when it is an old
+// value, itself when it is a selectable kind, nothing otherwise.
+func zaloKindMeanings(kind string) []string {
+	if m, ok := ZaloLegacyKindMap[kind]; ok {
+		return m
+	}
+	if slices.Contains(ZaloReminderKinds, kind) {
+		return []string{kind}
+	}
+	return nil
+}
+
+// ExpandZaloKinds maps a stored selection onto per-domain kinds: old values become what they mean,
+// duplicates collapse, the order is ZaloReminderKinds'. A value that is neither (the CHECK admits none)
+// is dropped — it can select nothing.
+func ExpandZaloKinds(kinds []string) []string {
+	want := map[string]bool{}
+	for _, k := range kinds {
+		for _, m := range zaloKindMeanings(k) {
+			want[m] = true
+		}
+	}
+	out := make([]string, 0, len(want))
+	for _, k := range ZaloReminderKinds {
+		if want[k] {
+			out = append(out, k)
+		}
+	}
+	return out
+}
+
+// ZaloKindSelected reports whether a notice of noticeKind passes a selection. A notice of an OLD kind
+// (what producers send until the proto card) passes when ANY kind it maps to is selected; a selection
+// still holding old values is read through the same map.
+func ZaloKindSelected(selected []string, noticeKind string) bool {
+	sel := ExpandZaloKinds(selected)
+	for _, m := range zaloKindMeanings(noticeKind) {
+		if slices.Contains(sel, m) {
+			return true
+		}
+	}
+	return false
+}
+
+// ZaloLegacyKindPairs flattens ZaloLegacyKindMap into two parallel lists — (old, per-domain) pairs — for
+// the enqueue statement's unnest, so SQL reads the same table Go does instead of a copy of it.
+func ZaloLegacyKindPairs() (legacy, perDomain []string) {
+	for _, old := range []string{StaffNotificationDueSoon, StaffNotificationOverdue, StaffNotificationEscalation,
+		StaffNotificationWeeklyDigest} {
+		for _, k := range ZaloLegacyKindMap[old] {
+			legacy = append(legacy, old)
+			perDomain = append(perDomain, k)
+		}
+	}
+	return legacy, perDomain
 }
 
 // The defaults a commune that never saved is SHOWN. Only the quiet window has one, and it MIRRORS 0018's
@@ -165,6 +265,20 @@ type ZaloChannelSetting struct {
 	UpdatedAt              time.Time
 	UpdatedBy              string
 	Saved                  bool
+	// LegacyKindsStored: the stored row still holds one of the four OLD values, and Kinds is its
+	// read-time expansion (0021). A save is then never a no-op, so the next save writes per-domain values.
+	LegacyKindsStored bool
+}
+
+// ReadStoredZaloKinds is the settings read's half of 0021: the stored kinds, expanded, and whether any
+// stored value was an old one.
+func ReadStoredZaloKinds(stored []string) (kinds []string, legacy bool) {
+	for _, k := range stored {
+		if _, old := ZaloLegacyKindMap[k]; old && k != ZaloKindWeeklyDigest {
+			legacy = true
+		}
+	}
+	return ExpandZaloKinds(stored), legacy
 }
 
 // DefaultZaloChannelSetting is what a commune with no row is shown: off, no kind, the default quiet window.
@@ -173,8 +287,9 @@ func DefaultZaloChannelSetting() ZaloChannelSetting {
 		Kinds: []string{}}
 }
 
-// KindEnabled reports whether the commune selected kind.
-func (s ZaloChannelSetting) KindEnabled(kind string) bool { return slices.Contains(s.Kinds, kind) }
+// KindEnabled reports whether a notice of kind passes the commune's selection — through 0021's map, so
+// a notice of an OLD kind passes when any per-domain kind it stands for is selected.
+func (s ZaloChannelSetting) KindEnabled(kind string) bool { return ZaloKindSelected(s.Kinds, kind) }
 
 // Same reports whether two settings carry the same values (the audit-free no-op save).
 func (s ZaloChannelSetting) Same(o ZaloChannelSetting) bool {
@@ -214,21 +329,20 @@ const (
 )
 
 // NormalizeZaloChannelSetting validates a save and returns it with the kinds de-duplicated in the
-// canonical order. It refuses exactly what 0018's CHECKs refuse.
+// canonical order. It refuses exactly what 0018/0021's CHECKs refuse.
+//
+// AN OLD VALUE IS ACCEPTED AND WRITTEN AS WHAT IT MEANS (0021's map): a client built before 0021 keeps
+// working, and the row it saves holds per-domain values only — never an old one again.
 func NormalizeZaloChannelSetting(in ZaloChannelSetting) (ZaloChannelSetting, error) {
 	out := in
-	out.Kinds = []string{}
+	out.LegacyKindsStored = false
 	for _, k := range in.Kinds {
-		if !slices.Contains(ZaloReminderKinds, k) {
+		if zaloKindMeanings(k) == nil {
 			return ZaloChannelSetting{}, settingErr("unknown_kind",
-				"Loại nhắc việc không hợp lệ. Chỉ chọn được: sắp đến hạn, quá hạn, leo thang, bản tin tuần.")
+				"Loại nhắc việc không hợp lệ. Hãy chọn trong danh sách sự kiện mà kênh Zalo hỗ trợ.")
 		}
 	}
-	for _, k := range ZaloReminderKinds {
-		if slices.Contains(in.Kinds, k) {
-			out.Kinds = append(out.Kinds, k)
-		}
-	}
+	out.Kinds = ExpandZaloKinds(in.Kinds)
 	if out.IsEnabled && len(out.Kinds) == 0 {
 		return ZaloChannelSetting{}, settingErr("enabled_without_kind",
 			"Bật kênh Zalo thì phải chọn ít nhất một loại nhắc việc.")
@@ -244,7 +358,7 @@ func NormalizeZaloChannelSetting(in ZaloChannelSetting) (ZaloChannelSetting, err
 		return ZaloChannelSetting{}, settingErr("overdue_cadence_incomplete",
 			"Nhịp nhắc việc quá hạn cần đủ hai số: bắt đầu sau bao nhiêu ngày, và nhắc lại mỗi bao nhiêu ngày.")
 	}
-	if out.KindEnabled(StaffNotificationOverdue) && out.OverdueStartAfterDays == nil {
+	if out.overdueKindSelected() && out.OverdueStartAfterDays == nil {
 		return ZaloChannelSetting{}, settingErr("overdue_cadence_required",
 			"Đã chọn nhắc việc quá hạn thì phải đặt nhịp nhắc: bắt đầu sau bao nhiêu ngày và nhắc lại mỗi bao nhiêu ngày.")
 	}
@@ -257,6 +371,16 @@ func NormalizeZaloChannelSetting(in ZaloChannelSetting) (ZaloChannelSetting, err
 			fmt.Sprintf("Số ngày nhắc lại việc quá hạn phải từ 1 đến %d.", MaxOverdueRepeatEveryDays))
 	}
 	return out, nil
+}
+
+// overdueKindSelected — any of the three per-domain overdue kinds (0021's cadence CHECK).
+func (s ZaloChannelSetting) overdueKindSelected() bool {
+	for _, k := range zaloOverdueKinds {
+		if slices.Contains(s.Kinds, k) {
+			return true
+		}
+	}
+	return false
 }
 
 func validMinute(m int) bool { return m >= 0 && m < 24*60 }

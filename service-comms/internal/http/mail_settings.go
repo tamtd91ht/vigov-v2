@@ -18,6 +18,7 @@ package http
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/vihat/vigov/core/crypto"
 	"github.com/vihat/vigov/core/httpx"
@@ -48,15 +49,36 @@ type mailSettingsOut struct {
 	// EncryptionConfigured false: the platform has no SECRET_ENCRYPTION_KEYS, so saving and
 	// test-sending answer 503 until the operator configures it.
 	EncryptionConfigured bool `json:"encryption_configured"`
+	// LastTest is the last test message's result (migration 0019, spec Cấu hình 10/12); null = never
+	// tested, or cleared since because host, port, security or account changed. NO platform_fallback
+	// field: the platform has no fallback mail server (ADR 0079 Q1 #8).
+	LastTest *mailLastTestOut `json:"last_test"`
+}
+
+// mailLastTestOut — `to` is the MASKED recipient ("c***@xa.gov.vn"), never the address typed (rule 3);
+// `error_class` is one of 0019's closed values, null on success — never the server's words.
+type mailLastTestOut struct {
+	At         time.Time `json:"at"`
+	To         string    `json:"to"`
+	OK         bool      `json:"ok"`
+	ErrorClass *string   `json:"error_class"`
 }
 
 func mailSettingsToOut(v app.MailSettingsView) mailSettingsOut {
-	return mailSettingsOut{
+	out := mailSettingsOut{
 		Configured: v.Configured, Host: v.Host, Port: v.Port, Security: v.Security,
 		Username: v.Username, FromAddress: v.FromAddress, FromName: v.FromName,
 		IsEnabled: v.IsEnabled, PasswordSet: v.PasswordSet,
 		EncryptionConfigured: v.EncryptionConfigured,
 	}
+	if t := v.LastTest; t != nil {
+		out.LastTest = &mailLastTestOut{At: t.At, To: t.ToMasked, OK: t.OK}
+		if t.ErrorClass != "" {
+			class := t.ErrorClass
+			out.LastTest.ErrorClass = &class
+		}
+	}
+	return out
 }
 
 // mailSettingsIn is the body of PUT — the whole configuration.

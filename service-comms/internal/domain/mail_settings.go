@@ -20,7 +20,9 @@ import (
 	"errors"
 	"net"
 	"net/mail"
+	"regexp"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 )
@@ -64,6 +66,52 @@ type MailSettings struct {
 	// PasswordSet reports whether a sealed password is stored. It is the only thing any read says
 	// about the password (§12.6).
 	PasswordSet bool
+	// LastTest is the result of the last test message that reached the send step (migration 0019);
+	// nil = never tested, or cleared because the destination changed since.
+	LastTest *MailTestResult
+}
+
+// MailTestResult is the last test message's outcome as 0019 keeps it: a MASKED recipient and an
+// error CLASS, never the address typed or the server's words (rule 3; ADR 0079 Q1 #8).
+type MailTestResult struct {
+	At         time.Time
+	ToMasked   string
+	OK         bool
+	ErrorClass string // "" when OK
+}
+
+// The error classes of 0019's mail_settings_last_test_error_class_known — VALUES (ADR 0011), one per
+// internal/mail sentinel plus MailTestErrorOther. The sentinel → class table is in internal/app,
+// because this package imports nothing but the standard library.
+const (
+	MailTestErrorConnect           = "khong-ket-noi"
+	MailTestErrorTimeout           = "het-thoi-gian"
+	MailTestErrorCertificate       = "chung-chi-khong-hop-le"
+	MailTestErrorTLS               = "loi-tls"
+	MailTestErrorStartTLSMissing   = "khong-co-starttls"
+	MailTestErrorPlaintextRefused  = "tu-choi-khong-ma-hoa"
+	MailTestErrorAuthUnsupported   = "khong-ho-tro-dang-nhap"
+	MailTestErrorAuthRejected      = "sai-tai-khoan"
+	MailTestErrorRecipientRejected = "tu-choi-dia-chi"
+	MailTestErrorProtocol          = "sai-giao-thuc"
+	MailTestErrorOther             = "khac"
+)
+
+// maskedTestRecipientShape is 0019's mail_settings_last_test_to_masked_shape, character for character.
+// Checked BEFORE the send so a recipient whose mask the CHECK would refuse is a 400, never a send whose
+// result cannot be recorded.
+var maskedTestRecipientShape = regexp.MustCompile(`^[^@\s][*][*][*]@[^@\s]+$`)
+
+// ValidMaskedTestRecipient reports whether masked is a value 0019's CHECK accepts.
+func ValidMaskedTestRecipient(masked string) bool {
+	return utf8.RuneCountInString(masked) <= 260 && maskedTestRecipientShape.MatchString(masked)
+}
+
+// MailTestTargetChanged reports whether a save points the configuration somewhere the last test did not
+// go — host, port, security or account (0019 "OWED BY GO"). The old result then describes a destination
+// that is no longer configured, and is cleared.
+func MailTestTargetChanged(before, after MailSettings) bool {
+	return MailDestinationChanged(before, after) || before.Security != after.Security
 }
 
 // MailSettingsSubject is the audit subject: one row per commune, so the business address of the row

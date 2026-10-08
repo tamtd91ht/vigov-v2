@@ -133,13 +133,29 @@ func (l fakeLimiter) Allow(context.Context, ratelimit.Key) (bool, time.Duration,
 	return l.allow, time.Minute, l.err
 }
 
+// noCommuneBot answers zalo_commune_bot reads with no row — the commune uses the shared bot — and passes
+// every other statement to the test's own answers.
+func noCommuneBot(f *sqlFake) {
+	inner := f.query
+	f.query = func(q string, args []driver.Value) ([]string, [][]driver.Value, error) {
+		if strings.Contains(q, "FROM zalo_commune_bot") {
+			return communeBotCols(false), nil, nil
+		}
+		if inner == nil {
+			return nil, nil, errors.New("fake: no answer")
+		}
+		return inner(q, args)
+	}
+}
+
 func newWebhook(t *testing.T, f *sqlFake, r *fakeResolver, l fakeLimiter) *ZaloWebhook {
 	t.Helper()
+	noCommuneBot(f)
 	db := sql.OpenDB(f)
 	t.Cleanup(func() { db.Close() })
 	kho := store.New(db)
-	return NewZaloWebhook(kho, docstore.NewZaloLinkStore(kho), r, l, fakeBot{}, fakeSend{},
-		slog.New(slog.NewTextHandler(io.Discard, nil)))
+	return NewZaloWebhook(kho, docstore.NewZaloLinkStore(kho), docstore.NewZaloCommuneBotStore(kho), r, l, fakeBot{},
+		fakeSend{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 }
 
 func text(s string) zalobot.Update {

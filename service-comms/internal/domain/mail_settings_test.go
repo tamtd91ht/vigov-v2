@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -70,5 +71,42 @@ func TestMailDestinationChanged(t *testing.T) {
 		if !MailDestinationChanged(a, c) {
 			t.Errorf("not a destination change: %+v", c)
 		}
+	}
+}
+
+func TestValidMaskedTestRecipientMirrors0019(t *testing.T) {
+	for in, want := range map[string]bool{
+		"c***@xa.gov.vn":                   true,
+		"canbo@xa.gov.vn":                  false, // a raw address
+		"***@xa.gov.vn":                    false,
+		"c***@":                            false,
+		"c***@a@b":                         false,
+		" ***@xa.gov.vn":                   false,
+		"c***@xa gov.vn":                   false,
+		"c**@xa.gov.vn":                    false,
+		"c***@" + strings.Repeat("a", 256): false,
+	} {
+		if got := ValidMaskedTestRecipient(in); got != want {
+			t.Errorf("%q → %v, want %v", in, got, want)
+		}
+	}
+}
+
+func TestMailTestTargetChanged(t *testing.T) {
+	base := MailSettings{Host: "h", Port: 587, Security: MailSecurityStartTLS, Username: "u", FromName: "a"}
+	for name, edit := range map[string]func(*MailSettings){
+		"host": func(m *MailSettings) { m.Host = "x" }, "port": func(m *MailSettings) { m.Port = 25 },
+		"security": func(m *MailSettings) { m.Security = MailSecurityTLS }, "user": func(m *MailSettings) { m.Username = "v" },
+	} {
+		after := base
+		edit(&after)
+		if !MailTestTargetChanged(base, after) {
+			t.Errorf("%s change not seen", name)
+		}
+	}
+	after := base
+	after.FromName = "b"
+	if MailTestTargetChanged(base, after) {
+		t.Error("a display-name change cleared the test")
 	}
 }

@@ -261,10 +261,10 @@ func TestChenKhongCoThamSoNaoChoNguon(t *testing.T) {
 	if !strings.Contains(chen[0].sql, "'don-vi'") {
 		t.Errorf("`nguon` không phải hằng trong câu lệnh: %q", chen[0].sql)
 	}
-	// Seven bound parameters: tenant_id, id, ma, nhan, thu_tu, la_mac_dinh, dang_dung. Nothing for
-	// `nguon`, nothing for `ma_nguon_re_nhanh`.
-	if len(chen[0].args) != 7 {
-		t.Errorf("câu chèn nhận %d tham số, muốn 7 — thêm một tham số là thêm một đường cho client",
+	// Eight bound parameters: tenant_id, id, ma, nhan, thu_tu, la_mac_dinh, dang_dung, color (0020 —
+	// presentation, a client value by design). Nothing for `nguon`, nothing for `ma_nguon_re_nhanh`.
+	if len(chen[0].args) != 8 {
+		t.Errorf("câu chèn nhận %d tham số, muốn 8 — thêm một tham số là thêm một đường cho client",
 			len(chen[0].args))
 	}
 	for _, a := range chen[0].args {
@@ -568,4 +568,108 @@ func chuoiTrongDoi(args []driver.Value) map[string]bool {
 		}
 	}
 	return ra
+}
+
+// --- colour (migration 0020, ADR 0079 #5 and Q1 #9) ----------------------------------------------
+
+func TestThemLuuMauChuThuong(t *testing.T) {
+	k := &khoGia{}
+	uc, ctx := dungUseCase(t, k)
+	yc := themMau()
+	yc.Color = " #1A2B3C "
+	got, err := uc.Them(ctx, yc, nguoiThu())
+	if err != nil {
+		t.Fatalf("Them lỗi: %v", err)
+	}
+	chen := k.cau("INSERT INTO loai_tai_nguyen_ban_do")
+	if len(chen) != 1 || chen[0].args[7] != "#1a2b3c" || got.Color != "#1a2b3c" {
+		t.Fatalf("màu ghi = %v / trả về %q, muốn #1a2b3c", chen[0].args, got.Color)
+	}
+	vet := k.cau("INSERT INTO audit_log")
+	if len(vet) != 1 || !strings.Contains(string(vet[0].args[7].([]byte)), `"color":"#1a2b3c"`) {
+		t.Fatalf("vết không ghi màu: %v", vet)
+	}
+}
+
+// colorChange is a PRESENT colour in a PATCH: nil = JSON null = remove.
+func colorChange(c *string) *CatalogueColorChange { return &CatalogueColorChange{Color: c} }
+
+// "" in a PATCH is NOT a removal (null is) — the rule service-identity committed (6fc89b98).
+func TestPatchEmptyColorIsRefused(t *testing.T) {
+	for _, empty := range []string{"", "   "} {
+		k := &khoGia{hang: dongTang1()}
+		uc, ctx := dungUseCase(t, k)
+		c := empty
+		if _, err := uc.Sua(ctx, "ltn-001", YeuCauSuaLoaiTaiNguyen{Color: colorChange(&c)}, nguoiThu()); !errors.Is(err, domain.ErrCatalogueColorShape) {
+			t.Errorf("Sua %q → %v, want the shape refusal", empty, err)
+		}
+		if k.batDau != 0 {
+			t.Errorf("%q: a transaction was opened", empty)
+		}
+	}
+}
+
+func TestMauSaiDangBiTuChoiTruocGiaoDich(t *testing.T) {
+	for _, bad := range []string{"1a2b3c", "#1a2b3", "#1a2b3cd", "#xyzxyz", "red", "rgb(1,2,3)"} {
+		k := &khoGia{hang: dongTang1()}
+		uc, ctx := dungUseCase(t, k)
+		yc := themMau()
+		yc.Color = bad
+		if _, err := uc.Them(ctx, yc, nguoiThu()); !errors.Is(err, domain.ErrCatalogueColorShape) {
+			t.Errorf("Them %q → %v", bad, err)
+		}
+		c := bad
+		if _, err := uc.Sua(ctx, "ltn-001", YeuCauSuaLoaiTaiNguyen{Color: colorChange(&c)}, nguoiThu()); !errors.Is(err, domain.ErrCatalogueColorShape) {
+			t.Errorf("Sua %q → %v", bad, err)
+		}
+		if k.batDau != 0 {
+			t.Errorf("%q: một giao dịch đã mở cho màu sai dạng", bad)
+		}
+	}
+}
+
+func TestSuaMauDuocOMoiTangVaGhiTruocSau(t *testing.T) {
+	for name, row := range map[string]*hangLVB{"tầng 1": dongTang1(), "tầng 2": dongTang2(), "tầng 3": dongTang3()} {
+		t.Run(name, func(t *testing.T) {
+			row.color = "#000000"
+			k := &khoGia{hang: row}
+			uc, ctx := dungUseCase(t, k)
+			c := "#FFAA00"
+			got, err := uc.Sua(ctx, row.id, YeuCauSuaLoaiTaiNguyen{Color: colorChange(&c)}, nguoiThu())
+			if err != nil {
+				t.Fatalf("Sua lỗi: %v", err)
+			}
+			up := k.cau("UPDATE loai_tai_nguyen_ban_do")
+			if len(up) != 1 || up[0].args[6] != "#ffaa00" || got.Color != "#ffaa00" {
+				t.Fatalf("cập nhật = %v", up)
+			}
+			delta := string(k.cau("INSERT INTO audit_log")[0].args[7].([]byte))
+			if !strings.Contains(delta, `"truoc":{"color":"#000000"}`) || !strings.Contains(delta, `"sau":{"color":"#ffaa00"}`) {
+				t.Errorf("delta = %s", delta)
+			}
+		})
+	}
+}
+
+func TestSuaXoaMauVaMauKhongDoiThiKhongGhi(t *testing.T) {
+	row := dongTang1()
+	row.color = "#00ff00"
+	k := &khoGia{hang: row}
+	uc, ctx := dungUseCase(t, k)
+	same := "#00FF00"
+	if _, err := uc.Sua(ctx, row.id, YeuCauSuaLoaiTaiNguyen{Color: colorChange(&same)}, nguoiThu()); err != nil {
+		t.Fatal(err)
+	}
+	if len(k.cau("UPDATE loai_tai_nguyen_ban_do")) != 0 || len(k.cau("INSERT INTO audit_log")) != 0 {
+		t.Fatal("the same colour in another case was written as a change")
+	}
+	// Explicit null removes the colour.
+	got, err := uc.Sua(ctx, row.id, YeuCauSuaLoaiTaiNguyen{Color: colorChange(nil)}, nguoiThu())
+	if err != nil || got.Color != "" {
+		t.Fatalf("clear → %+v %v", got, err)
+	}
+	up := k.cau("UPDATE loai_tai_nguyen_ban_do")
+	if len(up) != 1 || up[0].args[6] != "" || !strings.Contains(up[0].sql, "NULLIF($7, '')") {
+		t.Fatalf("clearing must store NULL: %v", up)
+	}
 }

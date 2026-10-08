@@ -693,3 +693,37 @@ func TestMiniAppIDLookupPolicyIsPinnedFailClosedAndPerNetwork(t *testing.T) {
 		t.Errorf("IPv6 key = %q", got)
 	}
 }
+
+// One counter per (commune, bot, chat); the chat id never appears as written; no commune, no chat or no
+// bot is a refusal, never a shared key.
+func TestZaloCommuneChatKeyShape(t *testing.T) {
+	f := newFake()
+	l, _ := New(f, ZaloBotPairing)
+	a := tenant.Into(context.Background(), tenant.ID(testCommune))
+	b := tenant.Into(context.Background(), tenant.ID("01JTESTCOMMUNEB00000000000"))
+	ka, err := ZaloCommuneChatKey(a, "commune:bot-1", "chat-0900000000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	kb, _ := ZaloCommuneChatKey(b, "commune:bot-1", "chat-0900000000")
+	_, _, _ = l.Allow(a, ka)
+	_, _, _ = l.Allow(b, kb)
+	if len(f.keys) != 2 || f.keys[0] == f.keys[1] ||
+		!strings.HasPrefix(f.keys[0], "t:"+testCommune+":rl:zalo-bot-pairing:zalo-chat:commune:bot-1:") {
+		t.Fatalf("keys = %v", f.keys)
+	}
+	for _, k := range f.keys {
+		if strings.Contains(k, "chat-0900000000") {
+			t.Fatalf("the chat id is written as is: %s", k)
+		}
+	}
+	if _, err := ZaloCommuneChatKey(context.Background(), "commune:bot-1", "c"); !errors.Is(err, ErrNoCommune) {
+		t.Errorf("no commune: %v", err)
+	}
+	if _, err := ZaloCommuneChatKey(a, "commune:bot-1", " "); !errors.Is(err, ErrNoChat) {
+		t.Errorf("no chat: %v", err)
+	}
+	if _, err := ZaloCommuneChatKey(a, "", "c"); !errors.Is(err, ErrNoChat) {
+		t.Errorf("no bot: %v", err)
+	}
+}

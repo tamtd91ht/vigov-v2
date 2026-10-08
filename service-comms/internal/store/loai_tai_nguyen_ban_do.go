@@ -52,7 +52,9 @@ var ErrQuaNhieuLoaiTaiNguyen = errors.New("loai_tai_nguyen_ban_do: vượt trầ
 // `la_mac_dinh` and `dang_dung` are adjacent BOOLEANs: swapping either pair here — or there —
 // produces no error at all. The first swap shows slugs where labels belong; the second opens the
 // map on a group that was taken out of use.
-const cotLoaiTaiNguyen = `id, ma, nhan, thu_tu, la_mac_dinh, dang_dung, nguon, ma_nguon_re_nhanh`
+//
+// `color` (migration 0020) is NULLABLE and read through sql.NullString: NULL is "no colour chosen".
+const cotLoaiTaiNguyen = `id, ma, nhan, thu_tu, la_mac_dinh, dang_dung, nguon, ma_nguon_re_nhanh, color`
 
 // DanhSach reads the commune's whole map-asset-type catalogue, ordered.
 //
@@ -100,11 +102,10 @@ func (s *LoaiTaiNguyenBanDoStore) DanhSach(ctx context.Context) ([]domain.LoaiTa
 
 	ra := make([]domain.LoaiTaiNguyenBanDo, 0, 16)
 	for rows.Next() {
-		var lt domain.LoaiTaiNguyenBanDo
 		// POSITIONAL — in lockstep with cotLoaiTaiNguyen. See the note there on the two adjacent
 		// pairs of same-typed columns.
-		if err := rows.Scan(&lt.ID, &lt.Ma, &lt.Nhan, &lt.ThuTu, &lt.LaMacDinh, &lt.DangDung,
-			&lt.Nguon, &lt.MaNguonReNhanh); err != nil {
+		lt, err := docMotDongLoaiTaiNguyen(rows.Scan)
+		if err != nil {
 			return nil, fmt.Errorf("loai_tai_nguyen_ban_do: đọc dòng: %w", err)
 		}
 		ra = append(ra, lt)
@@ -144,8 +145,10 @@ func (s *LoaiTaiNguyenBanDoStore) DanhSach(ctx context.Context) ([]domain.LoaiTa
 // driver mirrored the SAME wrong order, so it stayed green; it now mirrors cotLoaiTaiNguyen.
 func docMotDongLoaiTaiNguyen(quet func(...any) error) (domain.LoaiTaiNguyenBanDo, error) {
 	var ltn domain.LoaiTaiNguyenBanDo
+	var color sql.NullString
 	err := quet(&ltn.ID, &ltn.Ma, &ltn.Nhan, &ltn.ThuTu, &ltn.LaMacDinh,
-		&ltn.DangDung, &ltn.Nguon, &ltn.MaNguonReNhanh)
+		&ltn.DangDung, &ltn.Nguon, &ltn.MaNguonReNhanh, &color)
+	ltn.Color = color.String
 	return ltn, err
 }
 
@@ -214,13 +217,14 @@ func (s *LoaiTaiNguyenBanDoStore) DemDangSong(ctx context.Context, tx *store.Sco
 // yet (commune onboarding — see the migration header). Turning either into a parameter is the one
 // edit that reopens the whole tier model, and it would look like tidying up.
 const chenLoaiTaiNguyen = `INSERT INTO loai_tai_nguyen_ban_do
-	(tenant_id, id, ma, nhan, thu_tu, la_mac_dinh, dang_dung, nguon, ma_nguon_re_nhanh)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, 'don-vi', false)`
+	(tenant_id, id, ma, nhan, thu_tu, la_mac_dinh, dang_dung, nguon, ma_nguon_re_nhanh, color)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, 'don-vi', false, NULLIF($8, ''))`
 
-// Chen adds one row the COMMUNE owns. There is no method here that writes a `he-thong` row.
+// Chen adds one row the COMMUNE owns. There is no method here that writes a `he-thong` row. An empty
+// Color is stored as NULL ("no colour chosen", 0020).
 func (s *LoaiTaiNguyenBanDoStore) Chen(ctx context.Context, tx *store.ScopedTx, ltn domain.LoaiTaiNguyenBanDo) error {
 	if _, err := tx.Exec(ctx, chenLoaiTaiNguyen, string(tx.TenantID()),
-		ltn.ID, ltn.Ma, ltn.Nhan, ltn.ThuTu, ltn.LaMacDinh, ltn.DangDung); err != nil {
+		ltn.ID, ltn.Ma, ltn.Nhan, ltn.ThuTu, ltn.LaMacDinh, ltn.DangDung, ltn.Color); err != nil {
 		return fmt.Errorf("loai_tai_nguyen_ban_do: chèn: %w", err)
 	}
 	return nil
@@ -249,14 +253,15 @@ func (s *LoaiTaiNguyenBanDoStore) BoMacDinhKhac(ctx context.Context, tx *store.S
 // trigger, and both layers are meant: the trigger is the floor that holds against every writer, and
 // their absence here is what makes the floor unreachable from this service in the first place.
 const capNhatLoaiTaiNguyen = `UPDATE loai_tai_nguyen_ban_do ` +
-	`SET nhan = $3, thu_tu = $4, dang_dung = $5, la_mac_dinh = $6, cap_nhat_luc = now() ` +
+	`SET nhan = $3, thu_tu = $4, dang_dung = $5, la_mac_dinh = $6, color = NULLIF($7, ''), cap_nhat_luc = now() ` +
 	`WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
 
-// CapNhat writes the four fields a commune may change. The caller has already read the row with
-// TheoIDDeSua and decided the change is permitted at this row's tier.
+// CapNhat writes the five fields a commune may change (the colour since 0020 — presentation, every
+// tier). The caller has already read the row with TheoIDDeSua and decided the change is permitted at
+// this row's tier.
 func (s *LoaiTaiNguyenBanDoStore) CapNhat(ctx context.Context, tx *store.ScopedTx, ltn domain.LoaiTaiNguyenBanDo) error {
 	kq, err := tx.Exec(ctx, capNhatLoaiTaiNguyen, string(tx.TenantID()),
-		ltn.ID, ltn.Nhan, ltn.ThuTu, ltn.DangDung, ltn.LaMacDinh)
+		ltn.ID, ltn.Nhan, ltn.ThuTu, ltn.DangDung, ltn.LaMacDinh, ltn.Color)
 	if err != nil {
 		return fmt.Errorf("loai_tai_nguyen_ban_do: cập nhật: %w", err)
 	}

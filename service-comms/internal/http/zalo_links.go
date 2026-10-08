@@ -41,6 +41,8 @@ type ZaloLinkReader interface {
 	Current(ctx context.Context, actor audit.Actor) (app.ZaloLinkCurrentView, error)
 	LinkedStaff(ctx context.Context) ([]app.LinkedStaffView, error)
 	Settings(ctx context.Context) (domain.ZaloChannelSetting, error)
+	// BotReady: some bot can serve the commune — its own live bot, or the shared bot with a token.
+	BotReady(ctx context.Context) (bool, error)
 }
 
 // ZaloLinkWriter is the WRITE half: each method opens a transaction and writes its audit entry inside
@@ -93,6 +95,11 @@ type zaloLinkedStaffList struct {
 
 // zaloChannelSettingsOut — ZaloChannelSettings in zalo.ts. A commune that never saved gets is_enabled
 // false with the defaults, and no updated_at / updated_by.
+//
+// `kinds` IS ALWAYS PER-DOMAIN (migration 0021): a row still holding one of the four old values is read
+// as the per-domain kinds it means. `supported_events` is the list a commune may tick — 0021's twelve
+// per-domain kinds and the weekly digest, in display order (spec Cấu hình 11 §2 "Chỉ hiện các sự kiện có
+// trong supported_events"); the ten spec events with no producer yet are not in it (ADR 0079 Q3).
 type zaloChannelSettingsOut struct {
 	IsEnabled              bool       `json:"is_enabled"`
 	Kinds                  []string   `json:"kinds"`
@@ -102,10 +109,16 @@ type zaloChannelSettingsOut struct {
 	OverdueRepeatEveryDays *int       `json:"overdue_repeat_every_days"`
 	UpdatedAt              *time.Time `json:"updated_at,omitempty"`
 	UpdatedBy              string     `json:"updated_by,omitempty"`
+	SupportedEvents        []string   `json:"supported_events"`
+	// PlatformReady (GET only) is spec 11 §0's `platform_ready`: false = no bot can serve the commune —
+	// neither its own live bot nor the shared bot with a token — so nothing can be sent yet.
+	PlatformReady *bool `json:"platform_ready,omitempty"`
 }
 
 // zaloChannelSettingsIn — ZaloChannelSettingsChange in zalo.ts: the whole form. is_enabled, kinds and the
-// two quiet times are required; the two overdue numbers are null unless `qua-han` is chosen.
+// two quiet times are required; the two overdue numbers are null unless a `*.qua-han` kind is chosen.
+// `kinds` takes supported_events values; one of the four OLD values is still accepted and saved as the
+// per-domain kinds it means (0021).
 type zaloChannelSettingsIn struct {
 	IsEnabled              *bool    `json:"is_enabled"`
 	Kinds                  []string `json:"kinds"`
@@ -124,6 +137,7 @@ func settingsToOut(s domain.ZaloChannelSetting) zaloChannelSettingsOut {
 	if out.Kinds == nil {
 		out.Kinds = []string{}
 	}
+	out.SupportedEvents = append([]string(nil), domain.ZaloReminderKinds...)
 	if s.Saved {
 		at := s.UpdatedAt
 		out.UpdatedAt, out.UpdatedBy = &at, s.UpdatedBy
@@ -230,7 +244,7 @@ func RegisterZaloLinks(mux *http.ServeMux, d ZaloLinkDeps) {
 
 	// NO idem.* DECLARATION: a GET. No row = is_enabled false with the defaults.
 	//
-	// @summary  Cấu hình kênh nhắc việc Zalo của xã — bật/tắt, các loại nhắc, giờ yên tĩnh (giờ Việt Nam), nhịp nhắc việc quá hạn; xã chưa lưu thì là tắt
+	// @summary  Cấu hình kênh nhắc việc Zalo của xã — bật/tắt, các loại nhắc theo từng phân hệ (supported_events là danh sách được chọn), giờ yên tĩnh (giờ Việt Nam), nhịp nhắc việc quá hạn, platform_ready (đã có bot phục vụ xã chưa); xã chưa lưu thì là tắt
 	// @screen   ADR 0074 — Cấu hình → tab Kênh Zalo
 	// @reply    200 zaloChannelSettingsOut
 	// @reply    401 httpx.Error
@@ -364,7 +378,14 @@ func (h *zaloLinkHandler) GetZaloChannelSettings(w http.ResponseWriter, r *http.
 		h.fail(w, r, "đọc cấu hình", err)
 		return
 	}
-	vietJSON(w, http.StatusOK, settingsToOut(s))
+	ready, err := h.d.Reader.BotReady(r.Context())
+	if err != nil {
+		h.fail(w, r, "đọc trạng thái bot", err)
+		return
+	}
+	out := settingsToOut(s)
+	out.PlatformReady = &ready
+	vietJSON(w, http.StatusOK, out)
 }
 
 // PutZaloChannelSettings — PUT /api/v1/zalo-channel-settings

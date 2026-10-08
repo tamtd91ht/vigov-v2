@@ -23,6 +23,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/store"
@@ -91,6 +92,8 @@ type YeuCauThemLoaiTaiNguyen struct {
 	Nhan      string
 	ThuTu     int
 	LaMacDinh bool
+	// Color is `#RRGGBB` or "" for none (migration 0020).
+	Color string
 }
 
 // YeuCauSuaLoaiTaiNguyen is a PARTIAL edit: a nil pointer means "leave this alone".
@@ -105,6 +108,15 @@ type YeuCauSuaLoaiTaiNguyen struct {
 	ThuTu     *int
 	DangDung  *bool
 	LaMacDinh *bool
+	// Color: nil = leave alone; a change with a nil Color = remove the colour; `#RRGGBB` = set it.
+	// Allowed on every tier (ADR 0079 Q1 #9). Same shape as service-identity's catalogues.
+	Color *CatalogueColorChange
+}
+
+// CatalogueColorChange is a PRESENT `color` in a PATCH: Color nil = JSON null = remove the colour. An
+// empty string is not a removal — it is refused (ErrCatalogueColorShape), as service-identity refuses it.
+type CatalogueColorChange struct {
+	Color *string
 }
 
 // Them adds one row the commune owns.
@@ -129,6 +141,10 @@ func (uc *DanhMucLoaiTaiNguyen) Them(ctx context.Context, yc YeuCauThemLoaiTaiNg
 	if err := domain.KiemTraThuTu(yc.ThuTu); err != nil {
 		return domain.LoaiTaiNguyenBanDo{}, err
 	}
+	color, err := domain.NormalizeCatalogueColor(yc.Color)
+	if err != nil {
+		return domain.LoaiTaiNguyenBanDo{}, err
+	}
 
 	id, err := uc.sinhID()
 	if err != nil {
@@ -139,6 +155,7 @@ func (uc *DanhMucLoaiTaiNguyen) Them(ctx context.Context, yc YeuCauThemLoaiTaiNg
 		ID: id, Ma: ma, Nhan: nhan, ThuTu: yc.ThuTu,
 		LaMacDinh: yc.LaMacDinh,
 		DangDung:  true,
+		Color:     color,
 		// Set here only so the value this function RETURNS describes the row that was written. The
 		// store does not read them: it writes 'don-vi' and false as literals.
 		Nguon:          domain.NguonDonVi,
@@ -223,6 +240,16 @@ func (uc *DanhMucLoaiTaiNguyen) Sua(ctx context.Context, id string, yc YeuCauSua
 			return domain.LoaiTaiNguyenBanDo{}, err
 		}
 	}
+	var color string
+	if yc.Color != nil && yc.Color.Color != nil {
+		if strings.TrimSpace(*yc.Color.Color) == "" {
+			return domain.LoaiTaiNguyenBanDo{}, domain.ErrCatalogueColorShape // removal is null, never ""
+		}
+		var err error
+		if color, err = domain.NormalizeCatalogueColor(*yc.Color.Color); err != nil {
+			return domain.LoaiTaiNguyenBanDo{}, err
+		}
+	}
 
 	var sau domain.LoaiTaiNguyenBanDo
 	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
@@ -243,6 +270,10 @@ func (uc *DanhMucLoaiTaiNguyen) Sua(ctx context.Context, id string, yc YeuCauSua
 		}
 		if yc.LaMacDinh != nil {
 			sau.LaMacDinh = *yc.LaMacDinh
+		}
+		// Presentation only: no tier check (0020; ADR 0079 Q1 #9 — editable on system rows too).
+		if yc.Color != nil {
+			sau.Color = color
 		}
 
 		// THE TIER CHECK IS ON THE TRANSITION, not on the requested value. Asking a tier-3 row to
@@ -358,6 +389,7 @@ func tomTatLoaiTaiNguyen(l domain.LoaiTaiNguyenBanDo) map[string]any {
 		"dang_dung":   l.DangDung,
 		"la_mac_dinh": l.LaMacDinh,
 		"nguon":       l.Nguon,
+		"color":       l.Color,
 	}
 }
 
@@ -376,6 +408,9 @@ func tomTatDoiLoaiTaiNguyen(truoc, sau domain.LoaiTaiNguyenBanDo, ben bool) map[
 	if truoc.LaMacDinh != sau.LaMacDinh {
 		ra["la_mac_dinh"] = chon(ben, truoc.LaMacDinh, sau.LaMacDinh)
 	}
+	if truoc.Color != sau.Color {
+		ra["color"] = chon(ben, truoc.Color, sau.Color)
+	}
 	return ra
 }
 
@@ -383,5 +418,5 @@ func tomTatDoiLoaiTaiNguyen(truoc, sau domain.LoaiTaiNguyenBanDo, ben bool) map[
 // not compared because no path here can change them.
 func khongDoiLoaiTaiNguyen(truoc, sau domain.LoaiTaiNguyenBanDo) bool {
 	return truoc.Nhan == sau.Nhan && truoc.ThuTu == sau.ThuTu &&
-		truoc.DangDung == sau.DangDung && truoc.LaMacDinh == sau.LaMacDinh
+		truoc.DangDung == sau.DangDung && truoc.LaMacDinh == sau.LaMacDinh && truoc.Color == sau.Color
 }

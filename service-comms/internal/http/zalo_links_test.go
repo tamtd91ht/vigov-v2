@@ -35,6 +35,7 @@ type fakeZaloLinks struct {
 	lastActor   audit.Actor
 	lastSave    domain.ZaloChannelSetting
 	err         error
+	ready       bool
 }
 
 func (f *fakeZaloLinks) note(ctx context.Context, a audit.Actor) {
@@ -58,6 +59,8 @@ func (f *fakeZaloLinks) Settings(ctx context.Context) (domain.ZaloChannelSetting
 	f.note(ctx, audit.Actor{})
 	return domain.DefaultZaloChannelSetting(), f.err
 }
+
+func (f *fakeZaloLinks) BotReady(context.Context) (bool, error) { return f.ready, nil }
 
 func (f *fakeZaloLinks) IssuePairingCode(ctx context.Context, a audit.Actor) (app.PairingCodeView, error) {
 	f.note(ctx, a)
@@ -327,9 +330,16 @@ func TestZaloShapesMatchTheWebContract(t *testing.T) {
 	checkKeys("/api/v1/zalo-links/current", http.MethodGet, "linked", "linked_at", "bot_name", "chat_url", "channel_enabled")
 	checkKeys("/api/v1/zalo-links/current/pairing-codes", http.MethodPost, "code", "expires_at", "chat_url")
 	set := checkKeys("/api/v1/zalo-channel-settings", http.MethodGet, "is_enabled", "kinds", "quiet_start", "quiet_end",
-		"overdue_start_after_days", "overdue_repeat_every_days")
+		"overdue_start_after_days", "overdue_repeat_every_days", "supported_events", "platform_ready")
 	if set["quiet_start"] != "21:00" || set["quiet_end"] != "06:00" || set["is_enabled"] != false {
 		t.Errorf("unsaved settings = %v, want off with 21:00–06:00", set)
+	}
+	// ADR 0079 Q3 phase 1: the twelve per-domain kinds with a producer, and the weekly digest — no more.
+	if ev, _ := set["supported_events"].([]any); len(ev) != 13 || ev[0] != "nhiem-vu.sap-den-han" || ev[12] != "ban-tin-tuan" {
+		t.Errorf("supported_events = %v", set["supported_events"])
+	}
+	if set["platform_ready"] != false {
+		t.Errorf("platform_ready = %v with no bot ready", set["platform_ready"])
 	}
 	if _, saved := set["updated_by"]; saved {
 		t.Error("an unsaved commune carries updated_by")

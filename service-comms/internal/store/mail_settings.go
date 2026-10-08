@@ -25,8 +25,11 @@ import (
 // produces no error, only wrong data.
 const mailSettingsColumns = `host, port, security, username, from_address, from_name, is_enabled`
 
-const selectMailSettingsForUpdate = `SELECT ` + mailSettingsColumns + `, password_sealed ` +
-	`FROM mail_settings WHERE tenant_id = $1 FOR UPDATE`
+// mailLastTestColumns — 0019's four columns, read by position in scanLastTest.
+const mailLastTestColumns = `last_test_at, last_test_to_masked, last_test_ok, last_test_error_class`
+
+const selectMailSettingsForUpdate = `SELECT ` + mailSettingsColumns + `, password_sealed, ` + mailLastTestColumns +
+	` FROM mail_settings WHERE tenant_id = $1 FOR UPDATE`
 
 // upsertMailSettings — one row per commune. `tenant_id` appears in no SET list: the trigger refuses
 // a change too, and its absence here keeps that floor unreachable from this service.
@@ -66,7 +69,7 @@ func scanMailSettings(scan func(...any) error, extra ...any) (domain.MailSetting
 // computed in SQL; the sealed bytes never leave the database on this path (point 2 above).
 func (s *MailSettingsStore) Get(ctx context.Context) (domain.MailSettings, error) {
 	// Scoped: Query adds `WHERE tenant_id = $1` from the context.
-	rows, err := s.db.For(ctx).Query(ctx, mailSettingsColumns+`, password_sealed IS NOT NULL`,
+	rows, err := s.db.For(ctx).Query(ctx, mailSettingsColumns+`, password_sealed IS NOT NULL, `+mailLastTestColumns,
 		"mail_settings", "")
 	if err != nil {
 		return domain.MailSettings{}, fmt.Errorf("mail_settings: read: %w", err)
@@ -79,12 +82,32 @@ func (s *MailSettingsStore) Get(ctx context.Context) (domain.MailSettings, error
 		return domain.MailSettings{}, ErrMailSettingsNotFound
 	}
 	var set bool
-	m, err := scanMailSettings(rows.Scan, &set)
+	var t lastTestScan
+	m, err := scanMailSettings(rows.Scan, append([]any{&set}, t.dest()...)...)
 	if err != nil {
 		return domain.MailSettings{}, fmt.Errorf("mail_settings: scan: %w", err)
 	}
 	m.PasswordSet = set
+	m.LastTest = t.result()
 	return m, nil
+}
+
+// lastTestScan holds 0019's four nullable columns while a row is scanned.
+type lastTestScan struct {
+	at    sql.NullTime
+	to    sql.NullString
+	ok    sql.NullBool
+	class sql.NullString
+}
+
+func (t *lastTestScan) dest() []any { return []any{&t.at, &t.to, &t.ok, &t.class} }
+
+// result is nil for "never tested" — 0019's CHECK makes the three NOT-NULL-together columns agree.
+func (t *lastTestScan) result() *domain.MailTestResult {
+	if !t.at.Valid {
+		return nil
+	}
+	return &domain.MailTestResult{At: t.at.Time, ToMasked: t.to.String, OK: t.ok.Bool, ErrorClass: t.class.String}
 }
 
 // Account reads the settings AND the sealed password, for the one use that needs to open it: a
@@ -117,8 +140,9 @@ func (s *MailSettingsStore) Account(ctx context.Context) (domain.MailSettings, [
 func (s *MailSettingsStore) ForUpdate(ctx context.Context, tx *store.ScopedTx) (
 	m domain.MailSettings, sealed []byte, found bool, err error) {
 
+	var t lastTestScan
 	m, err = scanMailSettings(tx.Underlying().QueryRowContext(ctx, selectMailSettingsForUpdate,
-		string(tx.TenantID())).Scan, &sealed)
+		string(tx.TenantID())).Scan, append([]any{&sealed}, t.dest()...)...)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.MailSettings{}, nil, false, nil
 	}
@@ -126,6 +150,7 @@ func (s *MailSettingsStore) ForUpdate(ctx context.Context, tx *store.ScopedTx) (
 		return domain.MailSettings{}, nil, false, fmt.Errorf("mail_settings: read for update: %w", err)
 	}
 	m.PasswordSet = len(sealed) > 0
+	m.LastTest = t.result()
 	return m, sealed, true, nil
 }
 
@@ -141,6 +166,45 @@ func (s *MailSettingsStore) Upsert(ctx context.Context, tx *store.ScopedTx, m do
 	if _, err := tx.Exec(ctx, upsertMailSettings, string(tx.TenantID()), m.Host, m.Port, m.Security,
 		m.Username, m.FromAddress, m.FromName, m.IsEnabled, sealed, by); err != nil {
 		return fmt.Errorf("mail_settings: upsert: %w", err)
+	}
+	return nil
+}
+
+// recordMailTest writes 0019's four columns and NOTHING ELSE — not updated_at, not updated_by: recording
+// a test is not a change of the configuration, and bumping updated_by would show the tester as the last
+// person to save the server settings (0019 "OWED BY GO").
+const recordMailTest = `UPDATE mail_settings SET last_test_at = $2, last_test_to_masked = $3, last_test_ok = $4,
+	last_test_error_class = $5 WHERE tenant_id = $1`
+
+// RecordTest stores the last test message's result. errorClass "" when ok. ErrMailSettingsNotFound when
+// the commune has no row (the use case read it a moment before; the guard refuses DELETE).
+func (s *MailSettingsStore) RecordTest(ctx context.Context, tx *store.ScopedTx, r domain.MailTestResult) error {
+	var class any
+	if r.ErrorClass != "" {
+		class = r.ErrorClass
+	}
+	res, err := tx.Exec(ctx, recordMailTest, string(tx.TenantID()), r.At.UTC(), r.ToMasked, r.OK, class)
+	if err != nil {
+		return fmt.Errorf("mail_settings: record test: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("mail_settings: record test: %w", err)
+	}
+	if n == 0 {
+		return ErrMailSettingsNotFound
+	}
+	return nil
+}
+
+// clearMailTest empties the four columns — all NULL is what 0019's CHECKs allow for "never tested".
+const clearMailTest = `UPDATE mail_settings SET last_test_at = NULL, last_test_to_masked = NULL,
+	last_test_ok = NULL, last_test_error_class = NULL WHERE tenant_id = $1`
+
+// ClearTest forgets the last test result: a save pointed the configuration at another destination.
+func (s *MailSettingsStore) ClearTest(ctx context.Context, tx *store.ScopedTx) error {
+	if _, err := tx.Exec(ctx, clearMailTest, string(tx.TenantID())); err != nil {
+		return fmt.Errorf("mail_settings: clear test: %w", err)
 	}
 	return nil
 }

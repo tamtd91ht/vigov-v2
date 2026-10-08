@@ -34,7 +34,6 @@ import (
 	"time"
 
 	"github.com/vihat/vigov/core/audit"
-	"github.com/vihat/vigov/core/secret"
 	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-comms/internal/domain"
@@ -66,9 +65,11 @@ type ZaloDispatcherDeps struct {
 	Repo     *docstore.ZaloLinkStore
 	Locks    ZaloDispatchLocks
 	Registry PortalCommuneRegistry
-	Bot      SharedZaloBot
-	Send     ZaloMessenger
-	Log      *slog.Logger
+	// Bots answers, per commune, which bot sends: the commune's own live bot (0022, ADR 0079 Q1 #4),
+	// else the shared bot.
+	Bots ZaloBotSource
+	Send ZaloMessenger
+	Log  *slog.Logger
 }
 
 // ZaloDispatcher sends owed Zalo messages. Run blocks until ctx is done.
@@ -81,7 +82,7 @@ type ZaloDispatcher struct {
 
 // NewZaloDispatcher builds the sender.
 func NewZaloDispatcher(d ZaloDispatcherDeps) (*ZaloDispatcher, error) {
-	if d.DB == nil || d.Repo == nil || d.Locks == nil || d.Registry == nil || d.Bot == nil || d.Send == nil {
+	if d.DB == nil || d.Repo == nil || d.Locks == nil || d.Registry == nil || d.Bots == nil || d.Send == nil {
 		return nil, errors.New("gui_zalo: việc nền thiếu phụ thuộc")
 	}
 	if d.Log == nil {
@@ -128,26 +129,13 @@ func (z *ZaloDispatcher) Tick(ctx context.Context) {
 		z.d.Log.WarnContext(ctx, "CẢNH BÁO: không liệt kê được xã có tin Zalo đến hạn", "service", "comms", "err", err)
 		return
 	}
-	if len(ids) == 0 {
-		return
-	}
-	// The token is opened ONCE per tick. An unopenable token (no key in this deployment, a broken seal) is
-	// not "not configured": the rows stay owed and the next tick tries again — nothing is skipped on a
-	// fault of ours.
-	token, configured, err := z.d.Bot.Token(tctx)
-	if err != nil {
-		z.d.Log.WarnContext(ctx, "CẢNH BÁO: không mở được token Zalo Bot dùng chung — tin Zalo chờ nhịp sau",
-			"service", "comms", "err", err)
-		return
-	}
-	defer clear(token)
 	for i, id := range ids {
 		if tctx.Err() != nil {
 			z.d.Log.WarnContext(ctx, "CẢNH BÁO: nhịp gửi Zalo hết thời gian, các xã còn lại chờ nhịp sau",
 				"service", "comms", "con_lai", len(ids)-i)
 			return
 		}
-		z.sendCommune(tctx, id, token, configured)
+		z.sendCommune(tctx, id)
 	}
 }
 
@@ -158,7 +146,7 @@ type zaloJob struct {
 }
 
 // sendCommune runs the three steps for one commune. Nothing it does can stop the next commune.
-func (z *ZaloDispatcher) sendCommune(ctx context.Context, id tenant.ID, token secret.Secret, configured bool) {
+func (z *ZaloDispatcher) sendCommune(ctx context.Context, id tenant.ID) {
 	defer func() {
 		if p := recover(); p != nil {
 			z.d.Log.ErrorContext(ctx, "LỖI: gửi Zalo của một xã bị panic, chuyển sang xã kế", "service", "comms",
@@ -175,6 +163,17 @@ func (z *ZaloDispatcher) sendCommune(ctx context.Context, id tenant.ID, token se
 	if !ok || !t.Active {
 		return // a merged or unknown commune keeps its rows unchanged (rule 7, invariant 6)
 	}
+	// THE COMMUNE'S BOT, opened once per commune per tick: its own live bot when it has one, else the
+	// shared bot (ADR 0079 Q1 #4). An unopenable token (no key in this deployment, a broken seal) is not
+	// "not configured": the rows stay owed and the next tick tries again — nothing is skipped on a fault
+	// of ours, and an own bot never silently falls back to the shared one.
+	bot, token, err := z.d.Bots.ActiveToken(cctx)
+	if err != nil {
+		z.d.Log.WarnContext(cctx, "CẢNH BÁO: không mở được token Zalo Bot của xã — tin Zalo chờ nhịp sau",
+			"service", "comms", "xa", string(id), "err", err)
+		return
+	}
+	defer clear(token)
 
 	now := z.now().Truncate(time.Microsecond)
 	var jobs []zaloJob
@@ -192,13 +191,13 @@ func (z *ZaloDispatcher) sendCommune(ctx context.Context, id tenant.ID, token se
 		for _, d := range due {
 			codes = append(codes, d.StaffCode)
 		}
-		chats, err := z.d.Repo.LiveChatsOf(cctx, tx, codes)
+		chats, err := z.d.Repo.LiveChatsOf(cctx, tx, bot.Ref, codes)
 		if err != nil {
 			return err
 		}
 		tally := map[string][]string{}
 		for _, d := range due {
-			outcome, err := z.decide(cctx, tx, d, settings, chats, configured, t.Host, now, &jobs)
+			outcome, err := z.decide(cctx, tx, d, settings, chats, bot.Configured, t.Host, now, &jobs)
 			if err != nil {
 				return err
 			}

@@ -54,6 +54,15 @@ type hangLVB struct {
 	thuTu        int
 	nguon        string
 	reNhanh      bool
+	color        string // "" = NULL (migration 0020)
+}
+
+// mau is the `color` column as the driver hands it back: NULL for "no colour".
+func (h hangLVB) mau() driver.Value {
+	if h.color == "" {
+		return nil
+	}
+	return h.color
 }
 
 type khoGia struct {
@@ -177,7 +186,7 @@ func (c *connGia) QueryContext(_ context.Context, q string, args []driver.NamedV
 		}
 		h := *c.k.hang
 		return &rowsGia{cot: cotLVB(), hang: [][]driver.Value{{
-			h.id, h.ma, h.nhan, int64(h.thuTu), h.macDinh, h.dangDung, h.nguon, h.reNhanh,
+			h.id, h.ma, h.nhan, int64(h.thuTu), h.macDinh, h.dangDung, h.nguon, h.reNhanh, h.mau(),
 		}}}, nil
 	case strings.Contains(q, "deleted_at IS NOT NULL FROM loai_tai_nguyen_ban_do"):
 		return &rowsGia{cot: []string{"ma", "nhan", "da_xoa"}, hang: c.k.snapshot}, nil
@@ -191,7 +200,7 @@ func (c *connGia) QueryContext(_ context.Context, q string, args []driver.NamedV
 // mirrored the store's (wrong) Scan order instead of its SELECT, so a Scan that could never succeed
 // on PostgreSQL passed here.
 func cotLVB() []string {
-	return []string{"id", "ma", "nhan", "thu_tu", "la_mac_dinh", "dang_dung", "nguon", "ma_nguon_re_nhanh"}
+	return []string{"id", "ma", "nhan", "thu_tu", "la_mac_dinh", "dang_dung", "nguon", "ma_nguon_re_nhanh", "color"}
 }
 
 type txGia struct{ k *khoGia }

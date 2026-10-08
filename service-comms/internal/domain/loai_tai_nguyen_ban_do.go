@@ -1,5 +1,10 @@
 package domain
 
+import (
+	"errors"
+	"strings"
+)
+
 // LoaiTaiNguyenBanDo is one group the economic map is organised by — the `MapAssetType` entity
 // declared on migrations/0003_danh_muc_loai_tai_nguyen_ban_do.sql.
 //
@@ -47,4 +52,33 @@ type LoaiTaiNguyenBanDo struct {
 	// own row in tier 2 and step around every guard.
 	Nguon          string
 	MaNguonReNhanh bool
+
+	// Color is the group's display colour, `#rrggbb` LOWER-CASE, or "" for none chosen (the column
+	// is NULL — migration 0020). Presentation only: editable on every tier, system rows included
+	// (ADR 0079 Q1 #9), and never a reason the tier guard refuses anything.
+	Color string
+}
+
+// ErrCatalogueColorShape — a colour that is not `#` and six hex digits. One shape, because the map
+// renderer and the chip both parse it and the value reaches a style attribute (0020; rule 13 #3).
+var ErrCatalogueColorShape = errors.New("danh_muc: `color` phải có dạng #RRGGBB (sáu chữ số hệ mười sáu)")
+
+// NormalizeCatalogueColor returns the colour to store: "" for none, otherwise `#rrggbb` lower-cased —
+// '#1A2B3C' and '#1a2b3c' are one colour, and one stored spelling keeps a before/after audit delta
+// from recording a change that changed nothing. Mirrors 0020's CHECK `^#[0-9A-Fa-f]{6}$`.
+func NormalizeCatalogueColor(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", nil
+	}
+	if len(s) != 7 || s[0] != '#' {
+		return "", ErrCatalogueColorShape
+	}
+	for i := 1; i < len(s); i++ {
+		c := s[i]
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
+			return "", ErrCatalogueColorShape
+		}
+	}
+	return strings.ToLower(s), nil
 }

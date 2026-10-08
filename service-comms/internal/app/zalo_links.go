@@ -80,9 +80,10 @@ type LinkedStaffView struct {
 
 // ZaloLinks owns the staff side.
 type ZaloLinks struct {
-	db    *store.DB
-	repo  *docstore.ZaloLinkStore
-	bot   SharedZaloBot
+	db   *store.DB
+	repo *docstore.ZaloLinkStore
+	// bots answers which bot serves the commune: its own live bot (0022), else the shared one.
+	bots  ZaloBotSource
 	send  ZaloMessenger
 	names StaffNames
 	log   *slog.Logger
@@ -94,16 +95,16 @@ type ZaloLinks struct {
 }
 
 // NewZaloLinks panics on a missing dependency — at construction, not on the first request.
-func NewZaloLinks(db *store.DB, repo *docstore.ZaloLinkStore, bot SharedZaloBot, send ZaloMessenger,
+func NewZaloLinks(db *store.DB, repo *docstore.ZaloLinkStore, bots ZaloBotSource, send ZaloMessenger,
 	names StaffNames, log *slog.Logger) *ZaloLinks {
 
-	if db == nil || repo == nil || bot == nil || send == nil || names == nil {
+	if db == nil || repo == nil || bots == nil || send == nil || names == nil {
 		panic("app: NewZaloLinks thiếu phụ thuộc")
 	}
 	if log == nil {
 		log = slog.Default()
 	}
-	return &ZaloLinks{db: db, repo: repo, bot: bot, send: send, names: names, log: log,
+	return &ZaloLinks{db: db, repo: repo, bots: bots, send: send, names: names, log: log,
 		newID: ulid.Moi, now: time.Now, drawCode: drawPairingCode}
 }
 
@@ -142,14 +143,24 @@ func (uc *ZaloLinks) Current(ctx context.Context, actor audit.Actor) (ZaloLinkCu
 		return v, fmt.Errorf("zalo: read the settings: %w", err)
 	}
 	v.ChannelEnabled = s.Saved && s.IsEnabled
-	b, found, err := uc.bot.Bot(ctx)
+	b, err := uc.bots.Active(ctx)
 	if err != nil {
 		return v, err
 	}
-	if found {
+	if b.Configured {
 		v.BotName, v.ChatURL = b.BotName, b.ChatURL
 	}
 	return v, nil
+}
+
+// BotReady is spec Cấu hình 11 §0's `platform_ready`: some bot can serve the commune — its own live bot,
+// or the shared bot with a token. false = no message can go out, whatever the settings say.
+func (uc *ZaloLinks) BotReady(ctx context.Context) (bool, error) {
+	b, err := uc.bots.Active(ctx)
+	if err != nil {
+		return false, err
+	}
+	return b.Configured, nil
 }
 
 // maxCodeDraws bounds the redraws on a hash collision in this commune's history. 31^8 codes make even one
@@ -163,11 +174,11 @@ func (uc *ZaloLinks) IssuePairingCode(ctx context.Context, actor audit.Actor) (P
 	if actor.ID == "" {
 		return PairingCodeView{}, ErrNoActor
 	}
-	b, found, err := uc.bot.Bot(ctx)
+	b, err := uc.bots.Active(ctx)
 	if err != nil {
 		return PairingCodeView{}, err
 	}
-	if !found {
+	if !b.Configured {
 		return PairingCodeView{}, ErrZaloBotNotConfigured
 	}
 	at := uc.clock()
@@ -238,7 +249,7 @@ func writeLinkEnded(ctx context.Context, tx *store.ScopedTx, actor audit.Actor, 
 
 	delta, err := json.Marshal(map[string]any{
 		"lien_ket_id": link.ID, "lien_ket_tu": link.LinkedAt, "ly_do": reason, "nguon": source,
-		"bot_ref": domain.SharedZaloBotRef,
+		"bot_ref": link.BotRef,
 	})
 	if err != nil {
 		return fmt.Errorf("zalo: encode delta: %w", err)
@@ -262,12 +273,12 @@ func (uc *ZaloLinks) SendTestMessage(ctx context.Context, actor audit.Actor) err
 	if !s.Saved || !s.IsEnabled {
 		return ErrZaloChannelOff
 	}
-	token, configured, err := uc.bot.Token(ctx)
+	bot, token, err := uc.bots.ActiveToken(ctx)
 	if err != nil {
-		uc.log.WarnContext(ctx, "CẢNH BÁO: không mở được token Zalo Bot dùng chung — gửi thử bị từ chối", "err", err)
+		uc.log.WarnContext(ctx, "CẢNH BÁO: không mở được token Zalo Bot của xã — gửi thử bị từ chối", "err", err)
 		return ErrZaloBotNotConfigured
 	}
-	if !configured {
+	if !bot.Configured {
 		return ErrZaloBotNotConfigured
 	}
 	defer clear(token)
@@ -279,7 +290,7 @@ func (uc *ZaloLinks) SendTestMessage(ctx context.Context, actor audit.Actor) err
 	}
 	var chat docstore.LinkedChat
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
-		chats, err := uc.repo.LiveChatsOf(ctx, tx, []string{actor.ID})
+		chats, err := uc.repo.LiveChatsOf(ctx, tx, bot.Ref, []string{actor.ID})
 		if err != nil {
 			return err
 		}
@@ -398,7 +409,9 @@ func (uc *ZaloLinks) SaveSettings(ctx context.Context, in domain.ZaloChannelSett
 		if err != nil {
 			return err
 		}
-		if before.Saved && before.Same(v) {
+		// A row still holding an OLD kind (0021) is rewritten even when it reads the same: the save is
+		// what moves it onto per-domain values.
+		if before.Saved && before.Same(v) && !before.LegacyKindsStored {
 			out = before
 			return nil
 		}

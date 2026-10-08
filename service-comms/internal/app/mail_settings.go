@@ -29,6 +29,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/crypto"
@@ -48,6 +49,8 @@ type MailSettingsRepo interface {
 	Account(ctx context.Context) (domain.MailSettings, []byte, error)
 	ForUpdate(ctx context.Context, tx *store.ScopedTx) (domain.MailSettings, []byte, bool, error)
 	Upsert(ctx context.Context, tx *store.ScopedTx, m domain.MailSettings, sealed []byte, by string) error
+	RecordTest(ctx context.Context, tx *store.ScopedTx, r domain.MailTestResult) error
+	ClearTest(ctx context.Context, tx *store.ScopedTx) error
 }
 
 // MailSender is the SMTP adapter (internal/mail), declared at the point of use so a test can stand
@@ -60,6 +63,8 @@ type MailSender interface {
 const (
 	ActionSaveMailSettings = "luu_cau_hinh_may_chu_thu"
 	ActionSendTestMail     = "gui_thu_thu_may_chu_thu"
+	// ActionRecordTestMailResult — the result of a test send, written onto the row (0019) with this entry.
+	ActionRecordTestMailResult = "ghi_ket_qua_thu_thu_may_chu_thu"
 )
 
 // The fixed test message. NO CITIZEN DATA, NO COMMUNE DATA: it proves the configuration works and
@@ -103,6 +108,7 @@ type MailSettingsAdmin struct {
 	repo     MailSettingsRepo
 	envelope *crypto.Envelope // nil when SECRET_ENCRYPTION_KEYS is unset — see the file header
 	sender   MailSender
+	now      func() time.Time // nil = time.Now; tests pin it
 }
 
 func NewMailSettingsAdmin(db *store.DB, repo MailSettingsRepo, envelope *crypto.Envelope,
@@ -160,12 +166,15 @@ func (uc *MailSettingsAdmin) Save(ctx context.Context, req SaveMailSettingsReque
 		}
 	}
 
+	// The last test result the row still holds once this save commits — what the reply shows.
+	var lastTest *domain.MailTestResult
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		// Scoped: tx comes from uc.db.For(ctx).Tx — tenant_id is $1 of every statement.
 		before, oldSealed, found, err := uc.repo.ForUpdate(ctx, tx)
 		if err != nil {
 			return err
 		}
+		lastTest = before.LastTest
 		final := newSealed
 		if final == nil {
 			switch {
@@ -181,13 +190,23 @@ func (uc *MailSettingsAdmin) Save(ctx context.Context, req SaveMailSettingsReque
 		if err := uc.repo.Upsert(ctx, tx, after, final, actor.ID); err != nil {
 			return err
 		}
+		// 0019: a result describing a destination no longer configured is forgotten, in the same
+		// transaction as the save that moved it.
+		testCleared := found && domain.MailTestTargetChanged(before, after)
+		if testCleared {
+			if err := uc.repo.ClearTest(ctx, tx); err != nil {
+				return err
+			}
+			lastTest = nil
+		}
 
 		var delta map[string]any
 		if found {
 			delta = map[string]any{
-				"truoc":            diffMailSettings(before, after, true),
-				"sau":              diffMailSettings(before, after, false),
-				"password_changed": newSealed != nil,
+				"truoc":             diffMailSettings(before, after, true),
+				"sau":               diffMailSettings(before, after, false),
+				"password_changed":  newSealed != nil,
+				"last_test_cleared": testCleared,
 			}
 		} else {
 			delta = map[string]any{"sau": summarizeMailSettings(after), "password_changed": true}
@@ -209,6 +228,7 @@ func (uc *MailSettingsAdmin) Save(ctx context.Context, req SaveMailSettingsReque
 		return MailSettingsView{}, fmt.Errorf("may_chu_thu: lưu cho xã %s: %w", tenant.MustFrom(ctx), err)
 	}
 	after.PasswordSet = true
+	after.LastTest = lastTest
 	return MailSettingsView{MailSettings: after, Configured: true, EncryptionConfigured: true}, nil
 }
 
@@ -221,6 +241,10 @@ func (uc *MailSettingsAdmin) Save(ctx context.Context, req SaveMailSettingsReque
 // Before, not after: an entry written after the send cannot be made atomic with it, and a send
 // whose entry failed would be a use of the credential nobody can account for. So no entry, no send.
 // The recipient is masked (rule 6, invariant 5).
+//
+// THE RESULT IS RECORDED AFTER THE SEND RETURNS (migration 0019): masked recipient, ok, error class —
+// one UPDATE that leaves updated_at / updated_by alone, with its own entry, in one transaction. A
+// refusal BEFORE the send (bad address, no row, no KEK, a password that does not open) records nothing.
 func (uc *MailSettingsAdmin) SendTestMessage(ctx context.Context, rawRecipient string, actor audit.Actor) error {
 	if uc.envelope == nil {
 		return crypto.ErrNotConfigured
@@ -231,6 +255,12 @@ func (uc *MailSettingsAdmin) SendTestMessage(ctx context.Context, rawRecipient s
 	to, err := domain.NormalizeMailAddress(rawRecipient)
 	if err != nil {
 		return err
+	}
+	// The value 0019 stores. Refused HERE, before anything is read or sent, when its CHECK would refuse
+	// it: a send whose result cannot be recorded is a send the screen can never report.
+	masked := privacy.MaskEmail(to)
+	if !domain.ValidMaskedTestRecipient(masked) {
+		return domain.ErrMailRecipient
 	}
 	// Scoped in the store: MailSettingsStore.Account reads through db.For(ctx).Query.
 	m, sealed, err := uc.repo.Account(ctx)
@@ -244,7 +274,7 @@ func (uc *MailSettingsAdmin) SendTestMessage(ctx context.Context, rawRecipient s
 	defer clear(password)
 
 	delta, err := json.Marshal(map[string]any{
-		"recipient": privacy.MaskEmail(to),
+		"recipient": masked,
 		"host":      m.Host,
 		"port":      m.Port,
 		"security":  m.Security,
@@ -263,12 +293,79 @@ func (uc *MailSettingsAdmin) SendTestMessage(ctx context.Context, rawRecipient s
 		return fmt.Errorf("may_chu_thu: ghi vết gửi thử cho xã %s: %w", tenant.MustFrom(ctx), err)
 	}
 
-	return uc.sender.Send(ctx, mail.Account{
+	sendErr := uc.sender.Send(ctx, mail.Account{
 		Host: m.Host, Port: m.Port, Security: m.Security, Username: m.Username, Password: password,
 	}, mail.Message{
 		FromAddress: m.FromAddress, FromName: m.FromName, To: to,
 		Subject: testMailSubject, Body: testMailBody,
 	})
+
+	// THE RESULT, ONCE THE SEND RETURNED (0019): the four columns and their entry in ONE transaction.
+	// Everything that failed BEFORE the send returned above and records nothing — no test reached a
+	// server. The class is the sentinel's, never the server's words (internal/mail never returns them).
+	result := domain.MailTestResult{At: uc.clock(), ToMasked: masked, OK: sendErr == nil}
+	if sendErr != nil {
+		result.ErrorClass = mailErrorClass(sendErr)
+	}
+	rdelta, err := json.Marshal(map[string]any{
+		"recipient": masked, "ok": result.OK, "error_class": result.ErrorClass,
+	})
+	if err != nil {
+		return fmt.Errorf("may_chu_thu: mã hoá delta: %w", err)
+	}
+	if err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		if err := uc.repo.RecordTest(ctx, tx, result); err != nil {
+			return err
+		}
+		return audit.Write(ctx, tx, audit.Entry{
+			Actor:   actor,
+			Action:  ActionRecordTestMailResult,
+			Subject: domain.MailSettingsSubject,
+			At:      result.At,
+			Delta:   rdelta,
+		})
+	}); err != nil {
+		// The server answered; the record did not land. The screen is told it failed rather than shown a
+		// result that is not on the row — the attempt itself is already on record (above).
+		return fmt.Errorf("may_chu_thu: ghi kết quả gửi thử cho xã %s: %w", tenant.MustFrom(ctx), err)
+	}
+	return sendErr
+}
+
+// mailTestErrorClasses — 0019's table, sentinel → class, one to one. A wrapped sentinel (with its SMTP
+// reply code) still matches.
+var mailTestErrorClasses = []struct {
+	err   error
+	class string
+}{
+	{mail.ErrConnect, domain.MailTestErrorConnect},
+	{mail.ErrTimeout, domain.MailTestErrorTimeout},
+	{mail.ErrCertificate, domain.MailTestErrorCertificate},
+	{mail.ErrTLS, domain.MailTestErrorTLS},
+	{mail.ErrStartTLSMissing, domain.MailTestErrorStartTLSMissing},
+	{mail.ErrPlaintextRefused, domain.MailTestErrorPlaintextRefused},
+	{mail.ErrAuthUnsupported, domain.MailTestErrorAuthUnsupported},
+	{mail.ErrAuthRejected, domain.MailTestErrorAuthRejected},
+	{mail.ErrRecipientRejected, domain.MailTestErrorRecipientRejected},
+	{mail.ErrProtocol, domain.MailTestErrorProtocol},
+}
+
+// mailErrorClass is the stored class of a send failure; MailTestErrorOther for anything not a sentinel.
+func mailErrorClass(err error) string {
+	for _, c := range mailTestErrorClasses {
+		if errors.Is(err, c.err) {
+			return c.class
+		}
+	}
+	return domain.MailTestErrorOther
+}
+
+func (uc *MailSettingsAdmin) clock() time.Time {
+	now := time.Now
+	if uc.now != nil {
+		now = uc.now
+	}
+	return now().UTC().Truncate(time.Microsecond)
 }
 
 // summarizeMailSettings is the full non-secret picture, addresses masked.

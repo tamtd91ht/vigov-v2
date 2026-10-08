@@ -345,6 +345,28 @@ func ZaloChatKey(chatID string) (Key, error) {
 // shared key.
 var ErrNoChat = errors.New("ratelimit: no chat id for a per-chat key")
 
+// ZaloCommuneChatKey is the key of a per-CHAT limit of a COMMUNE's own Zalo bot (service-comms, ADR 0079
+// Q1 #2): one counter per (commune, bot, chat).
+//
+//	→ "t:<tenant>:rl:<policy>:zalo-chat:<botRef>:<sha256(chatID) hex>"
+//
+// UNLIKE ZaloChatKey, THE COMMUNE IS IN THE KEY: a commune bot's update arrives on the commune's own domain,
+// so the chat belongs to that commune's bot and its budget is the commune's — one commune's chats never
+// spend another's. The tenant comes from ctx (rule 1, invariant 4); none → ErrNoCommune. botRef is the
+// bot's bot_ref (`commune:<account>`, printable ASCII, not personal data) — a chat id is per bot. chatID
+// is hashed for ZaloChatKey's reason (rule 3, forbidden #4); empty → ErrNoChat.
+func ZaloCommuneChatKey(ctx context.Context, botRef, chatID string) (Key, error) {
+	if strings.TrimSpace(chatID) == "" || strings.TrimSpace(botRef) == "" {
+		return Key{}, ErrNoChat
+	}
+	id, ok := tenant.From(ctx)
+	if !ok || !id.Valid() {
+		return Key{}, ErrNoCommune
+	}
+	sum := sha256.Sum256([]byte(chatID))
+	return Key{tenant: string(id), subject: "zalo-chat:" + botRef + ":" + hex.EncodeToString(sum[:])}, nil
+}
+
 // ipSubject is the client-network part every IP-keyed counter shares — the table on OperatorIPKey.
 func ipSubject(ip string) string {
 	a, err := netip.ParseAddr(ip)

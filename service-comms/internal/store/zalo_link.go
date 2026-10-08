@@ -60,10 +60,12 @@ func scanZaloSetting(scan func(...any) error) (domain.ZaloChannelSetting, error)
 	if err := scan(&s.IsEnabled, &kinds, &qs, &qe, &startDays, &everyDay, &s.UpdatedAt, &s.UpdatedBy); err != nil {
 		return domain.ZaloChannelSetting{}, err
 	}
-	s.Kinds = []string{}
+	stored := []string{}
 	if kinds != "" {
-		s.Kinds = strings.Split(kinds, ",")
+		stored = strings.Split(kinds, ",")
 	}
+	// 0021's read-time map: an old stored value is read as the per-domain kinds it means.
+	s.Kinds, s.LegacyKindsStored = domain.ReadStoredZaloKinds(stored)
 	var ok1, ok2 bool
 	s.QuietStartMinute, ok1 = domain.ParseClock(qs)
 	s.QuietEndMinute, ok2 = domain.ParseClock(qe)
@@ -208,6 +210,34 @@ func (s *ZaloLinkStore) InsertPairingCode(ctx context.Context, tx *store.ScopedT
 	return nil
 }
 
+// OpenPairingCodeByHash finds an OPEN code of THIS commune by its hash — the commune bot's webhook,
+// whose commune comes from Host (ADR 0079 Q1 #2): no cross-commune read. found=false: none open here.
+// 0018 never issues a hash twice in a commune, so at most one row matches.
+func (s *ZaloLinkStore) OpenPairingCodeByHash(ctx context.Context, hash []byte) (string, bool, error) {
+	// Scoped.Query adds `WHERE tenant_id = $1` and binds the context's commune.
+	rows, err := s.db.For(ctx).Query(ctx, "id", "zalo_pairing_code",
+		"AND code_hash = $2 AND used_at IS NULL AND cancelled_at IS NULL LIMIT 2", hash)
+	if err != nil {
+		return "", false, fmt.Errorf("zalo_pairing_code: find by hash: %w", err)
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return "", false, fmt.Errorf("zalo_pairing_code: find by hash: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return "", false, fmt.Errorf("zalo_pairing_code: find by hash: %w", err)
+	}
+	if len(ids) != 1 {
+		return "", false, nil // none, or (impossible by 0018) two: no match, fail closed
+	}
+	return ids[0], true, nil
+}
+
 // LockOpenPairingCode reads one OPEN code of this commune, FOR UPDATE — two chats sending the same code at
 // once cannot both use it. ErrPairingCodeNotOpen when it is used, cancelled or absent.
 func (s *ZaloLinkStore) LockOpenPairingCode(ctx context.Context, tx *store.ScopedTx, id string) (PairingCode, error) {
@@ -242,14 +272,14 @@ func (s *ZaloLinkStore) MarkPairingCodeUsed(ctx context.Context, tx *store.Scope
 
 // ---- links -------------------------------------------------------------------------------------------
 
-const zaloLinkColumns = "id, staff_code, linked_at"
+const zaloLinkColumns = "id, staff_code, linked_at, bot_ref"
 
 func scanLinks(rows *sql.Rows) ([]domain.ZaloLink, error) {
 	defer rows.Close()
 	out := []domain.ZaloLink{}
 	for rows.Next() {
 		var l domain.ZaloLink
-		if err := rows.Scan(&l.ID, &l.StaffCode, &l.LinkedAt); err != nil {
+		if err := rows.Scan(&l.ID, &l.StaffCode, &l.LinkedAt, &l.BotRef); err != nil {
 			return nil, fmt.Errorf("zalo_link: scan: %w", err)
 		}
 		out = append(out, l)
@@ -303,14 +333,58 @@ func (s *ZaloLinkStore) LockLiveLinkOfStaff(ctx context.Context, tx *store.Scope
 		"AND staff_code = $2 AND unlinked_at IS NULL FOR UPDATE", staffCode))
 }
 
-// LockLiveLinkOfChat locks the live link of one chat IN THIS COMMUNE (the shared bot). found=false: none
-// here — a live link elsewhere is crosstenant's to end.
-func (s *ZaloLinkStore) LockLiveLinkOfChat(ctx context.Context, tx *store.ScopedTx, chatID string) (
+// LockLiveLinkOfChat locks the live link of one chat of one bot IN THIS COMMUNE. found=false: none here —
+// for the shared bot, a live link elsewhere is crosstenant's to end; a commune bot's links live in its
+// commune only (0022 zalo_link_commune_bot_live). A chat id is per bot, so botRef is part of the key.
+func (s *ZaloLinkStore) LockLiveLinkOfChat(ctx context.Context, tx *store.ScopedTx, botRef, chatID string) (
 	domain.ZaloLink, bool, error) {
 
 	// ScopedTx.Query adds `WHERE tenant_id = $1` and binds the transaction's commune.
 	return firstLink(tx.Query(ctx, zaloLinkColumns, "zalo_link",
-		"AND bot_ref = $2 AND chat_id = $3 AND unlinked_at IS NULL FOR UPDATE", domain.SharedZaloBotRef, chatID))
+		"AND bot_ref = $2 AND chat_id = $3 AND unlinked_at IS NULL FOR UPDATE", botRef, chatID))
+}
+
+// CountLiveLinksOfBot counts this commune's live links through botRef — the number a switch of bot would
+// end (ADR 0079 Q1 #4). A COUNT, unbounded by MaxZaloLinksListed: a number shown in a confirmation, not a
+// list.
+func (s *ZaloLinkStore) CountLiveLinksOfBot(ctx context.Context, botRef string) (int, error) {
+	// Scoped.Query adds `WHERE tenant_id = $1` and binds the context's commune.
+	rows, err := s.db.For(ctx).Query(ctx, "count(*)", "zalo_link", "AND bot_ref = $2 AND unlinked_at IS NULL", botRef)
+	if err != nil {
+		return 0, fmt.Errorf("zalo_link: count: %w", err)
+	}
+	defer rows.Close()
+	n := 0
+	if rows.Next() {
+		if err := rows.Scan(&n); err != nil {
+			return 0, fmt.Errorf("zalo_link: count: %w", err)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("zalo_link: count: %w", err)
+	}
+	return n, nil
+}
+
+// endLiveLinksOfBot ends every live link of one bot in this commune and returns them, for the caller's
+// one audit entry per ended link (0022: switching bots ends every live link, both directions).
+const endLiveLinksOfBot = `UPDATE zalo_link SET unlinked_at = $3, unlinked_by = $4, unlink_reason = $5, updated_at = $3
+	WHERE tenant_id = $1 AND bot_ref = $2 AND unlinked_at IS NULL
+	RETURNING ` + zaloLinkColumns
+
+// EndLiveLinksOfBot ends every live link of botRef in this commune. by is the staff code of whoever
+// switched the bot; reason a fixed sentence.
+func (s *ZaloLinkStore) EndLiveLinksOfBot(ctx context.Context, tx *store.ScopedTx, botRef, by, reason string,
+	at time.Time) ([]domain.ZaloLink, error) {
+
+	// THE TENANT SCOPE HERE IS MANUAL: tx.Underlying() bypasses ScopedTx's own binding (an UPDATE …
+	// RETURNING is neither its Query nor its Exec), so `tenant_id = $1` in the statement and
+	// tx.TenantID() as $1 below are what keep this to the transaction's commune. Keep both.
+	rows, err := tx.Underlying().QueryContext(ctx, endLiveLinksOfBot, string(tx.TenantID()), botRef, at.UTC(), by, reason)
+	if err != nil {
+		return nil, fmt.Errorf("zalo_link: end the bot's links: %w", err)
+	}
+	return scanLinks(rows)
 }
 
 const endZaloLink = `UPDATE zalo_link SET unlinked_at = $3, unlinked_by = $4, unlink_reason = $5, updated_at = $3
@@ -326,12 +400,13 @@ func (s *ZaloLinkStore) EndLink(ctx context.Context, tx *store.ScopedTx, id, by,
 const insertZaloLink = `INSERT INTO zalo_link (tenant_id, id, staff_code, bot_ref, chat_id, linked_at, created_at, updated_at)
 	VALUES ($1, $2, $3, $4, $5, $6, $6, $6)`
 
-// InsertLink creates a live link of the shared bot. The caller has ended every live link of this member
-// of staff and of this chat first (the two partial unique indexes of 0018).
-func (s *ZaloLinkStore) InsertLink(ctx context.Context, tx *store.ScopedTx, id, staffCode, chatID string,
+// InsertLink creates a live link through botRef — the shared bot, or the commune's live own bot (0022's
+// insert trigger refuses any other). The caller has ended every live link of this member of staff and
+// of this chat first (the two partial unique indexes of 0018).
+func (s *ZaloLinkStore) InsertLink(ctx context.Context, tx *store.ScopedTx, id, staffCode, botRef, chatID string,
 	at time.Time) error {
 
-	if _, err := tx.Exec(ctx, insertZaloLink, string(tx.TenantID()), id, staffCode, domain.SharedZaloBotRef,
+	if _, err := tx.Exec(ctx, insertZaloLink, string(tx.TenantID()), id, staffCode, botRef,
 		chatID, at.UTC()); err != nil {
 		return fmt.Errorf("zalo_link: insert: %w", err)
 	}
@@ -344,15 +419,16 @@ type LinkedChat struct {
 	ChatID string
 }
 
-// LiveChatsOf reads the live chats of several members of staff, keyed by staff code.
-func (s *ZaloLinkStore) LiveChatsOf(ctx context.Context, tx *store.ScopedTx, staffCodes []string) (map[string]LinkedChat, error) {
+// LiveChatsOf reads the live chats, through botRef, of several members of staff, keyed by staff code.
+// botRef is the bot serving the commune now: a message goes through the bot the chat was paired with.
+func (s *ZaloLinkStore) LiveChatsOf(ctx context.Context, tx *store.ScopedTx, botRef string, staffCodes []string) (map[string]LinkedChat, error) {
 	out := map[string]LinkedChat{}
 	if len(staffCodes) == 0 {
 		return out, nil
 	}
 	// ScopedTx.Query adds `WHERE tenant_id = $1` and binds the transaction's commune.
 	rows, err := tx.Query(ctx, "staff_code, id, chat_id", "zalo_link",
-		"AND bot_ref = $2 AND staff_code = ANY($3) AND unlinked_at IS NULL", domain.SharedZaloBotRef, staffCodes)
+		"AND bot_ref = $2 AND staff_code = ANY($3) AND unlinked_at IS NULL", botRef, staffCodes)
 	if err != nil {
 		return nil, fmt.Errorf("zalo_link: read chats: %w", err)
 	}
@@ -385,7 +461,9 @@ func (s *ZaloLinkStore) LiveChatsOf(ctx context.Context, tx *store.ScopedTx, sta
 // order, so a skip is recorded the moment the notice exists ("mỗi lần bỏ qua ghi lý do"):
 //
 //	kenh-tat       no settings row, or switched off
-//	loai-tat       this kind not selected
+//	loai-tat       this kind not selected — through 0021's map ($4/$5, domain.ZaloLegacyKindPairs): a
+//	               notice of an OLD kind passes when a per-domain kind it stands for is selected, and a
+//	               row still holding an old value passes the per-domain kinds that value stands for
 //	chua-lien-ket  the recipient has no live link
 //
 // Everything else — the bot's configuration (platform scope), quiet hours, the send — is the sender's,
@@ -401,7 +479,10 @@ const enqueueZaloDeliveries = `INSERT INTO zalo_delivery
 		SELECT n.tenant_id, n.id, n.recipient_code, n.kind,
 			CASE
 				WHEN s.tenant_id IS NULL OR NOT s.is_enabled THEN 'kenh-tat'
-				WHEN NOT (n.kind = ANY (s.kinds)) THEN 'loai-tat'
+				WHEN NOT (n.kind = ANY (s.kinds) OR EXISTS (
+					SELECT 1 FROM unnest($4::text[], $5::text[]) AS m(legacy, per_domain)
+					WHERE (m.legacy = n.kind AND m.per_domain = ANY (s.kinds))
+					   OR (m.per_domain = n.kind AND m.legacy = ANY (s.kinds)))) THEN 'loai-tat'
 				WHEN NOT EXISTS (SELECT 1 FROM zalo_link l
 				                 WHERE l.tenant_id = n.tenant_id AND l.staff_code = n.recipient_code
 				                   AND l.unlinked_at IS NULL) THEN 'chua-lien-ket'
@@ -429,7 +510,8 @@ func (s *ZaloLinkStore) EnqueueZaloDeliveries(ctx context.Context, tx *store.Sco
 	if _, err := tx.Exec(ctx, `SAVEPOINT zalo_delivery_enqueue`); err != nil {
 		return 0, fmt.Errorf("zalo_delivery: savepoint: %w", err)
 	}
-	res, err := tx.Exec(ctx, enqueueZaloDeliveries, string(tx.TenantID()), keys, createdAt.UTC())
+	legacy, perDomain := domain.ZaloLegacyKindPairs()
+	res, err := tx.Exec(ctx, enqueueZaloDeliveries, string(tx.TenantID()), keys, createdAt.UTC(), legacy, perDomain)
 	var n int64
 	if err == nil {
 		n, err = res.RowsAffected()

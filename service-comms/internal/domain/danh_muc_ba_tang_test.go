@@ -165,3 +165,16 @@ func TestTangCuaMotDongDocCaHaiCot(t *testing.T) {
 		t.Errorf("Tang() = %d, muốn %d", l.Tang(), TangReNhanh)
 	}
 }
+
+func TestNormalizeCatalogueColorMirrors0020(t *testing.T) {
+	for in, want := range map[string]string{"": "", "  ": "", "#1A2B3C": "#1a2b3c", " #abcdef ": "#abcdef", "#000000": "#000000"} {
+		if got, err := NormalizeCatalogueColor(in); err != nil || got != want {
+			t.Errorf("%q → %q, %v; want %q", in, got, err, want)
+		}
+	}
+	for _, bad := range []string{"#abc", "abcdef", "#abcdeg", "#1a2b3c4", "red", "#ABCDEF;x", "#１２３４５６"} {
+		if _, err := NormalizeCatalogueColor(bad); !errors.Is(err, ErrCatalogueColorShape) {
+			t.Errorf("%q accepted", bad)
+		}
+	}
+}

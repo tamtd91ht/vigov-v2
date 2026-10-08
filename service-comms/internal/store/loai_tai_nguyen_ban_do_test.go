@@ -56,6 +56,7 @@ type hangGia struct {
 	macDinh, dangDung bool
 	nguon             string
 	reNhanh           bool
+	color             string
 }
 
 func (h hangGia) giaTri(cot string) driver.Value {
@@ -76,6 +77,11 @@ func (h hangGia) giaTri(cot string) driver.Value {
 		return h.nguon
 	case "ma_nguon_re_nhanh":
 		return h.reNhanh
+	case "color":
+		if h.color == "" {
+			return nil // NULL: no colour chosen (migration 0020)
+		}
+		return h.color
 	default:
 		// A column was added to cotLoaiTaiNguyen and not here. Failing loudly beats scanning a nil
 		// that "passes" while proving nothing.

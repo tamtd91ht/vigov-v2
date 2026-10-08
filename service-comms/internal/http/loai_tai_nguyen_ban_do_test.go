@@ -299,6 +299,7 @@ func TestLoaiTaiNguyenChiTraTruongCuaHopDong(t *testing.T) {
 	muon := map[string]bool{
 		"id": true, "code": true, "label": true, "is_default": true, "active": true,
 		"order": true, "source": true, "tier": true,
+		"color": true, // migration 0020, ADR 0079 #5 — null when none chosen
 	}
 	for _, mot := range tho.Items {
 		for khoa := range mot {

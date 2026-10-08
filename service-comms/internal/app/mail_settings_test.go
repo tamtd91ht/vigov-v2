@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/vihat/vigov/core/crypto"
 	"github.com/vihat/vigov/core/secret"
@@ -44,6 +45,7 @@ type mailRow struct {
 	port                                 int
 	enabled                              bool
 	sealed                               []byte
+	lastTest                             *domain.MailTestResult
 }
 
 type mailDB struct {
@@ -124,6 +126,10 @@ func (c *mailConn) QueryContext(_ context.Context, q string, args []driver.Named
 		return nil, fmt.Errorf("fake driver: no answer for %q", q)
 	}
 	cols := []string{"host", "port", "security", "username", "from_address", "from_name", "is_enabled", "x"}
+	withTest := strings.Contains(q, "last_test_at")
+	if withTest {
+		cols = append(cols, "t_at", "t_to", "t_ok", "t_class")
+	}
 	if c.d.row == nil {
 		return &mailRows{cols: cols}, nil
 	}
@@ -132,9 +138,19 @@ func (c *mailConn) QueryContext(_ context.Context, q string, args []driver.Named
 	if strings.Contains(q, "IS NOT NULL") {
 		last = len(r.sealed) > 0
 	}
-	return &mailRows{cols: cols, rows: [][]driver.Value{{
-		r.host, int64(r.port), r.security, r.username, r.from, r.name, r.enabled, last,
-	}}}, nil
+	row := []driver.Value{r.host, int64(r.port), r.security, r.username, r.from, r.name, r.enabled, last}
+	if withTest {
+		if t := r.lastTest; t != nil {
+			var class driver.Value
+			if t.ErrorClass != "" {
+				class = t.ErrorClass
+			}
+			row = append(row, t.At, t.ToMasked, t.OK, class)
+		} else {
+			row = append(row, nil, nil, nil, nil)
+		}
+	}
+	return &mailRows{cols: cols, rows: [][]driver.Value{row}}, nil
 }
 
 type mailTx struct{ d *mailDB }
@@ -516,7 +532,8 @@ func TestSendTestMessageOpensPasswordAuditsFirstThenSends(t *testing.T) {
 	if sender.calls != 1 || sender.password != testMailPassword {
 		t.Fatalf("sender calls=%d, password opened correctly=%v", sender.calls, sender.password == testMailPassword)
 	}
-	if sender.auditsBefore != 1 || d.committed != 1 {
+	// Two transactions: the attempt's entry BEFORE the send, the result (0019) after it.
+	if sender.auditsBefore != 1 || d.committed != 2 {
 		t.Fatalf("audit entries before send = %d, commits = %d — the attempt must be on record first",
 			sender.auditsBefore, d.committed)
 	}
@@ -570,6 +587,10 @@ func TestSendTestMessageRefusals(t *testing.T) {
 			if sender.calls != 0 || len(d.with("INSERT INTO")) != 0 {
 				t.Fatal("a refused test message still audited or sent")
 			}
+			// 0019: a failure before the send records no result — no test reached a server.
+			if len(d.with("UPDATE mail_settings")) != 0 {
+				t.Fatal("a refusal before the send recorded a test result")
+			}
 		})
 	}
 }
@@ -581,5 +602,147 @@ func TestSendTestMessagePassesSenderErrorThrough(t *testing.T) {
 	sender.err = mail.ErrAuthRejected
 	if err := uc.SendTestMessage(ctx, "a@example.test", staffActor); !errors.Is(err, mail.ErrAuthRejected) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+// --- the last test result (migration 0019) -------------------------------------------------------
+
+var mailTestClock = time.Date(2026, 10, 8, 3, 0, 0, 0, time.UTC)
+
+func TestSendTestMessageRecordsTheResultWithItsEntryInOneTransaction(t *testing.T) {
+	env := testEnvelope(t)
+	d := &mailDB{row: storedRow(t, env)}
+	uc, _, ctx := newMailUseCase(t, d, env)
+	uc.now = func() time.Time { return mailTestClock }
+
+	if err := uc.SendTestMessage(ctx, "canbo@example.test", staffActor); err != nil {
+		t.Fatalf("SendTestMessage: %v", err)
+	}
+	up := d.with("UPDATE mail_settings")
+	if len(up) != 1 {
+		t.Fatalf("%d result updates, want 1", len(up))
+	}
+	// Recording a test is NOT a save: updated_at / updated_by stay as the last saver left them.
+	if strings.Contains(up[0].sql, "updated_at") || strings.Contains(up[0].sql, "updated_by") {
+		t.Fatalf("the result update touches updated_at/updated_by: %s", up[0].sql)
+	}
+	if up[0].args[0] != string(xaA) || up[0].args[2] != "c***@example.test" || up[0].args[3] != true || up[0].args[4] != nil {
+		t.Fatalf("result args = %v — want commune, masked recipient, ok, no class", up[0].args)
+	}
+	if strings.Contains(fmt.Sprint(up[0].args), "canbo@") {
+		t.Fatal("the raw recipient reached the row")
+	}
+	iUp := d.indexOf("UPDATE mail_settings")
+	entries := d.with("INSERT INTO audit_log")
+	if len(entries) != 2 || entries[1].args[4] != ActionRecordTestMailResult {
+		t.Fatalf("entries = %d, second action = %v — the result needs its own entry", len(entries), entries[1].args[4])
+	}
+	if iAudit := len(d.stmts) - 1; d.stmts[iAudit].sql != entries[1].sql || iAudit < iUp {
+		t.Error("the result's entry must follow its UPDATE in the same transaction")
+	}
+	if d.begun != 2 || d.committed != 2 {
+		t.Fatalf("begun/committed = %d/%d, want 2/2", d.begun, d.committed)
+	}
+}
+
+func TestSendTestMessageFailureIsRecordedAsItsClass(t *testing.T) {
+	env := testEnvelope(t)
+	d := &mailDB{row: storedRow(t, env)}
+	uc, sender, ctx := newMailUseCase(t, d, env)
+	sender.err = fmt.Errorf("%w (smtp 535)", mail.ErrAuthRejected)
+
+	err := uc.SendTestMessage(ctx, "canbo@example.test", staffActor)
+	if !errors.Is(err, mail.ErrAuthRejected) {
+		t.Fatalf("err = %v — the send's own failure must still reach the handler", err)
+	}
+	up := d.with("UPDATE mail_settings")
+	if len(up) != 1 || up[0].args[3] != false || up[0].args[4] != domain.MailTestErrorAuthRejected {
+		t.Fatalf("result = %v, want ok=false class %q", up, domain.MailTestErrorAuthRejected)
+	}
+	delta, _ := d.with("INSERT INTO audit_log")[1].args[7].([]byte)
+	if strings.Contains(string(delta), "535") || strings.Contains(string(delta), "canbo@") {
+		t.Errorf("the result entry carries the reply code or the raw address: %s", delta)
+	}
+}
+
+func TestMailErrorClassIsOneToOneWithTheSentinels(t *testing.T) {
+	// 0019's CHECK list, verbatim.
+	allowed := map[string]bool{"khong-ket-noi": true, "het-thoi-gian": true, "chung-chi-khong-hop-le": true,
+		"loi-tls": true, "khong-co-starttls": true, "tu-choi-khong-ma-hoa": true, "khong-ho-tro-dang-nhap": true,
+		"sai-tai-khoan": true, "tu-choi-dia-chi": true, "sai-giao-thuc": true, "khac": true}
+	sentinels := []error{mail.ErrPlaintextRefused, mail.ErrConnect, mail.ErrTimeout, mail.ErrCertificate, mail.ErrTLS,
+		mail.ErrStartTLSMissing, mail.ErrAuthUnsupported, mail.ErrAuthRejected, mail.ErrRecipientRejected, mail.ErrProtocol}
+	seen := map[string]bool{}
+	for _, s := range sentinels {
+		c := mailErrorClass(fmt.Errorf("wrapped: %w", s))
+		if !allowed[c] || c == domain.MailTestErrorOther || seen[c] {
+			t.Errorf("%v → %q: not a distinct 0019 class", s, c)
+		}
+		seen[c] = true
+	}
+	if c := mailErrorClass(errors.New("something else")); c != domain.MailTestErrorOther {
+		t.Errorf("an unknown error → %q, want %q", c, domain.MailTestErrorOther)
+	}
+}
+
+func TestSendTestMessageResultRecordFailureIsReported(t *testing.T) {
+	env := testEnvelope(t)
+	d := &mailDB{row: storedRow(t, env), failOnContain: "UPDATE mail_settings"}
+	uc, sender, ctx := newMailUseCase(t, d, env)
+	if err := uc.SendTestMessage(ctx, "canbo@example.test", staffActor); err == nil {
+		t.Fatal("a result that did not land was reported as success")
+	}
+	if sender.calls != 1 || d.rolledBack != 1 {
+		t.Fatalf("calls=%d rolledBack=%d", sender.calls, d.rolledBack)
+	}
+}
+
+func TestSaveMailSettingsClearsTheLastTestWhenTheTargetMoves(t *testing.T) {
+	for name, tc := range map[string]struct {
+		edit  func(*domain.MailSettingsInput)
+		clear bool
+	}{
+		"host":      {func(in *domain.MailSettingsInput) { in.Host = "smtp.new.example.test" }, true},
+		"port":      {func(in *domain.MailSettingsInput) { in.Port = 2525 }, true},
+		"security":  {func(in *domain.MailSettingsInput) { in.Port = 465; in.Security = domain.MailSecurityTLS }, true},
+		"username":  {func(in *domain.MailSettingsInput) { in.Username = "khac@example.test" }, true},
+		"from name": {func(in *domain.MailSettingsInput) { in.FromName = "Tên khác" }, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			env := testEnvelope(t)
+			row := storedRow(t, env)
+			row.lastTest = &domain.MailTestResult{At: mailTestClock, ToMasked: "c***@example.test", OK: true}
+			d := &mailDB{row: row}
+			uc, _, ctx := newMailUseCase(t, d, env)
+			in := validMailInput()
+			tc.edit(&in)
+			v, err := uc.Save(ctx, SaveMailSettingsRequest{Input: in, Password: secret.Secret("fixture-new-pass-3")}, staffActor)
+			if err != nil {
+				t.Fatalf("Save: %v", err)
+			}
+			cleared := len(d.with("last_test_at = NULL")) == 1
+			if cleared != tc.clear {
+				t.Fatalf("cleared = %v, want %v", cleared, tc.clear)
+			}
+			if (v.LastTest == nil) != tc.clear {
+				t.Errorf("reply last test = %+v, want cleared=%v", v.LastTest, tc.clear)
+			}
+			delta, _ := d.with("INSERT INTO audit_log")[0].args[7].([]byte)
+			if !strings.Contains(string(delta), fmt.Sprintf(`"last_test_cleared":%v`, tc.clear)) {
+				t.Errorf("delta = %s", delta)
+			}
+		})
+	}
+}
+
+func TestGetMailSettingsCarriesTheLastTest(t *testing.T) {
+	env := testEnvelope(t)
+	row := storedRow(t, env)
+	row.lastTest = &domain.MailTestResult{At: mailTestClock, ToMasked: "c***@example.test", ErrorClass: domain.MailTestErrorTimeout}
+	uc, _, ctx := newMailUseCase(t, &mailDB{row: row}, env)
+	v, err := uc.Get(ctx)
+	if err != nil || v.LastTest == nil || v.LastTest.OK || v.LastTest.ErrorClass != domain.MailTestErrorTimeout ||
+		v.LastTest.ToMasked != "c***@example.test" {
+		t.Fatalf("view = %+v err = %v", v.LastTest, err)
 	}
 }

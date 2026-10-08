@@ -2,6 +2,8 @@ package domain
 
 import (
 	"errors"
+	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -64,14 +66,26 @@ func TestParseZaloCommand(t *testing.T) {
 func days(n int) *int { return &n }
 
 func TestNormalizeZaloChannelSettingMirrorsTheChecks(t *testing.T) {
-	base := ZaloChannelSetting{IsEnabled: true, Kinds: []string{"leo-thang", "sap-den-han", "sap-den-han"},
+	base := ZaloChannelSetting{IsEnabled: true,
+		Kinds:            []string{"phan-anh.leo-thang", "nhiem-vu.sap-den-han", "nhiem-vu.sap-den-han", "ban-tin-tuan"},
 		QuietStartMinute: 21 * 60, QuietEndMinute: 6 * 60}
 	got, err := NormalizeZaloChannelSetting(base)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(got.Kinds, ",") != "sap-den-han,leo-thang" {
+	if strings.Join(got.Kinds, ",") != "nhiem-vu.sap-den-han,phan-anh.leo-thang,ban-tin-tuan" {
 		t.Errorf("kinds = %v, want de-duplicated in canonical order", got.Kinds)
+	}
+	// An OLD value (0021) is accepted and saved as what it means — never stored as itself again.
+	old := base
+	old.Kinds = []string{"leo-thang", "sap-den-han"}
+	got, err = NormalizeZaloChannelSetting(old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(got.Kinds, ",") != "nhiem-vu.sap-den-han,nhiem-vu.leo-thang,van-ban.sap-den-han,"+
+		"van-ban.leo-thang,phan-anh.sap-den-han,phan-anh.leo-thang" {
+		t.Errorf("old kinds saved as %v", got.Kinds)
 	}
 
 	refuse := map[string]func(*ZaloChannelSetting){
@@ -80,7 +94,7 @@ func TestNormalizeZaloChannelSettingMirrorsTheChecks(t *testing.T) {
 		"empty_quiet_window":          func(s *ZaloChannelSetting) { s.QuietEndMinute = s.QuietStartMinute },
 		"invalid_quiet_time":          func(s *ZaloChannelSetting) { s.QuietEndMinute = 24 * 60 },
 		"overdue_cadence_incomplete":  func(s *ZaloChannelSetting) { s.OverdueStartAfterDays = days(1) },
-		"overdue_cadence_required":    func(s *ZaloChannelSetting) { s.Kinds = []string{"qua-han"} },
+		"overdue_cadence_required":    func(s *ZaloChannelSetting) { s.Kinds = []string{"van-ban.qua-han"} },
 		"overdue_start_out_of_range":  func(s *ZaloChannelSetting) { s.OverdueStartAfterDays, s.OverdueRepeatEveryDays = days(366), days(1) },
 		"overdue_repeat_out_of_range": func(s *ZaloChannelSetting) { s.OverdueStartAfterDays, s.OverdueRepeatEveryDays = days(0), days(0) },
 	}
@@ -176,5 +190,92 @@ func TestZaloReminderTextAndLink(t *testing.T) {
 	}
 	if AbsoluteStaffLink("", "/x") != "" {
 		t.Error("no host, still a link")
+	}
+}
+
+// --- 0021: per-domain kinds and the read-time map --------------------------------------------------
+
+func TestZaloReminderKindsAreThe0021Kinds(t *testing.T) {
+	b, err := os.ReadFile("../../migrations/0021_zalo_kinds_per_domain.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	check := string(b)
+	if len(ZaloReminderKinds) != 13 {
+		t.Fatalf("%d selectable kinds, want 12 per-domain + the weekly digest", len(ZaloReminderKinds))
+	}
+	for _, k := range ZaloReminderKinds {
+		if !strings.Contains(check, "'"+k+"'") {
+			t.Errorf("%q is not admitted by 0021's CHECKs", k)
+		}
+	}
+}
+
+func TestZaloLegacyKindMapIs0021sTable(t *testing.T) {
+	want := map[string]string{
+		"sap-den-han":  "nhiem-vu.sap-den-han,van-ban.sap-den-han,phan-anh.sap-den-han",
+		"qua-han":      "nhiem-vu.qua-han,nhiem-vu.chua-cu-nguoi,van-ban.qua-han,van-ban.chua-cu-nguoi,phan-anh.qua-han,phan-anh.chua-cu-nguoi",
+		"leo-thang":    "nhiem-vu.leo-thang,van-ban.leo-thang,phan-anh.leo-thang",
+		"ban-tin-tuan": "ban-tin-tuan",
+	}
+	for old, kinds := range want {
+		if got := strings.Join(ExpandZaloKinds([]string{old}), ","); got != kinds {
+			t.Errorf("%s → %s, want %s", old, got, kinds)
+		}
+	}
+	// Together the four old values cover every selectable kind exactly: lossless both ways.
+	if got := ExpandZaloKinds([]string{"sap-den-han", "qua-han", "leo-thang", "ban-tin-tuan"}); !slices.Equal(got, ZaloReminderKinds) {
+		t.Errorf("the four old values expand to %v", got)
+	}
+	legacy, perDomain := ZaloLegacyKindPairs()
+	if len(legacy) != len(perDomain) || len(legacy) != 13 {
+		t.Fatalf("pairs %d/%d", len(legacy), len(perDomain))
+	}
+	for i := range legacy {
+		if !slices.Contains(ZaloLegacyKindMap[legacy[i]], perDomain[i]) {
+			t.Errorf("pair (%s, %s) is not in the map", legacy[i], perDomain[i])
+		}
+	}
+}
+
+func TestZaloKindSelectedThroughTheMap(t *testing.T) {
+	cases := []struct {
+		selected []string
+		notice   string
+		want     bool
+	}{
+		// Producers still send OLD kinds: an old notice passes when a kind it stands for is selected.
+		{[]string{"van-ban.chua-cu-nguoi"}, "qua-han", true},
+		{[]string{"phan-anh.sap-den-han"}, "sap-den-han", true},
+		{[]string{"phan-anh.sap-den-han"}, "qua-han", false},
+		{[]string{"nhiem-vu.leo-thang"}, "leo-thang", true},
+		{[]string{"ban-tin-tuan"}, "ban-tin-tuan", true},
+		// A row still holding an OLD value passes the per-domain kinds it stands for.
+		{[]string{"qua-han"}, "phan-anh.chua-cu-nguoi", true},
+		{[]string{"qua-han"}, "qua-han", true},
+		{[]string{"sap-den-han"}, "van-ban.qua-han", false},
+		// Per-domain to per-domain is exact.
+		{[]string{"van-ban.qua-han"}, "phan-anh.qua-han", false},
+		{[]string{}, "qua-han", false},
+		{[]string{"qua-han"}, "thu-nghiem", false},
+	}
+	for _, c := range cases {
+		if got := ZaloKindSelected(c.selected, c.notice); got != c.want {
+			t.Errorf("%v / %s → %v, want %v", c.selected, c.notice, got, c.want)
+		}
+		s := ZaloChannelSetting{Kinds: c.selected}
+		if s.KindEnabled(c.notice) != c.want {
+			t.Errorf("KindEnabled disagrees for %v / %s", c.selected, c.notice)
+		}
+	}
+}
+
+func TestReadStoredZaloKindsFlagsOldValues(t *testing.T) {
+	kinds, legacy := ReadStoredZaloKinds([]string{"qua-han"})
+	if !legacy || len(kinds) != 6 {
+		t.Errorf("qua-han → %v legacy=%v", kinds, legacy)
+	}
+	if _, legacy := ReadStoredZaloKinds([]string{"ban-tin-tuan", "van-ban.qua-han"}); legacy {
+		t.Error("ban-tin-tuan is a current value, not a legacy one")
 	}
 }

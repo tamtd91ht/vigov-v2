@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -726,4 +727,53 @@ func ctxChuThe(r *http.Request, p *authz.Principal) context.Context {
 		return r.Context()
 	}
 	return context.WithValue(r.Context(), khoaChuTheGhi{}, *p)
+}
+
+// --- colour (migration 0020) -----------------------------------------------------------------------
+
+func TestMauDiQuaPostVaPatch(t *testing.T) {
+	m := dungMayChuGhi(t)
+	m.capQuyen(xaA, QuyenDanhMuc)
+	m.ghi.ra.Color = "#1a2b3c"
+
+	w := m.goiThan(t, http.MethodPost, hostA, "/api/v1/map-asset-types", canBoGhi(xaA),
+		`{"code":"bao-cao","label":"Báo cáo","color":"#1A2B3C"}`)
+	doiMa(t, w, http.StatusCreated)
+	if m.ghi.themCuoi.Color != "#1A2B3C" {
+		t.Errorf("POST color reached the use case as %q", m.ghi.themCuoi.Color)
+	}
+	if !strings.Contains(w.Body.String(), `"color":"#1a2b3c"`) {
+		t.Errorf("reply lacks the stored colour: %s", w.Body.String())
+	}
+
+	// ABSENT = leave alone; explicit null = remove; a string = set (service-identity's semantics).
+	doiMa(t, m.goiThan(t, http.MethodPatch, hostA, "/api/v1/map-asset-types/dm-moi", canBoGhi(xaA),
+		`{"label":"Báo cáo tháng"}`), http.StatusOK)
+	if m.ghi.suaCuoi.Color != nil {
+		t.Errorf("an absent colour arrived as a change: %+v", m.ghi.suaCuoi.Color)
+	}
+	doiMa(t, m.goiThan(t, http.MethodPatch, hostA, "/api/v1/map-asset-types/dm-moi", canBoGhi(xaA),
+		`{"color":null}`), http.StatusOK)
+	if m.ghi.suaCuoi.Color == nil || m.ghi.suaCuoi.Color.Color != nil {
+		t.Errorf("null did not arrive as a removal: %+v", m.ghi.suaCuoi.Color)
+	}
+	doiMa(t, m.goiThan(t, http.MethodPatch, hostA, "/api/v1/map-asset-types/dm-moi", canBoGhi(xaA),
+		`{"color":"#ABCDEF"}`), http.StatusOK)
+	if c := m.ghi.suaCuoi.Color; c == nil || c.Color == nil || *c.Color != "#ABCDEF" {
+		t.Errorf("a colour did not arrive as a set: %+v", c)
+	}
+	// Not a string and not null: the body is refused before the use case.
+	doiMa(t, m.goiThan(t, http.MethodPatch, hostA, "/api/v1/map-asset-types/dm-moi", canBoGhi(xaA),
+		`{"color":123}`), http.StatusBadRequest)
+}
+
+func TestMauSaiDangLa400(t *testing.T) {
+	m := dungMayChuGhi(t)
+	m.capQuyen(xaA, QuyenDanhMuc)
+	m.ghi.loi = fmt.Errorf("danh_muc_loai_tai_nguyen_ban_do: sửa: %w", domain.ErrCatalogueColorShape)
+	w := m.goiThan(t, http.MethodPatch, hostA, "/api/v1/map-asset-types/dm-moi", canBoGhi(xaA), `{"color":"red"}`)
+	doiMa(t, w, http.StatusBadRequest)
+	if e := loiTra(t, w); e.Code != "invalid_request" {
+		t.Errorf("code = %q", e.Code)
+	}
 }

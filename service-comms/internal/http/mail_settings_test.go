@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
@@ -380,5 +382,34 @@ func assertNoInternalWording(t *testing.T, msg string) {
 	}
 	if strings.TrimSpace(msg) == "" {
 		t.Error("empty message")
+	}
+}
+
+func TestGetMailSettingsLastTestShape(t *testing.T) {
+	s := newMailServer(t)
+	s.grant(xaA, "admin.lookup")
+	w := s.call(t, http.MethodGet, hostA, mailPath, canBoGhi(xaA), "")
+	doiMa(t, w, http.StatusOK)
+	if !strings.Contains(w.Body.String(), `"last_test":null`) {
+		t.Errorf("never tested must read last_test null: %s", w.Body.String())
+	}
+
+	s.fake.view.LastTest = &domain.MailTestResult{At: time.Date(2026, 10, 8, 3, 0, 0, 0, time.UTC),
+		ToMasked: "c***@example.test", ErrorClass: domain.MailTestErrorTimeout}
+	w = s.call(t, http.MethodGet, hostA, mailPath, canBoGhi(xaA), "")
+	doiMa(t, w, http.StatusOK)
+	var out struct {
+		LastTest map[string]any `json:"last_test"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.LastTest["to"] != "c***@example.test" || out.LastTest["ok"] != false ||
+		out.LastTest["error_class"] != "het-thoi-gian" || out.LastTest["at"] == nil {
+		t.Errorf("last_test = %v", out.LastTest)
+	}
+	// ADR 0079 Q1 #8: no platform fallback mail server, so no field claiming one.
+	if strings.Contains(w.Body.String(), "platform_fallback") {
+		t.Error("platform_fallback appeared")
 	}
 }

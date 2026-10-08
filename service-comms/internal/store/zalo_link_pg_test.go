@@ -56,7 +56,7 @@ func TestPgZaloSettingsRoundTripAndIsolation(t *testing.T) {
 	h, s, _, c1, c2 := zaloRig(t)
 	ctx := ctxXa(tenant.ID(c1))
 	five, two := 5, 2
-	in := domain.ZaloChannelSetting{IsEnabled: true, Kinds: []string{"sap-den-han", "qua-han"},
+	in := domain.ZaloChannelSetting{IsEnabled: true, Kinds: []string{"nhiem-vu.sap-den-han", "van-ban.qua-han"},
 		QuietStartMinute: 22*60 + 30, QuietEndMinute: 5 * 60, OverdueStartAfterDays: &five, OverdueRepeatEveryDays: &two}
 	if err := h.For(ctx).Tx(ctx, func(tx *pkgstore.ScopedTx) error {
 		if _, err := s.LockChannelSetting(ctx, tx); err != nil {
@@ -75,6 +75,18 @@ func TestPgZaloSettingsRoundTripAndIsolation(t *testing.T) {
 	}
 	if other, _ := s.ChannelSetting(ctxXa(tenant.ID(c2))); other.Saved {
 		t.Error("commune 2 reads commune 1's settings")
+	}
+	// 0021: a row still holding an OLD value is read as the per-domain kinds it means.
+	legacy := in
+	legacy.Kinds = []string{"qua-han"}
+	if err := h.For(ctx).Tx(ctx, func(tx *pkgstore.ScopedTx) error {
+		return s.SaveChannelSetting(ctx, tx, legacy, "CB-00123", zaloAt)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err = s.ChannelSetting(ctx); err != nil || !got.LegacyKindsStored || len(got.Kinds) != 6 ||
+		!got.KindEnabled("phan-anh.chua-cu-nguoi") {
+		t.Fatalf("legacy read: %+v %v", got, err)
 	}
 	// The CHECK backs the domain: enabled with no kind is refused by the database too.
 	err = h.For(ctx).Tx(ctx, func(tx *pkgstore.ScopedTx) error {
@@ -97,7 +109,7 @@ func pairStaff(t *testing.T, h *pkgstore.DB, s *ZaloLinkStore, z *crosstenant.Za
 			return err
 		}
 		ended = n
-		if l, found, err := s.LockLiveLinkOfChat(ctx, tx, chat); err != nil {
+		if l, found, err := s.LockLiveLinkOfChat(ctx, tx, domain.SharedZaloBotRef, chat); err != nil {
 			return err
 		} else if found {
 			if err := s.EndLink(ctx, tx, l.ID, staff, domain.ZaloLinkEndedByChatTaken, zaloAt); err != nil {
@@ -111,7 +123,7 @@ func pairStaff(t *testing.T, h *pkgstore.DB, s *ZaloLinkStore, z *crosstenant.Za
 				return err
 			}
 		}
-		return s.InsertLink(ctx, tx, linkID, staff, chat, zaloAt)
+		return s.InsertLink(ctx, tx, linkID, staff, domain.SharedZaloBotRef, chat, zaloAt)
 	}); err != nil {
 		t.Fatalf("pair %s/%s: %v", commune, staff, err)
 	}
@@ -291,7 +303,7 @@ func TestPgZaloEnqueueDecidesTheThreeLocalSkips(t *testing.T) {
 		if err != nil || len(due) != 1 || due[0].Title != "T" || due[0].StaffCode != "CB-00001" {
 			return fmt.Errorf("claim = %+v %w", due, err)
 		}
-		chats, err := s.LiveChatsOf(ctx, tx, []string{"CB-00001"})
+		chats, err := s.LiveChatsOf(ctx, tx, domain.SharedZaloBotRef, []string{"CB-00001"})
 		if err != nil || chats["CB-00001"].LinkID != "link-q" {
 			return fmt.Errorf("chats = %+v %w", chats, err)
 		}

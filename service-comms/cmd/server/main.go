@@ -290,6 +290,12 @@ func main() {
 	zaloBot := commsapp.NewSharedZaloBotAccess(commsapp.NewZaloBotStore(platformStore), platformStore, platformEnvelope)
 	zaloLinks := commsstore.NewZaloLinkStore(kho)
 	zaloCross := crosstenant.NewZaloBot(db)
+	// A COMMUNE'S OWN BOT (migration 0022, ADR 0079 Q1): a COMMUNE table on the scoped handle, its token and
+	// webhook secret sealed by the COMMUNE envelope (the mail password's, above). The router answers, per
+	// commune, which bot sends — its own live bot, else the shared one — for the staff routes and the
+	// dispatcher alike.
+	zaloCommuneBots := commsstore.NewZaloCommuneBotStore(kho)
+	zaloRouter := commsapp.NewZaloBotRouter(zaloBot, zaloCommuneBots, envelope)
 
 	mailSettings := commsapp.NewMailSettingsAdmin(kho, commsstore.NewMailSettingsStore(kho), envelope,
 		mail.NewSender(nil, mail.DefaultTimeout))
@@ -371,7 +377,7 @@ func main() {
 	// The sender of owed Zalo messages — the sweep's pattern (one advisory lock, per-commune context).
 	// `nenTang` gives a commune's state (a merged one is left untouched) and its host for message links.
 	zaloDispatcher, err := commsapp.NewZaloDispatcher(commsapp.ZaloDispatcherDeps{
-		DB: kho, Repo: zaloLinks, Locks: zaloCross, Registry: nenTang, Bot: zaloBot, Send: zaloClient, Log: log,
+		DB: kho, Repo: zaloLinks, Locks: zaloCross, Registry: nenTang, Bots: zaloRouter, Send: zaloClient, Log: log,
 	})
 	if err != nil {
 		log.Error("không dựng được việc nền gửi tin Zalo", "service", "comms", "err", err)
@@ -451,19 +457,30 @@ func main() {
 	// The Zalo Bot channel's staff routes (ADR 0074 §"Tài nguyên URL") — the caller's own link
 	// (AnyAuthenticated) and the commune's administration (admin.lookup), on the SAME staff mux. Staff names
 	// for the linked list come from identity's ResolveStaffNames over the client the edge already holds.
-	zaloLinkActs := commsapp.NewZaloLinks(kho, zaloLinks, zaloBot, zaloClient, dinhDanh, log)
+	zaloLinkActs := commsapp.NewZaloLinks(kho, zaloLinks, zaloRouter, zaloClient, dinhDanh, log)
 	svchttp.RegisterZaloLinks(mux, svchttp.ZaloLinkDeps{
 		Checker: staffauth.Checker{},
 		Reader:  zaloLinkActs,
 		Writer:  zaloLinkActs,
 		Log:     log,
 	})
+	// The commune's own bot (ADR 0079 Q1 #5) — five admin.lookup routes on the SAME staff mux. `nenTang`
+	// gives the commune's host, which the webhook URL registered with Zalo is built on.
+	svchttp.RegisterZaloCommuneBot(mux, svchttp.ZaloCommuneBotDeps{
+		Checker: staffauth.Checker{},
+		Bots:    commsapp.NewCommuneZaloBots(kho, zaloCommuneBots, zaloLinks, envelope, zaloClient, nenTang, log),
+		Log:     log,
+	})
 
-	// THE THIRD EDGE CHAIN — the shared Zalo Bot's webhook (ADR 0074 #5), served ONLY on
-	// ZALO_BOT_WEBHOOK_HOST (withZaloBotWebhook). Its own mux: no commune, no session, no CORS.
+	// THE THIRD EDGE CHAIN — the Zalo Bot webhook (ADR 0074 #5; ADR 0079 Q1 #2). Its own mux: no session,
+	// no CORS. Mounted twice by withZaloBotWebhook: on ZALO_BOT_WEBHOOK_HOST with no commune (the shared
+	// bot), and on every other host behind TenantMiddleware (a commune's own bot, commune from Host).
 	muxZaloBot := http.NewServeMux()
 	svchttp.RegisterZaloBotUpdates(muxZaloBot, svchttp.ZaloBotUpdateDeps{
-		Updates: commsapp.NewZaloWebhook(kho, zaloLinks, zaloCross, zaloPairingLimiter, zaloBot, zaloClient, log),
+		Updates: commsapp.NewZaloWebhook(kho, zaloLinks, zaloCommuneBots, zaloCross, zaloPairingLimiter, zaloBot,
+			zaloClient, log),
+		CommuneUpdates: commsapp.NewCommuneZaloWebhook(kho, zaloLinks, zaloCommuneBots, envelope, zaloPairingLimiter,
+			zaloClient, log),
 		Limiter: zaloWebhookLimiter,
 		Log:     log,
 	})
@@ -528,7 +545,7 @@ func main() {
 		// only the proxies TRUSTED_PROXY_CIDRS names (rule 6, invariant 2).
 		Handler: httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies())(withZaloBotWebhook(
 			dungBien(mux, congKhai, directory, dinhDanh, idemStore, log),
-			zaloBotChain(muxZaloBot), cfg.ZaloBotWebhookHost())),
+			zaloBotChain(muxZaloBot), communeZaloBotChain(muxZaloBot, directory), cfg.ZaloBotWebhookHost())),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -807,21 +824,42 @@ func zaloBotChain(muxZaloBot http.Handler) http.Handler {
 	return h
 }
 
-// withZaloBotWebhook puts the webhook in front of the other two chains — for ONE host and ONE path.
+// communeZaloBotChain is the webhook chain for a COMMUNE's own bot (ADR 0079 Q1 #2), outermost last:
 //
-// A HOST PATTERN, NOT A PATH PATTERN: ServeMux prefers a pattern with a host, so
-// `<ZALO_BOT_WEBHOOK_HOST>/api/v1/zalo-bot-updates` reaches the webhook chain, while the same path on any
-// other Host falls through to the staff chain, where TenantMiddleware or the staff mux answers 404. The
-// webhook is therefore not reachable through a commune's domain, and the webhook host serves nothing else
-// (the staff chain 404s it: it is no commune's host — core/config refuses a commune-shaped value).
+//	StripTenantHeaders  a client naming its own commune is granting itself access
+//	Recover             a panic becomes a traceable 500
+//	TenantMiddleware    the commune from Host; unknown Host = 404, never a default (rule 1, invariant 3)
 //
-// host "" (dev only — staging and prod refuse to start without it): no webhook at all, fail closed.
-func withZaloBotWebhook(rest, zaloBot http.Handler, host string) http.Handler {
-	if host == "" {
-		return rest
-	}
+// The SAME mux as the shared bot's: the handler reads the commune TenantMiddleware put in the context
+// (internal/http/zalo_bot_updates.go). NO staffauth (Zalo has no session), NO idem (Zalo sends no key),
+// NO CORS (server to server).
+func communeZaloBotChain(muxZaloBot http.Handler, danhBa tenant.Directory) http.Handler {
+	h := muxZaloBot
+	h = httpx.TenantMiddleware(danhBa)(h)
+	h = httpx.Recover(traceID)(h)
+	h = httpx.StripTenantHeaders(h)
+	return h
+}
+
+// withZaloBotWebhook puts the webhook in front of the other two chains — for ONE path.
+//
+//	<ZALO_BOT_WEBHOOK_HOST>/api/v1/zalo-bot-updates   the SHARED bot's chain (no commune). A HOST
+//	                                                  PATTERN: ServeMux prefers it over the bare path
+//	/api/v1/zalo-bot-updates on any other host        a COMMUNE's own bot (ADR 0079 Q1 #2): Zalo calls
+//	                                                  `https://<xã>/api/v1/zalo-bot-updates`, and the
+//	                                                  commune chain resolves the commune from Host
+//
+// The webhook host serves nothing else (the staff chain 404s it: it is no commune's host — core/config
+// refuses a commune-shaped value), and a commune's host never reaches the shared bot's chain.
+//
+// host "" (dev only — staging and prod refuse to start without it): no SHARED webhook at all, fail
+// closed. A commune's own bot does not depend on it and is served either way.
+func withZaloBotWebhook(rest, sharedBot, communeBot http.Handler, host string) http.Handler {
 	m := http.NewServeMux()
-	m.Handle(host+svchttp.ZaloBotUpdatesPath, zaloBot)
+	if host != "" {
+		m.Handle(host+svchttp.ZaloBotUpdatesPath, sharedBot)
+	}
+	m.Handle(svchttp.ZaloBotUpdatesPath, communeBot)
 	m.Handle("/", rest)
 	return m
 }

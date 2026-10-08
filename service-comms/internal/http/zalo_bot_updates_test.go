@@ -10,7 +10,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/ratelimit"
+	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-comms/internal/domain"
 	"github.com/vihat/vigov/service-comms/internal/zalobot"
 )
@@ -60,24 +62,85 @@ func (b *readCounter) Read(p []byte) (int, error) {
 	return b.r.Read(p)
 }
 
+// fakeCommuneUpdates is the commune bot's use case, RECORDING THE COMMUNE each call ran in. Its secret is
+// per commune, as the real one is.
+type fakeCommuneUpdates struct {
+	secrets   map[tenant.ID]string
+	authCalls int
+	authIn    []tenant.ID
+	handledIn []tenant.ID
+	repliedIn []tenant.ID
+	handled   []zalobot.Update
+	// lostAuth: Handle or Reply ran without Authenticate's context — the authenticated bot was dropped.
+	lostAuth bool
+}
+
+// authMark is what the fake's Authenticate puts in the context; Handle and Reply must see it.
+type authMark struct{}
+
+func (f *fakeCommuneUpdates) Authenticate(ctx context.Context, presented string) (context.Context, bool, error) {
+	f.authCalls++
+	xa := tenant.MustFrom(ctx)
+	f.authIn = append(f.authIn, xa)
+	if presented == "" || presented != f.secrets[xa] {
+		return ctx, false, nil
+	}
+	return context.WithValue(ctx, authMark{}, "bot-of-"+string(xa)), true, nil
+}
+
+func (f *fakeCommuneUpdates) Handle(ctx context.Context, u zalobot.Update, _ string) string {
+	if ctx.Value(authMark{}) == nil {
+		f.lostAuth = true
+	}
+	f.handledIn = append(f.handledIn, tenant.MustFrom(ctx))
+	f.handled = append(f.handled, u)
+	return domain.ZaloReplyHelp
+}
+
+func (f *fakeCommuneUpdates) Reply(ctx context.Context, _, _ string) {
+	if ctx.Value(authMark{}) == nil {
+		f.lostAuth = true
+	}
+	f.repliedIn = append(f.repliedIn, tenant.MustFrom(ctx))
+}
+
 type webhookServer struct {
 	h       http.Handler
+	commune http.Handler // the SAME mux behind TenantMiddleware — cmd/server's commune chain
 	fake    *fakeUpdates
+	cfake   *fakeCommuneUpdates
 	counter *memCounter
 }
 
 func newWebhookServer(t *testing.T) *webhookServer {
 	t.Helper()
 	fake := &fakeUpdates{secret: "s3cret-of-forty-three-characters-XXXXXXXXXX", reply: domain.ZaloReplyHelp}
+	cfake := &fakeCommuneUpdates{secrets: map[tenant.ID]string{xaA: "secret-of-commune-A", xaB: "secret-of-commune-B"}}
 	counter := &memCounter{}
 	lim, err := ratelimit.New(counter, ratelimit.ZaloBotWebhook)
 	if err != nil {
 		t.Fatal(err)
 	}
 	mux := http.NewServeMux()
-	RegisterZaloBotUpdates(mux, ZaloBotUpdateDeps{Updates: fake, Limiter: lim,
+	RegisterZaloBotUpdates(mux, ZaloBotUpdateDeps{Updates: fake, CommuneUpdates: cfake, Limiter: lim,
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
-	return &webhookServer{h: mux, fake: fake, counter: counter}
+	var commune http.Handler = mux
+	commune = httpx.TenantMiddleware(thuMucMau())(commune)
+	commune = httpx.StripTenantHeaders(commune)
+	return &webhookServer{h: mux, commune: commune, fake: fake, cfake: cfake, counter: counter}
+}
+
+func (s *webhookServer) postCommune(t *testing.T, host, secret string, body io.Reader) *httptest.ResponseRecorder {
+	t.Helper()
+	r := httptest.NewRequest(http.MethodPost, "https://"+host+ZaloBotUpdatesPath, body)
+	r.Host = host
+	r.RemoteAddr = "203.0.113.9:443"
+	if secret != "" {
+		r.Header.Set(ZaloSecretHeader, secret)
+	}
+	w := httptest.NewRecorder()
+	s.commune.ServeHTTP(w, r)
+	return w
 }
 
 const flatUpdate = `{"event_name":"message.text.received","message":{"chat":{"id":"chat-1"},"text":"/trogiup","message_id":"m1"}}`
@@ -190,8 +253,9 @@ func TestZaloWebhookRateLimitBeforeTheSecretAndClosed(t *testing.T) {
 func TestRegisterZaloBotUpdatesRefusesIncompleteWiring(t *testing.T) {
 	lim, _ := ratelimit.New(&memCounter{}, ratelimit.ZaloBotWebhook)
 	for name, d := range map[string]ZaloBotUpdateDeps{
-		"updates": {Limiter: lim},
-		"limiter": {Updates: &fakeUpdates{}},
+		"updates": {Limiter: lim, CommuneUpdates: &fakeCommuneUpdates{}},
+		"commune": {Limiter: lim, Updates: &fakeUpdates{}},
+		"limiter": {Updates: &fakeUpdates{}, CommuneUpdates: &fakeCommuneUpdates{}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			defer func() {
@@ -201,5 +265,72 @@ func TestRegisterZaloBotUpdatesRefusesIncompleteWiring(t *testing.T) {
 			}()
 			RegisterZaloBotUpdates(http.NewServeMux(), d)
 		})
+	}
+}
+
+// --- a commune's own bot: the same route on the commune's domain (ADR 0079 Q1 #2) ---------------------
+
+func TestCommuneWebhookRunsInTheHostsCommuneOnly(t *testing.T) {
+	s := newWebhookServer(t)
+	doiMa(t, s.postCommune(t, hostA, "secret-of-commune-A", strings.NewReader(flatUpdate)), http.StatusOK)
+	if len(s.cfake.handledIn) != 1 || s.cfake.handledIn[0] != xaA || len(s.cfake.repliedIn) != 1 || s.cfake.repliedIn[0] != xaA {
+		t.Fatalf("handled in %v, replied in %v — want commune A from Host", s.cfake.handledIn, s.cfake.repliedIn)
+	}
+	if len(s.fake.handled) != 0 || s.fake.authCalls != 0 {
+		t.Fatal("a commune host reached the SHARED bot's use case")
+	}
+	if s.cfake.lostAuth {
+		t.Fatal("Handle or Reply ran without the authenticated bot's context")
+	}
+	// Commune A's secret presented on commune B's host is wrong there: 403, body unread.
+	body := &readCounter{r: strings.NewReader(flatUpdate)}
+	doiMa(t, s.postCommune(t, hostB, "secret-of-commune-A", body), http.StatusForbidden)
+	if body.read || len(s.cfake.handled) != 1 {
+		t.Fatal("another commune's secret was accepted, or the body was read")
+	}
+	// A client-named commune header changes nothing: Host decides.
+	r := httptest.NewRequest(http.MethodPost, "https://"+hostA+ZaloBotUpdatesPath, strings.NewReader(flatUpdate))
+	r.Host = hostA
+	r.Header.Set("X-Tenant-Id", string(xaB))
+	r.Header.Set(ZaloSecretHeader, "secret-of-commune-A")
+	w := httptest.NewRecorder()
+	s.commune.ServeHTTP(w, r)
+	doiMa(t, w, http.StatusOK)
+	if last := s.cfake.handledIn[len(s.cfake.handledIn)-1]; last != xaA {
+		t.Fatalf("ran in %q, want the Host's commune", last)
+	}
+}
+
+func TestCommuneWebhookUnknownHostIs404BeforeAnything(t *testing.T) {
+	s := newWebhookServer(t)
+	doiMa(t, s.postCommune(t, "khong-co.example.gov.vn", "secret-of-commune-A", strings.NewReader(flatUpdate)),
+		http.StatusNotFound)
+	if s.cfake.authCalls != 0 || len(s.counter.keys) != 0 {
+		t.Fatal("an unknown host reached the limiter or the secret check")
+	}
+}
+
+func TestCommuneWebhookRateLimitIsPerCommuneAndBeforeTheSecret(t *testing.T) {
+	s := newWebhookServer(t)
+	for i := 0; i < ratelimit.ZaloBotWebhookLimit; i++ {
+		s.postCommune(t, hostA, "wrong", strings.NewReader(flatUpdate))
+	}
+	before := s.cfake.authCalls
+	doiMa(t, s.postCommune(t, hostA, "secret-of-commune-A", strings.NewReader(flatUpdate)), http.StatusTooManyRequests)
+	if s.cfake.authCalls != before {
+		t.Error("the secret was compared for a request over the limit")
+	}
+	// Commune A's spent budget is not commune B's: the key carries the commune.
+	doiMa(t, s.postCommune(t, hostB, "secret-of-commune-B", strings.NewReader(flatUpdate)), http.StatusOK)
+	for _, k := range s.counter.keys {
+		if !strings.HasPrefix(k, "t:") {
+			t.Fatalf("a commune webhook counted under an unscoped key %q", k)
+		}
+	}
+	s2 := newWebhookServer(t)
+	s2.counter.fail = errors.New("redis down")
+	doiMa(t, s2.postCommune(t, hostA, "secret-of-commune-A", strings.NewReader(flatUpdate)), http.StatusServiceUnavailable)
+	if s2.cfake.authCalls != 0 {
+		t.Error("the commune webhook served with its rate limit down — it must fail closed")
 	}
 }

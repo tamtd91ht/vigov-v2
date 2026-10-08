@@ -1,6 +1,7 @@
 package http
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -88,6 +89,10 @@ type loaiTaiNguyenRa struct {
 	// after what a screen does with it (ADR 0017). Capability flags would also have to be kept in
 	// step with the trigger from a second place.
 	Tier int `json:"tier"`
+
+	// Color is the display colour, `#rrggbb` lower-case, or null when none was chosen (migration
+	// 0020) — the screen then draws its neutral chip. Editable on every tier (ADR 0079 Q1 #9).
+	Color *string `json:"color"`
 }
 
 // danhSachLoaiTaiNguyenRa wraps the list in an OBJECT rather than returning a bare JSON array.
@@ -104,7 +109,13 @@ type danhSachLoaiTaiNguyenRa struct {
 }
 
 func loaiTaiNguyenRaNgoai(lt domain.LoaiTaiNguyenBanDo) loaiTaiNguyenRa {
+	var color *string
+	if lt.Color != "" {
+		c := lt.Color
+		color = &c
+	}
 	return loaiTaiNguyenRa{
+		Color:     color,
 		ID:        lt.ID,
 		Code:      lt.Ma,
 		Label:     lt.Nhan,
@@ -195,6 +206,8 @@ type themLoaiTaiNguyenVao struct {
 	Label     string `json:"label"`
 	Order     int    `json:"order,omitempty"`
 	IsDefault bool   `json:"is_default,omitempty"`
+	// Color is `#RRGGBB` (either case; stored lower-case), or omitted / "" for none.
+	Color string `json:"color,omitempty"`
 
 	Source *string `json:"source,omitempty"`
 	Tier   *int    `json:"tier,omitempty"`
@@ -216,10 +229,45 @@ type suaLoaiTaiNguyenVao struct {
 	Order     *int    `json:"order,omitempty"`
 	Active    *bool   `json:"active,omitempty"`
 	IsDefault *bool   `json:"is_default,omitempty"`
+	// Color: ABSENT = leave alone; explicit null = remove the colour; `#RRGGBB` = set it (stored
+	// lower-case); "" = 400. The same semantics, and the same device, as service-identity's catalogues
+	// (internal/http/danh_muc_ghi.go optionalColorIn) — one rule for "màu mục danh mục" on every service.
+	Color optionalColorIn `json:"color,omitempty"`
 
 	Code   *string `json:"code,omitempty"`
 	Source *string `json:"source,omitempty"`
 	Tier   *int    `json:"tier,omitempty"`
+}
+
+// optionalColorIn records whether `color` was present at all, and its value when it was a string.
+// encoding/json calls UnmarshalJSON for a present field INCLUDING an explicit null, never for an absent
+// one — which is what tells "leave it" from "remove it". Mirrors service-identity's type of the same
+// name (rule 2: no import across services).
+type optionalColorIn struct {
+	present bool
+	color   *string
+}
+
+func (o *optionalColorIn) UnmarshalJSON(b []byte) error {
+	o.present = true
+	if string(b) == "null" {
+		o.color = nil
+		return nil
+	}
+	var c string
+	if err := json.Unmarshal(b, &c); err != nil {
+		return err
+	}
+	o.color = &c
+	return nil
+}
+
+// change turns the wire state into the use case's: nil when absent.
+func (o optionalColorIn) change() *app.CatalogueColorChange {
+	if !o.present {
+		return nil
+	}
+	return &app.CatalogueColorChange{Color: o.color}
 }
 
 // xoaLoaiTaiNguyenVao is the body of DELETE /api/v1/map-asset-types/{id}.
@@ -259,6 +307,7 @@ func (h *Handler) ThemLoaiTaiNguyen(w http.ResponseWriter, r *http.Request) {
 		Nhan:      vao.Label,
 		ThuTu:     vao.Order,
 		LaMacDinh: vao.IsDefault,
+		Color:     vao.Color,
 	}, nguoi)
 	if err != nil {
 		h.traLoiLoiGhi(w, r, "thêm", err)
@@ -300,6 +349,7 @@ func (h *Handler) SuaLoaiTaiNguyen(w http.ResponseWriter, r *http.Request) {
 		ThuTu:     vao.Order,
 		DangDung:  vao.Active,
 		LaMacDinh: vao.IsDefault,
+		Color:     vao.Color.change(),
 	}, nguoi)
 	if err != nil {
 		h.traLoiLoiGhi(w, r, "sửa", err)

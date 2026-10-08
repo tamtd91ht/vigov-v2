@@ -60,6 +60,7 @@ const maxConcurrentReplies = 32
 type ZaloWebhook struct {
 	db       *store.DB
 	repo     *docstore.ZaloLinkStore
+	own      *docstore.ZaloCommuneBotStore // a commune with its own bot pairs through it, never the shared one
 	resolver ZaloChatResolver
 	limiter  ZaloPairingLimiter
 	bot      SharedZaloBot
@@ -72,17 +73,18 @@ type ZaloWebhook struct {
 }
 
 // NewZaloWebhook panics on a missing dependency.
-func NewZaloWebhook(db *store.DB, repo *docstore.ZaloLinkStore, resolver ZaloChatResolver,
-	limiter ZaloPairingLimiter, bot SharedZaloBot, send ZaloMessenger, log *slog.Logger) *ZaloWebhook {
+func NewZaloWebhook(db *store.DB, repo *docstore.ZaloLinkStore, own *docstore.ZaloCommuneBotStore,
+	resolver ZaloChatResolver, limiter ZaloPairingLimiter, bot SharedZaloBot, send ZaloMessenger,
+	log *slog.Logger) *ZaloWebhook {
 
-	if db == nil || repo == nil || resolver == nil || limiter == nil || bot == nil || send == nil {
+	if db == nil || repo == nil || own == nil || resolver == nil || limiter == nil || bot == nil || send == nil {
 		panic("app: NewZaloWebhook thiếu phụ thuộc")
 	}
 	if log == nil {
 		log = slog.Default()
 	}
-	return &ZaloWebhook{db: db, repo: repo, resolver: resolver, limiter: limiter, bot: bot, send: send, log: log,
-		newID: ulid.Moi, now: time.Now, replies: make(chan struct{}, maxConcurrentReplies)}
+	return &ZaloWebhook{db: db, repo: repo, own: own, resolver: resolver, limiter: limiter, bot: bot, send: send,
+		log: log, newID: ulid.Moi, now: time.Now, replies: make(chan struct{}, maxConcurrentReplies)}
 }
 
 // Authenticate compares the X-Bot-Api-Secret-Token header with the stored secrets, in constant time.
@@ -144,66 +146,20 @@ func (w *ZaloWebhook) pair(ctx context.Context, chatID, code, clientIP string) s
 	}
 	m := matches[0]
 	cctx := tenant.Into(ctx, m.TenantID)
+	// A commune that has its own bot pairs through IT (ADR 0079 Q1 #4): a code typed into the shared bot
+	// is refused with the one sentence. 0022's link trigger is the floor under a switch made meanwhile.
+	if _, ownBot, err := w.own.Live(cctx); err != nil {
+		w.log.ErrorContext(ctx, "ghép nối Zalo: không đọc được bot riêng của xã", "xa", string(m.TenantID), "err", err)
+		return domain.ZaloReplyUnavailable
+	} else if ownBot {
+		return domain.ZaloReplyPairingRefused
+	}
 	at := w.clock()
 	err = w.db.For(cctx).Tx(cctx, func(tx *store.ScopedTx) error {
-		c, err := w.repo.LockOpenPairingCode(cctx, tx, m.CodeID)
-		if errors.Is(err, docstore.ErrPairingCodeNotOpen) {
-			return errPairingRefused
-		}
-		if err != nil {
-			return err
-		}
-		if !at.Before(c.ExpiresAt) || c.FailedAttempts >= domain.PairingMaxFailedAttempts {
-			return errPairingRefused
-		}
-		staff := audit.Actor{ID: c.StaffCode, Kind: "staff", IP: clientIP}
-		if err := w.repo.MarkPairingCodeUsed(cctx, tx, c.ID, at); err != nil {
-			return err
-		}
 		// "Một chat một tài khoản": the chat's live link in ANOTHER commune ends first (audited there, by
-		// the system), then in THIS commune if it is somebody else's, then this person's previous link.
-		elsewhere, err := w.resolver.EndChatLinksInOtherCommunes(cctx, tx, chatID, at)
-		if err != nil {
-			return err
-		}
-		if other, found, err := w.repo.LockLiveLinkOfChat(cctx, tx, chatID); err != nil {
-			return err
-		} else if found && other.StaffCode != c.StaffCode {
-			if err := w.repo.EndLink(cctx, tx, other.ID, c.StaffCode, domain.ZaloLinkEndedByChatTaken, at); err != nil {
-				return err
-			}
-			if err := writeLinkEnded(cctx, tx, staff, other, domain.ZaloLinkEndedByChatTaken, "ghep_cho_tai_khoan_khac", at); err != nil {
-				return err
-			}
-		}
-		repaired := false
-		if own, found, err := w.repo.LockLiveLinkOfStaff(cctx, tx, c.StaffCode); err != nil {
-			return err
-		} else if found {
-			if err := w.repo.EndLink(cctx, tx, own.ID, c.StaffCode, domain.ZaloLinkEndedByRepair, at); err != nil {
-				return err
-			}
-			if err := writeLinkEnded(cctx, tx, staff, own, domain.ZaloLinkEndedByRepair, "ghep_lai", at); err != nil {
-				return err
-			}
-			repaired = true
-		}
-		linkID, err := w.newID()
-		if err != nil {
-			return fmt.Errorf("zalo: new id: %w", err)
-		}
-		if err := w.repo.InsertLink(cctx, tx, linkID, c.StaffCode, chatID, at); err != nil {
-			return err
-		}
-		delta, err := json.Marshal(map[string]any{
-			"lien_ket_id": linkID, "ma_ghep_id": c.ID, "bot_ref": domain.SharedZaloBotRef, "kenh": "zalo_bot",
-			"ghep_lai": repaired, "ket_thuc_o_xa_khac": elsewhere,
-		})
-		if err != nil {
-			return fmt.Errorf("zalo: encode delta: %w", err)
-		}
-		return audit.Write(cctx, tx, audit.Entry{Actor: staff, Action: domain.ActionPairZaloLink,
-			Subject: c.StaffCode, At: at, Delta: delta})
+		// the system) — the shared bot only: its chat ids are platform-wide.
+		return pairInCommune(cctx, tx, w.repo, m.CodeID, chatID, domain.SharedZaloBotRef, clientIP, at, w.newID,
+			func() (int, error) { return w.resolver.EndChatLinksInOtherCommunes(cctx, tx, chatID, at) })
 	})
 	switch {
 	case errors.Is(err, errPairingRefused):
@@ -213,6 +169,75 @@ func (w *ZaloWebhook) pair(ctx context.Context, chatID, code, clientIP string) s
 		return domain.ZaloReplyUnavailable
 	}
 	return domain.ZaloReplyPaired
+}
+
+// pairInCommune is one pairing inside the commune's transaction — the steps BOTH webhooks run (the shared
+// bot's, whose commune came from the code; a commune bot's, whose commune came from Host). botRef is the
+// bot the chat wrote to; endElsewhere ends the chat's live link in OTHER communes, and is nil for a
+// commune bot, whose links live in its commune alone (0022 zalo_link_commune_bot_live).
+func pairInCommune(ctx context.Context, tx *store.ScopedTx, repo *docstore.ZaloLinkStore, codeID, chatID, botRef,
+	clientIP string, at time.Time, newID func() (string, error), endElsewhere func() (int, error)) error {
+
+	c, err := repo.LockOpenPairingCode(ctx, tx, codeID)
+	if errors.Is(err, docstore.ErrPairingCodeNotOpen) {
+		return errPairingRefused
+	}
+	if err != nil {
+		return err
+	}
+	if !at.Before(c.ExpiresAt) || c.FailedAttempts >= domain.PairingMaxFailedAttempts {
+		return errPairingRefused
+	}
+	staff := audit.Actor{ID: c.StaffCode, Kind: "staff", IP: clientIP}
+	if err := repo.MarkPairingCodeUsed(ctx, tx, c.ID, at); err != nil {
+		return err
+	}
+	// "Một chat một tài khoản": elsewhere first, then in THIS commune if the chat is somebody else's,
+	// then this person's previous link.
+	elsewhere := 0
+	if endElsewhere != nil {
+		if elsewhere, err = endElsewhere(); err != nil {
+			return err
+		}
+	}
+	if other, found, err := repo.LockLiveLinkOfChat(ctx, tx, botRef, chatID); err != nil {
+		return err
+	} else if found && other.StaffCode != c.StaffCode {
+		if err := repo.EndLink(ctx, tx, other.ID, c.StaffCode, domain.ZaloLinkEndedByChatTaken, at); err != nil {
+			return err
+		}
+		if err := writeLinkEnded(ctx, tx, staff, other, domain.ZaloLinkEndedByChatTaken, "ghep_cho_tai_khoan_khac", at); err != nil {
+			return err
+		}
+	}
+	repaired := false
+	if own, found, err := repo.LockLiveLinkOfStaff(ctx, tx, c.StaffCode); err != nil {
+		return err
+	} else if found {
+		if err := repo.EndLink(ctx, tx, own.ID, c.StaffCode, domain.ZaloLinkEndedByRepair, at); err != nil {
+			return err
+		}
+		if err := writeLinkEnded(ctx, tx, staff, own, domain.ZaloLinkEndedByRepair, "ghep_lai", at); err != nil {
+			return err
+		}
+		repaired = true
+	}
+	linkID, err := newID()
+	if err != nil {
+		return fmt.Errorf("zalo: new id: %w", err)
+	}
+	if err := repo.InsertLink(ctx, tx, linkID, c.StaffCode, botRef, chatID, at); err != nil {
+		return err
+	}
+	delta, err := json.Marshal(map[string]any{
+		"lien_ket_id": linkID, "ma_ghep_id": c.ID, "bot_ref": botRef, "kenh": "zalo_bot",
+		"ghep_lai": repaired, "ket_thuc_o_xa_khac": elsewhere,
+	})
+	if err != nil {
+		return fmt.Errorf("zalo: encode delta: %w", err)
+	}
+	return audit.Write(ctx, tx, audit.Entry{Actor: staff, Action: domain.ActionPairZaloLink,
+		Subject: c.StaffCode, At: at, Delta: delta})
 }
 
 // stop ends the chat's live link (/dung), in the link's commune, attributed to its owner.
@@ -226,28 +251,38 @@ func (w *ZaloWebhook) stop(ctx context.Context, chatID, clientIP string) string 
 		return domain.ZaloReplyNotLinked
 	}
 	cctx := tenant.Into(ctx, commune)
-	at := w.clock()
-	ended := false
-	err = w.db.For(cctx).Tx(cctx, func(tx *store.ScopedTx) error {
-		link, found, err := w.repo.LockLiveLinkOfChat(cctx, tx, chatID)
-		if err != nil || !found {
-			return err
-		}
-		if err := w.repo.EndLink(cctx, tx, link.ID, link.StaffCode, domain.ZaloLinkEndedByStop, at); err != nil {
-			return err
-		}
-		ended = true
-		return writeLinkEnded(cctx, tx, audit.Actor{ID: link.StaffCode, Kind: "staff", IP: clientIP}, link,
-			domain.ZaloLinkEndedByStop, "lenh_dung_trong_zalo", at)
-	})
+	reply, err := stopInCommune(cctx, w.db, w.repo, domain.SharedZaloBotRef, chatID, clientIP, w.clock())
 	if err != nil {
 		w.log.ErrorContext(ctx, "Zalo /dung: lỗi hệ thống", "xa", string(commune), "err", err)
 		return domain.ZaloReplyUnavailable
 	}
-	if !ended {
-		return domain.ZaloReplyNotLinked
+	return reply
+}
+
+// stopInCommune ends the live link of chatID through botRef in the context's commune — /dung, both bots.
+func stopInCommune(ctx context.Context, db *store.DB, repo *docstore.ZaloLinkStore, botRef, chatID, clientIP string,
+	at time.Time) (string, error) {
+
+	ended := false
+	err := db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		link, found, err := repo.LockLiveLinkOfChat(ctx, tx, botRef, chatID)
+		if err != nil || !found {
+			return err
+		}
+		if err := repo.EndLink(ctx, tx, link.ID, link.StaffCode, domain.ZaloLinkEndedByStop, at); err != nil {
+			return err
+		}
+		ended = true
+		return writeLinkEnded(ctx, tx, audit.Actor{ID: link.StaffCode, Kind: "staff", IP: clientIP}, link,
+			domain.ZaloLinkEndedByStop, "lenh_dung_trong_zalo", at)
+	})
+	if err != nil {
+		return "", err
 	}
-	return domain.ZaloReplyStopped
+	if !ended {
+		return domain.ZaloReplyNotLinked, nil
+	}
+	return domain.ZaloReplyStopped, nil
 }
 
 // Reply sends text to chatID through the shared bot, AFTER the webhook has answered Zalo — in its own
