@@ -890,6 +890,7 @@ export type comms_zaloChannelSettingsIn = {
   "quiet_end": string | null;
   "overdue_start_after_days": number | null;
   "overdue_repeat_every_days": number | null;
+  "due_soon_days": number | null;
 };
 
 export type comms_zaloChannelSettingsOut = {
@@ -899,6 +900,7 @@ export type comms_zaloChannelSettingsOut = {
   "quiet_end": string;
   "overdue_start_after_days": number | null;
   "overdue_repeat_every_days": number | null;
+  "due_soon_days": number | null;
   "updated_at"?: string | null;
   "updated_by"?: string;
   "supported_events": Array<string>;
@@ -1108,6 +1110,10 @@ export type documents_incomingSummaryOut = {
   "arrived": number;
   "open": number;
   "overdue": number;
+};
+
+export type documents_letterDeadlineIn = {
+  "due_at": string | null;
 };
 
 export type documents_letterLogEntryOut = {
@@ -2748,6 +2754,16 @@ export type identity_seedRoleTemplatesOut = {
   "skipped_deleted": Array<identity_roleTemplateRefOut>;
 };
 
+export type identity_staffCountQueryIn = {
+  "q": string;
+  "unit": string;
+  "published": boolean | null;
+};
+
+export type identity_staffCountQueryOut = {
+  "total": number;
+};
+
 export type identity_staffCountsOut = {
   "total": number;
   "published": number;
@@ -2956,6 +2972,8 @@ export type identity_timCanBoVao = {
   "published": boolean | null;
   "limit": number | null;
   "cursor": string;
+  "sort"?: string;
+  "order"?: string;
 };
 
 export type identity_updateResidentialUnitIn = {
@@ -4681,7 +4699,7 @@ export type documents_get_citizen_letters = {
   };
 };
 
-/** POST /api/v1/citizen-letters — Vào sổ một đơn thư công dân; hệ thống cấp số theo dãy của xã trong năm, chưa đặt hạn (ADR 0078 #3) */
+/** POST /api/v1/citizen-letters — Vào sổ một đơn thư công dân; hệ thống cấp số theo dãy của xã trong năm; hạn xử lý đặt sau bằng PATCH …/deadline */
 export type documents_post_citizen_letters = {
   duongDan: "/api/v1/citizen-letters";
   phuongThuc: "POST";
@@ -4734,6 +4752,27 @@ export type documents_get_citizen_letters_by_id = {
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/citizen-letters/{id}/deadline — Đặt hoặc bỏ hạn xử lý của đơn thư do cán bộ nhập (null = Không đặt); lưu nguyên giá trị, áp cho giai đoạn hiện tại của đơn */
+export type documents_patch_citizen_letters_by_id_deadline = {
+  duongDan: "/api/v1/citizen-letters/{id}/deadline";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: documents_letterDeadlineIn;
+  phanHoi: {
+    200: documents_citizenLetterOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
     500: httpx_Error;
   };
 };
@@ -9610,7 +9649,7 @@ export type identity_get_staff = {
   truyVan: {
     "limit"?: number;
     "cursor"?: string;
-    "sort"?: "code" | "created_at";
+    "sort"?: "code" | "created_at" | "full_name" | "position" | "department" | "phone" | "last_login_at" | "status";
     "order"?: "asc" | "desc";
     "published"?: string;
     "unit"?: string;
@@ -9640,6 +9679,24 @@ export type identity_post_staff = {
     401: httpx_Error;
     403: httpx_Error;
     409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/staff-count-queries — Đếm số cán bộ khớp bộ lọc và từ khoá tìm kiếm hiện tại của danh bạ xã — từ khoá đi trong THÂN, không lên URL */
+export type identity_post_staff_count_queries = {
+  duongDan: "/api/v1/staff-count-queries";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: identity_staffCountQueryIn;
+  phanHoi: {
+    200: identity_staffCountQueryOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
     500: httpx_Error;
   };
 };
@@ -9795,7 +9852,7 @@ export type identity_post_staff_publications = {
   };
 };
 
-/** POST /api/v1/staff/searches — Tìm cán bộ trong danh bạ của xã theo họ tên, chức vụ hoặc số điện thoại — từ khoá đi trong THÂN, không lên URL */
+/** POST /api/v1/staff/searches — Tìm cán bộ trong danh bạ của xã theo họ tên, chức vụ, số điện thoại, thư điện tử hoặc tên bộ phận — từ khoá đi trong THÂN, không lên URL */
 export type identity_post_staff_searches = {
   duongDan: "/api/v1/staff/searches";
   phuongThuc: "POST";
@@ -11355,7 +11412,7 @@ export type comms_post_zalo_bots_current_webhook = {
   };
 };
 
-/** GET /api/v1/zalo-channel-settings — Cấu hình kênh nhắc việc Zalo của xã — bật/tắt, các loại nhắc theo từng phân hệ (supported_events là danh sách được chọn), giờ yên tĩnh (giờ Việt Nam), nhịp nhắc việc quá hạn, platform_ready (đã có bot phục vụ xã chưa); xã chưa lưu thì là tắt */
+/** GET /api/v1/zalo-channel-settings — Cấu hình kênh nhắc việc Zalo của xã — bật/tắt, các loại nhắc theo từng phân hệ (supported_events là danh sách được chọn), giờ yên tĩnh (giờ Việt Nam), nhịp nhắc việc quá hạn, số ngày nhắc trước khi đến hạn của tin Zalo (due_soon_days, null = không lọc), platform_ready (đã có bot phục vụ xã chưa); xã chưa lưu thì là tắt */
 export type comms_get_zalo_channel_settings = {
   duongDan: "/api/v1/zalo-channel-settings";
   phuongThuc: "GET";
@@ -11372,7 +11429,7 @@ export type comms_get_zalo_channel_settings = {
   };
 };
 
-/** PUT /api/v1/zalo-channel-settings — Lưu cấu hình kênh nhắc việc Zalo của xã — bật thì phải chọn ít nhất một loại; chọn quá hạn thì phải đặt đủ nhịp nhắc; giờ yên tĩnh HH:MM không trùng nhau; có ghi vết trước/sau */
+/** PUT /api/v1/zalo-channel-settings — Lưu cấu hình kênh nhắc việc Zalo của xã — bật thì phải chọn ít nhất một loại; chọn quá hạn thì phải đặt đủ nhịp nhắc; giờ yên tĩnh HH:MM không trùng nhau; số ngày nhắc trước 1–14 hoặc để trống (chỉ thu hẹp tin Zalo sắp đến hạn, chuông giữ cột SLA); có ghi vết trước/sau */
 export type comms_put_zalo_channel_settings = {
   duongDan: "/api/v1/zalo-channel-settings";
   phuongThuc: "PUT";
@@ -11391,7 +11448,7 @@ export type comms_put_zalo_channel_settings = {
   };
   errorCodes: {
     400: "invalid_request";
-    422: "empty_quiet_window" | "enabled_without_kind" | "invalid_quiet_time" | "overdue_cadence_incomplete" | "overdue_cadence_required" | "overdue_repeat_out_of_range" | "overdue_start_out_of_range" | "unknown_kind";
+    422: "due_soon_days_out_of_range" | "empty_quiet_window" | "enabled_without_kind" | "invalid_quiet_time" | "overdue_cadence_incomplete" | "overdue_cadence_required" | "overdue_repeat_out_of_range" | "overdue_start_out_of_range" | "unknown_kind";
   };
 };
 

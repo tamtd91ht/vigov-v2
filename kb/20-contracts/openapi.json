@@ -3059,7 +3059,7 @@
         }
       },
       "post": {
-        "summary": "Vào sổ một đơn thư công dân; hệ thống cấp số theo dãy của xã trong năm, chưa đặt hạn (ADR 0078 #3)",
+        "summary": "Vào sổ một đơn thư công dân; hệ thống cấp số theo dãy của xã trong năm; hạn xử lý đặt sau bằng PATCH …/deadline",
         "operationId": "documents_post_citizen_letters",
         "tags": [
           "documents"
@@ -3303,6 +3303,113 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/citizen-letters/{id}/deadline": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "patch": {
+        "summary": "Đặt hoặc bỏ hạn xử lý của đơn thư do cán bộ nhập (null = Không đặt); lưu nguyên giá trị, áp cho giai đoạn hiện tại của đơn",
+        "operationId": "documents_patch_citizen_letters_by_id_deadline",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "05-van-ban-don-thu §3.5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "petition.create"
+        },
+        "x-vigov-task": "e3bf1f42fc97",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/documents.letterDeadlineIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documents.citizenLetterOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -25587,7 +25694,13 @@
               "type": "string",
               "enum": [
                 "code",
-                "created_at"
+                "created_at",
+                "full_name",
+                "position",
+                "department",
+                "phone",
+                "last_login_at",
+                "status"
               ],
               "default": "code"
             }
@@ -25756,6 +25869,83 @@
           },
           "409": {
             "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/staff-count-queries": {
+      "post": {
+        "summary": "Đếm số cán bộ khớp bộ lọc và từ khoá tìm kiếm hiện tại của danh bạ xã — từ khoá đi trong THÂN, không lên URL",
+        "operationId": "identity_post_staff_count_queries",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §3",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.user"
+        },
+        "x-vigov-task": "9b38990c0633",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.staffCountQueryIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.staffCountQueryOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
             "content": {
               "application/json": {
                 "schema": {
@@ -26392,7 +26582,7 @@
     },
     "/api/v1/staff/searches": {
       "post": {
-        "summary": "Tìm cán bộ trong danh bạ của xã theo họ tên, chức vụ hoặc số điện thoại — từ khoá đi trong THÂN, không lên URL",
+        "summary": "Tìm cán bộ trong danh bạ của xã theo họ tên, chức vụ, số điện thoại, thư điện tử hoặc tên bộ phận — từ khoá đi trong THÂN, không lên URL",
         "operationId": "identity_post_staff_searches",
         "tags": [
           "identity"
@@ -33526,7 +33716,7 @@
     },
     "/api/v1/zalo-channel-settings": {
       "get": {
-        "summary": "Cấu hình kênh nhắc việc Zalo của xã — bật/tắt, các loại nhắc theo từng phân hệ (supported_events là danh sách được chọn), giờ yên tĩnh (giờ Việt Nam), nhịp nhắc việc quá hạn, platform_ready (đã có bot phục vụ xã chưa); xã chưa lưu thì là tắt",
+        "summary": "Cấu hình kênh nhắc việc Zalo của xã — bật/tắt, các loại nhắc theo từng phân hệ (supported_events là danh sách được chọn), giờ yên tĩnh (giờ Việt Nam), nhịp nhắc việc quá hạn, số ngày nhắc trước khi đến hạn của tin Zalo (due_soon_days, null = không lọc), platform_ready (đã có bot phục vụ xã chưa); xã chưa lưu thì là tắt",
         "operationId": "comms_get_zalo_channel_settings",
         "tags": [
           "comms"
@@ -33581,7 +33771,7 @@
         }
       },
       "put": {
-        "summary": "Lưu cấu hình kênh nhắc việc Zalo của xã — bật thì phải chọn ít nhất một loại; chọn quá hạn thì phải đặt đủ nhịp nhắc; giờ yên tĩnh HH:MM không trùng nhau; có ghi vết trước/sau",
+        "summary": "Lưu cấu hình kênh nhắc việc Zalo của xã — bật thì phải chọn ít nhất một loại; chọn quá hạn thì phải đặt đủ nhịp nhắc; giờ yên tĩnh HH:MM không trùng nhau; số ngày nhắc trước 1–14 hoặc để trống (chỉ thu hẹp tin Zalo sắp đến hạn, chuông giữ cột SLA); có ghi vết trước/sau",
         "operationId": "comms_put_zalo_channel_settings",
         "tags": [
           "comms"
@@ -33656,6 +33846,7 @@
               }
             },
             "x-vigov-error-codes": [
+              "due_soon_days_out_of_range",
               "empty_quiet_window",
               "enabled_without_kind",
               "invalid_quiet_time",
@@ -37377,9 +37568,16 @@
               "integer",
               "null"
             ]
+          },
+          "due_soon_days": {
+            "type": [
+              "integer",
+              "null"
+            ]
           }
         },
         "required": [
+          "due_soon_days",
           "is_enabled",
           "kinds",
           "overdue_repeat_every_days",
@@ -37419,6 +37617,12 @@
               "null"
             ]
           },
+          "due_soon_days": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "updated_at": {
             "type": [
               "string",
@@ -37443,6 +37647,7 @@
           }
         },
         "required": [
+          "due_soon_days",
           "is_enabled",
           "kinds",
           "overdue_repeat_every_days",
@@ -38181,6 +38386,21 @@
           "open",
           "overdue",
           "to"
+        ],
+        "additionalProperties": false
+      },
+      "documents.letterDeadlineIn": {
+        "type": "object",
+        "properties": {
+          "due_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "due_at"
         ],
         "additionalProperties": false
       },
@@ -44155,6 +44375,41 @@
         ],
         "additionalProperties": false
       },
+      "identity.staffCountQueryIn": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "published": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "published",
+          "q",
+          "unit"
+        ],
+        "additionalProperties": false
+      },
+      "identity.staffCountQueryOut": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total"
+        ],
+        "additionalProperties": false
+      },
       "identity.staffCountsOut": {
         "type": "object",
         "properties": {
@@ -44967,6 +45222,12 @@
             ]
           },
           "cursor": {
+            "type": "string"
+          },
+          "sort": {
+            "type": "string"
+          },
+          "order": {
             "type": "string"
           }
         },
