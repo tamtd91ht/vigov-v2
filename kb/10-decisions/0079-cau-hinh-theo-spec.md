@@ -32,6 +32,7 @@ owns_facts:
   - "lỗi đọc đảo cờ dang_dung/la_mac_dinh không sửa dữ liệu hàng loạt; xã tự kiểm/sửa cờ ở màn Danh mục (lô thứ năm Q17, 08/10/2026)"
   - "nhắc việc cho đơn thư làm theo prototype: dùng hạn đã lưu và dòng SLA mặc định của đơn thư, gửi bằng loại DOCUMENT_* (lô thứ năm Q18, 08/10/2026)"
   - "câu chữ menu Cấu hình: lời prototype thắng nguyên văn khi prototype có câu (lô thứ năm Q19, 08/10/2026)"
+  - "ô 'Sắp đến hạn: nhắc trước' của Zalo có lựa chọn trống 'Theo chuông' (không thu hẹp); lời dẫn 'Nhắc khi nào' thay câu prototype bằng câu đúng với Q13; bật/tắt một dòng thành công thì không toast, như prototype; đăng ký webhook lỗi do mã bot dùng nguyên câu prototype, lỗi khác nói lý do thật (lô thứ sáu, 08/10/2026)"
 ---
 
 # 0079. Menu Cấu hình theo spec Cấu hình 02–12
@@ -277,3 +278,13 @@ Chủ dự án chỉ trả lời **"tuân thủ prototype nhé"**. Phiên chính
 |---|---|
 | Q18 — hạn của đơn thư | Hạn đơn thư hiện **chưa bao giờ được lưu** (`service-documents/migrations/0006_citizen_letter.sql:72-75,215-216`; ADR 0064 #3–#5 còn mở về ngày lịch/giờ làm việc cho khiếu nại, tố cáo). Hỏi lại, chủ dự án trả lời **"theo prototype"**. Prototype (`../vigov-require/apps/admin/src/components/documents/PetitionDetailDrawer.tsx:519-523, 329`): ô **"Hạn xử lý" do cán bộ tự đặt** khi sửa đơn, được để **"Không đặt"** — không tự tính. Vậy: hạn đơn thư là ngày cán bộ nhập (lưu tại hành vi đặt, luật 10 bất biến 2); **nhắc việc chỉ chạy với đơn đã có hạn**; không tính hạn theo luật, nên câu ngày lịch/giờ làm việc của ADR 0064 không bị quyết ở đây. Màn đơn thư thuộc menu Văn bản & Đơn thư (ADR 0078) |
 | Q13 — tin tổng hợp mỗi ngày | Ô "Nhắc trước" tính theo **ngày** (1–14) và bản tin sắp đến hạn chạy mỗi ngày: một hồ sơ có hạn trong N ngày luôn nằm trong ít nhất một bản tin trước hạn, nên comms chỉ lọc lúc nhận, **không cần lập lịch gửi riêng**. Ngưỡng Zalo chỉ thu hẹp được ngưỡng của chuông (hồ sơ ngoài ngưỡng chuông không tới comms) — ghi rõ dưới ô |
+| Q18 — cột lưu hạn | Một ô "Hạn xử lý" duy nhất, ghi vào cột hạn của **giai đoạn hiện tại** của đơn (`processing_due_at` trước thụ lý, `resolution_due_at` từ thụ lý; CHECK 0006:300-301 cấm hạn giải quyết trước thụ lý); đơn đã kết thúc từ chối 409; quyền `petition.create` như prototype (`router.py:430-433`); không tự điền hạn từ dòng SLA (khác prototype `service.py:708`, theo dòng Q18 trên). Sau thụ lý ô hiện "Không đặt" tới khi cán bộ đặt hạn giải quyết |
+
+## Lô câu trả lời thứ sáu — câu chữ còn lại (08/10/2026)
+
+| # | Câu hỏi | Chủ dự án trả lời | Hệ quả |
+|---|---|---|---|
+| 1 | Lựa chọn trống của ô "Sắp đến hạn: nhắc trước" (prototype chỉ có số ngày) | **"Theo chuông"** | Trống = không thu hẹp, `due_soon_days` null |
+| 2 | Lời dẫn "Nhắc khi nào" (câu prototype nói số Zalo luôn bằng số trên màn — sai từ Q13) | **Câu mới** | "Tin Zalo “sắp đến hạn” chỉ gồm những hồ sơ cái chuông và danh sách “Sắp đến hạn” đang báo, nên không hồ sơ nào vào Zalo mà không có trên màn hình." |
+| 3 | Toast khi bật/tắt một dòng thành công (Danh mục, Trường bản đồ, Lời hệ thống) | **"Bỏ, đúng prototype"** | Thành công: công tắc đổi là đủ; lỗi vẫn toast |
+| 4 | Đăng ký webhook thất bại | **Câu prototype khi lỗi do mã bot, câu riêng khi lỗi khác** | Mã bot sai → "Chưa đăng ký được. Kiểm tra lại mã bot." (`ZaloChannelPanel.tsx:479`); lỗi mạng/Zalo → "Chưa đăng ký được." + lý do thật |
