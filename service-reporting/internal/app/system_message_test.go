@@ -39,6 +39,8 @@ type overrideFake struct {
 	txsSeen                map[*store.ScopedTx]bool
 	lastBy, lastReason     string
 	lastAt                 time.Time
+
+	switches int // system_message_switch_test.go
 }
 
 func newOverrideFake() *overrideFake {

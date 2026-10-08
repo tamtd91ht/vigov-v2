@@ -36,6 +36,8 @@ type MessageOverrideStore interface {
 	AddOverride(ctx context.Context, tx *store.ScopedTx, o domain.MessageOverride) error
 	UpdateText(ctx context.Context, tx *store.ScopedTx, o domain.MessageOverride) error
 	SoftDelete(ctx context.Context, tx *store.ScopedTx, id, by, reason string, at time.Time) error
+	// SetActive is "Tắt / Bật lại" (ADR 0079 Q2). It touches `is_active` and the who/when only.
+	SetActive(ctx context.Context, tx *store.ScopedTx, id string, active bool, by string, at time.Time) error
 }
 
 // The business verbs written into the trail — the SAME strings finance and petitions write, so an
@@ -43,6 +45,10 @@ type MessageOverrideStore interface {
 const (
 	ActionRewordSystemMessage  = "sua_loi_he_thong"
 	ActionRestoreSystemMessage = "khoi_phuc_loi_he_thong_mac_dinh"
+
+	// "Tắt / Bật lại" (ADR 0079 Q2) — the same strings in every service that has the switch.
+	ActionSwitchOffSystemMessage = "tat_loi_he_thong"
+	ActionSwitchOnSystemMessage  = "bat_lai_loi_he_thong"
 )
 
 // RestoreReason is what `delete_reason` holds on a reverted wording. A FIXED SENTENCE, not a field
@@ -111,12 +117,24 @@ func (uc *SystemMessages) Reword(ctx context.Context, key, rawText string, actor
 			return err
 		}
 		before := domain.ResolveMessage(shipped, cur)
-		if before.CurrentText == text {
+		// THE COMPARISON IS AGAINST THE COMMUNE'S WORDING when it has one, switched on or off — not
+		// against the text in force. Re-sending the stored words of a switched-off wording changes
+		// nothing; comparing to CurrentText (the default, while off) would rewrite it as "new".
+		stored := shipped.DefaultText
+		if cur != nil {
+			stored = cur.Text
+		}
+		if stored == text {
 			after = before
 			return nil
 		}
 
+		// REWORDING DOES NOT FLIP THE SWITCH: a switched-off wording that is edited stays off until
+		// "Bật lại" — the switch and the words are two acts, each with its own entry.
 		o := domain.MessageOverride{Key: key, Text: text, UpdatedAt: uc.now().UTC(), UpdatedBy: actor.ID}
+		if cur != nil {
+			o.Inactive = cur.Inactive
+		}
 		if cur == nil {
 			if o.ID, err = uc.newID(); err != nil {
 				return fmt.Errorf("system_message: sinh mã: %w", err)
@@ -182,8 +200,8 @@ func writeMessageAudit(ctx context.Context, tx *store.ScopedTx, actor audit.Acto
 	before, after domain.SystemMessage) error {
 
 	delta, err := json.Marshal(map[string]any{
-		"truoc": map[string]any{"text": before.CurrentText, "overridden": before.Overridden},
-		"sau":   map[string]any{"text": after.CurrentText, "overridden": after.Overridden},
+		"truoc": map[string]any{"text": before.CurrentText, "overridden": before.Overridden, "is_active": before.Active, "override_text": before.OverrideText},
+		"sau":   map[string]any{"text": after.CurrentText, "overridden": after.Overridden, "is_active": after.Active, "override_text": after.OverrideText},
 	})
 	if err != nil {
 		return fmt.Errorf("system_message: mã hoá delta: %w", err)

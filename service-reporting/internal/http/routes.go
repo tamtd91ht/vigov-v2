@@ -118,4 +118,31 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "admin.lookup")(
 			idem.KhongCan("khôi phục khi xã đã dùng câu mặc định thì không còn dòng nào để gỡ và không ghi gì")(
 				http.HandlerFunc(h.RestoreSystemMessage))))
+
+	// --- ADR 0079 Q2 ("Làm đúng prototype", migration 0004) — the switch ---------------------
+	//
+	// SAME KEY, `admin.lookup`: the same screen and the same act of administering the commune's
+	// configuration as the three routes above (rule 5, invariant 3c — no key invented).
+
+	// "Tắt / Bật lại" of the commune's wording of a SHIPPED key: a PATCH of the override sub-resource's
+	// one other field. While off, every reader resolves the shipped sentence (domain.ResolveMessage).
+	// 409 `no_commune_wording` on a key the commune never reworded — nothing to switch, and a shipped
+	// refusal may not be silenced.
+	//
+	// idem.KhongCan: app.SetActive writes nothing and files no entry when the state already holds.
+	//
+	// @summary  Xã tắt hoặc bật lại lời đã sửa của một câu hệ thống (tắt thì dùng lời gốc của phần mềm)
+	// @screen   14-cau-hinh §7
+	// @request  switchSystemMessageIn
+	// @reply    200 systemMessageOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/reporting-system-messages/{code}/override",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			idem.KhongCan("đặt lại đúng trạng thái đang có không ghi gì và không để vết, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.SwitchSystemMessage))))
 }

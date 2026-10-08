@@ -116,6 +116,7 @@ type systemMessagesFake struct {
 	err     error
 	list    []domain.SystemMessage
 	result  domain.SystemMessage
+	active  *bool
 }
 
 func (f *systemMessagesFake) record(ctx context.Context, op string) {
@@ -138,6 +139,12 @@ func (f *systemMessagesFake) Reword(ctx context.Context, key, text string, actor
 func (f *systemMessagesFake) Restore(ctx context.Context, key string, actor audit.Actor) (domain.SystemMessage, error) {
 	f.record(ctx, "restore")
 	f.key, f.actor = key, actor
+	return f.result, f.err
+}
+
+func (f *systemMessagesFake) SetActive(ctx context.Context, key string, active bool, actor audit.Actor) (domain.SystemMessage, error) {
+	f.record(ctx, "switch")
+	f.key, f.actor, f.active = key, actor, &active
 	return f.result, f.err
 }
 
@@ -226,6 +233,8 @@ func systemMessageRoutes() []systemMessageRoute {
 		{"GET", http.MethodGet, systemMessagesPath, "", http.StatusOK},
 		{"PUT", http.MethodPut, overridePath(titleKey), `{"text":"Báo cáo của xã."}`, http.StatusOK},
 		{"DELETE", http.MethodDelete, overridePath(titleKey), "", http.StatusNoContent},
+		// ADR 0079 Q2 (migration 0004): "Tắt / Bật lại".
+		{"PATCH (switch)", http.MethodPatch, overridePath(titleKey), `{"is_active":false}`, http.StatusOK},
 	}
 }
 
@@ -529,4 +538,50 @@ func (emptyOverrideStore) UpdateText(context.Context, *pkgstore.ScopedTx, domain
 
 func (emptyOverrideStore) SoftDelete(context.Context, *pkgstore.ScopedTx, string, string, string, time.Time) error {
 	return errNoWritePath
+}
+
+func (emptyOverrideStore) SetActive(context.Context, *pkgstore.ScopedTx, string, bool, string, time.Time) error {
+	return errNoWritePath
+}
+
+// --- "Tắt / Bật lại" (ADR 0079 Q2, migration 0004) -----------------------------------------------
+
+func TestSwitchPassesStateRequiresItAndMapsRefusal(t *testing.T) {
+	s := newHarness(t)
+	s.checker.grant(communeA, "admin.lookup")
+	w := call(s.h, http.MethodPatch, hostA, overridePath(titleKey), staffOf(communeA), `{"is_active":true}`)
+	wantStatus(t, w, http.StatusOK)
+	if s.svc.active == nil || !*s.svc.active || s.svc.op != "switch" || s.svc.key != titleKey {
+		t.Errorf("active=%v op=%q key=%q", s.svc.active, s.svc.op, s.svc.key)
+	}
+
+	s = newHarness(t)
+	s.checker.grant(communeA, "admin.lookup")
+	wantStatus(t, call(s.h, http.MethodPatch, hostA, overridePath(titleKey), staffOf(communeA), `{}`), http.StatusBadRequest)
+	if s.svc.calls != 0 {
+		t.Error("a PATCH with no state reached the use case")
+	}
+
+	s = newHarness(t)
+	s.checker.grant(communeA, "admin.lookup")
+	s.svc.err = domain.ErrNoOverrideToSwitch
+	w = call(s.h, http.MethodPatch, hostA, overridePath(titleKey), staffOf(communeA), `{"is_active":false}`)
+	wantStatus(t, w, http.StatusConflict)
+	if !strings.Contains(w.Body.String(), "no_commune_wording") {
+		t.Errorf("body %s", w.Body.String())
+	}
+}
+
+func TestListCarriesGroupOriginAndSwitch(t *testing.T) {
+	s := newHarness(t)
+	s.checker.grant(communeA, "admin.lookup")
+	s.svc.list = []domain.SystemMessage{{Key: titleKey, Group: domain.GroupReport, Origin: domain.OriginShipped,
+		DefaultText: "M.", CurrentText: "M.", OverrideText: "Của xã.", Overridden: true, Active: false}}
+	w := call(s.h, http.MethodGet, hostA, systemMessagesPath, staffOf(communeA), "")
+	wantStatus(t, w, http.StatusOK)
+	for _, frag := range []string{`"group_code":"bao-cao"`, `"origin":"shipped"`, `"is_active":false`, `"override_text":"Của xã."`} {
+		if !strings.Contains(w.Body.String(), frag) {
+			t.Errorf("body lacks %s: %s", frag, w.Body.String())
+		}
+	}
 }

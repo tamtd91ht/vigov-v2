@@ -89,6 +89,10 @@ func (s *overrideStoreCounting) SoftDelete(context.Context, *pkgstore.ScopedTx, 
 	return errNoWritePath
 }
 
+func (s *overrideStoreCounting) SetActive(context.Context, *pkgstore.ScopedTx, string, bool, string, time.Time) error {
+	return errNoWritePath
+}
+
 type server struct {
 	h     http.Handler
 	store *overrideStoreCounting
