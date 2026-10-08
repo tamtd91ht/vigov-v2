@@ -229,9 +229,179 @@ func TestBuildLetterReport(t *testing.T) {
 		t.Fatalf("theo bộ phận sai: %+v", r.ByUnit)
 	}
 
-	// C12: no letter with a deadline → nil, never 100%.
+	// Nothing resolved → nil, never 100%.
 	if BuildLetterReport(2026, rows[2:4], now).OnTimePercent != nil {
-		t.Fatal("không có đơn nào có hạn mà tỷ lệ đúng hạn khác nil")
+		t.Fatal("không có đơn nào đã giải quyết mà tỷ lệ đúng hạn khác nil")
+	}
+}
+
+// ADR 0084 #4 (reverses C12): a resolved letter with NO deadline counts as ON TIME, over every letter
+// resolved in the year; a unit's rate follows the same rule and is nil only when it resolved nothing;
+// the average counts `da-giai-quyet` only (the prototype's PROCESSED), still inclusive (C16/C17);
+// ByType and ByUnit are sorted by total, largest first.
+func TestBuildLetterReportAfterADR0084(t *testing.T) {
+	now := time.Date(2026, 10, 7, 3, 0, 0, 0, time.UTC)
+	rec := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	booked := time.Date(2026, 3, 2, 2, 0, 0, 0, time.UTC)
+	at := func(m time.Month, d int) time.Time { return time.Date(2026, m, d, 2, 0, 0, 0, time.UTC) }
+	due := at(time.April, 1)
+	resolved := func(typ LetterType, st LetterStatus, unit string, end, dueAt time.Time) CitizenLetter {
+		return CitizenLetter{Year: 2026, Type: typ, Status: st, ReceivedDate: rec, CreatedAt: booked, AcceptedAt: booked,
+			ResolvedAt: end, ClosedAt: end, ResolutionDueAt: dueAt, HoldingUnitID: unit}
+	}
+	open := CitizenLetter{Year: 2026, Type: LetterTypeRequest, Status: LetterStatusScreening, ReceivedDate: rec,
+		CreatedAt: booked, HoldingUnitID: "bp-3"}
+	rows := []CitizenLetter{
+		// bp-1: one on time with a deadline, one with none (on time), one late.
+		resolved(LetterTypeComplaint, LetterStatusResolved, "bp-1", at(time.March, 10), due),
+		resolved(LetterTypeFeedback, LetterStatusResolved, "bp-1", at(time.March, 20), time.Time{}),
+		resolved(LetterTypeComplaint, LetterStatusResolved, "bp-1", at(time.May, 1), due),
+		// bp-2: discontinued with no deadline — resolved and on time, but NOT in the average.
+		resolved(LetterTypeRequest, LetterStatusDiscontinued, "bp-2", at(time.June, 30), time.Time{}),
+		// bp-3: resolved nothing.
+		open, open, open,
+	}
+	r := BuildLetterReport(2026, rows, now)
+	if r.Resolved != 4 || r.OnTimePercent == nil || *r.OnTimePercent != 75 {
+		t.Fatalf("đã giải quyết %d, đúng hạn %v — muốn 4 và 75 (đơn không hạn tính là đúng hạn)", r.Resolved, r.OnTimePercent)
+	}
+	// da-giai-quyet only: 10, 20 and 62 days inclusive → 30.7; the dinh-chi letter (122 days) is out.
+	if r.AverageDays == nil || *r.AverageDays != 30.7 {
+		t.Fatalf("số ngày trung bình = %v, muốn 30.7 (chỉ đơn đã giải quyết, đếm cả hai đầu)", r.AverageDays)
+	}
+	units := map[string]LetterReportUnitRow{}
+	for _, u := range r.ByUnit {
+		units[u.UnitID] = u
+	}
+	if p := units["bp-1"].OnTimePercent; p == nil || *p != 66.7 {
+		t.Fatalf("bp-1 đúng hạn = %v, muốn 66.7", p)
+	}
+	if p := units["bp-2"].OnTimePercent; p == nil || *p != 100 {
+		t.Fatalf("bp-2 (đình chỉ, không hạn) đúng hạn = %v, muốn 100", p)
+	}
+	if units["bp-3"].OnTimePercent != nil {
+		t.Fatal("bộ phận chưa giải quyết đơn nào phải là nil (web in —)")
+	}
+	if r.ByUnit[0].Total != 3 || r.ByUnit[len(r.ByUnit)-1].UnitID != "bp-2" {
+		t.Fatalf("theo bộ phận chưa sắp theo tổng giảm dần: %+v", r.ByUnit)
+	}
+	// By type: de-nghi 4, khieu-nai 2, kien-nghi-phan-anh 1 — total desc, not C4 order.
+	if len(r.ByType) != 3 || r.ByType[0].Type != LetterTypeRequest || r.ByType[1].Type != LetterTypeComplaint ||
+		r.ByType[2].Type != LetterTypeFeedback {
+		t.Fatalf("theo loại chưa sắp theo tổng giảm dần: %+v", r.ByType)
+	}
+	// A tie keeps C4 order.
+	tie := BuildLetterReport(2026, []CitizenLetter{rows[3], rows[0]}, now)
+	if tie.ByType[0].Type != LetterTypeComplaint || tie.ByType[1].Type != LetterTypeRequest {
+		t.Fatalf("hoà tổng phải giữ thứ tự C4: %+v", tie.ByType)
+	}
+}
+
+// ADR 0084 §2 table: every (status, held?) pair belongs to exactly one group, and the derived group is
+// the one the filter rule selects.
+func TestLetterGroupsPartitionEveryStatus(t *testing.T) {
+	for _, st := range LetterStatuses {
+		for _, unit := range []string{"", "bp-1"} {
+			l := CitizenLetter{Status: st, HoldingUnitID: unit}
+			hits := 0
+			for _, g := range LetterStatusGroups() {
+				rule, ok := g.Rule()
+				if !ok {
+					t.Fatalf("nhóm %q không có quy tắc", g)
+				}
+				inStatuses := false
+				for _, s := range rule.Statuses {
+					inStatuses = inStatuses || s == st
+				}
+				holds := rule.Holding == HoldingAny || (rule.Holding == HoldingNone) == (unit == "")
+				if inStatuses && holds {
+					hits++
+					if l.StatusGroup() != g {
+						t.Fatalf("%s/%q: nhóm suy ra %q, quy tắc chọn %q", st, unit, l.StatusGroup(), g)
+					}
+				}
+			}
+			if hits != 1 {
+				t.Fatalf("%s/%q thuộc %d nhóm, muốn đúng 1", st, unit, hits)
+			}
+		}
+	}
+	want := map[LetterStatus]LetterStatusGroup{
+		LetterStatusScreening: LetterGroupInProgress, LetterStatusAdmitted: LetterGroupInProgress,
+		LetterStatusResolving: LetterGroupInProgress, LetterStatusResolved: LetterGroupResolved,
+		LetterStatusForwarded: LetterGroupForwarded, LetterStatusNotAdmitted: LetterGroupNotProcessed,
+		LetterStatusGuided: LetterGroupNotProcessed, LetterStatusFiled: LetterGroupNotProcessed,
+		LetterStatusDiscontinued: LetterGroupNotProcessed,
+	}
+	for st, g := range want {
+		if got := (CitizenLetter{Status: st}).StatusGroup(); got != g {
+			t.Fatalf("%s → %q, muốn %q", st, got, g)
+		}
+	}
+	if (CitizenLetter{Status: LetterStatusNew}).StatusGroup() != LetterGroupNew ||
+		(CitizenLetter{Status: LetterStatusNew, HoldingUnitID: "bp-1"}).StatusGroup() != LetterGroupAssigned {
+		t.Fatal("moi-vao-so: chưa có bộ phận là Mới vào sổ, có bộ phận là Đã phân công")
+	}
+	if LetterStatusGroup("cho-phan-cong").Valid() {
+		t.Fatal("Chờ phân công không phải một nhóm (ADR 0084 #5)")
+	}
+	if got := LetterStatusGroups(); len(got) != 6 {
+		t.Fatalf("có %d nhóm, muốn 6", len(got))
+	}
+}
+
+func TestHasResultAndWithResultFollowTheType(t *testing.T) {
+	doc := LetterResult{DocumentNo: "12/QĐ-UBND", DocumentDate: time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC),
+		Signer: "Chủ tịch UBND xã", Issuer: "UBND xã", Summary: "Giữ nguyên quyết định"}
+	for _, typ := range LetterTypes {
+		empty := CitizenLetter{Type: typ}
+		if empty.HasResult() == typ.RequiresIssuedResult() {
+			t.Fatalf("%s: HasResult khi chưa ghi gì = %v", typ, empty.HasResult())
+		}
+		full, err := empty.WithResult(doc)
+		if err != nil || !full.HasResult() {
+			t.Fatalf("%s: kết quả đủ năm trường: %v", typ, err)
+		}
+		_, err = empty.WithResult(LetterResult{Summary: "Đã trả lời"})
+		if typ.RequiresIssuedResult() != errors.Is(err, ErrLetterResultIncomplete) {
+			t.Fatalf("%s: chỉ trả lời → %v", typ, err)
+		}
+	}
+	if !LetterTypeComplaint.RequiresIssuedResult() || !LetterTypeDenunciation.RequiresIssuedResult() ||
+		LetterTypeFeedback.RequiresIssuedResult() || LetterTypeRequest.RequiresIssuedResult() {
+		t.Fatal("chỉ khiếu nại và tố cáo bắt buộc văn bản kết quả (ADR 0084 #2)")
+	}
+}
+
+func TestLetterSourcesAreMigration0008s(t *testing.T) {
+	want := []LetterSource{"nhap-tay", "nhap-excel", "mini-app", "thu-dien-tu"}
+	if len(LetterSources) != len(want) {
+		t.Fatalf("có %d nguồn", len(LetterSources))
+	}
+	for i, s := range want {
+		if LetterSources[i] != s || !s.Valid() {
+			t.Fatalf("nguồn %d = %q, muốn %q", i, LetterSources[i], s)
+		}
+	}
+	if LetterSource("").Valid() || LetterSource("zalo").Valid() {
+		t.Fatal("nguồn rỗng hoặc lạ được nhận")
+	}
+}
+
+// The contract current_due_at: resolution deadline once admitted, processing deadline before — and
+// NOT blank on a finished letter, unlike ActiveDueAt.
+func TestCurrentStageDueAt(t *testing.T) {
+	p, r := time.Date(2026, 10, 1, 10, 0, 0, 0, time.UTC), time.Date(2026, 11, 1, 10, 0, 0, 0, time.UTC)
+	before := CitizenLetter{Status: LetterStatusScreening, ProcessingDueAt: p}
+	if !before.CurrentStageDueAt().Equal(p) {
+		t.Fatal("trước thụ lý phải là hạn xử lý đơn")
+	}
+	after := CitizenLetter{Status: LetterStatusResolved, ProcessingDueAt: p, ResolutionDueAt: r, AcceptedAt: p}
+	if !after.CurrentStageDueAt().Equal(r) || !after.ActiveDueAt().IsZero() {
+		t.Fatal("sau thụ lý phải là hạn giải quyết, kể cả khi đơn đã kết thúc")
+	}
+	if !(CitizenLetter{Status: LetterStatusAdmitted, AcceptedAt: p, ProcessingDueAt: p}).CurrentStageDueAt().IsZero() {
+		t.Fatal("đã thụ lý mà chưa đặt hạn giải quyết thì không có hạn — không lùi về hạn xử lý đơn")
 	}
 }
 

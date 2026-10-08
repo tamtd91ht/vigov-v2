@@ -52,6 +52,7 @@ type CitizenLetterRepo interface {
 	Log(ctx context.Context, tx *store.ScopedTx, letterID string) ([]domain.LetterLogEntry, error)
 
 	List(ctx context.Context, f docstore.CitizenLetterFilter, req page.Request) (page.Result[domain.CitizenLetter], error)
+	Count(ctx context.Context, f docstore.CitizenLetterFilter) (int, error)
 	DuplicateCandidates(ctx context.Context, senderName string, since time.Time) ([]domain.CitizenLetter, error)
 	ReportRows(ctx context.Context, year int, yearStart time.Time) ([]domain.CitizenLetter, error)
 }
@@ -92,9 +93,13 @@ const (
 
 // Fixed log sentences. A `sua-nguoi-gui` row records THAT the sender was corrected, never the values
 // (0006:419-422; rule 6, forbidden #4).
+//
+// logAssignedAtBooking is the prototype's sentence for a unit chosen on the booking form (ADR 0084 #2:
+// the letter stays `moi-vao-so` and its group derives "Đã phân công"). The row's from-unit stays EMPTY,
+// so the timeline prints "Một cửa → <unit>" — the letter came from the reception desk, not a unit.
 const (
-	logSenderCorrected = "Sửa thông tin người gửi"
-	logRoutedAtBooking = "Chuyển ngay khi vào sổ"
+	logSenderCorrected   = "Sửa thông tin người gửi"
+	logAssignedAtBooking = "Phân công xử lý"
 )
 
 // LetterCaller is the acting member of staff. Actor.ID IS THE STAFF BUSINESS CODE (Principal.Ma —
@@ -108,7 +113,11 @@ type LetterCaller struct {
 // BookLetterRequest is one letter as it arrives. NO number, year, status or due field: the number is
 // the counter's, the year is the year of the act, the status a literal, and the deadline is set by a
 // clerk afterwards, by its own act (SetDeadline).
+//
+// Source is NOT the client's: each booking PATH states its own (the booking route `nhap-tay`, the
+// Excel import `nhap-excel`). Required — an empty one is refused, never defaulted.
 type BookLetterRequest struct {
+	Source          domain.LetterSource
 	ReceivedDate    time.Time
 	Type            domain.LetterType
 	SenderName      string
@@ -243,7 +252,7 @@ func (uc *CitizenLetters) Book(ctx context.Context, req BookLetterRequest, calle
 		if l.HoldingUnitID != "" {
 			if err := uc.repo.InsertLog(ctx, tx, domain.LetterLogEntry{
 				ID: logID, LetterID: l.ID, At: now, ActorCode: caller.Actor.ID,
-				Kind: domain.LetterLogRouting, ToUnitID: l.HoldingUnitID, Content: logRoutedAtBooking,
+				Kind: domain.LetterLogRouting, ToUnitID: l.HoldingUnitID, Content: logAssignedAtBooking,
 			}); err != nil {
 				return err
 			}
@@ -263,6 +272,9 @@ func normaliseBooking(req BookLetterRequest, now time.Time) (domain.CitizenLette
 		l   domain.CitizenLetter
 		err error
 	)
+	if !req.Source.Valid() {
+		return l, domain.ErrLetterSourceInvalid
+	}
 	if err = domain.CheckReceivedDate(req.ReceivedDate, now); err != nil {
 		return l, err
 	}
@@ -289,6 +301,7 @@ func normaliseBooking(req BookLetterRequest, now time.Time) (domain.CitizenLette
 	}
 	l.ReceivedDate = req.ReceivedDate
 	l.Type = req.Type
+	l.Source = req.Source
 	return l, nil
 }
 
@@ -368,7 +381,9 @@ func (uc *CitizenLetters) Route(ctx context.Context, id string, req RouteLetterR
 // Move changes the status along C3's arrows. WHO: the assignee, or a holder of `petition.create`
 // (C13/C14) — decided on the row read under the lock, so a re-assignment racing this request cannot
 // let the previous assignee through. `thu-ly` stamps `accepted_at`; `da-giai-quyet` / `dinh-chi` stamp
-// `resolved_at`; `da-giai-quyet` needs the result recorded first (C10 — never close silently).
+// `resolved_at`; `da-giai-quyet` needs the result the TYPE requires recorded first (domain
+// .CitizenLetter.HasResult — a complaint / denunciation its issued document, a feedback letter /
+// request nothing, ADR 0084 #2).
 func (uc *CitizenLetters) Move(ctx context.Context, id string, req MoveLetterRequest, caller LetterCaller) (domain.CitizenLetter, error) {
 	if id == "" {
 		return domain.CitizenLetter{}, docstore.ErrCitizenLetterNotFound
@@ -437,9 +452,12 @@ func (uc *CitizenLetters) Move(ctx context.Context, id string, req MoveLetterReq
 
 // --- result -----------------------------------------------------------------------------------------
 
-// RecordResult writes C10's result: the issued document and a summary. Allowed in `thu-ly` and
-// `dang-giai-quyet` only. Same WHO as Move. A request carrying the values already stored writes
-// nothing and audits nothing — which is what makes the PUT honestly idempotent.
+// RecordResult writes the result. WHAT IS REQUIRED DEPENDS ON THE LETTER'S TYPE (ADR 0084 #2,
+// domain.CitizenLetter.WithResult): the issued document and a summary for a complaint or a
+// denunciation; the reply alone (the one textarea) for a feedback letter or a request. The type is
+// known only once the row is read, so the shape is checked here and the rule under the row lock.
+// Allowed in `thu-ly` and `dang-giai-quyet` only. Same WHO as Move. A request carrying the values
+// already stored writes nothing and audits nothing — which is what makes the PUT honestly idempotent.
 func (uc *CitizenLetters) RecordResult(ctx context.Context, id string, req LetterResultRequest, caller LetterCaller) (domain.CitizenLetter, error) {
 	if id == "" {
 		return domain.CitizenLetter{}, docstore.ErrCitizenLetterNotFound
@@ -469,9 +487,9 @@ func (uc *CitizenLetters) RecordResult(ctx context.Context, id string, req Lette
 		if before.Status != domain.LetterStatusAdmitted && before.Status != domain.LetterStatusResolving {
 			return domain.ErrLetterResultNotAllowed
 		}
-		after = before
-		after.ResultDocumentNo, after.ResultDocumentDate = res.DocumentNo, res.DocumentDate
-		after.ResultSigner, after.ResultIssuer, after.ResultSummary = res.Signer, res.Issuer, res.Summary
+		if after, err = before.WithResult(res); err != nil {
+			return err
+		}
 		if sameResult(before, after) {
 			return nil
 		}
@@ -479,12 +497,9 @@ func (uc *CitizenLetters) RecordResult(ctx context.Context, id string, req Lette
 		if err := uc.repo.UpdateResult(ctx, tx, after, caller.Actor.ID); err != nil {
 			return err
 		}
-		// The document number and date name an ISSUED document, not a citizen; the result summary is
-		// never copied into the append-only log.
 		if err := uc.repo.InsertLog(ctx, tx, domain.LetterLogEntry{
 			ID: logID, LetterID: before.ID, At: now, ActorCode: caller.Actor.ID, Kind: domain.LetterLogResult,
-			Content: "Ghi kết quả giải quyết: văn bản số " + res.DocumentNo + " ngày " +
-				res.DocumentDate.Format("02/01/2006"),
+			Content: resultLogLine(res),
 		}); err != nil {
 			return err
 		}
@@ -500,28 +515,42 @@ func (uc *CitizenLetters) RecordResult(ctx context.Context, id string, req Lette
 	return after, nil
 }
 
-func normaliseResult(req LetterResultRequest, now time.Time) (LetterResultRequest, error) {
+// normaliseResult trims every field and checks its SHAPE — ceilings, and a document date that is not
+// in the future — before any transaction. Which fields are REQUIRED is the type's rule, checked under
+// the row lock (domain.CitizenLetter.WithResult).
+func normaliseResult(req LetterResultRequest, now time.Time) (domain.LetterResult, error) {
 	var (
-		out LetterResultRequest
+		out domain.LetterResult
 		err error
 	)
-	if out.DocumentNo, err = domain.TrimRequired(req.DocumentNo, domain.MaxResultNo, domain.ErrLetterResultIncomplete); err != nil {
+	if out.DocumentNo, err = domain.TrimOptional(req.DocumentNo, domain.MaxResultNo); err != nil {
 		return out, err
 	}
-	if err = domain.CheckResultDocumentDate(req.DocumentDate, now); err != nil {
+	if !req.DocumentDate.IsZero() {
+		if err = domain.CheckResultDocumentDate(req.DocumentDate, now); err != nil {
+			return out, err
+		}
+		out.DocumentDate = req.DocumentDate
+	}
+	if out.Signer, err = domain.TrimOptional(req.Signer, domain.MaxResultSigner); err != nil {
 		return out, err
 	}
-	out.DocumentDate = req.DocumentDate
-	if out.Signer, err = domain.TrimRequired(req.Signer, domain.MaxResultSigner, domain.ErrLetterResultIncomplete); err != nil {
+	if out.Issuer, err = domain.TrimOptional(req.Issuer, domain.MaxResultIssuer); err != nil {
 		return out, err
 	}
-	if out.Issuer, err = domain.TrimRequired(req.Issuer, domain.MaxResultIssuer, domain.ErrLetterResultIncomplete); err != nil {
-		return out, err
-	}
-	if out.Summary, err = domain.TrimRequired(req.Summary, domain.MaxResultSummary, domain.ErrLetterResultIncomplete); err != nil {
+	if out.Summary, err = domain.TrimOptional(req.Summary, domain.MaxResultSummary); err != nil {
 		return out, err
 	}
 	return out, nil
+}
+
+// resultLogLine is the log row of a recorded result. The document number and date name an ISSUED
+// document, not a citizen; the reply text is never copied into the append-only log.
+func resultLogLine(r domain.LetterResult) string {
+	if r.DocumentNo == "" {
+		return "Ghi kết quả giải quyết"
+	}
+	return "Ghi kết quả giải quyết: văn bản số " + r.DocumentNo + " ngày " + r.DocumentDate.Format("02/01/2006")
 }
 
 func sameResult(a, b domain.CitizenLetter) bool {
@@ -794,24 +823,9 @@ func (uc *CitizenLetters) Log(ctx context.Context, id string) ([]domain.LetterLo
 // List reads one page. `related` asks identity for the caller's units; an identity error is a 503,
 // never the tab with the unit clause dropped (which would hide exactly what the tab is named for).
 func (uc *CitizenLetters) List(ctx context.Context, q LetterListQuery, req page.Request) (page.Result[domain.CitizenLetter], error) {
-	f := q.Filter
-	switch q.Scope {
-	case "", "all":
-	case "mine", "related":
-		if q.CallerCode == "" {
-			return page.NewResult[domain.CitizenLetter](), fmt.Errorf("citizen_letter: thiếu mã cán bộ của phiên")
-		}
-		if q.Scope == "mine" {
-			f.MineCode = q.CallerCode
-			break
-		}
-		units, err := uc.dir.StaffOrgUnits(ctx, q.CallerCode)
-		if err != nil {
-			return page.NewResult[domain.CitizenLetter](), fmt.Errorf("%w: %w", ErrLetterDirectoryUnavailable, err)
-		}
-		f.Related = &docstore.CitizenLetterRelated{StaffCode: q.CallerCode, OrgUnits: units}
-	default:
-		return page.NewResult[domain.CitizenLetter](), ErrLetterScopeInvalid
+	f, err := uc.scopedFilter(ctx, q)
+	if err != nil {
+		return page.NewResult[domain.CitizenLetter](), err
 	}
 	// The store scopes this read by tenant_id through store.DB.For(ctx).
 	res, err := uc.repo.List(ctx, f, req)
@@ -819,6 +833,48 @@ func (uc *CitizenLetters) List(ctx context.Context, q LetterListQuery, req page.
 		return page.NewResult[domain.CitizenLetter](), wrapLetter(ctx, "đọc sổ đơn thư", err)
 	}
 	return res, nil
+}
+
+// Count is how many letters List would page through for the same query — the tab label "Đơn thư công
+// dân (N)" (ADR 0084 #7). The SAME scope resolution and the same filter as List (scopedFilter, then
+// one predicate builder in the store), so the number never disagrees with the register it labels. A
+// number only: nothing in it is masked because nothing in it is personal.
+func (uc *CitizenLetters) Count(ctx context.Context, q LetterListQuery) (int, error) {
+	f, err := uc.scopedFilter(ctx, q)
+	if err != nil {
+		return 0, err
+	}
+	n, err := uc.repo.Count(ctx, f)
+	if err != nil {
+		return 0, wrapLetter(ctx, "đếm sổ đơn thư", err)
+	}
+	return n, nil
+}
+
+// scopedFilter adds the scope's clause to the filter. `related` asks identity for the caller's units;
+// an identity error is a 503, never the tab with the unit clause dropped (which would hide exactly
+// what the tab is named for).
+func (uc *CitizenLetters) scopedFilter(ctx context.Context, q LetterListQuery) (docstore.CitizenLetterFilter, error) {
+	f := q.Filter
+	switch q.Scope {
+	case "", "all":
+	case "mine", "related":
+		if q.CallerCode == "" {
+			return f, fmt.Errorf("citizen_letter: thiếu mã cán bộ của phiên")
+		}
+		if q.Scope == "mine" {
+			f.MineCode = q.CallerCode
+			break
+		}
+		units, err := uc.dir.StaffOrgUnits(ctx, q.CallerCode)
+		if err != nil {
+			return f, fmt.Errorf("%w: %w", ErrLetterDirectoryUnavailable, err)
+		}
+		f.Related = &docstore.CitizenLetterRelated{StaffCode: q.CallerCode, OrgUnits: units}
+	default:
+		return f, ErrLetterScopeInvalid
+	}
+	return f, nil
 }
 
 // Duplicates is C11's warning: candidates received within the last year (Asia/Ho_Chi_Minh), same
@@ -913,7 +969,7 @@ func writeLetterAudit(ctx context.Context, tx *store.ScopedTx, actor audit.Actor
 // forbidden #4). WHETHER each sender field was given is recorded — that is what an inspection asks.
 func bookingSummary(l domain.CitizenLetter) map[string]any {
 	return map[string]any{
-		"so_vao_so": l.Number, "nam": l.Year, "loai_don": string(l.Type),
+		"so_vao_so": l.Number, "nam": l.Year, "loai_don": string(l.Type), "nguon": string(l.Source),
 		"ngay_nhan":     l.ReceivedDate.Format(time.DateOnly),
 		"co_ho_ten":     l.SenderName != "",
 		"co_dien_thoai": l.SenderPhone != "",

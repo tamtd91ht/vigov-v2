@@ -1,6 +1,6 @@
 package http
 
-// SỔ ĐƠN THƯ CÔNG DÂN — twelve routes (ADR 0039, ADR 0078 #2–#4, ADR 0079 lô 5 Q18). Handlers and masking:
+// SỔ ĐƠN THƯ CÔNG DÂN — thirteen routes (ADR 0039, ADR 0078 #2–#4, ADR 0079 lô 5 Q18, ADR 0084). Handlers and masking:
 // citizen_letter.go.
 //
 // TWO KEYS, BOTH SEEDED, NONE INVENTED (rule 5, invariant 3c): `petition.create` ("Tiếp nhận đơn
@@ -71,9 +71,11 @@ func registerCitizenLetterRoutes(mux *http.ServeMux, d Deps, h *Handler) {
 			idem.KhongCan("chỉ đọc và so sánh, không ghi gì — gửi lại bao nhiêu lần cũng cho cùng một câu trả lời trên cùng trạng thái sổ")(
 				http.HandlerFunc(h.CitizenLetterDuplicates))))
 
-	// THE REGISTER. Denunciations carry neither identity nor summary here, whoever asks.
+	// THE REGISTER. Denunciations carry neither identity nor summary here, whoever asks. Each row
+	// carries `source` (fixed at booking) and `status_group` (ADR 0084's display group, derived on read).
+	// `status_group=` filters by that group (closed set, 400 otherwise), ANDed with `status=`.
 	//
-	// @summary  Sổ đơn thư công dân, phân trang theo con trỏ, mới vào sổ trước; lọc năm · trạng thái · loại · bộ phận · cán bộ · khoảng ngày nhận · từ khoá · phạm vi
+	// @summary  Sổ đơn thư công dân, phân trang theo con trỏ, mới vào sổ trước; lọc năm · trạng thái · nhóm trạng thái hiển thị (status_group) · loại · bộ phận · cán bộ · khoảng ngày nhận · từ khoá · phạm vi
 	// @screen   05-van-ban-don-thu §3.1
 	// @reply    200 page.Result[citizenLetterItemOut]
 	// @reply    400 httpx.Error
@@ -84,6 +86,29 @@ func registerCitizenLetterRoutes(mux *http.ServeMux, d Deps, h *Handler) {
 	mux.Handle("GET /api/v1/citizen-letters",
 		authz.RequirePermission(d.Checker, "petition.read")(
 			http.HandlerFunc(h.ListCitizenLetters)))
+
+	// SỐ ĐẾM TRÊN TAB "Đơn thư công dân (N)" (ADR 0084 #7) — the size of the register above under
+	// EXACTLY its filters and scope (one parser, letterFilterFromQuery; one predicate builder in the
+	// store). A sibling count route and not a `total` on the list: page.Result carries none by design,
+	// and petitions' task-counts / task-extension-counts are the precedent. A top-level
+	// `citizen-letter-counts`, not `citizen-letters/counts`, which `citizen-letters/{id}` would read as
+	// a letter whose id is `counts`; its own first segment, so tools/ingress routes it here.
+	//
+	// `petition.read`, THE LIST'S OWN KEY: the number reveals nothing the list does not, and a second
+	// key would let an account see a badge over a register it may not read. NO KEY WAS INVENTED (rule
+	// 5, invariant 3c). NO idem.*: a GET changes no state. NO AUDIT ENTRY: a number, no personal data.
+	//
+	// @summary  Số đơn thư trong sổ theo đúng bộ lọc và phạm vi của danh sách — số trên tab "Đơn thư công dân (N)"
+	// @screen   05-van-ban-don-thu §3.1
+	// @reply    200 citizenLetterCountOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("GET /api/v1/citizen-letter-counts",
+		authz.RequirePermission(d.Checker, "petition.read")(
+			http.HandlerFunc(h.CitizenLetterCount)))
 
 	// ONE LETTER. 404 is one sentence for never-existed, removed and another commune's. Reading a
 	// denunciation's identity or content writes an audit entry in the same transaction (rule 6,
@@ -136,7 +161,7 @@ func registerCitizenLetterRoutes(mux *http.ServeMux, d Deps, h *Handler) {
 	// ĐỔI TRẠNG THÁI along C3's arrows. A second identical request is refused by the table itself
 	// (the letter is no longer in the `from` status), so it writes nothing.
 	//
-	// @summary  Đổi trạng thái đơn thư theo TT 05/2021 (C3); cán bộ được giao hoặc người có quyền tiếp nhận; Đã giải quyết cần kết quả trước
+	// @summary  Đổi trạng thái đơn thư theo TT 05/2021 (C3); cán bộ được giao hoặc người có quyền tiếp nhận; khiếu nại / tố cáo cần kết quả trước khi sang Đã giải quyết
 	// @screen   05-van-ban-don-thu §3.5
 	// @request  letterStatusIn
 	// @reply    200 citizenLetterOut
@@ -151,9 +176,10 @@ func registerCitizenLetterRoutes(mux *http.ServeMux, d Deps, h *Handler) {
 			idem.KhongCan("lần gửi thứ hai bị bảng chuyển trạng thái từ chối (đơn đã rời trạng thái cũ) nên trả 409 và không ghi gì")(
 				http.HandlerFunc(h.MoveCitizenLetter))))
 
-	// KẾT QUẢ GIẢI QUYẾT (C10) — a full replacement, so PUT.
+	// KẾT QUẢ GIẢI QUYẾT (C10, narrowed by ADR 0084 #2) — a full replacement, so PUT. khieu-nai /
+	// to-cao: all five fields. kien-nghi-phan-anh / de-nghi: the reply (`result_summary`) alone.
 	//
-	// @summary  Ghi kết quả giải quyết: văn bản đã ban hành (số, ngày, người ký, cơ quan) và tóm tắt — khi đơn đang Thụ lý hoặc Đang giải quyết
+	// @summary  Ghi kết quả giải quyết khi đơn đang Thụ lý hoặc Đang giải quyết: khiếu nại / tố cáo cần văn bản đã ban hành (số, ngày, người ký, cơ quan) và tóm tắt; kiến nghị-phản ánh / đề nghị chỉ cần nội dung trả lời
 	// @screen   05-van-ban-don-thu §3.5
 	// @request  letterResultIn
 	// @reply    200 citizenLetterOut

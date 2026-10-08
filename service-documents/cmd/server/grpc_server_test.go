@@ -52,11 +52,20 @@ func (tenantTypes) StatesByCode(ctx context.Context, codes []string) ([]domain.D
 	return out, nil
 }
 
+// tenantLetters answers every id as a live feedback letter with no deadline — and panics without a
+// commune, like the real store.
+type tenantLetters struct{}
+
+func (tenantLetters) LiveByID(ctx context.Context, id string) (domain.CitizenLetter, bool, error) {
+	_ = tenant.MustFrom(ctx)
+	return domain.CitizenLetter{ID: id, Number: 3, Year: 2026, Type: domain.LetterTypeFeedback}, true, nil
+}
+
 func startGRPC(t *testing.T, opts ...grpc.DialOption) documentsv1.DocumentsServiceClient {
 	t.Helper()
 	lis := bufconn.Listen(1 << 20)
 	srv := buildGRPCServer(testCallerKey, svcgrpc.Deps{Incoming: tenantCounter{n: 6}, DocumentTypes: tenantTypes{},
-		Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+		Letters: tenantLetters{}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	go func() {
 		if err := srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
 			t.Errorf("Serve: %v", err)
@@ -115,7 +124,7 @@ func TestGRPCServerWithoutCallerKeyDoesNotBuild(t *testing.T) {
 		}
 	}()
 	_ = buildGRPCServer(nil, svcgrpc.Deps{Incoming: tenantCounter{}, DocumentTypes: tenantTypes{},
-		Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+		Letters: tenantLetters{}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 }
 
 // The new RPC rides the SAME chain: with key and commune it answers, without the commune it is refused
@@ -134,6 +143,25 @@ func TestGRPCResolveDocumentTypeCodesThroughChain(t *testing.T) {
 		t.Errorf("= %+v", res)
 	}
 	if _, err := cl.ResolveDocumentTypeCodes(context.Background(), req); status.Code(err) != codes.InvalidArgument {
+		t.Errorf("no commune: code = %v, want InvalidArgument", status.Code(err))
+	}
+}
+
+func TestGRPCResolveCitizenLetterForTaskThroughChain(t *testing.T) {
+	cl := startGRPC(t, grpc.WithChainUnaryInterceptor(
+		grpcx.UnaryClientCallerAuth(testCallerKey),
+		grpcx.UnaryClientInterceptor(),
+	))
+	req := &documentsv1.ResolveCitizenLetterForTaskRequest{LetterId: "dt-1"}
+	res, err := cl.ResolveCitizenLetterForTask(tenant.Into(context.Background(), grpcTestTenant), req)
+	if err != nil {
+		t.Fatalf("refused with key and commune: %v", err)
+	}
+	if res.GetEligibility() != documentsv1.CitizenLetterTaskEligibility_CITIZEN_LETTER_TASK_ELIGIBILITY_ELIGIBLE ||
+		res.GetLetter().GetNumber() != 3 {
+		t.Errorf("= %+v", res)
+	}
+	if _, err := cl.ResolveCitizenLetterForTask(context.Background(), req); status.Code(err) != codes.InvalidArgument {
 		t.Errorf("no commune: code = %v, want InvalidArgument", status.Code(err))
 	}
 }

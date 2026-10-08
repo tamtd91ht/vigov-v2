@@ -54,7 +54,7 @@ func catalogue() *fakeTypes {
 }
 
 func typesServer(f *fakeTypes) *Server {
-	return NewServer(Deps{Incoming: &fakeCounter{}, DocumentTypes: f,
+	return NewServer(Deps{Incoming: &fakeCounter{}, DocumentTypes: f, Letters: &fakeLetters{},
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 }
 

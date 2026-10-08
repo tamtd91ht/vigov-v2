@@ -87,12 +87,12 @@ var citizenLetterColumns = `id, number, year, received_date, letter_type, ` +
 	`COALESCE(related_letter_id, ''), ` +
 	`COALESCE(result_document_no, ''), result_document_date, COALESCE(result_signer, ''), ` +
 	`COALESCE(result_issuer, ''), COALESCE(result_summary, ''), ` +
-	`created_by_code, created_at, updated_at`
+	`created_by_code, created_at, updated_at, source`
 
 func scanCitizenLetter(scan func(...any) error) (domain.CitizenLetter, error) {
 	var (
 		l                                       domain.CitizenLetter
-		letterType, status                      string
+		letterType, status, source              string
 		procDue, resDue, accepted, resolved, cl sql.NullTime
 		resultDate                              sql.NullTime
 	)
@@ -102,10 +102,11 @@ func scanCitizenLetter(scan func(...any) error) (domain.CitizenLetter, error) {
 		&procDue, &resDue, &accepted, &resolved, &cl,
 		&l.RelatedLetterID,
 		&l.ResultDocumentNo, &resultDate, &l.ResultSigner, &l.ResultIssuer, &l.ResultSummary,
-		&l.CreatedByCode, &l.CreatedAt, &l.UpdatedAt)
+		&l.CreatedByCode, &l.CreatedAt, &l.UpdatedAt, &source)
 	if err != nil {
 		return domain.CitizenLetter{}, err
 	}
+	l.Source = domain.LetterSource(source)
 	l.Type = domain.LetterType(letterType)
 	l.Status = domain.LetterStatus(status)
 	l.ProcessingDueAt = nullTime(procDue)
@@ -152,9 +153,12 @@ var cursorCitizenLetters = store.NewMoc[domain.CitizenLetter](SortCitizenLetters
 
 // CitizenLetterFilter is the validated filter set. Every field becomes a BOUND PARAMETER.
 type CitizenLetterFilter struct {
-	Year          int                 // 0 = every year
-	Status        domain.LetterStatus // "" = every status
-	Type          domain.LetterType   // "" = every type
+	Year   int                 // 0 = every year
+	Status domain.LetterStatus // "" = every status
+	// StatusGroup is ADR 0084's display group ("" = every group). ANDed with Status when both are
+	// sent: the answer is their intersection, never one silently overriding the other.
+	StatusGroup   domain.LetterStatusGroup
+	Type          domain.LetterType // "" = every type
 	HoldingUnitID string
 	AssigneeCode  string
 	ReceivedFrom  time.Time // zero = open
@@ -194,6 +198,30 @@ func (s *CitizenLetterStore) List(ctx context.Context, f CitizenLetterFilter,
 	})
 }
 
+// Count is the number of live letters List would page through under the same filter — the tab label
+// "Đơn thư công dân (N)" (ADR 0084 #7). ONE predicate builder for both (citizenLetterFilterSQL), so the
+// number and the list cannot disagree. `tenant_id = $1` prunes the hash-partitioned table to this
+// commune's partition, and a commune books hundreds of letters a year: a count, not a scan of the
+// platform (rest-api-design §5 #4 asks a total to be a separate route — this is that route's read).
+func (s *CitizenLetterStore) Count(ctx context.Context, f CitizenLetterFilter) (int, error) {
+	cond, args := citizenLetterFilterSQL(f)
+	rows, err := s.db.For(ctx).Query(ctx, "count(*)", "citizen_letter", `AND deleted_at IS NULL`+cond, args...)
+	if err != nil {
+		return 0, fmt.Errorf("citizen_letter: đếm: %w", err)
+	}
+	defer rows.Close()
+	n := 0
+	if rows.Next() {
+		if err := rows.Scan(&n); err != nil {
+			return 0, fmt.Errorf("citizen_letter: quét số đếm: %w", err)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("citizen_letter: duyệt số đếm: %w", err)
+	}
+	return n, nil
+}
+
 // citizenLetterFilterSQL builds the predicate and its bound values in ONE place, so placeholder
 // numbers and argument order cannot drift. $1 is the commune.
 func citizenLetterFilterSQL(f CitizenLetterFilter) (string, []any) {
@@ -210,6 +238,28 @@ func citizenLetterFilterSQL(f CitizenLetterFilter) (string, []any) {
 	}
 	if f.Status != "" {
 		b.WriteString(" AND status = " + bind(string(f.Status)))
+	}
+	if f.StatusGroup != "" {
+		// THE GROUP TABLE IS domain's (letterGroupRules) — read here, never restated as SQL literals,
+		// so the filter and the `status_group` field on each row cannot disagree (ADR 0084 "Hệ quả" #2).
+		// An unknown group matches NOTHING (`AND false`): the edge refuses it with 400 first, and a
+		// value that slipped past must narrow the page, never widen it to the whole register.
+		rule, ok := f.StatusGroup.Rule()
+		if !ok {
+			b.WriteString(" AND false")
+		} else {
+			ph := make([]string, 0, len(rule.Statuses))
+			for _, st := range rule.Statuses {
+				ph = append(ph, bind(string(st)))
+			}
+			b.WriteString(" AND status IN (" + strings.Join(ph, ", ") + ")")
+			switch rule.Holding {
+			case domain.HoldingNone:
+				b.WriteString(" AND holding_unit_id IS NULL")
+			case domain.HoldingSome:
+				b.WriteString(" AND holding_unit_id IS NOT NULL")
+			}
+		}
 	}
 	if f.Type != "" {
 		b.WriteString(" AND letter_type = " + bind(string(f.Type)))
@@ -300,6 +350,25 @@ func (s *CitizenLetterStore) ByID(ctx context.Context, tx *store.ScopedTx, id st
 	return s.one(ctx, tx, id, false)
 }
 
+// LiveByID reads one live letter of the commune in ctx OUTSIDE any transaction — for the read-only
+// gRPC answer ResolveCitizenLetterForTask, which writes nothing. found=false for an id that never
+// existed, a soft-deleted letter and another commune's letter alike: the query cannot reach the last
+// two (rule 1; rule 7, invariant 2).
+func (s *CitizenLetterStore) LiveByID(ctx context.Context, id string) (domain.CitizenLetter, bool, error) {
+	rows, err := s.db.For(ctx).Query(ctx, citizenLetterColumns, "citizen_letter", `AND id = $2 AND deleted_at IS NULL`, id)
+	if err != nil {
+		return domain.CitizenLetter{}, false, fmt.Errorf("citizen_letter: đọc đơn: %w", err)
+	}
+	letters, err := collectLetters(rows, "đơn", 1, nil)
+	if err != nil {
+		return domain.CitizenLetter{}, false, err
+	}
+	if len(letters) == 0 {
+		return domain.CitizenLetter{}, false, nil
+	}
+	return letters[0], true, nil
+}
+
 // ForUpdate reads one live letter and holds it until the transaction ends.
 func (s *CitizenLetterStore) ForUpdate(ctx context.Context, tx *store.ScopedTx, id string) (domain.CitizenLetter, error) {
 	return s.one(ctx, tx, id, true)
@@ -311,17 +380,27 @@ func (s *CitizenLetterStore) ForUpdate(ctx context.Context, tx *store.ScopedTx, 
 // is the one edit that lets a client book a letter already `da-giai-quyet`. The two due columns are
 // ABSENT and stay NULL until a clerk sets one (UpdateDeadline) — never a default commitment (rule 10,
 // forbidden #3).
+//
+// `source` IS WRITTEN EXPLICITLY (ADR 0084 #7): the booking path states how the letter came in, and
+// 0008's column DEFAULT is never what decides it. It appears in this INSERT and in no UPDATE below —
+// a fact of the booking act (domain.LetterSource).
 const insertCitizenLetter = `INSERT INTO citizen_letter
 	(tenant_id, id, number, year, received_date, letter_type, sender_name, sender_phone, sender_address,
-	 summary, status, holding_unit_id, related_letter_id, created_by_code)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'moi-vao-so', $11, $12, $13)`
+	 summary, status, holding_unit_id, related_letter_id, created_by_code, source)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'moi-vao-so', $11, $12, $13, $14)`
 
 // Insert books one letter. `Number` comes from DaySoStore.CapSo in the same transaction.
 func (s *CitizenLetterStore) Insert(ctx context.Context, tx *store.ScopedTx, l domain.CitizenLetter) error {
+	// Refused here as the last wall before 0008's CHECK: an empty source would otherwise be a
+	// constraint error with the commune's partition name in it, not a sentence.
+	if !l.Source.Valid() {
+		return domain.ErrLetterSourceInvalid
+	}
 	_, err := tx.Exec(ctx, insertCitizenLetter, string(tx.TenantID()),
 		l.ID, l.Number, l.Year, l.ReceivedDate, string(l.Type),
 		rongThanhNil(l.SenderName), rongThanhNil(l.SenderPhone), rongThanhNil(l.SenderAddress),
-		l.Summary, rongThanhNil(l.HoldingUnitID), rongThanhNil(l.RelatedLetterID), l.CreatedByCode)
+		l.Summary, rongThanhNil(l.HoldingUnitID), rongThanhNil(l.RelatedLetterID), l.CreatedByCode,
+		string(l.Source))
 	if err != nil {
 		return fmt.Errorf("citizen_letter: chèn: %w", err)
 	}

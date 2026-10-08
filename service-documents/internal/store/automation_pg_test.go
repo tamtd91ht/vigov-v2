@@ -87,7 +87,7 @@ func TestPgCitizenLetterDeadlineAndAutomationRead(t *testing.T) {
 				return err
 			}
 			l := domain.CitizenLetter{ID: id, Number: n, Year: 2026, ReceivedDate: t1, Type: domain.LetterTypeFeedback,
-				Summary: "Đề nghị sửa đường", HoldingUnitID: unit, CreatedByCode: "CB-TEST01"}
+				Source: domain.LetterSourceManual, Summary: "Đề nghị sửa đường", HoldingUnitID: unit, CreatedByCode: "CB-TEST01"}
 			if err := s.Insert(ctx, tx, l); err != nil {
 				return err
 			}

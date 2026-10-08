@@ -105,6 +105,10 @@ func (r *letterRepoFake) List(_ context.Context, f docstore.CitizenLetterFilter,
 	r.listF = f
 	return page.NewResult[domain.CitizenLetter](), nil
 }
+func (r *letterRepoFake) Count(_ context.Context, f docstore.CitizenLetterFilter) (int, error) {
+	r.listF = f
+	return len(r.rows), nil
+}
 func (r *letterRepoFake) DuplicateCandidates(context.Context, string, time.Time) ([]domain.CitizenLetter, error) {
 	return nil, nil
 }
@@ -183,7 +187,7 @@ func liveDirectory() *directoryFake {
 }
 
 func bookingRequest() BookLetterRequest {
-	return BookLetterRequest{ReceivedDate: time.Date(2026, 12, 30, 0, 0, 0, 0, time.UTC),
+	return BookLetterRequest{Source: domain.LetterSourceManual, ReceivedDate: time.Date(2026, 12, 30, 0, 0, 0, 0, time.UTC),
 		Type: domain.LetterTypeComplaint, SenderName: " Nguyễn Văn A ", SenderPhone: "0900000000",
 		SenderAddress: "Thôn Bình An", Summary: " Khiếu nại quyết định thu hồi đất "}
 }
@@ -334,6 +338,13 @@ func TestBookRoutedAtBookingKeepsTheStatusAndLogsTheRouting(t *testing.T) {
 	}
 	if len(repo.logs) != 1 || repo.logs[0].Kind != domain.LetterLogRouting || repo.logs[0].ToUnitID != "bp-dia-chinh" {
 		t.Fatalf("thiếu dòng luan-chuyen: %+v", repo.logs)
+	}
+	// The prototype's sentence, and NO from-unit: the timeline prints "Một cửa → <unit>" (ADR 0084 #2).
+	if repo.logs[0].Content != "Phân công xử lý" || repo.logs[0].FromUnitID != "" {
+		t.Fatalf("dòng phân công lúc vào sổ: %+v", repo.logs[0])
+	}
+	if l.StatusGroup() != domain.LetterGroupAssigned {
+		t.Fatalf("đơn vào sổ kèm bộ phận phải thuộc nhóm Đã phân công, được %q", l.StatusGroup())
 	}
 	checkLogRows(t, repo.logs)
 
@@ -672,5 +683,147 @@ func TestListScopes(t *testing.T) {
 	}
 	if _, err := uc.List(ctx, LetterListQuery{Scope: "everyone"}, req); !errors.Is(err, ErrLetterScopeInvalid) {
 		t.Fatal("phạm vi lạ phải bị từ chối")
+	}
+}
+
+// --- ADR 0084 (08/10/2026) --------------------------------------------------------------------------
+
+// The booking path states the source; it is stored as given, audited, and never defaulted.
+func TestBookStoresTheSourceOfThePathAndRefusesNone(t *testing.T) {
+	k := khoVBMau()
+	repo := newLetterRepo()
+	uc, ctx := buildLetters(t, k, repo, liveDirectory())
+
+	req := bookingRequest()
+	req.Source = domain.LetterSourceExcel
+	l, err := uc.Book(ctx, req, clerk)
+	if err != nil {
+		t.Fatalf("Book: %v", err)
+	}
+	if repo.rows[l.ID].Source != domain.LetterSourceExcel {
+		t.Fatalf("nguồn lưu = %q, muốn nhap-excel", repo.rows[l.ID].Source)
+	}
+	if !strings.Contains(auditDelta(k, 0), `"nguon":"nhap-excel"`) {
+		t.Fatalf("vết vào sổ thiếu nguồn: %s", auditDelta(k, 0))
+	}
+
+	for _, bad := range []domain.LetterSource{"", "zalo"} {
+		req.Source = bad
+		if _, err := uc.Book(ctx, req, clerk); !errors.Is(err, domain.ErrLetterSourceInvalid) {
+			t.Fatalf("nguồn %q: lỗi = %v, muốn ErrLetterSourceInvalid — không bao giờ gán mặc định", bad, err)
+		}
+	}
+	if k.batDau != 1 {
+		t.Fatalf("nguồn sai mà vẫn mở giao dịch: %d", k.batDau)
+	}
+}
+
+// Every later act keeps the source the booking wrote — it is a fact of the booking act.
+func TestLaterActsNeverChangeTheSource(t *testing.T) {
+	l := letterIn("dt-1", domain.LetterStatusNew, "CB-00777")
+	l.Source = domain.LetterSourceMiniApp
+	repo := newLetterRepo(l)
+	uc, ctx := buildLetters(t, khoVBMau(), repo, liveDirectory())
+	if _, err := uc.Route(ctx, "dt-1", RouteLetterRequest{ToUnitID: "bp-dia-chinh", Reason: "x"}, clerk); err != nil {
+		t.Fatalf("Route: %v", err)
+	}
+	if _, err := uc.Move(ctx, "dt-1", MoveLetterRequest{Status: domain.LetterStatusScreening}, clerk); err != nil {
+		t.Fatalf("Move: %v", err)
+	}
+	name := "Nguyễn Văn Bê"
+	if _, err := uc.CorrectSender(ctx, "dt-1", SenderCorrection{Name: &name}, clerk); err != nil {
+		t.Fatalf("CorrectSender: %v", err)
+	}
+	if _, err := uc.SetDeadline(ctx, "dt-1", time.Date(2027, 1, 20, 10, 0, 0, 0, time.UTC), clerk); err != nil {
+		t.Fatalf("SetDeadline: %v", err)
+	}
+	if got := repo.rows["dt-1"].Source; got != domain.LetterSourceMiniApp {
+		t.Fatalf("nguồn đổi thành %q sau các thao tác", got)
+	}
+}
+
+// ADR 0084 #2: a feedback letter / a request closes with no result, and its result route takes the
+// reply alone; a complaint / denunciation still needs all five fields.
+func TestResultRuleFollowsTheLetterType(t *testing.T) {
+	feedback := letterIn("dt-kp", domain.LetterStatusResolving, "CB-00777")
+	feedback.Type = domain.LetterTypeFeedback
+	request := letterIn("dt-dn", domain.LetterStatusResolving, "CB-00777")
+	request.Type = domain.LetterTypeRequest
+	denunciation := letterIn("dt-tc", domain.LetterStatusResolving, "CB-00777")
+	denunciation.Type = domain.LetterTypeDenunciation
+	complaint := letterIn("dt-kn", domain.LetterStatusResolving, "CB-00777")
+	k := khoVBMau()
+	repo := newLetterRepo(feedback, request, denunciation, complaint)
+	uc, ctx := buildLetters(t, k, repo, liveDirectory())
+
+	// Closing a request with nothing recorded.
+	if _, err := uc.Move(ctx, "dt-dn", MoveLetterRequest{Status: domain.LetterStatusResolved}, officer); err != nil {
+		t.Fatalf("đề nghị đóng không cần kết quả (ADR 0084 #2): %v", err)
+	}
+	// The reply alone on a feedback letter.
+	reply := LetterResultRequest{Summary: " Đã trả lời công dân qua điện thoại "}
+	l, err := uc.RecordResult(ctx, "dt-kp", reply, officer)
+	if err != nil {
+		t.Fatalf("kiến nghị-phản ánh: chỉ nội dung trả lời mà bị từ chối: %v", err)
+	}
+	if l.ResultSummary != "Đã trả lời công dân qua điện thoại" || l.ResultDocumentNo != "" {
+		t.Fatalf("kết quả lưu: %+v", l)
+	}
+	if e := repo.logs[len(repo.logs)-1]; e.Kind != domain.LetterLogResult || e.Content != "Ghi kết quả giải quyết" {
+		t.Fatalf("dòng ket-qua không văn bản: %+v", e)
+	}
+	checkLogRows(t, repo.logs)
+	if strings.Contains(auditDelta(k, len(auditEntries(k))-1), "điện thoại") {
+		t.Fatal("nội dung trả lời lọt vào vết")
+	}
+	// Nothing at all is not a result; a number without its date breaks 0006's pair rule.
+	if _, err := uc.RecordResult(ctx, "dt-kp", LetterResultRequest{}, officer); !errors.Is(err, domain.ErrLetterReplyMissing) {
+		t.Fatalf("kết quả rỗng: %v", err)
+	}
+	if _, err := uc.RecordResult(ctx, "dt-kp", LetterResultRequest{DocumentNo: "5/UBND", Summary: "x"}, officer); !errors.Is(err, domain.ErrLetterResultDocumentPair) {
+		t.Fatalf("số văn bản thiếu ngày: %v", err)
+	}
+	// Complaint and denunciation: the reply alone is refused, and so is closing without the result.
+	for _, id := range []string{"dt-kn", "dt-tc"} {
+		writes := repo.writes
+		if _, err := uc.RecordResult(ctx, id, reply, officer); !errors.Is(err, domain.ErrLetterResultIncomplete) {
+			t.Fatalf("%s: chỉ trả lời mà được nhận: %v", id, err)
+		}
+		if _, err := uc.Move(ctx, id, MoveLetterRequest{Status: domain.LetterStatusResolved}, officer); !errors.Is(err, domain.ErrLetterNeedsResult) {
+			t.Fatalf("%s: đóng không kết quả: %v", id, err)
+		}
+		if repo.writes != writes {
+			t.Fatalf("%s: bị từ chối mà vẫn ghi", id)
+		}
+	}
+	// A future document date is refused whatever the type.
+	if _, err := uc.RecordResult(ctx, "dt-kp", LetterResultRequest{DocumentNo: "5/UBND",
+		DocumentDate: newYearsNight.AddDate(0, 0, 5), Summary: "x"}, officer); !errors.Is(err, domain.ErrLetterResultDateFuture) {
+		t.Fatalf("ngày văn bản tương lai: %v", err)
+	}
+}
+
+// The tab count resolves the scope exactly as the list does.
+func TestCountUsesTheListsScope(t *testing.T) {
+	repo := newLetterRepo(letterIn("dt-1", domain.LetterStatusNew, ""), letterIn("dt-2", domain.LetterStatusNew, ""))
+	dir := liveDirectory()
+	dir.myUnits = []string{"bp-tu-phap"}
+	uc, ctx := buildLetters(t, khoVBMau(), repo, dir)
+
+	q := LetterListQuery{Scope: "related", CallerCode: "CB-00777",
+		Filter: docstore.CitizenLetterFilter{StatusGroup: domain.LetterGroupAssigned}}
+	n, err := uc.Count(ctx, q)
+	if err != nil || n != 2 {
+		t.Fatalf("Count = %d, %v", n, err)
+	}
+	if repo.listF.Related == nil || repo.listF.Related.StaffCode != "CB-00777" || repo.listF.StatusGroup != domain.LetterGroupAssigned {
+		t.Fatalf("bộ lọc tới kho: %+v", repo.listF)
+	}
+	if _, err := uc.Count(ctx, LetterListQuery{Scope: "mine"}); err == nil {
+		t.Fatal("mine không có mã cán bộ của phiên mà vẫn đếm")
+	}
+	dir.err = errors.New("identity sập")
+	if _, err := uc.Count(ctx, q); !errors.Is(err, ErrLetterDirectoryUnavailable) {
+		t.Fatalf("identity không trả lời mà vẫn đếm (bỏ mệnh đề bộ phận): %v", err)
 	}
 }

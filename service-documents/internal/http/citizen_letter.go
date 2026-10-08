@@ -60,6 +60,7 @@ type citizenLetterItemOut struct {
 	Year         int    `json:"year"`
 	ReceivedDate string `json:"received_date"` // YYYY-MM-DD
 	LetterType   string `json:"letter_type"`   // kien-nghi-phan-anh · khieu-nai · to-cao · de-nghi
+	Source       string `json:"source"`        // nhap-tay · nhap-excel · mini-app · thu-dien-tu — fixed at booking
 
 	// null for a denunciation (identity_withheld) and when no name was given.
 	SenderName *string `json:"sender_name"`
@@ -76,6 +77,10 @@ type citizenLetterItemOut struct {
 	HoldingUnitID string `json:"holding_unit_id,omitempty"` // identity's `bo_phan.id`
 	AssigneeCode  string `json:"assignee_code,omitempty"`   // a staff business code
 	Status        string `json:"status"`
+	// ADR 0084's display group, DERIVED on read from `status` and whether a unit holds the letter —
+	// never stored: moi-vao-so · da-phan-cong · dang-xu-ly · da-giai-quyet · chuyen-cap-tren ·
+	// luu-khong-thu-ly.
+	StatusGroup string `json:"status_group"`
 
 	ProcessingDueAt *string `json:"processing_due_at"` // RFC 3339; null = no deadline set
 	ResolutionDueAt *string `json:"resolution_due_at"` // RFC 3339; null = no deadline set
@@ -93,6 +98,7 @@ type citizenLetterOut struct {
 	Year         int    `json:"year"`
 	ReceivedDate string `json:"received_date"`
 	LetterType   string `json:"letter_type"`
+	Source       string `json:"source"` // nhap-tay · nhap-excel · mini-app · thu-dien-tu — fixed at booking
 
 	SenderName       *string `json:"sender_name"`
 	SenderPhone      *string `json:"sender_phone"` // MASKED, always
@@ -106,6 +112,7 @@ type citizenLetterOut struct {
 	SummaryWithheld bool    `json:"summary_withheld"`
 
 	Status       string   `json:"status"`
+	StatusGroup  string   `json:"status_group"`  // ADR 0084's display group, derived on read (see the list item)
 	NextStatuses []string `json:"next_statuses"` // C3's arrows out of the current status
 
 	HoldingUnitID string `json:"holding_unit_id,omitempty"`
@@ -160,7 +167,8 @@ func letterItemOut(l domain.CitizenLetter, now time.Time) citizenLetterItemOut {
 	show := domain.ListDisclosure(l.Type)
 	out := citizenLetterItemOut{
 		ID: l.ID, Number: l.Number, Year: l.Year, ReceivedDate: ngayRa(l.ReceivedDate),
-		LetterType: string(l.Type), Status: string(l.Status),
+		LetterType: string(l.Type), Source: string(l.Source),
+		Status: string(l.Status), StatusGroup: string(l.StatusGroup()),
 		IdentityWithheld: !show.Identity, SummaryWithheld: !show.Summary,
 		HoldingUnitID: l.HoldingUnitID, AssigneeCode: l.AssigneeCode,
 		ProcessingDueAt: instantPtr(l.ProcessingDueAt), ResolutionDueAt: instantPtr(l.ResolutionDueAt),
@@ -184,7 +192,8 @@ func letterOut(l domain.CitizenLetter, show domain.LetterDisclosure, now time.Ti
 	}
 	out := citizenLetterOut{
 		ID: l.ID, Number: l.Number, Year: l.Year, ReceivedDate: ngayRa(l.ReceivedDate),
-		LetterType: string(l.Type), Status: string(l.Status), NextStatuses: next,
+		LetterType: string(l.Type), Source: string(l.Source), Status: string(l.Status),
+		StatusGroup: string(l.StatusGroup()), NextStatuses: next,
 		IdentityWithheld: !show.Identity, SummaryWithheld: !show.Summary,
 		HoldingUnitID: l.HoldingUnitID, AssigneeCode: l.AssigneeCode,
 		ProcessingDueAt: instantPtr(l.ProcessingDueAt), ResolutionDueAt: instantPtr(l.ResolutionDueAt),
@@ -337,6 +346,9 @@ type bookLetterIn struct {
 	Status          *string `json:"status,omitempty"`
 	ProcessingDueAt *string `json:"processing_due_at,omitempty"`
 	ResolutionDueAt *string `json:"resolution_due_at,omitempty"`
+	// Refused like the three above: this route IS the manual entry, so it writes `nhap-tay` itself
+	// (ADR 0084 #7). A client naming its own source could make an imported letter read as typed in.
+	Source *string `json:"source,omitempty"`
 }
 
 // duplicateCheckIn is the body of POST /api/v1/citizen-letters/duplicates. A POST BODY, NEVER A QUERY
@@ -359,11 +371,14 @@ type letterStatusIn struct {
 	Note   string `json:"note,omitempty"`
 }
 
+// letterResultIn is the body of PUT …/result. WHAT IS REQUIRED DEPENDS ON THE LETTER'S TYPE (ADR 0084
+// #2): khieu-nai / to-cao need all five fields; kien-nghi-phan-anh / de-nghi need `result_summary`
+// only (the one reply textarea) — the document fields may be omitted, but number and date go together.
 type letterResultIn struct {
-	ResultDocumentNo   string `json:"result_document_no"`
-	ResultDocumentDate string `json:"result_document_date"` // YYYY-MM-DD
-	ResultSigner       string `json:"result_signer"`
-	ResultIssuer       string `json:"result_issuer"`
+	ResultDocumentNo   string `json:"result_document_no,omitempty"`
+	ResultDocumentDate string `json:"result_document_date,omitempty"` // YYYY-MM-DD
+	ResultSigner       string `json:"result_signer,omitempty"`
+	ResultIssuer       string `json:"result_issuer,omitempty"`
 	ResultSummary      string `json:"result_summary"`
 }
 
@@ -417,6 +432,9 @@ func (h *Handler) BookCitizenLetter(w http.ResponseWriter, r *http.Request) {
 	case in.ProcessingDueAt != nil || in.ResolutionDueAt != nil:
 		h.letterError(w, r, "vào sổ", domain.ErrLetterDueFromClient)
 		return
+	case in.Source != nil:
+		h.letterError(w, r, "vào sổ", domain.ErrLetterSourceFromClient)
+		return
 	}
 	received, ok := ngayVao(in.ReceivedDate)
 	if !ok {
@@ -430,6 +448,8 @@ func (h *Handler) BookCitizenLetter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	l, err := h.d.CitizenLetters.Book(r.Context(), app.BookLetterRequest{
+		// THIS ROUTE IS MANUAL ENTRY — the clerk's booking form (ADR 0084 #7).
+		Source:       domain.LetterSourceManual,
 		ReceivedDate: received, Type: domain.LetterType(in.LetterType),
 		SenderName: in.SenderName, SenderPhone: in.SenderPhone, SenderAddress: in.SenderAddress,
 		Summary: in.Summary, RelatedLetterID: in.RelatedLetterID, HoldingUnitID: in.HoldingUnitID,
@@ -667,6 +687,34 @@ func (h *Handler) AddCitizenLetterNote(w http.ResponseWriter, r *http.Request) {
 	vietJSON(w, http.StatusCreated, logEntryOut(e))
 }
 
+// citizenLetterCountOut is the reply of GET /api/v1/citizen-letter-counts: how many letters the
+// register holds for this caller under the filters sent. A number only — nothing personal, nothing
+// to mask, a denunciation counted like any letter (the list shows it too, masked).
+type citizenLetterCountOut struct {
+	Count int `json:"count"`
+}
+
+// CitizenLetterCount — GET /api/v1/citizen-letter-counts
+//
+// EXACTLY the list's filters (letterFilterFromQuery) and scope (app.CitizenLetters.Count), so the tab
+// label never disagrees with the register below it. Paging parameters are ignored.
+func (h *Handler) CitizenLetterCount(w http.ResponseWriter, r *http.Request) {
+	f, scope, err := letterFilterFromQuery(r.URL.Query())
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
+		return
+	}
+	// THE CALLER'S CODE FROM THE SESSION, never from a parameter.
+	p, _ := authz.From(r.Context())
+	// tenant_id: the context's, from Host; the store binds it through store.DB.For(ctx).
+	n, err := h.d.CitizenLetters.Count(r.Context(), app.LetterListQuery{Filter: f, Scope: scope, CallerCode: p.Ma})
+	if err != nil {
+		h.letterError(w, r, "đếm sổ", err)
+		return
+	}
+	vietJSON(w, http.StatusOK, citizenLetterCountOut{Count: n})
+}
+
 // CitizenLetterReport — GET /api/v1/citizen-letter-report?year=
 func (h *Handler) CitizenLetterReport(w http.ResponseWriter, r *http.Request) {
 	// `year` IS REQUIRED: a report silently defaulting to "this year" is a figure a person may file
@@ -687,11 +735,13 @@ func (h *Handler) CitizenLetterReport(w http.ResponseWriter, r *http.Request) {
 // --- parsing ----------------------------------------------------------------------------------------
 
 var (
-	errLetterStatusFilter = errors.New("`status` không phải một trạng thái của sổ đơn thư")
-	errLetterTypeFilter   = errors.New("`letter_type` phải là một trong kien-nghi-phan-anh, khieu-nai, to-cao, de-nghi")
-	errLetterScope        = errors.New("`scope` phải là all, mine hoặc related")
-	errLetterDateFilter   = errors.New("`received_from` / `received_to` phải theo dạng YYYY-MM-DD và from không sau to")
-	errLetterCodeFilter   = errors.New("`holding_unit` / `assignee` quá dài")
+	errLetterStatusFilter      = errors.New("`status` không phải một trạng thái của sổ đơn thư")
+	errLetterStatusGroupFilter = errors.New("`status_group` phải là một trong moi-vao-so, da-phan-cong, dang-xu-ly, " +
+		"da-giai-quyet, chuyen-cap-tren, luu-khong-thu-ly")
+	errLetterTypeFilter = errors.New("`letter_type` phải là một trong kien-nghi-phan-anh, khieu-nai, to-cao, de-nghi")
+	errLetterScope      = errors.New("`scope` phải là all, mine hoặc related")
+	errLetterDateFilter = errors.New("`received_from` / `received_to` phải theo dạng YYYY-MM-DD và from không sau to")
+	errLetterCodeFilter = errors.New("`holding_unit` / `assignee` quá dài")
 )
 
 // letterFilterFromQuery validates the list filters. An unknown value is REFUSED, not ignored: a filter
@@ -711,6 +761,15 @@ func letterFilterFromQuery(q url.Values) (docstore.CitizenLetterFilter, string, 
 			return f, "", errLetterStatusFilter
 		}
 		f.Status = domain.LetterStatus(s)
+	}
+	// `status_group` is ADR 0084's display group — what the web's status filter sends. A closed set:
+	// an unknown value is 400, never "every status". ANDed with `status` when both are sent. Like every
+	// parameter here it narrows WITHIN the commune; tenant_id is never read from the query.
+	if s := q.Get("status_group"); s != "" {
+		if !domain.LetterStatusGroup(s).Valid() {
+			return f, "", errLetterStatusGroupFilter
+		}
+		f.StatusGroup = domain.LetterStatusGroup(s)
 	}
 	if s := q.Get("letter_type"); s != "" {
 		if !domain.LetterType(s).Valid() {

@@ -263,14 +263,17 @@ func run(log *slog.Logger) error {
 	// lại thì k8s `SIGKILL` trước khi hạn ở đây trôi hết, và toàn bộ đoạn mã này trở thành thứ
 	// trông như đang canh mà không bao giờ chạy tới cuối.
 	// THE gRPC SURFACE — its own port (GRPC_LISTEN_ADDR, default :9090), the same shape as platform
-	// and identity. Two RPCs, both asked by identity: CountOrgUnitHoldings before it deletes an org
-	// unit, ResolveDocumentTypeCodes before it writes an SLA row for one document type. The stores are
-	// the SAME objects the register and the catalogue screen read, so "open" here and on /tong-quan,
-	// and "switched on" here and on Cấu hình, come from one predicate each.
+	// and identity. Three RPCs: CountOrgUnitHoldings (identity, before it deletes an org unit),
+	// ResolveDocumentTypeCodes (identity, before it writes an SLA row for one document type) and
+	// ResolveCitizenLetterForTask (petitions, before it creates a task from a letter — ADR 0085 A). The
+	// stores are the SAME objects the registers and the catalogue screen read, so "open" here and on
+	// /tong-quan, "switched on" here and on Cấu hình, and "live letter" here and in Sổ đơn thư come
+	// from one predicate each.
 	//
 	// Plaintext, like every gRPC port here (ADR 0025): the guard is GRPC_CALLER_KEY on every RPC plus
 	// NetworkPolicy rule 3 (deploy/base/mang/netpol.yaml) — both, not either.
-	grpcSrv := buildGRPCServer(cfg.GRPCCallerKey(), svcgrpc.Deps{Incoming: vanBanDen, DocumentTypes: loaiVanBan, Log: log})
+	grpcSrv := buildGRPCServer(cfg.GRPCCallerKey(), svcgrpc.Deps{Incoming: vanBanDen, DocumentTypes: loaiVanBan,
+		Letters: docstore.NewCitizenLetterStore(kho), Log: log})
 	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr())
 	if err != nil {
 		return err

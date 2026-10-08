@@ -945,6 +945,7 @@ export type documents_bookLetterIn = {
   "status"?: string | null;
   "processing_due_at"?: string | null;
   "resolution_due_at"?: string | null;
+  "source"?: string | null;
 };
 
 export type documents_capSoVanBanDiVao = {
@@ -963,6 +964,10 @@ export type documents_chuyenVanBanVao = {
   "reason": string;
 };
 
+export type documents_citizenLetterCountOut = {
+  "count": number;
+};
+
 export type documents_citizenLetterItemOut = {
   "id": string;
   "number": number;
@@ -971,6 +976,8 @@ export type documents_citizenLetterItemOut = {
   "received_date": string;
   /** kien-nghi-phan-anh · khieu-nai · to-cao · de-nghi */
   "letter_type": string;
+  /** nhap-tay · nhap-excel · mini-app · thu-dien-tu — fixed at booking */
+  "source": string;
   "sender_name": string | null;
   "sender_phone": string | null;
   "identity_withheld": boolean;
@@ -981,6 +988,7 @@ export type documents_citizenLetterItemOut = {
   /** a staff business code */
   "assignee_code"?: string;
   "status": string;
+  "status_group": string;
   /** RFC 3339; null = no deadline set */
   "processing_due_at": string | null;
   /** RFC 3339; null = no deadline set */
@@ -999,6 +1007,8 @@ export type documents_citizenLetterOut = {
   "year": number;
   "received_date": string;
   "letter_type": string;
+  /** nhap-tay · nhap-excel · mini-app · thu-dien-tu — fixed at booking */
+  "source": string;
   "sender_name": string | null;
   /** MASKED, always */
   "sender_phone": string | null;
@@ -1008,6 +1018,8 @@ export type documents_citizenLetterOut = {
   "summary": string | null;
   "summary_withheld": boolean;
   "status": string;
+  /** ADR 0084's display group, derived on read (see the list item) */
+  "status_group": string;
   /** C3's arrows out of the current status */
   "next_statuses": Array<string>;
   "holding_unit_id"?: string;
@@ -1178,11 +1190,11 @@ export type documents_letterReportUnitOut = {
 };
 
 export type documents_letterResultIn = {
-  "result_document_no": string;
+  "result_document_no"?: string;
   /** YYYY-MM-DD */
-  "result_document_date": string;
-  "result_signer": string;
-  "result_issuer": string;
+  "result_document_date"?: string;
+  "result_signer"?: string;
+  "result_issuer"?: string;
   "result_summary": string;
 };
 
@@ -2404,6 +2416,21 @@ export type identity_catalogueImportRejectedOut = {
   "errors": Array<identity_catalogueImportErrorOut>;
 };
 
+export type identity_citizenLetterDeadlineRuleOut = {
+  /** ULID — what PATCH / DELETE reference */
+  "id": string;
+  "letter_type": string;
+  "deadline_kind": string;
+  "amount": number;
+  "unit": string;
+  "required_unit": string;
+  "problem": string | null;
+};
+
+export type identity_citizenLetterDeadlineRulesOut = {
+  "items": Array<identity_citizenLetterDeadlineRuleOut>;
+};
+
 export type identity_citizenSessionIn = {
   "appId": string;
   "accessToken": string;
@@ -2439,6 +2466,13 @@ export type identity_cotPhanQuyenRa = {
   "role_id": string;
   /** sắp theo thứ tự chữ; `[]` khi vai trò không giữ quyền nào */
   "permissions": Array<string>;
+};
+
+export type identity_createCitizenLetterDeadlineRuleIn = {
+  "letter_type": string;
+  "deadline_kind": string;
+  "amount": number;
+  "unit": string;
 };
 
 export type identity_createResidentialUnitIn = {
@@ -2689,6 +2723,10 @@ export type identity_quyenMucRa = {
   "code": string;
   /** "Duyệt gia hạn" */
   "label": string;
+};
+
+export type identity_removeCitizenLetterDeadlineRuleIn = {
+  "reason": string;
 };
 
 export type identity_removeSLAFieldRowIn = {
@@ -2974,6 +3012,11 @@ export type identity_timCanBoVao = {
   "cursor": string;
   "sort"?: string;
   "order"?: string;
+};
+
+export type identity_updateCitizenLetterDeadlineRuleIn = {
+  "amount"?: number | null;
+  "unit"?: string | null;
 };
 
 export type identity_updateResidentialUnitIn = {
@@ -4686,6 +4729,111 @@ export type finance_delete_capital_plan_categories_by_id = {
   };
 };
 
+/** GET /api/v1/citizen-letter-counts — Số đơn thư trong sổ theo đúng bộ lọc và phạm vi của danh sách — số trên tab "Đơn thư công dân (N)" */
+export type documents_get_citizen_letter_counts = {
+  duongDan: "/api/v1/citizen-letter-counts";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "assignee"?: string;
+    "holding_unit"?: string;
+    "letter_type"?: string;
+    "q"?: string;
+    "received_from"?: string;
+    "received_to"?: string;
+    "scope"?: string;
+    "status"?: string;
+    "status_group"?: string;
+    "year"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: documents_citizenLetterCountOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** GET /api/v1/citizen-letter-deadline-rules — Quy tắc hạn đơn thư của xã theo loại đơn — số ngày và đơn vị cho hạn xử lý đơn và hạn giải quyết */
+export type identity_get_citizen_letter_deadline_rules = {
+  duongDan: "/api/v1/citizen-letter-deadline-rules";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_citizenLetterDeadlineRulesOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-letter-deadline-rules — Thêm quy tắc hạn đơn thư cho một loại đơn và một loại hạn — KHÔNG hồi tố lên đơn đã vào sổ */
+export type identity_post_citizen_letter_deadline_rules = {
+  duongDan: "/api/v1/citizen-letter-deadline-rules";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: identity_createCitizenLetterDeadlineRuleIn;
+  phanHoi: {
+    201: identity_citizenLetterDeadlineRuleOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/citizen-letter-deadline-rules/{id} — Sửa số ngày hoặc đơn vị của một quy tắc hạn đơn thư — KHÔNG hồi tố lên đơn đã vào sổ */
+export type identity_patch_citizen_letter_deadline_rules_by_id = {
+  duongDan: "/api/v1/citizen-letter-deadline-rules/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_updateCitizenLetterDeadlineRuleIn;
+  phanHoi: {
+    200: identity_citizenLetterDeadlineRuleOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/citizen-letter-deadline-rules/{id} — Xoá mềm một quy tắc hạn đơn thư, kèm lý do bắt buộc — từ đó đơn loại này vào sổ không hạn */
+export type identity_delete_citizen_letter_deadline_rules_by_id = {
+  duongDan: "/api/v1/citizen-letter-deadline-rules/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_removeCitizenLetterDeadlineRuleIn;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/citizen-letter-report — Báo cáo sổ đơn thư một năm: nhận, đã giải quyết, đang xử lý (gồm năm trước chuyển sang), quá hạn, tỷ lệ đúng hạn, số ngày trung bình, theo loại · bộ phận · tháng */
 export type documents_get_citizen_letter_report = {
   duongDan: "/api/v1/citizen-letter-report";
@@ -4705,7 +4853,7 @@ export type documents_get_citizen_letter_report = {
   };
 };
 
-/** GET /api/v1/citizen-letters — Sổ đơn thư công dân, phân trang theo con trỏ, mới vào sổ trước; lọc năm · trạng thái · loại · bộ phận · cán bộ · khoảng ngày nhận · từ khoá · phạm vi */
+/** GET /api/v1/citizen-letters — Sổ đơn thư công dân, phân trang theo con trỏ, mới vào sổ trước; lọc năm · trạng thái · nhóm trạng thái hiển thị (status_group) · loại · bộ phận · cán bộ · khoảng ngày nhận · từ khoá · phạm vi */
 export type documents_get_citizen_letters = {
   duongDan: "/api/v1/citizen-letters";
   phuongThuc: "GET";
@@ -4724,6 +4872,7 @@ export type documents_get_citizen_letters = {
     "received_to"?: string;
     "scope"?: string;
     "status"?: string;
+    "status_group"?: string;
     "year"?: string;
   };
   than: never;
@@ -4854,7 +5003,7 @@ export type documents_post_citizen_letters_by_id_log_entries = {
   };
 };
 
-/** PUT /api/v1/citizen-letters/{id}/result — Ghi kết quả giải quyết: văn bản đã ban hành (số, ngày, người ký, cơ quan) và tóm tắt — khi đơn đang Thụ lý hoặc Đang giải quyết */
+/** PUT /api/v1/citizen-letters/{id}/result — Ghi kết quả giải quyết khi đơn đang Thụ lý hoặc Đang giải quyết: khiếu nại / tố cáo cần văn bản đã ban hành (số, ngày, người ký, cơ quan) và tóm tắt; kiến nghị-phản ánh / đề nghị chỉ cần nội dung trả lời */
 export type documents_put_citizen_letters_by_id_result = {
   duongDan: "/api/v1/citizen-letters/{id}/result";
   phuongThuc: "PUT";
@@ -4917,7 +5066,7 @@ export type documents_patch_citizen_letters_by_id_sender = {
   };
 };
 
-/** POST /api/v1/citizen-letters/{id}/status — Đổi trạng thái đơn thư theo TT 05/2021 (C3); cán bộ được giao hoặc người có quyền tiếp nhận; Đã giải quyết cần kết quả trước */
+/** POST /api/v1/citizen-letters/{id}/status — Đổi trạng thái đơn thư theo TT 05/2021 (C3); cán bộ được giao hoặc người có quyền tiếp nhận; khiếu nại / tố cáo cần kết quả trước khi sang Đã giải quyết */
 export type documents_post_citizen_letters_by_id_status = {
   duongDan: "/api/v1/citizen-letters/{id}/status";
   phuongThuc: "POST";

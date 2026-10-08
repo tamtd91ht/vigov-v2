@@ -33,7 +33,7 @@ func (f *fakeCounter) CountOpenHeldByOrgUnit(ctx context.Context, id string) (in
 }
 
 func newTestServer(f *fakeCounter) *Server {
-	return NewServer(Deps{Incoming: f, DocumentTypes: &fakeTypes{},
+	return NewServer(Deps{Incoming: f, DocumentTypes: &fakeTypes{}, Letters: &fakeLetters{},
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 }
 

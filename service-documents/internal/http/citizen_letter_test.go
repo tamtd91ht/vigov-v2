@@ -1,6 +1,6 @@
 package http
 
-// The TWELVE routes of SỔ ĐƠN THƯ CÔNG DÂN at the edge:
+// The THIRTEEN routes of SỔ ĐƠN THƯ CÔNG DÂN at the edge:
 //
 //  1. rule 5 invariant 7 on every route — 401 · 403 wrong key · 403 right key WRONG COMMUNE · 2xx;
 //  2. each route's gate key is the seeded literal (`petition.create` / `petition.read`);
@@ -63,6 +63,8 @@ type citizenLettersFake struct {
 	lastDup    app.DuplicateQuery
 	lastList   app.LetterListQuery
 	lastDue    *time.Time
+	lastBook   app.BookLetterRequest
+	lastResult app.LetterResultRequest
 }
 
 func citizenLettersSample() *citizenLettersFake {
@@ -104,7 +106,9 @@ func (f *citizenLettersFake) find(ctx context.Context, id string) (domain.Citize
 func (f *citizenLettersFake) Book(ctx context.Context, req app.BookLetterRequest, c app.LetterCaller) (domain.CitizenLetter, error) {
 	f.note(ctx, c)
 	f.books++
+	f.lastBook = req
 	return domain.CitizenLetter{ID: "dt-moi", Number: 4, Year: 2026, ReceivedDate: req.ReceivedDate, Type: req.Type,
+		Source:     req.Source,
 		SenderName: req.SenderName, SenderPhone: req.SenderPhone, SenderAddress: req.SenderAddress,
 		Summary: req.Summary, Status: domain.LetterStatusNew, CreatedByCode: c.Actor.ID}, nil
 }
@@ -116,8 +120,9 @@ func (f *citizenLettersFake) Move(ctx context.Context, id string, _ app.MoveLett
 	f.note(ctx, c)
 	return f.find(ctx, id)
 }
-func (f *citizenLettersFake) RecordResult(ctx context.Context, id string, _ app.LetterResultRequest, c app.LetterCaller) (domain.CitizenLetter, error) {
+func (f *citizenLettersFake) RecordResult(ctx context.Context, id string, req app.LetterResultRequest, c app.LetterCaller) (domain.CitizenLetter, error) {
 	f.note(ctx, c)
+	f.lastResult = req
 	return f.find(ctx, id)
 }
 func (f *citizenLettersFake) CorrectSender(ctx context.Context, id string, _ app.SenderCorrection, c app.LetterCaller) (domain.CitizenLetter, error) {
@@ -162,6 +167,11 @@ func (f *citizenLettersFake) List(ctx context.Context, q app.LetterListQuery, _ 
 	f.lastList = q
 	return page.Result[domain.CitizenLetter]{Items: f.rows[tenant.MustFrom(ctx)]}, nil
 }
+func (f *citizenLettersFake) Count(ctx context.Context, q app.LetterListQuery) (int, error) {
+	f.note(ctx, app.LetterCaller{})
+	f.lastList = q
+	return len(f.rows[tenant.MustFrom(ctx)]), nil
+}
 func (f *citizenLettersFake) Duplicates(ctx context.Context, q app.DuplicateQuery) ([]domain.DuplicateCandidate, error) {
 	f.note(ctx, app.LetterCaller{})
 	f.lastDup = q
@@ -200,6 +210,7 @@ func letterRoutes() []letterRoute {
 		{"đặt hạn xử lý", http.MethodPatch, one + "/deadline", `{"due_at":"2026-10-20T17:00:00+07:00"}`, create, http.StatusOK},
 		{"ghi nhật ký", http.MethodPost, one + "/log-entries", `{"content":"Đã liên hệ bộ phận địa chính"}`, read, http.StatusCreated},
 		{"báo cáo", http.MethodGet, "/api/v1/citizen-letter-report?year=2026", "", read, http.StatusOK},
+		{"số đếm", http.MethodGet, "/api/v1/citizen-letter-counts?scope=related", "", read, http.StatusOK},
 	}
 }
 
@@ -564,4 +575,112 @@ func TestCitizenLetter_ListScopeAndFiltersAreValidated(t *testing.T) {
 	if m.letters.lastList.Scope != "mine" || m.letters.lastList.CallerCode != maCanBo {
 		t.Fatalf("phạm vi `mine` phải lấy mã cán bộ từ phiên: %+v", m.letters.lastList)
 	}
+}
+
+// --- ADR 0084 (08/10/2026) --------------------------------------------------------------------------
+
+// The booking route IS manual entry: it states `nhap-tay` itself, and a client naming a source is
+// refused like a client naming the number.
+func TestCitizenLetter_BookingWritesManualSourceAndRefusesAClientSource(t *testing.T) {
+	m := dungMayChuCoIdem(t)
+	m.capQuyen(xaA, "petition.create")
+	w := m.goiThan(t, http.MethodPost, hostA, pathLetters, canBoCua(xaA), bookBody)
+	doiMa(t, w, http.StatusCreated)
+	if m.letters.lastBook.Source != domain.LetterSourceManual {
+		t.Fatalf("nguồn tới use case = %q, muốn nhap-tay", m.letters.lastBook.Source)
+	}
+	var out map[string]any
+	decodeJSON(t, w, &out)
+	if out["source"] != "nhap-tay" || out["status_group"] != "moi-vao-so" {
+		t.Fatalf("trả về: source %v, status_group %v", out["source"], out["status_group"])
+	}
+
+	m2 := dungMayChuCoIdem(t)
+	m2.capQuyen(xaA, "petition.create")
+	body := strings.TrimSuffix(bookBody, "}") + `,"source":"nhap-excel"}`
+	w = m2.goiThan(t, http.MethodPost, hostA, pathLetters, canBoCua(xaA), body)
+	doiMa(t, w, http.StatusBadRequest)
+	if m2.letters.books != 0 || loiTra(t, w).Message != domain.ErrLetterSourceFromClient.Msg {
+		t.Fatalf("client tự khai nguồn: vào sổ %d lần, câu %q", m2.letters.books, loiTra(t, w).Message)
+	}
+}
+
+// `status_group` is a closed set validated at the edge, reaches the store filter, and every row and
+// the drawer carry the DERIVED group.
+func TestCitizenLetter_StatusGroupFilterAndDerivedField(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(xaA, "petition.read")
+	m.letters.rows[xaA][0].HoldingUnitID = "bp-dia-chinh"
+
+	for _, bad := range []string{"cho-phan-cong", "thu-ly", "Moi-vao-so"} {
+		doiMa(t, m.goi(t, http.MethodGet, hostA, pathLetters+"?status_group="+bad, canBoCua(xaA)), http.StatusBadRequest)
+	}
+	for _, g := range domain.LetterStatusGroups() {
+		doiMa(t, m.goi(t, http.MethodGet, hostA, pathLetters+"?status_group="+string(g)+"&status=moi-vao-so", canBoCua(xaA)), http.StatusOK)
+		if f := m.letters.lastList.Filter; f.StatusGroup != g || f.Status != domain.LetterStatusNew {
+			t.Fatalf("bộ lọc tới use case: %+v, muốn nhóm %q và trạng thái moi-vao-so", f, g)
+		}
+	}
+
+	w := m.goi(t, http.MethodGet, hostA, pathLetters, canBoCua(xaA))
+	doiMa(t, w, http.StatusOK)
+	var out struct {
+		Items []map[string]any `json:"items"`
+	}
+	decodeJSON(t, w, &out)
+	groups := map[any]any{}
+	for _, it := range out.Items {
+		groups[it["id"]] = it["status_group"]
+		if _, ok := it["source"]; !ok {
+			t.Fatalf("dòng thiếu `source`: %v", it)
+		}
+	}
+	if groups["dt-a-001"] != "da-phan-cong" || groups["dt-a-002"] != "moi-vao-so" {
+		t.Fatalf("nhóm suy ra trên danh sách: %v", groups)
+	}
+
+	w = m.goi(t, http.MethodGet, hostA, pathLetters+"/dt-a-001", canBoCua(xaA))
+	doiMa(t, w, http.StatusOK)
+	var one map[string]any
+	decodeJSON(t, w, &one)
+	if one["status_group"] != "da-phan-cong" {
+		t.Fatalf("ngăn chi tiết: status_group %v", one["status_group"])
+	}
+}
+
+// The tab count: a number only, the list's filters and scope, the caller's code from the session.
+func TestCitizenLetter_CountUsesTheListFilters(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(xaA, "petition.read")
+	w := m.goi(t, http.MethodGet, hostA, "/api/v1/citizen-letter-counts?scope=related&status_group=dang-xu-ly&letter_type=to-cao", canBoCua(xaA))
+	doiMa(t, w, http.StatusOK)
+	if strings.TrimSpace(w.Body.String()) != `{"count":3}` {
+		t.Fatalf("thân = %s, muốn đúng một con số", w.Body.String())
+	}
+	q := m.letters.lastList
+	if q.Scope != "related" || q.CallerCode != maCanBo || q.Filter.StatusGroup != domain.LetterGroupInProgress ||
+		q.Filter.Type != domain.LetterTypeDenunciation {
+		t.Fatalf("truy vấn đếm: %+v", q)
+	}
+	calls := m.letters.calls
+	for _, bad := range []string{"?scope=everyone", "?status_group=x", "?status=x"} {
+		doiMa(t, m.goi(t, http.MethodGet, hostA, "/api/v1/citizen-letter-counts"+bad, canBoCua(xaA)), http.StatusBadRequest)
+	}
+	if m.letters.calls != calls {
+		t.Fatal("bộ lọc sai mà vẫn đếm")
+	}
+}
+
+// ADR 0084 #2: the result route takes the reply alone; which type needs what is the use case's rule.
+func TestCitizenLetter_ResultRouteAcceptsReplyOnly(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(xaA, "petition.read")
+	doiMa(t, m.goiThan(t, http.MethodPut, hostA, pathLetters+"/dt-a-001/result", canBoCua(xaA),
+		`{"result_summary":"Đã trả lời công dân"}`), http.StatusOK)
+	r := m.letters.lastResult
+	if r.Summary != "Đã trả lời công dân" || r.DocumentNo != "" || !r.DocumentDate.IsZero() {
+		t.Fatalf("kết quả tới use case: %+v", r)
+	}
+	doiMa(t, m.goiThan(t, http.MethodPut, hostA, pathLetters+"/dt-a-001/result", canBoCua(xaA),
+		`{"result_summary":"x","result_document_date":"25/09/2026"}`), http.StatusBadRequest)
 }

@@ -169,6 +169,7 @@ type CitizenLetterService interface {
 	Detail(ctx context.Context, id string, viewer app.LetterCaller) (domain.CitizenLetter, domain.LetterDisclosure, error)
 	Log(ctx context.Context, id string) ([]domain.LetterLogEntry, error)
 	List(ctx context.Context, q app.LetterListQuery, req page.Request) (page.Result[domain.CitizenLetter], error)
+	Count(ctx context.Context, q app.LetterListQuery) (int, error)
 	Duplicates(ctx context.Context, q app.DuplicateQuery) ([]domain.DuplicateCandidate, error)
 	Report(ctx context.Context, year int) (domain.LetterReport, error)
 }

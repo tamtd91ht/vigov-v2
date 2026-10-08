@@ -2783,6 +2783,498 @@
         }
       }
     },
+    "/api/v1/citizen-letter-counts": {
+      "get": {
+        "summary": "Số đơn thư trong sổ theo đúng bộ lọc và phạm vi của danh sách — số trên tab \"Đơn thư công dân (N)\"",
+        "operationId": "documents_get_citizen_letter_counts",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "05-van-ban-don-thu §3.1",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "petition.read"
+        },
+        "x-vigov-task": "cad9acfafe95",
+        "parameters": [
+          {
+            "name": "assignee",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "holding_unit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "letter_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "received_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "received_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status_group",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "year",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documents.citizenLetterCountOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/citizen-letter-deadline-rules": {
+      "get": {
+        "summary": "Quy tắc hạn đơn thư của xã theo loại đơn — số ngày và đơn vị cho hạn xử lý đơn và hạn giải quyết",
+        "operationId": "identity_get_citizen_letter_deadline_rules",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sla"
+        },
+        "x-vigov-task": "6544319eaa5d",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.citizenLetterDeadlineRulesOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Thêm quy tắc hạn đơn thư cho một loại đơn và một loại hạn — KHÔNG hồi tố lên đơn đã vào sổ",
+        "operationId": "identity_post_citizen_letter_deadline_rules",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sla"
+        },
+        "x-vigov-task": "f1277eba6cae",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "MoKhiHong",
+          "on_store_failure_effect": "Store không tới được -> cho qua và ghi cảnh báo"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.createCitizenLetterDeadlineRuleIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.citizenLetterDeadlineRuleOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/citizen-letter-deadline-rules/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Xoá mềm một quy tắc hạn đơn thư, kèm lý do bắt buộc — từ đó đơn loại này vào sổ không hạn",
+        "operationId": "identity_delete_citizen_letter_deadline_rules_by_id",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sla"
+        },
+        "x-vigov-task": "e401a2480c20",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.removeCitizenLetterDeadlineRuleIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Sửa số ngày hoặc đơn vị của một quy tắc hạn đơn thư — KHÔNG hồi tố lên đơn đã vào sổ",
+        "operationId": "identity_patch_citizen_letter_deadline_rules_by_id",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sla"
+        },
+        "x-vigov-task": "78bbe65cfdba",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.updateCitizenLetterDeadlineRuleIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.citizenLetterDeadlineRuleOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/citizen-letter-report": {
       "get": {
         "summary": "Báo cáo sổ đơn thư một năm: nhận, đã giải quyết, đang xử lý (gồm năm trước chuyển sang), quá hạn, tỷ lệ đúng hạn, số ngày trung bình, theo loại · bộ phận · tháng",
@@ -2862,7 +3354,7 @@
     },
     "/api/v1/citizen-letters": {
       "get": {
-        "summary": "Sổ đơn thư công dân, phân trang theo con trỏ, mới vào sổ trước; lọc năm · trạng thái · loại · bộ phận · cán bộ · khoảng ngày nhận · từ khoá · phạm vi",
+        "summary": "Sổ đơn thư công dân, phân trang theo con trỏ, mới vào sổ trước; lọc năm · trạng thái · nhóm trạng thái hiển thị (status_group) · loại · bộ phận · cán bộ · khoảng ngày nhận · từ khoá · phạm vi",
         "operationId": "documents_get_citizen_letters",
         "tags": [
           "documents"
@@ -2980,6 +3472,14 @@
           },
           {
             "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status_group",
             "in": "query",
             "required": false,
             "schema": {
@@ -3633,7 +4133,7 @@
         }
       ],
       "put": {
-        "summary": "Ghi kết quả giải quyết: văn bản đã ban hành (số, ngày, người ký, cơ quan) và tóm tắt — khi đơn đang Thụ lý hoặc Đang giải quyết",
+        "summary": "Ghi kết quả giải quyết khi đơn đang Thụ lý hoặc Đang giải quyết: khiếu nại / tố cáo cần văn bản đã ban hành (số, ngày, người ký, cơ quan) và tóm tắt; kiến nghị-phản ánh / đề nghị chỉ cần nội dung trả lời",
         "operationId": "documents_put_citizen_letters_by_id_result",
         "tags": [
           "documents"
@@ -3954,7 +4454,7 @@
         }
       ],
       "post": {
-        "summary": "Đổi trạng thái đơn thư theo TT 05/2021 (C3); cán bộ được giao hoặc người có quyền tiếp nhận; Đã giải quyết cần kết quả trước",
+        "summary": "Đổi trạng thái đơn thư theo TT 05/2021 (C3); cán bộ được giao hoặc người có quyền tiếp nhận; khiếu nại / tố cáo cần kết quả trước khi sang Đã giải quyết",
         "operationId": "documents_post_citizen_letters_by_id_status",
         "tags": [
           "documents"
@@ -38091,6 +38591,12 @@
               "string",
               "null"
             ]
+          },
+          "source": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -38153,6 +38659,18 @@
         ],
         "additionalProperties": false
       },
+      "documents.citizenLetterCountOut": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count"
+        ],
+        "additionalProperties": false
+      },
       "documents.citizenLetterItemOut": {
         "type": "object",
         "properties": {
@@ -38172,6 +38690,10 @@
           "letter_type": {
             "type": "string",
             "description": "kien-nghi-phan-anh · khieu-nai · to-cao · de-nghi"
+          },
+          "source": {
+            "type": "string",
+            "description": "nhap-tay · nhap-excel · mini-app · thu-dien-tu — fixed at booking"
           },
           "sender_name": {
             "type": [
@@ -38206,6 +38728,9 @@
             "description": "a staff business code"
           },
           "status": {
+            "type": "string"
+          },
+          "status_group": {
             "type": "string"
           },
           "processing_due_at": {
@@ -38250,7 +38775,9 @@
           "resolution_due_at",
           "sender_name",
           "sender_phone",
+          "source",
           "status",
+          "status_group",
           "summary",
           "summary_withheld",
           "year"
@@ -38274,6 +38801,10 @@
           },
           "letter_type": {
             "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "description": "nhap-tay · nhap-excel · mini-app · thu-dien-tu — fixed at booking"
           },
           "sender_name": {
             "type": [
@@ -38311,6 +38842,10 @@
           },
           "status": {
             "type": "string"
+          },
+          "status_group": {
+            "type": "string",
+            "description": "ADR 0084's display group, derived on read (see the list item)"
           },
           "next_statuses": {
             "type": "array",
@@ -38419,7 +38954,9 @@
           "sender_name",
           "sender_phone",
           "sender_unknown",
+          "source",
           "status",
+          "status_group",
           "summary",
           "summary_withheld",
           "updated_at",
@@ -38956,10 +39493,6 @@
           }
         },
         "required": [
-          "result_document_date",
-          "result_document_no",
-          "result_issuer",
-          "result_signer",
           "result_summary"
         ],
         "additionalProperties": false
@@ -43426,6 +43959,61 @@
         ],
         "additionalProperties": false
       },
+      "identity.citizenLetterDeadlineRuleOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID — what PATCH / DELETE reference"
+          },
+          "letter_type": {
+            "type": "string"
+          },
+          "deadline_kind": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "integer"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "required_unit": {
+            "type": "string"
+          },
+          "problem": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "amount",
+          "deadline_kind",
+          "id",
+          "letter_type",
+          "problem",
+          "required_unit",
+          "unit"
+        ],
+        "additionalProperties": false
+      },
+      "identity.citizenLetterDeadlineRulesOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.citizenLetterDeadlineRuleOut"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
       "identity.citizenSessionIn": {
         "type": "object",
         "properties": {
@@ -43547,6 +44135,30 @@
         "required": [
           "permissions",
           "role_id"
+        ],
+        "additionalProperties": false
+      },
+      "identity.createCitizenLetterDeadlineRuleIn": {
+        "type": "object",
+        "properties": {
+          "letter_type": {
+            "type": "string"
+          },
+          "deadline_kind": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "integer"
+          },
+          "unit": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "amount",
+          "deadline_kind",
+          "letter_type",
+          "unit"
         ],
         "additionalProperties": false
       },
@@ -44454,6 +45066,18 @@
         "required": [
           "code",
           "label"
+        ],
+        "additionalProperties": false
+      },
+      "identity.removeCitizenLetterDeadlineRuleIn": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
         ],
         "additionalProperties": false
       },
@@ -45541,6 +46165,24 @@
           "q",
           "unit"
         ],
+        "additionalProperties": false
+      },
+      "identity.updateCitizenLetterDeadlineRuleIn": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
         "additionalProperties": false
       },
       "identity.updateResidentialUnitIn": {

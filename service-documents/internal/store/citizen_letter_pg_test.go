@@ -26,7 +26,7 @@ func TestPgCitizenLetterStoreRoundTrip(t *testing.T) {
 	received := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 	at := time.Date(2026, 10, 2, 2, 0, 0, 0, time.UTC)
 
-	book := func(id string, typ domain.LetterType, name, summary string) {
+	book := func(id string, typ domain.LetterType, src domain.LetterSource, name, summary string) {
 		t.Helper()
 		err := kho.For(ctxA).Tx(ctxA, func(tx *pkgstore.ScopedTx) error {
 			n, err := series.CapSo(ctxA, tx, SeriesCitizenLetter, 2026)
@@ -34,12 +34,12 @@ func TestPgCitizenLetterStoreRoundTrip(t *testing.T) {
 				return err
 			}
 			return s.Insert(ctxA, tx, domain.CitizenLetter{ID: id, Number: n, Year: 2026, ReceivedDate: received,
-				Type: typ, SenderName: name, SenderPhone: "0900000000", Summary: summary, CreatedByCode: "CB-TEST01"})
+				Type: typ, Source: src, SenderName: name, SenderPhone: "0900000000", Summary: summary, CreatedByCode: "CB-TEST01"})
 		})
 		mustAccept(t, err, "vào sổ "+id)
 	}
-	book(a+"-1", domain.LetterTypeFeedback, "Nguyễn Văn A", "Đề nghị sửa đường liên thôn")
-	book(a+"-2", domain.LetterTypeDenunciation, "Trần Thị B", "Tố cáo sửa đường sai thiết kế")
+	book(a+"-1", domain.LetterTypeFeedback, domain.LetterSourceManual, "Nguyễn Văn A", "Đề nghị sửa đường liên thôn")
+	book(a+"-2", domain.LetterTypeDenunciation, domain.LetterSourceExcel, "Trần Thị B", "Tố cáo sửa đường sai thiết kế")
 
 	// Read back in commune A, invisible from commune B.
 	err := kho.For(ctxA).Tx(ctxA, func(tx *pkgstore.ScopedTx) error {
@@ -47,7 +47,8 @@ func TestPgCitizenLetterStoreRoundTrip(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if l.Number != 1 || l.Status != domain.LetterStatusNew || l.SenderName != "Nguyễn Văn A" || !l.ClosedAt.IsZero() {
+		if l.Number != 1 || l.Status != domain.LetterStatusNew || l.SenderName != "Nguyễn Văn A" || !l.ClosedAt.IsZero() ||
+			l.Source != domain.LetterSourceManual {
 			t.Errorf("đọc lại sai: %+v", l)
 		}
 		// Move to a processing-phase outcome with its log row: closed_at must derive from the log.
@@ -108,6 +109,28 @@ func TestPgCitizenLetterStoreRoundTrip(t *testing.T) {
 	mustAccept(t, err, "danh sách")
 	if len(res.Items) != 1 || res.Items[0].ID != a+"-1" {
 		t.Errorf("tìm kiếm trả %d dòng — trích yếu đơn tố cáo không được tìm", len(res.Items))
+	}
+
+	// Source written explicitly and read back (0008); the count and the group filter share List's
+	// predicate; LiveByID is commune-scoped.
+	if l, found, err := s.LiveByID(ctxA, a+"-2"); err != nil || !found || l.Source != domain.LetterSourceExcel {
+		t.Errorf("LiveByID: %+v %v %v", l, found, err)
+	}
+	if _, found, err := s.LiveByID(ctxB, a+"-2"); err != nil || found {
+		t.Errorf("xã B thấy đơn của xã A qua LiveByID: %v %v", found, err)
+	}
+	if n, err := s.Count(ctxA, CitizenLetterFilter{}); err != nil || n != 2 {
+		t.Errorf("Count = %d, %v — muốn 2", n, err)
+	}
+	if n, err := s.Count(ctxB, CitizenLetterFilter{}); err != nil || n != 0 {
+		t.Errorf("Count ở xã B = %d, %v — muốn 0", n, err)
+	}
+	// a-1 is luu-don now, a-2 moi-vao-so with no unit.
+	for g, want := range map[domain.LetterStatusGroup]int{domain.LetterGroupNew: 1, domain.LetterGroupAssigned: 0,
+		domain.LetterGroupNotProcessed: 1, domain.LetterGroupInProgress: 0} {
+		if n, err := s.Count(ctxA, CitizenLetterFilter{StatusGroup: g}); err != nil || n != want {
+			t.Errorf("nhóm %s: %d, %v — muốn %d", g, n, err, want)
+		}
 	}
 
 	rep, err := s.ReportRows(ctxA, 2026, time.Date(2026, 1, 1, 0, 0, 0, 0, domain.AutomationZone))

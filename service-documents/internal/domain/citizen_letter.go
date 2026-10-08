@@ -6,7 +6,8 @@ package domain
 // WHAT LIVES HERE is what is true regardless of storage: the four letter types (C4), the ten statuses
 // of TT 05/2021 and the arrows between them (C3), what a whistleblower letter may show and to whom
 // (ADR 0078 #4), the duplicate-similarity measure (C11), the "số ngày xử lý" count (C16/C17) and the
-// report figures (C12). Standard library only.
+// report figures (C12, as ADR 0084 #4 reversed it), the display groups and the closing-result rule by
+// type (ADR 0084 #2). Standard library only.
 //
 // THE DATABASE CLOSES THE SET, THIS FILE DRAWS THE ARROWS. 0006 refuses an unknown status and binds
 // `accepted_at` / `resolved_at` to the statuses; it does not encode which move is admissible. That is
@@ -83,7 +84,11 @@ var (
 	ErrLetterUnitNotLive         = inputRefusal("Bộ phận này không nhận được việc: không có trong sơ đồ tổ chức đang dùng của xã.")
 	ErrLetterAssigneeNotLive     = inputRefusal("Cán bộ này không nhận được việc: không có tài khoản đang hoạt động ở xã.")
 	ErrLetterRelatedNotFound     = inputRefusal("Đơn liên quan không có trong sổ đơn thư của xã.")
-	ErrLetterResultIncomplete    = inputRefusal("Kết quả giải quyết cần đủ số văn bản, ngày văn bản, người ký, cơ quan ban hành và tóm tắt kết quả.")
+	ErrLetterResultIncomplete    = inputRefusal("Kết quả giải quyết đơn khiếu nại / tố cáo cần đủ số văn bản, ngày văn bản, người ký, cơ quan ban hành và tóm tắt kết quả.")
+	ErrLetterReplyMissing        = inputRefusal("Kết quả giải quyết: thiếu nội dung trả lời.")
+	ErrLetterResultDocumentPair  = inputRefusal("Kết quả giải quyết: số văn bản và ngày văn bản phải nhập cùng nhau.")
+	ErrLetterSourceInvalid       = inputRefusal("Đơn thư: nguồn vào sổ phải là một trong nhap-tay, nhap-excel, mini-app, thu-dien-tu.")
+	ErrLetterSourceFromClient    = inputRefusal("Đơn thư: nguồn vào sổ do hệ thống ghi theo đường vào sổ, không nhận từ client.")
 	ErrLetterResultDateFuture    = inputRefusal("Kết quả giải quyết: ngày văn bản ở tương lai.")
 	ErrLetterSenderEmpty         = inputRefusal("Sửa người gửi: không có trường nào để sửa.")
 
@@ -97,7 +102,7 @@ var (
 	ErrLetterDueTooFar  = inputRefusal("Hạn xử lý: năm phải từ 2000 đến 2200.")
 
 	ErrLetterTransitionRefused = stateRefusal("Không chuyển được đơn từ trạng thái hiện tại sang trạng thái đã chọn.")
-	ErrLetterNeedsResult       = stateRefusal("Chưa ghi kết quả giải quyết (văn bản đã ban hành và tóm tắt) nên chưa chuyển được sang Đã giải quyết. Hãy ghi kết quả trước.")
+	ErrLetterNeedsResult       = stateRefusal("Đơn khiếu nại / tố cáo chưa ghi kết quả giải quyết (số, ngày, người ký, cơ quan ban hành văn bản kết quả và tóm tắt) nên chưa chuyển được sang Đã giải quyết. Hãy ghi kết quả trước.")
 	ErrLetterResultNotAllowed  = stateRefusal("Chỉ ghi kết quả giải quyết khi đơn đang ở Thụ lý hoặc Đang giải quyết.")
 	ErrLetterFinished          = stateRefusal("Đơn đã kết thúc xử lý nên không chuyển tiếp được.")
 	ErrLetterDueOnFinished     = stateRefusal("Đơn đã kết thúc xử lý nên không đặt hay bỏ hạn xử lý được.")
@@ -134,6 +139,40 @@ func (t LetterType) Valid() bool {
 // ProtectsIdentity is Luật Tố cáo 2018 Đ.8 in one line: a denunciation's sender is protected, so no
 // surface that lists letters shows who sent it, nor what it says (ADR 0078 #4).
 func (t LetterType) ProtectsIdentity() bool { return t == LetterTypeDenunciation }
+
+// RequiresIssuedResult is ADR 0084 #2 (C10 narrowed): a complaint or a denunciation is resolved by an
+// ISSUED decision/conclusion (Luật Khiếu nại 2011, Luật Tố cáo 2018), so it cannot reach
+// `da-giai-quyet` without the document's number, date, signer, issuing body and the summary. A
+// feedback letter or a request is answered by a reply the clerk may leave unwritten. Migration 0008's
+// `citizen_letter_resolved_has_result` is the same rule as a CHECK.
+func (t LetterType) RequiresIssuedResult() bool {
+	return t == LetterTypeComplaint || t == LetterTypeDenunciation
+}
+
+// LetterSource is HOW a letter entered the register — the "nguồn vào sổ" chip (ADR 0084 #7, migration
+// 0008). A FACT OF THE BOOKING ACT: written once by the path that booked the letter, never by a client
+// and never by a later edit. No UPDATE in store/citizen_letter.go names the column, and no method here
+// changes it — a letter that changed source would show a chip that lies about the record's origin.
+type LetterSource string
+
+const (
+	LetterSourceManual  LetterSource = "nhap-tay"    // typed in by a clerk — the booking route
+	LetterSourceExcel   LetterSource = "nhap-excel"  // the Excel import (TASK-07)
+	LetterSourceMiniApp LetterSource = "mini-app"    // arrived through the Zalo Mini App
+	LetterSourceEmail   LetterSource = "thu-dien-tu" // arrived by e-mail
+)
+
+// LetterSources is the closed set — 0008's `citizen_letter_source_valid`.
+var LetterSources = []LetterSource{LetterSourceManual, LetterSourceExcel, LetterSourceMiniApp, LetterSourceEmail}
+
+func (s LetterSource) Valid() bool {
+	for _, v := range LetterSources {
+		if s == v {
+			return true
+		}
+	}
+	return false
+}
 
 // LetterStatus is TT 05/2021's set, C3.
 type LetterStatus string
@@ -223,6 +262,96 @@ func CheckLetterTransition(from, to LetterStatus) error {
 	return &LetterTransitionError{From: from, To: to}
 }
 
+// --- display groups (ADR 0084 #2) -------------------------------------------------------------------
+
+// LetterStatusGroup is one of the prototype's DISPLAY groups — the status filter and the 4-step bar.
+// DERIVED on read from the TT 05/2021 status and whether a unit holds the letter; NEVER STORED: the
+// data keeps C3's ten statuses, because folding them into groups would erase whether a letter was
+// admitted, guided or filed — editing archival records (rule 7, forbidden #5; ADR 0084 "Vì sao không
+// gộp trạng thái").
+//
+// The VALUES are the codes the web filter sends (Vietnamese, ADR 0011). There is deliberately no
+// "Chờ phân công" group (ADR 0084 #5).
+type LetterStatusGroup string
+
+const (
+	LetterGroupNew          LetterStatusGroup = "moi-vao-so"       // Mới vào sổ
+	LetterGroupAssigned     LetterStatusGroup = "da-phan-cong"     // Đã phân công
+	LetterGroupInProgress   LetterStatusGroup = "dang-xu-ly"       // Đang xử lý
+	LetterGroupResolved     LetterStatusGroup = "da-giai-quyet"    // Đã giải quyết
+	LetterGroupForwarded    LetterStatusGroup = "chuyen-cap-tren"  // Chuyển cấp trên (branch)
+	LetterGroupNotProcessed LetterStatusGroup = "luu-khong-thu-ly" // Lưu, không thụ lý (branch)
+)
+
+// LetterHolding is the second axis of a group: whether a unit must, must not, or may hold the letter.
+type LetterHolding int
+
+const (
+	HoldingAny LetterHolding = iota
+	HoldingNone
+	HoldingSome
+)
+
+// LetterGroupRule is one row of ADR 0084 §2's table.
+type LetterGroupRule struct {
+	Group    LetterStatusGroup
+	Statuses []LetterStatus
+	Holding  LetterHolding
+}
+
+// letterGroupRules IS ADR 0084 §2's TABLE, AND THE ONLY COPY OF IT — the filter (store), the derived
+// field (GroupOf) and any future count by group read this, so two figures cannot drift ("Hệ quả" #2).
+// Every (status, held?) pair falls in exactly one row; TestLetterGroupsPartitionEveryStatus holds it.
+var letterGroupRules = []LetterGroupRule{
+	{LetterGroupNew, []LetterStatus{LetterStatusNew}, HoldingNone},
+	{LetterGroupAssigned, []LetterStatus{LetterStatusNew}, HoldingSome},
+	{LetterGroupInProgress, []LetterStatus{LetterStatusScreening, LetterStatusAdmitted, LetterStatusResolving}, HoldingAny},
+	{LetterGroupResolved, []LetterStatus{LetterStatusResolved}, HoldingAny},
+	{LetterGroupForwarded, []LetterStatus{LetterStatusForwarded}, HoldingAny},
+	{LetterGroupNotProcessed, []LetterStatus{LetterStatusNotAdmitted, LetterStatusGuided, LetterStatusFiled, LetterStatusDiscontinued}, HoldingAny},
+}
+
+// LetterStatusGroups is the closed set, in the order the filter lists them.
+func LetterStatusGroups() []LetterStatusGroup {
+	out := make([]LetterStatusGroup, 0, len(letterGroupRules))
+	for _, r := range letterGroupRules {
+		out = append(out, r.Group)
+	}
+	return out
+}
+
+// Rule returns the group's row of the table; ok is false for a value outside the set.
+func (g LetterStatusGroup) Rule() (LetterGroupRule, bool) {
+	for _, r := range letterGroupRules {
+		if r.Group == g {
+			return LetterGroupRule{Group: r.Group, Statuses: append([]LetterStatus(nil), r.Statuses...), Holding: r.Holding}, true
+		}
+	}
+	return LetterGroupRule{}, false
+}
+
+func (g LetterStatusGroup) Valid() bool {
+	_, ok := g.Rule()
+	return ok
+}
+
+// StatusGroup derives the letter's display group. "" only for a status outside C3's set, which the
+// database refuses.
+func (l CitizenLetter) StatusGroup() LetterStatusGroup {
+	held := l.HoldingUnitID != ""
+	for _, r := range letterGroupRules {
+		if r.Holding == HoldingNone && held || r.Holding == HoldingSome && !held {
+			continue
+		}
+		for _, s := range r.Statuses {
+			if s == l.Status {
+				return r.Group
+			}
+		}
+	}
+	return ""
+}
+
 // LetterLogKind is the kind of one log row — 0006's `citizen_letter_log_kind_valid`.
 type LetterLogKind string
 
@@ -251,6 +380,7 @@ type CitizenLetter struct {
 	Year         int
 	ReceivedDate time.Time
 	Type         LetterType
+	Source       LetterSource // fixed at booking, never changed (LetterSource)
 
 	// ⚠ PERSONAL DATA (rule 3). All optional (C7).
 	SenderName    string
@@ -306,10 +436,64 @@ func LetterAuditSubject(year, number int) string {
 	return "DT-" + strconv.Itoa(year) + "-" + fmt.Sprintf("%04d", number)
 }
 
-// HasResult reports whether C10's result is complete: the issued document and the summary.
+// HasResult reports whether the result THE LETTER'S TYPE requires before `da-giai-quyet` is recorded
+// (ADR 0084 #2, migration 0008): for a complaint or a denunciation, the issued document (number, date,
+// signer, issuing body) and the summary; for a feedback letter or a request, nothing — the reply is
+// optional, so such a letter always "has" what it needs.
 func (l CitizenLetter) HasResult() bool {
+	if !l.Type.RequiresIssuedResult() {
+		return true
+	}
 	return l.ResultDocumentNo != "" && !l.ResultDocumentDate.IsZero() && l.ResultSigner != "" &&
 		l.ResultIssuer != "" && l.ResultSummary != ""
+}
+
+// LetterResult is the result as a clerk recorded it, already trimmed and length-checked.
+type LetterResult struct {
+	DocumentNo   string
+	DocumentDate time.Time
+	Signer       string
+	Issuer       string
+	Summary      string
+}
+
+// WithResult checks `r` against the rule of the letter's type and returns the letter carrying it.
+//
+//	khieu-nai, to-cao              all five fields (C10 as 0006 had it) — ErrLetterResultIncomplete
+//	kien-nghi-phan-anh, de-nghi    the reply (`Summary`, the prototype's one textarea) is required on
+//	                               THIS act — recording an empty result records nothing; the document
+//	                               fields stay optional, but number and date travel together (0006's
+//	                               `citizen_letter_result_document_pair`)
+//
+// Recording a result is optional for the second pair; closing without one is Move's business.
+func (l CitizenLetter) WithResult(r LetterResult) (CitizenLetter, error) {
+	if l.Type.RequiresIssuedResult() {
+		if r.DocumentNo == "" || r.DocumentDate.IsZero() || r.Signer == "" || r.Issuer == "" || r.Summary == "" {
+			return l, ErrLetterResultIncomplete
+		}
+	} else {
+		if r.Summary == "" {
+			return l, ErrLetterReplyMissing
+		}
+		if (r.DocumentNo == "") != r.DocumentDate.IsZero() {
+			return l, ErrLetterResultDocumentPair
+		}
+	}
+	l.ResultDocumentNo, l.ResultDocumentDate = r.DocumentNo, r.DocumentDate
+	l.ResultSigner, l.ResultIssuer, l.ResultSummary = r.Signer, r.Issuer, r.Summary
+	return l, nil
+}
+
+// CurrentStageDueAt is the deadline the letter shows right now, as ResolveCitizenLetterForTask's
+// contract defines it (documents.proto, CitizenLetterTaskSource.current_due_at): the resolution
+// deadline once the letter was admitted (`accepted_at` set), the processing deadline before. Unlike
+// ActiveDueAt it does not go blank on a finished letter — the contract converts a letter in any status
+// (ADR 0085 A) and the task inherits what the letter showed. Zero = no deadline.
+func (l CitizenLetter) CurrentStageDueAt() time.Time {
+	if !l.AcceptedAt.IsZero() {
+		return l.ResolutionDueAt
+	}
+	return l.ProcessingDueAt
 }
 
 // SenderUnknown is C7's "Không rõ người gửi" — DERIVED from the three columns, never a flag.
@@ -633,9 +817,18 @@ func RankDuplicates(summary string, candidates []CitizenLetter) []DuplicateCandi
 //	InProgress          not finished NOW, booked in the year or carried over from an earlier year.
 //	PastDue             not finished, a deadline exists and is past now. DERIVED (rule 10). A letter
 //	                    whose clerk set no deadline is never counted.
-//	OnTimePercent       C12: among letters resolved in the year WITH a resolution deadline, the share
-//	                    resolved at or before it. nil when there is none — never 100%.
-//	AverageDays         C16: mean DaysOpen of letters resolved in the year. nil when none.
+//	OnTimePercent       ADR 0084 #4 (REVERSES C12): among ALL letters resolved in the year, the share
+//	                    resolved at or before their resolution deadline — A LETTER WITH NO DEADLINE
+//	                    COUNTS AS ON TIME (prototype service.py:605-608). nil only when nothing was
+//	                    resolved. The owner accepted that this inflates the rate in a commune that sets
+//	                    no deadlines; figures before 08/10/2026 are not comparable.
+//	AverageDays         C16: mean DaysOpen of letters that reached `da-giai-quyet` in the year — the
+//	                    prototype averages its PROCESSED letters only, so `dinh-chi` is left out here.
+//	                    Days counted INCLUSIVE (C16/C17, not reversed). nil when none.
+//
+// ByType and ByUnit are sorted by Total, largest first (ADR 0084 #4); a tie keeps C4's type order and
+// the unit id order respectively. A unit's OnTimePercent follows the same rule over the letters it
+// resolved, nil only when it resolved none (the web prints "—").
 //
 // A denunciation is COUNTED and never NAMED: the report carries no identity and no summary at all.
 type LetterReport struct {
@@ -667,7 +860,7 @@ type LetterReportUnitRow struct {
 	Resolved      int
 	PastDue       int
 	OnTimePercent *float64
-	onTime, timed int
+	onTime        int
 }
 
 type LetterReportMonthRow struct {
@@ -687,7 +880,7 @@ func BuildLetterReport(year int, rows []CitizenLetter, now time.Time) LetterRepo
 	for i := range months {
 		months[i].Month = i + 1
 	}
-	onTime, timed, daysSum, daysN := 0, 0, 0, 0
+	onTime, daysSum, daysN := 0, 0, 0
 
 	for _, l := range rows {
 		resolvedInYear := !l.ResolvedAt.IsZero() && l.ResolvedAt.In(AutomationZone).Year() == year
@@ -721,15 +914,13 @@ func BuildLetterReport(year int, rows []CitizenLetter, now time.Time) LetterRepo
 			t.Resolved++
 			u.Resolved++
 			months[int(l.ResolvedAt.In(AutomationZone).Month())-1].Resolved++
-			daysSum += l.DaysOpen(now)
-			daysN++
-			if !l.ResolutionDueAt.IsZero() {
-				timed++
-				u.timed++
-				if !l.ResolvedAt.After(l.ResolutionDueAt) {
-					onTime++
-					u.onTime++
-				}
+			if l.Status == LetterStatusResolved {
+				daysSum += l.DaysOpen(now)
+				daysN++
+			}
+			if l.ResolutionDueAt.IsZero() || !l.ResolvedAt.After(l.ResolutionDueAt) {
+				onTime++
+				u.onTime++
 			}
 		}
 		if !finished {
@@ -744,7 +935,7 @@ func BuildLetterReport(year int, rows []CitizenLetter, now time.Time) LetterRepo
 		}
 	}
 
-	r.OnTimePercent = percent(onTime, timed)
+	r.OnTimePercent = percent(onTime, r.Resolved)
 	if daysN > 0 {
 		avg := roundTenth(float64(daysSum) / float64(daysN))
 		r.AverageDays = &avg
@@ -754,6 +945,7 @@ func BuildLetterReport(year int, rows []CitizenLetter, now time.Time) LetterRepo
 			r.ByType = append(r.ByType, *t)
 		}
 	}
+	sort.SliceStable(r.ByType, func(i, j int) bool { return r.ByType[i].Total > r.ByType[j].Total })
 	sort.SliceStable(unitOrder, func(i, j int) bool {
 		a, b := byUnit[unitOrder[i]], byUnit[unitOrder[j]]
 		if a.Total != b.Total {
@@ -763,7 +955,7 @@ func BuildLetterReport(year int, rows []CitizenLetter, now time.Time) LetterRepo
 	})
 	for _, id := range unitOrder {
 		u := byUnit[id]
-		u.OnTimePercent = percent(u.onTime, u.timed)
+		u.OnTimePercent = percent(u.onTime, u.Resolved)
 		r.ByUnit = append(r.ByUnit, *u)
 	}
 	r.ByMonth = months

@@ -1,9 +1,10 @@
 // Package grpc serves the documents contract (proto/vigov/documents/v1) to the other services.
 //
-// Two questions, both from identity, both read-only: CountOrgUnitHoldings, asked before it soft-deletes
-// an org unit, and ResolveDocumentTypeCodes (document_type_codes.go), asked before it writes an SLA
-// row for one document type. Neither writes, publishes or audits — the audited act is identity's
-// (documents.proto, which defers to petitions.proto for the reasoning).
+// Three questions, all read-only: CountOrgUnitHoldings, asked by identity before it soft-deletes an
+// org unit; ResolveDocumentTypeCodes (document_type_codes.go), asked by identity before it writes an
+// SLA row for one document type; and ResolveCitizenLetterForTask (citizen_letter_task.go), asked by
+// petitions before it creates a task from a citizen letter (ADR 0085 A). None writes, publishes or
+// audits — the audited act is the caller's (documents.proto).
 //
 // Health is not implemented, like every other gRPC server in this repository: liveness is the
 // HTTP /healthz, outside the commune chain.
@@ -35,10 +36,17 @@ type DocumentTypeCodeReader interface {
 	StatesByCode(ctx context.Context, codes []string) ([]domain.DocumentTypeCodeState, error)
 }
 
+// CitizenLetterReader is "one live citizen letter of the commune in ctx". found=false for an unknown,
+// soft-deleted or another commune's id alike. *store.CitizenLetterStore satisfies it.
+type CitizenLetterReader interface {
+	LiveByID(ctx context.Context, id string) (domain.CitizenLetter, bool, error)
+}
+
 // Deps are what the server reads. Every field is required.
 type Deps struct {
 	Incoming      OrgUnitHoldingsCounter
 	DocumentTypes DocumentTypeCodeReader
+	Letters       CitizenLetterReader
 	Log           *slog.Logger
 }
 
@@ -50,7 +58,7 @@ type Server struct {
 
 // NewServer panics on a missing dependency, at construction rather than on the first call.
 func NewServer(d Deps) *Server {
-	if d.Incoming == nil || d.DocumentTypes == nil || d.Log == nil {
+	if d.Incoming == nil || d.DocumentTypes == nil || d.Letters == nil || d.Log == nil {
 		panic("documents grpc: NewServer thiếu phụ thuộc")
 	}
 	return &Server{d: d}

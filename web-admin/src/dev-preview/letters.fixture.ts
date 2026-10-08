@@ -161,6 +161,7 @@ function itemOf(seed: Seed, year: number): documents_citizenLetterItemOut {
     year,
     received_date: day(seed.received),
     letter_type: seed.type,
+    source: "nhap-tay",
     sender_name: withheld ? null : seed.name,
     sender_phone: withheld || !seed.phone ? null : MASKED_PHONE,
     identity_withheld: withheld,
@@ -169,6 +170,7 @@ function itemOf(seed: Seed, year: number): documents_citizenLetterItemOut {
     holding_unit_id: seed.unit === "" ? undefined : seed.unit,
     assignee_code: seed.assignee === "" ? undefined : seed.assignee,
     status: seed.status,
+    status_group: previewStatusGroup(seed.status, seed.unit),
     processing_due_at: seed.processingDue === null ? null : at(seed.processingDue),
     resolution_due_at: seed.resolutionDue === undefined ? null : at(seed.resolutionDue),
     days_open: daysOpen(seed),
@@ -176,6 +178,15 @@ function itemOf(seed: Seed, year: number): documents_citizenLetterItemOut {
     is_closed: CLOSED.has(seed.status),
     related_letter_id: seed.related === null ? undefined : previewLetterId(seed.related),
   };
+}
+
+/** The server's display group (ADR 0084 table, service-documents domain) — a fixture copy for the preview only. */
+function previewStatusGroup(status: string, unit: string): string {
+  if (status === "moi-vao-so") return unit === "" ? "moi-vao-so" : "da-phan-cong";
+  if (status === "dang-xu-ly-don" || status === "thu-ly" || status === "dang-giai-quyet") return "dang-xu-ly";
+  if (status === "chuyen-don") return "chuyen-cap-tren";
+  if (status === "da-giai-quyet") return "da-giai-quyet";
+  return "luu-khong-thu-ly";
 }
 
 export type PreviewLetterQuery = {

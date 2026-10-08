@@ -52,7 +52,7 @@
     },
     "app.AddNote": {
       "kind": "func",
-      "at": "service-documents/internal/app/citizen_letter.go:698"
+      "at": "service-documents/internal/app/citizen_letter.go:727"
     },
     "app.AttachmentDownload": {
       "kind": "type",
@@ -176,7 +176,7 @@
     },
     "app.BookLetterRequest": {
       "kind": "type",
-      "at": "service-documents/internal/app/citizen_letter.go:111"
+      "at": "service-documents/internal/app/citizen_letter.go:119"
     },
     "app.Bot": {
       "kind": "func",
@@ -366,13 +366,21 @@
       "kind": "type",
       "at": "service-petitions/internal/app/gui_phan_anh.go:65"
     },
+    "app.CitizenLetterDeadlineRuleWriter": {
+      "kind": "type",
+      "at": "service-identity/internal/app/citizen_letter_deadline_rule.go:38"
+    },
+    "app.CitizenLetterDeadlineRules": {
+      "kind": "type",
+      "at": "service-identity/internal/app/citizen_letter_deadline_rule.go:46"
+    },
     "app.CitizenLetterRepo": {
       "kind": "type",
       "at": "service-documents/internal/app/citizen_letter.go:42"
     },
     "app.CitizenLetters": {
       "kind": "type",
-      "at": "service-documents/internal/app/citizen_letter.go:166"
+      "at": "service-documents/internal/app/citizen_letter.go:175"
     },
     "app.CitizenPetitionPhotos": {
       "kind": "type",
@@ -456,7 +464,11 @@
     },
     "app.CorrectSender": {
       "kind": "func",
-      "at": "service-documents/internal/app/citizen_letter.go:549"
+      "at": "service-documents/internal/app/citizen_letter.go:578"
+    },
+    "app.Count": {
+      "kind": "func",
+      "at": "service-documents/internal/app/citizen_letter.go:842"
     },
     "app.CoverFiles": {
       "kind": "type",
@@ -485,6 +497,10 @@
     "app.Create": {
       "kind": "func",
       "at": "service-identity/internal/app/residential_unit.go:94"
+    },
+    "app.CreateCitizenLetterDeadlineRuleRequest": {
+      "kind": "type",
+      "at": "service-identity/internal/app/citizen_letter_deadline_rule.go:59"
     },
     "app.CreateCustom": {
       "kind": "func",
@@ -608,7 +624,7 @@
     },
     "app.Detail": {
       "kind": "func",
-      "at": "service-documents/internal/app/citizen_letter.go:743"
+      "at": "service-documents/internal/app/citizen_letter.go:772"
     },
     "app.DinhDanhKho": {
       "kind": "type",
@@ -668,11 +684,11 @@
     },
     "app.DuplicateQuery": {
       "kind": "type",
-      "at": "service-documents/internal/app/citizen_letter.go:160"
+      "at": "service-documents/internal/app/citizen_letter.go:169"
     },
     "app.Duplicates": {
       "kind": "func",
-      "at": "service-documents/internal/app/citizen_letter.go:826"
+      "at": "service-documents/internal/app/citizen_letter.go:882"
     },
     "app.Edit": {
       "kind": "func",
@@ -901,6 +917,10 @@
     "app.IsAutomationInputError": {
       "kind": "func",
       "at": "service-identity/internal/app/automation.go:85"
+    },
+    "app.IsCitizenLetterDeadlineRuleInputError": {
+      "kind": "func",
+      "at": "service-identity/internal/app/citizen_letter_deadline_rule.go:204"
     },
     "app.IsResidentialUnitInputError": {
       "kind": "func",
@@ -1132,19 +1152,19 @@
     },
     "app.LetterCaller": {
       "kind": "type",
-      "at": "service-documents/internal/app/citizen_letter.go:103"
+      "at": "service-documents/internal/app/citizen_letter.go:108"
     },
     "app.LetterDirectory": {
       "kind": "type",
-      "at": "service-documents/internal/app/citizen_letter.go:63"
+      "at": "service-documents/internal/app/citizen_letter.go:64"
     },
     "app.LetterListQuery": {
       "kind": "type",
-      "at": "service-documents/internal/app/citizen_letter.go:153"
+      "at": "service-documents/internal/app/citizen_letter.go:162"
     },
     "app.LetterResultRequest": {
       "kind": "type",
-      "at": "service-documents/internal/app/citizen_letter.go:136"
+      "at": "service-documents/internal/app/citizen_letter.go:145"
     },
     "app.Lich": {
       "kind": "type",
@@ -1184,7 +1204,7 @@
     },
     "app.Log": {
       "kind": "func",
-      "at": "service-documents/internal/app/citizen_letter.go:775"
+      "at": "service-documents/internal/app/citizen_letter.go:804"
     },
     "app.LogAttachmentLinker": {
       "kind": "type",
@@ -1372,11 +1392,11 @@
     },
     "app.Move": {
       "kind": "func",
-      "at": "service-documents/internal/app/citizen_letter.go:372"
+      "at": "service-documents/internal/app/citizen_letter.go:387"
     },
     "app.MoveLetterRequest": {
       "kind": "type",
-      "at": "service-documents/internal/app/citizen_letter.go:130"
+      "at": "service-documents/internal/app/citizen_letter.go:139"
     },
     "app.NenTangCauPhien": {
       "kind": "type",
@@ -1414,9 +1434,13 @@
       "kind": "func",
       "at": "service-identity/internal/app/citizen_contact_phone_reveal.go:40"
     },
+    "app.NewCitizenLetterDeadlineRules": {
+      "kind": "func",
+      "at": "service-identity/internal/app/citizen_letter_deadline_rule.go:54"
+    },
     "app.NewCitizenLetters": {
       "kind": "func",
-      "at": "service-documents/internal/app/citizen_letter.go:176"
+      "at": "service-documents/internal/app/citizen_letter.go:185"
     },
     "app.NewCitizenPetitionPhotos": {
       "kind": "func",
@@ -2140,7 +2164,7 @@
     },
     "app.RecordResult": {
       "kind": "func",
-      "at": "service-documents/internal/app/citizen_letter.go:443"
+      "at": "service-documents/internal/app/citizen_letter.go:461"
     },
     "app.RegenerateRecoveryCodes": {
       "kind": "func",
@@ -2176,7 +2200,7 @@
     },
     "app.Report": {
       "kind": "func",
-      "at": "service-documents/internal/app/citizen_letter.go:845"
+      "at": "service-documents/internal/app/citizen_letter.go:901"
     },
     "app.RequestBodyImageUpload": {
       "kind": "func",
@@ -2284,11 +2308,11 @@
     },
     "app.Route": {
       "kind": "func",
-      "at": "service-documents/internal/app/citizen_letter.go:300"
+      "at": "service-documents/internal/app/citizen_letter.go:313"
     },
     "app.RouteLetterRequest": {
       "kind": "type",
-      "at": "service-documents/internal/app/citizen_letter.go:123"
+      "at": "service-documents/internal/app/citizen_letter.go:132"
     },
     "app.Run": {
       "kind": "func",
@@ -2344,7 +2368,7 @@
     },
     "app.SenderCorrection": {
       "kind": "type",
-      "at": "service-documents/internal/app/citizen_letter.go:145"
+      "at": "service-documents/internal/app/citizen_letter.go:154"
     },
     "app.SessionIdleExpiry": {
       "kind": "type",
@@ -2372,7 +2396,7 @@
     },
     "app.SetDeadline": {
       "kind": "func",
-      "at": "service-documents/internal/app/citizen_letter.go:641"
+      "at": "service-documents/internal/app/citizen_letter.go:670"
     },
     "app.SetGrantedAmount": {
       "kind": "func",
@@ -2741,6 +2765,10 @@
     "app.Update": {
       "kind": "func",
       "at": "service-identity/internal/app/residential_unit.go:252"
+    },
+    "app.UpdateCitizenLetterDeadlineRuleRequest": {
+      "kind": "type",
+      "at": "service-identity/internal/app/citizen_letter_deadline_rule.go:68"
     },
     "app.UpdateMapFieldRequest": {
       "kind": "type",
@@ -3848,7 +3876,7 @@
     },
     "domain.ActiveDueAt": {
       "kind": "func",
-      "at": "service-documents/internal/domain/citizen_letter.go:322"
+      "at": "service-documents/internal/domain/citizen_letter.go:506"
     },
     "domain.AfterFailure": {
       "kind": "func",
@@ -4028,7 +4056,7 @@
     },
     "domain.BuildLetterReport": {
       "kind": "func",
-      "at": "service-documents/internal/domain/citizen_letter.go:681"
+      "at": "service-documents/internal/domain/citizen_letter.go:874"
     },
     "domain.CaLamBu": {
       "kind": "type",
@@ -4052,7 +4080,7 @@
     },
     "domain.CalendarDaysInclusive": {
       "kind": "func",
-      "at": "service-documents/internal/domain/citizen_letter.go:395"
+      "at": "service-documents/internal/domain/citizen_letter.go:579"
     },
     "domain.CanBo": {
       "kind": "type",
@@ -4178,6 +4206,10 @@
       "kind": "func",
       "at": "service-identity/internal/domain/bulk_publication.go:40"
     },
+    "domain.CheckCitizenLetterDeadlineRule": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_letter_deadline.go:163"
+    },
     "domain.CheckCoverUsable": {
       "kind": "func",
       "at": "service-comms/internal/domain/content_cover.go:175"
@@ -4212,7 +4244,7 @@
     },
     "domain.CheckLetterTransition": {
       "kind": "func",
-      "at": "service-documents/internal/domain/citizen_letter.go:214"
+      "at": "service-documents/internal/domain/citizen_letter.go:253"
     },
     "domain.CheckMapFrameNotice": {
       "kind": "func",
@@ -4256,7 +4288,7 @@
     },
     "domain.CheckReceivedDate": {
       "kind": "func",
-      "at": "service-documents/internal/domain/citizen_letter.go:507"
+      "at": "service-documents/internal/domain/citizen_letter.go:691"
     },
     "domain.CheckReopenReason": {
       "kind": "func",
@@ -4280,7 +4312,7 @@
     },
     "domain.CheckResultDocumentDate": {
       "kind": "func",
-      "at": "service-documents/internal/domain/citizen_letter.go:521"
+      "at": "service-documents/internal/domain/citizen_letter.go:705"
     },
     "domain.CheckSLAKindTakesFieldRows": {
       "kind": "func",
@@ -4624,7 +4656,27 @@
     },
     "domain.CitizenLetter": {
       "kind": "type",
-      "at": "service-documents/internal/domain/citizen_letter.go:248"
+      "at": "service-documents/internal/domain/citizen_letter.go:377"
+    },
+    "domain.CitizenLetterDeadlineKind": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/citizen_letter_deadline.go:50"
+    },
+    "domain.CitizenLetterDeadlineRule": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/citizen_letter_deadline.go:87"
+    },
+    "domain.CitizenLetterDeadlineUnit": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/citizen_letter_deadline.go:65"
+    },
+    "domain.CitizenLetterDueAt": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_letter_deadline.go:225"
+    },
+    "domain.CitizenLetterType": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/citizen_letter_deadline.go:30"
     },
     "domain.CitizenReportDigestCounts": {
       "kind": "type",
@@ -4738,6 +4790,10 @@
       "kind": "func",
       "at": "service-finance/internal/domain/nguong_canh_bao_cham.go:55"
     },
+    "domain.CurrentStageDueAt": {
+      "kind": "func",
+      "at": "service-documents/internal/domain/citizen_letter.go:492"
+    },
     "domain.CurvePoint": {
       "kind": "type",
       "at": "service-finance/internal/domain/disbursement_summary.go:90"
@@ -4792,7 +4848,7 @@
     },
     "domain.DaysOpen": {
       "kind": "func",
-      "at": "service-documents/internal/domain/citizen_letter.go:385"
+      "at": "service-documents/internal/domain/citizen_letter.go:569"
     },
     "domain.DeNghiLuiHan": {
       "kind": "type",
@@ -4836,7 +4892,7 @@
     },
     "domain.DetailDisclosure": {
       "kind": "func",
-      "at": "service-documents/internal/domain/citizen_letter.go:438"
+      "at": "service-documents/internal/domain/citizen_letter.go:622"
     },
     "domain.DiemCham": {
       "kind": "func",
@@ -4988,7 +5044,7 @@
     },
     "domain.DuplicateCandidate": {
       "kind": "type",
-      "at": "service-documents/internal/domain/citizen_letter.go:583"
+      "at": "service-documents/internal/domain/citizen_letter.go:767"
     },
     "domain.Empty": {
       "kind": "func",
@@ -4996,7 +5052,7 @@
     },
     "domain.EndsResolution": {
       "kind": "func",
-      "at": "service-documents/internal/domain/citizen_letter.go:190"
+      "at": "service-documents/internal/domain/citizen_letter.go:229"
     },
     "domain.EntryLockingClose": {
       "kind": "func",
@@ -5076,11 +5132,11 @@
     },
     "domain.Finished": {
       "kind": "func",
-      "at": "service-documents/internal/domain/citizen_letter.go:187"
+      "at": "service-documents/internal/domain/citizen_letter.go:226"
     },
     "domain.FinishedInProcessing": {
       "kind": "func",
-      "at": "service-documents/internal/domain/citizen_letter.go:195"
+      "at": "service-documents/internal/domain/citizen_letter.go:234"
     },
     "domain.FinishedIncomingStatuses": {
       "kind": "func",
@@ -5204,7 +5260,7 @@
     },
     "domain.HasResult": {
       "kind": "func",
-      "at": "service-documents/internal/domain/citizen_letter.go:310"
+      "at": "service-documents/internal/domain/citizen_letter.go:443"
     },
     "domain.HeadStaffChoice": {
       "kind": "type",
@@ -5332,7 +5388,7 @@
     },
     "domain.IsOverdue": {
       "kind": "func",
-      "at": "service-documents/internal/domain/citizen_letter.go:376"
+      "at": "service-documents/internal/domain/citizen_letter.go:560"
     },
     "domain.IsPetitionLogAttachmentOf": {
       "kind": "func",
@@ -5736,59 +5792,83 @@
     },
     "domain.LetterAuditSubject": {
       "kind": "func",
-      "at": "service-documents/internal/domain/citizen_letter.go:305"
+      "at": "service-documents/internal/domain/citizen_letter.go:435"
     },
     "domain.LetterDisclosure": {
       "kind": "type",
-      "at": "service-documents/internal/domain/citizen_letter.go:413"
+      "at": "service-documents/internal/domain/citizen_letter.go:597"
     },
     "domain.LetterDueColumn": {
       "kind": "func",
-      "at": "service-documents/internal/domain/citizen_letter.go:334"
+      "at": "service-documents/internal/domain/citizen_letter.go:518"
     },
     "domain.LetterError": {
       "kind": "type",
-      "at": "service-documents/internal/domain/citizen_letter.go:50"
+      "at": "service-documents/internal/domain/citizen_letter.go:51"
+    },
+    "domain.LetterGroupRule": {
+      "kind": "type",
+      "at": "service-documents/internal/domain/citizen_letter.go:296"
+    },
+    "domain.LetterHolding": {
+      "kind": "type",
+      "at": "service-documents/internal/domain/citizen_letter.go:287"
     },
     "domain.LetterLogEntry": {
       "kind": "type",
-      "at": "service-documents/internal/domain/citizen_letter.go:286"
+      "at": "service-documents/internal/domain/citizen_letter.go:416"
     },
     "domain.LetterLogKind": {
       "kind": "type",
-      "at": "service-documents/internal/domain/citizen_letter.go:227"
+      "at": "service-documents/internal/domain/citizen_letter.go:356"
     },
     "domain.LetterRefusal": {
       "kind": "type",
-      "at": "service-documents/internal/domain/citizen_letter.go:34"
+      "at": "service-documents/internal/domain/citizen_letter.go:35"
     },
     "domain.LetterReport": {
       "kind": "type",
-      "at": "service-documents/internal/domain/citizen_letter.go:641"
+      "at": "service-documents/internal/domain/citizen_letter.go:834"
     },
     "domain.LetterReportMonthRow": {
       "kind": "type",
-      "at": "service-documents/internal/domain/citizen_letter.go:673"
+      "at": "service-documents/internal/domain/citizen_letter.go:866"
     },
     "domain.LetterReportTypeRow": {
       "kind": "type",
-      "at": "service-documents/internal/domain/citizen_letter.go:655"
+      "at": "service-documents/internal/domain/citizen_letter.go:848"
     },
     "domain.LetterReportUnitRow": {
       "kind": "type",
-      "at": "service-documents/internal/domain/citizen_letter.go:663"
+      "at": "service-documents/internal/domain/citizen_letter.go:856"
+    },
+    "domain.LetterResult": {
+      "kind": "type",
+      "at": "service-documents/internal/domain/citizen_letter.go:452"
+    },
+    "domain.LetterSource": {
+      "kind": "type",
+      "at": "service-documents/internal/domain/citizen_letter.go:156"
     },
     "domain.LetterStatus": {
       "kind": "type",
-      "at": "service-documents/internal/domain/citizen_letter.go:139"
+      "at": "service-documents/internal/domain/citizen_letter.go:178"
+    },
+    "domain.LetterStatusGroup": {
+      "kind": "type",
+      "at": "service-documents/internal/domain/citizen_letter.go:275"
+    },
+    "domain.LetterStatusGroups": {
+      "kind": "func",
+      "at": "service-documents/internal/domain/citizen_letter.go:315"
     },
     "domain.LetterTransitionError": {
       "kind": "type",
-      "at": "service-documents/internal/domain/citizen_letter.go:206"
+      "at": "service-documents/internal/domain/citizen_letter.go:245"
     },
     "domain.LetterType": {
       "kind": "type",
-      "at": "service-documents/internal/domain/citizen_letter.go:113"
+      "at": "service-documents/internal/domain/citizen_letter.go:118"
     },
     "domain.LienKetKetLuanHop": {
       "kind": "type",
@@ -5796,7 +5876,7 @@
     },
     "domain.ListDisclosure": {
       "kind": "func",
-      "at": "service-documents/internal/domain/citizen_letter.go:420"
+      "at": "service-documents/internal/domain/citizen_letter.go:604"
     },
     "domain.LiveAllocationLines": {
       "kind": "func",
@@ -6100,7 +6180,7 @@
     },
     "domain.NextStatuses": {
       "kind": "func",
-      "at": "service-documents/internal/domain/citizen_letter.go:180"
+      "at": "service-documents/internal/domain/citizen_letter.go:219"
     },
     "domain.NgayNghiLe": {
       "kind": "type",
@@ -6237,6 +6317,10 @@
     "domain.NormalizeCatalogueColor": {
       "kind": "func",
       "at": "service-petitions/internal/domain/catalogue_color.go:23"
+    },
+    "domain.NormalizeCitizenLetterDeleteReason": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_letter_deadline.go:186"
     },
     "domain.NormalizeCommuneZaloBotName": {
       "kind": "func",
@@ -6780,7 +6864,7 @@
     },
     "domain.ProtectsIdentity": {
       "kind": "func",
-      "at": "service-documents/internal/domain/citizen_letter.go:136"
+      "at": "service-documents/internal/domain/citizen_letter.go:141"
     },
     "domain.Province": {
       "kind": "type",
@@ -6828,7 +6912,7 @@
     },
     "domain.RankDuplicates": {
       "kind": "func",
-      "at": "service-documents/internal/domain/citizen_letter.go:595"
+      "at": "service-documents/internal/domain/citizen_letter.go:779"
     },
     "domain.RatingLogText": {
       "kind": "func",
@@ -6894,9 +6978,17 @@
       "kind": "func",
       "at": "service-comms/internal/domain/noi_dung_mini_app.go:1098"
     },
+    "domain.RequiredCitizenLetterUnit": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_letter_deadline.go:133"
+    },
     "domain.RequiresDirective": {
       "kind": "func",
       "at": "service-petitions/internal/domain/loai_nhiem_vu.go:82"
+    },
+    "domain.RequiresIssuedResult": {
+      "kind": "func",
+      "at": "service-documents/internal/domain/citizen_letter.go:148"
     },
     "domain.ResetStatus": {
       "kind": "func",
@@ -6949,6 +7041,10 @@
     "domain.RoleTemplates": {
       "kind": "func",
       "at": "service-identity/internal/domain/role_template.go:58"
+    },
+    "domain.Rule": {
+      "kind": "func",
+      "at": "service-documents/internal/domain/citizen_letter.go:324"
     },
     "domain.RunOutcome": {
       "kind": "type",
@@ -7020,7 +7116,7 @@
     },
     "domain.SenderUnknown": {
       "kind": "func",
-      "at": "service-documents/internal/domain/citizen_letter.go:316"
+      "at": "service-documents/internal/domain/citizen_letter.go:500"
     },
     "domain.Sentence": {
       "kind": "func",
@@ -7032,7 +7128,7 @@
     },
     "domain.SetActiveDue": {
       "kind": "func",
-      "at": "service-documents/internal/domain/citizen_letter.go:359"
+      "at": "service-documents/internal/domain/citizen_letter.go:543"
     },
     "domain.SetsAudioField": {
       "kind": "func",
@@ -7198,6 +7294,10 @@
       "kind": "type",
       "at": "service-identity/internal/domain/staff_counts.go:5"
     },
+    "domain.StatusGroup": {
+      "kind": "func",
+      "at": "service-documents/internal/domain/citizen_letter.go:340"
+    },
     "domain.StoredAllocationLine": {
       "kind": "type",
       "at": "service-finance/internal/domain/project_allocation.go:152"
@@ -7244,7 +7344,7 @@
     },
     "domain.SummarySimilarity": {
       "kind": "func",
-      "at": "service-documents/internal/domain/citizen_letter.go:555"
+      "at": "service-documents/internal/domain/citizen_letter.go:739"
     },
     "domain.SystemMessage": {
       "kind": "type",
@@ -7504,15 +7604,15 @@
     },
     "domain.TrimOptional": {
       "kind": "func",
-      "at": "service-documents/internal/domain/citizen_letter.go:480"
+      "at": "service-documents/internal/domain/citizen_letter.go:664"
     },
     "domain.TrimPhone": {
       "kind": "func",
-      "at": "service-documents/internal/domain/citizen_letter.go:491"
+      "at": "service-documents/internal/domain/citizen_letter.go:675"
     },
     "domain.TrimRequired": {
       "kind": "func",
-      "at": "service-documents/internal/domain/citizen_letter.go:467"
+      "at": "service-documents/internal/domain/citizen_letter.go:651"
     },
     "domain.TuXa": {
       "kind": "func",
@@ -7794,6 +7894,10 @@
       "kind": "func",
       "at": "service-petitions/internal/domain/automation.go:246"
     },
+    "domain.WithResult": {
+      "kind": "func",
+      "at": "service-documents/internal/domain/citizen_letter.go:469"
+    },
     "domain.WithoutOtherTypeFields": {
       "kind": "func",
       "at": "service-comms/internal/domain/noi_dung_mini_app.go:688"
@@ -7920,7 +8024,7 @@
     },
     "grpc.BatchGetStaff": {
       "kind": "func",
-      "at": "service-identity/internal/grpc/server.go:576"
+      "at": "service-identity/internal/grpc/server.go:583"
     },
     "grpc.BeginOperatorEnrollment": {
       "kind": "func",
@@ -7958,6 +8062,14 @@
       "kind": "type",
       "at": "service-identity/internal/grpc/citizen_contact_phone.go:20"
     },
+    "grpc.CitizenLetterDeadlineRuleReader": {
+      "kind": "type",
+      "at": "service-identity/internal/grpc/citizen_letter_deadline.go:22"
+    },
+    "grpc.CitizenLetterReader": {
+      "kind": "type",
+      "at": "service-documents/internal/grpc/server.go:41"
+    },
     "grpc.ClaimDueAutomationRuns": {
       "kind": "func",
       "at": "service-identity/internal/grpc/automation.go:31"
@@ -7984,7 +8096,7 @@
     },
     "grpc.DocumentTypeCodeReader": {
       "kind": "type",
-      "at": "service-documents/internal/grpc/server.go:34"
+      "at": "service-documents/internal/grpc/server.go:35"
     },
     "grpc.GetMapFrameDefault": {
       "kind": "func",
@@ -8146,6 +8258,14 @@
       "kind": "func",
       "at": "service-identity/internal/grpc/citizen_contact_phone.go:38"
     },
+    "grpc.ResolveCitizenLetterDeadline": {
+      "kind": "func",
+      "at": "service-identity/internal/grpc/citizen_letter_deadline.go:45"
+    },
+    "grpc.ResolveCitizenLetterForTask": {
+      "kind": "func",
+      "at": "service-documents/internal/grpc/citizen_letter_task.go:31"
+    },
     "grpc.ResolveCitizenSession": {
       "kind": "func",
       "at": "service-identity/internal/grpc/phien_cong_dan.go:80"
@@ -8208,7 +8328,7 @@
     },
     "grpc.ResolveStaffPrincipal": {
       "kind": "func",
-      "at": "service-identity/internal/grpc/server.go:386"
+      "at": "service-identity/internal/grpc/server.go:393"
     },
     "grpc.ResolveTaskBlocLabels": {
       "kind": "func",
@@ -8312,7 +8432,7 @@
     },
     "http.AddCitizenLetterNote": {
       "kind": "func",
-      "at": "service-documents/internal/http/citizen_letter.go:651"
+      "at": "service-documents/internal/http/citizen_letter.go:671"
     },
     "http.AddProjectComment": {
       "kind": "func",
@@ -8352,7 +8472,7 @@
     },
     "http.BookCitizenLetter": {
       "kind": "func",
-      "at": "service-documents/internal/http/citizen_letter.go:405"
+      "at": "service-documents/internal/http/citizen_letter.go:420"
     },
     "http.BookStaffIntake": {
       "kind": "func",
@@ -8414,21 +8534,33 @@
       "kind": "type",
       "at": "service-petitions/internal/http/petition_fields.go:40"
     },
+    "http.CitizenLetterCount": {
+      "kind": "func",
+      "at": "service-documents/internal/http/citizen_letter.go:701"
+    },
+    "http.CitizenLetterDeadlineRuleReader": {
+      "kind": "type",
+      "at": "service-identity/internal/http/citizen_letter_deadline_rule.go:42"
+    },
+    "http.CitizenLetterDeadlineRuleWriting": {
+      "kind": "type",
+      "at": "service-identity/internal/http/citizen_letter_deadline_rule.go:48"
+    },
     "http.CitizenLetterDetail": {
       "kind": "func",
-      "at": "service-documents/internal/http/citizen_letter.go:516"
+      "at": "service-documents/internal/http/citizen_letter.go:536"
     },
     "http.CitizenLetterDuplicates": {
       "kind": "func",
-      "at": "service-documents/internal/http/citizen_letter.go:448"
+      "at": "service-documents/internal/http/citizen_letter.go:468"
     },
     "http.CitizenLetterLog": {
       "kind": "func",
-      "at": "service-documents/internal/http/citizen_letter.go:531"
+      "at": "service-documents/internal/http/citizen_letter.go:551"
     },
     "http.CitizenLetterReport": {
       "kind": "func",
-      "at": "service-documents/internal/http/citizen_letter.go:671"
+      "at": "service-documents/internal/http/citizen_letter.go:719"
     },
     "http.CitizenLetterService": {
       "kind": "type",
@@ -8516,7 +8648,7 @@
     },
     "http.CorrectCitizenLetterSender": {
       "kind": "func",
-      "at": "service-documents/internal/http/citizen_letter.go:613"
+      "at": "service-documents/internal/http/citizen_letter.go:633"
     },
     "http.CountMyUnreadNotifications": {
       "kind": "func",
@@ -8533,6 +8665,10 @@
     "http.CreateBudgetPeriodReopening": {
       "kind": "func",
       "at": "service-finance/internal/http/budget_period_close.go:133"
+    },
+    "http.CreateCitizenLetterDeadlineRule": {
+      "kind": "func",
+      "at": "service-identity/internal/http/citizen_letter_deadline_rule.go:143"
     },
     "http.CreateCustomMessage": {
       "kind": "func",
@@ -9178,9 +9314,13 @@
       "kind": "func",
       "at": "service-finance/internal/http/budget_period_close.go:80"
     },
+    "http.ListCitizenLetterDeadlineRules": {
+      "kind": "func",
+      "at": "service-identity/internal/http/citizen_letter_deadline_rule.go:123"
+    },
     "http.ListCitizenLetters": {
       "kind": "func",
-      "at": "service-documents/internal/http/citizen_letter.go:482"
+      "at": "service-documents/internal/http/citizen_letter.go:502"
     },
     "http.ListCitizenReportFields": {
       "kind": "func",
@@ -9384,7 +9524,7 @@
     },
     "http.MoveCitizenLetter": {
       "kind": "func",
-      "at": "service-documents/internal/http/citizen_letter.go:565"
+      "at": "service-documents/internal/http/citizen_letter.go:585"
     },
     "http.MucUuTienDanhMuc": {
       "kind": "type",
@@ -9716,7 +9856,7 @@
     },
     "http.RecordCitizenLetterResult": {
       "kind": "func",
-      "at": "service-documents/internal/http/citizen_letter.go:585"
+      "at": "service-documents/internal/http/citizen_letter.go:605"
     },
     "http.RecordProjectIssue": {
       "kind": "func",
@@ -9769,6 +9909,10 @@
     "http.RegisterZaloLinks": {
       "kind": "func",
       "at": "service-comms/internal/http/zalo_links.go:155"
+    },
+    "http.RemoveCitizenLetterDeadlineRule": {
+      "kind": "func",
+      "at": "service-identity/internal/http/citizen_letter_deadline_rule.go:210"
     },
     "http.RemoveSLAFieldRow": {
       "kind": "func",
@@ -9856,7 +10000,7 @@
     },
     "http.RouteCitizenLetter": {
       "kind": "func",
-      "at": "service-documents/internal/http/citizen_letter.go:545"
+      "at": "service-documents/internal/http/citizen_letter.go:565"
     },
     "http.SLADoc": {
       "kind": "type",
@@ -9892,7 +10036,7 @@
     },
     "http.SetCitizenLetterDeadline": {
       "kind": "func",
-      "at": "service-documents/internal/http/citizen_letter.go:632"
+      "at": "service-documents/internal/http/citizen_letter.go:652"
     },
     "http.SetFundingSourceGrantedAmount": {
       "kind": "func",
@@ -10253,6 +10397,10 @@
     "http.UnmarshalJSON": {
       "kind": "func",
       "at": "service-platform/internal/http/operator_platform.go:62"
+    },
+    "http.UpdateCitizenLetterDeadlineRule": {
+      "kind": "func",
+      "at": "service-identity/internal/http/citizen_letter_deadline_rule.go:174"
     },
     "http.UpdateContentCategory": {
       "kind": "func",
@@ -10661,6 +10809,10 @@
     "identityclient.ResolveCitizenContactPhone": {
       "kind": "func",
       "at": "core/identityclient/citizen_contact_phone.go:34"
+    },
+    "identityclient.ResolveCitizenLetterDeadline": {
+      "kind": "func",
+      "at": "core/identityclient/citizen_letter_deadline.go:43"
     },
     "identityclient.ResolveStaff": {
       "kind": "func",
@@ -12542,13 +12694,17 @@
       "kind": "func",
       "at": "service-petitions/internal/store/xu_ly_phan_anh.go:455"
     },
+    "store.CitizenLetterDeadlineRuleStore": {
+      "kind": "type",
+      "at": "service-identity/internal/store/citizen_letter_deadline_rule.go:28"
+    },
     "store.CitizenLetterFilter": {
       "kind": "type",
-      "at": "service-documents/internal/store/citizen_letter.go:154"
+      "at": "service-documents/internal/store/citizen_letter.go:155"
     },
     "store.CitizenLetterRelated": {
       "kind": "type",
-      "at": "service-documents/internal/store/citizen_letter.go:173"
+      "at": "service-documents/internal/store/citizen_letter.go:177"
     },
     "store.CitizenLetterStore": {
       "kind": "type",
@@ -12641,6 +12797,10 @@
     "store.CotCuaBang": {
       "kind": "func",
       "at": "service-finance/internal/store/thu_chi_ngan_sach.go:180"
+    },
+    "store.Count": {
+      "kind": "func",
+      "at": "service-documents/internal/store/citizen_letter.go:206"
     },
     "store.CountAccountlessPetitionsSince": {
       "kind": "func",
@@ -12896,7 +13056,7 @@
     },
     "store.DuplicateCandidates": {
       "kind": "func",
-      "at": "service-documents/internal/store/citizen_letter.go:468"
+      "at": "service-documents/internal/store/citizen_letter.go:547"
     },
     "store.EditPetitionField": {
       "kind": "func",
@@ -12973,6 +13133,10 @@
     "store.GetDEK": {
       "kind": "func",
       "at": "service-identity/internal/store/data_encryption_key.go:63"
+    },
+    "store.GetForUpdate": {
+      "kind": "func",
+      "at": "service-identity/internal/store/citizen_letter_deadline_rule.go:134"
     },
     "store.GhepPhienStore": {
       "kind": "type",
@@ -13112,7 +13276,7 @@
     },
     "store.InsertLog": {
       "kind": "func",
-      "at": "service-documents/internal/store/citizen_letter.go:404"
+      "at": "service-documents/internal/store/citizen_letter.go:483"
     },
     "store.InsertPairingCode": {
       "kind": "func",
@@ -13264,7 +13428,7 @@
     },
     "store.List": {
       "kind": "func",
-      "at": "service-documents/internal/store/citizen_letter.go:179"
+      "at": "service-identity/internal/store/citizen_letter_deadline_rule.go:72"
     },
     "store.ListCommunes": {
       "kind": "func",
@@ -13297,6 +13461,10 @@
     "store.LiveByCode": {
       "kind": "func",
       "at": "service-petitions/internal/store/nhiem_vu.go:1053"
+    },
+    "store.LiveByID": {
+      "kind": "func",
+      "at": "service-documents/internal/store/citizen_letter.go:357"
     },
     "store.LiveChatsOf": {
       "kind": "func",
@@ -13492,7 +13660,7 @@
     },
     "store.Log": {
       "kind": "func",
-      "at": "service-documents/internal/store/citizen_letter.go:422"
+      "at": "service-documents/internal/store/citizen_letter.go:501"
     },
     "store.MaCungGoc": {
       "kind": "func",
@@ -13637,6 +13805,10 @@
     "store.NewChungTuGiaiNganStore": {
       "kind": "func",
       "at": "service-finance/internal/store/chung_tu_giai_ngan.go:44"
+    },
+    "store.NewCitizenLetterDeadlineRuleStore": {
+      "kind": "func",
+      "at": "service-identity/internal/store/citizen_letter_deadline_rule.go:32"
     },
     "store.NewCitizenLetterStore": {
       "kind": "func",
@@ -14272,7 +14444,7 @@
     },
     "store.ReportRows": {
       "kind": "func",
-      "at": "service-documents/internal/store/citizen_letter.go:496"
+      "at": "service-documents/internal/store/citizen_letter.go:575"
     },
     "store.ResealKey": {
       "kind": "func",
@@ -14742,6 +14914,10 @@
       "kind": "func",
       "at": "service-finance/internal/store/du_an_ghi.go:647"
     },
+    "store.UpdateAmountUnit": {
+      "kind": "func",
+      "at": "service-identity/internal/store/citizen_letter_deadline_rule.go:170"
+    },
     "store.UpdateAnnualAmount": {
       "kind": "func",
       "at": "service-finance/internal/store/funding_source.go:361"
@@ -14756,11 +14932,11 @@
     },
     "store.UpdateDeadline": {
       "kind": "func",
-      "at": "service-documents/internal/store/citizen_letter.go:372"
+      "at": "service-documents/internal/store/citizen_letter.go:451"
     },
     "store.UpdateHolder": {
       "kind": "func",
-      "at": "service-documents/internal/store/citizen_letter.go:332"
+      "at": "service-documents/internal/store/citizen_letter.go:411"
     },
     "store.UpdateMeta": {
       "kind": "func",
@@ -14768,11 +14944,11 @@
     },
     "store.UpdateResult": {
       "kind": "func",
-      "at": "service-documents/internal/store/citizen_letter.go:349"
+      "at": "service-documents/internal/store/citizen_letter.go:428"
     },
     "store.UpdateSender": {
       "kind": "func",
-      "at": "service-documents/internal/store/citizen_letter.go:361"
+      "at": "service-documents/internal/store/citizen_letter.go:440"
     },
     "store.UpdateSetting": {
       "kind": "func",
@@ -14780,7 +14956,7 @@
     },
     "store.UpdateStatus": {
       "kind": "func",
-      "at": "service-documents/internal/store/citizen_letter.go:340"
+      "at": "service-documents/internal/store/citizen_letter.go:419"
     },
     "store.UpdateText": {
       "kind": "func",
