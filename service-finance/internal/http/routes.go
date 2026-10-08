@@ -244,6 +244,10 @@ type GhiNganSach interface {
 	// Budget period close (migration 0012) — app/budget_period_close.go.
 	CloseBudgetPeriod(ctx context.Context, req app.BudgetPeriodCloseRequest, nguoi audit.Actor) (domain.BudgetPeriodClose, error)
 	ReopenBudgetPeriodClose(ctx context.Context, code, reason string, nguoi audit.Actor) (domain.BudgetPeriodClose, error)
+
+	// The Excel import (ADR 0081 #6) — app/budget_import.go, routes_budget_import.go.
+	PreviewBudgetImport(ctx context.Context, req app.BudgetImportRequest) (app.BudgetImportResult, error)
+	ImportBudgetWorkbook(ctx context.Context, req app.BudgetImportRequest, actor audit.Actor) (app.BudgetImportResult, error)
 }
 
 type Deps struct {
@@ -370,6 +374,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	// The voucher register's Excel import — `budget.read` template, `budget.update` preview and import
 	// (routes_disbursement_import.go).
 	registerDisbursementImportRoutes(mux, d, h)
+
+	// The budget board's Excel import — `budget.update` preview and import (routes_budget_import.go).
+	registerBudgetImportRoutes(mux, d, h)
 
 	// --- the commune's capital plan category catalogue ----------------------------------------
 	//

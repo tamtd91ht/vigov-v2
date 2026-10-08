@@ -110,6 +110,11 @@ type ghiNganSachGia struct {
 	lastClose               app.BudgetPeriodCloseRequest
 	lastReopenCode          string
 
+	// The Excel import (budget_import_test.go has the two methods).
+	previewImportCalls, importCalls int
+	lastImport                      app.BudgetImportRequest
+	importErr                       error
+
 	xaCuoi      tenant.ID
 	nguoiCuoi   audit.Actor
 	taoCuoi     app.YeuCauTaoBang
@@ -236,7 +241,7 @@ func (g *ghiNganSachGia) ReopenBudgetPeriodClose(ctx context.Context, code, reas
 
 func (g *ghiNganSachGia) tongGoi() int {
 	return g.taoBangGoi + g.goBangGoi + g.suaBangGoi + g.themGoi + g.suaGoi + g.goGoi + g.tongGoiN +
-		g.ghiDotGoi + g.goDotGoi + g.closeCalls + g.reopenCalls
+		g.ghiDotGoi + g.goDotGoi + g.closeCalls + g.reopenCalls + g.previewImportCalls + g.importCalls
 }
 
 // --- fixtures ------------------------------------------------------------------------------------

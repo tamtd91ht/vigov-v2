@@ -319,6 +319,15 @@
       "bang_chung": "RatioOf làm tròn nửa xa số 0 ở phần vạn; TyLeGiaiNgan, phân bổ, nguồn vốn dùng chung RatioOf; ví dụ tài liệu 3259 + 6741 = 10000. ProjectExpectedEndMonth: expected_end_month luôn có (không ngày hoàn thành → 12; năm sau → 12; năm trước → tháng đầu), không dùng thời hạn giải ngân. go vet + go test service-finance xanh.",
       "no_confirm": [],
       "tiep_theo": "Điểm chậm có thể dịch tối đa 0,005 — dự án sát ngưỡng có thể đổi trạng thái chậm. PhanTramThoiGianDaQua (thời gian đã qua) vẫn cắt bớt, ngoài thẻ."
+    },
+    {
+      "id": "thu-chi-nap-excel-08-10",
+      "viec": "Thu - Chi ngân sách: nạp tệp Excel của Phòng Tài chính (một tệp hai sheet → bảng chi + bảng thu) theo prototype (ADR 0081 #6)",
+      "trang_thai": "dang_lam",
+      "menu": "giai-ngan",
+      "bang_chung": "POST /api/v1/budget-sheets/import-previews và /imports (budget.update; imports Idempotency-Key bắt buộc). core/xlsx ReadSheets (nhiều sheet, ReadSheet giữ nguyên). Bộ phân tích theo vigov-require fiscal_import.py: dòng tiêu đề TT/STT, độ sâu theo mã TT/thụt lề, đơn vị tính bắt buộc, tự đánh sao dòng có số thực hiện lớn nhất cấp trên cùng, đoán vai trò cột từ tiêu đề. Chặn khi năm HOẶC tháng đã chốt (ImportLockingClose); bảng có số liệu nhập tay → 409 'Gỡ bảng trước'; bảng trống thay bằng bản mới (lan+1, bản cũ xoá mềm có vết); cả tệp một giao dịch, vết nap_excel_bang_ngan_sach. Kiểm trên worktree HEAD sạch: go test service-finance 6 gói + core/xlsx xanh.",
+      "no_confirm": [],
+      "tiep_theo": "CÒN: web hộp thoại Nạp từ Excel (bỏ '?'), hợp đồng openapi/schema.gen.ts (chờ hợp đồng chung). Quyết định builder tự chọn cần chủ dự án xem: đơn vị tính bắt buộc; sheet không có chữ thu/chi bị từ chối; số dạng chữ mơ hồ ('1.234') bị từ chối; thay bảng dùng budget.update (Gỡ tay dùng budget.confirm). Thiếu: sửa vai trò cột sau khi nạp (chưa có tuyến); sao tự đánh ở bảng thu có thể chọn A thay vì B (quyết định 30/09: B); chưa cảnh báo tổng con lệch số giấy. SQL mới chưa chạy trên PG thật."
     }
   ]
 }

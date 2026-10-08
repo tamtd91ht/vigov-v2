@@ -60,6 +60,11 @@ var (
 	ErrPercentOperandsUnresolved = errors.New(
 		"ngan_sach: cột phần trăm này tạo trước khi hệ thống lưu rõ cột tử số và mẫu số, và công thức cũ không đọc được chắc chắn — không tính được; không đoán từ công thức")
 
+	// ErrPercentOperandsNotIdentified — a column of a sheet loaded from Excel whose operands the headings
+	// did not identify unambiguously (ADR 0081 #6). The figure in the file is not used (§9 rule 3).
+	ErrPercentOperandsNotIdentified = errors.New(
+		"ngan_sach: cột phần trăm này nạp từ Excel mà tiêu đề không cho xác định chắc chắn cột tử số và cột mẫu số — không tính được; hệ thống không lấy số % trong tệp và không đoán")
+
 	// ErrPercentNumeratorEmpty / ErrPercentDenominatorEmpty — an operand cell of THIS line is empty.
 	// Empty is not 0 (§9 rule 4): a ratio over an empty cell would print 0% for a figure nobody entered.
 	ErrPercentNumeratorEmpty = errors.New(
@@ -215,6 +220,11 @@ func (b BangDayDu) PercentCell(lineID, columnID string) TyLe {
 		return tyLeKhong(ErrKhongThayCot)
 	}
 	if col.NumeratorColumnID == "" || col.DenominatorColumnID == "" {
+		// Two ways to arrive here, two sentences: a sheet loaded from Excel whose headings did not
+		// identify the operands (budget_import.go), or a legacy column 0011 could not resolve.
+		if b.Bang.NguonTep != "" {
+			return tyLeKhong(ErrPercentOperandsNotIdentified)
+		}
 		return tyLeKhong(ErrPercentOperandsUnresolved)
 	}
 	for _, id := range []string{col.NumeratorColumnID, col.DenominatorColumnID} {

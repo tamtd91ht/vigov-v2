@@ -158,19 +158,27 @@ func (h *Handler) CapitalPlanCategoryImportTemplate(w http.ResponseWriter, r *ht
 // tooLarge writes the 413: each import states its OWN row cap in it (the voucher import reuses this
 // reader, disbursement_import.go), and one shared sentence would quote the wrong figure for one of them.
 func readCatalogueUpload(w http.ResponseWriter, r *http.Request, tooLarge func(http.ResponseWriter)) ([]byte, bool) {
+	data, _, ok := readUploadWithName(w, r, tooLarge)
+	return data, ok
+}
+
+// readUploadWithName is readCatalogueUpload that also returns the part's file name, for the one import
+// that records it (the budget board's `nguon_tep`, migration 0006). Still never logged.
+func readUploadWithName(w http.ResponseWriter, r *http.Request, tooLarge func(http.ResponseWriter)) ([]byte, string, bool) {
 	mt, _, err := mime.ParseMediaType(r.Header.Get(catalogueHeaderContentType))
 	if err != nil || mt != "multipart/form-data" {
 		httpx.WriteError(w, http.StatusUnsupportedMediaType, "unsupported_media_type",
 			"Hãy gửi tệp dưới dạng multipart/form-data, trường \"file\".", "")
-		return nil, false
+		return nil, "", false
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, catalogueBodyMax)
 	mr, err := r.MultipartReader()
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", "Nội dung gửi lên không đọc được.", "")
-		return nil, false
+		return nil, "", false
 	}
 	var data []byte
+	name := ""
 	for {
 		part, err := mr.NextPart()
 		if errors.Is(err, io.EOF) {
@@ -178,41 +186,41 @@ func readCatalogueUpload(w http.ResponseWriter, r *http.Request, tooLarge func(h
 		}
 		if err != nil {
 			writeCatalogueUploadError(w, err, tooLarge)
-			return nil, false
+			return nil, "", false
 		}
 		if part.FormName() != catalogueFormField {
 			// Drained, not kept: bounded by the body cap either way.
 			if _, err := io.Copy(io.Discard, part); err != nil {
 				writeCatalogueUploadError(w, err, tooLarge)
-				return nil, false
+				return nil, "", false
 			}
 			continue
 		}
 		if data != nil {
 			httpx.WriteError(w, http.StatusBadRequest, "invalid_request", "Chỉ gửi MỘT tệp mỗi lần nhập.", "")
-			return nil, false
+			return nil, "", false
 		}
 		if !acceptableCatalogueXLSXPart(part.Header.Get(catalogueHeaderContentType), part.FileName()) {
 			httpx.WriteError(w, http.StatusUnsupportedMediaType, "unsupported_file_type",
 				"Chỉ nhận tệp Excel .xlsx (không nhận .xls, .xlsm có macro hay .csv). Hãy tải tệp mẫu và nhập vào đó.", "")
-			return nil, false
+			return nil, "", false
 		}
 		b, err := io.ReadAll(io.LimitReader(part, xlsx.DefaultLimits.MaxFileBytes+1))
 		if err != nil {
 			writeCatalogueUploadError(w, err, tooLarge)
-			return nil, false
+			return nil, "", false
 		}
 		if int64(len(b)) > xlsx.DefaultLimits.MaxFileBytes {
 			tooLarge(w)
-			return nil, false
+			return nil, "", false
 		}
-		data = b
+		data, name = b, part.FileName()
 	}
 	if data == nil {
 		httpx.WriteError(w, http.StatusBadRequest, "missing_file", "Chưa chọn tệp để nhập (trường \"file\").", "")
-		return nil, false
+		return nil, "", false
 	}
-	return data, true
+	return data, name, true
 }
 
 func acceptableCatalogueXLSXPart(contentType, fileName string) bool {

@@ -131,7 +131,8 @@ func (l Limits) normalize() Limits {
 // workbook (.xlsm), a template (.xltx) and a binary workbook (.xlsb) each declare a different one.
 const contentTypeMainXLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"
 
-// ReadSheet reads the FIRST sheet of an uploaded workbook into rows of raw cell text.
+// ReadSheet reads the FIRST sheet of an uploaded workbook into rows of raw cell text. ReadSheets reads
+// every sheet.
 //
 // size is the length the caller was told (a multipart header's Size); pass -1 when unknown. It only
 // refuses early — the read itself is capped at MaxFileBytes whatever size says.
@@ -146,6 +147,128 @@ const contentTypeMainXLSX = "application/vnd.openxmlformats-officedocument.sprea
 // The error is one of the sentinels above, or — only when r itself fails — a wrapped read error.
 func ReadSheet(r io.Reader, size int64, lim Limits) ([][]string, error) {
 	lim = lim.normalize()
+	f, err := openWorkbook(r, size, lim)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	sheets := f.GetSheetList()
+	if len(sheets) == 0 {
+		return nil, ErrNotXLSX
+	}
+	out, err := readRows(f, sheets[0], lim)
+	if err != nil {
+		return nil, err
+	}
+	if out == nil {
+		return nil, ErrEmptySheet
+	}
+	return out, nil
+}
+
+// MaxSheets bounds ReadSheets. A report workbook carries two or three tabs (revenue, expenditure, a
+// note); sixteen is five times that, and the point past which every extra tab is only more work a
+// hostile file can ask for — each sheet is scanned up to MaxRows on its own.
+const MaxSheets = 16
+
+// Sheet is one worksheet as ReadSheets returns it.
+type Sheet struct {
+	Name string
+
+	// Hidden is true for a sheet the workbook marks hidden or very hidden. It is RETURNED, not dropped:
+	// whether a hidden tab counts is the caller's business rule, and a reader that silently dropped it
+	// would decide that rule for every import.
+	Hidden bool
+
+	// Rows has exactly ReadSheet's shape: rows[i] is spreadsheet row i+1, blank rows in the middle are
+	// kept as empty slices, trailing blank rows are dropped, values are raw and untrimmed. nil for a
+	// sheet with no non-blank cell.
+	Rows [][]string
+
+	// numbers holds the positions of the cells STORED AS NUMBERS. See IsNumber.
+	numbers map[[2]int]struct{}
+}
+
+// IsNumber reports whether the cell at Rows[row][col] (both 0-based) is stored as a NUMBER rather
+// than as text.
+//
+// WHY A CALLER NEEDS IT: the raw value of a number cell is its stored digits with a DOT decimal point
+// ("1.234" is one point two three four), while the same five characters typed as TEXT on a Vietnamese
+// machine mean one thousand two hundred and thirty-four. The raw strings cannot tell the two apart and
+// a guess is off by a factor of a thousand, so the cell's type travels with it. A formula cell counts
+// as a number when its cached result is one.
+func (s Sheet) IsNumber(row, col int) bool {
+	_, ok := s.numbers[[2]int{row, col}]
+	return ok
+}
+
+// ReadSheets reads EVERY sheet of an uploaded workbook, in workbook order, under the same guards as
+// ReadSheet (steps 1–6 of the package comment, applied per sheet: MaxRows and MaxColumns bound each
+// sheet on its own). ReadSheet is unchanged and still reads only the first sheet — the imports that
+// depend on that keep their behaviour.
+//
+// The error is one of the sentinels above (ErrTooLarge also for more than MaxSheets sheets;
+// ErrEmptySheet only when EVERY sheet is blank), or — only when r itself fails — a wrapped read error.
+func ReadSheets(r io.Reader, size int64, lim Limits) ([]Sheet, error) {
+	lim = lim.normalize()
+	f, err := openWorkbook(r, size, lim)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	names := f.GetSheetList()
+	if len(names) == 0 {
+		return nil, ErrNotXLSX
+	}
+	if len(names) > MaxSheets {
+		return nil, ErrTooLarge
+	}
+	out := make([]Sheet, 0, len(names))
+	anyData := false
+	for _, name := range names {
+		rows, err := readRows(f, name, lim)
+		if err != nil {
+			return nil, err
+		}
+		visible, err := f.GetSheetVisible(name)
+		if err != nil {
+			return nil, ErrMalformed
+		}
+		s := Sheet{Name: name, Hidden: !visible, Rows: rows, numbers: map[[2]int]struct{}{}}
+		for ri, row := range rows {
+			for ci, v := range row {
+				if v == "" {
+					continue
+				}
+				anyData = true
+				ref, err := excelize.CoordinatesToCellName(ci+1, ri+1)
+				if err != nil {
+					return nil, ErrMalformed
+				}
+				typ, err := f.GetCellType(name, ref)
+				if err != nil {
+					return nil, ErrMalformed
+				}
+				// An absent `t` attribute (Unset) IS a number in SpreadsheetML; `n` says so explicitly.
+				if typ == excelize.CellTypeUnset || typ == excelize.CellTypeNumber {
+					s.numbers[[2]int{ri, ci}] = struct{}{}
+				}
+			}
+		}
+		out = append(out, s)
+	}
+	if !anyData {
+		return nil, ErrEmptySheet
+	}
+	return out, nil
+}
+
+// openWorkbook is steps 1–4 of the package comment and the open itself — the part ReadSheet and
+// ReadSheets share, so the guards cannot differ between them. lim must already be normalized. The
+// caller closes the file.
+func openWorkbook(r io.Reader, size int64, lim Limits) (*excelize.File, error) {
 	if size > lim.MaxFileBytes {
 		return nil, ErrTooLarge
 	}
@@ -169,13 +292,13 @@ func ReadSheet(r io.Reader, size int64, lim Limits) ([][]string, error) {
 		}
 		return nil, ErrNotXLSX
 	}
-	defer f.Close()
+	return f, nil
+}
 
-	sheets := f.GetSheetList()
-	if len(sheets) == 0 {
-		return nil, ErrNotXLSX
-	}
-	it, err := f.Rows(sheets[0])
+// readRows is steps 5–6 for one sheet: raw values, at most MaxRows rows and MaxColumns cells per
+// row, trailing blank rows dropped. nil (and no error) when the sheet has no non-blank cell.
+func readRows(f *excelize.File, sheet string, lim Limits) ([][]string, error) {
+	it, err := f.Rows(sheet)
 	if err != nil {
 		return nil, ErrNotXLSX
 	}
@@ -203,7 +326,7 @@ func ReadSheet(r io.Reader, size int64, lim Limits) ([][]string, error) {
 		return nil, ErrMalformed
 	}
 	if lastNonBlank < 0 {
-		return nil, ErrEmptySheet
+		return nil, nil
 	}
 	return out[:lastNonBlank+1], nil
 }

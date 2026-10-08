@@ -31,11 +31,8 @@ package app
 // summing or choosing.
 //
 // ---------------------------------------------------------------------------
-// WHAT IS NOT BUILT HERE, deliberately:
+// WHAT IS NOT BUILT HERE, deliberately (the Excel import of §6 is in budget_import.go):
 //
-//	the Excel import (§6)   `nguon_tep` / `nap_luc` are the columns it will fill, and TaoBang takes
-//	                        the column set as data for exactly that reason — the parser is a turn of
-//	                        its own and it is what fills them.
 //	editing a COLUMN       a sheet's columns come from the Phòng Tài chính's file. Renaming one, or
 //	                        moving a role from one column to another, changes which figure an
 //	                        indicator reads — which is ADR 0035 §A territory and needs its own
@@ -98,6 +95,10 @@ type KhoNganSach interface {
 	NextBudgetPeriodCloseRevision(ctx context.Context, tx *store.ScopedTx, year, month int) (int, error)
 	InsertBudgetPeriodClose(ctx context.Context, tx *store.ScopedTx, c domain.BudgetPeriodClose) error
 	ReopenBudgetPeriodClose(ctx context.Context, tx *store.ScopedTx, id, by, reason string) error
+
+	// The Excel import (ADR 0081 #6) — budget_import.go in both packages.
+	LiveSheetsForUpdate(ctx context.Context, tx *store.ScopedTx, year int, kind domain.LoaiBang) ([]domain.BangNganSach, error)
+	HandEntries(ctx context.Context, tx *store.ScopedTx, sheetID string) ([]string, int, int, error)
 }
 
 // NganSach owns creating, removing, and editing one commune's budget board.

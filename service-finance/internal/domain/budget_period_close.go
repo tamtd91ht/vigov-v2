@@ -218,6 +218,30 @@ func SheetLockingClose(closes []BudgetPeriodClose, sheetYear int) (BudgetPeriodC
 	return FindActiveClose(closes, sheetYear, 0)
 }
 
+// ImportLockingClose answers "may an Excel file be loaded into budget year `year`": the close that
+// forbids it, or false. STRICTER THAN SheetLockingClose, and that is ADR 0081 #6: an import replaces a
+// whole year's figures at once, so ANY active close of that year — the year itself or any one of its
+// months — refuses it. The year close is named first, then the earliest closed month.
+func ImportLockingClose(closes []BudgetPeriodClose, year int) (BudgetPeriodClose, bool) {
+	if c, ok := FindActiveClose(closes, year, 0); ok {
+		return c, true
+	}
+	for m := 1; m <= 12; m++ {
+		if c, ok := FindActiveClose(closes, year, m); ok {
+			return c, true
+		}
+	}
+	return BudgetPeriodClose{}, false
+}
+
+// ImportPeriodClosedError — loading Excel into a year of which the year or a month is closed.
+func ImportPeriodClosedError(c BudgetPeriodClose) error {
+	return &PeriodCloseConflict{Close: c, kind: ErrPeriodClosed, msg: fmt.Sprintf(
+		"ngan_sach: kỳ %s đã chốt (mã %s) — không nạp Excel vào năm ngân sách %d khi năm hoặc bất kỳ tháng nào "+
+			"của năm đã chốt, vì nạp là thay số liệu của cả năm. Muốn nạp, người có quyền xác nhận mở chốt kỳ này, kèm lý do",
+		c.PeriodLabel(), c.Code, c.Year)}
+}
+
 // LockYears returns the distinct years in ASCENDING order — the order every writer takes its
 // (tenant, year) advisory locks in, so two writers needing the same two years cannot deadlock.
 func LockYears(years ...int) []int {

@@ -48,6 +48,14 @@ type hangBang struct {
 	loai              string
 	lan               int
 	tieuDe, donViTinh string
+	// sourceFile is `nguon_tep`: "" for a sheet entered by hand, the file name for one loaded from Excel.
+	sourceFile string
+}
+
+// handEntryLine is one row of store.handEntryLines: a line carrying live batches.
+type handEntryLine struct {
+	code, name string
+	batches    int
 }
 
 type khoNSGia struct {
@@ -88,6 +96,11 @@ type khoNSGia struct {
 	// 1). A reopen UPDATE marks the matching row reopened, so the re-read sees it.
 	closes       []domain.BudgetPeriodClose
 	nextRevision int
+
+	// The Excel import's two reads (store/budget_import.go): the lines with live batches, and the count
+	// of hand-entered cells. The fake does no filtering — the SQL text carries the rule.
+	entryLines []handEntryLine
+	handCells  int
 
 	loi error
 
@@ -251,6 +264,16 @@ func (c *connNSGia) QueryContext(_ context.Context, q string, args []driver.Name
 	case strings.Contains(q, "FROM budget_period_closes"):
 		return c.closeRows(q, args), nil
 
+	// THE IMPORT'S TWO READS, before anything that names `khoan_muc_ngan_sach` or `gia_tri_khoan_muc`.
+	case strings.Contains(q, "hand_entry_lines"):
+		var hang [][]driver.Value
+		for _, l := range c.k.entryLines {
+			hang = append(hang, []driver.Value{l.code, l.name, int64(l.batches)})
+		}
+		return &rowsGia{cot: []string{"tt", "ten", "count"}, hang: hang}, nil
+	case strings.Contains(q, "hand_entry_cells"):
+		return &rowsGia{cot: []string{"count"}, hang: [][]driver.Value{{int64(c.k.handCells)}}}, nil
+
 	// THE BATCH STATEMENTS COME FIRST: the sum names `khoan_muc_ngan_sach` and the EXISTS names
 	// `SELECT EXISTS`, both of which a later case would otherwise answer.
 	case strings.Contains(q, "SUM(g.gia_tri)"):
@@ -368,9 +391,13 @@ func (c *connNSGia) QueryContext(_ context.Context, q string, args []driver.Name
 			return &rowsGia{cot: cotBangNS()}, nil
 		}
 		b := c.k.bang
+		var loaded any
+		if b.sourceFile != "" {
+			loaded = time.Date(2026, 9, 1, 8, 0, 0, 0, time.UTC)
+		}
 		return &rowsGia{cot: cotBangNS(), hang: [][]driver.Value{{
 			b.id, b.ma, int64(b.nam), b.loai, int64(b.lan), b.tieuDe, b.donViTinh,
-			nil, "", nil,
+			nil, b.sourceFile, loaded,
 		}}}, nil
 	}
 	return nil, fmt.Errorf("driver giả: không biết trả gì cho %q", q)
