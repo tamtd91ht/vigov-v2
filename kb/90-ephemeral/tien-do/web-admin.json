@@ -1065,6 +1065,15 @@
       "bang_chung": "e414dea2 (hunk xoá .o-thao-tac-icon trong globals.css nằm ở d31a06bb). Test viết trước: 49 ca đỏ trước khi sửa (user-list-prototype mới, danh-ba-can-bo.tim, danh-ba-can-bo, user-pages nguoi-dung), 76/76 xanh sau. Kiểm 08/10: lint sạch; vitest web-admin 275 tệp / 5063 ca xanh; các bước python của make check xanh; typecheck chỉ đỏ ở phieu-phan-anh.test.ts:440 (schema.gen.ts chưa commit của phiên khác). CHƯA KIỂM BẰNG ẢNH RENDER (chủ dự án bỏ bước chụp ảnh 08/10).",
       "no_confirm": [],
       "tiep_theo": "BACKEND DEPENDENCY (service-identity): xếp theo các cột prototype (máy chủ chỉ xếp code/created_at — 9 đầu cột đang vô hiệu kèm '?'); tìm theo thư điện tử và bộ phận (gợi ý ô tìm giữ câu đúng 'Tìm theo tên, chức danh, số điện thoại…'); tổng theo điều kiện tìm (M hiện là tổng sổ của xã kể cả khi đang tìm). Còn lệch nhỏ: hộp Cấp tài khoản/Đặt lại mật khẩu (mat-khau-tam.tsx) vẫn nút chính trước Huỷ; nút Trang trước/Trang sau giữ dáng cũ; bảng dùng ConfigTable (hàng 48px), web chưa có shadcn Table. Chụp ảnh render /nguoi-dung + hộp thêm/sửa cạnh prototype để chấm."
+    },
+    {
+      "id": "nhiem-vu-do-rong-giao-viec-08-10",
+      "menu": "nhiem-vu",
+      "trang_thai": "xong",
+      "viec": "Báo lỗi 08/10 'hộp Giao việc mới hẹp hơn prototype nhiều' — chẩn đoán: KHÔNG phải lỗi CSS, không sửa mã",
+      "bang_chung": "Prototype TaskAssignForm.tsx:196: sm:max-w-200 (800px) khi loại có requires_directive, sm:max-w-125 (500px) khi không. web-admin modal-dialog.tsx:115 + so-nhiem-vu.tsx:4679-4680,5142 cùng quy tắc; đo getComputedStyle trên CSS đang chạy (1440px): 800px / 500px, không luật globals.css nào đè. Máy chủ chỉ gắn requires_directive cho mã theo-van-ban (service-petitions/internal/domain/loai_nhiem_vu.go:82). Ảnh của người dùng (site Thăng Bình): danh mục loại chỉ có 4 dòng xã tự thêm (cấp trên giao, kết luận cuộc họp, thường xuyên, đột xuất), không dòng theo-van-ban đang dùng → loại nào cũng 500px. Người dùng CHỐT 08/10: giữ quy tắc 500/800 của prototype, không ép 800px.",
+      "no_confirm": [],
+      "tiep_theo": "Muốn hộp 800px + ba danh sách văn bản: xã bật lại / đổi nhãn dòng theo-van-ban ở Cấu hình → Danh mục (việc của dữ liệu, không phải mã). ĐỪNG sửa lại độ rộng hộp thoại khi được báo lần nữa — kiểm danh mục loại của xã trước."
     }
   ]
 }
