@@ -20,17 +20,46 @@ import type {
 import type { UpdateMapFieldIn } from "@/lib/api/map-field-schemas";
 
 /**
- * The six value types: VALUE as stored (ADR 0011, Vietnamese without diacritics) and the label the
- * screen shows — both from the server's constants and the spec (`docs/ui-ux/10-ban-do-kinh-te-so.md:221`).
+ * The six value types: VALUE as stored (ADR 0011, Vietnamese without diacritics — the server's
+ * constants, `service-comms/internal/domain/map_field_schema.go`) and the LABEL of spec Cấu hình 06
+ * (ADR 0079; prototype `AssetFieldTable.tsx:29-36`). Only the labels follow the spec: its values
+ * (`text`, `integer`, …) are not what the server stores (spec 12 "giữ backend, chỉ map lại").
  */
 export const VALUE_TYPES: readonly { readonly value: string; readonly label: string }[] = [
-  { value: "van-ban", label: "Văn bản" },
+  { value: "van-ban", label: "Chữ" },
   { value: "so-nguyen", label: "Số nguyên" },
   { value: "so-thap-phan", label: "Số thập phân" },
-  { value: "dung-sai", label: "Đúng/Sai" },
+  { value: "dung-sai", label: "Có / Không" },
   { value: "ngay", label: "Ngày" },
   { value: "chon", label: "Chọn trong danh sách" },
 ];
+
+/** The server's `FieldCodeMaxLen` — a longer generated code would be refused as "too long". */
+const FIELD_CODE_MAX = 64;
+
+/**
+ * The field code generated from the label (spec 06; prototype `AssetFieldTable.tsx:281-288`): strip
+ * Vietnamese diacritics, `đ` → `d`, lowercase, every other run of characters → one `_`, trimmed.
+ *
+ * ADAPTED TO THE SERVER'S SHAPE `^[a-z][a-z0-9_]*$`, 1–64 (`NormalizeFieldCode`): the prototype's
+ * slug of "3 tầng" is `3_tang`, which the server refuses for starting with a digit — such a code gets
+ * the prefix `f_`. Cut at 64 characters, then trimmed of a trailing `_` again. Empty = the label has
+ * no letter or digit, and nothing can be sent.
+ */
+export function fieldCodeFromLabel(label: string): string {
+  let code = label
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[đĐ]/g, "d")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  if (code === "") return "";
+  if (!/^[a-z]/.test(code)) code = `f_${code}`;
+  return code.slice(0, FIELD_CODE_MAX).replace(/_+$/, "");
+}
+
+export const LABEL_NEEDS_ALNUM = "Nhãn phải có ít nhất một chữ cái hoặc chữ số.";
 
 export const CHOICE_TYPE = "chon";
 
@@ -123,18 +152,22 @@ function optionsIn(options: readonly OptionDraft[]): comms_fieldOptionIn[] {
 }
 
 /**
- * POST body. Field shapes (code pattern, label length, at least one option for `chon`) are checked
- * by the SERVER, which names the field it refuses; a second copy here would drift (rule 9).
+ * POST body. The code is GENERATED from the label (`fieldCodeFromLabel`) — `d.fieldCode` is the edit
+ * draft's read-only copy and is ignored here. The one local check is the one the generation needs: a
+ * label with no letter or digit yields no code. Every other shape (label length, at least one option
+ * for `chon`) is checked by the SERVER, which names what it refuses; a second copy would drift (rule 9).
  */
 export function createBody(d: MapFieldDraft): Built<comms_createMapFieldSchemaIn> {
+  const code = fieldCodeFromLabel(d.label);
+  if (code === "") return { kind: "error", message: LABEL_NEEDS_ALNUM };
   const order = readSortOrder(d.sortOrder);
   if (!order.ok) return { kind: "error", message: SORT_ORDER_ERROR };
   return {
     kind: "send",
     body: {
       asset_type_code: d.assetTypeCode,
-      field_code: d.fieldCode.trim(),
-      label: d.label,
+      field_code: code,
+      label: d.label.trim(),
       value_type: d.valueType,
       options: d.valueType === CHOICE_TYPE ? optionsIn(d.options) : undefined,
       is_required: d.isRequired,
