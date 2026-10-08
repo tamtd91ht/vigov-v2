@@ -54,6 +54,8 @@ export const PREVIEW_TASK_TYPES: petitions_danhSachLoaiNhiemVuRa = {
   items: [
     { id: "01PREVIEWTTY0000000000001", code: TYPE_BY_DOCUMENT, label: "Theo văn bản", is_default: false, active: true, order: 1, source: "he-thong", tier: 3, color: null, requires_directive: true },
     { id: "01PREVIEWTTY0000000000002", code: TYPE_BASIC, label: "Cơ bản", is_default: true, active: true, order: 2, source: "he-thong", tier: 2, color: null, requires_directive: false },
+    // RETIRED (ADR 0082 #2: retired, never deleted) — absent from every select of the Nhiệm vụ menu.
+    { id: "01PREVIEWTTY0000000000003", code: "loai-cu", label: "Loại cũ (ngừng dùng)", is_default: false, active: false, order: 3, source: "xa", tier: 3, color: null, requires_directive: false },
   ],
 };
 
@@ -62,6 +64,8 @@ export const PREVIEW_TASK_PRIORITIES: petitions_danhSachMucUuTienRa = {
     { id: "01PREVIEWTPR0000000000001", code: "khan", label: "Khẩn", is_default: false, active: true, order: 1, source: "he-thong", tier: 2, color: null },
     { id: "01PREVIEWTPR0000000000002", code: "cao", label: "Cao", is_default: false, active: true, order: 2, source: "he-thong", tier: 2, color: null },
     { id: "01PREVIEWTPR0000000000003", code: "thuong", label: "Thường", is_default: true, active: true, order: 3, source: "he-thong", tier: 2, color: null },
+    // RETIRED — absent from the filter and the create form (ADR 0082 #2).
+    { id: "01PREVIEWTPR0000000000004", code: "uu-tien-cu", label: "Mức cũ (ngừng dùng)", is_default: false, active: false, order: 4, source: "xa", tier: 3, color: null },
   ],
 };
 
@@ -70,6 +74,8 @@ export const PREVIEW_TASK_BLOCS: identity_danhSachKhoiNhiemVuRa = {
     { id: "01PREVIEWTBL0000000000001", code: "khoi-uy-ban", label: "Khối Uỷ ban", is_default: true, active: true, order: 1, source: "he-thong", tier: 2, color: null },
     { id: "01PREVIEWTBL0000000000002", code: "khoi-dang", label: "Khối Đảng", is_default: false, active: true, order: 2, source: "he-thong", tier: 2, color: null },
     { id: "01PREVIEWTBL0000000000003", code: "khac", label: "Khác", is_default: false, active: true, order: 3, source: "he-thong", tier: 2, color: null },
+    // RETIRED — absent from the filter and the create form (ADR 0082 #2).
+    { id: "01PREVIEWTBL0000000000004", code: "khoi-cu", label: "Khối cũ (ngừng dùng)", is_default: false, active: false, order: 4, source: "xa", tier: 3, color: null },
   ],
 };
 
@@ -303,12 +309,15 @@ export type PreviewTaskQuery = {
   readonly assignee?: string;
   readonly source?: string;
   readonly late?: boolean;
+  /** `roots=true` — root tasks only (ADR 0082 #8), as the Nhiệm vụ screen now asks. */
+  readonly roots?: boolean;
   /** `include=documents` — the Sổ theo dõi's projection. */
   readonly documents?: boolean;
 };
 
 function matches(seed: TaskSeed, q: PreviewTaskQuery, now: Date): boolean {
   const eq = (want: string | undefined, have: string) => want === undefined || want === have;
+  if (q.roots === true && (seed.parent ?? "") !== "") return false;
   if (!eq(q.status, seed.status) || !eq(q.parent, seed.parent ?? "") || !eq(q.type, seed.type)) return false;
   if (!eq(q.priority, seed.priority) || !eq(q.bloc, seed.bloc) || !eq(q.unit, seed.unit)) return false;
   if (!eq(q.assignee, seed.assignee) || !eq(q.source, seed.source)) return false;

@@ -14,6 +14,7 @@ import {
 import type { identity_canBoChonNguoiRa } from "@/lib/api/schema.gen";
 import { cn } from "@/lib/cn";
 
+import { maskedEmailOf } from "./nhan-nhiem-vu";
 import { INPUT_CLASS } from "./task-spec";
 
 /** The prototype's placeholder of the staff search box (`PersonPicker.tsx:30`). */
@@ -33,8 +34,10 @@ export function personNoMatchText(query: string): string {
  *   open / empty     a 36px search input (`Gõ tên để tìm…`, ⇕ inside it), the list FLOATING under it:
  *                    the "nobody" line, then "Họ tên · chức vụ" rows with a ✓ on the chosen one
  *
- * The prototype's second line (the officer's e-mail) is not drawn: the staff directory route does not
- * carry e-mail (BACKEND DEPENDENCY, and a personal-data question — rule 3, stop 1).
+ * The prototype's second line is the officer's address (`PersonPicker.tsx:158-167`) and the chosen box
+ * reads `Họ tên — email` (`:83-86`): here the MASKED address (`email_masked`, ADR 0082 #3/#10/#12). No
+ * `Xem` in this box — the drawer is the only place that reveals (ADR 0082 #10). An officer without an
+ * address keeps the one-line row and the `Họ tên · chức vụ` box. Typing never matches the address.
  *
  * Matching and keys are `components/staff-combobox-logic.ts` (the same as `StaffCombobox`): every typed
  * word must appear in the full name, accents optional; Enter is ALWAYS consumed — a stray Enter must
@@ -74,6 +77,9 @@ export function TaskPersonPicker({
   const options = useMemo(() => staffOptions(directory, value), [directory, value]);
   const visible = visibleOptions(options, emptyLabel, state.query);
   const chosen = value === "" ? null : (options.find((o) => o.value === value) ?? null);
+  const byCode = useMemo(() => new Map(directory.map((cb) => [cb.code, cb])), [directory]);
+  const chosenEntry = chosen === null ? undefined : byCode.get(chosen.value);
+  const chosenEmail = chosen === null ? null : maskedEmailOf(chosen.value, byCode);
   const listId = `${id}-danh-sach`;
   const optionId = (i: number) => `${id}-lua-chon-${i}`;
 
@@ -118,7 +124,14 @@ export function TaskPersonPicker({
               setState({ open: true, query: null, active: visible.findIndex((o) => o.value === value) });
             }}
           >
-            <span className="text-navy min-w-0 flex-1 truncate">{chosen.label}</span>
+            {chosenEmail !== null && chosenEntry !== undefined && chosenEntry.full_name !== "" ? (
+              <span className="min-w-0 flex-1 truncate">
+                <span className="text-navy">{chosenEntry.full_name}</span>
+                <span className="text-ink-muted"> — {chosenEmail}</span>
+              </span>
+            ) : (
+              <span className="text-navy min-w-0 flex-1 truncate">{chosen.label}</span>
+            )}
             <span
               role="button"
               tabIndex={-1}
@@ -198,7 +211,7 @@ export function TaskPersonPicker({
                     focusable="false"
                     className={cn("text-brand mt-0.5 size-3.5 shrink-0", o.value === value ? "opacity-100" : "opacity-0")}
                   />
-                  <span className="text-navy min-w-0 truncate">{o.label}</span>
+                  <PersonOptionText label={o.label} email={maskedEmailOf(o.value, byCode)} />
                 </>
               )}
             </li>
@@ -212,5 +225,16 @@ export function TaskPersonPicker({
       </div>
       {hint}
     </div>
+  );
+}
+
+/** An option row: `Họ tên · chức vụ`, then the masked address in small muted text when there is one. */
+function PersonOptionText({ label, email }: { label: string; email: string | null }) {
+  if (email === null) return <span className="text-navy min-w-0 truncate">{label}</span>;
+  return (
+    <span className="min-w-0">
+      <span className="text-navy block truncate">{label}</span>
+      <span className="text-ink-muted block truncate text-[11px]">{email}</span>
+    </span>
   );
 }

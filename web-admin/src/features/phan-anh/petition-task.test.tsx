@@ -67,7 +67,7 @@ const DIRECTORY: KetQua<identity_danhBaChonNguoiRa> = {
   ok: true,
   duLieu: {
     items: [
-      { code: "CB-00123", full_name: "Trần Thị B", position: "Công chức", department_id: "01JBOPHAN" },
+      { code: "CB-00123", full_name: "Trần Thị B", position: "Công chức", department_id: "01JBOPHAN", email_masked: null },
     ],
   },
 };

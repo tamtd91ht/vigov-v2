@@ -4,6 +4,7 @@ import { QUYEN_DUYET_GIA_HAN } from "@/lib/quyen";
 import {
   PREVIEW_CATEGORIES,
   PREVIEW_STAFF,
+  PREVIEW_STAFF_EMAILS,
   PREVIEW_UNITS,
   previewComments,
   previewCurve,
@@ -136,6 +137,10 @@ export function answer(method: string, url: URL): Response {
   if (p === "/api/v1/capital-plan-categories") return json(PREVIEW_CATEGORIES);
   if (p === "/api/v1/org-units") return json(PREVIEW_UNITS);
   if (p === "/api/v1/staff-directory") return json(staffDirectory(url.searchParams));
+  if ((m = /^\/api\/v1\/staff-directory\/([^/]+)\/email$/.exec(p))) {
+    const email = PREVIEW_STAFF_EMAILS[decodeURIComponent(m[1]!)];
+    return email === undefined ? refuse(404, "Không tìm thấy cán bộ.") : json({ email });
+  }
   const tasks = answerTasks(p, url.searchParams);
   if (tasks !== null) return tasks;
   const letters = answerLetters(p, url.searchParams);
@@ -302,6 +307,7 @@ function taskQuery(q: URLSearchParams): PreviewTaskQuery {
     assignee: one("assignee"),
     source: one("source"),
     late: q.get("late") === "true",
+    roots: q.get("roots") === "true",
     documents: q.get("include") === "documents",
   };
 }

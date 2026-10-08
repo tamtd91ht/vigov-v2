@@ -516,12 +516,12 @@ describe("§5.4 — câu chữ của khối văn bản chỉ đạo", () => {
     expect(needsDirective([row("theo-van-ban", false)], "theo-van-ban")).toBe(false);
   });
 
-  it("the Sổ theo dõi's type: the first flagged row, active or not; none ⇒ `null`, never a fallback", () => {
-    const row = (code: string, requires_directive: boolean, active = true) => ({
+  it("the Sổ theo dõi's type, as the prototype: active flagged → active default → first active → `null`", () => {
+    const row = (code: string, requires_directive: boolean, active = true, is_default = code === "co-ban") => ({
       id: `01J${code}`,
       code,
       label: code,
-      is_default: code === "co-ban",
+      is_default,
       active,
       order: 1,
       source: "he-thong",
@@ -530,9 +530,14 @@ describe("§5.4 — câu chữ của khối văn bản chỉ đạo", () => {
       requires_directive,
     });
     expect(directiveTaskType([row("co-ban", false), row("theo-van-ban", true)])).toBe("theo-van-ban");
-    expect(directiveTaskType([row("theo-van-ban", true, false)])).toBe("theo-van-ban");
-    // The default type is NOT a stand-in (the prototype falls back to it; this screen does not).
-    expect(directiveTaskType([row("co-ban", false)])).toBeNull();
+    // A RETIRED flagged row is skipped (prototype `activeKinds`): the active default stands in.
+    expect(directiveTaskType([row("theo-van-ban", true, false), row("x", false), row("co-ban", false)])).toBe("co-ban");
+    // No default among the active rows: the first active one.
+    expect(directiveTaskType([row("x", false, false), row("y", false, true, false), row("z", false, true, false)])).toBe("y");
+    // A retired default does not count either.
+    expect(directiveTaskType([row("co-ban", false, false), row("y", false, true, false)])).toBe("y");
+    // Nothing active (or the catalogue failed): no type filter — never a blocking error.
+    expect(directiveTaskType([row("theo-van-ban", true, false)])).toBeNull();
     expect(directiveTaskType([])).toBeNull();
   });
 
@@ -1201,7 +1206,7 @@ describe("✎ Sửa — đọc lại trước khi lưu: không gỡ lặng lẽ 
 });
 
 describe("danh bạ chọn người cho ba ô chọn cán bộ — BA pha, không hai", () => {
-  const CB = { code: "CB-00001", full_name: "Cán bộ giả", position: "", department_id: "" };
+  const CB = { code: "CB-00001", full_name: "Cán bộ giả", position: "", department_id: "", email_masked: null };
 
   it("chưa đọc xong (`null`) ⇒ đang tải, không lỗi, không lựa chọn nào", () => {
     expect(docDanhBaChonNguoi(null)).toEqual({ ds: [], dangTai: true, loi: null });
@@ -1252,8 +1257,8 @@ describe("danh bạ chọn người cho ba ô chọn cán bộ — BA pha, khôn
 describe("§5.9 Nhật ký & Trao đổi — nửa đọc", () => {
   const CB = "CB-00311";
   const DANH_BA = new Map([
-    [CB, { code: CB, full_name: "Nguyễn Văn A", position: "Chuyên viên", department_id: "" }],
-    ["CB-00999", { code: "CB-00999", full_name: "", position: "", department_id: "" }],
+    [CB, { code: CB, full_name: "Nguyễn Văn A", position: "Chuyên viên", department_id: "", email_masked: null }],
+    ["CB-00999", { code: "CB-00999", full_name: "", position: "", department_id: "", email_masked: null }],
   ]);
   const TEN_BO_PHAN = new Map([["bp-vpdu", "VĂN PHÒNG ĐẢNG ỦY"]]);
 
@@ -1394,8 +1399,8 @@ describe("câu `chưa ghi lãnh đạo giao việc` nói ĐÚNG điều làm đ�
 
 describe("tên cán bộ ở ô chật — họ tên, mã lạ là mã, rỗng là câu của ô", () => {
   const DANH_BA = new Map([
-    ["CB-1", { code: "CB-1", full_name: "Lê Văn Một", position: "", department_id: "" }],
-    ["CB-2", { code: "CB-2", full_name: "", position: "", department_id: "" }],
+    ["CB-1", { code: "CB-1", full_name: "Lê Văn Một", position: "", department_id: "", email_masked: null }],
+    ["CB-2", { code: "CB-2", full_name: "", position: "", department_id: "", email_masked: null }],
   ]);
 
   it("ba nhánh, không nhánh nào ra chuỗi rỗng cho một mã có thật", () => {
@@ -1511,6 +1516,9 @@ describe("§3 — bộ lọc ↔ đường dẫn", () => {
     expect(locTuDuongDan("?sort=title&order=up")).toEqual({ sapXep: "title" });
     expect(locTuDuongDan("?sort=title")).toEqual({ sapXep: "title" });
     expect(locTuDuongDan("?sort=priority")).toEqual({ sapXep: "priority" });
+    // ĐỔI CHIỀU CÓ CHỦ Ý 08/10/2026 (ADR 0082 #5): `status` is a server column now.
+    expect(locTuDuongDan("?sort=status&order=desc")).toEqual({ sapXep: "status", chieu: "desc" });
+    expect(locTuDuongDan("?sort=assignee")).toEqual({});
     expect(locTuDuongDan("?sort=tieu_de")).toEqual({});
     expect(locTuDuongDan("?order=desc")).toEqual({ chieu: "desc" });
   });

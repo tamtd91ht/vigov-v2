@@ -8,7 +8,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { PHAM_VI_CUA_TOI, PHAM_VI_TOAN_XA, SCOPE_RELATED_LABEL } from "./nhan-nhiem-vu";
-import { HangLoc, SCOPE_OPTIONS } from "./so-nhiem-vu";
+import { HangLoc, SCOPE_GROUP_LABEL, SCOPE_OPTIONS } from "./so-nhiem-vu";
 
 beforeAll(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -30,20 +30,60 @@ function unmount(): void {
 
 afterEach(unmount);
 
-function mount(loc: RowProps["loc"], onFilter: (l: unknown) => void): void {
+function mount(loc: RowProps["loc"], onFilter: (l: unknown) => void, danhMuc: RowProps["danhMuc"] = CATALOGUE): void {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
   act(() =>
     root!.render(
-      <HangLoc loc={loc} tim={loc.tim ?? ""} datTim={() => {}} datLoc={onFilter} danhMuc={CATALOGUE} danhBa={null} />,
+      <HangLoc loc={loc} tim={loc.tim ?? ""} datTim={() => {}} datLoc={onFilter} danhMuc={danhMuc} danhBa={null} />,
     ),
   );
 }
 
+describe("Mức ưu tiên / Loại / Khối list ACTIVE rows only (prototype `TaskWorkspace.tsx:223-255`)", () => {
+  const row = (code: string, active: boolean) => ({
+    id: `01J${code}`,
+    code,
+    label: `nhãn ${code}`,
+    is_default: false,
+    active,
+    order: 1,
+    source: "xa",
+    tier: 3,
+    color: null,
+  });
+  const WITH_RETIRED: RowProps["danhMuc"] = {
+    loai: [{ ...row("co-ban", true), requires_directive: false }, { ...row("loai-cu", false), requires_directive: false }],
+    mucUuTien: [row("khan", true), row("uu-tien-cu", false)],
+    khoi: [row("khoi-uy-ban", true), row("khoi-cu", false)],
+    boPhan: [],
+  };
+  const values = (id: string) =>
+    Array.from(host!.querySelectorAll<HTMLOptionElement>(`#${id} option`)).map((o) => o.value);
+
+  it("a retired row is not offered", () => {
+    mount({}, () => {}, WITH_RETIRED);
+    expect(values("loc-uu-tien")).toEqual(["", "khan"]);
+    expect(values("loc-loai")).toEqual(["", "co-ban"]);
+    expect(values("loc-khoi")).toEqual(["", "khoi-uy-ban"]);
+  });
+
+  it("…except the one the query already holds, so the select never shows another value", () => {
+    mount({ mucUuTien: "uu-tien-cu" }, () => {}, WITH_RETIRED);
+    expect(values("loc-uu-tien")).toEqual(["", "khan", "uu-tien-cu"]);
+  });
+});
+
 function scopeButtons(): HTMLButtonElement[] {
-  return Array.from(host!.querySelectorAll<HTMLButtonElement>('[role="group"][aria-label="Phạm vi"] button'));
+  return Array.from(
+    host!.querySelectorAll<HTMLButtonElement>(`[role="group"][aria-label="${SCOPE_GROUP_LABEL}"] button`),
+  );
 }
+
+it("the scope group is named as the prototype's `ScopeFilter`", () => {
+  expect(SCOPE_GROUP_LABEL).toBe("Lọc nhanh theo người xử lý");
+});
 
 describe("scope — THREE options (owner 07/10/2026 #4), values `` / `mine` / `related`, never a staff code", () => {
   it("exactly three buttons, spec words and hints, the current one pressed", () => {

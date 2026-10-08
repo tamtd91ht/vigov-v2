@@ -12,7 +12,6 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import {
-  AlarmClock,
   ArrowUpDown,
   CalendarClock,
   Check,
@@ -103,7 +102,7 @@ import {
 } from "@/lib/api/nhiem-vu";
 import { layTrangThaiNhiemVu } from "@/lib/api/trang-thai-nhiem-vu";
 import { NO_DRILL_DOWN, type DrillDown } from "@/lib/drill-down";
-import { QUYEN_DUYET_GIA_HAN } from "@/lib/quyen";
+import { coQuyen, QUYEN_DUYET_GIA_HAN, QUYEN_XEM_NHIEM_VU } from "@/lib/quyen";
 import { DrillDownBanner } from "@/components/drill-down-banner";
 import type {
   identity_boPhanRa,
@@ -163,6 +162,7 @@ import {
   NHAN_THEM_VAN_BAN,
   NHAN_TIEU_DE_THEO_VAN_BAN,
   PRIORITY_COLUMN_LABEL,
+  STATUS_COLUMN_LABEL,
   TITLE_COLUMN_LABEL,
   O_TRONG,
   PHAM_VI_CUA_TOI,
@@ -209,8 +209,10 @@ import {
   kanbanMovePendingText,
   needsDirective,
   directiveTaskType,
+  REGISTER_EMPTY,
+  blankDocumentRow,
+  usableDocumentRows,
   extensionCountText,
-  REGISTER_NO_DIRECTIVE_TYPE,
   cotPhaiDoc,
   docBangNhanTrangThai,
   docDanhBaChonNguoi,
@@ -220,6 +222,7 @@ import {
   hoanThanhTreHan,
   lateText,
   locTuDuongDan,
+  maskedEmailOf,
   mergeChildPages,
   mucUuTienMacDinh,
   nhanBoDem,
@@ -269,6 +272,7 @@ import {
   type TaskSelectionState,
 } from "./batch-delete";
 import { ChildTasks } from "./child-tasks";
+import { StaffEmailReveal } from "./staff-email";
 import { TaskStatusPipeline } from "./task-status-pipeline";
 import { saveFile } from "./save-file";
 import { TaskImportDialog } from "./task-import-dialog";
@@ -480,28 +484,28 @@ function nhanDanhMuc(
   return ds.find((m) => m.code === ma)?.label ?? ma;
 }
 
+/** `#RRGGBB` — the only shape of a catalogue `color` this screen puts into an inline style. */
+const HEX_COLOUR = /^#[0-9a-fA-F]{6}$/;
+
 /**
- * Colour of the Kanban card's top strip, from the task's RANK on the commune's own priority scale —
- * never from a hard-coded code: the scale is a commune catalogue whose order IS its meaning
- * (`muc_uu_tien_nhiem_vu.go`, first = most urgent; `0003_danh_muc_nhiem_vu.sql:293` — no branch is
- * keyed on a priority code).
- *
- * THE PROTOTYPE'S RULE, by rank (`TaskCard.tsx:35,46` + `lib/task-display.ts:114-118`): `khan` red,
- * `cao` tangerine, `thuong` brand — and EVERYTHING ELSE falls back to `thuong`, i.e. brand: no
- * priority, an unknown code, any lower level. On the shipped scale `khan · cao · thuong` that is
- * rank 0 red, rank 1 amber, the rest brand; a two-level scale has no amber (its rank 1 is its last,
- * which is `thuong`'s place). Before 07/10/2026 a missing priority drew a grey strip and every middle
- * rank amber, so a board read mostly red/amber where the prototype's reads mostly blue. The colour
- * is the SECOND signal: the card says the priority in words too.
+ * Colour of the Kanban card's top strip (ADR 0082 #6, replacing ADR 0076 lần 2 #10's rank rule):
+ *   1. the colour the commune chose for that priority in its catalogue (`color`, `#RRGGBB`) — an
+ *      inline style, since a per-commune value cannot be a class baked into the bundle;
+ *   2. otherwise by CODE, as the prototype (`TaskCard.tsx:35,46` + `lib/task-display.ts:114-118`):
+ *      `khan` red, `cao` tangerine (v2's `warning-500`), everything else — `thuong`, no priority, an
+ *      unknown code — brand.
+ * A value that is not `#RRGGBB` is ignored (falls to 2), never written into the style as typed.
+ * The colour is the SECOND signal: the card says the priority in words too.
  */
-export function priorityStripClass(
-  scale: readonly { readonly code: string }[],
+export function priorityStrip(
+  scale: readonly { readonly code: string; readonly color: string | null }[],
   code: string,
-): string {
-  const rank = code === "" ? -1 : scale.findIndex((m) => m.code === code);
-  if (rank === 0) return "bg-danger-500";
-  if (rank === 1 && scale.length > 2) return "bg-warning-500";
-  return "bg-brand-500";
+): { readonly className: string; readonly style?: { readonly backgroundColor: string } } {
+  const chosen = code === "" ? null : (scale.find((m) => m.code === code)?.color ?? null);
+  if (chosen !== null && HEX_COLOUR.test(chosen)) return { className: "", style: { backgroundColor: chosen } };
+  if (code === "khan") return { className: "bg-danger-500" };
+  if (code === "cao") return { className: "bg-warning-500" };
+  return { className: "bg-brand-500" };
 }
 
 /**
@@ -855,26 +859,31 @@ export function SoNhiemVu({
   // from "read, empty".
   const [typesRead, setTypesRead] = useState(false);
   /**
-   * The type the Sổ theo dõi reads: `undefined` while the catalogue is being read, `null` when it
-   * holds no `requires_directive` row (or failed) — `directiveTaskType`.
+   * The type the Sổ theo dõi reads: `undefined` while the catalogue is being read, `null` when no
+   * active type exists (or the read failed) — `directiveTaskType`, the prototype's choice.
    */
   const directiveType = typesRead ? directiveTaskType(danhMuc.loai) : undefined;
   /**
-   * THE QUERY OF THE VIEW ON SCREEN. The Sổ theo dõi is the book of DIRECTIVE tasks (spec 02 §State):
-   * its query forces the type the catalogue flags `requires_directive`, whatever the `Loại` filter of
-   * the other views holds (that filter is hidden there). The counts and the export read the same
-   * query, so the footer and the file say what the table shows.
+   * THE QUERY OF THE VIEW ON SCREEN. The Sổ theo dõi forces the type `directiveTaskType` chose,
+   * whatever the `Loại` filter of the other views holds (that filter is hidden there); `null` reads
+   * the book without a type filter, as the prototype does (ADR 0082 #9). The counts and the export
+   * read the same query, so the footer and the file say what the table shows.
    *
-   * NO DIRECTIVE TYPE KNOWN = NO READ (`registerHeld`). Reading the book without the type would show
-   * basic tasks under eleven directive columns, and the figure in the footer would be the commune's
-   * whole register under the book's name.
+   * ROOT TASKS ONLY (`roots`) on every view, as the prototype (ADR 0082 #8) — except a Tổng quan
+   * drill-down, whose rows must equal a figure that counts sub-tasks too (ADR 0053).
+   *
+   * The book waits (`registerHeld`) only while the catalogue is being read: reading it before would
+   * be one read without the type, then a second with it.
    */
-  const registerHeld = viewMode === "so-theo-doi" && typeof directiveType !== "string";
-  const viewLoc = useMemo<BoLoc>(
-    () =>
-      viewMode === "so-theo-doi" && typeof directiveType === "string" ? { ...loc, loai: directiveType } : loc,
-    [loc, viewMode, directiveType],
-  );
+  const registerHeld = viewMode === "so-theo-doi" && directiveType === undefined;
+  const viewLoc = useMemo<BoLoc>(() => {
+    const scoped: BoLoc = drillDownActive ? loc : { ...loc, roots: true };
+    return viewMode === "so-theo-doi" && typeof directiveType === "string"
+      ? { ...scoped, loai: directiveType }
+      : viewMode === "so-theo-doi"
+        ? { ...scoped, loai: undefined }
+        : scoped;
+  }, [loc, viewMode, directiveType, drillDownActive]);
 
   const [daTai, datDaTai] = useState<{
     khoa: string;
@@ -1002,7 +1011,8 @@ export function SoNhiemVu({
     Promise.all(
       ds.map(async (ma) => ({
         ma,
-        kq: await laySoNhiemVu({ ...loc, trangThai: ma, limit: SO_THE_MOI_COT }),
+        // Root tasks only (ADR 0082 #8). Kanban never runs under a drill-down (`viewMode` above).
+        kq: await laySoNhiemVu({ ...loc, roots: true, trangThai: ma, limit: SO_THE_MOI_COT }),
       })),
     ).then((cot) => {
       if (!bo) datDaTaiKanban({ khoa: khoaKanban, cot });
@@ -1180,17 +1190,14 @@ export function SoNhiemVu({
   }, [panel.tabs.tabs, maNguoiDangNhap]);
   // Cùng chiều FAIL CLOSED: phiên chưa đọc xong hoặc đọc hỏng thì MỌI cổng nút đóng.
   const quyen = quyenNhiemVu(phien !== null && phien.ok ? phien.duLieu.permissions : null);
+  // `Xem` of the assignee's address (ADR 0082 #3) — `task.read`, closed while the session is unread.
+  const canRevealEmail = phien !== null && phien.ok && coQuyen(phien.duLieu.permissions, QUYEN_XEM_NHIEM_VU);
   // Bảng tra họ tên theo mã — dựng MỘT LẦN mỗi lần danh bạ về, dùng chung cho thẻ, dòng và drawer.
   // Không gọi mạng thêm lần nào: danh bạ đã đọc một lần cho cả màn ở khối danh mục trên.
   const danhBaMa = useMemo(() => danhBaChoNhatKy(kqDanhBa), [kqDanhBa]);
 
-  // A held register is "loading" while the catalogue is read, and says why once it is read without a
-  // directive type — never an endless loading bar, never another view's rows.
-  const held: TrangThaiTai<never> | null = !registerHeld
-    ? null
-    : directiveType === null
-      ? { pha: "loi", thongBao: REGISTER_NO_DIRECTIVE_TYPE }
-      : { pha: "dangTai" };
+  // A held register is "loading" while the catalogue is read — never another view's rows.
+  const held: TrangThaiTai<never> | null = registerHeld ? { pha: "dangTai" } : null;
   const so = held ?? taiTu(daTai, khoa);
   const counts = held ?? taiTu(countsLoaded, khoaCounts);
   const cotKanban: readonly CotKanban[] = cotPhaiDoc(loc.trangThai).map((ma) => ({
@@ -1666,7 +1673,15 @@ export function SoNhiemVu({
             maDangMo={maDrawer}
             moNhiemVu={openDrawer}
             selection={taskSelection}
-            empty={emptyList}
+            empty={
+              // The book's own sentence (prototype `TaskRegisterTable.tsx:114`); the filter hint only
+              // when a filter is on, so an empty book is not read as "the commune has none".
+              <EmptyState
+                icon={ClipboardList}
+                title={REGISTER_EMPTY}
+                description={noFilter ? undefined : "Thử đổi hoặc bỏ bớt bộ lọc."}
+              />
+            }
           />
         )}
         {viewMode === "danh-sach" && so.pha === "xong" && listTable(listItems)}
@@ -1757,6 +1772,7 @@ export function SoNhiemVu({
           bayGio={new Date()}
           maNguoiDangNhap={maNguoiDangNhap}
           quyen={quyen}
+          canRevealEmail={canRevealEmail}
           dangGui={dangGui}
           dong={() => guiDrawer({ loai: "dong" })}
           // The answer goes back to the pipeline: it keeps the typed note and toasts the outcome.
@@ -2128,7 +2144,7 @@ export function HangLoc({
         {/* ONE joined group (spec 02 §2 item 1, prototype `ScopeFilter`). */}
         <div
           role="group"
-          aria-label="Phạm vi"
+          aria-label={SCOPE_GROUP_LABEL}
           className="border-line inline-flex overflow-hidden rounded-md border bg-white"
         >
           {SCOPE_OPTIONS.map((o) => (
@@ -2200,7 +2216,7 @@ export function HangLoc({
         {/* KHÔNG SẮP XẾP LẠI MẢNG NÀY: thứ tự `items` LÀ thang bậc của xã (`muc_uu_tien_nhiem_vu.go`). */}
         <FilterSelect id="loc-uu-tien" label="Lọc theo mức ưu tiên" value={loc.mucUuTien ?? ""} disabled={disabled} onChange={(v) => datLoc({ ...loc, mucUuTien: v || undefined })}>
           <option value="">{MOI_MUC_UU_TIEN_NHAN}</option>
-          {danhMuc.mucUuTien.map((m) => (
+          {activeChoices(danhMuc.mucUuTien, loc.mucUuTien).map((m) => (
             <option key={m.code} value={m.code}>
               {m.label}
             </option>
@@ -2210,7 +2226,7 @@ export function HangLoc({
         {!hideType && (
           <FilterSelect id="loc-loai" label="Lọc theo loại nhiệm vụ" value={loc.loai ?? ""} disabled={disabled} onChange={(v) => datLoc({ ...loc, loai: v || undefined })}>
             <option value="">{MOI_LOAI_NHAN}</option>
-            {danhMuc.loai.map((l) => (
+            {activeChoices(danhMuc.loai, loc.loai).map((l) => (
               <option key={l.code} value={l.code}>
                 {l.label}
               </option>
@@ -2220,7 +2236,7 @@ export function HangLoc({
 
         <FilterSelect id="loc-khoi" label="Lọc theo khối nhiệm vụ" value={loc.khoi ?? ""} disabled={disabled} onChange={(v) => datLoc({ ...loc, khoi: v || undefined })}>
           <option value="">{MOI_KHOI_NHAN}</option>
-          {danhMuc.khoi.map((k) => (
+          {activeChoices(danhMuc.khoi, loc.khoi).map((k) => (
             <option key={k.code} value={k.code}>
               {k.label}
             </option>
@@ -2271,6 +2287,23 @@ export function HangLoc({
       )}
     </div>
   );
+}
+
+/** The scope group's accessible name — prototype `ScopeFilter` (ADR 0082 #1). */
+export const SCOPE_GROUP_LABEL = "Lọc nhanh theo người xử lý";
+
+/**
+ * A catalogue's ACTIVE rows, as the prototype lists them (`TaskWorkspace.tsx:223-255`,
+ * `TaskAssignForm.tsx`): a retired row (ADR 0082 #2 — retired, never deleted) is not offered for a
+ * new choice. The ONE exception is the value already chosen (`keep` — a shared URL, a form's
+ * current value): dropping it would make the select silently show another option than the one the
+ * query or the form holds.
+ */
+export function activeChoices<T extends { readonly code: string; readonly active: boolean }>(
+  rows: readonly T[],
+  keep?: string,
+): readonly T[] {
+  return rows.filter((r) => r.active || (keep !== undefined && keep !== "" && r.code === keep));
 }
 
 /** One native select of the filter row (spec 02 §2), its label visually hidden. */
@@ -2893,8 +2926,9 @@ function SelectAllBox({
 
 /**
  * The status badge of a row (spec 04/05 `taskDisplayState`): finished late, then overdue, override
- * the status — both derived from dates (rule 10, invariant 3). ICON + WORD (ADR 0068 lần 6 #7), the
- * icon by status code, a clock for the two date states.
+ * the status — both derived from dates (rule 10, invariant 3). WORD ONLY, no icon, as the prototype
+ * (`TaskListTable.tsx`) — ADR 0082 #7 replaces ADR 0068 lần 6 #7 for this menu only. The word carries
+ * the meaning; the tone is the second signal.
  */
 export function SpecStatusBadge({
   state,
@@ -2908,7 +2942,6 @@ export function SpecStatusBadge({
 }) {
   return (
     <span className={cn(BADGE_CLASS, state.chip, className)} data-status={status} data-tone={state.tone}>
-      <Glyph icon={state.tone === "status" ? taskStatusIcon(status) : AlarmClock} />
       {state.label}
     </span>
   );
@@ -2926,7 +2959,7 @@ export function cardDueText(task: petitions_nhiemVuRa, labels: BangNhanTrangThai
  * button holding code · title · `N việc con` · deadline · assignee.
  *
  * THE STRIP IS COLOUR, so the priority is also said in words for a screen reader (colour is never the
- * only signal). Its colour comes from the commune's priority RANK (`priorityStripClass`).
+ * only signal). Its colour: the commune's catalogue colour, else by code (`priorityStrip`).
  *
  * The move button (`Chuyển sang cột…`, kept #5) sits at the card's top-right corner; the open button
  * leaves room for it so the title never runs under it.
@@ -2994,6 +3027,7 @@ export function TheNhiemVu({
   const hasMenu = move !== null && targets.length > 0 && !overlay;
 
   const priorityLabel = nhiemVu.priority === "" ? "" : nhanDanhMuc(danhMuc.mucUuTien, nhiemVu.priority);
+  const strip = priorityStrip(danhMuc.mucUuTien, nhiemVu.priority);
   const completedLate = hoanThanhTreHan(nhiemVu.completed_at, nhiemVu.original_due_at);
   const late = !completedLate && isOverdueNow(nhiemVu, bayGio);
   const children = childCountLabel(nhiemVu.child_count);
@@ -3023,7 +3057,8 @@ export function TheNhiemVu({
       {...(canDrag ? drag.listeners : {})}
     >
       <div
-        className={cn("h-[3px] rounded-t-[9px]", priorityStripClass(danhMuc.mucUuTien, nhiemVu.priority))}
+        className={cn("h-[3px] rounded-t-[9px]", strip.className)}
+        style={strip.style}
         aria-hidden="true"
       />
       {selection !== null && !overlay && (
@@ -3152,46 +3187,15 @@ function SortHeader({
   );
 }
 
-/** Sorting by assignee, unit or status needs the server (ADR 0076 lần 2 #12) — a disabled "?". */
-export const SERVER_SORT_PENDING = {
-  ten: "Sắp xếp theo cột này",
-  viSao:
-    "Danh sách được sắp ở máy chủ (phân trang theo con trỏ), mà máy chủ chưa sắp được theo người thực " +
-    "hiện, bộ phận hay trạng thái. Sắp riêng một trang ở trình duyệt sẽ cho một thứ tự sai của cả sổ.",
-} as const;
-
-/**
- * A header the server cannot sort by yet (prototype `TaskListTable.tsx:171-186` draws the arrow on
- * all seven): the same look, the button DISABLED, and the "?" beside it saying why.
- */
-function UnsortableHeader({ label }: { label: string }) {
-  return (
-    <th scope="col" className={TH_CLASS}>
-      <span className="flex items-center gap-1.5">
-        <button
-          type="button"
-          disabled
-          className="text-navy flex cursor-not-allowed items-center gap-1.5 border-0 bg-transparent p-0 font-medium [font-family:inherit] text-[length:inherit]"
-        >
-          {label}
-          <ArrowUpDown aria-hidden="true" focusable="false" className="size-3 opacity-25" />
-        </button>
-        <PendingMarker info={SERVER_SORT_PENDING} />
-      </span>
-    </th>
-  );
-}
-
 /**
  * Bảng Danh sách — spec 04: Mã · Tên việc · Người thực hiện · Bộ phận · Ưu tiên · Hạn · Trạng thái,
  * after the `☐` column only a `task.delete` holder sees (with the header box). The whole row opens
  * the drawer; an overdue row takes the spec's pink tint, and the `Hạn` cell says `(trễ N ngày)` in
  * words — colour is never the only signal.
  *
- * SORTING IS THE SERVER'S (owner 07/10/2026 #5): Mã, Tên việc, Ưu tiên and Hạn carry a sort button;
- * Người thực hiện, Bộ phận and Trạng thái draw it DISABLED with a "?" (`UnsortableHeader`) — the
- * server cannot sort by them yet (BACKEND DEPENDENCY), and a client sort of one page would order
- * 100 rows of a longer register. Cells do not wrap (prototype `table.tsx:86`): the table scrolls
+ * SORTING IS THE SERVER'S (owner 07/10/2026 #5, ADR 0082 #5): Mã, Tên việc, Ưu tiên, Hạn and Trạng
+ * thái carry a sort button; Người thực hiện and Bộ phận are plain headers (owner 08/10/2026: not
+ * sortable, no "?") — a client sort of one page would order 100 rows of a longer register. Cells do not wrap (prototype `table.tsx:86`): the table scrolls
  * sideways.
  */
 export function BangNhiemVu({
@@ -3244,11 +3248,15 @@ export function BangNhiemVu({
               )}
               <SortHeader cot="code" nhan={NHAN_COT_MA} sapXep={sapXep} doiSapXep={doiSapXep} />
               <SortHeader cot="title" nhan={TITLE_COLUMN_LABEL} sapXep={sapXep} doiSapXep={doiSapXep} />
-              <UnsortableHeader label="Người thực hiện" />
-              <UnsortableHeader label="Bộ phận" />
+              <th scope="col" className={TH_CLASS}>
+                Người thực hiện
+              </th>
+              <th scope="col" className={TH_CLASS}>
+                Bộ phận
+              </th>
               <SortHeader cot="priority" nhan={PRIORITY_COLUMN_LABEL} sapXep={sapXep} doiSapXep={doiSapXep} />
               <SortHeader cot="due_at" nhan={DUE_COLUMN_LABEL} sapXep={sapXep} doiSapXep={doiSapXep} />
-              <UnsortableHeader label="Trạng thái" />
+              <SortHeader cot="status" nhan={STATUS_COLUMN_LABEL} sapXep={sapXep} doiSapXep={doiSapXep} />
             </tr>
           </thead>
           <tbody>
@@ -3283,11 +3291,13 @@ export function BangNhiemVu({
                       {n.code === "" ? O_TRONG : n.code}
                     </button>
                   </td>
-                  <td className={TD_CLASS}>
-                    <span className="text-navy block font-semibold">{n.title}</span>
+                  {/* Capped at ~42% and cut with "…" (brief 08/10 §5.4): uncapped, one long title pushed
+                      the Trạng thái column off a 1440px screen. The full title stays in `title`. */}
+                  <td className={cn(TD_CLASS, "w-[42%] max-w-0")} title={n.title}>
+                    <span className="text-navy block truncate font-semibold">{n.title}</span>
                     {/* `{nguồn} · đã gia hạn n lần` (prototype `TaskListTable.tsx:83-89`): the second part
                         only when the count is above zero. */}
-                    <span className="text-ink-muted block text-[11px]">
+                    <span className="text-ink-muted block truncate text-[11px]">
                       {nhanNguonGiao(n.source)}
                       {extensions !== null && ` · ${extensions}`}
                     </span>
@@ -3392,6 +3402,7 @@ export function ChiTietNhiemVu({
   bayGio,
   maNguoiDangNhap,
   quyen,
+  canRevealEmail = false,
   dangGui,
   dong,
   doiTrangThai,
@@ -3452,6 +3463,11 @@ export function ChiTietNhiemVu({
    * gọi quên truyền thì `tsc` đỏ, thay vì một mặc định lặng lẽ mở (hay đóng) mọi nút.
    */
   quyen: QuyenNhiemVu;
+  /**
+   * `task.read` — the `Xem` beside the assignee's masked address (ADR 0082 #3). Not a field of
+   * `QuyenNhiemVu`: those gate WRITE buttons, and `task.read` opens none of them. Absent = closed.
+   */
+  canRevealEmail?: boolean;
   dangGui: boolean;
   dong: () => void;
   /**
@@ -3499,6 +3515,7 @@ export function ChiTietNhiemVu({
   const extensions = extensionCountText(nhiemVu.extension_count);
 
   const unitName = nhiemVu.unit === "" ? null : (tenBoPhan.get(nhiemVu.unit) ?? nhiemVu.unit);
+  const assigneeEmail = maskedEmailOf(nhiemVu.assignee, danhBaMa);
   const meetingLink =
     cauTuKetLuan(nhiemVu) !== null && nhiemVu.meeting_id !== undefined
       ? duongDanBienBan(nhiemVu.meeting_id)
@@ -3572,19 +3589,22 @@ export function ChiTietNhiemVu({
             role="status"
           >
             <CalendarClock aria-hidden="true" focusable="false" className="size-4 shrink-0" />
-            Chờ duyệt lùi hạn — đã gửi tới {nhanCanBoNgan(nhiemVu.assigner, danhBaMa, O_TRONG)}
+            {/* No assigner: the prototype's `nameOf(null)` word (`TaskWorkspace.tsx:107`). */}
+            Chờ duyệt lùi hạn — đã gửi tới {nhanCanBoNgan(nhiemVu.assigner, danhBaMa, CHUA_PHAN_CONG)}
           </p>
         )}
 
-        {/* ── THE FACT GRID (spec 07 §4, four columns as the spec asks). Overdue is DERIVED from
-            `due_at` and now (rule 10, invariant 3). */}
+        {/* ── THE FACT GRID — three columns as the prototype (`TaskDetailDrawer.tsx:358`, ADR 0082 #1:
+            the prototype source wins over the spec's four); one column below 640px. Overdue is
+            DERIVED from `due_at` and now (rule 10, invariant 3). */}
         <div className="border-line bg-line grid shrink-0 grid-cols-1 gap-px border-b sm:grid-cols-2 lg:grid-cols-4">
           <Fact label="Hạn xử lý">
+            {/* Prototype `:366-375`: `Trễ N ngày` over `Hạn d`, else the date over `Còn trong hạn`. */}
             <p className={cn("m-0 text-[12.5px]", late ? "text-danger font-semibold" : "text-navy")}>
               {late ? nhanHanThe(nhiemVu.due_at, bayGio) : nhanNgay(nhiemVu.due_at)}
             </p>
             <p className="text-ink-muted m-0 mt-0.5 text-[11px]">
-              {late ? `Hạn ${nhanNgay(nhiemVu.due_at)}` : nhiemVu.due_at === null ? "Chưa đặt hạn" : "Còn trong hạn"}
+              {late ? `Hạn ${nhanNgay(nhiemVu.due_at)}` : "Còn trong hạn"}
               {extensions !== null && ` · ${extensions}`}
             </p>
           </Fact>
@@ -3599,14 +3619,21 @@ export function ChiTietNhiemVu({
                   : "Chưa cử ai"}
             </p>
           </Fact>
-          {/* "chuyên viên tham mưu" IS the assignee. The prototype's email line needs a field the
-              staff directory does not carry (BACKEND DEPENDENCY): the assigner line stands instead. */}
+          {/* "chuyên viên tham mưu" IS the assignee. No assignee: `Chưa phân công`, the prototype's
+              `nameOf(null)` (`TaskWorkspace.tsx:107`, `TaskDetailDrawer.tsx:409`).
+              STAFF EMAIL (ADR 0082 #3, #10): the prototype's sub-line is `holder.email ?? <assigner
+              line>` (`:412-415`) — here the MASKED address with `Xem`; no address (or an assignee the
+              directory does not know) keeps the assigner line. */}
           <Fact label="Người thực hiện (chuyên viên tham mưu)">
-            <p className="text-navy m-0 text-[12.5px]">{nhanCanBoNgan(nhiemVu.assignee, danhBaMa, "Chưa cử ai")}</p>
+            <p className="text-navy m-0 text-[12.5px]">{nhanCanBoNgan(nhiemVu.assignee, danhBaMa, CHUA_PHAN_CONG)}</p>
             <p className="text-ink-muted m-0 mt-0.5 text-[11px]">
-              {nhiemVu.assigner !== ""
-                ? `Lãnh đạo giao việc: ${nhanCanBoNgan(nhiemVu.assigner, danhBaMa, O_TRONG)}`
-                : "Chưa chỉ định người thực hiện"}
+              {assigneeEmail !== null ? (
+                <StaffEmailReveal key={nhiemVu.assignee} code={nhiemVu.assignee} masked={assigneeEmail} canReveal={canRevealEmail} />
+              ) : nhiemVu.assigner !== "" ? (
+                `Lãnh đạo giao việc: ${nhanCanBoNgan(nhiemVu.assigner, danhBaMa, O_TRONG)}`
+              ) : (
+                "Chưa chỉ định người thực hiện"
+              )}
             </p>
           </Fact>
           <Fact label="Mức ưu tiên">
@@ -3860,15 +3887,19 @@ const EDIT_LABEL_CLASS = "text-ink mb-1 block text-[11.5px] font-semibold";
 
 /**
  * Whether the information block is the "Sổ theo dõi văn bản chỉ đạo" (spec 07 §6a): a task whose
- * type the catalogue flags `requires_directive`, or a task that already carries a result, a note or
- * an approval tick (prototype `TaskDetailDrawer.tsx:179-186`).
+ * type the catalogue flags `requires_directive`, or a task that already carries a document, a result,
+ * a note or an approval tick (prototype `TaskDetailDrawer.tsx:179-186`) — so a commune that changed a
+ * task's type never hides what somebody entered. `documents` counts only once the detail has answered
+ * (`xong`); the list row carries no documents (`DrawerNhiemVu`).
  */
 export function showsDirectiveBlock(
   task: petitions_nhiemVuRa,
   types: readonly petitions_loaiNhiemVuRa[],
+  documents?: TrangThaiTai<readonly petitions_nhiemVuVanBanRa[]>,
 ): boolean {
   return (
     needsDirective(types, task.type) ||
+    (documents !== undefined && documents.pha === "xong" && documents.duLieu.length > 0) ||
     task.result_summary !== "" ||
     task.note !== "" ||
     task.leader_approved ||
@@ -3925,7 +3956,7 @@ function TaskInfoBlock({
   }, [editing]);
 
   const hasDocuments = needsDirective(types, task.type);
-  const directive = showsDirectiveBlock(task, types);
+  const directive = showsDirectiveBlock(task, types, documents);
   const lock = hasDocuments ? lyDoKhoaSua(documents) : null;
   // ALL THREE AT ONCE. A `Theo văn bản` block that leaves the `xong` phase mid-edit (a failed
   // re-read) hides the form — no editing on a set the server just failed to confirm.
@@ -3956,7 +3987,9 @@ function TaskInfoBlock({
             size="sm"
             className="ml-auto"
             icon={<Pencil aria-hidden="true" focusable="false" className="size-3.5" />}
-            aria-label={directive ? `Sửa ${TIEU_DE_KHOI_VAN_BAN.toLowerCase()}` : TASK_INFO_EDIT_LABEL}
+            // Named by WHAT IT EDITS: a type without the flag opens the basic form (title, deadline)
+            // even when the block is shown for the data it carries (`showsDirectiveBlock`).
+            aria-label={hasDocuments ? `Sửa ${TIEU_DE_KHOI_VAN_BAN.toLowerCase()}` : TASK_INFO_EDIT_LABEL}
             aria-describedby={lock !== null ? "ly-do-khoa-sua-van-ban" : undefined}
             disabled={lock !== null}
             onClick={() => setEditing(true)}
@@ -4612,11 +4645,16 @@ export function FormGiaoViec({
   // The box half typed: its value reads "" (= no deadline), so this flag is what blocks sending.
   const [dueIncomplete, setDueIncomplete] = useState(false);
   const { date: han, time: dueTime } = splitNewTaskDue(dueInput);
-  const [vanBan, datVanBan] = useState<readonly DongVanBanNhap[]>([]);
+  // Nhiệm vụ: ONE EMPTY ROW PER GROUP from the start, as the prototype (`TaskAssignForm.tsx:90-94`);
+  // untouched rows are dropped on send (`usableDocumentRows`). Elsewhere: no row until `+ Thêm văn bản`.
+  const [vanBan, datVanBan] = useState<readonly DongVanBanNhap[]>(() =>
+    taskScreen ? MOI_NHOM_VAN_BAN.map((nhom, i) => blankDocumentRow(`vb${i + 1}`, nhom)) : [],
+  );
   const [ghiChu, datGhiChu] = useState("");
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [focusRequest, setFocusRequest] = useState(0);
-  const demKhoaVanBan = useRef(0);
+  // Continues after the starting rows' keys, so a key is never reused within one opening.
+  const demKhoaVanBan = useRef(taskScreen ? MOI_NHOM_VAN_BAN.length : 0);
   // Id ô cần nhận tiêu điểm SAU lần vẽ kế tiếp: dòng vừa thêm chưa có trong DOM lúc bấm nút.
   const oCanTieuDiem = useRef<string | null>(null);
 
@@ -4642,6 +4680,11 @@ export function FormGiaoViec({
   const hienVanBan = theoVanBan && coDanhSachVanBan;
   // Nhiệm vụ: the unit and assignee fields belong to the `Theo văn bản` form only (spec 06 §5).
   const showUnitAndAssignee = !taskScreen || theoVanBan;
+  // Nhiệm vụ: Khối / Mức ưu tiên offer ACTIVE rows only (prototype `TaskAssignForm.tsx:233-234,
+  // 391-392`), keeping the current value so the select never shows another option than it sends.
+  const blocOptions = taskScreen ? activeChoices(danhMuc.khoi, khoi) : danhMuc.khoi;
+  // What is validated AND sent: Nhiệm vụ drops its all-blank rows silently (`usableDocumentRows`).
+  const documentsToSend = taskScreen ? usableDocumentRows(vanBan) : vanBan;
   // Recomputed every render; SHOWN only after the first press of `Giao việc` (`submitAttempted`), so
   // nothing is red before the clerk has tried, and each error clears as its field is fixed.
   const errors = createTaskErrors({
@@ -4650,7 +4693,7 @@ export function FormGiaoViec({
     title: tieuDe,
     dueInput,
     dueIncomplete,
-    documents: vanBan,
+    documents: documentsToSend,
     documentsShown: hienVanBan,
   });
   const shown = submitAttempted ? errors : null;
@@ -4679,10 +4722,17 @@ export function FormGiaoViec({
     demKhoaVanBan.current += 1;
     const khoa = `vb${demKhoaVanBan.current}`;
     oCanTieuDiem.current = `giao-van-ban-${khoa}`;
-    datVanBan((ds) => [...ds, { khoa, nhom, trichYeu: "", soKyHieu: "", ngay: "" }]);
+    datVanBan((ds) => [...ds, blankDocumentRow(khoa, nhom)]);
   }
 
   function goVanBan(dong: DongVanBanNhap) {
+    // Nhiệm vụ: the group's LAST row is CLEARED, not removed, so the box never leaves the form
+    // (prototype `TaskReferenceEditor.tsx:120-126`). Focus stays in that row's summary.
+    if (taskScreen && dongCuaNhom(vanBan, dong.nhom).length === 1) {
+      oCanTieuDiem.current = `giao-van-ban-${dong.khoa}`;
+      datVanBan((ds) => ds.map((d) => (d.khoa === dong.khoa ? blankDocumentRow(d.khoa, d.nhom) : d)));
+      return;
+    }
     // Dòng vừa gỡ mang theo tiêu điểm; trả nó về nút thêm của cùng nhóm thay vì để rơi về đầu trang.
     oCanTieuDiem.current = `giao-them-van-ban-${dong.nhom}`;
     datVanBan((ds) => ds.filter((d) => d.khoa !== dong.khoa));
@@ -4719,7 +4769,7 @@ export function FormGiaoViec({
         lanhDaoGiaoViec,
         han,
         dueTime,
-        vanBan,
+        vanBan: documentsToSend,
         ghiChu,
       },
       { coDanhSachVanBan, directive: theoVanBan, maCha: maChaCoSan },
@@ -4782,7 +4832,7 @@ export function FormGiaoViec({
           </label>
           <select id="giao-khoi" value={khoi} className={FORM_SELECT_CLASS} onChange={(e) => datKhoi(e.target.value)}>
             <option value="">{CHUA_XAC_DINH}</option>
-            {danhMuc.khoi.map((k) => (
+            {blocOptions.map((k) => (
               <option key={k.code} value={k.code}>
                 {k.label}
               </option>
@@ -4888,7 +4938,8 @@ export function FormGiaoViec({
             search={staffSearch}
             id="giao-nguoi-thuc-hien"
             label={theoVanBan ? "Chuyên viên tham mưu / theo dõi (người thực hiện)" : "Người thực hiện"}
-            emptyLabel={nhanTrongOChonCanBo(db, DE_BO_PHAN_TU_PHAN_CONG)}
+            // Nhiệm vụ: the prototype `PersonPicker`'s empty line (`common/PersonPicker.tsx:31`).
+            emptyLabel={nhanTrongOChonCanBo(db, taskScreen ? ASSIGNEE_EMPTY_LABEL : DE_BO_PHAN_TU_PHAN_CONG)}
             value={nguoiThucHien}
             directory={db.ds}
             disabled={db.dangTai}
@@ -4992,7 +5043,7 @@ export function FormGiaoViec({
           <select id="giao-uu-tien" value={mucUuTien} className={FORM_SELECT_CLASS} onChange={(e) => datMucUuTien(e.target.value)}>
             {/* KHÔNG SẮP XẾP LẠI: thứ tự `items` LÀ thang bậc của xã. Nhiệm vụ: no empty choice (spec 06). */}
             {(!taskScreen || mucUuTien === "") && <option value="">{CHUA_XAC_DINH}</option>}
-            {danhMuc.mucUuTien.map((m) => (
+            {(taskScreen ? activeChoices(danhMuc.mucUuTien, mucUuTien) : danhMuc.mucUuTien).map((m) => (
               <option key={m.code} value={m.code}>
                 {m.label}
               </option>
@@ -5111,6 +5162,8 @@ export function FormGiaoViec({
 
 /** Spec 06: the empty line of `Lãnh đạo giao việc` on the Nhiệm vụ screen (owner 07/10/2026 #2). */
 export const LEADER_EMPTY_LABEL = "— Người đang tạo nhiệm vụ —";
+/** The empty line of `Chuyên viên tham mưu / theo dõi` on the Nhiệm vụ screen — prototype `PersonPicker`. */
+export const ASSIGNEE_EMPTY_LABEL = "— Chưa phân công —";
 /** Spec 06: its hint, verbatim (#2) — the screen promises a bell and a mail (ADR 0076 lần 2 (b)). */
 export const LEADER_HINT_SPEC = "Đề nghị lùi hạn sẽ gửi tới người này, qua chuông và qua thư.";
 

@@ -85,8 +85,8 @@ const UNITS: identity_boPhanRa[] = [
   { id: "01JUNIT_VANPHONG", code: "van-phong", name: "Văn phòng UBND", parent_id: "", order: 2, staff_count: 5 },
 ];
 const STAFF: identity_canBoChonNguoiRa[] = [
-  { code: "CB-00101", full_name: "Nguyễn Văn An", position: "Công chức địa chính", department_id: "01JUNIT_DIACHINH" },
-  { code: "CB-00102", full_name: "Trần Thị Bình", position: "", department_id: "01JUNIT_VANPHONG" },
+  { code: "CB-00101", full_name: "Nguyễn Văn An", position: "Công chức địa chính", department_id: "01JUNIT_DIACHINH", email_masked: null },
+  { code: "CB-00102", full_name: "Trần Thị Bình", position: "", department_id: "01JUNIT_VANPHONG", email_masked: null },
 ];
 
 const READY: ProjectPeople = {

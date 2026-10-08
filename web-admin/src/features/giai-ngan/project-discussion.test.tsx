@@ -105,9 +105,9 @@ function json(status: number, body: unknown): Response {
 }
 
 const STAFF_ITEMS: identity_canBoChonNguoiRa[] = [
-  { code: "CB-00001", full_name: "Nguyễn Văn An", position: "Kế toán", department_id: "" },
-  { code: "CB-00002", full_name: "Trần Thị Bình", position: "Chủ tịch", department_id: "" },
-  { code: "CB-00003", full_name: "Nguyễn Văn A", position: "", department_id: "" },
+  { code: "CB-00001", full_name: "Nguyễn Văn An", position: "Kế toán", department_id: "", email_masked: null },
+  { code: "CB-00002", full_name: "Trần Thị Bình", position: "Chủ tịch", department_id: "", email_masked: null },
+  { code: "CB-00003", full_name: "Nguyễn Văn A", position: "", department_id: "", email_masked: null },
 ];
 const STAFF = staffCatalogue({ ok: true, duLieu: { items: STAFF_ITEMS } });
 const LOADING: PeopleCatalogue<identity_canBoChonNguoiRa> = { phase: "loading" };

@@ -539,6 +539,14 @@
       "bang_chung": "357745c3. go vet + go test -count=1 ./... xanh; ca pg bỏ qua (không VIGOV_TEST_DSN). Cái giá đã chấp nhận: phiên không số không chứng minh App ID (ADR 0080 Cái phải trả #6).",
       "no_confirm": [],
       "tiep_theo": "Chạy thật trên máy với app xã (chưa gọi Zalo thật). citizen-app phải gửi được thân không phoneToken."
+    },
+    {
+      "id": "email-can-bo-che-va-xem-08-10",
+      "trang_thai": "xong",
+      "viec": "Danh bạ chọn người trả email đã che; GET /staff-directory/{code}/email (task.read) xem đầy đủ, mỗi lần ghi audit_log (ADR 0082 #3)",
+      "bang_chung": "3d53605f. go test ./service-identity/... xanh (worktree HEAD+staged). TestEmailForRevealPg BỎ QUA — chưa có VIGOV_TEST_DSN.",
+      "no_confirm": [],
+      "tiep_theo": "Chạy TestEmailForRevealPg trên PG16 thật."
     }
   ]
 }

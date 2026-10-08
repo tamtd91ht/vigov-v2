@@ -135,7 +135,7 @@ function dueFact(html: string): string {
 describe("list sub-line — `{nguồn} · đã gia hạn n lần` (prototype `TaskListTable.tsx:83-89`)", () => {
   it("n = 0: the source alone, no separator, no \"?\" marker", () => {
     const html = listHtml([task({ extension_count: 0 })]);
-    expect(html).toContain('<span class="text-ink-muted block text-[11px]">Giao trực tiếp</span>');
+    expect(html).toContain('<span class="text-ink-muted block truncate text-[11px]">Giao trực tiếp</span>');
     // The body only: the header keeps its own "?" for the columns the server cannot sort by.
     const body = html.slice(html.indexOf("<tbody>"));
     expect(body).not.toContain("đã gia hạn");
@@ -145,8 +145,22 @@ describe("list sub-line — `{nguồn} · đã gia hạn n lần` (prototype `Ta
 
   it("n > 0: `· đã gia hạn n lần` after the source, per row", () => {
     const html = listHtml([task({ code: "NV1", extension_count: 1 }), task({ code: "NV2", extension_count: 4 })]);
-    expect(html).toContain('<span class="text-ink-muted block text-[11px]">Giao trực tiếp · đã gia hạn 1 lần</span>');
+    expect(html).toContain('<span class="text-ink-muted block truncate text-[11px]">Giao trực tiếp · đã gia hạn 1 lần</span>');
     expect(html).toContain("Giao trực tiếp · đã gia hạn 4 lần</span>");
+  });
+
+  it("D1 (ADR 0082 #7): the status badge is the WORD only — no icon; `Hoàn thành trễ hạn` kept", () => {
+    const badge = (html: string) => {
+      const m = /<span class="[^"]*" data-status="[^"]*" data-tone="[^"]*">(.*?)<\/span>/.exec(html);
+      return m?.[1] ?? null;
+    };
+    expect(badge(listHtml([task({ status: "dang-thuc-hien" })]))).toBe("Đang thực hiện");
+    // Overdue (derived) — a word, no clock icon.
+    expect(badge(listHtml([task({ due_at: "2026-09-01T23:59:59+07:00" })]))).toBe("Trễ hạn");
+    const finishedLate = listHtml([
+      task({ status: "hoan-thanh", completed_at: "2026-09-10T02:00:00Z", original_due_at: "2026-09-01T23:59:59+07:00" }),
+    ]);
+    expect(badge(finishedLate)).toBe("Hoàn thành trễ hạn");
   });
 
   it("a pending request adds nothing to the row — the prototype list draws no marker", () => {
@@ -204,6 +218,42 @@ describe("`requires_directive` decides the directive block — not the type code
     expect(showsDirectiveBlock(task({ result_summary: "Đã xong" }), [])).toBe(true);
   });
 
+  it("≥1 document read by the detail opens the block too (prototype `task.references.length > 0`)", () => {
+    const doc = { id: "01JDOC", group: "cap-tren-giao", reference: "12/UBND", date: "2026-09-01", summary: "Văn bản giả", position: 0 };
+    expect(showsDirectiveBlock(task({ type: "co-ban" }), SHIPPED.loai, { pha: "xong", duLieu: [doc] })).toBe(true);
+    // None, or not read yet: the type decides alone.
+    expect(showsDirectiveBlock(task({ type: "co-ban" }), SHIPPED.loai, { pha: "xong", duLieu: [] })).toBe(false);
+    expect(showsDirectiveBlock(task({ type: "co-ban" }), SHIPPED.loai, { pha: "dangTai" })).toBe(false);
+  });
+});
+
+describe("drawer fact grid — the prototype's words (`TaskDetailDrawer.tsx:358-417`)", () => {
+  // Four cells in one row from 1024px (brief 08/10 §10): three columns left two empty cells.
+  it("four columns from 1024px, two from 640px, one below", () => {
+    expect(drawerHtml({})).toContain(
+      "border-line bg-line grid shrink-0 grid-cols-1 gap-px border-b sm:grid-cols-2 lg:grid-cols-4",
+    );
+  });
+
+  it("no deadline is not late: `Còn trong hạn`, as the prototype", () => {
+    expect(dueFact(drawerHtml({ due_at: null }))).toContain("Còn trong hạn</p>");
+  });
+
+  it("overdue: `Trễ N ngày` over `Hạn d`", () => {
+    const fact = dueFact(drawerHtml({ due_at: "2026-09-01T23:59:59+07:00", original_due_at: "2026-09-01T23:59:59+07:00" }));
+    expect(fact).toMatch(/Trễ \d+ ngày<\/p>/);
+    expect(fact).toContain("Hạn 1/9/2026</p>");
+  });
+
+  it("no assignee: `Chưa phân công`; no assigner on the pending strip: `Chưa phân công`", () => {
+    const html = drawerHtml({ assignee: "", assigner: "", pending_extension: true });
+    const start = html.indexOf(">Người thực hiện (chuyên viên tham mưu)</p>");
+    expect(html.slice(start, html.indexOf("</div>", start))).toContain(">Chưa phân công</p>");
+    expect(html).toContain("Chờ duyệt lùi hạn — đã gửi tới Chưa phân công");
+  });
+});
+
+describe("create form — `requires_directive` decides the document lists", () => {
   it("create form: the flagged default type draws the three lists and `Nội dung nhiệm vụ…`, whatever its code", () => {
     const form = (types: DanhMucNhiemVu) =>
       renderToStaticMarkup(

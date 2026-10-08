@@ -655,8 +655,11 @@ export function thanThongBao(so: string, ngay: string): ThongBaoVao | null {
 export function luaChonCanBo(
   danhBa: readonly identity_canBoChonNguoiRa[],
   dangLuu: string,
+  // The line of one officer. Nhiệm vụ's handover passes its own (masked address, ADR 0082 #10);
+  // every other caller keeps `Họ tên · Chức vụ`.
+  label: (cb: identity_canBoChonNguoiRa) => string = nhanLuaChonCanBo,
 ): { readonly ma: string; readonly nhan: string }[] {
-  const ds = danhBa.map((cb) => ({ ma: cb.code, nhan: nhanLuaChonCanBo(cb) }));
+  const ds = danhBa.map((cb) => ({ ma: cb.code, nhan: label(cb) }));
   if (dangLuu !== "" && !danhBa.some((cb) => cb.code === dangLuu)) {
     ds.unshift({ ma: dangLuu, nhan: `${dangLuu} (không có trong danh bạ cán bộ đang hoạt động)` });
   }

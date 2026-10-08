@@ -3,9 +3,11 @@
  *
  * KHÁC HẲN `GET /api/v1/staff` (`lib/api/can-bo.ts`): tuyến ấy là SỔ QUẢN TRỊ, đòi `admin.user` —
  * một khoá cấu hình hệ thống mà gần như không cán bộ đang trực nào có. Tuyến này là
- * `AnyAuthenticated`: mọi cán bộ đã đăng nhập của CHÍNH xã ấy đọc được, và đổi lại nó chỉ trả bốn
- * trường — mã cán bộ · họ tên · chức vụ · bộ phận. Không `id`, không số điện thoại, không email
+ * `AnyAuthenticated`: mọi cán bộ đã đăng nhập của CHÍNH xã ấy đọc được, và đổi lại nó chỉ trả năm
+ * trường — mã cán bộ · họ tên · chức vụ · bộ phận · email ĐÃ CHE (`email_masked`, ADR 0082 #3/#12).
+ * Không `id`, không số điện thoại, không bao giờ email đầy đủ
  * (`service-identity/internal/http/danh_ba_chon_nguoi.go`). Chỉ người có tài khoản đang hoạt động.
+ * Email đầy đủ là một tuyến riêng, có ghi vết: `revealStaffEmail` bên dưới.
  *
  * `code` LÀ THỨ GỬI LẠI MÁY CHỦ khi giao việc — mã NGHIỆP VỤ (`CB-00123`), không phải ULID nội bộ.
  * Luật nắm giữ ở `service-petitions` so `can_bo_xu_ly_id` với `Principal.Ma`
@@ -18,8 +20,13 @@
 
 import { QUYEN_DUYET_GIA_HAN } from "@/lib/quyen";
 
-import { docJSON, thamSoTheoHopDong, type KetQua } from "./goi";
-import type { identity_danhBaChonNguoiRa, identity_get_staff_directory } from "./schema.gen";
+import { CHUNG, docJSON, LOI_KHONG_RO, thamSoTheoHopDong, thongBaoLoi, type KetQua } from "./goi";
+import type {
+  identity_danhBaChonNguoiRa,
+  identity_get_staff_directory,
+  identity_get_staff_directory_by_code_email,
+  identity_staffEmailOut,
+} from "./schema.gen";
 
 /**
  * Khoá được phép gửi vào `permission` — ĐÚNG MỘT, và kiểu hẹp hơn kiểu hợp đồng (`string`) có chủ ý.
@@ -66,4 +73,47 @@ export function layDanhBaChonNguoi(
   quyen?: QuyenLocDanhBa,
 ): Promise<KetQua<identity_danhBaChonNguoiRa>> {
   return docJSON<identity_danhBaChonNguoiRa>(duongDanDanhBaChonNguoi(boPhanID, quyen));
+}
+
+/**
+ * The reveal route's path. The code is percent-encoded: it is a business code (`CB-00123`), but a
+ * value spliced raw into a path is a value that can walk to another route.
+ */
+export function staffEmailPath(code: string): string {
+  const template: identity_get_staff_directory_by_code_email["duongDan"] = "/api/v1/staff-directory/{code}/email";
+  return template.replace("{code}", encodeURIComponent(code));
+}
+
+/**
+ * The reveal's answer. `forbidden` is set on a 403 ONLY: the button then disappears and the masked
+ * address stays — the account lacks the right, and a sentence about it next to every assignee would
+ * be noise. Every other refusal (404 `staff_not_found`, network) carries the server's sentence.
+ */
+export type StaffEmailResult =
+  | { ok: true; duLieu: identity_staffEmailOut }
+  | { ok: false; thongBao: string; forbidden?: boolean };
+
+/**
+ * `GET /api/v1/staff-directory/{code}/email` — one officer's FULL address (ADR 0082 #3), `task.read`.
+ * The server writes an audit entry for EVERY call (rule 6, invariant 7), so this runs only on an
+ * explicit click — never on render, never prefetched. The address lives in the calling component's
+ * state and nowhere else: not logged, not cached (`CHUNG` is `no-store`), never put in a URL.
+ */
+export async function revealStaffEmail(code: string): Promise<StaffEmailResult> {
+  let res: Response;
+  try {
+    res = await fetch(staffEmailPath(code), { ...CHUNG, method: "GET" });
+  } catch {
+    // No logging: the answer of this route is personal data (rule 3).
+    return { ok: false, thongBao: LOI_KHONG_RO };
+  }
+  if (res.status !== 200) {
+    const thongBao = await thongBaoLoi(res);
+    return res.status === 403 ? { ok: false, thongBao, forbidden: true } : { ok: false, thongBao };
+  }
+  try {
+    return { ok: true, duLieu: (await res.json()) as identity_staffEmailOut };
+  } catch {
+    return { ok: false, thongBao: LOI_KHONG_RO };
+  }
 }

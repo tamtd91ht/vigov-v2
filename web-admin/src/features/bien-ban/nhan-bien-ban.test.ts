@@ -357,8 +357,8 @@ describe("quy tắc nút — tiện dụng, FAIL CLOSED theo trạng thái", () 
 });
 
 const DANH_BA = danhBaTheoMa([
-  { code: "CB-2026-7K3M9Q", full_name: "Nguyễn Văn An", position: "Chủ tịch UBND", department_id: "" },
-  { code: "CB-2026-1A2B3C", full_name: "Trần Thị Bình", position: "", department_id: "" },
+  { code: "CB-2026-7K3M9Q", full_name: "Nguyễn Văn An", position: "Chủ tịch UBND", department_id: "", email_masked: null },
+  { code: "CB-2026-1A2B3C", full_name: "Trần Thị Bình", position: "", department_id: "", email_masked: null },
 ]);
 
 describe("biểu mẫu → thân yêu cầu", () => {
@@ -441,7 +441,7 @@ describe("đọc ra mã cán bộ, Thông báo, neo", () => {
   });
 
   it("ô chọn giữ giá trị đang lưu dù người ấy đã rời danh bạ — không xoá chủ trì lặng lẽ", () => {
-    const ds = [{ code: "CB-A", full_name: "A", position: "", department_id: "" }];
+    const ds = [{ code: "CB-A", full_name: "A", position: "", department_id: "", email_masked: null }];
     expect(luaChonCanBo(ds, "CB-DA-NGHI").map((l) => l.ma)).toEqual(["CB-DA-NGHI", "CB-A"]);
     expect(luaChonCanBo(ds, "CB-A").map((l) => l.ma)).toEqual(["CB-A"]);
   });

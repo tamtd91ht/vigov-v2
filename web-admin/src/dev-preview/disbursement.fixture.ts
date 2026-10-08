@@ -68,10 +68,21 @@ export const PREVIEW_UNITS: identity_danhSachBoPhanRa = {
 
 export const PREVIEW_STAFF: identity_danhBaChonNguoiRa = {
   items: [
-    { code: "CB-00001", full_name: "Cán bộ A", position: "Kế toán ngân sách", department_id: UNIT_OFFICE },
-    { code: "CB-00002", full_name: "Cán bộ B", position: "Công chức Tài chính – Kế toán", department_id: UNIT_ECONOMY },
-    { code: "CB-00003", full_name: "Cán bộ C", position: "Phó Chủ tịch UBND", department_id: UNIT_OFFICE },
+    // Masked as `privacy.MaskEmail` does (ADR 0082 #12); fake addresses only (`PREVIEW_STAFF_EMAILS`).
+    // B has none, so the preview also shows the no-address fallback.
+    { code: "CB-00001", full_name: "Cán bộ A", position: "Kế toán ngân sách", department_id: UNIT_OFFICE, email_masked: "c***@example.vn" },
+    { code: "CB-00002", full_name: "Cán bộ B", position: "Công chức Tài chính – Kế toán", department_id: UNIT_ECONOMY, email_masked: null },
+    { code: "CB-00003", full_name: "Cán bộ C", position: "Phó Chủ tịch UBND", department_id: UNIT_OFFICE, email_masked: "c***@example.vn" },
   ],
+};
+
+/**
+ * The "full" addresses the preview's `Xem` reveals — `example.vn`, a reserved-style fake domain, never a
+ * real person's address (rule 3, forbidden #2).
+ */
+export const PREVIEW_STAFF_EMAILS: Readonly<Record<string, string>> = {
+  "CB-00001": "can.bo.a@example.vn",
+  "CB-00003": "can.bo.c@example.vn",
 };
 
 const DELAY_THRESHOLD = 1000;

@@ -19,12 +19,14 @@ import {
   DE_BO_PHAN_TU_PHAN_CONG,
   docDanhBaChonNguoi,
   nhanTrongOChonCanBo,
+  taskStaffOptionLabel,
 } from "./nhan-nhiem-vu";
 import type { BangNhanTrangThai } from "./nhan-nhiem-vu"; // vi-name-ok: existing type, imported not declared (rule 12 inv 3)
 import {
   ASSIGNMENT_ASSIGNEE_LABEL,
   ASSIGNMENT_BLOCK_ID,
   ASSIGNMENT_NOTE_LABEL,
+  ASSIGNMENT_NOTE_PLACEHOLDER,
   ASSIGNMENT_NOTE_MAX,
   ASSIGNMENT_UNIT_FIELD_ID,
   ASSIGNMENT_UNIT_LABEL,
@@ -143,7 +145,8 @@ export function TaskAssignmentForm({
   // Unit chosen → only its staff (spec 07 §6e); the person recorded today keeps a line even when
   // outside it, so the select never shows "nobody" for a task that has someone.
   const reachable = staffInUnit(staff.ds, form.unit);
-  const people = luaChonCanBo(reachable, form.assignee);
+  // `Họ tên — email_masked · Chức danh` (prototype `HandoverFields.tsx:87-92`, ADR 0082 #10).
+  const people = luaChonCanBo(reachable, form.assignee, taskStaffOptionLabel);
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -220,6 +223,7 @@ export function TaskAssignmentForm({
           id="giao-lai-ly-do"
           name="giao-lai-ly-do"
           value={form.note}
+          placeholder={ASSIGNMENT_NOTE_PLACEHOLDER}
           maxLength={ASSIGNMENT_NOTE_MAX}
           autoComplete="off"
           className={`${INPUT_CLASS} mt-1 text-[12.5px] md:text-[12.5px]`}

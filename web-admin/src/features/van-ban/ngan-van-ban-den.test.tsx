@@ -117,8 +117,8 @@ function ve({
 // VBD-07: the staff directory the register reads once. `CB-00999` is deliberately absent — an account
 // no longer active must still read as its code.
 const DANH_BA = danhBaTheoMa([
-  { code: "CB-00123", full_name: "Trần Thị B", position: "Văn thư", department_id: "" },
-  { code: "CB-00456", full_name: "Lê Văn C", position: "", department_id: "" },
+  { code: "CB-00123", full_name: "Trần Thị B", position: "Văn thư", department_id: "", email_masked: null },
+  { code: "CB-00456", full_name: "Lê Văn C", position: "", department_id: "", email_masked: null },
 ]);
 
 describe("phần đầu và các ô thông tin", () => {

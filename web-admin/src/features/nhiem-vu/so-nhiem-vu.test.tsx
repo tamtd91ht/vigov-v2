@@ -251,12 +251,13 @@ const DANH_BA: KetQua<identity_danhBaChonNguoiRa> = {
   ok: true,
   duLieu: {
     items: [
-      { code: LANH_DAO, full_name: "Trần Văn Lãnh", position: "Chủ tịch", department_id: "" },
+      { code: LANH_DAO, full_name: "Trần Văn Lãnh", position: "Chủ tịch", department_id: "", email_masked: null },
       {
         code: NGUOI_KHAC,
         full_name: "Nguyễn Thị Thực",
         position: "",
         department_id: "01JBOPHAN",
+        email_masked: null,
       },
     ],
   },
@@ -1611,14 +1612,21 @@ describe("§5.4 — một lần đổi trạng thái KHÔNG làm rơi khối vă
 describe("§5.4 — chỉ với loại `Theo văn bản`, và câu chữ của từng dòng", () => {
   const XONG: TaiVanBan = { pha: "xong", duLieu: BA_VAN_BAN };
 
-  it("loại `co-ban`: KHÔNG vẽ khối, kể cả khi đã có văn bản trong tay", () => {
-    const html = veChiTiet({ type: "co-ban" }, LANH_DAO, XONG);
+  it("loại `co-ban`, KHÔNG có văn bản: không vẽ khối", () => {
+    const html = veChiTiet({ type: "co-ban" }, LANH_DAO, { pha: "xong", duLieu: [] });
     expect(html).not.toContain(nhuTrongHTML(TIEU_DE_KHOI_VAN_BAN));
     for (const nhan of NHAN_BA_NHOM) expect(html).not.toContain(nhuTrongHTML(nhan));
-    expect(html).not.toContain("1742-CV/BTCTU");
     // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (spec 07 §6a): a basic task with no result, note or tick shows
     // `Thông tin nhiệm vụ` — the two ticks and their note belong to the directive block.
     expect(html).not.toContain(nhuTrongHTML(CHU_THICH_HAI_O_TICK));
+  });
+
+  // ĐỔI CHIỀU CÓ CHỦ Ý 08/10/2026 (ADR 0082 #1, prototype `TaskDetailDrawer.tsx:179-186`
+  // `task.references.length > 0`): documents already entered are never hidden because the type moved.
+  it("loại `co-ban` ĐÃ CÓ văn bản: khối hiện, văn bản hiện", () => {
+    const html = veChiTiet({ type: "co-ban" }, LANH_DAO, XONG);
+    expect(html).toContain(nhuTrongHTML(TIEU_DE_KHOI_VAN_BAN));
+    expect(html).toContain("1742-CV/BTCTU");
   });
 
   it("loại `theo-van-ban` với cùng dữ liệu: khối CÓ — bài trên không xanh vì lý do sai", () => {
@@ -1679,7 +1687,8 @@ describe("§5.4 — nút `✎ Sửa`: chỉ `Theo văn bản`, và KHOÁ khi ch�
   });
 
   it("loại `co-ban`: KHÔNG có nút sửa khối văn bản, kể cả khi đã có văn bản trong tay", () => {
-    // Its `✎ Sửa` is the information block's (title + deadline), never the document block's.
+    // Its `✎ Sửa` is the information block's (title + deadline), never the document block's — even
+    // now the block is SHOWN for its documents (ADR 0082): the button is named by what it edits.
     const html = veChiTiet({ type: "co-ban" }, LANH_DAO, { pha: "xong", duLieu: BA_VAN_BAN });
     expect(theNutSua(html)).toBeNull();
     expect(html).not.toContain(NHAN_NUT_SUA);
@@ -1828,7 +1837,7 @@ describe("§5.4 — form `✎ Sửa`", () => {
 describe("§5.9 Nhật ký & Trao đổi — khối trong drawer", () => {
   const CB = "CB-2026-3H8N2W";
   const DANH_BA_THEO_MA = new Map([
-    [CB, { code: CB, full_name: "Trần Thị B", position: "", department_id: "" }],
+    [CB, { code: CB, full_name: "Trần Thị B", position: "", department_id: "", email_masked: null }],
   ]);
 
   function veNhatKy(tai: TaiNhatKyNhiemVu, loiThem: string | null = null): string {
@@ -2190,7 +2199,7 @@ describe("ô `Lãnh đạo giao việc` — chỉ người cầm quyền duyệt
   const CHI_LANH_DAO: KetQua<identity_danhBaChonNguoiRa> = {
     ok: true,
     duLieu: {
-      items: [{ code: LANH_DAO, full_name: "Trần Văn Lãnh", position: "Chủ tịch", department_id: "" }],
+      items: [{ code: LANH_DAO, full_name: "Trần Văn Lãnh", position: "Chủ tịch", department_id: "", email_masked: null }],
     },
   };
 
@@ -2304,26 +2313,37 @@ describe("§4.2 — tiêu đề sắp được: Mã, Tên việc, Ngày giao, Ư
   // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3b): was "đúng BA", with `Tên việc` plain. Backend P9 sorts by
   // `title` and `priority` too — five buttons; the other columns stay plain text.
   // ĐỔI CHIỀU CÓ CHỦ Ý 06/10/2026 (prototype columns): FOUR — `Ngày giao` left the table.
-  it("đúng BỐN nút sắp, `aria-sort` đúng chiều ở cột đang sắp, `none` ở các cột kia", () => {
+  // ĐỔI CHIỀU CÓ CHỦ Ý 08/10/2026 (ADR 0082 #5): FIVE — the server sorts by `status` now, so
+  // `Trạng thái` got a real button; owner 08/10: Người thực hiện / Bộ phận are PLAIN headers, no "?".
+  it("đúng NĂM nút sắp, `aria-sort` đúng chiều ở cột đang sắp, `none` ở các cột kia", () => {
     const html = veBangSapXep({ cot: "code", chieu: "asc" });
-    // Owner #5: server-side sort. A column the server cannot sort draws its control DISABLED with a
-    // "?" (lần 2 #12) — seven arrows, three of them on disabled buttons.
-    expect(html.split("lucide-arrow-up-down").length - 1).toBe(7);
-    expect(html.split('<button type="button" disabled=""').length - 1).toBe(3);
-    expect(html.split('aria-label="Sắp xếp theo cột này').length - 1).toBe(3);
+    expect(html.split("lucide-arrow-up-down").length - 1).toBe(5);
+    expect(html).not.toContain('disabled=""');
+    expect(html).not.toContain("Sắp xếp theo cột này");
     const sortable = [...html.matchAll(/<th scope="col" aria-sort="(\w+)"[^>]*><button[^>]*>([^<]+)</g)].map((m) => [m[2], m[1]]);
     expect(sortable).toEqual([
       ["Mã", "ascending"],
       ["Tên việc", "none"],
       ["Ưu tiên", "none"],
       ["Hạn", "none"],
+      ["Trạng thái", "none"],
     ]);
     expect(html).not.toContain("Ngày giao");
     // The active column's arrow is full strength; the others are faded.
     expect(html.split("size-3 opacity-100").length - 1).toBe(1);
-    // The three others: no `aria-sort` (nothing was asked of the server for them).
-    expect(html).toMatch(/<th scope="col" class="[^"]*"><span[^>]*><button type="button" disabled=""[^>]*>Người thực hiện</);
-    expect(html).toMatch(/<th scope="col" class="[^"]*"><span[^>]*><button type="button" disabled=""[^>]*>Trạng thái</);
+    // The two others: plain text, no button, no `aria-sort`.
+    expect(html).toMatch(/<th scope="col" class="[^"]*">Người thực hiện<\/th>/);
+    expect(html).toMatch(/<th scope="col" class="[^"]*">Bộ phận<\/th>/);
+  });
+
+  it("Trạng thái: bấm lần đầu là `sort=status&order=asc`, bấm lại là `desc` — về trang đầu", () => {
+    const first = bamSapXep({}, "status");
+    expect(first.loc).toEqual({ sapXep: "status", chieu: "asc" });
+    expect(first.nganXep).toEqual(TRANG_DAU);
+    expect(duongDanSoNhiemVu({ ...first.loc, limit: 20 })).toBe("/api/v1/tasks?sort=status&order=asc&limit=20");
+    const again = bamSapXep(first.loc, "status");
+    expect(again.loc).toEqual({ sapXep: "status", chieu: "desc" });
+    expect(veBangSapXep({ cot: "status", chieu: "desc" })).toMatch(/aria-sort="descending"[^>]*><button[^>]*>Trạng thái</);
   });
 
   it("đang sắp theo Ưu tiên giảm dần: `aria-sort=\"descending\"` ở đúng cột ấy", () => {
@@ -2643,7 +2663,7 @@ describe("the filter row — ONE row in the prototype's order, no `Bộ lọc` p
     const html = row();
     const at = (s: string) => html.indexOf(s);
     const order = [
-      'role="group" aria-label="Phạm vi"',
+      'role="group" aria-label="Lọc nhanh theo người xử lý"',
       'id="tim-nhiem-vu"',
       'id="loc-bo-phan"',
       'id="loc-nguoi-thuc-hien"',
@@ -2868,5 +2888,70 @@ describe("NV-13 — không còn tham chiếu đặc tả hay câu kỹ thuật t
   it("câu dưới Kanban không có `§`; câu việc con là câu hành chính", () => {
     expect(ghiChuKanbanReNhanh(BANG_NHAN_MAC_DINH)).not.toContain("§");
     expect(childFormNote("NV19")).toBe("Việc con của NV19.");
+  });
+});
+
+describe("ADR 0082 #3/#10 — the assignee's MASKED address in the drawer, with `Xem` behind `task.read`", () => {
+  const WITH_EMAIL: KetQua<identity_danhBaChonNguoiRa> = {
+    ok: true,
+    duLieu: {
+      items: [
+        { code: LANH_DAO, full_name: "Trần Văn Lãnh", position: "Chủ tịch", department_id: "", email_masked: null },
+        { code: NGUOI_KHAC, full_name: "Nguyễn Thị Thực", position: "", department_id: "01JBOPHAN", email_masked: "n***@example.vn" },
+      ],
+    },
+  };
+
+  function drawer(
+    assignee: string,
+    canRevealEmail: boolean | undefined,
+    danhBa: KetQua<identity_danhBaChonNguoiRa> | null = WITH_EMAIL,
+  ): string {
+    return renderToStaticMarkup(
+      <ChiTietNhiemVu
+        nhiemVu={nhiemVu({ assignee })}
+        vanBan={{ pha: "dangTai" }}
+        danhMuc={DANH_MUC}
+        nhanTT={BANG_NHAN_MAC_DINH}
+        tenBoPhan={TEN_BO_PHAN}
+        danhBa={danhBa}
+        bayGio={BAY_GIO}
+        maNguoiDangNhap={LANH_DAO}
+        quyen={DU_QUYEN}
+        canRevealEmail={canRevealEmail}
+        dangGui={false}
+        dong={() => {}}
+        doiTrangThai={NOT_SENT}
+        xoa={NOT_SENT}
+        guiDeNghiLuiHan={KHONG_GOI}
+        quyetDinh={KHONG_GOI}
+        suaKhoiVanBan={KHONG_SUA}
+        docLaiChiTiet={KHONG_SUA}
+        {...PASS2_DRAWER_PROPS}
+      />,
+    );
+  }
+
+  it("assignee with an address + `task.read`: the masked address and `Xem` replace the assigner line", () => {
+    const html = drawer(NGUOI_KHAC, true);
+    expect(html).toMatch(/Người thực hiện \(chuyên viên tham mưu\)[\s\S]*Nguyễn Thị Thực[\s\S]*n\*\*\*@example\.vn[\s\S]*aria-label="Xem email đầy đủ"[^>]*>Xem</);
+    expect(html).not.toContain("Lãnh đạo giao việc: Trần Văn Lãnh");
+  });
+
+  it("DENIED — no `task.read` (or the prop absent): the masked address, NO `Xem`", () => {
+    for (const can of [false, undefined]) {
+      const html = drawer(NGUOI_KHAC, can);
+      expect(html).toContain("n***@example.vn");
+      expect(html).not.toContain("Xem email đầy đủ");
+    }
+  });
+
+  it("assignee without an address, or not in the directory: the assigner line stays, no button", () => {
+    for (const html of [drawer(LANH_DAO, true), drawer("CB-2026-3H8N2W", true), drawer(NGUOI_KHAC, true, null)]) {
+      // Directory null → the assigner reads as its code; either way the assigner line is there.
+      expect(html).toContain("Lãnh đạo giao việc: ");
+      expect(html).not.toContain("Xem email đầy đủ");
+      expect(html).not.toContain("@example.vn");
+    }
   });
 });

@@ -385,8 +385,8 @@ describe("ô chọn người nhận — danh bạ chọn người, không phải
     ok: true,
     duLieu: {
       items: [
-        { code: "CB-00123", full_name: "Trần Thị B", position: "Công chức", department_id: "01JBP" },
-        { code: "CB-00124", full_name: "Lê Văn C", position: "", department_id: "" },
+        { code: "CB-00123", full_name: "Trần Thị B", position: "Công chức", department_id: "01JBP", email_masked: null },
+        { code: "CB-00124", full_name: "Lê Văn C", position: "", department_id: "", email_masked: null },
       ],
     },
   };

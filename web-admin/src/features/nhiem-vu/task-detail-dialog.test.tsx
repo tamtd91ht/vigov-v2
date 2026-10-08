@@ -673,7 +673,7 @@ describe("compose box hand-over and files (prototype `TaskStatusPipeline.tsx:261
   ];
   const DIRECTORY = {
     ok: true as const,
-    duLieu: { items: [{ code: "CB-2026-0P4X1Z", full_name: "Nguyễn Thị Thực", position: "", department_id: "01JB" }] },
+    duLieu: { items: [{ code: "CB-2026-0P4X1Z", full_name: "Nguyễn Thị Thực", position: "", department_id: "01JB", email_masked: null }] },
   };
 
   function pipeline(staffCode: string, move: (t: string, n?: string, e?: unknown) => Promise<KetQua<petitions_nhiemVuRa>>) {

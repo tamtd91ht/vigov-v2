@@ -100,9 +100,9 @@ const DANH_BA: KetQua<identity_danhBaChonNguoiRa> = {
   ok: true,
   duLieu: {
     items: [
-      { code: "CB-00123", full_name: "Trần Thị B", position: "Công chức", department_id: "01JBOPHAN" },
-      { code: "CB-00124", full_name: "Phạm Văn D", position: "", department_id: "01JBOPHAN" },
-      { code: "CB-00200", full_name: "Lê Văn C", position: "Trưởng thôn", department_id: "01JKHAC" },
+      { code: "CB-00123", full_name: "Trần Thị B", position: "Công chức", department_id: "01JBOPHAN", email_masked: null },
+      { code: "CB-00124", full_name: "Phạm Văn D", position: "", department_id: "01JBOPHAN", email_masked: null },
+      { code: "CB-00200", full_name: "Lê Văn C", position: "Trưởng thôn", department_id: "01JKHAC", email_masked: null },
     ],
   },
 };

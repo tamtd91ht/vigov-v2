@@ -108,8 +108,8 @@ const DIRECTORY: KetQua<identity_danhBaChonNguoiRa> = {
   ok: true,
   duLieu: {
     items: [
-      { code: STAFF_A, full_name: "Nguyễn Văn A", position: "", department_id: UNIT_A },
-      { code: STAFF_B, full_name: "Trần Thị B", position: "", department_id: UNIT_B },
+      { code: STAFF_A, full_name: "Nguyễn Văn A", position: "", department_id: UNIT_A, email_masked: null },
+      { code: STAFF_B, full_name: "Trần Thị B", position: "", department_id: UNIT_B, email_masked: null },
     ],
   },
 };
@@ -258,6 +258,8 @@ describe("the drawer — block present / absent, and the stepper's `Chuyển ti�
     expect(html).toContain(`<label for="${ASSIGNMENT_UNIT_FIELD_ID}" class="text-ink block text-[11.5px] font-medium">Bộ phận</label>`);
     expect(html).toContain(">Người thực hiện</label>");
     expect(html).toContain(`>${ASSIGNMENT_NOTE_LABEL}</label>`);
+    // G8: the prototype's example sentence (`TaskDetailDrawer.tsx:519`).
+    expect(html).toContain('placeholder="Anh Hiếu nghỉ phép, chuyển cho chị Trang"');
     // `[UserPlus] Giao việc` — a primary button (`nut-chinh` is the legacy hook it still carries).
     expect(html).toMatch(/<button class="nut-chinh[^"]*" type="submit"[^>]*><svg[^>]*lucide-user-plus[^>]*>.*?<\/svg>Giao việc<\/button>/);
   });
@@ -367,8 +369,8 @@ describe("the block — what each state says", () => {
 
   it("the person list follows the chosen unit (spec 07 §6e); an empty unit says so", () => {
     const staff = [
-      { code: STAFF_A, full_name: "A", position: "", department_id: UNIT_A },
-      { code: STAFF_B, full_name: "B", position: "", department_id: UNIT_B },
+      { code: STAFF_A, full_name: "A", position: "", department_id: UNIT_A, email_masked: null },
+      { code: STAFF_B, full_name: "B", position: "", department_id: UNIT_B, email_masked: null },
     ];
     expect(staffInUnit(staff, UNIT_A).map((c) => c.code)).toEqual([STAFF_A]);
     expect(staffInUnit(staff, "").map((c) => c.code)).toEqual([STAFF_A, STAFF_B]);

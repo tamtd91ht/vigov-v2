@@ -284,7 +284,7 @@ describe("pickers exclude what is out of use", () => {
   });
 
   it("head picker: the directory (live staff only), sent back by business code", () => {
-    const dir = [{ code: "CB-002", full_name: "Trần Thị B", position: "Công chức", department_id: "" }];
+    const dir = [{ code: "CB-002", full_name: "Trần Thị B", position: "Công chức", department_id: "", email_masked: null }];
     expect(headOptions(dir, null)).toEqual([{ value: "CB-002", label: "Trần Thị B — Công chức (CB-002)" }]);
     const withGone = headOptions(dir, { code: "CB-001", name: "Nguyễn Văn A" });
     expect(withGone[0]).toEqual({ value: "CB-001", label: "Nguyễn Văn A (không còn trong danh bạ cán bộ)" });

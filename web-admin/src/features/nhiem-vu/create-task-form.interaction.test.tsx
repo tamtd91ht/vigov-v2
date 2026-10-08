@@ -19,7 +19,6 @@ import type {
 import {
   DOCUMENT_SUMMARY_MISSING,
   NEW_TASK_DUE_INCOMPLETE,
-  TASK_CONTENT_MISSING,
   TASK_TITLE_MISSING,
   TASK_TYPE_MISSING,
   TASK_TYPE_PLACEHOLDER,
@@ -32,7 +31,7 @@ beforeAll(() => {
 
 const DIRECTORY: KetQua<identity_danhBaChonNguoiRa> = {
   ok: true,
-  duLieu: { items: [{ code: "CB-0001", full_name: "Trần Văn Lãnh", position: "Chủ tịch", department_id: "" }] },
+  duLieu: { items: [{ code: "CB-0001", full_name: "Trần Văn Lãnh", position: "Chủ tịch", department_id: "", email_masked: null }] },
 };
 
 function typeRow(code: string, label: string, isDefault: boolean, active = true): petitions_loaiNhiemVuRa {
@@ -77,7 +76,7 @@ type Sent = { body: petitions_taoNhiemVuVao; key: string };
 
 function draw(
   danhMuc: DanhMucNhiemVu,
-  opts: { sent?: Sent[]; documents?: boolean; loi?: string | null } = {},
+  opts: { sent?: Sent[]; documents?: boolean; loi?: string | null; taskScreen?: boolean } = {},
 ): void {
   const sent = opts.sent ?? [];
   act(() =>
@@ -86,6 +85,7 @@ function draw(
         danhMuc={danhMuc}
         danhBa={DIRECTORY}
         danhBaLanhDao={DIRECTORY}
+        taskScreen={opts.taskScreen ?? false}
         coDanhSachVanBan={opts.documents ?? false}
         dangGui={false}
         loi={opts.loi ?? null}
@@ -220,10 +220,11 @@ describe("Giao việc mới — bấm khi thiếu: lỗi dưới ô, tiêu đi�
     expect(sent[0]!.body.title).toBe("Rà soát hộ nghèo");
   });
 
-  it("loại `theo-van-ban`: câu lỗi tên nói đúng tên ô", () => {
+  it("loại `theo-van-ban`: cùng MỘT câu của prototype dưới cả hai nhãn (`TaskAssignForm.tsx:46`)", () => {
+    expect(TASK_TITLE_MISSING).toBe("Vui lòng nhập tên nhiệm vụ");
     draw(DOCUMENT_DEFAULT);
     press();
-    expect(errorOf("giao-tieu-de")).toBe(TASK_CONTENT_MISSING);
+    expect(errorOf("giao-tieu-de")).toBe(TASK_TITLE_MISSING);
     expect(document.activeElement?.id).toBe("giao-tieu-de");
   });
 
@@ -265,6 +266,11 @@ describe("Giao việc mới — bấm khi thiếu: lỗi dưới ô, tiêu đi�
     expect(alert?.className).toContain("thong-bao-loi");
   });
 
+  it("màn khác (Biên bản, Phản ánh): không có dòng văn bản trống nào lúc mở — giữ như cũ", () => {
+    draw(DOCUMENT_DEFAULT, { documents: true });
+    expect(host.querySelectorAll('textarea[id^="giao-van-ban-"]')).toHaveLength(0);
+  });
+
   it("đang gửi thì nút khoá — chỉ lúc ấy (và lúc danh bạ còn tải)", () => {
     act(() =>
       root.render(
@@ -280,5 +286,71 @@ describe("Giao việc mới — bấm khi thiếu: lỗi dưới ô, tiêu đi�
       ),
     );
     expect(submitButton().disabled).toBe(true);
+  });
+});
+
+describe("Giao việc mới trên màn Nhiệm vụ — như prototype `TaskAssignForm.tsx` (ADR 0082)", () => {
+  const summaries = () => Array.from(host.querySelectorAll<HTMLTextAreaElement>('textarea[id^="giao-van-ban-"]'));
+
+  it("F4: mở ra đã có MỘT dòng trống mỗi nhóm; gửi thì dòng trống bị bỏ lặng lẽ, không báo lỗi", () => {
+    const sent: Sent[] = [];
+    draw(DOCUMENT_DEFAULT, { sent, documents: true, taskScreen: true });
+    expect(summaries()).toHaveLength(3);
+    typeInto("giao-tieu-de", "Báo cáo sơ kết");
+    press();
+    expect(host.querySelector('[aria-invalid="true"]')).toBeNull();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.body.documents ?? []).toEqual([]);
+  });
+
+  it("F4: dòng đã gõ thì gửi; dòng gõ dở (có số, thiếu trích yếu) vẫn bị chặn dưới đúng dòng", () => {
+    const sent: Sent[] = [];
+    draw(DOCUMENT_DEFAULT, { sent, documents: true, taskScreen: true });
+    typeInto("giao-tieu-de", "Báo cáo sơ kết");
+    const [upper, party] = summaries();
+    typeInto(upper!.id, "Thông báo giả về ý kiến chỉ đạo");
+    typeInto(`${party!.id}-so`, "416-CV/ĐU");
+    press();
+    expect(sent).toHaveLength(0);
+    expect(errorOf(party!.id)).toBe(DOCUMENT_SUMMARY_MISSING);
+    typeInto(party!.id, "Công văn giả");
+    press();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.body.documents?.map((d) => d.summary)).toEqual(["Thông báo giả về ý kiến chỉ đạo", "Công văn giả"]);
+  });
+
+  it("F4: `Bỏ dòng này` trên dòng CUỐI của nhóm xoá chữ, không bỏ dòng", () => {
+    draw(DOCUMENT_DEFAULT, { documents: true, taskScreen: true });
+    const first = summaries()[0]!;
+    typeInto(first.id, "Văn bản giả");
+    const remove = first.closest('[role="group"][aria-label]')!.querySelector<HTMLButtonElement>('button[title="Bỏ dòng này"]')!;
+    act(() => remove.click());
+    expect(summaries()).toHaveLength(3);
+    expect(byId<HTMLTextAreaElement>(first.id).value).toBe("");
+    // With a second row, the press removes the row as before.
+    act(() => byId("giao-them-van-ban-cap-tren-giao").click());
+    expect(summaries()).toHaveLength(4);
+    act(() =>
+      summaries()[0]!.closest('[role="group"][aria-label]')!.querySelector<HTMLButtonElement>('button[title="Bỏ dòng này"]')!.click(),
+    );
+    expect(summaries()).toHaveLength(3);
+  });
+
+  it("F2/F3: Khối và Mức ưu tiên chỉ liệt kê dòng ĐANG DÙNG", () => {
+    const row = (code: string, active: boolean, isDefault = false) => ({
+      id: `01J${code}`, code, label: code, is_default: isDefault, active, order: 1, source: "xa", tier: 3, color: null,
+    });
+    draw(
+      { ...BASIC_DEFAULT, khoi: [row("khoi-a", true), row("khoi-cu", false)], mucUuTien: [row("thuong", true, true), row("cu", false)] },
+      { taskScreen: true },
+    );
+    const values = (id: string) => Array.from(byId<HTMLSelectElement>(id).options).map((o) => o.value);
+    expect(values("giao-khoi")).toEqual(["", "khoi-a"]);
+    expect(values("giao-uu-tien")).toEqual(["thuong"]);
+  });
+
+  it("F6: ô Chuyên viên trống là `— Chưa phân công —`", () => {
+    draw(DOCUMENT_DEFAULT, { documents: true, taskScreen: true });
+    expect(host.textContent).toContain("— Chưa phân công —");
   });
 });

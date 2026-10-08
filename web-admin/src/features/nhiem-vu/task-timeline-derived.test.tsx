@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import type { petitions_deNghiLuiHanRa, petitions_nhatKyNhiemVuRa } from "@/lib/api/schema.gen";
 
-import { handoverOf } from "./nhat-ky-nhiem-vu";
+import { handoverOf, rowShowsStatusPill, visibleLogNote } from "./nhat-ky-nhiem-vu";
 import { TimelineAttachments, removeFileLabel } from "./task-attachments-ui";
 import { EXTENSION_HISTORY_TITLE, TaskExtensionHistoryView, extensionStatusText } from "./task-extension-block";
 import { elapsedText, statusEnteredAt } from "./task-status-pipeline";
@@ -72,6 +72,43 @@ describe("G-3 — hand-over `A → B`, never an arrow with nothing before it", (
 
   it("a row that does not touch the assignment: no hand-over", () => {
     expect(handoverOf([row({})], 0, unit, staff)).toBeNull();
+  });
+});
+
+describe("H-1 / H-2 — the server's `Chuyển trạng thái` line is hidden; the pill says it (ADR 0082 #4)", () => {
+  it("the whole note when it is only the server's line, both codes known", () => {
+    expect(visibleLogNote("Chuyển trạng thái: moi-giao → da-tiep-nhan")).toBe("");
+  });
+
+  it("the `; Chuyển trạng thái: …` tail of a reassignment line (`task_assignment.go:207-209`)", () => {
+    expect(visibleLogNote("Giao lại: bộ phận A → B; Chuyển trạng thái: dang-thuc-hien → moi-giao")).toBe(
+      "Giao lại: bộ phận A → B",
+    );
+  });
+
+  it("an officer's own words, or unknown codes, are never touched", () => {
+    for (const note of [
+      "Đã làm xong phần khảo sát",
+      "Chuyển trạng thái: tạm thời chưa → được",
+      "Chuyển trạng thái: moi-giao → ma-la",
+      "Ghi chú. Chuyển trạng thái: moi-giao → da-tiep-nhan",
+    ]) {
+      expect(visibleLogNote(note)).toBe(note);
+    }
+  });
+
+  it("pill: a change against the older row, or — at a page boundary — the server's own line", () => {
+    const rows = [
+      row({ id: "3", status: "dang-thuc-hien", note: "Ghi chú thường" }),
+      row({ id: "2", status: "dang-thuc-hien", note: "Chuyển trạng thái: da-tiep-nhan → dang-thuc-hien" }),
+    ];
+    // Row 3: same status as its older neighbour → no pill.
+    expect(rowShowsStatusPill(rows, 0)).toBe(false);
+    // Row 2: oldest loaded, but its note names the move to its own status → pill.
+    expect(rowShowsStatusPill(rows, 1)).toBe(true);
+    // Oldest loaded with a plain note: unknown is never drawn as changed.
+    expect(rowShowsStatusPill([row({ note: "Ghi chú" })], 0)).toBe(false);
+    expect(rowShowsStatusPill([row({ status: "da-tiep-nhan" }), row({ status: "moi-giao" })], 0)).toBe(true);
   });
 });
 

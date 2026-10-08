@@ -192,10 +192,11 @@ export type LocNhiemVu = {
    */
   parent?: string;
   /**
-   * `roots=true` — root tasks only, no sub-task (the prototype's `roots_only`). NO SCREEN TURNS IT ON
-   * YET, deliberately: it would hide sub-tasks from the register and break the equality between a
-   * Tổng quan figure and its drill-down list, which count every task. The server accepts ONLY the
-   * string `true` (400 otherwise), so `false` sends nothing.
+   * `roots=true` — root tasks only, no sub-task (the prototype's `roots_only`). The Nhiệm vụ screen
+   * sends it for Kanban, Danh sách, Sổ theo dõi AND their `/task-counts` (ADR 0082 #8) — EXCEPT a
+   * drill-down from Tổng quan (`?metric=`), which counts every task, so its list must too or the row
+   * count stops equalling the figure (ADR 0053). Other callers (leader notebook) do not send it. The
+   * server accepts ONLY the string `true` (400 otherwise), so `false` sends nothing.
    */
   roots?: boolean;
   /**

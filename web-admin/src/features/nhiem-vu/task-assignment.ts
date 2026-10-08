@@ -114,6 +114,8 @@ export const ASSIGNMENT_UNIT_LABEL = "Bộ phận";
 export const ASSIGNMENT_ASSIGNEE_LABEL = "Người thực hiện";
 /** §5.7, verbatim. */
 export const ASSIGNMENT_NOTE_LABEL = "Lý do chuyển (bỏ trống nếu chỉ giao lần đầu)";
+/** Prototype `TaskDetailDrawer.tsx:519`, verbatim — an example sentence, no real person. */
+export const ASSIGNMENT_NOTE_PLACEHOLDER = "Anh Hiếu nghỉ phép, chuyển cho chị Trang";
 export const ASSIGNMENT_BUTTON = "Giao việc";
 export const ASSIGNMENT_SENDING = "Đang giao…";
 

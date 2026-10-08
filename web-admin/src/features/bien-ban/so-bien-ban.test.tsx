@@ -642,8 +642,8 @@ describe("hàng thêm kết luận", () => {
 });
 
 const DANH_BA: identity_canBoChonNguoiRa[] = [
-  { code: "CB-2026-7K3M9Q", full_name: "Nguyễn Văn An", position: "Chủ tịch UBND", department_id: "" },
-  { code: "CB-2026-1A2B3C", full_name: "Trần Thị Bình", position: "Văn phòng", department_id: "" },
+  { code: "CB-2026-7K3M9Q", full_name: "Nguyễn Văn An", position: "Chủ tịch UBND", department_id: "", email_masked: null },
+  { code: "CB-2026-1A2B3C", full_name: "Trần Thị Bình", position: "Văn phòng", department_id: "", email_masked: null },
 ];
 
 describe("biểu mẫu nhập biên bản §4", () => {

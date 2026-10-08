@@ -8,7 +8,7 @@ import { danhBaTheoMa } from "@/features/phan-anh/nhan-phieu";
 import type { petitions_nhiemVuRa } from "@/lib/api/schema.gen";
 
 import { EMPTY_SELECTION, toggleSelected } from "./batch-delete";
-import { BANG_NHAN_MAC_DINH, TRANG_THAI_CHINH, kanbanSharedError } from "./nhan-nhiem-vu";
+import { BANG_NHAN_MAC_DINH, REGISTER_EMPTY, TRANG_THAI_CHINH, kanbanSharedError } from "./nhan-nhiem-vu";
 import {
   BangKanban,
   BangSoTheoDoi,
@@ -90,7 +90,7 @@ const UNITS = new Map([
   ["01JUNIT", "BỘ PHẬN GIẢ THỰC HIỆN"],
 ]);
 const DIRECTORY = danhBaTheoMa([
-  { code: "CB-2026-THUCHIEN", full_name: "Nguyễn Văn Giả", position: "", department_id: "" },
+  { code: "CB-2026-THUCHIEN", full_name: "Nguyễn Văn Giả", position: "", department_id: "", email_masked: null },
 ]);
 
 function table(rows: readonly petitions_nhiemVuRa[], withSelection = false): string {
@@ -261,25 +261,37 @@ describe("page wiring (source)", () => {
     expect(SRC).toContain('|${viewMode === "so-theo-doi" ? "docs" : ""}');
   });
 
-  it("the book's query forces the catalogue's `requires_directive` type (spec 02 §State) — rows, counts AND the export", () => {
+  it("the book's query forces the type the prototype's rule picks (ADR 0082 #9) — rows, counts AND the export", () => {
     // The type comes from the catalogue (`directiveTaskType`), never a code typed in the bundle.
     expect(SRC).toContain("const directiveType = typesRead ? directiveTaskType(danhMuc.loai) : undefined;");
-    expect(SRC).toContain(
-      'viewMode === "so-theo-doi" && typeof directiveType === "string" ? { ...loc, loai: directiveType } : loc,',
-    );
+    expect(SRC).toContain('viewMode === "so-theo-doi" && typeof directiveType === "string"');
+    expect(SRC).toContain("? { ...scoped, loai: directiveType }");
+    // No active type: no type filter — the hidden `Loại` filter of another view never leaks in.
+    expect(SRC).toContain("? { ...scoped, loai: undefined }");
     expect(SRC).not.toContain("LOAI_THEO_VAN_BAN");
     expect(SRC).toContain("getTaskCounts(viewLoc)");
     expect(SRC).toContain("hideType={viewMode === \"so-theo-doi\"}");
   });
 
-  it("no directive type known ⇒ the book reads NOTHING (rows, counts, export) and says why once the catalogue is read", () => {
-    expect(SRC).toContain('const registerHeld = viewMode === "so-theo-doi" && typeof directiveType !== "string";');
+  it("root tasks only on every view and its counts (ADR 0082 #8) — never under a Tổng quan drill-down", () => {
+    expect(SRC).toContain("const scoped: BoLoc = drillDownActive ? loc : { ...loc, roots: true };");
+    expect(SRC).toContain("laySoNhiemVu({ ...loc, roots: true, trangThai: ma, limit: SO_THE_MOI_COT })");
+  });
+
+  it("the book waits ONLY while the catalogue is read — no blocking error once it is (ADR 0082 #9)", () => {
+    expect(SRC).toContain('const registerHeld = viewMode === "so-theo-doi" && directiveType === undefined;');
     expect(SRC).toContain("if (registerHeld) return;");
     expect(SRC).toContain("if (!daDocDuongDan || registerHeld) return;");
     expect(SRC).toContain("if (exporting || registerHeld) return;");
-    expect(SRC).toContain('? { pha: "loi", thongBao: REGISTER_NO_DIRECTIVE_TYPE }');
+    expect(SRC).not.toContain("REGISTER_NO_DIRECTIVE_TYPE");
+    expect(SRC).toContain('const held: TrangThaiTai<never> | null = registerHeld ? { pha: "dangTai" } : null;');
     expect(SRC).toContain("const so = held ?? taiTu(daTai, khoa);");
     expect(SRC).toContain("const counts = held ?? taiTu(countsLoaded, khoaCounts);");
+  });
+
+  it("an empty book says the prototype's sentence", () => {
+    expect(REGISTER_EMPTY).toBe("Chưa có nhiệm vụ nào theo văn bản chỉ đạo.");
+    expect(SRC).toContain("title={REGISTER_EMPTY}");
   });
 
   it("export (kept, owner 07/10/2026 #5): the SAME query and sort as the screen; refusal verbatim as a toast", () => {

@@ -22,7 +22,7 @@ import {
   kanbanColumnCount,
   kanbanPartialNote,
 } from "./nhan-nhiem-vu";
-import { BangKanban, TheNhiemVu, priorityStripClass, type CotKanban, type DanhMucNhiemVu } from "./so-nhiem-vu";
+import { BangKanban, TheNhiemVu, priorityStrip, type CotKanban, type DanhMucNhiemVu } from "./so-nhiem-vu";
 import type { TrangThaiTai } from "./so-nhiem-vu"; // vi-name-ok: existing type, imported not declared (rule 12 inv 3)
 
 /**
@@ -321,29 +321,43 @@ describe("thẻ nhiệm vụ §4.1", () => {
     expect(html).not.toContain("đã gia hạn");
   });
 
-  it("`priorityStripClass` follows the commune's RANK, not a hard-coded code", () => {
-    const scale = [{ code: "a" }, { code: "b" }, { code: "c" }];
-    expect(priorityStripClass(scale, "a")).toBe("bg-danger-500");
-    expect(priorityStripClass(scale, "b")).toBe("bg-warning-500");
-    expect(priorityStripClass(scale, "c")).toBe("bg-brand-500");
+  // ADR 0082 #6 (08/10/2026): the commune's catalogue colour first, else by CODE as the prototype
+  // (`TaskCard.tsx:35,46`, `task-display.ts:114-118`). The rank rule is gone: a catalogue listing
+  // `thuong` first no longer paints every card red.
+  it("`priorityStrip`: the catalogue's `#RRGGBB` colour wins, as an inline style", () => {
+    const scale = [
+      { code: "thuong", color: null },
+      { code: "khan", color: "#123abc" },
+    ];
+    expect(priorityStrip(scale, "khan")).toEqual({ className: "", style: { backgroundColor: "#123abc" } });
+    // Rank no longer matters: first row, no colour, code `thuong` → brand, not red.
+    expect(priorityStrip(scale, "thuong")).toEqual({ className: "bg-brand-500" });
   });
 
-  // 07/10/2026: the prototype's TaskCard falls back to `thuong` (brand) for everything that is not
-  // `khan` / `cao` (`TaskCard.tsx:35`, `task-display.ts:114-118`) — so does ours, by rank.
-  it("`priorityStripClass`: no / unknown priority and lower levels are brand, as in the prototype", () => {
-    const shipped = [{ code: "khan" }, { code: "cao" }, { code: "thuong" }];
-    expect(priorityStripClass(shipped, "khan")).toBe("bg-danger-500");
-    expect(priorityStripClass(shipped, "cao")).toBe("bg-warning-500");
-    expect(priorityStripClass(shipped, "thuong")).toBe("bg-brand-500");
-    expect(priorityStripClass(shipped, "")).toBe("bg-brand-500");
-    expect(priorityStripClass(shipped, "khong-co")).toBe("bg-brand-500");
-    // A fourth, lower level is `thuong`'s fallback in the prototype: brand, not amber.
-    expect(priorityStripClass([...shipped, { code: "thap" }], "thuong")).toBe("bg-brand-500");
-    expect(priorityStripClass([...shipped, { code: "thap" }], "thap")).toBe("bg-brand-500");
-    // Two levels: the second is the last — brand, no amber.
-    expect(priorityStripClass([{ code: "khan" }, { code: "thuong" }], "thuong")).toBe("bg-brand-500");
-    // No catalogue loaded yet: brand, never a red guess.
-    expect(priorityStripClass([], "khan")).toBe("bg-brand-500");
+  it("`priorityStrip`: no colour → by code — khan red, cao tangerine, everything else brand", () => {
+    const shipped = [
+      { code: "khan", color: null },
+      { code: "cao", color: null },
+      { code: "thuong", color: null },
+      { code: "thap", color: null },
+    ];
+    expect(priorityStrip(shipped, "khan").className).toBe("bg-danger-500");
+    expect(priorityStrip(shipped, "cao").className).toBe("bg-warning-500");
+    expect(priorityStrip(shipped, "thuong").className).toBe("bg-brand-500");
+    expect(priorityStrip(shipped, "thap").className).toBe("bg-brand-500");
+    expect(priorityStrip(shipped, "").className).toBe("bg-brand-500");
+    expect(priorityStrip(shipped, "khong-co").className).toBe("bg-brand-500");
+    // No catalogue loaded yet: the code rule still holds (it does not need the catalogue).
+    expect(priorityStrip([], "khan").className).toBe("bg-danger-500");
+    expect(priorityStrip([], "khan").style).toBeUndefined();
+  });
+
+  it("`priorityStrip`: a colour that is not `#RRGGBB` never reaches the style", () => {
+    for (const bad of ["red", "#fff", "#12345g", "url(x)", "#123456;background:url(x)", ""]) {
+      const s = priorityStrip([{ code: "khan", color: bad }], "khan");
+      expect(s.style).toBeUndefined();
+      expect(s.className).toBe("bg-danger-500");
+    }
   });
 
   it("không có hạn thì `Hạn —`, không phải một ô trống và không phải `Trễ 0 ngày`", () => {
@@ -367,7 +381,7 @@ describe("thẻ nhiệm vụ §4.1", () => {
     const danhBa = new Map([
       [
         "CB-2026-3H8N2W",
-        { code: "CB-2026-3H8N2W", full_name: "Huỳnh Văn Ba", position: "", department_id: "" },
+        { code: "CB-2026-3H8N2W", full_name: "Huỳnh Văn Ba", position: "", department_id: "", email_masked: null },
       ],
     ]);
     const ve = (assignee: string) =>

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { QUYEN_DUYET_GIA_HAN } from "@/lib/quyen";
 
-import { duongDanDanhBaChonNguoi, layDanhBaChonNguoi } from "./danh-ba-chon-nguoi";
+import { duongDanDanhBaChonNguoi, layDanhBaChonNguoi, revealStaffEmail, staffEmailPath } from "./danh-ba-chon-nguoi";
 
 function batFetch(tra: Response) {
   const gia = vi.fn(async (_duongDan: string, _tuyChon?: RequestInit) => tra);
@@ -83,5 +83,37 @@ describe("danh bạ chọn người — GET /api/v1/staff-directory", () => {
       ok: false,
       thongBao: "Đã xảy ra lỗi. Vui lòng thử lại.",
     });
+  });
+});
+
+describe("reveal — GET /api/v1/staff-directory/{code}/email (ADR 0082 #3)", () => {
+  const jsonRes = (body: unknown, status: number) =>
+    new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+
+  it("path: the business code, percent-encoded; nothing else on the URL", async () => {
+    expect(staffEmailPath("CB-00123")).toBe("/api/v1/staff-directory/CB-00123/email");
+    expect(staffEmailPath("a/../b")).toBe("/api/v1/staff-directory/a%2F..%2Fb/email");
+    const gia = batFetch(jsonRes({ email: "can.bo.a@example.vn" }, 200));
+    expect(await revealStaffEmail("CB-00123")).toEqual({ ok: true, duLieu: { email: "can.bo.a@example.vn" } });
+    expect(gia.mock.calls[0]?.[0]).toBe("/api/v1/staff-directory/CB-00123/email");
+    expect(gia.mock.calls[0]?.[1]?.method).toBe("GET");
+    expect(gia.mock.calls[0]?.[1]?.cache).toBe("no-store");
+  });
+
+  it("403: `forbidden` set — the caller hides the button", async () => {
+    batFetch(jsonRes({ code: "forbidden", message: "Bạn không có quyền.", trace_id: "" }, 403));
+    expect(await revealStaffEmail("CB-00123")).toEqual({ ok: false, thongBao: "Bạn không có quyền.", forbidden: true });
+  });
+
+  it("404 `staff_not_found`: the server's sentence, no `forbidden`", async () => {
+    batFetch(jsonRes({ code: "staff_not_found", message: "Không tìm thấy cán bộ.", trace_id: "" }, 404));
+    expect(await revealStaffEmail("CB-99999")).toEqual({ ok: false, thongBao: "Không tìm thấy cán bộ." });
+  });
+
+  it("network failure: the generic sentence", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("offline"); }));
+    const r = await revealStaffEmail("CB-00123");
+    expect(r.ok).toBe(false);
+    expect(r.ok ? null : r.forbidden).toBeUndefined();
   });
 });

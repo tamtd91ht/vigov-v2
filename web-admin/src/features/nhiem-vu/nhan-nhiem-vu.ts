@@ -715,6 +715,31 @@ export function nhanCanBoNgan(ma: string, danhBa: DanhBaTheoMa | null, rong: str
 }
 
 /**
+ * The MASKED address of one officer (`email_masked`, ADR 0082 #3/#12 — `privacy.MaskEmail`), or
+ * `null` when there is nothing to show: no code, directory not loaded or failed, the code not in it,
+ * or the officer has no address. The directory never carries the full address; this never builds one.
+ */
+export function maskedEmailOf(code: string, directory: DanhBaTheoMa | null): string | null {
+  if (code === "") return null;
+  const masked = directory?.get(code)?.email_masked;
+  return masked === undefined || masked === null || masked === "" ? null : masked;
+}
+
+/**
+ * One line of the Nhiệm vụ handover select: `Họ tên — email_masked · Chức danh`, the prototype's
+ * `HandoverFields.tsx:87-92` with the address masked (ADR 0082 #10 — an `<option>` holds no button).
+ * No address → `nhanLuaChonCanBo`'s `Họ tên · Chức danh`, unchanged.
+ *
+ * NHIỆM VỤ ONLY, ON PURPOSE: `nhanLuaChonCanBo` is shared by Phản ánh, Biên bản, Thông báo and the
+ * staff combobox; changing it would put addresses on screens nobody decided on.
+ */
+export function taskStaffOptionLabel(cb: identity_canBoChonNguoiRa): string {
+  const name = cb.full_name === "" ? cb.code : cb.full_name;
+  const email = cb.email_masked === null || cb.email_masked === "" ? "" : ` — ${cb.email_masked}`;
+  return cb.position === "" ? `${name}${email}` : `${name}${email} · ${cb.position}`;
+}
+
+/**
  * Who holds a task, on a Kanban card: the assignee's name; with no assignee, the holding unit
  * `{unit} · Chưa phân công` (report 05/10/2026, NV-11) — "Chưa phân công" alone hid which unit
  * still owed the work. A unit missing from the catalogue shows its id, as in the timeline.
@@ -1190,15 +1215,17 @@ export function duongDanTuLoc(loc: {
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * §4.2 — SẮP XẾP BẢNG DANH SÁCH ("cột có thể sắp xếp (icon ⇅)")
  *
- * NĂM CỘT, đúng năm cột máy chủ sắp được (`petitions_get_tasks["truyVan"]["sort"]`): `created_at`,
- * `code`, `due_at` (ad7f821), và — ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3b, backend P9) — `title` và
- * `priority`. `priority` xếp theo THỨ TỰ XÃ ĐẶT ở danh mục mức ưu tiên (`thu_tu`), không theo mã chữ
+ * ĐÚNG CÁC CỘT máy chủ sắp được (`petitions_get_tasks["truyVan"]["sort"]`): `created_at`,
+ * `code`, `due_at` (ad7f821), — ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3b, backend P9) — `title` và
+ * `priority`, và từ 08/10/2026 `status` (thứ tự trạng thái của xã, ADR 0082 #11). `priority` xếp theo THỨ TỰ XÃ ĐẶT ở danh mục mức ưu tiên (`thu_tu`), không theo mã chữ
  * cái (`store/nhiem_vu.go:104-109`). Việc KHÔNG CÓ HẠN và việc KHÔNG CÓ MỨC ƯU TIÊN luôn nằm CUỐI ở
  * cả hai chiều (máy chủ quyết, hai câu `…_LAST_NOTE` nói ra). Không mũi tên nào sắp ở trình duyệt:
  * sắp trang đang mở — 20 dòng — trông như sắp cả sổ mà không phải.
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
-const MOI_COT_SAP_XEP: readonly CotSapXepNhiemVu[] = ["created_at", "code", "due_at", "title", "priority"];
+// `status` added 08/10/2026 (ADR 0082 #5/#11: the commune's status order).
+// vi-name-ok: existing name restored as it was at HEAD (rule 12 inv 3)
+const MOI_COT_SAP_XEP: readonly CotSapXepNhiemVu[] = ["created_at", "code", "due_at", "title", "priority", "status"];
 
 function laCotSapXep(s: string): s is CotSapXepNhiemVu {
   return (MOI_COT_SAP_XEP as readonly string[]).includes(s);
@@ -1232,6 +1259,7 @@ export function sapXepDayDu(loc: {
  *   `due_at`      TĂNG DẦN — hạn sớm nhất (kể cả hạn đã qua) lên đầu: câu hỏi "việc nào gấp nhất"
  *   `title`       TĂNG DẦN — A → Z, theo collation của cơ sở dữ liệu
  *   `priority`    TĂNG DẦN — đúng thứ tự xã xếp danh mục mức ưu tiên, mục đầu danh mục lên đầu
+ *   `status`      TĂNG DẦN — đúng thứ tự trạng thái của xã, trạng thái đầu vòng đời lên đầu
  *
  * ⚠ ĐỔI CÁCH SẮP LÀ VỀ TRANG ĐẦU, và đó không phải lựa chọn giao diện: con trỏ mang `sort`/`order`
  * bên trong và máy chủ trả 400 `invalid_cursor` cho con trỏ của một cách sắp khác
@@ -1258,6 +1286,7 @@ export const NHAN_COT_NGAY_GIAO = "Ngày giao";
 export const DUE_COLUMN_LABEL = "Hạn";
 export const TITLE_COLUMN_LABEL = "Tên việc";
 export const PRIORITY_COLUMN_LABEL = "Ưu tiên";
+export const STATUS_COLUMN_LABEL = "Trạng thái";
 
 /**
  * Under the list, always visible. The server puts tasks WITHOUT a deadline last in BOTH directions;
@@ -1501,6 +1530,9 @@ export function boDeNghiDaQuyet<T extends { readonly id: string }>(
 /** Quyển sổ rỗng. */
 export const SO_RONG = "Chưa có nhiệm vụ nào khớp bộ lọc đang chọn.";
 
+/** The Sổ theo dõi with no row — prototype `TaskRegisterTable.tsx:114`, verbatim. */
+export const REGISTER_EMPTY = "Chưa có nhiệm vụ nào theo văn bản chỉ đạo.";
+
 /** Đang đọc trang. `role="status"`, không phải `alert`. */
 export const DANG_TAI_SO = "Đang tải sổ nhiệm vụ…";
 
@@ -1670,10 +1702,12 @@ export const EXTENSION_NO_DUE =
  * was `""`). Since 07/10/2026 it is shown UNDER the select, after a submit attempt — not as a box.
  */
 export const TASK_TYPE_MISSING = "Chọn loại nhiệm vụ để giao việc.";
-/** The title field's error after a submit attempt — the prototype's sentence (`TaskAssignForm.tsx:46`). */
-export const TASK_TITLE_MISSING = "Vui lòng nhập tên nhiệm vụ.";
-/** The same, when the field is labelled `Nội dung nhiệm vụ / Trích yếu văn bản` (a type flagged `requires_directive`). */
-export const TASK_CONTENT_MISSING = "Vui lòng nhập nội dung nhiệm vụ.";
+/**
+ * The title field's error after a submit attempt — the prototype's sentence VERBATIM, no full stop
+ * (`TaskAssignForm.tsx:46`), under BOTH of its labels (`Tên nhiệm vụ` and `Nội dung nhiệm vụ / Trích
+ * yếu văn bản`): the prototype has one zod rule for the one field.
+ */
+export const TASK_TITLE_MISSING = "Vui lòng nhập tên nhiệm vụ";
 /** Under ONE document row whose summary is empty — the row itself says which one. */
 export const DOCUMENT_SUMMARY_MISSING = "Nhập trích yếu, hoặc bấm ✕ để gỡ dòng này.";
 /** Empty first option of the type select while nothing is chosen. */
@@ -1769,13 +1803,17 @@ export function needsDirective(types: readonly petitions_loaiNhiemVuRa[], code: 
 }
 
 /**
- * The code of the type the Sổ theo dõi reads — the FIRST catalogue row flagged `requires_directive`
- * (prototype `TaskWorkspace.tsx:72-77`), active or not: a retired type still has tasks in the book.
- * `null` = the catalogue holds no such row (or could not be read). Unlike the prototype there is NO
- * fallback to the default type: that would fill the eleven directive columns with basic tasks.
+ * The code of the type the Sổ theo dõi reads, EXACTLY as the prototype chooses it (ADR 0082 #9,
+ * `TaskWorkspace.tsx:72-77` + `lib/task-kinds.ts:9-13`), over ACTIVE rows only: the first active row
+ * flagged `requires_directive` → the active default → the first active row. `null` = no active row
+ * at all (or the catalogue could not be read): the book reads WITHOUT a type filter, as the
+ * prototype does with an empty code — never an error that blocks the screen.
  */
 export function directiveTaskType(types: readonly petitions_loaiNhiemVuRa[]): string | null {
-  return types.find((t) => t.requires_directive)?.code ?? null;
+  const active = types.filter((t) => t.active);
+  return (
+    active.find((t) => t.requires_directive)?.code ?? active.find((t) => t.is_default)?.code ?? active[0]?.code ?? null
+  );
 }
 
 /**
@@ -1787,11 +1825,6 @@ export function directiveTaskType(types: readonly petitions_loaiNhiemVuRa[]): st
 export function extensionCountText(count: number): string | null {
   return count > 0 ? `đã gia hạn ${count} lần` : null;
 }
-
-/** The Sổ theo dõi cannot be read: no type of the catalogue carries the directive block. */
-export const REGISTER_NO_DIRECTIVE_TYPE =
-  "Chưa đọc được loại nhiệm vụ theo văn bản trong danh mục của xã, nên chưa hiện được Sổ theo dõi. " +
-  "Vui lòng tải lại trang.";
 
 /** Tiêu đề khối — chữ của §5.4, viết hoa đầu câu như mọi tiêu đề khối khác trong drawer. */
 export const TIEU_DE_KHOI_VAN_BAN = "Sổ theo dõi văn bản chỉ đạo";
@@ -1991,6 +2024,24 @@ export type FormGiaoViecNhap = {
  */
 export function dongCuaNhom<T extends DongVanBanNhap>(ds: readonly T[], nhom: NhomVanBan): T[] {
   return ds.filter((d) => d.nhom === nhom);
+}
+
+/** An empty document row of `group` under key `key` — what `+ Thêm văn bản` adds. */
+export function blankDocumentRow(key: string, group: NhomVanBan): DongVanBanNhap {
+  return { khoa: key, nhom: group, trichYeu: "", soKyHieu: "", ngay: "" };
+}
+
+/**
+ * The Nhiệm vụ CREATE form's document rows with every ALL-BLANK row dropped — the prototype's
+ * `usableReferences` (`TaskReferenceEditor.tsx:63-74`). That form OPENS with one empty row per group
+ * (`TaskAssignForm.tsx:90-94`), so an untouched row is not "a document the clerk announced": it is the
+ * form's own empty box, dropped silently and never validated (ADR 0082 #1). A row with ANY box typed
+ * stays, and its missing summary is still refused under it (the server needs one,
+ * `ErrThieuTrichYeuVanBan`). The `Sửa` form keeps `canhBaoVanBan`'s stricter rule: it has no empty
+ * starting rows, so an empty row there IS one the clerk added.
+ */
+export function usableDocumentRows<T extends DongVanBanNhap>(rows: readonly T[]): T[] {
+  return rows.filter((d) => d.trichYeu.trim() !== "" || d.soKyHieu.trim() !== "" || d.ngay !== "");
 }
 
 /**
@@ -2446,7 +2497,10 @@ export type CreateTaskErrors = {
  */
 export function createTaskErrors(f: {
   readonly type: string;
-  /** The type carries the §5.4 block (`needsDirective`) — the title field is then `Nội dung…`. */
+  /**
+   * The type carries the §5.4 block (`needsDirective`). No longer changes the title's sentence (one
+   * sentence for both labels, as the prototype); kept so callers state what the form is drawing.
+   */
   readonly directive: boolean;
   readonly title: string;
   readonly dueInput: string;
@@ -2456,8 +2510,7 @@ export function createTaskErrors(f: {
   readonly documentsShown: boolean;
 }): CreateTaskErrors {
   const type = f.type === "" ? TASK_TYPE_MISSING : null;
-  const title =
-    f.title.trim() === "" ? (f.directive ? TASK_CONTENT_MISSING : TASK_TITLE_MISSING) : null;
+  const title = f.title.trim() === "" ? TASK_TITLE_MISSING : null;
   const due = newTaskDueInputProblem(f.dueInput, f.dueIncomplete);
   const documents = f.documentsShown ? f.documents : [];
   const documentLimit = documents.length > VAN_BAN_MOT_LAN_TOI_DA ? canhBaoVanBan(documents) : null;

@@ -22,7 +22,7 @@ import { extensionDeadlineText, taskRowText } from "./task-mini-list";
 const NOW = new Date("2026-09-16T03:00:00Z");
 const ASSIGNEE = "CB-2026-7K3M9Q";
 const DIRECTORY: DanhBaTheoMa = new Map([
-  [ASSIGNEE, { code: ASSIGNEE, full_name: "Huỳnh Văn Sáu", position: "", department_id: "" }],
+  [ASSIGNEE, { code: ASSIGNEE, full_name: "Huỳnh Văn Sáu", position: "", department_id: "", email_masked: null }],
 ]);
 
 function task(patch: Partial<petitions_nhiemVuRa> = {}): petitions_nhiemVuRa {

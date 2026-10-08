@@ -172,4 +172,15 @@ describe("fixture answering machine", () => {
     for (const s of staff.items as { full_name: string }[]) expect(s.full_name).toMatch(/^Cán bộ [A-Z]$/);
     expect(JSON.stringify(staff)).not.toMatch(/phone|\b0\d{9}\b/);
   });
+
+  it("staff addresses (ADR 0082 #3): the directory carries MASKED fakes; the reveal answers a fake, 404 otherwise", async () => {
+    const staff = await at("/api/v1/staff-directory").json();
+    const masked = (staff.items as { email_masked: string | null }[]).map((s) => s.email_masked);
+    expect(masked.filter((m) => m !== null).length).toBeGreaterThan(0);
+    for (const m of masked) if (m !== null) expect(m).toMatch(/^.\*\*\*@example\.vn$/);
+    expect(await at("/api/v1/staff-directory/CB-00001/email").json()).toEqual({ email: "can.bo.a@example.vn" });
+    const missing = at("/api/v1/staff-directory/CB-00002/email");
+    expect(missing.status).toBe(404);
+    expect((await missing.json()).message).toBe("Không tìm thấy cán bộ.");
+  });
 });

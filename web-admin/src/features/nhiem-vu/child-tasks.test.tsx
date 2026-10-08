@@ -121,7 +121,7 @@ describe("(#6) `{n} việc con` — on the Kanban card only (spec 04: the list's
   it("the list's second line is the source label alone; the count is the card's (`childCountLabel`)", () => {
     // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (spec 04): `nguồn · đã gia hạn n lần` — no child count in the list.
     // `extension_count` 0 ⇒ the source alone (prototype `TaskListTable.tsx:86-88`).
-    expect(list(2)).toContain('<span class="text-ink-muted block text-[11px]">Giao trực tiếp</span>');
+    expect(list(2)).toContain('<span class="text-ink-muted block truncate text-[11px]">Giao trực tiếp</span>');
     expect(list(2)).not.toContain("việc con");
     expect(childCountLabel(2)).toBe("2 việc con");
     expect(childCountLabel(0)).toBeNull();
@@ -368,7 +368,8 @@ describe("(#13) `Hạn` sortable — `sort=due_at`, with the note about tasks wi
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3b): 3 → 5 — `Tên việc` and `Ưu tiên` sort too (backend P9).
     // 06/10/2026 (prototype columns): 5 → 4 — the `Ngày giao` column is gone.
     // 07/10/2026 (spec 04): the label + `ArrowUpDown`; the active column's icon at full opacity.
-    expect(out.split("aria-sort=").length - 1).toBe(4);
+    // 08/10/2026 (ADR 0082 #5): 4 → 5 — `Trạng thái` sorts on the server (`sort=status`).
+    expect(out.split("aria-sort=").length - 1).toBe(5);
     expect(out).toMatch(/aria-sort="ascending"[^>]*><button type="button"[^>]*>Hạn<svg[^>]*lucide-arrow-up-down[^>]*opacity-100/);
   });
 
@@ -421,9 +422,8 @@ describe("(#15) Kanban counts use the SAME filter builder as the list", () => {
   it("`SoNhiemVu` counts with the VIEW's own query — the board's `loc` on Kanban, the forced type on Sổ theo dõi", () => {
     const src = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
     expect(src).toContain("getTaskCounts(viewLoc).then(");
-    expect(src).toContain(
-      'viewMode === "so-theo-doi" && typeof directiveType === "string" ? { ...loc, loai: directiveType } : loc,',
-    );
+    expect(src).toContain('viewMode === "so-theo-doi" && typeof directiveType === "string"');
+    expect(src).toContain("? { ...scoped, loai: directiveType }");
     const effect = src.slice(src.indexOf("getTaskCounts(viewLoc).then("));
     expect(effect.indexOf("}, [viewLoc, khoaCounts, daDocDuongDan, registerHeld]);")).toBeGreaterThan(0);
   });

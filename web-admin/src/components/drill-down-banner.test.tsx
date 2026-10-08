@@ -100,7 +100,7 @@ describe("sổ nhiệm vụ nhận lọc", () => {
     expect(html).not.toContain('id="loc-trang-thai"');
     const views = html.slice(html.indexOf('aria-label="Chế độ xem"'));
     expect(views.split("</div>")[0]!.match(/disabled=""/g)?.length).toBe(3);
-    const scope = html.slice(html.indexOf('aria-label="Phạm vi"'));
+    const scope = html.slice(html.indexOf('aria-label="Lọc nhanh theo người xử lý"'));
     expect(scope.split("</div>")[0]!.match(/disabled=""/g)?.length).toBe(3);
   });
 

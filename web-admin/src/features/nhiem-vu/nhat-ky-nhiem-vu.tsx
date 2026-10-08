@@ -37,6 +37,7 @@ import {
   TIEU_DE_NHAT_KY_NHIEM_VU,
   gopTrangNhatKy,
   hienDongNhatKy,
+  laTrangThaiNhiemVu,
   logEntryNote,
   nhanCanBoNgan,
   nhanTrangThai,
@@ -354,6 +355,45 @@ export function rowChangedStatus(rows: readonly petitions_nhatKyNhiemVuRa[], i: 
 }
 
 /**
+ * The line the SERVER writes into a timeline row when a move carries no note
+ * (`service-petitions/internal/domain/nhiem_vu_ghi.go:594-596`, `NoiDungChuyenTrangThai`) — and appends,
+ * after `; `, to a reassignment that also moved the status (`task_assignment.go:207-209`). Two CODES,
+ * never labels. Matched only when BOTH are among the seven codes: an officer's own sentence that
+ * happens to start the same way is never touched.
+ */
+const SERVER_STATUS_LINE = /(?:^|; )Chuyển trạng thái: (\S+) → (\S+)$/;
+
+function serverStatusLine(note: string): { readonly at: number; readonly to: string } | null {
+  const m = SERVER_STATUS_LINE.exec(note);
+  if (m === null || m[1] === undefined || m[2] === undefined) return null;
+  if (!laTrangThaiNhiemVu(m[1]) || !laTrangThaiNhiemVu(m[2])) return null;
+  return { at: m.index, to: m[2] };
+}
+
+/**
+ * The note AS DRAWN (ADR 0082 #4): the server's `Chuyển trạng thái: <code> → <code>` line is hidden —
+ * the whole note when it is only that, the `; Chuyển trạng thái: …` tail of a reassignment line
+ * otherwise. DISPLAY ONLY: the stored row is untouched (the timeline is append-only, rule 7); the
+ * status pill says the same thing in the commune's words.
+ */
+export function visibleLogNote(note: string): string {
+  const line = serverStatusLine(note);
+  return line === null ? note : note.slice(0, line.at);
+}
+
+/**
+ * Whether row `i` gets the status pill (prototype `TaskActivityPanel.tsx:119-122,307-311`: every entry
+ * that recorded a status). A row carries the status AT ITS MOMENT, not a "status after" field, so a
+ * change is read from the older neighbour (`rowChangedStatus`) — or, when that neighbour is not loaded
+ * (page boundary), from the server's own transition line in the note, which names the code it moved to.
+ */
+export function rowShowsStatusPill(rows: readonly petitions_nhatKyNhiemVuRa[], i: number): boolean {
+  const row = rows[i];
+  if (row === undefined) return false;
+  return rowChangedStatus(rows, i) || serverStatusLine(row.note)?.to === row.status;
+}
+
+/**
  * Phần vẽ, không đọc mạng — tách ra để kiểm bằng `renderToStaticMarkup`.
  *
  * TẢI HỎNG KHÔNG VẼ CÂU "Chưa có ghi chép nào.": một nhật ký rỗng vì đọc hỏng trông y hệt một nhiệm
@@ -421,7 +461,8 @@ export function KhoiNhatKyNhiemVu({
           <ol className="m-0 list-none space-y-3 p-0" aria-label="Nhật ký nhiệm vụ, mới nhất trước">
             {tai.dong.map((d, i) => {
               const h = hienDongNhatKy(d, nhanTT, danhBa, tenBoPhan);
-              const changed = rowChangedStatus(tai.dong, i);
+              const changed = rowShowsStatusPill(tai.dong, i);
+              const note = visibleLogNote(h.ghiChu);
               const handover = handoverOf(
                 tai.dong,
                 i,
@@ -464,9 +505,9 @@ export function KhoiNhatKyNhiemVu({
                         )}
                       </div>
                     )}
-                    {h.ghiChu !== "" && (
+                    {note !== "" && (
                       <p className={cn("m-0 text-[12.5px] whitespace-pre-line", changed || handedOver ? "mt-1" : "mt-0.5")}>
-                        {h.ghiChu}
+                        {note}
                       </p>
                     )}
                     {/* `attachments` is always present on a row (b37ec2d); `?? []` only guards a reply

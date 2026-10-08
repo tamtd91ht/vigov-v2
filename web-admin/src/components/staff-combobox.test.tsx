@@ -25,10 +25,10 @@ import {
  */
 
 const DIRECTORY: readonly identity_canBoChonNguoiRa[] = [
-  { code: "CB-2026-0000A1", full_name: "Nguyễn Thị Hoa", position: "Văn thư", department_id: "" },
-  { code: "CB-2026-0000A2", full_name: "Trần Văn An", position: "Chủ tịch", department_id: "" },
-  { code: "CB-2026-0000A3", full_name: "Đặng Quốc Dũng", position: "Chuyên viên", department_id: "" },
-  { code: "CB-2026-0000A4", full_name: "Lê Nguyên Khôi", position: "", department_id: "" },
+  { code: "CB-2026-0000A1", full_name: "Nguyễn Thị Hoa", position: "Văn thư", department_id: "", email_masked: null },
+  { code: "CB-2026-0000A2", full_name: "Trần Văn An", position: "Chủ tịch", department_id: "", email_masked: null },
+  { code: "CB-2026-0000A3", full_name: "Đặng Quốc Dũng", position: "Chuyên viên", department_id: "", email_masked: null },
+  { code: "CB-2026-0000A4", full_name: "Lê Nguyên Khôi", position: "", department_id: "", email_masked: null },
 ];
 
 const OPTIONS = staffOptions(DIRECTORY, "");
