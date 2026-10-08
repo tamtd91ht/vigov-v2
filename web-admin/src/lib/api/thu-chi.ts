@@ -28,8 +28,8 @@
  * TIỀN TRÊN DÂY LUÔN LÀ SỐ NGUYÊN ĐỒNG (`int64`), cả chiều đọc lẫn chiều ghi. Đơn vị tính của
  * bảng (`unit`) chỉ đổi cách HIỂN THỊ; phép quy đổi nằm ở `nhan-thu-chi.ts`, không ở tệp này.
  *
- * KHÔNG CÓ TUYẾN NẠP EXCEL, và chỗ trống ấy là **sự thật của hợp đồng**: không có tuyến nhận tệp
- * nào trong `openapi.json` (§6). Màn hình nói thẳng điều đó ra chứ không giấu trong chú thích.
+ * NẠP EXCEL (§6, ADR 0081 #6) nằm ở `budget-import.ts`: một tuyến multipart, khác hình dạng mọi tuyến
+ * JSON ở đây.
  */
 
 import { docJSON, docThanLoiGoi, goiGhi, type KetQua } from "./goi";

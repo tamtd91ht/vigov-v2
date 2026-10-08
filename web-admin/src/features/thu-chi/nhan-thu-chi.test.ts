@@ -393,10 +393,10 @@ describe("thẻ chỉ số và danh sách phần chưa dựng", () => {
     expect(ten).not.toMatch(/đợt/i);
     expect(ten).not.toMatch(/Cách tính/);
     expect(ten).not.toMatch(/Luỹ kế/);
-    expect(ten).toMatch(/Excel/);
-    // Cột % trên từng dòng đã dựng (máy chủ tính, 30/09/2026) — không còn nằm trong danh sách.
+    // Cột % trên từng dòng đã dựng (máy chủ tính, 30/09/2026); Nạp từ Excel đã dựng (08/10/2026).
     expect(ten).not.toMatch(/phần trăm/i);
-    expect(PHAN_CHUA_DUNG).toHaveLength(1);
+    expect(ten).not.toMatch(/Excel/);
+    expect(PHAN_CHUA_DUNG).toHaveLength(0);
   });
 
   it("ô `%` in đúng phần vạn máy chủ gửi, không chia lại", () => {

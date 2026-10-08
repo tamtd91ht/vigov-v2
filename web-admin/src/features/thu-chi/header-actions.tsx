@@ -1,31 +1,25 @@
 "use client";
 
-import { Upload } from "lucide-react";
-
-import { PendingButton } from "@/components/ui/pending-feature";
-
-import { PHAN_CHUA_DUNG } from "./nhan-thu-chi";
+import { BudgetImportButton } from "./budget-import-button";
 
 /**
  * PageHeader actions of Thu - Chi, spec §2 (`Nút phải: [⬆ Nạp từ Excel] [🗑 Gỡ]`).
  *
- * `⬆ Nạp từ Excel` is a disabled "?" placeholder (ADR 0068 §14): no route takes a file. Its
- * description is the `PHAN_CHUA_DUNG` entry, looked up by name — never a second copy of the
- * sentence. Nothing here fetches or stores anything.
+ * `⬆ Nạp từ Excel` is LIVE (ADR 0081 #6): pick a file, it is loaded at once, as in the prototype
+ * (`budget-import-button.tsx`). The caller draws it only with `budget.update`; the route checks the key
+ * anyway (rule 5).
  *
- * `🗑 Gỡ` is NOT here: it is built, as `Gỡ bảng` in the tree's toolbar, behind `budget.confirm` and
- * only once a sheet exists. Moving it is a behaviour change, out of a presentation pass (§1).
+ * `🗑 Gỡ` is NOT here: it is built, as `Gỡ` in the selection bar, behind `budget.confirm` and only once
+ * a sheet exists — an imported sheet included, since it is read back through the same routes.
  */
-export function BudgetSheetHeaderActions() {
-  const info = PHAN_CHUA_DUNG.find((p) => p.ten === IMPORT_EXCEL);
-  if (info === undefined) throw new Error(`PHAN_CHUA_DUNG has no entry "${IMPORT_EXCEL}"`);
-  return (
-    // The prototype's main action of the selection bar (`Button size="sm"`, default = solid).
-    <PendingButton info={info} side="bottom" variant="primary" size="sm" icon={<Upload aria-hidden="true" />}>
-      Nạp từ Excel
-    </PendingButton>
-  );
+export function BudgetSheetHeaderActions({
+  year,
+  busy,
+  onImported,
+}: {
+  year: number;
+  busy: boolean;
+  onImported: (firstKind: "thu" | "chi" | null) => void;
+}) {
+  return <BudgetImportButton year={year} disabled={busy} onImported={onImported} />;
 }
-
-/** Exact `ten` of the entry — the description shown behind the "?". */
-export const IMPORT_EXCEL = "Nạp từ Excel";

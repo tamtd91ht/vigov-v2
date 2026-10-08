@@ -186,6 +186,7 @@ function renderSelectionBar(
       onCreate={() => {}}
       onEdit={() => {}}
       onRemove={() => {}}
+      onImported={() => {}}
     />,
   );
 }
@@ -683,10 +684,8 @@ describe("biểu mẫu ghi", () => {
   });
 });
 
-describe("lập bảng — thứ thay cho `⬆ Nạp từ Excel`", () => {
-  it("KHÔNG vẽ ô chọn tệp nào, vì hợp đồng không có tuyến nhận tệp", () => {
-    // Vẽ một vùng kéo thả `.xlsx` ở đây là hứa với cán bộ một chức năng không tồn tại — đúng điều
-    // `dau-trang.tsx` đã từ chối làm với ô tìm kiếm.
+describe("lập bảng — biểu mẫu cho xã không có tệp Excel", () => {
+  it("KHÔNG vẽ ô chọn tệp nào: tệp đi qua `Nạp từ Excel`, biểu mẫu này chỉ lập bảng bằng tay", () => {
     const html = renderToStaticMarkup(
       <LapBang nam={2026} loai="chi" dangGui={false} datDangGui={() => {}} xong={() => {}} onClose={() => {}} />,
     );
@@ -698,22 +697,14 @@ describe("lập bảng — thứ thay cho `⬆ Nạp từ Excel`", () => {
 });
 
 describe("những phần đặc tả vẽ mà chưa dựng được", () => {
-  it("phần còn lại là nút `Nạp từ Excel` VÔ HIỆU có dấu '?' ở PageHeader — ba phần đã dựng thì KHÔNG còn", () => {
-    // ADR 0068 §14: the collapsed block is retired; the one remaining part is drawn where the spec
-    // puts it, as the control it will be, disabled. Its description is the array entry itself.
-    const html = renderToStaticMarkup(<BudgetSheetHeaderActions />);
+  it("không còn phần nào: `Nạp từ Excel` đã dựng (ADR 0081 #6) — nút THẬT, không vô hiệu, không dấu '?'", () => {
+    const html = renderToStaticMarkup(<BudgetSheetHeaderActions year={2026} busy={false} onImported={() => {}} />);
 
-    // Chỉ còn Nạp từ Excel: cột % trên từng dòng đã dựng (máy chủ tính, 30/09/2026).
-    expect(PHAN_CHUA_DUNG).toHaveLength(1);
-    expect(PHAN_CHUA_DUNG.map((p) => p.ten).join(" | ")).not.toMatch(/Cột phần trăm trên từng dòng/);
-    for (const p of PHAN_CHUA_DUNG) {
-      expect(html).toContain(`aria-label="${pendingMarkerLabel(p.ten)}"`);
-    }
-    expect(html).toMatch(/<button[^>]* disabled=""[^>]*>.*Nạp từ Excel<\/button>/);
-    // No file picker: a placeholder never takes a file (the contract has no route that would).
-    expect(html).not.toContain('type="file"');
-    // The description opens only when "?" is pressed — it is not printed on the page.
-    expect(html).not.toContain(PHAN_CHUA_DUNG[0]!.viSao);
+    expect(PHAN_CHUA_DUNG).toHaveLength(0);
+    expect(html).not.toContain(`aria-label="${pendingMarkerLabel("Nạp từ Excel")}"`);
+    expect(html).toMatch(/<button[^>]*>.*Nạp từ Excel<\/button>/);
+    expect(html).toContain('type="file" accept=".xlsx"');
+    expect(html).not.toMatch(/<button[^>]* disabled=""[^>]*>.*Nạp từ Excel<\/button>/);
   });
 });
 

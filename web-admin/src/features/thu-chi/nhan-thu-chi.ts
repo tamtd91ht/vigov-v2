@@ -788,14 +788,8 @@ export type PhanChuaDung = {
 };
 
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
-  // §6 `⬆ Nạp từ Excel`. The REST contract has no route that takes a file: no
-  // `POST /api/v1/budget-sheets/import`, and no multipart route anywhere in `service-finance`.
-  {
-    ten: "Nạp từ Excel",
-    viSao:
-      "Chưa nạp được bảng thu - chi từ tệp Excel. Bảng được lập bằng biểu mẫu Lập bảng ngân sách, " +
-      "và khoản mục được nhập từng dòng.",
-  },
+  // §6 `⬆ Nạp từ Excel` ĐÃ DỰNG (08/10/2026, ADR 0081 #6): tuyến `budget-sheets/imports` của `service-finance`,
+  // nạp ngay khi chọn tệp như prototype — `budget-import-button.tsx`.
   // Cột phần trăm trên từng dòng ĐÃ DỰNG (quyết định 30/09/2026): máy chủ lưu rõ cột tử số và cột
   // mẫu số của mỗi cột `%` (migration 0011) và tự tính tỷ lệ của từng dòng (`percent_basis_points`).
   // `formula` từ đó chỉ còn là chữ chú thích, không máy nào đọc — màn hình in tỷ lệ máy chủ gửi, và

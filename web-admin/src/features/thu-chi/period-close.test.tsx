@@ -425,6 +425,7 @@ describe("sheet under a year close", () => {
         onCreate={() => {}}
         onEdit={() => {}}
         onRemove={() => {}}
+        onImported={() => {}}
       />,
     );
   }

@@ -133,8 +133,9 @@ function Glyph({ icon: Icon, className }: { icon: LucideIcon; className?: string
  * đề, dòng phụ, câu dòng tổng, các ô số) → thanh công cụ của cây → bảng cây. Thêm, sửa bảng, gỡ, đổi
  * cách tính, các đợt là HỘP THOẠI như prototype.
  *
- * KHÁC PROTOTYPE CÓ LÝ DO: `Nạp từ Excel` là nút vô hiệu dấu "?" (không tuyến nào nhận tệp, ADR 0068
- * §14) nên biểu mẫu `Lập bảng` đứng cạnh nó; prototype không có năm (tệp mang năm) nên có ô năm;
+ * KHÁC PROTOTYPE CÓ LÝ DO: `Nạp từ Excel` nạp ngay như prototype (`budget-import-button.tsx`, ADR 0081
+ * #6), và biểu mẫu `Lập bảng` vẫn đứng cạnh nó cho xã không có tệp; prototype không có năm nên có ô
+ * năm — năm ấy cũng là năm tệp được nạp vào;
  * thẻ ba chỉ số của năm và khối chốt kỳ — hai thứ của CẢ NĂM, không của một bảng — nằm dưới bảng.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  *
@@ -329,6 +330,13 @@ export function BangThuChi() {
         onRemove={() => {
           resetEdits();
           datDangMo({ kieu: "goBang" });
+        }}
+        onImported={(firstKind) => {
+          // The file may have created or REPLACED either sheet of the year: every read starts over, and
+          // the first sheet loaded is selected, as the prototype does (`FiscalReportPanel.tsx:141`).
+          resetEdits();
+          if (firstKind !== null) datLoai(firstKind);
+          datLanTai((n) => n + 1);
         }}
       />
 
@@ -632,9 +640,9 @@ function ConfirmModal({
  * it); this contract reads one sheet per year and kind, so the year is a control and both kinds are
  * always offered — a kind with no sheet yet opens on its empty state.
  *
- * RIGHT — `Nạp từ Excel` at the prototype's place, as a disabled "?" placeholder (no route takes a
- * file, ADR 0068 §14); `Lập bảng` beside it while the sheet does not exist (the form that replaces the
- * import); `Sửa thông tin bảng` and `Gỡ` once it does. Gates: `budget.update` for the first three,
+ * RIGHT — `Nạp từ Excel` at the prototype's place (ADR 0081 #6: loads the selected year's sheets from the
+ * finance office's file); `Lập bảng` beside it while the sheet does not exist (the form for a commune
+ * without the file); `Sửa thông tin bảng` and `Gỡ` once it does — an imported sheet included. Gates: `budget.update` for the first three,
  * `budget.confirm` for `Gỡ` (`routes.go:821`). A YEAR close keeps edit and removal VISIBLE and
  * disabled with the reason as tooltip — a vanished button reads as "you lack the right".
  */
@@ -652,6 +660,7 @@ export function SheetSelectionBar({
   onCreate,
   onEdit,
   onRemove,
+  onImported,
 }: {
   year: number;
   anchorYear: number;
@@ -667,6 +676,8 @@ export function SheetSelectionBar({
   onCreate: () => void;
   onEdit: () => void;
   onRemove: () => void;
+  /** After `Nạp từ Excel` loaded the file: the board re-reads everything and selects `firstKind`. */
+  onImported: (firstKind: LoaiBang | null) => void;
 }) {
   const locked = sheetLock !== null;
   const lockTitle = sheetLock ?? undefined;
@@ -700,7 +711,7 @@ export function SheetSelectionBar({
 
       {(canRecord || canConfirm) && (
         <div className="ml-auto flex min-w-0 flex-wrap items-center gap-2">
-          {canRecord && <BudgetSheetHeaderActions />}
+          {canRecord && <BudgetSheetHeaderActions year={year} busy={busy} onImported={onImported} />}
           {canRecord && sheetState === "missing" && (
             <Button
               type="button"
