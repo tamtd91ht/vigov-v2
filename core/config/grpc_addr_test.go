@@ -263,6 +263,30 @@ func TestOrgUnitOwnerGRPCAddrsReadTrimmedAndApart(t *testing.T) {
 	}
 }
 
+// petitions declares DocumentsClient, not OrgUnitOwnerClients: in prod it must start with
+// DOCUMENTS_GRPC_ADDR alone. Requiring PETITIONS_GRPC_ADDR there — its OWN address, never dialled —
+// is exactly the defect the separate group exists to prevent.
+func TestDocumentsClientDoesNotRequirePetitionsAddr(t *testing.T) {
+	clean(t, EnvProd, map[string]string{
+		"GRPC_CALLER_KEY":     khoaGoiNoiBoGia,
+		"DOCUMENTS_GRPC_ADDR": " documents.noi-bo:9090\n",
+	})
+	cfg, err := Load("petitions", Uses(DocumentsClient))
+	if err != nil {
+		t.Fatalf("petitions refused with DOCUMENTS_GRPC_ADDR set and PETITIONS_GRPC_ADDR empty: %v", err)
+	}
+	if cfg.DocumentsGRPCAddr() != "documents.noi-bo:9090" {
+		t.Errorf("DocumentsGRPCAddr = %q", cfg.DocumentsGRPCAddr())
+	}
+
+	clean(t, EnvProd, map[string]string{"GRPC_CALLER_KEY": khoaGoiNoiBoGia})
+	_, err = Load("petitions", Uses(DocumentsClient))
+	if !errors.Is(err, ErrThieuBienMoiTruong) || !strings.Contains(err.Error(), "DOCUMENTS_GRPC_ADDR") ||
+		strings.Contains(err.Error(), "PETITIONS_GRPC_ADDR") {
+		t.Errorf("want a refusal naming DOCUMENTS_GRPC_ADDR and only it, got %v", err)
+	}
+}
+
 func TestHaiDiaChiGRPCKhongLanNhau(t *testing.T) {
 	// Two addresses, two variables, and a reader has to be able to tell which is which. They were
 	// briefly one field's worth of typing apart in the struct literal, and a swap there would point

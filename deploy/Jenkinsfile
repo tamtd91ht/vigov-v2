@@ -89,6 +89,7 @@ pipeline {
     choice(name: 'HANH_DONG', choices: ['kiem-tra', 'xem-log', 'doi-ten-mien-thang-binh', 'tao-xa-thang-binh',
                                   'gan-mini-app-thang-binh', 'doi-app-id-thang-binh',
                                   'tao-khoa-ma-hoa-identity', 'mo-netpol-identity-zalo', 'bo-sung-cau-hinh-identity',
+                                  'bo-sung-cau-hinh-petitions',
                                   'kiem-tra-dang-nhap-app-rieng',
                                   'dat-secret-mini-app',
                                   'dung-clamav', 'tao-tai-khoan-van-hanh',
@@ -109,6 +110,9 @@ pipeline {
                         'DOCUMENTS_GRPC_ADDR / CITIZEN_SESSION_BRIDGE_LISTEN_ADDR vào env của deploy identity nếu chưa có ' +
                         '(có rồi thì giữ nguyên), CITIZEN_SESSION_BRIDGE_KEYS vào identity-secrets (cùng giá trị prod + ' +
                         'staging; đã có thì giữ), rồi khởi động lại identity của MT · ' +
+                        'bo-sung-cau-hinh-petitions: (TRƯỚC job service-petitions, từ ảnh 09/10/2026) thêm ' +
+                        'DOCUMENTS_GRPC_ADDR=vigov-service-documents:9090 vào env của deploy petitions nếu chưa có (có rồi ' +
+                        'thì giữ nguyên), rồi khởi động lại petitions của MT — thiếu biến này ảnh petitions mới từ chối khởi động · ' +
                         'kiem-tra-dang-nhap-app-rieng: (bước 4, SAU job service-identity) chỉ đọc — key, ảnh, Ingress, ' +
                         'thử POST /api/v1/citizen-sessions · ' +
                         'dat-secret-mini-app: (bước 5) operatorctl mini-app-secret set cho TENANT_ID + APP_ID bằng APP_SECRET ' +
@@ -139,7 +143,7 @@ pipeline {
     string(name: 'XAC_NHAN', defaultValue: '',
            description: 'Cho doi-ten-mien-thang-binh / tao-xa-thang-binh / gan-mini-app-thang-binh / doi-app-id-thang-binh / ' +
                         'tao-khoa-ma-hoa-identity / dat-secret-mini-app / di-tru-vihat-miniapp / bat-cau-phien-miniapp: gõ đúng vigov-prod. ' +
-                        'Cho mo-netpol-identity-zalo / bo-sung-cau-hinh-identity / dung-clamav: gõ đúng namespace của MT ' +
+                        'Cho mo-netpol-identity-zalo / bo-sung-cau-hinh-identity / bo-sung-cau-hinh-petitions / dung-clamav: gõ đúng namespace của MT ' +
                         '(vigov-prod hoặc vigov-staging).')
     string(name: 'TENANT_ID', defaultValue: '01M3CS7HHK72V71CGRRJHGR8E8',
            description: 'Cho dat-secret-mini-app: id xã (ULID 26 ký tự). Mặc định: Xã Thăng Bình.')
@@ -189,6 +193,7 @@ pipeline {
           if (!(params.HANH_DONG in ['kiem-tra', 'xem-log', 'doi-ten-mien-thang-binh', 'tao-xa-thang-binh',
                                   'gan-mini-app-thang-binh', 'doi-app-id-thang-binh',
                                   'tao-khoa-ma-hoa-identity', 'mo-netpol-identity-zalo', 'bo-sung-cau-hinh-identity',
+                                  'bo-sung-cau-hinh-petitions',
                                   'kiem-tra-dang-nhap-app-rieng',
                                   'dat-secret-mini-app',
                                   'dung-clamav', 'tao-tai-khoan-van-hanh',
@@ -963,6 +968,89 @@ YAML
     // GIÁ TRỊ KHOÁ không bao giờ vào log hay dòng lệnh — cùng cách bước 1 (umask 077, tệp tạm,
     // --patch-file, so bằng cmp -s, không set -x). Giá trị ba biến env không bí mật nên được in.
     // ─────────────────────────────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    // BỔ SUNG CẤU HÌNH PETITIONS — ảnh petitions từ 09/10/2026 khai nhóm biến `config.DocumentsClient`
+    // (chuyển đơn thư thành nhiệm vụ, ADR 0085: petitions hỏi documents qua gRPC). Ở staging/prod thiếu
+    // DOCUMENTS_GRPC_ADDR = ảnh mới TỪ CHỐI KHỞI ĐỘNG (crash-loop) — cùng loại sự cố identity 01/10/2026.
+    // Cụm thật dựng tay, không đọc deploy/base, nên biến phải được đặt TRƯỚC khi ảnh mới lên.
+    //
+    // Biến không bí mật → `env:` của deploy petitions (KHÔNG common-config: địa chỉ gRPC ở env của
+    // Deployment — core/config/hints.go grpcAddrHint, deploy/cau-hinh/README.md mục 3). CHỈ THÊM khi
+    // thiếu; đã có — dù khác giá trị — GIỮ NGUYÊN và in ra (giá trị ai đó đặt tay là quyết định của họ).
+    //
+    // NetworkPolicy: deploy/base/mang/netpol.yaml mở petitions → documents:9090. Namespace có
+    // NetworkPolicy mà thiếu luật ấy thì lời gọi treo tới hết hạn (503) — job này CHỈ CẢNH BÁO.
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    stage('Bổ sung cấu hình petitions') {
+      when { expression { params.HANH_DONG == 'bo-sung-cau-hinh-petitions' } }
+      steps {
+        script {
+          if (!(params.MT in ['prod', 'staging'])) { error("bo-sung-cau-hinh-petitions: MT '${params.MT}' không hợp lệ.") }
+          if (params.XAC_NHAN != env.NS) {
+            error("XAC_NHAN phải là đúng '${env.NS}' (namespace của MT). Nhận được: '${params.XAC_NHAN}'. Không ghi gì cả.")
+          }
+        }
+        sh '''
+          set -eu
+          DEP=vigov-service-petitions
+          DOCUMENTS_SVC=vigov-service-documents
+          WANT="DOCUMENTS_GRPC_ADDR=$DOCUMENTS_SVC:9090"
+
+          # ── 0. ĐỌC — chưa ghi gì. Hỏng một điều kiện = DỪNG, cụm không bị đụng.
+          kubectl -n "$NS" get deploy "$DEP" >/dev/null 2>&1 || {
+            echo "DỪNG: không thấy deploy/$DEP trong $NS — không đổi gì."; exit 1; }
+          n=$(kubectl -n "$NS" get deploy "$DEP" -o go-template='{{len .spec.template.spec.containers}}')
+          [ "$n" = "1" ] || { echo "DỪNG: deploy/$DEP có $n container — không biết đặt env vào cái nào. Không đổi gì."; exit 1; }
+          kubectl -n "$NS" get svc "$DOCUMENTS_SVC" >/dev/null 2>&1 || {
+            echo "DỪNG: không thấy svc/$DOCUMENTS_SVC trong $NS — tên khác giả định của job này. Không đổi gì."
+            kubectl -n "$NS" get svc -o go-template='{{range .items}}   {{.metadata.name}}{{"\n"}}{{end}}' || true
+            exit 1; }
+          env_value() {
+            kubectl -n "$NS" get deploy "$DEP" \
+              -o go-template='{{range (index .spec.template.spec.containers 0).env}}{{if eq .name "'"$1"'"}}{{if .valueFrom}}<valueFrom>{{else}}{{.value}}{{end}}{{end}}{{end}}'
+          }
+          env_names() {
+            kubectl -n "$NS" get deploy "$DEP" \
+              -o go-template='{{range (index .spec.template.spec.containers 0).env}}{{.name}}{{"\n"}}{{end}}'
+          }
+
+          # ── 1. CHỈ CẢNH BÁO — documents nghe 9090 qua Service; NetworkPolicy.
+          ports=$(kubectl -n "$NS" get svc "$DOCUMENTS_SVC" -o go-template='{{range .spec.ports}} {{.port}}/{{.protocol}}{{end}}')
+          case " $ports " in
+            *" 9090/TCP "*) echo "✓ svc/$DOCUMENTS_SVC có 9090" ;;
+            *) echo "⚠ svc/$DOCUMENTS_SVC, cổng:${ports:- (không có)} — chưa mở 9090. petitions vẫn khởi động (gRPC quay số lười),"
+               echo "  nhưng 'Chuyển thành nhiệm vụ' của đơn thư trả 503 tới khi Service mở 9090 (README mục 3)." ;;
+          esac
+          if [ -n "$(kubectl -n "$NS" get netpol -o name 2>/dev/null)" ]; then
+            echo "⚠ $NS có NetworkPolicy: cần luật petitions → documents:9090 (deploy/base/mang/netpol.yaml)."
+            echo "  Thiếu luật ấy thì 'Chuyển thành nhiệm vụ' treo tới hết hạn rồi 503. Job này không áp netpol."
+          fi
+
+          # ── 2. ENV — chỉ thêm khi thiếu.
+          if env_names | grep -qxF DOCUMENTS_GRPC_ADDR; then
+            echo "DOCUMENTS_GRPC_ADDR: giữ nguyên — đang là '$(env_value DOCUMENTS_GRPC_ADDR)'"
+          else
+            echo "DOCUMENTS_GRPC_ADDR: chưa có → đặt ${WANT#*=}"
+            kubectl -n "$NS" set env deploy/"$DEP" "$WANT"
+          fi
+
+          # ── 3. ĐỌC LẠI từ cụm; có giá trị mới khởi động lại.
+          [ -n "$(env_value DOCUMENTS_GRPC_ADDR)" ] || {
+            echo "DỪNG: đọc lại vẫn thiếu DOCUMENTS_GRPC_ADDR trên deploy/$DEP — KHÔNG khởi động lại."; exit 1; }
+          echo "✓ deploy/$DEP có DOCUMENTS_GRPC_ADDR — khởi động lại"
+          kubectl -n "$NS" rollout restart deploy/"$DEP"
+          if ! kubectl -n "$NS" rollout status deploy/"$DEP" --timeout=180s; then
+            pod=$(kubectl -n "$NS" get pod --sort-by=.metadata.creationTimestamp -o name 2>/dev/null \
+                    | grep "^pod/$DEP-" | tail -1 || true)
+            echo "✗ rollout chưa xong sau 3 phút. 60 dòng log cuối của ${pod:-(không thấy pod)} (lỗi cấu hình chỉ in TÊN biến):"
+            if [ -n "$pod" ]; then kubectl -n "$NS" logs "$pod" --tail=60 2>&1 || true; fi
+            exit 1
+          fi
+          echo "✓ petitions của $NS chạy với DOCUMENTS_GRPC_ADDR. Bước kế: job service-petitions (ảnh mới)."
+        '''
+      }
+    }
+
     stage('Bổ sung cấu hình identity') {
       when { expression { params.HANH_DONG == 'bo-sung-cau-hinh-identity' } }
       steps {

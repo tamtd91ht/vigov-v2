@@ -29,6 +29,16 @@ pod sẽ dừng và gọi tên key thiếu. Dễ sót nhất: `TRUSTED_PROXY_CID
 `_SECRET_KEY` (`platform-secrets`, cặp MinIO riêng `…/platform/*` + ghi bucket public) là pod platform
 **không khởi động** — và platform chết là mọi xã trả 404.
 
+**Trước khi rollout petitions có "chuyển đơn thư thành nhiệm vụ" (ADR 0085, 09/10/2026):** petitions
+nay khai thêm `DocumentsClient`, nên thiếu `DOCUMENTS_GRPC_ADDR` trong `env:` của
+`vigov-service-petitions` là pod petitions **không khởi động** ở staging/prod. Cụm dựng tay không nhận
+dòng mới của `deploy/base/petitions` — đặt tay trước khi đổi ảnh:
+`kubectl -n <namespace> set env deploy/vigov-service-petitions DOCUMENTS_GRPC_ADDR=<tên Service của documents>:9090`.
+Cách làm sẵn: job vận hành `deploy/Jenkinsfile`, `HANH_DONG=bo-sung-cau-hinh-petitions` (MT=prod, rồi MT=staging;
+`XAC_NHAN` = namespace) — chỉ thêm biến khi thiếu, rồi khởi động lại petitions.
+Cùng lúc áp hai luật mạng mới (petitions → documents 9090, quy tắc 3d + 4b của
+`deploy/base/mang/netpol.yaml`) — thiếu thì pod vẫn chạy nhưng tuyến ấy treo tới hết hạn rồi trả 503.
+
 ## 1. Secret
 
 ### `<dịch vụ>-secrets` — type `Opaque`, mỗi dịch vụ một cái
@@ -109,7 +119,7 @@ ingress-nginx chạy `hostNetwork` thì thêm dải IP node (`kubectl get nodes 
 | `IDENTITY_GRPC_ADDR` | **có (prod)** — documents, finance, petitions, comms, reporting, platform (từ 02/10/2026) | 6 dịch vụ trừ `identity` (manifest platform đã đặt sẵn) | gRPC của identity — đổi phiên cán bộ thành người dùng. Tên Service + `9090`. Platform dùng lại biến này từ 02/10/2026 cho tuyến logo + banner web-admin của xã (ADR 0069, quyền `admin.org`); phiên vận hành vẫn đi cổng riêng, xem `IDENTITY_OPERATOR_GRPC_ADDR` | `identity:9090` |
 | `IDENTITY_OPERATOR_GRPC_ADDR` | **có (prod)** — platform | `vigov-service-platform` **chỉ nơi này** | gRPC `OperatorService` của identity — tra / mở phiên vận hành (ADR 0048 §01/10 #2; cổng riêng chốt 01/10/2026). Cổng `9093`, **không** phải `9090`: 9090 nhận năm dịch vụ cán bộ, 9093 chỉ nhận platform (quy tắc 11 của `deploy/base/mang/netpol.yaml`). Danh sách `host:port[,host:port]` | `identity:9093` — khớp cổng `grpc-operator` của Deployment/Service identity |
 | `PETITIONS_GRPC_ADDR` | **có (prod)** — identity | `vigov-service-identity` | gRPC của petitions — hỏi trước khi xoá mềm đơn vị. Tên Service + `9090` | `petitions:9090` |
-| `DOCUMENTS_GRPC_ADDR` | **có (prod)** — identity | `vigov-service-identity` | gRPC của documents — như trên | `documents:9090` |
+| `DOCUMENTS_GRPC_ADDR` | **có (prod)** — identity, petitions | `vigov-service-identity`, `vigov-service-petitions` | gRPC của documents. identity: như trên. petitions: hỏi đơn thư trước khi chuyển thành nhiệm vụ (`ResolveCitizenLetterForTask`, ADR 0085) — thiếu ở dev thì `POST /api/v1/citizen-letter-tasks` trả 503. Tên Service + `9090` | `documents:9090` |
 | `COMMS_GRPC_ADDR` | **có (prod)** — petitions, documents, finance | `vigov-service-petitions`, `vigov-service-documents`, `vigov-service-finance` | gRPC của comms — hộp nhắc việc của bộ chạy tự động hoá (ADR 0058); finance: thông báo nhắc tên trong trao đổi dự án (ADR 0081 #5). Tên Service + `9090` | `comms:9090` |
 | `OPERATOR_HOST` | không — kể cả prod; vắng là khu vận hành **tắt**, mọi tuyến vận hành trả 404 (ADR 0048) | `vigov-service-platform` **chỉ nơi này** | Host duy nhất của khu vận hành ViHAT. Chỉ đặt khi host đã có DNS + TLS + Ingress, và sau khi xong còn mở #12 của ADR 0048 | tên host trần, chữ thường, không giao thức / cổng / đường dẫn, vd `admin.vigov.vn` (staging: `admin-stg.vigov.vn`). Host dạng xã dưới `vigov.vn` → platform **không khởi động** |
 | `ZALO_BOT_WEBHOOK_HOST` | **có (prod)** — comms | `vigov-service-comms` **chỉ nơi này** | Host mà Zalo gửi tin của bot dùng chung tới; comms tự dựng `https://<host>/api/v1/zalo-bot-updates` khi trỏ webhook (ADR 0074 #5). Chỉ đặt khi host đã có DNS + TLS + Ingress vào comms | tên host trần, chữ thường, không giao thức / cổng / đường dẫn: `bot.api.vigov.vn` ở prod. Host dạng xã (`<xa>.vigov.vn`) → comms **không khởi động** |

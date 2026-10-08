@@ -40,6 +40,7 @@
 //	IDENTITY_GRPC_ADDR                    ConfigMap  IdentityClient         refused in staging/prod; dev: refused at Dial
 //	PETITIONS_GRPC_ADDR                   ConfigMap  OrgUnitOwnerClients    refused in staging/prod; dev: delete answers 503
 //	DOCUMENTS_GRPC_ADDR                   ConfigMap  OrgUnitOwnerClients    as above
+//	                                                 + DocumentsClient      refused in staging/prod; dev: letter→task answers 503
 //	COMMS_GRPC_ADDR                       ConfigMap  CommsClient            refused in staging/prod; dev: automation runner off
 //	TENANT_CACHE_TTL                      —          TenantCache            default 30s, not set in the cluster
 //	REDIS_DSN                             Secret     Redis                  refused in staging/prod; dev: no cache
@@ -274,6 +275,12 @@ type Config struct {
 	// CLUSTER-INTERNAL ADDRESS ONLY. The hop is plaintext (ADR 0025; tools/security_debt.json). What
 	// travels on it is one org-unit id and two counts — no session token, no personal data — but the
 	// caller key does, and an address that leaves the cluster puts that key on the wire.
+	//
+	// documentsGRPCAddr ALSO belongs to group DocumentsClient, declared by petitions: it asks
+	// ResolveCitizenLetterForTask before booking a task from a citizen letter (ADR 0085 A). Same
+	// shape: no default, refused at Load in staging/prod; in dev empty makes that one route answer
+	// 503 with nothing written. What travels is one letter id out and number/year/type back — the
+	// RPC returns no personal data by contract — plus the caller key and the commune id.
 	petitionsGRPCAddr string
 	documentsGRPCAddr string
 
@@ -611,13 +618,16 @@ func Load(serviceName string, uses Usage) (Config, error) {
 	// 3): a missing key would produce a port that answers ANYTHING that reaches it, silently and on
 	// every RPC. A service with no gRPC server and no gRPC client (reporting) never reads it.
 	callerKey := r.read("GRPC_CALLER_KEY", os.Getenv("GRPC_CALLER_KEY"), requiredEverywhere,
-		GRPCServer, PlatformClient, IdentityClient, OrgUnitOwnerClients, CommsClient)
+		GRPCServer, PlatformClient, IdentityClient, OrgUnitOwnerClients, CommsClient, DocumentsClient)
 	// Required in prod; in dev empty is allowed here and refused by name at Dial.
 	platformAddr := r.read("PLATFORM_GRPC_ADDR", os.Getenv("PLATFORM_GRPC_ADDR"), requiredInProd, PlatformClient)
 	identityAddr := r.read("IDENTITY_GRPC_ADDR", os.Getenv("IDENTITY_GRPC_ADDR"), requiredInProd, IdentityClient)
 	// Required in prod; in dev empty means org-unit delete answers 503 (fail closed).
 	petitionsAddr := r.read("PETITIONS_GRPC_ADDR", os.Getenv("PETITIONS_GRPC_ADDR"), requiredInProd, OrgUnitOwnerClients)
-	documentsAddr := r.read("DOCUMENTS_GRPC_ADDR", os.Getenv("DOCUMENTS_GRPC_ADDR"), requiredInProd, OrgUnitOwnerClients)
+	// The same variable for petitions (DocumentsClient): in dev empty means POST
+	// /api/v1/citizen-letter-tasks answers 503 (fail closed, nothing written).
+	documentsAddr := r.read("DOCUMENTS_GRPC_ADDR", os.Getenv("DOCUMENTS_GRPC_ADDR"), requiredInProd,
+		OrgUnitOwnerClients, DocumentsClient)
 	// Required in prod: a runner that cannot deliver sends no commune any reminder. In dev empty
 	// means the automation runner does not start (fail closed: nothing claimed, nothing sent).
 	commsAddr := r.read("COMMS_GRPC_ADDR", os.Getenv("COMMS_GRPC_ADDR"), requiredInProd, CommsClient)

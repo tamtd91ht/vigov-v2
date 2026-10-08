@@ -123,6 +123,12 @@ spec:
             # bộ vào hộp chuông của comms qua `DeliverStaffNotifications` (ADR 0058 §3). Đòi
             # `comms` phơi cổng 9090 — `deploy/base/comms/service.yaml`.
             - { name: COMMS_GRPC_ADDR, value: comms:9090 }
+            # Bắt buộc ở staging/prod (nhóm DocumentsClient): trước khi chuyển một đơn thư thành
+            # nhiệm vụ, petitions hỏi documents `ResolveCitizenLetterForTask` (ADR 0085 A). Thiếu
+            # thì pod KHÔNG khởi động ở staging/prod; dev cho thiếu và tuyến
+            # POST /api/v1/citizen-letter-tasks trả 503. Đòi `documents` phơi cổng 9090 —
+            # `deploy/base/documents/service.yaml` — và cặp netpol quy tắc 3d + 4b.
+            - { name: DOCUMENTS_GRPC_ADDR, value: documents:9090 }
           envFrom:
             - configMapRef: { name: common-config }
             # Secret PHẢI có ít nhất: DATABASE_DSN · GRPC_CALLER_KEY · SESSION_SIGNING_KEYS.

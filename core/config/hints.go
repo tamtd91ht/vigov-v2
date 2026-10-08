@@ -119,7 +119,8 @@ var envHints = map[string]envHint{
 	"PLATFORM_GRPC_ADDR":  grpcAddrHint("platform", "nơi phân giải tên miền ra xã; thiếu thì không phục vụ được xã nào"),
 	"IDENTITY_GRPC_ADDR":  grpcAddrHint("identity", "nơi đổi phiên cán bộ thành người dùng; thiếu thì mọi route cán bộ trả 503"),
 	"PETITIONS_GRPC_ADDR": grpcAddrHint("petitions", "identity hỏi trước khi xoá mềm một đơn vị; thiếu thì không xoá được đơn vị nào"),
-	"DOCUMENTS_GRPC_ADDR": grpcAddrHint("documents", "identity hỏi trước khi xoá mềm một đơn vị; thiếu thì không xoá được đơn vị nào"),
+	"DOCUMENTS_GRPC_ADDR": grpcAddrHint("documents", "identity hỏi trước khi xoá mềm một đơn vị, petitions hỏi trước khi chuyển đơn thư thành nhiệm vụ (ADR 0085); "+
+		"thiếu ở identity thì không xoá được đơn vị nào, thiếu ở petitions thì POST /api/v1/citizen-letter-tasks luôn trả 503"),
 	"COMMS_GRPC_ADDR":     grpcAddrHint("comms", "hộp thông báo mà bộ chạy tự động hoá gửi nhắc việc vào (ADR 0058); thiếu thì không xã nào nhận nhắc việc"),
 	"REDIS_DSN": {
 		meaning: "Redis chống gửi trùng và giới hạn tần suất — thiếu thì một yêu cầu gửi hai lần tạo hai bản ghi vĩnh viễn.",

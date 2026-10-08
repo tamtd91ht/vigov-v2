@@ -86,6 +86,12 @@ const (
 	// ZaloBotWebhook: ZALO_BOT_WEBHOOK_HOST — the host comms points the shared Zalo Bot's webhook at
 	// (ADR 0074 #5, owner 05/10/2026: "chỉ comms nạp, bắt buộc ở prod"). service-comms only. APPENDED.
 	ZaloBotWebhook
+	// DocumentsClient: DOCUMENTS_GRPC_ADDR, GRPC_CALLER_KEY — petitions asking documents whether a
+	// citizen letter may become a task (ResolveCitizenLetterForTask, ADR 0085 A). A SEPARATE GROUP
+	// FROM OrgUnitOwnerClients, which also names DOCUMENTS_GRPC_ADDR: declaring that one in petitions
+	// would make staging/prod refuse to start without PETITIONS_GRPC_ADDR — petitions' OWN address,
+	// which it never dials. One variable, two groups, like GRPC_CALLER_KEY. APPENDED.
+	DocumentsClient
 
 	groupEnd // not a group: the bound Uses checks against
 )
@@ -112,6 +118,7 @@ var groupNames = map[Group]string{
 	CommsClient:         "CommsClient",
 	OperatorEdge:        "OperatorEdge",
 	ZaloBotWebhook:      "ZaloBotWebhook",
+	DocumentsClient:     "DocumentsClient",
 }
 
 // String is the identifier a main writes (`config.Redis`), so a message names what to add.

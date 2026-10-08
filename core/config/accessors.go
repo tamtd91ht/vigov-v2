@@ -37,7 +37,8 @@ func (c Config) GRPCListenAddr() string {
 
 // GRPCCallerKey is GRPC_CALLER_KEY — read by a gRPC server and by every gRPC client.
 func (c Config) GRPCCallerKey() secret.Secret {
-	c.require("GRPCCallerKey", GRPCServer, PlatformClient, IdentityClient, OrgUnitOwnerClients, CommsClient)
+	c.require("GRPCCallerKey", GRPCServer, PlatformClient, IdentityClient, OrgUnitOwnerClients, CommsClient,
+		DocumentsClient)
 	return c.grpcCallerKey
 }
 
@@ -59,9 +60,9 @@ func (c Config) PetitionsGRPCAddr() string {
 	return c.petitionsGRPCAddr
 }
 
-// DocumentsGRPCAddr is DOCUMENTS_GRPC_ADDR.
+// DocumentsGRPCAddr is DOCUMENTS_GRPC_ADDR — identity's org-unit owner, or petitions' letter check.
 func (c Config) DocumentsGRPCAddr() string {
-	c.require("DocumentsGRPCAddr", OrgUnitOwnerClients)
+	c.require("DocumentsGRPCAddr", OrgUnitOwnerClients, DocumentsClient)
 	return c.documentsGRPCAddr
 }
 

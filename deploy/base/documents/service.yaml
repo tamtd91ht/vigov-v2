@@ -8,5 +8,7 @@ spec:
     - { name: rest, port: 8080, targetPort: rest }
     # Tên DNS trong cụm: documents.<namespace>.svc.cluster.local:9090
     # Đây là giá trị `DOCUMENTS_GRPC_ADDR` của `identity` (chặn xoá bộ phận còn giữ văn bản đến,
-    # `CountOrgUnitHoldings`). Không có dòng này thì mọi lần xoá bộ phận bị từ chối.
+    # `CountOrgUnitHoldings`) và của `petitions` (hỏi đơn thư trước khi chuyển thành nhiệm vụ,
+    # `ResolveCitizenLetterForTask`, ADR 0085). Không có dòng này thì mọi lần xoá bộ phận bị từ
+    # chối và POST /api/v1/citizen-letter-tasks luôn trả 503.
     - { name: grpc, port: 9090, targetPort: grpc }

@@ -122,7 +122,9 @@ spec:
       ports:
         - { port: 9090, protocol: TCP }
 ---
-# 3d. documents 9090 ← CHỈ identity (`CountOrgUnitHoldings`, hỏi trước khi xoá một bộ phận).
+# 3d. documents 9090 ← identity (`CountOrgUnitHoldings`, hỏi trước khi xoá một bộ phận) và petitions
+# (`ResolveCitizenLetterForTask`, hỏi đơn thư trước khi chuyển thành nhiệm vụ — ADR 0085 A,
+# `documentsclient.Dial` trong `service-petitions/cmd/server/main.go`).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -134,6 +136,7 @@ spec:
   ingress:
     - from:
         - podSelector: { matchLabels: { app.kubernetes.io/name: identity } }
+        - podSelector: { matchLabels: { app.kubernetes.io/name: petitions } }
       ports:
         - { port: 9090, protocol: TCP }
 ---
@@ -271,6 +274,7 @@ spec:
         - podSelector: { matchLabels: { app.kubernetes.io/name: platform } }
         - podSelector: { matchLabels: { app.kubernetes.io/name: identity } }
         - podSelector: { matchLabels: { app.kubernetes.io/name: comms } }
+        - podSelector: { matchLabels: { app.kubernetes.io/name: documents } }   # đơn thư → nhiệm vụ, ADR 0085
       ports:
         - { port: 9090, protocol: TCP }
 ---

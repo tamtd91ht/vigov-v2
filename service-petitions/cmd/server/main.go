@@ -25,6 +25,7 @@ import (
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/commsclient"
 	"github.com/vihat/vigov/core/config"
+	"github.com/vihat/vigov/core/documentsclient"
 	petitionsv1 "github.com/vihat/vigov/core/gen/vigov/petitions/v1"
 	"github.com/vihat/vigov/core/grpcx"
 	"github.com/vihat/vigov/core/httpx"
@@ -54,6 +55,8 @@ import (
 //
 // petitions: the one service storing uploads (scene photographs), so the only one declaring ObjectStore and MalwareScan.
 // CommsClient: the automation runner delivers staff notices into comms' bell inbox (ADR 0058 §3).
+// DocumentsClient: a task from a citizen letter asks documents first (ADR 0085 A) — NOT
+// OrgUnitOwnerClients, which would also require this service's own PETITIONS_GRPC_ADDR.
 var configUses = config.Uses(
 	config.HTTPServer,
 	config.GRPCServer,
@@ -65,6 +68,7 @@ var configUses = config.Uses(
 	config.ObjectStore,
 	config.MalwareScan,
 	config.CommsClient,
+	config.DocumentsClient,
 )
 
 func main() {
@@ -151,6 +155,27 @@ func chay(log *slog.Logger) error {
 		return err
 	}
 	defer dinhDanh.Close()
+
+	// 3a. documents — asked before a task is booked from a citizen letter (ResolveCitizenLetterForTask,
+	// ADR 0085 A). The letter register is documents' (rule 2), so there is no other way to learn
+	// whether a letter exists in this commune, is a denunciation, or what its deadline is.
+	//
+	// DECLARED AS THE INTERFACE, nil when unset: a nil *documentsclient.Client assigned into it would
+	// be a non-nil interface, and the use case would call through it instead of failing closed.
+	// Empty happens in DEV only (config.DocumentsClient is required in staging/prod); the route then
+	// answers 503 and writes nothing. grpc.NewClient connects lazily, so documents being down does not
+	// delay startup — it makes that one route answer 503.
+	var letters app.CitizenLetterResolver
+	if addr := cfg.DocumentsGRPCAddr(); addr != "" {
+		documents, err := documentsclient.Dial(addr, cfg.GRPCCallerKey(), log)
+		if err != nil {
+			return err
+		}
+		defer documents.Close()
+		letters = documents
+	} else {
+		log.Warn("chuyển đơn thư thành nhiệm vụ TẮT — thiếu DOCUMENTS_GRPC_ADDR; POST /api/v1/citizen-letter-tasks sẽ trả 503")
+	}
 
 	// 3b. The CITIZEN session registry, over the SAME connection to identity.
 	//
@@ -395,14 +420,8 @@ func chay(log *slog.Logger) error {
 		// `ghiNhiemVu` — the create path itself — so this door cannot book a task any other way.
 		PetitionTasks: app.NewPetitionTaskCreation(phieu, ghiNhiemVu),
 		// A task FROM a citizen letter (ADR 0085): documents is asked, then `ghiNhiemVu` books it.
-		//
-		// ⚠ THE DOCUMENTS RESOLVER IS NOT WIRED YET, AND THE ROUTE THEREFORE ANSWERS 503 — fail closed,
-		// nothing written. DOCUMENTS_GRPC_ADDR lives in config group OrgUnitOwnerClients, which also
-		// carries PETITIONS_GRPC_ADDR (identity's two org-unit owners); declaring that group here would
-		// make staging/prod refuse to start without THIS service's own address. Wiring needs a group of
-		// its own in core/config (and DOCUMENTS-GRPC-ADDR on this deployment), then:
-		// documentsclient.Dial(cfg.DocumentsGRPCAddr(), cfg.GRPCCallerKey(), log) passed here.
-		CitizenLetterTasks: app.NewCitizenLetterTaskCreation(nil, ghiNhiemVu),
+		// `letters` is nil only in dev with DOCUMENTS_GRPC_ADDR empty — the route then answers 503.
+		CitizenLetterTasks: app.NewCitizenLetterTaskCreation(letters, ghiNhiemVu),
 		// §5.9's attachments: the SAME task store (the holder rule reads the row the acts lock) and the
 		// SAME stored-file store the log entry links through, so a file the upload route issued is the
 		// row the entry attaches and the timeline reads back.

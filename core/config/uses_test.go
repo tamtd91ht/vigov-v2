@@ -68,6 +68,8 @@ var prodRequired = map[Group][]string{
 	OperatorEdge: {"OPERATOR_SESSION_SIGNING_KEYS", "IDENTITY_OPERATOR_GRPC_ADDR"},
 	// Owner, 05/10/2026 (ADR 0074 frontmatter): "bắt buộc ở prod".
 	ZaloBotWebhook: {"ZALO_BOT_WEBHOOK_HOST"},
+	// Owner rule (ADR 0057): petitions uses documents, so petitions requires its address in prod.
+	DocumentsClient: {"GRPC_CALLER_KEY", "DOCUMENTS_GRPC_ADDR"},
 }
 
 func TestEveryGroupHasAProdDecision(t *testing.T) {
