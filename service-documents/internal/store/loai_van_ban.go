@@ -55,7 +55,7 @@ var ErrQuaNhieuLoaiVanBan = errors.New("loai_van_ban: vượt trần danh mục"
 // `dang_dung` and `la_mac_dinh` are adjacent BOOLEANs: swapping either pair here — or there —
 // produces no error at all, and the screen shows slugs where labels belong, or pre-selects a type
 // the commune has taken out of use.
-const cotLoaiVanBan = `id, ma, nhan, dang_dung, la_mac_dinh, thu_tu, nguon, ma_nguon_re_nhanh`
+const cotLoaiVanBan = `id, ma, nhan, dang_dung, la_mac_dinh, thu_tu, nguon, ma_nguon_re_nhanh, color`
 
 // DanhSach reads the commune's whole document-type catalogue, ordered.
 //
@@ -103,11 +103,8 @@ func (s *LoaiVanBanStore) DanhSach(ctx context.Context) ([]domain.LoaiVanBan, er
 
 	ra := make([]domain.LoaiVanBan, 0, 16)
 	for rows.Next() {
-		var lvb domain.LoaiVanBan
-		// POSITIONAL — in lockstep with cotLoaiVanBan. See the note there on the two adjacent
-		// pairs of same-typed columns.
-		if err := rows.Scan(&lvb.ID, &lvb.Ma, &lvb.Nhan, &lvb.DangDung, &lvb.LaMacDinh,
-			&lvb.ThuTu, &lvb.Nguon, &lvb.MaNguonReNhanh); err != nil {
+		lvb, err := docMotDongLoaiVanBan(rows.Scan)
+		if err != nil {
 			return nil, fmt.Errorf("loai_van_ban: đọc dòng: %w", err)
 		}
 		ra = append(ra, lvb)
@@ -142,8 +139,11 @@ func (s *LoaiVanBanStore) DanhSach(ctx context.Context) ([]domain.LoaiVanBan, er
 // note there on the adjacent same-typed columns.
 func docMotDongLoaiVanBan(quet func(...any) error) (domain.LoaiVanBan, error) {
 	var lvb domain.LoaiVanBan
+	// `color` is NULL when none was chosen; "" in the domain (migration 0007).
+	var color sql.NullString
 	err := quet(&lvb.ID, &lvb.Ma, &lvb.Nhan, &lvb.DangDung, &lvb.LaMacDinh,
-		&lvb.ThuTu, &lvb.Nguon, &lvb.MaNguonReNhanh)
+		&lvb.ThuTu, &lvb.Nguon, &lvb.MaNguonReNhanh, &color)
+	lvb.Color = color.String
 	return lvb, err
 }
 
@@ -212,13 +212,13 @@ func (s *LoaiVanBanStore) DemDangSong(ctx context.Context, tx *store.ScopedTx) (
 // yet (commune onboarding — see the migration header). Turning either into a parameter is the one
 // edit that reopens the whole tier model, and it would look like tidying up.
 const chenLoaiVanBan = `INSERT INTO loai_van_ban
-	(tenant_id, id, ma, nhan, thu_tu, la_mac_dinh, dang_dung, nguon, ma_nguon_re_nhanh)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, 'don-vi', false)`
+	(tenant_id, id, ma, nhan, thu_tu, la_mac_dinh, dang_dung, color, nguon, ma_nguon_re_nhanh)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'don-vi', false)`
 
 // Chen adds one row the COMMUNE owns. There is no method here that writes a `he-thong` row.
 func (s *LoaiVanBanStore) Chen(ctx context.Context, tx *store.ScopedTx, lvb domain.LoaiVanBan) error {
 	if _, err := tx.Exec(ctx, chenLoaiVanBan, string(tx.TenantID()),
-		lvb.ID, lvb.Ma, lvb.Nhan, lvb.ThuTu, lvb.LaMacDinh, lvb.DangDung); err != nil {
+		lvb.ID, lvb.Ma, lvb.Nhan, lvb.ThuTu, lvb.LaMacDinh, lvb.DangDung, colorArg(lvb.Color)); err != nil {
 		return fmt.Errorf("loai_van_ban: chèn: %w", err)
 	}
 	return nil
@@ -247,14 +247,14 @@ func (s *LoaiVanBanStore) BoMacDinhKhac(ctx context.Context, tx *store.ScopedTx,
 // trigger, and both layers are meant: the trigger is the floor that holds against every writer, and
 // their absence here is what makes the floor unreachable from this service in the first place.
 const capNhatLoaiVanBan = `UPDATE loai_van_ban ` +
-	`SET nhan = $3, thu_tu = $4, dang_dung = $5, la_mac_dinh = $6, cap_nhat_luc = now() ` +
+	`SET nhan = $3, thu_tu = $4, dang_dung = $5, la_mac_dinh = $6, color = $7, cap_nhat_luc = now() ` +
 	`WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
 
 // CapNhat writes the four fields a commune may change. The caller has already read the row with
 // TheoIDDeSua and decided the change is permitted at this row's tier.
 func (s *LoaiVanBanStore) CapNhat(ctx context.Context, tx *store.ScopedTx, lvb domain.LoaiVanBan) error {
 	kq, err := tx.Exec(ctx, capNhatLoaiVanBan, string(tx.TenantID()),
-		lvb.ID, lvb.Nhan, lvb.ThuTu, lvb.DangDung, lvb.LaMacDinh)
+		lvb.ID, lvb.Nhan, lvb.ThuTu, lvb.DangDung, lvb.LaMacDinh, colorArg(lvb.Color))
 	if err != nil {
 		return fmt.Errorf("loai_van_ban: cập nhật: %w", err)
 	}

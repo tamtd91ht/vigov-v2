@@ -55,3 +55,11 @@ func doiMotDong(kq sql.Result, viec string) error {
 	}
 	return nil
 }
+
+// colorArg writes "" as NULL — "no colour chosen" (ADR 0079 row 5). The CHECK refuses an empty string.
+func colorArg(color string) any {
+	if color == "" {
+		return nil
+	}
+	return color
+}

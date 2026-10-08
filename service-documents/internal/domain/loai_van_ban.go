@@ -60,6 +60,11 @@ type LoaiVanBan struct {
 	// and leaves MaNguonReNhanh false; see the comment on the constants.
 	Nguon          string
 	MaNguonReNhanh bool
+
+	// Color is the display colour, `#rrggbb` lower-case, "" when none was chosen (NULL, migration
+	// 0007, ADR 0079 row 5). Presentation only — editable on every tier, "Hệ thống" rows included
+	// (Q1 #9); nothing branches on it. See catalogue_color.go.
+	Color string
 }
 
 // WHAT THIS TYPE DELIBERATELY DOES NOT CARRY, so the absence reads as a decision:

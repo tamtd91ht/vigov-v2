@@ -54,6 +54,7 @@ type hangLVB struct {
 	thuTu        int
 	nguon        string
 	reNhanh      bool
+	color        any // nil = NULL, as PostgreSQL hands it back (migration 0007)
 }
 
 type khoGia struct {
@@ -179,7 +180,7 @@ func (c *connGia) QueryContext(_ context.Context, q string, args []driver.NamedV
 		}
 		h := *c.k.hang
 		return &rowsGia{cot: cotLVB(), hang: [][]driver.Value{{
-			h.id, h.ma, h.nhan, h.dangDung, h.macDinh, int64(h.thuTu), h.nguon, h.reNhanh,
+			h.id, h.ma, h.nhan, h.dangDung, h.macDinh, int64(h.thuTu), h.nguon, h.reNhanh, h.color,
 		}}}, nil
 	}
 	return nil, fmt.Errorf("driver giả: không biết trả gì cho %q", q)
@@ -189,7 +190,7 @@ func (c *connGia) QueryContext(_ context.Context, q string, args []driver.NamedV
 // reordering the store's list without reordering its Scan turns this red too — the store's own
 // suite makes the same argument for the same reason.
 func cotLVB() []string {
-	return []string{"id", "ma", "nhan", "dang_dung", "la_mac_dinh", "thu_tu", "nguon", "ma_nguon_re_nhanh"}
+	return []string{"id", "ma", "nhan", "dang_dung", "la_mac_dinh", "thu_tu", "nguon", "ma_nguon_re_nhanh", "color"}
 }
 
 type txGia struct{ k *khoGia }

@@ -22,6 +22,7 @@ import (
 	"github.com/vihat/vigov/core/grpcx"
 	"github.com/vihat/vigov/core/secret"
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-documents/internal/domain"
 	svcgrpc "github.com/vihat/vigov/service-documents/internal/grpc"
 )
 
@@ -38,10 +39,23 @@ func (c tenantCounter) CountOpenHeldByOrgUnit(ctx context.Context, _ string) (in
 	return c.n, nil
 }
 
+// tenantTypes answers every asked code as an active type — and panics without a commune, like the
+// real store.
+type tenantTypes struct{}
+
+func (tenantTypes) StatesByCode(ctx context.Context, codes []string) ([]domain.DocumentTypeCodeState, error) {
+	_ = tenant.MustFrom(ctx)
+	out := make([]domain.DocumentTypeCodeState, 0, len(codes))
+	for _, c := range codes {
+		out = append(out, domain.DocumentTypeCodeState{Code: c, Active: true})
+	}
+	return out, nil
+}
+
 func startGRPC(t *testing.T, opts ...grpc.DialOption) documentsv1.DocumentsServiceClient {
 	t.Helper()
 	lis := bufconn.Listen(1 << 20)
-	srv := buildGRPCServer(testCallerKey, svcgrpc.Deps{Incoming: tenantCounter{n: 6},
+	srv := buildGRPCServer(testCallerKey, svcgrpc.Deps{Incoming: tenantCounter{n: 6}, DocumentTypes: tenantTypes{},
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	go func() {
 		if err := srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
@@ -100,6 +114,26 @@ func TestGRPCServerWithoutCallerKeyDoesNotBuild(t *testing.T) {
 			t.Fatal("built a gRPC server with an empty GRPC_CALLER_KEY")
 		}
 	}()
-	_ = buildGRPCServer(nil, svcgrpc.Deps{Incoming: tenantCounter{},
+	_ = buildGRPCServer(nil, svcgrpc.Deps{Incoming: tenantCounter{}, DocumentTypes: tenantTypes{},
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+}
+
+// The new RPC rides the SAME chain: with key and commune it answers, without the commune it is refused
+// by the interceptor before the handler runs.
+func TestGRPCResolveDocumentTypeCodesThroughChain(t *testing.T) {
+	cl := startGRPC(t, grpc.WithChainUnaryInterceptor(
+		grpcx.UnaryClientCallerAuth(testCallerKey),
+		grpcx.UnaryClientInterceptor(),
+	))
+	req := &documentsv1.ResolveDocumentTypeCodesRequest{Codes: []string{"cong-van"}}
+	res, err := cl.ResolveDocumentTypeCodes(tenant.Into(context.Background(), grpcTestTenant), req)
+	if err != nil {
+		t.Fatalf("refused with key and commune: %v", err)
+	}
+	if len(res.GetItems()) != 1 || res.GetItems()[0].GetCode() != "cong-van" || !res.GetItems()[0].GetActive() {
+		t.Errorf("= %+v", res)
+	}
+	if _, err := cl.ResolveDocumentTypeCodes(context.Background(), req); status.Code(err) != codes.InvalidArgument {
+		t.Errorf("no commune: code = %v, want InvalidArgument", status.Code(err))
+	}
 }

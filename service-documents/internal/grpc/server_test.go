@@ -33,7 +33,8 @@ func (f *fakeCounter) CountOpenHeldByOrgUnit(ctx context.Context, id string) (in
 }
 
 func newTestServer(f *fakeCounter) *Server {
-	return NewServer(Deps{Incoming: f, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	return NewServer(Deps{Incoming: f, DocumentTypes: &fakeTypes{},
+		Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 }
 
 func TestCountOrgUnitHoldingsAnswersInContextCommune(t *testing.T) {
@@ -101,4 +102,13 @@ func TestNewServerRefusesMissingDeps(t *testing.T) {
 		}
 	}()
 	NewServer(Deps{Incoming: &fakeCounter{}})
+}
+
+func TestNewServerRefusesMissingDocumentTypes(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("built a server without the document-type reader")
+		}
+	}()
+	NewServer(Deps{Incoming: &fakeCounter{}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 }

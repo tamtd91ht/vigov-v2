@@ -1,7 +1,8 @@
 // Package grpc serves the documents contract (proto/vigov/documents/v1) to the other services.
 //
-// ONE question today: CountOrgUnitHoldings, asked by identity before it soft-deletes an org unit.
-// It writes nothing, publishes nothing and is not audited — the audited act is identity's delete
+// Two questions, both from identity, both read-only: CountOrgUnitHoldings, asked before it soft-deletes
+// an org unit, and ResolveDocumentTypeCodes (document_type_codes.go), asked before it writes an SLA
+// row for one document type. Neither writes, publishes or audits — the audited act is identity's
 // (documents.proto, which defers to petitions.proto for the reasoning).
 //
 // Health is not implemented, like every other gRPC server in this repository: liveness is the
@@ -19,6 +20,7 @@ import (
 
 	documentsv1 "github.com/vihat/vigov/core/gen/vigov/documents/v1"
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-documents/internal/domain"
 )
 
 // OrgUnitHoldingsCounter is "open incoming documents this unit holds", in the commune of ctx.
@@ -27,10 +29,17 @@ type OrgUnitHoldingsCounter interface {
 	CountOpenHeldByOrgUnit(ctx context.Context, orgUnitID string) (int, error)
 }
 
+// DocumentTypeCodeReader is "the live document types of the commune in ctx carrying these codes".
+// *store.LoaiVanBanStore satisfies it.
+type DocumentTypeCodeReader interface {
+	StatesByCode(ctx context.Context, codes []string) ([]domain.DocumentTypeCodeState, error)
+}
+
 // Deps are what the server reads. Every field is required.
 type Deps struct {
-	Incoming OrgUnitHoldingsCounter
-	Log      *slog.Logger
+	Incoming      OrgUnitHoldingsCounter
+	DocumentTypes DocumentTypeCodeReader
+	Log           *slog.Logger
 }
 
 // Server implements documentsv1.DocumentsServiceServer.
@@ -41,7 +50,7 @@ type Server struct {
 
 // NewServer panics on a missing dependency, at construction rather than on the first call.
 func NewServer(d Deps) *Server {
-	if d.Incoming == nil || d.Log == nil {
+	if d.Incoming == nil || d.DocumentTypes == nil || d.Log == nil {
 		panic("documents grpc: NewServer thiếu phụ thuộc")
 	}
 	return &Server{d: d}
