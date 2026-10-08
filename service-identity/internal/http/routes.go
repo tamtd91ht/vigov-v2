@@ -2806,11 +2806,11 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @screen   14-cau-hinh §8
 	// 400 is a body that is not JSON, `don-thu` (default row only), an empty or malformed field, a
 	// figure outside 0 < giờ <= domain.GioToiDa, escalate_president_hours below escalate_leader_hours,
-	// a `phan-anh` field that is not an active tier-1 code (`sla_field_unknown`), or `van-ban-den` /
-	// `nhiem-vu` (`sla_field_unverifiable` — no contract yet lets identity check a document-type or
-	// task-priority code, rule 2 stop condition #2).
+	// or a code its owner does not answer as live and in use (`sla_field_unknown`): a `phan-anh` field
+	// checked against platform's tier-1 list, a `van-ban-den` document type against service-documents,
+	// a `nhiem-vu` task priority against service-petitions.
 	// 409 `sla_rule_exists` is a live row for this kind and field already.
-	// 503 `sla_field_check_unavailable` is the platform not answering; nothing was written.
+	// 503 `sla_field_check_unavailable` is the owner of the code not answering; nothing was written.
 	//
 	// @request  addSLAFieldRowIn
 	// @reply    201 dongSLARa
