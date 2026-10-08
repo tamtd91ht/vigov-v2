@@ -150,6 +150,15 @@
       "tiep_theo": "ĐƠN THƯ KHÔNG CHẠY: chưa có sổ đơn thư (không bảng, không cột hạn) — người dùng đã duyệt nhắc hạn đơn thư 29/09; bật bằng một dòng automationKinds khi có sổ.",
       "no_confirm": [],
       "menu": "cau-hinh"
+    },
+    {
+      "id": "cau-hinh-loai-van-ban-08-10",
+      "menu": "cau-hinh",
+      "viec": "RPC ResolveDocumentTypeCodes (identity đối chiếu mã dòng thời hạn văn bản đến), màu loại văn bản, gửi thông báo theo loại DOCUMENT_* (ADR 0079)",
+      "trang_thai": "xong",
+      "bang_chung": "Migration c4e2f0c7 (0007); a0a5fa0e (RPC + màu + core/documentsclient), 1a7cdd46 (loại thông báo theo phân hệ). go test ./service-documents/... xanh; *_pg_test chưa chạy.",
+      "no_confirm": [],
+      "tiep_theo": "Triển khai SAU comms f339b2ff. Chú thích 'don_thu không tồn tại trong service này' đã cũ (domain/automation.go:17-21, store/crosstenant/automation.go:38, http/incoming_dashboard.go:28, domain/incoming_dashboard.go:139, app/automation_runner.go:127). Có nhắc việc cho đơn thư hay không là điều kiện dừng luật 10 — chờ chủ dự án."
     }
   ]
 }

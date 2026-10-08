@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-reporting",
-  "cap_nhat": "2026-09-29",
+  "cap_nhat": "2026-10-08",
   "muc": [
     {
       "id": "khung-rong-cho-khach-chot",
@@ -36,6 +36,15 @@
       "tiep_theo": "Chưa có gì PHÁT RA các câu này: màn /bao-cao và thông báo báo cáo chưa dựng — câu sửa được lưu nhưng chưa hiện ở đâu. Việc NGOÀI KHO: tạo CSDL vigov_reporting + Secret reporting-secrets (DATABASE_DSN, GRPC_CALLER_KEY), job Jenkins vigov-svc-reporting, DNS reporting.api.vigov.vn. Chưa có graceful shutdown.",
       "no_confirm": [],
       "menu": "cau-hinh"
+    },
+    {
+      "id": "cau-hinh-tat-loi-he-thong-08-10",
+      "menu": "cau-hinh",
+      "viec": "Tắt/Bật lời hệ thống đã sửa (ADR 0079 lô 2 Q2)",
+      "trang_thai": "xong",
+      "bang_chung": "Migration c4e2f0c7 (0004); 2a4959cb. go test ./service-reporting/... xanh.",
+      "no_confirm": [],
+      "tiep_theo": "Nợ cũ: CHECK delete_complete của 0003 như finance. Web chưa nối lại."
     }
   ]
 }

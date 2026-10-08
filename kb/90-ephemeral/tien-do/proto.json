@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "proto",
-  "cap_nhat": "2026-10-05",
+  "cap_nhat": "2026-10-08",
   "muc": [
     {
       "id": "operator-mini-app-secret",
@@ -142,6 +142,15 @@
       "trang_thai": "xong",
       "bang_chung": "048eca0e zalo_bot_operator.proto; buf lint + breaking xanh.",
       "tiep_theo": "Sửa chú thích 'mỗi lần trỏ webhook xoay khoá' cho khớp một ô chờ. Thêm hạn/số ngày trễ vào thông báo cán bộ nếu cần áp nhịp nhắc việc trễ."
+    },
+    {
+      "id": "cau-hinh-rpc-doi-chieu-ma-va-loai-nhan-08-10",
+      "menu": "cau-hinh",
+      "viec": "documents.ResolveDocumentTypeCodes, petitions.ResolveTaskPriorityCodes (identity đối chiếu mã dòng thời hạn riêng) + comms.StaffNotificationKind 5–16 theo phân hệ (ADR 0079 lô 2 Q3, Q4)",
+      "trang_thai": "xong",
+      "bang_chung": "0bf43b86 — buf lint, buf breaking --against HEAD sạch; transaction-boundaries them_dong_thoi_han_rieng_kiem_ma.",
+      "no_confirm": [],
+      "tiep_theo": "Thứ tự triển khai: comms (f339b2ff) trước nơi phát (documents 1a7cdd46, petitions). Sau khi mọi nơi phát đã đổi: đặt giá trị 1–3 thành reserved và thu hẹp CHECK cài đặt Zalo — một thay đổi riêng."
     }
   ]
 }

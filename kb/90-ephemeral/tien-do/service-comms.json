@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-comms",
-  "cap_nhat": "2026-10-05",
+  "cap_nhat": "2026-10-08",
   "muc": [
     {
       "id": "so-thong-bao-gui-cong-dan",
@@ -339,6 +339,15 @@
       "bang_chung": "Chưa có consumer nào trong service-comms cho sự kiện của finance; tuyến POST /api/v1/investment-projects/{id}/comments tự ghi 'chưa gửi thông báo' (kb/30-indexes/api-surface.json). Phía phát: sổ service-finance → `giai-ngan-su-kien-vuong-mac-nhac-ten`. Kiểm 06/10/2026.",
       "no_confirm": [],
       "tiep_theo": "Chờ thiết kế sự kiện (lượt bị chặn quyền 06/10/2026, chờ chủ dự án). Khi dựng: tiêu thụ luỹ đẳng, tenant_id trong thông điệp, thân thông báo KHÔNG chép nội dung ý kiến (tự do, có thể chứa dữ liệu cá nhân — luật 3); chỉ báo 'được nhắc trong trao đổi của dự án <mã>' và liên kết. Người được nhắc định danh bằng mã cán bộ."
+    },
+    {
+      "id": "cau-hinh-bot-xa-va-loai-nhan-08-10",
+      "menu": "cau-hinh",
+      "viec": "Bot Zalo riêng của xã + webhook trên tên miền xã, lưu lần thử thư gần nhất, màu loại tài nguyên bản đồ, 12 loại thông báo theo phân hệ (ADR 0079 lô 2 Q1, Q3)",
+      "trang_thai": "xong",
+      "bang_chung": "Migration f5c78d29 (0019–0022); Go afe3be2d (bot xã, webhook, thư, màu — isolation+security-reviewer không mục chặn, đã sửa mọi RISK/GAP), f339b2ff (nhận loại 5–16). go test ./service-comms/... xanh. *_pg_test CHƯA chạy (không VIGOV_TEST_DSN).",
+      "no_confirm": [],
+      "tiep_theo": "Chờ chủ dự án: ngưỡng webhook 600/phút nay tính theo từng xã (luật 13, vẫn tạm); admin.lookup được thay bot (ADR 0074 #6) — xem lại có cần quyền riêng; hạn của secret chờ (pending) chưa có. Nhật ký an ninh cho bot chung và máy chủ thư còn thiếu (chỉ có ở bot xã). Migration 0021 khoá ACCESS EXCLUSIVE khi chạy — triển khai lúc vắng. Web chưa nối lại (còn '?')."
     }
   ]
 }
