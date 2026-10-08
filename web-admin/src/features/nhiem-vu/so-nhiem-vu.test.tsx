@@ -194,6 +194,7 @@ const DANH_MUC: DanhMucNhiemVu = {
       order: 1,
       source: "he-thong",
       tier: 1,
+      color: null,
       requires_directive: true,
     },
   ],
@@ -207,6 +208,7 @@ const DANH_MUC: DanhMucNhiemVu = {
       order: 2,
       source: "he-thong",
       tier: 1,
+      color: null,
     },
   ],
   khoi: [
@@ -219,6 +221,7 @@ const DANH_MUC: DanhMucNhiemVu = {
       order: 1,
       source: "don-vi",
       tier: 1,
+      color: null,
     },
   ],
   boPhan: BO_PHAN,
@@ -237,6 +240,7 @@ const DANH_MUC_CO_BAN: DanhMucNhiemVu = {
       order: 2,
       source: "he-thong",
       tier: 1,
+      color: null,
       requires_directive: false,
     },
   ],
@@ -790,6 +794,7 @@ describe("form Giao việc mới §7", () => {
       order: 1,
       source: "he-thong",
       tier: 1,
+      color: null,
       requires_directive: code === "theo-van-ban",
     });
     const noDefaultType: DanhMucNhiemVu = {
@@ -1072,6 +1077,7 @@ describe("form Giao việc mới §7", () => {
     order,
     source: "he-thong",
     tier: 1,
+    color: null,
     requires_directive: code === "theo-van-ban",
   });
 
@@ -2364,6 +2370,7 @@ describe("§7.1 — mức ưu tiên mặc định lấy từ DANH MỤC CỦA X�
     order: 1,
     source: "he-thong",
     tier: 1,
+    color: null,
   });
 
   function oUuTien(mucUuTien: DanhMucNhiemVu["mucUuTien"]): string {

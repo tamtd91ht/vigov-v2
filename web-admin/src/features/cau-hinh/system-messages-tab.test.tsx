@@ -28,10 +28,13 @@ function sessionWith(permissions: readonly string[]): PhienDaDoc {
 function message(patch: Partial<SystemMessage> = {}): SystemMessage {
   return {
     code: "feedback.reason_required",
+    group_code: "phan-anh",
+    origin: "shipped",
     description: "Hiện khi cán bộ không tiếp nhận hoặc chuyển phiếu lên cấp trên mà bỏ trống lý do",
     default_text: "Không tiếp nhận hoặc chuyển phiếu lên cấp trên thì phải ghi rõ lý do để trả lời người dân.",
     current_text: "Không tiếp nhận hoặc chuyển phiếu lên cấp trên thì phải ghi rõ lý do để trả lời người dân.",
     overridden: false,
+    is_active: true,
     updated_at: null,
     ...patch,
   };

@@ -72,6 +72,17 @@ export function openIssuesLabel(count: number | null | undefined): string {
 }
 
 /**
+ * §3 fourth card, second half: `N nguy cơ không giải ngân hết` (prototype `BudgetWorkspace.tsx:221`),
+ * from the summary's `at_risk_count` — the projects whose hand-set flag is ticked (ADR 0081 #2).
+ * ABSENT IS NOT ZERO, as above: an older reply without the field shows "—", never "0", which would tell
+ * leadership no project is at risk.
+ */
+export function atRiskLabel(count: number | null | undefined): string {
+  const n = count === null || count === undefined || !Number.isFinite(count) ? "—" : String(count);
+  return `${n} nguy cơ không giải ngân hết`;
+}
+
+/**
  * Spec 07 line under a message: "Nhắc: @A, @B" — names from the directory, the code itself when the
  * directory does not resolve it (the record still says who was meant). `null` = nobody mentioned.
  */

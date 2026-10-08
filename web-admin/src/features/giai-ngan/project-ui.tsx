@@ -44,6 +44,22 @@ export function ProgressBadge({ progress, children }: { progress: TienDoDuAn; ch
 }
 
 /**
+ * `Nguy cơ không giải ngân hết` beside the progress pill (prototype `BudgetItemDetail.tsx:289-293`:
+ * `bg-tangerine/12 text-tangerine border-tangerine/25`, no icon — the words say it). Drawn by the caller
+ * only when the project's hand-set `at_risk` flag is on (ADR 0081 #2). Same pill shape as `bamSat`.
+ */
+export function AtRiskBadge() {
+  return (
+    <span
+      className="border-tangerine/25 bg-tangerine/12 text-tangerine inline-flex h-5 w-fit shrink-0 items-center rounded-4xl border border-solid px-2 py-0.5 text-xs leading-none font-medium whitespace-nowrap"
+      data-at-risk=""
+    >
+      Nguy cơ không giải ngân hết
+    </span>
+  );
+}
+
+/**
  * Icon and tone per voucher status CODE (`nhan-ghi-giai-ngan.ts`), never per label. An unknown code
  * falls to the neutral pill and still shows the raw string `nhanTrangThaiChungTu` returns, so a
  * reader sees that something is off.

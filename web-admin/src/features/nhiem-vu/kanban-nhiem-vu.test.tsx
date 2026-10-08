@@ -85,6 +85,7 @@ const DANH_MUC: DanhMucNhiemVu = {
       order: 2,
       source: "he-thong",
       tier: 1,
+      color: null,
     },
   ],
   khoi: [],

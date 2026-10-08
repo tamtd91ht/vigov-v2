@@ -471,13 +471,12 @@ describe("§8.4 discussion", () => {
     expect(box.value).toBe("dài");
   });
 
-  it("the mention notification is a disabled '?' spot — nothing claims anyone was notified", async () => {
+  it("mention notices are live (server sends them): the composer carries no '?' spot about them", async () => {
     stubServer({ issues: [], comments: [] });
     const el = mount(<ProjectCommentsPanel projectId="DA1" staff={STAFF} canComment />);
     await settle();
-    const spot = el.querySelector<HTMLElement>("form [data-pending]")!;
-    expect(spot.textContent).toContain("Thông báo cho người được nhắc tên — chưa có");
-    expect(spot.querySelector("button[data-pending-marker]")).not.toBeNull();
+    expect(el.querySelector("form [data-pending]")).toBeNull();
+    expect(el.textContent).not.toContain("Thông báo cho người được nhắc tên");
   });
 
   it("DENIED (no budget.read): no composer, no denial note (spec 07)", async () => {

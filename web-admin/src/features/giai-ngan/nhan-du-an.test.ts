@@ -152,6 +152,7 @@ describe("tra hạng mục kế hoạch vốn", () => {
       order: 1,
       source: "he-thong",
       tier: 2,
+      color: null,
     },
     {
       id: "01JHM2",
@@ -162,6 +163,7 @@ describe("tra hạng mục kế hoạch vốn", () => {
       order: 2,
       source: "don-vi",
       tier: 1,
+      color: null,
     },
   ];
 

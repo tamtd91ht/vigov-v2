@@ -60,6 +60,7 @@ export const PREVIEW_DOCUMENT_TYPES: documents_danhSachLoaiVanBanRa = {
     order: i + 1,
     source: "",
     tier: 0,
+    color: null,
   })),
 };
 

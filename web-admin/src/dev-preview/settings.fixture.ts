@@ -76,9 +76,9 @@ export const PREVIEW_SETTINGS_UNITS: identity_danhSachBoPhanRa = {
 // ── Thôn / Tổ dân phố ─────────────────────────────────────────────────────────────────────────────
 export const PREVIEW_RESIDENTIAL_TYPES: identity_danhSachLoaiDonViDanCuRa = {
   items: [
-    { id: "01PREVIEWRUT0000000000001", code: "thon", label: "Thôn", is_default: true, active: true, order: 1, source: "he-thong", tier: 2 },
-    { id: "01PREVIEWRUT0000000000002", code: "to-dan-pho", label: "Tổ dân phố", is_default: false, active: true, order: 2, source: "he-thong", tier: 2 },
-    { id: "01PREVIEWRUT0000000000003", code: "khu-pho", label: "Khu phố", is_default: false, active: false, order: 3, source: "don-vi", tier: 1 },
+    { id: "01PREVIEWRUT0000000000001", code: "thon", label: "Thôn", is_default: true, active: true, order: 1, source: "he-thong", tier: 2, color: null },
+    { id: "01PREVIEWRUT0000000000002", code: "to-dan-pho", label: "Tổ dân phố", is_default: false, active: true, order: 2, source: "he-thong", tier: 2, color: null },
+    { id: "01PREVIEWRUT0000000000003", code: "khu-pho", label: "Khu phố", is_default: false, active: false, order: 3, source: "don-vi", tier: 1, color: null },
   ],
 };
 
@@ -96,11 +96,11 @@ export const PREVIEW_RESIDENTIAL_UNITS: identity_danhSachThonToDanPhoRa = {
 // ── Danh mục: map asset types (comms) — the other six catalogues are the shared fixtures' ──────────
 export const PREVIEW_MAP_ASSET_TYPES: comms_danhSachLoaiTaiNguyenRa = {
   items: [
-    { id: "01PREVIEWMAT0000000000001", code: "doanh-nghiep", label: "Doanh nghiệp", is_default: true, active: true, order: 1, source: "he-thong", tier: 2 },
-    { id: "01PREVIEWMAT0000000000002", code: "truong-hoc", label: "Trường học", is_default: false, active: true, order: 2, source: "he-thong", tier: 2 },
-    { id: "01PREVIEWMAT0000000000003", code: "tram-y-te", label: "Trạm y tế", is_default: false, active: true, order: 3, source: "he-thong", tier: 2 },
-    { id: "01PREVIEWMAT0000000000004", code: "nha-van-hoa", label: "Nhà văn hoá thôn", is_default: false, active: true, order: 4, source: "don-vi", tier: 1 },
-    { id: "01PREVIEWMAT0000000000005", code: "camera-an-ninh", label: "Camera an ninh", is_default: false, active: false, order: 5, source: "don-vi", tier: 1 },
+    { id: "01PREVIEWMAT0000000000001", code: "doanh-nghiep", label: "Doanh nghiệp", is_default: true, active: true, order: 1, source: "he-thong", tier: 2, color: null },
+    { id: "01PREVIEWMAT0000000000002", code: "truong-hoc", label: "Trường học", is_default: false, active: true, order: 2, source: "he-thong", tier: 2, color: null },
+    { id: "01PREVIEWMAT0000000000003", code: "tram-y-te", label: "Trạm y tế", is_default: false, active: true, order: 3, source: "he-thong", tier: 2, color: null },
+    { id: "01PREVIEWMAT0000000000004", code: "nha-van-hoa", label: "Nhà văn hoá thôn", is_default: false, active: true, order: 4, source: "don-vi", tier: 1, color: null },
+    { id: "01PREVIEWMAT0000000000005", code: "camera-an-ninh", label: "Camera an ninh", is_default: false, active: false, order: 5, source: "don-vi", tier: 1, color: null },
   ],
 };
 
@@ -132,17 +132,17 @@ const MAP_FIELDS: readonly comms_mapFieldSchemaOut[] = [
 // ── Lời hệ thống — three services, the same shape ─────────────────────────────────────────────────
 const MESSAGES: Record<"petitions" | "finance" | "reporting", readonly petitions_systemMessageOut[]> = {
   petitions: [
-    { code: "petition.not_found", description: "Không tìm thấy phản ánh theo mã tra cứu", default_text: "Không tìm thấy phản ánh với mã này.", current_text: "Không tìm thấy phản ánh với mã này. Vui lòng kiểm tra lại mã trên tin nhắn đã nhận.", overridden: true, updated_at: "2026-09-28T02:15:00Z", updated_by: "CB-00003" },
-    { code: "petition.closed", description: "Phản ánh đã đóng, không nhận thêm ý kiến", default_text: "Phản ánh đã được xử lý xong, không thể gửi thêm ý kiến.", current_text: "Phản ánh đã được xử lý xong, không thể gửi thêm ý kiến.", overridden: false },
-    { code: "petition.rate_limited", description: "Gửi quá nhiều phản ánh trong thời gian ngắn", default_text: "Bạn đã gửi nhiều phản ánh liên tiếp. Vui lòng thử lại sau ít phút.", current_text: "Bạn đã gửi nhiều phản ánh liên tiếp. Vui lòng thử lại sau ít phút.", overridden: false },
-    { code: "task.extension_pending", description: "Nhiệm vụ đang có đề nghị gia hạn chờ duyệt", default_text: "Nhiệm vụ đang có một đề nghị gia hạn chờ duyệt.", current_text: "Nhiệm vụ đang có một đề nghị gia hạn chờ duyệt.", overridden: false },
+    { code: "petition.not_found", group_code: "phan-anh", origin: "shipped", description: "Không tìm thấy phản ánh theo mã tra cứu", default_text: "Không tìm thấy phản ánh với mã này.", current_text: "Không tìm thấy phản ánh với mã này. Vui lòng kiểm tra lại mã trên tin nhắn đã nhận.", overridden: true, is_active: true, updated_at: "2026-09-28T02:15:00Z", updated_by: "CB-00003" },
+    { code: "petition.closed", group_code: "phan-anh", origin: "shipped", description: "Phản ánh đã đóng, không nhận thêm ý kiến", default_text: "Phản ánh đã được xử lý xong, không thể gửi thêm ý kiến.", current_text: "Phản ánh đã được xử lý xong, không thể gửi thêm ý kiến.", overridden: false, is_active: true },
+    { code: "petition.rate_limited", group_code: "phan-anh", origin: "shipped", description: "Gửi quá nhiều phản ánh trong thời gian ngắn", default_text: "Bạn đã gửi nhiều phản ánh liên tiếp. Vui lòng thử lại sau ít phút.", current_text: "Bạn đã gửi nhiều phản ánh liên tiếp. Vui lòng thử lại sau ít phút.", overridden: false, is_active: true },
+    { code: "task.extension_pending", group_code: "phan-anh", origin: "shipped", description: "Nhiệm vụ đang có đề nghị gia hạn chờ duyệt", default_text: "Nhiệm vụ đang có một đề nghị gia hạn chờ duyệt.", current_text: "Nhiệm vụ đang có một đề nghị gia hạn chờ duyệt.", overridden: false, is_active: true },
   ],
   finance: [
-    { code: "budget.voucher_locked", description: "Chứng từ đã khoá, không sửa được", default_text: "Chứng từ đã khoá, không sửa được.", current_text: "Chứng từ đã khoá sổ. Liên hệ kế toán để mở khoá nếu cần điều chỉnh.", overridden: true, updated_at: "2026-09-30T08:40:00Z", updated_by: "CB-00001" },
-    { code: "budget.self_confirm", description: "Người lập không tự xác nhận chứng từ của mình", default_text: "Người lập chứng từ không được tự xác nhận.", current_text: "Người lập chứng từ không được tự xác nhận.", overridden: false },
+    { code: "budget.voucher_locked", group_code: "giai-ngan", origin: "shipped", description: "Chứng từ đã khoá, không sửa được", default_text: "Chứng từ đã khoá, không sửa được.", current_text: "Chứng từ đã khoá sổ. Liên hệ kế toán để mở khoá nếu cần điều chỉnh.", overridden: true, is_active: true, updated_at: "2026-09-30T08:40:00Z", updated_by: "CB-00001" },
+    { code: "budget.self_confirm", group_code: "giai-ngan", origin: "shipped", description: "Người lập không tự xác nhận chứng từ của mình", default_text: "Người lập chứng từ không được tự xác nhận.", current_text: "Người lập chứng từ không được tự xác nhận.", overridden: false, is_active: true },
   ],
   reporting: [
-    { code: "report.period_open", description: "Kỳ báo cáo chưa kết thúc", default_text: "Kỳ báo cáo chưa kết thúc, số liệu có thể còn thay đổi.", current_text: "Kỳ báo cáo chưa kết thúc, số liệu có thể còn thay đổi.", overridden: false },
+    { code: "report.period_open", group_code: "bao-cao", origin: "shipped", description: "Kỳ báo cáo chưa kết thúc", default_text: "Kỳ báo cáo chưa kết thúc, số liệu có thể còn thay đổi.", current_text: "Kỳ báo cáo chưa kết thúc, số liệu có thể còn thay đổi.", overridden: false, is_active: true },
   ],
 };
 
@@ -267,6 +267,7 @@ const MAIL: comms_mailSettingsOut = {
   is_enabled: true,
   password_set: true,
   encryption_configured: true,
+  last_test: null,
 };
 
 const ZALO_SETTINGS: ZaloChannelSettings = {

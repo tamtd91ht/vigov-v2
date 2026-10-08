@@ -279,6 +279,22 @@ export function FormDuAn({
         onChange={(allocations) => datGT({ ...gt, allocations })}
       />
 
+      {/* ADR 0081 #2: the prototype stores `at_risk` but has nowhere to set it; the owner put the tick
+          here, in the EDIT form only (a project is judged at risk once it exists). Gated by the form's
+          own key, `budget.update`; the server checks it again on the PATCH and audits before/after. */}
+      {isEdit && (
+        <label htmlFor="nguy-co-du-an" className={cn(CHECKBOX_LABEL_CLASS, "w-fit")}>
+          <input
+            id="nguy-co-du-an"
+            type="checkbox"
+            className={CHECKBOX_CLASS}
+            checked={gt.atRisk}
+            onChange={(e) => datGT({ ...gt, atRisk: e.target.checked })}
+          />
+          Nguy cơ không giải ngân hết
+        </label>
+      )}
+
       <button
         type="button"
         aria-expanded={showMore}
@@ -1001,6 +1017,8 @@ export function giaTriTuDuAn(duAn: finance_duAnRa): GiaTriFormDuAn {
     orgUnitId: duAn.org_unit_id ?? "",
     implementingUnit: duAn.implementing_unit ?? "",
     assigneeId: duAn.assignee_id ?? "",
+    // Absent on an older reply reads as not flagged; the PATCH carries `at_risk` only if the box changes.
+    atRisk: duAn.at_risk === true,
   };
 }
 

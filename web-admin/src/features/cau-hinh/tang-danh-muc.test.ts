@@ -38,6 +38,7 @@ function muc(tier: number, active = true): MucDanhMuc {
     order: 1,
     source: tier === TANG_DON_VI ? "don-vi" : "he-thong",
     tier,
+    color: null,
   };
 }
 
@@ -56,6 +57,7 @@ function mucDanhMucDinhDanh(): MucDanhMuc {
     order: 1,
     source: "don-vi",
     tier: 1,
+    color: null,
   };
 }
 

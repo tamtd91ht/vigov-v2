@@ -66,6 +66,7 @@ function typeRow(code: string, requiresDirective: boolean, isDefault = false): p
     order: 1,
     source: "he-thong",
     tier: 3,
+    color: null,
     requires_directive: requiresDirective,
   };
 }

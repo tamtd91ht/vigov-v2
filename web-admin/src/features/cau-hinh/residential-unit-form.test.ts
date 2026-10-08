@@ -262,7 +262,7 @@ describe("submit — create and edit", () => {
 });
 
 function type(code: string, label: string, active: boolean): identity_loaiDonViDanCuRa {
-  return { id: `id-${code}`, code, label, active, is_default: false, order: 0, source: "system", tier: 1 };
+  return { id: `id-${code}`, code, label, active, is_default: false, order: 0, source: "system", tier: 1, color: null };
 }
 
 describe("pickers exclude what is out of use", () => {

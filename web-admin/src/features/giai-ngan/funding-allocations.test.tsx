@@ -97,7 +97,7 @@ const SOURCES = [source("S1", "Ngân sách tỉnh"), source("S2", "Ngân sách x
 const READY: FundingCatalogue = { phase: "ready", items: SOURCES };
 
 const CATEGORIES: finance_hangMucRa[] = [
-  { id: "01JHM1", code: "chuyen-tiep", label: "Chuyển tiếp", is_default: true, active: true, order: 1, source: "he-thong", tier: 1 },
+  { id: "01JHM1", code: "chuyen-tiep", label: "Chuyển tiếp", is_default: true, active: true, order: 1, source: "he-thong", tier: 1, color: null },
 ];
 
 function addForm(catalogue: FundingCatalogue, save = vi.fn()) {

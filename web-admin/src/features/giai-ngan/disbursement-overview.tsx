@@ -169,7 +169,7 @@ export function KpiCards({ summary: s }: { summary: finance_projectSummaryOut })
       <Kpi
         label="Cần chú ý"
         value={`${s.delayed_project_count} dự án chậm`}
-        hint={<AttentionCaption openIssueCount={s.open_issue_count} />}
+        hint={<AttentionCaption openIssueCount={s.open_issue_count} atRiskCount={s.at_risk_count} />}
         accent={s.delayed_project_count > 0 ? DANGER_ACCENT : "text-leaf"}
       />
     </div>

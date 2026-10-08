@@ -19,7 +19,6 @@ import type {
 import { cn } from "@/lib/cn";
 
 import { nhanMocKhoa } from "./nhan-ghi-giai-ngan";
-import { MentionNoticePending } from "./pending-parts";
 import { COMMENT_PLACEHOLDER, MENTION_PICKER_LIMIT, mentionLine, staffLabel } from "./project-discussion-labels";
 import type { PeopleCatalogue } from "./project-people";
 import { Glyph } from "./project-ui";
@@ -31,8 +30,8 @@ import { Glyph } from "./project-ui";
  * MENTIONS AS THE PROTOTYPE DRAWS THEM (ADR 0068 lần 6, row D35): a row of at most eight `@Tên` chips
  * under the box, the first eight of the commune's staff directory; pressing one toggles it. What is
  * sent is the CODES of the chips on (`mentioned_staff_codes`); the body stays exactly what was typed.
- * A message's mentions are listed under it as "Nhắc: @A, @B". Nobody is notified yet
- * (`MentionNoticePending`).
+ * A message's mentions are listed under it as "Nhắc: @A, @B". Each person mentioned (but the author)
+ * gets a bell notice from the server once the comment is saved (ADR 0081 #5) — nothing to show here.
  *
  * KNOWN COST of following the prototype: only the first eight staff of the directory can be mentioned.
  *
@@ -225,7 +224,6 @@ function CommentComposer({
         {staff.phase === "error" && (
           <p className="text-ink-muted m-0 text-[11px]">Chưa tải được danh bạ cán bộ, nên chưa nhắc tên được.</p>
         )}
-        <MentionNoticePending />
         <Button
           type="submit"
           variant="primary"

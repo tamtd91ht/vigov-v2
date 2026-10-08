@@ -501,6 +501,7 @@ describe("§5.4 — câu chữ của khối văn bản chỉ đạo", () => {
       order: 1,
       source: "he-thong",
       tier: 3,
+      color: null,
       requires_directive,
     });
     const types = [row("theo-van-ban", true), row("co-ban", false)];
@@ -525,6 +526,7 @@ describe("§5.4 — câu chữ của khối văn bản chỉ đạo", () => {
       order: 1,
       source: "he-thong",
       tier: 3,
+      color: null,
       requires_directive,
     });
     expect(directiveTaskType([row("co-ban", false), row("theo-van-ban", true)])).toBe("theo-van-ban");
@@ -1422,6 +1424,7 @@ describe("§7.1 — `mucUuTienMacDinh`", () => {
     order: 1,
     source: "he-thong",
     tier: 1,
+    color: null,
   });
 
   it("dòng xã đặt mặc định, đang dùng — không phải dòng tên `Thường`", () => {

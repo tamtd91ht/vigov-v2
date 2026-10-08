@@ -46,6 +46,7 @@ function typeRow(code: string, label: string, isDefault: boolean, active = true)
     order: 1,
     source: "he-thong",
     tier: 1,
+    color: null,
     requires_directive: code === "theo-van-ban",
   };
 }

@@ -19,7 +19,6 @@ import { BangDanhSach } from "./bang-du-an";
 import type { ProjectPeople } from "./project-people";
 import {
   AttentionCaption,
-  MentionNoticePending,
   ProjectRecordTabs,
   TrackingTaskPending,
 } from "./pending-parts";
@@ -137,6 +136,7 @@ const HANG_MUC: finance_hangMucRa[] = [
     order: 1,
     source: "he-thong",
     tier: 1,
+    color: null,
   },
 ];
 
@@ -474,9 +474,8 @@ describe("BIỂU MẪU DỰ ÁN", () => {
 /** Every "?" of the Giải ngân screens, server-rendered — the spots ADR 0068 §14 approved. */
 function allPlaceholders(): string {
   return [
-    renderToStaticMarkup(<AttentionCaption openIssueCount={3} />),
+    renderToStaticMarkup(<AttentionCaption openIssueCount={3} atRiskCount={1} />),
     renderToStaticMarkup(<TrackingTaskPending />),
-    renderToStaticMarkup(<MentionNoticePending />),
     renderToStaticMarkup(
       <BangDanhSach
         duLieu={{ items: [DU_AN], year: 2026, delay_threshold: 1000, delay_threshold_source: "mac_dinh" }}
@@ -575,13 +574,47 @@ describe("PHẦN CHƯA DỰNG — dấu '?' đúng vị trí đặc tả (ADR 00
     expect(html).toContain('<select id="can-bo-du-an"');
   });
 
-  it("dòng phụ thẻ 4: số vướng mắc của máy chủ; phần 'nguy cơ' giữ chỗ KHÔNG in con số nào", () => {
-    const html = renderToStaticMarkup(<AttentionCaption openIssueCount={3} />);
-    expect(html).toContain("3 vướng mắc đang theo dõi");
-    // The at-risk half: words and a "?", never a number — "0 nguy cơ" would read as "none".
-    const pending = /<span[^>]*data-pending=""[^>]*>(.*)<\/span><\/span>$/.exec(html);
-    expect(pending).not.toBeNull();
-    expect(pending![1]!.replace(/<[^>]*>/g, "")).not.toMatch(/\d/);
+  it("dòng phụ thẻ 4: hai con số của máy chủ, đúng câu prototype, không còn '?'", () => {
+    const html = renderToStaticMarkup(<AttentionCaption openIssueCount={3} atRiskCount={1} />);
+    expect(html.replace(/<[^>]*>/g, "")).toBe("3 vướng mắc đang theo dõi·1 nguy cơ không giải ngân hết");
+    expect(html).not.toContain("data-pending");
+  });
+
+  it("biểu mẫu SỬA có ô 'Nguy cơ không giải ngân hết' theo cờ của dự án; biểu mẫu THÊM không có", () => {
+    const edit = (atRisk: boolean) =>
+      renderToStaticMarkup(
+        <FormDuAn
+          budgetYear={2026}
+          tieuDeForm="Sửa dự án"
+          giaTriDau={giaTriTuDuAn({ ...DU_AN, at_risk: atRisk })}
+          maChiDoc={DU_AN.code}
+          danhMuc={HANG_MUC}
+          fundingCatalogue={NO_SOURCES}
+          dangGui={false}
+          loi={null}
+          huy={() => {}}
+          luu={() => {}}
+        />,
+      );
+    expect(edit(true)).toMatch(/<input id="nguy-co-du-an" type="checkbox"[^>]*checked=""/);
+    expect(edit(false)).toContain('id="nguy-co-du-an"');
+    expect(edit(false)).not.toMatch(/<input id="nguy-co-du-an"[^>]*checked=""/);
+    expect(edit(false)).toContain("Nguy cơ không giải ngân hết");
+
+    const add = renderToStaticMarkup(
+      <FormDuAn
+        budgetYear={2026}
+        tieuDeForm="Thêm dự án"
+        giaTriDau={FORM_DU_AN_TRONG}
+        danhMuc={HANG_MUC}
+        fundingCatalogue={NO_SOURCES}
+        dangGui={false}
+        loi={null}
+        huy={() => {}}
+        luu={() => {}}
+      />,
+    );
+    expect(add).not.toContain('id="nguy-co-du-an"');
   });
 });
 

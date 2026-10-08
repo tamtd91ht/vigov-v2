@@ -81,6 +81,12 @@ export function ProjectDetailPreview({ tab }: { tab: PreviewTab }) {
     return true;
   });
   usePressWhenReady(tab === "vuong-mac" ? null : `#${TAB_IDS[tab]}`);
+  // `?sua=1` presses the REAL `Sửa dự án` button (its state is internal), for a screenshot of the edit
+  // form. Read in the browser: only the effect uses it, so server and client markup stay the same.
+  const [openEdit] = useState(
+    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("sua") === "1",
+  );
+  usePressWhenReady(openEdit ? 'button[aria-controls="sua-du-an"]' : null, "Sửa dự án");
   return (
     <div className="mx-auto w-full max-w-[76rem] min-w-0">
       <h1 className="an-thi-giac">Chi tiết dự án</h1>

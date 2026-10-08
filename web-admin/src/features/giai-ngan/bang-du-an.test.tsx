@@ -132,6 +132,7 @@ describe("bảng dự án kết xuất ra trang", () => {
             order: 1,
             source: "he-thong",
             tier: 1,
+            color: null,
           },
         ]}
       />,

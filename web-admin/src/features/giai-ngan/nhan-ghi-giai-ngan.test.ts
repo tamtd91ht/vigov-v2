@@ -82,6 +82,7 @@ const DU_AN_MAU: GiaTriFormDuAn = {
   orgUnitId: "",
   implementingUnit: "",
   assigneeId: "",
+  atRisk: false,
 };
 
 describe("docSoTien — tiền vào hệ thống bằng đúng con số người ta gõ", () => {

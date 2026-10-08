@@ -52,24 +52,24 @@ const TYPE_BASIC = "co-ban";
 
 export const PREVIEW_TASK_TYPES: petitions_danhSachLoaiNhiemVuRa = {
   items: [
-    { id: "01PREVIEWTTY0000000000001", code: TYPE_BY_DOCUMENT, label: "Theo văn bản", is_default: false, active: true, order: 1, source: "he-thong", tier: 3, requires_directive: true },
-    { id: "01PREVIEWTTY0000000000002", code: TYPE_BASIC, label: "Cơ bản", is_default: true, active: true, order: 2, source: "he-thong", tier: 2, requires_directive: false },
+    { id: "01PREVIEWTTY0000000000001", code: TYPE_BY_DOCUMENT, label: "Theo văn bản", is_default: false, active: true, order: 1, source: "he-thong", tier: 3, color: null, requires_directive: true },
+    { id: "01PREVIEWTTY0000000000002", code: TYPE_BASIC, label: "Cơ bản", is_default: true, active: true, order: 2, source: "he-thong", tier: 2, color: null, requires_directive: false },
   ],
 };
 
 export const PREVIEW_TASK_PRIORITIES: petitions_danhSachMucUuTienRa = {
   items: [
-    { id: "01PREVIEWTPR0000000000001", code: "khan", label: "Khẩn", is_default: false, active: true, order: 1, source: "he-thong", tier: 2 },
-    { id: "01PREVIEWTPR0000000000002", code: "cao", label: "Cao", is_default: false, active: true, order: 2, source: "he-thong", tier: 2 },
-    { id: "01PREVIEWTPR0000000000003", code: "thuong", label: "Thường", is_default: true, active: true, order: 3, source: "he-thong", tier: 2 },
+    { id: "01PREVIEWTPR0000000000001", code: "khan", label: "Khẩn", is_default: false, active: true, order: 1, source: "he-thong", tier: 2, color: null },
+    { id: "01PREVIEWTPR0000000000002", code: "cao", label: "Cao", is_default: false, active: true, order: 2, source: "he-thong", tier: 2, color: null },
+    { id: "01PREVIEWTPR0000000000003", code: "thuong", label: "Thường", is_default: true, active: true, order: 3, source: "he-thong", tier: 2, color: null },
   ],
 };
 
 export const PREVIEW_TASK_BLOCS: identity_danhSachKhoiNhiemVuRa = {
   items: [
-    { id: "01PREVIEWTBL0000000000001", code: "khoi-uy-ban", label: "Khối Uỷ ban", is_default: true, active: true, order: 1, source: "he-thong", tier: 2 },
-    { id: "01PREVIEWTBL0000000000002", code: "khoi-dang", label: "Khối Đảng", is_default: false, active: true, order: 2, source: "he-thong", tier: 2 },
-    { id: "01PREVIEWTBL0000000000003", code: "khac", label: "Khác", is_default: false, active: true, order: 3, source: "he-thong", tier: 2 },
+    { id: "01PREVIEWTBL0000000000001", code: "khoi-uy-ban", label: "Khối Uỷ ban", is_default: true, active: true, order: 1, source: "he-thong", tier: 2, color: null },
+    { id: "01PREVIEWTBL0000000000002", code: "khoi-dang", label: "Khối Đảng", is_default: false, active: true, order: 2, source: "he-thong", tier: 2, color: null },
+    { id: "01PREVIEWTBL0000000000003", code: "khac", label: "Khác", is_default: false, active: true, order: 3, source: "he-thong", tier: 2, color: null },
   ],
 };
 

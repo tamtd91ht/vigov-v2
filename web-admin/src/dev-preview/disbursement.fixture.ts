@@ -52,10 +52,10 @@ const PRJ_EMBANKMENT = "01PREVIEWPRJ0000000000006";
 
 export const PREVIEW_CATEGORIES: finance_danhSachHangMucRa = {
   items: [
-    { id: CAT_NEW, code: "xay-dung-moi", label: "Công trình xây dựng mới", is_default: true, active: true, order: 1, source: "he-thong", tier: 2 },
-    { id: CAT_REPAIR, code: "sua-chua-cai-tao", label: "Sửa chữa, cải tạo", is_default: false, active: true, order: 2, source: "don-vi", tier: 1 },
-    { id: CAT_DIGITAL, code: "ha-tang-so", label: "Hạ tầng số", is_default: false, active: true, order: 3, source: "don-vi", tier: 1 },
-    { id: CAT_ENVIRONMENT, code: "moi-truong", label: "Môi trường", is_default: false, active: true, order: 4, source: "don-vi", tier: 1 },
+    { id: CAT_NEW, code: "xay-dung-moi", label: "Công trình xây dựng mới", is_default: true, active: true, order: 1, source: "he-thong", tier: 2, color: null },
+    { id: CAT_REPAIR, code: "sua-chua-cai-tao", label: "Sửa chữa, cải tạo", is_default: false, active: true, order: 2, source: "don-vi", tier: 1, color: null },
+    { id: CAT_DIGITAL, code: "ha-tang-so", label: "Hạ tầng số", is_default: false, active: true, order: 3, source: "don-vi", tier: 1, color: null },
+    { id: CAT_ENVIRONMENT, code: "moi-truong", label: "Môi trường", is_default: false, active: true, order: 4, source: "don-vi", tier: 1, color: null },
   ],
 };
 
@@ -92,6 +92,8 @@ type ProjectSeed = {
   deadlineMonthDay: string;
   allocations: { source: string; amount: number; disbursed: number }[];
   latestIssue?: { id: string; text: string; resolved: boolean };
+  /** `at_risk`: the hand-set "nguy cơ không giải ngân hết" flag (ADR 0081 #2). */
+  atRisk?: boolean;
 };
 
 const SEEDS: readonly ProjectSeed[] = [
@@ -111,6 +113,7 @@ const SEEDS: readonly ProjectSeed[] = [
       { source: SOURCE_COMMUNE, amount: 1_000_000_000, disbursed: 650_000_000 },
     ],
     latestIssue: { id: "01PREVIEWISS0000000000001", text: "Chờ bổ sung hồ sơ nghiệm thu giai đoạn 2", resolved: false },
+    atRisk: true,
   },
   {
     id: PRJ_ROAD,
@@ -125,6 +128,7 @@ const SEEDS: readonly ProjectSeed[] = [
     deadlineMonthDay: "12-31",
     allocations: [{ source: SOURCE_PROVINCE, amount: 4_200_000_000, disbursed: 1_050_000_000 }],
     latestIssue: { id: "01PREVIEWISS0000000000003", text: "Vướng giải phóng mặt bằng đoạn qua thôn Bình Trung", resolved: false },
+    atRisk: true,
   },
   {
     id: PRJ_SCHOOL,
@@ -243,6 +247,7 @@ function project(seed: ProjectSeed, year: number): finance_duAnRa {
     })),
     unallocated_plan_amount: Math.max(0, seed.planned - allocated),
     time_elapsed_ratio: timeElapsed(year),
+    at_risk: seed.atRisk === true,
     latest_issue:
       seed.latestIssue === undefined
         ? null
@@ -322,6 +327,7 @@ export function previewSummary(year: number): finance_projectSummaryOut {
     delay_threshold_source: "mac_dinh",
     delayed_project_count: SEEDS.filter((s) => s.delayScore !== null && s.delayScore > DELAY_THRESHOLD).length,
     open_issue_count: 2,
+    at_risk_count: SEEDS.filter((s) => s.atRisk === true).length,
     monthly: curve(planned, disbursed, year),
     disbursed_after_year: 0,
     by_category: PREVIEW_CATEGORIES.items.map((c) => categoryRow(c.id, c.label, c.order, year)),

@@ -13,7 +13,6 @@ import { FormDuAn } from "./ghi-du-an";
 import { FORM_DU_AN_TRONG, PHAN_CHUA_DUNG_GHI, pendingPart } from "./nhan-ghi-giai-ngan";
 import {
   AttentionCaption,
-  MentionNoticePending,
   ProjectRecordTabs,
   TrackingTaskPending,
 } from "./pending-parts";
@@ -58,9 +57,8 @@ function mount(node: ReactNode): HTMLDivElement {
 function screens(): ReactNode {
   return (
     <>
-      <AttentionCaption openIssueCount={2} />
+      <AttentionCaption openIssueCount={2} atRiskCount={1} />
       <TrackingTaskPending />
-      <MentionNoticePending />
       <ProjectRecordTabs chart={<p>chart</p>} issues={<p>issues</p>} discussion={<p>discussion</p>}>
         <p>panel</p>
       </ProjectRecordTabs>
@@ -143,12 +141,12 @@ describe("Giải ngân placeholders (ADR 0068 §14)", () => {
       "Chỉ dự án chậm",
       "Gộp theo hạng mục",
       "Biểu đồ",
+      // The fourth card's at-risk half: LIVE since 81533bb3 (`at_risk_count`, ADR 0081 #2).
+      "Nguy cơ không giải ngân hết",
     ]) {
       expect(PHAN_CHUA_DUNG_GHI.some((p) => p.ten === ten)).toBe(false);
       expect(() => pendingPart(ten)).toThrow();
     }
-    // The fourth card's at-risk half stays a "?": no rule defines it.
-    expect(pendingPart("Nguy cơ không giải ngân hết").viSao).toContain("quy tắc");
   });
 
   it("project funding (§7.2 chip, §8 block, §9 list) and the §8.2 voucher list + source are LIVE: no registry entry left", () => {
@@ -182,7 +180,8 @@ describe("Giải ngân placeholders (ADR 0068 §14)", () => {
     }
     // What is still NOT built is said as not built, never as a fact.
     expect(pendingPart("Tự sinh nhiệm vụ theo dõi").viSao).toContain("chưa sinh nhiệm vụ nào");
-    expect(pendingPart("Thông báo cho người được nhắc tên").viSao).toContain("chưa nhận được thông báo");
+    // Mention notices are LIVE (dda12fa4): no entry may still claim nobody is notified.
+    expect(PHAN_CHUA_DUNG_GHI.some((p) => p.ten === "Thông báo cho người được nhắc tên")).toBe(false);
   });
 
   it("tabs carry the server's counts once read, and no number before", () => {

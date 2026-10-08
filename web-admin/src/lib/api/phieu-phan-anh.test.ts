@@ -411,6 +411,10 @@ const KHOA_PHIEU_MONG_DOI = [
   // Thêm 26/09/2026 (4ce8933): phiếu có công dân đứng sau để xác nhận không. Chỉ là cờ, không mang
   // `cong_dan_id` — cho biết CÓ tài khoản, không cho biết AI.
   "has_citizen",
+  // Added in dde0f8f3 (ADR 0080): true when the petition came from a session whose phone
+  // number was never verified, so the contact on it is unconfirmed. A flag about the channel, not a
+  // staff note or routing history (rule 4, forbidden #5); it carries no identity of its own.
+  "contact_unverified",
   // Added 28/09/2026 (ADR 0050 points 2 and 8), all five read by the drawer and the lookup view:
   // `publication_status` is the staff moderation of the public page (`public` is now derived from
   // it); `rating` · `rating_comment` · `rated_at` are the CITIZEN'S verdict — `rating_comment` is the

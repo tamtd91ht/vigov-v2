@@ -269,23 +269,31 @@ describe("§3 KPI cards — the server's figures, formatted, never re-derived", 
     }
   });
 
-  it("fourth card: the server's open-issue count; the at-risk half stays a '?' with no number", () => {
-    const el = mount(<KpiCards summary={summary({ open_issue_count: 4 })} />);
+  it("fourth card: the prototype's sub-line with the server's two counts, no '?' left", () => {
+    const el = mount(<KpiCards summary={summary({ open_issue_count: 4, at_risk_count: 2 })} />);
     expect(el.querySelector("[data-open-issues]")?.textContent).toBe("4 vướng mắc đang theo dõi");
-    const spot = el.querySelector<HTMLElement>("[data-pending]")!;
-    expect(spot.textContent).not.toMatch(/\d/);
-    expect(spot.querySelector("button[data-pending-marker]")?.getAttribute("aria-label")).toContain(
-      pendingPart("Nguy cơ không giải ngân hết").ten,
+    expect(el.querySelector("[data-at-risk-count]")?.textContent).toBe("2 nguy cơ không giải ngân hết");
+    expect(el.querySelector("[data-attention-caption]")?.textContent).toBe(
+      "4 vướng mắc đang theo dõi·2 nguy cơ không giải ngân hết",
     );
+    expect(el.querySelector("[data-pending]")).toBeNull();
+    expect(el.querySelector("button[data-pending-marker]")).toBeNull();
+    expect(() => pendingPart("Nguy cơ không giải ngân hết")).toThrow();
   });
 
   it("fourth card: zero is said as 0; an ABSENT count is not turned into 0", () => {
-    const zero = mount(<KpiCards summary={summary({ open_issue_count: 0 })} />);
+    const zero = mount(<KpiCards summary={summary({ open_issue_count: 0, at_risk_count: 0 })} />);
     expect(zero.querySelector("[data-open-issues]")?.textContent).toBe("0 vướng mắc đang theo dõi");
+    expect(zero.querySelector("[data-at-risk-count]")?.textContent).toBe("0 nguy cơ không giải ngân hết");
     act(() => root?.unmount());
     host?.remove();
-    const absent = mount(<KpiCards summary={summary({ open_issue_count: undefined })} />);
+    const absent = mount(<KpiCards summary={summary({ open_issue_count: undefined, at_risk_count: undefined })} />);
     expect(absent.querySelector("[data-open-issues]")?.textContent).toBe("Chưa đọc được số vướng mắc");
+    expect(absent.querySelector("[data-at-risk-count]")?.textContent).toBe("— nguy cơ không giải ngân hết");
+    act(() => root?.unmount());
+    host?.remove();
+    const nulled = mount(<KpiCards summary={summary({ at_risk_count: null })} />);
+    expect(nulled.querySelector("[data-at-risk-count]")?.textContent).toBe("— nguy cơ không giải ngân hết");
   });
 });
 

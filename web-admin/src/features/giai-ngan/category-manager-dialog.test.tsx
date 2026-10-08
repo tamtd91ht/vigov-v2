@@ -104,6 +104,7 @@ function category(over: Partial<finance_hangMucRa> = {}): finance_hangMucRa {
     order: 1,
     source: "don-vi",
     tier: 1,
+    color: null,
     ...over,
   };
 }

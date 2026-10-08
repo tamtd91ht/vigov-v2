@@ -57,6 +57,7 @@ function entry(tier: number, opts: Partial<MucDanhMucGhi> = {}): MucDanhMucGhi {
     order: 7,
     source: tier === TANG_DON_VI ? "don-vi" : "he-thong",
     tier,
+    color: null,
     ...opts,
   };
 }

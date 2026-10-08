@@ -478,6 +478,11 @@ export type GiaTriFormDuAn = {
    * assigned. The contract field is `assignee_id`; why it holds the code: `project-people.ts`.
    */
   readonly assigneeId: string;
+  /**
+   * `Nguy cơ không giải ngân hết` (`at_risk`, ADR 0081 #2): a flag a `budget.update` holder ticks by
+   * judgement — never computed here or on the server. Only the EDIT form shows and sends it.
+   */
+  readonly atRisk: boolean;
 };
 
 export const FORM_DU_AN_TRONG: GiaTriFormDuAn = {
@@ -496,6 +501,7 @@ export const FORM_DU_AN_TRONG: GiaTriFormDuAn = {
   orgUnitId: "",
   implementingUnit: "",
   assigneeId: "",
+  atRisk: false,
 };
 
 /** `domain.ImplementingUnitMax` — 255 characters; the server refuses longer with its own sentence. */
@@ -733,6 +739,7 @@ export function thanSuaDuAn(dau: GiaTriFormDuAn, moi: GiaTriFormDuAn): ThanDung<
     org_unit_id?: string;
     implementing_unit?: string;
     assignee_id?: string;
+    at_risk?: boolean;
   } = {};
 
   if (moi.hangMucID !== dau.hangMucID) {
@@ -795,6 +802,9 @@ export function thanSuaDuAn(dau: GiaTriFormDuAn, moi: GiaTriFormDuAn): ThanDung<
     than.implementing_unit = moi.implementingUnit.trim();
   }
   if (moi.assigneeId !== dau.assigneeId) than.assignee_id = moi.assigneeId;
+  // Absent = unchanged (the server reads a missing `at_risk` that way): every toggle is an audited
+  // write with its before/after, so an untouched box must write nothing.
+  if (moi.atRisk !== dau.atRisk) than.at_risk = moi.atRisk;
 
   // FUNDING: ABSENT = unchanged, `[]` = remove all, a list = full replacement (8245698b). So it is
   // sent ONLY when the set changed — an unchanged list sent back would be a write nobody asked for.
@@ -857,14 +867,8 @@ export const PHAN_CHUA_DUNG_GHI: readonly PhanChuaDung[] = [
   // `delayed_only` (a3fdcac2; `disbursement-overview.tsx`, `project-groups.ts`). §6 per-funding-source
   // block + `Quản lý nguồn vốn`: BUILT (migration 0013, `funding-source-progress.tsx`).
   // §3 fourth card, sub-line: "N vướng mắc đang theo dõi" is LIVE (889d4598, the summary's
-  // `open_issue_count`); "N nguy cơ không giải ngân hết" stays a "?" — no rule says which project is at
-  // risk, and a number drawn without one would be a figure nobody measured.
-  {
-    ten: "Nguy cơ không giải ngân hết",
-    viSao:
-      "Chưa có quy tắc xác định dự án nào có nguy cơ không giải ngân hết trong năm, nên chưa có số " +
-      "liệu để hiện.",
-  },
+  // `open_issue_count`); "N nguy cơ không giải ngân hết" is LIVE too (81533bb3, `at_risk_count`): the
+  // count of projects whose hand-set `at_risk` flag is ticked in `Sửa dự án` (ADR 0081 #2).
   // §7.2 funding chip: BUILT (`funding_status` on the list, `FundingChip` in `bang-du-an.tsx`).
   // Prototype list column "Đơn vị / phụ trách" + the detail figure "Đơn vị thực hiện": BUILT — names
   // resolved client-side, one read per catalogue per screen (`project-people.ts`).
@@ -885,14 +889,7 @@ export const PHAN_CHUA_DUNG_GHI: readonly PhanChuaDung[] = [
   // Spec 04 `Đơn vị thực hiện` "— Đơn vị khác, nhập tay —": BUILT (65afbdcd, `implementing_unit`,
   // `GET /api/v1/implementing-units`; `ghi-du-an.tsx`).
   // Spec 07 `Khoá` on a draft voucher (confirm + lock in one call): BUILT (356a5a9f; `chung-tu-du-an.tsx`).
-  // §8.4: the server stores the mentioned staff codes but sends nobody anything — the notification
-  // belongs to `comms` and arrives later as an event (same decision).
-  {
-    ten: "Thông báo cho người được nhắc tên",
-    viSao:
-      "Người được nhắc tên trong trao đổi chưa nhận được thông báo nào. Tên được lưu cùng ý kiến, " +
-      "nhưng hệ thống chưa gửi tin cho họ — hãy báo trực tiếp nếu cần họ đọc.",
-  },
+  // §8.4 `Thông báo cho người được nhắc tên`: BUILT (dda12fa4 — bell notice via comms, ADR 0081 #5).
 ];
 
 /**

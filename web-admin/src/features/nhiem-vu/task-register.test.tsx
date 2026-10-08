@@ -83,7 +83,7 @@ const ROW: petitions_nhiemVuRa = {
 const CATALOGUES: DanhMucNhiemVu = {
   loai: [],
   mucUuTien: [],
-  khoi: [{ id: "k", code: "khoi-uy-ban", label: "Khối Uỷ ban", is_default: false, active: true, order: 1, source: "he-thong", tier: 1 }],
+  khoi: [{ id: "k", code: "khoi-uy-ban", label: "Khối Uỷ ban", is_default: false, active: true, order: 1, source: "he-thong", tier: 1, color: null }],
   boPhan: [],
 };
 const UNITS = new Map([

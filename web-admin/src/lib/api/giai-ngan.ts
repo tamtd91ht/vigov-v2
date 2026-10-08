@@ -369,6 +369,8 @@ export function suaDuAn(id: string, than: SuaDuAnVao): Promise<KetQua<finance_du
     start_date: than.start_date,
     completion_date: than.completion_date,
     disbursement_deadline: than.disbursement_deadline,
+    // ADR 0081 #2: absent = unchanged; the form sends it only when the box was toggled.
+    at_risk: than.at_risk,
     // Rebuilt line by line, as on create; `undefined` drops out of the JSON and means "unchanged",
     // while `[]` survives and means "remove all" — `map` keeps that difference.
     funding_allocations: than.funding_allocations?.map((d) => ({

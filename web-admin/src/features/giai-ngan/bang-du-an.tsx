@@ -74,7 +74,8 @@ import {
  * re-read it. Edit and delete of one project happen on the detail page; coming back mounts this anew.
  *
  * `Vướng mắc mới nhất` is the list's own `latest_issue` (889d4598) — no read per row. The fourth card's
- * at-risk count stays a "?" (`pending-parts.tsx`): no rule defines it. `Đơn vị / phụ trách` is names
+ * at-risk count and each row's `nguy cơ không giải ngân hết` are the hand-set `at_risk` flag (ADR 0081
+ * #2), read from the summary and the row — never inferred here. `Đơn vị / phụ trách` is names
  * resolved from identity's two catalogues, read once per mount (`project-people.ts`).
  *
  * `GỘP THEO HẠNG MỤC` (on by default, §7.1): group headers carry the SERVER's `by_category` totals, and
@@ -621,6 +622,12 @@ export function BangDanhSach({
               <span className="text-danger flex items-center gap-0.5 font-semibold" data-late="">
                 <Glyph icon={TriangleAlert} className="size-3 shrink-0" />
                 chậm {delayPointsLabel(tienDo.diem)}
+              </span>
+            )}
+            {/* Prototype `BudgetItemTable.tsx:291-295`: the hand-set flag (ADR 0081 #2), words in tangerine. */}
+            {d.at_risk === true && (
+              <span className="text-tangerine font-semibold" data-at-risk="">
+                nguy cơ không giải ngân hết
               </span>
             )}
           </span>

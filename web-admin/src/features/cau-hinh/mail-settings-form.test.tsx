@@ -35,6 +35,7 @@ const SAVED: comms_mailSettingsOut = {
   is_enabled: true,
   password_set: true,
   encryption_configured: true,
+  last_test: null,
 };
 
 function view(

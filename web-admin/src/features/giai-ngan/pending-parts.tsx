@@ -6,7 +6,7 @@ import { PendingMarker } from "@/components/ui/pending-feature";
 import { Tab, TabList } from "@/components/ui/tabs";
 
 import { pendingPart } from "./nhan-ghi-giai-ngan";
-import { openIssuesLabel } from "./project-discussion-labels";
+import { atRiskLabel, openIssuesLabel } from "./project-discussion-labels";
 
 /**
  * The "?" placeholders of the Giải ngân screens — ADR 0068 §14, positions approved 02/10/2026 — and the
@@ -25,29 +25,32 @@ import { openIssuesLabel } from "./project-discussion-labels";
 // §5 `☰ Hạng mục` is LIVE since 06/10/2026 (`category-manager-dialog.tsx`).
 // §3 KPI cards, §4 chart, §5 category table and the two §7.1 checkboxes are LIVE since 06/10/2026
 // (`disbursement-overview.tsx`, `bang-du-an.tsx`); §8.3 `Biểu đồ` too (`project-curve.tsx`).
-const AT_RISK = "Nguy cơ không giải ngân hết"; // §3, fourth card's sub-line, second half
+// §3 fourth card's sub-line, second half (`Nguy cơ không giải ngân hết`) is LIVE since 81533bb3.
 // §7.2 `Vướng mắc mới nhất`, §8.1 `Vướng mắc` and §8.4 `Trao đổi` are LIVE since 889d4598.
 const TRACKING_TASK = "Tự sinh nhiệm vụ theo dõi"; // §8.1 note, §13 rule 4
-const MENTION_NOTICE = "Thông báo cho người được nhắc tên"; // §8.4
+// §8.4 `Thông báo cho người được nhắc tên` is LIVE since dda12fa4 (bell notice from the server).
 // §7.2 `Đơn vị / phụ trách`, §8 `Đơn vị thực hiện` and the two §9 selects are LIVE (`project-people.ts`).
 // §9 `Tự sinh mã` is LIVE since 9f0a0187 (`ghi-du-an.tsx`).
 // §7.2 funding chip, §8 per-source block and the §9 funding list are LIVE since 8245698b; the §8.2
 // voucher list, its `NGUỒN VỐN` column and the voucher form's source select since db94b35c.
 
 /**
- * Sub-line of §3's fourth card: "3 vướng mắc đang theo dõi · nguy cơ không giải ngân hết ?". The first
- * half is the server's `open_issue_count`; the second has no rule behind it, so it stays words and a
- * "?" — never a 0, which would read as "none".
+ * Sub-line of §3's fourth card, verbatim from the prototype (`BudgetWorkspace.tsx:221`): "3 vướng mắc
+ * đang theo dõi · 1 nguy cơ không giải ngân hết". Both counts are the summary's (`open_issue_count`,
+ * `at_risk_count`); an absent count is said as not read, never as 0.
  */
-export function AttentionCaption({ openIssueCount }: { openIssueCount: number | null | undefined }) {
+export function AttentionCaption({
+  openIssueCount,
+  atRiskCount,
+}: {
+  openIssueCount: number | null | undefined;
+  atRiskCount: number | null | undefined;
+}) {
   return (
     <span className="inline-flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5" data-attention-caption="">
       <span data-open-issues="">{openIssuesLabel(openIssueCount)}</span>
       <span aria-hidden="true">·</span>
-      <span className="inline-flex items-center gap-1.5" data-pending="">
-        <span className="text-ink-400">nguy cơ không giải ngân hết</span>
-        <PendingMarker info={pendingPart(AT_RISK)} />
-      </span>
+      <span data-at-risk-count="">{atRiskLabel(atRiskCount)}</span>
     </span>
   );
 }
@@ -61,16 +64,6 @@ export function TrackingTaskPending() {
     <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px]" data-pending="">
       <span className="text-ink-muted">{TRACKING_TASK}</span>
       <PendingMarker info={pendingPart(TRACKING_TASK)} />
-    </span>
-  );
-}
-
-/** §8.4: a mention is stored, but nobody is notified yet — said beside the composer, with its "?". */
-export function MentionNoticePending() {
-  return (
-    <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px]" data-pending="">
-      <span className="text-ink-muted">{MENTION_NOTICE} — chưa có</span>
-      <PendingMarker info={pendingPart(MENTION_NOTICE)} />
     </span>
   );
 }

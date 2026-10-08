@@ -283,9 +283,9 @@ describe("add row", () => {
 
 describe("toolbar and footnote", () => {
   const TYPES: comms_loaiTaiNguyenRa[] = [
-    { id: "1", code: "doanh-nghiep", label: "Doanh nghiệp", is_default: true, active: true, order: 1, source: "", tier: 0 },
-    { id: "2", code: "truong-hoc", label: "Trường học", is_default: true, active: false, order: 2, source: "", tier: 0 },
-    { id: "3", code: "dn-cu", label: "Doanh nghiệp", is_default: false, active: false, order: 3, source: "", tier: 0 },
+    { id: "1", code: "doanh-nghiep", label: "Doanh nghiệp", is_default: true, active: true, order: 1, source: "", tier: 0, color: null },
+    { id: "2", code: "truong-hoc", label: "Trường học", is_default: true, active: false, order: 2, source: "", tier: 0, color: null },
+    { id: "3", code: "dn-cu", label: "Doanh nghiệp", is_default: false, active: false, order: 3, source: "", tier: 0, color: null },
   ];
   const bar = (canWrite: boolean) =>
     renderToStaticMarkup(

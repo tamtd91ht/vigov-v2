@@ -25,7 +25,7 @@ import { ProjectCommentsPanel } from "./project-comments";
 import { ProjectCurvePanel } from "./project-curve";
 import { ProjectIssuesPanel, useProjectIssues } from "./project-issues";
 import { officerLabel, PEOPLE_LOADING, unitLabel, useProjectPeople, type ProjectPeople } from "./project-people";
-import { Glyph, ProgressBadge } from "./project-ui";
+import { AtRiskBadge, Glyph, ProgressBadge } from "./project-ui";
 import { TRACK_CLASS } from "./spec-classes";
 
 /**
@@ -279,6 +279,7 @@ export function ThongTinDuAn({
       <div className="px-5 py-4">
         <div className="mb-4 flex flex-wrap gap-2">
           <ProgressBadge progress={tienDo}>{nhanTienDo(tienDo)}</ProgressBadge>
+          {duAn.at_risk === true && <AtRiskBadge />}
         </div>
 
         <dl className="m-0 grid min-w-0 grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
