@@ -71,7 +71,8 @@ var pgOp = Operator{Code: "VH-00001", IP: "10.0.0.5"}
 
 func addLink(t *testing.T, db *sql.DB, tid, id, staff, chat string) {
 	t.Helper()
-	if _, err := db.Exec(`INSERT INTO zalo_link (tenant_id, id, staff_code, chat_id) VALUES ($1,$2,$3,$4)`,
+	// bot_ref named explicitly: migration 0022 dropped its 'shared' default, so every writer says which bot.
+	if _, err := db.Exec(`INSERT INTO zalo_link (tenant_id, id, staff_code, bot_ref, chat_id) VALUES ($1,$2,$3,'shared',$4)`,
 		tid, id, staff, chat); err != nil {
 		t.Fatalf("insert link: %v", err)
 	}
