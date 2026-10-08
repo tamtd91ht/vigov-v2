@@ -10,7 +10,9 @@ vi.mock("@/features/phien/phien-hien-tai", () => ({
   usePhien: () => fakeSession,
 }));
 
-const { SystemMessageCardView, SystemMessagesTab } = await import("./system-messages-tab");
+const { AddMessageFormView, SystemMessageCardView, SystemMessagesHeader, SystemMessagesTab } = await import(
+  "./system-messages-tab"
+);
 const form = await import("./system-message-form");
 
 function sessionWith(permissions: readonly string[]): PhienDaDoc {
@@ -45,19 +47,49 @@ const noop = () => {};
 /** The attribute, not the word: every button's class list carries `disabled:` variants. */
 const DISABLED_ATTR = ' disabled=""';
 
-function card(m: SystemMessage, extra: Partial<{ draft: string; busy: boolean; error: string | null }> = {}) {
+function card(
+  m: SystemMessage,
+  extra: Partial<{
+    draft: string;
+    busy: boolean;
+    error: string | null;
+    deleteReason: string | null;
+    deleteError: string | null;
+  }> = {},
+) {
   return renderToStaticMarkup(
     <SystemMessageCardView
       message={m}
-      draft={m.current_text}
+      draft={form.editableText(m)}
       busy={false}
       error={null}
       onDraft={noop}
       onSave={noop}
       onRestore={noop}
+      onToggle={noop}
+      onDeleteStart={noop}
+      onDeleteReason={noop}
+      onDeleteSubmit={noop}
+      onDeleteCancel={noop}
       {...extra}
     />,
   );
+}
+
+/** A sentence the commune added (ADR 0079 Q2): no default text, never overridden. */
+function communeMessage(patch: Partial<SystemMessage> = {}): SystemMessage {
+  return {
+    code: "chung.loi-chao",
+    group_code: "chung",
+    origin: "commune",
+    description: "Câu chào ở đầu thư trả lời",
+    current_text: "Xã xin chào ông/bà.",
+    overridden: false,
+    is_active: true,
+    updated_at: "2026-10-08T03:00:00Z",
+    updated_by: "CB-00123",
+    ...patch,
+  };
 }
 
 /** The `<button …>…label</button>` element, to read its attributes. */
@@ -92,11 +124,32 @@ describe("tab Lời hệ thống — cổng quyền", () => {
     expect(html).toContain(">Báo cáo điều hành</h3>");
   });
 
-  it("thứ tự nhóm theo mã nhóm tăng dần, như prototype: bao-cao, giai-ngan, phan-anh", () => {
+  it("thứ tự nhóm theo mã nhóm tăng dần, như prototype: bao-cao, chung, giai-ngan, phan-anh", () => {
     fakeSession = sessionWith(["admin.lookup"]);
-    expect(form.SYSTEM_MESSAGE_SECTIONS.map((s) => s.group)).toEqual(["bao-cao", "giai-ngan", "phan-anh"]);
+    expect(form.SYSTEM_MESSAGE_SECTIONS.map((s) => s.group)).toEqual(["bao-cao", "chung", "giai-ngan", "phan-anh"]);
+    // While loading, "Dùng chung" is not drawn: it appears only when it holds sentences.
     const titles = [...renderToStaticMarkup(<SystemMessagesTab />).matchAll(/<h3[^>]*>([^<]*)<\/h3>/g)].map((x) => x[1]);
     expect(titles).toEqual(["Báo cáo điều hành", "Theo dõi giải ngân", "Phản ánh của người dân"]);
+  });
+
+  it("'Dùng chung' do service Phản ánh giữ (ADR 0079 Q5a); nhóm lạ rơi vào nhóm chính của service, không biến mất", () => {
+    const [chung, phanAnh, giaiNgan] = ["chung", "phan-anh", "giai-ngan"].map(
+      (g) => form.SYSTEM_MESSAGE_SECTIONS.find((s) => s.group === g)!,
+    );
+    expect(chung).toMatchObject({ module: "petitions", title: "Dùng chung", primary: false });
+    const all = [
+      message(),
+      communeMessage(),
+      communeMessage({ code: "phan-anh.cam-on", group_code: "phan-anh" }),
+      communeMessage({ code: "la.x", group_code: "nhom-la" }),
+    ];
+    expect(form.sectionMessages(chung!, all).map((m) => m.code)).toEqual(["chung.loi-chao"]);
+    expect(form.sectionMessages(phanAnh!, all).map((m) => m.code)).toEqual([
+      "feedback.reason_required",
+      "phan-anh.cam-on",
+      "la.x",
+    ]);
+    expect(form.sectionMessages(giaiNgan!, [communeMessage({ group_code: "giai-ngan" })]).length).toBe(1);
   });
 
   it("câu hướng dẫn: nguyên văn câu chủ đầu tư chốt 08/10 (spec, bỏ phần Mini App), kiểu chữ của spec", () => {
@@ -124,14 +177,64 @@ describe("tab Lời hệ thống — cổng quyền", () => {
     expect(html).not.toMatch(/chưa hiện ở đâu|Màn Báo cáo chưa xuất tệp/);
   });
 
-  it("`Thêm câu mới`: nút cỡ thường, VÔ HIỆU, có dấu '?' (ADR 0068 §14) — không bao giờ là nút bấm được", () => {
+  it("`Thêm câu mới`: nút THẬT cỡ thường (không còn '?'), ml-auto, mở/đóng form", () => {
     fakeSession = sessionWith(["admin.lookup"]);
     const html = renderToStaticMarkup(<SystemMessagesTab />);
     const button = buttonOf(html, "Thêm câu mới");
-    expect(button).toContain(DISABLED_ATTR);
+    expect(button).not.toContain(DISABLED_ATTR);
     expect(button).toContain("h-8"); // size md, not sm (h-7)
     expect(button).not.toContain("h-7");
-    expect(html).toContain('aria-label="Thêm câu mới — tính năng đang phát triển. Bấm để xem mô tả"');
+    expect(button).toContain("ml-auto");
+    expect(button).toContain('aria-expanded="false"');
+    expect(html).not.toContain("tính năng đang phát triển");
+    expect(renderToStaticMarkup(<SystemMessagesHeader adding onToggleAdd={noop} />)).toContain('aria-expanded="true"');
+  });
+});
+
+describe("form thêm câu (spec 07)", () => {
+  function addForm(extra: Partial<{ draft: ReturnType<typeof form.emptyAddDraft>; error: string | null; sending: boolean }> = {}) {
+    return renderToStaticMarkup(
+      <AddMessageFormView
+        draft={form.emptyAddDraft()}
+        sending={false}
+        error={null}
+        onDraft={noop}
+        onSubmit={noop}
+        onCancel={noop}
+        {...extra}
+      />,
+    );
+  }
+
+  it("khung xám của spec, đúng prototype: Mã câu (gợi ý cố định 'chung.loi-chao') · Giải thích, rồi Nội dung 2 dòng, 'Thêm câu' / 'Huỷ'", () => {
+    const html = addForm();
+    expect(html).toContain('class="border-line bg-background mb-4 rounded-[10px] border border-solid p-3"');
+    expect(html).toContain('class="grid gap-3 sm:grid-cols-[14rem_minmax(0,1fr)]"');
+    expect(html).toContain(">Mã câu</label>");
+    expect(html).toContain('placeholder="chung.loi-chao"');
+    expect(html).toContain(">Giải thích câu này dùng ở đâu</label>");
+    expect(html).toContain(">Nội dung</label>");
+    expect(html).toMatch(/<textarea[^>]*rows="2"/);
+    expect(buttonOf(html, "Thêm câu")).toContain('type="submit"');
+    expect(buttonOf(html, "Huỷ")).toContain('type="button"');
+    // Field order of the prototype: code, description, then content.
+    expect(html.indexOf(">Mã câu<")).toBeLessThan(html.indexOf(">Giải thích câu này dùng ở đâu<"));
+    expect(html.indexOf(">Giải thích câu này dùng ở đâu<")).toBeLessThan(html.indexOf(">Nội dung<"));
+  });
+
+  it("HỒI QUY (VALIDATE vòng 4, 'đúng prototype'): KHÔNG có ô chọn nhóm — nhóm lấy từ tiền tố của mã", () => {
+    const html = addForm();
+    expect(html).not.toContain("<select");
+    expect(html).not.toContain(">Nhóm</label>");
+    expect("ADD_GROUP_LABEL" in form).toBe(false);
+    // The placeholder is fixed, whatever is typed.
+    expect(addForm({ draft: { ...form.emptyAddDraft(), code: "giai-ngan.x" } })).toContain('placeholder="chung.loi-chao"');
+  });
+
+  it("lỗi hiện TẠI CHỖ trong form, nguyên văn", () => {
+    expect(addForm({ error: form.ADD_MISSING })).toContain(
+      'role="alert" class="text-danger m-0 mt-2 text-[12px] font-medium">Cần cả mã và nội dung câu.</p>',
+    );
   });
 });
 
@@ -188,11 +291,97 @@ describe("một câu hệ thống", () => {
     expect(html).not.toContain("Dùng lại câu mặc định của phần mềm");
   });
 
-  it("câu đã sửa lời: 'Tắt' là nút '?' vô hiệu; không có 'Xoá' (mọi câu đi kèm phần mềm)", () => {
+  it("câu đã sửa lời: 'Tắt' là nút THẬT (không '?'); không có 'Xoá' (mọi câu đi kèm phần mềm)", () => {
     const html = card(message({ overridden: true }));
-    expect(buttonOf(html, "Tắt")).toContain(DISABLED_ATTR);
-    expect(html).toContain('aria-label="Tắt câu hệ thống — tính năng đang phát triển. Bấm để xem mô tả"');
+    const off = buttonOf(html, "Tắt");
+    expect(off).not.toContain(DISABLED_ATTR);
+    expect(off).toContain('type="button"');
+    expect(html).not.toContain("tính năng đang phát triển");
     expect(html).not.toContain("Xoá");
+  });
+
+  it("câu đi kèm phần mềm đang tắt: mờ (opacity-60), viên 'Đang tắt — dùng lời gốc', nút 'Bật lại'; ô sửa giữ LỜI CỦA XÃ chứ không phải lời gốc đang dùng", () => {
+    const m = message({
+      overridden: true,
+      is_active: false,
+      override_text: "Xin ghi lý do.",
+      current_text: "Không tiếp nhận hoặc chuyển phiếu lên cấp trên thì phải ghi rõ lý do để trả lời người dân.",
+    });
+    const html = card(m);
+    expect(html).toMatch(/<article class="[^"]*opacity-60"/);
+    expect(html).toMatch(/<span class="[^"]*bg-ink-muted\/12 text-ink border-line">Đang tắt — dùng lời gốc<\/span>/);
+    expect(buttonOf(html, "Bật lại")).not.toContain(DISABLED_ATTR);
+    expect(html).not.toMatch(/>Tắt<\/button>/);
+    expect(html).toContain(">Xin ghi lý do.</textarea>");
+    // Unchanged words: nothing to save.
+    expect(buttonOf(html, "Lưu")).toContain(DISABLED_ATTR);
+  });
+
+  it("câu đang bật thì KHÔNG mờ, không có viên 'Đang tắt'", () => {
+    const html = card(message({ overridden: true }));
+    expect(html).not.toContain("opacity-60");
+    expect(html).not.toContain("Đang tắt");
+  });
+});
+
+describe("câu xã tự thêm (ADR 0079 Q2)", () => {
+  it("viên 'Xã tự thêm' màu brand, chỉ chữ; không 'Đi kèm phần mềm', không 'Đã sửa lời', không 'Khôi phục lời gốc'", () => {
+    const html = card(communeMessage());
+    expect(html).toMatch(/<span class="[^"]*bg-brand\/12 text-brand border-brand\/25">Xã tự thêm<\/span>/);
+    expect(html).not.toContain(form.SHIPPED_BADGE);
+    expect(html).not.toContain(form.OVERRIDDEN_BADGE);
+    expect(html).not.toContain(form.RESTORE_BUTTON);
+  });
+
+  it("'Tắt' thật; 'Xoá' viền đỏ ml-auto có Trash2 — chỉ trên câu xã tự thêm", () => {
+    const html = card(communeMessage());
+    expect(buttonOf(html, "Tắt")).not.toContain(DISABLED_ATTR);
+    const del = buttonOf(html, "Xoá");
+    expect(del).toContain("text-danger");
+    expect(del).toContain("ml-auto");
+    expect(del).toContain("lucide-trash-2");
+    expect(del).not.toContain(DISABLED_ATTR);
+    expect(card(message())).not.toContain(">Xoá</button>");
+  });
+
+  it("đang tắt: mờ, viên 'Đang tắt' (không nói 'dùng lời gốc' — câu xã thêm không có lời gốc), nút 'Bật lại'", () => {
+    const html = card(communeMessage({ is_active: false }));
+    expect(html).toMatch(/<article class="[^"]*opacity-60"/);
+    expect(html).toMatch(/<span class="[^"]*bg-ink-muted\/12 text-ink border-line">Đang tắt<\/span>/);
+    expect(html).not.toContain("dùng lời gốc");
+    expect(buttonOf(html, "Bật lại")).not.toContain(DISABLED_ATTR);
+  });
+
+  it("ADR 0079 lô 3 Q7(b) THẮNG Q5b: không có dòng 'Chưa có chức năng nào dùng câu này' trên câu xã tự thêm", () => {
+    expect(card(communeMessage())).not.toContain("Chưa có chức năng nào dùng câu này");
+  });
+
+  it("mô tả trống thì không vẽ dòng mô tả", () => {
+    expect(card(communeMessage({ description: "" }))).not.toContain('class="text-ink-muted m-0 mb-2 text-[11.5px]"');
+  });
+
+  it("bước LÝ DO XOÁ (luật 7): ô lý do có nhãn, nút Xoá đỏ + Huỷ, nằm NGOÀI form sửa lời; 'Xoá' trên thẻ khoá lại", () => {
+    const html = card(communeMessage(), { deleteReason: "" });
+    expect(html).toContain(">Lý do xoá câu chung.loi-chao</label>");
+    expect(html).toMatch(/<input[^>]*id="loi-he-thong-ly-do-xoa-chung.loi-chao"[^>]*maxLength="200"/);
+    expect(html).toMatch(/<form[^>]*aria-label="Xoá câu chung.loi-chao"/);
+    // The edit form closes before the delete step opens: no nested <form>.
+    const edit = html.indexOf('aria-label="Sửa lời câu chung.loi-chao"');
+    const step = html.indexOf('aria-label="Xoá câu chung.loi-chao"');
+    expect(html.slice(edit, step)).toContain("</form>");
+    expect(buttonOf(html, "Huỷ")).toContain('type="button"');
+    expect(html.match(/<button[^>]*>(?:(?!<button).)*?Xoá<\/button>/g)?.length).toBe(2);
+    expect(html).toMatch(/<button class="[^"]*bg-destructive\/10[^"]*" type="submit"[^>]*>Xoá<\/button>/);
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*aria-expanded="true"/);
+  });
+
+  it("lỗi của bước xoá hiện tại chỗ, nguyên văn", () => {
+    const html = card(communeMessage(), { deleteReason: "", deleteError: form.DELETE_REASON_MISSING });
+    expect(html).toContain(`role="alert" class="text-danger col-span-full m-0 text-[12px] font-medium">${form.DELETE_REASON_MISSING}</p>`);
+  });
+
+  it("câu đi kèm phần mềm KHÔNG bao giờ có bước xoá, kể cả khi trạng thái lệch", () => {
+    expect(card(message({ overridden: true }), { deleteReason: "" })).not.toContain("Lý do xoá");
   });
 
   it("HỒI QUY (ADR 0079 lô 3): câu CHƯA có lời của xã thì KHÔNG có 'Tắt' — không có gì để tắt", () => {

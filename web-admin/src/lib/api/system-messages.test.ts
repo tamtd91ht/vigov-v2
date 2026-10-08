@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { listSystemMessages, restoreSystemMessage, rewordSystemMessage } from "./system-messages";
+import {
+  createCommuneMessage,
+  deleteCommuneMessage,
+  editCommuneMessage,
+  listSystemMessages,
+  restoreSystemMessage,
+  rewordSystemMessage,
+  switchSystemMessage,
+} from "./system-messages";
 
 function reply(status: number, body?: unknown) {
   return body === undefined
@@ -125,5 +133,67 @@ describe("restoreSystemMessage — DELETE …/{code}/override", () => {
       ok: false,
       thongBao: "Không tìm thấy câu hệ thống này.",
     });
+  });
+});
+
+describe("switchSystemMessage — PATCH …/{code}/override", () => {
+  it.each(["petitions", "finance", "reporting"] as const)("%s: PATCH { is_active } to the override route", async (module) => {
+    const fake = stubFetch(() => reply(200, { ...MESSAGE, is_active: false }));
+    expect((await switchSystemMessage(module, "x.y", false)).ok).toBe(true);
+    const c = call(fake);
+    expect(c.path).toBe(`/api/v1/${module}-system-messages/x.y/override`);
+    expect(c.method).toBe("PATCH");
+    expect(c.body).toEqual({ is_active: false });
+    expect(c.headers.has("Idempotency-Key")).toBe(false);
+  });
+
+  it("409 no_commune_wording is the server's sentence", async () => {
+    const sentence = "Câu này đang dùng lời gốc của phần mềm, chưa có lời của xã để tắt hoặc bật.";
+    stubFetch(() => reply(409, { code: "no_commune_wording", message: sentence }));
+    expect(await switchSystemMessage("petitions", "feedback.never_public", false)).toEqual({ ok: false, thongBao: sentence });
+  });
+});
+
+describe("commune sentences — POST / PATCH / DELETE …/{code}", () => {
+  it("POST to the list route with the Idempotency-Key; 201 is the new sentence", async () => {
+    const created = { ...MESSAGE, code: "chung.loi-chao", origin: "commune" };
+    const fake = stubFetch(() => reply(201, created));
+    const r = await createCommuneMessage(
+      "petitions",
+      { group_code: "chung", code: "chung.loi-chao", text: "Xin chào." },
+      "idem-1",
+    );
+    expect(r).toEqual({ ok: true, duLieu: created });
+    const c = call(fake);
+    expect(c.path).toBe("/api/v1/petitions-system-messages");
+    expect(c.method).toBe("POST");
+    expect(c.headers.get("Idempotency-Key")).toBe("idem-1");
+    expect(c.body).toEqual({ group_code: "chung", code: "chung.loi-chao", text: "Xin chào." });
+  });
+
+  it("POST 409 message_code_taken is the server's sentence", async () => {
+    stubFetch(() => reply(409, { code: "message_code_taken", message: "Mã này đã được dùng cho một câu khác." }));
+    expect(
+      await createCommuneMessage("finance", { group_code: "giai-ngan", code: "giai-ngan.a", text: "B." }, "k"),
+    ).toEqual({ ok: false, thongBao: "Mã này đã được dùng cho một câu khác." });
+  });
+
+  it("PATCH …/{code} (NOT /override), code encoded, no Idempotency-Key", async () => {
+    const fake = stubFetch(() => reply(200, MESSAGE));
+    await editCommuneMessage("finance", "giai-ngan/x", { is_active: true });
+    const c = call(fake);
+    expect(c.path).toBe("/api/v1/finance-system-messages/giai-ngan%2Fx");
+    expect(c.method).toBe("PATCH");
+    expect(c.body).toEqual({ is_active: true });
+    expect(c.headers.has("Idempotency-Key")).toBe(false);
+  });
+
+  it("DELETE …/{code} carries { reason } in the body; 204 is success", async () => {
+    const fake = stubFetch(() => reply(204));
+    expect(await deleteCommuneMessage("petitions", "phan-anh.a", "Trùng.")).toEqual({ ok: true, duLieu: null });
+    const c = call(fake);
+    expect(c.path).toBe("/api/v1/petitions-system-messages/phan-anh.a");
+    expect(c.method).toBe("DELETE");
+    expect(c.body).toEqual({ reason: "Trùng." });
   });
 });
