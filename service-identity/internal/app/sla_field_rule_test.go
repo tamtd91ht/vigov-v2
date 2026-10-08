@@ -161,15 +161,13 @@ func TestAddFieldRuleWithoutReaderFailsClosed(t *testing.T) {
 	}
 }
 
-// DOCUMENT TYPES AND TASK PRIORITIES HAVE NO CONTRACT IDENTITY CAN ASK (rule 2, stop condition #2),
-// so both kinds are refused — and the platform is not asked about a code that is not its own.
-// `don-thu` has the default row only.
+// TASK PRIORITIES ARE NOT YET CHECKED, so that kind is refused — and the platform is not asked about a
+// code that is not its own. `don-thu` has the default row only.
 func TestAddFieldRuleRefusesUncheckableKinds(t *testing.T) {
 	cases := []struct {
 		kind domain.LoaiViec
 		want error
 	}{
-		{domain.LoaiViecVanBanDen, ErrSLAFieldUnverifiable},
 		{domain.LoaiViecNhiemVu, ErrSLAFieldUnverifiable},
 		{domain.LoaiViecDonThu, domain.ErrSLAKindHasNoFieldRows},
 		{domain.LoaiViec("la"), domain.ErrSLAKindUnknown},
@@ -184,6 +182,89 @@ func TestAddFieldRuleRefusesUncheckableKinds(t *testing.T) {
 		}
 		if k.batDau != 0 || src.calls != 0 {
 			t.Errorf("%s: giao dịch %d, hỏi platform %d lần — muốn 0/0", c.kind, k.batDau, src.calls)
+		}
+	}
+}
+
+// --- van-ban-den: the document type is checked with service-documents ---------------------------
+
+// documentTypesFake answers code → active for the codes it knows; absent otherwise.
+type documentTypesFake struct {
+	known map[string]bool
+	err   error
+	calls int
+	asked []string
+}
+
+func (f *documentTypesFake) DocumentTypeCodes(_ context.Context, codes []string) (map[string]bool, error) {
+	f.calls++
+	f.asked = append([]string(nil), codes...)
+	if f.err != nil {
+		return nil, f.err
+	}
+	out := map[string]bool{}
+	for _, c := range codes {
+		if a, ok := f.known[c]; ok {
+			out[c] = a
+		}
+	}
+	return out, nil
+}
+
+func documentTypes() *documentTypesFake {
+	return &documentTypesFake{known: map[string]bool{"cong-van": true, "to-trinh": false}}
+}
+
+// AN ACTIVE TYPE IS WRITTEN, with its audit entry, after ONE question carrying the normalised code —
+// and the platform is not asked about a code that is not its own.
+func TestAddFieldRuleAcceptsActiveDocumentType(t *testing.T) {
+	k := &khoSLAGia{}
+	platform := tier1()
+	uc, ctx := useCaseWithFields(t, k, platform)
+	docs := documentTypes()
+	uc.WithDocumentTypes(docs)
+
+	row, err := uc.AddFieldRule(ctx, addReq(domain.LoaiViecVanBanDen, " cong-van "), nguoiSLA())
+	if err != nil {
+		t.Fatalf("AddFieldRule lỗi: %v", err)
+	}
+	if row.LinhVuc != "cong-van" || docs.calls != 1 || len(docs.asked) != 1 || docs.asked[0] != "cong-van" {
+		t.Errorf("row %+v, asked %v (%d calls)", row, docs.asked, docs.calls)
+	}
+	if platform.calls != 0 {
+		t.Errorf("hỏi platform %d lần về một mã loại văn bản", platform.calls)
+	}
+	if k.soCau("INSERT INTO sla") != 1 || k.soCau("audit_log") != 1 || k.daCommit != 1 {
+		t.Errorf("insert %d, vết %d, commit %d — muốn 1/1/1", k.soCau("INSERT INTO sla"), k.soCau("audit_log"), k.daCommit)
+	}
+}
+
+// EVERY ANSWER OTHER THAN "ACTIVE" WRITES NOTHING: switched off and absent are 400, any error is 503,
+// and no client wired is 503 — fail closed.
+func TestAddFieldRuleDocumentTypeFailsClosed(t *testing.T) {
+	cases := []struct {
+		name  string
+		field string
+		src   *documentTypesFake // nil = not wired
+		want  error
+	}{
+		{"loại đã tắt", "to-trinh", documentTypes(), ErrSLAFieldNotInList},
+		{"mã không có", "khong-co", documentTypes(), ErrSLAFieldNotInList},
+		{"documents không trả lời", "cong-van", &documentTypesFake{err: errors.New("unavailable")}, ErrSLAFieldListUnavailable},
+		{"chưa nối documents", "cong-van", nil, ErrSLAFieldListUnavailable},
+	}
+	for _, c := range cases {
+		k := &khoSLAGia{}
+		uc, ctx := useCaseWithFields(t, k, tier1())
+		if c.src != nil {
+			uc.WithDocumentTypes(c.src)
+		}
+		_, err := uc.AddFieldRule(ctx, addReq(domain.LoaiViecVanBanDen, c.field), nguoiSLA())
+		if !errors.Is(err, c.want) {
+			t.Errorf("%s: lỗi = %v, muốn %v", c.name, err, c.want)
+		}
+		if k.batDau != 0 {
+			t.Errorf("%s: mở %d giao dịch — phải từ chối TRƯỚC", c.name, k.batDau)
 		}
 	}
 }

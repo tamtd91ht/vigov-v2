@@ -331,17 +331,29 @@ func run(log *slog.Logger) error {
 	// not stop identity from starting (it is optional in core/config), and it must never let a
 	// delete through on half the question. grpc.NewClient connects lazily, so a dialled owner that is
 	// down refuses deletes (503) rather than delaying startup.
-	if cfg.PetitionsGRPCAddr() != "" && cfg.DocumentsGRPCAddr() != "" {
+	//
+	// ONE documents connection serves both of its questions: the delete's holdings count and the SLA
+	// write's document-type check (ADR 0079 lô 2 Q4). Without DOCUMENTS_GRPC_ADDR every `van-ban-den`
+	// add on POST /api/v1/sla answers 503 `sla_field_check_unavailable` (app/sla_field_rule.go) — never
+	// accepted unchecked.
+	var documents *documentsclient.Client
+	if addr := cfg.DocumentsGRPCAddr(); addr != "" {
+		d, err := documentsclient.Dial(addr, cfg.GRPCCallerKey(), log)
+		if err != nil {
+			return err
+		}
+		defer d.Close()
+		documents = d
+		ghiSLA.WithDocumentTypes(documents)
+	} else {
+		log.Warn("thêm thời hạn riêng cho loại văn bản TẮT — thiếu DOCUMENTS_GRPC_ADDR; POST /api/v1/sla loại van-ban-den sẽ trả 503")
+	}
+	if cfg.PetitionsGRPCAddr() != "" && documents != nil {
 		petitions, err := petitionsclient.Dial(cfg.PetitionsGRPCAddr(), cfg.GRPCCallerKey(), log)
 		if err != nil {
 			return err
 		}
 		defer petitions.Close()
-		documents, err := documentsclient.Dial(cfg.DocumentsGRPCAddr(), cfg.GRPCCallerKey(), log)
-		if err != nil {
-			return err
-		}
-		defer documents.Close()
 		ghiBoPhan.WithHoldingsSources(petitions, documents)
 	} else {
 		log.Warn("xoá bộ phận TẮT — thiếu PETITIONS_GRPC_ADDR hoặc DOCUMENTS_GRPC_ADDR; DELETE /api/v1/org-units/{id} sẽ trả 503",

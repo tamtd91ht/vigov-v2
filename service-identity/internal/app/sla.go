@@ -99,6 +99,10 @@ type SLA struct {
 	// petitionFields checks a `phan-anh` field code on AddFieldRule (sla_field_rule.go). Nil = every
 	// such add is refused as unavailable, never accepted unchecked.
 	petitionFields PetitionFieldSource
+
+	// documentTypes checks a `van-ban-den` field code the same way, against service-documents. Nil =
+	// refused as unavailable.
+	documentTypes DocumentTypeSource
 }
 
 func NewSLA(db *store.DB, kho KhoSLA) *SLA {

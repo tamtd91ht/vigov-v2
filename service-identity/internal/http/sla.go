@@ -527,7 +527,9 @@ func (h *Handler) traLoiLoiGhiSLA(w http.ResponseWriter, r *http.Request, viec s
 
 	case errors.Is(err, app.ErrSLAFieldNotInList):
 		httpx.WriteError(w, http.StatusBadRequest, "sla_field_unknown",
-			"Mã lĩnh vực không có trong danh mục lĩnh vực phản ánh, hoặc đã ngừng dùng.", "")
+			// Neutral on purpose: the code is a petition field, a document type or (later) a task
+			// priority depending on the work kind, and the old sentence named the petition catalogue.
+			"Mã này không có trong danh mục của loại việc đã chọn, hoặc đã ngừng dùng.", "")
 
 	case errors.Is(err, app.ErrSLAFieldListUnavailable):
 		// 503, retryable. The cause stays in the log; nothing was written.

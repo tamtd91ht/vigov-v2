@@ -5,22 +5,25 @@ package app
 // row, and nobody approves either act. `admin.sla` + the audit entry are the control.
 //
 // =================================================================================================
-// WHICH CODES ARE CHECKED, AND WHY TWO OF THE THREE KINDS ARE REFUSED TODAY.
+// WHICH CODES ARE CHECKED, AND WHY ONE OF THE THREE KINDS IS STILL REFUSED.
 //
 // A field code is stored as a VALUE (migration 0008, sla.linh_vuc) and read back by every
 // ResolveDeadlines call — which answers a misspelled code with the DEFAULT row, silently. So the code
 // is checked HERE, on the write, against the service that owns the list (rule 2, invariant 3):
 //
-//	phan-anh     tier-1 petition fields, platform, ListPetitionFields (ADR 0060). CHECKED.
-//	van-ban-den  document types (`loai_van_ban`), owned by service-documents.   NO CONTRACT.
-//	nhiem-vu     task priorities (`muc_uu_tien_nhiem_vu`), service-petitions.  NO CONTRACT.
+//	phan-anh     tier-1 petition fields, platform, ListPetitionFields (ADR 0060).           CHECKED.
+//	van-ban-den  document types (`loai_van_ban`), service-documents,
+//	             ResolveDocumentTypeCodes (ADR 0079 lô 2 Q4).                              CHECKED.
+//	nhiem-vu     task priorities (`muc_uu_tien_nhiem_vu`), service-petitions.             NOT YET.
 //
-// For the last two there is no RPC identity can ask (proto/vigov/documents/v1/documents.proto and
-// petitions/v1/petitions.proto expose only Health and CountOrgUnitHoldings), and identity may not read
-// their databases (rule 2, forbidden #2). That is rule 2 STOP CONDITION #2, so those kinds are REFUSED
-// with ErrSLAFieldUnverifiable rather than accepted on trust. Accepting them unchecked would store a
-// code that a typo makes permanently wrong — falling back to the default deadline with nothing on any
-// screen to say so. Lifting this refusal needs a contract (contract-designer), not a change here.
+// The checked kinds share one rule, fail closed: an active code is accepted; a code the owner does not
+// know, or has switched off, is ErrSLAFieldNotInList (400); the owner not answering — or not wired at
+// all — is ErrSLAFieldListUnavailable (503), never "accept unchecked".
+//
+// `nhiem-vu` is refused with ErrSLAFieldUnverifiable until identity is wired to the petitions RPC that
+// answers task-priority codes; identity may not read that database (rule 2, forbidden #2). Accepting it
+// unchecked would store a code that a typo makes permanently wrong — falling back to the default
+// deadline with nothing on any screen to say so.
 //
 // =================================================================================================
 // NEITHER ACT TOUCHES A DEADLINE ALREADY ISSUED (rule 10, invariant 2; ADR 0028). A row added or
@@ -64,6 +67,20 @@ var (
 // satisfies it in production.
 type PetitionFieldSource interface {
 	Set(ctx context.Context) (platformclient.PetitionFieldSet, error)
+}
+
+// DocumentTypeSource answers which document-type codes a live type of the commune in ctx carries, and
+// whether each is switched on (present → `dang_dung`; absent → no live type). *documentsclient.Client
+// satisfies it in production.
+type DocumentTypeSource interface {
+	DocumentTypeCodes(ctx context.Context, codes []string) (map[string]bool, error)
+}
+
+// WithDocumentTypes wires the document-type check. Without it every `van-ban-den` add answers
+// ErrSLAFieldListUnavailable — fail closed, never "accept unchecked".
+func (uc *SLA) WithDocumentTypes(src DocumentTypeSource) *SLA {
+	uc.documentTypes = src
+	return uc
 }
 
 // WithPetitionFields wires the tier-1 reader. Without it every `phan-anh` add answers
@@ -148,11 +165,39 @@ func (uc *SLA) AddFieldRule(ctx context.Context, req AddFieldRuleRequest, nguoi 
 }
 
 // checkFieldWithOwner asks the list's owner whether the code may be written. See the file comment for
-// why two kinds are refused outright.
+// the kind still refused outright.
 func (uc *SLA) checkFieldWithOwner(ctx context.Context, kind domain.LoaiViec, field string) error {
-	if kind != domain.LoaiViecPhanAnh {
+	switch kind {
+	case domain.LoaiViecPhanAnh:
+		return uc.checkPetitionField(ctx, field)
+	case domain.LoaiViecVanBanDen:
+		return uc.checkDocumentType(ctx, field)
+	default:
 		return ErrSLAFieldUnverifiable
 	}
+}
+
+// checkDocumentType asks service-documents about ONE code, exactly as it will be stored (already
+// normalised by the caller — the server matches exactly). Not cached: a cached "active" would let a
+// row through for a type switched off a moment ago (documents.proto).
+func (uc *SLA) checkDocumentType(ctx context.Context, field string) error {
+	if uc.documentTypes == nil {
+		return ErrSLAFieldListUnavailable
+	}
+	answered, err := uc.documentTypes.DocumentTypeCodes(ctx, []string{field})
+	if err != nil {
+		// Including ErrDocumentsUnavailable: documents could not be asked. The wrapped cause stays for
+		// the log; the sentinel decides the status.
+		return fmt.Errorf("%w: %w", ErrSLAFieldListUnavailable, err)
+	}
+	// Absent (unknown, soft-deleted, another commune's) and switched off are one refusal.
+	if active, ok := answered[field]; !ok || !active {
+		return ErrSLAFieldNotInList
+	}
+	return nil
+}
+
+func (uc *SLA) checkPetitionField(ctx context.Context, field string) error {
 	if uc.petitionFields == nil {
 		return ErrSLAFieldListUnavailable
 	}
