@@ -456,3 +456,36 @@ func (emptyOverrideStore) UpdateText(context.Context, *pkgstore.ScopedTx, domain
 func (emptyOverrideStore) SoftDelete(context.Context, *pkgstore.ScopedTx, string, string, string, time.Time) error {
 	return errNoWritePath
 }
+
+func (emptyOverrideStore) SetActive(context.Context, *pkgstore.ScopedTx, string, bool, string, time.Time) error {
+	return errNoWritePath
+}
+
+// The commune-sentence half (migration 0017): a commune that added none.
+func (emptyOverrideStore) ListCustom(context.Context) ([]domain.CustomMessage, error) {
+	return nil, nil
+}
+
+func (emptyOverrideStore) CustomForUpdate(context.Context, *pkgstore.ScopedTx, string) (*domain.CustomMessage, error) {
+	return nil, errNoWritePath
+}
+
+func (emptyOverrideStore) CustomKeyTaken(context.Context, *pkgstore.ScopedTx, string) (bool, error) {
+	return false, errNoWritePath
+}
+
+func (emptyOverrideStore) CountLiveCustom(context.Context, *pkgstore.ScopedTx) (int, error) {
+	return 0, errNoWritePath
+}
+
+func (emptyOverrideStore) AddCustom(context.Context, *pkgstore.ScopedTx, domain.CustomMessage) error {
+	return errNoWritePath
+}
+
+func (emptyOverrideStore) UpdateCustom(context.Context, *pkgstore.ScopedTx, domain.CustomMessage) error {
+	return errNoWritePath
+}
+
+func (emptyOverrideStore) SoftDeleteCustom(context.Context, *pkgstore.ScopedTx, string, string, string, time.Time) error {
+	return errNoWritePath
+}

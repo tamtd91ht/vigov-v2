@@ -288,7 +288,7 @@ func TestHangMucChiTraTruongCuaHopDong(t *testing.T) {
 	// answer `name`. This literal is where a drift back to `name` turns red.
 	muon := map[string]bool{
 		"id": true, "code": true, "label": true, "is_default": true, "active": true,
-		"order": true, "source": true, "tier": true,
+		"order": true, "source": true, "tier": true, "color": true,
 	}
 	for _, mot := range tho.Items {
 		for khoa := range mot {

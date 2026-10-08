@@ -99,6 +99,10 @@ type hangMucRa struct {
 	// after what a screen does with it (ADR 0017). Capability flags would also have to be kept in
 	// step with the trigger from a second place.
 	Tier int `json:"tier"`
+
+	// Color is the display colour, `#rrggbb` lower-case, or null when none was chosen (ADR 0079 row 5).
+	// Presentation only; the screen draws a neutral chip for null.
+	Color *string `json:"color"`
 }
 
 // danhSachHangMucRa wraps the list in an OBJECT rather than returning a bare JSON array.
@@ -125,6 +129,7 @@ func hangMucRaNgoai(hm domain.HangMucKeHoachVon) hangMucRa {
 		Order:     hm.ThuTu,
 		Source:    hm.Nguon,
 		Tier:      int(hm.Tang()),
+		Color:     colorOut(hm.Color),
 	}
 }
 
@@ -207,6 +212,9 @@ type themHangMucVao struct {
 	Order     int    `json:"order,omitempty"`
 	IsDefault bool   `json:"is_default,omitempty"`
 
+	// Color is `#RRGGBB` (stored lower-case); absent or null = no colour (ADR 0079 row 5).
+	Color *string `json:"color,omitempty"`
+
 	Source *string `json:"source,omitempty"`
 	Tier   *int    `json:"tier,omitempty"`
 }
@@ -227,6 +235,9 @@ type suaHangMucVao struct {
 	Order     *int    `json:"order,omitempty"`
 	Active    *bool   `json:"active,omitempty"`
 	IsDefault *bool   `json:"is_default,omitempty"`
+
+	// Color has THREE states: absent = leave it; null = clear it; `#RRGGBB` = set it.
+	Color optionalColorIn `json:"color,omitempty"`
 
 	Code   *string `json:"code,omitempty"`
 	Source *string `json:"source,omitempty"`
@@ -272,6 +283,7 @@ func (h *Handler) ThemHangMuc(w http.ResponseWriter, r *http.Request) {
 		Nhan:      vao.Label,
 		ThuTu:     vao.Order,
 		LaMacDinh: vao.IsDefault,
+		Color:     vao.Color,
 	}, nguoi)
 	if err != nil {
 		h.traLoiLoiGhi(w, r, "thêm", err)
@@ -313,6 +325,7 @@ func (h *Handler) SuaHangMuc(w http.ResponseWriter, r *http.Request) {
 		ThuTu:     vao.Order,
 		DangDung:  vao.Active,
 		LaMacDinh: vao.IsDefault,
+		Color:     vao.Color.change(),
 	}, nguoi)
 	if err != nil {
 		h.traLoiLoiGhi(w, r, "sửa", err)

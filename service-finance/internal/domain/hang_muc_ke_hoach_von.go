@@ -65,4 +65,9 @@ type HangMucKeHoachVon struct {
 	// own row in tier 2 and step around every guard.
 	Nguon          string
 	MaNguonReNhanh bool
+
+	// Color is the display colour, `#rrggbb` lower-case, "" when none was chosen (NULL, migration
+	// 0017, ADR 0079 row 5). Presentation only — editable on every tier, "Hệ thống" rows included
+	// (Q1 #9); nothing branches on it. See catalogue_color.go.
+	Color string
 }

@@ -69,37 +69,76 @@ type MessageOverride struct {
 	Text      string
 	UpdatedAt time.Time
 	UpdatedBy string // staff business code, never the internal id (rule 6, invariant 8)
+
+	// Inactive is "Tắt" (migration 0017 §A, ADR 0079 Q2): the wording is kept and NOT used — the shipped
+	// sentence is in force until "Bật lại". Named for the off state so the zero value is the column's
+	// default (`is_active` true): an override built without thinking about the switch is in force,
+	// exactly as every override was before that migration.
+	Inactive bool
 }
+
+// GroupDisbursement is the group every shipped key of this service is listed under on "Lời hệ thống" — the
+// web's group code (ADR 0011 value).
+const GroupDisbursement = "giai-ngan"
+
+// Origin says who wrote a sentence: the software ("shipped") or the commune ("commune"). Technical
+// values the web branches on — which buttons a card has — not business vocabulary.
+const (
+	OriginShipped = "shipped"
+	OriginCommune = "commune"
+)
 
 // SystemMessage is what a reader gets: the default, the text in force, and whether the commune
 // has reworded it.
+//
+// THREE STATES OF A SHIPPED KEY, and how they read:
+//
+//	no override          CurrentText = DefaultText, Overridden false, Active true
+//	override, on         CurrentText = OverrideText, Overridden true,  Active true
+//	override, "Tắt"      CurrentText = DefaultText, Overridden true,  Active false — OverrideText
+//	                     still carries the commune's words, so "Bật lại" shows what comes back
 type SystemMessage struct {
-	Key         string
-	Description string
-	DefaultText string
-	CurrentText string
-	Overridden  bool
-	UpdatedAt   *time.Time
-	UpdatedBy   string
+	Key          string
+	Group        string
+	Origin       string
+	Description  string
+	DefaultText  string
+	CurrentText  string
+	OverrideText string
+	Overridden   bool
+	Active       bool
+	UpdatedAt    *time.Time
+	UpdatedBy    string
 }
 
 // ResolveMessage is THE fallback rule, in one place: no live override means the default, and an
 // override for another key is a programming error, not a wording. Every reader of these sentences
 // — the configuration list today, any route that emits the sentence tomorrow — goes through here,
 // so "what does this commune see" has exactly one answer.
+//
+// A SWITCHED-OFF OVERRIDE RESOLVES TO THE DEFAULT (migration 0017 §A). This is the one place that decides it,
+// so every reader agrees; a reader that took o.Text without asking here would keep printing a wording
+// the commune switched off.
 func ResolveMessage(m ShippedMessage, o *MessageOverride) SystemMessage {
 	out := SystemMessage{
 		Key:         m.Key,
+		Group:       GroupDisbursement,
+		Origin:      OriginShipped,
 		Description: m.Description,
 		DefaultText: m.DefaultText,
 		CurrentText: m.DefaultText,
+		Active:      true,
 	}
 	if o == nil || o.Key != m.Key {
 		return out
 	}
 	at := o.UpdatedAt
-	out.CurrentText = o.Text
+	out.OverrideText = o.Text
 	out.Overridden = true
+	out.Active = !o.Inactive
+	if out.Active {
+		out.CurrentText = o.Text
+	}
 	out.UpdatedAt = &at
 	out.UpdatedBy = o.UpdatedBy
 	return out

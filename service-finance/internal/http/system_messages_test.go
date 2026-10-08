@@ -17,6 +17,7 @@ import (
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-finance/internal/app"
 	"github.com/vihat/vigov/service-finance/internal/domain"
 )
 
@@ -50,6 +51,11 @@ type systemMessagesFake struct {
 	textCommune tenant.ID
 	textOut     string // "" answers the shipped default, which is what a commune that reworded nothing reads
 	textErr     error
+
+	active  *bool
+	created app.NewCustomMessage
+	edited  app.CustomMessageEdit
+	reason  string
 }
 
 func (f *systemMessagesFake) Text(ctx context.Context, key string) (string, error) {
@@ -89,6 +95,30 @@ func (f *systemMessagesFake) Restore(ctx context.Context, key string, actor audi
 	f.record(ctx, "restore")
 	f.key, f.actor = key, actor
 	return f.result, f.err
+}
+
+func (f *systemMessagesFake) SetActive(ctx context.Context, key string, active bool, actor audit.Actor) (domain.SystemMessage, error) {
+	f.record(ctx, "switch")
+	f.key, f.actor, f.active = key, actor, &active
+	return f.result, f.err
+}
+
+func (f *systemMessagesFake) CreateCustom(ctx context.Context, in app.NewCustomMessage, actor audit.Actor) (domain.SystemMessage, error) {
+	f.record(ctx, "create")
+	f.key, f.actor, f.created = in.Key, actor, in
+	return f.result, f.err
+}
+
+func (f *systemMessagesFake) EditCustom(ctx context.Context, key string, in app.CustomMessageEdit, actor audit.Actor) (domain.SystemMessage, error) {
+	f.record(ctx, "edit")
+	f.key, f.actor, f.edited = key, actor, in
+	return f.result, f.err
+}
+
+func (f *systemMessagesFake) DeleteCustom(ctx context.Context, key, reason string, actor audit.Actor) error {
+	f.record(ctx, "delete")
+	f.key, f.actor, f.reason = key, actor, reason
+	return f.err
 }
 
 type systemMessagesHarness struct {
@@ -159,6 +189,10 @@ func (s *systemMessagesHarness) call(method, host, path string, p *authz.Princip
 	r.Host = host
 	r.RemoteAddr = "10.0.0.7:51000"
 	r.Header.Set("Content-Type", "application/json")
+	if method == http.MethodPost {
+		// Only the create route declares idem.Required; the others are proved to need no key below.
+		r.Header.Set(idem.Header, "tn-system-message-0001")
+	}
 	if p != nil {
 		r = r.WithContext(context.WithValue(r.Context(), khoaChuTheGhi{}, *p))
 	}
@@ -170,13 +204,23 @@ func (s *systemMessagesHarness) call(method, host, path string, p *authz.Princip
 type systemMessageRoute struct {
 	name, method, path, body string
 	ok                       int
+	key                      string // the key the use case must receive; "" for the list
 }
 
+const customCode = "giai-ngan.loi-nhac"
+
 func systemMessageRoutes() []systemMessageRoute {
+	k := domain.KeyBudgetScopeNotice
 	return []systemMessageRoute{
-		{"GET", http.MethodGet, systemMessagesPath, "", http.StatusOK},
-		{"PUT", http.MethodPut, overridePath(domain.KeyBudgetScopeNotice), `{"text":"Câu của xã."}`, http.StatusOK},
-		{"DELETE", http.MethodDelete, overridePath(domain.KeyBudgetScopeNotice), "", http.StatusNoContent},
+		{"GET", http.MethodGet, systemMessagesPath, "", http.StatusOK, ""},
+		{"PUT", http.MethodPut, overridePath(k), `{"text":"Câu của xã."}`, http.StatusOK, k},
+		{"DELETE", http.MethodDelete, overridePath(k), "", http.StatusNoContent, k},
+		// ADR 0079 Q2 (migration 0017).
+		{"PATCH override (switch)", http.MethodPatch, overridePath(k), `{"is_active":false}`, http.StatusOK, k},
+		{"POST commune sentence", http.MethodPost, systemMessagesPath,
+			`{"group_code":"giai-ngan","code":"` + customCode + `","text":"Nhắc."}`, http.StatusCreated, customCode},
+		{"PATCH commune sentence", http.MethodPatch, systemMessagesPath + "/" + customCode, `{"text":"Mới."}`, http.StatusOK, customCode},
+		{"DELETE commune sentence", http.MethodDelete, systemMessagesPath + "/" + customCode, `{"reason":"Không dùng"}`, http.StatusNoContent, customCode},
 	}
 }
 
@@ -243,8 +287,8 @@ func TestSystemMessages_200RightPermissionRightCommune(t *testing.T) {
 				if s.svc.actor.ID != maCanBoGhi || s.svc.actor.ID == idCanBoGhi || s.svc.actor.IP != "10.0.0.7" {
 					t.Errorf("actor = %+v, want business code %s and socket IP", s.svc.actor, maCanBoGhi)
 				}
-				if s.svc.key != domain.KeyBudgetScopeNotice {
-					t.Errorf("key = %q", s.svc.key)
+				if s.svc.key != rt.key {
+					t.Errorf("key = %q, want %q", s.svc.key, rt.key)
 				}
 			}
 		})

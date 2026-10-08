@@ -91,6 +91,9 @@ type YeuCauThemHangMuc struct {
 	Nhan      string
 	ThuTu     int
 	LaMacDinh bool
+
+	// Color is the display colour (migration 0017); nil = none chosen.
+	Color *string
 }
 
 // YeuCauSuaHangMuc is a PARTIAL edit: a nil pointer means "leave this alone".
@@ -105,6 +108,10 @@ type YeuCauSuaHangMuc struct {
 	ThuTu     *int
 	DangDung  *bool
 	LaMacDinh *bool
+
+	// Color has THREE states: nil = leave it; a change with Color nil = clear it; a value = set it.
+	// Editable on every tier — presentation only (ADR 0079 lô 2 Q1 #9).
+	Color *CatalogueColorChange
 }
 
 // categoryCreateAttempts bounds how many TRANSACTIONS an auto-coded create may take. A retry happens
@@ -146,6 +153,13 @@ func (uc *DanhMucHangMuc) Them(ctx context.Context, yc YeuCauThemHangMuc,
 	if err := domain.KiemTraThuTu(yc.ThuTu); err != nil {
 		return domain.HangMucKeHoachVon{}, err
 	}
+	if yc.Color != nil {
+		color, err := domain.NormalizeCatalogueColor(*yc.Color)
+		if err != nil {
+			return domain.HangMucKeHoachVon{}, err
+		}
+		yc.Color = &color
+	}
 
 	attempts := 1
 	if autoCode {
@@ -178,6 +192,7 @@ func (uc *DanhMucHangMuc) createOnce(ctx context.Context, ma, nhan string, yc Ye
 	moi := domain.HangMucKeHoachVon{
 		ID: id, Ma: ma, Nhan: nhan, ThuTu: yc.ThuTu,
 		LaMacDinh: yc.LaMacDinh,
+		Color:     colorValue(yc.Color), // normalised by Them
 		DangDung:  true,
 		// Set here only so the value this function RETURNS describes the row that was written. The
 		// store does not read them: it writes 'don-vi' and false as literals.
@@ -288,6 +303,13 @@ func (uc *DanhMucHangMuc) Sua(ctx context.Context, id string, yc YeuCauSuaHangMu
 			return domain.HangMucKeHoachVon{}, err
 		}
 	}
+	var color string
+	if c := yc.Color; c != nil && c.Color != nil {
+		var err error
+		if color, err = domain.NormalizeCatalogueColor(*c.Color); err != nil {
+			return domain.HangMucKeHoachVon{}, err
+		}
+	}
 
 	var sau domain.HangMucKeHoachVon
 	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
@@ -308,6 +330,9 @@ func (uc *DanhMucHangMuc) Sua(ctx context.Context, id string, yc YeuCauSuaHangMu
 		}
 		if yc.LaMacDinh != nil {
 			sau.LaMacDinh = *yc.LaMacDinh
+		}
+		if yc.Color != nil {
+			sau.Color = color // "" when the change clears it
 		}
 
 		// THE TIER CHECK IS ON THE TRANSITION, not on the requested value. Asking a tier-3 row to
@@ -426,6 +451,7 @@ func tomTatHangMuc(l domain.HangMucKeHoachVon) map[string]any {
 		"dang_dung":   l.DangDung,
 		"la_mac_dinh": l.LaMacDinh,
 		"nguon":       l.Nguon,
+		"color":       colorDelta(l.Color),
 	}
 }
 
@@ -444,6 +470,9 @@ func tomTatDoiHangMuc(truoc, sau domain.HangMucKeHoachVon, ben bool) map[string]
 	if truoc.LaMacDinh != sau.LaMacDinh {
 		ra["la_mac_dinh"] = chon(ben, truoc.LaMacDinh, sau.LaMacDinh)
 	}
+	if truoc.Color != sau.Color {
+		ra["color"] = chon(ben, colorDelta(truoc.Color), colorDelta(sau.Color))
+	}
 	return ra
 }
 
@@ -451,5 +480,13 @@ func tomTatDoiHangMuc(truoc, sau domain.HangMucKeHoachVon, ben bool) map[string]
 // not compared because no path here can change them.
 func khongDoiHangMuc(truoc, sau domain.HangMucKeHoachVon) bool {
 	return truoc.Nhan == sau.Nhan && truoc.ThuTu == sau.ThuTu &&
-		truoc.DangDung == sau.DangDung && truoc.LaMacDinh == sau.LaMacDinh
+		truoc.DangDung == sau.DangDung && truoc.LaMacDinh == sau.LaMacDinh && truoc.Color == sau.Color
+}
+
+// colorValue reads an already-normalised optional colour; nil is "" (none).
+func colorValue(c *string) string {
+	if c == nil {
+		return ""
+	}
+	return *c
 }

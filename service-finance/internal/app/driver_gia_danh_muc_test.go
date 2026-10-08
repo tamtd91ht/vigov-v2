@@ -54,6 +54,7 @@ type hangLVB struct {
 	thuTu        int
 	nguon        string
 	reNhanh      bool
+	color        any // nil = NULL, as PostgreSQL hands it back (migration 0017)
 }
 
 type khoGia struct {
@@ -208,7 +209,7 @@ func (c *connGia) QueryContext(_ context.Context, q string, args []driver.NamedV
 		}
 		h := *c.k.hang
 		return &rowsGia{cot: cotLVB(), hang: [][]driver.Value{{
-			h.id, h.ma, h.nhan, h.macDinh, h.dangDung, int64(h.thuTu), h.nguon, h.reNhanh,
+			h.id, h.ma, h.nhan, h.macDinh, h.dangDung, int64(h.thuTu), h.nguon, h.reNhanh, h.color,
 		}}}, nil
 	}
 	return nil, fmt.Errorf("driver giả: không biết trả gì cho %q", q)
@@ -220,7 +221,7 @@ func (c *connGia) QueryContext(_ context.Context, q string, args []driver.NamedV
 // mirrored the store's buggy Scan instead of its column list, so every write-path test agreed
 // with the bug. Copy from the COLUMN LIST, never from a Scan.
 func cotLVB() []string {
-	return []string{"id", "ma", "nhan", "la_mac_dinh", "dang_dung", "thu_tu", "nguon", "ma_nguon_re_nhanh"}
+	return []string{"id", "ma", "nhan", "la_mac_dinh", "dang_dung", "thu_tu", "nguon", "ma_nguon_re_nhanh", "color"}
 }
 
 type txGia struct{ k *khoGia }

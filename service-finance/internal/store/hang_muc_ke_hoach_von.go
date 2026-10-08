@@ -57,7 +57,7 @@ var ErrQuaNhieuHangMuc = errors.New("hang_muc_ke_hoach_von: vượt trần danh 
 //	                         the one the form pre-selects, and nothing anywhere says so. Invisible.
 //
 // The second pair is why this constant exists instead of the column list being written inline.
-const cotHangMuc = `id, ma, nhan, la_mac_dinh, dang_dung, thu_tu, nguon, ma_nguon_re_nhanh`
+const cotHangMuc = `id, ma, nhan, la_mac_dinh, dang_dung, thu_tu, nguon, ma_nguon_re_nhanh, color`
 
 // DanhSach reads the commune's whole capital plan category catalogue, ordered.
 //
@@ -144,8 +144,11 @@ func (s *HangMucKeHoachVonStore) DanhSach(ctx context.Context) ([]domain.HangMuc
 // note there on the adjacent same-typed columns.
 func docMotDongHangMuc(quet func(...any) error) (domain.HangMucKeHoachVon, error) {
 	var hm domain.HangMucKeHoachVon
+	// `color` is NULL when none was chosen; "" in the domain (migration 0017).
+	var color sql.NullString
 	err := quet(&hm.ID, &hm.Ma, &hm.Nhan, &hm.LaMacDinh, &hm.DangDung,
-		&hm.ThuTu, &hm.Nguon, &hm.MaNguonReNhanh)
+		&hm.ThuTu, &hm.Nguon, &hm.MaNguonReNhanh, &color)
+	hm.Color = color.String
 	return hm, err
 }
 
@@ -214,8 +217,8 @@ func (s *HangMucKeHoachVonStore) DemDangSong(ctx context.Context, tx *store.Scop
 // yet (commune onboarding — see the migration header). Turning either into a parameter is the one
 // edit that reopens the whole tier model, and it would look like tidying up.
 const chenHangMuc = `INSERT INTO hang_muc_ke_hoach_von
-	(tenant_id, id, ma, nhan, thu_tu, la_mac_dinh, dang_dung, nguon, ma_nguon_re_nhanh)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, 'don-vi', false)`
+	(tenant_id, id, ma, nhan, thu_tu, la_mac_dinh, dang_dung, color, nguon, ma_nguon_re_nhanh)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'don-vi', false)`
 
 // Chen adds one row the COMMUNE owns. There is no method here that writes a `he-thong` row.
 //
@@ -227,7 +230,7 @@ const chenHangMuc = `INSERT INTO hang_muc_ke_hoach_von
 // The transaction is dead after it either way (PostgreSQL aborts it); only a new one can retry.
 func (s *HangMucKeHoachVonStore) Chen(ctx context.Context, tx *store.ScopedTx, hm domain.HangMucKeHoachVon) error {
 	if _, err := tx.Exec(ctx, chenHangMuc, string(tx.TenantID()),
-		hm.ID, hm.Ma, hm.Nhan, hm.ThuTu, hm.LaMacDinh, hm.DangDung); err != nil {
+		hm.ID, hm.Ma, hm.Nhan, hm.ThuTu, hm.LaMacDinh, hm.DangDung, colorArg(hm.Color)); err != nil {
 		if strings.Contains(err.Error(), "tenant_id_ma_key") {
 			return fmt.Errorf("hang_muc_ke_hoach_von: chèn: %w", ErrMaDaTonTai)
 		}
@@ -259,14 +262,14 @@ func (s *HangMucKeHoachVonStore) BoMacDinhKhac(ctx context.Context, tx *store.Sc
 // trigger, and both layers are meant: the trigger is the floor that holds against every writer, and
 // their absence here is what makes the floor unreachable from this service in the first place.
 const capNhatHangMuc = `UPDATE hang_muc_ke_hoach_von ` +
-	`SET nhan = $3, thu_tu = $4, dang_dung = $5, la_mac_dinh = $6, cap_nhat_luc = now() ` +
+	`SET nhan = $3, thu_tu = $4, dang_dung = $5, la_mac_dinh = $6, color = $7, cap_nhat_luc = now() ` +
 	`WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
 
 // CapNhat writes the four fields a commune may change. The caller has already read the row with
 // TheoIDDeSua and decided the change is permitted at this row's tier.
 func (s *HangMucKeHoachVonStore) CapNhat(ctx context.Context, tx *store.ScopedTx, hm domain.HangMucKeHoachVon) error {
 	kq, err := tx.Exec(ctx, capNhatHangMuc, string(tx.TenantID()),
-		hm.ID, hm.Nhan, hm.ThuTu, hm.DangDung, hm.LaMacDinh)
+		hm.ID, hm.Nhan, hm.ThuTu, hm.DangDung, hm.LaMacDinh, colorArg(hm.Color))
 	if err != nil {
 		return fmt.Errorf("hang_muc_ke_hoach_von: cập nhật: %w", err)
 	}
