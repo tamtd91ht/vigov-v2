@@ -136,13 +136,33 @@ func TestPgCitizenLetterBindings(t *testing.T) {
 
 	mustRefuse(t, insertLetter(ctx, db, a, "B1", 1, ", status"), "thu-ly without accepted_at")
 	mustAccept(t, insertLetter(ctx, db, a, "B2", 2, ", status, accepted_at"), "thu-ly with accepted_at")
-	mustRefuse(t, insertLetter(ctx, db, a, "B3", 3, ", status, accepted_at, resolved_at"),
-		"da-giai-quyet without its result document and summary (C10)")
+	// 0008 (ADR 0084 #2): the result is required only for khieu-nai / to-cao. insertLetter books a
+	// kien-nghi-phan-anh letter, which may now close with no result at all.
+	mustAccept(t, insertLetter(ctx, db, a, "B3", 3, ", status, accepted_at, resolved_at"),
+		"kien-nghi-phan-anh resolved with no result (ADR 0084 #2)")
+	for i, lt := range []string{"khieu-nai", "to-cao"} {
+		_, err := db.ExecContext(ctx, `INSERT INTO citizen_letter
+			(tenant_id, id, number, year, received_date, letter_type, summary, created_by_code,
+			 status, accepted_at, resolved_at)
+			VALUES ($1, $2, $3, 2026, DATE '2026-10-01', $4, 'Khiếu nại quyết định', 'CB-TEST01',
+			 'da-giai-quyet', now(), now())`, a, fmt.Sprintf("B3-%d", i), 30+i, lt)
+		mustRefuse(t, err, lt+" da-giai-quyet without its result document and summary (C10, ADR 0084 #2)")
+	}
+	_, err := db.ExecContext(ctx, `INSERT INTO citizen_letter
+		(tenant_id, id, number, year, received_date, letter_type, summary, created_by_code, source)
+		VALUES ($1, 'B3-src', 40, 2026, DATE '2026-10-01', 'de-nghi', 'Đề nghị', 'CB-TEST01', 'fax')`, a)
+	mustRefuse(t, err, "an entry source outside the four of ADR 0084 #7")
+	var source string
+	mustAccept(t, db.QueryRowContext(ctx, `SELECT source FROM citizen_letter WHERE tenant_id = $1 AND id = 'B3'`, a).
+		Scan(&source), "read the default source")
+	if source != "nhap-tay" {
+		t.Errorf("a letter booked without a source reads %q, want nhap-tay (owner 08/10/2026)", source)
+	}
 	mustRefuse(t, insertLetter(ctx, db, a, "B4", 4, ", sender_name"), "a blank sender name instead of NULL")
 	mustAccept(t, insertLetter(ctx, db, a, "B5", 5, ""), "an anonymous letter (C7: all sender fields NULL)")
 	mustAccept(t, insertLetter(ctx, db, a, "B6", 6, ", sender_name, sender_phone"), "a named letter")
 
-	_, err := db.ExecContext(ctx, `UPDATE citizen_letter SET related_letter_id = 'B6'
+	_, err = db.ExecContext(ctx, `UPDATE citizen_letter SET related_letter_id = 'B6'
 		WHERE tenant_id = $1 AND id = 'B6'`, a)
 	mustRefuse(t, err, "a letter marked as a duplicate of itself")
 }

@@ -215,3 +215,72 @@ func TestMigration0006DestroysNothing(t *testing.T) {
 		t.Error("citizen_letter_log has a soft-delete column — the log is append-only")
 	}
 }
+
+const file0008 = "0008_citizen_letter_source_and_result_by_type.sql"
+
+// TestMigration0008SourceList — the four entry sources of ADR 0084 #7, and existing rows read as
+// manual entry (owner, 08/10/2026). NOT NULL with that DEFAULT is what makes "đơn cũ gán Nhập tay"
+// true without a backfill.
+//
+// THE MUTATIONS THAT MUST TURN THIS RED: add, drop or misspell a source; drop NOT NULL or change the
+// default.
+func TestMigration0008SourceList(t *testing.T) {
+	sql := executableSQL(t, file0008)
+	if got := strings.Join(checkCodes(t, sql, "citizen_letter_source_valid", "source"), ","); got !=
+		"mini-app,nhap-excel,nhap-tay,thu-dien-tu" {
+		t.Errorf("source = %s, want the four sources of ADR 0084 #7", got)
+	}
+	if !strings.Contains(sql, "add column if not exists source text not null default 'nhap-tay';") {
+		t.Error("source is not NOT NULL DEFAULT 'nhap-tay' — existing letters would not read as Nhập tay")
+	}
+}
+
+// TestMigration0008ResultRuleNarrowedToComplaintAndDenunciation — ADR 0084 #2: `kien-nghi-phan-anh`
+// and `de-nghi` close without a result; `khieu-nai` and `to-cao` still need the five fields. The
+// constraint keeps 0006's name, and is replaced, not left beside the old one (two CHECKs with the same
+// intent would make the stricter one win silently).
+//
+// THE MUTATIONS THAT MUST TURN THIS RED: exempt `khieu-nai` or `to-cao`; drop any of the five fields
+// from the required arm; add the new rule without dropping the old one.
+func TestMigration0008ResultRuleNarrowedToComplaintAndDenunciation(t *testing.T) {
+	sql := executableSQL(t, file0008)
+	want := "alter table citizen_letter drop constraint if exists citizen_letter_resolved_has_result; " +
+		"alter table citizen_letter add constraint citizen_letter_resolved_has_result check ( " +
+		"status <> 'da-giai-quyet' or letter_type in ('kien-nghi-phan-anh', 'de-nghi') " +
+		"or (result_document_no is not null and result_document_date is not null " +
+		"and result_signer is not null and result_issuer is not null and result_summary is not null));"
+	if !strings.Contains(sql, want) {
+		t.Errorf("0008 does not replace citizen_letter_resolved_has_result with the KN/TC rule:\n  want %q", want)
+	}
+	// The exempt list must be a subset of 0006's types and must not hold the two statutory ones.
+	m := regexp.MustCompile(`or letter_type in \(([^)]*)\)`).FindStringSubmatch(sql)
+	if m == nil {
+		t.Fatal("exempt letter_type list not found — the parser went blind")
+	}
+	for _, statutory := range []string{"'khieu-nai'", "'to-cao'"} {
+		if strings.Contains(m[1], statutory) {
+			t.Errorf("%s is exempted from the result document — ADR 0084 #2 keeps it required", statutory)
+		}
+	}
+}
+
+// TestMigration0008DestroysNothing — the file adds a column and swaps two CHECKs; it rewrites no row
+// and touches nothing else of 0006.
+func TestMigration0008DestroysNothing(t *testing.T) {
+	sql := executableSQL(t, file0008)
+	for _, banned := range []string{"drop table", "drop column", "alter column", "delete from",
+		"truncate", "insert into", "update ", "not valid", "drop trigger", "replace function"} {
+		if strings.Contains(sql, banned) {
+			t.Errorf("0008 contains %q", banned)
+		}
+	}
+	dropped := regexp.MustCompile(`drop constraint if exists (\w+);`).FindAllStringSubmatch(sql, -1)
+	if len(dropped) != 2 {
+		t.Fatalf("0008 drops %d constraints, want exactly 2", len(dropped))
+	}
+	for _, d := range dropped {
+		if !strings.Contains(sql, "add constraint "+d[1]+" check (") {
+			t.Errorf("0008 drops %s without adding it back in the same file", d[1])
+		}
+	}
+}
