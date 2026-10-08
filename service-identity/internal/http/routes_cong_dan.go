@@ -193,8 +193,15 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	//
 	// PUBLIC (ADR 0066 decision row 1, user decision 2026-10-01): this IS the sign-in — the caller has
 	// no session yet. What stands in front of it is a Zalo token only Zalo issues, exchanged with the
-	// App ID's own sealed secret, and the per-IP rate limit below. There is no path without a verified
-	// phone: the `--demo` identity was removed on 05/10/2026 (ADR 0066 §Sửa đổi).
+	// App ID's own sealed secret, and the per-IP rate limit below. The `--demo` identity was removed on
+	// 05/10/2026 (ADR 0066 §Sửa đổi).
+	//
+	// WITHOUT A phoneToken (ADR 0080 decision 6, owner decision 08/10/2026): the citizen declined to
+	// share the number or Zalo would not give one, and Zalo will not approve the commune's app until
+	// a petition can be sent (ADR 0080 §Bối cảnh). The accessToken is still verified with Zalo and the
+	// session is ACCOUNT-ONLY: no citizen identity, owned by the Zalo account, phoneVerified false.
+	// Without the phone exchange the App ID claim is NOT proven by Zalo — app.OwnAppSignIn's file
+	// comment states the bound. phone_required is therefore gone from the status table.
 	//
 	// RATE LIMIT (rule 13, invariant 7; ADR 0066 decision row 2): 10 attempts / 5 minutes / client IP,
 	// in memory per pod, checked before the body is read (rate_limit.go). 429 carries Retry-After.
@@ -204,18 +211,21 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	// after a lost reply leaves one extra session nobody holds the token of, which expires by TTL.
 	// The surface also has no idem.Middleware (cmd/server dungBienCongKhai), so Required could not work.
 	//
-	// @summary  App riêng của xã đổi accessToken/phoneToken Zalo lấy phiên công dân ViGov
+	// @summary  App riêng của xã đổi accessToken (kèm phoneToken nếu công dân chia sẻ số) Zalo lấy phiên công dân ViGov
 	// @consumer citizen-app
 	// NO @screen: docs/ui-ux/ has no section for the Mini App sign-in; it is silent, no screen of its own.
 	//
 	// @request  citizenSessionIn
 	// 201 `{vigovSession:{token, expiresAt, tenantDisplayName, phoneVerified, communePrimaryHost}}`.
+	// phoneVerified is false exactly when no phoneToken was sent (the account-only session, ADR 0080).
 	//
 	// 400 invalid_body: body not one JSON object of the known fields (a retired `demoIdentity` field
-	// included), over 8 KB, appId not digits, accessToken missing. phone_required: no phoneToken —
-	// vihat-miniapp's "cần số để xác minh app".
+	// included), over 8 KB, appId not digits, accessToken missing. NO phone_required since 08/10/2026:
+	// a missing phoneToken opens the account-only session instead (ADR 0080 decision 6).
 	//
-	// 401 zalo_token_invalid: Zalo refused accessToken/phoneToken.
+	// 401 zalo_token_invalid: Zalo refused accessToken, or refused the phoneToken the client DID send —
+	// never downgraded to an account-only session on the client's behalf; retrying without the
+	// phoneToken is the client's decision.
 	//
 	// 422 app_not_ready: ONE answer for an unknown App ID, the shared ViHAT app, a commune not active,
 	// and an App ID with no live settings or no secret set.
@@ -224,7 +234,7 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	// the sealed secret does not open — nothing was issued.
 	//
 	// @reply    201 citizenSessionsOut
-	// @reply    400 httpx.Error invalid_body phone_required
+	// @reply    400 httpx.Error invalid_body
 	// @reply    401 httpx.Error zalo_token_invalid
 	// @reply    422 httpx.Error app_not_ready
 	// @reply    429 httpx.Error too_many_attempts

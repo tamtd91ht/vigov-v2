@@ -65,6 +65,10 @@ func TestPgPhienCauChuaCoSoTraCuuDuocVoiCongDanRong(t *testing.T) {
 	if p.ID != sid || p.CitizenID != "" || string(p.TenantID) != xaA {
 		t.Fatalf("phiên = %+v", p)
 	}
+	// ADR 0080: the real SELECT carries tai_khoan_zalo_id — the owner of this session's petitions.
+	if p.ZaloAccountID != tk.ID {
+		t.Fatalf("ZaloAccountID = %q, muốn %q", p.ZaloAccountID, tk.ID)
+	}
 }
 
 func TestPgPhienKhongThuocAiBiCSDLTuChoi(t *testing.T) {

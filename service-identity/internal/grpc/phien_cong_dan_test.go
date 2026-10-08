@@ -233,6 +233,36 @@ func TestPhienCongDanChuaCoSoDiQuaNguyenVen(t *testing.T) {
 	}
 }
 
+// ADR 0080: the Zalo account travels to the edge, because for a session without a verified phone it
+// is the ONLY owner a petition route can name. Set → straight through; unset (a paired screen) → ""
+// and nothing substituted for it — not the sid, not the citizen id.
+func TestCitizenSessionCarriesZaloAccount(t *testing.T) {
+	const account = "01JE1CCCCCCCCCCCCCCCCCCCCC"
+	for name, c := range map[string]struct {
+		session httpx.CitizenSession
+		want    string
+	}{
+		"phone-less, account set":   {httpx.CitizenSession{ID: sidCongDan, TenantID: xaA, ZaloAccountID: account}, account},
+		"verified, account set":     {httpx.CitizenSession{ID: sidCongDan, CitizenID: idCongDan, TenantID: xaA, ZaloAccountID: account}, account},
+		"paired screen, no account": {httpx.CitizenSession{ID: sidCongDan, CitizenID: idCongDan, TenantID: xaA}, ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			s, _ := may(t, func(d *Deps) { d.PhienCongDan = &phienCongDanGia{p: c.session, ok: true} })
+			ra, err := s.ResolveCitizenSession(context.Background(),
+				&identityv1.ResolveCitizenSessionRequest{SessionToken: tokenGia})
+			if err != nil || ra.GetSession() == nil {
+				t.Fatalf("session=%v err=%v", ra.GetSession(), err)
+			}
+			if got := ra.GetSession().GetZaloAccountId(); got != c.want {
+				t.Errorf("zalo_account_id = %q, want %q", got, c.want)
+			}
+			if got := ra.GetSession().GetCitizenId(); got != c.session.CitizenID {
+				t.Errorf("citizen_id = %q, want %q", got, c.session.CitizenID)
+			}
+		})
+	}
+}
+
 // Wiring is refused AT CONSTRUCTION, where a human is watching a process fail to start. The case
 // lives in server_test.go's TestNewServerTuChoiNoiDayKhongDu beside the other seven, so the list
 // of required collaborators is read in one place rather than two.

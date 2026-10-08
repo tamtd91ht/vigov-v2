@@ -162,6 +162,11 @@ func (s *Server) ResolveCitizenSession(ctx context.Context, req *identityv1.Reso
 			// STRAIGHT THROUGH, INCLUDING EMPTY. See the note on the RPC: "" is the citizen who has
 			// not chosen a commune, and substituting anything for it is rule 1, forbidden #1.
 			TenantId: string(p.TenantID),
+			// tai_khoan_zalo.id, "" for a session that did not come through the Mini App (a paired
+			// screen). STRAIGHT THROUGH, never filled from the sid or the citizen id: it is the owner
+			// and the trail's "who" of an unverified petition (ADR 0080), and a substitute would name
+			// an owner the session never had.
+			ZaloAccountId: p.ZaloAccountID,
 		},
 	}, nil
 }

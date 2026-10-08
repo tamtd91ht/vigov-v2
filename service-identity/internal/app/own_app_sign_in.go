@@ -23,12 +23,25 @@ package app
 //     and 4 cannot open a session in a commune whose secret was never checked. Mo owns the one
 //     transaction and its audit entries (rule 6).
 //
-// # NO DEMO IDENTITY
+// # NO DEMO IDENTITY — AND, SINCE 08/10/2026, A PHONE-LESS SESSION
 //
-// The `--demo` fixed identity — a session with no phone verification — was removed by the owner on
-// 05/10/2026 (ADR 0066 §Sửa đổi). Every session opened here comes from a phone Zalo verified with
-// THIS App ID's secret. A body still carrying `demoIdentity` is refused by the HTTP decoder as an
-// unknown field (400 invalid_body) before it reaches this file.
+// The `--demo` fixed identity was removed by the owner on 05/10/2026 (ADR 0066 §Sửa đổi). A body
+// still carrying `demoIdentity` is refused by the HTTP decoder as an unknown field (400
+// invalid_body) before it reaches this file.
+//
+// With no phoneToken (the citizen declined to share the number, or Zalo would not give one — ADR
+// 0080 decision 1, 6) the same steps 1-3 run, Phone is skipped, and Mo issues an ACCOUNT-ONLY session
+// (YeuCauMoPhienCau.AccountOnly): no citizen identity, owned by the tai_khoan_zalo row, phoneVerified
+// false. ADR 0080 limits what such a session may do (submit and follow unverified petitions only);
+// that limit is enforced by core/httpx.XaTuPhien on every other route, not here.
+//
+// WHAT THE PHONE-LESS PATH DOES NOT PROVE, stated rather than implied. AccountID takes no secret, so
+// without the Phone exchange NOTHING ties the accessToken to THIS App ID (package internal/zalo,
+// "WHAT 'APP ID VERIFIED' MEANS"). The secret is still opened in step 3 — an App ID with no working
+// secret is not a live app and answers app_not_ready either way — but it is not sent to Zalo. The
+// consequence is bounded the way ADR 0045 bounds the unmeasured case: an accessToken from another
+// app reaches only the commune whose App ID was named, under a Zalo account (per-app id) that is new
+// to it, and AccountOnly guarantees it never inherits an identity.
 //
 // # NOTHING PERSONAL IS LOGGED
 //
@@ -55,7 +68,6 @@ import (
 // nothing the caller sent is echoed.
 var (
 	ErrOwnAppRequestInvalid  = errors.New("own app sign-in: request is not valid")                // 400
-	ErrOwnAppPhoneRequired   = errors.New("own app sign-in: a phone token is required")           // 400
 	ErrOwnAppTokenInvalid    = errors.New("own app sign-in: Zalo refused the token")              // 401
 	ErrOwnAppNotReady        = errors.New("own app sign-in: app not ready for a commune")         // 422
 	ErrOwnAppZaloUnreachable = errors.New("own app sign-in: Zalo unreachable")                    // 502
@@ -123,11 +135,10 @@ func (uc *OwnAppSignIn) SignIn(ctx context.Context, req OwnAppSignInRequest) (Ke
 		return KetQuaMoPhienCau{}, fmt.Errorf("%w: appId", ErrOwnAppRequestInvalid)
 	case req.AccessToken == "":
 		return KetQuaMoPhienCau{}, fmt.Errorf("%w: accessToken", ErrOwnAppRequestInvalid)
-	case req.PhoneToken == "":
-		// The exchange of the phoneToken with THIS App ID's secret is the only thing that verifies
-		// the App ID the client claims (internal/zalo package comment). Refused before any call.
-		return KetQuaMoPhienCau{}, ErrOwnAppPhoneRequired
 	}
+	// No phoneToken is no longer a refusal (ADR 0080 decision 6): it selects the account-only
+	// session. See the file comment for what that path does not prove.
+	withPhone := req.PhoneToken != ""
 
 	// --- 1. which commune's own app ----------------------------------------------------------------
 	app, found, err := uc.platform.MiniApp(ctx, appID)
@@ -185,11 +196,19 @@ func (uc *OwnAppSignIn) SignIn(ctx context.Context, req OwnAppSignInRequest) (Ke
 	if err != nil {
 		return KetQuaMoPhienCau{}, uc.zaloError(ctx, appID, xa, "account_id", err)
 	}
-	so, err := uc.zalo.Phone(ctx, req.AccessToken, req.PhoneToken, appSecret)
-	if err != nil {
-		return KetQuaMoPhienCau{}, uc.zaloError(ctx, appID, xa, "phone", err)
+	yc.MaZalo = maZalo
+	if withPhone {
+		// A Zalo refusal HERE keeps its 401/502: the client sent a phoneToken, and whether to retry
+		// without one (the account-only session) is the client's decision, never made silently on
+		// its behalf — a silent downgrade would hide a broken phone exchange behind working sign-ins.
+		so, err := uc.zalo.Phone(ctx, req.AccessToken, req.PhoneToken, appSecret)
+		if err != nil {
+			return KetQuaMoPhienCau{}, uc.zaloError(ctx, appID, xa, "phone", err)
+		}
+		yc.SoDaXacThuc = so
+	} else {
+		yc.AccountOnly = true
 	}
-	yc.MaZalo, yc.SoDaXacThuc = maZalo, so
 
 	// --- 4. the session --------------------------------------------------------------------------------
 	kq, err := uc.sessions.Mo(ctx, yc)
@@ -210,7 +229,8 @@ func (uc *OwnAppSignIn) SignIn(ctx context.Context, req OwnAppSignInRequest) (Ke
 		return KetQuaMoPhienCau{}, fmt.Errorf("%w: no token issued", ErrOwnAppUnavailable)
 	}
 
-	uc.log.InfoContext(ctx, "mở phiên công dân qua app riêng", "app_id", appID, "xa", string(xa), "phien_id", kq.Sid)
+	uc.log.InfoContext(ctx, "mở phiên công dân qua app riêng", "app_id", appID, "xa", string(xa), "phien_id", kq.Sid,
+		"co_so", kq.DaCoSo)
 	return kq, nil
 }
 

@@ -348,13 +348,96 @@ func TestCitizenSessionsBadBody400(t *testing.T) {
 	}
 }
 
-func TestCitizenSessionsPhoneRequired400(t *testing.T) {
+// --- 201 without a phone (ADR 0080 decision 6) ---------------------------------------------------
+
+func phoneLessBody(appID, phoneToken string) string {
+	if phoneToken == "" {
+		return `{"appId":"` + appID + `","accessToken":"` + fakeAccessToken + `"}`
+	}
+	return `{"appId":"` + appID + `","accessToken":"` + fakeAccessToken + `","phoneToken":"` + phoneToken + `"}`
+}
+
+// No phoneToken (absent, or "") is no longer phone_required: the accessToken is verified with Zalo,
+// the phone exchange is NOT attempted, and Mo is asked for an ACCOUNT-ONLY session in the app's own
+// commune — phoneVerified false on the wire, the field citizen-app already reads.
+func TestCitizenSessionsPhoneLess201(t *testing.T) {
+	for name, body := range map[string]string{
+		"absent":      phoneLessBody(ownApp, ""),
+		"empty value": `{"appId":"` + ownApp + `","accessToken":"` + fakeAccessToken + `","phoneToken":""}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			hs := newHarness(t)
+			w := hs.post(body, "")
+			if w.Code != http.StatusCreated {
+				t.Fatalf("status = %d — %s", w.Code, w.Body.String())
+			}
+			const want = `{"vigovSession":{"token":"VIGOV-TOKEN","expiresAt":"2026-10-31T00:00:00Z","tenantDisplayName":"Xã Thăng Bình","phoneVerified":false,"communePrimaryHost":"thangbinh-danang.vigov.vn"}}`
+			if got := strings.TrimSpace(w.Body.String()); got != want {
+				t.Fatalf("body =\n%s\nwant\n%s", got, want)
+			}
+			if len(hs.mo.calls) != 1 {
+				t.Fatalf("Mo called %d times", len(hs.mo.calls))
+			}
+			yc := hs.mo.calls[0]
+			if !yc.AccountOnly || yc.SoDaXacThuc != "" || yc.MaZalo != fakeZaloID || yc.RequireOwnAppOf != communeA {
+				t.Fatalf("Mo request = %+v — want account-only, no phone, the app's commune", yc)
+			}
+			if strings.Join(hs.zalo.calls, ",") != zalo.AccountIDPath {
+				t.Fatalf("Zalo calls = %v — only the account id, never the phone exchange", hs.zalo.calls)
+			}
+			for _, leak := range []string{fakeAccessToken, fakeAppSecret, fakeZaloID} {
+				if strings.Contains(hs.log.String(), leak) {
+					t.Errorf("log carries %q", leak)
+				}
+			}
+		})
+	}
+}
+
+// The phone path is unchanged: WITH a phoneToken, Mo is NOT asked for an account-only session.
+func TestCitizenSessionsWithPhoneIsNotAccountOnly(t *testing.T) {
 	hs := newHarness(t)
-	// No phoneToken: refused before the platform is asked and before Zalo.
-	hs.plat.err = errors.New("platform must not be asked")
-	wantError(t, hs.post(`{"appId":"`+ownApp+`","accessToken":"a"}`, ""), http.StatusBadRequest, "phone_required")
-	if len(hs.zalo.calls) != 0 || len(hs.mo.calls) != 0 {
-		t.Fatalf("Zalo %v / Mo %d", hs.zalo.calls, len(hs.mo.calls))
+	if w := hs.post(normalBody(ownApp), ""); w.Code != http.StatusCreated {
+		t.Fatalf("status = %d — %s", w.Code, w.Body.String())
+	}
+	if hs.mo.calls[0].AccountOnly {
+		t.Fatal("a verified-phone sign-in was opened as account-only")
+	}
+}
+
+// The phone-less path keeps every refusal that stands before the phone exchange: a bad accessToken
+// is 401, Zalo down is 502, and an App ID that is not a live own app is the one 422 — the secret
+// is still required to exist and open, so "no phone" is not a way around app_not_ready.
+func TestCitizenSessionsPhoneLessRefusals(t *testing.T) {
+	hs := newHarness(t)
+	hs.zalo.meError = -216
+	wantError(t, hs.post(phoneLessBody(ownApp, ""), ""), http.StatusUnauthorized, "zalo_token_invalid")
+
+	hs = newHarness(t)
+	hs.zalo.down = true
+	wantError(t, hs.post(phoneLessBody(ownApp, ""), ""), http.StatusBadGateway, "zalo_unreachable")
+
+	for name, appID := range map[string]string{
+		"shared ViHAT app":         sharedApp,
+		"no settings row":          ownAppNoConf,
+		"live settings, no secret": ownAppOnly,
+	} {
+		hs = newHarness(t)
+		wantError(t, hs.post(phoneLessBody(appID, ""), ""), http.StatusUnprocessableEntity, "app_not_ready")
+		if len(hs.zalo.calls) != 0 || len(hs.mo.calls) != 0 {
+			t.Errorf("%s: Zalo %v / Mo %d", name, hs.zalo.calls, len(hs.mo.calls))
+		}
+	}
+}
+
+// A phoneToken the client DID send that Zalo refuses stays 401 — never silently downgraded to an
+// account-only session; retrying without it is the client's decision (ADR 0080 decision 1).
+func TestCitizenSessionsRefusedPhoneTokenNotDowngraded(t *testing.T) {
+	hs := newHarness(t)
+	hs.zalo.wantSecret = "ANOTHER-SECRET"
+	wantError(t, hs.post(normalBody(ownApp), ""), http.StatusUnauthorized, "zalo_token_invalid")
+	if len(hs.mo.calls) != 0 {
+		t.Fatalf("Mo called %d times — a refused phone exchange opened a session anyway", len(hs.mo.calls))
 	}
 }
 

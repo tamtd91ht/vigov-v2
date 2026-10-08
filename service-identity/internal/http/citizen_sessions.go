@@ -42,6 +42,10 @@ type OwnAppSignInner interface {
 //
 //	{"appId": "...", "accessToken": "...", "phoneToken": "..."}
 //
+// phoneToken is OPTIONAL since 08/10/2026 (ADR 0080 decision 6): absent or "" opens an account-only
+// session, answered with `phoneVerified: false` — the field the 201 already carried, so the client
+// needs no new key to tell the two apart.
+//
 // `demoIdentity` is GONE (owner decision 05/10/2026, ADR 0066 §Sửa đổi). It is not kept as an
 // ignored field: decodeStrict disallows unknown fields, so a body still carrying it — even
 // `"demoIdentity": false` — is 400 invalid_body. A client still wired to the demo path is told so,
@@ -74,7 +78,6 @@ type citizenSessionOut struct {
 // technical code, a column name or Zalo's own message.
 const (
 	msgCitizenSessionBadRequest  = "Yêu cầu không hợp lệ. Vui lòng mở lại ứng dụng và thử đăng nhập lại."
-	msgCitizenSessionNeedsPhone  = "Vui lòng cho phép ứng dụng dùng số điện thoại Zalo của bạn để đăng nhập, rồi thử lại."
 	msgCitizenSessionTokenExpiry = "Phiên đăng nhập Zalo đã hết hạn. Vui lòng đóng và mở lại ứng dụng để đăng nhập lại."
 	msgCitizenSessionNotReady    = "Ứng dụng chưa sẵn sàng cho địa phương này. Vui lòng quét lại mã QR do địa phương cung cấp hoặc thử lại sau."
 	msgCitizenSessionTooMany     = "Bạn đã thử đăng nhập quá nhiều lần. Vui lòng chờ vài phút rồi thử lại."
@@ -130,8 +133,6 @@ func (h *HandlerCongKhai) CitizenSessions(w http.ResponseWriter, r *http.Request
 
 func (h *HandlerCongKhai) citizenSessionError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
-	case errors.Is(err, app.ErrOwnAppPhoneRequired):
-		httpx.WriteError(w, http.StatusBadRequest, "phone_required", msgCitizenSessionNeedsPhone, "")
 	case errors.Is(err, app.ErrOwnAppRequestInvalid):
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_body", msgCitizenSessionBadRequest, "")
 	case errors.Is(err, app.ErrOwnAppTokenInvalid):

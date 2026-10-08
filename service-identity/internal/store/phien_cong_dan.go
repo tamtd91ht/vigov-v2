@@ -115,10 +115,13 @@ var (
 
 // cotPhienCongDan is the SELECT list, kept next to the one function that scans it.
 //
-// POSITIONAL, AND ALL THREE ARE STRINGS. Swapping `id` with `cong_dan_id` compiles, returns
+// POSITIONAL, AND ALL FOUR ARE STRINGS. Swapping `id` with `cong_dan_id` compiles, returns
 // rows, and hands every request the wrong citizen — a silent, symmetric defect of exactly the
 // shape this repository has already been bitten by. The list and quetPhien move together.
-const cotPhienCongDan = `tenant_id, id, cong_dan_id`
+//
+// tai_khoan_zalo_id SINCE 08/10/2026 (ADR 0080): a session without a verified phone has no
+// cong_dan_id, and its Zalo account is then the only owner a petition route can name.
+const cotPhienCongDan = `tenant_id, id, cong_dan_id, tai_khoan_zalo_id`
 
 // ONE `WHERE`, THREE CONDITIONS, ONE NEGATIVE ANSWER — and the filtering happens HERE rather
 // than in Go, deliberately.
@@ -265,9 +268,13 @@ func quetPhien(rows dongPhien) (httpx.CitizenSession, bool) {
 	// opened before the phone is verified has no citizen identity yet. Scanning NULL into a plain
 	// string is a Scan error, which below means "no session" — every such citizen would be signed
 	// out on every request. NULL becomes "", and "" is what core/httpx.XaTuPhien refuses.
+	//
+	// tai_khoan_zalo_id IS NULLABLE TOO: a paired-screen session (ADR 0019) did not come through the
+	// bridge. NULL becomes "", which core/httpx.CitizenSession calls "no account" — never a value
+	// filled in from anything else.
 	var xa, sid string
-	var congDanID sql.NullString
-	if err := rows.Scan(&xa, &sid, &congDanID); err != nil {
+	var congDanID, taiKhoanZaloID sql.NullString
+	if err := rows.Scan(&xa, &sid, &congDanID, &taiKhoanZaloID); err != nil {
 		return httpx.CitizenSession{}, false
 	}
 	if rows.Next() {
@@ -280,9 +287,10 @@ func quetPhien(rows dongPhien) (httpx.CitizenSession, bool) {
 	}
 
 	return httpx.CitizenSession{
-		ID:        sid,
-		CitizenID: congDanID.String,
-		TenantID:  tenant.ID(xa),
+		ID:            sid,
+		CitizenID:     congDanID.String,
+		TenantID:      tenant.ID(xa),
+		ZaloAccountID: taiKhoanZaloID.String,
 	}, true
 }
 

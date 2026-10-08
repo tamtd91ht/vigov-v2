@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/vihat/vigov/core/audit"
+	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/platformclient"
 	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
@@ -143,6 +144,14 @@ type YeuCauMoPhienCau struct {
 	// a binding moved in between must not open a session in a commune whose secret nobody checked.
 	// Empty on the gRPC bridge — the caller there is vihat-miniapp and the field is not on the wire.
 	RequireOwnAppOf tenant.ID
+	// AccountOnly is set ONLY by the own-app sign-in when the client sent no phoneToken (ADR 0080
+	// decision 6): the session is owned by the Zalo account alone. Mo then issues it with NO citizen
+	// identity even when this account was linked to one by an earlier verified phone — that identity
+	// was proven by a phone exchange signed with the app's secret, and this open carries no such
+	// proof (internal/zalo: AccountID takes no secret). Carrying the old link over would hand
+	// "Phản ánh của tôi" to whoever holds an accessToken, which ADR 0080 stop condition #4 forbids.
+	// Requires SoDaXacThuc == "". Empty/false on the gRPC bridge — not on the wire.
+	AccountOnly bool
 	// There is no demo-identity input any more (owner decision 05/10/2026, ADR 0066 §Sửa đổi): every
 	// own-app session is opened from a phone verified by Zalo. Sessions opened under the old fixed
 	// identity keep their audit entries (`danh_tinh_demo: true`) untouched — history, not input.
@@ -202,6 +211,10 @@ func (uc *CauPhienCongDan) Mo(ctx context.Context, yc YeuCauMoPhienCau) (KetQuaM
 		return KetQuaMoPhienCau{}, fmt.Errorf("%w: commune_host_hint sai hình dạng", ErrCauYeuCauSai)
 	case yc.DaXacNhanXa && yc.GoiYTenMien == "":
 		return KetQuaMoPhienCau{}, fmt.Errorf("%w: %w", ErrCauYeuCauSai, domain.ErrXacNhanKhongCoGoiY)
+	case yc.AccountOnly && (yc.SoDaXacThuc != "" || yc.RequireOwnAppOf == ""):
+		// An account-only open that carries a phone contradicts itself, and one that did not come
+		// from the own-app sign-in has no business asking for it. Wiring faults, refused loudly.
+		return KetQuaMoPhienCau{}, fmt.Errorf("%w: account_only chỉ dành cho đăng nhập app riêng không số", ErrCauYeuCauSai)
 	}
 
 	// --- 1. which app ------------------------------------------------------------------------
@@ -305,6 +318,11 @@ func (uc *CauPhienCongDan) Mo(ctx context.Context, yc YeuCauMoPhienCau) (KetQuaM
 		}
 
 		congDan := tk.CongDanID
+		if yc.AccountOnly {
+			// See the field: an account-only session never inherits the account's linked identity.
+			// The link itself is left as it is — it is not this open's to change.
+			congDan = ""
+		}
 		if yc.SoDaXacThuc != "" {
 			dd, dinhDanhMoi, err := uc.dinhDanh.TimHoacTao(ctxXa, tx.Underlying(), yc.SoDaXacThuc)
 			if err != nil {
@@ -316,7 +334,7 @@ func (uc *CauPhienCongDan) Mo(ctx context.Context, yc YeuCauMoPhienCau) (KetQuaM
 				}
 				// Who linked: the citizen whose number was just verified. Before/after are identity
 				// ids, never numbers (rule 6, invariant 5 with rule 3).
-				if err := ghiVetCau(ctxXa, tx, dd.ID, yc.IP, HanhDongLienKetDinhDanh, tk.ID, map[string]any{
+				if err := ghiVetCau(ctxXa, tx, chuTheVet(dd.ID, tk.ID), yc.IP, HanhDongLienKetDinhDanh, tk.ID, map[string]any{
 					"truoc":             tk.CongDanID,
 					"sau":               dd.ID,
 					"dinh_danh_moi_tao": dinhDanhMoi,
@@ -367,6 +385,11 @@ func (uc *CauPhienCongDan) Mo(ctx context.Context, yc YeuCauMoPhienCau) (KetQuaM
 			"tai_khoan_zalo":     tk.ID,
 			"tai_khoan_zalo_moi": taiKhoanMoi,
 		}
+		if yc.AccountOnly {
+			// Recorded so a later inspection can tell "phone not shared at this open" (ADR 0080) from
+			// "account never verified" — both read da_co_so=false otherwise.
+			sessionDelta["chi_tai_khoan_zalo"] = true
+		}
 		if err := ghiVetCau(ctxXa, tx, chuThe, yc.IP, HanhDongMoPhienCongDan, sid, sessionDelta); err != nil {
 			return err
 		}
@@ -398,20 +421,26 @@ func (uc *CauPhienCongDan) khongCoXa(cheDo domain.CheDoApp) KetQuaMoPhienCau {
 // phone is verified, the Zalo account's own id before that. Never a phone number, never the Zalo id.
 // A citizen has no staff code, so rule 6 invariant 8's `.Ma` does not apply (tools/check_audit_actor.py
 // names the citizen case as the one where an id is the right value).
-func chuTheVet(congDanID, taiKhoanZaloID string) string {
+//
+// THE KIND TRAVELS WITH THE ID (ADR 0080, core 434e72a3): a tai_khoan_zalo.id is written with
+// audit.KindZaloAccount, never "citizen". The two ids are both ULIDs and indistinguishable on sight;
+// a trail that labels an account id "citizen" is a trail whose citizen filter returns somebody who
+// never verified a phone.
+func chuTheVet(congDanID, taiKhoanZaloID string) audit.Actor {
 	if congDanID != "" {
-		return congDanID
+		return audit.Actor{ID: congDanID, Kind: authz.KindCitizen}
 	}
-	return taiKhoanZaloID
+	return audit.Actor{ID: taiKhoanZaloID, Kind: audit.KindZaloAccount}
 }
 
-func ghiVetCau(ctx context.Context, tx *store.ScopedTx, chuThe, ip, hanhDong, doiTuong string, noiDung map[string]any) error {
+func ghiVetCau(ctx context.Context, tx *store.ScopedTx, chuThe audit.Actor, ip, hanhDong, doiTuong string, noiDung map[string]any) error {
 	delta, err := json.Marshal(noiDung)
 	if err != nil {
 		return fmt.Errorf("cầu phiên: dựng nội dung vết: %w", err)
 	}
+	chuThe.IP = ip
 	return audit.Write(ctx, tx, audit.Entry{
-		Actor:   audit.Actor{ID: chuThe, Kind: "citizen", IP: ip},
+		Actor:   chuThe,
 		Action:  hanhDong,
 		Subject: doiTuong,
 		Delta:   delta,

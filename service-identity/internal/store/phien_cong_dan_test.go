@@ -23,7 +23,7 @@ import (
 // decisions (no row, two rows, a read that failed) are precisely the ones an integration suite
 // cannot reach without contriving a collision in the database.
 type dongGia struct {
-	hang    [][3]string
+	hang    [][4]string
 	vt      int
 	loiDoc  error
 	loiScan error
@@ -69,11 +69,11 @@ const oNull = "<NULL>"
 func (d *dongGia) Err() error { return d.loiDoc }
 
 func TestQuetPhienDocDungTungCot(t *testing.T) {
-	// THE ORDER IS THE WHOLE TEST. cotPhienCongDan selects (tenant_id, id, cong_dan_id) and all
-	// three are strings: swapping the session id with the citizen id compiles, returns rows, and
-	// hands every request the wrong citizen. Three visibly different values are what turn that
-	// into a red test instead of a silent leak.
-	rows := &dongGia{hang: [][3]string{{"XA-01", "SID-02", "CD-03"}}}
+	// THE ORDER IS THE WHOLE TEST. cotPhienCongDan selects (tenant_id, id, cong_dan_id,
+	// tai_khoan_zalo_id) and all four are strings: swapping the session id with the citizen id
+	// compiles, returns rows, and hands every request the wrong citizen. Four visibly different
+	// values are what turn that into a red test instead of a silent leak.
+	rows := &dongGia{hang: [][4]string{{"XA-01", "SID-02", "CD-03", "TK-04"}}}
 
 	p, ok := quetPhien(rows)
 	if !ok {
@@ -87,6 +87,9 @@ func TestQuetPhienDocDungTungCot(t *testing.T) {
 	}
 	if p.CitizenID != "CD-03" {
 		t.Errorf("CitizenID = %q, muốn CD-03", p.CitizenID)
+	}
+	if p.ZaloAccountID != "TK-04" {
+		t.Errorf("ZaloAccountID = %q, muốn TK-04", p.ZaloAccountID)
 	}
 }
 
@@ -103,9 +106,9 @@ func TestQuetPhienHaiDongThiTuChoi(t *testing.T) {
 	// table must contain the partition key), so it is per commune and not global. Two rows means
 	// the registry cannot say WHOSE session this is — and handing commune B's session to the
 	// holder of commune A's token is the one outcome that must be impossible.
-	rows := &dongGia{hang: [][3]string{
-		{"XA-01", "SID-02", "CD-03"},
-		{"XA-99", "SID-98", "CD-97"},
+	rows := &dongGia{hang: [][4]string{
+		{"XA-01", "SID-02", "CD-03", "TK-04"},
+		{"XA-99", "SID-98", "CD-97", "TK-96"},
 	}}
 	if _, ok := quetPhien(rows); ok {
 		t.Error("RÒ RỈ: hai phiên khớp một token mà vẫn chọn đại một cái")
@@ -119,7 +122,7 @@ func TestQuetPhienLoiDocThiTuChoi(t *testing.T) {
 		t.Error("lỗi đọc mà vẫn trả về phiên dùng được")
 	}
 	rows := &dongGia{
-		hang:    [][3]string{{"XA-01", "SID-02", "CD-03"}},
+		hang:    [][4]string{{"XA-01", "SID-02", "CD-03", "TK-04"}},
 		loiScan: errors.New("kiểu cột lệch"),
 	}
 	if _, ok := quetPhien(rows); ok {
@@ -132,7 +135,7 @@ func TestQuetPhienChuaChonXaVanLaPhienDungDuoc(t *testing.T) {
 	// signed in and has not chosen a commune, and that is exactly when the commune-choice screen
 	// calls. The registry says "usable"; core/httpx.XaTuPhien is what answers 401 on any
 	// business route. Refusing it here would break the one screen it exists for.
-	rows := &dongGia{hang: [][3]string{{xaChuaChon, "SID-02", "CD-03"}}}
+	rows := &dongGia{hang: [][4]string{{xaChuaChon, "SID-02", "CD-03", "TK-04"}}}
 
 	p, ok := quetPhien(rows)
 	if !ok {
@@ -147,7 +150,7 @@ func TestQuetPhienChuaCoSoVanLaPhienDungDuoc(t *testing.T) {
 	// cong_dan_id is NULL for a bridge session opened before the phone was verified (ADR 0045).
 	// The registry must answer "usable, no citizen yet" — a Scan error here would sign every such
 	// citizen out on every request. Refusing it is core/httpx.XaTuPhien's job, not this one's.
-	rows := &dongGia{hang: [][3]string{{"XA-01", "SID-02", oNull}}}
+	rows := &dongGia{hang: [][4]string{{"XA-01", "SID-02", oNull, "TK-04"}}}
 
 	p, ok := quetPhien(rows)
 	if !ok {
@@ -158,6 +161,28 @@ func TestQuetPhienChuaCoSoVanLaPhienDungDuoc(t *testing.T) {
 	}
 	if p.CitizenID != "" {
 		t.Errorf("CitizenID = %q, muốn rỗng", p.CitizenID)
+	}
+	// The account is what owns this session's unverified petitions (ADR 0080) — losing it here
+	// leaves the session with no owner at all, and every such submission refused.
+	if p.ZaloAccountID != "TK-04" {
+		t.Errorf("ZaloAccountID = %q, muốn TK-04", p.ZaloAccountID)
+	}
+}
+
+func TestScanSessionWithoutZaloAccount(t *testing.T) {
+	// tai_khoan_zalo_id is NULL for a paired-screen session (ADR 0019): a Scan error here would
+	// sign every such screen out, and anything but "" would invent an owner the session never had.
+	rows := &dongGia{hang: [][4]string{{"XA-01", "SID-02", "CD-03", oNull}}}
+
+	p, ok := quetPhien(rows)
+	if !ok {
+		t.Fatal("phiên ghép màn hình (không tài khoản Zalo) bị coi là không dùng được")
+	}
+	if p.ZaloAccountID != "" {
+		t.Errorf("ZaloAccountID = %q, muốn rỗng", p.ZaloAccountID)
+	}
+	if p.CitizenID != "CD-03" {
+		t.Errorf("CitizenID = %q, muốn CD-03", p.CitizenID)
 	}
 }
 

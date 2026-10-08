@@ -33,7 +33,7 @@ Hôm nay mọi đường gửi phản ánh đòi phiên **đã xác thực số*
 | Tuyến công dân trả 403 `chua_xac_thuc_so` với phiên chưa có số | `core/httpx/citizen.go`, mã lỗi `chua_xac_thuc_so` (dòng 220 ở `d77d739a`; tệp đang được sửa) |
 | Use case gửi từ chối chủ thể không có mã công dân | `service-petitions/internal/app/gui_phan_anh.go:236` |
 | Khoá chống gửi trùng từ chối chủ thể `anon` — chung một không gian khoá thì người gửi này nhận mã tra cứu của người khác | `core/idem/idem.go:486-506` |
-| App riêng của xã: thiếu `phoneToken` → `phone_required`, không phát phiên | `service-identity/internal/http/routes_cong_dan.go:215` |
+| App riêng của xã: thiếu `phoneToken` → `phone_required`, không phát phiên | `service-identity/internal/http/routes_cong_dan.go:215` (ở `d77d739a`, trước ADR này) |
 
 Zalo **không cấp** `getPhoneNumber` cho tới khi app được duyệt (`../vigov-require/docs/runbook/zalo-miniapp.md:139-152`).
 Ngày 05/10/2026 Zalo **từ chối** bản duyệt app Xã Thăng Bình vì *"tính năng gửi phản ánh chưa hoạt
@@ -57,7 +57,7 @@ khớp `zalo_user_id` (`:544-558`).
 | 3 | Công dân theo dõi thế nào | Bằng **mã tra cứu VÀ cùng tài khoản Zalo**. Không tra cứu công khai. Phiếu **không bao giờ** hiện trong "Phản ánh của tôi" |
 | 4 | Báo tin | **Không ZNS** tới số chưa xác thực. Về cấu trúc: không có `cong_dan_id` thì không có sự kiện outbox (`service-petitions/internal/app/xu_ly_phan_anh.go:1339`) |
 | 5 | Web Admin | Nhãn **"Số tự khai — chưa xác thực"**, đọc từ **một trường tường minh** máy chủ trả — không suy từ kênh + có/không công dân |
-| 6 | App riêng của xã | Zalo không cho số → identity phát **phiên không số** (`accessToken` xác minh bằng secret của chính app xã, ADR 0066). Phiên ấy **chỉ** được gửi và theo dõi phiếu chưa xác thực |
+| 6 | App riêng của xã | Zalo không cho số → identity phát **phiên không số**: `accessToken` đổi lấy mã tài khoản Zalo, App ID phải có secret mở được (thiếu → 422 `app_not_ready`), nhưng **secret không tham gia** lời gọi ấy — xem *Cái phải trả* #6. Phiên ấy **chỉ** được gửi và theo dõi phiếu chưa xác thực, và **không thừa hưởng** danh tính dù tài khoản Zalo từng xác thực số |
 | 7 | Chống lạm dụng | **10 phiếu chưa xác thực / ngày / tài khoản Zalo** — ngưỡng bảo mật do chủ dự án chọn (luật 13) |
 | 8 | Ảnh, đánh giá, mở lại, đóng | **Có ảnh hiện trường** (chủ ảnh là tài khoản Zalo; trigger của `service-petitions/migrations/0026_petition_scene_photo.sql:119-175` phải đổi). **Không đánh giá, không mở lại.** Cán bộ đóng thẳng từ `da-xu-ly` như phiếu cán bộ vào hộ (`service-petitions/internal/domain/xu_ly_phan_anh.go:372-390`); công dân đọc kết quả qua tra cứu |
 | 9 | "Ai" của vết và chủ thể idem | **`tai_khoan_zalo.id`** (ULID sẵn có) — ADR 0045:242-244 đã dự liệu đúng trường hợp này. **Không** cấp mã nghiệp vụ riêng: luật 6 bất biến 8 (mã nghiệp vụ) chỉ áp cho cán bộ; vết công dân ghi mã định danh mờ kèm `Kind` (`core/authz/authz.go:86-88`), và migration `service-identity/migrations/0011_tai_khoan_zalo_va_phien_chua_co_so.sql:99` đã chỉ định cột này làm "ai". Chủ dự án chốt lại 08/10/2026 sau khi phiên chính sửa một tiền đề sai đã hỏi trước đó |
@@ -89,6 +89,7 @@ và một kênh mới mai sau cũng vậy. Quy tắc suy luận ở giao diện 
 | 3 | **Số tự khai là dữ liệu cá nhân** dù chưa xác thực. Luật 3 không đổi: che khi ra API, không log, không vào vết | Không nới |
 | 4 | Ngưỡng 10/ngày là ngưỡng bảo mật; nới hay siết về sau là điều kiện dừng của luật 13 | — |
 | 5 | Phiếu chưa xác thực **không** chuyển thành phiếu có danh tính khi tài khoản Zalo về sau xác thực số. Làm vậy là "nhận hồ sơ cũ" — ADR 0020 CÒN MỞ #1 | Không đụng |
+| 6 | **Phiên không số của app xã không chứng minh App ID.** `/v2.0/me` của Zalo không nhận secret; chỉ lời gọi đổi số mới ký bằng secret (`service-identity/internal/zalo/client.go:21-29`). Không có `phoneToken` thì một `accessToken` của app Zalo bất kỳ, kèm App ID của xã X, lấy được phiên không số ở xã X. Bị chặn ở: chỉ xã X (đúng thứ QR công khai của X đã cho), tài khoản khoá theo App ID của X nên không chiếm được tài khoản ai, không đọc được hồ sơ ai, trần #7. Còn lại: một người nhiều tài khoản Zalo vẫn gửi được nhiều lần 10 phiếu/ngày | Chủ dự án chấp nhận 08/10/2026. Đường có số cũng chỉ chứng minh App ID nếu Zalo từ chối token chéo app — chưa đo (ADR 0045 UNKNOWN #1) |
 
 ## Còn mở — chưa quyết
 

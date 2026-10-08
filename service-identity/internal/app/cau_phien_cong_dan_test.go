@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vihat/vigov/core/audit"
+	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/platformclient"
 	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
@@ -720,6 +722,113 @@ func TestCauGoiYLaTenMienCuThiTraTenMienChinh(t *testing.T) {
 	}
 }
 
+// --- account-only own-app session (ADR 0080 decision 6) -----------------------------------------
+
+func accountOnlyRequest() YeuCauMoPhienCau {
+	yc := yeuCauCau(cauAppRieng)
+	yc.RequireOwnAppOf, yc.AccountOnly = xaThu, true
+	return yc
+}
+
+// An account-only open issues a session in the app's commune with NO citizen identity, owned by the
+// Zalo account, audited in the same transaction with the account as the citizen "who" — and the
+// second open reuses the same account row instead of minting another.
+func TestAccountOnlySessionOwnedByZaloAccount(t *testing.T) {
+	b := dungBanThuCau(t)
+	ctx := context.Background()
+
+	first, err := b.uc.Mo(ctx, accountOnlyRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Token == "" || first.Xa != xaThu || first.DaCoSo {
+		t.Fatalf("result = %+v — want a session in the app's commune, phone not verified", first)
+	}
+	tk := b.k.taiKhoan[cauAppRieng+"|"+cauMaZalo]
+	if b.k.phien[0].congDan != "" || b.k.phien[0].taiKhoan != tk.ID || tk.ID == "" {
+		t.Fatalf("session row = %+v — want no citizen, account %q", b.k.phien[0], tk.ID)
+	}
+	v := b.vet(HanhDongMoPhienCongDan)
+	if len(v) != 1 || v[0].tx != 1 || b.g.ketThucCua(1) != "commit" {
+		t.Fatalf("audit entries %v — want exactly one, inside the committed session transaction", v)
+	}
+	// args: tenant_id, actor_id, actor_kind, actor_ip, action, subject, at, delta
+	if v[0].args[0] != string(xaThu) || v[0].args[1] != tk.ID || v[0].args[2] != audit.KindZaloAccount {
+		t.Fatalf("audit who = %v/%v in %v — want the Zalo account, kind zalo-account, in the app's commune",
+			v[0].args[1], v[0].args[2], v[0].args[0])
+	}
+	if d := string(v[0].args[7].([]byte)); !strings.Contains(d, `"chi_tai_khoan_zalo":true`) ||
+		!strings.Contains(d, `"da_co_so":false`) || !strings.Contains(d, `"tai_khoan_zalo_moi":true`) {
+		t.Errorf("delta = %s", d)
+	}
+
+	second, err := b.uc.Mo(ctx, accountOnlyRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(b.k.taiKhoan) != 1 || b.k.phien[1].taiKhoan != tk.ID || second.Sid == first.Sid {
+		t.Fatalf("second open: %d accounts, session account %q — want the same account, a new session",
+			len(b.k.taiKhoan), b.k.phien[1].taiKhoan)
+	}
+	if d := string(b.vet(HanhDongMoPhienCongDan)[1].args[7].([]byte)); !strings.Contains(d, `"tai_khoan_zalo_moi":false`) {
+		t.Errorf("second open delta = %s — the account was reused, not created", d)
+	}
+}
+
+// THE PROPERTY THE FLAG EXISTS FOR: an account linked to an identity by an earlier verified phone does
+// NOT pass that identity to an account-only session — this open proved nothing about the app (no
+// phone exchange), so it must not reach "Phản ánh của tôi" (ADR 0080 stop #4). The link is untouched.
+func TestAccountOnlySessionNeverInheritsLinkedIdentity(t *testing.T) {
+	b := dungBanThuCau(t)
+	ctx := context.Background()
+
+	withPhone := yeuCauCau(cauAppRieng)
+	withPhone.RequireOwnAppOf, withPhone.SoDaXacThuc = xaThu, "84900000000"
+	if kq, err := b.uc.Mo(ctx, withPhone); err != nil || !kq.DaCoSo {
+		t.Fatalf("verified open: %+v, %v", kq, err)
+	}
+	linked := b.k.taiKhoan[cauAppRieng+"|"+cauMaZalo].CongDanID
+	if linked == "" {
+		t.Fatal("premise broken: the verified open did not link an identity")
+	}
+
+	kq, err := b.uc.Mo(ctx, accountOnlyRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kq.DaCoSo || b.k.phien[1].congDan != "" {
+		t.Fatalf("account-only session carries identity %q — it inherited the earlier link", b.k.phien[1].congDan)
+	}
+	if b.k.taiKhoan[cauAppRieng+"|"+cauMaZalo].CongDanID != linked {
+		t.Fatal("the account's existing link was changed by an account-only open")
+	}
+	if got := b.vet(HanhDongMoPhienCongDan)[1].args[1]; got != b.k.taiKhoan[cauAppRieng+"|"+cauMaZalo].ID {
+		t.Fatalf("audit who = %v — want the Zalo account, not the linked identity", got)
+	}
+	if got := b.vet(HanhDongMoPhienCongDan)[1].args[2]; got != audit.KindZaloAccount {
+		t.Fatalf("audit kind = %v — want zalo-account", got)
+	}
+}
+
+func TestAccountOnlyWiringFaultsRefused(t *testing.T) {
+	b := dungBanThuCau(t)
+	for name, edit := range map[string]func(*YeuCauMoPhienCau){
+		"with a phone":         func(y *YeuCauMoPhienCau) { y.SoDaXacThuc = "84900000000" },
+		"not from own sign-in": func(y *YeuCauMoPhienCau) { y.RequireOwnAppOf = "" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			yc := accountOnlyRequest()
+			edit(&yc)
+			if _, err := b.uc.Mo(context.Background(), yc); !errors.Is(err, ErrCauYeuCauSai) {
+				t.Fatalf("err = %v, want ErrCauYeuCauSai", err)
+			}
+		})
+	}
+	if b.g.soGiaoDich() != 0 {
+		t.Fatal("a refused wiring fault opened a transaction")
+	}
+}
+
 func TestCauChuTheVetLaDinhDanhHoacTaiKhoanZalo(t *testing.T) {
 	b := dungBanThuCau(t)
 	if _, err := b.uc.Mo(context.Background(), yeuCauCau(cauAppRieng)); err != nil {
@@ -728,8 +837,22 @@ func TestCauChuTheVetLaDinhDanhHoacTaiKhoanZalo(t *testing.T) {
 	v := b.vet(HanhDongMoPhienCongDan)
 	tk := b.k.taiKhoan[cauAppRieng+"|"+cauMaZalo]
 	// args: tenant_id, actor_id, actor_kind, actor_ip, action, subject, at, delta
-	if v[0].args[1] != tk.ID || v[0].args[2] != "citizen" || v[0].args[3] != cauIP {
-		t.Fatalf("chủ thể vết = %v/%v/%v — chưa có số thì là mã tài khoản Zalo, loại citizen, IP của bên cầu",
+	if v[0].args[1] != tk.ID || v[0].args[2] != audit.KindZaloAccount || v[0].args[3] != cauIP {
+		t.Fatalf("chủ thể vết = %v/%v/%v — chưa có số thì là mã tài khoản Zalo, loại zalo-account, IP của bên cầu",
 			v[0].args[1], v[0].args[2], v[0].args[3])
+	}
+
+	// Once a phone is verified the "who" is the citizen identity, and ONLY then is the kind citizen —
+	// on the link entry and on the session entry alike.
+	yc := yeuCauCau(cauAppRieng)
+	yc.SoDaXacThuc = "84900000000"
+	if _, err := b.uc.Mo(context.Background(), yc); err != nil {
+		t.Fatal(err)
+	}
+	congDan := b.k.taiKhoan[cauAppRieng+"|"+cauMaZalo].CongDanID
+	for _, l := range []lenhGhi{b.vet(HanhDongLienKetDinhDanh)[0], b.vet(HanhDongMoPhienCongDan)[1]} {
+		if l.args[1] != congDan || l.args[2] != authz.KindCitizen {
+			t.Fatalf("chủ thể vết = %v/%v — có số thì là định danh công dân, loại citizen", l.args[1], l.args[2])
+		}
 	}
 }
