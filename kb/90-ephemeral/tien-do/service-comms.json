@@ -348,6 +348,15 @@
       "bang_chung": "Migration f5c78d29 (0019–0022); Go afe3be2d (bot xã, webhook, thư, màu — isolation+security-reviewer không mục chặn, đã sửa mọi RISK/GAP), f339b2ff (nhận loại 5–16). go test ./service-comms/... xanh. *_pg_test CHƯA chạy (không VIGOV_TEST_DSN).",
       "no_confirm": [],
       "tiep_theo": "Chờ chủ dự án: ngưỡng webhook 600/phút nay tính theo từng xã (luật 13, vẫn tạm); admin.lookup được thay bot (ADR 0074 #6) — xem lại có cần quyền riêng; hạn của secret chờ (pending) chưa có. Nhật ký an ninh cho bot chung và máy chủ thư còn thiếu (chỉ có ở bot xã). Migration 0021 khoá ACCESS EXCLUSIVE khi chạy — triển khai lúc vắng. Web chưa nối lại (còn '?')."
+    },
+    {
+      "id": "loai-thong-bao-giai-ngan-nhac-ten-08-10",
+      "viec": "Loại thông báo cán bộ 17 'giai-ngan.nhac-ten' (được nhắc tên trong trao đổi giải ngân), chỉ chuông — ADR 0081 #5",
+      "trang_thai": "xong",
+      "menu": "giai-ngan",
+      "bang_chung": "043cd0eb: proto STAFF_NOTIFICATION_KIND_DISBURSEMENT_MENTION = 17; kindFromWire; domain.BellOnlyKinds + ZaloQueueableKinds; enqueueZaloDeliveries lọc kind = ANY(ZaloQueueableKinds) nên không có dòng zalo_delivery; migration 0023 nới CHECK staff_notification; nhãn chuông web. go vet + go test service-comms xanh; buf lint/breaking/generate sạch.",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA chạy migration 0023 và pg test (không gửi Zalo) trên PostgreSQL thật. Thứ tự triển khai: comms trước, finance (nơi phát) sau."
     }
   ]
 }
