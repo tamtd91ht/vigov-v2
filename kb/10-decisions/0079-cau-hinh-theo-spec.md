@@ -14,7 +14,11 @@ owns_facts:
   - "hành vi spec Cấu hình mà máy chủ chưa có (thêm/tắt/xoá câu hệ thống; thêm/xoá dòng thời hạn; màu mục danh mục; lưu kết quả gửi thư thử + dòng máy chủ thư nền tảng) sẽ làm backend; lượt web đặt control '?' (ADR 0068 §14) đúng vị trí spec (chốt 08/10/2026)"
   - "huy hiệu trạng thái menu Cấu hình giữ icon + chữ (ADR 0068 lần 2 #8b), lệch prototype có lý do (chốt 08/10/2026)"
   - "mã bot riêng của xã niêm phong bằng khoá dữ liệu riêng từng xã của service-comms; webhook bot của xã trên tên miền của xã, xã lấy từ Host; secret webhook chỉ ghi, hiện một lần; đổi bot chấm dứt mọi ghép nối (lô thứ hai Q1, 08/10/2026)"
-  - "'nhắc trước khi đến hạn' của Kênh Zalo không lưu ở comms, đọc từ cột 'Sắp đến hạn khi còn' của SLA; không làm máy chủ thư dự phòng của nền tảng lượt này, platform_fallback luôn false (lô thứ hai Q1, 08/10/2026)"
+  - "không làm máy chủ thư dự phòng của nền tảng lượt này, platform_fallback luôn false (lô thứ hai Q1, 08/10/2026)"
+  - "'Sắp đến hạn: nhắc trước' của Kênh Zalo sửa được (1–14 ngày), comms lưu due_soon_days theo từng xã, bộ phát Zalo áp dụng; ngưỡng Zalo được phép khác ngưỡng 'sắp đến hạn' của chuông — THAY lô thứ hai Q1 #7 (lô thứ tư Q10, 08/10/2026)"
+  - "Kênh Zalo chỉ có 18 dòng của spec; dòng 'Văn bản, đơn thư quá hạn' và 'Phản ánh quá hạn' bật/tắt cùng lúc các loại quá hạn + chưa cử người + đôn đốc của miền mình; nhiệm vụ giữ dòng riêng 'Việc bị đôn đốc lên cấp trên' và 'Bộ phận chưa cử người làm' (lô thứ tư Q11, 08/10/2026)"
+  - "'Kiểm tra kết nối' ẩn khi xã dùng bot chung, như Đăng ký webhook / Quay về bot chung (lô thứ tư Q12, 08/10/2026)"
+  - "biểu mẫu thêm câu Lời hệ thống không có ô 'Nhóm'; nhóm lấy từ tiền tố mã (chung. / phan-anh. / giai-ngan.), như prototype (phiên chính, 08/10/2026)"
   - "Lời hệ thống: xã được thêm câu, tắt/bật lại, xoá mềm câu tự thêm — thay quyết định 28/09/2026 và phần bộ mã đóng của ADR 0024 (lô thứ hai Q2, 08/10/2026)"
   - "câu Lời hệ thống xã tự thêm vào nhóm 'Dùng chung' cất ở service-petitions; câu xã tự thêm chỉ lưu và quản lý, chưa hiện ra ở kênh nào (lô thứ hai Q5, 08/10/2026)"
   - "18 loại nhắn Zalo chia hai giai đoạn: loại đã có nơi phát làm ngay, 10 loại chưa có nơi phát giữ '?' và mỗi loại một ADR + outbox (lô thứ hai Q3, 08/10/2026)"
@@ -24,7 +28,7 @@ owns_facts:
 
 # 0079. Menu Cấu hình theo spec Cấu hình 02–12
 
-**Trạng thái:** đã chốt; lô câu trả lời thứ hai 08/10/2026 đóng phần lớn điều kiện dừng backend, còn dòng 9 (§*Còn mở*); lô thứ ba (chấm ảnh vòng 1) chốt phần trình bày · **Ngày:** 2026-10-08 ·
+**Trạng thái:** đã chốt; lô câu trả lời thứ hai 08/10/2026 đóng phần lớn điều kiện dừng backend, còn dòng 9 (§*Còn mở*); lô thứ ba (chấm ảnh vòng 1) chốt phần trình bày; lô thứ tư (chấm ảnh vòng 4) thay lô 2 Q1 #7 · **Ngày:** 2026-10-08 ·
 **Người quyết:** chủ dự án, 08/10/2026, phiên chính, lệnh `/fix-web-admin --menu=cau-hinh --des=Cập
 nhật lại ui ux toàn bộ view và action trong menu cấu hình này, tham khảo hướng dẫn tại
 .\tmp\web\cau-hinh\vigov-cau-hinh-spec\*.md` · **Bổ sung** ADR 0068 §*Sửa đổi 06/10/2026 (lần 5)* và
@@ -87,7 +91,7 @@ Không quyết ở đây. Lượt backend phải hỏi chủ dự án trước k
 | 1 | Cách cất mã bot riêng của xã | luật 8 điều kiện dừng #1 (bí mật bên thứ ba mới, theo xã) | **Đóng** 08/10 — Q1 mục 1 |
 | 2 | Tuyến webhook không đăng nhập cho bot của xã | luật 13 điều kiện dừng (tuyến không xác thực mới) | **Đóng** 08/10 — Q1 mục 2, 3 |
 | 3 | Nguồn phát của 18 sự kiện ở các service | luật 2 (chủ dữ liệu, hợp đồng sự kiện) | **Đóng một phần** 08/10 — Q3: loại đã có nơi phát làm lượt này; 10 loại còn lại → dòng 9 |
-| 4 | `due_soon_days` của Zalo so với `due_soon_hours` của SLA | luật 9 (một sự kiện, một nguồn); 0074 đã chốt ngưỡng "sắp đến hạn" dùng chung với chuông | **Đóng** 08/10 — Q1 mục 7 |
+| 4 | `due_soon_days` của Zalo so với `due_soon_hours` của SLA | luật 9 (một sự kiện, một nguồn); 0074 đã chốt ngưỡng "sắp đến hạn" dùng chung với chuông | **Đóng** 08/10 — Q1 mục 7, rồi Q10 (lô thứ tư) thay: lưu riêng cho Zalo |
 | 5 | Thêm câu hệ thống | ADR 0024 (bộ mã đóng, câu gốc sống trong mã) | **Đóng** 08/10 — Q2; còn hai câu hỏi tiếp → dòng 7, 8 |
 | 6 | Thêm/xoá dòng SLA | ADR 0026 điều kiện dừng #2 · ADR 0029 điều kiện dừng #4 | **Đóng** 08/10 — Q4 |
 | 7 | Nhóm "Dùng chung" của Lời hệ thống thuộc service nào | luật 2 (một chủ cho mỗi thực thể) | **Đóng** 08/10 — Q5a |
@@ -109,7 +113,7 @@ Chủ dự án trả lời năm câu hỏi của lượt backend, 08/10/2026. L�
 | 4 | Đổi bot chung ↔ bot riêng | Chấm dứt mọi ghép nối đang sống; cán bộ phải ghép lại. Có hộp xác nhận nêu số người bị ảnh hưởng |
 | 5 | Đường dẫn | `zalo-bots/current` (+ `/check`, `/webhook`; `DELETE` = quay về bot chung), song song `zalo-bots/shared` |
 | 6 | Mã loại nhắn mới | Tiếng Việt không dấu (vd `nhiem-vu.sap-den-han`) theo ADR 0011 / 0051; web ánh xạ sang mã spec |
-| 7 | "Nhắc trước khi đến hạn" (`due_soon_days`) | **Không** lưu ở comms. Chỉ đọc, lấy từ cột "Sắp đến hạn khi còn" của bảng SLA, kèm liên kết sang tab Thời hạn xử lý (luật 9) |
+| 7 | "Nhắc trước khi đến hạn" (`due_soon_days`) | ~~**Không** lưu ở comms. Chỉ đọc, lấy từ cột "Sắp đến hạn khi còn" của bảng SLA, kèm liên kết sang tab Thời hạn xử lý (luật 9)~~ — **Đã bị thay** bởi §*Lô câu trả lời thứ tư* Q10 |
 | 8 | Lần thử gửi thư gần nhất | Lưu người nhận đã che (`privacy.MaskEmail`, `core/privacy/mask.go`) và lỗi theo lớp; không lưu chữ thô của máy chủ SMTP. **Không** làm máy chủ thư dự phòng của nền tảng lượt này (luật 11 điều kiện dừng #1 + luật 8): `platform_fallback` luôn `false` |
 | 9 | Màu mục danh mục | Sửa được cả trên mục "Hệ thống" — chỉ là trình bày |
 
@@ -195,3 +199,28 @@ Hệ quả của Q7:
 | Khi nào hiện "Tắt" | Chỉ khi câu đã có lời của xã: lời sửa đè, hoặc câu xã tự thêm | Q2: khi tắt thì dùng lời gốc. Câu chưa có lời của xã thì không có gì để tắt |
 | "Số cán bộ đã ghép nối", "Cán bộ chưa ghép nối" | Thôi là "?" | Danh sách "Ai đã ghép nối" ghép với danh bạ cán bộ (`GET /api/v1/staff-directory`, đã có). Hai mục này không nằm trong danh sách việc backend của lô 2, nên lô 2 không có dòng nào phải đóng |
 | Đơn thư trong bảng thời hạn | Chỉ có dòng thời hạn mặc định | Prototype có 3 loại việc. Q4 chỉ thêm dòng riêng cho phản ánh, văn bản và nhiệm vụ |
+
+## Lô câu trả lời thứ tư — chấm ảnh vòng 4 (08/10/2026)
+
+Chủ dự án trả lời ba câu hỏi sau khi chấm ảnh vòng 4 của menu Cấu hình, 08/10/2026. Lựa chọn ghi
+nguyên văn trong ngoặc kép.
+
+| # | Câu hỏi | Chốt | Nghĩa |
+|---|---|---|---|
+| Q10 | Kênh Zalo, ô "Sắp đến hạn: nhắc trước". Spec 11 §2 là ô chọn 1–14 ngày; lô 2 Q1 #7 đã chốt chỉ đọc, lấy từ cột SLA, một nguồn với chuông | Lần đầu **"theo prototype"**. Hỏi xác nhận vì câu này đảo Q1 #7, chủ dự án chọn **"Đúng prototype: sửa được, lưu riêng cho Zalo"** | **Thay** lô 2 Q1 #7. Xem các hệ quả dưới bảng |
+| Q11 | Bốn ô loại nhắn ngoài spec: (văn bản/phản ánh) × (đôn đốc / chưa cử người) | **"theo prototype"** | Không thêm dòng; chỉ 18 dòng của spec. Dòng "Văn bản, đơn thư quá hạn" bật/tắt cùng lúc các loại quá hạn + chưa cử người + đôn đốc của miền văn bản–đơn thư; dòng "Phản ánh quá hạn" làm như vậy cho miền phản ánh. Miền nhiệm vụ giữ hai dòng riêng của spec: "Việc bị đôn đốc lên cấp trên" và "Bộ phận chưa cử người làm" |
+| Q12 | "Kiểm tra kết nối" khi xã dùng bot chung | **"Ẩn khi dùng bot chung"** | Ẩn, như Đăng ký webhook và Quay về bot chung |
+
+Hệ quả của Q10:
+
+| Điểm | Hệ quả |
+|---|---|
+| Lưu ở đâu | service-comms lưu `due_soon_days` theo từng xã: migration + API + bộ phát Zalo áp dụng giá trị này |
+| Hai ngưỡng | Ngưỡng "sắp đến hạn" của tin Zalo có thể **khác** ngưỡng của chuông (cột "Sắp đến hạn khi còn" của SLA). Chủ dự án **chấp nhận** độ lệch này khi xác nhận Q10 |
+| Q1 #7 | Dòng #7 của bảng Q1 giữ nguyên chữ, đánh dấu đã bị thay — không xoá (ADR không xoá) |
+
+### Phiên chính tự quyết theo nguyên tắc "đúng prototype" (lô 3 Q7) — không phải câu trả lời của chủ dự án
+
+| Điểm | Quyết | Căn cứ |
+|---|---|---|
+| Ô "Nhóm" ở biểu mẫu thêm câu Lời hệ thống | Không có. Nhóm lấy từ tiền tố mã (`chung.` / `phan-anh.` / `giai-ngan.`), như prototype | Lô 3 Q7 **"Bỏ hết, đúng prototype"** |
