@@ -992,6 +992,24 @@
       "bang_chung": "W1 (khung trang, Văn bản đến danh sách/hộp vào sổ/ngăn chi tiết, Văn bản đi; trang xem thử /xem-thu/van-ban): ui-ux-reviewer PASS vòng 3 trên ảnh render scratchpad vb/cur-w1r2-*.png + cur-w1r3-den-drawer-0.png (1440). Quá hạn chỉ tính cho văn bản còn mở. goiGhi có tuỳ chọn withCode, chỉ vaoSoVanBanDen dùng (lỗi sla_chua_cau_hinh). Tìm theo cơ quan ban hành: febf4cd3. Test web-admin 4570/4570, build xanh. || W2 (tab Đơn thư công dân + Báo cáo nối /api/v1/citizen-letters: danh sách + lọc + phạm vi, hộp vào sổ có kiểm trùng thân POST + 'Gộp vào đơn này', ngăn chi tiết dải trạng thái C3 + Rẽ nhánh, chuyển bộ phận, kết quả C10, sửa người gửi, nhật ký; báo cáo năm hiện tại): ui-ux-reviewer PASS vòng 2 trên vb/cur-w2-*.png + cur-w2r2-*.png. Sửa tràn ngang trang (span ẩn trong ô bảng thoát vùng cuộn → relative). Test web-admin 4625/4625, build xanh.",
       "no_confirm": [],
       "tiep_theo": "CHỜ CHỦ DỰ ÁN DUYỆT thêm: Q8 Báo cáo không có ô chọn năm (luôn năm hiện tại, như prototype); R1 hạn đơn thư KHÔNG đếm 'Còn/Quá hạn N ngày' (chỉ ngày hạn + 'Quá hạn · ngày' khi còn mở) — cùng luật với văn bản đến; câu chữ phiên tự viết: gợi ý từng trạng thái, mô tả hộp vào sổ, hai câu bảo mật đơn tố cáo, 'đã kết thúc', 'Không ghi họ tên'. || CHỜ CHỦ DỰ ÁN DUYỆT (giả định của phiên, ADR 0078 #5 + đêm 08/10): tab mặc định Đơn thư công dân trừ khi có lọc Tổng quan; tiêu đề 'Văn bản & đơn thư'; bỏ 'Quét & OCR'; Q1 độ khẩn chỉ còn ô nhập trong 'Thông tin thêm'; Q2 giữ Sửa/Gỡ ở ngăn; Q3 giữ 'Sổ năm'; Q4 không số đếm trên tab (API không có tổng); Q5 chỉ Số đến sắp được; Q7 nút 'Vào sổ văn bản đến'. CÒN: nhập/xuất Excel đơn thư, chuyển thành nhiệm vụ (hợp đồng documents→petitions) vẫn '?'; định dạng ngày '8/10/2026' của prototype (toàn app, để sau); kiểm trang không tràn ngang ở 1440."
+    },
+    {
+      "id": "cau-hinh-theo-spec-08-10",
+      "menu": "cau-hinh",
+      "viec": "Màn Cấu hình (/cau-hinh) làm lại theo spec chủ dự án tmp/web/cau-hinh/vigov-cau-hinh-spec 02–12 (ADR 0079 lô 1–3): 12 tab (thêm Lịch làm việc tách khỏi Thời hạn xử lý; Thời hạn xử lý ẩn khi thiếu admin.sla; thanh tab xuống dòng), hàng form xám thay hộp thoại (trừ Sơ đồ), toast sonner, khối dùng chung config-ui, Switch; 9 tab theo prototype; phần máy chủ chưa có là control '?'",
+      "trang_thai": "xong",
+      "bang_chung": "Commit 846ad7a5 (khung) · 90cf3068 (trang xem thử /xem-thu/cau-hinh) · f0005c43+2ac4211b (sổ '?') · 75e78a29 (Sơ đồ) · efe448df (khung vòng 2, Lịch làm việc) · a1dd6b7f (Thời hạn) · 66e7087b (Tự động hoá) · 4c28dfc6 (Danh mục) · ae9e2f5a (Thôn) · a45d10d2 (Trường bản đồ) · 0e40589d (Lời hệ thống) · 3757b242 (Máy chủ thư) · 2f396f9b (Kênh Zalo). Kiểm: vitest cau-hinh+dev-preview+ui 894/894; make brain hooks quyen vet-actor khoaduynhat envmap buildfiles security web xanh ở 846ad7a5 (vitest toàn web 4642/4642). ui-ux-reviewer PASS: Khung, Sơ đồ, Thời hạn, Lịch làm việc, Tự động hoá, Kênh Zalo vòng 2; Thôn, Danh mục, Trường bản đồ, Lời hệ thống, Máy chủ thư vòng 3 — ảnh render Chrome headless 1440px trên /xem-thu/cau-hinh (dữ liệu mẫu), không phải ảnh site thật.",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA kiểm: bề ngang <500px (Chrome headless không dựng được), site thật thangbinh-danang.vigov.vn sau khi Jenkins triển khai. Typecheck web còn 1 lỗi ở src/lib/api/phieu-phan-anh.test.ts:436 — việc dở của phiên ADR 0080, không phải màn này. Hệ quả chủ dự án chọn 'Bỏ hết, đúng prototype': khi bảng thời hạn đã có dòng mà máy chủ báo thiếu dòng mặc định, câu máy chủ bảo bấm 'Gieo thời hạn mặc định' nhưng nút ấy không còn — cần chủ dự án quyết lại hoặc sửa câu máy chủ. Các '?' còn lại chờ backend (mục cau-hinh-backend-08-10)."
+    },
+    {
+      "id": "cau-hinh-backend-08-10",
+      "menu": "cau-hinh",
+      "viec": "BACKEND DEPENDENCY của màn Cấu hình (ADR 0079 lô 2): bot Zalo riêng của xã + webhook, 12 loại nhắn theo phân hệ (giai đoạn 1), thêm/tắt/xoá câu hệ thống, thêm/xoá dòng thời hạn mọi loại việc, màu mục danh mục, lưu lần thử thư; nối lại web khi máy chủ có (bỏ các '?' tương ứng)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Migration đã commit f5c78d29 (comms 0019–0022), c4e2f0c7 (petitions 0033, finance 0017, reporting 0004, documents 0007), fad0fd41 (identity 0026) — qua isolation-reviewer + security-reviewer; CHƯA chạy trên PostgreSQL 16 thật.",
+      "no_confirm": [],
+      "tiep_theo": "Go: service-identity (POST/DELETE /sla, màu) xong chờ review; service-comms, petitions/finance/reporting/documents đang dựng. Contract: RPC đọc loại văn bản / mức ưu tiên để identity đối chiếu mã dòng thời hạn van-ban-den/nhiem-vu (hiện trả 400 sla_field_unverifiable) + domain cho loại nhắn Zalo. Giai đoạn 2: 10 loại nhắn chưa có nơi phát, mỗi loại một ADR + outbox. Nợ cũ: CHECK system_message_override_delete_complete (petitions 0020, finance 0010, reporting 0003) cho qua khi delete_reason NULL — cần migration NOT VALID rồi VALIDATE."
     }
   ]
 }
