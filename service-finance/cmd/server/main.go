@@ -20,6 +20,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/vihat/vigov/core/audit"
+	"github.com/vihat/vigov/core/commsclient"
 	"github.com/vihat/vigov/core/config"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
@@ -40,12 +41,14 @@ import (
 // not read at all. TestConfigUsesMatchReads keeps this list equal to what the package reads.
 //
 // finance: REST only — no gRPC server; resolves communes and staff through platform and identity.
+// CommsClient: a mention in a project's discussion becomes a bell notice in comms (ADR 0081 #5).
 var configUses = config.Uses(
 	config.HTTPServer,
 	config.PlatformClient,
 	config.IdentityClient,
 	config.TenantCache,
 	config.Redis,
+	config.CommsClient,
 )
 
 func main() {
@@ -142,6 +145,22 @@ func main() {
 		idemStore = r
 	}
 
+	// comms — the bell notice for a mention in a project's discussion (ADR 0081 #5), sent after the
+	// comment commits. EMPTY ONLY IN DEV (config.CommsClient is required in staging/prod): mentions are
+	// then stored and nobody is told, and this line says so at startup.
+	var mentionNotifier app.MentionNotifier
+	if addr := cfg.CommsGRPCAddr(); addr != "" {
+		comms, err := commsclient.Dial(addr, cfg.GRPCCallerKey(), log)
+		if err != nil {
+			log.Error("không nối được dịch vụ comms", "service", "finance", "err", err)
+			os.Exit(1)
+		}
+		defer comms.Close()
+		mentionNotifier = comms
+	} else {
+		log.Warn("CẢNH BÁO: thiếu COMMS_GRPC_ADDR — nhắc tên trong trao đổi dự án không gửi thông báo", "service", "finance")
+	}
+
 	hangMuc := fistore.NewHangMucKeHoachVonStore(kho)
 	chungTu := fistore.NewChungTuGiaiNganStore(kho)
 	nganSach := fistore.NewNganSachStore(kho)
@@ -190,9 +209,10 @@ func main() {
 		// §8.1 issues and §8.4 discussion (migration 0015). Same split as funding sources: reads on the
 		// store, writes on a use case whose store takes its transaction, so each row and its audit
 		// entry commit together (rule 6, invariant 3).
-		ProjectDiscussion:       fistore.NewProjectDiscussionStore(kho),
-		ProjectDiscussionWrites: app.NewProjectDiscussion(kho, fistore.NewProjectDiscussionWriteStore(kho)),
-		Log:                     log,
+		ProjectDiscussion: fistore.NewProjectDiscussionStore(kho),
+		ProjectDiscussionWrites: app.NewProjectDiscussion(kho, fistore.NewProjectDiscussionWriteStore(kho)).
+			NotifyMentionsThrough(mentionNotifier, log),
+		Log: log,
 	})
 
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.

@@ -10,19 +10,24 @@ package app
 // WHY THIS LAYER: rule 6, invariant 3 — the row and its audit entry share ONE transaction, and
 // core/audit.Write takes a *store.ScopedTx with no overload that writes outside one.
 //
-// WHAT HAPPENS ACROSS SERVICES IS DELIBERATELY ABSENT, AND IT IS A FOLLOW-UP, NOT AN OVERSIGHT.
-// §13 rule 4 asks that recording an issue on a project with an officer in charge raise a tracking task
-// (tasks belong to petitions), and the prototype notifies every mentioned colleague (messages belong to
-// comms). Both cross a service boundary, which leaves exactly two legal paths (rule 2, invariant 3):
-// a gRPC call or an event. The user decided on 06/10/2026 that these come later, as events published
-// from THIS transaction through the outbox — so the issue, its audit entry and the "please raise a
-// task" message commit together or not at all. Until then nothing here calls, publishes or enqueues
-// anything, `project_issues.tracking_task_id` stays NULL, and a mention is stored without being sent.
+// THE TRACKING TASK IS DELIBERATELY ABSENT, AND IT IS A FOLLOW-UP, NOT AN OVERSIGHT. §13 rule 4 asks
+// that recording an issue on a project with an officer in charge raise a tracking task (tasks belong to
+// petitions). That crosses a service boundary, and the user decided on 06/10/2026 that it comes later,
+// as an event published from THIS transaction through the outbox — so the issue, its audit entry and
+// the "please raise a task" message commit together or not at all. Until then
+// `project_issues.tracking_task_id` stays NULL.
+//
+// THE MENTION NOTICE IS A gRPC CALL AFTER THE COMMIT, NOT AN OUTBOX ROW (ADR 0081 #5, 08/10/2026 —
+// it replaces ADR 0075 #5 for this one kind). Each mentioned colleague except the author gets a bell
+// notice (kind 17, bell only — never Zalo) through comms' DeliverStaffNotifications. THE TRADE-OFF THE
+// OWNER ACCEPTED: comms down means the notice is lost and only a log line says so; the comment itself
+// is saved either way, because a message somebody typed must never be refused for a bell. An outbox
+// would close that gap, and exists nowhere in this repository yet.
 //
 // MENTIONS ARE STAFF BUSINESS CODES (CB-…), because the only staff list a `budget.*` account can read
-// (GET /api/v1/staff-directory) carries codes and no internal id. So the notification follow-up has a
-// step this service cannot do: comms must resolve each code to an ACTIVE account of THIS commune
-// (through identity, which owns staff) and drop any code that resolves to nobody before sending.
+// (GET /api/v1/staff-directory) carries codes and no internal id. Comms does NOT re-resolve them
+// (comms.proto, "WHO MAY BE ADDRESSED"): a code naming nobody in this commune yields a bell row nobody
+// in this commune can read — harmless, which is why the shape check in domain is enough here.
 //
 // FREE TEXT NEVER ENTERS THE AUDIT DELTA. An issue or a message is typed by staff and may name a
 // person (rule 6, forbidden #4). The delta carries ids, lengths and who was mentioned; the row itself
@@ -33,9 +38,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net/url"
 	"time"
 
 	"github.com/vihat/vigov/core/audit"
+	"github.com/vihat/vigov/core/commsclient"
+	commsv1 "github.com/vihat/vigov/core/gen/vigov/comms/v1"
 	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/core/ulid"
@@ -47,6 +56,7 @@ import (
 // TRANSACTION, so a row and its audit entry cannot be written in two.
 type ProjectDiscussionStore interface {
 	LiveProjectCode(ctx context.Context, tx *store.ScopedTx, projectID string) (string, error)
+	LiveProjectCodeAndName(ctx context.Context, tx *store.ScopedTx, projectID string) (code, name string, err error)
 	LiveProjectForIssue(ctx context.Context, tx *store.ScopedTx, projectID string) (code, assignee string, err error)
 	InsertIssue(ctx context.Context, tx *store.ScopedTx, i domain.ProjectIssue) (time.Time, error)
 	IssueForUpdate(ctx context.Context, tx *store.ScopedTx, id string) (domain.ProjectIssue, error)
@@ -61,10 +71,98 @@ type ProjectDiscussion struct {
 
 	// newID is injected so a test can pin the ids. In production it is ulid.Moi.
 	newID func() (string, error)
+
+	// notifier is comms' bell inbox; nil = mentions are stored and nobody is told (dev with no
+	// COMMS_GRPC_ADDR — staging/prod refuse to start without it, config.CommsClient).
+	notifier MentionNotifier
+	log      *slog.Logger
+}
+
+// MentionNotifier is comms' bell inbox, declared at the point of use. *commsclient.Client satisfies it.
+type MentionNotifier interface {
+	DeliverStaffNotifications(ctx context.Context, notices []commsclient.Notice) (map[string]commsclient.Delivery, error)
 }
 
 func NewProjectDiscussion(db *store.DB, s ProjectDiscussionStore) *ProjectDiscussion {
-	return &ProjectDiscussion{db: db, store: s, newID: ulid.Moi}
+	return &ProjectDiscussion{db: db, store: s, newID: ulid.Moi, log: slog.Default()}
+}
+
+// NotifyMentionsThrough makes AddComment tell each mentioned colleague through n (ADR 0081 #5). A nil
+// n leaves mentions unsent. log receives the failure line; nil keeps slog.Default.
+func (uc *ProjectDiscussion) NotifyMentionsThrough(n MentionNotifier, log *slog.Logger) *ProjectDiscussion {
+	uc.notifier = n
+	if log != nil {
+		uc.log = log
+	}
+	return uc
+}
+
+// The mention notice as the prototype writes it (vigov-require budget/service.py:1065-1076).
+const (
+	mentionTitlePrefix = "Bạn được nhắc trong trao đổi giải ngân: "
+	// mentionBodyRunes is the prototype's `body[:280]` — characters, not bytes: a cut inside a UTF-8
+	// sequence would hand comms an invalid string.
+	mentionBodyRunes = 280
+	// mentionTitleRunes is comms' bound on `title` (comms.proto, 1..200): a long project name is cut
+	// rather than letting comms refuse the whole notice.
+	mentionTitleRunes = 200
+	// ONE KEY PER COMMENT, ALL RECIPIENTS UNDER IT: comms deduplicates per (commune, key, recipient),
+	// so a retry reaches each person once — "comment id + recipient" without the recipient IN the key.
+	// Putting it there would break the key's printable-ASCII rule for a staff code with a Vietnamese
+	// letter (domain checks shape only), and comms would refuse the whole batch.
+	mentionKeyPrefix = "giai-ngan.nhac-ten:"
+)
+
+// mentionNotice builds the notice for one saved comment, or ok=false when nobody but the author was
+// mentioned. Pure, so the test pins title, body, key and recipients without a database.
+func mentionNotice(c domain.ProjectComment, projectName string) (commsclient.Notice, bool) {
+	recipients := make([]string, 0, len(c.MentionedStaffCodes))
+	for _, code := range c.MentionedStaffCodes { // already trimmed and de-duplicated by domain
+		if code != c.AuthorCode {
+			recipients = append(recipients, code)
+		}
+	}
+	if len(recipients) == 0 {
+		return commsclient.Notice{}, false
+	}
+	return commsclient.Notice{
+		IdempotencyKey: mentionKeyPrefix + c.ID,
+		Kind:           commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DISBURSEMENT_MENTION,
+		RecipientMa:    recipients,
+		Title:          firstRunes(mentionTitlePrefix+projectName, mentionTitleRunes),
+		Body:           firstRunes(c.Body, mentionBodyRunes),
+		Link:           "/giai-ngan/du-an/" + url.PathEscape(c.ProjectID),
+	}, true
+}
+
+func firstRunes(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n])
+	}
+	return s
+}
+
+// notifyMentions runs AFTER the commit and never fails the request: the comment is already saved.
+//
+// context.WithoutCancel keeps the commune (the interceptor reads it) but not the request's
+// cancellation — a client hanging up after the save must not drop its colleagues' notices. commsclient
+// bounds the call at CallTimeout.
+//
+// THE LOG LINE CARRIES IDS AND A COUNT, NEVER THE TEXT (rule 3): the comment and the project name are
+// free text, and the error is not logged as a string because comms' refusal may quote a field.
+func (uc *ProjectDiscussion) notifyMentions(ctx context.Context, c domain.ProjectComment, projectCode, projectName string) {
+	if uc.notifier == nil {
+		return
+	}
+	n, ok := mentionNotice(c, projectName)
+	if !ok {
+		return
+	}
+	if _, err := uc.notifier.DeliverStaffNotifications(context.WithoutCancel(ctx), []commsclient.Notice{n}); err != nil {
+		uc.log.WarnContext(ctx, "CẢNH BÁO: không gửi được thông báo nhắc tên trong trao đổi dự án — ý kiến vẫn đã lưu",
+			"service", "finance", "comment_id", c.ID, "project_code", projectCode,
+			"recipients", len(n.RecipientMa), "comms_unavailable", errors.Is(err, commsclient.ErrCommsUnavailable))
+	}
 }
 
 // The business verbs written into the trail — Vietnamese snake_case, like every other action this
@@ -261,8 +359,10 @@ func (uc *ProjectDiscussion) AddComment(ctx context.Context, projectID string, r
 	comment := domain.ProjectComment{
 		ID: id, ProjectID: projectID, Body: body, AuthorCode: actor.ID, MentionedStaffCodes: mentions,
 	}
+	var code, name string
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
-		code, err := uc.store.LiveProjectCode(ctx, tx, projectID)
+		var err error
+		code, name, err = uc.store.LiveProjectCodeAndName(ctx, tx, projectID)
 		if err != nil {
 			return err
 		}
@@ -285,6 +385,7 @@ func (uc *ProjectDiscussion) AddComment(ctx context.Context, projectID string, r
 	if err != nil {
 		return domain.ProjectComment{}, wrapDiscussion(ctx, "gửi ý kiến trao đổi", err)
 	}
+	uc.notifyMentions(ctx, comment, code, name)
 	return comment, nil
 }
 

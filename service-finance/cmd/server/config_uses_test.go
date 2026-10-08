@@ -20,3 +20,15 @@ func TestConfigUsesMatchReads(t *testing.T) {
 		t.Error(p)
 	}
 }
+
+// TestDeclaresCommsClient: the mention notice (ADR 0081 #5) needs comms, so staging/prod must refuse
+// to start without COMMS_GRPC_ADDR (rule 11, invariant 8). Undeclared, an unset address in prod would
+// mean every mention silently notifies nobody.
+func TestDeclaresCommsClient(t *testing.T) {
+	for _, g := range configUses.Groups() {
+		if g == config.CommsClient {
+			return
+		}
+	}
+	t.Fatal("configUses does not declare config.CommsClient")
+}

@@ -107,6 +107,10 @@ spec:
             # identity (luật 2, cấm #1). Giá trị này đòi `identity` phải thật sự phơi cổng
             # 9090 — xem `deploy/base/identity/service.yaml`.
             - { name: IDENTITY_GRPC_ADDR, value: identity:9090 }
+            # Bắt buộc ở staging/prod (nhóm CommsClient): nhắc tên trong trao đổi dự án gửi thông
+            # báo chuông qua `DeliverStaffNotifications` của comms (ADR 0081 #5). Đòi comms phơi
+            # 9090 và NetworkPolicy 3c + `allow-finance-egress-grpc` cho phép finance → comms.
+            - { name: COMMS_GRPC_ADDR, value: comms:9090 }
           envFrom:
             - configMapRef: { name: common-config }
             # Secret PHẢI có ít nhất: DATABASE_DSN · GRPC_CALLER_KEY · SESSION_SIGNING_KEYS.

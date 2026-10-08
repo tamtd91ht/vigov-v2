@@ -104,7 +104,8 @@ spec:
       ports:
         - { port: 9090, protocol: TCP }
 ---
-# 3c. comms 9090 ← documents và petitions (gửi thông báo qua `commsclient`).
+# 3c. comms 9090 ← documents, petitions và finance (gửi thông báo qua `commsclient`; finance: nhắc tên
+# trong trao đổi dự án, ADR 0081 #5).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -117,6 +118,7 @@ spec:
     - from:
         - podSelector: { matchLabels: { app.kubernetes.io/name: documents } }
         - podSelector: { matchLabels: { app.kubernetes.io/name: petitions } }
+        - podSelector: { matchLabels: { app.kubernetes.io/name: finance } }
       ports:
         - { port: 9090, protocol: TCP }
 ---
@@ -235,6 +237,7 @@ spec:
     - to:
         - podSelector: { matchLabels: { app.kubernetes.io/name: platform } }
         - podSelector: { matchLabels: { app.kubernetes.io/name: identity } }
+        - podSelector: { matchLabels: { app.kubernetes.io/name: comms } }
       ports:
         - { port: 9090, protocol: TCP }
 ---

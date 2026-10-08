@@ -46,6 +46,7 @@ type fakeDiscussionDB struct {
 	begun, committed, rolledBack int
 
 	projectCode string // "" = no live project with that id in this commune
+	projectName string // the project's `ten`, read by AddComment for the mention notice
 
 	// projectAssignee is the project's `can_bo_phu_trach_id` as COALESCEd ("" = nobody) — the owner an
 	// issue takes when the request names none.
@@ -131,6 +132,11 @@ func (c *fakeDiscussionConn) QueryContext(_ context.Context, q string, args []dr
 		}
 		return &rowsGia{cot: []string{"ma", "can_bo_phu_trach_id"},
 			hang: [][]driver.Value{{c.k.projectCode, c.k.projectAssignee}}}, nil
+	case strings.Contains(q, "SELECT ma, ten FROM du_an") && strings.Contains(q, "FOR SHARE"):
+		if c.k.projectCode == "" {
+			return &rowsGia{cot: []string{"ma", "ten"}}, nil
+		}
+		return &rowsGia{cot: []string{"ma", "ten"}, hang: [][]driver.Value{{c.k.projectCode, c.k.projectName}}}, nil
 	case strings.Contains(q, "FROM du_an") && strings.Contains(q, "FOR SHARE"):
 		if c.k.projectCode == "" {
 			return &rowsGia{cot: []string{"ma"}}, nil

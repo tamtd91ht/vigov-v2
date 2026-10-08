@@ -203,8 +203,8 @@ func NormaliseCommentBody(body string) (string, error) {
 // SHAPE ONLY: non-empty, at most StaffCodeMax characters, no whitespace or control character. THE
 // CODES ARE NOT CHECKED AGAINST identity HERE — that would be a synchronous call to another service,
 // which this round does not make (user decision 06/10/2026). A code that names nobody, or somebody of
-// another commune, notifies nobody: the notification follow-up must resolve each code to an active
-// account of THIS commune (comms, through identity) before it sends anything.
+// another commune, notifies nobody: comms files the bell row under (this commune, that code), and no
+// account of this commune signs in with it (comms.proto, "WHO MAY BE ADDRESSED"; ADR 0081 #5).
 func NormaliseMentions(codes []string) ([]string, error) {
 	out := make([]string, 0, len(codes))
 	seen := make(map[string]bool, len(codes))

@@ -42,6 +42,9 @@ func TestPgProjectDiscussionReadsWritesAndIsolation(t *testing.T) {
 		if err != nil || code != "DA01" {
 			t.Fatalf("mã dự án = %q, %v", code, err)
 		}
+		if code, name, err := w.LiveProjectCodeAndName(ctx, tx, "da-1"); err != nil || code != "DA01" || name != "Dự án thử" {
+			t.Fatalf("mã + tên dự án = %q %q, %v", code, name, err)
+		}
 		for _, i := range []domain.ProjectIssue{
 			{ID: "01JISSUE0000000000000000A1", ProjectID: "da-1", Title: "Cũ", RecordedBy: "CB-00001"},
 			{ID: "01JISSUE0000000000000000A2", ProjectID: "da-1", Title: "Mới", Description: "chi tiết", RecordedBy: "CB-00002"},

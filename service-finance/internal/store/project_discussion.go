@@ -293,6 +293,29 @@ func (s *ProjectDiscussionWriteStore) LiveProjectCode(ctx context.Context, tx *s
 	return code, nil
 }
 
+// projectForComment is projectForDiscussion plus the project's NAME — the mention notice's title
+// (ADR 0081 #5: "Bạn được nhắc trong trao đổi giải ngân: {tên dự án}"). Read in the comment's
+// transaction under the same share lock, so the name is the one the project had when the message was
+// posted, not one read again after the commit from a row that may have changed in between.
+const projectForComment = `SELECT ma, ten FROM du_an
+	WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL FOR SHARE`
+
+// LiveProjectCodeAndName returns the code and the name of one live project of this commune;
+// ErrKhongThayDuAn otherwise.
+func (s *ProjectDiscussionWriteStore) LiveProjectCodeAndName(ctx context.Context, tx *store.ScopedTx,
+	projectID string) (code, name string, err error) {
+
+	err = tx.Underlying().QueryRowContext(ctx, projectForComment, string(tx.TenantID()), projectID).
+		Scan(&code, &name)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", ErrKhongThayDuAn
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("du_an: đọc dự án cho trao đổi: %w", err)
+	}
+	return code, name, nil
+}
+
 // projectForIssue is projectForDiscussion plus the project's officer in charge — the owner an issue
 // takes when the request names none (prototype budget/service.py:949). Same FOR SHARE, same reason.
 const projectForIssue = `SELECT ma, COALESCE(can_bo_phu_trach_id, '') FROM du_an
