@@ -16,7 +16,9 @@ owns_facts:
 # 0008. Vòng đời phiếu phản ánh là cấu hình theo xã
 
 **Trạng thái:** đã chốt · **Ngày:** 2026-09-16 · **Đóng câu hỏi mở #7 và #8** · **Phần mở lại phiếu (#8)
-BỊ THAY bởi ADR 0050** (28/09/2026)
+BỊ THAY bởi ADR 0050** (28/09/2026) · **Sửa một phần bởi ADR 0080** (08/10/2026): gửi được phản ánh qua
+phiên Mini App chưa xác thực số khi Zalo không cho số — thay §*Công dân gửi phản ánh* #2 và lý do chống
+spam/ẩn danh cho riêng loại phiếu ấy.
 
 ## Bối cảnh
 

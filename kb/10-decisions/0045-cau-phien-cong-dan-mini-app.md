@@ -17,7 +17,8 @@ owns_facts:
 
 **Trạng thái:** đã chốt (năm quyết định của chủ dự án, 25/09/2026) · phần ghi *"đề xuất của
 người thiết kế"* **chờ xác nhận** · **Thực thi ADR 0044** · ADR 0005, 0019, 0022, 0025, 0032
-giữ nguyên
+giữ nguyên · **Sửa một phần bởi ADR 0080** (08/10/2026): ĐIỀU KIỆN DỪNG #6 — tuyến gửi và theo dõi
+phiếu chưa xác thực nhận phiên chưa có số
 
 ## Bối cảnh
 

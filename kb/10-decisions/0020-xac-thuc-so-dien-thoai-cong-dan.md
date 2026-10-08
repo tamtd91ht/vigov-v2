@@ -11,7 +11,9 @@ owns_facts:
 
 # 0020. Xác thực số điện thoại công dân bằng `getPhoneNumber` của Zalo
 
-**Trạng thái:** đã chốt · **Ngày:** 2026-09-17
+**Trạng thái:** đã chốt · **Ngày:** 2026-09-17 · **Sửa một phần bởi ADR 0080** (08/10/2026, mở lại theo
+điều kiện #1): kênh Mini App có thêm đường gửi phản ánh không số khi Zalo không cho số; đăng nhập có
+danh tính vẫn chỉ qua `getPhoneNumber`.
 
 ## Bối cảnh
 
