@@ -24,6 +24,7 @@ import (
 	"github.com/vihat/vigov/core/grpcx"
 	"github.com/vihat/vigov/core/secret"
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-petitions/internal/domain"
 	svcgrpc "github.com/vihat/vigov/service-petitions/internal/grpc"
 )
 
@@ -41,11 +42,24 @@ func (c tenantCounter) CountOpenHeldByOrgUnit(ctx context.Context, _ string) (in
 	return c.n, nil
 }
 
+// tenantPriorities answers every asked code as an active priority — and panics without a commune,
+// like the real store.
+type tenantPriorities struct{}
+
+func (tenantPriorities) StatesByCode(ctx context.Context, codes []string) ([]domain.TaskPriorityCodeState, error) {
+	_ = tenant.MustFrom(ctx)
+	out := make([]domain.TaskPriorityCodeState, 0, len(codes))
+	for _, c := range codes {
+		out = append(out, domain.TaskPriorityCodeState{Code: c, Active: true})
+	}
+	return out, nil
+}
+
 func startGRPC(t *testing.T, opts ...grpc.DialOption) petitionsv1.PetitionsServiceClient {
 	t.Helper()
 	lis := bufconn.Listen(1 << 20)
 	srv := buildGRPCServer(testCallerKey, svcgrpc.Deps{
-		Petitions: tenantCounter{n: 4}, Tasks: tenantCounter{n: 5},
+		Petitions: tenantCounter{n: 4}, Tasks: tenantCounter{n: 5}, TaskPriorities: tenantPriorities{},
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	go func() {
@@ -106,6 +120,26 @@ func TestGRPCServerWithoutCallerKeyDoesNotBuild(t *testing.T) {
 			t.Fatal("dựng được máy chủ gRPC với GRPC_CALLER_KEY rỗng")
 		}
 	}()
-	_ = buildGRPCServer(nil, svcgrpc.Deps{Petitions: tenantCounter{}, Tasks: tenantCounter{},
+	_ = buildGRPCServer(nil, svcgrpc.Deps{Petitions: tenantCounter{}, Tasks: tenantCounter{}, TaskPriorities: tenantPriorities{},
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+}
+
+// The new RPC rides the SAME chain: with key and commune it answers, without the commune it is refused
+// by the interceptor before the handler runs.
+func TestGRPCResolveTaskPriorityCodesThroughChain(t *testing.T) {
+	cl := startGRPC(t, grpc.WithChainUnaryInterceptor(
+		grpcx.UnaryClientCallerAuth(testCallerKey),
+		grpcx.UnaryClientInterceptor(),
+	))
+	req := &petitionsv1.ResolveTaskPriorityCodesRequest{Codes: []string{"khan"}}
+	res, err := cl.ResolveTaskPriorityCodes(tenant.Into(context.Background(), grpcTestTenant), req)
+	if err != nil {
+		t.Fatalf("refused with key and commune: %v", err)
+	}
+	if len(res.GetItems()) != 1 || res.GetItems()[0].GetCode() != "khan" || !res.GetItems()[0].GetActive() {
+		t.Errorf("= %+v", res)
+	}
+	if _, err := cl.ResolveTaskPriorityCodes(context.Background(), req); status.Code(err) != codes.InvalidArgument {
+		t.Errorf("no commune: code = %v, want InvalidArgument", status.Code(err))
+	}
 }

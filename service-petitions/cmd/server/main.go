@@ -503,13 +503,14 @@ func chay(log *slog.Logger) error {
 	// lại thì k8s `SIGKILL` trước khi hạn ở đây trôi hết, và toàn bộ đoạn mã này trở thành thứ
 	// trông như đang canh mà không bao giờ chạy tới cuối.
 	// THE gRPC SURFACE — its own port (GRPC_LISTEN_ADDR, default :9090), the same shape as platform
-	// and identity. One RPC today, CountOrgUnitHoldings, asked by identity before it deletes an org
-	// unit. The stores are the SAME objects the REST routes read, so "open" on the delete and on the
-	// register come from one place.
+	// and identity. Two RPCs, both asked by identity: CountOrgUnitHoldings before it deletes an org
+	// unit, ResolveTaskPriorityCodes before it writes an SLA row for one task priority. The stores are
+	// the SAME objects the REST routes read, so "open" on the delete and on the register, and "switched
+	// on" here and on Cấu hình, come from one place each.
 	//
 	// Plaintext, like every gRPC port here (ADR 0025): the guard is GRPC_CALLER_KEY on every RPC plus
 	// NetworkPolicy rule 3 (deploy/base/mang/netpol.yaml) — both, not either.
-	grpcSrv := buildGRPCServer(cfg.GRPCCallerKey(), svcgrpc.Deps{Petitions: phieu, Tasks: nhiemVu, Log: log})
+	grpcSrv := buildGRPCServer(cfg.GRPCCallerKey(), svcgrpc.Deps{Petitions: phieu, Tasks: nhiemVu, TaskPriorities: mucUuTien, Log: log})
 	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr())
 	if err != nil {
 		return err
