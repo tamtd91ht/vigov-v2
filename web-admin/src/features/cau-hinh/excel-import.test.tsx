@@ -23,7 +23,9 @@ import {
   TASK_TYPE_IMPORT_TARGET,
   catalogueImportFor,
 } from "./excel-import-targets";
-import { NhomMuc } from "./tab-danh-muc"; // vi-name-ok: existing export of tab-danh-muc.tsx, imported not declared (rule 12 inv 3)
+import { ConfigImportButton } from "./config-import-button";
+import { TASK_STATUS_GROUP, nhomDanhMuc } from "./nhom-danh-muc"; // vi-name-ok: existing export of nhom-danh-muc.ts, imported not declared (rule 12 inv 3)
+import { importGroupFor } from "./tab-danh-muc";
 
 /**
  * The shared import panel, bound to the Danh mục group `Loại tài nguyên bản đồ`; its gate in the
@@ -175,31 +177,34 @@ describe("Danh mục — which group offers the import, to whom", () => {
     expect(catalogueImportFor(null, session(["admin.lookup"]))).toBeNull();
   });
 
-  const noActions = { them: () => {}, sua: () => {}, xoa: () => {}, datTrangThai: () => {} };
-  const group = {
-    khoa: "loaiTaiNguyenBanDo" as const,
-    nhan: "Loại tài nguyên bản đồ",
-    thuTuLaThangBac: false,
-    ghi: null,
-    trangThai: { pha: "chuaCoMuc" as const },
-  };
+  // Spec 05/02: ONE "Nhập từ Excel" at the head of the tab, acting on the FILTERED group (ADR 0079).
+  const groups = nhomDanhMuc({
+    loaiTaiNguyenBanDo: { ok: true, duLieu: { items: [] } },
+    hangMucKeHoachVon: { ok: true, duLieu: { items: [] } },
+    loaiVanBan: { ok: true, duLieu: { items: [] } },
+    loaiDonViDanCu: { ok: true, duLieu: { items: [] } },
+    khoiNhiemVu: { ok: true, duLieu: { items: [] } },
+    loaiNhiemVu: { ok: true, duLieu: { items: [] } },
+    mucUuTienNhiemVu: { ok: true, duLieu: { items: [] } },
+  });
 
-  it("the group draws '⬆ Nhập từ Excel' only when told it may, and the panel under itself", () => {
-    const shown = renderToStaticMarkup(
-      <NhomMuc
-        nhom={group}
-        coQuyenGhi={false}
-        thaoTac={noActions}
-        form={null}
-        importAllowed
-        importPanel={<p>PANEL</p>}
-      />,
+  it("the tab's import button: the filtered group with `admin.lookup` only — never 'Tất cả' or the eighth group", () => {
+    expect(importGroupFor(groups, "loaiTaiNguyenBanDo", session(["admin.lookup"]))).toBe("loaiTaiNguyenBanDo");
+    expect(importGroupFor(groups, null, session(["admin.lookup"]))).toBeNull();
+    expect(importGroupFor(groups, TASK_STATUS_GROUP, session(["admin.lookup"]))).toBeNull();
+    // DENIED: no key, a look-alike key, an unread session, groups not read yet.
+    expect(importGroupFor(groups, "loaiTaiNguyenBanDo", session(["admin.lookups"]))).toBeNull();
+    expect(importGroupFor(groups, "loaiTaiNguyenBanDo", null)).toBeNull();
+    expect(importGroupFor(null, "loaiTaiNguyenBanDo", session(["admin.lookup"]))).toBeNull();
+  });
+
+  it("the button reaches the page: '⬆ Nhập từ Excel' rendered above the filter row", () => {
+    const html = renderToStaticMarkup(
+      <ConfigImportButton target={T} onImported={() => {}} />,
     );
     // The ⬆ glyph became a lucide `Upload` icon (ADR 0068 §2); the words are unchanged.
-    expect(shown).toContain(">Nhập từ Excel</button>");
-    expect(shown).toContain("<p>PANEL</p>");
-    const denied = renderToStaticMarkup(<NhomMuc nhom={group} coQuyenGhi={false} thaoTac={noActions} form={null} />);
-    expect(denied).not.toContain("Nhập từ Excel");
+    expect(html).toContain("Nhập từ Excel</button>");
+    expect(html).toContain('class="mb-3 flex justify-end"');
   });
 });
 

@@ -2,7 +2,90 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { docDanhMucNghiepVu } from "@/lib/api/danh-muc-nghiep-vu";
 
-import { nhomDanhMuc } from "./nhom-danh-muc";
+import {
+  CODE_MAX_LENGTH,
+  TASK_STATUS_GROUP,
+  catalogueRows,
+  codeFromLabel,
+  effectiveShownGroup,
+  groupsWithRows,
+  nhomDanhMuc,
+} from "./nhom-danh-muc";
+
+describe("codeFromLabel — the add row derives the code (no 'Mã' field, spec 05)", () => {
+  // The server's `ChuanHoaMa` accepts exactly this shape: a–z, 0–9, single inner hyphens.
+  const SHAPE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+  it("folds Vietnamese the way it is written without diacritics", () => {
+    expect(codeFromLabel("Chợ và thương mại")).toBe("cho-va-thuong-mai");
+    expect(codeFromLabel("Đường giao thông")).toBe("duong-giao-thong");
+    expect(codeFromLabel("  Công văn / Tờ trình (2026)  ")).toBe("cong-van-to-trinh-2026");
+  });
+
+  it("always yields the server's accepted shape, at most 64 characters, never ending on a hyphen", () => {
+    for (const label of ["Ấp Ông Đồ", "a--b", "-x-", "Khối 1 — Tổ 2", "Ỹ".repeat(10) + " z ".repeat(40)]) {
+      const code = codeFromLabel(label);
+      expect(code).toMatch(SHAPE);
+      expect(code.length).toBeLessThanOrEqual(CODE_MAX_LENGTH);
+    }
+  });
+
+  it("a label with no letter or digit yields '' (refused before sending)", () => {
+    expect(codeFromLabel("!!! ---")).toBe("");
+  });
+});
+
+describe("catalogueRows — one table, group order then server order", () => {
+  const ok = (items: unknown[]) => ({ ok: true as const, duLieu: { items } });
+  const row = (id: string, order: number) => ({
+    id,
+    code: id,
+    label: id,
+    active: true,
+    is_default: false,
+    order,
+    source: "don-vi",
+    tier: 1,
+  });
+  const groups = nhomDanhMuc({
+    loaiTaiNguyenBanDo: ok([row("a", 1)]),
+    hangMucKeHoachVon: ok([]),
+    loaiVanBan: ok([]),
+    loaiDonViDanCu: ok([]),
+    khoiNhiemVu: ok([]),
+    loaiNhiemVu: ok([]),
+    // Server order kept as-is: the priority scale is NOT re-sorted.
+    mucUuTienNhiemVu: ok([row("p-high", 9), row("p-low", 1)]),
+  } as never);
+  const statuses = [
+    { code: "moi-giao", label: "Mới giao", order: 1, role: "chinh", default_label: "Mới giao", default_order: 1, customised: false },
+  ];
+
+  it("all: groups in screen order, items unsorted, task statuses last", () => {
+    expect(catalogueRows(groups, statuses, null).map((r) => r.key)).toEqual([
+      "loaiTaiNguyenBanDo:a",
+      "mucUuTienNhiemVu:p-high",
+      "mucUuTienNhiemVu:p-low",
+      `${TASK_STATUS_GROUP}:moi-giao`,
+    ]);
+  });
+
+  it("filter buttons only for groups with rows; an emptied chosen group falls back to all (D22)", () => {
+    const all = catalogueRows(groups, statuses, null);
+    expect([...groupsWithRows(all)].sort()).toEqual(
+      ["loaiTaiNguyenBanDo", "mucUuTienNhiemVu", TASK_STATUS_GROUP].sort(),
+    );
+    expect(effectiveShownGroup(all, "mucUuTienNhiemVu")).toBe("mucUuTienNhiemVu");
+    expect(effectiveShownGroup(all, "loaiVanBan")).toBeNull();
+    expect(effectiveShownGroup(all, null)).toBeNull();
+    expect(effectiveShownGroup([], TASK_STATUS_GROUP)).toBeNull();
+  });
+
+  it("filtered: only that group", () => {
+    expect(catalogueRows(groups, statuses, "mucUuTienNhiemVu")).toHaveLength(2);
+    expect(catalogueRows(groups, statuses, TASK_STATUS_GROUP).map((r) => r.kind)).toEqual(["taskStatus"]);
+  });
+});
 
 /**
  * Kiểm CẢ ĐƯỜNG: phản hồi HTTP của bảy tuyến danh mục → bảy nhóm mà màn hình dựng được.

@@ -52,6 +52,12 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "phần này đang được làm (ADR 0079).",
   },
   {
+    ten: "Nhập Excel chung cho mọi nhóm danh mục",
+    viSao:
+      "Nhập một tệp cho tất cả các nhóm danh mục cùng lúc. Máy chủ hiện chỉ nhận tệp theo từng nhóm; " +
+      "hãy chọn một nhóm ở hàng lọc rồi bấm Nhập từ Excel để nhập vào nhóm đó (ADR 0079).",
+  },
+  {
     ten: "Thêm câu mới",
     viSao:
       "Xã tự thêm câu nói với người dân ngoài các câu đi kèm phần mềm. Máy chủ hiện chỉ cho sửa lời các " +
@@ -64,16 +70,10 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "thái bật/tắt cho câu; trong lúc chờ, dùng \"Khôi phục lời gốc\" (ADR 0079).",
   },
   {
-    ten: "Lần thử gửi thư gần nhất",
+    ten: "Lần thử gần nhất",
     viSao:
       "Ghi lại lần gửi thư thử gần nhất (lúc nào, tới đâu, có gửi được không) để người sau xem lại. Máy " +
       "chủ chưa lưu kết quả này; hiện chỉ thấy kết quả của lần thử ngay trên màn (ADR 0079).",
-  },
-  {
-    ten: "Đường thư dự phòng của nền tảng",
-    viSao:
-      "Cho biết khi xã chưa khai máy chủ thư thì thư có đi bằng máy chủ chung của nền tảng hay không. Máy " +
-      "chủ chưa trả thông tin này (ADR 0079).",
   },
   {
     ten: "Con bot của xã",
@@ -93,17 +93,5 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "Chọn từng việc cụ thể được nhắn qua Zalo (giao việc mới, văn bản chuyển tới, phản ánh bị mở lại…). " +
       "Máy chủ hiện nhắn được bốn loại: sắp đến hạn, quá hạn, đôn đốc lên cấp trên, bản tin đầu tuần; các " +
       "loại còn lại đang được làm (ADR 0079).",
-  },
-  {
-    ten: "Số cán bộ đã ghép nối",
-    viSao:
-      "Đếm bao nhiêu cán bộ trong xã đã ghép nối Zalo trên tổng số cán bộ. Máy chủ chưa trả tổng số này " +
-      "(ADR 0079).",
-  },
-  {
-    ten: "Cán bộ chưa ghép nối",
-    viSao:
-      "Liệt kê cả cán bộ chưa ghép nối Zalo để nhắc họ tự ghép nối. Máy chủ hiện chỉ trả người đã ghép " +
-      "nối (ADR 0079).",
   },
 ];

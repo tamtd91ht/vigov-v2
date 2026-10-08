@@ -1,962 +1,1030 @@
 "use client";
 
-import { Pencil, Plus, Trash2, TriangleAlert, Upload } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Pencil, Plus, Trash2, Upload } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
+import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CardHeader } from "@/components/ui/card";
-import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
-import { IconButton } from "@/components/ui/icon-button";
-import { Notice } from "@/components/ui/notice";
-import { SkeletonRows } from "@/components/ui/skeleton";
+import { controlClass } from "@/components/ui/field";
+import { PendingButton, PendingMarker } from "@/components/ui/pending-feature";
 import { BUSY_DELETING, BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
-
-import {
-  suaMuc,
-  themMuc,
-  xoaMuc,
-  type KhoaDanhMucGhi, // vi-name-ok: existing type of danh-muc.ts, imported not declared (rule 12 inv 3)
-  type MoTaDanhMucGhi,
-  type MucDanhMucGhi,
-} from "@/lib/api/danh-muc";
-import { docDanhMucNghiepVu, type BayDanhMuc, type MucDanhMuc } from "@/lib/api/danh-muc-nghiep-vu";
-import { QUYEN_QUAN_LY_DANH_MUC, quyetDinhTheoKhoa } from "@/lib/quyen";
 import { usePhien } from "@/features/phien/phien-hien-tai";
+import { cn } from "@/lib/cn";
+import { suaMuc, themMuc, xoaMuc, type KhoaDanhMucGhi } from "@/lib/api/danh-muc"; // vi-name-ok: existing exports of danh-muc.ts, imported not declared (rule 12 inv 3)
+import { docDanhMucNghiepVu, type BayDanhMuc } from "@/lib/api/danh-muc-nghiep-vu";
+import type { KetQua } from "@/lib/api/goi";
+import type { petitions_danhSachTrangThaiNhiemVuRa } from "@/lib/api/schema.gen";
+import { suaTrangThaiNhiemVu, layTrangThaiNhiemVu } from "@/lib/api/trang-thai-nhiem-vu";
+import { QUYEN_QUAN_LY_DANH_MUC, quyetDinhTheoKhoa } from "@/lib/quyen";
 
-import { IMPORT_BUTTON } from "./excel-import-flow";
-import { catalogueImportFor } from "./excel-import-targets";
-
+import { ConfigImportButton } from "./config-import-button";
+import {
+  ConfigField,
+  ConfigFormRow,
+  ConfigLoading,
+  ConfigTable,
+  RowActions,
+  SMALL_BUTTON_CLASS,
+  StatusBadge,
+  formInputCls,
+  formSelectCls,
+} from "./config-ui";
+import {
+  CAPITAL_PLAN_CATEGORY_IMPORT_TARGET,
+  DOCUMENT_TYPE_IMPORT_TARGET,
+  MAP_ASSET_TYPE_IMPORT_TARGET,
+  RESIDENTIAL_UNIT_TYPE_IMPORT_TARGET,
+  TASK_BLOC_IMPORT_TARGET,
+  TASK_PRIORITY_IMPORT_TARGET,
+  TASK_TYPE_IMPORT_TARGET,
+  catalogueImportFor,
+} from "./excel-import-targets";
+import { PHAN_CHUA_DUNG } from "./nhan-cau-hinh";
 import {
   CANH_BAO_XOA,
-  CAU_THIEU_QUYEN_GHI,
-  GHI_CHU_BA_TANG,
-  GHI_CHU_NHOM_CHI_XEM,
-  GIAI_THICH_DA_TAT,
-  GIAI_THICH_O_MA,
-  GIAI_THICH_O_NHAN,
-  GIAI_THICH_THANG_BAC,
-  NUT_BAT_LAI,
   NUT_HUY,
   NUT_LUU,
-  NUT_SUA,
   NUT_TAT,
   NUT_THEM,
-  NUT_XAC_NHAN_XOA,
   NUT_XOA,
   O_LY_DO_XOA,
-  O_MA,
-  O_MAC_DINH,
   O_NHAN,
   O_THU_TU,
-  daLuu,
-  daThem,
-  daXoa,
-  giaiThichKhongThaoTac,
   nhanMacDinh,
-  nhanNguon,
-  nhanNhomRong,
   nhanNutCuaDong,
-  nhanSoMuc,
-  nhanTrangThaiMuc,
-  tieuDeSua,
-  tieuDeThem,
-  tieuDeXoa,
-  type LoiRaCuaNhomRong,
 } from "./nhan-danh-muc";
-import { CATALOGUE_GROUPS, nhomDanhMuc, type NhomDanhMuc } from "./nhom-danh-muc";
-import { NhomTrangThaiNhiemVu } from "./nhom-trang-thai-nhiem-vu";
-import { TIEU_DE_NHOM_TRANG_THAI } from "./trang-thai-nhiem-vu";
+import {
+  CATALOGUE_GROUPS,
+  TASK_STATUS_GROUP,
+  catalogueRows,
+  codeFromLabel,
+  effectiveShownGroup,
+  groupsWithRows,
+  nhomDanhMuc,
+  type CatalogueRow,
+  type NhomDanhMuc,
+  type ShownGroup,
+} from "./nhom-danh-muc";
 import { choBatLai, kiemLyDoXoa, laMucGhi, thaoTacCuaMuc } from "./tang-danh-muc";
+import { THU_TU_KHONG_PHAI_SO, TIEU_DE_NHOM_TRANG_THAI, thanSuaTrangThai } from "./trang-thai-nhiem-vu";
 
 /**
- * Tab "Danh mục" — `docs/ui-ux/14-cau-hinh.md §5`, bảy danh mục nghiệp vụ của đơn vị, cả bảy sửa
- * được từ màn hình.
+ * Tab "Danh mục" — spec `05-danh-muc.md` (ADR 0079), prototype `LookupTable.tsx`: a group filter, a
+ * grey add row, ONE table across every group.
  *
- * ─────────────────────────────────────────────────────────────────────────────────────────
- * ĐÂY LÀ MÀN HÌNH ĐẦU TIÊN CỦA WEB QUẢN TRỊ CÓ ĐƯỜNG GHI. Ba điều dưới đây quyết định nó đúng
- * hay sai, và không điều nào nhìn thấy được bằng mắt trên một màn hình chạy tốt:
+ * ─────────────────────────────────────────────────────────────────────────────────────────────
+ * THREE THINGS DECIDE WHETHER THIS SCREEN IS RIGHT, AND NONE OF THEM IS VISIBLE:
  *
- * 1. NÚT VẼ THEO TẦNG, VÀ TẦNG ĐẾN TỪ MÁY CHỦ. Tầng 3 không có `Tắt` và không có `Xoá`; tầng 2
- *    không có `Xoá`. Quy tắc nằm ở `tang-danh-muc.ts` (hàm thuần, có bài test) chứ không rải
- *    trong JSX, vì một nhánh `if` giữa hai thẻ `<td>` là nhánh không bài test nào chạm tới. Cái
- *    CHẶN thật là trigger CSDL (ADR 0024); vẽ đúng nút chỉ để cán bộ không bấm vào một 409.
+ * 1. BUTTONS FOLLOW THE TIER, AND THE TIER COMES FROM THE SERVER (ADR 0024). Tier 3 has no "Tắt" and no
+ *    bin; tier 2 has no bin. The rule lives in `tang-danh-muc.ts` (pure, tested), never as a branch
+ *    between two `<td>`s. The real block is the database trigger; drawing the right buttons only keeps
+ *    staff from pressing a 409. The per-row sentence explaining a missing button is gone (spec 05):
+ *    the rule is still enforced by which buttons are drawn.
  *
- * 2. `source` VÀ `tier` KHÔNG BAO GIỜ ĐI LÊN. Máy chủ trả 400 nếu thân yêu cầu nhắc tới chúng,
- *    kể cả với giá trị đúng. Lối sai tự nhiên nhất — đọc một dòng rồi gửi lại chính nó — bị
- *    chặn ở `lib/api/danh-muc.ts`, nơi thân yêu cầu được dựng từng trường.
+ * 2. `source` AND `tier` NEVER GO UP. The server answers 400 if a body names them; the bodies are built
+ *    field by field in `lib/api/danh-muc.ts`.
  *
- * 3. ẨN NÚT LÀ TIỆN DỤNG, KHÔNG PHẢI BIỆN PHÁP. Ba tuyến ghi khai `RequirePermission
- *    ("admin.lookup")` ở máy chủ và kiểm trên TỪNG yêu cầu; ẩn nút chỉ để cán bộ không bấm vào
- *    một thứ chắc chắn trả 403 (luật 5, cấm #1).
- * ─────────────────────────────────────────────────────────────────────────────────────────
+ * 3. HIDING A BUTTON IS CONVENIENCE, NOT A CONTROL. Every write route declares
+ *    `RequirePermission("admin.lookup")` and checks it on EVERY request (rule 5, forbidden #1).
+ * ─────────────────────────────────────────────────────────────────────────────────────────────
  *
- * VÌ SAO BẢNG VẪN HIỆN CHO MỌI TÀI KHOẢN, CHỈ NÚT MỚI ẨN — và đây là chỗ tab này khác hẳn tab
- * Người dùng. Bảy tuyến ĐỌC khai `any-authenticated`, có lý do ghi ngay trên tuyến: nhãn danh
- * mục xuất hiện ở ô chọn và bộ lọc của gần như mọi màn hình. Dựng một cổng quyền quanh cả tab
- * sẽ là để GIAO DIỆN từ chối điều máy chủ đang phục vụ bình thường, và hiện ra một câu SAI —
- * "bạn không có quyền xem danh mục" — với người đang đọc đúng danh mục ấy trên năm màn hình
- * khác. Cổng quyền vì vậy đặt đúng chỗ máy chủ đặt nó: quanh ba thao tác GHI.
+ * THE TABLE SHOWS FOR EVERY ACCOUNT, ONLY THE WRITES ARE GATED: the read routes are
+ * `any-authenticated` because catalogue labels appear in pickers and filters on almost every screen.
  *
- * HAI NHÓM CỦA ĐẶC TẢ KHÔNG CÓ Ở ĐÂY: `Lĩnh vực phản ánh` và `Loại đơn thư` chưa có tuyến nào
- * trong hợp đồng REST. `Trạng thái nhiệm vụ` CÓ, là nhóm thứ tám, nhưng KHÔNG cùng khuôn thêm ·
- * sửa · xoá mềm: câu hỏi #21 đã chốt là đơn vị chỉ đổi nhãn và thứ tự của một bộ mã cố định, nên
- * nó là một thành phần riêng — `nhom-trang-thai-nhiem-vu.tsx`.
+ * DELETE KEEPS ITS REASON STEP (rule 7, owner decision): the server keeps the row and requires
+ * `reason`. The step is compact — the row's actions turn into a "Lý do xoá" box, "Xoá" and "Huỷ".
  *
- * NÚT `⬆ Nhập từ Excel` CỦA ĐẶC TẢ CHỈ MỌC Ở NHÓM ĐÃ CÓ TUYẾN NHẬP (`CATALOGUE_IMPORTS`,
- * `excel-import-targets.tsx`) — mỗi service sở hữu một tuyến nhập cho nhóm của mình, không có tuyến
- * nhập chung (ADR 0059 §3). Nên nút nằm TRONG từng nhóm, cạnh `+ Thêm mục`, không ở đầu tab: một nút
- * chung phải hỏi "nhập vào nhóm nào" rồi từ chối sáu trong bảy câu trả lời. Nhóm chưa có tuyến thì
- * không có nút — một nút bấm vào không có gì xảy ra khiến cán bộ tin là mình thao tác sai.
+ * `Trạng thái nhiệm vụ` (decision #21, ADR 0035 §C) sits in the same table but only ever offers the
+ * pencil: a commune renames and reorders the seven fixed codes, never adds, disables or deletes one.
  */
 export function TabDanhMuc() {
-  /** `null` là chưa đọc xong. Bảy danh mục về trong MỘT lượt nên cả tab có đúng một pha tải. */
-  const [bay, datBay] = useState<BayDanhMuc | null>(null);
+  /** `null` = not read yet. The seven catalogues arrive in ONE round, so the tab has one loading phase. */
+  const [catalogues, setCatalogues] = useState<BayDanhMuc | null>(null);
+  const [taskStatuses, setTaskStatuses] = useState<KetQua<petitions_danhSachTrangThaiNhiemVuRa> | null>(null);
   /**
-   * Tăng lên sau mỗi lần ghi thành công để đọc lại từ máy chủ.
-   *
-   * ĐỌC LẠI, KHÔNG VÁ TẠI CHỖ. Vá mảng trong state bằng dòng máy chủ vừa trả về là nhanh hơn,
-   * và nó sai ở đúng chỗ khó thấy: đặt một mục làm mặc định sẽ GỠ mặc định của mục khác trong
-   * cùng danh mục (`moc_mac_dinh` chỉ nhận một dòng), nên bảng sẽ hiện hai mục cùng "Mặc định"
-   * cho tới lần mở màn hình sau. Một lượt đọc lại thì không thể lệch.
+   * Bumped after every successful write to READ AGAIN, never to patch arrays in place: making one entry
+   * the default clears the default of another in the same catalogue, and a local patch would show two.
    */
-  const [lanDoc, datLanDoc] = useState(0);
+  const [reads, setReads] = useState(0);
 
-  const [dangMo, datDangMo] = useState<DangMo>(null);
-  /**
-   * Mã trạng thái nhiệm vụ đang mở biểu mẫu sửa ở nhóm thứ tám, hoặc `null`. Giữ Ở TAB, cạnh
-   * `dangMo`, để luật "một biểu mẫu cho cả tab" phủ cả nhóm ấy: mở bên này thì đóng bên kia.
-   */
-  const [maTrangThaiDangSua, datMaTrangThaiDangSua] = useState<string | null>(null);
-  /**
-   * Nhóm đang mở khung nhập Excel, hoặc `null`. Cùng luật "một biểu mẫu cho cả tab": mở khung nhập
-   * thì đóng biểu mẫu thêm · sửa · xoá, và ngược lại.
-   */
-  const [importingGroup, setImportingGroup] = useState<KhoaDanhMucGhi | null>(null);
-  const [ban, datBan] = useState<BanNhap>(BAN_TRONG);
-  /** Lỗi do chính màn hình phát hiện trước khi gửi. Khác hẳn câu của máy chủ — xem `loiMayChu`. */
-  const [loiTaiCho, datLoiTaiCho] = useState("");
-  const [loiMayChu, datLoiMayChu] = useState("");
-  const [dangGui, datDangGui] = useState(false);
-  const [cauDaXong, datCauDaXong] = useState("");
+  /** The filter button pressed. What is APPLIED is `shownGroup` below — see `effectiveShownGroup`. */
+  const [chosenGroup, setChosenGroup] = useState<ShownGroup>(null);
+  const [open, setOpen] = useState<OpenForm>(null);
+  const [draft, setDraft] = useState<CatalogueDraft>(EMPTY_DRAFT);
+  /** A check this screen made before sending — distinct from the server's sentence (`serverError`). */
+  const [localError, setLocalError] = useState("");
+  const [serverError, setServerError] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  const phien = usePhien();
-  /**
-   * BA TRẠNG THÁI, KHÔNG HAI: chưa đọc xong phiên thì chưa vẽ nút ghi nào. "Chưa biết" không
-   * được hành xử như "có quyền" — và cũng không được hành xử như "thiếu quyền", vì câu giải
-   * thích thiếu quyền hiện ra trong lúc còn đang đọc là nói một điều chưa biết đúng hay sai.
-   */
-  const quyetDinhGhi = phien === null ? null : quyetDinhTheoKhoa(phien, QUYEN_QUAN_LY_DANH_MUC);
-  const coQuyenGhi = quyetDinhGhi !== null && quyetDinhGhi.hien;
+  const session = usePhien();
+  // THREE STATES, NOT TWO: no write button until the session is read — "not known yet" acts neither as
+  // "allowed" nor as "refused".
+  const writeDecision = session === null ? null : quyetDinhTheoKhoa(session, QUYEN_QUAN_LY_DANH_MUC);
+  const canWrite = writeDecision !== null && writeDecision.hien;
+  const sessionError =
+    writeDecision !== null && !writeDecision.hien && writeDecision.vi === "khong-doc-duoc" ? writeDecision.thongBao : "";
 
   useEffect(() => {
-    let bo = false;
+    let dropped = false;
     docDanhMucNghiepVu().then((d) => {
-      if (!bo) datBay(d);
+      if (!dropped) setCatalogues(d);
+    });
+    layTrangThaiNhiemVu().then((r) => {
+      if (!dropped) setTaskStatuses(r);
     });
     return () => {
-      bo = true;
+      dropped = true;
     };
-  }, [lanDoc]);
+  }, [reads]);
 
-  const nhom = useMemo<readonly NhomDanhMuc[]>(() => (bay === null ? [] : nhomDanhMuc(bay)), [bay]);
-  /** The group the screen is narrowed to, or `null` for all of them. */
-  const [shownGroup, setShownGroup] = useState<string | null>(null);
-
-  const coMucNao = nhom.some((n) => n.trangThai.pha === "coMuc");
-
-  /** Mở một biểu mẫu: dọn sạch mọi thông báo của lần trước, và nạp giá trị đang có vào bản nháp. */
-  const mo = useCallback((m: DangMo, banDau: BanNhap) => {
-    datMaTrangThaiDangSua(null);
-    setImportingGroup(null);
-    datDangMo(m);
-    datBan(banDau);
-    datLoiTaiCho("");
-    datLoiMayChu("");
-    datCauDaXong("");
-  }, []);
-
-  const dong = useCallback(() => {
-    datDangMo(null);
-    datBan(BAN_TRONG);
-    datLoiTaiCho("");
-    datLoiMayChu("");
-  }, []);
-
-  /** Nhóm thứ tám mở biểu mẫu: đóng biểu mẫu của bảy nhóm kia trước (một biểu mẫu cho cả tab). */
-  const moSuaTrangThai = useCallback(
-    (ma: string | null) => {
-      if (ma !== null) {
-        dong();
-        setImportingGroup(null);
-      }
-      datMaTrangThaiDangSua(ma);
-    },
-    [dong],
+  const groups = useMemo(() => (catalogues === null ? null : nhomDanhMuc(catalogues)), [catalogues]);
+  const allRows = useMemo(
+    () =>
+      groups === null
+        ? []
+        : catalogueRows(groups, taskStatuses !== null && taskStatuses.ok ? taskStatuses.duLieu.items : [], null),
+    [groups, taskStatuses],
   );
+  const writable = useMemo(() => writableGroups(groups), [groups]);
+  const shownGroup = effectiveShownGroup(allRows, chosenGroup);
 
-  /** Sau một lần ghi thành công: đóng biểu mẫu, nói ra đã làm gì, và đọc lại từ máy chủ. */
-  const xong = useCallback((cau: string) => {
-    datDangMo(null);
-    datBan(BAN_TRONG);
-    datLoiTaiCho("");
-    datLoiMayChu("");
-    datCauDaXong(cau);
-    datLanDoc((n) => n + 1);
+  const close = useCallback(() => {
+    setOpen(null);
+    setDraft(EMPTY_DRAFT);
+    setLocalError("");
+    setServerError("");
   }, []);
 
-  const thaoTac = useMemo<ThaoTacNhom>(
-    () => ({
-      them: (mo_, nhanNhom) =>
-        mo(
-          {
-            kieu: "them",
-            ghi: mo_,
-            nhanNhom,
-            // KHOÁ CHỐNG TRÙNG SINH KHI MỞ BIỂU MẪU, KHÔNG SINH LÚC GỬI. Bấm `Lưu` lần thứ hai
-            // sau một lỗi mạng phải mang ĐÚNG khoá của lần đầu: lần đầu có thể đã tới máy chủ,
-            // và một khoá mới biến lần thử lại thành một mục thứ hai trong danh mục.
-            khoaChongTrung: khoaChongTrungMoi(),
-          },
-          BAN_TRONG,
-        ),
-      sua: (mo_, nhanNhom, m) =>
-        mo({ kieu: "sua", ghi: mo_, nhanNhom, muc: m }, banTuMuc(m)),
-      xoa: (mo_, nhanNhom, m) => mo({ kieu: "xoa", ghi: mo_, nhanNhom, muc: m }, BAN_TRONG),
-      datTrangThai: (mo_, nhanNhom, m, dung) => {
-        datLoiMayChu("");
-        datCauDaXong("");
-        datDangGui(true);
-        void suaMuc(mo_, m.id, { active: dung }).then((kq) => {
-          datDangGui(false);
-          if (kq.ok) xong(daLuu(nhanNhom));
-          else datLoiMayChu(kq.thongBao);
-        });
-      },
-    }),
-    [mo, xong],
-  );
-
-  const guiBieuMau = useCallback(() => {
-    if (dangMo === null || dangGui) return;
-
-    if (dangMo.kieu === "xoa") {
-      // PHÉP KIỂM DUY NHẤT MÀN HÌNH TỰ LÀM — xem `tang-danh-muc.ts`. Không gửi gì khi lý do rỗng.
-      const kiem = kiemLyDoXoa(ban.lyDo);
-      if (!kiem.ok) {
-        datLoiTaiCho(kiem.loi);
+  /**
+   * One write: clear old messages, send, then either toast what was done and READ AGAIN, or show the
+   * server's sentence AS WRITTEN — no branching on `code`, no `trace_id`.
+   */
+  const run = useCallback(function <T>(call: Promise<KetQua<T>>, sentence: string) {
+    setLocalError("");
+    setServerError("");
+    setBusy(true);
+    void call.then((r) => {
+      setBusy(false);
+      if (!r.ok) {
+        setServerError(r.thongBao);
         return;
       }
-      datLoiTaiCho("");
-      datLoiMayChu("");
-      datDangGui(true);
-      void xoaMuc(dangMo.ghi, dangMo.muc.id, kiem.giaTri).then((kq) => {
-        datDangGui(false);
-        if (kq.ok) xong(daXoa(dangMo.nhanNhom));
-        else datLoiMayChu(kq.thongBao);
-      });
-      return;
-    }
-
-    datLoiTaiCho("");
-    datLoiMayChu("");
-    datDangGui(true);
-
-    // KHÔNG KIỂM KHUÔN MÃ, ĐỘ DÀI NHÃN HAY KHOẢNG THỨ TỰ Ở ĐÂY. Máy chủ đã kiểm cả ba, mỗi thứ
-    // kèm một câu tiếng Việt nói rõ phải sửa gì; chép chúng xuống client là dựng bản sao thứ hai
-    // của một bộ quy tắc nghiệp vụ, và bản sao ấy trôi mà không bài test nào đỏ (luật 9).
-    if (dangMo.kieu === "them") {
-      void themMuc(
-        dangMo.ghi,
-        { code: ban.ma, label: ban.nhan, order: soThuTu(ban.thuTu), is_default: ban.macDinh },
-        dangMo.khoaChongTrung,
-      ).then((kq) => {
-        datDangGui(false);
-        if (kq.ok) xong(daThem(dangMo.nhanNhom));
-        else datLoiMayChu(kq.thongBao);
-      });
-      return;
-    }
-
-    void suaMuc(dangMo.ghi, dangMo.muc.id, {
-      label: ban.nhan,
-      order: soThuTu(ban.thuTu),
-      is_default: ban.macDinh,
-    }).then((kq) => {
-      datDangGui(false);
-      if (kq.ok) xong(daLuu(dangMo.nhanNhom));
-      else datLoiMayChu(kq.thongBao);
+      setOpen(null);
+      setDraft(EMPTY_DRAFT);
+      toast.success(sentence);
+      setReads((n) => n + 1);
     });
-  }, [ban, dangGui, dangMo, xong]);
+  }, []);
+
+  const actions: CatalogueActions = {
+    toggleAdd: () => {
+      if (open !== null && open.kind === "add") {
+        close();
+        return;
+      }
+      const initial = writable.find((g) => g.khoa === shownGroup) ?? writable[0];
+      setOpen({ kind: "add", idempotencyKey: newIdempotencyKey() });
+      setDraft({ ...EMPTY_DRAFT, group: initial === undefined ? "" : initial.khoa });
+      setLocalError("");
+      setServerError("");
+    },
+    edit: (row) => {
+      setOpen({ kind: "edit", rowKey: row.key });
+      setDraft({
+        ...EMPTY_DRAFT,
+        label: row.item.label,
+        order: row.kind === "taskStatus" ? String(row.item.order) : laMucGhi(row.item) ? String(row.item.order) : "",
+        isDefault: row.kind === "lookup" && row.item.is_default,
+      });
+      setLocalError("");
+      setServerError("");
+    },
+    remove: (row) => {
+      setOpen({ kind: "delete", rowKey: row.key });
+      setDraft(EMPTY_DRAFT);
+      setLocalError("");
+      setServerError("");
+    },
+    setActive: (row, active) => {
+      if (busy || row.kind !== "lookup" || row.group.ghi === null) return;
+      close();
+      run(suaMuc(row.group.ghi, row.item.id, { active }), SAVED);
+    },
+    makeDefault: (row) => {
+      if (busy || row.kind !== "lookup" || row.group.ghi === null) return;
+      close();
+      run(suaMuc(row.group.ghi, row.item.id, { is_default: true }), defaultFromNow(row.item.label));
+    },
+    cancel: close,
+    submit: () => {
+      if (open === null || busy) return;
+
+      if (open.kind === "add") {
+        const label = draft.label.trim();
+        if (label === "") {
+          setLocalError(LABEL_REQUIRED);
+          return;
+        }
+        const code = codeFromLabel(label);
+        if (code === "") {
+          setLocalError(LABEL_WITHOUT_LETTERS);
+          return;
+        }
+        const group = writable.find((g) => g.khoa === draft.group);
+        if (group === undefined || group.ghi === null) return;
+        run(themMuc(group.ghi, { code, label, is_default: false }, open.idempotencyKey), ADDED);
+        return;
+      }
+
+      const row = allRows.find((r) => r.key === open.rowKey);
+      if (row === undefined) return;
+
+      if (open.kind === "delete") {
+        if (row.kind !== "lookup" || row.group.ghi === null) return;
+        // THE ONE CHECK THIS SCREEN MAKES ITSELF (`tang-danh-muc.ts`): an empty reason is never sent.
+        const reason = kiemLyDoXoa(draft.reason);
+        if (!reason.ok) {
+          setLocalError(reason.loi);
+          return;
+        }
+        run(xoaMuc(row.group.ghi, row.item.id, reason.giaTri), DELETED);
+        return;
+      }
+
+      const label = draft.label.trim();
+      if (label === "") {
+        setLocalError(LABEL_REQUIRED);
+        return;
+      }
+      if (row.kind === "taskStatus") {
+        const body = thanSuaTrangThai(row.item, { nhan: label, thuTu: draft.order });
+        if (!body.ok) {
+          setLocalError(body.loi);
+          return;
+        }
+        run(suaTrangThaiNhiemVu(row.item.code, body.than), SAVED);
+        return;
+      }
+      if (row.group.ghi === null) return;
+      const order = orderValue(draft.order);
+      if (!order.ok) {
+        setLocalError(THU_TU_KHONG_PHAI_SO);
+        return;
+      }
+      run(suaMuc(row.group.ghi, row.item.id, { label, order: order.value, is_default: draft.isDefault }), SAVED);
+    },
+  };
+
+  /**
+   * A new add attempt is a new request: changing the group or the label after a refusal must not reuse
+   * the key of a body the server may already hold. Retrying the SAME body (after a network failure)
+   * keeps the key — the first attempt may have reached the server.
+   */
+  const updateDraft = (next: CatalogueDraft) => {
+    if (open !== null && open.kind === "add" && (next.label !== draft.label || next.group !== draft.group)) {
+      setOpen({ kind: "add", idempotencyKey: newIdempotencyKey() });
+    }
+    setDraft(next);
+  };
+
+  const importGroup = importGroupFor(groups, shownGroup, session);
 
   return (
-    <section className="tab-danh-muc flex min-w-0 flex-col gap-4 [&>*]:my-0" aria-labelledby="tieu-de-danh-muc">
-      {/* No card, no visible title: the tab IS the section, as in the prototype (ADR 0068 lần 5). */}
+    <CatalogueView
+      groups={groups}
+      taskStatuses={taskStatuses}
+      shownGroup={shownGroup}
+      onShowGroup={setChosenGroup}
+      canWrite={canWrite}
+      sessionError={sessionError}
+      importButton={catalogueImportButton(canWrite, importGroup, () => setReads((n) => n + 1))}
+      open={open}
+      draft={draft}
+      setDraft={updateDraft}
+      localError={localError}
+      serverError={serverError}
+      busy={busy}
+      actions={actions}
+    />
+  );
+}
+
+/* ---- words of this tab (spec 05 / prototype `LookupTable.tsx`, verbatim) ---------------------------- */
+
+export const ALL_GROUPS = "Tất cả";
+const GROUP_FIELD = "Nhóm danh mục";
+const COLOR_FIELD = "Màu";
+const LABEL_PLACEHOLDER = "Ví dụ: Chợ và thương mại";
+const ADD_SUBMIT = "Thêm";
+const ENABLE = "Bật";
+export const EDIT_LABEL = "Sửa nhãn";
+export const DELETE_ENTRY = "Xoá mục";
+export const SET_DEFAULT = "Đặt mặc định";
+export const SET_DEFAULT_TITLE = "Đặt làm lựa chọn mặc định khi giao việc";
+export const SOURCE_SYSTEM = "Hệ thống";
+export const SOURCE_COMMUNE = "Xã tự thêm";
+export const ADDED = "Đã thêm mục mới vào danh mục.";
+export const SAVED = "Đã lưu.";
+export const DELETED = "Đã xoá mục khỏi danh mục.";
+export const LABEL_REQUIRED = "Nhãn hiển thị không được để trống.";
+/** Not in the spec: a label of only symbols yields no code (`codeFromLabel`), refused before sending. */
+export const LABEL_WITHOUT_LETTERS = "Nhãn hiển thị cần có ít nhất một chữ cái hoặc chữ số.";
+
+export function defaultFromNow(label: string): string {
+  return `"${label}" là lựa chọn mặc định từ giờ.`;
+}
+
+/** The one group with a "default when assigning" choice in the prototype (`LookupTable.tsx:32`). */
+const GROUP_WITH_DEFAULT_BUTTON = "loaiNhiemVu";
+
+/** The "?" of the colour field — its sentence is `PHAN_CHUA_DUNG`'s, never a second copy. */
+const COLOR_PENDING = PHAN_CHUA_DUNG.find((p) => p.ten === "Màu của mục danh mục")!;
+
+/**
+ * One import button per group, bound to that group's target. A `Record` over every key, so a new
+ * catalogue group fails `tsc` here instead of silently drawing no button.
+ */
+const IMPORT_BUTTONS: Record<KhoaDanhMucGhi, (onImported: () => void) => ReactNode> = {
+  loaiTaiNguyenBanDo: (f) => <ConfigImportButton target={MAP_ASSET_TYPE_IMPORT_TARGET} onImported={f} />,
+  hangMucKeHoachVon: (f) => <ConfigImportButton target={CAPITAL_PLAN_CATEGORY_IMPORT_TARGET} onImported={f} />,
+  loaiVanBan: (f) => <ConfigImportButton target={DOCUMENT_TYPE_IMPORT_TARGET} onImported={f} />,
+  loaiDonViDanCu: (f) => <ConfigImportButton target={RESIDENTIAL_UNIT_TYPE_IMPORT_TARGET} onImported={f} />,
+  khoiNhiemVu: (f) => <ConfigImportButton target={TASK_BLOC_IMPORT_TARGET} onImported={f} />,
+  loaiNhiemVu: (f) => <ConfigImportButton target={TASK_TYPE_IMPORT_TARGET} onImported={f} />,
+  mucUuTienNhiemVu: (f) => <ConfigImportButton target={TASK_PRIORITY_IMPORT_TARGET} onImported={f} />,
+};
+
+/** The "?" of the tab-wide import — its sentence is `PHAN_CHUA_DUNG`'s. */
+const COMMON_IMPORT_PENDING = PHAN_CHUA_DUNG.find((p) => p.ten === "Nhập Excel chung cho mọi nhóm danh mục")!;
+
+/**
+ * The ONE "Nhập từ Excel" row at the head of the tab (prototype `ConfigWorkspace.tsx:109-111`), always
+ * drawn for an account holding `admin.lookup`:
+ *   · a filtered group with an import route → the working button for THAT group;
+ *   · "Tất cả", the eighth group, or a group without a route → the same button DISABLED with its "?"
+ *     (ADR 0068 §14): the server imports per group only, there is no route taking every group at once.
+ * Without the key: nothing at all — a "?" would announce a write the account may not do anyway.
+ */
+export function catalogueImportButton(
+  canWrite: boolean,
+  importGroup: KhoaDanhMucGhi | null,
+  onImported: () => void,
+): ReactNode {
+  if (!canWrite) return null;
+  if (importGroup !== null) return IMPORT_BUTTONS[importGroup](onImported);
+  return (
+    // FIXED 28px ROW, the height of the working sm `ConfigImportButton`: the legacy `nut-phu` min-height
+    // (32px) reached the disabled button inside `PendingButton` (which takes no button class), so the
+    // whole tab jumped ~5px when the filter switched between "Tất cả" and a group. The row is pinned to
+    // `h-7`, the disabled button is forced back to `h-7` without the min-height, and the 18px "?" (also a
+    // `<button>`, excluded by `data-pending-marker`) stays inside that box; nothing clips it.
+    <div className="mb-3 flex h-7 items-center justify-end overflow-visible">
+      <span className="inline-flex h-7 items-center [&_button:not([data-pending-marker])]:h-7 [&_button:not([data-pending-marker])]:min-h-0">
+        <PendingButton
+          info={COMMON_IMPORT_PENDING}
+          variant="outline"
+          size="sm"
+          icon={<Upload aria-hidden="true" focusable="false" className="size-4" />}
+        >
+          Nhập từ Excel
+        </PendingButton>
+      </span>
+    </div>
+  );
+}
+
+/* ---- state ------------------------------------------------------------------------------------- */
+
+/**
+ * Which form is open — ONE for the whole tab: the add row, or one row in edit or delete. Two drafts at
+ * once on a 320px screen are two drafts staff cannot both see.
+ */
+export type OpenForm =
+  | { readonly kind: "add"; readonly idempotencyKey: string }
+  | { readonly kind: "edit"; readonly rowKey: string }
+  | { readonly kind: "delete"; readonly rowKey: string }
+  | null;
+
+/** The draft being typed. Strings, as a browser input returns them. */
+export type CatalogueDraft = {
+  readonly group: string;
+  readonly label: string;
+  readonly order: string;
+  readonly isDefault: boolean;
+  readonly reason: string;
+};
+
+export const EMPTY_DRAFT: CatalogueDraft = { group: "", label: "", order: "", isDefault: false, reason: "" };
+
+export type CatalogueActions = {
+  readonly toggleAdd: () => void;
+  readonly edit: (row: CatalogueRow) => void;
+  readonly remove: (row: CatalogueRow) => void;
+  readonly setActive: (row: CatalogueRow, active: boolean) => void;
+  readonly makeDefault: (row: CatalogueRow) => void;
+  readonly submit: () => void;
+  readonly cancel: () => void;
+};
+
+function writableGroups(groups: readonly NhomDanhMuc[] | null): readonly NhomDanhMuc[] {
+  return groups === null ? [] : groups.filter((g) => g.ghi !== null);
+}
+
+/**
+ * The group the top "Nhập từ Excel" button imports into, or `null` for no button: it acts on the
+ * FILTERED group only — never "Tất cả", never the eighth group — and only when that group has an import
+ * route AND this account holds the route's key (`catalogueImportFor`, fail closed). Convenience, not a
+ * control: the server checks the key on all three import routes.
+ */
+export function importGroupFor(
+  groups: readonly NhomDanhMuc[] | null,
+  shown: ShownGroup,
+  session: Parameters<typeof catalogueImportFor>[1],
+): KhoaDanhMucGhi | null {
+  const group = writableGroups(groups).find((g) => g.khoa === shown);
+  if (group === undefined || group.ghi === null) return null;
+  return catalogueImportFor(group.ghi.khoa, session) === null ? null : group.ghi.khoa;
+}
+
+/**
+ * The order box: empty = UNCHANGED (never 0, which would move the entry to the top — and in the
+ * priority group the order IS the scale). Not `parseInt`: `parseInt("3 chữ")` is 3, swallowing a typo.
+ */
+function orderValue(box: string): { ok: true; value: number | undefined } | { ok: false } {
+  const clean = box.trim();
+  if (clean === "") return { ok: true, value: undefined };
+  const n = Number(clean);
+  return Number.isInteger(n) ? { ok: true, value: n } : { ok: false };
+}
+
+/** `crypto.randomUUID` exists in every secure context — the same context the `Secure` session cookie needs. */
+function newIdempotencyKey(): string {
+  return crypto.randomUUID();
+}
+
+/* ---- presentation ------------------------------------------------------------------------------ */
+
+/**
+ * Everything visible on the tab, PURE PRESENTATION — exported so a test renders it with
+ * `react-dom/server`: a decision tested only in a pure module can still fail to reach the page.
+ */
+export function CatalogueView({
+  groups,
+  taskStatuses,
+  shownGroup: chosenGroup,
+  onShowGroup,
+  canWrite,
+  sessionError,
+  importButton,
+  open,
+  draft,
+  setDraft,
+  localError,
+  serverError,
+  busy,
+  actions,
+}: {
+  groups: readonly NhomDanhMuc[] | null;
+  taskStatuses: KetQua<petitions_danhSachTrangThaiNhiemVuRa> | null;
+  shownGroup: ShownGroup;
+  onShowGroup: (g: ShownGroup) => void;
+  canWrite: boolean;
+  /** The session could not be read: its sentence, and no write button. */
+  sessionError: string;
+  importButton: ReactNode;
+  open: OpenForm;
+  draft: CatalogueDraft;
+  setDraft: (d: CatalogueDraft) => void;
+  localError: string;
+  serverError: string;
+  busy: boolean;
+  actions: CatalogueActions;
+}) {
+  const loading = groups === null || taskStatuses === null;
+  const taskItems = taskStatuses !== null && taskStatuses.ok ? taskStatuses.duLieu.items : [];
+  const allRows = groups === null ? [] : catalogueRows(groups, taskItems, null);
+  // Applied here too (the tab already passes the effective value): the view must never narrow to a group
+  // that has no filter button.
+  const shownGroup = effectiveShownGroup(allRows, chosenGroup);
+  const rows = groups === null ? [] : catalogueRows(groups, taskItems, shownGroup);
+  const total = allRows.length;
+  const present = groupsWithRows(allRows);
+  const writable = writableGroups(groups);
+
+  // A group that could not be read says so ABOVE the table, in the server's words: its rows are absent
+  // for a reason, never "the commune has no entries".
+  const readErrors: string[] = [];
+  for (const g of groups ?? []) {
+    if ((shownGroup === null || shownGroup === g.khoa) && g.trangThai.pha === "khongDocDuoc") {
+      readErrors.push(`${g.nhan}: ${g.trangThai.thongBao}`);
+    }
+  }
+  if (taskStatuses !== null && !taskStatuses.ok && (shownGroup === null || shownGroup === TASK_STATUS_GROUP)) {
+    readErrors.push(`${TIEU_DE_NHOM_TRANG_THAI}: ${taskStatuses.thongBao}`);
+  }
+
+  return (
+    <section className="space-y-4" aria-labelledby="tieu-de-danh-muc">
+      {/* No card, no visible title: the tab IS the section (prototype). */}
       <h2 id="tieu-de-danh-muc" className="an-thi-giac">
         Danh mục
       </h2>
 
-      {/* The prototype's group buttons — "Tất cả" then one per group, the chosen one solid. Choosing a
-          group narrows the screen to it; adding stays INSIDE a group (pick the group first), because each
-          group is written through its own route and its own rules. */}
-      <div className="flex min-w-0 flex-wrap items-center gap-2" role="group" aria-label="Lọc theo nhóm danh mục">
-        <Button
-          type="button"
-          size="sm"
-          variant={shownGroup === null ? "dark" : "secondary"}
-          aria-pressed={shownGroup === null}
-          onClick={() => setShownGroup(null)}
-        >
-          {ALL_GROUPS}
-        </Button>
-        {groupChoices.map((g) => (
-          <Button
-            key={g.key}
-            type="button"
-            size="sm"
-            variant={shownGroup === g.key ? "dark" : "secondary"}
-            aria-pressed={shownGroup === g.key}
-            onClick={() => setShownGroup(g.key)}
-          >
-            {g.label}
-          </Button>
+      {importButton}
+
+      {/* While loading the placeholder replaces the whole workspace, filter row included (prototype
+          `ConfigWorkspace.tsx:112` wraps `LookupTable` in `Panel loading`). */}
+      {!loading && (
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Lọc theo nhóm danh mục">
+        <FilterButton pressed={shownGroup === null} onClick={() => onShowGroup(null)}>
+          {`${ALL_GROUPS} (${total})`}
+        </FilterButton>
+        {/* One button per group THAT HAS ROWS, as the prototype derives them (`LookupTable.tsx:68-71`). */}
+        {CATALOGUE_GROUPS.filter((g) => present.has(g.khoa)).map((g) => (
+          <FilterButton key={g.khoa} pressed={shownGroup === g.khoa} onClick={() => onShowGroup(g.khoa)}>
+            {g.nhan}
+          </FilterButton>
         ))}
+        {present.has(TASK_STATUS_GROUP) && (
+          <FilterButton pressed={shownGroup === TASK_STATUS_GROUP} onClick={() => onShowGroup(TASK_STATUS_GROUP)}>
+            {TIEU_DE_NHOM_TRANG_THAI}
+          </FilterButton>
+        )}
+        {canWrite && writable.length > 0 && (
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            className={cn(SMALL_BUTTON_CLASS, "ml-auto")}
+            icon={<Plus aria-hidden="true" focusable="false" className="size-4" />}
+            aria-expanded={open !== null && open.kind === "add"}
+            onClick={actions.toggleAdd}
+          >
+            {NUT_THEM}
+          </Button>
+        )}
       </div>
-      <p className="ghi-chu m-0 text-[13px] text-ink-500">{GHI_CHU_BA_TANG}</p>
-
-      {/* MỘT dòng `role="status"` cho cả tab, không phải bảy. Bảy vùng thông báo cùng đọc
-          "Đang tải…" là bảy lần trình đọc màn hình ngắt lời người dùng về cùng một chuyện. */}
-      {bay === null && (
-        <>
-          <p role="status" className="an-thi-giac">
-            Đang tải danh mục của đơn vị…
-          </p>
-          <SkeletonRows rows={4} className="rounded-xl border border-line" />
-        </>
       )}
 
-      {/* Câu xác nhận sau khi ghi. `role="status"` chứ không `alert`: không có gì hỏng. */}
-      {cauDaXong !== "" && (
-        <p role="status" className="text-sm font-medium text-success-600">
-          {cauDaXong}
-        </p>
-      )}
+      {sessionError !== "" && <InlineError>{sessionError}</InlineError>}
 
-      {/* Không đọc được quyền (phiên hết hạn, mạng hỏng) thì nói đúng câu của máy chủ, và không
-          vẽ nút ghi nào. Đóng khi không chắc. */}
-      {quyetDinhGhi !== null && !quyetDinhGhi.hien && quyetDinhGhi.vi === "khong-doc-duoc" && (
-        <p className="thong-bao-loi" role="alert">
-          {quyetDinhGhi.thongBao}
-        </p>
-      )}
-      {quyetDinhGhi !== null && !quyetDinhGhi.hien && quyetDinhGhi.vi === "khong-du-quyen" && (
-        <Notice tone="neutral">{CAU_THIEU_QUYEN_GHI}</Notice>
-      )}
-
-      {coMucNao && <p className="ghi-chu text-[13px] text-ink-500">{GIAI_THICH_DA_TAT}</p>}
-
-      {nhom.filter((n) => shownGroup === null || shownGroup === n.khoa).map((n) => {
-        const groupWrite = n.ghi;
-        // Cổng của khung nhập là KHOÁ CỦA TUYẾN NHẬP, không mặc nhiên là khoá ghi của tab: hôm nay hai
-        // khoá trùng nhau (`admin.lookup`), nhưng một nhóm sau này có thể khai khoá khác.
-        const catalogueImport = catalogueImportFor(groupWrite === null ? null : groupWrite.khoa, phien);
-        return (
-          <NhomMuc
-            key={n.khoa}
-            nhom={n}
-            coQuyenGhi={coQuyenGhi}
-            thaoTac={thaoTac}
-            importAllowed={catalogueImport !== null}
-            onOpenImport={() => {
-              if (groupWrite === null) return;
-              dong();
-              datMaTrangThaiDangSua(null);
-              datCauDaXong("");
-              setImportingGroup(groupWrite.khoa);
-            }}
-            importPanel={
-              catalogueImport !== null && groupWrite !== null && importingGroup === groupWrite.khoa
-                ? catalogueImport.panel({
-                    asDialog: true,
-                    // Đọc lại cả bảy nhóm: mục vừa nhập chỉ có thật ở máy chủ. Khung giữ nguyên để
-                    // cán bộ đọc câu "Đã nhập N loại…" rồi tự đóng.
-                    onImported: () => datLanDoc((k) => k + 1),
-                    onClose: () => setImportingGroup(null),
-                  })
-                : null
-            }
-            form={
-              dangMo !== null && dangMo.ghi.khoa === n.ghi?.khoa ? (
-                <BieuMauGhi
-                  dangMo={dangMo}
-                  ban={ban}
-                  datBan={datBan}
-                  loiTaiCho={loiTaiCho}
-                  loiMayChu={loiMayChu}
-                  dangGui={dangGui}
-                  onGui={guiBieuMau}
-                  onHuy={dong}
-                />
-              ) : null
-            }
-          />
-        );
-      })}
-
-      {/* NHÓM THỨ TÁM, KHUÔN RIÊNG (#21): chỉ đổi nhãn và thứ tự, không thêm · tắt · xoá. Nút ghi
-          chỉ vẽ khi đã biết có quyền — `coQuyenGhi` là `false` khi phiên còn đang đọc. */}
-      {(shownGroup === null || shownGroup === TASK_STATUS_GROUP) && (
-        <NhomTrangThaiNhiemVu
-          coQuyenGhi={coQuyenGhi}
-          maDangSua={maTrangThaiDangSua}
-          moSua={moSuaTrangThai}
+      {!loading && canWrite && open !== null && open.kind === "add" && (
+        <AddRow
+          groups={writable}
+          draft={draft}
+          setDraft={setDraft}
+          localError={localError}
+          serverError={serverError}
+          busy={busy}
+          onSubmit={actions.submit}
+          onCancel={actions.cancel}
         />
       )}
-    </section>
-  );
-}
 
-/** The "all groups" button — the prototype's "Tất cả". */
-export const ALL_GROUPS = "Tất cả";
-
-/** Key of the eighth group's button — it is not one of the seven catalogue keys (`nhom-trang-thai-nhiem-vu.tsx`). */
-const TASK_STATUS_GROUP = "trangThaiNhiemVu";
-
-/**
- * One button per group, in the screen's order. The names are FIXED, not read: the buttons stand before
- * the first read lands and whether a group's read fails.
- */
-const groupChoices: readonly { key: string; label: string }[] = [
-  ...CATALOGUE_GROUPS.map((g) => ({ key: g.khoa as string, label: g.nhan })),
-  { key: TASK_STATUS_GROUP, label: TIEU_DE_NHOM_TRANG_THAI },
-];
-
-/* ---- trạng thái của các biểu mẫu ghi ------------------------------------------------------ */
-
-/**
- * Biểu mẫu nào đang mở, của nhóm nào, trên mục nào.
- *
- * MỘT BIỂU MẪU MỞ TẠI MỘT THỜI ĐIỂM, CHO CẢ TAB. Bảy nhóm mở được bảy biểu mẫu cùng lúc là bảy
- * bản nháp mà cán bộ không thấy hết trên một màn hình 320px, và bản nháp không nhìn thấy là bản
- * nháp bị gửi nhầm.
- */
-type DangMo =
-  | { kieu: "them"; ghi: MoTaDanhMucGhi; nhanNhom: string; khoaChongTrung: string }
-  | { kieu: "sua"; ghi: MoTaDanhMucGhi; nhanNhom: string; muc: MucDanhMucGhi }
-  | { kieu: "xoa"; ghi: MoTaDanhMucGhi; nhanNhom: string; muc: MucDanhMucGhi }
-  | null;
-
-/** Bản nháp đang gõ. Chuỗi hết, kể cả thứ tự — ô nhập của trình duyệt trả về chuỗi. */
-type BanNhap = { ma: string; nhan: string; thuTu: string; lyDo: string; macDinh: boolean };
-
-const BAN_TRONG: BanNhap = { ma: "", nhan: "", thuTu: "", lyDo: "", macDinh: false };
-
-function banTuMuc(m: MucDanhMucGhi): BanNhap {
-  return { ma: m.code, nhan: m.label, thuTu: String(m.order), lyDo: "", macDinh: m.is_default };
-}
-
-/**
- * Ô `Thứ tự` rỗng nghĩa là KHÔNG ĐỔI, không phải số 0.
- *
- * `undefined` bị `JSON.stringify` bỏ khỏi thân, nên máy chủ giữ nguyên thứ tự đang có. Trả 0 ở
- * đây thì một cán bộ chỉ định sửa nhãn sẽ vô tình đẩy mục lên đầu danh mục — và ở nhóm mức ưu
- * tiên, thứ tự ấy LÀ thang bậc của đơn vị.
- *
- * KHÔNG `parseInt`: `parseInt("3 chữ")` trả 3, tức là nuốt một lỗi gõ thành một con số. `Number`
- * trả `NaN`, và `NaN` được trả về `undefined` để máy chủ không nhận một thân JSON có `null`.
- */
-function soThuTu(oNhap: string): number | undefined {
-  const sach = oNhap.trim();
-  if (sach === "") return undefined;
-  const n = Number(sach);
-  return Number.isInteger(n) ? n : undefined;
-}
-
-/**
- * Khoá chống trùng cho một lần thêm mục.
- *
- * `crypto.randomUUID` có sẵn trong mọi trình duyệt chạy được ứng dụng này và không cần thư viện.
- * Nó chỉ tồn tại trong ngữ cảnh an toàn (HTTPS hoặc localhost) — đúng ngữ cảnh mà cookie phiên
- * `Secure` cũng đòi, nên không có môi trường nào ứng dụng đăng nhập được mà hàm này lại vắng.
- */
-function khoaChongTrungMoi(): string {
-  return crypto.randomUUID();
-}
-
-/** Ba thao tác ghi mà một dòng hoặc một tiêu đề nhóm có thể yêu cầu. */
-export type ThaoTacNhom = {
-  readonly them: (ghi: MoTaDanhMucGhi, nhanNhom: string) => void;
-  readonly sua: (ghi: MoTaDanhMucGhi, nhanNhom: string, m: MucDanhMucGhi) => void;
-  readonly xoa: (ghi: MoTaDanhMucGhi, nhanNhom: string, m: MucDanhMucGhi) => void;
-  readonly datTrangThai: (
-    ghi: MoTaDanhMucGhi,
-    nhanNhom: string,
-    m: MucDanhMucGhi,
-    dung: boolean,
-  ) => void;
-};
-
-/** Một nhóm danh mục: tiêu đề, rồi đúng một trong ba trạng thái. Không trạng thái nào là ô trống.
- *
- * XUẤT RA để `tab-danh-muc.test.tsx` kết xuất được nó bằng `react-dom/server`. Đây là thành phần
- * thuần: nhận một trạng thái đã tính sẵn và không gọi gì. Trước khi nó được xuất, phép đột biến
- * bôi trắng câu báo danh mục rỗng ở dòng dưới KHÔNG làm ca test nào đỏ — mọi ca đều canh quyết
- * định trong module thuần, không ca nào canh việc quyết định ấy có ra tới trang hay không.
- */
-export function NhomMuc({
-  nhom,
-  coQuyenGhi,
-  thaoTac,
-  form,
-  importAllowed = false,
-  onOpenImport,
-  importPanel = null,
-}: {
-  nhom: NhomDanhMuc;
-  coQuyenGhi: boolean;
-  thaoTac: ThaoTacNhom;
-  /** Biểu mẫu đang mở của CHÍNH nhóm này, hoặc `null`. Do tab dựng, xem `TabDanhMuc`. */
-  form: ReactNode;
-  /** Nhóm có tuyến nhập Excel VÀ tài khoản có khoá của tuyến ấy. Tab quyết, xem `TabDanhMuc`. */
-  importAllowed?: boolean;
-  onOpenImport?: () => void;
-  /** Khung nhập Excel đang mở của CHÍNH nhóm này, hoặc `null`. */
-  importPanel?: ReactNode;
-}) {
-  const maTieuDe = `nhom-danh-muc-${nhom.khoa}`;
-  // Rút ra một `const` để phép thu hẹp kiểu còn sống bên trong các hàm xử lý sự kiện phía dưới.
-  // Đọc thẳng `nhom.ghi` trong một closure thì TypeScript phải giả định nó đã đổi, và cách "sửa"
-  // gần nhất là một phép ép kiểu — tức là mã tự khẳng định điều trình biên dịch vừa từ chối.
-  const ghi = nhom.ghi;
-  const veDuocNutGhi = ghi !== null && coQuyenGhi;
-
-  return (
-    // One card per group (spec v2 §7): title + count on the left, the group's own buttons on the right.
-    <section
-      className="nhom-danh-muc m-0 min-w-0 overflow-hidden rounded-card border border-line bg-surface p-0 shadow-sm"
-      aria-labelledby={maTieuDe}
-    >
-      <CardHeader className="m-0 justify-between">
-        <div className="min-w-0 flex-1 basis-64">
-          <h3 id={maTieuDe} className="m-0 flex flex-wrap items-center gap-2 text-[15px] leading-snug font-semibold text-ink-900">
-            {nhom.nhan}
-            {nhom.trangThai.pha === "coMuc" && (
-              <span className="dem-muc text-xs font-medium text-ink-500">{nhanSoMuc(nhom.trangThai.muc.length)}</span>
-            )}
-          </h3>
-          {/* Nhóm chưa có tuyến ghi thì NÓI RA, một lần, ngay dưới tiêu đề của chính nó. Không vẽ
-              nút mờ để dành chỗ: một nút bấm vào không có gì xảy ra khiến cán bộ tin mình bấm sai. */}
-          {ghi === null && <p className="ghi-chu m-0 mt-1 text-[13px] text-ink-500">{GHI_CHU_NHOM_CHI_XEM}</p>}
-        </div>
-
-        {((veDuocNutGhi && ghi !== null) || importAllowed) && (
-          <p className="cum-nut m-0 flex flex-wrap items-center gap-2">
-            {/* Prototype variants: "Nhập từ Excel" outline, "+ Thêm mục" primary, both small. */}
-            {importAllowed && (
-              <Button type="button" variant="outline" size="sm" icon={<Upload aria-hidden="true" focusable="false" strokeWidth={1.8} />} onClick={onOpenImport}>
-                {IMPORT_BUTTON}
-              </Button>
-            )}
-            {veDuocNutGhi && ghi !== null && (
-              <Button
-                type="button"
-                variant="primary"
-                size="sm"
-                icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
-                onClick={() => thaoTac.them(ghi, nhom.nhan)}
-              >
-                {NUT_THEM}
-              </Button>
-            )}
-          </p>
-        )}
-      </CardHeader>
-      <div className="flex min-w-0 flex-col gap-3 p-4 empty:hidden [&>*]:my-0">
-
-      {/* LỖI: hiện đúng `message` của máy chủ, không diễn giải, không rẽ nhánh theo `code`, không
-          hiện `trace_id` (`lib/api/goi.ts`). Năm dịch vụ đứng sau bảy nhóm, nên một nhóm hỏng
-          trong khi sáu nhóm còn lại hiện bình thường là ca có thật. */}
-      {nhom.trangThai.pha === "khongDocDuoc" && (
-        <p className="thong-bao-loi" role="alert">
-          {nhom.trangThai.thongBao}
-        </p>
-      )}
-
-      {/* TRẠNG THÁI RỖNG, KHÔNG PHẢI TRẠNG THÁI LỖI — và hôm nay đây vẫn là đường THÔNG THƯỜNG của
-          hầu hết đơn vị. Câu chữ và lý do đầy đủ ở `nhan-danh-muc.ts`. */}
-      {nhom.trangThai.pha === "chuaCoMuc" && (
-        <p className="trang-thai-rong">{nhanNhomRong(nhom.nhan, loiRaCuaNhom(nhom, coQuyenGhi))}</p>
-      )}
-
-      {nhom.trangThai.pha === "coMuc" && (
+      {loading ? (
+        <ConfigLoading label="Đang tải danh mục của đơn vị…" />
+      ) : (
         <>
-          {nhom.thuTuLaThangBac && <p className="ghi-chu">{GIAI_THICH_THANG_BAC}</p>}
-          <BangMuc
-            nhan={nhom.nhan}
-            muc={nhom.trangThai.muc}
-            ghi={ghi}
-            veDuocNutGhi={veDuocNutGhi}
-            thaoTac={thaoTac}
-          />
+          {readErrors.map((e) => (
+            <InlineError key={e}>{e}</InlineError>
+          ))}
+          {/* The error of an action that opens no form ("Tắt", "Bật", "Đặt mặc định"). */}
+          {open === null && serverError !== "" && <InlineError>{serverError}</InlineError>}
+
+          {(rows.length > 0 || readErrors.length === 0) && (
+            <ConfigTable label="Danh mục của đơn vị" caption="Các mục danh mục của đơn vị, theo nhóm và theo thứ tự đơn vị đã sắp">
+              <thead>
+                <tr>
+                  <th scope="col">Nhóm danh mục</th>
+                  <th scope="col">Mã</th>
+                  <th scope="col">{O_NHAN}</th>
+                  <th scope="col">{O_THU_TU}</th>
+                  <th scope="col">Nguồn</th>
+                  <th scope="col">Trạng thái</th>
+                  {canWrite && (
+                    <th scope="col">
+                      <span className="an-thi-giac">Thao tác</span>
+                    </th>
+                  )}
+                </tr>
+              </thead>
+              {/* NO EMPTY ROW, NO EMPTY SENTENCE: the prototype draws none (`LookupTable.tsx:136-140`, owner
+                  08/10/2026 "Bỏ hết, đúng prototype") — an empty group is the header alone. */}
+              <tbody>
+                {rows.map((row) => (
+                  <CatalogueTableRow
+                    key={row.key}
+                    row={row}
+                    canWrite={canWrite}
+                    mode={open !== null && open.kind !== "add" && open.rowKey === row.key ? open.kind : "view"}
+                    draft={draft}
+                    setDraft={setDraft}
+                    localError={localError}
+                    serverError={serverError}
+                    busy={busy}
+                    actions={actions}
+                  />
+                ))}
+              </tbody>
+            </ConfigTable>
+          )}
         </>
       )}
-
-      {form}
-      {importPanel}
-      </div>
     </section>
   );
 }
 
-/** Ba lý do một nhóm rỗng không thêm được mục — ba câu khác nhau, xem `nhanNhomRong`. */
-function loiRaCuaNhom(nhom: NhomDanhMuc, coQuyenGhi: boolean): LoiRaCuaNhomRong {
-  if (nhom.ghi === null) return "khongCoTuyen";
-  return coQuyenGhi ? "themDuoc" : "thieuQuyen";
+function FilterButton({ pressed, onClick, children }: { pressed: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant={pressed ? "primary" : "outline"}
+      className={SMALL_BUTTON_CLASS}
+      aria-pressed={pressed}
+      onClick={onClick}
+    >
+      {children}
+    </Button>
+  );
 }
 
-/**
- * Bảng các mục của một nhóm.
- *
- * `muc` ĐƯỢC DỰNG THEO ĐÚNG THỨ TỰ NHẬN ĐƯỢC. Không `sort`, không `filter` — ở nhóm mức ưu tiên
- * thứ tự ấy LÀ thang bậc của đơn vị, và sắp lại nó không phải đổi cách trình bày mà là đổi mức
- * việc đơn vị coi là gấp nhất, với màn hình vẫn trông bình thường (`nhom-danh-muc.ts`).
- *
- * MỤC ĐÃ TẮT VẪN HIỆN, KHÔNG LỌC BỚT: một hồ sơ đã lập theo mã đã tắt vẫn phải tra ra được nhãn
- * của nó. Máy chủ cũng trả về chúng đúng vì lý do này ("Returned rather than filtered
- * server-side, so the list screen can show it while a picker filters it out").
- *
- * HAI CỘT CUỐI CHỈ MỌC KHI NHÓM CÓ ĐƯỜNG GHI. Một nhóm không có tuyến ghi thì cột hành động
- * không có hành động nào để chứa, và cột `Nguồn` chỉ có nghĩa cạnh quy tắc ba tầng của đường ghi.
- */
-function BangMuc({
-  nhan,
-  muc,
-  ghi,
-  veDuocNutGhi,
-  thaoTac,
+/** A sentence the server wrote (or the one check of this screen), in place, in the spec's error type. */
+function InlineError({ children }: { children: ReactNode }) {
+  return (
+    <p role="alert" className="text-danger text-[12px] font-medium whitespace-normal">
+      {children}
+    </p>
+  );
+}
+
+/** The two error regions of a form, never merged: a local check and a server refusal read differently. */
+function FormErrors({ localError, serverError }: { localError: string; serverError: string }) {
+  return (
+    <>
+      {localError !== "" && <InlineError>{localError}</InlineError>}
+      {serverError !== "" && <InlineError>{serverError}</InlineError>}
+    </>
+  );
+}
+
+/** The spec's grey add row: group · label · colour ("?") · "Thêm" / "Huỷ". Enter in the label submits. */
+export function AddRow({
+  groups,
+  draft,
+  setDraft,
+  localError,
+  serverError,
+  busy,
+  onSubmit,
+  onCancel,
 }: {
-  nhan: string;
-  muc: readonly MucDanhMuc[];
-  ghi: MoTaDanhMucGhi | null;
-  veDuocNutGhi: boolean;
-  thaoTac: ThaoTacNhom;
+  /** The groups that have a write route — the only ones an entry can be added to. */
+  groups: readonly NhomDanhMuc[];
+  draft: CatalogueDraft;
+  setDraft: (d: CatalogueDraft) => void;
+  localError: string;
+  serverError: string;
+  busy: boolean;
+  onSubmit: () => void;
+  onCancel: () => void;
 }) {
   return (
-    // `role="region"` + `tabIndex` để vùng cuộn ngang tới được bằng bàn phím — ở 320px bảng cuộn
-    // ngang chứ không đổi thành thẻ, vì đổi `display` của phần tử bảng làm mất ngữ nghĩa bảng với
-    // trình đọc màn hình (cùng lý lẽ với `bang-can-bo`).
-    <TableScroll sticky aria-label={`Danh mục ${nhan}`}>
-      <table className={`bang-danh-muc ${DATA_TABLE_CLASS}`}>
-        <caption className="an-thi-giac">
-          Các mục của danh mục {nhan}, theo đúng thứ tự đơn vị đã sắp
-        </caption>
-        <thead>
-          <tr>
-            <th scope="col">Mã</th>
-            <th scope="col">Nhãn hiển thị</th>
-            <th scope="col">Thứ tự</th>
-            {ghi !== null && <th scope="col">Nguồn</th>}
-            <th scope="col">Trạng thái</th>
-            {ghi !== null && (
-              <th scope="col">
-                <span className="an-thi-giac">Thao tác</span>
-              </th>
-            )}
-          </tr>
-        </thead>
-        <tbody>
-          {muc.map((m, i) => (
-            <tr key={m.id}>
-              {/* `code` font mono theo đặc tả §5: nó là một slug được gõ lại và đọc qua điện
-                  thoại, nên `l`/`1` và `O`/`0` phải phân biệt được. */}
-              <td className="ma-muc">{m.code}</td>
-              {/* "Mặc định" is a badge beside the label, as in the prototype — not a column of "Không". */}
-              <td>
-                <span className="inline-flex flex-wrap items-center gap-2">
-                  {m.label}
-                  {m.is_default && <Badge tone="info">{nhanMacDinh(true)}</Badge>}
-                </span>
-              </td>
-              {/* THỨ TỰ LÀ TRƯỜNG CỦA HỢP ĐỒNG KHI CÓ, VÀ LÀ VỊ TRÍ TRONG MẢNG KHI KHÔNG. Cả bảy
-                  danh mục đều phát ra `order`, và cột này PHẢI hiện đúng con số ấy: biểu mẫu sửa
-                  đổi chính nó, nên một cột hiện vị trí trong mảng sẽ nói "3" sau khi cán bộ vừa
-                  đặt thứ tự 7. Vị trí trong `items` chỉ còn là đường lui cho một dòng méo hình
-                  dạng (hợp đồng trôi) — `laMucGhi` trả `false` cho nó. */}
-              <td>{laMucGhi(m) ? m.order : i + 1}</td>
-              {ghi !== null && <td>{laMucGhi(m) ? nhanNguon(m.source) : ""}</td>}
-              <td>
-                {/* Tone by the CODE (`active`); icon + word, never colour alone. */}
-                <Badge tone={m.active ? "success" : "neutral"}>{nhanTrangThaiMuc(m.active)}</Badge>
-              </td>
-              {ghi !== null && (
-                <td className="o-thao-tac">
-                  <NutCuaDong
-                    ghi={ghi}
-                    nhanNhom={nhan}
-                    m={m}
-                    veDuocNutGhi={veDuocNutGhi}
-                    thaoTac={thaoTac}
-                  />
-                </td>
-              )}
-            </tr>
+    <ConfigFormRow
+      columns="sm:grid-cols-[16rem_1fr_6rem_auto]"
+      aria-label="Thêm mục danh mục"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSubmit();
+      }}
+    >
+      <ConfigField label={GROUP_FIELD} htmlFor="catalogue-add-group">
+        <select
+          id="catalogue-add-group"
+          name="group"
+          className={formSelectCls}
+          value={draft.group}
+          onChange={(e) => setDraft({ ...draft, group: e.target.value })}
+        >
+          {groups.map((g) => (
+            <option key={g.khoa} value={g.khoa}>
+              {g.nhan}
+            </option>
           ))}
-        </tbody>
-      </table>
-    </TableScroll>
+        </select>
+      </ConfigField>
+      <ConfigField label={O_NHAN} htmlFor="catalogue-add-label">
+        <input
+          id="catalogue-add-label"
+          name="label"
+          className={formInputCls}
+          placeholder={LABEL_PLACEHOLDER}
+          value={draft.label}
+          onChange={(e) => setDraft({ ...draft, label: e.target.value })}
+          aria-invalid={localError !== ""}
+        />
+      </ConfigField>
+      <ColorField />
+      <div className="flex gap-2">
+        <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
+          <BusyLabel busy={busy} label={ADD_SUBMIT} busyText={BUSY_SAVING} />
+        </Button>
+        <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
+          {NUT_HUY}
+        </Button>
+      </div>
+      {(localError !== "" || serverError !== "") && (
+        <div className="col-span-full">
+          <FormErrors localError={localError} serverError={serverError} />
+        </div>
+      )}
+    </ConfigFormRow>
   );
 }
 
 /**
- * Những nút của MỘT dòng — và đây là chỗ ba tầng hiện ra thành giao diện.
- *
- * ─────────────────────────────────────────────────────────────────────────────────────────
- * PHÉP QUYẾT ĐỊNH KHÔNG NẰM Ở ĐÂY, NÓ Ở `tang-danh-muc.ts`. Hàm này chỉ đọc kết quả. Viết
- * `m.tier !== 3 && <button>Tắt</button>` ngay tại đây thì con số 3 nằm giữa hai thẻ JSX, không
- * bài test nào chạm tới nó, và bản sao thứ hai của quy tắc ba tầng bắt đầu từ đúng dòng ấy.
- * ─────────────────────────────────────────────────────────────────────────────────────────
- *
- * DÒNG KHÔNG CÓ THAO TÁC NÀO THÌ NÓI RA, không để ô trống. Một ô trống đọc bằng trình đọc màn
- * hình thành im lặng, và người xem bằng mắt thì không phân biệt được "mục này không xoá được"
- * với "màn hình chưa dựng xong".
+ * The spec's "Màu" field, drawn DISABLED with its "?" (ADR 0068 §14, ADR 0079 #5): no catalogue stores
+ * a colour yet. The "?" sits beside the label, never inside it — inside, its sentence would become part
+ * of the control's accessible name. The disabled input has no `name`: it can never submit anything.
  */
-function NutCuaDong({
-  ghi,
-  nhanNhom,
-  m,
-  veDuocNutGhi,
-  thaoTac,
+function ColorField() {
+  return (
+    <div className="block min-w-0" data-pending="">
+      <div className="flex items-center gap-1.5">
+        <label htmlFor="catalogue-add-color" className="text-foreground m-0 text-[11.5px] leading-none font-medium">
+          {COLOR_FIELD}
+        </label>
+        <PendingMarker info={COLOR_PENDING} />
+      </div>
+      <input
+        id="catalogue-add-color"
+        type="color"
+        disabled
+        defaultValue="#2fb1f9"
+        className="border-line mt-1 h-9 w-full cursor-not-allowed rounded-md border border-solid bg-white p-1 opacity-50"
+      />
+    </div>
+  );
+}
+
+/** Enter saves, Escape cancels — the in-place edit and the reason box (prototype `LookupTable.tsx:224`). */
+function submitOrCancel(onSubmit: () => void, onCancel: () => void) {
+  return (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      onSubmit();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      onCancel();
+    }
+  };
+}
+
+const ROW_INPUT_CLASS = cn(controlClass, "h-8 text-[12.5px]");
+
+function SourceText({ source }: { source: string | null }) {
+  if (source === "he-thong") return <span className="text-ink-muted text-[12px]">{SOURCE_SYSTEM}</span>;
+  if (source === "don-vi") return <span className="text-[12px]">{SOURCE_COMMUNE}</span>;
+  // An unknown value means the contract drifted from the CHECK constraint: shown as is, never guessed.
+  return <span className="text-[12px]">{source === null || source.trim() === "" ? "—" : source}</span>;
+}
+
+/**
+ * One line of the table. `mode` is the open form ON THIS ROW: "edit" turns the label (and order, and
+ * "Mặc định") cells into inputs with "Lưu" / "Huỷ"; "delete" turns the actions into the reason step.
+ */
+export function CatalogueTableRow({
+  row,
+  canWrite,
+  mode,
+  draft,
+  setDraft,
+  localError,
+  serverError,
+  busy,
+  actions,
 }: {
-  ghi: MoTaDanhMucGhi;
-  nhanNhom: string;
-  m: MucDanhMuc;
-  veDuocNutGhi: boolean;
-  thaoTac: ThaoTacNhom;
+  row: CatalogueRow;
+  canWrite: boolean;
+  mode: "view" | "edit" | "delete";
+  draft: CatalogueDraft;
+  setDraft: (d: CatalogueDraft) => void;
+  localError: string;
+  serverError: string;
+  busy: boolean;
+  actions: CatalogueActions;
 }) {
-  if (!veDuocNutGhi) return null;
-  if (!laMucGhi(m)) return <span className="ghi-chu">{giaiThichKhongThaoTac(null)}</span>;
-
-  const cho = thaoTacCuaMuc(m);
-  const batLaiDuoc = choBatLai(m);
-
-  // Tầng 3 đang dùng: không `Tắt`, không `Xoá`, chỉ còn `Sửa`. Tầng 2: không `Xoá`.
-  if (!cho.doiNhan && !cho.tat && !cho.xoa && !batLaiDuoc) {
-    return <span className="ghi-chu">{giaiThichKhongThaoTac(m.tier)}</span>;
-  }
+  const label = row.item.label;
+  const writeShaped = row.kind === "lookup" && laMucGhi(row.item);
+  // Order is the contract's field — never the array position: the edit changes exactly this number.
+  const order = row.kind === "taskStatus" ? row.item.order : laMucGhi(row.item) ? row.item.order : "—";
+  // Task statuses are the seven fixed codes the software ships (#21), so their source is the system.
+  const source = row.kind === "taskStatus" ? "he-thong" : laMucGhi(row.item) ? row.item.source : null;
+  const active = row.kind === "taskStatus" ? true : row.item.active;
+  const isDefault = row.kind === "lookup" && row.item.is_default;
+  const keys = submitOrCancel(actions.submit, actions.cancel);
+  const editing = canWrite && mode === "edit";
+  const deleting = canWrite && mode === "delete";
 
   return (
-    <span className="cum-nut flex flex-wrap items-center gap-1.5">
-      {/* The prototype's row: pencil icon, then "Tắt" / "Bật lại" in words, then a red bin icon. An icon
-          button's words are its accessible name and its hover title (`IconButton`). */}
-      {cho.doiNhan && (
-        <IconButton type="button" variant="secondary" label={nhanNutCuaDong(NUT_SUA, m.label)} onClick={() => thaoTac.sua(ghi, nhanNhom, m)}>
-          <Pencil aria-hidden="true" focusable="false" strokeWidth={1.8} />
-        </IconButton>
+    <tr>
+      <td className="text-ink-muted">{row.kind === "lookup" ? row.group.nhan : TIEU_DE_NHOM_TRANG_THAI}</td>
+      <td>
+        <code className="text-[11.5px]">{row.item.code}</code>
+      </td>
+      <td className="text-navy font-medium">
+        {editing ? (
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-3">
+              <input
+                className={cn(ROW_INPUT_CLASS, "w-56")}
+                aria-label={nhanNutCuaDong(O_NHAN, label)}
+                value={draft.label}
+                onChange={(e) => setDraft({ ...draft, label: e.target.value })}
+                onKeyDown={keys}
+                aria-invalid={localError !== ""}
+              />
+              {/* Decision 3: "Mặc định" stays editable. Every catalogue's PATCH carries `is_default`. */}
+              {writeShaped && (
+                <label className="text-ink inline-flex items-center gap-1.5 text-[12px] font-normal">
+                  <input
+                    type="checkbox"
+                    checked={draft.isDefault}
+                    onChange={(e) => setDraft({ ...draft, isDefault: e.target.checked })}
+                  />
+                  {nhanMacDinh(true)}
+                </label>
+              )}
+            </div>
+            <FormErrors localError={localError} serverError={serverError} />
+          </div>
+        ) : (
+          <span className="inline-flex items-center gap-2">
+            {label}
+            {/* Not a status: the prototype's text-only pill (`LookupTable.tsx:243`), no tone icon. */}
+            {isDefault && (
+              <span className="bg-brand/12 text-brand border-brand/25 inline-flex h-5 w-fit shrink-0 items-center rounded-4xl border border-solid px-2 py-0.5 text-xs leading-none font-medium whitespace-nowrap">
+                {nhanMacDinh(true)}
+              </span>
+            )}
+          </span>
+        )}
+      </td>
+      <td>
+        {editing ? (
+          // `inputMode="numeric"`, not `type="number"`: a number box changes value on a mouse wheel.
+          <input
+            className={cn(ROW_INPUT_CLASS, "w-16")}
+            aria-label={nhanNutCuaDong(O_THU_TU, label)}
+            inputMode="numeric"
+            value={draft.order}
+            onChange={(e) => setDraft({ ...draft, order: e.target.value })}
+            onKeyDown={keys}
+          />
+        ) : (
+          order
+        )}
+      </td>
+      <td>
+        <SourceText source={source} />
+      </td>
+      <td>
+        <StatusBadge active={active} />
+      </td>
+      {canWrite && (
+        <td>
+          {editing ? (
+            <RowActions>
+              <Button type="button" variant="primary" size="sm" disabled={busy} aria-busy={busy} onClick={actions.submit}>
+                <BusyLabel busy={busy} label={NUT_LUU} busyText={BUSY_SAVING} />
+              </Button>
+              <Button type="button" variant="outline" size="sm" disabled={busy} onClick={actions.cancel}>
+                {NUT_HUY}
+              </Button>
+            </RowActions>
+          ) : deleting ? (
+            <div className="flex flex-col items-end gap-1">
+              <RowActions>
+                {/* Rule 7: the server keeps the row and requires why. The warning that the code stays
+                    reserved rides on the box (hover + description) rather than as a notice. */}
+                <input
+                  className={cn(ROW_INPUT_CLASS, "w-48")}
+                  aria-label={`${O_LY_DO_XOA} — mục ${label}`}
+                  aria-describedby={`${row.key}-delete-note`}
+                  title={CANH_BAO_XOA}
+                  placeholder={O_LY_DO_XOA}
+                  value={draft.reason}
+                  onChange={(e) => setDraft({ ...draft, reason: e.target.value })}
+                  onKeyDown={keys}
+                  aria-invalid={localError !== ""}
+                />
+                <Button type="button" variant="danger" size="sm" disabled={busy} aria-busy={busy} onClick={actions.submit}>
+                  <BusyLabel busy={busy} label={NUT_XOA} busyText={BUSY_DELETING} />
+                </Button>
+                <Button type="button" variant="outline" size="sm" disabled={busy} onClick={actions.cancel}>
+                  {NUT_HUY}
+                </Button>
+              </RowActions>
+              <span id={`${row.key}-delete-note`} className="an-thi-giac">
+                {CANH_BAO_XOA}
+              </span>
+              <div className="max-w-80 text-right">
+                <FormErrors localError={localError} serverError={serverError} />
+              </div>
+            </div>
+          ) : (
+            <RowButtons row={row} busy={busy} actions={actions} />
+          )}
+        </td>
       )}
+    </tr>
+  );
+}
 
-      {/* `Tắt` THEO TẦNG, `Bật lại` THÌ KHÔNG. Trigger chỉ từ chối chiều bật → tắt ở tầng 3;
-          chiều ngược lại luôn được phép, và phải được phép, nếu không một dòng tầng 3 lỡ tắt
-          sẽ không còn đường quay lại (`tang-danh-muc.ts`, `choBatLai`). */}
-      {cho.tat && m.active && (
+/**
+ * The buttons of one row in view mode. WHICH buttons is decided in `tang-danh-muc.ts`, not here: a tier
+ * number between two JSX tags is a second copy of the three-tier rule that no test reaches.
+ */
+function RowButtons({ row, busy, actions }: { row: CatalogueRow; busy: boolean; actions: CatalogueActions }) {
+  const label = row.item.label;
+  const pencil = (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      title={EDIT_LABEL}
+      aria-label={nhanNutCuaDong(EDIT_LABEL, label)}
+      disabled={busy}
+      onClick={() => actions.edit(row)}
+    >
+      <Pencil aria-hidden="true" focusable="false" className="size-3.5" />
+    </Button>
+  );
+
+  // #21: the eighth group renames and reorders, nothing else — the pencil only.
+  if (row.kind === "taskStatus") return <RowActions>{pencil}</RowActions>;
+  // No write route for the group, or a row that does not state its tier: no button (fail closed).
+  if (row.group.ghi === null || !laMucGhi(row.item)) return null;
+
+  const item = row.item;
+  const allowed = thaoTacCuaMuc(item);
+  const canDefault = row.group.khoa === GROUP_WITH_DEFAULT_BUTTON && allowed.doiNhan && item.active && !item.is_default;
+
+  return (
+    <RowActions>
+      {allowed.doiNhan && pencil}
+      {canDefault && (
         <Button
           type="button"
-          variant="secondary"
+          variant="outline"
           size="sm"
-          aria-label={nhanNutCuaDong(NUT_TAT, m.label)}
-          onClick={() => thaoTac.datTrangThai(ghi, nhanNhom, m, false)}
+          title={SET_DEFAULT_TITLE}
+          disabled={busy}
+          onClick={() => actions.makeDefault(row)}
+        >
+          {SET_DEFAULT}
+        </Button>
+      )}
+      {/* "Tắt" follows the tier; "Bật" does not — the trigger refuses only on → off at tier 3, so a tier-3
+          row switched off must keep its way back (`choBatLai`). */}
+      {allowed.tat && item.active && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          aria-label={nhanNutCuaDong(NUT_TAT, label)}
+          disabled={busy}
+          onClick={() => actions.setActive(row, false)}
         >
           {NUT_TAT}
         </Button>
       )}
-      {batLaiDuoc && (
+      {choBatLai(item) && (
         <Button
           type="button"
-          variant="secondary"
+          variant="outline"
           size="sm"
-          aria-label={nhanNutCuaDong(NUT_BAT_LAI, m.label)}
-          onClick={() => thaoTac.datTrangThai(ghi, nhanNhom, m, true)}
+          aria-label={nhanNutCuaDong(ENABLE, label)}
+          disabled={busy}
+          onClick={() => actions.setActive(row, true)}
         >
-          {NUT_BAT_LAI}
+          {ENABLE}
         </Button>
       )}
-
-      {cho.xoa && (
-        <IconButton
+      {allowed.xoa && (
+        <Button
           type="button"
-          variant="secondary"
-          className="text-danger-600 hover:not-disabled:border-danger-600 hover:not-disabled:text-danger-600"
-          label={nhanNutCuaDong(NUT_XOA, m.label)}
-          onClick={() => thaoTac.xoa(ghi, nhanNhom, m)}
+          variant="outline"
+          size="sm"
+          className="text-danger"
+          title={DELETE_ENTRY}
+          aria-label={nhanNutCuaDong(DELETE_ENTRY, label)}
+          disabled={busy}
+          onClick={() => actions.remove(row)}
         >
-          <Trash2 aria-hidden="true" focusable="false" strokeWidth={1.8} />
-        </IconButton>
-      )}
-
-      {/* Tầng 2 và 3 vẫn phải nói vì sao thiếu nút, kể cả khi còn nút `Sửa` đứng bên cạnh. */}
-      {!cho.xoa && <span className="ghi-chu text-xs whitespace-normal text-ink-500">{giaiThichKhongThaoTac(m.tier)}</span>}
-    </span>
-  );
-}
-
-/* ---- ba biểu mẫu ghi ---------------------------------------------------------------------- */
-
-/**
- * Biểu mẫu đang mở — thêm, sửa, hoặc xoá.
- *
- * THUẦN TRÌNH BÀY: mọi giá trị đi vào qua `ban`, mọi thay đổi đi ra qua `datBan`, và phép kiểm
- * nằm ở chỗ gọi. Tách như vậy để hai nhánh KHÔNG ai nhìn thấy trong lúc phát triển — "lý do xoá
- * còn trống" và "máy chủ vừa từ chối" — kết xuất được bằng `react-dom/server` mà không cần một
- * trình duyệt giả lập (cùng lý lẽ với `KhungQuyen` ở `features/quyen/cong-quyen.tsx`).
- */
-export function BieuMauGhi({
-  dangMo,
-  ban,
-  datBan,
-  loiTaiCho,
-  loiMayChu,
-  dangGui,
-  onGui,
-  onHuy,
-}: {
-  dangMo: NonNullable<DangMo>;
-  ban: BanNhap;
-  datBan: (b: BanNhap) => void;
-  loiTaiCho: string;
-  loiMayChu: string;
-  dangGui: boolean;
-  onGui: () => void;
-  onHuy: () => void;
-}) {
-  const tieuDe =
-    dangMo.kieu === "them"
-      ? tieuDeThem(dangMo.nhanNhom)
-      : dangMo.kieu === "sua"
-        ? tieuDeSua(dangMo.muc.label)
-        : tieuDeXoa(dangMo.muc.label);
-
-  return (
-    <form
-      className="form-danh-muc grid min-w-0 gap-4 sm:grid-cols-2 [&>*]:m-0 [&>.cum-nut]:col-span-full [&>.thong-bao-loi]:col-span-full [&>h4]:col-span-full [&>.canh-bao-pham-vi]:col-span-full"
-      aria-label={tieuDe}
-      onSubmit={(e) => {
-        e.preventDefault();
-        onGui();
-      }}
-    >
-      <h4 className="flex items-center gap-2 text-[15px] font-semibold text-ink-900">
-        {dangMo.kieu === "xoa" && (
-          <Trash2 aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-danger-600" />
-        )}
-        {tieuDe}
-      </h4>
-
-      {dangMo.kieu === "them" && (
-        <div className="o-nhap">
-          <label htmlFor="o-ma-muc">{O_MA}</label>
-          <input
-            id="o-ma-muc"
-            name="ma"
-            value={ban.ma}
-            onChange={(e) => datBan({ ...ban, ma: e.target.value })}
-            aria-describedby="giai-thich-ma"
-          />
-          <p className="ghi-chu" id="giai-thich-ma">
-            {GIAI_THICH_O_MA}
-          </p>
-        </div>
-      )}
-
-      {dangMo.kieu !== "xoa" && (
-        <>
-          <div className="o-nhap">
-            <label htmlFor="o-nhan-muc">{O_NHAN}</label>
-            <input
-              id="o-nhan-muc"
-              name="nhan"
-              value={ban.nhan}
-              onChange={(e) => datBan({ ...ban, nhan: e.target.value })}
-              aria-describedby="giai-thich-nhan"
-            />
-            <p className="ghi-chu" id="giai-thich-nhan">
-              {GIAI_THICH_O_NHAN}
-            </p>
-          </div>
-
-          <div className="o-nhap">
-            <label htmlFor="o-thu-tu-muc">{O_THU_TU}</label>
-            {/* `inputMode="numeric"` chứ không `type="number"`: ô số của trình duyệt có nút tăng
-                giảm bé xíu và cuộn chuột đổi giá trị mà người dùng không biết. */}
-            <input
-              id="o-thu-tu-muc"
-              name="thuTu"
-              inputMode="numeric"
-              value={ban.thuTu}
-              onChange={(e) => datBan({ ...ban, thuTu: e.target.value })}
-            />
-          </div>
-
-          <div className="o-nhap o-chon self-end">
-            <input
-              id="o-mac-dinh-muc"
-              name="macDinh"
-              type="checkbox"
-              checked={ban.macDinh}
-              onChange={(e) => datBan({ ...ban, macDinh: e.target.checked })}
-            />
-            <label htmlFor="o-mac-dinh-muc">{O_MAC_DINH}</label>
-          </div>
-        </>
-      )}
-
-      {dangMo.kieu === "xoa" && (
-        <>
-          <Notice tone="neutral" icon={TriangleAlert} className="canh-bao-pham-vi col-span-full m-0 border-l border-line">
-            {CANH_BAO_XOA}
-          </Notice>
-          <div className="o-nhap">
-            <label htmlFor="o-ly-do-xoa">{O_LY_DO_XOA}</label>
-            {/* `required` là lớp nhắc của trình duyệt, KHÔNG phải phép kiểm: nó không bắt được
-                một ô toàn dấu cách, và tắt được. Phép kiểm thật là `kiemLyDoXoa`, chạy trước khi
-                gửi và có bài test riêng. */}
-            <input
-              id="o-ly-do-xoa"
-              name="lyDo"
-              required
-              value={ban.lyDo}
-              onChange={(e) => datBan({ ...ban, lyDo: e.target.value })}
-              aria-invalid={loiTaiCho !== ""}
-              aria-describedby={loiTaiCho !== "" ? "loi-ly-do-xoa" : undefined}
-            />
-          </div>
-        </>
-      )}
-
-      {/* HAI VÙNG LỖI RIÊNG, KHÔNG GỘP. Lỗi tại chỗ nói "bạn còn thiếu một ô"; lỗi máy chủ nói
-          "yêu cầu vừa rồi bị từ chối" — trong đó có cả câu 409 giải thích quy tắc ba tầng. Gộp
-          chúng vào một dòng thì câu sau đè mất câu trước ở đúng lúc cần đọc cả hai. */}
-      {loiTaiCho !== "" && (
-        <p className="thong-bao-loi" id="loi-ly-do-xoa" role="alert">
-          {loiTaiCho}
-        </p>
-      )}
-      {loiMayChu !== "" && (
-        <p className="thong-bao-loi" role="alert">
-          {loiMayChu}
-        </p>
-      )}
-
-      <div className="cum-nut flex flex-wrap justify-end gap-2">
-        <Button type="submit" variant={dangMo.kieu === "xoa" ? "danger" : "primary"} disabled={dangGui} aria-busy={dangGui}>
-          <BusyLabel
-            busy={dangGui}
-            label={dangMo.kieu === "xoa" ? NUT_XAC_NHAN_XOA : NUT_LUU}
-            busyText={dangMo.kieu === "xoa" ? BUSY_DELETING : BUSY_SAVING}
-          />
+          <Trash2 aria-hidden="true" focusable="false" className="size-3.5" />
         </Button>
-        <Button type="button" variant="secondary" onClick={onHuy} disabled={dangGui}>
-          {NUT_HUY}
-        </Button>
-      </div>
-    </form>
+      )}
+    </RowActions>
   );
 }

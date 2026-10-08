@@ -57,7 +57,11 @@ describe("phần chưa dựng của màn Cấu hình — mục còn đúng", () 
     expect(Object.keys(CATALOGUE_IMPORTS).sort()).toEqual(
       [...BAY_DANH_MUC_GHI.map((m) => m.khoa)].sort(),
     );
-    expect(PHAN_CHUA_DUNG.some((p) => /Excel|Nhập từ/i.test(`${p.ten} ${p.viSao}`))).toBe(false);
+    // The ONE Excel entry allowed is the tab-wide import of Danh mục ("Tất cả"): each group imports on
+    // its own route, a single file for every group has no route (ADR 0079; owner 08/10/2026).
+    expect(
+      PHAN_CHUA_DUNG.filter((p) => /Excel|Nhập từ/i.test(`${p.ten} ${p.viSao}`)).map((p) => p.ten),
+    ).toEqual(["Nhập Excel chung cho mọi nhóm danh mục"]);
   });
 
   it("Tự động hoá: chỉ còn Gửi báo cáo định kỳ (chờ xuất báo cáo); Tính lại số liệu Tổng quan đã bỏ, không có mục", () => {

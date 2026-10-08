@@ -1,397 +1,418 @@
+import type { ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { BAY_DANH_MUC_GHI, type MoTaDanhMucGhi, type MucDanhMucGhi } from "@/lib/api/danh-muc";
-import type { BayDanhMuc, MucDanhMuc } from "@/lib/api/danh-muc-nghiep-vu";
+import { pendingMarkerLabel } from "@/components/ui/pending-feature";
+import type { MucDanhMucGhi } from "@/lib/api/danh-muc";
+import type { BayDanhMuc } from "@/lib/api/danh-muc-nghiep-vu";
 
 import {
+  GHI_CHU_BA_TANG,
   GHI_CHU_NHOM_CHI_XEM,
-  NUT_BAT_LAI,
-  NUT_SUA,
-  NUT_TAT,
-  NUT_THEM,
-  NUT_XOA,
-  O_LY_DO_XOA,
+  GIAI_THICH_DA_TAT,
+  GIAI_THICH_THANG_BAC,
   giaiThichKhongThaoTac,
   nhanNhomRong,
-  nhanSoMuc,
 } from "@/features/cau-hinh/nhan-danh-muc";
-import { nhomDanhMuc, type KhoaNhom, type NhomDanhMuc } from "@/features/cau-hinh/nhom-danh-muc";
-import { BieuMauGhi, NhomMuc, type ThaoTacNhom } from "@/features/cau-hinh/tab-danh-muc";
+import { nhomDanhMuc, type KhoaNhom } from "@/features/cau-hinh/nhom-danh-muc";
+import {
+  ADDED,
+  CatalogueView,
+  catalogueImportButton,
+  DELETE_ENTRY,
+  EDIT_LABEL,
+  EMPTY_DRAFT,
+  SET_DEFAULT,
+  SET_DEFAULT_TITLE,
+  type CatalogueActions,
+} from "@/features/cau-hinh/tab-danh-muc";
 import { TANG_DON_VI, TANG_HE_THONG, TANG_RE_NHANH } from "@/features/cau-hinh/tang-danh-muc";
 
 /**
- * VÌ SAO TỆP NÀY TỒN TẠI, và nó không phải chuyện phủ thêm cho đủ.
+ * The Danh mục tab as it reaches the page (spec `05-danh-muc.md`, ADR 0079): one table across groups,
+ * the group filter, the grey add row, in-place edit, the compact delete-with-reason step.
  *
- * Mọi ca test khác của màn Danh mục canh một QUYẾT ĐỊNH trong module thuần: nhóm nào rỗng, câu
- * nào hiện ra, tầng nào cho phép thao tác gì. Không ca nào canh việc quyết định ấy CÓ RA TỚI
- * TRANG hay không.
- *
- * Đã đo, không phải lo xa: bôi trắng `{nhanNhomRong(...)}` trong `tab-danh-muc.tsx` — câu quan
- * trọng nhất trên màn hình — từng làm cả bộ test vẫn xanh và `tsc` vẫn sạch. Nay điều tương tự
- * đúng với NÚT: `thaoTacTheoTang` có thể trả về đúng, mà JSX vẫn vẽ ra một nút `Xoá` ở dòng của
- * hệ thống. Ba ca "tầng ... vẽ những nút nào" dưới đây canh đúng chỗ ấy.
- *
- * KHÔNG THÊM PHỤ THUỘC NÀO. `react-dom` đã nằm trong `dependencies`; `renderToStaticMarkup` chạy
- * trong Node thuần và trả về một chuỗi. Những thứ THẬT SỰ cần trình duyệt (sự kiện, tiêu điểm,
- * bố cục) vẫn nằm ngoài phạm vi — phép kiểm của chúng là `kiemLyDoXoa` và `thaoTacTheoTang`.
+ * WHY RENDER AND NOT ONLY TEST THE PURE MODULES: `thaoTacTheoTang` can answer right while the JSX still
+ * draws a bin on a system row. The tier cases below guard exactly that place. `renderToStaticMarkup`
+ * runs in plain Node; events and focus stay out of scope.
  */
 
-const KHONG_LAM_GI: ThaoTacNhom = {
-  them: () => {},
-  sua: () => {},
-  xoa: () => {},
-  datTrangThai: () => {},
+const NO_ACTIONS: CatalogueActions = {
+  toggleAdd: () => {},
+  edit: () => {},
+  remove: () => {},
+  setActive: () => {},
+  makeDefault: () => {},
+  submit: () => {},
+  cancel: () => {},
 };
 
-function duongGhiLoaiVanBan(): MoTaDanhMucGhi {
-  const mo = BAY_DANH_MUC_GHI.find((m) => m.khoa === "loaiVanBan");
-  if (mo === undefined) throw new Error("hợp đồng không còn tuyến ghi cho Loại văn bản");
-  return mo;
-}
-
-function muc(tier: number, active = true, label = "Công văn"): MucDanhMucGhi {
+function entry(tier: number, opts: Partial<MucDanhMucGhi> = {}): MucDanhMucGhi {
   return {
-    id: `01JH-${tier}-${String(active)}`,
+    id: `01JH-${tier}-${opts.label ?? "x"}`,
     code: "cong-van",
-    label,
-    active,
+    label: "Công văn",
+    active: true,
     is_default: false,
     order: 7,
     source: tier === TANG_DON_VI ? "don-vi" : "he-thong",
     tier,
+    ...opts,
   };
 }
 
-function nhomRong(ghi: MoTaDanhMucGhi | null = duongGhiLoaiVanBan()): NhomDanhMuc {
-  return {
-    khoa: "loaiVanBan",
-    nhan: "Loại văn bản",
-    thuTuLaThangBac: false,
-    ghi,
-    trangThai: { pha: "chuaCoMuc" },
+type Items = Partial<Record<KhoaNhom, readonly MucDanhMucGhi[] | string>>;
+
+/** Seven reads; a string is a failed read carrying the server's sentence. */
+function groupsOf(items: Items) {
+  const read = (k: KhoaNhom) => {
+    const v = items[k];
+    if (typeof v === "string") return { ok: false as const, thongBao: v };
+    const rows = v ?? [];
+    return {
+      ok: true as const,
+      duLieu: { items: k === "loaiNhiemVu" ? rows.map((r) => ({ ...r, requires_directive: false })) : rows },
+    };
   };
+  const bay = {
+    loaiTaiNguyenBanDo: read("loaiTaiNguyenBanDo"),
+    hangMucKeHoachVon: read("hangMucKeHoachVon"),
+    loaiVanBan: read("loaiVanBan"),
+    loaiDonViDanCu: read("loaiDonViDanCu"),
+    khoiNhiemVu: read("khoiNhiemVu"),
+    loaiNhiemVu: read("loaiNhiemVu"),
+    mucUuTienNhiemVu: read("mucUuTienNhiemVu"),
+  } as BayDanhMuc;
+  return nhomDanhMuc(bay);
 }
 
-function nhomCoMuc(
-  ds: readonly MucDanhMuc[],
-  ghi: MoTaDanhMucGhi | null = duongGhiLoaiVanBan(),
-): NhomDanhMuc {
-  return {
-    khoa: "loaiVanBan",
-    nhan: "Loại văn bản",
-    thuTuLaThangBac: false,
-    ghi,
-    trangThai: { pha: "coMuc", muc: ds },
-  };
-}
+type Props = ComponentProps<typeof CatalogueView>;
 
-function ve(nhom: NhomDanhMuc, coQuyenGhi = true): string {
+function view(items: Items, p: Partial<Props> = {}): string {
   return renderToStaticMarkup(
-    <NhomMuc nhom={nhom} coQuyenGhi={coQuyenGhi} thaoTac={KHONG_LAM_GI} form={null} />,
+    <CatalogueView
+      groups={groupsOf(items)}
+      taskStatuses={{ ok: true, duLieu: { items: [] } }}
+      shownGroup={null}
+      onShowGroup={() => {}}
+      canWrite
+      sessionError=""
+      importButton={null}
+      open={null}
+      draft={EMPTY_DRAFT}
+      setDraft={() => {}}
+      localError=""
+      serverError=""
+      busy={false}
+      actions={NO_ACTIONS}
+      {...p}
+    />,
   );
 }
 
-describe("NhomMuc kết xuất ra trang", () => {
-  it("nhóm rỗng: câu báo rỗng PHẢI có mặt trong markup, nguyên văn", () => {
-    // Nguyên văn, không phải một mảnh: một câu bị cắt còn tệ hơn câu vắng mặt, vì nó vẫn đọc
-    // trôi chảy mà thiếu đúng nửa nói phải làm gì tiếp theo.
-    expect(ve(nhomRong())).toContain(nhanNhomRong("Loại văn bản", "themDuoc"));
+function count(html: string, s: string): number {
+  return html.split(s).length - 1;
+}
+
+const editLabel = (label: string) => `aria-label="${EDIT_LABEL} — mục ${label}"`;
+const deleteLabel = (label: string) => `aria-label="${DELETE_ENTRY} — mục ${label}"`;
+
+describe("one table across groups (spec 05 §3)", () => {
+  it("rows of several groups sit in ONE table, group name in the first column — no per-group card", () => {
+    const html = view({
+      loaiVanBan: [entry(TANG_DON_VI)],
+      loaiTaiNguyenBanDo: [entry(TANG_DON_VI, { id: "a1", code: "cot-dien", label: "Cột điện" })],
+    });
+    expect(count(html, "<table")).toBe(1);
+    expect(html).toContain(">Nhóm danh mục</th>");
+    expect(html).toContain('<td class="text-ink-muted">Loại văn bản</td>');
+    expect(html).toContain('<td class="text-ink-muted">Loại tài nguyên bản đồ</td>');
+    expect(html).toContain('<code class="text-[11.5px]">cot-dien</code>');
+    expect(html).not.toContain("nhom-danh-muc");
   });
 
-  it("nhóm rỗng KHÔNG được dựng thành ô trống", () => {
-    const html = ve(nhomRong());
-
-    // Thứ đang canh là "có chữ cho người đọc", không phải "có thẻ p". Một <p></p> rỗng qua được
-    // phép kiểm thẻ và trượt đúng thứ ca test này sinh ra để bắt.
-    expect(html).toContain('class="trang-thai-rong"');
-    expect(html).not.toContain('class="trang-thai-rong"></p>');
+  it("filter row: 'Tất cả (n)' pressed by default, one button per group, 'Thêm mục' at the end", () => {
+    const html = view({ loaiVanBan: [entry(TANG_DON_VI), entry(TANG_HE_THONG, { id: "b" })] });
+    expect(html).toMatch(/aria-pressed="true"[^>]*>Tất cả \(2\)<\/button>/);
+    expect(html).toContain(">Loại văn bản</button>");
+    expect(html).toMatch(/ml-auto[^>]*>.*Thêm mục<\/button>/);
   });
 
-  it("nhóm rỗng KHÔNG được dựng như một lỗi", () => {
-    const html = ve(nhomRong());
-
-    // `role="alert"` cắt ngang người dùng trình đọc màn hình. Một danh mục chưa có mục nào là
-    // trạng thái BÌNH THƯỜNG của nhiều đơn vị hôm nay — không có gì để báo động.
-    expect(html).not.toContain('role="alert"');
-    expect(html).not.toContain("thong-bao-loi");
+  it("D22 — a group with no row gets NO filter button (prototype derives them from the data)", () => {
+    // Failed before: every group always had a button.
+    const html = view({ loaiVanBan: [entry(TANG_DON_VI)] });
+    expect(html).toContain(">Loại văn bản</button>");
+    expect(html).not.toContain(">Mức ưu tiên nhiệm vụ</button>");
+    expect(html).not.toContain(">Loại tài nguyên bản đồ</button>");
+    expect(html).not.toContain(">Trạng thái nhiệm vụ</button>");
+    expect(html).toContain(">Tất cả (1)</button>");
   });
 
-  it("nhóm rỗng nói BA câu khác nhau theo ba lý do khác nhau", () => {
-    // Gộp "chưa có tuyến ghi" với "thiếu quyền" là nói sai với một trong hai người đọc: một người
-    // cần đi xin quyền, người kia xin quyền cũng không có gì mở ra.
-    expect(ve(nhomRong(), true)).toContain(nhanNhomRong("Loại văn bản", "themDuoc"));
-    expect(ve(nhomRong(), false)).toContain(nhanNhomRong("Loại văn bản", "thieuQuyen"));
-    expect(ve(nhomRong(null))).toContain(nhanNhomRong("Loại văn bản", "khongCoTuyen"));
+  it("D22 — the add row still lists EVERY writable group, empty ones included", () => {
+    const html = view(
+      { loaiVanBan: [entry(TANG_DON_VI)] },
+      { open: { kind: "add", idempotencyKey: "k" }, draft: { ...EMPTY_DRAFT, group: "loaiVanBan" } },
+    );
+    expect(count(html, "<option ")).toBe(7);
+    expect(html).toContain(">Mức ưu tiên nhiệm vụ</option>");
   });
 
-  it("nhóm có mục: hiện số đếm và mã, và KHÔNG hiện câu báo rỗng", () => {
-    const html = ve(nhomCoMuc([muc(TANG_DON_VI), muc(TANG_HE_THONG, false, "Tờ trình")]));
-
-    expect(html).toContain(nhanSoMuc(2));
-    expect(html).toContain("cong-van");
-    expect(html).toContain("Tờ trình");
-    expect(html).not.toContain(nhanNhomRong("Loại văn bản", "themDuoc"));
+  it("D22 — a chosen group that has become empty falls back to 'Tất cả'", () => {
+    const html = view({ loaiVanBan: [entry(TANG_DON_VI)] }, { shownGroup: "loaiTaiNguyenBanDo" });
+    expect(html).toMatch(/aria-pressed="true"[^>]*>Tất cả \(1\)<\/button>/);
+    expect(html).toContain(">cong-van<");
   });
 
-  it("nhóm đọc không được: hiện ĐÚNG thông báo của máy chủ, và không hiện câu báo rỗng", () => {
-    const thongBao = "Đã xảy ra lỗi. Vui lòng thử lại.";
-    const html = ve({ ...nhomRong(), trangThai: { pha: "khongDocDuoc", thongBao } });
-
-    expect(html).toContain(thongBao);
-    // Hai trạng thái này phải phân biệt được trên màn hình: "chưa có gì" và "không đọc được" dẫn
-    // người dùng đi hai đường khác hẳn nhau — một bên chờ onboard, một bên gọi hỗ trợ.
-    expect(html).not.toContain(nhanNhomRong("Loại văn bản", "themDuoc"));
-    expect(html).toContain('role="alert"');
-  });
-});
-
-/* ══════════════════════════════════════════════════════════════════════════════════════════
- * BA TẦNG HIỆN RA THÀNH NÚT. Ba ca dưới đây là lý do chính tệp này tồn tại.
- * ══════════════════════════════════════════════════════════════════════════════════════════
- */
-
-describe("nút của một dòng, theo tầng", () => {
-  it("tầng 1 — đơn vị tự thêm: đủ Sửa, Tắt, Xoá", () => {
-    const html = ve(nhomCoMuc([muc(TANG_DON_VI)]));
-
-    expect(html).toContain(`aria-label="${NUT_SUA} — mục `);
-    expect(html).toContain(NUT_TAT);
-    expect(html).toContain(`aria-label="${NUT_XOA} — mục `);
+  it("filtering narrows the table to the chosen group", () => {
+    const html = view(
+      { loaiVanBan: [entry(TANG_DON_VI)], loaiTaiNguyenBanDo: [entry(TANG_DON_VI, { id: "a1", code: "cot-dien" })] },
+      { shownGroup: "loaiTaiNguyenBanDo" },
+    );
+    expect(html).toContain("cot-dien");
+    expect(html).not.toContain(">cong-van<");
   });
 
-  it("tầng 2 — phần mềm cấp: CÓ Tắt, KHÔNG có Xoá", () => {
-    const html = ve(nhomCoMuc([muc(TANG_HE_THONG)]));
-
-    expect(html).toContain(`aria-label="${NUT_SUA} — mục `);
-    expect(html).toContain(NUT_TAT);
-    expect(html).not.toContain(NUT_XOA);
-    // Và nói ra vì sao thiếu nút, ngay trong ô hành động của chính dòng ấy.
-    expect(html).toContain(giaiThichKhongThaoTac(TANG_HE_THONG));
-  });
-
-  it("tầng 3 — mã nguồn rẽ nhánh theo mã: KHÔNG Tắt, KHÔNG Xoá, chỉ còn Sửa", () => {
-    // ĐÂY LÀ CA ĐẮT NHẤT CỦA MÀN HÌNH NÀY. Vẽ ra một nút `Xoá` hay `Tắt` ở đây là mời cán bộ bấm
-    // vào một 409 — và người bấm sẽ kết luận phần mềm hỏng, chứ không kết luận quy tắc ba tầng
-    // đang làm đúng việc của nó. Cái CHẶN thật là trigger CSDL; ca này canh cái VẼ.
-    const html = ve(nhomCoMuc([muc(TANG_RE_NHANH)]));
-
-    expect(html).toContain(`aria-label="${NUT_SUA} — mục `);
-    expect(html).not.toContain(NUT_TAT);
-    expect(html).not.toContain(NUT_XOA);
-    expect(html).toContain(giaiThichKhongThaoTac(TANG_RE_NHANH));
-  });
-
-  it("mục đã tắt có nút Bật lại ở MỌI tầng, kể cả tầng 3", () => {
-    // Trigger chỉ từ chối chiều bật → tắt. Giấu nốt nút bật thì một dòng tầng 3 lỡ tắt không còn
-    // đường nào quay lại (`tang-danh-muc.ts`, `choBatLai`).
-    const html = ve(nhomCoMuc([muc(TANG_RE_NHANH, false)]));
-
-    expect(html).toContain(NUT_BAT_LAI);
-    expect(html).not.toContain(NUT_XOA);
-  });
-
-  it("KHÔNG CÓ QUYỀN `admin.lookup`: không một nút ghi nào được vẽ — kể cả ở dòng tầng 1", () => {
-    // CA BỊ TỪ CHỐI, không phải ca được phép. Ẩn nút chỉ là tiện dụng — máy chủ vẫn kiểm
-    // `RequirePermission` trên từng yêu cầu (luật 5, cấm #1) — nhưng nếu lớp tiện dụng này sai
-    // thì cán bộ không có quyền sẽ bấm và nhận 403 ở mọi dòng.
-    const html = ve(nhomCoMuc([muc(TANG_DON_VI)]), false);
-
-    expect(html).not.toContain(NUT_THEM);
-    expect(html).not.toContain(NUT_SUA);
-    expect(html).not.toContain(NUT_TAT);
-    expect(html).not.toContain(NUT_XOA);
-    // Bảng thì VẪN HIỆN: tuyến đọc khai `any-authenticated`, nên ẩn cả bảng là giao diện từ chối
-    // điều máy chủ đang phục vụ bình thường.
-    expect(html).toContain("cong-van");
-  });
-});
-
-describe("cột Nguồn và cột Thứ tự", () => {
-  it("hiện `Hệ thống` / `Đơn vị` bằng chữ người đọc được", () => {
-    const html = ve(nhomCoMuc([muc(TANG_DON_VI), muc(TANG_HE_THONG)]));
-
-    expect(html).toContain("Nguồn");
-    expect(html).toContain("Đơn vị");
-    expect(html).toContain("Hệ thống");
-  });
-
-  it("Thứ tự hiện `order` CỦA HỢP ĐỒNG, không phải vị trí trong mảng", () => {
-    // Biểu mẫu sửa đổi chính con số này. Một cột hiện vị trí trong mảng sẽ nói "1" ngay sau khi
-    // cán bộ vừa đặt thứ tự 7 — và họ sẽ đặt lại lần nữa.
-    const html = ve(nhomCoMuc([muc(TANG_DON_VI)]));
-
+  it("Nguồn reads 'Xã tự thêm' / 'Hệ thống'; status 'Đang dùng' / 'Ngừng dùng'; Thứ tự is the contract's", () => {
+    const html = view({ loaiVanBan: [entry(TANG_DON_VI), entry(TANG_HE_THONG, { id: "b", active: false })] });
+    expect(html).toContain('<span class="text-[12px]">Xã tự thêm</span>');
+    expect(html).toContain('<span class="text-ink-muted text-[12px]">Hệ thống</span>');
+    expect(html).toContain("Đang dùng");
+    expect(html).toContain("Ngừng dùng");
     expect(html).toContain("<td>7</td>");
   });
 
-  it("nhóm KHÔNG có đường ghi: không cột Nguồn, không cột hành động, và nói rõ là chỉ xem", () => {
-    // Read-only is decided by the group having NO write descriptor (`null` below), not by the row
-    // shape: every catalogue now emits `order`/`source`/`tier`, so this row is write-shaped and the
-    // guarantee must hold anyway. This is the one place the read-only guarantee is asserted
-    // (`tang-danh-muc.test.ts` points here).
-    //
-    // NO RENDERED GROUP IS READ-ONLY TODAY: since the two identity catalogues were wired, all seven
-    // groups carry a descriptor (asserted in "hai danh mục identity" below). The `null` branch stays
-    // because the next catalogue added to `BANG_NHOM` before its write routes exist lands exactly
-    // here — so this case is a synthetic group, deliberately, and guards that branch.
-    const chiDoc: MucDanhMuc = {
-      id: "01JH-x",
-      code: "thon",
-      label: "Thôn",
-      active: true,
-      is_default: false,
-      order: 1,
-      source: "don-vi",
-      tier: 1,
-    };
-    const html = ve(nhomCoMuc([chiDoc], null));
-
-    expect(html).toContain(GHI_CHU_NHOM_CHI_XEM);
-    expect(html).not.toContain("Nguồn");
-    expect(html).not.toContain(NUT_SUA);
-    expect(html).not.toContain(NUT_THEM);
+  it("the explanatory notes are gone: no three-tier note, no 'disabled stay' note, no per-row reason", () => {
+    // Regression (failed before this change): spec 05 has none of these sentences; the rule is still
+    // enforced by which buttons are drawn (cases below).
+    const html = view({
+      loaiVanBan: [entry(TANG_HE_THONG), entry(TANG_RE_NHANH, { id: "c" })],
+      mucUuTienNhiemVu: [entry(TANG_DON_VI, { id: "p" })],
+    });
+    for (const s of [GHI_CHU_BA_TANG, GIAI_THICH_DA_TAT, GIAI_THICH_THANG_BAC, GHI_CHU_NHOM_CHI_XEM]) {
+      expect(html).not.toContain(s);
+    }
+    expect(html).not.toContain(giaiThichKhongThaoTac(TANG_HE_THONG));
+    expect(html).not.toContain(giaiThichKhongThaoTac(TANG_RE_NHANH));
   });
 });
 
-describe("biểu mẫu xoá", () => {
-  const ghi = duongGhiLoaiVanBan();
-  const banTrong = { ma: "", nhan: "", thuTu: "", lyDo: "", macDinh: false };
-
-  function veForm(loiTaiCho: string) {
-    return renderToStaticMarkup(
-      <BieuMauGhi
-        dangMo={{ kieu: "xoa", ghi, nhanNhom: "Loại văn bản", muc: muc(TANG_DON_VI) }}
-        ban={banTrong}
-        datBan={() => {}}
-        loiTaiCho={loiTaiCho}
-        loiMayChu=""
-        dangGui={false}
-        onGui={() => {}}
-        onHuy={() => {}}
-      />,
-    );
-  }
-
-  it("có ô lý do, và ô ấy bắt buộc", () => {
-    const html = veForm("");
-
-    expect(html).toContain(O_LY_DO_XOA);
-    expect(html).toContain("required");
+describe("row buttons follow the tier (ADR 0024)", () => {
+  it("tier 1 — commune's own: pencil, Tắt, bin", () => {
+    const html = view({ loaiVanBan: [entry(TANG_DON_VI)] });
+    expect(html).toContain(editLabel("Công văn"));
+    expect(html).toContain('title="Sửa nhãn"');
+    expect(html).toContain(">Tắt</button>");
+    expect(html).toContain(deleteLabel("Công văn"));
+    expect(html).toContain('title="Xoá mục"');
   });
 
-  it("lý do rỗng: câu từ chối hiện ra, có `role=alert` và ô được đánh dấu sai", () => {
-    // Phép quyết định nằm ở `kiemLyDoXoa` (có bài test riêng). Ca này canh việc quyết định ấy RA
-    // TỚI TRANG: một câu lỗi tính đúng mà không dựng ra là một biểu mẫu im lặng không gửi gì.
-    const html = veForm("Vui lòng nhập lý do xoá.");
+  it("tier 2 — shipped with the software: Tắt, NO bin", () => {
+    const html = view({ loaiVanBan: [entry(TANG_HE_THONG)] });
+    expect(html).toContain(editLabel("Công văn"));
+    expect(html).toContain(">Tắt</button>");
+    expect(html).not.toContain(deleteLabel("Công văn"));
+  });
 
+  it("tier 3 — code branches on it: pencil only, NO Tắt, NO bin", () => {
+    const html = view({ loaiVanBan: [entry(TANG_RE_NHANH)] });
+    expect(html).toContain(editLabel("Công văn"));
+    expect(html).not.toContain(">Tắt</button>");
+    expect(html).not.toContain(deleteLabel("Công văn"));
+  });
+
+  it("a disabled entry offers 'Bật' at every tier, tier 3 included", () => {
+    const html = view({ loaiVanBan: [entry(TANG_RE_NHANH, { active: false })] });
+    expect(html).toContain(">Bật</button>");
+    expect(html).not.toContain(deleteLabel("Công văn"));
+  });
+
+  it("DENIED — no `admin.lookup`: no Thêm mục, no pencil, no Tắt, no bin, no actions column; table still shows", () => {
+    const html = view({ loaiVanBan: [entry(TANG_DON_VI)] }, { canWrite: false });
+    expect(html).not.toContain("Thêm mục");
+    expect(html).not.toContain(EDIT_LABEL);
+    expect(html).not.toContain(">Tắt</button>");
+    expect(html).not.toContain(DELETE_ENTRY);
+    expect(html).not.toContain("Thao tác");
+    expect(html).toContain("cong-van");
+  });
+});
+
+describe("'Đặt mặc định' — Loại nhiệm vụ only", () => {
+  it("an active, non-default task kind offers it, with the spec's title", () => {
+    const html = view({ loaiNhiemVu: [entry(TANG_DON_VI, { code: "hanh-chinh", label: "Hành chính" })] });
+    expect(html).toContain(`title="${SET_DEFAULT_TITLE}"`);
+    expect(html).toContain(`>${SET_DEFAULT}</button>`);
+  });
+
+  it("not on the default one (which shows the 'Mặc định' badge), not when off, not in another group", () => {
+    const html = view({
+      loaiNhiemVu: [
+        entry(TANG_DON_VI, { id: "d", label: "Hành chính", is_default: true }),
+        entry(TANG_DON_VI, { id: "o", label: "Tạm", active: false }),
+      ],
+      loaiVanBan: [entry(TANG_DON_VI)],
+    });
+    expect(html).not.toContain(`>${SET_DEFAULT}</button>`);
+    expect(html).toContain("bg-brand/12");
+    expect(html).toContain(">Mặc định</span>");
+  });
+});
+
+describe("in-place edit and delete", () => {
+  const row = entry(TANG_DON_VI);
+  const key = `loaiVanBan:${row.id}`;
+
+  it("edit: the label becomes an input (h-8, 12.5px), the order a small box, 'Mặc định' a checkbox; Lưu / Huỷ", () => {
+    const html = view(
+      { loaiVanBan: [row] },
+      { open: { kind: "edit", rowKey: key }, draft: { ...EMPTY_DRAFT, label: "Công văn", order: "7" } },
+    );
+    expect(html).toMatch(/<input class="[^"]*h-8[^"]*text-\[12\.5px\][^"]*" aria-label="Nhãn hiển thị — mục Công văn"[^>]*value="Công văn"/);
+    expect(html).toContain('aria-label="Thứ tự — mục Công văn" inputMode="numeric" value="7"');
+    expect(html).toContain('type="checkbox"');
+    expect(html).toContain(">Lưu</button>");
+    expect(html).toContain(">Huỷ</button>");
+    expect(html).not.toContain(editLabel("Công văn"));
+  });
+
+  it("edit: an empty label is refused in place", () => {
+    const html = view(
+      { loaiVanBan: [row] },
+      { open: { kind: "edit", rowKey: key }, localError: "Nhãn hiển thị không được để trống." },
+    );
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("Nhãn hiển thị không được để trống.");
+    expect(html).toContain('aria-invalid="true"');
+  });
+
+  it("delete keeps the REASON step, inline in the row: 'Lý do xoá' box + Xoá (danger) + Huỷ", () => {
+    const html = view({ loaiVanBan: [row] }, { open: { kind: "delete", rowKey: key } });
+    expect(html).toContain('placeholder="Lý do xoá"');
+    expect(html).toContain("nut-xoa");
+    expect(html).toContain(">Xoá</button>");
+    expect(html).toContain(">Huỷ</button>");
+    // The code stays reserved — said on the box, for hover and for a screen reader.
+    expect(html).toContain("không dùng lại được");
+  });
+
+  it("delete: an empty reason is refused in place, the box marked invalid", () => {
+    const html = view(
+      { loaiVanBan: [row] },
+      { open: { kind: "delete", rowKey: key }, localError: "Vui lòng nhập lý do xoá." },
+    );
     expect(html).toContain("Vui lòng nhập lý do xoá.");
     expect(html).toContain('role="alert"');
     expect(html).toContain('aria-invalid="true"');
   });
+});
 
-  it("nói trước rằng mã vẫn bị giữ chỗ — 'xoá' ở đây không phải xoá", () => {
-    expect(veForm("")).toContain("không dùng lại được");
+describe("the add row (spec 05 §2)", () => {
+  function addRow(p: Partial<Props> = {}) {
+    return view(
+      {},
+      { open: { kind: "add", idempotencyKey: "k" }, draft: { ...EMPTY_DRAFT, group: "loaiVanBan" }, ...p },
+    );
+  }
+
+  it("group select of the writable groups · label · disabled 'Màu' with its '?' · Thêm / Huỷ — no 'Mã' field", () => {
+    const html = addRow();
+    expect(html).toContain("sm:grid-cols-[16rem_1fr_6rem_auto]");
+    expect(html).toContain(">Nhóm danh mục</label>");
+    expect(count(html, "<option ")).toBe(7);
+    expect(html).toContain('placeholder="Ví dụ: Chợ và thương mại"');
+    expect(html).toMatch(/type="color" disabled=""/);
+    expect(html).toContain(pendingMarkerLabel("Màu của mục danh mục"));
+    expect(html).toContain(">Thêm</button>");
+    expect(html).toContain(">Huỷ</button>");
+    expect(html).not.toContain('name="code"');
+    expect(html).not.toContain(">Mã</label>");
   });
 
-  it("KHÔNG có ô nhập mã: mã đã cấp thì không đổi được", () => {
-    // Một ô `Mã` trong biểu mẫu sửa/xoá là một ô hứa điều máy chủ sẽ từ chối bằng 400.
-    expect(veForm("")).not.toContain('id="o-ma-muc"');
+  it("a refusal (e.g. the derived code is taken) shows the server's sentence in place", () => {
+    const html = addRow({ serverError: "Mã cong-van đã có trong danh mục." });
+    expect(html).toContain("Mã cong-van đã có trong danh mục.");
+    expect(html).toContain('role="alert"');
+  });
+
+  it("no add row without the write key, even if one is marked open", () => {
+    expect(addRow({ canWrite: false })).not.toContain("Ví dụ: Chợ và thương mại");
+  });
+
+  it("the success sentence is the spec's", () => {
+    expect(ADDED).toBe("Đã thêm mục mới vào danh mục.");
   });
 });
 
-/* ══════════════════════════════════════════════════════════════════════════════════════════
- * HAI DANH MỤC IDENTITY ĐÃ CÓ ĐƯỜNG GHI. Dựng qua `nhomDanhMuc` THẬT — không tự ráp một nhóm có
- * sẵn mô tả ghi — để ca này đỏ nếu bảng đường ghi mất khoá của nhóm, hay `nhomDanhMuc` thôi ghép.
- * ══════════════════════════════════════════════════════════════════════════════════════════
- */
-
-function mucIdentity(tier: number, active = true): MucDanhMucGhi {
-  return {
-    id: `01JHT-${tier}-${String(active)}`,
-    code: "khu-pho",
-    label: "Khu phố",
-    active,
-    is_default: false,
-    order: 4,
-    source: tier === TANG_DON_VI ? "don-vi" : "he-thong",
-    tier,
-  };
-}
-
-/** Bảy kết quả đọc, nhóm nào cũng có đúng một dòng — đủ để `nhomDanhMuc` dựng cả bảy nhóm. */
-function bayDanhMuc(dong: MucDanhMucGhi): BayDanhMuc {
-  const kq = { ok: true as const, duLieu: { items: [dong] } };
-  return {
-    loaiTaiNguyenBanDo: kq,
-    hangMucKeHoachVon: kq,
-    loaiVanBan: kq,
-    loaiDonViDanCu: kq,
-    khoiNhiemVu: kq,
-    // Task types now carry the derived `requires_directive` flag (9f3a21c4); this catalogue row is not one.
-    loaiNhiemVu: { ok: true as const, duLieu: { items: [{ ...dong, requires_directive: false }] } },
-    mucUuTienNhiemVu: kq,
-  };
-}
-
-function nhomThat(khoa: KhoaNhom, dong: MucDanhMucGhi): NhomDanhMuc {
-  const n = nhomDanhMuc(bayDanhMuc(dong)).find((x) => x.khoa === khoa);
-  if (n === undefined) throw new Error(`nhomDanhMuc không còn nhóm ${khoa}`);
-  return n;
-}
-
-describe("hai danh mục identity: Loại đơn vị dân cư và Khối nhiệm vụ", () => {
-  const HAI_NHOM: readonly { khoa: KhoaNhom; goc: string }[] = [
-    { khoa: "loaiDonViDanCu", goc: "/api/v1/residential-unit-types" },
-    { khoa: "khoiNhiemVu", goc: "/api/v1/task-blocs" },
-  ];
-
-  it("không nhóm nào trong bảy còn thiếu đường ghi", () => {
-    // Nếu ca này đỏ vì có nhóm mang `null`, ca "nhóm KHÔNG có đường ghi" phía trên lại canh một
-    // nhóm có thật — hãy sửa lời chú thích ở đó cho đúng.
-    const bay = nhomDanhMuc(bayDanhMuc(mucIdentity(TANG_DON_VI)));
-    expect(bay).toHaveLength(7);
-    expect(bay.filter((n) => n.ghi === null).map((n) => n.khoa)).toEqual([]);
+describe("validate round 1 (owner 08/10/2026: 'Theo prototype')", () => {
+  it("D16 — an empty table draws NO empty row and NO sentence, for 'Tất cả' and for a filtered group", () => {
+    for (const shownGroup of [null, "loaiVanBan"] as const) {
+      const html = view({}, { shownGroup });
+      expect(html).not.toContain("py-10");
+      expect(html).not.toContain(nhanNhomRong("Loại văn bản", "themDuoc"));
+      expect(html).not.toContain("chưa có mục");
+      expect(html).toContain("<tbody></tbody>");
+    }
   });
 
-  for (const { khoa, goc } of HAI_NHOM) {
-    it(`${khoa}: mô tả ghi trỏ đúng tuyến của hợp đồng`, () => {
-      const ghi = nhomThat(khoa, mucIdentity(TANG_DON_VI)).ghi;
-      expect(ghi?.khoa).toBe(khoa);
-      expect(ghi?.gocThem).toBe(goc);
-      expect(ghi?.mauMuc).toBe(`${goc}/{id}`);
-    });
+  it("D17 — while loading: no filter row, no 'Thêm mục'", () => {
+    const html = view({}, { groups: null });
+    expect(html).not.toContain("Tất cả");
+    expect(html).not.toContain("Thêm mục");
+    expect(html).not.toContain("Lọc theo nhóm danh mục");
+  });
 
-    it(`${khoa}: tầng 1 + quyền admin.lookup — đủ Thêm, Sửa, Tắt, Xoá, không còn câu "chỉ xem"`, () => {
-      const html = ve(nhomThat(khoa, mucIdentity(TANG_DON_VI)), true);
+  it("D7 — 'Mặc định' is a text-only pill (no tone icon), brand classes", () => {
+    const html = view({ loaiNhiemVu: [entry(TANG_DON_VI, { label: "Hành chính", is_default: true })] });
+    const pill = html.match(/<span class="bg-brand\/12 text-brand border-brand\/25[^"]*">([^<]*)<\/span>/);
+    expect(pill?.[1]).toBe("Mặc định");
+    expect(html).not.toMatch(/<svg[^>]*>(?:(?!<\/span>).)*Mặc định/);
+  });
 
-      expect(html).toContain(`>${NUT_THEM}</button>`);
-      expect(html).toContain(`aria-label="${NUT_SUA} — mục `);
-      expect(html).toContain(NUT_TAT);
-      expect(html).toContain(`aria-label="${NUT_XOA} — mục `);
-      expect(html).toContain("Nguồn");
-      expect(html).not.toContain(GHI_CHU_NHOM_CHI_XEM);
-    });
+  it("D21 — the Plus of 'Thêm mục' is size-4", () => {
+    expect(view({})).toMatch(/<svg[^>]*class="[^"]*size-4[^"]*"[^>]*>(?:(?!<button).)*Thêm mục<\/button>/);
+  });
 
-    it(`${khoa}: KHÔNG có quyền admin.lookup — không một nút ghi nào, bảng vẫn hiện`, () => {
-      const html = ve(nhomThat(khoa, mucIdentity(TANG_DON_VI)), false);
+  it("D15 — an empty `source` reads '—', never a blank cell", () => {
+    const html = view({ loaiVanBan: [entry(TANG_DON_VI, { source: "" })] });
+    expect(html).toContain('<span class="text-[12px]">—</span>');
+  });
 
-      expect(html).not.toContain(NUT_THEM);
-      expect(html).not.toContain(NUT_SUA);
-      expect(html).not.toContain(NUT_TAT);
-      expect(html).not.toContain(NUT_XOA);
-      expect(html).toContain("khu-pho");
-    });
+  it("D4 — the top 'Nhập từ Excel' is ALWAYS drawn for `admin.lookup`: working for a group, '?' otherwise", () => {
+    const common = renderToStaticMarkup(<>{catalogueImportButton(true, null, () => {})}</>);
+    // D4b (failed before): the "?" row is pinned to the 28px of the working sm button, and the disabled
+    // button loses the legacy 32px min-height — the tab no longer jumps ~5px when the filter changes.
+    expect(common).toContain('class="mb-3 flex h-7 items-center justify-end overflow-visible"');
+    expect(common).toContain("[&amp;_button:not([data-pending-marker])]:h-7");
+    expect(common).toContain("[&amp;_button:not([data-pending-marker])]:min-h-0");
+    expect(common).toContain("Nhập từ Excel");
+    expect(common).toMatch(/disabled=""/);
+    expect(common).toContain(pendingMarkerLabel("Nhập Excel chung cho mọi nhóm danh mục"));
 
-    it(`${khoa}: tầng 2 — không Xoá; tầng 3 — không Tắt, không Xoá`, () => {
-      const t2 = ve(nhomThat(khoa, mucIdentity(TANG_HE_THONG)), true);
-      expect(t2).toContain(`aria-label="${NUT_SUA} — mục `);
-      expect(t2).toContain(NUT_TAT);
-      expect(t2).not.toContain(NUT_XOA);
+    const group = renderToStaticMarkup(<>{catalogueImportButton(true, "loaiVanBan", () => {})}</>);
+    expect(group).toContain("Nhập từ Excel</button>");
+    expect(group).not.toContain('disabled=""');
+    expect(group).not.toContain("data-pending-marker");
 
-      const t3 = ve(nhomThat(khoa, mucIdentity(TANG_RE_NHANH)), true);
-      expect(t3).toContain(`aria-label="${NUT_SUA} — mục `);
-      expect(t3).not.toContain(NUT_TAT);
-      expect(t3).not.toContain(NUT_XOA);
-    });
-  }
+    // DENIED: without the key, no button at all — neither the working one nor the "?".
+    expect(renderToStaticMarkup(<>{catalogueImportButton(false, null, () => {})}</>)).toBe("");
+    expect(renderToStaticMarkup(<>{catalogueImportButton(false, "loaiVanBan", () => {})}</>)).toBe("");
+  });
+});
+
+describe("failed, loading", () => {
+
+  it("a group that cannot be read: the server's sentence, named, as an alert — the others still render", () => {
+    const html = view({ loaiVanBan: "Đã xảy ra lỗi. Vui lòng thử lại.", khoiNhiemVu: [entry(TANG_DON_VI, { code: "khoi-1" })] });
+    expect(html).toContain("Loại văn bản: Đã xảy ra lỗi. Vui lòng thử lại.");
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("khoi-1");
+    expect(html).not.toContain(nhanNhomRong("Loại văn bản", "themDuoc"));
+  });
+
+  it("loading: three placeholder bars and a status line, no table", () => {
+    const html = view({}, { groups: null });
+    expect(html).toContain("Đang tải danh mục của đơn vị…");
+    expect(count(html, "h-11 w-full")).toBe(3);
+    expect(html).not.toContain("<table");
+  });
 });

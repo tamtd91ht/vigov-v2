@@ -39,6 +39,7 @@
 import { BAY_DANH_MUC_GHI, type MoTaDanhMucGhi } from "@/lib/api/danh-muc";
 import type { BayDanhMuc, MucDanhMuc } from "@/lib/api/danh-muc-nghiep-vu";
 import type { KetQua } from "@/lib/api/goi";
+import type { petitions_trangThaiNhiemVuRa } from "@/lib/api/schema.gen";
 
 export type TrangThaiNhom =
   | { pha: "khongDocDuoc"; thongBao: string }
@@ -146,4 +147,101 @@ export function trangThaiNhom(kq: KetQua<{ items: readonly MucDanhMuc[] }>): Tra
   if (!kq.ok) return { pha: "khongDocDuoc", thongBao: kq.thongBao };
   if (kq.duLieu.items.length === 0) return { pha: "chuaCoMuc" };
   return { pha: "coMuc", muc: kq.duLieu.items };
+}
+
+/**
+ * Key of the eighth group's filter button — `Trạng thái nhiệm vụ` is read through its own route and is
+ * not one of the seven catalogue keys (decision #21: label and order only).
+ */
+export const TASK_STATUS_GROUP = "trangThaiNhiemVu";
+
+/** What the group filter can be narrowed to: one of the seven groups, the eighth, or `null` for all. */
+export type ShownGroup = KhoaNhom | typeof TASK_STATUS_GROUP | null;
+
+/** One line of the tab's single table (spec 05: one table across groups, "Nhóm danh mục" first). */
+export type CatalogueRow =
+  | { readonly kind: "lookup"; readonly key: string; readonly group: NhomDanhMuc; readonly item: MucDanhMuc }
+  | { readonly kind: "taskStatus"; readonly key: string; readonly item: petitions_trangThaiNhiemVuRa };
+
+/**
+ * The rows of the one table, narrowed to `shown`.
+ *
+ * GROUP ORDER IS `BANG_NHOM`'s, ITEM ORDER IS THE SERVER'S — no sort anywhere. In "Mức ưu tiên nhiệm
+ * vụ" the order of `items` IS the commune's scale (see `BANG_NHOM`); sorting the merged table by label
+ * or code would silently change which priority reads as the most urgent. Task statuses come last, in
+ * the order the server returns (effective order, ties by default).
+ *
+ * A group that could not be read contributes no row: the tab states its server sentence above the
+ * table, so its absence is explained rather than read as "no entries".
+ */
+export function catalogueRows(
+  groups: readonly NhomDanhMuc[],
+  taskStatuses: readonly petitions_trangThaiNhiemVuRa[],
+  shown: ShownGroup,
+): CatalogueRow[] {
+  const rows: CatalogueRow[] = [];
+  for (const group of groups) {
+    if (shown !== null && shown !== group.khoa) continue;
+    if (group.trangThai.pha !== "coMuc") continue;
+    for (const item of group.trangThai.muc) {
+      rows.push({ kind: "lookup", key: `${group.khoa}:${item.id}`, group, item });
+    }
+  }
+  if (shown === null || shown === TASK_STATUS_GROUP) {
+    for (const item of taskStatuses) {
+      rows.push({ kind: "taskStatus", key: `${TASK_STATUS_GROUP}:${item.code}`, item });
+    }
+  }
+  return rows;
+}
+
+/** The filter key a row belongs to. */
+function rowGroup(row: CatalogueRow): Exclude<ShownGroup, null> {
+  return row.kind === "lookup" ? row.group.khoa : TASK_STATUS_GROUP;
+}
+
+/**
+ * The groups that get a filter button: those with at least one row, as the prototype derives its
+ * buttons from the data (`LookupTable.tsx:68-71`; ADR 0079 "đúng prototype"). Adding stays possible to
+ * every writable group through the add row's select, so an empty group is never un-addable.
+ */
+export function groupsWithRows(rows: readonly CatalogueRow[]): ReadonlySet<Exclude<ShownGroup, null>> {
+  return new Set(rows.map(rowGroup));
+}
+
+/**
+ * The filter actually applied: a chosen group that has no row any more (its last entry was just
+ * deleted, or its read failed) falls back to "Tất cả" — its button is gone, and a table narrowed to a
+ * group with no button would leave staff no visible way to know what is filtered.
+ */
+export function effectiveShownGroup(rows: readonly CatalogueRow[], shown: ShownGroup): ShownGroup {
+  return shown !== null && !rows.some((r) => rowGroup(r) === shown) ? null : shown;
+}
+
+/** The server's ceiling on a catalogue code (`MaToiDa`, `service-documents/internal/domain/danh_muc_ba_tang.go:142`). */
+export const CODE_MAX_LENGTH = 64;
+
+/**
+ * The code a new entry gets, derived from its label — the add row has no "Mã" field (spec 05, prototype
+ * `LookupTable.tsx:341` "Mã sinh từ nhãn, không hỏi người dùng").
+ *
+ * WHY THE CLIENT SHAPES THE CODE, against the usual "the server checks, the client does not copy the
+ * rule": every write route still REQUIRES `code` (`ThemMucVao`), so something has to produce it, and
+ * a code typed by nobody can only be produced here. The shape follows `ChuanHoaMa`
+ * (`danh_muc_ba_tang.go:158`, ADR 0011): lower-case a–z and digits, single hyphens, none at either
+ * end, at most 64 characters. The server still validates it; a collision (same label → same code, or a
+ * code kept by a soft-deleted entry, rule 7 invariant 3) comes back as the server's own sentence.
+ *
+ * Vietnamese is folded the way a person writes it without diacritics: "Chợ và thương mại" →
+ * `cho-va-thuong-mai`, "Đường" → `duong` (`đ` is a letter, not a combining mark, so NFD leaves it).
+ * A label with no letter or digit at all yields `""`; the caller refuses it before sending.
+ */
+export function codeFromLabel(label: string): string {
+  const folded = label
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[đĐ]/g, "d")
+    .toLowerCase();
+  const slug = folded.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return slug.slice(0, CODE_MAX_LENGTH).replace(/-+$/, "");
 }
