@@ -15,43 +15,16 @@ function cot(soCanBo: number, soTaiKhoanHoatDong: number): identity_vaiTroCotRa 
   };
 }
 
-describe("đầu cột vai trò hiện HAI số đếm", () => {
-  it("3 cán bộ, 1 tài khoản đang hoạt động: cả hai số, và nói rõ số sau nằm TRONG số trước", () => {
-    expect(nhanSoNguoiGiuVaiTro(cot(3, 1))).toBe(
-      "3 cán bộ · 1 trong số đó có tài khoản đang hoạt động",
-    );
+// The prototype's role head (`RolePermissionMatrix.tsx:147-149`): ONE count, "{n} cán bộ" — owner
+// decision 08/10/2026 (card B, P13) drops the active-account clause and the zero-holder sentence.
+describe("đầu cột vai trò hiện MỘT số đếm, như prototype", () => {
+  it("staff_count only — the active-account count is not printed", () => {
+    expect(nhanSoNguoiGiuVaiTro(cot(3, 1))).toBe("3 cán bộ");
+    expect(nhanSoNguoiGiuVaiTro(cot(3, 0))).toBe("3 cán bộ");
   });
 
-  it("(3, 0): vẫn hiện ĐỦ HAI SỐ — đây là ca một số đếm duy nhất giấu mất", () => {
-    // Một cột `3 · 0` là cột mà mọi ô đã cấp không tới được ai: ba cán bộ giữ vai trò, không ai
-    // trong số họ có tài khoản đang mở. Rút gọn thành "3 cán bộ" là xoá đúng điều người quản trị
-    // cần thấy trước khi tin rằng quyền đã tới tay ai đó.
-    const nhan = nhanSoNguoiGiuVaiTro(cot(3, 0));
-    expect(nhan).toBe("3 cán bộ · 0 trong số đó có tài khoản đang hoạt động");
-    expect(nhan).toContain("3");
-    expect(nhan).toContain("0");
-  });
-
-  it("(3, 3): vẫn là hai số, không rút thành một", () => {
-    expect(nhanSoNguoiGiuVaiTro(cot(3, 3))).toBe(
-      "3 cán bộ · 3 trong số đó có tài khoản đang hoạt động",
-    );
-  });
-
-  it("chưa ai giữ vai trò: MỘT câu, vì tập con của tập rỗng không nói thêm được gì", () => {
-    expect(nhanSoNguoiGiuVaiTro(cot(0, 0))).toBe("Chưa có cán bộ nào giữ vai trò này");
-  });
-
-  it("dữ liệu lệch (tập con lớn hơn tập cha) KHÔNG bị câu rút gọn nuốt mất", () => {
-    // Máy chủ không phát ra được hình dạng này, và đúng vì thế nó phải hiện nguyên hai con số nếu
-    // có ngày nó xảy ra — chứ không hiện "Chưa có cán bộ nào giữ vai trò này".
-    expect(nhanSoNguoiGiuVaiTro(cot(0, 2))).toBe(
-      "0 cán bộ · 2 trong số đó có tài khoản đang hoạt động",
-    );
-  });
-
-  it("câu chữ nói quan hệ TẬP CON, không đặt hai con số cạnh nhau rồi để người đọc tự cộng", () => {
-    expect(nhanSoNguoiGiuVaiTro(cot(5, 2))).toContain("trong số đó");
+  it("zero holders reads '0 cán bộ', as the prototype prints it", () => {
+    expect(nhanSoNguoiGiuVaiTro(cot(0, 0))).toBe("0 cán bộ");
   });
 });
 
@@ -76,6 +49,12 @@ describe("xã chưa cấu hình: có câu giải thích, không bao giờ là b�
     // `skills/accessibility-elderly`: một thông báo phải nói làm gì tiếp theo.
     for (const thieu of ["vaiTro", "danhMucQuyen", "caHai"] as const) {
       expect(nhanChuaCauHinh(thieu)).toMatch(/liên hệ|Liên hệ|báo cho/);
+    }
+  });
+
+  it("no sentence points at the removed 'Tạo tám vai trò mẫu' button (owner decision 08/10/2026)", () => {
+    for (const thieu of ["vaiTro", "danhMucQuyen", "caHai"] as const) {
+      expect(nhanChuaCauHinh(thieu)).not.toContain("Tạo tám vai trò mẫu");
     }
   });
 

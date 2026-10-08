@@ -1,14 +1,13 @@
 "use client";
 
-import { Check, Crown, Minus, ShieldQuestion, TriangleAlert } from "lucide-react";
+import { Check, Loader2, Minus, ShieldQuestion } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
-import { Notice } from "@/components/ui/notice";
-import { SkeletonRows } from "@/components/ui/skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 
 import type { KetQua } from "@/lib/api/goi";
 import { layMaTranQuyen, luuPhanQuyenVaiTro } from "@/lib/api/phan-quyen";
@@ -19,17 +18,11 @@ import type {
 } from "@/lib/api/schema.gen";
 
 import { oDaCap, trangThaiMaTran, type BangDaCap } from "./ma-tran-quyen";
-import { RoleTemplateSeedPanel } from "./role-template-seed-panel";
-import { unheldPermissionWarnings } from "./role-templates";
-import type { UnheldWarning } from "./role-templates";
 import {
   CHU_THICH_BANG_SUA,
   CHU_THICH_BANG_XEM,
-  GHI_CHU_CHI_XEM,
-  HUONG_DAN_SUA,
   LY_DO_KHONG_TU_SUA,
   NHAN_LANH_DAO,
-  NUT_DANG_LUU,
   NUT_HUY,
   NUT_LUU,
   nhanChuaCauHinh,
@@ -38,6 +31,7 @@ import {
   nhanO,
   nhanOBatTat,
   nhanSoNguoiGiuVaiTro,
+  savedToast,
 } from "./nhan-ma-tran";
 import {
   banSuaMoi,
@@ -52,32 +46,34 @@ import {
 } from "./sua-phan-quyen";
 
 /**
- * Ma trận phân quyền — `docs/ui-ux/14-cau-hinh.md §4`, tab "Phân quyền".
+ * Ma trận phân quyền — `/nguoi-dung/phan-quyen`, theo prototype `vigov-require/apps/admin/src/
+ * components/admin/RolePermissionMatrix.tsx` (thẻ B, 08/10/2026).
  * **Hàng = quyền** (gom theo nhóm) · **cột = vai trò**.
  *
  * ═════════════════════════════════════════════════════════════════════════════════════════
  * LƯU THEO TỪNG CỘT, KHÔNG LƯU TOÀN MA TRẬN (§12.5) — `PUT /api/v1/roles/{id}/permissions`.
  *
- * Mỗi cột có trạng thái sửa riêng (`sua-phan-quyen.ts`): nút `Lưu` chỉ bật khi cột ấy đã khác bản
+ * Mỗi cột có trạng thái sửa riêng (`sua-phan-quyen.ts`): nút `Lưu` chỉ hiện khi cột ấy đã khác bản
  * máy chủ, bấm thì gửi đúng tập của cột ấy, và các cột khác — đã sửa hay chưa — không đi kèm. 200
- * thay cột bằng tập máy chủ trả; lỗi giữ nguyên phần cán bộ đã tick và hiện nguyên câu máy chủ
- * viết cạnh cột. Không tự thử lại.
+ * thay cột bằng tập máy chủ trả và báo bằng toast; lỗi giữ nguyên phần cán bộ đã tick và hiện nguyên
+ * câu máy chủ viết cạnh cột. Không tự thử lại.
  *
- * Ô chỉ thành `<input type="checkbox">` khi tài khoản giữ `admin.role` (`choSua`). Đó là tiện dụng:
- * ba ràng buộc thật — #13 người giữ cuối cùng, #14 không tự sửa vai trò mình, không cấp/gỡ khoá
- * mình không giữ — nằm ở máy chủ, và màn hình không dựng bản sao nào của chúng ngoài một chỗ: cột
- * của chính vai trò người đang đăng nhập được khoá sẵn kèm lý do (#14), vì phiên có phát mã vai trò
- * (`quyen-tab.ts`, `maVaiTroCuaToi`). Khoá ấy sai thì máy chủ vẫn trả 403.
+ * Ô chỉ thành nút bật/tắt khi tài khoản giữ `admin.role` (`choSua`). Đó là tiện dụng: ba ràng buộc
+ * thật — #13 người giữ cuối cùng, #14 không tự sửa vai trò mình, không cấp/gỡ khoá mình không giữ —
+ * nằm ở máy chủ, và màn hình không dựng bản sao nào của chúng ngoài một chỗ: cột của chính vai trò
+ * người đang đăng nhập được khoá sẵn kèm lý do (#14), vì phiên có phát mã vai trò (`quyen-tab.ts`,
+ * `maVaiTroCuaToi`). Khoá ấy sai thì máy chủ vẫn trả 403.
  * ═════════════════════════════════════════════════════════════════════════════════════════
  *
  * KHÔNG HIỆN CON SỐ TỔNG NÀO — không "33 quyền", không "10 nhóm", không "8 vai trò". Danh mục
  * quyền nằm trong CSDL và khách còn có thể chốt thêm khoá; một con số cứng trên màn hình sẽ sai
- * vào đúng ngày ấy, lặng lẽ, vì không ai kiểm lại nó. (Tiêu đề đặc tả §4.2 ghi "43 quyền, 11
- * nhóm" trong khi bảng liệt kê ngay dưới nó có 33 khoá / 10 nhóm và CSDL khớp bảng — đúng kiểu
- * hỏng mà một con số chép tay gây ra.)
+ * vào đúng ngày ấy, lặng lẽ, vì không ai kiểm lại nó.
  *
- * KHÔNG DỮ LIỆU CÁ NHÂN (luật 3): đầu cột chỉ có hai số đếm, và màn hình này không gọi thêm tuyến
+ * KHÔNG DỮ LIỆU CÁ NHÂN (luật 3): đầu cột chỉ có một số đếm, và màn hình này không gọi thêm tuyến
  * nào để đổi số đếm thành danh sách tên.
+ *
+ * Owner decision 08/10/2026: the "Tạo tám vai trò mẫu" panel and the ADR 0055 unheld-permission
+ * warning are NOT on this page any more — the prototype has neither.
  */
 export function MaTranPhanQuyen({
   choSua,
@@ -90,15 +86,10 @@ export function MaTranPhanQuyen({
 }) {
   /** `null` là CHƯA ĐỌC XONG, khác hẳn "đọc xong và hỏng". Ba pha, không hai (`goi.ts`). */
   const [phanHoi, datPhanHoi] = useState<KetQua<identity_maTranQuyenRa> | null>(null);
-  /** Bumped after "Tạo tám vai trò mẫu" succeeds: the new columns exist only on the server. */
-  const [reloadCount, setReloadCount] = useState(0);
 
   /**
-   * MỘT LỜI GỌI CHO CẢ MA TRẬN — một lần khi mở màn, và một lần nữa sau mỗi lần gieo vai trò mẫu
-   * thành công (`reloadCount`), không lần nào khác. Hàng, cột và ô đã cấp về trong cùng một phản hồi
-   * vì ma trận chỉ đúng khi ba thứ ấy được đọc ở cùng một thời điểm (`lib/api/phan-quyen.ts`). Đọc
-   * lại thì bản sửa chưa lưu của mọi cột bị dựng lại từ bản mới — cái giá được chấp nhận, vì cột mới
-   * vừa gieo phải hiện ra đúng quyền máy chủ đã cấp.
+   * MỘT LỜI GỌI CHO CẢ MA TRẬN, một lần khi mở màn. Hàng, cột và ô đã cấp về trong cùng một phản
+   * hồi vì ma trận chỉ đúng khi ba thứ ấy được đọc ở cùng một thời điểm (`lib/api/phan-quyen.ts`).
    *
    * `bo` chặn một phản hồi đến muộn ghi vào một component đã rời màn hình.
    *
@@ -114,17 +105,9 @@ export function MaTranPhanQuyen({
     return () => {
       bo = true;
     };
-  }, [reloadCount]);
+  }, []);
 
   const trangThai = useMemo(() => trangThaiMaTran(phanHoi), [phanHoi]);
-  /** From the SAVED grants only — see `unheldPermissionWarnings`. */
-  const warnings = useMemo(
-    () =>
-      trangThai.pha === "coDuLieu"
-        ? unheldPermissionWarnings(trangThai.nhom, trangThai.vaiTro, trangThai.daCap)
-        : [],
-    [trangThai],
-  );
 
   /**
    * Bản sửa, dựng lại MỖI LẦN có phản hồi đọc mới. `null` khi chưa có ma trận để sửa. Cặp
@@ -141,47 +124,43 @@ export function MaTranPhanQuyen({
 
   async function luuCot(vaiTroId: string) {
     const b = banSua;
-    if (b === null || !cotDaSua(b, vaiTroId) || b.dangLuu.has(vaiTroId)) return;
+    // One column at a time (prototype `savingRoleId !== null`): every Lưu/Huỷ is disabled while any
+    // column saves, and this guard holds the same line if a click slips through.
+    if (b === null || !cotDaSua(b, vaiTroId) || b.dangLuu.size > 0) return;
     datBanSua((x) => (x === null ? x : batDauLuu(x, vaiTroId)));
     // Thân dựng từ bản sửa TẠI LÚC BẤM, và chỉ cho cột này — `guiCot` gọi mạng đúng một lần.
     const kq = await guiCot(b, vaiTroId, luuPhanQuyenVaiTro);
     datBanSua((x) => (x === null ? x : ketThucLuu(x, vaiTroId, kq)));
+    // Success is a toast (ADR 0068 lần 6 #4). A refusal stays inline under the column: it carries
+    // the server's #13/#14 reason, and a toast disappears. A 200 for ANOTHER role is not a success —
+    // `ketThucLuu` turns it into that column's error, so no toast either.
+    if (kq.ok && kq.duLieu.role_id === vaiTroId && trangThai.pha === "coDuLieu") {
+      const role = trangThai.vaiTro.find((v) => v.id === vaiTroId);
+      if (role !== undefined) toast.success(savedToast(role.name));
+    }
   }
 
   return (
-    // The prototype's composition (`RolePermissionMatrix`, ADR 0068 lần 5): under the page header, one
-    // hint line, then the bordered matrix — no second "Phân quyền" title inside a card. The section keeps
-    // its accessible name from the page `<h1>`'s words.
-    <section className="tab-phan-quyen flex min-w-0 flex-col gap-3 [&>*]:my-0" aria-label="Phân quyền">
-      {/* Câu hướng dẫn của đặc tả §4 khi sửa được; câu chỉ-xem khi không. */}
-      <p className="ghi-chu m-0 text-[13px] text-ink-500">{choSua ? HUONG_DAN_SUA : GHI_CHU_CHI_XEM}</p>
-
-      <div className="flex min-w-0 flex-col gap-3 empty:hidden [&>*]:my-0">
-
-      {/* The seed button follows the same gate as the ticks: `admin.role`, the key the route
-          declares. Convenience only — the server checks it, and #14, on the call. */}
-      {choSua && (
-        <RoleTemplateSeedPanel
-          onSeeded={() => setReloadCount((n) => n + 1)}
-          roles={trangThai.pha === "coDuLieu" ? trangThai.vaiTro : null}
-        />
-      )}
-
-      <UnheldPermissionWarnings warnings={warnings} />
-      </div>
-
+    // The prototype's composition: under the page header, one hint line, then the bordered matrix,
+    // `space-y-3`. The section keeps its accessible name from the page `<h1>`'s words.
+    <section className="space-y-3" aria-label="Phân quyền">
+      {/* Prototype `AccountWorkspace.tsx` `Loading`: three 44px bars while the matrix reads. */}
       {trangThai.pha === "dangDoc" && (
         <>
           <p role="status" className="an-thi-giac">
             Đang tải ma trận phân quyền…
           </p>
-          <SkeletonRows rows={6} />
+          <div className="space-y-2">
+            <Skeleton className="h-11 w-full" />
+            <Skeleton className="h-11 w-full" />
+            <Skeleton className="h-11 w-full" />
+          </div>
         </>
       )}
 
       {/* LỖI: hiện đúng `message` của máy chủ, không diễn giải, không rẽ nhánh theo `code`, không
           hiện `trace_id` (`lib/api/goi.ts`). 403 ở đây là ca thật: quyền `admin.role` có thể vừa
-          bị gỡ giữa lúc màn hình đang mở. */}
+          bị gỡ giữa lúc màn hình đang mở. The prototype is silent on this state; kept. */}
       {trangThai.pha === "khongDocDuoc" && (
         <ErrorState role="alert" title="Chưa tải được ma trận phân quyền" message={trangThai.thongBao} />
       )}
@@ -190,6 +169,13 @@ export function MaTranPhanQuyen({
           lời giải thích nào. Xem `nhan-ma-tran.ts`. */}
       {trangThai.pha === "chuaCauHinh" && (
         <EmptyState icon={ShieldQuestion} title={nhanChuaCauHinh(trangThai.thieu)} />
+      )}
+
+      {/* The hint only when the account can edit (prototype :127-132); read-only prints nothing. */}
+      {trangThai.pha === "coDuLieu" && choSua && (
+        <p className="text-ink-muted text-[12px]">
+          Bấm vào ô để bật hoặc tắt quyền, sau đó bấm <b>Lưu</b> ở đầu cột của vai trò đó.
+        </p>
       )}
 
       {trangThai.pha === "coDuLieu" &&
@@ -215,23 +201,21 @@ export function MaTranPhanQuyen({
 }
 
 /**
- * Bảng ma trận.
+ * Bảng ma trận — the prototype's table (`RolePermissionMatrix.tsx:134-247`), class for class.
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
- * BỀ RỘNG NHỎ NHẤT ĐƯỢC HỖ TRỢ LÀ 320px, và ở đó một bảng 8 cột vai trò không vừa. Ba điều giữ
- * cho nó vẫn đọc được, cả ba nằm trong CSS đi kèm (`globals.css`, khối `.bang-phan-quyen`):
+ * BỀ RỘNG NHỎ NHẤT ĐƯỢC HỖ TRỢ LÀ 320px, và ở đó một bảng 8 cột vai trò không vừa. Hai điều giữ
+ * cho nó vẫn đọc được:
  *
  *   1. Cột đầu (tên quyền) GHIM TRÁI khi cuộn ngang — không có nó thì cuộn sang cột thứ tư là
  *      không còn biết mình đang ở hàng nào, và một dấu tích đọc nhầm hàng là đọc sai quyền.
- *   2. Hàng đầu (tên vai trò) GHIM TRÊN khi cuộn dọc — 33 hàng thì đầu cột trôi khỏi màn hình
- *      ngay ở nhóm thứ hai. Ghim được là vì vùng cuộn có TRẦN CHIỀU CAO; không có trần thì
- *      `sticky` không có gì để ghim vào (xem `.bang-cuon-ma-tran`).
- *   3. Mỗi nhóm quyền có một DẢI TIÊU ĐỀ riêng chạy ngang bảng, nên hàng nào cũng biết mình
- *      thuộc nhóm nào mà không phải cuộn ngược lên.
+ *   2. Mỗi nhóm quyền có một DẢI TIÊU ĐỀ riêng chạy ngang bảng.
+ *
+ * The frame scrolls HORIZONTALLY only and the header row is not sticky — the prototype's choice
+ * (card B, P8): the page scrolls vertically, as on every other screen.
  *
  * Bảng CUỘN NGANG chứ không đổi thành thẻ: đổi `display` của `table`/`tr`/`td` làm mất ngữ nghĩa
- * bảng với trình đọc màn hình, mà đây đúng là dữ liệu dạng bảng — và là loại dữ liệu bảng cần
- * quan hệ hàng–cột nhất.
+ * bảng với trình đọc màn hình, mà đây đúng là dữ liệu dạng bảng.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
 // EXPORTED FOR ONE REASON, and it is worth the widened surface: this is the component that turns
@@ -264,41 +248,47 @@ export function BangMaTran({
   chinhSua?: ChinhSuaMaTran;
 }) {
   return (
-    // `role="region"` + `tabIndex` để vùng cuộn tới được bằng bàn phím — vùng này cuộn CẢ HAI
-    // chiều, nên không tới được bằng bàn phím là 33 hàng đọc được bằng chuột thôi.
-    // The prototype's frame: one bordered, rounded box that scrolls inside itself, never the page.
+    // `role="region"` + `tabIndex` để vùng cuộn ngang tới được bằng bàn phím.
     <div
-      className="bang-cuon bang-cuon-ma-tran m-0 min-w-0 rounded-card border border-line bg-surface shadow-none"
+      className="border-line overflow-x-auto rounded-[10px] border"
       role="region"
       aria-label="Ma trận phân quyền"
       tabIndex={0}
     >
-      <table className="bang-phan-quyen">
+      <table className="w-full border-collapse text-[12.5px]">
         <caption className="an-thi-giac">
           {chinhSua === undefined ? CHU_THICH_BANG_XEM : CHU_THICH_BANG_SUA}
         </caption>
         <thead>
           <tr>
-            <th scope="col" className="cot-quyen">
+            <th
+              scope="col"
+              className="bg-canvas border-line text-ink-muted sticky left-0 z-10 border-b px-4 py-3 text-left font-semibold"
+            >
               Quyền
             </th>
             {vaiTro.map((vt) => (
-              <th scope="col" key={vt.id} className="cot-vai-tro">
-                <span className="ten-vai-tro">{vt.name}</span>
+              <th
+                scope="col"
+                key={vt.id}
+                className="bg-canvas border-line min-w-30 border-b px-3 py-3 text-center align-bottom"
+              >
+                <div className="text-navy font-semibold">{vt.name}</div>
+                <div className="text-ink-muted mt-1 text-[10.5px] font-normal">{nhanSoNguoiGiuVaiTro(vt)}</div>
                 {/*
                   `is_leader` CHỈ SINH RA NHÃN NÀY VÀ KHÔNG QUYẾT ĐỊNH GÌ KHÁC — không ẩn/hiện cột,
                   không đổi thứ tự, không đổi cách đọc một ô. Dùng nó để rẽ nhánh là mở một hệ
                   phân quyền THỨ HAI không đi qua `(tenant_id, vai trò, quyền)`, tức là đúng thứ
-                  luật 5 cấm ở #2 và #3. Cấp bậc lãnh đạo là thông tin tổ chức, không phải thang
-                  quyền (`service-identity/internal/domain/quyen.go`).
+                  luật 5 cấm ở #2 và #3 (`service-identity/internal/domain/quyen.go`).
+
+                  A plain span, not `Badge`: ours always draws a tone icon, and the prototype's
+                  shadcn Badge here has none (card B, P14). The base classes are `Badge`'s own.
                 */}
                 {vt.is_leader && (
-                  <Badge tone="info" icon={Crown} className="chip-lanh-dao">
+                  <span className="inline-flex h-5 w-fit shrink-0 items-center justify-center overflow-hidden rounded-4xl border border-solid px-2 py-0.5 leading-none font-medium whitespace-nowrap bg-violet/12 text-violet border-violet/25 mt-1.5 text-[9.5px]">
                     {NHAN_LANH_DAO}
-                  </Badge>
+                  </span>
                 )}
-                {/* HAI SỐ ĐẾM, và số sau là tập con của số trước — câu chữ và lý do ở `nhan-ma-tran.ts`. */}
-                <span className="dong-phu">{nhanSoNguoiGiuVaiTro(vt)}</span>
                 {chinhSua !== undefined && <DauCotSua vt={vt} chinhSua={chinhSua} />}
               </th>
             ))}
@@ -315,27 +305,26 @@ export function BangMaTran({
         */}
         {nhom.map((n) => (
           <tbody key={n.name}>
-            <tr className="dai-nhom">
-              <th scope="rowgroup" colSpan={vaiTro.length + 1}>
-                {/* Chữ nằm trong một `<span>` GHIM TRÁI, không nằm thẳng trong `<th>`: dải nhóm
-                    rộng bằng cả bảng, nên khi cuộn ngang thì chính cái dải ấy đứng yên còn chữ
-                    trôi ra khỏi khung nhìn. Ghim chữ thì cuộn tới cột vai trò cuối cùng vẫn biết
-                    mình đang ở nhóm nào. */}
-                <span className="nhan-nhom">{n.name}</span>
+            <tr>
+              <th
+                scope="rowgroup"
+                colSpan={vaiTro.length + 1}
+                className="bg-canvas/70 border-line text-navy border-y px-4 py-2 text-left text-[11.5px] font-bold tracking-wide uppercase"
+              >
+                {n.name}
               </th>
             </tr>
             {n.permissions.map((q) => (
-              <tr key={q.code}>
-                <th scope="row" className="cot-quyen">
-                  {/* One line each, "…" + the full words on hover: every row stays the same height, so
-                      a tick is read against the right row (layout lesson, ADR 0068 lần 5). */}
-                  <span className="nhan-quyen truncate" title={q.label}>
-                    {q.label}
-                  </span>
-                  {/* Khoá quyền hiện ngay dưới nhãn: nó là MỘT khoá phẳng `<nhóm>.<việc>` (luật 5,
-                      bất biến 3b), là chuỗi mà máy chủ kiểm trên từng tuyến, và là thứ cán bộ đối
-                      chiếu được khi hỏi "vì sao màn hình kia báo không có quyền". */}
-                  <code className="dong-phu ma-khoa-quyen truncate">{q.code}</code>
+              <tr key={q.code} className="hover:bg-canvas/60">
+                {/* Khoá quyền hiện ngay dưới nhãn: nó là MỘT khoá phẳng `<nhóm>.<việc>` (luật 5,
+                    bất biến 3b), là chuỗi mà máy chủ kiểm trên từng tuyến. Wraps, no truncation
+                    (prototype :196-203). */}
+                <th
+                  scope="row"
+                  className="border-line sticky left-0 z-10 border-b bg-white px-4 py-2.5 text-left font-normal"
+                >
+                  <div className="text-navy font-medium">{q.label}</div>
+                  <code className="text-ink-muted text-[10.5px]">{q.code}</code>
                 </th>
                 {vaiTro.map((vt) =>
                   chinhSua === undefined ? (
@@ -362,23 +351,6 @@ export function BangMaTran({
   );
 }
 
-/**
- * The ADR 0055 warning lines, one per watched key no working role holds. Exported so the test
- * renders it with data it controls (the parent reads the API inside an effect).
- *
- * TEXT, NOT COLOUR: the sentence names the key and the consequence; the styling is a second signal.
- */
-export function UnheldPermissionWarnings({ warnings }: { warnings: readonly UnheldWarning[] }) {
-  if (warnings.length === 0) return null;
-  return (
-    <Notice tone="neutral" icon={TriangleAlert} role="note" className="[&_p]:m-0 [&_p+p]:mt-1">
-      {warnings.map((w) => (
-        <p key={w.code}>{w.sentence}</p>
-      ))}
-    </Notice>
-  );
-}
-
 /** Cột không bấm được: đang lưu, hoặc là vai trò của chính người đang đăng nhập (#14). */
 function khoaCot(c: ChinhSuaMaTran, vt: identity_vaiTroCotRa): boolean {
   return c.banSua.dangLuu.has(vt.id) || laCotCuaToi(c, vt);
@@ -391,88 +363,91 @@ function laCotCuaToi(c: ChinhSuaMaTran, vt: identity_vaiTroCotRa): boolean {
 /**
  * Phần sửa ở đầu một cột: `Lưu` · `Huỷ` · câu lỗi của máy chủ · lý do cột bị khoá.
  *
- * THE PROTOTYPE'S RULE (ADR 0068 lần 5): `Lưu` · `Huỷ` appear ONLY on a column with unsaved changes
- * (or one being saved) — a column nobody touched has nothing to save, and eight greyed `Lưu` buttons
- * read as eight things waiting. The column of the signed-in admin's own role can never be changed
- * (#14), so it never shows them; it shows the reason instead. Câu lỗi mang `role="alert"` và nằm ngay
- * dưới nút của CHÍNH cột ấy — một câu lỗi chung ở đầu bảng không cho biết cột nào chưa lưu được.
+ * THE PROTOTYPE'S RULE (`RolePermissionMatrix.tsx:155-178`): `Lưu` · `Huỷ` appear ONLY on a column
+ * with unsaved changes (or one being saved); while ANY column saves, every column's pair is disabled
+ * and the saving one spins beside "Lưu". The column of the signed-in admin's own role can never be
+ * changed (#14), so it never shows them; it shows the reason instead. Câu lỗi mang `role="alert"` và
+ * nằm ngay dưới nút của CHÍNH cột ấy — một câu lỗi chung ở đầu bảng không cho biết cột nào chưa lưu.
  */
 function DauCotSua({ vt, chinhSua }: { vt: identity_vaiTroCotRa; chinhSua: ChinhSuaMaTran }) {
   const { banSua } = chinhSua;
   const daSua = cotDaSua(banSua, vt.id);
   const dangLuu = banSua.dangLuu.has(vt.id);
+  const anySaving = banSua.dangLuu.size > 0;
   const cuaToi = laCotCuaToi(chinhSua, vt);
   const loi = banSua.loi.get(vt.id);
 
   return (
     <>
       {(daSua || dangLuu) && !cuaToi && (
-        <span className="nut-cot">
+        <div className="mt-2 flex justify-center gap-1">
           <Button
             type="button"
             variant="primary"
             size="sm"
-            disabled={dangLuu}
+            className="h-7 px-2 text-[11px]"
+            disabled={anySaving}
             aria-busy={dangLuu}
             aria-label={nhanNutLuu(vt.name)}
             onClick={() => chinhSua.luu(vt.id)}
           >
-            {dangLuu ? NUT_DANG_LUU : NUT_LUU}
+            {dangLuu && <Loader2 aria-hidden="true" focusable="false" className="size-3 animate-spin" />}
+            {NUT_LUU}
           </Button>
           <Button
             type="button"
-            variant="secondary"
+            variant="outline"
             size="sm"
-            disabled={dangLuu}
+            className="h-7 px-2 text-[11px]"
+            disabled={anySaving}
             aria-label={nhanNutHuy(vt.name)}
             onClick={() => chinhSua.huy(vt.id)}
           >
             {NUT_HUY}
           </Button>
-        </span>
+        </div>
       )}
-      {cuaToi && <span className="dong-phu">{LY_DO_KHONG_TU_SUA}</span>}
+      {cuaToi && <div className="text-ink-muted mt-2 text-[10.5px] font-normal">{LY_DO_KHONG_TU_SUA}</div>}
       {loi !== undefined && (
-        <span className="thong-bao-loi loi-cot" role="alert">
+        <div className="text-danger mt-1 text-[11px] font-normal" role="alert">
           {loi}
-        </span>
+        </div>
       )}
     </>
   );
 }
 
+/** The prototype's two marks (`RolePermissionMatrix.tsx:208-218`): two SHAPES, not two colours. */
+function Mark({ daCap }: { daCap: boolean }) {
+  return daCap ? (
+    <Check aria-hidden="true" focusable="false" className="text-leaf mx-auto size-4" />
+  ) : (
+    <Minus aria-hidden="true" focusable="false" className="text-ink-muted/40 mx-auto size-4" />
+  );
+}
+
+const CELL_CLASS = "border-line border-b px-3 py-2.5 text-center";
+
 /**
- * Một ô của ma trận ở chế độ XEM. **Không phải điều khiển** — không `<input>`, không `<button>`,
- * không sự kiện bấm, và CSS cố ý không cho nó con trỏ chuột hay hiệu ứng rê chuột nào.
- *
- * HAI TÍN HIỆU, KHÔNG PHẢI MÀU: dấu `✓` và `–` khác nhau về HÌNH DẠNG, nên người không phân biệt
- * được màu vẫn đọc ra, và người dùng trình đọc màn hình nghe được câu đầy đủ ("Đã cấp" / "Chưa
- * cấp") thay vì một ký tự — `aria-hidden` trên dấu, câu chữ trong lớp chỉ-đọc-màn-hình.
+ * Một ô ở chế độ XEM — the icon alone (prototype :236-238). **Không phải điều khiển.** Người dùng
+ * trình đọc màn hình nghe được câu đầy đủ ("Đã cấp" / "Chưa cấp") thay vì một ký tự.
  */
 function ODaCap({ daCap }: { daCap: boolean }) {
   return (
-    <td className={daCap ? "o-da-cap" : "o-chua-cap"}>
-      {/* Two SHAPES (a tick, a dash), not two colours; the words are for the screen reader. */}
-      {daCap ? (
-        <Check aria-hidden="true" focusable="false" strokeWidth={2.2} className="inline-block size-4 text-success-600" />
-      ) : (
-        <Minus aria-hidden="true" focusable="false" strokeWidth={1.8} className="inline-block size-4 text-ink-400" />
-      )}
+    <td className={CELL_CLASS}>
+      <Mark daCap={daCap} />
       <span className="an-thi-giac">{nhanO(daCap)}</span>
     </td>
   );
 }
 
 /**
- * Một ô ở chế độ SỬA: the prototype's toggle — a `<button aria-pressed>` drawing the same two SHAPES as
- * the read-only cell (a tick, a dash), named "{nhãn quyền} — {tên vai trò}" (ADR 0068 lần 5).
+ * Một ô ở chế độ SỬA: the prototype's toggle — a `<button aria-pressed>` drawing the same two marks,
+ * named "{tên vai trò} — {nhãn quyền}". `aria-pressed` is the state a screen reader announces with
+ * the name, so for that user the state is never shape or colour alone.
  *
- * `aria-pressed` is the state a screen reader announces with the name, so for that user the state is
- * never shape or colour alone; the name itself says which right, for which role.
- *
- * Ô đã khác bản máy chủ mang thêm lớp `o-da-doi` — cán bộ thấy được mình đã đổi những ô nào trước
- * khi bấm Lưu, thay vì phải nhớ. Màu không phải tín hiệu duy nhất: trạng thái của ô là chính dấu
- * tích, lớp ấy chỉ là phần nhắc thêm.
+ * Ô đã khác bản máy chủ mang thêm nền `bg-tangerine/12` — cán bộ thấy được mình đã đổi những ô nào
+ * trước khi bấm Lưu. Ô của cột bị khoá (#14, hoặc đang lưu) là nút `disabled`, mờ đi.
  */
 function OBatTat({
   daCap,
@@ -488,21 +463,17 @@ function OBatTat({
   batTat: () => void;
 }) {
   return (
-    <td className={`${daCap ? "o-da-cap" : "o-chua-cap"}${daDoi ? " o-da-doi" : ""}`}>
+    <td className={daDoi ? `${CELL_CLASS} bg-tangerine/12` : CELL_CLASS}>
       <button
         type="button"
-        className="o-bat-tat"
+        className="hover:bg-canvas mx-auto grid size-7 place-items-center rounded-md disabled:cursor-not-allowed disabled:opacity-50"
         aria-pressed={daCap}
         disabled={khoa}
         aria-label={nhan}
         title={nhan}
         onClick={batTat}
       >
-        {daCap ? (
-          <Check aria-hidden="true" focusable="false" strokeWidth={2.2} className="size-4 text-success-600" />
-        ) : (
-          <Minus aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-4 text-ink-400" />
-        )}
+        <Mark daCap={daCap} />
       </button>
     </td>
   );

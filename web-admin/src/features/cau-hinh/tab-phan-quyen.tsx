@@ -1,6 +1,6 @@
 "use client";
 
-import { NoAccess } from "@/components/ui/no-access";
+import { Skeleton } from "@/components/ui/skeleton";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 
 import { MaTranPhanQuyen } from "./ma-tran-phan-quyen";
@@ -40,7 +40,21 @@ export function TabPhanQuyen() {
   const phien = usePhien();
 
   // `null` là "chưa đọc xong", không phải "không có quyền". Ba trạng thái, không hai.
-  if (phien === null) return <p role="status">Đang kiểm tra quyền truy cập…</p>;
+  // Drawn as the prototype's `Loading` (three 44px bars); the sentence stays for screen readers.
+  if (phien === null) {
+    return (
+      <>
+        <p role="status" className="an-thi-giac">
+          Đang kiểm tra quyền truy cập…
+        </p>
+        <div className="space-y-2">
+          <Skeleton className="h-11 w-full" />
+          <Skeleton className="h-11 w-full" />
+          <Skeleton className="h-11 w-full" />
+        </div>
+      </>
+    );
+  }
   const quyetDinh: QuyetDinhTab = quyetDinhTabPhanQuyen(phien);
 
   // KHÔNG ĐOÁN KHI KHÔNG ĐỌC ĐƯỢC QUYỀN: không dựng ma trận, và hiện đúng câu của máy chủ (thường
@@ -54,15 +68,12 @@ export function TabPhanQuyen() {
   }
 
   if (!quyetDinh.hien) {
-    // Shared `NoAccess` (spec v2 §8b) + this tab's own sentence, verbatim, as its caption.
+    // The prototype's `Denied` paragraph (`AccountWorkspace.tsx`, spec README §Quyền), verbatim.
     return (
-      <div className="khung-thieu-quyen flex min-w-0 flex-col items-center pb-10 [&>.trang-thai-rong]:m-0 [&>.trang-thai-rong]:max-w-md [&>.trang-thai-rong]:border-0 [&>.trang-thai-rong]:bg-transparent [&>.trang-thai-rong]:px-4 [&>.trang-thai-rong]:py-0 [&>.trang-thai-rong]:text-center [&>.trang-thai-rong]:text-[13px] [&>.trang-thai-rong]:text-ink-500">
-        <NoAccess className="pb-4" />
-        <p className="trang-thai-rong">
-          Tài khoản của bạn không có quyền phân quyền, nên màn này không hiển thị. Liên hệ quản trị
-          viên của đơn vị nếu bạn cần quyền này.
-        </p>
-      </div>
+      <p className="border-line text-ink-muted rounded-card border bg-white p-6 text-[13px]">
+        Tài khoản của bạn không có quyền quản lý phân quyền. Liên hệ Chánh Văn phòng hoặc quản trị viên
+        của đơn vị nếu cần.
+      </p>
     );
   }
 

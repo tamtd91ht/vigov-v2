@@ -105,11 +105,33 @@ describe("/nguoi-dung/phan-quyen", () => {
     expect(html).toContain("ROLE-MATRIX edit=true");
   });
 
-  it("DENIED: no `admin.role` (even with `admin.user`, look-alikes) → refusal, matrix never mounted", async () => {
+  it("P2: header is the prototype's — mb-5, h1 navy 22px bold, subtitle VERBATIM (owner 08/10/2026)", async () => {
+    fakeSession = sessionWith(["admin.role"]);
+    const html = await render(RolePermissionsPage);
+    expect(html).toMatch(/<header class="[^"]*mb-5[^"]*">/);
+    expect(html).toMatch(/<h1 class="[^"]*text-\[22px\][^"]*font-bold[^"]*text-navy[^"]*">Phân quyền<\/h1>/);
+    expect(html).toContain(
+      ">Mỗi vai trò làm được những gì. Đổi ở đây là đổi cho mọi cán bộ đang giữ vai trò đó, ngay lần đăng nhập sau của họ.<",
+    );
+    // No extra column gap between header and body: the header's own 20px is the only spacing.
+    expect(html).toMatch(/<\/header><div class="min-w-0">/);
+  });
+
+  it("P4: session not read yet → the three-bar skeleton, neither matrix nor refusal", async () => {
+    fakeSession = null;
+    const html = await render(RolePermissionsPage);
+    expect(html).not.toContain("ROLE-MATRIX");
+    expect(html).not.toContain("không có quyền");
+    expect(html).toMatch(/<div class="space-y-2">(<span[^>]*class="[^"]*h-11 w-full[^"]*"><\/span>){3}<\/div>/);
+  });
+
+  it("P3 DENIED: no `admin.role` (even with `admin.user`, look-alikes) → the prototype's paragraph, matrix never mounted", async () => {
     fakeSession = sessionWith(["admin.user", "admin.roles", "ADMIN.ROLE", "admin.audit"]);
     const html = await render(RolePermissionsPage);
     expect(html).not.toContain("ROLE-MATRIX");
-    expect(html).toContain("không có quyền phân quyền");
+    expect(html).toContain(
+      '<p class="border-line text-ink-muted rounded-card border bg-white p-6 text-[13px]">Tài khoản của bạn không có quyền quản lý phân quyền. Liên hệ Chánh Văn phòng hoặc quản trị viên của đơn vị nếu cần.</p>',
+    );
   });
 
   it("session unreadable → the server's sentence, matrix never mounted (fail closed)", async () => {

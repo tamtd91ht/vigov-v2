@@ -11,39 +11,15 @@ import type { identity_vaiTroCotRa } from "@/lib/api/schema.gen";
 import type { ThieuTruc } from "./ma-tran-quyen";
 
 /**
- * Đầu cột vai trò — HAI SỐ ĐẾM, và số thứ hai là TẬP CON của số thứ nhất.
+ * Đầu cột vai trò — MỘT số đếm, "{n} cán bộ", đúng câu prototype (`RolePermissionMatrix.tsx:147-149`).
  *
- * ─────────────────────────────────────────────────────────────────────────────────────────
- * VÌ SAO HAI SỐ CHỨ KHÔNG PHẢI MỘT (người dùng chốt, và hợp đồng phát ra đúng hai trường):
- *
- *   `staff_count`           mọi cán bộ đang giữ vai trò này — ĐÚNG con số tab Người dùng đếm
- *                           được bằng tay. Không lọc theo tài khoản, để hai màn hình cạnh nhau
- *                           không nói hai con số khác nhau về cùng một vai trò.
- *   `active_account_count`  trong số đó, ai có tài khoản và tài khoản đang mở. Đây là những
- *                           người mà một ô của cột này thật sự tác động tới.
- *
- * Một số thì luôn có một câu đố: "3 cán bộ" không cho biết một ô tích trên cột ấy chạm tới mấy
- * người, và một vai trò `3 · 0` là cột mà mọi dấu tích không tới được ai — đúng ca không nhìn
- * thấy được sau một con số duy nhất (`service-identity/internal/domain/quyen.go`).
- * ─────────────────────────────────────────────────────────────────────────────────────────
- *
- * CÂU CHỮ PHẢI NÓI RÕ QUAN HỆ TẬP CON, nên "1 TRONG SỐ ĐÓ" chứ không phải một nhãn đứng riêng:
- * hai con số đặt cạnh nhau mà không có chữ "trong số đó" thì đọc thành hai phép đo khác nhau, và
- * người đọc sẽ cộng chúng lại.
- *
- * TỪ VỰNG MƯỢN NGUYÊN TAB NGƯỜI DÙNG — "có tài khoản" (`has_account`) và "đang hoạt động"
- * (`active`) là đúng hai cột của bảng danh bạ (`nhan-can-bo.ts`), và đúng hai điều kiện máy chủ
- * đếm. Đặt ra một từ thứ ba ở đây là mời cán bộ đi tìm xem nó khác gì hai từ kia.
+ * `staff_count` là mọi cán bộ đang giữ vai trò — đúng con số trang Người dùng đếm được bằng tay, để
+ * hai màn hình không nói hai con số khác nhau về cùng một vai trò. Vế "… trong số đó có tài khoản
+ * đang hoạt động" (`active_account_count`) đã bị bỏ theo quyết định của chủ đầu tư ngày 08/10/2026
+ * (thẻ B, P13); hợp đồng vẫn phát trường ấy, màn hình này chỉ không in nó.
  */
 export function nhanSoNguoiGiuVaiTro(cot: identity_vaiTroCotRa): string {
-  // KHÔNG AI GIỮ VAI TRÒ NÀY: một câu, không phải "0 cán bộ · 0 trong số đó…". Số thứ hai là tập
-  // con của một tập rỗng nên nó không nói thêm được gì, và câu ghép ấy đọc như tiếng máy.
-  // Điều kiện đòi CẢ HAI số bằng 0: nếu có ngày máy chủ trả một tập con lớn hơn tập cha thì đó là
-  // dữ liệu lệch, và nó phải hiện ra nguyên hai con số chứ không bị câu này nuốt mất.
-  if (cot.staff_count === 0 && cot.active_account_count === 0) {
-    return "Chưa có cán bộ nào giữ vai trò này";
-  }
-  return `${cot.staff_count} cán bộ · ${cot.active_account_count} trong số đó có tài khoản đang hoạt động`;
+  return `${cot.staff_count} cán bộ`;
 }
 
 /** Nhãn phụ của vai trò lãnh đạo — `is_leader`. CHỈ là nhãn: xem `ma-tran-phan-quyen.tsx`. */
@@ -72,9 +48,9 @@ export function nhanChuaCauHinh(thieu: ThieuTruc): string {
   switch (thieu) {
     case "vaiTro":
       return (
-        "Đơn vị chưa có vai trò nào, nên ma trận chưa có cột nào để hiển thị. Người có quyền phân " +
-        "quyền có thể bấm Tạo tám vai trò mẫu ở trên — liên hệ quản trị hệ thống nếu đơn vị đã hoạt " +
-        "động mà danh sách vẫn trống."
+        // No pointer to "Tạo tám vai trò mẫu": the owner removed that panel from this page (08/10/2026).
+        "Đơn vị chưa có vai trò nào, nên ma trận chưa có cột nào để hiển thị. Liên hệ quản trị hệ " +
+        "thống nếu đơn vị đã hoạt động mà danh sách vẫn trống."
       );
     case "danhMucQuyen":
       return (
@@ -89,28 +65,21 @@ export function nhanChuaCauHinh(thieu: ThieuTruc): string {
   }
 }
 
-/** Hướng dẫn đầu tab khi tài khoản sửa được — nguyên câu của đặc tả §4. */
-export const HUONG_DAN_SUA =
-  "Bấm vào ô để bật hoặc tắt quyền, sau đó bấm Lưu ở đầu cột của vai trò đó.";
-
-/**
- * Câu khi tài khoản chỉ xem được ma trận. Không xảy ra qua cổng tab hôm nay (tab đòi đúng khoá
- * sửa), nhưng bảng vẫn dựng được ở chế độ xem, và một bảng không có ô bấm mà không nói vì sao thì
- * cán bộ sẽ tưởng màn hình hỏng.
- */
-export const GHI_CHU_CHI_XEM = "Bảng chỉ để xem. Tài khoản của bạn không có quyền phân quyền.";
-
 export const NUT_LUU = "Lưu";
-export const NUT_DANG_LUU = "Đang lưu…";
 export const NUT_HUY = "Huỷ";
 
 /**
- * Tên đọc được của một ô bấm: "{nhãn quyền} — {tên vai trò}". Trình đọc màn hình đọc riêng ô ấy,
- * không kèm tiêu đề hàng và cột, nên thiếu một nửa là cán bộ tick mà không biết mình đang cấp
- * quyền gì cho ai.
+ * Tên đọc được của một ô bấm: "{tên vai trò} — {nhãn quyền}", vai trò trước như `title` của prototype
+ * (`RolePermissionMatrix.tsx:231`). Trình đọc màn hình đọc riêng ô ấy, không kèm tiêu đề hàng và cột,
+ * nên thiếu một nửa là cán bộ tick mà không biết mình đang cấp quyền gì cho ai.
  */
 export function nhanOBatTat(nhanQuyen: string, tenVaiTro: string): string {
-  return `${nhanQuyen} — ${tenVaiTro}`;
+  return `${tenVaiTro} — ${nhanQuyen}`;
+}
+
+/** Toast after a column saved — the prototype's sentence (`RolePermissionMatrix.tsx:117`). */
+export function savedToast(roleName: string): string {
+  return `Đã lưu quyền của vai trò ${roleName}.`;
 }
 
 /** Tên đọc được của hai nút đầu cột — chữ "Lưu" đứng một mình thì tám cột nghe như nhau. */

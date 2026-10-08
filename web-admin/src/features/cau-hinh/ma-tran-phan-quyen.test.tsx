@@ -180,14 +180,15 @@ describe("BangMaTran ở chế độ sửa", () => {
     expect(html).not.toContain("<button");
   });
 
-  it("có phần sửa thì mỗi ô là một nút bật/tắt mang tên \"{nhãn quyền} — {tên vai trò}\"", () => {
+  it("có phần sửa thì mỗi ô là một nút bật/tắt mang tên \"{tên vai trò} — {nhãn quyền}\" (prototype :231)", () => {
     const html = veSua(banSuaMoi(GOC_A));
     expect(html).toContain("aria-pressed");
-    expect(html).toContain('aria-label="Quản lý tài khoản — Chuyên viên"');
-    expect(html).toContain('aria-label="Phân quyền — Lãnh đạo"');
+    expect(html).toContain('aria-label="Chuyên viên — Quản lý tài khoản"');
+    expect(html).toContain('title="Chuyên viên — Quản lý tài khoản"');
+    expect(html).toContain('aria-label="Lãnh đạo — Phân quyền"');
     // Ô đã cấp thì đang bật.
-    expect(o(html, "Quản lý tài khoản — Lãnh đạo")).toContain('aria-pressed="true"');
-    expect(o(html, "Quản lý tài khoản — Chuyên viên")).toContain('aria-pressed="false"');
+    expect(o(html, "Lãnh đạo — Quản lý tài khoản")).toContain('aria-pressed="true"');
+    expect(o(html, "Chuyên viên — Quản lý tài khoản")).toContain('aria-pressed="false"');
   });
 
   it("`Lưu` · `Huỷ` chỉ có ở cột ĐÃ SỬA (prototype) — cột chưa đụng tới không có nút nào", () => {
@@ -196,8 +197,12 @@ describe("BangMaTran ở chế độ sửa", () => {
     expect(html).toContain('aria-label="Huỷ thay đổi chưa lưu của vai trò Chuyên viên"');
     expect(html).not.toContain('aria-label="Lưu phân quyền của vai trò Lãnh đạo"');
     expect(html).not.toContain('aria-label="Huỷ thay đổi chưa lưu của vai trò Lãnh đạo"');
-    // The changed cell is marked, so the officer sees what will be saved before pressing it.
-    expect(html).toMatch(/<td class="o-da-cap o-da-doi"><button[^>]*aria-label="Phân quyền — Chuyên viên"/);
+    // The changed cell is marked (P23 `bg-tangerine/12`), so the officer sees what will be saved.
+    expect(html).toMatch(
+      /<td class="border-line border-b px-3 py-2\.5 text-center bg-tangerine\/12"><button[^>]*aria-label="Chuyên viên — Phân quyền"/,
+    );
+    // An unchanged cell carries no tint.
+    expect(html).toMatch(/<td class="border-line border-b px-3 py-2\.5 text-center"><button[^>]*aria-label="Lãnh đạo — Phân quyền"/);
   });
 
   it("chưa sửa gì thì không cột nào có nút Lưu", () => {
@@ -213,15 +218,15 @@ describe("BangMaTran ở chế độ sửa", () => {
 
     expect(html).toContain(`role="alert">${cau}<`);
     // Ô vừa gỡ vẫn đang gỡ (không bị trả về bản máy chủ), và nút Lưu vẫn bật để thử lại bằng tay.
-    expect(o(html, "Quản lý tài khoản — Lãnh đạo")).not.toContain("checked");
+    expect(o(html, "Lãnh đạo — Quản lý tài khoản")).toContain('aria-pressed="false"');
     expect(nut(html, "Lưu phân quyền của vai trò Lãnh đạo")).not.toContain('disabled=""');
   });
 
   it("cột của CHÍNH vai trò mình bị khoá kèm lý do (#14); cột khác vẫn bấm được", () => {
     const html = veSua(banSuaMoi(GOC_A), "lanh-dao");
     expect(html).toContain(LY_DO_KHONG_TU_SUA);
-    expect(o(html, "Phân quyền — Lãnh đạo")).toContain('disabled=""');
-    expect(o(html, "Phân quyền — Chuyên viên")).not.toContain("disabled");
+    expect(o(html, "Lãnh đạo — Phân quyền")).toContain('disabled=""');
+    expect(o(html, "Chuyên viên — Phân quyền")).not.toContain('disabled=""');
     // Its cells cannot change, so it never offers a Save.
     expect(html).not.toContain('aria-label="Lưu phân quyền của vai trò Lãnh đạo"');
   });
@@ -231,5 +236,106 @@ describe("BangMaTran ở chế độ sửa", () => {
     expect(html).not.toContain(LY_DO_KHONG_TU_SUA);
     expect(html).not.toMatch(/<button[^>]*aria-pressed[^>]*disabled=""/);
     expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*aria-pressed/);
+  });
+});
+
+/**
+ * PROTOTYPE FIDELITY — card B (08/10/2026), `vigov-require/apps/admin/src/components/admin/
+ * RolePermissionMatrix.tsx`. One case per MISMATCH row it closes; the row number is in the name.
+ * Class strings are pinned because the legacy `.bang-phan-quyen` block they replace is deleted: a
+ * utility missing here is a property nothing sets any more.
+ */
+describe("BangMaTran follows the prototype (card B)", () => {
+  it("P8/P9: frame scrolls horizontally only — no max-height, no sticky header row", () => {
+    const html = ve(NHOM_A);
+    expect(html).toMatch(/<div class="border-line overflow-x-auto rounded-\[10px\] border"/);
+    expect(html).toContain('<table class="w-full border-collapse text-[12.5px]">');
+    expect(html).not.toMatch(/max-h-|75vh|bang-cuon|bang-phan-quyen/);
+    expect(html).not.toMatch(/sticky top-0/);
+  });
+
+  it("P10: corner cell 'Quyền' sticks left, canvas fill, no fixed width", () => {
+    const html = ve(NHOM_A);
+    expect(html).toMatch(
+      /<th scope="col" class="bg-canvas border-line text-ink-muted sticky left-0 z-10 border-b px-4 py-3 text-left font-semibold">Quyền<\/th>/,
+    );
+  });
+
+  it("P11–P13: role head — name, then ONE count '{n} cán bộ'", () => {
+    const html = ve(NHOM_A);
+    expect(html).toContain(
+      'class="bg-canvas border-line min-w-30 border-b px-3 py-3 text-center align-bottom"',
+    );
+    expect(html).toContain('<div class="text-navy font-semibold">Chuyên viên</div>');
+    expect(html).toContain('<div class="text-ink-muted mt-1 text-[10.5px] font-normal">3 cán bộ</div>');
+    expect(html).not.toContain("trong số đó");
+  });
+
+  it("P14: leader badge is violet 'Lãnh đạo' with NO icon, after the count", () => {
+    const html = ve(NHOM_A);
+    expect(html).toMatch(
+      /<span class="[^"]*bg-violet\/12 text-violet border-violet\/25 mt-1\.5 text-\[9\.5px\][^"]*">Lãnh đạo<\/span>/,
+    );
+    expect(html).not.toContain("lucide-crown");
+    // Count first, badge second (prototype :147-154).
+    const head = html.slice(html.indexOf(">1 cán bộ<"));
+    expect(head.indexOf("bg-violet/12")).toBeGreaterThan(0);
+    // Non-leader column has no badge: exactly one.
+    expect(html.match(/bg-violet\/12/g)).toHaveLength(1);
+  });
+
+  it("P18: group row — one full-width cell in the prototype's classes, label from the server", () => {
+    const html = ve(NHOM_A);
+    expect(html).toMatch(
+      /<th[^>]*colSpan="3"[^>]*class="bg-canvas\/70 border-line text-navy border-y px-4 py-2 text-left text-\[11\.5px\] font-bold tracking-wide uppercase"[^>]*>Quản trị<\/th>/,
+    );
+    expect(html).not.toContain("nhan-nhom");
+  });
+
+  it("P21/P22: permission cell — label + code, sticky left, white, wraps (no truncate)", () => {
+    const html = ve(NHOM_A);
+    expect(html).toContain('<tr class="hover:bg-canvas/60">');
+    expect(html).toMatch(
+      /<th scope="row" class="border-line sticky left-0 z-10 border-b bg-white px-4 py-2\.5 text-left font-normal"><div class="text-navy font-medium">Quản lý tài khoản<\/div><code class="text-ink-muted text-\[10\.5px\]">admin\.user<\/code><\/th>/,
+    );
+    expect(html).not.toContain("truncate");
+  });
+
+  it("P24/P25: read-only cell is the icon alone — leaf Check / muted Minus, centred", () => {
+    const html = ve(NHOM_A, [{ role_id: "vt-1", permission: "admin.user" }]);
+    expect(html).not.toContain("<button");
+    expect(html).toMatch(/<svg[^>]*class="lucide lucide-check[^"]*text-leaf mx-auto size-4"/);
+    expect(html).toMatch(/<svg[^>]*class="lucide lucide-minus[^"]*text-ink-muted\/40 mx-auto size-4"/);
+  });
+
+  it("P24: edit-mode toggle is the prototype's 28px square button", () => {
+    const html = veSua(banSuaMoi(GOC_A));
+    expect(o(html, "Chuyên viên — Quản lý tài khoản")).toContain(
+      'class="hover:bg-canvas mx-auto grid size-7 place-items-center rounded-md',
+    );
+  });
+
+  it("P15: Lưu / Huỷ are the prototype's 28px buttons, in a centred row", () => {
+    const html = veSua(batTatO(banSuaMoi(GOC_A), "vt-1", "admin.role"));
+    expect(html).toContain('<div class="mt-2 flex justify-center gap-1">');
+    expect(nut(html, "Lưu phân quyền của vai trò Chuyên viên")).toMatch(/h-7 px-2 text-\[11px\]/);
+    expect(nut(html, "Huỷ thay đổi chưa lưu của vai trò Chuyên viên")).toMatch(/h-7 px-2 text-\[11px\]/);
+  });
+
+  it("P15/P16: while ONE column saves, every column's Lưu/Huỷ is disabled; the saving one spins", () => {
+    let b = batTatO(banSuaMoi(GOC_A), "vt-1", "admin.role");
+    b = batTatO(b, "vt-2", "admin.role");
+    b = batDauLuu(b, "vt-1");
+    const html = veSua(b);
+
+    const saveSaving = nut(html, "Lưu phân quyền của vai trò Chuyên viên");
+    expect(saveSaving).toContain('disabled=""');
+    expect(nut(html, "Huỷ thay đổi chưa lưu của vai trò Chuyên viên")).toContain('disabled=""');
+    // The OTHER dirty column is frozen too (prototype `savingRoleId !== null`).
+    expect(nut(html, "Lưu phân quyền của vai trò Lãnh đạo")).toContain('disabled=""');
+    expect(nut(html, "Huỷ thay đổi chưa lưu của vai trò Lãnh đạo")).toContain('disabled=""');
+    // Loader2 inside the saving column's Lưu only; the word stays "Lưu".
+    expect(html.match(/lucide-loader-circle[^"]*size-3 animate-spin/g)).toHaveLength(1);
+    expect(html).not.toContain("Đang lưu…");
   });
 });

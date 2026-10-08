@@ -1,5 +1,3 @@
-import { ShieldCheck } from "lucide-react";
-
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
 import { DauTrang } from "@/components/dau-trang";
 import { PageHeader } from "@/components/ui/page-header";
@@ -34,14 +32,16 @@ export default async function RolePermissionsPage() {
         <div className="khung-trang">
           <DauTrang />
           <main className="than-trang">
+            {/* The prototype's header (`AccountWorkspace.tsx` `RoleWorkspace`): no button, 20px to the
+                body. Subtitle VERBATIM by owner decision 08/10/2026, knowing the server applies a
+                change on the next request rather than the next login. */}
             <PageHeader
-              icon={ShieldCheck}
+              className="mb-5"
               title="Phân quyền"
-              subtitle="Mỗi vai trò làm được những gì. Đổi ở đây là đổi cho mọi cán bộ đang giữ vai trò đó."
+              subtitle="Mỗi vai trò làm được những gì. Đổi ở đây là đổi cho mọi cán bộ đang giữ vai trò đó, ngay lần đăng nhập sau của họ."
             />
-            {/* `min-w-0`: the matrix scrolls inside its own region, never the page. `[&>section]:mt-0`
-                drops the top margin the section kept from its stacked-on-`/cau-hinh` days. */}
-            <div className="flex min-w-0 flex-col gap-4 [&>section]:mt-0">
+            {/* `min-w-0`: the matrix scrolls inside its own region, never the page. */}
+            <div className="min-w-0">
               <TabPhanQuyen />
             </div>
           </main>
