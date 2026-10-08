@@ -76,22 +76,6 @@ export const NUT_HUY = "Huỷ";
 export const NUT_XAC_NHAN_KHOA = "Xác nhận khoá";
 export const NUT_XAC_NHAN_MO_KHOA = "Xác nhận mở khoá";
 
-/**
- * MÀN `/nguoi-dung` (trước 05/10/2026 là màn `/nguoi-dung` (trước 05/10/2026 là tab `Cấu hình → Người dùng`)) KHÔNG CÓ NÚT XOÁ, và đây là hằng ghi lại lý do ở chỗ người ta sẽ đi
- * tìm nó.
- *
- * Câu mở #10 (chốt 22/09/2026) tách KHOÁ khỏi XOÁ: nghỉ hưu / chuyển công tác là KHOÁ, người vẫn
- * còn trong danh bạ; xoá một dòng nhập trùng là XOÁ MỀM và mang QUYỀN RIÊNG (`admin.user.delete`,
- * gieo ở migration 0010, ADR 0035). Nút xoá dòng trùng nằm ở màn `/danh-ba`, sau quyền ấy — không ở
- * tab này, nơi mọi nút đều đứng sau `admin.user`.
- *
- * Câu dưới hiện trên tab ấy, nên phải nói đúng chỗ việc xoá được làm: "chưa mở" đã sai từ 24/09/2026.
- */
-export const VI_SAO_KHONG_CO_NUT_XOA =
-  "Cán bộ nghỉ hưu hoặc chuyển công tác thì khoá tài khoản, không xoá: hồ sơ đã xử lý phải còn " +
-  "đọc được tên người thực hiện. Dòng nhập trùng (không có tài khoản đăng nhập) được xoá ở màn " +
-  "Danh bạ cán bộ, bởi người có quyền riêng cho việc ấy.";
-
 /* ---- tiêu đề và câu giải thích của từng biểu mẫu -------------------------------------------- */
 
 export function tieuDeThem(): string {
@@ -336,4 +320,24 @@ export function thanSua(ban: BanNhapCanBo, goc: identity_canBoTomTat): identity_
  */
 export function khoaChongTrungMoi(): string {
   return crypto.randomUUID();
+}
+
+/* ---- the `/nguoi-dung` profile dialog in the prototype's shape (`UserFormDialog.tsx`) ---------------
+ * NEW exports only: every string above is shared by /danh-ba and /mini-app, which must not change. */
+
+/** Edit title. Add keeps `tieuDeThem()` ("…vào danh bạ"): adding does NOT create a sign-in account (#9). */
+export const ACCOUNT_EDIT_TITLE = "Sửa tài khoản cán bộ";
+export const ACCOUNT_EMAIL_LABEL = "Thư điện tử";
+export const ACCOUNT_NO_UNIT_OPTION = "— Chưa xếp bộ phận —";
+export const ACCOUNT_SAVED = "Đã lưu tài khoản.";
+
+export const NAME_PLACEHOLDER = "Nguyễn Văn A";
+export const EMAIL_PLACEHOLDER = "canbo@xa.gov.vn";
+export const POSITION_PLACEHOLDER = "Công chức Văn phòng";
+/** A prefix, never a whole number (rule 3: no phone number in source). */
+export const PHONE_PLACEHOLDER = "0905…";
+
+/** The staff code shown, not editable, on the edit form (#15). */
+export function staffCodeNote(code: string): string {
+  return `Mã cán bộ: ${code} — do hệ thống cấp, không sửa được.`;
 }

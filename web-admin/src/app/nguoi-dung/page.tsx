@@ -40,10 +40,10 @@ export default async function UsersPage() {
           <DauTrang />
           <main className="than-trang">
             {/* The page header is drawn by `TabNguoiDung` (prototype: `Nhập từ Excel` sits in the
-                header and opens a dialog of the list below). `[&>header]:mb-1` because the column gap
-                already spaces it. `[&>section]:mt-0`: the section kept the 2.5rem top margin it had as
-                one of several stacked parts of `/cau-hinh`; under a page header it is a gap with no reason. */}
-            <div className="flex min-w-0 flex-col gap-4 [&>header]:mb-1 [&>section]:mt-0">
+                header and opens a dialog of the list below); the header's own `mb-5` and the list's
+                `space-y-3` are the prototype's spacing (`AccountWorkspace.tsx`), so this wrapper adds
+                none. `min-w-0`: the table scrolls inside its own frame, never the page. */}
+            <div className="min-w-0">
               <TabNguoiDung />
             </div>
           </main>

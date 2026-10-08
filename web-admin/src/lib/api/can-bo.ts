@@ -44,6 +44,7 @@ import type {
   identity_delete_staff_by_id_lockout,
   identity_get_staff,
   identity_get_staff_by_id,
+  identity_get_staff_counts,
   identity_patch_staff_by_id,
   identity_post_staff,
   identity_post_staff_by_id_lockout,
@@ -315,6 +316,23 @@ export function docTrangDanhBa(
 export function layChiTietCanBo(id: string): Promise<KetQua<identity_canBoTomTat>> {
   const thamSo: identity_get_staff_by_id["thamSo"] = { id };
   return docJSON<identity_canBoTomTat>(`/api/v1/staff/${encodeURIComponent(thamSo.id)}`);
+}
+
+/**
+ * GET /api/v1/staff-counts — the commune's register size (`admin.user`, `service-identity/internal/
+ * http/routes.go`). No parameter: the commune is the one the edge fixed from Host (rule 1).
+ *
+ * `total` IS CHECKED AT RUN TIME. TypeScript casts the JSON without looking at it, and a total that is
+ * `undefined` would print "Hiển thị 20/undefined cán bộ." on an authority's screen; anything that is
+ * not a non-negative integer is reported as "no total", never guessed.
+ */
+export async function getStaffCounts(): Promise<KetQua<number>> {
+  const answer = await docJSON<identity_get_staff_counts["phanHoi"][200]>("/api/v1/staff-counts");
+  if (!answer.ok) return answer;
+  const total = (answer.duLieu as { total?: unknown } | null)?.total;
+  return typeof total === "number" && Number.isInteger(total) && total >= 0
+    ? { ok: true, duLieu: total }
+    : { ok: false, thongBao: "Không đọc được tổng số cán bộ." };
 }
 
 /* ---- năm tuyến ghi ------------------------------------------------------------------------- */

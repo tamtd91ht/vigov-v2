@@ -1,15 +1,18 @@
 "use client";
 
-import { Upload, UsersRound } from "lucide-react";
+import { Upload } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
-import { NoAccess } from "@/components/ui/no-access";
 import { PageHeader } from "@/components/ui/page-header";
+import { Skeleton } from "@/components/ui/skeleton";
+import { duocXoaTheoPhien } from "@/features/danh-ba/xoa-dong";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 
+import { SMALL_BUTTON_CLASS } from "./config-ui";
 import { DanhBaCanBo } from "./danh-ba-can-bo";
 import { IMPORT_BUTTON } from "./excel-import-flow";
+import { USERS_DENIED } from "./nhan-can-bo";
 import { quyetDinhTabNguoiDung, type QuyetDinhTab } from "./quyen-tab";
 
 /**
@@ -29,7 +32,8 @@ import { quyetDinhTabNguoiDung, type QuyetDinhTab } from "./quyen-tab";
  *
  * Bỏ lớp 1 thì màn hình xấu. Bỏ lớp 2 thì danh bạ cán bộ của một cơ quan nhà nước mở cho mọi
  * tài khoản đã đăng nhập (luật 5, cấm #1: kiểm quyền ở giao diện thay cho tầng dịch vụ là
- * không kiểm gì cả).
+ * không kiểm gì cả). Cùng lẽ ấy cho nút Xoá: `admin.user.delete` ở đây chỉ quyết định có VẼ
+ * `Trash2`; `DELETE /api/v1/staff/{id}` kiểm khoá ấy trên từng lời gọi.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  *
  * VÌ SAO ĐỌC QUYỀN Ở TRÌNH DUYỆT CHỨ KHÔNG Ở MÁY CHỦ: gọi ở phía máy chủ thì phải chuyển tiếp
@@ -48,10 +52,30 @@ export const USERS_PAGE_SUBTITLE =
  * THE PAGE HEADER LIVES HERE, not in `app/nguoi-dung/page.tsx`, for one reason: the prototype puts
  * `Nhập từ Excel` in the header's action slot, and that button opens a dialog whose state belongs to the
  * list below it. The header is drawn in EVERY branch (checking, unreadable, denied, allowed) so the
- * `<h1>` never depends on the session; only the allowed branch gets the action.
+ * `<h1>` never depends on the session; only the allowed branch gets the action. `mb-5` is the
+ * prototype's gap under the header (`AccountWorkspace.tsx`).
  */
 function UsersPageHeader({ actions }: { actions?: ReactNode }) {
-  return <PageHeader icon={UsersRound} title={USERS_PAGE_TITLE} subtitle={USERS_PAGE_SUBTITLE} actions={actions} />;
+  return <PageHeader className="mb-5" title={USERS_PAGE_TITLE} subtitle={USERS_PAGE_SUBTITLE} actions={actions} />;
+}
+
+/**
+ * The prototype's loading block (`AccountWorkspace.tsx`, `Loading`): three 44px bars. Decorative; the
+ * sentence beside it is the live region.
+ */
+export function UsersLoading({ label }: { label: string }) {
+  return (
+    <>
+      <p role="status" className="an-thi-giac">
+        {label}
+      </p>
+      <div className="space-y-2" aria-hidden="true">
+        <Skeleton className="h-11 w-full" />
+        <Skeleton className="h-11 w-full" />
+        <Skeleton className="h-11 w-full" />
+      </div>
+    </>
+  );
 }
 
 /** `active` — whether this tab is on display; passed through so the staff screen re-reads its catalogues. */
@@ -76,7 +100,7 @@ export function TabNguoiDung({ active = true }: { active?: boolean } = {}) {
     return (
       <>
         <UsersPageHeader />
-        <p role="status">Đang kiểm tra quyền truy cập…</p>
+        <UsersLoading label="Đang kiểm tra quyền truy cập…" />
       </>
     );
   }
@@ -95,17 +119,14 @@ export function TabNguoiDung({ active = true }: { active?: boolean } = {}) {
   }
 
   if (!quyetDinh.hien) {
-    // Shared `NoAccess` (spec v2 §8b) + this tab's own sentence, verbatim, as its caption.
+    // The prototype's refusal (`AccountWorkspace.tsx`, `Denied`). `border-solid` and `m-0` because
+    // preflight is off here: a bare `border` draws nothing and a bare `<p>` keeps the UA's margins.
     return (
       <>
         <UsersPageHeader />
-        <div className="khung-thieu-quyen flex min-w-0 flex-col items-center pb-10 [&>.trang-thai-rong]:m-0 [&>.trang-thai-rong]:max-w-md [&>.trang-thai-rong]:border-0 [&>.trang-thai-rong]:bg-transparent [&>.trang-thai-rong]:px-4 [&>.trang-thai-rong]:py-0 [&>.trang-thai-rong]:text-center [&>.trang-thai-rong]:text-[13px] [&>.trang-thai-rong]:text-ink-500">
-          <NoAccess className="pb-4" />
-          <p className="trang-thai-rong">
-            Tài khoản của bạn không có quyền quản lý người dùng, nên màn này không hiển thị. Liên hệ
-            quản trị viên của đơn vị nếu bạn cần quyền này.
-          </p>
-        </div>
+        <p className="border-line text-ink-muted rounded-card m-0 border border-solid bg-white p-6 text-[13px]">
+          {USERS_DENIED}
+        </p>
       </>
     );
   }
@@ -113,22 +134,28 @@ export function TabNguoiDung({ active = true }: { active?: boolean } = {}) {
   return (
     <>
       {/* Same key as every write of this screen (`admin.user`), so no second gate; the role column of
-          the sheet additionally needs `admin.role`, which the server checks on the import itself. */}
+          the sheet additionally needs `admin.role`, which the server checks on the import itself. Never
+          disabled (prototype): the dialog it opens is modal, so it cannot be pressed twice anyway. */}
       <UsersPageHeader
         actions={
           <Button
             type="button"
             variant="outline"
             size="sm"
-            icon={<Upload aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+            className={SMALL_BUTTON_CLASS}
+            icon={<Upload aria-hidden="true" focusable="false" className="size-4" />}
             onClick={() => setImportOpen(true)}
-            disabled={importOpen}
           >
             {IMPORT_BUTTON}
           </Button>
         }
       />
-      <DanhBaCanBo active={active} importOpen={importOpen} onImportClose={() => setImportOpen(false)} />
+      <DanhBaCanBo
+        active={active}
+        canDelete={duocXoaTheoPhien(phien)}
+        importOpen={importOpen}
+        onImportClose={() => setImportOpen(false)}
+      />
     </>
   );
 }

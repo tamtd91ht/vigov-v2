@@ -30,7 +30,11 @@ vi.mock("@/lib/tenant.server", () => ({
 // The header carries the navigation since the text sidebar was replaced (ADR 0068 §Sửa đổi 05/10/2026 lần 2).
 vi.mock("@/components/dau-trang", () => ({ DauTrang: () => <header>HEADER</header> }));
 vi.mock("@/features/cau-hinh/danh-ba-can-bo", () => ({
-  DanhBaCanBo: ({ active }: { active?: boolean }) => <section>STAFF-ACCOUNTS active={String(active)}</section>,
+  DanhBaCanBo: ({ active, canDelete }: { active?: boolean; canDelete?: boolean }) => (
+    <section>
+      STAFF-ACCOUNTS active={String(active)} canDelete={String(canDelete)}
+    </section>
+  ),
 }));
 vi.mock("@/features/cau-hinh/ma-tran-phan-quyen", () => ({
   MaTranPhanQuyen: ({ choSua }: { choSua: boolean }) => <section>ROLE-MATRIX edit={String(choSua)}</section>,
@@ -70,22 +74,56 @@ describe("/nguoi-dung", () => {
     expect(html).toMatch(/<button[^>]*>.*Nhập từ Excel<\/button>/);
   });
 
-  it("DENIED: no `admin.user` (even with `admin.role`, `admin.user.delete`) → refusal, list never mounted", async () => {
+  it("prototype header (U2/U3): navy 22px bold title, the subtitle verbatim, no icon tile", async () => {
+    fakeSession = sessionWith(["admin.user"]);
+    const html = await render(UsersPage);
+    expect(html).toMatch(/<h1[^>]*class="[^"]*text-\[22px\][^"]*font-bold[^"]*text-navy[^"]*"[^>]*>Người dùng<\/h1>/);
+    expect(html).toContain(
+      "Tài khoản cán bộ của đơn vị: bộ phận công tác, vai trò được gán và trạng thái hoạt động.",
+    );
+  });
+
+  it("U4: `Nhập từ Excel` is an outline sm button with the Upload icon, never disabled", async () => {
+    fakeSession = sessionWith(["admin.user"]);
+    const html = await render(UsersPage);
+    const button = /<button[^>]*>(?:(?!<\/button>).)*Nhập từ Excel<\/button>/.exec(html)?.[0] ?? "";
+    expect(button).toContain("h-7");
+    expect(button).toContain("lucide-upload");
+    expect(button).not.toContain('disabled=""');
+  });
+
+  it("DELETE GATE: `admin.user.delete` reaches the list as `canDelete`; without it, false (UX only, rule 5)", async () => {
+    fakeSession = sessionWith(["admin.user", "admin.user.delete"]);
+    expect(await render(UsersPage)).toContain("canDelete=true");
+    fakeSession = sessionWith(["admin.user", "admin.user.deletes", "ADMIN.USER.DELETE"]);
+    expect(await render(UsersPage)).toContain("canDelete=false");
+  });
+
+  it("DENIED: no `admin.user` (even with `admin.role`, `admin.user.delete`) → the prototype's paragraph, list never mounted", async () => {
     fakeSession = sessionWith(["admin.role", "admin.user.delete", "admin.users", "ADMIN.USER"]);
     const html = await render(UsersPage);
     expect(html).not.toContain("STAFF-ACCOUNTS");
-    expect(html).toContain("không có quyền quản lý người dùng");
+    const refusal =
+      /<p class="([^"]*)">Tài khoản của bạn không có quyền quản lý tài khoản người dùng\. Liên hệ Chánh Văn phòng hoặc quản trị viên của đơn vị nếu cần\.<\/p>/.exec(
+        html,
+      );
+    // The prototype's classes; `border-solid` + `m-0` because preflight is off in this app (a bare
+    // `border` draws nothing, a bare `<p>` keeps the UA's 1em margins).
+    for (const token of ["border-line", "text-ink-muted", "rounded-card", "border", "border-solid", "bg-white", "p-6", "text-[13px]", "m-0"]) {
+      expect((refusal?.[1] ?? "").split(" ")).toContain(token);
+    }
     // The header stays (the page still says where you are), but without its write action.
     expect(html).toMatch(/<h1[^>]*>Người dùng<\/h1>/);
     expect(html).not.toContain("Nhập từ Excel");
   });
 
-  it("session not read yet → neither the list nor a refusal", async () => {
+  it("session not read yet → three 44px skeleton bars, neither the list nor a refusal", async () => {
     fakeSession = null;
     const html = await render(UsersPage);
     expect(html).not.toContain("STAFF-ACCOUNTS");
     expect(html).not.toContain("không có quyền");
     expect(html).toContain("Đang kiểm tra quyền truy cập");
+    expect(html).toMatch(/<div class="space-y-2"[^>]*>(<span[^>]*class="[^"]*h-11 w-full[^"]*"[^>]*><\/span>){3}<\/div>/);
     expect(html).not.toContain("Nhập từ Excel");
   });
 

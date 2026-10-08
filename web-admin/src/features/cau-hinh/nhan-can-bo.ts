@@ -157,3 +157,51 @@ export function nhanVaiTro(ket: KetTra): string {
       return "Chưa đọc được danh mục vai trò";
   }
 }
+
+/* ---- `/nguoi-dung` in the prototype's shape (owner decisions 08/10/2026, fix-web-admin card A) ---- */
+
+/** Search box name and placeholder. The placeholder is TRUE: the server searches name, position and
+ * the two phones (`store/can_bo_danh_sach.go`), never email or unit — the prototype's "thư điện tử, bộ
+ * phận" would send an officer typing an address to an empty list and the wrong conclusion. */
+export const SEARCH_LABEL = "Tìm cán bộ";
+export const SEARCH_PLACEHOLDER = "Tìm theo tên, chức danh, số điện thoại…";
+
+/** One sentence for both "no staff" and "no match" — the prototype's (`UserTable.tsx`). */
+export const EMPTY_STAFF_LIST = "Không có cán bộ nào khớp điều kiện tìm kiếm.";
+
+/** Row buttons' hover titles (the person goes in `aria-label`). */
+export const EDIT_ACCOUNT_BUTTON = "Sửa tài khoản";
+export const DELETE_ACCOUNT_BUTTON = "Xoá tài khoản";
+
+/**
+ * Why Trash2 is disabled on a row holding a sign-in account. The server refuses it anyway (409
+ * `staff_has_account`, #10): retirement or transfer is a LOCK, so the name stays readable on every
+ * record the person handled.
+ */
+export const DELETE_BLOCKED_REASON = "Đang có tài khoản đăng nhập nên không xoá được — hãy khoá tài khoản.";
+
+/** The page's refusal for an account without `admin.user` (prototype `AccountWorkspace.tsx`, `Denied`). */
+export const USERS_DENIED =
+  "Tài khoản của bạn không có quyền quản lý tài khoản người dùng. Liên hệ Chánh Văn phòng hoặc quản " +
+  "trị viên của đơn vị nếu cần.";
+
+/**
+ * The line under the table. `total` is the commune's register size from `GET /api/v1/staff-counts`;
+ * `null` when that read failed — the line then says only what is on screen, never a guessed total.
+ */
+export function staffCountLine(shown: number, total: number | null): string {
+  return total === null ? `Hiển thị ${shown} cán bộ.` : `Hiển thị ${shown}/${total} cán bộ.`;
+}
+
+/** Empty text cells read "—" (prototype), never an empty cell. */
+export function orDash(text: string): string {
+  return text.trim() === "" ? "—" : text;
+}
+
+/**
+ * The `Bộ phận` cell: "—" for a row with no unit (prototype), every other case as `nhanBoPhan` says
+ * it — a lookup failure must still read differently from "no unit".
+ */
+export function unitCellLabel(lookup: KetTra): string {
+  return lookup.loai === "chuaGan" ? "—" : nhanBoPhan(lookup);
+}

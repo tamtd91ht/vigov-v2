@@ -28,23 +28,21 @@ import type { BangTraDanhMuc } from "./tra-danh-muc";
  *    loại dữ liệu, mà mức an toàn phải lấy theo loại nhạy hơn — nên hoặc số máy bàn của cơ quan
  *    bị che vô cớ, hoặc số di động cá nhân đi theo bản xuất ra ngoài.
  *
- * 2. KHÔNG CÓ NÚT XOÁ Ở BẤT KỲ DÒNG NÀO — câu mở #10, cùng ngày. Xoá mềm một cán bộ là thao tác
- *    RIÊNG mang QUYỀN RIÊNG, và bảng `quyen` chưa có khoá nào mang nghĩa ấy (phát hiện cho câu mở
- *    #27). Đặc tả thì vẽ nút ấy (`docs/ui-ux/12-danh-ba-can-bo.md:61`), nên áp lực thêm lại nó là
- *    có thật và đến từ một tài liệu trông có thẩm quyền. Một nút gọi vào tuyến không tồn tại là
- *    lời hứa suông: người quản trị bấm, nhận một lỗi, và kết luận hệ thống hỏng — trong khi thứ
- *    đang thiếu là một quyết định của khách.
+ * 2. NÚT XOÁ CHỈ ĐI SAU QUYỀN RIÊNG — câu mở #10 tách khoá khỏi xoá; xoá mềm một dòng nhập trùng mang
+ *    `admin.user.delete` (ADR 0035). Chủ dự án chốt 08/10/2026 đưa `Trash2` của prototype về màn này,
+ *    sau đúng khoá ấy; phần kiểm nó nằm ở `user-list-prototype.test.tsx`. Ở đây chỉ canh: không có
+ *    khoá thì không có nút.
  */
 
 const TRA_RONG: BangTraDanhMuc = { pha: "xong", ten: new Map() };
 
 const KHONG_LAM_GI: ThaoTacDong = {
-  chiTiet: () => {},
   sua: () => {},
   doiVaiTro: () => {},
   datKhoa: () => {},
   capTaiKhoan: () => {},
   datLaiMatKhau: () => {},
+  xoa: () => {},
 };
 
 /**
@@ -79,9 +77,6 @@ function ve(danhSach: readonly identity_canBoTomTat[] = [CAN_BO]) {
   return renderToStaticMarkup(
     <BangCanBo
       danhSach={danhSach}
-      khoa="code"
-      chieu="asc"
-      doiSapXep={() => {}}
       thaoTac={KHONG_LAM_GI}
       traBoPhan={TRA_RONG}
       traVaiTro={TRA_RONG}
@@ -105,8 +100,8 @@ describe("danh bạ cán bộ giữ hai cột điện thoại riêng", () => {
   it("hai số hiện ở HAI ô, không gộp và không nối chuỗi", () => {
     const html = ve();
 
-    expect(html).toContain(`<td>${MAY_BAN}</td>`);
-    expect(html).toContain(`<td>${DI_DONG}</td>`);
+    expect(html).toMatch(new RegExp(`<td[^>]*>${MAY_BAN}</td>`));
+    expect(html).toMatch(new RegExp(`<td[^>]*>${DI_DONG}</td>`));
 
     // Ba cách gộp thường gặp, chặn cả ba: nối bằng dấu phẩy, nối bằng gạch, và `a || b`.
     expect(html).not.toContain(`${MAY_BAN}, ${DI_DONG}`);
@@ -123,34 +118,32 @@ describe("danh bạ cán bộ giữ hai cột điện thoại riêng", () => {
     expect(html).not.toContain("****");
   });
 
-  it("cán bộ KHÔNG có di động vẫn hiện được, và ô ấy để trống chứ không mượn số máy bàn", () => {
+  it("cán bộ KHÔNG có di động vẫn hiện được, và ô ấy hiện '—' chứ không mượn số máy bàn", () => {
     // Cột `di_dong_ca_nhan` là `NOT NULL DEFAULT ''` (migration 0009) — "không có số" là chuỗi
     // rỗng, một trạng thái THẬT, không phải lỗi. Lấp nó bằng số máy bàn là ghép hai loại dữ liệu
     // vào một ô bằng đường khác.
     const html = ve([{ ...CAN_BO, mobile: "" }]);
 
-    expect(html).toContain(`<td>${MAY_BAN}</td>`);
-    expect(html).toContain("<td></td>");
+    expect(html).toMatch(new RegExp(`<td[^>]*>${MAY_BAN}</td>`));
+    expect(html).toMatch(/<td[^>]*>—<\/td>/);
   });
 });
 
-describe("cụm nút của một dòng — ba thao tác ghi, KHÔNG có Xoá", () => {
-  it("mỗi dòng có Sửa hồ sơ và Đổi vai trò", () => {
+describe("cụm nút của một dòng — Xoá chỉ khi có `admin.user.delete`", () => {
+  it("mỗi dòng có Sửa tài khoản và Đổi vai trò", () => {
     const html = ve();
 
-    expect(html).toContain("Sửa hồ sơ");
+    expect(html).toContain("Sửa tài khoản");
     expect(html).toContain("Đổi vai trò");
-    expect(html).toContain("Chi tiết");
   });
 
-  it("KHÔNG có nút Xoá dưới bất kỳ cách viết nào", () => {
+  it("không có khoá xoá → KHÔNG có nút Xoá dưới bất kỳ cách viết nào", () => {
     const html = ve();
 
-    // BỐN CÁCH VIẾT, KHÔNG MỘT. Ca này tồn tại để đỏ khi ai đó thêm lại nút của đặc tả, và đặc tả
-    // viết nó là `🗑 Xoá khỏi danh bạ` — nên chặn cả biểu tượng lẫn chữ, cả chữ hoa lẫn chữ
-    // thường. Một phép kiểm chỉ tìm đúng một chuỗi là phép kiểm né được bằng cách đổi nhãn.
+    // BỐN CÁCH VIẾT, KHÔNG MỘT: một phép kiểm chỉ tìm đúng một chuỗi là phép kiểm né được bằng
+    // cách đổi nhãn.
     expect(html).not.toContain("🗑");
-    expect(html).not.toMatch(/Xo[áa] kh[ỏo]i danh b[ạa]/i);
+    expect(html).not.toMatch(/Xo[áa] (kh[ỏo]i danh b[ạa]|t[àa]i kho[ảa]n)/i);
     expect(html).not.toMatch(/>\s*Xoá\s*</);
     expect(html).not.toContain("nut-xoa");
   });
@@ -163,12 +156,13 @@ describe("cụm nút của một dòng — ba thao tác ghi, KHÔNG có Xoá", (
     expect(ve([{ ...CAN_BO, active: false }])).toContain("Mở khoá tài khoản");
   });
 
-  it("prototype row (ADR 0068 lần 5): icon-only actions named in `aria-label` AND hover `title`; locked = `Tạm khoá`", () => {
+  it("prototype row (ADR 0068 lần 5): icon-only actions, the action in `title`, the person in `aria-label`; locked = `Tạm khoá`", () => {
     const html = ve([{ ...CAN_BO, active: false }]);
-    expect(html).toContain('title="Sửa hồ sơ: Huỳnh Văn A"');
-    expect(html).toContain('title="Mở khoá tài khoản: Huỳnh Văn A"');
+    expect(html).toContain('title="Sửa tài khoản"');
+    expect(html).toContain('title="Mở khoá tài khoản"');
+    expect(html).toContain('aria-label="Mở khoá tài khoản: Huỳnh Văn A"');
     // No visible action WORDS in the row: the names live in the attributes, so the row stays one line.
-    expect(html).not.toContain(">Sửa hồ sơ<");
+    expect(html).not.toContain(">Sửa tài khoản<");
     expect(html).not.toContain(">Đổi vai trò<");
     expect(html).toContain(">Tạm khoá<");
   });
@@ -178,7 +172,7 @@ describe("cụm nút của một dòng — ba thao tác ghi, KHÔNG có Xoá", (
     // đọc màn hình không chọn đúng được dòng nào — và chọn nhầm dòng ở đây là khoá nhầm tài khoản.
     const html = ve();
 
-    expect(html).toContain('aria-label="Sửa hồ sơ: Huỳnh Văn A"');
+    expect(html).toContain('aria-label="Sửa tài khoản: Huỳnh Văn A"');
     expect(html).toContain('aria-label="Khoá tài khoản: Huỳnh Văn A"');
   });
 });
@@ -235,8 +229,10 @@ describe("hai nút thông tin đăng nhập loại trừ nhau theo `has_account`
         Number(html.includes(NUT_CAP_TAI_KHOAN)) + Number(html.includes(NUT_DAT_LAI_MAT_KHAU));
 
       expect(soNut).toBe(1);
-      // `disabled=""`, the attribute — the shared Button's classes carry `disabled:` variants.
-      expect(html).not.toContain('disabled=""');
+      // `disabled=""`, the attribute — the shared Button's classes carry `disabled:` variants. The
+      // header's sort buttons are disabled by design (no server sort), so only the row is read.
+      const body = /<tbody[^>]*>([\s\S]*)<\/tbody>/.exec(html)?.[1] ?? "";
+      expect(body).not.toContain('disabled=""');
     }
   });
 });
@@ -357,8 +353,8 @@ describe("staff without an email — optional since 4cf87b6", () => {
 
   it("the list shows the empty marker, never an empty cell", () => {
     const html = ve([NO_EMAIL]);
-    expect(html).toContain(`<span class="dong-phu">${NO_EMAIL_MARKER}</span>`);
-    expect(html).not.toContain('<span class="dong-phu"></span>');
+    expect(html).toContain(`<div class="text-ink-muted text-[11.5px]">${NO_EMAIL_MARKER}</div>`);
+    expect(html).not.toContain('<div class="text-ink-muted text-[11.5px]"></div>');
   });
 
   it("DENIED: 'Cấp tài khoản' is disabled and the reason is readable next to it", () => {

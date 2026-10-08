@@ -1,10 +1,24 @@
 "use client";
 
+import { Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { Button } from "@/components/ui/button";
+import { controlClass } from "@/components/ui/field";
+import { selectCls } from "@/features/cau-hinh/config-ui";
+import { DIALOG_FOOTER_CLASS, DIALOG_LABEL_CLASS } from "@/features/cau-hinh/org-unit-dialog-classes";
 import type { identity_canBoTomTat } from "@/lib/api/schema.gen";
+import { cn } from "@/lib/cn";
 
 import {
+  ACCOUNT_EDIT_TITLE,
+  ACCOUNT_EMAIL_LABEL,
+  ACCOUNT_NO_UNIT_OPTION,
+  EMAIL_PLACEHOLDER,
+  NAME_PLACEHOLDER,
+  NUT_THEM_CAN_BO,
+  PHONE_PLACEHOLDER,
+  POSITION_PLACEHOLDER,
   CANH_BAO_DOI_DI_DONG_CONG_KHAI,
   CANH_BAO_KHOA_CONG_KHAI,
   CHON_KHONG_BO_PHAN,
@@ -27,6 +41,7 @@ import {
   canhBaoKhoa,
   coCanhBaoDoiDiDong,
   coCanhBaoKhoaCongKhai,
+  staffCodeNote,
   tieuDeKhoa,
   tieuDeSua,
   tieuDeThem,
@@ -57,7 +72,8 @@ import {
  * `react-dom/server` mà không cần trình duyệt giả lập.
  *
  * KHÔNG CÓ NHÁNH NÀO CHO XOÁ: xoá dòng trùng mang quyền riêng và có hộp riêng ở màn `/danh-ba`
- * (`features/danh-ba/hop-xoa.tsx`). Xem `VI_SAO_KHONG_CO_NUT_XOA` trong `nhan-ghi-danh-ba.ts`.
+ * (`features/danh-ba/hop-xoa.tsx`), dùng ở cả `/danh-ba` lẫn `/nguoi-dung` (từ 08/10/2026), sau
+ * `admin.user.delete`; dòng có tài khoản thì khoá chứ không xoá (#10).
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
 
@@ -83,7 +99,15 @@ export function BieuMauGhiCanBo({
   onGui,
   onHuy,
   avatarField,
+  layout = "contact",
 }: {
+  /**
+   * `contact` (default): the in-flow form of /danh-ba and /mini-app — UNCHANGED, and pinned by
+   * `user-list-prototype.test.tsx`. `account`: the prototype's `UserFormDialog` shape, used ONLY by
+   * `/nguoi-dung` (`danh-ba-can-bo.tsx`), which opens it inside a `ModalDialog` (owner, 08/10/2026).
+   * Same fields, same handlers, same bodies sent — only the presentation differs.
+   */
+  layout?: "contact" | "account";
   /**
    * Spec §5 `Ảnh đại diện` placeholder (ADR 0068 §14), drawn on the profile forms only. A slot, not
    * drawn here: the Danh bạ screen owns that entry, and the Cấu hình staff dialog (14-cau-hinh §3)
@@ -102,6 +126,24 @@ export function BieuMauGhiCanBo({
   onGui: () => void;
   onHuy: () => void;
 }) {
+  if (layout === "account") {
+    return (
+      <AccountForm
+        dangMo={dangMo}
+        ban={ban}
+        datBan={datBan}
+        vaiTroID={vaiTroID}
+        datVaiTroID={datVaiTroID}
+        boPhan={boPhan}
+        vaiTro={vaiTro}
+        loiMayChu={loiMayChu}
+        dangGui={dangGui}
+        onGui={onGui}
+        onHuy={onHuy}
+      />
+    );
+  }
+
   const tieuDe = tieuDeCuaBieuMau(dangMo);
   const coOHoSo = dangMo.kieu === "them" || dangMo.kieu === "sua";
 
@@ -122,7 +164,7 @@ export function BieuMauGhiCanBo({
           không có `name`, nên không có đường nào cho nó đi vào thân yêu cầu. Người sửa hồ sơ cần
           nhìn thấy mã để đối chiếu với hồ sơ giấy; người NHẬP thì không được có ô ấy. */}
       {dangMo.kieu === "sua" && (
-        <p className="ghi-chu">Mã cán bộ: {dangMo.canBo.code} — do hệ thống cấp, không sửa được.</p>
+        <p className="ghi-chu">{staffCodeNote(dangMo.canBo.code)}</p>
       )}
 
       {coOHoSo && (
@@ -254,6 +296,218 @@ export function BieuMauGhiCanBo({
         <button type="button" className="nut-phu" onClick={onHuy} disabled={dangGui}>
           {NUT_HUY}
         </button>
+      </div>
+    </form>
+  );
+}
+
+type AccountFormProps = {
+  dangMo: DangMoGhi;
+  ban: BanNhapCanBo;
+  datBan: (b: BanNhapCanBo) => void;
+  vaiTroID: string;
+  datVaiTroID: (id: string) => void;
+  boPhan: readonly MucChon[];
+  vaiTro: readonly MucChon[];
+  loiMayChu: string;
+  dangGui: boolean;
+  onGui: () => void;
+  onHuy: () => void;
+};
+
+/**
+ * The `/nguoi-dung` shape (`vigov-require/apps/admin/src/components/admin/UserFormDialog.tsx`): the
+ * profile fields in a two-column grid, shadcn Label + Input `mt-1.5`, the footer band with `Huỷ` FIRST
+ * and a spinner in the primary while sending. The prototype's password and role boxes are NOT here:
+ * the password is a one-time value the server generates (#9, `Cấp tài khoản` / `Đặt lại mật khẩu`),
+ * and the role goes through its own route with #13/#14's checks (`Đổi vai trò`).
+ *
+ * NO `form-danh-muc` / `cum-nut` / `o-nhap` ON THE PROFILE FIELDS: the legacy sheet gives buttons and
+ * labels under those classes a 44px floor and a 12px/600 label, which the prototype's h-8 buttons and
+ * 14px labels would lose to. `Đổi vai trò` and `Khoá` keep their bodies as they were.
+ *
+ * The heading is the dialog's (`ModalDialogHeader`), so there is no `<h4>`; the form keeps its name.
+ */
+function AccountForm({
+  dangMo,
+  ban,
+  datBan,
+  vaiTroID,
+  datVaiTroID,
+  boPhan,
+  vaiTro,
+  loiMayChu,
+  dangGui,
+  onGui,
+  onHuy,
+}: AccountFormProps) {
+  const profile = dangMo.kieu === "them" || dangMo.kieu === "sua";
+  const formName = dangMo.kieu === "sua" ? ACCOUNT_EDIT_TITLE : tieuDeCuaBieuMau(dangMo);
+  const primary = dangMo.kieu === "them" ? NUT_THEM_CAN_BO : nhanNutLuu(dangMo);
+  const unitMissing = ban.boPhanID !== "" && !boPhan.some((m) => m.id === ban.boPhanID);
+
+  return (
+    <form
+      className="m-0 flex min-h-0 min-w-0 flex-col gap-4"
+      aria-label={formName}
+      onSubmit={(e) => {
+        e.preventDefault();
+        onGui();
+      }}
+    >
+      <div className="flex min-h-0 flex-col gap-3 overflow-y-auto">
+        {profile && (
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2 block">
+              <label htmlFor="o-ho-ten-can-bo" className={DIALOG_LABEL_CLASS}>
+                {O_HO_TEN}
+              </label>
+              <input
+                id="o-ho-ten-can-bo"
+                name="o-ho-ten-can-bo"
+                value={ban.hoTen}
+                required
+                placeholder={NAME_PLACEHOLDER}
+                onChange={(e) => datBan({ ...ban, hoTen: e.target.value })}
+                className={cn(controlClass, "mt-1.5")}
+              />
+            </div>
+            <div className="block min-w-0">
+              <label htmlFor="o-email-can-bo" className={DIALOG_LABEL_CLASS}>
+                {ACCOUNT_EMAIL_LABEL}
+              </label>
+              <input
+                id="o-email-can-bo"
+                name="o-email-can-bo"
+                type="email"
+                value={ban.email}
+                placeholder={EMAIL_PLACEHOLDER}
+                onChange={(e) => datBan({ ...ban, email: e.target.value })}
+                className={cn(controlClass, "mt-1.5")}
+              />
+            </div>
+            <div className="block min-w-0">
+              <label htmlFor="o-chuc-danh-can-bo" className={DIALOG_LABEL_CLASS}>
+                {O_CHUC_DANH}
+              </label>
+              <input
+                id="o-chuc-danh-can-bo"
+                name="o-chuc-danh-can-bo"
+                value={ban.chucDanh}
+                placeholder={POSITION_PLACEHOLDER}
+                onChange={(e) => datBan({ ...ban, chucDanh: e.target.value })}
+                className={cn(controlClass, "mt-1.5")}
+              />
+            </div>
+            {/* TWO phone fields, two labels saying which kind (#16): the prototype's single "Điện thoại"
+                would put duty information and Decree 13 personal data under one name. */}
+            <div className="block min-w-0">
+              <label htmlFor="o-may-ban-can-bo" className={DIALOG_LABEL_CLASS}>
+                {O_MAY_BAN}
+              </label>
+              <input
+                id="o-may-ban-can-bo"
+                name="o-may-ban-can-bo"
+                value={ban.mayBanCoQuan}
+                placeholder={PHONE_PLACEHOLDER}
+                onChange={(e) => datBan({ ...ban, mayBanCoQuan: e.target.value })}
+                className={cn(controlClass, "mt-1.5")}
+              />
+            </div>
+            <div className="block min-w-0">
+              <label htmlFor="o-di-dong-can-bo" className={DIALOG_LABEL_CLASS}>
+                {O_DI_DONG}
+              </label>
+              <input
+                id="o-di-dong-can-bo"
+                name="o-di-dong-can-bo"
+                value={ban.diDongCaNhan}
+                placeholder={PHONE_PLACEHOLDER}
+                onChange={(e) => datBan({ ...ban, diDongCaNhan: e.target.value })}
+                className={cn(controlClass, "mt-1.5")}
+              />
+            </div>
+            <div className="col-span-2 block">
+              <label htmlFor="o-bo-phan-can-bo" className={DIALOG_LABEL_CLASS}>
+                {O_BO_PHAN}
+              </label>
+              <select
+                id="o-bo-phan-can-bo"
+                name="o-bo-phan-can-bo"
+                value={ban.boPhanID}
+                onChange={(e) => datBan({ ...ban, boPhanID: e.target.value })}
+                className={cn(selectCls, "mt-1.5 h-9 w-full min-w-0 pr-8 text-[13px]")}
+              >
+                <option value="">{ACCOUNT_NO_UNIT_OPTION}</option>
+                {boPhan.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+                {/* Same reason as `OChon`: a stored unit the catalogue no longer lists stays selected,
+                    so saving a phone number never silently unlinks it. */}
+                {unitMissing && <option value={ban.boPhanID}>Giá trị đang lưu — không còn trong danh mục</option>}
+              </select>
+            </div>
+            {dangMo.kieu === "sua" && (
+              <div className="col-span-2 block">
+                <label htmlFor="o-co-zalo-can-bo" className="m-0 flex cursor-pointer items-center gap-2 text-[12.5px]">
+                  <input
+                    id="o-co-zalo-can-bo"
+                    name="o-co-zalo-can-bo"
+                    type="checkbox"
+                    checked={ban.coZalo}
+                    aria-describedby="o-co-zalo-can-bo-mo-ta"
+                    onChange={(e) => datBan({ ...ban, coZalo: e.target.checked })}
+                    className="accent-brand m-0 size-3.5"
+                  />
+                  <span className="text-navy">{O_CO_ZALO}</span>
+                </label>
+                <p id="o-co-zalo-can-bo-mo-ta" className="text-ink-muted m-0 mt-1 text-[11.5px]">
+                  {MO_TA_CO_ZALO}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {coCanhBaoDoiDiDong(dangMo, ban) && (
+          <p className="canh-bao-pham-vi m-0" role="status">
+            {CANH_BAO_DOI_DI_DONG_CONG_KHAI}
+          </p>
+        )}
+
+        {dangMo.kieu === "vaiTro" && (
+          <OChon
+            id="o-vai-tro-can-bo"
+            nhan={O_VAI_TRO}
+            nhanRong={CHON_KHONG_VAI_TRO}
+            giaTri={vaiTroID}
+            muc={vaiTro}
+            doi={datVaiTroID}
+            moTa="Vai trò quyết định cán bộ này làm được những việc gì trong hệ thống."
+          />
+        )}
+
+        {dangMo.kieu === "khoa" && <p className="canh-bao-pham-vi m-0">{canhBaoKhoa(dangMo.khoa)}</p>}
+        {coCanhBaoKhoaCongKhai(dangMo) && <p className="canh-bao-pham-vi m-0">{CANH_BAO_KHOA_CONG_KHAI}</p>}
+
+        {/* The server's sentence, verbatim, beside the button it refused (#13, #14) — see above. */}
+        {loiMayChu !== "" && (
+          <p role="alert" className="text-danger m-0 text-[12px] font-medium">
+            {loiMayChu}
+          </p>
+        )}
+      </div>
+
+      <div className={DIALOG_FOOTER_CLASS}>
+        <Button type="button" variant="outline" onClick={onHuy} disabled={dangGui}>
+          {NUT_HUY}
+        </Button>
+        <Button type="submit" variant="primary" disabled={dangGui} aria-busy={dangGui}>
+          {dangGui && <Loader2 aria-hidden="true" focusable="false" className="size-4 animate-spin" />}
+          {primary}
+        </Button>
       </div>
     </form>
   );
