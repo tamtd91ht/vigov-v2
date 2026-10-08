@@ -316,15 +316,16 @@ func (h *HandlerCongDan) traLoiLoiGui(w http.ResponseWriter, r *http.Request, er
 	case errors.Is(err, app.ErrUnverifiedDailyLimit):
 		// ADR 0080 decision 7: the Zalo account reached domain.UnverifiedDailyCeiling today. Nothing was
 		// written and no lookup code was issued. NO Retry-After: the allowance refills at the commune's
-		// midnight, and the honest next step for the citizen is to share their Zalo number, which lifts
-		// the ceiling, or to come back tomorrow. The ceiling's number is NOT in the sentence (the
+		// midnight. The sentence does NOT tell the citizen to share their Zalo number: in a commune app
+		// Zalo has not approved yet, sharing cannot succeed (ADR 0080 Bối cảnh), so the only next steps
+		// that always work are tomorrow or the commune's reception desk. The ceiling's number is NOT in the sentence (the
 		// citizen does not need it, and a stated number is a target). Logged with the commune only —
 		// never the account id (rule 3).
 		h.d.Log.Warn("từ chối phiếu chưa xác thực vì tài khoản Zalo đã gửi đủ số phiếu trong ngày",
 			"xa", string(tenant.MustFrom(ctx)))
 		httpx.WriteError(w, http.StatusTooManyRequests, "unverified_daily_limit",
 			"Hôm nay bạn đã gửi nhiều phản ánh khi chưa xác nhận số điện thoại nên phản ánh này CHƯA được "+
-				"ghi nhận. Vui lòng xác nhận số điện thoại Zalo để gửi tiếp, hoặc gửi lại vào ngày mai.", "")
+				"ghi nhận. Vui lòng gửi lại vào ngày mai, hoặc đến Bộ phận tiếp nhận của Ủy ban nhân dân xã.", "")
 
 	case errors.Is(err, app.ErrFieldCatalogueUnavailable):
 		// Platform unreachable past the 60-second cache (ADR 0060 §3): nothing was written, no code was
