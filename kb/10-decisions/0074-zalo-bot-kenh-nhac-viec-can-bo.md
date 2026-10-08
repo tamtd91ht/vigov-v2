@@ -25,7 +25,9 @@ owns_facts:
 
 **Trạng thái:** đã chốt · **Ngày:** 2026-10-05 · **Người quyết:** chủ dự án, 05/10/2026, trong phiên
 chính · **Nguồn yêu cầu:** `../vigov-require` `docs/spec/07-viec-nen-va-thong-bao.md` §Kênh Zalo Bot,
-`08-tich-hop-ngoai.md` §Zalo Bot, `04-api.md:256-296` (bản đối chiếu N7, MB3).
+`08-tich-hop-ngoai.md` §Zalo Bot, `04-api.md:256-296` (bản đối chiếu N7, MB3). · **Sửa bởi ADR 0079**
+(08/10/2026): bot riêng của xã làm ngay, xã tự cấu hình ở web-admin — thay #1, #3, #4 cho phần bot của
+xã; bot dùng chung giữ nguyên.
 
 ## Bối cảnh
 
