@@ -198,12 +198,13 @@ func (t TrangThaiNhiemVu) LaTrangThaiChinh() bool {
 	return t == MoiGiao || t == DaTiepNhanNV || t == DangThucHien || t == ChoDuyet || t == HoanThanh
 }
 
-// --- the four sources of work ------------------------------------------------------------------
+// --- the five sources of work ------------------------------------------------------------------
 
 // NguonGiao is where the task came from (§3, §4.2).
 //
-// FOUR CODES, CLOSED: each names a DIFFERENT originating register, so a fifth is a new integration
-// rather than a new label a commune might want.
+// FIVE CODES, CLOSED: each names a DIFFERENT originating register, so a new one is a new integration
+// rather than a new label a commune might want. The fifth, `don-thu`, is exactly such an integration
+// (ADR 0085 A5, migration 0034): the register is service-documents' citizen letters.
 type NguonGiao string
 
 const (
@@ -211,11 +212,16 @@ const (
 	NguonKetLuanHop NguonGiao = "ket-luan-hop"
 	NguonVanBanDen  NguonGiao = "van-ban-den"
 	NguonPhanAnh    NguonGiao = "phan-anh"
+
+	// SourceCitizenLetter: a task booked from a citizen letter; `nguon_id` is `citizen_letter.id` in
+	// service-documents. ONE door writes it — POST /api/v1/citizen-letter-tasks (app.CitizenLetterTaskCreation),
+	// which asks documents for the letter first. POST /api/v1/tasks refuses it (ErrCitizenLetterSourceNotDirect).
+	SourceCitizenLetter NguonGiao = "don-thu"
 )
 
 func (n NguonGiao) HopLe() bool {
 	switch n {
-	case NguonTrucTiep, NguonKetLuanHop, NguonVanBanDen, NguonPhanAnh:
+	case NguonTrucTiep, NguonKetLuanHop, NguonVanBanDen, NguonPhanAnh, SourceCitizenLetter:
 		return true
 	}
 	return false

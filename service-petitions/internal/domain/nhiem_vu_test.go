@@ -229,14 +229,16 @@ func TestNamCotKanban(t *testing.T) {
 }
 
 func TestBonNguonGiao(t *testing.T) {
-	for _, m := range []NguonGiao{NguonTrucTiep, NguonKetLuanHop, NguonVanBanDen, NguonPhanAnh} {
+	// `don-thu` is the FIFTH code since ADR 0085 A5 / migration 0034 — valid as a VALUE; that only its own
+	// door may write it is app's rule (ErrCitizenLetterSourceNotDirect), not this one's.
+	for _, m := range []NguonGiao{NguonTrucTiep, NguonKetLuanHop, NguonVanBanDen, NguonPhanAnh, SourceCitizenLetter} {
 		if !m.HopLe() {
 			t.Errorf("thiếu nguồn giao %q", m)
 		}
 	}
-	for _, xau := range []NguonGiao{"", "excel", "don-thu", "truc_tiep"} {
+	for _, xau := range []NguonGiao{"", "excel", "don_thu", "DON-THU", "truc_tiep"} {
 		if xau.HopLe() {
-			t.Errorf("nhận nguồn giao %q ngoài bốn mã", xau)
+			t.Errorf("nhận nguồn giao %q ngoài năm mã", xau)
 		}
 	}
 }

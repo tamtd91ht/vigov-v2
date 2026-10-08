@@ -72,7 +72,7 @@ var (
 	// person looking at the wrong one. The four codes are CLOSED — each names a different
 	// originating register, so a fifth is a new integration rather than a new label.
 	ErrNguonGiaoKhongHopLe = errors.New(
-		"nhiệm vụ: nguồn giao việc không phải một trong bốn nguồn của sổ nhiệm vụ")
+		"nhiệm vụ: nguồn giao việc không phải một trong năm nguồn của sổ nhiệm vụ")
 
 	// ErrNguonKetLuanPhaiTach refuses `ket-luan-hop` on the DIRECT create (POST /api/v1/tasks).
 	//
@@ -101,6 +101,15 @@ var (
 	ErrPetitionSourceNotDirect = errors.New(
 		"nhiệm vụ: nhiệm vụ từ phản ánh chỉ tạo được từ chính phiếu phản ánh trên màn hình Phản ánh " +
 			"người dân — biểu mẫu giao việc trực tiếp không nhận nguồn này")
+
+	// ErrCitizenLetterSourceNotDirect refuses `don-thu` anywhere but its own door (ADR 0085 Hệ quả: "POST
+	// /api/v1/tasks phải từ chối source = don-thu"). The direct create would take any `source_id` — a
+	// letter of another commune, a soft-deleted one, a DENUNCIATION whose very existence is confidential
+	// (Luật Tố cáo 2018 Đ.8) — and check none of it. POST /api/v1/citizen-letter-tasks asks documents,
+	// the owner of the letter, before anything is written (app.CitizenLetterTaskCreation).
+	ErrCitizenLetterSourceNotDirect = errors.New(
+		"nhiệm vụ: nhiệm vụ từ đơn thư chỉ tạo được bằng nút \"Chuyển thành nhiệm vụ\" trên sổ đơn thư " +
+			"— biểu mẫu giao việc trực tiếp không nhận nguồn này")
 
 	ErrMaNhiemVuSaiDinhDang = errors.New(
 		"nhiệm vụ: mã nhiệm vụ chỉ nhận chữ in hoa, chữ số, dấu gạch ngang và dấu gạch dưới")
@@ -154,6 +163,7 @@ func LoiDauVaoNhiemVuGoc(err error) error {
 	for _, mot := range []error{
 		ErrThieuTieuDeNhiemVu, ErrTieuDeNhiemVuQuaDai, ErrMoTaNhiemVuQuaDai,
 		ErrThieuLoaiNhiemVu, ErrNguonGiaoKhongHopLe, ErrNguonKetLuanPhaiTach, ErrPetitionSourceNotDirect,
+		ErrCitizenLetterSourceNotDirect,
 		ErrMaNhiemVuSaiDinhDang, ErrMaNhiemVuQuaDai,
 		ErrTienDoNgoaiKhoang,
 		ErrThieuLyDoXoaNhiemVu, ErrLyDoNhiemVuQuaDai,

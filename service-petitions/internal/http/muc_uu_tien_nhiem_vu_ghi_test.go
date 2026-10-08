@@ -185,6 +185,7 @@ func dungMayChuGhiUuTien(t *testing.T) *mayChuGhiUuTien {
 		DeNghiChoDuyet:               deNghiChoDuyetMau(),
 		GhiNhiemVu:                   &ghiNhiemVuGia{},
 		PetitionTasks:                &petitionTaskFake{},
+		CitizenLetterTasks:           &citizenLetterTaskFake{},
 		TaskAttachments:              &taskAttachmentsFake{},
 		TaskLogAttachments:           &logAttachmentsFake{},
 		PetitionPhotos:               &staffPhotosFake{},

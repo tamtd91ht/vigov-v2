@@ -618,10 +618,22 @@ type RecordOnSourceInTx func(ctx context.Context, tx *store.ScopedTx, n domain.N
 // conclusion (the badge counts tasks by `nguon_id`) and WRONG for a petition — so a `phan-anh` source
 // is refused unless BOTH are set (user decision 30/09/2026: the task and the petition's log entry in
 // ONE transaction).
+//
+// AuditExtra adds top-level keys to the task's OWN `tao_nhiem_vu` entry (createInTxRequest.ExtraDelta:
+// it never overwrites a key create writes). A citizen letter is not written by this act, so it gets no
+// entry of its own — the letter's business number rides on the task's entry instead (ADR 0085,
+// transaction-boundaries `tao_nhiem_vu_tu_don_thu`). A `don-thu` source is refused unless it carries
+// AuditExtraCitizenLetter: only the citizen-letter door, which asked documents, can fill it.
 type SourceSteps struct {
-	Check  KiemNguonTrongGiaoDich
-	Record RecordOnSourceInTx
+	Check      KiemNguonTrongGiaoDich
+	Record     RecordOnSourceInTx
+	AuditExtra map[string]any
 }
+
+// AuditExtraCitizenLetter is the AuditExtra key a `don-thu` task's entry carries: the letter's register
+// number and year, as service-documents' own entries name them (`so_vao_so`, `nam`) — so one inspection
+// query reads both registers. Vietnamese snake_case, the audit vocabulary (ADR 0011).
+const AuditExtraCitizenLetter = "don_thu"
 
 // CreateFromSource is TaoTuNguon with the source's own write in the SAME transaction. It is the only
 // body of the create path: Tao and TaoTuNguon both arrive here.
@@ -644,6 +656,12 @@ func (uc *GhiNhiemVu) CreateFromSource(ctx context.Context, yc YeuCauTaoNhiemVu,
 	// task with either missing is one the petition's own record would never show.
 	if domain.NguonGiao(yc.NguonGiao) == domain.NguonPhanAnh && (steps.Check == nil || steps.Record == nil) {
 		return domain.NhiemVu{}, domain.ErrPetitionSourceNotDirect
+	}
+	// AND FOR A CITIZEN LETTER (ADR 0085): without the letter's facts — which only
+	// CitizenLetterTaskCreation gets, from documents — `source_id` is whatever the caller sent, possibly a
+	// denunciation's id. POST /api/v1/tasks refuses it first; this is the same rule for any other caller.
+	if domain.NguonGiao(yc.NguonGiao) == domain.SourceCitizenLetter && steps.AuditExtra[AuditExtraCitizenLetter] == nil {
+		return domain.NhiemVu{}, domain.ErrCitizenLetterSourceNotDirect
 	}
 
 	moi, err := chuanHoaTaoNhiemVu(yc)
@@ -701,7 +719,7 @@ func (uc *GhiNhiemVu) CreateFromSource(ctx context.Context, yc YeuCauTaoNhiemVu,
 		}
 		if err := uc.createInTx(ctx, tx, &moi, createInTxRequest{
 			ParentCode: yc.ParentCode, TuSinhMa: yc.TuSinhMa, Documents: thayDoiVB,
-			LogPrefix: "Giao việc mới: ",
+			LogPrefix: "Giao việc mới: ", ExtraDelta: steps.AuditExtra,
 		}, nguoi, bayGio); err != nil {
 			return err
 		}

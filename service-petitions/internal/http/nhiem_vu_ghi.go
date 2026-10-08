@@ -532,6 +532,13 @@ func (h *Handler) TaoNhiemVu(w http.ResponseWriter, r *http.Request) {
 			domain.ErrPetitionSourceNotDirect.Error(), "")
 		return
 	}
+	// A CITIZEN-LETTER SOURCE LIKEWISE (ADR 0085 Hệ quả): nothing here asks documents whether `source_id`
+	// is a live letter of THIS commune, or a denunciation that must never become a task.
+	if domain.NguonGiao(vao.Source) == domain.SourceCitizenLetter {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			domain.ErrCitizenLetterSourceNotDirect.Error(), "")
+		return
+	}
 
 	// REFUSED BEFORE THE USE CASE IS REACHED, so a malformed date opens no transaction at all.
 	vanBan, err := vanBanVaoTrong(vao.Documents)

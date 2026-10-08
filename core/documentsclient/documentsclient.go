@@ -1,11 +1,13 @@
 // Package documentsclient is how another service asks documents a question over gRPC.
 //
-// Two questions, one caller (identity); each predicate is stated once, in
+// Three questions, two callers; each predicate is stated once, in
 // proto/vigov/documents/v1/documents.proto, and not repeated here:
 //
-//	OrgUnitHoldings     before it soft-deletes an org unit (CountOrgUnitHoldings).
-//	DocumentTypeCodes   before it writes an SLA row for one document type (ResolveDocumentTypeCodes,
-//	                    document_type_codes.go).
+//	OrgUnitHoldings              identity, before it soft-deletes an org unit (CountOrgUnitHoldings).
+//	DocumentTypeCodes            identity, before it writes an SLA row for one document type
+//	                             (ResolveDocumentTypeCodes, document_type_codes.go).
+//	ResolveCitizenLetterForTask  petitions, before it books a task from a citizen letter (ADR 0085,
+//	                             citizen_letter_task.go).
 //
 // Same shape as core/petitionsclient, for the same reasons, including the two read there first:
 // the new identity → documents edge is not a startup cycle (grpc.NewClient connects lazily), and

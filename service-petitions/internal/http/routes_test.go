@@ -218,6 +218,8 @@ type mayChu struct {
 
 	// petitionTasks is the task-from-petition act — petition_task_test.go.
 	petitionTasks *petitionTaskFake
+	// citizenLetterTasks is "Chuyển đơn thư thành nhiệm vụ" — citizen_letter_task_test.go.
+	citizenLetterTasks *citizenLetterTaskFake
 
 	// The leadership overview — summary_test.go.
 	taskSummary   *taskSummaryFake
@@ -278,6 +280,8 @@ func dungMayChu(t *testing.T) *mayChu {
 	ghiNhiemVu := &ghiNhiemVuGia{}
 	// A task FROM a petition — petition_task_test.go.
 	petitionTasks := &petitionTaskFake{}
+	// A task FROM a citizen letter — citizen_letter_task_test.go.
+	citizenLetterTasks := &citizenLetterTaskFake{}
 	// The approval queue of extension requests, keyed by commune — see deNghiChoDuyetGia.
 	deNghiCho := deNghiChoDuyetMau()
 	// The meeting register. Its fixtures are SEPARATE from the task register's on purpose: the
@@ -354,6 +358,7 @@ func dungMayChu(t *testing.T) *mayChu {
 			DeNghiChoDuyet:      deNghiCho,
 			GhiNhiemVu:          ghiNhiemVu,
 			PetitionTasks:       petitionTasks,
+			CitizenLetterTasks:  citizenLetterTasks,
 			TaskAttachments:     taskAttachments,
 			TaskLogAttachments:  logAttachments,
 			PetitionPhotos:      staffPhotos,
@@ -390,7 +395,8 @@ func dungMayChu(t *testing.T) *mayChu {
 		bienBan:    bienBan,
 		ghiBienBan: ghiBienBan,
 
-		petitionTasks: petitionTasks,
+		petitionTasks:      petitionTasks,
+		citizenLetterTasks: citizenLetterTasks,
 
 		taskSummary:   taskSummary,
 		reportSummary: reportSummary,
@@ -509,6 +515,7 @@ func depsDay() Deps {
 		DeNghiChoDuyet:     deNghiChoDuyetMau(),
 		GhiNhiemVu:         &ghiNhiemVuGia{},
 		PetitionTasks:      &petitionTaskFake{},
+		CitizenLetterTasks: &citizenLetterTaskFake{},
 		TaskAttachments:    &taskAttachmentsFake{},
 		TaskLogAttachments: &logAttachmentsFake{},
 		PetitionPhotos:     &staffPhotosFake{},
@@ -581,6 +588,7 @@ func TestRegisterThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 		// §5.9's attachments: a nil use case panics on the first `📎 Đính kèm`; a nil reader panics on
 		// EVERY timeline read, attachments or not.
 		"thiếu use case tạo nhiệm vụ từ phiếu":     func(d *Deps) { d.PetitionTasks = nil },
+		"missing citizen-letter task use case":     func(d *Deps) { d.CitizenLetterTasks = nil },
 		"thiếu use case tệp đính kèm nhiệm vụ":     func(d *Deps) { d.TaskAttachments = nil },
 		"thiếu đường đọc tệp đính kèm của nhật ký": func(d *Deps) { d.TaskLogAttachments = nil },
 		"missing petition photo read":              func(d *Deps) { d.PetitionPhotos = nil },

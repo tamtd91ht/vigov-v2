@@ -548,6 +548,10 @@ type Deps struct {
 	// written in the same transaction (app.PetitionTaskCreation).
 	PetitionTasks PetitionTaskCreator
 
+	// CitizenLetterTasks books a task FROM a citizen letter (POST /api/v1/citizen-letter-tasks, ADR 0085) —
+	// documents asked first, then GhiNhiemVu's own create path (app.CitizenLetterTaskCreation).
+	CitizenLetterTasks CitizenLetterTaskCreator
+
 	// §5.9's attachments: the three acts (app.TaskAttachments — built even when object storage, the
 	// scanner or platform's limits are not configured; its routes then answer 503 and nothing else
 	// changes), and the batched read the timeline renders them from.
@@ -675,6 +679,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("petitions/http: thiếu use case ghi nhiệm vụ — sáu tuyến giao việc/sửa/chuyển trạng thái/xoá/lùi hạn sẽ panic khi có người gọi")
 	case d.PetitionTasks == nil:
 		panic("petitions/http: thiếu use case tạo nhiệm vụ từ phiếu — POST /api/v1/citizen-reports/{maTraCuu}/tasks sẽ panic khi có người gọi")
+	case d.CitizenLetterTasks == nil:
+		panic("petitions/http: thiếu use case chuyển đơn thư thành nhiệm vụ — POST /api/v1/citizen-letter-tasks sẽ panic khi có người gọi")
 	case d.TaskAttachments == nil:
 		panic("petitions/http: thiếu use case tệp đính kèm nhiệm vụ — ba tuyến /api/v1/tasks/{ma}/attachments sẽ panic khi có người gọi")
 	case d.PetitionPhotos == nil:
@@ -1528,6 +1534,48 @@ func Register(mux *http.ServeMux, d Deps) {
 			authz.RequirePermission(d.Checker, "feedback.read")(
 				idem.Required(idem.MoKhiHong)(
 					http.HandlerFunc(h.CreateTaskFromPetition)))))
+
+	// CHUYỂN ĐƠN THƯ THÀNH NHIỆM VỤ (ADR 0085 A; ADR 0084 #6; docs/ui-ux/05 §3.5). Its own noun because
+	// `citizen-letters` belongs to service-documents and cannot be nested under (A1); the record created is
+	// a task, and it is written HERE. Before anything is written, documents is asked whether the letter
+	// exists in this commune and is not a denunciation (ResolveCitizenLetterForTask); one transaction then
+	// books the task with `nguon_giao = don-thu`, `nguon_id = letter id`, the inherited deadline and the
+	// `tao_nhiem_vu` entry naming the letter by number/year (transaction-boundaries `tao_nhiem_vu_tu_don_thu`).
+	//
+	// `task.create` AND `petition.read`, BOTH seeded (service-identity/migrations/0001_init.sql:308 and
+	// :303; ADR 0085 A8). The act creates a task; it is done FROM a letter the caller must be able to read —
+	// without the read key a task holder could probe letter ids through this route.
+	//
+	// 401 is RequirePermission's answer to no session AND to a session of another commune (compared before
+	// either key). 404 `not_found`: unknown, soft-deleted or another commune's letter — documents' one
+	// answer. 422 `denunciation_no_task` (a `to-cao` letter, C9) and `assignment_required` (no unit or
+	// assignee in the dialog, and the letter holds none). 503 `citizen_letter_check_unavailable` (documents
+	// not reachable / not wired / broke contract) and `assignee_check_unavailable` — nothing written in
+	// either. 400 also answers `source`, `source_id`, `due_at`, `lead_unit` or `monitor` in the body. Plus
+	// the task register's own refusals (traLoiLoiNhiemVu): `code_taken`, `task_tree`, `task_document`, and
+	// idem's `request_in_progress`.
+	//
+	// idem.Required(idem.MoKhiHong), POST /api/v1/tasks' declaration (A9): one letter may become several
+	// tasks, as in the prototype, so a double submit is indistinguishable from an intended second task
+	// without the key.
+	//
+	// @summary  Chuyển đơn thư thành nhiệm vụ — nguồn, hạn và người giữ suy ra ở máy chủ theo đơn; đơn tố cáo bị từ chối
+	// @screen   05-van-ban-don-thu §3.5
+	// @request  citizenLetterTaskIn
+	// @reply    201 nhiemVuRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error code_taken task_tree task_document request_in_progress
+	// @reply    422 httpx.Error denunciation_no_task assignment_required
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("POST /api/v1/citizen-letter-tasks",
+		authz.RequirePermission(d.Checker, "task.create")(
+			authz.RequirePermission(d.Checker, "petition.read")(
+				idem.Required(idem.MoKhiHong)(
+					http.HandlerFunc(h.CreateTaskFromCitizenLetter)))))
 
 	// --- THE TASK REGISTER. TWO READ ROUTES AND SIX WRITE ROUTES ---------------------------------
 	//

@@ -204,3 +204,10 @@ func (uc *GhiNhiemVu) checkAssignableStaff(ctx context.Context, codes []string) 
 	}
 	return nil
 }
+
+// CheckAssignableStaff is checkAssignableStaff for another door into the create path — the citizen-letter
+// door (citizen_letter_task.go), whose assignee may be the letter's own and so was typed by nobody in
+// this act. The SAME checker and the SAME refusals as Reassign, so one officer code answers one way.
+func (uc *GhiNhiemVu) CheckAssignableStaff(ctx context.Context, codes []string) error {
+	return uc.checkAssignableStaff(ctx, codes)
+}

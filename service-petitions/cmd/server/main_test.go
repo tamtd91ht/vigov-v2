@@ -439,6 +439,9 @@ func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *m
 		// Never invoked here; Register refuses a nil. Own suites: internal/app/petition_task_test.go and
 		// internal/http/petition_task_test.go.
 		PetitionTasks: app.NewPetitionTaskCreation(nil, nil),
+		// Never invoked here; Register refuses a nil. Own suites: internal/app/citizen_letter_task_test.go
+		// and internal/http/citizen_letter_task_test.go.
+		CitizenLetterTasks: app.NewCitizenLetterTaskCreation(nil, nil),
 		// §5.9's attachments, with NO object store, scanner or policy — the not-configured shape a
 		// deployment without OBJECT_STORAGE_* runs in. Never invoked here; Register refuses a nil. Own
 		// suites: internal/app/task_attachment_test.go and internal/http/task_attachment_test.go.

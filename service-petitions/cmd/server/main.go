@@ -394,6 +394,15 @@ func chay(log *slog.Logger) error {
 		// A task FROM a petition: the petition store for the locked read and the timeline row, and
 		// `ghiNhiemVu` — the create path itself — so this door cannot book a task any other way.
 		PetitionTasks: app.NewPetitionTaskCreation(phieu, ghiNhiemVu),
+		// A task FROM a citizen letter (ADR 0085): documents is asked, then `ghiNhiemVu` books it.
+		//
+		// ⚠ THE DOCUMENTS RESOLVER IS NOT WIRED YET, AND THE ROUTE THEREFORE ANSWERS 503 — fail closed,
+		// nothing written. DOCUMENTS_GRPC_ADDR lives in config group OrgUnitOwnerClients, which also
+		// carries PETITIONS_GRPC_ADDR (identity's two org-unit owners); declaring that group here would
+		// make staging/prod refuse to start without THIS service's own address. Wiring needs a group of
+		// its own in core/config (and DOCUMENTS-GRPC-ADDR on this deployment), then:
+		// documentsclient.Dial(cfg.DocumentsGRPCAddr(), cfg.GRPCCallerKey(), log) passed here.
+		CitizenLetterTasks: app.NewCitizenLetterTaskCreation(nil, ghiNhiemVu),
 		// §5.9's attachments: the SAME task store (the holder rule reads the row the acts lock) and the
 		// SAME stored-file store the log entry links through, so a file the upload route issued is the
 		// row the entry attaches and the timeline reads back.
