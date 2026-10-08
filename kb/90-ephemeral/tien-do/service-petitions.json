@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-petitions",
-  "cap_nhat": "2026-10-08",
+  "cap_nhat": "2026-10-09",
   "muc": [
     {
       "id": "so-tay-lanh-dao-bo-loc-may-chu",
@@ -644,6 +644,15 @@
       "no_confirm": [],
       "tiep_theo": "Triển khai identity TRƯỚC petitions (identity cũ trả UNIMPLEMENTED → 503 đúng ca này). Thử trên máy thật: gửi phiếu từ phiên đã xác thực, ô số ẩn → cán bộ thấy số (che) trên web-admin.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "chuyen-don-thu-thanh-nhiem-vu-09-10",
+      "menu": "van-ban-don-thu",
+      "trang_thai": "xong",
+      "viec": "POST /api/v1/citizen-letter-tasks — chuyển đơn thư thành nhiệm vụ (ADR 0085 A)",
+      "bang_chung": "bc00f039 (tuyến, migration 0034 nới CHECK nguồn giao don-thu, core/documentsclient) · e347b985 (nhóm biến DocumentsClient, Dial documents, netpol, Jenkins bo-sung-cau-hinh-petitions). go test petitions + core xanh.",
+      "no_confirm": [],
+      "tiep_theo": "TRƯỚC khi đổi ảnh petitions ở staging/prod: chạy Jenkins vận hành HANH_DONG=bo-sung-cau-hinh-petitions (đặt DOCUMENTS_GRPC_ADDR) và áp luật netpol petitions→documents:9090 nếu namespace có NetworkPolicy — thiếu biến thì pod crash-loop. Phát hiện sẵn có (không sửa): POST /api/v1/tasks không kiểm assignee qua ResolveAssignableStaff khi tạo."
     }
   ]
 }

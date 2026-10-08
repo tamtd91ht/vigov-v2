@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-identity",
-  "cap_nhat": "2026-10-08",
+  "cap_nhat": "2026-10-09",
   "muc": [
     {
       "id": "store-crosstenant",
@@ -565,6 +565,15 @@
       "bang_chung": "proto/vigov/identity/v1/identity.proto (buf lint + buf breaking --against HEAD sạch); internal/store/citizen_contact_phone.go (@cross-tenant: dinh_danh_cong_dan không có cột xã, neo trên phiên của xã), internal/app/citizen_contact_phone_reveal.go, internal/grpc/citizen_contact_phone.go, cmd/server/main.go nối Deps.ContactPhones. go vet + go test ./service-identity/... xanh 08/10; check_audit_actor + check_security PASS. TestContactPhoneForRevealPg BỎ QUA — chưa có VIGOV_TEST_DSN; kb/30-indexes/transaction-boundaries.json gan_so_da_xac_thuc_cua_phien_khi_tiep_nhan.",
       "no_confirm": [],
       "tiep_theo": "Chạy TestContactPhoneForRevealPg trên PG16 thật. Chỉ một khoá chung cho mọi bên gọi gRPC (ADR 0025) — giới hạn thật là đòi phiên đang sống; định danh theo dịch vụ (mTLS) vẫn nợ. Triển khai identity trước petitions."
+    },
+    {
+      "id": "han-don-thu-theo-loai-09-10",
+      "menu": "van-ban-don-thu",
+      "trang_thai": "xong",
+      "viec": "Thời hạn đơn thư theo loại đơn (ADR 0085 B): bảng citizen_letter_deadline_rule, ResolveCitizenLetterDeadline, REST citizen-letter-deadline-rules (admin.sla)",
+      "bang_chung": "c063f405 (migration 0027, không gieo) · 11c31dd6 (khoá đơn vị theo loại, đếm ngày theo Bộ luật Dân sự, gRPC deadline|not_configured, REST ghi vết, core/identityclient). go test service-identity + core xanh; make check (trừ web) xanh.",
+      "no_confirm": [],
+      "tiep_theo": "Chưa chạy PostgreSQL thật. Mỗi xã phải tự khai thời hạn ở Cấu hình → Thời hạn xử lý; chưa khai thì đơn 'Không đặt hạn'. Số luật định (10/30/7/30) chưa pháp chế đối chiếu, không gieo. Triển khai identity TRƯỚC documents (documents gọi RPC mới; identity cũ trả UNIMPLEMENTED → mọi lần vào sổ 503)."
     }
   ]
 }

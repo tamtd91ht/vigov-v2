@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-documents",
-  "cap_nhat": "2026-10-08",
+  "cap_nhat": "2026-10-09",
   "muc": [
     {
       "id": "loai-van-ban-tuyen-doc",
@@ -159,6 +159,15 @@
       "bang_chung": "Migration c4e2f0c7 (0007); a0a5fa0e (RPC + màu + core/documentsclient), 1a7cdd46 (loại thông báo theo phân hệ). go test ./service-documents/... xanh; *_pg_test chưa chạy.",
       "no_confirm": [],
       "tiep_theo": "Triển khai SAU comms f339b2ff. Chú thích 'don_thu không tồn tại trong service này' đã cũ (domain/automation.go:17-21, store/crosstenant/automation.go:38, http/incoming_dashboard.go:28, domain/incoming_dashboard.go:139, app/automation_runner.go:127). Có nhắc việc cho đơn thư hay không là điều kiện dừng luật 10 — chờ chủ dự án."
+    },
+    {
+      "id": "don-thu-bam-prototype-09-10",
+      "menu": "van-ban-don-thu",
+      "trang_thai": "xong",
+      "viec": "Sổ đơn thư bám prototype (ADR 0084/0085): nguồn vào sổ, nhóm trạng thái hiển thị, đếm, hạn tự điền theo loại đơn, kết quả theo loại, báo cáo đúng hạn mới, tra đơn cho chuyển nhiệm vụ, nhập/xuất Excel",
+      "bang_chung": "53196f95 (migration 0008 source + ràng buộc kết quả theo loại) · bf43af79 (status_group, citizen-letter-counts, 'Phân công xử lý', báo cáo, gRPC ResolveCitizenLetterForTask) · 6cdddada (hạn tự điền qua identity khi vào sổ / thụ lý KN-TC, identity lỗi → từ chối) · e87b72ac (nhập Excel tất cả-hoặc-không qua đúng code vào sổ, xuất Excel báo cáo có ghi vết). go build/vet/test service-documents xanh; make check (trừ web) 09/10: 95 gói ok, lint xanh sau fabcfa81.",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA chạy PostgreSQL thật (VIGOV_TEST_DSN trống) — migration 0008, Count theo nhóm, LiveByID, nhập Excel chưa qua CSDL thật. Bỏ ngỏ có chủ ý: câu chữ gợi ý 'Bộ phận đang xử lý, trong hạn giải quyết.' hiện cả khi quá hạn (chữ prototype). Cột bộ phận trong mẫu Excel nhận MÃ bộ phận (không tên); loại đơn/ngày trống bị từ chối (prototype mặc định). Xuất Excel không có tên xã. ADR 0064 #5 (đơn vị gia hạn) còn mở."
     }
   ]
 }

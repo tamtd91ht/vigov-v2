@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "web-admin",
-  "cap_nhat": "2026-10-08",
+  "cap_nhat": "2026-10-09",
   "muc": [
     {
       "id": "tam-viec-web-tu-hop-dong",
@@ -1087,11 +1087,11 @@
     {
       "id": "van-ban-don-thu-bam-prototype-08-10",
       "menu": "van-ban-don-thu",
-      "trang_thai": "dang_lam",
+      "trang_thai": "xong",
       "viec": "Văn bản & Đơn thư — tab Đơn thư công dân + Báo cáo bám prototype theo tmp/web/updated/van-ban-don-thu-theo-prototype-v2.md (/fix-web-admin 08/10, ADR 0084). 10 card: TASK-01 ADR · 02 web giao diện thuần · 03 hợp đồng · 04/05 migration documents/identity · 06–08 backend · 09/10 web",
-      "bang_chung": "TASK-01 4eb7ef27 (ADR 0084). TASK-02 6f9278f2: H1 theo tab, bảng table-fixed + colgroup (letter-register.tsx), d/m/yyyy (letterDate), một câu bảng trống, báo cáo 'Chưa phân công' + theo loại xếp theo tổng, dòng phụ Chuyển thành nhiệm vụ, ô bộ phận chỉ tên, gợi ý trạng thái + tên người dòng thời gian như prototype. Kiểm: vitest 13 ca đỏ trước sửa; web-admin typecheck · lint · test 275 tệp 5090 ca xanh; make check: mọi target xanh, target web 1 ca dashboard/export.test.ts PPTX quá 5s lúc máy tải nặng — chạy riêng 15/15 xanh. CHƯA kiểm bằng ảnh render (site và prototype cần đăng nhập) — chưa được báo là khớp prototype.",
+      "bang_chung": "TASK-01 4eb7ef27 (ADR 0084). TASK-02 6f9278f2: H1 theo tab, bảng table-fixed + colgroup (letter-register.tsx), d/m/yyyy (letterDate), một câu bảng trống, báo cáo 'Chưa phân công' + theo loại xếp theo tổng, dòng phụ Chuyển thành nhiệm vụ, ô bộ phận chỉ tên, gợi ý trạng thái + tên người dòng thời gian như prototype. Kiểm: vitest 13 ca đỏ trước sửa; web-admin typecheck · lint · test 275 tệp 5090 ca xanh; make check: mọi target xanh, target web 1 ca dashboard/export.test.ts PPTX quá 5s lúc máy tải nặng — chạy riêng 15/15 xanh. CHƯA kiểm bằng ảnh render (site và prototype cần đăng nhập) — chưa được báo là khớp prototype. · 09/10: 6c93b676 (Cấu hình — khối Thời hạn giải quyết đơn thư) · de566fd8 (6 nhóm trạng thái, thanh 4 bước + 2 nhánh + 'Bước cụ thể', chip nguồn, một ô trả lời + 4 trường KN/TC, tab (N), câu mô tả prototype). Vitest 278 tệp 5136 ca xanh. · e360e3a8 (Nhập từ Excel, Xuất Excel báo cáo, Chuyển thành nhiệm vụ trừ tố cáo; chip/cột hạn cùng quy tắc). Vitest 280 tệp 5163 ca, check:api khớp. make check đầy đủ cuối lượt bị Claude Code dừng vì thiếu bộ nhớ ở bước go build; các bước trước đó xanh và lượt không-web trước đó xanh (95 gói).",
       "no_confirm": [],
-      "tiep_theo": "Còn TASK-03…10 (hợp đồng chuyển thành nhiệm vụ + hạn theo loại đơn, migration nguồn vào sổ + ràng buộc kết quả theo loại, SLA theo loại đơn ở identity, backend nhóm trạng thái/đếm/hạn tự điền/quy tắc đúng hạn, nhập/xuất Excel, web thanh 4 bước+2 nhánh, Cấu hình thời hạn theo loại đơn). Không sắp 'sort=number': store/citizen_letter.go:138-141 — không lọc năm thì số hai năm xen nhau; mặc định created_at desc đã ra số mới nhất trước. Dòng 'Phụ trách:' ở dòng thời gian vẫn 'Tên (CB-…)' (spec §4.5 ghi chỉ họ tên). Bảng theo đơn vị chưa xếp theo tổng (prototype service.py:636). Chờ ảnh render 1280/1440 để ui-ux-reviewer VALIDATE."
+      "tiep_theo": "CHƯA kiểm bằng ảnh render (site/prototype cần đăng nhập) — không được báo là khớp prototype; cần ui-ux-reviewer VALIDATE với ảnh 1280/1440 các trạng thái: danh sách, ngăn chi tiết Mới vào sổ/Đã phân công, hộp vào sổ, hộp nhập Excel, hộp Chuyển thành nhiệm vụ, Báo cáo, khối thời hạn đơn thư ở Cấu hình. Câu chữ phiên tự đặt cần người duyệt: 'Bước cụ thể', 'Tệp chưa nhập được', '{k} dòng sai', 'Đã tạo nhiệm vụ X.', tiêu đề cột khối thời hạn. Hộp Chuyển thành nhiệm vụ dùng FormGiaoViec nên nhiều ô hơn prototype. Hợp đồng GET citizen-letter-report/exports chưa khai query year (web viết tay đường dẫn). Câu gợi ý prototype 'trong hạn giải quyết' hiện cả khi quá hạn."
     }
   ]
 }
