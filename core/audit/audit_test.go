@@ -32,3 +32,22 @@ func TestValidateRejectsUnattributableEntries(t *testing.T) {
 		}
 	}
 }
+
+// ADR 0080 #9: an act by a session without a verified phone is attributed to its Zalo account, with
+// its own actor_kind. The entry is accepted with the account id, and refused without one — there is no
+// fallback to the session id or to anything else.
+func TestValidateZaloAccountActor(t *testing.T) {
+	e := Entry{
+		TenantID: tenant.ID("01J0000000000000000000000X"),
+		Actor:    Actor{ID: "tkz-1", Kind: KindZaloAccount},
+		Action:   "gui_phan_anh",
+		Subject:  "PA-2026-0001",
+	}
+	if err := e.validate(); err != nil {
+		t.Fatalf("a zalo-account entry with an account id must validate: %v", err)
+	}
+	e.Actor.ID = ""
+	if err := e.validate(); err == nil {
+		t.Fatal("a zalo-account entry with no account id must be refused")
+	}
+}

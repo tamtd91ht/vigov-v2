@@ -258,7 +258,7 @@ func TestRead_FiltersAreExactAndHalfOpen(t *testing.T) {
 	s := theRead(t, d)
 	for _, want := range []string{
 		"AND at >= $2", "AND at < $3",
-		"AND actor_id = $4 AND actor_kind <> 'citizen'",
+		"AND actor_id = $4 AND actor_kind NOT IN ('citizen', 'zalo-account')",
 		"AND action = $5", "AND subject = $6", "LIMIT $7",
 	} {
 		if !strings.Contains(s.sql, want) {
@@ -372,6 +372,22 @@ func TestRead_CursorWithNonIntegerIdIs400(t *testing.T) {
 	}
 	if len(d.of("query")) != 0 {
 		t.Error("a forged cursor reached the database")
+	}
+}
+
+// ADR 0080: a Zalo account's entry is withheld exactly like a citizen's — its id names a member of the
+// public's Zalo account, not a staff member anybody needs to identify on this screen.
+func TestRead_ZaloAccountEntriesHaveNoCodeAndNoIP(t *testing.T) {
+	d := &rdDB{rows: [][]driver.Value{
+		row(1, t0, KindZaloAccount, "tkz-1", "203.0.113.9", "gui_phan_anh", "PA-X", nil),
+	}}
+	l, ctx := newLog(t, d)
+	res, err := l.Read(ctx, reader, Query{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v := res.Items[0]; v.ActorCode != "" || v.ActorIP != "" || v.ActorKind != KindZaloAccount {
+		t.Errorf("zalo-account entry = %+v, want empty actor_code and actor_ip", v)
 	}
 }
 

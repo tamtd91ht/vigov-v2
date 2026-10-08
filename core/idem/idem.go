@@ -473,7 +473,8 @@ func loi(w http.ResponseWriter, status int, code, msg string) {
 // consequence is one clerk reading another's result.
 //
 // The actor carries Kind as well as ID (`staff:01J…`): staff ids and citizen ids come from two
-// different tables and nothing guarantees the strings never coincide.
+// different tables and nothing guarantees the strings never coincide. The same holds for a Zalo
+// account (`zalo-account:01J…`, authz.KindZaloAccount, ADR 0080) against a citizen id.
 //
 // METHOD AND PATH are hashed so one client key reused across two routes does not replay the
 // wrong result.

@@ -71,8 +71,9 @@ type CitizenSession struct {
 
 	// ZaloAccountID is the Zalo account that opened this session through the Mini App bridge —
 	// `tai_khoan_zalo.id` in service-identity, a ULID. It is the audit "who" and the idem subject of
-	// a session without a verified phone (ADR 0045 §Ghi vết, ADR 0080; a citizen actor is an opaque
-	// id with Kind "citizen", see authz.Principal.Ma). NEVER the Zalo user id (personal data, which
+	// a session without a verified phone (ADR 0045 §Ghi vết, ADR 0080) — an opaque id with its OWN
+	// Kind, authz.KindZaloAccount, never "citizen", so no path that stores a citizen id can take it by
+	// accident (see authz.CitizenPrincipal). NEVER the Zalo user id (personal data, which
 	// identity keeps only as a hash) and never a phone number.
 	//
 	// RỖNG LÀ MỘT CÂU TRẢ LỜI THẬT: phiên không đi qua cầu Mini App. Tuyến cần một chủ sở hữu mà thấy
@@ -81,7 +82,8 @@ type CitizenSession struct {
 	//
 	// IT DOES NOT CHANGE WHAT CitizenID MEANS, and it does not loosen XaTuPhien: that wall still
 	// refuses a session without CitizenID. A route that accepts an account-owned session must say so
-	// in its own class declaration (ADR 0080, which amends ADR 0045 stop condition #6).
+	// in its own class declaration, CommuneFromSessionOrZaloAccount (ADR 0080, which amends ADR 0045
+	// stop condition #6).
 	ZaloAccountID string
 }
 
@@ -204,7 +206,7 @@ func CitizenSessionFrom(ctx context.Context) (CitizenSession, bool) {
 // Mini App cần phân biệt nó để hỏi số điện thoại — gộp vào 401 thì app mở lại phiên mới, nhận lại
 // đúng phiên chưa có số, và lặp mãi.
 func XaTuPhien() func(http.Handler) http.Handler {
-	return lopXaTuPhien(false)
+	return lopXaTuPhien(ownerVerifiedCitizen)
 }
 
 // XaTuPhienChiXem declares a VIEW-ONLY route of one commune: the commune comes from the session
@@ -220,10 +222,62 @@ func XaTuPhienChiXem(lyDo string) func(http.Handler) http.Handler {
 	if strings.TrimSpace(lyDo) == "" {
 		panic("httpx: XaTuPhienChiXem cần một lý do cụ thể")
 	}
-	return lopXaTuPhien(true)
+	return lopXaTuPhien(ownerNone)
 }
 
-func lopXaTuPhien(chiXem bool) func(http.Handler) http.Handler {
+// CommuneFromSessionOrZaloAccount declares a route of one commune, taken from the citizen session
+// exactly as in XaTuPhien, that ALSO accepts a session whose phone is not verified yet — provided
+// the session carries the Zalo account that opened it, which then OWNS what the route writes or reads
+// (ADR 0080, amending ADR 0045 stop condition #6).
+//
+// THREE OUTCOMES, AND ONLY THE MIDDLE ONE IS NEW:
+//
+//	CitizenID set                       served, identical to XaTuPhien (a verified citizen wins even
+//	                                    when the session also carries a Zalo account)
+//	CitizenID empty, ZaloAccountID set  served; the principal is the Zalo account (authz.KindZaloAccount)
+//	both empty                          403 chua_xac_thuc_so, the same answer XaTuPhien gives — there
+//	                                    is no owner to filter by, and nothing is put in its place
+//
+// THE COMMUNE IS NEVER WAIVED: no session, an unusable one or one with no commune answers the same 401
+// as XaTuPhien, from the same code path.
+//
+// ONLY FOR ROUTES THAT SUBMIT OR FOLLOW AN UNVERIFIED PETITION (ADR 0080 stop condition #4). A route
+// in this class must branch on the principal's Kind: a handler that reads Principal.ID as a citizen id
+// would treat a Zalo account as a citizen. The reason is mandatory, as for XaTuPhienChiXem — it is a
+// waiver of the phone and must be readable in the contract (rule 5, forbidden #4).
+func CommuneFromSessionOrZaloAccount(reason string) func(http.Handler) http.Handler {
+	if strings.TrimSpace(reason) == "" {
+		panic("httpx: CommuneFromSessionOrZaloAccount needs a specific reason")
+	}
+	return lopXaTuPhien(ownerVerifiedCitizenOrZaloAccount)
+}
+
+// sessionOwner is what a commune-from-session class demands of the session's OWNER, the commune
+// itself being demanded identically by all three. One body behind all three classes, so the 401 and
+// the commune handling cannot drift between them.
+type sessionOwner int
+
+const (
+	ownerVerifiedCitizen              sessionOwner = iota // XaTuPhien: CitizenID required
+	ownerNone                                             // XaTuPhienChiXem: no owner needed, view only
+	ownerVerifiedCitizenOrZaloAccount                     // CommuneFromSessionOrZaloAccount
+)
+
+// hasOwner reports whether session p satisfies the class's owner requirement.
+func (o sessionOwner) hasOwner(p CitizenSession) bool {
+	verified := strings.TrimSpace(p.CitizenID) != ""
+	switch o {
+	case ownerNone:
+		return true
+	case ownerVerifiedCitizenOrZaloAccount:
+		return verified || strings.TrimSpace(p.ZaloAccountID) != ""
+	default:
+		// ownerVerifiedCitizen, and any value nobody declared: fail closed.
+		return verified
+	}
+}
+
+func lopXaTuPhien(owner sessionOwner) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
@@ -238,7 +292,7 @@ func lopXaTuPhien(chiXem bool) func(http.Handler) http.Handler {
 					"Phiên không hợp lệ hoặc đã kết thúc. Vui lòng mở lại ứng dụng.", "")
 				return
 			}
-			if !chiXem && strings.TrimSpace(p.CitizenID) == "" {
+			if !owner.hasOwner(p) {
 				WriteError(w, http.StatusForbidden, "chua_xac_thuc_so",
 					"Vui lòng xác nhận số điện thoại để tiếp tục.", "")
 				return

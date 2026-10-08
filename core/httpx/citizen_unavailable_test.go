@@ -21,9 +21,10 @@ func (registryDown) TraCuu(context.Context, string) (CitizenSession, bool, error
 
 func TestCitizenEdgeRegistryDownIs503OnEveryRouteClass(t *testing.T) {
 	for name, class := range map[string]func(http.Handler) http.Handler{
-		"XaTuPhien":       XaTuPhien(),
-		"XaTuPhienChiXem": XaTuPhienChiXem("test: view-only"),
-		"KhongThuocXa":    KhongThuocXa("test: commune picker"),
+		"XaTuPhien":                       XaTuPhien(),
+		"XaTuPhienChiXem":                 XaTuPhienChiXem("test: view-only"),
+		"KhongThuocXa":                    KhongThuocXa("test: commune picker"),
+		"CommuneFromSessionOrZaloAccount": CommuneFromSessionOrZaloAccount("test: unverified petition"),
 	} {
 		t.Run(name, func(t *testing.T) {
 			ran := false

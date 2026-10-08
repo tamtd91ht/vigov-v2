@@ -28,9 +28,17 @@ import (
 // Actor identifies who performed the action.
 type Actor struct {
 	ID   string // staff code, citizen id, operator code (VH-…), or SystemActor
-	Kind string // "staff" | "citizen" | "system" | KindOperator
+	Kind string // "staff" | "citizen" | "system" | KindOperator | KindZaloAccount
 	IP   string
 }
+
+// KindZaloAccount is the actor_kind of an act by a Mini App session WITHOUT a verified phone, owned by
+// its Zalo account (ADR 0080 #9): actor_id is `tai_khoan_zalo.id`, an opaque ULID — rule 6 invariant 8
+// (business code) binds staff only. Like a citizen's entry, its actor id and IP are WITHHELD from the
+// commune's audit screen (Log.Read, ADR 0054 §4): the id names a person's Zalo account, and an exact
+// actor filter on it would let a guessed id confirm that person's activity. No CHECK on the column in
+// any service, so the value needs no migration. Equal to authz.KindZaloAccount, pinned by a test.
+const KindZaloAccount = "zalo-account"
 
 // SystemActor is used for background jobs and migrations. System actions are audited too;
 // an unattributed change is the thing this package exists to prevent.
