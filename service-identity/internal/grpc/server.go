@@ -244,6 +244,11 @@ type Deps struct {
 	// ResolveDeadlines refuses rather than producing something from whichever half it holds.
 	SLA SLADoc
 
+	// The commune's citizen-letter deadline rules (migration 0027, ADR 0085 B), read by
+	// ResolveCitizenLetterDeadline and by nothing else here. Declared in citizen_letter_deadline.go.
+	// A SEPARATE TABLE FROM `sla` and a separate field: nothing falls back from one to the other.
+	CitizenLetterRules CitizenLetterDeadlineRuleReader
+
 	// The recipient reads of the automation jobs (ADR 0058), for ResolveOrgUnitPermissionHolders and
 	// ResolveLeadershipStaff. Declared in notice_recipients.go. Recipients is *idstore.CanBoStore,
 	// PermissionKeys is *idstore.QuyenStore (the `quyen` catalogue, rule 5 invariant 3c).
@@ -317,6 +322,8 @@ func NewServer(d Deps) *Server {
 		panic("identity/grpc: thiếu kho ngày làm bù — AdvanceWorkingHours sẽ tính hạn như thể xã nghỉ đúng những ngày nó có làm")
 	case d.SLA == nil:
 		panic("identity/grpc: thiếu kho thời hạn xử lý — ResolveDeadlines sẽ panic, và mọi tuyến ghi của petitions lẫn documents không đặt được hạn")
+	case d.CitizenLetterRules == nil:
+		panic("identity/grpc: thiếu kho quy tắc hạn đơn thư — ResolveCitizenLetterDeadline sẽ panic, và documents không vào sổ được đơn thư nào")
 	case d.Recipients == nil || d.PermissionKeys == nil:
 		panic("identity/grpc: thiếu kho người nhận thông báo — ResolveOrgUnitPermissionHolders và ResolveLeadershipStaff sẽ panic, và việc nền leo thang không báo được ai")
 	case d.Automation == nil:

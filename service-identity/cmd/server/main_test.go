@@ -133,6 +133,15 @@ func (lamBuGia) TheoNam(context.Context, int) ([]domain.CaLamBu, error)     { re
 // reason; what each fault answers is defended in internal/grpc.
 func (slaGia) DanhSach(context.Context) ([]domain.DongSLA, error) { return nil, nil }
 
+// letterRulesWiringFake answers "no rule" — the real state of every commune (migration 0027 seeds
+// nothing). These wiring tests only need NewServer to build.
+type letterRulesWiringFake struct{}
+
+func (letterRulesWiringFake) Live(context.Context, domain.CitizenLetterType, domain.CitizenLetterDeadlineKind) (
+	domain.CitizenLetterDeadlineRule, bool, error) {
+	return domain.CitizenLetterDeadlineRule{}, false, nil
+}
+
 // orgUnitFake answers no live unit and no unit for anybody.
 type orgUnitFake struct{}
 
@@ -183,6 +192,8 @@ func noiDayGia(t *testing.T) svcgrpc.Deps {
 		NghiLe:   nghiLeGia{},
 		LamBu:    lamBuGia{},
 		SLA:      slaGia{},
+		// NewServer refuses a Deps without the citizen-letter deadline rules.
+		CitizenLetterRules: letterRulesWiringFake{},
 		// The automation collaborators answer nothing — these wiring tests only need NewServer to build.
 		Recipients:     automationWiringFake{},
 		PermissionKeys: automationWiringFake{},

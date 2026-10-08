@@ -214,6 +214,9 @@ func run(log *slog.Logger) error {
 	// It leaves this service by two doors now: the gRPC RPC ResolveDeadlines (the figures, for the
 	// deadline path) and GET /api/v1/sla (the rows, for the configuration screen).
 	sla := idstore.NewSLAStore(kho)
+	// The commune's citizen-letter deadline rules (migration 0027, ADR 0085 B). One store behind the
+	// gRPC ResolveCitizenLetterDeadline and the configuration routes, so both read one place.
+	letterRules := idstore.NewCitizenLetterDeadlineRuleStore(kho)
 	// The CITIZEN session registry (migration 0004) — the only store here built on the RAW *sql.DB
 	// rather than on `kho`, and the exemption is argued in full at NewPhienCongDanStore: this
 	// lookup is what ESTABLISHES the commune, so there is no commune with which to scope it
@@ -521,9 +524,12 @@ func run(log *slog.Logger) error {
 		// MỘT KHO CHO ĐỌC, MỘT USE CASE CHO GHI. `sla` là cùng một *idstore.SLAStore mà máy chủ
 		// gRPC dưới kia dùng, nên màn hình cấu hình và phép tính hạn đọc đúng một chỗ; `ghiSLA` mở
 		// giao dịch mà vết kiểm toán dùng chung (luật 6 bất biến 3).
-		SLA:        sla,
-		GhiSLA:     ghiSLA,
-		Automation: automation,
+		SLA:    sla,
+		GhiSLA: ghiSLA,
+		// Citizen-letter deadline rules: the read store and the write use case (audit in the same tx).
+		CitizenLetterDeadlineRules:      letterRules,
+		WriteCitizenLetterDeadlineRules: app.NewCitizenLetterDeadlineRules(kho, letterRules),
+		Automation:                      automation,
 		// This service's OWN audit_log, on its own handle — never another service's (ADR 0054 §1).
 		AuditLog: audit.NewLog(kho),
 		// Logo + web-admin banner on GET /api/v1/communes/current (ADR 0069 #8): the SAME platform client
@@ -702,6 +708,9 @@ func run(log *slog.Logger) error {
 		// read-only store, and there is no second reader: a deadline must come from ONE place, and
 		// this field plus the three above are that place.
 		SLA: sla,
+		// The citizen-letter deadline rules, for ResolveCitizenLetterDeadline (ADR 0085 B). Nothing
+		// falls back from this table to `sla`.
+		CitizenLetterRules: letterRules,
 		// The automation jobs (ADR 0058): recipients from the staff register and the `quyen` catalogue,
 		// claims and outcomes through the same use case the REST routes use.
 		Recipients:     canBo,

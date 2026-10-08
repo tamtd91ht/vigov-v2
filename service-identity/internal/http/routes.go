@@ -570,7 +570,12 @@ type Deps struct {
 	// register and every petition (ADR 0029 §"Xã chưa cấu hình").
 	SLA    SLADoc
 	GhiSLA SLAGhi
-	// Automation — Cấu hình → Tự động hoá (migration 0017, ADR 0058): the three job cards, their
+	// The commune's citizen-letter deadline rules (migration 0027, ADR 0085 B) — read store and write
+	// use case, the SLADoc / SLAGhi split. See citizen_letter_deadline_rule.go. Without the write
+	// surface a commune has no way to give its letters a deadline at all.
+	CitizenLetterDeadlineRules      CitizenLetterDeadlineRuleReader
+	WriteCitizenLetterDeadlineRules CitizenLetterDeadlineRuleWriting
+	// Automation —Cấu hình → Tự động hoá (migration 0017, ADR 0058): the three job cards, their
 	// settings, and "run now". A use case (every write shares its audit entry's transaction). See
 	// AutomationJobs in automation.go. *app.Automation in production.
 	Automation AutomationJobs
@@ -703,6 +708,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		// petition answer 409 `sla_chua_cau_hinh`. The service would start and the commune would be
 		// unable to do its work, with nothing saying why.
 		panic("identity/http: thiếu use case ghi thời hạn xử lý — xã sẽ không có cách nào cấu hình SLA, và mọi tuyến vào sổ vẫn bị từ chối")
+	case d.CitizenLetterDeadlineRules == nil || d.WriteCitizenLetterDeadlineRules == nil:
+		panic("identity/http: thiếu kho hoặc use case quy tắc hạn đơn thư — bốn tuyến /api/v1/citizen-letter-deadline-rules sẽ panic, và xã không có cách nào đặt hạn cho đơn thư")
 	case d.AuditLog == nil:
 		panic("identity/http: thiếu bộ đọc nhật ký hệ thống — GET /api/v1/identity-audit-entries sẽ panic khi có người gọi")
 	case d.Automation == nil:
@@ -2902,6 +2909,91 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "admin.sla")(
 			idem.KhongCan("xoá một dòng đã xoá trả 404 ở cả hai lần vì câu lệnh mang `deleted_at IS NULL`; lần gửi thứ hai không ghi đè người xoá và lý do của lần xoá thật")(
 				http.HandlerFunc(h.RemoveSLAFieldRow))))
+
+	// ---- Cấu hình → Thời hạn xử lý, đơn thư (migration 0027, ADR 0085 B, ADR 0084 #3, ADR 0064) -----
+	//
+	// ALL FOUR DECLARE `admin.sla` — the key the five `sla` routes above use, seeded in `quyen` at
+	// migrations/0001_init.sql:284. No key invented (rule 5, invariant 3c). Nothing is seeded (ADR 0085
+	// câu 4): an empty list is "Không đặt hạn" for every letter type. The unit lock (owner, 08/10/2026)
+	// is the domain's: domain.RequiredCitizenLetterUnit.
+	// ⚠ The noun `citizen-letter-deadline-rules` is NOT user-approved — stated in the handler file.
+
+	// @summary  Quy tắc hạn đơn thư của xã theo loại đơn — số ngày và đơn vị cho hạn xử lý đơn và hạn giải quyết
+	// @screen   14-cau-hinh §8
+	// 200 carries `items`, empty for a commune that configured nothing (letters booked with no deadline).
+	// Each item's `problem` is null when usable, otherwise why the rule is NOT used — booking that type is
+	// refused until it is fixed. `required_unit` is the one unit the lock allows for the pair.
+	//
+	// @reply    200 citizenLetterDeadlineRulesOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/citizen-letter-deadline-rules",
+		authz.RequirePermission(d.Checker, "admin.sla")(
+			http.HandlerFunc(h.ListCitizenLetterDeadlineRules)))
+
+	// POST idem.Required(idem.MoKhiHong), AND TWO LAYERS PROTECT IT: the key replays the 201 (and the
+	// rule id) to a retry, and the live-unique key (tenant_id, letter_type, deadline_kind) refuses a
+	// second live rule whether or not the header was sent — so the cache failing OPEN costs nothing.
+	//
+	// @summary  Thêm quy tắc hạn đơn thư cho một loại đơn và một loại hạn — KHÔNG hồi tố lên đơn đã vào sổ
+	// @screen   14-cau-hinh §8
+	// 400 is a body that is not JSON, an unknown letter type / deadline kind / unit, `giai-quyet` for
+	// kien-nghi-phan-anh or de-nghi, a unit the lock refuses (gio-lam-viec anywhere; khieu-nai only
+	// ngay-lich; to-cao xu-ly-don ngay-lam-viec, giai-quyet ngay-lich; the other two ngay-lam-viec), or
+	// an amount outside 1..365. 409 `citizen_letter_deadline_rule_exists` is a live rule for the pair.
+	//
+	// @request  createCitizenLetterDeadlineRuleIn
+	// @reply    201 citizenLetterDeadlineRuleOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/citizen-letter-deadline-rules",
+		authz.RequirePermission(d.Checker, "admin.sla")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.CreateCitizenLetterDeadlineRule))))
+
+	// idem.KhongCan, AND THE STATE IS THE PROTECTION: the use case writes nothing — no UPDATE, no audit
+	// entry — when amount and unit already equal the body, so a second identical PATCH leaves one row
+	// and one entry.
+	//
+	// @summary  Sửa số ngày hoặc đơn vị của một quy tắc hạn đơn thư — KHÔNG hồi tố lên đơn đã vào sổ
+	// @screen   14-cau-hinh §8
+	// 400 is a body that is not JSON, a body with neither `amount` nor `unit`, or a RESULT the lock or
+	// the 1..365 bound refuses (a stored row violating the lock cannot be saved again unchanged in unit).
+	// 404 is an id matching no live rule OF THIS COMMUNE — one answer for an invented id, a removed rule
+	// and another authority's rule.
+	//
+	// @request  updateCitizenLetterDeadlineRuleIn
+	// @reply    200 citizenLetterDeadlineRuleOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/citizen-letter-deadline-rules/{id}",
+		authz.RequirePermission(d.Checker, "admin.sla")(
+			idem.KhongCan("sửa là ghi đè một trạng thái đã biết trên một quy tắc đã có; use case không ghi gì khi số ngày và đơn vị không đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.UpdateCitizenLetterDeadlineRule))))
+
+	// @summary  Xoá mềm một quy tắc hạn đơn thư, kèm lý do bắt buộc — từ đó đơn loại này vào sổ không hạn
+	// @screen   14-cau-hinh §8
+	// 400 is a body that is not JSON or an empty / over-500-character reason. 404 is an id matching no
+	// live rule OF THIS COMMUNE.
+	//
+	// @request  removeCitizenLetterDeadlineRuleIn
+	// @reply    204 -
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/citizen-letter-deadline-rules/{id}",
+		authz.RequirePermission(d.Checker, "admin.sla")(
+			idem.KhongCan("xoá một quy tắc đã xoá trả 404 ở cả hai lần vì câu lệnh mang `deleted_at IS NULL`; lần gửi thứ hai không ghi đè người xoá và lý do của lần xoá thật")(
+				http.HandlerFunc(h.RemoveCitizenLetterDeadlineRule))))
 
 	// ---- Cấu hình → Tự động hoá (14-cau-hinh.md §9, migration 0017, ADR 0058) -------------------
 	//

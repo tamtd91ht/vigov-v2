@@ -137,9 +137,12 @@ func dungMayChuHaiSigner(t *testing.T, kySigner, giaiSigner *token.Signer) http.
 		GhiNgayLamBu:   ghiLichMau(),
 		// The deadline table, read and write. Unlike the calendar these ARE mounted — three routes
 		// under `admin.sla` — so Register would refuse this Deps without them.
-		SLA:      slaMau(),
-		GhiSLA:   ghiSLAMau(),
-		AuditLog: &auditLogFake{},
+		SLA:    slaMau(),
+		GhiSLA: ghiSLAMau(),
+		// Register refuses a Deps without the citizen-letter deadline rules (four `admin.sla` routes).
+		CitizenLetterDeadlineRules:      letterRulesReadSample(),
+		WriteCitizenLetterDeadlineRules: letterRulesWriteSample(),
+		AuditLog:                        &auditLogFake{},
 		// Register refuses a Deps without the profile read (logo/banner on /communes/current).
 		Profile: &profileReaderFake{},
 		// Register refuses a Deps without the automation use case.

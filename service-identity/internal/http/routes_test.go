@@ -708,6 +708,9 @@ type mayChu struct {
 	// the read is a store, the write is a use case. See slaGia / ghiSLAGia in sla_test.go.
 	sla    *slaGia
 	ghiSLA *ghiSLAGia
+	// The citizen-letter deadline rules, read store and write use case — citizen_letter_deadline_rule_test.go.
+	letterRules      *letterRulesReadFake
+	writeLetterRules *letterRulesWriteFake
 	// The audit-log reader — see audit_entries_test.go.
 	auditLog *auditLogFake
 	// The automation use case — see automationFake in automation_test.go.
@@ -773,6 +776,8 @@ func dungMayChu(t *testing.T) *mayChu {
 	ghiLich := ghiLichMau()
 	sla := slaMau()
 	ghiSLA := ghiSLAMau()
+	letterRules := letterRulesReadSample()
+	writeLetterRules := letterRulesWriteSample()
 	auditLog := &auditLogFake{}
 	automation := automationSample()
 	idleSessions := &idleRevokerFake{}
@@ -827,6 +832,9 @@ func dungMayChu(t *testing.T) *mayChu {
 		// cannot register a single incoming document.
 		SLA:    sla,
 		GhiSLA: ghiSLA,
+		// The citizen-letter deadline rules. Register panics without either.
+		CitizenLetterDeadlineRules:      letterRules,
+		WriteCitizenLetterDeadlineRules: writeLetterRules,
 		// The audit-log reader — audit_entries_test.go.
 		AuditLog: auditLog,
 		// The logo/banner read behind /communes/current — xa_test.go. Commune A has both images,
@@ -916,6 +924,9 @@ func dungMayChu(t *testing.T) *mayChu {
 
 		sla:    sla,
 		ghiSLA: ghiSLA,
+
+		letterRules:      letterRules,
+		writeLetterRules: writeLetterRules,
 
 		auditLog:   auditLog,
 		automation: automation,

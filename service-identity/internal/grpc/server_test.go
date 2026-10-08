@@ -148,6 +148,9 @@ func may(t *testing.T, sua func(*Deps)) (*Server, *bytes.Buffer) {
 		// would make "the commune has configured nothing" the one state no test ever entered —
 		// which is the state that is live in production right now. Its fakes live in sla_test.go.
 		SLA: &slaGia{},
+		// The citizen-letter deadline rules — NONE by default, the real state of every commune
+		// (migration 0027 seeds nothing). Fake in citizen_letter_deadline_test.go.
+		CitizenLetterRules: &letterRulesFake{},
 		// The automation collaborators — fakes in automation_test.go. They answer NOTHING by default,
 		// so a test says which holders, leaders and runs exist.
 		Recipients:     &recipientsFake{},
@@ -586,28 +589,29 @@ func TestNewServerTuChoiNoiDayKhongDu(t *testing.T) {
 	}
 	du := func() Deps {
 		return Deps{
-			Signer:         ky,
-			Phien:          &phienGia{},
-			IdleSessions:   &idleRevokerFake{},
-			CanBo:          canBoGia{},
-			Lo:             &loGia{},
-			Ten:            &tenGia{},
-			GiaoViec:       &giaoViecGia{},
-			OrgUnits:       &orgUnitFake{},
-			OrgUnitNames:   &orgUnitNameFake{},
-			TaskBlocLabels: &taskBlocLabelFake{},
-			Quyen:          quyenGia{},
-			PhienCongDan:   &phienCongDanGia{},
-			Communes:       &communesFake{},
-			Lich:           &lichGia{},
-			NghiLe:         &nghiLeGia{},
-			LamBu:          &lamBuGia{},
-			SLA:            &slaGia{},
-			Recipients:     &recipientsFake{},
-			PermissionKeys: &keysFake{},
-			Automation:     &automationFake{},
-			ContactPhones:  &contactPhoneFake{},
-			Log:            slog.New(slog.NewTextHandler(io.Discard, nil)),
+			Signer:             ky,
+			Phien:              &phienGia{},
+			IdleSessions:       &idleRevokerFake{},
+			CanBo:              canBoGia{},
+			Lo:                 &loGia{},
+			Ten:                &tenGia{},
+			GiaoViec:           &giaoViecGia{},
+			OrgUnits:           &orgUnitFake{},
+			OrgUnitNames:       &orgUnitNameFake{},
+			TaskBlocLabels:     &taskBlocLabelFake{},
+			Quyen:              quyenGia{},
+			PhienCongDan:       &phienCongDanGia{},
+			Communes:           &communesFake{},
+			Lich:               &lichGia{},
+			NghiLe:             &nghiLeGia{},
+			LamBu:              &lamBuGia{},
+			SLA:                &slaGia{},
+			CitizenLetterRules: &letterRulesFake{},
+			Recipients:         &recipientsFake{},
+			PermissionKeys:     &keysFake{},
+			Automation:         &automationFake{},
+			ContactPhones:      &contactPhoneFake{},
+			Log:                slog.New(slog.NewTextHandler(io.Discard, nil)),
 		}
 	}
 
@@ -646,6 +650,8 @@ func TestNewServerTuChoiNoiDayKhongDu(t *testing.T) {
 		// tables above, and without it every write route of `petitions` and the deadline path of
 		// `documents` has nothing to compute a commitment from (ADR 0029 §Hệ quả ngay).
 		"thiếu kho thời hạn xử lý": func(d *Deps) { d.SLA = nil },
+		// Missing it is every citizen letter refused at booking (ADR 0085 §Hệ quả: identity first).
+		"missing citizen-letter deadline rules": func(d *Deps) { d.CitizenLetterRules = nil },
 		// The automation jobs (ADR 0058): without these the escalation job notifies nobody and no
 		// job can claim a run.
 		"missing recipients":      func(d *Deps) { d.Recipients = nil },
