@@ -19,11 +19,12 @@ owns_facts:
   - "câu Lời hệ thống xã tự thêm vào nhóm 'Dùng chung' cất ở service-petitions; câu xã tự thêm chỉ lưu và quản lý, chưa hiện ra ở kênh nào (lô thứ hai Q5, 08/10/2026)"
   - "18 loại nhắn Zalo chia hai giai đoạn: loại đã có nơi phát làm ngay, 10 loại chưa có nơi phát giữ '?' và mỗi loại một ADR + outbox (lô thứ hai Q3, 08/10/2026)"
   - "dòng thời hạn riêng cho mọi loại việc (phản ánh theo lĩnh vực, văn bản theo loại văn bản, nhiệm vụ theo mức ưu tiên), không bước duyệt, tra lúc cố định hạn — thay ADR 0029 điểm nhiệm vụ dùng dòng mặc định (lô thứ hai Q4, 08/10/2026)"
+  - "lời dẫn tab Lời hệ thống chỉ nói trang quản trị, không nói Mini App; menu Cấu hình bỏ các phần web có mà prototype không có (dòng Sửa lần cuối, ghi chú chưa dùng, chú thích hai cột báo lãnh đạo, nút gieo khi bảng đã có dòng, hộp xác nhận Khôi phục lời gốc — thay ADR 0068 §15 ở điểm này); Nhập từ Excel luôn ở đầu tab Danh mục; thanh tab xuống dòng khi tràn (lô thứ ba Q6–Q9, 08/10/2026)"
 ---
 
 # 0079. Menu Cấu hình theo spec Cấu hình 02–12
 
-**Trạng thái:** đã chốt; lô câu trả lời thứ hai 08/10/2026 đóng phần lớn điều kiện dừng backend, còn dòng 9 (§*Còn mở*) · **Ngày:** 2026-10-08 ·
+**Trạng thái:** đã chốt; lô câu trả lời thứ hai 08/10/2026 đóng phần lớn điều kiện dừng backend, còn dòng 9 (§*Còn mở*); lô thứ ba (chấm ảnh vòng 1) chốt phần trình bày · **Ngày:** 2026-10-08 ·
 **Người quyết:** chủ dự án, 08/10/2026, phiên chính, lệnh `/fix-web-admin --menu=cau-hinh --des=Cập
 nhật lại ui ux toàn bộ view và action trong menu cấu hình này, tham khảo hướng dẫn tại
 .\tmp\web\cau-hinh\vigov-cau-hinh-spec\*.md` · **Bổ sung** ADR 0068 §*Sửa đổi 06/10/2026 (lần 5)* và
@@ -162,3 +163,35 @@ Hệ quả, chủ dự án chốt bằng chính câu trả lời này:
 
 ADR 0024, 0029 và chú thích các migration nêu trên không sửa ở lượt này; trên các điểm đã kể, ADR
 này thay chúng.
+
+## Lô câu trả lời thứ ba — chấm ảnh vòng 1 (08/10/2026)
+
+Chủ dự án trả lời bốn câu hỏi sau khi chấm ảnh vòng 1 của menu Cấu hình, 08/10/2026. Lựa chọn
+ghi nguyên văn trong ngoặc kép.
+
+| # | Câu hỏi | Chốt | Nghĩa |
+|---|---|---|---|
+| Q6 | Lời dẫn tab Lời hệ thống. Spec nói các câu hiện "ở cả trang quản trị và Zalo Mini App" — sai: citizen-app không đọc câu nào | **"Giữ spec, chỉ bỏ phần Mini App"** | Lời dẫn: "Những câu dưới đây là lời hệ thống hiện ra trên trang quản trị. Câu đi kèm phần mềm có thể sửa lời nhưng không xoá được — xoá đi thì lúc từ chối, hệ thống không còn gì để nói." |
+| Q7 | Phần web có mà prototype không có: (a) dòng "Sửa lần cuối: CB-…" trên thẻ câu hệ thống; (b) ghi chú "Chưa có chức năng nào dùng câu này" + hộp ghi chú nhóm Báo cáo; (c) chú thích dưới bảng thời hạn về hai cột báo lãnh đạo; (d) nút "Gieo thời hạn mặc định" khi bảng đã có dòng; (e) hộp xác nhận trước "Khôi phục lời gốc" | **"Bỏ hết, đúng prototype"** | Bỏ cả năm. Xem các hệ quả dưới bảng |
+| Q8 | Danh mục "Nhập từ Excel": prototype có một nút luôn ở đầu tab; máy chủ chỉ có tuyến nhập theo từng nhóm | **"Theo prototype"** | Nút luôn ở đầu tab. Nhóm đang lọc có tuyến nhập thì nút chạy thật; "Tất cả", hoặc nhóm không có tuyến nhập, thì nút là control "?" (ADR 0068 §14) |
+| Q9 | Thanh 12 tab tràn ở bề rộng 1440px | **"theo prototype nếu prototype chưa có thì theo 1"** | Prototype có 9 tab và không nói gì về chỗ tràn, nên áp phương án 1: thanh tab **xuống dòng** khi không đủ chỗ |
+
+Hệ quả của Q7:
+
+| Điểm | Hệ quả |
+|---|---|
+| (b) so với Q5b | Q5b đòi màn ghi rõ câu xã tự thêm chưa được chức năng nào dùng. Q7 bỏ ghi chú ấy, theo prototype; Q7 trả lời sau nên thắng ở điểm trình bày này. Q5b vẫn đúng ở phần nghĩa: câu chỉ lưu và quản lý, chưa hiện ra đâu |
+| (e) | **Thay** ADR 0068 §15, chỉ dòng "Xác nhận khôi phục câu mặc định" và chỉ cho nút Khôi phục lời gốc. Các dòng khác của §15 giữ nguyên, kể cả "Ngừng dùng <tên>?". ADR 0068 không sửa ở đây |
+| Cùng nguyên tắc | Bỏ thêm đoạn chú thích về người nhận ở tab Tự động hoá, vì prototype không có |
+| Không đổi | Khối gieo khi bảng thời hạn còn trống (`KhoiChuaKhai`) giữ. (d) chỉ bỏ nút gieo khi bảng **đã có** dòng |
+
+### Phiên chính tự quyết theo luật/ADR sẵn có — không phải câu trả lời của chủ dự án
+
+| Điểm | Quyết | Căn cứ |
+|---|---|---|
+| Huy hiệu "Mặc định" | Chỉ hiện chữ, như prototype | Đây là thuộc tính, không phải trạng thái. §*Quyết định* #6 ("Giữ icon + chữ") chỉ nói về huy hiệu trạng thái |
+| Nút Tắt bị ẩn với một số câu | Cho phép lệch prototype | Theo luật ba tầng của ADR 0024, máy chủ từ chối thao tác ấy |
+| Trạng thái nhiệm vụ chỉ có bút chì (#21) | Cho phép lệch prototype | Máy chủ từ chối thao tác khác |
+| Khi nào hiện "Tắt" | Chỉ khi câu đã có lời của xã: lời sửa đè, hoặc câu xã tự thêm | Q2: khi tắt thì dùng lời gốc. Câu chưa có lời của xã thì không có gì để tắt |
+| "Số cán bộ đã ghép nối", "Cán bộ chưa ghép nối" | Thôi là "?" | Danh sách "Ai đã ghép nối" ghép với danh bạ cán bộ (`GET /api/v1/staff-directory`, đã có). Hai mục này không nằm trong danh sách việc backend của lô 2, nên lô 2 không có dòng nào phải đóng |
+| Đơn thư trong bảng thời hạn | Chỉ có dòng thời hạn mặc định | Prototype có 3 loại việc. Q4 chỉ thêm dòng riêng cho phản ánh, văn bản và nhiệm vụ |
