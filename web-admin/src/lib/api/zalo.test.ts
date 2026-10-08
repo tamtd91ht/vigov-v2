@@ -1,10 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  checkCommuneZaloBot,
   createPairingCode,
+  getCommuneZaloBot,
   getCurrentZaloLink,
   getZaloChannelSettings,
   listZaloLinkedStaff,
+  registerCommuneZaloWebhook,
+  retireCommuneZaloBot,
+  saveCommuneZaloBot,
   saveZaloChannelSettings,
   sendZaloTestMessage,
   unlinkCurrentZalo,
@@ -43,13 +48,15 @@ afterEach(() => vi.unstubAllGlobals());
 
 const SETTINGS: ZaloChannelSettings = {
   is_enabled: true,
-  kinds: ["sap-den-han", "qua-han"],
+  kinds: ["nhiem-vu.sap-den-han", "nhiem-vu.qua-han"],
   quiet_start: "21:00",
   quiet_end: "06:00",
   overdue_start_after_days: 1,
   overdue_repeat_every_days: 2,
   updated_at: "2026-10-05T03:00:00Z",
   updated_by: "CB-00123",
+  supported_events: ["nhiem-vu.sap-den-han", "nhiem-vu.qua-han", "ban-tin-tuan"],
+  platform_ready: true,
 };
 
 describe("own link — everything from the session, nothing in the request", () => {
@@ -85,7 +92,7 @@ describe("own link — everything from the session, nothing in the request", () 
 });
 
 describe("commune settings and linked list", () => {
-  it("PUT sends exactly the six editable keys — never updated_at / updated_by", async () => {
+  it("PUT sends exactly the six editable keys — never updated_*, supported_events, platform_ready", async () => {
     answer = () => json(ZALO_STATUS.settingsSaved, SETTINGS);
     // The whole read shape passed in, `updated_*` included: they must not travel back up.
     await saveZaloChannelSettings(SETTINGS);
@@ -94,7 +101,7 @@ describe("commune settings and linked list", () => {
     expect(c.init.method).toBe("PUT");
     expect(JSON.parse(String(c.init.body))).toEqual({
       is_enabled: true,
-      kinds: ["sap-den-han", "qua-han"],
+      kinds: ["nhiem-vu.sap-den-han", "nhiem-vu.qua-han"],
       quiet_start: "21:00",
       quiet_end: "06:00",
       overdue_start_after_days: 1,
@@ -114,5 +121,64 @@ describe("commune settings and linked list", () => {
   it("403 on the admin routes is a sentence, never an empty list", async () => {
     answer = () => json(403, { code: "forbidden", message: "Bạn không có quyền thực hiện thao tác này.", trace_id: "" });
     expect(await listZaloLinkedStaff()).toEqual({ ok: false, thongBao: "Bạn không có quyền thực hiện thao tác này." });
+  });
+});
+
+describe("the commune's own bot — zalo-bots/current", () => {
+  const TOKEN_FAKE = "000000000:fake-token-for-tests";
+
+  it("PUT: token sent VERBATIM only when typed; no other key goes up", async () => {
+    answer = () => json(200, { bot: {}, adopted: true, ended_link_count: 3 });
+    await saveCommuneZaloBot({ bot_token: ` ${TOKEN_FAKE}`, bot_name: "Bot Xã", chat_url: "https://zalo.me/1" });
+    await saveCommuneZaloBot({ bot_token: "", bot_name: "Bot Xã", chat_url: "https://zalo.me/1" });
+    expect(calls.map((c) => [String(c.init.method), c.url])).toEqual([
+      ["PUT", "/api/v1/zalo-bots/current"],
+      ["PUT", "/api/v1/zalo-bots/current"],
+    ]);
+    expect(JSON.parse(String(calls[0]!.init.body))).toEqual({
+      bot_token: ` ${TOKEN_FAKE}`,
+      bot_name: "Bot Xã",
+      chat_url: "https://zalo.me/1",
+    });
+    // Empty = keep the live token: the key is ABSENT, not "".
+    expect(JSON.parse(String(calls[1]!.init.body))).toEqual({ bot_name: "Bot Xã", chat_url: "https://zalo.me/1" });
+    for (const c of calls) expect(c.url).not.toContain(TOKEN_FAKE);
+  });
+
+  it("GET current, POST check, POST webhook: relative paths, no body; webhook secret handed back as is", async () => {
+    answer = () => json(200, { has_own_bot: false, bot: null, live_link_count: 2 });
+    expect(await getCommuneZaloBot()).toEqual({ ok: true, duLieu: { has_own_bot: false, bot: null, live_link_count: 2 } });
+    answer = () => json(200, { result: "thanh-cong", checked_at: "2026-10-08T03:00:00Z" });
+    expect((await checkCommuneZaloBot()).ok).toBe(true);
+    answer = () => json(200, { result: "thanh-cong", url: "https://xa.example.test/api/v1/zalo-bot-updates", secret: "s3cr3t-fake" });
+    const w = await registerCommuneZaloWebhook();
+    expect(w.ok && w.duLieu.secret).toBe("s3cr3t-fake");
+    expect(calls.map((c) => [String(c.init.method), c.url])).toEqual([
+      ["GET", "/api/v1/zalo-bots/current"],
+      ["POST", "/api/v1/zalo-bots/current/check"],
+      ["POST", "/api/v1/zalo-bots/current/webhook"],
+    ]);
+    for (const c of calls) {
+      expect(c.init.body).toBeUndefined();
+      expect(c.init.credentials).toBe("same-origin");
+    }
+  });
+
+  it("DELETE carries the reason in the BODY, never in the URL", async () => {
+    answer = () => json(200, { retired: true, ended_link_count: 1, revoke_notice: "Thu hồi mã cũ." });
+    const r = await retireCommuneZaloBot("Xã thôi dùng bot riêng");
+    expect(r).toEqual({ ok: true, duLieu: { retired: true, ended_link_count: 1, revoke_notice: "Thu hồi mã cũ." } });
+    const c = calls.at(-1)!;
+    expect([c.init.method, c.url]).toEqual(["DELETE", "/api/v1/zalo-bots/current"]);
+    expect(JSON.parse(String(c.init.body))).toEqual({ reason: "Xã thôi dùng bot riêng" });
+  });
+
+  it("a refusal is the server's sentence (409 zalo_bot_in_use)", async () => {
+    answer = () =>
+      json(409, { code: "zalo_bot_in_use", message: "Con bot này đang được dùng ở nơi khác trên nền tảng nên xã không dùng được.", trace_id: "" });
+    expect(await saveCommuneZaloBot({ bot_token: TOKEN_FAKE, bot_name: "Bot X", chat_url: "https://zalo.me/1" })).toEqual({
+      ok: false,
+      thongBao: "Con bot này đang được dùng ở nơi khác trên nền tảng nên xã không dùng được.",
+    });
   });
 });

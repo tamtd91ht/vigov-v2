@@ -5,8 +5,8 @@
  * still reaches the screen.
  */
 
-import type { ZaloChannelSettings, ZaloChannelSettingsChange, ZaloReminderKind } from "@/lib/api/zalo";
-import { ZALO_REMINDER_KINDS } from "@/lib/api/zalo";
+import type { comms_communeZaloBotCurrentOut, comms_communeZaloBotIn } from "@/lib/api/schema.gen";
+import type { ZaloChannelSettings, ZaloChannelSettingsChange } from "@/lib/api/zalo";
 
 export const NO_LINKED_STAFF = "Chưa cán bộ nào của xã ghép nối Zalo.";
 
@@ -27,8 +27,8 @@ export const CHANNEL_DESCRIPTION =
 export const QUIET_HINT = "Trong khoảng này hệ thống không nhắn Zalo; chuông trong web vẫn kêu.";
 
 /**
- * Spec 11 §2 with "đổi ở đây là đổi cho cả hai" DROPPED (ADR 0079 Q6, "giữ spec, chỉ bỏ phần sai"):
- * the threshold is read from the SLA column and cannot be changed on this tab.
+ * Spec 11 §2 with "đổi ở đây là đổi cho cả hai" DROPPED — ADR 0079 lô 2 Q1 #7 (đổi ở lô 4 Q10 — ô sửa
+ * được, lưu riêng cho Zalo). Until that field ships, the threshold is not changed on this tab.
  */
 export const WHEN_DESCRIPTION =
   "Ngưỡng “sắp đến hạn” dùng chung với cái chuông và danh sách “Sắp đến hạn”, nên con số trong tin nhắn luôn bằng con số trên màn hình.";
@@ -37,20 +37,39 @@ export const WHEN_DESCRIPTION =
 export const EVENTS_HINT = "Bỏ chọn thì việc đó vẫn vào chuông như cũ, chỉ không nhắn Zalo.";
 
 /**
- * One row of spec 11's event table. `kind` is the server kind that ACTUALLY sends this event today,
- * or null when nothing does (drawn disabled with "?"). Several rows share one kind, hence one
- * checkbox state — what was found in the producers on 08/10/2026:
- *   - `sap-den-han`: the daily per-person digest of tasks, petitions (service-petitions
- *     `domain.DueSoonNotice`) and incoming documents (service-documents `slaReminders`);
- *   - `qua-han`: the same three, AND "unit has named nobody past the threshold"
- *     (`domain.UnassignedNotice` is sent with kind OVERDUE — comms has no kind of its own for it);
- *   - `leo-thang`: escalation of those three; the spec's one escalation row is the task one;
- *   - `ban-tin-tuan`: the Monday digest.
+ * One row of the event table. `kind` is the per-domain kind comms sends this event under
+ * (`service-comms/internal/domain/zalo_link.go` ZaloReminderKinds, migration 0021 — ADR 0079 Q1 #6:
+ * "web ánh xạ sang mã spec"), or null when NOTHING produces it yet (ADR 0079 Q3, second phase): drawn
+ * disabled with "?". `alsoKinds` are switched TOGETHER with `kind` by the same box. A row any of whose
+ * kinds is not in the server's `supported_events` is drawn disabled with "?" too — the server, not this
+ * table, says what may be ticked.
+ *
+ * THE BOX IS CHECKED WHEN `kind` IS SELECTED, whatever `alsoKinds` hold. A stored half-state (e.g.
+ * `van-ban.chua-cu-nguoi` alone, from a save made outside this screen) reads unchecked while `qua-han`
+ * is off and checked while it is on; the next tick or untick then sets all three alike.
  */
-export type ZaloEventRow = { code: string; label: string; hint?: string; kind: ZaloReminderKind | null };
+export type ZaloEventRow = {
+  code: string;
+  label: string;
+  hint?: string;
+  kind: string | null;
+  alsoKinds?: readonly string[];
+};
+
+/** Every kind one row switches: `kind` first, then `alsoKinds`. Empty for a row with no producer. */
+export function rowKinds(row: ZaloEventRow): readonly string[] {
+  return row.kind === null ? [] : [row.kind, ...(row.alsoKinds ?? [])];
+}
 
 export type ZaloEventGroup = { title: string; events: readonly ZaloEventRow[] };
 
+/**
+ * Spec 11 §2's eighteen rows, in its order and words — nothing more (owner, 08/10/2026, "theo
+ * prototype"). Comms has four kinds the spec has no row for: document / petition escalation and
+ * "unassigned". The domain's "quá hạn" row switches them (`alsoKinds`), so every kind in
+ * `supported_events` still has exactly one box — none can stay selected with no control on screen. The
+ * task rows keep their own kinds.
+ */
 export const ZALO_EVENT_GROUPS: readonly ZaloEventGroup[] = [
   {
     title: "Nhiệm vụ",
@@ -60,16 +79,16 @@ export const ZALO_EVENT_GROUPS: readonly ZaloEventGroup[] = [
         code: "task.due_soon",
         label: "Việc sắp đến hạn",
         hint: "Gộp thành một bản tin mỗi sáng, theo ngưỡng bên dưới.",
-        kind: "sap-den-han",
+        kind: "nhiem-vu.sap-den-han",
       },
-      { code: "task.overdue", label: "Việc quá hạn", hint: "Theo nhịp đặt ở phần dưới.", kind: "qua-han" },
+      { code: "task.overdue", label: "Việc quá hạn", hint: "Theo nhịp đặt ở phần dưới.", kind: "nhiem-vu.qua-han" },
       {
         code: "task.escalated",
         label: "Việc bị đôn đốc lên cấp trên",
         hint: "Lãnh đạo nhận khi việc trễ quá lâu.",
-        kind: "leo-thang",
+        kind: "nhiem-vu.leo-thang",
       },
-      { code: "task.unassigned_too_long", label: "Bộ phận chưa cử người làm", kind: "qua-han" },
+      { code: "task.unassigned_too_long", label: "Bộ phận chưa cử người làm", kind: "nhiem-vu.chua-cu-nguoi" },
       {
         code: "task.extension_requested",
         label: "Đề nghị lùi hạn chờ duyệt",
@@ -94,16 +113,26 @@ export const ZALO_EVENT_GROUPS: readonly ZaloEventGroup[] = [
         hint: "Gửi ngay lúc văn thư phân công cho cán bộ xử lý.",
         kind: null,
       },
-      { code: "document.due_soon", label: "Văn bản, đơn thư sắp đến hạn", kind: "sap-den-han" },
-      { code: "document.overdue", label: "Văn bản, đơn thư quá hạn", kind: "qua-han" },
+      { code: "document.due_soon", label: "Văn bản, đơn thư sắp đến hạn", kind: "van-ban.sap-den-han" },
+      {
+        code: "document.overdue",
+        label: "Văn bản, đơn thư quá hạn",
+        kind: "van-ban.qua-han",
+        alsoKinds: ["van-ban.chua-cu-nguoi", "van-ban.leo-thang"],
+      },
     ],
   },
   {
     title: "Phản ánh người dân",
     events: [
       { code: "feedback.assigned", label: "Phản ánh được phân công", kind: null },
-      { code: "feedback.due_soon", label: "Phản ánh sắp đến hạn", kind: "sap-den-han" },
-      { code: "feedback.overdue", label: "Phản ánh quá hạn", kind: "qua-han" },
+      { code: "feedback.due_soon", label: "Phản ánh sắp đến hạn", kind: "phan-anh.sap-den-han" },
+      {
+        code: "feedback.overdue",
+        label: "Phản ánh quá hạn",
+        kind: "phan-anh.qua-han",
+        alsoKinds: ["phan-anh.chua-cu-nguoi", "phan-anh.leo-thang"],
+      },
       {
         code: "feedback.reopened",
         label: "Phản ánh bị mở lại",
@@ -121,6 +150,12 @@ export const ZALO_EVENT_GROUPS: readonly ZaloEventGroup[] = [
     ],
   },
 ];
+
+/**
+ * The kinds that need the overdue cadence — comms' `zaloOverdueKinds` (0021
+ * `zalo_channel_setting_overdue_kinds_need_cadence`). Unassigned and escalation notices are one-shot.
+ */
+export const OVERDUE_KINDS: readonly string[] = ["nhiem-vu.qua-han", "van-ban.qua-han", "phan-anh.qua-han"];
 
 /** One person of `GET /api/v1/staff-directory` — exactly the four fields it returns, no phone, no e-mail. */
 export type DirectoryPerson = { code: string; full_name: string; position: string; department_id: string };
@@ -163,7 +198,8 @@ export function joinStaffLinks(
 
 export type ZaloChannelDraft = {
   isEnabled: boolean;
-  kinds: ZaloReminderKind[];
+  /** As the server sent them (its canonical order). A kind this screen has no row for is KEPT, never dropped on save. */
+  kinds: string[];
   /** "HH:MM", as the server stores it. The selects offer whole hours; another stored value is kept. */
   quietStart: string;
   quietEnd: string;
@@ -175,7 +211,7 @@ export type ZaloChannelDraft = {
 export function draftFromSettings(s: ZaloChannelSettings): ZaloChannelDraft {
   return {
     isEnabled: s.is_enabled,
-    kinds: ZALO_REMINDER_KINDS.filter((k) => s.kinds.includes(k)),
+    kinds: [...s.kinds],
     quietStart: s.quiet_start,
     quietEnd: s.quiet_end,
     lateStartDays: s.overdue_start_after_days,
@@ -183,10 +219,22 @@ export function draftFromSettings(s: ZaloChannelSettings): ZaloChannelDraft {
   };
 }
 
-export function toggleKind(draft: ZaloChannelDraft, kind: ZaloReminderKind, on: boolean): ZaloChannelDraft {
-  const next = on ? [...draft.kinds, kind] : draft.kinds.filter((k) => k !== kind);
-  // Kept in the fixed order, so the body never depends on click order.
-  return { ...draft, kinds: ZALO_REMINDER_KINDS.filter((k) => next.includes(k)) };
+/**
+ * `order` is the server's `supported_events` — its canonical order, so the body never depends on click
+ * order. A selected kind outside it stays, after the ordered ones.
+ */
+export function toggleKind(
+  draft: ZaloChannelDraft,
+  kind: string | readonly string[],
+  on: boolean,
+  order: readonly string[],
+): ZaloChannelDraft {
+  const kinds: readonly string[] = typeof kind === "string" ? [kind] : kind;
+  const next = on
+    ? [...draft.kinds, ...kinds.filter((k) => !draft.kinds.includes(k))]
+    : draft.kinds.filter((k) => !kinds.includes(k));
+  const ordered = order.filter((k) => next.includes(k));
+  return { ...draft, kinds: [...ordered, ...next.filter((k) => !order.includes(k))] };
 }
 
 /** The select ranges of spec 11 §2 ("từ min đến 14"). The server allows up to 365; a larger stored value is shown as its own option. */
@@ -222,7 +270,7 @@ export type BuildRefusal = {
  * the server's refusals, in its words:
  *   - turning the channel ON needs at least one kind;
  *   - the quiet window cannot start and end at the same time;
- *   - the two overdue cadences are both set or both unset; `qua-han` chosen → both REQUIRED.
+ *   - the two overdue cadences are both set or both unset; an overdue kind chosen → both REQUIRED.
  * These are reminder CADENCES set by the commune (ADR 0074), not a deadline: nothing here computes
  * or stores whether a task is late.
  */
@@ -243,7 +291,7 @@ export function buildChange(d: ZaloChannelDraft): { ok: true; change: ZaloChanne
       text: "Chọn đủ hai số của nhịp nhắc quá hạn (bắt đầu nhắc sau, nhắc lại mỗi) thì mới lưu.",
     };
   }
-  if (d.kinds.includes("qua-han") && d.lateStartDays === null) {
+  if (d.kinds.some((k) => OVERDUE_KINDS.includes(k)) && d.lateStartDays === null) {
     return {
       ok: false,
       held: false,
@@ -269,4 +317,167 @@ export function buildChange(d: ZaloChannelDraft): { ok: true; change: ZaloChanne
       overdue_repeat_every_days: repeat,
     },
   };
+}
+
+// ---- §0 and §3: the commune's own bot (ADR 0079 Q1 #1–#5) ----------------------------------------
+
+/** Spec 11 §0, verbatim — shown when the GET says `platform_ready: false` (no bot can serve the commune). */
+export const PLATFORM_NOT_READY =
+  "Chưa có con bot nào phục vụ xã, nên chưa tin nào gửi đi được. Hoặc chờ ViHAT bật bot chung, hoặc nhập mã bot riêng của xã ở phần dưới.";
+
+/** Spec 11 §3 description, by `has_own_bot`. */
+export function botDescription(hasOwnBot: boolean): string {
+  return hasOwnBot
+    ? "Xã đang dùng bot riêng. Mọi tin nhắc việc của xã đi bằng con bot này."
+    : "Xã đang dùng bot chung của nền tảng. Để trống phần dưới là giữ nguyên như vậy — chỉ nhập mã bot khi xã muốn bot mang tên mình.";
+}
+
+/** Spec 11 §3 pill: "Bot riêng · {tên}" or "Bot chung". */
+export function botPill(current: comms_communeZaloBotCurrentOut): string {
+  return current.has_own_bot && current.bot !== null ? `Bot riêng · ${current.bot.bot_name}` : "Bot chung";
+}
+
+/** Spec 11 §3 token hint, by `has_own_bot`. */
+export function botTokenHint(hasOwnBot: boolean): string {
+  return hasOwnBot
+    ? "Đã có mã. Để trống nếu giữ nguyên; nhập mã mới để thay."
+    : "Lấy trong Mini App “Zalo Bot Creator”. Để trống là dùng bot chung.";
+}
+
+/**
+ * The sentence for each Zalo call outcome comms records (`service-comms/internal/domain/zalo_bot.go`,
+ * ZaloCall*). ZALO IS NEVER QUOTED: comms sends the class only. Commune words — "mã bot", the Mini App
+ * the commune got it from — not the operator console's.
+ */
+const OUTCOME_TEXT: Readonly<Record<string, { long: string; short: string }>> = {
+  "thanh-cong": { long: "Kết nối tốt: Zalo nhận mã bot của xã.", short: "kết nối tốt" },
+  "chua-cau-hinh": { long: "Xã chưa có mã bot nên hệ thống chưa hỏi Zalo.", short: "chưa có mã bot" },
+  "token-bi-tu-choi": {
+    long: "Zalo không nhận mã bot (mã sai, đã bị thu hồi, hoặc bot không còn). Lấy mã mới trong Mini App “Zalo Bot Creator” rồi lưu lại.",
+    short: "Zalo không nhận mã bot",
+  },
+  "gioi-han-tan-suat": {
+    long: "Zalo đang giới hạn số lần gọi. Vui lòng thử lại sau ít phút.",
+    short: "Zalo đang giới hạn số lần gọi",
+  },
+  "khong-kha-dung": {
+    long: "Không nhận được trả lời từ Zalo. Vui lòng thử lại sau ít phút.",
+    short: "Zalo không trả lời",
+  },
+  "bi-tu-choi": {
+    long: "Zalo từ chối yêu cầu. Kiểm tra cấu hình bot trong Mini App “Zalo Bot Creator”.",
+    short: "Zalo từ chối yêu cầu",
+  },
+  "phan-hoi-sai-dang": {
+    long: "Zalo trả lời theo dạng hệ thống không đọc được. Hãy báo đơn vị vận hành hệ thống kèm thời điểm thử.",
+    short: "Zalo trả lời sai dạng",
+  },
+};
+
+/** A class this build does not know is a failure of unknown cause — never a success. */
+const UNKNOWN_OUTCOME = {
+  long: "Không rõ kết quả lần hỏi Zalo. Hãy báo đơn vị vận hành hệ thống kèm thời điểm thử.",
+  short: "không rõ kết quả",
+};
+
+function outcome(result: string): { long: string; short: string } {
+  // Own keys only: `"toString" in OUTCOME_TEXT` is true and would print a function as a sentence.
+  return (Object.prototype.hasOwnProperty.call(OUTCOME_TEXT, result) ? OUTCOME_TEXT[result] : undefined) ?? UNKNOWN_OUTCOME;
+}
+
+export const isOutcomeOk = (result: string): boolean => result === "thanh-cong";
+
+/** "Kiểm tra kết nối" toast. `account_name` is the BOT's name as Zalo knows it — not personal data. */
+export function checkResultText(result: string, accountName?: string): string {
+  if (isOutcomeOk(result) && accountName !== undefined && accountName.trim() !== "") {
+    return `Kết nối tốt: Zalo nhận mã bot của xã (${accountName}).`;
+  }
+  return outcome(result).long;
+}
+
+/** "Lần kiểm gần nhất: {lúc} · {kết quả}" — `at` already formatted by the caller. */
+export function lastCheckText(at: string, result: string): string {
+  return `Lần kiểm gần nhất: ${at} · ${outcome(result).short}`;
+}
+
+/**
+ * After "Đăng ký webhook". `khong-kha-dung` / `phan-hoi-sai-dang` are AMBIGUOUS: Zalo may already hold
+ * the new secret (comms keeps it pending and REUSES it on the next press), so staff are told to press
+ * again, not that it failed.
+ */
+export function webhookResultText(result: string): string {
+  if (isOutcomeOk(result)) return "Đã đăng ký webhook với Zalo. Tin cán bộ nhắn cho bot từ giờ về hệ thống.";
+  if (result === "khong-kha-dung" || result === "phan-hoi-sai-dang") {
+    return `${outcome(result).long} Chưa rõ Zalo đã nhận đăng ký hay chưa: bấm “Đăng ký webhook” lần nữa.`;
+  }
+  return `Chưa đăng ký được. ${outcome(result).long}`;
+}
+
+/** The one-time secret box (ADR 0079 Q1 #3). Says it BEFORE it is too late. */
+export const WEBHOOK_SECRET_ONCE =
+  "Mã này chỉ hiện một lần, ngay bây giờ. Hệ thống không lưu bản đọc được nên không hiện lại — chép ngay nếu xã tự đăng ký webhook bằng tay trong ứng dụng Zalo.";
+
+/**
+ * ADR 0079 Q1 #4: a switch ends EVERY live link — the confirmation names how many. `live_link_count` is
+ * the server's figure; nothing is estimated here.
+ */
+export function relinkSentence(liveLinkCount: number): string {
+  return liveLinkCount > 0
+    ? `${liveLinkCount} cán bộ đang ghép nối sẽ phải ghép nối lại.`
+    : "Hiện chưa cán bộ nào ghép nối, nên không ai phải ghép nối lại.";
+}
+
+/** After a switch: what the server says actually ended. */
+export function endedLinksText(count: number): string {
+  return count > 0 ? ` ${count} cán bộ cần ghép nối lại.` : "";
+}
+
+/**
+ * Which switch a save is. `adopt`: shared → own (token typed, no own bot). `replace`: a new token on an
+ * own bot — a switch only if it is ANOTHER bot account, which only Zalo can tell, so it is confirmed as
+ * one. `edit`: name / link only, no token — no link ends, no confirmation.
+ */
+export type BotSaveKind = "adopt" | "replace" | "edit";
+
+export type BotDraft = { token: string; name: string; chatUrl: string };
+
+export const RETIRE_REASON_MAX = 200;
+
+function isHttpsUrl(v: string): boolean {
+  try {
+    const u = new URL(v);
+    return u.protocol === "https:" && u.hostname !== "" && u.username === "" && u.password === "";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The PUT body, or the first thing wrong — in comms' own words (`zalo_commune_bot.go`
+ * communeBotRefusals). A HINT: comms re-checks every rule and its sentence still reaches the screen.
+ * The token is VERBATIM: a trimmed copy is a different token.
+ */
+export function buildBotChange(
+  d: BotDraft,
+  hasOwnBot: boolean,
+): { ok: true; body: comms_communeZaloBotIn; kind: BotSaveKind } | { ok: false; text: string } {
+  if (!hasOwnBot && d.token === "") return { ok: false, text: "Xã chưa có bot riêng nên phải nhập mã bot." };
+  const name = d.name.trim();
+  if (!name.startsWith("Bot")) return { ok: false, text: "Tên bot phải bắt đầu bằng “Bot”." };
+  const chatUrl = d.chatUrl.trim();
+  if (!isHttpsUrl(chatUrl)) {
+    return { ok: false, text: "Đường mở khung chat phải là một liên kết https:// đầy đủ, ví dụ https://zalo.me/…" };
+  }
+  const body: comms_communeZaloBotIn = { bot_name: name, chat_url: chatUrl };
+  if (d.token !== "") body.bot_token = d.token;
+  return { ok: true, body, kind: d.token === "" ? "edit" : hasOwnBot ? "replace" : "adopt" };
+}
+
+/** The retire reason, trimmed, or why not (comms: required, at most 200 characters). */
+export function checkRetireReason(raw: string): { ok: true; reason: string } | { ok: false; text: string } {
+  const reason = raw.trim();
+  if (reason === "" || [...reason].length > RETIRE_REASON_MAX) {
+    return { ok: false, text: `Cần nhập lý do quay về bot chung (tối đa ${RETIRE_REASON_MAX} ký tự).` };
+  }
+  return { ok: true, reason };
 }

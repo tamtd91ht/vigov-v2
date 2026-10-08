@@ -1,10 +1,12 @@
 "use client";
 
-import { Check, Loader2, RefreshCw, X } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { Check, Copy, Loader2, RefreshCw, TriangleAlert, Undo2, X } from "lucide-react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
+import { NUT_HUY } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ErrorState } from "@/components/ui/error-state";
 import { controlClass } from "@/components/ui/field";
 import { NoAccess } from "@/components/ui/no-access";
@@ -20,32 +22,56 @@ import { layDanhMucBoPhan } from "@/lib/api/danh-muc";
 import { layDanhBaChonNguoi } from "@/lib/api/danh-ba-chon-nguoi";
 // vi-name-ok: the existing result type and sentence of lib/api/goi.ts, imported, not a new name
 import { LOI_KHONG_RO, type KetQua } from "@/lib/api/goi";
+import type { comms_communeZaloBotCurrentOut } from "@/lib/api/schema.gen";
 import {
+  checkCommuneZaloBot,
+  getCommuneZaloBot,
   getZaloChannelSettings,
   listZaloLinkedStaff,
+  registerCommuneZaloWebhook,
+  retireCommuneZaloBot,
+  saveCommuneZaloBot,
   saveZaloChannelSettings,
   type ZaloChannelSettings,
   type ZaloLinkedStaff,
 } from "@/lib/api/zalo";
 
+import { ConfigDialog } from "./config-dialog";
 import { selectCls } from "./config-ui";
 import { PHAN_CHUA_DUNG } from "./nhan-cau-hinh";
 import { zaloChannelTabDecision } from "./quyen-tab";
 import {
+  botDescription,
+  botPill,
+  botTokenHint,
+  buildBotChange,
   buildChange,
   CHANNEL_DESCRIPTION,
+  checkResultText,
+  checkRetireReason,
   dayOptions,
   draftFromSettings,
+  endedLinksText,
   EVENTS_HINT,
   hourOptions,
+  isOutcomeOk,
   joinStaffLinks,
+  lastCheckText,
   NO_LINKED_STAFF,
+  PLATFORM_NOT_READY,
   QUIET_HINT,
+  relinkSentence,
+  RETIRE_REASON_MAX,
+  rowKinds,
   SAVE_FAILED_TOAST,
   SAVED_TOAST,
   toggleKind,
+  WEBHOOK_SECRET_ONCE,
+  webhookResultText,
   WHEN_DESCRIPTION,
   ZALO_EVENT_GROUPS,
+  type BotDraft,
+  type BotSaveKind,
   type DirectoryPerson,
   type UnitName,
   type ZaloChannelDraft,
@@ -65,8 +91,11 @@ type Units = KetQua<{ items: UnitName[] }>;
  * let the slower one overwrite the other's change.
  *
  * WHAT THE SERVER CANNOT DO YET is drawn at its spec position, disabled, with "?" (ADR 0068 §14): the
- * commune's own bot, the "nhắc trước" threshold, the events no producer sends, the staff total and the
- * not-yet-linked list. The linked list is names, codes and a date — never a Zalo chat id.
+ * "nhắc trước" threshold (read from the SLA table, ADR 0079 Q1 #7 — one value per SLA row, so no single
+ * figure to show here) and the events no producer sends (ADR 0079 Q3). The linked list is names, codes
+ * and a date — never a Zalo chat id.
+ *
+ * §3 "Con bot của xã" is `CommuneBotSection`: its own reads and writes, independent of the autosave.
  */
 export function ZaloChannelTab() {
   const phien = usePhien();
@@ -80,6 +109,19 @@ export function ZaloChannelTab() {
   const [units, setUnits] = useState<Units | null>(null);
   const [saving, setSaving] = useState(false);
   const [held, setHeld] = useState<string | null>(null);
+  /**
+   * Spec 11 §0. Its own state, not `loaded.platform_ready`: comms sends it on the GET only, and the PUT
+   * reply that replaces `loaded` after every autosave does not carry it. null = not known — no warning
+   * is drawn on a guess.
+   */
+  const [platformReady, setPlatformReady] = useState<boolean | null>(null);
+
+  const readPlatformReady = useCallback(() => {
+    // After a bot switch the answer may change. A failed re-read keeps what was shown.
+    getZaloChannelSettings().then((r) => {
+      if (r.ok) setPlatformReady(r.duLieu.platform_ready ?? null);
+    });
+  }, []);
 
   useEffect(() => {
     if (!allowed) return;
@@ -87,7 +129,10 @@ export function ZaloChannelTab() {
     getZaloChannelSettings().then((r) => {
       if (gone) return;
       setLoaded(r);
-      if (r.ok) setDraft(draftFromSettings(r.duLieu));
+      if (r.ok) {
+        setDraft(draftFromSettings(r.duLieu));
+        setPlatformReady(r.duLieu.platform_ready ?? null);
+      }
     });
     listZaloLinkedStaff().then((r) => {
       if (!gone) setStaff(r);
@@ -168,10 +213,13 @@ export function ZaloChannelTab() {
   return (
     <ZaloChannelView
       draft={draft}
+      supported={saved.supported_events}
+      platformReady={platformReady}
       onChange={(d) => void apply(d)}
       saving={saving}
       held={held}
       people={peopleState(staff, directory, units)}
+      botSection={<CommuneBotSection onSwitched={readPlatformReady} />}
     />
   );
 }
@@ -182,7 +230,6 @@ function pendingEntry(name: string): PendingFeatureInfo {
   return entry;
 }
 
-const BOT_ENTRY = pendingEntry("Con bot của xã");
 const DUE_SOON_ENTRY = pendingEntry("Nhắc trước khi đến hạn qua Zalo");
 const MORE_EVENTS_ENTRY = pendingEntry("Thêm loại việc nhắn qua Zalo");
 
@@ -338,19 +385,38 @@ function HourSelect({
 /** Pure rendering, exported so the tests read the markup. */
 export function ZaloChannelView({
   draft,
+  supported,
+  platformReady,
   onChange,
   saving,
   held,
   people,
+  botSection,
 }: {
   draft: ZaloChannelDraft;
+  /** The server's `supported_events`: the only kinds a box may be ticked for. */
+  supported: readonly string[];
+  /** Spec 11 §0: false draws the warning; true or unknown (null) draws nothing. */
+  platformReady: boolean | null;
   onChange: (d: ZaloChannelDraft) => void;
   saving: boolean;
   held: string | null;
   people: PeopleState;
+  /** §3, stateful (`CommuneBotSection`) — a slot, so this view stays pure for the tests. */
+  botSection: ReactNode;
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-5">
+      {/* §0 — ZaloChannelPanel.tsx:55-60. Preflight is off: `border` needs its `border-solid`. */}
+      {platformReady === false && (
+        <p
+          role="status"
+          className="border-tangerine/30 bg-tangerine/8 text-navy m-0 rounded-[10px] border border-solid px-4 py-3 text-[12.5px]"
+        >
+          {PLATFORM_NOT_READY}
+        </p>
+      )}
+
       {/* §1 — ZaloChannelPanel.tsx:62-109 */}
       <section className={SECTION} aria-labelledby="zalo-channel-title">
         <div className="flex flex-wrap items-start gap-4">
@@ -464,7 +530,9 @@ export function ZaloChannelView({
                     </span>
                   );
                   const kind = ev.kind;
-                  if (kind === null) {
+                  const kinds = rowKinds(ev);
+                  // No producer yet, or a kind this server does not offer: the server decides what may be ticked.
+                  if (kind === null || !kinds.every((k) => supported.includes(k))) {
                     // The "?" sits OUTSIDE the label: a button inside a label joins its accessible name.
                     return (
                       <div key={ev.code} className="flex items-start gap-1.5" data-pending="">
@@ -484,7 +552,7 @@ export function ZaloChannelView({
                         data-event={ev.code}
                         checked={draft.kinds.includes(kind)}
                         disabled={saving}
-                        onChange={(e) => onChange(toggleKind(draft, kind, e.target.checked))}
+                        onChange={(e) => onChange(toggleKind(draft, kinds, e.target.checked, supported))}
                       />
                       {text}
                     </label>
@@ -496,7 +564,7 @@ export function ZaloChannelView({
         </div>
       </section>
 
-      <BotSection />
+      {botSection}
 
       <LinkedStaffSection people={people} />
 
@@ -510,85 +578,495 @@ export function ZaloChannelView({
   );
 }
 
+type BotCurrent = comms_communeZaloBotCurrentOut;
+
+type BotBusy = "save" | "check" | "webhook" | "retire" | null;
+
+/** A save waiting for "N cán bộ … phải ghép nối lại" to be confirmed (ADR 0079 Q1 #4). */
+type PendingSwitch = { kind: Exclude<BotSaveKind, "edit">; draft: BotDraft };
+
+function draftFromBot(c: BotCurrent): BotDraft {
+  return { token: "", name: c.bot?.bot_name ?? "", chatUrl: c.bot?.chat_url ?? "" };
+}
+
+const DANGER_OUTLINE = "border-danger/30 text-danger hover:not-disabled:bg-danger/5 bg-white";
+
 /**
- * §3 — ZaloChannelPanel.tsx:337-510. The commune's own bot is decided (ADR 0079 #4) but comms has no
- * route for it yet, so the whole section is its shape, disabled, under ONE "?". No input has a
- * `name` and no button an action: nothing here can send a token anywhere.
+ * §3 — ZaloChannelPanel.tsx:337-510, against `zalo-bots/current` (ADR 0079 Q1 #1–#5). Every action is
+ * an explicit button, never the autosave: a bot switch ends every live link.
+ *
+ * SECRETS:
+ *   - the TOKEN input is write-only: never filled from the server (nothing returns it), cleared after a
+ *     save that went through, sent only when typed (`saveCommuneZaloBot`);
+ *   - the WEBHOOK SECRET lives in `secret` only while its one-time box is open, and is dropped by
+ *     "Tôi đã chép, đóng", by any other write, and by unmount. No `console`, no storage, no URL, no
+ *     `aria-label` / `title` carries either (rule 3 forbidden #4, rule 8).
+ *
+ * Spec 11 §3's "Secret Token của webhook" field is THAT box (ADR 0079 Q1 #3: shown once, never read
+ * back), not a standing input.
  */
-function BotSection() {
+function CommuneBotSection({ onSwitched }: { onSwitched: () => void }) {
+  const [current, setCurrent] = useState<KetQua<BotCurrent> | null>(null);
+  const [draft, setDraft] = useState<BotDraft>({ token: "", name: "", chatUrl: "" });
+  const [busy, setBusy] = useState<BotBusy>(null);
+  const [pendingSwitch, setPendingSwitch] = useState<PendingSwitch | null>(null);
+  const [retireOpen, setRetireOpen] = useState(false);
+  const [retireReason, setRetireReason] = useState("");
+  const [retireError, setRetireError] = useState<string | null>(null);
+  const [secret, setSecret] = useState<string | null>(null);
+  const [revokeNotice, setRevokeNotice] = useState<string | null>(null);
+
+  const load = useCallback(async (resetDraft: boolean) => {
+    const r = await getCommuneZaloBot();
+    setCurrent(r);
+    if (r.ok && resetDraft) setDraft(draftFromBot(r.duLieu));
+  }, []);
+
+  useEffect(() => {
+    let gone = false;
+    getCommuneZaloBot().then((r) => {
+      if (gone) return;
+      setCurrent(r);
+      if (r.ok) setDraft(draftFromBot(r.duLieu));
+    });
+    return () => {
+      gone = true;
+    };
+  }, []);
+
+  if (current === null) {
+    return (
+      <section className={SECTION} aria-labelledby="zalo-bot-title">
+        <h3 id="zalo-bot-title" className={TITLE}>
+          Con bot của xã
+        </h3>
+        <p role="status" className="an-thi-giac">
+          Đang tải con bot của xã…
+        </p>
+        <Skeleton className="mt-4 h-24 w-full" />
+      </section>
+    );
+  }
+  if (!current.ok) {
+    return (
+      <section className={SECTION} aria-labelledby="zalo-bot-title">
+        <h3 id="zalo-bot-title" className={TITLE}>
+          Con bot của xã
+        </h3>
+        <p className="text-danger m-0 mt-2 text-[12.5px] font-medium" role="alert">
+          {current.thongBao}
+        </p>
+      </section>
+    );
+  }
+  const bot = current.duLieu;
+
+  async function save(d: BotDraft) {
+    const built = buildBotChange(d, bot.has_own_bot);
+    if (!built.ok) {
+      toast.error(built.text);
+      return;
+    }
+    setPendingSwitch(null);
+    setBusy("save");
+    setSecret(null);
+    const r = await saveCommuneZaloBot(built.body);
+    setBusy(null);
+    if (!r.ok) {
+      toast.error(r.thongBao);
+      return;
+    }
+    toast.success(`Đã lưu con bot.${endedLinksText(r.duLieu.ended_link_count)}`);
+    setRevokeNotice(r.duLieu.revoke_notice ?? null);
+    await load(true);
+    onSwitched();
+  }
+
+  function requestSave() {
+    const built = buildBotChange(draft, bot.has_own_bot);
+    if (!built.ok) {
+      toast.error(built.text);
+      return;
+    }
+    if (built.kind === "edit") {
+      void save(draft);
+      return;
+    }
+    setPendingSwitch({ kind: built.kind, draft });
+  }
+
+  async function check() {
+    setBusy("check");
+    const r = await checkCommuneZaloBot();
+    setBusy(null);
+    if (!r.ok) {
+      toast.error(r.thongBao);
+      return;
+    }
+    const text = checkResultText(r.duLieu.result, r.duLieu.account_name);
+    if (isOutcomeOk(r.duLieu.result)) toast.success(text);
+    else toast.error(text);
+    await load(false);
+  }
+
+  async function registerWebhook() {
+    setBusy("webhook");
+    setSecret(null);
+    const r = await registerCommuneZaloWebhook();
+    setBusy(null);
+    if (!r.ok) {
+      toast.error(r.thongBao);
+      return;
+    }
+    const text = webhookResultText(r.duLieu.result);
+    if (isOutcomeOk(r.duLieu.result)) toast.success(text);
+    else toast.error(text);
+    // Present only on the call that generated it (comms: not on a refusal, not when a pending one is reused).
+    const s = r.duLieu.secret;
+    if (typeof s === "string" && s !== "") setSecret(s);
+    await load(false);
+  }
+
+  async function retire() {
+    const checked = checkRetireReason(retireReason);
+    if (!checked.ok) {
+      setRetireError(checked.text);
+      return;
+    }
+    setRetireError(null);
+    setBusy("retire");
+    setSecret(null);
+    const r = await retireCommuneZaloBot(checked.reason);
+    setBusy(null);
+    if (!r.ok) {
+      // Kept in the box: the reason typed stays, the server's sentence is next to it.
+      setRetireError(r.thongBao);
+      return;
+    }
+    setRetireOpen(false);
+    setRetireReason("");
+    toast.success(
+      r.duLieu.retired
+        ? `Đã quay về bot chung.${endedLinksText(r.duLieu.ended_link_count)}`
+        : "Xã đã không còn bot riêng nào đang dùng.",
+    );
+    setRevokeNotice(r.duLieu.revoke_notice ?? null);
+    await load(true);
+    onSwitched();
+  }
+
+  const idle = busy === null;
+  const lastCheck = bot.bot?.last_check ?? null;
   return (
-    <section className={SECTION} aria-labelledby="zalo-bot-title" data-pending="">
+    <section className={SECTION} aria-labelledby="zalo-bot-title">
       <div className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <h3 id="zalo-bot-title" className={TITLE}>
-              Con bot của xã
-            </h3>
-            <PendingMarker info={BOT_ENTRY} />
+          <h3 id="zalo-bot-title" className={TITLE}>
+            Con bot của xã
+          </h3>
+          <p className={DESCRIPTION}>{botDescription(bot.has_own_bot)}</p>
+        </div>
+        <span
+          className={cn(
+            "rounded-full px-3 py-1 text-[12px] font-semibold",
+            // Token trap (config-ui.tsx): the spec's `bg-surface` is the page grey = `bg-background` here.
+            bot.has_own_bot ? "bg-violet/10 text-violet" : "bg-background text-ink-muted",
+          )}
+          data-bot-pill=""
+        >
+          {botPill(bot)}
+        </span>
+      </div>
+
+      <form
+        aria-label="Con bot của xã"
+        className="m-0"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (idle) requestSave();
+        }}
+      >
+        <fieldset disabled={!idle} className="m-0 min-w-0 border-0 p-0">
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <ZaloField label="Mã bot của xã" htmlFor="zalo-bot-token" hint={botTokenHint(bot.has_own_bot)}>
+              {/* Write-only: never filled from the server; no `name`, so nothing submits it natively. */}
+              <input
+                id="zalo-bot-token"
+                type="password"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder={bot.has_own_bot ? "••••••••" : "123456789:abc-xyz"}
+                className={botInputCls}
+                value={draft.token}
+                onChange={(e) => setDraft({ ...draft, token: e.target.value })}
+              />
+            </ZaloField>
+            <ZaloField label="Tên bot" htmlFor="zalo-bot-name" hint="Tên hiển thị trong Zalo, bắt đầu bằng “Bot”.">
+              <input
+                id="zalo-bot-name"
+                type="text"
+                className={botInputCls}
+                value={draft.name}
+                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+              />
+            </ZaloField>
+            <ZaloField
+              label="Đường mở khung chat"
+              htmlFor="zalo-bot-chat-url"
+              hint="Link bot dạng https://zalo.me/<số>. Mã QR cán bộ quét được dựng từ đây."
+            >
+              <input
+                id="zalo-bot-chat-url"
+                type="url"
+                inputMode="url"
+                placeholder="https://zalo.me/..."
+                className={botInputCls}
+                value={draft.chatUrl}
+                onChange={(e) => setDraft({ ...draft, chatUrl: e.target.value })}
+              />
+            </ZaloField>
           </div>
-          <p className={DESCRIPTION}>
-            Xã đang dùng bot chung của nền tảng. Để trống phần dưới là giữ nguyên như vậy — chỉ nhập mã bot khi xã muốn
-            bot mang tên mình.
+
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <Button type="submit" variant="primary" aria-busy={busy === "save"}>
+              Lưu con bot
+            </Button>
+            {/* Own bot only (owner 08/10/2026): comms checks the commune's OWN bot, 409 zalo_own_bot_missing otherwise. */}
+            {bot.has_own_bot && (
+              <Button
+                type="button"
+                variant="outline"
+                className="bg-white"
+                icon={
+                  busy === "check" ? (
+                    <Loader2 aria-hidden="true" focusable="false" className="animate-spin" />
+                  ) : (
+                    <RefreshCw aria-hidden="true" focusable="false" />
+                  )
+                }
+                aria-busy={busy === "check"}
+                onClick={() => void check()}
+              >
+                Kiểm tra kết nối
+              </Button>
+            )}
+            {bot.has_own_bot && (
+              <Button
+                type="button"
+                variant="outline"
+                className="bg-white"
+                aria-busy={busy === "webhook"}
+                onClick={() => void registerWebhook()}
+              >
+                Đăng ký webhook
+              </Button>
+            )}
+            {bot.has_own_bot && (
+              <Button
+                type="button"
+                variant="outline"
+                className={DANGER_OUTLINE}
+                icon={<Undo2 aria-hidden="true" focusable="false" />}
+                onClick={() => {
+                  setRetireError(null);
+                  setRetireOpen(true);
+                }}
+              >
+                Quay về bot chung
+              </Button>
+            )}
+          </div>
+        </fieldset>
+      </form>
+
+      {bot.bot !== null && (
+        <div className="mt-3 flex flex-col gap-1">
+          {lastCheck !== null && (
+            <p className="text-ink-muted m-0 text-[12px]" data-last-check="">
+              {lastCheckText(formatVietnamDateTime(lastCheck.at), lastCheck.result)}
+            </p>
+          )}
+          <p className="text-ink-muted m-0 text-[12px]" data-webhook-state="">
+            {bot.bot.webhook_set_at !== null
+              ? `Webhook đã đăng ký lúc ${formatVietnamDateTime(bot.bot.webhook_set_at)}.`
+              : bot.bot.webhook_pending
+                ? "Lần đăng ký webhook gần nhất chưa được Zalo xác nhận — bấm “Đăng ký webhook” lần nữa."
+                : "Chưa đăng ký webhook."}
           </p>
         </div>
-        <span className="bg-background text-ink-muted rounded-full px-3 py-1 text-[12px] font-semibold">Bot chung</span>
-      </div>
+      )}
 
-      {/* A <form> only because a password input outside one makes the browser warn ("[DOM] Password field
-          is not contained in a form"). Fully disabled, no action, submit prevented: nothing is sent. */}
-      <form aria-label="Con bot của xã" className="m-0" onSubmit={(e) => e.preventDefault()}>
-        <fieldset disabled className="m-0 min-w-0 border-0 p-0">
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <ZaloField
-          label="Mã bot của xã"
-          htmlFor="zalo-bot-token"
-          hint="Lấy trong Mini App “Zalo Bot Creator”. Để trống là dùng bot chung."
-        >
-          <input
-            id="zalo-bot-token"
-            type="password"
-            autoComplete="off"
-            placeholder="123456789:abc-xyz"
-            className={botInputCls}
-            disabled
-          />
-        </ZaloField>
-        <ZaloField label="Tên bot" htmlFor="zalo-bot-name" hint="Tên hiển thị trong Zalo, bắt đầu bằng “Bot”.">
-          <input id="zalo-bot-name" type="text" className={botInputCls} disabled />
-        </ZaloField>
-        <ZaloField
-          label="Đường mở khung chat"
-          htmlFor="zalo-bot-chat-url"
-          hint="Link bot dạng https://zalo.me/<số>. Mã QR cán bộ quét được dựng từ đây."
-        >
-          <input id="zalo-bot-chat-url" type="text" placeholder="https://zalo.me/..." className={botInputCls} disabled />
-        </ZaloField>
-        <ZaloField
-          label="Secret Token của webhook"
-          htmlFor="zalo-bot-secret"
-          hint="Chép sang ứng dụng Zalo nếu xã tự đăng ký webhook bằng tay."
-        >
-          <input id="zalo-bot-secret" type="text" className={cn(botInputCls, "font-mono")} disabled />
-        </ZaloField>
-      </div>
+      {secret !== null && <WebhookSecretOnce secret={secret} onClose={() => setSecret(null)} />}
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <Button type="button" variant="primary" disabled>
-          Lưu con bot
-        </Button>
+      {revokeNotice !== null && (
+        <p
+          role="status"
+          className="border-tangerine/30 bg-tangerine/8 text-navy m-0 mt-3 rounded-[10px] border border-solid px-4 py-3 text-[12.5px]"
+          data-revoke-notice=""
+        >
+          {revokeNotice}
+        </p>
+      )}
+
+      {pendingSwitch !== null && (
+        <ConfigDialog
+          title={pendingSwitch.kind === "adopt" ? "Chuyển sang bot riêng của xã?" : "Thay mã bot của xã?"}
+          hideHeader
+          onDismiss={() => {
+            if (idle) setPendingSwitch(null);
+          }}
+        >
+          <ConfirmDialog
+            icon={TriangleAlert}
+            tone="danger"
+            title={pendingSwitch.kind === "adopt" ? "Chuyển sang bot riêng của xã?" : "Thay mã bot của xã?"}
+            className="m-0 p-0 shadow-none"
+            actions={
+              <>
+                <Button
+                  type="button"
+                  variant="primary"
+                  disabled={!idle}
+                  aria-busy={busy === "save"}
+                  onClick={() => void save(pendingSwitch.draft)}
+                >
+                  Lưu con bot
+                </Button>
+                <Button type="button" variant="outline" disabled={!idle} onClick={() => setPendingSwitch(null)}>
+                  {NUT_HUY}
+                </Button>
+              </>
+            }
+          >
+            <p className="m-0" data-relink="">
+              {pendingSwitch.kind === "adopt"
+                ? `Từ lúc lưu, mọi tin nhắc việc của xã đi bằng bot riêng. ${relinkSentence(bot.live_link_count)}`
+                : `Nếu mã mới là của một con bot khác, ${relinkSentence(bot.live_link_count)}`}
+            </p>
+          </ConfirmDialog>
+        </ConfigDialog>
+      )}
+
+      {retireOpen && (
+        <ConfigDialog
+          title="Quay về bot chung?"
+          hideHeader
+          onDismiss={() => {
+            if (idle) setRetireOpen(false);
+          }}
+        >
+          <ConfirmDialog
+            as="form"
+            aria-label="Quay về bot chung"
+            icon={Undo2}
+            tone="danger"
+            title="Quay về bot chung?"
+            className="m-0 p-0 shadow-none"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (idle) void retire();
+            }}
+            actions={
+              <>
+                <Button type="submit" variant="primary" disabled={!idle} aria-busy={busy === "retire"}>
+                  Quay về bot chung
+                </Button>
+                <Button type="button" variant="outline" disabled={!idle} onClick={() => setRetireOpen(false)}>
+                  {NUT_HUY}
+                </Button>
+              </>
+            }
+          >
+            <p className="m-0" data-relink="">
+              {`Mọi tin nhắc việc của xã sẽ đi bằng bot chung của nền tảng. ${relinkSentence(bot.live_link_count)}`}
+            </p>
+            <div className="mt-3 flex flex-col gap-1.5">
+              <label htmlFor="zalo-bot-retire-reason" className={FIELD_LABEL}>
+                Lý do quay về bot chung
+              </label>
+              {/* One line: comms refuses control characters, a newline included. */}
+              <input
+                id="zalo-bot-retire-reason"
+                type="text"
+                className={botInputCls}
+                maxLength={RETIRE_REASON_MAX}
+                value={retireReason}
+                disabled={!idle}
+                aria-invalid={retireError !== null}
+                onChange={(e) => setRetireReason(e.target.value)}
+              />
+              {retireError !== null && (
+                <p className="text-danger m-0 text-[12px] font-medium" role="alert">
+                  {retireError}
+                </p>
+              )}
+            </div>
+          </ConfirmDialog>
+        </ConfigDialog>
+      )}
+    </section>
+  );
+}
+
+/**
+ * The webhook secret, ONCE (ADR 0079 Q1 #3). A read-only box to copy from, the sentence that it will
+ * not be shown again, and one explicit close. It does not close by itself.
+ */
+function WebhookSecretOnce({ secret, onClose }: { secret: string; onClose: () => void }) {
+  return (
+    <div
+      className="border-line bg-background m-0 mt-4 flex flex-col gap-2 rounded-[10px] border border-solid p-3"
+      data-webhook-secret=""
+    >
+      <label htmlFor="zalo-bot-secret" className={FIELD_LABEL}>
+        Secret Token của webhook
+      </label>
+      <p className="text-navy m-0 text-[12.5px]" role="status">
+        {WEBHOOK_SECRET_ONCE}
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          id="zalo-bot-secret"
+          type="text"
+          readOnly
+          autoComplete="off"
+          spellCheck={false}
+          className={cn(botInputCls, "min-w-0 flex-1 font-mono")}
+          value={secret}
+          onFocus={(e) => e.currentTarget.select()}
+        />
         <Button
           type="button"
           variant="outline"
           className="bg-white"
-          icon={<RefreshCw aria-hidden="true" focusable="false" />}
-          disabled
+          icon={<Copy aria-hidden="true" focusable="false" />}
+          onClick={() => {
+            const clip = typeof navigator === "undefined" ? undefined : navigator.clipboard;
+            if (clip === undefined) {
+              toast.error("Chưa chép được. Hãy chọn chữ trong ô rồi chép tay.");
+              return;
+            }
+            clip.writeText(secret).then(
+              () => toast.success("Đã chép."),
+              () => toast.error("Chưa chép được. Hãy chọn chữ trong ô rồi chép tay."),
+            );
+          }}
         >
-          Kiểm tra kết nối
+          Chép
         </Button>
       </div>
-        </fieldset>
-      </form>
-    </section>
+      <p className={FIELD_HINT}>Chép sang ứng dụng Zalo nếu xã tự đăng ký webhook bằng tay.</p>
+      <div className="flex justify-end">
+        <Button
+          type="button"
+          variant="primary"
+          icon={<Check aria-hidden="true" focusable="false" />}
+          onClick={onClose}
+        >
+          Tôi đã chép, đóng
+        </Button>
+      </div>
+    </div>
   );
 }
 
