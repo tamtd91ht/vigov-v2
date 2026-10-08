@@ -17,7 +17,6 @@
  * An unknown code therefore falls to a sentence that SAYS it has no label, never to a guess.
  */
 
-import { nhanNgay } from "@/features/cau-hinh/nhan-lich-lam-viec";
 import { nhanThoiDiem } from "@/features/phan-anh/nhan-phieu";
 import type {
   documents_bookLetterIn,
@@ -56,7 +55,8 @@ export function letterTypeLabel(code: string): string {
 /**
  * The ten statuses: label (glossary / ledger C3), the prototype's chip colours by the nearest step of
  * ITS flow (`document-display.ts:52-84, 167-175`), and one hint line under the strip
- * (`PetitionDetailDrawer.tsx:431-433`).
+ * (`PetitionDetailDrawer.tsx:431-433`). The hint is the prototype's sentence word for word where both
+ * sets have the status (`PETITION_STATUS_HINT`, `document-display.ts:156-164`): Mới vào sổ, Đã giải quyết.
  */
 type StatusLook = {
   readonly label: string;
@@ -72,7 +72,7 @@ const STATUS: Readonly<Record<string, StatusLook>> = {
     label: "Mới vào sổ",
     chip: "border-line bg-ink-muted/12 text-ink",
     active: "bg-ink-muted text-white",
-    hint: "Đã vào sổ, chưa xem xét, xử lý đơn.",
+    hint: "Đã vào sổ, chưa giao cho bộ phận nào.",
   },
   "dang-xu-ly-don": {
     label: "Đang xử lý đơn",
@@ -96,7 +96,7 @@ const STATUS: Readonly<Record<string, StatusLook>> = {
     label: "Đã giải quyết",
     chip: "border-leaf/25 bg-leaf/12 text-leaf",
     active: "bg-leaf text-white",
-    hint: "Đã giải quyết xong, kết quả đã được ghi.",
+    hint: "Đã giải quyết xong và trả lời công dân.",
   },
   "khong-thu-ly": {
     label: "Không thụ lý",
@@ -260,8 +260,8 @@ export const DUE_TONE_CLASS: Readonly<Record<DueTone, string>> = {
 };
 
 /**
- * The "Hạn giải quyết" words: "Không đặt hạn", "Hạn {dd/MM/yyyy}", or — open AND past the stored
- * instant — "Quá hạn · {dd/MM/yyyy}". A COMPARISON of two instants, never a deadline computed here
+ * The "Hạn giải quyết" words: "Không đặt hạn", "Hạn {d/m/yyyy}", or — open AND past the stored
+ * instant — "Quá hạn · {d/m/yyyy}". A COMPARISON of two instants, never a deadline computed here
  * (rule 10, invariants 2–3).
  *
  * NO "Còn N ngày" / "Quá hạn N ngày" COUNT (owner decision 08/10/2026, R1): such a count is a duration,
@@ -298,7 +298,7 @@ export function dueSettable(status: string): boolean {
 /** A stored deadline → the `YYYY-MM-DD` of a date input, read in the Vietnamese zone. `""` when none. */
 export function dueInputValue(dueISO: string | null): string {
   if (dueISO === null || dueISO === "" || Number.isNaN(new Date(dueISO).getTime())) return "";
-  const [dd, mm, yyyy] = deadlineDate(dueISO).split("/");
+  const [dd, mm, yyyy] = deadlineDayPadded(dueISO).split("/");
   return `${yyyy}-${mm}-${dd}`;
 }
 
@@ -322,9 +322,18 @@ export function isPastDue(letter: DueFields & { is_closed: boolean }, now: Date)
 }
 
 /** `dd/MM/yyyy` of a deadline instant, pinned to the Vietnamese zone through `nhanThoiDiem`. */
-function deadlineDate(dueISO: string): string {
+function deadlineDayPadded(dueISO: string): string {
   const full = nhanThoiDiem(dueISO);
   return full.slice(full.lastIndexOf(" ") + 1);
+}
+
+/**
+ * `d/m/yyyy` of a deadline instant — the prototype's `formatDay` (`toLocaleDateString("vi-VN")`, no zero
+ * padding), but still read in the Vietnamese zone: the browser's own zone could move a deadline a day.
+ */
+function deadlineDate(dueISO: string): string {
+  const [dd, mm, yyyy] = deadlineDayPadded(dueISO).split("/");
+  return `${Number(dd)}/${Number(mm)}/${yyyy}`;
 }
 
 /* ---- the sender (C7, ADR 0078 #4) --------------------------------------------------------- */
@@ -390,9 +399,14 @@ export function letterNumber(number: number, year: number): string {
   return `${number}/${year}`;
 }
 
-/** `dd/MM/yyyy` of a `YYYY-MM-DD` — cut as text, never through `Date` (a date has no zone). */
+/**
+ * `d/m/yyyy` of a `YYYY-MM-DD` — the prototype's `formatDay` (`23/8/2026`, no zero padding). Cut as text,
+ * never through `Date` (a date has no zone). Anything not in the contract's shape is shown verbatim.
+ */
 export function letterDate(iso: string): string {
-  return iso === "" ? "—" : nhanNgay(iso);
+  if (iso === "") return "—";
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m === null ? iso : `${Number(m[3])}/${Number(m[2])}/${m[1]}`;
 }
 
 /** A report figure: `null` → "—", never 0 (a 0 is a figure somebody reports upward). */

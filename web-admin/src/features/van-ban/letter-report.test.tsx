@@ -62,7 +62,12 @@ describe("report tab", () => {
       overdue: 0,
       on_time_percent: null,
       average_days: null,
-      by_type: [{ letter_type: "khieu-nai", total: 4, resolved: 1, in_progress: 3, overdue: 0 }],
+      by_type: [
+        { letter_type: "khieu-nai", total: 4, resolved: 1, in_progress: 3, overdue: 0 },
+        { letter_type: "kien-nghi-phan-anh", total: 9, resolved: 3, in_progress: 6, overdue: 0 },
+        { letter_type: "de-nghi", total: 4, resolved: 1, in_progress: 3, overdue: 0 },
+        { letter_type: "to-cao", total: 1, resolved: 0, in_progress: 1, overdue: 0 },
+      ],
       by_unit: [
         { unit_id: "U1", total: 6, in_progress: 4, resolved: 2, overdue: 0, on_time_percent: null },
         { unit_id: "U-UNKNOWN", total: 1, in_progress: 1, resolved: 0, overdue: 0, on_time_percent: 50 },
@@ -84,7 +89,15 @@ describe("report tab", () => {
     // Name from the org chart; the id when the chart does not know it; a fixed phrase for "no unit".
     expect(names).toEqual(["Văn phòng", "U-UNKNOWN", REPORT_NO_UNIT]);
     expect(unitRows.textContent).toContain("50%");
-    expect(el.textContent).toContain("Khiếu nại");
+    // THEO LOẠI ĐƠN by Tổng số descending (prototype `service.py:635`); a tie keeps the server's order.
+    const typeRows = [...el.querySelectorAll("section")].find((s) => s.querySelector(":scope > h3")?.textContent === "Theo loại đơn")!;
+    expect([...typeRows.querySelectorAll("tbody tr")].map((tr) => tr.querySelector("td")!.textContent)).toEqual([
+      "Kiến nghị, phản ánh",
+      "Khiếu nại",
+      "Đề nghị",
+      "Tố cáo",
+    ]);
+    expect(REPORT_NO_UNIT).toBe("Chưa phân công");
     // The disabled export with its "?".
     const exportButton = [...el.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Xuất Excel")!;
     expect(exportButton.disabled).toBe(true);

@@ -7,11 +7,12 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
+import { TRANG_DAU } from "@/features/cau-hinh/ngan-xep-con-tro";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import type { documents_citizenLetterItemOut } from "@/lib/api/schema.gen";
 import { PETITION_CREATE_PERMISSION, PETITION_READ_PERMISSION } from "@/lib/quyen";
 
-import { LetterRegister, LetterTable, MERGED_DUPLICATE } from "./letter-register";
+import { LETTER_REGISTER_EMPTY, LetterRegister, LetterRegisterView, LetterTable, MERGED_DUPLICATE, NO_FILTERS } from "./letter-register";
 import { NO_DEADLINE, WITHHELD_SENDER, WITHHELD_SUMMARY } from "./letter-display";
 
 beforeAll(() => {
@@ -100,6 +101,11 @@ describe("letter table — masking and rows", () => {
     expect(heads).toEqual(["Số", "Ngày nhận", "Người gửi", "Loại đơn", "Nội dung", "Đang giữ", "Số ngày xử lý", "Hạn giải quyết", "Trạng thái"]);
   });
 
+  it("received date reads d/m/yyyy without zero padding (prototype `formatDay`)", () => {
+    const cells = [...el().querySelectorAll("tbody tr")][0]!.querySelectorAll("td");
+    expect(cells[1]!.textContent).toBe("1/10/2026");
+  });
+
   it("phone as masked text, never a link; a denunciation's sender and summary are fixed sentences", () => {
     const t = el();
     const rows = t.querySelectorAll("tbody tr");
@@ -122,7 +128,7 @@ describe("letter table — masking and rows", () => {
     expect(el().querySelectorAll("tr.bg-danger\\/4")).toHaveLength(0);
   });
 
-  it("empty and empty-by-filter say different things; an error has Tải lại", () => {
+  it("empty — under a filter too — says exactly the prototype's one sentence; an error has Tải lại", () => {
     act(() => root?.unmount());
     host?.remove();
     const empty = mountNode(
@@ -131,10 +137,27 @@ describe("letter table — masking and rows", () => {
     expect(empty.textContent).toContain("Sổ đơn thư chưa có bản ghi nào.");
     act(() => root?.unmount());
     host?.remove();
+    // The whole tab under a status filter and a scope: still the one sentence, no second one.
     const byFilter = mountNode(
-      <LetterTable answer={{ ok: true, duLieu: { items: [], next_cursor: "", has_more: false } }} now={new Date()} units={{ pha: "dangDoc" }} onOpen={() => {}} filtered />,
+      <LetterRegisterView
+        answer={{ ok: true, duLieu: { items: [], next_cursor: "", has_more: false } }}
+        now={new Date()}
+        scope="mine"
+        onScope={() => {}}
+        filters={{ ...NO_FILTERS, status: "thu-ly" }}
+        onFilters={() => {}}
+        units={{ pha: "dangDoc" }}
+        directory={null}
+        stack={TRANG_DAU}
+        goToPage={() => {}}
+        onOpen={() => {}}
+      />,
     );
-    expect(byFilter.textContent).toContain("Không có đơn thư nào khớp bộ lọc đang chọn.");
+    const card = byFilter.querySelector("section p.p-6")!;
+    expect(card.textContent).toBe(LETTER_REGISTER_EMPTY);
+    expect(byFilter.textContent).not.toContain("khớp bộ lọc");
+    expect(byFilter.textContent).not.toContain("bỏ bớt bộ lọc");
+    expect(LETTER_REGISTER_EMPTY).toBe("Sổ đơn thư chưa có bản ghi nào.");
     act(() => root?.unmount());
     host?.remove();
     const error = mountNode(

@@ -18,6 +18,8 @@ import {
   duplicateQuery,
   emptyEntryDraft,
   isPastDue,
+  letterDate,
+  letterStatusHint,
   letterStatusLabel,
   mayWorkOnLetter,
   canBookLetters,
@@ -82,8 +84,8 @@ describe("deadlines (rule 10) — read, compared, never computed", () => {
     expect(dueLabel(null, false, NOW)).toEqual({ text: NO_DEADLINE, tone: "none" });
   });
   it("a stored deadline reads as its DATE; open and past it is “Quá hạn · date” — never a count (R1)", () => {
-    expect(dueLabel("2026-10-05T03:00:00Z", false, NOW)).toEqual({ text: "Quá hạn · 05/10/2026", tone: "overdue" });
-    expect(dueLabel("2026-10-05T03:00:00Z", true, NOW)).toEqual({ text: "Hạn 05/10/2026", tone: "normal" });
+    expect(dueLabel("2026-10-05T03:00:00Z", false, NOW)).toEqual({ text: "Quá hạn · 5/10/2026", tone: "overdue" });
+    expect(dueLabel("2026-10-05T03:00:00Z", true, NOW)).toEqual({ text: "Hạn 5/10/2026", tone: "normal" });
     expect(dueLabel("2026-10-12T03:00:00Z", false, NOW)).toEqual({ text: "Hạn 12/10/2026", tone: "normal" });
     for (const iso of ["2026-10-05T03:00:00Z", "2026-10-08T05:00:00Z", "2026-10-20T03:00:00Z"]) {
       expect(dueLabel(iso, false, NOW).text).not.toMatch(/Còn|\d+ (ngày|giờ)/);
@@ -92,7 +94,9 @@ describe("deadlines (rule 10) — read, compared, never computed", () => {
   it("the drawer figure is the date or the prototype's “Không đặt”", () => {
     expect(dueDateText(null)).toBe(DUE_NOT_SET);
     expect(DUE_NOT_SET).toBe("Không đặt");
-    expect(dueDateText("2026-10-05T03:00:00Z")).toBe("05/10/2026");
+    expect(dueDateText("2026-10-05T03:00:00Z")).toBe("5/10/2026");
+    // Read in the Vietnamese zone: 20:00Z on 31/8 is already 1/9 there.
+    expect(dueDateText("2026-08-31T20:00:00Z")).toBe("1/9/2026");
   });
   it("the clerk's date ↔ the stored instant: 17:00 pinned to +07:00, read back in the Vietnamese zone", () => {
     expect(dueInstantOf("2026-10-20")).toBe("2026-10-20T17:00:00+07:00");
@@ -100,6 +104,8 @@ describe("deadlines (rule 10) — read, compared, never computed", () => {
     expect(dueInputValue("2026-10-20T17:00:00+07:00")).toBe("2026-10-20");
     // 20:00Z on the 19th is already the 20th in Vietnam — never sliced from the UTC string.
     expect(dueInputValue("2026-10-19T20:00:00Z")).toBe("2026-10-20");
+    // The date input needs zero-padded parts even though the screen shows d/m/yyyy.
+    expect(dueInputValue("2026-09-04T10:00:00Z")).toBe("2026-09-04");
     expect(dueInputValue(null)).toBe("");
   });
   it("only the four open phases have a deadline to set (domain.LetterDueColumn)", () => {
@@ -166,6 +172,24 @@ describe("drafts → bodies", () => {
       ok: true,
       body: { sender_name: null, sender_phone: null, sender_address: null },
     });
+  });
+});
+
+describe("dates — d/m/yyyy without zero padding (prototype `formatDay`, vi-VN)", () => {
+  it("a received date is cut as text, never padded", () => {
+    expect(letterDate("2026-08-23")).toBe("23/8/2026");
+    expect(letterDate("2026-01-05")).toBe("5/1/2026");
+    expect(letterDate("2026-10-12")).toBe("12/10/2026");
+    expect(letterDate("")).toBe("—");
+    // Not the contract's shape: shown verbatim, never guessed.
+    expect(letterDate("2026/8/23")).toBe("2026/8/23");
+  });
+});
+
+describe("status hints — the prototype's words where the two sets share a status (`document-display.ts:156-164`)", () => {
+  it("Mới vào sổ and Đã giải quyết", () => {
+    expect(letterStatusHint("moi-vao-so")).toBe("Đã vào sổ, chưa giao cho bộ phận nào.");
+    expect(letterStatusHint("da-giai-quyet")).toBe("Đã giải quyết xong và trả lời công dân.");
   });
 });
 

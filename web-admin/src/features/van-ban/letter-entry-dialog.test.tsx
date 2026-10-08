@@ -96,7 +96,8 @@ describe("booking dialog", () => {
 
     const box = document.querySelector('[aria-label="Cảnh báo đơn trùng"]')!;
     expect(box.textContent).toContain("Công dân này đã có 2 đơn nội dung tương tự");
-    expect(box.textContent).toContain("Số 3/2026 · 01/09/2026 · giống 82%");
+    // d/m/yyyy, as the prototype's duplicate line (`PetitionEntryForm.tsx:188`, `formatDay`).
+    expect(box.textContent).toContain("Số 3/2026 · 1/9/2026 · giống 82%");
     expect(box.textContent).toContain(DUPLICATE_FOOTER);
 
     const toggles = [...box.querySelectorAll<HTMLButtonElement>("button")];

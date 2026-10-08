@@ -232,7 +232,8 @@ describe("preview — Văn bản & Đơn thư", () => {
     const el = await mountDocs(docs());
     await settle(600);
     expect(el.querySelector('.side-nav a[aria-current="page"]')!.getAttribute("href")).toBe("/van-ban");
-    expect(el.querySelector("h1")!.textContent).toBe("Văn bản & đơn thư");
+    // The prototype's H1 on the petition tabs (`DocumentWorkspace.tsx:108`); Văn bản đến/đi keep the page's.
+    expect(el.querySelector("h1")!.textContent).toBe("Đơn thư công dân");
     expect(selected(el)).toBe("Đơn thư công dân");
     expect(network).not.toHaveBeenCalled();
   }, SLOW);

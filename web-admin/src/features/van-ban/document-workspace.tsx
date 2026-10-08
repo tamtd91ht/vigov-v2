@@ -21,6 +21,17 @@ import { SoVanBanDi } from "./so-van-ban-di";
 /** The page's title and subtitle — the prototype's subtitle, word for word. */
 export const DOCUMENT_PAGE_TITLE = "Văn bản & đơn thư";
 export const DOCUMENT_PAGE_SUBTITLE = "Vào sổ, phân công xử lý và theo dõi hạn giải quyết.";
+/** The prototype's H1 (`DocumentWorkspace.tsx:108`) — its page holds only the petition tabs. */
+export const LETTER_PAGE_TITLE = "Đơn thư công dân";
+
+/**
+ * The H1 for the active tab (owner request v2 §4.1): the two tabs the prototype has (`Đơn thư công dân`,
+ * `Báo cáo`) carry its title; `Văn bản đến` / `Văn bản đi`, which the prototype does not have, keep the
+ * page's own title — "Đơn thư công dân" above an incoming-document register would name the wrong book.
+ */
+export function documentPageTitle(tab: DocumentTabId): string {
+  return tab === "petitions" || tab === "report" ? LETTER_PAGE_TITLE : DOCUMENT_PAGE_TITLE;
+}
 
 /**
  * The tab the page opens on (ADR 0078 #5, an ASSUMPTION awaiting the owner): `Đơn thư công dân`, as in
@@ -81,7 +92,7 @@ export function DocumentWorkspace({
     <>
       <PageHeader
         icon={Mail}
-        title={DOCUMENT_PAGE_TITLE}
+        title={documentPageTitle(tab)}
         subtitle={
           subtitleExtra === undefined || subtitleExtra === null ? (
             DOCUMENT_PAGE_SUBTITLE

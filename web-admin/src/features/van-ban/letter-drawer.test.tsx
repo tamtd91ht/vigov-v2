@@ -6,9 +6,10 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
+import { danhBaTheoMa } from "@/features/phan-anh/nhan-phieu";
 import type { documents_citizenLetterOut, documents_letterLogOut } from "@/lib/api/schema.gen";
 
-import { DEADLINE_CLEARED, DEADLINE_EDIT_LABEL, DEADLINE_SAVED, LetterDrawer, RESULT_LOCKED_HINT } from "./letter-drawer";
+import { DEADLINE_CLEARED, DEADLINE_EDIT_LABEL, DEADLINE_SAVED, LetterDrawer, RESULT_LOCKED_HINT, letterDrawerTitle } from "./letter-drawer";
 import { NO_DEADLINE, WITHHELD_SENDER } from "./letter-display";
 
 beforeAll(() => {
@@ -338,6 +339,59 @@ describe("letter drawer — result (C10)", () => {
       result_issuer: "UBND xã",
       result_summary: "Đã nạo vét mương thoát nước",
     });
+  });
+});
+
+describe("letter drawer — prototype presentation (TASK-02)", () => {
+  it("header line reads d/m/yyyy without zero padding", () => {
+    expect(letterDrawerTitle(7, 2026, "2026-09-04")).toBe("Đơn số 7/2026 · nhận ngày 4/9/2026");
+    mount(drawer(letter()));
+    expect(dialog().querySelector("h2")!.textContent).toBe("Đơn số 7/2026 · nhận ngày 1/10/2026");
+  });
+
+  it("“Bộ phận đang giữ” is the unit name only — no “Phụ trách” line; “Chưa chuyển” when none", () => {
+    const held = () => {
+      const dt = [...dialog().querySelectorAll("dt")].find((d) => d.textContent === "Bộ phận đang giữ")!;
+      return dt.nextElementSibling!.textContent;
+    };
+    mount(drawer(letter({ holding_unit_id: "U1", assignee_code: "CB-00002" })));
+    expect(held()).toBe("Văn phòng");
+    act(() => root?.unmount());
+    host?.remove();
+    mount(drawer(letter()));
+    expect(held()).toBe("Chưa chuyển");
+  });
+
+  it("the task button carries the prototype's sub-line", () => {
+    mount(drawer(letter()));
+    expect(dialog().textContent).toContain("Nhiệm vụ kế thừa hạn xử lý của đơn, để hai bên không lệch nhau.");
+  });
+
+  it("the timeline names the actor only (the prototype's `actor_name`); the bare code when the directory does not know it", () => {
+    mount(
+      <LetterDrawer
+        letter={{ ok: true, duLieu: letter() }}
+        log={{
+          ok: true,
+          duLieu: {
+            items: [
+              { id: "2", letter_id: "L1", at: "2026-10-02T02:00:00Z", actor_code: "CB-00009", kind: "ghi-chu", content: "x" },
+              { id: "1", letter_id: "L1", at: "2026-10-01T02:00:00Z", actor_code: "CB-00001", kind: "ghi-chu", content: "y" },
+            ],
+          },
+        }}
+        now={new Date("2026-10-08T03:00:00Z")}
+        units={{ pha: "xong", ten: new Map() }}
+        directory={danhBaTheoMa([{ code: "CB-00001", full_name: "Trần Thị B", position: "", department_id: "", email_masked: null }])}
+        canBook
+        mayWork
+        onChanged={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    const names = [...dialog().querySelectorAll('section[aria-labelledby="tieu-de-dong-thoi-gian-don-thu"] li b')].map((b) => b.textContent);
+    expect(names[0]).toBe("CB-00009");
+    expect(names[1]).toBe("Trần Thị B");
   });
 });
 

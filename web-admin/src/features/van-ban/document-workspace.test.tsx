@@ -8,6 +8,8 @@ import {
   DOCUMENT_PAGE_SUBTITLE,
   DOCUMENT_PAGE_TITLE,
   DocumentWorkspace,
+  LETTER_PAGE_TITLE,
+  documentPageTitle,
   initialDocumentTab,
 } from "./document-workspace";
 
@@ -33,7 +35,7 @@ describe("khung trang Văn bản & đơn thư", () => {
   const html = render();
 
   it("đầu trang: tiêu đề, phụ đề của prototype, rồi thanh tab, rồi khung tab", () => {
-    const h1 = html.indexOf(`>${DOCUMENT_PAGE_TITLE.replace("&", "&amp;")}</h1>`);
+    const h1 = html.indexOf(`>${LETTER_PAGE_TITLE}</h1>`);
     const subtitle = html.indexOf(DOCUMENT_PAGE_SUBTITLE);
     const tablist = html.indexOf('role="tablist"');
     const panel = html.indexOf('role="tabpanel"');
@@ -58,6 +60,18 @@ describe("khung trang Văn bản & đơn thư", () => {
 
     const invalid = render({ metric: "khong-co" });
     expect(selectedTab(invalid)).toBe("tab-van-ban-incoming");
+  });
+
+  it("tiêu đề H1 theo tab (prototype `DocumentWorkspace.tsx:108`): Đơn thư/Báo cáo → “Đơn thư công dân”; Văn bản đến/đi giữ “Văn bản & đơn thư”", () => {
+    expect(LETTER_PAGE_TITLE).toBe("Đơn thư công dân");
+    expect(DOCUMENT_PAGE_TITLE).toBe("Văn bản & đơn thư");
+    expect(documentPageTitle("petitions")).toBe(LETTER_PAGE_TITLE);
+    expect(documentPageTitle("report")).toBe(LETTER_PAGE_TITLE);
+    expect(documentPageTitle("incoming")).toBe(DOCUMENT_PAGE_TITLE);
+    expect(documentPageTitle("outgoing")).toBe(DOCUMENT_PAGE_TITLE);
+    // Rendered: the page opened on Đơn thư says so; opened on Văn bản đến it keeps the page's own title.
+    expect(html).toMatch(/<h1[^>]*>Đơn thư công dân<\/h1>/);
+    expect(render({ metric: "overdue" })).toMatch(/<h1[^>]*>Văn bản &amp; đơn thư<\/h1>/);
   });
 
   it("thứ tự tab: Văn bản đến · Văn bản đi · Đơn thư công dân · Báo cáo", () => {

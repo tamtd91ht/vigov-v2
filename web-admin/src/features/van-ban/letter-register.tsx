@@ -56,15 +56,13 @@ import { LetterDrawer } from "./letter-drawer";
 import { LETTER_ENTRY_SUBMIT, LetterEntryDialog } from "./letter-entry-dialog";
 import { LetterScopeFilter, LetterStatusBadge } from "./letter-ui";
 import { FilterSelect, doiLocVeTrangDau } from "./loc-so-van-ban";
-import { DieuHuongTrang, REGISTER_HEAD_ROW, REGISTER_ROW, REGISTER_TD, REGISTER_TH } from "./so-van-ban-den";
+import { DieuHuongTrang, REGISTER_HEAD_ROW, REGISTER_ROW } from "./so-van-ban-den";
 
 /** The prototype's words (`DocumentWorkspace.tsx:264-267`, `PetitionTable.tsx:25`). */
 export const LETTER_REGISTER_INTRO =
   "Sổ theo dõi đơn khiếu nại, tố cáo, kiến nghị và đề nghị của công dân. Hệ thống nhắc khi một người " +
   "gửi lại đơn có nội dung tương tự.";
 export const LETTER_REGISTER_EMPTY = "Sổ đơn thư chưa có bản ghi nào.";
-export const LETTER_NO_MATCH = "Không có đơn thư nào khớp bộ lọc đang chọn.";
-export const LETTER_FILTER_HINT = "Thử đổi hoặc bỏ bớt bộ lọc.";
 /** The merged-duplicate line under a row's summary (`PetitionTable.tsx:78-82`). */
 export const MERGED_DUPLICATE = "Đã gộp vì trùng đơn trước";
 
@@ -311,7 +309,6 @@ export function LetterRegisterView({
   overlays?: ReactNode;
 }) {
   const count = activeFilterCount(filters);
-  const filtered = count > 0 || scope !== "all" || coTrangTruoc(stack);
   // The prototype's red "{n} đơn đang quá hạn." — DERIVED from the rows on this page, against `now`;
   // omitted when there is none (every letter has no deadline today, ADR 0078 #3). Never a stored flag.
   const pastDue = answer !== null && answer.ok ? answer.duLieu.items.filter((row) => isPastDue(row, now)).length : 0;
@@ -386,7 +383,7 @@ export function LetterRegisterView({
         </div>
 
         <Card className="bg-white">
-          <LetterTable answer={answer} now={now} units={units} openId={openId} onOpen={onOpen} filtered={filtered} onReload={onReload} />
+          <LetterTable answer={answer} now={now} units={units} openId={openId} onOpen={onOpen} onReload={onReload} />
           {answer !== null && answer.ok && (answer.duLieu.has_more || coTrangTruoc(stack)) && (
             <CardFooter className="justify-end">
               <DieuHuongTrang
@@ -439,9 +436,35 @@ function DateFilter({
 }
 
 /**
+ * Column widths of the register — the prototype's table is `min-w-[900px]` with free-width columns,
+ * which at 1280px (240px sidebar + 2×28px page padding ⇒ ~966px with the scrollbar) scrolled sideways
+ * and pushed `Trạng thái` out of view. Owner request v2 §4.3: no horizontal scrollbar from 1280px,
+ * `Đang giữ` / `Người gửi` at most three lines, `Nội dung` the flexible column cut with "…". So the
+ * table is `table-fixed` with these widths (cell padding px-3 included), and `Nội dung` takes the rest.
+ * `Trạng thái` is sized for the widest badge ("Đang giải quyết"; the badge never wraps).
+ * LOCAL on purpose: `REGISTER_TH` / `REGISTER_TD` are shared with Văn bản đến/đi, which keep theirs.
+ */
+const LETTER_COLUMNS: readonly { label: string; width?: string }[] = [
+  { label: "Số", width: "w-[52px]" },
+  { label: "Ngày nhận", width: "w-[92px]" },
+  { label: "Người gửi", width: "w-[136px]" },
+  { label: "Loại đơn", width: "w-[96px]" },
+  { label: "Nội dung" },
+  { label: "Đang giữ", width: "w-[124px]" },
+  { label: "Số ngày xử lý", width: "w-[88px]" },
+  { label: "Hạn giải quyết", width: "w-[104px]" },
+  { label: "Trạng thái", width: "w-[148px]" },
+];
+/** The prototype's header cell (`PetitionTable.tsx:35-43`): no `nowrap`, so a long label wraps. */
+const LETTER_TH = "px-3 py-2.5 align-bottom font-semibold";
+const LETTER_TD = "px-3 py-2.5 align-top break-words";
+
+/**
  * The register table — the prototype's nine columns in its order (`PetitionTable.tsx:33-45`). A row
  * opens the drawer; the number is a real button for the keyboard. Masking is the SERVER's: the phone
  * as sent, never a link; a denunciation's sender and summary are one fixed muted sentence each.
+ *
+ * Empty — with or without a filter — is the prototype's ONE sentence (`PetitionTable.tsx:22-27`).
  *
  * Hook-free: tests render it as a plain function.
  */
@@ -451,7 +474,6 @@ export function LetterTable({
   units,
   openId = null,
   onOpen,
-  filtered = false,
   onReload,
 }: {
   answer: KetQua<page_Result_documents_citizenLetterItemOut> | null;
@@ -459,7 +481,6 @@ export function LetterTable({
   units: BangTraDanhMuc;
   openId?: string | null;
   onOpen: (row: documents_citizenLetterItemOut) => void;
-  filtered?: boolean;
   onReload?: () => void;
 }) {
   if (answer === null) {
@@ -497,10 +518,7 @@ export function LetterTable({
   }
   if (answer.duLieu.items.length === 0) {
     return (
-      <div className="p-6 text-center text-[12.5px] text-ink-muted">
-        <p className="m-0">{filtered ? LETTER_NO_MATCH : LETTER_REGISTER_EMPTY}</p>
-        {filtered && <p className="m-0 mt-1">{LETTER_FILTER_HINT}</p>}
-      </div>
+      <p className="m-0 p-6 text-center text-[12.5px] text-ink-muted">{LETTER_REGISTER_EMPTY}</p>
     );
   }
 
@@ -508,17 +526,21 @@ export function LetterTable({
     // `relative`: the scroller must contain its cells' visually-hidden spans, or the page scrolls
     // sideways (`BangVanBanDen`, measured 08/10/2026).
     <div className="relative overflow-x-auto" role="region" aria-label="Sổ đơn thư công dân" tabIndex={0}>
-      <table className="w-full min-w-[900px] border-collapse text-[12.5px]">
+      {/* min-w: below it (narrow windows) the region scrolls instead of crushing `Nội dung` to nothing. */}
+      <table className="w-full min-w-[940px] table-fixed border-collapse text-[12.5px]">
         <caption className="an-thi-giac">Các đơn thư đã vào sổ, đơn mới vào sổ trước</caption>
+        <colgroup>
+          {LETTER_COLUMNS.map((c) => (
+            <col key={c.label} className={c.width} />
+          ))}
+        </colgroup>
         <thead>
           <tr className={REGISTER_HEAD_ROW}>
-            {["Số", "Ngày nhận", "Người gửi", "Loại đơn", "Nội dung", "Đang giữ", "Số ngày xử lý", "Hạn giải quyết", "Trạng thái"].map(
-              (label) => (
-                <th key={label} scope="col" className={REGISTER_TH}>
-                  {label}
-                </th>
-              ),
-            )}
+            {LETTER_COLUMNS.map(({ label }) => (
+              <th key={label} scope="col" className={LETTER_TH}>
+                {label}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
@@ -560,7 +582,7 @@ function LetterRow({
         onOpen(row);
       }}
     >
-      <td className={REGISTER_TD}>
+      <td className={LETTER_TD}>
         <button
           type="button"
           id={letterRowButtonId(row.id)}
@@ -573,8 +595,8 @@ function LetterRow({
           {row.number}
         </button>
       </td>
-      <td className={cn(REGISTER_TD, "whitespace-nowrap tabular-nums")}>{letterDate(row.received_date)}</td>
-      <td className={REGISTER_TD}>
+      <td className={cn(LETTER_TD, "whitespace-nowrap tabular-nums")}>{letterDate(row.received_date)}</td>
+      <td className={LETTER_TD}>
         {sender.kind === "withheld" ? (
           <span className="text-[12px] text-ink-muted italic">{WITHHELD_SENDER}</span>
         ) : sender.kind === "unknown" ? (
@@ -586,16 +608,17 @@ function LetterRow({
           </>
         )}
       </td>
-      <td className={cn(REGISTER_TD, "whitespace-nowrap")}>{letterTypeLabel(row.letter_type)}</td>
-      <td className={REGISTER_TD}>
+      <td className={LETTER_TD}>{letterTypeLabel(row.letter_type)}</td>
+      <td className={LETTER_TD}>
         {row.summary !== null ? (
-          <span className="block max-w-96 truncate">{row.summary}</span>
+          // One line, cut with "…" (owner request v2 §4.3); the full text is in the drawer.
+          <span className="block truncate">{row.summary}</span>
         ) : (
           <span className="block text-[12px] text-ink-muted italic">{row.summary_withheld ? WITHHELD_SUMMARY : "—"}</span>
         )}
         {merged && <span className="text-[11px] font-semibold text-tangerine">{MERGED_DUPLICATE}</span>}
       </td>
-      <td className={REGISTER_TD}>
+      <td className={LETTER_TD}>
         {unit === "" ? (
           <>
             <span aria-hidden="true">—</span>
@@ -610,14 +633,14 @@ function LetterRow({
           unit
         )}
       </td>
-      <td className={cn(REGISTER_TD, "whitespace-nowrap tabular-nums")}>
+      <td className={cn(LETTER_TD, "tabular-nums")}>
         <span className={days.stopped ? "text-ink-muted" : "font-semibold text-navy"}>{days.text}</span>
         {days.note !== null && <span className="block text-[11px] text-ink-muted">{days.note}</span>}
       </td>
-      <td className={cn(REGISTER_TD, "whitespace-nowrap")}>
+      <td className={LETTER_TD}>
         <span className={DUE_TONE_CLASS[due.tone]}>{due.text}</span>
       </td>
-      <td className={REGISTER_TD}>
+      <td className={LETTER_TD}>
         <LetterStatusBadge status={row.status} />
       </td>
     </tr>

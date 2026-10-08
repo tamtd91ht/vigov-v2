@@ -29,8 +29,17 @@ export function reportTitle(year: number): string {
 }
 export const REPORT_NO_TYPE_ROWS = "Chưa có đơn nào trong năm.";
 export const REPORT_NO_UNIT_ROWS = "Chưa có đơn nào được phân công.";
-/** A row of `by_unit` with `unit_id: null` — letters held by no unit. */
-export const REPORT_NO_UNIT = "Chưa chuyển bộ phận nào";
+/** A row of `by_unit` with `unit_id: null` — letters held by no unit. The prototype's words (owner request v2 §5). */
+export const REPORT_NO_UNIT = "Chưa phân công";
+
+/**
+ * `THEO LOẠI ĐƠN` by Tổng số, largest first — the prototype's order (`service.py:635`,
+ * `sorted(..., key=-total)`). A stable sort: a tie keeps the server's order. Ordering only — no figure
+ * is touched.
+ */
+export function byTotalDescending<T extends { total: number }>(rows: readonly T[]): T[] {
+  return [...rows].sort((a, b) => b.total - a.total);
+}
 
 /** The current year IN VIETNAM — not the machine's zone: 31/12 evening abroad is already 01/01 here. */
 export function vietnamYear(now: Date = new Date()): number {
@@ -223,7 +232,7 @@ function ReportBody({ report, units }: { report: documents_letterReportOut; unit
                 </td>
               </tr>
             ) : (
-              report.by_type.map((row) => (
+              byTotalDescending(report.by_type).map((row) => (
                 <tr key={row.letter_type} className={BODY_ROW}>
                   <td className="py-2 pr-3 text-navy">{letterTypeLabel(row.letter_type)}</td>
                   <td className="py-2 pr-3 text-right tabular-nums">{row.total}</td>

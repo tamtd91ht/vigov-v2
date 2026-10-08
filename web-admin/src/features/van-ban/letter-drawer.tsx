@@ -68,13 +68,15 @@ import { LetterStatusBadge } from "./letter-ui";
 /** Heading id of the drawer — the dialog's accessible name. */
 export const LETTER_DRAWER_TITLE_ID = "tieu-de-ngan-don-thu";
 
-/** `Đơn số 7/2026 · nhận ngày 08/10/2026` — the prototype's first header line (`PetitionDetailDrawer.tsx:348-351`). */
+/** `Đơn số 7/2026 · nhận ngày 8/10/2026` — the prototype's first header line (`PetitionDetailDrawer.tsx:348-351`). */
 export function letterDrawerTitle(number: number, year: number, receivedDate: string): string {
   return `Đơn số ${letterNumber(number, year)} · nhận ngày ${letterDate(receivedDate)}`;
 }
 
 /** Words of the drawer, the prototype's where it has them. */
 export const LETTER_LOG_EMPTY = "Chưa chuyển cho bộ phận nào.";
+/** The sub-line under "Chuyển thành nhiệm vụ" (`PetitionDetailDrawer.tsx:600-602`). */
+export const RAISE_TASK_HINT = "Nhiệm vụ kế thừa hạn xử lý của đơn, để hai bên không lệch nhau.";
 export const ROUTING_SECTION_TITLE = "Chuyển cho bộ phận khác";
 export const RESULT_SECTION_TITLE = "Nội dung trả lời công dân";
 export const RESULT_SAVE_LABEL = "Lưu nội dung trả lời";
@@ -190,13 +192,9 @@ export function LetterDrawer({
               <DrawerBadges letter={doc} now={now} />
               <dl className="m-0 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
                 <Figure label="Địa chỉ người gửi">{senderAddressText(doc)}</Figure>
+                {/* The unit's name only, as the prototype's figure (`:515-518`). The assignee is on the log. */}
                 <Figure label="Bộ phận đang giữ">
                   {(doc.holding_unit_id ?? "") === "" ? "Chưa chuyển" : unitName(units, doc.holding_unit_id ?? "")}
-                  {(doc.assignee_code ?? "") !== "" && (
-                    <span className="block text-[11px] font-normal text-ink-muted">
-                      Phụ trách: {staffNameWithCode(doc.assignee_code ?? "", directory)}
-                    </span>
-                  )}
                 </Figure>
                 {/* The stored date or "Không đặt" — the prototype's figure (`:519-524`), no count. */}
                 <Figure label="Hạn xử lý">{dueDateText(activeDue(doc))}</Figure>
@@ -214,6 +212,7 @@ export function LetterDrawer({
 
               <div className="mt-4">
                 <RaiseTaskButton />
+                <p className="m-0 mt-1.5 text-[11px] text-ink-muted">{RAISE_TASK_HINT}</p>
               </div>
 
               {saved !== "" && (
@@ -1028,8 +1027,10 @@ function logPill(entry: documents_letterLogEntryOut): string | null {
 /**
  * "Dòng thời gian chuyển tiếp" (`PetitionDetailDrawer.tsx:764-836`) over the processing log, newest
  * first as the server sends it. READ-ONLY: the log is append-only (rule 7, forbidden #5) and no
- * control on any line edits or removes it. Names are `Full name (CB-…)` from the directory read once
- * by the register, or the bare code.
+ * control on any line edits or removes it. The actor is named as the prototype does (`actor_name`,
+ * `:779-784`): the full name from the directory read once by the register, or the bare code when the
+ * directory does not know it (not loaded, or a retired account) — the code still names one person.
+ * The STORED trail keeps the business code either way (rule 6, invariant 8); this is presentation.
  */
 export function LetterLog({
   log,
@@ -1078,7 +1079,8 @@ function LogRow({
   units: BangTraDanhMuc;
   directory: DanhBaTheoMa | null;
 }) {
-  const who = staffNameWithCode(entry.actor_code, directory);
+  const actorName = directory?.get(entry.actor_code)?.full_name ?? "";
+  const who = actorName === "" ? entry.actor_code : actorName;
   const pill = logPill(entry);
   const moved = entry.kind === "luan-chuyen" && (entry.to_unit_id ?? "") !== "";
   return (
@@ -1087,7 +1089,7 @@ function LogRow({
         aria-hidden="true"
         className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-brand/12 text-[11px] font-bold text-brand"
       >
-        {initialsOf(directory?.get(entry.actor_code)?.full_name ?? "")}
+        {initialsOf(actorName)}
       </span>
       <div className="min-w-0 flex-1 [&>p]:m-0">
         <div className="flex flex-wrap items-baseline gap-x-2">
