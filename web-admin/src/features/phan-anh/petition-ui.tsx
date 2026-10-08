@@ -8,6 +8,7 @@ import {
   Inbox,
   Loader,
   LoaderCircle,
+  ShieldQuestion,
   Tags,
   type LucideIcon,
 } from "lucide-react";
@@ -16,6 +17,8 @@ import type { ReactNode } from "react";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { buttonVariants, LEGACY_BUTTON_CLASS, type ButtonSize, type ButtonVariant } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
+
+import { UNVERIFIED_CONTACT_LABEL, UNVERIFIED_CONTACT_NOTE } from "./nhan-phieu";
 
 /**
  * Presentation shared by the Phản ánh screen (ADR 0068, spec v2). Nothing here reads data or decides
@@ -56,6 +59,20 @@ export function PetitionStatusBadge({ status, children }: { status: string; chil
   return (
     <Badge tone={look?.tone ?? "neutral"} icon={look?.icon}>
       {children}
+    </Badge>
+  );
+}
+
+/**
+ * `Số tự khai — chưa xác thực` beside the sender (ADR 0080 decision 5). Drawn by the caller only when
+ * `isContactUnverified` holds. Neutral tone on purpose: warning is the colour of "waiting / due soon",
+ * and this is a fact about the contact, not a deadline. The `title` carries the explanation (no
+ * personal data in it, rule 3); the drawer also prints it as a visible line, since touch has no hover.
+ */
+export function UnverifiedContactBadge() {
+  return (
+    <Badge tone="neutral" icon={ShieldQuestion} title={UNVERIFIED_CONTACT_NOTE}>
+      {UNVERIFIED_CONTACT_LABEL}
     </Badge>
   );
 }

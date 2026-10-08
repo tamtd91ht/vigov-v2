@@ -1024,10 +1024,10 @@
       "id": "adr-0080-nhan-so-tu-khai",
       "menu": "phan-anh-nguoi-dan",
       "viec": "Nhãn 'Số tự khai — chưa xác thực' cạnh nhanNguoiGui (nhan-phieu.ts:137; so-phan-anh.tsx:944,1102; tra-cuu-phieu.tsx:184) đọc trường contact_unverified (ADR 0080 quyết định 5)",
-      "trang_thai": "chua_lam",
-      "bang_chung": "Hợp đồng đã có: petitions_phieuPhanAnhRa.contact_unverified (schema.gen.ts sinh lại cùng commit C3).",
+      "trang_thai": "xong",
+      "bang_chung": "(commit này). UnverifiedContactBadge (badge trung tính) ở thẻ sổ, đầu ngăn chi tiết (kèm một dòng ghi chú hiện được trên màn cảm ứng) và thẻ tra cứu; chỉ đọc contact_unverified. tsc sạch; eslint phan-anh sạch; vitest phan-anh 13 tệp / 327 ca; check:api khớp. Ảnh 1280px và 360px đã xem.",
       "no_confirm": [],
-      "tiep_theo": "admin-web-builder; xem ảnh render thật trước khi báo xong."
+      "tiep_theo": "cau-hinh/audit-log-view.ts:36,43 chưa có nhãn Kind 'zalo-account' và ipLabel chỉ che IP cho 'citizen' — ngoài phạm vi (phiên Cấu hình giữ tệp). Bộ test toàn web-admin còn đỏ ở tệp ngoài phan-anh (drill-down-banner.test.tsx), không do thẻ này."
     },
     {
       "id": "cau-hinh-con-mo-08-10",

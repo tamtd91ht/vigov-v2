@@ -40,6 +40,7 @@ import {
   nhanLinhVuc,
   nhanLuaChonCanBo,
   nhanNguoiGui,
+  isContactUnverified,
   nhanThoiDiem,
   nhanTrangThai,
   PHAN_CHUA_DUNG,
@@ -167,6 +168,14 @@ describe("người gửi", () => {
     // hình hiện tên của một người đã xin giấu tên.
     const an = phieu({ anonymous: true, reporter_name: "Nguyễn V. A.", reporter_phone: "09****0000" });
     expect(nhanNguoiGui(an)).toBe("Người gửi ẩn danh");
+  });
+
+  it("contact_unverified: only an explicit true counts (ADR 0080 #5), never has_citizen/channel", () => {
+    expect(isContactUnverified(phieu({ contact_unverified: true }))).toBe(true);
+    expect(isContactUnverified(phieu({ contact_unverified: false }))).toBe(false);
+    expect(isContactUnverified(phieu({ contact_unverified: null }))).toBe(false);
+    expect(isContactUnverified(phieu({ contact_unverified: undefined }))).toBe(false);
+    expect(isContactUnverified(phieu({ channel: "zalo-mini-app", has_citizen: false }))).toBe(false);
   });
 
   it("không ẩn danh mà cả hai trường rỗng: nói ra, không để ô trống", () => {
@@ -464,8 +473,8 @@ describe("bộ phận (ULID) và cán bộ (MÃ CÁN BỘ) đang giữ phiếu �
   });
 
   const DANH_BA = danhBaTheoMa([
-    { code: "CB-00123", full_name: "Trần Thị B", position: "Công chức Văn phòng", department_id: "01JBOPHAN" },
-    { code: "CB-00124", full_name: "", position: "", department_id: "" },
+    { code: "CB-00123", full_name: "Trần Thị B", position: "Công chức Văn phòng", department_id: "01JBOPHAN", email_masked: null },
+    { code: "CB-00124", full_name: "", position: "", department_id: "", email_masked: null },
   ]);
 
   it("chưa phân công cán bộ cụ thể: câu nói ra điều đó, bất kể danh bạ", () => {
@@ -494,10 +503,10 @@ describe("bộ phận (ULID) và cán bộ (MÃ CÁN BỘ) đang giữ phiếu �
 
   it("dòng ô chọn: `Họ tên · Chức danh`, bỏ chức danh khi rỗng", () => {
     expect(
-      nhanLuaChonCanBo({ code: "CB-00123", full_name: "Trần Thị B", position: "Công chức", department_id: "" }),
+      nhanLuaChonCanBo({ code: "CB-00123", full_name: "Trần Thị B", position: "Công chức", department_id: "", email_masked: null }),
     ).toBe("Trần Thị B · Công chức");
     expect(
-      nhanLuaChonCanBo({ code: "CB-00123", full_name: "Trần Thị B", position: "", department_id: "" }),
+      nhanLuaChonCanBo({ code: "CB-00123", full_name: "Trần Thị B", position: "", department_id: "", email_masked: null }),
     ).toBe("Trần Thị B");
   });
 });
@@ -681,10 +690,10 @@ describe("nhật ký xử lý — nhãn mười mã thao tác", () => {
 
   // PA-06: the log names the officer, and keeps the code (rule 6, invariant 8).
   const LOG_DIRECTORY = danhBaTheoMa([
-    { code: "CB-00123", full_name: "Trần Thị B", position: "Công chức", department_id: "" },
-    { code: "CB-00124", full_name: "", position: "", department_id: "" },
+    { code: "CB-00123", full_name: "Trần Thị B", position: "Công chức", department_id: "", email_masked: null },
+    { code: "CB-00124", full_name: "", position: "", department_id: "", email_masked: null },
     // A directory row whose code collides with the citizen marker must never be looked up.
-    { code: "cong-dan", full_name: "Không được hiện", position: "", department_id: "" },
+    { code: "cong-dan", full_name: "Không được hiện", position: "", department_id: "", email_masked: null },
   ]);
 
   it("staff code known to the directory reads `Họ tên (CB-…)`", () => {

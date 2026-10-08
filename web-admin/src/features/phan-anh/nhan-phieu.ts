@@ -142,6 +142,24 @@ export function nhanNguoiGui(phieu: petitions_phieuPhanAnhRa): string {
   return phan.join(" · ");
 }
 
+/**
+ * SELF-DECLARED CONTACT (ADR 0080 decision 5). The petition came from a Mini App session Zalo gave no
+ * phone number to: the name and phone above were typed by the sender, never verified, and no
+ * notification reaches them (ADR 0080 decision 4) — so the officer must call if the case needs it.
+ *
+ * READ FROM THE SERVER'S EXPLICIT FIELD ONLY, never derived from `channel` + `has_citizen`: a staff
+ * intake also has no citizen, and so will a future channel. A UI inference would be a second copy of
+ * "does this petition carry an identity" that drifts the day a third channel exists (rule 9).
+ * `=== true`: absent or `null` means the server did not say so, and the label is not drawn.
+ */
+export function isContactUnverified(phieu: petitions_phieuPhanAnhRa): boolean {
+  return phieu.contact_unverified === true;
+}
+
+export const UNVERIFIED_CONTACT_LABEL = "Số tự khai — chưa xác thực";
+export const UNVERIFIED_CONTACT_NOTE =
+  "Người gửi tự nhập, chưa xác nhận qua Zalo; công dân không nhận thông báo — liên hệ qua số này nếu cần.";
+
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * SCENE LOCATION (§8.4) — requirement `FeedbackDetailDrawer.tsx:394-406`
  *

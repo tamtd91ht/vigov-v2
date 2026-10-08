@@ -44,6 +44,8 @@ import {
   SCOPE_RELATED_LABEL,
   SO_RONG,
   TIEU_DE_NHAT_KY,
+  UNVERIFIED_CONTACT_LABEL,
+  UNVERIFIED_CONTACT_NOTE,
 } from "./nhan-phieu";
 import {
   BieuMauReNhanh,
@@ -127,8 +129,8 @@ const DANH_BA: KetQua<identity_danhBaChonNguoiRa> = {
   ok: true,
   duLieu: {
     items: [
-      { code: "CB-00123", full_name: "Trần Thị B", position: "Công chức", department_id: "01JBOPHAN" },
-      { code: "CB-00200", full_name: "Lê Văn C", position: "Trưởng thôn", department_id: "01JKHAC" },
+      { code: "CB-00123", full_name: "Trần Thị B", position: "Công chức", department_id: "01JBOPHAN", email_masked: null },
+      { code: "CB-00200", full_name: "Lê Văn C", position: "Trưởng thôn", department_id: "01JKHAC", email_masked: null },
     ],
   },
 };
@@ -1119,7 +1121,7 @@ describe("log — the two citizen-rating rows", () => {
   const TB = new Map([["01JBOPHAN", "VĂN PHÒNG ĐẢNG ỦY"]]);
   // A directory that WOULD match if the marker were looked up — it must not be.
   const DB = danhBaTheoMa([
-    { code: "cong-dan", full_name: "Không được hiện", position: "", department_id: "" },
+    { code: "cong-dan", full_name: "Không được hiện", position: "", department_id: "", email_masked: null },
   ]);
 
   function dongNhatKy(sua: Partial<petitions_nhatKyPhieuRa>): petitions_nhatKyPhieuRa {
@@ -1337,5 +1339,41 @@ describe("prototype composition — the drawer", () => {
   it("the duplicates block offers NO merge button — only its '?'", () => {
     const html = veChiTiet(ALL);
     expect(html).not.toContain("Gộp phiếu");
+  });
+});
+
+describe("self-declared contact — ADR 0080 decision 5", () => {
+  // The server's explicit field, and ONLY it, draws the label: `has_citizen: false` on a Mini App
+  // petition is also what a staff intake looks like, so it must not be enough on its own.
+  const UNVERIFIED = phieu({ contact_unverified: true, has_citizen: false });
+
+  function card(p: petitions_phieuPhanAnhRa): string {
+    return renderToStaticMarkup(<ThePhieu phieu={p} bayGio={BAY_GIO} dangMo={false} mo={() => {}} />);
+  }
+
+  it("list row: label beside the masked sender when contact_unverified is true", () => {
+    const html = card(UNVERIFIED);
+    expect(html).toContain("Nguyễn V. A. · 09****0000");
+    expect(html).toContain(UNVERIFIED_CONTACT_LABEL);
+  });
+
+  it.each([false, undefined, null])("list row: no label when contact_unverified is %s", (v) => {
+    expect(card(phieu({ contact_unverified: v }))).not.toContain(UNVERIFIED_CONTACT_LABEL);
+  });
+
+  it("list row: has_citizen false alone draws nothing (never derived)", () => {
+    expect(card(phieu({ has_citizen: false }))).not.toContain(UNVERIFIED_CONTACT_LABEL);
+  });
+
+  it("drawer: label and the visible one-line note", () => {
+    const html = veChiTiet(congThaoTac(false, false, false), UNVERIFIED);
+    expect(html).toContain(UNVERIFIED_CONTACT_LABEL);
+    expect(html).toContain(`>${UNVERIFIED_CONTACT_NOTE}</p>`);
+  });
+
+  it.each([false, undefined, null])("drawer: neither label nor note when contact_unverified is %s", (v) => {
+    const html = veChiTiet(congThaoTac(false, false, false), phieu({ contact_unverified: v, has_citizen: false }));
+    expect(html).not.toContain(UNVERIFIED_CONTACT_LABEL);
+    expect(html).not.toContain(UNVERIFIED_CONTACT_NOTE);
   });
 });

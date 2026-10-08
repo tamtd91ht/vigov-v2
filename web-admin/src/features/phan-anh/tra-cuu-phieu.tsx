@@ -12,6 +12,7 @@ import type { petitions_phieuPhanAnhRa } from "@/lib/api/schema.gen";
 import {
   CHUA_TRA_CUU,
   HUONG_DAN_TRA_CUU,
+  isContactUnverified,
   linhVucPhanAnh,
   lopHan,
   nhanHan,
@@ -25,7 +26,7 @@ import {
   trangThaiHan,
 } from "./nhan-phieu";
 import { CitizenRatingBlock, PublicationBox, SceneLocation } from "./citizen-report-blocks";
-import { FIELD_LIST_CLASS, Glyph, PetitionStatusBadge } from "./petition-ui";
+import { FIELD_LIST_CLASS, Glyph, PetitionStatusBadge, UnverifiedContactBadge } from "./petition-ui";
 
 /**
  * Tra cứu một phiếu phản ánh theo **mã tra cứu** — `docs/ui-ux/09-phan-anh-nguoi-dan.md §8`.
@@ -181,7 +182,10 @@ export function ThongTinPhieu({
 
         {/* NGƯỜI GỬI ĐÃ CHE SẴN Ở MÁY CHỦ — không ghép lại, không hiện thêm chữ số nào. */}
         <dt>Người gửi</dt>
-        <dd>{nhanNguoiGui(phieu)}</dd>
+        <dd className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+          <span>{nhanNguoiGui(phieu)}</span>
+          {isContactUnverified(phieu) && <UnverifiedContactBadge />}
+        </dd>
 
         <dt>Nội dung</dt>
         {/* Nội dung KHÔNG che, và đó không phải mâu thuẫn: cán bộ không đọc được phản ánh thì

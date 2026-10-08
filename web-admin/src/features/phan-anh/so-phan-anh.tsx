@@ -137,6 +137,7 @@ import {
   nhanLuaChonCanBo,
   nhanKenh,
   nhanLinhVuc,
+  isContactUnverified,
   nhanNguoiGui,
   nhanThoiDiem,
   nhanTrangThai,
@@ -157,6 +158,7 @@ import {
   SO_RONG,
   TIM_PLACEHOLDER,
   trangThaiHan,
+  UNVERIFIED_CONTACT_NOTE,
   type CongThaoTac,
 } from "./nhan-phieu";
 import {
@@ -180,6 +182,7 @@ import {
   TEXTAREA_CLASS,
   TOGGLE_TRACK,
   toggleButtonClass,
+  UnverifiedContactBadge,
 } from "./petition-ui";
 import { PetitionKpis } from "./petition-kpis";
 import { afterPhotosHeadingId, ScenePhotos } from "./scene-photos";
@@ -939,9 +942,12 @@ export function ThePhieu({
           <span className="truncate">{phieu.address === "" ? CARD_NO_LOCATION : phieu.address}</span>
         </span>
 
-        <span className="mt-1 flex min-w-0 items-center gap-1 text-xs text-ink-500">
+        {/* WRAPS instead of squeezing the sender to nothing: at the narrowest width the badge alone is
+            wider than what is left of the line beside the tile. */}
+        <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5 text-xs text-ink-500">
           <Glyph icon={UserRound} className="size-3 shrink-0" />
-          <span className="truncate">{nhanNguoiGui(phieu)}</span>
+          <span className="min-w-0 truncate">{nhanNguoiGui(phieu)}</span>
+          {isContactUnverified(phieu) && <UnverifiedContactBadge />}
         </span>
 
         <span className="mt-auto flex flex-wrap items-center gap-2 pt-1.5">
@@ -1099,7 +1105,11 @@ export function ChiTietPhieu({
             <span className="ma-muc">{phieu.code}</span> · {nhanKenh(phieu.channel)} · {nhanThoiDiem(phieu.booked_at)}
           </h2>
           <p className="mt-0.5 text-base leading-snug font-bold text-ink-900">{nhanLinhVuc(linhVuc)}</p>
-          <p className="mt-1 text-[13px] text-ink-500">{nhanNguoiGui(phieu)}</p>
+          <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[13px] text-ink-500">
+            <span>{nhanNguoiGui(phieu)}</span>
+            {isContactUnverified(phieu) && <UnverifiedContactBadge />}
+          </p>
+          {isContactUnverified(phieu) && <p className="mt-1 text-xs text-ink-500">{UNVERIFIED_CONTACT_NOTE}</p>}
         </div>
         <IconButton label="Đóng chi tiết phiếu" type="button" variant="secondary" onClick={dong}>
           <Glyph icon={X} />

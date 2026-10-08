@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import type { petitions_phieuPhanAnhRa } from "@/lib/api/schema.gen";
 
+import { UNVERIFIED_CONTACT_LABEL } from "./nhan-phieu";
 import { ThongTinPhieu } from "./tra-cuu-phieu";
 
 /**
@@ -225,6 +226,29 @@ describe("đánh giá, mở lại, công khai — màn tra cứu", () => {
     expect(html).not.toContain("Ẩn khỏi trang công khai</button>");
     // Nor the "no permission" sentence: read-only here is about the screen, not the account.
     expect(html).not.toContain("feedback.assign");
+  });
+
+  it("contact_unverified=true: the self-declared label sits beside the sender (ADR 0080 #5)", () => {
+    const html = renderToStaticMarkup(
+      <ThongTinPhieu phieu={phieu({ contact_unverified: true, has_citizen: false })} bayGio={BAY_GIO} />,
+    );
+    expect(html).toContain("Nguyễn V. A. · 09****0000");
+    expect(html).toContain(UNVERIFIED_CONTACT_LABEL);
+  });
+
+  it.each([false, undefined, null])("contact_unverified=%s: no label", (v) => {
+    const html = renderToStaticMarkup(
+      <ThongTinPhieu phieu={phieu({ contact_unverified: v })} bayGio={BAY_GIO} />,
+    );
+    expect(html).not.toContain(UNVERIFIED_CONTACT_LABEL);
+  });
+
+  it("the label is never derived: no citizen on a Mini App petition is NOT enough", () => {
+    // A staff intake also has no citizen; only the server's explicit field may draw the label.
+    const html = renderToStaticMarkup(
+      <ThongTinPhieu phieu={phieu({ channel: "zalo-mini-app", has_citizen: false })} bayGio={BAY_GIO} />,
+    );
+    expect(html).not.toContain(UNVERIFIED_CONTACT_LABEL);
   });
 
   it("đang công khai: nhãn trạng thái đúng", () => {
