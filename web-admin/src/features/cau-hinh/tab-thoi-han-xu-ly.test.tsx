@@ -323,6 +323,62 @@ describe("bảng thời hạn xử lý", () => {
     expect(html).toContain(cau);
   });
 
+  describe("nút gieo cạnh câu 'thiếu dòng mặc định' (ADR 0079 lô 5 Q14)", () => {
+    const cau =
+      "Loại việc “phan-anh” có dòng riêng nhưng thiếu dòng mặc định, nên lĩnh vực nào không có " +
+      "dòng riêng sẽ không tính được hạn.";
+    const missing = (...kinds: string[]) =>
+      ok<identity_danhSachSLARa>({
+        items: [DONG_SLA],
+        problems: kinds.map((k) => ({ kind: "missing_default_row", work_kind: k, message: cau })),
+      });
+    /** The block holding the sentence, up to the table. */
+    const block = (html: string) => html.slice(html.indexOf(cau), html.indexOf("<table"));
+
+    it("máy chủ báo thiếu dòng mặc định → nút 'Gieo thời hạn mặc định' đứng NGAY CẠNH câu ấy", () => {
+      const html = ve({ thoiHan: missing("phan-anh") });
+      const near = block(html);
+
+      expect(near).toMatch(/<button[^>]*type="button"[^>]*>(?:(?!<\/button>).)*Gieo thời hạn mặc định<\/button>/);
+      expect(html.match(/Gieo thời hạn mặc định/g)).toHaveLength(1);
+    });
+
+    it("hai loại việc cùng thiếu → vẫn MỘT nút: một lần gieo thêm đủ mọi dòng mặc định còn thiếu", () => {
+      const html = ve({ thoiHan: missing("phan-anh", "nhiem-vu") });
+      expect(html.match(/Gieo thời hạn mặc định<\/button>/g)).toHaveLength(1);
+    });
+
+    it("đang gửi → nút khoá", () => {
+      const html = renderToStaticMarkup(
+        <ManThoiHanXuLy
+          du={{ thoiHan: missing("phan-anh") }}
+          coQuyenGhi
+          thaoTac={KHONG_LAM_GI}
+          loiMayChuNgoaiForm=""
+          dangGui
+        />,
+      );
+      expect(html).toMatch(/<button[^>]*disabled=""[^>]*>(?:(?!<\/button>).)*Gieo thời hạn mặc định<\/button>/);
+    });
+
+    it("CA BỊ TỪ CHỐI: thiếu `admin.sla` → câu vẫn hiện, KHÔNG có nút", () => {
+      const html = ve({ thoiHan: missing("phan-anh") }, { coQuyenGhi: false });
+      expect(html).toContain(cau);
+      expect(html).not.toContain("Gieo thời hạn mặc định");
+    });
+
+    it("vấn đề loại khác (không phải missing_default_row) → KHÔNG có nút", () => {
+      const html = ve({
+        thoiHan: ok<identity_danhSachSLARa>({
+          items: [DONG_SLA],
+          problems: [{ kind: "something_else", work_kind: "", message: "Cấu hình có vấn đề." }],
+        }),
+      });
+      expect(html).toContain("Cấu hình có vấn đề.");
+      expect(html).not.toContain("Gieo thời hạn mặc định");
+    });
+  });
+
   it("dòng mặc định nói rõ nó là mặc định, chữ mờ", () => {
     expect(ve({ thoiHan: rowsOf(DEFAULT_ROW) })).toContain('<td class="text-ink-muted">Mặc định cho mọi lĩnh vực</td>');
   });

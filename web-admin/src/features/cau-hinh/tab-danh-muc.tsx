@@ -39,6 +39,7 @@ import {
   TASK_TYPE_IMPORT_TARGET,
   catalogueImportFor,
 } from "./excel-import-targets";
+import { LABEL_NEEDS_ALNUM } from "./map-field-form";
 import { PHAN_CHUA_DUNG } from "./nhan-cau-hinh";
 import {
   CANH_BAO_XOA,
@@ -225,16 +226,12 @@ export function TabDanhMuc() {
       if (open === null || busy) return;
 
       if (open.kind === "add") {
-        const label = draft.label.trim();
-        if (label === "") {
-          setLocalError(LABEL_REQUIRED);
+        const checked = checkAddLabel(draft.label);
+        if (!checked.ok) {
+          setLocalError(checked.error);
           return;
         }
-        const code = codeFromLabel(label);
-        if (code === "") {
-          setLocalError(LABEL_WITHOUT_LETTERS);
-          return;
-        }
+        const { label, code } = checked;
         const group = writable.find((g) => g.khoa === draft.group);
         if (group === undefined || group.ghi === null) return;
         run(
@@ -350,9 +347,27 @@ export const SOURCE_COMMUNE = "Xã tự thêm";
 export const ADDED = "Đã thêm mục mới vào danh mục.";
 export const SAVED = "Đã lưu.";
 export const DELETED = "Đã xoá mục khỏi danh mục.";
+/** The in-place edit's empty label (`LookupTable.tsx:176`). */
 export const LABEL_REQUIRED = "Nhãn hiển thị không được để trống.";
-/** Not in the spec: a label of only symbols yields no code (`codeFromLabel`), refused before sending. */
-export const LABEL_WITHOUT_LETTERS = "Nhãn hiển thị cần có ít nhất một chữ cái hoặc chữ số.";
+/** The add row's empty label — the prototype words it differently from the edit (`LookupTable.tsx:358`). */
+export const ADD_LABEL_REQUIRED = "Vui lòng nhập nhãn hiển thị.";
+/**
+ * A label of only symbols yields no code (`codeFromLabel`), refused before sending. `LookupTable` has no
+ * such check (its server makes the code); the prototype's sentence for this exact check is the map-field
+ * add row's (`AssetFieldTable.tsx:293`), so the two tabs share it rather than word one refusal two ways.
+ */
+export const LABEL_WITHOUT_LETTERS = LABEL_NEEDS_ALNUM;
+
+/** The add row's two local checks: a label, and one a code can be made from. */
+export function checkAddLabel(
+  raw: string,
+): { ok: true; label: string; code: string } | { ok: false; error: string } {
+  const label = raw.trim();
+  if (label === "") return { ok: false, error: ADD_LABEL_REQUIRED };
+  const code = codeFromLabel(label);
+  if (code === "") return { ok: false, error: LABEL_WITHOUT_LETTERS };
+  return { ok: true, label, code };
+}
 
 export function defaultFromNow(label: string): string {
   return `"${label}" là lựa chọn mặc định từ giờ.`;

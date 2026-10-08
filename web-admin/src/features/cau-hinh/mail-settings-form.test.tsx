@@ -251,11 +251,15 @@ describe("last test (spec 10 #7)", () => {
     for (const c of classes) {
       expect(lastTestSentence({ ...OK_TEST, ok: false, error_class: c })).toMatch(new RegExp(`: ${LAST_TEST_ERRORS[c]}$`));
     }
-    for (const unknown of ["moi-them", null]) {
-      const line = lastTestSentence({ ...OK_TEST, ok: false, error_class: unknown });
-      expect(line.endsWith(`: ${LAST_TEST_ERRORS.khac}`)).toBe(true);
-      expect(line.endsWith(`: ${LAST_TEST_OK}`)).toBe(false);
-    }
+    const unknown = lastTestSentence({ ...OK_TEST, ok: false, error_class: "moi-them" });
+    expect(unknown.endsWith(`: ${LAST_TEST_ERRORS.khac}`)).toBe(true);
+    expect(unknown.endsWith(`: ${LAST_TEST_OK}`)).toBe(false);
+  });
+
+  it("a failure with NO class → the prototype's own fallback 'hỏng' (`EmailSettingPanel.tsx:279`), still a failure", () => {
+    const line = lastTestSentence({ ...OK_TEST, ok: false, error_class: null });
+    expect(line.endsWith(": hỏng")).toBe(true);
+    expect(line.endsWith(`: ${LAST_TEST_OK}`)).toBe(false);
   });
 
   it("an unparsable time is shown as sent, never 'NaN'", () => {

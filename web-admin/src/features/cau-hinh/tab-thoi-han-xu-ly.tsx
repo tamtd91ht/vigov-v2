@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Pencil, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, Pencil, Plus, Sprout, Trash2 } from "lucide-react";
 import {
   Fragment,
   useCallback,
@@ -20,6 +20,7 @@ import type { KetQua } from "@/lib/api/goi";
 import type {
   identity_danhSachSLARa,
   identity_dongSLARa,
+  identity_vanDeSLARa,
 } from "@/lib/api/schema.gen";
 import {
   FIELD_ROW_KINDS,
@@ -59,6 +60,7 @@ import {
   ADD_SUBMIT,
   BUSY_ADDING,
   DA_LUU_THOI_HAN,
+  NUT_GIEO_THOI_HAN,
   NUT_HUY,
   NUT_LUU,
   NUT_XOA,
@@ -567,8 +569,9 @@ export function ManThoiHanXuLy({
       </div>
 
       {coQuyenGhi && (
-        // NO RE-SEED BUTTON once the table has rows (owner, 08/10/2026: "Bỏ hết, đúng prototype"). The
-        // only seed button is the empty table's, inside `KhoiChuaKhai`.
+        // NO RE-SEED BUTTON once the table has rows (owner, 08/10/2026: "Bỏ hết, đúng prototype"). Seed
+        // buttons appear only where a sentence asks for one: the empty table's, inside `KhoiChuaKhai`,
+        // and beside a `missing_default_row` problem (`SlaProblems`, ADR 0079 lô 5 Q14).
         <div className="flex justify-end">
           {/* `SlaTable.tsx:80-87`: toggles the add row. */}
           <Button
@@ -609,17 +612,14 @@ export function ManThoiHanXuLy({
 
       {/* SAI SÓT CỦA CHÍNH DỮ LIỆU XÃ, máy chủ suy ra từ đúng những dòng nó vừa trả về. Tuyến vẫn trả
           200 có chủ ý: đây là màn hình SỬA nó, nên phải mở được kể cả khi đang hỏng. */}
-      {kq !== null &&
-        kq.ok &&
-        kq.duLieu.problems.map((v, i) => (
-          <p
-            role="alert"
-            className="text-danger m-0 text-[12.5px]"
-            key={`${v.kind}-${v.work_kind}-${i}`}
-          >
-            {v.message}
-          </p>
-        ))}
+      {kq !== null && kq.ok && (
+        <SlaProblems
+          problems={kq.duLieu.problems}
+          coQuyenGhi={coQuyenGhi}
+          dangGui={dangGui}
+          onSeed={thaoTac.gieoThoiHan}
+        />
+      )}
 
       {rows.length > 0 && (
         <SlaTable
@@ -633,6 +633,60 @@ export function ManThoiHanXuLy({
         />
       )}
     </section>
+  );
+}
+
+/** `problems[].kind` of a kind that has field rows but no default row (`sla.go`, `vanDeSLARa`). */
+const MISSING_DEFAULT_ROW = "missing_default_row";
+
+/**
+ * The server's `problems`, verbatim. A `missing_default_row` sentence gets the seed button BESIDE it
+ * (ADR 0079 lô 5 Q14): seeding writes every seed row the commune lacks — default rows of every kind
+ * included — and keeps every row it has, so one press answers every such sentence; hence ONE button
+ * for the group, never one per kind. No such problem → no button (the prototype has none, lô 3 Q7 d).
+ * Without `admin.sla` the sentences still show: that account must know why deadlines fail, to go and
+ * find who can fix it.
+ */
+function SlaProblems({
+  problems,
+  coQuyenGhi,
+  dangGui,
+  onSeed,
+}: {
+  problems: readonly identity_vanDeSLARa[];
+  coQuyenGhi: boolean;
+  dangGui: boolean;
+  onSeed: () => void;
+}) {
+  const missing = problems.filter((v) => v.kind === MISSING_DEFAULT_ROW);
+  const other = problems.filter((v) => v.kind !== MISSING_DEFAULT_ROW);
+  const sentence = (v: identity_vanDeSLARa, i: number) => (
+    <p role="alert" className="text-danger m-0 text-[12.5px]" key={`${v.kind}-${v.work_kind}-${i}`}>
+      {v.message}
+    </p>
+  );
+  return (
+    <>
+      {other.map(sentence)}
+      {missing.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <div className="min-w-0 flex-1 space-y-1">{missing.map(sentence)}</div>
+          {coQuyenGhi && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className={SMALL_BUTTON_CLASS}
+              disabled={dangGui}
+              onClick={onSeed}
+            >
+              <Sprout aria-hidden="true" focusable="false" strokeWidth={1.8} />
+              {NUT_GIEO_THOI_HAN}
+            </Button>
+          )}
+        </div>
+      )}
+    </>
   );
 }
 

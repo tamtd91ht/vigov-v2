@@ -20,6 +20,7 @@ import {
   CLEAR_COLOR,
   CatalogueView,
   catalogueImportButton,
+  checkAddLabel,
   DELETE_ENTRY,
   EDIT_LABEL,
   EMPTY_DRAFT,
@@ -489,5 +490,23 @@ describe("failed, loading", () => {
     expect(html).toContain("Đang tải danh mục của đơn vị…");
     expect(count(html, "h-11 w-full")).toBe(3);
     expect(html).not.toContain("<table");
+  });
+});
+
+describe("the add row's own refusals use the prototype's words (ADR 0079 lô 5 Q19)", () => {
+  it("empty label → `LookupTable.tsx:358` verbatim, not the in-place edit's sentence", () => {
+    expect(checkAddLabel("   ")).toEqual({ ok: false, error: "Vui lòng nhập nhãn hiển thị." });
+  });
+
+  it("a label with no letter or digit → `AssetFieldTable.tsx:293` verbatim (same check: no code can be made)", () => {
+    expect(checkAddLabel("— ? —")).toEqual({ ok: false, error: "Nhãn phải có ít nhất một chữ cái hoặc chữ số." });
+  });
+
+  it("a usable label → trimmed label and the code made from it", () => {
+    expect(checkAddLabel("  Chợ và thương mại ")).toEqual({
+      ok: true,
+      label: "Chợ và thương mại",
+      code: "cho-va-thuong-mai",
+    });
   });
 });

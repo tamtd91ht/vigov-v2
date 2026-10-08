@@ -162,16 +162,24 @@ export const LAST_TEST_ERRORS: Readonly<Record<string, string>> = {
 
 export const LAST_TEST_OK = "gửi được";
 
+/** A failure the server stored WITHOUT a class — the prototype's own fallback (`EmailSettingPanel.tsx:279`). */
+export const LAST_TEST_NO_DETAIL = "hỏng";
+
 /**
  * "Lần thử gần nhất {thời gian} tới {email}: gửi được | {lỗi}" (spec 10 #7). `to` is the server's
- * MASKED recipient, shown as is (rule 3). A class this screen does not know reads as "không gửi được" —
- * still a failure, never "gửi được", so a new server class cannot turn into a false success line.
+ * MASKED recipient, shown as is (rule 3). A class this screen does not know reads as "không gửi được",
+ * no class at all as the prototype's "hỏng" — both still a failure, never "gửi được", so a new server
+ * class cannot turn into a false success line.
  * An `at` that does not parse is shown verbatim rather than as "NaN:NaN".
  */
 export function lastTestSentence(t: comms_mailLastTestOut): string {
   const instant = Date.parse(t.at);
   const when = Number.isNaN(instant) ? t.at : formatDateTime(instant);
-  const outcome = t.ok ? LAST_TEST_OK : (LAST_TEST_ERRORS[t.error_class ?? "khac"] ?? LAST_TEST_ERRORS.khac);
+  const outcome = t.ok
+    ? LAST_TEST_OK
+    : t.error_class === null
+      ? LAST_TEST_NO_DETAIL
+      : (LAST_TEST_ERRORS[t.error_class] ?? LAST_TEST_ERRORS.khac);
   return `Lần thử gần nhất ${when} tới ${t.to}: ${outcome}`;
 }
 
