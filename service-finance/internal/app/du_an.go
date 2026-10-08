@@ -188,6 +188,10 @@ type YeuCauSuaDuAn struct {
 	NgayHoanThanh   *time.Time
 	ThoiHanGiaiNgan *time.Time
 
+	// AtRisk: nil = leave alone; otherwise tick / untick "nguy cơ không giải ngân hết" (ADR 0080 #2,
+	// migration 0018). Same permission as every other field of this edit — budget.update.
+	AtRisk *bool
+
 	PhanBo *[]domain.DongPhanBoMoi
 }
 
@@ -576,6 +580,9 @@ func (uc *DuAn) Sua(ctx context.Context, id string, yc YeuCauSuaDuAn,
 		if yc.ImplementingUnit != nil {
 			sau.ImplementingUnit = implementingUnit
 		}
+		if yc.AtRisk != nil {
+			sau.AtRisk = *yc.AtRisk
+		}
 		if yc.NgayKhoiCong != nil {
 			sau.NgayKhoiCong = *yc.NgayKhoiCong
 		}
@@ -932,6 +939,9 @@ func tomTatDuAn(d domain.DuAn, phanBo []domain.PhanBoNguonVon) map[string]any {
 	if d.ImplementingUnit != "" {
 		ra["implementing_unit"] = d.ImplementingUnit
 	}
+	if d.AtRisk {
+		ra["at_risk"] = true // a removed project's flag is part of what was removed (0018)
+	}
 	if len(phanBo) == 0 {
 		return ra
 	}
@@ -978,6 +988,11 @@ func tomTatDoiDuAn(truoc, sau domain.DuAn, ben bool) map[string]any {
 	if truoc.ImplementingUnit != sau.ImplementingUnit {
 		ra["implementing_unit"] = chon(ben, truoc.ImplementingUnit, sau.ImplementingUnit)
 	}
+	// A leader's judgement on the project (ADR 0080 #2): who ticked or unticked it, and when, is the
+	// whole point of the trail — the flag itself carries no reason.
+	if truoc.AtRisk != sau.AtRisk {
+		ra["at_risk"] = chon(ben, truoc.AtRisk, sau.AtRisk)
+	}
 	if !truoc.NgayKhoiCong.Equal(sau.NgayKhoiCong) {
 		ra["ngay_khoi_cong"] = ngayDelta(chon(ben, truoc.NgayKhoiCong, sau.NgayKhoiCong))
 	}
@@ -1014,6 +1029,7 @@ func khongDoiDuAn(truoc, sau domain.DuAn) bool {
 		truoc.DonViThucHienID == sau.DonViThucHienID &&
 		truoc.CanBoPhuTrachID == sau.CanBoPhuTrachID &&
 		truoc.ImplementingUnit == sau.ImplementingUnit &&
+		truoc.AtRisk == sau.AtRisk &&
 		truoc.NgayKhoiCong.Equal(sau.NgayKhoiCong) &&
 		truoc.NgayHoanThanh.Equal(sau.NgayHoanThanh) &&
 		truoc.ThoiHanGiaiNgan.Equal(sau.ThoiHanGiaiNgan)

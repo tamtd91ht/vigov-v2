@@ -98,8 +98,9 @@ func TestProjectSummary_FiguresAreDerivedServerSide(t *testing.T) {
 	if s.Year != 2026 || s.ProjectCount != 2 || s.PlannedTotal != 25_100_000_000 || s.DisbursedTotal != 90_000_000 {
 		t.Fatalf("totals = %+v", s)
 	}
-	if s.DisbursedRatio == nil || *s.DisbursedRatio != 35 { // 0,3585…% toward zero
-		t.Fatalf("disbursed_ratio = %v, want 35", s.DisbursedRatio)
+	// 35,857… phần vạn, rounded half away from zero (ADR 0080 #1); truncation gave 35.
+	if s.DisbursedRatio == nil || *s.DisbursedRatio != 36 {
+		t.Fatalf("disbursed_ratio = %v, want 36", s.DisbursedRatio)
 	}
 	if s.TimeElapsedRatio != 7096 {
 		t.Fatalf("time_elapsed_ratio = %d, want 7096 (§3's worked example)", s.TimeElapsedRatio)
@@ -298,8 +299,12 @@ func TestProjectCurve_UndatedProjectRunsTheWholeYear(t *testing.T) {
 	w := m.goi(t, http.MethodGet, hostA, "/api/v1/investment-projects/da-001/disbursement-curve", canBoCua(xaA))
 	doiMa(t, w, http.StatusOK)
 	c := decode[projectCurveOut](t, w.Body.Bytes())
-	if c.ProjectID != "da-001" || c.Year != 2026 || len(c.Points) != 12 || c.ExpectedEndMonth != nil {
+	if c.ProjectID != "da-001" || c.Year != 2026 || len(c.Points) != 12 {
 		t.Fatalf("curve = %+v", c)
+	}
+	// No completion date: the "Hoàn thành dự kiến" line sits on December (ADR 0080 #3, prototype).
+	if c.ExpectedEndMonth == nil || *c.ExpectedEndMonth != 12 {
+		t.Fatalf("expected_end_month = %v, want 12", c.ExpectedEndMonth)
 	}
 	if c.Points[11].PlannedCumulative != 100_000_000 {
 		t.Fatalf("December plan = %d, want exactly the plan", c.Points[11].PlannedCumulative)

@@ -92,9 +92,10 @@ func TestTienDoNguonVonTheoViDuCuaDacTa(t *testing.T) {
 	if ty, ok := nganSachXa.TyLeDaPhanBo(); !ok || ty != 76 {
 		t.Fatalf("đã phân bổ/tổng nguồn = %d phần vạn (ok=%v), muốn 76 (0,76%%)", ty, ok)
 	}
-	// 13,2 triệu / 70 triệu — the figure §6 prints as 18,9%.
-	if ty, ok := nganSachXa.TyLeGiaiNganTrenPhanBo(); !ok || ty != 1885 {
-		t.Fatalf("giải ngân/đã phân bổ = %d phần vạn (ok=%v), muốn 1885 (§6: 18,9%%)", ty, ok)
+	// 13,2 triệu / 70 triệu = 1885,71 phần vạn — the figure §6 prints as 18,9%. Rounded half away from
+	// zero (ADR 0080 #1): 1886; truncation gave 1885.
+	if ty, ok := nganSachXa.TyLeGiaiNganTrenPhanBo(); !ok || ty != 1886 {
+		t.Fatalf("giải ngân/đã phân bổ = %d phần vạn (ok=%v), muốn 1886 (§6: 18,9%%)", ty, ok)
 	}
 	// 13,2 triệu / 9,2 tỷ — the figure §6 prints as 0,1%.
 	if ty, ok := nganSachXa.TyLeGiaiNganTrenTongNguon(); !ok || ty != 14 {

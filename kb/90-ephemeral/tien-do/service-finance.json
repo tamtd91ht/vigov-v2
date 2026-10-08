@@ -279,10 +279,10 @@
       "id": "giai-ngan-co-nguy-co-khong-giai-ngan-het",
       "menu": "giai-ngan",
       "viec": "Cờ 'nguy cơ không giải ngân hết' của dự án (prototype: cờ đặt tay)",
-      "trang_thai": "chua_lam",
+      "trang_thai": "dang_lam",
       "bang_chung": "Không có cột, tuyến hay trường nào mang cờ này trong service-finance — tổng hợp a3fdcac2 cố ý không trả (mục `giai-ngan-tong-hop-may-chu`, tiep_theo (1)). Kiểm 06/10/2026.",
       "no_confirm": [],
-      "tiep_theo": "Câu còn mở #3 của ADR 0075: chưa ai chốt cờ đặt tay (ai đặt, quyền nào, có vết) hay suy ra. Chưa chốt thì không dựng — một cờ đặt tay là nguồn thứ hai cho một sự thật đã có số đo (điểm chậm), cùng loại rủi ro luật 10 bất biến 3."
+      "tiep_theo": "08/10/2026 (ADR 0080 #2): máy chủ XONG — migration 0018 du_an.at_risk, PATCH at_risk (budget.update, vết trước/sau), at_risk trên bản đọc, at_risk_count ở investment-project-summary. CÒN: web ô tick trong form Sửa dự án + nhãn + bỏ '?' ô Cần chú ý. Chưa chạy 0018 trên PG thật. || Câu còn mở #3 của ADR 0075: chưa ai chốt cờ đặt tay (ai đặt, quyền nào, có vết) hay suy ra. Chưa chốt thì không dựng — một cờ đặt tay là nguồn thứ hai cho một sự thật đã có số đo (điểm chậm), cùng loại rủi ro luật 10 bất biến 3."
     },
     {
       "id": "giai-ngan-xac-nhan-con-mo-adr-0075",
@@ -310,6 +310,15 @@
       "bang_chung": "356a5a9f (G1+G2) · ca9d156b (0016) · 65afbdcd (G3+G4) · apidoc test 9f3a21c4. go build/vet/test -p 1 ./... xanh, gofmt sạch; ca pg bỏ qua (không VIGOV_TEST_DSN) — 0016 và câu UPDATE khoá CHƯA chạy trên PostgreSQL thật.",
       "no_confirm": [],
       "tiep_theo": "(1) make kb chưa chạy sạch: cây có tuyến chưa commit của phiên Văn bản → openapi.json/ingress chưa có GET /api/v1/implementing-units, 409 self_confirmation, thân DELETE tuỳ chọn; tuyến mới sẽ 404 khi triển khai cho tới khi make kb + commit ingress. (2) Web chưa nối: control '?' Khoá nháp, đơn vị nhập tay, người theo dõi/hạn vướng mắc vẫn ở web-admin (nhan-ghi-giai-ngan.ts) — chờ (1). (3) KHÔNG LÀM, cần chủ dự án: cờ 'nguy cơ không giải ngân hết' (prototype không có chỗ đặt cờ — ADR 0075 còn mở #3), trạng thái 'đang tháo gỡ' + mở lại vướng mắc (prototype UI không đặt), Mở khoá giữ nguyên (câu #29). (4) Quyết định phiên ghi để phủ quyết: không ghi đè người xác nhận khi khoá từ nháp (khác prototype), người nhập không tự khoá cả khoản người khác đã xác nhận (như prototype), PATCH null không xoá implementing_unit (chỉ \"\" xoá), year bắt buộc ở tuyến đơn vị, owner_code chỉ kiểm hình dạng (như mentions)."
+    },
+    {
+      "id": "giai-ngan-lam-tron-va-vach-ht-08-10",
+      "viec": "Giải ngân: làm tròn tỷ lệ nửa xa số 0 (thay cắt bớt) + vạch 'Hoàn thành dự kiến' theo prototype (ADR 0080 #1, #3)",
+      "trang_thai": "xong",
+      "menu": "giai-ngan",
+      "bang_chung": "RatioOf làm tròn nửa xa số 0 ở phần vạn; TyLeGiaiNgan, phân bổ, nguồn vốn dùng chung RatioOf; ví dụ tài liệu 3259 + 6741 = 10000. ProjectExpectedEndMonth: expected_end_month luôn có (không ngày hoàn thành → 12; năm sau → 12; năm trước → tháng đầu), không dùng thời hạn giải ngân. go vet + go test service-finance xanh.",
+      "no_confirm": [],
+      "tiep_theo": "Điểm chậm có thể dịch tối đa 0,005 — dự án sát ngưỡng có thể đổi trạng thái chậm. PhanTramThoiGianDaQua (thời gian đã qua) vẫn cắt bớt, ngoài thẻ."
     }
   ]
 }

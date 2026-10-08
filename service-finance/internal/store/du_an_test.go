@@ -50,6 +50,7 @@ type dongDuAnGia struct {
 	khoiCong, hoanTat any // nil or time.Time
 	thoiHan           time.Time
 	implementingUnit  string // COALESCE(implementing_unit, '') — 0016, after the three dates
+	atRisk            bool   // at_risk — 0018, after the unit
 	daGiaiNgan        int64
 }
 
@@ -57,7 +58,7 @@ func (d dongDuAnGia) giaTri() []driver.Value {
 	return []driver.Value{
 		d.id, d.ma, d.nam, d.hangMucID, d.ten, d.moTa,
 		d.keHoach, d.tongMuc, d.donVi, d.canBo,
-		d.khoiCong, d.hoanTat, d.thoiHan, d.implementingUnit, d.daGiaiNgan,
+		d.khoiCong, d.hoanTat, d.thoiHan, d.implementingUnit, d.atRisk, d.daGiaiNgan,
 	}
 }
 
@@ -109,9 +110,9 @@ func (c *connDuAnGia) QueryContext(_ context.Context, q string, args []driver.Na
 	for _, h := range c.k.hang {
 		dong = append(dong, h.giaTri())
 	}
-	// 15 unnamed columns: cotDuAn's fourteen plus the aggregate. The fake does not parse the
+	// 16 unnamed columns: cotDuAn's fifteen plus the aggregate. The fake does not parse the
 	// column list — see the NOT PROVED note at the top.
-	cot := make([]string, 15)
+	cot := make([]string, 16)
 	return &rowsGia{cot: cot, hang: dong}, nil
 }
 
@@ -335,6 +336,32 @@ func TestProjectListReadsImplementingUnitAfterTheDates(t *testing.T) {
 	}
 	if !strings.Contains(cotDuAn, "da.thoi_han_giai_ngan, COALESCE(da.implementing_unit, '')") {
 		t.Fatalf("cotDuAn must end with the unit after the deadline: %s", cotDuAn)
+	}
+}
+
+// --- migration 0018: at_risk ---------------------------------------------------------------------------
+
+func TestProjectListReadsAtRiskAfterTheUnit(t *testing.T) {
+	rows := mauDuAn()
+	rows[0].atRisk = true
+	got, err := dungKhoDuAn(&khoDuAnGia{hang: rows}).DanhSach(ctxXa(xaThu), LocDuAn{Nam: 2026})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	// Positional: the flag, the unit and the aggregate beside it must all land where they belong.
+	if !got[0].DuAn.AtRisk || got[0].DuAn.ImplementingUnit != "Công ty Xây dựng Thành Long" ||
+		got[0].DaGiaiNgan != 90_000_000 {
+		t.Fatalf("at_risk %v, unit %q, disbursed %d", got[0].DuAn.AtRisk, got[0].DuAn.ImplementingUnit,
+			got[0].DaGiaiNgan)
+	}
+	if !strings.HasSuffix(cotDuAn, "COALESCE(da.implementing_unit, ''), da.at_risk") {
+		t.Fatalf("cotDuAn must end with at_risk after the unit: %s", cotDuAn)
+	}
+	if !strings.HasSuffix(cotDuAnGhi, "COALESCE(implementing_unit, ''), at_risk") {
+		t.Fatalf("cotDuAnGhi must end with at_risk after the unit: %s", cotDuAnGhi)
+	}
+	if !strings.Contains(capNhatDuAn, "at_risk = $14") {
+		t.Fatalf("the edit statement must write at_risk: %s", capNhatDuAn)
 	}
 }
 

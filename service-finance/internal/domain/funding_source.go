@@ -124,12 +124,10 @@ type FundingSourceProject struct {
 //
 // ok = false WHEN NOTHING IS ALLOCATED (a line of 0 đồng is admitted by 0007's CHECK), for the reason
 // TienDoNguonVon's ratios give: "0%" there would report a line nobody funded as the worst performer.
-// NOT CLAMPED — above 100% is shown, not hidden (§13 rule 2).
+// NOT CLAMPED — above 100% is shown, not hidden (§13 rule 2). Rounded half away from zero by RatioOf
+// (ADR 0080 #1).
 func (p FundingSourceProject) DisbursedRatio() (PhanVan, bool) {
-	if p.AllocatedAmount <= 0 {
-		return 0, false
-	}
-	return PhanVan(int64(p.DisbursedAmount) * 10000 / int64(p.AllocatedAmount)), true
+	return RatioOf(p.DisbursedAmount, p.AllocatedAmount)
 }
 
 // FundingSourceProjects is the breakdown of one source's card for one budget year.

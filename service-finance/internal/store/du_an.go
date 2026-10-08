@@ -65,12 +65,14 @@ var ErrKhongThayDuAn = errors.New("du_an: không có dự án này")
 // `da_giai_ngan` is NOT in it: it is not a column anywhere, it is the aggregate the statements
 // below compute, and it is appended after this list.
 //
-// `implementing_unit` (0016) IS LAST, after the three dates, so no existing position moved.
+// `implementing_unit` (0016) IS AFTER the three dates, then `at_risk` (0018), so no existing position
+// moved. at_risk is NOT NULL DEFAULT false — no COALESCE needed, and none would be honest: a NULL there
+// is a schema fault, and the scan into a bool fails loudly rather than reading "not at risk".
 const cotDuAn = `da.id, da.ma, da.nam, da.hang_muc_id, da.ten, COALESCE(da.mo_ta, ''), ` +
 	`da.ke_hoach_von_nam, COALESCE(da.tong_muc_duoc_duyet, 0), ` +
 	`COALESCE(da.don_vi_thuc_hien_id, ''), COALESCE(da.can_bo_phu_trach_id, ''), ` +
 	`da.ngay_khoi_cong, da.ngay_hoan_thanh, da.thoi_han_giai_ngan, ` +
-	`COALESCE(da.implementing_unit, '')`
+	`COALESCE(da.implementing_unit, ''), da.at_risk`
 
 // tongChungTu is the subquery that produces "đã giải ngân" for every project of one commune.
 //
@@ -110,7 +112,7 @@ func quetDuAn(rows *sql.Rows) (domain.TienDoDuAn, error) {
 	)
 	err := rows.Scan(&t.DuAn.ID, &t.DuAn.Ma, &t.DuAn.Nam, &t.DuAn.HangMucID, &t.DuAn.Ten, &t.DuAn.MoTa,
 		&keHoach, &tong, &t.DuAn.DonViThucHienID, &t.DuAn.CanBoPhuTrachID,
-		&khoiCong, &hoanThanh, &thoiHan, &t.DuAn.ImplementingUnit, &daGiaiNgan)
+		&khoiCong, &hoanThanh, &thoiHan, &t.DuAn.ImplementingUnit, &t.DuAn.AtRisk, &daGiaiNgan)
 	if err != nil {
 		return domain.TienDoDuAn{}, err
 	}

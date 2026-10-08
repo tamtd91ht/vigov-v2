@@ -91,6 +91,12 @@ type DuAn struct {
 	// finish. §9 spells out the difference: a project completed in March may still have to be
 	// disbursed before 31/12.
 	ThoiHanGiaiNgan time.Time
+
+	// AtRisk is "nguy cơ không giải ngân hết" — a FLAG a person holding budget.update ticks on the
+	// project form (ADR 0080 #2, SRS M3.3.3, prototype `budget_items.at_risk`; migration 0018). NOT
+	// DERIVED and deliberately not computed from a rate: the owner chose a leader's judgement over a
+	// formula nobody had specified. Every change is audited before/after (Sua).
+	AtRisk bool
 }
 
 // TongMucHieuLuc is the approved total to use, applying §9's rule for a blank field in ONE place.
@@ -135,13 +141,11 @@ func (t TienDoDuAn) ConPhaiGiaiNgan() Dong {
 // as the worst performer in the commune. The caller has to decide what to show; it cannot receive
 // a plausible number by accident.
 //
-// ROUNDING IS TOWARD ZERO, which is Go's integer division. The unit is a hundredth of a percent,
-// so the discarded part is smaller than anything any screen prints.
+// ROUNDING IS HALF AWAY FROM ZERO at the hundredth of a percent — RatioOf, the one ratio of the
+// disbursement screens (ADR 0080 #1). It was truncation until 08/10/2026, which made a ratio and its
+// complement miss 100% by 0,01; the consequence for DiemCham / LaCham is on RatioOf.
 func (t TienDoDuAn) TyLeGiaiNgan() (PhanVan, bool) {
-	if t.DuAn.KeHoachVonNam <= 0 {
-		return 0, false
-	}
-	return PhanVan(int64(t.DaGiaiNgan) * 10000 / int64(t.DuAn.KeHoachVonNam)), true
+	return RatioOf(t.DaGiaiNgan, t.DuAn.KeHoachVonNam)
 }
 
 // PhanTramThoiGianDaQua is how much of the budget year has elapsed at `nay`, in parts per ten

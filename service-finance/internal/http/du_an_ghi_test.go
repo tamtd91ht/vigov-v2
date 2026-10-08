@@ -244,6 +244,15 @@ func baTuyenGhiDuAn() []motTuyenDuAn {
 			dem: func(g *ghiDuAnGia) int { return g.suaGoi },
 		},
 		{
+			// THE SAME ROUTE, CARRYING `at_risk` (ADR 0080 #2): ticking "nguy cơ không giải ngân hết" is
+			// budget.update like every other field of the form — the matrix proves the body adds no
+			// authority and loses none.
+			ten: "đánh dấu nguy cơ", method: http.MethodPatch, duong: duongDuAnMot(),
+			than: `{"at_risk":true}`,
+			khoa: "budget.update", ok: http.StatusOK,
+			dem: func(g *ghiDuAnGia) int { return g.suaGoi },
+		},
+		{
 			// `budget.update` SINCE 06/10/2026 (user decision, following the prototype) — it was
 			// `budget.confirm`. TestGhiDuAnSaiQuyenThi403 grants `budget.confirm` alone and expects 403.
 			ten: "xoá mềm dự án", method: http.MethodDelete, duong: duongDuAnMot(), than: thanXoaDA,

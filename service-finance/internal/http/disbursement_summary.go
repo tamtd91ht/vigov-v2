@@ -90,12 +90,6 @@ func categoryProgressOutOf(c domain.CategoryProgress) categoryProgressOut {
 }
 
 // projectSummaryOut is GET /api/v1/investment-project-summary.
-//
-// NO "nguy cơ không giải ngân hết" COUNT, on purpose. §3's fourth card prints it, but in the prototype
-// it is a HAND-SET flag on each project (`budget_items.at_risk`, ticked on the project form), not a
-// figure derivable from anything this service stores — and inventing a rule for it would decide the
-// commune's warning for them. A 0 would be a plausible figure that is simply false. It is added
-// (optional) the day the flag, or a decided rule, exists.
 type projectSummaryOut struct {
 	Year int `json:"year"`
 
@@ -125,6 +119,13 @@ type projectSummaryOut struct {
 	// contract because it was added to a published reply; this route always fills it.
 	OpenIssueCount *int `json:"open_issue_count,omitempty"`
 
+	// AtRiskCount is §3 card 4's "N nguy cơ không giải ngân hết": this year's live projects whose
+	// `at_risk` flag is ticked. A HAND-SET flag (ADR 0080 #2, SRS M3.3.3, prototype
+	// `budget_items.at_risk`; migration 0018), COUNTED, never inferred from a disbursement rate — the
+	// owner chose a person's judgement over a formula nobody specified. Optional in the contract (added
+	// to a published reply, like open_issue_count); this route always fills it, 0 included.
+	AtRiskCount *int `json:"at_risk_count,omitempty"`
+
 	// Monthly is §4's curve, January..December: linear plan against cumulative paid by `payment_date`.
 	Monthly []curvePointOut `json:"monthly"`
 
@@ -150,8 +151,10 @@ type projectCurveOut struct {
 	// points for a project with no dates, fewer for one that breaks ground mid-year.
 	Points []curvePointOut `json:"points"`
 
-	// ExpectedEndMonth is the month of the expected completion, where the plan line reaches the full
-	// year plan and flattens; absent when the project has no completion date.
+	// ExpectedEndMonth is where the "Hoàn thành dự kiến" line is drawn — domain.ProjectExpectedEndMonth
+	// (ADR 0080 #3): the completion month inside the year, December when it is later or unset, the
+	// first point when it is earlier. ALWAYS FILLED since 08/10/2026 (it was absent for a project with
+	// no completion date); still a pointer + omitempty so the published shape does not change.
 	ExpectedEndMonth *int `json:"expected_end_month,omitempty"`
 
 	// DisbursedAfterYear: as on the summary — paid after 31/12, on no point.
@@ -230,6 +233,7 @@ func (h *Handler) ProjectSummary(w http.ResponseWriter, r *http.Request) {
 		DelayThresholdSource: string(threshold.Nguon),
 		DelayedProjectCount:  s.DelayedCount,
 		OpenIssueCount:       &openIssues,
+		AtRiskCount:          &s.AtRiskCount,
 		Monthly:              curveOut(domain.YearCurve(s.Total.Planned, byMonth, year, now)),
 		DisbursedAfterYear:   int64(byMonth.AfterYear),
 		ByCategory:           make([]categoryProgressOut, 0, len(s.ByCategory)),

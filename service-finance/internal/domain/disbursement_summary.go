@@ -16,12 +16,19 @@ import (
 	"time"
 )
 
-// RatioOf is part / whole in parts per ten thousand, ROUNDED TOWARD ZERO — the same rounding
-// TienDoDuAn.TyLeGiaiNgan uses, so a category row and the projects inside it are rounded alike.
+// RatioOf is part / whole in parts per ten thousand, ROUNDED HALF AWAY FROM ZERO at the hundredth of a
+// percent — the rounding PercentBasisPoints gives Thu - Chi (ADR 0080 #1). EVERY disbursement ratio
+// (TyLeGiaiNgan, the funding-source bars, the allocation chip) goes through here, so a category row and
+// the projects inside it are rounded alike.
+//
+// WHY ROUNDED AND NO LONGER TRUNCATED (ADR 0080 #1, 08/10/2026): truncation made the two ratio columns
+// of one row miss 100% — 260.690.000 / 800.000.000 printed 32,58% beside 67,41%. Rounded, they read
+// 32,59% + 67,41%. The cost, accepted in the ADR: DiemCham subtracts this ratio, so a score moves by at
+// most 0,005 points and a project sitting exactly at LaCham's threshold can change side.
 //
 // ok IS false WHEN THE WHOLE IS ZERO OR LESS: "no ratio" and "0%" are different statements (the reason
 // TyLeGiaiNgan gives). NOT CLAMPED: §13 rule 2 shows a ratio above 100%, and a negative part (an
-// over-disbursed remainder) gives a negative ratio.
+// over-disbursed remainder) gives a negative ratio — rounded symmetrically, so -x is always -(x).
 //
 // THE PRODUCT IS TAKEN IN big.Int ONLY WHEN int64 WOULD OVERFLOW (|part| > 9,2 × 10^14 đồng). A
 // commune's year is ~3 × 10^10, so the path is never taken in practice; it exists because the
@@ -32,12 +39,30 @@ func RatioOf(part, whole Dong) (PhanVan, bool) {
 		return 0, false
 	}
 	const maxSafe = int64(^uint64(0)>>1) / 10000
-	p := int64(part)
+	p, w := int64(part), int64(whole)
+	neg := p < 0
 	if p <= maxSafe && p >= -maxSafe {
-		return PhanVan(p * 10000 / int64(whole)), true
+		if neg {
+			p = -p // inside ±maxSafe, so the negation cannot overflow
+		}
+		n := p * 10000
+		q, r := n/w, n%w
+		// r ≥ w − r is 2r ≥ w without computing 2r, which could overflow for a whole near MaxInt64.
+		if r >= w-r {
+			q++
+		}
+		if neg {
+			q = -q
+		}
+		return PhanVan(q), true
 	}
-	q := new(big.Int).Mul(big.NewInt(p), big.NewInt(10000))
-	q.Quo(q, big.NewInt(int64(whole))) // Quo truncates toward zero, like Go's `/`
+	// |q| = (|part| × 10000 + ⌊whole / 2⌋) / whole, truncated — PercentBasisPoints' formula.
+	q := new(big.Int).Mul(new(big.Int).Abs(big.NewInt(int64(part))), big.NewInt(10000))
+	q.Add(q, big.NewInt(w/2))
+	q.Quo(q, big.NewInt(w))
+	if neg {
+		q.Neg(q)
+	}
 	return PhanVan(q.Int64()), true
 }
 
@@ -72,8 +97,8 @@ type CurvePoint struct {
 	// The current month IS observed — it is partial, and what is paid so far is real.
 	Observed bool
 
-	// ExpectedEnd marks the month of the project's expected completion (§8.3, prototype 03c1787) —
-	// set only when the project HAS a completion date. The year curve never sets it.
+	// ExpectedEnd marks the "Hoàn thành dự kiến" line of one project's chart — exactly one point of
+	// every ProjectCurve carries it (ProjectExpectedEndMonth, ADR 0080 #3). The year curve never sets it.
 	ExpectedEnd bool
 }
 
@@ -146,6 +171,25 @@ func ProjectScheduleMonths(d DuAn) (start, end int) {
 	return start, end
 }
 
+// ProjectExpectedEndMonth is where the "Hoàn thành dự kiến" line of one project's chart is drawn
+// (ADR 0080 #3, prototype vigov-require budget/service.py:1197 `is_expected_end=month == end_month`):
+//
+//	completion date in the budget year    its month (never before the curve's first month)
+//	completion date in a LATER year       December
+//	completion date in an EARLIER year    the curve's first month
+//	no completion date                    December
+//
+// THE PROTOTYPE'S MARKER IS ITS end_month, so this is ProjectScheduleMonths' `end` — read, never
+// changed: the plan line's window is not moved by the marker. A function of its own so the rule has a
+// name and a test, and so a future divergence (the brief proposed the disbursement deadline as a
+// fallback) has one place to happen. ThoiHanGiaiNgan is DELIBERATELY NOT consulted: the owner chose
+// the prototype over the brief on 08/10/2026 — the deadline is when money is due, not when works end
+// (§9's distinction on DuAn.ThoiHanGiaiNgan).
+func ProjectExpectedEndMonth(d DuAn) int {
+	_, end := ProjectScheduleMonths(d)
+	return end
+}
+
 // ProjectCurve is §8.3's chart for ONE project, following the project's own calendar (prototype
 // 03c1787): points from its start month to December; the plan rises evenly to the full year plan at
 // the expected-completion month and stays flat after it — money still goes out after works finish,
@@ -162,6 +206,7 @@ func ProjectScheduleMonths(d DuAn) (start, end int) {
 func ProjectCurve(d DuAn, paid DisbursedByMonth, now time.Time) []CurvePoint {
 	start, end := ProjectScheduleMonths(d)
 	span := int64(end - start + 1)
+	marker := ProjectExpectedEndMonth(d)
 
 	var running Dong
 	for i := 0; i < start-1; i++ {
@@ -179,7 +224,7 @@ func ProjectCurve(d DuAn, paid DisbursedByMonth, now time.Time) []CurvePoint {
 			Planned:     Dong(int64(d.KeHoachVonNam) * done / span),
 			Disbursed:   running,
 			Observed:    monthObserved(d.Nam, m, now),
-			ExpectedEnd: !d.NgayHoanThanh.IsZero() && m == end,
+			ExpectedEnd: m == marker,
 		})
 	}
 	return out
@@ -233,6 +278,7 @@ func (c *CategoryProgress) add(p TienDoDuAn) {
 type ProjectsSummary struct {
 	Total        CategoryProgress // CategoryID/Label empty — the "Tổng cộng" row and the KPI totals
 	DelayedCount int              // projects LaCham flags against the commune's threshold
+	AtRiskCount  int              // projects whose AtRisk flag is ticked (ADR 0080 #2) — counted, never inferred
 	ByCategory   []CategoryProgress
 }
 
@@ -259,6 +305,9 @@ func SummariseProjects(projects []TienDoDuAn, catalogue []HangMucKeHoachVon,
 		s.Total.add(p)
 		if LaCham(p, now, threshold) {
 			s.DelayedCount++
+		}
+		if p.DuAn.AtRisk {
+			s.AtRiskCount++
 		}
 		row, ok := byID[p.DuAn.HangMucID]
 		if !ok {

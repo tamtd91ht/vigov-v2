@@ -39,11 +39,9 @@ type ProjectAllocation struct {
 
 // DisbursedRatio is disbursed / allocated for this source on this project, in PhanVan. ok = false when
 // nothing is allocated — the reason FundingSourceProject.DisbursedRatio gives. Not clamped (§13 rule 2).
+// Rounded half away from zero by RatioOf (ADR 0080 #1).
 func (a ProjectAllocation) DisbursedRatio() (PhanVan, bool) {
-	if a.Amount <= 0 {
-		return 0, false
-	}
-	return PhanVan(int64(a.Disbursed) * 10000 / int64(a.Amount)), true
+	return RatioOf(a.Disbursed, a.Amount)
 }
 
 // FundingStatusOfAllocations is GanNguon over read lines — the ONE rule for the chip, whichever shape

@@ -483,7 +483,8 @@ func TestListCardShape(t *testing.T) {
 	}
 	a := out.Items[0]
 	if a.UnallocatedAmount != 9_130_000_000 || a.OverallocatedAmount != 0 ||
-		*a.AllocatedRatio != 76 || *a.DisbursedOfAllocatedRatio != 1885 || *a.DisbursedOfGrantedRatio != 14 {
+		// 1885,71 → 1886: ratios round half away from zero (ADR 0080 #1).
+		*a.AllocatedRatio != 76 || *a.DisbursedOfAllocatedRatio != 1886 || *a.DisbursedOfGrantedRatio != 14 {
 		t.Fatalf("thẻ §6 = %+v", a)
 	}
 	b := out.Items[1]

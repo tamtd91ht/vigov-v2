@@ -177,32 +177,21 @@ func (t TienDoNguonVon) ConChuaPhanBo() Dong {
 // there would report a source nobody has allocated from as the worst performing one in the commune,
 // which is a statement about the commune's work rather than about missing data.
 //
-// THE MULTIPLICATION IS SAFE IN int64 at any figure this domain can hold: the largest denominator
-// in sight is a commune's whole capital plan (§14: 3,3 × 10^10 đồng), and `× 10000` leaves it eight
-// orders of magnitude inside int64. It is the same shape as TyLeGiaiNgan and overflows at the same
-// point — around 9,2 × 10^14 đồng, which is four orders of magnitude above a province.
+// ALL THREE ARE RatioOf: rounded half away from zero at the hundredth of a percent (ADR 0080 #1), and
+// safe past int64 (RatioOf takes the product in big.Int when it would overflow).
 
 // TyLeDaPhanBo is allocated / total — the first bar.
 func (t TienDoNguonVon) TyLeDaPhanBo() (PhanVan, bool) {
-	if t.NguonVon.TongNguon <= 0 {
-		return 0, false
-	}
-	return PhanVan(int64(t.DaPhanBo) * 10000 / int64(t.NguonVon.TongNguon)), true
+	return RatioOf(t.DaPhanBo, t.NguonVon.TongNguon)
 }
 
 // TyLeGiaiNganTrenPhanBo is disbursed / allocated — the second bar. This is the one that says how
 // the money actually committed to this source is moving.
 func (t TienDoNguonVon) TyLeGiaiNganTrenPhanBo() (PhanVan, bool) {
-	if t.DaPhanBo <= 0 {
-		return 0, false
-	}
-	return PhanVan(int64(t.DaGiaiNgan) * 10000 / int64(t.DaPhanBo)), true
+	return RatioOf(t.DaGiaiNgan, t.DaPhanBo)
 }
 
 // TyLeGiaiNganTrenTongNguon is disbursed / total — the third bar.
 func (t TienDoNguonVon) TyLeGiaiNganTrenTongNguon() (PhanVan, bool) {
-	if t.NguonVon.TongNguon <= 0 {
-		return 0, false
-	}
-	return PhanVan(int64(t.DaGiaiNgan) * 10000 / int64(t.NguonVon.TongNguon)), true
+	return RatioOf(t.DaGiaiNgan, t.NguonVon.TongNguon)
 }

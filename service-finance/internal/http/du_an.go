@@ -80,6 +80,11 @@ type duAnRa struct {
 	// contract because it was added to a published reply (rule 2, forbidden #4's principle).
 	ImplementingUnit *string `json:"implementing_unit,omitempty"`
 
+	// AtRisk is "nguy cơ không giải ngân hết" — a flag a person with budget.update ticks on the edit form
+	// (ADR 0080 #2, migration 0018), never computed. OPTIONAL IN THE CONTRACT because it was added to a
+	// published reply; every route returning a duAnRa ALWAYS fills it, false included.
+	AtRisk *bool `json:"at_risk,omitempty"`
+
 	// DisbursementDeadline is the date THIS YEAR'S MONEY must be disbursed by. §9 is explicit that
 	// it is not the completion date: works finished in March may still have to be disbursed before
 	// 31/12. Two different dates, deliberately two different fields.
@@ -270,6 +275,8 @@ func duAnRaNgoai(t domain.TienDoDuAn, nay time.Time, nguong domain.NguongCanhBao
 		ImplementingUnit:     optionalText(t.DuAn.ImplementingUnit),
 		DisbursementDeadline: ngayRa(t.DuAn.ThoiHanGiaiNgan),
 	}
+	atRisk := t.DuAn.AtRisk
+	ra.AtRisk = &atRisk
 	if ty, ok := t.TyLeGiaiNgan(); ok {
 		v := int64(ty)
 		ra.DisbursedRatio = &v

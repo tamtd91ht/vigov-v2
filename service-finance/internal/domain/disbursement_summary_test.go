@@ -7,12 +7,25 @@ import (
 
 var ict = time.FixedZone("ICT", 7*3600)
 
-func TestRatioOfTowardZeroUnclampedAndAbsentOnZero(t *testing.T) {
+func TestRatioOfRoundsHalfAwayFromZeroUnclampedAndAbsentOnZero(t *testing.T) {
 	if _, ok := RatioOf(5, 0); ok {
 		t.Fatal("ratio over a zero plan must have no value, not 0%")
 	}
 	if r, ok := RatioOf(1, 3); !ok || r != 3333 {
-		t.Fatalf("1/3 = %d — want 3333 (toward zero)", r)
+		t.Fatalf("1/3 = %d — want 3333 (3333,3 rounds down)", r)
+	}
+	if r, ok := RatioOf(2, 3); !ok || r != 6667 {
+		t.Fatalf("2/3 = %d — want 6667 (6666,7 rounds up; truncation gave 6666)", r)
+	}
+	if r, _ := RatioOf(-2, 3); r != -6667 {
+		t.Fatalf("-2/3 = %d — want -6667 (half AWAY from zero, symmetric)", r)
+	}
+	// Exactly half a unit: 1 / 20000 = 0,5 phần vạn → 1 (away from zero), -1 for the negative.
+	if r, _ := RatioOf(1, 20000); r != 1 {
+		t.Fatalf("1/20000 = %d — want 1 (a half rounds away from zero)", r)
+	}
+	if r, _ := RatioOf(-1, 20000); r != -1 {
+		t.Fatalf("-1/20000 = %d — want -1", r)
 	}
 	if r, _ := RatioOf(35_300_000, 20_000_000); r != 17650 {
 		t.Fatalf("over-disbursed = %d — want 17650, never clamped to 10000", r)
@@ -24,6 +37,30 @@ func TestRatioOfTowardZeroUnclampedAndAbsentOnZero(t *testing.T) {
 	big := Dong(2_000_000_000_000_000)
 	if r, ok := RatioOf(big, big*2); !ok || r != 5000 {
 		t.Fatalf("huge figures = %d — want 5000 (overflow would wrap)", r)
+	}
+	// The big.Int path rounds the same way: 2 × 10^18 / (3 × 10^18) = 6666,67 → 6667.
+	if r, _ := RatioOf(big, big/2*3); r != 6667 {
+		t.Fatalf("huge 2/3 = %d — want 6667 (big path must round, not truncate)", r)
+	}
+	if r, _ := RatioOf(-big, big/2*3); r != -6667 {
+		t.Fatalf("huge -2/3 = %d — want -6667", r)
+	}
+}
+
+// The brief's own row (giai-ngan-update-theo-prototype.md §2.1, "Các công trình chuyển tiếp"):
+// truncated, the two ratio columns read 32,58% + 67,41% = 99,99%. Rounded, 32,59% + 67,41% = 100%.
+func TestCategoryRatiosOfBriefRowAddUpToHundredPercent(t *testing.T) {
+	row := CategoryProgress{Planned: 800_000_000, Disbursed: 260_690_000}
+	d, ok := row.DisbursedRatio()
+	if !ok || d != 3259 {
+		t.Fatalf("disbursed ratio = %d, want 3259 (32,59%%)", d)
+	}
+	u, ok := row.UndisbursedRatio()
+	if !ok || u != 6741 {
+		t.Fatalf("undisbursed ratio (539.310.000 / 800.000.000) = %d, want 6741 (67,41%%)", u)
+	}
+	if d+u != 10000 {
+		t.Fatalf("columns sum to %d, want 10000", d+u)
 	}
 }
 
@@ -117,14 +154,61 @@ func TestProjectCurveFollowsOwnCalendar(t *testing.T) {
 		t.Fatal("October observed, November not")
 	}
 
-	// No dates: twelve points, linear — and no completion month is invented.
+	// No dates: twelve points, linear — and the marker sits on December (ADR 0080 #3, prototype).
 	plain := ProjectCurve(DuAn{Nam: 2026, KeHoachVonNam: 1200}, DisbursedByMonth{}, now)
 	if len(plain) != 12 || plain[0].Planned != 100 || plain[11].Planned != 1200 {
 		t.Fatalf("undated project: %+v", plain)
 	}
-	for _, pt := range plain {
-		if pt.ExpectedEnd {
-			t.Fatal("an undated project has no expected-completion month")
+	for i, pt := range plain {
+		if pt.ExpectedEnd != (i == 11) {
+			t.Fatalf("undated project: marker on month %d = %v — want December only", pt.Month, pt.ExpectedEnd)
+		}
+	}
+}
+
+// ADR 0080 #3: every project curve carries exactly one "Hoàn thành dự kiến" point, placed as the
+// prototype places it — and the plan line does not move because of it.
+func TestProjectExpectedEndMarkerPrototypeRules(t *testing.T) {
+	d := func(y, m int) time.Time { return time.Date(y, time.Month(m), 10, 0, 0, 0, 0, ict) }
+	deadline := d(2026, 6) // a disbursement deadline that must NOT be consulted
+	cases := []struct {
+		name       string
+		start, end time.Time
+		want       int
+		firstMonth int
+		planAtWant Dong // the plan at the marker month: the full plan, as before this change
+	}{
+		{"completion in the year", d(2026, 3), d(2026, 9), 9, 3, 1200},
+		{"completion in a later year", d(2026, 3), d(2027, 2), 12, 3, 1200},
+		{"completion in an earlier year", d(2026, 4), d(2025, 11), 4, 4, 1200},
+		{"completion in an earlier year, no start", time.Time{}, d(2025, 11), 1, 1, 1200},
+		{"no completion date", d(2026, 5), time.Time{}, 12, 5, 1200},
+		{"no dates at all", time.Time{}, time.Time{}, 12, 1, 1200},
+	}
+	now := time.Date(2026, time.October, 5, 0, 0, 0, 0, ict)
+	for _, tc := range cases {
+		p := DuAn{Nam: 2026, KeHoachVonNam: 1200, NgayKhoiCong: tc.start, NgayHoanThanh: tc.end,
+			ThoiHanGiaiNgan: deadline}
+		if got := ProjectExpectedEndMonth(p); got != tc.want {
+			t.Errorf("%s: marker month %d, want %d", tc.name, got, tc.want)
+			continue
+		}
+		c := ProjectCurve(p, DisbursedByMonth{}, now)
+		if c[0].Month != tc.firstMonth {
+			t.Errorf("%s: curve starts at %d, want %d", tc.name, c[0].Month, tc.firstMonth)
+		}
+		marked := 0
+		for _, pt := range c {
+			if pt.ExpectedEnd {
+				marked++
+				if pt.Month != tc.want || pt.Planned != tc.planAtWant {
+					t.Errorf("%s: marker on %d with plan %d, want %d with %d", tc.name, pt.Month, pt.Planned,
+						tc.want, tc.planAtWant)
+				}
+			}
+		}
+		if marked != 1 {
+			t.Errorf("%s: %d marked points, want exactly 1", tc.name, marked)
 		}
 	}
 }
@@ -156,6 +240,16 @@ func TestSummariseProjectsRollsUpByCategory(t *testing.T) {
 	}
 	if s.DelayedCount != 2 {
 		t.Fatalf("delayed = %d, want 2 (b at 70,96 points, d likewise; e has no plan)", s.DelayedCount)
+	}
+	if s.AtRiskCount != 0 {
+		t.Fatalf("at risk = %d, want 0 — no project is flagged, and nothing is inferred", s.AtRiskCount)
+	}
+	// The flag is counted as set, independent of delay: one delayed project and one ahead, both flagged.
+	flagged := append([]TienDoDuAn(nil), projects...)
+	flagged[0].DuAn.AtRisk = true // "a": ahead of schedule — still counted, the flag is a judgement
+	flagged[1].DuAn.AtRisk = true // "b": delayed
+	if got := SummariseProjects(flagged, catalogue, now, NguongCanhBaoChamMacDinh).AtRiskCount; got != 2 {
+		t.Fatalf("at risk = %d, want 2", got)
 	}
 	if !s.Total.EarliestDeadline.Equal(dl(3)) {
 		t.Fatalf("total deadline = %v, want the earliest", s.Total.EarliestDeadline)

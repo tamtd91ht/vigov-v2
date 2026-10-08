@@ -136,6 +136,10 @@ type suaDuAnVao struct {
 	CompletionDate       *string `json:"completion_date,omitempty"`
 	DisbursementDeadline *string `json:"disbursement_deadline,omitempty"`
 
+	// AtRisk ticks / unticks "nguy cơ không giải ngân hết" (ADR 0080 #2, migration 0018). Absent (or
+	// null) = unchanged. Optional, so every client that does not know the field keeps working.
+	AtRisk *bool `json:"at_risk,omitempty"`
+
 	FundingAllocations *[]phanBoVao `json:"funding_allocations,omitempty"`
 
 	Code *string `json:"code,omitempty"`
@@ -197,6 +201,10 @@ type duAnGhiRa struct {
 
 	DisbursementDeadline string `json:"disbursement_deadline"`
 
+	// AtRisk — the "nguy cơ không giải ngân hết" flag after the write (migration 0018). Optional in the
+	// contract because it was added to a published reply; always filled, false included.
+	AtRisk *bool `json:"at_risk,omitempty"`
+
 	// FundingAllocations is the project's live lines after the write — on create what was written, on
 	// an edit what the project draws on afterwards — so the client does not have to guess which lines
 	// landed. `omitempty`, because "Chưa gắn nguồn" is a normal project (§9, §11).
@@ -235,6 +243,8 @@ func duAnGhiRaNgoai(d domain.DuAn, phanBo []domain.PhanBoNguonVon) duAnGhiRa {
 		ImplementingUnit:     optionalText(d.ImplementingUnit),
 		DisbursementDeadline: ngayRa(d.ThoiHanGiaiNgan),
 	}
+	atRisk := d.AtRisk
+	ra.AtRisk = &atRisk
 	for _, pb := range phanBo {
 		ra.FundingAllocations = append(ra.FundingAllocations, phanBoRa{
 			ID:              pb.ID,
@@ -358,6 +368,7 @@ func (h *Handler) SuaDuAn(w http.ResponseWriter, r *http.Request) {
 		DonViThucHienID:  vao.OrgUnitID,
 		CanBoPhuTrachID:  vao.AssigneeID,
 		ImplementingUnit: vao.ImplementingUnit,
+		AtRisk:           vao.AtRisk,
 	}
 	if vao.PlannedAmount != nil {
 		so := domain.Dong(*vao.PlannedAmount)

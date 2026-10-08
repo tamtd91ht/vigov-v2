@@ -122,11 +122,11 @@ var (
 // behind the read path; this statement reads one table with no alias. Two constants, because a
 // single one carrying the alias would silently attach this write path to the shape of a read.
 //
-// `implementing_unit` (0016) IS LAST, as in cotDuAn.
+// `implementing_unit` (0016) then `at_risk` (0018) ARE LAST, as in cotDuAn.
 const cotDuAnGhi = `id, ma, nam, hang_muc_id, ten, COALESCE(mo_ta, ''), ` +
 	`ke_hoach_von_nam, COALESCE(tong_muc_duoc_duyet, 0), ` +
 	`COALESCE(don_vi_thuc_hien_id, ''), COALESCE(can_bo_phu_trach_id, ''), ` +
-	`ngay_khoi_cong, ngay_hoan_thanh, thoi_han_giai_ngan, COALESCE(implementing_unit, '')`
+	`ngay_khoi_cong, ngay_hoan_thanh, thoi_han_giai_ngan, COALESCE(implementing_unit, ''), at_risk`
 
 func docMotDongDuAn(quet func(...any) error) (domain.DuAn, error) {
 	var (
@@ -138,7 +138,7 @@ func docMotDongDuAn(quet func(...any) error) (domain.DuAn, error) {
 	)
 	err := quet(&d.ID, &d.Ma, &d.Nam, &d.HangMucID, &d.Ten, &d.MoTa,
 		&keHoach, &tong, &d.DonViThucHienID, &d.CanBoPhuTrachID,
-		&khoiCong, &hoanThanh, &thoiHan, &d.ImplementingUnit)
+		&khoiCong, &hoanThanh, &thoiHan, &d.ImplementingUnit, &d.AtRisk)
 	if err != nil {
 		return domain.DuAn{}, err
 	}
@@ -398,19 +398,23 @@ const capNhatDuAn = `UPDATE du_an
 	    ke_hoach_von_nam = $6, tong_muc_duoc_duyet = $7,
 	    don_vi_thuc_hien_id = $8, can_bo_phu_trach_id = $9,
 	    ngay_khoi_cong = $10, ngay_hoan_thanh = $11, thoi_han_giai_ngan = $12,
-	    implementing_unit = $13,
+	    implementing_unit = $13, at_risk = $14,
 	    cap_nhat_luc = now()
 	WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
 
-// CapNhat writes the eleven fields a member of staff may correct (`implementing_unit` since 0016). The
-// caller has already read the row with TheoIDDeSua, so an unchanged field is written back as read.
+// CapNhat writes the twelve fields a member of staff may correct (`implementing_unit` since 0016,
+// `at_risk` since 0018). The caller has already read the row with TheoIDDeSua, so an unchanged field is
+// written back as read.
+//
+// ⚠ ROLLING DEPLOY (0018's header): a replica still on the old statement does not name `at_risk`, so it
+// leaves the flag as it was — it never clears it.
 func (s *DuAnGhiStore) CapNhat(ctx context.Context, tx *store.ScopedTx, d domain.DuAn) error {
 	kq, err := tx.Exec(ctx, capNhatDuAn, string(tx.TenantID()),
 		d.ID, d.HangMucID, d.Ten, rongThanhNil(d.MoTa),
 		int64(d.KeHoachVonNam), khongThanhNil(d.TongMucDuocDuyet),
 		rongThanhNil(d.DonViThucHienID), rongThanhNil(d.CanBoPhuTrachID),
 		ngayThanhNil(d.NgayKhoiCong), ngayThanhNil(d.NgayHoanThanh), d.ThoiHanGiaiNgan,
-		rongThanhNil(d.ImplementingUnit))
+		rongThanhNil(d.ImplementingUnit), d.AtRisk)
 	if err != nil {
 		return fmt.Errorf("du_an: cập nhật: %w", err)
 	}

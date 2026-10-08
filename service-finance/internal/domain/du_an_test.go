@@ -60,6 +60,32 @@ func TestTyLeGiaiNganVuotMotTramKhongBiChan(t *testing.T) {
 	}
 }
 
+// ADR 0080 #1: the ratio is ROUNDED half away from zero, no longer truncated. The brief's row:
+// 260.690.000 / 800.000.000 = 3258,625 phần vạn → 3259 (truncation printed 32,58%).
+//
+// THE BOUNDARY EFFECT the ADR accepts: DiemCham subtracts this ratio, so the score moves by up to half a
+// phần vạn and a project exactly at LaCham's threshold can change side. 7096 elapsed, 1000 threshold:
+// a ratio of 6095,6 used to truncate to 6095 (score 1001, BEHIND); it now rounds to 6096 (score 1000,
+// on the threshold, NOT behind — LaCham is strictly greater).
+func TestDisbursedRatioRoundsHalfAwayFromZero(t *testing.T) {
+	brief := TienDoDuAn{DuAn: DuAn{Nam: 2026, KeHoachVonNam: 800_000_000}, DaGiaiNgan: 260_690_000}
+	if r, ok := brief.TyLeGiaiNgan(); !ok || r != 3259 {
+		t.Fatalf("ratio = %d (ok=%v), want 3259 (32,59%% — rounded, not truncated)", r, ok)
+	}
+
+	edge := TienDoDuAn{DuAn: DuAn{Nam: 2026, KeHoachVonNam: 100_000_000}, DaGiaiNgan: 60_956_000}
+	if r, _ := edge.TyLeGiaiNgan(); r != 6096 {
+		t.Fatalf("ratio = %d, want 6096 (6095,6 rounds up)", r)
+	}
+	score, _ := DiemCham(edge, lucDaQua7096)
+	if score != 1000 {
+		t.Fatalf("delay score = %d, want 1000", score)
+	}
+	if LaCham(edge, lucDaQua7096, NguongCanhBaoChamMacDinh) {
+		t.Fatal("exactly on the threshold after rounding is NOT behind (truncation gave 1001 = behind)")
+	}
+}
+
 func TestKhongCoKeHoachThiKhongCoTyLe(t *testing.T) {
 	// 0% and "no ratio" are different statements. A project nobody has allocated money to must not
 	// be reported as the worst performer in the commune.

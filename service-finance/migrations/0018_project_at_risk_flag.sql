@@ -1,0 +1,56 @@
+-- 0018 — `du_an.at_risk`: the "nguy cơ không giải ngân hết" flag of one project.
+--
+-- AUTHORITY: ADR 0080 #2 (owner answers of 08/10/2026), SRS M3.3.3. The prototype backend
+-- (../vigov-require/apps/api/app/modules/budget) stores `budget_items.at_risk`, a boolean a leader sets,
+-- but offers no control to set it; the owner placed the tick box on the "Sửa dự án" form under the same
+-- permission as every other field of that form (budget.update), each change audited before/after.
+--
+-- WHAT THIS IS NOT: a derived figure. The brief (giai-ngan-update-theo-prototype.md §2.3) suggested a
+-- rate-based rule ("còn phải giải ngân > mức có thể giải ngân trước hạn theo tốc độ hiện tại"); the owner
+-- chose the prototype's hand-set flag instead. Rule 10's "never store a derivable fact" therefore does not
+-- apply — nothing in this schema can derive a leader's judgement.
+--
+-- WHY A NEW FILE: 0001..0017 have been applied and core/migrate compares the checksum of every applied
+-- file at startup (ErrChecksumLech).
+--
+-- RULE 1: tenant_id, the primary key and the HASH (tenant_id) partitioning of `du_an` are untouched. No
+-- key and no index is added, so invariants 6/7 have nothing new to satisfy. A column added to a
+-- partitioned parent is added to every partition by PostgreSQL itself.
+--
+-- RULE 3: a boolean about a public project. Not personal data.
+--
+-- ---------------------------------------------------------------------------
+-- THE FIVE MIGRATION QUESTIONS.
+--
+--   1. HOW MANY ROWS PER COMMUNE: none written. ADD COLUMN with a CONSTANT DEFAULT is catalogue-only on
+--      PostgreSQL 11+ (the cluster runs 16) — no row is rewritten. Every existing project reads false,
+--      which is the true state: nobody has ever ticked a box that did not exist. No backfill.
+--   2. IF IT STOPS HALF-WAY: it cannot land half-applied — one file, one statement, one transaction
+--      (core/migrate), with its progress row. ADD COLUMN IF NOT EXISTS: a retry costs nothing.
+--   3. HOW IT IS REVERSED: see REVERSAL at the bottom.
+--   4. WHICH READ PATHS CHANGE MEANING WHILE IT IS HALF-APPLIED: none can see it half-applied. After it,
+--      every project reads false — the "0 nguy cơ" the card printed as "?" before. ROLLING DEPLOY: an old
+--      replica's project UPDATE (internal/store/du_an_ghi.go capNhatDuAn before 0018) names its columns
+--      and not this one, so it LEAVES the flag as a new replica wrote it — it never clears it. An old
+--      replica's INSERT leaves it to the DEFAULT, false, which is what a new project is.
+--   5. RETENTION: `du_an` is archival (rule 7). Nothing is dropped, retyped, emptied or overwritten; no
+--      business code is issued or renumbered. Every change of the flag is an audited edit (`sua_du_an`,
+--      before/after), so its history lives in the ledger, not here.
+-- ---------------------------------------------------------------------------
+
+ALTER TABLE du_an ADD COLUMN IF NOT EXISTS at_risk BOOLEAN NOT NULL DEFAULT false;
+
+-- ---------------------------------------------------------------------------
+-- NOT YET RUN ON A REAL POSTGRESQL when written (08/10/2026, VIGOV_TEST_DSN absent):
+-- project_at_risk_test.go proves the SQL is WRITTEN, not that PostgreSQL accepts it;
+-- internal/store/project_at_risk_pg_test.go exercises it once VIGOV_TEST_DSN is set.
+--
+-- REVERSAL (migration question 3). Run by a person, in ONE transaction, AFTER A VERIFIED BACKUP of
+-- `du_an` once any project holds true (archival — dropping a populated column destroys a leader's recorded
+-- judgement, and that is the user's decision, never an agent's); core/migrate has no automatic rollback
+-- (ADR 0013).
+--
+--   1. Roll back the Go code that reads and writes `at_risk` first (the reads name the column).
+--   2. ALTER TABLE du_an DROP COLUMN at_risk;
+--   3. Remove this file's row from `schema_migration`, otherwise the runner still believes it has run.
+-- ---------------------------------------------------------------------------
