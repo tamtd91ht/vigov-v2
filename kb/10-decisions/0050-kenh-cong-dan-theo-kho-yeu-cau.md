@@ -19,6 +19,7 @@ owns_facts:
   - "nháp phản ánh giữ trên máy CHỈ trong app riêng của xã: một khoá, sáu trường, họ tên và số điện thoại lưu cả khi ẩn danh (vòng 4–5, 28/09/2026; sửa 06/10/2026 — có cả ở app chung mở từ QR của xã)"
   - "ở app chung, khoá nháp mang tên miền xã vì một origin phục vụ nhiều xã — ràng buộc người dựng chọn, không phải lời chủ dự án (06/10/2026)"
   - "không có màn phiếu công khai phía dân; kiểm duyệt pending/approved/hidden là việc của cán bộ ở máy chủ; phiếu tác phong cán bộ không bao giờ công khai (vòng 4, 28/09/2026)"
+  - "phiên đã xác thực số: màn gửi gộp họ tên + số thành một dòng 'Gửi bằng: <tên> · số Zalo đã xác thực' có nút 'Sửa'; ô số để trống thì service-petitions gắn số đã xác thực của phiên, che và ghi vết như số gõ tay; không bao giờ cho phiếu ẩn danh, không áp ADR 0080, 0083 (chủ dự án, 08/10/2026)"
 ---
 
 # 0050. Kênh công dân theo kho yêu cầu — xung đột thì theo yêu cầu, còn lại theo prototype
@@ -45,6 +46,9 @@ phần ADR 0028** (quyết định E cho kênh Mini App), **ADR 0041** (thêm m�
 > "Phạm vi điểm 1 và 9" dưới bảng.
 >
 > 06/10/2026 — chủ dự án: **nháp (điểm 7) có cả ở app chung** mở từ QR của xã — §*Sửa đổi 06/10/2026*.
+>
+> 08/10/2026 — chủ dự án: **người gửi đã xác thực số gọn một dòng, máy chủ gắn số của phiên** (điểm 4,
+> 9) — §*Sửa đổi 08/10/2026*.
 
 ## Bối cảnh
 
@@ -170,6 +174,28 @@ ADR 0047 điều kiện dừng #1 cấm (phiên, xã đã nhớ, vết, bản gh
   `ranh-gioi-hai-nua.test.ts` §3b — điểm 7) phải đổi **cùng lượt dựng**, sao cho vẫn cấm mọi thứ khác.
 - Tên miền cũ trỏ sang xã kế thừa sau sáp nhập (ADR 0047 câu 4): nháp viết dưới tên miền cũ hiện trong
   giao diện của xã kế thừa. Chủ dự án **chưa nói** về ca này — không tự chọn.
+
+## Sửa đổi 08/10/2026 — người gửi đã xác thực số: một dòng, máy chủ gắn số của phiên
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. **Người quyết:** chủ dự án,
+08/10/2026, trong phiên chính, qua phiếu hỏi. **Đang dựng** (phiên khác) — sổ
+`citizen-app/gui-phan-anh-nguoi-gui-da-xac-thuc` và `service-petitions/gan-so-da-xac-thuc-cua-phien`.
+
+| # | Điểm | Chốt |
+|---|---|---|
+| 1 | Màn gửi, công dân có phiên **đã xác thực số** | Hai ô "Họ và tên" và "Số điện thoại" **gộp thành một dòng**: "Gửi bằng: <tên> · số Zalo đã xác thực", kèm nút **"Sửa"** |
+| 2 | Máy chủ gắn số | Phiếu tới từ phiên đã xác thực số mà **ô số điện thoại để trống** → `service-petitions` gắn **số đã xác thực của phiên** vào phiếu. Số ấy được đối xử **y như số gõ tay**: che khi ra API (luật 3 bất biến 3), che trong phần trước/sau của vết (luật 6 bất biến 5), không vào log (luật 3 bất biến 1) |
+| 3 | Không bao giờ gắn | (a) Phiếu **ẩn danh** — điểm 3: bật ẩn danh thì không gửi số, nên máy chủ cũng **không tự thêm**; (b) phiếu từ phiên **chưa xác thực số** — ADR 0080, phiên không có số đã xác thực để gắn; (c) phiếu **không tài khoản** — ADR 0083, không có phiên. **ADR 0080 và 0083 không đổi** |
+| 4 | Giữ nguyên | Điểm 9: người gửi (họ tên) vẫn bắt buộc khi không ẩn danh. Chủ phiếu vẫn là công dân **của phiên** (luật 4 bất biến 2) — số gắn vào là **số liên hệ** trên phiếu, không phải nguồn danh tính. Ô số **có chữ** thì máy chủ dùng chữ ấy như trước; quyết định này chỉ nói ca ô **trống** |
+
+**Thay gì:** điểm 4 ghi số *"lấy từ tài khoản Zalo … sửa được"*, cột nguồn ghi *"trước đó dân tự gõ"*; nay
+với phiên đã xác thực số, dân **không phải gõ lại** — số lấy từ phiên ở máy chủ, "Sửa" vẫn còn. Điểm 9 vẫn
+đứng; chỉ cách **hiện** hai ô người gửi đổi.
+
+**Vì sao máy chủ gắn, client không gửi lại số** (lý do của người ghi, không phải lời chủ dự án): số đã xác
+thực nằm ở phiên phía máy chủ. Client tự điền rồi gửi lại thì số trên phiếu là chữ client nói, không còn là
+số máy chủ đã xác minh — đúng thứ luật 4 bất biến 2 cấm cho danh tính. Gắn ở máy chủ thì nhãn "số Zalo đã
+xác thực" trên màn là thật.
 
 ## ĐIỀU KIỆN DỪNG
 

@@ -19,6 +19,8 @@ owns_facts:
   - "ảnh 'sau xử lý' của cán bộ dựng ngay, thay G8; người dân xem ảnh trước/sau của chính phiếu mình trong app riêng của xã (chủ dự án, 02/10/2026; từ 06/10/2026 cả app chung mở từ QR của xã)"
   - "app chung ViHAT được MƯỢN vì app riêng của xã chưa được Zalo duyệt nhanh: mở từ QR của xã thì hiện trọn giao diện TrangXa của xã — ảnh hiện trường, vị trí, nháp trên máy, phản ánh của tôi, tra cứu, đánh giá, tin, danh bạ, tiện ích; bỏ màn 'xác nhận xã' riêng trên đường QR, tên xã ở mọi màn và trên nút gửi; tham số QR vẫn không cấp gì, không chọn/đổi xã (chủ dự án, 06/10/2026)"
   - "lượt xem tin: mỗi lần mở chi tiết bài trong Mini App (cả app riêng lẫn app chung) +1 trong tuyến công khai sẵn có, không lưu gì theo người, không ghi vết từng lượt, Redis lỗi thì không đếm; dân thấy '{n} lượt xem', cán bộ có cột nhưng không sắp xếp theo nó — thay 'không lượt xem' của 30/09 và 01/10 (chủ dự án, 02/10/2026)"
+  - "app chung mở từ QR của xã: thanh tiêu đề gốc của Zalo hiện tên xã đọc lúc chạy từ lượt tra công khai theo tên miền (không còn 'ViHAT Group'), màu trùng header của giao diện xã, đặt bằng configAppView; app-config.json không đổi (chủ dự án, 08/10/2026)"
+  - "nút chụp ảnh hiện trường dùng máy ảnh mặc định của điện thoại (chooseImage, sourceType camera), không dùng bộ chọn zcamera_photo của Zalo (chủ dự án, 08/10/2026)"
 ---
 
 # 0047. Hai luồng dựng `citizen-app` theo tên miền xã
@@ -27,7 +29,9 @@ owns_facts:
 **Thay thế một phần** ADR 0005, 0019, 0044, 0045 (chỉ các điểm ở §*Thay thế gì*; thân các ADR ấy
 giữ nguyên từng chữ, chỉ thêm một dòng trỏ có ngày) · ADR 0018, 0022, 0031, 0032 đứng nguyên ·
 **Sửa đổi 06/10/2026** (app chung hiện trọn giao diện của xã, bỏ màn xác nhận xã riêng; lệnh đẩy
-chỉ chọn app nào, QR mang xã sinh ở platform-admin — §*Sửa đổi 06/10/2026*)
+chỉ chọn app nào, QR mang xã sinh ở platform-admin — §*Sửa đổi 06/10/2026*) ·
+**Sửa đổi 08/10/2026** (thanh tiêu đề gốc của Zalo mang tên xã ở app chung; chụp ảnh hiện trường bằng
+máy ảnh mặc định — §*Sửa đổi 08/10/2026*)
 
 ## Bối cảnh
 
@@ -361,6 +365,47 @@ của xã, ADR 0044 §*Hệ quả*). Vì vậy app chung ViHAT được **mượ
   kiểm** đã khai cho App ID ấy chưa.
 - Ba giá trị theo xã nung trong bundle `--vao-thang` (từ 06/10/2026 là bundle `--domain`, #5; tên miền, logo, ảnh bìa — mục 6) **không** có ở
   app chung; ở đó mọi thứ của xã phải đọc lúc chạy theo tên miền trên QR, hoặc khối ấy ẩn.
+
+### Sửa đổi 08/10/2026 — thanh tiêu đề gốc mang tên xã; chụp ảnh hiện trường bằng máy ảnh mặc định
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. **Người quyết:** chủ dự án,
+08/10/2026, trong phiên chính, qua phiếu hỏi. **Đang dựng** (phiên khác) — sổ
+`citizen-app/app-chung-thanh-tieu-de-ten-xa` và `citizen-app/anh-hien-truong-may-anh-mac-dinh`.
+
+| # | Điểm | Chốt | Thay gì |
+|---|---|---|---|
+| 1 | Thanh tiêu đề gốc của Zalo khi app chung mở từ QR của xã | **Không còn** chữ *"ViHAT Group"*. Thanh hiện **tên xã**, đọc **lúc chạy** từ **chính lượt tra công khai theo tên miền trên QR** đã đặt tên cho header trong trang (mục 6, dòng *"Mở app riêng có cờ"*: tra `/communes` theo tên miền) — QR của Xã Thăng Bình hiện "Xã Thăng Bình", QR của xã khác hiện tên xã ấy. **Màu** thanh trùng màu header của giao diện xã, để thanh gốc và header trong trang liền một khối. Đặt bằng `configAppView` của zmp-sdk lúc chạy (`actionBar.title`, `headerColor` — `citizen-app/node_modules/zmp-sdk/index.d.ts:5192-5199`, chỉ chạy trong Zalo, `:5250`). **`citizen-app/app-config.json` không đổi:** tệp ấy dùng chung với phần giới thiệu ViHAT (app chung mở không QR), nên `app.title` vẫn là *"ViHAT Group"* (`app-config.json:3`) ở đó | Với app chung trên đường QR: tiêu đề tĩnh *"ViHAT Group"* của `app.title` (mục 6, dòng *"Giao diện app riêng có cờ"* nêu nó) |
+| 2 | Nút chụp ảnh hiện trường | Dùng **máy ảnh mặc định của điện thoại**: `chooseImage` của zmp-sdk với `sourceType: ["camera"]` (`index.d.ts:4914-4944`), **thay** bộ chọn `zcamera_photo` của Zalo (`openMediaPicker`, `takeScenePhoto` ở `citizen-app/src/features/tinh-nang/zalo-api.ts`). Áp ở mọi nơi có nút ảnh: app riêng và app chung mở từ QR của xã (§*Sửa đổi 06/10/2026* #2). Nút chọn ảnh có sẵn không thuộc quyết định này | Cách chụp `requestCameraPermission` + `openMediaPicker` `zcamera_photo` — **lựa chọn của người dựng** ghi ở sổ `citizen-app/app-xa-anh-hien-truong`, chưa từng là lời chủ dự án; không dòng nào của ADR này bị thay |
+
+**Vẫn đứng — không nới:**
+
+- Tên trên thanh tiêu đề lấy từ **trả lời của máy chủ** cho tên miền, **không bao giờ** từ chữ của tham số
+  `d`: tham số QR chỉ dẫn giao diện, không cấp gì (§*Sửa đổi 06/10/2026*, *Vẫn đứng*). Thanh tiêu đề là
+  giao diện, **không phải** bước xác nhận xã: phiên vẫn mở chỉ bằng lượt bấm tường minh ở nút mang tên xã
+  (§*Sửa đổi 06/10/2026* #4, ĐIỀU KIỆN DỪNG #4). Rủi ro mục 4 (hiện theo tên, gửi theo tên miền) nay áp
+  cả cho thanh tiêu đề.
+- App riêng của xã: thanh tiêu đề gốc vẫn ẩn (`app.actionBarHidden`, mục 6). Quyết định #1 chỉ nói về app
+  chung trên đường QR.
+- Ảnh từ máy ảnh mặc định vẫn chịu đủ ràng buộc của dòng *"Ảnh hiện trường khi gửi phản ánh"* và G3.
+  **G3 càng không được nới:** ảnh chụp bằng máy ảnh của hệ điều hành có thể mang toạ độ GPS trong EXIF (khi máy bật gắn vị trí) —
+  máy chủ mã hoá lại và bỏ toàn bộ EXIF là thứ giữ toạ độ nhà người dân khỏi kho tệp (luật 3).
+
+**Chưa chốt — người dựng không tự chọn mà không ghi ra:**
+
+- Thanh tiêu đề hiện gì khi lượt tra xã **hỏng**, hoặc tên miền **không ra xã nào** (header trong trang đã có
+  một câu và nút "Thử lại" — mục 6). Chủ dự án chưa nói. Người dựng chọn thì ghi vào sổ là lựa chọn của
+  người dựng, và **không** hiện chữ lấy từ tham số `d`.
+
+**Hệ quả:**
+
+- Bảng khai lời gọi `KHAI_BAO_LOI_GOI` và hồ sơ nộp Zalo (`citizen-app/src/content/ket-xuat-ho-so.ts`) phải
+  khai `chooseImage` (máy ảnh) thay `openMediaPicker` cho nút chụp, **cùng lượt dựng** — khai sai lời gọi
+  là lý do Zalo trả hồ sơ. Đoạn chính sách quyền riêng tư về ảnh hiện trường đang [CHỜ DUYỆT] (sổ
+  `citizen-app/chinh-sach-anh-hien-truong-nhap`): soát lại nếu nó tả cách chụp.
+- Quyền Zalo mà `chooseImage` máy ảnh cần cho App ID app chung và App ID từng app xã — **chưa kiểm**, như
+  câu quyền camera ở §*Sửa đổi 06/10/2026*, *Hệ quả*.
+- `configAppView` chỉ chạy trong Zalo bản từ 23.02.01 (`index.d.ts:5247-5250`); máy cũ hơn giữ tiêu đề
+  *"ViHAT Group"* của `app-config.json`.
 
 ## ĐIỀU KIỆN DỪNG
 

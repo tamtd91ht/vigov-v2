@@ -17,6 +17,7 @@ owns_facts:
   - "Bản đồ kinh tế số — toạ độ numeric(10,6) bắt buộc; 3 trạng thái + cờ xác minh; số điện thoại người đại diện che khi xuất"
   - "Bản đồ kinh tế số — CSP khi trả nợ missing-security-headers: connect-src/img-src gồm tiles.openfreemap.org, worker-src blob:"
   - "Bản đồ kinh tế số — phương án dự phòng nếu bỏ OpenFreeMap: cách dựng, nơi đặt và ghi nguồn tệp PMTiles vùng tự phục vụ"
+  - "geocoding ngược cho ô 'Nơi xảy ra' của phản ánh: Nominatim TỰ HOST trong cụm, dữ liệu OSM Việt Nam, không host ngoài; địa chỉ điền sẵn và sửa được, toạ độ giữ riêng; đóng việc còn mở #3 của bảng gốc (chủ dự án, 08/10/2026)"
 ---
 
 # 0072. Bản đồ kinh tế số — nền tự phục vụ, 11 nhóm tài nguyên, phạm vi MVP
@@ -28,6 +29,8 @@ xã (cuối tệp). Văn bản gốc giữ nguyên bên dưới.
 **Sửa đổi 04/10/2026 (lần 2):** khung mặc định ở platform-admin, trần bán kính 50 km, lưu ý pháp
 lý khi xã đổi khung — thay một phần H3, H4 và việc còn mở #4 của lần 1 (§Sửa đổi 04/10/2026 (lần
 2), cuối tệp).
+**Sửa đổi 08/10/2026:** geocoding ngược cho "Nơi xảy ra" — Nominatim tự host; đóng việc còn mở #3 của
+bảng gốc (§Sửa đổi 08/10/2026, cuối tệp).
 
 ## Bối cảnh
 
@@ -189,7 +192,7 @@ Trường Sa thuộc Khánh Hoà), một bản đồ tỉnh không có quần đ
 |---|---|---|
 | 1 | Xác nhận pháp lý về thể hiện chủ quyền trước khi chạy thật | Chủ dự án |
 | 2 | Lớp nhiệt phản ánh và "Mật độ theo thôn" — cần hợp đồng đọc từ `petitions` | Chủ dự án + kiến trúc |
-| 3 | Geocoding địa chỉ đường phố | Chủ dự án |
+| 3 | Geocoding địa chỉ đường phố — **đã chốt 08/10/2026: Nominatim tự host**, xem §Sửa đổi 08/10/2026 | Chủ dự án |
 | 4 | Bề mặt Mini App | Chủ dự án |
 
 ## Sửa đổi 04/10/2026 — OpenFreeMap và khung xã
@@ -396,3 +399,36 @@ ADR này **sở hữu** văn bản. Mã giữ nó thành **hằng số + phiên 
 | 2 | Mức khuyến nghị 10 km và ngưỡng "lệch xa" 3–20 km (đề xuất của phiên chính) | Chủ dự án chỉnh được |
 | 3 | ~~Khoá vận hành nào cho tuyến đặt khung mặc định~~ — **phiên chính chốt 04/10/2026:** dùng khoá sẵn có của quản lý xã (`KeyTenantManage`), không thêm khoá thứ tám. Lý do: tâm và bán kính mặc định là siêu dữ liệu của xã, cùng loại với tên xã mà khoá ấy đã canh (ADR 0073 `0073:35-37` — tập khoá đóng giữ nguyên) | Đã chốt |
 | 4 | Xác nhận pháp lý về thể hiện chủ quyền (việc còn mở #1 của lần 1) — vẫn mở | Chủ dự án |
+
+## Sửa đổi 08/10/2026 — geocoding ngược cho "Nơi xảy ra": Nominatim tự host
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. **Người quyết:** chủ dự án,
+08/10/2026, trong phiên chính, qua phiếu hỏi. **Chưa dựng** — sổ `citizen-app/noi-xay-ra-dia-chi-nominatim`.
+
+| Điểm | Nội dung |
+|---|---|
+| Việc | Đổi **toạ độ** công dân vừa lấy ở màn gửi phản ánh ra **địa chỉ** để điền sẵn ô "Nơi xảy ra" (geocoding ngược) |
+| Chốt | **Nominatim tự host trong cụm**, dữ liệu OpenStreetMap Việt Nam. **Không host ngoài nào** |
+| Vì sao khớp ADR này | H4, dòng *"Điểm dừng 1"*: *"Geocoding vẫn chỉ nội bộ — không host ngoài nào"*. Quyết định này giữ đúng câu ấy |
+| Màn gửi | Địa chỉ **điền sẵn và sửa được**. Toạ độ giữ **riêng**, không bị chữ địa chỉ thay hay suy ngược lại |
+| Đóng | Việc còn mở **#3** của bảng gốc (*"Geocoding địa chỉ đường phố"*, Chủ dự án): nhà cung cấp geocoding là Nominatim tự host |
+
+**Phạm vi — không mở rộng ngầm:** chủ dự án chốt cho ô "Nơi xảy ra" của phản ánh. Dùng cùng máy Nominatim
+cho ô tìm địa điểm của `/ban-do` (geocoding xuôi) **chưa ai quyết** — §4 *"Tìm địa điểm = chỉ tài nguyên
+của xã và tên thôn/tổ dân phố"* vẫn đứng tới khi có lời chủ dự án.
+
+**Vì sao luật 3 điều kiện dừng #2 không bật:** toạ độ nơi xảy ra có thể là toạ độ nhà người dân — dữ liệu
+cá nhân (luật 3). Gửi nó tới một máy **trong cụm** không phải gửi ra dịch vụ bên ngoài. Điều này chỉ đúng
+chừng nào Nominatim còn ở trong cụm: chuyển nó ra host ngoài, hay "tạm" gọi `nominatim.openstreetmap.org`
+khi máy nội bộ chưa có, là điều kiện dừng ấy — và là điểm dừng 1 của H4.
+
+**Còn mở khi dựng — hỏi, không tự quyết:**
+
+| # | Việc | Vì sao không tự chọn |
+|---|---|---|
+| 1 | Nominatim cần **cơ sở dữ liệu riêng có PostGIS** | Điểm dừng 3 của ADR này là *"Thêm PostGIS"*; hạ tầng dữ liệu do ADR 0010 chốt. Một CSDL riêng của Nominatim (không phải CSDL nghiệp vụ) có thuộc điểm dừng ấy không — chủ dự án nói |
+| 2 | Service nào gọi Nominatim và mở tuyến cho Mini App | `citizen-app` không tới được máy trong cụm; cần một tuyến phía máy chủ — chủ sở hữu (luật 2 điều kiện dừng #1), khai báo quyền (luật 5) và trần tần suất (luật 13) |
+| 3 | Biến cấu hình địa chỉ Nominatim | Phụ thuộc mới chưa có trong `core/config` — luật 11 điều kiện dừng #1 |
+| 4 | Log truy cập của Nominatim chứa toạ độ trong URL | Luật 3 bất biến 1: log ấy phải tắt hoặc coi là dữ liệu cá nhân |
+| 5 | Ghi nguồn ODbL `© OpenStreetMap contributors` cho địa chỉ trả về, và câu khai trong chính sách quyền riêng tư | Lời văn pháp lý — chủ dự án duyệt |
+| 6 | Làm mới dữ liệu OSM Việt Nam | Chưa có nhịp; như bước 5 của §Dựng và cập nhật tệp nền |
