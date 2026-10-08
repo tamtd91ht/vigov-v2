@@ -6,7 +6,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { controlClass } from "@/components/ui/field";
-import { PendingButton, PendingMarker } from "@/components/ui/pending-feature";
+import { PendingButton } from "@/components/ui/pending-feature";
 import { BUSY_DELETING, BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 import { cn } from "@/lib/cn";
@@ -55,9 +55,12 @@ import {
 } from "./nhan-danh-muc";
 import {
   CATALOGUE_GROUPS,
+  DEFAULT_ENTRY_COLOR,
   TASK_STATUS_GROUP,
   catalogueRows,
   codeFromLabel,
+  colorChange,
+  dotColor,
   effectiveShownGroup,
   groupsWithRows,
   nhomDanhMuc,
@@ -184,7 +187,7 @@ export function TabDanhMuc() {
       }
       const initial = writable.find((g) => g.khoa === shownGroup) ?? writable[0];
       setOpen({ kind: "add", idempotencyKey: newIdempotencyKey() });
-      setDraft({ ...EMPTY_DRAFT, group: initial === undefined ? "" : initial.khoa });
+      setDraft({ ...EMPTY_DRAFT, group: initial === undefined ? "" : initial.khoa, color: DEFAULT_ENTRY_COLOR });
       setLocalError("");
       setServerError("");
     },
@@ -195,6 +198,8 @@ export function TabDanhMuc() {
         label: row.item.label,
         order: row.kind === "taskStatus" ? String(row.item.order) : laMucGhi(row.item) ? String(row.item.order) : "",
         isDefault: row.kind === "lookup" && row.item.is_default,
+        // Task statuses carry no colour; every catalogue row does (`null` = none).
+        color: row.kind === "lookup" ? row.item.color : null,
       });
       setLocalError("");
       setServerError("");
@@ -232,7 +237,10 @@ export function TabDanhMuc() {
         }
         const group = writable.find((g) => g.khoa === draft.group);
         if (group === undefined || group.ghi === null) return;
-        run(themMuc(group.ghi, { code, label, is_default: false }, open.idempotencyKey), ADDED);
+        run(
+          themMuc(group.ghi, { code, label, is_default: false, color: draft.color ?? undefined }, open.idempotencyKey),
+          ADDED,
+        );
         return;
       }
 
@@ -271,7 +279,16 @@ export function TabDanhMuc() {
         setLocalError(THU_TU_KHONG_PHAI_SO);
         return;
       }
-      run(suaMuc(row.group.ghi, row.item.id, { label, order: order.value, is_default: draft.isDefault }), SAVED);
+      run(
+        suaMuc(row.group.ghi, row.item.id, {
+          label,
+          order: order.value,
+          is_default: draft.isDefault,
+          // Q1 #9: the colour is editable at every tier, "Hệ thống" included. Sent only when it changed.
+          ...colorChange(row.item.color, draft.color),
+        }),
+        SAVED,
+      );
     },
   };
 
@@ -281,7 +298,11 @@ export function TabDanhMuc() {
    * keeps the key — the first attempt may have reached the server.
    */
   const updateDraft = (next: CatalogueDraft) => {
-    if (open !== null && open.kind === "add" && (next.label !== draft.label || next.group !== draft.group)) {
+    if (
+      open !== null &&
+      open.kind === "add" &&
+      (next.label !== draft.label || next.group !== draft.group || next.color !== draft.color)
+    ) {
       setOpen({ kind: "add", idempotencyKey: newIdempotencyKey() });
     }
     setDraft(next);
@@ -317,6 +338,9 @@ const COLOR_FIELD = "Màu";
 const LABEL_PLACEHOLDER = "Ví dụ: Chợ và thương mại";
 const ADD_SUBMIT = "Thêm";
 const ENABLE = "Bật";
+/** Not in the spec: the in-place edit's way back to "no colour" (Q1 #9), and how "none" reads. */
+export const CLEAR_COLOR = "Bỏ màu";
+export const NO_COLOR = "Không màu";
 export const EDIT_LABEL = "Sửa nhãn";
 export const DELETE_ENTRY = "Xoá mục";
 export const SET_DEFAULT = "Đặt mặc định";
@@ -336,9 +360,6 @@ export function defaultFromNow(label: string): string {
 
 /** The one group with a "default when assigning" choice in the prototype (`LookupTable.tsx:32`). */
 const GROUP_WITH_DEFAULT_BUTTON = "loaiNhiemVu";
-
-/** The "?" of the colour field — its sentence is `PHAN_CHUA_DUNG`'s, never a second copy. */
-const COLOR_PENDING = PHAN_CHUA_DUNG.find((p) => p.ten === "Màu của mục danh mục")!;
 
 /**
  * One import button per group, bound to that group's target. A `Record` over every key, so a new
@@ -412,9 +433,18 @@ export type CatalogueDraft = {
   readonly order: string;
   readonly isDefault: boolean;
   readonly reason: string;
+  /** `#rrggbb` as the colour input returns it, or `null` = no colour. */
+  readonly color: string | null;
 };
 
-export const EMPTY_DRAFT: CatalogueDraft = { group: "", label: "", order: "", isDefault: false, reason: "" };
+export const EMPTY_DRAFT: CatalogueDraft = {
+  group: "",
+  label: "",
+  order: "",
+  isDefault: false,
+  reason: "",
+  color: null,
+};
 
 export type CatalogueActions = {
   readonly toggleAdd: () => void;
@@ -668,7 +698,7 @@ function FormErrors({ localError, serverError }: { localError: string; serverErr
   );
 }
 
-/** The spec's grey add row: group · label · colour ("?") · "Thêm" / "Huỷ". Enter in the label submits. */
+/** The spec's grey add row: group · label · colour · "Thêm" / "Huỷ". Enter in the label submits. */
 export function AddRow({
   groups,
   draft,
@@ -724,7 +754,16 @@ export function AddRow({
           aria-invalid={localError !== ""}
         />
       </ConfigField>
-      <ColorField />
+      <ConfigField label={COLOR_FIELD} htmlFor="catalogue-add-color">
+        <input
+          id="catalogue-add-color"
+          name="color"
+          type="color"
+          className={cn(controlClass, "mt-1 h-9 p-1")}
+          value={draft.color ?? DEFAULT_ENTRY_COLOR}
+          onChange={(e) => setDraft({ ...draft, color: e.target.value })}
+        />
+      </ConfigField>
       <div className="flex gap-2">
         <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
           <BusyLabel busy={busy} label={ADD_SUBMIT} busyText={BUSY_SAVING} />
@@ -739,31 +778,6 @@ export function AddRow({
         </div>
       )}
     </ConfigFormRow>
-  );
-}
-
-/**
- * The spec's "Màu" field, drawn DISABLED with its "?" (ADR 0068 §14, ADR 0079 #5): no catalogue stores
- * a colour yet. The "?" sits beside the label, never inside it — inside, its sentence would become part
- * of the control's accessible name. The disabled input has no `name`: it can never submit anything.
- */
-function ColorField() {
-  return (
-    <div className="block min-w-0" data-pending="">
-      <div className="flex items-center gap-1.5">
-        <label htmlFor="catalogue-add-color" className="text-foreground m-0 text-[11.5px] leading-none font-medium">
-          {COLOR_FIELD}
-        </label>
-        <PendingMarker info={COLOR_PENDING} />
-      </div>
-      <input
-        id="catalogue-add-color"
-        type="color"
-        disabled
-        defaultValue="#2fb1f9"
-        className="border-line mt-1 h-9 w-full cursor-not-allowed rounded-md border border-solid bg-white p-1 opacity-50"
-      />
-    </div>
   );
 }
 
@@ -822,6 +836,7 @@ export function CatalogueTableRow({
   const source = row.kind === "taskStatus" ? "he-thong" : laMucGhi(row.item) ? row.item.source : null;
   const active = row.kind === "taskStatus" ? true : row.item.active;
   const isDefault = row.kind === "lookup" && row.item.is_default;
+  const dot = row.kind === "lookup" ? dotColor(row.item.color) : null;
   const keys = submitOrCancel(actions.submit, actions.cancel);
   const editing = canWrite && mode === "edit";
   const deleting = canWrite && mode === "delete";
@@ -835,7 +850,8 @@ export function CatalogueTableRow({
       <td className="text-navy font-medium">
         {editing ? (
           <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-3">
+            {/* `flex-wrap`: label box, colour and "Mặc định" do not fit one line at 320px. */}
+            <div className="flex flex-wrap items-center gap-3">
               <input
                 className={cn(ROW_INPUT_CLASS, "w-56")}
                 aria-label={nhanNutCuaDong(O_NHAN, label)}
@@ -844,6 +860,7 @@ export function CatalogueTableRow({
                 onKeyDown={keys}
                 aria-invalid={localError !== ""}
               />
+              {row.kind === "lookup" && <RowColorEdit label={label} draft={draft} setDraft={setDraft} />}
               {/* Decision 3: "Mặc định" stays editable. Every catalogue's PATCH carries `is_default`. */}
               {writeShaped && (
                 <label className="text-ink inline-flex items-center gap-1.5 text-[12px] font-normal">
@@ -860,6 +877,10 @@ export function CatalogueTableRow({
           </div>
         ) : (
           <span className="inline-flex items-center gap-2">
+            {/* Decoration beside the label, never instead of it: the label stays the accessible text. */}
+            {dot !== null && (
+              <span aria-hidden="true" className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: dot }} />
+            )}
             {label}
             {/* Not a status: the prototype's text-only pill (`LookupTable.tsx:243`), no tone icon. */}
             {isDefault && (
@@ -938,6 +959,45 @@ export function CatalogueTableRow({
         </td>
       )}
     </tr>
+  );
+}
+
+/**
+ * The colour of the in-place edit (Q1 #9). A colour input cannot hold "none", so `null` is shown as the
+ * input dimmed beside "Không màu" — picking a colour sets one; "Bỏ màu" returns to none (sent as `null`).
+ */
+function RowColorEdit({
+  label,
+  draft,
+  setDraft,
+}: {
+  label: string;
+  draft: CatalogueDraft;
+  setDraft: (d: CatalogueDraft) => void;
+}) {
+  return (
+    <span className="inline-flex items-center gap-2">
+      <input
+        type="color"
+        aria-label={nhanNutCuaDong(COLOR_FIELD, label)}
+        className={cn(controlClass, "h-8 w-10 p-1", draft.color === null && "opacity-50")}
+        value={draft.color ?? DEFAULT_ENTRY_COLOR}
+        onChange={(e) => setDraft({ ...draft, color: e.target.value })}
+      />
+      {draft.color === null ? (
+        <span className="text-ink-muted text-[12px] font-normal">{NO_COLOR}</span>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          aria-label={nhanNutCuaDong(CLEAR_COLOR, label)}
+          onClick={() => setDraft({ ...draft, color: null })}
+        >
+          {CLEAR_COLOR}
+        </Button>
+      )}
+    </span>
   );
 }
 

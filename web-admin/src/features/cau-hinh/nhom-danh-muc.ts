@@ -218,6 +218,32 @@ export function effectiveShownGroup(rows: readonly CatalogueRow[], shown: ShownG
   return shown !== null && !rows.some((r) => rowGroup(r) === shown) ? null : shown;
 }
 
+/** The add row's starting colour (spec 05 §2, `#2FB1F9`), lower-case as the server stores it. */
+export const DEFAULT_ENTRY_COLOR = "#2fb1f9";
+
+/** The server's shape (`NormalizeCatalogueColor`): `#` + six hex digits, either case. */
+const COLOR_SHAPE = /^#[0-9a-f]{6}$/i;
+
+/**
+ * The colour to paint as the label's dot, or `null` for no dot. A value that is not `#rrggbb` (the
+ * contract drifted) draws NO dot rather than reaching a `style` attribute — the server never sends one,
+ * so this only decides what a broken answer looks like.
+ */
+export function dotColor(color: string | null | undefined): string | null {
+  return typeof color === "string" && COLOR_SHAPE.test(color) ? color : null;
+}
+
+/**
+ * The `color` member of an in-place PATCH: ABSENT when the colour did not change (absent = keep), else
+ * the new value — `null` meaning "clear". Compared case-insensitively because the server stores
+ * lower-case while a colour input may answer either: re-sending the same colour would add an audit
+ * entry for a change nobody made.
+ */
+export function colorChange(before: string | null, after: string | null): { color?: string | null } {
+  const same = before === null || after === null ? before === after : before.toLowerCase() === after.toLowerCase();
+  return same ? {} : { color: after };
+}
+
 /** The server's ceiling on a catalogue code (`MaToiDa`, `service-documents/internal/domain/danh_muc_ba_tang.go:142`). */
 export const CODE_MAX_LENGTH = 64;
 

@@ -5,8 +5,11 @@ import { docDanhMucNghiepVu } from "@/lib/api/danh-muc-nghiep-vu";
 import {
   CODE_MAX_LENGTH,
   TASK_STATUS_GROUP,
+  DEFAULT_ENTRY_COLOR,
   catalogueRows,
   codeFromLabel,
+  colorChange,
+  dotColor,
   effectiveShownGroup,
   groupsWithRows,
   nhomDanhMuc,
@@ -321,5 +324,50 @@ describe("lớp client không quyết định quyền — máy chủ quyết đ�
       pha: "khongDocDuoc",
       thongBao: "Bạn không có quyền thực hiện thao tác này.",
     });
+  });
+});
+
+/**
+ * Colour (ADR 0079 lô 2 Q1 #8–#9). The helper cases failed before (the exports did not exist). The read
+ * case is a guard: the readers return the generated item types untouched, so `color` needed no code —
+ * this holds that no one starts rebuilding rows field by field and drops it.
+ */
+describe("catalogue colour", () => {
+  it("the seven reads bring each entry's `color` to the row as the server sent it, null included", async () => {
+    const bang = bayTuyenRong();
+    for (const duongDan of Object.values(TUYEN)) {
+      bang[duongDan] = {
+        status: 200,
+        than: { items: [{ ...muc("mau-xanh", "Xanh"), color: "#2fb1f9" }, { ...muc("khong-mau", "Không"), color: null }] },
+      };
+    }
+    batFetchTheoTuyen(bang);
+    const rows = catalogueRows(nhomDanhMuc(await docDanhMucNghiepVu()), [], null);
+    expect(rows).toHaveLength(14);
+    for (const r of rows) {
+      if (r.kind !== "lookup") throw new Error("only catalogue rows here");
+      expect(r.item.color).toBe(r.item.code === "mau-xanh" ? "#2fb1f9" : null);
+    }
+  });
+
+  it("dotColor: a #rrggbb paints; null, empty, or anything else paints NOTHING (never reaches `style`)", () => {
+    expect(dotColor("#2fb1f9")).toBe("#2fb1f9");
+    expect(dotColor("#ABCDEF")).toBe("#ABCDEF");
+    for (const bad of [null, undefined, "", "red", "#fff", "#2fb1f9;background:url(x)", "2fb1f9"]) {
+      expect(dotColor(bad)).toBeNull();
+    }
+  });
+
+  it("colorChange: unchanged → no key (keep); changed → the value; cleared → null; case is not a change", () => {
+    expect(colorChange(null, null)).toEqual({});
+    expect(colorChange("#2fb1f9", "#2fb1f9")).toEqual({});
+    expect(colorChange("#2fb1f9", "#2FB1F9")).toEqual({});
+    expect(colorChange("#2fb1f9", "#ff0000")).toEqual({ color: "#ff0000" });
+    expect(colorChange(null, "#ff0000")).toEqual({ color: "#ff0000" });
+    expect(colorChange("#2fb1f9", null)).toEqual({ color: null });
+  });
+
+  it("the add row's default is the spec's #2FB1F9", () => {
+    expect(DEFAULT_ENTRY_COLOR.toUpperCase()).toBe("#2FB1F9");
   });
 });

@@ -17,11 +17,13 @@ import {
 import { nhomDanhMuc, type KhoaNhom } from "@/features/cau-hinh/nhom-danh-muc";
 import {
   ADDED,
+  CLEAR_COLOR,
   CatalogueView,
   catalogueImportButton,
   DELETE_ENTRY,
   EDIT_LABEL,
   EMPTY_DRAFT,
+  NO_COLOR,
   SET_DEFAULT,
   SET_DEFAULT_TITLE,
   type CatalogueActions,
@@ -315,14 +317,22 @@ describe("the add row (spec 05 §2)", () => {
     );
   }
 
-  it("group select of the writable groups · label · disabled 'Màu' with its '?' · Thêm / Huỷ — no 'Mã' field", () => {
-    const html = addRow();
+  it("group select of the writable groups · label · a WORKING 'Màu' · Thêm / Huỷ — no 'Mã' field", () => {
+    const html = addRow({ draft: { ...EMPTY_DRAFT, group: "loaiVanBan", color: "#2fb1f9" } });
     expect(html).toContain("sm:grid-cols-[16rem_1fr_6rem_auto]");
     expect(html).toContain(">Nhóm danh mục</label>");
     expect(count(html, "<option ")).toBe(7);
     expect(html).toContain('placeholder="Ví dụ: Chợ và thương mại"');
-    expect(html).toMatch(/type="color" disabled=""/);
-    expect(html).toContain(pendingMarkerLabel("Màu của mục danh mục"));
+    // Failed before: the colour was a disabled box with a "?" and no `name`.
+    const color = html.match(/<input[^>]*type="color"[^>]*>/)?.[0] ?? "";
+    expect(color).toContain('id="catalogue-add-color"');
+    expect(color).toContain('name="color"');
+    expect(color).toContain('value="#2fb1f9"');
+    expect(color).toMatch(/class="[^"]*mt-1 h-9 p-1/);
+    expect(color).not.toMatch(/\sdisabled=/);
+    expect(html).toContain('<label for="catalogue-add-color"');
+    expect(html).not.toContain(pendingMarkerLabel("Màu của mục danh mục"));
+    expect(html).not.toContain("data-pending");
     expect(html).toContain(">Thêm</button>");
     expect(html).toContain(">Huỷ</button>");
     expect(html).not.toContain('name="code"');
@@ -397,6 +407,70 @@ describe("validate round 1 (owner 08/10/2026: 'Theo prototype')", () => {
     // DENIED: without the key, no button at all — neither the working one nor the "?".
     expect(renderToStaticMarkup(<>{catalogueImportButton(false, null, () => {})}</>)).toBe("");
     expect(renderToStaticMarkup(<>{catalogueImportButton(false, "loaiVanBan", () => {})}</>)).toBe("");
+  });
+});
+
+describe("colour (spec 05 §3, Q1 #9)", () => {
+  const blue = entry(TANG_HE_THONG, { color: "#2fb1f9" });
+  const key = `loaiVanBan:${blue.id}`;
+
+  it("a coloured entry shows a size-2.5 round dot BEFORE its label; no dot without a colour", () => {
+    // Failed before: the label cell drew the text only.
+    const html = view({ loaiVanBan: [blue, entry(TANG_DON_VI, { id: "n", label: "Không màu" })] });
+    expect(html).toMatch(
+      /<span aria-hidden="true" class="size-2.5 shrink-0 rounded-full" style="background-color:#2fb1f9"><\/span>Công văn/,
+    );
+    expect(count(html, "rounded-full\" style=")).toBe(1);
+  });
+
+  it("a value that is not #rrggbb draws no dot (it never reaches the style attribute)", () => {
+    const html = view({ loaiVanBan: [entry(TANG_DON_VI, { color: "red;background:url(x)" })] });
+    expect(html).not.toContain("style=");
+  });
+
+  it("in-place edit on a 'Hệ thống' row: a colour input with the row's colour, and 'Bỏ màu' to clear", () => {
+    const html = view(
+      { loaiVanBan: [blue] },
+      { open: { kind: "edit", rowKey: key }, draft: { ...EMPTY_DRAFT, label: "Công văn", color: "#2fb1f9" } },
+    );
+    const input = html.match(/<input[^>]*type="color"[^>]*>/)?.[0] ?? "";
+    expect(input).toContain('aria-label="Màu — mục Công văn"');
+    expect(input).toContain('value="#2fb1f9"');
+    expect(input).not.toMatch(/[\s"]opacity-50/);
+    expect(html).toContain(`aria-label="${CLEAR_COLOR} — mục Công văn"`);
+    expect(html).not.toContain(NO_COLOR);
+  });
+
+  it("in-place edit with no colour: the input dimmed, 'Không màu' said, no 'Bỏ màu'", () => {
+    const html = view(
+      { loaiVanBan: [entry(TANG_DON_VI)] },
+      { open: { kind: "edit", rowKey: `loaiVanBan:${entry(TANG_DON_VI).id}` }, draft: { ...EMPTY_DRAFT, label: "Công văn" } },
+    );
+    expect(html.match(/<input[^>]*type="color"[^>]*>/)?.[0]).toMatch(/\sopacity-50/);
+    expect(html).toContain(NO_COLOR);
+    expect(html).not.toContain(CLEAR_COLOR);
+  });
+
+  it("DENIED — no `admin.lookup`: the dot still shows, no colour input anywhere", () => {
+    const html = view({ loaiVanBan: [blue] }, { canWrite: false, open: { kind: "edit", rowKey: key } });
+    expect(html).toContain("background-color:#2fb1f9");
+    expect(html).not.toContain('type="color"');
+  });
+
+  it("task statuses (no colour in their contract) get no colour input in edit", () => {
+    const html = view(
+      {},
+      {
+        taskStatuses: {
+          ok: true,
+          duLieu: { items: [{ code: "moi", label: "Mới", order: 1, default_label: "Mới", default_order: 1 }] },
+        } as unknown as Props["taskStatuses"],
+        open: { kind: "edit", rowKey: "trangThaiNhiemVu:moi" },
+        draft: { ...EMPTY_DRAFT, label: "Mới", order: "1" },
+      },
+    );
+    expect(html).toContain('aria-label="Nhãn hiển thị — mục Mới"');
+    expect(html).not.toContain('type="color"');
   });
 });
 

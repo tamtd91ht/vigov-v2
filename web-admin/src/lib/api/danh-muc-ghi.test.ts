@@ -187,6 +187,48 @@ describe("PATCH sửa mục", () => {
   });
 });
 
+/**
+ * `color` (ADR 0079 lô 2 Q1 #9): three states on PATCH — absent = keep · `null` = clear · `#rrggbb` =
+ * set. The dangerous one is `null`: a body builder that drops "falsy" fields, or turns it into `""`
+ * (a 400), loses "clear" silently. The cases that send a colour failed before: neither writer carried
+ * `color`. The two "absent" cases guard the other direction.
+ */
+describe("color — all seven catalogues", () => {
+  it("POST carries the chosen colour, to every group", async () => {
+    const gia = batFetchGhi(() => taoRa(dongMayChuTraVe()));
+    for (const mo of BAY_DANH_MUC_GHI) {
+      await themMuc(mo, { code: "a-b", label: "A B", color: "#2fb1f9" }, "k");
+    }
+    for (let i = 0; i < BAY_DANH_MUC_GHI.length; i++) expect(loiGoi(gia, i).than.color).toBe("#2fb1f9");
+  });
+
+  it("POST without a colour sends no `color` key (absent = none)", async () => {
+    const gia = batFetchGhi(() => taoRa(dongMayChuTraVe()));
+    await themMuc(moTa("loaiVanBan"), { code: "a-b", label: "A B" }, "k");
+    expect(loiGoi(gia).khoaThan).not.toContain("color");
+  });
+
+  it("PATCH: a colour is sent; `null` is sent AS null (clear), never as \"\" and never dropped", async () => {
+    const gia = batFetchGhi(() => ok200(dongMayChuTraVe()));
+    for (const mo of BAY_DANH_MUC_GHI) {
+      await suaMuc(mo, "01JHM7", { color: "#ff0000" });
+      await suaMuc(mo, "01JHM7", { color: null });
+    }
+    for (let i = 0; i < BAY_DANH_MUC_GHI.length; i++) {
+      expect(loiGoi(gia, 2 * i).than).toEqual({ color: "#ff0000" });
+      const cleared = loiGoi(gia, 2 * i + 1);
+      expect(cleared.khoaThan).toEqual(["color"]);
+      expect(cleared.than.color).toBeNull();
+    }
+  });
+
+  it("PATCH without `color` leaves the key out — the colour is kept", async () => {
+    const gia = batFetchGhi(() => ok200(dongMayChuTraVe()));
+    await suaMuc(moTa("khoiNhiemVu"), "01JHM7", { label: "Khối Uỷ ban" });
+    expect(loiGoi(gia).khoaThan).toEqual(["label"]);
+  });
+});
+
 describe("DELETE xoá mềm", () => {
   it("gửi lý do trong THÂN, không trong query", async () => {
     const gia = batFetchGhi(() => new Response(null, { status: 204 }));

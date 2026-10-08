@@ -328,12 +328,25 @@ export type ThemMucVao = Omit<comms_themLoaiTaiNguyenVao, "source" | "tier"> &
  * 3), và một ô nhập mã trong biểu mẫu sửa là một ô hứa điều máy chủ sẽ từ chối. Đổi cách gọi một
  * mục là đổi `label`; thay hẳn khái niệm là thêm dòng mới rồi tắt dòng cũ.
  */
-export type SuaMucVao = Omit<comms_suaLoaiTaiNguyenVao, "source" | "tier" | "code"> &
-  Omit<documents_suaLoaiVanBanVao, "source" | "tier" | "code"> &
-  Omit<finance_suaHangMucVao, "source" | "tier" | "code"> &
-  Omit<identity_suaDanhMucVao, "source" | "tier" | "code"> &
-  Omit<petitions_suaLoaiNhiemVuVao, "source" | "tier" | "code"> &
-  Omit<petitions_suaMucUuTienVao, "source" | "tier" | "code">;
+export type SuaMucVao = Omit<comms_suaLoaiTaiNguyenVao, "source" | "tier" | "code" | "color"> &
+  Omit<documents_suaLoaiVanBanVao, "source" | "tier" | "code" | "color"> &
+  Omit<finance_suaHangMucVao, "source" | "tier" | "code" | "color"> &
+  Omit<identity_suaDanhMucVao, "source" | "tier" | "code" | "color"> &
+  Omit<petitions_suaLoaiNhiemVuVao, "source" | "tier" | "code" | "color"> &
+  Omit<petitions_suaMucUuTienVao, "source" | "tier" | "code" | "color"> & {
+    /**
+     * THE ONE FIELD TYPED HERE, NOT TAKEN FROM `schema.gen.ts` — and why that is not a second copy.
+     *
+     * The generated PATCH `color` is `<svc>_optionalColorIn = Record<string, never>`: every service
+     * reads it through a custom `UnmarshalJSON` (`optionalColorIn`, e.g.
+     * `service-documents/internal/http/danh_muc_ghi.go:143`) and the doc generator cannot see through
+     * one, so the contract describes it as an empty object no caller can build. The wire meaning is
+     * three-state: ABSENT = keep · `null` = clear · `"#rrggbb"` = set (`""` is a 400, never "clear").
+     * Owed upstream: the annotation should declare a nullable string; once regenerated, delete this
+     * member and drop `"color"` from the six `Omit`s — `tsc` then checks the field against the contract.
+     */
+    color?: string | null;
+  };
 
 /** Thân DELETE. `reason` BẮT BUỘC — luật 7, bất biến 1: `deleted_at` · `deleted_by` · lý do. */
 export type XoaMucVao = comms_xoaLoaiTaiNguyenVao &
@@ -364,11 +377,13 @@ export async function themMuc(
 ): Promise<KetQua<MucDanhMucGhi>> {
   // DỰNG TỪNG TRƯỜNG, KHÔNG TRẢI TỪ ĐỐI TƯỢNG NGUỒN — xem đầu phần hai. Một `...than` ở đây là
   // đường để `source`/`tier` đi lên vào ngày ai đó truyền vào một dòng đọc được từ máy chủ.
+  // `color` absent = the entry has no colour (POST has no "clear": nothing to clear yet).
   const thanGui = {
     code: than.code,
     label: than.label,
     order: than.order,
     is_default: than.is_default,
+    color: than.color,
   };
 
   const kq = await goiGhi(mo.gocThem, "POST", thanGui, 201, {
@@ -389,11 +404,14 @@ export async function suaMuc(
   id: string,
   than: SuaMucVao,
 ): Promise<KetQua<MucDanhMucGhi>> {
+  // `color: null` SURVIVES `JSON.stringify` (only `undefined` is dropped) — which is exactly the
+  // "clear the colour" the server reads from an explicit null. Never send "" for that: it is a 400.
   const thanGui = {
     label: than.label,
     order: than.order,
     active: than.active,
     is_default: than.is_default,
+    color: than.color,
   };
 
   const kq = await goiGhi(duongDanMuc(mo.mauMuc, id), "PATCH", thanGui, 200);
