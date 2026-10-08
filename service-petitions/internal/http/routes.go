@@ -2980,4 +2980,93 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "admin.lookup")(
 			idem.KhongCan("khôi phục khi xã đã dùng câu mặc định thì không còn dòng nào để gỡ và không ghi gì")(
 				http.HandlerFunc(h.RestoreSystemMessage))))
+
+	// --- ADR 0079 Q2 ("Làm đúng prototype", migration 0033) — the switch and the commune's sentences ---
+	//
+	// SAME KEY, `admin.lookup`, on all four: the same screen and the same act of administering the
+	// commune's configuration as the three routes above (rule 5, invariant 3c — no key invented).
+
+	// "Tắt / Bật lại" of the commune's wording of a SHIPPED key: a PATCH of the override sub-resource's
+	// one other field. While off, every reader resolves the shipped sentence (domain.ResolveMessage).
+	// 409 `no_commune_wording` on a key the commune never reworded — nothing to switch, and a shipped
+	// refusal may not be silenced.
+	//
+	// idem.KhongCan: app.SetActive writes nothing and files no entry when the state already holds.
+	//
+	// @summary  Xã tắt hoặc bật lại lời đã sửa của một câu hệ thống (tắt thì dùng lời gốc của phần mềm)
+	// @screen   14-cau-hinh §7
+	// @request  switchSystemMessageIn
+	// @reply    200 systemMessageOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/petitions-system-messages/{code}/override",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			idem.KhongCan("đặt lại đúng trạng thái đang có không ghi gì và không để vết, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.SwitchSystemMessage))))
+
+	// A sentence the COMMUNE adds, group `phan-anh` or `chung` (ADR 0079 Q5a). Stored and managed
+	// only — nothing resolves it anywhere (Q5b).
+	//
+	// idem.Required(MoKhiHong), as the catalogue creates: the real guard is UNIQUE (tenant_id,
+	// message_key), which counts soft-deleted rows; the key turns a double-submit into a replayed 201
+	// instead of a confusing 409. Not DongKhiHong: no legal consequence rides on a duplicate.
+	//
+	// @summary  Xã thêm một câu hệ thống của riêng xã (nhóm Phản ánh hoặc Dùng chung)
+	// @screen   14-cau-hinh §7
+	// @request  createCustomMessageIn
+	// @reply    201 systemMessageOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/petitions-system-messages",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.CreateCustomMessage))))
+
+	// Edit a commune sentence: words, description, switch. A shipped key answers 409 — it changes
+	// through …/override.
+	//
+	// idem.KhongCan: app.EditCustom writes nothing and files no entry when no field moved.
+	//
+	// @summary  Sửa lời, mô tả hoặc tắt/bật một câu do xã tự thêm
+	// @screen   14-cau-hinh §7
+	// @request  editCustomMessageIn
+	// @reply    200 systemMessageOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/petitions-system-messages/{code}",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; app.EditCustom không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.EditCustomMessage))))
+
+	// Soft delete of a commune sentence, reason required (rule 7, invariant 1). Its key stays taken
+	// for ever; the deleted row is frozen by the trigger (0033). A shipped key answers 409.
+	//
+	// idem.KhongCan: the second request finds no live sentence (404) and cannot overwrite who deleted
+	// it or why — the UPDATE carries `AND deleted_at IS NULL`.
+	//
+	// @summary  Xoá mềm một câu do xã tự thêm, kèm lý do bắt buộc
+	// @screen   14-cau-hinh §7
+	// @request  deleteCustomMessageIn
+	// @reply    204 -
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/petitions-system-messages/{code}",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			idem.KhongCan("xoá một câu đã xoá cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người xoá và lý do")(
+				http.HandlerFunc(h.DeleteCustomMessage))))
 }

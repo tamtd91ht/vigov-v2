@@ -33,6 +33,31 @@ type MessageOverrideStore interface {
 	AddOverride(ctx context.Context, tx *store.ScopedTx, o domain.MessageOverride) error
 	UpdateText(ctx context.Context, tx *store.ScopedTx, o domain.MessageOverride) error
 	SoftDelete(ctx context.Context, tx *store.ScopedTx, id, by, reason string, at time.Time) error
+	// SetActive is "Tắt / Bật lại" (migration 0033 §A). It touches `is_active` and the who/when only.
+	SetActive(ctx context.Context, tx *store.ScopedTx, id string, active bool, by string, at time.Time) error
+}
+
+// CustomMessageStore is the commune-sentence half (migration 0033 §B). Same shape of promise: every
+// write takes the transaction the audit entry is written in.
+type CustomMessageStore interface {
+	// ListCustom reads the commune's LIVE sentences, bounded by domain.TranCustomMessages (an error
+	// past it, never a truncated list).
+	ListCustom(ctx context.Context) ([]domain.CustomMessage, error)
+	CustomForUpdate(ctx context.Context, tx *store.ScopedTx, key string) (*domain.CustomMessage, error)
+	// CustomKeyTaken counts SOFT-DELETED rows too: a deleted key is never reused (rule 7, inv 3).
+	CustomKeyTaken(ctx context.Context, tx *store.ScopedTx, key string) (bool, error)
+	CountLiveCustom(ctx context.Context, tx *store.ScopedTx) (int, error)
+	AddCustom(ctx context.Context, tx *store.ScopedTx, c domain.CustomMessage) error
+	UpdateCustom(ctx context.Context, tx *store.ScopedTx, c domain.CustomMessage) error
+	SoftDeleteCustom(ctx context.Context, tx *store.ScopedTx, id, by, reason string, at time.Time) error
+}
+
+// SystemMessageStore is everything "Lời hệ thống" stores in this service. ONE value satisfies both
+// halves (store.SystemMessageOverrideStore), so wiring cannot give the screen its overrides and forget
+// the commune sentences — the list merges both, and half a list would look complete.
+type SystemMessageStore interface {
+	MessageOverrideStore
+	CustomMessageStore
 }
 
 // The business verbs written into the trail — the SAME strings finance writes, so an inspection
@@ -40,6 +65,15 @@ type MessageOverrideStore interface {
 const (
 	ActionRewordSystemMessage  = "sua_loi_he_thong"
 	ActionRestoreSystemMessage = "khoi_phuc_loi_he_thong_mac_dinh"
+
+	// "Tắt / Bật lại" (ADR 0079 Q2) — of a commune's wording of a shipped key, or of a commune sentence.
+	ActionSwitchOffSystemMessage = "tat_loi_he_thong"
+	ActionSwitchOnSystemMessage  = "bat_lai_loi_he_thong"
+
+	// A commune sentence ("Xã tự thêm", ADR 0079 Q2, Q5a).
+	ActionAddCustomMessage    = "them_cau_he_thong_cua_xa"
+	ActionEditCustomMessage   = "sua_cau_he_thong_cua_xa"
+	ActionDeleteCustomMessage = "xoa_cau_he_thong_cua_xa"
 )
 
 // RestoreReason is what `delete_reason` holds on a reverted wording. A FIXED SENTENCE, not a field
@@ -50,14 +84,14 @@ const RestoreReason = "khôi phục câu mặc định"
 // resolving the one sentence a refusal branch is about to send.
 type SystemMessages struct {
 	db    *store.DB
-	store MessageOverrideStore
+	store SystemMessageStore
 
 	// Injected so a test can pin them. ulid.Moi and time.Now in production.
 	newID func() (string, error)
 	now   func() time.Time
 }
 
-func NewSystemMessages(db *store.DB, s MessageOverrideStore) *SystemMessages {
+func NewSystemMessages(db *store.DB, s SystemMessageStore) *SystemMessages {
 	return &SystemMessages{db: db, store: s, newID: ulid.Moi, now: time.Now}
 }
 
@@ -67,19 +101,29 @@ func NewSystemMessages(db *store.DB, s MessageOverrideStore) *SystemMessages {
 // A STORE FAILURE IS AN ERROR HERE, NOT THE DEFAULT: this is the screen where an administrator
 // checks what the commune says, and showing the default when the read failed would tell them their
 // own wording is gone. Text below makes the opposite call, for the opposite reader.
+//
+// THE COMMUNE'S OWN SENTENCES FOLLOW THE SHIPPED ONES (migration 0033 §B), in the store's order (group,
+// then key). A failure of EITHER read fails the list: half a list looks complete.
 func (uc *SystemMessages) Messages(ctx context.Context) ([]domain.SystemMessage, error) {
 	live, err := uc.store.ListLive(ctx)
 	if err != nil {
 		return nil, wrapMessage(ctx, "đọc", err)
+	}
+	custom, err := uc.store.ListCustom(ctx)
+	if err != nil {
+		return nil, wrapMessage(ctx, "đọc câu xã tự thêm", err)
 	}
 	byKey := make(map[string]*domain.MessageOverride, len(live))
 	for i := range live {
 		byKey[live[i].Key] = &live[i]
 	}
 	shipped := domain.ShippedMessages()
-	out := make([]domain.SystemMessage, 0, len(shipped))
+	out := make([]domain.SystemMessage, 0, len(shipped)+len(custom))
 	for _, m := range shipped {
 		out = append(out, domain.ResolveMessage(m, byKey[m.Key]))
+	}
+	for _, c := range custom {
+		out = append(out, domain.CustomToMessage(c))
 	}
 	return out, nil
 }
@@ -141,12 +185,25 @@ func (uc *SystemMessages) Reword(ctx context.Context, key, rawText string, actor
 			return err
 		}
 		before := domain.ResolveMessage(shipped, cur)
-		if before.CurrentText == text {
+		// THE COMPARISON IS AGAINST THE COMMUNE'S WORDING when it has one, switched on or off — not
+		// against the text in force. Re-sending the stored words of a switched-off wording changes
+		// nothing; comparing to CurrentText (the default, while off) would rewrite it as "new".
+		stored := shipped.DefaultText
+		if cur != nil {
+			stored = cur.Text
+		}
+		if stored == text {
 			after = before
 			return nil
 		}
 
+		// REWORDING DOES NOT FLIP THE SWITCH: a switched-off wording that is edited stays off until
+		// "Bật lại" — the switch and the words are two acts, each with its own entry. An assumption of
+		// this card, stated in its report.
 		o := domain.MessageOverride{Key: key, Text: text, UpdatedAt: uc.now().UTC(), UpdatedBy: actor.ID}
+		if cur != nil {
+			o.Inactive = cur.Inactive
+		}
 		if cur == nil {
 			if o.ID, err = uc.newID(); err != nil {
 				return fmt.Errorf("system_message: sinh mã: %w", err)
@@ -212,8 +269,8 @@ func writeMessageAudit(ctx context.Context, tx *store.ScopedTx, actor audit.Acto
 	before, after domain.SystemMessage) error {
 
 	delta, err := json.Marshal(map[string]any{
-		"truoc": map[string]any{"text": before.CurrentText, "overridden": before.Overridden},
-		"sau":   map[string]any{"text": after.CurrentText, "overridden": after.Overridden},
+		"truoc": map[string]any{"text": before.CurrentText, "overridden": before.Overridden, "is_active": before.Active, "override_text": before.OverrideText},
+		"sau":   map[string]any{"text": after.CurrentText, "overridden": after.Overridden, "is_active": after.Active, "override_text": after.OverrideText},
 	})
 	if err != nil {
 		return fmt.Errorf("system_message: mã hoá delta: %w", err)

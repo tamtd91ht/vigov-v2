@@ -59,6 +59,7 @@ type hangGia struct {
 	thuTu             int
 	nguon             string
 	reNhanh           bool
+	color             string // "" = NULL (ADR 0079 row 5)
 }
 
 func (h hangGia) giaTri(cot string) driver.Value {
@@ -82,6 +83,11 @@ func (h hangGia) giaTri(cot string) driver.Value {
 		return h.nguon
 	case "ma_nguon_re_nhanh":
 		return h.reNhanh
+	case "color":
+		if h.color == "" {
+			return nil
+		}
+		return h.color
 	case "enabled":
 		// `nhan_linh_vuc.enabled` (migration 0022) — the same "in use" switch as `dang_dung`, and the
 		// fixtures already set that boolean opposite to `la_mac_dinh`, so a mis-wired Scan still shows.

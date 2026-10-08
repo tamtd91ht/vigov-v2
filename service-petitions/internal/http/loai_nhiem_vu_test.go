@@ -285,7 +285,7 @@ func TestLoaiNhiemVuChiTraTruongCuaHopDong(t *testing.T) {
 	// `requires_directive` ADDED 07/10/2026 (derived from the code like `tier`, read-only).
 	muon := map[string]bool{
 		"id": true, "code": true, "label": true, "is_default": true, "active": true,
-		"order": true, "source": true, "tier": true, "requires_directive": true,
+		"order": true, "source": true, "tier": true, "requires_directive": true, "color": true,
 	}
 	for _, mot := range tho.Items {
 		for khoa := range mot {

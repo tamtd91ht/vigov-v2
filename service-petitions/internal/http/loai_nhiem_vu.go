@@ -105,6 +105,10 @@ type loaiNhiemVuRa struct {
 	// WRITABLE: no write body declares it, so a POST/PATCH carrying it is ignored like any unknown field.
 	// `theo-van-ban` is a tier-3 code (migration 0003:205-208), so the code this reads cannot change.
 	RequiresDirective bool `json:"requires_directive"`
+
+	// Color is the display colour, `#rrggbb` lower-case, or null when none was chosen (ADR 0079 row 5).
+	// Presentation only; the screen draws a neutral chip for null.
+	Color *string `json:"color"`
 }
 
 // danhSachLoaiNhiemVuRa wraps the list in an OBJECT rather than returning a bare JSON array.
@@ -129,6 +133,7 @@ func loaiNhiemVuRaNgoai(l domain.LoaiNhiemVu) loaiNhiemVuRa {
 		ID: l.ID, Code: l.Ma, Label: l.Nhan, IsDefault: l.LaMacDinh, Active: l.DangDung,
 		Order: l.ThuTu, Source: l.Nguon, Tier: int(l.Tang()),
 		RequiresDirective: l.RequiresDirective(),
+		Color:             colorOut(l.Color),
 	}
 }
 
@@ -208,6 +213,9 @@ type themLoaiNhiemVuVao struct {
 	Order     int    `json:"order,omitempty"`
 	IsDefault bool   `json:"is_default,omitempty"`
 
+	// Color is `#RRGGBB` (stored lower-case); absent or null = no colour (ADR 0079 row 5).
+	Color *string `json:"color,omitempty"`
+
 	Source *string `json:"source,omitempty"`
 	Tier   *int    `json:"tier,omitempty"`
 }
@@ -228,6 +236,9 @@ type suaLoaiNhiemVuVao struct {
 	Order     *int    `json:"order,omitempty"`
 	Active    *bool   `json:"active,omitempty"`
 	IsDefault *bool   `json:"is_default,omitempty"`
+
+	// Color has THREE states: absent = leave it; null = clear it; `#RRGGBB` = set it.
+	Color optionalColorIn `json:"color,omitempty"`
 
 	Code   *string `json:"code,omitempty"`
 	Source *string `json:"source,omitempty"`
@@ -271,6 +282,7 @@ func (h *Handler) ThemLoaiNhiemVu(w http.ResponseWriter, r *http.Request) {
 		Nhan:      vao.Label,
 		ThuTu:     vao.Order,
 		LaMacDinh: vao.IsDefault,
+		Color:     vao.Color,
 	}, nguoi)
 	if err != nil {
 		h.traLoiLoiGhi(w, r, "thêm", err)
@@ -312,6 +324,7 @@ func (h *Handler) SuaLoaiNhiemVu(w http.ResponseWriter, r *http.Request) {
 		ThuTu:     vao.Order,
 		DangDung:  vao.Active,
 		LaMacDinh: vao.IsDefault,
+		Color:     vao.Color.change(),
 	}, nguoi)
 	if err != nil {
 		h.traLoiLoiGhi(w, r, "sửa", err)

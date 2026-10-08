@@ -71,6 +71,10 @@ type mucUuTienRa struct {
 	// after what a screen does with it (ADR 0017). Capability flags would also have to be kept in
 	// step with the trigger from a second place.
 	Tier int `json:"tier"`
+
+	// Color is the display colour, `#rrggbb` lower-case, or null when none was chosen (ADR 0079 row 5).
+	// Presentation only; the screen draws a neutral chip for null.
+	Color *string `json:"color"`
 }
 
 // danhSachMucUuTienRa wraps the list in an object — same reasoning as danhSachLoaiNhiemVuRa, and
@@ -88,6 +92,7 @@ func mucUuTienRaNgoai(m domain.MucUuTienNhiemVu) mucUuTienRa {
 	return mucUuTienRa{
 		ID: m.ID, Code: m.Ma, Label: m.Nhan, IsDefault: m.LaMacDinh, Active: m.DangDung,
 		Order: m.ThuTu, Source: m.Nguon, Tier: int(m.Tang()),
+		Color: colorOut(m.Color),
 	}
 }
 
@@ -157,6 +162,9 @@ type themMucUuTienVao struct {
 	Order     int    `json:"order,omitempty"`
 	IsDefault bool   `json:"is_default,omitempty"`
 
+	// Color is `#RRGGBB` (stored lower-case); absent or null = no colour (ADR 0079 row 5).
+	Color *string `json:"color,omitempty"`
+
 	Source *string `json:"source,omitempty"`
 	Tier   *int    `json:"tier,omitempty"`
 }
@@ -177,6 +185,9 @@ type suaMucUuTienVao struct {
 	Order     *int    `json:"order,omitempty"`
 	Active    *bool   `json:"active,omitempty"`
 	IsDefault *bool   `json:"is_default,omitempty"`
+
+	// Color has THREE states: absent = leave it; null = clear it; `#RRGGBB` = set it.
+	Color optionalColorIn `json:"color,omitempty"`
 
 	Code   *string `json:"code,omitempty"`
 	Source *string `json:"source,omitempty"`
@@ -220,6 +231,7 @@ func (h *Handler) ThemMucUuTien(w http.ResponseWriter, r *http.Request) {
 		Nhan:      vao.Label,
 		ThuTu:     vao.Order,
 		LaMacDinh: vao.IsDefault,
+		Color:     vao.Color,
 	}, nguoi)
 	if err != nil {
 		h.traLoiLoiGhi(w, r, "thêm", err)
@@ -261,6 +273,7 @@ func (h *Handler) SuaMucUuTien(w http.ResponseWriter, r *http.Request) {
 		ThuTu:     vao.Order,
 		DangDung:  vao.Active,
 		LaMacDinh: vao.IsDefault,
+		Color:     vao.Color.change(),
 	}, nguoi)
 	if err != nil {
 		h.traLoiLoiGhi(w, r, "sửa", err)

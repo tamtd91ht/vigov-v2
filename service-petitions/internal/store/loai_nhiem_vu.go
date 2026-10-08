@@ -52,7 +52,7 @@ var ErrQuaNhieuLoaiNhiemVu = errors.New("loai_nhiem_vu: vượt trần danh mụ
 // `la_mac_dinh` / `dang_dung` adjacent BOOLEANs: swapping either pair — here or in the Scan —
 // produces no error at all. The first pair shows slugs where names belong; the second pre-selects a
 // disabled row on a form.
-const cotLoaiNhiemVu = `id, ma, nhan, la_mac_dinh, dang_dung, thu_tu, nguon, ma_nguon_re_nhanh`
+const cotLoaiNhiemVu = `id, ma, nhan, la_mac_dinh, dang_dung, thu_tu, nguon, ma_nguon_re_nhanh, color`
 
 // DanhSach reads the commune's whole task-type catalogue, in the commune's own order.
 //
@@ -95,10 +95,8 @@ func (s *LoaiNhiemVuStore) DanhSach(ctx context.Context) ([]domain.LoaiNhiemVu, 
 
 	ra := make([]domain.LoaiNhiemVu, 0, 8)
 	for rows.Next() {
-		var l domain.LoaiNhiemVu
-		// POSITIONAL — in lockstep with cotLoaiNhiemVu. See the note there on the adjacent pairs.
-		if err := rows.Scan(&l.ID, &l.Ma, &l.Nhan, &l.LaMacDinh, &l.DangDung,
-			&l.ThuTu, &l.Nguon, &l.MaNguonReNhanh); err != nil {
+		l, err := docMotDongLoaiNhiemVu(rows.Scan)
+		if err != nil {
 			return nil, fmt.Errorf("loai_nhiem_vu: đọc dòng: %w", err)
 		}
 		ra = append(ra, l)
@@ -133,8 +131,15 @@ func (s *LoaiNhiemVuStore) DanhSach(ctx context.Context) ([]domain.LoaiNhiemVu, 
 // note there on the adjacent same-typed columns.
 func docMotDongLoaiNhiemVu(quet func(...any) error) (domain.LoaiNhiemVu, error) {
 	var lnv domain.LoaiNhiemVu
-	err := quet(&lnv.ID, &lnv.Ma, &lnv.Nhan, &lnv.DangDung, &lnv.LaMacDinh,
-		&lnv.ThuTu, &lnv.Nguon, &lnv.MaNguonReNhanh)
+	// LA_MAC_DINH BEFORE DANG_DUNG, AS THE COLUMN LIST SAYS. Until 08/10/2026 this Scan read the two
+	// the other way round (copied from documents, whose list orders them dang_dung first), so every
+	// PATCH read a row's default flag as its in-use flag and wrote both back swapped — and the app
+	// fake mirrored the same wrong order, so nothing turned red. `color` is NULL when none was chosen,
+	// "" in the domain (migration 0033).
+	var color sql.NullString
+	err := quet(&lnv.ID, &lnv.Ma, &lnv.Nhan, &lnv.LaMacDinh, &lnv.DangDung,
+		&lnv.ThuTu, &lnv.Nguon, &lnv.MaNguonReNhanh, &color)
+	lnv.Color = color.String
 	return lnv, err
 }
 
@@ -203,13 +208,13 @@ func (s *LoaiNhiemVuStore) DemDangSong(ctx context.Context, tx *store.ScopedTx) 
 // yet (commune onboarding — see the migration header). Turning either into a parameter is the one
 // edit that reopens the whole tier model, and it would look like tidying up.
 const chenLoaiNhiemVu = `INSERT INTO loai_nhiem_vu
-	(tenant_id, id, ma, nhan, thu_tu, la_mac_dinh, dang_dung, nguon, ma_nguon_re_nhanh)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, 'don-vi', false)`
+	(tenant_id, id, ma, nhan, thu_tu, la_mac_dinh, dang_dung, color, nguon, ma_nguon_re_nhanh)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'don-vi', false)`
 
 // Chen adds one row the COMMUNE owns. There is no method here that writes a `he-thong` row.
 func (s *LoaiNhiemVuStore) Chen(ctx context.Context, tx *store.ScopedTx, lnv domain.LoaiNhiemVu) error {
 	if _, err := tx.Exec(ctx, chenLoaiNhiemVu, string(tx.TenantID()),
-		lnv.ID, lnv.Ma, lnv.Nhan, lnv.ThuTu, lnv.LaMacDinh, lnv.DangDung); err != nil {
+		lnv.ID, lnv.Ma, lnv.Nhan, lnv.ThuTu, lnv.LaMacDinh, lnv.DangDung, colorArg(lnv.Color)); err != nil {
 		return fmt.Errorf("loai_nhiem_vu: chèn: %w", err)
 	}
 	return nil
@@ -238,14 +243,14 @@ func (s *LoaiNhiemVuStore) BoMacDinhKhac(ctx context.Context, tx *store.ScopedTx
 // trigger, and both layers are meant: the trigger is the floor that holds against every writer, and
 // their absence here is what makes the floor unreachable from this service in the first place.
 const capNhatLoaiNhiemVu = `UPDATE loai_nhiem_vu ` +
-	`SET nhan = $3, thu_tu = $4, dang_dung = $5, la_mac_dinh = $6, cap_nhat_luc = now() ` +
+	`SET nhan = $3, thu_tu = $4, dang_dung = $5, la_mac_dinh = $6, color = $7, cap_nhat_luc = now() ` +
 	`WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
 
 // CapNhat writes the four fields a commune may change. The caller has already read the row with
 // TheoIDDeSua and decided the change is permitted at this row's tier.
 func (s *LoaiNhiemVuStore) CapNhat(ctx context.Context, tx *store.ScopedTx, lnv domain.LoaiNhiemVu) error {
 	kq, err := tx.Exec(ctx, capNhatLoaiNhiemVu, string(tx.TenantID()),
-		lnv.ID, lnv.Nhan, lnv.ThuTu, lnv.DangDung, lnv.LaMacDinh)
+		lnv.ID, lnv.Nhan, lnv.ThuTu, lnv.DangDung, lnv.LaMacDinh, colorArg(lnv.Color))
 	if err != nil {
 		return fmt.Errorf("loai_nhiem_vu: cập nhật: %w", err)
 	}

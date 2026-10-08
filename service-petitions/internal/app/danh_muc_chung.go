@@ -27,3 +27,17 @@ func chon[T any](ben bool, truoc, sau T) T {
 	}
 	return sau
 }
+
+// CatalogueColorChange is one edit of a catalogue row's display colour (ADR 0079 row 5). Color nil
+// clears it.
+type CatalogueColorChange struct {
+	Color *string
+}
+
+// colorDelta renders the colour for the trail: nil when none, so "cleared" reads as null.
+func colorDelta(color string) any {
+	if color == "" {
+		return nil
+	}
+	return color
+}

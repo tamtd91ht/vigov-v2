@@ -17,6 +17,7 @@ import (
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-petitions/internal/app"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
 	docstore "github.com/vihat/vigov/service-petitions/internal/store"
 )
@@ -127,6 +128,7 @@ func laLoiDauVao(err error) bool {
 		domain.ErrThuTuNgoaiKhoang,
 		domain.ErrThieuLyDoXoa, domain.ErrLyDoXoaQuaDai,
 		domain.ErrMaBatBien, domain.ErrNguonDoTuClient,
+		domain.ErrCatalogueColorInvalid,
 		domain.ErrKhongTatDuocTrangThai,
 	} {
 		if errors.Is(err, mot) {
@@ -134,4 +136,43 @@ func laLoiDauVao(err error) bool {
 		}
 	}
 	return false
+}
+
+// optionalColorIn records whether `color` was present at all, and its value when it was a string.
+// encoding/json calls UnmarshalJSON for a present field INCLUDING an explicit null, never for an absent
+// one — the device service-identity uses for the same field.
+type optionalColorIn struct {
+	present bool
+	color   *string
+}
+
+func (o *optionalColorIn) UnmarshalJSON(b []byte) error {
+	o.present = true
+	if string(b) == "null" {
+		o.color = nil
+		return nil
+	}
+	var c string
+	if err := json.Unmarshal(b, &c); err != nil {
+		return err
+	}
+	o.color = &c
+	return nil
+}
+
+// change turns the wire state into the use case's: nil when absent.
+func (o optionalColorIn) change() *app.CatalogueColorChange {
+	if !o.present {
+		return nil
+	}
+	return &app.CatalogueColorChange{Color: o.color}
+}
+
+// colorOut renders a catalogue colour: "" (NULL) leaves as null, never as an empty string a client
+// could hand to a style attribute.
+func colorOut(color string) *string {
+	if color == "" {
+		return nil
+	}
+	return &color
 }

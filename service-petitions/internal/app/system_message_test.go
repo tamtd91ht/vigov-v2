@@ -37,6 +37,15 @@ type overrideFake struct {
 	txsSeen                map[*store.ScopedTx]bool
 	lastBy, lastReason     string
 	lastAt                 time.Time
+
+	// The switch and the commune-sentence half (system_message_custom_test.go).
+	switches                                 int
+	custom                                   map[tenant.ID]map[string]*domain.CustomMessage
+	deleted                                  map[string]bool
+	customListErr                            error
+	liveCount                                int
+	customAdds, customUpdates, customDeletes int
+	addCustomErr                             error
 }
 
 func newOverrideFake() *overrideFake {

@@ -55,6 +55,11 @@ type systemMessagesFake struct {
 	overrides map[tenant.ID]map[string]string
 	textErr   error
 	textCalls int
+
+	active  *bool
+	created app.NewCustomMessage
+	edited  app.CustomMessageEdit
+	reason  string
 }
 
 func (f *systemMessagesFake) record(ctx context.Context, op string) {
@@ -105,6 +110,30 @@ func (f *systemMessagesFake) Restore(ctx context.Context, key string, actor audi
 	return f.result, f.err
 }
 
+func (f *systemMessagesFake) SetActive(ctx context.Context, key string, active bool, actor audit.Actor) (domain.SystemMessage, error) {
+	f.record(ctx, "switch")
+	f.key, f.actor, f.active = key, actor, &active
+	return f.result, f.err
+}
+
+func (f *systemMessagesFake) CreateCustom(ctx context.Context, in app.NewCustomMessage, actor audit.Actor) (domain.SystemMessage, error) {
+	f.record(ctx, "create")
+	f.key, f.actor, f.created = in.Key, actor, in
+	return f.result, f.err
+}
+
+func (f *systemMessagesFake) EditCustom(ctx context.Context, key string, in app.CustomMessageEdit, actor audit.Actor) (domain.SystemMessage, error) {
+	f.record(ctx, "edit")
+	f.key, f.actor, f.edited = key, actor, in
+	return f.result, f.err
+}
+
+func (f *systemMessagesFake) DeleteCustom(ctx context.Context, key, reason string, actor audit.Actor) error {
+	f.record(ctx, "delete")
+	f.key, f.actor, f.reason = key, actor, reason
+	return f.err
+}
+
 // --- PART 1: the configuration routes ------------------------------------------------------------
 
 // systemMessagesServer is dungMayChu's real routes with the Checker swapped for the commune-keyed
@@ -149,6 +178,8 @@ func (s *systemMessagesServer) call(method, host, path string, p *authz.Principa
 	r.Host = host
 	r.RemoteAddr = "10.0.0.7:51000"
 	r.Header.Set("Content-Type", "application/json")
+	// The create route declares idem.Required; the others ignore the header.
+	r.Header.Set("Idempotency-Key", "tn-system-message-0001")
 	if p != nil {
 		r = r.WithContext(authz.Into(r.Context(), *p))
 	}
@@ -160,13 +191,23 @@ func (s *systemMessagesServer) call(method, host, path string, p *authz.Principa
 type systemMessageRoute struct {
 	name, method, path, body string
 	ok                       int
+	key                      string // the key the use case must receive; "" for the list
 }
 
+const customCode = "chung.loi-chao"
+
 func systemMessageRoutes() []systemMessageRoute {
+	k := domain.KeyFeedbackReasonRequired
 	return []systemMessageRoute{
-		{"GET", http.MethodGet, systemMessagesPath, "", http.StatusOK},
-		{"PUT", http.MethodPut, overridePath(domain.KeyFeedbackReasonRequired), `{"text":"Câu của xã."}`, http.StatusOK},
-		{"DELETE", http.MethodDelete, overridePath(domain.KeyFeedbackReasonRequired), "", http.StatusNoContent},
+		{"GET", http.MethodGet, systemMessagesPath, "", http.StatusOK, ""},
+		{"PUT override", http.MethodPut, overridePath(k), `{"text":"Câu của xã."}`, http.StatusOK, k},
+		{"DELETE override", http.MethodDelete, overridePath(k), "", http.StatusNoContent, k},
+		// ADR 0079 Q2 (migration 0033).
+		{"PATCH override (switch)", http.MethodPatch, overridePath(k), `{"is_active":false}`, http.StatusOK, k},
+		{"POST commune sentence", http.MethodPost, systemMessagesPath,
+			`{"group_code":"chung","code":"` + customCode + `","text":"Xin chào."}`, http.StatusCreated, customCode},
+		{"PATCH commune sentence", http.MethodPatch, systemMessagesPath + "/" + customCode, `{"text":"Mới."}`, http.StatusOK, customCode},
+		{"DELETE commune sentence", http.MethodDelete, systemMessagesPath + "/" + customCode, `{"reason":"Không dùng"}`, http.StatusNoContent, customCode},
 	}
 }
 
@@ -230,8 +271,8 @@ func TestSystemMessages_200RightPermissionRightCommune(t *testing.T) {
 				if s.svc.actor.ID != maCanBo || s.svc.actor.ID == idCanBo || s.svc.actor.IP != "10.0.0.7" {
 					t.Errorf("actor = %+v, want business code %s and socket IP", s.svc.actor, maCanBo)
 				}
-				if s.svc.key != domain.KeyFeedbackReasonRequired {
-					t.Errorf("key = %q", s.svc.key)
+				if s.svc.key != rt.key {
+					t.Errorf("key = %q, want %q", s.svc.key, rt.key)
 				}
 			}
 		})
@@ -380,13 +421,14 @@ func TestSystemMessageWriteWithoutBusinessCodeIs500(t *testing.T) {
 	s := newSystemMessagesServer(t)
 	s.grant(xaA, "admin.lookup")
 	p := &authz.Principal{ID: idCanBo, Kind: "staff", TenantID: xaA}
-	for _, method := range []string{http.MethodPut, http.MethodDelete} {
-		body := ""
-		if method == http.MethodPut {
-			body = `{"text":"x"}`
+	for _, rt := range systemMessageRoutes() {
+		if rt.method == http.MethodGet {
+			continue
 		}
-		doiMa(t, s.call(method, hostA, overridePath(domain.KeyFeedbackReasonRequired), p, body),
-			http.StatusInternalServerError)
+		w := s.call(rt.method, hostA, rt.path, p, rt.body)
+		if w.Code != http.StatusInternalServerError {
+			t.Errorf("%s: code = %d, want 500", rt.name, w.Code)
+		}
 	}
 	if s.svc.calls != 0 {
 		t.Error("write ran for a principal with no business code")
@@ -525,6 +567,30 @@ func (f *failingOverrideStore) UpdateText(context.Context, *store.ScopedTx, doma
 	return errors.New("not used")
 }
 func (f *failingOverrideStore) SoftDelete(context.Context, *store.ScopedTx, string, string, string, time.Time) error {
+	return errors.New("not used")
+}
+func (f *failingOverrideStore) SetActive(context.Context, *store.ScopedTx, string, bool, string, time.Time) error {
+	return errors.New("not used")
+}
+func (f *failingOverrideStore) ListCustom(context.Context) ([]domain.CustomMessage, error) {
+	return nil, errors.New("not used")
+}
+func (f *failingOverrideStore) CustomForUpdate(context.Context, *store.ScopedTx, string) (*domain.CustomMessage, error) {
+	return nil, errors.New("not used")
+}
+func (f *failingOverrideStore) CustomKeyTaken(context.Context, *store.ScopedTx, string) (bool, error) {
+	return false, errors.New("not used")
+}
+func (f *failingOverrideStore) CountLiveCustom(context.Context, *store.ScopedTx) (int, error) {
+	return 0, errors.New("not used")
+}
+func (f *failingOverrideStore) AddCustom(context.Context, *store.ScopedTx, domain.CustomMessage) error {
+	return errors.New("not used")
+}
+func (f *failingOverrideStore) UpdateCustom(context.Context, *store.ScopedTx, domain.CustomMessage) error {
+	return errors.New("not used")
+}
+func (f *failingOverrideStore) SoftDeleteCustom(context.Context, *store.ScopedTx, string, string, string, time.Time) error {
 	return errors.New("not used")
 }
 

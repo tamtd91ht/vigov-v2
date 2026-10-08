@@ -32,7 +32,18 @@ func NewSystemMessageOverrideStore(db *store.DB) *SystemMessageOverrideStore {
 var ErrTooManyMessageOverrides = errors.New("system_message_override: số dòng đang dùng vượt số khoá")
 
 // Read by position, in lockstep with every Scan below.
-const systemMessageOverrideCols = `id, message_key, message_text, updated_at, updated_by`
+const systemMessageOverrideCols = `id, message_key, message_text, updated_at, updated_by, is_active`
+
+// scanOverride is the ONE Scan of systemMessageOverrideCols. `is_active` is read and stored as its
+// negation (domain.MessageOverride.Inactive) so the zero value of the struct means "in force", as the
+// column's default does (migration 0033 §A).
+func scanOverride(scan func(...any) error) (domain.MessageOverride, error) {
+	var o domain.MessageOverride
+	var active bool
+	err := scan(&o.ID, &o.Key, &o.Text, &o.UpdatedAt, &o.UpdatedBy, &active)
+	o.Inactive = !active
+	return o, err
+}
 
 // ListLive reads the commune's live overrides. SOFT-DELETED ROWS ARE EXCLUDED (rule 7, invariant
 // 2): a reverted wording is history, not the sentence in force.
@@ -50,8 +61,8 @@ func (s *SystemMessageOverrideStore) ListLive(ctx context.Context) ([]domain.Mes
 
 	out := make([]domain.MessageOverride, 0, limit)
 	for rows.Next() {
-		var o domain.MessageOverride
-		if err := rows.Scan(&o.ID, &o.Key, &o.Text, &o.UpdatedAt, &o.UpdatedBy); err != nil {
+		o, err := scanOverride(rows.Scan)
+		if err != nil {
 			return nil, fmt.Errorf("system_message_override: đọc dòng: %w", err)
 		}
 		out = append(out, o)
@@ -77,9 +88,7 @@ func (s *SystemMessageOverrideStore) LiveForUpdate(ctx context.Context, tx *stor
 	const stmt = `SELECT ` + systemMessageOverrideCols + ` FROM system_message_override ` +
 		`WHERE tenant_id = $1 AND message_key = $2 AND deleted_at IS NULL FOR UPDATE`
 
-	var o domain.MessageOverride
-	err := tx.Underlying().QueryRowContext(ctx, stmt, string(tx.TenantID()), key).
-		Scan(&o.ID, &o.Key, &o.Text, &o.UpdatedAt, &o.UpdatedBy)
+	o, err := scanOverride(tx.Underlying().QueryRowContext(ctx, stmt, string(tx.TenantID()), key).Scan)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -89,19 +98,20 @@ func (s *SystemMessageOverrideStore) LiveForUpdate(ctx context.Context, tx *stor
 	return &o, nil
 }
 
-// AddOverride writes the commune's first wording of a key (or its first after a revert).
+// AddOverride writes the commune's first wording of a key (or its first after a revert). `is_active`
+// is bound, not left to the column default, so the row written is the row the caller described.
 func (s *SystemMessageOverrideStore) AddOverride(ctx context.Context, tx *store.ScopedTx, o domain.MessageOverride) error {
 	const stmt = `INSERT INTO system_message_override
-		(tenant_id, id, message_key, message_text, created_at, created_by, updated_at, updated_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $5, $6)`
-	if _, err := tx.Exec(ctx, stmt, string(tx.TenantID()), o.ID, o.Key, o.Text, o.UpdatedAt, o.UpdatedBy); err != nil {
+		(tenant_id, id, message_key, message_text, created_at, created_by, updated_at, updated_by, is_active)
+		VALUES ($1, $2, $3, $4, $5, $6, $5, $6, $7)`
+	if _, err := tx.Exec(ctx, stmt, string(tx.TenantID()), o.ID, o.Key, o.Text, o.UpdatedAt, o.UpdatedBy, !o.Inactive); err != nil {
 		return fmt.Errorf("system_message_override: chèn: %w", err)
 	}
 	return nil
 }
 
 // UpdateText rewrites the live wording. `message_key` is not in the statement: a row never moves
-// to another key.
+// to another key; nor is `is_active` — rewording does not flip the switch (SetActive does).
 func (s *SystemMessageOverrideStore) UpdateText(ctx context.Context, tx *store.ScopedTx, o domain.MessageOverride) error {
 	const stmt = `UPDATE system_message_override SET message_text = $3, updated_at = $4, updated_by = $5 ` +
 		`WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
@@ -123,4 +133,16 @@ func (s *SystemMessageOverrideStore) SoftDelete(ctx context.Context, tx *store.S
 		return fmt.Errorf("system_message_override: xoá mềm: %w", err)
 	}
 	return doiMotDong(res, "khôi phục câu mặc định")
+}
+
+// SetActive is "Tắt / Bật lại" (migration 0033 §A): the switch and who/when, nothing else — the
+// wording stays exactly as it was, which is what makes "Bật lại" bring the same words back.
+func (s *SystemMessageOverrideStore) SetActive(ctx context.Context, tx *store.ScopedTx, id string, active bool, by string, at time.Time) error {
+	const stmt = `UPDATE system_message_override SET is_active = $3, updated_at = $4, updated_by = $5 ` +
+		`WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
+	res, err := tx.Exec(ctx, stmt, string(tx.TenantID()), id, active, at, by)
+	if err != nil {
+		return fmt.Errorf("system_message_override: tắt/bật: %w", err)
+	}
+	return doiMotDong(res, "tắt/bật câu hệ thống")
 }

@@ -89,6 +89,9 @@ type YeuCauThemMucUuTien struct {
 	Nhan      string
 	ThuTu     int
 	LaMacDinh bool
+
+	// Color is the display colour (migration 0033); nil = none chosen.
+	Color *string
 }
 
 // YeuCauSuaMucUuTien is a PARTIAL edit: a nil pointer means "leave this alone".
@@ -103,6 +106,10 @@ type YeuCauSuaMucUuTien struct {
 	ThuTu     *int
 	DangDung  *bool
 	LaMacDinh *bool
+
+	// Color has THREE states: nil = leave it; a change with Color nil = clear it; a value = set it.
+	// Editable on every tier — presentation only (ADR 0079 lô 2 Q1 #9).
+	Color *CatalogueColorChange
 }
 
 // Them adds one row the commune owns.
@@ -127,6 +134,12 @@ func (uc *DanhMucMucUuTien) Them(ctx context.Context, yc YeuCauThemMucUuTien,
 	if err := domain.KiemTraThuTu(yc.ThuTu); err != nil {
 		return domain.MucUuTienNhiemVu{}, err
 	}
+	var color string
+	if yc.Color != nil {
+		if color, err = domain.NormalizeCatalogueColor(*yc.Color); err != nil {
+			return domain.MucUuTienNhiemVu{}, err
+		}
+	}
 
 	id, err := uc.sinhID()
 	if err != nil {
@@ -136,6 +149,7 @@ func (uc *DanhMucMucUuTien) Them(ctx context.Context, yc YeuCauThemMucUuTien,
 	moi := domain.MucUuTienNhiemVu{
 		ID: id, Ma: ma, Nhan: nhan, ThuTu: yc.ThuTu,
 		LaMacDinh: yc.LaMacDinh,
+		Color:     color,
 		DangDung:  true,
 		// Set here only so the value this function RETURNS describes the row that was written. The
 		// store does not read them: it writes 'don-vi' and false as literals.
@@ -221,6 +235,13 @@ func (uc *DanhMucMucUuTien) Sua(ctx context.Context, id string, yc YeuCauSuaMucU
 			return domain.MucUuTienNhiemVu{}, err
 		}
 	}
+	var color string
+	if c := yc.Color; c != nil && c.Color != nil {
+		var err error
+		if color, err = domain.NormalizeCatalogueColor(*c.Color); err != nil {
+			return domain.MucUuTienNhiemVu{}, err
+		}
+	}
 
 	var sau domain.MucUuTienNhiemVu
 	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
@@ -241,6 +262,9 @@ func (uc *DanhMucMucUuTien) Sua(ctx context.Context, id string, yc YeuCauSuaMucU
 		}
 		if yc.LaMacDinh != nil {
 			sau.LaMacDinh = *yc.LaMacDinh
+		}
+		if yc.Color != nil {
+			sau.Color = color // "" when the change clears it
 		}
 
 		// THE TIER CHECK IS ON THE TRANSITION, not on the requested value. Asking a tier-3 row to
@@ -356,6 +380,7 @@ func tomTatMucUuTien(l domain.MucUuTienNhiemVu) map[string]any {
 		"dang_dung":   l.DangDung,
 		"la_mac_dinh": l.LaMacDinh,
 		"nguon":       l.Nguon,
+		"color":       colorDelta(l.Color),
 	}
 }
 
@@ -374,6 +399,9 @@ func tomTatDoiMucUuTien(truoc, sau domain.MucUuTienNhiemVu, ben bool) map[string
 	if truoc.LaMacDinh != sau.LaMacDinh {
 		ra["la_mac_dinh"] = chon(ben, truoc.LaMacDinh, sau.LaMacDinh)
 	}
+	if truoc.Color != sau.Color {
+		ra["color"] = chon(ben, colorDelta(truoc.Color), colorDelta(sau.Color))
+	}
 	return ra
 }
 
@@ -381,5 +409,5 @@ func tomTatDoiMucUuTien(truoc, sau domain.MucUuTienNhiemVu, ben bool) map[string
 // not compared because no path here can change them.
 func khongDoiMucUuTien(truoc, sau domain.MucUuTienNhiemVu) bool {
 	return truoc.Nhan == sau.Nhan && truoc.ThuTu == sau.ThuTu &&
-		truoc.DangDung == sau.DangDung && truoc.LaMacDinh == sau.LaMacDinh
+		truoc.DangDung == sau.DangDung && truoc.LaMacDinh == sau.LaMacDinh && truoc.Color == sau.Color
 }

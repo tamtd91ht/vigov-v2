@@ -261,10 +261,11 @@ func TestChenKhongCoThamSoNaoChoNguon(t *testing.T) {
 	if !strings.Contains(chen[0].sql, "'don-vi'") {
 		t.Errorf("`nguon` không phải hằng trong câu lệnh: %q", chen[0].sql)
 	}
-	// Seven bound parameters: tenant_id, id, ma, nhan, thu_tu, la_mac_dinh, dang_dung. Nothing for
+	// Eight bound parameters: tenant_id, id, ma, nhan, thu_tu, la_mac_dinh, dang_dung, color (the
+	// colour is presentation, not provenance — ADR 0079 row 5). Nothing for
 	// `nguon`, nothing for `ma_nguon_re_nhanh`.
-	if len(chen[0].args) != 7 {
-		t.Errorf("câu chèn nhận %d tham số, muốn 7 — thêm một tham số là thêm một đường cho client",
+	if len(chen[0].args) != 8 {
+		t.Errorf("câu chèn nhận %d tham số, muốn 8 — thêm một tham số là thêm một đường cho client",
 			len(chen[0].args))
 	}
 	for _, a := range chen[0].args {

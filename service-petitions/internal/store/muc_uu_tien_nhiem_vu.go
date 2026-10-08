@@ -48,7 +48,7 @@ var ErrQuaNhieuMucUuTien = errors.New("muc_uu_tien_nhiem_vu: vượt trần danh
 // cotMucUuTien IS READ BY POSITION in DanhSach — same note as cotLoaiNhiemVu: `ma`/`nhan` are
 // adjacent TEXT columns and `la_mac_dinh`/`dang_dung` adjacent BOOLEANs, and swapping either pair
 // raises no error anywhere.
-const cotMucUuTien = `id, ma, nhan, la_mac_dinh, dang_dung, thu_tu, nguon, ma_nguon_re_nhanh`
+const cotMucUuTien = `id, ma, nhan, la_mac_dinh, dang_dung, thu_tu, nguon, ma_nguon_re_nhanh, color`
 
 // DanhSach reads the commune's whole priority scale, IN RANK ORDER.
 //
@@ -76,10 +76,8 @@ func (s *MucUuTienNhiemVuStore) DanhSach(ctx context.Context) ([]domain.MucUuTie
 
 	ra := make([]domain.MucUuTienNhiemVu, 0, 8)
 	for rows.Next() {
-		var m domain.MucUuTienNhiemVu
-		// POSITIONAL — in lockstep with cotMucUuTien.
-		if err := rows.Scan(&m.ID, &m.Ma, &m.Nhan, &m.LaMacDinh, &m.DangDung,
-			&m.ThuTu, &m.Nguon, &m.MaNguonReNhanh); err != nil {
+		m, err := docMotDongMucUuTien(rows.Scan)
+		if err != nil {
 			return nil, fmt.Errorf("muc_uu_tien_nhiem_vu: đọc dòng: %w", err)
 		}
 		ra = append(ra, m)
@@ -113,8 +111,15 @@ func (s *MucUuTienNhiemVuStore) DanhSach(ctx context.Context) ([]domain.MucUuTie
 // note there on the adjacent same-typed columns.
 func docMotDongMucUuTien(quet func(...any) error) (domain.MucUuTienNhiemVu, error) {
 	var muu domain.MucUuTienNhiemVu
-	err := quet(&muu.ID, &muu.Ma, &muu.Nhan, &muu.DangDung, &muu.LaMacDinh,
-		&muu.ThuTu, &muu.Nguon, &muu.MaNguonReNhanh)
+	// LA_MAC_DINH BEFORE DANG_DUNG, AS THE COLUMN LIST SAYS. Until 08/10/2026 this Scan read the two
+	// the other way round (copied from documents, whose list orders them dang_dung first), so every
+	// PATCH read a row's default flag as its in-use flag and wrote both back swapped — and the app
+	// fake mirrored the same wrong order, so nothing turned red. `color` is NULL when none was chosen,
+	// "" in the domain (migration 0033).
+	var color sql.NullString
+	err := quet(&muu.ID, &muu.Ma, &muu.Nhan, &muu.LaMacDinh, &muu.DangDung,
+		&muu.ThuTu, &muu.Nguon, &muu.MaNguonReNhanh, &color)
+	muu.Color = color.String
 	return muu, err
 }
 
@@ -183,13 +188,13 @@ func (s *MucUuTienNhiemVuStore) DemDangSong(ctx context.Context, tx *store.Scope
 // yet (commune onboarding — see the migration header). Turning either into a parameter is the one
 // edit that reopens the whole tier model, and it would look like tidying up.
 const chenMucUuTien = `INSERT INTO muc_uu_tien_nhiem_vu
-	(tenant_id, id, ma, nhan, thu_tu, la_mac_dinh, dang_dung, nguon, ma_nguon_re_nhanh)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, 'don-vi', false)`
+	(tenant_id, id, ma, nhan, thu_tu, la_mac_dinh, dang_dung, color, nguon, ma_nguon_re_nhanh)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'don-vi', false)`
 
 // Chen adds one row the COMMUNE owns. There is no method here that writes a `he-thong` row.
 func (s *MucUuTienNhiemVuStore) Chen(ctx context.Context, tx *store.ScopedTx, muu domain.MucUuTienNhiemVu) error {
 	if _, err := tx.Exec(ctx, chenMucUuTien, string(tx.TenantID()),
-		muu.ID, muu.Ma, muu.Nhan, muu.ThuTu, muu.LaMacDinh, muu.DangDung); err != nil {
+		muu.ID, muu.Ma, muu.Nhan, muu.ThuTu, muu.LaMacDinh, muu.DangDung, colorArg(muu.Color)); err != nil {
 		return fmt.Errorf("muc_uu_tien_nhiem_vu: chèn: %w", err)
 	}
 	return nil
@@ -218,14 +223,14 @@ func (s *MucUuTienNhiemVuStore) BoMacDinhKhac(ctx context.Context, tx *store.Sco
 // trigger, and both layers are meant: the trigger is the floor that holds against every writer, and
 // their absence here is what makes the floor unreachable from this service in the first place.
 const capNhatMucUuTien = `UPDATE muc_uu_tien_nhiem_vu ` +
-	`SET nhan = $3, thu_tu = $4, dang_dung = $5, la_mac_dinh = $6, cap_nhat_luc = now() ` +
+	`SET nhan = $3, thu_tu = $4, dang_dung = $5, la_mac_dinh = $6, color = $7, cap_nhat_luc = now() ` +
 	`WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
 
 // CapNhat writes the four fields a commune may change. The caller has already read the row with
 // TheoIDDeSua and decided the change is permitted at this row's tier.
 func (s *MucUuTienNhiemVuStore) CapNhat(ctx context.Context, tx *store.ScopedTx, muu domain.MucUuTienNhiemVu) error {
 	kq, err := tx.Exec(ctx, capNhatMucUuTien, string(tx.TenantID()),
-		muu.ID, muu.Nhan, muu.ThuTu, muu.DangDung, muu.LaMacDinh)
+		muu.ID, muu.Nhan, muu.ThuTu, muu.DangDung, muu.LaMacDinh, colorArg(muu.Color))
 	if err != nil {
 		return fmt.Errorf("muc_uu_tien_nhiem_vu: cập nhật: %w", err)
 	}
