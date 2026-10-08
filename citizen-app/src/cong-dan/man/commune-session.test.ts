@@ -25,7 +25,7 @@ afterEach(() => {
 describe("openCommuneAppSession — stores only a usable session of the commune on screen", () => {
   it("same commune, bearer, verified phone → stored", async () => {
     expect(await openCommuneAppSession(async () => OK, COMMUNE)).toEqual({ kieu: "da-mo" });
-    expect(layPhienViGov()).toEqual({ token: "tok-test", ten_xa: COMMUNE });
+    expect(layPhienViGov()).toEqual({ token: "tok-test", ten_xa: COMMUNE, phone_verified: true });
   });
 
   it("ANOTHER commune → khac-xa and NOTHING stored (a petition would reach the wrong commune)", async () => {
@@ -38,11 +38,25 @@ describe("openCommuneAppSession — stores only a usable session of the commune 
     expect(layPhienViGov()).toBeNull();
   });
 
-  it("phone not verified → chua-xac-thuc-so, not stored", async () => {
+  it("phone not verified → no-phone, STORED flagged phone-less (ADR 0080 — it was dropped before)", async () => {
     expect(await openCommuneAppSession(async () => ({ ...OK, da_xac_thuc_so: false }), COMMUNE)).toEqual({
-      kieu: "chua-xac-thuc-so",
+      kieu: "no-phone",
     });
+    expect(layPhienViGov()).toEqual({ token: "tok-test", ten_xa: COMMUNE, phone_verified: false });
+  });
+
+  it("phone-less session for ANOTHER commune → khac-xa, nothing stored (the commune check is not relaxed)", async () => {
+    expect(
+      await openCommuneAppSession(async () => ({ ...OK, ten_xa: "Xã Khác", da_xac_thuc_so: false }), COMMUNE, "skip"),
+    ).toEqual({ kieu: "khac-xa" });
     expect(layPhienViGov()).toBeNull();
+  });
+
+  it("hands the opener the mode it was asked for — `ask` by default, `skip` only when passed", async () => {
+    const open = vi.fn<OpenCommuneAppSession>(async () => OK);
+    await openCommuneAppSession(open, COMMUNE);
+    await openCommuneAppSession(open, COMMUNE, "skip");
+    expect(open.mock.calls.map((c) => c[1])).toEqual(["ask", "skip"]);
   });
 
   it("empty bearer → chua-mo; a throwing opener → thu-lai", async () => {

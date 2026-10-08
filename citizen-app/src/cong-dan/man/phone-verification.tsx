@@ -34,6 +34,7 @@ import {
   PHONE_VERIFICATION,
   PHONE_VERIFICATION_TASK,
   type PhoneVerificationTask,
+  TYPED_CONTACT,
   zaloFailureSentence,
   zaloSupportCode,
 } from "./noi-dung";
@@ -173,6 +174,16 @@ export function phoneVerificationMessage(
 }
 
 /**
+ * Whether a screen that SENDS may offer "Gửi bằng họ tên và số điện thoại" under this outcome (ADR 0080 #1):
+ * only when Zalo gave no number — the citizen declined, Zalo failed the PHONE step, or the server reopened the
+ * session without a verified number. Never outside Zalo, never for a network failure or another commune. PURE.
+ */
+export function phoneVerificationOffersManual(outcome: PhoneVerificationStop, zalo?: ZaloFailure): boolean {
+  if (outcome === "tu-choi" || outcome === "van-chua-xac-thuc") return true;
+  return outcome === "thu-lai" && zalo?.capability === "phone";
+}
+
+/**
  * Khung hiện trên màn, THUẦN. `focusId` nằm trên phần tử ĐẦU TIÊN của mọi trạng thái, để màn nào dời
  * tiêu điểm khi đổi bước (màn gửi) thì trình đọc màn hình đọc ngay câu mới.
  *
@@ -192,6 +203,11 @@ export function PhoneVerificationPanel(props: {
   zaloAsks?: string;
   onAllow: () => void;
   onDecline: () => void;
+  /**
+   * "Gửi bằng họ tên và số điện thoại" (ADR 0080) — only the SEND screen passes it, and the button shows only
+   * where `phoneVerificationOffersManual` says. Absent = never offered (lookup, "Phản ánh của tôi", rating).
+   */
+  onManual?: () => void;
 }) {
   const { state } = props;
   const draft = props.draftKept === true ? <p className="cd-ghi-chu">{PHONE_VERIFICATION.draft_kept}</p> : null;
@@ -218,6 +234,14 @@ export function PhoneVerificationPanel(props: {
           <button type="button" className="cd-nut" onClick={props.onAllow}>
             {PHONE_VERIFICATION.allow}
           </button>
+        )}
+        {props.onManual !== undefined && phoneVerificationOffersManual(state.outcome, state.zalo) && (
+          <>
+            <p className="cd-cau">{TYPED_CONTACT.offer}</p>
+            <button type="button" className="cd-nut" onClick={props.onManual}>
+              {TYPED_CONTACT.button}
+            </button>
+          </>
         )}
       </div>
     );

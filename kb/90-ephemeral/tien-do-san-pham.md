@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: dda12fa4
+derived_from_commit: e6273eff
 expires: 2027-01-06
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -42,7 +42,7 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **11** Quản trị nội dung Mini App | 25 | 22/22 +3 ngoài web | ✓ |
 | **12** Danh bạ cán bộ | 14 | 5/12 +2 ngoài web | ✓ |
 | **13** Báo cáo điều hành | 1 | 1/1 | ✓ |
-| **14** Cấu hình hệ thống | 130 | 119/130 | ✓ |
+| **14** Cấu hình hệ thống | 130 | 129/130 | ✓ |
 | **15** Phụ lục: giao diện dùng chung & xác thực | 9 | 9/9 | ✓ |
 
 Tổng **357 tuyến** trong hợp đồng. **16** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
@@ -60,7 +60,7 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 | 3 | Sổ tay lãnh đạo | `/nhiem-vu/so-tay` | `QUYEN_XEM_NHIEM_VU` | ✓ | **không khai** |
 | 4 | Biên bản họp | `/nhiem-vu/bien-ban` | `QUYEN_XEM_NHIEM_VU` | ✓ | 2 |
 | 5 | Văn bản & Đơn thư | `/van-ban` | `QUYEN_XEM_VAN_BAN` | ✓ | 11 |
-| 6 | Giải ngân | `/giai-ngan` | `QUYEN_XEM_GIAI_NGAN` | ✓ | 2 |
+| 6 | Giải ngân | `/giai-ngan` | `QUYEN_XEM_GIAI_NGAN` | ✓ | 1 |
 | 7 | Thu - Chi ngân sách | `/giai-ngan/thu-chi` | `QUYEN_XEM_GIAI_NGAN` | ✓ | 0 |
 | 8 | Thông báo nội bộ | `/thong-bao` | `QUYEN_SOAN_THONG_BAO` | ✓ | 9 |
 | 9 | Danh bạ người dân | — | — | ✗ | |
@@ -69,12 +69,12 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 | 12 | Bản đồ kinh tế số | `/ban-do` | `ASSET_READ_PERMISSION` | ✓ | 7 |
 | 13 | Nội dung Mini App | `/mini-app` | `MINI_APP_MENU_KEYS` | ✓ | 5 |
 | 14 | Báo cáo | `/bao-cao` | `REPORT_READ_PERMISSION` | ✓ | 2 |
-| 15 | Người dùng | `/nguoi-dung` | `QUYEN_QUAN_LY_NGUOI_DUNG` | ✓ | 11 |
-| 16 | Phân quyền | `/nguoi-dung/phan-quyen` | `QUYEN_PHAN_QUYEN` | ✓ | 11 |
+| 15 | Người dùng | `/nguoi-dung` | `QUYEN_QUAN_LY_NGUOI_DUNG` | ✓ | 4 |
+| 16 | Phân quyền | `/nguoi-dung/phan-quyen` | `QUYEN_PHAN_QUYEN` | ✓ | 4 |
 | 17 | Hướng dẫn sử dụng | — | — | ✗ | |
-| 18 | Cấu hình | `/cau-hinh` | `KHOA_MO_CAU_HINH` | ✓ | 11 |
+| 18 | Cấu hình | `/cau-hinh` | `KHOA_MO_CAU_HINH` | ✓ | 4 |
 
-**15/18** mục menu có màn thật. **84** phần chưa dựng đang hiện trên các màn ấy.
+**15/18** mục menu có màn thật. **62** phần chưa dựng đang hiện trên các màn ấy.
 
 ⚠ **1 màn KHÔNG KHAI khối `PHAN_CHUA_DUNG`**, và ô của chúng đọc là `không khai` chứ không phải `0` —
 hai thứ khác hẳn nhau. `0` nghĩa là màn có khai một danh sách và danh sách ấy rỗng, tức mọi phần
@@ -118,7 +118,7 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | Module | xong | đang làm | chưa làm | treo |
 |---|---|---|---|---|
 | `_chung` | 22 | 3 | 8 | 6 |
-| `citizen-app` | 40 | 20 | 4 | 0 |
+| `citizen-app` | 42 | 20 | 3 | 0 |
 | `core` | 32 | 3 | 1 | 1 |
 | `deploy` | 19 | 12 | 1 | 0 |
 | `platform-admin` | 8 | 3 | 0 | 0 |

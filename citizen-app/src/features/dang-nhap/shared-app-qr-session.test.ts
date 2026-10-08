@@ -9,7 +9,7 @@ import {
 } from "../../cong-dan/api/mo-phien-vigov";
 import { datPhienViGov, layPhienViGov } from "../../cong-dan/api/phien-vigov";
 
-import type { ReopenWithPhoneBridgeResult } from "./cau-vigov";
+import type { KetQuaMoPhienQuaCau, ReopenWithPhoneBridgeResult } from "./cau-vigov";
 
 /**
  * THE SHARED APP ON A COMMUNE QR (owner 06/10/2026) — the session opener `QrCommuneApp` hands `TrangXa`.
@@ -79,26 +79,42 @@ describe("the opener — bound to the QR host, guarded by the state half", () =>
     expect(await reopenSessionWithPhone(communeAppReopen(open))).toEqual({ kieu: "da-xac-thuc" });
     expect(reopen).toHaveBeenCalledTimes(2);
     for (const [host] of reopen.mock.calls) expect(host).toBe(QR_HOST);
-    expect(layPhienViGov()).toEqual({ token: "tok-test", ten_xa: SHOWN });
+    expect(layPhienViGov()).toEqual({ token: "tok-test", ten_xa: SHOWN, phone_verified: true });
   });
 
   it("a session for ANOTHER commune than the one on screen is refused and not stored — first open and reopen", async () => {
     const open = openSharedAppSession(QR_HOST, async () => session("Xã Khác"));
     expect(await openCommuneAppSession(open, SHOWN)).toEqual({ kieu: "khac-xa" });
     expect(layPhienViGov()).toBeNull();
-    datPhienViGov({ token: "tok-old", ten_xa: SHOWN });
+    datPhienViGov({ token: "tok-old", ten_xa: SHOWN, phone_verified: true });
     expect(await reopenSessionWithPhone(communeAppReopen(open))).toEqual({ kieu: "khac-xa" });
-    expect(layPhienViGov()).toEqual({ token: "tok-old", ten_xa: SHOWN });
+    expect(layPhienViGov()).toEqual({ token: "tok-old", ten_xa: SHOWN, phone_verified: true });
   });
 
-  it("an unverified phone is not stored either; a refused dialog sends nothing further", async () => {
+  it("an unverified phone is STORED as phone-less (ADR 0080); a refused dialog sends nothing further", async () => {
     expect(await openCommuneAppSession(openSharedAppSession(QR_HOST, async () => session(SHOWN, false)), SHOWN)).toEqual({
-      kieu: "chua-xac-thuc-so",
+      kieu: "no-phone",
     });
-    expect(layPhienViGov()).toBeNull();
+    expect(layPhienViGov()).toEqual({ token: "tok-test", ten_xa: SHOWN, phone_verified: false });
+    datPhienViGov(null);
     expect(await openCommuneAppSession(openSharedAppSession(QR_HOST, async () => ({ kieu: "tu-choi" })), SHOWN)).toEqual({
       kieu: "tu-choi",
     });
+    expect(layPhienViGov()).toBeNull();
+  });
+
+  it("`skip` sends the phone-less bridge body to the SAME QR host and never the phone path (ADR 0080)", async () => {
+    const reopen = vi.fn(async (_host: string) => session(SHOWN));
+    const withoutPhone = vi.fn(async (_host: string) => session(SHOWN, false) as KetQuaMoPhienQuaCau);
+    const open = openSharedAppSession(QR_HOST, reopen, withoutPhone);
+    expect(await openCommuneAppSession(open, SHOWN, "skip")).toEqual({ kieu: "no-phone" });
+    expect(reopen).not.toHaveBeenCalled();
+    expect(withoutPhone).toHaveBeenCalledTimes(1);
+    expect(withoutPhone.mock.calls[0]![0]).toBe(QR_HOST);
+    // The commune check still applies on this path: another commune is refused and nothing is stored.
+    datPhienViGov(null);
+    const other = openSharedAppSession(QR_HOST, reopen, async () => session("Xã Khác", false) as KetQuaMoPhienQuaCau);
+    expect(await openCommuneAppSession(other, SHOWN, "skip")).toEqual({ kieu: "khac-xa" });
     expect(layPhienViGov()).toBeNull();
   });
 

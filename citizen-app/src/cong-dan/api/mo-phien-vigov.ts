@@ -71,6 +71,8 @@ export type KetQuaMoPhien =
        * `?host=` cho tin tức và danh bạ — không vào `phien-vigov.ts`, không gửi đi làm "xã của tôi".
        */
       readonly ten_mien: string | null;
+      /** `phoneVerified` of the session; absent is read as NOT verified (the screen then asks first). */
+      readonly da_xac_thuc_so?: boolean;
     }
   | { readonly kieu: "chua-mo" }
   /** `zalo`: Zalo refused a step, with its code (`ZaloFailure`). Absent = network, server, or nothing measured. */
@@ -160,7 +162,7 @@ export async function reopenSessionWithPhone(reopen: ReopenWithPhone): Promise<P
   if (result.token === "" || result.ten_xa.trim() === "") return { kieu: "chua-mo" };
   if (result.ten_xa !== current.ten_xa) return { kieu: "khac-xa" };
   if (!result.da_xac_thuc_so) return { kieu: "van-chua-xac-thuc" };
-  datPhienViGov({ token: result.token, ten_xa: result.ten_xa });
+  datPhienViGov({ token: result.token, ten_xa: result.ten_xa, phone_verified: true });
   return { kieu: "da-xac-thuc" };
 }
 
@@ -180,7 +182,7 @@ export async function moPhienSauXacNhan(mo: MoPhienViGov, ten_mien: string): Pro
   if (kq.kieu === "thu-lai") return withZalo(kq.zalo);
   if (kq.kieu !== "xong") return { kieu: kq.kieu };
   if (kq.token === "" || kq.ten_xa.trim() === "") return { kieu: "chua-mo" };
-  datPhienViGov({ token: kq.token, ten_xa: kq.ten_xa });
+  datPhienViGov({ token: kq.token, ten_xa: kq.ten_xa, phone_verified: kq.da_xac_thuc_so === true });
   // KIỂM KHUÔN LẠI Ở ĐÂY dù nửa thương mại đã kiểm: hàm này nhận từ BÊN NGOÀI nửa nhà nước, và một tên
   // miền sai khuôn đi vào `?host=` là để máy chủ phân tích một thứ không phải tên miền.
   const ten_mien_phien = typeof kq.ten_mien === "string" && laTenMien(kq.ten_mien) ? kq.ten_mien : null;
@@ -191,8 +193,9 @@ export async function moPhienSauXacNhan(mo: MoPhienViGov, ten_mien: string): Pro
  * APP RIÊNG CỦA MỘT XÃ — MỞ PHIÊN Ở VIỆC CÁ NHÂN ĐẦU TIÊN (ADR 0047:251 · ADR 0045:148-176, 311)
  *
  * Không đăng nhập lúc mở app. Phiên mở khi công dân làm việc cá nhân đầu tiên — gửi phản ánh, xem phản
- * ánh của mình, tra cứu phiếu của mình, chấm sao — SAU lời giải thích và cú bấm đồng ý, vì lần mở nào của
- * app riêng cũng xin số điện thoại (`vihat-miniapp` xác minh App ID bằng lượt đổi số).
+ * ánh của mình, tra cứu phiếu của mình, chấm sao — SAU lời giải thích và cú bấm đồng ý, vì lần mở đầu tiên
+ * xin số điện thoại. Zalo không cho số (từ chối, lỗi, hoặc identity từ chối mã số trước khi app được duyệt)
+ * thì có phiên KHÔNG SỐ (ADR 0080) — chỉ để gửi và theo dõi phiếu chưa xác thực.
  *
  * ⚠ HÀM TIÊM VÀO NHẬN ĐÚNG MỘT THAM SỐ, VÀ NÓ ĐI RA, KHÔNG ĐI VÀO: the ViGov `identity` host from this
  *   half's address map (ADR 0066 — the commune app's login now goes to identity). App ID, hai mã Zalo và số
@@ -228,8 +231,19 @@ export type CommuneAppSessionResult =
   | { readonly kieu: "thu-lai"; readonly zalo?: ZaloFailure }
   | { readonly kieu: "ngoai-zalo" };
 
-/** `identityHost`: ViGov identity's host (`communeAppIdentityHost`), where the commune app's login goes. */
-export type OpenCommuneAppSession = (identityHost: string) => Promise<CommuneAppSessionResult>;
+/**
+ * Whether the opener asks Zalo for the number (ADR 0080, 08/10/2026):
+ *   `ask`   `getAccessToken` + `getPhoneNumber` — Zalo's phone dialog; only after "Đồng ý chia sẻ số điện thoại"
+ *   `skip`  `getAccessToken` only — no dialog, a PHONE-LESS session; only after "Gửi bằng họ tên và số điện
+ *           thoại", which the gate offers only when Zalo gave no number
+ */
+export type SessionPhone = "ask" | "skip";
+
+/**
+ * `identityHost`: ViGov identity's host (`communeAppIdentityHost`), where the commune app's login goes. The
+ * shared app's QR opener ignores it (`App.tsx` `openSharedAppSession`).
+ */
+export type OpenCommuneAppSession = (identityHost: string, phone: SessionPhone) => Promise<CommuneAppSessionResult>;
 
 /**
  * The host the commune app's login goes to — the platform-wide `identity` row, never a per-commune value and
@@ -243,14 +257,17 @@ export function communeAppIdentityHost(): string {
 /**
  * Kết quả cho màn hình — KHÔNG mang bearer.
  *
- *   `da-mo`               phiên đã ghi; màn làm tiếp việc cá nhân
+ *   `da-mo`               phiên ĐÃ XÁC THỰC SỐ đã ghi; màn làm tiếp việc cá nhân
+ *   `no-phone`            a PHONE-LESS session (ADR 0080) of the commune on screen, STORED: it may send and
+ *                         follow unverified petitions; the gate decides which act may run on it
  *   `khac-xa`             phiên thuộc xã khác xã trên đầu màn hình — KHÔNG ghi
- *   `chua-xac-thuc-so`    máy chủ mở được nhưng không xác thực được số — hỏi lại không đổi gì
+ *   `chua-xac-thuc-so`    the gate's own stop: an act that needs a verified phone, and Zalo gave none
  *   `chua-mo`             máy chủ trả phiên không dùng được (thiếu bearer / tên xã)
  *   còn lại               như `CommuneAppSessionResult`
  */
 export type CommuneAppSessionOutcome =
   | { readonly kieu: "da-mo" }
+  | { readonly kieu: "no-phone" }
   | { readonly kieu: "khac-xa" }
   | { readonly kieu: "chua-xac-thuc-so" }
   | { readonly kieu: "chua-mo" }
@@ -258,27 +275,31 @@ export type CommuneAppSessionOutcome =
 
 /**
  * Gọi hàm mở phiên đã tiêm, rồi ghi phiên CHỈ KHI nó dùng được: có bearer, có tên xã, TRÙNG `ten_xa_hien`
- * (tên xã đang hiện trên đầu màn hình), và đã xác thực số (mọi tuyến phản ánh đòi số — một phiên chưa xác
- * thực chỉ dẫn tới 403 `chua_xac_thuc_so` ngay sau đó).
+ * (tên xã đang hiện trên đầu màn hình).
+ *
+ * A session WITHOUT a verified phone is stored too, since ADR 0080 (08/10/2026) — flagged
+ * `phone_verified: false` and answered `no-phone`. Until then it was dropped, which left a commune app Zalo has
+ * not approved with no way to send anything (Zalo hands out no number before approval). The commune check above
+ * applies to it exactly as to a verified one: a phone-less petition must still reach the commune on screen.
  *
  * Không ném ra ngoài: hàm tiêm ném lỗi là `thu-lai`.
  */
 export async function openCommuneAppSession(
   open: OpenCommuneAppSession,
   shownCommuneName: string,
+  phone: SessionPhone = "ask",
 ): Promise<CommuneAppSessionOutcome> {
   let result: CommuneAppSessionResult;
   try {
-    result = await open(communeAppIdentityHost());
+    result = await open(communeAppIdentityHost(), phone);
   } catch {
     return { kieu: "thu-lai" };
   }
   if (result.kieu !== "xong") return result;
   if (result.token === "" || result.ten_xa.trim() === "") return { kieu: "chua-mo" };
   if (shownCommuneName.trim() === "" || result.ten_xa !== shownCommuneName) return { kieu: "khac-xa" };
-  if (!result.da_xac_thuc_so) return { kieu: "chua-xac-thuc-so" };
-  datPhienViGov({ token: result.token, ten_xa: result.ten_xa });
-  return { kieu: "da-mo" };
+  datPhienViGov({ token: result.token, ten_xa: result.ten_xa, phone_verified: result.da_xac_thuc_so });
+  return result.da_xac_thuc_so ? { kieu: "da-mo" } : { kieu: "no-phone" };
 }
 
 /**
@@ -292,12 +313,13 @@ export function dropCommuneAppSession(): void {
 
 /**
  * Hàm mở phiên của app riêng, nhìn như một `ReopenWithPhone` — cho lần 403 `chua_xac_thuc_so` (và cho
- * `usePhoneVerification` của các màn dùng chung). Thân app riêng luôn mang số, nên "mở lại kèm số" chính là
- * mở phiên lần nữa; `reopenSessionWithPhone` vẫn là bên so tên xã với phiên đang dùng và quyết định ghi.
+ * `usePhoneVerification` của các màn dùng chung). "Mở lại kèm số" chính là mở phiên lần nữa với `ask`;
+ * `reopenSessionWithPhone` vẫn là bên so tên xã với phiên đang dùng và quyết định ghi — and a phone-less
+ * answer (the one-retry of `cau-vigov.ts`) is `van-chua-xac-thuc` there, never stored as verified.
  */
 export function communeAppReopen(open: OpenCommuneAppSession): ReopenWithPhone {
   return async () => {
-    const result = await open(communeAppIdentityHost());
+    const result = await open(communeAppIdentityHost(), "ask");
     switch (result.kieu) {
       case "xong":
       case "tu-choi":

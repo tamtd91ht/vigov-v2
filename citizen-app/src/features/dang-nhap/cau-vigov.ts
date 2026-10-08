@@ -114,7 +114,18 @@ export type CommuneAppLoginResult =
  * MỞ PHIÊN CÔNG DÂN ViGov TỪ APP RIÊNG CỦA MỘT XÃ — App ID lúc chạy + `getAccessToken` + `getPhoneNumber`
  * → ViGov identity `POST /api/v1/citizen-sessions` (`hop-dong.ts` thân thứ tư; ADR 0066 — no longer
  * `vihat-miniapp`). Dùng cho CẢ lần mở đầu (việc cá nhân đầu tiên) LẪN lần mở lại khi ViGov trả 403
- * `chua_xac_thuc_so`: thân app riêng luôn mang số, nên hai việc là một lời gọi.
+ * `chua_xac_thuc_so`.
+ *
+ * ⚠ 401 AFTER SENDING `phoneToken` → ONE RETRY WITHOUT IT (ADR 0080, 08/10/2026). Until Zalo approves the
+ *   commune's app, `getPhoneNumber` still hands out a token that identity cannot exchange, so the call with it
+ *   is refused (`zalo_token_invalid`). The server deliberately does not downgrade (`hop-dong.ts`); the retry
+ *   reuses the access token already taken — no SDK call, no dialog — and its answer is final: a second 401
+ *   means the access token itself was refused, and that goes up as `ma-het-han`. Never a loop. A phone-less
+ *   session comes back as `xong` with `da_xac_thuc_so: false`; the gate decides what it may be used for.
+ *
+ * ⚠ REFUSAL / NO PHONE CODE STILL CALL NOTHING HERE. The citizen then chooses "Gửi bằng họ tên và số điện
+ *   thoại" on the gate, and only that tap sends the phone-less body (`openCommuneAppSessionWithoutPhone`): a
+ *   session is opened by the citizen's act, never as a side effect of declining Zalo's dialog.
  *
  * CHỈ CHẠY SAU CÚ BẤM ĐỒNG Ý trên lời giải thích của nửa nhà nước (chính sách 3.3.4): hàm này bật hộp
  * thoại xin số của Zalo.
@@ -151,12 +162,36 @@ export async function openCommuneAppSessionWithPhone(
   if (codes.kieu !== "xong" || codes.du_lieu.ma_truy_cap === "" || codes.du_lieu.ma_so_dien_thoai === "") {
     return noCode(codes);
   }
-  return call(
-    {
-      ma_truy_cap: codes.du_lieu.ma_truy_cap,
-      ma_so_dien_thoai: codes.du_lieu.ma_so_dien_thoai,
-      app_id,
-    },
+  const accessToken = codes.du_lieu.ma_truy_cap;
+  const withPhone = await call(
+    { ma_truy_cap: accessToken, ma_so_dien_thoai: codes.du_lieu.ma_so_dien_thoai, app_id },
     address,
   );
+  if (withPhone.kieu !== "ma-het-han") return withPhone;
+  // Exactly one retry, without the phone code (see the header). Its answer is returned whatever it is.
+  return call({ ma_truy_cap: accessToken, ma_so_dien_thoai: "", app_id }, address);
+}
+
+/**
+ * THE COMMUNE APP'S PHONE-LESS SESSION (ADR 0080 #1, #6) — App ID + `getAccessToken` only, no `phoneToken`, so
+ * Zalo shows NO dialog. Called only after the citizen tapped "Gửi bằng họ tên và số điện thoại" on the gate,
+ * which is offered only when Zalo gave no number (refused, or failed). Same order and same stops as above:
+ * no address or no App ID → nothing asked, nothing sent.
+ *
+ * `readAppId` / `requestAccess` / `call` are for tests only — production code never passes them.
+ */
+export async function openCommuneAppSessionWithoutPhone(
+  identityHost: string,
+  readAppId: () => string | null = readRuntimeAppId,
+  requestAccess: () => Promise<KetQuaXin<string>> = xinMaTruyCap,
+  call: (req: CommuneAppSessionRequest, address: string) => Promise<CommuneAppBridgeResult> = openCommuneAppSessionCall,
+): Promise<CommuneAppLoginResult> {
+  const address = communeAppSessionAddress(identityHost);
+  if (address === "") return { kieu: "chua-khai-host" };
+  const app_id = readAppId();
+  if (app_id === null || app_id === "") return { kieu: "khong-ro-app" };
+  const access = await requestAccess();
+  if (access.kieu === "ngoai-zalo") return { kieu: "ngoai-zalo" };
+  if (access.kieu !== "xong" || access.du_lieu === "") return noCode(access);
+  return call({ ma_truy_cap: access.du_lieu, ma_so_dien_thoai: "", app_id }, address);
 }

@@ -42,9 +42,19 @@ import { layPhienViGov } from "../api/phien-vigov";
 
 import { type Catalogue, fieldLabelOf, offeredCodes, readCatalogueAnswer } from "./field-catalogue";
 import { BangXa, KenhChuaMo, LoadingNotice, ThePhieu } from "./khung";
-import { CUA_TOI, GUI, KHAN_CAP, LOI_GUI, nhanTrangThai, QUAY_LAI, SEND_LOCATION_WORDS } from "./noi-dung";
+import {
+  CUA_TOI,
+  GUI,
+  KHAN_CAP,
+  LOI_GUI,
+  nhanTrangThai,
+  QUAY_LAI,
+  SEND_LOCATION_WORDS,
+  TYPED_CONTACT,
+} from "./noi-dung";
 import { ONhapDoan, ONhapDong } from "./o-nhap";
 import { PhoneVerificationPanel, usePhoneVerification } from "./phone-verification";
+import { isPlausiblePhone } from "./trai-nghiem";
 import {
   formatCoordinates,
   type GetSceneLocation,
@@ -66,19 +76,26 @@ export const PHAN_ANH_TRONG: PhanAnhMoi = {
 /**
  * Câu cần sửa, hoặc `null` khi gửi được. Đếm theo KÝ TỰ như máy chủ, không theo byte. The field comes
  * first: it is step 1 and required on this screen (the server keeps it optional — see the header).
+ *
+ * `typedContact` (ADR 0080): Zalo gave no number and the citizen chose to type a name and a number — both are
+ * then required, the number must look like a Vietnamese phone, and anonymous does not apply.
  */
-export function kiemPhanAnh(pa: PhanAnhMoi): string | null {
+export function kiemPhanAnh(pa: PhanAnhMoi, typedContact = false): string | null {
   const dai = (s: string) => [...s.trim()].length;
+  const anonymous = !typedContact && pa.an_danh;
   if ((pa.field ?? "").trim() === "") return GUI.field_missing;
   if (dai(pa.noi_dung) === 0) return GUI.thieu_noi_dung;
   if (dai(pa.noi_dung) > DO_DAI_TOI_DA.noi_dung) return GUI.qua_dai("Nội dung", DO_DAI_TOI_DA.noi_dung);
   if (dai(pa.dia_chi) > DO_DAI_TOI_DA.dia_chi) return GUI.qua_dai("Nơi xảy ra", DO_DAI_TOI_DA.dia_chi);
-  if (!pa.an_danh && dai(pa.ho_ten) > DO_DAI_TOI_DA.ho_ten) {
+  if (typedContact && dai(pa.ho_ten) === 0) return TYPED_CONTACT.name_missing;
+  if (!anonymous && dai(pa.ho_ten) > DO_DAI_TOI_DA.ho_ten) {
     return GUI.qua_dai("Họ và tên", DO_DAI_TOI_DA.ho_ten);
   }
-  if (!pa.an_danh && dai(pa.dien_thoai) > DO_DAI_TOI_DA.dien_thoai) {
+  if (!anonymous && dai(pa.dien_thoai) > DO_DAI_TOI_DA.dien_thoai) {
     return GUI.qua_dai("Số điện thoại", DO_DAI_TOI_DA.dien_thoai);
   }
+  if (typedContact && dai(pa.dien_thoai) === 0) return TYPED_CONTACT.phone_missing;
+  if (typedContact && !isPlausiblePhone(pa.dien_thoai)) return TYPED_CONTACT.phone_invalid;
   return null;
 }
 
@@ -234,9 +251,13 @@ export function BuocNhap(props: {
   onTiep: () => void;
   field: InputStepField;
   location?: InputStepLocation;
+  /** The typed-contact path (ADR 0080): name + number required, anonymous off with its reason. */
+  typedContact?: boolean;
 }) {
   const { pa, onDoi } = props;
   const location = props.location ?? null;
+  const typedContact = props.typedContact === true;
+  const anonymous = !typedContact && pa.an_danh;
   return (
     <div className="cd-buoc">
       {/* "Lĩnh vực: <tên> · Đổi" — what was picked on step 1, and a real 48px button back to it. */}
@@ -291,32 +312,40 @@ export function BuocNhap(props: {
 
       {/* NÚT BẬT/TẮT, KHÔNG PHẢI Ô ĐÁNH DẤU: trạng thái nói bằng CHỮ ("Đang bật"), không bằng một
           dấu tích nhỏ hay một màu (README §Non-negotiables #6), và đích chạm to bằng cả dòng. */}
+      {typedContact && (
+        <p className="cd-cau" role="note">
+          {TYPED_CONTACT.form_note}
+        </p>
+      )}
       <button
         type="button"
         className="cd-cong-tac"
-        aria-pressed={pa.an_danh}
+        aria-pressed={anonymous}
+        disabled={typedContact}
         onClick={() => onDoi({ ...pa, an_danh: !pa.an_danh })}
       >
         <span className="cd-cong-tac__ten">{GUI.an_danh}</span>
-        <span className="cd-cong-tac__trang-thai">{pa.an_danh ? GUI.an_danh_bat : GUI.an_danh_tat}</span>
+        <span className="cd-cong-tac__trang-thai">{anonymous ? GUI.an_danh_bat : GUI.an_danh_tat}</span>
       </button>
-      <p className="cd-ghi-chu">{GUI.an_danh_giai_thich}</p>
+      <p className="cd-ghi-chu">{typedContact ? TYPED_CONTACT.anonymous_off : GUI.an_danh_giai_thich}</p>
 
-      {!pa.an_danh && (
+      {!anonymous && (
         <>
           <ONhapDong
             id="cd-ho-ten"
-            nhan={GUI.nhan_ho_ten}
+            nhan={typedContact ? TYPED_CONTACT.name_label : GUI.nhan_ho_ten}
             gia_tri={pa.ho_ten}
             toi_da={DO_DAI_TOI_DA.ho_ten}
+            required={typedContact || undefined}
             onDoi={(v) => onDoi({ ...pa, ho_ten: v })}
           />
           <ONhapDong
             id="cd-dien-thoai"
-            nhan={GUI.nhan_dien_thoai}
+            nhan={typedContact ? TYPED_CONTACT.phone_label : GUI.nhan_dien_thoai}
             gia_tri={pa.dien_thoai}
             toi_da={DO_DAI_TOI_DA.dien_thoai}
             kieu_ban_phim="tel"
+            required={typedContact || undefined}
             onDoi={(v) => onDoi({ ...pa, dien_thoai: v })}
           />
         </>
@@ -393,6 +422,12 @@ export function KetQuaGui(props: { phieu: PhieuCuaToi; onGuiKhac: () => void }) 
         <p className="cd-ma-tra-cuu">{phieu.ma_tra_cuu}</p>
       </div>
       <p className="cd-ghi-chu">{GUI.xong_giu_ma}</p>
+      {/* ADR 0080: an unverified petition is never notified — said under the code, from the server's field. */}
+      {phieu.contact_unverified === true && (
+        <p className="cd-cau" role="note">
+          {TYPED_CONTACT.done_no_notice}
+        </p>
+      )}
       <p className="cd-cau">
         <strong>{nhanTrangThai(phieu.trang_thai)}</strong>
       </p>
@@ -407,13 +442,16 @@ export function KetQuaGui(props: { phieu: PhieuCuaToi; onGuiKhac: () => void }) 
 
 type NhanhLoi = keyof typeof LOI_GUI;
 
-/** Câu lỗi kèm việc cần làm. "Gửi lại" dùng lại CÙNG lần gửi — cùng thân, cùng khoá. */
-export function LoiGui(props: { nhanh: NhanhLoi; onGuiLai: () => void; onSua: () => void }) {
+/**
+ * Câu lỗi kèm việc cần làm. "Gửi lại" dùng lại CÙNG lần gửi — cùng thân, cùng khoá. `message`: the server's
+ * own sentence, shown instead of ours (`unverified-daily-limit` only, `api/goi-vigov.ts`).
+ */
+export function LoiGui(props: { nhanh: NhanhLoi; message?: string; onGuiLai: () => void; onSua: () => void }) {
   const loi = LOI_GUI[props.nhanh];
   return (
     <div className="cd-buoc">
       <p className="cd-loi" role="alert" id={ID_DAU_BUOC.loi} tabIndex={-1}>
-        {loi.cau}
+        {props.message ?? loi.cau}
       </p>
       {loi.co_the_gui_lai && (
         <button type="button" className="cd-nut" onClick={props.onGuiLai}>
@@ -436,7 +474,7 @@ type Buoc =
   | { kieu: "xac-nhan" }
   | { kieu: "dang-gui" }
   | { kieu: "xong"; phieu: PhieuCuaToi }
-  | { kieu: "loi"; nhanh: NhanhLoi }
+  | { kieu: "loi"; nhanh: NhanhLoi; message?: string }
   /** Máy chủ cần số điện thoại đã xác thực — khung `phone-verification.tsx`. Nháp `pa` vẫn nguyên. */
   | { kieu: "can-so" };
 
@@ -461,6 +499,8 @@ export function buocSauKhiGui(kq: KetQuaGoi): Buoc | "kenh-chua-mo" {
       return { kieu: "loi", nhanh: "loi-may-chu" };
     case "can-xac-thuc-so":
       return { kieu: "can-so" };
+    case "unverified-daily-limit":
+      return kq.message === null ? { kieu: "loi", nhanh: kq.kieu } : { kieu: "loi", nhanh: kq.kieu, message: kq.message };
     case "field-not-offered":
       // The commune changed its list since it was loaded: back to step 1 to pick again (the screen reloads
       // the catalogue). Sending the same body again would only meet the same answer.
@@ -488,6 +528,12 @@ export function GuiPhanAnhScreen({
   // TÊN XÃ (`reopenSessionWithPhone` từ chối phiên khác xã), nên bản đọc một lần này vẫn đúng.
   const [phien] = useState(layPhienViGov);
   const phone = usePhoneVerification(reopenWithPhone);
+  /**
+   * The citizen chose "Gửi bằng họ tên và số điện thoại" after Zalo gave no number (ADR 0080). Applies only
+   * while the session is still phone-less: a session reopened with a verified number sends as usual.
+   */
+  const [typedChosen, setTypedChosen] = useState(false);
+  const typedContact = typedChosen && layPhienViGov()?.phone_verified !== true;
   const [pa, datPa] = useState<PhanAnhMoi>(PHAN_ANH_TRONG);
   const [buoc, datBuoc] = useState<Buoc>({ kieu: "field", changed: false });
   const [kenhDong, datKenhDong] = useState(false);
@@ -593,16 +639,25 @@ export function GuiPhanAnhScreen({
       datBuoc(tiep);
       void loadCatalogue();
     } else {
-      if (tiep.kieu === "xong") datLan(null);
+      // A 201, or the daily ceiling of unverified petitions (nothing recorded — a later send is a new act).
+      if (tiep.kieu === "xong" || (tiep.kieu === "loi" && tiep.nhanh === "unverified-daily-limit")) datLan(null);
       datBuoc(tiep);
     }
   }
 
   function guiLanDau() {
+    // ADR 0080 decision 1: a session with no verified phone is INVITED to share the Zalo number before anything
+    // is sent — the server would now accept the send as unverified, so no 403 asks any more. Read fresh: a
+    // reopen with the number replaces the session, and the rerun below must see it.
+    if (layPhienViGov()?.phone_verified !== true && !typedChosen) {
+      datBuoc({ kieu: "can-so" });
+      phone.onPhoneRequired(() => guiLanDau());
+      return;
+    }
     let lan_gui = lan;
     if (lan_gui === null) {
       try {
-        lan_gui = taoLanGui(thanGuiPhanAnh(pa));
+        lan_gui = taoLanGui(thanGuiPhanAnh(typedContact ? { ...pa, an_danh: false } : pa));
       } catch {
         datBuoc({ kieu: "loi", nhanh: "khong-tao-duoc-khoa" });
         return;
@@ -651,8 +706,9 @@ export function GuiPhanAnhScreen({
             // Nội dung đổi thì lần gửi cũ không còn đúng thân của nó.
             datLan(null);
           }}
+          typedContact={typedContact}
           onTiep={() => {
-            const loi = kiemPhanAnh(pa);
+            const loi = kiemPhanAnh(pa, typedContact);
             // No field (or one the loaded catalogue no longer names): step 1 is where that is fixed.
             if (loi === GUI.field_missing || fieldLabel === "") datBuoc({ kieu: "field", changed: false });
             else datBuoc(loi === null ? { kieu: "xac-nhan" } : { kieu: "nhap", loi });
@@ -701,6 +757,7 @@ export function GuiPhanAnhScreen({
       than = (
         <LoiGui
           nhanh={buoc.nhanh}
+          {...(buoc.message === undefined ? {} : { message: buoc.message })}
           onGuiLai={() => {
             if (lan !== null) void gui(lan);
           }}
@@ -723,6 +780,14 @@ export function GuiPhanAnhScreen({
               draftKept
               onAllow={() => void phone.allow()}
               onDecline={phone.decline}
+              onManual={() => {
+                // Back to the writing step with name + number required (ADR 0080); the attempt goes — the body
+                // changes (anonymous off), so the next send is a new act. What was written stays.
+                phone.reset();
+                setTypedChosen(true);
+                datLan(null);
+                datBuoc({ kieu: "nhap", loi: null });
+              }}
             />
             {phone.state.kieu !== "dang-xac-nhan" && (
               <button type="button" className="cd-nut-phu" onClick={suaLai}>

@@ -184,10 +184,18 @@ export const LOI_GUI: Readonly<
     | "kenh-chua-mo"
     | "loi-may-chu"
     | "loi-mang"
-    | "khong-tao-duoc-khoa",
+    | "khong-tao-duoc-khoa"
+    | "unverified-daily-limit",
     { cau: string; co_the_gui_lai: boolean }
   >
 > = {
+  // 429 `unverified_daily_limit` (ADR 0080 #7): the screen shows the SERVER's sentence when it sent one (owner
+  // decision for this code only); this is the sentence when it did not. Nothing was recorded, so no "Gửi lại"
+  // with the same key — the draft stays, and a later send is a new act.
+  "unverified-daily-limit": {
+    cau: "Hôm nay bạn đã gửi nhiều phản ánh mà chưa xác nhận số điện thoại, nên phản ánh này CHƯA được ghi nhận. Nội dung bạn viết vẫn còn nguyên. Hãy gửi lại vào ngày mai, hoặc gọi điện thoại cho xã.",
+    co_the_gui_lai: false,
+  },
   "het-phien": {
     cau: "Phiên làm việc đã hết hạn nên phản ánh chưa được gửi. Hãy đóng ứng dụng, mở lại rồi gửi lại.",
     co_the_gui_lai: false,
@@ -250,7 +258,11 @@ export type PhoneVerificationTask = keyof typeof PHONE_VERIFICATION_TASK;
 
 export const PHONE_VERIFICATION = {
   title: "Cần xác nhận số điện thoại của bạn",
-  why: "Để gửi phản ánh và xem phản ánh của chính mình, xã cần biết số điện thoại Zalo của bạn. Nhờ số này, xã biết phản ánh là của ai, và chỉ bạn xem được phản ánh của bạn.",
+  // 08/10/2026 (ADR 0080): the old "Để gửi phản ánh… xã cần biết số điện thoại" became false — a petition can
+  // now be sent with a typed name and number when Zalo gives none. The sentence now says what the Zalo number
+  // gives, and the privacy promise holds on both paths (a typed-contact petition is read by code AND the same
+  // Zalo account only).
+  why: "Với số điện thoại Zalo của bạn, xã biết chắc phản ánh là của ai, và bạn xem lại được mọi phản ánh của mình trong “Phản ánh của tôi”. Dù bạn có chia sẻ số hay không, chỉ bạn xem được phản ánh bạn đã gửi.",
   zalo_asks:
     "Khi bạn bấm nút dưới đây, Zalo sẽ hỏi bạn có đồng ý chia sẻ số điện thoại không. Số được gửi qua máy chủ của Tập đoàn ViHAT Group tới hệ thống của xã. Ứng dụng không lưu số này trên điện thoại.",
   allow: "Đồng ý chia sẻ số điện thoại",
@@ -355,6 +367,38 @@ export const COMMUNE_APP_SESSION = {
     `Zalo hoặc hệ thống của xã đang bận, nên ${task}. Hãy chờ một lát rồi bấm “Đồng ý chia sẻ số điện thoại” lần nữa.`,
   other_commune: (task: string) =>
     `Ứng dụng chưa xác nhận được bạn đang làm việc với đúng xã ghi ở đầu màn hình, nên ${task}. Hãy đến Bộ phận tiếp nhận của Ủy ban nhân dân xã, hoặc gọi điện thoại cho xã.`,
+} as const;
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * GỬI BẰNG HỌ TÊN VÀ SỐ ĐIỆN THOẠI TỰ NHẬP — khi Zalo không cho số (ADR 0080, 08/10/2026)
+ *
+ * Đường lui, không phải đường chính: lời mời chia sẻ số Zalo luôn đứng trước (`commune-session.ts`,
+ * `phone-verification.tsx`). Số tự nhập là THÔNG TIN LIÊN HỆ, không phải danh tính: xã không gửi thông báo
+ * nào tới số ấy, và phiếu chỉ tra cứu được bằng mã CÙNG tài khoản Zalo — mỗi câu dưới đây nói đúng điều đó,
+ * không hứa thêm. Xưng "bạn" như các câu chung; câu riêng của màn gửi trong app xã ở `XA_PA` ("bà con").
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+export const TYPED_CONTACT = {
+  button: "Gửi bằng họ tên và số điện thoại",
+  /** Above the button: what the fallback means, said BEFORE the citizen chooses it. */
+  offer:
+    "Bạn vẫn gửi được phản ánh nếu tự nhập họ tên và số điện thoại để xã liên hệ lại. Số bạn nhập không được xác nhận qua Zalo, nên xã sẽ không gửi thông báo cho bạn; bạn theo dõi phản ánh bằng mã tra cứu.",
+  /** The gate's sentence when identity issued a phone-less session after the citizen agreed to share. */
+  zalo_gave_no_number: (task: string) =>
+    `Zalo chưa cho ứng dụng nhận số điện thoại của bạn, nên ${task}. Hãy bấm “Gửi bằng họ tên và số điện thoại” để tự nhập, hoặc đến Bộ phận tiếp nhận của Ủy ban nhân dân xã.`,
+  /** Shared app's form, on the typed-contact path. */
+  form_note:
+    "Zalo chưa cho ứng dụng số điện thoại của bạn, nên bạn cần tự nhập họ tên và số điện thoại để xã liên hệ lại.",
+  name_label: "Họ và tên (bắt buộc)",
+  phone_label: "Số điện thoại để xã liên hệ lại (bắt buộc)",
+  name_missing: "Bạn chưa nhập họ tên. Hãy nhập họ tên để xã biết ai gửi phản ánh.",
+  phone_missing: "Bạn chưa nhập số điện thoại. Hãy nhập số để xã liên hệ lại với bạn.",
+  phone_invalid: "Số điện thoại chưa đúng. Hãy nhập 10 hoặc 11 chữ số, bắt đầu bằng 0 hoặc +84.",
+  anonymous_off:
+    "Không gửi ẩn danh được khi tự nhập số: họ tên và số điện thoại là cách duy nhất để xã liên hệ lại với bạn.",
+  /** The code screen after a 201 with `contact_unverified` — said under the lookup code. */
+  done_no_notice:
+    "Bạn sẽ KHÔNG nhận được thông báo nào về phản ánh này, vì số điện thoại chưa được xác nhận qua Zalo. Hãy giữ mã tra cứu, rồi mở ứng dụng này bằng chính tài khoản Zalo bạn đang dùng và tra cứu theo mã để biết phản ánh đi tới đâu.",
 } as const;
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
@@ -1033,6 +1077,19 @@ export const XA_PA = {
   // Photos left this list on 02/10/2026 — optional by the owner's decision (`anh_bat_buoc`).
   bat_buoc: "Bắt buộc: lĩnh vực, mô tả, vị trí, họ tên người gửi.",
   bat_buoc_an_danh: "Bắt buộc: lĩnh vực, mô tả, vị trí.",
+  // The typed-contact path (ADR 0080, 08/10/2026): Zalo gave no number, so the name and number the citizen
+  // types are the commune's only way back to them — both required, anonymous off.
+  contact_note:
+    "Zalo chưa cho ứng dụng số điện thoại của bà con, nên bà con nhập họ tên và số điện thoại để cán bộ xã liên hệ lại.",
+  contact_required: "Bắt buộc: lĩnh vực, mô tả, vị trí, họ tên và số điện thoại người gửi.",
+  phone_required_label: "Số điện thoại (bắt buộc)",
+  contact_name_missing: "Bà con nhập họ tên để xã biết ai gửi phản ánh.",
+  contact_phone_missing: "Bà con nhập số điện thoại để cán bộ xã liên hệ lại.",
+  contact_phone_invalid: "Số điện thoại chưa đúng. Bà con nhập 10 hoặc 11 chữ số, bắt đầu bằng 0 hoặc +84.",
+  anonymous_off:
+    "Không gửi ẩn danh được khi tự nhập số: họ tên và số điện thoại là cách duy nhất để xã liên hệ lại với bà con.",
+  done_no_notice:
+    "Bà con sẽ KHÔNG nhận được thông báo nào về phản ánh này, vì số điện thoại chưa được xác nhận qua Zalo. Bà con giữ mã phiếu, rồi mở ứng dụng này bằng chính tài khoản Zalo đang dùng và tra cứu theo mã để biết phản ánh đi tới đâu.",
   gui_toi: (xa: string) => `Phản ánh sẽ gửi tới: ${xa}`,
   // Said only after a 201: the petition is in the commune's register and has its lookup code (rule 10 #1).
   xong_tieu_de: "Đã gửi phản ánh",

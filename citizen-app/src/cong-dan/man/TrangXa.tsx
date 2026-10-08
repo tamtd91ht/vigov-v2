@@ -37,10 +37,12 @@ import { communeBanners, type NewsReadResult } from "../api/goi-vigov";
 import type { CommuneProfile, XaTraDuoc } from "../api/hop-dong-cong-khai";
 import { type CommuneBannerItem, readHttpsLink } from "../api/hop-dong-cong-khai";
 import { communeAppReopen, dropCommuneAppSession, type OpenCommuneAppSession } from "../api/mo-phien-vigov";
+import { layPhienViGov } from "../api/phien-vigov";
 
 import { BieuTuong, type TenBieuTuong } from "./BieuTuong";
 import {
   createSessionGate,
+  offersManualSend,
   type SessionGate,
   sessionGateMessage,
   sessionGateOffersRetry,
@@ -59,6 +61,7 @@ import {
   PHONE_VERIFICATION,
   type PhoneVerificationTask,
   TIN_XA,
+  TYPED_CONTACT,
   XA_GIAO_DIEN,
   XA_PA,
   XA_TN,
@@ -671,6 +674,8 @@ export function profileLogoUrl(profile: CommuneProfile | null): string {
  *   `dang-mo`   words, not a spinner — and "Về trang chủ", which works while the open runs
  *   `ket-qua`   one sentence saying what to do next, "Về trang chủ" always, a retry only where a new tap can
  *               help — the retry is "Đồng ý chia sẻ số điện thoại" again, since that tap is what opens Zalo's dialog
+ *               — and, for SENDING when Zalo gave no number, "Gửi bằng họ tên và số điện thoại" under the line that
+ *               says what that path means (no notification, follow by code) BEFORE the citizen chooses it (ADR 0080)
  *
  * Exported for `session-gate-exits.test.tsx` only.
  */
@@ -679,9 +684,15 @@ export function SessionGateScreen(props: {
   task: PhoneVerificationTask;
   onAllow: () => void;
   onDecline: () => void;
+  /** "Gửi bằng họ tên và số điện thoại" — absent = never offered (tests that pin the older screen). */
+  onManual?: () => void;
   onClose: () => void;
 }) {
   const { state } = props;
+  const manual =
+    state.kieu === "ket-qua" &&
+    props.onManual !== undefined &&
+    offersManualSend(state.outcome, props.task, state.zalo);
   return (
     <>
       <DauManCon tieu_de={PHONE_VERIFICATION.title} onQuayLai={props.onClose} />
@@ -722,6 +733,14 @@ export function SessionGateScreen(props: {
                   : undefined
               }
             />
+            {manual && (
+              <section className="xa-the xa-the--dem xa-khoi" aria-labelledby="xa-cong-tu-nhap">
+                <p id="xa-cong-tu-nhap">{TYPED_CONTACT.offer}</p>
+                <button type="button" className="xa-nut" onClick={props.onManual}>
+                  {TYPED_CONTACT.button}
+                </button>
+              </section>
+            )}
             <button type="button" className="xa-nut xa-nut--phu" onClick={props.onClose}>
               {XA_TN.nut_ve_trang_chu}
             </button>
@@ -811,9 +830,11 @@ function AppCuaXa(props: {
     setGateTask(task);
     gate.require(() => {
       act();
-      // A session now exists: the home block and Cá nhân fill in without a second question.
-      petitions.loadIfIdle();
-    });
+      // A session now exists: the home block and Cá nhân fill in without a second question — but only with a
+      // VERIFIED phone. A phone-less session (ADR 0080) is refused by the list route, and that refusal would
+      // drop the session and put the gate over the form the citizen just opened.
+      if (layPhienViGov()?.phone_verified === true) petitions.loadIfIdle();
+    }, task);
   }
 
   /** 401 / 403 `chua_xac_thuc_so`: forget the session, and run the act again through the gate. */
@@ -859,6 +880,7 @@ function AppCuaXa(props: {
           getSceneLocation={props.getSceneLocation}
           pickScenePhotos={props.pickScenePhotos}
           draftStore={props.draftStore}
+          typedContact={layPhienViGov()?.phone_verified === false}
           onBack={ve}
           onSessionLost={sessionLost("submit")}
           onSent={() => void petitions.load()}
@@ -971,6 +993,7 @@ function AppCuaXa(props: {
         task={gateTask}
         onAllow={() => void gate.allow()}
         onDecline={gate.decline}
+        onManual={() => void gate.manual()}
         onClose={gate.reset}
       />
     );

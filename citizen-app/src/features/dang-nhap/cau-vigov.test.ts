@@ -325,25 +325,31 @@ describe("mở lại phiên kèm `phoneToken` — thân, lời gọi, và không
 });
 
 describe("App.tsx dịch kết quả sang kiểu của nửa nhà nước — theo việc người dân làm tiếp", () => {
-  it("xong → bearer + tên xã của PHIÊN + tên miền chính của phiên (hoặc `null`)", () => {
+  it("xong → bearer + tên xã của PHIÊN + tên miền chính của phiên (hoặc `null`) + cờ số (ADR 0080)", () => {
     expect(
       sangKieuCongDan({
         kieu: "xong",
         phien: { token: "t", het_han: "", ten_xa: "Xã Của Phiên", da_xac_thuc_so: false, ten_mien_xa: TEN_MIEN },
       }),
-    ).toEqual({ kieu: "xong", token: "t", ten_xa: "Xã Của Phiên", ten_mien: TEN_MIEN });
+    ).toEqual({ kieu: "xong", token: "t", ten_xa: "Xã Của Phiên", ten_mien: TEN_MIEN, da_xac_thuc_so: false });
     expect(
       sangKieuCongDan({
         kieu: "xong",
-        phien: { token: "t", het_han: "", ten_xa: "Xã Của Phiên", da_xac_thuc_so: false, ten_mien_xa: null },
+        phien: { token: "t", het_han: "", ten_xa: "Xã Của Phiên", da_xac_thuc_so: true, ten_mien_xa: null },
       }),
-    ).toEqual({ kieu: "xong", token: "t", ten_xa: "Xã Của Phiên", ten_mien: null });
+    ).toEqual({ kieu: "xong", token: "t", ten_xa: "Xã Của Phiên", ten_mien: null, da_xac_thuc_so: true });
   });
 
   it("thân 201 thật → `sangKieuCongDan`: `communePrimaryHost` đi suốt tới kiểu của nửa nhà nước", async () => {
     datFetch(traLoi(201, { vigovSession: { ...PHIEN_VIGOV.vigovSession, communePrimaryHost: TEN_MIEN } }));
     const kq = sangKieuCongDan(await moPhienViGovQuaCau({ ma_truy_cap: "m", ten_mien_xa: TEN_MIEN }, DIA_CHI));
-    expect(kq).toEqual({ kieu: "xong", token: "tok-vigov-thu", ten_xa: "Xã Của Phiên", ten_mien: TEN_MIEN });
+    expect(kq).toEqual({
+      kieu: "xong",
+      token: "tok-vigov-thu",
+      ten_xa: "Xã Của Phiên",
+      ten_mien: TEN_MIEN,
+      da_xac_thuc_so: PHIEN_VIGOV.vigovSession.phoneVerified,
+    });
   });
 
   it("bấm lại không đổi được gì → `chua-mo`; bấm lại có thể được → `thu-lai`", () => {

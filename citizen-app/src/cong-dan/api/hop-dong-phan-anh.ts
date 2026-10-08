@@ -262,6 +262,12 @@ export type PhieuCuaToi = {
   readonly rating: number | null;
   /** When that rating was recorded (RFC3339), `null` exactly when `rating` is. */
   readonly rated_at: string | null;
+  /**
+   * `contact_unverified` (ADR 0080 #5): `true` = sent from a session with no verified phone — the name and
+   * number are typed contact, the petition belongs to the Zalo account, and NO notification will ever be sent.
+   * Read from the server's explicit field, never inferred. Absent here means the server did not say `true`.
+   */
+  readonly contact_unverified?: true;
 };
 
 /** Stars bounds and comment limit — COPIED from `service-petitions/internal/domain/petition_rating.go`. */
@@ -367,8 +373,12 @@ export function docPhieu(than: unknown): PhieuCuaToi | null {
   const ly_do = tuyChon("reason", DO_DAI_NHANH_KET_THUC.ly_do);
   const co_quan_nhan = tuyChon("receiving_body", DO_DAI_NHANH_KET_THUC.co_quan_nhan);
   const rating = readRating(t);
+  // OPTIONAL (`boolean | null`, omitted for an identified petition); anything else is a body out of shape.
+  const unverified = t["contact_unverified"];
+  const unverifiedOk = unverified === undefined || unverified === null || typeof unverified === "boolean";
 
   if (
+    !unverifiedOk ||
     rating === null ||
     ma === null ||
     ma === "" ||
@@ -411,8 +421,16 @@ export function docPhieu(than: unknown): PhieuCuaToi | null {
     co_quan_nhan: trang_thai === "chuyen-cap-tren" ? co_quan_nhan : "",
     rating: rating.rating,
     rated_at: rating.rated_at,
+    ...(unverified === true ? { contact_unverified: true as const } : {}),
   };
 }
+
+/**
+ * 429 code of the send route (ADR 0080 #7): this Zalo account already sent the day's ceiling of unverified
+ * petitions in this commune. Nothing was written and no code issued. Its `message` is the one server sentence
+ * this app shows (owner decision for this code only — `goi-vigov.ts` `readLimitMessage`).
+ */
+export const UNVERIFIED_DAILY_LIMIT_CODE = "unverified_daily_limit";
 
 /**
  * Mã lỗi của thân 403 khi phiên chưa có số điện thoại đã xác thực — `core/httpx/citizen.go:199-200`

@@ -940,18 +940,29 @@ export function blankForm(nameFromEntry: string | null): NhapPhieu {
 /**
  * The request body for this form + location. PURE. The five fields of the contract, `field` = the CODE
  * picked on step 1 (from the commune's catalogue), plus `lat`/`lng` only when the citizen tapped for them.
+ *
+ * `typedContact` (ADR 0080, a phone-less session): `anonymous` is sent `false` whatever a restored draft held —
+ * the typed name and number are the commune's only way back to the citizen, and an anonymous body would send
+ * them empty (`thanGuiPhanAnh`).
  */
-export function sendBody(form: NhapPhieu, location: SceneLocation | null): string {
+export function sendBody(form: NhapPhieu, location: SceneLocation | null, typedContact = false): string {
   return thanGuiPhanAnh({
     noi_dung: form.noi_dung,
     dia_chi: form.dia_chi,
     ho_ten: form.ho_ten,
     dien_thoai: form.dien_thoai,
-    an_danh: form.an_danh,
+    an_danh: typedContact ? false : form.an_danh,
     scene_location: location,
     field: form.linh_vuc,
   });
 }
+
+/** The commune app's typed-contact checks, in "bà con" (`kiemNhapPhieu`). */
+const COMMUNE_TYPED_CONTACT = {
+  name_missing: XA_PA.contact_name_missing,
+  phone_missing: XA_PA.contact_phone_missing,
+  phone_invalid: XA_PA.contact_phone_invalid,
+};
 
 type SendFailure = keyof typeof LOI_GUI;
 
@@ -959,12 +970,17 @@ type SendFailure = keyof typeof LOI_GUI;
 export type SendOutcome =
   | { readonly kind: "sent"; readonly petition: PhieuCuaToi }
   | { readonly kind: "session" }
-  | { readonly kind: "failed"; readonly failure: SendFailure };
+  /** `message`: the server's own sentence — only for `unverified-daily-limit` (`api/goi-vigov.ts`). */
+  | { readonly kind: "failed"; readonly failure: SendFailure; readonly message?: string };
 
 export function sendOutcome(kq: KetQuaGoi): SendOutcome {
   switch (kq.kieu) {
     case "xong":
       return { kind: "sent", petition: kq.phieu };
+    case "unverified-daily-limit":
+      return kq.message === null
+        ? { kind: "failed", failure: kq.kieu }
+        : { kind: "failed", failure: kq.kieu, message: kq.message };
     case "chua-co-phien":
     case "het-phien":
     case "can-xac-thuc-so":
@@ -1048,6 +1064,11 @@ export function CommuneSendScreen(props: {
   pickScenePhotos?: PickScenePhotos;
   /** Draft kept on the phone (ADR 0050 #7) — commune app only. Absent: no draft at all. */
   draftStore?: FeedbackDraftStore;
+  /**
+   * The session has NO verified phone (ADR 0080): Zalo gave no number, so name and number are required and
+   * anonymous is off. Read by `TrangXa` from the session on each render; the screen never decides it.
+   */
+  typedContact?: boolean;
   onBack: () => void;
   onSessionLost: OnSessionLost;
   /** 201 — the petition as the server recorded it. */
@@ -1055,6 +1076,7 @@ export function CommuneSendScreen(props: {
   onOpenPetition: (code: string) => void;
 }) {
   const { draftStore } = props;
+  const typedContact = props.typedContact === true;
   const [step, setStep] = useState<1 | 2 | 3>(1);
   /**
    * A draft found when the screen opened, until the citizen picks "Tiếp tục" or "Bỏ nháp". While it is
@@ -1070,6 +1092,8 @@ export function CommuneSendScreen(props: {
   const [attempt, setAttempt] = useState<LanGui | null>(null);
   const [sending, setSending] = useState(false);
   const [failure, setFailure] = useState<SendFailure | null>(null);
+  /** The server's own sentence for the failure, when it sent one we show (`unverified-daily-limit` only). */
+  const [failureMessage, setFailureMessage] = useState<string | null>(null);
   const [sent, setSent] = useState<PhieuCuaToi | null>(null);
   /** The server said the picked field is no longer offered: say so on step 1 while the citizen re-picks. */
   const [fieldChanged, setFieldChanged] = useState(false);
@@ -1120,7 +1144,10 @@ export function CommuneSendScreen(props: {
     setForm((t) => ({ ...t, [k]: v }));
     setAttempt(null);
     setFailure(null);
+    setFailureMessage(null);
   };
+  /** Anonymous as it applies: never on the typed-contact path, whatever a restored draft held. */
+  const anonymous = !typedContact && form.an_danh;
   const hasContent = form.linh_vuc !== "" || form.noi_dung.trim() !== "" || form.dia_chi.trim() !== "";
 
   // Save as the citizen types, on the writing step only (the prototype's rule, `NewFeedbackPage.tsx:124`).
@@ -1152,6 +1179,7 @@ export function CommuneSendScreen(props: {
   async function send(a: LanGui) {
     setSending(true);
     setFailure(null);
+    setFailureMessage(null);
     const out = sendOutcome(await guiPhanAnh(a));
     setSending(false);
     if (out.kind === "session") {
@@ -1169,7 +1197,11 @@ export function CommuneSendScreen(props: {
       return;
     }
     if (out.kind === "failed") {
+      // The daily ceiling of unverified petitions (ADR 0080 #7): nothing was recorded, so the attempt goes — a
+      // later send is a new act with a new key. The form (the draft) stays exactly as written.
+      if (out.failure === "unverified-daily-limit") setAttempt(null);
       setFailure(out.failure);
+      setFailureMessage(out.message ?? null);
       return;
     }
     setAttempt(null);
@@ -1185,17 +1217,21 @@ export function CommuneSendScreen(props: {
 
   function submit() {
     if (sending) return;
-    const e = kiemNhapPhieu(form, {
-      thieu: XA_PA.thieu_mo_ta,
-      thieu_nguoi_gui: XA_PA.thieu_nguoi_gui,
-      qua_dai: (n) => GUI.qua_dai(XA_TN.o_nay, n),
-    });
+    const e = kiemNhapPhieu(
+      form,
+      {
+        thieu: XA_PA.thieu_mo_ta,
+        thieu_nguoi_gui: XA_PA.thieu_nguoi_gui,
+        qua_dai: (n) => GUI.qua_dai(XA_TN.o_nay, n),
+      },
+      typedContact ? COMMUNE_TYPED_CONTACT : undefined,
+    );
     setErrors(e);
     if (Object.keys(e).length > 0) return;
     let a = attempt;
     if (a === null) {
       try {
-        a = taoLanGui(sendBody(form, location));
+        a = taoLanGui(sendBody(form, location, typedContact));
       } catch {
         setFailure("khong-tao-duoc-khoa");
         return;
@@ -1320,17 +1356,26 @@ export function CommuneSendScreen(props: {
                 onLocate={() => void sceneLocation.locate()}
               />
             )}
+            {/* The typed-contact path (ADR 0080): the switch stays where the citizen expects it, OFF and disabled,
+                and the line under it says why in words — never a control that silently does nothing. */}
+            {typedContact && (
+              <div className="xa-ghi-chu" role="note">
+                <BieuTuong ten="info" co={22} />
+                <p>{XA_PA.contact_note}</p>
+              </div>
+            )}
             <div className="xa-hang xa-hang--tinh xa-hang--sat">
               <span className="xa-hang__chu">
                 <strong>{XA_PA.an_danh}</strong>
-                <span className="xa-phu">{XA_PA.an_danh_giai_thich}</span>
+                <span className="xa-phu">{typedContact ? XA_PA.anonymous_off : XA_PA.an_danh_giai_thich}</span>
               </span>
               <button
                 type="button"
                 role="switch"
-                aria-checked={form.an_danh}
+                aria-checked={anonymous}
                 aria-label={XA_PA.an_danh}
-                className={`xa-cong-tac${form.an_danh ? " xa-cong-tac--bat" : ""}`}
+                disabled={typedContact}
+                className={`xa-cong-tac${anonymous ? " xa-cong-tac--bat" : ""}`}
                 onClick={() => {
                   setForm((t) => ({ ...t, an_danh: !t.an_danh }));
                   setAttempt(null);
@@ -1339,15 +1384,34 @@ export function CommuneSendScreen(props: {
                 <span className="xa-cong-tac__nut" />
               </button>
             </div>
-            {!form.an_danh && (
+            {!anonymous && (
               <>
-                <ONhapDong id="xa-ho-ten" nhan={XA_PA.ten_nguoi_pa} goi_y={XA_PA.goi_y_ten} gia_tri={form.ho_ten} toi_da={DO_DAI_TOI_DA.ho_ten} onDoi={edit("ho_ten")} />
+                <ONhapDong
+                  id="xa-ho-ten"
+                  nhan={XA_PA.ten_nguoi_pa}
+                  goi_y={XA_PA.goi_y_ten}
+                  gia_tri={form.ho_ten}
+                  toi_da={DO_DAI_TOI_DA.ho_ten}
+                  required={typedContact || undefined}
+                  onDoi={edit("ho_ten")}
+                />
                 {errors.ho_ten && <p className="xa-loi-o" role="alert">{errors.ho_ten}</p>}
-                <ONhapDong id="xa-dien-thoai" nhan={XA_PA.so_dien_thoai} goi_y={XA_PA.goi_y_so} gia_tri={form.dien_thoai} toi_da={DO_DAI_TOI_DA.dien_thoai} kieu_ban_phim="tel" onDoi={edit("dien_thoai")} />
+                <ONhapDong
+                  id="xa-dien-thoai"
+                  nhan={typedContact ? XA_PA.phone_required_label : XA_PA.so_dien_thoai}
+                  goi_y={XA_PA.goi_y_so}
+                  gia_tri={form.dien_thoai}
+                  toi_da={DO_DAI_TOI_DA.dien_thoai}
+                  kieu_ban_phim="tel"
+                  required={typedContact || undefined}
+                  onDoi={edit("dien_thoai")}
+                />
                 {errors.dien_thoai && <p className="xa-loi-o" role="alert">{errors.dien_thoai}</p>}
               </>
             )}
-            <p className="xa-phu">{form.an_danh ? XA_PA.bat_buoc_an_danh : XA_PA.bat_buoc}</p>
+            <p className="xa-phu">
+              {typedContact ? XA_PA.contact_required : anonymous ? XA_PA.bat_buoc_an_danh : XA_PA.bat_buoc}
+            </p>
             {draftStore !== undefined && <p className="xa-phu">{XA_PA.draft_kept_on_phone}</p>}
             <div className="xa-ghi-chu">
               <BieuTuong ten="alert" co={22} />
@@ -1373,7 +1437,7 @@ export function CommuneSendScreen(props: {
           {photos.length > 0 && <p className="xa-phu">{SCENE_PHOTOS.footer_with(photos.length)}</p>}
           {failed !== null && (
             <p className="xa-error-box" role="alert">
-              {failed.cau}
+              {failureMessage ?? failed.cau}
             </p>
           )}
           {sending && (
@@ -1426,6 +1490,15 @@ export function SendDone(props: {
         <p className="xa-phu">{XA_PA.ma_phieu_cua_ba_con}</p>
         <strong className="xa-ket-qua__code">#{p.ma_tra_cuu}</strong>
       </div>
+      {/* ADR 0080 #4 and "Cái phải trả" #2: an unverified petition gets no notification, ever — said here, under
+          the code, so the citizen knows that silence is not neglect and how to follow it. Read from the server's
+          explicit field, never inferred from the session. */}
+      {p.contact_unverified === true && (
+        <div className="xa-ghi-chu xa-ket-qua__notice" role="note">
+          <BieuTuong ten="info" co={22} />
+          <p>{XA_PA.done_no_notice}</p>
+        </div>
+      )}
       {(acknowledge !== null || resolve !== null) && (
         <div className="xa-deadline-band">
           {acknowledge !== null && <p>{XA_PA.acknowledge_by(acknowledge)}</p>}

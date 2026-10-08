@@ -422,7 +422,8 @@ describe("chính sách mô tả đúng thứ ứng dụng thật sự làm", () 
     // Whole sections are drafts: no paragraph of them may lose its mark alone.
     expect(marked["anh-hien-truong"]).toBe(11);
     expect(marked["trang-xa"]).toBe(5);
-    expect(marked["phan-anh"]).toBe(8);
+    // 08/10/2026 (ADR 0080): phan-anh +1 — the typed-contact paragraph ("NẾU ZALO KHÔNG CHO ỨNG DỤNG SỐ…").
+    expect(marked["phan-anh"]).toBe(9);
     expect(marked["nhap-phan-anh"]).toBe(4);
     expect(marked["chat-sms"]).toBe(6);
     // The opening sentence is a draft too (06/10/2026); it is not in `MUC_CHINH_SACH`, so it is checked here.

@@ -153,7 +153,7 @@ describe("phone — shared app (403 reopen) and commune app (session gate)", () 
   });
 
   it("the reopen keeps Zalo's answer on its way to the screen", async () => {
-    datPhienViGov({ token: "tok-test", ten_xa: "Xã Thử Nghiệm" });
+    datPhienViGov({ token: "tok-test", ten_xa: "Xã Thử Nghiệm", phone_verified: false });
     expect(await reopenSessionWithPhone(async () => ({ kieu: "thu-lai", zalo: PHONE }))).toEqual({
       kieu: "thu-lai",
       zalo: PHONE,

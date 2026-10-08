@@ -45,6 +45,13 @@ export type PhienViGov = {
   readonly token: string;
   /** Tên xã của phiên, nguyên văn máy chủ trả về (`tenantDisplayName`). */
   readonly ten_xa: string;
+  /**
+   * `phoneVerified` of the session, verbatim. `false` is the PHONE-LESS session of ADR 0080: Zalo gave no
+   * number, the session belongs to the Zalo account, and it may only send and follow unverified petitions.
+   * It steers the screens (ask before sending, name + phone required) and grants nothing — the server
+   * decides what each route accepts.
+   */
+  readonly phone_verified: boolean;
 };
 
 let phien_hien_tai: PhienViGov | null = null;

@@ -22,6 +22,8 @@ import { NutChatOA } from "./features/company-intro/NutChatOA";
 import {
   type CommuneAppLoginResult,
   type KetQuaMoPhienQuaCau,
+  moPhienCongDanQuaCau, // vi-name-ok: existing export, not renamed (rule 12 #3)
+  openCommuneAppSessionWithoutPhone,
   openCommuneAppSessionWithPhone,
   reopenCitizenSessionWithPhone,
   type ReopenWithPhoneBridgeResult,
@@ -109,6 +111,7 @@ export function sangKieuCongDan(kq: KetQuaMoPhienQuaCau): KetQuaMoPhien {
         token: kq.phien.token,
         ten_xa: kq.phien.ten_xa,
         ten_mien: kq.phien.ten_mien_xa,
+        da_xac_thuc_so: kq.phien.da_xac_thuc_so,
       };
     case "cau-tat":
     case "chua-san-sang":
@@ -344,9 +347,15 @@ export function toCommuneAppSessionResult(result: CommuneAppLoginResult): Commun
  * `identityHost` is handed in by the state half (`cong-dan/api/mo-phien-vigov.ts`, from its address map),
  * because this shell may not import that map. The shared app's QR-path openers near the top of this file are
  * untouched and still go to `vihat-miniapp` (`openSharedAppSession` below).
+ *
+ * `skip` (ADR 0080): the phone-less session, after the citizen chose "Gửi bằng họ tên và số điện thoại".
  */
-const openCommuneAppSession: OpenCommuneAppSession = async (identityHost) =>
-  toCommuneAppSessionResult(await openCommuneAppSessionWithPhone(identityHost));
+const openCommuneAppSession: OpenCommuneAppSession = async (identityHost, phone) =>
+  toCommuneAppSessionResult(
+    await (phone === "ask"
+      ? openCommuneAppSessionWithPhone(identityHost)
+      : openCommuneAppSessionWithoutPhone(identityHost)),
+  );
 
 /**
  * THE LOCATION BRIDGE, for BOTH apps — the shell builds it, the state half only declares its type
@@ -544,13 +553,21 @@ export function toSharedAppSessionResult(result: ReopenWithPhoneResult): Commune
  * The host it sends is the QR's `d` — the commune whose public pages the citizen is looking at — and the
  * session is still kept only if the server's commune name equals the name on screen (`openCommuneAppSession`).
  *
- * `reopen` is for tests only — production code never passes it.
+ * `skip` (ADR 0080, after "Gửi bằng họ tên và số điện thoại"): the bridge body WITHOUT `phoneToken`
+ * (`moPhienCongDanQuaCau`, `hop-dong.ts` `thanYeuCauCauViGov`) — same host, same commune check, a phone-less
+ * session. `vihat-miniapp` already takes that body; nothing changed there.
+ *
+ * `reopen` / `openWithoutPhone` are for tests only — production code never passes them.
  */
 export function openSharedAppSession(
   communeHost: string,
   reopen: (communeHost: string) => Promise<ReopenWithPhoneBridgeResult> = reopenCitizenSessionWithPhone,
+  openWithoutPhone: (communeHost: string) => Promise<KetQuaMoPhienQuaCau> = moPhienCongDanQuaCau,
 ): OpenCommuneAppSession {
-  return async () => toSharedAppSessionResult(toReopenWithPhoneResult(await reopen(communeHost)));
+  return async (_identityHost, phone) =>
+    toSharedAppSessionResult(
+      toReopenWithPhoneResult(await (phone === "ask" ? reopen(communeHost) : openWithoutPhone(communeHost))),
+    );
 }
 
 /**

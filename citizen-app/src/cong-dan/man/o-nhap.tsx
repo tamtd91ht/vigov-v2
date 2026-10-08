@@ -23,8 +23,12 @@ type ChungProps = {
   onDoi: (gia_tri: string) => void;
 };
 
+/**
+ * `required`: OPTIONAL — only the typed-contact path asks for it (ADR 0080: name and number are the commune's
+ * only way back to the citizen). It sets `aria-required`, so a screen reader says what the label says.
+ */
 export function ONhapDong(
-  props: ChungProps & { kieu_ban_phim?: "text" | "tel" },
+  props: ChungProps & { kieu_ban_phim?: "text" | "tel"; required?: boolean },
 ) {
   const id_goi_y = props.goi_y ? `${props.id}-goi-y` : undefined;
   return (
@@ -46,6 +50,8 @@ export function ONhapDong(
         autoCapitalize="off"
         spellCheck={false}
         maxLength={props.toi_da}
+        required={props.required}
+        aria-required={props.required}
         value={props.gia_tri}
         aria-describedby={id_goi_y}
         onChange={(e) => props.onDoi(e.target.value)}

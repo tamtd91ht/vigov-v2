@@ -188,16 +188,40 @@ const soKyTu = (s: string): number => [...s].length;
 export function kiemNhapPhieu(
   nhap: NhapPhieu,
   cau: { thieu: string; thieu_nguoi_gui: string; qua_dai: (toi_da: number) => string },
+  /**
+   * The typed-contact path (ADR 0080): Zalo gave no number, so name AND phone are required, the phone must look
+   * like a Vietnamese number, and anonymous does not apply (the screen turns it off). Absent = the usual rules.
+   */
+  typedContact?: TypedContactWords,
 ): LoiNhapPhieu {
   const loi: LoiNhapPhieu = {};
+  const anonymous = typedContact === undefined && nhap.an_danh;
   if (nhap.noi_dung.trim() === "") loi.noi_dung = cau.thieu;
   else if (soKyTu(nhap.noi_dung.trim()) > DO_DAI_TOI_DA.noi_dung) loi.noi_dung = cau.qua_dai(DO_DAI_TOI_DA.noi_dung);
   if (soKyTu(nhap.dia_chi.trim()) > DO_DAI_TOI_DA.dia_chi) loi.dia_chi = cau.qua_dai(DO_DAI_TOI_DA.dia_chi);
-  if (!nhap.an_danh && nhap.ho_ten.trim() === "") loi.ho_ten = cau.thieu_nguoi_gui;
-  else if (!nhap.an_danh && soKyTu(nhap.ho_ten.trim()) > DO_DAI_TOI_DA.ho_ten) loi.ho_ten = cau.qua_dai(DO_DAI_TOI_DA.ho_ten);
-  if (!nhap.an_danh && soKyTu(nhap.dien_thoai.trim()) > DO_DAI_TOI_DA.dien_thoai) {
+  if (!anonymous && nhap.ho_ten.trim() === "") loi.ho_ten = typedContact?.name_missing ?? cau.thieu_nguoi_gui;
+  else if (!anonymous && soKyTu(nhap.ho_ten.trim()) > DO_DAI_TOI_DA.ho_ten) loi.ho_ten = cau.qua_dai(DO_DAI_TOI_DA.ho_ten);
+  if (!anonymous && soKyTu(nhap.dien_thoai.trim()) > DO_DAI_TOI_DA.dien_thoai) {
     loi.dien_thoai = cau.qua_dai(DO_DAI_TOI_DA.dien_thoai);
+  } else if (typedContact !== undefined && nhap.dien_thoai.trim() === "") {
+    loi.dien_thoai = typedContact.phone_missing;
+  } else if (typedContact !== undefined && !isPlausiblePhone(nhap.dien_thoai)) {
+    loi.dien_thoai = typedContact.phone_invalid;
   }
   return loi;
+}
+
+/** The three sentences of the typed-contact checks — each screen passes its own voice ("bạn" / "bà con"). */
+export type TypedContactWords = { name_missing: string; phone_missing: string; phone_invalid: string };
+
+/**
+ * A typed number that LOOKS like a Vietnamese phone: digits only once spaces, dots and dashes are removed;
+ * 10 or 11 digits starting with 0, or the same after +84 (which stands for that 0). A sanity check so a slip of
+ * the finger is caught before sending — NOT a verification: the server keeps the number as contact only, never
+ * as identity (ADR 0080 #2). PURE.
+ */
+export function isPlausiblePhone(typed: string): boolean {
+  const s = typed.trim().replace(/[\s.\-]/g, "");
+  return /^0\d{9,10}$/.test(s) || /^\+84\d{9,10}$/.test(s);
 }
 

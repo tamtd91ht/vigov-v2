@@ -207,7 +207,8 @@ describe("xác nhận → mở phiên qua hàm TIÊM VÀO", () => {
     expect(goi).toEqual([{ communeHostHint: TEN_MIEN, communeConfirmed: true }]);
     // Bearer KHÔNG đi ngược lên màn hình — chỉ tên xã (và tên miền chính của phiên, nếu có).
     expect(kq).toEqual({ kieu: "da-mo", ten_xa: "Xã Của Phiên", ten_mien: null });
-    expect(layPhienViGov()).toEqual({ token: "tok-vigov-thu", ten_xa: "Xã Của Phiên" });
+    // No `da_xac_thuc_so` from the opener is read as NOT verified (ADR 0080): the send screen then asks first.
+    expect(layPhienViGov()).toEqual({ token: "tok-vigov-thu", ten_xa: "Xã Của Phiên", phone_verified: false });
   });
 
   it("tên miền chính của phiên đi lên màn hình khi đúng khuôn; sai khuôn thì `null` — kiểm lại ở nửa này", async () => {
@@ -221,8 +222,8 @@ describe("xác nhận → mở phiên qua hàm TIÊM VÀO", () => {
     for (const sai of ["", "localhost", "https://xa.vn", "Xa.Vn", "xa.vn?host=khac"]) {
       expect(await voi(sai), sai).toMatchObject({ kieu: "da-mo", ten_mien: null });
     }
-    // Tên miền KHÔNG vào nguồn phiên: bearer và tên xã là tất cả những gì `phien-vigov.ts` giữ.
-    expect(layPhienViGov()).toEqual({ token: "tok", ten_xa: "Xã Của Phiên" });
+    // Tên miền KHÔNG vào nguồn phiên: bearer, tên xã và cờ số điện thoại là tất cả những gì `phien-vigov.ts` giữ.
+    expect(layPhienViGov()).toEqual({ token: "tok", ten_xa: "Xã Của Phiên", phone_verified: false });
   });
 
   it("tên xã của phiên thắng tên màn xác nhận đã hiện (ADR 0047 §Trả lời mục 4)", () => {
@@ -304,7 +305,7 @@ describe("kênh công dân KHÔNG phiên — nói ra, không im lặng", () => {
   });
 
   it("CÓ phiên → không có câu 'chưa đăng nhập được'", () => {
-    datPhienViGov({ token: "tok", ten_xa: "Xã Của Phiên" });
+    datPhienViGov({ token: "tok", ten_xa: "Xã Của Phiên", phone_verified: true });
     const html = renderToStaticMarkup(createElement(KenhCongDan, { onDong: () => {}, ten_mien: TEN_MIEN }));
     expect(textOf(html)).not.toContain(CHUA_DANG_NHAP_XA.cau);
     expect(html).toContain(TIN_XA.tieu_de);

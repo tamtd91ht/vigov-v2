@@ -61,6 +61,7 @@ import {
   type ScenePhotoType,
   STORAGE_FILE_FIELD,
   type TrangPhieuCuaToi,
+  UNVERIFIED_DAILY_LIMIT_CODE,
   verificationPhotosAddress,
 } from "./hop-dong-phan-anh";
 import {
@@ -110,9 +111,12 @@ import { laTenMien } from "../../lib/launch-params";
  *   `kenh-chua-mo`                      503 khác — xã chưa cấu hình hạn; phiếu CHƯA được ghi nhận
  *   `loi-may-chu`                       500, mã lạ, hoặc thân sai khuôn
  *   `loi-mang`                          mất mạng, quá hạn chờ
+ *   `unverified-daily-limit`            429 `unverified_daily_limit` (ADR 0080 #7) — phiếu CHƯA được ghi
  *
  * KHÔNG MANG CÂU CỦA MÁY CHỦ: câu 400 của `petitions` nói bằng tên trường kỹ thuật (`content`), và
- * màn hình người dân có câu riêng cho từng nhánh (`man/noi-dung.ts`).
+ * màn hình người dân có câu riêng cho từng nhánh (`man/noi-dung.ts`). ONE EXCEPTION, the owner's decision
+ * (08/10/2026): `unverified-daily-limit` carries the server's Vietnamese sentence — it says the ceiling in the
+ * commune's own words — trimmed and capped, `null` when absent; the screen falls back to its own sentence.
  */
 export type KetQuaGoi =
   | { kieu: "chua-co-phien" }
@@ -127,7 +131,8 @@ export type KetQuaGoi =
   | { kieu: "field-catalogue-unavailable" }
   | { kieu: "kenh-chua-mo" }
   | { kieu: "loi-may-chu" }
-  | { kieu: "loi-mang" };
+  | { kieu: "loi-mang" }
+  | { kieu: "unverified-daily-limit"; message: string | null };
 
 /** Mọi nhánh trừ `xong` — chung cho mọi tuyến. */
 type NhanhKhongThanh = Exclude<KetQuaGoi, { kieu: "xong" }>;
@@ -288,9 +293,16 @@ async function callOnce<T>(
         return khi_404;
       case 409:
         return { kieu: "dang-xu-ly-truoc" };
-      case 429:
-        // Only the wait is read; the body is never read (nothing to show, nothing to log).
-        return { kieu: "rate-limited", retryAfterSeconds: readRetryAfter(tra_loi) };
+      case 429: {
+        // The body is read for its `code` only — and, for `unverified_daily_limit` alone, its sentence
+        // (`readLimitMessage`). Nothing is logged.
+        const retryAfterSeconds = readRetryAfter(tra_loi);
+        const body = await readErrorBody(tra_loi);
+        if (errorCode(body) === UNVERIFIED_DAILY_LIMIT_CODE) {
+          return { kieu: "unverified-daily-limit", message: readLimitMessage(body) };
+        }
+        return { kieu: "rate-limited", retryAfterSeconds };
+      }
       case 503:
         return (await readErrorCode(tra_loi)) === FIELD_CATALOGUE_UNAVAILABLE_CODE
           ? { kieu: "field-catalogue-unavailable" }
@@ -311,11 +323,32 @@ async function callOnce<T>(
  * network"), which would tell the citizen to fix the wrong thing. Only `code` is read (`errorCode`).
  */
 async function readErrorCode(response: Response): Promise<string | null> {
+  return errorCode(await readErrorBody(response));
+}
+
+/** The error body, or `null` when absent or not JSON. Never throws — same reason as `readErrorCode`. */
+async function readErrorBody(response: Response): Promise<unknown> {
   try {
-    return errorCode(await response.json());
+    return await response.json();
   } catch {
     return null;
   }
+}
+
+/** Longest server sentence shown: anything longer is not the sentence the contract describes. */
+const LIMIT_MESSAGE_MAX = 400;
+
+/**
+ * The `message` of a 429 `unverified_daily_limit` body — the ONE server sentence the citizen screens show
+ * (see `KetQuaGoi`). Text only (React renders it as text, never as HTML), trimmed, and `null` when absent,
+ * empty or too long, so the screen says its own sentence instead.
+ */
+function readLimitMessage(body: unknown): string | null {
+  if (typeof body !== "object" || body === null) return null;
+  const m = (body as Record<string, unknown>)["message"];
+  if (typeof m !== "string") return null;
+  const s = m.trim();
+  return s === "" || [...s].length > LIMIT_MESSAGE_MAX ? null : s;
 }
 
 /**

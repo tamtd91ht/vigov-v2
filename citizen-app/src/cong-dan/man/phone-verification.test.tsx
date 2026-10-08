@@ -73,7 +73,8 @@ const VERIFIED: ReopenWithPhoneResult = { kieu: "xong", token: NEW_TOKEN, ten_xa
 
 beforeEach(() => {
   calls = [];
-  datPhienViGov({ token: OLD_TOKEN, ten_xa: COMMUNE });
+  // The session opened without the number (ADR 0045 câu 2) — phone-less until the reopen below.
+  datPhienViGov({ token: OLD_TOKEN, ten_xa: COMMUNE, phone_verified: false });
 });
 
 afterEach(() => {
@@ -123,13 +124,13 @@ describe("lớp gọi: 403 chỉ là `can-xac-thuc-so` khi mã là `chua_xac_thu
 describe("reopenSessionWithPhone — phiên mới chỉ thay phiên cũ khi cùng xã VÀ đã xác thực số", () => {
   it("cùng xã, đã xác thực → ghi, `da-xac-thuc`", async () => {
     expect(await reopenSessionWithPhone(fakeReopen(VERIFIED))).toEqual({ kieu: "da-xac-thuc" });
-    expect(layPhienViGov()).toEqual({ token: NEW_TOKEN, ten_xa: COMMUNE });
+    expect(layPhienViGov()).toEqual({ token: NEW_TOKEN, ten_xa: COMMUNE, phone_verified: true });
   });
 
   it("xã KHÁC → `khac-xa`, phiên cũ giữ nguyên (không đổi xã lặng lẽ)", async () => {
     const r = await reopenSessionWithPhone(fakeReopen({ ...VERIFIED, ten_xa: "Xã Khác" }));
     expect(r).toEqual({ kieu: "khac-xa" });
-    expect(layPhienViGov()).toEqual({ token: OLD_TOKEN, ten_xa: COMMUNE });
+    expect(layPhienViGov()).toEqual({ token: OLD_TOKEN, ten_xa: COMMUNE, phone_verified: false });
   });
 
   it("máy chủ vẫn chưa xác thực số → `van-chua-xac-thuc`, không ghi", async () => {
@@ -316,7 +317,7 @@ describe("ghép thật với lớp gọi — cùng lần gửi, bearer mới, v�
     if (r.kieu === "can-xac-thuc-so") m.onPhoneRequired(() => void traCuuPhieu("PA7K2QX9M4TD"));
     await m.allow();
     expect(calls).toHaveLength(1);
-    expect(layPhienViGov()).toEqual({ token: OLD_TOKEN, ten_xa: COMMUNE });
+    expect(layPhienViGov()).toEqual({ token: OLD_TOKEN, ten_xa: COMMUNE, phone_verified: false });
   });
 });
 

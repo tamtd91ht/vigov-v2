@@ -268,18 +268,25 @@ export function bridgeBodyWithPhone(yc: BridgeRequestWithPhone): string {
  *   `vihat-miniapp`'s (ADR 0066, "sáu câu dựng tuyến" #1). The `vihat-miniapp` file references below
  *   describe the contract this route copies; the server that answers is now identity.
  *
- *   gửi : { "accessToken", "phoneToken", "appId": "<App ID của app đang chạy>" }
+ *   gửi : { "accessToken", "phoneToken"?, "appId": "<App ID của app đang chạy>" }
  *         — KHÔNG `communeHostHint`, KHÔNG `communeConfirmed`: `vihat-miniapp` nhận ra app riêng từ
  *         `appId`, và ViGov tra xã từ dòng `mini_app` của App ID ấy (chế độ riêng). App không tự đặt ra
  *         một tên miền gợi ý nào (sự cố 27/09, ADR 0047:271-277).
- *   nhận: 201 { "vigovSession": {...} } — cùng khuôn nhánh cầu, đọc bằng `docTraLoiCauViGov`
- *   lỗi : 400 thiếu `phoneToken` / yêu cầu hỏng · 401 mã Zalo hết hạn · 422 `appId` lạ, hoặc app chưa gắn
- *         xã / xã ngừng hoạt động (MỘT câu) · 429 · 502 không với tới Zalo · 503 cầu tắt / chưa lắp ráp
- *         (`vihat-miniapp` `internal/httpapi/sessions.go` switch `chonApp`, `sessions_vigov.go:54-58`)
+ *   nhận: 201 { "vigovSession": {...} } — cùng khuôn nhánh cầu, đọc bằng `docTraLoiCauViGov`;
+ *         `phoneVerified` false khi không có `phoneToken` (ADR 0080 #6)
+ *   lỗi : 400 yêu cầu hỏng · 401 `zalo_token_invalid` — Zalo từ chối `accessToken` HOẶC `phoneToken` đã gửi ·
+ *         422 `app_not_ready` (App ID lạ, app chưa gắn xã / xã ngừng — MỘT câu) · 429 · 502 không với tới
+ *         Zalo · 503 (`kb/20-contracts/openapi.json`, `service-identity/internal/http/routes_cong_dan.go`)
  *
- * ⚠ `phoneToken` BẮT BUỘC Ở MỌI LẦN, và đó là cách máy chủ XÁC MINH App ID: đổi `phoneToken` bằng secret
- *   của đúng app ấy phải thành công (`vihat-miniapp` `internal/httpapi/app_zalo.go` điểm 2). Nên không có
- *   thân "chỉ accessToken" cho app riêng — mọi lần mở phiên đều đi sau lời giải thích và hộp thoại xin số.
+ * ⚠ SINCE ADR 0080 (08/10/2026) `phoneToken` IS OPTIONAL. Absent, identity issues a PHONE-LESS session owned
+ *   by the Zalo account, usable only to send and follow unverified petitions; `400 phone_required` no longer
+ *   exists. Without `phoneToken` the call does NOT prove the App ID: Zalo's `/me` takes no secret, so any
+ *   app's `accessToken` plus commune X's App ID gets a phone-less session at X — accepted by the owner, ADR 0080
+ *   "Cái phải trả" #6. The phone path still asks first: Zalo's phone dialog only follows the explanation and
+ *   the citizen's tap, and the phone-less body is sent only when Zalo gave no number (`cau-vigov.ts`).
+ *
+ * ⚠ THE SERVER DOES NOT DOWNGRADE: a refused `phoneToken` is a 401, never a quiet phone-less session
+ *   (`routes_cong_dan.go:226-228`). Retrying WITHOUT it — once — is the client's job (`cau-vigov.ts`).
  *
  * ⚠ `appId` CHỈ CHỌN SECRET, KHÔNG CẤP GÌ. Nó đọc từ môi trường Zalo lúc chạy (`readRuntimeAppId`); một
  *   `appId` sai thì lượt đổi số thất bại (401/502) hoặc máy chủ trả 422 — không bao giờ thành một phiên.
@@ -335,11 +342,16 @@ export const COMMUNE_APP_SESSION_FIELDS: readonly TruongGuiDi[] = [
   },
 ];
 
-/** Thân đăng nhập từ app riêng. CHỖ DUY NHẤT tên trường `appId` được viết ra. */
+/**
+ * Thân đăng nhập từ app riêng. CHỖ DUY NHẤT tên trường `appId` được viết ra.
+ *
+ * An EMPTY phone code leaves `phoneToken` OUT of the body (ADR 0080 #6, the phone-less session): the contract
+ * takes absent or "", and absent is what it is — no number was given, so no field claims one.
+ */
 export function communeAppSessionBody(req: CommuneAppSessionRequest): string {
   return JSON.stringify({
     accessToken: req.ma_truy_cap,
-    phoneToken: req.ma_so_dien_thoai,
+    ...(req.ma_so_dien_thoai === "" ? {} : { phoneToken: req.ma_so_dien_thoai }),
     appId: req.app_id,
   });
 }

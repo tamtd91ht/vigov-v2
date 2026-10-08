@@ -553,10 +553,18 @@
       "id": "adr-0080-nhap-tay-lien-he",
       "menu": "phan-anh-nguoi-dan",
       "viec": "Gửi phản ánh khi Zalo không cho số (ADR 0080): mời chia sẻ số TRƯỚC khi gửi nếu phiên chưa có số (máy chủ nay nhận thẳng, không còn 403 nhắc); từ chối / Zalo lỗi → bước nhập họ tên + SĐT (bắt buộc ở đường này), gửi; màn mã báo contact_unverified = sẽ không nhận tin, lưu mã để tra cứu; 429 unverified_daily_limit; app xã: gọi POST /api/v1/citizen-sessions KHÔNG phoneToken khi getPhoneNumber thất bại, giữ phiên phoneVerified:false (mo-phien-vigov.ts:279 đang bỏ); sửa câu PHONE_VERIFICATION.why (noi-dung.ts:253), chú thích hop-dong.ts:276-280",
-      "trang_thai": "chua_lam",
-      "bang_chung": "Máy chủ đã có: 357745c3 (identity), commit C3 (petitions). Ngoài Zalo vẫn từ chối.",
+      "trang_thai": "xong",
+      "bang_chung": "(commit này). tsc sạch; vitest 65 tệp / 1776 ca xanh; bundle-for-zalo 32 ca. Ảnh render 390px (trang thử trong scratchpad gắn component thật): cổng từ chối, form lỗi, 429, màn mã có contact_unverified, màn app chung. App chung đi QrCommuneApp → TrangXa → CommuneSendScreen như app xã; GuiPhanAnhScreen chỉ còn qua KenhCongDan (không màn nào render). App xã: 401 khi có phoneToken → thử lại ĐÚNG MỘT LẦN không phoneToken; từ chối/thiếu mã số → nút 'Gửi bằng họ tên và số điện thoại' (gọi không phoneToken khi công dân bấm). Họ tên + SĐT bắt buộc ở đường này, tắt ẩn danh.",
       "no_confirm": [],
-      "tiep_theo": "citizen-app-builder (lớn); ../vihat-miniapp không cần đổi."
+      "tiep_theo": "(1) CHƯA chạy thật trên cụm: người dùng báo 401 citizen-sessions 08/10 trước bản này — cần log identity trường 'buoc' (phone hay account_id); account_id thì bản này không cứu. (2) Câu 429 của máy chủ (service-petitions http/gui_phan_anh.go:325-327) bảo 'xác nhận số điện thoại Zalo' — app xã chưa được duyệt không làm được; sửa câu. (3) Phiếu chưa xác thực tới 'đã xử lý' có thể vẫn hiện khối đánh giá rồi xin số (ADR 0080 #8: không đánh giá) — ẩn theo contact_unverified. (4) Chưa đo: phiên không số qua cầu vihat-miniapp có mang tài khoản Zalo không."
+    },
+    {
+      "id": "lenh-qr-app-chung-theo-xa",
+      "viec": "Lệnh `npm run qr -- --domain=<tên-miền-xã> [--version=<n>] [--out=<tệp>.svg]` — CHỈ sinh QR mở App ViHAT (app chung) vào một xã, không dựng, không đẩy; README gom lại bảng lệnh zmp:* (giữ nguyên tên, giải thích từng lệnh/cờ)",
+      "trang_thai": "xong",
+      "bang_chung": "citizen-app/scripts/commune-qr.mjs (thuần) + make-qr.mjs (chạy) + commune-qr.test.mjs; package.json `qr`; .gitignore `qr/`; README §Nộp lên Zalo → 'Lệnh — đẩy bản và sinh QR'. Liên kết trùng khuôn service-platform shared_mini_app.go (`?d=<host>&src=qr`; bản thử thêm `env=TESTING&version=<n>` trước). App ID từ platform `mini-app-ids?app=vihat`, xã kiểm qua identity `communes?host=` — không biết thì DỪNG, không lối --app-id. `npx vitest run scripts/` 138 ca xanh; chạy thật 08/10/2026: tên miền không có → dừng; thangbinh-danang.vigov.vn --version=3 → in App ID, tên xã, liên kết, ghi SVG",
+      "no_confirm": [],
+      "tiep_theo": "QR app RIÊNG của xã (`zalo.me/s/<App ID xã>/?src=qr`) lệnh này không sinh — vẫn lấy ở platform-admin. Chưa quét thử tệp SVG bằng Zalo trên máy thật."
     }
   ]
 }

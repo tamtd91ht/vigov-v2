@@ -28,7 +28,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 
 const trang = vi.hoisted(() => ({
   /** `undefined` = dùng nguồn phiên THẬT. Chỉ ca đối chứng đặt giá trị. */
-  phien: undefined as { token: string; ten_xa: string } | undefined,
+  phien: undefined as { token: string; ten_xa: string; phone_verified?: boolean } | undefined,
 }));
 
 vi.mock("../api/phien-vigov", async (importOriginal) => {
@@ -52,7 +52,8 @@ import type { PhieuCuaToi } from "../api/hop-dong-phan-anh";
 import { layPhienViGov } from "../api/phien-vigov";
 
 import { GuiPhanAnhScreen, ID_DAU_BUOC } from "./GuiPhanAnhScreen";
-import { CUA_TOI, GUI, KENH_CHUA_MO, LOI_GUI, PHONE_VERIFICATION, QUAY_LAI } from "./noi-dung";
+import { CUA_TOI, GUI, KENH_CHUA_MO, LOI_GUI, PHONE_VERIFICATION, QUAY_LAI, TYPED_CONTACT, XA_PA } from "./noi-dung";
+import { CommuneSendScreen } from "./PhanAnhAppXa";
 import { PhanAnhCuaToiScreen } from "./PhanAnhCuaToiScreen";
 import { TraCuuPhieuScreen } from "./TraCuuPhieuScreen";
 
@@ -198,6 +199,10 @@ class TaiLieuGia extends NutGia {
   createElement(ten: string) {
     return new PhanTuGia(ten.toUpperCase(), this);
   }
+  /** The commune app's icons are inline SVG (`BieuTuong.tsx`); the shim keeps them as plain nodes. */
+  createElementNS(_ns: string, ten: string) {
+    return new PhanTuGia(ten, this);
+  }
   createTextNode(chu: string) {
     return new ChuGia(chu, this);
   }
@@ -254,6 +259,16 @@ async function typeInto(box: PhanTuGia, text: string) {
   await act(async () => {
     dispatch(box, "input");
   });
+}
+
+/**
+ * What the text box `id` holds. A box React CREATES (a step drawn again) gets its text as `value`, `defaultValue`
+ * or child text depending on the element; a box typed into holds `value`. Any of them is what the citizen sees.
+ */
+function boxText(id: string): string {
+  const doc = (globalThis as unknown as { document: TaiLieuGia }).document;
+  const box = doc.getElementById(id) as unknown as { value?: string; defaultValue?: string; textContent: string };
+  return box.value ?? box.defaultValue ?? box.textContent;
 }
 
 /** The buttons under `root` whose text is exactly `text`. */
@@ -493,7 +508,8 @@ const SENT: PhieuCuaToi = {
 
 describe("app chung — bước lĩnh vực: bắt buộc, mã chọn được đi lên `field`, không danh sách dự phòng", () => {
   beforeEach(() => {
-    trang.phien = { token: "tok-thu-nghiem", ten_xa: "Xã Thử Nghiệm" };
+    // A VERIFIED session: these cases are about the field step, not the phone (ADR 0080 asks first otherwise).
+    trang.phien = { token: "tok-thu-nghiem", ten_xa: "Xã Thử Nghiệm", phone_verified: true };
     vi.mocked(guiPhanAnh).mockReset();
     vi.mocked(citizenReportFields).mockReset();
   });
@@ -612,6 +628,166 @@ describe("app chung — bước lĩnh vực: bắt buộc, mã chọn được �
     vi.mocked(citizenReportFields).mockResolvedValueOnce({ kieu: "chua-co-phien" });
     const { khung, go } = await gan(createElement(GuiPhanAnhScreen, { onQuayLai: () => {} }));
     khangDinhKenhChuaMo(khung);
+    await go();
+  });
+});
+
+/* ─────────────── ADR 0080 (08/10/2026): Zalo gives no number — ask first, then typed contact ─────────────── */
+
+describe("app chung — phiên chưa xác thực số: mời chia sẻ TRƯỚC khi gửi, rồi đường họ tên + số tự nhập", () => {
+  beforeEach(() => {
+    trang.phien = { token: "tok-thu-nghiem", ten_xa: "Xã Thử Nghiệm", phone_verified: false };
+    vi.mocked(guiPhanAnh).mockReset();
+    vi.mocked(citizenReportFields).mockReset();
+    vi.mocked(citizenReportFields).mockResolvedValue({ kieu: "xong", fields: FIELDS });
+  });
+
+  const radios = (root: PhanTuGia) => tatCaPhanTu(root).filter((p) => p.getAttribute("role") === "radio");
+  const doc = () => (globalThis as unknown as { document: TaiLieuGia }).document;
+  const next = (root: PhanTuGia) => buttonsNamed(root, GUI.nut_tiep)[0]!;
+
+  it("send → the phone panel BEFORE any call; declined → typed path → name + number required → body carries them", async () => {
+    const reopen = vi.fn();
+    const { khung, go } = await gan(createElement(GuiPhanAnhScreen, { onQuayLai: () => {}, reopenWithPhone: reopen }));
+    await press(radios(khung).find((r) => r.textContent.startsWith("An ninh trật tự"))!);
+    await press(next(khung));
+    await typeInto(doc().getElementById("cd-noi-dung")!, "Tụ tập gây ồn sau 23 giờ");
+    await press(next(khung));
+    await press(buttonsNamed(khung, GUI.nut_gui("Xã Thử Nghiệm"))[0]!);
+
+    // Decision 1: the invitation to share the Zalo number comes first — nothing was sent, Zalo was not asked.
+    expect(guiPhanAnh).not.toHaveBeenCalled();
+    expect(reopen).not.toHaveBeenCalled();
+    expect(khung.textContent).toContain(PHONE_VERIFICATION.title);
+    expect(buttonsNamed(khung, PHONE_VERIFICATION.allow)).toHaveLength(1);
+    expect(buttonsNamed(khung, TYPED_CONTACT.button)).toEqual([]);
+
+    await press(buttonsNamed(khung, PHONE_VERIFICATION.decline)[0]!);
+    expect(khung.textContent).toContain(TYPED_CONTACT.offer);
+    await press(buttonsNamed(khung, TYPED_CONTACT.button)[0]!);
+
+    // Back on the writing step, words kept, the typed-contact rules on.
+    expect(khung.textContent).toContain(TYPED_CONTACT.form_note);
+    expect(khung.textContent).toContain(TYPED_CONTACT.name_label);
+    expect(khung.textContent).toContain(TYPED_CONTACT.anonymous_off);
+    const toggle = tatCaPhanTu(khung).find((p) => p.getAttribute("class") === "cd-cong-tac")!;
+    expect(toggle.hasAttribute("disabled")).toBe(true);
+    expect(boxText("cd-noi-dung")).toBe("Tụ tập gây ồn sau 23 giờ");
+
+    await press(next(khung));
+    expect(khung.textContent).toContain(TYPED_CONTACT.name_missing);
+    await typeInto(doc().getElementById("cd-ho-ten")!, "Nguyễn Văn An");
+    await typeInto(doc().getElementById("cd-dien-thoai")!, "12345");
+    await press(next(khung));
+    expect(khung.textContent).toContain(TYPED_CONTACT.phone_invalid);
+    await typeInto(doc().getElementById("cd-dien-thoai")!, "0900000000");
+    await press(next(khung));
+
+    vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "xong", phieu: { ...SENT, contact_unverified: true } });
+    await press(buttonsNamed(khung, GUI.nut_gui("Xã Thử Nghiệm"))[0]!);
+    expect(guiPhanAnh).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(vi.mocked(guiPhanAnh).mock.calls[0]![0].than) as Record<string, unknown>;
+    expect(body).toMatchObject({
+      reporter_name: "Nguyễn Văn An",
+      reporter_phone: "0900000000",
+      anonymous: false,
+      field: "an-ninh",
+    });
+    // The code screen says no notification will come.
+    expect(khung.textContent).toContain(SENT.ma_tra_cuu);
+    expect(khung.textContent).toContain(TYPED_CONTACT.done_no_notice);
+    expect(reopen).not.toHaveBeenCalled();
+    await go();
+  });
+
+  it("429 `unverified_daily_limit` → the server's sentence, no 'Gửi lại', the words still there via 'Sửa lại'", async () => {
+    const reopen = vi.fn();
+    const { khung, go } = await gan(createElement(GuiPhanAnhScreen, { onQuayLai: () => {}, reopenWithPhone: reopen }));
+    await press(radios(khung)[0]!);
+    await press(next(khung));
+    await typeInto(doc().getElementById("cd-noi-dung")!, "Rác tồn đọng");
+    await press(next(khung));
+    await press(buttonsNamed(khung, GUI.nut_gui("Xã Thử Nghiệm"))[0]!);
+    await press(buttonsNamed(khung, PHONE_VERIFICATION.decline)[0]!);
+    await press(buttonsNamed(khung, TYPED_CONTACT.button)[0]!);
+    await typeInto(doc().getElementById("cd-ho-ten")!, "Nguyễn Văn An");
+    await typeInto(doc().getElementById("cd-dien-thoai")!, "0900000000");
+    await press(next(khung));
+    vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "unverified-daily-limit", message: "Câu của máy chủ." });
+    await press(buttonsNamed(khung, GUI.nut_gui("Xã Thử Nghiệm"))[0]!);
+    expect(khung.textContent).toContain("Câu của máy chủ.");
+    expect(buttonsNamed(khung, GUI.nut_gui_lai)).toEqual([]);
+    await press(buttonsNamed(khung, GUI.nut_sua)[0]!);
+    expect(boxText("cd-noi-dung")).toBe("Rác tồn đọng");
+    await go();
+  });
+});
+
+describe("app xã — phiên chưa xác thực số: họ tên + số bắt buộc, ẩn danh tắt, 429 giữ nháp", () => {
+  beforeEach(() => {
+    trang.phien = { token: "tok-thu-nghiem", ten_xa: "Xã Thử Nghiệm", phone_verified: false };
+    vi.mocked(guiPhanAnh).mockReset();
+    vi.mocked(citizenReportFields).mockReset();
+    vi.mocked(citizenReportFields).mockResolvedValue({ kieu: "xong", fields: FIELDS });
+  });
+
+  const doc = () => (globalThis as unknown as { document: TaiLieuGia }).document;
+  const mount = () =>
+    gan(
+      createElement(CommuneSendScreen, {
+        ten_xa: "Xã Thử Nghiệm",
+        ho_ten: null,
+        typedContact: true,
+        onBack: () => {},
+        onSessionLost: () => {},
+        onSent: () => {},
+        onOpenPetition: () => {},
+      }),
+    );
+
+  it("required name + number with a plain sentence; the switch is off and disabled; the body carries the typed contact", async () => {
+    const { khung, go } = await mount();
+    await press(tatCaPhanTu(khung).filter((p) => p.getAttribute("role") === "radio")[0]!);
+    expect(khung.textContent).toContain(XA_PA.contact_note);
+    expect(khung.textContent).toContain(XA_PA.anonymous_off);
+    expect(khung.textContent).toContain(XA_PA.contact_required);
+    const toggle = tatCaPhanTu(khung).find((p) => p.getAttribute("role") === "switch")!;
+    expect(toggle.hasAttribute("disabled")).toBe(true);
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    expect(doc().getElementById("xa-dien-thoai")!.getAttribute("aria-required")).toBe("true");
+
+    await typeInto(doc().getElementById("xa-noi-dung")!, "Rác tồn đọng đầu ngõ 12");
+    await press(buttonsNamed(khung, GUI.tieu_de)[0]!);
+    expect(guiPhanAnh).not.toHaveBeenCalled();
+    expect(khung.textContent).toContain(XA_PA.contact_name_missing);
+    expect(khung.textContent).toContain(XA_PA.contact_phone_missing);
+
+    await typeInto(doc().getElementById("xa-ho-ten")!, "Nguyễn Văn An");
+    await typeInto(doc().getElementById("xa-dien-thoai")!, "0900000000");
+    vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "xong", phieu: { ...SENT, contact_unverified: true } });
+    await press(buttonsNamed(khung, GUI.tieu_de)[0]!);
+    expect(guiPhanAnh).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(vi.mocked(guiPhanAnh).mock.calls[0]![0].than) as Record<string, unknown>;
+    expect(body).toMatchObject({ reporter_name: "Nguyễn Văn An", reporter_phone: "0900000000", anonymous: false });
+    expect(khung.textContent).toContain(XA_PA.done_no_notice);
+    await go();
+  });
+
+  it("429 `unverified_daily_limit` → the server's sentence in the footer, words kept, the next send a NEW attempt", async () => {
+    const { khung, go } = await mount();
+    await press(tatCaPhanTu(khung).filter((p) => p.getAttribute("role") === "radio")[0]!);
+    await typeInto(doc().getElementById("xa-noi-dung")!, "Rác tồn đọng");
+    await typeInto(doc().getElementById("xa-ho-ten")!, "Nguyễn Văn An");
+    await typeInto(doc().getElementById("xa-dien-thoai")!, "0900000000");
+    vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "unverified-daily-limit", message: "Câu của máy chủ." });
+    await press(buttonsNamed(khung, GUI.tieu_de)[0]!);
+    expect(khung.textContent).toContain("Câu của máy chủ.");
+    expect(buttonsNamed(khung, GUI.nut_gui_lai)).toEqual([]);
+    expect(boxText("xa-noi-dung")).toBe("Rác tồn đọng");
+    vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "xong", phieu: SENT });
+    await press(buttonsNamed(khung, GUI.tieu_de)[0]!);
+    const [first, second] = vi.mocked(guiPhanAnh).mock.calls.map((c) => c[0]);
+    expect(second!.khoa).not.toBe(first!.khoa);
     await go();
   });
 });

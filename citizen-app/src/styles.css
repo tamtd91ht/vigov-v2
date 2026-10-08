@@ -2517,6 +2517,13 @@ body {
 .cd-cong-tac[aria-pressed="true"] {
   border-width: 3px;
 }
+/* Not available on the typed-contact path (ADR 0080): a dashed edge and no pointer say "cannot be pressed" by
+   shape; the line under it says why in words. The text keeps full contrast. */
+.cd-cong-tac:disabled {
+  border-style: dashed;
+  background: var(--surface-alt);
+  cursor: default;
+}
 
 .cd-cong-tac__trang-thai {
   font-weight: 700;
@@ -4046,6 +4053,17 @@ button.xa-o-nhanh {
 .xa-deadline-band p {
   margin: 0;
 }
+/* "No notification will be sent" on an unverified petition (ADR 0080): read left-aligned like the band above,
+   framed by a navy edge so it is not lost among the centred lines — the words carry the meaning, not the edge. */
+.xa-ket-qua__notice {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border-left: 4px solid var(--xa-navy);
+  border-radius: 0 12px 12px 0;
+  background: var(--surface);
+  text-align: left;
+}
 
 /* biến thể nút — the send buttons use plain `.xa-nut` (brand red) since 30/09/2026; the pink variant is gone */
 .xa-nut--do {
@@ -4219,6 +4237,11 @@ button.xa-o-nhanh {
 }
 .xa-cong-tac--bat .xa-cong-tac__nut {
   left: 30px;
+}
+/* Off and not available (the typed-contact path, ADR 0080): the sentence beside it says why in words. */
+.xa-cong-tac:disabled {
+  cursor: default;
+  opacity: 0.5;
 }
 
 /* ---------- phản ánh theo hợp đồng thật (28/09/2026) ---------- */
