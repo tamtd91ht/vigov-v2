@@ -40,6 +40,18 @@ type Actor struct {
 // any service, so the value needs no migration. Equal to authz.KindZaloAccount, pinned by a test.
 const KindZaloAccount = "zalo-account"
 
+// KindAnonymous is the actor_kind of an ACCOUNTLESS petition intake (ADR 0083 row 12, TEMPORARY until
+// the shared Mini App passes Zalo review): no session, no citizen, no Zalo account — nobody to name.
+// actor_id is the fixed marker AnonymousActorID, never a value derived from the request (rule 3: the
+// typed name and phone are contact details, not an identity, and never enter the trail). Like a
+// citizen's entry, its actor id and IP are WITHHELD from the commune's audit screen (Log.Read). No
+// CHECK on the column in any service, so the value needs no migration. Remove with ADR 0083's routes.
+const KindAnonymous = "anonymous"
+
+// AnonymousActorID is the actor_id of every KindAnonymous entry. Non-empty because Entry.validate
+// refuses an empty actor; a constant because there is no person behind it to identify.
+const AnonymousActorID = "anonymous"
+
 // SystemActor is used for background jobs and migrations. System actions are audited too;
 // an unattributed change is the thing this package exists to prevent.
 const SystemActor = "system"

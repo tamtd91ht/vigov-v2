@@ -36,6 +36,7 @@ package http
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -290,6 +291,12 @@ func (h *HandlerCongDan) channelSender(r *http.Request) (app.IntakeSender, bool)
 		return app.IntakeSender{}, false
 	}
 	s := app.IntakeSender{Owner: domain.PetitionOwner{ID: p.ID}, IP: httpx.ClientIP(r)}
+	// THE SID, FROM THE SAME RESOLVED SESSION the principal was built from (httpx.CitizenEdge), never from
+	// the request (rule 4, invariant 2). The intake hands it to identity to attach the session's verified
+	// phone when the box is empty (ADR 0050 §Sửa đổi 08/10/2026); absent, the use case refuses that case.
+	if sess, ok := httpx.CitizenSessionFrom(r.Context()); ok {
+		s.SessionID = sess.ID
+	}
 	switch p.Kind {
 	case authz.KindCitizen:
 		s.Owner.Kind = domain.OwnerCitizen
@@ -308,10 +315,27 @@ func (h *HandlerCongDan) channelSender(r *http.Request) (app.IntakeSender, bool)
 // not recognise is the client's fault" turns an identity outage into a 400, and the Mini App then
 // tells a citizen to fix their report forever while nobody is told the server is broken.
 func (h *HandlerCongDan) traLoiLoiGui(w http.ResponseWriter, r *http.Request, err error) {
+	writeIntakeError(w, r, h.d.Log, err)
+}
+
+// writeIntakeError is traLoiLoiGui without the handler, so the accountless intake (ADR 0083) answers
+// every shared failure with the SAME status, code and sentence as the session intake. r must carry the
+// commune (tenant.MustFrom).
+func writeIntakeError(w http.ResponseWriter, r *http.Request, log *slog.Logger, err error) {
 	ctx := r.Context()
 	switch {
 	case errors.Is(err, app.ErrFieldNotOffered):
 		writeFieldNotOffered(w)
+
+	case errors.Is(err, app.ErrAccountlessDailyLimit):
+		// ADR 0083 row 3: the commune already received its day's accountless petitions. Nothing written,
+		// no code issued, no Retry-After (the allowance refills at the commune's midnight). The number is
+		// not in the sentence; the reception desk is (row 3). Only the session-less route reaches here.
+		log.Warn("từ chối phiếu không tài khoản vì xã đã nhận đủ số phiếu trong ngày",
+			"xa", string(tenant.MustFrom(ctx)))
+		httpx.WriteError(w, http.StatusTooManyRequests, "commune_daily_limit",
+			"Hôm nay xã đã nhận nhiều phản ánh gửi không qua tài khoản nên phản ánh này CHƯA được ghi nhận. "+
+				"Vui lòng gửi lại vào ngày mai, hoặc đến Bộ phận tiếp nhận của Ủy ban nhân dân xã.", "")
 
 	case errors.Is(err, app.ErrUnverifiedDailyLimit):
 		// ADR 0080 decision 7: the Zalo account reached domain.UnverifiedDailyCeiling today. Nothing was
@@ -321,7 +345,7 @@ func (h *HandlerCongDan) traLoiLoiGui(w http.ResponseWriter, r *http.Request, er
 		// that always work are tomorrow or the commune's reception desk. The ceiling's number is NOT in the sentence (the
 		// citizen does not need it, and a stated number is a target). Logged with the commune only —
 		// never the account id (rule 3).
-		h.d.Log.Warn("từ chối phiếu chưa xác thực vì tài khoản Zalo đã gửi đủ số phiếu trong ngày",
+		log.Warn("từ chối phiếu chưa xác thực vì tài khoản Zalo đã gửi đủ số phiếu trong ngày",
 			"xa", string(tenant.MustFrom(ctx)))
 		httpx.WriteError(w, http.StatusTooManyRequests, "unverified_daily_limit",
 			"Hôm nay bạn đã gửi nhiều phản ánh khi chưa xác nhận số điện thoại nên phản ánh này CHƯA được "+
@@ -330,10 +354,29 @@ func (h *HandlerCongDan) traLoiLoiGui(w http.ResponseWriter, r *http.Request, er
 	case errors.Is(err, app.ErrFieldCatalogueUnavailable):
 		// Platform unreachable past the 60-second cache (ADR 0060 §3): nothing was written, no code was
 		// issued. A different 503 from `intake_not_configured` — this one clears by itself.
-		h.d.Log.Warn("CẢNH BÁO: từ chối tiếp nhận phản ánh vì chưa đọc được bộ mã lĩnh vực",
+		log.Warn("CẢNH BÁO: từ chối tiếp nhận phản ánh vì chưa đọc được bộ mã lĩnh vực",
 			"xa", string(tenant.MustFrom(ctx)), "err", err)
 		httpx.WriteError(w, http.StatusServiceUnavailable, "field_catalogue_unavailable",
 			"Chưa kiểm tra được lĩnh vực nên phản ánh của bạn CHƯA được ghi nhận. Vui lòng thử lại sau ít phút.", "")
+
+	case errors.Is(err, app.ErrContactPhoneNoSession):
+		// ADR 0050 §Sửa đổi 08/10/2026: the box was empty, so the session's verified number was to be
+		// attached, and identity says the session is no longer usable. The SAME 401 httpx.XaTuPhien gives
+		// for a dead session — the Mini App's move is the same: open the app again. Nothing written, no
+		// code. Logged with the commune only (rule 3).
+		log.Info("từ chối phản ánh để trống số vì phiên không còn dùng được để gắn số đã xác thực",
+			"xa", string(tenant.MustFrom(ctx)))
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized",
+			"Phiên không hợp lệ hoặc đã kết thúc. Vui lòng mở lại ứng dụng.", "")
+
+	case errors.Is(err, app.ErrContactPhoneUnavailable):
+		// identity unreachable for the verified-phone question: same class as the deadline outage, a
+		// different code so the Mini App and an operator can tell them apart. Clears by itself.
+		log.Warn("CẢNH BÁO: từ chối phản ánh để trống số vì chưa lấy được số đã xác thực của phiên",
+			"xa", string(tenant.MustFrom(ctx)), "err", err)
+		httpx.WriteError(w, http.StatusServiceUnavailable, "contact_phone_unavailable",
+			"Chưa lấy được số điện thoại đã xác thực của bạn nên phản ánh CHƯA được ghi nhận. "+
+				"Vui lòng thử lại sau ít phút.", "")
 
 	case domain.LaLoiGuiPhanAnh(err):
 		// The domain's own sentence is returned: it names the field and the rule, holds no personal
@@ -345,7 +388,7 @@ func (h *HandlerCongDan) traLoiLoiGui(w http.ResponseWriter, r *http.Request, er
 		// WARN AND NOT ERROR: this service is healthy and answering. The commune is the whole of the
 		// actionable information — it names which commune's configuration screen is empty — and the
 		// wrapped chain carries the gRPC code core/identityclient already logged.
-		h.d.Log.Warn("CẢNH BÁO: từ chối tiếp nhận phản ánh vì chưa ấn định được hạn của xã",
+		log.Warn("CẢNH BÁO: từ chối tiếp nhận phản ánh vì chưa ấn định được hạn của xã",
 			"xa", string(tenant.MustFrom(ctx)), "err", err)
 		httpx.WriteError(w, http.StatusServiceUnavailable, "intake_not_configured",
 			"Xã chưa mở kênh tiếp nhận phản ánh trực tuyến nên chưa nhận được phiếu của bạn. "+
@@ -353,7 +396,7 @@ func (h *HandlerCongDan) traLoiLoiGui(w http.ResponseWriter, r *http.Request, er
 
 	default:
 		// The wrapped error carries the failure and never reaches the citizen (rule 3, forbidden #3).
-		h.d.Log.Error("gửi phản ánh: lỗi hệ thống",
+		log.Error("gửi phản ánh: lỗi hệ thống",
 			"xa", string(tenant.MustFrom(ctx)), "err", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal",
 			"Đã xảy ra lỗi. Vui lòng thử lại.", "")

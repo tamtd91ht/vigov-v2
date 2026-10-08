@@ -3186,6 +3186,43 @@ export type page_Result_petitions_phieuPhanAnhRa = {
   "has_more": boolean;
 };
 
+export type petitions_accountlessLookupOut = {
+  "code": string;
+  "status": string;
+  "acknowledge_due": string | null;
+  "resolve_due": string | null;
+  "result": string;
+  "reason"?: string;
+};
+
+export type petitions_accountlessReceiptOut = {
+  "code": string;
+  "status": string;
+  "acknowledge_due": string | null;
+  "resolve_due": string | null;
+};
+
+export type petitions_accountlessReportIn = {
+  "host": string;
+  "content": string;
+  "address": string;
+  "reporter_name": string;
+  "reporter_phone": string;
+  "anonymous": boolean;
+  "field"?: string | null;
+  "lat": number | null;
+  "lng": number | null;
+  "citizen_id": string | null;
+  "cong_dan_id": string | null;
+  "linh_vuc": string | null;
+  "channel": string | null;
+  "code": string | null;
+  "status": string | null;
+  "clock_from": string | null;
+  "acknowledge_due": string | null;
+  "resolve_due": string | null;
+};
+
 export type petitions_bienBanRa = {
   "id": string;
   "title": string;
@@ -3618,6 +3655,7 @@ export type petitions_phieuPhanAnhRa = {
   "branch_ended_at"?: string | null;
   "has_citizen"?: boolean | null;
   "contact_unverified"?: boolean | null;
+  "accountless"?: boolean | null;
   "publication_status"?: string;
   "public": boolean;
   "rating"?: number | null;
@@ -8994,6 +9032,81 @@ export type finance_post_project_issues_by_id_resolution = {
   };
   errorCodes: {
     409: "issue_already_resolved";
+  };
+};
+
+/** GET /api/v1/public-citizen-report-fields — Lĩnh vực xã đang mở cho người dân chọn khi gửi phản ánh KHÔNG TÀI KHOẢN, theo tên miền xã trên QR — đường tạm ADR 0083 */
+export type petitions_get_public_citizen_report_fields = {
+  duongDan: "/api/v1/public-citizen-report-fields";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "host"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_citizenFieldListOut;
+    400: httpx_Error;
+    404: httpx_Error;
+    429: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_host";
+    404: "commune_not_found";
+    429: "rate_limited";
+  };
+};
+
+/** POST /api/v1/public-citizen-reports — Gửi một phiếu phản ánh KHÔNG TÀI KHOẢN (không phiên, không tài khoản Zalo) tới xã theo tên miền trên QR — trả MÃ TRA CỨU; đường tạm ADR 0083 */
+export type petitions_post_public_citizen_reports = {
+  duongDan: "/api/v1/public-citizen-reports";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: petitions_accountlessReportIn;
+  phanHoi: {
+    201: petitions_accountlessReceiptOut;
+    400: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    429: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    404: "commune_not_found";
+    409: "request_in_progress";
+    429: "commune_daily_limit" | "rate_limited";
+    503: "intake_not_configured" | "platform_unavailable";
+  };
+};
+
+/** GET /api/v1/public-citizen-reports/{maTraCuu} — Tra cứu công khai tình trạng một phiếu phản ánh KHÔNG TÀI KHOẢN theo mã tra cứu và tên miền xã — chỉ tình trạng, hạn, kết quả, lý do; đường tạm ADR 0083 */
+export type petitions_get_public_citizen_reports_by_maTraCuu = {
+  duongDan: "/api/v1/public-citizen-reports/{maTraCuu}";
+  phuongThuc: "GET";
+  thamSo: {
+    "maTraCuu": string;
+  };
+  truyVan: {
+    "host"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_accountlessLookupOut;
+    404: httpx_Error;
+    429: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    404: "not_found";
+    429: "rate_limited";
   };
 };
 

@@ -207,6 +207,13 @@ type phieuPhanAnhRa struct {
 	// `false`, and the key stays optional in the contract. Absent means "this server predates the field".
 	ContactUnverified *bool `json:"contact_unverified,omitempty"`
 
+	// Accountless is the EXPLICIT server fact that the petition was sent through the TEMPORARY
+	// accountless path (ADR 0083 row 11): Mini App channel, no citizen, no Zalo account — nobody behind
+	// it, its contact details self-declared, nobody notified. DERIVED by domain.PhieuPhanAnh.Accountless,
+	// the one definition; Web Admin labels from this field and never re-derives it from `channel` +
+	// `has_citizen` (rule 9). Pointer + omitempty, set on every response — the ContactUnverified precedent.
+	Accountless *bool `json:"accountless,omitempty"`
+
 	// PublicationStatus is `publication_status` (migration 0017, ADR 0050 point 8): the staff
 	// moderation of the public page — `cho-duyet` · `cong-khai` · `an`. Separate from `status`.
 	//
@@ -315,6 +322,8 @@ func phieuRaNgoai(p domain.PhieuPhanAnh, nhan string, xemDayDu bool) phieuPhanAn
 	ra.HasCitizen = &coCongDan
 	unverified := p.ContactUnverified()
 	ra.ContactUnverified = &unverified
+	accountless := p.Accountless()
+	ra.Accountless = &accountless
 
 	if p.Rating != 0 {
 		stars, at := p.Rating, p.RatedAt

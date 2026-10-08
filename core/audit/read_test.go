@@ -258,7 +258,7 @@ func TestRead_FiltersAreExactAndHalfOpen(t *testing.T) {
 	s := theRead(t, d)
 	for _, want := range []string{
 		"AND at >= $2", "AND at < $3",
-		"AND actor_id = $4 AND actor_kind NOT IN ('citizen', 'zalo-account')",
+		"AND actor_id = $4 AND actor_kind NOT IN ('citizen', 'zalo-account', 'anonymous')",
 		"AND action = $5", "AND subject = $6", "LIMIT $7",
 	} {
 		if !strings.Contains(s.sql, want) {
@@ -388,6 +388,26 @@ func TestRead_ZaloAccountEntriesHaveNoCodeAndNoIP(t *testing.T) {
 	}
 	if v := res.Items[0]; v.ActorCode != "" || v.ActorIP != "" || v.ActorKind != KindZaloAccount {
 		t.Errorf("zalo-account entry = %+v, want empty actor_code and actor_ip", v)
+	}
+}
+
+// ADR 0083: an accountless intake's entry is withheld like a citizen's — its IP is a member of the
+// public's address — and an actor filter can never select it.
+func TestRead_AnonymousEntriesHaveNoCodeAndNoIP(t *testing.T) {
+	d := &rdDB{rows: [][]driver.Value{
+		row(1, t0, KindAnonymous, AnonymousActorID, "203.0.113.9", "cong_dan_gui_phan_anh", "PA-X", nil),
+	}}
+	l, ctx := newLog(t, d)
+	res, err := l.Read(ctx, reader, Query{Actor: AnonymousActorID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v := res.Items[0]; v.ActorCode != "" || v.ActorIP != "" || v.ActorKind != KindAnonymous {
+		t.Errorf("anonymous entry = %+v, want empty actor_code and actor_ip", v)
+	}
+	q := d.of("query")
+	if len(q) == 0 || !strings.Contains(q[0].sql, "'"+KindAnonymous+"'") {
+		t.Errorf("the actor filter does not exclude anonymous entries: %v", q)
 	}
 }
 

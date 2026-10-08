@@ -9,6 +9,8 @@ package app
 //	0. CHECK the picked field, if any, against the commune's offered catalogue (ADR 0050, 0060)
 //	1. ASK identity for the deadline(s) — acknowledge, plus resolve when a field was picked; may
 //	   refuse, and a refusal ends the intake
+//	1c. ASK identity for the session's verified phone — only for a verified citizen, not anonymous,
+//	   who typed none (ADR 0050 §Sửa đổi 08/10/2026); a refusal ends the intake too
 //	2. MINT the lookup code                          — only once step 1 has succeeded
 //	3. ONE TRANSACTION: the row, its audit entry     — rule 6, invariant 3
 //	   and the `petitions.status_changed.v1` outbox row  — rule 10, invariant 5; rule 2, invariant 6
@@ -65,6 +67,11 @@ type CitizenIntakePetitions interface {
 	LockZaloAccountIntake(ctx context.Context, tx *store.ScopedTx, zaloAccountID string) error
 	CountZaloAccountPetitionsSince(ctx context.Context, tx *store.ScopedTx, zaloAccountID string,
 		since time.Time) (int, error)
+
+	// The ACCOUNTLESS ceiling (ADR 0083 row 3, TEMPORARY): serialise one commune's accountless intakes,
+	// then count today's — inside the intake transaction, like the two above.
+	LockAccountlessIntake(ctx context.Context, tx *store.ScopedTx) error
+	CountAccountlessPetitionsSince(ctx context.Context, tx *store.ScopedTx, since time.Time) (int, error)
 }
 
 // IntakeSender is who files a petition through the citizen channel — and therefore who OWNS it — plus
@@ -76,6 +83,13 @@ type CitizenIntakePetitions interface {
 type IntakeSender struct {
 	Owner domain.PetitionOwner
 	IP    string
+
+	// SessionID is the sid of the citizen session the request came through (httpx.CitizenSession.ID),
+	// set by the handler FROM THE SESSION and from nothing else (rule 4, invariant 2). It is read for one
+	// purpose only: asking identity for the session's verified phone when a verified citizen leaves the
+	// phone box empty (ADR 0050 §Sửa đổi 08/10/2026 point 2). It is never stored and never audited here —
+	// identity's disclosure entry quotes it. "" on the accountless and staff paths, which never ask.
+	SessionID string
 }
 
 // Actor is the audit "who" of the sender's act: the opaque owner id with its Kind. A citizen has no
@@ -83,6 +97,12 @@ type IntakeSender struct {
 // account the "who" is `tai_khoan_zalo.id` — ADR 0080 decision 9. The ONE place in this service that
 // turns a citizen-channel owner into an audit actor; the scene-photo handlers use it too.
 func (s IntakeSender) Actor() (audit.Actor, error) {
+	if s.Owner.IsAccountless() {
+		// ADR 0083 row 12: nobody is behind an accountless send, so the "who" is the fixed marker with
+		// Kind anonymous — never a value from the request (the typed name and phone are contact details,
+		// not an identity, and never enter the trail). The IP is this socket's, as for every sender.
+		return audit.Actor{ID: audit.AnonymousActorID, Kind: audit.KindAnonymous, IP: s.IP}, nil
+	}
 	if !s.Owner.Valid() {
 		return audit.Actor{}, fmt.Errorf("gui_phan_anh: chủ phiếu không hợp lệ (kind=%q) — tuyến thiếu "+
 			"authz.CitizenOnly hoặc lớp xã từ phiên", s.Owner.Kind)
@@ -98,6 +118,17 @@ func (s IntakeSender) Actor() (audit.Actor, error) {
 	}
 	return audit.Actor{}, fmt.Errorf("gui_phan_anh: loại chủ phiếu không được khai (kind=%q)", s.Owner.Kind)
 }
+
+// AccountlessSender is the sender of an ACCOUNTLESS petition (ADR 0083, TEMPORARY): no owner — neither
+// column is written — and the address the request arrived from (httpx.ClientIP) for the trail. The ONLY
+// constructor of that shape; the session handler's channelSender never produces it.
+func AccountlessSender(ip string) IntakeSender {
+	return IntakeSender{Owner: domain.PetitionOwner{Kind: domain.OwnerAccountless}, IP: ip}
+}
+
+// ErrAccountlessDailyLimit — this commune already received domain.AccountlessDailyCeiling accountless
+// petitions today (ADR 0083 row 3). Nothing was written and no code was issued. 429 to the sender.
+var ErrAccountlessDailyLimit = errors.New("gui_phan_anh: xã đã nhận đủ số phiếu không tài khoản trong ngày")
 
 // ErrUnverifiedDailyLimit — the Zalo account already sent domain.UnverifiedDailyCeiling unverified
 // petitions in this commune today (ADR 0080 decision 7). Nothing was written and no code was issued.
@@ -135,6 +166,30 @@ type HanTiepNhanDoc interface {
 
 	TienGioLamViec(ctx context.Context, tuLuc time.Time, gio []uint32) (map[uint32]time.Time, error)
 }
+
+// CitizenContactPhones hands the verified phone of the citizen behind one live session — the narrow
+// half of *identityclient.Client this use case needs (identity.proto, ResolveCitizenContactPhone).
+//
+// "" with a nil error means identity disclosed nothing: the session is no longer live, belongs to
+// another commune, or is not this citizen's. An error means the call did not happen.
+type CitizenContactPhones interface {
+	ResolveCitizenContactPhone(ctx context.Context, sessionID, citizenID string) (string, error)
+}
+
+// ErrContactPhoneNoSession — the sender left the phone box empty, so the session's verified number was
+// to be attached (ADR 0050 §Sửa đổi 08/10/2026 point 2), and identity answered that the session is no
+// longer usable. Nothing was written and no code was issued. 401 "no session" to the sender: filing the
+// petition WITHOUT the number the citizen's screen promised would be attached is the one thing the
+// owner's decision rules out.
+//
+// DELIBERATELY NOT a domain error and NOT in domain.LaLoiGuiPhanAnh: it is not something the citizen
+// typed wrong, and a 400 would tell them to fix a report that has nothing wrong with it.
+var ErrContactPhoneNoSession = errors.New("gui_phan_anh: phiên không còn dùng được để gắn số đã xác thực")
+
+// ErrContactPhoneUnavailable — the session's verified number could not be asked for (identity
+// unreachable, older than the RPC, refused the caller key). Nothing was written and no code was issued.
+// 503 to the sender, exactly as when the deadlines cannot be asked for: no new outage mode.
+var ErrContactPhoneUnavailable = errors.New("gui_phan_anh: chưa lấy được số đã xác thực của phiên")
 
 // CitizenIntakeFields checks the field a citizen picked against what the commune offers.
 // *PetitionFieldCatalogue satisfies it. Answers ErrFieldNotOffered (one sentinel for every reason the
@@ -246,6 +301,11 @@ type GuiPhanAnh struct {
 	// ADR 0060). Consulted only when a field is sent.
 	fields CitizenIntakeFields
 
+	// phones attaches the session's verified number when a verified citizen leaves the phone box empty
+	// (ADR 0050 §Sửa đổi 08/10/2026 point 2). Consulted only in that one case; nil there is refused as
+	// a wiring fault, never read as "no number".
+	phones CitizenContactPhones
+
 	// sinhID and sinhMa are injected so a test can pin both values. In production they are
 	// ulid.Moi and domain.SinhMaTraCuu. sinhID mints BOTH the petition id and the outbox row id.
 	sinhID func() (string, error)
@@ -257,9 +317,9 @@ type GuiPhanAnh struct {
 }
 
 func NewGuiPhanAnh(db *store.DB, kho CitizenIntakePetitions, suKien KhoSuKien, han HanTiepNhanDoc,
-	fields CitizenIntakeFields) *GuiPhanAnh {
+	fields CitizenIntakeFields, phones CitizenContactPhones) *GuiPhanAnh {
 	return &GuiPhanAnh{
-		db: db, kho: kho, suKien: suKien, han: han, fields: fields,
+		db: db, kho: kho, suKien: suKien, han: han, fields: fields, phones: phones,
 		sinhID: ulid.Moi,
 		sinhMa: domain.SinhMaTraCuu,
 		luc:    func() time.Time { return time.Now().UTC() },
@@ -421,6 +481,24 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, sender Intak
 			ErrChuaAnDinhDuocHan, tenant.MustFrom(ctx))
 	}
 
+	// STEP 1c — THE SESSION'S VERIFIED PHONE, attached when the box was left empty (owner, 08/10/2026,
+	// ADR 0050 §Sửa đổi 08/10/2026 point 2). Stored in NguoiGuiDienThoai exactly like a typed number:
+	// masked on every staff read, named (never valued) in the trail's truong_da_dien.
+	//
+	// ONLY A VERIFIED CITIZEN, NOT ANONYMOUS, WITH NOTHING TYPED. A Zalo-account owner (ADR 0080) has no
+	// verified phone to attach; the accountless sender (ADR 0083) has no session at all; an anonymous
+	// sender asked not to be named, and attaching a number they did not type would undo that. A typed
+	// number always wins and nothing is asked.
+	//
+	// AFTER THE DEADLINES, BEFORE THE CODE. identity audits every disclosure in its own transaction, so
+	// asking only once the commune's commitment is known keeps disclosures for intakes that were going to
+	// fail anyway to the minimum; asking before the mint keeps "fail the intake" meaning no code at all.
+	if dienThoai == "" && !yc.AnDanh && sender.Owner.Kind == domain.OwnerCitizen {
+		if dienThoai, err = uc.verifiedContactPhone(ctx, sender); err != nil {
+			return domain.PhieuPhanAnh{}, err
+		}
+	}
+
 	// STEP 2 — the code, minted only now. See the note at the top of this file.
 	id, err := uc.sinhID()
 	if err != nil {
@@ -477,7 +555,8 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, sender Intak
 	moi.PublicationStatus = domain.InitialPublicationStatus(moi.LinhVuc)
 
 	// THE OWNER, IN EXACTLY ONE OF TWO COLUMNS — the other stays "" and the store writes NULL, never ''
-	// (migration 0032: non-blank, single owner). sender.Actor() already refused any other kind.
+	// (migration 0032: non-blank, single owner). sender.Actor() already refused any other kind. The
+	// ACCOUNTLESS sender (ADR 0083) writes NEITHER, and that absence is what domain.Accountless reads.
 	switch sender.Owner.Kind {
 	case domain.OwnerCitizen:
 		moi.CongDanID = sender.Owner.ID
@@ -492,6 +571,20 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, sender Intak
 		// lock this account's intakes in this commune, count today's, refuse at the ceiling. Outside the
 		// transaction two sends at one instant would both pass at 9. Counted from the commune's day
 		// (domain.UnverifiedCountingDayStart) and INCLUDING soft-deleted rows — the store says why.
+		// THE ACCOUNTLESS CEILING (ADR 0083 row 3), the same shape per COMMUNE: lock, count today's
+		// accountless petitions (soft-deleted included), refuse at domain.AccountlessDailyCeiling.
+		if sender.Owner.IsAccountless() {
+			if err := uc.kho.LockAccountlessIntake(ctx, tx); err != nil {
+				return err
+			}
+			n, err := uc.kho.CountAccountlessPetitionsSince(ctx, tx, domain.UnverifiedCountingDayStart(bayGio))
+			if err != nil {
+				return err
+			}
+			if n >= domain.AccountlessDailyCeiling {
+				return ErrAccountlessDailyLimit
+			}
+		}
 		if moi.ZaloAccountID != "" {
 			if err := uc.kho.LockZaloAccountIntake(ctx, tx, moi.ZaloAccountID); err != nil {
 				return err
@@ -546,6 +639,8 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, sender Intak
 			// ADR 0080: whether the contact details are self-declared and unverified (a Zalo-account
 			// owner). A boolean — the owner id is the entry's actor already, and nothing else is needed.
 			"contact_unverified": moi.ContactUnverified(),
+			// ADR 0083: sent with no owner at all. A boolean, derived (domain.Accountless).
+			"accountless": moi.Accountless(),
 		})
 		if err != nil {
 			return fmt.Errorf("gui_phan_anh: mã hoá delta: %w", err)
@@ -590,6 +685,43 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, sender Intak
 			tenant.MustFrom(ctx), err)
 	}
 	return moi, nil
+}
+
+// verifiedContactPhone asks identity for the verified phone of the session the citizen is sending
+// through, and normalises it like a typed number.
+//
+// NOTHING HERE PUTS THE NUMBER, THE SESSION ID OR THE CITIZEN ID INTO AN ERROR OR A LOG (rule 3). The
+// commune is what an operator needs, and identityclient has already logged the gRPC code.
+func (uc *GuiPhanAnh) verifiedContactPhone(ctx context.Context, sender IntakeSender) (string, error) {
+	if uc.phones == nil {
+		return "", errors.New("gui_phan_anh: thiếu nguồn số đã xác thực của phiên — sai nối dây")
+	}
+	if sender.SessionID == "" || sender.Owner.ID == "" {
+		// The handler builds the sender from the session, so this is a route mounted without the
+		// citizen edge. Refused rather than asked: identity would answer INVALID_ARGUMENT anyway.
+		return "", errors.New("gui_phan_anh: người gửi là công dân nhưng thiếu sid hoặc định danh phiên — sai nối dây")
+	}
+	phone, err := uc.phones.ResolveCitizenContactPhone(ctx, sender.SessionID, sender.Owner.ID)
+	if err != nil {
+		return "", fmt.Errorf("%w cho xã %s: %w", ErrContactPhoneUnavailable, tenant.MustFrom(ctx), err)
+	}
+	if phone == "" {
+		return "", ErrContactPhoneNoSession
+	}
+	normalised, err := domain.ChuanHoaDienThoai(phone)
+	if err != nil {
+		// A VERIFIED number that fails the typed-number bound is a contract fault between the two
+		// services, not something the citizen typed. The domain sentinel is NOT wrapped on purpose:
+		// domain.LaLoiGuiPhanAnh would match it and tell the citizen "your phone is too long" (400) about
+		// a number they never entered. The cause's text (a length, no value) is kept; this answers 500.
+		return "", fmt.Errorf("gui_phan_anh: số đã xác thực của phiên không qua chuẩn hoá cho xã %s — "+
+			"lỗi hợp đồng với identity (%s)", tenant.MustFrom(ctx), err.Error())
+	}
+	if normalised == "" {
+		// Whitespace only: identity disclosed nothing usable. Same answer as an empty one.
+		return "", ErrContactPhoneNoSession
+	}
+	return normalised, nil
 }
 
 // nilIfEmpty and nilIfZero put JSON null in the trail for "not set", so a reader cannot mistake an

@@ -97,6 +97,10 @@ type khoPhieuGia struct {
 	lockedFor    []string
 	countedFor   []string
 	countedSince []time.Time
+
+	// The accountless ceiling (ADR 0083): communeToday is what its count answers.
+	communeToday     int
+	accountlessLocks int
 }
 
 func (k *khoPhieuGia) Tao(ctx context.Context, tx *pkgstore.ScopedTx, p domain.PhieuPhanAnh) error {
@@ -126,6 +130,23 @@ func (k *khoPhieuGia) CountZaloAccountPetitionsSince(ctx context.Context, tx *pk
 		return 0, err
 	}
 	return k.sentToday, nil
+}
+
+// The accountless ceiling (ADR 0083): same pattern, keyed by the commune alone.
+func (k *khoPhieuGia) LockAccountlessIntake(ctx context.Context, tx *pkgstore.ScopedTx) error {
+	k.accountlessLocks++
+	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, string(tx.TenantID()))
+	return err
+}
+
+func (k *khoPhieuGia) CountAccountlessPetitionsSince(ctx context.Context, tx *pkgstore.ScopedTx,
+	since time.Time) (int, error) {
+	k.countedSince = append(k.countedSince, since)
+	if _, err := tx.Exec(ctx, `SELECT count(*) FROM phieu_phan_anh WHERE tenant_id = $1 AND accountless`,
+		string(tx.TenantID())); err != nil {
+		return 0, err
+	}
+	return k.communeToday, nil
 }
 
 // --- fixtures --------------------------------------------------------------------------------
@@ -189,7 +210,9 @@ func dungGuiVoiSuKien(db *pkgstore.DB, kho *khoPhieuGia, suKien KhoSuKien,
 
 	// The field checker is nil here: these cases send no field, and a nil checker reached by a field
 	// is refused as a wiring fault (the field-path cases in intake_field_test.go inject one).
-	uc := NewGuiPhanAnh(db, kho, suKien, han, nil)
+	// The contact-phone source is nil too: the default fixture types a number, so it is never asked;
+	// contact_phone_test.go injects one for the cases that leave the box empty.
+	uc := NewGuiPhanAnh(db, kho, suKien, han, nil, nil)
 	uc.sinhID = func() (string, error) { return idCoDinh, nil }
 	uc.sinhMa = func() (string, error) { return maCoDinh, nil }
 	uc.luc = func() time.Time { return mocGuiThu }

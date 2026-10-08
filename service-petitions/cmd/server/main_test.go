@@ -494,7 +494,7 @@ func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *m
 	}
 	so := &soPhienGia{}
 	return &mayChu{
-		h:   dungBien(mux, muxCongDan, so, danhBa, pg, nil, nguonCORS, log),
+		h:   dungBien(mux, muxCongDan, accountlessMuxForTest(t, log), so, danhBa, pg, nil, nguonCORS, log),
 		kho: kho, pg: pg, so: so, gui: gui,
 	}
 }

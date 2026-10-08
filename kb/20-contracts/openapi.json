@@ -22939,6 +22939,309 @@
         }
       }
     },
+    "/api/v1/public-citizen-report-fields": {
+      "get": {
+        "summary": "Lĩnh vực xã đang mở cho người dân chọn khi gửi phản ánh KHÔNG TÀI KHOẢN, theo tên miền xã trên QR — đường tạm ADR 0083",
+        "operationId": "petitions_get_public_citizen_report_fields",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "09-phan-anh-nguoi-dan §13",
+        "x-vigov-permission": {
+          "kind": "public",
+          "reason": "ADR 0083 #8 (đường tạm khi App ViHAT chưa được Zalo duyệt): danh mục lĩnh vực là cấu hình xã công bố cho mọi người dân, không chứa hồ sơ của ai; xã do máy chủ tra từ tên miền trên QR, chỉ xã đang hoạt động; giới hạn tần suất theo tên miền và mạng của máy gọi, Redis hỏng thì từ chối"
+        },
+        "x-vigov-consumer": "citizen-app",
+        "x-vigov-task": "9562541e90cc",
+        "parameters": [
+          {
+            "name": "host",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.citizenFieldListOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "invalid_host"
+            ]
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "commune_not_found"
+            ]
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "rate_limited"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/public-citizen-reports": {
+      "post": {
+        "summary": "Gửi một phiếu phản ánh KHÔNG TÀI KHOẢN (không phiên, không tài khoản Zalo) tới xã theo tên miền trên QR — trả MÃ TRA CỨU; đường tạm ADR 0083",
+        "operationId": "petitions_post_public_citizen_reports",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "09-phan-anh-nguoi-dan §13",
+        "x-vigov-permission": {
+          "kind": "public",
+          "reason": "ADR 0083 #1-#3 (đường tạm khi App ViHAT chưa được Zalo duyệt, getAccessToken trả -1401): người dân gửi phản ánh không cần phiên; xã do máy chủ tra từ tên miền trên QR, chỉ xã đang hoạt động; 5 phiếu/giờ theo tên miền và mạng của máy gọi, 200 phiếu không tài khoản/ngày/xã; Redis hỏng thì từ chối"
+        },
+        "x-vigov-consumer": "citizen-app",
+        "x-vigov-task": "f5a97a562f16",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/petitions.accountlessReportIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.accountlessReceiptOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "commune_not_found"
+            ]
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "request_in_progress"
+            ]
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "commune_daily_limit",
+              "rate_limited"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "intake_not_configured",
+              "platform_unavailable"
+            ]
+          }
+        }
+      }
+    },
+    "/api/v1/public-citizen-reports/{maTraCuu}": {
+      "parameters": [
+        {
+          "name": "maTraCuu",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Tra cứu công khai tình trạng một phiếu phản ánh KHÔNG TÀI KHOẢN theo mã tra cứu và tên miền xã — chỉ tình trạng, hạn, kết quả, lý do; đường tạm ADR 0083",
+        "operationId": "petitions_get_public_citizen_reports_by_maTraCuu",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "09-phan-anh-nguoi-dan §8",
+        "x-vigov-permission": {
+          "kind": "public",
+          "reason": "ADR 0083 #4 và #9 (đường tạm khi App ViHAT chưa được Zalo duyệt): người cầm mã tra cứu xem tình trạng phiếu không tài khoản của chính mình; chỉ phiếu không tài khoản của xã theo tên miền, chỉ tình trạng/hạn/kết quả/lý do, không dữ liệu cá nhân; mã sai và mã xã khác cùng một 404; 30 lần/giờ theo mạng của máy gọi, Redis hỏng thì từ chối"
+        },
+        "x-vigov-consumer": "citizen-app",
+        "x-vigov-task": "5de768525dad",
+        "parameters": [
+          {
+            "name": "host",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.accountlessLookupOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "not_found"
+            ]
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "rate_limited"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/public-holidays": {
       "get": {
         "summary": "Ngày nghỉ lễ của xã trong một năm — ngày xã KHÔNG làm việc, gồm cả lễ quốc gia lẫn lễ địa phương",
@@ -45960,6 +46263,192 @@
         ],
         "additionalProperties": false
       },
+      "petitions.accountlessLookupOut": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "acknowledge_due": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "resolve_due": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "result": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "acknowledge_due",
+          "code",
+          "resolve_due",
+          "result",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.accountlessReceiptOut": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "acknowledge_due": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "resolve_due": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "acknowledge_due",
+          "code",
+          "resolve_due",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.accountlessReportIn": {
+        "type": "object",
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "reporter_name": {
+            "type": "string"
+          },
+          "reporter_phone": {
+            "type": "string"
+          },
+          "anonymous": {
+            "type": "boolean"
+          },
+          "field": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lat": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "lng": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "citizen_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cong_dan_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "linh_vuc": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "channel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "clock_from": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "acknowledge_due": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolve_due": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "acknowledge_due",
+          "address",
+          "anonymous",
+          "channel",
+          "citizen_id",
+          "clock_from",
+          "code",
+          "cong_dan_id",
+          "content",
+          "host",
+          "lat",
+          "linh_vuc",
+          "lng",
+          "reporter_name",
+          "reporter_phone",
+          "resolve_due",
+          "status"
+        ],
+        "additionalProperties": false
+      },
       "petitions.bienBanRa": {
         "type": "object",
         "properties": {
@@ -47674,6 +48163,12 @@
             ]
           },
           "contact_unverified": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "accountless": {
             "type": [
               "boolean",
               "null"

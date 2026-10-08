@@ -432,6 +432,9 @@ const KHOA_PHIEU_MONG_DOI = [
   // (`features/phan-anh/nhan-phieu.ts`, `sceneCoordinates`).
   "lat",
   "lng",
+  // ADR 0083 (08/10/2026, temporary): an explicit marker that the petition came in with no account — derived in
+  // one function of service-petitions, never a stored flag. Not personal data; staff see a label from it.
+  "accountless",
 ] as const satisfies readonly KhoaPhieu[];
 
 /** Hợp đồng mọc thêm một trường mà danh sách trên không có → đỏ ngay tại đây. */

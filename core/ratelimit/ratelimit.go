@@ -108,6 +108,25 @@ const (
 	MiniAppIDLookupWindow = time.Minute
 )
 
+// The ACCOUNTLESS petition thresholds — ADR 0083 (TEMPORARY until the shared Mini App passes Zalo
+// review; remove with its routes, ADR 0083 §Gỡ bỏ).
+//
+//	send    5 per hour per (commune host, client network) — CHOSEN BY THE OWNER, ADR 0083 row 3
+//	lookup  30 per hour per client network — CHOSEN BY THE OWNER, ADR 0083 row 9
+//	fields  120 per minute per (commune host, client network) — PROVISIONAL, NOT AN OWNER FIGURE: ADR
+//	        0083 row 8 opened the read and named no number. It copies PublicNewsRead's owner figure for
+//	        the other public Mini App read, but NOT its fail-open exception (see AccountlessFieldRead)
+//
+// Changing any of them is a rule 13 stop condition (ADR 0083 stop condition #3 for the first two).
+const (
+	AccountlessSendLimit    = 5
+	AccountlessSendWindow   = time.Hour
+	AccountlessLookupLimit  = 30
+	AccountlessLookupWindow = time.Hour
+	AccountlessFieldsLimit  = 120
+	AccountlessFieldsWindow = time.Minute
+)
+
 // Policy is one limit: at most Limit attempts per key per Window.
 type Policy struct {
 	// name goes into every key; it separates the counters of two policies keyed by the same subject.
@@ -185,6 +204,38 @@ var ZaloBotPairing = Policy{name: "zalo-bot-pairing", limit: ZaloBotPairingLimit
 // unauthenticated route, and the caller (a deploy run) can simply retry.
 var MiniAppIDLookup = Policy{name: "mini-app-ids", limit: MiniAppIDLookupLimit,
 	window: MiniAppIDLookupWindow, event: "mini_app_ids.rate_limited"}
+
+// AccountlessSend is the policy of service-petitions' POST /api/v1/public-citizen-reports (ADR 0083).
+// Keys from PublicHostIPKey. FAILS CLOSED (ADR 0083 row 12: "Redis hỏng thì từ chối (503)"): this bound
+// is half of what stands between an unauthenticated write route and a flood of archival records that can
+// never be deleted (rule 7). The 429 sentence points to the commune's reception desk (ADR 0083 row 3),
+// because a real resident behind a shared address (ADR 0083 cost #3) still needs somewhere to go.
+var AccountlessSend = Policy{name: "accountless-send", limit: AccountlessSendLimit,
+	window: AccountlessSendWindow, event: "accountless_petition.rate_limited",
+	refusedCode: "rate_limited",
+	refusedMessage: "Bạn đã gửi nhiều phản ánh trong một giờ nên phản ánh này CHƯA được ghi nhận. " +
+		"Vui lòng thử lại sau, hoặc đến Bộ phận tiếp nhận của Ủy ban nhân dân xã."}
+
+// AccountlessLookup is the policy of GET /api/v1/public-citizen-reports/{code} (ADR 0083 row 9). Keys
+// from AccountlessLookupKey — per client network ONLY, not per host, so a prober walking codes cannot
+// multiply the budget by naming more communes. FAILS CLOSED: it is the bound on enumerating codes.
+var AccountlessLookup = Policy{name: "accountless-lookup", limit: AccountlessLookupLimit,
+	window: AccountlessLookupWindow, event: "accountless_lookup.rate_limited"}
+
+// AccountlessFieldRead is the policy of GET /api/v1/public-citizen-report-fields (ADR 0083 row 8). Keys
+// from PublicHostIPKey. FAILS CLOSED — unlike PublicNewsRead, whose fail-open is the owner's exception
+// for the notice board only: here, with Redis down the send route answers 503 anyway, so serving the form
+// it feeds would only lead a resident to a refusal.
+var AccountlessFieldRead = Policy{name: "accountless-fields", limit: AccountlessFieldsLimit,
+	window: AccountlessFieldsWindow, event: "accountless_fields.rate_limited"}
+
+// AccountlessLookupKey is the key of the accountless lookup limit: one counter per client network,
+// reduced as OperatorIPKey reduces it. NO TENANT PREFIX, and that is not a default on the isolation path:
+// the bound is on the PROBER, across every commune, and is counted before any host is resolved — keyed
+// per commune, naming 200 communes would buy 200 budgets (ADR 0083 row 9).
+//
+//	→ "rl:<policy>:ip:<net>"
+func AccountlessLookupKey(ip string) Key { return Key{subject: ipSubject(ip)} }
 
 // Key is one counter's identity. OPAQUE, built only by the constructors below, so that "which scope
 // does this counter belong to" is decided once, by name, and never by a caller concatenating a

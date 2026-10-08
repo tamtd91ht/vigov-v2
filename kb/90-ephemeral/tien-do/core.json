@@ -298,6 +298,15 @@
       "bang_chung": "7c0e55c9 (CitizenSession.ZaloAccountID), 434e72a3. go test ./core/... xanh.",
       "no_confirm": [],
       "tiep_theo": "Web Admin audit-log-view.ts:36,43 chưa có nhãn cho Kind 'zalo-account' (hiện chữ thô)."
+    },
+    {
+      "id": "core-accountless-va-so-xac-thuc-08-10",
+      "menu": "phan-anh-nguoi-dan",
+      "viec": "Phần core cho hai việc 08/10/2026: (1) ADR 0083 phiếu không tài khoản — audit Kind anonymous + che IP như vết công dân (core/audit), idem nhớ theo (xã, khoá) 24 giờ (core/idem), ratelimit đếm theo (xã, IP), Redis hỏng thì từ chối (core/ratelimit); (2) core/identityclient.ResolveCitizenContactPhone cho petitions gắn số đã xác thực (ADR 0050 §Sửa đổi 08/10/2026).",
+      "trang_thai": "xong",
+      "bang_chung": "core/idem/accountless_test.go, core/ratelimit/accountless_test.go, core/audit/read_test.go, core/identityclient/citizen_contact_phone_test.go (lỗi/log không mang sid, mã công dân, số). go vet + go test ./core/... xanh 08/10/2026; make check toàn kho chưa xanh trọn (lượt bị dừng vì máy hết RAM).",
+      "no_confirm": [],
+      "tiep_theo": "Không."
     }
   ]
 }

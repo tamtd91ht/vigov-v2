@@ -40,10 +40,11 @@
 // scoped to is the same kind of decision. The 500 says the ROUTE is wired wrong, because it is —
 // the sender did nothing wrong and is told so.
 //
-// THERE IS DELIBERATELY NO `RequiredAnDanh` ESCAPE HATCH. No route needs one today, and an exit
-// nobody has needed yet is an exit nobody has thought through. When a genuinely anonymous route
-// needs duplicate protection, the identity it is scoped to gets designed then — with the person
-// who owns the business rule.
+// THERE IS NO GENERAL ANONYMOUS ESCAPE HATCH. ONE anonymous route needed duplicate protection —
+// the TEMPORARY accountless petition intake (ADR 0083) — and its key space was designed with the
+// owner then, as this note asked: RequiredAccountless, scoped to (commune, 128-bit random key). It is
+// named for that route, not for "anonymous", and goes away with it. Any other anonymous route needs
+// the same design conversation, not a reuse of that declaration.
 //
 // → .claude/skills/rest-api-design/SKILL.md §4 owns this convention.
 package idem
@@ -256,12 +257,36 @@ func Required(cheDo CheDoHong) func(http.Handler) http.Handler {
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			phucVu(w, r, next, cheDo)
+			phucVu(w, r, next, cheDo, principalScope)
 		})
 	}
 }
 
-func phucVu(w http.ResponseWriter, r *http.Request, next http.Handler, cheDo CheDoHong) {
+// scope is WHOSE key space a request's Idempotency-Key lives in, and how strictly the key is checked.
+// Two exist and there is no third: the principal's (every route but one) and the accountless one
+// (RequiredAccountless, ADR 0083). A struct of two functions rather than a flag, so that the
+// accountless branch is a separate, named value that no ordinary route can reach by passing `true`.
+type scope struct {
+	// actor returns the actor component of the key, or ok=false when the request cannot be scoped —
+	// which phucVu answers 500, a route wired wrong.
+	actor func(ctx context.Context) (string, bool)
+	// check bounds the client-supplied key.
+	check func(khoa string) error
+	// replay, when set, writes the replay of a finished request itself (RequiredAccountless). It
+	// returns false when it could not, and the standard PhatLai body is written instead.
+	replay Replayer
+}
+
+// principalScope is the key space of every route declared with Required: the principal's own.
+var principalScope = scope{
+	actor: func(ctx context.Context) (string, bool) {
+		c := ChuThe(ctx)
+		return c, c != ChuTheAnDanh
+	},
+	check: kiemTraKhoa,
+}
+
+func phucVu(w http.ResponseWriter, r *http.Request, next http.Handler, cheDo CheDoHong, sc scope) {
 	ctx := r.Context()
 	rt := runtimeFrom(ctx)
 
@@ -278,8 +303,8 @@ func phucVu(w http.ResponseWriter, r *http.Request, next http.Handler, cheDo Che
 	// this commune would otherwise share one key space, and the second one would be handed the
 	// first one's lookup code. Refusing is the only answer that does not quietly hand one
 	// citizen another citizen's record.
-	chuThe := ChuThe(ctx)
-	if chuThe == ChuTheAnDanh {
+	chuThe, ok := sc.actor(ctx)
+	if !ok {
 		rt.log.Error("idem: route khai Required nhưng yêu cầu không có chủ thể — SAI CẤU HÌNH ROUTE",
 			"method", r.Method, "path", r.URL.Path, "xa", xa.String(), "che_do", cheDo.String())
 		loi(w, http.StatusInternalServerError, "idempotency_misconfigured",
@@ -296,7 +321,7 @@ func phucVu(w http.ResponseWriter, r *http.Request, next http.Handler, cheDo Che
 				"thao tác (UUID hoặc ULID), và giữ nguyên mã đó khi thử lại.")
 		return
 	}
-	if err := kiemTraKhoa(khoa); err != nil {
+	if err := sc.check(khoa); err != nil {
 		// The key itself is never echoed back: it is client-supplied and lands in access logs.
 		loi(w, http.StatusBadRequest, "invalid_idempotency_key",
 			"Header "+Header+" không hợp lệ: "+err.Error())
@@ -342,6 +367,14 @@ func phucVu(w http.ResponseWriter, r *http.Request, next http.Handler, cheDo Che
 			dangChay(w)
 			return
 		case strings.HasPrefix(giaTri, dauDaXong+":"):
+			if sc.replay != nil {
+				// The replay marker is set FIRST, so it is on the answer whichever writer produces it:
+				// the route's replayer, or phatLai below when the replayer declined.
+				w.Header().Set(HeaderPhatLai, "true")
+				if status, ma, ok := TachGiaTri(giaTri); ok && sc.replay(w, r, status, ma) {
+					return
+				}
+			}
 			phatLai(w, giaTri, rt, xa)
 			return
 		default:
@@ -384,6 +417,97 @@ func phucVu(w http.ResponseWriter, r *http.Request, next http.Handler, cheDo Che
 	}()
 
 	next.ServeHTTP(rw, r.WithContext(context.WithValue(ctx, ctxKeyKetQua{}, kq)))
+}
+
+// --- the ONE route without a principal: accountless petitions (ADR 0083, TEMPORARY) ----------
+
+// Replayer writes the replay of a finished request: `status` and `code` are what the first attempt
+// recorded (RecordCode). It returns false WITHOUT WRITING ANYTHING when it cannot, and the standard
+// PhatLai body is written instead. HeaderPhatLai is already set when it is called.
+type Replayer func(w http.ResponseWriter, r *http.Request, status int, code string) bool
+
+// AccountlessKeyMinHex and AccountlessKeyMinBase64URL are the shortest Idempotency-Key the accountless
+// scope accepts: 32 hex digits, or 22 base64url characters — the shortest spellings that CAN carry the
+// 128 random bits ADR 0083 row 10 has the app generate per compose. Nothing here can measure randomness;
+// what the bound refuses is a key too short to be unguessable whatever generated it.
+const (
+	AccountlessKeyMinHex       = 32
+	AccountlessKeyMinBase64URL = 22
+)
+
+// ErrAccountlessKeyTooShort — the key cannot carry 128 bits. The message names the rule, never the key.
+var ErrAccountlessKeyTooShort = fmt.Errorf(
+	"phải là khoá ngẫu nhiên 128 bit: tối thiểu %d chữ số hex hoặc %d ký tự base64url",
+	AccountlessKeyMinHex, AccountlessKeyMinBase64URL)
+
+// accountlessActor is the actor component of every accountless key. A CONSTANT, and that is the
+// design rather than the leak the package comment describes: the key space IS (commune, key), and what
+// keeps one sender out of another's result is that the key is a 128-bit random value the client
+// minted, not that the actor differs. It also differs from every "<Kind>:<ID>" a principal produces,
+// so an accountless key can never coincide with a signed-in user's.
+const accountlessActor = "accountless"
+
+// RequiredAccountless guards THE ONE ROUTE that has no principal to scope a key to: the TEMPORARY
+// accountless petition intake of service-petitions (ADR 0083 row 10 — "khoá ngẫu nhiên 128 bit cho mỗi
+// lần soạn; máy chủ nhớ theo (xã, khoá) 24 giờ"). Remove it together with that route (ADR 0083 §Gỡ bỏ).
+//
+// WHY THIS IS SAFE WHEN Required-WITHOUT-A-PRINCIPAL IS NOT (read the package comment first). The leak
+// there is two senders presenting THE SAME key — "aaaaaaaa", a device id, a hash of the form — and the
+// second being replayed the first one's lookup code. Here:
+//
+//  1. the key must be long enough to carry 128 bits (validateAccountlessKey), and the contract has the
+//     app draw it from a CSPRNG for every compose. Two senders meet in one key space only by guessing
+//     a 128-bit value — and a guesser who could do that would rather guess lookup codes directly;
+//  2. the key space is ONE COMMUNE's (`t:<tenant_id>:` prefix, rule 1 invariant 7) — the commune the
+//     server resolved from the host, never one the client named;
+//  3. what a replay hands back is the code the SAME key produced, i.e. the code the holder of that key
+//     already received. It reveals nothing a sender did not already have.
+//
+// What it does NOT protect against, stated: a client that reuses one key across composes gets its
+// first code back instead of a second petition — the duplicate-protection behaviour, not a leak.
+//
+// `replay` may be nil (the standard PhatLai body). ADR 0083's route passes one so a retry receives the
+// SAME 201 shape as the first answer, rebuilt from the database rather than from a stored body: the
+// body is never put in Redis (see RecordCode).
+//
+// Every other route keeps Required, and Required keeps refusing a request with no principal.
+func RequiredAccountless(cheDo CheDoHong, replay Replayer) func(http.Handler) http.Handler {
+	switch cheDo {
+	case MoKhiHong, DongKhiHong:
+	default:
+		panic(fmt.Sprintf("idem: RequiredAccountless needs MoKhiHong or DongKhiHong, got %d", cheDo))
+	}
+	sc := scope{
+		actor:  func(context.Context) (string, bool) { return accountlessActor, true },
+		check:  validateAccountlessKey,
+		replay: replay,
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			phucVu(w, r, next, cheDo, sc)
+		})
+	}
+}
+
+// validateAccountlessKey is kiemTraKhoa plus the 128-bit floor. An all-hex key needs 32 digits (4 bits
+// each); any other key over the base64url alphabet needs 22 characters (6 bits each). A UUID (36
+// characters with dashes) passes the second branch.
+func validateAccountlessKey(khoa string) error {
+	if err := kiemTraKhoa(khoa); err != nil {
+		return err
+	}
+	hex := true
+	for i := 0; i < len(khoa); i++ {
+		c := khoa[i]
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F') {
+			hex = false
+			break
+		}
+	}
+	if hex && len(khoa) < AccountlessKeyMinHex || !hex && len(khoa) < AccountlessKeyMinBase64URL {
+		return ErrAccountlessKeyTooShort
+	}
+	return nil
 }
 
 // hong applies the failure mode the route declared.

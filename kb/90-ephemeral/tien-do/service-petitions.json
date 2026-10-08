@@ -626,6 +626,24 @@
       "bang_chung": "3d53605f. go test ./service-petitions/... xanh. TestPgStatusSortWalk BỎ QUA — chưa có VIGOV_TEST_DSN.",
       "no_confirm": [],
       "tiep_theo": "Chạy TestPgStatusSortWalk trên PG16 thật."
+    },
+    {
+      "id": "phan-anh-khong-tai-khoan-adr-0083",
+      "viec": "Phiếu phản ánh KHÔNG TÀI KHOẢN (ADR 0083, đường TẠM khi App ViHAT chưa được Zalo duyệt): 3 tuyến công khai — danh mục lĩnh vực, gửi, tra cứu theo mã",
+      "trang_thai": "xong",
+      "bang_chung": "service-petitions: internal/http/{accountless.go,routes_accountless.go}, internal/app/gui_phan_anh.go (AccountlessSender, ErrAccountlessDailyLimit, trần trong tx), internal/domain/{accountless.go,commune_host.go}, internal/store/accountless.go (khoá + đếm 200/ngày/xã, AccountlessByCode chỉ đọc phiếu không tài khoản), cmd/server/main.go (chuỗi thứ ba: CORS · StripTenantHeaders · Recover · idem), staff DTO `accountless`. core: idem.RequiredAccountless (khoá theo (xã, khoá) 24h), audit.KindAnonymous + che IP khi đọc, ratelimit AccountlessSend 5/giờ/(host,IP) · AccountlessLookup 30/giờ/IP · AccountlessFieldRead. Không migration. `go build ./... && go vet ./... && go test ./...` service-petitions xanh; core idem/audit/ratelimit/httpx xanh; check_audit_actor/security/quyen PASS — 08/10/2026. openapi.json sinh lại (362 route).",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA chạy trên cụm thật, chưa gọi từ máy thật. Ngưỡng AccountlessFieldRead 120/phút/(host,IP) là số TẠM của agent (chép PublicNewsRead) — chờ chủ dự án chốt (luật 13). apidoc chưa đọc idem.RequiredAccountless nên openapi không khai idempotency cho POST. rest_api_guard/audit_guard báo nhầm trên tuyến mới (hook tư vấn). Đếm 200/ngày không có chỉ mục riêng. GỠ khi App ViHAT được duyệt — ADR 0083 §Gỡ bỏ.",
+      "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "gan-so-da-xac-thuc-cua-phien",
+      "viec": "Gửi phản ánh từ phiên ĐÃ xác thực số mà ô số điện thoại để trống: gắn số đã xác thực của phiên vào phiếu, che khi ra API và trong vết như số gõ tay (chủ dự án 08/10/2026, ADR 0050 §Sửa đổi 08/10/2026)",
+      "trang_thai": "xong",
+      "bang_chung": "Quyết định: kb/10-decisions/0050-kenh-cong-dan-theo-kho-yeu-cau.md §Sửa đổi 08/10/2026 (:178). Mã 08/10/2026: internal/app/gui_phan_anh.go bước 1c verifiedContactPhone (chỉ khi ô số trống, không ẩn danh, Owner.Kind == OwnerCitizen) gọi identity ResolveCitizenContactPhone(sid của phiên, citizen_id) qua core/identityclient/citizen_contact_phone.go; trả rỗng → 401, identity hỏng → 503 contact_phone_unavailable, không ghi gì. Test internal/app/contact_phone_test.go + internal/http/contact_phone_test.go + core/identityclient/citizen_contact_phone_test.go: gắn khi trống; số gõ tay thắng; ẩn danh / ADR 0080 / ADR 0083 không gọi; vết chỉ mang tên cột nguoi_gui_dien_thoai. go vet + go test ./service-petitions/... ./core/identityclient/... xanh 08/10. make check toàn kho CHƯA xanh trọn (lượt chạy bị dừng vì máy hết RAM).",
+      "no_confirm": [],
+      "tiep_theo": "Triển khai identity TRƯỚC petitions (identity cũ trả UNIMPLEMENTED → 503 đúng ca này). Thử trên máy thật: gửi phiếu từ phiên đã xác thực, ô số ẩn → cán bộ thấy số (che) trên web-admin.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }

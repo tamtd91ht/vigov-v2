@@ -41,7 +41,8 @@ import (
 const ActionReadLog = "xem_nhat_ky_he_thong"
 
 // actorKindCitizen is the actor_kind whose code and IP are never returned (ADR 0054 §4). KindZaloAccount
-// is withheld identically (ADR 0080): both ids are opaque ids of a member of the public.
+// is withheld identically (ADR 0080): both ids are opaque ids of a member of the public. KindAnonymous
+// too (ADR 0083): its id is a fixed marker, but its IP is a member of the public's address.
 const actorKindCitizen = "citizen"
 
 // maxFilterLen bounds the three exact-match text filters. A business code is a few dozen bytes; a
@@ -276,7 +277,7 @@ func (l *Log) readPage(ctx context.Context, tx *store.ScopedTx, f filter) (page.
 		// A citizen's actor_id is an internal id this route never returns; matching on it would let a
 		// guessed id confirm a citizen's activity. A Zalo account's id is the same kind of value
 		// (ADR 0080), so it is excluded on the same ground.
-		add(" AND actor_id = $%d AND actor_kind NOT IN ('"+actorKindCitizen+"', '"+KindZaloAccount+"')", f.actor)
+		add(" AND actor_id = $%d AND actor_kind NOT IN ('"+actorKindCitizen+"', '"+KindZaloAccount+"', '"+KindAnonymous+"')", f.actor)
 	}
 	if f.action != "" {
 		add(" AND action = $%d", f.action)
@@ -337,7 +338,7 @@ func (l *Log) readPage(ctx context.Context, tx *store.ScopedTx, f filter) (page.
 			&v.Action, &v.Subject, &delta); err != nil {
 			return page.NewResult[EntryView](), fmt.Errorf("audit: quét dòng nhật ký: %w", err)
 		}
-		if v.ActorKind == actorKindCitizen || v.ActorKind == KindZaloAccount {
+		if v.ActorKind == actorKindCitizen || v.ActorKind == KindZaloAccount || v.ActorKind == KindAnonymous {
 			v.ActorCode, v.ActorIP = "", ""
 		}
 		if len(delta) > 0 {

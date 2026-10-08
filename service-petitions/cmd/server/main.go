@@ -199,6 +199,12 @@ func chay(log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	// THE ACCOUNTLESS PETITION LIMITS (ADR 0083, TEMPORARY — remove with its routes) over the SAME counter.
+	// All three fail CLOSED: with no REDIS_DSN (dev only) the three public routes answer 503.
+	accountlessLimiters, err := newAccountlessLimiters(photoCounter)
+	if err != nil {
+		return err
+	}
 
 	loaiNhiemVu := petstore.NewLoaiNhiemVuStore(kho)
 	mucUuTien := petstore.NewMucUuTienNhiemVuStore(kho)
@@ -453,7 +459,11 @@ func chay(log *slog.Logger) error {
 		//
 		// `fieldCatalogue` checks the field a citizen picked (ADR 0050 point 1) by the same rule the
 		// citizen catalogue lists by, BEFORE identity is asked for that field's deadlines.
-		GuiPhieu: app.NewGuiPhanAnh(kho, phieu, suKien, dinhDanh, fieldCatalogue),
+		//
+		// `dinhDanh` a second time, as the verified-phone source (ADR 0050 §Sửa đổi 08/10/2026): a
+		// verified citizen who leaves the phone box empty gets the session's number attached, asked of
+		// identity over the SAME connection (ResolveCitizenContactPhone). identity must be deployed first.
+		GuiPhieu: app.NewGuiPhanAnh(kho, phieu, suKien, dinhDanh, fieldCatalogue, dinhDanh),
 		// The citizen's star rating (ADR 0050 point 2). The SAME outbox store as the intake: a 1–2 star
 		// rating reopens the petition, and that transition's notification is written in its transaction.
 		Rating: app.NewRatePetition(kho, phieu, suKien),
@@ -476,6 +486,25 @@ func chay(log *slog.Logger) error {
 		Log:          log,
 	})
 
+	// THE ACCOUNTLESS SURFACE — ADR 0083, TEMPORARY: a THIRD mux behind a THIRD chain (dungBien). The
+	// intake is the SAME use case as the citizen one (one validation, one deadline rule, one trail); only
+	// the sender differs. ITS OWN CachedDirectory, asked through XaTheoHost: the staff edge's `directory`
+	// is asked through ByHost, which caches an outage as a miss — shared, a registry blip would answer
+	// 404 "no such commune" to residents for one TTL instead of 503 (core/tenant/cache.go).
+	muxAccountless := http.NewServeMux()
+	svchttp.RegisterAccountless(muxAccountless, svchttp.DepsAccountless{
+		Communes: tenant.NewCachedDirectory(nenTang, cfg.TenantCacheTTL()),
+		// NO verified-phone source: an accountless sender has no session, so the use case never asks — and
+		// nil makes any path that did ask fail closed instead of disclosing a number.
+		Intake:        app.NewGuiPhanAnh(kho, phieu, suKien, dinhDanh, fieldCatalogue, nil),
+		Petitions:     phieu,
+		Fields:        fieldCatalogue,
+		SendLimiter:   accountlessLimiters.send,
+		LookupLimiter: accountlessLimiters.lookup,
+		FieldsLimiter: accountlessLimiters.fields,
+		Log:           log,
+	})
+
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.
 	// LISTEN_ADDR or ":8080" — one default for every service, see config.Config.ListenAddr.
 	addr := cfg.ListenAddr()
@@ -484,7 +513,7 @@ func chay(log *slog.Logger) error {
 		Addr: addr,
 		// OUTERMOST, around BOTH chains (staff and citizen): every layer reads one client address
 		// per request, crossing only the proxies TRUSTED_PROXY_CIDRS names (rule 6, invariant 2).
-		Handler: httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies())(dungBien(mux, muxCongDan, soPhien, directory, dinhDanh,
+		Handler: httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies())(dungBien(mux, muxCongDan, muxAccountless, soPhien, directory, dinhDanh,
 			idemStore, cfg.CitizenCORSAllowedOrigins(), log)),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
@@ -725,7 +754,16 @@ func buildGRPCServer(callerKey secret.Secret, d svcgrpc.Deps) *grpc.Server {
 // IT IS NOT ON THE STAFF CHAIN AND MUST NEVER BE: staff are same-origin through web-admin (ADR 0043)
 // with a host-only cookie, and a CORS grant there lets another page drive a staff session.
 // main_test.go asserts a staff route carries no CORS header even for an allowed Origin.
-func dungBien(mux, muxCongDan http.Handler, soPhien httpx.CitizenSessions,
+//
+// # THE THIRD CHAIN — ACCOUNTLESS PETITIONS (ADR 0083, TEMPORARY; remove with svchttp.RegisterAccountless)
+//
+//	/api/v1/public-citizen-reports, …/{code}, /api/v1/public-citizen-report-fields
+//
+// CORSCongDan · StripTenantHeaders · Recover · idem.Middleware — and NO TenantMiddleware (the Mini App
+// calls the reserved API host, which maps to no commune) and NO CitizenEdge (there is no session). The
+// commune is resolved per request from the QR's domain, in the handler; idem.Middleware only installs
+// the Store, the key is built after that resolution (idem.RequiredAccountless on the route).
+func dungBien(mux, muxCongDan, muxAccountless http.Handler, soPhien httpx.CitizenSessions,
 	danhBa tenant.Directory, dinhDanh staffauth.Resolver,
 	idemStore idem.Store, nguonCORS httpx.NguonCORS, log *slog.Logger) http.Handler {
 
@@ -750,6 +788,13 @@ func dungBien(mux, muxCongDan http.Handler, soPhien httpx.CitizenSessions,
 	c = httpx.StripTenantHeaders(c)
 	c = httpx.CORSCongDan(nguonCORS)(c)
 
+	// The accountless chain (ADR 0083). Outermost-last, as above.
+	var a http.Handler = muxAccountless
+	a = idem.Middleware(idemStore, log)(a)
+	a = httpx.Recover(traceID)(a)
+	a = httpx.StripTenantHeaders(a)
+	a = httpx.CORSCongDan(nguonCORS)(a)
+
 	ngoai := http.NewServeMux()
 	ngoai.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -768,6 +813,12 @@ func dungBien(mux, muxCongDan http.Handler, soPhien httpx.CitizenSessions,
 	// own line here. Without it the path falls to the staff chain and TenantMiddleware answers 404 to
 	// every citizen opening step 1 of the form.
 	ngoai.Handle(svchttp.CitizenFieldsPath, c)
+	// ADR 0083 — the collection (POST), its subtree (the lookup by code), and the catalogue. All three
+	// lines are load-bearing for the reason the two citizen lines above are; without them the staff chain
+	// answers 404 on the reserved host.
+	ngoai.Handle(svchttp.AccountlessReportsPath, a)
+	ngoai.Handle(svchttp.AccountlessReportsPath+"/", a)
+	ngoai.Handle(svchttp.AccountlessFieldsPath, a)
 	ngoai.Handle("/", h)
 	return ngoai
 }
@@ -811,6 +862,22 @@ func chayMigration(ctx context.Context, log *slog.Logger, db *sql.DB) error {
 	// out the replica is already at the schema they expected, without opening a psql prompt.
 	log.Info("migration xong", "service", "petitions", "da_ap", kq.DaAp, "bo_qua", len(kq.BoQua))
 	return nil
+}
+
+// accountlessLimiters are the three limits of ADR 0083's public routes (TEMPORARY).
+type accountlessLimiters struct{ send, lookup, fields *ratelimit.Limiter }
+
+func newAccountlessLimiters(c ratelimit.Counter) (accountlessLimiters, error) {
+	var l accountlessLimiters
+	var err error
+	if l.send, err = ratelimit.New(c, ratelimit.AccountlessSend); err != nil {
+		return l, err
+	}
+	if l.lookup, err = ratelimit.New(c, ratelimit.AccountlessLookup); err != nil {
+		return l, err
+	}
+	l.fields, err = ratelimit.New(c, ratelimit.AccountlessFieldRead)
+	return l, err
 }
 
 // unavailableCounter is the citizen photo rate-limit store when REDIS_DSN is unset (dev only — staging

@@ -5254,6 +5254,73 @@
       "declared_in": "service-finance/internal/http/routes.go"
     },
     {
+      "service": "petitions",
+      "method": "GET",
+      "path": "/api/v1/public-citizen-report-fields",
+      "operation_id": "petitions_get_public_citizen_report_fields",
+      "task_id": "9562541e90cc",
+      "summary": "Lĩnh vực xã đang mở cho người dân chọn khi gửi phản ánh KHÔNG TÀI KHOẢN, theo tên miền xã trên QR — đường tạm ADR 0083",
+      "screen": "09-phan-anh-nguoi-dan §13",
+      "permission_kind": "public",
+      "permission_reason": "ADR 0083 #8 (đường tạm khi App ViHAT chưa được Zalo duyệt): danh mục lĩnh vực là cấu hình xã công bố cho mọi người dân, không chứa hồ sơ của ai; xã do máy chủ tra từ tên miền trên QR, chỉ xã đang hoạt động; giới hạn tần suất theo tên miền và mạng của máy gọi, Redis hỏng thì từ chối",
+      "consumer": "citizen-app",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "petitions.citizenFieldListOut",
+        "400": "httpx.Error",
+        "404": "httpx.Error",
+        "429": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes_accountless.go"
+    },
+    {
+      "service": "petitions",
+      "method": "POST",
+      "path": "/api/v1/public-citizen-reports",
+      "operation_id": "petitions_post_public_citizen_reports",
+      "task_id": "f5a97a562f16",
+      "summary": "Gửi một phiếu phản ánh KHÔNG TÀI KHOẢN (không phiên, không tài khoản Zalo) tới xã theo tên miền trên QR — trả MÃ TRA CỨU; đường tạm ADR 0083",
+      "screen": "09-phan-anh-nguoi-dan §13",
+      "permission_kind": "public",
+      "permission_reason": "ADR 0083 #1-#3 (đường tạm khi App ViHAT chưa được Zalo duyệt, getAccessToken trả -1401): người dân gửi phản ánh không cần phiên; xã do máy chủ tra từ tên miền trên QR, chỉ xã đang hoạt động; 5 phiếu/giờ theo tên miền và mạng của máy gọi, 200 phiếu không tài khoản/ngày/xã; Redis hỏng thì từ chối",
+      "consumer": "citizen-app",
+      "idempotency": "",
+      "request_schema": "petitions.accountlessReportIn",
+      "reply_schemas": {
+        "201": "petitions.accountlessReceiptOut",
+        "400": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "429": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes_accountless.go"
+    },
+    {
+      "service": "petitions",
+      "method": "GET",
+      "path": "/api/v1/public-citizen-reports/{maTraCuu}",
+      "operation_id": "petitions_get_public_citizen_reports_by_maTraCuu",
+      "task_id": "5de768525dad",
+      "summary": "Tra cứu công khai tình trạng một phiếu phản ánh KHÔNG TÀI KHOẢN theo mã tra cứu và tên miền xã — chỉ tình trạng, hạn, kết quả, lý do; đường tạm ADR 0083",
+      "screen": "09-phan-anh-nguoi-dan §8",
+      "permission_kind": "public",
+      "permission_reason": "ADR 0083 #4 và #9 (đường tạm khi App ViHAT chưa được Zalo duyệt): người cầm mã tra cứu xem tình trạng phiếu không tài khoản của chính mình; chỉ phiếu không tài khoản của xã theo tên miền, chỉ tình trạng/hạn/kết quả/lý do, không dữ liệu cá nhân; mã sai và mã xã khác cùng một 404; 30 lần/giờ theo mạng của máy gọi, Redis hỏng thì từ chối",
+      "consumer": "citizen-app",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "petitions.accountlessLookupOut",
+        "404": "httpx.Error",
+        "429": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes_accountless.go"
+    },
+    {
       "service": "identity",
       "method": "GET",
       "path": "/api/v1/public-holidays",

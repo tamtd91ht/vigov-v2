@@ -65,6 +65,7 @@ type soPhieuGia struct {
 	thayYeuCau  []app.YeuCauGuiPhanAnh
 	thayKind    []string
 	thayIP      []string
+	thaySession []string
 	dem         int
 }
 
@@ -85,6 +86,7 @@ func (s *soPhieuGia) Gui(ctx context.Context, yc app.YeuCauGuiPhanAnh, sender ap
 	s.thayCongDan = append(s.thayCongDan, sender.Owner.ID)
 	s.thayKind = append(s.thayKind, string(sender.Owner.Kind))
 	s.thayIP = append(s.thayIP, sender.IP)
+	s.thaySession = append(s.thaySession, sender.SessionID)
 	s.thayYeuCau = append(s.thayYeuCau, yc)
 	// tenant.MustFrom, never tenant.From with a fallback: a write with no commune must be loud.
 	xa := tenant.MustFrom(ctx)
