@@ -24,7 +24,7 @@
  * một đích. Nên khi không cờ, script hỏi người gõ tên đích, không đưa danh sách.
  *
  * QR mở App ViHAT vào một xã (`zalo.me/s/<App ID app chung>/?d=<host>&src=qr`) KHÔNG phải việc của
- * bước đẩy: nó làm ở platform-admin (chi tiết xã → "Mở bằng app ViHAT").
+ * bước đẩy: nó làm ở platform-admin (chi tiết xã → "Mở bằng app ViHAT"), hoặc `npm run qr` (`make-qr.mjs`).
  *
  * Mọi hàm ở đây THUẦN — nhận dữ liệu, trả dữ liệu hoặc ném lỗi, không đọc đĩa, không đọc môi
  * trường, không gọi mạng, không hỏi ai — để `dich-den.test.mjs` kiểm được từng nhánh mà không chạy
@@ -179,8 +179,8 @@ export function docCo(argv) {
   if (co.shared_app && co.ten_mien !== null) {
     throw new Error(
       "--app=vihat không đi cùng --domain: App ViHAT là bundle chung, không nung xã nào (ADR 0044).\n" +
-        "  QR mở App ViHAT vào một xã làm ở platform-admin (chi tiết xã → \"Mở bằng app ViHAT\"), " +
-        "không phải bằng một lần đẩy.\n" +
+        "  QR mở App ViHAT vào một xã làm ở platform-admin (chi tiết xã → \"Mở bằng app ViHAT\") " +
+        "hoặc bằng `npm run qr -- --domain=<tên-miền>`, không phải bằng một lần đẩy.\n" +
         "  Muốn đẩy app riêng của xã thì bỏ --app=vihat, giữ --domain.",
     );
   }
@@ -453,7 +453,7 @@ export function planLines({
     `  App ID   : ${dich.app_id}  (${source})`,
     own
       ? `  Nung xã  : CÓ — ${dich.ten_mien} nung vào bundle; app mở thẳng vào xã, ẩn thanh tiêu đề Zalo`
-      : "  Nung xã  : KHÔNG — bundle chung; vào xã bằng QR có `d` (làm ở platform-admin)",
+      : "  Nung xã  : KHÔNG — bundle chung; vào xã bằng QR có `d` (platform-admin, hoặc npm run qr)",
   ];
   if (own) {
     lines.push(`  Logo xã  : ${logo ?? "(chưa có — header hiện biểu tượng)"}`);

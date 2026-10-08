@@ -23,7 +23,7 @@
  * cuối trên máy ấy.
  *
  * QR mở App ViHAT vào một xã KHÔNG phải việc của script này — platform-admin làm (chi tiết xã → "Mở
- * bằng app ViHAT").
+ * bằng app ViHAT"), hoặc `npm run qr -- --domain=<tên-miền-xã>` (`make-qr.mjs`).
  *
  * ⚠ ĐÍCH DO `ZMP_TOKEN` QUYẾT, KHÔNG DO `APP_ID` — đã đo, xem đầu `dich-den.mjs`. Nên mọi đích lấy token
  * từ MÔI TRƯỜNG, hoặc — khi môi trường không có token đúng App ID và có người ngồi trước cửa sổ lệnh —

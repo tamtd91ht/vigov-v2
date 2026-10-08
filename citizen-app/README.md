@@ -641,18 +641,71 @@ lần thêm hoặc bớt một mục — lệch trong một văn bản pháp lý
 
 ## Nộp lên Zalo
 
-### Chuỗi lệnh
+### Lệnh — đẩy bản và sinh QR
 
-```bash
-npm ci                                              # máy mới: cài đúng package-lock.json
-npm run zmp:deploy -- --app=vihat --thu             # in kế hoạch rồi dừng — chạy trước mọi lần đẩy thật
-npm run zmp:deploy -- --app=vihat                   # App ViHAT (app chung), bản thử nghiệm (-t)
-npm run zmp:deploy -- --domain=<tên-miền-xã>        # APP RIÊNG của xã ấy, mở thẳng vào xã, bản thử nghiệm
-npm run zmp:deploy                                  # HỎI: "App ViHAT (gõ vihat) hay tên miền xã"
-npm run zmp:phat-hanh -- --app=vihat                # thêm --phat-hanh (zmp:phat-hanh) = BẢN PHÁT HÀNH (bỏ -t)
-npm run zmp:phat-hanh -- --domain=<tên-miền-xã>     # APP RIÊNG của xã ấy, BẢN PHÁT HÀNH
-npm run zmp:deploy -- --domain=<tên-miền-xã> --app-id=<chữ số>   # đối chiếu với App ID platform trả
-```
+Mọi lệnh chạy trong `citizen-app/`. Cờ đứng **sau `--`**: npm chuyển nguyên phần ấy cho script.
+Máy mới thì chạy `npm ci` trước (cài đúng `package-lock.json`).
+
+Có **hai việc khác nhau**, đừng dùng lẫn lệnh của việc này cho việc kia:
+
+| Việc | Lệnh | Có chạm Zalo không |
+|---|---|---|
+| **Đẩy một bản** lên Zalo — app chung hoặc app riêng của một xã | `npm run zmp:deploy` · `npm run zmp:phat-hanh` | **Có**: dựng → `sync-config` → `deploy` |
+| **Sinh QR** mở app chung (App ViHAT) vào một xã | `npm run qr` | **Không**: chỉ đọc platform + identity, rồi ghi một tệp SVG |
+
+#### Đẩy bản — `zmp:deploy`, `zmp:phat-hanh`
+
+`zmp:phat-hanh` là đúng `zmp:deploy --phat-hanh`. Hai tên tồn tại để lệnh phát hành phải **gõ khác hẳn**
+lệnh thử.
+
+| Muốn | Lệnh | Điều xảy ra |
+|---|---|---|
+| Xem trước, không làm gì | `npm run zmp:deploy -- --app=vihat --thu` | In kế hoạch (đích, App ID, token, loại bản, nhãn, máy chủ) và dòng lệnh sẽ chạy, rồi dừng. Không cần `VIGOV_API_HOST`. **Chạy trước mọi lần đẩy thật** — thay `--app=vihat` bằng `--domain=…` cho app riêng |
+| App chung, **bản thử** | `npm run zmp:deploy -- --app=vihat` | Đẩy có `-t`. Bundle không nung xã nào; vào xã bằng QR (mục dưới) |
+| App riêng của một xã, **bản thử** | `npm run zmp:deploy -- --domain=<tên-miền-xã>` | Nung tên miền vào bundle: app mở thẳng vào xã, ẩn thanh tiêu đề Zalo |
+| App chung, **bản phát hành** | `npm run zmp:phat-hanh -- --app=vihat` | Bỏ `-t`. In kế hoạch, đếm ngược 5 giây để kịp `Ctrl-C` |
+| App riêng của một xã, **bản phát hành** | `npm run zmp:phat-hanh -- --domain=<tên-miền-xã>` | Như trên, cho App ID riêng của xã |
+| Không nhớ đích | `npm run zmp:deploy` | Hỏi "App ViHAT (gõ vihat) hay tên miền xã". Không có người ngồi (Jenkins, ống) thì **dừng** |
+| Đối chiếu App ID mình biết | thêm `--app-id=<chữ số>` | Phải **trùng** App ID platform trả, khác thì dừng. Platform không trả lời thì đây là lối khẩn cấp, chỉ khi có người gõ `c` |
+| Chỉ đồng bộ `app-config.json` | `npm run zmp:sync` | Dựng + `sync-config`, **không đẩy** |
+
+| Cờ | Nghĩa |
+|---|---|
+| `--app=vihat` | Đích là App ViHAT (app chung). Không đi cùng `--domain` |
+| `--domain=<tên-miền-xã>` | Đích là app riêng của xã có tên miền ấy. Tên miền trần: chữ thường, không `https://`, không cổng/đường dẫn |
+| `--phat-hanh` | Bản phát hành (bỏ `-t`). `zmp:phat-hanh` đã gắn sẵn cờ này |
+| `--thu` | In kế hoạch rồi dừng — không dựng, không đẩy (vẫn hỏi platform App ID, tuyến chỉ đọc) |
+| `--app-id=<chữ số>` | Chỉ để đối chiếu, không chọn đích (xem bảng "Platform trả" bên dưới) |
+
+#### Sinh QR app chung vào một xã — `qr`
+
+Lệnh này **chỉ sinh QR**: không dựng, không đẩy, không cần `ZMP_TOKEN` hay `VIGOV_API_HOST`.
+Liên kết nó in ra trùng từng ký tự với nút **"Mở bằng app ViHAT"** ở platform-admin → chi tiết xã.
+Liên kết ấy do `service-platform/internal/domain/shared_mini_app.go` dựng.
+
+| Muốn | Lệnh | Liên kết trong QR |
+|---|---|---|
+| QR mở **bản phát hành** | `npm run qr -- --domain=<tên-miền-xã>` | `https://zalo.me/s/<App ID app chung>/?d=<tên-miền-xã>&src=qr` |
+| QR mở **bản thử** Version `n` | `npm run qr -- --domain=<tên-miền-xã> --version=<n>` | `https://zalo.me/s/<App ID app chung>/?env=TESTING&version=<n>&d=<tên-miền-xã>&src=qr` |
+| Ghi tệp ra chỗ khác | thêm `--out=<đường-dẫn>.svg` | — |
+
+Lệnh làm theo thứ tự sau, và **lỗi ở bước nào cũng dừng, không ghi tệp**:
+
+1. Hỏi platform `GET /api/v1/mini-app-ids?app=vihat` để lấy App ID app chung (bảng `mini_app`). Kho này
+   không chép App ID nào. Platform không trả lời thì dừng. Ở đây **không có** lối `--app-id`: một tấm QR
+   in sai sống nhiều năm trên bảng tin xã.
+2. Hỏi identity `GET /api/v1/communes?host=<tên-miền-xã>`. Đây chính là câu app hỏi khi người dân quét
+   mã. Identity không biết tên miền ấy thì **dừng**, vì QR ấy chỉ mở phần giới thiệu ViHAT, không vào xã nào.
+3. In ra App ID, tên xã, loại bản, liên kết, rồi vẽ QR trên cửa sổ lệnh để quét thử ngay. Ghi tệp SVG
+   vào `qr/<tên-miền-xã>.svg`, hoặc `qr/<tên-miền-xã>.test-v<n>.svg` cho bản thử. Thư mục `qr/` không
+   vào git: sinh lại lúc nào cũng được.
+
+`--version=<n>` là số **Version** của bản thử trên console Zalo. QR không kèm nó chỉ mở **bản đã phát
+hành**: app chung chưa phát hành thì Zalo báo *"ứng dụng đang trong giai đoạn phát triển"* (bảng "Hai thứ
+đã kiểm" bên dưới). Tham số `d`, `src` chỉ dẫn giao diện, không cấp quyền gì (ADR 0047 câu 3).
+
+QR của **app riêng** một xã (`https://zalo.me/s/<App ID xã>/?src=qr`, không `d`) lệnh này không sinh:
+lấy ở platform-admin → chi tiết xã (ADR 0070 §Sửa đổi 06/10/2026 #2).
 
 **Đích luôn được chọn tường minh (chủ dự án, 06/10/2026).** Trước ngày ấy, `npm run zmp:deploy`
 không cờ đẩy lên app mà `ZMP_TOKEN` trong `citizen-app/.env` thuộc về — app người ấy đăng nhập lần cuối
@@ -663,7 +716,7 @@ trên máy ấy. Nay:
 | `--app=vihat` | App ViHAT (app chung) | **Không bao giờ** (ADR 0044) — mở ra là màn giới thiệu ViHAT, vào xã bằng QR `d` |
 | `--domain=<tên-miền-xã>` | App ID riêng của xã ấy | **Luôn** — app mở thẳng vào kênh công dân của xã, ẩn thanh tiêu đề Zalo (ADR 0047 §6) |
 | không cờ đích | hỏi `vihat` hay tên miền xã (có người ngồi trước cửa sổ lệnh) — không có danh sách: platform cố ý không có lệnh liệt kê | — ; không có người (Jenkins, ống) thì **DỪNG** và nêu hai cờ |
-| `--app=vihat --domain=…` | **DỪNG** | QR mở App ViHAT vào một xã làm ở **platform-admin** (chi tiết xã → "Mở bằng app ViHAT"), không bằng một lần đẩy |
+| `--app=vihat --domain=…` | **DỪNG** | QR mở App ViHAT vào một xã: `npm run qr -- --domain=…` (mục trên), hoặc **platform-admin** (chi tiết xã → "Mở bằng app ViHAT"). Không làm bằng một lần đẩy |
 | `--vao-thang` | **DỪNG** — đã bỏ | `--domain` nay luôn làm việc ấy |
 
 **App ID của đích do service-platform trả** (chủ dự án 06/10/2026): script gọi
@@ -800,8 +853,6 @@ quyền gì**. Ngày có cầu phiên, thay bằng xã đọc từ phiên — **
 | `npm run build` | Gói tĩnh vào `dist/` — bản dựng duy nhất |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm test` | Vitest — sự thật đã công bố, hình dạng bundle, sổ màn hình, bộ bóc tách vCard, các tính năng, kênh công dân, **và bundle đúng bằng thứ người duyệt đọc** |
-| `npm run zmp:sync` | Dựng rồi đồng bộ `app-config.json` theo trang đã dựng |
-| `npm run zmp:deploy -- --app=vihat` · `-- --domain=<tên-miền-xã>` · (không cờ: hỏi) | App ViHAT, hoặc app riêng của xã (mở thẳng vào xã) → bản thử nghiệm. App ID do service-platform trả; `--app-id=<chữ số>` chỉ đối chiếu, `--thu` để chỉ in kế hoạch |
-| `npm run zmp:phat-hanh -- --app=vihat` · `-- --domain=<tên-miền-xã>` | Như trên, có `--phat-hanh` → **bản phát hành**, có in ra và đếm ngược 5 giây |
+| `npm run zmp:sync` · `zmp:deploy` · `zmp:phat-hanh` · `qr` | Đẩy bản lên Zalo và sinh QR: bảng đầy đủ ở §"Nộp lên Zalo" → "Lệnh — đẩy bản và sinh QR" |
 
 → Skills: `.claude/skills/zalo-miniapp-multi-tenant` · `.claude/skills/accessibility-elderly`

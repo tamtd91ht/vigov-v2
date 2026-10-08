@@ -11,3 +11,7 @@ public/banner-xa.png
 # Tài liệu thiết kế khách gửi (ảnh chụp, PROTOTYPE.md) — tham khảo trên máy, không vào kho:
 # nguồn của nó là prototype bên vigov-require, và một bản sao ở đây sẽ lệch bản gốc (luật 9).
 ui-design/
+
+# QR sinh bởi `npm run qr` (scripts/make-qr.mjs). Sinh lại được bất cứ lúc nào từ platform + identity;
+# một bản trong kho là một App ID chép tay, lệch ngày platform đổi App ID.
+qr/
