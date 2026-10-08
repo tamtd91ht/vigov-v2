@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/error-state";
 import { controlClass } from "@/components/ui/field";
-import { BUSY_DELETING, BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
+import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 
 import { usePhien } from "@/features/phien/phien-hien-tai";
 import type { KetQua } from "@/lib/api/goi";
@@ -63,8 +63,6 @@ import {
   NUT_GIEO_THOI_HAN,
   NUT_HUY,
   NUT_LUU,
-  NUT_XOA,
-  O_LY_DO_XOA,
   PETITION_FIELDS_NOT_READABLE,
   REMOVED_SLA,
   REMOVE_SLA_TITLE,
@@ -97,6 +95,8 @@ import {
   type BanNhapGio,
   type KhoaGio,
 } from "./sua-thoi-han";
+import { CitizenLetterDeadlineBlock } from "./citizen-letter-deadline-block";
+import { RemoveStep } from "./remove-reason-step";
 import { KhoiChuaKhai } from "./working-calendar-tab";
 
 /**
@@ -443,7 +443,8 @@ export function TabThoiHanXuLy() {
   }, [busy, removing]);
 
   return (
-    <ManThoiHanXuLy
+    <div className="space-y-6">
+      <ManThoiHanXuLy
       du={{ thoiHan }}
       coQuyenGhi={coQuyenGhi}
       catalogues={shownCatalogues}
@@ -492,7 +493,11 @@ export function TabThoiHanXuLy() {
               onCancel: cancelEdit,
             }
       }
-    />
+      />
+      {/* ADR 0084 #3 / ADR 0085: the citizen-letter rules, same key (`admin.sla`). Three states, as
+          above: an unread session draws nothing, never "allowed". */}
+      <CitizenLetterDeadlineBlock canWrite={coQuyenGhi} />
+    </div>
   );
 }
 
@@ -941,58 +946,6 @@ function HoursInput({ column, edit }: { column: KhoaGio; edit: InlineEdit }) {
 
 /** The id of the add row — the add button's `aria-controls`. */
 const ADD_FORM_ID = "sla-add-row";
-
-/**
- * The reason step of one row's removal, inside the action cell: compact (spec 08 draws only a trash
- * button), but never a one-click delete — the server keeps the row and records why (rule 7). Enter
- * confirms, Esc cancels. Refusals show in the row below, like the edit's.
- */
-function RemoveStep({ remove, rowName }: { remove: InlineRemove; rowName: string }) {
-  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      remove.onConfirm();
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      remove.onCancel();
-    }
-  };
-  return (
-    <>
-      <input
-        name="reason"
-        autoFocus
-        aria-label={`${O_LY_DO_XOA} — ${rowName}`}
-        aria-invalid={remove.localError !== ""}
-        placeholder={O_LY_DO_XOA}
-        className={cn(controlClass, "h-8 w-44 text-[12.5px]")}
-        value={remove.reason}
-        disabled={remove.busy}
-        onChange={(e) => remove.setReason(e.currentTarget.value)}
-        onKeyDown={onKeyDown}
-      />
-      <Button
-        type="button"
-        variant="danger"
-        size="sm"
-        disabled={remove.busy}
-        aria-busy={remove.busy}
-        onClick={remove.onConfirm}
-      >
-        <BusyLabel busy={remove.busy} label={NUT_XOA} busyText={BUSY_DELETING} />
-      </Button>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={remove.busy}
-        onClick={remove.onCancel}
-      >
-        {NUT_HUY}
-      </Button>
-    </>
-  );
-}
 
 /**
  * The grey add row (spec 08, `SlaTable.tsx:294-409`). Only the two figures the spec shows are typed;
