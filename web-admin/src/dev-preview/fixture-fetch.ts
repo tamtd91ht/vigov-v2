@@ -25,6 +25,13 @@ import {
   previewOutgoingDocuments,
   previewRoutings,
 } from "./documents.fixture";
+import {
+  previewLetter,
+  previewLetterDuplicates,
+  previewLetterLog,
+  previewLetterReport,
+  previewLetters,
+} from "./letters.fixture";
 import { devPreviewEnabled, isDevPreviewPath } from "./preview-gate";
 import {
   PREVIEW_EXTENSION_APPROVERS,
@@ -100,6 +107,9 @@ function refuse(status: number, message: string): Response {
 
 /** Exported for the test: which answer a (method, URL) gets. */
 export function answer(method: string, url: URL): Response {
+  // The ONE POST that is a read: the citizen-letter duplicate check carries its query in the body
+  // (rule 3, forbidden #4) and writes nothing — so the preview answers it instead of refusing it.
+  if (method === "POST" && url.pathname === "/api/v1/citizen-letters/duplicates") return json(previewLetterDuplicates());
   if (method !== "GET") return refuse(409, PREVIEW_WRITE_REFUSAL);
   const year = Number(url.searchParams.get("year")) || new Date().getFullYear();
   const p = url.pathname;
@@ -113,6 +123,8 @@ export function answer(method: string, url: URL): Response {
   if (p === "/api/v1/staff-directory") return json(staffDirectory(url.searchParams));
   const tasks = answerTasks(p, url.searchParams);
   if (tasks !== null) return tasks;
+  const letters = answerLetters(p, url.searchParams);
+  if (letters !== null) return letters;
   const documents = answerDocuments(p, url.searchParams);
   if (documents !== null) return documents;
   if (p === "/api/v1/investment-projects") return json(previewProjects(year));
@@ -191,7 +203,45 @@ function answerTasks(p: string, q: URLSearchParams): Response | null {
  * are, so the drawer still opens in every state.
  */
 function isDocumentRegisterPath(p: string): boolean {
-  return p === "/api/v1/incoming-documents" || p === "/api/v1/outgoing-documents";
+  return (
+    p === "/api/v1/incoming-documents" ||
+    p === "/api/v1/outgoing-documents" ||
+    p === "/api/v1/citizen-letters" ||
+    p === "/api/v1/citizen-letter-report"
+  );
+}
+
+/**
+ * The citizen-letter reads (`lib/api/citizen-letters.ts`); `null` = not a letter route. The list and
+ * the report follow `?state=` like the two registers: `empty` is an empty register / an empty year,
+ * `error` the refusal. The drawer's reads stay as they are.
+ */
+function answerLetters(p: string, q: URLSearchParams): Response | null {
+  const one = (name: string) => q.get(name) ?? undefined;
+  const state = documentPreviewStateNow();
+  if (p === "/api/v1/citizen-letters") {
+    if (state === "error") return refuse(503, PREVIEW_REGISTER_ERROR);
+    if (state === "empty") return json({ items: [], next_cursor: "", has_more: false });
+    return json(
+      previewLetters({
+        status: one("status"),
+        holdingUnit: one("holding_unit"),
+        assignee: one("assignee"),
+        receivedFrom: one("received_from"),
+        receivedTo: one("received_to"),
+        scope: one("scope"),
+      }),
+    );
+  }
+  if (p === "/api/v1/citizen-letter-report") {
+    if (state === "error") return refuse(503, PREVIEW_REGISTER_ERROR);
+    return json(previewLetterReport(Number(q.get("year")) || new Date().getFullYear(), state === "empty"));
+  }
+  const m = /^\/api\/v1\/citizen-letters\/([^/]+)(\/log)?$/.exec(p);
+  if (m === null) return null;
+  const id = decodeURIComponent(m[1]!);
+  const found = m[2] === undefined ? previewLetter(id) : previewLetterLog(id);
+  return found === null ? refuse(404, "Không tìm thấy đơn thư này.") : json(found);
 }
 
 function answerDocuments(p: string, q: URLSearchParams): Response | null {

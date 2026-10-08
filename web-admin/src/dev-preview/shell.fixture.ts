@@ -16,6 +16,8 @@ import {
   QUYEN_XEM_NHIEM_VU,
   QUYEN_XOA_NHIEM_VU,
   TASK_ASSIGN_PERMISSION,
+  PETITION_CREATE_PERMISSION,
+  PETITION_READ_PERMISSION,
 } from "@/lib/quyen";
 
 /**
@@ -73,6 +75,9 @@ export const PREVIEW_DOCUMENT_PERMISSIONS: readonly string[] = [
   QUYEN_XEM_VAN_BAN,
   QUYEN_GHI_SO_VAN_BAN,
   QUYEN_CHUYEN_VAN_BAN,
+  // The citizen-letter tabs: read, and book / route / correct (which also opens status and result).
+  PETITION_READ_PERMISSION,
+  PETITION_CREATE_PERMISSION,
 ];
 
 /** Who the session is. The accountant opens Giải ngân; the leader opens Nhiệm vụ. */

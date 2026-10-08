@@ -14,10 +14,7 @@ import {
   DocumentTabBar,
   IncomingRowLinks,
   IncomingScopeFilter,
-  PETITION_COLUMNS,
-  PendingPetitionRegister,
-  PendingPetitionReport,
-  PetitionHeaderActions,
+  LetterImportButton,
   RaiseTaskButton,
   StatusChangeRow,
   documentTabDomId,
@@ -71,10 +68,10 @@ function dialogText(): string {
 }
 
 describe("PHAN_CHUA_DUNG của màn Văn bản", () => {
-  it("đúng mười một phần, mỗi mục có lý do; “Quét & OCR” đã rời màn (ADR 0078 #5)", () => {
+  it("đúng mười một phần, mỗi mục có lý do; hai tab Đơn thư/Báo cáo đã dựng, chỉ còn Excel của chúng", () => {
     expect(PHAN_CHUA_DUNG.map((p) => p.ten)).toEqual([
-      "Đơn thư công dân",
-      "Báo cáo",
+      "Nhập đơn thư từ Excel",
+      "Xuất báo cáo đơn thư",
       "Chuyển trạng thái văn bản đến",
       "Lọc Giao cho tôi / Liên quan đến tôi",
       "Nhập hàng loạt từ Excel",
@@ -143,39 +140,13 @@ describe("chỗ giữ “?” của màn Văn bản & Đơn thư (ADR 0068 §14)
     expect(markers(el)).toHaveLength(2);
   });
 
-  it("đầu trang tab Đơn thư: [Vào sổ đơn thư] hoặc [Nhập từ Excel] — cả hai vô hiệu", () => {
-    const el = mount(<PetitionHeaderActions />);
+  it("đầu trang tab Đơn thư: [Nhập từ Excel] vô hiệu, “?” nói chưa có đường nhập", () => {
+    const el = mount(<LetterImportButton />);
     const buttons = realButtons(el);
-    expect(buttons.map((b) => b.textContent)).toEqual(["Vào sổ đơn thư", "Nhập từ Excel"]);
-    for (const b of buttons) expect(b.disabled).toBe(true);
-    expect(el.textContent).toContain("hoặc");
-  });
-
-  it("tab Đơn thư: bộ lọc và bảng của prototype, mọi ô vô hiệu, thân bảng là câu lý do — không một dòng giả", () => {
-    const el = mount(<PendingPetitionRegister />);
-    const heads = [...el.querySelectorAll("th")].map((th) => th.textContent);
-    expect(heads).toEqual([...PETITION_COLUMNS]);
-    for (const c of el.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select")) {
-      expect(c.disabled).toBe(true);
-    }
-    for (const b of el.querySelectorAll<HTMLButtonElement>('[role="group"] button')) expect(b.disabled).toBe(true);
-    const rows = el.querySelectorAll("tbody tr");
-    expect(rows).toHaveLength(1);
-    expect(rows[0]!.textContent).toBe(PHAN_CHUA_DUNG[0]!.viSao);
-    // The duplicate-letter reminder the prototype describes does not exist — not said.
-    expect(el.textContent).not.toContain("nhắc khi một người gửi lại đơn");
-  });
-
-  it("tab Báo cáo: khung prototype, KHÔNG một con số nào", () => {
-    const el = mount(<PendingPetitionReport year={2026} />);
-    expect(el.textContent).toContain("Tiến độ tiếp nhận và xử lý đơn thư năm 2026");
-    expect(el.textContent).toContain("Tiếp nhận trong năm");
-    expect(el.textContent).toContain("Theo loại đơn");
-    expect(el.textContent).toContain("Tiến độ xử lý theo đơn vị");
-    // A 0 would be a figure the commune reports upward. Only the year is a number on this panel.
-    const withoutYear = (el.textContent ?? "").replace("2026", "");
-    expect(withoutYear).not.toMatch(/\d/);
-    expect(realButtons(el).find((b) => b.textContent === "Xuất Excel")?.disabled).toBe(true);
+    expect(buttons.map((b) => b.textContent)).toEqual(["Nhập từ Excel"]);
+    expect(buttons[0]!.disabled).toBe(true);
+    act(() => markers(el)[0]!.click());
+    expect(dialogText()).toContain("chưa nhận sổ đơn thư từ tệp Excel");
   });
 
   it("dải trạng thái: năm bước C2 của văn bản đến, bước đang đứng sáng, mọi nút vô hiệu, một “?”", () => {
@@ -212,9 +183,7 @@ describe("chỗ giữ “?” của màn Văn bản & Đơn thư (ADR 0068 §14)
       <>
         <IncomingScopeFilter />
         <IncomingRowLinks year={2026} />
-        <PetitionHeaderActions />
-        <PendingPetitionRegister />
-        <PendingPetitionReport year={2026} />
+        <LetterImportButton />
         <StatusChangeRow current={null} />
         <RaiseTaskButton />
       </>,

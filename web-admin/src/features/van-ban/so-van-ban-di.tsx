@@ -532,7 +532,8 @@ export function BangVanBanDi({
   }
 
   return (
-    <div className="overflow-x-auto" role="region" aria-label="Sổ văn bản đi" tabIndex={0}>
+    // `relative`: the scroller must contain its cells' visually-hidden spans — see `BangVanBanDen`.
+    <div className="relative overflow-x-auto" role="region" aria-label="Sổ văn bản đi" tabIndex={0}>
       <table className="w-full min-w-[900px] border-collapse text-[12.5px]">
         <caption className="an-thi-giac">
           Các văn bản xã đã phát hành, {soCuTruoc ? "số cũ nhất trước" : "số mới nhất trước"}

@@ -108,7 +108,15 @@ export function DeadlineMark({
  * function down and the register calls it with its own buttons and body: the page decides where they
  * go, the register keeps its state. Without a page (tests, a register on its own) it is `plainFrame`.
  */
-export type RegisterFrame = (headerActions: ReactNode, body: ReactNode) => ReactNode;
+export type RegisterFrame = (
+  headerActions: ReactNode,
+  body: ReactNode,
+  /**
+   * Words appended to the page subtitle — the prototype's red "{n} đơn đang quá hạn."
+   * (`DocumentWorkspace.tsx:111-116`). Only a register that can DERIVE such a count passes one.
+   */
+  subtitleExtra?: ReactNode,
+) => ReactNode;
 
 export const plainFrame: RegisterFrame = (headerActions, body) => (
   <>

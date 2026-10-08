@@ -1,12 +1,9 @@
 "use client";
 
-import { Download, FileSpreadsheet, ListChecks, Plus } from "lucide-react";
+import { Download, FileSpreadsheet, ListChecks } from "lucide-react";
 import type { KeyboardEvent, ReactNode } from "react";
 
-import { Card } from "@/components/ui/card";
-import { Field } from "@/components/ui/field";
 import { PendingButton, PendingMarker } from "@/components/ui/pending-feature";
-import { Segmented } from "@/components/ui/segmented";
 import { Tab, TabList } from "@/components/ui/tabs";
 import { cn } from "@/lib/cn";
 
@@ -21,6 +18,9 @@ import { INCOMING_STATUS_STEPS, PHAN_CHUA_DUNG, type PendingPart } from "./nhan-
  *
  * Descriptions come from `PHAN_CHUA_DUNG` by name, never a second sentence written here: two copies
  * of one reason drift, and the stale one is what a staff member reads.
+ *
+ * The two tabs `Đơn thư công dân` and `Báo cáo` were placeholders here until 08/10/2026; they are
+ * built now (`letter-register.tsx`, `letter-report.tsx`). Only their Excel buttons stay "?".
  */
 export function pendingPart(name: string): PendingPart {
   const found = PHAN_CHUA_DUNG.find((p) => p.ten === name);
@@ -35,8 +35,8 @@ export function pendingPart(name: string): PendingPart {
  * The prototype's four tabs, in its order: the registers first, then `Đơn thư công dân`, then
  * `Báo cáo`. The prototype HIDES its `Văn bản đến` tab because ITS demo commune asked (17/09/2026);
  * that request does not apply here, and our two working registers each get their tab. The prototype's
- * counts in brackets are not drawn: our registers are paged, so the count of the loaded page is not
- * the register's count, and the petition register does not exist.
+ * counts in brackets are not drawn: every register is paged, so the count of the loaded page is not
+ * the register's count.
  */
 export const DOCUMENT_TABS = [
   { id: "incoming", label: "Văn bản đến" },
@@ -53,11 +53,7 @@ export function documentTabDomId(id: DocumentTabId): string {
   return `tab-van-ban-${id}`;
 }
 
-/**
- * The tab bar under the page header. ALL FOUR TABS ARE SELECTABLE — `Đơn thư công dân` and `Báo cáo`
- * open the prototype's layout as disabled controls with "?", so the staff member sees what the tab
- * will hold and why it is not there yet, instead of a dead tab. Roving focus: Left/Right/Home/End.
- */
+/** The tab bar under the page header. Roving focus: Left/Right/Home/End. */
 export function DocumentTabBar({
   selected,
   onSelect,
@@ -106,21 +102,18 @@ export function HeaderOr() {
 }
 
 /**
- * The prototype's header pair of the petition register — `[+ Vào sổ đơn thư]  hoặc  [Nhập từ Excel]`
- * — both disabled with the register's one reason.
+ * The prototype's second header button of the petition register — `[Nhập từ Excel]`
+ * (`DocumentWorkspace.tsx:135-142`) — disabled with its "?": no import route exists (ADR 0078 #6).
  */
-export function PetitionHeaderActions() {
-  const info = pendingPart("Đơn thư công dân");
+export function LetterImportButton() {
   return (
-    <>
-      <PendingButton info={info} variant="primary" icon={<Plus aria-hidden="true" />}>
-        Vào sổ đơn thư
-      </PendingButton>
-      <HeaderOr />
-      <PendingButton info={info} variant="outline" icon={<FileSpreadsheet aria-hidden="true" />}>
-        Nhập từ Excel
-      </PendingButton>
-    </>
+    <PendingButton
+      info={pendingPart("Nhập đơn thư từ Excel")}
+      variant="outline"
+      icon={<FileSpreadsheet aria-hidden="true" />}
+    >
+      Nhập từ Excel
+    </PendingButton>
   );
 }
 
@@ -221,7 +214,10 @@ export function IncomingRowLinks({ year }: { year: number }) {
   );
 }
 
-/** The detail's `Chuyển thành nhiệm vụ` (prototype `DocumentDetailDrawer.tsx:404-418`), disabled. */
+/**
+ * The detail's `Chuyển thành nhiệm vụ` (prototype `DocumentDetailDrawer.tsx:404-418`,
+ * `PetitionDetailDrawer.tsx:590-602`), disabled.
+ */
 export function RaiseTaskButton() {
   return (
     <PendingButton info={pendingPart("Chuyển thành nhiệm vụ")} variant="primary" icon={<ListChecks aria-hidden="true" />} />
@@ -276,203 +272,5 @@ export function StatusChangeRow({ current }: { current: number | null }) {
         </span>
       </div>
     </div>
-  );
-}
-
-/* ---- the petition tab ------------------------------------------------------------------------- */
-
-/** The prototype's petition register columns (`PetitionTable.tsx`), in its order. */
-export const PETITION_COLUMNS = [
-  "Số",
-  "Ngày nhận",
-  "Người gửi",
-  "Loại đơn",
-  "Nội dung",
-  "Đang giữ",
-  "Số ngày xử lý",
-  "Hạn giải quyết",
-  "Trạng thái",
-] as const;
-
-/**
- * `Đơn thư công dân`: the prototype's tab body — scope filter + one line about the register, the
- * four-filter row, the table — every control disabled, and the table body is the ONE reason sentence,
- * never an empty-register line (there is no register to be empty).
- *
- * The prototype's second sentence ("Hệ thống nhắc khi một người gửi lại đơn có nội dung tương tự.")
- * is not drawn: it describes a duplicate check that does not exist.
- */
-export function PendingPetitionRegister() {
-  const info = pendingPart("Đơn thư công dân");
-  return (
-    <section aria-labelledby="tieu-de-don-thu" className="flex min-w-0 flex-col gap-3 [&>*]:my-0" data-pending="">
-      <h2 id="tieu-de-don-thu" className="an-thi-giac">
-        Sổ đơn thư công dân
-      </h2>
-      <div className="flex min-w-0 flex-wrap items-center gap-3">
-        <Segmented
-          mode="buttons"
-          legend="Lọc nhanh theo người xử lý"
-          name="pham-vi-don-thu"
-          value=""
-          disabled
-          onChange={() => {}}
-          options={[
-            { value: "", label: "Toàn xã" },
-            { value: "assigned", label: "Giao cho tôi" },
-            { value: "involved", label: "Liên quan đến tôi" },
-          ]}
-        />
-        <p className="m-0 max-w-lg text-[13px] text-ink-500">
-          Sổ theo dõi đơn khiếu nại, tố cáo, kiến nghị và đề nghị của công dân.
-        </p>
-      </div>
-
-      <div className="flex min-w-0 flex-wrap items-end gap-2.5">
-        <Field label="Từ ngày" htmlFor="don-thu-tu-ngay" grow="auto">
-          <input id="don-thu-tu-ngay" type="date" disabled />
-        </Field>
-        <Field label="Đến ngày" htmlFor="don-thu-den-ngay" grow="auto">
-          <input id="don-thu-den-ngay" type="date" disabled />
-        </Field>
-        {(
-          [
-            ["don-thu-don-vi", "Lọc theo đơn vị chủ quản", "Tất cả đơn vị"],
-            ["don-thu-can-bo", "Lọc theo cán bộ chủ quản", "Tất cả cán bộ"],
-            ["don-thu-trang-thai", "Lọc theo trạng thái", "Tất cả trạng thái"],
-          ] as const
-        ).map(([id, label, first]) => (
-          <Field key={id} label={label} htmlFor={id} kind="select" hideLabel grow="auto">
-            <select id={id} disabled>
-              <option>{first}</option>
-            </select>
-          </Field>
-        ))}
-        <span className="relative mb-2 inline-flex">
-          <PendingMarker info={info} />
-        </span>
-      </div>
-
-      <Card className="overflow-hidden">
-        <div className="bang-cuon overflow-x-auto rounded-none border-0 shadow-none">
-          <table className="bang-danh-muc min-w-[900px]">
-            <caption className="an-thi-giac">Sổ đơn thư công dân</caption>
-            <thead>
-              <tr>
-                {PETITION_COLUMNS.map((c) => (
-                  <th key={c} scope="col">
-                    {c}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td colSpan={PETITION_COLUMNS.length} className="p-6 text-center text-[13px] text-ink-500">
-                  {info.viSao}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </Card>
-    </section>
-  );
-}
-
-/* ---- the report tab --------------------------------------------------------------------------- */
-
-const REPORT_FIGURES = [
-  { label: "Tiếp nhận trong năm" },
-  { label: "Đã giải quyết" },
-  { label: "Đang xử lý", hint: "Gồm cả đơn tồn từ năm trước" },
-  { label: "Quá hạn" },
-  { label: "Giải quyết đúng hạn" },
-  { label: "Số ngày xử lý trung bình" },
-] as const;
-
-const REPORT_TABLES = [
-  { title: "Theo loại đơn", columns: ["Loại đơn", "Tổng số", "Đã giải quyết", "Đang xử lý", "Quá hạn"] },
-  {
-    title: "Tiến độ xử lý theo đơn vị",
-    columns: ["Bộ phận", "Tổng số", "Đang xử lý", "Đã giải quyết", "Quá hạn", "Đúng hạn"],
-  },
-] as const;
-
-/**
- * `Báo cáo`: the prototype's `PetitionReportPanel` frame — heading + `Xuất Excel`, six figure cards,
- * two tables, the monthly panel. Every figure is "—" and every table body is the reason sentence:
- * a 0 would be a figure, and the commune would report it upward.
- */
-export function PendingPetitionReport({ year }: { year: number }) {
-  const info = pendingPart("Báo cáo");
-  return (
-    <section aria-labelledby="tieu-de-bao-cao-don-thu" className="flex min-w-0 flex-col gap-5 [&>*]:my-0" data-pending="">
-      <div className="flex flex-wrap items-center gap-3">
-        <h2 id="tieu-de-bao-cao-don-thu" className="m-0 text-[15px] font-bold text-ink-900">
-          Tiến độ tiếp nhận và xử lý đơn thư năm {year}
-        </h2>
-        <PendingMarker info={info} />
-        <PendingButton
-          info={info}
-          variant="outline"
-          size="sm"
-          icon={<Download aria-hidden="true" />}
-          className="ml-auto"
-        >
-          Xuất Excel
-        </PendingButton>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {REPORT_FIGURES.map((f) => (
-          <Card key={f.label} className="p-3.5">
-            <p className="m-0 text-[24px] font-bold text-ink-400 tabular-nums" aria-hidden="true">
-              —
-            </p>
-            <p className="m-0 mt-0.5 text-[12px] text-ink-500">{f.label}</p>
-            {"hint" in f && <p className="m-0 mt-0.5 text-[11px] text-ink-500">{f.hint}</p>}
-          </Card>
-        ))}
-      </div>
-
-      {REPORT_TABLES.map((t) => (
-        <ReportPanel key={t.title} title={t.title}>
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-[13px]">
-              <thead>
-                <tr className="border-b border-line text-left text-[11px] text-ink-500 uppercase">
-                  {t.columns.map((c, i) => (
-                    <th key={c} scope="col" className={i === 0 ? "py-2 pr-3 font-semibold" : "py-2 pr-3 text-right font-semibold"}>
-                      {c}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td colSpan={t.columns.length} className="py-6 text-center text-ink-500">
-                    {info.viSao}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </ReportPanel>
-      ))}
-
-      <ReportPanel title="Tiếp nhận và giải quyết theo tháng">
-        <p className="m-0 py-6 text-center text-[13px] text-ink-500">{info.viSao}</p>
-      </ReportPanel>
-    </section>
-  );
-}
-
-function ReportPanel({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <Card as="section" className="p-4">
-      <h3 className="m-0 mb-3 text-[11.5px] font-bold tracking-wide text-ink-500 uppercase">{title}</h3>
-      {children}
-    </Card>
   );
 }

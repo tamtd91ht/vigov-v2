@@ -46,6 +46,7 @@ const { DocumentsPreview } = await import("./documents-preview");
 const { PREVIEW_DOCUMENT_PERMISSIONS } = await import("./shell.fixture");
 const { PREVIEW_DOCUMENT_WITH_ROUTINGS, PREVIEW_DOCUMENT_NO_ROUTING, PREVIEW_REGISTER_ERROR, setDocumentPreviewState } =
   await import("./documents.fixture");
+const { PREVIEW_LETTER_OVERDUE } = await import("./letters.fixture");
 type PreviewPerson = import("./shell.fixture").PreviewPerson;
 
 let root: Root | null = null;
@@ -280,6 +281,42 @@ describe("preview — Văn bản & Đơn thư", () => {
     await mountDocs(docs({ drawer: PREVIEW_DOCUMENT_NO_ROUTING }));
     await settle(1000);
     expect(document.querySelector("dialog[open]")!.textContent).toContain("Chưa chuyển cho bộ phận nào.");
+  }, SLOW);
+
+  it("?tab=don-thu: the real citizen-letter register on its fixture rows; the denunciation is masked", async () => {
+    const el = await mountDocs(docs({ tab: "don-thu" }));
+    await settle(800);
+    expect(selected(el)).toBe("Đơn thư công dân");
+    expect(el.querySelectorAll("tbody tr")).toHaveLength(9);
+    expect(el.textContent).toContain("Người gửi được giữ bí mật");
+    expect(el.textContent).toContain("Đã gộp vì trùng đơn trước");
+    expect(el.querySelector('a[href^="tel:"]')).toBeNull();
+    // The booking button: the preview session holds petition.create.
+    expect([...el.querySelectorAll("button")].some((b) => b.textContent?.trim() === "Vào sổ đơn thư")).toBe(true);
+    expect(network).not.toHaveBeenCalled();
+  }, SLOW);
+
+  it("?drawer=<letter id> opens the real letter drawer; ?modal=vao-so-don&dup=1 shows the duplicate box", async () => {
+    await mountDocs(docs({ drawer: PREVIEW_LETTER_OVERDUE }));
+    await settle(1000);
+    const dialog = document.querySelector("dialog[open]")!;
+    expect(dialog.textContent).toContain("Đơn số 11/");
+    expect(dialog.querySelectorAll('section[aria-labelledby="tieu-de-dong-thoi-gian-don-thu"] li')).toHaveLength(3);
+    act(() => root?.unmount());
+    host?.remove();
+    await mountDocs(docs({ modal: "vao-so-don", duplicate: true }));
+    await settle(1600);
+    expect(document.querySelector("dialog[open]")!.textContent).toContain("Công dân này đã có 2 đơn nội dung tương tự");
+    expect(network).not.toHaveBeenCalled();
+  }, SLOW);
+
+  it("?tab=bao-cao: the real report on the fixture year", async () => {
+    const el = await mountDocs(docs({ tab: "bao-cao" }));
+    await settle(800);
+    expect(selected(el)).toBe("Báo cáo");
+    expect(el.textContent).toContain("Tiến độ tiếp nhận và xử lý đơn thư năm");
+    expect(el.textContent).toContain("Văn phòng HĐND – UBND");
+    expect(network).not.toHaveBeenCalled();
   }, SLOW);
 
   it("?state=empty|error|loading: the register's real empty, error (+ Tải lại) and first-load states", async () => {

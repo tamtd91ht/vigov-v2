@@ -33,8 +33,11 @@ export type PreviewSearchParams = Promise<Record<string, string | string[] | und
 export const DOCUMENT_PREVIEW_TABS = ["den", "di", "don-thu", "bao-cao"] as const;
 export type DocumentPreviewTab = (typeof DOCUMENT_PREVIEW_TABS)[number];
 
-/** `?modal=` of `/xem-thu/van-ban` — the intake of Văn bản đến, the issue of Văn bản đi. */
-export const DOCUMENT_PREVIEW_MODALS = ["vao-so-den", "cap-so-di"] as const;
+/**
+ * `?modal=` of `/xem-thu/van-ban` — the intake of Văn bản đến, the issue of Văn bản đi, the booking of
+ * a citizen letter (`vao-so-don`, on the Đơn thư tab).
+ */
+export const DOCUMENT_PREVIEW_MODALS = ["vao-so-den", "cap-so-di", "vao-so-don"] as const;
 export type DocumentPreviewModal = (typeof DOCUMENT_PREVIEW_MODALS)[number];
 
 /** `?state=` of `/xem-thu/van-ban` — what the two register reads answer (`documents.fixture.ts`). */
@@ -72,6 +75,28 @@ export function previewDocumentFoldOpen(value: string | string[] | undefined): b
 }
 
 export function previewDocumentMeasure(value: string | string[] | undefined): boolean {
+  return first(value) === "1";
+}
+
+/**
+ * `?dup=1` (with `?modal=vao-so-don`) — types a sender's name and a summary into the REAL booking
+ * dialog, so its real duplicate check runs and the warning box shows (fixture candidates).
+ */
+export function previewDocumentDuplicate(value: string | string[] | undefined): boolean {
+  return first(value) === "1";
+}
+
+/**
+ * Four more one-word screenshot states of the citizen-letter tabs, each `=1`, each pressing or setting
+ * the REAL control:
+ *   `?buoc=1`           in a letter drawer: the first clickable status chip — the status composer
+ *   `?sua-nguoi-gui=1`  in a letter drawer: "Sửa thông tin người gửi" — the sender-correction form
+ *   `?loc=1`            on the Đơn thư tab: status filter "Đình chỉ" (no fixture row) — "Bỏ 1 bộ lọc"
+ *                       and the empty-by-filter sentence
+ *   `?cuon=1`           scrolls to the end: the drawer's result form (with its save button), or the
+ *                       report's monthly bars
+ */
+export function previewDocumentFlag(value: string | string[] | undefined): boolean {
   return first(value) === "1";
 }
 

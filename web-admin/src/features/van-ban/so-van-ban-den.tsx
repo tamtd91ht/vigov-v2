@@ -1067,7 +1067,10 @@ export function BangVanBanDen({
   }
 
   return (
-    <div className="overflow-x-auto" role="region" aria-label="Sổ văn bản đến" tabIndex={0}>
+    // `relative` MAKES THE SCROLLER THE CONTAINING BLOCK of the cells' visually-hidden (absolute) spans:
+    // without it those spans escape the clip and the WHOLE PAGE scrolled sideways at 1440px (measured
+    // 08/10/2026: page 1623px wide in a 1418px window, the right edge of the last column's sr-only span).
+    <div className="relative overflow-x-auto" role="region" aria-label="Sổ văn bản đến" tabIndex={0}>
       <table className="w-full min-w-[980px] border-collapse text-[12.5px]">
         <caption className="an-thi-giac">
           Các văn bản đến đã vào sổ, {soCuTruoc ? "số cũ nhất trước" : "số mới nhất trước"}

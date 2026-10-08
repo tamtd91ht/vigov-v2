@@ -5,18 +5,16 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { PageHeader } from "@/components/ui/page-header";
 import { NO_DRILL_DOWN, type DrillDown } from "@/lib/drill-down";
-import { namTheoDongHoMay } from "@/lib/nam";
 
 import {
   DOCUMENT_PANEL_ID,
   DocumentTabBar,
-  PendingPetitionRegister,
-  PendingPetitionReport,
-  PetitionHeaderActions,
   documentTabDomId,
   type DocumentTabId,
 } from "./document-pending";
 import type { RegisterFrame } from "./document-ui";
+import { LetterRegister } from "./letter-register";
+import { LetterReport } from "./letter-report";
 import { SoVanBanDen } from "./so-van-ban-den";
 import { SoVanBanDi } from "./so-van-ban-di";
 
@@ -51,8 +49,8 @@ const HEADER_ACTIONS_CLASS =
  * WHY THE HEADER BUTTONS CHANGE WITH THE TAB: in the prototype the header pair belongs to the petition
  * register, its main tab. Here each register has a working create button of its own, so each tab
  * puts its own buttons in the header (`RegisterFrame`): Văn bản đến `[+ Vào sổ văn bản đến]`, Văn bản đi
- * `[+ Cấp số văn bản đi]`, Đơn thư and Báo cáo the prototype's `[+ Vào sổ đơn thư ?] hoặc [Nhập từ
- * Excel ?]`. No "Quét & OCR": the prototype has none (ADR 0078 #5).
+ * `[+ Cấp số văn bản đi]`, Đơn thư and Báo cáo the prototype's `[+ Vào sổ đơn thư] hoặc [Nhập từ
+ * Excel ?]` (the import has no route, ADR 0078 #6). No "Quét & OCR": the prototype has none (#5).
  *
  * Tab order is the prototype's with `Văn bản đi` after `Văn bản đến`; the opening tab is
  * `initialDocumentTab`. The tab is NOT in the URL (see `app/van-ban/page.tsx`). Only the selected tab is
@@ -78,15 +76,22 @@ export function DocumentWorkspace({
     focusSelectedTab.current = true;
     setTab(id);
   };
-  // The report's year: the machine clock, read once — the same anchor every register uses.
-  const [year] = useState(namTheoDongHoMay);
 
-  const frame: RegisterFrame = (headerActions, body) => (
+  const frame: RegisterFrame = (headerActions, body, subtitleExtra) => (
     <>
       <PageHeader
         icon={Mail}
         title={DOCUMENT_PAGE_TITLE}
-        subtitle={DOCUMENT_PAGE_SUBTITLE}
+        subtitle={
+          subtitleExtra === undefined || subtitleExtra === null ? (
+            DOCUMENT_PAGE_SUBTITLE
+          ) : (
+            <>
+              {DOCUMENT_PAGE_SUBTITLE}
+              {subtitleExtra}
+            </>
+          )
+        }
         className="mb-5"
         actions={headerActions === null ? undefined : <div className={HEADER_ACTIONS_CLASS}>{headerActions}</div>}
       />
@@ -112,10 +117,10 @@ export function DocumentWorkspace({
       content = <SoVanBanDi frame={frame} />;
       break;
     case "petitions":
-      content = frame(<PetitionHeaderActions />, <PendingPetitionRegister />);
+      content = <LetterRegister frame={frame} />;
       break;
     default:
-      content = frame(<PetitionHeaderActions />, <PendingPetitionReport year={year} />);
+      content = <LetterReport frame={frame} />;
   }
   return content;
 }

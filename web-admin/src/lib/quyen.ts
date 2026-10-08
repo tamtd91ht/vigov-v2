@@ -210,6 +210,24 @@ export const QUYEN_CHUYEN_VAN_BAN = "document.route";
 export const QUYEN_XEM_VAN_BAN = "document.read";
 
 /**
+ * `petition.create` — "Tiếp nhận đơn thư" (`service-identity/migrations/0001_init.sql:302`). The key of
+ * three citizen-letter routes (`service-documents/internal/http/routes_citizen_letter.go`): book a
+ * letter, route it, correct its sender — and of the duplicate check that serves the booking form.
+ * It ALSO opens the status / result / log routes for a letter assigned to somebody else (C13/C14):
+ * the server asks the same checker for it inside those handlers.
+ *
+ * HIDING IS CONVENIENCE, NOT PROTECTION — the server checks on every call (rule 5, forbidden #1).
+ */
+export const PETITION_CREATE_PERMISSION = "petition.create";
+
+/**
+ * `petition.read` — "Xem đơn thư" (`0001_init.sql:303`). The key of every citizen-letter READ (list,
+ * detail, log, report) and the route-level half of status / result / log-entries; the other half —
+ * "the letter's assignee OR `petition.create`" — is decided by the server on the row.
+ */
+export const PETITION_READ_PERMISSION = "petition.read";
+
+/**
  * Khoá quyền XEM sổ nhiệm vụ — `task.read`, "Xem nhiệm vụ"
  * (`service-identity/migrations/0001_init.sql:311`).
  *

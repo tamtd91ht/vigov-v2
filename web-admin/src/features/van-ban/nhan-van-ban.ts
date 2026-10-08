@@ -509,7 +509,7 @@ export const DAN_SO_DI =
  * ĐỔI CHIỀU 06/10/2026 (ADR 0068 lần 5): "Chuyển thành nhiệm vụ" NAY CÓ MỤC — prototype đặt nút ấy
  * trong ngăn chi tiết văn bản, nên nó có chỗ giữ trên màn. Cùng lượt thêm ba chỗ giữ khác prototype
  * có ở sổ văn bản đến: phạm vi "Giao cho tôi / Liên quan đến tôi", "Nhập hàng loạt từ Excel" và
- * "Xuất sổ". Mọi nút của tab Đơn thư và Báo cáo dùng chung lý do của hai mục đầu.
+ * "Xuất sổ". Hai tab Đơn thư và Báo cáo đã dựng (08/10/2026); hai mục đầu nay là Excel của chúng.
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
 export type PendingPart = {
@@ -520,19 +520,21 @@ export type PendingPart = {
 };
 
 export const PHAN_CHUA_DUNG: readonly PendingPart[] = [
-  // No service holds a citizen-letter register (`don_thu`) — no entity, no route.
+  // "Đơn thư công dân" and "Báo cáo" LEFT THIS LIST 08/10/2026: both tabs are built on the
+  // citizen-letter register of `service-documents` (ADR 0078 #2). What the prototype has there and the
+  // server does not are the two entries below (ADR 0078 #6).
+  // No import route for the citizen-letter register.
   {
-    ten: "Đơn thư công dân",
+    ten: "Nhập đơn thư từ Excel",
     viSao:
-      "Hệ thống chưa có sổ theo dõi đơn khiếu nại, tố cáo, kiến nghị, đề nghị của công dân, nên " +
-      "tab này chưa có dữ liệu để hiện.",
+      "Hệ thống chưa nhận sổ đơn thư từ tệp Excel. Hôm nay vào sổ từng đơn bằng nút “Vào sổ đơn thư”.",
   },
-  // The report counts the citizen-letter register, which does not exist yet (entry above).
+  // No export route for the citizen-letter report (and no audit convention for an export yet, rule 3 #4).
   {
-    ten: "Báo cáo",
+    ten: "Xuất báo cáo đơn thư",
     viSao:
-      "Báo cáo tiến độ tiếp nhận và xử lý đơn thư lấy số liệu từ sổ đơn thư công dân, mà sổ ấy " +
-      "hệ thống chưa có.",
+      "Hệ thống chưa xuất được báo cáo đơn thư ra tệp Excel. Số liệu trên màn hình là số liệu máy chủ " +
+      "tính cho năm đang chọn.",
   },
   // "Quét & OCR" LEFT THIS LIST 08/10/2026 (ADR 0078 #5): the prototype has no such button (the
   // commune asked for it to go, 17/09/2026), so the screen no longer draws a "?" for it.
@@ -568,8 +570,8 @@ export const PHAN_CHUA_DUNG: readonly PendingPart[] = [
   {
     ten: "Chuyển thành nhiệm vụ",
     viSao:
-      "Tạo nhiệm vụ thẳng từ một văn bản đến cần sổ văn bản và sổ nhiệm vụ trao đổi với nhau, việc " +
-      "ấy hệ thống chưa có. Hôm nay vẫn giao việc được ở màn Nhiệm vụ.",
+      "Tạo nhiệm vụ thẳng từ một văn bản đến hay một đơn thư cần sổ văn bản và sổ nhiệm vụ trao đổi " +
+      "với nhau, việc ấy hệ thống chưa có. Hôm nay vẫn giao việc được ở màn Nhiệm vụ.",
   },
   // The incoming record has no source field (manual / Excel / scan): the prototype's "Nguồn nhập"
   // column and "Nguồn vào sổ" cell (ADR 0078 #6).

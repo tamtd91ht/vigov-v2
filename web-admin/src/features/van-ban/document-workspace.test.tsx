@@ -65,12 +65,12 @@ describe("khung trang Văn bản & đơn thư", () => {
     expect(tabs).toEqual(["Văn bản đến", "Văn bản đi", "Đơn thư công dân", "Báo cáo"]);
   });
 
-  it("nút đầu trang của tab nằm TRONG đầu trang, trước thanh tab, cao 40px; không còn “Quét & OCR”", () => {
+  it("phiên chưa đọc xong: đầu trang CHƯA vẽ nút ghi nào (ba trạng thái, không hai); không còn “Quét & OCR”", () => {
+    // Server render: no effect runs, so the session is "not read yet" — neither "may book" nor
+    // "may not". The booking button appears once the session says `petition.create`
+    // (`letter-register.test.tsx` covers both answers).
     const header = html.slice(0, html.indexOf('role="tablist"'));
-    expect(header).toContain("Vào sổ đơn thư");
-    expect(header).toContain("hoặc");
-    expect(header).toContain("Nhập từ Excel");
-    expect(header).toContain("[&amp;_button:not([data-pending-marker])]:h-10");
+    expect(header).not.toContain("Vào sổ đơn thư");
     expect(html).not.toContain("OCR");
   });
 });
