@@ -3,9 +3,6 @@ import { describe, expect, it } from "vitest";
 
 import type { KetQua } from "@/lib/api/goi";
 import type {
-  identity_danhSachCaLamBuRa,
-  identity_danhSachCaLamViecRa,
-  identity_danhSachNgayNghiLeRa,
   identity_danhSachSLARa,
   identity_dongSLARa,
   identity_phienHienTaiRa,
@@ -24,6 +21,10 @@ import {
 } from "./tab-thoi-han-xu-ly";
 
 /**
+ * Tab "Thời hạn xử lý" since ADR 0079 D2 holds the SLA table only; the three calendar tables and their
+ * checks moved to `working-calendar-tab.test.tsx` with their code. Of the five points below, #5 (the
+ * holiday sentence) now lives there; the rest stay here.
+ *
  * NĂM ĐIỀU TỆP NÀY CANH, và cả năm đều là những thứ một lần sửa MỘT DÒNG phá được mà không phép
  * kiểm nào khác thấy:
  *
@@ -52,18 +53,7 @@ import {
 
 const KHONG_LAM_GI: ThaoTacThoiHan = {
   gieoThoiHan: () => {},
-  gieoTuan: () => {},
-  gieoNgayLe: () => {},
   suaThoiHan: () => {},
-  themCa: () => {},
-  suaCa: () => {},
-  xoaCa: () => {},
-  themNghi: () => {},
-  suaNghi: () => {},
-  xoaNghi: () => {},
-  themLamBu: () => {},
-  suaLamBu: () => {},
-  xoaLamBu: () => {},
 };
 
 const DONG_SLA: identity_dongSLARa = {
@@ -97,17 +87,6 @@ function phienVoi(quyen: string[]): KetQua<identity_phienHienTaiRa> {
 const SLA_CO_DONG = ok<identity_danhSachSLARa>({ items: [DONG_SLA], problems: [] });
 const SLA_RONG = ok<identity_danhSachSLARa>({ items: [], problems: [] });
 
-const TUAN_CO_CA = ok<identity_danhSachCaLamViecRa>({
-  items: [
-    { id: "01J00000000000000000000CA", weekday: 1, start: "07:30:00", end: "11:30:00", note: "Buổi sáng" },
-  ],
-  problems: [],
-});
-const TUAN_RONG = ok<identity_danhSachCaLamViecRa>({ items: [], problems: [] });
-
-const NGHI_RONG = ok<identity_danhSachNgayNghiLeRa>({ items: [] });
-const LAM_BU_RONG = ok<identity_danhSachCaLamBuRa>({ items: [], problems: [] });
-
 function ve(
   du: Partial<DuLieuTab> = {},
   them: { coQuyenGhi?: boolean; cauDaXong?: string; fieldLabels?: ReadonlyMap<string, string> } = {},
@@ -116,21 +95,14 @@ function ve(
     <ManThoiHanXuLy
       du={{
         thoiHan: SLA_CO_DONG,
-        tuan: TUAN_CO_CA,
-        nghi: NGHI_RONG,
-        lamBu: LAM_BU_RONG,
         ...du,
       }}
-      nam={2026}
-      namGoc={2026}
-      datNam={() => {}}
       coQuyenGhi={them.coQuyenGhi ?? true}
       fieldLabels={them.fieldLabels}
       thieuQuyen={false}
       thaoTac={KHONG_LAM_GI}
       cauDaXong={them.cauDaXong ?? ""}
       form={null}
-      nhomForm={null}
       loiMayChuNgoaiForm=""
       dangGui={false}
     />,
@@ -148,25 +120,14 @@ describe("khối 'đơn vị chưa khai xong'", () => {
     expect(html).toContain("Bảng Thời hạn xử lý đang trống");
   });
 
-  it("giờ làm việc RỖNG → khối vẫn có mặt, dù bảng thời hạn đã đầy", () => {
-    // Điều kiện `&&` thay cho `||` ở đây sẽ tạo ra trạng thái im lặng nguy hiểm nhất: xã đã gieo
-    // thời hạn, tưởng xong, mà `ResolveDeadlines` vẫn từ chối vì không đếm được giờ làm việc nào.
-    const html = ve({ tuan: TUAN_RONG });
-
-    expect(html).toContain("Đơn vị chưa khai xong phần bắt buộc");
-    expect(html).toContain("Giờ làm việc trong tuần đang trống");
-    expect(html).toContain("chưa nhận được phản ánh của người dân");
-  });
-
-  it("khối mang ĐÚNG nút gieo của bảng đang thiếu, không mang nút của bảng đã đầy", () => {
-    const html = ve({ thoiHan: SLA_RONG, tuan: TUAN_CO_CA });
+  it("khối mang ĐÚNG nút gieo của bảng thời hạn, và chỉ nó — lịch tuần ở tab Lịch làm việc (ADR 0079 D2)", () => {
+    const html = ve({ thoiHan: SLA_RONG });
 
     // Câu `problems` của máy chủ gọi đích danh nhãn nút này; đặt tên khác đi là để máy chủ chỉ vào
     // một cái nút không tồn tại trên màn hình.
     expect(html).toContain("Gieo thời hạn mặc định");
-    // Lịch tuần đã có ca, nên không có nút gieo tuần TRONG KHỐI — nhưng vẫn có nút vá lại ở bảng
-    // giờ làm việc phía dưới, nên đếm bằng số lần xuất hiện chứ không bằng `not.toContain`.
-    expect(html.split("Gieo giờ làm việc mặc định").length - 1).toBe(1);
+    expect(html).not.toContain("Gieo giờ làm việc mặc định");
+    expect(html).not.toContain("Giờ làm việc trong tuần đang trống");
   });
 
   it("CẢ HAI bảng đã có dòng → khối VẮNG MẶT", () => {
@@ -177,7 +138,7 @@ describe("khối 'đơn vị chưa khai xong'", () => {
   });
 
   it("chưa đọc xong → khối VẮNG MẶT, và trang nói đang tải", () => {
-    const html = ve({ thoiHan: null, tuan: null });
+    const html = ve({ thoiHan: null });
 
     expect(html).not.toContain("Đơn vị chưa khai xong phần bắt buộc");
     expect(html).toContain("Đang tải bảng thời hạn xử lý…");
@@ -342,33 +303,12 @@ describe("cột thứ sáu và loại việc thứ tư (migration 0016 của ide
   });
 });
 
-describe("gieo ngày nghỉ lễ nợ người bấm một câu", () => {
-  it("câu Tết / Giỗ Tổ / ngày liền kề còn thiếu đứng cạnh kết quả gieo", () => {
-    const html = ve({}, { cauDaXong: "Năm 2026: đã thêm 4 ngày nghỉ lễ theo dương lịch." });
-
-    expect(html).toContain("Năm 2026: đã thêm 4 ngày nghỉ lễ theo dương lịch.");
-    expect(html).toContain("Tết Nguyên đán");
-    expect(html).toContain("Giỗ Tổ Hùng Vương");
-    expect(html).toContain("ngày liền kề 02/9");
-    expect(html).toContain("mọi thời hạn rơi vào dịp Tết đều bị tính sai");
-  });
-
-  it("câu ấy đứng sẵn cả khi chưa bấm gieo — nó là sự thật thường trực, không phải một lời đáp", () => {
-    expect(ve()).toContain("Tết Nguyên đán, Giỗ Tổ Hùng Vương và ngày liền kề 02/9 CHƯA có");
-  });
-});
-
-describe("cổng quyền bọc phần GHI, không bọc bảng", () => {
-  it("thiếu quyền: bảng vẫn hiện đủ dòng, chỉ nút ghi vắng", () => {
-    // Ẩn cả bảng là giao diện từ chối điều máy chủ đang phục vụ. Ba tuyến đọc lịch là
-    // `any-authenticated`, và `GET /api/v1/sla` thì máy chủ tự trả 403 — không cần cổng thứ hai.
+describe("nút ghi đi theo `admin.sla`", () => {
+  it("thiếu quyền ghi: bảng vẫn hiện đủ dòng, chỉ nút ghi vắng", () => {
     const html = ve({}, { coQuyenGhi: false });
 
     expect(html).toContain("16 giờ làm việc");
-    expect(html).toContain("Buổi sáng");
-    expect(html).not.toContain(">Sửa<");
-    expect(html).not.toContain(">Xoá<");
-    expect(html).not.toContain("Thêm ca làm việc");
+    expect(html).not.toContain('aria-label="Sửa thời hạn');
     expect(html).not.toContain("Gieo thời hạn mặc định");
   });
 
@@ -379,8 +319,7 @@ describe("cổng quyền bọc phần GHI, không bọc bảng", () => {
     expect(quyet).toEqual({ hien: true });
 
     const html = ve({}, { coQuyenGhi: quyet.hien });
-    expect(html).toContain(">Sửa<");
-    expect(html).toContain("Thêm ca làm việc");
+    expect(html).toContain('aria-label="Sửa thời hạn');
   });
 
   it("không có `admin.sla` (dù có mọi khoá admin khác): KHÔNG một nút ghi nào", () => {
@@ -389,32 +328,7 @@ describe("cổng quyền bọc phần GHI, không bọc bảng", () => {
     expect(quyet).toEqual({ hien: false, vi: "khong-du-quyen" });
 
     const html = ve({}, { coQuyenGhi: quyet.hien });
-    expect(html).not.toContain(">Sửa<");
-    expect(html).not.toContain("Thêm ca làm việc");
-  });
-
-  it("có quyền: nút ghi có mặt ở cả bốn bảng", () => {
-    const html = ve();
-
-    expect(html).toContain(">Sửa<");
-    expect(html).toContain(">Xoá<");
-    expect(html).toContain("Thêm ca làm việc");
-    expect(html).toContain("Thêm ngày nghỉ lễ");
-    expect(html).toContain("Thêm ca làm bù");
-  });
-});
-
-describe("trạng thái rỗng của hai bảng theo năm", () => {
-  it("năm chưa khai ngày nghỉ nào thì nói ra hệ quả, không để trang trống", () => {
-    const html = ve({ nghi: NGHI_RONG });
-
-    expect(html).toContain("Năm 2026 chưa khai ngày nghỉ lễ nào");
-  });
-
-  it("năm không có ngày làm bù là BÌNH THƯỜNG, và câu chữ phải phân biệt với lịch tuần trống", () => {
-    const html = ve({ lamBu: LAM_BU_RONG });
-
-    expect(html).toContain("Phần lớn các năm là như vậy");
+    expect(html).not.toContain('aria-label="Sửa thời hạn');
   });
 });
 

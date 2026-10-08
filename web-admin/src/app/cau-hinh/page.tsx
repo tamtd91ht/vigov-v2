@@ -1,11 +1,10 @@
-import { Settings } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
-import { PageHeader } from "@/components/ui/page-header";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
+import { ConfigPageHeader } from "@/features/cau-hinh/config-page-header";
 import { KhungTabCauHinh } from "@/features/cau-hinh/khung-tab-cau-hinh";
 import { movedTabRoute } from "@/features/cau-hinh/moved-tabs";
 import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
@@ -26,7 +25,10 @@ import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
  * chủ thư — chưa có tuyến nào trong hợp đồng REST. Một thanh mười tab mà bốn tab bấm vào không ra
  * gì là bốn lần hứa hẹn suông, nên thanh tab chỉ mọc thêm khi tuyến mọc thêm.
  *
- * TAB THỜI HẠN XỬ LÝ (§8) NAY ĐỦ CẢ BỐN BẢNG, VÀ ĐÓ LÀ TAB GẤP NHẤT TRONG NĂM. Bảng thời hạn —
+ * BA BẢNG LỊCH NAY Ở TAB "LỊCH LÀM VIỆC" (chủ dự án 08/10/2026, ADR 0079 D1/D2), tab Thời hạn xử lý chỉ
+ * còn bảng thời hạn và ẩn khi thiếu `admin.sla`. Đoạn dưới kể lý do của bốn bảng, vẫn đúng:
+ *
+ * TAB THỜI HẠN XỬ LÝ (§8) TỪNG ĐỦ CẢ BỐN BẢNG, VÀ ĐÓ LÀ TAB GẤP NHẤT TRONG NĂM. Bảng thời hạn —
  * số giờ tiếp nhận và xử lý xong — đã có tuyến (`/api/v1/sla`), cùng ba bảng lịch mà §8 nêu ở
  * cuối (`/working-hours`, `/public-holidays`, `/swap-working-days`). Bốn bảng ấy là nền của cách
  * đếm hạn theo giờ làm việc (ADR 0007), và HAI trong số đó rỗng thì xã KHÔNG vào sổ được văn bản
@@ -56,7 +58,8 @@ import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
  *   |-----------------|----------------|-------------------------------------------------------|
  *   | Sơ đồ tổ chức   | `admin.org`    | chỉ nút ghi — tuyến đọc `any-authenticated`           |
  *   | Danh mục        | `admin.lookup` | chỉ nút ghi — cùng lý do                              |
- *   | Thời hạn xử lý  | `admin.sla`    | chỉ nút ghi; `GET /sla` đòi khoá, máy chủ tự trả 403  |
+ *   | Thời hạn xử lý  | `admin.sla`    | cả tab — `GET /sla` đòi khoá (ADR 0079 D1)             |
+ *   | Lịch làm việc   | `admin.sla`    | chỉ nút ghi — ba tuyến đọc lịch `any-authenticated`   |
  *   | Thôn/Tổ dân phố | —              | không cổng — phần chỉ xem, tuyến `any-authenticated`  |
  *
  * Ẩn cả một phần mà máy chủ vẫn phục vụ là để GIAO DIỆN quyết định điều máy chủ không từ chối —
@@ -67,10 +70,6 @@ import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
  * trên từng lời gọi API thật (xem `features/cau-hinh/tab-nguoi-dung.tsx`).
  */
 export const dynamic = "force-dynamic";
-
-const CONFIG_SUBTITLE =
-  "Sơ đồ tổ chức, địa bàn dân cư, danh mục nghiệp vụ và thời hạn xử lý của đơn vị. Tài khoản và " +
-  "phân quyền nằm ở menu Người dùng.";
 
 // Tab title carries the signed-in commune, never the product name (ADR 0068 §13); a Host
 // matching no commune 404s here exactly as the page body does.
@@ -97,11 +96,13 @@ export default async function TrangCauHinh({
         <div className="khung-trang">
         <DauTrang />
         <main className="than-trang">
-          {/* Title and subtitle are the prototype's own words (`ConfigWorkspace`, ADR 0068 lần 5). */}
-          <PageHeader icon={Settings} title="Cấu hình hệ thống" subtitle={<span>{CONFIG_SUBTITLE}</span>} />
-          {/* Thứ tự tab của đặc tả §0 nằm ở `TAB_CAU_HINH` (`thanh-tab-cau-hinh.ts`). `min-w-0`: a
-              wide tab (the permission matrix) scrolls inside its own region, never the page. */}
-          <div className="flex min-w-0 flex-col gap-4">
+          {/* Spec 02 frame: `than-trang` is the page's `p-7` (28px from 768px, 16px below — every
+              page's shell), then the `mb-6` header with no icon and no button. */}
+          <ConfigPageHeader />
+          {/* Thứ tự tab nằm ở `TAB_CAU_HINH` (`thanh-tab-cau-hinh.ts`). `min-w-0`: a wide tab scrolls
+              inside its own region, never the page. No gap here: the frame owns the 28px between the
+              strip and the content (`khung-tab-cau-hinh.tsx`). */}
+          <div className="min-w-0">
             <KhungTabCauHinh />
           </div>
         </main>

@@ -1,6 +1,7 @@
 /**
  * Một xã mới đã khai đủ hai bảng BẮT BUỘC chưa — phép quyết định đứng sau khối cảnh báo ở đầu tab
- * "Thời hạn xử lý". Hàm thuần: không gọi mạng, không dựng DOM.
+ * "Thời hạn xử lý" (bảng thời hạn) và tab "Lịch làm việc" (lịch tuần) — mỗi tab truyền "chuaBiet" cho
+ * bảng không thuộc về nó (ADR 0079 D2). Hàm thuần: không gọi mạng, không dựng DOM.
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
  * VÌ SAO KHỐI ẤY LÀ PHẦN ĐÁNG GIÁ NHẤT CỦA MÀN HÌNH, chứ không phải bảng số liệu.

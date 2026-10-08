@@ -40,7 +40,7 @@ afterEach(() => {
 });
 
 describe("tab nào của màn Cấu hình được hiện", () => {
-  it("đủ khoá cổng (trừ `admin.org`) → mười tab, đúng thứ tự §0 trừ hai tab đã rời màn, Kênh Zalo sau Máy chủ thư, Nhật ký hệ thống cuối", async () => {
+  it("đủ khoá cổng (trừ `admin.org`) → mười một tab theo thứ tự ADR 0079 D1: Lịch làm việc ngay sau Thời hạn xử lý, Kênh Zalo sau Máy chủ thư, Nhật ký hệ thống cuối", async () => {
     const phien = await phienVoi(
       phanHoiPhien(["admin.user", "admin.role", "asset.read", "admin.lookup", "admin.sla", "admin.audit"]),
     );
@@ -52,12 +52,29 @@ describe("tab nào của màn Cấu hình được hiện", () => {
       "Trường bản đồ",
       "Lời hệ thống",
       "Thời hạn xử lý",
+      "Lịch làm việc",
       "Tự động hoá",
       "Máy chủ thư",
       "Kênh Zalo",
       "Nhật ký hệ thống",
     ]);
     expect(coThanhTab(phien, hien.length)).toBe(true);
+  });
+
+  it("Thời hạn xử lý đi theo `admin.sla` (ADR 0079 D1) — ca bị từ chối trước; Lịch làm việc thì không cổng", async () => {
+    // `GET /api/v1/sla` declares `admin.sla`: without it the tab's one read is a 403, so the tab hides.
+    // The three calendar reads are any-authenticated, so "Lịch làm việc" shows to every account.
+    const denied = await phienVoi(
+      phanHoiPhien(["admin.user", "admin.role", "asset.read", "admin.lookup", "admin.audit", "admin.org", "admin.slas", "ADMIN.SLA"]),
+    );
+    const deniedTabs = nhan(cacTabHien(TAB_CAU_HINH, denied));
+    expect(deniedTabs).not.toContain("Thời hạn xử lý");
+    expect(deniedTabs).toContain("Lịch làm việc");
+    const holder = await phienVoi(phanHoiPhien(["admin.sla"]));
+    const holderTabs = nhan(cacTabHien(TAB_CAU_HINH, holder));
+    expect(holderTabs).toContain("Thời hạn xử lý");
+    expect(holderTabs).toContain("Lịch làm việc");
+    expect(TAB_CAU_HINH.find((t) => t.ma === "lich-lam-viec")?.cong).toBeNull();
   });
 
   it("Kênh Zalo đi theo `admin.lookup` (ADR 0074 #6) — ca bị từ chối trước", async () => {
@@ -124,10 +141,10 @@ describe("tab nào của màn Cấu hình được hiện", () => {
     expect(nhan(cacTabHien(TAB_CAU_HINH, denied))).not.toContain("Nhật ký hệ thống");
   });
 
-  it("thiếu mọi khoá cổng → bốn tab; Người dùng, Phân quyền, Trường bản đồ, Máy chủ thư ẩn", async () => {
+  it("thiếu mọi khoá cổng → bốn tab; Người dùng, Phân quyền, Trường bản đồ, Máy chủ thư, Thời hạn xử lý ẩn", async () => {
     const phien = await phienVoi(phanHoiPhien(["task.read"]));
     const hien = cacTabHien(TAB_CAU_HINH, phien);
-    expect(nhan(hien)).toEqual(["Sơ đồ tổ chức", "Thôn / Tổ dân phố", "Danh mục", "Thời hạn xử lý"]);
+    expect(nhan(hien)).toEqual(["Sơ đồ tổ chức", "Thôn / Tổ dân phố", "Danh mục", "Lịch làm việc"]);
     expect(coThanhTab(phien, hien.length)).toBe(true);
   });
 
@@ -139,14 +156,14 @@ describe("tab nào của màn Cấu hình được hiện", () => {
   });
 
   it("KHÔNG thêm cổng cho bốn tab đọc mở: không khoá nào thì bốn tab ấy vẫn hiện", async () => {
-    // Tuyến đọc của bốn tab này mở cho mọi tài khoản đã đăng nhập (GET /sla thì máy chủ tự 403).
+    // Tuyến đọc của bốn tab này mở cho mọi tài khoản đã đăng nhập (ba bảng lịch: any-authenticated).
     // Giao diện ẩn chúng là giao diện từ chối điều máy chủ không từ chối — luật 5, cấm #1.
     const khong = await phienVoi(phanHoiPhien([]));
     expect(nhan(cacTabHien(TAB_CAU_HINH, khong))).toEqual([
       "Sơ đồ tổ chức",
       "Thôn / Tổ dân phố",
       "Danh mục",
-      "Thời hạn xử lý",
+      "Lịch làm việc",
     ]);
   });
 
@@ -166,6 +183,7 @@ describe("tab nào của màn Cấu hình được hiện", () => {
     expect(hien).not.toContain("Kênh Zalo");
     expect(hien).not.toContain("Lời hệ thống");
     expect(hien).not.toContain("Tự động hoá");
+    expect(hien).not.toContain("Thời hạn xử lý");
     expect(hien).not.toContain("Nhật ký hệ thống");
     expect(hien).not.toContain("Nhận diện xã");
   });

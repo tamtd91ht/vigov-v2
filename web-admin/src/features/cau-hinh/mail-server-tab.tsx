@@ -202,7 +202,7 @@ export function MailServerView({
     // (icon + 13px bold), the fields in two columns with host and sender name full width, the switches
     // in one muted box, then "Lưu cấu hình" and — right-aligned — the test send.
     <section
-      className="tab-danh-muc m-0 flex max-w-3xl min-w-0 flex-col gap-3 rounded-card border border-line bg-surface p-4 [&>*]:my-0"
+      className="tab-danh-muc flex max-w-3xl min-w-0 flex-col gap-3 rounded-card border border-line bg-surface p-4 [&>*]:my-0"
       aria-labelledby="tieu-de-may-chu-thu"
     >
       <div className="min-w-0">

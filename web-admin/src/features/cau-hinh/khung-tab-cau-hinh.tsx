@@ -2,6 +2,7 @@
 
 import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
+import { Tab, TabList } from "@/components/ui/tabs";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 import { cn } from "@/lib/cn";
 
@@ -15,6 +16,7 @@ import { TabDanhMuc } from "./tab-danh-muc";
 import { TabSoDoToChuc } from "./tab-so-do-to-chuc";
 import { TabThoiHanXuLy } from "./tab-thoi-han-xu-ly";
 import { TabThonToDanPho } from "./tab-thon-to-dan-pho";
+import { WorkingCalendarTab } from "./working-calendar-tab";
 import { ZaloChannelTab } from "./zalo-channel-tab";
 import {
   cacTabHien,
@@ -36,6 +38,7 @@ const NOI_DUNG: Record<MaTabCauHinh, (active: boolean) => ReactNode> = {
   "truong-ban-do": () => <MapFieldTab />,
   "loi-he-thong": () => <SystemMessagesTab />,
   "thoi-han-xu-ly": () => <TabThoiHanXuLy />,
+  "lich-lam-viec": () => <WorkingCalendarTab />,
   "tu-dong-hoa": () => <AutomationTab />,
   "may-chu-thu": () => <MailServerTab />,
   "kenh-zalo": () => <ZaloChannelTab />,
@@ -90,52 +93,44 @@ export function KhungTabCauHinh() {
         </p>
       )}
 
-      {/* The prototype's `TabsList` (ADR 0068 lần 5): one muted rounded strip, 3px inset, the open
-          tab a white raised segment; words only, no icons. Eleven tabs do not fit 320px, so the
-          strip scrolls sideways INSIDE its own box (`max-w-full overflow-x-auto`) and never widens
-          the page. */}
+      {/* The prototype's shadcn `TabsList` (spec 02, ADR 0079): the `muted` strip (#edf3f8), 3px inset,
+          32px tall, segments `px-1.5 text-sm font-medium` at 60% foreground; the open one a WHITE raised
+          segment (`bg-surface` here — this app's `bg-background` is the page colour, not white). Twelve
+          tabs do not fit 320px, so the strip scrolls sideways inside its OWN box and never widens the
+          page; the scroller wraps the strip so a scrollbar never eats the 32px track. */}
       {coThanh && (
-        <div className="mb-1 max-w-full min-w-0 overflow-x-auto">
-          <div
-            role="tablist"
-            aria-label="Các phần cấu hình"
-            className="inline-flex w-max items-center gap-0.5 rounded-lg bg-surface-subtle p-[3px]"
-          >
+        <div className="max-w-full min-w-0 overflow-x-auto">
+          <TabList aria-label="Các phần cấu hình" className="w-max max-w-none overflow-visible">
             {hien.map((t, i) => (
-              <button
+              <Tab
                 key={t.ma}
-                ref={(el) => {
+                ref={(el: HTMLButtonElement | null) => {
                   nutTab.current[t.ma] = el;
                 }}
-                type="button"
-                role="tab"
                 id={idTab(t.ma)}
-                aria-selected={t.ma === chon}
+                selected={t.ma === chon}
                 aria-controls={idPanel(t.ma)}
                 tabIndex={t.ma === chon ? 0 : -1}
                 onClick={() => datDangChon(t.ma)}
                 onKeyDown={(e) => xuLyPhim(e, i)}
-                className={cn(
-                  "inline-flex h-8 shrink-0 cursor-pointer items-center rounded-md border border-solid border-transparent bg-transparent px-3 [font-family:inherit] text-[13px] font-medium whitespace-nowrap text-ink-500",
-                  "transition-[color,background-color] duration-(--dur-fast) ease-(--ease) hover:text-ink-900",
-                  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500",
-                  t.ma === chon && "bg-surface text-ink-900 shadow-sm",
-                )}
+                className={cn(t.ma === chon && "bg-surface")}
               >
                 {t.nhan}
-              </button>
+              </Tab>
             ))}
-          </div>
+          </TabList>
         </div>
       )}
 
       {/* Cùng một danh sách có `key` ở cả hai trạng thái (có thanh / không thanh), nên khi thanh
-          xuất hiện React giữ nguyên các panel đã dựng — không đọc lại, không mất gì đang nhập. */}
+          xuất hiện React giữ nguyên các panel đã dựng — không đọc lại, không mất gì đang nhập.
+          28px from the strip to every tab's content (spec 02: shadcn Tabs `gap-2` + TabsContent `mt-5`);
+          the first child's own margin is zeroed so no tab can add to it. */}
       {hien.map((t) => (
         <div
           key={t.ma}
           id={idPanel(t.ma)}
-          className="panel-cau-hinh"
+          className={cn("min-w-0 [&>:first-child]:mt-0", coThanh && "mt-7")}
           hidden={t.ma !== chon}
           {...(coThanh
             ? { role: "tabpanel", "aria-labelledby": idTab(t.ma), tabIndex: 0 }

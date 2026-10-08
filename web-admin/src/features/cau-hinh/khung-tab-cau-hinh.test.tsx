@@ -43,12 +43,12 @@ describe("khung tab màn Cấu hình", () => {
     phienGia = null;
     const html = renderToStaticMarkup(<KhungTabCauHinh />);
     expect(html).not.toContain('role="tablist"');
-    expect(html).toMatch(/<div id="panel-cau-hinh-so-do-to-chuc" class="panel-cau-hinh">/);
-    expect(html).toMatch(/<div id="panel-cau-hinh-danh-muc" class="panel-cau-hinh" hidden="">/);
+    expect(html).toMatch(/<div id="panel-cau-hinh-so-do-to-chuc" class="[^"]*">/);
+    expect(html).toMatch(/<div id="panel-cau-hinh-danh-muc" class="[^"]*" hidden="">/);
     expect(html).not.toContain("panel-cau-hinh-nguoi-dung");
   });
 
-  it("đủ quyền → thanh chín tab (Kênh Zalo từ 05/10/2026); tab đầu được chọn và là tab duy nhất có tabindex=0", () => {
+  it("đủ quyền trừ `admin.sla` → thanh chín tab (Lịch làm việc thay Thời hạn xử lý, ADR 0079 D1); tab đầu được chọn và là tab duy nhất có tabindex=0", () => {
     phienGia = phienCo(["admin.user", "admin.role", "asset.read", "admin.lookup", "admin.audit"]);
     const html = renderToStaticMarkup(<KhungTabCauHinh />);
     expect(html).toContain('role="tablist"');
@@ -67,6 +67,8 @@ describe("khung tab màn Cấu hình", () => {
     phienGia = phienCo(["task.read"]);
     const html = renderToStaticMarkup(<KhungTabCauHinh />);
     expect(soNutTab(html)).toBe(4);
+    expect(html).toContain('id="tab-cau-hinh-lich-lam-viec"');
+    expect(html).not.toContain("panel-cau-hinh-thoi-han-xu-ly");
     expect(html).not.toContain(">Người dùng</button>");
     expect(html).not.toContain(">Phân quyền</button>");
     expect(html).not.toContain("panel-cau-hinh-nguoi-dung");
@@ -114,8 +116,31 @@ describe("khung tab màn Cấu hình", () => {
     expect(html).not.toContain(">Phân quyền</button>");
     expect(html).not.toContain("panel-cau-hinh-nguoi-dung");
     expect(html).not.toContain("panel-cau-hinh-phan-quyen");
-    // Eleven with "Kênh Zalo" (ADR 0074 #6).
-    expect(soNutTab(html)).toBe(11);
+    // Twelve: "Kênh Zalo" (ADR 0074 #6) and "Lịch làm việc" (ADR 0079 D1).
+    expect(soNutTab(html)).toBe(12);
+  });
+
+  it("CA BỊ TỪ CHỐI: thiếu `admin.sla` → không nút, không panel Thời hạn xử lý; Lịch làm việc vẫn có (ADR 0079 D1)", () => {
+    phienGia = phienCo(["admin.user", "admin.role", "admin.org", "admin.lookup", "admin.audit", "asset.read", "admin.slas"]);
+    const html = renderToStaticMarkup(<KhungTabCauHinh />);
+    expect(html).not.toContain(">Thời hạn xử lý</button>");
+    expect(html).not.toContain("panel-cau-hinh-thoi-han-xu-ly");
+    expect(html).toContain(">Lịch làm việc</button>");
+    expect(html).toContain('id="panel-cau-hinh-lich-lam-viec"');
+  });
+
+  it("`admin.sla` → Thời hạn xử lý rồi Lịch làm việc, liền nhau, theo thứ tự ADR 0079 D1", () => {
+    phienGia = phienCo(["admin.sla"]);
+    const html = renderToStaticMarkup(<KhungTabCauHinh />);
+    const order = [...html.matchAll(/role="tab"[^>]*>([^<]+)<\/button>/g)].map((m) => m[1]);
+    expect(order).toEqual([
+      "Sơ đồ tổ chức",
+      "Thôn / Tổ dân phố",
+      "Danh mục",
+      "Thời hạn xử lý",
+      "Lịch làm việc",
+      "Tự động hoá",
+    ]);
   });
 
   it("phiên đọc hỏng → câu của máy chủ vẫn ra tới màn hình", () => {

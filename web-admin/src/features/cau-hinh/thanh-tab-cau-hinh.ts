@@ -9,11 +9,12 @@
  * Trường bản đồ (`asset.read`, khoá tuyến ĐỌC
  * `GET /map-field-schemas`), Lời hệ thống và Máy chủ thư (`admin.lookup`, khoá mọi tuyến của hai
  * tab ấy, cả tuyến đọc), Tự động hoá (`admin.sla`, khoá cả ba tuyến `automation-jobs`) và Nhật ký
- * hệ thống (`admin.audit`, khoá năm tuyến `*-audit-entries`), Nhận diện xã (`admin.org`) — gọi
- * đúng hàm của `quyen-tab.ts` mà chính tab ấy gọi, để chỉ có MỘT nguồn quyết định. Bốn tab kia KHÔNG
- * có cổng (`cong: null`) vì tuyến đọc của chúng mở cho mọi tài khoản đã đăng nhập; riêng `GET /sla`
- * thì máy chủ tự trả 403 và tab Thời hạn xử lý hiện nguyên câu ấy. Thêm cổng cho bốn tab này là để
- * GIAO DIỆN từ chối điều máy chủ không từ chối — luật 5, cấm #1.
+ * hệ thống (`admin.audit`, khoá năm tuyến `*-audit-entries`), Nhận diện xã (`admin.org`), Thời hạn
+ * xử lý (`admin.sla`, khoá của `GET /sla` — ADR 0079 D1) — gọi đúng hàm của `quyen-tab.ts` mà chính
+ * tab ấy gọi, để chỉ có MỘT nguồn quyết định. Bốn tab kia (Sơ đồ tổ chức, Thôn / Tổ dân phố, Danh
+ * mục, Lịch làm việc) KHÔNG có cổng (`cong: null`) vì tuyến đọc của chúng mở cho mọi tài khoản đã
+ * đăng nhập. Thêm cổng cho bốn tab này là để GIAO DIỆN từ chối điều máy chủ không từ chối — luật 5,
+ * cấm #1.
  *
  * Đây vẫn là TIỆN DỤNG, không phải biện pháp: máy chủ kiểm quyền trên từng yêu cầu.
  */
@@ -27,6 +28,7 @@ import {
   brandingTabDecision,
   mailServerTabDecision,
   mapFieldTabDecision,
+  slaTabDecision,
   systemMessagesTabDecision,
   zaloChannelTabDecision,
   type QuyetDinhTab,
@@ -39,6 +41,7 @@ export type MaTabCauHinh =
   | "truong-ban-do"
   | "loi-he-thong"
   | "thoi-han-xu-ly"
+  | "lich-lam-viec"
   | "tu-dong-hoa"
   | "may-chu-thu"
   | "kenh-zalo"
@@ -69,6 +72,10 @@ export type MoTaTab<M extends string = MaTabCauHinh> = {
  *
  * "Kênh Zalo" (ADR 0074 #6, 05/10/2026) is not in §0 either; it sits right after "Máy chủ thư" — the
  * other outbound channel of the commune, behind the same `admin.lookup` key.
+ *
+ * OWNER DECISION 08/10/2026 (ADR 0079 D1): "Thời hạn xử lý" is gated on `admin.sla` like the prototype,
+ * and its three calendar tables moved to a tab of their own, "Lịch làm việc", right after it and with
+ * NO gate — the calendar reads are `any-authenticated`; its write buttons still need `admin.sla`.
  */
 export const TAB_CAU_HINH: readonly MoTaTab[] = [
   { ma: "so-do-to-chuc", nhan: "Sơ đồ tổ chức", cong: null },
@@ -76,7 +83,8 @@ export const TAB_CAU_HINH: readonly MoTaTab[] = [
   { ma: "danh-muc", nhan: "Danh mục", cong: null },
   { ma: "truong-ban-do", nhan: "Trường bản đồ", cong: mapFieldTabDecision },
   { ma: "loi-he-thong", nhan: "Lời hệ thống", cong: systemMessagesTabDecision },
-  { ma: "thoi-han-xu-ly", nhan: "Thời hạn xử lý", cong: null },
+  { ma: "thoi-han-xu-ly", nhan: "Thời hạn xử lý", cong: slaTabDecision },
+  { ma: "lich-lam-viec", nhan: "Lịch làm việc", cong: null },
   { ma: "tu-dong-hoa", nhan: "Tự động hoá", cong: automationTabDecision },
   { ma: "may-chu-thu", nhan: "Máy chủ thư", cong: mailServerTabDecision },
   { ma: "kenh-zalo", nhan: "Kênh Zalo", cong: zaloChannelTabDecision },

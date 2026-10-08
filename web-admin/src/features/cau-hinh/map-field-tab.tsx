@@ -239,7 +239,7 @@ export function MapFieldTab() {
   return (
     // The prototype's `AssetFieldTable` (ADR 0068 lần 5): no card, no visible title — the type picker and
     // "Thêm trường" on one row, the form, the table, and the notes UNDER the table.
-    <section className="tab-danh-muc m-0 flex min-w-0 flex-col gap-4 [&>*]:my-0" aria-labelledby="tieu-de-truong-ban-do">
+    <section className="tab-danh-muc flex min-w-0 flex-col gap-4 [&>*]:my-0" aria-labelledby="tieu-de-truong-ban-do">
       <h2 id="tieu-de-truong-ban-do" className="an-thi-giac">
         {MAP_FIELD_TITLE}
       </h2>

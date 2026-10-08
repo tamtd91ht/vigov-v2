@@ -2599,18 +2599,9 @@ a.nav-sheet-link.is-active::before {
   border-bottom-color: var(--brand-600);
 }
 
-/* Mỗi phần tự đặt `margin-top: 2.5rem` từ thời còn dựng nối tiếp; ngay dưới thanh tab thì bớt đi. */
-.panel-cau-hinh > :first-child {
-  margin-top: 1.5rem;
-}
-
-/* ---- màn cấu hình · tab Thôn/Tổ dân phố và tab Danh mục -------------------------------- */
-
-.tab-thon-to-dan-pho,
-.tab-danh-muc,
-.tab-so-do-to-chuc {
-  margin-top: 2.5rem;
-}
+/* Cấu hình: no tab sets its own top margin any more — the frame puts 28px between the strip and every
+ * tab's content (spec 02, `khung-tab-cau-hinh.tsx`). The old `.panel-cau-hinh > :first-child` and
+ * `.tab-*` margins made that gap differ per tab. */
 
 /* SƠ ĐỒ TỔ CHỨC — cây bằng `<ul>` lồng. Mỗi cấp thụt 1rem và kẻ một đường dọc bên trái để thấy
  * được con thuộc cha nào; ở 320px ba cấp mất 3rem, vẫn còn chỗ cho tên. Không `nowrap` ở đâu: tên
@@ -2864,9 +2855,7 @@ a.nav-sheet-link.is-active::before {
 .man-nhiem-vu,
 .man-bien-ban,
 .man-thong-bao,
-.man-noi-dung,
-.tab-lich-lam-viec,
-.tab-thoi-han {
+.man-noi-dung {
   margin-top: 2rem;
 }
 

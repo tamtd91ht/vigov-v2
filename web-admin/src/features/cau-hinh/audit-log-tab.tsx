@@ -240,7 +240,7 @@ export function AuditLogView({
 
   return (
     <section
-      className="tab-danh-muc m-0 min-w-0 overflow-hidden rounded-card border border-line bg-surface shadow-sm"
+      className="tab-danh-muc min-w-0 overflow-hidden rounded-card border border-line bg-surface shadow-sm"
       aria-labelledby="tieu-de-nhat-ky"
     >
       <CardHeader className="m-0">

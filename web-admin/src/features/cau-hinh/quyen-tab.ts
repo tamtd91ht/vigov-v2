@@ -51,14 +51,24 @@ export function quyetDinhTabPhanQuyen(ketQua: KetQua<identity_phienHienTaiRa>): 
 }
 
 /**
- * Phần GHI của tab "Thời hạn xử lý" — `admin.sla`. Khác hai tab trên ở chỗ nó không ẩn cả tab: ba
- * bảng lịch đọc `any-authenticated`, còn `GET /api/v1/sla` thì máy chủ tự trả 403 cho người thiếu
- * khoá (`tab-thoi-han-xu-ly.tsx`). Khoá này chỉ quyết định nút ghi có được vẽ hay không.
+ * Write half of "Thời hạn xử lý" AND of "Lịch làm việc" — `admin.sla`, the key all eleven write
+ * routes of the four tables declare. On "Lịch làm việc" it only decides whether write buttons are
+ * drawn: the three calendar reads are `any-authenticated`, so that tab never hides.
  *
  * Tách thành một hàm có tên để bài test nói được "chỉ có `admin.sla` là đủ dùng tab này" bằng đúng
  * phép quyết định mà tab gọi, không bằng một bản chép.
  */
 export function quyetDinhGhiThoiHan(ketQua: KetQua<identity_phienHienTaiRa>): QuyetDinhTab {
+  return theoKhoaQuyen(ketQua, QUYEN_CAU_HINH_THOI_HAN);
+}
+
+/**
+ * Tab "Thời hạn xử lý" — `admin.sla`, the key `GET /api/v1/sla` declares (owner decision 08/10/2026,
+ * ADR 0079 D1). Since the three calendar tables moved to their own tab ("Lịch làm việc"), the SLA
+ * table is all this tab reads, and without the key that read is a 403 — so the tab hides as a whole,
+ * like Tự động hoá. Same key as `quyetDinhGhiThoiHan`; a separate function so the tab names its gate.
+ */
+export function slaTabDecision(ketQua: KetQua<identity_phienHienTaiRa>): QuyetDinhTab {
   return theoKhoaQuyen(ketQua, QUYEN_CAU_HINH_THOI_HAN);
 }
 
