@@ -109,3 +109,8 @@ vụ: nhiệm vụ liên kết đơn, kế thừa hạn (C9), qua hợp đồng 
 → ADR 0078 (menu theo prototype, thứ hạng prototype/câu đã chốt) · ADR 0079 lô 5 Q18 (hạn do cán bộ đặt)
 → ADR 0064 (hai hạn KN/TC, ngày lịch) · ADR 0039 (sổ đơn thư thuộc documents) · ADR 0007 (giờ làm việc)
 → C-list 24/09: `kb/90-ephemeral/tien-do/service-documents.json` → `so-don-thu-cong-dan`
+
+## Sửa đổi 08/10/2026
+
+- §3 "ADR 0007 (hai loại còn lại)" là sai: `kien-nghi-phan-anh`, `de-nghi` đếm **ngày làm việc**, không
+  phải giờ làm việc — chủ dự án chốt, xem ADR 0085 §Trả lời 08/10/2026 câu 3.

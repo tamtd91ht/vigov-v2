@@ -3,19 +3,23 @@ id: 0085-hop-dong-don-thu-sang-nhiem-vu-va-han-theo-loai-don
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: 4eb7ef27
+derived_from_commit: 2e22afda
 expires: null
 owns_facts:
-  - "chuyển đơn thư thành nhiệm vụ: tuyến trình duyệt ở service-petitions, petitions HỎI documents (ResolveCitizenLetterForTask) rồi ghi nhiệm vụ trong MỘT giao dịch; documents không ghi gì; đơn tố cáo bị chặn ở documents và không trả về gì (đề xuất 08/10/2026)"
-  - "nguồn giao nhiệm vụ thứ năm `don-thu` (nguon_id = citizen_letter.id), hạn nhiệm vụ = ngày (giờ Việt Nam) của hạn hiện tại của đơn lúc 17:00, đơn không hạn → nhiệm vụ không hạn (đề xuất 08/10/2026)"
-  - "hạn đơn thư theo loại đơn đi qua RPC riêng IdentityService.ResolveCitizenLetterDeadline, không qua ResolveDeadlines; 'xã chưa cấu hình' là câu trả lời OK riêng, mọi lỗi là từ chối hành vi (đề xuất 08/10/2026)"
+  - "chuyển đơn thư thành nhiệm vụ: tuyến trình duyệt POST /api/v1/citizen-letter-tasks ở service-petitions, petitions HỎI documents (ResolveCitizenLetterForTask) rồi ghi nhiệm vụ trong MỘT giao dịch; documents không ghi gì; đơn tố cáo bị chặn ở documents và không trả về gì (chốt 08/10/2026)"
+  - "nguồn giao nhiệm vụ thứ năm `don-thu` (nguon_id = citizen_letter.id), hạn nhiệm vụ = ngày (giờ Việt Nam) của hạn hiện tại của đơn lúc 17:00, đơn không hạn → nhiệm vụ không hạn (chốt 08/10/2026)"
+  - "hạn đơn thư theo loại đơn đi qua RPC riêng IdentityService.ResolveCitizenLetterDeadline, không qua ResolveDeadlines; 'xã chưa cấu hình' là câu trả lời OK riêng, mọi lỗi là từ chối hành vi (chốt 08/10/2026)"
+  - "quy tắc hạn theo loại đơn lưu ở bảng riêng citizen_letter_deadline_rule của identity, không thêm cột vào sla; không gieo sẵn số, chưa có dòng = 'Không đặt hạn' (chốt 08/10/2026)"
+  - "đơn vị hạn của kien-nghi-phan-anh và de-nghi là NGÀY LÀM VIỆC, không phải giờ làm việc (chủ dự án 08/10/2026, theo C8 24/09)"
+  - "cách đếm ngày của hạn đơn thư theo Bộ luật Dân sự: không tính ngày đầu, ngày cuối rơi vào ngày nghỉ dời sang ngày làm việc kế tiếp, hạn hết lúc cuối giờ làm việc của xã ngày ấy — trả lời ADR 0064 câu #3, #4 (chủ dự án 08/10/2026, cờ cần pháp chế đối chiếu)"
+  - "chuyển đơn thư thành nhiệm vụ khi hộp thoại không có bộ phận lẫn cán bộ: dùng bộ phận đang giữ đơn; đơn cũng không có thì từ chối 'Chọn bộ phận hoặc người thực hiện' (assignment_required) (chủ dự án 08/10/2026)"
 ---
 
 # 0085. Hợp đồng: đơn thư → nhiệm vụ, và hạn đơn thư theo loại đơn
 
-**Trạng thái:** đề xuất của contract-designer, hợp đồng `.proto` đã viết (chưa có cài đặt) · **Ngày:**
-2026-10-08 · **Chờ chủ dự án chốt** các câu ở §Còn mở trước khi dựng hành vi · **Thực thi** ADR 0084 #3,
-#6 và ADR 0039 hệ quả #2 · **Đổi** chỗ tính mà ADR 0064 §"Tính thế nào" đề xuất (ResolveDeadlines).
+**Trạng thái:** đã chốt · **Ngày:** 2026-10-08 · **Người quyết:** chủ dự án (§Trả lời 08/10/2026);
+hợp đồng `.proto` do contract-designer viết, chưa có cài đặt · **Thực thi** ADR 0084 #3, #6 và ADR 0039
+hệ quả #2 · **Đổi** chỗ tính mà ADR 0064 §"Tính thế nào" đề xuất (ResolveDeadlines).
 
 ## Bối cảnh
 
@@ -28,13 +32,13 @@ owns_facts:
 | `ResolveDeadlines` trả FAILED_PRECONDITION khi xã chưa cấu hình, và bên gọi **từ chối tiếp nhận** | `identity.proto` (chú thích RPC), `transaction-boundaries.json` `tinh_han_xu_ly_luc_tiep_nhan` |
 | Tố cáo: hạn xử lý đơn đếm **ngày làm việc**, hạn giải quyết đếm **ngày lịch** — hai đơn vị trên một loại đơn | ADR 0064 bảng 30/09 |
 
-## Quyết định (đề xuất)
+## Quyết định
 
 ### A. Chuyển đơn thư thành nhiệm vụ
 
-| # | Điểm | Đề xuất |
+| # | Điểm | Chốt |
 |---|---|---|
-| A1 | Ai mở tuyến | `petitions` — nó ghi bản ghi duy nhất (nhiệm vụ). Tiền tố `citizen-letters` thuộc `documents` nên không lồng được; danh từ đề xuất `POST /api/v1/citizen-letter-tasks` (thân: `letter_id`, tiêu đề, bộ phận/cán bộ tuỳ chọn, mức ưu tiên…) — **danh từ chờ chủ dự án** |
+| A1 | Ai mở tuyến | `petitions` — nó ghi bản ghi duy nhất (nhiệm vụ). Tiền tố `citizen-letters` thuộc `documents` nên không lồng được; tuyến là `POST /api/v1/citizen-letter-tasks` (thân: `letter_id`, tiêu đề, bộ phận/cán bộ tuỳ chọn, mức ưu tiên…) |
 | A2 | Chiều gọi | `petitions → documents.ResolveCitizenLetterForTask` (đọc), trước khi mở giao dịch |
 | A3 | Nhất quán | **Mạnh**, một giao dịch của `petitions`; không có bù trừ vì `documents` không ghi gì |
 | A4 | Tố cáo | `documents` trả `DENUNCIATION` và **không** trả số, hạn, người giữ, trích yếu; `petitions` trả 422 |
@@ -56,7 +60,7 @@ phải mang loại đơn và thông tin của đơn tố cáo đi qua ranh giớ
 
 ### B. Hạn đơn thư theo loại đơn
 
-| # | Điểm | Đề xuất |
+| # | Điểm | Chốt |
 |---|---|---|
 | B1 | Lối vào | RPC mới `ResolveCitizenLetterDeadline(letter_type, kind, count_from)` |
 | B2 | Hai hạn | `PROCESSING` (vào sổ, từ 00:00 giờ VN của ngày nhận) · `RESOLUTION` (thụ lý, từ `accepted_at`) |
@@ -76,20 +80,23 @@ phải mang loại đơn và thông tin của đơn tố cáo đi qua ranh giớ
 Phép tính vẫn **một chỗ** trong identity (ADR 0064 #4): RPC mới và ResolveDeadlines dùng chung phép
 tiến giờ làm việc.
 
-## Còn mở — hỏi chủ dự án, không tự chọn
+## Trả lời 08/10/2026 — sáu câu từng để mở
 
-| # | Câu | Chặn việc nào |
-|---|---|---|
-| 1 | Danh từ URL `citizen-letter-tasks` (A1) | TASK-08 (tuyến) |
-| 2 | Nơi lưu quy tắc theo loại đơn: **bảng riêng** trong identity (đề xuất, xem dưới) hay thêm cột vào `sla` (ADR 0064 đề xuất). ADR 0084 §Hệ quả đã để câu này cho cổng | TASK-05 |
-| 3 | Đơn vị của `kien-nghi-phan-anh`, `de-nghi`: **giờ làm việc** (ADR 0084 §3 "theo ADR 0007") hay **ngày làm việc** (C8 24/09 "ngày làm việc theo lịch xã"). Hai nguồn nói khác nhau | TASK-05 |
-| 4 | ADR 0064 #3, #4 (ngày cuối rơi vào ngày nghỉ; ngày đầu có tính không; hạn hết lúc mấy giờ ngày cuối) — **vẫn mở** | Phép tính ngày lịch / ngày làm việc trong identity |
-| 5 | Gieo sẵn số luật định của ADR 0064 (10 / 30 / 7 / 30) cho xã, hay để trống tới khi xã nhập | TASK-05 |
-| 6 | Hộp thoại bỏ trống cả bộ phận lẫn cán bộ và đơn cũng không có người giữ: từ chối (prototype `assignment_required`) hay tạo nhiệm vụ "Chưa xác định" như cửa giao trực tiếp | TASK-08 |
+| # | Câu | Chốt | Ai chốt |
+|---|---|---|---|
+| 1 | Danh từ tuyến (A1) | `POST /api/v1/citizen-letter-tasks` | Phiên chính, lựa chọn kỹ thuật; chủ dự án không phản đối |
+| 2 | Nơi lưu quy tắc theo loại đơn | **Bảng riêng** `citizen_letter_deadline_rule` trong identity; **không** thêm cột vào `sla` (bỏ đề xuất của ADR 0064 §Tính thế nào) | Phiên chính theo contract-designer, lựa chọn kỹ thuật |
+| 3 | Đơn vị của `kien-nghi-phan-anh`, `de-nghi` | **Ngày làm việc** theo lịch xã (C8 24/09). Sửa chữ "theo ADR 0007" ở ADR 0084 §3. Khiếu nại, tố cáo giữ đơn vị của ADR 0064 | Chủ dự án |
+| 4 | Gieo sẵn số luật định | **Không gieo.** Mỗi xã tự nhập số; loại chưa có dòng → "Không đặt hạn" (B3) | Chủ dự án |
+| 5 | Đếm ngày (ADR 0064 câu #3, #4) | Theo **Bộ luật Dân sự**: không tính ngày đầu, đếm từ ngày kế tiếp · ngày cuối rơi vào ngày nghỉ thì dời sang ngày làm việc kế tiếp · hạn hết lúc **cuối giờ làm việc của xã** ngày ấy. Cờ **"cần pháp chế đối chiếu"** của ADR 0064 vẫn đứng | Chủ dự án |
+| 6 | Hộp thoại trống cả bộ phận lẫn cán bộ | Đơn có bộ phận đang giữ → dùng bộ phận ấy. Đơn cũng không có → **từ chối** "Chọn bộ phận hoặc người thực hiện" (prototype `assignment_required`); không tạo nhiệm vụ "Chưa xác định" | Chủ dự án |
 
-**Bảng riêng (câu 2) — vì sao đề xuất:** cột `gio_*` của `sla` là **giờ** và NOT NULL năm ngưỡng nhắc
-việc không áp cho đơn; hai lối vào đọc chung một dòng với hai nghĩa là cái bẫy. Bảng riêng
-`citizen_letter_deadline_rule` một dòng = (loại đơn, hạn, số, đơn vị), "chưa cấu hình" = không có dòng.
+**Vì sao bảng riêng (câu 2):** cột `gio_*` của `sla` là **giờ** và NOT NULL năm ngưỡng nhắc việc không
+áp cho đơn; hai lối vào đọc chung một dòng với hai nghĩa là cái bẫy. Một dòng = (loại đơn, hạn, số, đơn
+vị), "chưa cấu hình" = không có dòng — câu 4 vì thế không cần giá trị đặc biệt nào.
+
+**Vì sao câu 5 cần lịch nghỉ cả khi đếm ngày lịch:** dời ngày cuối đòi `ngay_nghi_le` và `ngay_lam_bu`
+của xã, và giờ kết thúc đòi giờ làm việc của xã — cả ba đều ở identity, nên phép tính vẫn một chỗ (B4).
 
 ## Hệ quả
 
