@@ -282,7 +282,7 @@
       "trang_thai": "dang_lam",
       "bang_chung": "Không có cột, tuyến hay trường nào mang cờ này trong service-finance — tổng hợp a3fdcac2 cố ý không trả (mục `giai-ngan-tong-hop-may-chu`, tiep_theo (1)). Kiểm 06/10/2026.",
       "no_confirm": [],
-      "tiep_theo": "08/10/2026 (ADR 0080 #2): máy chủ XONG — migration 0018 du_an.at_risk, PATCH at_risk (budget.update, vết trước/sau), at_risk trên bản đọc, at_risk_count ở investment-project-summary. CÒN: web ô tick trong form Sửa dự án + nhãn + bỏ '?' ô Cần chú ý. Chưa chạy 0018 trên PG thật. || Câu còn mở #3 của ADR 0075: chưa ai chốt cờ đặt tay (ai đặt, quyền nào, có vết) hay suy ra. Chưa chốt thì không dựng — một cờ đặt tay là nguồn thứ hai cho một sự thật đã có số đo (điểm chậm), cùng loại rủi ro luật 10 bất biến 3."
+      "tiep_theo": "08/10/2026 (ADR 0081 #2): máy chủ XONG — migration 0018 du_an.at_risk, PATCH at_risk (budget.update, vết trước/sau), at_risk trên bản đọc, at_risk_count ở investment-project-summary. CÒN: web ô tick trong form Sửa dự án + nhãn + bỏ '?' ô Cần chú ý. Chưa chạy 0018 trên PG thật. || Câu còn mở #3 của ADR 0075: chưa ai chốt cờ đặt tay (ai đặt, quyền nào, có vết) hay suy ra. Chưa chốt thì không dựng — một cờ đặt tay là nguồn thứ hai cho một sự thật đã có số đo (điểm chậm), cùng loại rủi ro luật 10 bất biến 3."
     },
     {
       "id": "giai-ngan-xac-nhan-con-mo-adr-0075",
@@ -313,7 +313,7 @@
     },
     {
       "id": "giai-ngan-lam-tron-va-vach-ht-08-10",
-      "viec": "Giải ngân: làm tròn tỷ lệ nửa xa số 0 (thay cắt bớt) + vạch 'Hoàn thành dự kiến' theo prototype (ADR 0080 #1, #3)",
+      "viec": "Giải ngân: làm tròn tỷ lệ nửa xa số 0 (thay cắt bớt) + vạch 'Hoàn thành dự kiến' theo prototype (ADR 0081 #1, #3)",
       "trang_thai": "xong",
       "menu": "giai-ngan",
       "bang_chung": "RatioOf làm tròn nửa xa số 0 ở phần vạn; TyLeGiaiNgan, phân bổ, nguồn vốn dùng chung RatioOf; ví dụ tài liệu 3259 + 6741 = 10000. ProjectExpectedEndMonth: expected_end_month luôn có (không ngày hoàn thành → 12; năm sau → 12; năm trước → tháng đầu), không dùng thời hạn giải ngân. go vet + go test service-finance xanh.",

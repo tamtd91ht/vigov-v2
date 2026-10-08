@@ -1,5 +1,5 @@
 ---
-id: 0080-giai-ngan-cap-nhat-theo-prototype-08-10
+id: 0081-giai-ngan-cap-nhat-theo-prototype-08-10
 tier: T1
 source: CURATED
 owner: domain
@@ -14,7 +14,7 @@ owns_facts:
   - "nạp Excel Thu - Chi theo tài liệu giao việc 08/10 + prototype: tự đánh sao dòng 'Tổng số', đoán vai trò cột từ tiêu đề (sửa lại được), chặn khi năm HOẶC tháng đã chốt, bảng đã có số liệu nhập tay phải Gỡ trước, cột % do máy chủ tính — thay các câu 30/09 trái với điều này (chốt 08/10/2026)"
 ---
 
-# 0080. Giải ngân và Thu - Chi cập nhật theo prototype (08/10/2026)
+# 0081. Giải ngân và Thu - Chi cập nhật theo prototype (08/10/2026)
 
 **Trạng thái:** đã chốt · **Ngày:** 2026-10-08 · **Người quyết:** chủ dự án, trả lời từng câu khi giao
 tài liệu `tmp/web/updated/giai-ngan-update-theo-prototype.md`.
