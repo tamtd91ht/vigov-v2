@@ -309,7 +309,8 @@ func (s *CitizenLetterStore) ForUpdate(ctx context.Context, tx *store.ScopedTx, 
 
 // insertCitizenLetter — `status` IS A LITERAL. A new letter is `moi-vao-so`, always; a parameter here
 // is the one edit that lets a client book a letter already `da-giai-quyet`. The two due columns are
-// ABSENT and stay NULL (ADR 0078 #3; rule 10, forbidden #3 — no default commitment).
+// ABSENT and stay NULL until a clerk sets one (UpdateDeadline) — never a default commitment (rule 10,
+// forbidden #3).
 const insertCitizenLetter = `INSERT INTO citizen_letter
 	(tenant_id, id, number, year, received_date, letter_type, sender_name, sender_phone, sender_address,
 	 summary, status, holding_unit_id, related_letter_id, created_by_code)
@@ -363,6 +364,17 @@ func (s *CitizenLetterStore) UpdateSender(ctx context.Context, tx *store.ScopedT
 		WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
 	return s.exec(ctx, tx, "sửa người gửi", stmt, l.ID, rongThanhNil(l.SenderName),
 		rongThanhNil(l.SenderPhone), rongThanhNil(l.SenderAddress), actorCode)
+}
+
+// UpdateDeadline writes the two due columns as the use case decided them (domain.SetActiveDue changed
+// one, the other is the value read under the same row lock). A zero instant is NULL — "Không đặt".
+// The value is written as given: no arithmetic here, and no now() (rule 10, invariant 2).
+func (s *CitizenLetterStore) UpdateDeadline(ctx context.Context, tx *store.ScopedTx, l domain.CitizenLetter, actorCode string) error {
+	const stmt = `UPDATE citizen_letter
+		SET processing_due_at = $3, resolution_due_at = $4, updated_by_code = $5, updated_at = now()
+		WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
+	return s.exec(ctx, tx, "đặt hạn xử lý", stmt, l.ID, timeOrNil(l.ProcessingDueAt),
+		timeOrNil(l.ResolutionDueAt), actorCode)
 }
 
 // exec runs one UPDATE with tx.TenantID() as $1 and turns "no row touched" into not-found.

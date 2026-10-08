@@ -82,6 +82,11 @@ func (r *letterRepoFake) UpdateSender(_ context.Context, _ *store.ScopedTx, l do
 	r.rows[l.ID] = l
 	return nil
 }
+func (r *letterRepoFake) UpdateDeadline(_ context.Context, _ *store.ScopedTx, l domain.CitizenLetter, _ string) error {
+	r.writes++
+	r.rows[l.ID] = l
+	return nil
+}
 func (r *letterRepoFake) InsertLog(_ context.Context, _ *store.ScopedTx, e domain.LetterLogEntry) error {
 	r.writes++
 	r.logs = append(r.logs, e)
@@ -269,7 +274,7 @@ func TestBookTakesTheCommunesLetterSeriesNumberForTheYearOfTheAct(t *testing.T) 
 		t.Fatalf("dòng lưu chưa được cắt khoảng trắng hoặc sai người tạo: %+v", got)
 	}
 	if !got.ProcessingDueAt.IsZero() || !got.ResolutionDueAt.IsZero() || got.Status != domain.LetterStatusNew {
-		t.Fatal("đơn mới phải `moi-vao-so` và CHƯA có hạn (ADR 0078 #3)")
+		t.Fatal("đơn mới phải `moi-vao-so` và CHƯA có hạn — hạn do cán bộ đặt sau, bằng SetDeadline (ADR 0079 lô 5 Q18)")
 	}
 }
 
@@ -515,6 +520,106 @@ func TestAddNote(t *testing.T) {
 		t.Fatal("nội dung ghi chú lọt vào vết")
 	}
 	checkLogRows(t, repo.logs)
+}
+
+// --- deadline ---------------------------------------------------------------------------------------
+
+// The clerk's "Hạn xử lý" (ADR 0079 lô 5 Q18): stored exactly as typed on the CURRENT phase's column,
+// one transaction with one audit entry naming the business code and the deadline before and after.
+func TestSetDeadlineStoresTheClerksInstantOnTheCurrentPhase(t *testing.T) {
+	// Not on a whole hour and not in UTC: anything that rounds, re-zones to a day or adds hours shows.
+	due := time.Date(2026, 10, 20, 16, 45, 30, 0, time.FixedZone("ICT", 7*3600))
+	k := khoVBMau()
+	repo := newLetterRepo(letterIn("dt-1", domain.LetterStatusScreening, ""), letterIn("dt-2", domain.LetterStatusResolving, ""))
+	uc, ctx := buildLetters(t, k, repo, liveDirectory())
+
+	l, err := uc.SetDeadline(ctx, "dt-1", due, clerk)
+	if err != nil {
+		t.Fatalf("SetDeadline: %v", err)
+	}
+	got := repo.rows["dt-1"]
+	if !got.ProcessingDueAt.Equal(due) || !got.ResolutionDueAt.IsZero() || !l.ActiveDueAt().Equal(due) {
+		t.Fatalf("đơn đang xử lý: hạn lưu %v / %v, muốn đúng %v ở processing_due_at", got.ProcessingDueAt, got.ResolutionDueAt, due)
+	}
+	if k.batDau != 1 || k.daCommit != 1 {
+		t.Fatalf("giao dịch: mở %d, commit %d — muốn đúng một", k.batDau, k.daCommit)
+	}
+	a := auditEntries(k)
+	if len(a) != 1 || a[0].args[1] != "CB-00123" || a[0].args[4] != ActionSetLetterDeadline || a[0].args[5] != "DT-2026-0005" {
+		t.Fatalf("vết: %v", a)
+	}
+	delta := auditDelta(k, 0)
+	if !strings.Contains(delta, `"truoc":{"han_xu_ly":""}`) || !strings.Contains(delta, `"sau":{"han_xu_ly":"2026-10-20T09:45:30Z"}`) ||
+		!strings.Contains(delta, `"cot":"processing_due_at"`) {
+		t.Fatalf("vết phải mang hạn trước và sau: %s", delta)
+	}
+	if len(repo.logs) != 0 {
+		t.Fatalf("đặt hạn ghi dòng nhật ký loại không có trong CHECK của 0006: %+v", repo.logs)
+	}
+
+	// After `thu-ly` the clerk's deadline is the resolution deadline (0006 binds it to accepted_at).
+	if _, err := uc.SetDeadline(ctx, "dt-2", due, clerk); err != nil {
+		t.Fatalf("SetDeadline sau thụ lý: %v", err)
+	}
+	if got := repo.rows["dt-2"]; !got.ResolutionDueAt.Equal(due) || !got.ProcessingDueAt.IsZero() {
+		t.Fatalf("đơn đang giải quyết: %v / %v", got.ProcessingDueAt, got.ResolutionDueAt)
+	}
+}
+
+func TestSetDeadlineClearAndNoOp(t *testing.T) {
+	due := time.Date(2026, 10, 20, 10, 0, 0, 0, time.UTC)
+	set := letterIn("dt-1", domain.LetterStatusNew, "")
+	set.ProcessingDueAt = due
+	k := khoVBMau()
+	repo := newLetterRepo(set)
+	uc, ctx := buildLetters(t, k, repo, liveDirectory())
+
+	// The same value again: nothing written, nothing audited.
+	if _, err := uc.SetDeadline(ctx, "dt-1", due, clerk); err != nil || repo.writes != 0 || len(auditEntries(k)) != 0 {
+		t.Fatalf("đặt lại đúng hạn cũ: lỗi %v, ghi %d, vết %d", err, repo.writes, len(auditEntries(k)))
+	}
+	// Zero clears it — "Không đặt" — and the trail keeps what was cleared.
+	l, err := uc.SetDeadline(ctx, "dt-1", time.Time{}, clerk)
+	if err != nil {
+		t.Fatalf("bỏ hạn: %v", err)
+	}
+	if !l.ProcessingDueAt.IsZero() || !repo.rows["dt-1"].ProcessingDueAt.IsZero() {
+		t.Fatal("bỏ hạn mà hạn vẫn còn")
+	}
+	if d := auditDelta(k, 0); !strings.Contains(d, `"truoc":{"han_xu_ly":"2026-10-20T10:00:00Z"}`) || !strings.Contains(d, `"sau":{"han_xu_ly":""}`) {
+		t.Fatalf("vết bỏ hạn: %s", d)
+	}
+}
+
+func TestSetDeadlineRefusals(t *testing.T) {
+	due := time.Date(2026, 10, 20, 10, 0, 0, 0, time.UTC)
+	k := khoVBMau()
+	repo := newLetterRepo(letterIn("dt-done", domain.LetterStatusFiled, ""), letterIn("dt-1", domain.LetterStatusNew, "CB-00777"))
+	uc, ctx := buildLetters(t, k, repo, liveDirectory())
+
+	if _, err := uc.SetDeadline(ctx, "dt-done", due, clerk); !errors.Is(err, domain.ErrLetterDueOnFinished) {
+		t.Fatalf("đơn đã kết thúc mà đặt được hạn: %v", err)
+	}
+	// Even the letter's own assignee: the deadline is the booking clerk's act (`petition.create`).
+	if _, err := uc.SetDeadline(ctx, "dt-1", due, officer); !errors.Is(err, domain.ErrLetterNotPermitted) {
+		t.Fatalf("không có quyền tiếp nhận mà đặt được hạn: %v", err)
+	}
+	if _, err := uc.SetDeadline(ctx, "dt-1", time.Date(26, 10, 20, 0, 0, 0, 0, time.UTC), clerk); !errors.Is(err, domain.ErrLetterDueTooFar) {
+		t.Fatalf("năm gõ nhầm (0026) mà vẫn nhận: %v", err)
+	}
+	if _, err := uc.SetDeadline(ctx, "khong-co", due, clerk); !errors.Is(err, docstore.ErrCitizenLetterNotFound) {
+		t.Fatalf("đơn không có: %v", err)
+	}
+	if repo.writes != 0 || len(auditEntries(k)) != 0 {
+		t.Fatalf("bị từ chối mà vẫn ghi: ghi %d, vết %d", repo.writes, len(auditEntries(k)))
+	}
+
+	k2 := khoVBMau()
+	k2.loiSau = "INSERT INTO audit_log"
+	uc2, ctx2 := buildLetters(t, k2, newLetterRepo(letterIn("dt-1", domain.LetterStatusNew, "")), liveDirectory())
+	if _, err := uc2.SetDeadline(ctx2, "dt-1", due, clerk); err == nil || k2.daCommit != 0 || k2.daRollback != 1 {
+		t.Fatalf("vết hỏng: lỗi %v, commit %d, rollback %d — hạn và vết phải cùng một giao dịch", err, k2.daCommit, k2.daRollback)
+	}
 }
 
 // --- reads ------------------------------------------------------------------------------------------

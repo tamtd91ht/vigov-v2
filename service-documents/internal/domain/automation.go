@@ -1,8 +1,9 @@
 package domain
 
-// The automation jobs' business rules that need no I/O (ADR 0058): which incoming documents a job
-// speaks about, the idempotency keys of the notices, and the Vietnamese sentences the bell shows.
-// Same design as service-petitions/internal/domain/automation.go; this is the documents half.
+// The automation jobs' business rules that need no I/O (ADR 0058): which records a job speaks about,
+// the idempotency keys of the notices, and the Vietnamese sentences the bell shows. Same design as
+// service-petitions/internal/domain/automation.go; this is the documents half, over TWO registers —
+// incoming documents (`van-ban-den`) and citizen letters (`don-thu`, ADR 0079 lô 5 Q18).
 //
 // NOTHING HERE COMPUTES A DEADLINE OR A LATENESS. Every threshold is an instant identity answered
 // (ResolveDueSoonCutoff, ResolveEscalationInstants, ResolveUnassignedHoldInstants) and every test here
@@ -14,11 +15,10 @@ package domain
 // forwarding a citizen's letter carries that citizen's name in its summary. The recipient follows the
 // link to a screen that checks their permission.
 //
-// ĐƠN THƯ IS NOT HERE, and that is a finding, not an omission: `don_thu` does not exist in this
-// service (no table, no deadline column — migration 0004 has only the two document registers). The
-// contract admits WORK_KIND_DON_THU for this runner, but there is no stored commitment to compare with,
-// and inventing one is rule 10's stop condition #1. The runner therefore does not claim DON_THU scopes
-// (app.automationKinds says why claiming them would be worse than not).
+// A CITIZEN LETTER IS NAMED BY ITS REGISTER CODE ("DT-2026-0007", LetterAuditSubject) and nothing
+// else — never its sender or summary, and for a denunciation not even its type (ADR 0078 #4). Only a
+// letter carrying a deadline a clerk SET is a record here; a letter left "Không đặt" is never reminded
+// about, and no default deadline stands in for the missing one (rule 10; ADR 0079 lô 5 Q18).
 
 import (
 	"fmt"
@@ -33,25 +33,30 @@ import (
 // contract.
 type AutomationWorkKind string
 
-// AutomationIncomingDocument is `van-ban-den`, the one kind this runner executes today.
-const AutomationIncomingDocument AutomationWorkKind = "van-ban-den"
+// The two kinds this runner executes. Each is the namespace of its notices' idempotency keys, so a
+// letter's key can never collide with a document's.
+const (
+	AutomationIncomingDocument AutomationWorkKind = "van-ban-den"
+	AutomationCitizenLetter    AutomationWorkKind = "don-thu"
+)
 
 // AutomationZone is Asia/Ho_Chi_Minh for the dates in idempotency keys and in the sentences. FIXED
 // +07:00, the petitions runner's choice, so neither runner depends on tzdata for a key: Viet Nam has no
 // daylight saving. Used for DISPLAY and DATE KEYS only — never to count time towards a deadline.
 var AutomationZone = time.FixedZone("ICT", 7*3600)
 
-// AutomationRecord is the runner's view of one OPEN incoming document — codes, instants and holders.
+// AutomationRecord is the runner's view of one OPEN record — codes, instants and holders.
 type AutomationRecord struct {
 	// ID is the internal id: key material for the idempotency key, never shown.
 	ID string
-	// Code is what the notice shows: MaVanBanDen(nam, so_vao_so).
+	// Code is what the notice shows: MaVanBanDen(nam, so_vao_so), or LetterAuditSubject(year, number).
 	Code string
-	// Deadline is the stored commitment `han_xu_ly_xong` (NOT NULL in migration 0004).
+	// Deadline is the STORED commitment: `han_xu_ly_xong` of an incoming document (NOT NULL in
+	// migration 0004), or a letter's ActiveDueAt — the deadline a clerk set for its current phase.
 	Deadline time.Time
-	// OrgUnitID is identity's `bo_phan.id` holding the document (`bo_phan_dang_giu_id`); "" when none.
+	// OrgUnitID is identity's `bo_phan.id` holding the record; "" when none.
 	OrgUnitID string
-	// AssigneeMa is `can_bo_xu_ly_ma`, a staff business code; "" when nobody is named.
+	// AssigneeMa is the named holder, a staff business code; "" when nobody is named.
 	AssigneeMa string
 	// HoldStartedAt is when the unit began holding the document with nobody named — zero unless
 	// OrgUnitID is set and AssigneeMa is empty. Derived by the store from the routing timeline.
@@ -236,6 +241,28 @@ const (
 	incomingRegisterLink = "/van-ban"
 	incomingOverdueLink  = "/van-ban?metric=overdue"
 	incomingOpenLink     = "/van-ban?metric=open"
+	// The letter register lives on the same /van-ban screen (ADR 0078), which has no letter drill-down
+	// parameter: a letter notice links to the screen and its title carries the code to find it by.
+	letterRegisterLink = "/van-ban"
+)
+
+// NoticeRegister is what differs between the two registers' notices: the key namespace, the noun the
+// sentences use, and the links. Everything else — keys' shape, recipients, bounds — is one code path.
+type NoticeRegister struct {
+	Kind         AutomationWorkKind
+	noun         string // mid-sentence: "văn bản đến"
+	nounTitle    string // sentence-initial: "Văn bản đến"
+	registerLink string
+	openLink     string
+	overdueLink  string
+}
+
+// IncomingNotices and LetterNotices are the two registers this runner speaks about.
+var (
+	IncomingNotices = NoticeRegister{Kind: AutomationIncomingDocument, noun: "văn bản đến", nounTitle: "Văn bản đến",
+		registerLink: incomingRegisterLink, openLink: incomingOpenLink, overdueLink: incomingOverdueLink}
+	LetterNotices = NoticeRegister{Kind: AutomationCitizenLetter, noun: "đơn thư", nounTitle: "Đơn thư",
+		registerLink: letterRegisterLink, openLink: letterRegisterLink, overdueLink: letterRegisterLink}
 )
 
 // FormatLocalInstant is "17:00 ngày 26/09/2026" in Asia/Ho_Chi_Minh.
@@ -243,22 +270,27 @@ func FormatLocalInstant(t time.Time) string {
 	return t.In(AutomationZone).Format("15:04 ngày 02/01/2006")
 }
 
-// DueSoonNotice is the per-person digest: "Bạn có 3 văn bản đến sắp đến hạn xử lý", listing codes.
-// recs are the documents the runner chose for THIS recipient; title and body count every one of them,
-// and the items are the same records.
+// DueSoonNotice is the incoming register's per-person digest (IncomingNotices.DueSoon).
 func DueSoonNotice(day, recipient string, recs []AutomationRecord) StaffNotice {
+	return IncomingNotices.DueSoon(day, recipient, recs)
+}
+
+// DueSoon is the per-person digest: "Bạn có 3 văn bản đến sắp đến hạn xử lý", listing codes. recs are
+// the records the runner chose for THIS recipient; title and body count every one of them, and the
+// items are the same records.
+func (g NoticeRegister) DueSoon(day, recipient string, recs []AutomationRecord) StaffNotice {
 	codes := make([]string, 0, len(recs))
 	for _, x := range recs {
 		codes = append(codes, x.Code)
 	}
 	sort.Strings(codes)
 	return StaffNotice{
-		Key:          DueSoonKey(AutomationIncomingDocument, day, recipient),
+		Key:          DueSoonKey(g.Kind, day, recipient),
 		Kind:         NoticeDueSoon,
 		Recipients:   []string{recipient},
-		Title:        fmt.Sprintf("Bạn có %d văn bản đến sắp đến hạn xử lý", len(codes)),
+		Title:        fmt.Sprintf("Bạn có %d %s sắp đến hạn xử lý", len(codes), g.noun),
 		Body:         codeList("Gồm: ", codes),
-		Link:         incomingOpenLink,
+		Link:         g.openLink,
 		DueSoonItems: dueSoonItems(recs),
 	}
 }
@@ -290,60 +322,81 @@ func dueSoonItems(recs []AutomationRecord) []DueSoonItem {
 	return out
 }
 
-// OverdueNotice is one late document, once per day late.
+// OverdueNotice is the incoming register's overdue notice (IncomingNotices.Overdue).
 func OverdueNotice(r AutomationRecord, day string, recipients []string) StaffNotice {
+	return IncomingNotices.Overdue(r, day, recipients)
+}
+
+// Overdue is one late record, once per day late.
+func (g NoticeRegister) Overdue(r AutomationRecord, day string, recipients []string) StaffNotice {
 	return StaffNotice{
-		Key:        OverdueKey(AutomationIncomingDocument, r.ID, day),
+		Key:        OverdueKey(g.Kind, r.ID, day),
 		Kind:       NoticeOverdue,
 		Recipients: recipients,
-		Title:      clip("Văn bản đến "+r.Code+" đã quá hạn xử lý", noticeTitleMax),
+		Title:      clip(g.nounTitle+" "+r.Code+" đã quá hạn xử lý", noticeTitleMax),
 		Body:       "Hạn xử lý: " + FormatLocalInstant(r.Deadline) + ".",
-		Link:       incomingOverdueLink,
+		Link:       g.overdueLink,
 	}
 }
 
-// UnassignedNotice reports a unit holding the document with nobody named past the commune's
-// threshold. Its own kind (DOCUMENT_UNASSIGNED on the wire); the key is the one it had when it was
-// sent as OVERDUE, so a run straddling the switch does not tell anybody twice.
+// UnassignedNotice is the incoming register's unassigned-hold notice (IncomingNotices.Unassigned).
 func UnassignedNotice(r AutomationRecord, recipients []string) StaffNotice {
+	return IncomingNotices.Unassigned(r, recipients)
+}
+
+// Unassigned reports a unit holding the record with nobody named past the commune's threshold. Its
+// own kind (DOCUMENT_UNASSIGNED on the wire); the key is the one it had when it was sent as OVERDUE,
+// so a run straddling the switch does not tell anybody twice.
+func (g NoticeRegister) Unassigned(r AutomationRecord, recipients []string) StaffNotice {
 	return StaffNotice{
-		Key:        UnassignedKey(AutomationIncomingDocument, r.ID, r.HoldStartedAt),
+		Key:        UnassignedKey(g.Kind, r.ID, r.HoldStartedAt),
 		Kind:       NoticeUnassigned,
 		Recipients: recipients,
-		Title:      clip("Văn bản đến "+r.Code+" chưa được phân công người xử lý", noticeTitleMax),
+		Title:      clip(g.nounTitle+" "+r.Code+" chưa được phân công người xử lý", noticeTitleMax),
 		Body: "Bộ phận nhận từ " + FormatLocalInstant(r.HoldStartedAt) +
 			" nhưng chưa phân công người xử lý, đã quá thời gian xã quy định.",
-		Link: incomingRegisterLink,
+		Link: g.registerLink,
 	}
 }
 
-// EscalationNotice is one late document crossing one threshold, once per level.
+// EscalationNotice is the incoming register's escalation notice (IncomingNotices.Escalation).
 func EscalationNotice(r AutomationRecord, level EscalationLevel, recipients []string) StaffNotice {
+	return IncomingNotices.Escalation(r, level, recipients)
+}
+
+// Escalation is one late record crossing one threshold, once per level.
+func (g NoticeRegister) Escalation(r AutomationRecord, level EscalationLevel, recipients []string) StaffNotice {
 	who := "trưởng bộ phận"
 	if level == EscalationChairman {
 		who = "lãnh đạo"
 	}
 	return StaffNotice{
-		Key:        EscalationKey(AutomationIncomingDocument, r.ID, level),
+		Key:        EscalationKey(g.Kind, r.ID, level),
 		Kind:       NoticeEscalation,
 		Recipients: recipients,
-		Title:      clip("Báo cáo việc trễ hạn: văn bản đến "+r.Code, noticeTitleMax),
+		Title:      clip("Báo cáo việc trễ hạn: "+g.noun+" "+r.Code, noticeTitleMax),
 		Body: "Quá hạn xử lý từ " + FormatLocalInstant(r.Deadline) +
 			", đã vượt ngưỡng báo " + who + " theo quy định của xã.",
-		Link: incomingOverdueLink,
+		Link: g.overdueLink,
 	}
 }
 
-// IncomingDigestNotice is the documents half of the Monday summary (ADR 0058 §8, two parts).
+// IncomingDigestNotice is the incoming register's part of the Monday summary (IncomingNotices.Digest).
 func IncomingDigestNotice(week string, pastDeadline, dueThisWeek int, recipients []string) StaffNotice {
+	return IncomingNotices.Digest(week, pastDeadline, dueThisWeek, recipients)
+}
+
+// Digest is one register's part of the Monday summary (ADR 0058 §8, parts by owning service; this
+// service sends one per register, under its own key).
+func (g NoticeRegister) Digest(week string, pastDeadline, dueThisWeek int, recipients []string) StaffNotice {
 	return StaffNotice{
-		Key:        WeeklyDigestKey(AutomationIncomingDocument, week),
+		Key:        WeeklyDigestKey(g.Kind, week),
 		Kind:       NoticeWeeklyDigest,
 		Recipients: recipients,
-		Title:      "Bản tin đầu tuần: văn bản đến",
-		Body: fmt.Sprintf("%d văn bản đến quá hạn xử lý, %d văn bản đến sắp đến hạn trong 7 ngày tới.",
-			pastDeadline, dueThisWeek),
-		Link: incomingOverdueLink,
+		Title:      "Bản tin đầu tuần: " + g.noun,
+		Body: fmt.Sprintf("%d %s quá hạn xử lý, %d %s sắp đến hạn trong 7 ngày tới.",
+			pastDeadline, g.noun, dueThisWeek, g.noun),
+		Link: g.overdueLink,
 	}
 }
 

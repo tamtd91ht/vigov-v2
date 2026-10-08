@@ -2,7 +2,9 @@ package app
 
 // What these tests defend (ADR 0058), mirroring service-petitions' runner tests:
 //   - claim → run → outcome recorded, with counts; `now` is claimed_at, never a local clock;
-//   - only VAN_BAN_DEN scopes are claimed — never a petitions kind, and not DON_THU (no register);
+//   - VAN_BAN_DEN and DON_THU scopes are claimed — never a petitions kind; a DON_THU run reads the
+//     letter register only, asks identity with DON_THU, routes by `petition.create`, and keys every
+//     notice under `don-thu` (ADR 0079 lô 5 Q18);
 //   - two communes never see each other's documents, recipients or notices;
 //   - the same document gives the same key across retried runs with different run ids;
 //   - the recipient chain, escalation levels, digest contents;
@@ -182,7 +184,7 @@ func (f *fakeAutomationIdentity) UnassignedHoldInstants(_ context.Context, k ide
 func (f *fakeAutomationIdentity) OrgUnitPermissionHolders(ctx context.Context, units []string, key string) (map[string][]string, error) {
 	f.permsSeen[key] = true
 	out := map[string][]string{}
-	if key != permDocumentRoute {
+	if key != permDocumentRoute && key != permLetterBook {
 		return out, nil
 	}
 	for _, u := range units {
@@ -251,11 +253,23 @@ func (f *fakeIncomingReader) OpenIncomingForAutomation(ctx context.Context) ([]d
 	return f.byCommune[communeOf(ctx)], nil
 }
 
+// fakeLetterReader is the letter register's read, keyed by commune like the incoming one.
+type fakeLetterReader struct {
+	byCommune map[tenant.ID][]domain.AutomationRecord
+	reads     int
+}
+
+func (f *fakeLetterReader) OpenLettersForAutomation(ctx context.Context) ([]domain.AutomationRecord, error) {
+	f.reads++
+	return f.byCommune[communeOf(ctx)], nil
+}
+
 type harness struct {
 	runner   *AutomationRunner
 	identity *fakeAutomationIdentity
 	comms    *fakeComms
 	incoming *fakeIncomingReader
+	letters  *fakeLetterReader
 	locks    *fakeLocks
 	registry *fakeRegistry
 }
@@ -265,10 +279,12 @@ func newHarness(t *testing.T, communes ...tenant.ID) *harness {
 	h := &harness{
 		identity: newFakeIdentity(), comms: &fakeComms{},
 		incoming: &fakeIncomingReader{byCommune: map[tenant.ID][]domain.AutomationRecord{}},
+		letters:  &fakeLetterReader{byCommune: map[tenant.ID][]domain.AutomationRecord{}},
 		locks:    &fakeLocks{}, registry: &fakeRegistry{},
 	}
 	r, err := NewAutomationRunner(AutomationDeps{Communes: &fakeCommunes{ids: communes}, Locks: h.locks,
-		Registry: h.registry, Identity: h.identity, Comms: h.comms, Incoming: h.incoming, Log: quietLogger})
+		Registry: h.registry, Identity: h.identity, Comms: h.comms, Incoming: h.incoming, Letters: h.letters,
+		Log: quietLogger})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -305,11 +321,22 @@ const (
 	jobEscalate  = identityv1.AutomationJob_AUTOMATION_JOB_ESCALATION
 	jobDigest    = identityv1.AutomationJob_AUTOMATION_JOB_WEEKLY_DIGEST
 	kindIncoming = identityv1.WorkKind_WORK_KIND_VAN_BAN_DEN
+	kindLetter   = identityv1.WorkKind_WORK_KIND_DON_THU
 	succeeded    = identityv1.AutomationRunOutcome_AUTOMATION_RUN_OUTCOME_SUCCEEDED
 )
 
 func doc(id string, no int, deadline time.Time) domain.AutomationRecord {
 	return domain.AutomationRecord{ID: id, Code: domain.MaVanBanDen(2026, no), Deadline: deadline}
+}
+
+// letter is an open citizen letter WITH a clerk-set deadline — the only kind the store returns.
+func letter(id string, no int, deadline time.Time) domain.AutomationRecord {
+	return domain.AutomationRecord{ID: id, Code: domain.LetterAuditSubject(2026, no), Deadline: deadline}
+}
+
+func (h *harness) claimLetters(id tenant.ID, runID string, job identityv1.AutomationJob) {
+	h.identity.runs[id] = append(h.identity.runs[id], identityclient.AutomationRun{RunID: runID, Job: job,
+		WorkKind: kindLetter, ClaimedAt: runAt})
 }
 
 // --- tests -----------------------------------------------------------------------------------------
@@ -328,15 +355,17 @@ func TestClaimRunAndRecordOutcome(t *testing.T) {
 	h.claim(communeA, "run-1", jobSLA)
 	h.runner.Tick(context.Background())
 
-	// Three scopes: three jobs × VAN_BAN_DEN. Never a petitions kind; never DON_THU (no register).
+	// Six scopes: three jobs × {VAN_BAN_DEN, DON_THU}. Never a petitions kind.
 	got := h.identity.claimed[communeA]
-	if len(got) != 3 {
-		t.Fatalf("claimed %d phạm vi, muốn 3", len(got))
+	if len(got) != 6 {
+		t.Fatalf("claimed %d phạm vi, muốn 6", len(got))
 	}
+	perKind := map[identityv1.WorkKind]int{}
 	for _, s := range got {
-		if s.GetWorkKind() != kindIncoming {
-			t.Errorf("nhận phạm vi ngoài văn bản đến: %v", s)
-		}
+		perKind[s.GetWorkKind()]++
+	}
+	if perKind[kindIncoming] != 3 || perKind[kindLetter] != 3 {
+		t.Errorf("phạm vi theo loại = %v, muốn 3 văn bản đến + 3 đơn thư", perKind)
 	}
 	want := []string{"sla_reminders:due_soon:van-ban-den:2026-09-29:CB-001", "sla_reminders:overdue:van-ban-den:vb-late:2026-09-29"}
 	if keys := h.keys(communeA); strings.Join(keys, "|") != strings.Join(want, "|") {
@@ -753,15 +782,132 @@ func TestOneCommuneFailingNeverStopsTheNext(t *testing.T) {
 	}
 }
 
-// A run for a kind this runner does not execute is FAILED, never run as van-ban-den.
+// A run for a kind this runner does not execute is FAILED, never run as one of its own registers.
 func TestForeignKindRunIsFailed(t *testing.T) {
 	h := newHarness(t, communeA)
+	h.incoming.byCommune[communeA] = []domain.AutomationRecord{doc("vb-1", 1, missed)}
 	h.identity.runs[communeA] = []identityclient.AutomationRun{{RunID: "run-x", Job: jobSLA,
-		WorkKind: identityv1.WorkKind_WORK_KIND_DON_THU, ClaimedAt: runAt}}
+		WorkKind: identityv1.WorkKind_WORK_KIND_PHAN_ANH, ClaimedAt: runAt}}
 	h.runner.Tick(context.Background())
 	if o := h.identity.recorded["run-x"]; o.Outcome != identityv1.AutomationRunOutcome_AUTOMATION_RUN_OUTCOME_FAILED ||
-		h.comms.calls != 0 {
-		t.Errorf("lượt đơn thư: %+v", o)
+		h.comms.calls != 0 || h.letters.reads != 0 {
+		t.Errorf("lượt phản ánh: %+v", o)
+	}
+}
+
+// --- citizen letters (ADR 0079 lô 5 Q18) -------------------------------------------------------------
+
+// A DON_THU run reads the LETTER register only, asks identity with DON_THU, routes by
+// `petition.create`, names letters by their DT- code and keys every notice under `don-thu` — so a
+// letter's keys can never collide with an incoming document's, even for the same internal id.
+func TestLetterRunUsesTheLetterRegisterKindKeyAndRouteKey(t *testing.T) {
+	h := newHarness(t, communeA)
+	h.identity.holders[communeA] = map[string][]string{"bp-1": {"CB-BOOK"}}
+	h.identity.leaders[communeA] = []string{"CB-LD"}
+	late := letter("same-id", 7, missed)
+	late.OrgUnitID, late.HoldStartedAt = "bp-1", holdStart
+	soon := letter("dt-soon", 8, soonDue)
+	soon.AssigneeMa = "CB-001"
+	h.letters.byCommune[communeA] = []domain.AutomationRecord{late, soon}
+	// An incoming document with the SAME internal id must not be read, nor keyed alike.
+	h.incoming.byCommune[communeA] = []domain.AutomationRecord{doc("same-id", 7, missed)}
+	h.claimLetters(communeA, "run-l", jobSLA)
+	h.runner.Tick(context.Background())
+
+	want := []string{
+		"sla_reminders:due_soon:don-thu:2026-09-29:CB-001",
+		"sla_reminders:overdue:don-thu:same-id:2026-09-29",
+		"sla_reminders:unassigned:don-thu:same-id:" + fmt.Sprint(holdStart.Unix()),
+	}
+	if got := h.keys(communeA); strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("khoá = %v, muốn %v", got, want)
+	}
+	for k := range h.identity.kindsSeen {
+		if k != kindLetter {
+			t.Errorf("lượt đơn thư hỏi identity với loại việc %v", k)
+		}
+	}
+	if !h.identity.permsSeen[permLetterBook] || len(h.identity.permsSeen) != 1 {
+		t.Errorf("hỏi người giữ theo khoá %v, muốn đúng petition.create", h.identity.permsSeen)
+	}
+	to := h.recipientsByKey()
+	if to["sla_reminders:overdue:don-thu:same-id:2026-09-29"] != "CB-BOOK" {
+		t.Errorf("đơn của bộ phận không tới người tiếp nhận của bộ phận: %v", to)
+	}
+	for _, d := range h.comms.delivered {
+		n := d.n
+		if strings.Contains(n.Title+n.Body, "VB-DEN") || strings.Contains(n.Title, "văn bản") {
+			t.Errorf("thông báo đơn thư nói về văn bản đến: %+v", n)
+		}
+		switch n.Kind {
+		case commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_OVERDUE:
+			if n.Title != "Đơn thư DT-2026-0007 đã quá hạn xử lý" {
+				t.Errorf("tiêu đề quá hạn = %q", n.Title)
+			}
+		case commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_DUE_SOON:
+			// The deadline travels AS STORED (the clerk's instant), never recomputed (rule 10).
+			if len(n.DueSoonItems) != 1 || n.DueSoonItems[0].Code != "DT-2026-0008" || !n.DueSoonItems[0].Deadline.Equal(soonDue) ||
+				n.Title != "Bạn có 1 đơn thư sắp đến hạn xử lý" {
+				t.Errorf("sắp đến hạn = %+v", n)
+			}
+		case commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_UNASSIGNED:
+		default:
+			t.Errorf("loại thông báo đơn thư = %v — phải là loại DOCUMENT_*", n.Kind)
+		}
+	}
+	if o := h.identity.recorded["run-l"]; o.Outcome != succeeded || o.RecordsExamined != 2 || o.NoticesDelivered != 3 {
+		t.Errorf("kết quả lượt đơn thư = %+v", o)
+	}
+}
+
+// A commune whose letters all have "Không đặt" gets nothing — the store returns no record, and the run
+// is an honest SUCCEEDED over zero letters, never a reminder from a default deadline.
+func TestLettersWithoutDeadlineAreNeverReminded(t *testing.T) {
+	h := newHarness(t, communeA)
+	h.identity.leaders[communeA] = []string{"CB-LD"}
+	for _, j := range []identityv1.AutomationJob{jobSLA, jobEscalate, jobDigest} {
+		h.claimLetters(communeA, "run-"+j.String(), j)
+	}
+	h.runner.Tick(context.Background())
+	for _, d := range h.comms.delivered {
+		if d.n.Kind != commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_WEEKLY_DIGEST {
+			t.Errorf("không đơn nào có hạn mà vẫn nhắc: %+v", d.n)
+		}
+	}
+	for _, j := range []identityv1.AutomationJob{jobSLA, jobEscalate, jobDigest} {
+		if o := h.identity.recorded["run-"+j.String()]; o.Outcome != succeeded || o.RecordsExamined != 0 {
+			t.Errorf("%s: %+v", j, o)
+		}
+	}
+}
+
+func TestLetterEscalationAndDigest(t *testing.T) {
+	h := newHarness(t, communeA)
+	h.identity.holders[communeA] = map[string][]string{"bp-1": {"CB-BOOK"}}
+	h.identity.leaders[communeA] = []string{"CB-LD"}
+	late := letter("dt-late", 3, missed)
+	late.OrgUnitID = "bp-1"
+	h.letters.byCommune[communeA] = []domain.AutomationRecord{late, letter("dt-soon", 4, soonDue)}
+	h.claimLetters(communeA, "run-e", jobEscalate)
+	h.claimLetters(communeA, "run-d", jobDigest)
+	h.runner.Tick(context.Background())
+
+	got := map[string]commsclient.Notice{}
+	for _, d := range h.comms.delivered {
+		got[d.n.IdempotencyKey] = d.n
+	}
+	esc, ok := got["escalation:don-thu:dt-late:unit_head"]
+	if !ok || strings.Join(esc.RecipientMa, ",") != "CB-BOOK" || esc.Title != "Báo cáo việc trễ hạn: đơn thư DT-2026-0003" ||
+		esc.Kind != commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_ESCALATION {
+		t.Errorf("leo thang đơn thư = %+v (có=%v)", esc, ok)
+	}
+	dig, ok := got["weekly_digest:don-thu:2026-W40"]
+	if !ok || dig.Title != "Bản tin đầu tuần: đơn thư" ||
+		dig.Body != "1 đơn thư quá hạn xử lý, 1 đơn thư sắp đến hạn trong 7 ngày tới." {
+		t.Errorf("bản tin đơn thư = %+v (có=%v)", dig, ok)
+	}
+	if len(got) != 2 {
+		t.Errorf("khoá = %v, muốn đúng leo thang mức 1 và bản tin", got)
 	}
 }
 
@@ -770,8 +916,8 @@ func TestOnlyLockedJobsAreClaimed(t *testing.T) {
 	h.locks.held = map[string]bool{"escalation": true}
 	h.runner.Tick(context.Background())
 	got := h.identity.claimed[communeA]
-	if len(got) != 1 || got[0].GetJob() != jobEscalate {
-		t.Errorf("phạm vi = %v, muốn chỉ escalation × văn bản đến", got)
+	if len(got) != 2 || got[0].GetJob() != jobEscalate || got[1].GetJob() != jobEscalate {
+		t.Errorf("phạm vi = %v, muốn chỉ escalation × {văn bản đến, đơn thư}", got)
 	}
 
 	h2 := newHarness(t, communeA)

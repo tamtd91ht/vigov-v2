@@ -1,7 +1,8 @@
 package store
 
-// The automation jobs' read of SỔ VĂN BẢN ĐẾN (ADR 0058 §1: each runner counts its own books, never
-// another service's). SQL, and nothing else. Same design as service-petitions/internal/store/automation.go.
+// The automation jobs' reads of SỔ VĂN BẢN ĐẾN and SỔ ĐƠN THƯ (ADR 0058 §1: each runner counts its own
+// books, never another service's). SQL, and nothing else. Same design as
+// service-petitions/internal/store/automation.go.
 //
 // THE SAME THREE GUARANTEES AS THE REST OF THIS PACKAGE: the commune is $1 from the context on every
 // table of the statement (rule 1, invariant 5), soft-deleted rows are excluded (rule 7, invariant 2),
@@ -10,12 +11,15 @@ package store
 // (identity.proto, ClaimDueAutomationRuns).
 //
 // WHAT IS READ: id, issued number, stored deadline, holders — never `trich_yeu`, `co_quan_ban_hanh` or
-// `so_ky_hieu` (free text; rule 3). A notice is composed from exactly these columns.
+// `so_ky_hieu`, and never a letter's `sender_*`, `summary` or `letter_type` (free text and personal
+// data; rule 3, ADR 0078 #4). A notice is composed from exactly these columns.
 
 import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/vihat/vigov/service-documents/internal/domain"
 )
@@ -92,6 +96,88 @@ func (s *VanBanDenStore) OpenIncomingForAutomation(ctx context.Context) ([]domai
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("van_ban_den: đọc cho việc nền: %w", err)
+	}
+	return out, nil
+}
+
+// --- citizen letters --------------------------------------------------------------------------------
+
+// letterHoldStartColumn is incomingHoldStartColumn's derivation over the letter log: `holding_unit_id`
+// and `assignee_code` are written ONLY by the routing act (CitizenLetterStore.UpdateHolder, and Insert
+// when routed at booking), and that act appends a `luan-chuyen` row copying both in the same
+// transaction (app.CitizenLetters.Route / Book). So the hold began at the FIRST routing row naming
+// (this unit, nobody) after the LAST routing row naming anything else. Fallback `updated_at` — errs
+// late, never early. `assignee_code` is NULL, never ”, on both tables (0006's CHECKs). $2 is the
+// routing kind, bound from domain.LetterLogRouting so the SQL holds no second copy of the word.
+const letterHoldStartColumn = `CASE WHEN c.holding_unit_id IS NOT NULL AND c.assignee_code IS NULL THEN COALESCE(
+	(SELECT min(lg.at) FROM citizen_letter_log lg
+	  WHERE lg.tenant_id = $1 AND lg.letter_id = c.id AND lg.kind = $2
+	    AND lg.to_unit_id = c.holding_unit_id AND lg.assignee_code IS NULL
+	    AND lg.at > COALESCE(
+	      (SELECT max(l2.at) FROM citizen_letter_log l2
+	        WHERE l2.tenant_id = $1 AND l2.letter_id = c.id AND l2.kind = $2
+	          AND (l2.to_unit_id IS DISTINCT FROM c.holding_unit_id OR l2.assignee_code IS NOT NULL)),
+	      '-infinity'::timestamptz)),
+	c.updated_at) END`
+
+// automationLetterQuery reads every live, NOT FINISHED letter carrying at least one deadline. "Not
+// finished" is the complement of domain's Finished(), bound from $3 — the set the transition table
+// draws, never a second list. Which of the two deadlines applies is decided in Go by ActiveDueAt, so a
+// letter whose only deadline belongs to a phase it has left is read and then dropped, not mis-reminded.
+func automationLetterQuery() (string, []any) {
+	args := []any{string(domain.LetterLogRouting)}
+	var open []string
+	for _, s := range domain.LetterStatuses {
+		if !s.Finished() {
+			args = append(args, string(s))
+			open = append(open, "$"+strconv.Itoa(len(args)+1))
+		}
+	}
+	return `SELECT c.id, c.year, c.number, c.status, c.processing_due_at, c.resolution_due_at,
+	COALESCE(c.holding_unit_id, ''), COALESCE(c.assignee_code, ''), ` + letterHoldStartColumn + `
+	FROM citizen_letter c
+	WHERE c.tenant_id = $1 AND c.deleted_at IS NULL AND c.status IN (` + strings.Join(open, ", ") + `)
+	  AND (c.processing_due_at IS NOT NULL OR c.resolution_due_at IS NOT NULL)
+	ORDER BY c.id`, args
+}
+
+// OpenLettersForAutomation reads, for the commune in ctx, every open letter whose CURRENT phase has a
+// deadline a clerk set (domain.CitizenLetter.ActiveDueAt). A letter left "Không đặt" is not a record
+// here at all — no reminder, no escalation, no hold report: nothing is ever sent from a default
+// (ADR 0079 lô 5 Q18). Unbounded for the reason OpenIncomingForAutomation gives.
+func (s *CitizenLetterStore) OpenLettersForAutomation(ctx context.Context) ([]domain.AutomationRecord, error) {
+	stmt, args := automationLetterQuery()
+	rows, err := s.db.For(ctx).QueryJoin(ctx, stmt, args...)
+	if err != nil {
+		return nil, fmt.Errorf("citizen_letter: đọc cho việc nền: %w", err)
+	}
+	defer rows.Close()
+	var out []domain.AutomationRecord
+	for rows.Next() {
+		var (
+			r                     domain.AutomationRecord
+			year, number          int
+			status                string
+			procDue, resDue, hold sql.NullTime
+		)
+		if err := rows.Scan(&r.ID, &year, &number, &status, &procDue, &resDue, &r.OrgUnitID, &r.AssigneeMa, &hold); err != nil {
+			return nil, fmt.Errorf("citizen_letter: đọc cho việc nền: đọc dòng: %w", err)
+		}
+		l := domain.CitizenLetter{Status: domain.LetterStatus(status),
+			ProcessingDueAt: nullTime(procDue), ResolutionDueAt: nullTime(resDue)}
+		due := l.ActiveDueAt()
+		if due.IsZero() {
+			continue
+		}
+		r.Code = domain.LetterAuditSubject(year, number)
+		r.Deadline = due.UTC()
+		if hold.Valid {
+			r.HoldStartedAt = hold.Time.UTC()
+		}
+		out = append(out, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("citizen_letter: đọc cho việc nền: %w", err)
 	}
 	return out, nil
 }

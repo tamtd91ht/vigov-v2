@@ -164,6 +164,7 @@ type CitizenLetterService interface {
 	Move(ctx context.Context, id string, req app.MoveLetterRequest, caller app.LetterCaller) (domain.CitizenLetter, error)
 	RecordResult(ctx context.Context, id string, req app.LetterResultRequest, caller app.LetterCaller) (domain.CitizenLetter, error)
 	CorrectSender(ctx context.Context, id string, req app.SenderCorrection, caller app.LetterCaller) (domain.CitizenLetter, error)
+	SetDeadline(ctx context.Context, id string, due time.Time, caller app.LetterCaller) (domain.CitizenLetter, error)
 	AddNote(ctx context.Context, id, content string, caller app.LetterCaller) (domain.LetterLogEntry, error)
 	Detail(ctx context.Context, id string, viewer app.LetterCaller) (domain.CitizenLetter, domain.LetterDisclosure, error)
 	Log(ctx context.Context, id string) ([]domain.LetterLogEntry, error)

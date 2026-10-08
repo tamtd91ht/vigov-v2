@@ -91,12 +91,16 @@ var (
 	// incoming register draws (ErrSoDoTuClient and its two siblings).
 	ErrLetterNumberFromClient = inputRefusal("Đơn thư: số vào sổ do hệ thống cấp, không nhận từ client.")
 	ErrLetterStatusFromClient = inputRefusal("Đơn thư: trạng thái do luồng xử lý quyết định, không nhận từ client.")
-	ErrLetterDueFromClient    = inputRefusal("Đơn thư: hạn xử lý và hạn giải quyết không nhận từ client — sổ đơn thư hiện chưa đặt hạn (ADR 0078 #3).")
+	ErrLetterDueFromClient    = inputRefusal("Đơn thư: hạn xử lý không đặt lúc vào sổ — vào sổ xong, đặt hạn bằng thao tác Đặt hạn xử lý của đơn.")
+
+	ErrLetterDueInvalid = inputRefusal("Hạn xử lý: phải là một thời điểm dạng RFC 3339 (ví dụ 2026-10-20T17:00:00+07:00), hoặc null để bỏ hạn.")
+	ErrLetterDueTooFar  = inputRefusal("Hạn xử lý: năm phải từ 2000 đến 2200.")
 
 	ErrLetterTransitionRefused = stateRefusal("Không chuyển được đơn từ trạng thái hiện tại sang trạng thái đã chọn.")
 	ErrLetterNeedsResult       = stateRefusal("Chưa ghi kết quả giải quyết (văn bản đã ban hành và tóm tắt) nên chưa chuyển được sang Đã giải quyết. Hãy ghi kết quả trước.")
 	ErrLetterResultNotAllowed  = stateRefusal("Chỉ ghi kết quả giải quyết khi đơn đang ở Thụ lý hoặc Đang giải quyết.")
 	ErrLetterFinished          = stateRefusal("Đơn đã kết thúc xử lý nên không chuyển tiếp được.")
+	ErrLetterDueOnFinished     = stateRefusal("Đơn đã kết thúc xử lý nên không đặt hay bỏ hạn xử lý được.")
 
 	ErrLetterNotPermitted = &LetterError{Refusal: RefusalNotPermitted,
 		Msg: "Chỉ cán bộ được giao xử lý đơn này hoặc người có quyền Tiếp nhận đơn thư mới thực hiện được thao tác này."}
@@ -234,8 +238,9 @@ const (
 
 // CitizenLetter is one row of the register.
 //
-// THE TWO DUE INSTANTS ARE STORED, NEVER COMPUTED HERE (rule 10, invariant 2), AND ARE ZERO THIS RUN
-// (ADR 0078 #3). THERE IS NO OVERDUE FIELD: IsOverdue derives it (rule 10, invariant 3).
+// THE TWO DUE INSTANTS ARE STORED, NEVER COMPUTED HERE (rule 10, invariant 2). Each is the instant a
+// clerk SET, as set, or zero for "Không đặt" (ADR 0079 lô 5 Q18; SetActiveDue). THERE IS NO OVERDUE
+// FIELD: IsOverdue derives it (rule 10, invariant 3).
 //
 // ClosedAt IS DERIVED ON READ by the store — `resolved_at` for the two ends of resolution, the instant
 // of the log row that moved the letter into one of the four processing-phase outcomes otherwise. Not a
@@ -315,17 +320,59 @@ func (l CitizenLetter) SenderUnknown() bool {
 // ActiveDueAt is the commitment that applies to the letter's CURRENT phase: the processing deadline
 // before admission, the resolution deadline after it, none once finished. Zero = none set.
 func (l CitizenLetter) ActiveDueAt() time.Time {
-	switch l.Status {
-	case LetterStatusNew, LetterStatusScreening:
+	switch LetterDueColumn(l.Status) {
+	case "processing_due_at":
 		return l.ProcessingDueAt
-	case LetterStatusAdmitted, LetterStatusResolving:
+	case "resolution_due_at":
 		return l.ResolutionDueAt
 	}
 	return time.Time{}
 }
 
-// IsOverdue DERIVES lateness (rule 10, invariant 3). A letter with no deadline is never late — which
-// is every letter this run, so every overdue figure is 0 until a letter deadline can be fixed.
+// LetterDueColumn names the column ActiveDueAt reads for a status — the one SetActiveDue writes. ""
+// for a finished letter, which has no active deadline.
+func LetterDueColumn(s LetterStatus) string {
+	switch s {
+	case LetterStatusNew, LetterStatusScreening:
+		return "processing_due_at"
+	case LetterStatusAdmitted, LetterStatusResolving:
+		return "resolution_due_at"
+	}
+	return ""
+}
+
+// SetActiveDue is the clerk's "Hạn xử lý" (ADR 0079 lô 5 Q18, the prototype's PetitionDetailDrawer
+// :519-523): ONE deadline, typed by a clerk, optional. It is written to the deadline of the letter's
+// CURRENT phase — the column ActiveDueAt reads — so what the drawer shows, what the reminders compare
+// and what the report counts are one value:
+//
+//	moi-vao-so · dang-xu-ly-don      processing_due_at
+//	thu-ly · dang-giai-quyet         resolution_due_at (0006 binds it to `accepted_at`, set in these)
+//	any finishing status             refused — a closed letter has no deadline to keep
+//
+// `due` is stored EXACTLY as given (rule 10, invariant 2: fixed at the act, never recomputed); zero
+// clears it ("Không đặt"). Nothing here adds an hour or reads a calendar: the clerk's instant IS the
+// commitment, which is why ADR 0064's working-day questions are not decided by this path.
+//
+// AFTER `thu-ly` THE PROCESSING DEADLINE STOPS APPLYING and the resolution one is "Không đặt" until a
+// clerk sets it — TT 05/2021's two phases (C8), which 0006 already drew as two columns.
+func (l CitizenLetter) SetActiveDue(due time.Time) (CitizenLetter, error) {
+	if !due.IsZero() && (due.Year() < 2000 || due.Year() > 2200) {
+		return l, ErrLetterDueTooFar
+	}
+	switch LetterDueColumn(l.Status) {
+	case "processing_due_at":
+		l.ProcessingDueAt = due
+	case "resolution_due_at":
+		l.ResolutionDueAt = due
+	default:
+		return l, ErrLetterDueOnFinished
+	}
+	return l, nil
+}
+
+// IsOverdue DERIVES lateness (rule 10, invariant 3). A letter with no deadline is never late — a clerk
+// may leave the deadline unset ("Không đặt"), and no default stands in for it.
 func (l CitizenLetter) IsOverdue(now time.Time) bool {
 	due := l.ActiveDueAt()
 	return !due.IsZero() && now.After(due)
@@ -584,8 +631,8 @@ func RankDuplicates(summary string, candidates []CitizenLetter) []DuplicateCandi
 //	ClosedInProcessing  booked in the year and ended in one of the four processing-phase outcomes —
 //	                    neither resolved nor in progress; reported so the figures reconcile.
 //	InProgress          not finished NOW, booked in the year or carried over from an earlier year.
-//	PastDue             not finished, a deadline exists and is past now. DERIVED (rule 10). 0 while no
-//	                    letter carries a deadline (ADR 0078 #3).
+//	PastDue             not finished, a deadline exists and is past now. DERIVED (rule 10). A letter
+//	                    whose clerk set no deadline is never counted.
 //	OnTimePercent       C12: among letters resolved in the year WITH a resolution deadline, the share
 //	                    resolved at or before it. nil when there is none — never 100%.
 //	AverageDays         C16: mean DaysOpen of letters resolved in the year. nil when none.

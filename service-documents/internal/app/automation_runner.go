@@ -4,7 +4,8 @@ package app
 // the data — ADR 0058 (user decision 2026-09-29). COPIED IN DESIGN from service-petitions'
 // internal/app/automation_runner.go, deliberately (ADR 0058 §Hệ quả: "ba vòng lặp giống nhau ở hai
 // service" — lifting the shared part into core/ is a later build step, not this one). This service
-// runs the three jobs over the incoming-document register (VAN_BAN_DEN).
+// runs the three jobs over two registers: incoming documents (VAN_BAN_DEN) and citizen letters
+// (DON_THU, ADR 0079 lô 5 Q18 — only letters carrying a clerk-set deadline).
 //
 // ONE TICK A MINUTE (ADR 0058 §7: "chạy ngay" is only a mark in identity, picked up at the next tick,
 // ≤ 1 minute). Per tick:
@@ -79,6 +80,11 @@ type IncomingAutomationReader interface {
 	OpenIncomingForAutomation(ctx context.Context) ([]domain.AutomationRecord, error)
 }
 
+// LetterAutomationReader is the citizen-letter register's read for the jobs. *store.CitizenLetterStore.
+type LetterAutomationReader interface {
+	OpenLettersForAutomation(ctx context.Context) ([]domain.AutomationRecord, error)
+}
+
 // AutomationDeps wires the runner.
 type AutomationDeps struct {
 	Communes CommuneLister
@@ -87,6 +93,7 @@ type AutomationDeps struct {
 	Identity AutomationIdentity
 	Comms    NoticeDeliverer
 	Incoming IncomingAutomationReader
+	Letters  LetterAutomationReader
 	Log      *slog.Logger
 }
 
@@ -100,7 +107,7 @@ type AutomationRunner struct {
 // claim runs it cannot execute, and a claimed slot is not given back.
 func NewAutomationRunner(d AutomationDeps) (*AutomationRunner, error) {
 	if d.Communes == nil || d.Locks == nil || d.Registry == nil || d.Identity == nil || d.Comms == nil ||
-		d.Incoming == nil {
+		d.Incoming == nil || d.Letters == nil {
 		return nil, errors.New("bộ chạy tự động hoá: thiếu phụ thuộc")
 	}
 	if d.Log == nil {
@@ -122,16 +129,13 @@ var automationJobs = []automationJob{
 }
 
 // automationKinds are the WorkKinds this runner CLAIMS — only kinds it owns (a runner claiming another
-// service's scope silently takes its runs away — identity.proto, ClaimDueAutomationRuns).
-//
-// WORK_KIND_DON_THU IS OWNED HERE AND DELIBERATELY NOT CLAIMED. `don_thu` does not exist in this
-// service: no register, no stored deadline. A claimed run must end in a recorded outcome, and every
-// available outcome would be false: SUCCEEDED with nothing examined tells the commune's configuration
-// screen "ran, nothing due" about letters nobody checked; FAILED every five minutes is a fault that is
-// not one. Unclaimed, the scope reads "never run", which is true. Add it here in the same change that
-// adds the register and its `han_xu_ly_xong` (rule 10: a deadline is stored at the act that fixes it).
+// service's scope silently takes its runs away — identity.proto, ClaimDueAutomationRuns). Both are
+// this service's registers, and each has a stored deadline to compare with: `han_xu_ly_xong` for an
+// incoming document, the clerk-set "Hạn xử lý" for a letter (ADR 0079 lô 5 Q18). A letter without one
+// is simply not a record of the run — SUCCEEDED over zero letters is then the truth, not a guess.
 var automationKinds = []identityv1.WorkKind{
 	identityv1.WorkKind_WORK_KIND_VAN_BAN_DEN,
+	identityv1.WorkKind_WORK_KIND_DON_THU,
 }
 
 // Run ticks until ctx is cancelled — once at start, then every interval.
@@ -236,7 +240,8 @@ func (r *AutomationRunner) execute(ctx context.Context, run identityclient.Autom
 		}
 	}()
 
-	if run.WorkKind != identityv1.WorkKind_WORK_KIND_VAN_BAN_DEN || run.ClaimedAt.IsZero() {
+	reg, ok := registerFor(run.WorkKind)
+	if !ok || run.ClaimedAt.IsZero() {
 		out.Outcome = identityv1.AutomationRunOutcome_AUTOMATION_RUN_OUTCOME_FAILED
 		return out
 	}
@@ -246,11 +251,11 @@ func (r *AutomationRunner) execute(ctx context.Context, run identityclient.Autom
 	)
 	switch run.Job {
 	case identityv1.AutomationJob_AUTOMATION_JOB_SLA_REMINDERS:
-		p, err = r.slaReminders(ctx, run.ClaimedAt)
+		p, err = r.slaReminders(ctx, reg, run.ClaimedAt)
 	case identityv1.AutomationJob_AUTOMATION_JOB_ESCALATION:
-		p, err = r.escalation(ctx, run.ClaimedAt)
+		p, err = r.escalation(ctx, reg, run.ClaimedAt)
 	case identityv1.AutomationJob_AUTOMATION_JOB_WEEKLY_DIGEST:
-		p, err = r.weeklyDigest(ctx, run.ClaimedAt)
+		p, err = r.weeklyDigest(ctx, reg, run.ClaimedAt)
 	default:
 		err = fmt.Errorf("việc nền không biết: %v", run.Job)
 	}

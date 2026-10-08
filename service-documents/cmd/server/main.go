@@ -276,8 +276,8 @@ func run(log *slog.Logger) error {
 		return err
 	}
 
-	// THE AUTOMATION RUNNER (ADR 0058) — the Tự động hoá tab's jobs over the incoming register, in this
-	// process because this service owns it. It reads the SAME store the REST routes and /tong-quan read
+	// THE AUTOMATION RUNNER (ADR 0058) — the Tự động hoá tab's jobs over the incoming register and the
+	// citizen-letter register (ADR 0079 lô 5 Q18), in this process because this service owns both. It reads the SAME store the REST routes and /tong-quan read
 	// (so a reminder and the register agree), asks identity over the SAME client, reads commune status
 	// over the SAME platform connection, and writes nothing here: notices go to comms, the run's trail
 	// to identity.
@@ -297,7 +297,7 @@ func run(log *slog.Logger) error {
 		automation := crosstenant.NewAutomation(db)
 		runner, err := app.NewAutomationRunner(app.AutomationDeps{
 			Communes: automation, Locks: automation, Registry: nenTang, Identity: dinhDanh, Comms: comms,
-			Incoming: vanBanDen, Log: log,
+			Incoming: vanBanDen, Letters: docstore.NewCitizenLetterStore(kho), Log: log,
 		})
 		if err != nil {
 			return err

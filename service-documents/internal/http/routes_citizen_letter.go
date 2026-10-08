@@ -1,11 +1,12 @@
 package http
 
-// SỔ ĐƠN THƯ CÔNG DÂN — eleven routes (ADR 0039, ADR 0078 #2–#4). Handlers and masking:
+// SỔ ĐƠN THƯ CÔNG DÂN — twelve routes (ADR 0039, ADR 0078 #2–#4, ADR 0079 lô 5 Q18). Handlers and masking:
 // citizen_letter.go.
 //
 // TWO KEYS, BOTH SEEDED, NONE INVENTED (rule 5, invariant 3c): `petition.create` ("Tiếp nhận đơn
 // thư") and `petition.read` ("Xem đơn thư"), service-identity/migrations/0001_init.sql:302-303. C13/C14
-// (ledger `so-don-thu-cong-dan`, user decision 24/09/2026): booking and routing are `petition.create`;
+// (ledger `so-don-thu-cong-dan`, user decision 24/09/2026): booking, routing and the deadline are
+// `petition.create`;
 // a status change is `petition.read` AND (the letter's assignee OR a holder of `petition.create`).
 //
 // THE THIRD GROUP — status, result, log-entries — IS GATED ON `petition.read` AT THE ROUTE, and the
@@ -21,7 +22,8 @@ package http
 // A finding for open question #27, not a decision.
 //
 // THE NOUN `citizen-letters` IS THE GLOSSARY'S (kb/00-foundation/ubiquitous-language.md:142). The
-// sub-resources `duplicates`, `routings` (as incoming-documents), `status`, `result`, `sender`, `log`,
+// sub-resources `duplicates`, `routings` (as incoming-documents), `status`, `result`, `sender`,
+// `deadline`, `log`,
 // `log-entries` (as citizen-reports and tasks) and the singular `citizen-letter-report` were chosen
 // here (ADR 0011: reported, not settled). `citizen-letter-report` is its OWN first segment so
 // tools/ingress routes it to this service like `incoming-document-summary`.
@@ -38,7 +40,7 @@ func registerCitizenLetterRoutes(mux *http.ServeMux, d Deps, h *Handler) {
 	// the incoming register's call and for its reason: during a Redis outage a double-submitted form
 	// would take THE NEXT NUMBER, and an issued number is never given back (rule 7, invariant 3).
 	//
-	// @summary  Vào sổ một đơn thư công dân; hệ thống cấp số theo dãy của xã trong năm, chưa đặt hạn (ADR 0078 #3)
+	// @summary  Vào sổ một đơn thư công dân; hệ thống cấp số theo dãy của xã trong năm; hạn xử lý đặt sau bằng PATCH …/deadline
 	// @screen   05-van-ban-don-thu §3.4
 	// @request  bookLetterIn
 	// @reply    201 citizenLetterOut
@@ -181,6 +183,26 @@ func registerCitizenLetterRoutes(mux *http.ServeMux, d Deps, h *Handler) {
 		authz.RequirePermission(d.Checker, "petition.create")(
 			idem.KhongCan("ghi đè một trạng thái đã biết; app.CorrectSender không ghi gì khi không trường nào đổi")(
 				http.HandlerFunc(h.CorrectCitizenLetterSender))))
+
+	// HẠN XỬ LÝ — the clerk's deadline (ADR 0079 lô 5 Q18; prototype PetitionDetailDrawer.tsx:519-523,
+	// set through PATCH /petitions/{id} under `petition.create`, router.py:430-433). Optional: null
+	// clears it ("Không đặt"). Stored as sent, on the CURRENT phase's column; refused (409) on a
+	// finished letter. The audit entry carries the deadline before and after.
+	//
+	// @summary  Đặt hoặc bỏ hạn xử lý của đơn thư do cán bộ nhập (null = Không đặt); lưu nguyên giá trị, áp cho giai đoạn hiện tại của đơn
+	// @screen   05-van-ban-don-thu §3.5
+	// @request  letterDeadlineIn
+	// @reply    200 citizenLetterOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/citizen-letters/{id}/deadline",
+		authz.RequirePermission(d.Checker, "petition.create")(
+			idem.KhongCan("ghi đè một trạng thái đã biết; app.SetDeadline không ghi gì và không để vết khi hạn không đổi")(
+				http.HandlerFunc(h.SetCitizenLetterDeadline))))
 
 	// GHI NHẬT KÝ — idem.Required(MoKhiHong): a double-submitted note is a duplicate line in an
 	// append-only log that can never be removed, but refusing an officer's note during a cache outage

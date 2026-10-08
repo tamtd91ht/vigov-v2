@@ -49,8 +49,9 @@ import (
 // citizenLetterItemOut is one row of the register list.
 //
 // THERE IS NO `overdue` FIELD (rule 10, invariant 3 — vanBanDenRa says why a boolean beside the
-// deadline is a second copy of one fact). The two due instants are the facts; both are null this run
-// (ADR 0078 #3), which the screen renders as "Không đặt hạn".
+// deadline is a second copy of one fact). The two due instants are the facts, each as a clerk set it
+// (PATCH …/deadline); null is "Không đặt". The one that applies is the CURRENT phase's —
+// `processing_due_at` before `thu-ly`, `resolution_due_at` from it (domain.CitizenLetter.ActiveDueAt).
 //
 // `days_open` IS NOT A DEADLINE: it counts days already spent (C16/C17), so it is computed on read.
 type citizenLetterItemOut struct {
@@ -379,6 +380,13 @@ type letterNoteIn struct {
 	Content string `json:"content"`
 }
 
+// letterDeadlineIn documents PATCH /api/v1/citizen-letters/{id}/deadline: `due_at` is REQUIRED as a key
+// — an RFC 3339 instant sets the deadline, null clears it ("Không đặt"). Parsed by key presence
+// (readLetterDeadline): an absent key must not read as "clear".
+type letterDeadlineIn struct {
+	DueAt *string `json:"due_at"`
+}
+
 // --- handlers ---------------------------------------------------------------------------------------
 
 // letterCaller builds the acting member of staff: the audit actor from Principal.Ma (nguoiThucHien —
@@ -620,6 +628,25 @@ func (h *Handler) CorrectCitizenLetterSender(w http.ResponseWriter, r *http.Requ
 	vietJSON(w, http.StatusOK, letterOut(l, domain.DetailDisclosure(l, caller.Actor.ID, caller.CanBook), h.now()))
 }
 
+// SetCitizenLetterDeadline — PATCH /api/v1/citizen-letters/{id}/deadline
+func (h *Handler) SetCitizenLetterDeadline(w http.ResponseWriter, r *http.Request) {
+	due, ok := readLetterDeadline(w, r)
+	if !ok {
+		return
+	}
+	caller, ok := h.letterCaller(r)
+	if !ok {
+		h.thieuChuThe(w, r)
+		return
+	}
+	l, err := h.d.CitizenLetters.SetDeadline(r.Context(), r.PathValue("id"), due, caller)
+	if err != nil {
+		h.letterError(w, r, "đặt hạn xử lý", err)
+		return
+	}
+	vietJSON(w, http.StatusOK, letterOut(l, domain.DetailDisclosure(l, caller.Actor.ID, caller.CanBook), h.now()))
+}
+
 // AddCitizenLetterNote — POST /api/v1/citizen-letters/{id}/log-entries
 func (h *Handler) AddCitizenLetterNote(w http.ResponseWriter, r *http.Request) {
 	var in letterNoteIn
@@ -754,6 +781,43 @@ func readSenderCorrection(w http.ResponseWriter, r *http.Request) (app.SenderCor
 		*target = &s
 	}
 	return corr, true
+}
+
+// readLetterDeadline reads the deadline PATCH: exactly one key, `due_at`, a string or null. Absent →
+// 400 (never "clear"); another key → 400 (a client must not believe it changed something else here).
+// The instant is parsed as RFC 3339 and kept AS GIVEN — no rounding to a day, no time of day added:
+// the prototype stores the instant its date field sends (PetitionUpdate.due_at, a datetime).
+func readLetterDeadline(w http.ResponseWriter, r *http.Request) (time.Time, bool) {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, thanToiDa))
+	var raw map[string]json.RawMessage
+	if err == nil {
+		err = json.Unmarshal(body, &raw)
+	}
+	if err != nil || raw == nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Nội dung gửi lên không phải JSON hợp lệ hoặc quá lớn.", "")
+		return time.Time{}, false
+	}
+	val, present := raw["due_at"]
+	if !present || len(raw) != 1 {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Chỉ gửi đúng một trường due_at: thời điểm RFC 3339 để đặt hạn, hoặc null để bỏ hạn.", "")
+		return time.Time{}, false
+	}
+	if bytes.Equal(bytes.TrimSpace(val), []byte("null")) {
+		return time.Time{}, true
+	}
+	var s string
+	if err := json.Unmarshal(val, &s); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", domain.ErrLetterDueInvalid.Msg, "")
+		return time.Time{}, false
+	}
+	due, err := time.Parse(time.RFC3339, s)
+	if err != nil || due.IsZero() {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", domain.ErrLetterDueInvalid.Msg, "")
+		return time.Time{}, false
+	}
+	return due, true
 }
 
 // --- errors -----------------------------------------------------------------------------------------

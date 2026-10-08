@@ -1,22 +1,29 @@
 package app
 
-// The three jobs over SỔ VĂN BẢN ĐẾN (ADR 0058 §4, §8; ADR 0029 §Bổ sung 29/09) and the delivery of
-// their notices. Same design as service-petitions' internal/app/automation_jobs.go.
+// The three jobs over SỔ VĂN BẢN ĐẾN and SỔ ĐƠN THƯ (ADR 0058 §4, §8; ADR 0029 §Bổ sung 29/09; ADR 0079
+// lô 5 Q18) and the delivery of their notices. Same design as service-petitions'
+// internal/app/automation_jobs.go. ONE CODE PATH FOR BOTH REGISTERS: what differs — the WorkKind every
+// identity question carries, the "hands out work" key, the notices' noun, links and key namespace — is
+// an automationRegister, so a letter is reminded about exactly as a document is.
 //
 // A JOB FIRST BUILDS A PLAN, THEN DELIVERS IT. Every identity question is asked while planning; a
 // failure there (outage, contract fault) stops the run with NOTHING delivered, and the next run redoes
 // it under the same idempotency keys. FAILED_PRECONDITION (the commune has no usable `sla` row for
-// `van-ban-den`) drops the notices that depended on it — nothing is ever sent from a default — and the
-// run is recorded CONFIGURATION_MISSING, so the commune sees it on the configuration screen.
+// the register's kind) drops the notices that depended on it — nothing is ever sent from a default —
+// and the run is recorded CONFIGURATION_MISSING, so the commune sees it on the configuration screen.
 //
-// ONE FIELD, "": the register has no `lĩnh vực` (app.VanBanDen.hanXuLyXong), so every identity
-// question reads the commune's DEFAULT `van-ban-den` row — the same row the deadline was fixed from.
+// ONE FIELD, "": neither register has a `lĩnh vực` (app.VanBanDen.hanXuLyXong; `don-thu` takes the
+// default row only — service-identity sla_field_rule.go), so every identity question reads the
+// commune's DEFAULT row of the register's kind. For a letter that row supplies the reminder
+// THRESHOLDS only (due-soon lead, escalation, unassigned hold); the deadline itself is the one the
+// clerk set, compared as stored (ADR 0079 lô 5 Q18: "dùng hạn đã lưu và dòng SLA mặc định").
 //
 // WHO IS TOLD, in one chain for every job, fail closed at each step:
 //
-//	the named holder (`can_bo_xu_ly_ma`)
-//	  →  the people in the holding unit who route its documents (`document.route`,
-//	     ResolveOrgUnitPermissionHolders — the key the contract names for incoming documents)
+//	the named holder (`can_bo_xu_ly_ma` / `assignee_code`)
+//	  →  the people in the holding unit who hand out its work — `document.route` for incoming
+//	     documents (the key the contract names), `petition.create` for letters (the key that books and
+//	     routes them, C13) — ResolveOrgUnitPermissionHolders
 //	  →  the leadership (ResolveLeadershipStaff) — the contract's fallback for work with neither
 //
 // ALL LATENESS IS IDENTITY'S INSTANTS compared with `claimed_at` (rule 10, forbidden #2 and
@@ -41,10 +48,37 @@ import (
 // ResolveOrgUnitPermissionHolders for incoming documents.
 const permDocumentRoute = "document.route"
 
-// incomingWorkKind is the contract value every identity question of this runner carries.
-const incomingWorkKind = identityv1.WorkKind_WORK_KIND_VAN_BAN_DEN
+// permLetterBook means "books and routes this commune's citizen letters" — `petition.create`, a row of
+// `quyen` (service-identity/migrations/0001_init.sql:302) and the key routes_citizen_letter.go gates
+// booking and routing on. NOT a new key (rule 5, invariant 3c).
+const permLetterBook = "petition.create"
 
-// defaultSLARow is the `linh_vuc` of every question: the register has none (file header).
+// automationRegister is one register's part of the runner.
+type automationRegister struct {
+	workKind   identityv1.WorkKind
+	notices    domain.NoticeRegister
+	permission string // ResolveOrgUnitPermissionHolders' key: who hands out this register's work
+}
+
+var (
+	incomingRegister = automationRegister{workKind: identityv1.WorkKind_WORK_KIND_VAN_BAN_DEN,
+		notices: domain.IncomingNotices, permission: permDocumentRoute}
+	letterRegister = automationRegister{workKind: identityv1.WorkKind_WORK_KIND_DON_THU,
+		notices: domain.LetterNotices, permission: permLetterBook}
+)
+
+// registerFor is the register a claimed run's kind names; false for a kind this runner does not own.
+func registerFor(k identityv1.WorkKind) (automationRegister, bool) {
+	switch k {
+	case incomingRegister.workKind:
+		return incomingRegister, true
+	case letterRegister.workKind:
+		return letterRegister, true
+	}
+	return automationRegister{}, false
+}
+
+// defaultSLARow is the `linh_vuc` of every question: neither register has one (file header).
 const defaultSLARow = ""
 
 // maxRecipientsPerNotice is comms' bound on one notice (1 to 200); a longer list is split into
@@ -73,9 +107,20 @@ func (p automationPlan) withoutRecipientCount() int {
 	return len(p.withoutRecipient) + p.digestWithoutRecipient
 }
 
-// loadRecords reads the open documents. A store failure is a dependency failure.
-func (r *AutomationRunner) loadRecords(ctx context.Context) ([]domain.AutomationRecord, error) {
-	recs, err := r.d.Incoming.OpenIncomingForAutomation(ctx)
+// loadRecords reads the register's open records. A store failure is a dependency failure.
+func (r *AutomationRunner) loadRecords(ctx context.Context, reg automationRegister) ([]domain.AutomationRecord, error) {
+	var (
+		recs []domain.AutomationRecord
+		err  error
+	)
+	switch reg.workKind {
+	case incomingRegister.workKind:
+		recs, err = r.d.Incoming.OpenIncomingForAutomation(ctx)
+	case letterRegister.workKind:
+		recs, err = r.d.Letters.OpenLettersForAutomation(ctx)
+	default:
+		return nil, fmt.Errorf("việc nền: sổ không biết: %v", reg.workKind)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", errAutomationStore, err)
 	}
@@ -84,9 +129,9 @@ func (r *AutomationRunner) loadRecords(ctx context.Context) ([]domain.Automation
 
 // --- sla_reminders ---------------------------------------------------------------------------------
 
-func (r *AutomationRunner) slaReminders(ctx context.Context, asOf time.Time) (automationPlan, error) {
+func (r *AutomationRunner) slaReminders(ctx context.Context, reg automationRegister, asOf time.Time) (automationPlan, error) {
 	var p automationPlan
-	recs, err := r.loadRecords(ctx)
+	recs, err := r.loadRecords(ctx, reg)
 	if err != nil {
 		return p, err
 	}
@@ -99,7 +144,7 @@ func (r *AutomationRunner) slaReminders(ctx context.Context, asOf time.Time) (au
 	)
 	for _, x := range recs {
 		if x.Deadline.After(asOf) {
-			c, err := r.d.Identity.DueSoonCutoff(ctx, incomingWorkKind, defaultSLARow, asOf)
+			c, err := r.d.Identity.DueSoonCutoff(ctx, reg.workKind, defaultSLARow, asOf)
 			switch {
 			case errors.Is(err, identityclient.ErrDueSoonNotConfigured):
 				p.configMissing = true
@@ -122,7 +167,7 @@ func (r *AutomationRunner) slaReminders(ctx context.Context, asOf time.Time) (au
 	holdDue := map[time.Time]time.Time{}
 	holdReported := len(held) > 0
 	for _, page := range pageInstants(held, func(x domain.AutomationRecord) time.Time { return x.HoldStartedAt }) {
-		off, got, err := r.d.Identity.UnassignedHoldInstants(ctx, incomingWorkKind, defaultSLARow, page)
+		off, got, err := r.d.Identity.UnassignedHoldInstants(ctx, reg.workKind, defaultSLARow, page)
 		if errors.Is(err, identityclient.ErrAutomationNotConfigured) {
 			p.configMissing = true
 			holdReported = false
@@ -165,7 +210,7 @@ func (r *AutomationRunner) slaReminders(ctx context.Context, asOf time.Time) (au
 			}
 		}
 	}
-	book, err := r.newRecipientBook(ctx, unnamed, len(unnamed) > 0)
+	book, err := r.newRecipientBook(ctx, reg, unnamed, len(unnamed) > 0)
 	if err != nil {
 		return p, err
 	}
@@ -185,7 +230,7 @@ func (r *AutomationRunner) slaReminders(ctx context.Context, asOf time.Time) (au
 		}
 	}
 	for _, ma := range sortedKeys(perPerson) {
-		p.notices = append(p.notices, domain.DueSoonNotice(day, ma, perPerson[ma]))
+		p.notices = append(p.notices, reg.notices.DueSoon(day, ma, perPerson[ma]))
 	}
 	for _, x := range late {
 		to := book.chain(x)
@@ -193,7 +238,7 @@ func (r *AutomationRunner) slaReminders(ctx context.Context, asOf time.Time) (au
 			p.nobody(x.ID)
 			continue
 		}
-		p.notices = append(p.notices, domain.OverdueNotice(x, day, to))
+		p.notices = append(p.notices, reg.notices.Overdue(x, day, to))
 	}
 	for _, x := range unassigned {
 		to := book.chain(x)
@@ -201,22 +246,22 @@ func (r *AutomationRunner) slaReminders(ctx context.Context, asOf time.Time) (au
 			p.nobody(x.ID)
 			continue
 		}
-		p.notices = append(p.notices, domain.UnassignedNotice(x, to))
+		p.notices = append(p.notices, reg.notices.Unassigned(x, to))
 	}
 	return p, nil
 }
 
 // --- escalation ------------------------------------------------------------------------------------
 
-// escalation tells the unit head, then the leadership, once each, when a late document's lateness
-// crosses the commune's two thresholds, counted from `han_xu_ly_xong` (the register's one clock).
+// escalation tells the unit head, then the leadership, once each, when a late record's lateness
+// crosses the commune's two thresholds, counted from its stored deadline (the register's one clock).
 //
 // ⚠ ADR 0058 open question #3 (which kinds escalate) is still the user's; the contract allows every
-// WorkKind and the caller's card asked for documents. A commune that does not want it switches the
-// `escalation` job off — the setting is per job, so that also stops the petitions half.
-func (r *AutomationRunner) escalation(ctx context.Context, asOf time.Time) (automationPlan, error) {
+// WorkKind and the cards asked for documents and letters. A commune that does not want it switches the
+// `escalation` job off for the kind on the configuration screen (the scope is job × kind).
+func (r *AutomationRunner) escalation(ctx context.Context, reg automationRegister, asOf time.Time) (automationPlan, error) {
 	var p automationPlan
-	recs, err := r.loadRecords(ctx)
+	recs, err := r.loadRecords(ctx, reg)
 	if err != nil {
 		return p, err
 	}
@@ -230,7 +275,7 @@ func (r *AutomationRunner) escalation(ctx context.Context, asOf time.Time) (auto
 	}
 	instants := map[time.Time]identityclient.EscalationInstants{}
 	for _, page := range pageInstants(late, func(x domain.AutomationRecord) time.Time { return x.Deadline }) {
-		ans, err := r.d.Identity.EscalationInstants(ctx, incomingWorkKind, defaultSLARow, page)
+		ans, err := r.d.Identity.EscalationInstants(ctx, reg.workKind, defaultSLARow, page)
 		if errors.Is(err, identityclient.ErrAutomationNotConfigured) {
 			p.configMissing = true
 			return p, nil // nothing escalates from a default
@@ -243,7 +288,7 @@ func (r *AutomationRunner) escalation(ctx context.Context, asOf time.Time) (auto
 		}
 	}
 
-	book, err := r.newRecipientBook(ctx, late, len(late) > 0)
+	book, err := r.newRecipientBook(ctx, reg, late, len(late) > 0)
 	if err != nil {
 		return p, err
 	}
@@ -255,14 +300,14 @@ func (r *AutomationRunner) escalation(ctx context.Context, asOf time.Time) (auto
 		// the chairman's instant first (identity.proto, EscalationInstants.chairman_due_at).
 		if !in.UnitHeadDueAt.IsZero() && !in.UnitHeadDueAt.After(asOf) {
 			if to := book.unitHolders(x); len(to) > 0 {
-				p.notices = append(p.notices, domain.EscalationNotice(x, domain.EscalationUnitHead, to))
+				p.notices = append(p.notices, reg.notices.Escalation(x, domain.EscalationUnitHead, to))
 			} else {
 				p.nobody(x.ID)
 			}
 		}
 		if !in.ChairmanDueAt.IsZero() && !in.ChairmanDueAt.After(asOf) {
 			if len(book.leaders) > 0 {
-				p.notices = append(p.notices, domain.EscalationNotice(x, domain.EscalationChairman, book.leaders))
+				p.notices = append(p.notices, reg.notices.Escalation(x, domain.EscalationChairman, book.leaders))
 			} else {
 				p.nobody(x.ID)
 			}
@@ -273,18 +318,18 @@ func (r *AutomationRunner) escalation(ctx context.Context, asOf time.Time) (auto
 
 // --- weekly_digest ---------------------------------------------------------------------------------
 
-// weeklyDigest sends the leadership this service's part of the Monday summary (ADR 0058 §8, two
-// parts by owning service). Documents part: overdue, and due within the next 7 calendar days. The
-// đơn thư line the caller's card named is absent because the register is (domain/automation.go).
-func (r *AutomationRunner) weeklyDigest(ctx context.Context, asOf time.Time) (automationPlan, error) {
+// weeklyDigest sends the leadership this service's part of the Monday summary (ADR 0058 §8, parts by
+// owning service): per register, overdue and due within the next 7 calendar days. A letter without a
+// clerk-set deadline is in neither figure — it is not a record of the run.
+func (r *AutomationRunner) weeklyDigest(ctx context.Context, reg automationRegister, asOf time.Time) (automationPlan, error) {
 	var p automationPlan
-	book, err := r.newRecipientBook(ctx, nil, true)
+	book, err := r.newRecipientBook(ctx, reg, nil, true)
 	if err != nil {
 		return p, err
 	}
 	p.configMissing = book.leadersMissing
 
-	recs, err := r.loadRecords(ctx)
+	recs, err := r.loadRecords(ctx, reg)
 	if err != nil {
 		return p, err
 	}
@@ -304,7 +349,7 @@ func (r *AutomationRunner) weeklyDigest(ctx context.Context, asOf time.Time) (au
 		p.digestWithoutRecipient = pastDeadline + dueThisWeek
 		return p, nil
 	}
-	p.notices = append(p.notices, domain.IncomingDigestNotice(domain.ISOWeek(asOf), pastDeadline, dueThisWeek, book.leaders))
+	p.notices = append(p.notices, reg.notices.Digest(domain.ISOWeek(asOf), pastDeadline, dueThisWeek, book.leaders))
 	return p, nil
 }
 
@@ -312,12 +357,12 @@ func (r *AutomationRunner) weeklyDigest(ctx context.Context, asOf time.Time) (au
 
 // recipientBook holds, for ONE run, every recipient lookup it needs — asked once, batched.
 type recipientBook struct {
-	units          map[string][]string // unit -> holders of document.route
+	units          map[string][]string // unit -> holders of the register's "hands out work" key
 	leaders        []string
 	leadersMissing bool
 }
 
-func (r *AutomationRunner) newRecipientBook(ctx context.Context, recs []domain.AutomationRecord,
+func (r *AutomationRunner) newRecipientBook(ctx context.Context, reg automationRegister, recs []domain.AutomationRecord,
 	withLeaders bool) (*recipientBook, error) {
 
 	b := &recipientBook{units: map[string][]string{}}
@@ -331,7 +376,7 @@ func (r *AutomationRunner) newRecipientBook(ctx context.Context, recs []domain.A
 	}
 	sort.Strings(units)
 	for _, page := range pageStrings(units, identityclient.MaxOrgUnitsPerCall) {
-		got, err := r.d.Identity.OrgUnitPermissionHolders(ctx, page, permDocumentRoute)
+		got, err := r.d.Identity.OrgUnitPermissionHolders(ctx, page, reg.permission)
 		if err != nil {
 			return nil, err
 		}
@@ -355,7 +400,7 @@ func (r *AutomationRunner) newRecipientBook(ctx context.Context, recs []domain.A
 	return b, nil
 }
 
-// unitHolders are the people in the document's unit who route its documents.
+// unitHolders are the people in the record's unit who hand out its work.
 func (b *recipientBook) unitHolders(x domain.AutomationRecord) []string {
 	if x.OrgUnitID == "" {
 		return nil

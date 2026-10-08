@@ -47,6 +47,7 @@ type CitizenLetterRepo interface {
 	UpdateStatus(ctx context.Context, tx *store.ScopedTx, l domain.CitizenLetter, actorCode string) error
 	UpdateResult(ctx context.Context, tx *store.ScopedTx, l domain.CitizenLetter, actorCode string) error
 	UpdateSender(ctx context.Context, tx *store.ScopedTx, l domain.CitizenLetter, actorCode string) error
+	UpdateDeadline(ctx context.Context, tx *store.ScopedTx, l domain.CitizenLetter, actorCode string) error
 	InsertLog(ctx context.Context, tx *store.ScopedTx, e domain.LetterLogEntry) error
 	Log(ctx context.Context, tx *store.ScopedTx, letterID string) ([]domain.LetterLogEntry, error)
 
@@ -83,6 +84,7 @@ const (
 	ActionRecordCitizenLetterResult = "ghi_ket_qua_don_thu"
 	ActionCorrectLetterSender       = "sua_nguoi_gui_don_thu"
 	ActionNoteCitizenLetter         = "ghi_nhat_ky_don_thu"
+	ActionSetLetterDeadline         = "dat_han_xu_ly_don_thu"
 	// ActionViewDenunciation — rule 6, invariant 7: reading a whistleblower's identity or the letter's
 	// content is itself recorded, in the transaction of the read.
 	ActionViewDenunciation = "xem_don_to_cao"
@@ -104,8 +106,8 @@ type LetterCaller struct {
 }
 
 // BookLetterRequest is one letter as it arrives. NO number, year, status or due field: the number is
-// the counter's, the year is the year of the act, the status a literal, and both deadlines stay empty
-// (ADR 0078 #3).
+// the counter's, the year is the year of the act, the status a literal, and the deadline is set by a
+// clerk afterwards, by its own act (SetDeadline).
 type BookLetterRequest struct {
 	ReceivedDate    time.Time
 	Type            domain.LetterType
@@ -619,6 +621,71 @@ func (uc *CitizenLetters) CorrectSender(ctx context.Context, id string, req Send
 		return domain.CitizenLetter{}, wrapLetter(ctx, "sửa người gửi đơn thư", err)
 	}
 	return after, nil
+}
+
+// --- deadline ---------------------------------------------------------------------------------------
+
+// SetDeadline is the clerk's "Hạn xử lý" (ADR 0079 lô 5 Q18): set it to `due`, or clear it with the
+// zero instant ("Không đặt"). domain.SetActiveDue decides the column and refuses a finished letter.
+// The instant is stored exactly as given — fixed AT THIS ACT, never recomputed on read (rule 10,
+// invariant 2). A request carrying the value already stored writes nothing and audits nothing.
+//
+// WHO: a holder of `petition.create` — the prototype's PATCH of a petition (router.py:430-433) and the
+// key that books and routes letters here (C13). The route already demands it; CanBook is the checker's
+// answer for the same key in this commune, refused here as a second wall so the use case is safe
+// whatever edge calls it.
+//
+// NO LOG ROW: 0006's `citizen_letter_log_kind_valid` admits five kinds and none is a deadline change.
+// The audit entry (same transaction) is the record; adding a log kind needs a migration widening that
+// CHECK — reported, not done here.
+func (uc *CitizenLetters) SetDeadline(ctx context.Context, id string, due time.Time, caller LetterCaller) (domain.CitizenLetter, error) {
+	if id == "" {
+		return domain.CitizenLetter{}, docstore.ErrCitizenLetterNotFound
+	}
+	if err := requireActor(caller.Actor); err != nil {
+		return domain.CitizenLetter{}, err
+	}
+	if !caller.CanBook {
+		return domain.CitizenLetter{}, domain.ErrLetterNotPermitted
+	}
+	now := uc.clock()
+
+	var after domain.CitizenLetter
+	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		before, err := uc.repo.ForUpdate(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if after, err = before.SetActiveDue(due); err != nil {
+			return err
+		}
+		if before.ProcessingDueAt.Equal(after.ProcessingDueAt) && before.ResolutionDueAt.Equal(after.ResolutionDueAt) {
+			return nil
+		}
+		after.UpdatedAt = now
+		if err := uc.repo.UpdateDeadline(ctx, tx, after, caller.Actor.ID); err != nil {
+			return err
+		}
+		// A deadline is an instant a clerk typed, not personal data: before and after are recorded in
+		// full, so an inspection can see every commitment the commune made and moved.
+		return writeLetterAudit(ctx, tx, caller.Actor, ActionSetLetterDeadline, before, map[string]any{
+			"cot":   domain.LetterDueColumn(before.Status),
+			"truoc": map[string]any{"han_xu_ly": instantText(before.ActiveDueAt())},
+			"sau":   map[string]any{"han_xu_ly": instantText(after.ActiveDueAt())},
+		})
+	})
+	if err != nil {
+		return domain.CitizenLetter{}, wrapLetter(ctx, "đặt hạn xử lý đơn thư", err)
+	}
+	return after, nil
+}
+
+// instantText is an instant for the trail: RFC 3339 in UTC, "" for none.
+func instantText(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format(time.RFC3339)
 }
 
 // --- notes ------------------------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 package http
 
-// The ELEVEN routes of SỔ ĐƠN THƯ CÔNG DÂN at the edge:
+// The TWELVE routes of SỔ ĐƠN THƯ CÔNG DÂN at the edge:
 //
 //  1. rule 5 invariant 7 on every route — 401 · 403 wrong key · 403 right key WRONG COMMUNE · 2xx;
 //  2. each route's gate key is the seeded literal (`petition.create` / `petition.read`);
@@ -62,6 +62,7 @@ type citizenLettersFake struct {
 	lastCaller app.LetterCaller
 	lastDup    app.DuplicateQuery
 	lastList   app.LetterListQuery
+	lastDue    *time.Time
 }
 
 func citizenLettersSample() *citizenLettersFake {
@@ -122,6 +123,15 @@ func (f *citizenLettersFake) RecordResult(ctx context.Context, id string, _ app.
 func (f *citizenLettersFake) CorrectSender(ctx context.Context, id string, _ app.SenderCorrection, c app.LetterCaller) (domain.CitizenLetter, error) {
 	f.note(ctx, c)
 	return f.find(ctx, id)
+}
+func (f *citizenLettersFake) SetDeadline(ctx context.Context, id string, due time.Time, c app.LetterCaller) (domain.CitizenLetter, error) {
+	f.note(ctx, c)
+	f.lastDue = &due
+	l, err := f.find(ctx, id)
+	if err != nil {
+		return l, err
+	}
+	return l.SetActiveDue(due)
 }
 func (f *citizenLettersFake) AddNote(ctx context.Context, id, content string, c app.LetterCaller) (domain.LetterLogEntry, error) {
 	f.note(ctx, c)
@@ -187,6 +197,7 @@ func letterRoutes() []letterRoute {
 		{"kết quả", http.MethodPut, one + "/result", `{"result_document_no":"12/TB-UBND","result_document_date":"2026-09-25",` +
 			`"result_signer":"Chủ tịch UBND xã","result_issuer":"UBND xã","result_summary":"Đã trả lời bằng văn bản"}`, read, http.StatusOK},
 		{"sửa người gửi", http.MethodPatch, one + "/sender", `{"sender_address":null}`, create, http.StatusOK},
+		{"đặt hạn xử lý", http.MethodPatch, one + "/deadline", `{"due_at":"2026-10-20T17:00:00+07:00"}`, create, http.StatusOK},
 		{"ghi nhật ký", http.MethodPost, one + "/log-entries", `{"content":"Đã liên hệ bộ phận địa chính"}`, read, http.StatusCreated},
 		{"báo cáo", http.MethodGet, "/api/v1/citizen-letter-report?year=2026", "", read, http.StatusOK},
 	}
@@ -488,6 +499,58 @@ func TestCitizenLetter_SenderPatchIsTriState(t *testing.T) {
 		`{"summary":"x"}`), http.StatusBadRequest)
 	doiMa(t, m.goiThan(t, http.MethodPatch, hostA, pathLetters+"/dt-a-001/sender", canBoCua(xaA),
 		`{"sender_name":7}`), http.StatusBadRequest)
+}
+
+// The deadline PATCH: the instant reaches the use case EXACTLY as sent (no rounding, no re-zoning to a
+// day), null clears it, the answer carries it back, and a body that is not exactly `due_at` is refused
+// before the use case runs.
+func TestCitizenLetter_DeadlinePatch(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(xaA, "petition.create")
+	path := pathLetters + "/dt-a-001/deadline"
+
+	w := m.goiThan(t, http.MethodPatch, hostA, path, canBoCua(xaA), `{"due_at":"2026-10-20T16:45:30+07:00"}`)
+	doiMa(t, w, http.StatusOK)
+	want := time.Date(2026, 10, 20, 9, 45, 30, 0, time.UTC)
+	if m.letters.lastDue == nil || !m.letters.lastDue.Equal(want) {
+		t.Fatalf("hạn tới use case = %v, muốn đúng %v", m.letters.lastDue, want)
+	}
+	var out map[string]any
+	decodeJSON(t, w, &out)
+	if out["processing_due_at"] != "2026-10-20T09:45:30Z" || out["resolution_due_at"] != nil {
+		t.Fatalf("trả về: processing %v, resolution %v", out["processing_due_at"], out["resolution_due_at"])
+	}
+	if m.letters.lastCaller.Actor.ID != maCanBo || !m.letters.lastCaller.CanBook {
+		t.Fatalf("người đặt hạn = %+v, muốn mã cán bộ và quyền tiếp nhận", m.letters.lastCaller)
+	}
+
+	doiMa(t, m.goiThan(t, http.MethodPatch, hostA, path, canBoCua(xaA), `{"due_at":null}`), http.StatusOK)
+	if m.letters.lastDue == nil || !m.letters.lastDue.IsZero() {
+		t.Fatalf("null phải là bỏ hạn (thời điểm rỗng), được %v", m.letters.lastDue)
+	}
+
+	calls := m.letters.calls
+	for _, bad := range []string{`{}`, `{"due_at":"2026-10-20"}`, `{"due_at":7}`, `{"due_at":null,"status":"x"}`, `not json`} {
+		doiMa(t, m.goiThan(t, http.MethodPatch, hostA, path, canBoCua(xaA), bad), http.StatusBadRequest)
+	}
+	if m.letters.calls != calls {
+		t.Fatal("thân sai mà use case vẫn chạy")
+	}
+
+	// Another commune's letter: the same 404 sentence as everywhere (rule 1).
+	w = m.goiThan(t, http.MethodPatch, hostA, pathLetters+"/dt-b-001/deadline", canBoCua(xaA), `{"due_at":null}`)
+	doiMa(t, w, http.StatusNotFound)
+}
+
+func TestCitizenLetter_DeadlineOnFinishedLetterIs409(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(xaA, "petition.create")
+	m.letters.rows[xaA][0].Status = domain.LetterStatusFiled
+	w := m.goiThan(t, http.MethodPatch, hostA, pathLetters+"/dt-a-001/deadline", canBoCua(xaA), `{"due_at":null}`)
+	doiMa(t, w, http.StatusConflict)
+	if loiTra(t, w).Message != domain.ErrLetterDueOnFinished.Msg {
+		t.Fatalf("câu 409 = %q", loiTra(t, w).Message)
+	}
 }
 
 func TestCitizenLetter_ListScopeAndFiltersAreValidated(t *testing.T) {

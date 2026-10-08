@@ -3,6 +3,7 @@ package domain
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -274,5 +275,60 @@ func TestTrimRefinementStillMatchesItsSentinel(t *testing.T) {
 func TestLetterAuditSubject(t *testing.T) {
 	if got := LetterAuditSubject(2026, 7); got != "DT-2026-0007" {
 		t.Fatalf("mã đối tượng = %q", got)
+	}
+}
+
+// THE CLERK'S DEADLINE (ADR 0079 lô 5 Q18), EXHAUSTIVELY over the ten statuses: an open letter takes it
+// on the column ActiveDueAt reads for its phase, stored to the nanosecond as given; a finished one is
+// refused; zero clears. A status that gained an arrow without a phase here would turn its cell red.
+func TestSetActiveDueWritesTheCurrentPhaseColumnAsGiven(t *testing.T) {
+	due := time.Date(2026, 10, 20, 16, 45, 30, 123, time.FixedZone("ICT", 7*3600))
+	for _, s := range LetterStatuses {
+		l := CitizenLetter{Status: s}
+		got, err := l.SetActiveDue(due)
+		if s.Finished() {
+			if !errors.Is(err, ErrLetterDueOnFinished) || LetterDueColumn(s) != "" {
+				t.Errorf("%s: đơn đã kết thúc mà đặt được hạn (%v)", s, err)
+			}
+			continue
+		}
+		if err != nil || !got.ActiveDueAt().Equal(due) || got.ActiveDueAt().Nanosecond() != 123 {
+			t.Errorf("%s: hạn hiện hành %v, lỗi %v — muốn đúng %v", s, got.ActiveDueAt(), err, due)
+		}
+		other := got.ResolutionDueAt
+		if LetterDueColumn(s) == "resolution_due_at" {
+			other = got.ProcessingDueAt
+		}
+		if !other.IsZero() {
+			t.Errorf("%s: ghi cả cột của giai đoạn khác", s)
+		}
+		cleared, err := got.SetActiveDue(time.Time{})
+		if err != nil || !cleared.ActiveDueAt().IsZero() {
+			t.Errorf("%s: bỏ hạn không xoá: %v %v", s, cleared.ActiveDueAt(), err)
+		}
+	}
+	if _, err := (CitizenLetter{Status: LetterStatusNew}).SetActiveDue(time.Date(26, 1, 1, 0, 0, 0, 0, time.UTC)); !errors.Is(err, ErrLetterDueTooFar) {
+		t.Errorf("năm 0026 phải bị từ chối: %v", err)
+	}
+}
+
+// The incoming wrappers are the register methods, byte for byte — the documents' keys, titles and
+// links did not move when letters joined (a moved key re-delivers every notice already sent that day).
+func TestIncomingNoticesUnchangedAndLetterKeysNamespaced(t *testing.T) {
+	r := AutomationRecord{ID: "x", Code: "VB-DEN-2026-0001", Deadline: time.Date(2026, 9, 25, 10, 0, 0, 0, time.UTC)}
+	if n := OverdueNotice(r, "2026-09-29", []string{"CB-1"}); n.Key != "sla_reminders:overdue:van-ban-den:x:2026-09-29" ||
+		n.Title != "Văn bản đến VB-DEN-2026-0001 đã quá hạn xử lý" || n.Link != "/van-ban?metric=overdue" {
+		t.Errorf("văn bản đến đổi khoá/câu: %+v", n)
+	}
+	r.Code = "DT-2026-0001"
+	n := LetterNotices.Overdue(r, "2026-09-29", []string{"CB-1"})
+	if n.Key != "sla_reminders:overdue:don-thu:x:2026-09-29" || n.Title != "Đơn thư DT-2026-0001 đã quá hạn xử lý" {
+		t.Errorf("đơn thư: %+v", n)
+	}
+	for _, k := range []string{DueSoonKey(LetterNotices.Kind, "d", "CB-1"), EscalationKey(LetterNotices.Kind, "x", EscalationChairman),
+		WeeklyDigestKey(LetterNotices.Kind, "2026-W40"), UnassignedKey(LetterNotices.Kind, "x", r.Deadline)} {
+		if !ValidNoticeKey(k) || !strings.Contains(k, ":don-thu:") {
+			t.Errorf("khoá đơn thư %q không nằm trong không gian don-thu", k)
+		}
 	}
 }
