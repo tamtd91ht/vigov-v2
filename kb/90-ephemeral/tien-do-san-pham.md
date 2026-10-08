@@ -3,8 +3,8 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: f70361d7
-expires: 2027-01-06
+derived_from_commit: e360e3a8
+expires: 2027-01-07
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
 ---
@@ -17,7 +17,7 @@ không dòng nào viết tay (luật 9, bất biến 1).
 Trục ở đây là **phân hệ sản phẩm**. Trục theo **module kho mã** nằm ở `kb/90-ephemeral/tien-do.md`;
 hai tệp trả lời hai câu khác nhau và không chép của nhau.
 
-Sinh ngày **2026-10-08** · hết hạn **2027-01-06**.
+Sinh ngày **2026-10-09** · hết hạn **2027-01-07**.
 
 ## 1 · Theo chương đặc tả
 
@@ -33,7 +33,7 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **02** Quản lý nhiệm vụ | 22 | 22/22 | ✓ |
 | **03** Sổ tay lãnh đạo | 1 | 1/1 | ✓ |
 | **04** Biên bản và kết luận họp | 13 | 13/13 | ✓ |
-| **05** Văn bản đến & Đơn thư | 19 | 19/19 | ✓ |
+| **05** Văn bản đến & Đơn thư | 25 | 25/25 | ✓ |
 | **06** Theo dõi giải ngân | 27 | 27/27 | ✓ |
 | **07** Thu – Chi ngân sách xã | 17 | 14/17 | ✓ |
 | **08** Thông báo | 2 | 2/2 | ✓ |
@@ -42,10 +42,10 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **11** Quản trị nội dung Mini App | 25 | 22/22 +3 ngoài web | ✓ |
 | **12** Danh bạ cán bộ | 14 | 6/12 +2 ngoài web | ✓ |
 | **13** Báo cáo điều hành | 1 | 1/1 | ✓ |
-| **14** Cấu hình hệ thống | 131 | 130/131 | ✓ |
+| **14** Cấu hình hệ thống | 135 | 134/135 | ✓ |
 | **15** Phụ lục: giao diện dùng chung & xác thực | 9 | 9/9 | ✓ |
 
-Tổng **363 tuyến** trong hợp đồng. **17** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
+Tổng **373 tuyến** trong hợp đồng. **17** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
 
 ## 2 · web-admin, theo từng mục menu
 
@@ -59,7 +59,7 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 | 2 | Nhiệm vụ | `/nhiem-vu` | `QUYEN_XEM_NHIEM_VU` | ✓ | 0 |
 | 3 | Sổ tay lãnh đạo | `/nhiem-vu/so-tay` | `QUYEN_XEM_NHIEM_VU` | ✓ | **không khai** |
 | 4 | Biên bản họp | `/nhiem-vu/bien-ban` | `QUYEN_XEM_NHIEM_VU` | ✓ | 2 |
-| 5 | Văn bản & Đơn thư | `/van-ban` | `QUYEN_XEM_VAN_BAN` | ✓ | 11 |
+| 5 | Văn bản & Đơn thư | `/van-ban` | `QUYEN_XEM_VAN_BAN` | ✓ | 9 |
 | 6 | Giải ngân | `/giai-ngan` | `QUYEN_XEM_GIAI_NGAN` | ✓ | 1 |
 | 7 | Thu - Chi ngân sách | `/giai-ngan/thu-chi` | `QUYEN_XEM_GIAI_NGAN` | ✓ | 0 |
 | 8 | Thông báo nội bộ | `/thong-bao` | `QUYEN_SOAN_THONG_BAO` | ✓ | 9 |
@@ -74,7 +74,7 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 | 17 | Hướng dẫn sử dụng | — | — | ✗ | |
 | 18 | Cấu hình | `/cau-hinh` | `KHOA_MO_CAU_HINH` | ✓ | 3 |
 
-**15/18** mục menu có màn thật. **59** phần chưa dựng đang hiện trên các màn ấy.
+**15/18** mục menu có màn thật. **57** phần chưa dựng đang hiện trên các màn ấy.
 
 ⚠ **1 màn KHÔNG KHAI khối `PHAN_CHUA_DUNG`**, và ô của chúng đọc là `không khai` chứ không phải `0` —
 hai thứ khác hẳn nhau. `0` nghĩa là màn có khai một danh sách và danh sách ấy rỗng, tức mọi phần
@@ -127,12 +127,12 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `platform-admin` | 8 | 3 | 0 | 0 |
 | `proto` | 19 | 1 | 0 | 0 |
 | `service-comms` | 23 | 12 | 4 | 3 |
-| `service-documents` | 11 | 4 | 3 | 0 |
+| `service-documents` | 12 | 4 | 3 | 0 |
 | `service-finance` | 31 | 5 | 2 | 0 |
-| `service-identity` | 48 | 14 | 2 | 1 |
-| `service-petitions` | 49 | 18 | 5 | 0 |
+| `service-identity` | 49 | 14 | 2 | 1 |
+| `service-petitions` | 50 | 18 | 5 | 0 |
 | `service-platform` | 15 | 17 | 5 | 1 |
 | `service-reporting` | 4 | 0 | 1 | 0 |
 | `tools` | 20 | 0 | 0 | 0 |
-| `web-admin` | 79 | 38 | 3 | 1 |
+| `web-admin` | 80 | 38 | 3 | 1 |
 
