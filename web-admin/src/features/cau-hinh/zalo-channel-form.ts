@@ -14,6 +14,9 @@ export const NO_LINKED_STAFF = "Chưa cán bộ nào của xã ghép nối Zalo.
 export const SAVED_TOAST = "Đã lưu.";
 export const SAVE_FAILED_TOAST = "Chưa lưu được. Vui lòng thử lại.";
 
+/** "Kiểm tra kết nối" when the call itself failed unexplained — prototype `ZaloChannelPanel.tsx:456`. */
+export const CHECK_FAILED_TOAST = "Không kiểm tra được.";
+
 /**
  * Spec 11 §1, "song song với chuông và thư" with "và thư" DROPPED: a reminder goes to the bell and,
  * since ADR 0074, to Zalo — no producer mails it (`service-comms/internal/app/staff_notification.go`
@@ -27,11 +30,33 @@ export const CHANNEL_DESCRIPTION =
 export const QUIET_HINT = "Trong khoảng này hệ thống không nhắn Zalo; chuông trong web vẫn kêu.";
 
 /**
- * Spec 11 §2 with "đổi ở đây là đổi cho cả hai" DROPPED — ADR 0079 lô 2 Q1 #7 (đổi ở lô 4 Q10 — ô sửa
- * được, lưu riêng cho Zalo). Until that field ships, the threshold is not changed on this tab.
+ * Spec 11 §2's sentence ("dùng chung với cái chuông…; đổi ở đây là đổi cho cả hai, nên con số trong tin
+ * nhắn luôn bằng con số trên màn hình") is FALSE since ADR 0079 lô 5 Q13, an owner decision that ranks
+ * above the prototype: the Zalo lead is a second threshold that only NARROWS the bell's set, so the Zalo
+ * digest can list fewer records than the screen. What stays true — and is the reason the commune can
+ * trust it — is the direction: nothing reaches Zalo that the bell does not show (records outside the
+ * bell's window never reach comms).
  */
 export const WHEN_DESCRIPTION =
-  "Ngưỡng “sắp đến hạn” dùng chung với cái chuông và danh sách “Sắp đến hạn”, nên con số trong tin nhắn luôn bằng con số trên màn hình.";
+  "Tin Zalo “sắp đến hạn” chỉ gồm những hồ sơ cái chuông và danh sách “Sắp đến hạn” đang báo, nên không hồ sơ nào vào Zalo mà không có trên màn hình.";
+
+/**
+ * "Sắp đến hạn: nhắc trước" (prototype `ZaloChannelPanel.tsx:120-126`, options "1 ngày"…"14 ngày").
+ * The empty option is NOT in the prototype (its select always holds a number); the server's null means
+ * "no narrowing — the bell's set as is", and a commune must be able to go back to it.
+ */
+export const DUE_SOON_NO_LEAD = "Theo chuông";
+
+/** ADR 0079 Bổ sung Q13: "Ngưỡng Zalo chỉ thu hẹp được ngưỡng của chuông … — ghi rõ dưới ô". */
+export const DUE_SOON_HINT =
+  "Zalo chỉ thu hẹp được, không nới rộng ngưỡng của chuông. Ngưỡng của chuông là cột “Sắp đến hạn khi còn” ở tab Thời hạn xử lý.";
+
+/** The server's bounds for `due_soon_days` (`service-comms/internal/domain/zalo_link.go` Min/MaxDueSoonDays). */
+export const DUE_SOON_MIN = 1;
+export const DUE_SOON_MAX = 14;
+
+/** The comms refusal drawn under the select rather than as a toast. */
+export const DUE_SOON_OUT_OF_RANGE = "due_soon_days_out_of_range";
 
 /** Spec 11 §2, "và thư" dropped for the reason given on `CHANNEL_DESCRIPTION`. */
 export const EVENTS_HINT = "Bỏ chọn thì việc đó vẫn vào chuông như cũ, chỉ không nhắn Zalo.";
@@ -206,6 +231,11 @@ export type ZaloChannelDraft = {
   /** null = not set. The two are set together or not at all (server: overdue_cadence_incomplete). */
   lateStartDays: number | null;
   lateRepeatDays: number | null;
+  /**
+   * The Zalo due-soon lead in days, 1–14; null = no narrowing. Read back and SENT on every PUT: the PUT
+   * replaces the row, so leaving it out of any save — a tick elsewhere included — would clear it.
+   */
+  dueSoonDays: number | null;
 };
 
 export function draftFromSettings(s: ZaloChannelSettings): ZaloChannelDraft {
@@ -216,6 +246,8 @@ export function draftFromSettings(s: ZaloChannelSettings): ZaloChannelDraft {
     quietEnd: s.quiet_end,
     lateStartDays: s.overdue_start_after_days,
     lateRepeatDays: s.overdue_repeat_every_days,
+    // An older comms that does not send the key has no lead stored: null is what it means, not a guess.
+    dueSoonDays: s.due_soon_days ?? null,
   };
 }
 
@@ -306,6 +338,15 @@ export function buildChange(d: ZaloChannelDraft): { ok: true; change: ZaloChanne
   if (repeat !== null && (!Number.isSafeInteger(repeat) || repeat < 1 || repeat > SERVER_DAYS_MAX)) {
     return { ok: false, held: false, text: `Số ngày nhắc lại việc quá hạn phải từ 1 đến ${SERVER_DAYS_MAX}.` };
   }
+  const lead = d.dueSoonDays;
+  if (lead !== null && (!Number.isSafeInteger(lead) || lead < DUE_SOON_MIN || lead > DUE_SOON_MAX)) {
+    // comms' own sentence (`domain/zalo_link.go` due_soon_days_out_of_range).
+    return {
+      ok: false,
+      held: false,
+      text: `Số ngày nhắc trước khi đến hạn phải từ ${DUE_SOON_MIN} đến ${DUE_SOON_MAX}, hoặc để trống.`,
+    };
+  }
   return {
     ok: true,
     change: {
@@ -315,6 +356,7 @@ export function buildChange(d: ZaloChannelDraft): { ok: true; change: ZaloChanne
       quiet_end: d.quietEnd,
       overdue_start_after_days: start,
       overdue_repeat_every_days: repeat,
+      due_soon_days: lead,
     },
   };
 }

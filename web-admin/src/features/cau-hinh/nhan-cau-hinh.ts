@@ -39,13 +39,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "hãy chọn một nhóm ở hàng lọc rồi bấm Nhập từ Excel để nhập vào nhóm đó (ADR 0079).",
   },
   {
-    ten: "Nhắc trước khi đến hạn qua Zalo",
-    viSao:
-      "Ngưỡng \"sắp đến hạn\" của tin Zalo dùng chung với chuông và lấy theo cột \"Sắp đến hạn khi còn\" " +
-      "ở tab Thời hạn xử lý — mỗi dòng thời hạn một số giờ riêng, nên ở đây không có một con số chung để " +
-      "chọn. Muốn đổi thì sửa cột ấy ở tab Thời hạn xử lý (ADR 0079).",
-  },
-  {
     ten: "Thêm loại việc nhắn qua Zalo",
     viSao:
       "Việc này chưa có nơi nào trong phần mềm phát ra thông báo, nên chưa nhắn qua Zalo được. Các việc " +

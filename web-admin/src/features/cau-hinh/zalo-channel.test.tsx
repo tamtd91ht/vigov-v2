@@ -60,6 +60,7 @@ const SETTINGS: ZaloChannelSettings = {
   quiet_end: "06:00",
   overdue_start_after_days: 1,
   overdue_repeat_every_days: 2,
+  due_soon_days: 3,
   updated_at: "2026-10-05T03:00:00Z",
   updated_by: "CB-00123",
   supported_events: SUPPORTED,
@@ -73,6 +74,7 @@ const OFF: ZaloChannelSettings = {
   quiet_end: "06:00",
   overdue_start_after_days: null,
   overdue_repeat_every_days: null,
+  due_soon_days: null,
   supported_events: SUPPORTED,
   platform_ready: true,
 };
@@ -278,8 +280,28 @@ describe("form check (mirrors comms' refusals; comms re-checks)", () => {
         quiet_end: "06:00",
         overdue_start_after_days: 1,
         overdue_repeat_every_days: 3,
+        due_soon_days: null,
       },
     });
+  });
+
+  it("'nhắc trước': a stored lead round-trips; null stays null (the key is always there); outside 1–14 refused", () => {
+    expect(draftFromSettings(SETTINGS).dueSoonDays).toBe(3);
+    expect(draftFromSettings(OFF).dueSoonDays).toBeNull();
+    // An older comms without the key has no lead: null, never a number guessed here.
+    const noKey = Object.fromEntries(Object.entries(SETTINGS).filter(([k]) => k !== "due_soon_days"));
+    expect(draftFromSettings(noKey as unknown as ZaloChannelSettings).dueSoonDays).toBeNull();
+    expect(buildChange(draftFromSettings(SETTINGS))).toMatchObject({ ok: true, change: { due_soon_days: 3 } });
+    const none = buildChange(draftFromSettings(OFF));
+    expect(none.ok && "due_soon_days" in none.change && none.change.due_soon_days).toBeNull();
+    expect(buildChange({ ...draftFromSettings(SETTINGS), dueSoonDays: 14 })).toMatchObject({ ok: true });
+    for (const bad of [0, 15, 2.5]) {
+      expect(buildChange({ ...draftFromSettings(SETTINGS), dueSoonDays: bad })).toEqual({
+        ok: false,
+        held: false,
+        text: "Số ngày nhắc trước khi đến hạn phải từ 1 đến 14, hoặc để trống.",
+      });
+    }
   });
 
   it("overdue un-ticked keeps the cadence shown on screen (both set is valid without it)", () => {
@@ -404,12 +426,37 @@ describe("view", () => {
     expect(markup).not.toContain("Lưu cấu hình");
   });
 
-  it("REGRESSION: §2 description no longer claims the threshold is changed here (ADR 0079 Q6)", () => {
+  it("REGRESSION: §2 description claims neither a shared threshold nor equal figures (ADR 0079 lô 5 Q13)", () => {
     const markup = view(SETTINGS);
     expect(markup).not.toContain("đổi ở đây là đổi cho cả hai");
+    // Since Q13 the Zalo digest can list FEWER records than the screen: "luôn bằng" would be false.
+    expect(markup).not.toContain("luôn bằng con số trên màn hình");
+    expect(markup).not.toContain("dùng chung với cái chuông");
     expect(markup).toContain(
-      "Ngưỡng “sắp đến hạn” dùng chung với cái chuông và danh sách “Sắp đến hạn”, nên con số trong tin nhắn luôn bằng con số trên màn hình.",
+      "Tin Zalo “sắp đến hạn” chỉ gồm những hồ sơ cái chuông và danh sách “Sắp đến hạn” đang báo, nên không hồ sơ nào vào Zalo mà không có trên màn hình.",
     );
+  });
+
+  it("'Sắp đến hạn: nhắc trước' is a REAL select now: prototype label, 'Theo chuông' + 1…14 ngày, the stored value, the note", () => {
+    const el = html(view(SETTINGS));
+    const select = el.querySelector<HTMLSelectElement>("#zalo-due-soon-days")!;
+    expect(select.disabled).toBe(false);
+    expect(select.name).toBe("due_soon_days");
+    expect(el.querySelector('label[for="zalo-due-soon-days"]')!.textContent).toBe("Sắp đến hạn: nhắc trước");
+    const options = Array.from(select.options).map((o) => [o.value, o.textContent]);
+    expect(options[0]).toEqual(["", "Theo chuông"]);
+    expect(options.slice(1)).toEqual(Array.from({ length: 14 }, (_, i) => [String(i + 1), `${i + 1} ngày`]));
+    expect(select.querySelector<HTMLOptionElement>("option[selected]")!.value).toBe("3");
+    // The "?" is gone from this field; it stays only on the events no producer sends.
+    const field = select.closest("div.flex-col")!;
+    expect(field.querySelector("[data-field-label-row] button")).toBeNull();
+    expect(el.querySelector('[aria-label^="Nhắc trước khi đến hạn qua Zalo"]')).toBeNull();
+    expect(field.textContent).toContain(
+      "Zalo chỉ thu hẹp được, không nới rộng ngưỡng của chuông. Ngưỡng của chuông là cột “Sắp đến hạn khi còn” ở tab Thời hạn xử lý.",
+    );
+    // No lead stored → the empty option is the one selected.
+    const off = html(view(OFF)).querySelector<HTMLSelectElement>("#zalo-due-soon-days")!;
+    expect(off.querySelector("option[selected]")!.getAttribute("value")).toBe("");
   });
 
   it("empty list keeps its sentence", () => {
@@ -519,9 +566,87 @@ describe("ZaloChannelTab — admin.lookup, denied case first", () => {
       quiet_end: "06:00",
       overdue_start_after_days: 1,
       overdue_repeat_every_days: 2,
+      // Not touched by this tick, yet sent: the PUT replaces the row, an absent key would clear it.
+      due_soon_days: 3,
     });
     expect(H.toast.success).toHaveBeenCalledWith("Đã lưu.");
     expect(box(el, "digest.weekly").checked).toBe(true);
+  });
+
+  function pickDueSoon(el: HTMLElement, value: string) {
+    const select = el.querySelector<HTMLSelectElement>("#zalo-due-soon-days")!;
+    act(() => {
+      select.value = value;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  }
+
+  function lastSettingsPut(): Record<string, unknown> {
+    return JSON.parse(calls.filter((c) => c.method === "PUT" && c.url === "/api/v1/zalo-channel-settings").at(-1)!.body!);
+  }
+
+  it("'nhắc trước' saves at once with the WHOLE row; the saved value is what the select then shows", async () => {
+    H.phien = session(["admin.lookup"]);
+    const el = await mount();
+    pickDueSoon(el, "7");
+    await settle();
+    expect(lastSettingsPut()).toEqual({
+      is_enabled: true,
+      kinds: ["nhiem-vu.sap-den-han", "nhiem-vu.qua-han"],
+      quiet_start: "21:00",
+      quiet_end: "06:00",
+      overdue_start_after_days: 1,
+      overdue_repeat_every_days: 2,
+      due_soon_days: 7,
+    });
+    expect(H.toast.success).toHaveBeenCalledWith("Đã lưu.");
+    expect(el.querySelector<HTMLSelectElement>("#zalo-due-soon-days")!.value).toBe("7");
+  });
+
+  it("'Theo chuông' (empty) → due_soon_days: null, sent as a key, not left out", async () => {
+    H.phien = session(["admin.lookup"]);
+    const el = await mount();
+    pickDueSoon(el, "");
+    await settle();
+    const body = lastSettingsPut();
+    expect(body).toHaveProperty("due_soon_days", null);
+    expect(el.querySelector<HTMLSelectElement>("#zalo-due-soon-days")!.value).toBe("");
+  });
+
+  it("422 due_soon_days_out_of_range → the server's sentence UNDER the select, no toast, value back to stored", async () => {
+    H.phien = session(["admin.lookup"]);
+    putAnswer = {
+      status: 422,
+      body: { code: "due_soon_days_out_of_range", message: "Số ngày nhắc trước khi đến hạn phải từ 1 đến 14, hoặc để trống." },
+    };
+    const el = await mount();
+    pickDueSoon(el, "9");
+    await settle();
+    const select = el.querySelector<HTMLSelectElement>("#zalo-due-soon-days")!;
+    const error = el.querySelector<HTMLElement>("#zalo-due-soon-error")!;
+    expect(error.getAttribute("role")).toBe("alert");
+    expect(error.textContent).toBe("Số ngày nhắc trước khi đến hạn phải từ 1 đến 14, hoặc để trống.");
+    expect(select.getAttribute("aria-invalid")).toBe("true");
+    expect(select.getAttribute("aria-describedby")).toBe("zalo-due-soon-error");
+    expect(select.value).toBe("3");
+    expect(H.toast.error).not.toHaveBeenCalled();
+
+    // The next save that goes through clears the field error.
+    putAnswer = null;
+    pickDueSoon(el, "5");
+    await settle();
+    expect(el.querySelector("#zalo-due-soon-error")).toBeNull();
+    expect(select.getAttribute("aria-invalid")).toBe("false");
+  });
+
+  it("another 422 on the same PUT stays a toast — only due_soon_days_out_of_range belongs to the field", async () => {
+    H.phien = session(["admin.lookup"]);
+    putAnswer = { status: 422, body: { code: "unknown_kind", message: "Có loại nhắc việc không được hỗ trợ." } };
+    const el = await mount();
+    pickDueSoon(el, "9");
+    await settle();
+    expect(H.toast.error).toHaveBeenCalledWith("Có loại nhắc việc không được hỗ trợ.");
+    expect(el.querySelector("#zalo-due-soon-error")).toBeNull();
   });
 
   it("'Văn bản, đơn thư quá hạn' switches qua-han + chua-cu-nguoi + leo-thang TOGETHER, on and off", async () => {
@@ -686,7 +811,7 @@ describe("§3 Con bot của xã — zalo-bots/current (ADR 0079 Q1)", () => {
     await settle();
     const put = calls.find((c) => c.method === "PUT" && c.url === "/api/v1/zalo-bots/current")!;
     expect(JSON.parse(put.body!)).toEqual({ bot_token: TOKEN_FAKE, bot_name: "Bot Xã Thử", chat_url: "https://zalo.me/000000001" });
-    expect(H.toast.success).toHaveBeenCalledWith("Đã lưu con bot. 2 cán bộ cần ghép nối lại.");
+    expect(H.toast.success).toHaveBeenCalledWith("Đã lưu. 2 cán bộ cần ghép nối lại.");
     expect(el.querySelector("dialog")).toBeNull();
     expect(botSection(el).querySelector<HTMLInputElement>("#zalo-bot-token")!.value).toBe("");
     expect(botSection(el).querySelector("[data-bot-pill]")!.textContent).toBe("Bot riêng · Bot Xã Thử");
@@ -722,7 +847,7 @@ describe("§3 Con bot của xã — zalo-bots/current (ADR 0079 Q1)", () => {
     await settle();
     const put = calls.find((c) => c.method === "PUT" && c.url === "/api/v1/zalo-bots/current")!;
     expect(JSON.parse(put.body!)).toEqual({ bot_name: "Bot Xã Mới", chat_url: "https://zalo.me/000000001" });
-    expect(H.toast.success).toHaveBeenCalledWith("Đã lưu con bot.");
+    expect(H.toast.success).toHaveBeenCalledWith("Đã lưu.");
   });
 
   it("own bot + NEW token = possible replace → confirmed with the count first", async () => {
@@ -778,6 +903,22 @@ describe("§3 Con bot của xã — zalo-bots/current (ADR 0079 Q1)", () => {
     await settle();
     expect(calls.some((c) => c.method === "POST" && c.url === "/api/v1/zalo-bots/current/check")).toBe(true);
     expect(H.toast.error).toHaveBeenCalledWith(expect.stringContaining("Zalo không nhận mã bot"));
+  });
+
+  it("Q19 wording: an unexplained failure says the prototype's sentence — check 'Không kiểm tra được.', save 'Chưa lưu được…'", async () => {
+    H.phien = session(["admin.lookup"]);
+    botNow = OWN_BOT;
+    // A body that is not httpx.Error (a proxy page) = no server sentence = LOI_KHONG_RO underneath.
+    botAnswers["POST /api/v1/zalo-bots/current/check"] = { status: 502, body: {} };
+    botAnswers["PUT /api/v1/zalo-bots/current"] = { status: 502, body: {} };
+    const el = await mount();
+    act(() => button(botSection(el), "Kiểm tra kết nối").click());
+    await settle();
+    expect(H.toast.error).toHaveBeenLastCalledWith("Không kiểm tra được.");
+    typeInto(botSection(el).querySelector<HTMLInputElement>("#zalo-bot-name")!, "Bot Xã Mới");
+    act(() => button(botSection(el), "Lưu con bot").click());
+    await settle();
+    expect(H.toast.error).toHaveBeenLastCalledWith("Chưa lưu được. Vui lòng thử lại.");
   });
 
   it("Đăng ký webhook: the secret is shown ONCE with its sentence, and gone for good after 'Tôi đã chép, đóng'", async () => {
@@ -847,7 +988,7 @@ describe("§3 Con bot của xã — zalo-bots/current (ADR 0079 Q1)", () => {
     const del = calls.find((c) => c.method === "DELETE")!;
     expect(del.url).toBe("/api/v1/zalo-bots/current");
     expect(JSON.parse(del.body!)).toEqual({ reason: "Xã thôi dùng bot riêng" });
-    expect(H.toast.success).toHaveBeenCalledWith("Đã quay về bot chung. 5 cán bộ cần ghép nối lại.");
+    expect(H.toast.success).toHaveBeenCalledWith("Đã lưu. 5 cán bộ cần ghép nối lại.");
     expect(el.querySelector("[data-revoke-notice]")!.textContent).toBe("Mã của con bot cũ vẫn còn hiệu lực ở phía Zalo.");
     expect(botSection(el).querySelector("[data-bot-pill]")!.textContent).toBe("Bot chung");
   });

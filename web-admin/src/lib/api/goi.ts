@@ -34,9 +34,10 @@ export type KetQua<T> =
       /**
        * The server's machine `code`, set ONLY on a refused WRITE whose caller passed `withCode` to
        * `goiGhi`, and whose body is `httpx.Error`.
-       * Present for ONE documented use, not as a licence to branch: the intake of an incoming document
+       * Present for TWO documented uses, not as a licence to branch: the intake of an incoming document
        * shows the way to Cấu hình only when the refusal is `sla_chua_cau_hinh` — the remedy lives on
-       * another screen, and matching the WORDING would break silently the day the sentence changes.
+       * another screen, and matching the WORDING would break silently the day the sentence changes; and
+       * the Zalo channel tab draws `due_soon_days_out_of_range` under its own select (`zalo.ts`).
        * The sentence shown is still `thongBao`, verbatim; every other screen ignores this field.
        */
       code?: string;
@@ -221,7 +222,7 @@ export async function goiGhi(
   than: unknown | undefined,
   maMongDoi: number,
   headerThem?: Readonly<Record<string, string>>,
-  /** `withCode`: also return the server's `code` on a refusal — ONE documented caller, see `KetQua`. */
+  /** `withCode`: also return the server's `code` on a refusal — documented callers only, see `KetQua`. */
   options?: { readonly withCode?: boolean },
 ): Promise<KetQua<Response>> {
   let phanHoi: Response;

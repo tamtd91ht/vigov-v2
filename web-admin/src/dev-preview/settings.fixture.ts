@@ -285,6 +285,7 @@ const ZALO_SETTINGS: ZaloChannelSettings = {
   quiet_end: "07:00",
   overdue_start_after_days: 1,
   overdue_repeat_every_days: 2,
+  due_soon_days: 3,
   updated_at: "2026-10-05T03:20:00Z",
   updated_by: "CB-00003",
 };

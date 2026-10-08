@@ -47,10 +47,15 @@ import {
   buildBotChange,
   buildChange,
   CHANNEL_DESCRIPTION,
+  CHECK_FAILED_TOAST,
   checkResultText,
   checkRetireReason,
   dayOptions,
   draftFromSettings,
+  DUE_SOON_HINT,
+  DUE_SOON_MIN,
+  DUE_SOON_NO_LEAD,
+  DUE_SOON_OUT_OF_RANGE,
   endedLinksText,
   EVENTS_HINT,
   hourOptions,
@@ -91,9 +96,9 @@ type Units = KetQua<{ items: UnitName[] }>;
  * let the slower one overwrite the other's change.
  *
  * WHAT THE SERVER CANNOT DO YET is drawn at its spec position, disabled, with "?" (ADR 0068 §14): the
- * "nhắc trước" threshold (read from the SLA table, ADR 0079 Q1 #7 — one value per SLA row, so no single
- * figure to show here) and the events no producer sends (ADR 0079 Q3). The linked list is names, codes
- * and a date — never a Zalo chat id.
+ * events no producer sends (ADR 0079 Q3). "Sắp đến hạn: nhắc trước" is a real field since ADR 0079 lô 5
+ * Q13 — it narrows the ZALO copy only; the bell keeps the SLA table's column. The linked list is names,
+ * codes and a date — never a Zalo chat id.
  *
  * §3 "Con bot của xã" is `CommuneBotSection`: its own reads and writes, independent of the autosave.
  */
@@ -109,6 +114,7 @@ export function ZaloChannelTab() {
   const [units, setUnits] = useState<Units | null>(null);
   const [saving, setSaving] = useState(false);
   const [held, setHeld] = useState<string | null>(null);
+  const [dueSoonError, setDueSoonError] = useState<string | null>(null);
   /**
    * Spec 11 §0. Its own state, not `loaded.platform_ready`: comms sends it on the GET only, and the PUT
    * reply that replaces `loaded` after every autosave does not carry it. null = not known — no warning
@@ -195,11 +201,18 @@ export function ZaloChannelTab() {
     }
     setDraft(next);
     setHeld(null);
+    setDueSoonError(null);
     setSaving(true);
     const r = await saveZaloChannelSettings(built.change);
     setSaving(false);
     if (!r.ok) {
       setDraft(draftFromSettings(saved));
+      if (r.code === DUE_SOON_OUT_OF_RANGE) {
+        // A field error, in the server's words, under the field it is about (ADR 0079 §Giữ bất kể spec,
+        // "Thông báo": "lỗi biểu mẫu hiện tại chỗ") — the select is back at the stored value, the sentence says why.
+        setDueSoonError(r.thongBao);
+        return;
+      }
       // A refusal the server explained (a rule, a permission) is shown in its words; a lost connection
       // gets the spec's sentence.
       toast.error(r.thongBao === LOI_KHONG_RO ? SAVE_FAILED_TOAST : r.thongBao);
@@ -218,6 +231,7 @@ export function ZaloChannelTab() {
       onChange={(d) => void apply(d)}
       saving={saving}
       held={held}
+      dueSoonError={dueSoonError}
       people={peopleState(staff, directory, units)}
       botSection={<CommuneBotSection onSwitched={readPlatformReady} />}
     />
@@ -230,7 +244,6 @@ function pendingEntry(name: string): PendingFeatureInfo {
   return entry;
 }
 
-const DUE_SOON_ENTRY = pendingEntry("Nhắc trước khi đến hạn qua Zalo");
 const MORE_EVENTS_ENTRY = pendingEntry("Thêm loại việc nhắn qua Zalo");
 
 /**
@@ -390,6 +403,7 @@ export function ZaloChannelView({
   onChange,
   saving,
   held,
+  dueSoonError = null,
   people,
   botSection,
 }: {
@@ -401,6 +415,8 @@ export function ZaloChannelView({
   onChange: (d: ZaloChannelDraft) => void;
   saving: boolean;
   held: string | null;
+  /** comms' `due_soon_days_out_of_range` sentence, drawn under the "nhắc trước" select. */
+  dueSoonError?: string | null;
   people: PeopleState;
   /** §3, stateful (`CommuneBotSection`) — a slot, so this view stays pure for the tests. */
   botSection: ReactNode;
@@ -478,14 +494,29 @@ export function ZaloChannelView({
         <p className={DESCRIPTION}>{WHEN_DESCRIPTION}</p>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-3">
-          <ZaloField
-            label="Sắp đến hạn: nhắc trước"
-            htmlFor="zalo-due-soon-days"
-            marker={<PendingMarker info={DUE_SOON_ENTRY} />}
-          >
-            <select id="zalo-due-soon-days" className={daySelectCls} disabled>
-              <option value="" />
+          <ZaloField label="Sắp đến hạn: nhắc trước" htmlFor="zalo-due-soon-days" hint={DUE_SOON_HINT}>
+            {/* Unlike the two overdue selects, the empty option stays offered once a number is picked:
+                "no narrowing" is a choice a commune must be able to go back to, not an unset state. */}
+            <select
+              id="zalo-due-soon-days"
+              name="due_soon_days"
+              className={daySelectCls}
+              value={draft.dueSoonDays === null ? "" : String(draft.dueSoonDays)}
+              disabled={saving}
+              aria-invalid={dueSoonError !== null}
+              aria-describedby={dueSoonError !== null ? "zalo-due-soon-error" : undefined}
+              onChange={(e) => onChange({ ...draft, dueSoonDays: e.target.value === "" ? null : Number(e.target.value) })}
+            >
+              <option value="">{DUE_SOON_NO_LEAD}</option>
+              {dayOptions(DUE_SOON_MIN, draft.dueSoonDays).map((d) => (
+                <option key={d} value={d}>{`${d} ngày`}</option>
+              ))}
             </select>
+            {dueSoonError !== null && (
+              <p id="zalo-due-soon-error" className="text-danger m-0 text-[12px] font-medium" role="alert">
+                {dueSoonError}
+              </p>
+            )}
           </ZaloField>
           <ZaloField label="Quá hạn: bắt đầu nhắc sau" htmlFor="zalo-overdue-start">
             <DaySelect
@@ -673,10 +704,12 @@ function CommuneBotSection({ onSwitched }: { onSwitched: () => void }) {
     const r = await saveCommuneZaloBot(built.body);
     setBusy(null);
     if (!r.ok) {
-      toast.error(r.thongBao);
+      // Prototype `ZaloChannelPanel.tsx:48-49`: "Lưu con bot" goes through the same save as the rest of
+      // the tab, so the same two toasts (ADR 0079 Q19). A refusal the server explained keeps its words.
+      toast.error(r.thongBao === LOI_KHONG_RO ? SAVE_FAILED_TOAST : r.thongBao);
       return;
     }
-    toast.success(`Đã lưu con bot.${endedLinksText(r.duLieu.ended_link_count)}`);
+    toast.success(`${SAVED_TOAST}${endedLinksText(r.duLieu.ended_link_count)}`);
     setRevokeNotice(r.duLieu.revoke_notice ?? null);
     await load(true);
     onSwitched();
@@ -700,7 +733,8 @@ function CommuneBotSection({ onSwitched }: { onSwitched: () => void }) {
     const r = await checkCommuneZaloBot();
     setBusy(null);
     if (!r.ok) {
-      toast.error(r.thongBao);
+      // Prototype `ZaloChannelPanel.tsx:456` for a call that failed unexplained (ADR 0079 Q19).
+      toast.error(r.thongBao === LOI_KHONG_RO ? CHECK_FAILED_TOAST : r.thongBao);
       return;
     }
     const text = checkResultText(r.duLieu.result, r.duLieu.account_name);
@@ -739,15 +773,17 @@ function CommuneBotSection({ onSwitched }: { onSwitched: () => void }) {
     const r = await retireCommuneZaloBot(checked.reason);
     setBusy(null);
     if (!r.ok) {
-      // Kept in the box: the reason typed stays, the server's sentence is next to it.
-      setRetireError(r.thongBao);
+      // Kept in the box: the reason typed stays, the server's sentence is next to it. Unexplained
+      // failure: the prototype's save toast text (`ZaloChannelPanel.tsx:49`, ADR 0079 Q19).
+      setRetireError(r.thongBao === LOI_KHONG_RO ? SAVE_FAILED_TOAST : r.thongBao);
       return;
     }
     setRetireOpen(false);
     setRetireReason("");
+    // Prototype `ZaloChannelPanel.tsx:491` → `:48`: "Quay về bot chung" is a save, toasted "Đã lưu."
     toast.success(
       r.duLieu.retired
-        ? `Đã quay về bot chung.${endedLinksText(r.duLieu.ended_link_count)}`
+        ? `${SAVED_TOAST}${endedLinksText(r.duLieu.ended_link_count)}`
         : "Xã đã không còn bot riêng nào đang dùng.",
     );
     setRevokeNotice(r.duLieu.revoke_notice ?? null);

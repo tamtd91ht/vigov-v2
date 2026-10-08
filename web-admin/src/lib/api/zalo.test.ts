@@ -53,6 +53,7 @@ const SETTINGS: ZaloChannelSettings = {
   quiet_end: "06:00",
   overdue_start_after_days: 1,
   overdue_repeat_every_days: 2,
+  due_soon_days: null,
   updated_at: "2026-10-05T03:00:00Z",
   updated_by: "CB-00123",
   supported_events: ["nhiem-vu.sap-den-han", "nhiem-vu.qua-han", "ban-tin-tuan"],
@@ -92,10 +93,10 @@ describe("own link — everything from the session, nothing in the request", () 
 });
 
 describe("commune settings and linked list", () => {
-  it("PUT sends exactly the six editable keys — never updated_*, supported_events, platform_ready", async () => {
+  it("PUT sends exactly the seven editable keys — never updated_*, supported_events, platform_ready", async () => {
     answer = () => json(ZALO_STATUS.settingsSaved, SETTINGS);
     // The whole read shape passed in, `updated_*` included: they must not travel back up.
-    await saveZaloChannelSettings(SETTINGS);
+    await saveZaloChannelSettings({ ...SETTINGS, due_soon_days: 3 });
     const c = calls.at(-1)!;
     expect(c.url).toBe("/api/v1/zalo-channel-settings");
     expect(c.init.method).toBe("PUT");
@@ -106,6 +107,31 @@ describe("commune settings and linked list", () => {
       quiet_end: "06:00",
       overdue_start_after_days: 1,
       overdue_repeat_every_days: 2,
+      due_soon_days: 3,
+    });
+  });
+
+  it("due_soon_days is ALWAYS a key of the PUT — null when unset, never dropped (absent would clear it)", async () => {
+    answer = () => json(ZALO_STATUS.settingsSaved, SETTINGS);
+    await saveZaloChannelSettings({ ...SETTINGS, due_soon_days: null });
+    expect(JSON.parse(String(calls.at(-1)!.init.body))).toHaveProperty("due_soon_days", null);
+    // A caller that slipped `undefined` past the type: `JSON.stringify` would drop the key.
+    const withoutKey = Object.fromEntries(Object.entries(SETTINGS).filter(([k]) => k !== "due_soon_days"));
+    await saveZaloChannelSettings(withoutKey as unknown as Parameters<typeof saveZaloChannelSettings>[0]);
+    expect(JSON.parse(String(calls.at(-1)!.init.body))).toHaveProperty("due_soon_days", null);
+  });
+
+  it("422 due_soon_days_out_of_range: the server's sentence AND its code (the field error keys on the code)", async () => {
+    answer = () =>
+      json(422, {
+        code: "due_soon_days_out_of_range",
+        message: "Số ngày nhắc trước khi đến hạn phải từ 1 đến 14, hoặc để trống.",
+        trace_id: "",
+      });
+    expect(await saveZaloChannelSettings({ ...SETTINGS, due_soon_days: 3 })).toEqual({
+      ok: false,
+      thongBao: "Số ngày nhắc trước khi đến hạn phải từ 1 đến 14, hoặc để trống.",
+      code: "due_soon_days_out_of_range",
     });
   });
 

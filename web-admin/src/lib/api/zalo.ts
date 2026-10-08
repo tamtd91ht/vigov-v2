@@ -62,9 +62,23 @@ export type ZaloPairingCode = comms_pairingCodeOut;
  * GET · PUT /api/v1/zalo-channel-settings. `kinds` and `supported_events` are per-domain kinds
  * (`nhiem-vu.qua-han`, … — comms migration 0021); `platform_ready` is sent by the GET only.
  */
-export type ZaloChannelSettings = comms_zaloChannelSettingsOut;
+export type ZaloChannelSettings = comms_zaloChannelSettingsOut & DueSoonDaysUntilRegen;
 
-export type ZaloChannelSettingsChange = comms_zaloChannelSettingsIn;
+export type ZaloChannelSettingsChange = comms_zaloChannelSettingsIn & Required<DueSoonDaysUntilRegen>;
+
+/**
+ * Until contract regen: `due_soon_days` (comms 3c9f14fd, `service-comms/internal/http/zalo_links.go:112,133`)
+ * is not in the COMMITTED `schema.gen.ts` — regenerating it here would mix in other sessions'
+ * uncommitted routes. Same stopgap as `optionalColorIn` in `danh-muc.ts`. It is harmless once the
+ * regenerated file carries the field (the intersection then adds nothing); delete this and the two
+ * intersections above in the commit that lands that regen.
+ *
+ * Wire meaning: 1–14 = the Zalo copy of a due-soon digest keeps only records whose STORED deadline is
+ * within that many days; null = no narrowing (the bell's set, as is). The bell and the "Sắp đến hạn"
+ * list never read it (ADR 0079 lô 5 Q13). REQUIRED on the PUT side: the PUT replaces the whole row, so
+ * a body without it CLEARS the commune's choice.
+ */
+type DueSoonDaysUntilRegen = { due_soon_days?: number | null };
 
 /** GET /api/v1/zalo-links — staff of THIS commune with a live link. Names, codes, a date; no chat id. */
 export type ZaloLinkedStaff = comms_zaloLinkedStaffOut;
@@ -122,7 +136,14 @@ export function getZaloChannelSettings(): Promise<KetQua<ZaloChannelSettings>> {
   return docJSON<ZaloChannelSettings>(SETTINGS_PATH);
 }
 
-/** Built key by key: a `...body` is how a stray field — `updated_by`, `supported_events` — goes up. */
+/**
+ * Built key by key: a `...body` is how a stray field — `updated_by`, `supported_events` — goes up.
+ * `due_soon_days` is ALWAYS a key, null included (`JSON.stringify` drops `undefined`, and an absent key
+ * clears the stored lead).
+ *
+ * `withCode`: the second documented reader of `KetQua.code` — `due_soon_days_out_of_range` is drawn
+ * under its own select instead of a toast; the sentence is still the server's, verbatim.
+ */
 export function saveZaloChannelSettings(change: ZaloChannelSettingsChange): Promise<KetQua<ZaloChannelSettings>> {
   const sent: ZaloChannelSettingsChange = {
     is_enabled: change.is_enabled,
@@ -131,8 +152,11 @@ export function saveZaloChannelSettings(change: ZaloChannelSettingsChange): Prom
     quiet_end: change.quiet_end,
     overdue_start_after_days: change.overdue_start_after_days,
     overdue_repeat_every_days: change.overdue_repeat_every_days,
+    due_soon_days: change.due_soon_days ?? null,
   };
-  return docThanLoiGoi<ZaloChannelSettings>(goiGhi(SETTINGS_PATH, "PUT", sent, ZALO_STATUS.settingsSaved));
+  return docThanLoiGoi<ZaloChannelSettings>(
+    goiGhi(SETTINGS_PATH, "PUT", sent, ZALO_STATUS.settingsSaved, undefined, { withCode: true }),
+  );
 }
 
 export async function listZaloLinkedStaff(): Promise<KetQua<ZaloLinkedStaff[]>> {
