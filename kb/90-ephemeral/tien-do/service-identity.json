@@ -547,6 +547,15 @@
       "bang_chung": "3d53605f. go test ./service-identity/... xanh (worktree HEAD+staged). TestEmailForRevealPg BỎ QUA — chưa có VIGOV_TEST_DSN.",
       "no_confirm": [],
       "tiep_theo": "Chạy TestEmailForRevealPg trên PG16 thật."
+    },
+    {
+      "id": "so-can-bo-xep-tim-dem-08-10",
+      "menu": "cau-hinh",
+      "trang_thai": "xong",
+      "viec": "Sổ cán bộ (màn /nguoi-dung) theo prototype, chủ dự án chốt 08/10/2026: (1) GET /api/v1/staff và POST /api/v1/staff/searches xếp theo 6 cột prototype — full_name, position, phone (máy bàn cơ quan) dùng page.KindRef (con trỏ chỉ mang id, luật 3 cấm #4); department, last_login_at là khoá tính trong bảng dẫn xuất buộc tenant_id = $1, trống luôn cuối cả hai chiều; status = cờ dang_hoat_dong; email, mobile vẫn không xếp; sort/order tuỳ chọn trên thân tìm kiếm. (2) Tìm thêm thư điện tử và tên bộ phận (bộ phận đã xoá mềm không khớp) — dùng chung với /danh-ba, /mini-app; staff-directory không đổi (ADR 0082). (3) Tuyến mới POST /api/v1/staff-count-queries {q, unit, published} → {total}, admin.user, cùng vị từ với tìm kiếm; GET /staff-counts giữ nguyên; không thêm total vào page.Result.",
+      "bang_chung": "4b0b9ce3 (mã + test) · 40b46898 (openapi, api-surface, schema.gen.ts, dinh-tuyen.gen.ts, ingress sinh trong worktree sạch). Test viết trước, đỏ trước khi sửa: TestStaffSortWalksEveryNewSortInOrder, TestStaffSortEmptyValuesAreOnALaterPageNotLost, TestStaffSortCursorNeverCarriesThePersonalValue, TestStaffSearchMatchesEmail, TestStaffSearchDepartmentNameStaysInItsCommune, TestStaffCountMatchingEqualsTheWalk, TestStaffCountQueries_401/403/403 sai xã/200…; test chặn cũ viết lại thành TestStaffSortAllowlistKeepsPersonalValuesOutOfTheCursor. Kiểm 08/10: go vet + go test -p 1 ./... service-identity xanh (13 gói ok); check_quyen, check_security, check_audit_actor xanh. TestStaffRegisterSortSearchCountPg BỎ QUA (máy không có VIGOV_TEST_DSN/Docker) — SQL thật chưa chạy trên Postgres.",
+      "no_confirm": [],
+      "tiep_theo": "Chạy TestStaffRegisterSortSearchCountPg trên Postgres thật (khoá ngày 0001-01-01, thứ tự tiền tố theo collation). Chức danh / máy bàn rỗng ('') xếp đầu khi tăng dần — muốn đẩy cuối phải đổi core/page (con trỏ id trên biểu thức), chờ chủ dự án. Tuyến đếm bắt buộc q: tổng theo bộ phận không có chữ tìm dùng GET /staff-counts. Sửa tên/chức danh giữa hai trang có thể lặp/lỡ vài dòng (giá của con trỏ chỉ mang id). Chưa có chỉ mục cho các thứ tự mới — ổn ở vài trăm dòng/xã."
     }
   ]
 }
