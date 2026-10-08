@@ -65,10 +65,19 @@ describe("delete form", () => {
 
   it("a required reason box with a real label, and the explanation says the code is not reused", () => {
     const html = form(null);
-    expect(html).toMatch(/<label for="o-ly-do-xoa-bo-phan">Lý do xoá<\/label>/);
+    expect(html).toMatch(/<label for="o-ly-do-xoa-bo-phan"[^>]*>Lý do xoá<\/label>/);
     expect(html).toContain('required=""');
     expect(html).toContain("không được cấp lại");
     expect(html).toContain("Xoá bộ phận VĂN PHÒNG");
+  });
+
+  it("restyled as the spec's dialog: title, footer Huỷ then the red confirm, no legacy form classes", () => {
+    const html = form(null);
+    expect(html).toMatch(/<h2[^>]*>Xoá bộ phận VĂN PHÒNG<\/h2>/);
+    expect(html).toContain("sm:max-w-lg");
+    expect(html).toContain("bg-muted/50");
+    expect(html.indexOf(">Huỷ<")).toBeLessThan(html.indexOf("Xác nhận xoá"));
+    expect(html).not.toMatch(/class="[^"]*\b(form-danh-muc|form-bo-phan|o-nhap|ghi-chu|thong-bao-loi)\b/);
   });
 
   it("the local 'reason missing' error shows before any request", () => {

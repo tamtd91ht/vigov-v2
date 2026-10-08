@@ -1,14 +1,15 @@
 "use client";
 
-import { Building2, Pencil, Plus, Trash2, Upload, UsersRound } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Building2, Pencil, Plus, Trash2, Users } from "lucide-react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/error-state";
-import { IconButton } from "@/components/ui/icon-button";
-import { Notice } from "@/components/ui/notice";
-import { SkeletonRows } from "@/components/ui/skeleton";
+import { controlClass } from "@/components/ui/field";
+import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
 import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
+import { cn } from "@/lib/cn";
 
 import { layDanhMucBoPhan } from "@/lib/api/danh-muc";
 import type { identity_boPhanRa } from "@/lib/api/schema.gen";
@@ -30,59 +31,60 @@ import {
   type DongPhang,
   type NutCay,
 } from "./cay-bo-phan";
+import { ConfigImportButton } from "./config-import-button";
+import { ConfigLoading, SMALL_BUTTON_CLASS, selectCls } from "./config-ui";
+import { ORG_UNIT_IMPORT_TARGET } from "./excel-import-targets";
 import {
-  CAU_THIEU_QUYEN_GHI,
+  ADD_BUTTON,
+  ADD_TITLE,
   CHON_KHONG_CO_CHA,
   DANG_TAI,
-  GIAI_THICH_O_CHA_SUA,
-  GIAI_THICH_O_MA_THEM,
-  GIAI_THICH_O_TEN,
-  GIAI_THICH_O_THU_TU,
+  DIALOG_DESCRIPTION,
+  EDIT_TITLE,
+  EMPTY_TREE,
   LOI_THU_TU,
+  NAME_PLACEHOLDER,
+  NAME_REQUIRED,
   NUT_HUY,
   NUT_LUU,
   NUT_THEM_BO_PHAN,
   O_CHA,
-  O_MA,
   O_TEN,
   O_THU_TU,
   TIEU_DE_SO_DO,
-  giaiThichMaKhongSua,
-  nhanCayRong,
+  TITLE_ADD_CHILD,
+  TITLE_DELETE,
+  TITLE_EDIT,
   nhanNutSua,
   nhanNutThemCon,
   nhanSoCanBo,
-  tieuDeSua,
-  tieuDeThemCon,
-  tieuDeThemGoc,
 } from "./nhan-so-do";
-import { ConfigDialog } from "./config-dialog";
+import { deleteButtonLabel, deletedSentence } from "./org-unit-delete";
 import { DELETE_REASON_ID, OrgUnitDeleteForm } from "./org-unit-delete-form";
 import type { DeleteRefusal } from "./org-unit-delete-form";
-import { deleteButtonLabel, deletedSentence, deleteFormTitle } from "./org-unit-delete";
-import { IMPORT_BUTTON } from "./org-unit-import-flow";
-import { OrgUnitImportPanel } from "./org-unit-import-panel";
+import { DIALOG_FOOTER_CLASS, DIALOG_LABEL_CLASS } from "./org-unit-dialog-classes";
 import { kiemLyDoXoa } from "./tang-danh-muc";
 
 /**
- * Tab "Sơ đồ tổ chức" — `docs/ui-ux/14-cau-hinh.md §1`: cây bộ phận của đơn vị; thêm, đổi tên,
- * dời sang bộ phận cha khác, đổi thứ tự, XOÁ MỀM kèm lý do (ADR 0056), và nhập từ Excel.
+ * Tab "Sơ đồ tổ chức" — spec Cấu hình `03-so-do-to-chuc.md` (ADR 0079), prototype
+ * `vigov-require/apps/admin/src/components/admin/OrgChart.tsx`: cây bộ phận của đơn vị; thêm, đổi tên,
+ * dời sang bộ phận khác, đổi thứ tự, XOÁ MỀM kèm lý do (ADR 0056), và nhập từ Excel.
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
- * CÂY HIỆN CHO MỌI TÀI KHOẢN, CHỈ NÚT GHI MỚI ẨN — cùng khuôn tab Danh mục, và vì cùng một lý do ở
- * máy chủ: `GET /api/v1/org-units` khai `any-authenticated` (tên bộ phận có ở ô phân công và bộ lọc
- * của mọi màn), còn hai tuyến ghi khai `RequirePermission("admin.org")`. Ẩn nút là TIỆN DỤNG, không
- * phải biện pháp: máy chủ kiểm khoá trên TỪNG yêu cầu (luật 5, cấm #1).
+ * CÂY HIỆN CHO MỌI TÀI KHOẢN, CHỈ NÚT GHI MỚI ẨN: `GET /api/v1/org-units` khai `any-authenticated`
+ * (tên bộ phận có ở ô phân công và bộ lọc của mọi màn), còn các tuyến ghi khai
+ * `RequirePermission("admin.org")` — NOT the spec's `admin.user` (ADR 0079 "Giữ bất kể spec"). Ẩn nút
+ * là TIỆN DỤNG, không phải biện pháp: máy chủ kiểm khoá trên TỪNG yêu cầu (luật 5, cấm #1).
  *
  * ĐỌC LẠI SAU MỖI LẦN GHI, KHÔNG VÁ TẠI CHỖ. Phản hồi của hai tuyến ghi KHÔNG mang `staff_count`
  * (`bo_phan.go:53`), nên vẽ lại thẻ từ phản hồi ấy là in "0 cán bộ" cho một bộ phận mười hai người.
  *
  * XOÁ: máy chủ là bên chặn khi bộ phận còn cán bộ, bộ phận con hay hồ sơ đang mở ở phân hệ khác
- * (409 kèm số đếm từng loại; 503 khi chưa hỏi được phân hệ khác — KHÔNG BAO GIỜ là "đã xoá"). Nút
- * `🗑` vì vậy hiện trên mọi thẻ, kể cả thẻ "0 cán bộ": con số ấy chỉ là một trong năm thứ được đếm.
+ * (409 kèm số đếm từng loại; 503 khi chưa hỏi được phân hệ khác — KHÔNG BAO GIỜ là "đã xoá"). Nút xoá
+ * vì vậy hiện trên mọi thẻ, kể cả thẻ "0 cán bộ": con số ấy chỉ là một trong năm thứ được đếm. Spec 03
+ * xoá không hỏi; ở đây vẫn hỏi lý do vì máy chủ đòi `reason` (luật 7, ADR 0079).
  *
- * MỘT BIỂU MẪU MỞ MỘT LÚC: mở biểu mẫu xoá thì đóng biểu mẫu thêm/sửa và ngược lại — hai bản nháp
- * mở cùng lúc trên màn 320px là một bản nháp không nhìn thấy.
+ * MỘT HỘP THOẠI MỞ MỘT LÚC: mở hộp xoá thì đóng hộp thêm/sửa và ngược lại.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
 export function TabSoDoToChuc() {
@@ -94,31 +96,29 @@ export function TabSoDoToChuc() {
   const [loiTaiCho, datLoiTaiCho] = useState("");
   const [loiMayChu, datLoiMayChu] = useState("");
   const [dangGui, datDangGui] = useState(false);
-  const [cauDaXong, datCauDaXong] = useState("");
 
   /**
-   * Nút đã mở biểu mẫu — tiêu điểm trả về nó khi biểu mẫu đóng (Huỷ hoặc lưu xong). Giữ `id` chứ
-   * không giữ phần tử: sau một lần lưu, cây được đọc lại và nút có thể là một phần tử MỚI.
+   * Nút đã mở hộp thoại — tiêu điểm trả về nó khi hộp đóng (Huỷ hoặc lưu xong). Giữ `id` chứ không
+   * giữ phần tử: sau một lần lưu, cây được đọc lại và nút có thể là một phần tử MỚI.
    */
   const nutDaMo = useRef<string | null>(null);
 
-  /** The unit whose delete form is open, and that form's state. */
+  /** The unit whose delete dialog is open, and that dialog's state. */
   const [removing, setRemoving] = useState<identity_boPhanRa | null>(null);
   const [reason, setReason] = useState("");
   const [deleteLocalError, setDeleteLocalError] = useState("");
   const [refusal, setRefusal] = useState<DeleteRefusal | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
 
   const phien = usePhien();
-  /** Ba trạng thái: chưa đọc xong phiên thì chưa vẽ nút ghi nào, cũng chưa nói "thiếu quyền". */
+  /** Ba trạng thái: chưa đọc xong phiên thì chưa vẽ nút ghi nào. */
   const quyetDinhGhi = phien === null ? null : quyetDinhTheoKhoa(phien, QUYEN_QUAN_LY_SO_DO);
   const coQuyenGhi = quyetDinhGhi !== null && quyetDinhGhi.hien;
 
   useEffect(() => {
     let bo = false;
     // KHÔNG đặt lại về "đang đọc" trước lượt đọc lại: cây cũ còn trên màn hình trong lúc chờ, nên
-    // nút vừa mở biểu mẫu vẫn còn đó để nhận lại tiêu điểm.
+    // nút vừa mở hộp thoại vẫn còn đó để nhận lại tiêu điểm.
     layDanhMucBoPhan().then((kq) => {
       if (bo) return;
       datTai(kq.ok ? { pha: "xong", items: kq.duLieu.items } : { pha: "loi", thongBao: kq.thongBao });
@@ -128,7 +128,7 @@ export function TabSoDoToChuc() {
     };
   }, [lanDoc]);
 
-  // Mở biểu mẫu → tiêu điểm vào ô đầu tiên. Đóng → tiêu điểm về nút đã mở nó.
+  // Mở hộp thoại → tiêu điểm vào ô đầu tiên. Đóng → tiêu điểm về nút đã mở nó.
   useEffect(() => {
     if (removing !== null) {
       document.getElementById(DELETE_REASON_ID)?.focus();
@@ -154,7 +154,6 @@ export function TabSoDoToChuc() {
     datBan(banDau);
     datLoiTaiCho("");
     datLoiMayChu("");
-    datCauDaXong("");
   }, []);
 
   const thaoTac = useMemo<ThaoTacCay>(
@@ -175,7 +174,6 @@ export function TabSoDoToChuc() {
         setReason("");
         setDeleteLocalError("");
         setRefusal(null);
-        datCauDaXong("");
       },
     }),
     [mo],
@@ -201,7 +199,7 @@ export function TabSoDoToChuc() {
     void deleteOrgUnit(unit.id, checked.giaTri).then((r) => {
       setDeleting(false);
       if (!r.ok) {
-        // The form stays open with the reason as typed: once what the unit holds is moved, the
+        // The dialog stays open with the reason as typed: once what the unit holds is moved, the
         // same click is the retry.
         setRefusal({ message: r.message, holdings: r.holdings });
         return;
@@ -209,7 +207,7 @@ export function TabSoDoToChuc() {
       // The card is gone after the reload, so focus has nowhere to return to.
       nutDaMo.current = null;
       setRemoving(null);
-      datCauDaXong(deletedSentence(unit.name));
+      toast.success(deletedSentence(unit.name));
       datLanDoc((n) => n + 1);
     });
   }, [deleting, reason, removing]);
@@ -232,27 +230,41 @@ export function TabSoDoToChuc() {
         return;
       }
       if (kq.kieu === "loiMayChu") {
-        // Biểu mẫu GIỮ NGUYÊN chữ đã gõ, và GIỮ NGUYÊN khoá chống trùng: lần bấm lại là lần thử lại
-        // của CÙNG một lần thêm.
+        // Hộp thoại GIỮ NGUYÊN chữ đã gõ, và GIỮ NGUYÊN khoá chống trùng: lần bấm lại là lần thử lại
+        // của CÙNG một lần thêm. The server's sentence is shown verbatim — its 409 `org_unit_cycle`
+        // covers "itself" and "a descendant" alike, so the spec's self-parent sentence is not substituted.
         datLoiMayChu(kq.thongBao);
         return;
       }
       datDangMo(null);
-      datCauDaXong(kq.cau);
+      toast.success(kq.cau);
       datLanDoc((n) => n + 1);
     });
   }, [ban, dangGui, dangMo]);
 
-  // ADD / EDIT / DELETE OPEN IN A DIALOG, as the prototype's `OrgUnitDialog` (ADR 0068 lần 5). The
-  // form inside is unchanged — same fields, same two error areas, same create key kept across retries.
-  const bieuMau =
-    dangMo === null ? null : (
-      <ConfigDialog
-        title={formTitle(dangMo)}
-        onDismiss={() => {
-          if (!dangGui) dong();
-        }}
-      >
+  return (
+    // No card, no visible title: the tab IS the section, as in the prototype. The heading stays for
+    // the outline and the region's name, out of view.
+    <section className="min-w-0 space-y-3" aria-labelledby="tieu-de-so-do">
+      <h2 id="tieu-de-so-do" className="an-thi-giac">
+        {TIEU_DE_SO_DO}
+      </h2>
+
+      {quyetDinhGhi !== null && !quyetDinhGhi.hien && quyetDinhGhi.vi === "khong-doc-duoc" && (
+        <p className="text-danger m-0 text-[12px] font-medium" role="alert">
+          {quyetDinhGhi.thongBao}
+        </p>
+      )}
+
+      <KhungSoDo
+        tai={tai}
+        cay={cay}
+        coQuyenGhi={coQuyenGhi}
+        thaoTac={thaoTac}
+        onImported={() => datLanDoc((n) => n + 1)}
+      />
+
+      {dangMo !== null && (
         <BieuMauBoPhan
           dangMo={dangMo}
           ban={ban}
@@ -264,17 +276,8 @@ export function TabSoDoToChuc() {
           onGui={gui}
           onHuy={dong}
         />
-      </ConfigDialog>
-    );
-  const deleteForm =
-    removing === null ? null : (
-      <ConfigDialog
-        title={deleteFormTitle(removing.name)}
-        hideHeader
-        onDismiss={() => {
-          if (!deleting) closeDelete();
-        }}
-      >
+      )}
+      {removing !== null && (
         <OrgUnitDeleteForm
           unit={removing}
           reason={reason}
@@ -285,69 +288,12 @@ export function TabSoDoToChuc() {
           onSubmit={submitDelete}
           onCancel={closeDelete}
         />
-      </ConfigDialog>
-    );
-
-  return (
-    // No card, no visible title: the tab IS the section, as in the prototype (ADR 0068 lần 5). The
-    // heading stays for the outline and the region's name, out of view.
-    <section className="tab-so-do-to-chuc flex min-w-0 flex-col gap-3 [&>*]:my-0" aria-labelledby="tieu-de-so-do">
-      <h2 id="tieu-de-so-do" className="an-thi-giac">
-        {TIEU_DE_SO_DO}
-      </h2>
-
-      {/* FIRST LOAD (spec §8b): the sentence stays the live region; the eye gets placeholder rows. */}
-      {tai.pha === "dangDoc" && (
-        <>
-          <p role="status" className="an-thi-giac">
-            {DANG_TAI}
-          </p>
-          <SkeletonRows rows={4} columns={2} className="rounded-xl border border-line" />
-        </>
       )}
-      {cauDaXong !== "" && (
-        <p role="status" className="text-sm font-medium text-success-600">
-          {cauDaXong}
-        </p>
-      )}
-
-      {quyetDinhGhi !== null && !quyetDinhGhi.hien && quyetDinhGhi.vi === "khong-doc-duoc" && (
-        <p className="thong-bao-loi" role="alert">
-          {quyetDinhGhi.thongBao}
-        </p>
-      )}
-
-      <KhungSoDo
-        tai={tai}
-        cay={cay}
-        coQuyenGhi={coQuyenGhi}
-        thieuQuyen={quyetDinhGhi !== null && !quyetDinhGhi.hien && quyetDinhGhi.vi === "khong-du-quyen"}
-        thaoTac={thaoTac}
-        onOpenImport={() => setImportOpen(true)}
-        bieuMauDauTab={
-          importOpen && coQuyenGhi ? (
-            <OrgUnitImportPanel
-              asDialog
-              onImported={() => datLanDoc((n) => n + 1)}
-              onClose={() => setImportOpen(false)}
-            />
-          ) : (
-            (bieuMau ?? deleteForm)
-          )
-        }
-        bieuMauTaiThe={null}
-      />
     </section>
   );
 }
 
-/** The dialog's title — the same words the form's own heading used. */
-function formTitle(open: DangMo): string {
-  if (open.kieu === "sua") return tieuDeSua(open.bp.name);
-  return open.tenCha === null ? tieuDeThemGoc() : tieuDeThemCon(open.tenCha);
-}
-
-/** `id` của ô `Tên` — nơi tiêu điểm tới khi biểu mẫu mở. */
+/** `id` của ô `Tên` — nơi tiêu điểm tới khi hộp thoại mở. */
 const O_TEN_ID = "o-ten-bo-phan";
 
 type TrangThaiTai =
@@ -363,70 +309,62 @@ export type ThaoTacCay = {
   readonly xoa: (bp: identity_boPhanRa) => void;
 };
 
-/** `id` of a card's delete button — focus returns there when the delete form is cancelled. */
+/** `id` of a card's delete button — focus returns there when the delete dialog is cancelled. */
 export function deleteButtonId(unitId: string): string {
   return `nut-xoa-bo-phan-${unitId}`;
 }
 
 /**
- * Thân tab: nút thêm, câu thiếu quyền, cây hoặc trạng thái rỗng/lỗi.
+ * Thân tab (spec 03): hàng "Nhập từ Excel", nút "Thêm bộ phận", rồi cây — hoặc trạng thái đang tải /
+ * rỗng / lỗi.
  *
  * THUẦN TRÌNH BÀY và XUẤT RA để `tab-so-do-to-chuc.test.tsx` kết xuất bằng `react-dom/server`:
  * câu "nút ghi ẩn khi thiếu `admin.org`" là một điều của JSX, và một phép quyết định đúng trong
  * module thuần không nói gì về việc JSX có vẽ theo nó hay không.
+ *
+ * No read-only notice (spec 02/ADR 0079): an account without `admin.org` simply sees the tree.
  */
 export function KhungSoDo({
   tai,
   cay,
   coQuyenGhi,
-  thieuQuyen,
   thaoTac,
-  onOpenImport,
-  bieuMauDauTab,
-  bieuMauTaiThe,
+  onImported,
 }: {
   tai: TrangThaiTai;
   cay: readonly NutCay[];
   coQuyenGhi: boolean;
-  thieuQuyen: boolean;
   thaoTac: ThaoTacCay;
-  onOpenImport: () => void;
-  bieuMauDauTab: ReactNode;
-  bieuMauTaiThe: { id: string; node: ReactNode } | null;
+  onImported: () => void;
 }) {
   return (
     <>
-      {/* Prototype order: "Nhập từ Excel" (outline) on its own row, then "Thêm bộ phận" (primary), both
-          right-aligned, both small. */}
       {coQuyenGhi && (
         <>
-          <p className="cum-nut m-0 flex justify-end">
-            <Button type="button" variant="outline" size="sm" icon={<Upload aria-hidden="true" focusable="false" strokeWidth={1.8} />} onClick={onOpenImport}>
-              {IMPORT_BUTTON}
-            </Button>
-          </p>
-          <p className="cum-nut m-0 flex justify-end">
-            <Button
-              type="button"
-              variant="primary"
-              size="sm"
-              id={idNutMo("themGoc")}
-              icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
-              onClick={thaoTac.themGoc}
-            >
-              {NUT_THEM_BO_PHAN}
-            </Button>
-          </p>
+          {/* Draws its own `mb-3 flex justify-end` row (spec 02); the dialog title is the target's,
+              "Nhập sơ đồ tổ chức từ Excel". */}
+          <ConfigImportButton target={ORG_UNIT_IMPORT_TARGET} onImported={onImported} />
+          {/* While loading the prototype draws only the import row and the skeletons
+              (ConfigWorkspace.tsx:86, :173-180): the add button belongs to the loaded tree. */}
+          {tai.pha !== "dangDoc" && (
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                className={SMALL_BUTTON_CLASS}
+                id={idNutMo("themGoc")}
+                icon={<Plus aria-hidden="true" focusable="false" className="size-4" />}
+                onClick={thaoTac.themGoc}
+              >
+                {NUT_THEM_BO_PHAN}
+              </Button>
+            </div>
+          )}
         </>
       )}
-      {/* Read-only is a normal state of an account, not an error: a neutral note, no role. */}
-      {thieuQuyen && (
-        <Notice tone="neutral" className="m-0">
-          {CAU_THIEU_QUYEN_GHI}
-        </Notice>
-      )}
 
-      {bieuMauDauTab}
+      {tai.pha === "dangDoc" && <ConfigLoading label={DANG_TAI} />}
 
       {/* LỖI ĐỌC: nguyên câu của máy chủ, không diễn giải, không rẽ nhánh theo `code`. */}
       {tai.pha === "loi" && (
@@ -434,64 +372,56 @@ export function KhungSoDo({
       )}
 
       {tai.pha === "xong" && cay.length === 0 && (
-        <p className="m-0 py-8 text-center text-[13px] text-ink-500">{nhanCayRong(coQuyenGhi)}</p>
+        <p className="text-ink-muted m-0 py-8 text-center text-[13px]">{EMPTY_TREE}</p>
       )}
 
       {tai.pha === "xong" && cay.length > 0 && (
-        <CapBoPhan
-          nut={cay}
-          coQuyenGhi={coQuyenGhi}
-          thaoTac={thaoTac}
-          bieuMauTaiThe={bieuMauTaiThe}
-          nhan={TIEU_DE_SO_DO}
-        />
+        <ul className="m-0 list-none space-y-2 p-0" aria-label={TIEU_DE_SO_DO}>
+          {cay.map((n) => (
+            <OrgUnitBranch key={n.bp.id} node={n} coQuyenGhi={coQuyenGhi} thaoTac={thaoTac} />
+          ))}
+        </ul>
       )}
     </>
   );
 }
 
 /**
- * Một cấp của cây — danh sách lồng nhau, `<ul>` trong `<li>` của cha.
+ * One unit and, under it, its sub-units — the prototype's recursive `TreeBranch`
+ * (`OrgChart.tsx:124-219`).
  *
- * DANH SÁCH LỒNG CHỨ KHÔNG PHẢI THỤT LỀ BẰNG CSS TRÊN MỘT DANH SÁCH PHẲNG: trình đọc màn hình đọc
- * được cấp của một `<ul>` lồng ("danh sách, cấp 2"), còn một lề trái chỉ người nhìn thấy mới đọc
- * được. Quan hệ cha–con là dữ liệu, không phải trang trí.
+ * NESTED LISTS, NOT A FLAT LIST INDENTED BY CSS: a screen reader announces the level of a nested
+ * `<ul>` ("list, level 2"), while a left margin is only read by the eye. The parent–child relation is
+ * data, not decoration. The dashed left rule is the prototype's (`OrgChart.tsx:206`).
  */
-function CapBoPhan({
-  nut,
+function OrgUnitBranch({
+  node,
   coQuyenGhi,
   thaoTac,
-  bieuMauTaiThe,
-  nhan,
 }: {
-  nut: readonly NutCay[];
+  node: NutCay;
   coQuyenGhi: boolean;
   thaoTac: ThaoTacCay;
-  bieuMauTaiThe: { id: string; node: ReactNode } | null;
-  nhan?: string;
 }) {
   return (
-    <ul className="cay-bo-phan" aria-label={nhan}>
-      {nut.map((n) => (
-        <li key={n.bp.id}>
-          <TheBoPhan bp={n.bp} coQuyenGhi={coQuyenGhi} thaoTac={thaoTac} />
-          {bieuMauTaiThe !== null && bieuMauTaiThe.id === n.bp.id && bieuMauTaiThe.node}
-          {n.con.length > 0 && (
-            <CapBoPhan
-              nut={n.con}
-              coQuyenGhi={coQuyenGhi}
-              thaoTac={thaoTac}
-              bieuMauTaiThe={bieuMauTaiThe}
-            />
-          )}
-        </li>
-      ))}
-    </ul>
+    <li className="m-0">
+      <TheBoPhan bp={node.bp} coQuyenGhi={coQuyenGhi} thaoTac={thaoTac} />
+      {node.con.length > 0 && (
+        // Preflight is off: `border-0` zeroes the three other sides before `border-l-2` sets the left.
+        <ul className="border-line m-0 mt-2 ml-6 list-none space-y-2 border-0 border-l-2 border-dashed p-0 pl-5">
+          {node.con.map((c) => (
+            <OrgUnitBranch key={c.bp.id} node={c} coQuyenGhi={coQuyenGhi} thaoTac={thaoTac} />
+          ))}
+        </ul>
+      )}
+    </li>
   );
 }
 
 /**
- * Một thẻ bộ phận: tên, mã, số cán bộ, và — khi có `admin.org` — ba nút `＋`, `✎` và `🗑`.
+ * One unit card (`OrgChart.tsx:154-203`): icon tile · name over code · headcount · and, with
+ * `admin.org`, three small outline icon buttons. `flex-wrap` + `min-w-0` only matter at 320px, where a
+ * nested card would otherwise push its buttons out of view.
  */
 function TheBoPhan({
   bp,
@@ -503,69 +433,77 @@ function TheBoPhan({
   thaoTac: ThaoTacCay;
 }) {
   return (
-    // The prototype's `TreeBranch` card: icon tile · name over code · headcount · three icon buttons.
-    <div className="the-bo-phan">
-      <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-[9px] bg-brand-50 text-brand-600">
-        <Building2 focusable="false" strokeWidth={1.8} className="size-4" />
+    <div className="border-line shadow-card flex flex-wrap items-center gap-3 rounded-[10px] border border-solid bg-white px-4 py-3">
+      <span aria-hidden="true" className="bg-navy/8 text-navy grid size-9 shrink-0 place-items-center rounded-[9px]">
+        <Building2 focusable="false" className="size-4" />
       </span>
-      <div className="the-bo-phan-than">
-        <span className="the-bo-phan-ten text-[13px] text-ink-900">{bp.name}</span>
-        {/* Mã font đẳng chiều: nó là slug đọc qua điện thoại, `l`/`1` phải phân biệt được. */}
-        <span className="ma-muc the-bo-phan-ma text-[11px]">{bp.code}</span>
+      <div className="min-w-0 flex-1">
+        <div className="text-navy text-[13px] font-semibold break-words">{bp.name}</div>
+        <code className="text-ink-muted text-[11px]">{bp.code}</code>
       </div>
-      <span className="the-bo-phan-so inline-flex items-center gap-1.5 text-xs">
-        <UsersRound aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-3.5 shrink-0" />
+      <span className="text-ink-muted flex shrink-0 items-center gap-1.5 text-[12px]">
+        <Users aria-hidden="true" focusable="false" className="size-3.5" />
         {nhanSoCanBo(bp.staff_count)}
       </span>
       {coQuyenGhi && (
-        // Icon-only, as the prototype: `IconButton` gives each the SAME words as its accessible name and
-        // its hover title, naming the unit ("Sửa bộ phận VĂN PHÒNG"). Same ids and handlers as before.
-        <span className="cum-nut flex flex-wrap items-center gap-1.5">
-          <IconButton
+        <div className="flex items-center gap-1.5">
+          <Button
             type="button"
-            variant="secondary"
-            className="w-11"
+            variant="outline"
+            size="sm"
+            className={SMALL_BUTTON_CLASS}
             id={idNutMo("themCon", bp.id)}
-            label={nhanNutThemCon(bp.name)}
+            title={TITLE_ADD_CHILD}
+            aria-label={nhanNutThemCon(bp.name)}
             onClick={() => thaoTac.themCon(bp)}
           >
-            <Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />
-          </IconButton>
-          <IconButton
+            <Plus aria-hidden="true" focusable="false" className="size-3.5" />
+          </Button>
+          <Button
             type="button"
-            variant="secondary"
-            className="w-11"
+            variant="outline"
+            size="sm"
+            className={SMALL_BUTTON_CLASS}
             id={idNutMo("sua", bp.id)}
-            label={nhanNutSua(bp.name)}
+            title={TITLE_EDIT}
+            aria-label={nhanNutSua(bp.name)}
             onClick={() => thaoTac.sua(bp)}
           >
-            <Pencil aria-hidden="true" focusable="false" strokeWidth={1.8} />
-          </IconButton>
-          <IconButton
+            <Pencil aria-hidden="true" focusable="false" className="size-3.5" />
+          </Button>
+          <Button
             type="button"
-            variant="secondary"
-            className="w-11 text-danger-600 hover:not-disabled:border-danger-600 hover:not-disabled:text-danger-600"
+            variant="outline"
+            size="sm"
+            className={cn(SMALL_BUTTON_CLASS, "text-danger")}
             id={deleteButtonId(bp.id)}
-            label={deleteButtonLabel(bp.name)}
+            title={TITLE_DELETE}
+            aria-label={deleteButtonLabel(bp.name)}
             onClick={() => thaoTac.xoa(bp)}
           >
-            <Trash2 aria-hidden="true" focusable="false" strokeWidth={1.8} />
-          </IconButton>
-        </span>
+            <Trash2 aria-hidden="true" focusable="false" className="size-3.5" />
+          </Button>
+        </div>
       )}
     </div>
   );
 }
 
 /**
- * Biểu mẫu thêm hoặc sửa một bộ phận.
+ * Hộp thoại thêm hoặc sửa một bộ phận — the prototype's `OrgUnitDialog` (`OrgChart.tsx:221-339`).
  *
  * THUẦN TRÌNH BÀY: mọi giá trị vào qua `ban`, mọi thay đổi ra qua `datBan`, phép dựng thân yêu cầu
  * nằm ở `cay-bo-phan.ts`. XUẤT RA để kết xuất được nhánh "máy chủ vừa từ chối" — câu 409 về vòng
  * lặp phải ra tới trang NGUYÊN VĂN.
  *
- * Ô `Mã` CHỈ CÓ Ở BIỂU MẪU THÊM. Ở biểu mẫu sửa, mã hiện thành chữ: một ô nhập mã sửa được là một ô
- * hứa điều máy chủ sẽ từ chối 400 (luật 7, bất biến 3).
+ * NO CODE FIELD (spec 03): the server derives the code from the name when none is sent
+ * (`service-identity/internal/store/bo_phan_ghi.go`, `MaCungGoc`), and an issued code never changes.
+ * `Thứ tự` stays after `Trực thuộc` — owner decision 3 of ADR 0079.
+ *
+ * `Trực thuộc` lists every unit flat, minus — when editing — the unit itself AND its descendants
+ * (`luaChonCha`): picking one of those is a cycle the server would refuse anyway.
+ *
+ * Enter in any field submits the `<form>`; Esc and ✕ ask `onHuy`, refused while a send is in flight.
  */
 export function BieuMauBoPhan({
   dangMo,
@@ -588,123 +526,103 @@ export function BieuMauBoPhan({
   onGui: () => void;
   onHuy: () => void;
 }) {
-  const tieuDe =
-    dangMo.kieu === "sua"
-      ? tieuDeSua(dangMo.bp.name)
-      : dangMo.tenCha === null
-        ? tieuDeThemGoc()
-        : tieuDeThemCon(dangMo.tenCha);
+  const titleId = useId();
+  const editing = dangMo.kieu === "sua";
+  const title = editing ? EDIT_TITLE : ADD_TITLE;
 
   return (
-    <form
-      className="form-danh-muc form-bo-phan grid min-w-0 gap-4 sm:grid-cols-2 [&>*]:m-0 [&>.cum-nut]:col-span-full [&>.thong-bao-loi]:col-span-full [&>h4]:col-span-full"
-      aria-label={tieuDe}
-      onSubmit={(e) => {
-        e.preventDefault();
-        onGui();
+    <ModalDialog
+      titleId={titleId}
+      onDismiss={() => {
+        if (!dangGui) onHuy();
       }}
-      onKeyDown={(e) => {
-        // Esc đóng biểu mẫu như `Huỷ` — trừ khi đang gửi, để một lần gửi dở không mất dấu.
-        if (e.key === "Escape" && !dangGui) onHuy();
-      }}
+      closeDisabled={dangGui}
+      className="sm:max-w-lg"
     >
-      <h4 className="text-[15px] font-semibold text-ink-900">{tieuDe}</h4>
+      <ModalDialogHeader titleId={titleId} title={title} description={DIALOG_DESCRIPTION} />
+      <form
+        className="m-0 flex min-h-0 min-w-0 flex-col gap-4"
+        aria-label={title}
+        onSubmit={(e) => {
+          e.preventDefault();
+          onGui();
+        }}
+      >
+        <div className="min-h-0 space-y-4 overflow-y-auto">
+          <div className="block">
+            <label htmlFor={O_TEN_ID} className={DIALOG_LABEL_CLASS}>
+              {O_TEN}
+            </label>
+            <input
+              id={O_TEN_ID}
+              name="ten"
+              value={ban.ten}
+              placeholder={NAME_PLACEHOLDER}
+              onChange={(e) => datBan({ ...ban, ten: e.target.value })}
+              aria-invalid={loiTaiCho === NAME_REQUIRED}
+              className={cn(controlClass, "mt-1.5")}
+            />
+          </div>
 
-      <div className="o-nhap">
-        <label htmlFor={O_TEN_ID}>{O_TEN}</label>
-        <input
-          id={O_TEN_ID}
-          name="ten"
-          value={ban.ten}
-          onChange={(e) => datBan({ ...ban, ten: e.target.value })}
-          aria-describedby="giai-thich-ten-bo-phan"
-        />
-        <p className="ghi-chu" id="giai-thich-ten-bo-phan">
-          {GIAI_THICH_O_TEN}
-        </p>
-      </div>
+          <div className="block">
+            <label htmlFor="o-cha-bo-phan" className={DIALOG_LABEL_CLASS}>
+              {O_CHA}
+            </label>
+            <select
+              id="o-cha-bo-phan"
+              name="chaId"
+              value={ban.chaId}
+              onChange={(e) => datBan({ ...ban, chaId: e.target.value })}
+              className={cn(selectCls, "mt-1.5 h-9 w-full min-w-0 pr-8 text-[13px]")}
+            >
+              <option value="">{CHON_KHONG_CO_CHA}</option>
+              {luaChon.map((d) => (
+                <option key={d.bp.id} value={d.bp.id}>
+                  {d.bp.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
-      {dangMo.kieu === "them" ? (
-        <div className="o-nhap">
-          <label htmlFor="o-ma-bo-phan">{O_MA}</label>
-          <input
-            id="o-ma-bo-phan"
-            name="ma"
-            value={ban.ma}
-            onChange={(e) => datBan({ ...ban, ma: e.target.value })}
-            aria-describedby="giai-thich-ma-bo-phan"
-          />
-          <p className="ghi-chu" id="giai-thich-ma-bo-phan">
-            {GIAI_THICH_O_MA_THEM}
-          </p>
+          <div className="block">
+            <label htmlFor="o-thu-tu-bo-phan" className={DIALOG_LABEL_CLASS}>
+              {O_THU_TU}
+            </label>
+            {/* `inputMode="numeric"` chứ không `type="number"`: cuộn chuột trên ô số đổi giá trị mà
+                người dùng không biết. */}
+            <input
+              id="o-thu-tu-bo-phan"
+              name="thuTu"
+              inputMode="numeric"
+              value={ban.thuTu}
+              onChange={(e) => datBan({ ...ban, thuTu: e.target.value })}
+              aria-invalid={loiTaiCho === LOI_THU_TU}
+              className={cn(controlClass, "mt-1.5")}
+            />
+          </div>
+
+          {/* HAI VÙNG LỖI RIÊNG, TẠI CHỖ: lỗi chưa gửi gì, và câu của máy chủ, nguyên văn. */}
+          {loiTaiCho !== "" && (
+            <p role="alert" className="text-danger m-0 text-[12px] font-medium">
+              {loiTaiCho}
+            </p>
+          )}
+          {loiMayChu !== "" && (
+            <p role="alert" className="text-danger m-0 text-[12px] font-medium">
+              {loiMayChu}
+            </p>
+          )}
         </div>
-      ) : (
-        <p className="ghi-chu">{giaiThichMaKhongSua(dangMo.bp.code)}</p>
-      )}
 
-      <div className="o-nhap">
-        <label htmlFor="o-cha-bo-phan">{O_CHA}</label>
-        <select
-          id="o-cha-bo-phan"
-          name="chaId"
-          value={ban.chaId}
-          onChange={(e) => datBan({ ...ban, chaId: e.target.value })}
-          aria-describedby={dangMo.kieu === "sua" ? "giai-thich-cha-bo-phan" : undefined}
-        >
-          <option value="">{CHON_KHONG_CO_CHA}</option>
-          {luaChon.map((d) => (
-            <option key={d.bp.id} value={d.bp.id}>
-              {/* Thụt bằng khoảng trắng không ngắt: ô chọn không nhận lề, và cấp phải thấy được. */}
-              {"   ".repeat(d.cap)}
-              {d.bp.name}
-            </option>
-          ))}
-        </select>
-        {dangMo.kieu === "sua" && (
-          <p className="ghi-chu" id="giai-thich-cha-bo-phan">
-            {GIAI_THICH_O_CHA_SUA}
-          </p>
-        )}
-      </div>
-
-      <div className="o-nhap">
-        <label htmlFor="o-thu-tu-bo-phan">{O_THU_TU}</label>
-        {/* `inputMode="numeric"` chứ không `type="number"`: cuộn chuột trên ô số đổi giá trị mà
-            người dùng không biết. */}
-        <input
-          id="o-thu-tu-bo-phan"
-          name="thuTu"
-          inputMode="numeric"
-          value={ban.thuTu}
-          onChange={(e) => datBan({ ...ban, thuTu: e.target.value })}
-          aria-invalid={loiTaiCho === LOI_THU_TU}
-          aria-describedby="giai-thich-thu-tu-bo-phan"
-        />
-        <p className="ghi-chu" id="giai-thich-thu-tu-bo-phan">
-          {GIAI_THICH_O_THU_TU}
-        </p>
-      </div>
-
-      {/* HAI VÙNG LỖI RIÊNG: lỗi tại chỗ (chưa gửi gì) và câu của máy chủ, nguyên văn. */}
-      {loiTaiCho !== "" && (
-        <p className="thong-bao-loi" role="alert">
-          {loiTaiCho}
-        </p>
-      )}
-      {loiMayChu !== "" && (
-        <p className="thong-bao-loi" role="alert">
-          {loiMayChu}
-        </p>
-      )}
-
-      <div className="cum-nut flex flex-wrap justify-end gap-2">
-        <Button type="submit" variant="primary" disabled={dangGui} aria-busy={dangGui}>
-          <BusyLabel busy={dangGui} label={NUT_LUU} busyText={BUSY_SAVING} />
-        </Button>
-        <Button type="button" variant="secondary" onClick={onHuy} disabled={dangGui}>
-          {NUT_HUY}
-        </Button>
-      </div>
-    </form>
+        <div className={DIALOG_FOOTER_CLASS}>
+          <Button type="button" variant="outline" onClick={onHuy} disabled={dangGui}>
+            {NUT_HUY}
+          </Button>
+          <Button type="submit" variant="primary" disabled={dangGui} aria-busy={dangGui}>
+            <BusyLabel busy={dangGui} label={editing ? NUT_LUU : ADD_BUTTON} busyText={BUSY_SAVING} />
+          </Button>
+        </div>
+      </form>
+    </ModalDialog>
   );
 }

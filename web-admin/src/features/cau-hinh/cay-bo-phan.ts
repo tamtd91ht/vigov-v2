@@ -22,7 +22,7 @@ import {
   type ThemBoPhanVao,
 } from "@/lib/api/so-do-to-chuc";
 
-import { CHUA_CO_THAY_DOI, LOI_THU_TU, daLuu, daThem } from "./nhan-so-do";
+import { ADDED_TOAST, CHUA_CO_THAY_DOI, LOI_THU_TU, NAME_REQUIRED, SAVED_TOAST } from "./nhan-so-do";
 
 /* ---- cây ------------------------------------------------------------------------------------ */
 
@@ -226,11 +226,12 @@ export type ThanDung<T> =
 /**
  * Thân POST từ bản nháp — TỪNG TRƯỜNG.
  *
- * `code` RỖNG THÌ VẮNG MẶT, để máy chủ tự sinh mã từ tên. `parent_id` rỗng thì vắng (gốc). Không
- * kiểm tên rỗng, độ dài tên hay khuôn mã ở đây: máy chủ kiểm cả ba kèm một câu tiếng Việt nói rõ
- * phải sửa gì, và một bản sao ở client là bản sao sẽ trôi (luật 9).
+ * `code` RỖNG THÌ VẮNG MẶT, để máy chủ tự sinh mã từ tên — and the dialog has no code field since
+ * spec 03, so it is always absent from the screen. `parent_id` rỗng thì vắng (gốc). Độ dài tên và
+ * khuôn mã không kiểm ở đây: máy chủ kiểm kèm một câu tiếng Việt nói rõ phải sửa gì, và một bản sao
+ * ở client là bản sao sẽ trôi (luật 9). Tên trống thì `guiBieuMau` chặn trước (spec 03).
  *
- * TÊN GỬI NGUYÊN CHỮ ĐÃ GÕ — không viết hoa hộ. Xem `GIAI_THICH_O_TEN`.
+ * TÊN GỬI NGUYÊN CHỮ ĐÃ GÕ — không viết hoa hộ: tên đi vào hồ sơ lưu trữ.
  */
 export function thanThem(ban: BanNhap): ThanDung<ThemBoPhanVao> {
   const thuTu = docThuTu(ban.thuTu);
@@ -286,7 +287,9 @@ export const API_SO_DO: ApiSoDo = { them: themBoPhan, sua: suaBoPhan };
 
 /**
  * Kết quả một lần bấm `Lưu`. HAI LOẠI LỖI RIÊNG: lỗi tại chỗ ("ô này gõ sai", chưa gửi gì) và câu
- * của máy chủ (nguyên văn — kể cả câu 409 về vòng lặp và câu 409 về mã đã dùng).
+ * của máy chủ (nguyên văn — kể cả câu 409 `org_unit_cycle`, which covers "itself" and "one of its
+ * descendants" alike, so the spec's self-parent sentence cannot be told apart and is not substituted).
+ * `cau` of a success is the toast sentence.
  */
 export type KetQuaGui =
   | { readonly kieu: "xong"; readonly cau: string }
@@ -301,17 +304,19 @@ export type KetQuaGui =
  * mới mỗi lần bấm.
  */
 export async function guiBieuMau(dangMo: DangMo, ban: BanNhap, api: ApiSoDo): Promise<KetQuaGui> {
+  // Spec 03: a blank name is refused in place, before any request — both when adding and when editing.
+  if (ban.ten.trim() === "") return { kieu: "loiTaiCho", loi: NAME_REQUIRED };
   if (dangMo.kieu === "them") {
     const d = thanThem(ban);
     if (d.kieu === "loi") return { kieu: "loiTaiCho", loi: d.loi };
     if (d.kieu === "khongDoi") return { kieu: "loiTaiCho", loi: CHUA_CO_THAY_DOI };
     const kq = await api.them(d.than, dangMo.khoaChongTrung);
-    return kq.ok ? { kieu: "xong", cau: daThem(kq.duLieu.name) } : { kieu: "loiMayChu", thongBao: kq.thongBao };
+    return kq.ok ? { kieu: "xong", cau: ADDED_TOAST } : { kieu: "loiMayChu", thongBao: kq.thongBao };
   }
 
   const d = thanSua(dangMo.bp, ban);
   if (d.kieu === "loi") return { kieu: "loiTaiCho", loi: d.loi };
   if (d.kieu === "khongDoi") return { kieu: "loiTaiCho", loi: CHUA_CO_THAY_DOI };
   const kq = await api.sua(dangMo.bp.id, d.than);
-  return kq.ok ? { kieu: "xong", cau: daLuu(kq.duLieu.name) } : { kieu: "loiMayChu", thongBao: kq.thongBao };
+  return kq.ok ? { kieu: "xong", cau: SAVED_TOAST } : { kieu: "loiMayChu", thongBao: kq.thongBao };
 }

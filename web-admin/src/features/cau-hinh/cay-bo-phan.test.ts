@@ -16,7 +16,7 @@ import {
   voiConChau,
   type NutCay,
 } from "./cay-bo-phan";
-import { CHUA_CO_THAY_DOI, LOI_THU_TU } from "./nhan-so-do";
+import { ADDED_TOAST, CHUA_CO_THAY_DOI, LOI_THU_TU, NAME_REQUIRED, SAVED_TOAST } from "./nhan-so-do";
 
 function bp(id: string, name: string, parent_id = "", order = 0, code = id.toLowerCase()): identity_boPhanRa {
   return { id, code, name, parent_id, order, staff_count: 2 };
@@ -210,12 +210,35 @@ describe("gửi biểu mẫu", () => {
     expect(gia).not.toHaveBeenCalled();
   });
 
-  it("sửa gửi PATCH không có `code`, lưu xong nói rõ bộ phận nào", async () => {
+  it("REGRESSION (spec 03): tên trống là lỗi tại chỗ, không gọi mạng — thêm lẫn sửa", async () => {
+    const gia = vi.fn();
+    vi.stubGlobal("fetch", gia);
+    expect(await guiBieuMau(moThem("", null, () => "k"), { ...banThem(""), ten: "   " }, API_SO_DO)).toEqual({
+      kieu: "loiTaiCho",
+      loi: NAME_REQUIRED,
+    });
+    expect(await guiBieuMau({ kieu: "sua", bp: VAN_PHONG }, { ...banSua(VAN_PHONG), ten: "" }, API_SO_DO)).toEqual({
+      kieu: "loiTaiCho",
+      loi: NAME_REQUIRED,
+    });
+    expect(gia).not.toHaveBeenCalled();
+  });
+
+  it("thêm không có ô mã: thân POST không mang `code`, lưu xong là câu của spec", async () => {
+    const gia = vi.fn(async () => phanHoi(201, DA_GHI));
+    vi.stubGlobal("fetch", gia);
+    const kq = await guiBieuMau(moThem("", null, () => "k"), { ...banThem(""), ten: "BỘ PHẬN MỚI" }, API_SO_DO);
+    expect(kq).toEqual({ kieu: "xong", cau: ADDED_TOAST });
+    const init = (gia.mock.calls[0] as unknown as [string, RequestInit])[1];
+    expect(JSON.parse(String(init.body))).not.toHaveProperty("code");
+  });
+
+  it("sửa gửi PATCH không có `code`, lưu xong là câu của spec", async () => {
     const gia = vi.fn(async () => phanHoi(200, { ...DA_GHI, name: "TÊN MỚI" }));
     vi.stubGlobal("fetch", gia);
     const goc = VAN_PHONG;
     const kq = await guiBieuMau({ kieu: "sua", bp: goc }, { ...banSua(goc), ten: "TÊN MỚI" }, API_SO_DO);
-    expect(kq).toEqual({ kieu: "xong", cau: "Đã lưu thay đổi của bộ phận TÊN MỚI." });
+    expect(kq).toEqual({ kieu: "xong", cau: SAVED_TOAST });
     const init = (gia.mock.calls[0] as unknown as [string, RequestInit])[1];
     expect(init.method).toBe("PATCH");
     expect(JSON.parse(String(init.body))).toEqual({ name: "TÊN MỚI" });
