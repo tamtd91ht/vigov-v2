@@ -292,11 +292,11 @@ message StaffNotification {
   //     bell set. No kept item → no Zalo message for that notice (the bell row still exists).
   //   * the Zalo lead can only NARROW: the producer sends the bell's set, so a Zalo lead longer than
   //     the bell window cannot reach records the producer never sent.
-  //   * WHEN the window is measured is comms' decision and has a trap: this digest is delivered ONCE
-  //     per recipient per day (key `sla_reminders:due_soon:<work_kind>:<YYYY-MM-DD>`, first delivery
-  //     wins). Filtering only at the moment of delivery drops every item that enters the Zalo lead
-  //     later that day — it is never sent again before it is overdue. Comms must schedule against
-  //     the deadline, not just filter at receipt.
+  //   * this digest is delivered ONCE per recipient per day (key
+  //     `sla_reminders:due_soon:<work_kind>:<YYYY-MM-DD>`, first delivery wins), so comms filters
+  //     when the message leaves and needs no schedule of its own: the Zalo lead counts whole days
+  //     (1–14), so an item just outside it today is inside it on the next day's digest, still
+  //     before its deadline (ADR 0079, Bổ sung 08/10/2026).
   //
   // VALIDATION (INVALID_ARGUMENT, nothing written): at most 500 items; every `code` 1 to 100
   // printable characters, unique within the notice; every `deadline` set. A producer with more than
