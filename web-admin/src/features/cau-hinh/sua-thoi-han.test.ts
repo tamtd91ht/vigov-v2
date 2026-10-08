@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { identity_dongSLARa } from "@/lib/api/schema.gen";
 
-import { LOI_KHONG_DOI_GI, LOI_SO_GIO_LA, PRESIDENT_BELOW_LEADER_ERROR } from "./nhan-thoi-han";
+import { LOI_KHONG_DOI_GI, LOI_SO_GIO_LA, PRESIDENT_BELOW_LEADER_ERROR, RESOLVE_HOURS_ERROR } from "./nhan-thoi-han";
 import { banTuDong, soanSua } from "./sua-thoi-han";
 
 /**
@@ -75,6 +75,35 @@ describe("soanSua — chỉ gửi những cột đã đổi", () => {
     // Biểu mẫu mở ra đã có sẵn con số, nên một ô trống là một ý định — mà "bỏ hẳn một con số"
     // không có trên tuyến. Nói ra, đừng đoán.
     expect(soanSua(DONG, { ...banTuDong(DONG), due_soon_hours: "" })).toEqual({
+      ok: false,
+      loi: LOI_SO_GIO_LA,
+    });
+  });
+
+  it("Xử lý xong bằng 0 hoặc âm → câu riêng của spec 08, 'Thời hạn xử lý phải lớn hơn 0 giờ.'", () => {
+    // REGRESSION: before spec 08 this box got the general LOI_SO_GIO_LA like every other.
+    for (const bad of ["0", "-4"]) {
+      expect(soanSua(DONG, { ...banTuDong(DONG), resolve_hours: bad }), bad).toEqual({
+        ok: false,
+        loi: RESOLVE_HOURS_ERROR,
+      });
+    }
+    expect(RESOLVE_HOURS_ERROR).toBe("Thời hạn xử lý phải lớn hơn 0 giờ.");
+  });
+
+  it("Xử lý xong trống, chữ hay số lẻ → vẫn câu chung: không phải lỗi 'nhỏ hơn 0'", () => {
+    for (const bad of ["", "?", "1.5", "16 giờ"]) {
+      expect(soanSua(DONG, { ...banTuDong(DONG), resolve_hours: bad }), bad).toEqual({
+        ok: false,
+        loi: LOI_SO_GIO_LA,
+      });
+    }
+  });
+
+  it("ô không đọc được của trình duyệt ('?') ở cột thứ sáu bị TỪ CHỐI, không thành 'tắt báo'", () => {
+    // `type="number"` reports "" for "-" or "1e"; the tab stores "?" instead (`readNumberBox`),
+    // because "" in this column means `null` = do not report.
+    expect(soanSua(DONG, { ...banTuDong(DONG), unassigned_hold_hours: "?" })).toEqual({
       ok: false,
       loi: LOI_SO_GIO_LA,
     });

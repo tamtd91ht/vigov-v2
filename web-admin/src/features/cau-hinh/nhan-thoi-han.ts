@@ -7,10 +7,10 @@
  * thống rồi thỉnh thoảng sửa. Không ai trong số đó quen chữ "SLA", nên trên màn hình không có chữ
  * ấy: "Thời hạn xử lý", "Giờ làm việc", "Ngày nghỉ lễ", "Ngày làm bù".
  *
- * VÀ MỌI CON SỐ ĐỀU PHẢI ĐI KÈM ĐƠN VỊ "GIỜ LÀM VIỆC", không phải "giờ". Đơn vị là sự thật nặng
- * nhất về những con số này (ADR 0007, luật 10 bất biến 4): 8 giờ làm việc là hơn một ngày làm,
- * không phải một buổi tối. Đọc nhầm thành giờ đồng hồ là nới hoặc siết một cam kết với người dân
- * mà không có gì báo lỗi.
+ * ĐƠN VỊ "GIỜ LÀM VIỆC" là sự thật nặng nhất về những con số này (ADR 0007, luật 10 bất biến 4): 8
+ * giờ làm việc là hơn một ngày làm, không phải một buổi tối. Since ADR 0079 (spec 08) the cells say
+ * "{n} giờ" and the unit is stated ONCE, in bold, in the banner directly above the table
+ * (`SLA_BANNER_UNIT`) — so the banner sentence is what must never be dropped from this tab.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  *
  * KHÔNG MỘT PHÉP TÍNH HẠN NÀO Ở ĐÂY, và không được thêm vào. `identity` sở hữu bảng thời hạn, ba
@@ -67,54 +67,47 @@ export const GHI_CHU_SAU_KHI_GIEO =
 /* ---- bảng thời hạn xử lý -------------------------------------------------------------------- */
 
 /**
- * HAI CÂU DẪN CỦA ĐẶC TẢ, GIỮ NGUYÊN VĂN (`14-cau-hinh.md:289` và `:291` — "bắt buộc giữ").
+ * THE BANNER ABOVE THE TABLE (spec 08 "Hộp giải thích"), split where the spec sets words in bold.
  *
- * Câu thứ nhất là điều dễ hiểu sai nhất trên màn hình này: sửa một con số KHÔNG kéo theo hồ sơ
- * đang chạy. Hạn của một hồ sơ được chốt MỘT lần tại hành vi cố định nó và lưu trên chính hồ sơ
- * (luật 10, bất biến 2; ADR 0028) — không dòng mã nào tính lại nó từ bảng này. Không nói ra thì
- * cán bộ sẽ tưởng vừa bấm Lưu là mọi hồ sơ đang chạy đổi hạn theo, và sẽ báo cáo lên trên theo
- * cái tưởng ấy.
- */
-export const DAN_THOI_HAN_1 =
-  "Thời hạn tính theo giờ làm việc, không tính ngày nghỉ và ngày lễ. Thay đổi chỉ áp dụng cho hồ " +
-  "sơ tiếp nhận sau thời điểm lưu.";
-
-export const DAN_THOI_HAN_2 =
-  "Cột Sắp đến hạn khi còn quyết định cả ba: lúc nào gửi lời nhắc, ô lọc “Sắp đến hạn” trên màn " +
-  "nhiệm vụ lấy ra việc nào, và con số trong thông báo ở chuông. Mặc định 72 giờ, tức ba ngày.";
-
-/**
- * BA CỘT CUỐI SỬA ĐƯỢC NHƯNG PHẦN MỀM CHƯA GỬI BÁO THEO CHÚNG — và không nói ra thì đó là một lời
- * hứa suông.
+ * Every clause was checked against the code before it was kept (08/10/2026):
  *
- * Mốc đếm ĐÃ CHỐT (29/09/2026, ADR 0029 §Bổ sung 29/09): hai ngưỡng báo lãnh đạo đếm từ HẠN ĐÃ LỠ,
- * bằng giờ làm việc, Chủ tịch không được báo trước lãnh đạo trực tiếp; ngưỡng thứ ba đếm lúc bộ
- * phận giữ việc mà chưa giao ai. Nhưng tới 29/09/2026 CHƯA có bên chạy nào: `service-identity` đã
- * có `ResolveEscalationInstants` và `ResolveUnassignedHoldInstants`, và KHÔNG service nào gọi chúng
- * (ADR 0058). Ngày bên chạy ấy lên và việc tự động hoá được bật, câu "CHƯA tự gửi" dưới đây thành
- * sai — sửa nó cùng lượt dựng ấy. Cán bộ điền các ô này rồi chờ phần mềm tự báo sẽ chờ mãi.
+ * - `SLA_BANNER_UNIT` / `_HOLIDAYS`: `identity.AdvanceWorkingHours` counts working hours only (ADR 0007).
+ * - `SLA_BANNER_APPLIES`: the spec's "Thay đổi chỉ áp dụng cho hồ sơ tiếp nhận sau thời điểm lưu" is
+ *   NOT true here and was reworded. A deadline is fixed at the act that fixes it and stored (rule 10
+ *   invariant 2), and for a citizen's petition `han_xu_ly_xong` is fixed when staff settle the field,
+ *   not on receipt (ADR 0028 decision E) — so a petition received BEFORE the save but classified after
+ *   it takes the new figure. What is true for every record: a deadline already set never moves.
+ * - `SLA_BANNER_DUE_SOON_*`: the three uses are real — the reminder digest (`slaReminders` →
+ *   `ResolveDueSoonCutoff`, `service-petitions/internal/app/automation_jobs.go`), the task register's
+ *   `soon=true` filter (`service-petitions/internal/http/nhiem_vu.go`), and the bell's "Sắp đến hạn"
+ *   notice. The spec's closing "Mặc định 72 giờ, tức ba ngày" is DROPPED: an SLA figure written into
+ *   source, false for most rows (rule 10 forbidden #3, ADR 0079).
  */
-export const GHI_CHU_HAI_COT_LEO_THANG =
-  "Hai cột Báo lãnh đạo trực tiếp và Báo Chủ tịch đếm từ lúc việc đã quá hạn, theo giờ làm việc; " +
-  "số giờ Báo Chủ tịch không được nhỏ hơn số giờ Báo lãnh đạo trực tiếp. Cột Báo khi bộ phận giữ " +
-  "việc chưa giao đếm thời gian một bộ phận giữ việc mà chưa giao cho ai; để trống là không báo. " +
-  "Phần mềm lưu được các con số này nhưng CHƯA tự gửi lời báo nào theo chúng. Đừng dựa vào chúng " +
-  "để theo dõi việc trễ hạn.";
+export const SLA_BANNER_LEAD = "Thời hạn tính theo ";
+export const SLA_BANNER_UNIT = "giờ làm việc";
+export const SLA_BANNER_HOLIDAYS = ", không tính ngày nghỉ và ngày lễ. ";
+export const SLA_BANNER_APPLIES =
+  "Thay đổi chỉ áp dụng cho hạn đặt sau thời điểm lưu; hạn đã đặt cho hồ sơ giữ nguyên.";
+export const SLA_BANNER_DUE_SOON_LEAD = "Cột ";
+export const SLA_BANNER_DUE_SOON_COLUMN = "Sắp đến hạn khi còn";
+export const SLA_BANNER_DUE_SOON_REST =
+  " quyết định cả ba: lúc nào gửi lời nhắc, ô lọc “Sắp đến hạn” trên màn nhiệm vụ lấy ra việc nào, " +
+  "và con số trong thông báo ở chuông.";
+
+/*
+ * NO NOTE UNDER THE TABLE (owner, 08/10/2026: "Bỏ hết, đúng prototype"). The former note explained
+ * what the reporting columns count from and that an empty sixth box means "không báo"; the prototype
+ * has no such line, so the tab says neither. (Its old closing claim, "CHƯA tự gửi lời báo nào", had
+ * also become false: escalation and the unassigned-hold check run in `AutomationRunner`, ADR 0058.)
+ */
+
+/** Column heading of the sixth figure — the owner's name for it (ADR 0079 decision 3). */
+export const UNASSIGNED_HOLD_LABEL = "Giữ chưa phân công";
 
 /**
- * Column heading and input label (with " (giờ làm việc)" appended by the form) for the sixth figure.
- * "Giao" and not "phân công" because the staff screens that act on it say "Giao việc".
+ * Accessible text of an unset sixth figure, behind the visible "—". NULL is the commune's choice,
+ * never replaced by a number, and "—" alone would read as "no data".
  */
-export const UNASSIGNED_HOLD_LABEL = "Báo khi bộ phận giữ việc chưa giao quá";
-
-/**
- * Under the sixth input. An empty box is a MEANING here ("do not report"), unlike the other five,
- * so it has to be said at the box — otherwise clearing it reads as a mistake to be refilled.
- */
-export const UNASSIGNED_HOLD_HINT =
-  "Để trống nếu đơn vị không muốn được báo về việc bộ phận giữ mà chưa giao cho ai.";
-
-/** Table cell for an unset sixth figure. NULL is the commune's choice, never replaced by a number. */
 export const UNASSIGNED_HOLD_OFF = "Không báo";
 
 /**
@@ -167,18 +160,20 @@ export function nhanLinhVuc(
 }
 
 /**
- * Một con số giờ → chữ trên màn hình. **Luôn kèm hai chữ "làm việc"**, ở mọi ô, không rút gọn.
- *
- * Lặp lại đơn vị ở từng ô trông thừa cho tới lúc một cán bộ đọc cột "Xử lý xong 40" và hiểu là
- * chưa tới hai ngày. 40 giờ làm việc là trọn một tuần.
+ * A deadline cell: "{n} giờ" (spec 08). The unit "giờ làm việc" is stated in bold in the banner
+ * directly above the table, not repeated per cell — see the file header.
  */
-export function nhanSoGio(gio: number): string {
-  return `${gio} giờ làm việc`;
+export function hoursCell(hours: number): string {
+  return `${hours} giờ`;
 }
 
-/** A cell that may be unset (only the sixth figure is): `null` reads "Không báo", never a number. */
-export function hoursCellLabel(hours: number | null): string {
-  return hours === null ? UNASSIGNED_HOLD_OFF : nhanSoGio(hours);
+/**
+ * A reporting-threshold cell: "sau {n} giờ" — it counts from a moment (a missed deadline, a hold),
+ * not from receipt. `null` (only the sixth figure can be unset) has no sentence here: the cell draws
+ * "—" with `UNASSIGNED_HOLD_OFF` for a screen reader.
+ */
+export function afterHoursCell(hours: number): string {
+  return `sau ${hours} giờ`;
 }
 
 /* ---- kết quả các lượt gieo ------------------------------------------------------------------ */
@@ -302,7 +297,8 @@ export const NUT_LUU = "Lưu";
 export const NUT_HUY = "Huỷ";
 export const NUT_XAC_NHAN_XOA = "Xác nhận xoá";
 
-export const DA_LUU_THOI_HAN = "Đã lưu thời hạn xử lý mới. Hồ sơ đã tiếp nhận vẫn giữ hạn cũ.";
+/** Toast after an SLA row is saved (spec 08). */
+export const DA_LUU_THOI_HAN = "Đã lưu thời hạn mới.";
 export const DA_LUU_LICH = "Đã lưu lịch làm việc của đơn vị.";
 export const DA_XOA_LICH = "Đã xoá dòng lịch. Dòng cũ vẫn được giữ lại trong sổ của hệ thống.";
 
@@ -320,3 +316,6 @@ export const LOI_KHONG_DOI_GI = "Chưa có con số nào được sửa.";
 
 /** Con số phải là số nguyên dương — máy chủ từ chối, nhưng ô trống thì không đáng gửi đi. */
 export const LOI_SO_GIO_LA = "Số giờ phải là một số nguyên lớn hơn 0.";
+
+/** Spec 08's own sentence for "Xử lý xong" typed as zero or below — the column a citizen is promised. */
+export const RESOLVE_HOURS_ERROR = "Thời hạn xử lý phải lớn hơn 0 giờ.";

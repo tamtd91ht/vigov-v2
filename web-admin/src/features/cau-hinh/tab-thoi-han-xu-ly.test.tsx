@@ -10,45 +10,24 @@ import type {
 
 import { pendingMarkerLabel } from "@/components/ui/pending-feature";
 
+import { RESOLVE_HOURS_ERROR } from "./nhan-thoi-han";
 import { quyetDinhGhiThoiHan, slaFieldLabelReadDecision } from "./quyen-tab";
 import { banTuDong } from "./sua-thoi-han";
-import {
-  BAN_TRONG,
-  BieuMauThoiHan,
-  ManThoiHanXuLy,
-  type DuLieuTab,
-  type ThaoTacThoiHan,
-} from "./tab-thoi-han-xu-ly";
+import { ManThoiHanXuLy, type DuLieuTab, type InlineEdit, type ThaoTacThoiHan } from "./tab-thoi-han-xu-ly";
 
 /**
  * Tab "Thời hạn xử lý" since ADR 0079 D2 holds the SLA table only; the three calendar tables and their
- * checks moved to `working-calendar-tab.test.tsx` with their code. Of the five points below, #5 (the
- * holiday sentence) now lives there; the rest stay here.
+ * checks moved to `working-calendar-tab.test.tsx` with their code.
  *
- * NĂM ĐIỀU TỆP NÀY CANH, và cả năm đều là những thứ một lần sửa MỘT DÒNG phá được mà không phép
- * kiểm nào khác thấy:
+ * WHAT THIS FILE GUARDS — each is a one-line edit away from breaking with nothing else turning red:
  *
- * 1. KHỐI CẢNH BÁO CÓ MẶT KHI XÃ CHƯA KHAI XONG, VÀ NÓI RA HẬU QUẢ. Đây là phần đáng giá nhất của
- *    màn hình: một xã mới không vào sổ được văn bản đến và không nhận được phản ánh nào, mà lỗi ấy
- *    hiện ra ở một màn hình khác hẳn màn hình sửa được nó.
- *
- * 2. VÀ VẮNG MẶT KHI ĐÃ KHAI XONG — vế phủ định là vế chịu lực. Một lời báo động cũng hiện ở xã đã
- *    cấu hình đủ là một lời báo động người ta học cách bỏ qua, rồi bỏ qua nốt lần nó đúng.
- *
- * 3. KHÔNG CÓ NÚT `+ Thêm thời hạn cho một lĩnh vực` BẤM ĐƯỢC — chỉ một chỗ giữ VÔ HIỆU có dấu "?"
- *    ở đúng vị trí prototype (ADR 0068 §14, lần 5), không gọi tuyến nào. Đặc tả vẽ nút ấy
- *    (`14-cau-hinh.md:293`) nên áp lực thêm lại nó là có thật và đến từ một tài liệu trông có thẩm
- *    quyền — nhưng tuyến sau nó cố ý chưa có (ADR 0026 điều kiện dừng #2: mã lĩnh vực từ client
- *    phải đối chiếu bộ mã tầng 1 ở `platform`, và đường đọc ấy chưa có ADR). Một nút gọi vào tuyến
- *    không tồn tại là lời hứa suông.
- *
- * 4. CÂU "THAY ĐỔI CHỈ ÁP DỤNG CHO HỒ SƠ TIẾP NHẬN SAU THỜI ĐIỂM LƯU" CÓ TRÊN TRANG. Không nói ra
- *    thì cán bộ tưởng vừa bấm Lưu là mọi hồ sơ đang chạy đổi hạn theo — và báo cáo lên trên theo
- *    cái tưởng ấy.
- *
- * 5. CÂU "TẾT / GIỖ TỔ / NGÀY LIỀN KỀ 02/9 CÒN THIẾU" ĐỨNG CẠNH NÚT GIEO NGÀY LỄ. Tuyến chỉ gieo
- *    BỐN ngày cố định theo dương lịch và `seeded: 4` đọc ra là "xong"; thiếu ba nhóm ngày kia thì
- *    mọi hạn rơi vào dịp Tết bị tính sai mà không gì báo lỗi.
+ * 1. KHỐI CẢNH BÁO CÓ MẶT KHI XÃ CHƯA KHAI XONG, VÀ NÓI RA HẬU QUẢ — and is ABSENT once configured.
+ * 2. "+ Thêm thời hạn cho một lĩnh vực" and "Xoá thời hạn riêng" are only disabled "?" placeholders
+ *    (ADR 0068 §14, ADR 0026 stop condition #2) — no clickable button to a route that does not exist.
+ * 3. The banner states the unit "giờ làm việc" — the cells say only "{n} giờ" (spec 08), so the banner
+ *    is now the one place the unit is said — and never a hardcoded SLA figure (rule 10 forbidden #3).
+ * 4. Nothing beyond the prototype (owner 08/10/2026): no re-seed button once rows exist, no footnote.
+ * 5. Editing is IN PLACE (spec 08) and its refusals show in place, the local one and the server one apart.
  */
 
 const KHONG_LAM_GI: ThaoTacThoiHan = {
@@ -69,6 +48,13 @@ const DONG_SLA: identity_dongSLARa = {
   unassigned_hold_hours: 8,
 };
 
+const DEFAULT_ROW: identity_dongSLARa = {
+  ...DONG_SLA,
+  id: "01J0000000000000000000DEF",
+  field: "",
+  is_default: true,
+};
+
 function ok<T>(duLieu: T): KetQua<T> {
   return { ok: true, duLieu };
 }
@@ -87,9 +73,32 @@ function phienVoi(quyen: string[]): KetQua<identity_phienHienTaiRa> {
 const SLA_CO_DONG = ok<identity_danhSachSLARa>({ items: [DONG_SLA], problems: [] });
 const SLA_RONG = ok<identity_danhSachSLARa>({ items: [], problems: [] });
 
+function rowsOf(...items: identity_dongSLARa[]): KetQua<identity_danhSachSLARa> {
+  return ok<identity_danhSachSLARa>({ items, problems: [] });
+}
+
+function editOf(row: identity_dongSLARa, more: Partial<InlineEdit> = {}): InlineEdit {
+  return {
+    rowId: row.id,
+    draft: banTuDong(row),
+    localError: "",
+    serverError: "",
+    busy: false,
+    setDraft: () => {},
+    onSave: () => {},
+    onCancel: () => {},
+    ...more,
+  };
+}
+
 function ve(
   du: Partial<DuLieuTab> = {},
-  them: { coQuyenGhi?: boolean; cauDaXong?: string; fieldLabels?: ReadonlyMap<string, string> } = {},
+  them: {
+    coQuyenGhi?: boolean;
+    fieldLabels?: ReadonlyMap<string, string>;
+    edit?: InlineEdit | null;
+    seedError?: string;
+  } = {},
 ) {
   return renderToStaticMarkup(
     <ManThoiHanXuLy
@@ -99,14 +108,17 @@ function ve(
       }}
       coQuyenGhi={them.coQuyenGhi ?? true}
       fieldLabels={them.fieldLabels}
-      thieuQuyen={false}
       thaoTac={KHONG_LAM_GI}
-      cauDaXong={them.cauDaXong ?? ""}
-      form={null}
-      loiMayChuNgoaiForm=""
+      loiMayChuNgoaiForm={them.seedError ?? ""}
       dangGui={false}
+      edit={them.edit ?? null}
     />,
   );
+}
+
+/** Every `<input>` tag of the markup. */
+function inputs(html: string): string[] {
+  return html.match(/<input[^>]*>/g) ?? [];
 }
 
 describe("khối 'đơn vị chưa khai xong'", () => {
@@ -123,25 +135,30 @@ describe("khối 'đơn vị chưa khai xong'", () => {
   it("khối mang ĐÚNG nút gieo của bảng thời hạn, và chỉ nó — lịch tuần ở tab Lịch làm việc (ADR 0079 D2)", () => {
     const html = ve({ thoiHan: SLA_RONG });
 
-    // Câu `problems` của máy chủ gọi đích danh nhãn nút này; đặt tên khác đi là để máy chủ chỉ vào
-    // một cái nút không tồn tại trên màn hình.
+    // Câu `problems` của máy chủ gọi đích danh nhãn nút này.
     expect(html).toContain("Gieo thời hạn mặc định");
     expect(html).not.toContain("Gieo giờ làm việc mặc định");
     expect(html).not.toContain("Giờ làm việc trong tuần đang trống");
   });
 
-  it("CẢ HAI bảng đã có dòng → khối VẮNG MẶT", () => {
+  it("bảng đã có dòng → khối VẮNG MẶT", () => {
     const html = ve();
 
     expect(html).not.toContain("Đơn vị chưa khai xong phần bắt buộc");
     expect(html).not.toContain("chưa vào sổ được văn bản đến");
   });
 
-  it("chưa đọc xong → khối VẮNG MẶT, và trang nói đang tải", () => {
+  it("bảng đã có dòng → KHÔNG có nút gieo lại — đúng prototype (chủ dự án 08/10/2026)", () => {
+    // REGRESSION (round 1 #7): a secondary "Gieo thời hạn mặc định" stood beside the Add button.
+    expect(ve()).not.toContain("Gieo thời hạn mặc định");
+  });
+
+  it("chưa đọc xong → khối VẮNG MẶT, trang nói đang tải, và không có bảng", () => {
     const html = ve({ thoiHan: null });
 
     expect(html).not.toContain("Đơn vị chưa khai xong phần bắt buộc");
     expect(html).toContain("Đang tải bảng thời hạn xử lý…");
+    expect(html).not.toContain("<table");
   });
 
   it("đọc hỏng → KHÔNG khẳng định xã chưa khai; hiện NGUYÊN câu máy chủ", () => {
@@ -152,15 +169,46 @@ describe("khối 'đơn vị chưa khai xong'", () => {
     expect(html).not.toContain("Đơn vị chưa khai xong phần bắt buộc");
     expect(html).toContain("Bạn không có quyền thực hiện thao tác này.");
   });
+
+  it("gieo bị từ chối → câu máy chủ hiện TẠI CHỖ", () => {
+    const html = ve({}, { seedError: "Máy chủ từ chối gieo." });
+    expect(html).toMatch(/<p role="alert"[^>]*>Máy chủ từ chối gieo\.<\/p>/);
+  });
+});
+
+describe("hộp giải thích (spec 08)", () => {
+  it("nói ĐƠN VỊ 'giờ làm việc' in đậm — ô bảng chỉ còn '{n} giờ', nên đây là chỗ duy nhất nói nó", () => {
+    expect(ve()).toContain("Thời hạn tính theo <b>giờ làm việc</b>, không tính ngày nghỉ và ngày lễ.");
+  });
+
+  it("KHÔNG có câu 'Mặc định 72 giờ, tức ba ngày' — một con số SLA ghi cứng (luật 10 cấm #3)", () => {
+    // REGRESSION: the old banner rendered `DAN_THOI_HAN_2`, which ended with exactly this sentence.
+    const html = ve();
+    expect(html).not.toContain("72 giờ");
+    expect(html).not.toContain("tức ba ngày");
+  });
+
+  it("câu áp dụng nói đúng điều hệ thống làm: hạn đã đặt giữ nguyên (luật 10 bất biến 2, ADR 0028)", () => {
+    // The spec's "chỉ áp dụng cho hồ sơ tiếp nhận sau thời điểm lưu" is false here: a citizen's petition
+    // received before the save gets `han_xu_ly_xong` when its field is settled — possibly after.
+    const html = ve();
+    expect(html).toContain("Thay đổi chỉ áp dụng cho hạn đặt sau thời điểm lưu; hạn đã đặt cho hồ sơ giữ nguyên.");
+    expect(html).not.toContain("hồ sơ tiếp nhận sau thời điểm lưu");
+  });
+
+  it("cột Sắp đến hạn khi còn: ba công dụng, tên cột in đậm", () => {
+    expect(ve()).toContain(
+      "Cột <b>Sắp đến hạn khi còn</b> quyết định cả ba: lúc nào gửi lời nhắc, ô lọc “Sắp đến hạn” trên màn " +
+        "nhiệm vụ lấy ra việc nào, và con số trong thông báo ở chuông.",
+    );
+  });
 });
 
 describe("bảng thời hạn xử lý", () => {
   it("thêm thời hạn cho một lĩnh vực: CHỈ là chỗ giữ vô hiệu có dấu '?' (ADR 0068 §14), không một nút bấm được", () => {
-    // No route adds a field row (ADR 0026), so the prototype's button stands disabled in its place.
     const html = ve();
 
     expect(html).toContain(pendingMarkerLabel("Thêm thời hạn cho một lĩnh vực"));
-    // Every "Thêm thời hạn" button on the page is a disabled one inside a placeholder.
     const buttons = html.match(/<button[^>]*>(?:(?!<\/button>).)*Thêm thời hạn(?:(?!<\/button>).)*<\/button>/g) ?? [];
     expect(buttons.length).toBeGreaterThan(0);
     for (const b of buttons) expect(b).toContain('disabled=""');
@@ -168,21 +216,31 @@ describe("bảng thời hạn xử lý", () => {
     expect(html).not.toContain("Thêm lĩnh vực");
   });
 
-  it("CA BỊ TỪ CHỐI: thiếu admin.sla thì không có cả chỗ giữ ấy", () => {
-    expect(ve({}, { coQuyenGhi: false })).not.toContain("Thêm thời hạn");
-  });
-
-  it("câu 'chỉ áp dụng cho hồ sơ tiếp nhận sau' có trên trang", () => {
-    expect(ve()).toContain("Thay đổi chỉ áp dụng cho hồ sơ tiếp nhận sau thời điểm lưu.");
-  });
-
-  it("mọi con số kèm ĐƠN VỊ 'giờ làm việc', không phải giờ đồng hồ", () => {
-    // 16 giờ làm việc là hai ngày làm. Đọc nhầm thành giờ đồng hồ là siết một cam kết với người
-    // dân xuống còn một phần ba, mà không có gì báo lỗi.
+  it("ô số nói '{n} giờ', Xử lý xong in đậm, ba cột báo nói 'sau {n} giờ'", () => {
     const html = ve();
 
-    expect(html).toContain("2 giờ làm việc");
-    expect(html).toContain("16 giờ làm việc");
+    expect(html).toContain("<td>2 giờ</td>");
+    expect(html).toContain('<td class="font-semibold">16 giờ</td>');
+    expect(html).toContain("<td>4 giờ</td>");
+    expect(html).toContain("<td>sau 8 giờ</td>");
+    expect(html).toContain("<td>sau 16 giờ</td>");
+    // Cells no longer repeat the unit (spec 08); the banner says it.
+    expect(html).not.toContain("16 giờ làm việc");
+  });
+
+  it("thứ tự cột theo spec, cột Giữ chưa phân công đứng trước cột thao tác", () => {
+    const heads = (ve().match(/<th[^>]*>(?:(?!<\/th>).)*<\/th>/g) ?? []).map((h) => h.replace(/<[^>]+>/g, ""));
+    expect(heads).toEqual([
+      "Loại việc",
+      "Lĩnh vực",
+      "Tiếp nhận",
+      "Xử lý xong",
+      "Sắp đến hạn khi còn",
+      "Báo lãnh đạo trực tiếp",
+      "Báo Chủ tịch",
+      "Giữ chưa phân công",
+      "Thao tác",
+    ]);
   });
 
   it("`problems` của máy chủ hiện ra NGUYÊN VĂN, không nuốt", () => {
@@ -199,121 +257,133 @@ describe("bảng thời hạn xử lý", () => {
     expect(html).toContain(cau);
   });
 
-  it("mã lĩnh vực hiện NGUYÊN MÃ — không có bảng tra tên lĩnh vực nào ở web", () => {
-    // Danh mục `Lĩnh vực phản ánh` chưa có chủ (câu mở #4, ADR 0024) và chưa có tuyến nào phát ra
-    // nhãn. Một bảng tra gõ tay ở web là bản sao thứ hai của một danh mục chưa ai sở hữu.
-    expect(ve()).toContain("an-ninh-trat-tu");
+  it("dòng mặc định nói rõ nó là mặc định, chữ mờ", () => {
+    expect(ve({ thoiHan: rowsOf(DEFAULT_ROW) })).toContain('<td class="text-ink-muted">Mặc định cho mọi lĩnh vực</td>');
   });
 
-  it("dòng mặc định nói rõ nó là mặc định, không hiện một ô trống", () => {
-    const html = ve({
-      thoiHan: ok<identity_danhSachSLARa>({
-        items: [{ ...DONG_SLA, field: "", is_default: true }],
-        problems: [],
-      }),
-    });
+  it("dòng `don-thu` đọc là 'Đơn thư', chữ navy đậm, không hiện mã thô", () => {
+    const html = ve({ thoiHan: rowsOf({ ...DEFAULT_ROW, work_kind: "don-thu" }) });
 
-    expect(html).toContain("Mặc định cho mọi lĩnh vực");
-  });
-});
-
-describe("cột thứ sáu và loại việc thứ tư (migration 0016 của identity)", () => {
-  it("bảng có cột 'Báo khi bộ phận giữ việc chưa giao quá' và con số kèm đơn vị", () => {
-    const html = ve({
-      thoiHan: ok<identity_danhSachSLARa>({
-        items: [{ ...DONG_SLA, unassigned_hold_hours: 12 }],
-        problems: [],
-      }),
-    });
-
-    expect(html).toContain("Báo khi bộ phận giữ việc chưa giao quá");
-    expect(html).toContain("12 giờ làm việc");
-  });
-
-  it("ngưỡng CHƯA ĐẶT hiện 'Không báo' — không một con số nào thay cho lựa chọn của xã", () => {
-    // NULL = không báo (ADR 0029 §Bổ sung 29/09). Một ô trống đọc ra là "chưa tải xong"; một con số
-    // mặc định là nói dối rằng xã sẽ được báo.
-    const html = ve({
-      thoiHan: ok<identity_danhSachSLARa>({
-        items: [{ ...DONG_SLA, unassigned_hold_hours: null }],
-        problems: [],
-      }),
-    });
-
-    expect(html).toContain("<td>Không báo</td>");
-    expect(html).not.toContain("null");
-  });
-
-  it("dòng `don-thu` đọc là 'Đơn thư', không hiện mã thô", () => {
-    const html = ve({
-      thoiHan: ok<identity_danhSachSLARa>({
-        items: [{ ...DONG_SLA, work_kind: "don-thu", field: "", is_default: true }],
-        problems: [],
-      }),
-    });
-
-    expect(html).toContain("<td>Đơn thư</td>");
+    expect(html).toContain('<td class="text-navy font-medium">Đơn thư</td>');
     expect(html).not.toContain("don-thu");
   });
 
-  it("ghi chú nói rõ mốc đếm đã chốt NHƯNG phần mềm chưa tự gửi lời báo nào", () => {
+  it("nhịp dọc space-y-3 (`SlaTable.tsx:67`); đầu cột được xuống dòng để bảng vừa khung, không đẩy cột thao tác ra ngoài", () => {
+    const html = ve();
+    expect(html).toMatch(/^<section class="space-y-3"/);
+    expect(html).toContain('<div class="[&amp;_th]:min-w-[4.5rem] [&amp;_th]:whitespace-normal"><div role="region"');
+  });
+
+  it("không còn tên lớp CSS cũ nào", () => {
+    const html = ve({}, { edit: editOf(DONG_SLA) });
+    for (const legacy of ["tab-thoi-han", "form-danh-muc", "o-nhap", "o-thao-tac", "bang-cuon", "ma-muc", "thong-bao-loi"]) {
+      expect(html, legacy).not.toContain(legacy);
+    }
+  });
+});
+
+describe("cột Giữ chưa phân công (migration 0016, ADR 0079 quyết định 3)", () => {
+  it("con số hiện 'sau {n} giờ'", () => {
+    expect(ve({ thoiHan: rowsOf({ ...DONG_SLA, unassigned_hold_hours: 12 }) })).toContain("<td>sau 12 giờ</td>");
+  });
+
+  it("CHƯA ĐẶT hiện '—' và vẫn nói 'Không báo' cho trình đọc màn hình — không một con số nào thay lựa chọn của xã", () => {
+    const html = ve({ thoiHan: rowsOf({ ...DONG_SLA, unassigned_hold_hours: null }) });
+
+    expect(html).toContain('<td><span aria-hidden="true">—</span><span class="sr-only">Không báo</span></td>');
+    expect(html).not.toContain("null");
+  });
+
+  it("KHÔNG có ghi chú nào dưới bảng — đúng prototype (chủ dự án 08/10/2026)", () => {
+    // REGRESSION (round 1 #15): a footnote under the table, absent from `SlaTable.tsx`.
     const html = ve();
 
-    expect(html).toContain("đếm từ lúc việc đã quá hạn");
-    expect(html).toContain("CHƯA tự gửi lời báo nào");
-    expect(html).not.toContain("mốc bắt đầu đếm chưa được chốt");
+    expect(html).not.toContain("đếm từ lúc việc đã quá hạn");
+    expect(html).not.toContain("để trống là không báo");
+    expect(html).not.toContain("CHƯA tự gửi");
+    expect(html).not.toContain("sla-reporting-note");
+    // The table is the last thing in the tab.
+    expect(html).toMatch(/<\/table><\/div><\/div><\/section>$/);
+  });
+});
+
+describe("sửa tại chỗ (spec 08)", () => {
+  it("dòng đang sửa: sáu ô số h-8 w-20 nạp sẵn con số hiện tại; nút thành Lưu / Huỷ", () => {
+    const html = ve({}, { edit: editOf(DONG_SLA) });
+    const boxes = inputs(html);
+
+    expect(boxes).toHaveLength(6);
+    for (const b of boxes) {
+      expect(b).toContain('type="number"');
+      expect(b).toContain("h-8 w-20 text-[12.5px]");
+    }
+    expect(html).toMatch(/<input[^>]*name="resolve_hours"[^>]*value="16"/);
+    expect(html).toMatch(/<button[^>]*>Lưu<\/button>/);
+    expect(html).toMatch(/<button[^>]*>Huỷ<\/button>/);
+    // The pencil and the trash of the row being edited are gone.
+    expect(html).not.toContain('title="Sửa thời hạn"');
+    expect(html).not.toContain(pendingMarkerLabel("Xoá thời hạn riêng"));
   });
 
-  it("biểu mẫu sửa có ô thứ sáu, nhãn kèm đơn vị, và câu 'để trống là không báo' gắn vào ô", () => {
-    const html = renderToStaticMarkup(
-      <BieuMauThoiHan
-        dangMo={{ kieu: "suaThoiHan", dong: DONG_SLA }}
-        ban={{ ...BAN_TRONG, gio: banTuDong(DONG_SLA) }}
-        datBan={() => {}}
-        loiTaiCho=""
-        loiMayChu=""
-        dangGui={false}
-        onGui={() => {}}
-        onHuy={() => {}}
-      />,
-    );
-
-    expect(html).toContain("Báo khi bộ phận giữ việc chưa giao quá (giờ làm việc)");
-    expect(html).toContain('name="unassigned_hold_hours"');
-    expect(html).toContain('aria-describedby="giai-thich-giu-viec"');
-    expect(html).toContain("Để trống nếu đơn vị không muốn được báo");
+  it("không ô nào trỏ tới một ghi chú đã bỏ (aria-describedby treo là id không tồn tại)", () => {
+    const html = ve({}, { edit: editOf(DONG_SLA) });
+    expect(inputs(html).filter((b) => b.includes("aria-describedby"))).toHaveLength(0);
   });
 
-  it("máy chủ từ chối (400 Chủ tịch < lãnh đạo) → biểu mẫu hiện NGUYÊN câu máy chủ", () => {
-    const cau = "Số giờ báo Chủ tịch không được nhỏ hơn số giờ báo lãnh đạo trực tiếp.";
-    const html = renderToStaticMarkup(
-      <BieuMauThoiHan
-        dangMo={{ kieu: "suaThoiHan", dong: DONG_SLA }}
-        ban={{ ...BAN_TRONG, gio: banTuDong(DONG_SLA) }}
-        datBan={() => {}}
-        loiTaiCho=""
-        loiMayChu={cau}
-        dangGui={false}
-        onGui={() => {}}
-        onHuy={() => {}}
-      />,
-    );
+  it("chỉ DÒNG đang sửa thành ô nhập; dòng khác giữ chữ và nút bút", () => {
+    const html = ve({ thoiHan: rowsOf(DONG_SLA, DEFAULT_ROW) }, { edit: editOf(DONG_SLA) });
+    expect(inputs(html)).toHaveLength(6);
+    expect(html).toContain('aria-label="Sửa thời hạn Phản ánh của người dân — Mặc định cho mọi lĩnh vực"');
+  });
 
-    expect(html).toContain(cau);
+  it("lỗi tại chỗ và lỗi máy chủ hiện NGAY DƯỚI dòng, tách hai câu", () => {
+    const serverSentence = "Số giờ báo Chủ tịch không được nhỏ hơn số giờ báo lãnh đạo trực tiếp.";
+    const html = ve({}, { edit: editOf(DONG_SLA, { localError: RESOLVE_HOURS_ERROR, serverError: serverSentence }) });
+
+    expect(html).toContain(`<p role="alert" class="text-danger m-0 text-[12.5px]">${RESOLVE_HOURS_ERROR}</p>`);
+    expect(html).toContain(`<p role="alert" class="text-danger m-0 text-[12.5px]">${serverSentence}</p>`);
+    expect(html).toContain('<td colSpan="9">');
+  });
+
+  it("đang lưu: nút Lưu báo bận, ô nhập khoá", () => {
+    const html = ve({}, { edit: editOf(DONG_SLA, { busy: true }) });
+    expect(html).toContain("Đang lưu…");
+    for (const b of inputs(html)) expect(b).toContain('disabled=""');
+  });
+});
+
+describe("xoá thời hạn riêng: chỗ giữ '?' (ADR 0079 #5)", () => {
+  it("dòng có lĩnh vực: nút thùng rác VÔ HIỆU, có dấu '?'", () => {
+    const html = ve();
+
+    expect(html).toContain(pendingMarkerLabel("Xoá thời hạn riêng"));
+    expect(html).toMatch(/<button[^>]*title="Xoá thời hạn riêng"[^>]*disabled=""/);
+  });
+
+  it("dòng mặc định: KHÔNG có nút xoá — mọi lĩnh vực chưa có dòng riêng dựa vào nó", () => {
+    const html = ve({ thoiHan: rowsOf(DEFAULT_ROW) });
+    expect(html).not.toContain("Xoá thời hạn riêng");
+    expect(html).toContain('title="Sửa thời hạn"');
   });
 });
 
 describe("nút ghi đi theo `admin.sla`", () => {
-  it("thiếu quyền ghi: bảng vẫn hiện đủ dòng, chỉ nút ghi vắng", () => {
+  it("CA BỊ TỪ CHỐI: thiếu quyền ghi thì bảng vẫn đủ dòng, không bút, không thùng rác, không chỗ giữ Thêm, không gieo", () => {
     const html = ve({}, { coQuyenGhi: false });
 
-    expect(html).toContain("16 giờ làm việc");
-    expect(html).not.toContain('aria-label="Sửa thời hạn');
+    expect(html).toContain('<td class="font-semibold">16 giờ</td>');
+    expect(html).not.toContain("Sửa thời hạn");
+    expect(html).not.toContain("Xoá thời hạn riêng");
+    expect(html).not.toContain("Thêm thời hạn");
     expect(html).not.toContain("Gieo thời hạn mặc định");
+    expect(html).not.toContain("Thao tác");
+  });
+
+  it("CA BỊ TỪ CHỐI: một `edit` lọt vào khi thiếu quyền vẫn không vẽ ô nhập nào", () => {
+    expect(inputs(ve({}, { coQuyenGhi: false, edit: editOf(DONG_SLA) }))).toHaveLength(0);
   });
 
   it("CHỈ có `admin.sla` (không `admin.lookup`, không khoá admin nào khác): dùng được tab", () => {
-    // Đi qua ĐÚNG phép quyết định mà `TabThoiHanXuLy` gọi, không qua một cờ gõ tay trong test.
     const phien = phienVoi(["admin.sla"]);
     const quyet = quyetDinhGhiThoiHan(phien);
     expect(quyet).toEqual({ hien: true });
@@ -337,11 +407,12 @@ describe("cột Lĩnh vực (SLA-03)", () => {
     const html = ve({}, { fieldLabels: new Map([["an-ninh-trat-tu", "An ninh, trật tự"]]) });
     expect(html).toContain("An ninh, trật tự");
     expect(html).not.toContain(">an-ninh-trat-tu<");
+    expect(html).toContain('aria-label="Sửa thời hạn Phản ánh của người dân — An ninh, trật tự"');
     expect(html).not.toMatch(/câu mở #4|câu hỏi mở #4/);
   });
 
   it("không đọc được nhãn → hiện nguyên mã", () => {
-    expect(ve()).toContain("an-ninh-trat-tu");
+    expect(ve()).toContain(">an-ninh-trat-tu<");
   });
 
   it("slaFieldLabelReadDecision: chỉ admin.lookup mới đọc danh mục lĩnh vực; admin.sla thôi thì không", () => {

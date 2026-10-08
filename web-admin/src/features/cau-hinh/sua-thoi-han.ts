@@ -37,6 +37,7 @@ import {
   LOI_KHONG_DOI_GI,
   LOI_SO_GIO_LA,
   PRESIDENT_BELOW_LEADER_ERROR,
+  RESOLVE_HOURS_ERROR,
   UNASSIGNED_HOLD_LABEL,
 } from "./nhan-thoi-han";
 
@@ -116,7 +117,12 @@ export function soanSua(goc: identity_dongSLARa, ban: BanNhapGio): KetQuaSoan {
   for (const khoa of REQUIRED_HOURS_COLUMNS) {
     // Ô TRỐNG KHÔNG PHẢI "GIỮ NGUYÊN". Biểu mẫu mở ra đã có sẵn con số, nên một ô bị xoá trắng là
     // một ý định — và ý định ấy (bỏ hẳn một con số) không có trên tuyến. Nói ra, đừng đoán.
-    const so = positiveInteger(ban[khoa].trim());
+    const text = ban[khoa].trim();
+    const so = positiveInteger(text);
+    // "Xử lý xong" at zero or below gets spec 08's own sentence; any other bad box the general one.
+    if (so === null && khoa === "resolve_hours" && text !== "" && Number(text) <= 0) {
+      return { ok: false, loi: RESOLVE_HOURS_ERROR };
+    }
     if (so === null) return { ok: false, loi: LOI_SO_GIO_LA };
     if (so !== goc[khoa]) than[khoa] = so;
   }

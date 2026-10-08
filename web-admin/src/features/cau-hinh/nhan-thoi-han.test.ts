@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  SLA_BANNER_UNIT,
+  afterHoursCell,
   cauBoQua,
   cauGieoTuan,
-  hoursCellLabel,
+  hoursCell,
   nhanLinhVuc,
   nhanLoaiViec,
-  nhanSoGio,
 } from "./nhan-thoi-han";
 
 /**
@@ -14,19 +15,16 @@ import {
  * phải: mỗi cái đều đổi điều cán bộ HIỂU về một con số của cơ quan mình.
  */
 
-describe("nhanSoGio — đơn vị luôn đi kèm", () => {
-  it("nói rõ 'giờ làm việc', không phải 'giờ'", () => {
-    // 40 giờ làm việc là trọn một tuần. Đọc nhầm thành giờ đồng hồ là nới hoặc siết một cam kết
-    // với người dân theo hệ số tám, mà không có gì báo lỗi (ADR 0007, luật 10 bất biến 4).
-    expect(nhanSoGio(40)).toBe("40 giờ làm việc");
-    expect(nhanSoGio(2)).toBe("2 giờ làm việc");
+describe("ô giờ của bảng (spec 08)", () => {
+  it("hạn nói '{n} giờ'; ngưỡng báo nói 'sau {n} giờ' — đơn vị 'giờ làm việc' nằm ở hộp giải thích", () => {
+    expect(hoursCell(40)).toBe("40 giờ");
+    expect(afterHoursCell(8)).toBe("sau 8 giờ");
   });
-});
 
-describe("hoursCellLabel — ô có thể chưa đặt", () => {
-  it("null đọc là 'Không báo', con số vẫn kèm đơn vị", () => {
-    expect(hoursCellLabel(null)).toBe("Không báo");
-    expect(hoursCellLabel(8)).toBe("8 giờ làm việc");
+  it("đơn vị vẫn được nói ra một lần, nguyên chữ, ở hộp giải thích", () => {
+    // 40 giờ làm việc là trọn một tuần (ADR 0007, luật 10 bất biến 4). Bỏ chữ ấy khỏi hộp là không
+    // còn chỗ nào trên tab nói ra đơn vị.
+    expect(SLA_BANNER_UNIT).toBe("giờ làm việc");
   });
 });
 
