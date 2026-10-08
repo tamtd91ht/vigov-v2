@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
-  lastEditLine,
-  MESSAGES_NOT_RAISED_YET,
+  isTextChanged,
   restoreMessageFlow,
   saveMessageFlow,
   SYSTEM_MESSAGE_MAX,
@@ -99,16 +98,25 @@ describe("restoreMessageFlow — Khôi phục câu mặc định", () => {
 });
 
 describe("small decisions", () => {
-  it("exactly the two keys no branch raises yet are marked", () => {
-    expect([...MESSAGES_NOT_RAISED_YET].sort()).toEqual([
-      "feedback.after_photo_required",
-      "feedback.unknown_field",
-    ]);
+  it("Lưu is enabled only by a change beyond surrounding spaces", () => {
+    expect(isTextChanged("Câu cũ.", "Câu cũ.")).toBe(false);
+    expect(isTextChanged("  Câu cũ. ", "Câu cũ.")).toBe(false);
+    expect(isTextChanged("Câu mới.", "Câu cũ.")).toBe(true);
+    expect(isTextChanged("", "Câu cũ.")).toBe(true);
   });
 
-  it("last-edit line only for an overridden sentence", () => {
-    const base = { code: "c", description: "", default_text: "", current_text: "", updated_at: null };
-    expect(lastEditLine({ ...base, overridden: false })).toBeNull();
-    expect(lastEditLine({ ...base, overridden: true, updated_by: "CB-00123" })).toBe("Sửa lần cuối: CB-00123");
+  it("owner 08/10/2026 'Bỏ hết, đúng prototype': no last-edit line, no not-raised set, no restore confirmation", async () => {
+    const form = await import("./system-message-form");
+    for (const gone of [
+      "lastEditLine",
+      "MESSAGES_NOT_RAISED_YET",
+      "NOT_RAISED_NOTE",
+      "RESTORE_CONFIRM",
+      "RESTORE_CONFIRM_BUTTON",
+      "CANCEL_BUTTON",
+    ]) {
+      expect(gone in form).toBe(false);
+    }
+    expect(form.SYSTEM_MESSAGE_SECTIONS.some((s) => "note" in s)).toBe(false);
   });
 });

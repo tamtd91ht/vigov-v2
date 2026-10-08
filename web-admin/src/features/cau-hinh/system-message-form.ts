@@ -15,64 +15,42 @@ import type { KetQua } from "@/lib/api/goi";
 export const SYSTEM_MESSAGES_TITLE = "Lời hệ thống";
 
 /**
- * NOT the spec's guidance sentence verbatim: §7 says these sentences are "said to citizens" and show
- * "on the admin site and the Zalo Mini App". Of today's catalogue several are refusals only staff
- * see (e.g. `feedback.assignment_required`), so that sentence would tell the administrator something
- * untrue about where a change lands. What stays: a shipped sentence may be reworded, never removed.
+ * Spec 07's sentence with its "Zalo Mini App" clause removed (owner, 08/10/2026: "Giữ spec, chỉ bỏ
+ * phần Mini App"). `citizen-app/` reads no system message and every key is raised on a STAFF route
+ * (petitions `refusalSentence`, `petition_publication.go`; finance `du_an.go` scopeNotice), so the
+ * Mini App clause told the administrator something untrue about where a change lands.
  */
 export const SYSTEM_MESSAGES_GUIDANCE =
-  "Những câu dưới đây là lời hệ thống nói khi từ chối một thao tác. Câu đi kèm phần mềm sửa được " +
-  "lời nhưng không xoá được — xoá đi thì lúc từ chối, hệ thống không còn gì để nói. Muốn dùng lại " +
-  "câu gốc thì bấm Khôi phục lời gốc.";
+  "Những câu dưới đây là lời hệ thống hiện ra trên trang quản trị. Câu đi kèm phần mềm có thể sửa " +
+  "lời nhưng không xoá được — xoá đi thì lúc từ chối, hệ thống không còn gì để nói.";
 
 /**
- * The three sections, in the order of §7's groups. `note` is a section-wide sentence, drawn under the
- * heading when the whole group shares one fact an administrator must know before rewording.
- *
- * WHY "Báo cáo" CARRIES A NOTE: its sentences are the captions of the exported report and the titles
- * of the report notifications. `/bao-cao` exists since 04/10/2026 but exports nothing and sends nothing
- * (ADR 0053 amendment, B4), and no service reads these keys yet, so a reworded caption shows nowhere today. Said once for the group rather than
- * on 38 cards (`MESSAGES_NOT_RAISED_YET` is per key, for the one-off case). Remove the note in the same
- * change that makes a feature print these sentences.
+ * The three sections, ordered by group code like the prototype (spec 07's "Dùng chung" has no keys
+ * here; "Báo cáo điều hành" is this app's third group, decision 3 of the fix card). No per-group or per-card notes:
+ * owner, 08/10/2026, "Bỏ hết, đúng prototype".
  */
-export const SYSTEM_MESSAGE_SECTIONS: readonly {
+type SystemMessageSection = {
   module: SystemMessageModule;
+  /** The prototype's group code (`MessageTemplateTable` GROUP_LABEL); `bao-cao` is this app's own. */
+  group: string;
   title: string;
-  note?: string;
-}[] = [
-  { module: "petitions", title: "Phản ánh" },
-  { module: "finance", title: "Thu – Chi" },
-  {
-    module: "reporting",
-    title: "Báo cáo",
-    note:
-      "Các câu nhóm này là tiêu đề, tên khối và tên chỉ số trên báo cáo xuất ra và trên thông báo " +
-      "báo cáo gửi lãnh đạo. Màn Báo cáo chưa xuất tệp và chưa gửi thông báo, nên câu sửa ở đây được lưu " +
-      "cho xã nhưng hôm nay chưa hiện ở đâu.",
-  },
-];
+};
 
-/**
- * Keys in the catalogue that NO refusal branch raises yet (backend report, 29/09/2026): rewording one
- * changes nothing any officer or citizen will see until a feature uses it. Said on the card so an
- * administrator does not reword it and wait for a change that cannot come. Remove a key from here in
- * the same change that makes a branch raise it.
- */
-export const MESSAGES_NOT_RAISED_YET: ReadonlySet<string> = new Set([
-  "feedback.after_photo_required",
-  "feedback.unknown_field",
-]);
+export const SYSTEM_MESSAGE_SECTIONS: readonly SystemMessageSection[] = ([
 
-export const NOT_RAISED_NOTE = "Chưa có chức năng nào dùng câu này.";
-// Button, badge and confirmation words are the prototype's (`MessageTemplateTable`, ADR 0068 lần 5).
+  { module: "petitions", group: "phan-anh", title: "Phản ánh của người dân" },
+  { module: "finance", group: "giai-ngan", title: "Theo dõi giải ngân" },
+  { module: "reporting", group: "bao-cao", title: "Báo cáo điều hành" },
+  // Drawn in ascending group-code order, as the prototype sorts its groups (`MessageTemplateTable.tsx:40`).
+] satisfies SystemMessageSection[]).sort((a, b) => (a.group < b.group ? -1 : a.group > b.group ? 1 : 0));
+
+// Button and badge words are the prototype's (`MessageTemplateTable`, ADR 0068 lần 5).
+export const SHIPPED_BADGE = "Đi kèm phần mềm";
 export const OVERRIDDEN_BADGE = "Đã sửa lời";
-export const EDIT_BUTTON = "Sửa lời";
+/** Label of the disabled "?" control; its entry in `PHAN_CHUA_DUNG` is "Tắt câu hệ thống". */
+export const SWITCH_OFF_BUTTON = "Tắt";
 export const SAVE_BUTTON = "Lưu";
-export const CANCEL_BUTTON = "Huỷ";
 export const RESTORE_BUTTON = "Khôi phục lời gốc";
-export const RESTORE_CONFIRM =
-  "Dùng lại câu mặc định của phần mềm cho câu này? Câu xã đã sửa sẽ không còn được dùng.";
-export const RESTORE_CONFIRM_BUTTON = "Khôi phục";
 export const SAVED_SENTENCE = "Đã lưu lời mới.";
 export const RESTORED_SENTENCE = "Đã khôi phục lời gốc.";
 
@@ -97,6 +75,14 @@ export function validateMessageText(
 }
 
 /**
+ * "Lưu" is enabled only when this is true (spec 07; prototype compares trimmed text): saving what is
+ * already in force would write an audit entry recording no change.
+ */
+export function isTextChanged(draft: string, current: string): boolean {
+  return draft.trim() !== current.trim();
+}
+
+/**
  * Save: validate, then PUT. A refusal — ours or the server's 400 sentence (markup, control
  * characters…) — comes back as the one sentence to show; the request is not sent when ours refuses.
  */
@@ -116,24 +102,4 @@ export function restoreMessageFlow(
   code: string,
 ): Promise<KetQua<null>> {
   return restoreSystemMessage(module, code);
-}
-
-const TIME_FORMAT = new Intl.DateTimeFormat("vi-VN", {
-  timeZone: "Asia/Ho_Chi_Minh",
-  hour: "2-digit",
-  minute: "2-digit",
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-  hour12: false,
-});
-
-/** "Sửa lần cuối: CB-00123, 14:05 22/09/2026" — only for an overridden sentence. */
-export function lastEditLine(m: SystemMessage): string | null {
-  if (!m.overridden) return null;
-  const who = m.updated_by !== undefined && m.updated_by !== "" ? m.updated_by : "không rõ người sửa";
-  if (m.updated_at === undefined || m.updated_at === null) return `Sửa lần cuối: ${who}`;
-  const d = new Date(m.updated_at);
-  const when = Number.isNaN(d.getTime()) ? "mốc thời gian không đọc được" : TIME_FORMAT.format(d);
-  return `Sửa lần cuối: ${who}, ${when}`;
 }
