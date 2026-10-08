@@ -43,6 +43,7 @@ import {
   type BanNhapCanBo,
 } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import {
+  countStaffMatches,
   datKhoaCanBo,
   docTrangDanhBa,
   doiVaiTroCanBo,
@@ -50,6 +51,8 @@ import {
   suaCanBo,
   themCanBo,
   xoaCanBo,
+  type ChieuSapXep,
+  type KhoaSapXep,
 } from "@/lib/api/can-bo";
 import { ketQuaGuiTim, type LocDanhBa } from "@/features/danh-ba/loc-danh-ba";
 import { HopXoa } from "@/features/danh-ba/hop-xoa";
@@ -59,7 +62,6 @@ import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/error-state";
 import { controlClass } from "@/components/ui/field";
 import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
-import { PendingMarker, type PendingFeatureInfo } from "@/components/ui/pending-feature";
 import { Skeleton } from "@/components/ui/skeleton";
 import { docDanhMucDanhBa, type DanhMucDanhBa } from "@/lib/api/danh-muc";
 import type { identity_canBoTomTat, page_Result_identity_canBoTomTat } from "@/lib/api/schema.gen";
@@ -113,7 +115,8 @@ import { bangTraTuKetQua, traTen, type BangTraDanhMuc, type KetTra } from "./tra
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
  * Hợp đồng REST phục vụ màn hình này: đọc `GET /api/v1/staff`, `POST /api/v1/staff/searches` (chữ tìm
- * đi trong thân), `GET /api/v1/staff-counts` (tổng của dòng đếm), hai danh mục `GET /api/v1/org-units`
+ * đi trong thân), `GET /api/v1/staff-counts` (tổng của dòng đếm khi không tìm), `POST /api/v1/staff-count-
+ * queries` (tổng của dòng đếm khi đang tìm, chữ trong thân), hai danh mục `GET /api/v1/org-units`
  * · `GET /api/v1/roles`; ghi `POST /staff`, `PATCH /staff/{id}`, `POST`/`DELETE /staff/{id}/lockout`,
  * `PUT /staff/{id}/role`, `POST /staff/{id}/account`, `PUT /staff/{id}/password` (cùng `admin.user`) và
  * `DELETE /staff/{id}` (`admin.user.delete`, xoá mềm kèm lý do — luật 7).
@@ -126,8 +129,8 @@ import { bangTraTuKetQua, traTen, type BangTraDanhMuc, type KetTra } from "./tra
  *   · Thêm `Đổi vai trò`, `Khoá/Mở khoá`, `Cấp TK/Đặt lại MK` ở mỗi dòng, và cột `Vai trò`, `Tài khoản`.
  *   · Xoá hỏi lý do (luật 7) và chỉ cho dòng KHÔNG có tài khoản (#10: nghỉ thì khoá, không xoá).
  *   · Tìm ở MÁY CHỦ, theo trang con trỏ: danh bạ một xã không đọc hết về trình duyệt để lọc.
- *   · Đầu cột có nút sắp xếp của prototype nhưng VÔ HIỆU kèm dấu "?" (ADR 0068 §14): máy chủ chỉ sắp
- *     theo mã và ngày tạo, hai cột ấy chủ dự án đã bỏ khỏi bảng. Không sắp giả ở client.
+ *   · Sắp xếp ở MÁY CHỦ (4b0b9ce3), không sắp một trang ở client: đúng sáu cột prototype sắp được là nút
+ *     thật (chủ dự án 08/10/2026); Vai trò, Di động cá nhân, Tài khoản là chữ trơn — không sắp được.
  *
  * KHÔNG CÓ CỔNG QUYỀN RIÊNG CHO PHẦN GHI `admin.user`: `TabNguoiDung` đã dùng đúng khoá ấy để quyết định
  * có dựng màn hình này hay không. `canDelete` (từ `admin.user.delete`) chỉ quyết định có VẼ `Trash2`.
@@ -176,10 +179,17 @@ export function DanhBaCanBo({
   /** `null` là chưa đọc xong. Hai danh mục của xã, đọc MỘT lần cho cả màn hình — xem dưới. */
   const [danhMuc, datDanhMuc] = useState<DanhMucDanhBa | null>(null);
   /**
-   * The commune's register size for the count line, from `GET /api/v1/staff-counts`. `null` = not read
-   * (yet, or refused): the line then says only what is on screen — never a total nobody counted.
+   * The order the officer chose by clicking a column head. `null` = none: the server's default (code
+   * ascending), and NOTHING is sent — no copy of that default lives in this file.
    */
-  const [staffTotal, setStaffTotal] = useState<number | null>(null);
+  const [sort, setSort] = useState<StaffSort | null>(null);
+  /**
+   * The M of the count line, TAGGED WITH THE FILTER IT ANSWERS (`forLoc`, the very `loc` object the read
+   * was made for). The line shows it only while that filter is still the applied one, so an answer for
+   * an older search — or the commune total, while a search's own count is in flight — never sits next to
+   * the N of a newer list. `total: null` = refused: the line then says only what is on screen.
+   */
+  const [count, setCount] = useState<{ forLoc: LocNguoiDung; total: number | null } | null>(null);
 
   /* ---- trạng thái của đường GHI ---------------------------------------------------------- */
 
@@ -244,26 +254,39 @@ export function DanhBaCanBo({
     [danhMuc],
   );
 
-  // The total of the count line: read on arrival and after every write (a write can add or remove a
-  // row), not on paging or searching — the commune's total does not move between two page turns.
+  // The M of the count line: the commune's total with no search, the search's own match count with one
+  // (same q/unit/published as the list, and fired by the same debounced `doiLoc`). Read on arrival, on
+  // every filter change and after every write; not on paging or sorting — neither changes the set.
+  // `stale` drops an answer whose effect was superseded; `forLoc` (above) hides one that is not the
+  // applied filter's — two guards, because the second also covers "the list is back, the count is not".
   useEffect(() => {
     let stale = false;
-    void getStaffCounts().then((answer) => {
-      if (!stale) setStaffTotal(answer.ok ? answer.duLieu : null);
+    const forLoc = loc;
+    const read =
+      forLoc.tuKhoa === null ? getStaffCounts() : countStaffMatches(forLoc.tuKhoa, { boPhan: forLoc.boPhan });
+    void read.then((answer) => {
+      if (!stale) setCount({ forLoc, total: answer.ok ? answer.duLieu : null });
     });
     return () => {
       stale = true;
     };
-  }, [lanDoc]);
+  }, [loc, lanDoc]);
+
+  const shownTotal = count !== null && count.forLoc === loc ? count.total : null;
 
   useEffect(() => {
     // `bo` chặn một phản hồi đến muộn của lần đọc trước ghi đè lên lần đọc sau.
     let bo = false;
 
-    // Không truyền `limit` (mặc định của máy chủ), không truyền `sort`/`order`: hai cột máy chủ sắp
-    // được (mã, ngày tạo) đã rời bảng, nên thứ tự là thứ tự mặc định của máy chủ. MỘT chỗ rẽ GET hay
-    // POST, và nó ở `docTrangDanhBa` — cùng hàm màn `/danh-ba` dùng.
-    docTrangDanhBa(loc.tuKhoa, { boPhan: loc.boPhan, cursor: nganXep.hienTai }).then((ketQua) => {
+    // Không truyền `limit` (mặc định của máy chủ). `sort`/`order` only when a head was clicked — they go
+    // on the GET's URL or in the search's body. MỘT chỗ rẽ GET hay POST, và nó ở `docTrangDanhBa` —
+    // cùng hàm màn `/danh-ba` dùng.
+    docTrangDanhBa(loc.tuKhoa, {
+      boPhan: loc.boPhan,
+      cursor: nganXep.hienTai,
+      sort: sort?.key,
+      order: sort?.order,
+    }).then((ketQua) => {
       if (bo) return;
       datTrangThai(
         ketQua.ok ? { pha: "xong", trang: ketQua.duLieu } : { pha: "loi", thongBao: ketQua.thongBao },
@@ -273,7 +296,7 @@ export function DanhBaCanBo({
     return () => {
       bo = true;
     };
-  }, [nganXep, loc, lanDoc]);
+  }, [nganXep, loc, sort, lanDoc]);
 
   /**
    * Chuyển trang. `dangTai` được đặt Ở ĐÂY, trong sự kiện, chứ không trong thân effect: gọi setState
@@ -292,6 +315,18 @@ export function DanhBaCanBo({
   const doiLoc = useCallback(
     (doi: Partial<LocNguoiDung>) => {
       datLoc((cu) => ({ ...cu, ...doi }));
+      diToiTrang(TRANG_DAU);
+    },
+    [diToiTrang],
+  );
+
+  /**
+   * A click on a sort head. Back to the FIRST page, always: a cursor encodes a position in ONE order, and
+   * sent with another it reads from the middle of a different sequence.
+   */
+  const changeSort = useCallback(
+    (key: KhoaSapXep) => {
+      setSort((current) => nextSort(current, key));
       diToiTrang(TRANG_DAU);
     },
     [diToiTrang],
@@ -649,11 +684,13 @@ export function DanhBaCanBo({
             traBoPhan={traBoPhan}
             traVaiTro={traVaiTro}
             canDelete={canDelete}
+            sort={sort}
+            onSort={changeSort}
           />
           {/* The prototype's count line; the cursor pager (kept, decision 3) at the right of it. */}
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
             <p className="text-ink-muted m-0 text-[12px]">
-              {staffCountLine(trangThai.trang.items.length, staffTotal)}
+              {staffCountLine(trangThai.trang.items.length, shownTotal)}
             </p>
             <DieuHuongTrang
               nganXep={nganXep}
@@ -1001,51 +1038,72 @@ function OTaiKhoan({ cb }: { cb: identity_canBoTomTat }) {
   );
 }
 
-/** What the column-sort "?" says: the server sorts by neither of the columns left on this table. */
-const SORT_PENDING: PendingFeatureInfo = {
-  ten: "Sắp xếp theo cột",
-  viSao:
-    "Máy chủ hiện chỉ sắp xếp danh sách cán bộ theo mã cán bộ và ngày tạo — hai cột này không còn trên " +
-    "bảng. Sắp xếp theo các cột khác cần tuyến danh sách nhận thêm khoá sắp xếp; trong lúc chờ, danh " +
-    "sách theo thứ tự mặc định của máy chủ.",
-};
+/** The order chosen on the table: one server sort key and its direction. */
+export type StaffSort = { readonly key: KhoaSapXep; readonly order: ChieuSapXep };
 
 /**
- * A column head in the prototype's shape (`<button className="flex items-center gap-1.5">label
- * <ArrowUpDown/></button>`), DISABLED with the "?" marker (ADR 0068 §14): no client-side sort of one
- * page would be honest on a cursor-paged list.
+ * One click on a head. Another column starts ascending; the same column goes asc → desc → none, where
+ * none is the server's default (code ascending) — the prototype's TanStack cycle (asc / desc / unsorted).
  */
-function SortHead({ label }: { label: string }) {
+export function nextSort(current: StaffSort | null, key: KhoaSapXep): StaffSort | null {
+  if (current === null || current.key !== key) return { key, order: "asc" };
+  return current.order === "asc" ? { key, order: "desc" } : null;
+}
+
+/**
+ * A sortable head in the prototype's shape (`<button className="flex items-center gap-1.5">label
+ * <ArrowUpDown className="size-3 opacity-40"/></button>`). The active direction is told by `aria-sort`
+ * on the `<th>` (owner 08/10/2026: no ↑/↓ glyph), and only on the active one — `aria-sort` names the
+ * column the rows are ordered by, and there is at most one.
+ */
+function SortHead({
+  label,
+  sortKey,
+  sort,
+  onSort,
+}: {
+  label: string;
+  sortKey: KhoaSapXep;
+  sort: StaffSort | null;
+  onSort: (key: KhoaSapXep) => void;
+}) {
+  const direction = sort !== null && sort.key === sortKey ? sort.order : null;
   return (
-    <th scope="col">
-      <span className="inline-flex items-center gap-1.5">
-        <button
-          type="button"
-          disabled
-          className="flex items-center gap-1.5 border-0 bg-transparent p-0 [font-family:inherit] text-inherit [font-size:inherit] [font-weight:inherit] disabled:cursor-not-allowed"
-        >
-          {label}
-          <ArrowUpDown aria-hidden="true" focusable="false" className="size-3 opacity-40" />
-        </button>
-        <PendingMarker info={SORT_PENDING} side="bottom" />
-      </span>
+    <th
+      scope="col"
+      aria-sort={direction === null ? undefined : direction === "asc" ? "ascending" : "descending"}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        className="flex items-center gap-1.5 border-0 bg-transparent p-0 [font-family:inherit] text-inherit [font-size:inherit] [font-weight:inherit] cursor-pointer"
+      >
+        {label}
+        <ArrowUpDown aria-hidden="true" focusable="false" className="size-3 opacity-40" />
+      </button>
     </th>
   );
 }
 
-/** The nine data columns, in the owner's order (decision 3). */
-const DATA_COLUMNS = [
-  "Họ và tên",
-  "Chức danh",
-  "Bộ phận",
-  "Vai trò",
+/**
+ * The nine data columns, in the owner's order (decision 3). `sortKey` only on the prototype's six (owner
+ * 08/10/2026); the other three are plain text — not sortable, like the actions column. "Máy bàn cơ
+ * quan" sorts by `phone`, the OFFICE phone (the prototype's "Điện thoại"), never the personal mobile.
+ */
+const DATA_COLUMNS: readonly { readonly label: string; readonly sortKey?: KhoaSapXep }[] = [
+  { label: "Họ và tên", sortKey: "full_name" },
+  { label: "Chức danh", sortKey: "position" },
+  { label: "Bộ phận", sortKey: "department" },
+  { label: "Vai trò" },
   // TWO phone columns, labelled by kind (#16): duty information vs Decree 13 personal data.
-  "Máy bàn cơ quan",
-  "Di động cá nhân",
-  "Đăng nhập gần nhất",
-  "Trạng thái",
-  "Tài khoản",
-] as const;
+  { label: "Máy bàn cơ quan", sortKey: "phone" },
+  { label: "Di động cá nhân" },
+  { label: "Đăng nhập gần nhất", sortKey: "last_login_at" },
+  { label: "Trạng thái", sortKey: "status" },
+  { label: "Tài khoản" },
+];
+
+const NO_SORT = () => {};
 
 // EXPORTED SO THE COLUMNS CAN BE PINNED BY A RENDER TEST: the parent reads the API in `useEffect`,
 // which `renderToStaticMarkup` never runs.
@@ -1055,6 +1113,8 @@ export function BangCanBo({
   traBoPhan,
   traVaiTro,
   canDelete = false,
+  sort = null,
+  onSort = NO_SORT,
 }: {
   danhSach: readonly identity_canBoTomTat[];
   thaoTac: ThaoTacDong;
@@ -1062,6 +1122,9 @@ export function BangCanBo({
   traBoPhan: BangTraDanhMuc;
   traVaiTro: BangTraDanhMuc;
   canDelete?: boolean;
+  /** The applied order, for `aria-sort`. The screen owns it; the table only reports clicks. */
+  sort?: StaffSort | null;
+  onSort?: (key: KhoaSapXep) => void;
 }) {
   return (
     // The prototype's frame (`border-line overflow-hidden rounded-[10px] border` around shadcn's Table),
@@ -1069,9 +1132,15 @@ export function BangCanBo({
     <ConfigTable label="Danh sách cán bộ" caption="Danh sách cán bộ của đơn vị">
       <thead>
         <tr>
-          {DATA_COLUMNS.map((label) => (
-            <SortHead key={label} label={label} />
-          ))}
+          {DATA_COLUMNS.map(({ label, sortKey }) =>
+            sortKey === undefined ? (
+              <th key={label} scope="col">
+                {label}
+              </th>
+            ) : (
+              <SortHead key={label} label={label} sortKey={sortKey} sort={sort} onSort={onSort} />
+            ),
+          )}
           <th scope="col" className="text-right">
             <span className="an-thi-giac">Hành động</span>
           </th>

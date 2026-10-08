@@ -160,11 +160,12 @@ export function nhanVaiTro(ket: KetTra): string {
 
 /* ---- `/nguoi-dung` in the prototype's shape (owner decisions 08/10/2026, fix-web-admin card A) ---- */
 
-/** Search box name and placeholder. The placeholder is TRUE: the server searches name, position and
- * the two phones (`store/can_bo_danh_sach.go`), never email or unit — the prototype's "thư điện tử, bộ
- * phận" would send an officer typing an address to an empty list and the wrong conclusion. */
+/** Search box name and placeholder — the prototype's words verbatim (`UserTable.tsx`). They are TRUE
+ * since 4b0b9ce3: the server matches email and unit name as well as name, position and the phones.
+ * A placeholder promising a field the server does not search sends an officer to an empty list and the
+ * wrong conclusion, so the two move together. */
 export const SEARCH_LABEL = "Tìm cán bộ";
-export const SEARCH_PLACEHOLDER = "Tìm theo tên, chức danh, số điện thoại…";
+export const SEARCH_PLACEHOLDER = "Tìm theo tên, thư điện tử, bộ phận…";
 
 /** One sentence for both "no staff" and "no match" — the prototype's (`UserTable.tsx`). */
 export const EMPTY_STAFF_LIST = "Không có cán bộ nào khớp điều kiện tìm kiếm.";
@@ -186,8 +187,9 @@ export const USERS_DENIED =
   "trị viên của đơn vị nếu cần.";
 
 /**
- * The line under the table. `total` is the commune's register size from `GET /api/v1/staff-counts`;
- * `null` when that read failed — the line then says only what is on screen, never a guessed total.
+ * The line under the table. `total` is the commune's register size (`GET /api/v1/staff-counts`) when no
+ * search is applied, the search's match count (`POST /api/v1/staff-count-queries`) while one is; `null`
+ * when that read failed or has not answered yet — the line then says only what is on screen.
  */
 export function staffCountLine(shown: number, total: number | null): string {
   return total === null ? `Hiển thị ${shown} cán bộ.` : `Hiển thị ${shown}/${total} cán bộ.`;

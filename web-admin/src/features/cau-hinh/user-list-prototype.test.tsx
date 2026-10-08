@@ -105,14 +105,62 @@ describe("table columns — the owner's list, in order (decision 3)", () => {
     ]);
   });
 
-  it("every data head is the prototype's sort button, disabled with the '?' marker; the actions head has none", () => {
+  it("the prototype's six heads are ENABLED sort buttons; no '?' marker anywhere in the head (owner 08/10)", () => {
     const head = thead(table());
-    const sortButtons = [...head.matchAll(/<button[^>]*class="flex items-center gap-1\.5[^"]*"[^>]*>/g)].map(
-      (m) => m[0],
-    );
-    expect(sortButtons).toHaveLength(9);
-    for (const b of sortButtons) expect(b).toContain('disabled=""');
-    expect([...head.matchAll(/data-pending-marker=""/g)]).toHaveLength(9);
+    const sortButtons = [...head.matchAll(/<button[^>]*class="flex items-center gap-1\.5[^"]*"[^>]*>([\s\S]*?)<\/button>/g)];
+    expect(sortButtons.map((m) => (m[1] ?? "").replace(/<[^>]+>/g, "").trim())).toEqual([
+      "Họ và tên",
+      "Chức danh",
+      "Bộ phận",
+      "Máy bàn cơ quan",
+      "Đăng nhập gần nhất",
+      "Trạng thái",
+    ]);
+    for (const m of sortButtons) {
+      expect(m[0]).not.toContain("disabled");
+      expect(m[0]).toMatch(/<svg[^>]*class="[^"]*size-3 opacity-40/);
+    }
+    expect(head).not.toContain("data-pending-marker");
+  });
+
+  it("Vai trò, Di động cá nhân, Tài khoản are plain header text — no button, no arrow, no '?'", () => {
+    const ths = [...thead(table()).matchAll(/<th[^>]*>([\s\S]*?)<\/th>/g)].map((m) => m[1] ?? "");
+    for (const label of ["Vai trò", "Di động cá nhân", "Tài khoản"]) {
+      const cell = ths.find((c) => c.replace(/<[^>]+>/g, "").trim() === label);
+      expect(cell).toBe(label);
+    }
+  });
+
+  it("no sort chosen → no aria-sort on any head", () => {
+    expect(thead(table())).not.toContain("aria-sort");
+  });
+
+  it("the active column carries aria-sort with its direction, keeps the ArrowUpDown icon, no ↑/↓ glyph", () => {
+    const render = (order: "asc" | "desc") =>
+      thead(
+        renderToStaticMarkup(
+          <BangCanBo
+            danhSach={[STAFF]}
+            thaoTac={NO_ACTIONS}
+            traBoPhan={EMPTY_LOOKUP}
+            traVaiTro={EMPTY_LOOKUP}
+            sort={{ key: "last_login_at", order }}
+            onSort={() => {}}
+          />,
+        ),
+      );
+    for (const [order, aria] of [
+      ["asc", "ascending"],
+      ["desc", "descending"],
+    ] as const) {
+      const head = render(order);
+      const sorted = [...head.matchAll(/<th[^>]*aria-sort="([^"]+)"[^>]*>([\s\S]*?)<\/th>/g)];
+      expect(sorted).toHaveLength(1);
+      expect(sorted[0]?.[1]).toBe(aria);
+      expect((sorted[0]?.[2] ?? "").replace(/<[^>]+>/g, "").trim()).toBe("Đăng nhập gần nhất");
+      expect(sorted[0]?.[2]).toMatch(/<svg[^>]*class="[^"]*size-3 opacity-40/);
+      expect(head).not.toMatch(/[↑↓]/);
+    }
   });
 
   it("name navy semibold, email muted 11.5px under it, no ellipsis anywhere", () => {

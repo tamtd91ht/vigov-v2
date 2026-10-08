@@ -9,9 +9,11 @@ import {
 } from "@/features/cau-hinh/ngan-xep-con-tro";
 
 import {
+  KHOA_SAP_XEP,
   LY_DO_XOA_TOI_DA,
   TU_KHOA_TIM_TOI_DA,
   bulkPublicationBody,
+  countStaffMatches,
   publishStaffBulk,
   chuanHoaLyDoXoa,
   chuanHoaTuKhoaTim,
@@ -1089,9 +1091,24 @@ describe("POST /api/v1/staff/searches — chữ tìm đi trong THÂN", () => {
 
   it("một trường lạ không đi lên máy chủ — thân dựng từng trường", async () => {
     const gia = ghiGia(200, { items: [], next_cursor: "", has_more: false });
-    await timCanBo(hopLe("abc"), { boPhan: "BP", sort: "code", tenant_id: "X" } as never);
+    await timCanBo(hopLe("abc"), { boPhan: "BP", tenant_id: "X" } as never);
     const than = JSON.parse(String(loiGoi(gia, 0).tuyChon.body)) as Record<string, unknown>;
     expect(Object.keys(than).sort()).toEqual(["cursor", "limit", "published", "q", "unit"]);
+  });
+
+  it("sort/order travel in the body when set (4b0b9ce3); absent → no key, the server's code asc", async () => {
+    expect(thanTimCanBo(hopLe("abc"), { sort: "last_login_at", order: "desc" })).toMatchObject({
+      sort: "last_login_at",
+      order: "desc",
+    });
+    expect(thanTimCanBo(hopLe("abc"))).not.toHaveProperty("sort");
+    expect(thanTimCanBo(hopLe("abc"))).not.toHaveProperty("order");
+
+    const gia = ghiGia(200, { items: [], next_cursor: "", has_more: false });
+    await docTrangDanhBa(hopLe("abc"), { sort: "department", order: "asc", cursor: "MOC" });
+    const { duongDan, tuyChon } = loiGoi(gia, 0);
+    expect(duongDan).toBe("/api/v1/staff/searches");
+    expect(JSON.parse(String(tuyChon.body))).toMatchObject({ q: "abc", sort: "department", order: "asc", cursor: "MOC" });
   });
 
   it("400 của máy chủ về tới giao diện nguyên văn", async () => {
@@ -1180,5 +1197,47 @@ describe("docTrangDanhBa — rẽ GET hay POST, và chữ tìm KHÔNG BAO GIỜ 
     for (const r of gia.mock.results) {
       expect(((await r.value) as Response).status).toBe(200);
     }
+  });
+});
+
+describe("KHOA_SAP_XEP — the contract's eight keys (4b0b9ce3)", () => {
+  it("lists exactly the server's allow-list", () => {
+    expect([...KHOA_SAP_XEP].sort()).toEqual(
+      ["code", "created_at", "department", "full_name", "last_login_at", "phone", "position", "status"].sort(),
+    );
+  });
+});
+
+describe("POST /api/v1/staff-count-queries — the total of a search, words in the BODY", () => {
+  it("constant path, body {q, unit, published} and nothing else; `total` read", async () => {
+    const gia = ghiGia(200, { total: 4 });
+    const answer = await countStaffMatches(hopLe("  Huỳnh   Văn "), { boPhan: " BP-LE ", congKhai: false });
+    expect(answer).toEqual({ ok: true, duLieu: 4 });
+
+    const { duongDan, tuyChon, header } = loiGoi(gia, 0);
+    expect(duongDan).toBe("/api/v1/staff-count-queries");
+    expect(tuyChon.method).toBe("POST");
+    expect(JSON.parse(String(tuyChon.body))).toEqual({ q: "Huỳnh Văn", unit: "BP-LE", published: false });
+    // A read: no idempotency key is required by the contract, none is invented.
+    expect(header.has("Idempotency-Key")).toBe(false);
+  });
+
+  it("no filter → unit \"\" and published null, as the contract means them", async () => {
+    const gia = ghiGia(200, { total: 0 });
+    expect(await countStaffMatches(hopLe("abc"))).toEqual({ ok: true, duLieu: 0 });
+    expect(JSON.parse(String(loiGoi(gia, 0).tuyChon.body))).toEqual({ q: "abc", unit: "", published: null });
+  });
+
+  it("a `total` that is not a non-negative integer is refused, never shown", async () => {
+    for (const body of [{ total: "4" }, {}, { total: -1 }, { total: 2.5 }, null]) {
+      ghiGia(200, body);
+      const answer = await countStaffMatches(hopLe("abc"));
+      expect(answer.ok).toBe(false);
+    }
+  });
+
+  it("the server's refusal comes back verbatim", async () => {
+    ghiGia(403, { code: "forbidden", message: "Tài khoản không có quyền này.", trace_id: "T" });
+    expect(await countStaffMatches(hopLe("abc"))).toEqual({ ok: false, thongBao: "Tài khoản không có quyền này." });
   });
 });

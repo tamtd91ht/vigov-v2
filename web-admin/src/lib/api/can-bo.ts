@@ -1,9 +1,10 @@
 /**
- * Gọi mười một tuyến của danh bạ cán bộ — ba tuyến đọc và **tám tuyến ghi**.
+ * Gọi các tuyến của danh bạ cán bộ — các tuyến đọc và **tám tuyến ghi**.
  *
- * BA TUYẾN ĐỌC: `GET /api/v1/staff` (một trang, lọc theo `unit` / `published` trên URL),
- * `GET /api/v1/staff/{id}`, và `POST /api/v1/staff/searches` — tìm theo chữ, CHỮ ĐI TRONG THÂN
- * (xem `timCanBo`).
+ * TUYẾN ĐỌC: `GET /api/v1/staff` (một trang, lọc theo `unit` / `published` trên URL),
+ * `GET /api/v1/staff/{id}`, `POST /api/v1/staff/searches` — tìm theo chữ, CHỮ ĐI TRONG THÂN
+ * (xem `timCanBo`), `GET /api/v1/staff-counts` (tổng toàn xã) và `POST /api/v1/staff-count-queries`
+ * (tổng của một lần tìm, chữ cũng đi trong thân — xem `countStaffMatches`).
  *
  * KIỂU LẤY TỪ HỢP ĐỒNG, KHÔNG GÕ TAY: `page_Result_identity_canBoTomTat` và
  * `identity_canBoTomTat` đến từ `schema.gen.ts`. Không tệp nào trong ứng dụng này mô tả lại
@@ -45,6 +46,7 @@ import type {
   identity_get_staff,
   identity_get_staff_by_id,
   identity_get_staff_counts,
+  identity_post_staff_count_queries,
   identity_patch_staff_by_id,
   identity_post_staff,
   identity_post_staff_by_id_lockout,
@@ -52,6 +54,8 @@ import type {
   identity_post_staff_searches,
   identity_put_staff_by_id_publication,
   identity_put_staff_by_id_role,
+  identity_staffCountQueryIn,
+  identity_staffCountQueryOut,
   identity_suaCanBoVao,
   identity_themCanBoVao,
   identity_timCanBoVao,
@@ -73,11 +77,10 @@ import type {
  * `sort` kèm enum vào `openapi.json`, nên hai kiểu dưới đây lấy thẳng từ kiểu đã sinh. Thêm
  * hoặc bớt một cột ở máy chủ là `KhoaSapXep` đổi theo, và mọi chỗ dùng sai sẽ đỏ ở `tsc`.
  *
- * Sáu cột khác mà đặc tả vẽ mũi tên ⇅ lên (`docs/ui-ux/14-cau-hinh.md §3`) CỐ Ý không sắp xếp
- * được, mỗi cột một lý do đã ghi ngay trên danh sách trắng: họ tên và điện thoại là dữ liệu cá
- * nhân mà khoá sắp xếp thì đi vào URL, log truy cập và lịch sử trình duyệt (luật 3, cấm #4);
- * `dang_nhap_gan_nhat` cho phép NULL nên mọi người chưa từng đăng nhập sẽ rơi khỏi mọi trang
- * sau trang đầu — lặng lẽ.
+ * Since 4b0b9ce3 the allow-list holds eight keys: the six columns the prototype sorts (owner
+ * 08/10/2026) plus `code` and `created_at`. The KEY is a column name, never a value, so a sort key
+ * on the URL carries no personal data; and the server puts empty values (never signed in, no
+ * department) LAST in both directions, so no row drops out of the pages after the first.
  */
 type TruyVanDanhSach = identity_get_staff["truyVan"];
 
@@ -101,7 +104,16 @@ export type ChieuSapXep = NonNullable<TruyVanDanhSach["order"]>;
  * khi người dùng bấm (400), còn một khoá thiếu thì không ai thấy — cột ấy đơn giản không có
  * mũi tên, và không ai biết nó lẽ ra phải có.
  */
-export const KHOA_SAP_XEP = ["code", "created_at"] as const satisfies readonly KhoaSapXep[];
+export const KHOA_SAP_XEP = [
+  "code",
+  "created_at",
+  "full_name",
+  "position",
+  "department",
+  "phone",
+  "last_login_at",
+  "status",
+] as const satisfies readonly KhoaSapXep[];
 
 /** Mọi khoá trong hợp đồng đều phải có mặt ở KHOA_SAP_XEP. Thiếu một khoá → `tsc` đỏ tại đây. */
 type DuKhoaSapXep =
@@ -238,21 +250,31 @@ export function chuanHoaTuKhoaTim(tho: string): TuKhoaTim {
  * đã khai ở máy chủ (`can_bo_tim.go`): `unit: ""` = mọi khối, `published: null` = cả hai,
  * `limit: null` = mặc định của máy chủ, `cursor: ""` = trang đầu.
  *
- * KHÔNG CÓ `sort` / `order`: tìm kiếm luôn phân trang theo thứ tự mặc định của danh bạ (mã, tăng
- * dần). Hợp đồng không có hai trường ấy, nên `tsc` đỏ nếu ai thêm vào.
+ * `sort` / `order` ARE OPTIONAL (4b0b9ce3) and copied ONLY when the caller set them: absent means the
+ * server's own default (code, ascending), so no second copy of that default lives here. Their type
+ * is `KhoaSapXep` / `ChieuSapXep` — the GET route's enum — because the generated body type says only
+ * `string`, and a free string is how a 400 `invalid_sort` reaches an officer's screen.
  */
-export function thanTimCanBo(
-  tuKhoa: TuKhoaHopLe,
-  thamSo: LocCanBo & { limit?: number; cursor?: string | null } = {},
-): identity_timCanBoVao {
-  return {
+export function thanTimCanBo(tuKhoa: TuKhoaHopLe, thamSo: SearchPage = {}): identity_timCanBoVao {
+  const than: identity_timCanBoVao = {
     q: tuKhoa.tu,
     unit: thamSo.boPhan?.trim() ?? "",
     published: thamSo.congKhai ?? null,
     limit: thamSo.limit ?? null,
     cursor: thamSo.cursor ?? "",
   };
+  if (thamSo.sort !== undefined) than.sort = thamSo.sort;
+  if (thamSo.order !== undefined) than.order = thamSo.order;
+  return than;
 }
+
+/** What one page of a search takes: the filters, the page, and an optional order. */
+type SearchPage = LocCanBo & {
+  limit?: number;
+  cursor?: string | null;
+  sort?: KhoaSapXep;
+  order?: ChieuSapXep;
+};
 
 /**
  * POST /api/v1/staff/searches — một trang kết quả tìm. 200, cùng hình dạng trang với
@@ -274,7 +296,7 @@ export function thanTimCanBo(
  */
 export function timCanBo(
   tuKhoa: TuKhoaHopLe,
-  thamSo: LocCanBo & { limit?: number; cursor?: string | null } = {},
+  thamSo: SearchPage = {},
 ): Promise<KetQua<page_Result_identity_canBoTomTat>> {
   const duongDan: identity_post_staff_searches["duongDan"] = "/api/v1/staff/searches";
   return docThanLoiGoi<page_Result_identity_canBoTomTat>(
@@ -289,20 +311,23 @@ export function timCanBo(
  * `tuKhoa === null` là "không tìm" — không phải chuỗi rỗng, vì tuyến tìm từ chối chữ rỗng (400):
  * một lần tìm không chữ đã có tuyến của nó, và đó là danh sách.
  *
- * `sort` / `order` CHỈ ĐI NHÁNH GET. Hợp đồng của tuyến tìm không có hai trường ấy — kết quả tìm
- * luôn theo mã tăng dần (`can_bo_tim.go`) — nên màn hình nào truyền chúng phải tự nói ra điều đó
- * khi đang tìm (tab Người dùng của Cấu hình làm thế), chứ không để một mũi tên sắp xếp nói dối.
- * Vắng thì máy chủ áp mặc định của chính nó; không giữ bản sao nào ở đây.
+ * `sort` / `order` go to BOTH branches (4b0b9ce3): on the GET's URL, in the search's body. Absent,
+ * the server applies its own default; no copy of it is kept here. `/danh-ba` passes neither, so its
+ * order is unchanged.
  */
 export function docTrangDanhBa(
   tuKhoa: TuKhoaHopLe | null,
   thamSo: LocCanBo & { cursor?: string | null; sort?: KhoaSapXep; order?: ChieuSapXep } = {},
 ): Promise<KetQua<page_Result_identity_canBoTomTat>> {
   // KHÔNG TRUYỀN `limit`: để máy chủ áp mặc định của chính nó.
-  const loc = { boPhan: thamSo.boPhan, congKhai: thamSo.congKhai, cursor: thamSo.cursor };
-  return tuKhoa === null
-    ? layDanhSachCanBo({ ...loc, sort: thamSo.sort, order: thamSo.order })
-    : timCanBo(tuKhoa, loc);
+  const loc = {
+    boPhan: thamSo.boPhan,
+    congKhai: thamSo.congKhai,
+    cursor: thamSo.cursor,
+    sort: thamSo.sort,
+    order: thamSo.order,
+  };
+  return tuKhoa === null ? layDanhSachCanBo(loc) : timCanBo(tuKhoa, loc);
 }
 
 /**
@@ -322,12 +347,44 @@ export function layChiTietCanBo(id: string): Promise<KetQua<identity_canBoTomTat
  * GET /api/v1/staff-counts — the commune's register size (`admin.user`, `service-identity/internal/
  * http/routes.go`). No parameter: the commune is the one the edge fixed from Host (rule 1).
  *
+ * `total` is checked at run time (`readTotal`).
+ */
+export async function getStaffCounts(): Promise<KetQua<number>> {
+  return readTotal(await docJSON<identity_get_staff_counts["phanHoi"][200]>("/api/v1/staff-counts"));
+}
+
+/**
+ * POST /api/v1/staff-count-queries — how many rows THIS search matches (`admin.user`, 4b0b9ce3), so the
+ * count line reads "N of the matches", not "N of the commune", while a search is applied.
+ *
+ * POST FOR A READ, FOR THE SAME REASON AS `timCanBo`: the words are usually a name or a phone number,
+ * and a URL goes into every access log on the way (rule 3, forbidden #4). The path is a constant; the
+ * words leave the browser only in the body. Takes `TuKhoaHopLe`, so a blank or too-long `q` (the server
+ * wants 1..200 characters) cannot be sent. The body is built field by field — the SAME `q`/`unit`/
+ * `published` the search sends, so the two answers describe one set of rows.
+ *
+ * No `Idempotency-Key`: the contract does not require one, and counting twice changes nothing.
+ * Nothing is logged, on any branch.
+ */
+export async function countStaffMatches(
+  tuKhoa: TuKhoaHopLe,
+  loc: LocCanBo = {},
+): Promise<KetQua<number>> {
+  const path: identity_post_staff_count_queries["duongDan"] = "/api/v1/staff-count-queries";
+  const body: identity_staffCountQueryIn = {
+    q: tuKhoa.tu,
+    unit: loc.boPhan?.trim() ?? "",
+    published: loc.congKhai ?? null,
+  };
+  return readTotal(await docThanLoiGoi<identity_staffCountQueryOut>(goiGhi(path, "POST", body, 200)));
+}
+
+/**
  * `total` IS CHECKED AT RUN TIME. TypeScript casts the JSON without looking at it, and a total that is
  * `undefined` would print "Hiển thị 20/undefined cán bộ." on an authority's screen; anything that is
  * not a non-negative integer is reported as "no total", never guessed.
  */
-export async function getStaffCounts(): Promise<KetQua<number>> {
-  const answer = await docJSON<identity_get_staff_counts["phanHoi"][200]>("/api/v1/staff-counts");
+function readTotal(answer: KetQua<{ total: number }>): KetQua<number> {
   if (!answer.ok) return answer;
   const total = (answer.duLieu as { total?: unknown } | null)?.total;
   return typeof total === "number" && Number.isInteger(total) && total >= 0

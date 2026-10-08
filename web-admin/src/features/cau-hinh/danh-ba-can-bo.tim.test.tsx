@@ -167,10 +167,16 @@ function hopLe(tho: string): TuKhoaHopLe {
 type LoiGoi = { url: string; method: string; than: Record<string, unknown> | null };
 
 const COUNTS_PATH = "/api/v1/staff-counts";
+const COUNT_QUERIES_PATH = "/api/v1/staff-count-queries";
 
 let gia: ReturnType<typeof vi.fn>;
 /** What `GET /api/v1/staff-counts` answers in the current test: a total, or a refusal. */
 let countsAnswer: { status: number; body: unknown };
+/**
+ * What `POST /api/v1/staff-count-queries` answers for a given body. A test may return a promise it
+ * resolves later, to make an older search's count arrive AFTER a newer one's.
+ */
+let countQueryAnswer: (body: { q: string }) => Promise<{ status: number; body: unknown }>;
 
 function allCalls(): LoiGoi[] {
   return (gia.mock.calls as [string, RequestInit | undefined][]).map(([url, tc]) => ({
@@ -182,7 +188,7 @@ function allCalls(): LoiGoi[] {
 
 /** The LIST calls only — the count read is not part of the search/paging questions below. */
 function cacLoiGoi(): LoiGoi[] {
-  return allCalls().filter((c) => c.url !== COUNTS_PATH);
+  return allCalls().filter((c) => c.url !== COUNTS_PATH && c.url !== COUNT_QUERIES_PATH);
 }
 
 const cuoi = () => cacLoiGoi().at(-1) as LoiGoi;
@@ -196,8 +202,13 @@ function json(status: number, body: unknown): Response {
 
 beforeEach(() => {
   countsAnswer = { status: 200, body: { total: 7, published: 0, no_department: { total: 0, published: 0 }, departments: [] } };
+  countQueryAnswer = async () => ({ status: 200, body: { total: 3 } });
   gia = vi.fn(async (url: string, init?: RequestInit) => {
     if (url === COUNTS_PATH) return json(countsAnswer.status, countsAnswer.body);
+    if (url === COUNT_QUERIES_PATH) {
+      const a = await countQueryAnswer(JSON.parse(String(init?.body)) as { q: string });
+      return json(a.status, a.body);
+    }
     if (init?.method === "DELETE") return json(204, null);
     return json(200, { items: [A], next_cursor: "CB-00001", has_more: true });
   });
@@ -259,13 +270,14 @@ describe("tìm: chữ đi trong thân POST, URL không mang nó", () => {
     await xongMang(m);
 
     const ds = allCalls();
-    expect(ds.filter((x) => x.method === "POST").length).toBe(2);
+    // Two search pages and ONE count of the search (paging does not count again).
+    expect(ds.filter((x) => x.method === "POST").length).toBe(3);
     for (const { url, method } of ds) {
       for (const h of [...hinhDang(CHU), ...hinhDang("0900000000"), ...hinhDang("Nguyễn")]) {
         expect(url).not.toContain(h);
       }
       expect(url).not.toMatch(/[?&]q=/);
-      if (method === "POST") expect(url).toBe("/api/v1/staff/searches");
+      if (method === "POST") expect(["/api/v1/staff/searches", COUNT_QUERIES_PATH]).toContain(url);
     }
   });
 
@@ -384,7 +396,7 @@ describe("ô tìm của màn Người dùng — live, debounced (decision 3)", (
     expect(String(loi?.props.children)).toMatch(/quá dài/);
   });
 
-  it("prototype shape: no 'Tìm' button, no unit filter; aria-label 'Tìm cán bộ', true placeholder, no `name`, no autofill", () => {
+  it("prototype shape: no 'Tìm' button, no unit filter; aria-label 'Tìm cán bộ', prototype placeholder, no `name`, no autofill", () => {
     const { m } = chay({ tuKhoa: null, boPhan: "" });
     const cay = m.cay();
     expect(tatCa(cay, (p) => p.props.type === "submit")).toHaveLength(0);
@@ -392,8 +404,8 @@ describe("ô tìm của màn Người dùng — live, debounced (decision 3)", (
     const input = tatCa(cay, (p) => p.type === "input")[0]?.props ?? {};
     expect(input["aria-label"]).toBe("Tìm cán bộ");
     expect(input.placeholder).toBe(SEARCH_PLACEHOLDER);
-    // The server searches name, position and the two phones — never email or unit (decision 3).
-    expect(SEARCH_PLACEHOLDER).toBe("Tìm theo tên, chức danh, số điện thoại…");
+    // The prototype's words, verbatim: since 4b0b9ce3 the server also matches email and unit name.
+    expect(SEARCH_PLACEHOLDER).toBe("Tìm theo tên, thư điện tử, bộ phận…");
     expect(input).not.toHaveProperty("name");
     expect(input.autoComplete).toBe("off");
     expect(String(input.className)).toContain("pl-9");
@@ -499,5 +511,175 @@ describe("danh mục: màn Người dùng đọc lại khi được hiện lại
     props.active = true;
     await xongMang(m);
     expect(doc).toHaveBeenCalledTimes(1);
+  });
+});
+
+/* ---- 7. sắp xếp theo cột (owner decision 08/10/2026, contract 4b0b9ce3) ----------------------- */
+
+/** Click a sort head the way the table does: through the `onSort` the screen hands it. */
+function sortBy(m: { cay: () => unknown }, key: Parameters<NonNullable<Parameters<typeof BangCanBo>[0]["onSort"]>>[0]) {
+  const onSort = phaiCo(m.cay(), BangCanBo).onSort;
+  if (onSort === undefined) throw new Error("the table got no onSort");
+  onSort(key);
+}
+
+function lastListUrl(): URL {
+  const c = cuoi();
+  expect(c.method).toBe("GET");
+  return new URL(c.url, "https://mot-xa.test");
+}
+
+describe("column sort — asc, desc, then back to the server's default (code asc)", () => {
+  it("first click asc, second desc, third drops sort/order from the GET; the table is told each time", async () => {
+    const m = await moMan();
+
+    sortBy(m, "full_name");
+    await xongMang(m);
+    expect(lastListUrl().searchParams.get("sort")).toBe("full_name");
+    expect(lastListUrl().searchParams.get("order")).toBe("asc");
+    expect(phaiCo(m.cay(), BangCanBo).sort).toEqual({ key: "full_name", order: "asc" });
+
+    sortBy(m, "full_name");
+    await xongMang(m);
+    expect(lastListUrl().searchParams.get("order")).toBe("desc");
+    expect(phaiCo(m.cay(), BangCanBo).sort).toEqual({ key: "full_name", order: "desc" });
+
+    sortBy(m, "full_name");
+    await xongMang(m);
+    expect(lastListUrl().searchParams.has("sort")).toBe(false);
+    expect(lastListUrl().searchParams.has("order")).toBe(false);
+    expect(phaiCo(m.cay(), BangCanBo).sort).toBeNull();
+  });
+
+  it("another column starts at asc, whatever the previous column's direction", async () => {
+    const m = await moMan();
+    sortBy(m, "status");
+    sortBy(m, "status");
+    await xongMang(m);
+    sortBy(m, "phone");
+    await xongMang(m);
+    expect(lastListUrl().searchParams.get("sort")).toBe("phone");
+    expect(lastListUrl().searchParams.get("order")).toBe("asc");
+  });
+
+  it("changing sort restarts from the FIRST page — the old cursor belongs to the old order", async () => {
+    const m = await moMan();
+    diToiTrang(m)(sangTrangSau(TRANG_DAU, "CB-00001"));
+    await xongMang(m);
+    expect(lastListUrl().searchParams.get("cursor")).toBe("CB-00001");
+
+    sortBy(m, "department");
+    await xongMang(m);
+    expect(lastListUrl().searchParams.has("cursor")).toBe(false);
+    expect(lastListUrl().searchParams.get("sort")).toBe("department");
+  });
+
+  it("while searching, sort/order go in the search BODY; a sort change sends cursor \"\"", async () => {
+    const m = await moMan();
+    hangLoc(m).doiLoc({ tuKhoa: hopLe(CHU) });
+    await xongMang(m);
+    diToiTrang(m)(sangTrangSau(TRANG_DAU, "CB-00001"));
+    await xongMang(m);
+    expect(cuoi().than).toMatchObject({ cursor: "CB-00001" });
+
+    sortBy(m, "last_login_at");
+    await xongMang(m);
+    const c = cuoi();
+    expect(c.url).toBe("/api/v1/staff/searches");
+    expect(c.than).toMatchObject({ q: CHU, sort: "last_login_at", order: "asc", cursor: "" });
+  });
+
+  it("the sort survives a new search: the new words are read in the chosen order, from page one", async () => {
+    const m = await moMan();
+    sortBy(m, "position");
+    sortBy(m, "position");
+    await xongMang(m);
+    hangLoc(m).doiLoc({ tuKhoa: hopLe("Trần") });
+    await xongMang(m);
+    expect(cuoi().than).toMatchObject({ q: "Trần", sort: "position", order: "desc", cursor: "" });
+  });
+});
+
+/* ---- 8. dòng đếm khi đang tìm: POST /api/v1/staff-count-queries ------------------------------- */
+
+function countQueryCalls(): LoiGoi[] {
+  return allCalls().filter((c) => c.url === COUNT_QUERIES_PATH);
+}
+
+describe("count line while searching — M is the search's own total (owner decision 3)", () => {
+  it("searching → POST /staff-count-queries with the same q/unit/published; line N/M from it", async () => {
+    const m = await moMan();
+    expect(countQueryCalls()).toHaveLength(0);
+    expect(paragraphs(m.cay())).toContain("Hiển thị 1/7 cán bộ.");
+
+    hangLoc(m).doiLoc({ tuKhoa: hopLe(`  ${CHU} `) });
+    await xongMang(m);
+
+    const calls = countQueryCalls();
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.method).toBe("POST");
+    expect(calls[0]?.than).toEqual({ q: CHU, unit: "", published: null });
+    expect(paragraphs(m.cay())).toContain("Hiển thị 1/3 cán bộ.");
+  });
+
+  it("paging inside a search does not count again; dropping the search goes back to the commune total", async () => {
+    const m = await moMan();
+    hangLoc(m).doiLoc({ tuKhoa: hopLe(CHU) });
+    await xongMang(m);
+    diToiTrang(m)(sangTrangSau(TRANG_DAU, "CB-00001"));
+    await xongMang(m);
+    expect(countQueryCalls()).toHaveLength(1);
+    expect(paragraphs(m.cay())).toContain("Hiển thị 1/3 cán bộ.");
+
+    hangLoc(m).doiLoc({ tuKhoa: null });
+    await xongMang(m);
+    expect(countQueryCalls()).toHaveLength(1);
+    expect(paragraphs(m.cay())).toContain("Hiển thị 1/7 cán bộ.");
+  });
+
+  it("count read refused while searching → `Hiển thị N cán bộ.`, never the commune total", async () => {
+    countQueryAnswer = async () => ({ status: 400, body: { code: "invalid_request", message: "Không hợp lệ." } });
+    const m = await moMan();
+    hangLoc(m).doiLoc({ tuKhoa: hopLe(CHU) });
+    await xongMang(m);
+    const lines = paragraphs(m.cay());
+    expect(lines).toContain("Hiển thị 1 cán bộ.");
+    expect(lines).not.toContain("Hiển thị 1/7 cán bộ.");
+  });
+
+  it("STALE ANSWER: an older search's count arriving after a newer one's is never shown", async () => {
+    const pending = new Map<string, (total: number) => void>();
+    countQueryAnswer = (body) =>
+      new Promise((resolve) => pending.set(body.q, (total) => resolve({ status: 200, body: { total } })));
+
+    const m = await moMan();
+    hangLoc(m).doiLoc({ tuKhoa: hopLe("Nguyễn") });
+    await xongMang(m);
+    // The list of the first search is on screen, its count is not back yet: no total at all.
+    expect(paragraphs(m.cay())).toContain("Hiển thị 1 cán bộ.");
+
+    hangLoc(m).doiLoc({ tuKhoa: hopLe("Trần") });
+    await xongMang(m);
+    // The new list is back, the new count is not: neither the old search's total nor the commune's.
+    expect(paragraphs(m.cay())).toContain("Hiển thị 1 cán bộ.");
+
+    pending.get("Trần")?.(9);
+    await xongMang(m);
+    expect(paragraphs(m.cay())).toContain("Hiển thị 1/9 cán bộ.");
+
+    pending.get("Nguyễn")?.(5);
+    await xongMang(m);
+    const lines = paragraphs(m.cay());
+    expect(lines).toContain("Hiển thị 1/9 cán bộ.");
+    expect(lines).not.toContain("Hiển thị 1/5 cán bộ.");
+  });
+
+  it("the count route never carries the words on its URL", async () => {
+    const m = await moMan();
+    hangLoc(m).doiLoc({ tuKhoa: hopLe(CHU) });
+    await xongMang(m);
+    for (const { url } of countQueryCalls()) {
+      expect(url).toBe(COUNT_QUERIES_PATH);
+    }
   });
 });
