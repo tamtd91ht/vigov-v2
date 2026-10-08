@@ -293,6 +293,17 @@ func TestPgZaloEnqueueDecidesTheThreeLocalSkips(t *testing.T) {
 	if st, _ := status("k4"); st != "cho-gui" {
 		t.Errorf("linked, enabled, selected: %s", st)
 	}
+	// BELL ONLY (ADR 0081 #5): linked and enabled, yet the mention gets no zalo_delivery row — not even a
+	// skip — and the enqueue does not fail on 0021's zalo_delivery CHECK, which does not admit it.
+	if n := deliver("k5", domain.StaffNotificationDisbursementMention, "CB-00001"); n != 0 {
+		t.Fatalf("bell-only notice queued %d Zalo rows", n)
+	}
+	var zaloRows int
+	if err := moKetNoi(t).QueryRow(`SELECT count(*) FROM zalo_delivery d
+		JOIN staff_notification n ON n.tenant_id = d.tenant_id AND n.id = d.notification_id
+		WHERE d.tenant_id = $1 AND n.idempotency_key = 'k5'`, c1).Scan(&zaloRows); err != nil || zaloRows != 0 {
+		t.Errorf("bell-only notice has %d zalo_delivery rows, %v", zaloRows, err)
+	}
 
 	// The sender's half: claim, lease, sent — and the commune is listed while it is owed.
 	if ids, err := z.CommunesWithDueZaloDeliveries(context.Background(), zaloAt.Add(time.Hour)); err != nil || !contains(ids, c1) {

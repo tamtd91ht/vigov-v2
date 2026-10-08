@@ -211,6 +211,55 @@ func TestZaloReminderKindsAreThe0021Kinds(t *testing.T) {
 	}
 }
 
+// ADR 0081 #5: the disbursement mention is BELL ONLY. It is admitted on staff_notification by 0023, and
+// on nothing Zalo reads: not selectable, not queueable, matched by no selection — not even "everything".
+func TestBellOnlyKindsNeverReachZalo(t *testing.T) {
+	if !slices.Equal(BellOnlyKinds, []string{"giai-ngan.nhac-ten"}) {
+		t.Fatalf("BellOnlyKinds = %v", BellOnlyKinds)
+	}
+	b0023, err := os.ReadFile("../../migrations/0023_staff_notification_disbursement_mention.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	all := append(slices.Clone(ZaloReminderKinds), "sap-den-han", "qua-han", "leo-thang", "ban-tin-tuan")
+	for _, k := range BellOnlyKinds {
+		if !knownKind(k) {
+			t.Errorf("%q: the bell refuses it", k)
+		}
+		if !strings.Contains(string(b0023), "'"+k+"'") {
+			t.Errorf("%q is not admitted by 0023's CHECK", k)
+		}
+		if slices.Contains(ZaloReminderKinds, k) {
+			t.Errorf("%q is a Zalo box a commune could tick", k)
+		}
+		if slices.Contains(ZaloQueueableKinds(), k) {
+			t.Errorf("%q would get a zalo_delivery row", k)
+		}
+		if ZaloKindSelected(all, k) {
+			t.Errorf("%q passes a selection of every Zalo kind", k)
+		}
+		s := DefaultZaloChannelSetting()
+		s.Kinds = []string{k}
+		if _, err := NormalizeZaloChannelSetting(s); err == nil {
+			t.Errorf("%q can be saved as a Zalo kind", k)
+		}
+	}
+}
+
+// ZaloQueueableKinds is exactly what 0021's zalo_delivery CHECK admits for a notice: the old four and
+// the twelve per-domain kinds — so the enqueue filter cannot drop a Zalo notice by mistake.
+func TestZaloQueueableKindsAreTheNoticeKinds(t *testing.T) {
+	q := ZaloQueueableKinds()
+	if len(q) != 16 {
+		t.Fatalf("%d queueable kinds, want 4 old + 12 per-domain", len(q))
+	}
+	for _, k := range append([]string{"sap-den-han", "qua-han", "leo-thang", "ban-tin-tuan"}, ZaloReminderKinds...) {
+		if !slices.Contains(q, k) {
+			t.Errorf("%q missing — its notices would silently lose their Zalo row", k)
+		}
+	}
+}
+
 func TestZaloLegacyKindMapIs0021sTable(t *testing.T) {
 	want := map[string]string{
 		"sap-den-han":  "nhiem-vu.sap-den-han,van-ban.sap-den-han,phan-anh.sap-den-han",

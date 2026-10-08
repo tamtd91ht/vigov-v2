@@ -147,30 +147,31 @@ func TestDeliverMapsOutcomesAndKindsAndUsesSystemActor(t *testing.T) {
 }
 
 // Every wire value of comms.proto maps to exactly the value 0021 admits; 1–4 keep their old values
-// (the read-time map routes them), 5–16 are stored per-domain as-is.
+// (the read-time map routes them), 5–16 are stored per-domain as-is, 17 is the bell-only mention (0023).
 func TestKindFromWireIsTheProtoTable(t *testing.T) {
 	want := map[commsv1.StaffNotificationKind]string{
-		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DUE_SOON:            "sap-den-han",
-		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_OVERDUE:             "qua-han",
-		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_ESCALATION:          "leo-thang",
-		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_WEEKLY_DIGEST:       "ban-tin-tuan",
-		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_DUE_SOON:       "nhiem-vu.sap-den-han",
-		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_OVERDUE:        "nhiem-vu.qua-han",
-		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_UNASSIGNED:     "nhiem-vu.chua-cu-nguoi",
-		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_ESCALATION:     "nhiem-vu.leo-thang",
-		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_DUE_SOON:   "van-ban.sap-den-han",
-		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_OVERDUE:    "van-ban.qua-han",
-		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_UNASSIGNED: "van-ban.chua-cu-nguoi",
-		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_ESCALATION: "van-ban.leo-thang",
-		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_DUE_SOON:   "phan-anh.sap-den-han",
-		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_OVERDUE:    "phan-anh.qua-han",
-		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_UNASSIGNED: "phan-anh.chua-cu-nguoi",
-		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_ESCALATION: "phan-anh.leo-thang",
-		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_UNSPECIFIED:         "",
-		commsv1.StaffNotificationKind(17):                                         "",
-		commsv1.StaffNotificationKind(-1):                                         "",
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DUE_SOON:             "sap-den-han",
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_OVERDUE:              "qua-han",
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_ESCALATION:           "leo-thang",
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_WEEKLY_DIGEST:        "ban-tin-tuan",
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_DUE_SOON:        "nhiem-vu.sap-den-han",
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_OVERDUE:         "nhiem-vu.qua-han",
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_UNASSIGNED:      "nhiem-vu.chua-cu-nguoi",
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_ESCALATION:      "nhiem-vu.leo-thang",
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_DUE_SOON:    "van-ban.sap-den-han",
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_OVERDUE:     "van-ban.qua-han",
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_UNASSIGNED:  "van-ban.chua-cu-nguoi",
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_ESCALATION:  "van-ban.leo-thang",
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_DUE_SOON:    "phan-anh.sap-den-han",
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_OVERDUE:     "phan-anh.qua-han",
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_UNASSIGNED:  "phan-anh.chua-cu-nguoi",
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_ESCALATION:  "phan-anh.leo-thang",
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DISBURSEMENT_MENTION: "giai-ngan.nhac-ten",
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_UNSPECIFIED:          "",
+		commsv1.StaffNotificationKind(18):                                          "",
+		commsv1.StaffNotificationKind(-1):                                          "",
 	}
-	// Every enum value the generated code knows is in the table — a 17th added to the proto without a
+	// Every enum value the generated code knows is in the table — an 18th added to the proto without a
 	// mapping here turns this red instead of being refused in production.
 	for v := range commsv1.StaffNotificationKind_name {
 		if _, ok := want[commsv1.StaffNotificationKind(v)]; !ok {
@@ -181,6 +182,20 @@ func TestKindFromWireIsTheProtoTable(t *testing.T) {
 		if got := kindFromWire(k); got != w {
 			t.Errorf("kindFromWire(%v) = %q, muốn %q", k, got, w)
 		}
+	}
+}
+
+// The bell-only disbursement mention (ADR 0081 #5) passes the whole RPC, validation included — a comms
+// that maps it but whose domain refuses it would fail every finance mention call.
+func TestDeliverAcceptsDisbursementMention(t *testing.T) {
+	r := goodRequest()
+	r.Notifications[0].Kind = commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DISBURSEMENT_MENTION
+	f := &fakeDeliverer{}
+	if _, err := newTestServer(f).DeliverStaffNotifications(ctxWithPeer(), r); err != nil {
+		t.Fatal(err)
+	}
+	if f.lastIn[0].Kind != domain.StaffNotificationDisbursementMention {
+		t.Errorf("loại = %q", f.lastIn[0].Kind)
 	}
 }
 

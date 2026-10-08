@@ -466,6 +466,10 @@ func (s *ZaloLinkStore) LiveChatsOf(ctx context.Context, tx *store.ScopedTx, bot
 //	               row still holding an old value passes the per-domain kinds that value stands for
 //	chua-lien-ket  the recipient has no live link
 //
+// A BELL-ONLY notice ($6, domain.ZaloQueueableKinds) gets NO row — not even a skip. It is not a Zalo
+// notice a commune switched off; Zalo never carries it (ADR 0081 #5), and 0023 keeps zalo_delivery.kind
+// closed to it, so without this filter the INSERT would fail and lose every other row of the call.
+//
 // Everything else — the bot's configuration (platform scope), quiet hours, the send — is the sender's,
 // which re-checks all three at send time as well.
 const enqueueZaloDeliveries = `INSERT INTO zalo_delivery
@@ -490,6 +494,7 @@ const enqueueZaloDeliveries = `INSERT INTO zalo_delivery
 		FROM staff_notification n
 		LEFT JOIN zalo_channel_setting s ON s.tenant_id = n.tenant_id
 		WHERE n.tenant_id = $1 AND n.idempotency_key = ANY ($2) AND n.created_at = $3 AND n.deleted_at IS NULL
+		  AND n.kind = ANY ($6::text[])
 	) c
 	ON CONFLICT (tenant_id, notification_id) DO NOTHING`
 
@@ -511,7 +516,8 @@ func (s *ZaloLinkStore) EnqueueZaloDeliveries(ctx context.Context, tx *store.Sco
 		return 0, fmt.Errorf("zalo_delivery: savepoint: %w", err)
 	}
 	legacy, perDomain := domain.ZaloLegacyKindPairs()
-	res, err := tx.Exec(ctx, enqueueZaloDeliveries, string(tx.TenantID()), keys, createdAt.UTC(), legacy, perDomain)
+	res, err := tx.Exec(ctx, enqueueZaloDeliveries, string(tx.TenantID()), keys, createdAt.UTC(), legacy, perDomain,
+		domain.ZaloQueueableKinds())
 	var n int64
 	if err == nil {
 		n, err = res.RowsAffected()

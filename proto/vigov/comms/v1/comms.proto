@@ -218,6 +218,19 @@ enum StaffNotificationKind {
 
   // → `phan-anh.leo-thang`.
   STAFF_NOTIFICATION_KIND_PETITION_ESCALATION = 16;
+
+  // --- Disbursement (`giai-ngan`, producer service-finance) ------------------------------------------
+
+  // → `giai-ngan.nhac-ten`. The staff member was mentioned in a disbursement project's discussion
+  // (ADR 0081 #5; prototype vigov-require apps/api/app/modules/budget/service.py:1065-1076). One notice
+  // per mentioned person, never the author.
+  //
+  // BELL ONLY — NEVER ZALO (ADR 0081 #5, decided 08/10/2026). It is not a Zalo box a commune can tick
+  // and comms queues no Zalo delivery for it: 0023 admits it on staff_notification only, not on
+  // zalo_channel_setting.kinds nor zalo_delivery.kind.
+  //
+  // ROLLOUT: comms first, as for 5–16 — a comms build that predates 17 refuses the whole batch.
+  STAFF_NOTIFICATION_KIND_DISBURSEMENT_MENTION = 17;
 }
 
 message DeliverStaffNotificationsRequest {

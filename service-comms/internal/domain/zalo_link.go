@@ -170,6 +170,17 @@ var ZaloReminderKinds = []string{
 	ZaloKindWeeklyDigest,
 }
 
+// ZaloQueueableKinds is every kind the Zalo enqueue may write a zalo_delivery row for — queued or
+// skipped: the four OLD kinds and ZaloReminderKinds, exactly what 0021's zalo_delivery.kind CHECK
+// admits (less 'thu-nghiem', which has no notice). A kind NOT here (BellOnlyKinds) gets no row at all:
+// filtering it in the enqueue statement keeps the savepoint from failing on that CHECK and taking every
+// other notice's Zalo row of the call down with it.
+func ZaloQueueableKinds() []string {
+	// The weekly digest's value is unchanged and already ends ZaloReminderKinds — not listed twice.
+	return append([]string{StaffNotificationDueSoon, StaffNotificationOverdue, StaffNotificationEscalation},
+		ZaloReminderKinds...)
+}
+
 // zaloOverdueKinds need the commune's overdue cadence (0021 zalo_channel_setting_overdue_kinds_need_cadence).
 // Unassigned and escalation notices are one-shot per hold / per level and need none.
 var zaloOverdueKinds = []string{ZaloKindTaskOverdue, ZaloKindDocumentOverdue, ZaloKindPetitionOverdue}

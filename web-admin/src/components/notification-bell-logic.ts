@@ -12,8 +12,9 @@ export const POLL_MS = 60_000;
 export const PAGE_SIZE = 20;
 
 /**
- * The four kinds the automation jobs deliver (ADR 0011 values, `service-comms` `StaffNotification*`).
- * An unknown kind is still shown — as "Thông báo" — never hidden: a notice the screen cannot name is
+ * The four kinds the automation jobs deliver (ADR 0011 values, `service-comms` `StaffNotification*`),
+ * and `giai-ngan.nhac-ten` — a mention in a disbursement project's "Trao đổi", bell only (ADR 0081 #5,
+ * migration 0023). An unknown kind is still shown — as "Thông báo" — never hidden: a notice the screen cannot name is
  * still addressed to this person.
  */
 export function kindLabel(kind: string): string {
@@ -26,6 +27,8 @@ export function kindLabel(kind: string): string {
       return "Leo thang";
     case "ban-tin-tuan":
       return "Bản tin tuần";
+    case "giai-ngan.nhac-ten":
+      return "Được nhắc tên trong trao đổi giải ngân";
     default:
       return "Thông báo";
   }

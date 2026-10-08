@@ -130,6 +130,8 @@ describe("kind labels", () => {
     expect(kindLabel("qua-han")).toBe("Quá hạn");
     expect(kindLabel("leo-thang")).toBe("Leo thang");
     expect(kindLabel("ban-tin-tuan")).toBe("Bản tin tuần");
+    // ADR 0081 #5, migration 0023 — the bell-only disbursement mention.
+    expect(kindLabel("giai-ngan.nhac-ten")).toBe("Được nhắc tên trong trao đổi giải ngân");
     expect(kindLabel("khac")).toBe("Thông báo");
   });
 });

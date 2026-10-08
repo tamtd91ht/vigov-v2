@@ -89,10 +89,12 @@ func TestValidateDeliveries_ContractLimits(t *testing.T) {
 	}
 }
 
-// Every kind 0021 admits on staff_notification is accepted, and kept exactly as sent.
-func TestValidateDeliveries_AcceptsEvery0021Kind(t *testing.T) {
+// Every kind 0023 admits on staff_notification (0021's sixteen + the bell-only mention) is accepted,
+// and kept exactly as sent.
+func TestValidateDeliveries_AcceptsEvery0023Kind(t *testing.T) {
 	kinds := append([]string{StaffNotificationDueSoon, StaffNotificationOverdue, StaffNotificationEscalation,
 		StaffNotificationWeeklyDigest}, ZaloReminderKinds...)
+	kinds = append(kinds, BellOnlyKinds...)
 	for _, k := range kinds {
 		n := okNotice("k")
 		n.Kind = k

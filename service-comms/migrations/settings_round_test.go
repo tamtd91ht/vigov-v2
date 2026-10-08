@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// Schema-TEXT checks for migrations 0019–0022 (ADR 0079, owner answers 08/10/2026). They assert the
+// Schema-TEXT checks for migrations 0019–0023 (ADR 0079, ADR 0081 #5, owner answers 08/10/2026). They assert the
 // columns, CHECKs, keys and triggers are WRITTEN; they do not prove PostgreSQL enforces them — the pg
 // suites need VIGOV_TEST_DSN for that.
 
@@ -15,6 +15,7 @@ const (
 	file0020 = "0020_map_asset_type_color.sql"
 	file0021 = "0021_zalo_kinds_per_domain.sql"
 	file0022 = "0022_zalo_commune_bot.sql"
+	file0023 = "0023_staff_notification_disbursement_mention.sql"
 )
 
 // noDestruction fails when an additive migration drops a table or a column, deletes or seeds rows.
@@ -125,6 +126,50 @@ func TestMigration0021ZaloKindsPerDomain(t *testing.T) {
 		}
 	}
 	noDestruction(t, file0021, sql)
+}
+
+// THE MUTATIONS THAT MUST TURN THIS RED: an old or per-domain kind dropped from the staff_notification
+// CHECK (delivered notices are immutable); the mention kind missing there; the old constraint dropped
+// before the new one exists; and — the bell-only half of ADR 0081 #5 — the mention admitted on
+// zalo_channel_setting.kinds or zalo_delivery.kind, by any constraint of this file.
+func TestMigration0023DisbursementMentionBellOnly(t *testing.T) {
+	sql := executableSQL(t, file0023)
+	const name = "staff_notification_kind_with_bell_only"
+	i := strings.Index(sql, "add constraint "+name+" ")
+	if i < 0 {
+		t.Fatalf("0023 does not add %s", name)
+	}
+	rest := sql[i:]
+	if end := strings.Index(rest, "end if;"); end > 0 {
+		rest = rest[:end]
+	}
+	for _, want := range []string{
+		"check (kind in ('sap-den-han', 'qua-han', 'leo-thang', 'ban-tin-tuan',",
+		"'nhiem-vu.sap-den-han', 'nhiem-vu.qua-han', 'nhiem-vu.chua-cu-nguoi', 'nhiem-vu.leo-thang'",
+		"'van-ban.sap-den-han', 'van-ban.qua-han', 'van-ban.chua-cu-nguoi', 'van-ban.leo-thang'",
+		"'phan-anh.sap-den-han', 'phan-anh.qua-han', 'phan-anh.chua-cu-nguoi', 'phan-anh.leo-thang'",
+		"'giai-ngan.nhac-ten'",
+	} {
+		if !strings.Contains(rest, want) {
+			t.Errorf("%s lacks %s", name, want)
+		}
+	}
+	drop := strings.Index(sql, "drop constraint if exists staff_notification_kind_per_domain;")
+	if drop < 0 {
+		t.Error("0023 does not drop 0021's staff_notification_kind_per_domain")
+	} else if drop < i {
+		t.Error("0023 drops the old CHECK before adding the new one")
+	}
+	// BELL ONLY: nothing in this file touches the Zalo tables.
+	for _, banned := range []string{"zalo_channel_setting", "zalo_delivery"} {
+		if strings.Contains(sql, banned) {
+			t.Errorf("0023 touches %s — the mention is bell only (ADR 0081 #5)", banned)
+		}
+	}
+	if strings.Count(sql, "add constraint") != 1 {
+		t.Error("0023 adds more than the one staff_notification CHECK")
+	}
+	noDestruction(t, file0023, sql)
 }
 
 // THE MUTATIONS THAT MUST TURN THIS RED: the table partitioned (its platform-wide account key cannot

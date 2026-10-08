@@ -35,6 +35,17 @@ const (
 	StaffNotificationWeeklyDigest = "ban-tin-tuan"
 )
 
+// StaffNotificationDisbursementMention — mentioned in a disbursement project's discussion (comms.proto
+// STAFF_NOTIFICATION_KIND_DISBURSEMENT_MENTION, migration 0023, ADR 0081 #5). `<domain>.<shape>` like
+// 0021's kinds, but BELL ONLY: it is in BellOnlyKinds, never in ZaloReminderKinds.
+const StaffNotificationDisbursementMention = "giai-ngan.nhac-ten"
+
+// BellOnlyKinds are kinds the bell stores and Zalo never carries (ADR 0081 #5: "không gửi Zalo"). A
+// commune cannot select them (0021's settings CHECK does not admit them) and the Zalo enqueue never
+// writes a row for them (ZaloQueueableKinds excludes them; 0023 leaves zalo_delivery.kind without them,
+// so a row slipping past Go is refused by the database too).
+var BellOnlyKinds = []string{StaffNotificationDisbursementMention}
+
 // The contract's bounds (comms.proto, DeliverStaffNotificationsRequest and StaffNotification).
 const (
 	MaxNotificationsPerCall = 100
@@ -160,16 +171,11 @@ func ValidateDeliveries(in []NotificationDelivery) ([]NotificationDelivery, erro
 	return out, nil
 }
 
-// knownKind is the set 0021's staff_notification_kind_per_domain admits: the four old kinds and the
-// twelve per-domain ones (ZaloReminderKinds, which also holds the weekly digest). One list for both, so
-// the bell and the Zalo selection can never disagree on what a kind is.
+// knownKind is the set 0023's staff_notification_kind_with_bell_only admits: the four old kinds, the twelve
+// per-domain ones (ZaloReminderKinds, which also holds the weekly digest) and the bell-only kinds. One
+// list for both, so the bell and the Zalo selection can never disagree on what a kind is.
 func knownKind(k string) bool {
-	switch k {
-	case StaffNotificationDueSoon, StaffNotificationOverdue, StaffNotificationEscalation,
-		StaffNotificationWeeklyDigest:
-		return true
-	}
-	return slices.Contains(ZaloReminderKinds, k)
+	return slices.Contains(ZaloQueueableKinds(), k) || slices.Contains(BellOnlyKinds, k)
 }
 
 // validateIdempotencyKey: 1–200 printable ASCII characters, NOT trimmed — the key is opaque, and a

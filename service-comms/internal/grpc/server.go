@@ -99,6 +99,10 @@ func kindFromWire(k commsv1.StaffNotificationKind) string {
 		return domain.ZaloKindPetitionUnassigned
 	case commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_ESCALATION:
 		return domain.ZaloKindPetitionEscalation
+
+	// 17 is BELL ONLY (ADR 0081 #5): stored for the bell, never queued for Zalo (domain.BellOnlyKinds).
+	case commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DISBURSEMENT_MENTION:
+		return domain.StaffNotificationDisbursementMention
 	}
 	return ""
 }
