@@ -71,6 +71,24 @@ func TestPgTaskListSoonAndRelated(t *testing.T) {
 	if got := codes(soon, ""); got != "NV71,NV73" {
 		t.Errorf("sắp đến hạn = %q, muốn NV71,NV73", got)
 	}
+	// Per priority (ADR 0079 lô 2 Q4 b): NV72 is `cao`, whose threshold reaches it; NV71/NV73 carry no
+	// priority and keep the default's. Also proves the CASE's casts compare over TIMESTAMPTZ.
+	if _, err := db.Exec(`UPDATE nhiem_vu SET muc_uu_tien = 'cao' WHERE tenant_id = $1 AND id = 'nv-sr-2'`, xa); err != nil {
+		t.Fatalf("gán mức ưu tiên: %v", err)
+	}
+	byPriority := soon
+	byPriority.DueSoonByPriority = &TaskDueSoonByPriority{Until: map[string]time.Time{"cao": now.Add(72 * time.Hour)}}
+	for _, srt := range []string{"", "due_at"} {
+		if got := codes(byPriority, srt); got != "NV71,NV72,NV73" {
+			t.Errorf("sắp đến hạn theo mức ưu tiên (sort=%q) = %q, muốn NV71,NV72,NV73", srt, got)
+		}
+	}
+	byPriority.DueSoonByPriority = &TaskDueSoonByPriority{Until: map[string]time.Time{"cao": now.Add(time.Hour)}}
+	byPriority.DueSoonUntil = now.Add(72 * time.Hour)
+	if got := codes(byPriority, ""); got != "NV71,NV73" {
+		t.Errorf("mức cao ngưỡng ngắn = %q, muốn NV71,NV73 — mức riêng phải đè ngưỡng mặc định", got)
+	}
+
 	related := LocNhiemVu{Related: &TaskRelatedScope{StaffCode: "CB-SR-001", OrgUnits: []string{"bp-sr"}}}
 	for _, srt := range []string{"", "due_at"} {
 		if got := codes(related, srt); got != "NV72,NV73" {

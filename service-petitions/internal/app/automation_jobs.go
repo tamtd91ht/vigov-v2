@@ -102,7 +102,9 @@ func (r *AutomationRunner) slaReminders(ctx context.Context, kind domain.Automat
 	p.examined = len(recs)
 	wk := identityWorkKind(kind)
 
-	// 1. THE DUE-SOON CUTOFF, ONCE PER FIELD (one field, one threshold — identity.proto).
+	// 1. THE DUE-SOON CUTOFF, ONCE PER SLA ROW KEY (one key, one threshold — identity.proto): a
+	// petition's field, a task's priority (ADR 0079 lô 2 Q4 b; "" = no priority, the default row).
+	// Thresholds only — every task deadline stays the one the assigner typed (rule 10).
 	cutoffs := map[string]time.Time{}
 	for _, f := range distinctFields(recs, func(x domain.AutomationRecord) bool {
 		return x.HasDeadline() && x.Deadline.After(asOf)
@@ -118,7 +120,7 @@ func (r *AutomationRunner) slaReminders(ctx context.Context, kind domain.Automat
 		cutoffs[f] = c
 	}
 
-	// 2. THE UNASSIGNED-HOLD INSTANTS, per field, in pages of 500 distinct starts.
+	// 2. THE UNASSIGNED-HOLD INSTANTS, per SLA row key, in pages of 500 distinct starts.
 	holdDue := map[string]map[time.Time]time.Time{}
 	held := groupByField(recs, domain.AutomationRecord.HeldUnassigned)
 	for _, f := range sortedKeys(held) {
@@ -150,13 +152,13 @@ func (r *AutomationRunner) slaReminders(ctx context.Context, kind domain.Automat
 	// 3. WHAT IS DUE A NOTICE.
 	var soon, late, unassigned []domain.AutomationRecord
 	for _, x := range recs {
-		if c, ok := cutoffs[x.Field]; ok && x.DueSoonAt(asOf, c) {
+		if c, ok := cutoffs[x.SLARowKey()]; ok && x.DueSoonAt(asOf, c) {
 			soon = append(soon, x)
 		} else if x.PastDeadlineAt(asOf) {
 			late = append(late, x)
 		}
 		if x.HeldUnassigned() {
-			if at, ok := holdDue[x.Field][x.HoldStartedAt.UTC()]; ok && !at.After(asOf) {
+			if at, ok := holdDue[x.SLARowKey()][x.HoldStartedAt.UTC()]; ok && !at.After(asOf) {
 				unassigned = append(unassigned, x)
 			}
 		}
@@ -262,7 +264,7 @@ func (r *AutomationRunner) escalation(ctx context.Context, kind domain.Automatio
 	p.configMissing = p.configMissing || book.leadersMissing
 
 	for _, x := range late {
-		in := instants[x.Field][x.Deadline.UTC()]
+		in := instants[x.SLARowKey()][x.Deadline.UTC()]
 		// THE TWO LEVELS ARE EVALUATED INDEPENDENTLY — a row saved before the Y >= X rule may answer
 		// the chairman's instant first (identity.proto, EscalationInstants.chairman_due_at).
 		if !in.UnitHeadDueAt.IsZero() && !in.UnitHeadDueAt.After(asOf) {
@@ -499,7 +501,7 @@ func automationPages(notices []domain.StaffNotice) ([][]commsclient.Notice, erro
 		if !domain.ValidNoticeKey(n.Key) {
 			return nil, fmt.Errorf("việc nền: khoá chống trùng không hợp lệ")
 		}
-		kind, ok := commsKind(n.Kind)
+		kind, ok := commsKind(n.Work, n.Kind)
 		if !ok {
 			return nil, fmt.Errorf("việc nền: loại thông báo không biết")
 		}
@@ -537,29 +539,55 @@ func automationPages(notices []domain.StaffNotice) ([][]commsclient.Notice, erro
 	return pages, nil
 }
 
-func commsKind(k domain.NoticeKind) (commsv1.StaffNotificationKind, bool) {
-	switch k {
-	case domain.NoticeDueSoon:
-		return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DUE_SOON, true
-	case domain.NoticeOverdue:
-		return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_OVERDUE, true
-	case domain.NoticeEscalation:
-		return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_ESCALATION, true
-	case domain.NoticeWeeklyDigest:
+// commsKind names the wire kind by the work the notice speaks about: a task's is a TASK kind (5–8), a
+// petition's a PETITION kind (13–16), so a commune can switch each domain's reminders apart (ADR 0079
+// lô 2 Q3); never the legacy 1–3. A comms build older than 5–16 refuses the batch: the run fails loudly
+// and the next one resends the SAME keys. The kind is not part of comms' dedup (commune, key,
+// recipient), so a notice delivered under the legacy kind earlier the same day is not delivered again.
+//
+// The weekly digest stays WEEKLY_DIGEST: comms does not split it per domain; the key tells the digests
+// apart. An unknown work kind is refused, not defaulted to either domain.
+func commsKind(work domain.AutomationWorkKind, k domain.NoticeKind) (commsv1.StaffNotificationKind, bool) {
+	if k == domain.NoticeWeeklyDigest && (work == domain.AutomationTask || work == domain.AutomationCitizenReport) {
 		return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_WEEKLY_DIGEST, true
+	}
+	switch work {
+	case domain.AutomationTask:
+		switch k {
+		case domain.NoticeDueSoon:
+			return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_DUE_SOON, true
+		case domain.NoticeOverdue:
+			return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_OVERDUE, true
+		case domain.NoticeUnassigned:
+			return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_UNASSIGNED, true
+		case domain.NoticeEscalation:
+			return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_ESCALATION, true
+		}
+	case domain.AutomationCitizenReport:
+		switch k {
+		case domain.NoticeDueSoon:
+			return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_DUE_SOON, true
+		case domain.NoticeOverdue:
+			return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_OVERDUE, true
+		case domain.NoticeUnassigned:
+			return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_UNASSIGNED, true
+		case domain.NoticeEscalation:
+			return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_ESCALATION, true
+		}
 	}
 	return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_UNSPECIFIED, false
 }
 
 // --- small helpers ---------------------------------------------------------------------------------
 
+// distinctFields and groupByField key by SLARowKey — the code identity reads the `sla` row by.
 func distinctFields(recs []domain.AutomationRecord, keep func(domain.AutomationRecord) bool) []string {
 	seen := map[string]bool{}
 	var out []string
 	for _, x := range recs {
-		if keep(x) && !seen[x.Field] {
-			seen[x.Field] = true
-			out = append(out, x.Field)
+		if k := x.SLARowKey(); keep(x) && !seen[k] {
+			seen[k] = true
+			out = append(out, k)
 		}
 	}
 	sort.Strings(out)
@@ -570,7 +598,7 @@ func groupByField(recs []domain.AutomationRecord, keep func(domain.AutomationRec
 	out := map[string][]domain.AutomationRecord{}
 	for _, x := range recs {
 		if keep(x) {
-			out[x.Field] = append(out[x.Field], x)
+			out[x.SLARowKey()] = append(out[x.SLARowKey()], x)
 		}
 	}
 	return out

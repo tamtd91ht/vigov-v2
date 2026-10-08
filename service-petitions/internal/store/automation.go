@@ -47,7 +47,10 @@ const taskHoldStartColumn = `CASE WHEN n.bo_phan_id IS NOT NULL AND NULLIF(n.ngu
 // automationTaskQuery reads every live task still owed — the overview's "đang thực hiện" set
 // (taskInProgressCondition: `tam-dung` excluded, `cho-duyet` and legacy `chuyen-tiep` included), so
 // a reminder speaks about exactly the tasks the overview counts.
-var automationTaskQuery = `SELECT n.id, n.ma, n.trang_thai, n.han_xu_ly,
+//
+// `muc_uu_tien` is the key identity reads the task's reminder thresholds by (ADR 0079 lô 2 Q4 b);
+// NULL — a task filed with no priority — reads as "", the default row.
+var automationTaskQuery = `SELECT n.id, n.ma, COALESCE(n.muc_uu_tien, ''), n.trang_thai, n.han_xu_ly,
 	COALESCE(n.bo_phan_id, ''), COALESCE(n.nguoi_thuc_hien_ma, ''), ` + taskHoldStartColumn + `
 	FROM nhiem_vu n
 	WHERE n.tenant_id = $1 AND n.deleted_at IS NULL AND n.` + taskInProgressCondition + `
@@ -71,7 +74,7 @@ func (s *NhiemVuStore) OpenTasksForAutomation(ctx context.Context) ([]domain.Aut
 			deadline sql.NullTime
 			hold     sql.NullTime
 		)
-		if err := rows.Scan(&r.ID, &r.Code, &r.Status, &deadline, &r.OrgUnitID, &r.AssigneeMa, &hold); err != nil {
+		if err := rows.Scan(&r.ID, &r.Code, &r.Priority, &r.Status, &deadline, &r.OrgUnitID, &r.AssigneeMa, &hold); err != nil {
 			return nil, fmt.Errorf("nhiem_vu: đọc cho việc nền: đọc dòng: %w", err)
 		}
 		if deadline.Valid {

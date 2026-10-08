@@ -17,8 +17,9 @@ import (
 // Tests for `soon=true` and `scope=related` on GET /api/v1/tasks and GET /api/v1/task-counts — the
 // two filters that ask identity before the store is reached.
 //
-//	PROVED HERE   `soon` asks for the TASK kind and the default field, with ONE instant that becomes
-//	              both ends of the window the store receives · not-configured is 409 and names the
+//	PROVED HERE   `soon` asks for the TASK kind, the default row and each priority level (or only the
+//	              `priority` named), with ONE instant that becomes both ends of the window the store
+//	              receives · each level's threshold reaches the store · not-configured is 409 and names the
 //	              missing configuration · any other failure is 503 · neither failure reaches the store ·
 //	              `related` asks for the SESSION's code (never a query value), in the request's commune,
 //	              and hands the store the code and the units · an empty unit list is a real answer ·
@@ -36,6 +37,10 @@ import (
 type taskFilterIdentityFake struct {
 	cutoffAfter time.Duration // the cutoff is asOf + this, when no error is set
 	cutoffErr   error
+	// cutoffAfterByPriority overrides cutoffAfter for one priority code (ADR 0079 lô 2 Q4 b).
+	cutoffAfterByPriority map[string]time.Duration
+	// askedFields is every field / priority code DueSoonCutoff was asked about, in order.
+	askedFields []string
 	units       map[tenant.ID]map[string][]string
 	unitsErr    error
 
@@ -64,9 +69,13 @@ func (f *taskFilterIdentityFake) DueSoonCutoff(ctx context.Context, kind identit
 
 	f.cutoffCalls++
 	f.lastKind, f.lastField, f.lastAsOf = kind, field, asOf
+	f.askedFields = append(f.askedFields, field)
 	f.lastTenant = tenant.MustFrom(ctx)
 	if f.cutoffErr != nil {
 		return time.Time{}, f.cutoffErr
+	}
+	if d, ok := f.cutoffAfterByPriority[field]; ok {
+		return asOf.Add(d), nil
 	}
 	f.lastCutoff = asOf.Add(f.cutoffAfter)
 	return f.lastCutoff, nil
@@ -84,18 +93,19 @@ func (f *taskFilterIdentityFake) StaffOrgUnits(ctx context.Context, staffCode st
 
 // --- soon=true -------------------------------------------------------------------------------------
 
-func TestTaskListSoonAsksIdentityOnceAndBindsBothEnds(t *testing.T) {
+func TestTaskListSoonAsksIdentityPerPriorityAndBindsBothEnds(t *testing.T) {
 	m := dungMayChu(t)
 
 	w := m.goi(t, http.MethodGet, hostA, "/api/v1/tasks?soon=true", canBoCuaXa(xaA))
 
 	doiMa(t, w, http.StatusOK)
 	f := m.filterIdentity
-	if f.cutoffCalls != 1 {
-		t.Fatalf("hỏi ngưỡng %d lần, muốn đúng 1 cho cả trang", f.cutoffCalls)
+	// The default row, then each level of commune A's scale (ADR 0079 lô 2 Q4 b) — never per row.
+	if got := strings.Join(f.askedFields, "|"); got != "|khan|cao|thuong" {
+		t.Fatalf("hỏi ngưỡng theo %q, muốn dòng mặc định rồi từng mức của xã", got)
 	}
-	if f.lastKind != identityv1.WorkKind_WORK_KIND_NHIEM_VU || f.lastField != "" {
-		t.Errorf("hỏi loại việc %v, lĩnh vực %q — muốn nhiệm vụ và dòng mặc định", f.lastKind, f.lastField)
+	if f.lastKind != identityv1.WorkKind_WORK_KIND_NHIEM_VU {
+		t.Errorf("hỏi loại việc %v — muốn nhiệm vụ", f.lastKind)
 	}
 	if f.lastTenant != xaA {
 		t.Errorf("hỏi ngưỡng của xã %q, muốn xã của Host", f.lastTenant)
@@ -155,6 +165,57 @@ func TestTaskListWithoutSoonOrRelatedAsksIdentityNothing(t *testing.T) {
 	}
 	if l := m.nhiemVu.locCuoi; !l.DueSoonFrom.IsZero() || l.Related != nil {
 		t.Errorf("bộ lọc xuống kho mang soon/related dù không được hỏi: %+v", l)
+	}
+}
+
+// Each priority level's threshold reaches the store as that level's upper end, for the SAME `now`; a
+// level answering the default's instant is left to the ELSE branch.
+func TestTaskListSoonCarriesEachPriorityThreshold(t *testing.T) {
+	m := dungMayChu(t)
+	m.filterIdentity.cutoffAfterByPriority = map[string]time.Duration{"khan": 40 * time.Hour, "cao": 2 * time.Hour}
+
+	doiMa(t, m.goi(t, http.MethodGet, hostA, "/api/v1/tasks?soon=true", canBoCuaXa(xaA)), http.StatusOK)
+
+	loc := m.nhiemVu.locCuoi
+	p := loc.DueSoonByPriority
+	if p == nil || len(p.Until) != 2 ||
+		!p.Until["khan"].Equal(loc.DueSoonFrom.Add(40*time.Hour)) || !p.Until["cao"].Equal(loc.DueSoonFrom.Add(2*time.Hour)) {
+		t.Fatalf("ngưỡng theo mức xuống kho = %+v (từ %v)", p, loc.DueSoonFrom)
+	}
+	if _, ok := p.Until["thuong"]; ok {
+		t.Errorf("mức trả đúng ngưỡng mặc định vẫn bị đưa xuống kho: %+v", p.Until)
+	}
+	if !loc.DueSoonUntil.Equal(loc.DueSoonFrom.Add(17 * time.Hour)) {
+		t.Errorf("ngưỡng mặc định = %v", loc.DueSoonUntil)
+	}
+}
+
+// `priority=` names one level: one question, for that level, and no per-level overrides.
+func TestTaskListSoonWithPriorityFilterAsksThatLevelOnly(t *testing.T) {
+	m := dungMayChu(t)
+	m.filterIdentity.cutoffAfterByPriority = map[string]time.Duration{"khan": 40 * time.Hour}
+
+	doiMa(t, m.goi(t, http.MethodGet, hostA, "/api/v1/tasks?soon=true&priority=khan", canBoCuaXa(xaA)), http.StatusOK)
+
+	if got := strings.Join(m.filterIdentity.askedFields, "|"); got != "khan" {
+		t.Errorf("hỏi ngưỡng theo %q, muốn đúng mức khan", got)
+	}
+	loc := m.nhiemVu.locCuoi
+	if loc.DueSoonByPriority != nil || !loc.DueSoonUntil.Equal(loc.DueSoonFrom.Add(40*time.Hour)) {
+		t.Errorf("cửa sổ = (%v, %v] theo mức %+v", loc.DueSoonFrom, loc.DueSoonUntil, loc.DueSoonByPriority)
+	}
+}
+
+// The scale unreadable: refused, never "the default threshold for everything".
+func TestTaskListSoonPriorityScaleUnreadableIs503(t *testing.T) {
+	m := dungMayChu(t)
+	m.uuTien.loi = errors.New("kho xuống")
+
+	w := m.goi(t, http.MethodGet, hostA, "/api/v1/tasks?soon=true", canBoCuaXa(xaA))
+
+	doiMa(t, w, http.StatusServiceUnavailable)
+	if loiTra(t, w).Code != "task_filter_unavailable" || m.nhiemVu.goi != 0 {
+		t.Errorf("mã lỗi hoặc số lần đọc kho sai: %s, %d", w.Body.String(), m.nhiemVu.goi)
 	}
 }
 

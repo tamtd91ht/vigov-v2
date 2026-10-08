@@ -41,6 +41,27 @@ func TestTaskListSoonWindowSQL(t *testing.T) {
 	}
 }
 
+// Each priority level's own upper end (ADR 0079 lô 2 Q4 b), bound, in code order, with the default's
+// as ELSE — so a task with no priority (NULL) keeps the default row's threshold.
+func TestTaskListSoonWindowPerPrioritySQL(t *testing.T) {
+	khan, cao := soonUntil.Add(24*time.Hour), soonUntil.Add(-time.Hour)
+	cond, args := locNhiemVuThanhSQL(LocNhiemVu{TrangThai: "moi-giao", DueSoonFrom: soonFrom, DueSoonUntil: soonUntil,
+		DueSoonByPriority: &TaskDueSoonByPriority{Until: map[string]time.Time{"khan": khan, "cao": cao}}})
+
+	want := " AND han_xu_ly > $3 AND han_xu_ly <= (CASE muc_uu_tien WHEN $5::text THEN $6::timestamptz" +
+		" WHEN $7::text THEN $8::timestamptz ELSE $4::timestamptz END)"
+	if !strings.Contains(cond, want) {
+		t.Fatalf("điều kiện = %q\nmuốn chứa %q", cond, want)
+	}
+	if len(args) != 7 || args[1] != soonFrom || args[2] != soonUntil || args[3] != "cao" || args[4] != cao ||
+		args[5] != "khan" || args[6] != khan {
+		t.Errorf("tham số = %v", args)
+	}
+	if strings.Contains(cond, "khan") || strings.Contains(cond, "'cao'") {
+		t.Errorf("mã mức ưu tiên bị ghép thẳng vào câu lệnh: %s", cond)
+	}
+}
+
 func TestTaskListRelatedSQL(t *testing.T) {
 	cond, args := locNhiemVuThanhSQL(LocNhiemVu{
 		Loai:    "co-ban",
@@ -94,6 +115,12 @@ func TestTaskListScopeRefusedBeforeAnyStatement(t *testing.T) {
 		"thiếu đầu dưới":     {DueSoonUntil: soonUntil},
 		"cửa sổ bị ngược":    {DueSoonFrom: soonUntil, DueSoonUntil: soonFrom},
 		"liên quan không mã": {Related: &TaskRelatedScope{OrgUnits: []string{"bp-1"}}},
+		"mức ưu tiên không cửa sổ": {DueSoonByPriority: &TaskDueSoonByPriority{
+			Until: map[string]time.Time{"khan": soonUntil}}},
+		"mức ưu tiên bị ngược": {DueSoonFrom: soonFrom, DueSoonUntil: soonUntil, DueSoonByPriority: &TaskDueSoonByPriority{
+			Until: map[string]time.Time{"khan": soonFrom.Add(-time.Hour)}}},
+		"mức ưu tiên mã rỗng": {DueSoonFrom: soonFrom, DueSoonUntil: soonUntil, DueSoonByPriority: &TaskDueSoonByPriority{
+			Until: map[string]time.Time{"": soonUntil}}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			k := &khoGia{}

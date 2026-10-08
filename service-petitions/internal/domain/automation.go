@@ -46,9 +46,12 @@ type AutomationRecord struct {
 	ID string
 	// Code is what the notice shows: a task's `ma`, a petition's `ma_tra_cuu`.
 	Code string
-	// Field is the petition's `linh_vuc`; "" for tasks, which carry none (identity reads the default row).
-	Field  string
-	Status string
+	// Field is the petition's `linh_vuc`; "" for tasks, which carry none.
+	Field string
+	// Priority is the task's `muc_uu_tien` (ADR 0079 lô 2 Q4 b); "" for petitions and for a task filed
+	// with no priority. Identity reads the task's `sla` row by it, falling back to the default row.
+	Priority string
+	Status   string
 	// Deadline is the stored commitment (`han_xu_ly`, `han_xu_ly_xong`); zero when there is none.
 	Deadline time.Time
 	// OrgUnitID is identity's `bo_phan.id` holding the record; "" when none.
@@ -61,6 +64,17 @@ type AutomationRecord struct {
 	// Restricted is a petition in the `can-bo` field (ADR 0030): it is never announced to anybody
 	// who might not hold `feedback.restricted`.
 	Restricted bool
+}
+
+// SLARowKey is the code identity looks the record's `sla` row up by: a petition's field, a task's
+// priority (ADR 0079 lô 2 Q4 b). The store fills at most one of the two, so this never has to choose.
+// "" asks for the default row — identity's DongTheoLinhVuc also falls back to it when the code has no
+// row of its own. Reminder thresholds only: no deadline is computed from it here (rule 10).
+func (r AutomationRecord) SLARowKey() string {
+	if r.Priority != "" {
+		return r.Priority
+	}
+	return r.Field
 }
 
 // HasDeadline reports whether a commitment is stored.
@@ -103,7 +117,8 @@ const (
 )
 
 // NoticeKind mirrors comms' StaffNotificationKind without importing it (domain imports only the
-// standard library).
+// standard library). On the wire every kind but the weekly digest is split by the notice's Work — a
+// TASK_* or PETITION_* kind (app.commsKind, ADR 0079 lô 2 Q3); comms does not split the digest.
 type NoticeKind int
 
 const (
@@ -111,12 +126,17 @@ const (
 	NoticeOverdue
 	NoticeEscalation
 	NoticeWeeklyDigest
+	// NoticeUnassigned is the holding unit having named nobody past the commune's threshold — its own
+	// kind since comms split it out of OVERDUE, so a commune can switch it separately.
+	NoticeUnassigned
 )
 
 // StaffNotice is one notice before delivery.
 type StaffNotice struct {
-	Key        string
-	Kind       NoticeKind
+	Key  string
+	Kind NoticeKind
+	// Work is the kind of work the notice speaks about; with Kind it names the wire kind.
+	Work       AutomationWorkKind
 	Recipients []string
 	Title      string
 	Body       string
@@ -285,6 +305,7 @@ func DueSoonNotice(kind AutomationWorkKind, day, recipient string, codes []strin
 	return StaffNotice{
 		Key:        DueSoonKey(kind, day, recipient),
 		Kind:       NoticeDueSoon,
+		Work:       kind,
 		Recipients: []string{recipient},
 		Title:      fmt.Sprintf("Bạn có %d %s sắp đến hạn xử lý", len(sorted), kind.noun()),
 		Body:       codeList("Gồm: ", sorted),
@@ -297,6 +318,7 @@ func OverdueNotice(kind AutomationWorkKind, r AutomationRecord, day string, reci
 	return StaffNotice{
 		Key:        OverdueKey(kind, r.ID, day),
 		Kind:       NoticeOverdue,
+		Work:       kind,
 		Recipients: recipients,
 		Title:      clip(fmt.Sprintf("%s %s đã quá hạn xử lý", capitalise(kind.noun()), r.Code), noticeTitleMax),
 		Body:       "Hạn xử lý: " + FormatLocalInstant(r.Deadline) + ".",
@@ -305,12 +327,13 @@ func OverdueNotice(kind AutomationWorkKind, r AutomationRecord, day string, reci
 }
 
 // UnassignedNotice reports a unit holding the record with nobody named past the commune's threshold.
-// Kind OVERDUE: comms has no kind of its own for it (four kinds, "added when a producer exists"), and
-// the notice is the one-record, overdue-for-assignment shape.
+// Its own kind (TASK_UNASSIGNED / PETITION_UNASSIGNED on the wire); the key is the one it had when it
+// was sent as OVERDUE, so a run straddling the switch does not tell anybody twice.
 func UnassignedNotice(kind AutomationWorkKind, r AutomationRecord, recipients []string) StaffNotice {
 	return StaffNotice{
 		Key:        UnassignedKey(kind, r.ID, r.HoldStartedAt),
-		Kind:       NoticeOverdue,
+		Kind:       NoticeUnassigned,
+		Work:       kind,
 		Recipients: recipients,
 		Title:      clip(fmt.Sprintf("%s %s chưa được phân công người thực hiện", capitalise(kind.noun()), r.Code), noticeTitleMax),
 		Body: "Bộ phận nhận từ " + FormatLocalInstant(r.HoldStartedAt) +
@@ -328,6 +351,7 @@ func EscalationNotice(kind AutomationWorkKind, r AutomationRecord, level Escalat
 	return StaffNotice{
 		Key:        EscalationKey(kind, r.ID, level),
 		Kind:       NoticeEscalation,
+		Work:       kind,
 		Recipients: recipients,
 		Title:      clip(fmt.Sprintf("Báo cáo việc trễ hạn: %s %s", kind.noun(), r.Code), noticeTitleMax),
 		Body: "Quá hạn xử lý từ " + FormatLocalInstant(r.Deadline) +
@@ -341,6 +365,7 @@ func TaskDigestNotice(week string, pastDeadline, dueThisWeek, awaitingApproval i
 	return StaffNotice{
 		Key:        WeeklyDigestKey(AutomationTask, week),
 		Kind:       NoticeWeeklyDigest,
+		Work:       AutomationTask,
 		Recipients: recipients,
 		Title:      "Bản tin đầu tuần: nhiệm vụ",
 		Body: fmt.Sprintf("%d nhiệm vụ quá hạn, %d nhiệm vụ đến hạn trong 7 ngày tới, %d nhiệm vụ chờ duyệt.",
@@ -355,6 +380,7 @@ func CitizenReportDigestNotice(week string, c CitizenReportDigestCounts, recipie
 	return StaffNotice{
 		Key:        WeeklyDigestKey(AutomationCitizenReport, week),
 		Kind:       NoticeWeeklyDigest,
+		Work:       AutomationCitizenReport,
 		Recipients: recipients,
 		Title:      "Bản tin đầu tuần: phản ánh",
 		Body: fmt.Sprintf("%d phản ánh nóng: %d phiếu quá hạn xử lý, %d phiếu bị đánh giá 1–2 sao trong 7 ngày qua.",

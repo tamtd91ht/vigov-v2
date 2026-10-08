@@ -645,22 +645,61 @@ func (h *Handler) taskFilterFromRequest(w http.ResponseWriter, r *http.Request,
 		// ONE `now` FOR BOTH ENDS OF THE WINDOW: it is the asOf identity walks the working hours from,
 		// and the lower bound the store compares against — so no task falls between the two.
 		now := time.Now().UTC()
-		cutoff, err := h.d.TaskFilterIdentity.DueSoonCutoff(ctx, identityv1.WorkKind_WORK_KIND_NHIEM_VU,
-			// "" IS THE DEFAULT ROW, and a real request: a task carries no field (linh_vuc).
-			"", now)
-		switch {
-		case errors.Is(err, identityclient.ErrDueSoonNotConfigured):
-			httpx.WriteError(w, http.StatusConflict, "due_soon_not_configured",
-				"Xã chưa cấu hình ngưỡng sắp đến hạn cho nhiệm vụ, nên chưa lọc được việc sắp đến hạn. "+
-					"Vui lòng cấu hình tại Cấu hình → Thời hạn xử lý.", "")
-			return loc, false
-		case err != nil:
-			h.taskFilterUnavailable(w, r, "không lấy được ngưỡng sắp đến hạn của xã", err)
+		cutoff, ok := h.taskDueSoonCutoff(w, r, loc.MucUuTien, now)
+		if !ok {
 			return loc, false
 		}
 		loc.DueSoonFrom, loc.DueSoonUntil = now, cutoff
+		if loc.MucUuTien == "" {
+			// EVERY PRIORITY ON ONE PAGE: each level has its own threshold (ADR 0079 lô 2 Q4 b), so the
+			// window's upper end is asked per level of the commune's scale, for the SAME `now`. Levels out
+			// of use are asked too — open tasks still carry them. A task whose level is not on the scale
+			// any more (soft-deleted) or that has none is compared with the default row's cutoff above.
+			levels, err := h.d.MucUuTien.DanhSach(ctx)
+			if err != nil {
+				h.taskFilterUnavailable(w, r, "không đọc được danh mục mức ưu tiên nhiệm vụ", err)
+				return loc, false
+			}
+			byPriority := map[string]time.Time{}
+			for _, l := range levels {
+				c, ok := h.taskDueSoonCutoff(w, r, l.Ma, now)
+				if !ok {
+					return loc, false
+				}
+				// A level answering the default's instant (identity fell back to the default row) adds
+				// nothing the ELSE branch does not already say.
+				if !c.Equal(cutoff) {
+					byPriority[l.Ma] = c
+				}
+			}
+			if len(byPriority) > 0 {
+				loc.DueSoonByPriority = &petstore.TaskDueSoonByPriority{Until: byPriority}
+			}
+		}
 	}
 	return loc, true
+}
+
+// taskDueSoonCutoff asks identity for the commune's due-soon cutoff of one task priority — "" is the
+// default row, and identity also falls back to it for a level with no row of its own. It writes the
+// refusal itself (409 not configured, 503 otherwise). A threshold only: no task deadline is computed
+// or moved here (rule 10).
+func (h *Handler) taskDueSoonCutoff(w http.ResponseWriter, r *http.Request, priority string, now time.Time) (
+	time.Time, bool) {
+
+	cutoff, err := h.d.TaskFilterIdentity.DueSoonCutoff(r.Context(), identityv1.WorkKind_WORK_KIND_NHIEM_VU,
+		priority, now)
+	switch {
+	case errors.Is(err, identityclient.ErrDueSoonNotConfigured):
+		httpx.WriteError(w, http.StatusConflict, "due_soon_not_configured",
+			"Xã chưa cấu hình ngưỡng sắp đến hạn cho nhiệm vụ, nên chưa lọc được việc sắp đến hạn. "+
+				"Vui lòng cấu hình tại Cấu hình → Thời hạn xử lý.", "")
+		return time.Time{}, false
+	case err != nil:
+		h.taskFilterUnavailable(w, r, "không lấy được ngưỡng sắp đến hạn của xã", err)
+		return time.Time{}, false
+	}
+	return cutoff, true
 }
 
 // taskFilterUnavailable answers a filter identity could not resolve. WARN, like every identity

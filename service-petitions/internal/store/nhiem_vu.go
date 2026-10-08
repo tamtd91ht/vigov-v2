@@ -20,6 +20,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -332,6 +333,13 @@ type LocNhiemVu struct {
 	DueSoonFrom  time.Time
 	DueSoonUntil time.Time
 
+	// DueSoonByPriority overrides DueSoonUntil for the tasks of one priority level: each level has
+	// its own threshold (ADR 0079 lô 2 Q4 b), asked of identity for the SAME DueSoonFrom. A task whose
+	// `muc_uu_tien` is not in it — none, or a level answering the default's instant — is compared with
+	// DueSoonUntil, the default row's. nil = DueSoonUntil for every task. A POINTER so the struct stays
+	// comparable, as Related is.
+	DueSoonByPriority *TaskDueSoonByPriority
+
 	// Related is §3's "Liên quan đến tôi" (`scope=related`). nil = no filter. A POINTER so the struct
 	// stays comparable (the handler tests compare it whole) while carrying a list.
 	Related *TaskRelatedScope
@@ -367,6 +375,11 @@ type TaskRelatedScope struct {
 	OrgUnits  []string
 }
 
+// TaskDueSoonByPriority is identity's due-soon cutoff per task-priority code (`muc_uu_tien`).
+type TaskDueSoonByPriority struct {
+	Until map[string]time.Time
+}
+
 // ErrTaskDueSoonWindow — one end of the due-soon window without the other, or an inverted window.
 var ErrTaskDueSoonWindow = errors.New("nhiem_vu: cửa sổ `sắp đến hạn` thiếu một đầu hoặc bị ngược")
 
@@ -383,6 +396,17 @@ func validateTaskListScope(loc LocNhiemVu) error {
 	// the start is a broken answer from identity and is refused.
 	if !loc.DueSoonFrom.IsZero() && loc.DueSoonUntil.Before(loc.DueSoonFrom) {
 		return ErrTaskDueSoonWindow
+	}
+	if loc.DueSoonByPriority != nil {
+		// Per-level ends without the window's start would be a window with no lower bound.
+		if loc.DueSoonFrom.IsZero() {
+			return ErrTaskDueSoonWindow
+		}
+		for code, until := range loc.DueSoonByPriority.Until {
+			if code == "" || until.Before(loc.DueSoonFrom) {
+				return ErrTaskDueSoonWindow
+			}
+		}
 	}
 	if loc.Related != nil && loc.Related.StaffCode == "" {
 		return ErrTaskRelatedNoStaff
@@ -496,6 +520,26 @@ func locNhiemVuThanhSQL(loc LocNhiemVu) (string, []any) {
 		from := "$" + strconv.Itoa(len(args)+1)
 		args = append(args, loc.DueSoonUntil)
 		until := "$" + strconv.Itoa(len(args)+1)
+		if p := loc.DueSoonByPriority; p != nil && len(p.Until) > 0 {
+			// THE UPPER END PER PRIORITY LEVEL (ADR 0079 lô 2 Q4 b): `CASE muc_uu_tien WHEN code THEN
+			// its cutoff ... ELSE the default's END`. A NULL priority matches no WHEN and takes the
+			// default. Codes in sorted order so the same filter builds the same statement.
+			codes := make([]string, 0, len(p.Until))
+			for c := range p.Until {
+				codes = append(codes, c)
+			}
+			sort.Strings(codes)
+			expr := "CASE muc_uu_tien"
+			for _, c := range codes {
+				args = append(args, c)
+				code := "$" + strconv.Itoa(len(args)+1)
+				args = append(args, p.Until[c])
+				expr += " WHEN " + code + "::text THEN $" + strconv.Itoa(len(args)+1) + "::timestamptz"
+			}
+			// THE CASTS ARE LOAD-BEARING: a CASE whose every branch is a bare parameter resolves to
+			// text, and `timestamptz <= text` is no operator.
+			until = "(" + expr + " ELSE " + until + "::timestamptz END)"
+		}
 		dieuKien += " AND han_xu_ly IS NOT NULL AND ngay_hoan_thanh IS NULL" +
 			" AND han_xu_ly > " + from + " AND han_xu_ly <= " + until
 	}

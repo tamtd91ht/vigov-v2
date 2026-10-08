@@ -180,8 +180,11 @@ type (
 	//	StaffOrgUnits  `scope=related` — the caller's OWN live unit(s), by the session's business code.
 	//	               It NARROWS a list; it grants nothing and must never guard a write (rule 5).
 	//
-	// ONE CALL EACH PER REQUEST, never per row, and neither answer is cached (rule 1: a process
-	// cache keyed without the commune serves one commune's answer to another).
+	// NEVER PER ROW, and neither answer is cached (rule 1: a process cache keyed without the commune
+	// serves one commune's answer to another). StaffOrgUnits is one call per request; DueSoonCutoff is
+	// one per task-priority level plus the default row (ADR 0079 lô 2 Q4 b — each level has its own
+	// threshold), or one when the request names a `priority`. The scale is bounded at
+	// petstore.TranDanhMucMucUuTien.
 	TaskFilterIdentity interface {
 		DueSoonCutoff(ctx context.Context, kind identityv1.WorkKind, linhVuc string, asOf time.Time) (
 			time.Time, error)

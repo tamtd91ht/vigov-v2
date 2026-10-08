@@ -109,6 +109,18 @@ type fakeAutomationIdentity struct {
 	holders        map[tenant.ID]map[string]map[string][]string // commune -> key -> unit -> codes
 	leaders        map[tenant.ID][]string
 	unavailable    bool
+
+	// cutoffByKey answers DueSoonCutoff for one SLA row key; a key not in it gets soonCutoff.
+	cutoffByKey map[string]time.Time
+	// asked records, per lookup, every SLA row key (field / priority) it was asked about.
+	asked map[string][]string
+}
+
+func (f *fakeAutomationIdentity) ask(lookup, key string) {
+	if f.asked == nil {
+		f.asked = map[string][]string{}
+	}
+	f.asked[lookup] = append(f.asked[lookup], key)
 }
 
 func newFakeIdentity() *fakeAutomationIdentity {
@@ -135,7 +147,8 @@ func (f *fakeAutomationIdentity) RecordAutomationRunOutcome(ctx context.Context,
 	return nil
 }
 
-func (f *fakeAutomationIdentity) DueSoonCutoff(_ context.Context, _ identityv1.WorkKind, _ string, asOf time.Time) (time.Time, error) {
+func (f *fakeAutomationIdentity) DueSoonCutoff(_ context.Context, _ identityv1.WorkKind, key string, asOf time.Time) (time.Time, error) {
+	f.ask("due_soon", key)
 	if f.unavailable {
 		return time.Time{}, identityclient.ErrIdentityUnavailable
 	}
@@ -145,11 +158,15 @@ func (f *fakeAutomationIdentity) DueSoonCutoff(_ context.Context, _ identityv1.W
 	if !asOf.Equal(runAt) {
 		return time.Time{}, fmt.Errorf("as_of %s không phải claimed_at", asOf)
 	}
+	if c, ok := f.cutoffByKey[key]; ok {
+		return c, nil
+	}
 	return soonCutoff, nil
 }
 
-func (f *fakeAutomationIdentity) EscalationInstants(_ context.Context, _ identityv1.WorkKind, _ string,
+func (f *fakeAutomationIdentity) EscalationInstants(_ context.Context, _ identityv1.WorkKind, key string,
 	missedAt []time.Time) (map[time.Time]identityclient.EscalationInstants, error) {
+	f.ask("escalation", key)
 	out := map[time.Time]identityclient.EscalationInstants{}
 	for _, m := range missedAt {
 		out[m.UTC()] = identityclient.EscalationInstants{UnitHeadDueAt: headDueAt, ChairmanDueAt: f.chairDue}
@@ -157,8 +174,9 @@ func (f *fakeAutomationIdentity) EscalationInstants(_ context.Context, _ identit
 	return out, nil
 }
 
-func (f *fakeAutomationIdentity) UnassignedHoldInstants(_ context.Context, _ identityv1.WorkKind, _ string,
+func (f *fakeAutomationIdentity) UnassignedHoldInstants(_ context.Context, _ identityv1.WorkKind, key string,
 	starts []time.Time) (bool, map[time.Time]time.Time, error) {
+	f.ask("unassigned", key)
 	if f.holdDisabled {
 		return true, nil, nil
 	}
@@ -481,6 +499,163 @@ func TestRestrictedPetitionFailsClosed(t *testing.T) {
 	}
 }
 
+// Every notice shape → its per-domain wire kind (ADR 0079 lô 2 Q3), under the SAME keys it had when it
+// went out as the legacy DUE_SOON / OVERDUE / ESCALATION. The keys are literals on purpose: comms
+// deduplicates on (commune, key, recipient), so a key that moved with the kind would re-deliver every
+// notice already sent that day. `to` is the recipient shapesHarness tells.
+type noticeShape struct {
+	kind commsv1.StaffNotificationKind
+	to   string
+}
+
+var petitionsNoticeShapes = map[string]noticeShape{
+	"sla_reminders:due_soon:nhiem-vu:2026-09-29:CB-001":    {commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_DUE_SOON, "CB-001"},
+	"sla_reminders:overdue:nhiem-vu:nv-unit:2026-09-29":    {commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_OVERDUE, "CB-ROUTE"},
+	"sla_reminders:unassigned:nhiem-vu:nv-unit:1789869600": {commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_UNASSIGNED, "CB-ROUTE"},
+	"escalation:nhiem-vu:nv-unit:unit_head":                {commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_ESCALATION, "CB-ROUTE"},
+	"weekly_digest:nhiem-vu:2026-W40":                      {commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_WEEKLY_DIGEST, "CB-LD"},
+	"sla_reminders:due_soon:phan-anh:2026-09-29:CB-002":    {commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_DUE_SOON, "CB-002"},
+	"sla_reminders:overdue:phan-anh:pa-unit:2026-09-29":    {commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_OVERDUE, "CB-PROUTE"},
+	"sla_reminders:unassigned:phan-anh:pa-unit:1789869600": {commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_UNASSIGNED, "CB-PROUTE"},
+	"escalation:phan-anh:pa-unit:unit_head":                {commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_ESCALATION, "CB-PROUTE"},
+	"weekly_digest:phan-anh:2026-W40":                      {commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_WEEKLY_DIGEST, "CB-LD"},
+}
+
+// shapesHarness has one task and one petition of each shape, and one run of each job × kind claimed.
+func shapesHarness(t *testing.T) *harness {
+	t.Helper()
+	h := newHarness(t, communeA)
+	h.identity.holders[communeA] = map[string]map[string][]string{
+		permTaskAssign:     {"bp-1": {"CB-ROUTE"}},
+		permFeedbackAssign: {"bp-1": {"CB-PROUTE"}},
+	}
+	h.identity.leaders[communeA] = []string{"CB-LD"}
+	h.tasks.byCommune[communeA] = []domain.AutomationRecord{
+		{ID: "nv-soon", Code: "NV01", Priority: "khan", Deadline: soonDue, AssigneeMa: "CB-001"},
+		{ID: "nv-unit", Code: "NV02", Deadline: missed, OrgUnitID: "bp-1", HoldStartedAt: holdStart},
+	}
+	h.reports.byCommune[communeA] = []domain.AutomationRecord{
+		{ID: "pa-soon", Code: "PA-AAAA1111", Field: "moi-truong", Deadline: soonDue, AssigneeMa: "CB-002"},
+		{ID: "pa-unit", Code: "PA-BBBB2222", Field: "moi-truong", Deadline: missed, OrgUnitID: "bp-1", HoldStartedAt: holdStart},
+	}
+	for _, k := range []identityv1.WorkKind{kindTask, kindReport} {
+		h.claim(communeA, "sla-"+k.String(), jobSLA, k)
+		h.claim(communeA, "esc-"+k.String(), jobEscalate, k)
+		h.claim(communeA, "dig-"+k.String(), jobDigest, k)
+	}
+	return h
+}
+
+func TestEveryNoticeGoesOutUnderItsDomainKind(t *testing.T) {
+	h := shapesHarness(t)
+	h.runner.Tick(context.Background())
+
+	got := map[string]noticeShape{}
+	for _, d := range h.comms.delivered {
+		got[d.n.IdempotencyKey] = noticeShape{d.n.Kind, strings.Join(d.n.RecipientMa, ",")}
+	}
+	if len(got) != len(petitionsNoticeShapes) {
+		t.Errorf("giao %d khoá, muốn %d: %v", len(got), len(petitionsNoticeShapes), got)
+	}
+	for key, want := range petitionsNoticeShapes {
+		if g, ok := got[key]; !ok || g != want {
+			t.Errorf("khoá %s: %+v (có=%v), muốn %+v", key, g, ok, want)
+		}
+	}
+}
+
+// A commune told under the legacy kinds this morning is not told again after the switch: the keys and
+// recipients are what comms already holds.
+func TestSwitchingKindMidDayDoesNotRedeliver(t *testing.T) {
+	h := shapesHarness(t)
+	h.comms.seen = map[string]bool{}
+	for key, s := range petitionsNoticeShapes {
+		h.comms.seen[string(communeA)+"|"+key+"|"+s.to] = true
+	}
+	h.runner.Tick(context.Background())
+
+	if len(h.identity.recorded) != 6 {
+		t.Fatalf("ghi %d kết quả, muốn 6", len(h.identity.recorded))
+	}
+	for run, o := range h.identity.recorded {
+		if o.Outcome != succeeded || o.NoticesDelivered != 0 {
+			t.Errorf("%s sau khi đổi loại: %+v, muốn 0 thông báo mới", run, o)
+		}
+	}
+}
+
+func TestCommsKindNeverSendsLegacyKinds(t *testing.T) {
+	legacy := map[commsv1.StaffNotificationKind]bool{
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DUE_SOON:   true,
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_OVERDUE:    true,
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_ESCALATION: true,
+	}
+	seen := map[commsv1.StaffNotificationKind]bool{}
+	for _, work := range []domain.AutomationWorkKind{domain.AutomationTask, domain.AutomationCitizenReport} {
+		for _, k := range []domain.NoticeKind{domain.NoticeDueSoon, domain.NoticeOverdue, domain.NoticeUnassigned,
+			domain.NoticeEscalation, domain.NoticeWeeklyDigest} {
+			w, ok := commsKind(work, k)
+			if !ok || legacy[w] {
+				t.Errorf("%s loại %d → %v (ok=%v)", work, k, w, ok)
+			}
+			if k != domain.NoticeWeeklyDigest && seen[w] {
+				t.Errorf("%s loại %d → %v, trùng loại khác — hai phân hệ không tách được", work, k, w)
+			}
+			seen[w] = true
+		}
+	}
+	if _, ok := commsKind(domain.AutomationTask, domain.NoticeKind(0)); ok {
+		t.Error("loại 0 được nhận")
+	}
+	for _, k := range []domain.NoticeKind{domain.NoticeDueSoon, domain.NoticeWeeklyDigest} {
+		if _, ok := commsKind("van-ban-den", k); ok {
+			t.Errorf("loại việc lạ được nhận cho loại %d — không được gán phân hệ mặc định", k)
+		}
+	}
+}
+
+// A task's reminder thresholds are read by its priority (ADR 0079 lô 2 Q4 b); a task with none asks
+// the default row with "". A petition still asks by its field. No deadline is touched — the notice
+// compares the stored deadline with identity's answer.
+func TestTaskThresholdsAreAskedByPriority(t *testing.T) {
+	h := newHarness(t, communeA)
+	h.identity.holders[communeA] = map[string]map[string][]string{permTaskAssign: {"bp-1": {"CB-ROUTE"}}}
+	// "khan" warns three days ahead; the default row only an hour ahead — before either deadline.
+	h.identity.cutoffByKey = map[string]time.Time{"khan": soonCutoff, "": runAt.Add(time.Hour)}
+	h.tasks.byCommune[communeA] = []domain.AutomationRecord{
+		{ID: "nv-khan", Code: "NV01", Priority: "khan", Deadline: soonDue, AssigneeMa: "CB-K"},
+		{ID: "nv-none", Code: "NV02", Deadline: soonDue, AssigneeMa: "CB-N"},
+		{ID: "nv-held", Code: "NV03", Priority: "cao", Deadline: missed, OrgUnitID: "bp-1", HoldStartedAt: holdStart},
+	}
+	h.reports.byCommune[communeA] = []domain.AutomationRecord{
+		{ID: "pa-1", Code: "PA-AAAA1111", Field: "moi-truong", Deadline: missed, AssigneeMa: "CB-P"},
+	}
+	h.claim(communeA, "run-t", jobSLA, kindTask)
+	h.claim(communeA, "run-e", jobEscalate, kindTask)
+	h.claim(communeA, "run-p", jobEscalate, kindReport)
+	h.runner.Tick(context.Background())
+
+	want := map[string]string{
+		"due_soon":   "|khan",          // nv-held is late, so only the two not-yet-due tasks are asked about
+		"unassigned": "cao",            // the held task, by its own priority
+		"escalation": "cao|moi-truong", // the late task by its priority; the petition by its field
+	}
+	for lookup, w := range want {
+		got := append([]string(nil), h.identity.asked[lookup]...)
+		sort.Strings(got)
+		if strings.Join(got, "|") != w {
+			t.Errorf("%s hỏi theo %q, muốn %q", lookup, strings.Join(got, "|"), w)
+		}
+	}
+	keys := strings.Join(h.keys(communeA), "|")
+	if !strings.Contains(keys, "sla_reminders:due_soon:nhiem-vu:2026-09-29:CB-K") {
+		t.Errorf("việc khẩn trong ngưỡng của mức khẩn không được nhắc: %s", keys)
+	}
+	if strings.Contains(keys, "CB-N") {
+		t.Errorf("việc không mức ưu tiên được nhắc theo ngưỡng của mức khác: %s", keys)
+	}
+}
+
 func TestWeeklyDigestContent(t *testing.T) {
 	h := newHarness(t, communeA)
 	h.identity.leaders[communeA] = []string{"CB-LD1", "CB-LD2"}
@@ -636,10 +811,11 @@ func TestPagesRespectContractBounds(t *testing.T) {
 	for i := range wide {
 		wide[i] = fmt.Sprintf("CB-%04d", i)
 	}
-	notices = append(notices, domain.StaffNotice{Key: "k-wide", Kind: domain.NoticeOverdue, Recipients: wide, Title: "t"})
+	notices = append(notices, domain.StaffNotice{Key: "k-wide", Kind: domain.NoticeOverdue, Work: domain.AutomationTask,
+		Recipients: wide, Title: "t"})
 	for i := 0; i < 150; i++ {
 		notices = append(notices, domain.StaffNotice{Key: fmt.Sprintf("k-%03d", i), Kind: domain.NoticeDueSoon,
-			Recipients: []string{"CB-1"}, Title: "t"})
+			Work: domain.AutomationCitizenReport, Recipients: []string{"CB-1"}, Title: "t"})
 	}
 	pages, err := automationPages(notices)
 	if err != nil {
