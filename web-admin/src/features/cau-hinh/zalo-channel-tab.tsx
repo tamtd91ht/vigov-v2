@@ -1,48 +1,72 @@
 "use client";
 
-import { MessageCircle, Save, Users } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Check, Loader2, RefreshCw, X } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
 import { ErrorState } from "@/components/ui/error-state";
+import { controlClass } from "@/components/ui/field";
 import { NoAccess } from "@/components/ui/no-access";
+import { PendingMarker, type PendingFeatureInfo } from "@/components/ui/pending-feature";
 import { Skeleton } from "@/components/ui/skeleton";
-import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
+import { Switch } from "@/components/ui/switch";
 import { formatVietnamDateTime } from "@/features/noi-dung/nhan-noi-dung";
 import { usePhien } from "@/features/phien/phien-hien-tai";
-import type { KetQua } from "@/lib/api/goi";
+import { cn } from "@/lib/cn";
+// vi-name-ok: the existing unit-list reader of lib/api/danh-muc.ts, imported, not a new name
+import { layDanhMucBoPhan } from "@/lib/api/danh-muc";
+// vi-name-ok: the existing staff-directory reader of lib/api/danh-ba-chon-nguoi.ts, imported, not a new name
+import { layDanhBaChonNguoi } from "@/lib/api/danh-ba-chon-nguoi";
+// vi-name-ok: the existing result type and sentence of lib/api/goi.ts, imported, not a new name
+import { LOI_KHONG_RO, type KetQua } from "@/lib/api/goi";
 import {
   getZaloChannelSettings,
   listZaloLinkedStaff,
   saveZaloChannelSettings,
-  ZALO_REMINDER_KINDS,
   type ZaloChannelSettings,
   type ZaloLinkedStaff,
 } from "@/lib/api/zalo";
 
+import { selectCls } from "./config-ui";
+import { PHAN_CHUA_DUNG } from "./nhan-cau-hinh";
 import { zaloChannelTabDecision } from "./quyen-tab";
 import {
   buildChange,
+  CHANNEL_DESCRIPTION,
+  dayOptions,
   draftFromSettings,
-  KIND_LABEL,
+  EVENTS_HINT,
+  hourOptions,
+  joinStaffLinks,
   NO_LINKED_STAFF,
   QUIET_HINT,
-  SAVED_SENTENCE,
+  SAVE_FAILED_TOAST,
+  SAVED_TOAST,
   toggleKind,
-  ZALO_TAB_DESCRIPTION,
-  ZALO_TAB_TITLE,
+  WHEN_DESCRIPTION,
+  ZALO_EVENT_GROUPS,
+  type DirectoryPerson,
+  type UnitName,
   type ZaloChannelDraft,
-  type ZaloChannelField,
 } from "./zalo-channel-form";
 
+type Directory = KetQua<{ items: DirectoryPerson[] }>;
+type Units = KetQua<{ items: UnitName[] }>;
+
 /**
- * "Cấu hình → Kênh Zalo" (ADR 0074 #6): the commune's switch, which reminder kinds go out, quiet
- * hours, the overdue cadence — and who of this commune is paired. One key, `admin.lookup`, for read
- * and write (like Máy chủ thư), so the tab hides as a whole without it (convenience; comms refuses).
+ * "Cấu hình → Kênh Zalo" (ADR 0074 #6), laid out by spec 11 and the prototype's `ZaloChannelPanel`
+ * (ADR 0079). One key, `admin.lookup`, for read and write (like Máy chủ thư), so the tab hides as a
+ * whole without it (convenience; comms refuses).
  *
- * The bot itself (token, webhook) is NOT here: it is the platform's, set in platform-admin (ADR 0074 #3).
- * The linked-staff list is names, codes and a date — never a Zalo chat id (comms never returns one).
+ * EVERY CHANGE SAVES AT ONCE (spec 11): the whole settings row is PUT — the server's PUT replaces the
+ * row — and a refusal puts the screen back to what is stored, so it never shows a state that was not
+ * saved. All controls are disabled while one save is in flight: two overlapping full-row PUTs would
+ * let the slower one overwrite the other's change.
+ *
+ * WHAT THE SERVER CANNOT DO YET is drawn at its spec position, disabled, with "?" (ADR 0068 §14): the
+ * commune's own bot, the "nhắc trước" threshold, the events no producer sends, the staff total and the
+ * not-yet-linked list. The linked list is names, codes and a date — never a Zalo chat id.
  */
 export function ZaloChannelTab() {
   const phien = usePhien();
@@ -52,8 +76,10 @@ export function ZaloChannelTab() {
   const [loaded, setLoaded] = useState<KetQua<ZaloChannelSettings> | null>(null);
   const [draft, setDraft] = useState<ZaloChannelDraft | null>(null);
   const [staff, setStaff] = useState<KetQua<ZaloLinkedStaff[]> | null>(null);
+  const [directory, setDirectory] = useState<Directory | null>(null);
+  const [units, setUnits] = useState<Units | null>(null);
   const [saving, setSaving] = useState(false);
-  const [saveMessage, setSaveMessage] = useState<{ ok: boolean; text: string; field?: ZaloChannelField } | null>(null);
+  const [held, setHeld] = useState<string | null>(null);
 
   useEffect(() => {
     if (!allowed) return;
@@ -66,6 +92,14 @@ export function ZaloChannelTab() {
     listZaloLinkedStaff().then((r) => {
       if (!gone) setStaff(r);
     });
+    // Who has NOT linked yet = the commune's staff directory minus the links (AnyAuthenticated,
+    // code · name · title · unit only). Unit names come from the unit list (also AnyAuthenticated).
+    layDanhBaChonNguoi().then((r) => {
+      if (!gone) setDirectory(r);
+    });
+    layDanhMucBoPhan().then((r) => {
+      if (!gone) setUnits(r);
+    });
     return () => {
       gone = true;
     };
@@ -74,13 +108,13 @@ export function ZaloChannelTab() {
   if (phien === null) return <p role="status">Đang kiểm tra quyền truy cập…</p>;
   if (decision !== null && !decision.hien) {
     return decision.vi === "khong-doc-duoc" ? (
-      <p className="thong-bao-loi" role="alert">
+      <p className="text-danger m-0 text-[12.5px] font-medium" role="alert">
         {decision.thongBao}
       </p>
     ) : (
       <div className="flex min-w-0 flex-col items-center pb-10">
         <NoAccess className="pb-4" />
-        <p className="m-0 max-w-md px-4 text-center text-[13px] text-ink-500">
+        <p className="text-ink-muted m-0 max-w-md px-4 text-center text-[13px]">
           Tài khoản của bạn không có quyền cấu hình kênh Zalo, nên tab này không hiển thị.
         </p>
       </div>
@@ -88,294 +122,580 @@ export function ZaloChannelTab() {
   }
   if (loaded === null)
     return (
-      <div className="page--form flex flex-col gap-3 rounded-card border border-line bg-surface p-4">
+      <>
         <p role="status" className="an-thi-giac">
           Đang tải cấu hình kênh Zalo…
         </p>
-        <Skeleton className="h-5 w-48" />
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-10 w-2/3" />
-      </div>
+        <Skeleton className="h-64 w-full" />
+      </>
     );
   if (!loaded.ok) return <ErrorState role="alert" title="Chưa tải được cấu hình kênh Zalo" message={loaded.thongBao} />;
   if (draft === null) return null;
+  const saved = loaded.duLieu;
 
-  async function save() {
-    if (draft === null || saving) return;
-    const built = buildChange(draft);
-    if (!built.ok) return setSaveMessage({ ok: false, text: built.text, field: built.field });
+  async function apply(next: ZaloChannelDraft) {
+    if (saving) return;
+    const built = buildChange(next);
+    if (!built.ok) {
+      if (built.held) {
+        // Half-way through picking the two cadence numbers: keep what was picked, send nothing yet.
+        setDraft(next);
+        setHeld(built.text);
+        return;
+      }
+      setDraft(draftFromSettings(saved));
+      setHeld(null);
+      toast.error(built.text);
+      return;
+    }
+    setDraft(next);
+    setHeld(null);
     setSaving(true);
-    setSaveMessage(null);
     const r = await saveZaloChannelSettings(built.change);
     setSaving(false);
-    if (!r.ok) return setSaveMessage({ ok: false, text: r.thongBao });
+    if (!r.ok) {
+      setDraft(draftFromSettings(saved));
+      // A refusal the server explained (a rule, a permission) is shown in its words; a lost connection
+      // gets the spec's sentence.
+      toast.error(r.thongBao === LOI_KHONG_RO ? SAVE_FAILED_TOAST : r.thongBao);
+      return;
+    }
     setLoaded(r);
     setDraft(draftFromSettings(r.duLieu));
-    setSaveMessage({ ok: true, text: SAVED_SENTENCE });
+    toast.success(SAVED_TOAST);
   }
 
   return (
     <ZaloChannelView
-      saved={loaded.duLieu}
       draft={draft}
-      setDraft={setDraft}
+      onChange={(d) => void apply(d)}
       saving={saving}
-      saveMessage={saveMessage}
-      onSave={() => void save()}
-      staff={staff}
+      held={held}
+      people={peopleState(staff, directory, units)}
     />
+  );
+}
+
+function pendingEntry(name: string): PendingFeatureInfo {
+  const entry = PHAN_CHUA_DUNG.find((p) => p.ten === name);
+  if (entry === undefined) throw new Error(`PHAN_CHUA_DUNG has no entry "${name}"`);
+  return entry;
+}
+
+const BOT_ENTRY = pendingEntry("Con bot của xã");
+const DUE_SOON_ENTRY = pendingEntry("Nhắc trước khi đến hạn qua Zalo");
+const MORE_EVENTS_ENTRY = pendingEntry("Thêm loại việc nhắn qua Zalo");
+
+/**
+ * What "Ai đã ghép nối" and the §1 count can show:
+ *   - `loading`  — a read still running;
+ *   - `joined`   — directory + links: every staff member, linked or not, and "{linked}/{total}";
+ *   - `linkedOnly` — the directory could NOT be read: fall back to the links alone, say why, and
+ *     claim no total and no "not linked" — a list missing the unlinked must not read as "everyone";
+ *   - `failed`   — the links themselves could not be read: nothing about pairing is known.
+ */
+export type PeopleState =
+  | { state: "loading" }
+  | { state: "joined"; rows: ReturnType<typeof joinStaffLinks>["rows"]; linked: number; total: number }
+  | { state: "linkedOnly"; links: ZaloLinkedStaff[]; reason: string }
+  | { state: "failed"; reason: string };
+
+export function peopleState(staff: KetQua<ZaloLinkedStaff[]> | null, directory: Directory | null, units: Units | null): PeopleState {
+  if (staff === null || directory === null || units === null) return { state: "loading" };
+  if (!staff.ok) return { state: "failed", reason: staff.thongBao };
+  if (!directory.ok) return { state: "linkedOnly", links: staff.duLieu, reason: directory.thongBao };
+  // Unit names are presentation only: without them the line shows the title alone.
+  const j = joinStaffLinks(directory.duLieu.items, units.ok ? units.duLieu.items : [], staff.duLieu);
+  return { state: "joined", ...j };
+}
+
+/*
+ * NO `m-0` INSIDE A `space-y-*` PARENT: Tailwind v4 emits `space-y` under `:where()` (zero
+ * specificity), so a child's own `m-0` wins and the gap collapses to nothing. Stacks here are
+ * `flex flex-col gap-*` instead — a gap does not depend on any child's margin. Preflight is off, so
+ * `<p>`/`<h3>` still need their UA margins cleared (`m-0`) — which is exactly why `space-y` cannot be used.
+ */
+const SECTION = "border-line shadow-card rounded-card m-0 min-w-0 border border-solid bg-white p-5";
+const TITLE = "text-navy m-0 text-[14px] font-bold";
+const DESCRIPTION = "text-ink-muted m-0 mt-1 max-w-2xl text-[12.5px]";
+const FIELD_LABEL = "text-navy m-0 block text-[13px] leading-5 font-semibold";
+/**
+ * Preflight is off, so `border-solid` alone gives the OTHER three sides the UA `medium` (3px) width:
+ * a one-sided hairline is always `border-0` + that side.
+ */
+const HAIRLINE_BOTTOM = "border-line border-0 border-b border-solid";
+const HAIRLINE_TOP = "border-line border-0 border-t border-solid";
+const FIELD_HINT = "text-ink-muted m-0 text-[12px]";
+const CHECKBOX = "accent-brand m-0 mt-0.5 size-3.5 shrink-0";
+const daySelectCls = cn(selectCls, "w-full min-w-0 pr-8");
+const hourSelectCls = cn(selectCls, "min-w-0 pr-8");
+const botInputCls = cn(controlClass, "bg-white");
+
+/**
+ * The prototype's `Field` (label, control, hint), 6px apart — `flex flex-col gap-1.5`, see the note on
+ * `SECTION`. The label row is ALWAYS a fixed 20px row, marker or not, so the controls of one grid row
+ * line up even when only one label carries a "?" (18px).
+ */
+function ZaloField({
+  label,
+  htmlFor,
+  hint,
+  marker,
+  children,
+}: {
+  label: string;
+  htmlFor?: string;
+  hint?: string;
+  marker?: ReactNode;
+  children: ReactNode;
+}) {
+  const labelEl = htmlFor ? (
+    <label htmlFor={htmlFor} className={FIELD_LABEL}>
+      {label}
+    </label>
+  ) : (
+    <p className={FIELD_LABEL}>{label}</p>
+  );
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <div className="flex h-5 items-center gap-1.5" data-field-label-row="">
+        {labelEl}
+        {marker}
+      </div>
+      {children}
+      {hint && <p className={FIELD_HINT}>{hint}</p>}
+    </div>
+  );
+}
+
+function DaySelect({
+  id,
+  name,
+  min,
+  value,
+  zeroLabel,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  name: string;
+  min: number;
+  value: number | null;
+  zeroLabel?: string;
+  disabled: boolean;
+  onChange: (days: number | null) => void;
+}) {
+  return (
+    <select
+      id={id}
+      name={name}
+      className={daySelectCls}
+      value={value === null ? "" : String(value)}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
+    >
+      {value === null && <option value="">Chưa đặt</option>}
+      {dayOptions(min, value).map((d) => (
+        <option key={d} value={d}>
+          {d === 0 && zeroLabel ? zeroLabel : `${d} ngày`}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function HourSelect({
+  name,
+  label,
+  value,
+  disabled,
+  onChange,
+}: {
+  name: string;
+  label: string;
+  value: string;
+  disabled: boolean;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <select
+      name={name}
+      aria-label={label}
+      className={hourSelectCls}
+      value={value}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      {hourOptions(value).map((h) => (
+        <option key={h} value={h}>
+          {h}
+        </option>
+      ))}
+    </select>
   );
 }
 
 /** Pure rendering, exported so the tests read the markup. */
 export function ZaloChannelView({
-  saved,
   draft,
-  setDraft,
+  onChange,
   saving,
-  saveMessage,
-  onSave,
-  staff,
+  held,
+  people,
 }: {
-  saved: ZaloChannelSettings;
   draft: ZaloChannelDraft;
-  setDraft: (d: ZaloChannelDraft) => void;
+  onChange: (d: ZaloChannelDraft) => void;
   saving: boolean;
-  saveMessage: { ok: boolean; text: string; field?: ZaloChannelField } | null;
-  onSave: () => void;
-  staff: KetQua<ZaloLinkedStaff[]> | null;
+  held: string | null;
+  people: PeopleState;
 }) {
-  const lateChosen = draft.kinds.includes("qua-han");
-  const fieldError = (f: ZaloChannelField) => (saveMessage !== null && !saveMessage.ok && saveMessage.field === f ? saveMessage.text : null);
-  const formError = saveMessage !== null && !saveMessage.ok && saveMessage.field === undefined ? saveMessage.text : null;
-
   return (
-    // Presentation only follows the prototype's `ZaloChannelPanel` (ADR 0068 lần 5): white cards with the
-    // title INSIDE (14px bold, no header bar), 20px padding, 20px apart. Fields, calls and rules are
-    // unchanged (ADR 0074).
-    <div className="page--form flex min-w-0 flex-col gap-5">
-      <section
-        className="m-0 min-w-0 overflow-hidden rounded-card border border-line bg-surface shadow-sm"
-        aria-labelledby="tieu-de-kenh-zalo"
-      >
-        <div className="px-5 pt-5">
-          <div className="min-w-0">
-            <h2 id="tieu-de-kenh-zalo" className="m-0 flex items-center gap-2 text-sm font-bold text-ink-900">
-              <MessageCircle aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-4 shrink-0 text-brand-600" />
-              {ZALO_TAB_TITLE}
-            </h2>
-            <p className="m-0 mt-1 max-w-xl text-[13px] text-ink-500">{ZALO_TAB_DESCRIPTION}</p>
-            {saved.updated_at !== undefined && (
-              <p className="m-0 mt-1 text-xs text-ink-500">
-                Cập nhật {formatVietnamDateTime(saved.updated_at)}
-                {saved.updated_by ? ` — ${saved.updated_by}` : ""}
-              </p>
-            )}
+    <div className="flex min-w-0 flex-col gap-5">
+      {/* §1 — ZaloChannelPanel.tsx:62-109 */}
+      <section className={SECTION} aria-labelledby="zalo-channel-title">
+        <div className="flex flex-wrap items-start gap-4">
+          <div className="min-w-0 flex-1">
+            <h3 id="zalo-channel-title" className={TITLE}>
+              Nhắc việc qua Zalo
+            </h3>
+            <p className="text-ink-muted m-0 mt-1 max-w-xl text-[12.5px]">{CHANNEL_DESCRIPTION}</p>
           </div>
+          <Switch
+            checked={draft.isEnabled}
+            disabled={saving}
+            onCheckedChange={(next) => onChange({ ...draft, isEnabled: next })}
+            aria-label="Bật kênh Zalo"
+          />
         </div>
-        <form
-          className="form-danh-muc m-0 border-0 bg-transparent p-5"
-          aria-label="Cấu hình kênh Zalo"
-          onSubmit={(e) => {
-            e.preventDefault();
-            onSave();
-          }}
-        >
-          <fieldset disabled={saving}>
-            <div className="flex min-w-0 flex-col gap-4 [&>*]:m-0">
-              <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 font-semibold">
-                <input
-                  type="checkbox"
-                  name="is_enabled"
-                  checked={draft.isEnabled}
-                  onChange={(e) => setDraft({ ...draft, isEnabled: e.target.checked })}
-                />{" "}
-                Bật nhắc việc qua Zalo cho cán bộ của xã
-              </label>
 
-              <fieldset
-                className="flex flex-col gap-1 rounded-xl border border-line px-3 pt-1 pb-3"
-                aria-describedby={fieldError("kinds") ? "loi-loai-zalo" : undefined}
-              >
-                <legend className="px-1 text-xs font-semibold text-ink-700">Loại nhắc việc gửi qua Zalo</legend>
-                {ZALO_REMINDER_KINDS.map((k) => (
-                  <label key={k} className="inline-flex min-h-10 cursor-pointer items-center gap-2">
-                    <input
-                      type="checkbox"
-                      name="kinds"
-                      value={k}
-                      checked={draft.kinds.includes(k)}
-                      onChange={(e) => setDraft(toggleKind(draft, k, e.target.checked))}
-                    />{" "}
-                    {KIND_LABEL[k]}
-                  </label>
-                ))}
-                {fieldError("kinds") && (
-                  <p id="loi-loai-zalo" className="thong-bao-loi m-0" role="alert">
-                    {fieldError("kinds")}
-                  </p>
-                )}
-              </fieldset>
-
-              {lateChosen && (
-                <div className="grid min-w-0 gap-4 sm:grid-cols-2 [&>*]:m-0">
-                  <div className="o-nhap">
-                    <label htmlFor="o-zalo-qua-han-bat-dau">Bắt đầu nhắc sau khi quá hạn (ngày)</label>
-                    <input
-                      id="o-zalo-qua-han-bat-dau"
-                      name="overdue_start_after_days"
-                      type="number"
-                      inputMode="numeric"
-                      min={1}
-                      step={1}
-                      required
-                      value={draft.lateStartDays}
-                      aria-invalid={fieldError("lateStartDays") ? true : undefined}
-                      onChange={(e) => setDraft({ ...draft, lateStartDays: e.target.value })}
-                    />
-                    {fieldError("lateStartDays") && (
-                      <p className="thong-bao-loi" role="alert">
-                        {fieldError("lateStartDays")}
-                      </p>
-                    )}
-                  </div>
-                  <div className="o-nhap">
-                    <label htmlFor="o-zalo-qua-han-lap">Nhắc lại sau mỗi (ngày)</label>
-                    <input
-                      id="o-zalo-qua-han-lap"
-                      name="overdue_repeat_every_days"
-                      type="number"
-                      inputMode="numeric"
-                      min={1}
-                      step={1}
-                      required
-                      value={draft.lateRepeatDays}
-                      aria-invalid={fieldError("lateRepeatDays") ? true : undefined}
-                      onChange={(e) => setDraft({ ...draft, lateRepeatDays: e.target.value })}
-                    />
-                    {fieldError("lateRepeatDays") && (
-                      <p className="thong-bao-loi" role="alert">
-                        {fieldError("lateRepeatDays")}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              <fieldset className="flex flex-col gap-2 rounded-xl border border-line px-3 pt-1 pb-3">
-                <legend className="px-1 text-xs font-semibold text-ink-700">Giờ yên lặng</legend>
-                <div className="grid min-w-0 gap-4 sm:grid-cols-2 [&>*]:m-0">
-                  <div className="o-nhap">
-                    <label htmlFor="o-zalo-yen-lang-tu">Từ</label>
-                    <input
-                      id="o-zalo-yen-lang-tu"
-                      name="quiet_start"
-                      type="time"
-                      value={draft.quietStart}
-                      onChange={(e) => setDraft({ ...draft, quietStart: e.target.value })}
-                    />
-                  </div>
-                  <div className="o-nhap">
-                    <label htmlFor="o-zalo-yen-lang-den">Đến</label>
-                    <input
-                      id="o-zalo-yen-lang-den"
-                      name="quiet_end"
-                      type="time"
-                      value={draft.quietEnd}
-                      onChange={(e) => setDraft({ ...draft, quietEnd: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <p className="ghi-chu m-0">{QUIET_HINT}</p>
-                {fieldError("quiet") && (
-                  <p className="thong-bao-loi m-0" role="alert">
-                    {fieldError("quiet")}
-                  </p>
-                )}
-              </fieldset>
-
-              <div className="flex justify-end">
-                <Button
-                  type="submit"
-                  variant="primary"
-                  icon={saving ? undefined : <Save aria-hidden="true" focusable="false" strokeWidth={1.8} />}
-                  aria-busy={saving}
-                >
-                  <BusyLabel busy={saving} label="Lưu cấu hình" busyText={BUSY_SAVING} />
-                </Button>
-              </div>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <ZaloField label="Giờ yên tĩnh" hint={QUIET_HINT}>
+            <div className="flex flex-wrap items-center gap-2 text-[12.5px]" role="group" aria-label="Giờ yên tĩnh">
+              <HourSelect
+                name="quiet_start"
+                label="Giờ yên tĩnh bắt đầu"
+                value={draft.quietStart}
+                disabled={saving}
+                onChange={(v) => onChange({ ...draft, quietStart: v })}
+              />
+              <span className="text-ink-muted">đến</span>
+              <HourSelect
+                name="quiet_end"
+                label="Giờ yên tĩnh kết thúc"
+                value={draft.quietEnd}
+                disabled={saving}
+                onChange={(v) => onChange({ ...draft, quietEnd: v })}
+              />
             </div>
-          </fieldset>
-          {saveMessage !== null && saveMessage.ok && (
-            <p role="status" className="mt-3 text-sm font-medium text-success-600">
-              {saveMessage.text}
+          </ZaloField>
+
+          {/* "{linked}/{total}" only when the directory was read; without it a total would be a guess. */}
+          <ZaloField label="Đã ghép nối">
+            <p className="text-navy m-0 text-[15px] font-bold">
+              {people.state === "joined"
+                ? `${people.linked}/${people.total} cán bộ`
+                : people.state === "linkedOnly"
+                  ? `${people.links.length} cán bộ`
+                  : people.state === "loading"
+                    ? "…"
+                    : "—"}
             </p>
-          )}
-          {formError !== null && (
-            <p className="thong-bao-loi mt-3" role="alert">
-              {formError}
-            </p>
-          )}
-        </form>
+          </ZaloField>
+        </div>
       </section>
 
-      <LinkedStaffSection staff={staff} />
+      {/* §2 — ZaloChannelPanel.tsx:111-204 */}
+      <section className={SECTION} aria-labelledby="zalo-when-title">
+        <h3 id="zalo-when-title" className={TITLE}>
+          Nhắc khi nào
+        </h3>
+        <p className={DESCRIPTION}>{WHEN_DESCRIPTION}</p>
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <ZaloField
+            label="Sắp đến hạn: nhắc trước"
+            htmlFor="zalo-due-soon-days"
+            marker={<PendingMarker info={DUE_SOON_ENTRY} />}
+          >
+            <select id="zalo-due-soon-days" className={daySelectCls} disabled>
+              <option value="" />
+            </select>
+          </ZaloField>
+          <ZaloField label="Quá hạn: bắt đầu nhắc sau" htmlFor="zalo-overdue-start">
+            <DaySelect
+              id="zalo-overdue-start"
+              name="overdue_start_after_days"
+              min={0}
+              zeroLabel="Ngay hôm quá hạn"
+              value={draft.lateStartDays}
+              disabled={saving}
+              onChange={(v) => onChange({ ...draft, lateStartDays: v })}
+            />
+          </ZaloField>
+          <ZaloField label="Quá hạn: nhắc lại mỗi" htmlFor="zalo-overdue-repeat">
+            <DaySelect
+              id="zalo-overdue-repeat"
+              name="overdue_repeat_every_days"
+              min={1}
+              value={draft.lateRepeatDays}
+              disabled={saving}
+              onChange={(v) => onChange({ ...draft, lateRepeatDays: v })}
+            />
+          </ZaloField>
+        </div>
+        {held !== null && (
+          <p role="status" className="text-ink-muted m-0 mt-2 text-[12px]">
+            {held}
+          </p>
+        )}
+
+        <p className="text-navy m-0 mt-5 mb-1 text-[13px] font-semibold">Việc gì thì nhắn qua Zalo</p>
+        <p className="text-ink-muted m-0 mb-3 text-[12.5px]">{EVENTS_HINT}</p>
+        <div className="grid gap-5 sm:grid-cols-2">
+          {ZALO_EVENT_GROUPS.map((group) => (
+            <div key={group.title} role="group" aria-label={group.title}>
+              <p className="text-ink-muted m-0 mb-1.5 text-[11px] font-semibold tracking-wide uppercase">{group.title}</p>
+              <div className="flex flex-col gap-1.5">
+                {group.events.map((ev) => {
+                  const text = (
+                    <span>
+                      <span className="text-navy block text-[12.5px] font-semibold">{ev.label}</span>
+                      {ev.hint && <span className="text-ink-muted block text-[11.5px]">{ev.hint}</span>}
+                    </span>
+                  );
+                  const kind = ev.kind;
+                  if (kind === null) {
+                    // The "?" sits OUTSIDE the label: a button inside a label joins its accessible name.
+                    return (
+                      <div key={ev.code} className="flex items-start gap-1.5" data-pending="">
+                        <label className="flex cursor-not-allowed items-start gap-2.5 opacity-60">
+                          <input type="checkbox" className={CHECKBOX} data-event={ev.code} checked={false} disabled readOnly />
+                          {text}
+                        </label>
+                        <PendingMarker info={MORE_EVENTS_ENTRY} className="mt-0.5" />
+                      </div>
+                    );
+                  }
+                  return (
+                    <label key={ev.code} className="flex cursor-pointer items-start gap-2.5">
+                      <input
+                        type="checkbox"
+                        className={CHECKBOX}
+                        data-event={ev.code}
+                        checked={draft.kinds.includes(kind)}
+                        disabled={saving}
+                        onChange={(e) => onChange(toggleKind(draft, kind, e.target.checked))}
+                      />
+                      {text}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <BotSection />
+
+      <LinkedStaffSection people={people} />
+
+      {saving && (
+        <p role="status" className="text-ink-muted m-0 flex items-center gap-1.5 text-[12px]">
+          <Loader2 aria-hidden="true" focusable="false" className="size-4 animate-spin" />
+          Đang lưu…
+        </p>
+      )}
     </div>
   );
 }
 
-function LinkedStaffSection({ staff }: { staff: KetQua<ZaloLinkedStaff[]> | null }) {
+/**
+ * §3 — ZaloChannelPanel.tsx:337-510. The commune's own bot is decided (ADR 0079 #4) but comms has no
+ * route for it yet, so the whole section is its shape, disabled, under ONE "?". No input has a
+ * `name` and no button an action: nothing here can send a token anywhere.
+ */
+function BotSection() {
+  return (
+    <section className={SECTION} aria-labelledby="zalo-bot-title" data-pending="">
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <h3 id="zalo-bot-title" className={TITLE}>
+              Con bot của xã
+            </h3>
+            <PendingMarker info={BOT_ENTRY} />
+          </div>
+          <p className={DESCRIPTION}>
+            Xã đang dùng bot chung của nền tảng. Để trống phần dưới là giữ nguyên như vậy — chỉ nhập mã bot khi xã muốn
+            bot mang tên mình.
+          </p>
+        </div>
+        <span className="bg-background text-ink-muted rounded-full px-3 py-1 text-[12px] font-semibold">Bot chung</span>
+      </div>
+
+      {/* A <form> only because a password input outside one makes the browser warn ("[DOM] Password field
+          is not contained in a form"). Fully disabled, no action, submit prevented: nothing is sent. */}
+      <form aria-label="Con bot của xã" className="m-0" onSubmit={(e) => e.preventDefault()}>
+        <fieldset disabled className="m-0 min-w-0 border-0 p-0">
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <ZaloField
+          label="Mã bot của xã"
+          htmlFor="zalo-bot-token"
+          hint="Lấy trong Mini App “Zalo Bot Creator”. Để trống là dùng bot chung."
+        >
+          <input
+            id="zalo-bot-token"
+            type="password"
+            autoComplete="off"
+            placeholder="123456789:abc-xyz"
+            className={botInputCls}
+            disabled
+          />
+        </ZaloField>
+        <ZaloField label="Tên bot" htmlFor="zalo-bot-name" hint="Tên hiển thị trong Zalo, bắt đầu bằng “Bot”.">
+          <input id="zalo-bot-name" type="text" className={botInputCls} disabled />
+        </ZaloField>
+        <ZaloField
+          label="Đường mở khung chat"
+          htmlFor="zalo-bot-chat-url"
+          hint="Link bot dạng https://zalo.me/<số>. Mã QR cán bộ quét được dựng từ đây."
+        >
+          <input id="zalo-bot-chat-url" type="text" placeholder="https://zalo.me/..." className={botInputCls} disabled />
+        </ZaloField>
+        <ZaloField
+          label="Secret Token của webhook"
+          htmlFor="zalo-bot-secret"
+          hint="Chép sang ứng dụng Zalo nếu xã tự đăng ký webhook bằng tay."
+        >
+          <input id="zalo-bot-secret" type="text" className={cn(botInputCls, "font-mono")} disabled />
+        </ZaloField>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <Button type="button" variant="primary" disabled>
+          Lưu con bot
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className="bg-white"
+          icon={<RefreshCw aria-hidden="true" focusable="false" />}
+          disabled
+        >
+          Kiểm tra kết nối
+        </Button>
+      </div>
+        </fieldset>
+      </form>
+    </section>
+  );
+}
+
+/** §4 — ZaloChannelPanel.tsx:208-262. */
+function LinkedStaffSection({ people }: { people: PeopleState }) {
+  const [onlyMissing, setOnlyMissing] = useState(false);
+  // The filter only means something when the unlinked are known (the directory was read).
+  const canFilter = people.state === "joined";
+  const rows =
+    people.state === "joined"
+      ? people.rows.filter((r) => !onlyMissing || !r.linked)
+      : people.state === "linkedOnly"
+        ? people.links.map((s) => ({
+            code: s.staff_code,
+            name: s.staff_name,
+            detail: `${s.staff_code} · Ghép nối lúc ${formatVietnamDateTime(s.linked_at)}`,
+            linked: true,
+          }))
+        : [];
   return (
     <section
-      className="m-0 min-w-0 overflow-hidden rounded-card border border-line bg-surface shadow-sm"
-      aria-labelledby="tieu-de-can-bo-zalo"
+      className="border-line shadow-card rounded-card m-0 min-w-0 border border-solid bg-white"
+      aria-labelledby="zalo-linked-title"
     >
-      <div className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-3">
-        <h2 id="tieu-de-can-bo-zalo" className="m-0 flex items-center gap-2 text-sm font-bold text-ink-900">
-          <Users aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-4 shrink-0 text-brand-600" />
-          Cán bộ đã ghép nối Zalo
-          {staff !== null && staff.ok && staff.duLieu.length > 0 && (
-            <span className="text-[13px] font-normal text-ink-500">({staff.duLieu.length})</span>
+      <div className={cn(HAIRLINE_BOTTOM, "flex flex-wrap items-center gap-3 px-5 py-3")}>
+        <h3 id="zalo-linked-title" className={TITLE}>
+          Ai đã ghép nối
+        </h3>
+        <label
+          className={cn(
+            "text-ink ml-auto flex items-center gap-2 text-[12.5px]",
+            canFilter ? "cursor-pointer" : "cursor-not-allowed opacity-60",
           )}
-        </h2>
+        >
+          <input
+            type="checkbox"
+            name="only_missing"
+            className="accent-brand m-0 size-3.5"
+            checked={canFilter && onlyMissing}
+            disabled={!canFilter}
+            onChange={(e) => setOnlyMissing(e.target.checked)}
+          />
+          Chỉ người chưa ghép nối
+        </label>
       </div>
-      {staff === null ? (
+      {people.state === "loading" ? (
         <div className="flex flex-col gap-2 p-4">
           <p role="status" className="an-thi-giac">
-            Đang tải danh sách cán bộ đã ghép nối…
+            Đang tải danh sách cán bộ…
           </p>
-          <Skeleton className="h-5 w-full" />
-          <Skeleton className="h-5 w-2/3" />
+          <Skeleton className="h-9 w-full" />
+          <Skeleton className="h-9 w-full" />
         </div>
-      ) : !staff.ok ? (
-        <p className="thong-bao-loi m-4" role="alert">
-          {staff.thongBao}
+      ) : people.state === "failed" ? (
+        <p className="text-danger m-0 px-5 py-3 text-[12.5px] font-medium" role="alert">
+          {people.reason}
         </p>
-      ) : staff.duLieu.length === 0 ? (
-        <p className="m-0 p-4 text-sm text-ink-500">{NO_LINKED_STAFF}</p>
       ) : (
-        <TableScroll aria-label="Cán bộ đã ghép nối Zalo">
-          <table className={DATA_TABLE_CLASS}>
-            <caption className="an-thi-giac">Cán bộ của xã đã ghép nối Zalo</caption>
-            <thead>
-              <tr>
-                <th scope="col">Mã cán bộ</th>
-                <th scope="col">Họ và tên</th>
-                <th scope="col">Ghép nối lúc</th>
-              </tr>
-            </thead>
-            <tbody>
-              {staff.duLieu.map((s) => (
-                <tr key={s.staff_code}>
-                  <td className="font-mono">{s.staff_code}</td>
-                  <td>{s.staff_name}</td>
-                  <td>{formatVietnamDateTime(s.linked_at)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </TableScroll>
+        <>
+          {people.state === "linkedOnly" && (
+            // Fail closed: without the directory nobody can be called "not linked", so the list says
+            // what it is instead of passing for the whole commune.
+            <p className={cn(HAIRLINE_BOTTOM, "text-danger m-0 px-5 py-2.5 text-[12px]")} role="alert">
+              Chưa đọc được danh bạ cán bộ ({people.reason}), nên dưới đây chỉ có người đã ghép nối.
+            </p>
+          )}
+          {/* Filter on and nobody left: the prototype draws the empty table, no sentence (ZaloChannelPanel.tsx:227-255). */}
+          {rows.length === 0 && !(people.state === "joined" && onlyMissing) ? (
+            <p className="text-ink-muted m-0 px-5 py-3 text-[12.5px]">{NO_LINKED_STAFF}</p>
+          ) : (
+            <div className="max-h-96 overflow-y-auto">
+              <table className="w-full border-collapse text-[12.5px]">
+                <caption className="an-thi-giac">Cán bộ của xã và trạng thái ghép nối Zalo</caption>
+                <tbody>
+                  {rows.map((r) => (
+                    <tr key={r.code} className={cn(HAIRLINE_BOTTOM, "last:border-b-0")} data-staff-code={r.code}>
+                      <td className="px-5 py-2.5">
+                        <p className="text-navy m-0 font-semibold">{r.name}</p>
+                        {r.detail !== "" && <p className="text-ink-muted m-0 text-[11px]">{r.detail}</p>}
+                      </td>
+                      <td className="px-5 py-2.5 text-right">
+                        {r.linked ? (
+                          <span className="text-leaf inline-flex items-center gap-1 font-semibold">
+                            <Check aria-hidden="true" focusable="false" className="size-3.5" />
+                            Đã ghép nối
+                          </span>
+                        ) : (
+                          <span className="text-ink-muted inline-flex items-center gap-1">
+                            <X aria-hidden="true" focusable="false" className="size-3.5" />
+                            Chưa
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
+      {/* Spec 11 §4 "trong ViGov" → "trong hệ thống" (ADR 0068 §13). "Hồ sơ cá nhân" is the real
+          menu item (`components/user-menu.tsx`, → /ca-nhan). */}
+      <p className={cn(HAIRLINE_TOP, "text-ink-muted m-0 px-5 py-3 text-[12px]")}>
+        Cán bộ tự ghép nối trong hệ thống: bấm tên mình ở góc trên, chọn “Hồ sơ cá nhân”. Không ai bật hộ được — Zalo
+        chỉ cho bot nhắn cho người đã nhắn cho nó trước.
+      </p>
     </section>
   );
 }
