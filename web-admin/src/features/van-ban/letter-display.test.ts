@@ -32,6 +32,7 @@ import {
   reportFigure,
   resultNeedsDocument,
   senderView,
+  stageDueAt,
   statusStrip,
 } from "./letter-display";
 
@@ -146,6 +147,30 @@ describe("drawer deadline figure (prototype :513-525) — the stored instant of 
     expect(drawerDueAt({ ...base, accepted_at: "2026-10-02T02:00:00Z", resolution_due_at: "2026-10-20T10:00:00Z" })).toBe("2026-10-20T10:00:00Z");
     expect(drawerDueAt({ ...base, accepted_at: "2026-10-02T02:00:00Z" })).toBeNull();
     expect(drawerDueAt({ ...base, processing_due_at: null })).toBeNull();
+  });
+
+  // TASK-09b row 4: the list row (no `accepted_at` on the wire) and the drawer's chip row read the SAME
+  // instant as the figure. Admission is read from the status — 0006's CHECK sets `accepted_at` exactly on
+  // thu-ly · dang-giai-quyet · da-giai-quyet · dinh-chi.
+  it("stageDueAt (list rows) agrees with drawerDueAt for every status the database allows", () => {
+    const due = { processing_due_at: "2026-10-03T10:00:00Z", resolution_due_at: "2026-10-20T10:00:00Z" };
+    const admitted = ["thu-ly", "dang-giai-quyet", "da-giai-quyet", "dinh-chi"];
+    const notAdmitted = ["moi-vao-so", "dang-xu-ly-don", "khong-thu-ly", "huong-dan", "chuyen-don", "luu-don"];
+    for (const status of admitted) {
+      expect(stageDueAt({ ...due, status }), status).toBe(drawerDueAt({ ...due, accepted_at: "2026-10-02T02:00:00Z" }));
+      expect(stageDueAt({ ...due, status }), status).toBe("2026-10-20T10:00:00Z");
+    }
+    for (const status of notAdmitted) {
+      expect(stageDueAt({ ...due, status }), status).toBe(drawerDueAt({ ...due, accepted_at: null }));
+      expect(stageDueAt({ ...due, status }), status).toBe("2026-10-03T10:00:00Z");
+    }
+    // Admitted with no resolution deadline: "Không đặt hạn", never the processing one.
+    expect(stageDueAt({ ...due, resolution_due_at: null, status: "thu-ly" })).toBeNull();
+  });
+
+  it("a FINISHED letter's list cell reads its stage's date like the drawer figure, never “Không đặt hạn”", () => {
+    const row = { status: "luu-don", processing_due_at: "2026-10-03T10:00:00Z", resolution_due_at: null };
+    expect(dueLabel(stageDueAt(row), true, NOW)).toEqual({ text: "Hạn 3/10/2026", tone: "normal" });
   });
 });
 

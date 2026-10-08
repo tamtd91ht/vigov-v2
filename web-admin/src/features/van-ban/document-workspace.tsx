@@ -62,11 +62,12 @@ const HEADER_ACTIONS_CLASS =
  * register, its main tab. Here each register has a working create button of its own, so each tab
  * puts its own buttons in the header (`RegisterFrame`): Văn bản đến `[+ Vào sổ văn bản đến]`, Văn bản đi
  * `[+ Cấp số văn bản đi]`, Đơn thư and Báo cáo the prototype's `[+ Vào sổ đơn thư] hoặc [Nhập từ
- * Excel ?]` (the import has no route, ADR 0078 #6). No "Quét & OCR": the prototype has none (#5).
+ * Excel]` (ADR 0084 #5). No "Quét & OCR": the prototype has none (ADR 0078 #5).
  *
  * Tab order is the prototype's with `Văn bản đi` after `Văn bản đến`; the opening tab is
  * `initialDocumentTab`. `Đơn thư công dân (N)` is the WHOLE register's count — scope `all`, no filter, as
- * the prototype's tab (`DocumentWorkspace.tsx:163-165`) — read once here and again after a booking. The tab is NOT in the URL (see `app/van-ban/page.tsx`). Only the selected tab is
+ * the prototype's tab (`DocumentWorkspace.tsx:163-165`) — read once here and again after a booking or an
+ * import, from either tab. The tab is NOT in the URL (see `app/van-ban/page.tsx`). Only the selected tab is
  * mounted, as in the prototype: switching tabs starts the other register from its first page.
  */
 export function DocumentWorkspace({
@@ -147,7 +148,7 @@ export function DocumentWorkspace({
       content = <LetterRegister frame={frame} onBooked={() => setCountReads((n) => n + 1)} />;
       break;
     default:
-      content = <LetterReport frame={frame} />;
+      content = <LetterReport frame={frame} onBooked={() => setCountReads((n) => n + 1)} />;
   }
   return content;
 }

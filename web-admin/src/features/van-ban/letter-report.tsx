@@ -1,27 +1,30 @@
 "use client";
 
-import { CloudOff, Download, Plus, RefreshCw } from "lucide-react";
+import { CloudOff, Download, Loader2, Plus, RefreshCw } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { PendingButton } from "@/components/ui/pending-feature";
 import { Skeleton } from "@/components/ui/skeleton";
 import { bangTraTuKetQua, traTen } from "@/features/cau-hinh/tra-danh-muc";
 import type { BangTraDanhMuc } from "@/features/cau-hinh/tra-danh-muc";
 import { usePhien } from "@/features/phien/phien-hien-tai";
+import { saveFile } from "@/features/nhiem-vu/save-file";
+import { downloadLetterReport } from "@/lib/api/citizen-letter-import";
 import { getCitizenLetterReport } from "@/lib/api/citizen-letters";
 import { layDanhMucBoPhan } from "@/lib/api/danh-muc";
 import type { KetQua } from "@/lib/api/goi";
 import type { documents_letterReportOut } from "@/lib/api/schema.gen";
 import { cn } from "@/lib/cn";
+import { PETITION_READ_PERMISSION, REPORT_EXPORT_PERMISSION } from "@/lib/quyen";
 
-import { HeaderOr, LetterImportButton, pendingPart } from "./document-pending";
+import { HeaderOr, LetterImportButton } from "./document-pending";
 import { Glyph, plainFrame, type RegisterFrame } from "./document-ui";
 import { canBookLetters, letterNumber, letterTypeLabel, reportFigure } from "./letter-display";
 import { LETTER_ENTRY_SUBMIT, LetterEntryDialog } from "./letter-entry-dialog";
+import { LetterImportDialog } from "./letter-import-dialog";
 
 /** The prototype's words (`PetitionReportPanel.tsx`). */
 export function reportTitle(year: number): string {
@@ -31,6 +34,22 @@ export const REPORT_NO_TYPE_ROWS = "Chưa có đơn nào trong năm.";
 export const REPORT_NO_UNIT_ROWS = "Chưa có đơn nào được phân công.";
 /** A row of `by_unit` with `unit_id: null` — letters held by no unit. The prototype's words (owner request v2 §5). */
 export const REPORT_NO_UNIT = "Chưa phân công";
+
+/** The prototype's export words (`PetitionReportPanel.tsx:52-61`). */
+export const REPORT_EXPORT_BUTTON = "Xuất Excel";
+export function reportExportedText(fileName: string): string {
+  return `Đã tải ${fileName}.`;
+}
+/** The prototype's refusal toast, followed by the server's own sentence (as the Nhiệm vụ export does). */
+export const REPORT_EXPORT_REFUSED = "Không xuất được báo cáo.";
+
+/**
+ * Whether the session may export: `report.export` AND `petition.read` — the route's two keys
+ * (`routes_citizen_letter_import.go`). Convenience only: the server checks both, and audits the export.
+ */
+export function canExportLetterReport(permissions: readonly string[]): boolean {
+  return permissions.includes(REPORT_EXPORT_PERMISSION) && permissions.includes(PETITION_READ_PERMISSION);
+}
 
 /**
  * `THEO LOẠI ĐƠN` by Tổng số, largest first — the prototype's order (`service.py:635`,
@@ -52,18 +71,47 @@ export function vietnamYear(now: Date = new Date()): number {
  * CURRENT year in Vietnam time, read once when the tab opens. The server requires `year`, so the screen
  * still names the year it asked for — in the title.
  *
- * The header keeps the register's buttons (`Vào sổ đơn thư` · `Nhập từ Excel ?`): in the prototype they
- * belong to the page, so they work on this tab too — a booking from here re-reads the report.
+ * The header keeps the register's buttons (`Vào sổ đơn thư` · `Nhập từ Excel`): in the prototype they
+ * belong to the page, so they work on this tab too — a booking or an import from here re-reads the report
+ * and the tab's count.
+ *
+ * `Xuất Excel` downloads THE YEAR SHOWN (the one in the title) — never a server default. Drawn only for
+ * `report.export` + `petition.read`, like every gated control of this screen; the outcome is a toast.
  */
-export function LetterReport({ frame = plainFrame }: { frame?: RegisterFrame }) {
+export function LetterReport({
+  frame = plainFrame,
+  onBooked,
+}: {
+  frame?: RegisterFrame;
+  /** A letter was booked or imported — the workspace re-reads the tab's count. */
+  onBooked?: () => void;
+} = {}) {
   const [year] = useState(() => vietnamYear());
   const [reads, setReads] = useState(0);
   const [result, setResult] = useState<{ year: number; reads: number; answer: KetQua<documents_letterReportOut> } | null>(null);
   const [units, setUnits] = useState<BangTraDanhMuc>({ pha: "dangDoc" });
   const [entry, setEntry] = useState<number | null>(null);
+  const [importing, setImporting] = useState<number | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const session = usePhien();
-  const canBook = canBookLetters(session !== null && session.ok ? session.duLieu.permissions : []);
+  const permissions = session !== null && session.ok ? session.duLieu.permissions : [];
+  const canBook = canBookLetters(permissions);
+  const canExport = canExportLetterReport(permissions);
+
+  function exportReport(): void {
+    if (exporting) return;
+    setExporting(true);
+    downloadLetterReport(year).then((r) => {
+      setExporting(false);
+      if (!r.ok) {
+        toast.error(`${REPORT_EXPORT_REFUSED} ${r.thongBao}`);
+        return;
+      }
+      saveFile(r.duLieu.blob, r.duLieu.fileName);
+      toast.success(reportExportedText(r.duLieu.fileName));
+    });
+  }
 
   useEffect(() => {
     let dropped = false;
@@ -100,7 +148,7 @@ export function LetterReport({ frame = plainFrame }: { frame?: RegisterFrame }) 
         {LETTER_ENTRY_SUBMIT}
       </Button>
       <HeaderOr />
-      <LetterImportButton />
+      <LetterImportButton onClick={() => setImporting((n) => (n ?? 0) + 1)} />
     </>
   ) : null;
 
@@ -111,6 +159,8 @@ export function LetterReport({ frame = plainFrame }: { frame?: RegisterFrame }) 
         answer={answer}
         units={units}
         onReload={() => setReads((n) => n + 1)}
+        onExport={canExport ? exportReport : undefined}
+        exporting={exporting}
       />
       {entry !== null && (
         <LetterEntryDialog
@@ -121,6 +171,17 @@ export function LetterReport({ frame = plainFrame }: { frame?: RegisterFrame }) 
             setEntry(null);
             toast.success(`Đã vào sổ đơn thư số ${letterNumber(letter.number, letter.year)}.`);
             setReads((n) => n + 1);
+            onBooked?.();
+          }}
+        />
+      )}
+      {importing !== null && (
+        <LetterImportDialog
+          key={importing}
+          onClose={() => setImporting(null)}
+          onImported={() => {
+            setReads((n) => n + 1);
+            onBooked?.();
           }}
         />
       )}
@@ -130,8 +191,8 @@ export function LetterReport({ frame = plainFrame }: { frame?: RegisterFrame }) 
 }
 
 /**
- * The report, PURE PRESENTATION (`PetitionReportPanel.tsx:38-230`): title row with the disabled
- * `Xuất Excel ?`, six figure cards, two tables, the monthly bars. A `null` figure is "—",
+ * The report, PURE PRESENTATION (`PetitionReportPanel.tsx:38-230`): title row with `Xuất Excel` (absent
+ * without `onExport` — no permission), six figure cards, two tables, the monthly bars. A `null` figure is "—",
  * never 0. The server's seventh figure (`closed_in_processing`) is not drawn: the prototype has six
  * cards, and a card of our own invention is a figure nobody asked to see.
  */
@@ -140,11 +201,16 @@ export function LetterReportView({
   answer,
   units,
   onReload,
+  onExport,
+  exporting = false,
 }: {
   year: number;
   answer: KetQua<documents_letterReportOut> | null;
   units: BangTraDanhMuc;
   onReload?: () => void;
+  /** Download the year's .xlsx. Absent = the session may not export: no button is drawn. */
+  onExport?: () => void;
+  exporting?: boolean;
 }) {
   return (
     <section className="flex min-w-0 flex-col gap-5 [&>*]:my-0" aria-labelledby="tieu-de-bao-cao-don-thu">
@@ -152,15 +218,26 @@ export function LetterReportView({
         <h2 id="tieu-de-bao-cao-don-thu" className="m-0 text-[15px] font-bold text-navy">
           {reportTitle(year)}
         </h2>
-        <PendingButton
-          info={pendingPart("Xuất báo cáo đơn thư")}
-          variant="outline"
-          size="sm"
-          icon={<Download aria-hidden="true" />}
-          className="ml-auto"
-        >
-          Xuất Excel
-        </PendingButton>
+        {onExport !== undefined && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="ml-auto"
+            icon={
+              exporting ? (
+                <Loader2 aria-hidden="true" focusable="false" className="size-3.5 animate-spin" />
+              ) : (
+                <Download aria-hidden="true" focusable="false" className="size-3.5" />
+              )
+            }
+            disabled={exporting}
+            aria-busy={exporting || undefined}
+            onClick={onExport}
+          >
+            {REPORT_EXPORT_BUTTON}
+          </Button>
+        )}
       </div>
 
       {answer === null && (

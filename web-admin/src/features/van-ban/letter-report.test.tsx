@@ -2,11 +2,22 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { toast } from "sonner";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
+import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import type { documents_letterReportOut } from "@/lib/api/schema.gen";
+import { PETITION_READ_PERMISSION, REPORT_EXPORT_PERMISSION } from "@/lib/quyen";
 
-import { LetterReportView, REPORT_NO_TYPE_ROWS, REPORT_NO_UNIT, REPORT_NO_UNIT_ROWS, reportTitle, vietnamYear } from "./letter-report";
+import {
+  LetterReport,
+  LetterReportView,
+  REPORT_NO_TYPE_ROWS,
+  REPORT_NO_UNIT,
+  REPORT_NO_UNIT_ROWS,
+  reportTitle,
+  vietnamYear,
+} from "./letter-report";
 
 beforeAll(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -98,9 +109,9 @@ describe("report tab", () => {
       "Tố cáo",
     ]);
     expect(REPORT_NO_UNIT).toBe("Chưa phân công");
-    // The disabled export with its "?".
-    const exportButton = [...el.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Xuất Excel")!;
-    expect(exportButton.disabled).toBe(true);
+    // No `onExport` (no permission): no export button at all, and no "?" left.
+    expect([...el.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Xuất Excel")).toBeUndefined();
+    expect(el.querySelector("[data-pending-marker]")).toBeNull();
   });
 
   it("an empty year: both tables say so; twelve month labels still drawn", () => {
@@ -134,5 +145,118 @@ describe("report tab", () => {
     const el = mount(null);
     expect(el.textContent).toContain("Đang tải báo cáo đơn thư");
     expect(el.textContent).not.toContain("Tiếp nhận trong năm");
+  });
+});
+
+describe("report tab — “Xuất Excel” (ADR 0084 #6; report.export AND petition.read)", () => {
+  type Call = { url: string; method: string };
+
+  function server(permissions: string[], exportAnswer: () => Response): Call[] {
+    const calls: Call[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        calls.push({ url, method: (init?.method ?? "GET").toUpperCase() });
+        const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
+        if (url === "/api/v1/sessions/current") {
+          return json({
+            sid: "s",
+            expires_at: "2099-01-01T00:00:00Z",
+            staff: { code: "CB-00009", full_name: "Cán bộ X", position: "" },
+            role: { code: "r", name: "R", is_leader: false },
+            permissions,
+            must_change_password: false,
+          });
+        }
+        if (url.startsWith("/api/v1/citizen-letter-report/exports")) return exportAnswer();
+        if (url.startsWith("/api/v1/citizen-letter-report")) {
+          return json({
+            year: 2026, received: 0, resolved: 0, closed_in_processing: 0, in_progress: 0, overdue: 0,
+            on_time_percent: null, average_days: null, by_type: [], by_unit: [], by_month: months,
+          });
+        }
+        if (url.startsWith("/api/v1/org-units")) return json({ items: [] });
+        return new Response("{}", { status: 404 });
+      }),
+    );
+    return calls;
+  }
+
+  async function mountReport(): Promise<HTMLDivElement> {
+    host = document.createElement("div");
+    document.body.append(host);
+    const r = createRoot(host);
+    root = r;
+    act(() =>
+      r.render(
+        <PhienProvider>
+          <LetterReport />
+        </PhienProvider>,
+      ),
+    );
+    for (let i = 0; i < 5; i++) await act(async () => {});
+    return host;
+  }
+
+  // jsdom has no object URLs; `saveFile` needs one. Put back after each test.
+  const realCreate = URL.createObjectURL;
+  const realRevoke = URL.revokeObjectURL;
+  function stubObjectUrl(create: () => string) {
+    URL.createObjectURL = create;
+    URL.revokeObjectURL = () => {};
+  }
+
+  const exportButton = (el: HTMLElement) => [...el.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Xuất Excel");
+
+  afterEach(() => {
+    URL.createObjectURL = realCreate;
+    URL.revokeObjectURL = realRevoke;
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("DENIED: report.export without petition.read — and petition.read without report.export — draw no export button", async () => {
+    server([REPORT_EXPORT_PERMISSION], () => new Response("", { status: 200 }));
+    expect(exportButton(await mountReport())).toBeUndefined();
+    act(() => root?.unmount());
+    host?.remove();
+    server([PETITION_READ_PERMISSION], () => new Response("", { status: 200 }));
+    expect(exportButton(await mountReport())).toBeUndefined();
+  });
+
+  it("ALLOWED: enabled; the click downloads THE YEAR SHOWN and saves the server's file, with the prototype's toast", async () => {
+    const success = vi.spyOn(toast, "success");
+    // `saveFile` clicks a download anchor; jsdom would try to navigate.
+    const clicked = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    const createUrl = vi.fn(() => "blob:x");
+    stubObjectUrl(createUrl);
+    const calls = server([REPORT_EXPORT_PERMISSION, PETITION_READ_PERMISSION], () =>
+      new Response("PK", { status: 200, headers: { "Content-Disposition": `attachment; filename="bao-cao-don-thu-nam-${vietnamYear()}.xlsx"` } }),
+    );
+    const el = await mountReport();
+    const b = exportButton(el)!;
+    expect(b.disabled).toBe(false);
+    await act(async () => b.click());
+    for (let i = 0; i < 5; i++) await act(async () => {});
+    const sent = calls.find((c) => c.url.startsWith("/api/v1/citizen-letter-report/exports"))!;
+    expect(sent.url).toBe(`/api/v1/citizen-letter-report/exports?year=${vietnamYear()}`);
+    expect(el.textContent).toContain(reportTitle(vietnamYear()));
+    expect(createUrl).toHaveBeenCalledTimes(1);
+    expect(clicked).toHaveBeenCalledTimes(1);
+    expect(success).toHaveBeenCalledWith(`Đã tải bao-cao-don-thu-nam-${vietnamYear()}.xlsx.`);
+  });
+
+  it("a refusal is a toast: the prototype's sentence, then the server's verbatim; nothing is saved", async () => {
+    const error = vi.spyOn(toast, "error");
+    const createUrl = vi.fn(() => "blob:x");
+    stubObjectUrl(createUrl);
+    server([REPORT_EXPORT_PERMISSION, PETITION_READ_PERMISSION], () =>
+      new Response(JSON.stringify({ code: "unavailable", message: "Chưa đọc được danh mục bộ phận.", trace_id: "" }), { status: 503 }),
+    );
+    const el = await mountReport();
+    await act(async () => exportButton(el)!.click());
+    for (let i = 0; i < 5; i++) await act(async () => {});
+    expect(error).toHaveBeenCalledWith("Không xuất được báo cáo. Chưa đọc được danh mục bộ phận.");
+    expect(createUrl).not.toHaveBeenCalled();
   });
 });

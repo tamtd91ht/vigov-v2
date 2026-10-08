@@ -151,6 +151,25 @@ export function TaskImportDialog({
   );
 }
 
+/**
+ * The words that differ per register — the prototype's ONE `ExcelImportDialog` takes them as props
+ * (`title`, `templateLabel`, `unit`). The Văn bản screen's letter import passes its own; the task import
+ * keeps the defaults below.
+ */
+export type ImportViewWords = {
+  readonly templateButton: string;
+  readonly submitLabel: (report: petitions_taskImportResultOut | null) => string;
+  readonly heading: (report: petitions_taskImportResultOut) => string;
+  readonly fileInputId: string;
+};
+
+const TASK_IMPORT_WORDS: ImportViewWords = {
+  templateButton: IMPORT_TEMPLATE_BUTTON,
+  submitLabel: importButtonLabel,
+  heading: previewHeading,
+  fileInputId: FILE_INPUT_ID,
+};
+
 /** The body, without state — rendered by the tests with `renderToStaticMarkup`. */
 export function TaskImportView({
   fileName,
@@ -161,7 +180,9 @@ export function TaskImportView({
   onChoose,
   onImport,
   onClose,
+  words = TASK_IMPORT_WORDS,
 }: {
+  words?: ImportViewWords;
   fileName: string | null;
   /** The local pre-check's sentence, or the server's refusal of the check — verbatim. */
   problem: string | null;
@@ -198,7 +219,7 @@ export function TaskImportView({
           aria-busy={busy === "template" || undefined}
           onClick={onTemplate}
         >
-          {IMPORT_TEMPLATE_BUTTON}
+          {words.templateButton}
         </Button>
       </div>
 
@@ -211,8 +232,8 @@ export function TaskImportView({
       >
         <Upload aria-hidden="true" focusable="false" className="text-ink-muted mx-auto mb-2 block size-6" />
         <input
-          id={FILE_INPUT_ID}
-          name={FILE_INPUT_ID}
+          id={words.fileInputId}
+          name={words.fileInputId}
           type="file"
           accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           className="hidden"
@@ -229,7 +250,7 @@ export function TaskImportView({
           type="button"
           variant="outline"
           disabled={busy === "import"}
-          onClick={() => document.getElementById(FILE_INPUT_ID)?.click()}
+          onClick={() => document.getElementById(words.fileInputId)?.click()}
         >
           {IMPORT_FILE_LABEL}
         </Button>
@@ -261,7 +282,7 @@ export function TaskImportView({
             ) : (
               <TriangleAlert aria-hidden="true" focusable="false" className="text-danger size-4 shrink-0" />
             )}
-            <span className="text-navy">{previewHeading(report)}</span>
+            <span className="text-navy">{words.heading(report)}</span>
           </p>
           {report.errors.length > 0 && (
             <div className="mt-2 max-h-52 overflow-y-auto">
@@ -282,7 +303,8 @@ export function TaskImportView({
                 <tbody>
                   {sortedImportErrors(report.errors).map((e, i) => (
                     <tr key={`${e.row}-${e.column}-${i}`} className="border-line border-t">
-                      <td className="text-danger py-1.5 pr-3 font-semibold">{e.row}</td>
+                      {/* Row 0 is the whole file (the shared import contract) — never shown as "0". */}
+                      <td className="text-danger py-1.5 pr-3 font-semibold">{e.row === 0 ? "Cả tệp" : e.row}</td>
                       <td className="text-ink-muted py-1.5 pr-3">{e.column === "" ? "—" : e.column}</td>
                       <td className="py-1.5">{e.message}</td>
                     </tr>
@@ -306,7 +328,7 @@ export function TaskImportView({
           icon={busy === "import" ? <Loader2 aria-hidden="true" focusable="false" className="size-4 animate-spin" /> : undefined}
           onClick={onImport}
         >
-          {importButtonLabel(report)}
+          {words.submitLabel(report)}
         </Button>
       </div>
     </div>

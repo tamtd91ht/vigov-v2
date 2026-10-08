@@ -18,6 +18,7 @@ import {
   TASK_ASSIGN_PERMISSION,
   PETITION_CREATE_PERMISSION,
   PETITION_READ_PERMISSION,
+  REPORT_EXPORT_PERMISSION,
 } from "@/lib/quyen";
 
 /**
@@ -75,9 +76,13 @@ export const PREVIEW_DOCUMENT_PERMISSIONS: readonly string[] = [
   QUYEN_XEM_VAN_BAN,
   QUYEN_GHI_SO_VAN_BAN,
   QUYEN_CHUYEN_VAN_BAN,
-  // The citizen-letter tabs: read, and book / route / correct (which also opens status and result).
+  // The citizen-letter tabs: read, and book / route / correct (which also opens status and result) —
+  // book also opens "Nhập từ Excel".
   PETITION_READ_PERMISSION,
   PETITION_CREATE_PERMISSION,
+  // The drawer's "Chuyển thành nhiệm vụ" (with petition.read) and the report's "Xuất Excel" (ADR 0084 #6).
+  QUYEN_TAO_NHIEM_VU,
+  REPORT_EXPORT_PERMISSION,
 ];
 
 /** Who the session is. The accountant opens Giải ngân; the leader opens Nhiệm vụ. */

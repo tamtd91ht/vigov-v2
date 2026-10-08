@@ -138,6 +138,34 @@ describe("letter table — masking and rows", () => {
     expect(el().querySelectorAll("tr.bg-danger\\/4")).toHaveLength(0);
   });
 
+  it("“Hạn giải quyết” uses the drawer figure's rule: a finished letter keeps the date of its stage (TASK-09b)", () => {
+    act(() => root?.unmount());
+    host?.remove();
+    const t = mountNode(
+      <LetterTable
+        answer={{
+          ok: true,
+          duLieu: {
+            items: [
+              // Lưu đơn — never admitted: the processing date, not "Không đặt hạn".
+              row({ status: "luu-don", status_group: "luu-khong-thu-ly", is_closed: true, processing_due_at: "2026-10-03T10:00:00Z" }),
+              // Đã giải quyết — admitted: the resolution date.
+              row({ id: "L9", status: "da-giai-quyet", status_group: "da-giai-quyet", is_closed: true, is_resolved: true, processing_due_at: "2026-10-03T10:00:00Z", resolution_due_at: "2026-10-20T10:00:00Z" }),
+            ],
+            next_cursor: "",
+            has_more: false,
+          },
+        }}
+        now={new Date("2026-10-08T03:00:00Z")}
+        units={{ pha: "dangDoc" }}
+        onOpen={() => {}}
+      />,
+    );
+    const rows = t.querySelectorAll("tbody tr");
+    expect(rows[0]!.querySelectorAll("td")[7]!.textContent).toBe("Hạn 3/10/2026");
+    expect(rows[1]!.querySelectorAll("td")[7]!.textContent).toBe("Hạn 20/10/2026");
+  });
+
   it("empty — under a filter too — says exactly the prototype's one sentence; an error has Tải lại", () => {
     act(() => root?.unmount());
     host?.remove();
@@ -216,6 +244,121 @@ async function mountRegister(): Promise<HTMLDivElement> {
 }
 
 const bookButton = (el: HTMLElement) => [...el.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Vào sổ đơn thư");
+const importButton = (el: HTMLElement) => [...el.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Nhập từ Excel");
+
+describe("letter register — “Nhập từ Excel” (ADR 0084 #5, prototype ExcelImportDialog)", () => {
+  type Call = { url: string; method: string; key: string | undefined };
+
+  /** Session with petition.create; the import routes answer `preview` and `imported`. */
+  function importServer(preview: unknown, imported: { status: number; body: unknown }): Call[] {
+    const calls: Call[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        const method = (init?.method ?? "GET").toUpperCase();
+        calls.push({ url, method, key: (init?.headers as Record<string, string> | undefined)?.["Idempotency-Key"] });
+        const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
+        if (url === "/api/v1/sessions/current") {
+          return json({
+            sid: "s",
+            expires_at: "2099-01-01T00:00:00Z",
+            staff: { code: "CB-00009", full_name: "Cán bộ X", position: "" },
+            role: { code: "r", name: "R", is_leader: false },
+            permissions: [PETITION_READ_PERMISSION, PETITION_CREATE_PERMISSION],
+            must_change_password: false,
+          });
+        }
+        if (url === "/api/v1/citizen-letters/import-previews") return json(preview);
+        if (url === "/api/v1/citizen-letters/imports") return json(imported.body, imported.status);
+        if (url.startsWith("/api/v1/citizen-letter-counts")) return json({ count: 3 });
+        if (url.startsWith("/api/v1/citizen-letters")) return json({ items: ROWS, next_cursor: "", has_more: false });
+        if (url.startsWith("/api/v1/org-units")) return json({ items: [{ id: "U1", name: "Văn phòng" }] });
+        if (url.startsWith("/api/v1/staff-directory")) return json({ items: [] });
+        return new Response("{}", { status: 404 });
+      }),
+    );
+    return calls;
+  }
+
+  const ROW = { row: 2, year: 2026, letter_type: "de-nghi", received_date: "2026-10-01", holding_unit_id: null, processing_due_at: null, sender_unknown: false };
+
+  function importDialog(): HTMLDialogElement | undefined {
+    return [...document.querySelectorAll("dialog")].find((d) => d.textContent?.includes("Nhập sổ đơn thư từ Excel"));
+  }
+
+  async function choose(name: string) {
+    const input = importDialog()!.querySelector<HTMLInputElement>("#tep-nhap-don-thu")!;
+    const file = new File(["PK"], name);
+    Object.defineProperty(input, "files", { configurable: true, value: { 0: file, length: 1, item: () => file } });
+    await act(async () => input.dispatchEvent(new Event("change", { bubbles: true })));
+    await act(async () => {});
+  }
+
+  it("opens the prototype's dialog; a clean check enables “Nhập 2 đơn thư”; 201 closes it and re-reads the list and the count", async () => {
+    const onBooked = vi.fn();
+    const calls = importServer({ valid: true, letters: [ROW, { ...ROW, row: 3 }], errors: [] }, { status: 201, body: { created: [ROW, ROW] } });
+    const el = mountNode(
+      <PhienProvider>
+        <LetterRegister onBooked={onBooked} />
+      </PhienProvider>,
+    );
+    for (let i = 0; i < 5; i++) await act(async () => {});
+    await act(async () => importButton(el)!.click());
+    const d = importDialog()!;
+    expect(d.textContent).toContain("Tải mẫu sổ đơn thư");
+    expect(d.textContent).toContain("Chọn tệp .xlsx");
+    const submit = () => [...importDialog()!.querySelectorAll("button")].find((b) => b.textContent?.startsWith("Nhập"))!;
+    expect(submit().disabled).toBe(true);
+
+    await choose("so-don-thu.xlsx");
+    const preview = calls.find((c) => c.url === "/api/v1/citizen-letters/import-previews")!;
+    expect(preview.method).toBe("POST");
+    expect(importDialog()!.textContent).toContain("2 dòng hợp lệ, sẵn sàng nhập");
+    expect(submit().textContent).toBe("Nhập 2 đơn thư");
+    expect(submit().disabled).toBe(false);
+
+    const listReads = calls.filter((c) => c.url.startsWith("/api/v1/citizen-letters?") || c.url === "/api/v1/citizen-letters").length;
+    await act(async () => submit().click());
+    await act(async () => {});
+    const sent = calls.find((c) => c.url === "/api/v1/citizen-letters/imports")!;
+    expect(sent.key).toBeTruthy();
+    expect(importDialog()).toBeUndefined();
+    expect(onBooked).toHaveBeenCalledTimes(1);
+    expect(calls.filter((c) => c.url.startsWith("/api/v1/citizen-letters?") || c.url === "/api/v1/citizen-letters").length).toBeGreaterThan(listReads);
+  });
+
+  it("a refused check lists Dòng | Cột | Vấn đề and keeps “Nhập” disabled; a non-.xlsx file is stopped before any upload", async () => {
+    const calls = importServer(
+      { valid: false, letters: [], errors: [{ row: 4, column: "Loại đơn", message: "Loại đơn không hợp lệ." }, { row: 0, column: "", message: "Tệp quá 200 dòng." }] },
+      { status: 201, body: { created: [] } },
+    );
+    const el = await (async () => {
+      const node = mountNode(
+        <PhienProvider>
+          <LetterRegister />
+        </PhienProvider>,
+      );
+      for (let i = 0; i < 5; i++) await act(async () => {});
+      return node;
+    })();
+    await act(async () => importButton(el)!.click());
+    await choose("so.csv");
+    expect(calls.some((c) => c.url === "/api/v1/citizen-letters/import-previews")).toBe(false);
+    expect(importDialog()!.textContent).toContain("Chỉ nhận tệp Excel .xlsx");
+
+    await choose("so.xlsx");
+    const d = importDialog()!;
+    expect(d.textContent).toContain("1 dòng sai");
+    expect(d.textContent).not.toContain("trên tổng số");
+    const cells = [...d.querySelectorAll("tbody tr")].map((tr) => [...tr.querySelectorAll("td")].map((td) => td.textContent));
+    expect(cells).toEqual([
+      ["Cả tệp", "—", "Tệp quá 200 dòng."],
+      ["4", "Loại đơn", "Loại đơn không hợp lệ."],
+    ]);
+    const submit = [...d.querySelectorAll("button")].find((b) => b.textContent === "Nhập")!;
+    expect(submit.disabled).toBe(true);
+  });
+});
 
 describe("letter register — status filter (ADR 0084 #5)", () => {
   it("the prototype's group labels in its order, no “Chờ phân công”; choosing one sends status_group", async () => {
@@ -244,19 +387,21 @@ describe("letter register — status filter (ADR 0084 #5)", () => {
 });
 
 describe("letter register — permission gating (UX only; the server decides)", () => {
-  it("ALLOWED: petition.create draws “Vào sổ đơn thư” and the disabled “Nhập từ Excel ?”", async () => {
+  it("ALLOWED: petition.create draws “Vào sổ đơn thư” and an ENABLED “Nhập từ Excel” — no “?” left", async () => {
     stubServer([PETITION_READ_PERMISSION, PETITION_CREATE_PERMISSION]);
     const el = await mountRegister();
     expect(bookButton(el)).toBeDefined();
-    const excel = [...el.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Nhập từ Excel")!;
-    expect(excel.disabled).toBe(true);
+    const excel = importButton(el)!;
+    expect(excel.disabled).toBe(false);
+    expect(el.querySelector("[data-pending-marker]")).toBeNull();
   });
 
-  it("DENIED: petition.read alone sees the register but no booking button", async () => {
+  it("DENIED: petition.read alone sees the register but no booking and no import button", async () => {
     stubServer([PETITION_READ_PERMISSION]);
     const el = await mountRegister();
     expect(el.querySelectorAll("tbody tr")).toHaveLength(3);
     expect(bookButton(el)).toBeUndefined();
+    expect(importButton(el)).toBeUndefined();
   });
 
   it("scope “Giao cho tôi” asks the server with scope=mine — never a staff code from the client", async () => {

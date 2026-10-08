@@ -29,7 +29,7 @@ import type {
   documents_letterRoutingIn,
   documents_senderCorrectionIn,
 } from "@/lib/api/schema.gen";
-import { PETITION_CREATE_PERMISSION, PETITION_READ_PERMISSION } from "@/lib/quyen";
+import { PETITION_CREATE_PERMISSION, PETITION_READ_PERMISSION, QUYEN_TAO_NHIEM_VU } from "@/lib/quyen";
 
 /* ---- types (C4) --------------------------------------------------------------------------- */
 
@@ -284,6 +284,23 @@ export function mayWorkOnLetter(permissions: readonly string[], staffCode: strin
   return staffCode !== "" && staffCode === assigneeCode;
 }
 
+/**
+ * "Chuyển thành nhiệm vụ": `task.create` AND `petition.read` — the two keys of POST
+ * /api/v1/citizen-letter-tasks. Convenience only: the server checks both.
+ */
+export function canRaiseLetterTask(permissions: readonly string[]): boolean {
+  return permissions.includes(QUYEN_TAO_NHIEM_VU) && permissions.includes(PETITION_READ_PERMISSION);
+}
+
+/**
+ * Whether the drawer draws the button: the keys, and NEVER for a denunciation — a task is read by every
+ * officer with `task.read`, and the denouncer's protection (Luật Tố cáo 2018 Đ.8; C9, ADR 0084 #6) does not
+ * survive that. The server's 422 `denunciation_no_task` is the backstop, not the gate.
+ */
+export function showsRaiseTask(letter: Pick<documents_citizenLetterOut, "letter_type">, canRaise: boolean): boolean {
+  return canRaise && letter.letter_type !== DENUNCIATION_TYPE;
+}
+
 /* ---- deadlines (rule 10) ------------------------------------------------------------------ */
 
 /** The words of a letter with no deadline — the prototype's own state (`document-display.ts:228`). */
@@ -350,6 +367,23 @@ export function drawerDueAt(
   return (letter.accepted_at ?? "") !== "" ? letter.resolution_due_at : letter.processing_due_at;
 }
 
+/**
+ * The statuses in which `accepted_at` is set — `service-documents/migrations/0006_citizen_letter.sql`,
+ * CHECK `citizen_letter_accepted_at_matches_status`. The list row carries no `accepted_at`, so the
+ * database's own binding stands in for it.
+ */
+const ADMITTED_STATUSES: readonly string[] = ["thu-ly", "dang-giai-quyet", "da-giai-quyet", "dinh-chi"];
+
+/**
+ * `drawerDueAt` for a LIST ROW: the same instant, with admission read from the status instead of
+ * `accepted_at` (see `ADMITTED_STATUSES`). The list's "Hạn giải quyết", the drawer's chip row and its
+ * "Hạn xử lý" figure all read through this rule, so one letter never shows two deadlines. It is also the
+ * instant a task raised from the letter inherits (`CurrentStageDueAt`, documents).
+ */
+export function stageDueAt(letter: DueFields): string | null {
+  return ADMITTED_STATUSES.includes(letter.status) ? letter.resolution_due_at : letter.processing_due_at;
+}
+
 /** The drawer's "Hạn xử lý" figure: the stored date, or "Không đặt" — never a count. */
 export function dueDateText(dueISO: string | null): string {
   if (dueISO === null || dueISO === "") return DUE_NOT_SET;
@@ -381,10 +415,13 @@ export function dueInstantOf(date: string): string | null {
   return /^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date}T17:00:00+07:00` : null;
 }
 
-/** Whether an OPEN letter is past its stored, phase-relevant deadline. Derived at render time. */
+/**
+ * Whether an OPEN letter is past its stored deadline — the one `stageDueAt` shows, so a red row and the
+ * "Quá hạn" words in it can never disagree. Derived at render time.
+ */
 export function isPastDue(letter: DueFields & { is_closed: boolean }, now: Date): boolean {
   if (letter.is_closed) return false;
-  const due = activeDue(letter);
+  const due = stageDueAt(letter);
   if (due === null || due === "") return false;
   const at = new Date(due).getTime();
   return !Number.isNaN(at) && at < now.getTime();

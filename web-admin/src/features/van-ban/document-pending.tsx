@@ -3,6 +3,7 @@
 import { Download, FileSpreadsheet, ListChecks } from "lucide-react";
 import type { KeyboardEvent, ReactNode } from "react";
 
+import { Button } from "@/components/ui/button";
 import { PendingButton, PendingMarker } from "@/components/ui/pending-feature";
 import { Tab, TabList } from "@/components/ui/tabs";
 import { cn } from "@/lib/cn";
@@ -20,7 +21,8 @@ import { INCOMING_STATUS_STEPS, PHAN_CHUA_DUNG, type PendingPart } from "./nhan-
  * of one reason drift, and the stale one is what a staff member reads.
  *
  * The two tabs `Đơn thư công dân` and `Báo cáo` were placeholders here until 08/10/2026; they are
- * built now (`letter-register.tsx`, `letter-report.tsx`). Only their Excel buttons stay "?".
+ * built now (`letter-register.tsx`, `letter-report.tsx`), and since 09/10/2026 so are their Excel
+ * import / export and "Chuyển thành nhiệm vụ" (ADR 0084 #5/#6, ADR 0085 A).
  */
 export function pendingPart(name: string): PendingPart {
   const found = PHAN_CHUA_DUNG.find((p) => p.ten === name);
@@ -106,17 +108,22 @@ export function HeaderOr() {
 
 /**
  * The prototype's second header button of the petition register — `[Nhập từ Excel]`
- * (`DocumentWorkspace.tsx:135-142`) — disabled with its "?": no import route exists (ADR 0078 #6).
+ * (`DocumentWorkspace.tsx:135-142`, outline, `FileSpreadsheet`, white). It opens the import dialog
+ * (`letter-import-dialog.tsx`); the routes exist since ADR 0084 #5. Drawn only for `petition.create`
+ * holders (the header gates it); the routes check again.
  */
-export function LetterImportButton() {
+export function LetterImportButton({ onClick }: { onClick: () => void }) {
   return (
-    <PendingButton
-      info={pendingPart("Nhập đơn thư từ Excel")}
+    <Button
+      type="button"
       variant="outline"
+      className="justify-center bg-white px-4"
       icon={<FileSpreadsheet aria-hidden="true" />}
+      aria-haspopup="dialog"
+      onClick={onClick}
     >
       Nhập từ Excel
-    </PendingButton>
+    </Button>
   );
 }
 
@@ -218,8 +225,8 @@ export function IncomingRowLinks({ year }: { year: number }) {
 }
 
 /**
- * The detail's `Chuyển thành nhiệm vụ` (prototype `DocumentDetailDrawer.tsx:404-418`,
- * `PetitionDetailDrawer.tsx:590-602`), disabled.
+ * The INCOMING-DOCUMENT detail's `Chuyển thành nhiệm vụ` (prototype `DocumentDetailDrawer.tsx:404-418`),
+ * disabled. The citizen-letter drawer's own button works (`letter-task.tsx`, ADR 0085 A).
  */
 export function RaiseTaskButton() {
   return (

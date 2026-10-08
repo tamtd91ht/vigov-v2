@@ -4565,7 +4565,22 @@ export function FormGiaoViec({
   dialogDescription = MO_TA_FORM_GIAO_VIEC,
   lead,
   submitLabel = "Giao việc",
+  initialUnit = "",
+  initialAssignee = "",
+  inheritedDue,
 }: {
+  /**
+   * Starting values of `Đơn vị thực hiện` / `Người thực hiện` — the Văn bản screen's "Chuyển thành nhiệm
+   * vụ" opens on the letter's holding unit and assignee (ADR 0085 §Trả lời #6). Editable, like `tieuDeCoSan`.
+   */
+  initialUnit?: string;
+  initialAssignee?: string;
+  /**
+   * THE DEADLINE IS THE SERVER'S: drawn READ-ONLY in the deadline box's place, and NO `due_at` is sent.
+   * For a route that sets the task's deadline itself and refuses one in the body
+   * (`POST /api/v1/citizen-letter-tasks`, ADR 0085 A6). Absent: the usual editable box.
+   */
+  inheritedDue?: ReactNode;
   /**
    * Open as the prototype's centred DIALOG (`ModalDialog`) instead of inline — the Nhiệm vụ screen's
    * `+ Giao việc mới` and `+ Thêm việc con`, the Biên bản screen's `Tách thành nhiệm vụ` and Phản
@@ -4635,13 +4650,14 @@ export function FormGiaoViec({
   const [khoi, datKhoi] = useState("");
   const [tieuDe, datTieuDe] = useState(tieuDeCoSan ?? "");
   const [moTa, datMoTa] = useState("");
-  const [boPhan, datBoPhan] = useState("");
-  const [nguoiThucHien, datNguoiThucHien] = useState("");
+  const [boPhan, datBoPhan] = useState(initialUnit);
+  const [nguoiThucHien, datNguoiThucHien] = useState(initialAssignee);
   const [lanhDaoGiaoViec, datLanhDaoGiaoViec] = useState("");
   // ADR 0065 NV6: pre-filled +7 calendar days at 17:00, computed ONCE when the form opens (lazy
   // initialiser) — the clerk may change or clear it. ONE `datetime-local` value, as the prototype's
   // box; `han` / `dueTime` are derived from it so the body sent is unchanged (`thanGiaoViec`).
-  const [dueInput, setDueInput] = useState(() => defaultNewTaskDueInput());
+  // An INHERITED deadline keeps it empty: "" is "no deadline in the body", which is what such a route needs.
+  const [dueInput, setDueInput] = useState(() => (inheritedDue === undefined ? defaultNewTaskDueInput() : ""));
   // The box half typed: its value reads "" (= no deadline), so this flag is what blocks sending.
   const [dueIncomplete, setDueIncomplete] = useState(false);
   const { date: han, time: dueTime } = splitNewTaskDue(dueInput);
@@ -5017,24 +5033,28 @@ export function FormGiaoViec({
       {/* [Hạn hoàn thành | Mức ưu tiên], halves, ONE `datetime-local` box — the prototype's row. Date
           AND time: a deadline "tomorrow" read as 00:00 counts work done tomorrow as late. */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div>
-          <label htmlFor={CREATE_TASK_FIELD_IDS.due} className={LABEL_CLASS}>
-            Hạn hoàn thành
-          </label>
-          <input
-            id={CREATE_TASK_FIELD_IDS.due}
-            name="giao-han"
-            type="datetime-local"
-            value={dueInput}
-            className={INPUT_CLASS}
-            {...fieldErrorProps(CREATE_TASK_FIELD_IDS.due, shown?.due)}
-            onChange={(e) => {
-              setDueInput(e.target.value);
-              setDueIncomplete(e.target.validity.badInput);
-            }}
-          />
-          <FieldError forId={CREATE_TASK_FIELD_IDS.due} message={shown?.due} />
-        </div>
+        {inheritedDue !== undefined ? (
+          <div data-inherited-due="">{inheritedDue}</div>
+        ) : (
+          <div>
+            <label htmlFor={CREATE_TASK_FIELD_IDS.due} className={LABEL_CLASS}>
+              Hạn hoàn thành
+            </label>
+            <input
+              id={CREATE_TASK_FIELD_IDS.due}
+              name="giao-han"
+              type="datetime-local"
+              value={dueInput}
+              className={INPUT_CLASS}
+              {...fieldErrorProps(CREATE_TASK_FIELD_IDS.due, shown?.due)}
+              onChange={(e) => {
+                setDueInput(e.target.value);
+                setDueIncomplete(e.target.validity.badInput);
+              }}
+            />
+            <FieldError forId={CREATE_TASK_FIELD_IDS.due} message={shown?.due} />
+          </div>
+        )}
 
         <div>
           <label htmlFor="giao-uu-tien" className={LABEL_CLASS}>

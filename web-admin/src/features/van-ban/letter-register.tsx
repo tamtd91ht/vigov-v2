@@ -29,6 +29,7 @@ import type {
   documents_citizenLetterItemOut,
   documents_citizenLetterOut,
   documents_letterLogOut,
+  identity_danhBaChonNguoiRa, // vi-name-ok: generated contract type, imported not declared (rule 12 inv 3)
   page_Result_documents_citizenLetterItemOut,
 } from "@/lib/api/schema.gen";
 import { cn } from "@/lib/cn";
@@ -40,8 +41,8 @@ import {
   LETTER_STATUS_GROUPS,
   WITHHELD_SENDER,
   WITHHELD_SUMMARY,
-  activeDue,
   canBookLetters,
+  canRaiseLetterTask,
   daysOpenView,
   dueLabel,
   isPastDue,
@@ -50,9 +51,11 @@ import {
   letterTypeLabel,
   mayWorkOnLetter,
   senderView,
+  stageDueAt,
 } from "./letter-display";
 import { LetterDrawer } from "./letter-drawer";
 import { LETTER_ENTRY_SUBMIT, LetterEntryDialog } from "./letter-entry-dialog";
+import { LetterImportDialog } from "./letter-import-dialog";
 import { LetterScopeFilter, LetterStatusBadge } from "./letter-ui";
 import { FilterSelect, doiLocVeTrangDau } from "./loc-so-van-ban";
 import { DieuHuongTrang, REGISTER_HEAD_ROW, REGISTER_ROW } from "./so-van-ban-den";
@@ -111,7 +114,7 @@ export function LetterRegister({
   onBooked,
 }: {
   frame?: RegisterFrame;
-  /** A letter was booked — the workspace re-reads the tab's count. */
+  /** A letter was booked (by hand or from Excel) — the workspace re-reads the tab's count. */
   onBooked?: () => void;
 } = {}) {
   const [scope, setScope] = useState<LetterScope>("all");
@@ -124,8 +127,11 @@ export function LetterRegister({
   } | null>(null);
   const [units, setUnits] = useState<BangTraDanhMuc>({ pha: "dangDoc" });
   const [directory, setDirectory] = useState<DanhBaTheoMa | null>(null);
+  const [staff, setStaff] = useState<KetQua<identity_danhBaChonNguoiRa> | null>(null);
 
   const [entry, setEntry] = useState<number | null>(null);
+  // Bumped per opening, as the dialog's `key`: a new opening is a new attempt (file, check, key).
+  const [importing, setImporting] = useState<number | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [drawerReads, setDrawerReads] = useState(0);
   const [drawer, setDrawer] = useState<{
@@ -138,6 +144,7 @@ export function LetterRegister({
   const permissions = session !== null && session.ok ? session.duLieu.permissions : [];
   const staffCode = session !== null && session.ok ? session.duLieu.staff.code : "";
   const canBook = canBookLetters(permissions);
+  const canRaiseTask = canRaiseLetterTask(permissions);
 
   const query = useMemo<LetterListFilter>(
     () => ({
@@ -168,7 +175,10 @@ export function LetterRegister({
       if (!dropped) setUnits(bangTraTuKetQua(k));
     });
     layDanhBaChonNguoi().then((k) => {
-      if (!dropped && k.ok) setDirectory(danhBaTheoMa(k.duLieu.items));
+      if (dropped) return;
+      // The raw answer too: the task dialog's `Người thực hiện` reads it (one read for the screen).
+      setStaff(k);
+      if (k.ok) setDirectory(danhBaTheoMa(k.duLieu.items));
     });
     return () => {
       dropped = true;
@@ -214,7 +224,7 @@ export function LetterRegister({
         {LETTER_ENTRY_SUBMIT}
       </Button>
       <HeaderOr />
-      <LetterImportButton />
+      <LetterImportButton onClick={() => setImporting((n) => (n ?? 0) + 1)} />
     </>
   ) : null;
 
@@ -253,6 +263,17 @@ export function LetterRegister({
               }}
             />
           )}
+          {importing !== null && (
+            <LetterImportDialog
+              key={importing}
+              onClose={() => setImporting(null)}
+              onImported={() => {
+                // Re-read, never splice: the server issued the numbers and the deadlines.
+                setReads((n) => n + 1);
+                onBooked?.();
+              }}
+            />
+          )}
           {openId !== null && (
             <LetterDrawer
               key={openId}
@@ -262,6 +283,8 @@ export function LetterRegister({
               units={units}
               directory={directory}
               canBook={canBook}
+              canRaiseTask={canRaiseTask}
+              staff={staff}
               mayWork={openLetter !== null && mayWorkOnLetter(permissions, staffCode, openLetter.assignee_code ?? "")}
               onChanged={() => {
                 setDrawerReads((n) => n + 1);
@@ -578,7 +601,8 @@ function LetterRow({
   const number = letterNumber(row.number, row.year);
   const sender = senderView(row);
   const days = daysOpenView(row);
-  const due = dueLabel(activeDue(row), row.is_closed, now);
+  // The drawer figure's rule (`stageDueAt`), so the row and the drawer never show two deadlines.
+  const due = dueLabel(stageDueAt(row), row.is_closed, now);
   const merged = (row.related_letter_id ?? "") !== "";
   const unit = row.holding_unit_id ?? "";
   const unitLookup = traTen(units, unit);

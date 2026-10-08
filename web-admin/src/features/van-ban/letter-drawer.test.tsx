@@ -6,6 +6,8 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
+import { PREVIEW_STAFF, PREVIEW_UNITS } from "@/dev-preview/disbursement.fixture";
+import { answer as fixtureAnswer } from "@/dev-preview/fixture-fetch";
 import { danhBaTheoMa } from "@/features/phan-anh/nhan-phieu";
 import type { documents_citizenLetterOut, documents_letterLogOut } from "@/lib/api/schema.gen";
 
@@ -81,7 +83,10 @@ function letter(over: Partial<documents_citizenLetterOut> = {}): documents_citiz
 
 const EMPTY_LOG: documents_letterLogOut = { items: [] };
 
-function drawer(doc: documents_citizenLetterOut, opts: { canBook?: boolean; mayWork?: boolean; log?: documents_letterLogOut } = {}) {
+function drawer(
+  doc: documents_citizenLetterOut,
+  opts: { canBook?: boolean; mayWork?: boolean; log?: documents_letterLogOut; canRaiseTask?: boolean; onChanged?: () => void } = {},
+) {
   return (
     <LetterDrawer
       letter={{ ok: true, duLieu: doc }}
@@ -90,7 +95,9 @@ function drawer(doc: documents_citizenLetterOut, opts: { canBook?: boolean; mayW
       units={{ pha: "xong", ten: new Map([["U1", "Văn phòng"]]) }}
       canBook={opts.canBook ?? true}
       mayWork={opts.mayWork ?? true}
-      onChanged={() => {}}
+      canRaiseTask={opts.canRaiseTask ?? false}
+      staff={{ ok: true, duLieu: PREVIEW_STAFF }}
+      onChanged={opts.onChanged ?? (() => {})}
       onClose={() => {}}
     />
   );
@@ -460,8 +467,144 @@ describe("letter drawer — prototype presentation (TASK-02)", () => {
   });
 
   it("the task button carries the prototype's sub-line", () => {
-    mount(drawer(letter()));
+    mount(drawer(letter(), { canRaiseTask: true }));
     expect(dialog().textContent).toContain("Nhiệm vụ kế thừa hạn xử lý của đơn, để hai bên không lệch nhau.");
+  });
+
+  it("the deadline CHIP reads the figure's instant: a finished letter keeps its stage's date (TASK-09b row 4)", () => {
+    mount(drawer(letter({ status: "luu-don", status_group: "luu-khong-thu-ly", is_closed: true, next_statuses: [], processing_due_at: "2026-10-03T10:00:00Z" })));
+    expect(dialog().querySelector("[data-letter-chips]")!.textContent).toContain("Hạn 3/10/2026");
+    expect(dialog().querySelector("[data-letter-chips]")!.textContent).not.toContain(NO_DEADLINE);
+  });
+});
+
+describe("letter drawer — “Chuyển thành nhiệm vụ” (ADR 0085 A, prototype :590-627)", () => {
+  const UNIT = PREVIEW_UNITS.items[0]!.id;
+  const held = () =>
+    letter({
+      holding_unit_id: UNIT,
+      assignee_code: "CB-00002",
+      status: "thu-ly",
+      status_group: "dang-xu-ly",
+      accepted_at: "2026-10-02T02:00:00Z",
+      next_statuses: ["dang-giai-quyet"],
+      processing_due_at: "2026-10-03T10:00:00Z",
+      resolution_due_at: "2026-10-20T10:00:00Z",
+    });
+
+  /** GETs answered by the dev-preview fixtures (catalogues, directories); POSTs recorded and answered by `post`. */
+  function server(post: (body: Record<string, unknown>, key: string) => Response) {
+    const posts: { body: Record<string, unknown>; key: string }[] = [];
+    const fake = vi.fn(async (input: string, init?: RequestInit) => {
+      const method = (init?.method ?? "GET").toUpperCase();
+      const url = new URL(input, "http://xa-a.vigov.test");
+      if (method === "GET") return fixtureAnswer("GET", url);
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      const key = (init?.headers as Record<string, string>)["Idempotency-Key"]!;
+      posts.push({ body, key });
+      expect(url.pathname).toBe("/api/v1/citizen-letter-tasks");
+      return post(body, key);
+    });
+    vi.stubGlobal("fetch", fake);
+    return posts;
+  }
+  const created = (code: string) => () => new Response(JSON.stringify({ code }), { status: 201, headers: { "Content-Type": "application/json" } });
+  const refused = (status: number, code: string, message: string) => () =>
+    new Response(JSON.stringify({ code, message, trace_id: "" }), { status, headers: { "Content-Type": "application/json" } });
+
+  /** The task dialog — the second `<dialog>`, over the drawer. */
+  function taskDialog(): HTMLDialogElement {
+    return [...document.querySelectorAll("dialog")].find((d) => d.textContent?.includes("Tạo nhiệm vụ từ hồ sơ này"))!;
+  }
+  async function openDialog() {
+    await act(async () => button("Chuyển thành nhiệm vụ")!.click());
+    // Catalogues load on first open.
+    await act(async () => {});
+  }
+  async function submit() {
+    const form = taskDialog().querySelector("form")!;
+    await act(async () => form.requestSubmit());
+    await act(async () => {});
+  }
+
+  it("DENIED: without task.create + petition.read there is no button and no sub-line", () => {
+    mount(drawer(held(), { canRaiseTask: false }));
+    expect(button("Chuyển thành nhiệm vụ")).toBeUndefined();
+    expect(dialog().textContent).not.toContain("Nhiệm vụ kế thừa hạn xử lý của đơn");
+  });
+
+  it("a DENUNCIATION never shows the button, even to a holder of both keys (server 422 is only the backstop)", () => {
+    mount(drawer(letter({ letter_type: "to-cao", identity_withheld: true, summary: null, summary_withheld: true }), { canRaiseTask: true }));
+    expect(button("Chuyển thành nhiệm vụ")).toBeUndefined();
+  });
+
+  it("allowed: enabled, no “?” — the dialog opens with title, unit and assignee pre-filled and the deadline READ-ONLY", async () => {
+    server(created("NV41"));
+    mount(drawer(held(), { canRaiseTask: true }));
+    const raise = button("Chuyển thành nhiệm vụ")!;
+    expect(raise.disabled).toBe(false);
+    expect(dialog().querySelector("[data-pending-marker]")).toBeNull();
+    await openDialog();
+    const d = taskDialog();
+    expect(d.querySelector<HTMLInputElement>("#giao-tieu-de")!.value).toBe("Đường thôn bị ngập sau mưa");
+    expect(d.querySelector<HTMLSelectElement>("#giao-bo-phan")!.value).toBe(UNIT);
+    expect(d.querySelector<HTMLSelectElement>("#giao-nguoi-thuc-hien")!.value).toBe("CB-00002");
+    // No editable deadline: the server sets it from the letter.
+    expect(d.querySelector("#giao-han")).toBeNull();
+    const due = d.querySelector("[data-inherited-due]")!.textContent;
+    expect(due).toContain("17:00 ngày 20/10/2026");
+    expect(due).toContain("Kế thừa hạn của đơn");
+  });
+
+  it("submit: POST with letter_id, the edited fields, NO due_at / source; success names the code and links to it", async () => {
+    const changed = vi.fn();
+    const posts = server(created("NV41"));
+    mount(drawer(held(), { canRaiseTask: true, onChanged: changed }));
+    await openDialog();
+    await submit();
+    expect(posts).toHaveLength(1);
+    const body = posts[0]!.body;
+    expect(body.letter_id).toBe("L1");
+    expect(body.title).toBe("Đường thôn bị ngập sau mưa");
+    expect(body.unit).toBe(UNIT);
+    expect(body.assignee).toBe("CB-00002");
+    expect(body.type).toBe("co-ban");
+    for (const k of ["due_at", "source", "source_id"]) expect(body, k).not.toHaveProperty(k);
+    expect(posts[0]!.key).not.toBe("");
+    // The dialog closed; the outcome is in the drawer, with the task's link.
+    expect(taskDialog()).toBeUndefined();
+    const status = [...dialog().querySelectorAll('[role="status"]')].find((p) => p.textContent?.includes("NV41"))!;
+    expect(status.textContent).toContain("Đã tạo nhiệm vụ NV41.");
+    expect(status.querySelector("a")!.getAttribute("href")).toBe("/nhiem-vu?task=NV41");
+    expect(changed).toHaveBeenCalled();
+  });
+
+  it("a refusal is shown VERBATIM in the dialog; a retry reuses the key, a NEW opening takes a fresh one", async () => {
+    let answer = refused(422, "assignment_required", "Chọn bộ phận hoặc người thực hiện.");
+    const posts = server(() => answer());
+    mount(drawer(held(), { canRaiseTask: true }));
+    await openDialog();
+    await submit();
+    expect(taskDialog().textContent).toContain("Chọn bộ phận hoặc người thực hiện.");
+    await submit();
+    expect(posts[1]!.key).toBe(posts[0]!.key);
+    // Huỷ, then open again: a new attempt.
+    await act(async () => [...taskDialog().querySelectorAll("button")].find((b) => b.textContent === "Huỷ")!.click());
+    await openDialog();
+    answer = created("NV42");
+    await submit();
+    expect(posts[2]!.key).not.toBe(posts[0]!.key);
+  });
+
+  it("a letter with no deadline: the dialog says the task will have none — and still sends no due_at", async () => {
+    const posts = server(created("NV43"));
+    mount(drawer(letter({ holding_unit_id: UNIT }), { canRaiseTask: true }));
+    await openDialog();
+    const due = taskDialog().querySelector("[data-inherited-due]")!.textContent;
+    expect(due).toContain(NO_DEADLINE);
+    expect(due).toContain("Đơn không đặt hạn nên nhiệm vụ cũng không có hạn.");
+    await submit();
+    expect(posts[0]!.body).not.toHaveProperty("due_at");
   });
 
   it("the timeline names the actor only (the prototype's `actor_name`); the bare code when the directory does not know it", () => {

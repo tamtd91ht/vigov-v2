@@ -263,6 +263,11 @@ function answerLetters(p: string, q: URLSearchParams): Response | null {
     if (state === "error") return refuse(503, PREVIEW_REGISTER_ERROR);
     return json(previewLetterReport(Number(q.get("year")) || new Date().getFullYear(), state === "empty"));
   }
+  // The import template and the year's export are FILES the preview does not have — said, not faked.
+  // Checked before the `/citizen-letters/{id}` read below, which would take "import-template" for an id.
+  if (p === "/api/v1/citizen-letters/import-template" || p === "/api/v1/citizen-letter-report/exports") {
+    return refuse(409, PREVIEW_NO_FILE);
+  }
   const m = /^\/api\/v1\/citizen-letters\/([^/]+)(\/log)?$/.exec(p);
   if (m === null) return null;
   const id = decodeURIComponent(m[1]!);

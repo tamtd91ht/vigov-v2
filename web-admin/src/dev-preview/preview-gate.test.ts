@@ -167,6 +167,19 @@ describe("fixture answering machine", () => {
     expect((await file.json()).message).toBe(PREVIEW_NO_FILE);
   });
 
+  it("citizen letters (TASK-09b): the import template and the report export say there is no file; the import and the task are refused writes", async () => {
+    for (const path of ["/api/v1/citizen-letters/import-template", "/api/v1/citizen-letter-report/exports?year=2026"]) {
+      const res = at(path);
+      expect(res.status, path).toBe(409);
+      expect((await res.json()).message, path).toBe(PREVIEW_NO_FILE);
+    }
+    for (const path of ["/api/v1/citizen-letters/import-previews", "/api/v1/citizen-letters/imports", "/api/v1/citizen-letter-tasks"]) {
+      const res = at(path, "POST");
+      expect(res.status, path).toBe(409);
+      expect((await res.json()).message, path).toBe(PREVIEW_WRITE_REFUSAL);
+    }
+  });
+
   it("the fixture holds no real person: staff are 'Cán bộ …', no phone field", async () => {
     const staff = await at("/api/v1/staff-directory").json();
     for (const s of staff.items as { full_name: string }[]) expect(s.full_name).toMatch(/^Cán bộ [A-Z]$/);

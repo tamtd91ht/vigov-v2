@@ -25,10 +25,10 @@ import type {
   documents_citizenLetterOut,
   documents_letterLogEntryOut,
   documents_letterLogOut,
+  identity_danhBaChonNguoiRa, // vi-name-ok: generated contract type, imported not declared (rule 12 inv 3)
 } from "@/lib/api/schema.gen";
 import { cn } from "@/lib/cn";
 
-import { RaiseTaskButton } from "./document-pending";
 import { Glyph } from "./document-ui";
 import {
   DUE_TONE_CLASS,
@@ -62,12 +62,14 @@ import {
   resultNeedsDocument,
   senderAddressText,
   senderView,
+  showsRaiseTask,
   statusStrip,
   type ResultDraft,
   type RoutingDraft,
   type SenderDraft,
   type StatusChipModel,
 } from "./letter-display";
+import { LetterTaskBlock } from "./letter-task";
 import { LetterStatusBadge } from "./letter-ui";
 
 /** Heading id of the drawer — the dialog's accessible name. */
@@ -80,8 +82,6 @@ export function letterDrawerTitle(number: number, year: number, receivedDate: st
 
 /** Words of the drawer, the prototype's where it has them. */
 export const LETTER_LOG_EMPTY = "Chưa chuyển cho bộ phận nào.";
-/** The sub-line under "Chuyển thành nhiệm vụ" (`PetitionDetailDrawer.tsx:600-602`). */
-export const RAISE_TASK_HINT = "Nhiệm vụ kế thừa hạn xử lý của đơn, để hai bên không lệch nhau.";
 export const ROUTING_SECTION_TITLE = "Chuyển cho bộ phận khác";
 export const RESULT_SECTION_TITLE = "Nội dung trả lời công dân";
 export const RESULT_SAVE_LABEL = "Lưu nội dung trả lời";
@@ -109,7 +109,8 @@ export const DEADLINE_CLEARED = "Đã bỏ hạn xử lý.";
  *   left     badges (status group · type · source · deadline), figures (the ADDRESS IS NEVER SHOWN —
  *            only whether one exists), the clerk's "Hạn xử lý" editor (ADR 0079 lô 5 Q18, kept by ADR 0084
  *            #3, `petition.create`, open phases only), sender correction (an EMPTY form), "Chuyển thành
- *            nhiệm vụ" ("?"), "Chuyển cho bộ phận khác" (routing), and the reply — one textarea, plus the
+ *            nhiệm vụ" (`task.create` + `petition.read`, never a denunciation — `letter-task.tsx`),
+ *            "Chuyển cho bộ phận khác" (routing), and the reply — one textarea, plus the
  *            issued document for a complaint or a denunciation (ADR 0084 #2).
  *   right    "Nhật ký & Trao đổi" (one note) and the processing log, newest first, read-only.
  *
@@ -124,6 +125,8 @@ export function LetterDrawer({
   directory = null,
   canBook,
   mayWork,
+  canRaiseTask = false,
+  staff = null,
   onChanged,
   onClose,
 }: {
@@ -137,6 +140,10 @@ export function LetterDrawer({
   canBook: boolean;
   /** `petition.read` AND (assignee OR `petition.create`) — status, result, log. */
   mayWork: boolean;
+  /** `task.create` AND `petition.read` — "Chuyển thành nhiệm vụ" (`canRaiseLetterTask`). */
+  canRaiseTask?: boolean;
+  /** The register's whole-commune staff directory, raw — the task dialog's `Người thực hiện`. */
+  staff?: KetQua<identity_danhBaChonNguoiRa> | null;
   /** A write succeeded: re-read the letter, its log and the register row. */
   onChanged: () => void;
   onClose: () => void;
@@ -233,10 +240,9 @@ export function LetterDrawer({
 
               {canBook && <SenderCorrection key={`sender:${doc.id}`} letter={doc} onSaved={() => done("Đã sửa thông tin người gửi.")} />}
 
-              <div className="mt-4">
-                <RaiseTaskButton />
-                <p className="m-0 mt-1.5 text-[11px] text-ink-muted">{RAISE_TASK_HINT}</p>
-              </div>
+              {showsRaiseTask(doc, canRaiseTask) && (
+                <LetterTaskBlock key={`task:${doc.id}`} letter={doc} staff={staff} onCreated={onChanged} />
+              )}
 
               {saved !== "" && (
                 <p role="status" className="m-0 mt-4 flex items-center gap-2 text-[12.5px] font-medium text-success-600">
@@ -325,9 +331,12 @@ function DrawerHeadline({ letter }: { letter: documents_citizenLetterOut }) {
   );
 }
 
-/** The prototype's badge row (`PetitionDetailDrawer.tsx:489-511`): status group · type · source · deadline. */
+/**
+ * The prototype's badge row (`PetitionDetailDrawer.tsx:489-511`): status group · type · source · deadline.
+ * The deadline chip reads the SAME instant as the "Hạn xử lý" figure (`drawerDueAt`) and the list cell.
+ */
 function DrawerBadges({ letter, now }: { letter: documents_citizenLetterOut; now: Date }) {
-  const due = dueLabel(activeDue(letter), letter.is_closed, now);
+  const due = dueLabel(drawerDueAt(letter), letter.is_closed, now);
   return (
     <div className="mb-3 flex flex-wrap gap-2" data-letter-chips="">
       <LetterStatusBadge group={letter.status_group} />

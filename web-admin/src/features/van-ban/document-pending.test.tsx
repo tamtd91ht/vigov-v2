@@ -68,10 +68,8 @@ function dialogText(): string {
 }
 
 describe("PHAN_CHUA_DUNG của màn Văn bản", () => {
-  it("đúng mười một phần, mỗi mục có lý do; hai tab Đơn thư/Báo cáo đã dựng, chỉ còn Excel của chúng", () => {
+  it("đúng chín phần, mỗi mục có lý do; Excel của Đơn thư/Báo cáo đã dựng nên rời danh sách (TASK-09b)", () => {
     expect(PHAN_CHUA_DUNG.map((p) => p.ten)).toEqual([
-      "Nhập đơn thư từ Excel",
-      "Xuất báo cáo đơn thư",
       "Chuyển trạng thái văn bản đến",
       "Lọc Giao cho tôi / Liên quan đến tôi",
       "Nhập hàng loạt từ Excel",
@@ -83,6 +81,8 @@ describe("PHAN_CHUA_DUNG của màn Văn bản", () => {
       "Ghi chú văn bản đến",
     ]);
     for (const p of PHAN_CHUA_DUNG) expect(p.viSao.trim()).not.toBe("");
+    // The remaining "Chuyển thành nhiệm vụ" is the INCOMING document's: the letter's button works.
+    expect(PHAN_CHUA_DUNG.find((p) => p.ten === "Chuyển thành nhiệm vụ")!.viSao).not.toContain("đơn thư");
   });
 });
 
@@ -146,13 +146,16 @@ describe("chỗ giữ “?” của màn Văn bản & Đơn thư (ADR 0068 §14)
     expect(markers(el)).toHaveLength(2);
   });
 
-  it("đầu trang tab Đơn thư: [Nhập từ Excel] vô hiệu, “?” nói chưa có đường nhập", () => {
-    const el = mount(<LetterImportButton />);
+  it("đầu trang tab Đơn thư: [Nhập từ Excel] bấm được, không còn “?” (ADR 0084 #5)", () => {
+    const onClick = vi.fn();
+    const el = mount(<LetterImportButton onClick={onClick} />);
     const buttons = realButtons(el);
     expect(buttons.map((b) => b.textContent)).toEqual(["Nhập từ Excel"]);
-    expect(buttons[0]!.disabled).toBe(true);
-    act(() => markers(el)[0]!.click());
-    expect(dialogText()).toContain("chưa nhận sổ đơn thư từ tệp Excel");
+    expect(buttons[0]!.disabled).toBe(false);
+    expect(buttons[0]!.getAttribute("aria-haspopup")).toBe("dialog");
+    expect(markers(el)).toHaveLength(0);
+    act(() => buttons[0]!.click());
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 
   it("dải trạng thái: năm bước C2 của văn bản đến, bước đang đứng sáng, mọi nút vô hiệu, một “?”", () => {
@@ -189,7 +192,6 @@ describe("chỗ giữ “?” của màn Văn bản & Đơn thư (ADR 0068 §14)
       <>
         <IncomingScopeFilter />
         <IncomingRowLinks year={2026} />
-        <LetterImportButton />
         <StatusChangeRow current={null} />
         <RaiseTaskButton />
       </>,
