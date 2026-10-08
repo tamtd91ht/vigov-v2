@@ -51,8 +51,10 @@ function card(j: AutomationJob, extra: Record<string, unknown> = {}) {
     <AutomationJobCardView
       job={j}
       draft={form.draftFrom(j)}
+      on={j.configured && j.enabled}
       busy=""
-      notice={null}
+      error={null}
+      onToggle={noop}
       onDraft={noop}
       onSave={noop}
       onRunNow={noop}
@@ -84,13 +86,23 @@ describe("tab Tự động hoá — cổng quyền", () => {
     expect(html).not.toContain(form.AUTOMATION_GUIDANCE);
   });
 
-  it("có `admin.sla` → lời dẫn của §9 và câu 'chỉ gửi cán bộ, qua chuông'", () => {
+  it("có `admin.sla` → lời dẫn của §9 (đúng lớp chữ), và chỉ lời dẫn ấy", () => {
     fakeSession = sessionWith(["admin.sla"]);
     const html = renderToStaticMarkup(<AutomationTab />);
-    expect(html).toContain(form.AUTOMATION_GUIDANCE);
-    expect(html).toContain(form.AUTOMATION_RECIPIENTS);
-    expect(form.AUTOMATION_RECIPIENTS).toMatch(/chuông thông báo/);
+    expect(html).toContain(`<p class="text-ink-muted max-w-2xl text-[12.5px]">${form.AUTOMATION_GUIDANCE}</p>`);
     expect(html).toContain("Đang tải cấu hình tự động hoá");
+    // Spec 09 loading: one `Skeleton h-80`, not table rows.
+    expect(html).toMatch(/<span aria-hidden="true" class="[^"]*h-80/);
+    expect(html).not.toContain("skeleton-rows");
+  });
+
+  it("REGRESSION (owner 08/10 'Bỏ hết, đúng prototype'): no second paragraph — the recipients sentence is gone", () => {
+    fakeSession = sessionWith(["admin.sla"]);
+    const html = renderToStaticMarkup(<AutomationTab />);
+    expect(html).not.toContain("chuông thông báo");
+    expect(html).not.toContain("Người dân không nhận tin");
+    // The guidance is the only visible paragraph before the cards.
+    expect(html.match(/<p class="text-ink-muted max-w-2xl/g)).toHaveLength(1);
   });
 });
 
@@ -123,39 +135,68 @@ describe("danh sách việc", () => {
 });
 
 describe("một việc", () => {
-  it("chưa lưu lần nào (configured:false) → ĐANG TẮT, nhịp gợi ý điền sẵn, không có Chạy ngay", () => {
+  it("chưa lưu lần nào (configured:false) → ĐANG TẮT, nền trang (bg-background), không có phần nhịp", () => {
     const html = card(job({ configured: false, enabled: false, enabled_at: null }));
-    expect(html).toContain("Đang tắt — xã chưa lưu cấu hình việc này");
-    expect(html).toContain('value="15"');
-    expect(html).not.toContain(`>${form.RUN_NOW_BUTTON}</button>`);
-    expect(html).toContain(form.RUN_NOW_NEEDS_ON);
-    // The switch is drawn off.
-    expect(html).toMatch(/role="switch"(?![^>]*checked)/);
+    expect(html).toContain('role="switch" aria-checked="false"');
+    expect(html).toContain("Đang tắt</label>");
+    // TOKEN TRAP: the spec's off `bg-surface` is #f4f8fb = `bg-background` here; `bg-surface` is white.
+    expect(html).toMatch(/<section class="[^"]*bg-background/);
+    expect(html).not.toMatch(/<section class="[^"]*bg-white/);
+    expect(html).not.toContain("Cứ mỗi");
+    expect(html).not.toContain(`${form.RUN_NOW_BUTTON}</button>`);
+    expect(html).toContain("Chưa chạy lần nào");
   });
 
-  it("đang bật → nhịp bằng lời, giờ Việt Nam, nút Chạy ngay", () => {
-    const html = card(job());
-    expect(html).toContain("Cứ 15 phút một lần (Giờ Việt Nam)");
-    expect(html).toContain(`>${form.RUN_NOW_BUTTON}</button>`);
-    expect(html).toContain("Ít nhất 5 phút giữa hai lượt quét.");
+  it("đang bật → thẻ trắng, công tắc bật, 'Cứ mỗi' từ mức tối thiểu, Chạy ngay; chưa đổi thì không có Lưu nhịp", () => {
+    const html = card(job({ min_interval_minutes: 10 }));
+    expect(html).toMatch(/<section class="border-line shadow-card rounded-card border border-solid p-4 bg-white"/);
+    expect(html).toContain('role="switch" aria-checked="true"');
+    expect(html).toContain("Đang bật</label>");
+    expect(html).toContain('class="text-ink-muted m-0 mb-1 block text-[11px] font-semibold">Cứ mỗi</label>');
+    expect(html).toContain('<option value="15" selected="">15 phút</option>');
+    expect(html).toMatch(/<select id="tu-dong-hoa-sla_reminders-nhip" class="[^"]* min-w-0 /);
+    expect(html).toContain('<option value="180">3 giờ</option>');
+    expect(html).toContain('<option value="1440">1 ngày</option>');
+    // Below `min_interval_minutes` is not offered.
+    expect(html).not.toContain('<option value="5">');
+    expect(html).toContain(`${form.RUN_NOW_BUTTON}</button>`);
+    expect(html).not.toContain(form.SAVE_CADENCE_BUTTON);
+    // The old cadence sentence and state badge are gone.
+    expect(html).not.toContain("một lần");
   });
 
-  it("việc theo tuần: ô chọn thứ (1 = Thứ Hai … 7 = Chủ nhật) và ô giờ", () => {
+  it("nhịp đã đổi mà chưa lưu → hiện nút 'Lưu nhịp' cỡ sm", () => {
+    const j = job();
+    const html = card(j, { draft: { ...form.draftFrom(j), interval: "30" } });
+    expect(html).toMatch(/<button class="nut-chinh [^"]* h-7 [^"]* min-h-0" type="submit"[^>]*>Lưu nhịp<\/button>/);
+  });
+
+  it("việc theo tuần: ô 'Vào' (1 = Thứ Hai … 7 = Chủ nhật) và ô 'Lúc'", () => {
     const html = card(job({ job: "weekly_digest", schedule_kind: "weekly", interval_minutes: null, run_hour: 7, run_minute: 30, weekday: 1 }));
+    expect(html).toContain(">Vào</label>");
+    // The legacy 12rem select floor is undone, as `formSelectCls` does.
+    expect(html).toMatch(/<select id="tu-dong-hoa-weekly_digest-thu" class="[^"]* min-w-0 /);
     expect(html).toContain('<option value="1" selected="">Thứ Hai</option>');
     expect(html).toContain('<option value="7">Chủ nhật</option>');
     expect(html).toContain('type="time"');
     expect(html).toContain('value="07:30"');
-    expect(html).toContain("Lúc (Giờ Việt Nam)");
+    expect(html).toContain(">Lúc</label>");
   });
 
-  it("chưa có lượt chạy nào → nói đúng câu ấy, không có bảng", () => {
+  it("việc hằng ngày: chỉ ô 'Lúc'", () => {
+    const html = card(job({ job: "escalation", schedule_kind: "daily", interval_minutes: null, run_hour: 7, run_minute: 0 }));
+    expect(html).toContain(">Lúc</label>");
+    expect(html).not.toContain(">Vào</label>");
+    expect(html).not.toContain("Cứ mỗi");
+  });
+
+  it("chưa có lượt chạy nào → 'Chưa chạy lần nào', không có bảng", () => {
     const html = card(job());
-    expect(html).toContain(form.NO_RUNS_YET);
+    expect(html).toContain('<p class="text-ink-muted m-0 mt-1 text-[11px]">Chưa chạy lần nào</p>');
     expect(html).not.toContain("<table");
   });
 
-  it("lượt chạy theo từng loại việc: giờ nhận, cách chạy, kết quả, ba con số", () => {
+  it("lượt chạy theo từng loại việc: dòng 'Chạy lần cuối' lấy lượt MỚI NHẤT, bảng gọn trong thẻ", () => {
     const html = card(
       job({
         last_runs: [
@@ -184,20 +225,28 @@ describe("một việc", () => {
         ],
       }),
     );
+    expect(html).toContain("Chạy lần cuối 08:16 29/09/2026");
+    expect(html).toContain('<div class="border-line mt-3 border-t pt-3">');
     expect(html).toContain("<td>Nhiệm vụ</td><td>08:15 29/09/2026</td><td>Theo lịch</td><td>Hoàn thành</td><td>42</td><td>3</td><td>1</td>");
     expect(html).toContain("<td>Văn bản đến</td><td>08:16 29/09/2026</td><td>Chạy ngay</td><td>Chưa báo kết quả</td><td>—</td><td>—</td><td>—</td>");
-    expect(html).not.toContain(form.NO_RUNS_YET);
   });
 
-  it("câu từ chối của máy chủ (409 đang tắt / người khác vừa lưu) hiện nguyên văn", () => {
+  it("câu từ chối của máy chủ (409 đang tắt / người khác vừa lưu) hiện nguyên văn, tại chỗ", () => {
     const sentence = "Cấu hình việc này vừa được người khác lưu. Hãy tải lại trang rồi thử lại.";
-    const html = card(job(), { notice: { ok: false, text: sentence } });
-    expect(html).toContain(`<p class="thong-bao-loi" role="alert">${sentence}</p>`);
+    const html = card(job(), { error: sentence });
+    expect(html).toContain(`<p class="thong-bao-loi m-0 mt-2" role="alert">${sentence}</p>`);
   });
 
   it("yêu cầu chạy ngay chưa ai nhận → nói thật, từ dữ liệu", () => {
     const html = card(job({ run_requested_at: "2026-09-29T03:00:00Z" }));
     expect(html).toContain("Chưa có lượt chạy nào nhận yêu cầu này.");
+  });
+
+  it("không dùng lớp cũ của bảng/biểu mẫu danh mục", () => {
+    const html = card(job());
+    for (const legacy of ["o-nhap", "form-danh-muc", "the-loi-he-thong", "bang-danh-muc", "cum-nut"]) {
+      expect(html).not.toContain(legacy);
+    }
   });
 
   it("không chèn HTML thô: một khoá việc lạ chứa thẻ vẫn chỉ là chữ", () => {

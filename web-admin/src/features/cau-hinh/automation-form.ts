@@ -6,7 +6,7 @@
  * WHAT THE SCREEN SAYS ABOUT RUNS COMES FROM `last_runs` AND NOTHING ELSE. A switch that is on does not
  * mean anything ran: the runners claim work at their own tick, and a commune may switch a job on long
  * before the first run is recorded. So there is no sentence here promising "chạy trong vòng 1 phút";
- * there is "Chưa có lượt chạy nào" until a run exists, and a "run now" mark that no run has picked up
+ * there is "Chưa chạy lần nào" until a run exists, and a "run now" mark that no run has picked up
  * yet is said as exactly that.
  */
 
@@ -23,14 +23,6 @@ export const AUTOMATION_TITLE = "Tự động hoá";
 export const AUTOMATION_GUIDANCE =
   "Những việc phần mềm tự làm cho xã. Mặc định tắt hết — bật cái nào thì xã tự chọn, và giờ giấc " +
   "tính theo giờ Việt Nam. Đổi nhịp có hiệu lực ngay ở lượt chạy kế tiếp.";
-
-/**
- * Who receives what these jobs send (ADR 0058 §3): staff only, into the header bell. Said because a
- * switch named "Nhắc việc" reads as "the citizen gets reminded" to anyone who has run a one-stop shop.
- */
-export const AUTOMATION_RECIPIENTS =
-  "Lời nhắc, tin leo thang và bản tin đầu tuần chỉ gửi tới cán bộ của xã, vào chuông thông báo ở đầu " +
-  "trang. Người dân không nhận tin nào từ các việc này.";
 
 type JobWords = { readonly title: string; readonly description: string };
 
@@ -99,26 +91,76 @@ export function clock(hour: number | null, minute: number | null): string {
   return hour === null || minute === null ? "—" : `${pad(hour)}:${pad(minute)}`;
 }
 
-/** "Cứ 15 phút một lần" · "Hằng ngày lúc 07:00" · "Thứ Hai hằng tuần, lúc 07:30". */
-export function cadenceSentence(j: AutomationJob): string {
-  switch (j.schedule_kind) {
-    case "interval":
-      return j.interval_minutes === null ? "—" : `Cứ ${j.interval_minutes} phút một lần`;
-    case "daily":
-      return `Hằng ngày lúc ${clock(j.run_hour, j.run_minute)}`;
-    case "weekly":
-      return `${weekdayLabel(j.weekday)} hằng tuần, lúc ${clock(j.run_hour, j.run_minute)}`;
-    default:
-      return "—";
-  }
+/** The label above the clock field. Vietnam time is the guidance's promise; any other zone is named. */
+export function clockFieldLabel(tz: string): string {
+  return tz === "Asia/Ho_Chi_Minh" ? "Lúc" : `Lúc (${timezoneLabel(tz)})`;
 }
 
-/** The card's state line. `configured: false` is OFF, and its cadence is only a suggestion. */
-export function stateSentence(j: AutomationJob): string {
-  if (!j.configured) {
-    return "Đang tắt — xã chưa lưu cấu hình việc này. Nhịp dưới đây là nhịp gợi ý; bật rồi bấm Lưu thì việc mới chạy.";
+/**
+ * The card's run line (spec 09 header): the LATEST claim over every kind of work. Not `last_runs[0]`:
+ * the server orders the list by job and kind of work (`service-identity/internal/store/automation.go`,
+ * `ORDER BY sc.job, sc.work_kind`), so the first entry is the alphabetically first kind, not the newest.
+ */
+export function lastRunSentence(j: AutomationJob): string {
+  let latest = Number.NaN;
+  let latestIso: string | null = null;
+  for (const r of j.last_runs) {
+    const t = Date.parse(r.claimed_at);
+    if (!Number.isNaN(t) && (Number.isNaN(latest) || t > latest)) {
+      latest = t;
+      latestIso = r.claimed_at;
+    }
   }
-  return j.enabled ? "Đang bật" : "Đang tắt";
+  return latestIso === null ? NEVER_RAN : `Chạy lần cuối ${when(latestIso)}`;
+}
+
+export const NEVER_RAN = "Chưa chạy lần nào";
+
+/** The switch's own word, beside it (spec 09). */
+export function switchWord(on: boolean): string {
+  return on ? "Đang bật" : "Đang tắt";
+}
+
+/** Toast after a switch was saved (spec 09): `Đã lưu: …` when switched on, `Đã tắt: …` when off. */
+export function toggledToast(title: string, on: boolean): string {
+  return on ? `Đã lưu: ${title}` : `Đã tắt: ${title}`;
+}
+
+/** Toast after "Lưu nhịp". */
+export function cadenceSavedToast(title: string): string {
+  return `Đã lưu: ${title}`;
+}
+
+/** Toast after "Chạy ngay" — the request is RECORDED; nothing has run yet (ADR 0058 §7). */
+export function runRequestedToast(title: string): string {
+  return `Đã ghi yêu cầu chạy ngay: ${title}`;
+}
+
+/* ---- the interval choices -------------------------------------------------------------------- */
+
+/** Spec 09's "Cứ mỗi" list: 5, 10, 15, 30 phút, 1, 3, 6, 12 giờ, 1 ngày — in minutes. */
+export const INTERVAL_CHOICES: readonly number[] = [5, 10, 15, 30, 60, 180, 360, 720, 1440];
+
+/** "15 phút" · "3 giờ" · "1 ngày"; a minute count that is not a whole hour or day stays in minutes. */
+export function intervalLabel(minutes: number): string {
+  if (minutes >= 1440 && minutes % 1440 === 0) return `${minutes / 1440} ngày`;
+  if (minutes >= 60 && minutes % 60 === 0) return `${minutes / 60} giờ`;
+  return `${minutes} phút`;
+}
+
+/**
+ * The options of "Cứ mỗi": the spec's list from the server's `min_interval_minutes` up, plus the
+ * value already saved when the list does not hold it (e.g. 20 minutes) — a select that cannot show
+ * the saved value would silently show, and on "Lưu nhịp" send, another one.
+ */
+export function intervalOptions(j: AutomationJob, current: string): readonly number[] {
+  const min = j.min_interval_minutes ?? 0;
+  const list = INTERVAL_CHOICES.filter((m) => m >= min);
+  const n = Number(current);
+  if (current.trim() !== "" && Number.isInteger(n) && n > 0 && !list.includes(n)) {
+    return [...list, n].sort((a, b) => a - b);
+  }
+  return list;
 }
 
 /* ---- the cadence form ------------------------------------------------------------------------ */
@@ -139,6 +181,12 @@ export function draftFrom(j: AutomationJob): AutomationDraft {
     time: j.run_hour === null || j.run_minute === null ? "" : clock(j.run_hour, j.run_minute),
     weekday: j.weekday === null ? "" : String(j.weekday),
   };
+}
+
+/** "Lưu nhịp" shows only when the cadence on screen differs from the saved one (spec 09). */
+export function cadenceChanged(j: AutomationJob, d: AutomationDraft): boolean {
+  const saved = draftFrom(j);
+  return d.interval !== saved.interval || d.time !== saved.time || d.weekday !== saved.weekday;
 }
 
 export const INTERVAL_NOT_A_NUMBER = "Nhịp nhắc việc phải là một số phút nguyên.";
@@ -196,8 +244,6 @@ export function when(iso: string | null): string {
   return Number.isNaN(t) ? "mốc thời gian không đọc được" : formatDateTime(t);
 }
 
-export const NO_RUNS_YET = "Chưa có lượt chạy nào.";
-
 /** Outcome of a run. `null` = claimed and not reported: a runner that died shows as exactly that. */
 export function outcomeLabel(outcome: string | null): string {
   switch (outcome) {
@@ -252,10 +298,6 @@ export function runRequestSentence(j: AutomationJob): string | null {
     : `Đã ghi yêu cầu chạy ngay lúc ${at}. Chưa có lượt chạy nào nhận yêu cầu này.`;
 }
 
-export const SAVE_BUTTON = "Lưu";
-export const SAVING = "Đang lưu…";
+export const SAVE_CADENCE_BUTTON = "Lưu nhịp";
 export const RUN_NOW_BUTTON = "Chạy ngay";
 export const RUN_NOW_SENDING = "Đang gửi yêu cầu…";
-export const RUN_NOW_NEEDS_ON = "Chạy ngay chỉ dùng được khi việc đang bật và đã lưu.";
-export const SAVED_SENTENCE = "Đã lưu cấu hình việc này.";
-export const ENABLE_LABEL = "Bật việc này";

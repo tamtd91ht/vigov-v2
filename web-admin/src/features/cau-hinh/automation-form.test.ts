@@ -4,17 +4,24 @@ import type { AutomationJob } from "@/lib/api/automation-jobs";
 
 import {
   INTERVAL_NOT_A_NUMBER,
-  NO_RUNS_YET,
+  NEVER_RAN,
   TIME_MISSING,
   WEEKDAY_MISSING,
-  cadenceSentence,
+  cadenceChanged,
+  cadenceSavedToast,
+  clockFieldLabel,
   draftFrom,
+  intervalLabel,
+  intervalOptions,
   jobWords,
+  lastRunSentence,
   outcomeLabel,
   runRequestSentence,
+  runRequestedToast,
   settingBody,
-  stateSentence,
+  switchWord,
   timezoneLabel,
+  toggledToast,
   triggerLabel,
   weekdayLabel,
   when,
@@ -75,29 +82,59 @@ describe("the PUT body — only the fields of the job's kind, the others null", 
   });
 });
 
-describe("state and cadence sentences", () => {
-  it("configured:false is OFF and the cadence is called a suggestion", () => {
+describe("card words (spec 09)", () => {
+  it("configured:false prefills the suggested cadence, switched off", () => {
     const fresh = job({ configured: false, enabled: false, enabled_at: null });
-    expect(stateSentence(fresh)).toMatch(/^Đang tắt — xã chưa lưu cấu hình/);
-    expect(stateSentence(fresh)).toMatch(/nhịp gợi ý/);
-    // The suggested prefill (15 min) lands in the form.
     expect(draftFrom(fresh)).toEqual({ enabled: false, interval: "15", time: "", weekday: "" });
-  });
-
-  it("saved on / off", () => {
-    expect(stateSentence(job())).toBe("Đang bật");
-    expect(stateSentence(job({ enabled: false }))).toBe("Đang tắt");
-  });
-
-  it("cadence in words, Vietnam time named", () => {
-    expect(cadenceSentence(job())).toBe("Cứ 15 phút một lần");
-    expect(cadenceSentence(DAILY)).toBe("Hằng ngày lúc 07:00");
-    expect(cadenceSentence(WEEKLY)).toBe("Thứ Hai hằng tuần, lúc 07:30");
-    expect(timezoneLabel("Asia/Ho_Chi_Minh")).toBe("Giờ Việt Nam");
-    expect(weekdayLabel(7)).toBe("Chủ nhật");
     expect(draftFrom(WEEKLY)).toEqual({ enabled: true, interval: "", time: "07:30", weekday: "1" });
   });
 
+  it("switch word and the three toasts", () => {
+    expect(switchWord(true)).toBe("Đang bật");
+    expect(switchWord(false)).toBe("Đang tắt");
+    expect(toggledToast("Leo thang việc trễ hạn", true)).toBe("Đã lưu: Leo thang việc trễ hạn");
+    expect(toggledToast("Leo thang việc trễ hạn", false)).toBe("Đã tắt: Leo thang việc trễ hạn");
+    expect(cadenceSavedToast("Leo thang việc trễ hạn")).toBe("Đã lưu: Leo thang việc trễ hạn");
+    // "Chạy ngay" only RECORDS a request; the toast never says it ran.
+    expect(runRequestedToast("X")).toBe("Đã ghi yêu cầu chạy ngay: X");
+  });
+
+  it("clock label is 'Lúc' in Vietnam time; another zone is named, never hidden", () => {
+    expect(clockFieldLabel("Asia/Ho_Chi_Minh")).toBe("Lúc");
+    expect(clockFieldLabel("UTC")).toBe("Lúc (UTC)");
+    expect(timezoneLabel("Asia/Ho_Chi_Minh")).toBe("Giờ Việt Nam");
+    expect(weekdayLabel(7)).toBe("Chủ nhật");
+  });
+
+  it("'Lưu nhịp' only when the cadence differs from the saved one — the switch does not count", () => {
+    expect(cadenceChanged(job(), draftFrom(job()))).toBe(false);
+    expect(cadenceChanged(job(), { ...draftFrom(job()), enabled: false })).toBe(false);
+    expect(cadenceChanged(job(), { ...draftFrom(job()), interval: "30" })).toBe(true);
+    expect(cadenceChanged(WEEKLY, { ...draftFrom(WEEKLY), weekday: "3" })).toBe(true);
+    expect(cadenceChanged(DAILY, { ...draftFrom(DAILY), time: "08:00" })).toBe(true);
+  });
+});
+
+describe("'Cứ mỗi' choices (spec 09)", () => {
+  it("5, 10, 15, 30 phút, 1, 3, 6, 12 giờ, 1 ngày", () => {
+    expect(intervalOptions(job({ min_interval_minutes: 5 }), "15").map(intervalLabel)).toEqual([
+      "5 phút", "10 phút", "15 phút", "30 phút", "1 giờ", "3 giờ", "6 giờ", "12 giờ", "1 ngày",
+    ]);
+  });
+
+  it("only values from the server's min_interval_minutes up", () => {
+    expect(intervalOptions(job({ min_interval_minutes: 15 }), "15")).toEqual([15, 30, 60, 180, 360, 720, 1440]);
+  });
+
+  it("a saved value outside the list is offered as its own option, in order", () => {
+    expect(intervalOptions(job({ interval_minutes: 20 }), "20")).toEqual([5, 10, 15, 20, 30, 60, 180, 360, 720, 1440]);
+    expect(intervalLabel(20)).toBe("20 phút");
+    expect(intervalLabel(90)).toBe("90 phút");
+    expect(intervalLabel(2880)).toBe("2 ngày");
+  });
+});
+
+describe("job names and scopes", () => {
   it("the three jobs have their §9 names; an unknown key is shown as itself", () => {
     expect(jobWords("sla_reminders").title).toBe("Nhắc việc sắp đến hạn và đã quá hạn");
     expect(jobWords("escalation").title).toBe("Leo thang việc trễ hạn");
@@ -120,8 +157,27 @@ describe("state and cadence sentences", () => {
 });
 
 describe("runs — said from data only", () => {
-  it("no runs → 'Chưa có lượt chạy nào.'", () => {
-    expect(NO_RUNS_YET).toBe("Chưa có lượt chạy nào.");
+  it("no runs → 'Chưa chạy lần nào'", () => {
+    expect(lastRunSentence(job())).toBe(NEVER_RAN);
+    expect(NEVER_RAN).toBe("Chưa chạy lần nào");
+  });
+
+  it("REGRESSION: 'Chạy lần cuối' is the LATEST claim, not last_runs[0] (the server sorts by kind of work)", () => {
+    const base = {
+      run_id: "01JRUN",
+      trigger: "schedule",
+      outcome: null,
+      records_examined: null,
+      notices_delivered: null,
+      records_without_recipient: null,
+      recorded_at: null,
+    };
+    const runs = [
+      { ...base, work_kind: "don-thu", claimed_at: "2026-09-29T01:00:00Z" },
+      { ...base, work_kind: "nhiem-vu", claimed_at: "2026-09-29T03:30:00Z" },
+      { ...base, work_kind: "phan-anh", claimed_at: "not-a-time" },
+    ];
+    expect(lastRunSentence(job({ last_runs: runs }))).toBe("Chạy lần cuối 10:30 29/09/2026");
   });
 
   it("outcome null is 'claimed, no result' — not success; the four outcomes in words", () => {
