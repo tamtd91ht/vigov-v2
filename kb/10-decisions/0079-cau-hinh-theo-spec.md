@@ -288,3 +288,7 @@ Chủ dự án chỉ trả lời **"tuân thủ prototype nhé"**. Phiên chính
 | 2 | Lời dẫn "Nhắc khi nào" (câu prototype nói số Zalo luôn bằng số trên màn — sai từ Q13) | **Câu mới** | "Tin Zalo “sắp đến hạn” chỉ gồm những hồ sơ cái chuông và danh sách “Sắp đến hạn” đang báo, nên không hồ sơ nào vào Zalo mà không có trên màn hình." |
 | 3 | Toast khi bật/tắt một dòng thành công (Danh mục, Trường bản đồ, Lời hệ thống) | **"Bỏ, đúng prototype"** | Thành công: công tắc đổi là đủ; lỗi vẫn toast |
 | 4 | Đăng ký webhook thất bại | **Câu prototype khi lỗi do mã bot, câu riêng khi lỗi khác** | Mã bot sai → "Chưa đăng ký được. Kiểm tra lại mã bot." (`ZaloChannelPanel.tsx:479`); lỗi mạng/Zalo → "Chưa đăng ký được." + lý do thật |
+
+## Sửa đổi
+
+- 08/10/2026 — Lô thứ năm Q18, câu "không tự điền hạn từ dòng SLA", **đảo cho đơn thư**: hạn tự điền lúc vào sổ theo loại đơn, cán bộ vẫn sửa được. Xem `0084-don-thu-bam-prototype-08-10.md` mục 3.

@@ -100,3 +100,4 @@ hạn — bảng trên ghi theo trí nhớ là "ngày") **vẫn mở** và thu�
 → ADR 0007 (giờ làm việc — quyết định bị làm ngoại lệ): `kb/10-decisions/0007-sla-working-hours.md`
 → ADR 0028 (hạn ấn định tại hành vi, lưu một lần) · ADR 0029 (chủ bảng SLA) · ADR 0039 (sổ đơn thư thuộc văn thư)
 → Việc dựng và các câu C4/C8/C9/C16: `kb/90-ephemeral/tien-do/service-documents.json` → `so-don-thu-cong-dan`
+→ Hạn tự điền lúc vào sổ, hai hạn sau một ô (08/10/2026): xem `0084-don-thu-bam-prototype-08-10.md`

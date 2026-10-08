@@ -110,3 +110,4 @@ Hỏi ở cổng của lượt dựng backend, không tự chọn.
 → ADR 0026 (bộ mã đóng hai tầng, tiền lệ): `kb/10-decisions/0026-linh-vuc-phan-anh-hai-tang.md`
 → ADR 0021 (dấu `@entity`, chỉ mục sở hữu sinh ra): `kb/10-decisions/0021-khai-quyen-so-huu-thuc-the.md`
 → Tên tài nguyên URL `citizen-letters`: `kb/00-foundation/ubiquitous-language.md:141`
+→ Hệ quả #2 (chuyển thành nhiệm vụ — bật, hợp đồng vẫn qua cổng) và xung đột "Hạn mặc định" (08/10/2026): xem `0084-don-thu-bam-prototype-08-10.md`

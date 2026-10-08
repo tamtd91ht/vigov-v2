@@ -63,3 +63,4 @@ hai tab Đơn thư công dân và Báo cáo chỉ là khung vô hiệu: máy ch�
 ## Sửa đổi
 
 - 08/10/2026 — Mục 3 không còn đúng nguyên văn: ngăn chi tiết đơn thư có ô **"Hạn xử lý" do cán bộ tự đặt** (quyền `petition.create`, chỉ khi đơn chưa kết thúc; "Không đặt" để bỏ hạn; `PATCH /api/v1/citizen-letters/{id}/deadline`), máy chủ ghi vào hạn của giai đoạn hiện tại và web vẫn không tự tính hạn — theo ADR 0079 lô 5 Q18 và mục "Bổ sung 08/10/2026".
+- 08/10/2026 (lần 2) — ADR 0084 thay mục 3 (hạn tự điền theo loại đơn), tiêu đề ở mục 5 và phần đơn thư của mục 6 (nhập/xuất Excel, chuyển thành nhiệm vụ nay dựng); thu hẹp C10, đảo C12 của mục 2. Mục 4 đứng nguyên. Xem `0084-don-thu-bam-prototype-08-10.md`.
