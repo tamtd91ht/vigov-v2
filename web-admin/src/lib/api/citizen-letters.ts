@@ -1,12 +1,13 @@
 /**
- * The eleven routes of the CITIZEN-LETTER register — `service-documents`, `/api/v1/citizen-letters…`
+ * The twelve routes of the CITIZEN-LETTER register — `service-documents`, `/api/v1/citizen-letters…`
  * (ADR 0078 #2–#4; routes and their keys: `service-documents/internal/http/routes_citizen_letter.go`).
  *
  * WHAT THIS FILE NEVER SENDS, and why each absence is load-bearing:
  *   - `number`, `status`, `processing_due_at`, `resolution_due_at` on a booking. The contract declares
  *     them ONLY so the server can refuse them (400): the number is allocated under a row lock and never
  *     reissued (rule 7, invariant 3), the status is the flow's, and both deadlines are fixed by the
- *     server at the act that fixes them — today they stay empty (ADR 0078 #3, rule 10). `BookLetterInput`
+ *     server at the act that fixes them — the clerk's own "Hạn xử lý" goes through PATCH …/deadline
+ *     AFTER booking (ADR 0079 lô 5 Q18; the server refuses it on a booking). `BookLetterInput`
  *     omits them so `tsc` is red before a form can carry one.
  *   - A sender's name or summary in a URL. The duplicate check is a POST with a BODY (rule 3,
  *     forbidden #4); the prototype's `?sender_name=` is deliberately not copied (ADR 0078, Hệ quả).
@@ -231,6 +232,32 @@ export function correctCitizenLetterSender(
   if ("sender_name" in input) body.sender_name = input.sender_name;
   if ("sender_phone" in input) body.sender_phone = input.sender_phone;
   if ("sender_address" in input) body.sender_address = input.sender_address;
+  return docThanLoiGoi<documents_citizenLetterOut>(goiGhi(onePath(template, id), "PATCH", body, 200));
+}
+
+/**
+ * Body of PATCH …/deadline: EXACTLY one key. An RFC 3339 instant sets the clerk's "Hạn xử lý"; `null`
+ * clears it ("Không đặt"). The server refuses any other key, and any body without `due_at` (400).
+ *
+ * HAND-TYPED until contract regen: the committed `schema.gen.ts` predates this route
+ * (`service-documents/internal/http/citizen_letter.go` `readLetterDeadline`). Replace with the
+ * generated `documents_patch_citizen_letters_by_id_deadline` once the contract is regenerated.
+ */
+export type LetterDeadlineInput = { due_at: string | null };
+
+/**
+ * PATCH /api/v1/citizen-letters/{id}/deadline — the clerk's "Hạn xử lý" (ADR 0079 lô 5 Q18). The SERVER
+ * decides which stored deadline it is (processing before Thụ lý, resolution from it) and stores the
+ * instant as sent — nothing here computes a deadline (rule 10). 409 = the letter is finished; 400 = a
+ * malformed instant or a year outside 2000–2200; both carry the server's sentence, shown verbatim.
+ */
+export function setCitizenLetterDeadline(
+  id: string,
+  input: LetterDeadlineInput,
+): Promise<KetQua<documents_citizenLetterOut>> {
+  // Literal path, until contract regen (see `LetterDeadlineInput`).
+  const template = "/api/v1/citizen-letters/{id}/deadline";
+  const body: LetterDeadlineInput = { due_at: input.due_at };
   return docThanLoiGoi<documents_citizenLetterOut>(goiGhi(onePath(template, id), "PATCH", body, 200));
 }
 

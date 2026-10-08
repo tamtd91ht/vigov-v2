@@ -7,7 +7,7 @@ derived_from_commit: a1e5e64f
 expires: null
 owns_facts:
   - "menu Văn bản & Đơn thư làm lại theo prototype (lượt đêm 07→08/10/2026): NGHIỆP VỤ/DỮ LIỆU/PHÁP LÝ theo các câu chủ dự án đã chốt (C-list 24/09+30/09, C2 30/09, ADR 0039/0064/0007/0028/0038, luật 1–13); TRÌNH BÀY theo prototype ../vigov-require/apps/admin/src/components/documents/* và hướng dẫn tmp/web/van-ban/vigov-van-ban-spec/ (mã nguồn thắng hướng dẫn)"
-  - "sổ đơn thư dựng ở service-documents, tuyến /api/v1/citizen-letters; hai hạn của đơn để TRỐNG tới khi identity có loại việc đơn thư — giao diện hiện 'Không đặt hạn', web không tự tính hạn (luật 10)"
+  - "sổ đơn thư dựng ở service-documents, tuyến /api/v1/citizen-letters; hạn của đơn do cán bộ có petition.create tự đặt hoặc để 'Không đặt' (ADR 0079 lô 5 Q18, 08/10/2026 — thay quy định 'để TRỐNG tới khi identity có loại việc đơn thư'); web không tự tính hạn (luật 10)"
   - "đơn tố cáo: danh sách/báo cáo/cảnh báo trùng không mang danh tính lẫn trích yếu; không có khoá xem đầy đủ nào cho đơn thư nên SĐT/địa chỉ luôn che, ô sửa người gửi không điền sẵn giá trị đầy đủ, không có liên kết tel: — đóng an toàn tới khi có khoá"
   - "khung trang Văn bản & Đơn thư: 4 tab theo thứ tự Văn bản đến · Văn bản đi · Đơn thư công dân · Báo cáo; tab mặc định Đơn thư công dân TRỪ khi đường dẫn mang lọc Tổng quan (metric=…) thì Văn bản đến; tiêu đề 'Văn bản & đơn thư'; bỏ nút 'Quét & OCR' — GIẢ ĐỊNH của phiên, chờ chủ dự án xác nhận"
   - "phần prototype cần thứ máy chủ chưa có (nhập/xuất Excel, chuyển thành nhiệm vụ, gửi Zalo, OCR, tệp đính kèm, lọc phạm vi văn bản đến, gợi ý cơ quan ban hành, ghi chú/nguồn văn bản đến) = control vô hiệu '?' đúng vị trí prototype (ADR 0068 lần 5 #5)"
@@ -59,3 +59,7 @@ hai tab Đơn thư công dân và Báo cáo chỉ là khung vô hiệu: máy ch�
 - Bộ trạng thái văn bản đến C2 (NĐ 30/2020) cần migration mã trạng thái + tuyến đổi trạng thái; nếu
   chưa dựng kịp lượt này thì dải trạng thái giữ "?".
 - Danh sách các câu GIẢ ĐỊNH ở mục 5 nằm trong mục sổ tiến độ của menu để chủ dự án duyệt.
+
+## Sửa đổi
+
+- 08/10/2026 — Mục 3 không còn đúng nguyên văn: ngăn chi tiết đơn thư có ô **"Hạn xử lý" do cán bộ tự đặt** (quyền `petition.create`, chỉ khi đơn chưa kết thúc; "Không đặt" để bỏ hạn; `PATCH /api/v1/citizen-letters/{id}/deadline`), máy chủ ghi vào hạn của giai đoạn hiện tại và web vẫn không tự tính hạn — theo ADR 0079 lô 5 Q18 và mục "Bổ sung 08/10/2026".

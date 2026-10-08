@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { PETITION_CREATE_PERMISSION, PETITION_READ_PERMISSION } from "@/lib/quyen";
 
 import {
+  DUE_NOT_SET,
   NO_DEADLINE,
   SUMMARY_REQUIRED,
   buildBooking,
@@ -10,7 +11,10 @@ import {
   buildSenderCorrection,
   daysOpenView,
   dueDateText,
+  dueInputValue,
+  dueInstantOf,
   dueLabel,
+  dueSettable,
   duplicateQuery,
   emptyEntryDraft,
   isPastDue,
@@ -85,9 +89,22 @@ describe("deadlines (rule 10) — read, compared, never computed", () => {
       expect(dueLabel(iso, false, NOW).text).not.toMatch(/Còn|\d+ (ngày|giờ)/);
     }
   });
-  it("the drawer figure is the date or “Không đặt hạn”", () => {
-    expect(dueDateText(null)).toBe(NO_DEADLINE);
+  it("the drawer figure is the date or the prototype's “Không đặt”", () => {
+    expect(dueDateText(null)).toBe(DUE_NOT_SET);
+    expect(DUE_NOT_SET).toBe("Không đặt");
     expect(dueDateText("2026-10-05T03:00:00Z")).toBe("05/10/2026");
+  });
+  it("the clerk's date ↔ the stored instant: 17:00 pinned to +07:00, read back in the Vietnamese zone", () => {
+    expect(dueInstantOf("2026-10-20")).toBe("2026-10-20T17:00:00+07:00");
+    expect(dueInstantOf("")).toBeNull();
+    expect(dueInputValue("2026-10-20T17:00:00+07:00")).toBe("2026-10-20");
+    // 20:00Z on the 19th is already the 20th in Vietnam — never sliced from the UTC string.
+    expect(dueInputValue("2026-10-19T20:00:00Z")).toBe("2026-10-20");
+    expect(dueInputValue(null)).toBe("");
+  });
+  it("only the four open phases have a deadline to set (domain.LetterDueColumn)", () => {
+    expect(["moi-vao-so", "dang-xu-ly-don", "thu-ly", "dang-giai-quyet"].every(dueSettable)).toBe(true);
+    expect(["da-giai-quyet", "dinh-chi", "luu-don", "chuyen-don"].some(dueSettable)).toBe(false);
   });
   it("isPastDue uses the PHASE's deadline and only while open", () => {
     const base = { processing_due_at: "2026-10-01T00:00:00Z", resolution_due_at: null };

@@ -8,7 +8,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { documents_citizenLetterOut, documents_letterLogOut } from "@/lib/api/schema.gen";
 
-import { LetterDrawer, RESULT_LOCKED_HINT } from "./letter-drawer";
+import { DEADLINE_CLEARED, DEADLINE_EDIT_LABEL, DEADLINE_SAVED, LetterDrawer, RESULT_LOCKED_HINT } from "./letter-drawer";
 import { NO_DEADLINE, WITHHELD_SENDER } from "./letter-display";
 
 beforeAll(() => {
@@ -195,6 +195,109 @@ describe("letter drawer — masking", () => {
   it("no deadline anywhere reads “Không đặt hạn”", () => {
     mount(drawer(letter()));
     expect(dialog().textContent).toContain(NO_DEADLINE);
+  });
+});
+
+describe("letter drawer — the clerk's “Hạn xử lý” (ADR 0079 lô 5 Q18)", () => {
+  function figure(): string {
+    const dt = [...dialog().querySelectorAll("dt")].find((d) => d.textContent === "Hạn xử lý")!;
+    return dt.nextElementSibling!.textContent ?? "";
+  }
+
+  function typeDate(value: string) {
+    const el = dialog().querySelector<HTMLInputElement>("#don-thu-han-xu-ly")!;
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(el, value);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+
+  it("no deadline: the figure reads the prototype's “Không đặt”", () => {
+    mount(drawer(letter()));
+    expect(figure()).toBe("Không đặt");
+  });
+
+  it("a stored deadline of the CURRENT phase reads as its date (resolution from Thụ lý)", () => {
+    mount(drawer(letter({ status: "thu-ly", next_statuses: ["dang-giai-quyet"], processing_due_at: "2026-10-03T10:00:00Z", resolution_due_at: "2026-10-20T10:00:00Z" })));
+    expect(figure()).toBe("20/10/2026");
+  });
+
+  it("set: PATCH …/deadline with exactly { due_at } at 17:00 +07:00 of the chosen day; success says so", async () => {
+    const changed = vi.fn();
+    const fetchSpy = vi.fn(async () => new Response(JSON.stringify(letter({ processing_due_at: "2026-10-20T10:00:00Z" })), { status: 200 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    mount(
+      <LetterDrawer
+        letter={{ ok: true, duLieu: letter() }}
+        log={{ ok: true, duLieu: EMPTY_LOG }}
+        now={new Date("2026-10-08T03:00:00Z")}
+        units={{ pha: "xong", ten: new Map() }}
+        canBook
+        mayWork
+        onChanged={changed}
+        onClose={() => {}}
+      />,
+    );
+    act(() => button(DEADLINE_EDIT_LABEL)!.click());
+    // Nothing to clear yet: no “Không đặt” button while the letter has no deadline.
+    expect(button("Không đặt")).toBeUndefined();
+    typeDate("2026-10-20");
+    await act(async () => button("Lưu")!.click());
+    await act(async () => {});
+    const [url, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/v1/citizen-letters/L1/deadline");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(String(init.body))).toEqual({ due_at: "2026-10-20T17:00:00+07:00" });
+    expect(changed).toHaveBeenCalledTimes(1);
+    expect(dialog().textContent).toContain(DEADLINE_SAVED);
+  });
+
+  it("clear: “Không đặt” sends { due_at: null }; the editor opens on the stored date", async () => {
+    const fetchSpy = vi.fn(async () => new Response(JSON.stringify(letter()), { status: 200 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    mount(drawer(letter({ processing_due_at: "2026-10-19T20:00:00Z" })));
+    act(() => button(DEADLINE_EDIT_LABEL)!.click());
+    expect(dialog().querySelector<HTMLInputElement>("#don-thu-han-xu-ly")!.value).toBe("2026-10-20");
+    await act(async () => button("Không đặt")!.click());
+    await act(async () => {});
+    const [url, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/v1/citizen-letters/L1/deadline");
+    expect(JSON.parse(String(init.body))).toEqual({ due_at: null });
+    expect(dialog().textContent).toContain(DEADLINE_CLEARED);
+  });
+
+  it("409 (finished meanwhile): the SERVER's sentence is shown in the editor", async () => {
+    const sentence = "Đơn đã kết thúc xử lý nên không đặt hay bỏ hạn xử lý được.";
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ code: "letter_state", message: sentence, trace_id: "" }), { status: 409 })));
+    mount(drawer(letter()));
+    act(() => button(DEADLINE_EDIT_LABEL)!.click());
+    typeDate("2026-10-20");
+    await act(async () => button("Lưu")!.click());
+    await act(async () => {});
+    expect(dialog().querySelector('form[aria-label="Sửa hạn xử lý"] [role="alert"]')!.textContent).toBe(sentence);
+  });
+
+  it("400 (year out of range): the SERVER's sentence is shown", async () => {
+    const sentence = "Hạn xử lý: năm phải từ 2000 đến 2200.";
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ code: "invalid_request", message: sentence, trace_id: "" }), { status: 400 })));
+    mount(drawer(letter()));
+    act(() => button(DEADLINE_EDIT_LABEL)!.click());
+    typeDate("2300-01-01");
+    await act(async () => button("Lưu")!.click());
+    await act(async () => {});
+    expect(dialog().querySelector('[role="alert"]')!.textContent).toBe(sentence);
+  });
+
+  it("DENIED: without petition.create there is no edit control — the figure is still read", () => {
+    mount(drawer(letter({ processing_due_at: "2026-10-20T10:00:00Z" }), { canBook: false, mayWork: true }));
+    expect(button(DEADLINE_EDIT_LABEL)).toBeUndefined();
+    expect(dialog().querySelector("#don-thu-han-xu-ly")).toBeNull();
+    expect(figure()).toBe("20/10/2026");
+  });
+
+  it("a finished letter offers no edit even to petition.create (no phase deadline; server would 409)", () => {
+    mount(drawer(letter({ status: "luu-don", next_statuses: [], is_closed: true })));
+    expect(button(DEADLINE_EDIT_LABEL)).toBeUndefined();
   });
 });
 

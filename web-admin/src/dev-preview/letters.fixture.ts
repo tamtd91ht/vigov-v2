@@ -17,11 +17,11 @@ import { PREVIEW_UNITS } from "./disbursement.fixture";
  * (`09****0000`, rule 3). Addresses never appear: the server never sends one (only
  * `has_sender_address`). Dates are relative to the machine clock.
  *
- * WHAT EACH ROW IS FOR (task card W2): every C4 type; statuses across C3; #11 overdue WITH a stored
- * processing deadline (the only letter with one — every other deadline is null, as on the real server
- * today, ADR 0078 #3); #10 a denunciation (identity + summary withheld on the list; in the drawer the
- * preview's session — Cán bộ C, `petition.create`, not its assignee — sees the summary, not the sender);
- * #9 Đang giải quyết (result form open); #8 resolved with its result; #7 a branch end (Chuyển đơn);
+ * WHAT EACH ROW IS FOR (task card W2): every C4 type; statuses across C3; #11 overdue WITH a clerk-set
+ * processing deadline (ADR 0079 lô 5 Q18); #10 a denunciation (identity + summary withheld on the list;
+ * in the drawer the preview's session — Cán bộ C, `petition.create`, not its assignee — sees the summary,
+ * not the sender); #9 Đang giải quyết (result form open) with a clerk-set RESOLUTION deadline in 6 days;
+ * every other letter has none ("Không đặt"); #8 resolved with its result; #7 a branch end (Chuyển đơn);
  * #6 linked to an earlier letter as a duplicate; #5 a long summary and no sender at all. #12 has an
  * EMPTY log, #11 a three-entry log.
  *
@@ -86,6 +86,8 @@ type Seed = {
   unit: string;
   assignee: string;
   processingDue: number | null;
+  /** Days from now of the clerk-set resolution deadline (Thụ lý onward, ADR 0079 lô 5 Q18); absent = none. */
+  resolutionDue?: number;
   related: number | null;
   closedDaysAgo: number | null;
   result: boolean;
@@ -110,7 +112,7 @@ const SEEDS: readonly Seed[] = [
   {
     number: 9, received: -14, type: "de-nghi", name: "Phạm Thị D", phone: false, address: true,
     summary: "Đề nghị hỗ trợ kinh phí sửa chữa nhà văn hoá thôn Bình Trung",
-    status: "dang-giai-quyet", unit: UNIT_ECONOMY, assignee: VIEWER, processingDue: null, related: null, closedDaysAgo: null, result: false,
+    status: "dang-giai-quyet", unit: UNIT_ECONOMY, assignee: VIEWER, processingDue: null, resolutionDue: 6, related: null, closedDaysAgo: null, result: false,
   },
   {
     number: 8, received: -20, type: "kien-nghi-phan-anh", name: "Hoàng Văn E", phone: true, address: true,
@@ -168,7 +170,7 @@ function itemOf(seed: Seed, year: number): documents_citizenLetterItemOut {
     assignee_code: seed.assignee === "" ? undefined : seed.assignee,
     status: seed.status,
     processing_due_at: seed.processingDue === null ? null : at(seed.processingDue),
-    resolution_due_at: null,
+    resolution_due_at: seed.resolutionDue === undefined ? null : at(seed.resolutionDue),
     days_open: daysOpen(seed),
     is_resolved: RESOLVED.has(seed.status),
     is_closed: CLOSED.has(seed.status),

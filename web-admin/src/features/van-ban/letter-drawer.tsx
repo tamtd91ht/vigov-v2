@@ -18,6 +18,7 @@ import {
   moveCitizenLetter,
   recordCitizenLetterResult,
   routeCitizenLetter,
+  setCitizenLetterDeadline,
 } from "@/lib/api/citizen-letters";
 import type { KetQua } from "@/lib/api/goi";
 import type {
@@ -40,8 +41,12 @@ import {
   activeDue,
   buildRouting,
   buildSenderCorrection,
+  DUE_NOT_SET,
   dueDateText,
+  dueInputValue,
+  dueInstantOf,
   dueLabel,
+  dueSettable,
   initialsOf,
   letterDate,
   letterNumber,
@@ -76,6 +81,10 @@ export const RESULT_SAVE_LABEL = "Lưu nội dung trả lời";
 /** The server's own sentence for a result outside the two statuses (`ErrLetterResultNotAllowed`). */
 export const RESULT_LOCKED_HINT = "Chỉ ghi kết quả giải quyết khi đơn đang ở Thụ lý hoặc Đang giải quyết.";
 const CLOSE_LABEL = "Đóng chi tiết đơn thư";
+/** Not in the prototype (it has no deadline edit in the drawer) — patterned on "Sửa thông tin người gửi". */
+export const DEADLINE_EDIT_LABEL = "Sửa hạn xử lý";
+export const DEADLINE_SAVED = "Đã lưu hạn xử lý.";
+export const DEADLINE_CLEARED = "Đã bỏ hạn xử lý.";
 
 /**
  * ONE citizen letter — the prototype's right-hand drawer (`PetitionDetailDrawer.tsx`, 72rem), in the
@@ -88,7 +97,8 @@ const CLOSE_LABEL = "Đóng chi tiết đơn thư";
  *   strip    C3's main row + the "Rẽ nhánh:" row; a chip is clickable only for an arrow the SERVER
  *            lists in `next_statuses`, and only for a viewer who may work on the letter. A click opens
  *            the prototype's composer (note) and posts the status. Routing is NOT a status here.
- *   left     badges, figures (the ADDRESS IS NEVER SHOWN — only whether one exists), sender correction
+ *   left     badges, figures (the ADDRESS IS NEVER SHOWN — only whether one exists), the clerk's "Hạn xử
+ *            lý" (ADR 0079 lô 5 Q18, `petition.create`, open phases only), sender correction
  *            (an EMPTY form), "Chuyển thành nhiệm vụ" ("?"), "Chuyển cho bộ phận khác" (routing), and the
  *            result form in the place of the prototype's free-text answer (C10).
  *   right    "Nhật ký & Trao đổi" (one note) and the processing log, newest first, read-only.
@@ -113,7 +123,7 @@ export function LetterDrawer({
   now: Date;
   units: BangTraDanhMuc;
   directory?: DanhBaTheoMa | null;
-  /** `petition.create` — routing and sender correction. */
+  /** `petition.create` — routing, sender correction and the deadline. */
   canBook: boolean;
   /** `petition.read` AND (assignee OR `petition.create`) — status, result, log. */
   mayWork: boolean;
@@ -188,9 +198,17 @@ export function LetterDrawer({
                     </span>
                   )}
                 </Figure>
-                {/* The stored date or "Không đặt hạn" — the prototype's figure (`:519-524`), no count. */}
+                {/* The stored date or "Không đặt" — the prototype's figure (`:519-524`), no count. */}
                 <Figure label="Hạn xử lý">{dueDateText(activeDue(doc))}</Figure>
               </dl>
+
+              {canBook && dueSettable(doc.status) && (
+                <DeadlineEditor
+                  key={`due:${doc.id}`}
+                  letter={doc}
+                  onSaved={(cleared) => done(cleared ? DEADLINE_CLEARED : DEADLINE_SAVED)}
+                />
+              )}
 
               {canBook && <SenderCorrection key={`sender:${doc.id}`} letter={doc} onSaved={() => done("Đã sửa thông tin người gửi.")} />}
 
@@ -428,11 +446,122 @@ function StatusChip({ chip, onClick }: { chip: StatusChipModel; onClick: () => v
   );
 }
 
-/* ---- sender correction --------------------------------------------------------------------- */
-
 const SMALL_INPUT =
   "mt-1 box-border h-9 min-h-0 w-full min-w-0 rounded-lg border border-solid border-input bg-white px-2.5 [font-family:inherit] text-[12.5px] text-navy outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50";
 const SMALL_LABEL = "block text-[11.5px] leading-none font-medium text-ink";
+
+/* ---- the clerk's deadline (ADR 0079 lô 5 Q18) ---------------------------------------------- */
+
+/**
+ * The clerk-set "Hạn xử lý" — `PATCH …/deadline`. THE PROTOTYPE SHOWS the figure (`PetitionDetailDrawer
+ * .tsx:519-523`, "Không đặt" when none) but edits it nowhere in the drawer; its only deadline control is
+ * the entry form's date field (`DocumentEntryForm.tsx:227-238`, label "Hạn xử lý", `type="date"`, sent as
+ * 17:00 of that day, `:118`). So: the sender correction's shape (outline button → grey inline box → Lưu /
+ * Huỷ) around that date field, plus "Không đặt" to clear. The server picks the phase's column and refuses
+ * a finished letter (409) — its sentence is shown verbatim. Shown only to `petition.create` (convenience).
+ */
+export function DeadlineEditor({
+  letter,
+  onSaved,
+}: {
+  letter: documents_citizenLetterOut;
+  onSaved: (cleared: boolean) => void;
+}) {
+  const current = activeDue(letter);
+  const [editing, setEditing] = useState(false);
+  const [date, setDate] = useState("");
+  const [error, setError] = useState("");
+  const [sending, setSending] = useState(false);
+
+  if (!editing) {
+    return (
+      <div className="mt-3">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          icon={<Glyph icon={Pencil} />}
+          onClick={() => {
+            setDate(dueInputValue(current));
+            setError("");
+            setEditing(true);
+          }}
+        >
+          {DEADLINE_EDIT_LABEL}
+        </Button>
+      </div>
+    );
+  }
+
+  const send = (dueAt: string | null) => {
+    if (sending) return;
+    setError("");
+    setSending(true);
+    void setCitizenLetterDeadline(letter.id, { due_at: dueAt }).then((k) => {
+      setSending(false);
+      if (!k.ok) {
+        setError(k.thongBao);
+        return;
+      }
+      setEditing(false);
+      onSaved(dueAt === null);
+    });
+  };
+
+  const instant = dueInstantOf(date);
+  return (
+    <form
+      className="mt-3 flex flex-col gap-3 rounded-[10px] border border-solid border-line bg-canvas p-3"
+      aria-label={DEADLINE_EDIT_LABEL}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (instant !== null) send(instant);
+      }}
+    >
+      <div className="min-w-0 sm:max-w-[16rem]">
+        <label htmlFor="don-thu-han-xu-ly" className={SMALL_LABEL}>
+          Hạn xử lý
+        </label>
+        <input
+          id="don-thu-han-xu-ly"
+          type="date"
+          className={SMALL_INPUT}
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+        />
+      </div>
+      {error !== "" && (
+        <p className="thong-bao-loi m-0" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" size="sm" variant="primary" disabled={sending || instant === null} aria-busy={sending || undefined}>
+          <BusyLabel busy={sending} label="Lưu" busyText="Đang lưu…" />
+        </Button>
+        {current !== null && current !== "" && (
+          <Button type="button" size="sm" variant="outline" disabled={sending} onClick={() => send(null)}>
+            {DUE_NOT_SET}
+          </Button>
+        )}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={sending}
+          onClick={() => {
+            setEditing(false);
+            setError("");
+          }}
+        >
+          Huỷ
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/* ---- sender correction --------------------------------------------------------------------- */
 
 /**
  * "Sửa thông tin người gửi" (`PetitionDetailDrawer.tsx:527-588`). THE FORM STARTS EMPTY (ADR 0078 #4):

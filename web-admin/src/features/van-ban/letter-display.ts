@@ -8,8 +8,8 @@
  *   - statuses are C3's ten (TT 05/2021), not the prototype's seven; assignment is an ATTRIBUTE;
  *   - types are C4's four codes;
  *   - the sender is optional (C7);
- *   - deadlines are NEVER computed here — both are null today and read "Không đặt hạn" (ADR 0078 #3,
- *     rule 10); lateness, when a deadline exists, is DERIVED from it against `now`, never stored;
+ *   - deadlines are NEVER computed here — the only one is the clerk's typed "Hạn xử lý" (ADR 0079 lô 5
+ *     Q18), stored by the server; unset reads "Không đặt hạn" / "Không đặt" (rule 10); lateness, when a deadline exists, is DERIVED from it against `now`, never stored;
  *   - the phone is shown exactly as the server masked it, the address never (ADR 0078 #4, rule 3).
  *
  * ⚠ THE LABEL TABLES ARE HAND COPIES of `service-documents/internal/domain/citizen_letter.go` — the
@@ -278,10 +278,38 @@ export function dueLabel(dueISO: string | null, closed: boolean, now: Date): { t
   return { text: `Hạn ${deadlineDate(dueISO)}`, tone: "normal" };
 }
 
-/** The drawer's "Hạn xử lý" figure: the stored date, or "Không đặt hạn" — never a count. */
+/** The drawer figure's word for no deadline — the prototype's (`PetitionDetailDrawer.tsx:522`). */
+export const DUE_NOT_SET = "Không đặt";
+
+/** The drawer's "Hạn xử lý" figure: the stored date, or "Không đặt" — never a count. */
 export function dueDateText(dueISO: string | null): string {
-  if (dueISO === null || dueISO === "") return NO_DEADLINE;
+  if (dueISO === null || dueISO === "") return DUE_NOT_SET;
   return Number.isNaN(new Date(dueISO).getTime()) ? dueISO : deadlineDate(dueISO);
+}
+
+/**
+ * Whether the letter's phase HAS a deadline a clerk can set — mirror of `domain.LetterDueColumn`: the
+ * four open phases; a finished letter has none (the server answers 409). UX only: the server decides.
+ */
+export function dueSettable(status: string): boolean {
+  return ["moi-vao-so", "dang-xu-ly-don", "thu-ly", "dang-giai-quyet"].includes(status);
+}
+
+/** A stored deadline → the `YYYY-MM-DD` of a date input, read in the Vietnamese zone. `""` when none. */
+export function dueInputValue(dueISO: string | null): string {
+  if (dueISO === null || dueISO === "" || Number.isNaN(new Date(dueISO).getTime())) return "";
+  const [dd, mm, yyyy] = deadlineDate(dueISO).split("/");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/**
+ * The date input → the instant PATCH …/deadline stores: 17:00 of that day. The prototype's own
+ * deadline field sends `new Date(\`${dueOn}T17:00:00\`).toISOString()` (`DocumentEntryForm.tsx:118`) —
+ * 17:00 in the BROWSER's zone. Pinned to `+07:00` here instead, so a machine set to the wrong zone
+ * cannot shift a commitment made to a citizen; in Vietnam the two are the same instant. `null` = empty.
+ */
+export function dueInstantOf(date: string): string | null {
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date}T17:00:00+07:00` : null;
 }
 
 /** Whether an OPEN letter is past its stored, phase-relevant deadline. Derived at render time. */

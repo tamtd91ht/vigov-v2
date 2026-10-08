@@ -9,6 +9,7 @@ import {
   correctCitizenLetterSender,
   moveCitizenLetter,
   routeCitizenLetter,
+  setCitizenLetterDeadline,
 } from "./citizen-letters";
 
 type Call = { url: string; init: RequestInit };
@@ -114,6 +115,16 @@ describe("citizen-letter writes", () => {
     await correctCitizenLetterSender("L1", { sender_name: null, sender_phone: null, sender_address: null });
     expect(sentBody(calls[1]!)).toEqual({ sender_name: null, sender_phone: null, sender_address: null });
     expect(calls[1]!.init.method).toBe("PATCH");
+  });
+
+  it("deadline: PATCH with EXACTLY { due_at } — an instant sets, null clears; the id is in the path", async () => {
+    const calls = stubFetch(200, {});
+    await setCitizenLetterDeadline("L/1", { due_at: "2026-10-20T17:00:00+07:00" });
+    expect(calls[0]!.url).toBe("/api/v1/citizen-letters/L%2F1/deadline");
+    expect(calls[0]!.init.method).toBe("PATCH");
+    expect(sentBody(calls[0]!)).toEqual({ due_at: "2026-10-20T17:00:00+07:00" });
+    await setCitizenLetterDeadline("L1", { due_at: null });
+    expect(sentBody(calls[1]!)).toEqual({ due_at: null });
   });
 
   it("a note carries the draft's Idempotency-Key (the route requires one)", async () => {
