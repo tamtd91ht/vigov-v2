@@ -94,32 +94,33 @@ export function KhungTabCauHinh() {
       )}
 
       {/* The prototype's shadcn `TabsList` (spec 02, ADR 0079): the `muted` strip (#edf3f8), 3px inset,
-          32px tall, segments `px-1.5 text-sm font-medium` at 60% foreground; the open one a WHITE raised
-          segment (`bg-surface` here — this app's `bg-background` is the page colour, not white). Twelve
-          tabs do not fit 320px, so the strip scrolls sideways inside its OWN box and never widens the
-          page; the scroller wraps the strip so a scrollbar never eats the 32px track. */}
+          segments `px-1.5 text-sm font-medium` at 60% foreground, each 25px tall (the prototype's
+          `h-[calc(100%-1px)]` of a 32px strip); the open one a WHITE raised segment (`bg-surface` here —
+          this app's `bg-background` is the page colour, not white).
+          WRAPS, NEVER SCROLLS (owner, VALIDATE 08/10/2026): the prototype has nine tabs, this screen
+          twelve, and at 1440px a sideways scroller hid "Nhận diện xã" past the right edge with nothing
+          saying it was there. So the strip is `flex-wrap` with `h-auto`: when a row is full the next tabs
+          go onto a second row and the muted strip grows to hold both. */}
       {coThanh && (
-        <div className="max-w-full min-w-0 overflow-x-auto">
-          <TabList aria-label="Các phần cấu hình" className="w-max max-w-none overflow-visible">
-            {hien.map((t, i) => (
-              <Tab
-                key={t.ma}
-                ref={(el: HTMLButtonElement | null) => {
-                  nutTab.current[t.ma] = el;
-                }}
-                id={idTab(t.ma)}
-                selected={t.ma === chon}
-                aria-controls={idPanel(t.ma)}
-                tabIndex={t.ma === chon ? 0 : -1}
-                onClick={() => datDangChon(t.ma)}
-                onKeyDown={(e) => xuLyPhim(e, i)}
-                className={cn(t.ma === chon && "bg-surface")}
-              >
-                {t.nhan}
-              </Tab>
-            ))}
-          </TabList>
-        </div>
+        <TabList aria-label="Các phần cấu hình" className="h-auto flex-wrap overflow-visible">
+          {hien.map((t, i) => (
+            <Tab
+              key={t.ma}
+              ref={(el: HTMLButtonElement | null) => {
+                nutTab.current[t.ma] = el;
+              }}
+              id={idTab(t.ma)}
+              selected={t.ma === chon}
+              aria-controls={idPanel(t.ma)}
+              tabIndex={t.ma === chon ? 0 : -1}
+              onClick={() => datDangChon(t.ma)}
+              onKeyDown={(e) => xuLyPhim(e, i)}
+              className={cn("h-[25px]", t.ma === chon && "bg-surface")}
+            >
+              {t.nhan}
+            </Tab>
+          ))}
+        </TabList>
       )}
 
       {/* Cùng một danh sách có `key` ở cả hai trạng thái (có thanh / không thanh), nên khi thanh

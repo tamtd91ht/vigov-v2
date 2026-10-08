@@ -188,6 +188,27 @@ describe("trạng thái rỗng của hai bảng theo năm — một dòng trong 
   });
 });
 
+describe("ô chọn năm của lịch nghỉ lễ và làm bù (VALIDATE 08/10/2026)", () => {
+  it("là select theo mẫu chung (selectCls, h-9), nhãn 11.5px — không còn ô `.chon-nam` cũ", () => {
+    const html = render();
+    expect(html).not.toContain("chon-nam");
+    const select = html.match(/<select id="nam-lich-lam-viec"[^>]*class="([^"]*)"/);
+    expect(select).not.toBeNull();
+    const cls = select![1]!.split(" ");
+    expect(cls).toContain("h-9");
+    expect(cls).toContain("rounded-md");
+    expect(cls).toContain("text-[12.5px]");
+    expect(html).toMatch(/<label for="nam-lich-lam-viec" class="[^"]*text-\[11\.5px\][^"]*">Năm của lịch nghỉ lễ và làm bù<\/label>/);
+  });
+
+  it("giữ đúng các năm của `danhSachNam` quanh năm gốc, năm đang chọn được chọn", () => {
+    const html = render();
+    expect(html).toMatch(/<option value="2026" selected="">2026<\/option>/);
+    expect(html).toContain('<option value="2025">2025</option>');
+    expect(html).toContain('<option value="2027">2027</option>');
+  });
+});
+
 describe("biểu mẫu là hàng xám phía trên bảng", () => {
   it("biểu mẫu thuộc đúng bảng của nó", () => {
     expect(calendarGroupOf({ kieu: "themCa" })).toBe("week");

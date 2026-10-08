@@ -45,6 +45,11 @@ export const formInputCls = cn(controlClass, "mt-1 h-9 text-[12.5px]");
  * The grey add/edit row. A `<form>`, so Enter in any field submits it (the spec's "Enter trong ô chính
  * để submit"). `columns` is the grid template FROM `sm:` up (e.g. `"sm:grid-cols-[10rem_1fr_auto]"`):
  * below 640px every field takes a full row, so 320px never scrolls sideways.
+ *
+ * NO MARGIN UTILITY HERE, ON PURPOSE. Tailwind v4 emits the parent's `space-y-*` under `:where()` (zero
+ * specificity), so an `m-0` on this row beat it and the row touched the table below (VALIDATE round 2,
+ * 08/10/2026). There was nothing for `m-0` to cancel: a `<form>` has no UA margin in standards mode and
+ * the legacy sheet has no bare `form` rule. `config-ui.test.tsx` keeps it that way.
  */
 export function ConfigFormRow({
   columns,
@@ -54,7 +59,7 @@ export function ConfigFormRow({
   return (
     <form
       className={cn(
-        "border-line bg-background m-0 grid items-end gap-3 rounded-[10px] border border-solid p-3",
+        "border-line bg-background grid items-end gap-3 rounded-[10px] border border-solid p-3",
         columns,
         className,
       )}

@@ -143,6 +143,22 @@ describe("khung tab màn Cấu hình", () => {
     ]);
   });
 
+  it("thanh mười hai tab XUỐNG DÒNG khi thiếu chỗ, không cuộn ngang (chủ dự án, VALIDATE 08/10/2026)", () => {
+    // At 1440px twelve tabs overflowed and "Nhận diện xã" sat hidden past the right edge with no cue.
+    phienGia = phienCo(["admin.user", "admin.role", "admin.org", "admin.lookup", "admin.sla", "admin.audit", "asset.read"]);
+    const html = renderToStaticMarkup(<KhungTabCauHinh />);
+    const tablist = html.match(/<div role="tablist"[^>]*class="([^"]*)"/);
+    expect(tablist).not.toBeNull();
+    const cls = tablist![1]!.split(" ");
+    expect(cls).toContain("flex-wrap");
+    expect(cls).toContain("h-auto");
+    expect(cls).toContain("bg-muted");
+    expect(cls).not.toContain("h-8");
+    expect(cls).not.toContain("overflow-x-auto");
+    expect(html).not.toContain("overflow-x-auto");
+    expect(html).toContain('id="tab-cau-hinh-nhan-dien-xa"');
+  });
+
   it("phiên đọc hỏng → câu của máy chủ vẫn ra tới màn hình", () => {
     phienGia = { ok: false, thongBao: "Phiên làm việc đã hết hạn" } as PhienDaDoc;
     const html = renderToStaticMarkup(<KhungTabCauHinh />);

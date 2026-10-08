@@ -34,16 +34,17 @@ import { PREVIEW_TASK_BLOCS, PREVIEW_TASK_PRIORITIES, PREVIEW_TASK_STATUSES, PRE
  * every non-GET in the server's error shape.
  *
  * `?state=empty` answers every list empty (the screen's own empty states); `?state=loading` is handled
- * by the caller, which holds every read `isSettingsReadPath` names unsettled.
+ * by the caller, which holds every read `isSettingsReadPath` names unsettled; `?state=mail-off` answers
+ * the mail server configured but switched off (`is_enabled: false`), everything else as normal.
  */
 
-export type SettingsPreviewState = "loading" | "empty" | null;
+export type SettingsPreviewState = "loading" | "empty" | "mail-off" | null;
 
 /** `?state=` of `/xem-thu/cau-hinh`, read from the browser URL at call time (`null` on the server). */
 export function settingsPreviewState(): SettingsPreviewState {
   if (typeof window === "undefined") return null;
   const v = new URLSearchParams(window.location.search).get("state");
-  return v === "loading" || v === "empty" ? v : null;
+  return v === "loading" || v === "empty" || v === "mail-off" ? v : null;
 }
 
 // ── Sơ đồ tổ chức: three levels. The two department ids are the shared fixture's (`PREVIEW_STAFF`
@@ -103,14 +104,14 @@ export const PREVIEW_MAP_ASSET_TYPES: comms_danhSachLoaiTaiNguyenRa = {
   ],
 };
 
-// ── Trường bản đồ ─────────────────────────────────────────────────────────────────────────────────
+// ── Trường bản đồ — `field_code` in the server's shape `^[a-z][a-z0-9_]*$` (underscores, never dashes) ─
 const MAP_FIELDS: readonly comms_mapFieldSchemaOut[] = [
-  { id: "01PREVIEWMFS0000000000001", asset_type_code: "doanh-nghiep", field_code: "ma-so-thue", label: "Mã số thuế", value_type: "van-ban", options: [], is_required: true, sort_order: 1, is_active: true },
-  { id: "01PREVIEWMFS0000000000002", asset_type_code: "doanh-nghiep", field_code: "so-lao-dong", label: "Số lao động", value_type: "so-nguyen", options: [], is_required: false, sort_order: 2, is_active: true },
+  { id: "01PREVIEWMFS0000000000001", asset_type_code: "doanh-nghiep", field_code: "ma_so_thue", label: "Mã số thuế", value_type: "van-ban", options: [], is_required: true, sort_order: 1, is_active: true },
+  { id: "01PREVIEWMFS0000000000002", asset_type_code: "doanh-nghiep", field_code: "so_lao_dong", label: "Số lao động", value_type: "so-nguyen", options: [], is_required: false, sort_order: 2, is_active: true },
   {
     id: "01PREVIEWMFS0000000000003",
     asset_type_code: "doanh-nghiep",
-    field_code: "nganh-nghe",
+    field_code: "nganh_nghe",
     label: "Ngành nghề chính",
     value_type: "chon",
     options: [
@@ -122,10 +123,10 @@ const MAP_FIELDS: readonly comms_mapFieldSchemaOut[] = [
     sort_order: 3,
     is_active: true,
   },
-  { id: "01PREVIEWMFS0000000000004", asset_type_code: "doanh-nghiep", field_code: "ngay-thanh-lap", label: "Ngày thành lập", value_type: "ngay", options: [], is_required: false, sort_order: 4, is_active: true },
-  { id: "01PREVIEWMFS0000000000005", asset_type_code: "doanh-nghiep", field_code: "co-giay-phep-moi-truong", label: "Có giấy phép môi trường", value_type: "dung-sai", options: [], is_required: false, sort_order: 5, is_active: false },
-  { id: "01PREVIEWMFS0000000000006", asset_type_code: "truong-hoc", field_code: "so-hoc-sinh", label: "Số học sinh", value_type: "so-nguyen", options: [], is_required: true, sort_order: 1, is_active: true },
-  { id: "01PREVIEWMFS0000000000007", asset_type_code: "truong-hoc", field_code: "cap-hoc", label: "Cấp học", value_type: "chon", options: [{ value: "mam-non", label: "Mầm non" }, { value: "tieu-hoc", label: "Tiểu học" }, { value: "thcs", label: "Trung học cơ sở" }], is_required: true, sort_order: 2, is_active: true },
+  { id: "01PREVIEWMFS0000000000004", asset_type_code: "doanh-nghiep", field_code: "ngay_thanh_lap", label: "Ngày thành lập", value_type: "ngay", options: [], is_required: false, sort_order: 4, is_active: true },
+  { id: "01PREVIEWMFS0000000000005", asset_type_code: "doanh-nghiep", field_code: "co_giay_phep_moi_truong", label: "Có giấy phép môi trường", value_type: "dung-sai", options: [], is_required: false, sort_order: 5, is_active: false },
+  { id: "01PREVIEWMFS0000000000006", asset_type_code: "truong-hoc", field_code: "so_hoc_sinh", label: "Số học sinh", value_type: "so-nguyen", options: [], is_required: true, sort_order: 1, is_active: true },
+  { id: "01PREVIEWMFS0000000000007", asset_type_code: "truong-hoc", field_code: "cap_hoc", label: "Cấp học", value_type: "chon", options: [{ value: "mam-non", label: "Mầm non" }, { value: "tieu-hoc", label: "Tiểu học" }, { value: "thcs", label: "Trung học cơ sở" }], is_required: true, sort_order: 2, is_active: true },
 ];
 
 // ── Lời hệ thống — three services, the same shape ─────────────────────────────────────────────────
@@ -199,7 +200,8 @@ function swapDays(year: number): identity_danhSachCaLamBuRa {
   };
 }
 
-// ── Tự động hoá ───────────────────────────────────────────────────────────────────────────────────
+// ── Tự động hoá — a run's `work_kind` is a real kind of work (phan-anh / van-ban-den / nhiem-vu),
+//    never the job key ─────────────────────────────────────────────────────────────────────────────
 const AUTOMATION: identity_automationJobsOut = {
   items: [
     {
@@ -216,8 +218,8 @@ const AUTOMATION: identity_automationJobsOut = {
       enabled_at: "2026-09-29T01:00:00Z",
       run_requested_at: null,
       last_runs: [
-        { work_kind: "sla_reminders", run_id: "01PREVIEWRUN0000000000001", trigger: "schedule", claimed_at: "2026-10-08T02:30:00Z", outcome: "succeeded", records_examined: 142, notices_delivered: 9, records_without_recipient: 1, recorded_at: "2026-10-08T02:30:04Z" },
-        { work_kind: "sla_reminders", run_id: "01PREVIEWRUN0000000000002", trigger: "schedule", claimed_at: "2026-10-08T02:00:00Z", outcome: "succeeded", records_examined: 140, notices_delivered: 4, records_without_recipient: 0, recorded_at: "2026-10-08T02:00:03Z" },
+        { work_kind: "phan-anh", run_id: "01PREVIEWRUN0000000000001", trigger: "schedule", claimed_at: "2026-10-08T02:30:00Z", outcome: "succeeded", records_examined: 142, notices_delivered: 9, records_without_recipient: 1, recorded_at: "2026-10-08T02:30:04Z" },
+        { work_kind: "van-ban-den", run_id: "01PREVIEWRUN0000000000002", trigger: "schedule", claimed_at: "2026-10-08T02:00:00Z", outcome: "succeeded", records_examined: 140, notices_delivered: 4, records_without_recipient: 0, recorded_at: "2026-10-08T02:00:03Z" },
       ],
     },
     {
@@ -318,10 +320,22 @@ const SYSTEM_MESSAGE_PATHS: Record<string, keyof typeof MESSAGES> = {
   "/api/v1/reporting-system-messages": "reporting",
 };
 
+/**
+ * The shared document types carry `source: ""` / `tier: 0` (the Văn bản screens never read them). The
+ * Danh mục tab shows both columns, so here — and only here, `documents.fixture.ts` is another screen's —
+ * the first four read as shipped with the system (`he-thong`, tier 2) and the rest as the commune's own
+ * (`don-vi`, tier 1), like every other catalogue of this file.
+ */
+const SETTINGS_DOCUMENT_TYPES = {
+  items: PREVIEW_DOCUMENT_TYPES.items.map((t, i) =>
+    i < 4 ? { ...t, source: "he-thong", tier: 2 } : { ...t, source: "don-vi", tier: 1 },
+  ),
+};
+
 /** Catalogue lists the Danh mục tab reads, answered from the shared fixtures (one source each). */
 const SHARED_CATALOGUES: Record<string, { items: readonly unknown[] }> = {
   "/api/v1/capital-plan-categories": PREVIEW_CATEGORIES,
-  "/api/v1/document-types": PREVIEW_DOCUMENT_TYPES,
+  "/api/v1/document-types": SETTINGS_DOCUMENT_TYPES,
   "/api/v1/task-blocs": PREVIEW_TASK_BLOCS,
   "/api/v1/task-types": PREVIEW_TASK_TYPES,
   "/api/v1/task-priorities": PREVIEW_TASK_PRIORITIES,
@@ -392,6 +406,9 @@ export function answerSettings(method: string, url: URL): Response | null {
     if (empty && p === "/api/v1/mail-settings") {
       const blank: comms_mailSettingsOut = { ...MAIL, configured: false, host: "", username: "", from_address: "", from_name: "", is_enabled: false, password_set: false };
       return json(blank);
+    }
+    if (p === "/api/v1/mail-settings" && settingsPreviewState() === "mail-off") {
+      return json({ ...MAIL, is_enabled: false } satisfies comms_mailSettingsOut);
     }
     return json(SINGLE_ANSWERS[p]);
   }

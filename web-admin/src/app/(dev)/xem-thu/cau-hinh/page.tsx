@@ -25,6 +25,9 @@ import {
  *   `?tab=<id>`             one tab of `TAB_CAU_HINH` (e.g. `thoi-han-xu-ly`), pressed on the real bar;
  *                           absent or unknown: the screen's own first tab
  *   `?state=loading|empty`  every read of the screen held unsettled / answered with empty lists
+ *   `?state=mail-off`       Máy chủ thư configured but switched off (`is_enabled: false`)
+ *   `?bam=<chữ nút>`        presses the real button with exactly that text (a form row, a dialog)
+ *   `?bam-title=<title>`    presses the first real icon button with that `title` (Pencil, Trash2)
  *   `?quyen=none`           a session holding no `admin.*` / `asset.read` key: the read-only screen
  *                           (gated tabs hidden, write buttons hidden or disabled)
  *   `?menu=day-du`, `?sidebar=thu-gon`, `?toast=1`, `?menu-tai-khoan=1`, `?chuong=1`  as every preview
@@ -65,7 +68,11 @@ export default async function SettingsPreviewPage({ searchParams }: { searchPara
       {/* The real page's header and wrapper (`app/cau-hinh/page.tsx`), so the screenshot is that page. */}
       <ConfigPageHeader />
       <div className="min-w-0">
-        <SettingsPreview tab={previewSettingsTab(q.tab)} />
+        <SettingsPreview
+          tab={previewSettingsTab(q.tab)}
+          press={first(q.bam) ?? null}
+          pressTitle={first(q["bam-title"]) ?? null}
+        />
       </div>
     </PreviewShell>
   );

@@ -4,7 +4,6 @@ import { Pencil, Plus, Sprout, Trash2, TriangleAlert } from "lucide-react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
-import { ChonNam } from "@/components/chon-nam";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/error-state";
 import { Notice } from "@/components/ui/notice";
@@ -33,7 +32,7 @@ import type {
   identity_danhSachNgayNghiLeRa,
   identity_ngayNghiLeRa,
 } from "@/lib/api/schema.gen";
-import { namTheoDongHoMay } from "@/lib/nam";
+import { danhSachNam, namTheoDongHoMay } from "@/lib/nam";
 
 import { khoiCanhBao, tinhTrangBang } from "./chua-cau-hinh";
 import type { KhoiCanhBao } from "./chua-cau-hinh";
@@ -450,7 +449,25 @@ export function WorkingCalendarView({
         form={formGroup === "week" ? form : null}
       />
 
-      <ChonNam id="nam-lich-lam-viec" nhan="Năm của lịch nghỉ lễ và làm bù" nam={year} namGoc={baseYear} datNam={setYear} />
+      {/* The year of the two per-year tables — the shared field pattern (11.5px label, `selectCls`), as
+          the Trường bản đồ group picker. Not `ChonNam`: its legacy `.chon-nam` frame clipped "2026" at
+          the bottom here (VALIDATE 08/10/2026), and it is shared with Giải ngân, so it is not restyled.
+          Same options (`danhSachNam` around the year read ONCE from the clock) and the same behaviour:
+          the year is always visible, never a hidden default (`lib/nam.ts`). */}
+      <ConfigField label="Năm của lịch nghỉ lễ và làm bù" htmlFor="nam-lich-lam-viec" className="w-48 max-w-full">
+        <select
+          id="nam-lich-lam-viec"
+          className={formSelectCls}
+          value={year}
+          onChange={(e) => setYear(Number(e.target.value))}
+        >
+          {danhSachNam(baseYear).map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+      </ConfigField>
 
       <BangNgayNghi
         kq={data.holidays}

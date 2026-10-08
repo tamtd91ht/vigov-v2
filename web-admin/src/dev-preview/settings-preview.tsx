@@ -19,7 +19,19 @@ export type SettingsTabId = MaTabCauHinh;
  * (`#tab-cau-hinh-<id>`) once the bar has drawn — the bar appears only after the session is read, which
  * is why this waits instead of pressing at once.
  */
-export function SettingsPreview({ tab }: { tab: SettingsTabId | null }) {
+export function SettingsPreview({
+  tab,
+  press = null,
+  pressTitle = null,
+}: {
+  tab: SettingsTabId | null;
+  /** `?bam=<words>`: presses the REAL button whose text is exactly these words (opens a form row or dialog). */
+  press?: string | null;
+  /** `?bam-title=<title>`: presses the first REAL button with this `title` (an icon button: Pencil, Trash2). */
+  pressTitle?: string | null;
+}) {
   usePressWhenReady(tab === null ? null : `button[role="tab"]#tab-cau-hinh-${tab}`);
+  usePressWhenReady(press === null ? null : "button", press ?? undefined);
+  usePressWhenReady(pressTitle === null ? null : `button[title="${CSS.escape(pressTitle)}"]`);
   return <KhungTabCauHinh />;
 }
