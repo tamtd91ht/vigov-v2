@@ -233,6 +233,51 @@ func TestPhienCongDanChuaCoSoDiThangQua(t *testing.T) {
 	}
 }
 
+// The Zalo account is the owner and the audit "who" of a petition sent before the phone is verified
+// (ADR 0080), so a mapping that drops it leaves the owning service with "" — which it must refuse,
+// turning every such submission into an error nobody can explain. Copied straight through, and
+// NEVER filled in from CitizenID or the sid when absent.
+func TestCitizenSessionZaloAccountPassesThrough(t *testing.T) {
+	const account = "01JE1CCCCCCCCCCCCCCCCCCCCC"
+	cl := moMay(t, &mayChuCongDanGia{tra: &identityv1.CitizenSessionPrincipal{
+		SessionId: "01JE1AAAAAAAAAAAAAAAAAAAAA", TenantId: string(xaA), ZaloAccountId: account}})
+
+	p, co, err := cl.TraCuuPhienCongDan(ngucCanhCongDan(), tokenCongDanGia)
+	if err != nil || !co {
+		t.Fatalf("bridge session without a phone refused: co=%v err=%v", co, err)
+	}
+	if p.ZaloAccountID != account || p.CitizenID != "" {
+		t.Errorf("session = %+v, want ZaloAccountID %q and CitizenID empty", p, account)
+	}
+
+	cl = moMay(t, &mayChuCongDanGia{tra: &identityv1.CitizenSessionPrincipal{
+		SessionId: "01JE1AAAAAAAAAAAAAAAAAAAAA", CitizenId: "01JE1BBBBBBBBBBBBBBBBBBBBB", TenantId: string(xaA)}})
+	p, co, err = cl.TraCuuPhienCongDan(ngucCanhCongDan(), tokenCongDanGia)
+	if err != nil || !co {
+		t.Fatalf("non-bridge session refused: co=%v err=%v", co, err)
+	}
+	if p.ZaloAccountID != "" {
+		t.Errorf("ZaloAccountID = %q for a session without one — something filled it in", p.ZaloAccountID)
+	}
+}
+
+// UNTIL IDENTITY'S HANDLER FILLS zalo_account_id, every bridge session without a phone arrives with
+// BOTH citizen_id and zalo_account_id empty. That must stay a usable session for view-only routes —
+// refusing it here would be an outage of every unverified Mini App screen. The refusal of an
+// ownerless write belongs to the route that needs an owner.
+func TestCitizenSessionWithoutCitizenOrAccountStillResolves(t *testing.T) {
+	cl := moMay(t, &mayChuCongDanGia{tra: &identityv1.CitizenSessionPrincipal{
+		SessionId: "01JE1AAAAAAAAAAAAAAAAAAAAA", TenantId: string(xaA)}})
+
+	p, co, err := cl.TraCuuPhienCongDan(ngucCanhCongDan(), tokenCongDanGia)
+	if err != nil || !co {
+		t.Fatalf("unverified session without an account refused: co=%v err=%v", co, err)
+	}
+	if p.CitizenID != "" || p.ZaloAccountID != "" {
+		t.Errorf("session = %+v — something filled in an owner", p)
+	}
+}
+
 // A request that can only fail has no business on the network, and the message names the CALLER's
 // fault rather than the server's answer.
 func TestPhienCongDanTokenRongBiChanTaiCho(t *testing.T) {

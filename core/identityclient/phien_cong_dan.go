@@ -170,9 +170,14 @@ func (c *Client) TraCuuPhienCongDan(ctx context.Context, token string) (httpx.Ci
 	// Substituting anything for an empty value here is rule 1, forbidden #1, and rejecting the
 	// session because of it would break the commune-picker screen, which is called WITH exactly
 	// this session.
+	// ZALO ACCOUNT COPIED STRAIGHT THROUGH, INCLUDING EMPTY: "" is a session that did not come
+	// through the Mini App bridge — and, until identity's handler fills the field, every session.
+	// Refusing it here would break the view-only screens of every unverified session. Whoever needs
+	// an owner refuses when both it and CitizenID are empty; nothing here fills one from the other.
 	return httpx.CitizenSession{
-		ID:        p.GetSessionId(),
-		CitizenID: p.GetCitizenId(),
-		TenantID:  tenant.ID(p.GetTenantId()),
+		ID:            p.GetSessionId(),
+		CitizenID:     p.GetCitizenId(),
+		TenantID:      tenant.ID(p.GetTenantId()),
+		ZaloAccountID: p.GetZaloAccountId(),
 	}, true, nil
 }

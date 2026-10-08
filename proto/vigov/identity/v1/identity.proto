@@ -193,8 +193,9 @@ service IdentityService {
   //                       through the service that is down. Answer 503.
   rpc ResolveStaffPrincipal(ResolveStaffPrincipalRequest) returns (ResolveStaffPrincipalResponse);
 
-  // ResolveCitizenSession turns the bearer token a Mini App holds into the three opaque
-  // identifiers the citizen edge needs: which session, which citizen, and WHICH COMMUNE.
+  // ResolveCitizenSession turns the bearer token a Mini App holds into the opaque identifiers the
+  // citizen edge needs: which session, which citizen, WHICH COMMUNE, and — for a bridge session —
+  // which Zalo account (CitizenSessionPrincipal.zalo_account_id, 08/10/2026).
   //
   // WHY IT EXISTS. `core/httpx.CitizenEdge` needs a `core/httpx.CitizenSessions`, and the only
   // implementation is `*store.PhienCongDanStore` inside service-identity's `internal/`
@@ -244,8 +245,9 @@ service IdentityService {
   //
   // # NO PERSONAL DATA CROSSES THIS BOUNDARY, BY CONSTRUCTION
   //
-  // Three opaque identifiers and there is no fourth field — the same refusal
-  // `core/httpx.CitizenSession` makes, for the same reason. A citizen is identified in the
+  // Opaque, server-minted identifiers only — four since 08/10/2026 (zalo_account_id, see the
+  // message) — and never a field that is not one: the same refusal `core/httpx.CitizenSession`
+  // makes, for the same reason. A citizen is identified in the
   // business by phone number (ADR 0020), and a phone number is personal data under Decree
   // 13/2023 (rule 3). This RPC runs on EVERY request of EVERY citizen, which makes it the single
   // most likely line in the system to put an entire commune's phone numbers into a log. Adding
@@ -2087,7 +2089,7 @@ message ResolveCitizenSessionResponse {
   // ABSENT MEANS NO SESSION — the token is not usable, for one of the reasons the RPC's comment
   // lists and deliberately does not distinguish.
   //
-  // A MESSAGE RATHER THAN THREE BARE STRINGS, so the facts cannot be half-set: there is no state
+  // A MESSAGE RATHER THAN BARE STRINGS, so the facts cannot be half-set: there is no state
   // in which a citizen id arrives without the session id it was read from. A caller checks
   // presence once and is done.
   //
@@ -2098,8 +2100,15 @@ message ResolveCitizenSessionResponse {
   CitizenSessionPrincipal session = 1;
 }
 
-// CitizenSessionPrincipal is what the citizen edge learns about one request. Three opaque
-// identifiers, and THERE IS NO FOURTH FIELD.
+// CitizenSessionPrincipal is what the citizen edge learns about one request. Opaque, server-minted
+// identifiers only — four of them since 08/10/2026, and never anything that is personal data.
+//
+// THE FOURTH FIELD, `zalo_account_id`, WAS ADDED ON THE OWNER'S DECISIONS OF 08/10/2026 (ADR 0080):
+// a session whose phone is not verified yet may submit a petition, and that petition belongs to the
+// session's Zalo account (`citizen_id` stays empty). Without the account on the principal, the
+// owning service has nothing to record as the owner, nothing to filter a lookup on (rule 4,
+// invariant 3) and no "who" for the trail (ADR 0045 §Ghi vết). It is a server-minted ULID like the
+// other three, so the argument below — the edge type cannot carry personal data — still holds.
 //
 // It is the wire form of `core/httpx.CitizenSession`, field for field, and the two are meant to
 // stay that way: the edge type refuses to be able to carry personal data, and a contract that
@@ -2134,6 +2143,26 @@ message CitizenSessionPrincipal {
   // THE CALLER, IS RULE 1 FORBIDDEN #1 — one line that collapses isolation silently, with every
   // test still green.
   string tenant_id = 3;
+
+  // The Zalo account that opened this session through the Mini App bridge — `tai_khoan_zalo.id`
+  // (service-identity migration 0011, `@entity: ZaloAccount`), a ULID minted by identity. NEVER the
+  // Zalo user id (personal data, stored only as a hash and never returned) and never a phone number.
+  //
+  // IT IS THE ACCOUNT'S "WHO" WHEN THE PHONE IS NOT VERIFIED — the trail and the idem subject of an
+  // account-owned petition (ADR 0045 §Ghi vết: "mã tài khoản Zalo khi chưa có số"; migration 0011's
+  // column note; owner, 08/10/2026, ADR 0080). A citizen has no staff-style business code: a citizen
+  // audit entry records an opaque id with actor kind "citizen" (core/authz.Principal.Ma), and this
+  // is that opaque id for the not-yet-verified case. No separate code is minted, by decision.
+  //
+  // "" IS A REAL ANSWER: a session that did not come through the bridge (`phien_cong_dan.tai_khoan_
+  // zalo_id` NULL). A caller that needs an owner and finds BOTH this and `citizen_id` empty REFUSES —
+  // it never substitutes the session id or anything else (fail closed).
+  //
+  // MAY BE SET BESIDE A NON-EMPTY `citizen_id`, and the two are not interchangeable: `citizen_id` is
+  // the platform-wide person a verified phone names; this is one Zalo account in one Mini App (keyed
+  // on (app_id, zalo user id)). Which of the two owns a record is the owning service's decision,
+  // recorded with the record — never re-derived from whichever happens to be set today.
+  string zalo_account_id = 4;
 }
 
 // CitizenIdentity is one citizen, once for the whole platform (ADR 0002).

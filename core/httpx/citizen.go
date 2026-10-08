@@ -30,8 +30,15 @@ import (
 // nằm TRONG LUỒNG chứ không ở rìa — ADR 0019, bất biến 8: xã của mã ghép phải khớp xã của
 // phiên công dân.
 
-// CitizenSession is what the edge learns about one citizen request. Three opaque identifiers,
-// and there is no fourth field.
+// CitizenSession is what the edge learns about one citizen request. Opaque, server-minted
+// identifiers only — four of them since 08/10/2026 — and never a field that is not one.
+//
+// WHY A FOURTH FIELD (ZaloAccountID), AND WHY IT DOES NOT BREAK THE ARGUMENT BELOW: on 08/10/2026
+// the owner decided that a session whose phone is not verified yet may submit a petition, owned by
+// the session's Zalo account (ADR 0080). With CitizenID empty, nothing else on the session could name
+// an owner, filter a lookup (rule 4, invariant 3) or be the trail's "who" (ADR 0045 §Ghi vết). The
+// account id is a ULID that identity mints, exactly like the other three — the type still cannot
+// carry personal data.
 //
 // VÌ SAO KHÔNG CÓ SỐ ĐIỆN THOẠI, TÊN, HAY BẤT KỲ DỮ LIỆU CÁ NHÂN NÀO: công dân được định danh
 // trong nghiệp vụ bằng số điện thoại (ADR 0020), và số điện thoại là dữ liệu cá nhân theo Nghị
@@ -61,6 +68,21 @@ type CitizenSession struct {
 	// Tuyến nghiệp vụ gặp giá trị rỗng thì XaTuPhien trả 401; không có mặc định nào được điền
 	// vào đây (luật 1 cấm #1).
 	TenantID tenant.ID
+
+	// ZaloAccountID is the Zalo account that opened this session through the Mini App bridge —
+	// `tai_khoan_zalo.id` in service-identity, a ULID. It is the audit "who" and the idem subject of
+	// a session without a verified phone (ADR 0045 §Ghi vết, ADR 0080; a citizen actor is an opaque
+	// id with Kind "citizen", see authz.Principal.Ma). NEVER the Zalo user id (personal data, which
+	// identity keeps only as a hash) and never a phone number.
+	//
+	// RỖNG LÀ MỘT CÂU TRẢ LỜI THẬT: phiên không đi qua cầu Mini App. Tuyến cần một chủ sở hữu mà thấy
+	// cả trường này lẫn CitizenID đều rỗng thì TỪ CHỐI — không lấy ID phiên hay bất cứ thứ gì khác thế
+	// vào (fail closed).
+	//
+	// IT DOES NOT CHANGE WHAT CitizenID MEANS, and it does not loosen XaTuPhien: that wall still
+	// refuses a session without CitizenID. A route that accepts an account-owned session must say so
+	// in its own class declaration (ADR 0080, which amends ADR 0045 stop condition #6).
+	ZaloAccountID string
 }
 
 // CitizenSessions resolves a bearer token to the session the server issued for it.
