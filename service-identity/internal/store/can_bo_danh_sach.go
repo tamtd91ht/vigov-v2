@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/store"
@@ -26,37 +27,143 @@ import (
 // Neither failure is loud. Two functions with two stated predicates is the cheap way to keep
 // them from drifting into one.
 
-// SapXepCanBo is the closed set of sorts GET /api/v1/staff offers. Declared here, next to the
-// SQL, because it names real columns of `nguoi_dung` — only store/ knows column names.
+// SapXepCanBo is the closed set of sorts GET /api/v1/staff and POST /api/v1/staff/searches offer.
+// Declared here, next to the SQL, because it names real columns of `nguoi_dung` — only store/ knows
+// column names. tools/apidoc reads it (`@page idstore.SapXepCanBo`) to publish the `sort` enum.
 //
-// `ma` IS THE DEFAULT, ascending: it is stable, unique within the commune (UNIQUE (tenant_id,
+// `code` IS THE DEFAULT, ascending: it is stable, unique within the commune (UNIQUE (tenant_id,
 // ma), migration 0001), and it is the value the audit trail quotes, so "the third row on page 2"
 // means the same thing to the screen and to whoever later reads the trail.
 //
-// WHAT IS DELIBERATELY ABSENT, although the screen shows a ⇅ arrow on all six of its columns
-// (14-cau-hinh.md §3). Every one of these is excluded for a reason pkg/page states, not for
-// convenience:
+// THE SIX SCREEN COLUMNS ARE SORTABLE SINCE 08/10/2026 (owner decision; prototype UserTable.tsx). This
+// list used to refuse all six, for two reasons that core/page states; each is now answered by a shape
+// that removes the reason rather than ignoring it:
 //
-//	ho_ten, dien_thoai_co_quan   a sort key travels in a URL, an access log and a browser history.
-//	di_dong_ca_nhan              Sorting on a person's own attributes puts personal data in all three
-//	                     (rule 3, forbidden #4) — pkg/page says so in its package comment.
-//	                     `di_dong_ca_nhan` is the clearest case of the three since #16 named it personal
-//	                     data outright, and `dien_thoai_co_quan` stays excluded even though it is duty
-//	                     information: a sort key is a promise about the whole column, and the
-//	                     next column somebody adds to this list will not be re-argued.
-//	dang_nhap_gan_nhat   NULLABLE. `(col, id) > ($2, $3)` is NULL when col is NULL, so every
-//	                     person who has never signed in would vanish from every page after the
-//	                     first — silently, and they are exactly the rows an administrator is
-//	                     looking for on this screen.
-//	co_tai_khoan,        two distinct values. The id then does the real ordering, which is
-//	dang_hoat_dong       slower than sorting by id and is not what the column header promised.
+//	full_name, position, phone   PERSONAL DATA MUST NOT TRAVEL IN A CURSOR (rule 3, forbidden #4) — a
+//	  (ho_ten, chuc_vu,          cursor is a URL, an access log and a browser history. page.KindRef:
+//	   dien_thoai_co_quan)       the cursor carries the anchor row's ID ONLY, and QueryPage looks the
+//	                             key up from that row server-side. All three are NOT NULL columns of the
+//	                             plain table, which KindRef requires. `phone` is the OFFICE number — the
+//	                             prototype's single "Điện thoại" column; the cost KindRef states (an
+//	                             anchor edited between two pages resumes from its new position) applies.
+//	department, last_login_at    NULLABLE: `(col, id) > (…)` is NULL for a NULL col, so the people with
+//	                             no department or who never signed in would vanish from page two on —
+//	                             exactly the rows an administrator opens this screen to find. They sort
+//	                             on a NOT NULL key COMPUTED in a derived relation (staffSortRelation)
+//	                             whose empty value is a per-DIRECTION sentinel, so empties come LAST
+//	                             both ways and the keyset stays a total order across the boundary.
+//	status                       a boolean: the owner chose to sort by it anyway, ties by id. Folded
+//	                             to 0/1 (core/page's note on booleans names the cost: the id does most
+//	                             of the ordering — which is what "ties → id" asks for).
 //
-// Sorting by those is a client-side sort of the page in hand, or a decision to add a filter
-// (`?has_account=`) — which is a route change, not a sort, and is not in this turn's scope.
+// WHAT STAYS ABSENT: `email` and `mobile` (di_dong_ca_nhan). Both are personal data, the owner did not
+// list them, and the prototype has no column for either; a sort key is a promise about the whole column.
+// `co_tai_khoan` stays absent too — it is not one of the six columns.
+//
+// THE ANCHOR OF A COMPUTED KEY IS THE SCANNED KEY, never re-derived in Go: the statement selects the
+// computed column at the tail and staffPageRow carries it, so the sentinel in the cursor is the very
+// value the SQL compared. One spelling of each sentinel, not two that could drift by a second.
 var SapXepCanBo = page.NewAllowlist(page.Asc,
 	page.Col("code", "ma", page.KindText),
 	page.Col("created_at", "tao_luc", page.KindTime),
+	page.Col("full_name", "ho_ten", page.KindRef),
+	page.Col("position", "chuc_vu", page.KindRef),
+	page.Col("department", staffDepartmentSortColumn, page.KindText),
+	page.Col("phone", "dien_thoai_co_quan", page.KindRef),
+	page.Col("last_login_at", staffLastLoginSortColumn, page.KindTime),
+	page.Col("status", staffStatusSortColumn, page.KindInt),
 )
+
+// The three computed sort columns of the derived relations.
+const (
+	staffDepartmentSortColumn = "department_sort"
+	staffLastLoginSortColumn  = "last_login_sort"
+	staffStatusSortColumn     = "status_sort"
+)
+
+// The "never signed in" sentinels, one per direction: later than any sign-in ascending, earlier than
+// any descending, so those people come LAST both ways. The SQL literals are built FROM these values
+// (staffTimestamptzLiteral) — the same discipline as service-petitions' due-date key.
+var (
+	staffNeverSignedInAsc  = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
+	staffNeverSignedInDesc = time.Time{} // 0001-01-01 00:00:00 UTC
+)
+
+// staffTimestamptzLiteral spells one of the two sentinels above as a PostgreSQL literal. Never called
+// on a value from a request.
+func staffTimestamptzLiteral(t time.Time) string {
+	return "TIMESTAMPTZ '" + t.UTC().Format("2006-01-02 15:04:05") + "+00'"
+}
+
+// staffSortRelation is the relation one page is cut from, and the computed key column to scan at the
+// tail ("" when the sort reads a plain column).
+//
+// THE PLAIN TABLE for `code`, `created_at` and the three KindRef sorts — KindRef MUST page the plain
+// table, because QueryPage looks the anchor's key up there by name.
+//
+// A DERIVED RELATION for the other three: every column of `nguoi_dung` plus one NOT NULL key.
+//
+//	ALIASED `nguoi_dung`        so every predicate of menhDeLocCanBo — including the department
+//	                            search's correlated `nguoi_dung.bo_phan_id` — reads the same names on
+//	                            both shapes. One predicate builder, no second copy.
+//	`nguoi_dung.tenant_id = $1` INSIDE as well as outside: QueryPage binds only the outer relation; the
+//	                            inner one keeps the commune bound in the subquery's own text (rule 1,
+//	                            invariant 5) and the partition pruned.
+//	department                  LEFT JOIN bo_phan bound to the SAME commune in its ON clause (rule 1) and
+//	                            to LIVE units only: the screen resolves names from the live unit list
+//	                            and shows "—" for a deleted one, so a deleted unit sorts as "no
+//	                            department" — the same reading the name search makes. The key is a
+//	                            one-character PREFIX + the name, NOT a sentinel string: no text value is
+//	                            reliably "greater than every name" under a linguistic collation, but a
+//	                            leading '0' vs '1' decides the comparison at its first character under
+//	                            any collation, and an equal prefix leaves the names' own order intact.
+//	                            Ascending: '0'||name, none = '1'. Descending: '1'||name, none = '0'.
+//	                            Never empty, which a KindText cursor key must not be (page.parseKey).
+//	                            A department name is not personal data, so it may ride in the cursor.
+//	last_login_at               COALESCE with the direction's sentinel.
+//	status                      dang_hoat_dong as 0/1 — one key for both directions.
+//
+// `nguoi_dung.*` NEVER LEAVES THE STATEMENT: the outer SELECT is cotTomTat plus the key, so the
+// credential column the derived relation passes through is never selected out.
+//
+// ⚠ NO INDEX SERVES THESE ORDERS; one commune's register (tens to a few hundred rows) is sorted in
+// memory — the same bound menhDeLocCanBo states for its scans.
+func staffSortRelation(param string, dir page.Dir) (relation, keyColumn string) {
+	const from = ` FROM nguoi_dung`
+	const where = ` WHERE nguoi_dung.tenant_id = $1) AS nguoi_dung`
+	switch param {
+	case "department":
+		present, absent := "'0'", "'1'"
+		if dir == page.Desc {
+			present, absent = "'1'", "'0'"
+		}
+		return `(SELECT nguoi_dung.*, CASE WHEN b.id IS NULL THEN ` + absent + ` ELSE ` + present +
+			` || b.ten END AS ` + staffDepartmentSortColumn + from +
+			` LEFT JOIN bo_phan b ON b.tenant_id = $1 AND b.id = nguoi_dung.bo_phan_id AND b.deleted_at IS NULL` +
+			where, staffDepartmentSortColumn
+	case "last_login_at":
+		never := staffNeverSignedInAsc
+		if dir == page.Desc {
+			never = staffNeverSignedInDesc
+		}
+		return `(SELECT nguoi_dung.*, COALESCE(nguoi_dung.dang_nhap_gan_nhat, ` + staffTimestamptzLiteral(never) +
+			`) AS ` + staffLastLoginSortColumn + from + where, staffLastLoginSortColumn
+	case "status":
+		return `(SELECT nguoi_dung.*, (CASE WHEN nguoi_dung.dang_hoat_dong THEN 1 ELSE 0 END)::bigint AS ` +
+			staffStatusSortColumn + from + where, staffStatusSortColumn
+	}
+	return "nguoi_dung", ""
+}
+
+// staffPageRow is one register row as the PAGE reads it: the person plus the computed key the
+// statement scanned for this sort (zero when the sort reads a plain column). Only mocCanBo reads the
+// key; DanhSach hands out the person alone.
+type staffPageRow struct {
+	staff    domain.CanBoTomTat
+	sortText string
+	sortTime time.Time
+	sortInt  int64
+}
 
 // cotTomTat IS READ BY POSITION in motTomTat, exactly like cotCanBo. Same trap, same discipline:
 // `co_tai_khoan` and `dang_hoat_dong` are adjacent BOOLEANs and swapping them produces no error
@@ -120,23 +227,79 @@ const locTomTat = `AND deleted_at IS NULL`
 // rows before the anchor, which is what "continue from here" means.
 func (s *CanBoStore) DanhSach(ctx context.Context, loc domain.LocCanBo, yc page.Request) (page.Result[domain.CanBoTomTat], error) {
 	menhDe, thamSo := menhDeLocCanBo(loc)
+	relation, keyColumn := staffSortRelation(yc.Column().Param, yc.Dir())
+	columns := cotTomTat
+	if keyColumn != "" {
+		// APPENDED AT THE TAIL, like every addition to the positional scan.
+		columns += ", " + keyColumn
+	}
 	// Cột sắp xếp KHÔNG còn được đọc ở đây. `mocCanBo` đã buộc sẵn mỗi cột với cách đọc mốc
 	// của nó, và QueryPage chọn hàm đúng theo cột nó đang sắp xếp — nên callback quét không
 	// cần biết gì về cột nữa, và cũng không còn cách nào chọn nhầm.
-	return store.QueryPage(ctx, s.db.For(ctx), store.PageSpec{
-		Columns: cotTomTat,
-		Table:   "nguoi_dung",
+	kq, err := store.QueryPage(ctx, s.db.For(ctx), store.PageSpec{
+		Columns: columns,
+		Table:   relation,
 		Filter:  locTomTat + menhDe,
 		Args:    thamSo,
-	}, yc, mocCanBo, func(rows *sql.Rows) (domain.CanBoTomTat, string, error) {
+	}, yc, mocCanBo, func(rows *sql.Rows) (staffPageRow, string, error) {
 		// quetTomTat, NOT motTomTat: QueryPage has already advanced the cursor to this row, and a
 		// second Next() here would hand back every other row and drop the ones in between.
-		cb, err := quetTomTat(rows)
-		if err != nil {
-			return domain.CanBoTomTat{}, "", err
+		var r staffPageRow
+		targets := dichQuetTomTat(&r.staff)
+		switch keyColumn {
+		case staffDepartmentSortColumn:
+			targets = append(targets, &r.sortText)
+		case staffLastLoginSortColumn:
+			targets = append(targets, &r.sortTime)
+		case staffStatusSortColumn:
+			targets = append(targets, &r.sortInt)
 		}
-		return cb, cb.ID, nil
+		if err := rows.Scan(targets...); err != nil {
+			return staffPageRow{}, "", fmt.Errorf("can_bo: đọc dòng: %w", err)
+		}
+		return r, r.staff.ID, nil
 	})
+	if err != nil {
+		return page.NewResult[domain.CanBoTomTat](), err
+	}
+	out := page.Result[domain.CanBoTomTat]{
+		Items:      make([]domain.CanBoTomTat, 0, len(kq.Items)),
+		NextCursor: kq.NextCursor,
+		HasMore:    kq.HasMore,
+	}
+	for _, r := range kq.Items {
+		out.Items = append(out.Items, r.staff)
+	}
+	return out, nil
+}
+
+// CountMatching counts the rows DanhSach would walk under `loc` — the total over the register's
+// current search (POST /api/v1/staff-count-queries).
+//
+// THE LIST'S OWN PREDICATE, NOT A COPY: locTomTat (soft-deleted excluded, rule 7) + menhDeLocCanBo,
+// so a total and the list it heads cannot disagree about what a filter means. A separate method
+// rather than a `total` on page.Result: core/page refuses one there on purpose.
+//
+// THE COMMUNE IS NOT A PARAMETER: Scoped.Query binds it to $1 from the context. A count, so nothing
+// personal is read; `loc` is never logged by any caller (it may hold the typed search text).
+func (s *CanBoStore) CountMatching(ctx context.Context, loc domain.LocCanBo) (int, error) {
+	menhDe, thamSo := menhDeLocCanBo(loc)
+	rows, err := s.db.For(ctx).Query(ctx, `count(*) AS matching`, "nguoi_dung", locTomTat+menhDe, thamSo...)
+	if err != nil {
+		return 0, fmt.Errorf("can_bo: đếm theo bộ lọc: %w", err)
+	}
+	defer rows.Close()
+	var n int64
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return 0, fmt.Errorf("can_bo: đếm theo bộ lọc: %w", err)
+		}
+		return 0, fmt.Errorf("can_bo: đếm theo bộ lọc: không có dòng kết quả")
+	}
+	if err := rows.Scan(&n); err != nil {
+		return 0, fmt.Errorf("can_bo: đếm theo bộ lọc: đọc: %w", err)
+	}
+	return int(n), rows.Err()
 }
 
 // thoatLike escapes the three characters LIKE treats specially, so the administrator's text is
@@ -154,10 +317,23 @@ var thoatLike = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 // PLACEHOLDERS START AT $2: $1 is the commune, always, bound by Scoped.Query from the context. No
 // value from `loc` is ever concatenated into the statement text — only the placeholder numbers are.
 //
-// THE TEXT SEARCH covers the four columns the Danh bạ search box names — name, position, office
-// number, personal mobile — with ILIKE on one escaped, bound pattern. When the text looks like a
-// telephone number (domain.ChuSoTimSoDienThoai) it ALSO compares its digits against each number's
-// digits, so "0900 000 001" finds "0900000001" whatever spacing either side was typed with.
+// THE TEXT SEARCH covers name, position, office number, personal mobile and — since 08/10/2026 (owner
+// decision) — email and the DEPARTMENT NAME, with ILIKE on one escaped, bound pattern. When the text
+// looks like a telephone number (domain.ChuSoTimSoDienThoai) it ALSO compares its digits against each
+// number's digits, so "0900 000 001" finds "0900000001" whatever spacing either side was typed with.
+// Shared by the register, /danh-ba and /mini-app (all POST /api/v1/staff/searches) — intended. NOT by
+// GET /api/v1/staff-directory, whose own predicate must never match on the email it masks (ADR 0082):
+// a search that hits on a hidden value is an oracle for it.
+//
+//	email            NULL since migration 0019 for a person with no address; `NULL ILIKE …` is NULL,
+//	                 which an OR with the other columns treats as "this column did not match".
+//	department name  an EXISTS on `bo_phan` that binds `bp.tenant_id = $1` ITSELF — Scoped.Query binds
+//	                 only the outer relation, and ids alone collide across communes. LIVE units only:
+//	                 the screen resolves names from the live unit list and shows "—" for a deleted one,
+//	                 so a hit on a name the row does not show would look like a wrong result; the
+//	                 department sort reads a deleted unit as "none" for the same reason. Correlated on
+//	                 `nguoi_dung.bo_phan_id`, a name both the plain table and the derived relations of
+//	                 staffSortRelation answer to.
 //
 // NO INDEX SERVES ANY OF THIS, and that is stated rather than hoped about: `ILIKE '%x%'` and a
 // `regexp_replace` on the column both force a scan. The scan is of ONE commune's register — the
@@ -184,7 +360,9 @@ func menhDeLocCanBo(loc domain.LocCanBo) (string, []any) {
 	if loc.TuKhoa != "" {
 		p := so("%" + thoatLike.Replace(loc.TuKhoa) + "%")
 		fmt.Fprintf(&b, " AND (ho_ten ILIKE $%d OR chuc_vu ILIKE $%d"+
-			" OR dien_thoai_co_quan ILIKE $%d OR di_dong_ca_nhan ILIKE $%d", p, p, p, p)
+			" OR dien_thoai_co_quan ILIKE $%d OR di_dong_ca_nhan ILIKE $%d OR email ILIKE $%d"+
+			" OR EXISTS (SELECT 1 FROM bo_phan bp WHERE bp.tenant_id = $1 AND bp.id = nguoi_dung.bo_phan_id"+
+			" AND bp.deleted_at IS NULL AND bp.ten ILIKE $%d)", p, p, p, p, p, p)
 		if chuSo := domain.ChuSoTimSoDienThoai(loc.TuKhoa); chuSo != "" {
 			// Digits only, so there is nothing for LIKE to misread and nothing to escape.
 			c := so("%" + chuSo + "%")
@@ -222,11 +400,25 @@ func (s *CanBoStore) ChiTiet(ctx context.Context, id string) (domain.CanBoTomTat
 // `store.NewMoc` đối chiếu hai danh sách ngay lúc dựng, nên cùng sai sót ấy nay là một panic
 // lúc khởi động. Và vì hàm đọc mốc được chọn THEO CHÍNH cột đang sắp xếp, việc lẫn hai cột
 // cùng kiểu — thứ không phép kiểm nào bắt được trước đây — không còn dựng được nữa.
-var mocCanBo = store.NewMoc[domain.CanBoTomTat](SapXepCanBo,
-	map[string]func(domain.CanBoTomTat) page.Key{
-		"code":       func(cb domain.CanBoTomTat) page.Key { return page.TextKey(cb.Ma) },
-		"created_at": func(cb domain.CanBoTomTat) page.Key { return page.TimeKey(cb.TaoLuc) },
+//
+// THE THREE KindRef SORTS READ NOTHING: their cursor carries the id alone (page.KindRef), which is the
+// whole point — the name, position or office number never reaches `next_cursor`. THE THREE COMPUTED
+// SORTS READ THE KEY THE STATEMENT SCANNED (staffPageRow), sentinel included, so the anchor is the very
+// value the SQL compared.
+var mocCanBo = store.NewMoc[staffPageRow](SapXepCanBo,
+	map[string]func(staffPageRow) page.Key{
+		"code":          func(r staffPageRow) page.Key { return page.TextKey(r.staff.Ma) },
+		"created_at":    func(r staffPageRow) page.Key { return page.TimeKey(r.staff.TaoLuc) },
+		"full_name":     staffRefKey,
+		"position":      staffRefKey,
+		"phone":         staffRefKey,
+		"department":    func(r staffPageRow) page.Key { return page.TextKey(r.sortText) },
+		"last_login_at": func(r staffPageRow) page.Key { return page.TimeKey(r.sortTime) },
+		"status":        func(r staffPageRow) page.Key { return page.IntKey(r.sortInt) },
 	})
+
+// staffRefKey is empty BY DESIGN — see page.KindRef.
+func staffRefKey(staffPageRow) page.Key { return page.RefKey() }
 
 // motTomTat reads the FIRST row of a single-row read, or reports that there is none.
 func motTomTat(rows quetDuoc) (domain.CanBoTomTat, error) {

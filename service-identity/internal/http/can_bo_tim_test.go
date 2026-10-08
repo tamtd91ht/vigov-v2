@@ -11,6 +11,7 @@ import (
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-identity/internal/domain"
+	idstore "github.com/vihat/vigov/service-identity/internal/store"
 )
 
 // GET /api/v1/staff's two URL filters and POST /api/v1/staff/searches (user decision 2026-09-24).
@@ -163,6 +164,77 @@ func TestTimCanBoKhongGhiTuKhoaVaoLog(t *testing.T) {
 	for _, manh := range []string{"Hoàng", "Bí Mật", "0900000099"} {
 		if strings.Contains(log, manh) {
 			t.Errorf("log chứa từ khoá tìm kiếm %q: %s", manh, log)
+		}
+	}
+}
+
+// --- sort/order in the search body (owner decision 08/10/2026) ------------------------------------
+
+// The search sorts by the SAME allowlist as GET /api/v1/staff, so the register keeps its column sort
+// while a search is typed. Absent = today's default (`code` ascending).
+func TestStaffSearchSortAndOrderReachTheStore(t *testing.T) {
+	m := dungMayChu(t)
+	tok := m.tokenCho(t, xaA, sidA)
+
+	for _, tc := range []struct {
+		body      string
+		wantParam string
+		wantDir   page.Dir
+	}{
+		{`{"q":"Nguyễn"}`, "code", page.Asc},
+		{`{"q":"Nguyễn","sort":"full_name","order":"desc"}`, "full_name", page.Desc},
+		{`{"q":"Nguyễn","sort":"last_login_at"}`, "last_login_at", page.Asc},
+		{`{"q":"Nguyễn","sort":"department","order":"asc"}`, "department", page.Asc},
+		{`{"q":"Nguyễn","order":"desc"}`, "code", page.Desc},
+	} {
+		doiMa(t, m.goi(t, "POST", hostA, duongTim, tc.body, tok), http.StatusOK)
+		yc := m.danhBa.yeuCauCuoi
+		if yc.Column().Param != tc.wantParam || yc.Dir() != tc.wantDir {
+			t.Errorf("%s: store got sort=%q order=%q, want %q %q",
+				tc.body, yc.Column().Param, yc.Dir(), tc.wantParam, tc.wantDir)
+		}
+	}
+}
+
+// A sort outside the allowlist, a bad direction, or a cursor issued under ANOTHER sort is 400 before
+// the store — the last because a cursor anchors a position that means nothing in a different order.
+func TestStaffSearchBadSortIs400AndNeverReachesTheStore(t *testing.T) {
+	m := dungMayChu(t)
+	tok := m.tokenCho(t, xaA, sidA)
+
+	codeCol := idstore.SapXepCanBo.Columns()[0]
+	codeCursor := page.Encode(codeCol, page.Asc, page.Anchor{Key: page.TextKey(maCanBo), ID: idNoiBo})
+
+	for name, tc := range map[string]struct{ body, code string }{
+		"email":           {`{"q":"Nguyễn","sort":"email"}`, "invalid_sort"},
+		"mobile":          {`{"q":"Nguyễn","sort":"mobile"}`, "invalid_sort"},
+		"sql column":      {`{"q":"Nguyễn","sort":"ho_ten"}`, "invalid_sort"},
+		"direction":       {`{"q":"Nguyễn","sort":"full_name","order":"sideways"}`, "invalid_sort"},
+		"foreign cursor":  {`{"q":"Nguyễn","sort":"full_name","cursor":"` + codeCursor + `"}`, "invalid_cursor"},
+		"reversed cursor": {`{"q":"Nguyễn","order":"desc","cursor":"` + codeCursor + `"}`, "invalid_cursor"},
+	} {
+		w := m.goi(t, "POST", hostA, duongTim, tc.body, tok)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("%s: status %d, want 400: %s", name, w.Code, w.Body.String())
+			continue
+		}
+		if got := loiTra(t, w).Code; got != tc.code {
+			t.Errorf("%s: code %q, want %q", name, got, tc.code)
+		}
+	}
+	if m.danhBa.soLanGoi != 0 {
+		t.Errorf("a refused sort still read the store %d times", m.danhBa.soLanGoi)
+	}
+}
+
+// GET /api/v1/staff takes the new sorts on the query string, as before for code/created_at.
+func TestStaffListNewSortsReachTheStore(t *testing.T) {
+	m := dungMayChu(t)
+	tok := m.tokenCho(t, xaA, sidA)
+	for _, param := range []string{"full_name", "position", "department", "phone", "last_login_at", "status"} {
+		doiMa(t, m.goi(t, "GET", hostA, "/api/v1/staff?sort="+param+"&order=desc", "", tok), http.StatusOK)
+		if yc := m.danhBa.yeuCauCuoi; yc.Column().Param != param || yc.Dir() != page.Desc {
+			t.Errorf("sort=%s: store got %q %q", param, yc.Column().Param, yc.Dir())
 		}
 	}
 }

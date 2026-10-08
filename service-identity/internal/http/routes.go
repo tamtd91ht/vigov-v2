@@ -117,10 +117,13 @@ type (
 	//
 	// StaffCounts IS ON THIS INTERFACE, not a new one, because GET /api/v1/staff-counts is the same
 	// register behind the same key (`admin.user`): a separate interface would buy no narrower authority.
+	// CountMatching (POST /api/v1/staff-count-queries) is here for the same reason, and because it is
+	// DanhSach's own predicate counted.
 	CanBoDanhBa interface {
 		DanhSach(ctx context.Context, loc domain.LocCanBo, yc page.Request) (page.Result[domain.CanBoTomTat], error)
 		ChiTiet(ctx context.Context, id string) (domain.CanBoTomTat, error)
 		StaffCounts(ctx context.Context) (domain.StaffCounts, error)
+		CountMatching(ctx context.Context, loc domain.LocCanBo) (int, error)
 	}
 
 	// DanhBaChonNguoi is the staff PICKER, for GET /api/v1/staff-directory.
@@ -887,7 +890,11 @@ func Register(mux *http.ServeMux, d Deps) {
 	// idem.KhongCan AND NOT Required: nothing is written, so a repeated request cannot leave a second
 	// row, a second code or a second audit entry — it simply reads again.
 	//
-	// @summary  Tìm cán bộ trong danh bạ của xã theo họ tên, chức vụ hoặc số điện thoại — từ khoá đi trong THÂN, không lên URL
+	// SORT/ORDER IN THE BODY SINCE 08/10/2026 (owner decision): the same allowlist as GET's `?sort=`
+	// (idstore.SapXepCanBo), optional, absent = `code` ascending — see timCanBoVao. No `@page` here: it
+	// would publish them as QUERY parameters, which this route does not read.
+	//
+	// @summary  Tìm cán bộ trong danh bạ của xã theo họ tên, chức vụ, số điện thoại, thư điện tử hoặc tên bộ phận — từ khoá đi trong THÂN, không lên URL
 	// @screen   12-danh-ba-can-bo §3
 	// @request  timCanBoVao
 	// @reply    200 page.Result[canBoTomTat]
@@ -941,6 +948,27 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/staff-counts",
 		authz.RequirePermission(d.Checker, "admin.user")(
 			http.HandlerFunc(h.StaffCounts)))
+
+	// THE TOTAL UNDER THE CURRENT SEARCH (owner decision 08/10/2026). POST /api/v1/staff-count-queries
+	//
+	// A POST for a read, for the reason POST /api/v1/staff/searches gives: the body carries the search
+	// text. `admin.user`, the key of the list it heads — a count is a fact about rows that key may
+	// list; already seeded (migration 0001:278), no key invented (rule 5, invariant 3c). idem.KhongCan
+	// like the search: nothing is written. 401 is RequirePermission's answer to no session; another
+	// commune's session is 403. The full argument is on CountStaffMatching in staff_count_queries.go.
+	//
+	// @summary  Đếm số cán bộ khớp bộ lọc và từ khoá tìm kiếm hiện tại của danh bạ xã — từ khoá đi trong THÂN, không lên URL
+	// @screen   14-cau-hinh §3
+	// @request  staffCountQueryIn
+	// @reply    200 staffCountQueryOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/staff-count-queries",
+		authz.RequirePermission(d.Checker, "admin.user")(
+			idem.KhongCan("đếm chỉ đọc, không đổi trạng thái nào — gửi lại chỉ là đếm lại, không sinh dòng, mã hay vết thứ hai")(
+				http.HandlerFunc(h.CountStaffMatching))))
 
 	// --- the staff PICKER. One read route, a SEPARATE RESOURCE from `staff` -----------------------
 	//

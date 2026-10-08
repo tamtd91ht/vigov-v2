@@ -95,8 +95,8 @@ func danhBaMau() *danhBaGia {
 // same way *store.Scoped does. Keying it any other way would make every isolation case below
 // pass without proving anything.
 //
-// IT PAGES ONLY BY THE DEFAULT SORT (`ma` ascending) and refuses anything else, rather than
-// pretending. The keyset walk itself — the part where a missing tie-break silently skips a
+// IT PAGES ONLY BY THE DEFAULT SORT (`ma` ascending); any other sort is recorded and answered with an
+// empty page rather than rows in a pretended order. The keyset walk itself — the part where a missing tie-break silently skips a
 // record — is proven against the REAL SQL in
 // identity/internal/store/can_bo_danh_sach_test.go. What is proven here is that the
 // handler hands the cursor back and forth without losing it.
@@ -130,7 +130,11 @@ func (d *danhBaGia) DanhSach(ctx context.Context, loc domain.LocCanBo, yc page.R
 		return kq, d.loi
 	}
 	if yc.Column().Param != "code" {
-		return kq, errors.New("danhBaGia: chỉ phục vụ sắp xếp mặc định theo mã")
+		// ANOTHER SORT IS RECORDED AND ANSWERED WITH AN EMPTY PAGE — never with rows in a made-up
+		// order. The order itself is proven against the real keyset in
+		// store/staff_register_sort_test.go; what a handler test proves is that the sort and direction
+		// the request carried reach the store (yeuCauCuoi).
+		return kq, nil
 	}
 
 	ds := d.theo[tenant.MustFrom(ctx)]
@@ -472,12 +476,13 @@ func TestCanBoConTroHongTra400VaKhongChamKho(t *testing.T) {
 }
 
 func TestCanBoSapXepNgoaiDanhSachTrangTra400(t *testing.T) {
-	// ?sort=ho_ten would put a person's name in a URL, an access log and a browser history
-	// (rule 3, forbidden #4). The allowlist is closed, and a column outside it is refused rather
-	// than ignored.
+	// The allowlist is closed, and a name outside it is refused rather than ignored: the SQL column
+	// names (`ho_ten`) are never a parameter, and `email` / `mobile` are personal data nobody made
+	// sortable (TestStaffSortAllowlistKeepsPersonalValuesOutOfTheCursor).
 	m := dungMayChu(t)
 
-	for _, truyVan := range []string{"?sort=ho_ten", "?sort=dien_thoai_co_quan", "?order=cheo", "?limit=0"} {
+	for _, truyVan := range []string{"?sort=ho_ten", "?sort=dien_thoai_co_quan", "?sort=email", "?sort=mobile",
+		"?order=cheo", "?limit=0"} {
 		w := m.goi(t, "GET", hostA, "/api/v1/staff"+truyVan, "", m.tokenCho(t, xaA, sidA))
 		doiMa(t, w, http.StatusBadRequest)
 	}
@@ -529,24 +534,70 @@ func TestCanBoLoiKhoTra500KhongLoDuLieu(t *testing.T) {
 }
 
 // --- the shape published in the contract --------------------------------------------------------
-func TestSapXepCanBoKhongMoCotDuLieuCaNhanVaKhongMoCotNULL(t *testing.T) {
-	// The allowlist is what decides which column names may appear in a URL. Two kinds must never
-	// be on it, and neither failure is visible from a passing screen:
-	//
-	//   ho_ten / dien_thoai_co_quan   a sort key travels in the URL, the access log and the browser
-	//                         history (rule 3, forbidden #4);
-	//   dang_nhap_gan_nhat    NULLABLE — `(col, id) > ($2, $3)` is NULL for a NULL col, so every
-	//                         person who has never signed in vanishes from every page after the
-	//                         first.
-	for _, cot := range []string{"ho_ten", "full_name", "dien_thoai_co_quan", "phone",
-		"dang_nhap_gan_nhat", "last_login_at", "email"} {
-		if _, err := page.New(idstore.SapXepCanBo, cot, "", "", ""); err == nil {
-			t.Errorf("sắp xếp theo %q được chấp nhận", cot)
+
+// THIS GUARD WAS REWRITTEN ON 08/10/2026, NOT REMOVED. It used to refuse `full_name`, `phone` and
+// `last_login_at` outright, for two reasons that still hold — and the owner's decision to sort by the
+// prototype's six columns was met by answering each reason, not by dropping it:
+//
+//	personal value in the cursor   a cursor travels in a URL, an access log and a browser history
+//	                               (rule 3, forbidden #4). The three personal columns are page.KindRef:
+//	                               the cursor carries the anchor row's id ONLY. Asserted here on the
+//	                               allowlist's declared kind; the bytes of real cursors are checked in
+//	                               store/staff_register_sort_test.go.
+//	NULL column                    `(col, id) > (…)` is NULL for a NULL col, so the never-signed-in and
+//	                               the department-less would vanish after page one. Those sorts read a
+//	                               COMPUTED NOT NULL key, never the raw nullable column — asserted below
+//	                               by the SQL name.
+//
+// WHAT STILL MUST NEVER BE SORTABLE: `email` and `mobile` — personal data the owner did not list and
+// the prototype has no column for.
+func TestStaffSortAllowlistKeepsPersonalValuesOutOfTheCursor(t *testing.T) {
+	for _, col := range []string{"email", "mobile", "ho_ten", "dien_thoai_co_quan", "di_dong_ca_nhan",
+		"dang_nhap_gan_nhat", "bo_phan_id"} {
+		if _, err := page.New(idstore.SapXepCanBo, col, "", "", ""); err == nil {
+			t.Errorf("sort=%q accepted", col)
 		}
 	}
-	for _, cot := range []string{"code", "created_at"} {
-		if _, err := page.New(idstore.SapXepCanBo, cot, "", "", ""); err != nil {
-			t.Errorf("sắp xếp theo %q bị từ chối: %v", cot, err)
+
+	want := map[string]page.Kind{
+		"code":          page.KindText,
+		"created_at":    page.KindTime,
+		"full_name":     page.KindRef, // personal: never in the cursor
+		"position":      page.KindRef, // a person's own attribute: never in the cursor
+		"phone":         page.KindRef, // the office number; personal enough to keep out of URLs
+		"department":    page.KindText,
+		"last_login_at": page.KindTime,
+		"status":        page.KindInt,
+	}
+	got := map[string]page.Column{}
+	for _, c := range idstore.SapXepCanBo.Columns() {
+		got[c.Param] = c
+	}
+	if len(got) != len(want) {
+		t.Fatalf("allowlist = %v, want exactly %v", got, want)
+	}
+	for param, kind := range want {
+		c, ok := got[param]
+		if !ok {
+			t.Errorf("sort=%q missing", param)
+			continue
+		}
+		if c.Kind != kind {
+			t.Errorf("sort=%q is %s, want %s", param, c.Kind, kind)
+		}
+	}
+	// The two nullable sorts must not name the raw nullable column.
+	for _, param := range []string{"last_login_at", "department"} {
+		if sqlName := got[param].SQL; sqlName == "dang_nhap_gan_nhat" || sqlName == "bo_phan_id" {
+			t.Errorf("sort=%q orders the raw nullable column %q", param, sqlName)
+		}
+	}
+
+	// A first-page cursor of a KindRef sort, as page.Encode writes it, carries an empty key.
+	for _, param := range []string{"full_name", "position", "phone"} {
+		cursor := page.Encode(got[param], page.Asc, page.Anchor{Key: page.RefKey(), ID: idNoiBo})
+		if _, err := page.New(idstore.SapXepCanBo, param, "asc", "", cursor); err != nil {
+			t.Errorf("sort=%q: an id-only cursor is refused: %v", param, err)
 		}
 	}
 }

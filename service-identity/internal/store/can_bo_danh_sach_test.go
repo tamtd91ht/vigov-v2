@@ -86,7 +86,9 @@ var dsDuLieu = []hangND{
 	{xa: xaMau, id: "nd-03", ma: "CB-003", hoTen: "Lê Văn C", email: "c@example.gov.vn",
 		chucVu: "Kế toán", boPhan: "bp-001", vaiTro: "vt-002",
 		dienThoaiCoQuan: "0900000003", diDongCaNhan: "0300000003",
-		coTaiKhoan: true, dangHoatDong: false, taoLuc: dsMoc.Add(2 * time.Minute), thuTu: dsSo(0)},
+		// Signed in BEFORE nd-01, so `last_login_at` has two real instants to order, not one.
+		coTaiKhoan: true, dangHoatDong: false, dangNhap: &dsEarlierSignIn,
+		taoLuc: dsMoc.Add(2 * time.Minute), thuTu: dsSo(0)},
 	{xa: xaMau, id: "nd-04", ma: "CB-004", hoTen: "Phạm Thị D", email: "d@example.gov.vn",
 		dienThoaiCoQuan: "0900000004", diDongCaNhan: "0300000004", coTaiKhoan: true, dangHoatDong: true,
 		taoLuc: dsMoc.Add(3 * time.Minute), daXoa: true},
@@ -96,14 +98,47 @@ var dsDuLieu = []hangND{
 		dienThoaiCoQuan: "0900000005", diDongCaNhan: "0300.000.005", coTaiKhoan: true, dangHoatDong: true,
 		// vt-009 is a SOFT-DELETED role still carrying task.extend (dsVaiTro): the one pickable person
 		// whose only claim to the key is a role that no longer exists — see dsCapQuyen.
-		vaiTro: "vt-009", taoLuc: dsMoc.Add(4 * time.Minute)},
+		// bp-003 is a SOFT-DELETED department (dsBoPhan): the register reads it as "no department".
+		vaiTro: "vt-009", boPhan: "bp-003", taoLuc: dsMoc.Add(4 * time.Minute)},
 
+	// ndb-01 sits in commune B's `bp-001` — the SAME id as commune A's — so a department lookup that
+	// lost its commune binding would match across the boundary (dsBoPhan).
 	{xa: dsXaB, id: "ndb-01", ma: "CB-900", hoTen: "Vũ Thị F", email: "f@example.gov.vn",
 		dienThoaiCoQuan: "0900000009", diDongCaNhan: "0300000009", coTaiKhoan: true, dangHoatDong: true,
-		vaiTro: "vt-b01", taoLuc: dsMoc.Add(30 * time.Minute)},
+		vaiTro: "vt-b01", boPhan: "bp-001", taoLuc: dsMoc.Add(30 * time.Minute)},
 	{xa: dsXaB, id: "ndb-02", ma: "CB-901", hoTen: "Bùi Văn G", email: "g@example.gov.vn",
 		dienThoaiCoQuan: "0900000010", diDongCaNhan: "0300000010", coTaiKhoan: true, dangHoatDong: true,
 		taoLuc: dsMoc.Add(31 * time.Minute)},
+}
+
+// dsEarlierSignIn is nd-03's last sign-in — an hour before nd-01's.
+var dsEarlierSignIn = dsMoc.Add(-time.Hour)
+
+// dsDepartments is the `bo_phan` table the department sort and the department-name search read.
+//
+//	(A, bp-001)          nd-01, nd-03
+//	(A, bp-002)          nd-02
+//	(A, bp-003 deleted)  nd-05 — a soft-deleted unit: no name to match, sorts as "no department"
+//	(B, bp-001)          ndb-01 — A's id reused in B under another name; a lookup that dropped the
+//	                     commune would hand A's people B's name
+var dsDepartments = []struct {
+	tenant, id, name string
+	deleted          bool
+}{
+	{tenant: xaMau, id: "bp-001", name: "Văn phòng UBND"},
+	{tenant: xaMau, id: "bp-002", name: "Bộ phận Một cửa"},
+	{tenant: xaMau, id: "bp-003", name: "Tổ Lưu trữ", deleted: true},
+	{tenant: dsXaB, id: "bp-001", name: "Phòng Bí Mật B"},
+}
+
+// dsLiveDepartmentName is the LIVE department name of row h in its own commune, or ok=false.
+func dsLiveDepartmentName(h hangND) (string, bool) {
+	for _, d := range dsDepartments {
+		if d.tenant == h.xa && d.id == h.boPhan && !d.deleted {
+			return d.name, true
+		}
+	}
+	return "", false
 }
 
 // dsVaiTro and dsCapQuyen are the two per-commune tables the picker's `permission` filter joins
@@ -532,10 +567,17 @@ func TestChuaDangNhapBaoGioThiDangNhapGanNhatLaNil(t *testing.T) {
 // cột đó, tức sau khi đã phát hành. `store.NewMoc` đối chiếu hai danh sách lúc DỰNG, nên cùng
 // sai sót ấy nay là một panic lúc khởi động — và đó mới là thứ cần được ghim.
 func TestMocCanBoBuocDungDanhSachTrang(t *testing.T) {
-	lay := func() map[string]func(domain.CanBoTomTat) page.Key {
-		return map[string]func(domain.CanBoTomTat) page.Key{
-			"code":       func(cb domain.CanBoTomTat) page.Key { return page.TextKey(cb.Ma) },
-			"created_at": func(cb domain.CanBoTomTat) page.Key { return page.TimeKey(cb.TaoLuc) },
+	lay := func() map[string]func(staffPageRow) page.Key {
+		ref := func(staffPageRow) page.Key { return page.RefKey() }
+		return map[string]func(staffPageRow) page.Key{
+			"code":          func(r staffPageRow) page.Key { return page.TextKey(r.staff.Ma) },
+			"created_at":    func(r staffPageRow) page.Key { return page.TimeKey(r.staff.TaoLuc) },
+			"full_name":     ref,
+			"position":      ref,
+			"phone":         ref,
+			"department":    func(r staffPageRow) page.Key { return page.TextKey(r.sortText) },
+			"last_login_at": func(r staffPageRow) page.Key { return page.TimeKey(r.sortTime) },
+			"status":        func(r staffPageRow) page.Key { return page.IntKey(r.sortInt) },
 		}
 	}
 
@@ -545,7 +587,7 @@ func TestMocCanBoBuocDungDanhSachTrang(t *testing.T) {
 				t.Fatalf("panic dù hai danh sách khớp: %v", r)
 			}
 		}()
-		_ = pkgstore.NewMoc[domain.CanBoTomTat](SapXepCanBo, lay())
+		_ = pkgstore.NewMoc[staffPageRow](SapXepCanBo, lay())
 	})
 
 	t.Run("thiếu một cột thì panic lúc dựng", func(t *testing.T) {
@@ -558,20 +600,20 @@ func TestMocCanBoBuocDungDanhSachTrang(t *testing.T) {
 				t.Fatal("KHÔNG panic: một cột sắp xếp được mà không ai biết đọc mốc của nó")
 			}
 		}()
-		_ = pkgstore.NewMoc[domain.CanBoTomTat](SapXepCanBo, m)
+		_ = pkgstore.NewMoc[staffPageRow](SapXepCanBo, m)
 	})
 
 	t.Run("thừa một cột thì panic lúc dựng", func(t *testing.T) {
 		// Gõ nhầm tên tham số, hoặc một cột đã bị gỡ khỏi danh sách trắng mà hàm đọc còn ở lại.
 		// Cả hai đều là mã chết trông y hệt mã đang chạy.
 		m := lay()
-		m["email"] = func(cb domain.CanBoTomTat) page.Key { return page.TextKey(cb.Email) }
+		m["email"] = func(r staffPageRow) page.Key { return page.TextKey(r.staff.Email) }
 		defer func() {
 			if recover() == nil {
 				t.Fatal("KHÔNG panic: khai cách đọc mốc cho một cột không có trong danh sách trắng")
 			}
 		}()
-		_ = pkgstore.NewMoc[domain.CanBoTomTat](SapXepCanBo, m)
+		_ = pkgstore.NewMoc[staffPageRow](SapXepCanBo, m)
 	})
 }
 
@@ -598,6 +640,11 @@ type hangND struct {
 
 	// Migration 0020 — the stored end of the automatic sign-in lock.
 	signInLockedUntil *time.Time
+
+	// sortKey is the value of the COMPUTED sort column of the derived relation this statement reads
+	// (staffSortRelation), set per statement by dsChay. nil outside such a statement — and asking for
+	// a computed column then panics rather than pretending to be SQL NULL.
+	sortKey driver.Value
 }
 
 func dsSo(v int) *int { return &v }
@@ -656,6 +703,11 @@ func (h hangND) giaTri(cot string) driver.Value {
 		return *h.signInLockedUntil
 	case "tenant_id":
 		return h.xa
+	case staffDepartmentSortColumn, staffLastLoginSortColumn, staffStatusSortColumn:
+		if h.sortKey == nil {
+			panic("driver giả: cột sắp xếp tính toán " + cot + " được đọc ngoài quan hệ dẫn xuất của nó")
+		}
+		return h.sortKey
 	default:
 		// A column was added to cotTomTat and not here. Failing loudly beats scanning a nil that
 		// "passes" while proving nothing.
@@ -686,10 +738,21 @@ var (
 	// conjunct the engine does not understand, so a changed filter cannot pass by being skipped.
 	dsReBoPhan   = regexp.MustCompile(`AND bo_phan_id = \$(\d+)`)
 	dsReCongKhai = regexp.MustCompile(`AND hien_tren_mini_app = \$(\d+)`)
-	dsReTim      = regexp.MustCompile(`AND \(ho_ten ILIKE \$(\d+) OR chuc_vu ILIKE \$(\d+)` +
-		` OR dien_thoai_co_quan ILIKE \$(\d+) OR di_dong_ca_nhan ILIKE \$(\d+)` +
+	//
+	// The search reads five columns of the row and ONE OTHER TABLE: the department-name EXISTS. Its
+	// commune binding and its soft-delete clause are LITERAL here — drop either from the store and the
+	// clause no longer matches, so dsMenhDeLa refuses what is left instead of the fake guessing.
+	dsReTim = regexp.MustCompile(`AND \(ho_ten ILIKE \$(\d+) OR chuc_vu ILIKE \$(\d+)` +
+		` OR dien_thoai_co_quan ILIKE \$(\d+) OR di_dong_ca_nhan ILIKE \$(\d+) OR email ILIKE \$(\d+)` +
+		` OR EXISTS \(SELECT 1 FROM bo_phan bp WHERE bp\.tenant_id = \$1 AND bp\.id = nguoi_dung\.bo_phan_id` +
+		` AND bp\.deleted_at IS NULL AND bp\.ten ILIKE \$(\d+)\)` +
 		`(?: OR regexp_replace\(dien_thoai_co_quan, '\[\^0-9\]', '', 'g'\) LIKE \$(\d+)` +
 		` OR regexp_replace\(di_dong_ca_nhan, '\[\^0-9\]', '', 'g'\) LIKE \$(\d+))?\)`)
+
+	// The KindRef anchor core/store.QueryPage builds: the sort key is LOOKED UP from the anchor row of
+	// commune $1, never carried in the cursor (page.KindRef).
+	dsReRefAnchor = regexp.MustCompile(`AND \(([a-z_]+), id\) ([<>]) \(\(SELECT r\.([a-z_]+) FROM nguoi_dung r` +
+		` WHERE r\.tenant_id = \$1 AND r\.id = \$(\d+)\), \$(\d+)\)`)
 
 	// The picker's two account conditions (can_bo_chon_nguoi.go). MODELLED like the rest, so the
 	// register cannot gain either one silently: its tests list the directory-only CB-002 and the
@@ -728,11 +791,70 @@ func dsChay(q string, args []driver.Value) (driver.Rows, error) {
 	}
 	lay := func(n int) driver.Value { return args[n-1] } // $n
 
+	// A DERIVED RELATION (staffSortRelation) is the plain table plus one computed sort column. It is
+	// recognised by the store's own text and replaced by the plain table; the computed column is
+	// MODELLED in Go by dsModelSortKey. What the SQL itself computes is proven against PostgreSQL in
+	// staff_register_sort_pg_test.go — this fake proves the keyset walk over that column.
+	var sortKeyOf func(hangND) driver.Value
+	for _, param := range []string{"department", "last_login_at", "status"} {
+		for _, dir := range []page.Dir{page.Asc, page.Desc} {
+			rel, _ := staffSortRelation(param, dir)
+			if strings.Contains(q, rel) {
+				q = strings.Replace(q, rel, "nguoi_dung", 1)
+				sortKeyOf = dsModelSortKey(param, dir)
+			}
+		}
+	}
+
 	var ra []hangND
 	for _, h := range dsDuLieu {
 		if h.xa == args[0] {
+			if sortKeyOf != nil {
+				h.sortKey = sortKeyOf(h)
+			}
 			ra = append(ra, h)
 		}
+	}
+
+	// THE TEXT SEARCH IS EVALUATED AND CUT OUT FIRST, like the semi-join below: its department EXISTS
+	// carries `bp.deleted_at IS NULL`, which must not stand in for the outer soft-delete clause.
+	if m := dsReTim.FindStringSubmatch(q); m != nil {
+		matches, err := dsSearchMatcher(m, lay)
+		if err != nil {
+			return nil, err
+		}
+		ra = dsLoc(ra, matches)
+		q = strings.Replace(q, m[0], "", 1)
+	}
+
+	// The KindRef anchor: the anchor row is read from commune $1 WITHOUT the soft-delete filter (as
+	// core/store does); an id naming no row of this commune makes the comparison NULL — no rows.
+	if m := dsReRefAnchor.FindStringSubmatch(q); m != nil {
+		col, op, lookedUp := m[1], m[2], m[3]
+		if col != lookedUp {
+			return nil, fmt.Errorf("driver giả: so %s với khoá tra từ cột %s", col, lookedUp)
+		}
+		idArg, tieArg := lay(dsSoNguyen(m[4])), lay(dsSoNguyen(m[5]))
+		var anchor *hangND
+		for i := range dsDuLieu {
+			if dsDuLieu[i].xa == args[0] && dsDuLieu[i].id == idArg {
+				anchor = &dsDuLieu[i]
+			}
+		}
+		ra = dsLoc(ra, func(h hangND) bool {
+			if anchor == nil {
+				return false
+			}
+			c := dsSoSanh(h.giaTri(col), anchor.giaTri(col))
+			if c == 0 {
+				c = dsSoSanh(h.id, tieArg)
+			}
+			if op == ">" {
+				return c > 0
+			}
+			return c < 0
+		})
+		q = strings.Replace(q, m[0], "", 1)
 	}
 
 	// The semi-join is evaluated FIRST and cut out of the statement, so the outer predicates below
@@ -792,42 +914,6 @@ func dsChay(q string, args []driver.Value) (driver.Rows, error) {
 		}
 		ra = dsLoc(ra, func(h hangND) bool { return h.hienMiniApp == v })
 	}
-	if m := dsReTim.FindStringSubmatch(q); m != nil {
-		// The four ILIKE placeholders must be ONE value: a search that bound a different pattern
-		// per column would be a different search on each.
-		mau, ok := lay(dsSoNguyen(m[1])).(string)
-		if !ok {
-			return nil, errors.New("driver giả: mẫu ILIKE không phải chuỗi")
-		}
-		for _, k := range m[2:5] {
-			if lay(dsSoNguyen(k)) != mau {
-				return nil, errors.New("driver giả: bốn cột ILIKE ràng buộc bốn mẫu khác nhau")
-			}
-		}
-		khop := dsLikeRegexp(mau, true)
-		var khopSo *regexp.Regexp
-		if m[5] != "" {
-			s, _ := lay(dsSoNguyen(m[5])).(string)
-			khopSo = dsLikeRegexp(s, false)
-		}
-		boChuSo := regexp.MustCompile(`[^0-9]`)
-		ra = dsLoc(ra, func(h hangND) bool {
-			for _, c := range []string{h.hoTen, h.chucVu, h.dienThoaiCoQuan, h.diDongCaNhan} {
-				if khop.MatchString(c) {
-					return true
-				}
-			}
-			if khopSo != nil {
-				for _, c := range []string{h.dienThoaiCoQuan, h.diDongCaNhan} {
-					if khopSo.MatchString(boChuSo.ReplaceAllString(c, "")) {
-						return true
-					}
-				}
-			}
-			return false
-		})
-	}
-
 	if m := dsReCap.FindStringSubmatch(q); m != nil {
 		khoa, phaHoa, op := m[1], m[2], m[3]
 		mkA, _ := strconv.Atoi(m[4])
@@ -892,6 +978,11 @@ func dsChay(q string, args []driver.Value) (driver.Rows, error) {
 		return nil, err
 	}
 
+	// THE FILTERED COUNT (CountMatching): one row, the number of rows every predicate above admitted.
+	if len(cot) == 1 && cot[0] == "matching" {
+		return &rowsDS{cot: cot, hang: [][]driver.Value{{int64(len(ra))}}}, nil
+	}
+
 	hg := &rowsDS{cot: cot}
 	for _, h := range ra {
 		dong := make([]driver.Value, len(cot))
@@ -901,6 +992,94 @@ func dsChay(q string, args []driver.Value) (driver.Rows, error) {
 		hg.hang = append(hg.hang, dong)
 	}
 	return hg, nil
+}
+
+// dsSearchMatcher evaluates one text-search clause (dsReTim) against a row.
+//
+// ALL SIX ILIKE PLACEHOLDERS MUST BE ONE VALUE: a search that bound a different pattern per column
+// would be a different search on each. The department name is the LIVE department of the row's OWN
+// commune (dsLiveDepartmentName) — what the literal `bp.tenant_id = $1 … bp.deleted_at IS NULL` says.
+func dsSearchMatcher(m []string, arg func(int) driver.Value) (func(hangND) bool, error) {
+	pattern, ok := arg(dsSoNguyen(m[1])).(string)
+	if !ok {
+		return nil, errors.New("driver giả: mẫu ILIKE không phải chuỗi")
+	}
+	for _, k := range m[2:7] {
+		if arg(dsSoNguyen(k)) != pattern {
+			return nil, errors.New("driver giả: các cột ILIKE ràng buộc những mẫu khác nhau")
+		}
+	}
+	text := dsLikeRegexp(pattern, true)
+	var digits *regexp.Regexp
+	if m[7] != "" {
+		s, _ := arg(dsSoNguyen(m[7])).(string)
+		if arg(dsSoNguyen(m[8])) != s {
+			return nil, errors.New("driver giả: hai cột chữ số ràng buộc hai mẫu khác nhau")
+		}
+		digits = dsLikeRegexp(s, false)
+	}
+	nonDigit := regexp.MustCompile(`[^0-9]`)
+	return func(h hangND) bool {
+		for _, c := range []string{h.hoTen, h.chucVu, h.dienThoaiCoQuan, h.diDongCaNhan, h.email} {
+			if text.MatchString(c) {
+				return true
+			}
+		}
+		if name, ok := dsLiveDepartmentName(h); ok && text.MatchString(name) {
+			return true
+		}
+		if digits != nil {
+			for _, c := range []string{h.dienThoaiCoQuan, h.diDongCaNhan} {
+				if digits.MatchString(nonDigit.ReplaceAllString(c, "")) {
+					return true
+				}
+			}
+		}
+		return false
+	}, nil
+}
+
+// dsModelSortKey is the Go model of the computed column staffSortRelation adds for (param, dir).
+//
+//	department     the LIVE department name of the row's own commune, prefixed so "no department"
+//	               (none, or soft-deleted) sorts LAST in both directions
+//	last_login_at  the instant, or the direction's sentinel for "never signed in"
+//	status         dang_hoat_dong folded to 0/1
+func dsModelSortKey(param string, dir page.Dir) func(hangND) driver.Value {
+	switch param {
+	case "department":
+		return func(h hangND) driver.Value {
+			name, ok := dsLiveDepartmentName(h)
+			switch {
+			case dir == page.Asc && ok:
+				return "0" + name
+			case dir == page.Asc:
+				return "1"
+			case ok:
+				return "1" + name
+			default:
+				return "0"
+			}
+		}
+	case "last_login_at":
+		return func(h hangND) driver.Value {
+			if h.dangNhap != nil {
+				return *h.dangNhap
+			}
+			if dir == page.Asc {
+				return staffNeverSignedInAsc
+			}
+			return staffNeverSignedInDesc
+		}
+	case "status":
+		return func(h hangND) driver.Value {
+			if h.dangHoatDong {
+				return int64(1)
+			}
+			return int64(0)
+		}
+	}
+	panic("driver giả: không có mô hình khoá sắp xếp cho " + param)
 }
 
 // dsGiuQuyen evaluates the inner SELECT of the `permission` semi-join: the set of values of the
@@ -1070,6 +1249,19 @@ func dsSoSanh(a, b driver.Value) int {
 			panic(fmt.Sprintf("driver giả: so chuỗi với %T — con trỏ ràng buộc sai kiểu", b))
 		}
 		return strings.Compare(x, y)
+	case int64:
+		y, ok := b.(int64)
+		if !ok {
+			panic(fmt.Sprintf("driver giả: so số với %T — con trỏ ràng buộc sai kiểu", b))
+		}
+		switch {
+		case x < y:
+			return -1
+		case x > y:
+			return 1
+		default:
+			return 0
+		}
 	default:
 		panic(fmt.Sprintf("driver giả: kiểu %T không so sánh được", a))
 	}

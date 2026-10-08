@@ -20,8 +20,12 @@ import (
 //	nd-02  bp-002  PUBLISHED      "Trần Thị B"    Trưởng thôn         0900000002 / 0300000002
 //	nd-03  bp-001  not published  "Lê Văn C"      Kế toán             0900000003 / 0300000003
 //	nd-04  —       soft-deleted   "Phạm Thị D"
-//	nd-05  none    not published  "Đỗ Văn E"                          0900000005 / 0300.000.005
-//	ndb-*  commune B
+//	nd-05  bp-003  not published  "Đỗ Văn E"                          0900000005 / 0300.000.005
+//	       (bp-003 is SOFT-DELETED — its name matches nothing; dsDepartments)
+//	ndb-*  commune B (ndb-01 in B's own bp-001)
+//
+// Since 08/10/2026 the text also matches email and the LIVE department name — those cases are in
+// staff_register_sort_test.go.
 
 // timHet walks every page of one filtered read and returns the ids, sorted.
 func (b *banThuDS) timHet(t *testing.T, xa string, loc domain.LocCanBo, truyVan string) []string {
