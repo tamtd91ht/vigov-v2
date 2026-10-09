@@ -39,7 +39,7 @@ export const PHAN_CHUA_DUNG: readonly PendingFeatureInfo[] = [
       "chưa được làm.",
   },
   // "Xuất báo cáo PDF, XLSX, PPTX" was built on 06/10/2026 (`export-actions.tsx`) and left this list;
-  // `/bao-cao`'s still-unbuilt export keeps its own entry in `features/report/labels.ts`.
+  // `/bao-cao`'s followed on 09/10/2026 (`features/report/report-export-actions.tsx`).
   // "Chế độ trình chiếu phòng họp" was built on 07/10/2026 (`presentation.tsx`) and left it too.
 ];
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { useCauHinhXa } from "@/components/cau-hinh-xa";
 import { useDashboardFigures } from "@/features/dashboard/overview";
 import { DEFAULT_PERIOD_KIND, toQueryPeriod } from "@/features/dashboard/period";
 import type { Loaded } from "@/features/dashboard/view";
@@ -50,7 +51,7 @@ export function ReportPage() {
 }
 
 /**
- * Owns the period and the clock. THE CLOCK IS READ ON AN ACT (mount, a period, "Xem", "Tải lại"),
+ * Owns the period and the clock. THE CLOCK IS READ ON AN ACT (mount, a period, a date, "Tải lại"),
  * never during a render: that instant is the page's "tính đến", and every window of the load is
  * computed from it. The six KPI groups come from `/tong-quan`'s own loader (`useDashboardFigures`),
  * without its overdue queues — this page has no "Cần xử lý ngay".
@@ -74,6 +75,9 @@ function ReportOverview() {
   const units = useUnitRows(windows.current, request.at, access.unitTable, unitAttempt);
 
   const ask = (selection: ReportSelection) => setRequest({ selection, at: new Date().getTime() });
+  // The commune printed on the export files: the runtime configuration the server resolved from
+  // `Host` (rule 1 inv. 10) — the value the page header prints. Never a constant.
+  const commune = useCauHinhXa();
 
   return (
     <ReportView
@@ -82,6 +86,7 @@ function ReportOverview() {
       figures={figures}
       access={access}
       units={units}
+      commune={{ displayName: commune.displayName, parentAuthority: commune.parentAuthority }}
       onNamedPeriod={(kind) => ask({ kind })}
       onCustomPeriod={(from, to) => ask({ kind: CUSTOM_PERIOD, from, to })}
       onReload={() => ask(request.selection)}

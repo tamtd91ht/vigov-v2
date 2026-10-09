@@ -118,36 +118,78 @@ describe("/bao-cao asks the servers what /tong-quan asks (spec 13 §10)", () => 
   });
 });
 
-describe("Tuỳ chọn — a refused range is never sent", () => {
-  it("from after to: inline sentence, no request; a valid range asks [D1, D2+1)", async () => {
+describe("Tuỳ chọn — the prototype's behaviour (D5): empty inputs, applies at once, never a refused range", () => {
+  const taskWindows = () =>
+    calls
+      .filter((c) => c.startsWith("/api/v1/task-summary?"))
+      .map((c) => new URLSearchParams(c.split("?")[1]))
+      .map((q) => [q.get("from"), q.get("to")])
+      .sort();
+
+  it("opens EMPTY with the hint, keeps the month's figures, and has no 'Xem' button", async () => {
+    const el = await mount(<ReportPage />);
+    calls = [];
+    act(() => button(el, "Tuỳ chọn").click());
+    expect(el.querySelector<HTMLInputElement>("#bao-cao-tu-ngay")!.value).toBe("");
+    expect(el.querySelector<HTMLInputElement>("#bao-cao-den-ngay")!.value).toBe("");
+    expect(el.textContent).toContain(
+      "Chọn cả hai ngày để xem kỳ tuỳ chọn. Trong lúc đó vẫn hiển thị số liệu tháng này.",
+    );
+    expect([...el.querySelectorAll("button")].some((b) => b.textContent?.trim() === "Xem")).toBe(false);
+    // the month is already on screen: nothing is asked again
+    expect(calls).toEqual([]);
+    expect(el.textContent).toContain("Kỳ tháng này");
+  });
+
+  it("one date alone asks nothing; from after to: inline sentence, no request; a valid range asks [D1, D2+1) AT ONCE", async () => {
     const el = await mount(<ReportPage />);
     act(() => button(el, "Tuỳ chọn").click());
     const from = el.querySelector<HTMLInputElement>("#bao-cao-tu-ngay")!;
     const to = el.querySelector<HTMLInputElement>("#bao-cao-den-ngay")!;
-    expect(from.value).toBe("2026-09-01");
-    expect(to.value).toBe("2026-09-28");
 
     calls = [];
-    act(() => {
-      setValue(from, "2026-09-17");
-      setValue(to, "2026-09-01");
-    });
-    act(() => button(el, "Xem").click());
+    act(() => setValue(from, "2026-09-17"));
+    expect(calls).toEqual([]);
+
+    act(() => setValue(to, "2026-09-01"));
     expect(el.querySelector('[role="alert"]')?.textContent).toBe("Từ ngày phải trước hoặc trùng Đến ngày.");
     expect(calls).toEqual([]);
 
-    act(() => {
-      setValue(from, "2026-09-01");
-      setValue(to, "2026-09-17");
-    });
-    await act(async () => {
-      button(el, "Xem").click();
-    });
-    const task = calls.filter((c) => c.startsWith("/api/v1/task-summary?")).map((c) => new URLSearchParams(c.split("?")[1]));
-    expect(task.map((q) => [q.get("from"), q.get("to")]).sort()).toEqual([
+    // Each input is one act, as a person changes them: 1/9 – 1/9 is already a valid range and applies.
+    await act(async () => setValue(from, "2026-09-01"));
+    expect(el.textContent).toContain("Kỳ tuỳ chọn: 1/9/2026 – 1/9/2026 (1 ngày)");
+    calls = [];
+    await act(async () => setValue(to, "2026-09-17"));
+    expect(taskWindows()).toEqual([
       ["2026-08-15T00:00:00+07:00", "2026-09-01T00:00:00+07:00"],
       ["2026-09-01T00:00:00+07:00", "2026-09-18T00:00:00+07:00"],
     ]);
     expect(el.textContent).toContain("Kỳ tuỳ chọn: 1/9/2026 – 17/9/2026 (17 ngày)");
+    expect(el.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it("clearing a date goes back to the month's figures (the prototype's fallback)", async () => {
+    const el = await mount(<ReportPage />);
+    act(() => button(el, "Tuỳ chọn").click());
+    const from = el.querySelector<HTMLInputElement>("#bao-cao-tu-ngay")!;
+    const to = el.querySelector<HTMLInputElement>("#bao-cao-den-ngay")!;
+    await act(async () => setValue(from, "2026-09-01"));
+    await act(async () => setValue(to, "2026-09-17"));
+    calls = [];
+    await act(async () => setValue(to, ""));
+    expect(taskWindows()).toEqual([
+      ["2026-08-01T00:00:00+07:00", "2026-08-28T16:43:01+07:00"],
+      ["2026-09-01T00:00:00+07:00", "2026-09-28T16:43:01+07:00"],
+    ]);
+    expect(el.textContent).toContain("Kỳ tháng này");
+  });
+
+  it("from another period, 'Tuỳ chọn' with no dates shows the month", async () => {
+    const el = await mount(<ReportPage />);
+    await act(async () => button(el, "Năm nay").click());
+    calls = [];
+    await act(async () => button(el, "Tuỳ chọn").click());
+    expect(el.textContent).toContain("Kỳ tháng này");
+    expect(taskWindows().length).toBe(2);
   });
 });

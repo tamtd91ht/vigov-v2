@@ -1,5 +1,6 @@
 /**
- * What the Tổng quan export files contain — pure: no library, no DOM, no clock of its own.
+ * What the Tổng quan export files contain — pure: no library, no DOM, no clock of its own. `/bao-cao`
+ * fills the same shape (`features/report/report-export.ts`) and adds its tables; the builders are one.
  *
  * THE FILES ARE BUILT FROM THE FIGURES ALREADY ON SCREEN (user decision 06/10/2026), never from a
  * second computation. `view.tsx` `exportBlocks` turns the very `Figure` objects the tiles draw into
@@ -73,6 +74,27 @@ export type ExportBlock = {
   readonly pending?: string;
 };
 
+/** One cell of an `ExportTable`: the screen's text, and the number behind it when it is a count. */
+export type ExportCell = {
+  readonly text: string;
+  readonly number?: number;
+};
+
+/**
+ * A table the page draws under its blocks — `/bao-cao`'s "Xếp hạng bộ phận" and its comparison with
+ * the previous period (as a table: a file carries the numbers, not the chart). Aggregates only: a row
+ * is an organisational unit or a figure, never a record or a person (rule 3).
+ */
+export type ExportTable = {
+  readonly title: string;
+  readonly columns: readonly string[];
+  readonly rows: readonly (readonly ExportCell[])[];
+  /** said instead of the rows when there are none — the page's own empty sentence */
+  readonly empty: string;
+  readonly notes: readonly string[];
+  readonly errors: readonly string[];
+};
+
 export type ExportUrgent = {
   readonly title: string;
   readonly lines: readonly string[];
@@ -90,6 +112,8 @@ export type DashboardExport = {
   /** `Xuất lúc 16:45 06/10/2026` — the click, not the figures. */
   readonly generatedLine: string;
   readonly blocks: readonly ExportBlock[];
+  /** Tables after the blocks — absent on Tổng quan, whose files are unchanged by their existence. */
+  readonly tables?: readonly ExportTable[];
   readonly urgent: ExportUrgent | null;
   /** Page-wide notes: what "kỳ trước" means, where the file came from. */
   readonly footnotes: readonly string[];

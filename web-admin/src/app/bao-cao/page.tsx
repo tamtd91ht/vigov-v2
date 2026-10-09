@@ -21,9 +21,11 @@ import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
 export const dynamic = "force-dynamic";
 
 // Tab title carries the signed-in commune, never the product name (ADR 0068 §13); a Host
-// matching no commune 404s here exactly as the page body does.
+// matching no commune 404s here exactly as the page body does. "Báo cáo tổng hợp" is the prototype's
+// tab title (`app/(workspace)/bao-cao/page.tsx` metadata, owner 09/10/2026 D5); the page's <h1> stays
+// "Báo cáo điều hành".
 export function generateMetadata() {
-  return communePageMetadata("Báo cáo điều hành");
+  return communePageMetadata("Báo cáo tổng hợp");
 }
 
 export default async function ReportRoutePage() {

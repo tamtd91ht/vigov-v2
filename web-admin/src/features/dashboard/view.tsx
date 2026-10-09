@@ -23,6 +23,7 @@ import type { PendingFeatureInfo } from "@/components/ui/pending-feature";
 import { NO_DATA_CAPTION } from "@/components/ui/stat-card";
 import { taskDetailHref } from "@/features/nhiem-vu/task-link";
 import { KPI_NO_RATING, ratingAverage } from "@/features/phan-anh/nhan-phieu";
+import { reportPendingPart } from "@/features/report/labels";
 import { OTien } from "@/features/thu-chi/o-tien";
 import {
   GHI_CHU_CHENH_LECH,
@@ -42,7 +43,7 @@ import type {
   petitions_taskSummaryOut,
 } from "@/lib/api/schema.gen";
 import { cn } from "@/lib/cn";
-import { compactDong } from "@/lib/compact-dong";
+import { compactDong, compactDongReport } from "@/lib/compact-dong";
 import {
   QUYEN_XEM_GIAI_NGAN,
   QUYEN_XEM_NHIEM_VU,
@@ -169,7 +170,27 @@ type Figure = {
   readonly exact?: string;
   /** the server's own count behind `display` — for the exported workbook only, never drawn */
   readonly raw?: number;
+  /** stock (the register now) or period (counted in the window) — what `/bao-cao`'s chart may plot */
+  readonly kind?: FigureKind;
+  /** which way is good — colours `/bao-cao`'s delta line and chart bar */
+  readonly trend?: Trend;
+  /**
+   * A PERIOD figure's two numbers, set only when BOTH windows answered with a value. `/bao-cao` reads
+   * them for its delta line and its comparison chart; Tổng quan never does (its line is `comparison`).
+   */
+  readonly values?: { readonly current: number; readonly previous: number; readonly previousText: string };
 };
+
+/** `values` of a period figure, or nothing — never a pair with a missing half. */
+function pairValues(
+  kind: FigureKind,
+  current: Read,
+  previous: Read,
+  format: (n: number) => string,
+): Figure["values"] {
+  if (kind !== "period" || typeof current !== "number" || typeof previous !== "number") return undefined;
+  return { current, previous, previousText: format(previous) };
+}
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * FIGURES — what is counted, compared and linked. Unchanged by the redesign.
@@ -208,6 +229,9 @@ function countFigure<T>(
     movement: movement(current, previous),
     alert: spec.alert === true && typeof current === "number" && current > 0,
     raw: typeof current === "number" ? current : undefined,
+    kind: spec.kind,
+    trend: spec.trend,
+    values: pairValues(spec.kind, current, previous, formatCount),
   };
 }
 
@@ -251,6 +275,9 @@ function ratioFigure<T>(
         ? null
         : comparisonLine("period", current, previous, "higher-is-better", formatPercent),
     movement: movement(current, previous),
+    kind: "period",
+    trend: "higher-is-better",
+    values: pairValues("period", current, previous, formatPercent),
   };
 }
 
@@ -363,6 +390,11 @@ export type BlockKey = "tasks" | "documents" | "budget" | "fiscal" | "citizen-re
  * (`DashboardWorkspace`) is the dense glance — `p-3.5` cards, tiles 3 across when a block has more
  * than four — and Báo cáo (`ReportWorkspace`) the roomier read — `p-4` cards, tiles always 2 across.
  * A context rather than a prop through six block components: only the frame differs, never a figure.
+ *
+ * Since 09/10/2026 (owner, ADR 0053 §Sửa đổi 09/10/2026 lần 2, D4/D6) `"report"` also draws the
+ * prototype's report TILE (not a link, never red, `1.7vw` value, delta line + sub-lines), the report
+ * fiscal order and sums, and the restyled "?". Every such branch reads this context; `"dashboard"` —
+ * Tổng quan — is unchanged except the fiscal block's title, which both pages share.
  */
 export type BlockLayout = "dashboard" | "report";
 
@@ -425,7 +457,14 @@ function Panel({
         current && "ring-2 ring-brand-500 ring-offset-2 ring-offset-canvas",
       )}
     >
-      <div className={cn("flex shrink-0 items-center gap-2", layout === "report" || presenting.on ? "mb-3" : "mb-2")}>
+      <div
+        className={cn(
+          "flex shrink-0 items-center",
+          // Báo cáo: the "?" sits right after the title, `gap-1` (spec 05 B, owner 09/10/2026 D4).
+          layout === "report" ? "gap-1" : "gap-2",
+          layout === "report" || presenting.on ? "mb-3" : "mb-2",
+        )}
+      >
         <h2
           className={cn(
             "m-0 min-w-0 leading-snug font-bold tracking-wide text-ink-500 uppercase",
@@ -661,10 +700,12 @@ function tileText(presenting: boolean): { value: string; label: string; note: st
  * rule — "1.234" broken over two lines reads as two numbers); an amount of money may.
  */
 function FigureTile({ figure, value }: { figure: Figure; value?: ReactNode }) {
+  const layout = useContext(BlockLayoutContext);
   const valueId = `${figure.id}-value`;
   const alert = figure.alert === true;
   const sentence = figure.sentence === true;
   const text = tileText(usePresenting().on);
+  if (layout === "report") return <ReportFigureTile figure={figure} value={value} />;
   return (
     <li className={cn("@container min-w-0", sentence && "col-span-full")}>
       <Link
@@ -707,9 +748,132 @@ function FigureTile({ figure, value }: { figure: Figure; value?: ReactNode }) {
   );
 }
 
+/* ── `/bao-cao`'s tile — the prototype's `MetricTile` as `ReportWorkspace` draws it ─────────────────
+ *
+ * Owner decision 09/10/2026 (ADR 0053 §Sửa đổi 09/10/2026 lần 2, D4), REPORT ONLY — Tổng quan's tile
+ * above is untouched:
+ *   · NOT a link (the prototype passes no `onOpen` on this page) and never red (no `emphasis`);
+ *   · the value at the prototype's `clamp(19px,1.7vw,26px)`, navy, bold, one line;
+ *   · the delta line: arrow + "+12,5% so với kỳ trước" / "không đổi" under 0,05%, or — when there is
+ *     no percentage (stock figure, previous 0 or missing) — "chưa có kỳ trước để so";
+ *   · what our page says beyond the prototype (README "giữ"): "Kỳ trước: 0", "tính đến …", "1/1 việc có
+ *     hạn"… as small sub-lines AFTER the delta line, two lines at most, the full text on hover. */
+
+/** The prototype's sentence for a figure with no percentage to show (`MetricTile.tsx`). */
+export const NO_PREVIOUS_PERIOD = "chưa có kỳ trước để so";
+
+const REPORT_TILE = "min-w-0 overflow-hidden px-1 py-0.5";
+const REPORT_VALUE = "block text-[clamp(19px,1.7vw,26px)] font-bold whitespace-nowrap text-navy tabular-nums";
+const REPORT_LABEL = "mt-0.5 block text-[12px] text-ink-muted";
+const REPORT_QUIET = "mt-1 block text-[11px] text-ink-muted/60";
+const REPORT_SUB = "mt-0.5 line-clamp-2 text-[10.5px] leading-snug text-ink-muted/70";
+
+/**
+ * The "?" of an unbuilt part on `/bao-cao`: the prototype's `HelpCircle size-3.5 text-ink-muted/70`,
+ * drawn by RESTYLING `PendingMarker` (a 14px muted ring with "?"), not by changing it — its default
+ * look, behaviour (tooltip, description, 42px hit area) and every other screen stay as they are.
+ */
+export const REPORT_PENDING_MARKER = "size-3.5 border-ink-muted/70 bg-transparent text-[9px] text-ink-muted/70";
+
+type ReportDelta = {
+  readonly text: string;
+  readonly tone: "good" | "bad" | "flat";
+  readonly icon: LucideIcon;
+};
+
+/**
+ * `/bao-cao`'s delta line for a figure — the prototype's `movement()`: `null` when there is no
+ * percentage (a stock figure, a previous value of 0 or missing), "không đổi" under 0,05%, otherwise the
+ * signed change. A volume whose rise is neither good nor bad (`neutral`) stays muted, as on Tổng quan.
+ */
+export function reportDelta(f: Pick<Figure, "values" | "trend">): ReportDelta | null {
+  const v = f.values;
+  if (v === undefined || v.previous === 0) return null;
+  const change = ((v.current - v.previous) / v.previous) * 100;
+  if (Math.abs(change) < 0.05) return { text: "không đổi", tone: "flat", icon: Minus };
+  const up = change > 0;
+  const tone =
+    f.trend === undefined || f.trend === "neutral" ? "flat" : (f.trend === "higher-is-better") === up ? "good" : "bad";
+  return {
+    text: `${up ? "+" : "-"}${formatPercent(Math.abs(change))} so với kỳ trước`,
+    tone,
+    icon: up ? ArrowUpRight : ArrowDownRight,
+  };
+}
+
+const REPORT_TONE: Readonly<Record<ReportDelta["tone"], string>> = {
+  good: "text-leaf",
+  bad: "text-danger",
+  flat: "text-ink-muted",
+};
+
+function ReportDeltaLine({ delta }: { delta: ReportDelta | null }) {
+  if (delta === null) return <span className={REPORT_QUIET}>{NO_PREVIOUS_PERIOD}</span>;
+  const Icon = delta.icon;
+  return (
+    <span className={cn("mt-1 flex items-center gap-1 text-[11px]", REPORT_TONE[delta.tone])}>
+      <Icon aria-hidden="true" focusable="false" strokeWidth={2} className="size-3 shrink-0" />
+      <span className="min-w-0">{delta.text}</span>
+    </span>
+  );
+}
+
+function ReportSubLine({ text }: { text: string }) {
+  return (
+    <span title={text} className={REPORT_SUB}>
+      {text}
+    </span>
+  );
+}
+
+function ReportFigureTile({ figure, value }: { figure: Figure; value?: ReactNode }) {
+  const valueId = `${figure.id}-value`;
+  const sentence = figure.sentence === true;
+  const loading = value === undefined && figure.display === LOADING;
+  const delta = reportDelta(figure);
+  // "Kỳ trước: 0" / "Kỳ trước: —" is said only when no percentage could be drawn (README "giữ").
+  const subLines = [figure.note, delta === null ? figure.comparison?.text : undefined].filter(
+    (s): s is string => s !== undefined && s !== "",
+  );
+  return (
+    <li className={cn(REPORT_TILE, sentence && "col-span-full")} title={figure.exact}>
+      <span className={sentence ? "block text-[13px] leading-snug font-medium text-ink-700" : REPORT_VALUE}>
+        {value !== undefined ? (
+          <span id={valueId} className="[overflow-wrap:anywhere]">
+            {value}
+          </span>
+        ) : (
+          <FigureValue id={valueId} text={figure.display} sentence={sentence} />
+        )}
+      </span>
+      <span className={REPORT_LABEL}>{figure.label}</span>
+      {/* No line while loading (it would claim "no previous period" before the answer), and none
+          under a server SENTENCE — there is no figure there to compare. */}
+      {!loading && !sentence && <ReportDeltaLine delta={delta} />}
+      {subLines.map((s) => (
+        <ReportSubLine key={s} text={s} />
+      ))}
+    </li>
+  );
+}
+
 /** A figure with no source data in wave 1: "Chưa có dữ liệu", never a 0, never a link. */
 function NoSourceTile({ label }: { label: string }) {
+  const layout = useContext(BlockLayoutContext);
   const text = tileText(usePresenting().on);
+  if (layout === "report") {
+    // Báo cáo (D4): "—" in the figure's own place and size, the caption as the quiet line — no
+    // Database icon, so the tile lines up with its neighbours.
+    return (
+      <li className={REPORT_TILE} title={NO_SOURCE_DATA}>
+        <span aria-hidden="true" className={REPORT_VALUE}>
+          —
+        </span>
+        <span className={REPORT_LABEL}>{label}</span>
+        <span className={REPORT_QUIET}>{NO_DATA_CAPTION}</span>
+      </li>
+    );
+  }
   return (
     <li className={TILE_BODY} title={NO_SOURCE_DATA}>
       <span className="flex min-h-[26px] items-center gap-1 text-[13px] text-ink-500">
@@ -727,7 +891,24 @@ function NoSourceTile({ label }: { label: string }) {
  * the "?" is the block's (a whole unbuilt block has one "?" in its header, not one per tile).
  */
 function PendingTile({ label, info }: { label: string; info?: PendingFeatureInfo }) {
+  const layout = useContext(BlockLayoutContext);
   const text = tileText(usePresenting().on);
+  if (layout === "report") {
+    // Báo cáo (D4): "—" navy bold like any figure, and "Tính năng đang phát triển" SAID on the tile
+    // (the quiet line), not only to a screen reader.
+    return (
+      <li className={REPORT_TILE} data-pending="">
+        <span className="flex items-center gap-1">
+          <span aria-hidden="true" className={REPORT_VALUE}>
+            —
+          </span>
+          {info !== undefined && <PendingMarker info={info} className={REPORT_PENDING_MARKER} />}
+        </span>
+        <span className={REPORT_LABEL}>{label}</span>
+        <span className={REPORT_QUIET}>{PENDING_HOVER_TEXT}</span>
+      </li>
+    );
+  }
   return (
     <li className={TILE_BODY} data-pending="">
       <span className="flex items-center gap-2">
@@ -830,9 +1011,19 @@ function PendingBlock({
   blockKey: BlockKey;
   name: keyof typeof PENDING_BLOCK_METRICS;
 }) {
+  const layout = useContext(BlockLayoutContext);
   const metrics = PENDING_BLOCK_METRICS[name];
   return (
-    <Panel blockKey={blockKey} title={name} aside={<PendingMarker info={pendingPart(name)} />}>
+    <Panel
+      blockKey={blockKey}
+      title={name}
+      aside={
+        <PendingMarker
+          info={pendingPart(name)}
+          className={layout === "report" ? REPORT_PENDING_MARKER : undefined}
+        />
+      }
+    >
       <TileGrid count={metrics.length}>
         {metrics.map((label) => (
           <PendingTile key={label} label={label} />
@@ -852,7 +1043,8 @@ export function CitizenReportBlock({
   windows: ComparedWindows;
   onReload?: () => void;
 }) {
-  const figures = citizenReportFigures(pair, windows);
+  const layout = useContext(BlockLayoutContext);
+  const figures = citizenReportFigures(pair, windows).map((f) => figureFor(layout, f));
   return (
     <Panel blockKey="citizen-reports" title="Phản ánh người dân">
       <PairErrors pair={pair} noun="phản ánh" onReload={onReload} />
@@ -863,6 +1055,20 @@ export function CitizenReportBlock({
       </TileGrid>
     </Panel>
   );
+}
+
+/**
+ * `/bao-cao`'s own label for a figure, where the prototype names it differently from Tổng quan's list
+ * heading (D4: "Tiếp nhận trong kỳ"). Tổng quan keeps the heading of the list the tile opens.
+ */
+const REPORT_LABELS: Readonly<Record<string, string>> = {
+  "citizen-reports-received": "Tiếp nhận trong kỳ",
+};
+
+/** A figure as `layout` draws it: on `/bao-cao` the report label and never the red (`alert`). */
+function figureFor(layout: BlockLayout, f: Figure): Figure {
+  if (layout !== "report") return f;
+  return { ...f, label: REPORT_LABELS[f.id] ?? f.label, alert: false };
 }
 
 /** Khối PHẢN ÁNH NGƯỜI DÂN's figures — shared by the block and the export (`exportBlocks`). */
@@ -984,62 +1190,114 @@ export function FiscalBlock({
   year: number;
   onReload?: () => void;
 }) {
-  const title = "Thu – Chi ngân sách";
+  const layout = useContext(BlockLayoutContext);
+  const report = layout === "report";
   const scope = fiscalScope(year);
 
   if (result === null || !result.ok) {
     const shown = result === null ? LOADING : NO_VALUE;
     const fixed = ["Thu đạt dự toán", "Chi đạt dự toán", NHAN_CHENH_LECH];
+    const tile = (label: string, i: number) => (
+      <FigureTile
+        key={label}
+        figure={{ id: `fiscal-${i}`, label, display: shown, href: FISCAL_SCREEN_PATH, comparison: null }}
+      />
+    );
     return (
-      <Panel blockKey="fiscal" title={title}>
+      <Panel blockKey="fiscal" title={FISCAL_TITLE}>
         {result !== null && (
           <LoadError title="Chưa tải được số liệu thu – chi" onReload={onReload}>
             {result.thongBao}
           </LoadError>
         )}
         <TileGrid count={fixed.length}>
-          {fixed.map((label, i) => (
-            <FigureTile
-              key={label}
-              figure={{ id: `fiscal-${i}`, label, display: shown, href: FISCAL_SCREEN_PATH, comparison: null }}
-            />
-          ))}
+          {fixed.slice(0, 2).map(tile)}
+          {report && <PendingTile label={EXPENDITURE_TOTAL_LABEL} info={reportPendingPart(EXPENDITURE_TOTAL_LABEL)} />}
+          {tile(NHAN_CHENH_LECH, 2)}
         </TileGrid>
-        <SmallNote>{scope}</SmallNote>
+        {report ? <ReportFootnotes notes={[scope]} /> : <SmallNote>{scope}</SmallNote>}
       </Panel>
     );
   }
 
   const d = result.duLieu;
+  const totals = d.revenue_totals.map((o) => {
+    const total = revenueTotalText(o, layout);
+    return (
+      <FigureTile
+        key={o.column_id}
+        figure={{
+          id: `fiscal-total-${o.column_id}`,
+          label: o.name,
+          display: "",
+          exact: total.exact,
+          href: FISCAL_SCREEN_PATH,
+          comparison: null,
+          sentence: total.reason !== null,        }}
+        value={<OTien chu={total.shown} lyDo={total.reason} hienLyDo />}
+      />
+    );
+  });
+  const revenue = <FigureTile figure={indicatorFigure("fiscal-revenue", d.revenue_achievement)} />;
+  const expenditure = <FigureTile figure={indicatorFigure("fiscal-expenditure", d.expenditure_achievement)} />;
+  const balance = <FigureTile figure={balanceFigure(d, layout)} />;
+
+  if (report) {
+    // The prototype's order (D6): Thu đạt dự toán · Tổng thu · Chi đạt dự toán · Tổng chi · Cân đối.
+    // "Tổng thu" is each revenue total the server sends, under the server's own column name; "Tổng
+    // chi" has no field in `finance_chiSoNamRa`, so it is the "?" tile.
+    return (
+      <Panel blockKey="fiscal" title={FISCAL_TITLE}>
+        <TileGrid count={4 + d.revenue_totals.length}>
+          {revenue}
+          {totals}
+          {expenditure}
+          <PendingTile label={EXPENDITURE_TOTAL_LABEL} info={reportPendingPart(EXPENDITURE_TOTAL_LABEL)} />
+          {balance}
+        </TileGrid>
+        <ReportFootnotes notes={[scope, balanceNote()]} />
+      </Panel>
+    );
+  }
+
   return (
-    <Panel blockKey="fiscal" title={title}>
+    <Panel blockKey="fiscal" title={FISCAL_TITLE}>
       <TileGrid count={3 + d.revenue_totals.length}>
-        <FigureTile figure={indicatorFigure("fiscal-revenue", d.revenue_achievement)} />
-        <FigureTile figure={indicatorFigure("fiscal-expenditure", d.expenditure_achievement)} />
-        <FigureTile figure={balanceFigure(d)} />
-        {d.revenue_totals.map((o) => {
-          const total = revenueTotalText(o);
-          return (
-            <FigureTile
-              key={o.column_id}
-              figure={{
-                id: `fiscal-total-${o.column_id}`,
-                label: o.name,
-                display: "",
-                exact: total.exact,
-                href: FISCAL_SCREEN_PATH,
-                comparison: null,
-                sentence: total.reason !== null,              }}
-              value={<OTien chu={total.shown} lyDo={total.reason} hienLyDo />}
-            />
-          );
-        })}
+        {revenue}
+        {expenditure}
+        {balance}
+        {totals}
       </TileGrid>
       <div className="mt-auto flex flex-col gap-1">
         <SmallNote>{scope}</SmallNote>
         <SmallNote>{balanceNote()}</SmallNote>
       </div>
     </Panel>
+  );
+}
+
+/**
+ * The fiscal block's title, on BOTH pages and in the files — the prototype's `blockLabel("fiscal")`
+ * (owner 09/10/2026, D4: the one change Tổng quan takes from this round).
+ */
+export const FISCAL_TITLE = "Thu - Chi ngân sách xã";
+
+/** The prototype's tile between "Chi đạt dự toán" and the balance — unbuilt (`features/report/labels.ts`). */
+const EXPENDITURE_TOTAL_LABEL = "Tổng chi";
+
+/**
+ * A block's closing notes on `/bao-cao` — spec 05 B: small, muted, under a hairline. Tổng quan keeps
+ * its `SmallNote`s.
+ */
+function ReportFootnotes({ notes }: { notes: readonly string[] }) {
+  return (
+    <div className="mt-auto border-t border-line pt-2">
+      {notes.map((n) => (
+        <p key={n} className="m-0 text-[11px] leading-snug text-ink-muted">
+          {n}
+        </p>
+      ))}
+    </div>
   );
 }
 
@@ -1053,14 +1311,22 @@ function balanceNote(): string {
   return `${NHAN_CHENH_LECH}: ${GHI_CHU_CHENH_LECH}`;
 }
 
+/**
+ * A tile's short sum: Tổng quan's `compactDong` ("9,64 tỷ đồng"), or on `/bao-cao` the prototype's
+ * `compactDongReport` ("9,6 tỷ", D6). The exact amount is the same on both.
+ */
+function shortDong(amount: number, layout: BlockLayout): string {
+  return layout === "report" ? compactDongReport(amount) : compactDong(amount);
+}
+
 /** The balance tile — the tile and the export read this one object. */
-function balanceFigure(d: finance_chiSoNamRa): Figure {
+function balanceFigure(d: finance_chiSoNamRa, layout: BlockLayout = "dashboard"): Figure {
   const balanceText = nhanSoTienChiSo(d.balance, "dong");
   return {
     id: "fiscal-balance",
     label: NHAN_CHENH_LECH,
     display: safeAmount(d.balance.amount)
-      ? compactDong(d.balance.amount)
+      ? shortDong(d.balance.amount, layout)
       : withUnit(balanceText, d.balance.amount !== null),
     exact: withUnit(balanceText, d.balance.amount !== null),
     href: FISCAL_SCREEN_PATH,
@@ -1071,7 +1337,10 @@ function balanceFigure(d: finance_chiSoNamRa): Figure {
 }
 
 /** One revenue total's text: shortened for the tile, exact for hover, and the "not computed" reason. */
-function revenueTotalText(o: finance_chiSoNamRa["revenue_totals"][number]): {
+function revenueTotalText(
+  o: finance_chiSoNamRa["revenue_totals"][number],
+  layout: BlockLayout = "dashboard",
+): {
   shown: string;
   exact: string;
   reason: string | null;
@@ -1079,7 +1348,7 @@ function revenueTotalText(o: finance_chiSoNamRa["revenue_totals"][number]): {
 } {
   const exact = withUnit(nhanSoTien(o.value, "dong"), o.value !== null);
   return {
-    shown: safeAmount(o.value) ? compactDong(o.value) : exact,
+    shown: safeAmount(o.value) ? shortDong(o.value, layout) : exact,
     exact,
     reason: lyDoKhongTinh(o.unavailable_reason),
     raw: safeAmount(o.value) ? o.value : undefined,
@@ -1513,28 +1782,32 @@ export function DashboardBlocks({
  * buttons wait for it: a file written while a tile still says "…" would carry a figure nobody saw.
  * At least one figure block must be visible; a file of placeholders only is not a report.
  */
-export function figuresSettled(data: BlocksData, visible: BlockVisibility): boolean {
+export function figuresSettled(data: BlocksData, visible: BlockVisibility, withQueue = true): boolean {
   const settled = <T,>(p: SummaryPair<T>) => p.current !== null && p.previous !== null;
   if (!(visible.tasks || visible.incomingDocuments || visible.citizenReports || visible.budget)) return false;
   if (visible.tasks && !settled(data.tasks)) return false;
   if (visible.incomingDocuments && !settled(data.incomingDocuments)) return false;
   if (visible.citizenReports && !settled(data.citizenReports)) return false;
   if (visible.budget && data.fiscal === null) return false;
+  // `/bao-cao` never reads the queues (no "Cần xử lý ngay"), so it passes `withQueue = false`.
   const anyQueue = visible.tasks || visible.incomingDocuments || visible.citizenReports;
-  if (anyQueue && data.queue === null) return false;
+  if (withQueue && anyQueue && data.queue === null) return false;
   return true;
 }
 
-function toExportFigure(f: Figure, unit: "count" | "dong" = "count"): ExportFigure {
+function toExportFigure(f: Figure, unit: "count" | "dong" = "count", layout: BlockLayout = "dashboard"): ExportFigure {
+  const shown = figureFor(layout, f);
   return {
-    label: f.label,
-    value: f.display,
-    exact: f.exact,
-    number: f.raw,
-    unit: f.raw === undefined ? undefined : unit,
-    note: f.note,
-    comparison: f.comparison?.text,
-    alert: f.alert === true,
+    label: shown.label,
+    value: shown.display,
+    exact: shown.exact,
+    number: shown.raw,
+    unit: shown.raw === undefined ? undefined : unit,
+    note: shown.note,
+    // `/bao-cao`'s delta line ("không đổi" under 0,05%) where it has one; else the line both pages
+    // carry ("Kỳ trước: 0"). Tổng quan: its own line, unchanged.
+    comparison: (layout === "report" ? reportDelta(shown)?.text : undefined) ?? shown.comparison?.text,
+    alert: shown.alert === true,
   };
 }
 
@@ -1559,31 +1832,50 @@ function pendingExportBlock(name: keyof typeof PENDING_BLOCK_METRICS): ExportBlo
   };
 }
 
-function fiscalExportBlock(result: Loaded<finance_chiSoNamRa>, year: number): ExportBlock {
-  const title = "Thu – Chi ngân sách";
+/** The "Tổng chi" tile of `/bao-cao`, as the files carry it: no number, the reason. */
+function expenditureTotalExport(): ExportFigure {
+  return {
+    label: EXPENDITURE_TOTAL_LABEL,
+    value: EXPORT_NO_FIGURE,
+    note: reportPendingPart(EXPENDITURE_TOTAL_LABEL).viSao,
+    noFigure: true,
+  };
+}
+
+function fiscalExportBlock(
+  result: Loaded<finance_chiSoNamRa>,
+  year: number,
+  layout: BlockLayout = "dashboard",
+): ExportBlock {
+  const title = FISCAL_TITLE;
+  const report = layout === "report";
   if (result === null || !result.ok) {
+    const none = (label: string): ExportFigure => ({ label, value: NO_VALUE });
     return {
       title,
-      figures: ["Thu đạt dự toán", "Chi đạt dự toán", NHAN_CHENH_LECH].map((label) => ({ label, value: NO_VALUE })),
+      figures: report
+        ? [none("Thu đạt dự toán"), none("Chi đạt dự toán"), expenditureTotalExport(), none(NHAN_CHENH_LECH)]
+        : ["Thu đạt dự toán", "Chi đạt dự toán", NHAN_CHENH_LECH].map(none),
       notes: [fiscalScope(year)],
       errors: result === null ? [] : [`Chưa tải được số liệu thu – chi: ${result.thongBao}`],
     };
   }
   const d = result.duLieu;
   const totals: ExportFigure[] = d.revenue_totals.map((o) => {
-    const t = revenueTotalText(o);
+    const t = revenueTotalText(o, layout);
     return t.reason === null
       ? { label: o.name, value: t.shown, exact: t.exact, number: t.raw, unit: t.raw === undefined ? undefined : "dong" }
       : { label: o.name, value: `${O_KHONG_TINH_DUOC} — ${t.reason}` };
   });
+  const revenue = toExportFigure(indicatorFigure("fiscal-revenue", d.revenue_achievement), "count", layout);
+  const expenditure = toExportFigure(indicatorFigure("fiscal-expenditure", d.expenditure_achievement), "count", layout);
+  const balance = toExportFigure(balanceFigure(d, layout), "dong", layout);
   return {
     title,
-    figures: [
-      toExportFigure(indicatorFigure("fiscal-revenue", d.revenue_achievement)),
-      toExportFigure(indicatorFigure("fiscal-expenditure", d.expenditure_achievement)),
-      toExportFigure(balanceFigure(d), "dong"),
-      ...totals,
-    ],
+    // The order each page draws (`FiscalBlock`).
+    figures: report
+      ? [revenue, ...totals, expenditure, expenditureTotalExport(), balance]
+      : [revenue, expenditure, balance, ...totals],
     notes: [fiscalScope(year), balanceNote()],
     errors: [],
   };
@@ -1593,14 +1885,22 @@ function fiscalExportBlock(result: Loaded<finance_chiSoNamRa>, year: number): Ex
  * The blocks the account sees, in the grid's order, as the files carry them. A block whose keys the
  * account lacks is absent here exactly as on screen — a file must not reveal what the page hides.
  * "Cần xử lý ngay" is not a block here: it goes in as an aggregate (`urgentSummary`).
+ *
+ * `layout = "report"` = `/bao-cao`'s files: its labels, its fiscal order and sums, no red — what that
+ * page draws. Tổng quan's files are the default and do not change.
  */
-export function exportBlocks(data: BlocksData, visible: BlockVisibility): ExportBlock[] {
+export function exportBlocks(
+  data: BlocksData,
+  visible: BlockVisibility,
+  layout: BlockLayout = "dashboard",
+): ExportBlock[] {
+  const out = (f: Figure) => toExportFigure(f, "count", layout);
   const blocks: ExportBlock[] = [];
   if (visible.tasks) {
     const t = taskFigures(data.tasks, data.windows);
     blocks.push({
       title: "Nhiệm vụ",
-      figures: [t.inProgress, t.overdue, t.completed, t.suspended, t.onTime].map((f) => toExportFigure(f)),
+      figures: [t.inProgress, t.overdue, t.completed, t.suspended, t.onTime].map(out),
       notes: [],
       errors: pairErrors(data.tasks, "nhiệm vụ"),
     });
@@ -1610,7 +1910,7 @@ export function exportBlocks(data: BlocksData, visible: BlockVisibility): Export
     blocks.push({
       title: "Văn bản & Đơn thư",
       figures: [
-        ...[d.arrived, d.open, d.overdue].map((f) => toExportFigure(f)),
+        ...[d.arrived, d.open, d.overdue].map(out),
         { label: DOCUMENT_ON_TIME_LABEL, value: NO_DATA_CAPTION, note: NO_SOURCE_DATA, noFigure: true },
         { label: LETTERS_LABEL, value: EXPORT_NO_FIGURE, note: pendingPart(LETTERS_LABEL).viSao, noFigure: true },
       ],
@@ -1620,18 +1920,79 @@ export function exportBlocks(data: BlocksData, visible: BlockVisibility): Export
   }
   if (visible.budget) {
     blocks.push(pendingExportBlock("Giải ngân ngân sách"));
-    blocks.push(fiscalExportBlock(data.fiscal, data.fiscalYear));
+    blocks.push(fiscalExportBlock(data.fiscal, data.fiscalYear, layout));
   }
   if (visible.citizenReports) {
     blocks.push({
       title: "Phản ánh người dân",
-      figures: citizenReportFigures(data.citizenReports, data.windows).map((f) => toExportFigure(f)),
+      figures: citizenReportFigures(data.citizenReports, data.windows).map(out),
       notes: [],
       errors: pairErrors(data.citizenReports, "phản ánh"),
     });
   }
   blocks.push(pendingExportBlock("Kinh tế & Tài nguyên"));
   return blocks;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * `/bao-cao`'s "So sánh với kỳ trước" — the figures its chart plots
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** One bar of the comparison chart: a PERIOD figure whose two windows both answered. */
+export type ComparedFigure = {
+  readonly id: string;
+  /** the tile's label, with the block named when two blocks share it ("Đúng hạn trong kỳ") */
+  readonly label: string;
+  readonly currentText: string;
+  readonly previousText: string;
+  /** change against the previous window, in percent — never computed from a previous of 0 */
+  readonly delta: number;
+  readonly trend: Trend;
+};
+
+/**
+ * What the chart may plot, in the grid's order. PERIOD FIGURES ONLY (owner 09/10/2026, D2): a stock
+ * figure has no previous period, Thu – Chi is year to date with no comparison, and "Điểm hài lòng" is a
+ * stock. A figure is left out when either window failed, the sample was empty, or the previous value
+ * is 0 — "from 0 to 3" is not a percentage (`comparisonLine`, user decision), and the tile says so.
+ *
+ * `null` = some visible compared block is still loading: the chart waits rather than draw a partial
+ * picture as the whole one.
+ */
+export function comparedFigures(data: BlocksData, visible: BlockVisibility): ComparedFigure[] | null {
+  const settled = <T,>(p: SummaryPair<T>) => p.current !== null && p.previous !== null;
+  if (visible.tasks && !settled(data.tasks)) return null;
+  if (visible.incomingDocuments && !settled(data.incomingDocuments)) return null;
+  if (visible.citizenReports && !settled(data.citizenReports)) return null;
+
+  const groups: { figures: Figure[]; block: string }[] = [];
+  if (visible.tasks) {
+    const t = taskFigures(data.tasks, data.windows);
+    groups.push({ figures: [t.completed, t.onTime], block: "nhiệm vụ" });
+  }
+  if (visible.incomingDocuments) {
+    groups.push({ figures: [incomingDocumentFigures(data.incomingDocuments, data.windows).arrived], block: "văn bản" });
+  }
+  if (visible.citizenReports) {
+    groups.push({ figures: citizenReportFigures(data.citizenReports, data.windows), block: "phản ánh" });
+  }
+  const rows: { f: Figure; v: NonNullable<Figure["values"]>; block: string }[] = [];
+  for (const { figures, block } of groups) {
+    for (const raw of figures) {
+      const f = figureFor("report", raw);
+      if (f.kind === "period" && f.values !== undefined && f.values.previous !== 0) rows.push({ f, v: f.values, block });
+    }
+  }
+  const count = new Map<string, number>();
+  for (const { f } of rows) count.set(f.label, (count.get(f.label) ?? 0) + 1);
+  return rows.map(({ f, v, block }) => ({
+    id: f.id,
+    label: (count.get(f.label) ?? 0) > 1 ? `${f.label} (${block})` : f.label,
+    currentText: f.display,
+    previousText: v.previousText,
+    delta: ((v.current - v.previous) / v.previous) * 100,
+    trend: f.trend ?? "neutral",
+  }));
 }
 
 /**

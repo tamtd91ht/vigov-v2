@@ -1,7 +1,8 @@
 /**
  * The three Tổng quan files — PDF, XLSX, PPTX — built IN THE BROWSER from a `DashboardExport`
  * (`export-model.ts`), which is itself the figures already on screen. Nothing here reads a server,
- * computes a figure or reads the clock: what goes in is what the page drew.
+ * computes a figure or reads the clock: what goes in is what the page drew. `/bao-cao` uses the same
+ * builders (owner 09/10/2026, D3); its `tables` render after the blocks, and only when present.
  *
  * Layout and wording follow the prototype's exporters (`vigov-require/apps/api/app/modules/reports/
  * exporters.py` `to_pdf` / `to_xlsx` / `to_pptx`): title, commune, period, "tính đến", one band per
@@ -21,7 +22,7 @@
 
 import type { Cell, CellObject, SheetData } from "write-excel-file/universal";
 
-import type { DashboardExport, ExportBlock, ExportFigure, ExportFormat } from "./export-model";
+import type { DashboardExport, ExportBlock, ExportFigure, ExportFormat, ExportTable } from "./export-model";
 import { EXPORT_MIME } from "./export-model";
 
 /** ViHAT palette of the prototype's exporters (hex without `#`). */
@@ -98,8 +99,44 @@ function blockRows(b: ExportBlock): XlsxCell[][] {
   return rows;
 }
 
+/**
+ * A page table (`/bao-cao`'s unit table and comparison): a title band, a header row, one row per line —
+ * a count goes in as a NUMBER cell, everything else as the screen's text.
+ */
+function tableRows(t: ExportTable): XlsxCell[][] {
+  const span = Math.max(XLSX_COLUMNS, t.columns.length);
+  const wide = (cell: CellObject): XlsxCell[] => [
+    { ...cell, columnSpan: span, wrap: true },
+    ...Array<XlsxCell>(span - 1).fill(null),
+  ];
+  const rows: XlsxCell[][] = [
+    wide({ value: t.title, fontWeight: "bold", fontSize: 12, textColor: `#${WHITE}`, backgroundColor: `#${NAVY}` }),
+    t.columns.map((h): CellObject => ({
+      value: h,
+      fontWeight: "bold",
+      textColor: `#${NAVY}`,
+      backgroundColor: `#${SURFACE}`,
+      wrap: true,
+      ...BORDER,
+    })),
+    ...t.rows.map((r) =>
+      r.map((c, i): CellObject =>
+        c.number !== undefined
+          ? { value: c.number, type: Number, format: "#,##0", align: "right", ...BORDER }
+          : { value: c.text, type: String, wrap: true, align: i === 0 ? "left" : "right", ...BORDER },
+      ),
+    ),
+  ];
+  if (t.rows.length === 0) rows.push(wide({ value: t.empty, textColor: `#${MUTED}` }));
+  for (const e of t.errors) rows.push(wide({ value: e, textColor: `#${DANGER}` }));
+  for (const n of t.notes) rows.push(wide({ value: n, textColor: `#${MUTED}` }));
+  rows.push([null]);
+  return rows;
+}
+
 export async function buildXlsx(doc: DashboardExport): Promise<Blob> {
   const { default: writeXlsxFile } = await import("write-excel-file/universal");
+  const tables = doc.tables ?? [];
   const rows: XlsxCell[][] = [
     spanRow({ value: doc.title, fontWeight: "bold", fontSize: 15, textColor: `#${NAVY}` }),
     spanRow({ value: doc.communeName, fontWeight: "bold", fontSize: 12, textColor: `#${NAVY}` }),
@@ -108,6 +145,7 @@ export async function buildXlsx(doc: DashboardExport): Promise<Blob> {
     spanRow({ value: doc.asOfLine, textColor: `#${INK}` }),
     [null],
     ...doc.blocks.flatMap(blockRows),
+    ...tables.flatMap(tableRows),
   ];
   if (doc.urgent !== null) {
     rows.push(spanRow({ value: doc.urgent.title, fontWeight: "bold", fontSize: 12, textColor: `#${WHITE}`, backgroundColor: `#${DANGER}` }));
@@ -120,7 +158,14 @@ export async function buildXlsx(doc: DashboardExport): Promise<Blob> {
   const sheet: SheetData = rows;
   const blob = await writeXlsxFile(sheet, {
     sheet: "Tổng quan",
-    columns: [{ width: 42 }, { width: 24 }, { width: 30 }, { width: 70 }],
+    // A fifth column only when a table needs it — Tổng quan's workbook keeps its four.
+    columns: [
+      { width: 42 },
+      { width: 24 },
+      { width: 30 },
+      { width: 70 },
+      ...(tables.some((t) => t.columns.length > XLSX_COLUMNS) ? [{ width: 18 }] : []),
+    ],
   }, { fontFamily: OFFICE_FONT, fontSize: 11 }).toBlob();
   return new Blob([blob], { type: EXPORT_MIME.xlsx });
 }
@@ -287,6 +332,53 @@ export async function buildPdf(
     y += 2;
   }
 
+  // Page tables (`/bao-cao`): the first column takes the room a unit name needs, the rest share the
+  // remainder; the header row repeats on a new page so a continued table still reads.
+  for (const t of doc.tables ?? []) {
+    heading(t.title);
+    const full = W - 2 * M;
+    const first = t.columns.length > 1 ? full * 0.36 : full;
+    const rest = t.columns.length > 1 ? (full - first) / (t.columns.length - 1) : 0;
+    const widths = t.columns.map((_, i) => (i === 0 ? first : rest));
+    const row = (cells: readonly string[], head: boolean) => {
+      const h =
+        Math.max(...cells.map((c, i) => measure(c, 9, (widths[i] ?? rest) - 2 * PAD, head))) + 2 * PAD;
+      if (y + h > BOTTOM) {
+        pdf.addPage();
+        y = M;
+        if (!head) row(t.columns, true);
+      }
+      if (head) {
+        pdf.setFillColor(...rgb(SURFACE));
+        pdf.rect(M, y, full, h, "F");
+      }
+      let x = M;
+      cells.forEach((c, i) => {
+        const w = widths[i] ?? rest;
+        text(c, x + PAD, y + PAD, {
+          size: 9,
+          bold: head,
+          color: head ? NAVY : INK,
+          width: w - 2 * PAD,
+          align: i === 0 ? "left" : "right",
+        });
+        x += w;
+      });
+      y += h;
+      pdf.setDrawColor(...rgb(LINE));
+      pdf.setLineWidth(0.25);
+      pdf.line(M, y, W - M, y);
+    };
+    ensure(18);
+    row(t.columns, true);
+    for (const r of t.rows) row(r.map((c) => c.text), false);
+    y += 1.5;
+    if (t.rows.length === 0) sentence(t.empty, MUTED);
+    for (const e of t.errors) sentence(e, DANGER);
+    for (const n of t.notes) sentence(n, MUTED);
+    y += 2;
+  }
+
   if (doc.urgent !== null) {
     heading(doc.urgent.title, DANGER);
     for (const l of doc.urgent.lines) sentence(l, NAVY, 9.5);
@@ -423,6 +515,54 @@ export async function buildPptx(doc: DashboardExport): Promise<Blob> {
         }
       }
     }
+  }
+
+  // Page tables (`/bao-cao`): one slide per ROWS_PER_SLIDE rows, the header row on each.
+  const ROWS_PER_SLIDE = 10;
+  for (const t of doc.tables ?? []) {
+    const chunks: ExportTable["rows"][] = t.rows.length === 0 ? [[]] : [];
+    for (let i = 0; i < t.rows.length; i += ROWS_PER_SLIDE) chunks.push(t.rows.slice(i, i + ROWS_PER_SLIDE));
+    chunks.forEach((chunk, n) => {
+      const slide = furniture(n === 0 ? t.title : `${t.title} (tiếp)`, doc.periodLabel);
+      const w = SLIDE_W - 2 * SM;
+      const first = t.columns.length > 1 ? w * 0.36 : w;
+      const rest = t.columns.length > 1 ? (w - first) / (t.columns.length - 1) : 0;
+      type Rows = Parameters<Slide["addTable"]>[0];
+      const head: Rows[number] = t.columns.map((c, i) => ({
+        text: c,
+        options: { bold: true, color: NAVY, fill: { color: SURFACE }, align: i === 0 ? "left" : "right" },
+      }));
+      const body: Rows = chunk.map((r) =>
+        r.map((c, i) => ({ text: c.text, options: { color: INK, align: i === 0 ? "left" : "right" } })),
+      );
+      if (chunk.length > 0) {
+        slide.addTable([head, ...body], {
+          x: SM,
+          y: 1.5,
+          w,
+          colW: t.columns.map((_, i) => (i === 0 ? first : rest)),
+          fontFace: OFFICE_FONT,
+          fontSize: 13,
+          border: { type: "solid", pt: 0.75, color: LINE },
+          margin: 0.06,
+        });
+      } else {
+        box(slide, t.empty, { x: SM, y: 1.6, w, h: 0.6, size: 16, color: MUTED });
+      }
+      if (n === chunks.length - 1) {
+        const extra = [...t.errors, ...t.notes];
+        if (extra.length > 0) {
+          box(slide, extra.join("\n"), {
+            x: SM,
+            y: SLIDE_H - 1.45,
+            w,
+            h: 0.85,
+            size: 10,
+            color: t.errors.length > 0 ? DANGER : MUTED,
+          });
+        }
+      }
+    });
   }
 
   if (doc.urgent !== null) {

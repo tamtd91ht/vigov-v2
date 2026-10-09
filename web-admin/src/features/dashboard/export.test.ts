@@ -129,7 +129,7 @@ describe("export model — the figures on screen, nothing else", () => {
       "Nhiệm vụ",
       "Văn bản & Đơn thư",
       "Giải ngân ngân sách",
-      "Thu – Chi ngân sách",
+      "Thu - Chi ngân sách xã",
       "Phản ánh người dân",
       "Kinh tế & Tài nguyên",
     ]);
@@ -232,7 +232,7 @@ describe("XLSX", () => {
       "Kỳ tháng này: 1/9/2026 – 30/9/2026",
       "Số liệu tính đến 16:43 28/09/2026",
       "Phản ánh người dân",
-      "Thu – Chi ngân sách",
+      "Thu - Chi ngân sách xã",
       "Luỹ kế năm 2026, không so với kỳ trước.",
       "+12,5% so với kỳ trước",
       EXPORT_NO_FIGURE,

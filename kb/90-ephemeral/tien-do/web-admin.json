@@ -1182,6 +1182,15 @@
       "bang_chung": "commit 'feat(web-admin): gộp/tách phiếu'. tsc + eslint sạch, vitest phan-anh + lib 75 tệp/1347 ca, check:api khớp. CHƯA kiểm bằng ảnh render.",
       "tiep_theo": "(1) Danh sách không trả merged_into/merged_petitions — mở ngăn từ thẻ chỉ thấy 'đã gộp vào một phiếu chính' + nút xem phiếu chính; đề xuất backend thêm hai trường (chỉ mã) vào mục danh sách. (2) Chip '{n} phiếu trùng' trên thẻ chưa dựng (danh sách không có số). (3) Câu rỗng/không vị trí do builder đặt.",
       "no_confirm": []
+    },
+    {
+      "id": "bao-cao-theo-prototype-09-10",
+      "menu": "bao-cao",
+      "trang_thai": "xong",
+      "viec": "/bao-cao theo prototype (ReportWorkspace/MetricTile/RankingTable) + spec 02–06, quyết định chủ dự án 09/10 (ADR 0053 §Sửa đổi 09/10 lần 2, f8cb78cd): bảng 'Xếp hạng bộ phận' có thanh Tổng việc/Quá hạn + Đúng hạn tô màu 80/50; biểu đồ 'So sánh với kỳ trước' SVG tự vẽ; xuất PDF/XLSX/PPTX dùng bộ xuất Tổng quan (report.export); ô chỉ số kiểu prototype (không liên kết, không đỏ, cỡ clamp(19px,1.7vw,26px), 'Tiếp nhận trong kỳ', 'chưa có kỳ trước để so'); Tuỳ chọn áp ngay không nút Xem; Thu - Chi theo thứ tự prototype, Tổng chi '?'; tiền 'x,x tỷ'. Tổng quan chỉ đổi tiêu đề 'Thu - Chi ngân sách xã'.",
+      "bang_chung": "commit 'fix(web-admin): bao-cao'. tsc không lỗi ở phần báo cáo/dashboard, eslint sạch, vitest report+dashboard+compact-dong 15 tệp/264 ca. Toàn web: 2 ca noi-dung.test.ts + lỗi tsc ở noi-dung/phieu-phan-anh/commune-branding/task-attachments do phiên song song đổi hợp đồng tải tệp (ADR 0052 sửa đổi 09/10) — không thuộc lượt này. CHƯA kiểm bằng ảnh render.",
+      "tiep_theo": "(1) Kiểm ảnh trên bản build; cỡ số theo cửa sổ có thể làm tràn số tiền ở ô hẹp (lý do của 412409a1). (2) Cột biểu đồ trung tính màu xám cho 'Đến trong kỳ'/'Tiếp nhận trong kỳ' (prototype tô xanh khi tăng) — chủ dự án xem. (3) Bỏ khỏi biểu đồ chỉ số có kỳ trước = 0. (4) Màu leaf trên chữ nhỏ không đạt tương phản AA. (5) Nợ ghi vết khi xuất (chung với Tổng quan). (6) Nút kỳ dùng chung vẫn h-7 (prototype h-8).",
+      "no_confirm": []
     }
   ]
 }

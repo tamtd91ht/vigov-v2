@@ -4,7 +4,8 @@ import type { identity_boPhanRa, petitions_taskUnitRowOut } from "@/lib/api/sche
 
 import {
   assembleUnitRows,
-  onTimeText,
+  barPercent,
+  onTimeCell,
   UNASSIGNED_UNIT_LABEL,
   UNKNOWN_UNIT_LABEL,
   unitRowsFrom,
@@ -64,15 +65,35 @@ describe("assembleUnitRows (ADR 0053 B3, B5d)", () => {
   });
 });
 
-describe("onTimeText", () => {
-  it("`{n} — {tỷ lệ}%` with a decimal comma, one decimal like /tong-quan's rate", () => {
-    expect(onTimeText({ onTime: 1, onTimeSample: 3 })).toBe("1 — 33,3%");
-    expect(onTimeText({ onTime: 2, onTimeSample: 2 })).toBe("2 — 100,0%");
-    expect(onTimeText({ onTime: 0, onTimeSample: 4 })).toBe("0 — 0,0%");
+describe("onTimeCell — the prototype's rounded % and threshold colour (D1)", () => {
+  it("rounded percentage, no decimals: 100%, 33%", () => {
+    expect(onTimeCell({ onTime: 2, onTimeSample: 2 })).toEqual({ text: "100%", tone: "good" });
+    expect(onTimeCell({ onTime: 1, onTimeSample: 3 })).toEqual({ text: "33%", tone: "bad" });
+    expect(onTimeCell({ onTime: 0, onTimeSample: 4 })).toEqual({ text: "0%", tone: "bad" });
   });
 
-  it("an empty sample is '—', never 0%", () => {
-    expect(onTimeText({ onTime: 0, onTimeSample: 0 })).toBe("—");
+  it("≥ 80 good, ≥ 50 warning, else bad — on the unrounded rate", () => {
+    expect(onTimeCell({ onTime: 4, onTimeSample: 5 })?.tone).toBe("good"); // 80%
+    expect(onTimeCell({ onTime: 79, onTimeSample: 100 })?.tone).toBe("warning");
+    expect(onTimeCell({ onTime: 1, onTimeSample: 2 })?.tone).toBe("warning"); // 50%
+    expect(onTimeCell({ onTime: 49, onTimeSample: 100 })?.tone).toBe("bad");
+  });
+
+  it("an empty sample has no rate — null, never 0%", () => {
+    expect(onTimeCell({ onTime: 0, onTimeSample: 0 })).toBeNull();
+  });
+});
+
+describe("barPercent — a bar against its column's largest value", () => {
+  it("0 draws nothing; the largest fills the track; a small non-zero never under 4%", () => {
+    expect(barPercent(0, 21)).toBe(0);
+    expect(barPercent(21, 21)).toBe(100);
+    expect(barPercent(7, 21)).toBe(33);
+    expect(barPercent(1, 100)).toBe(4);
+  });
+
+  it("a column of zeros (max floored at 1) draws no bar", () => {
+    expect(barPercent(0, 0)).toBe(0);
   });
 });
 

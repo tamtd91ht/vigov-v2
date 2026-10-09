@@ -1,12 +1,12 @@
 /**
- * "Tình hình thực hiện theo bộ phận" — the rows of `/bao-cao`'s unit table, assembled from TWO
- * answers: `GET /api/v1/task-unit-summary` (figures, one row per unit that holds tasks) and
+ * "Xếp hạng bộ phận" — the rows of `/bao-cao`'s unit table, assembled from TWO answers:
+ * `GET /api/v1/task-unit-summary` (figures, one row per unit that holds tasks) and
  * `GET /api/v1/org-units` (names, and the units that hold nothing). Pure, so every row rule below is
  * tested without a browser.
  *
- * DECIDED BY THE OWNER (ADR 0053, amendment 04/10/2026, B3) — not chosen here:
- *   · the name is "Tình hình thực hiện theo bộ phận", never "Xếp hạng": a People's Committee report
- *     does not rank the Party committee, the People's Council or the Fatherland Front;
+ * THE TITLE AND THE COLUMNS ARE THE PROTOTYPE'S (`RankingTable.tsx`) by the owner's decision of
+ * 09/10/2026 (ADR 0053 §Sửa đổi 09/10/2026 lần 2, D1), which REPLACES the 04/10 title "Tình hình thực
+ * hiện theo bộ phận" (B3). Kept from B3 — the ROW SET, not the prototype's:
  *   · EVERY unit of the commune is a row, a unit with no task included (zeros, not absent);
  *   · tasks with no unit are one row, "Chưa xác định bộ phận";
  *   · sorted by "Tổng việc", descending.
@@ -14,11 +14,12 @@
  *   · a unit id the org-unit list no longer holds (soft-deleted unit still holding tasks) gets ITS
  *     OWN row (B5d). Merging it into "Chưa xác định" would hand a real unit's tasks to nobody — a
  *     false statement of responsibility;
- *   · "Quá hạn" is a plain count of the CURRENT stock (B5b): no bar of overdue/total, because the
- *     numerator is "now" and the denominator is "the period" — a ratio nobody could read right.
+ *   · "Quá hạn" counts the CURRENT stock (B5b), and its header says so ("(hiện tại)"). Its bar is
+ *     scaled against the other rows' overdue counts — never overdue/total, because the numerator is
+ *     "now" and the denominator is "the period", a ratio nobody could read right.
  */
 
-import { formatCount, formatPercent, NO_VALUE, ratioPercent } from "@/features/dashboard/figures";
+import { ratioPercent } from "@/features/dashboard/figures";
 import type { KetQua } from "@/lib/api/goi";
 import type {
   identity_boPhanRa,
@@ -27,19 +28,22 @@ import type {
   petitions_taskUnitSummaryOut,
 } from "@/lib/api/schema.gen";
 
-export const UNIT_TABLE_TITLE = "Tình hình thực hiện theo bộ phận";
+export const UNIT_TABLE_TITLE = "Xếp hạng bộ phận";
 
 export const UNASSIGNED_UNIT_LABEL = "Chưa xác định bộ phận";
 
 export const UNKNOWN_UNIT_LABEL = "Bộ phận không còn trong danh mục";
 
-/** Column headers, in spec order minus the bar: Bộ phận · Tổng việc · Hoàn thành · Đúng hạn · Quá hạn. */
+/**
+ * Column headers in the prototype's order: Bộ phận · Tổng việc · Quá hạn · Hoàn thành · Đúng hạn.
+ * "(hiện tại)" after "Quá hạn" is ours (allowed, D1): the column is a stock, not a period figure.
+ */
 export const UNIT_COLUMNS = {
   unit: "Bộ phận",
   total: "Tổng việc",
+  overdue: "Quá hạn (hiện tại)",
   completed: "Hoàn thành",
   onTime: "Đúng hạn",
-  overdue: "Quá hạn (hiện tại)",
 } as const;
 
 /** The note under the table: what "Tổng việc" counts, and that "Quá hạn" is not a period figure. */
@@ -47,7 +51,8 @@ export const UNIT_TABLE_NOTE =
   "Tổng việc là số nhiệm vụ bộ phận đang nắm trong kỳ: tạo trước cuối kỳ và chưa hoàn thành trước " +
   "đầu kỳ. Quá hạn tính tại thời điểm xem, không theo kỳ.";
 
-export const UNIT_TABLE_EMPTY = "Xã chưa có bộ phận nào trong danh mục và không có nhiệm vụ nào trong kỳ.";
+/** The prototype's empty sentence (`RankingTable.tsx`). */
+export const UNIT_TABLE_EMPTY = "Chưa có bộ phận nào được giao việc trong kỳ.";
 
 export type UnitRowKind = "unit" | "unassigned" | "unknown";
 
@@ -119,11 +124,26 @@ export function unitRowsFrom(
 }
 
 /**
- * `{n} — {tỷ lệ}%` with a decimal comma (`3 — 33,3%`), or `—` when the unit completed no task with
- * an original deadline: an empty sample has no rate, and printing 0% would call the unit late for
- * doing nothing wrong (`ratioPercent`, the same rule as `/tong-quan`'s on-time figure).
+ * The "Đúng hạn" cell — the prototype's rounded percentage (`100%`) coloured by threshold: ≥ 80 good,
+ * ≥ 50 warning, else bad. `null` when the unit completed no task with an original deadline: an empty
+ * sample has no rate, and printing 0% would call the unit late for doing nothing wrong
+ * (`ratioPercent`, the same rule as `/tong-quan`'s on-time figure). The prototype painted that "—"
+ * red; the spec (04 A) and the owner (D1) make it muted.
  */
-export function onTimeText(row: Pick<UnitRow, "onTime" | "onTimeSample">): string {
+export function onTimeCell(
+  row: Pick<UnitRow, "onTime" | "onTimeSample">,
+): { text: string; tone: "good" | "warning" | "bad" } | null {
   const p = ratioPercent(row.onTime, row.onTimeSample);
-  return p === null ? NO_VALUE : `${formatCount(row.onTime)} — ${formatPercent(p)}`;
+  if (p === null) return null;
+  return { text: `${Math.round(p)}%`, tone: p >= 80 ? "good" : p >= 50 ? "warning" : "bad" };
+}
+
+/**
+ * A bar's fill, in percent of its track: the value against the LARGEST of its column across the rows
+ * (at least 1, so a column of zeros draws no bar). A non-zero value is never thinner than 4% — a
+ * one-task unit beside a forty-task one must still show it has something.
+ */
+export function barPercent(value: number, max: number): number {
+  if (value <= 0) return 0;
+  return Math.max(Math.round((value / Math.max(1, max)) * 100), 4);
 }

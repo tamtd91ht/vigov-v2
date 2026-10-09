@@ -20,8 +20,9 @@ export type { ExportSource };
  * NOT HERE, ON PURPOSE: `⟳ Tính lại ngay` — the owner decided not to build it (ADR 0053), and a
  * placeholder for it would announce a feature the authority refused.
  *
- * `/bao-cao`'s export is NOT this component: it is still unbuilt there and has its own pending row
- * (`features/report/export-pending-actions.tsx`); `/bao-cao` has no Trình chiếu (spec 13 §1).
+ * `/bao-cao`'s export is NOT this component: built 09/10/2026 on the same file builders, it draws the
+ * prototype's own row (`features/report/report-export-actions.tsx`); `/bao-cao` has no Trình chiếu
+ * (spec 13 §1).
  */
 export function DashboardHeaderActions({
   exportSource,

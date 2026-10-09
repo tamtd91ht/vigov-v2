@@ -367,7 +367,7 @@ describe("DashboardView — access per block", () => {
     expect(html).not.toContain('aria-label="Nhiệm vụ"');
     expect(html).not.toContain('aria-label="Văn bản &amp; Đơn thư"');
     expect(html).not.toContain('aria-label="Phản ánh người dân"');
-    expect(html).not.toContain("Thu – Chi ngân sách");
+    expect(html).not.toContain("Thu - Chi ngân sách xã");
     expect(html).not.toContain("Giải ngân ngân sách");
     expect(html).not.toContain("Cần xử lý ngay");
     // the block with no source and no key of its own stays, muted
@@ -393,7 +393,7 @@ describe("DashboardView — access per block", () => {
     expect(html).toContain('aria-label="Văn bản &amp; Đơn thư"');
     expect(html).toContain('aria-label="Phản ánh người dân"');
     expect(html).toContain("Giải ngân ngân sách");
-    expect(html).toContain("Thu – Chi ngân sách");
+    expect(html).toContain("Thu - Chi ngân sách xã");
     // the prototype's subline: the period, then the instant the figures were read, on one line
     expect(html).toContain("Kỳ tháng này: 1/9/2026 – 30/9/2026 · tính đến 16:43 28/09/2026");
     // what "kỳ trước" means — visible text, not a hover-only tooltip
@@ -492,7 +492,7 @@ describe("layout — the prototype frame (owner, 05/10/2026)", () => {
       "Nhiệm vụ",
       "Văn bản &amp; Đơn thư",
       "Giải ngân ngân sách",
-      "Thu – Chi ngân sách",
+      "Thu - Chi ngân sách xã",
       "Phản ánh người dân",
       "Kinh tế &amp; Tài nguyên",
       "Cần xử lý ngay",
@@ -688,5 +688,79 @@ describe("composition — the prototype's Panel / MetricTile / alert row (ADR 00
     expect(pressed).toContain("bg-primary");
     expect(html).toContain('role="group" aria-label="Kỳ báo cáo"');
     for (const f of ["PDF", "XLSX", "PPTX"]) expect(html).toMatch(new RegExp(`<button[^>]*disabled=""[^>]*><svg[^>]*>.*?</svg>${f}</button>`));
+  });
+});
+
+describe("/tong-quan is untouched by /bao-cao's tile (owner 09/10/2026: D4 and D6 are report-only)", () => {
+  const ALL = blockVisibility(["report.read", "task.read", "document.read", "feedback.read", "budget.read"]);
+  const rep: petitions_citizenReportSummaryOut = { received: 3, in_progress: 1, on_time_sample: 2, on_time: 1, late: 1 };
+  const fiscal: finance_chiSoNamRa = {
+    year: 2026,
+    revenue_achievement: { name: "Thu đạt dự toán", basis_points: 7350 },
+    expenditure_achievement: { name: "Chi đạt dự toán", basis_points: 9130 },
+    balance: { amount: 9_640_000_000 },
+    revenue_totals: [{ column_id: "c1", name: "Thu xã hưởng", value: 690_000_000 }],
+  };
+  const data: DashboardData = {
+    ...emptyData(),
+    tasks: { current: ok({ ...TASKS_ZERO, overdue: 2, completed: 9 }), previous: ok({ ...TASKS_ZERO, completed: 8 }) },
+    citizenReports: { current: ok(rep), previous: ok(rep) },
+    fiscal: ok(fiscal),
+  };
+  const dashboard = renderToStaticMarkup(<DashboardView data={data} visible={ALL} onPeriodChange={() => {}} />);
+  const report = renderToStaticMarkup(
+    <DashboardBlocks data={data} visible={ALL} onReload={() => {}} layout="report" />,
+  );
+  const fiscalLabels = (html: string) => {
+    const block = /<section[^>]*data-block="fiscal".*?<\/section>/s.exec(html)?.[0] ?? "";
+    return [...block.matchAll(/<span class="[^"]*text-\[12px\][^"]*">([^<]*)<\/span>/g)].map((m) => m[1]);
+  };
+
+  it("Tổng quan: every figure is still a link to its list; Báo cáo: none is", () => {
+    expect(dashboard).toContain('aria-label="Xem danh sách đằng sau: Quá hạn"');
+    expect(dashboard).toContain('href="/nhiem-vu?metric=overdue"');
+    expect(report).not.toContain("<a ");
+  });
+
+  it("Tổng quan: an overdue count is still red; Báo cáo: no red value", () => {
+    expect(valueOf(dashboard, "tasks-overdue")).toBe("2");
+    expect(/<li[^>]*>(?:(?!<\/li>).)*metric=overdue(?:(?!<\/li>).)*<\/li>/s.exec(dashboard)?.[0]).toContain("text-danger-600");
+    expect(report).not.toContain("text-danger-600");
+  });
+
+  it("Tổng quan: the tile-scaled value size (12cqi) and its own delta line; Báo cáo: the prototype's 1.7vw", () => {
+    expect(dashboard).toContain("text-[clamp(16px,12cqi,26px)]");
+    expect(dashboard).not.toContain("1.7vw");
+    expect(dashboard).not.toContain("chưa có kỳ trước để so");
+    expect(report).toContain("text-[clamp(19px,1.7vw,26px)]");
+    expect(report).not.toContain("12cqi");
+  });
+
+  it("Tổng quan keeps 'Nhận vào trong kỳ'; Báo cáo says 'Tiếp nhận trong kỳ'", () => {
+    expect(dashboard).toContain("Nhận vào trong kỳ");
+    expect(dashboard).not.toContain("Tiếp nhận trong kỳ");
+    expect(report).toContain("Tiếp nhận trong kỳ");
+  });
+
+  it("Tổng quan's fiscal block: its order and its sums; only the title changed", () => {
+    expect(dashboard).toContain('aria-label="Thu - Chi ngân sách xã"');
+    expect(valueOf(dashboard, "fiscal-balance")).toBe("9,64 tỷ đồng");
+    expect(dashboard).toContain("690 triệu đồng");
+    expect(dashboard).not.toContain(pendingMarkerLabel("Tổng chi"));
+    const order = /<section[^>]*data-block="fiscal".*?<\/section>/s.exec(dashboard)?.[0] ?? "";
+    const at = ["Thu đạt dự toán", "Chi đạt dự toán", NHAN_CHENH_LECH, "Thu xã hưởng"].map((l) => order.indexOf(`>${l}<`));
+    expect(at.every((i) => i >= 0)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+    expect(fiscalLabels(report)).toEqual(["Thu đạt dự toán", "Thu xã hưởng", "Chi đạt dự toán", "Tổng chi", NHAN_CHENH_LECH]);
+  });
+
+  it("Tổng quan's '?' keeps PendingMarker's default look; Báo cáo restyles it", () => {
+    const marker = (html: string) =>
+      /<button[^>]*aria-label="Giải ngân ngân sách — [^"]*"[^>]*class="([^"]*)"/.exec(html)?.[1] ??
+      /<button[^>]*class="([^"]*)"[^>]*aria-label="Giải ngân ngân sách — /.exec(html)?.[1] ??
+      "";
+    expect(marker(dashboard)).toContain("size-[18px]");
+    expect(marker(dashboard)).not.toContain("size-3.5");
+    expect(marker(report)).toContain("size-3.5");
   });
 });
