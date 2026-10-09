@@ -120,8 +120,9 @@ func (s *Server) ResolveCitizenSession(ctx context.Context, req *identityv1.Reso
 	// CITIZEN_SESSION_TTL (720h): without this check, deactivating a commune left every citizen
 	// session already open in it working for up to a month. HERE AND NOT AT EACH CITIZEN EDGE because
 	// this RPC is the ONE place every citizen request of every service passes through (core/httpx's
-	// CitizenEdge reaches a session only via core/identityclient → this RPC; identity has no citizen
-	// HTTP edge), so one check covers every edge that exists and every edge mounted later.
+	// CitizenEdge reaches a session only via core/identityclient → this RPC; identity's own citizen edge
+	// calls this same method in-process, CitizenEdgeSessions), so one check covers every edge that
+	// exists and every edge mounted later.
 	//
 	// Cached by tenant.CachedCommune with TENANT_CACHE_TTL — the same window Host resolution gives a
 	// deactivated commune's staff, so "stops within ~30 s" is true for its citizens too.

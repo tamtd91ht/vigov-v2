@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/vihat/vigov/core/config"
+	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/platformclient"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-identity/internal/app"
@@ -79,7 +80,67 @@ func dungNgoaiThu(t *testing.T) (http.Handler, *canBoDanhDau) {
 	svchttp.RegisterCongKhai(mux, svchttp.DepsCongKhai{Xa: xaTheoHostThu{}, DanhBa: danhBaThu{}, Profile: profileStub{},
 		CitizenSessions: signInStub{}})
 	cb := &canBoDanhDau{}
-	return dungNgoai(cb, dungBienCongKhai(mux, nguon, slog.New(slog.DiscardHandler))), cb
+	citizenMux := http.NewServeMux()
+	svchttp.RegisterCitizen(citizenMux, svchttp.DepsCitizen{ResidentialUnits: activeUnitsStub{}})
+	citizen := buildCitizenEdge(citizenMux, citizenSessionsStub{}, nguon, slog.New(slog.DiscardHandler))
+	return dungNgoai(cb, dungBienCongKhai(mux, nguon, slog.New(slog.DiscardHandler)), citizen), cb
+}
+
+// citizenSessionsStub knows one citizen session, in the test commune.
+type citizenSessionsStub struct{}
+
+const citizenTokenStub = "citizen-token-FAKE"
+
+// vi-name-ok: implements the existing httpx.CitizenSessions interface method.
+func (citizenSessionsStub) TraCuu(_ context.Context, tok string) (httpx.CitizenSession, bool, error) {
+	if tok != citizenTokenStub {
+		return httpx.CitizenSession{}, false, nil
+	}
+	return httpx.CitizenSession{ID: "sid-1", CitizenID: "citizen-1", TenantID: ulidThu}, true, nil
+}
+
+type activeUnitsStub struct{}
+
+func (activeUnitsStub) ActiveUnits(ctx context.Context) ([]domain.ActiveResidentialUnit, error) {
+	tenant.MustFrom(ctx) // the session's commune must be in context before the read
+	return []domain.ActiveResidentialUnit{{ID: "tt-1", Name: "Thôn Một"}}, nil
+}
+
+// GET /api/v1/my-residential-units rides the CITIZEN chain on the reserved host: a citizen session is
+// served (with CORS for the Mini App origin), no session is the citizen chain's 401 — never the staff
+// chain — and the staff list and anything under the citizen path stay on the staff chain.
+func TestMyResidentialUnitsOnCitizenChain(t *testing.T) {
+	h, cb := dungNgoaiThu(t)
+	r := httptest.NewRequest(http.MethodGet, "https://"+hostApiIdentity+svchttp.MyResidentialUnitsPath, nil)
+	r.Host = hostApiIdentity
+	r.Header.Set("Origin", nguonMiniAppThu)
+	r.Header.Set("Authorization", "Bearer "+citizenTokenStub)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusOK || cb.goi != 0 || !strings.Contains(w.Body.String(), "Thôn Một") {
+		t.Fatalf("status %d, staff chain hit %d, body %s", w.Code, cb.goi, w.Body.String())
+	}
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != nguonMiniAppThu {
+		t.Errorf("Access-Control-Allow-Origin = %q", got)
+	}
+
+	h, cb = dungNgoaiThu(t)
+	if w := goiThu(h, http.MethodGet, svchttp.MyResidentialUnitsPath, ""); w.Code != http.StatusUnauthorized || cb.goi != 0 {
+		t.Fatalf("no session: status %d, staff chain hit %d — want the citizen chain's 401", w.Code, cb.goi)
+	}
+
+	h, cb = dungNgoaiThu(t)
+	if w := goiThu(h, http.MethodOptions, svchttp.MyResidentialUnitsPath, nguonMiniAppThu); w.Code != http.StatusNoContent || cb.goi != 0 {
+		t.Fatalf("preflight: status %d, staff chain hit %d", w.Code, cb.goi)
+	}
+
+	for _, p := range []string{"/api/v1/residential-units", svchttp.MyResidentialUnitsPath + "/x"} {
+		h, cb = dungNgoaiThu(t)
+		goiThu(h, http.MethodGet, p, "")
+		if cb.goi != 1 {
+			t.Errorf("%s: staff chain hit %d times, want 1 (exact path only)", p, cb.goi)
+		}
+	}
 }
 
 func goiThu(h http.Handler, method, path, origin string) *httptest.ResponseRecorder {

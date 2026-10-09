@@ -25,7 +25,8 @@ import (
 // per-call ceiling is a contract fact and is enforced in internal/grpc.
 
 // activeResidentialUnit is the "may be written" predicate. ANY PICKER OFFERING UNITS FOR A PETITION
-// MUST USE THE SAME ONE (identity.proto, ResolveActiveResidentialUnits) — change both in one commit.
+// MUST USE THE SAME ONE (identity.proto, ResolveActiveResidentialUnits) — ActiveUnits below, the citizen
+// picker, does, by this constant.
 const activeResidentialUnit = "deleted_at IS NULL AND dang_dung"
 
 // ActiveUnitsByID returns the requested units that are live and in use in this commune, with their
@@ -53,6 +54,45 @@ func (s *ThonToDanPhoStore) ActiveUnitsByID(ctx context.Context, ids []string) (
 	// refuses a real hamlet as "no longer receiving petitions".
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("thon_to_dan_pho: duyệt đơn vị đang dùng: %w", err)
+	}
+	return out, nil
+}
+
+// ActiveUnits lists every unit of this commune a petition may carry — the Mini App petition form's
+// picker, GET /api/v1/my-residential-units (owner decision 09/10/2026, ADR 0088 "Còn mở" #2).
+//
+// THE SAME PREDICATE AS ActiveUnitsByID, by the shared constant: a unit the picker offers must be a unit
+// ResolveActiveResidentialUnits accepts when petitions writes it, or the citizen picks a hamlet and the
+// send is refused. Ordered as the commune's own list (truyVanThonToDanPho): rank, then name, then the
+// per-commune-unique `ma`, so the order is total.
+//
+// Only `id` and `ten` are read — never the head of the unit (a person) nor the counts: nothing the
+// citizen surface does not show can leave through a column that is not selected.
+//
+// Ceiling PLUS ONE, refused rather than truncated, for DanhSach's reason: a short picker is a hamlet a
+// citizen cannot choose, and nothing on the screen says so.
+func (s *ThonToDanPhoStore) ActiveUnits(ctx context.Context) ([]domain.ActiveResidentialUnit, error) {
+	rows, err := s.db.For(ctx).Query(ctx, `id, ten`, "thon_to_dan_pho",
+		"AND "+activeResidentialUnit+" ORDER BY sort_order, ten, ma LIMIT $2", TranDanhSachThonToDanPho+1)
+	if err != nil {
+		return nil, fmt.Errorf("thon_to_dan_pho: list active units: %w", err)
+	}
+	defer rows.Close()
+
+	out := make([]domain.ActiveResidentialUnit, 0, 32)
+	for rows.Next() {
+		var u domain.ActiveResidentialUnit
+		if err := rows.Scan(&u.ID, &u.Name); err != nil {
+			return nil, fmt.Errorf("thon_to_dan_pho: scan active unit: %w", err)
+		}
+		out = append(out, u)
+	}
+	// Checked: a connection lost mid-result ends the loop like a complete read — a short picker.
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("thon_to_dan_pho: iterate active units: %w", err)
+	}
+	if len(out) > TranDanhSachThonToDanPho {
+		return nil, ErrQuaNhieuThonToDanPho
 	}
 	return out, nil
 }

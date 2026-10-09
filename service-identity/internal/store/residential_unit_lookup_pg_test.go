@@ -77,3 +77,26 @@ func TestPgResidentialUnitNamesIncludeOutOfUseAndRemovedAndStayInCommune(t *test
 		t.Errorf("số dòng = %d, muốn 3", len(got))
 	}
 }
+
+// The citizen picker's list (GET /api/v1/my-residential-units): the decision read's predicate over the
+// whole commune — in use and live only, this commune only — in the commune's rank order, ids and names
+// only.
+func TestPgActiveUnitsListsOnlyInUseUnitsOfThisCommuneInRankOrder(t *testing.T) {
+	db := moKetNoi(t)
+	xa, otherXa := xaRieng(t)
+	seedResidentialUnits(t, db, xa, otherXa)
+	// A second in-use unit ranked BEFORE the first, so the order is the rank and not the name.
+	themThonToDanPho(t, db, xa, "tt-first", "thon-xuan", "Thôn Xuân", "")
+	if _, err := db.Exec(`UPDATE thon_to_dan_pho SET sort_order = CASE id WHEN 'tt-first' THEN 1 ELSE 2 END
+		WHERE tenant_id = $1 AND id IN ('tt-first', 'tt-active')`, xa); err != nil {
+		t.Fatalf("xếp hạng thôn: %v", err)
+	}
+
+	got, err := dungThonToDanPhoStore(db).ActiveUnits(ctxXa(xa))
+	if err != nil {
+		t.Fatalf("ActiveUnits: %v", err)
+	}
+	if len(got) != 2 || got[0].ID != "tt-first" || got[1].ID != "tt-active" || got[1].Name != "Thôn Bình An" {
+		t.Fatalf("danh sách = %+v, muốn [tt-first, tt-active] theo hạng (ngưng dùng / đã xoá / xã khác phải vắng)", got)
+	}
+}
