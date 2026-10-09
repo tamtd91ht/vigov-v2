@@ -1056,6 +1056,19 @@ COMMIT_PUSH_CASES = [
     ([], set(), 0, False, "phiên không viết gì — im"),
 ]
 
+# A builder still running owns half-written files: blocking on them told the main session to
+# commit red code (09/10/2026). Its files wait until the task-notification says it finished —
+# and a RESUMED agent is running again even though an older "completed" exists.
+_N = "<task-notification><task-id>abc123</task-id><status>{}</status></task-notification>"
+AGENT_RUNNING_CASES = [
+    ("abc123", 'launched agentId: abc123', True, "đã giao, chưa báo xong — đang chạy"),
+    ("abc123", "agentId: abc123 " + _N.format("completed"), False, "đã báo completed"),
+    ("abc123", "agentId: abc123 " + _N.format("failed"), False, "đã báo failed"),
+    ("abc123", "agentId: abc123 " + _N.format("completed") + ' "resumedAgentId":"abc123"', True,
+     "báo xong rồi được chạy tiếp — đang chạy lại"),
+    ("zzz999", "agentId: abc123", False, "không phải agent của phiên này — coi như đã xong"),
+]
+
 # Transcripts record absolute Windows paths, sometimes with escaped backslashes; git reports
 # repo-relative forward-slash paths. A mapping that misses one shape makes every dirty file look
 # foreign, and the guard goes silent for the wrong reason.
@@ -1498,6 +1511,13 @@ def chay_thuan() -> list[tuple[str, str, bool, bool]]:
         print(f"{mark} [{want}] {'commit_push_guard.problems':24s} {nhan}")
         if not ok:
             sai.append((str(written), nhan, mong, duoc))
+    for aid, text, mong, nhan in AGENT_RUNNING_CASES:
+        duoc = cpg.agent_running(aid, text)
+        ok = duoc == mong
+        mark = "  OK   " if ok else "  FAIL "
+        print(f"{mark} [{'CHẠY' if mong else 'XONG'}] {'commit_push_guard.agent_running':24s} {nhan}")
+        if not ok:
+            sai.append((aid, nhan, mong, duoc))
     for duong, goc, mong, nhan in REPO_PATH_CASES:
         duoc = cpg.to_repo_path(duong, goc)
         ok = duoc == mong

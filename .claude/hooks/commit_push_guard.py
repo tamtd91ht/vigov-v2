@@ -60,11 +60,45 @@ def to_repo_path(path: str, root: str) -> str | None:
     return p[2:] if p.startswith("./") else p
 
 
+_DONE = ("completed", "failed", "stopped", "killed")
+
+
+def agent_running(agent_id: str, main_text: str) -> bool:
+    """Pure: is this background subagent still working, judged from the MAIN transcript?
+
+    Finished = a task-notification for it with a terminal status, AFTER its last resume. A builder
+    that is still running owns half-written files: blocking on them (09/10/2026, measured) told the
+    main session to commit red code — the opposite of "code XONG là commit". So its files wait.
+    """
+    done = [m.start() for m in re.finditer(
+        r"<task-id>" + re.escape(agent_id) + r"</task-id>.{0,600}?<status>(?:"
+        + "|".join(_DONE) + r")</status>", main_text, re.S)]
+    resumed = [m.start() for m in re.finditer(
+        r'resumedAgentId\\*"\s*:\s*\\*"' + re.escape(agent_id), main_text)]
+    launched = agent_id in main_text
+    if not launched:
+        return False
+    last_done = max(done) if done else -1
+    last_resume = max(resumed) if resumed else -1
+    return last_done < 0 or last_resume > last_done
+
+
 def transcripts(main_path: str) -> list[str]:
-    """The main transcript plus every subagent transcript of the same session."""
-    out = [main_path] if main_path and os.path.exists(main_path) else []
+    """The main transcript plus the transcripts of subagents that have FINISHED."""
+    if not main_path or not os.path.exists(main_path):
+        return []
+    try:
+        with open(main_path, encoding="utf-8", errors="ignore") as f:
+            main_text = f.read()
+    except Exception:
+        main_text = ""
+    out = [main_path]
     base = main_path[:-6] if main_path.endswith(".jsonl") else main_path
-    out += sorted(glob.glob(os.path.join(base, "subagents", "*.jsonl")))
+    for tp in sorted(glob.glob(os.path.join(base, "subagents", "*.jsonl"))):
+        name = os.path.basename(tp)[:-6]
+        agent_id = name[len("agent-"):] if name.startswith("agent-") else name
+        if not agent_running(agent_id, main_text):
+            out.append(tp)
     return out
 
 
