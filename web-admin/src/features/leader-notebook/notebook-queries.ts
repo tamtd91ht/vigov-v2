@@ -97,7 +97,8 @@ export const NO_FIGURE = "—";
 export const NO_ACCESS_SENTENCE =
   "Sổ tay lãnh đạo đọc từ sổ nhiệm vụ của xã. Tài khoản của bạn chưa được cấp quyền xem nhiệm vụ.";
 
-/** A sub-task row says whose child it is (ADR 0071: sub-tasks are in the overdue column). */
-export function childOfText(parentCode: string): string {
-  return `việc con của ${parentCode}`;
-}
+/**
+ * A sub-task row says whose child it is (ADR 0071: sub-tasks are in the overdue column):
+ * `việc con của NV19`, the code drawn apart (spec 03 §B).
+ */
+export const CHILD_OF_PREFIX = "việc con của";

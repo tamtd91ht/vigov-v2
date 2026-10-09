@@ -41,6 +41,7 @@ const { Toaster } = await import("@/components/ui/toaster");
 const { SIDEBAR_STORAGE_KEY } = await import("@/components/sidebar-state");
 const { DisbursementPreview, ProjectDetailPreview } = await import("./disbursement-preview");
 const { TaskPreview } = await import("./tasks-preview");
+const { NotebookPreview } = await import("./notebook-preview");
 const { PREVIEW_TASK_PERMISSIONS } = await import("./shell.fixture");
 const { DocumentsPreview } = await import("./documents-preview");
 const { PREVIEW_DOCUMENT_PERMISSIONS } = await import("./shell.fixture");
@@ -210,6 +211,43 @@ describe("preview — Nhiệm vụ", () => {
     expect(dialog.textContent).toContain("Còn hai thôn chưa nộp phiếu rà soát");
     expect(dialog.textContent).toContain("Đề nghị gửi bản tổng hợp trước ngày họp giao ban");
     expect(dialog.textContent).toContain("bao-cao-tien-do-dot-1.pdf");
+    expect(network).not.toHaveBeenCalled();
+  });
+});
+
+describe("preview — Sổ tay lãnh đạo", () => {
+  const mountNotebook = (open: string | null) =>
+    mount("/xem-thu/nhiem-vu/so-tay", <NotebookPreview open={open} />, false, "", PREVIEW_TASK_PERMISSIONS, "lanh-dao");
+
+  it("the real notebook on the fixture: three columns, every row variant, Sổ tay lit, no network", async () => {
+    const el = await mountNotebook(null);
+    await settle(600);
+    // The menu lights what it lights on the real `/nhiem-vu/so-tay` (the menu itself is out of scope here).
+    expect([...el.querySelectorAll('.side-nav a[aria-current="page"]')].map((a) => a.getAttribute("href"))).toContain("/nhiem-vu");
+    const text = el.querySelector(".leader-notebook")!.textContent!;
+    expect(text).toContain("Khắc phục đèn chiếu sáng hỏng trên tuyến đường liên thôn"); // late, column 1
+    expect(text).toMatch(/· trễ \d+ ngày/);
+    expect(text).toContain("đã gia hạn 1 lần"); // NV107, waiting for approval
+    expect(text).toContain("việc con của NV105");
+    expect(text).toContain("Tạm dừng"); // NV110's badge
+    expect(text).toContain("Rà soát, cập nhật danh sách hộ nghèo"); // the extension request
+    // Badges are the fixture's server counts.
+    expect([...el.querySelectorAll(".notebook-count")].map((b) => b.textContent)).toEqual(["1", "3", "11"]);
+    expect(document.querySelector("dialog")).toBeNull();
+    expect(network).not.toHaveBeenCalled();
+  });
+
+  it("?mo=NV105 presses that row: the real detail drawer opens in place", async () => {
+    await mountNotebook("NV105");
+    await settle(800);
+    const dialog = document.querySelector("dialog[open]")!;
+    expect(dialog.querySelector("header")!.textContent).toContain("NV105");
+    // One drawer, no record tabs (the register's `[NV105]` tab label is absent).
+    expect(dialog.querySelector('[role="tablist"]')).toBeNull();
+    expect(dialog.textContent).not.toContain("[NV105]");
+    expect(dialog.textContent).toContain("Thu thập phiếu rà soát hộ gia đình thôn Bình An");
+    expect(dialog.textContent).not.toContain("chưa có dữ liệu mẫu");
+    expect(window.location.pathname).toBe("/xem-thu/nhiem-vu/so-tay");
     expect(network).not.toHaveBeenCalled();
   });
 });

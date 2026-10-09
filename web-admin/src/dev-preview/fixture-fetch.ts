@@ -45,6 +45,7 @@ import {
   PREVIEW_WORKING_HOURS,
   previewTask,
   previewTaskCounts,
+  previewTaskExtensionHistory,
   previewTaskExtensions,
   previewTaskLog,
   previewTasks,
@@ -200,6 +201,8 @@ function answerTasks(p: string, q: URLSearchParams): Response | null {
   if (p === "/api/v1/tasks") return json(previewTasks(taskQuery(q)));
   if (p === "/api/v1/task-counts") return json(previewTaskCounts(taskQuery(q)));
   if (p === "/api/v1/task-extensions") return json(previewTaskExtensions(q.get("task")));
+  // The Sổ tay's `Duyệt lùi hạn` badge: the same queue, counted (its one request names the leader).
+  if (p === "/api/v1/task-extension-counts") return json({ count: previewTaskExtensions(q.get("task")).items.length });
   const m = /^\/api\/v1\/tasks\/([^/]+)(\/.*)?$/.exec(p);
   if (m === null) return null;
   const code = decodeURIComponent(m[1]!);
@@ -211,6 +214,9 @@ function answerTasks(p: string, q: URLSearchParams): Response | null {
     const log = previewTaskLog(code);
     return log === null ? refuse(404, "Không tìm thấy nhiệm vụ.") : json(log);
   }
+  // Lịch sử gia hạn — the Sổ tay preview's drawer reads it too (the Nhiệm vụ preview answers it in
+  // its own wrapper first, `tasks-preview.tsx`; same fixture function, same answer).
+  if (m[2] === "/extensions") return json(previewTaskExtensionHistory(code));
   // `…/attachments/{id}/download`: there is no stored object behind the fixture — said, not faked.
   if (/^\/attachments\/[^/]+\/download$/.test(m[2])) return refuse(409, PREVIEW_NO_FILE);
   return refuse(404, NO_FIXTURE);
@@ -320,5 +326,8 @@ function taskQuery(q: URLSearchParams): PreviewTaskQuery {
     late: q.get("late") === "true",
     roots: q.get("roots") === "true",
     documents: q.get("include") === "documents",
+    metric: one("metric"),
+    scope: one("scope"),
+    incomplete: q.get("incomplete") === "true",
   };
 }

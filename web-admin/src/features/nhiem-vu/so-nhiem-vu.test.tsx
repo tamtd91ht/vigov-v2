@@ -1801,7 +1801,9 @@ describe("§5.4 — form `✎ Sửa`", () => {
     expect(src).toContain("const stale = changedSince(await docLai(), goc.nhiemVu.updated_at);");
     expect(src).toContain("toast.error(stale ? `${kq.thongBao} ${TASK_CHANGED_NOTE}` : kq.thongBao);");
     expect(src).toContain("if (than === null) {\n      xong();\n      return;\n    }");
-    expect(src).toContain('guiDrawer({ loai: "docLai", ma: code });');
+    // The drawer's wiring lives in `task-detail-host.tsx` since 09/10/2026 (one wiring for every screen).
+    const host = readFileSync(fileURLToPath(new URL("./task-detail-host.tsx", import.meta.url)), "utf8");
+    expect(host).toContain('dispatch({ loai: "docLai", ma: code });');
     expect(src).not.toMatch(/dueTime: "1\d:\d\d"/);
   });
 
@@ -2714,7 +2716,8 @@ describe("the filter row — ONE row in the prototype's order, no `Bộ lọc` p
     expect(page).not.toContain("Đóng biểu mẫu giao việc");
     expect(page).toContain("<FormGiaoViec\n          dialog");
     // `+ Thêm việc con` opens the SAME dialog (stacked over the detail panel).
-    expect(page).toContain("key={drawer.nhiemVu.code}\n                      dialog");
+    const host = readFileSync(fileURLToPath(new URL("./task-detail-host.tsx", import.meta.url)), "utf8");
+    expect(host).toContain("key={task.code}\n                  dialog");
     // Phản ánh `Tạo nhiệm vụ` opens the SAME form as the prototype's dialog too (06/10/2026).
     const petition = readFileSync(fileURLToPath(new URL("../phan-anh/petition-task.tsx", import.meta.url)), "utf8");
     expect(petition).toMatch(/<FormGiaoViec\s+dialog/);
@@ -2830,6 +2833,7 @@ describe("NV-09 → hộp chi tiết lớn (ADR 0068 §Sửa đổi 05/10/2026):
   // The behaviour itself (click → dialog + one pushed entry, `?task=` → dialog, close → focus back)
   // is exercised in a DOM in `task-detail-dialog.test.tsx`.
   const SRC = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
+  const HOST = readFileSync(fileURLToPath(new URL("./task-detail-host.tsx", import.meta.url)), "utf8");
 
   it("chỉ hai chỗ phát lệnh mở: hàm `openDrawer` và đường `?task=` lúc tải", () => {
     expect(SRC).toContain(
@@ -2848,7 +2852,10 @@ describe("NV-09 → hộp chi tiết lớn (ADR 0068 §Sửa đổi 05/10/2026):
     // The three views and the child list hand `openDrawer` itself down (07/10/2026: the views'
     // wrappers went with the rewrite).
     expect(SRC.split("moNhiemVu={openDrawer}").length - 1).toBe(3);
-    expect(SRC.split("openTask={openDrawer}").length - 1).toBe(1);
+    // The child list is the drawer's (`task-detail-host.tsx` since 09/10/2026): it dispatches the
+    // same `mo` as `openDrawer`, through the dispatcher this screen hands it.
+    expect(SRC.split("dispatch={guiDrawer}").length - 1).toBe(1);
+    expect(HOST.split('openTask={(n) => dispatch({ loai: "mo", nhiemVu: n })}').length - 1).toBe(1);
     // 2 → 1 on 07/10/2026: `Việc cha` (open by code) left the drawer (owner #6); Back/Forward remains.
     expect(SRC.split("openDrawer(kq.duLieu);").length - 1).toBe(1);
   });
@@ -2856,7 +2863,8 @@ describe("NV-09 → hộp chi tiết lớn (ADR 0068 §Sửa đổi 05/10/2026):
   it("thanh địa chỉ theo MÃ ĐANG MỞ, ở một chỗ; chi tiết vẽ trong `LargeDialog`", () => {
     // With record tabs the address names the ACTIVE tab while the panel is shown (`shownCode`).
     expect(SRC.split("useTaskDialogUrl(shownCode,").length - 1).toBe(1);
-    expect(SRC).toContain("<LargeDialog\n          titleId={TASK_DETAIL_TITLE_ID}");
+    expect(SRC.split("<TaskDetailHost").length - 1).toBe(1);
+    expect(HOST).toContain("<LargeDialog titleId={TASK_DETAIL_TITLE_ID}");
   });
 });
 

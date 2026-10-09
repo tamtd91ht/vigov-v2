@@ -3,10 +3,12 @@ import type { RawSearchParams } from "@/lib/drill-down";
 /**
  * `/nhiem-vu?task=<register code>` — open the register with ONE task's detail open.
  *
- * WHY A LINK AND NOT A SECOND DRAWER: the detail (`ChiTietNhiemVu`) is wired to the register through
- * some twenty-five props — status moves, extension requests, the log, documents, reassignment — and a
- * second wiring on another screen (the Sổ tay lãnh đạo) is a second copy that drifts. Other screens
- * link here instead.
+ * THE DETAIL HAS ONE WIRING: `TaskDetailHost` (`task-detail-host.tsx`) — some twenty-five props of
+ * status moves, extension requests, the log, documents, reassignment. A screen that shows the detail
+ * MOUNTS that host (the register, with its record tabs; the Sổ tay lãnh đạo, one drawer in place, owner
+ * 09/10/2026), never a copy of the wiring — a second copy drifts. Screens that do not mount it link
+ * here instead. This parameter is the REGISTER's: the Sổ tay opens its drawer without touching the
+ * address bar, so it never writes `?task=` on its own page.
  *
  * The value is the commune's REGISTER CODE (`NV19`), a business code, never an internal id and never
  * personal data — so it may sit in the address bar (rule 3, forbidden #4). It GRANTS NOTHING: the

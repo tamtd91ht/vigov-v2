@@ -2,10 +2,9 @@ import { CircleCheck, LoaderCircle, TriangleAlert, UserCheck, type LucideIcon } 
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/error-state";
 import { SkeletonRows } from "@/components/ui/skeleton";
-import type { BangNhanTrangThai } from "@/features/nhiem-vu/nhan-nhiem-vu"; // vi-name-ok: existing type of the commune's status labels
+import type { BangNhanTrangThai } from "@/features/nhiem-vu/nhan-nhiem-vu"; // vi-name-ok: existing type of the status labels
 import type { DanhBaTheoMa } from "@/features/phan-anh/nhan-phieu"; // vi-name-ok: existing staff-directory lookup type
 import type { petitions_deNghiChoDuyetRa, petitions_nhiemVuRa } from "@/lib/api/schema.gen"; // vi-name-ok: generated contract types
 import { cn } from "@/lib/cn";
@@ -28,8 +27,9 @@ import {
 import { ExtensionMiniList, TaskMiniList } from "./task-mini-list";
 
 /**
- * The three columns of the Sổ tay lãnh đạo — DRAWING ONLY, no network (`leader-notebook.tsx` reads).
- * Split out so every state (loading, error, empty, hidden group) renders under `react-dom/server`.
+ * The three columns of the Sổ tay lãnh đạo — DRAWING ONLY, no network (`leader-notebook.tsx` reads
+ * and owns the drawer a row opens). Split out so every state (loading, error, empty, hidden group)
+ * renders under `react-dom/server`.
  *
  * EMPTY IS NEVER AN ERROR, AND AN ERROR IS NEVER EMPTY. "Không có việc nào." drawn because a read
  * failed is a leader believing the commune is on time. A failed read shows the server's sentence,
@@ -62,6 +62,10 @@ export type NotebookViewProps = {
   readonly directory: DanhBaTheoMa | null;
   readonly statusLabels: BangNhanTrangThai;
   readonly now: Date;
+  /** A task row was pressed: open its drawer on this page. */
+  readonly onOpenTask: (task: petitions_nhiemVuRa) => void;
+  /** An extension-request row was pressed: open its TASK's drawer. */
+  readonly onOpenRequest: (request: petitions_deNghiChoDuyetRa) => void;
 };
 
 /** The figure for a badge: the server's count, or `—` while it is unknown. Never a row count. */
@@ -79,35 +83,50 @@ export function approvalFigure(groups: readonly Loaded<number>[]): string {
   return String(total);
 }
 
-export function NotebookView({ pastDue, completion, extensions, assigned, directory, statusLabels, now }: NotebookViewProps) {
+/**
+ * The prototype's grid (`LeaderNotebook.tsx:74`): three columns, ONE column at 1280px and below.
+ * `items-start` (spec 03 A5, owner 09/10/2026): each column is as tall as its content, so a short
+ * column does not stretch an empty white body down to the longest one.
+ */
+export const NOTEBOOK_GRID_CLASS = "leader-notebook grid min-w-0 grid-cols-3 items-start gap-4 max-[1280px]:grid-cols-1";
+
+export function NotebookView({
+  pastDue,
+  completion,
+  extensions,
+  assigned,
+  directory,
+  statusLabels,
+  now,
+  onOpenTask,
+  onOpenRequest,
+}: NotebookViewProps) {
   const approvalGroups = completion === null ? [extensions.count] : [completion.count, extensions.count];
   const groupsDone = [extensions.list.load, ...(completion === null ? [] : [completion.list.load])];
   const approvalAllEmpty = groupsDone.every((l) => l.phase === "done" && l.value.length === 0);
+  function taskList(title: string) {
+    return function renderTasks(tasks: readonly petitions_nhiemVuRa[]) {
+      return <TaskMiniList tasks={tasks} directory={directory} statusLabels={statusLabels} now={now} label={title} onOpen={onOpenTask} />;
+    };
+  }
 
-  // The prototype's grid: three columns, ONE column at 1280px and below (`max-[1280px]:grid-cols-1`).
   return (
-    <div className="leader-notebook grid min-w-0 grid-cols-3 gap-4 max-[1280px]:grid-cols-1">
+    <div className={NOTEBOOK_GRID_CLASS}>
       <NotebookColumn
         id="notebook-overdue"
         icon={TriangleAlert}
-        iconClass={TONE_DANGER}
+        tone={TONE_DANGER}
         title={OVERDUE_TITLE}
         figure={figure(pastDue.count)}
         countError={pastDue.count.phase === "error" ? pastDue.count.message : null}
       >
-        <ListBody
-          state={pastDue.list}
-          empty={<ColumnEmpty />}
-          render={(tasks) => (
-            <TaskMiniList tasks={tasks} directory={directory} statusLabels={statusLabels} now={now} label={OVERDUE_TITLE} />
-          )}
-        />
+        <ListBody state={pastDue.list} empty={<ColumnEmpty />} render={taskList(OVERDUE_TITLE)} />
       </NotebookColumn>
 
       <NotebookColumn
         id="notebook-approval"
         icon={CircleCheck}
-        iconClass={TONE_APPROVAL}
+        tone={TONE_VIOLET}
         title={APPROVAL_TITLE}
         figure={approvalFigure(approvalGroups)}
         countError={null}
@@ -121,15 +140,7 @@ export function NotebookView({ pastDue, completion, extensions, assigned, direct
                 <ListBody
                   state={completion.list}
                   empty={<GroupEmpty sentence={COMPLETION_GROUP_EMPTY} />}
-                  render={(tasks) => (
-                    <TaskMiniList
-                      tasks={tasks}
-                      directory={directory}
-                      statusLabels={statusLabels}
-                      now={now}
-                      label={COMPLETION_GROUP_TITLE}
-                    />
-                  )}
+                  render={taskList(COMPLETION_GROUP_TITLE)}
                 />
               </Group>
             )}
@@ -138,7 +149,7 @@ export function NotebookView({ pastDue, completion, extensions, assigned, direct
                 state={extensions.list}
                 empty={<GroupEmpty sentence={EXTENSION_GROUP_EMPTY} />}
                 render={(requests) => (
-                  <ExtensionMiniList requests={requests} directory={directory} label={EXTENSION_GROUP_TITLE} />
+                  <ExtensionMiniList requests={requests} directory={directory} label={EXTENSION_GROUP_TITLE} onOpen={onOpenRequest} />
                 )}
               />
             </Group>
@@ -149,39 +160,33 @@ export function NotebookView({ pastDue, completion, extensions, assigned, direct
       <NotebookColumn
         id="notebook-assigned"
         icon={UserCheck}
-        iconClass={TONE_BRAND}
+        tone={TONE_BRAND}
         title={ASSIGNED_TITLE}
         figure={figure(assigned.count)}
         countError={assigned.count.phase === "error" ? assigned.count.message : null}
       >
-        <ListBody
-          state={assigned.list}
-          empty={<ColumnEmpty />}
-          render={(tasks) => (
-            <TaskMiniList tasks={tasks} directory={directory} statusLabels={statusLabels} now={now} label={ASSIGNED_TITLE} />
-          )}
-        />
+        <ListBody state={assigned.list} empty={<ColumnEmpty />} render={taskList(ASSIGNED_TITLE)} />
       </NotebookColumn>
     </div>
   );
 }
 
-/*
- * The prototype's tile tones are danger · violet · brand, each `bg-<tone>/10 border-<tone>/25`. Our
- * tokens have no violet (ADR 0068 lần 2), so the approval column keeps the warning tone it had.
- */
-const TONE_DANGER = "border-danger-200 bg-danger-50 text-danger-600";
-const TONE_APPROVAL = "border-warning-500/25 bg-warning-50 text-warning-600";
-const TONE_BRAND = "border-brand-100 bg-brand-50 text-brand-600";
+/* The prototype's tile tones (`LeaderNotebook.tsx:136-140`): danger · violet · brand. */
+export const TONE_DANGER = "text-danger bg-danger/10 border-danger/25";
+export const TONE_VIOLET = "text-violet bg-violet/10 border-violet/25";
+export const TONE_BRAND = "text-brand bg-brand/10 border-brand/25";
 
 /**
- * One column, composed as the prototype's: header row `[tile] title ……… [count]`, then a body that
- * scrolls past 560px. The card frame itself is our token `Card` (no border, no shadow — guide §5).
+ * One column, the prototype's `NotebookColumn` (`LeaderNotebook.tsx:142-190`): a white card, a header
+ * row `[tile] title ……… [count]` over a rule, then a body that scrolls past 560px. Drawn here rather
+ * than through the shared `Card`: the prototype's frame (border, shadow) and its 14px navy title are
+ * this screen's, and the shared component stays as every other screen has it. `m-0` where a heading or
+ * paragraph would keep the browser's margins (no preflight).
  */
 function NotebookColumn({
   id,
   icon: Icon,
-  iconClass,
+  tone,
   title,
   figure: shown,
   countError,
@@ -189,36 +194,36 @@ function NotebookColumn({
 }: {
   id: string;
   icon: LucideIcon;
-  iconClass: string;
+  tone: string;
   title: string;
   figure: string;
   countError: string | null;
   children: ReactNode;
 }) {
   return (
-    <Card as="section" aria-labelledby={id}>
-      <CardHeader className="flex-nowrap gap-2.5 py-3">
-        <span aria-hidden="true" className={cn("grid size-8 shrink-0 place-items-center rounded-[9px] border", iconClass)}>
-          <Icon className="size-4" strokeWidth={1.8} focusable="false" />
+    <section aria-labelledby={id} className="border-line shadow-card rounded-card min-w-0 border bg-white">
+      <header className="border-line flex items-center gap-2.5 border-b px-4 py-3">
+        <span aria-hidden="true" className={cn("grid size-8 shrink-0 place-items-center rounded-[9px] border", tone)}>
+          <Icon className="size-4" focusable="false" />
         </span>
-        <CardTitle id={id} className="min-w-0">
+        <h2 id={id} className="text-navy m-0 min-w-0 text-[14px] font-bold">
           {title}
-        </CardTitle>
-        <span className="notebook-count ml-auto shrink-0 rounded-[10px] border border-line px-2 py-0.5 text-xs font-semibold text-ink-500">
+        </h2>
+        <span className="notebook-count border-line text-ink-muted ml-auto shrink-0 rounded-[10px] border px-2 py-0.5 text-[12px] font-semibold">
           {shown}
         </span>
-      </CardHeader>
+      </header>
       {countError !== null && (
         <p className="thong-bao-loi m-0 px-4 pt-3" role="alert">
           {COUNT_ERROR_PREFIX} {countError}
         </p>
       )}
       <div className="max-h-[560px] overflow-y-auto">{children}</div>
-    </Card>
+    </section>
   );
 }
 
-/** A labelled group inside column 2, with its own server count. */
+/** A labelled group inside column 2, with its own server count (ADR 0071 — not in the prototype). */
 function Group({ id, title, count, children }: { id: string; title: string; count: Loaded<number>; children: ReactNode }) {
   return (
     <section aria-labelledby={id} className="notebook-group border-b border-line last:border-b-0">
@@ -241,7 +246,7 @@ function Group({ id, title, count, children }: { id: string; title: string; coun
 /** The prototype's empty column: one centred muted line, no illustration. */
 function ColumnEmpty() {
   return (
-    <p className="column-empty m-0 px-4 py-8 text-center text-[13px] text-ink-500" role="status">
+    <p className="column-empty text-ink-muted m-0 px-4 py-8 text-center text-[12.5px]" role="status">
       {COLUMN_EMPTY}
     </p>
   );

@@ -26,8 +26,10 @@ import {
  * The Nhiệm vụ screens show THESE words, not the commune's `/task-statuses` labels. The catalogue is
  * still read: it gives the codes' ORDER (Kanban columns) and nothing else changes — codes stay the
  * Vietnamese ones of ADR 0011 and every request sends them. This reverses decision #21 ON THESE
- * SCREENS ONLY (ADR 0076 lần 2, consequence (a): to be confirmed with the customer); Sổ tay lãnh đạo
- * and the Danh mục tab keep the commune's labels.
+ * SCREENS ONLY (ADR 0076 lần 2, consequence (a): to be confirmed with the customer); the Danh mục tab
+ * keeps the commune's labels. The Sổ tay lãnh đạo uses THESE words since it opens this module's own
+ * detail drawer in place (owner 09/10/2026): a row and the drawer it opens must not name one status
+ * twice, differently.
  */
 export const SPEC_STATUS_LABELS: Readonly<Record<TrangThaiNhiemVu, string>> = {
   "moi-giao": "Chưa thực hiện",
@@ -85,6 +87,15 @@ function toneOf(code: string) {
 /** The 8px dot before a Kanban column title (spec 03). Decorative: the title beside it is the word. */
 export function statusDotClass(code: string): string {
   return toneOf(code).dot;
+}
+
+/**
+ * The status chip's tone of a code (spec 10 `TASK_STATUS_META[…].chip`) — the STATUS alone, without
+ * the late / finished-late overrides of `taskDisplayState`. For a badge that names the status a row
+ * is in and says lateness elsewhere (the Sổ tay row's `tam-dung` badge, under its `trễ n ngày`).
+ */
+export function statusChipClass(code: string): string {
+  return toneOf(code).chip;
 }
 
 /** Fill of the CURRENT step of the status strip (spec 07 §2), always with white text. */

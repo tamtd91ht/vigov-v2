@@ -313,7 +313,16 @@ export type PreviewTaskQuery = {
   readonly roots?: boolean;
   /** `include=documents` — the Sổ theo dõi's projection. */
   readonly documents?: boolean;
+  /** `metric=overdue` — the Sổ tay's first column: open, past its deadline, not paused (ADR 0071). */
+  readonly metric?: string;
+  /** `scope=assigned-by-me` — creator OR assigner is the preview's leader (Cán bộ C, `PREVIEW_LEADER`). */
+  readonly scope?: string;
+  /** `incomplete=true` — every status but `hoan-thanh`. */
+  readonly incomplete?: boolean;
 };
+
+/** The signed-in officer of the Nhiệm vụ previews (`shell.fixture.ts`, person `lanh-dao`). */
+const PREVIEW_LEADER = STAFF_C;
 
 function matches(seed: TaskSeed, q: PreviewTaskQuery, now: Date): boolean {
   const eq = (want: string | undefined, have: string) => want === undefined || want === have;
@@ -321,10 +330,12 @@ function matches(seed: TaskSeed, q: PreviewTaskQuery, now: Date): boolean {
   if (!eq(q.status, seed.status) || !eq(q.parent, seed.parent ?? "") || !eq(q.type, seed.type)) return false;
   if (!eq(q.priority, seed.priority) || !eq(q.bloc, seed.bloc) || !eq(q.unit, seed.unit)) return false;
   if (!eq(q.assignee, seed.assignee) || !eq(q.source, seed.source)) return false;
-  if (q.late === true) {
-    if (seed.due === null || seed.status === "hoan-thanh") return false;
-    if (new Date(day(now, seed.due)).getTime() >= now.getTime()) return false;
-  }
+  const pastDue = seed.due !== null && seed.status !== "hoan-thanh" && new Date(day(now, seed.due)).getTime() < now.getTime();
+  if (q.late === true && !pastDue) return false;
+  if (q.metric === "overdue" && (!pastDue || seed.status === "tam-dung")) return false;
+  // Every seed is created by Cán bộ C (`build`): creator OR assigner.
+  if (q.scope === "assigned-by-me" && STAFF_C !== PREVIEW_LEADER && seed.assigner !== PREVIEW_LEADER) return false;
+  if (q.incomplete === true && seed.status === "hoan-thanh") return false;
   return true;
 }
 
@@ -345,7 +356,9 @@ export function previewTask(code: string, now: Date = new Date()): petitions_nhi
 
 /** `GET /api/v1/task-counts` — per status, under the same filters as the board. */
 export function previewTaskCounts(q: PreviewTaskQuery, now: Date = new Date()): petitions_taskCountsOut {
-  const rows = SEEDS.filter((s) => matches(s, { ...q, status: undefined }, now));
+  // A `status` filter narrows the count too (the Sổ tay's `Duyệt hoàn thành` badge sums this answer);
+  // every status still has its row, the others at 0.
+  const rows = SEEDS.filter((s) => matches(s, q, now));
   return {
     by_status: STATUS_ROWS.map(([status]) => ({ status, count: rows.filter((s) => s.status === status).length })),
   };

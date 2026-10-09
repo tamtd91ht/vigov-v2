@@ -305,9 +305,13 @@ describe("(#10) `+ Thêm việc con` — the create form, prefilled with the par
   });
 
   it("`SoNhiemVu` gates the button on `quyen.giaoViec` — the key of `+ Giao việc mới`", () => {
-    const src = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
-    expect(src).toMatch(/addChild=\{[\s\S]*?quyen\.giaoViec\s*\?/);
-    expect(src).toContain("maChaCoSan={drawer.nhiemVu.code}");
+    // The drawer's wiring moved to `task-detail-host.tsx` (owner 09/10/2026): `SoNhiemVu` hands it
+    // the same `quyen`, and the host gates on its `giaoViec`.
+    const page = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
+    expect(page).toContain("permissions: quyen,");
+    const src = readFileSync(fileURLToPath(new URL("./task-detail-host.tsx", import.meta.url)), "utf8");
+    expect(src).toMatch(/addChild=\{[\s\S]*?context\.permissions\.giaoViec\s*\?/);
+    expect(src).toContain("maChaCoSan={task.code}");
   });
 });
 

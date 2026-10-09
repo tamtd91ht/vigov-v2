@@ -52,7 +52,6 @@ import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import { OChonCanBo } from "@/components/o-chon-can-bo";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { LargeDialog } from "@/components/ui/large-dialog";
 import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
 import { RecordTabStrip, recordTabDomId } from "@/components/ui/record-tabs";
 import {
@@ -85,15 +84,11 @@ import {
 } from "@/lib/api/danh-muc-nghiep-vu";
 import type { KetQua } from "@/lib/api/goi";
 import {
-  deNghiLuiHan,
   doiTrangThaiNhiemVu,
   downloadTaskRegister,
   getTaskCounts,
   layNhiemVu,
   laySoNhiemVu,
-  quyetDinhLuiHan,
-  reassignTask,
-  suaNhiemVu,
   taoNhiemVu,
   xoaNhiemVu,
   type CotSapXepNhiemVu,
@@ -187,7 +182,6 @@ import {
   createTaskErrors,
   CREATE_TASK_FIELD_IDS,
   childCountLabel,
-  childCreatedText,
   childFormNote,
   kanbanColumnCount,
   kanbanPartialNote,
@@ -306,6 +300,7 @@ import { KanbanMoveMenu } from "./kanban-move-menu";
 import { NhatKyNhiemVu } from "./nhat-ky-nhiem-vu";
 import { ASSIGNMENT_TITLE, canShowAssignment } from "./task-assignment";
 import { TaskAssignmentBlock } from "./task-assignment-block";
+import { TaskDetailHost, useTaskDetailRead, useTaskDetailState } from "./task-detail-host";
 import { readTaskParam, searchWithTask, useTaskDialogUrl } from "./task-dialog-url";
 import { TaskExtensionHistory, TaskExtensionSection } from "./task-extension-block";
 import { TaskPersonPicker } from "./task-person-picker";
@@ -699,9 +694,10 @@ export function chuyenTaskPanel(s: TaskPanel, v: TaskPanelAction): TaskPanel {
 
 /**
  * The content of a tab whose detail is not on screen: being read, or refused. The heading carries
- * the dialog's accessible name exactly as the detail's does, from the tab's own label.
+ * the dialog's accessible name exactly as the detail's does, from the tab's own label. Exported for
+ * `TaskDetailHost`, which draws it for every screen that opens the detail.
  */
-function TaskTabPending({
+export function TaskTabPending({
   code,
   title,
   error,
@@ -908,11 +904,11 @@ export function SoNhiemVu({
   // name — every drawer move below goes through the panel reducer, which forwards it.
   const [panel, guiDrawer] = useReducer(chuyenTaskPanel, NO_TASK_PANEL);
   const drawer = panel.drawer;
-  const [dangGui, datDangGui] = useState(false);
+  // The detail's own state (`task-detail-host.tsx`): the write in flight — shared with the create form
+  // below, as before — the extension-queue tick (NOT tied to `lanTai`: re-reading requests after every
+  // write on the register is a wasted call) and the child form.
+  const detailState = useTaskDetailState();
   const [moFormTao, datMoFormTao] = useState(false);
-  // Tăng khi một đề nghị lùi hạn vừa gửi xong từ drawer — khối đề nghị phải thấy nó. KHÔNG gắn vào
-  // `lanTai`: mỗi lần ghi trên sổ mà đọc lại đề nghị là một lời gọi thừa.
-  const [lanHangCho, datLanHangCho] = useState(0);
   // Kanban moves — the answer belongs on the board (a toast), not in a drawer that may be showing
   // another task.
   const [kanbanPending, setKanbanPending] = useState<KanbanMove["pending"]>(null);
@@ -922,9 +918,6 @@ export function SoNhiemVu({
     khoa: string;
     kq: KetQua<petitions_taskCountsOut>;
   } | null>(null);
-  // `+ Thêm việc con` (#10): the create form, opened INSIDE the drawer of the parent it names.
-  const [childFormFor, setChildFormFor] = useState<string | null>(null);
-  const [childFormSending, setChildFormSending] = useState(false);
   // `Xuất Excel` of the Sổ theo dõi (W6): one export at a time; the answer is a toast.
   const [exporting, setExporting] = useState(false);
   // `⬆ Nhập từ Excel` (W7, §8). Focus returns to the opening button when the dialog closes.
@@ -1077,17 +1070,7 @@ export function SoNhiemVu({
   // CHI TIẾT CỦA DRAWER — xem `chuyenDrawer`. Chạy lại ở mỗi lượt đọc mới (mở, hoặc sau một lần
   // ghi); `ma` và `luotDoc` đi kèm câu trả lời để reducer bỏ câu trả lời của lượt đã cũ.
   const maDrawer = drawer?.nhiemVu.code ?? null;
-  const luotDoc = drawer?.luotDoc ?? 0;
-  useEffect(() => {
-    if (maDrawer === null) return;
-    let bo = false;
-    layNhiemVu(maDrawer).then((kq) => {
-      if (!bo) guiDrawer({ loai: "chiTietVe", ma: maDrawer, luotDoc, kq });
-    });
-    return () => {
-      bo = true;
-    };
-  }, [maDrawer, luotDoc]);
+  useTaskDetailRead(drawer, guiDrawer);
 
   // `?task=NV19` from another screen (`task-link.ts`), or a Back / Forward onto such an entry: read
   // the task through the detail route — the same `task.read` + commune check as every read — and
@@ -1345,7 +1328,7 @@ export function SoNhiemVu({
     Object.entries(loc).every(([k, v]) => k === "sapXep" || k === "chieu" || v === undefined);
   const openCreate = () => {
     datMoFormTao(true);
-    setChildFormFor(null);
+    detailState.setChildFormFor(null);
   };
   const emptyList = noFilter ? (
     <EmptyState
@@ -1532,14 +1515,14 @@ export function SoNhiemVu({
           // `POST /api/v1/tasks` nhận `documents`; màn Biên bản thì không — xem prop.
           coDanhSachVanBan
           staffSearch
-          dangGui={dangGui}
+          dangGui={detailState.sending}
           // The server's answer is a toast on this screen (spec 06); field errors stay inline.
           loi={null}
           huy={() => datMoFormTao(false)}
           giaoViec={(than, khoaChongTrung) => {
-            datDangGui(true);
+            detailState.setSending(true);
             taoNhiemVu(than, khoaChongTrung).then((kq) => {
-              datDangGui(false);
+              detailState.setSending(false);
               if (!kq.ok) {
                 toast.error(kq.thongBao);
                 return;
@@ -1717,202 +1700,57 @@ export function SoNhiemVu({
           the record tabs above its content are KEPT (owner 07/10/2026, ADR 0076 lần 2 #1). Esc asks
           the same `dong` as the ✕ — it HIDES the panel, the record tabs stay. The dialog stays
           mounted across tab switches and parent / child moves (only the content is keyed by code),
-          so focus still returns to the row that first opened it. */}
+          so focus still returns to the row that first opened it. The drawer and every write it makes
+          are `TaskDetailHost` — the one wiring every screen shares (owner 09/10/2026). */}
       {shownCode !== null && (
-        <LargeDialog
-          titleId={TASK_DETAIL_TITLE_ID}
-          className={DETAIL_DRAWER_CLASS}
-          onDismiss={() => guiDrawer({ loai: "dong" })}
-        >
-        <RecordTabStrip
-          label={TASK_TABS_LABEL}
-          idPrefix={TASK_TAB_ID_PREFIX}
-          panelId={TASK_TAB_PANEL_ID}
-          // Code + title + the status word: what the register row already shows.
-          tabs={panel.tabs.tabs.map((t) => ({
-            id: t.id,
-            title: `[${t.id}] ${t.data.title}`,
-            secondary: nhanTrangThai(nhanTT, t.data.status),
-            icon: taskStatusIcon(t.data.status),
-          }))}
-          activeId={shownCode}
-          onSelect={(ma) => {
-            if (ma === shownCode) return;
-            guiDrawer({ loai: "chonTab", ma });
+        <TaskDetailHost
+          shownCode={shownCode}
+          drawer={drawer}
+          pendingTitle={panel.tabs.tabs.find((t) => t.id === shownCode)?.data.title ?? ""}
+          pendingError={panel.tabError?.code === shownCode ? panel.tabError.message : null}
+          dispatch={guiDrawer}
+          context={{
+            catalogues: danhMuc,
+            statusLabels: nhanTT,
+            unitNames: tenBoPhan,
+            directory: kqDanhBa,
+            leaderDirectory: kqDanhBaLanhDao,
+            staffCode: maNguoiDangNhap,
+            permissions: quyen,
+            canRevealEmail,
           }}
-          onClose={(ma) => guiDrawer({ loai: "dongTab", ma })}
-          onCloseAll={() => guiDrawer({ loai: "dongTatCa" })}
-          closeTabLabel={closeTaskTabLabel}
+          state={detailState}
+          onRegisterChanged={() => datLanTai((n) => n + 1)}
+          // The record is gone: its tab goes with it, and the panel hides as before tabs.
+          onDeleted={(code) => guiDrawer({ loai: "boTab", ma: [code] })}
+          onChildFormToggle={() => datMoFormTao(false)}
+          tabs={{
+            panelId: TASK_TAB_PANEL_ID,
+            labelledBy: recordTabDomId(TASK_TAB_ID_PREFIX, shownCode),
+            strip: (
+              <RecordTabStrip
+                label={TASK_TABS_LABEL}
+                idPrefix={TASK_TAB_ID_PREFIX}
+                panelId={TASK_TAB_PANEL_ID}
+                // Code + title + the status word: what the register row already shows.
+                tabs={panel.tabs.tabs.map((t) => ({
+                  id: t.id,
+                  title: `[${t.id}] ${t.data.title}`,
+                  secondary: nhanTrangThai(nhanTT, t.data.status),
+                  icon: taskStatusIcon(t.data.status),
+                }))}
+                activeId={shownCode}
+                onSelect={(ma) => {
+                  if (ma === shownCode) return;
+                  guiDrawer({ loai: "chonTab", ma });
+                }}
+                onClose={(ma) => guiDrawer({ loai: "dongTab", ma })}
+                onCloseAll={() => guiDrawer({ loai: "dongTatCa" })}
+                closeTabLabel={closeTaskTabLabel}
+              />
+            ),
+          }}
         />
-        <div
-          id={TASK_TAB_PANEL_ID}
-          role="tabpanel"
-          aria-labelledby={recordTabDomId(TASK_TAB_ID_PREFIX, shownCode)}
-          className="flex min-h-0 min-w-0 flex-1 flex-col"
-        >
-        {drawer === null || drawer.nhiemVu.code !== shownCode ? (
-          <TaskTabPending
-            code={shownCode}
-            title={panel.tabs.tabs.find((t) => t.id === shownCode)?.data.title ?? ""}
-            error={panel.tabError?.code === shownCode ? panel.tabError.message : null}
-            onHide={() => guiDrawer({ loai: "dong" })}
-          />
-        ) : (
-        <ChiTietNhiemVu
-          // A new task is a new detail: an open edit, a half-typed note or reason do not follow.
-          key={drawer.nhiemVu.code}
-          nhiemVu={drawer.nhiemVu}
-          vanBan={drawer.vanBan}
-          danhMuc={danhMuc}
-          nhanTT={nhanTT}
-          tenBoPhan={tenBoPhan}
-          danhBa={kqDanhBa}
-          // `luotDoc` tăng khi mở drawer VÀ sau mỗi lần ghi — đúng hai lúc nhật ký phải đọc lại.
-          lanLamMoiNhatKy={drawer.luotDoc}
-          bayGio={new Date()}
-          maNguoiDangNhap={maNguoiDangNhap}
-          quyen={quyen}
-          canRevealEmail={canRevealEmail}
-          dangGui={dangGui}
-          dong={() => guiDrawer({ loai: "dong" })}
-          // The answer goes back to the pipeline: it keeps the typed note and toasts the outcome.
-          doiTrangThai={(trangThai, ghiChu, extra) => {
-            const code = drawer.nhiemVu.code;
-            datDangGui(true);
-            const call = doiTrangThaiNhiemVu(code, trangThai, ghiChu, extra);
-            call.then((kq) => {
-              datDangGui(false);
-              if (!kq.ok) return;
-              guiDrawer({ loai: "ghiXong", nhiemVu: kq.duLieu });
-              datLanTai((n) => n + 1);
-            });
-            return call;
-          }}
-          xoa={(lyDo) => {
-            const code = drawer.nhiemVu.code;
-            datDangGui(true);
-            return xoaNhiemVu(code, lyDo).then((kq) => {
-              datDangGui(false);
-              // A refusal ("còn 3 việc con chưa xoá…", ADR 0037 decision 3) goes back to the confirm
-              // dialog, which shows it verbatim and stays open.
-              if (!kq.ok) return kq;
-              toast.success(taskDeletedText(code));
-              // The record is gone: its tab goes with it, and the panel hides as before tabs.
-              guiDrawer({ loai: "boTab", ma: [code] });
-              datLanTai((n) => n + 1);
-              return kq;
-            });
-          }}
-          guiDeNghiLuiHan={(hanMoi, lyDo) =>
-            deNghiLuiHan(drawer.nhiemVu.code, hanMoi, lyDo).then((kq) => {
-              if (kq.ok) {
-                // `pending_extension` of the task row changed: the drawer's strip and the register
-                // read it from the task, so both are read again — never set by hand here.
-                guiDrawer({ loai: "docLai", ma: drawer.nhiemVu.code });
-                datLanTai((n) => n + 1);
-                datLanHangCho((n) => n + 1);
-              }
-              return kq;
-            })
-          }
-          quyetDinh={(deNghiID, duyet, ghiChu) =>
-            quyetDinhLuiHan(drawer.nhiemVu.code, deNghiID, duyet, ghiChu)
-          }
-          // The drawer's extension block re-reads on every drawer re-read AND after a request is sent.
-          extensionRefreshKey={`${drawer.luotDoc}|${lanHangCho}`}
-          onExtensionDecided={(ma) => {
-            // Approving moves `due_at`: the drawer and the register are stale.
-            guiDrawer({ loai: "docLai", ma });
-            datLanTai((n) => n + 1);
-            datLanHangCho((n) => n + 1);
-          }}
-          openTask={openDrawer}
-          addChild={
-            // `+ Thêm việc con` stands behind the SAME key as `+ Giao việc mới` — `task.create`
-            // (`quyen.giaoViec`), the key of `POST /api/v1/tasks`. The server checks it anyway.
-            quyen.giaoViec
-              ? {
-                  open: childFormFor === drawer.nhiemVu.code,
-                  toggle: () => {
-                    // ONE create form on the page at a time: both render the same field ids
-                    // (`giao-loai`…), and two labels pointing at one id is a broken form for a
-                    // screen reader.
-                    datMoFormTao(false);
-                    setChildFormFor((f) =>
-                      f === drawer.nhiemVu.code ? null : drawer.nhiemVu.code,
-                    );
-                  },
-                  form: (
-                    <FormGiaoViec
-                      // A new form (and a new idempotency key) per parent.
-                      key={drawer.nhiemVu.code}
-                      dialog
-                      taskScreen
-                      danhMuc={danhMuc}
-                      danhBa={kqDanhBa}
-                      danhBaLanhDao={kqDanhBaLanhDao}
-                      coDanhSachVanBan
-                      staffSearch
-                      maChaCoSan={drawer.nhiemVu.code}
-                      dangGui={childFormSending}
-                      loi={null}
-                      huy={() => setChildFormFor(null)}
-                      giaoViec={(than, khoaChongTrung) => {
-                        const parentCode = drawer.nhiemVu.code;
-                        setChildFormSending(true);
-                        taoNhiemVu(than, khoaChongTrung).then((kq) => {
-                          setChildFormSending(false);
-                          if (!kq.ok) {
-                            // VERBATIM — an invalid parent is the server's 409 `task_tree` sentence.
-                            toast.error(kq.thongBao);
-                            return;
-                          }
-                          setChildFormFor(null);
-                          toast.success(childCreatedText(kq.duLieu.code));
-                          // STAY ON THE PARENT: re-read it (its `child_count`, its children block)
-                          // instead of jumping to the new child, which would lose the tree.
-                          guiDrawer({ loai: "docLai", ma: parentCode });
-                          datLanTai((n) => n + 1);
-                        });
-                      }}
-                    />
-                  ),
-                }
-              : null
-          }
-          // §5.4 `Sửa` and the two approval ticks. Thành công: phản hồi PATCH MANG `documents`
-          // (`app/nhiem_vu.go:696-741`), nên `ghiXong` thay cả trường vô hướng lẫn khối văn bản, rồi
-          // đọc lại sổ như mọi lần ghi khác. Hỏng: trả `KetQua` nguyên vẹn về form, để form GIỮ chữ
-          // cán bộ đã gõ; the drawer re-reads (a 409 `task_changed` means the task moved on).
-          suaKhoiVanBan={(than) => {
-            const code = drawer.nhiemVu.code;
-            return suaNhiemVu(code, than).then((kq) => {
-              if (kq.ok) {
-                guiDrawer({ loai: "ghiXong", nhiemVu: kq.duLieu });
-                datLanTai((n) => n + 1);
-              } else {
-                guiDrawer({ loai: "docLai", ma: code });
-              }
-              return kq;
-            });
-          }}
-          docLaiChiTiet={() => layNhiemVu(drawer.nhiemVu.code)}
-          // §5.7 — same refresh as `Sửa`: `ghiXong` takes the returned task (keeping the document
-          // block, which this reply does not carry) and bumps `luotDoc`, so the detail AND the
-          // timeline re-read; the register re-reads too — the card may have changed column.
-          reassign={(body) =>
-            reassignTask(drawer.nhiemVu.code, body).then((kq) => {
-              if (kq.ok) {
-                guiDrawer({ loai: "ghiXong", nhiemVu: kq.duLieu });
-                datLanTai((n) => n + 1);
-              }
-              return kq;
-            })
-          }
-        />
-        )}
-        </div>
-        </LargeDialog>
       )}
     </section>
     </>

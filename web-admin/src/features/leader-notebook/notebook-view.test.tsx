@@ -1,13 +1,16 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { BANG_NHAN_MAC_DINH, oHan } from "@/features/nhiem-vu/nhan-nhiem-vu"; // vi-name-ok: existing register wording under comparison
+import { BANG_NHAN_MAC_DINH, extensionCountText, oHan } from "@/features/nhiem-vu/nhan-nhiem-vu"; // vi-name-ok: existing register wording under comparison
+import { withSpecLabels } from "@/features/nhiem-vu/task-spec";
 import { KhungQuyen } from "@/features/quyen/cong-quyen"; // vi-name-ok: existing gate component
 import type { DanhBaTheoMa } from "@/features/phan-anh/nhan-phieu"; // vi-name-ok: existing staff-directory lookup type
 import type { petitions_deNghiChoDuyetRa, petitions_nhiemVuRa } from "@/lib/api/schema.gen"; // vi-name-ok: generated contract types
 
 import {
+  CHILD_OF_PREFIX,
   COLUMN_EMPTY,
+  COMPLETION_GROUP_EMPTY,
   COMPLETION_GROUP_TITLE,
   EXTENSION_GROUP_EMPTY,
   EXTENSION_GROUP_TITLE,
@@ -92,8 +95,10 @@ function render(patch: Partial<NotebookViewProps> = {}): string {
       extensions={section([request()], 1)}
       assigned={section([task({ code: "NV40", status: "tam-dung" })], 26)}
       directory={DIRECTORY}
-      statusLabels={BANG_NHAN_MAC_DINH}
+      statusLabels={withSpecLabels(BANG_NHAN_MAC_DINH)}
       now={NOW}
+      onOpenTask={noop}
+      onOpenRequest={noop}
       {...patch}
     />,
   );
@@ -132,14 +137,15 @@ describe("group 'Duyệt hoàn thành' needs task.approve (ADR 0071)", () => {
   it("drawn with its title and rows when the session holds the key", () => {
     const html = render();
     expect(html).toContain(COMPLETION_GROUP_TITLE);
-    expect(html).toContain("/nhiem-vu?task=NV30");
+    expect(html).toContain(`<ul aria-label="${COMPLETION_GROUP_TITLE}"`);
     expect(html).toContain(EXTENSION_GROUP_TITLE);
   });
 
   it("DENIED: not drawn at all — no title, no rows, no empty sentence", () => {
     const html = render({ completion: null });
     expect(html).not.toContain(COMPLETION_GROUP_TITLE);
-    expect(html).not.toContain("NV30");
+    expect(html).not.toContain(COMPLETION_GROUP_EMPTY);
+    expect(html.split("task-mini-row").length - 1).toBe(2);
     expect(html).toContain(EXTENSION_GROUP_TITLE);
   });
 
@@ -213,33 +219,79 @@ describe("row wording equals the register's (`oHan`)", () => {
     expect(taskRowText(task(), null, NOW).meta.startsWith(ASSIGNEE)).toBe(true);
   });
 
-  it("a sub-task names its parent; the late part is drawn red", () => {
+  it("a sub-task names its parent, the code in navy; the late part is drawn red and bold, ' · ' inside", () => {
     const html = render({ pastDue: section([task({ parent: "NV7" })], 1) });
-    expect(html).toContain("việc con của NV7");
-    expect(html).toContain('<span class="font-semibold text-danger-600">trễ 5 ngày</span>');
+    expect(html).toContain(`${CHILD_OF_PREFIX} <span class="text-navy font-medium">NV7</span>`);
+    expect(CHILD_OF_PREFIX).toBe("việc con của");
+    expect(html).toContain('<span class="text-danger font-semibold"> · trễ 5 ngày</span>');
   });
 
-  it("a paused task shows its status pill in the commune's label", () => {
-    const html = render();
-    expect(html).toContain("Tạm dừng");
+  it("an extended task says 'đã gia hạn n lần' in tangerine — the register's words; never at 0", () => {
+    const row = taskRowText(task({ extension_count: 2 }), DIRECTORY, NOW);
+    expect(row.extensions).toBe(extensionCountText(2));
+    const html = render({ pastDue: section([task({ extension_count: 2 })], 1) });
+    expect(html).toContain('<span class="text-tangerine"> · đã gia hạn 2 lần</span>');
+    expect(render({ pastDue: section([task()], 1) })).not.toContain("đã gia hạn");
   });
 
-  it("an extension row reads current deadline → proposed deadline", () => {
+  it("a paused task shows the register's word-only badge, tangerine, h-5 text-[10.5px], mt-1.5 — only for tam-dung", () => {
+    const html = render({ pastDue: section([task()], 1), completion: null, extensions: section([], 0), assigned: section([], 0) });
+    expect(html).not.toContain("data-status=");
+    const paused = render({ pastDue: section([task({ status: "tam-dung" })], 1), completion: null, extensions: section([], 0), assigned: section([], 0) });
+    expect(paused).toMatch(
+      /<span class="mt-1\.5 block"><span class="[^"]*bg-tangerine\/12 text-tangerine border-tangerine\/25 h-5 text-\[10\.5px\]" data-status="tam-dung" data-tone="status">Tạm dừng<\/span><\/span>/,
+    );
+    expect(paused).not.toContain("text-xs");
+  });
+
+  it("an extension row reads current deadline → proposed deadline, and is a button too", () => {
     expect(extensionDeadlineText(request())).toBe("hạn 20/6/2026 → 15/7/2026");
     expect(extensionDeadlineText(request({ task_due_at: null }))).toBe("hạn — → 15/7/2026");
-    expect(render()).toContain("/nhiem-vu?task=NV21");
+    expect(render()).toMatch(/<li class="extension-mini-row[^"]*"><button type="button" aria-haspopup="dialog"[^>]*><span[^>]*>Báo cáo tổng kết<\/span>/);
   });
 
-  it("no personal data in URLs or aria: rows link by register code only", () => {
+  it("rows are buttons that open the drawer here — no link, nothing in a URL; no personal data in aria", () => {
     const html = render();
-    for (const m of html.matchAll(/href="([^"]*)"/g)) expect(m[1]).toMatch(/^\/nhiem-vu\?task=NV\d+$/);
+    expect(html).not.toContain("href=");
+    expect(html.split('<button type="button" aria-haspopup="dialog"').length - 1).toBe(4);
     expect(html).not.toMatch(/aria-label="[^"]*Huỳnh/);
+  });
+
+  it("the row: the prototype's padding, rule, hover and type sizes", () => {
+    const html = render({ pastDue: section([task()], 1) });
+    expect(html).toContain('<li class="task-mini-row border-line border-b last:border-b-0">');
+    expect(html).toMatch(/<button type="button" aria-haspopup="dialog" class="m-0 block w-full cursor-pointer border-0 bg-transparent px-4 py-3 text-left \[font-family:inherit\] hover:bg-canvas /);
+    expect(html).toContain('<span class="text-navy block text-[12.8px] font-semibold">');
+    expect(html).toContain('<span class="text-ink-muted mt-1 block text-[11.5px]">Huỳnh Văn Sáu · hạn ');
   });
 });
 
 describe("prototype composition (ADR 0068 lần 5)", () => {
-  it("three columns side by side, one column at 1280px and below", () => {
-    expect(render()).toContain("grid min-w-0 grid-cols-3 gap-4 max-[1280px]:grid-cols-1");
+  it("three columns side by side, one column at 1280px and below, each as tall as its content", () => {
+    expect(render()).toContain('<div class="leader-notebook grid min-w-0 grid-cols-3 items-start gap-4 max-[1280px]:grid-cols-1">');
+  });
+
+  it("tile tones: danger · VIOLET · brand, size-8 rounded-[9px] border", () => {
+    const tiles = [...render().matchAll(/<span aria-hidden="true" class="grid size-8 shrink-0 place-items-center rounded-\[9px\] border ([^"]+)">/g)].map(
+      (m) => m[1],
+    );
+    expect(tiles).toEqual([
+      "text-danger bg-danger/10 border-danger/25",
+      "text-violet bg-violet/10 border-violet/25",
+      "text-brand bg-brand/10 border-brand/25",
+    ]);
+  });
+
+  it("the frame: white card, header with a rule, navy 14px bold title", () => {
+    const html = render();
+    expect(html.match(/<section aria-labelledby="notebook-[a-z]+" class="border-line shadow-card rounded-card min-w-0 border bg-white">/g)).toHaveLength(3);
+    expect(html.match(/<header class="border-line flex items-center gap-2.5 border-b px-4 py-3">/g)).toHaveLength(3);
+    expect(html).toContain('<h2 id="notebook-approval" class="text-navy m-0 min-w-0 text-[14px] font-bold">Chờ tôi duyệt</h2>');
+  });
+
+  it("an empty column: the prototype's muted line", () => {
+    const html = render({ pastDue: section([], 0) });
+    expect(html).toContain(`<p class="column-empty text-ink-muted m-0 px-4 py-8 text-center text-[12.5px]" role="status">${COLUMN_EMPTY}</p>`);
   });
 
   it("column order and titles are the prototype's", () => {
@@ -251,7 +303,9 @@ describe("prototype composition (ADR 0068 lần 5)", () => {
 
   it("the count is a neutral pill after the title, and each body scrolls past 560px", () => {
     const html = render();
-    expect(html.match(/notebook-count ml-auto/g)).toHaveLength(3);
+    expect(
+      html.match(/notebook-count border-line text-ink-muted ml-auto shrink-0 rounded-\[10px\] border px-2 py-0\.5 text-\[12px\] font-semibold/g),
+    ).toHaveLength(3);
     expect(html.match(/max-h-\[560px\] overflow-y-auto/g)).toHaveLength(3);
   });
 
