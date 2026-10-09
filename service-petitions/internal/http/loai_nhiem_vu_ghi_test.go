@@ -207,12 +207,14 @@ func dungMayChuGhi(t *testing.T) *mayChuGhi {
 		TaskSummary:          taskSummarySample(),
 		CitizenReportSummary: citizenReportSummarySample(),
 		OverdueQueue:         overdueQueueSample(),
-		TaskFilterIdentity:   taskFilterIdentitySample(),
-		TaskRegisterExport:   &registerExportFake{},
-		TaskImport:           &taskImportFake{},
-		AuditLog:             &auditLogFake{},
-		SystemMessages:       &systemMessagesFake{},
-		Log:                  im,
+		// The /phan-anh statistics: Register refuses a nil; suite in citizen_report_figures_test.go.
+		CitizenReportBreakdown: citizenReportBreakdownSample(),
+		TaskFilterIdentity:     taskFilterIdentitySample(),
+		TaskRegisterExport:     &registerExportFake{},
+		TaskImport:             &taskImportFake{},
+		AuditLog:               &auditLogFake{},
+		SystemMessages:         &systemMessagesFake{},
+		Log:                    im,
 	})
 
 	var h http.Handler = mux

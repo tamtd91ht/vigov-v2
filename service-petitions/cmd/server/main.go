@@ -458,6 +458,9 @@ func chay(log *slog.Logger) error {
 		TaskSummary:          nhiemVu,
 		CitizenReportSummary: phieu,
 		OverdueQueue:         app.NewOverdueQueue(nhiemVu, phieu, dinhDanh),
+		// The /phan-anh statistics: the register store, and the SAME identity client for the handling time
+		// in working hours (MeasureWorkingHours).
+		CitizenReportBreakdown: app.NewCitizenReportBreakdown(phieu, dinhDanh),
 		// This service's OWN audit_log, on its own handle — never another service's (ADR 0054 §1).
 		// The restricted-field subquery withholds `can-bo` petitions' entries unless the handler
 		// found `feedback.restricted` on the reader (ADR 0054 §4, ADR 0030).

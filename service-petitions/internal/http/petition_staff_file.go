@@ -50,6 +50,10 @@ type PetitionLogAttachmentActs interface {
 		restricted app.QuyenXemHanChe) (domain.StoredFile, error)
 	DownloadLink(ctx context.Context, ma, id string, reader audit.Actor, restricted app.QuyenXemHanChe) (
 		app.AttachmentDownload, error)
+	// Remove is the soft delete (DELETE …/log-attachments/{id}, 09/10/2026) — citizen_report_figures.go.
+	// `resolve` is the caller's `feedback.resolve` fact — the second door beside being the uploader.
+	Remove(ctx context.Context, ma, id, reason string, actor audit.Actor, resolve app.QuyenXuLyCaXa,
+		restricted app.QuyenXemHanChe) error
 }
 
 // PetitionLogAttachmentReader reads the attachments of ONE PAGE of petition timeline entries in one

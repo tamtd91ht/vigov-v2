@@ -1154,6 +1154,48 @@
     {
       "service": "petitions",
       "method": "GET",
+      "path": "/api/v1/citizen-report-breakdown",
+      "operation_id": "petitions_get_citizen_report_breakdown",
+      "task_id": "575b37e7d853",
+      "summary": "Thống kê phản ánh trong kỳ [from, to) — đúng hạn/trễ hạn và tồn quá hạn; theo lĩnh vực (kèm dòng chưa phân loại); theo bộ phận đang giữ phiếu lúc xử lý xong (thời gian xử lý theo giờ làm việc); theo thôn (kèm dòng chưa xác định địa bàn)",
+      "screen": "09-phan-anh-nguoi-dan §3",
+      "permission_kind": "permission",
+      "permission": "report.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "petitions.citizenReportBreakdownOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes_citizen_report_figures.go"
+    },
+    {
+      "service": "petitions",
+      "method": "GET",
+      "path": "/api/v1/citizen-report-counts",
+      "operation_id": "petitions_get_citizen_report_counts",
+      "task_id": "e9fd7ee67eef",
+      "summary": "Tổng số phiếu phản ánh theo đúng bộ lọc của danh sách (trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn · đánh giá · phạm vi · metric)",
+      "screen": "09-phan-anh-nguoi-dan §4",
+      "permission_kind": "permission",
+      "permission": "feedback.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "petitions.citizenReportCountsOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes_citizen_report_figures.go"
+    },
+    {
+      "service": "petitions",
+      "method": "GET",
       "path": "/api/v1/citizen-report-fields",
       "operation_id": "petitions_get_citizen_report_fields",
       "task_id": "10c5b3fcca74",
@@ -1214,6 +1256,27 @@
         "503": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "GET",
+      "path": "/api/v1/citizen-report-points",
+      "operation_id": "petitions_get_citizen_report_points",
+      "task_id": "1e71292a545d",
+      "summary": "Điểm phản ánh trên bản đồ nhiệt theo bộ lọc của danh sách — chỉ vĩ độ, kinh độ, trạng thái",
+      "screen": "09-phan-anh-nguoi-dan §4",
+      "permission_kind": "permission",
+      "permission": "feedback.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "petitions.citizenReportPointsOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "422": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes_citizen_report_figures.go"
     },
     {
       "service": "petitions",
@@ -1397,6 +1460,30 @@
         "503": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "DELETE",
+      "path": "/api/v1/citizen-reports/{maTraCuu}/log-attachments/{id}",
+      "operation_id": "petitions_delete_citizen_reports_by_maTraCuu_log_attachments_by_id",
+      "task_id": "2920efe7a068",
+      "summary": "Gỡ một tệp đính kèm khỏi nhật ký xử lý phiếu phản ánh (xoá mềm, lý do bắt buộc, không xoá tệp gốc) — người đã tải lên hoặc cán bộ có quyền kết thúc xử lý phản ánh",
+      "screen": "09-phan-anh-nguoi-dan §8.7",
+      "permission_kind": "permission",
+      "permission": "feedback.read",
+      "idempotency": "khong-can",
+      "idempotency_reason": "gỡ lần hai một tệp đã gỡ trả 404: câu đọc khoá dòng chỉ thấy tệp chưa gỡ nên không ghi đè người gỡ, lý do, và không thêm dòng nhật ký thứ hai",
+      "request_schema": "petitions.citizenReportLogAttachmentRemoveIn",
+      "reply_schemas": {
+        "204": "",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes_citizen_report_figures.go"
     },
     {
       "service": "petitions",
@@ -4189,7 +4276,7 @@
       "summary": "Khung bản đồ kinh tế số đang áp cho xã — của xã hoặc mặc định của nền tảng (source), tâm, bán kính, khung giới hạn [kinh độ nhỏ, vĩ độ nhỏ, kinh độ lớn, vĩ độ lớn] để đặt maxBounds, khung mặc định (default) khi có, và các gợi ý cho biểu mẫu; không có khung nào thì configured=false",
       "screen": "10-ban-do-kinh-te-so §4",
       "permission_kind": "permission",
-      "permission": "asset.read",
+      "permission": "asset.read|feedback.read",
       "idempotency": "",
       "reply_schemas": {
         "200": "comms.mapFrameOut",

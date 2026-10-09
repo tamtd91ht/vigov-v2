@@ -136,7 +136,8 @@ type xuLyPhieuGia struct {
 	// publication is the status the publication route handed down.
 	publication string
 
-	// attachmentIDs are the log attachments the note route handed down (migration 0027).
+	// attachmentIDs are the log attachments the note route — and, since 09/10/2026, the three
+	// string-signature acts — handed down (migration 0027).
 	attachmentIDs []string
 
 	loi error
@@ -188,26 +189,26 @@ func (x *xuLyPhieuGia) PhanCong(ctx context.Context, ma string, yc app.YeuCauPha
 }
 
 func (x *xuLyPhieuGia) TienTrangThai(ctx context.Context, ma, ghiChu string, nguoi audit.Actor,
-	quyen app.QuyenXuLyCaXa, hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
+	quyen app.QuyenXuLyCaXa, hanChe app.QuyenXemHanChe, attachmentIDs ...string) (domain.PhieuPhanAnh, error) {
 
 	x.ghi(ctx, "tien", ma, nguoi, hanChe)
-	x.quyenCaXa, x.ghiChu = quyen, ghiChu
+	x.quyenCaXa, x.ghiChu, x.attachmentIDs = quyen, ghiChu, attachmentIDs
 	return x.tra()
 }
 
 func (x *xuLyPhieuGia) Dong(ctx context.Context, ma, ketQua, ghiChu string, nguoi audit.Actor,
-	hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
+	hanChe app.QuyenXemHanChe, attachmentIDs ...string) (domain.PhieuPhanAnh, error) {
 
 	x.ghi(ctx, "dong", ma, nguoi, hanChe)
-	x.ketQua, x.ghiChu = ketQua, ghiChu
+	x.ketQua, x.ghiChu, x.attachmentIDs = ketQua, ghiChu, attachmentIDs
 	return x.tra()
 }
 
 func (x *xuLyPhieuGia) KhongTiepNhan(ctx context.Context, ma, lyDo, ghiChu string, nguoi audit.Actor,
-	hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
+	hanChe app.QuyenXemHanChe, attachmentIDs ...string) (domain.PhieuPhanAnh, error) {
 
 	x.ghi(ctx, "khong-tiep-nhan", ma, nguoi, hanChe)
-	x.lyDo, x.ghiChu = lyDo, ghiChu
+	x.lyDo, x.ghiChu, x.attachmentIDs = lyDo, ghiChu, attachmentIDs
 	return x.tra()
 }
 

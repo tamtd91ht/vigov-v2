@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 1945aef9
+derived_from_commit: 8525ba33
 expires: 2027-01-07
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -37,7 +37,7 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **06** Theo dõi giải ngân | 27 | 27/27 | ✓ |
 | **07** Thu – Chi ngân sách xã | 17 | 14/17 | ✓ |
 | **08** Thông báo | 2 | 2/2 | ✓ |
-| **09** Phản ánh của người dân | 33 | 20/21 +12 ngoài web | ✓ |
+| **09** Phản ánh của người dân | 37 | 20/25 +12 ngoài web | ✓ |
 | **10** Bản đồ phát triển kinh tế số | 13 | 13/13 | ✓ |
 | **11** Quản trị nội dung Mini App | 25 | 22/22 +3 ngoài web | ✓ |
 | **12** Danh bạ cán bộ | 14 | 6/12 +2 ngoài web | ✓ |
@@ -45,7 +45,7 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **14** Cấu hình hệ thống | 135 | 135/135 | ✓ |
 | **15** Phụ lục: giao diện dùng chung & xác thực | 9 | 9/9 | ✓ |
 
-Tổng **373 tuyến** trong hợp đồng. **17** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
+Tổng **377 tuyến** trong hợp đồng. **17** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
 
 ## 2 · web-admin, theo từng mục menu
 
@@ -126,11 +126,11 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `deploy` | 19 | 12 | 1 | 0 |
 | `platform-admin` | 8 | 3 | 0 | 0 |
 | `proto` | 20 | 1 | 0 | 0 |
-| `service-comms` | 25 | 12 | 4 | 3 |
+| `service-comms` | 26 | 12 | 4 | 3 |
 | `service-documents` | 13 | 4 | 3 | 0 |
 | `service-finance` | 32 | 5 | 2 | 0 |
-| `service-identity` | 51 | 14 | 2 | 1 |
-| `service-petitions` | 52 | 18 | 5 | 0 |
+| `service-identity` | 52 | 14 | 2 | 1 |
+| `service-petitions` | 53 | 18 | 5 | 0 |
 | `service-platform` | 16 | 17 | 5 | 1 |
 | `service-reporting` | 5 | 0 | 1 | 0 |
 | `tools` | 20 | 0 | 0 | 0 |

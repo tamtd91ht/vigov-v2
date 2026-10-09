@@ -464,6 +464,9 @@ type vpPetitions struct {
 	// absent = no such row (the zero time, as store.LatestReopenAtTx answers NULL).
 	reopenedAt  map[tenant.ID]map[string]time.Time
 	reopenReads int
+
+	// logged are the timeline rows written through GhiNhatKy (the removal's line) — petition_log_attachment_remove_test.go.
+	logged []domain.NhatKyPhanAnh
 }
 
 func (p *vpPetitions) LatestReopenAtTx(_ context.Context, tx *pkgstore.ScopedTx, petitionID string) (time.Time, error) {
@@ -507,6 +510,8 @@ func (p *vpPetitions) CitizenPetitionForUpdate(context.Context, *pkgstore.Scoped
 type vpFiles struct {
 	*ppFiles
 	links map[string]string
+	// softDeleted records "id|by|reason" per SoftDelete — petition_log_attachment_remove_test.go.
+	softDeleted []string
 }
 
 func (f *vpFiles) countPurpose(commune tenant.ID, subjectID, purpose string, pendingSince time.Time) int {

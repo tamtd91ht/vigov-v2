@@ -36,11 +36,13 @@ import (
 	"errors"
 	"fmt"
 	"time"
+	"unicode/utf8"
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/storage"
 	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/core/ulid"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
 	petstore "github.com/vihat/vigov/service-petitions/internal/store"
 )
@@ -52,7 +54,17 @@ const (
 	ActionPetitionLogAttachmentRejected   = "tu_choi_tep_nhat_ky_phan_anh"
 	ActionPetitionLogAttachmentExpired    = "tep_nhat_ky_phan_anh_het_han_tai"
 	ActionPetitionLogAttachmentDownloaded = "tai_tep_nhat_ky_phan_anh"
+	// ActionPetitionLogAttachmentRemoved is the soft delete (Remove) — the task twin's `go_tep_nhiem_vu`.
+	ActionPetitionLogAttachmentRemoved = "go_tep_phan_anh"
 )
+
+// PetitionLogAttachmentPetitions is what the three acts read of the register, plus the timeline write the
+// removal appends its line with. *petstore.PhieuPhanAnhStore satisfies it.
+type PetitionLogAttachmentPetitions interface {
+	VerificationPhotoPetitions
+	// vi-name-ok: mirrors the existing PhieuPhanAnhStore method; rule 12 invariant 3 keeps existing names
+	GhiNhatKy(ctx context.Context, tx *store.ScopedTx, e domain.NhatKyPhanAnh) error
+}
 
 // ErrPetitionLogAttachmentCountReached: the petition already carries platform's
 // `max_files_per_subject` log attachments. 409.
@@ -72,12 +84,15 @@ type PetitionLogAttachmentFiles interface {
 		pendingSince time.Time) (int, error)
 	ByID(ctx context.Context, id string) (*domain.StoredFile, error)
 	LinkedPetitionLogEntry(ctx context.Context, fileID string) (string, error)
+	// The removal's two: the link read on the transaction's connection, and the soft delete.
+	LinkedPetitionLogEntryTx(ctx context.Context, tx *store.ScopedTx, fileID string) (string, error)
+	SoftDelete(ctx context.Context, tx *store.ScopedTx, id, by, reason string, at time.Time) error
 }
 
-// PetitionLogAttachments owns the three attachment acts on a petition's log.
+// PetitionLogAttachments owns the four attachment acts on a petition's log.
 type PetitionLogAttachments struct {
 	db        *store.DB
-	petitions VerificationPhotoPetitions // the staff register's two reads — same pair, same reasons
+	petitions PetitionLogAttachmentPetitions // the staff register's two reads, and the removal's line
 	files     PetitionLogAttachmentFiles
 
 	// ANY OF THE THREE nil means "not configured" (503). Download needs only `objects`.
@@ -87,11 +102,13 @@ type PetitionLogAttachments struct {
 
 	newID func() (string, error)
 	now   func() time.Time
+	// logID is the removal's timeline-row id seam; nil means ulid.
+	logID func() (string, error)
 }
 
 // NewPetitionLogAttachments builds the use case. Pass UNTYPED nil for a dependency that is not
 // configured (a nil *storage.Client inside a non-nil interface would panic on first use).
-func NewPetitionLogAttachments(db *store.DB, petitions VerificationPhotoPetitions,
+func NewPetitionLogAttachments(db *store.DB, petitions PetitionLogAttachmentPetitions,
 	files PetitionLogAttachmentFiles, objects ObjectStore, scanner MalwareScanner,
 	policies UploadPolicies) *PetitionLogAttachments {
 	return &PetitionLogAttachments{db: db, petitions: petitions, files: files, objects: objects,
@@ -415,5 +432,124 @@ func (uc *PetitionLogAttachments) DownloadLink(ctx context.Context, ma, id strin
 	return AttachmentDownload{URL: u, ExpiresAt: now.Add(storage.MaxDownloadTTL)}, nil
 }
 
+// Remove soft-deletes one log attachment of petition `ma` — the task twin (TaskAttachments.Remove, user
+// decision 07/10/2026) on a petition (owner decision 09/10/2026, ADR 0076 §4b's shape): THE UPLOADER, OR
+// A HOLDER OF `feedback.resolve` (`resolve`). Route permission: `feedback.read`, the gate; this decides.
+//
+// WHICH FILES: only one the caller can SEE (domain.MayDownloadPetitionLogAttachment) — this petition's
+// log attachment, stored, on a log entry OR the caller's own draft. Anything else — unknown, another
+// commune's, another petition's, a scene or verification photo, somebody else's draft, already removed —
+// is ErrAttachmentNotFound, one answer. A visible file the caller neither uploaded nor holds
+// `feedback.resolve` for is domain.ErrAttachmentRemovalNotAllowed (403: the file is visible to them, so
+// hiding its existence hides nothing). `can-bo` without `feedback.restricted` is the petition's 404.
+//
+// ONE TRANSACTION: the petition FOR UPDATE (petition then file — the order RequestUpload, Complete and
+// the note take), the file FOR UPDATE, the soft delete, the timeline line, the audit entry. A refusal
+// writes nothing.
+//
+// THE OBJECT IS NOT TOUCHED and THE LINK STAYS: a records file is disposed of by the records schedule,
+// never by a command (ADR 0052 §6, §7; rule 7), and petition_log_attachment is append-only — "this entry
+// was written with this file" stays true. Every read path skips the deleted row (ByID, the timeline's
+// batched read, the attach candidates).
+//
+// ⚠ THE TIMELINE LINE IS A `ghi-chu` ROW written by the remover, carrying domain.AttachmentRemovalLogText —
+// the task twin's sentence, with no file name. A dedicated act code (`go-tep`) would need migration 0030's
+// CHECK `nhat_ky_phan_anh_hanh_vi_hop_le` widened — a migration on a populated table, not built here.
+//
+// THE TRAIL carries the file id, the entry it was on, the new line's id and the reason's LENGTH — never
+// the reason's text nor the file name (rule 6, forbidden #4; rule 3).
+func (uc *PetitionLogAttachments) Remove(ctx context.Context, ma, id, reasonRaw string, actor audit.Actor,
+	resolve QuyenXuLyCaXa, restricted QuyenXemHanChe) error {
+
+	reason, err := domain.CheckAttachmentRemovalReason(reasonRaw)
+	if err != nil {
+		return err
+	}
+	if err := coCanBoThucHien(actor); err != nil {
+		return err
+	}
+	text, err := domain.KiemGhiChu(domain.AttachmentRemovalLogText(reason))
+	if err != nil {
+		return err
+	}
+	now := uc.clock()
+
+	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		p, err := uc.petitions.TheoMaTraCuuDeSua(ctx, tx, ma)
+		if err != nil {
+			return err
+		}
+		if err := duocChamPhieuHanChe(p, restricted); err != nil {
+			return err
+		}
+		f, err := uc.files.ForUpdate(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if f == nil {
+			return ErrAttachmentNotFound
+		}
+		linked, err := uc.files.LinkedPetitionLogEntryTx(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if !domain.MayDownloadPetitionLogAttachment(*f, p.ID, linked, actor.ID) {
+			return ErrAttachmentNotFound
+		}
+		// THE DOOR, uploader first — the narrower, truer reason, named in the trail.
+		door := "nguoi-tai-len"
+		if f.UploadedBy != actor.ID {
+			if !resolve {
+				return domain.ErrAttachmentRemovalNotAllowed
+			}
+			door = "ket-thuc-xu-ly-phan-anh"
+		}
+		if f.LegalHold {
+			return domain.ErrAttachmentUnderLegalHold
+		}
+
+		// `deleted_by` IS THE STAFF BUSINESS CODE (rule 6, invariant 8); coCanBoThucHien refused an empty one.
+		if err := uc.files.SoftDelete(ctx, tx, id, actor.ID, reason, now); err != nil {
+			return err
+		}
+
+		logID, err := uc.newLogID()
+		if err != nil {
+			return fmt.Errorf("nhat_ky_phan_anh: sinh mã nội bộ: %w", err)
+		}
+		if err := uc.petitions.GhiNhatKy(ctx, tx, domain.NhatKyPhanAnh{
+			ID: logID, PhieuPhanAnhID: p.ID, ThoiDiem: now, NguoiMa: actor.ID,
+			HanhVi: domain.NhatKyGhiChu, TrangThai: p.TrangThai, NoiDung: text,
+		}); err != nil {
+			return err
+		}
+
+		return writeAttachmentAudit(ctx, tx, actor, p.MaTraCuu, ActionPetitionLogAttachmentRemoved, now, map[string]any{
+			"tep_id":       id,
+			"nhat_ky_id":   logID,
+			"gan_nhat_ky":  linked, // "" when the file was a draft on no entry
+			"quyen_go":     door,
+			"do_dai_ly_do": utf8.RuneCountInString(reason),
+			"truoc":        map[string]any{"trang_thai": string(f.Status), "da_go": false},
+			"sau":          map[string]any{"trang_thai": string(f.Status), "da_go": true},
+		})
+	})
+	if err != nil {
+		return bocPhieu(ctx, "gỡ tệp đính kèm nhật ký", err)
+	}
+	return nil
+}
+
+// newLogID is the timeline row id seam; ulid in production.
+func (uc *PetitionLogAttachments) newLogID() (string, error) {
+	if uc.logID == nil {
+		return ulid.Moi()
+	}
+	return uc.logID()
+}
+
 // Compile-time proof the real dependencies satisfy the interfaces.
-var _ PetitionLogAttachmentFiles = (*petstore.StoredFileStore)(nil)
+var (
+	_ PetitionLogAttachmentFiles     = (*petstore.StoredFileStore)(nil)
+	_ PetitionLogAttachmentPetitions = (*petstore.PhieuPhanAnhStore)(nil)
+)

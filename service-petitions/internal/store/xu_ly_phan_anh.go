@@ -291,18 +291,19 @@ func quetPhieuCoTaoLuc(r quangKiem) (domain.PhieuPhanAnh, error) {
 func (s *PhieuPhanAnhStore) DanhSach(ctx context.Context, loc LocPhieu, yc page.Request) (
 	page.Result[domain.PhieuPhanAnh], error) {
 
-	if err := validateCitizenReportMetric(loc); err != nil {
+	// registerFilter (citizen_report_figures.go) — the SAME tail the total and the heat map read through.
+	// `deleted_at IS NULL` FIRST AND ALWAYS (rule 7, invariant 2); the partial index `phieu_phan_anh_so`
+	// is built on exactly this predicate.
+	filter, args, err := registerFilter(loc)
+	if err != nil {
 		return page.NewResult[domain.PhieuPhanAnh](), err
 	}
-	dieuKien, args := locPhieuThanhSQL(loc)
 
 	return store.QueryPage(ctx, s.db.For(ctx), store.PageSpec{
 		Columns: cotPhieuCoTaoLuc,
 		Table:   "phieu_phan_anh",
-		// `deleted_at IS NULL` FIRST AND ALWAYS (rule 7, invariant 2). The partial index
-		// `phieu_phan_anh_so` is built on exactly this predicate.
-		Filter: `AND deleted_at IS NULL` + dieuKien,
-		Args:   args,
+		Filter:  filter,
+		Args:    args,
 	}, yc, mocPhieu, func(rows *sql.Rows) (domain.PhieuPhanAnh, string, error) {
 		p, err := quetPhieuCoTaoLuc(rows)
 		if err != nil {

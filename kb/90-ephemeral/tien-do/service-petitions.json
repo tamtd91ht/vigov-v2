@@ -669,6 +669,15 @@
       "viec": "ADR 0086: outbox staff_notice_outbox (0036) + bộ chuyển; 6 loại tin (giao việc, lùi hạn, chờ duyệt, nhắc tên — thêm mentioned_staff_codes vào POST /tasks/{ma}/log-entries —, phân công phản ánh, mở lại phản ánh); scheduled_reports NHIEM_VU + PHAN_ANH. Lời hệ thống: tắt được câu chưa sửa (0035).",
       "bang_chung": "e882e0d0, 7eccd37e. go build/vet/test xanh. CHƯA CHẠY TRÊN POSTGRESQL THẬT (máy không có DSN/Docker).",
       "tiep_theo": "Thứ tự triển khai: identity → comms → petitions/documents (identity cũ không biết SCHEDULED_REPORTS sẽ từ chối cả lượt nhận). Chạy migration trên PostgreSQL thật. Dòng outbox bị gạt (failed_class) chưa có màn xem/đẩy lại; dòng đã giao chưa dọn. Tiêu đề báo cáo dùng lời mặc định — chưa đọc được lời xã sửa ở service-reporting (chưa có hợp đồng)."
+    },
+    {
+      "id": "phan-anh-backend-dot-a-09-10",
+      "menu": "phan-anh-nguoi-dan",
+      "trang_thai": "xong",
+      "viec": "Backend /phan-anh đợt A (chủ dự án 09/10/2026, ADR 0053 §C, 0072, 0088): GET citizen-report-counts, GET citizen-report-points (lat,lng,status; trần 5000 → 422 too_many_points), GET citizen-report-breakdown (đúng hạn/trễ theo vị từ thẻ tổng quan, tồn trễ hiện tại, theo lĩnh vực + dòng chưa phân loại, theo bộ phận giờ làm việc từ lần giao cuối → xu_ly_xong_luc qua identity, theo thôn + dòng chưa xác định), DELETE log-attachments/{id} (xoá mềm, lý do bắt buộc, người tải lên HOẶC feedback.resolve), attachments trên 6 bước xử lý (gắn cùng giao dịch).",
+      "bang_chung": "commit đợt này (xem git log 'feat(petitions): /phan-anh đợt A'). go build/vet/test service-petitions xanh; check_quyen 0 khoá lạ; make check: 2 ca dashboard/export quá giờ lúc tải + 2 gói -race thiếu bộ nhớ (chạy riêng xanh) — không thuộc đợt này. Chưa chạy PostgreSQL thật (VIGOV_TEST_DSN).",
+      "tiep_theo": "(1) Đợt B: ghi thôn (Active RPC) ở nhập hộ/phân loại/tạo phiếu công dân; gộp phiếu theo ADR 0087 (migration merged_into, ngưỡng theo xã) và thêm mệnh đề loại phiếu phụ ở scopeFilter/registerFilter. (2) Dòng nhật ký khi gỡ tệp dùng hanh_vi 'ghi-chu' — mã riêng 'go-tep' cần mở CHECK bảng có dữ liệu (data-migration-builder). (3) attachments trên POST …/status chưa vào openapi (lỗ apidoc thân tuỳ chọn). (4) Điểm hài lòng theo lĩnh vực đang là số tồn, chưa theo kỳ — chủ dự án xem. (5) Chạy ca PG (CTE giờ xử lý, GROUPING SETS).",
+      "no_confirm": []
     }
   ]
 }

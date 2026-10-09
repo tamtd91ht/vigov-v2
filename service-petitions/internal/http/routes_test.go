@@ -225,6 +225,8 @@ type mayChu struct {
 	taskSummary   *taskSummaryFake
 	reportSummary *citizenReportSummaryFake
 	overdue       *overdueQueueFake
+	// breakdown is the /phan-anh statistics read — citizen_report_figures_test.go.
+	breakdown *citizenReportBreakdownFake
 
 	// filterIdentity answers `soon=true` and `scope=related` — task_filter_identity_test.go.
 	filterIdentity *taskFilterIdentityFake
@@ -297,6 +299,7 @@ func dungMayChu(t *testing.T) *mayChu {
 	taskSummary := taskSummarySample()
 	reportSummary := citizenReportSummarySample()
 	overdue := overdueQueueSample()
+	breakdown := citizenReportBreakdownSample()
 	filterIdentity := taskFilterIdentitySample()
 	registerExport := &registerExportFake{}
 	taskImport := &taskImportFake{}
@@ -371,6 +374,8 @@ func dungMayChu(t *testing.T) *mayChu {
 			TaskSummary:                  taskSummary,
 			CitizenReportSummary:         reportSummary,
 			OverdueQueue:                 overdue,
+			// The /phan-anh statistics — citizen_report_figures_test.go.
+			CitizenReportBreakdown: breakdown,
 			// The audit-log reader: present because Register refuses a nil one; its suite is
 			// audit_entries_test.go.
 			AuditLog: &auditLogFake{},
@@ -401,6 +406,7 @@ func dungMayChu(t *testing.T) *mayChu {
 		taskSummary:   taskSummary,
 		reportSummary: reportSummary,
 		overdue:       overdue,
+		breakdown:     breakdown,
 
 		filterIdentity: filterIdentity,
 		registerExport: registerExport,
@@ -529,8 +535,10 @@ func depsDay() Deps {
 		TaskSummary:          taskSummarySample(),
 		CitizenReportSummary: citizenReportSummarySample(),
 		OverdueQueue:         overdueQueueSample(),
-		AuditLog:             &auditLogFake{},
-		SystemMessages:       &systemMessagesFake{},
+		// The /phan-anh statistics.
+		CitizenReportBreakdown: citizenReportBreakdownSample(),
+		AuditLog:               &auditLogFake{},
+		SystemMessages:         &systemMessagesFake{},
 	}
 }
 

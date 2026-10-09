@@ -124,6 +124,10 @@ type (
 	PhieuPhanAnhDanhSach interface {
 		DanhSach(ctx context.Context, loc petstore.LocPhieu, yc page.Request) (
 			page.Result[domain.PhieuPhanAnh], error)
+		// The total and the heat map under the SAME filter (09/10/2026) — on THIS interface, the
+		// NhiemVuDanhSach precedent, so neither can be wired to a reader other than the list's.
+		CountCitizenReports(ctx context.Context, loc petstore.LocPhieu) (int, error)
+		CitizenReportPoints(ctx context.Context, loc petstore.LocPhieu) ([]domain.CitizenReportPoint, error)
 	}
 
 	// NhiemVuDoc is the read side of ONE task, for GET /api/v1/tasks/{ma}.
@@ -386,14 +390,18 @@ type (
 		// `ghiChu` on TienTrangThai, Dong and KhongTiepNhan (and GhiChu on the three request structs) is
 		// the OPTIONAL internal note stored on the act's logbook row (migration 0013). Free text: it
 		// grants nothing, and it is neither of the two permission facts.
+		//
+		// `attachmentIDs` (09/10/2026) on the three string-signature acts, and `Attachments` on the three
+		// request structs: optional completed log attachments linked to the act's timeline row in its
+		// transaction (app/act_attachments.go).
 		TienTrangThai(ctx context.Context, ma, ghiChu string, nguoi audit.Actor,
-			quyen app.QuyenXuLyCaXa, hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error)
+			quyen app.QuyenXuLyCaXa, hanChe app.QuyenXemHanChe, attachmentIDs ...string) (domain.PhieuPhanAnh, error)
 		Dong(ctx context.Context, ma, ketQua, ghiChu string, nguoi audit.Actor,
-			hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error)
+			hanChe app.QuyenXemHanChe, attachmentIDs ...string) (domain.PhieuPhanAnh, error)
 		// The two terminal branches (user decisions 24-25/09/2026). Same uniformity: both take the
 		// restricted fact, so neither can end a report about a member of staff for a colleague.
 		KhongTiepNhan(ctx context.Context, ma, lyDo, ghiChu string, nguoi audit.Actor,
-			hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error)
+			hanChe app.QuyenXemHanChe, attachmentIDs ...string) (domain.PhieuPhanAnh, error)
 		ChuyenCapTren(ctx context.Context, ma string, yc app.YeuCauChuyenCapTren, nguoi audit.Actor,
 			hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error)
 		// The manual internal note (POST …/log-entries). It takes the restricted fact like every act,
@@ -591,6 +599,9 @@ type Deps struct {
 	TaskSummary          TaskSummaryReader
 	CitizenReportSummary CitizenReportSummaryReader
 	OverdueQueue         OverdueQueueReader
+	// The /phan-anh statistics read (09/10/2026) — a use case, it asks identity's calendar
+	// (app.CitizenReportBreakdown). routes_citizen_report_figures.go refuses it nil.
+	CitizenReportBreakdown CitizenReportBreakdownReader
 
 	// AuditLog reads this service's own `audit_log` for the "Xem nhật ký hệ thống" screen (ADR 0054),
 	// withholding `can-bo` petitions' entries from a reader without `feedback.restricted` (§4).
@@ -727,6 +738,8 @@ func Register(mux *http.ServeMux, d Deps) {
 
 	// The two task catalogues' Excel imports — six routes, all `admin.lookup` (routes_catalogue_import.go).
 	registerCatalogueImportRoutes(mux, d, h)
+	// The /phan-anh statistics and the log-attachment removal — four routes (routes_citizen_report_figures.go).
+	registerCitizenReportFigureRoutes(mux, d, h)
 
 	// --- the commune's task catalogues. TWO READ ROUTES, AND DELIBERATELY NO WRITE ROUTE --------
 	//

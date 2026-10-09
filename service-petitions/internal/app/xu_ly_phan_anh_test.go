@@ -1020,8 +1020,9 @@ func TestDongKhongNhanQuyenNguoiDuocGiao(t *testing.T) {
 	// WIDENS appears.
 	//
 	// The assignment on the row above is irrelevant to this act by construction. The third string is
-	// the optional internal note (migration 0013) — free text, which grants nothing.
-	var dong func(context.Context, string, string, string, audit.Actor, QuyenXemHanChe) (
+	// the optional internal note (migration 0013) — free text, which grants nothing. The trailing
+	// `...string` (09/10/2026) is the optional attachment ids — file ids, which grant nothing either.
+	var dong func(context.Context, string, string, string, audit.Actor, QuyenXemHanChe, ...string) (
 		domain.PhieuPhanAnh, error) = uc.Dong
 	if _, err := dong(ctx, maPhieuThu, ketQuaThat, "", canBoThu(), khongQuyenHanChe); err != nil {
 		t.Fatalf("Dong: %v", err)

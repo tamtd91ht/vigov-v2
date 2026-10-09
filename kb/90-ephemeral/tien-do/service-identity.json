@@ -590,6 +590,15 @@
       "viec": "ADR 0086 B2: migration 0029, lịch scheduled_reports (thứ + mùng 1, giờ VN), automation_run.scheduled_report_period.",
       "bang_chung": "4ba24ac5. go build/test xanh. CHƯA CHẠY TRÊN POSTGRESQL THẬT (máy không có DSN/Docker).",
       "tiep_theo": "Chạy migration trên PostgreSQL thật."
+    },
+    {
+      "id": "thon-rpc-cho-phieu-09-10",
+      "menu": "phan-anh-nguoi-dan",
+      "trang_thai": "xong",
+      "viec": "RPC ResolveActiveResidentialUnits + ResolveResidentialUnitNames và client core/identityclient (ADR 0088) — kiểm thôn trước khi ghi phiếu, tên thôn kể cả đã ngưng cho hiển thị/báo cáo.",
+      "bang_chung": "eacc087e (proto), 76b30e7b (máy chủ + client). go build/vet/test core + service-identity xanh; ca PG store SKIP (chưa có VIGOV_TEST_DSN).",
+      "tiep_theo": "Chạy ca PG residential_unit_lookup_pg_test.go với DSN thật. Tuyến cho Mini App lấy danh sách thôn (công dân) còn chờ chủ dự án (ADR 0088 còn mở #2).",
+      "no_confirm": []
     }
   ]
 }

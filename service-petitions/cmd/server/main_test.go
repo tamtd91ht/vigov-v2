@@ -123,6 +123,17 @@ func (khoPhieu) DanhSach(ctx context.Context, _ petstore.LocPhieu, _ page.Reques
 	return page.NewResult[domain.PhieuPhanAnh](), nil
 }
 
+// CountCitizenReports and CitizenReportPoints: the total and the map over the same list — same rule.
+func (khoPhieu) CountCitizenReports(ctx context.Context, _ petstore.LocPhieu) (int, error) {
+	_ = tenant.MustFrom(ctx)
+	return 0, nil
+}
+
+func (khoPhieu) CitizenReportPoints(ctx context.Context, _ petstore.LocPhieu) ([]domain.CitizenReportPoint, error) {
+	_ = tenant.MustFrom(ctx)
+	return []domain.CitizenReportPoint{}, nil
+}
+
 // khoNhiemVu stands in for the TASK register, and it serves both read routes from one type for the
 // same reason khoPhieu does: this file is about the EDGE CHAIN — Host -> commune -> principal — and
 // the only thing it can prove about a store is that the commune reached it. A route reachable without
@@ -463,6 +474,9 @@ func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *m
 		TaskSummary:          petstore.NewNhiemVuStore(nil),
 		CitizenReportSummary: petstore.NewPhieuPhanAnhStore(nil),
 		OverdueQueue:         app.NewOverdueQueue(nil, nil, nil),
+		// Never invoked here; the route file refuses a nil. Own suites: internal/app and internal/http
+		// citizen_report_breakdown_test.go / citizen_report_figures_test.go.
+		CitizenReportBreakdown: app.NewCitizenReportBreakdown(nil, nil),
 		// Never invoked here; Register refuses a nil. Built exactly as main() builds it, so the
 		// real restricted-field subquery passes WithHiddenSubjects' wiring-time check in this test
 		// too. Own suite: internal/http/audit_entries_test.go.

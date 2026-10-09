@@ -373,6 +373,15 @@
       "viec": "ADR 0086: migration 0025 mở CHECK cho 9 loại; kindFromWire 18–25; phát hành thông báo nội bộ ghi chuông trong cùng giao dịch.",
       "bang_chung": "954f64ce. go build/vet/test xanh. CHƯA CHẠY TRÊN POSTGRESQL THẬT (máy không có DSN/Docker).",
       "tiep_theo": "Chạy migration trên PostgreSQL thật."
+    },
+    {
+      "id": "map-frame-cho-feedback-read-09-10",
+      "menu": "phan-anh-nguoi-dan",
+      "trang_thai": "xong",
+      "viec": "GET /api/v1/map-frame đọc được bằng asset.read HOẶC feedback.read (ADR 0072 Trả lời 09/10/2026) để bản đồ phản ánh lấy tâm theo xã; ghi vẫn admin.lookup.",
+      "bang_chung": "8525ba33. go test service-comms/internal/http xanh; check_quyen 0 khoá lạ.",
+      "tiep_theo": "—",
+      "no_confirm": []
     }
   ]
 }

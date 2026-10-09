@@ -5032,6 +5032,282 @@
         }
       }
     },
+    "/api/v1/citizen-report-breakdown": {
+      "get": {
+        "summary": "Thống kê phản ánh trong kỳ [from, to) — đúng hạn/trễ hạn và tồn quá hạn; theo lĩnh vực (kèm dòng chưa phân loại); theo bộ phận đang giữ phiếu lúc xử lý xong (thời gian xử lý theo giờ làm việc); theo thôn (kèm dòng chưa xác định địa bàn)",
+        "operationId": "petitions_get_citizen_report_breakdown",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "09-phan-anh-nguoi-dan §3",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "report.read"
+        },
+        "x-vigov-task": "575b37e7d853",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.citizenReportBreakdownOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "working_calendar_not_configured"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "working_hours_unavailable"
+            ]
+          }
+        }
+      }
+    },
+    "/api/v1/citizen-report-counts": {
+      "get": {
+        "summary": "Tổng số phiếu phản ánh theo đúng bộ lọc của danh sách (trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn · đánh giá · phạm vi · metric)",
+        "operationId": "petitions_get_citizen_report_counts",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "09-phan-anh-nguoi-dan §4",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "feedback.read"
+        },
+        "x-vigov-task": "e9fd7ee67eef",
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "field",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "hamlet",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "late",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "metric",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "rating_max",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "unit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.citizenReportCountsOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/citizen-report-fields": {
       "get": {
         "summary": "Danh mục lĩnh vực phản ánh của xã — đủ mọi mã nền tảng cấp, kèm nhãn, thứ tự, bật/tắt của xã (màn hình cấu hình)",
@@ -5262,6 +5538,184 @@
           },
           "503": {
             "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/citizen-report-points": {
+      "get": {
+        "summary": "Điểm phản ánh trên bản đồ nhiệt theo bộ lọc của danh sách — chỉ vĩ độ, kinh độ, trạng thái",
+        "operationId": "petitions_get_citizen_report_points",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "09-phan-anh-nguoi-dan §4",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "feedback.read"
+        },
+        "x-vigov-task": "1e71292a545d",
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "field",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "hamlet",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "late",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "metric",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "rating_max",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "unit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.citizenReportPointsOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "too_many_points"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
             "content": {
               "application/json": {
                 "schema": {
@@ -6222,6 +6676,117 @@
           },
           "503": {
             "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/citizen-reports/{maTraCuu}/log-attachments/{id}": {
+      "parameters": [
+        {
+          "name": "maTraCuu",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Gỡ một tệp đính kèm khỏi nhật ký xử lý phiếu phản ánh (xoá mềm, lý do bắt buộc, không xoá tệp gốc) — người đã tải lên hoặc cán bộ có quyền kết thúc xử lý phản ánh",
+        "operationId": "petitions_delete_citizen_reports_by_maTraCuu_log_attachments_by_id",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "09-phan-anh-nguoi-dan §8.7",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "feedback.read"
+        },
+        "x-vigov-task": "2920efe7a068",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/petitions.citizenReportLogAttachmentRemoveIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "legal_hold"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
             "content": {
               "application/json": {
                 "schema": {
@@ -18296,7 +18861,10 @@
         "x-vigov-screen": "10-ban-do-kinh-te-so §4",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "asset.read"
+          "any_of": [
+            "asset.read",
+            "feedback.read"
+          ]
         },
         "x-vigov-task": "c000a92deb22",
         "responses": {
@@ -47944,6 +48512,12 @@
           },
           "note": {
             "type": "string"
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -48054,6 +48628,191 @@
         ],
         "additionalProperties": false
       },
+      "petitions.citizenReportBreakdownOut": {
+        "type": "object",
+        "properties": {
+          "as_of": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/petitions.citizenReportBreakdownTotalsOut"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/petitions.citizenReportFieldRowOut"
+            }
+          },
+          "units": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/petitions.citizenReportUnitRowOut"
+            }
+          },
+          "residential_units": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/petitions.citizenReportResidentialUnitRowOut"
+            }
+          }
+        },
+        "required": [
+          "as_of",
+          "fields",
+          "residential_units",
+          "totals",
+          "units"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.citizenReportBreakdownTotalsOut": {
+        "type": "object",
+        "properties": {
+          "on_time_sample": {
+            "type": "integer"
+          },
+          "on_time": {
+            "type": "integer"
+          },
+          "late": {
+            "type": "integer"
+          },
+          "overdue": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "late",
+          "on_time",
+          "on_time_sample",
+          "overdue"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.citizenReportCountsOut": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.citizenReportFieldRowOut": {
+        "type": "object",
+        "properties": {
+          "field_code": {
+            "type": "string"
+          },
+          "received": {
+            "type": "integer"
+          },
+          "finished": {
+            "type": "integer"
+          },
+          "on_time_sample": {
+            "type": "integer"
+          },
+          "on_time": {
+            "type": "integer"
+          },
+          "late": {
+            "type": "integer"
+          },
+          "rating_sample": {
+            "type": "integer"
+          },
+          "rating_sum": {
+            "type": "integer"
+          },
+          "overdue": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "field_code",
+          "finished",
+          "late",
+          "on_time",
+          "on_time_sample",
+          "overdue",
+          "rating_sample",
+          "rating_sum",
+          "received"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.citizenReportLogAttachmentRemoveIn": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.citizenReportPointOut": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "number"
+          },
+          "lng": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "lat",
+          "lng",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.citizenReportPointsOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/petitions.citizenReportPointOut"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.citizenReportResidentialUnitRowOut": {
+        "type": "object",
+        "properties": {
+          "residential_unit_id": {
+            "type": "string"
+          },
+          "received": {
+            "type": "integer"
+          },
+          "overdue": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "overdue",
+          "received",
+          "residential_unit_id"
+        ],
+        "additionalProperties": false
+      },
       "petitions.citizenReportSummaryOut": {
         "type": "object",
         "properties": {
@@ -48103,6 +48862,31 @@
           "on_time",
           "on_time_sample",
           "received"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.citizenReportUnitRowOut": {
+        "type": "object",
+        "properties": {
+          "org_unit_id": {
+            "type": "string"
+          },
+          "finished": {
+            "type": "integer"
+          },
+          "handling_sample": {
+            "type": "integer"
+          },
+          "handling_working_seconds": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "finished",
+          "handling_sample",
+          "handling_working_seconds",
+          "org_unit_id"
         ],
         "additionalProperties": false
       },
@@ -48347,6 +49131,12 @@
           },
           "note": {
             "type": "string"
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -48553,6 +49343,12 @@
           },
           "note": {
             "type": "string"
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -49167,6 +49963,12 @@
           },
           "note": {
             "type": "string"
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -49182,6 +49984,12 @@
           },
           "note": {
             "type": "string"
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [

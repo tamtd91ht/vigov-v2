@@ -338,10 +338,22 @@ func (s *StoredFileStore) LinkedLogEntry(ctx context.Context, fileID string) (st
 // file row FOR UPDATE and must read its link on the same connection (a second connection would wait on
 // the pool while this transaction holds its only one).
 func (s *StoredFileStore) LinkedLogEntryTx(ctx context.Context, tx *store.ScopedTx, fileID string) (string, error) {
+	return linkedLogEntryTx(ctx, tx, taskLinkTable, fileID)
+}
+
+// LinkedPetitionLogEntryTx is LinkedLogEntryTx for a petition log attachment — the petition removal,
+// which holds the file row FOR UPDATE on the same connection.
+func (s *StoredFileStore) LinkedPetitionLogEntryTx(ctx context.Context, tx *store.ScopedTx, fileID string) (string, error) {
+	return linkedLogEntryTx(ctx, tx, petitionLinkTable, fileID)
+}
+
+// linkedLogEntryTx reads one link inside the transaction. `table` is one of the two closed constants
+// above, never a value from a request.
+func linkedLogEntryTx(ctx context.Context, tx *store.ScopedTx, table, fileID string) (string, error) {
 	// ScopedTx.Query prefixes `WHERE tenant_id = $1` and binds the commune from the transaction.
-	rows, err := tx.Query(ctx, "log_entry_id", taskLinkTable, "AND stored_file_id = $2", fileID)
+	rows, err := tx.Query(ctx, "log_entry_id", table, "AND stored_file_id = $2", fileID)
 	if err != nil {
-		return "", fmt.Errorf("%s: đọc dòng gắn tệp: %w", taskLinkTable, err)
+		return "", fmt.Errorf("%s: đọc dòng gắn tệp: %w", table, err)
 	}
 	defer rows.Close()
 	var entry string

@@ -104,6 +104,9 @@ type petitionLogAttachmentsFake struct {
 	noteRight  app.QuyenGhiChuCaXa
 	restricted bool
 	err        error
+	// removed records the (file id, reason) of the last Remove — citizen_report_figures_test.go.
+	removedID, removedReason string
+	removeResolve            app.QuyenXuLyCaXa
 
 	byEntry   map[string][]domain.PetitionLogAttachment
 	readIDs   []string

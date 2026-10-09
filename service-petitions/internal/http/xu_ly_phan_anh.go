@@ -136,6 +136,11 @@ type phanLoaiVao struct {
 	// audit delta (its length is), never on the event, never logged. At most domain.GhiChuToiDa
 	// characters; blank after trim is treated as absent.
 	Note string `json:"note,omitempty"`
+
+	// Attachments are OPTIONAL ids of completed log attachments THIS officer uploaded for THIS petition
+	// (POST …/log-attachments, then …/completion), linked to this act's timeline row in the act's
+	// transaction (app/act_attachments.go). `omitempty` keeps it optional in the published contract.
+	Attachments []string `json:"attachments,omitempty"`
 }
 
 // phanCongVao is the body of POST …/{maTraCuu}/assignment — the "Chuyển xử lý" block of §8.5.
@@ -145,6 +150,8 @@ type phanCongVao struct {
 	Assignee string `json:"assignee,omitempty"`
 	// Note: optional internal note — see phanLoaiVao.Note.
 	Note string `json:"note,omitempty"`
+	// Attachments: optional files — see phanLoaiVao.Attachments.
+	Attachments []string `json:"attachments,omitempty"`
 }
 
 // tienTrangThaiVao is the OPTIONAL body of POST …/{maTraCuu}/status. It carries the internal note and
@@ -153,6 +160,8 @@ type phanCongVao struct {
 type tienTrangThaiVao struct {
 	// Note: optional internal note — see phanLoaiVao.Note.
 	Note string `json:"note,omitempty"`
+	// Attachments: optional files — see phanLoaiVao.Attachments.
+	Attachments []string `json:"attachments,omitempty"`
 }
 
 // dongPhieuVao is the body of POST …/{maTraCuu}/closure.
@@ -165,6 +174,8 @@ type dongPhieuVao struct {
 	// Note: optional internal note — see phanLoaiVao.Note. It is NOT the result: the result is what
 	// the citizen reads, the note is what colleagues read.
 	Note string `json:"note,omitempty"`
+	// Attachments: optional files — see phanLoaiVao.Attachments.
+	Attachments []string `json:"attachments,omitempty"`
 }
 
 // khongTiepNhanVao is the body of POST …/{maTraCuu}/rejection.
@@ -175,6 +186,8 @@ type khongTiepNhanVao struct {
 	Reason string `json:"reason"`
 	// Note: optional internal note — see phanLoaiVao.Note.
 	Note string `json:"note,omitempty"`
+	// Attachments: optional files — see phanLoaiVao.Attachments.
+	Attachments []string `json:"attachments,omitempty"`
 }
 
 // chuyenCapTrenVao is the body of POST …/{maTraCuu}/referral. BOTH fields are mandatory: a citizen
@@ -186,6 +199,8 @@ type chuyenCapTrenVao struct {
 	ReceivingBody string `json:"receiving_body"`
 	// Note: optional internal note — see phanLoaiVao.Note.
 	Note string `json:"note,omitempty"`
+	// Attachments: optional files — see phanLoaiVao.Attachments.
+	Attachments []string `json:"attachments,omitempty"`
 }
 
 // --- the register list --------------------------------------------------------------------------
@@ -236,37 +251,22 @@ func (h *Handler) DanhSachPhieu(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	loc, chiGiaoChoToi, err := locPhieuTuQuery(thamSo)
-	if err != nil {
-		thongBao := err.Error()
-		if errors.Is(err, petstore.ErrTimPhieuQuaDai) {
-			// The store's sentinel carries its package prefix (`phieu_phan_anh:`); the four other
-			// refusals of locPhieuTuQuery are this file's own sentences and are already fit to show.
-			thongBao = fmt.Sprintf("Chuỗi tìm kiếm quá dài (tối đa %d ký tự).", petstore.TimPhieuToiDa)
-		}
-		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", thongBao, "")
+	// THE FILTER, THROUGH citizenReportFilter — the ONE parser this list, GET /api/v1/citizen-report-counts
+	// and GET /api/v1/citizen-report-points share (citizen_report_figures.go), so the total and the map
+	// cannot disagree with the list about what a filter means.
+	//
+	// "GIAO CHO TÔI" — THE CODE COMES FROM THE SESSION, NEVER FROM THE REQUEST: `Principal.Ma`, the same
+	// business code the holding rule compares against `can_bo_xu_ly_id` (app.duocTienTrangThai). FAIL
+	// CLOSED ON AN EMPTY CODE: dropping the filter would answer "Giao cho tôi" with the whole register; an
+	// empty `Ma` is identity older than the field — answered as the write routes answer it
+	// (thieuChuTheXuLy), and the store is not reached.
+	//
+	// THE RESTRICTED FACT is the one the four write routes hand down, read through the same helper (rule
+	// 9, invariant 2): two readings of one permission can end up consulting two keys.
+	loc, ok := h.citizenReportFilter(w, r)
+	if !ok {
 		return
 	}
-	// "GIAO CHO TÔI" — THE CODE COMES FROM THE SESSION, NEVER FROM THE REQUEST. The query said only
-	// "my petitions"; WHO "my" is, is `Principal.Ma`, the same business code the holding rule compares
-	// against `can_bo_xu_ly_id` (app.duocTienTrangThai).
-	//
-	// FAIL CLOSED ON AN EMPTY CODE: dropping the filter would answer "Giao cho tôi" with the whole
-	// register, a screen showing every petition under a tab that claims to be one officer's workload.
-	// An empty `Ma` is identity older than the field — a deployment fault, answered as the write
-	// routes answer it (thieuChuTheXuLy), and the store is not reached.
-	if chiGiaoChoToi {
-		p, ok := authz.From(ctx)
-		if !ok || p.Ma == "" {
-			h.thieuChuTheXuLy(w, r)
-			return
-		}
-		loc.CanBoXuLyID = p.Ma
-	}
-	// THE SAME FACT THE FOUR WRITE ROUTES HAND DOWN, read through the same helper (rule 9,
-	// invariant 2). Two readings of one permission are two readings that can end up consulting two
-	// keys, and the one that would drift is whichever is edited second.
-	loc.ChoPhepHanChe = bool(h.coQuyenHanChe(ctx))
 
 	kq, err := h.d.DanhSachPhieu.DanhSach(ctx, loc, yc)
 	if err != nil {
@@ -445,7 +445,7 @@ func (h *Handler) PhanLoaiPhieu(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	sau, err := h.d.XuLyPhieu.ChotLinhVuc(ctx, r.PathValue("maTraCuu"),
-		app.YeuCauChotLinhVuc{LinhVuc: vao.Field, GhiChu: vao.Note}, nguoi, h.coQuyenHanChe(ctx))
+		app.YeuCauChotLinhVuc{LinhVuc: vao.Field, GhiChu: vao.Note, Attachments: vao.Attachments}, nguoi, h.coQuyenHanChe(ctx))
 	if err != nil {
 		h.traLoiLoiXuLy(w, r, "phân loại", err)
 		return
@@ -467,7 +467,7 @@ func (h *Handler) PhanCongPhieu(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	sau, err := h.d.XuLyPhieu.PhanCong(ctx, r.PathValue("maTraCuu"),
-		app.YeuCauPhanCong{BoPhan: vao.Unit, CanBo: vao.Assignee, GhiChu: vao.Note}, nguoi,
+		app.YeuCauPhanCong{BoPhan: vao.Unit, CanBo: vao.Assignee, GhiChu: vao.Note, Attachments: vao.Attachments}, nguoi,
 		h.coQuyenHanChe(ctx))
 	if err != nil {
 		h.traLoiLoiXuLy(w, r, "phân công", err)
@@ -516,7 +516,7 @@ func (h *Handler) TienTrangThaiPhieu(w http.ResponseWriter, r *http.Request) {
 		quyen = app.QuyenXuLyCaXa(h.d.Checker.Allows(ctx, principal, QuyenXuLyCaXa))
 	}
 	sau, err := h.d.XuLyPhieu.TienTrangThai(ctx, r.PathValue("maTraCuu"), vao.Note, nguoi, quyen,
-		h.coQuyenHanChe(ctx))
+		h.coQuyenHanChe(ctx), vao.Attachments...)
 	if err != nil {
 		h.traLoiLoiXuLy(w, r, "chuyển trạng thái", err)
 		return
@@ -538,7 +538,7 @@ func (h *Handler) DongPhieu(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	sau, err := h.d.XuLyPhieu.Dong(ctx, r.PathValue("maTraCuu"), vao.Result, vao.Note, nguoi,
-		h.coQuyenHanChe(ctx))
+		h.coQuyenHanChe(ctx), vao.Attachments...)
 	if err != nil {
 		h.traLoiLoiXuLy(w, r, "đóng phiếu", err)
 		return
@@ -560,7 +560,7 @@ func (h *Handler) KhongTiepNhanPhieu(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	sau, err := h.d.XuLyPhieu.KhongTiepNhan(ctx, r.PathValue("maTraCuu"), vao.Reason, vao.Note, nguoi,
-		h.coQuyenHanChe(ctx))
+		h.coQuyenHanChe(ctx), vao.Attachments...)
 	if err != nil {
 		h.traLoiLoiXuLy(w, r, "không tiếp nhận", err)
 		return
@@ -582,7 +582,8 @@ func (h *Handler) ChuyenCapTrenPhieu(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	sau, err := h.d.XuLyPhieu.ChuyenCapTren(ctx, r.PathValue("maTraCuu"),
-		app.YeuCauChuyenCapTren{LyDo: vao.Reason, CoQuanNhan: vao.ReceivingBody, GhiChu: vao.Note}, nguoi,
+		app.YeuCauChuyenCapTren{LyDo: vao.Reason, CoQuanNhan: vao.ReceivingBody, GhiChu: vao.Note,
+			Attachments: vao.Attachments}, nguoi,
 		h.coQuyenHanChe(ctx))
 	if err != nil {
 		h.traLoiLoiXuLy(w, r, "chuyển cấp trên", err)
@@ -683,6 +684,12 @@ func (h *Handler) traLoiLoiXuLy(w http.ResponseWriter, r *http.Request, viec str
 		// chuỗi ấy đi ra dây trong `trace_id`. `httpx.Error` KHÔNG có trường `field`; muốn trả tên
 		// trường thì đó là một thay đổi ở `core/httpx` cho cả tám dịch vụ.
 		h.tuChoiXuLy(w, r, http.StatusConflict, "petition_state", viec, err)
+	case errors.Is(err, domain.ErrAttachmentListInvalid), errors.Is(err, domain.ErrPetitionAttachmentNotUsable):
+		// 400, THE DOMAIN'S OWN SENTENCE (cauTuChoi, never err.Error(): raised inside the transaction it
+		// arrives wrapped with the commune id). One sentence for every cause of a refused file — telling
+		// them apart would say which ids exist on work this officer did not upload (rule 4, forbidden #2).
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			cauTuChoi(err, domain.ErrAttachmentListInvalid, domain.ErrPetitionAttachmentNotUsable), "")
 	case errors.Is(err, domain.ErrVerificationPhotoRequired):
 		// 409 AND NOT 400 OR 403: the caller holds `feedback.resolve` and sent a valid result; what is
 		// refused is closing THIS petition while it holds no verification photo, in a commune whose
