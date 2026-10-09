@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/vihat/vigov/core/authz"
+	"github.com/vihat/vigov/service-petitions/internal/app"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
 )
 
@@ -80,6 +81,54 @@ func TestAddTaskLogEntry_RefusalsMapWithDomainSentence(t *testing.T) {
 			}
 			if strings.Contains(w.Body.String(), string(xaBocThu)) {
 				t.Errorf("thân lộ mã xã: %s", w.Body.String())
+			}
+		})
+	}
+}
+
+// TestAddTaskLogEntry_MentionsReachTheUseCase: `mentioned_staff_codes` is handed down as sent — the
+// shape and identity checks are the use case's (internal/app/task_log_entry.go), not the handler's.
+func TestAddTaskLogEntry_MentionsReachTheUseCase(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(t, authz.Perm("task.read"))
+
+	w := m.goiGhiNV(t, http.MethodPost, hostA, taskLogEntriesPath(maNVThu), canBoCuaXa(xaA),
+		taskLogEntryIn{Note: "Nhờ hai anh xem giúp.", MentionedStaffCodes: []string{"CB-00311", "CB-00007"}})
+
+	doiMa(t, w, http.StatusCreated)
+	if got := m.ghiNhiemVu.logMentions; len(got) != 2 || got[0] != "CB-00311" || got[1] != "CB-00007" {
+		t.Errorf("nhắc tên truyền xuống = %v", got)
+	}
+}
+
+// TestAddTaskLogEntry_MentionRefusals: the shape refusals answer the domain's sentence; a code identity
+// does not know in this commune is ONE 400 sentence that never echoes the code; identity down is 503.
+func TestAddTaskLogEntry_MentionRefusals(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		err  error
+		want int
+		code string
+	}{
+		{"mã sai dạng", domain.ErrMentionInvalid, http.StatusBadRequest, "invalid_request"},
+		{"nhắc quá nhiều", domain.ErrMentionsTooMany, http.StatusBadRequest, "invalid_request"},
+		{"không phải cán bộ của xã", app.ErrMentionStaffInvalid, http.StatusBadRequest, "invalid_request"},
+		{"chưa kiểm được", app.ErrMentionStaffUnchecked, http.StatusServiceUnavailable, "assignee_check_unavailable"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			m := dungMayChu(t)
+			m.capQuyen(t, authz.Perm("task.read"))
+			m.ghiNhiemVu.loi = bocNhuApp(c.err)
+
+			w := m.goiGhiNV(t, http.MethodPost, hostA, taskLogEntriesPath(maNVThu), canBoCuaXa(xaA),
+				taskLogEntryIn{Note: "x", MentionedStaffCodes: []string{"CB-99999"}})
+
+			doiMa(t, w, c.want)
+			if e := loiTra(t, w); e.Code != c.code {
+				t.Errorf("mã lỗi = %q, muốn %q", e.Code, c.code)
+			}
+			if strings.Contains(w.Body.String(), "CB-99999") || strings.Contains(w.Body.String(), string(xaBocThu)) {
+				t.Errorf("thân lộ mã cán bộ hoặc mã xã: %s", w.Body.String())
 			}
 		})
 	}

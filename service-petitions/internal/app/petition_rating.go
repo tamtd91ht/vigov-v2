@@ -84,13 +84,20 @@ type RatePetition struct {
 	// come from. Both are seams so a test can pin them.
 	newID func() (string, error)
 	now   func() time.Time
+
+	// notices is the STAFF-notice outbox (ADR 0086 kind 24) — not the citizen channel `events`. Built
+	// from `db` by the constructor; noticeID is its own id seam.
+	notices  StaffNoticeOutbox
+	noticeID func() (string, error)
 }
 
 func NewRatePetition(db *store.DB, s PetitionRatingStore, events KhoSuKien) *RatePetition {
 	return &RatePetition{
 		db: db, store: s, events: events,
-		newID: ulid.Moi,
-		now:   func() time.Time { return time.Now().UTC() },
+		newID:    ulid.Moi,
+		now:      func() time.Time { return time.Now().UTC() },
+		notices:  petstore.NewStaffNoticeOutboxStore(db),
+		noticeID: ulid.Moi,
 	}
 }
 
@@ -220,8 +227,15 @@ func (uc *RatePetition) Rate(ctx context.Context, ma string, req RatingRequest, 
 		// THE REOPENING OWES THE CITIZEN A WORD (ADR 0041:53, ADR 0050 point 2; rule 10, invariant 5),
 		// in the SAME transaction. `after.SoLanMoLai` is already incremented, so Occurrence is the
 		// ordinal of THIS entry into `dang-xu-ly` — never a duplicate of the first one.
-		return writeStatusChangedEvent(ctx, tx, uc.events, uc.newID, after, domain.DangXuLy, at,
-			domain.ReopenNextStep(after))
+		if err := writeStatusChangedEvent(ctx, tx, uc.events, uc.newID, after, domain.DangXuLy, at,
+			domain.ReopenNextStep(after)); err != nil {
+			return err
+		}
+		// AND THE OFFICER HOLDING IT A NOTICE (ADR 0086 kind 24), keyed by this rating's timeline row. No
+		// officer on the petition (a unit-only assignment) → no row. The actor is a CITIZEN, so there is
+		// no staff code to drop. NEVER the comment: the title carries the lookup code alone.
+		return writeStaffNotice(ctx, tx, uc.notices, uc.noticeID,
+			domain.PetitionReopenedNotice(after, logID), "", at)
 	})
 	if err != nil {
 		// NOT the code, NOT the comment, NOT the citizen id — the commune and the act only (rule 3).

@@ -45,7 +45,7 @@ func TestAddLogEntry_WhoMayWrite(t *testing.T) {
 			k := khoNVMau()
 			uc, ctx := dungGhiNhiemVu(t, k)
 
-			row, _, err := uc.AddLogEntry(ctx, maNVGoc, "  "+logText+"  ", nil, staffActor(c.code), c.update)
+			row, _, err := uc.AddLogEntry(ctx, maNVGoc, "  "+logText+"  ", nil, nil, staffActor(c.code), c.update)
 			if err != nil {
 				t.Fatalf("ghi nhật ký: %v", err)
 			}
@@ -93,7 +93,7 @@ func TestAddLogEntry_OutsiderRefusedWritesNothing(t *testing.T) {
 	k := khoNVMau()
 	uc, ctx := dungGhiNhiemVu(t, k)
 
-	_, _, err := uc.AddLogEntry(ctx, maNVGoc, logText, nil, staffActor(outsiderCode), false)
+	_, _, err := uc.AddLogEntry(ctx, maNVGoc, logText, nil, nil, staffActor(outsiderCode), false)
 	if !errors.Is(err, domain.ErrNotTaskParticipant) {
 		t.Fatalf("lỗi = %v, muốn ErrNotTaskParticipant", err)
 	}
@@ -120,7 +120,7 @@ func TestAddLogEntry_FinishedTaskStillTakesAnEntry(t *testing.T) {
 	k.nhiemVu[idNVGoc]["ngay_hoan_thanh"] = mocThaoTacNV
 	uc, ctx := dungGhiNhiemVu(t, k)
 
-	row, _, err := uc.AddLogEntry(ctx, maNVGoc, logText, nil, staffActor(maNguoiThucHien), false)
+	row, _, err := uc.AddLogEntry(ctx, maNVGoc, logText, nil, nil, staffActor(maNguoiThucHien), false)
 	if err != nil {
 		t.Fatalf("ghi nhật ký trên việc đã hoàn thành: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestAddLogEntry_BlankNeverOpensATransaction(t *testing.T) {
 	for _, blank := range []string{"", "   \t\n"} {
 		k := khoNVMau()
 		uc, ctx := dungGhiNhiemVu(t, k)
-		_, _, err := uc.AddLogEntry(ctx, maNVGoc, blank, nil, staffActor(maNguoiThucHien), true)
+		_, _, err := uc.AddLogEntry(ctx, maNVGoc, blank, nil, nil, staffActor(maNguoiThucHien), true)
 		if !errors.Is(err, domain.ErrThieuNoiDungNhatKy) {
 			t.Fatalf("nội dung %q: lỗi = %v, muốn ErrThieuNoiDungNhatKy", blank, err)
 		}
@@ -148,7 +148,7 @@ func TestAddLogEntry_BlankNeverOpensATransaction(t *testing.T) {
 func TestAddLogEntry_UnknownTaskIsNotFound(t *testing.T) {
 	k := khoNVMau()
 	uc, ctx := dungGhiNhiemVu(t, k)
-	_, _, err := uc.AddLogEntry(ctx, "NV404", logText, nil, staffActor(maNguoiThucHien), true)
+	_, _, err := uc.AddLogEntry(ctx, "NV404", logText, nil, nil, staffActor(maNguoiThucHien), true)
 	if !errors.Is(err, petstore.ErrNhiemVuKhongTonTai) {
 		t.Fatalf("lỗi = %v, muốn ErrNhiemVuKhongTonTai", err)
 	}
@@ -164,7 +164,7 @@ func TestAddLogEntry_RetiredMonitorColumnGrantsNothing(t *testing.T) {
 	k.nhiemVu[idNVGoc]["chuyen_vien_theo_doi_ma"] = "CB-00412"
 	uc, ctx := dungGhiNhiemVu(t, k)
 
-	_, _, err := uc.AddLogEntry(ctx, maNVGoc, logText, nil, staffActor("CB-00412"), false)
+	_, _, err := uc.AddLogEntry(ctx, maNVGoc, logText, nil, nil, staffActor("CB-00412"), false)
 	if !errors.Is(err, domain.ErrNotTaskParticipant) {
 		t.Fatalf("lỗi = %v, muốn ErrNotTaskParticipant — cột chuyên viên theo dõi đã nghỉ, không cấp quyền", err)
 	}

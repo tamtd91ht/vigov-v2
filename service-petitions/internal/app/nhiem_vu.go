@@ -73,6 +73,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -287,12 +288,39 @@ type GhiNhiemVu struct {
 	// `han_ban_dau`, so a test that cannot pin it cannot assert whether a task was finished on time.
 	// In production this is nil and nayHoac returns the real clock.
 	nay func() time.Time
+
+	// notices is the staff-notice outbox (ADR 0086 A1): kinds 18–21 are written into it inside the act's
+	// own transaction. Built from `db` by the constructor, so no wiring can leave it out.
+	notices StaffNoticeOutbox
+	// noticeID mints outbox row ids — its OWN seam, so the ids a test pins through sinhID (task, timeline
+	// row, request) are not shifted by a notice row.
+	noticeID func() (string, error)
+	// unitHolders answers kind 18's fallback recipients — the unit's `task.assign` holders — BEFORE the
+	// transaction. nil (not wired) means a task handed to a unit with nobody named notifies nobody; the
+	// act itself never depends on it (resolveUnitHolders).
+	unitHolders OrgUnitHolders
 }
 
 func NewGhiNhiemVu(db *store.DB, kho KhoNhiemVuGhi, deNghi KhoDeNghiLuiHan,
 	giaoViec KiemCanBoGiaoViec, orgUnits OrgUnitChecker, files LogAttachmentLinker) *GhiNhiemVu {
 	return &GhiNhiemVu{db: db, kho: kho, deNghi: deNghi, giaoViec: giaoViec, orgUnits: orgUnits,
-		files: files, sinhID: ulid.Moi}
+		files: files, sinhID: ulid.Moi,
+		notices: petstore.NewStaffNoticeOutboxStore(db), noticeID: ulid.Moi}
+}
+
+// WithUnitHolders wires kind 18's unit-holder lookup (identity). Returns the use case for chaining.
+func (uc *GhiNhiemVu) WithUnitHolders(h OrgUnitHolders) *GhiNhiemVu {
+	uc.unitHolders = h
+	return uc
+}
+
+// assignedNoticeHolders resolves, before the transaction, the `task.assign` holders kind 18 falls back
+// to when a task is booked for a unit with no named assignee.
+func (uc *GhiNhiemVu) assignedNoticeHolders(ctx context.Context, n domain.NhiemVu) map[string][]string {
+	if strings.TrimSpace(n.NguoiThucHienMa) != "" || n.BoPhanID == "" {
+		return map[string][]string{}
+	}
+	return resolveUnitHolders(ctx, uc.unitHolders, []string{n.BoPhanID})
 }
 
 // nayHoac is the clock, UTC. `TIMESTAMPTZ` stores an instant rather than a wall reading, so the
@@ -709,6 +737,9 @@ func (uc *GhiNhiemVu) CreateFromSource(ctx context.Context, yc YeuCauTaoNhiemVu,
 	// `updated_at` is the stored value — truncated to the column's microsecond precision here, once.
 	moi.UpdatedAt = bayGio.Truncate(time.Microsecond)
 
+	// Kind 18's fallback recipients, asked before the transaction (resolveUnitHolders).
+	holders := uc.assignedNoticeHolders(ctx, moi)
+
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		if steps.Check != nil {
 			// FIRST, before any lock of this register is taken: the source check locks the SOURCE's
@@ -719,7 +750,7 @@ func (uc *GhiNhiemVu) CreateFromSource(ctx context.Context, yc YeuCauTaoNhiemVu,
 		}
 		if err := uc.createInTx(ctx, tx, &moi, createInTxRequest{
 			ParentCode: yc.ParentCode, TuSinhMa: yc.TuSinhMa, Documents: thayDoiVB,
-			LogPrefix: "Giao việc mới: ", ExtraDelta: steps.AuditExtra,
+			LogPrefix: "Giao việc mới: ", ExtraDelta: steps.AuditExtra, UnitHolders: holders,
 		}, nguoi, bayGio); err != nil {
 			return err
 		}
@@ -745,6 +776,9 @@ type createInTxRequest struct {
 	Documents  domain.ThayDoiVanBan
 	LogPrefix  string
 	ExtraDelta map[string]any
+	// UnitHolders is kind 18's fallback (unit id -> `task.assign` holders), resolved BEFORE the
+	// transaction by the caller. Empty is ordinary: a named assignee needs none.
+	UnitHolders map[string][]string
 }
 
 // createInTx is the IN-TRANSACTION HALF of booking one task — parent under the lock, the register
@@ -814,7 +848,8 @@ func (uc *GhiNhiemVu) createInTx(ctx context.Context, tx *store.ScopedTx, n *dom
 	// THE FIRST TIMELINE ROW, IN THE SAME TRANSACTION. §5.9's drawer renders "Chưa có ghi chép
 	// nào." for an empty log, and a task that was given to somebody with no entry saying so
 	// would render exactly that on the day it was created.
-	if err := uc.ghiNhatKy(ctx, tx, *n, bayGio, nguoi.ID, req.LogPrefix+n.Ma); err != nil {
+	logID, err := uc.writeLogEntry(ctx, tx, *n, bayGio, nguoi.ID, req.LogPrefix+n.Ma)
+	if err != nil {
 		return err
 	}
 
@@ -862,12 +897,19 @@ func (uc *GhiNhiemVu) createInTx(ctx context.Context, tx *store.ScopedTx, n *dom
 	if err != nil {
 		return fmt.Errorf("nhiem_vu: mã hoá delta: %w", err)
 	}
-	return audit.Write(ctx, tx, audit.Entry{
+	if err := audit.Write(ctx, tx, audit.Entry{
 		Actor:   nguoi,
 		Action:  HanhViTaoNhiemVu,
 		Subject: n.Ma,
 		Delta:   delta,
-	})
+	}); err != nil {
+		return err
+	}
+	// KIND 18 (ADR 0086), keyed by THIS act's timeline row — every door into the create path (form,
+	// meeting split, petition, citizen letter, spreadsheet import) arrives here, so none can book a task
+	// without telling whoever it was handed to.
+	return writeStaffNotice(ctx, tx, uc.notices, uc.noticeID,
+		domain.TaskAssignedNotice(*n, logID, domain.TaskAssignedRecipients(*n, req.UnitHolders)), nguoi.ID, bayGio)
 }
 
 // chuanHoaTaoNhiemVu validates and trims the request. IT RUNS BEFORE THE TRANSACTION OPENS: a
@@ -1444,7 +1486,7 @@ func (uc *GhiNhiemVu) DoiTrangThai(ctx context.Context, ma string, yc YeuCauDoiT
 	}
 	// The optional handover and attachments (task_status_handover.go): shape, then identity — BEFORE
 	// the transaction, exactly as Reassign. Absent, this asks nothing and changes nothing.
-	extras, err := uc.prepareStatusExtras(ctx, yc)
+	extras, err := uc.prepareStatusExtras(ctx, ma, yc)
 	if err != nil {
 		return domain.NhiemVu{}, err
 	}
@@ -1630,12 +1672,21 @@ func (uc *GhiNhiemVu) DoiTrangThai(ctx context.Context, ma string, yc YeuCauDoiT
 		if err != nil {
 			return fmt.Errorf("nhiem_vu: mã hoá delta: %w", err)
 		}
-		return audit.Write(ctx, tx, audit.Entry{
+		if err := audit.Write(ctx, tx, audit.Entry{
 			Actor:   nguoi,
 			Action:  HanhViChuyenTrangNhiemVu,
 			Subject: truoc.Ma,
 			Delta:   delta,
-		})
+		}); err != nil {
+			return err
+		}
+		// KIND 20 (ADR 0086): work sent up for review tells the assigning leader, else the creator (user
+		// decision 09/10/2026) — on a move INTO `cho-duyet` only, keyed by this move's timeline row.
+		if moiTT != domain.ChoDuyet || truoc.TrangThai == domain.ChoDuyet {
+			return nil
+		}
+		return writeStaffNotice(ctx, tx, uc.notices, uc.noticeID,
+			domain.TaskApprovalRequestedNotice(sau, logID), nguoi.ID, bayGio)
 	})
 	if err != nil {
 		return domain.NhiemVu{}, bocNhiemVu(ctx, "chuyển trạng thái", err)
@@ -1800,12 +1851,18 @@ func (uc *GhiNhiemVu) DeNghiLuiHan(ctx context.Context, ma string, yc YeuCauDeNg
 		if err != nil {
 			return fmt.Errorf("de_nghi_lui_han: mã hoá delta: %w", err)
 		}
-		return audit.Write(ctx, tx, audit.Entry{
+		if err := audit.Write(ctx, tx, audit.Entry{
 			Actor:   nguoi,
 			Action:  HanhViDeNghiLuiHan,
 			Subject: n.Ma,
 			Delta:   delta,
-		})
+		}); err != nil {
+			return err
+		}
+		// KIND 19 (ADR 0086): the leader who must decide, else the creator — keyed by the request row.
+		// The requested DATE only; the reason stays on the request (ADR 0086 stop #3, rule 3).
+		return writeStaffNotice(ctx, tx, uc.notices, uc.noticeID,
+			domain.TaskExtensionRequestedNotice(n, dn.ID, dn.HanMoi), nguoi.ID, bayGio)
 	})
 	if err != nil {
 		return domain.DeNghiLuiHan{}, bocNhiemVu(ctx, "đề nghị lùi hạn", err)

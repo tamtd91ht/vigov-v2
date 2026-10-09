@@ -271,8 +271,9 @@ type (
 		// "does the caller hold `task.update`", which only ever WIDENS to people who may already edit
 		// every task of the commune; who else may write is decided on the row (app/task_log_entry.go).
 		// `attachments` are completed uploads of the same officer for the same task (migration 0021),
-		// linked in the entry's transaction; the reply carries them.
-		AddLogEntry(ctx context.Context, ma, text string, attachments []string, nguoi audit.Actor,
+		// linked in the entry's transaction; the reply carries them. `mentions` are staff business codes
+		// of colleagues named in the entry (ADR 0086 kind 21), checked against identity by the use case.
+		AddLogEntry(ctx context.Context, ma, text string, attachments, mentions []string, nguoi audit.Actor,
 			update app.TaskUpdateRight) (domain.NhatKyNhiemVu, []domain.TaskLogAttachment, error)
 	}
 
@@ -1823,8 +1824,11 @@ func Register(mux *http.ServeMux, d Deps) {
 	// ever remove (rule 7). MoKhiHong: a cache outage lets an entry through rather than refusing an
 	// officer mid-work.
 	//
-	// ONE TRANSACTION: the timeline row and the audit entry (`ghi_nhat_ky_nhiem_vu`); the text is in the
-	// row only, the delta carries its length (rule 6, forbidden #4).
+	// ONE TRANSACTION: the timeline row, the audit entry (`ghi_nhat_ky_nhiem_vu`) and — when the body
+	// names colleagues in `mentioned_staff_codes` — one staff-notice outbox row (ADR 0086 kind 21
+	// `nhiem-vu.nhac-ten`, every named colleague but the author). The text is in the row only; the delta
+	// carries its length and the named codes (rule 6, forbidden #4). A named code identity does not answer
+	// as staff of THIS commune is 400; identity down is 503 and nothing is written.
 	//
 	// @summary  Ghi một dòng nhật ký vào Nhật ký & Trao đổi của nhiệm vụ — người thực hiện, người liên quan hoặc cán bộ có quyền cập nhật (không đổi trạng thái)
 	// @screen   02-nhiem-vu §5.9
@@ -1835,6 +1839,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    403 httpx.Error
 	// @reply    404 httpx.Error
 	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
 	mux.Handle("POST /api/v1/tasks/{ma}/log-entries",
 		authz.RequirePermission(d.Checker, "task.read")(
 			idem.Required(idem.MoKhiHong)(

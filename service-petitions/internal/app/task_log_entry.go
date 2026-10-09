@@ -22,6 +22,15 @@ package app
 // (domain.CheckAttachable), so a wrong id is a 400 with a sentence rather than the trigger's 500.
 // `nhat_ky_nhiem_vu.dinh_kem` is NOT written: the link table is the one source (migration 0021).
 //
+// # MENTIONS (`mentioned_staff_codes`, ADR 0086 kind 21 `nhiem-vu.nhac-ten`)
+//
+// An entry may name colleagues. The codes are shape-checked (domain.NormaliseMentions) and then asked of
+// identity BEFORE the transaction — the same ResolveAssignableStaff check a hand-over uses, in the
+// commune the context carries — so a code of another commune, unknown or locked is ONE refusal (400,
+// no existence leak, rule 1) and identity down is 503 with nothing written. Inside the transaction ONE
+// staff-notice outbox row names every mentioned code but the author's, keyed by the entry's id. The
+// codes go into the audit delta (staff business codes, not personal data); the text does not.
+//
 // NO POLICY CALL ON THIS PATH, on purpose: platform's per-task count is enforced when each upload is
 // ISSUED and again when it is COMPLETED, and a file can be linked only once, so the set an entry can
 // carry is already bounded by it. Asking platform again here would make writing a log entry fail
@@ -50,6 +59,13 @@ type LogAttachmentLinker interface {
 // A wiring fault (500), never a reason to drop the files silently and write the text alone.
 var errAttachmentsNotWired = errors.New("nhat_ky_nhiem_vu: chưa nối kho tệp đính kèm")
 
+// ErrMentionStaffInvalid refuses a mentioned code identity did not answer as an active staff member of
+// THIS commune. ONE error for unknown / locked / another commune, and the code is not echoed (rule 1).
+var ErrMentionStaffInvalid = errors.New("nhat_ky_nhiem_vu: người được nhắc tên không phải cán bộ đang làm việc của xã")
+
+// ErrMentionStaffUnchecked means identity could not be asked, so the entry was NOT written. Retryable (503).
+var ErrMentionStaffUnchecked = errors.New("nhat_ky_nhiem_vu: chưa kiểm được người được nhắc tên")
+
 // ActionTaskLogEntry is the verb in the trail — Vietnamese snake_case like every other value this
 // service writes (an inspection reads it; ADR 0011), and the task twin of `ghi_chu_phan_anh`.
 const ActionTaskLogEntry = "ghi_nhat_ky_nhiem_vu"
@@ -67,7 +83,7 @@ type TaskUpdateRight bool
 //
 // THE CHECK RUNS ON THE ROW READ `FOR UPDATE`, so it is decided against the holder as it stands at this
 // instant — a reassignment committing concurrently cannot let the previous holder write after it.
-func (uc *GhiNhiemVu) AddLogEntry(ctx context.Context, ma, text string, attachmentIDs []string,
+func (uc *GhiNhiemVu) AddLogEntry(ctx context.Context, ma, text string, attachmentIDs, mentionedCodes []string,
 	actor audit.Actor, update TaskUpdateRight) (domain.NhatKyNhiemVu, []domain.TaskLogAttachment, error) {
 
 	text, err := domain.KiemNoiDungNhatKy(text)
@@ -82,6 +98,13 @@ func (uc *GhiNhiemVu) AddLogEntry(ctx context.Context, ma, text string, attachme
 	}
 	if len(attachmentIDs) > 0 && uc.files == nil {
 		return domain.NhatKyNhiemVu{}, nil, errAttachmentsNotWired
+	}
+	mentions, err := domain.NormaliseMentions(mentionedCodes)
+	if err != nil {
+		return domain.NhatKyNhiemVu{}, nil, err
+	}
+	if err := uc.checkMentionedStaff(ctx, mentions); err != nil {
+		return domain.NhatKyNhiemVu{}, nil, err
 	}
 
 	now := uc.nayHoac()
@@ -159,21 +182,45 @@ func (uc *GhiNhiemVu) AddLogEntry(ctx context.Context, ma, text string, attachme
 			"quyen_ghi": taskWorkRightCode(right),
 			// The file IDS, never their names (personal data when they describe a case — rule 3).
 			"tep_dinh_kem": attachmentIDs,
+			// STAFF business codes of the colleagues named (kind 21) — not personal data (rule 3 is about
+			// the people a commune serves). Always present, `[]` for none, so one key answers "who was named".
+			"nhac_ten": mentions,
 		})
 		if err != nil {
 			return fmt.Errorf("nhiem_vu: mã hoá delta: %w", err)
 		}
-		return audit.Write(ctx, tx, audit.Entry{
+		if err := audit.Write(ctx, tx, audit.Entry{
 			Actor:   actor,
 			Action:  ActionTaskLogEntry,
 			Subject: n.Ma,
 			Delta:   delta,
-		})
+		}); err != nil {
+			return err
+		}
+		// KIND 21 — one row for the entry, every mentioned colleague but the author (writeStaffNotice).
+		return writeStaffNotice(ctx, tx, uc.notices, uc.noticeID,
+			domain.TaskMentionNotice(n, id, text, mentions), actor.ID, now)
 	})
 	if err != nil {
 		return domain.NhatKyNhiemVu{}, nil, bocNhiemVu(ctx, "ghi nhật ký", err)
 	}
 	return row, attached, nil
+}
+
+// checkMentionedStaff asks identity whether every mentioned code is an active staff member of THIS
+// commune — the checker hand-overs use. None mentioned asks nothing. FAIL CLOSED: no checker wired, or
+// identity not answering, refuses the entry; a mention is never written unchecked.
+func (uc *GhiNhiemVu) checkMentionedStaff(ctx context.Context, codes []string) error {
+	err := uc.checkAssignableStaff(ctx, codes)
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, ErrAssignmentStaffInvalid):
+		return ErrMentionStaffInvalid
+	case errors.Is(err, ErrAssignmentStaffUnchecked):
+		return fmt.Errorf("%w: %w", ErrMentionStaffUnchecked, err)
+	}
+	return err
 }
 
 // taskWorkRightCode names the right in the trail: `day-du` (holder or `task.update`) or `ghi-nhat-ky`

@@ -39,6 +39,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/vihat/vigov/core/audit"
@@ -264,6 +265,16 @@ func (uc *TaskImport) Import(ctx context.Context, sheet [][]string, dryRun bool,
 		return res, nil
 	}
 
+	// Kind 18's fallback recipients for the rows naming a unit and no assignee — asked ONCE for every such
+	// unit, before the transaction (resolveUnitHolders; never fails the import).
+	var heldUnits []string
+	for _, p := range prepared {
+		if strings.TrimSpace(p.task.NguoiThucHienMa) == "" && p.task.BoPhanID != "" {
+			heldUnits = append(heldUnits, p.task.BoPhanID)
+		}
+	}
+	holders := resolveUnitHolders(ctx, uc.create.unitHolders, heldUnits)
+
 	// 4. ONE TRANSACTION FOR THE WHOLE FILE.
 	var codes []string
 	err = uc.create.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
@@ -276,7 +287,7 @@ func (uc *TaskImport) Import(ctx context.Context, sheet [][]string, dryRun bool,
 			}
 			p.task.ID = id
 			if err := uc.create.createInTx(ctx, tx, &p.task, createInTxRequest{
-				TuSinhMa: true, Documents: p.docs, LogPrefix: "Nhập từ Excel: ",
+				TuSinhMa: true, Documents: p.docs, LogPrefix: "Nhập từ Excel: ", UnitHolders: holders,
 				ExtraDelta: map[string]any{
 					"nguon_tao":          "nhap_excel",
 					"dong_excel":         p.row,

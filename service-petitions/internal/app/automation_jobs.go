@@ -1,6 +1,6 @@
 package app
 
-// The three jobs (ADR 0058 §4, §8; ADR 0029 §Bổ sung 29/09) and the delivery of their notices.
+// The four jobs (ADR 0058 §4, §8; ADR 0029 §Bổ sung 29/09; ADR 0086 B1) and the delivery of their notices.
 //
 // A JOB FIRST BUILDS A PLAN, THEN DELIVERS IT. Every identity question is asked while planning; a
 // failure there (outage, contract fault) stops the run with NOTHING delivered, and the next run
@@ -33,6 +33,7 @@ import (
 
 	"github.com/vihat/vigov/core/commsclient"
 	commsv1 "github.com/vihat/vigov/core/gen/vigov/comms/v1"
+	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
 	"github.com/vihat/vigov/core/identityclient"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
 )
@@ -353,6 +354,88 @@ func (r *AutomationRunner) weeklyDigest(ctx context.Context, kind domain.Automat
 	return p, nil
 }
 
+// --- scheduled_reports (ADR 0086 B1) -----------------------------------------------------------------
+
+// errReportPeriodMissing: a SCHEDULED_REPORTS run arrived with no period — an identity build older than
+// the field. NOTHING is sent and the run is FAILED (identity.proto AutomationRun.scheduled_report_period):
+// reading the period from this runner's own clock is ADR 0086 stop condition #4.
+var errReportPeriodMissing = errors.New("việc nền: lượt gửi báo cáo định kỳ không có kỳ")
+
+func reportPeriod(p identityv1.ScheduledReportPeriod) (domain.ReportPeriod, bool) {
+	switch p {
+	case identityv1.ScheduledReportPeriod_SCHEDULED_REPORT_PERIOD_WEEK:
+		return domain.ReportWeek, true
+	case identityv1.ScheduledReportPeriod_SCHEDULED_REPORT_PERIOD_MONTH:
+		return domain.ReportMonth, true
+	}
+	return "", false
+}
+
+// scheduledReports tells the leadership this service's half of the periodic briefing is ready, with its
+// headline figure in the notice (ADR 0086 B1). The structure of weeklyDigest: leadership asked once, the
+// figure from THIS service's own register only (stop condition #5 — no other service's register is
+// counted), one notice per work kind keyed by the period, nothing sent from a half-built plan.
+//
+//	NHIEM_VU   "Nhiệm vụ quá hạn: N"        — STOCK: open tasks whose stored deadline is at or before the
+//	                                          run's `claimed_at` (overdue DERIVED, rule 10 invariant 3)
+//	PHAN_ANH   "Phản ánh trễ hạn trong kỳ: N" — PERIOD [start of the current week/month, claimed_at): the
+//	                                          overview's `late` figure, restricted field excluded (the
+//	                                          leadership list carries no `feedback.restricted` fact)
+//
+// A PERIOD THAT HAS NOT YET RUN ANY TIME (a run at exactly 00:00 of its first day) has no data, so the
+// petition figure is left out — never sent as 0 (ADR 0053 §6). The notice still says the report is ready.
+func (r *AutomationRunner) scheduledReports(ctx context.Context, kind domain.AutomationWorkKind, asOf time.Time,
+	period identityv1.ScheduledReportPeriod) (automationPlan, error) {
+
+	var p automationPlan
+	rp, ok := reportPeriod(period)
+	if !ok {
+		return p, errReportPeriodMissing
+	}
+	start := domain.ReportPeriodStart(asOf, rp)
+	book, err := r.newRecipientBook(ctx, kind, nil, true)
+	if err != nil {
+		return p, err
+	}
+	p.configMissing = book.leadersMissing
+
+	var figures []domain.ReportFigure
+	if kind == domain.AutomationCitizenReport {
+		if window, err := domain.NewPeriod(start, asOf); err == nil {
+			s, err := r.d.CitizenReports.CitizenReportSummary(ctx, window, false)
+			if err != nil {
+				return p, fmt.Errorf("%w: %w", errAutomationStore, err)
+			}
+			p.examined = s.OnTimeSample
+			figures = append(figures, domain.ReportFigure{Label: "Phản ánh trễ hạn trong kỳ", Value: s.Late})
+		}
+	} else {
+		recs, err := r.loadRecords(ctx, kind)
+		if err != nil {
+			return p, err
+		}
+		p.examined = len(recs)
+		overdue := 0
+		for _, x := range recs {
+			if x.PastDeadlineAt(asOf) {
+				overdue++
+			}
+		}
+		figures = append(figures, domain.ReportFigure{Label: "Nhiệm vụ quá hạn", Value: overdue})
+	}
+
+	if len(book.leaders) == 0 {
+		// Nobody flagged as leadership: nobody is told, never "everyone" (ResolveLeadershipStaff). The
+		// records the figures count are what goes unreported.
+		for _, f := range figures {
+			p.digestWithoutRecipient += f.Value
+		}
+		return p, nil
+	}
+	p.notices = append(p.notices, domain.ReportReadyNotice(kind, rp, start, figures, book.leaders))
+	return p, nil
+}
+
 // --- recipients ------------------------------------------------------------------------------------
 
 // recipientBook holds, for ONE run, every recipient lookup it needs — asked once, batched.
@@ -569,6 +652,10 @@ func commsDueSoonItems(items []domain.DueSoonItem) []commsclient.DueSoonItem {
 func commsKind(work domain.AutomationWorkKind, k domain.NoticeKind) (commsv1.StaffNotificationKind, bool) {
 	if k == domain.NoticeWeeklyDigest && (work == domain.AutomationTask || work == domain.AutomationCitizenReport) {
 		return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_WEEKLY_DIGEST, true
+	}
+	// REPORT_READY is not split per domain either (comms.proto value 25); the key names the work kind.
+	if k == domain.NoticeReportReady && (work == domain.AutomationTask || work == domain.AutomationCitizenReport) {
+		return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_REPORT_READY, true
 	}
 	switch work {
 	case domain.AutomationTask:

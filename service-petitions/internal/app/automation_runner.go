@@ -1,8 +1,14 @@
 package app
 
 // The automation runner of the Tự động hoá tab (docs/ui-ux/14-cau-hinh.md §9), in the service owning
-// the data — ADR 0058 (user decision 2026-09-29). This service runs the three jobs over the two kinds
-// of work it owns: tasks (NHIEM_VU) and petitions (PHAN_ANH).
+// the data — ADR 0058 (user decision 2026-09-29). This service runs the four jobs over the two kinds
+// of work it owns: tasks (NHIEM_VU) and petitions (PHAN_ANH). The fourth, `scheduled_reports`, is ADR
+// 0086 B1 (user decision 09/10/2026).
+//
+// ⚠ ROLLOUT — identity FIRST (identity.proto AUTOMATION_JOB_SCHEDULED_REPORTS): an identity build that
+// predates that value refuses the WHOLE claim of a commune with INVALID_ARGUMENT, so deploying this
+// runner first stops all four jobs of this service until identity catches up. Nothing is lost — the
+// next claim after identity's rollout runs them — but the reminders of that window are not sent.
 //
 // ONE TICK A MINUTE (ADR 0058 §7: "chạy ngay" is only a mark in identity, picked up at the next tick,
 // ≤ 1 minute). Per tick:
@@ -88,6 +94,9 @@ type TaskAutomationReader interface {
 type CitizenReportAutomationReader interface {
 	OpenCitizenReportsForAutomation(ctx context.Context) ([]domain.AutomationRecord, error)
 	CitizenReportDigestCounts(ctx context.Context, asOf, ratedFrom time.Time) (domain.CitizenReportDigestCounts, error)
+	// CitizenReportSummary is the overview's count (Tổng quan) — scheduled_reports reads its period-bound
+	// `late` figure, the SAME predicate the leader's screen shows (store.citizenReportMetricCondition).
+	CitizenReportSummary(ctx context.Context, p domain.Period, restricted bool) (domain.CitizenReportSummary, error)
 }
 
 // AutomationDeps wires the runner.
@@ -131,6 +140,7 @@ var automationJobs = []automationJob{
 	{"sla_reminders", identityv1.AutomationJob_AUTOMATION_JOB_SLA_REMINDERS},
 	{"escalation", identityv1.AutomationJob_AUTOMATION_JOB_ESCALATION},
 	{"weekly_digest", identityv1.AutomationJob_AUTOMATION_JOB_WEEKLY_DIGEST},
+	{"scheduled_reports", identityv1.AutomationJob_AUTOMATION_JOB_SCHEDULED_REPORTS},
 }
 
 // automationKinds are the WorkKinds THIS service owns — and the only ones it may claim: a runner
@@ -259,6 +269,8 @@ func (r *AutomationRunner) execute(ctx context.Context, run identityclient.Autom
 		p, err = r.escalation(ctx, kind, run.ClaimedAt)
 	case identityv1.AutomationJob_AUTOMATION_JOB_WEEKLY_DIGEST:
 		p, err = r.weeklyDigest(ctx, kind, run.ClaimedAt)
+	case identityv1.AutomationJob_AUTOMATION_JOB_SCHEDULED_REPORTS:
+		p, err = r.scheduledReports(ctx, kind, run.ClaimedAt, run.ScheduledReportPeriod)
 	default:
 		err = fmt.Errorf("việc nền không biết: %v", run.Job)
 	}

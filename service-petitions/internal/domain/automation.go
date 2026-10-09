@@ -129,6 +129,9 @@ const (
 	// NoticeUnassigned is the holding unit having named nobody past the commune's threshold — its own
 	// kind since comms split it out of OVERDUE, so a commune can switch it separately.
 	NoticeUnassigned
+	// NoticeReportReady is the `scheduled_reports` job's notice (comms REPORT_READY, ADR 0086 B1). Like
+	// the weekly digest it is not split per domain on the wire; the key tells the two halves apart.
+	NoticeReportReady
 )
 
 // StaffNotice is one notice before delivery.
@@ -470,3 +473,74 @@ func clip(s string, max int) string {
 
 // sortStrings orders codes so a retried run builds the same request.
 func sortStrings(s []string) { sort.Strings(s) }
+
+// --- scheduled_reports (ADR 0086 B1) ----------------------------------------------------------------
+
+// ReportPeriod is which period a `scheduled_reports` run reports — decided by IDENTITY and handed over on
+// the claimed run (AutomationRun.scheduled_report_period, ADR 0086 B2). Never derived here from a clock.
+// The value is the key recipe's spelling (comms.proto REPORT_READY).
+type ReportPeriod string
+
+const (
+	ReportWeek  ReportPeriod = "week"
+	ReportMonth ReportPeriod = "month"
+)
+
+// ReportPeriodStart is the start of the CURRENT period containing asOf — the week (Monday 00:00) or the
+// month (day 1, 00:00) that has just begun — in Asia/Ho_Chi_Minh (ADR 0086 B1: "kỳ HIỆN TẠI vừa bắt
+// đầu", local day boundaries per ADR 0053 §3, not UTC). A calendar boundary for a report window, not a
+// deadline: nothing here counts time towards a commitment. Unknown period → zero, and the caller refuses.
+func ReportPeriodStart(asOf time.Time, p ReportPeriod) time.Time {
+	l := asOf.In(AutomationZone)
+	switch p {
+	case ReportWeek:
+		back := (int(l.Weekday()) + 6) % 7 // Monday = 0
+		return time.Date(l.Year(), l.Month(), l.Day()-back, 0, 0, 0, 0, AutomationZone).UTC()
+	case ReportMonth:
+		return time.Date(l.Year(), l.Month(), 1, 0, 0, 0, 0, AutomationZone).UTC()
+	}
+	return time.Time{}
+}
+
+// ScheduledReportKey is `scheduled_reports:<work_kind>:<week|month>:<YYYY-MM-DD of the period start>`
+// (comms.proto REPORT_READY) — once per work kind per period, whichever run sends it.
+func ScheduledReportKey(kind AutomationWorkKind, p ReportPeriod, periodStart time.Time) string {
+	return "scheduled_reports:" + string(kind) + ":" + string(p) + ":" + LocalDay(periodStart)
+}
+
+// ReportFigure is one headline figure: a Vietnamese label and a count (ADR 0086 B1 — labels, not raw
+// metric codes). A figure with no data source is NOT built at all — never sent as 0 (ADR 0053 §6).
+type ReportFigure struct {
+	Label string
+	Value int
+}
+
+// ReportReadyTitle is the notice's title. ⚠ The commune-editable wording `report.notification.week|month`
+// belongs to service-reporting (its system-message catalogue), which exposes no RPC for it and whose
+// database this service may not read (rule 2). Until a contract exists this is the prototype's default
+// text, the same text reporting ships as that key's default.
+func ReportReadyTitle(p ReportPeriod) string {
+	if p == ReportMonth {
+		return "Báo cáo điều hành tháng đã sẵn sàng"
+	}
+	return "Báo cáo điều hành tuần đã sẵn sàng"
+}
+
+// ReportReadyNotice is one work kind's `bao-cao.san-sang` notice to the leadership: the title, and the
+// figures as "Nhãn: N" joined by " · " (the prototype's separator). No figure → an empty body.
+func ReportReadyNotice(kind AutomationWorkKind, p ReportPeriod, periodStart time.Time, figures []ReportFigure,
+	recipients []string) StaffNotice {
+	parts := make([]string, 0, len(figures))
+	for _, f := range figures {
+		parts = append(parts, fmt.Sprintf("%s: %d", f.Label, f.Value))
+	}
+	return StaffNotice{
+		Key:        ScheduledReportKey(kind, p, periodStart),
+		Kind:       NoticeReportReady,
+		Work:       kind,
+		Recipients: recipients,
+		Title:      ReportReadyTitle(p),
+		Body:       clip(strings.Join(parts, " · "), noticeBodyMax),
+		Link:       "/bao-cao",
+	}
+}

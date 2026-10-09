@@ -3,12 +3,13 @@
 // unscoped statement must step outside core/store.For(ctx), and that step has to be COUNTABLE, in a
 // directory named after what it does. Every statement here carries its own `// @cross-tenant:`.
 //
-// TWO STATEMENTS TODAY, both for the automation runner (ADR 0058):
+// THREE STATEMENTS TODAY, for the automation runner (ADR 0058) and the staff-notice relay (ADR 0086):
 //
 //  1. the list of communes this service holds records for — tenant IDENTIFIERS only, never a row of
 //     business data (ADR 0058 §2b; identity.proto ClaimDueAutomationRuns, "HOW THE RUNNER FINDS
 //     COMMUNES TO ASK ABOUT");
-//  2. the advisory locks that keep one replica per job (ADR 0058 §1) — they read no table at all.
+//  2. the list of communes whose staff-notice outbox still owes a notice — identifiers only;
+//  3. the advisory locks that keep one replica per job (ADR 0058 §1) — they read no table at all.
 //
 // WHAT MAY NOT BE ADDED HERE: any read returning business rows of more than one commune (open
 // question #4 on rollups is still open), and any handle to the raw *sql.DB leaving this package.
@@ -75,6 +76,45 @@ func (a *Automation) CommunesWithRecords(ctx context.Context) ([]tenant.ID, erro
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("crosstenant: liệt kê xã có hồ sơ: %w", err)
+	}
+	return out, nil
+}
+
+// pendingNoticesQuery is communesQuery's loose index scan over the staff-notice outbox's PARTIAL index
+// (migration 0036, `staff_notice_outbox_pending`): one probe per commune that still owes a notice, and
+// nothing at all once everything is delivered.
+const pendingNoticesQuery = `WITH RECURSIVE
+	t(id) AS (
+		SELECT min(tenant_id) FROM staff_notice_outbox WHERE delivered_at IS NULL AND failed_class IS NULL
+		UNION ALL
+		SELECT (SELECT min(tenant_id) FROM staff_notice_outbox
+		        WHERE delivered_at IS NULL AND failed_class IS NULL AND tenant_id > t.id)
+		FROM t WHERE t.id IS NOT NULL)
+	SELECT id FROM t WHERE id IS NOT NULL ORDER BY 1`
+
+// CommunesWithPendingStaffNotices lists the communes whose outbox holds a notice still owed — tenant
+// identifiers only. The relay then reads each commune's rows IN that commune's context.
+func (a *Automation) CommunesWithPendingStaffNotices(ctx context.Context) ([]tenant.ID, error) {
+	// @cross-tenant: ADR 0086 A1 — the staff-notice relay lists the communes owing a notice (tenant
+	// identifiers only, no row of business data, not even the outbox payload), then drains each one in
+	// that commune's own context with "x-tenant-id" set from it (rule 1, invariant 8).
+	rows, err := a.db.QueryContext(ctx, pendingNoticesQuery)
+	if err != nil {
+		return nil, fmt.Errorf("crosstenant: liệt kê xã còn thông báo chờ gửi: %w", err)
+	}
+	defer rows.Close()
+	var out []tenant.ID
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("crosstenant: liệt kê xã còn thông báo chờ gửi: đọc dòng: %w", err)
+		}
+		if t := tenant.ID(id); t.Valid() {
+			out = append(out, t)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("crosstenant: liệt kê xã còn thông báo chờ gửi: %w", err)
 	}
 	return out, nil
 }

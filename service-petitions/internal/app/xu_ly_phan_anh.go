@@ -414,12 +414,19 @@ type XuLyPhanAnh struct {
 	// CEILING are both measured against, so a test that cannot pin it cannot assert whether a
 	// petition was acknowledged in time. In production this is nil and nayHoac returns the real clock.
 	nay func() time.Time
+
+	// notices is the STAFF-notice outbox (ADR 0086 kind 23), a different table and a different reader
+	// from suKien, which is the CITIZEN channel. Built from `db` by the constructor. noticeID is its own
+	// id seam, so the ids tests pin through sinhID are not shifted.
+	notices  StaffNoticeOutbox
+	noticeID func() (string, error)
 }
 
 func NewXuLyPhanAnh(db *store.DB, kho KhoPhieuXuLy, suKien KhoSuKien, han DocHanXuLyXong,
 	giaoViec KiemCanBoGiaoViec, settings VerificationPhotoSwitch, staffFiles PetitionStaffFiles) *XuLyPhanAnh {
 	return &XuLyPhanAnh{db: db, kho: kho, suKien: suKien, han: han, giaoViec: giaoViec,
-		settings: settings, staffFiles: staffFiles, sinhID: ulid.Moi}
+		settings: settings, staffFiles: staffFiles, sinhID: ulid.Moi,
+		notices: petstore.NewStaffNoticeOutboxStore(db), noticeID: ulid.Moi}
 }
 
 // VerificationPhotoSwitch reads ADR 0008 decision 3's per-commune switch INSIDE the closing
@@ -795,9 +802,17 @@ func (uc *XuLyPhanAnh) PhanCong(ctx context.Context, ma string, yc YeuCauPhanCon
 		}
 		// ON EVERY ASSIGNMENT, INCLUDING A RE-ASSIGNMENT THAT MOVES NO STATUS: "who held it at step N"
 		// is exactly what the row is for, and the petition's own columns only say who holds it NOW.
-		if err := uc.ghiNhatKy(ctx, tx, sau, domain.NhatKyPhanCong, bayGio, nguoi, ghiChu,
-			true); err != nil {
+		logID, err := uc.writeTimelineRow(ctx, tx, sau, domain.NhatKyPhanCong, bayGio, nguoi, ghiChu, true)
+		if err != nil {
 			return err
+		}
+		// KIND 23 (ADR 0086): the named officer, keyed by THIS assignment's timeline row. A unit-only
+		// assignment names nobody and writes no row. The lookup code only — no field, no content.
+		if canBo != "" {
+			if err := writeStaffNotice(ctx, tx, uc.notices, uc.noticeID,
+				domain.PetitionAssignedNotice(sau, logID), nguoi.ID, bayGio); err != nil {
+				return err
+			}
 		}
 
 		if sangTrangThai == p.TrangThai {

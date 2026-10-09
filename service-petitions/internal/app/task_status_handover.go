@@ -36,7 +36,8 @@ package app
 //	pending extension request   NOTHING, exactly as Reassign: a request filed by the previous holder
 //	                            stays `cho-duyet`, decidable as before (ledger giao-lai-nhiem-vu item 6
 //	                            is undecided)
-//	notifying the new holder    nothing, for the reason task_assignment.go gives
+//	notifying the new holder    DONE since ADR 0086: kind 18, exactly as Reassign (task_assignment.go),
+//	                            keyed by the handover's own timeline row, written in this transaction
 //	evidence before cho-duyet   the prototype's "≥1 file before pending approval" is NOT adopted — not
 //	                            decided here
 //	a handover changing nothing NOT refused (Reassign answers 409 `no_change`): the drawer sends the
@@ -64,6 +65,9 @@ type statusExtras struct {
 	note        string
 	assign      TaskAssignRight
 	attachments []string
+	// holders is kind 18's fallback recipient list (unit id -> `task.assign` holders), resolved before
+	// the transaction by handoverNoticeHolders. Empty when no handover, or a named assignee.
+	holders map[string][]string
 }
 
 // prepareStatusExtras validates what can be validated without the row, and asks identity — BEFORE the
@@ -72,7 +76,7 @@ type statusExtras struct {
 // ⚠ THE AUTHORITY CHECK IS NOT HERE: who may hand over depends on the locked row. So a caller who will
 // be refused 403 may first be answered 400/503 by the identity check — about a STAFF code or unit id of
 // their own commune, which the assignable-staff list already shows them.
-func (uc *GhiNhiemVu) prepareStatusExtras(ctx context.Context, yc YeuCauDoiTrangThai) (statusExtras, error) {
+func (uc *GhiNhiemVu) prepareStatusExtras(ctx context.Context, ma string, yc YeuCauDoiTrangThai) (statusExtras, error) {
 	var x statusExtras
 	if yc.Handover != nil {
 		change, err := domain.CheckTaskAssignment(yc.Handover.Change)
@@ -106,6 +110,7 @@ func (uc *GhiNhiemVu) prepareStatusExtras(ctx context.Context, yc YeuCauDoiTrang
 		if err := uc.checkLiveOrgUnits(ctx, units...); err != nil {
 			return x, err
 		}
+		x.holders = uc.handoverNoticeHolders(ctx, ma, *x.handover)
 	}
 	return x, nil
 }
@@ -173,7 +178,8 @@ func (uc *GhiNhiemVu) writeStatusHandover(ctx context.Context, tx *store.ScopedT
 	if x.note != "" {
 		line += "\n" + x.note
 	}
-	if err := uc.ghiNhatKy(ctx, tx, after, now, actor.ID, line); err != nil {
+	logID, err := uc.writeLogEntry(ctx, tx, after, now, actor.ID, line)
+	if err != nil {
 		return before, false, err
 	}
 
@@ -197,6 +203,12 @@ func (uc *GhiNhiemVu) writeStatusHandover(ctx context.Context, tx *store.ScopedT
 		Subject: before.Ma,
 		Delta:   delta,
 	}); err != nil {
+		return before, false, err
+	}
+	// KIND 18, as Reassign. `after` carries the status BEFORE the move; the notice reads only the holder,
+	// the title, the code and the deadline, none of which the status move changes.
+	if err := writeStaffNotice(ctx, tx, uc.notices, uc.noticeID,
+		domain.TaskAssignedNotice(after, logID, domain.TaskAssignedRecipients(after, x.holders)), actor.ID, now); err != nil {
 		return before, false, err
 	}
 	return after, true, nil

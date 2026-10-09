@@ -29,7 +29,7 @@ func TestAddLogEntry_WithAttachmentsLinksInTheEntrysTransaction(t *testing.T) {
 	k.addStoredFile(storedFileRow(string(xaThu), fileB, idNVGoc, maNguoiThucHien, domain.StoredFileReady, mocTaoNV))
 	uc, ctx := dungGhiNhiemVu(t, k)
 
-	row, files, err := uc.AddLogEntry(ctx, maNVGoc, logText, []string{fileA, fileB},
+	row, files, err := uc.AddLogEntry(ctx, maNVGoc, logText, []string{fileA, fileB}, nil,
 		staffActor(maNguoiThucHien), false)
 	if err != nil {
 		t.Fatalf("ghi nhật ký kèm tệp: %v", err)
@@ -104,7 +104,7 @@ func TestAddLogEntry_UnusableAttachmentRefusedWritesNothing(t *testing.T) {
 			}
 			uc, ctx := dungGhiNhiemVu(t, k)
 
-			_, _, err := uc.AddLogEntry(ctx, maNVGoc, logText, c.ids, staffActor(maNguoiThucHien), true)
+			_, _, err := uc.AddLogEntry(ctx, maNVGoc, logText, c.ids, nil, staffActor(maNguoiThucHien), true)
 			if !errors.Is(err, domain.ErrAttachmentNotUsable) {
 				t.Fatalf("lỗi = %v, muốn ErrAttachmentNotUsable", err)
 			}
@@ -117,7 +117,7 @@ func TestAddLogEntry_BadAttachmentListNeverOpensATransaction(t *testing.T) {
 	for _, ids := range [][]string{{fileA, fileA}, {""}} {
 		k := khoNVMau()
 		uc, ctx := dungGhiNhiemVu(t, k)
-		_, _, err := uc.AddLogEntry(ctx, maNVGoc, logText, ids, staffActor(maNguoiThucHien), true)
+		_, _, err := uc.AddLogEntry(ctx, maNVGoc, logText, ids, nil, staffActor(maNguoiThucHien), true)
 		if !errors.Is(err, domain.ErrAttachmentListInvalid) {
 			t.Fatalf("%q: lỗi = %v, muốn ErrAttachmentListInvalid", ids, err)
 		}
@@ -133,11 +133,11 @@ func TestAddLogEntry_AttachmentsWithoutFileStoreRefuse(t *testing.T) {
 	k := khoNVMau()
 	uc, ctx := dungGhiNhiemVu(t, k)
 	uc.files = nil
-	if _, _, err := uc.AddLogEntry(ctx, maNVGoc, logText, []string{fileA}, staffActor(maNguoiThucHien), true); err == nil {
+	if _, _, err := uc.AddLogEntry(ctx, maNVGoc, logText, []string{fileA}, nil, staffActor(maNguoiThucHien), true); err == nil {
 		t.Fatal("ghi nhật ký kèm tệp khi chưa nối kho tệp mà không lỗi")
 	}
 	khongGhiGi(t, k)
-	if _, _, err := uc.AddLogEntry(ctx, maNVGoc, logText, nil, staffActor(maNguoiThucHien), true); err != nil {
+	if _, _, err := uc.AddLogEntry(ctx, maNVGoc, logText, nil, nil, staffActor(maNguoiThucHien), true); err != nil {
 		t.Errorf("nhật ký không kèm tệp: %v", err)
 	}
 }

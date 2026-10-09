@@ -32,11 +32,12 @@ package app
 //	                                  column. (The PETITION assignment, domain.KiemPhanCong, still
 //	                                  does not — outside this card.)
 //
-// # NOTIFYING THE NEW HOLDER — NOT DONE, ON PURPOSE
+// # NOTIFYING THE NEW HOLDER — kind 18 `nhiem-vu.giao-moi` (ADR 0086, decided 09/10/2026)
 //
-// The task register notifies nobody today: creating a task writes no outbox row (TaoTuNguon), and the
-// only outbox in this service is the CITIZEN petition channel. Inventing a staff notification here
-// would be a new mechanism nobody decided. Reported instead.
+// The fourth write of the transaction is a staff-notice outbox row (staff_notice.go), keyed by THIS
+// hand-over's timeline row: handing the task back to the same person after a round notifies again. The
+// recipient is the new assignee; with none, the `task.assign` holders of the unit, asked of identity
+// BEFORE the transaction (handoverNoticeHolders). The actor is never told.
 
 import (
 	"context"
@@ -103,6 +104,7 @@ func (uc *GhiNhiemVu) Reassign(ctx context.Context, ma string, req TaskAssignmen
 	if err := uc.checkLiveOrgUnits(ctx, units...); err != nil {
 		return domain.NhiemVu{}, err
 	}
+	holders := uc.handoverNoticeHolders(ctx, ma, change)
 
 	now := uc.nayHoac()
 	var after domain.NhiemVu
@@ -141,7 +143,8 @@ func (uc *GhiNhiemVu) Reassign(ctx context.Context, ma string, req TaskAssignmen
 		if note != "" {
 			line += "\n" + note
 		}
-		if err := uc.ghiNhatKy(ctx, tx, after, now, nguoi.ID, line); err != nil {
+		logID, err := uc.writeLogEntry(ctx, tx, after, now, nguoi.ID, line)
+		if err != nil {
 			return err
 		}
 
@@ -159,17 +162,54 @@ func (uc *GhiNhiemVu) Reassign(ctx context.Context, ma string, req TaskAssignmen
 		if err != nil {
 			return fmt.Errorf("nhiem_vu: mã hoá delta: %w", err)
 		}
-		return audit.Write(ctx, tx, audit.Entry{
+		if err := audit.Write(ctx, tx, audit.Entry{
 			Actor:   nguoi,
 			Action:  ActionTaskAssignment,
 			Subject: before.Ma,
 			Delta:   delta,
-		})
+		}); err != nil {
+			return err
+		}
+		return writeStaffNotice(ctx, tx, uc.notices, uc.noticeID,
+			domain.TaskAssignedNotice(after, logID, domain.TaskAssignedRecipients(after, holders)), nguoi.ID, now)
 	})
 	if err != nil {
 		return domain.NhiemVu{}, bocNhiemVu(ctx, "giao lại nhiệm vụ", err)
 	}
 	return after, nil
+}
+
+// handoverNoticeHolders resolves, BEFORE the transaction, the unit holders kind 18 falls back to when a
+// hand-over leaves the task with no named assignee (the header). Which unit that is:
+//
+//	assignee named               none needed
+//	unit sent                    that unit (the assignee may still be empty after the act)
+//	assignee cleared, no unit    the task's CURRENT unit — read here, in a short transaction of its own
+//	                             with no network call inside, because the hand-over's own transaction
+//	                             must not hold its row lock across the identity call
+//
+// A unit that changes between this read and the hand-over's lock is not in the map, and then nobody is
+// told — a race measured in milliseconds, and the work is still handed over. Nothing here fails the act.
+func (uc *GhiNhiemVu) handoverNoticeHolders(ctx context.Context, ma string, change domain.TaskAssignmentChange) map[string][]string {
+	if change.Assignee != nil && *change.Assignee != "" {
+		return map[string][]string{}
+	}
+	if change.Unit != nil {
+		return resolveUnitHolders(ctx, uc.unitHolders, []string{*change.Unit})
+	}
+	if uc.unitHolders == nil {
+		return map[string][]string{}
+	}
+	var unit string
+	if err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		cur, err := uc.kho.TheoMaDeSua(ctx, tx, ma)
+		unit = cur.BoPhanID
+		return err
+	}); err != nil {
+		// The hand-over itself reads the row again under its lock and refuses with the right sentence.
+		return map[string][]string{}
+	}
+	return resolveUnitHolders(ctx, uc.unitHolders, []string{unit})
 }
 
 // assignmentAuditFields is one side of the delta. ONE function for both sides, so "before" and "after"

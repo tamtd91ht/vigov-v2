@@ -46,12 +46,21 @@ import (
 func (uc *XuLyPhanAnh) ghiNhatKy(ctx context.Context, tx *store.ScopedTx, sau domain.PhieuPhanAnh,
 	hanhVi domain.HanhViNhatKy, luc time.Time, nguoi audit.Actor, ghiChu string, laPhanCong bool) error {
 
+	_, err := uc.writeTimelineRow(ctx, tx, sau, hanhVi, luc, nguoi, ghiChu, laPhanCong)
+	return err
+}
+
+// writeTimelineRow is ghiNhatKy returning the new row's id — for the act whose staff notice is keyed by
+// it (PhanCong, ADR 0086 kind 23).
+func (uc *XuLyPhanAnh) writeTimelineRow(ctx context.Context, tx *store.ScopedTx, sau domain.PhieuPhanAnh,
+	hanhVi domain.HanhViNhatKy, luc time.Time, nguoi audit.Actor, ghiChu string, laPhanCong bool) (string, error) {
+
 	if nguoi.ID == "" {
-		return errors.New(loiThieuChuThe)
+		return "", errors.New(loiThieuChuThe)
 	}
 	id, err := uc.sinhID()
 	if err != nil {
-		return fmt.Errorf("nhat_ky_phan_anh: sinh mã nội bộ: %w", err)
+		return "", fmt.Errorf("nhat_ky_phan_anh: sinh mã nội bộ: %w", err)
 	}
 	e := domain.NhatKyPhanAnh{
 		ID:             id,
@@ -65,7 +74,7 @@ func (uc *XuLyPhanAnh) ghiNhatKy(ctx context.Context, tx *store.ScopedTx, sau do
 	if laPhanCong {
 		e.BoPhanID, e.CanBoXuLyMa = sau.BoPhanID, sau.CanBoXuLyID
 	}
-	return uc.kho.GhiNhatKy(ctx, tx, e)
+	return id, uc.kho.GhiNhatKy(ctx, tx, e)
 }
 
 // voiDoDaiGhiChu adds the note's LENGTH to an audit delta when a note was sent, and nothing else

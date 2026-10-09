@@ -169,6 +169,11 @@ type taskLogEntryIn struct {
 	// …/{id}/completion, by the same officer, for this task. Optional; each id at most once. They are
 	// linked in the entry's own transaction and can never be added to the entry later (append-only log).
 	Attachments []string `json:"attachments,omitempty"`
+
+	// MentionedStaffCodes are colleagues named in the entry — staff business codes (CB-…, the `code` of
+	// GET /api/v1/staff-directory), at most 20, each an active staff member of THIS commune. Optional.
+	// Each is sent a staff notice `nhiem-vu.nhac-ten` (ADR 0086), the author excepted.
+	MentionedStaffCodes []string `json:"mentioned_staff_codes,omitempty"`
 }
 
 // PermTaskUpdate is the commune-wide edit key — a37ec96's first "full" case. A constant because it is
@@ -191,9 +196,12 @@ func (h *Handler) AddTaskLogEntry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	row, files, err := h.d.GhiNhiemVu.AddLogEntry(ctx, r.PathValue("ma"), in.Note, in.Attachments, actor,
-		h.hasTaskUpdate(r))
+	row, files, err := h.d.GhiNhiemVu.AddLogEntry(ctx, r.PathValue("ma"), in.Note, in.Attachments,
+		in.MentionedStaffCodes, actor, h.hasTaskUpdate(r))
 	if err != nil {
+		if h.answerMentionError(w, r, err) {
+			return
+		}
 		// Through the attachment mapper: it answers the two attachment refusals and hands every task
 		// refusal on to traLoiLoiNhiemVu unchanged.
 		h.answerTaskAttachmentError(w, r, "ghi nhật ký", err)
@@ -202,6 +210,28 @@ func (h *Handler) AddTaskLogEntry(w http.ResponseWriter, r *http.Request) {
 	// What a retry carrying the same Idempotency-Key is told: the row's id, never the text.
 	idem.RecordCode(ctx, row.ID)
 	vietJSON(w, http.StatusCreated, nhatKyNhiemVuRaNgoai(row, files))
+}
+
+// answerMentionError maps the refusals only `mentioned_staff_codes` raises; false hands the error on.
+// The domain's own sentence for the shape refusals; ONE sentence for a code that names no active staff
+// member of this commune, and the code is never echoed (rule 1).
+func (h *Handler) answerMentionError(w http.ResponseWriter, r *http.Request, err error) bool {
+	switch {
+	case errors.Is(err, domain.ErrMentionInvalid), errors.Is(err, domain.ErrMentionsTooMany):
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			cauTuChoi(err, domain.ErrMentionInvalid, domain.ErrMentionsTooMany), "")
+	case errors.Is(err, app.ErrMentionStaffInvalid):
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Người được nhắc tên không phải cán bộ đang làm việc của xã. Hãy chọn người khác trong danh sách.", "")
+	case errors.Is(err, app.ErrMentionStaffUnchecked):
+		h.d.Log.Warn("CẢNH BÁO: từ chối ghi nhật ký vì chưa kiểm được người được nhắc tên",
+			"xa", string(tenant.MustFrom(r.Context())), "err", err)
+		httpx.WriteError(w, http.StatusServiceUnavailable, "assignee_check_unavailable",
+			"Chưa kiểm tra được người được nhắc tên nên nhật ký CHƯA được ghi. Vui lòng thử lại sau ít phút.", "")
+	default:
+		return false
+	}
+	return true
 }
 
 // hasTaskUpdate: does this account hold `task.update`? FAIL CLOSED — no principal is `false`.

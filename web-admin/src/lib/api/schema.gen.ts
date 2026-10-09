@@ -4033,6 +4033,7 @@ export type petitions_taskImportResultOut = {
 export type petitions_taskLogEntryIn = {
   "note": string;
   "attachments"?: Array<string>;
+  "mentioned_staff_codes"?: Array<string>;
 };
 
 export type petitions_taskStatusCountOut = {
@@ -11580,6 +11581,7 @@ export type petitions_post_tasks_by_ma_log_entries = {
     403: httpx_Error;
     404: httpx_Error;
     500: httpx_Error;
+    503: httpx_Error;
   };
 };
 

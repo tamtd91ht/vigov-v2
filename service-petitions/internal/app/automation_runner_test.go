@@ -255,6 +255,19 @@ type fakeCitizenReportReader struct {
 	byCommune map[tenant.ID][]domain.AutomationRecord
 	counts    domain.CitizenReportDigestCounts
 	sawFrom   time.Time
+
+	// summary answers CitizenReportSummary; sawPeriod / sawRestricted record what scheduled_reports asked.
+	summary       domain.CitizenReportSummary
+	summaryCalls  int
+	sawPeriod     domain.Period
+	sawRestricted bool
+}
+
+func (f *fakeCitizenReportReader) CitizenReportSummary(_ context.Context, p domain.Period, restricted bool) (
+	domain.CitizenReportSummary, error) {
+	f.summaryCalls++
+	f.sawPeriod, f.sawRestricted = p, restricted
+	return f.summary, nil
 }
 
 func (f *fakeCitizenReportReader) OpenCitizenReportsForAutomation(ctx context.Context) ([]domain.AutomationRecord, error) {
@@ -331,9 +344,10 @@ func TestClaimRunAndRecordOutcome(t *testing.T) {
 	h.claim(communeA, "run-1", jobSLA, kindTask)
 	h.runner.Tick(context.Background())
 
-	// Six scopes claimed: three jobs × this service's two kinds, never a document kind.
-	if got := h.identity.claimed[communeA]; len(got) != 6 {
-		t.Fatalf("claimed %d phạm vi, muốn 6", len(got))
+	// Eight scopes claimed: four jobs (scheduled_reports since ADR 0086) × this service's two kinds,
+	// never a document kind.
+	if got := h.identity.claimed[communeA]; len(got) != 8 {
+		t.Fatalf("claimed %d phạm vi, muốn 8", len(got))
 	}
 	for _, s := range h.identity.claimed[communeA] {
 		if s.GetWorkKind() != kindTask && s.GetWorkKind() != kindReport {

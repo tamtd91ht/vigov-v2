@@ -284,7 +284,10 @@ func chay(log *slog.Logger) error {
 	// `storedFiles` (migration 0021) is passed as the LINKER of a log entry's attachments: the entry and
 	// its files are written in one transaction, by this use case.
 	storedFiles := petstore.NewStoredFileStore(kho)
-	ghiNhiemVu := app.NewGhiNhiemVu(kho, nhiemVu, deNghiLuiHan, dinhDanh, dinhDanh, storedFiles)
+	// WithUnitHolders: kind 18 (ADR 0086) falls back to the unit's `task.assign` holders when a task is
+	// handed to a unit with nobody named — asked of identity over the SAME client, before the transaction.
+	ghiNhiemVu := app.NewGhiNhiemVu(kho, nhiemVu, deNghiLuiHan, dinhDanh, dinhDanh, storedFiles).
+		WithUnitHolders(dinhDanh)
 
 	// §5.9's `📎 Đính kèm` (ADR 0052). config.ObjectStore and config.MalwareScan are declared, so
 	// staging and prod refuse to START without them (owner's decision of 2026-09-29: a declared group
@@ -585,6 +588,10 @@ func chay(log *slog.Logger) error {
 	runnerCtx, stopRunner := context.WithCancel(context.Background())
 	defer stopRunner()
 	runnerDone := make(chan struct{})
+	// THE STAFF-NOTICE RELAY (ADR 0086 A1) — drains `staff_notice_outbox`, the rows the acts above write
+	// in their own transactions, into comms over the SAME client. Same lifetime and same switch as the
+	// runner: off without COMMS_GRPC_ADDR (dev only), and then rows simply wait — nothing is lost.
+	relayDone := make(chan struct{})
 	if addr := cfg.CommsGRPCAddr(); addr != "" {
 		comms, err := commsclient.Dial(addr, cfg.GRPCCallerKey(), log)
 		if err != nil {
@@ -603,9 +610,22 @@ func chay(log *slog.Logger) error {
 			defer close(runnerDone)
 			runner.Run(runnerCtx)
 		}()
+		relay, err := app.NewStaffNoticeRelay(app.StaffNoticeRelayDeps{
+			Communes: automation, Locks: automation, Queue: petstore.NewStaffNoticeOutboxStore(kho),
+			Comms: comms, Log: log,
+		})
+		if err != nil {
+			return err
+		}
+		go func() {
+			defer close(relayDone)
+			relay.Run(runnerCtx)
+		}()
 	} else {
-		log.Warn("CẢNH BÁO: bộ chạy tự động hoá TẮT — thiếu COMMS_GRPC_ADDR", "service", "petitions")
+		log.Warn("CẢNH BÁO: bộ chạy tự động hoá và bộ chuyển thông báo cán bộ TẮT — thiếu COMMS_GRPC_ADDR",
+			"service", "petitions")
 		close(runnerDone)
+		close(relayDone)
 	}
 
 	dungLai := make(chan os.Signal, 1)
@@ -660,6 +680,11 @@ func chay(log *slog.Logger) error {
 		case <-runnerDone:
 		case <-ctx.Done():
 			log.Warn("bộ chạy tự động hoá không dừng kịp hạn", "service", "petitions")
+		}
+		select {
+		case <-relayDone:
+		case <-ctx.Done():
+			log.Warn("bộ chuyển thông báo cán bộ không dừng kịp hạn", "service", "petitions")
 		}
 		return errHTTP
 	}

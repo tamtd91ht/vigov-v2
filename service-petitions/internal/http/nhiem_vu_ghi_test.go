@@ -62,6 +62,7 @@ type ghiNhiemVuGia struct {
 	logText        string
 	taskUpdate     app.TaskUpdateRight
 	logAttachments []string
+	logMentions    []string
 
 	// duyet is the fact the STATUS route hands down: does the caller hold `task.approve`?
 	//
@@ -153,10 +154,10 @@ func (g *ghiNhiemVuGia) Reassign(ctx context.Context, ma string, req app.TaskAss
 	return g.tra()
 }
 
-func (g *ghiNhiemVuGia) AddLogEntry(ctx context.Context, ma, text string, attachments []string,
+func (g *ghiNhiemVuGia) AddLogEntry(ctx context.Context, ma, text string, attachments, mentions []string,
 	actor audit.Actor, update app.TaskUpdateRight) (domain.NhatKyNhiemVu, []domain.TaskLogAttachment, error) {
 	g.ghi(ctx, "nhat-ky", ma, actor)
-	g.logText, g.taskUpdate, g.logAttachments = text, update, attachments
+	g.logText, g.taskUpdate, g.logAttachments, g.logMentions = text, update, attachments, mentions
 	if g.loi != nil {
 		return domain.NhatKyNhiemVu{}, nil, g.loi
 	}
@@ -277,6 +278,11 @@ func caCacTuyenGhiNhiemVu() []caGhiNhiemVu {
 		// case's (assignee / related / task.update). `task.create` without `task.read` must not open it.
 		{"ghi nhật ký", http.MethodPost, taskLogEntriesPath(maNVThu),
 			taskLogEntryIn{Note: "Đã gửi công văn sang huyện."},
+			authz.Perm("task.read"), authz.Perm("task.create"), http.StatusCreated},
+		// THE SAME ROUTE WITH `mentioned_staff_codes` (ADR 0086 kind 21): naming colleagues adds no key
+		// and opens nothing — the four cases hold exactly as without it.
+		{"ghi nhật ký có nhắc tên", http.MethodPost, taskLogEntriesPath(maNVThu),
+			taskLogEntryIn{Note: "Nhờ anh xem giúp số liệu.", MentionedStaffCodes: []string{"CB-00311"}},
 			authz.Perm("task.read"), authz.Perm("task.create"), http.StatusCreated},
 	}
 }
