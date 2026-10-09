@@ -407,6 +407,9 @@ func main() {
 		ContentCovers:     covers,
 		ImageFetchLimiter: imageFetchLimiter,
 		ContentAudio:      broadcastAudio,
+		// ONE bound for the process, shared by the cover, body-image and audio uploads (ADR 0052 §Sửa đổi
+		// 09/10/2026: 4 uploads in flight per pod; the bytes now cross this pod, GOMEMLIMIT 300MiB).
+		UploadSlots: httpx.NewUploadSlots(httpx.UploadSlotsPerPod),
 		// The write use case owns the transaction the business write and its audit entry share
 		// (rule 6, invariant 3). It is given *store.DB rather than a transaction because opening one
 		// is precisely what it is for.

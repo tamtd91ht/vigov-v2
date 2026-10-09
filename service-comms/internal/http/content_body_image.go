@@ -3,24 +3,27 @@ package http
 // THE BODY IMAGES OF A MINI APP ARTICLE (ADR 0067 §Sửa đổi 03/10/2026, H1, K2, K3, K8) — the HTTP half of
 // the body-image acts in internal/app/content_cover.go:
 //
-//	POST /api/v1/content-items/body-images                   content.update — pending row + presigned POST
-//	POST /api/v1/content-items/body-images/{id}/completion   content.update — the uploader only
-//	POST /api/v1/content-items/body-images/from-url          content.update — the server fetches a pasted
-//	                                                         https link (H5, K6; app/content_body_image_url.go)
+//	POST /api/v1/content-items/body-images            content.update — ONE multipart request → 201 the
+//	                                                  stored image (ADR 0052 §Sửa đổi 09/10/2026)
+//	POST /api/v1/content-items/body-images/from-url   content.update — the server fetches a pasted
+//	                                                  https link (H5, K6; app/content_body_image_url.go)
 //
 // The file then rides on the article INSIDE the body: `<figure><img data-file-id="{id}" alt="…">
 // <figcaption>…</figcaption></figure>` in `body` on POST / PATCH /api/v1/content-items, checked on every
 // save (422 `invalid_body_image` otherwise). A URL is never stored and never accepted (K2).
 //
 // `body-images` UNDER `content-items`, NEXT TO `cover-images` and for its reasons (content_cover.go): the
-// article may not exist yet, so the routes sit at collection level and the article is named in the body.
+// article may not exist yet, so the routes sit at collection level and the article is named in a field.
 // Unlike the cover, an article may hold many body images before it is saved, so the reply carries the
 // article id the FIRST upload reserved; every later upload of the same unsaved article — body image or
 // cover — sends it back as `content_item_id`.
 //
-// ⚠ THE REPLY OF THE FIRST ROUTE CARRIES A BEARER CREDENTIAL (the presigned POST form), and the staff detail
-// carries presigned GETs. They go to the client and nowhere else: nothing here logs a reply, a URL, a form
-// field or a file name.
+// The upload's fields are the cover's (coverUploadFields), checked against platform's
+// `content-body-image` policy (types, size, and the per-article count — H7), and the bytes again by the
+// completion (ADR 0052 §1c). ⚠ `file_name` CAN NAME A PERSON (rule 3): stored, never logged.
+//
+// ⚠ The upload reply and the staff detail carry presigned GETs. They go to the client and nowhere else:
+// nothing here logs a reply, a URL, a field value or a file name.
 
 import (
 	"errors"
@@ -31,38 +34,13 @@ import (
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/httpx"
+	"github.com/vihat/vigov/core/idem"
 	"github.com/vihat/vigov/core/ratelimit"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-comms/internal/app"
 	"github.com/vihat/vigov/service-comms/internal/domain"
 	"github.com/vihat/vigov/service-comms/internal/imagefetch"
 )
-
-// bodyImageUploadIn is what the browser declares before it uploads one body image. CHECKED against
-// platform's `content-body-image` policy (types, size, and the per-article count — H7) here, and the bytes
-// again at completion (ADR 0052 §1c).
-//
-// ⚠ `file_name` CAN NAME A PERSON (rule 3): stored, never logged, never in an object key.
-type bodyImageUploadIn struct {
-	FileName    string `json:"file_name"`
-	ContentType string `json:"content_type"`
-	Size        int64  `json:"size"`
-
-	// ContentItemID is ABSENT for the first image of an article not saved yet (the server reserves an id
-	// and returns it). Otherwise: an existing article of this commune, or the id an earlier upload of THIS
-	// officer reserved. Anything else → 404.
-	ContentItemID string `json:"content_item_id,omitempty"`
-}
-
-// bodyImageUploadOut is the reply of POST …/body-images. `upload` is the form: every `fields` entry as a
-// form field, then the file as the LAST field named `file`, POSTed to `url`; valid until `expires_at`.
-type bodyImageUploadOut struct {
-	BodyImage coverFileOut `json:"body_image"`
-	// ContentItemID is the article this image belongs to — the reserved id when the request named none.
-	// Send it as `content_item_id` on every later upload (body image or cover) of the same unsaved article.
-	ContentItemID string             `json:"content_item_id"`
-	Upload        presignedUploadOut `json:"upload"`
-}
 
 // bodyImageOut is one image the body references, on the staff DETAIL of an article (GET
 // /api/v1/content-items/{id}), in body order — what the editor draws each `<img data-file-id>` with.
@@ -80,51 +58,32 @@ type bodyImageOut struct {
 	PreviewExpiresAt *time.Time `json:"preview_expires_at,omitempty"`
 }
 
-// RequestBodyImageUpload issues one upload slot. POST /api/v1/content-items/body-images
-func (h *Handler) RequestBodyImageUpload(w http.ResponseWriter, r *http.Request) {
-	var in bodyImageUploadIn
-	if !docThan(w, r, &in) {
-		return
-	}
+// UploadBodyImage receives one body image and answers it stored, with its preview.
+// POST /api/v1/content-items/body-images
+func (h *Handler) UploadBodyImage(w http.ResponseWriter, r *http.Request) {
+	const what = "tải ảnh thân bài"
 	actor, ok := nguoiThucHien(r)
 	if !ok {
 		h.missingCoverPrincipal(w, r)
 		return
 	}
-	up, err := h.d.ContentCovers.RequestBodyImageUpload(r.Context(), app.CoverUploadRequest{
-		ContentItemID: in.ContentItemID, FileName: in.FileName, ContentType: in.ContentType, Size: in.Size,
-	}, actor)
-	if err != nil {
-		h.answerBodyImageError(w, r, "xin tải ảnh thân bài", err)
-		return
-	}
-	// A form is a bearer credential: no cache between here and the officer's browser keeps it.
-	w.Header().Set("Cache-Control", "no-store")
-	vietJSON(w, http.StatusCreated, bodyImageUploadOut{
-		BodyImage:     coverFileFrom(up.File),
-		ContentItemID: up.File.SubjectID,
-		Upload:        presignedUploadOut{URL: up.Post.URL, Fields: up.Post.Fields, ExpiresAt: up.Post.ExpiresAt},
-	})
-}
-
-// CompleteBodyImageUpload runs ADR 0052 §1c and the derivative on one body-image upload.
-// POST /api/v1/content-items/body-images/{id}/completion
-func (h *Handler) CompleteBodyImageUpload(w http.ResponseWriter, r *http.Request) {
-	actor, ok := nguoiThucHien(r)
+	answer := func(err error) { h.answerBodyImageError(w, r, what, err) }
+	up, ok := h.receiveUpload(w, r, what, h.d.ContentCovers.BodyImageUploadLimit, coverUploadFields, answer)
 	if !ok {
-		h.missingCoverPrincipal(w, r)
 		return
 	}
-	f, err := h.d.ContentCovers.CompleteBodyImageUpload(r.Context(), r.PathValue("id"), actor)
+	defer up.release()
+	f, err := h.d.ContentCovers.UploadBodyImage(r.Context(), coverUploadFrom(up), actor)
 	if err != nil {
-		h.answerBodyImageError(w, r, "hoàn tất ảnh thân bài", err)
+		answer(err)
 		return
 	}
-	vietJSON(w, http.StatusOK, h.bodyImageFileReply(w, r, f))
+	idem.RecordCode(r.Context(), f.ID)
+	vietJSON(w, http.StatusCreated, h.bodyImageFileReply(w, r, f))
 }
 
-// bodyImageFileReply builds bodyImageFileOut for a body-image row — the completion's reply and the
-// from-url reply alike.
+// bodyImageFileReply builds bodyImageFileOut for a body-image row — the upload's reply and the from-url
+// reply alike.
 func (h *Handler) bodyImageFileReply(w http.ResponseWriter, r *http.Request, f domain.StoredFile) bodyImageFileOut {
 	out := bodyImageFileOut{ID: f.ID, ContentItemID: f.SubjectID, MIMEType: f.MIMEType, SizeBytes: f.SizeBytes,
 		Status: string(f.Status)}
@@ -299,8 +258,8 @@ func (h *Handler) answerBodyImageFromURLError(w http.ResponseWriter, r *http.Req
 	}
 }
 
-// bodyImageFileOut is the completion reply of a body image: coverFileOut's five fields, plus the preview
-// once `ready`. ITS OWN TYPE so the cover's completion contract does not change.
+// bodyImageFileOut is the upload reply of a body image: coverFileOut's five fields, plus the preview
+// once `ready`. ITS OWN TYPE so the cover's reply contract does not change.
 //
 // The five fields are WRITTEN OUT, not embedded: tools/apidoc reads named fields, and an embedded struct
 // is how a contract silently loses half its shape.
@@ -343,8 +302,13 @@ func (h *Handler) bodyImageViews(r *http.Request, itemID string, fileIDs []strin
 }
 
 // answerBodyImageError maps the refusals whose sentence or code would otherwise name the COVER, then hands
-// the rest to answerCoverError (same pipeline, same statuses).
+// the rest to answerCoverError (same pipeline, same statuses). The upload envelope's and the write's
+// refusals go first: their sentences name no purpose.
 func (h *Handler) answerBodyImageError(w http.ResponseWriter, r *http.Request, what string, err error) {
+	if h.writeUploadError(w, r, what, err) {
+		return
+	}
+	refused := fileRefusalLog(r, h.d.Log, "ảnh thân bài: từ chối", what, err)
 	var rej *app.CoverRejection
 	switch {
 	case errors.As(err, &rej):
@@ -355,16 +319,19 @@ func (h *Handler) answerBodyImageError(w http.ResponseWriter, r *http.Request, w
 		if !ok {
 			sentence = "Ảnh bị từ chối và không được lưu."
 		}
+		refused("body_image_rejected")
 		httpx.WriteError(w, http.StatusUnprocessableEntity, "body_image_rejected", sentence, "")
 	case errors.Is(err, app.ErrCoverCountReached):
+		refused("body_image_limit")
 		httpx.WriteError(w, http.StatusConflict, "body_image_limit",
 			"Bài đã có đủ số ảnh trong thân bài tối đa được phép. Hãy gỡ bớt ảnh khỏi thân bài, lưu bài, rồi tải ảnh mới.", "")
 	case errors.Is(err, app.ErrCoverTypeNotAllowed):
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
 			"Loại tệp này không được phép làm ảnh trong thân bài.", "")
 	case errors.Is(err, app.ErrCoverNotPending):
+		refused("body_image_state")
 		httpx.WriteError(w, http.StatusConflict, "body_image_state",
-			"Ảnh này đã bị từ chối hoặc lượt tải đã hết hạn. Hãy chọn ảnh và tải lên lại.", "")
+			"Ảnh này không còn ở trạng thái chờ kiểm tra. Hãy chọn ảnh và tải lên lại.", "")
 	case errors.Is(err, app.ErrCoverUploadNotConfigured):
 		h.d.Log.Warn("CẢNH BÁO: từ chối ảnh thân bài vì chưa cấu hình kho lưu tệp / máy quét / giới hạn",
 			"xa", string(tenant.MustFrom(r.Context())), "viec", what, "err", err)

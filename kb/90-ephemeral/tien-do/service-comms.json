@@ -390,6 +390,14 @@
       "bang_chung": "8525ba33. go test service-comms/internal/http xanh; check_quyen 0 khoá lạ.",
       "tiep_theo": "—",
       "no_confirm": []
+    },
+    {
+      "id": "tai-len-qua-service-cover-body-audio",
+      "menu": "noi-dung-mini-app",
+      "trang_thai": "xong",
+      "viec": "ADR 0052 §Sửa đổi 09/10/2026 thẻ E: ảnh bìa, ảnh thân bài, âm thanh truyền thanh tải lên bằng MỘT lệnh multipart qua service-comms (size, file_name?, content_type?, content_item_id?, audio_duration_seconds cho âm thanh) → 201 tệp đã lưu; bỏ 3 tuyến …/completion; 4 lượt/pod; mọi lỗi sau khi có dòng pending → failed (kể cả máy quét bận — không còn tuyến thử lại)",
+      "bang_chung": "(commit này) — internal/http/upload.go (bảng lỗi 415/413/408/400/503), go vet + go test ./... service-comms xanh (phiên chính chạy lại, internal/grpc cũng xanh); ca 401/403/403-sai-xã/201 cho 3 tuyến",
+      "tiep_theo": "web-admin (features/noi-dung/cover-image.ts, body-image.ts, broadcast-audio.ts) CHƯA chuyển — không triển khai riêng comms. Thêm @multipart cho 3 tuyến khi make kb. Tệp gốc đã chép sang private mà bước sau hỏng thì nằm lại không ai trỏ tới (dọn sau)."
     }
   ]
 }

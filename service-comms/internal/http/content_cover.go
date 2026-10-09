@@ -3,21 +3,21 @@ package http
 // THE COVER UPLOAD OF A MINI APP ARTICLE (docs/ui-ux/11-noi-dung-mini-app.md §7 `Ảnh đại diện`) — the
 // HTTP half of internal/app/content_cover.go:
 //
-//	POST /api/v1/content-items/cover-images                   content.update — pending row + presigned POST
-//	POST /api/v1/content-items/cover-images/{id}/completion   content.update — the uploader only
+//	POST /api/v1/content-items/cover-images   content.update — ONE multipart request → 201 the stored file
 //
-// The file then rides on the article: `cover_image_file_id` on POST / PATCH /api/v1/content-items.
+// (ADR 0052 §Sửa đổi 09/10/2026: the presigned POST and the `…/{id}/completion` route are gone.) The
+// file then rides on the article: `cover_image_file_id` on POST / PATCH /api/v1/content-items.
 //
 // `cover-images` UNDER `content-items`, NOT A NEW FIRST SEGMENT: the noun is migration 0011's own column
 // (`cover_image_file_id`), and tools/ingress groups routes by the first segment after /api/v1/, which is
 // already this service's. It sits at COLLECTION level, not under `{id}`, because §7's modal uploads
-// before `Lưu` — the article may not exist yet (0011); an existing article is named in the body.
+// before `Lưu` — the article may not exist yet (0011); an existing article is named in a field.
 //
-// THESE HANDLERS DECIDE NOTHING: they translate the use case's answer.
+// THESE HANDLERS DECIDE NOTHING: they translate the use case's answer. The envelope (cap, slot, multipart)
+// is internal/http/upload.go's.
 //
-// ⚠ THE REPLY OF THE FIRST ROUTE CARRIES A BEARER CREDENTIAL (the presigned POST form), and the staff
-// detail carries a presigned GET. They go to the client and nowhere else: no handler here logs a reply,
-// a URL, a form field or a file name.
+// ⚠ The staff detail carries a presigned GET. It goes to the client and nowhere else: no handler here
+// logs a reply, a URL, a field value or a file name.
 
 import (
 	"context"
@@ -28,42 +28,45 @@ import (
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/httpx"
+	"github.com/vihat/vigov/core/idem"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-comms/internal/app"
 	"github.com/vihat/vigov/service-comms/internal/domain"
 	commsstore "github.com/vihat/vigov/service-comms/internal/store"
 )
 
-// ContentCoverActs is the cover upload, completion and staff preview. *app.ContentCovers satisfies it.
+// ContentCoverActs is the cover upload and staff preview. *app.ContentCovers satisfies it.
 // ITS OWN INTERFACE and not more methods on GhiNoiDungMiniApp: its dependencies — the object store, the
 // scanner, platform's limits — may be absent in a deployment while every other content route works.
 type ContentCoverActs interface {
-	RequestUpload(ctx context.Context, req app.CoverUploadRequest, actor audit.Actor) (app.CoverUpload, error)
-	Complete(ctx context.Context, id string, actor audit.Actor) (domain.StoredFile, error)
+	CoverUploadLimit(ctx context.Context) (int64, error)
+	UploadCover(ctx context.Context, req app.CoverUploadRequest, actor audit.Actor) (domain.StoredFile, error)
 	View(ctx context.Context, fileID string) (app.CoverView, error)
 
 	// The body images (content_body_image.go): the same acts under `content-body-image`, and the staff
 	// previews of the images one article's body references.
-	RequestBodyImageUpload(ctx context.Context, req app.CoverUploadRequest, actor audit.Actor) (app.CoverUpload, error)
-	CompleteBodyImageUpload(ctx context.Context, id string, actor audit.Actor) (domain.StoredFile, error)
+	BodyImageUploadLimit(ctx context.Context) (int64, error)
+	UploadBodyImage(ctx context.Context, req app.CoverUploadRequest, actor audit.Actor) (domain.StoredFile, error)
 	BodyImageViews(ctx context.Context, itemID string, fileIDs []string) ([]app.BodyImageView, error)
 	// FetchBodyImage: the server downloads a pasted https link into a ready body image (H5, K6).
 	FetchBodyImage(ctx context.Context, req app.BodyImageFromURLRequest, actor audit.Actor) (domain.StoredFile, error)
 }
 
-// coverUploadIn is what the browser declares before it uploads. CHECKED against platform's
-// `content-image` policy here and the bytes are checked again at completion (ADR 0052 §1c).
+// coverUploadFields are the text fields of the cover (and body-image) upload besides `size`:
 //
-// ⚠ `file_name` CAN NAME A PERSON (rule 3): stored, never logged, never in an object key.
-type coverUploadIn struct {
-	FileName    string `json:"file_name"`
-	ContentType string `json:"content_type"`
-	Size        int64  `json:"size"`
+//	file_name        the officer's file name (else the part's filename) — ⚠ CAN NAME A PERSON (rule 3):
+//	                 stored, never logged, never in an object key
+//	content_type     the DECLARED type (else the part's Content-Type), checked against the policy
+//	content_item_id  an EXISTING article, or one this officer's earlier upload reserved; ABSENT for an
+//	                 article not saved yet — the server reserves an id and returns it
+var coverUploadFields = []string{uploadFieldFileName, uploadFieldContentType, uploadFieldContentItemID}
 
-	// ContentItemID names an EXISTING article whose cover is being replaced. ABSENT for an article not
-	// saved yet: the server then reserves an id, and POST /api/v1/content-items with this upload's
-	// `cover_image_file_id` creates the article under it.
-	ContentItemID string `json:"content_item_id,omitempty"`
+// coverUploadFrom maps a received upload onto the use case's request.
+func coverUploadFrom(up receivedUpload) app.CoverUploadRequest {
+	return app.CoverUploadRequest{
+		ContentItemID: up.Fields[uploadFieldContentItemID], FileName: up.fileName, ContentType: up.contentType,
+		Size: up.Size, File: up.File, Finish: up.Finish, Deadline: up.Deadline,
+	}
 }
 
 // coverFileOut is one cover file as staff see it. No object key, no uploader, no file name echo beyond
@@ -89,23 +92,6 @@ func coverFileFrom(f domain.StoredFile) coverFileOut {
 		Status: string(f.Status)}
 }
 
-// coverUploadOut is the reply of POST …/cover-images. `upload` is the form: every `fields` entry as a
-// form field, then the file as the LAST field named `file`, POSTed to `url`; valid until `expires_at`.
-type coverUploadOut struct {
-	CoverImage coverFileOut `json:"cover_image"`
-	// ContentItemID is the article this cover belongs to — the reserved id when the request named none.
-	// The same place in the reply as bodyImageUploadOut's, so web-admin reads one shape for both uploads.
-	ContentItemID string             `json:"content_item_id"`
-	Upload        presignedUploadOut `json:"upload"`
-}
-
-// presignedUploadOut is a presigned POST into the temp bucket (15 minutes, ADR 0052 §1a).
-type presignedUploadOut struct {
-	URL       string            `json:"url"`
-	Fields    map[string]string `json:"fields"`
-	ExpiresAt time.Time         `json:"expires_at"`
-}
-
 // coverImageOut is the cover block of the staff DETAIL of an article.
 type coverImageOut struct {
 	FileID string `json:"file_id"`
@@ -120,47 +106,28 @@ type coverImageOut struct {
 	PreviewExpiresAt *time.Time `json:"preview_expires_at,omitempty"`
 }
 
-// RequestCoverUpload issues one upload slot. POST /api/v1/content-items/cover-images
-func (h *Handler) RequestCoverUpload(w http.ResponseWriter, r *http.Request) {
-	var in coverUploadIn
-	if !docThan(w, r, &in) {
-		return
-	}
+// UploadCover receives one cover image and answers it stored. POST /api/v1/content-items/cover-images
+func (h *Handler) UploadCover(w http.ResponseWriter, r *http.Request) {
+	const what = "tải ảnh bìa"
 	actor, ok := nguoiThucHien(r)
 	if !ok {
 		h.missingCoverPrincipal(w, r)
 		return
 	}
-	up, err := h.d.ContentCovers.RequestUpload(r.Context(), app.CoverUploadRequest{
-		ContentItemID: in.ContentItemID, FileName: in.FileName, ContentType: in.ContentType, Size: in.Size,
-	}, actor)
-	if err != nil {
-		h.answerCoverError(w, r, "xin tải ảnh bìa", err)
-		return
-	}
-	// A form is a bearer credential: no cache between here and the officer's browser keeps it.
-	w.Header().Set("Cache-Control", "no-store")
-	vietJSON(w, http.StatusCreated, coverUploadOut{
-		CoverImage:    coverFileFrom(up.File),
-		ContentItemID: up.File.SubjectID,
-		Upload:        presignedUploadOut{URL: up.Post.URL, Fields: up.Post.Fields, ExpiresAt: up.Post.ExpiresAt},
-	})
-}
-
-// CompleteCoverUpload runs ADR 0052 §1c and the derivative on one upload.
-// POST /api/v1/content-items/cover-images/{id}/completion
-func (h *Handler) CompleteCoverUpload(w http.ResponseWriter, r *http.Request) {
-	actor, ok := nguoiThucHien(r)
+	answer := func(err error) { h.answerCoverError(w, r, what, err) }
+	up, ok := h.receiveUpload(w, r, what, h.d.ContentCovers.CoverUploadLimit, coverUploadFields, answer)
 	if !ok {
-		h.missingCoverPrincipal(w, r)
 		return
 	}
-	f, err := h.d.ContentCovers.Complete(r.Context(), r.PathValue("id"), actor)
+	defer up.release()
+	f, err := h.d.ContentCovers.UploadCover(r.Context(), coverUploadFrom(up), actor)
 	if err != nil {
-		h.answerCoverError(w, r, "hoàn tất ảnh bìa", err)
+		answer(err)
 		return
 	}
-	vietJSON(w, http.StatusOK, coverFileFrom(f))
+	// A retry under the same Idempotency-Key learns which file the first attempt stored.
+	idem.RecordCode(r.Context(), f.ID)
+	vietJSON(w, http.StatusCreated, coverFileFrom(f))
 }
 
 func (h *Handler) missingCoverPrincipal(w http.ResponseWriter, r *http.Request) {
@@ -196,26 +163,32 @@ var coverRejectionSentences = map[string]string{
 	app.CoverRejectTooManyPixels:  "Ảnh bị từ chối: ảnh có kích thước điểm ảnh quá lớn để xử lý. Hãy thu nhỏ ảnh rồi tải lên lại.",
 }
 
-// fileRefusalLog returns the INFO line every 409/422 of an upload route writes. The client reads a fixed
-// sentence, so without it an operator cannot tell "the upload never arrived" from "it arrived in a store
-// this service does not read" (09/10/2026, a missing temp bucket — petitions' fileRefusalLog). INFO and
-// `ma_loi`, as petitions' tuChoiXuLy: a refusal is the rule doing its job. Commune, file id, code and the
-// wrapped error only — those errors name the commune and object keys, never a file name (rule 3).
+// fileRefusalLog returns the INFO line every refusal of an upload route writes (4xx of the envelope, 409,
+// 422). The client reads a fixed sentence, so without it an operator cannot tell "the upload never
+// arrived whole" from "it arrived in a store this service does not read" (09/10/2026, a missing temp
+// bucket — petitions' fileRefusalLog). INFO and `ma_loi`, as petitions' tuChoiXuLy: a refusal is the
+// rule doing its job. Commune, act, code and the wrapped error only — those errors name the commune, the
+// file id and object keys, never a file name or a field value (rule 3). No `tep_id` field: the upload
+// routes carry no id in their path any more, and the file id, when one exists, is in the trail.
 func fileRefusalLog(r *http.Request, log *slog.Logger, msg, what string, err error) func(code string) {
 	ctx := r.Context()
 	return func(code string) {
-		log.InfoContext(ctx, msg, "xa", string(tenant.MustFrom(ctx)), "viec", what,
-			"tep_id", r.PathValue("id"), "ma_loi", code, "err", err)
+		log.InfoContext(ctx, msg, "xa", string(tenant.MustFrom(ctx)), "viec", what, "ma_loi", code, "err", err)
 	}
 }
 
 // answerCoverError maps the cover refusals, then hands the rest to traLoiLoiNoiDung so a content route
 // answers one way. 503 for everything that is "not now" rather than "no": storage / scanner / limits
-// not configured, the platform or the scanner unreachable — nothing was stored in any of them.
+// not configured, the platform, the scanner or the temp bucket unreachable — nothing usable was stored.
 func (h *Handler) answerCoverError(w http.ResponseWriter, r *http.Request, what string, err error) {
+	if h.writeUploadError(w, r, what, err) {
+		return
+	}
 	refused := fileRefusalLog(r, h.d.Log, "ảnh bìa: từ chối", what, err)
 	var rej *app.CoverRejection
 	switch {
+	case errors.Is(err, app.ErrCoverUploadIncomplete):
+		h.writeUploadStoreError(w, r, what, err)
 	case errors.Is(err, app.ErrCoverFileNotFound):
 		httpx.WriteError(w, http.StatusNotFound, "not_found", "Không tìm thấy ảnh đã tải lên này.", "")
 	case errors.Is(err, commsstore.ErrNoiDungKhongTonTai):
@@ -229,7 +202,9 @@ func (h *Handler) answerCoverError(w http.ResponseWriter, r *http.Request, what 
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
 			"Loại tệp này không được phép làm ảnh bìa.", "")
 	case errors.Is(err, app.ErrCoverTooLarge):
-		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+		// The declared `size` over the policy — the same fact httpx answers 413 for, so the same status.
+		refused("file_too_large")
+		httpx.WriteError(w, http.StatusRequestEntityTooLarge, "file_too_large",
 			"Ảnh lớn hơn dung lượng tối đa được phép.", "")
 	case errors.As(err, &rej):
 		sentence, ok := coverRejectionSentences[rej.Reason]
@@ -244,19 +219,11 @@ func (h *Handler) answerCoverError(w http.ResponseWriter, r *http.Request, what 
 	case errors.Is(err, app.ErrCoverNotPending):
 		refused("cover_state")
 		httpx.WriteError(w, http.StatusConflict, "cover_state",
-			"Ảnh này đã bị từ chối hoặc lượt tải đã hết hạn. Hãy chọn ảnh và tải lên lại.", "")
-	case errors.Is(err, app.ErrCoverUploadNotReceived):
-		refused("upload_not_received")
-		httpx.WriteError(w, http.StatusConflict, "upload_not_received",
-			"Chưa nhận được tệp. Hãy chờ tải lên xong rồi bấm hoàn tất lại.", "")
-	case errors.Is(err, app.ErrCoverUploadExpired):
-		refused("upload_expired")
-		httpx.WriteError(w, http.StatusConflict, "upload_expired",
-			"Lượt tải lên đã hết hạn mà chưa nhận được tệp. Hãy chọn ảnh và tải lên lại.", "")
+			"Ảnh này không còn ở trạng thái chờ kiểm tra. Hãy chọn ảnh và tải lên lại.", "")
 	case errors.Is(err, app.ErrCoverUploadChanged):
 		refused("upload_changed")
 		httpx.WriteError(w, http.StatusConflict, "upload_changed",
-			"Tệp vừa bị thay đổi trong lúc kiểm tra. Hãy bấm hoàn tất lại.", "")
+			"Tệp vừa bị thay đổi trong lúc kiểm tra nên CHƯA được lưu. Hãy chọn ảnh và tải lên lại.", "")
 	case errors.Is(err, app.ErrCoverLimitsUnavailable):
 		h.d.Log.Warn("CẢNH BÁO: từ chối ảnh bìa vì chưa đọc được giới hạn tải tệp từ platform",
 			"xa", string(tenant.MustFrom(r.Context())), "viec", what, "err", err)

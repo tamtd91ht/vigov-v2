@@ -1,13 +1,16 @@
 package app
 
-// THE BROADCAST AUDIO OF A `truyen-thanh` ITEM (ADR 0067 §4; ADR 0052; ADR 0047 G7) — ADR 0052's
-// three-step upload, the cover's shape (content_cover.go) WITHOUT a derivative and WITHOUT a public copy:
+// THE BROADCAST AUDIO OF A `truyen-thanh` ITEM (ADR 0067 §4; ADR 0052; ADR 0047 G7) — ONE upload request
+// through this service (ADR 0052 §Sửa đổi 09/10/2026), the cover's shape (content_cover.go) WITHOUT a
+// derivative and WITHOUT a public copy, in three acts inside Upload:
 //
-//	a. RequestUpload  POST /api/v1/content-items/audio-files                  pending row + presigned POST
-//	b. the browser    POST straight to OBJECT_STORAGE_PUBLIC_ENDPOINT          bytes never cross this service
-//	c. Complete       POST /api/v1/content-items/audio-files/{id}/completion  sniff · audio check · scan ·
-//	                  { "audio_duration_seconds": n }                         hash · copy to PRIVATE → ready,
-//	                                                                          and ATTACHED to the item
+//	a. admitUpload  duration · declaration · the item (FOR UPDATE, `truyen-thanh`) · the count → pending row
+//	b. PutUpload    the multipart file part streamed into the temp bucket
+//	c. complete     sniff · audio check · scan · hash · copy to PRIVATE → ready, and ATTACHED to the item
+//	                with the typed duration — ADR 0052 §1c, unchanged
+//
+// A failure after (a) moves the row to `failed` (ContentCovers.abandon's reasons and its verb, here
+// ActionAudioExpired): with ONE file per item, a row left `pending` would refuse the officer's retry.
 //
 // WHAT DIFFERS FROM THE COVER, AND WHY:
 //
@@ -34,8 +37,8 @@ package app
 // THE LIMITS ARE PLATFORM'S (`content-audio`, ADR 0052 §10): 30 MiB, audio/mpeg + audio/mp4, one file
 // per item — on every request and again at completion. Not configured → refusal; platform down → 503.
 //
-// WHAT IS NEVER LOGGED OR PUT IN AN ERROR: the original file name (rule 3), a presigned URL or form
-// field (bearer credentials), file content. A public audio link is signed with NO file name, so the
+// WHAT IS NEVER LOGGED OR PUT IN AN ERROR: the original file name (rule 3), a presigned URL (a bearer
+// credential), file content. A public audio link is signed with NO file name, so the
 // officer's name for the file never reaches a resident's URL.
 
 import (
@@ -63,7 +66,9 @@ const (
 	// for both, because they are one transaction.
 	ActionAudioStored   = "luu_am_thanh_truyen_thanh"
 	ActionAudioRejected = "tu_choi_am_thanh_truyen_thanh"
-	ActionAudioExpired  = "am_thanh_truyen_thanh_het_han_tai"
+	// ActionAudioExpired: an upload that ENDED WITH NOTHING STORED (uploadVerbs.abandoned says why the
+	// verb kept its name); `ly_do` is a CoverAbandon* reason.
+	ActionAudioExpired = "am_thanh_truyen_thanh_het_han_tai"
 )
 
 // Rejection reasons of an audio file. The shared ones keep the cover's values (one vocabulary in the
@@ -94,12 +99,12 @@ var (
 	// ErrAudioItemRequired: no `content_item_id` — the audio is uploaded for a SAVED broadcast. 400.
 	ErrAudioItemRequired = errors.New("truyền thanh: cần `content_item_id` của mục truyền thanh đã lưu")
 	// ErrAudioFileNotFound: no such upload FOR THIS CALLER — one answer (rule 4, forbidden #2). 404.
-	ErrAudioFileNotFound      = errors.New("truyền thanh: không tìm thấy tệp âm thanh")
-	ErrAudioNotPending        = errors.New("truyền thanh: tệp không còn chờ hoàn tất")
-	ErrAudioUploadNotReceived = errors.New("truyền thanh: chưa nhận được tệp")
-	ErrAudioUploadExpired     = errors.New("truyền thanh: lượt tải lên đã hết hạn")
-	ErrAudioUploadChanged     = errors.New("truyền thanh: tệp vừa bị thay đổi trong lúc kiểm tra")
-	ErrAudioRejected          = errors.New("truyền thanh: tệp bị từ chối")
+	ErrAudioFileNotFound = errors.New("truyền thanh: không tìm thấy tệp âm thanh")
+	ErrAudioNotPending   = errors.New("truyền thanh: tệp không còn chờ hoàn tất")
+	// ErrAudioUploadIncomplete is ErrCoverUploadIncomplete for audio: always wraps the cause.
+	ErrAudioUploadIncomplete = errors.New("truyền thanh: chưa nhận đủ tệp")
+	ErrAudioUploadChanged    = errors.New("truyền thanh: tệp vừa bị thay đổi trong lúc kiểm tra")
+	ErrAudioRejected         = errors.New("truyền thanh: tệp bị từ chối")
 )
 
 // AudioRejection is a completion that refused the FILE: the row is `rejected`, the temp object deleted
@@ -111,8 +116,8 @@ func (e *AudioRejection) Is(t error) bool { return t == ErrAudioRejected }
 
 // AudioObjectStore is the part of *storage.Client the audio acts call (no derivative, no publish).
 type AudioObjectStore interface {
-	PresignUpload(ctx context.Context, uploadKey string, maxBytes int64, contentType string,
-		ttl time.Duration) (storage.PresignedPost, error)
+	PutUpload(ctx context.Context, uploadKey string, r io.Reader, size int64, maxBytes int64,
+		contentType string) (storage.ObjectInfo, error)
 	Stat(ctx context.Context, b storage.Bucket, key string) (storage.ObjectInfo, error)
 	ReadHead(ctx context.Context, b storage.Bucket, key, ifMatchETag string, n int) ([]byte, error)
 	Open(ctx context.Context, b storage.Bucket, key, ifMatchETag string) (io.ReadCloser, int64, error)
@@ -190,66 +195,147 @@ func (uc *ContentAudio) policy(ctx context.Context) (uploadpolicy.Policy, error)
 	return p, nil
 }
 
-// --- a. request an upload ---------------------------------------------------------------------------
+// --- the upload: admit, receive, complete -----------------------------------------------------------
 
-// AudioUploadRequest is what the browser declares before it uploads. A claim, checked again at
-// completion against the bytes (ADR 0052 §1c).
+// AudioUploadRequest is one upload as the handler received it: the declaration and the duration the
+// officer typed (checked here), and the file stream, whose bytes the completion checks again (ADR 0052
+// §1c). The stream fields are CoverUploadRequest's, with the same contract.
 type AudioUploadRequest struct {
 	// ContentItemID names an EXISTING, live `truyen-thanh` item of this commune. Required.
 	ContentItemID string
 	FileName      string
 	ContentType   string // DECLARED; the key's extension follows it, completion sniffs the truth
-	Size          int64
+	Size          int64  // DECLARED; File must yield exactly this many bytes
+	// DurationSeconds is what the officer typed (ADR 0067 §4.1, ADR 0047 G7 — never measured by the
+	// server), 1 .. 21600. Checked FIRST: a wrong figure refuses before a row or a byte.
+	DurationSeconds int
+
+	File     io.Reader
+	Finish   func() error
+	Deadline time.Time
 }
 
-// AudioUpload is the pending row and the form the browser posts the file with.
-type AudioUpload struct {
-	File domain.StoredFile
-	Post storage.PresignedPost // bearer credential for its TTL — never logged
-}
-
-// RequestUpload issues one upload slot. ONE TRANSACTION: the item FOR UPDATE (it must be a live
-// `truyen-thanh`; two requests serialise on it and on the count), the count, the pending row, the trail.
-func (uc *ContentAudio) RequestUpload(ctx context.Context, req AudioUploadRequest, actor audit.Actor) (
-	AudioUpload, error) {
-
-	if actor.ID == "" {
-		return AudioUpload{}, ErrThieuNguoiTaoNoiDung
-	}
-	if req.ContentItemID == "" {
-		return AudioUpload{}, ErrAudioItemRequired
-	}
-	if len(req.ContentItemID) > domain.MaxFileIDLen {
-		return AudioUpload{}, commsstore.ErrNoiDungKhongTonTai
-	}
-	name, err := domain.CleanCoverFileName(req.FileName)
-	if err != nil {
-		return AudioUpload{}, err
-	}
-	if req.Size <= 0 {
-		return AudioUpload{}, domain.ErrCoverSizeInvalid
-	}
+// UploadLimit is the `content-audio` policy's byte cap — the handler's body cap, read before the body.
+func (uc *ContentAudio) UploadLimit(ctx context.Context) (int64, error) {
 	if !uc.uploadsConfigured() {
-		return AudioUpload{}, ErrAudioUploadNotConfigured
+		return 0, ErrAudioUploadNotConfigured
 	}
 	pol, err := uc.policy(ctx)
 	if err != nil {
-		return AudioUpload{}, err
+		return 0, err
+	}
+	if pol.MaxBytes <= 0 {
+		return 0, fmt.Errorf("%w: %s has no byte cap", ErrAudioUploadNotConfigured, audioPurpose)
+	}
+	return pol.MaxBytes, nil
+}
+
+// Upload receives one audio file, checks it and attaches it to its item with the typed duration. What
+// each outcome leaves is ContentCovers.upload's table; on success the item carries the file.
+func (uc *ContentAudio) Upload(ctx context.Context, req AudioUploadRequest, actor audit.Actor) (
+	AudioCompletion, error) {
+
+	if req.File == nil || req.Finish == nil {
+		return AudioCompletion{}, errors.New("truyền thanh: lượt tải lên thiếu luồng tệp — lỗi nối dây ở tầng HTTP")
+	}
+	if actor.ID == "" {
+		return AudioCompletion{}, ErrThieuNguoiTaoNoiDung
+	}
+	if err := domain.CheckAudioDuration(req.DurationSeconds); err != nil {
+		return AudioCompletion{}, err
+	}
+	f, uploadKey, pol, err := uc.admitUpload(ctx, req, actor)
+	if err != nil {
+		return AudioCompletion{}, err
+	}
+
+	wctx, cancel := ctx, context.CancelFunc(func() {})
+	if !req.Deadline.IsZero() {
+		wctx, cancel = context.WithDeadline(ctx, req.Deadline)
+	}
+	_, err = uc.objects.PutUpload(wctx, uploadKey, req.File, req.Size, pol.MaxBytes, req.ContentType)
+	cancel()
+	if err == nil {
+		err = req.Finish() // trailing bytes: refused; the temp object expires with the bucket lifecycle
+	}
+	if err != nil {
+		return AudioCompletion{}, uc.abandon(ctx, f.ID, actor, CoverAbandonNotReceived,
+			fmt.Errorf("%w: %w", ErrAudioUploadIncomplete, err))
+	}
+
+	done, err := uc.complete(ctx, f.ID, req.DurationSeconds, actor)
+	if err != nil && !errors.Is(err, ErrAudioRejected) {
+		return AudioCompletion{}, uc.abandon(ctx, f.ID, actor, CoverAbandonNotInspected, err)
+	}
+	return done, err
+}
+
+// abandon is ContentCovers.abandon for audio: `pending → failed` and ActionAudioExpired with the reason,
+// one transaction, outside the request's cancellation; returns cause. It matters MORE here: the item has
+// one slot, and a pending row would answer the officer's retry with 409 `audio_limit` for UploadTTL.
+func (uc *ContentAudio) abandon(ctx context.Context, id string, actor audit.Actor, reason string, cause error) error {
+	ctx = context.WithoutCancel(ctx)
+	now := uc.clock()
+	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		cur, err := uc.files.ForUpdate(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if cur == nil || cur.Status != domain.StoredFilePending {
+			return nil
+		}
+		if err := uc.files.Transition(ctx, tx, id, domain.StoredFilePending, domain.StoredFileFailed, now); err != nil {
+			return err
+		}
+		return writeAudioAudit(ctx, tx, actor, ActionAudioExpired, domain.NoiDungMiniApp{ID: cur.SubjectID},
+			map[string]any{"tep_id": id, "muc_noi_dung_id": cur.SubjectID, "ly_do": reason})
+	})
+	if err != nil {
+		return fmt.Errorf("%w; truyền thanh: dòng tệp %s chưa chuyển được sang failed: %w", cause, id, err)
+	}
+	return cause
+}
+
+// admitUpload is act (a). ONE TRANSACTION: the item FOR UPDATE (it must be a live `truyen-thanh`; two
+// uploads serialise on it and on the count), the count, the pending row, the trail.
+func (uc *ContentAudio) admitUpload(ctx context.Context, req AudioUploadRequest, actor audit.Actor) (
+	domain.StoredFile, string, uploadpolicy.Policy, error) {
+
+	var none uploadpolicy.Policy
+	if req.ContentItemID == "" {
+		return domain.StoredFile{}, "", none, ErrAudioItemRequired
+	}
+	if len(req.ContentItemID) > domain.MaxFileIDLen {
+		return domain.StoredFile{}, "", none, commsstore.ErrNoiDungKhongTonTai
+	}
+	name, err := domain.CleanCoverFileName(req.FileName)
+	if err != nil {
+		return domain.StoredFile{}, "", none, err
+	}
+	if req.Size <= 0 {
+		return domain.StoredFile{}, "", none, domain.ErrCoverSizeInvalid
+	}
+	if !uc.uploadsConfigured() {
+		return domain.StoredFile{}, "", none, ErrAudioUploadNotConfigured
+	}
+	pol, err := uc.policy(ctx)
+	if err != nil {
+		return domain.StoredFile{}, "", none, err
 	}
 	if !pol.AllowsMIME(req.ContentType) {
-		return AudioUpload{}, ErrAudioTypeNotAllowed
+		return domain.StoredFile{}, "", none, ErrAudioTypeNotAllowed
 	}
 	if req.Size > pol.MaxBytes {
-		return AudioUpload{}, ErrAudioTooLarge
+		return domain.StoredFile{}, "", none, ErrAudioTooLarge
 	}
 	ext, ok := storage.ExtForMIME(req.ContentType)
 	if !ok {
-		return AudioUpload{}, ErrAudioTypeNotAllowed // unreachable while uploadpolicy narrows to storage's list
+		return domain.StoredFile{}, "", none, ErrAudioTypeNotAllowed // unreachable while uploadpolicy narrows to storage's list
 	}
 
 	id, err := uc.newID()
 	if err != nil {
-		return AudioUpload{}, fmt.Errorf("truyền thanh: sinh mã tệp: %w", err)
+		return domain.StoredFile{}, "", none, fmt.Errorf("truyền thanh: sinh mã tệp: %w", err)
 	}
 	now := uc.clock()
 	key := storage.Key{
@@ -259,14 +345,14 @@ func (uc *ContentAudio) RequestUpload(ctx context.Context, req AudioUploadReques
 	}
 	objectKey, err := key.Path()
 	if err != nil {
-		return AudioUpload{}, fmt.Errorf("truyền thanh: dựng khoá đối tượng: %w", err)
+		return domain.StoredFile{}, "", none, fmt.Errorf("truyền thanh: dựng khoá đối tượng: %w", err)
 	}
 	uploadKey, err := key.UploadPath()
 	if err != nil {
-		return AudioUpload{}, fmt.Errorf("truyền thanh: dựng khoá tải lên: %w", err)
+		return domain.StoredFile{}, "", none, fmt.Errorf("truyền thanh: dựng khoá tải lên: %w", err)
 	}
 
-	var out AudioUpload
+	var out domain.StoredFile
 	var refusal error
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		item, err := uc.items.TheoIDDeSua(ctx, tx, req.ContentItemID)
@@ -297,10 +383,6 @@ func (uc *ContentAudio) RequestUpload(ctx context.Context, req AudioUploadReques
 		if err := uc.files.InsertPending(ctx, tx, f); err != nil {
 			return err
 		}
-		post, err := uc.objects.PresignUpload(ctx, uploadKey, pol.MaxBytes, req.ContentType, storage.UploadTTL)
-		if err != nil {
-			return fmt.Errorf("truyền thanh: ký lượt tải lên: %w", err)
-		}
 		if err := writeAudioAudit(ctx, tx, actor, ActionAudioUploadRequested, item, map[string]any{
 			"tep_id":          id,
 			"muc_noi_dung_id": item.ID,
@@ -310,27 +392,25 @@ func (uc *ContentAudio) RequestUpload(ctx context.Context, req AudioUploadReques
 		}); err != nil {
 			return err
 		}
-		out = AudioUpload{File: f, Post: post}
+		out = f
 		return nil
 	})
 	if refusal != nil {
-		return AudioUpload{}, refusal
+		return domain.StoredFile{}, "", none, refusal
 	}
 	if err != nil {
-		return AudioUpload{}, bocNoiDung(ctx, "xin tải âm thanh truyền thanh", err)
+		return domain.StoredFile{}, "", none, bocNoiDung(ctx, "nhận âm thanh truyền thanh", err)
 	}
-	return out, nil
+	return out, uploadKey, pol, nil
 }
 
-// --- c. complete an upload, and attach it -----------------------------------------------------------
+// --- c. complete the upload, and attach it ----------------------------------------------------------
 
 type audioOutcome int
 
 const (
 	audioReady audioOutcome = iota + 1
 	audioRejected
-	audioNotReceived
-	audioExpired
 )
 
 type audioInspection struct {
@@ -342,18 +422,18 @@ type audioInspection struct {
 	tempRemoved bool
 }
 
-// AudioCompletion is what Complete returns: the file, and the item as it now stands.
+// AudioCompletion is what Upload returns: the file, and the item as it now stands.
 type AudioCompletion struct {
 	File domain.StoredFile
 	Item domain.NoiDungMiniApp
 }
 
-// Complete is ADR 0052 §1c for one audio upload, plus attaching it to its item with the duration the
-// officer typed. Only the officer the upload was issued to.
+// complete is ADR 0052 §1c for the audio upload Upload just wrote, plus attaching it to its item with the
+// duration the officer typed. It re-reads the row and checks it is THIS officer's audio upload.
 //
-// IDEMPOTENT: a file already `ready` is returned as it is — the duration sent the second time is NOT
-// applied (correcting it is PATCH /content-items/{id}); nothing is written.
-func (uc *ContentAudio) Complete(ctx context.Context, id string, durationSeconds int, actor audit.Actor) (
+// A file already `ready` is returned as it is and nothing is written (another writer finished first; the
+// duration is NOT re-applied — correcting it is PATCH /content-items/{id}).
+func (uc *ContentAudio) complete(ctx context.Context, id string, durationSeconds int, actor audit.Actor) (
 	AudioCompletion, error) {
 
 	if actor.ID == "" {
@@ -395,9 +475,6 @@ func (uc *ContentAudio) Complete(ctx context.Context, id string, durationSeconds
 	insp, err := uc.inspect(ctx, *f, key, pol)
 	if err != nil {
 		return AudioCompletion{}, err
-	}
-	if insp.kind == audioNotReceived {
-		return AudioCompletion{}, ErrAudioUploadNotReceived
 	}
 
 	now := uc.clock()
@@ -459,24 +536,19 @@ func (uc *ContentAudio) Complete(ctx context.Context, id string, durationSeconds
 					"audio_file_id": sau.AudioFileID, "audio_duration_seconds": sau.AudioDurationSeconds,
 					"da_sua_tay": sau.DaSuaTay},
 			})
-		case audioRejected, audioExpired:
+		case audioRejected:
 			if cur.Status != domain.StoredFilePending {
 				return ErrAudioNotPending
 			}
-			to, action := domain.StoredFileRejected, ActionAudioRejected
-			d := map[string]any{"tep_id": id, "muc_noi_dung_id": cur.SubjectID}
-			if insp.kind == audioExpired {
-				to, action = domain.StoredFileFailed, ActionAudioExpired
-			} else {
-				d["ly_do"], d["da_xoa_tep_tam"] = insp.reason, insp.tempRemoved
-				if insp.signature != "" {
-					d["chu_ky_ma_doc"] = insp.signature
-				}
+			d := map[string]any{"tep_id": id, "muc_noi_dung_id": cur.SubjectID,
+				"ly_do": insp.reason, "da_xoa_tep_tam": insp.tempRemoved}
+			if insp.signature != "" {
+				d["chu_ky_ma_doc"] = insp.signature
 			}
-			if err := uc.files.Transition(ctx, tx, id, domain.StoredFilePending, to, now); err != nil {
+			if err := uc.files.Transition(ctx, tx, id, domain.StoredFilePending, domain.StoredFileRejected, now); err != nil {
 				return err
 			}
-			return writeAudioAudit(ctx, tx, actor, action, domain.NoiDungMiniApp{ID: cur.SubjectID}, d)
+			return writeAudioAudit(ctx, tx, actor, ActionAudioRejected, domain.NoiDungMiniApp{ID: cur.SubjectID}, d)
 		}
 		return fmt.Errorf("truyền thanh: kết quả kiểm tra không rõ (%d)", insp.kind)
 	})
@@ -491,8 +563,6 @@ func (uc *ContentAudio) Complete(ctx context.Context, id string, durationSeconds
 		return uc.alreadyDone(ctx, done.File)
 	case done.File.ID != "":
 		return done, nil
-	case insp.kind == audioExpired:
-		return AudioCompletion{}, ErrAudioUploadExpired
 	default:
 		return AudioCompletion{}, &AudioRejection{Reason: insp.reason}
 	}
@@ -567,8 +637,8 @@ func writeAudioAudit(ctx context.Context, tx *store.ScopedTx, actor audit.Actor,
 	return audit.Write(ctx, tx, audit.Entry{Actor: actor, Action: action, Subject: subject, Delta: delta})
 }
 
-// inspect is the lock-free half of Complete. An error means nothing may be decided yet: nothing is
-// written and the row stays retryable.
+// inspect is the lock-free half of complete. An error means nothing may be decided: complete writes
+// nothing and Upload abandons the row.
 func (uc *ContentAudio) inspect(ctx context.Context, f domain.StoredFile, key storage.Key,
 	pol uploadpolicy.Policy) (audioInspection, error) {
 
@@ -670,8 +740,9 @@ func (uc *ContentAudio) inspect(ctx context.Context, f domain.StoredFile, key st
 		facts: domain.StoredFileFacts{MIMEType: pr.ContentType, SizeBytes: st.Size, SHA256: sum}}, nil
 }
 
-// fromDestination handles "the original is already in the private bucket" (a previous completion
-// promoted it; its transaction did not finish) or "nothing arrived". A destination object is TRUSTED
+// fromDestination handles "the original is already in the private bucket" (a concurrent Promote got there
+// first) or "nothing in either bucket right after PutUpload succeeded" — an error, never the client's
+// doing (ContentCovers.fromDestination says why). A destination object is TRUSTED
 // AS CHECKED because nothing else writes there: Promote is the only path into
 // `content-source/…/comms/content-audio/…/original.*`, and it runs only after the scan and the audio
 // check passed (ADR 0052 §3 scopes this service's key to its own subtree).
@@ -683,10 +754,7 @@ func (uc *ContentAudio) fromDestination(ctx context.Context, f domain.StoredFile
 		if f.Status != domain.StoredFilePending {
 			return audioInspection{}, errors.New("truyền thanh: dòng đã lưu nhưng không thấy bản gốc ở kho lưu")
 		}
-		if uc.clock().After(f.CreatedAt.Add(storage.UploadTTL)) {
-			return audioInspection{kind: audioExpired}, nil
-		}
-		return audioInspection{kind: audioNotReceived}, nil
+		return audioInspection{}, fmt.Errorf("truyền thanh: vừa ghi tệp %s vào kho tạm nhưng không thấy ở kho tạm lẫn kho lưu", f.ID)
 	}
 	if err != nil {
 		return audioInspection{}, audioStorageErr("đọc thông tin tệp đã lưu", err)

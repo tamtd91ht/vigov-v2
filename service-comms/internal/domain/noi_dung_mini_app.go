@@ -864,7 +864,7 @@ type YeuCauSuaNoiDung struct {
 	// AudioFileID — nil = leave alone; "" = REMOVE the broadcast audio (both columns go NULL and the file
 	// row is soft-deleted in the same transaction, rule 7). ANY OTHER VALUE is accepted only when it is
 	// the file already attached (a no-op): a file is attached by its upload's completion, which carries
-	// the duration (ContentAudio.Complete says why it is not attached here).
+	// the duration (ContentAudio.Upload — internal/app/content_audio.go says why it is not attached here).
 	AudioFileID *string
 
 	// AudioDurationSeconds — nil = leave alone; a value = correct the typed duration of the audio already

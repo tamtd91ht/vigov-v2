@@ -3,50 +3,49 @@ package http
 // THE BROADCAST AUDIO OF A `truyen-thanh` ITEM (ADR 0067 §4) — the HTTP half of
 // internal/app/content_audio.go:
 //
-//	POST /api/v1/content-items/audio-files                   content.update — pending row + presigned POST
-//	POST /api/v1/content-items/audio-files/{id}/completion   content.update — the uploader only; attaches
+//	POST /api/v1/content-items/audio-files   content.update — ONE multipart request → 201 the stored file,
+//	                                         ATTACHED to its item (ADR 0052 §Sửa đổi 09/10/2026)
 //
 // `audio-files` UNDER `content-items`, beside `cover-images`, for the same reasons (the noun is
-// migration 0012's `audio_file_id`; tools/ingress groups by the first segment). The item is named in the
-// body (`content_item_id`, REQUIRED here, unlike the cover): the audio is uploaded for a saved broadcast.
+// migration 0012's `audio_file_id`; tools/ingress groups by the first segment). The item is named in a
+// field (`content_item_id`, REQUIRED here, unlike the cover): the audio is uploaded for a saved broadcast.
 //
-// THESE HANDLERS DECIDE NOTHING. ⚠ The first reply carries a bearer credential (the presigned POST form)
-// and the staff detail a presigned GET: no handler here logs a reply, a URL, a form field or a file name.
+// THESE HANDLERS DECIDE NOTHING. ⚠ The staff detail carries a presigned GET: no handler here logs a
+// reply, a URL, a field value or a file name.
 
 import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/httpx"
+	"github.com/vihat/vigov/core/idem"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-comms/internal/app"
 	"github.com/vihat/vigov/service-comms/internal/domain"
 	commsstore "github.com/vihat/vigov/service-comms/internal/store"
 )
 
-// ContentAudioActs is the audio upload, completion and staff preview. *app.ContentAudio satisfies it.
+// ContentAudioActs is the audio upload and staff preview. *app.ContentAudio satisfies it.
 type ContentAudioActs interface {
-	RequestUpload(ctx context.Context, req app.AudioUploadRequest, actor audit.Actor) (app.AudioUpload, error)
-	Complete(ctx context.Context, id string, durationSeconds int, actor audit.Actor) (app.AudioCompletion, error)
+	UploadLimit(ctx context.Context) (int64, error)
+	Upload(ctx context.Context, req app.AudioUploadRequest, actor audit.Actor) (app.AudioCompletion, error)
 	View(ctx context.Context, fileID string) (app.AudioView, error)
 }
 
-// audioUploadIn is what the browser declares before it uploads; CHECKED against platform's
-// `content-audio` policy here, and the bytes again at completion (ADR 0052 §1c).
+// audioUploadFields are the text fields of the audio upload besides `size`, all BEFORE the `file` part:
 //
-// ⚠ `file_name` CAN NAME A PERSON (rule 3): stored, never logged, never in an object key, never in a
-// resident's link.
-type audioUploadIn struct {
-	// ContentItemID — REQUIRED: a saved, live `truyen-thanh` item of this commune.
-	ContentItemID string `json:"content_item_id"`
-	FileName      string `json:"file_name"`
-	// ContentType is `audio/mpeg` (MP3) or `audio/mp4` (M4A) — platform's list.
-	ContentType string `json:"content_type"`
-	Size        int64  `json:"size"`
-}
+//	content_item_id         REQUIRED: a saved, live `truyen-thanh` item of this commune
+//	audio_duration_seconds  REQUIRED: the duration the officer typed, 1 .. 21600 (ADR 0067 §4.1) — checked
+//	                        before a row is written or a byte of the file is read
+//	file_name               the officer's file name (else the part's filename) — ⚠ CAN NAME A PERSON
+//	                        (rule 3): stored, never logged, never in an object key or a resident's link
+//	content_type            `audio/mpeg` (MP3) or `audio/mp4` (M4A) — platform's list (else the part's)
+var audioUploadFields = []string{uploadFieldContentItemID, uploadFieldAudioDuration, uploadFieldFileName,
+	uploadFieldContentType}
 
 // audioFileOut is one audio file as staff see it. No object key, no uploader, no file name.
 type audioFileOut struct {
@@ -72,19 +71,6 @@ func audioFileFrom(f domain.StoredFile, item domain.NoiDungMiniApp) audioFileOut
 	return out
 }
 
-// audioUploadOut is the reply of POST …/audio-files: the form (every `fields` entry, then the file as
-// the LAST field named `file`, POSTed to `url`, valid until `expires_at`).
-type audioUploadOut struct {
-	AudioFile audioFileOut       `json:"audio_file"`
-	Upload    presignedUploadOut `json:"upload"`
-}
-
-// audioCompletionIn is the body of the completion: the duration the officer typed (ADR 0067 §4.1,
-// ADR 0047 G7 — never measured by the server). 1 .. 21600 seconds.
-type audioCompletionIn struct {
-	DurationSeconds int `json:"audio_duration_seconds"`
-}
-
 // audioOut is the audio block of the staff DETAIL of an item.
 type audioOut struct {
 	FileID string `json:"file_id"`
@@ -101,50 +87,41 @@ type audioOut struct {
 	PreviewExpiresAt *time.Time `json:"preview_expires_at,omitempty"`
 }
 
-// RequestAudioUpload issues one upload slot. POST /api/v1/content-items/audio-files
-func (h *Handler) RequestAudioUpload(w http.ResponseWriter, r *http.Request) {
-	var in audioUploadIn
-	if !docThan(w, r, &in) {
-		return
-	}
+// UploadAudio receives one audio file, checks it and attaches it to its item with the typed duration.
+// POST /api/v1/content-items/audio-files
+func (h *Handler) UploadAudio(w http.ResponseWriter, r *http.Request) {
+	const what = "tải âm thanh truyền thanh"
 	actor, ok := nguoiThucHien(r)
 	if !ok {
 		h.missingCoverPrincipal(w, r)
 		return
 	}
-	up, err := h.d.ContentAudio.RequestUpload(r.Context(), app.AudioUploadRequest{
-		ContentItemID: in.ContentItemID, FileName: in.FileName, ContentType: in.ContentType, Size: in.Size,
+	answer := func(err error) { h.answerAudioError(w, r, what, err) }
+	up, ok := h.receiveUpload(w, r, what, h.d.ContentAudio.UploadLimit, audioUploadFields, answer)
+	if !ok {
+		return
+	}
+	defer up.release()
+	// THE DURATION FIRST — a field before the file, so a wrong figure is refused before the use case
+	// writes a row or reads a byte. Not a whole number = the same refusal as out of range: one sentence.
+	seconds, err := strconv.Atoi(up.Fields[uploadFieldAudioDuration])
+	if err == nil {
+		err = domain.CheckAudioDuration(seconds)
+	}
+	if err != nil {
+		answer(domain.ErrAudioDurationInvalid)
+		return
+	}
+	done, err := h.d.ContentAudio.Upload(r.Context(), app.AudioUploadRequest{
+		ContentItemID: up.Fields[uploadFieldContentItemID], FileName: up.fileName, ContentType: up.contentType,
+		Size: up.Size, DurationSeconds: seconds, File: up.File, Finish: up.Finish, Deadline: up.Deadline,
 	}, actor)
 	if err != nil {
-		h.answerAudioError(w, r, "xin tải âm thanh truyền thanh", err)
+		answer(err)
 		return
 	}
-	// A form is a bearer credential: no cache between here and the officer's browser keeps it.
-	w.Header().Set("Cache-Control", "no-store")
-	vietJSON(w, http.StatusCreated, audioUploadOut{
-		AudioFile: audioFileFrom(up.File, domain.NoiDungMiniApp{}),
-		Upload:    presignedUploadOut{URL: up.Post.URL, Fields: up.Post.Fields, ExpiresAt: up.Post.ExpiresAt},
-	})
-}
-
-// CompleteAudioUpload checks one upload and attaches it to its item.
-// POST /api/v1/content-items/audio-files/{id}/completion
-func (h *Handler) CompleteAudioUpload(w http.ResponseWriter, r *http.Request) {
-	var in audioCompletionIn
-	if !docThan(w, r, &in) {
-		return
-	}
-	actor, ok := nguoiThucHien(r)
-	if !ok {
-		h.missingCoverPrincipal(w, r)
-		return
-	}
-	done, err := h.d.ContentAudio.Complete(r.Context(), r.PathValue("id"), in.DurationSeconds, actor)
-	if err != nil {
-		h.answerAudioError(w, r, "hoàn tất âm thanh truyền thanh", err)
-		return
-	}
-	vietJSON(w, http.StatusOK, audioFileFrom(done.File, done.Item))
+	idem.RecordCode(r.Context(), done.File.ID)
+	vietJSON(w, http.StatusCreated, audioFileFrom(done.File, done.Item))
 }
 
 // audioView builds the detail's audio block. A failure to sign the preview is logged and the block
@@ -176,9 +153,14 @@ var audioRejectionSentences = map[string]string{
 
 // answerAudioError maps the audio refusals, then hands the rest to traLoiLoiNoiDung.
 func (h *Handler) answerAudioError(w http.ResponseWriter, r *http.Request, what string, err error) {
+	if h.writeUploadError(w, r, what, err) {
+		return
+	}
 	refused := fileRefusalLog(r, h.d.Log, "âm thanh truyền thanh: từ chối", what, err)
 	var rej *app.AudioRejection
 	switch {
+	case errors.Is(err, app.ErrAudioUploadIncomplete):
+		h.writeUploadStoreError(w, r, what, err)
 	case errors.Is(err, app.ErrAudioFileNotFound):
 		httpx.WriteError(w, http.StatusNotFound, "not_found", "Không tìm thấy tệp âm thanh đã tải lên này.", "")
 	case errors.Is(err, commsstore.ErrNoiDungKhongTonTai):
@@ -195,7 +177,8 @@ func (h *Handler) answerAudioError(w http.ResponseWriter, r *http.Request, what 
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
 			"Loại tệp này không được phép cho truyền thanh — chỉ MP3 hoặc M4A.", "")
 	case errors.Is(err, app.ErrAudioTooLarge):
-		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+		refused("file_too_large")
+		httpx.WriteError(w, http.StatusRequestEntityTooLarge, "file_too_large",
 			"Tệp âm thanh lớn hơn dung lượng tối đa được phép.", "")
 	case errors.As(err, &rej):
 		sentence, ok := audioRejectionSentences[rej.Reason]
@@ -211,19 +194,11 @@ func (h *Handler) answerAudioError(w http.ResponseWriter, r *http.Request, what 
 	case errors.Is(err, app.ErrAudioNotPending):
 		refused("audio_state")
 		httpx.WriteError(w, http.StatusConflict, "audio_state",
-			"Tệp này đã bị từ chối hoặc lượt tải đã hết hạn. Hãy chọn tệp và tải lên lại.", "")
-	case errors.Is(err, app.ErrAudioUploadNotReceived):
-		refused("upload_not_received")
-		httpx.WriteError(w, http.StatusConflict, "upload_not_received",
-			"Chưa nhận được tệp. Hãy chờ tải lên xong rồi bấm hoàn tất lại.", "")
-	case errors.Is(err, app.ErrAudioUploadExpired):
-		refused("upload_expired")
-		httpx.WriteError(w, http.StatusConflict, "upload_expired",
-			"Lượt tải lên đã hết hạn mà chưa nhận được tệp. Hãy chọn tệp và tải lên lại.", "")
+			"Tệp này không còn ở trạng thái chờ kiểm tra. Hãy chọn tệp và tải lên lại.", "")
 	case errors.Is(err, app.ErrAudioUploadChanged):
 		refused("upload_changed")
 		httpx.WriteError(w, http.StatusConflict, "upload_changed",
-			"Tệp vừa bị thay đổi trong lúc kiểm tra. Hãy bấm hoàn tất lại.", "")
+			"Tệp vừa bị thay đổi trong lúc kiểm tra nên CHƯA được lưu. Hãy chọn tệp và tải lên lại.", "")
 	case errors.Is(err, app.ErrAudioLimitsUnavailable):
 		h.d.Log.Warn("CẢNH BÁO: từ chối âm thanh truyền thanh vì chưa đọc được giới hạn tải tệp từ platform",
 			"xa", string(tenant.MustFrom(r.Context())), "viec", what, "err", err)

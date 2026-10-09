@@ -1,13 +1,14 @@
 package http
 
 // The broadcast audio routes (content_audio.go) and the audio fields on the staff and public reads.
-// The four-case permission suite for both new routes runs in noi_dung_mini_app_test.go's table
+// The four-case permission suite for the upload route runs in noi_dung_mini_app_test.go's table
 // (cacTuyenND), through the REAL Register behind the REAL edge chain.
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -20,46 +21,49 @@ import (
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-comms/internal/app"
 	"github.com/vihat/vigov/service-comms/internal/domain"
+	commsstore "github.com/vihat/vigov/service-comms/internal/store"
 )
 
 type fakeAudio struct {
-	requests, completions, views int
-	tenantID                     tenant.ID
-	actor                        audit.Actor
-	lastRequest                  app.AudioUploadRequest
-	lastID                       string
-	lastDuration                 int
-	view                         app.AudioView
-	err                          error
+	requests, views int
+	tenantID        tenant.ID
+	actor           audit.Actor
+	lastRequest     app.AudioUploadRequest
+	received        []byte
+	view            app.AudioView
+	err             error
+	limitErr        error
 }
 
-func (f *fakeAudio) RequestUpload(ctx context.Context, req app.AudioUploadRequest, actor audit.Actor) (
-	app.AudioUpload, error) {
+func (f *fakeAudio) UploadLimit(context.Context) (int64, error) {
+	if f.limitErr != nil {
+		return 0, f.limitErr
+	}
+	return 1 << 20, nil
+}
+
+// Upload drains the stream like PutUpload, then calls Finish, like the use case.
+func (f *fakeAudio) Upload(ctx context.Context, req app.AudioUploadRequest, actor audit.Actor) (
+	app.AudioCompletion, error) {
 	f.requests++
 	f.tenantID, f.actor, f.lastRequest = tenant.MustFrom(ctx), actor, req
-	if f.err != nil {
-		return app.AudioUpload{}, f.err
+	b, err := io.ReadAll(req.File)
+	if err != nil {
+		return app.AudioCompletion{}, fmt.Errorf("%w: %w", app.ErrAudioUploadIncomplete, err)
 	}
-	return app.AudioUpload{
-		File: domain.StoredFile{ID: "01JAUDIOFILE00000000000000", Status: domain.StoredFilePending,
-			SubjectID: req.ContentItemID, OriginalName: "ban-tin-sang.mp3"},
-		Post: storage.PresignedPost{URL: "https://minio.example/vigov-prod-temp",
-			Fields: map[string]string{"key": "upload/x"}, ExpiresAt: time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)},
-	}, nil
-}
-
-func (f *fakeAudio) Complete(ctx context.Context, id string, durationSeconds int, actor audit.Actor) (
-	app.AudioCompletion, error) {
-	f.completions++
-	f.tenantID, f.actor, f.lastID, f.lastDuration = tenant.MustFrom(ctx), actor, id, durationSeconds
+	f.received = b
+	if err := req.Finish(); err != nil {
+		return app.AudioCompletion{}, fmt.Errorf("%w: %w", app.ErrAudioUploadIncomplete, err)
+	}
 	if f.err != nil {
 		return app.AudioCompletion{}, f.err
 	}
+	const id = "01JAUDIOFILE00000000000000"
 	return app.AudioCompletion{
-		File: domain.StoredFile{ID: id, SubjectID: "nd-tt-1", Status: domain.StoredFileReady,
-			MIMEType: "audio/mpeg", SizeBytes: 4096},
-		Item: domain.NoiDungMiniApp{ID: "nd-tt-1", Loai: domain.LoaiTruyenThanh, AudioFileID: id,
-			AudioDurationSeconds: durationSeconds},
+		File: domain.StoredFile{ID: id, SubjectID: req.ContentItemID, Status: domain.StoredFileReady,
+			MIMEType: "audio/mpeg", SizeBytes: req.Size},
+		Item: domain.NoiDungMiniApp{ID: req.ContentItemID, Loai: domain.LoaiTruyenThanh, AudioFileID: id,
+			AudioDurationSeconds: req.DurationSeconds},
 	}, nil
 }
 
@@ -92,52 +96,67 @@ func (a *fakePublicAudio) PublicAudioURLs(ctx context.Context, ids []string) (ma
 	return out, nil
 }
 
-const (
-	pathAudioFiles        = "/api/v1/content-items/audio-files"
-	bodyAudioUploadOK     = `{"file_name":"ban-tin-sang.mp3","content_type":"audio/mpeg","size":2048,"content_item_id":"nd-tt-1"}`
-	pathAudioCompletion   = "/api/v1/content-items/audio-files/01JAUDIOFILE00000000000000/completion"
-	bodyAudioCompletionOK = `{"audio_duration_seconds":754}`
-)
+const pathAudioFiles = "/api/v1/content-items/audio-files"
 
-func TestAudioUploadReplyCarriesTheFormAndNoStore(t *testing.T) {
+var bodyAudioUploadOK = multipartBody([][2]string{sizeOf(fileBytes), {"content_item_id", "nd-tt-1"},
+	{"audio_duration_seconds", "754"}, {"file_name", "ban-tin-sang.mp3"}, {"content_type", "audio/mpeg"}}, fileBytes)
+
+func TestAudioUploadStreamsTheFileAndAnswersItAttached(t *testing.T) {
 	m := dungMayChuND(t)
 	m.capQuyen(xaA, QuyenSuaNoiDung)
-	w := m.goi(t, http.MethodPost, hostA, pathAudioFiles, bodyAudioUploadOK, canBo(xaA))
+	w := m.goiVoi(t, http.MethodPost, hostA, pathAudioFiles, bodyAudioUploadOK, multipartCT, canBo(xaA))
 	doiMa(t, w, http.StatusCreated)
-	if w.Header().Get("Cache-Control") != "no-store" {
-		t.Errorf("a presigned form must not be cached: Cache-Control = %q", w.Header().Get("Cache-Control"))
-	}
-	var out audioUploadOut
-	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
-		t.Fatalf("body is not JSON: %v", err)
-	}
-	if out.Upload.URL == "" || out.AudioFile.Status != "pending" || out.AudioFile.ContentItemID != "nd-tt-1" {
-		t.Errorf("reply = %+v", out)
-	}
-	if strings.Contains(w.Body.String(), "ban-tin-sang") {
-		t.Error("the reply echoes the file name")
-	}
-	// RULE 6, INVARIANT 8: the actor is the staff BUSINESS CODE from the session, never the id.
-	if m.audio.actor.ID != canBo(xaA).Ma || m.audio.lastRequest.ContentItemID != "nd-tt-1" ||
-		m.audio.lastRequest.ContentType != "audio/mpeg" || m.audio.lastRequest.Size != 2048 {
-		t.Errorf("use case got actor=%q req=%+v", m.audio.actor.ID, m.audio.lastRequest)
-	}
-}
-
-func TestAudioCompletionPassesTheTypedDuration(t *testing.T) {
-	m := dungMayChuND(t)
-	m.capQuyen(xaA, QuyenSuaNoiDung)
-	w := m.goi(t, http.MethodPost, hostA, pathAudioCompletion, bodyAudioCompletionOK, canBo(xaA))
-	doiMa(t, w, http.StatusOK)
-	if m.audio.lastDuration != 754 || m.audio.lastID != "01JAUDIOFILE00000000000000" {
-		t.Errorf("use case got id=%q duration=%d", m.audio.lastID, m.audio.lastDuration)
-	}
 	var out audioFileOut
 	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
 		t.Fatalf("body is not JSON: %v", err)
 	}
-	if out.Status != "ready" || out.DurationSeconds != 754 || out.MIMEType != "audio/mpeg" || out.SizeBytes != 4096 {
+	if out.ID != "01JAUDIOFILE00000000000000" || out.Status != "ready" || out.ContentItemID != "nd-tt-1" ||
+		out.DurationSeconds != 754 || out.MIMEType != "audio/mpeg" || out.SizeBytes != int64(len(fileBytes)) {
 		t.Errorf("reply = %+v", out)
+	}
+	for _, gone := range []string{"ban-tin-sang", `"upload"`} {
+		if strings.Contains(w.Body.String(), gone) {
+			t.Errorf("the reply carries %s: %s", gone, w.Body.String())
+		}
+	}
+	// RULE 6, INVARIANT 8: the actor is the staff BUSINESS CODE from the session, never the id.
+	got := m.audio.lastRequest
+	if m.audio.actor.ID != canBo(xaA).Ma || got.ContentItemID != "nd-tt-1" || got.ContentType != "audio/mpeg" ||
+		got.Size != int64(len(fileBytes)) || got.DurationSeconds != 754 || got.FileName != "ban-tin-sang.mp3" ||
+		string(m.audio.received) != string(fileBytes) {
+		t.Errorf("use case got actor=%q req=%+v", m.audio.actor.ID, got)
+	}
+}
+
+// THE DURATION IS A FIELD BEFORE THE FILE, checked before the use case runs: missing, not a whole number
+// or out of range is one 422, and nothing is written or read.
+func TestAudioUploadDurationIsCheckedBeforeTheUseCase(t *testing.T) {
+	for name, fields := range map[string][][2]string{
+		"missing":      {sizeOf(fileBytes), {"content_item_id", "nd-tt-1"}},
+		"not a number": {sizeOf(fileBytes), {"content_item_id", "nd-tt-1"}, {"audio_duration_seconds", "12 phút"}},
+		"zero":         {sizeOf(fileBytes), {"content_item_id", "nd-tt-1"}, {"audio_duration_seconds", "0"}},
+		"over 6 hours": {sizeOf(fileBytes), {"content_item_id", "nd-tt-1"}, {"audio_duration_seconds", "21601"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := dungMayChuND(t)
+			m.capQuyen(xaA, QuyenSuaNoiDung)
+			w := m.goiVoi(t, http.MethodPost, hostA, pathAudioFiles, multipartBody(fields, fileBytes), multipartCT, canBo(xaA))
+			doiMa(t, w, http.StatusUnprocessableEntity)
+			if !strings.Contains(w.Body.String(), `"code":"invalid_audio_duration"`) || m.audio.requests != 0 {
+				t.Errorf("body: %s (requests %d)", w.Body.String(), m.audio.requests)
+			}
+		})
+	}
+	// SENT AFTER THE FILE it does not count: the handler decides at the file part, before reading it, so
+	// the duration is "missing" — the same 422, and the file is never read.
+	m := dungMayChuND(t)
+	m.capQuyen(xaA, QuyenSuaNoiDung)
+	body := strings.TrimSuffix(multipartBody([][2]string{sizeOf(fileBytes), {"content_item_id", "nd-tt-1"}}, fileBytes),
+		"--"+multipartBoundary+"--\r\n") + multipartBody([][2]string{{"audio_duration_seconds", "60"}}, nil)
+	w := m.goiVoi(t, http.MethodPost, hostA, pathAudioFiles, body, multipartCT, canBo(xaA))
+	doiMa(t, w, http.StatusUnprocessableEntity)
+	if m.audio.requests != 0 {
+		t.Error("a duration sent after the file reached the use case")
 	}
 }
 
@@ -148,26 +167,27 @@ func TestAudioErrorsMapToTheirStatus(t *testing.T) {
 		want int
 		code string
 	}{
-		{"declared too large (policy)", app.ErrAudioTooLarge, http.StatusBadRequest, "invalid_request"},
+		{"declared too large (policy)", app.ErrAudioTooLarge, http.StatusRequestEntityTooLarge, "file_too_large"},
 		{"declared type not allowed", app.ErrAudioTypeNotAllowed, http.StatusBadRequest, "invalid_request"},
 		{"no item named", app.ErrAudioItemRequired, http.StatusBadRequest, "invalid_request"},
 		{"infected", &app.AudioRejection{Reason: app.AudioRejectMalware}, http.StatusUnprocessableEntity, "audio_rejected"},
 		{"not audio", &app.AudioRejection{Reason: app.AudioRejectNotAudio}, http.StatusUnprocessableEntity, "audio_rejected"},
-		{"duration out of range", domain.ErrAudioDurationInvalid, http.StatusUnprocessableEntity, "invalid_audio_duration"},
 		{"item not truyen-thanh", domain.ErrAudioOnlyForBroadcast, http.StatusUnprocessableEntity, "audio_only_for_truyen_thanh"},
 		{"already has audio", app.ErrAudioCountReached, http.StatusConflict, "audio_limit"},
 		{"scanner down", app.ErrAudioScanUnavailable, http.StatusServiceUnavailable, "malware_scan_unavailable"},
 		{"not configured", app.ErrAudioUploadNotConfigured, http.StatusServiceUnavailable, "storage_not_configured"},
 		{"limits unavailable", app.ErrAudioLimitsUnavailable, http.StatusServiceUnavailable, "upload_limits_unavailable"},
-		{"not the caller's", app.ErrAudioFileNotFound, http.StatusNotFound, "not_found"},
-		{"not received", app.ErrAudioUploadNotReceived, http.StatusConflict, "upload_not_received"},
-		{"expired", app.ErrAudioUploadExpired, http.StatusConflict, "upload_expired"},
+		{"no such item", commsstore.ErrNoiDungKhongTonTai, http.StatusNotFound, "not_found"},
+		{"temp bucket down", fmt.Errorf("%w: storage: unreachable", app.ErrAudioUploadIncomplete),
+			http.StatusServiceUnavailable, "upload_store_unavailable"},
+		{"write over the cap", fmt.Errorf("%w: %w", app.ErrAudioUploadIncomplete, storage.ErrTooLarge),
+			http.StatusRequestEntityTooLarge, "file_too_large"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m := dungMayChuND(t)
 			m.capQuyen(xaA, QuyenSuaNoiDung)
 			m.audio.err = tc.err
-			w := m.goi(t, http.MethodPost, hostA, pathAudioCompletion, bodyAudioCompletionOK, canBo(xaA))
+			w := m.goiVoi(t, http.MethodPost, hostA, pathAudioFiles, bodyAudioUploadOK, multipartCT, canBo(xaA))
 			doiMa(t, w, tc.want)
 			if !strings.Contains(w.Body.String(), `"code":"`+tc.code+`"`) {
 				t.Errorf("code: %s", w.Body.String())

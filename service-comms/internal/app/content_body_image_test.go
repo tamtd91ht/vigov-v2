@@ -85,7 +85,7 @@ func TestBodyImageRequestRefusesThe21stFromThePolicyCount(t *testing.T) {
 		readyBodyImage(r.files, id, coverItemID)
 	}
 	req := CoverUploadRequest{ContentItemID: coverItemID, FileName: "anh.jpg", ContentType: storage.MIMEJPEG, Size: 10}
-	_, err := r.uc.RequestBodyImageUpload(r.ctx, req, nguoiSoanND())
+	_, err := r.uc.UploadBodyImage(r.ctx, bodyReq(t, req), nguoiSoanND())
 	if !errors.Is(err, ErrCoverCountReached) {
 		t.Fatalf("21st body image: err = %v, want ErrCoverCountReached", err)
 	}
@@ -98,13 +98,13 @@ func TestBodyImageRequestRefusesThe21stFromThePolicyCount(t *testing.T) {
 		r.files.deleted[id] = true
 		break
 	}
-	up, err := r.uc.RequestBodyImageUpload(r.ctx, req, nguoiSoanND())
+	up, err := r.uc.UploadBodyImage(r.ctx, bodyReq(t, req), nguoiSoanND())
 	if err != nil {
 		t.Fatalf("20 live after a retire: err = %v", err)
 	}
-	if up.File.Purpose != string(storage.PurposeContentBodyImage) || up.File.SubjectID != coverItemID ||
-		!strings.Contains(up.File.ObjectKey, "/comms/content-body-image/") {
-		t.Errorf("row = %+v", up.File)
+	if up.Purpose != string(storage.PurposeContentBodyImage) || up.SubjectID != coverItemID ||
+		!strings.Contains(up.ObjectKey, "/comms/content-body-image/") || up.Status != domain.StoredFileReady {
+		t.Errorf("row = %+v", up)
 	}
 	acts := auditActions(r.k)
 	if !containsString(acts, ActionBodyImageUploadRequested) || !containsString(acts, "noi-dung-mini-app/anh-than-bai/2026-10-01") {
@@ -142,8 +142,8 @@ func TestBodyImageAdmissionLocksTheSubjectBeforeCounting(t *testing.T) {
 				readyBodyImage(r.files, bodyFileA, coverItemID)
 			}
 			r.files.admitCalls = nil
-			_, err := r.uc.RequestBodyImageUpload(r.ctx, CoverUploadRequest{ContentItemID: tc.named, FileName: "a.jpg",
-				ContentType: storage.MIMEJPEG, Size: 10}, nguoiSoanND())
+			_, err := r.uc.UploadBodyImage(r.ctx, bodyReq(t, CoverUploadRequest{ContentItemID: tc.named, FileName: "a.jpg",
+				ContentType: storage.MIMEJPEG, Size: 10}), nguoiSoanND())
 			if err != nil {
 				t.Fatalf("err = %v", err)
 			}
@@ -195,8 +195,8 @@ func TestBodyImageCapDoesNotCountTheCover(t *testing.T) {
 	r := newCoverRig(t, &khoNDGia{})
 	r.uc.policies = bodyPolicy(1)
 	readyCover(r.files, coverFileID, coverItemID) // the cover: another purpose, another count
-	_, err := r.uc.RequestBodyImageUpload(r.ctx, CoverUploadRequest{ContentItemID: coverItemID, FileName: "a.jpg",
-		ContentType: storage.MIMEJPEG, Size: 10}, nguoiSoanND())
+	_, err := r.uc.UploadBodyImage(r.ctx, bodyReq(t, CoverUploadRequest{ContentItemID: coverItemID, FileName: "a.jpg",
+		ContentType: storage.MIMEJPEG, Size: 10}), nguoiSoanND())
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -207,8 +207,8 @@ func TestBodyImageRequestOnAnotherOfficersReservationIs404(t *testing.T) {
 	r.uc.policies = bodyPolicy(20)
 	f := readyBodyImage(r.files, bodyFileA, coverItemID)
 	f.UploadedBy = "CB-2026-KHAC00"
-	_, err := r.uc.RequestBodyImageUpload(r.ctx, CoverUploadRequest{ContentItemID: coverItemID, FileName: "a.jpg",
-		ContentType: storage.MIMEJPEG, Size: 10}, nguoiSoanND())
+	_, err := r.uc.UploadBodyImage(r.ctx, bodyReq(t, CoverUploadRequest{ContentItemID: coverItemID, FileName: "a.jpg",
+		ContentType: storage.MIMEJPEG, Size: 10}), nguoiSoanND())
 	if !errors.Is(err, commsstore.ErrNoiDungKhongTonTai) {
 		t.Fatalf("err = %v, want the 404 of an unknown article", err)
 	}
@@ -220,46 +220,66 @@ func TestBodyImageRequestOnAnotherOfficersReservationIs404(t *testing.T) {
 func TestBodyImageRequestWithoutItemMintsTheArticleID(t *testing.T) {
 	r := newCoverRig(t, nil)
 	r.uc.policies = bodyPolicy(20)
-	up, err := r.uc.RequestBodyImageUpload(r.ctx, CoverUploadRequest{FileName: "a.jpg", ContentType: storage.MIMEJPEG,
-		Size: 10}, nguoiSoanND())
+	up, err := r.uc.UploadBodyImage(r.ctx, bodyReq(t, CoverUploadRequest{FileName: "a.jpg", ContentType: storage.MIMEJPEG,
+		Size: 10}), nguoiSoanND())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if up.File.ID != coverFileID || up.File.SubjectID != coverItemID {
-		t.Errorf("file %q for article %q, want the server's two minted ids", up.File.ID, up.File.SubjectID)
+	if up.ID != coverFileID || up.SubjectID != coverItemID {
+		t.Errorf("file %q for article %q, want the server's two minted ids", up.ID, up.SubjectID)
 	}
 }
 
 // --- completion --------------------------------------------------------------------------------------
 
-func TestBodyImageCompletesLikeACoverAndRoutesDoNotCross(t *testing.T) {
+func TestBodyImageCompletesLikeACover(t *testing.T) {
 	r := newCoverRig(t, nil)
 	r.uc.policies = bodyPolicy(20)
-	up, err := r.uc.RequestBodyImageUpload(r.ctx, CoverUploadRequest{FileName: "a.jpg", ContentType: storage.MIMEJPEG,
-		Size: 10}, nguoiSoanND())
+	data := testJPEG(t, 1600, 900, 0)
+	file, finish := streamOf(data, nil)
+	got, err := r.uc.UploadBodyImage(r.ctx, CoverUploadRequest{FileName: "a.jpg", ContentType: storage.MIMEJPEG,
+		Size: int64(len(data)), File: file, Finish: finish}, nguoiSoanND())
 	if err != nil {
-		t.Fatal(err)
-	}
-	r.objects.temp[up.Post.Fields["key"]] = testJPEG(t, 1600, 900, 0)
-
-	// The cover's completion does not complete a body image: one purpose per route.
-	if _, err := r.uc.Complete(r.ctx, up.File.ID, nguoiSoanND()); !errors.Is(err, ErrCoverFileNotFound) {
-		t.Fatalf("cover completion of a body image: err = %v", err)
-	}
-	got, err := r.uc.CompleteBodyImageUpload(r.ctx, up.File.ID, nguoiSoanND())
-	if err != nil {
-		t.Fatalf("CompleteBodyImageUpload: %v", err)
+		t.Fatalf("UploadBodyImage: %v", err)
 	}
 	if got.Status != domain.StoredFileReady || r.scanner.scanned != 1 {
 		t.Fatalf("status=%s scanned=%d", got.Status, r.scanner.scanned)
 	}
-	deriv := strings.Replace(up.File.ObjectKey, "/original.jpg", "/thumb-1280.jpg", 1)
+	deriv := strings.Replace(got.ObjectKey, "/original.jpg", "/thumb-1280.jpg", 1)
 	if _, ok := r.objects.produced[deriv]; !ok {
 		t.Errorf("no EXIF-free derivative at %q", deriv)
 	}
 	if !containsString(auditActions(r.k), ActionBodyImageStored) {
 		t.Errorf("trail = %v", auditActions(r.k))
 	}
+}
+
+// An abandoned body image is recorded under the BODY IMAGE's verb — an inspection reading "ảnh bìa" for
+// an image in the body would be reading the wrong record.
+func TestBodyImageStreamFailureIsAbandonedUnderItsOwnVerb(t *testing.T) {
+	r := newCoverRig(t, nil)
+	r.uc.policies = bodyPolicy(20)
+	req := bodyReq(t, CoverUploadRequest{FileName: "a.jpg", ContentType: storage.MIMEJPEG})
+	req.Size++ // the stream is one byte short of the declaration
+	if _, err := r.uc.UploadBodyImage(r.ctx, req, nguoiSoanND()); !errors.Is(err, ErrCoverUploadIncomplete) {
+		t.Fatalf("err = %v", err)
+	}
+	if st := r.files.get(coverFileID).Status; st != domain.StoredFileFailed {
+		t.Errorf("status = %s, want failed", st)
+	}
+	acts := auditActions(r.k)
+	if !containsString(acts, ActionBodyImageExpired) || containsString(acts, ActionCoverExpired) {
+		t.Errorf("trail = %v", acts)
+	}
+}
+
+// bodyReq gives a declaration a real (small) JPEG as its file part, the declared size following it.
+func bodyReq(t *testing.T, req CoverUploadRequest) CoverUploadRequest {
+	t.Helper()
+	data := testJPEG(t, 16, 16, 0)
+	req.Size = int64(len(data))
+	req.File, req.Finish = streamOf(data, nil)
+	return req
 }
 
 // --- attach on save (K2) ------------------------------------------------------------------------------
@@ -401,8 +421,8 @@ func TestDeletedArticlesIDIsNeverReissued(t *testing.T) {
 		r.uc.policies = bodyPolicy(20)
 		readyBodyImage(r.files, bodyFileA, coverItemID)
 		r.files.issuedArticles = map[string]bool{coverItemID: true}
-		_, err := r.uc.RequestBodyImageUpload(r.ctx, CoverUploadRequest{ContentItemID: coverItemID, FileName: "a.jpg",
-			ContentType: storage.MIMEJPEG, Size: 10}, nguoiSoanND())
+		_, err := r.uc.UploadBodyImage(r.ctx, bodyReq(t, CoverUploadRequest{ContentItemID: coverItemID, FileName: "a.jpg",
+			ContentType: storage.MIMEJPEG, Size: 10}), nguoiSoanND())
 		if !errors.Is(err, commsstore.ErrNoiDungKhongTonTai) {
 			t.Fatalf("err = %v, want the 404 of an unknown article", err)
 		}

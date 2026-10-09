@@ -211,6 +211,8 @@ type mayChuND struct {
 	// fetchCounter is the store behind ImageFetchLimiter (ratelimit.StaffImageFetch, ADR 0067 K10).
 	fetchCounter *memCounter
 	attempt      int // fetchAttempt's idempotency-key sequence
+	// slots is the process's upload bound (Deps.UploadSlots), shared by the three upload routes.
+	slots *httpx.UploadSlots
 }
 
 func dungMayChuND(t *testing.T) *mayChuND {
@@ -234,9 +236,12 @@ func dungMayChuND(t *testing.T) *mayChuND {
 		t.Fatal(err)
 	}
 
+	slots := httpx.NewUploadSlots(httpx.UploadSlotsPerPod)
+
 	mux := http.NewServeMux()
 	Register(mux, Deps{
 		ImageFetchLimiter: fetchLimiter,
+		UploadSlots:       slots,
 		Checker:           checker,
 		LoaiTaiNguyen:     danhMucMau(),
 		GhiLoaiTaiNguyen:  &ghiDanhMucGia{},
@@ -275,7 +280,7 @@ func dungMayChuND(t *testing.T) *mayChuND {
 	h = httpx.StripTenantHeaders(h)
 
 	return &mayChuND{h: h, so: so, ghi: ghi, soDM: soDM, ghiDM: ghiDM, checker: checker, covers: covers, audio: audio,
-		logs: logs, fetchCounter: fetchCounter}
+		logs: logs, fetchCounter: fetchCounter, slots: slots}
 }
 
 func (m *mayChuND) capQuyen(xa tenant.ID, perm ...authz.Perm) {
@@ -295,6 +300,12 @@ func (m *mayChuND) capQuyen(xa tenant.ID, perm ...authz.Perm) {
 // harness that omitted it would turn every POST assertion into an assertion about the header.
 func (m *mayChuND) goi(t *testing.T, method, host, duong, than string, p *authz.Principal) *httptest.ResponseRecorder {
 	t.Helper()
+	return m.goiVoi(t, method, host, duong, than, "application/json", p)
+}
+
+// goiVoi is goi with the body's Content-Type named — multipartCT for the upload routes.
+func (m *mayChuND) goiVoi(t *testing.T, method, host, duong, than, ct string, p *authz.Principal) *httptest.ResponseRecorder {
+	t.Helper()
 	var body io.Reader
 	if than != "" {
 		body = strings.NewReader(than)
@@ -303,7 +314,7 @@ func (m *mayChuND) goi(t *testing.T, method, host, duong, than string, p *authz.
 	r.Host = host
 	r.RemoteAddr = "10.0.0.7:51000"
 	if method == http.MethodPost || method == http.MethodPatch || method == http.MethodDelete {
-		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Content-Type", ct)
 		r.Header.Set(idem.Header, "01JNOIDUNGKEY0000000000000")
 	}
 	if p != nil {
@@ -355,6 +366,16 @@ type tuyenND struct {
 	daGoi  func(*mayChuND) bool
 }
 
+// goi sends this route's request: a multipart body (multipartBody) as multipart, anything else as JSON.
+func (tc tuyenND) goi(t *testing.T, m *mayChuND, host string, p *authz.Principal) *httptest.ResponseRecorder {
+	t.Helper()
+	ct := "application/json"
+	if strings.HasPrefix(tc.than, "--"+multipartBoundary) {
+		ct = multipartCT
+	}
+	return m.goiVoi(t, tc.method, host, tc.duong, tc.than, ct, p)
+}
+
 func cacTuyenND() []tuyenND {
 	doc, sua := QuyenDocNoiDung, QuyenSuaNoiDung
 	return []tuyenND{
@@ -377,24 +398,19 @@ func cacTuyenND() []tuyenND {
 			http.StatusOK, func(m *mayChuND) bool { return m.ghiDM.updates > 0 }},
 		{"xoá danh mục", http.MethodDelete, duongDanhMucND + "/dm-001", sua, doc, `{"reason":"Gộp danh mục"}`,
 			http.StatusNoContent, func(m *mayChuND) bool { return m.ghiDM.deletes > 0 }},
-		// The cover upload (content_cover.go): `content.update` on both, `content.read` is the wrong key.
-		{"xin tải ảnh bìa", http.MethodPost, pathCoverImages, sua, doc, bodyCoverUploadOK, http.StatusCreated,
+		// The cover upload (content_cover.go, one multipart request since ADR 0052 §Sửa đổi 09/10/2026):
+		// `content.update`, `content.read` is the wrong key.
+		{"tải ảnh bìa", http.MethodPost, pathCoverImages, sua, doc, bodyCoverUploadOK, http.StatusCreated,
 			func(m *mayChuND) bool { return m.covers.requests > 0 }},
-		{"hoàn tất ảnh bìa", http.MethodPost, pathCoverCompletion, sua, doc, "", http.StatusOK,
-			func(m *mayChuND) bool { return m.covers.completions > 0 }},
-		// The body images (content_body_image.go, ADR 0067 §Sửa đổi 03/10/2026, K8): `content.update` on both.
-		{"xin tải ảnh thân bài", http.MethodPost, pathBodyImages, sua, doc, bodyBodyImageUploadOK, http.StatusCreated,
+		// The body images (content_body_image.go, ADR 0067 §Sửa đổi 03/10/2026, K8): `content.update`.
+		{"tải ảnh thân bài", http.MethodPost, pathBodyImages, sua, doc, bodyBodyImageUploadOK, http.StatusCreated,
 			func(m *mayChuND) bool { return m.covers.bodyRequests > 0 }},
-		{"hoàn tất ảnh thân bài", http.MethodPost, pathBodyImageCompletion, sua, doc, "", http.StatusOK,
-			func(m *mayChuND) bool { return m.covers.bodyCompletions > 0 }},
 		// The body image fetched from a pasted link (H5, K6, K8): `content.update`.
 		{"tải ảnh thân bài từ liên kết", http.MethodPost, pathBodyImageFromURL, sua, doc, bodyBodyImageFromURLOK,
 			http.StatusCreated, func(m *mayChuND) bool { return m.covers.fetches > 0 }},
-		// The broadcast audio (content_audio.go, ADR 0067 §4.3): `content.update` on both.
-		{"xin tải âm thanh truyền thanh", http.MethodPost, pathAudioFiles, sua, doc, bodyAudioUploadOK,
+		// The broadcast audio (content_audio.go, ADR 0067 §4.3): `content.update`.
+		{"tải âm thanh truyền thanh", http.MethodPost, pathAudioFiles, sua, doc, bodyAudioUploadOK,
 			http.StatusCreated, func(m *mayChuND) bool { return m.audio.requests > 0 }},
-		{"hoàn tất âm thanh truyền thanh", http.MethodPost, pathAudioCompletion, sua, doc, bodyAudioCompletionOK,
-			http.StatusOK, func(m *mayChuND) bool { return m.audio.completions > 0 }},
 	}
 }
 
@@ -402,7 +418,7 @@ func TestNoiDungKhongCoPhienTra401(t *testing.T) {
 	for _, tc := range cacTuyenND() {
 		t.Run(tc.ten, func(t *testing.T) {
 			m := dungMayChuND(t)
-			doiMa(t, m.goi(t, tc.method, hostA, tc.duong, tc.than, nil), http.StatusUnauthorized)
+			doiMa(t, tc.goi(t, m, hostA, nil), http.StatusUnauthorized)
 			if tc.daGoi(m) {
 				t.Error("không có phiên mà vẫn chạm tới nghiệp vụ")
 			}
@@ -418,7 +434,7 @@ func TestNoiDungSaiQuyenTra403(t *testing.T) {
 			// who may look at the commune's news also publish it.
 			m := dungMayChuND(t)
 			m.capQuyen(xaA, tc.khac)
-			doiMa(t, m.goi(t, tc.method, hostA, tc.duong, tc.than, canBo(xaA)), http.StatusForbidden)
+			doiMa(t, tc.goi(t, m, hostA, canBo(xaA)), http.StatusForbidden)
 			if tc.daGoi(m) {
 				t.Error("thiếu quyền mà vẫn chạm tới nghiệp vụ")
 			}
@@ -435,7 +451,7 @@ func TestNoiDungDungQuyenNhungXaKhacTra403(t *testing.T) {
 			// commune's register.
 			m := dungMayChuND(t)
 			m.capQuyen(xaA, tc.khoa)
-			doiMa(t, m.goi(t, tc.method, hostB, tc.duong, tc.than, canBo(xaB)), http.StatusForbidden)
+			doiMa(t, tc.goi(t, m, hostB, canBo(xaB)), http.StatusForbidden)
 			if tc.daGoi(m) {
 				t.Error("quyền cấp ở xã A mà làm được ở xã B")
 			}
@@ -448,7 +464,7 @@ func TestNoiDungDuQuyenTra2xxVaDungXa(t *testing.T) {
 		t.Run(tc.ten, func(t *testing.T) {
 			m := dungMayChuND(t)
 			m.capQuyen(xaB, tc.khoa)
-			w := m.goi(t, tc.method, hostB, tc.duong, tc.than, canBo(xaB))
+			w := tc.goi(t, m, hostB, canBo(xaB))
 			doiMa(t, w, tc.maDung)
 			if !tc.daGoi(m) {
 				t.Fatal("đủ quyền mà nghiệp vụ không được gọi")

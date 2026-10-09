@@ -1,12 +1,15 @@
 package app
 
 // THE COVER IMAGE OF A MINI APP ARTICLE (docs/ui-ux/11-noi-dung-mini-app.md §7 `Ảnh đại diện`,
-// ADR 0047 §6 (1), ADR 0052 §1, §11) — ADR 0052's three-step upload, then a server-made derivative:
+// ADR 0047 §6 (1), ADR 0052 §1, §11) — ONE upload request through this service (ADR 0052 §Sửa đổi
+// 09/10/2026: devices no longer POST straight to MinIO), in three acts inside UploadCover:
 //
-//	a. RequestUpload  POST /api/v1/content-items/cover-images                    pending row + presigned POST
-//	b. the browser    POST straight to OBJECT_STORAGE_PUBLIC_ENDPOINT             bytes never cross this service
-//	c. Complete       POST /api/v1/content-items/cover-images/{id}/completion     sniff · scan · hash · copy ·
-//	                                                                              derivative → ready
+//	a. admitUpload  the declaration against the policy · the article · the count → pending row + trail (tx 1)
+//	b. PutUpload    the multipart file part streamed into the temp bucket under the row's `upload/…` key
+//	c. complete     sniff · scan · hash · copy · derivative → ready + trail (tx 2) — ADR 0052 §1c, unchanged
+//
+// A failure after (a) never leaves the row `pending` with nothing that could finish it (the old
+// `…/completion` routes are gone): abandon moves it to `failed` with its own trail entry.
 //
 // and then the file rides on the article: `cover_image_file_id` on POST / PATCH /api/v1/content-items
 // (SoanNoiDungMiniApp.Them / Sua), checked and linked in THAT write's transaction. Publishing the article
@@ -23,22 +26,24 @@ package app
 //     and so usable as a cover, only once a publishable derivative exists.
 //
 // THE BODY IMAGES (ADR 0067 §Sửa đổi 03/10/2026, K2/K3) RUN THROUGH THE SAME ACTS under their own purpose,
-// `content-body-image` — POST …/body-images and …/body-images/{id}/completion — and ride on the article
+// `content-body-image` — POST …/body-images (UploadBodyImage) — and ride on the article
 // as `<img data-file-id>` inside the body, checked on every save (coverPublisher.checkBodyImages). The
 // publish step decides per purpose (settle), so publishing or replacing a cover never withdraws an image
 // the body still shows.
 //
 // THE LIMITS ARE PLATFORM'S, NEVER THIS FILE'S (ADR 0052 §10): size and types come from the
-// `content-image` (or `content-body-image`) policy on every request and again at completion. Not configured → refusal; platform
+// `content-image` (or `content-body-image`) policy before the body is read (the handler's cap,
+// CoverUploadLimit), at admission and again at completion. Not configured → refusal; platform
 // unreachable → 503. The 50 MB / JPG·PNG·WebP of 01/10/2026 lives in platform's seed, not here.
 //
-// WHY THE OBJECT-STORE WORK HAPPENS OUTSIDE ANY TRANSACTION: scanning, hashing and decoding are network
-// I/O and CPU of unbounded length; holding a row lock across them stalls every other write. Complete
-// inspects lock-free, then writes the outcome in ONE short transaction that re-reads the row FOR UPDATE.
+// WHY THE OBJECT-STORE WORK HAPPENS OUTSIDE ANY TRANSACTION: streaming, scanning, hashing and decoding are
+// network I/O and CPU of unbounded length; holding a row lock across them stalls every other write. The
+// pending row is committed first, the bytes are written and inspected lock-free, then the outcome is
+// written in ONE short transaction that re-reads the row FOR UPDATE.
 //
-// WHAT IS NEVER LOGGED OR PUT IN AN ERROR: the original file name (rule 3), any presigned URL or form
-// field (bearer credentials), file content. The trail carries the file id, the sniffed type, the size,
-// the hash and the reason for a refusal — never the name.
+// WHAT IS NEVER LOGGED OR PUT IN AN ERROR: the original file name (rule 3), any presigned URL, file
+// content. The trail carries the file id, the sniffed type, the size, the hash and the reason for a
+// refusal — never the name.
 
 import (
 	"bytes"
@@ -80,9 +85,14 @@ const (
 )
 
 // uploadVerbs are the trail's verbs and subject prefix for one upload purpose.
+//
+// `abandoned` is the …_het_han_tai verb: before 09/10/2026 it recorded a presigned form that expired with
+// nothing uploaded; now it records an upload that ENDED WITH NOTHING STORED — the stream or the write
+// failed, or the inspection could not run — and `ly_do` says which (CoverAbandon*). The same state
+// change (`pending → failed`, no file), so the same verb rather than a new one no screen has a label for.
 type uploadVerbs struct {
-	requested, stored, rejected, expired, withdrawn string
-	subject                                         string // + the UTC date, see coverAuditSubject
+	requested, stored, rejected, abandoned, withdrawn string
+	subject                                           string // + the UTC date, see coverAuditSubject
 }
 
 var (
@@ -111,6 +121,17 @@ const (
 	CoverRejectTooManyPixels  = "qua-nhieu-diem-anh"
 )
 
+// Why an upload ended with nothing stored — the `ly_do` of an abandoned entry (uploadVerbs.abandoned).
+// Shared by the audio upload: one vocabulary in the trail.
+const (
+	// CoverAbandonNotReceived: the file part did not arrive whole (client hung up, too slow, malformed,
+	// longer or shorter than declared) or the temp bucket refused the write.
+	CoverAbandonNotReceived = "khong-nhan-du-tep"
+	// CoverAbandonNotInspected: the bytes arrived but the completion could not decide (scanner down,
+	// object store unreachable, a refusal at attach time). Nothing was stored as a usable file.
+	CoverAbandonNotInspected = "khong-kiem-tra-duoc"
+)
+
 var (
 	// ErrCoverUploadNotConfigured: object storage, the scanner, or platform's limit is absent. 503.
 	ErrCoverUploadNotConfigured = errors.New("ảnh bìa: chưa cấu hình kho lưu tệp")
@@ -127,13 +148,13 @@ var (
 	// ErrCoverFileNotFound: no such upload FOR THIS CALLER — unknown, another commune's, another
 	// officer's. One answer for all (rule 4, forbidden #2). 404.
 	ErrCoverFileNotFound = errors.New("ảnh bìa: không tìm thấy")
-	// ErrCoverNotPending: completion of a file already refused or expired. 409.
+	// ErrCoverNotPending: the row moved past `pending` under the completion (a concurrent writer). 409.
 	ErrCoverNotPending = errors.New("ảnh bìa: tệp không còn chờ hoàn tất")
-	// ErrCoverUploadNotReceived: completion before the bytes arrived, form still valid. Nothing written. 409.
-	ErrCoverUploadNotReceived = errors.New("ảnh bìa: chưa nhận được tệp")
-	// ErrCoverUploadExpired: the form expired with nothing uploaded; the row moves to `failed`. 409.
-	ErrCoverUploadExpired = errors.New("ảnh bìa: lượt tải lên đã hết hạn")
-	// ErrCoverUploadChanged: the object was replaced through the still-valid form mid-inspection. 409.
+	// ErrCoverUploadIncomplete: the file part was not written whole into the temp bucket. It always wraps
+	// the cause: an httpx upload sentinel (the client's stream — 4xx by httpx.UploadErrorStatus),
+	// storage.ErrTooLarge / ErrSizeMismatch (4xx), or a store failure (503). The row is `failed`.
+	ErrCoverUploadIncomplete = errors.New("ảnh bìa: chưa nhận đủ tệp")
+	// ErrCoverUploadChanged: the temp object changed between two reads of the inspection. 409.
 	ErrCoverUploadChanged = errors.New("ảnh bìa: tệp vừa bị thay đổi trong lúc kiểm tra")
 	// ErrCoverPublishUnavailable: the object store refused or could not be reached while publishing or
 	// withdrawing the derivative. NOTHING was written; the article is as it was. 503.
@@ -152,8 +173,8 @@ func (e *CoverRejection) Is(t error) bool { return t == ErrCoverRejected }
 // CoverObjectStore is the part of *storage.Client the cover acts call — an interface so the tests run
 // with no MinIO. The semantics are core/storage's; read storage.go before implementing another.
 type CoverObjectStore interface {
-	PresignUpload(ctx context.Context, uploadKey string, maxBytes int64, contentType string,
-		ttl time.Duration) (storage.PresignedPost, error)
+	PutUpload(ctx context.Context, uploadKey string, r io.Reader, size int64, maxBytes int64,
+		contentType string) (storage.ObjectInfo, error)
 	Stat(ctx context.Context, b storage.Bucket, key string) (storage.ObjectInfo, error)
 	ReadHead(ctx context.Context, b storage.Bucket, key, ifMatchETag string, n int) ([]byte, error)
 	Open(ctx context.Context, b storage.Bucket, key, ifMatchETag string) (io.ReadCloser, int64, error)
@@ -282,43 +303,147 @@ func (uc *ContentCovers) policyFor(ctx context.Context, purpose storage.Purpose)
 	return p, nil
 }
 
-// --- a. request an upload ---------------------------------------------------------------------------
+// --- the upload: admit, receive, complete -----------------------------------------------------------
 
-// CoverUploadRequest is what the browser declares before it uploads. Checked here; the bytes are
-// checked again at completion — a claim is never the fact (ADR 0052 §1c).
+// CoverUploadRequest is one upload as the handler received it: the declaration (checked here against the
+// policy) and the file stream, whose bytes the completion checks again — a claim is never the fact
+// (ADR 0052 §1c).
 type CoverUploadRequest struct {
 	// ContentItemID is "" for an article not saved yet (the id is minted here), or the id of an existing
 	// LIVE article of this commune whose cover is being replaced.
 	ContentItemID string
 	FileName      string
 	ContentType   string // DECLARED; the key's extension follows it, completion sniffs the truth
-	Size          int64
+	Size          int64  // DECLARED; File must yield exactly this many bytes
+
+	// File streams the file part (httpx.UploadRequest.File). Never buffered here: PutUpload pipes it.
+	File io.Reader
+	// Finish confirms nothing followed the file (httpx.UploadRequest.Finish). Called after the write and
+	// BEFORE anything is recorded as received.
+	Finish func() error
+	// Deadline bounds the write (httpx.UploadRequest.Deadline); zero = the caller's context only.
+	Deadline time.Time
 }
 
-// CoverUpload is the pending row and the form the browser posts the file with.
-type CoverUpload struct {
-	File domain.StoredFile
-	Post storage.PresignedPost // bearer credential for its TTL — never logged
+// CoverUploadLimit is the `content-image` policy's byte cap — what the handler caps the request body at
+// BEFORE reading it (httpx.UploadOptions.MaxFileBytes). Never a constant here (ADR 0052 §10).
+func (uc *ContentCovers) CoverUploadLimit(ctx context.Context) (int64, error) {
+	return uc.uploadLimit(ctx, coverPurpose)
 }
 
-// RequestUpload issues one upload slot (ADR 0052 §1a). ONE TRANSACTION: the article row FOR UPDATE when
-// one is named (it must exist), the per-subject count lock and the count (admitSubject), the pending
-// row, the audit entry. The presigned POST is signed INSIDE it — offline, no network — so a signing
-// failure leaves no row behind.
-func (uc *ContentCovers) RequestUpload(ctx context.Context, req CoverUploadRequest, actor audit.Actor) (
-	CoverUpload, error) {
-	return uc.requestUpload(ctx, coverPurpose, req, actor)
+// BodyImageUploadLimit is CoverUploadLimit for `content-body-image`.
+func (uc *ContentCovers) BodyImageUploadLimit(ctx context.Context) (int64, error) {
+	return uc.uploadLimit(ctx, bodyImagePurpose)
 }
 
-// RequestBodyImageUpload is RequestUpload for an image INSIDE the body (ADR 0067 §Sửa đổi 03/10/2026, K3):
-// same acts, purpose `content-body-image`, its own policy — and so its own `max_files_per_subject` (H7),
-// counted against the article's live body images in the same transaction as the pending row.
-func (uc *ContentCovers) RequestBodyImageUpload(ctx context.Context, req CoverUploadRequest, actor audit.Actor) (
-	CoverUpload, error) {
-	return uc.requestUpload(ctx, bodyImagePurpose, req, actor)
+func (uc *ContentCovers) uploadLimit(ctx context.Context, purpose storage.Purpose) (int64, error) {
+	if !uc.uploadsConfigured() {
+		return 0, ErrCoverUploadNotConfigured
+	}
+	pol, err := uc.policyFor(ctx, purpose)
+	if err != nil {
+		return 0, err
+	}
+	if pol.MaxBytes <= 0 {
+		// A policy with no cap is no policy: refused, never read as "unbounded".
+		return 0, fmt.Errorf("%w: %s has no byte cap", ErrCoverUploadNotConfigured, purpose)
+	}
+	return pol.MaxBytes, nil
 }
 
-// requestUpload is the one implementation behind both. ContentItemID may name:
+// UploadCover receives one cover image and returns it stored: `ready` with its derivative, or a refusal.
+// The three acts of the file's header comment; see upload for what each failure leaves behind.
+func (uc *ContentCovers) UploadCover(ctx context.Context, req CoverUploadRequest, actor audit.Actor) (
+	domain.StoredFile, error) {
+	return uc.upload(ctx, coverPurpose, req, actor)
+}
+
+// UploadBodyImage is UploadCover for an image INSIDE the body (ADR 0067 §Sửa đổi 03/10/2026, K3): same acts,
+// purpose `content-body-image`, its own policy — and so its own `max_files_per_subject` (H7), counted
+// against the article's live body images in the same transaction as the pending row.
+func (uc *ContentCovers) UploadBodyImage(ctx context.Context, req CoverUploadRequest, actor audit.Actor) (
+	domain.StoredFile, error) {
+	return uc.upload(ctx, bodyImagePurpose, req, actor)
+}
+
+// upload is the one implementation behind both. What each outcome leaves:
+//
+//	refused at admission       nothing — no row, no trail, the body's file part never read
+//	stream / write failed      row `failed` + abandoned entry (khong-nhan-du-tep); ErrCoverUploadIncomplete
+//	file refused (*Rejection)  row `rejected` (or `failed`: undecodable) + rejected entry — complete's own
+//	could not inspect          row `failed` + abandoned entry (khong-kiem-tra-duoc); the cause (scanner down…)
+//	stored                     row `ready` + stored entry
+func (uc *ContentCovers) upload(ctx context.Context, purpose storage.Purpose, req CoverUploadRequest,
+	actor audit.Actor) (domain.StoredFile, error) {
+
+	if req.File == nil || req.Finish == nil {
+		return domain.StoredFile{}, errors.New("ảnh bìa: lượt tải lên thiếu luồng tệp — lỗi nối dây ở tầng HTTP")
+	}
+	f, uploadKey, pol, err := uc.admitUpload(ctx, purpose, req, actor)
+	if err != nil {
+		return domain.StoredFile{}, err
+	}
+
+	wctx, cancel := ctx, context.CancelFunc(func() {})
+	if !req.Deadline.IsZero() {
+		wctx, cancel = context.WithDeadline(ctx, req.Deadline)
+	}
+	_, err = uc.objects.PutUpload(wctx, uploadKey, req.File, req.Size, pol.MaxBytes, req.ContentType)
+	cancel()
+	if err == nil {
+		// Trailing bytes after the declared size: the object holds exactly Size bytes, but the request
+		// was not what it said — refused like any malformed upload. Its temp object is never read again
+		// and expires with the bucket's 1-day lifecycle.
+		err = req.Finish()
+	}
+	if err != nil {
+		return domain.StoredFile{}, uc.abandon(ctx, purpose, f.ID, actor, CoverAbandonNotReceived,
+			fmt.Errorf("%w: %w", ErrCoverUploadIncomplete, err))
+	}
+
+	done, err := uc.complete(ctx, purpose, f.ID, actor)
+	if err != nil && !errors.Is(err, ErrCoverRejected) {
+		return domain.StoredFile{}, uc.abandon(ctx, purpose, f.ID, actor, CoverAbandonNotInspected, err)
+	}
+	return done, err
+}
+
+// abandon moves a row this upload left `pending` to `failed`, with the abandoned trail entry, in ONE
+// transaction (rule 6, invariant 3), and returns cause. WITHOUT the request's cancellation: a client that
+// hung up is the commonest reason to be here, and its cancelled context must not leave the row pending.
+//
+// WHY NOT LEAVE IT `pending`: nothing can finish it any more — the completion route is gone (ADR 0052
+// §Sửa đổi 09/10/2026) — and a pending row holds one of the article's slots for UploadTTL (audio has one).
+// A row no longer pending (another writer moved it) is left alone. The temp object, if any, expires with
+// the bucket's 1-day lifecycle; one the inspection already promoted stays as an unreferenced original.
+func (uc *ContentCovers) abandon(ctx context.Context, purpose storage.Purpose, id string, actor audit.Actor,
+	reason string, cause error) error {
+
+	ctx = context.WithoutCancel(ctx)
+	now := uc.clock()
+	verbs := verbsFor(string(purpose))
+	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		cur, err := uc.files.ForUpdate(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if cur == nil || cur.Status != domain.StoredFilePending {
+			return nil
+		}
+		if err := uc.files.Transition(ctx, tx, id, domain.StoredFilePending, domain.StoredFileFailed, now); err != nil {
+			return err
+		}
+		return writeCoverAudit(ctx, tx, actor, verbs, verbs.abandoned, now, map[string]any{
+			"tep_id": id, "muc_noi_dung_id": cur.SubjectID, "ly_do": reason,
+		})
+	})
+	if err != nil {
+		return fmt.Errorf("%w; ảnh bìa: dòng tệp %s chưa chuyển được sang failed: %w", cause, id, err)
+	}
+	return cause
+}
+
+// admitUpload is act (a). ContentItemID may name:
 //
 //	""                          a new article: its id is minted here (File.SubjectID tells the client);
 //	a live article of this commune
@@ -326,49 +451,53 @@ func (uc *ContentCovers) RequestBodyImageUpload(ctx context.Context, req CoverUp
 //	                            second body image, or the cover after a body image, joins the article the
 //	                            first upload reserved. Anybody else's minted id answers 404, like an unknown
 //	                            one (rule 4, forbidden #2 on the commune axis).
-func (uc *ContentCovers) requestUpload(ctx context.Context, purpose storage.Purpose, req CoverUploadRequest,
-	actor audit.Actor) (CoverUpload, error) {
+//
+// ONE TRANSACTION: the article row FOR UPDATE when one is named, the per-subject count lock and the count
+// (admitSubject), the pending row, the audit entry. Returns the row, its temp `upload/…` key and the policy.
+func (uc *ContentCovers) admitUpload(ctx context.Context, purpose storage.Purpose, req CoverUploadRequest,
+	actor audit.Actor) (domain.StoredFile, string, uploadpolicy.Policy, error) {
 
+	var none uploadpolicy.Policy
 	if actor.ID == "" {
-		return CoverUpload{}, ErrThieuNguoiTaoNoiDung
+		return domain.StoredFile{}, "", none, ErrThieuNguoiTaoNoiDung
 	}
 	name, err := domain.CleanCoverFileName(req.FileName)
 	if err != nil {
-		return CoverUpload{}, err
+		return domain.StoredFile{}, "", none, err
 	}
 	if req.Size <= 0 {
-		return CoverUpload{}, domain.ErrCoverSizeInvalid
+		return domain.StoredFile{}, "", none, domain.ErrCoverSizeInvalid
 	}
 	if len(req.ContentItemID) > domain.MaxFileIDLen {
-		return CoverUpload{}, commsstore.ErrNoiDungKhongTonTai
+		return domain.StoredFile{}, "", none, commsstore.ErrNoiDungKhongTonTai
 	}
 	if !uc.uploadsConfigured() {
-		return CoverUpload{}, ErrCoverUploadNotConfigured
+		return domain.StoredFile{}, "", none, ErrCoverUploadNotConfigured
 	}
 	pol, err := uc.policyFor(ctx, purpose)
 	if err != nil {
-		return CoverUpload{}, err
+		return domain.StoredFile{}, "", none, err
 	}
 	if !pol.AllowsMIME(req.ContentType) {
-		return CoverUpload{}, ErrCoverTypeNotAllowed
+		return domain.StoredFile{}, "", none, ErrCoverTypeNotAllowed
 	}
 	if req.Size > pol.MaxBytes {
-		return CoverUpload{}, ErrCoverTooLarge
+		return domain.StoredFile{}, "", none, ErrCoverTooLarge
 	}
 	ext, ok := storage.ExtForMIME(req.ContentType)
 	if !ok {
-		return CoverUpload{}, ErrCoverTypeNotAllowed // unreachable while uploadpolicy narrows to storage's list
+		return domain.StoredFile{}, "", none, ErrCoverTypeNotAllowed // unreachable while uploadpolicy narrows to storage's list
 	}
 
 	id, err := uc.newID()
 	if err != nil {
-		return CoverUpload{}, fmt.Errorf("ảnh bìa: sinh mã tệp: %w", err)
+		return domain.StoredFile{}, "", none, fmt.Errorf("ảnh bìa: sinh mã tệp: %w", err)
 	}
 	subject := req.ContentItemID
 	if subject == "" {
 		// THE FUTURE ARTICLE'S ID, minted by the server. The create takes it from this row.
 		if subject, err = uc.newID(); err != nil {
-			return CoverUpload{}, fmt.Errorf("ảnh bìa: sinh mã mục nội dung: %w", err)
+			return domain.StoredFile{}, "", none, fmt.Errorf("ảnh bìa: sinh mã mục nội dung: %w", err)
 		}
 	}
 	now := uc.clock()
@@ -379,52 +508,43 @@ func (uc *ContentCovers) requestUpload(ctx context.Context, purpose storage.Purp
 	}
 	objectKey, err := key.Path()
 	if err != nil {
-		return CoverUpload{}, fmt.Errorf("ảnh bìa: dựng khoá đối tượng: %w", err)
+		return domain.StoredFile{}, "", none, fmt.Errorf("ảnh bìa: dựng khoá đối tượng: %w", err)
 	}
 	uploadKey, err := key.UploadPath()
 	if err != nil {
-		return CoverUpload{}, fmt.Errorf("ảnh bìa: dựng khoá tải lên: %w", err)
+		return domain.StoredFile{}, "", none, fmt.Errorf("ảnh bìa: dựng khoá tải lên: %w", err)
 	}
 
 	verbs := verbsFor(string(purpose))
-	var out CoverUpload
+	f := domain.StoredFile{
+		ID: id, Bucket: domain.StoredFileBucketPrivate, ObjectKey: objectKey,
+		RetentionClass: string(storage.ClassContentSource), Purpose: string(purpose),
+		SubjectType: domain.StoredFileSubjectContentItem, SubjectID: subject, OriginalName: name,
+		Status: domain.StoredFilePending, UploadedBy: actor.ID, CreatedAt: now, UpdatedAt: now,
+	}
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		if err := uc.admitSubject(ctx, tx, purpose, pol, req.ContentItemID, subject, actor, now); err != nil {
 			return err
 		}
-		f := domain.StoredFile{
-			ID: id, Bucket: domain.StoredFileBucketPrivate, ObjectKey: objectKey,
-			RetentionClass: string(storage.ClassContentSource), Purpose: string(purpose),
-			SubjectType: domain.StoredFileSubjectContentItem, SubjectID: subject, OriginalName: name,
-			Status: domain.StoredFilePending, UploadedBy: actor.ID, CreatedAt: now, UpdatedAt: now,
-		}
 		if err := uc.files.InsertPending(ctx, tx, f); err != nil {
 			return err
 		}
-		post, err := uc.objects.PresignUpload(ctx, uploadKey, pol.MaxBytes, req.ContentType, storage.UploadTTL)
-		if err != nil {
-			return fmt.Errorf("ảnh bìa: ký lượt tải lên: %w", err)
-		}
-		if err := writeCoverAudit(ctx, tx, actor, verbs, verbs.requested, now, map[string]any{
+		return writeCoverAudit(ctx, tx, actor, verbs, verbs.requested, now, map[string]any{
 			"tep_id":          id,
 			"muc_noi_dung_id": subject,
 			"muc_dich":        string(purpose),
 			"loai_khai_bao":   req.ContentType,
 			"kich_thuoc_khai": req.Size,
-		}); err != nil {
-			return err
-		}
-		out = CoverUpload{File: f, Post: post}
-		return nil
+		})
 	})
 	if err != nil {
-		return CoverUpload{}, bocNoiDung(ctx, "xin tải ảnh bìa", err)
+		return domain.StoredFile{}, "", none, bocNoiDung(ctx, "nhận ảnh bìa", err)
 	}
-	return out, nil
+	return f, uploadKey, pol, nil
 }
 
 // admitSubject is the in-transaction check of the article an upload names (named; "" = a fresh
-// reservation) and of the purpose's per-article count on subject. Shared by requestUpload and the body
+// reservation) and of the purpose's per-article count on subject. Shared by admitUpload and the body
 // image fetched from a link (FetchBodyImage), so the two cannot drift on who may add a file to what.
 //
 // THE COUNT IS TAKEN UNDER LockSubjectCount, ON EVERY PATH — article row or not. The row lock above
@@ -463,7 +583,7 @@ func (uc *ContentCovers) admitSubject(ctx context.Context, tx *store.ScopedTx, p
 	return nil
 }
 
-// --- c. complete an upload --------------------------------------------------------------------------
+// --- c. complete the upload -------------------------------------------------------------------------
 
 type coverOutcome int
 
@@ -471,8 +591,6 @@ const (
 	coverReady coverOutcome = iota + 1
 	coverRejected
 	coverFailed // stored, but no derivative can be made: `processing → failed`
-	coverNotReceived
-	coverExpired
 )
 
 type coverInspection struct {
@@ -484,21 +602,11 @@ type coverInspection struct {
 	tempRemoved bool
 }
 
-// Complete is ADR 0052 §1c plus the derivative, for one upload. Only the officer it was issued to.
+// complete is ADR 0052 §1c plus the derivative, for the upload upload() just wrote: the cover's and the body
+// image's alike — the same sniff, scan, hash, promote and `thumb-1280` EXIF-free derivative. It re-reads the
+// row and checks it is THIS officer's upload of THIS purpose, as when it was a route of its own.
 //
-// IDEMPOTENT: a file already `ready` is returned as it is — a retried request answers the same outcome.
-func (uc *ContentCovers) Complete(ctx context.Context, id string, actor audit.Actor) (domain.StoredFile, error) {
-	return uc.complete(ctx, coverPurpose, id, actor)
-}
-
-// CompleteBodyImageUpload is Complete for a body image — the same sniff, scan, hash, promote and `thumb-1280`
-// EXIF-free derivative. A cover's id answers 404 here and a body image's id answers 404 on Complete: the
-// purpose of the route must be the purpose of the row.
-func (uc *ContentCovers) CompleteBodyImageUpload(ctx context.Context, id string, actor audit.Actor) (
-	domain.StoredFile, error) {
-	return uc.complete(ctx, bodyImagePurpose, id, actor)
-}
-
+// A file already `ready` is returned as it is (another writer finished first: the same outcome).
 func (uc *ContentCovers) complete(ctx context.Context, purpose storage.Purpose, id string, actor audit.Actor) (
 	domain.StoredFile, error) {
 	if actor.ID == "" {
@@ -538,9 +646,6 @@ func (uc *ContentCovers) complete(ctx context.Context, purpose storage.Purpose, 
 	if err != nil {
 		return domain.StoredFile{}, err
 	}
-	if insp.kind == coverNotReceived {
-		return domain.StoredFile{}, ErrCoverUploadNotReceived
-	}
 
 	now := uc.clock()
 	verbs := verbsFor(string(purpose))
@@ -574,38 +679,29 @@ func (uc *ContentCovers) complete(ctx context.Context, purpose storage.Purpose, 
 				"kich_thuoc": insp.facts.SizeBytes, "sha256": insp.facts.SHA256,
 				"ban_dan_xuat": CoverDerivativeVariant, "khoi_phuc_tu_dich": insp.recovered,
 			})
-		case coverRejected, coverExpired:
+		case coverRejected:
 			if cur.Status != domain.StoredFilePending {
 				return ErrCoverNotPending
 			}
-			to, action := domain.StoredFileRejected, verbs.rejected
-			d := map[string]any{"tep_id": id, "muc_noi_dung_id": cur.SubjectID}
-			if insp.kind == coverExpired {
-				to, action = domain.StoredFileFailed, verbs.expired
-			} else {
-				d["ly_do"], d["da_xoa_tep_tam"] = insp.reason, insp.tempRemoved
-				if insp.signature != "" {
-					d["chu_ky_ma_doc"] = insp.signature
-				}
+			d := map[string]any{"tep_id": id, "muc_noi_dung_id": cur.SubjectID,
+				"ly_do": insp.reason, "da_xoa_tep_tam": insp.tempRemoved}
+			if insp.signature != "" {
+				d["chu_ky_ma_doc"] = insp.signature
 			}
-			if err := uc.files.Transition(ctx, tx, id, domain.StoredFilePending, to, now); err != nil {
+			if err := uc.files.Transition(ctx, tx, id, domain.StoredFilePending, domain.StoredFileRejected, now); err != nil {
 				return err
 			}
-			return writeCoverAudit(ctx, tx, actor, verbs, action, now, d)
+			return writeCoverAudit(ctx, tx, actor, verbs, verbs.rejected, now, d)
 		}
 		return fmt.Errorf("ảnh bìa: kết quả kiểm tra không rõ (%d)", insp.kind)
 	})
 	if err != nil {
 		return domain.StoredFile{}, bocNoiDung(ctx, "hoàn tất ảnh bìa", err)
 	}
-	switch {
-	case done.ID != "":
+	if done.ID != "" {
 		return done, nil
-	case insp.kind == coverExpired:
-		return domain.StoredFile{}, ErrCoverUploadExpired
-	default:
-		return domain.StoredFile{}, &CoverRejection{Reason: insp.reason}
 	}
+	return domain.StoredFile{}, &CoverRejection{Reason: insp.reason}
 }
 
 // walkToEnd moves a row along pending → scanning → stored → processing → ready (or → failed), from
@@ -666,8 +762,8 @@ func writeCoverAudit(ctx context.Context, tx *store.ScopedTx, actor audit.Actor,
 		At: at, Delta: delta})
 }
 
-// inspect is the lock-free half of Complete. An error means nothing may be decided yet (scanner down,
-// object replaced mid-inspection, store failure): nothing is written and the row stays retryable.
+// inspect is the lock-free half of complete. An error means nothing may be decided (scanner down, object
+// replaced mid-inspection, store failure): complete writes nothing and upload abandons the row.
 func (uc *ContentCovers) inspect(ctx context.Context, f domain.StoredFile, key storage.Key,
 	pol uploadpolicy.Policy) (coverInspection, error) {
 
@@ -753,11 +849,15 @@ func (uc *ContentCovers) inspect(ctx context.Context, f domain.StoredFile, key s
 	return uc.derive(ctx, f, key, pr.ETag, facts, false)
 }
 
-// fromDestination handles "the original is already in the private bucket" (a previous completion
-// promoted it; its transaction or its derivative did not finish) or "nothing arrived". A destination
-// object is TRUSTED AS SCANNED because nothing else writes there: Promote is the only path into
-// `content-source/…/comms/content-image/…/original.*`, it runs only after a clean scan, and IAM scopes
-// this service's key to its own subtree (ADR 0052 §3).
+// fromDestination handles "the original is already in the private bucket" (a concurrent Promote got
+// there first) or "nothing is in either bucket". A destination object is TRUSTED AS SCANNED because
+// nothing else writes there: Promote is the only path into `content-source/…/comms/content-image/…/
+// original.*`, it runs only after a clean scan, and IAM scopes this service's key to its own subtree
+// (ADR 0052 §3).
+//
+// NOTHING IN EITHER BUCKET right after PutUpload succeeded is not a client's doing — the temp bucket is
+// not the one this service writes to, or something removed the object (09/10/2026: a missing temp
+// bucket). An error, so the caller abandons the row and the log names the cause.
 func (uc *ContentCovers) fromDestination(ctx context.Context, f domain.StoredFile,
 	key storage.Key) (coverInspection, error) {
 
@@ -766,10 +866,7 @@ func (uc *ContentCovers) fromDestination(ctx context.Context, f domain.StoredFil
 		if f.Status != domain.StoredFilePending {
 			return coverInspection{}, errors.New("ảnh bìa: dòng đã lưu nhưng không thấy bản gốc ở kho lưu")
 		}
-		if uc.clock().After(f.CreatedAt.Add(storage.UploadTTL)) {
-			return coverInspection{kind: coverExpired}, nil
-		}
-		return coverInspection{kind: coverNotReceived}, nil
+		return coverInspection{}, fmt.Errorf("ảnh bìa: vừa ghi tệp %s vào kho tạm nhưng không thấy ở kho tạm lẫn kho lưu", f.ID)
 	}
 	if err != nil {
 		return coverInspection{}, coverStorageErr("đọc thông tin tệp đã lưu", err)
@@ -1082,7 +1179,7 @@ func (uc *ContentCovers) PublicBodyImageURLs(ctx context.Context, itemID string)
 //	          The lock is held for ONE server-side copy of a ≤ 1 MB JPEG, bounded by the request
 //	          context; that is the price of having no window in which another edit changes the cover
 //	          between the copy and the record (a scan or a decode would NOT be acceptable here — those
-//	          stay outside, in Complete).
+//	          stay outside, in the upload's completion).
 //	WITHDRAW  the transaction first (the article stops being public the moment it commits, whatever
 //	          MinIO is doing — hiding an article must never wait on storage), KEEPING the file's key
 //	          as the marker "a public copy may exist". After commit: UnpublishDerivative, then a second

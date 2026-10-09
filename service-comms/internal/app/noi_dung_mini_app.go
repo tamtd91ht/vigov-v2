@@ -544,7 +544,7 @@ func (uc *SoanNoiDungMiniApp) Sua(ctx context.Context, id string, yc domain.YeuC
 		}
 		// THE AUDIO PAIR (migration 0012, ADR 0067 §4): "" removes both; the id already attached is a
 		// no-op; any OTHER id is refused — a file is attached by its upload's completion, which carries
-		// the duration (ContentAudio.Complete). A duration alone corrects the one already typed.
+		// the duration (ContentAudio.Upload). A duration alone corrects the one already typed.
 		if sach.AudioFileID != nil {
 			switch *sach.AudioFileID {
 			case "":

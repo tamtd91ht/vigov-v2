@@ -172,8 +172,8 @@ func TestFetchBodyImageStoresAReadyImageWithPreviewAndTrailsTheHostOnly(t *testi
 	}
 
 	// The reservation it made lets the SAME officer's next upload join the article.
-	_, err = r.uc.RequestBodyImageUpload(r.ctx, CoverUploadRequest{ContentItemID: coverItemID, FileName: "b.jpg",
-		ContentType: storage.MIMEJPEG, Size: 10}, nguoiSoanND())
+	_, err = r.uc.UploadBodyImage(r.ctx, bodyReq(t, CoverUploadRequest{ContentItemID: coverItemID, FileName: "b.jpg",
+		ContentType: storage.MIMEJPEG}), nguoiSoanND())
 	if errors.Is(err, commsstore.ErrNoiDungKhongTonTai) {
 		t.Errorf("the fetched image did not reserve its article: %v", err)
 	}

@@ -15,6 +15,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"image/jpeg"
 	"io"
 	"log/slog"
@@ -210,15 +211,20 @@ func (f *fakeCoverFiles) CountForSubject(_ context.Context, subjectID, purpose s
 
 type fakeCoverObjects struct {
 	temp, private map[string][]byte
-	presignMax    int64
-	promoted      int
-	produced      map[string][]byte
-	purged        []string
-	published     []string // public dst keys
-	publishedSrc  []string
-	unpublished   []string
-	publishErr    error
-	unpublishErr  error
+	// putMax is the maxBytes PutUpload was given (the POLICY's); putErr fails the write after the stream
+	// was read; putDeadline reports whether the write's context carried a deadline.
+	putMax       int64
+	putErr       error
+	putDeadline  bool
+	puts         int
+	promoted     int
+	produced     map[string][]byte
+	purged       []string
+	published    []string // public dst keys
+	publishedSrc []string
+	unpublished  []string
+	publishErr   error
+	unpublishErr error
 }
 
 func newFakeCoverObjects() *fakeCoverObjects {
@@ -232,10 +238,31 @@ func (o *fakeCoverObjects) bucket(b storage.Bucket) map[string][]byte {
 	return o.private
 }
 
-func (o *fakeCoverObjects) PresignUpload(_ context.Context, uploadKey string, maxBytes int64, _ string,
-	_ time.Duration) (storage.PresignedPost, error) {
-	o.presignMax = maxBytes
-	return storage.PresignedPost{URL: "https://minio.example/temp", Fields: map[string]string{"key": uploadKey}}, nil
+// PutUpload mirrors core/storage's contract: only `upload/…` keys, size ≤ maxBytes before a byte is read,
+// exactly size bytes or ErrSizeMismatch, a reader error passed through wrapped.
+func (o *fakeCoverObjects) PutUpload(ctx context.Context, uploadKey string, r io.Reader, size int64, maxBytes int64,
+	contentType string) (storage.ObjectInfo, error) {
+	o.puts++
+	o.putMax = maxBytes
+	_, o.putDeadline = ctx.Deadline()
+	if !strings.HasPrefix(uploadKey, storage.TempUploadPrefix) {
+		return storage.ObjectInfo{}, storage.ErrInvalidArgument
+	}
+	if size > maxBytes {
+		return storage.ObjectInfo{}, storage.ErrTooLarge
+	}
+	d, err := io.ReadAll(r)
+	if err != nil {
+		return storage.ObjectInfo{}, fmt.Errorf("storage: read: %w", err)
+	}
+	if int64(len(d)) != size {
+		return storage.ObjectInfo{}, fmt.Errorf("%w: %w", storage.ErrInvalidArgument, storage.ErrSizeMismatch)
+	}
+	if o.putErr != nil {
+		return storage.ObjectInfo{}, o.putErr
+	}
+	o.temp[uploadKey] = d
+	return storage.ObjectInfo{Key: uploadKey, Size: size, ETag: "etag", ContentType: contentType}, nil
 }
 func (o *fakeCoverObjects) Stat(_ context.Context, b storage.Bucket, key string) (storage.ObjectInfo, error) {
 	d, ok := o.bucket(b)[key]
@@ -315,10 +342,15 @@ type fakeScanner struct {
 	res     malwarescan.Result
 	err     error
 	scanned int
+	// onScan runs during the scan: something that changes between the admission and the outcome.
+	onScan func()
 }
 
 func (s *fakeScanner) Scan(_ context.Context, r io.Reader, _ int64) (malwarescan.Result, error) {
 	s.scanned++
+	if s.onScan != nil {
+		s.onScan()
+	}
 	_, _ = io.Copy(io.Discard, r)
 	return s.res, s.err
 }
@@ -374,22 +406,48 @@ func newCoverRig(t *testing.T, k *khoNDGia) *coverRig {
 		ctx: tenant.Into(context.Background(), xaA)}
 }
 
-// pendingUpload issues an upload through the real RequestUpload and drops bytes into the temp bucket
-// at the key the browser would POST to.
-func (r *coverRig) pendingUpload(t *testing.T, data []byte) domain.StoredFile {
-	t.Helper()
-	up, err := r.uc.RequestUpload(r.ctx, CoverUploadRequest{FileName: "C:\\fakepath\\trao-qua.jpg",
-		ContentType: storage.MIMEJPEG, Size: int64(len(data))}, nguoiSoanND())
-	if err != nil {
-		t.Fatalf("RequestUpload: %v", err)
-	}
-	r.objects.temp[up.Post.Fields["key"]] = data
-	return up.File
+// streamOf is the file part as the handler hands it over: exactly data, then a Finish that reports what
+// followed the file (nil = nothing).
+func streamOf(data []byte, finishErr error) (io.Reader, func() error) {
+	return bytes.NewReader(data), func() error { return finishErr }
 }
 
-// --- a. request ----------------------------------------------------------------------------------
+// coverReq is one cover upload of data declared as mime, for item ("" = a fresh reservation).
+func coverReq(item, mime string, data []byte) CoverUploadRequest {
+	file, finish := streamOf(data, nil)
+	return CoverUploadRequest{ContentItemID: item, FileName: "C:\\fakepath\\trao-qua.jpg", ContentType: mime,
+		Size: int64(len(data)), File: file, Finish: finish}
+}
 
-func TestCoverRequestRefusesWhatThePolicyRefusesBeforeAnyRow(t *testing.T) {
+// withStream gives a declaration-only request a stream of its declared size (zero bytes: refused by the
+// sniff if the request ever gets that far — the tests using it stop at admission or assert the refusal).
+func withStream(req CoverUploadRequest) CoverUploadRequest {
+	if req.File == nil && req.Size > 0 && req.Size < 1<<20 {
+		req.File, req.Finish = streamOf(make([]byte, req.Size), nil)
+	} else if req.File == nil {
+		req.File, req.Finish = streamOf(nil, nil)
+	}
+	return req
+}
+
+// upload runs the real UploadCover with data as the file part.
+func (r *coverRig) upload(data []byte) (domain.StoredFile, error) {
+	return r.uc.UploadCover(r.ctx, coverReq("", storage.MIMEJPEG, data), nguoiSoanND())
+}
+
+// row is the one row this rig's upload wrote (coverFileID).
+func (r *coverRig) row(t *testing.T) *domain.StoredFile {
+	t.Helper()
+	f := r.files.get(coverFileID)
+	if f == nil {
+		t.Fatal("no row was written")
+	}
+	return f
+}
+
+// --- a. admission ----------------------------------------------------------------------------------
+
+func TestCoverUploadRefusesWhatThePolicyRefusesBeforeAnyRowOrByte(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		req  CoverUploadRequest
@@ -403,38 +461,69 @@ func TestCoverRequestRefusesWhatThePolicyRefusesBeforeAnyRow(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := newCoverRig(t, nil)
-			if _, err := r.uc.RequestUpload(r.ctx, tc.req, nguoiSoanND()); !errors.Is(err, tc.want) {
+			if _, err := r.uc.UploadCover(r.ctx, withStream(tc.req), nguoiSoanND()); !errors.Is(err, tc.want) {
 				t.Fatalf("err = %v, want %v", err, tc.want)
 			}
-			if r.k.batDau != 0 || len(r.files.inserted) != 0 {
-				t.Errorf("a refused declaration opened a transaction (%d) or wrote a row (%d)", r.k.batDau, len(r.files.inserted))
+			if r.k.batDau != 0 || len(r.files.inserted) != 0 || r.objects.puts != 0 {
+				t.Errorf("a refused declaration opened a transaction (%d), wrote a row (%d) or read the file (%d)",
+					r.k.batDau, len(r.files.inserted), r.objects.puts)
 			}
 		})
 	}
 }
 
-func TestCoverRequestFailsClosedWithoutPolicyOrStorage(t *testing.T) {
+func TestCoverUploadFailsClosedWithoutPolicyOrStorage(t *testing.T) {
 	r := newCoverRig(t, nil)
 	r.uc.policies = fakePolicies{ok: false}
-	req := CoverUploadRequest{FileName: "a.jpg", ContentType: storage.MIMEJPEG, Size: 10}
-	if _, err := r.uc.RequestUpload(r.ctx, req, nguoiSoanND()); !errors.Is(err, ErrCoverUploadNotConfigured) {
+	req := withStream(CoverUploadRequest{FileName: "a.jpg", ContentType: storage.MIMEJPEG, Size: 10})
+	if _, err := r.uc.UploadCover(r.ctx, req, nguoiSoanND()); !errors.Is(err, ErrCoverUploadNotConfigured) {
 		t.Errorf("no policy: err = %v", err)
 	}
+	if _, err := r.uc.CoverUploadLimit(r.ctx); !errors.Is(err, ErrCoverUploadNotConfigured) {
+		t.Errorf("no policy, limit: err = %v", err)
+	}
 	r.uc.policies = fakePolicies{err: uploadpolicy.ErrUnavailable}
-	if _, err := r.uc.RequestUpload(r.ctx, req, nguoiSoanND()); !errors.Is(err, ErrCoverLimitsUnavailable) {
+	if _, err := r.uc.UploadCover(r.ctx, req, nguoiSoanND()); !errors.Is(err, ErrCoverLimitsUnavailable) {
 		t.Errorf("platform down: err = %v", err)
 	}
+	if _, err := r.uc.CoverUploadLimit(r.ctx); !errors.Is(err, ErrCoverLimitsUnavailable) {
+		t.Errorf("platform down, limit: err = %v", err)
+	}
 	r.uc.objects = nil
-	if _, err := r.uc.RequestUpload(r.ctx, req, nguoiSoanND()); !errors.Is(err, ErrCoverUploadNotConfigured) {
+	if _, err := r.uc.UploadCover(r.ctx, req, nguoiSoanND()); !errors.Is(err, ErrCoverUploadNotConfigured) {
 		t.Errorf("no object store: err = %v", err)
+	}
+	if _, err := r.uc.BodyImageUploadLimit(r.ctx); !errors.Is(err, ErrCoverUploadNotConfigured) {
+		t.Errorf("no object store, body-image limit: err = %v", err)
 	}
 }
 
-func TestCoverRequestWritesRowAndTrailInOneTransaction(t *testing.T) {
+// The handler caps the request body at the POLICY's size, read here — never a constant.
+func TestCoverUploadLimitIsThePolicys(t *testing.T) {
 	r := newCoverRig(t, nil)
-	f := r.pendingUpload(t, []byte("whatever"))
-	if r.k.batDau != 1 || r.k.daCommit != 1 || len(r.k.cau("INSERT INTO audit_log")) != 1 {
+	if n, err := r.uc.CoverUploadLimit(r.ctx); err != nil || n != 50<<20 {
+		t.Fatalf("limit = %d, %v; want the policy's 50 MiB", n, err)
+	}
+	p := coverPolicy()
+	p.p.MaxBytes = 0
+	r.uc.policies = p
+	if _, err := r.uc.CoverUploadLimit(r.ctx); !errors.Is(err, ErrCoverUploadNotConfigured) {
+		t.Errorf("a policy with no cap must refuse, never mean unbounded: %v", err)
+	}
+}
+
+func TestCoverUploadWritesTheRequestedRowBeforeTheBytesAndTheTrailWithoutTheName(t *testing.T) {
+	r := newCoverRig(t, nil)
+	f, err := r.upload(testJPEG(t, 40, 30, 0))
+	if err != nil {
+		t.Fatalf("UploadCover: %v", err)
+	}
+	// Two transactions: the pending row + its trail, then the outcome + its trail.
+	if r.k.batDau != 2 || r.k.daCommit != 2 || len(r.k.cau("INSERT INTO audit_log")) != 2 {
 		t.Fatalf("tx: begin=%d commit=%d audit=%d", r.k.batDau, r.k.daCommit, len(r.k.cau("INSERT INTO audit_log")))
+	}
+	if !containsString(auditActions(r.k), ActionCoverUploadRequested) || !containsString(auditActions(r.k), ActionCoverStored) {
+		t.Errorf("trail = %v", auditActions(r.k))
 	}
 	if f.SubjectID != coverItemID || f.UploadedBy != maCanBoSoanND || f.OriginalName != "trao-qua.jpg" {
 		t.Errorf("row = %+v", f)
@@ -444,8 +533,8 @@ func TestCoverRequestWritesRowAndTrailInOneTransaction(t *testing.T) {
 	if f.ObjectKey != want {
 		t.Errorf("object key = %q, want %q", f.ObjectKey, want)
 	}
-	if r.objects.presignMax != 50<<20 {
-		t.Errorf("presigned limit = %d, want the POLICY's", r.objects.presignMax)
+	if r.objects.putMax != 50<<20 {
+		t.Errorf("write limit = %d, want the POLICY's", r.objects.putMax)
 	}
 	// The original file name is personal data: never in the trail.
 	for _, l := range r.k.cau("INSERT INTO audit_log") {
@@ -457,28 +546,96 @@ func TestCoverRequestWritesRowAndTrailInOneTransaction(t *testing.T) {
 	}
 }
 
-func TestCoverRequestForMissingItemIs404AndWritesNothing(t *testing.T) {
+func TestCoverUploadForMissingItemIs404AndWritesNothing(t *testing.T) {
 	r := newCoverRig(t, &khoNDGia{}) // TheoIDDeSua finds nothing
-	_, err := r.uc.RequestUpload(r.ctx, CoverUploadRequest{ContentItemID: "nd-khac", FileName: "a.jpg",
-		ContentType: storage.MIMEJPEG, Size: 10}, nguoiSoanND())
+	_, err := r.uc.UploadCover(r.ctx, coverReq("nd-khac", storage.MIMEJPEG, testJPEG(t, 10, 10, 0)), nguoiSoanND())
 	if !errors.Is(err, commsstore.ErrNoiDungKhongTonTai) {
 		t.Fatalf("err = %v", err)
 	}
-	if len(r.files.inserted) != 0 || r.k.daRollback != 1 {
-		t.Errorf("inserted=%d rollback=%d", len(r.files.inserted), r.k.daRollback)
+	if len(r.files.inserted) != 0 || r.k.daRollback != 1 || r.objects.puts != 0 {
+		t.Errorf("inserted=%d rollback=%d puts=%d", len(r.files.inserted), r.k.daRollback, r.objects.puts)
 	}
 }
 
-// --- c. complete ---------------------------------------------------------------------------------
+// --- b. the stream ---------------------------------------------------------------------------------
 
-func TestCoverCompleteCleanProducesDerivativeAndIsReady(t *testing.T) {
+// A FAILED STREAM NEVER LEAVES A PENDING ROW: nothing can complete it any more (no completion route),
+// and a pending row holds a slot of the article's count. `failed`, one abandoned entry, the cause kept.
+func TestCoverStreamFailureMarksTheRowFailedWithItsTrail(t *testing.T) {
+	brokenRead := errors.New("client hung up")
+	for _, tc := range []struct {
+		name  string
+		setup func(r *coverRig, req *CoverUploadRequest)
+		cause error
+	}{
+		{"the client's stream breaks", func(_ *coverRig, req *CoverUploadRequest) {
+			req.File = io.MultiReader(bytes.NewReader([]byte{1, 2}), iotestErrReader{brokenRead})
+		}, brokenRead},
+		{"shorter than declared", func(_ *coverRig, req *CoverUploadRequest) { req.Size++ }, storage.ErrSizeMismatch},
+		{"something after the file", func(_ *coverRig, req *CoverUploadRequest) {
+			req.Finish = func() error { return brokenRead }
+		}, brokenRead},
+		{"the temp bucket refuses", func(r *coverRig, _ *CoverUploadRequest) {
+			r.objects.putErr = errors.New("storage: put upload: bucket \"vigov-temp\" does not exist")
+		}, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newCoverRig(t, nil)
+			req := coverReq("", storage.MIMEJPEG, testJPEG(t, 10, 10, 0))
+			tc.setup(r, &req)
+			_, err := r.uc.UploadCover(r.ctx, req, nguoiSoanND())
+			if !errors.Is(err, ErrCoverUploadIncomplete) || (tc.cause != nil && !errors.Is(err, tc.cause)) {
+				t.Fatalf("err = %v, want ErrCoverUploadIncomplete wrapping %v", err, tc.cause)
+			}
+			if st := r.row(t).Status; st != domain.StoredFileFailed {
+				t.Errorf("status = %s, want failed", st)
+			}
+			if r.scanner.scanned != 0 || r.objects.promoted != 0 {
+				t.Error("an incomplete upload reached the scanner or the private bucket")
+			}
+			acts := auditActions(r.k)
+			if !containsString(acts, ActionCoverExpired) || !auditCarries(r.k.cau("INSERT INTO audit_log")[1], CoverAbandonNotReceived) {
+				t.Errorf("trail = %v, want the abandoned entry with %q", acts, CoverAbandonNotReceived)
+			}
+		})
+	}
+}
+
+// The write runs under the upload's deadline (httpx's 180 s), never unbounded.
+func TestCoverWriteRunsUnderTheUploadDeadline(t *testing.T) {
 	r := newCoverRig(t, nil)
-	f := r.pendingUpload(t, testJPEG(t, 2000, 1500, 0))
-	r.k.lenh = nil
+	req := coverReq("", storage.MIMEJPEG, testJPEG(t, 10, 10, 0))
+	req.Deadline = time.Now().Add(time.Minute)
+	if _, err := r.uc.UploadCover(r.ctx, req, nguoiSoanND()); err != nil {
+		t.Fatal(err)
+	}
+	if !r.objects.putDeadline {
+		t.Error("PutUpload ran without the upload's deadline")
+	}
+}
 
-	got, err := r.uc.Complete(r.ctx, f.ID, nguoiSoanND())
+// A client that hung up cancels the request's context: the row must still leave `pending`.
+func TestCoverAbandonSurvivesACancelledRequest(t *testing.T) {
+	r := newCoverRig(t, nil)
+	ctx, cancel := context.WithCancel(r.ctx)
+	defer cancel()
+	req := coverReq("", storage.MIMEJPEG, testJPEG(t, 10, 10, 0))
+	req.File = readerFunc(func([]byte) (int, error) { cancel(); return 0, context.Canceled })
+	if _, err := r.uc.UploadCover(ctx, req, nguoiSoanND()); !errors.Is(err, ErrCoverUploadIncomplete) {
+		t.Fatalf("err = %v", err)
+	}
+	if st := r.row(t).Status; st != domain.StoredFileFailed {
+		t.Errorf("status = %s, want failed even though the request was cancelled", st)
+	}
+}
+
+// --- c. the completion -----------------------------------------------------------------------------
+
+func TestCoverUploadCleanProducesDerivativeAndIsReady(t *testing.T) {
+	r := newCoverRig(t, nil)
+	got, err := r.upload(testJPEG(t, 2000, 1500, 0))
 	if err != nil {
-		t.Fatalf("Complete: %v", err)
+		t.Fatalf("UploadCover: %v", err)
 	}
 	if got.Status != domain.StoredFileReady || r.scanner.scanned != 1 || r.objects.promoted != 1 {
 		t.Fatalf("status=%s scanned=%d promoted=%d", got.Status, r.scanner.scanned, r.objects.promoted)
@@ -487,7 +644,7 @@ func TestCoverCompleteCleanProducesDerivativeAndIsReady(t *testing.T) {
 	if strings.Join(r.files.transitions, ",") != strings.Join(want, ",") {
 		t.Errorf("transitions = %v, want %v", r.files.transitions, want)
 	}
-	deriv := strings.Replace(f.ObjectKey, "/original.jpg", "/thumb-1280.jpg", 1)
+	deriv := strings.Replace(got.ObjectKey, "/original.jpg", "/thumb-1280.jpg", 1)
 	out, ok := r.objects.produced[deriv]
 	if !ok {
 		t.Fatalf("no derivative at %q: %v", deriv, r.objects.produced)
@@ -496,20 +653,16 @@ func TestCoverCompleteCleanProducesDerivativeAndIsReady(t *testing.T) {
 	if err != nil || cfg.Width != 1280 || cfg.Height != 960 {
 		t.Errorf("derivative %v %d×%d, want 1280×960", err, cfg.Width, cfg.Height)
 	}
-	if len(r.k.cau("INSERT INTO audit_log")) != 1 || r.k.daCommit != 2 {
-		t.Errorf("completion audit=%d commits=%d", len(r.k.cau("INSERT INTO audit_log")), r.k.daCommit)
-	}
 	if len(r.objects.published) != 0 {
-		t.Error("completing an upload must not publish anything")
+		t.Error("uploading must not publish anything")
 	}
 }
 
-func TestCoverCompleteInfectedIsRejectedNeverStored(t *testing.T) {
+func TestCoverUploadInfectedIsRejectedNeverStored(t *testing.T) {
 	r := newCoverRig(t, nil)
-	f := r.pendingUpload(t, testJPEG(t, 10, 10, 0))
 	r.scanner.res = malwarescan.Result{Clean: false, Signature: "Eicar-Test-Signature"}
 
-	_, err := r.uc.Complete(r.ctx, f.ID, nguoiSoanND())
+	_, err := r.upload(testJPEG(t, 10, 10, 0))
 	var rej *CoverRejection
 	if !errors.As(err, &rej) || rej.Reason != CoverRejectMalware {
 		t.Fatalf("err = %v, want malware rejection", err)
@@ -517,64 +670,98 @@ func TestCoverCompleteInfectedIsRejectedNeverStored(t *testing.T) {
 	if r.objects.promoted != 0 || len(r.objects.produced) != 0 {
 		t.Error("an infected file reached the private bucket")
 	}
-	if len(r.objects.purged) != 1 || r.files.get(f.ID).Status != domain.StoredFileRejected {
-		t.Errorf("temp purged=%v status=%s", r.objects.purged, r.files.get(f.ID).Status)
+	if len(r.objects.purged) != 1 || r.row(t).Status != domain.StoredFileRejected {
+		t.Errorf("temp purged=%v status=%s", r.objects.purged, r.row(t).Status)
+	}
+	if containsString(auditActions(r.k), ActionCoverExpired) {
+		t.Error("a rejection is not an abandoned upload")
 	}
 }
 
-func TestCoverCompleteUnscannableIsNeverTreatedClean(t *testing.T) {
+// UNSCANNABLE IS NEVER CLEAN (ADR 0052 §9) — and, with no completion route left to retry, the row is
+// abandoned rather than left pending: `failed`, the cause returned for the handler's 503.
+func TestCoverUploadUnscannableIsNeverTreatedClean(t *testing.T) {
 	r := newCoverRig(t, nil)
-	f := r.pendingUpload(t, testJPEG(t, 10, 10, 0))
 	r.scanner.err = malwarescan.ErrUnavailable
-	before := r.k.batDau
 
-	if _, err := r.uc.Complete(r.ctx, f.ID, nguoiSoanND()); !errors.Is(err, ErrCoverScanUnavailable) {
+	if _, err := r.upload(testJPEG(t, 10, 10, 0)); !errors.Is(err, ErrCoverScanUnavailable) {
 		t.Fatalf("err = %v", err)
 	}
-	if r.objects.promoted != 0 || r.k.batDau != before || r.files.get(f.ID).Status != domain.StoredFilePending {
-		t.Errorf("scanner down: promoted=%d tx=%d status=%s — must write nothing and stay retryable",
-			r.objects.promoted, r.k.batDau-before, r.files.get(f.ID).Status)
+	if r.objects.promoted != 0 || r.row(t).Status != domain.StoredFileFailed {
+		t.Errorf("scanner down: promoted=%d status=%s — never stored, never left pending",
+			r.objects.promoted, r.row(t).Status)
+	}
+	audits := r.k.cau("INSERT INTO audit_log")
+	if len(audits) != 2 || !auditCarries(audits[1], CoverAbandonNotInspected) {
+		t.Errorf("trail = %v, want requested + abandoned (%s)", auditActions(r.k), CoverAbandonNotInspected)
 	}
 }
 
-func TestCoverCompleteTightenedPolicyRejectsOversize(t *testing.T) {
+// seqPolicies answers its policies in turn, then the last one: a policy that changes between the
+// admission and the completion's own read.
+type seqPolicies struct {
+	ps []fakePolicies
+	n  int
+}
+
+func (s *seqPolicies) Policy(ctx context.Context, p storage.Purpose) (uploadpolicy.Policy, bool, error) {
+	i := min(s.n, len(s.ps)-1)
+	s.n++
+	return s.ps[i].Policy(ctx, p)
+}
+
+func TestCoverCompletionTightenedPolicyRejectsOversize(t *testing.T) {
 	r := newCoverRig(t, nil)
-	f := r.pendingUpload(t, testJPEG(t, 10, 10, 0))
-	p := coverPolicy()
-	p.p.MaxBytes = 10 // tightened since the request: the CURRENT policy decides
-	r.uc.policies = p
-	_, err := r.uc.Complete(r.ctx, f.ID, nguoiSoanND())
+	tight := coverPolicy()
+	tight.p.MaxBytes = 10 // tightened between admission and inspection: the CURRENT policy decides
+	r.uc.policies = &seqPolicies{ps: []fakePolicies{coverPolicy(), tight}}
+	_, err := r.upload(testJPEG(t, 10, 10, 0))
 	var rej *CoverRejection
 	if !errors.As(err, &rej) || rej.Reason != CoverRejectTooLarge || r.scanner.scanned != 0 {
 		t.Fatalf("err = %v scanned = %d", err, r.scanner.scanned)
 	}
 }
 
-func TestCoverCompleteUndecodableFailsAfterScan(t *testing.T) {
+func TestCoverUploadUndecodableFailsAfterScan(t *testing.T) {
 	r := newCoverRig(t, nil)
-	f := r.pendingUpload(t, append([]byte{0xFF, 0xD8, 0xFF, 0xE0}, bytes.Repeat([]byte{7}, 64)...))
-	_, err := r.uc.Complete(r.ctx, f.ID, nguoiSoanND())
+	_, err := r.upload(append([]byte{0xFF, 0xD8, 0xFF, 0xE0}, bytes.Repeat([]byte{7}, 64)...))
 	var rej *CoverRejection
 	if !errors.As(err, &rej) || rej.Reason != CoverRejectUndecodable {
 		t.Fatalf("err = %v", err)
 	}
-	if st := r.files.get(f.ID).Status; st != domain.StoredFileFailed {
+	if st := r.row(t).Status; st != domain.StoredFileFailed {
 		t.Errorf("status = %s, want failed", st)
 	}
 }
 
-func TestCoverCompleteByAnotherOfficerIs404(t *testing.T) {
+// The completion re-reads the row and checks it is THIS officer's upload of THIS purpose — the guard it
+// had as a route of its own, kept for a caller that would pass it another id.
+func TestCoverCompletionOfAnotherOfficersOrPurposesRowIs404(t *testing.T) {
 	r := newCoverRig(t, nil)
-	f := r.pendingUpload(t, testJPEG(t, 10, 10, 0))
+	f := readyCover(r.files, coverFileID, coverItemID)
+	f.Status, f.Purpose = domain.StoredFilePending, string(coverPurpose)
+
 	other := nguoiSoanND()
 	other.ID = "CB-2026-KHAC00"
-	if _, err := r.uc.Complete(r.ctx, f.ID, other); !errors.Is(err, ErrCoverFileNotFound) {
-		t.Fatalf("err = %v", err)
+	if _, err := r.uc.complete(r.ctx, coverPurpose, f.ID, other); !errors.Is(err, ErrCoverFileNotFound) {
+		t.Fatalf("another officer: err = %v", err)
+	}
+	if _, err := r.uc.complete(r.ctx, bodyImagePurpose, f.ID, nguoiSoanND()); !errors.Is(err, ErrCoverFileNotFound) {
+		t.Fatalf("another purpose: err = %v", err)
 	}
 	if r.scanner.scanned != 0 {
-		t.Error("another officer's completion reached the scanner")
+		t.Error("a foreign completion reached the scanner")
 	}
 }
+
+// iotestErrReader fails every read with err.
+type iotestErrReader struct{ err error }
+
+func (e iotestErrReader) Read([]byte) (int, error) { return 0, e.err }
+
+type readerFunc func([]byte) (int, error)
+
+func (f readerFunc) Read(p []byte) (int, error) { return f(p) }
 
 // --- publishing with the article -----------------------------------------------------------------
 

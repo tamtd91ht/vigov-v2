@@ -32,6 +32,7 @@ import (
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
+	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/ratelimit"
@@ -214,9 +215,9 @@ type Deps struct {
 	DanhMucNoiDung    DanhMucMiniAppDoc
 	GhiDanhMucNoiDung GhiDanhMucMiniApp
 
-	// The cover upload of an article (ADR 0047 §6 (1), ADR 0052) — internal/http/content_cover.go.
-	// Built even when object storage, the scanner or platform's limits are absent: the two routes then
-	// answer 503 and every other route keeps serving.
+	// The cover and body-image uploads of an article (ADR 0047 §6 (1), ADR 0052) —
+	// internal/http/content_cover.go. Built even when object storage, the scanner or platform's limits are
+	// absent: the upload routes then answer 503 and every other route keeps serving.
 	ContentCovers ContentCoverActs
 
 	// ImageFetchLimiter is ratelimit.StaffImageFetch (owner, 03/10/2026, ADR 0067 K10): 30 attempts per
@@ -227,9 +228,16 @@ type Deps struct {
 	ImageFetchLimiter *ratelimit.Limiter
 
 	// The broadcast audio of a `truyen-thanh` item (ADR 0067 §4) — internal/http/content_audio.go. Built
-	// even when object storage, the scanner or platform's limits are absent: its two routes then answer
+	// even when object storage, the scanner or platform's limits are absent: its upload route then answers
 	// 503 and every other route keeps serving.
 	ContentAudio ContentAudioActs
+
+	// UploadSlots is the process's ONE per-pod bound on uploads in flight (httpx.UploadSlotsPerPod, ADR 0052
+	// §Sửa đổi 09/10/2026: 4 per pod), shared by the cover, body-image and audio routes — a bound per route
+	// would let three routes hold twelve. nil makes those three routes answer 503 `upload_unavailable`
+	// (internal/http/upload.go), never serve unbounded; not a construction panic, for ImageFetchLimiter's
+	// reason.
+	UploadSlots *httpx.UploadSlots
 
 	// The map field schema (migration 0007) — see internal/http/map_field_schema.go.
 	MapFieldSchemas      MapFieldSchemaReader
@@ -290,10 +298,10 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("comms/http: thiếu use case ghi danh mục Mini App — POST /api/v1/content-categories sẽ panic khi có người gọi")
 	}
 	if d.ContentCovers == nil {
-		panic("comms/http: thiếu use case ảnh bìa — hai tuyến /api/v1/content-items/cover-images và chi tiết nội dung sẽ panic khi có người gọi")
+		panic("comms/http: thiếu use case ảnh bìa — các tuyến /api/v1/content-items/cover-images, body-images và chi tiết nội dung sẽ panic khi có người gọi")
 	}
 	if d.ContentAudio == nil {
-		panic("comms/http: thiếu use case âm thanh truyền thanh — hai tuyến /api/v1/content-items/audio-files và chi tiết nội dung sẽ panic khi có người gọi")
+		panic("comms/http: thiếu use case âm thanh truyền thanh — tuyến /api/v1/content-items/audio-files và chi tiết nội dung sẽ panic khi có người gọi")
 	}
 	if d.MapFieldSchemas == nil {
 		panic("comms/http: thiếu kho trường bản đồ — GET /api/v1/map-field-schemas sẽ panic khi có người gọi")
@@ -758,116 +766,96 @@ func Register(mux *http.ServeMux, d Deps) {
 			idem.KhongCan("xoá một mục đã xoá cho cùng một kết quả: lượt đọc khoá dòng và câu UPDATE đều mang `AND deleted_at IS NULL`, nên lần thứ hai trả 404 và không ghi đè được người xoá và lý do")(
 				http.HandlerFunc(h.DeleteContentItem))))
 
-	// --- the cover image of an article: ADR 0052's three-step upload -----------------------------------
+	// --- the cover image of an article: ONE upload request (ADR 0052 §Sửa đổi 09/10/2026) ----------------
 	//
 	// internal/app/content_cover.go has the whole flow; internal/http/content_cover.go says why the noun
-	// is `cover-images` and why it sits at collection level. `content.update` on both: uploading a cover
-	// is composing the article (§10.5 divides the screen into read and update, nothing else). The key is
-	// seeded (service-identity/migrations/0001_init.sql:293); NO KEY WAS INVENTED (rule 5, invariant 3c).
+	// is `cover-images` and why it sits at collection level; internal/http/upload.go the envelope.
+	// `content.update`: uploading a cover is composing the article (§10.5 divides the screen into read and
+	// update, nothing else). The key is seeded (service-identity/migrations/0001_init.sql:293); NO KEY WAS
+	// INVENTED (rule 5, invariant 3c). The presigned POST and `…/{id}/completion` are gone (owner, 09/10).
 	//
-	// THE LIMITS ARE PLATFORM'S (`content-image` policy, ADR 0052 §10): size and types on every request.
-	// Not configured → 503 `storage_not_configured`, as is a missing object store or scanner.
+	// BODY: multipart/form-data, text fields FIRST, then exactly one part named `file`, then nothing:
 	//
-	// idem.Required(idem.MoKhiHong): a double submit issues a second pending row — one unused upload
-	// slot for 15 minutes, never a second stored file, never a second article. A cache outage must not
-	// stop a member of staff mid-composition (petitions' attachment route makes the same call).
+	//	size             REQUIRED — the file's byte count (multipart carries no part length)
+	//	file_name        optional — else the part's filename; ⚠ personal data, stored, never logged
+	//	content_type     optional — else the part's Content-Type; image/jpeg · image/png · image/webp (policy)
+	//	content_item_id  optional — an existing article, or the id an earlier upload of THIS officer
+	//	                 reserved; ABSENT for an unsaved article (the server reserves one and returns it)
+	//	file             the image
+	//
+	// Then, in the request: sniff (the declared type is never trusted) · ClamAV · sha256 · copy to the
+	// private bucket · decode, orient, fit to 1280 px, re-encode JPEG without EXIF · `ready` and the trail
+	// in ONE transaction. Answers 201 with the stored file (`status` ready).
+	//
+	// THE LIMITS ARE PLATFORM'S (`content-image` policy, ADR 0052 §10): the body is capped at the policy's
+	// size before it is read. Over → 413. Not multipart → 415. Malformed (size missing or after the file, a
+	// second file, an undeclared field) → 400 `invalid_upload`. Slower than 180 s → 408. Every upload slot
+	// of the pod taken (4, shared with the body-image and audio routes) → 503 `upload_busy` + Retry-After.
+	// Infected, wrong type, undecodable, too many pixels → 422. Scanner, platform or temp bucket down →
+	// 503, NEVER stored unscanned (ADR 0052 §9). Every failure after the pending row moves it to `failed`.
+	//
+	// idem.Required(idem.MoKhiHong): a double submit replays the first answer (its file id is recorded);
+	// a missed replay stores one more unused file, never a second article. A cache outage must not stop a
+	// member of staff mid-composition (petitions' attachment route makes the same call).
 	//
 	// 404 is a named `content_item_id` that is no live article of this commune — the same answer as
 	// another commune's (rule 4, forbidden #2 on the commune axis).
 	//
-	// @summary  Xin tải ảnh bìa cho mục nội dung Mini App — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút); bỏ trống content_item_id khi bài chưa lưu
+	// @summary  Tải ảnh bìa cho mục nội dung Mini App — một lệnh multipart (size, file_name, content_type, content_item_id, rồi file); máy chủ dò kiểu, quét mã độc, lưu bản gốc riêng tư, tạo bản 1280px không EXIF; bỏ trống content_item_id khi bài chưa lưu
 	// @screen   11-noi-dung-mini-app §7
-	// @request  coverUploadIn
-	// @reply    201 coverUploadOut
+	// @reply    201 coverFileOut
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    404 httpx.Error
+	// @reply    408 httpx.Error
 	// @reply    409 httpx.Error
+	// @reply    413 httpx.Error
+	// @reply    415 httpx.Error
+	// @reply    422 httpx.Error
 	// @reply    500 httpx.Error
 	// @reply    503 httpx.Error
 	mux.Handle("POST /api/v1/content-items/cover-images",
 		authz.RequirePermission(d.Checker, "content.update")(
 			idem.Required(idem.MoKhiHong)(
-				http.HandlerFunc(h.RequestCoverUpload))))
+				http.HandlerFunc(h.UploadCover))))
 
-	// HOÀN TẤT TẢI ẢNH BÌA — `completion`, a nominalised sub-resource (skills/rest-api-design §3). Only
-	// the officer the upload was issued to; anybody else's id answers 404.
-	//
-	// Stat · sniff (the client's type is never trusted) · the CURRENT policy · ClamAV · sha256 · copy to
-	// the private bucket · decode, orient, fit to 1280 px, re-encode JPEG without EXIF · `ready` and the
-	// trail in ONE transaction. Infected, wrong type, too large, undecodable, too many pixels → 422.
-	// Scanner or platform down → 503, nothing written, retryable, NEVER stored unscanned (ADR 0052 §9).
-	//
-	// idem.KhongCan: a second completion of a ready file answers that file and writes nothing; two in
-	// flight at once serialise on the row lock and the loser lands on the winner's row.
-	//
-	// @summary  Hoàn tất tải ảnh bìa — dò kiểu, quét mã độc, lưu bản gốc riêng tư, tạo bản 1280px không EXIF
-	// @screen   11-noi-dung-mini-app §7
-	// @reply    200 coverFileOut
-	// @reply    401 httpx.Error
-	// @reply    403 httpx.Error
-	// @reply    404 httpx.Error
-	// @reply    409 httpx.Error
-	// @reply    422 httpx.Error
-	// @reply    500 httpx.Error
-	// @reply    503 httpx.Error
-	mux.Handle("POST /api/v1/content-items/cover-images/{id}/completion",
-		authz.RequirePermission(d.Checker, "content.update")(
-			idem.KhongCan("hoàn tất lần hai trên ảnh đã sẵn sàng trả lại đúng ảnh ấy và không ghi gì; hai lượt cùng lúc tuần tự hoá trên khoá dòng")(
-				http.HandlerFunc(h.CompleteCoverUpload))))
-
-	// --- the images INSIDE the body: the same three-step upload (ADR 0067 §Sửa đổi 03/10/2026) -----------
+	// --- the images INSIDE the body: the cover's upload (ADR 0067 §Sửa đổi 03/10/2026) ------------------
 	//
 	// internal/http/content_body_image.go has the contract; internal/app/content_cover.go the flow. The
-	// cover's pipeline under purpose `content-body-image`: sniff, ClamAV, `thumb-1280` derivative without
-	// EXIF, published and withdrawn with the article. `content.update` on both — K8 names it, the key the
-	// cover routes use, seeded (service-identity/migrations/0001_init.sql:293); NO KEY WAS INVENTED (rule 5,
-	// invariant 3c). No rate limit of its own (K8): authenticated, audited, and bounded by the per-article
-	// count of platform's policy (H7, 20 on 03/10/2026 — read per request, never a constant here).
+	// cover's request — the SAME multipart fields and refusals as the route above — under purpose
+	// `content-body-image`: sniff, ClamAV, `thumb-1280` derivative without EXIF, published and withdrawn
+	// with the article. Answers 201 with the stored image and, once ready, its preview link.
+	// `content.update` — K8 names it, the key the cover route uses, seeded
+	// (service-identity/migrations/0001_init.sql:293); NO KEY WAS INVENTED (rule 5, invariant 3c). No rate
+	// limit of its own (K8): authenticated, audited, bounded by the pod's upload slots and by the
+	// per-article count of platform's policy (H7, 20 on 03/10/2026 — read per request, never a constant).
 	//
 	// 404 is a `content_item_id` that is neither a live article of this commune nor an id an earlier upload
 	// of THIS officer reserved — one answer for all (rule 4, forbidden #2 on the commune axis). 409
-	// `body_image_limit` when the article already holds the policy's count of live body images.
+	// `body_image_limit` when the article already holds the policy's count of live body images. 422
+	// `body_image_rejected` for an infected, mistyped, undecodable or over-count file.
 	//
-	// idem.Required(idem.MoKhiHong): as on the cover route — a double submit issues one more pending row
-	// (one slot for 15 minutes), never a stored file.
+	// idem.Required(idem.MoKhiHong): as on the cover route.
 	//
-	// @summary  Xin tải ảnh chèn trong thân bài nội dung Mini App — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút) và mã mục nội dung; bỏ trống content_item_id cho ảnh đầu tiên của bài chưa lưu
+	// @summary  Tải ảnh chèn trong thân bài nội dung Mini App — một lệnh multipart (size, file_name, content_type, content_item_id, rồi file); trả ảnh đã lưu, mã mục nội dung và liên kết xem trước khi đã sẵn sàng; bỏ trống content_item_id cho ảnh đầu tiên của bài chưa lưu
 	// @screen   11-noi-dung-mini-app §7
-	// @request  bodyImageUploadIn
-	// @reply    201 bodyImageUploadOut
+	// @reply    201 bodyImageFileOut
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    404 httpx.Error
+	// @reply    408 httpx.Error
 	// @reply    409 httpx.Error
+	// @reply    413 httpx.Error
+	// @reply    415 httpx.Error
+	// @reply    422 httpx.Error
 	// @reply    500 httpx.Error
 	// @reply    503 httpx.Error
 	mux.Handle("POST /api/v1/content-items/body-images",
 		authz.RequirePermission(d.Checker, "content.update")(
 			idem.Required(idem.MoKhiHong)(
-				http.HandlerFunc(h.RequestBodyImageUpload))))
-
-	// HOÀN TẤT TẢI ẢNH THÂN BÀI — the cover completion's acts on a body-image upload. Only the officer it
-	// was issued to; anybody else's id, and a cover's id, answer 404. 422 `body_image_rejected` for an
-	// infected, mistyped, oversized, undecodable or over-count file; 503 when the scanner or platform is
-	// down — nothing written, retryable, NEVER stored unscanned (ADR 0052 §9).
-	//
-	// @summary  Hoàn tất tải ảnh thân bài — dò kiểu, quét mã độc, lưu bản gốc riêng tư, tạo bản 1280px không EXIF, trả liên kết xem trước khi đã sẵn sàng
-	// @screen   11-noi-dung-mini-app §7
-	// @reply    200 bodyImageFileOut
-	// @reply    401 httpx.Error
-	// @reply    403 httpx.Error
-	// @reply    404 httpx.Error
-	// @reply    409 httpx.Error
-	// @reply    422 httpx.Error
-	// @reply    500 httpx.Error
-	// @reply    503 httpx.Error
-	mux.Handle("POST /api/v1/content-items/body-images/{id}/completion",
-		authz.RequirePermission(d.Checker, "content.update")(
-			idem.KhongCan("hoàn tất lần hai trên ảnh đã sẵn sàng trả lại đúng ảnh ấy và không ghi gì; hai lượt cùng lúc tuần tự hoá trên khoá dòng")(
-				http.HandlerFunc(h.CompleteBodyImageUpload))))
+				http.HandlerFunc(h.UploadBodyImage))))
 
 	// ẢNH THÂN BÀI TỪ LIÊN KẾT — the server downloads a pasted https link (ADR 0067 §Sửa đổi 03/10/2026,
 	// H5, K6) and stores it as a READY body image: the residents' phones then load it from ViGov's public
@@ -912,72 +900,63 @@ func Register(mux *http.ServeMux, d Deps) {
 			idem.Required(idem.MoKhiHong)(
 				http.HandlerFunc(h.FetchBodyImageFromURL))))
 
-	// --- the broadcast audio of a `truyen-thanh` item: ADR 0052's three-step upload (ADR 0067 §4) -------
+	// --- the broadcast audio of a `truyen-thanh` item: ONE upload request (ADR 0067 §4; ADR 0052 §Sửa đổi
+	// 09/10/2026) ----------------------------------------------------------------------------------------
 	//
 	// internal/app/content_audio.go has the whole flow and says why it differs from the cover: the item
-	// must already be a saved `truyen-thanh`, the file is ATTACHED BY THE COMPLETION (with the duration
+	// must already be a saved `truyen-thanh`, the file is ATTACHED BY THE SAME REQUEST (with the duration
 	// the officer typed), and nothing of it is ever public — residents get a short-lived presigned GET.
 	//
-	// `content.update` ON BOTH: ADR 0067 §4.3 names it ("người tải cần content.update"); it is the key
-	// the cover routes use and is seeded (service-identity/migrations/0001_init.sql:293). NO KEY WAS
-	// INVENTED (rule 5, invariant 3c).
+	// `content.update`: ADR 0067 §4.3 names it ("người tải cần content.update"); it is the key the cover
+	// route uses and is seeded (service-identity/migrations/0001_init.sql:293). NO KEY WAS INVENTED (rule 5,
+	// invariant 3c). The presigned POST and `…/{id}/completion` are gone (owner, 09/10).
 	//
-	// THE LIMITS ARE PLATFORM'S (`content-audio`, platform 0013: 30 MiB, MP3/M4A, ONE file per item).
-	// Not configured → 503 `storage_not_configured`, as is a missing object store or scanner.
+	// BODY: multipart/form-data, text fields FIRST, then exactly one part named `file`, then nothing:
 	//
-	// idem.Required(idem.MoKhiHong): a double submit issues at most one pending row — the second meets the
-	// one-file count (409 `audio_limit`) — never a second stored file. A cache outage must not stop an
-	// officer mid-composition (the cover route makes the same call).
+	//	size                    REQUIRED — the file's byte count
+	//	content_item_id         REQUIRED — a saved, live `truyen-thanh` item of this commune
+	//	audio_duration_seconds  REQUIRED — 1 .. 21600, checked before anything is written or read (422
+	//	                        `invalid_audio_duration`, also for a value that is not a whole number)
+	//	file_name               optional — else the part's filename; ⚠ personal data, stored, never logged
+	//	content_type            optional — else the part's Content-Type; audio/mpeg · audio/mp4 (policy)
+	//	file                    the MP3 / M4A
+	//
+	// Then, in the request: sniff (MP3: ID3 or MPEG frame sync; M4A: `ftyp` brand) · ClamAV · the
+	// WHOLE-STREAM audio check (an M4A with a video track, or a renamed video, is refused) · sha256 · copy
+	// to the private bucket · in ONE transaction: `ready`, the item's `audio_file_id` and
+	// `audio_duration_seconds`, one trail entry. Answers 201 with the attached file.
+	//
+	// THE LIMITS ARE PLATFORM'S (`content-audio`, platform 0013: 30 MiB, MP3/M4A, ONE file per item); the
+	// envelope's refusals are the cover route's (400 · 408 · 413 · 415 · 503 `upload_busy`, shared slots).
+	// Infected, wrong type, not audio → 422. Scanner, platform or temp bucket down → 503, NEVER stored
+	// unscanned (ADR 0052 §9). Every failure after the pending row moves it to `failed`, freeing the slot.
+	//
+	// idem.Required(idem.MoKhiHong): a double submit replays the first answer (its file id is recorded); a
+	// missed replay meets the one-file count (409 `audio_limit`), never a second stored file. A cache
+	// outage must not stop an officer mid-composition (the cover route makes the same call).
 	//
 	// 404 is a `content_item_id` that is no live item of this commune — the same answer as another
 	// commune's (rule 4, forbidden #2). 422 `audio_only_for_truyen_thanh` for an item of another type.
 	// 409 `audio_limit` when the item already has its file (remove it first: PATCH audio_file_id "").
 	//
-	// @summary  Xin tải tệp âm thanh (MP3/M4A) cho mục truyền thanh đã lưu — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút)
+	// @summary  Tải tệp âm thanh (MP3/M4A) cho mục truyền thanh đã lưu — một lệnh multipart (size, content_item_id, audio_duration_seconds, file_name, content_type, rồi file); máy chủ dò kiểu, kiểm tra đúng là âm thanh, quét mã độc, lưu bản gốc riêng tư và gắn vào mục cùng thời lượng cán bộ nhập
 	// @screen   11-noi-dung-mini-app §7
-	// @request  audioUploadIn
-	// @reply    201 audioUploadOut
+	// @reply    201 audioFileOut
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    404 httpx.Error
+	// @reply    408 httpx.Error
 	// @reply    409 httpx.Error
+	// @reply    413 httpx.Error
+	// @reply    415 httpx.Error
 	// @reply    422 httpx.Error
 	// @reply    500 httpx.Error
 	// @reply    503 httpx.Error
 	mux.Handle("POST /api/v1/content-items/audio-files",
 		authz.RequirePermission(d.Checker, "content.update")(
 			idem.Required(idem.MoKhiHong)(
-				http.HandlerFunc(h.RequestAudioUpload))))
-
-	// HOÀN TẤT TẢI ÂM THANH — `completion`, as for the cover. Only the officer the upload was issued to;
-	// anybody else's id answers 404. Body: `audio_duration_seconds`, 1 .. 21600 (422 otherwise).
-	//
-	// Stat · sniff (MP3: ID3 or MPEG frame sync; M4A: `ftyp` brand) · the CURRENT policy · ClamAV · the
-	// WHOLE-STREAM audio check (an M4A with a video track, or a renamed video, is refused) · sha256 · copy
-	// to the private bucket · in ONE transaction: `ready`, the item's `audio_file_id` and
-	// `audio_duration_seconds`, one trail entry. Infected, wrong type, too large, not audio → 422. Scanner
-	// or platform down → 503, nothing written, retryable, NEVER stored unscanned (ADR 0052 §9).
-	//
-	// idem.KhongCan: a second completion of a ready file answers that file and writes nothing (the
-	// duration it carries is NOT applied — PATCH corrects it); two in flight serialise on the row lock.
-	//
-	// @summary  Hoàn tất tải âm thanh truyền thanh — dò kiểu, kiểm tra đúng là âm thanh, quét mã độc, lưu bản gốc riêng tư và gắn vào mục cùng thời lượng cán bộ nhập
-	// @screen   11-noi-dung-mini-app §7
-	// @request  audioCompletionIn
-	// @reply    200 audioFileOut
-	// @reply    400 httpx.Error
-	// @reply    401 httpx.Error
-	// @reply    403 httpx.Error
-	// @reply    404 httpx.Error
-	// @reply    409 httpx.Error
-	// @reply    422 httpx.Error
-	// @reply    500 httpx.Error
-	// @reply    503 httpx.Error
-	mux.Handle("POST /api/v1/content-items/audio-files/{id}/completion",
-		authz.RequirePermission(d.Checker, "content.update")(
-			idem.KhongCan("hoàn tất lần hai trên tệp đã sẵn sàng trả lại đúng tệp ấy và không ghi gì; hai lượt cùng lúc tuần tự hoá trên khoá dòng")(
-				http.HandlerFunc(h.CompleteAudioUpload))))
+				http.HandlerFunc(h.UploadAudio))))
 
 	// --- the commune's Mini App category tree --------------------------------------------------------
 	//

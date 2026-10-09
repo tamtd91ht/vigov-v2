@@ -152,23 +152,35 @@ func newAudioRig(t *testing.T) *audioRig {
 		ctx: tenant.Into(context.Background(), xaA)}
 }
 
-func (r *audioRig) pendingUpload(t *testing.T, mime string, data []byte) domain.StoredFile {
-	t.Helper()
-	up, err := r.uc.RequestUpload(r.ctx, AudioUploadRequest{ContentItemID: audioItemID,
-		FileName: "ban-tin-ong-nguyen-van-a.mp3", ContentType: mime, Size: int64(len(data))}, nguoiSoanND())
-	if err != nil {
-		t.Fatalf("RequestUpload: %v", err)
+// audioReq is one audio upload of data declared as mime, for the rig's broadcast, with a duration.
+func audioReq(mime string, data []byte, seconds int) AudioUploadRequest {
+	file, finish := streamOf(data, nil)
+	return AudioUploadRequest{ContentItemID: audioItemID, FileName: "ban-tin-ong-nguyen-van-a.mp3",
+		ContentType: mime, Size: int64(len(data)), DurationSeconds: seconds, File: file, Finish: finish}
+}
+
+// declared gives a declaration-only request a zero-filled stream of its size and a valid duration.
+func declared(req AudioUploadRequest) AudioUploadRequest {
+	if req.DurationSeconds == 0 {
+		req.DurationSeconds = 60
 	}
-	r.objects.temp[up.Post.Fields["key"]] = data
-	r.k.lenh, r.k.batDau, r.k.daCommit, r.k.daRollback = nil, 0, 0, 0
-	return up.File
+	n := req.Size
+	if n < 0 || n > 1<<20 {
+		n = 0
+	}
+	req.File, req.Finish = streamOf(make([]byte, n), nil)
+	return req
+}
+
+func (r *audioRig) upload(mime string, data []byte, seconds int) (AudioCompletion, error) {
+	return r.uc.Upload(r.ctx, audioReq(mime, data, seconds), nguoiSoanND())
 }
 
 func (r *audioRig) itemUpdates() []lenhGhi { return r.k.cau("UPDATE noi_dung_mini_app") }
 
-// --- a. request --------------------------------------------------------------------------------------
+// --- a. admission ------------------------------------------------------------------------------------
 
-func TestAudioRequestRefusesBeforeAnyTransaction(t *testing.T) {
+func TestAudioUploadRefusesBeforeAnyTransaction(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		req  AudioUploadRequest
@@ -188,80 +200,135 @@ func TestAudioRequestRefusesBeforeAnyTransaction(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := newAudioRig(t)
-			if _, err := r.uc.RequestUpload(r.ctx, tc.req, nguoiSoanND()); !errors.Is(err, tc.want) {
+			if _, err := r.uc.Upload(r.ctx, declared(tc.req), nguoiSoanND()); !errors.Is(err, tc.want) {
 				t.Fatalf("err = %v, want %v", err, tc.want)
 			}
-			if r.k.batDau != 0 || len(r.files.inserted) != 0 {
-				t.Errorf("a refused declaration opened a transaction (%d) or wrote a row (%d)", r.k.batDau, len(r.files.inserted))
+			if r.k.batDau != 0 || len(r.files.inserted) != 0 || r.objects.puts != 0 {
+				t.Errorf("a refused declaration opened a transaction (%d), wrote a row (%d) or read the file (%d)",
+					r.k.batDau, len(r.files.inserted), r.objects.puts)
 			}
 		})
 	}
 }
 
-func TestAudioRequestFailsClosedWithoutPolicyOrStorage(t *testing.T) {
+// THE DURATION IS CHECKED FIRST: a wrong figure refuses before a row, a transaction or a byte.
+func TestAudioUploadDurationBounds(t *testing.T) {
+	for _, d := range []int{0, -1, 21601} {
+		r := newAudioRig(t)
+		if _, err := r.upload(storage.MIMEMP3, testMP3(), d); !errors.Is(err, domain.ErrAudioDurationInvalid) {
+			t.Errorf("duration %d: err = %v", d, err)
+		}
+		if r.k.batDau != 0 || r.objects.puts != 0 || r.scanner.scanned != 0 {
+			t.Errorf("duration %d: refused AFTER work began", d)
+		}
+	}
+	for _, d := range []int{1, 21600} {
+		r := newAudioRig(t)
+		if _, err := r.upload(storage.MIMEMP3, testMP3(), d); err != nil {
+			t.Errorf("duration %d (a bound) refused: %v", d, err)
+		}
+	}
+}
+
+func TestAudioUploadFailsClosedWithoutPolicyOrStorage(t *testing.T) {
 	r := newAudioRig(t)
-	req := AudioUploadRequest{ContentItemID: audioItemID, FileName: "a.mp3", ContentType: storage.MIMEMP3, Size: 10}
+	req := declared(AudioUploadRequest{ContentItemID: audioItemID, FileName: "a.mp3", ContentType: storage.MIMEMP3, Size: 10})
 	r.uc.policies = fakePolicies{ok: false}
-	if _, err := r.uc.RequestUpload(r.ctx, req, nguoiSoanND()); !errors.Is(err, ErrAudioUploadNotConfigured) {
+	if _, err := r.uc.Upload(r.ctx, req, nguoiSoanND()); !errors.Is(err, ErrAudioUploadNotConfigured) {
 		t.Errorf("no policy: err = %v", err)
 	}
 	r.uc.policies = fakePolicies{err: uploadpolicy.ErrUnavailable}
-	if _, err := r.uc.RequestUpload(r.ctx, req, nguoiSoanND()); !errors.Is(err, ErrAudioLimitsUnavailable) {
+	if _, err := r.uc.Upload(r.ctx, req, nguoiSoanND()); !errors.Is(err, ErrAudioLimitsUnavailable) {
 		t.Errorf("platform down: err = %v", err)
 	}
+	if _, err := r.uc.UploadLimit(r.ctx); !errors.Is(err, ErrAudioLimitsUnavailable) {
+		t.Errorf("platform down, limit: err = %v", err)
+	}
 	r.uc.objects = nil
-	if _, err := r.uc.RequestUpload(r.ctx, req, nguoiSoanND()); !errors.Is(err, ErrAudioUploadNotConfigured) {
+	if _, err := r.uc.Upload(r.ctx, req, nguoiSoanND()); !errors.Is(err, ErrAudioUploadNotConfigured) {
 		t.Errorf("no object store: err = %v", err)
+	}
+	if _, err := r.uc.UploadLimit(r.ctx); !errors.Is(err, ErrAudioUploadNotConfigured) {
+		t.Errorf("no object store, limit: err = %v", err)
 	}
 }
 
-func TestAudioRequestRefusesAnItemThatIsNotABroadcast(t *testing.T) {
+func TestAudioUploadLimitIsThePolicys(t *testing.T) {
+	r := newAudioRig(t)
+	if n, err := r.uc.UploadLimit(r.ctx); err != nil || n != 31457280 {
+		t.Fatalf("limit = %d, %v; want the policy's 30 MiB", n, err)
+	}
+}
+
+func TestAudioUploadRefusesAnItemThatIsNotABroadcast(t *testing.T) {
 	r := newAudioRig(t)
 	r.k.dongHienCo.Loai = domain.LoaiTinTuc
-	_, err := r.uc.RequestUpload(r.ctx, AudioUploadRequest{ContentItemID: audioItemID, FileName: "a.mp3",
-		ContentType: storage.MIMEMP3, Size: 10}, nguoiSoanND())
+	_, err := r.upload(storage.MIMEMP3, testMP3(), 60)
 	if !errors.Is(err, domain.ErrAudioOnlyForBroadcast) {
 		t.Fatalf("err = %v", err)
 	}
-	if len(r.files.inserted) != 0 || r.k.daRollback != 1 || r.k.coCau("INSERT INTO audit_log") {
-		t.Errorf("inserted=%d rollback=%d", len(r.files.inserted), r.k.daRollback)
+	if len(r.files.inserted) != 0 || r.k.daRollback != 1 || r.k.coCau("INSERT INTO audit_log") || r.objects.puts != 0 {
+		t.Errorf("inserted=%d rollback=%d puts=%d", len(r.files.inserted), r.k.daRollback, r.objects.puts)
 	}
 }
 
-func TestAudioRequestForMissingItemIs404(t *testing.T) {
+func TestAudioUploadForMissingItemIs404(t *testing.T) {
 	r := newAudioRig(t)
 	r.k.dongHienCo = nil
-	_, err := r.uc.RequestUpload(r.ctx, AudioUploadRequest{ContentItemID: "nd-khac", FileName: "a.mp3",
-		ContentType: storage.MIMEMP3, Size: 10}, nguoiSoanND())
+	req := audioReq(storage.MIMEMP3, testMP3(), 60)
+	req.ContentItemID = "nd-khac"
+	_, err := r.uc.Upload(r.ctx, req, nguoiSoanND())
 	if !errors.Is(err, commsstore.ErrNoiDungKhongTonTai) || len(r.files.inserted) != 0 {
 		t.Fatalf("err = %v inserted = %d", err, len(r.files.inserted))
 	}
 }
 
 // ONE FILE PER ITEM (platform 0013): a second upload while one is live — or in flight — is refused.
-func TestAudioRequestRefusesASecondLiveFile(t *testing.T) {
+func TestAudioUploadRefusesASecondLiveFile(t *testing.T) {
 	r := newAudioRig(t)
 	r.files.liveCount = 1
-	_, err := r.uc.RequestUpload(r.ctx, AudioUploadRequest{ContentItemID: audioItemID, FileName: "a.mp3",
-		ContentType: storage.MIMEMP3, Size: 10}, nguoiSoanND())
+	_, err := r.upload(storage.MIMEMP3, testMP3(), 60)
 	if !errors.Is(err, ErrAudioCountReached) || len(r.files.inserted) != 0 {
 		t.Fatalf("err = %v inserted = %d", err, len(r.files.inserted))
 	}
 }
 
-func TestAudioRequestWritesRowAndTrailInOneTransaction(t *testing.T) {
+// --- b. the stream -----------------------------------------------------------------------------------
+
+// A FAILED STREAM FREES THE ITEM'S ONE SLOT: the row goes to `failed` with the abandoned entry — left
+// `pending`, it would answer the officer's retry with 409 `audio_limit` for UploadTTL.
+func TestAudioStreamFailureMarksTheRowFailedAndAttachesNothing(t *testing.T) {
 	r := newAudioRig(t)
-	up, err := r.uc.RequestUpload(r.ctx, AudioUploadRequest{ContentItemID: audioItemID,
-		FileName: "ban-tin-ong-nguyen-van-a.mp3", ContentType: storage.MIMEMP3, Size: 4096}, nguoiSoanND())
-	if err != nil {
-		t.Fatalf("RequestUpload: %v", err)
+	req := audioReq(storage.MIMEMP3, testMP3(), 60)
+	req.File = readerFunc(func([]byte) (int, error) { return 0, errors.New("client hung up") })
+	_, err := r.uc.Upload(r.ctx, req, nguoiSoanND())
+	if !errors.Is(err, ErrAudioUploadIncomplete) {
+		t.Fatalf("err = %v", err)
 	}
-	if r.k.batDau != 1 || r.k.daCommit != 1 || len(r.k.cau("INSERT INTO audit_log")) != 1 {
-		t.Fatalf("tx: begin=%d commit=%d audit=%d", r.k.batDau, r.k.daCommit, len(r.k.cau("INSERT INTO audit_log")))
+	if st := r.files.get(audioFileID).Status; st != domain.StoredFileFailed {
+		t.Errorf("status = %s, want failed", st)
 	}
-	f := up.File
+	if len(r.itemUpdates()) != 0 || r.scanner.scanned != 0 {
+		t.Error("an incomplete upload was attached or scanned")
+	}
+	audits := r.k.cau("INSERT INTO audit_log")
+	if len(audits) != 2 || !auditCarries(audits[1], CoverAbandonNotReceived) || !containsString(auditActions(r.k), ActionAudioExpired) {
+		t.Errorf("trail = %v", auditActions(r.k))
+	}
+}
+
+func TestAudioUploadWritesRowAndTrailBeforeTheBytes(t *testing.T) {
+	r := newAudioRig(t)
+	r.objects.putErr = errors.New("storage: put upload: unreachable")
+	if _, err := r.upload(storage.MIMEMP3, testMP3(), 60); !errors.Is(err, ErrAudioUploadIncomplete) {
+		t.Fatalf("err = %v", err)
+	}
+	if len(r.files.inserted) != 1 {
+		t.Fatalf("inserted = %d", len(r.files.inserted))
+	}
+	f := r.files.inserted[0]
 	if f.SubjectID != audioItemID || f.UploadedBy != maCanBoSoanND || f.Purpose != "content-audio" ||
-		f.Bucket != domain.StoredFileBucketPrivate || f.RetentionClass != "content-source" {
+		f.Bucket != domain.StoredFileBucketPrivate || f.RetentionClass != "content-source" || f.Status != domain.StoredFilePending {
 		t.Errorf("row = %+v", f)
 	}
 	want := "content-source/t_" + strings.ToLower(string(xaA)) + "/2026/10/comms/content-audio/" +
@@ -269,8 +336,11 @@ func TestAudioRequestWritesRowAndTrailInOneTransaction(t *testing.T) {
 	if f.ObjectKey != want {
 		t.Errorf("object key = %q, want %q", f.ObjectKey, want)
 	}
-	if r.objects.presignMax != 31457280 {
-		t.Errorf("presigned limit = %d, want the POLICY's 30 MiB", r.objects.presignMax)
+	if r.objects.putMax != 31457280 {
+		t.Errorf("write limit = %d, want the POLICY's 30 MiB", r.objects.putMax)
+	}
+	if !containsString(auditActions(r.k), ActionAudioUploadRequested) {
+		t.Errorf("trail = %v", auditActions(r.k))
 	}
 	for _, l := range r.k.cau("INSERT INTO audit_log") {
 		for _, a := range l.args {
@@ -281,18 +351,16 @@ func TestAudioRequestWritesRowAndTrailInOneTransaction(t *testing.T) {
 	}
 }
 
-// --- c. complete -------------------------------------------------------------------------------------
+// --- c. the completion -------------------------------------------------------------------------------
 
-func TestAudioCompleteMP3IsReadyAttachedAndAuditedInOneTransaction(t *testing.T) {
+func TestAudioUploadMP3IsReadyAttachedAndAuditedInOneTransaction(t *testing.T) {
 	r := newAudioRig(t)
-	f := r.pendingUpload(t, storage.MIMEMP3, testMP3())
-
-	got, err := r.uc.Complete(r.ctx, f.ID, 754, nguoiSoanND())
+	got, err := r.upload(storage.MIMEMP3, testMP3(), 754)
 	if err != nil {
-		t.Fatalf("Complete: %v", err)
+		t.Fatalf("Upload: %v", err)
 	}
 	if got.File.Status != domain.StoredFileReady || got.File.MIMEType != storage.MIMEMP3 ||
-		got.Item.AudioFileID != f.ID || got.Item.AudioDurationSeconds != 754 {
+		got.Item.AudioFileID != got.File.ID || got.Item.AudioDurationSeconds != 754 {
 		t.Fatalf("completion = %+v", got)
 	}
 	want := []string{"pending>scanning", "scanning>stored", "stored>processing", "processing>ready"}
@@ -306,15 +374,15 @@ func TestAudioCompleteMP3IsReadyAttachedAndAuditedInOneTransaction(t *testing.T)
 	if len(r.objects.produced) != 0 || len(r.objects.published) != 0 || len(r.files.publicSet) != 0 {
 		t.Errorf("produced=%v published=%v publicSet=%v", r.objects.produced, r.objects.published, r.files.publicSet)
 	}
-	// The item row and the trail entry: ONE transaction, one entry.
+	// The item row and the stored entry: ONE transaction (the second; the first is the pending row).
 	ups := r.itemUpdates()
-	if len(ups) != 1 || ups[0].args[18] != f.ID || ups[0].args[19] != int64(754) {
+	if len(ups) != 1 || ups[0].args[18] != got.File.ID || ups[0].args[19] != int64(754) {
 		t.Fatalf("item update = %+v", ups)
 	}
-	if r.k.batDau != 1 || r.k.daCommit != 1 || len(r.k.cau("INSERT INTO audit_log")) != 1 {
+	if r.k.batDau != 2 || r.k.daCommit != 2 || len(r.k.cau("INSERT INTO audit_log")) != 2 {
 		t.Errorf("tx: begin=%d commit=%d audit=%d", r.k.batDau, r.k.daCommit, len(r.k.cau("INSERT INTO audit_log")))
 	}
-	entry := r.k.cau("INSERT INTO audit_log")[0]
+	entry := r.k.cau("INSERT INTO audit_log")[1]
 	var sawAction, sawActor bool
 	for _, a := range entry.args {
 		if a == ActionAudioStored {
@@ -329,18 +397,17 @@ func TestAudioCompleteMP3IsReadyAttachedAndAuditedInOneTransaction(t *testing.T)
 	}
 }
 
-func TestAudioCompleteM4AIsReady(t *testing.T) {
+func TestAudioUploadM4AIsReady(t *testing.T) {
 	r := newAudioRig(t)
-	f := r.pendingUpload(t, storage.MIMEM4A, testM4A())
-	got, err := r.uc.Complete(r.ctx, f.ID, 60, nguoiSoanND())
+	got, err := r.upload(storage.MIMEM4A, testM4A(), 60)
 	if err != nil || got.File.MIMEType != storage.MIMEM4A || got.File.Status != domain.StoredFileReady {
-		t.Fatalf("Complete = %+v, %v", got, err)
+		t.Fatalf("Upload = %+v, %v", got, err)
 	}
 }
 
 // The file outcomes: each is a rejected row and a trail entry, the temp object purged, NOTHING promoted,
 // NO item update.
-func TestAudioCompleteRejectsWhatIsNotAllowedAudio(t *testing.T) {
+func TestAudioUploadRejectsWhatIsNotAllowedAudio(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		declared string
@@ -361,8 +428,7 @@ func TestAudioCompleteRejectsWhatIsNotAllowedAudio(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := newAudioRig(t)
-			f := r.pendingUpload(t, tc.declared, tc.data)
-			_, err := r.uc.Complete(r.ctx, f.ID, 60, nguoiSoanND())
+			_, err := r.upload(tc.declared, tc.data, 60)
 			var rej *AudioRejection
 			if !errors.As(err, &rej) || rej.Reason != tc.reason {
 				t.Fatalf("err = %v, want rejection %q", err, tc.reason)
@@ -370,111 +436,82 @@ func TestAudioCompleteRejectsWhatIsNotAllowedAudio(t *testing.T) {
 			if r.objects.promoted != 0 || len(r.itemUpdates()) != 0 {
 				t.Errorf("promoted=%d item updates=%d", r.objects.promoted, len(r.itemUpdates()))
 			}
-			if r.files.get(f.ID).Status != domain.StoredFileRejected || len(r.objects.purged) != 1 {
-				t.Errorf("status=%s purged=%v", r.files.get(f.ID).Status, r.objects.purged)
+			if r.files.get(audioFileID).Status != domain.StoredFileRejected || len(r.objects.purged) != 1 {
+				t.Errorf("status=%s purged=%v", r.files.get(audioFileID).Status, r.objects.purged)
 			}
-			if len(r.k.cau("INSERT INTO audit_log")) != 1 {
-				t.Error("a rejection leaves exactly one trail entry")
+			acts := auditActions(r.k)
+			if !containsString(acts, ActionAudioRejected) || containsString(acts, ActionAudioExpired) {
+				t.Errorf("a rejection leaves the rejected entry and no abandoned one: %v", acts)
 			}
 		})
 	}
 }
 
-func TestAudioCompleteInfectedIsRejectedNeverStored(t *testing.T) {
+func TestAudioUploadInfectedIsRejectedNeverStored(t *testing.T) {
 	r := newAudioRig(t)
 	r.scanner.res = malwarescan.Result{Clean: false, Signature: "Eicar-Test-Signature"}
-	f := r.pendingUpload(t, storage.MIMEMP3, testMP3())
-	_, err := r.uc.Complete(r.ctx, f.ID, 60, nguoiSoanND())
+	_, err := r.upload(storage.MIMEMP3, testMP3(), 60)
 	var rej *AudioRejection
 	if !errors.As(err, &rej) || rej.Reason != AudioRejectMalware {
 		t.Fatalf("err = %v", err)
 	}
-	if r.objects.promoted != 0 || len(r.itemUpdates()) != 0 || r.files.get(f.ID).Status != domain.StoredFileRejected {
+	if r.objects.promoted != 0 || len(r.itemUpdates()) != 0 || r.files.get(audioFileID).Status != domain.StoredFileRejected {
 		t.Errorf("an infected file went further than rejection")
 	}
 }
 
-func TestAudioCompleteScannerDownWritesNothing(t *testing.T) {
+// UNSCANNABLE IS NEVER CLEAN — and the row is abandoned, not left holding the item's one slot.
+func TestAudioUploadScannerDownStoresNothingAndFreesTheSlot(t *testing.T) {
 	r := newAudioRig(t)
 	r.scanner.err = errors.New("clamd unreachable")
-	f := r.pendingUpload(t, storage.MIMEMP3, testMP3())
-	if _, err := r.uc.Complete(r.ctx, f.ID, 60, nguoiSoanND()); !errors.Is(err, ErrAudioScanUnavailable) {
+	if _, err := r.upload(storage.MIMEMP3, testMP3(), 60); !errors.Is(err, ErrAudioScanUnavailable) {
 		t.Fatalf("err = %v", err)
 	}
-	if r.k.batDau != 0 || r.objects.promoted != 0 || r.files.get(f.ID).Status != domain.StoredFilePending {
-		t.Error("unscannable must leave the row pending and write nothing (ADR 0052 §9)")
+	if r.objects.promoted != 0 || len(r.itemUpdates()) != 0 || r.files.get(audioFileID).Status != domain.StoredFileFailed {
+		t.Error("unscannable must store nothing, attach nothing, and leave the row failed (ADR 0052 §9)")
+	}
+	if !auditCarries(r.k.cau("INSERT INTO audit_log")[1], CoverAbandonNotInspected) {
+		t.Errorf("trail = %v", auditActions(r.k))
 	}
 }
 
-func TestAudioCompleteOverThePolicyIsTooLarge(t *testing.T) {
+func TestAudioCompletionOverThePolicyIsTooLarge(t *testing.T) {
 	r := newAudioRig(t)
-	f := r.pendingUpload(t, storage.MIMEMP3, testMP3())
-	r.uc.policies = fakePolicies{ok: true, p: uploadpolicy.Policy{Purpose: storage.PurposeContentAudio, MaxBytes: 100,
+	tight := fakePolicies{ok: true, p: uploadpolicy.Policy{Purpose: storage.PurposeContentAudio, MaxBytes: 100,
 		AllowedMIMETypes: []string{storage.MIMEMP3}}}
-	_, err := r.uc.Complete(r.ctx, f.ID, 60, nguoiSoanND())
+	r.uc.policies = &seqPolicies{ps: []fakePolicies{audioPolicy(), tight}}
+	_, err := r.upload(storage.MIMEMP3, testMP3(), 60)
 	var rej *AudioRejection
 	if !errors.As(err, &rej) || rej.Reason != AudioRejectTooLarge {
 		t.Fatalf("err = %v", err)
 	}
 }
 
-func TestAudioCompleteDurationBounds(t *testing.T) {
-	for _, d := range []int{0, -1, 21601} {
-		r := newAudioRig(t)
-		f := r.pendingUpload(t, storage.MIMEMP3, testMP3())
-		if _, err := r.uc.Complete(r.ctx, f.ID, d, nguoiSoanND()); !errors.Is(err, domain.ErrAudioDurationInvalid) {
-			t.Errorf("duration %d: err = %v", d, err)
-		}
-		if r.k.batDau != 0 || r.scanner.scanned != 0 {
-			t.Errorf("duration %d: refused AFTER work began", d)
-		}
-	}
-	for _, d := range []int{1, 21600} {
-		r := newAudioRig(t)
-		f := r.pendingUpload(t, storage.MIMEMP3, testMP3())
-		if _, err := r.uc.Complete(r.ctx, f.ID, d, nguoiSoanND()); err != nil {
-			t.Errorf("duration %d (a bound) refused: %v", d, err)
-		}
-	}
-}
-
-// The item changed type between the request and the completion: nothing is written, the row stays.
-func TestAudioCompleteRefusesWhenTheItemIsNoLongerABroadcast(t *testing.T) {
+// The item changed type between the admission and the completion: nothing is attached, the row abandoned.
+func TestAudioCompletionRefusesWhenTheItemIsNoLongerABroadcast(t *testing.T) {
 	r := newAudioRig(t)
-	f := r.pendingUpload(t, storage.MIMEMP3, testMP3())
-	r.k.dongHienCo.Loai = domain.LoaiTinTuc
-	if _, err := r.uc.Complete(r.ctx, f.ID, 60, nguoiSoanND()); !errors.Is(err, domain.ErrAudioOnlyForBroadcast) {
+	r.scanner.onScan = func() { r.k.dongHienCo.Loai = domain.LoaiTinTuc }
+	if _, err := r.upload(storage.MIMEMP3, testMP3(), 60); !errors.Is(err, domain.ErrAudioOnlyForBroadcast) {
 		t.Fatalf("err = %v", err)
 	}
-	if len(r.itemUpdates()) != 0 || r.k.coCau("INSERT INTO audit_log") || r.k.daRollback != 1 {
-		t.Errorf("a refused completion wrote something")
+	if len(r.itemUpdates()) != 0 || containsString(auditActions(r.k), ActionAudioStored) {
+		t.Errorf("a refused completion attached something")
+	}
+	if st := r.files.get(audioFileID).Status; st != domain.StoredFileFailed {
+		t.Errorf("status = %s, want failed", st)
 	}
 }
 
-func TestAudioCompleteByAnotherOfficerIsNotFound(t *testing.T) {
+// The completion re-reads the row: another officer's upload answers 404, as it did as a route.
+func TestAudioCompletionByAnotherOfficerIsNotFound(t *testing.T) {
 	r := newAudioRig(t)
-	f := r.pendingUpload(t, storage.MIMEMP3, testMP3())
+	r.files.rows[audioFileID] = &domain.StoredFile{ID: audioFileID, Purpose: string(audioPurpose),
+		SubjectType: domain.StoredFileSubjectContentItem, SubjectID: audioItemID, Status: domain.StoredFilePending,
+		UploadedBy: maCanBoSoanND}
 	other := nguoiSoanND()
 	other.ID = "CB-2026-KHAC00"
-	if _, err := r.uc.Complete(r.ctx, f.ID, 60, other); !errors.Is(err, ErrAudioFileNotFound) {
+	if _, err := r.uc.complete(r.ctx, audioFileID, 60, other); !errors.Is(err, ErrAudioFileNotFound) {
 		t.Fatalf("err = %v", err)
-	}
-}
-
-func TestAudioCompleteIsIdempotentAndDoesNotRewriteTheDuration(t *testing.T) {
-	r := newAudioRig(t)
-	f := r.pendingUpload(t, storage.MIMEMP3, testMP3())
-	if _, err := r.uc.Complete(r.ctx, f.ID, 754, nguoiSoanND()); err != nil {
-		t.Fatalf("first: %v", err)
-	}
-	r.k.dongHienCo.AudioFileID, r.k.dongHienCo.AudioDurationSeconds = f.ID, 754
-	r.k.lenh = nil
-	got, err := r.uc.Complete(r.ctx, f.ID, 999, nguoiSoanND())
-	if err != nil || got.Item.AudioDurationSeconds != 754 {
-		t.Fatalf("second = %+v, %v", got, err)
-	}
-	if len(r.itemUpdates()) != 0 || r.k.coCau("INSERT INTO audit_log") {
-		t.Error("a second completion wrote something")
 	}
 }
 
