@@ -3,14 +3,15 @@ id: 0053-tong-quan-dem-truc-tiep-o-service-so-huu
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: c5bfb1ad
+derived_from_commit: 85466506
 expires: null
 owns_facts:
+  - "/bao-cao theo prototype (chốt 09/10/2026 lần 2): bảng 'Xếp hạng bộ phận' có thanh ở Tổng việc và Quá hạn, Đúng hạn là % làm tròn tô màu theo ngưỡng 80/50, thứ tự cột và câu rỗng của prototype; biểu đồ So sánh với kỳ trước bằng SVG tự vẽ; xuất PDF/XLSX/PPTX dùng lại Tổng quan; các điểm nhỏ (nhãn, chú thích số tồn, ô không bấm, cỡ số, không đỏ, tiêu đề Thu - Chi); /tong-quan chỉ đổi tiêu đề Thu - Chi"
   - "/tong-quan đếm trực tiếp ở service sở hữu từng sổ, web-admin ghép, không bảng snapshot, không qua service-reporting — và cái giá"
   - "/bao-cao đếm trực tiếp ở service sở hữu như /tong-quan, không dùng service-reporting cho các con số ấy (chốt 04/10/2026)"
   - "kỳ so sánh của /bao-cao: Tuần/Tháng/Quý/Năm như /tong-quan; kỳ Tuỳ chọn so với cùng số ngày liền trước; đặc tả 13 §3/§9.1 bị thay cho kỳ có tên (chốt 04/10/2026)"
-  - "bảng 'Tình hình thực hiện theo bộ phận' của /bao-cao: tên, phạm vi mọi đơn vị + dòng 'Chưa xác định bộ phận', chỉ nhiệm vụ, sắp theo Tổng việc, định nghĩa bốn cột, và vì sao không 'xếp hạng' (chốt 04/10/2026)"
-  - "phạm vi /bao-cao đợt này (MVP) và những phần không làm: xuất PDF/XLSX/PPTX, biểu đồ So sánh với kỳ trước, job Gửi báo cáo định kỳ, Thành lập mới (chốt 04/10/2026)"
+  - "bảng bộ phận của /bao-cao: phạm vi mọi đơn vị + dòng 'Chưa xác định bộ phận', chỉ nhiệm vụ, sắp theo Tổng việc, định nghĩa bốn cột (chốt 04/10/2026); tên và cách hiện bị thay bởi §Sửa đổi 09/10/2026 (lần 2)"
+  - "phạm vi /bao-cao đợt 04/10/2026 và những phần chưa làm khi ấy; job Gửi báo cáo định kỳ và Thành lập mới vẫn chưa làm (xuất tệp và biểu đồ: §Sửa đổi 09/10/2026 lần 2)"
   - "lựa chọn khi dựng /bao-cao (không phải quyết định của khách): câu meta, cột Quá hạn là số tồn hiện tại, hai khoá cho task-unit-summary, đơn vị đã xoá mềm thành dòng riêng, ranh giới kỳ Tuỳ chọn"
   - "budget-indicators giữ riêng budget.read, không lồng report.read — đóng việc còn mở #6 (chốt 04/10/2026)"
   - "hai khoá lồng nhau report.read + khoá đọc của phân hệ trên mọi tuyến số liệu /tong-quan (trừ budget-indicators, sửa đổi 04/10/2026 B6), và vì sao web không được tin x-vigov-permission của các tuyến ấy"
@@ -31,7 +32,8 @@ owns_facts:
 **Lệch** ADR 0010 §*Vì sao Elasticsearch KHÔNG dùng cho báo cáo* (`:75-76`) và ADR 0001 (`:65`,
 `:104`) **cho riêng `/tong-quan`** — không thay hai ADR ấy ở chỗ khác · Phạm vi: M7 đợt 1.
 **Sửa đổi 04/10/2026:** mở `/bao-cao` (cuối tệp). **Sửa đổi 09/10/2026:** tab Báo cáo của `/phan-anh`
-(cuối tệp).
+(cuối tệp). **Sửa đổi 09/10/2026 (lần 2):** `/bao-cao` theo prototype — thay một phần §3, §4, §7, B3,
+B4, B5b **cho riêng `/bao-cao`** (cuối tệp).
 
 ## Bối cảnh
 
@@ -105,6 +107,9 @@ không thay được (luật 5 cấm #1); phải lồng khoá ở `finance`.
 > Hai**; múi **Asia/Ho_Chi_Minh**; **client** tính `[from, to)` nửa mở; kỳ so sánh = **kỳ liền trước
 > cùng loại, CÙNG PHẦN ĐÃ TRÔI QUA**; chỉ số **theo kỳ** mới có dòng so sánh, số **hiện trạng** thì không.
 
+→ **Trên `/bao-cao`**, vế "số hiện trạng không có dòng so sánh" bị thay: §Sửa đổi 09/10/2026 (lần 2)
+D2. Kỳ và cách so sánh giữ nguyên.
+
 Máy chủ chỉ đếm trong hai mốc được đưa, và từ chối `from >= to` (`summary_metrics.go:22-47`). Cách đọc
 của người viết (chưa ai xác nhận câu chữ): ngày 10 của tháng thì so với 10 ngày đầu tháng trước,
 không với cả tháng trước.
@@ -130,6 +135,9 @@ Người dùng chọn giữ hướng v2 ở mọi chỗ kho yêu cầu ngược,
 | Nhiệm vụ — việc con | Đếm như dòng riêng | `task_summary.go:35-36` |
 | Nhiệm vụ — Đúng hạn trong kỳ | So với `han_ban_dau` (`docs/ui-ux/01:67`); ô Quá hạn thì so `han_xu_ly` hiện hành | `task_summary.go:51-54` |
 | Văn bản — **Đến trong kỳ** | `ngay_den` trong kỳ, đọc là ngày ở Asia/Ho_Chi_Minh. **TẠM — chờ khách**: đặc tả ghi *"vào sổ trong kỳ"* (`docs/ui-ux/01:73`); người dùng 28/09: giữ `ngay_den`, ghi là chờ khách | `incoming_dashboard.go:44-46,103-135` |
+
+→ **Trên `/bao-cao`**, nhãn *"Nhận vào trong kỳ"* bị thay bằng *"Tiếp nhận trong kỳ"*: §Sửa đổi 09/10/2026
+(lần 2) D2. Định nghĩa (vị từ) không đổi.
 
 ### 5. Khối "Cần xử lý ngay"
 
@@ -170,6 +178,9 @@ nào"), còn sự thật là "chưa đếm được".
 Theo SRS M7.2.2 (`../vigov-require/docs/SRS.md:461`). Giá trị `metric` là tên trường JSON của ô
 (`summary.go:6-10`, `incoming_dashboard.go:36-42`). Metric lạ thì máy chủ từ chối, không bỏ lọc
 (`summary_metrics.go:73-83`).
+
+→ **Trên `/bao-cao`**, ô số **không** còn là liên kết drill-down: §Sửa đổi 09/10/2026 (lần 2) D2.
+`/tong-quan` giữ §7.
 
 **Nới một ca kiểm, có chủ đích.** `web-admin/src/features/van-ban/ngan-van-ban-den.test.tsx:319-330`
 cấm sổ văn bản đến dùng `useSearchParams`. Ca ấy được nới để cho **ĐỌC đúng các tham số này**; mọi
@@ -274,7 +285,14 @@ Ranh giới ngày của kỳ Tuỳ chọn là lựa chọn khi dựng, không ph
 
 Bảng **không** có dòng so sánh kỳ trước.
 
+→ **Bị thay một phần** bởi §Sửa đổi 09/10/2026 (lần 2) D1: tên (thành *"Xếp hạng bộ phận"*), thứ tự
+cột, cách hiện Đúng hạn, câu rỗng. Các dòng Hàng · Sắp · Phạm vi · Đơn vị của một việc · định nghĩa bốn
+cột ở bảng trên **giữ**.
+
 ### B4. Phạm vi đợt này
+
+→ Hai dòng đầu (xuất tệp, biểu đồ) **bị thay** bởi §Sửa đổi 09/10/2026 (lần 2) D3, D4. Hai dòng sau
+giữ.
 
 > Người dùng, 04/10/2026: MVP = trang + 6 nhóm KPI dùng lại từ `/tong-quan` + kỳ Tuỳ chọn + bảng B3.
 
@@ -295,7 +313,7 @@ dùng hay khách nào chốt câu chữ; khách nói khác thì đổi theo khá
 | # | Điều | Lựa chọn | Vì sao |
 |---|---|---|---|
 | a | Dòng meta của trang (đặc tả `13-bao-cao.md:15,24` ghi *"cùng độ dài kỳ liền trước"*) | Kỳ có tên: dùng câu so sánh của `/tong-quan` (cùng loại, cùng phần đã trôi qua). Tuỳ chọn: *"so với cùng số ngày liền trước"* | Câu của đặc tả sai với kỳ có tên theo B2 |
-| b | Cột Quá hạn (đặc tả `13-bao-cao.md:64` đòi thanh tỷ lệ quá hạn/tổng) | **Số trần**, nhãn ghi rõ là tồn **hiện tại**. Không thanh | Tử số là tồn hiện tại, mẫu số là việc trong kỳ — một tỷ lệ trộn hai thời điểm là con số không ai đọc đúng được |
+| b | Cột Quá hạn (đặc tả `13-bao-cao.md:64` đòi thanh tỷ lệ quá hạn/tổng) — **bị thay**: chủ dự án chọn thanh như prototype, §Sửa đổi 09/10/2026 (lần 2) D1 | **Số trần**, nhãn ghi rõ là tồn **hiện tại**. Không thanh | Tử số là tồn hiện tại, mẫu số là việc trong kỳ — một tỷ lệ trộn hai thời điểm là con số không ai đọc đúng được |
 | c | Khoá quyền của tuyến mới `GET /api/v1/task-unit-summary` | `report.read` **VÀ** `task.read`, lồng như `task-summary` | Cùng luật hai khoá của §2 |
 | d | Đơn vị không còn trong danh sách đơn vị (đã xoá mềm) mà còn việc | **Dòng riêng**, nhãn ghi là đơn vị không còn trong danh sách. Không bao giờ gộp vào "Chưa xác định bộ phận" | Gộp vào là gán việc của một đơn vị có thật cho "không ai" — ghi sai trách nhiệm |
 | e | Ranh giới kỳ Tuỳ chọn | *Từ ngày* D1 – *Đến ngày* D2 **tính cả hai ngày**: `[D1 00:00, D2+1 00:00)` ở Asia/Ho_Chi_Minh, N ngày; kỳ so sánh `[D1 − N ngày, D1)` | Người chọn "đến ngày 17" hiểu là gồm ngày 17; nửa mở giữ quy ước `[from, to)` của §3 |
@@ -376,3 +394,100 @@ một con số sẽ hiện hai giá trị ở hai trang.
 | 2 | Tab có dòng so sánh kỳ trước (§3) không | Chủ dự án không nói |
 | 3 | Ô "Đang trễ hạn (hiện tại)" có loại phiếu phụ không | ADR 0087 còn mở #4 |
 | 4 | Ca PostgreSQL "số dòng danh sách = con số" cho các bảng mới | §9: phía phản ánh chưa có ca PostgreSQL nào |
+
+## Sửa đổi 09/10/2026 (lần 2) — trang `/bao-cao` theo prototype
+
+**Người quyết:** chủ dự án, 09/10/2026, trong phiên chính (`/fix-web-admin --menu=bao-cao`), qua phiếu
+hỏi. **Chưa dựng.** Mục này ghi thêm, không xoá phần trên; khi nói khác thì mục này thắng **cho riêng
+`/bao-cao`**. Nguồn đối chiếu: prototype `../vigov-require/apps/admin/src/components/reports/`
+(`ReportWorkspace.tsx`, `MetricTile.tsx`, `RankingTable.tsx`) và đặc tả `docs/ui-ux/13-bao-cao.md`.
+
+**`/tong-quan` không đổi**, trừ tiêu đề khối Thu – Chi (D2 dòng cuối) — prototype dùng chung tiêu đề ấy
+cho hai màn.
+
+**Vì sao là sửa đổi, không ADR mới.** Như lần 1: các sự thật bị thay (B3, B4, B5b, §3, §4, §7) đã sở
+hữu ở đây. ADR mới sẽ đặt "bảng bộ phận" và "phạm vi `/bao-cao`" ở hai tệp — luật 9 cấm #2.
+
+### D1. Bảng "Xếp hạng bộ phận" — theo prototype trọn vẹn
+
+**Chủ dự án thay B3 và B5b mục b có chủ đích**, đã được đọc lý do của hai dòng ấy (B3: báo cáo UBND
+không "xếp hạng" Đảng uỷ, HĐND, MTTQ) và vẫn chọn câu chữ của prototype.
+
+| Điểm | Quyết định | Nguồn | Thay cho |
+|---|---|---|---|
+| Tên | **"Xếp hạng bộ phận"** | `ReportWorkspace.tsx:169-171`, `13-bao-cao.md:11,53` | B3 dòng Tên |
+| Thứ tự cột | Bộ phận · Tổng việc · Quá hạn · Hoàn thành · Đúng hạn | `RankingTable.tsx:40-54` | — |
+| Tổng việc, Quá hạn | **Thanh ngang trong ô kèm con số**; chiều dài = giá trị / **giá trị lớn nhất của cột** | `RankingTable.tsx:19-20,63-68,104` | B5b mục b (*"số trần, không thanh"*) |
+| Đúng hạn | **% làm tròn** (không phần lẻ); màu ≥ 80 `leaf` · ≥ 50 `tangerine` · còn lại `danger` | `RankingTable.tsx:72-84` | B3 dòng Đúng hạn — chỉ phần **cách hiện** |
+| Rỗng | *"Chưa có bộ phận nào được giao việc trong kỳ."* | `RankingTable.tsx:22-27` | — |
+
+**Giữ nguyên của B3:** hàng (mọi đơn vị + "Chưa xác định bộ phận"), sắp theo Tổng việc, chỉ nhiệm vụ,
+đơn vị hiện hành, định nghĩa bốn cột (Quá hạn vẫn là **tồn hiện tại**), không dòng so sánh. B5 c, d, e giữ.
+
+**Vì sao thanh Quá hạn không vướng lý do của B5b.** B5b từ chối **tỷ lệ quá hạn/tổng** của đặc tả
+(`13-bao-cao.md:64`) vì trộn tồn hiện tại với việc trong kỳ. Thanh của prototype **không** là tỷ lệ ấy: nó
+so mỗi đơn vị với đơn vị nhiều quá hạn nhất **trong cùng cột** (`RankingTable.tsx:20,104`), nên hai thời
+điểm không trộn. Khi dựng phải theo cách tính của prototype, **không** theo câu đặc tả.
+
+### D2. Các điểm nhỏ — theo prototype / đặc tả, cho riêng `/bao-cao`
+
+| Điểm | Quyết định | Thay cho |
+|---|---|---|
+| Nhãn ô phản ánh theo kỳ | **"Tiếp nhận trong kỳ"** (`13-bao-cao.md:78`). Vị từ không đổi: vẫn gồm phiếu `khong-tiep-nhan` | §4 dòng *Nhận vào trong kỳ* |
+| Số hiện trạng (tồn) | Hiện dòng mờ kiểu *"chưa có kỳ trước để so"* ở đúng chỗ prototype hiện — ô không có so sánh, ngoài chế độ trình chiếu (`MetricTile.tsx:81-87`) | §3 vế *"số hiện trạng thì không"* có dòng so sánh |
+| Ô số bấm được? | **Không.** Prototype dựng `MetricTile` trên trang báo cáo **không** truyền `onOpen` (`ReportWorkspace.tsx:161`), nên ô không là nút (`MetricTile.tsx:29,91-93`). Ô của `/bao-cao` **thôi** là liên kết drill-down | §7, cho trang này |
+| Cỡ số | `clamp(19px, 1.7vw, 26px)` theo bề ngang cửa sổ (`MetricTile.tsx:48`) | Cỡ theo ô `@container` của commit `412409a1` — **chỉ** trên `/bao-cao` |
+| Ô Quá hạn | **Không** tô đỏ. Prototype không truyền `emphasis` ở trang báo cáo (`ReportWorkspace.tsx:161`; `MetricTile.tsx:30,49`) | — |
+| Dòng chú thích của ô | Nằm **sau** dòng so sánh | — |
+| Ô không có nguồn | *"Chưa có dữ liệu"*, **không** icon | — |
+| Tiêu đề khối Thu – Chi | **"Thu - Chi ngân sách xã"** (`13-bao-cao.md:49`) — **trên cả `/tong-quan` và `/bao-cao`** | — |
+
+**Cái giá của dòng Cỡ số, đã biết.** Commit `412409a1` đổi sang cỡ theo ô vì ảnh tester 06/10/2026:
+số tiền bị cắt (*"690.000.000 đồn"*). Trên `/bao-cao` quay về cỡ theo cửa sổ thì ô hẹp có thể cắt số lại;
+khi dựng phải xem ảnh thật ở bề ngang hẹp.
+
+### D3. Biểu đồ "So sánh với kỳ trước" — DỰNG
+
+| Điểm | Quyết định |
+|---|---|
+| Vẽ bằng | **SVG tự vẽ**, không `recharts` — ADR 0068 §4 (`chart` của shadcn cấm) và lần 6 #11. Prototype dùng `recharts` (`ReportWorkspace.tsx:5-14,222-252`); chỉ lấy hình, không lấy thư viện |
+| Số liệu | **Chỉ** các số đã tải cho trang (kỳ này và kỳ so sánh của §3/B2). **Không** tuyến mới |
+| Chỉ tiêu | **Chỉ số theo kỳ**. Số hiện trạng không vào biểu đồ (không có kỳ trước theo §3) |
+
+### D4. Xuất PDF / XLSX / PPTX — DỰNG
+
+| Điểm | Quyết định |
+|---|---|
+| Cách làm | **Dùng lại** phần xuất phía trình duyệt của Tổng quan (`web-admin/src/features/dashboard/export-*`) |
+| Hiện khi | Tài khoản có **`report.read` VÀ `report.export`** (khoá có sẵn, `service-identity/migrations/0001_init.sql:304`) |
+| Nội dung | **Chỉ số tổng hợp**. Không dữ liệu cá nhân (luật 3) |
+
+⚠ **Còn nợ, chung với Tổng quan:** lần xuất **chưa ghi vết** — chưa có tuyến máy chủ ghi nhật ký lần xuất
+(luật 3 bất biến 4, luật 6). Nợ này đang ghi ở `kb/90-ephemeral/tien-do/web-admin.json` (mục xuất của
+Tổng quan); dựng xuất ở `/bao-cao` **không** đóng nợ ấy mà thêm một bề mặt cùng mắc.
+
+Job "Gửi báo cáo định kỳ" vẫn **HOÃN** (B4, ADR 0058:126) — mục này không mở lại nó.
+
+### D5. Giữ nguyên
+
+| Điều | Chủ sự thật |
+|---|---|
+| Đếm trực tiếp ở service sở hữu, không qua `reporting` | B1 |
+| Kỳ có tên + kỳ Tuỳ chọn, cách so sánh | §3, B2, B5 mục e |
+| Vị từ đúng hạn | Câu mở #26 — ADR 0035 §#26 |
+| **Không** tuyến `/reports/*` | Spec 06 là API **của prototype**, không phải của v2; `13-bao-cao.md:99-106` cũng chỉ là đề xuất |
+| Phần "Tính năng đang phát triển" web đang có thêm | Giữ, theo README của spec |
+
+### Còn mở khi dựng — hỏi, không tự quyết
+
+Phiên ghi tệp này thấy các điểm dưới đây khi đối chiếu prototype; chủ dự án **chưa** trả lời.
+
+| # | Việc | Vì sao không tự chọn |
+|---|---|---|
+| 1 | Câu rỗng D1 gần như không bao giờ hiện: B3 luôn có mọi đơn vị + dòng "Chưa xác định bộ phận". Giữ hàng của B3, hay chỉ hiện đơn vị có việc như prototype | Hai cách cho hai bảng khác nhau; chủ dự án nói "theo prototype trọn vẹn" nhưng chỉ kể tên, cột, thanh, %, câu rỗng |
+| 2 | Ô Đúng hạn `—` (mẫu rỗng): prototype tô **đỏ** (`(null ?? 0) < 50`, `RankingTable.tsx:75-79`) | Đỏ cho "chưa có gì để tính" là một khẳng định sai về đơn vị |
+| 3 | Màu thanh biểu đồ: prototype tô theo **hướng tốt** (`higher_is_better`, `ReportWorkspace.tsx:187-189`); đặc tả: âm đỏ, dương xanh (`13-bao-cao.md:83`) | Hai nguồn ngược nhau |
+| 4 | Tệp XLSX/PPTX có thêm bảng "Xếp hạng bộ phận" và biểu đồ so sánh không (`13-bao-cao.md:92-93`) | D4 chỉ nói dùng lại xuất của Tổng quan |
+| 5 | Câu *"chưa có kỳ trước để so"* trên số tồn: số tồn không có kỳ nào, câu này có thể đọc như "kỳ trước chưa có dữ liệu" | Câu chữ do chủ dự án chọn theo prototype; ghi lại để khách duyệt |
+
+→ ADR 0068 §4, lần 6 #11 · ADR 0058 · luật 3 bất biến 4 · luật 5 bất biến 3c · luật 6
