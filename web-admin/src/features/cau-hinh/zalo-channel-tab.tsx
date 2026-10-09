@@ -10,7 +10,6 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ErrorState } from "@/components/ui/error-state";
 import { controlClass } from "@/components/ui/field";
 import { NoAccess } from "@/components/ui/no-access";
-import { PendingMarker, type PendingFeatureInfo } from "@/components/ui/pending-feature";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { formatVietnamDateTime } from "@/features/noi-dung/nhan-noi-dung";
@@ -38,7 +37,6 @@ import {
 
 import { ConfigDialog } from "./config-dialog";
 import { selectCls } from "./config-ui";
-import { PHAN_CHUA_DUNG } from "./nhan-cau-hinh";
 import { zaloChannelTabDecision } from "./quyen-tab";
 import {
   botDescription,
@@ -57,6 +55,7 @@ import {
   DUE_SOON_NO_LEAD,
   DUE_SOON_OUT_OF_RANGE,
   endedLinksText,
+  EVENT_NOT_OFFERED,
   EVENTS_HINT,
   hourOptions,
   isOutcomeOk,
@@ -238,14 +237,6 @@ export function ZaloChannelTab() {
     />
   );
 }
-
-function pendingEntry(name: string): PendingFeatureInfo {
-  const entry = PHAN_CHUA_DUNG.find((p) => p.ten === name);
-  if (entry === undefined) throw new Error(`PHAN_CHUA_DUNG has no entry "${name}"`);
-  return entry;
-}
-
-const MORE_EVENTS_ENTRY = pendingEntry("Thêm loại việc nhắn qua Zalo");
 
 /**
  * What "Ai đã ghép nối" and the §1 count can show:
@@ -563,17 +554,21 @@ export function ZaloChannelView({
                   );
                   const kind = ev.kind;
                   const kinds = rowKinds(ev);
-                  // No producer yet, or a kind this server does not offer: the server decides what may be ticked.
-                  if (kind === null || !kinds.every((k) => supported.includes(k))) {
-                    // The "?" sits OUTSIDE the label: a button inside a label joins its accessible name.
+                  // A kind this server does not offer: the server decides what may be ticked.
+                  if (!kinds.every((k) => supported.includes(k))) {
                     return (
-                      <div key={ev.code} className="flex items-start gap-1.5" data-pending="">
-                        <label className="flex cursor-not-allowed items-start gap-2.5 opacity-60">
-                          <input type="checkbox" className={CHECKBOX} data-event={ev.code} checked={false} disabled readOnly />
-                          {text}
-                        </label>
-                        <PendingMarker info={MORE_EVENTS_ENTRY} className="mt-0.5" />
-                      </div>
+                      <label
+                        key={ev.code}
+                        className="flex cursor-not-allowed items-start gap-2.5 opacity-60"
+                        data-not-offered=""
+                      >
+                        <input type="checkbox" className={CHECKBOX} data-event={ev.code} checked={false} disabled readOnly />
+                        <span>
+                          <span className="text-navy block text-[12.5px] font-semibold">{ev.label}</span>
+                          {ev.hint && <span className="text-ink-muted block text-[11.5px]">{ev.hint}</span>}
+                          <span className="text-ink-muted block text-[11.5px]">{EVENT_NOT_OFFERED}</span>
+                        </span>
+                      </label>
                     );
                   }
                   return (

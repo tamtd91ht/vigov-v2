@@ -64,10 +64,10 @@ export const EVENTS_HINT = "Bỏ chọn thì việc đó vẫn vào chuông như
 /**
  * One row of the event table. `kind` is the per-domain kind comms sends this event under
  * (`service-comms/internal/domain/zalo_link.go` ZaloReminderKinds, migration 0021 — ADR 0079 Q1 #6:
- * "web ánh xạ sang mã spec"), or null when NOTHING produces it yet (ADR 0079 Q3, second phase): drawn
- * disabled with "?". `alsoKinds` are switched TOGETHER with `kind` by the same box. A row any of whose
- * kinds is not in the server's `supported_events` is drawn disabled with "?" too — the server, not this
- * table, says what may be ticked.
+ * "web ánh xạ sang mã spec"; the nine act notices of migration 0025, ADR 0086 A2). Every row has a
+ * producer since ADR 0086. `alsoKinds` are switched TOGETHER with `kind` by the same box. A row any of
+ * whose kinds is not in the server's `supported_events` is drawn disabled — the server, not this table,
+ * says what may be ticked (an older comms during a rolling deploy lists fewer kinds).
  *
  * THE BOX IS CHECKED WHEN `kind` IS SELECTED, whatever `alsoKinds` hold. A stored half-state (e.g.
  * `van-ban.chua-cu-nguoi` alone, from a save made outside this screen) reads unchecked while `qua-han`
@@ -77,13 +77,20 @@ export type ZaloEventRow = {
   code: string;
   label: string;
   hint?: string;
-  kind: string | null;
+  kind: string;
   alsoKinds?: readonly string[];
 };
 
-/** Every kind one row switches: `kind` first, then `alsoKinds`. Empty for a row with no producer. */
+/**
+ * Under a row whose kinds the server's `supported_events` does not list. Not a "?" (ADR 0068 §14 marks
+ * an UNBUILT part, and every row is built since ADR 0086): this is a server that does not offer the kind
+ * yet — an older comms mid-deploy — so the box stays disabled and says why, rather than silently.
+ */
+export const EVENT_NOT_OFFERED = "Máy chủ chưa nhận loại này nên chưa bật được.";
+
+/** Every kind one row switches: `kind` first, then `alsoKinds`. */
 export function rowKinds(row: ZaloEventRow): readonly string[] {
-  return row.kind === null ? [] : [row.kind, ...(row.alsoKinds ?? [])];
+  return [row.kind, ...(row.alsoKinds ?? [])];
 }
 
 export type ZaloEventGroup = { title: string; events: readonly ZaloEventRow[] };
@@ -99,7 +106,7 @@ export const ZALO_EVENT_GROUPS: readonly ZaloEventGroup[] = [
   {
     title: "Nhiệm vụ",
     events: [
-      { code: "task.assigned", label: "Giao việc mới", hint: "Nhắn ngay cho người được giao.", kind: null },
+      { code: "task.assigned", label: "Giao việc mới", hint: "Nhắn ngay cho người được giao.", kind: "nhiem-vu.giao-moi" },
       {
         code: "task.due_soon",
         label: "Việc sắp đến hạn",
@@ -118,14 +125,14 @@ export const ZALO_EVENT_GROUPS: readonly ZaloEventGroup[] = [
         code: "task.extension_requested",
         label: "Đề nghị lùi hạn chờ duyệt",
         hint: "Gửi cho lãnh đạo giao việc.",
-        kind: null,
+        kind: "nhiem-vu.de-nghi-lui-han",
       },
-      { code: "task.approval_requested", label: "Việc chờ duyệt", kind: null },
+      { code: "task.approval_requested", label: "Việc chờ duyệt", kind: "nhiem-vu.cho-duyet" },
       {
         code: "task.comment_mention",
         label: "Được nhắc tên trong trao đổi",
         hint: "Loại này nổ nhiều; bật khi xã thật sự cần.",
-        kind: null,
+        kind: "nhiem-vu.nhac-ten",
       },
     ],
   },
@@ -136,7 +143,7 @@ export const ZALO_EVENT_GROUPS: readonly ZaloEventGroup[] = [
         code: "document.transferred",
         label: "Văn bản, đơn thư chuyển tới mình",
         hint: "Gửi ngay lúc văn thư phân công cho cán bộ xử lý.",
-        kind: null,
+        kind: "van-ban.chuyen-toi",
       },
       { code: "document.due_soon", label: "Văn bản, đơn thư sắp đến hạn", kind: "van-ban.sap-den-han" },
       {
@@ -150,7 +157,7 @@ export const ZALO_EVENT_GROUPS: readonly ZaloEventGroup[] = [
   {
     title: "Phản ánh người dân",
     events: [
-      { code: "feedback.assigned", label: "Phản ánh được phân công", kind: null },
+      { code: "feedback.assigned", label: "Phản ánh được phân công", kind: "phan-anh.phan-cong" },
       { code: "feedback.due_soon", label: "Phản ánh sắp đến hạn", kind: "phan-anh.sap-den-han" },
       {
         code: "feedback.overdue",
@@ -162,15 +169,15 @@ export const ZALO_EVENT_GROUPS: readonly ZaloEventGroup[] = [
         code: "feedback.reopened",
         label: "Phản ánh bị mở lại",
         hint: "Người dân chấm một hoặc hai sao thì phiếu mở lại.",
-        kind: null,
+        kind: "phan-anh.mo-lai",
       },
     ],
   },
   {
     title: "Khác",
     events: [
-      { code: "announcement.published", label: "Thông báo mới gửi cho mình", kind: null },
-      { code: "report.ready", label: "Báo cáo điều hành đã sẵn sàng", kind: null },
+      { code: "announcement.published", label: "Thông báo mới gửi cho mình", kind: "thong-bao.moi" },
+      { code: "report.ready", label: "Báo cáo điều hành đã sẵn sàng", kind: "bao-cao.san-sang" },
       { code: "digest.weekly", label: "Bản tin đầu tuần", kind: "ban-tin-tuan" },
     ],
   },

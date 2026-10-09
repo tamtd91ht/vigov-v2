@@ -11,6 +11,7 @@ import {
   cadenceSavedToast,
   clockFieldLabel,
   draftFrom,
+  hasWeekday,
   intervalLabel,
   intervalOptions,
   jobWords,
@@ -70,6 +71,19 @@ describe("the PUT body — only the fields of the job's kind, the others null", 
       ok: true,
       body: { enabled: true, interval_minutes: null, run_hour: 7, run_minute: 30, weekday: 7 },
     });
+  });
+
+  it("monthly_and_weekly (scheduled_reports, ADR 0086 B2): sent like weekly — weekday + hour and minute", () => {
+    const reports = job({ job: "scheduled_reports", schedule_kind: "monthly_and_weekly", interval_minutes: null, min_interval_minutes: null, run_hour: 7, run_minute: 45, weekday: 1 });
+    expect(settingBody(reports, { ...draftFrom(reports), weekday: "2", time: "08:15" })).toEqual({
+      ok: true,
+      body: { enabled: true, interval_minutes: null, run_hour: 8, run_minute: 15, weekday: 2 },
+    });
+    expect(settingBody(reports, { ...draftFrom(reports), weekday: "" })).toEqual({ ok: false, message: WEEKDAY_MISSING });
+    expect(hasWeekday("monthly_and_weekly")).toBe(true);
+    expect(hasWeekday("weekly")).toBe(true);
+    expect(hasWeekday("daily")).toBe(false);
+    expect(hasWeekday("interval")).toBe(false);
   });
 
   it("refuses only what cannot be SENT; the bounds (min 5 …) are the server's", () => {
@@ -135,10 +149,15 @@ describe("'Cứ mỗi' choices (spec 09)", () => {
 });
 
 describe("job names and scopes", () => {
-  it("the three jobs have their §9 names; an unknown key is shown as itself", () => {
+  it("the four jobs have their §9 names; an unknown key is shown as itself", () => {
     expect(jobWords("sla_reminders").title).toBe("Nhắc việc sắp đến hạn và đã quá hạn");
     expect(jobWords("escalation").title).toBe("Leo thang việc trễ hạn");
     expect(jobWords("weekly_digest").title).toBe("Bản tin đầu tuần cho lãnh đạo");
+    // Reference system verbatim (automation.py:91-99, ADR 0086 "theo prototype").
+    expect(jobWords("scheduled_reports")).toEqual({
+      title: "Gửi báo cáo định kỳ",
+      description: "Báo cáo tuần vào đầu tuần, báo cáo tháng vào ngày mùng 1.",
+    });
     // Escalation thresholds are working hours from the SLA tab, never "số ngày" (ADR 0058 §5).
     expect(jobWords("escalation").description).toMatch(/giờ làm việc/);
     expect(jobWords("escalation").description).not.toMatch(/số ngày/);

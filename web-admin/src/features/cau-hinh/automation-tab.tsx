@@ -7,7 +7,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { NoAccess } from "@/components/ui/no-access";
-import { PendingMarker } from "@/components/ui/pending-feature";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
@@ -34,6 +33,7 @@ import {
   clockFieldLabel,
   count,
   draftFrom,
+  hasWeekday,
   intervalLabel,
   intervalOptions,
   jobWords,
@@ -50,17 +50,16 @@ import {
   type AutomationDraft,
 } from "./automation-form";
 import { ConfigTable, SMALL_BUTTON_CLASS, selectCls } from "./config-ui";
-import { PHAN_CHUA_DUNG } from "./nhan-cau-hinh";
 import { automationTabDecision } from "./quyen-tab";
 
 /**
  * "Cấu hình → Tự động hoá" (§9, ADR 0058). All three routes declare `admin.sla`, the read included, so
  * the tab hides as a whole without it — convenience; the server refuses on every request.
  *
- * TWO JOBS OF §9 ARE NOT LIVE CARDS: `Tính lại số liệu Tổng quan` is dropped (ADR 0053: the overview
- * counts live, there is nothing to precompute) and gets NO placeholder — a spot for it would announce
- * a job the owner refused (ADR 0068 §14). `Gửi báo cáo định kỳ` waits for `/bao-cao`'s export (ADR 0058 §4, ADR 0053 B4)
- * and sits in its spec position, the last card, disabled with the "?" (`PendingReportJobCard`).
+ * ONE JOB OF §9 IS NOT A CARD: `Tính lại số liệu Tổng quan` is dropped (ADR 0053, ADR 0086 C: the
+ * overview counts live, there is nothing to precompute) and gets NO placeholder — a spot for it would
+ * announce a job the owner refused (ADR 0068 §14). `Gửi báo cáo định kỳ` (`scheduled_reports`, ADR
+ * 0086 B) is a live card like the others, last in the server's order.
  *
  * Drawn after `tmp/web/cau-hinh/vigov-cau-hinh-spec/09-tu-dong-hoa.md` and the prototype's
  * `AutomationTable.tsx` (ADR 0079). "Chạy ngay" and the last-runs table are not in either; ADR 0079
@@ -133,7 +132,6 @@ export function AutomationTabView({ loaded }: { loaded: KetQua<readonly Automati
       ) : (
         loaded.duLieu.map((j) => <AutomationJobCard key={j.job} initial={j} />)
       )}
-      <PendingReportJobCard />
     </section>
   );
 }
@@ -156,36 +154,6 @@ const FIELD_LABEL_CLASS = "text-ink-muted m-0 mb-1 block text-[11px] font-semibo
  * "Cứ mỗi" draws ~190px wide for "15 phút".
  */
 const CADENCE_SELECT_CLASS = cn(selectCls, "min-w-0 pr-8 disabled:opacity-60");
-
-/** The `Gửi báo cáo định kỳ` entry — looked up by name so a renamed entry fails a test, not a screen. */
-const REPORT_JOB = PHAN_CHUA_DUNG.find((p) => p.ten === "Gửi báo cáo định kỳ");
-
-/**
- * Spec §9's fifth card, "Gửi báo cáo định kỳ", in the shape of a job card that is off: its spec
- * description and a DISABLED switch, with the "?" beside the title (ADR 0068 §14). No server call.
- */
-function PendingReportJobCard() {
-  if (REPORT_JOB === undefined) return null;
-  return (
-    <section className={cn(CARD_CLASS, CARD_OFF_FILL)} aria-labelledby="tu-dong-hoa-bao-cao-dinh-ky-ten" data-pending="">
-      <div className="flex flex-wrap items-start gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <h3 id="tu-dong-hoa-bao-cao-dinh-ky-ten" className="text-navy m-0 text-[13px] font-bold">
-              {REPORT_JOB.ten}
-            </h3>
-            <PendingMarker info={REPORT_JOB} />
-          </div>
-          <p className="text-ink-muted m-0 mt-0.5 text-[12px]">Báo cáo tuần vào đầu tuần, báo cáo tháng vào ngày mùng 1.</p>
-        </div>
-        <label className="m-0 flex shrink-0 items-center gap-2 text-[12.5px]">
-          <Switch id="tu-dong-hoa-bao-cao-dinh-ky-bat" checked={false} disabled aria-labelledby="tu-dong-hoa-bao-cao-dinh-ky-ten" />
-          {switchWord(false)}
-        </label>
-      </div>
-    </section>
-  );
-}
 
 export type AutomationBusy = "" | "toggle" | "save" | "run";
 
@@ -361,7 +329,7 @@ export function AutomationJobCardView({
             </div>
           )}
 
-          {job.schedule_kind === "weekly" && (
+          {hasWeekday(job.schedule_kind) && (
             <div className="block">
               <label htmlFor={`${id}-thu`} className={FIELD_LABEL_CLASS}>
                 Vào

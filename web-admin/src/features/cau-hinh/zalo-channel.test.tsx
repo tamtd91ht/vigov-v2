@@ -25,6 +25,7 @@ const {
   checkRetireReason,
   dayOptions,
   draftFromSettings,
+  EVENT_NOT_OFFERED,
   hourOptions,
   joinStaffLinks,
   NO_LINKED_STAFF,
@@ -37,7 +38,20 @@ const {
 } = await import("./zalo-channel-form");
 const { peopleState, ZaloChannelTab, ZaloChannelView } = await import("./zalo-channel-tab");
 
-/** comms `domain.ZaloReminderKinds` — what `supported_events` carries today (zalo_links_test.go:338). */
+/** The nine act notices of ADR 0086 A2 (comms migration 0025), in comms' canonical order. */
+const ACT_KINDS = [
+  "nhiem-vu.giao-moi",
+  "nhiem-vu.de-nghi-lui-han",
+  "nhiem-vu.cho-duyet",
+  "nhiem-vu.nhac-ten",
+  "van-ban.chuyen-toi",
+  "phan-anh.phan-cong",
+  "phan-anh.mo-lai",
+  "bao-cao.san-sang",
+  "thong-bao.moi",
+];
+
+/** comms `domain.ZaloReminderKinds` (`service-comms/internal/domain/zalo_link.go`) — what `supported_events` carries today. */
 const SUPPORTED = [
   "nhiem-vu.sap-den-han",
   "nhiem-vu.qua-han",
@@ -52,6 +66,7 @@ const SUPPORTED = [
   "phan-anh.chua-cu-nguoi",
   "phan-anh.leo-thang",
   "ban-tin-tuan",
+  ...ACT_KINDS,
 ];
 
 const SETTINGS: ZaloChannelSettings = {
@@ -393,8 +408,17 @@ describe("view", () => {
     expect(rows.map((r) => r.label)).not.toContain("Phản ánh chưa cử người xử lý");
     // Fails if comms offers a kind no box switches — selected with no control anywhere.
     for (const kind of SUPPORTED) expect(rows.filter((r) => rowKinds(r).includes(kind)), kind).toHaveLength(1);
-    const mapped = Object.fromEntries(rows.filter((e) => e.kind !== null).map((e) => [e.code, rowKinds(e)]));
+    const mapped = Object.fromEntries(rows.map((e) => [e.code, rowKinds(e)]));
     expect(mapped).toEqual({
+      "task.assigned": ["nhiem-vu.giao-moi"],
+      "task.extension_requested": ["nhiem-vu.de-nghi-lui-han"],
+      "task.approval_requested": ["nhiem-vu.cho-duyet"],
+      "task.comment_mention": ["nhiem-vu.nhac-ten"],
+      "document.transferred": ["van-ban.chuyen-toi"],
+      "feedback.assigned": ["phan-anh.phan-cong"],
+      "feedback.reopened": ["phan-anh.mo-lai"],
+      "announcement.published": ["thong-bao.moi"],
+      "report.ready": ["bao-cao.san-sang"],
       "task.due_soon": ["nhiem-vu.sap-den-han"],
       "task.overdue": ["nhiem-vu.qua-han"],
       "task.unassigned_too_long": ["nhiem-vu.chua-cu-nguoi"],
@@ -413,14 +437,36 @@ describe("view", () => {
     expect(box(el, "feedback.overdue").checked).toBe(true);
     expect(box(el, "task.unassigned_too_long").checked).toBe(false);
     expect(box(el, "digest.weekly").disabled).toBe(false);
-    expect(box(el, "task.assigned").disabled).toBe(true);
-    expect(el.querySelectorAll('[aria-label^="Thêm loại việc nhắn qua Zalo"]')).toHaveLength(9);
+    // ADR 0086: every row has a producer — none is disabled, no "?" left in the table.
+    for (const r of rows) expect(box(el, r.code).disabled, r.code).toBe(false);
+    expect(el.querySelectorAll('[aria-label^="Thêm loại việc nhắn qua Zalo"]')).toHaveLength(0);
+    expect(el.querySelectorAll("[data-not-offered]")).toHaveLength(0);
   });
 
-  it("a kind the server does NOT list in supported_events is drawn disabled with '?', never tickable", () => {
+  it("ADR 0086 act rows: enabled when supported, checked from the stored kind, tick sends it in server order", () => {
+    const el = html(view({ ...SETTINGS, kinds: ["nhiem-vu.giao-moi", "bao-cao.san-sang"] }));
+    expect(box(el, "task.assigned").checked).toBe(true);
+    expect(box(el, "report.ready").checked).toBe(true);
+    expect(box(el, "feedback.reopened").checked).toBe(false);
+    const d = draftFromSettings(SETTINGS);
+    expect(toggleKind(d, "thong-bao.moi", true, SUPPORTED).kinds).toEqual([
+      "nhiem-vu.sap-den-han",
+      "nhiem-vu.qua-han",
+      "thong-bao.moi",
+    ]);
+  });
+
+  it("a kind the server does NOT list in supported_events is drawn disabled with the reason, never tickable", () => {
     const el = html(view({ ...SETTINGS, supported_events: SUPPORTED.filter((k) => k !== "ban-tin-tuan") }));
     expect(box(el, "digest.weekly").disabled).toBe(true);
-    expect(el.querySelectorAll('[aria-label^="Thêm loại việc nhắn qua Zalo"]')).toHaveLength(10);
+    expect(el.querySelectorAll("[data-not-offered]")).toHaveLength(1);
+    expect(el.textContent).toContain(EVENT_NOT_OFFERED);
+    // An older comms without the ADR 0086 kinds: those nine rows go back to disabled, nothing else.
+    const old = html(view({ ...SETTINGS, supported_events: SUPPORTED.filter((k) => !ACT_KINDS.includes(k)) }));
+    expect(box(old, "task.assigned").disabled).toBe(true);
+    expect(box(old, "report.ready").disabled).toBe(true);
+    expect(old.querySelectorAll("[data-not-offered]")).toHaveLength(9);
+    expect(box(old, "task.overdue").disabled).toBe(false);
     // A grouped row needs ALL its kinds offered.
     const el2 = html(view({ ...SETTINGS, supported_events: SUPPORTED.filter((k) => k !== "van-ban.leo-thang") }));
     expect(box(el2, "document.overdue").disabled).toBe(true);

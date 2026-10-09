@@ -27,7 +27,16 @@ export const AUTOMATION_GUIDANCE =
 type JobWords = { readonly title: string; readonly description: string };
 
 /**
- * The three jobs, in §9's order. Descriptions follow §9 with two corrections the decisions force:
+ * Does this schedule kind carry a weekday? `monthly_and_weekly` (`scheduled_reports`, ADR 0086 B2) is
+ * weekday + HH:MM on the wire exactly like `weekly` — the 1st of the month is implied by the kind, not
+ * a field (`service-identity/internal/domain/automation.go` LatestSlot).
+ */
+export function hasWeekday(scheduleKind: string): boolean {
+  return scheduleKind === "weekly" || scheduleKind === "monthly_and_weekly";
+}
+
+/**
+ * The jobs, in §9's order. Descriptions follow §9 with two corrections the decisions force:
  * reminders sweep petitions (đơn thư) too (ADR 0058 §4), and escalation thresholds are WORKING HOURS
  * from the SLA tab (ADR 0029, ADR 0058 §5) — §9's "số ngày" would tell the administrator a unit the
  * software does not count in.
@@ -58,6 +67,13 @@ const JOBS: Readonly<Record<string, JobWords>> = {
     description:
       "Tóm tắt việc tồn, việc trễ và phản ánh nóng của tuần trước. Phản ánh nóng là phiếu đã quá hạn " +
       "hoặc bị người dân chấm 1–2 sao trong tuần.",
+  },
+  // ADR 0086 B ("theo prototype"): label and description verbatim from the reference system
+  // (`vigov-require/apps/api/app/modules/admin/automation.py:91-99`). "Đầu tuần" holds for the
+  // suggested Monday; the weekday the commune picks is drawn right under it.
+  scheduled_reports: {
+    title: "Gửi báo cáo định kỳ",
+    description: "Báo cáo tuần vào đầu tuần, báo cáo tháng vào ngày mùng 1.",
   },
 };
 
@@ -227,7 +243,7 @@ export function settingBody(
   const m = /^(\d{1,2}):(\d{2})$/.exec(d.time.trim());
   if (m === null) return { ok: false, message: TIME_MISSING };
   const timed = { ...body, run_hour: Number(m[1]), run_minute: Number(m[2]) };
-  if (j.schedule_kind === "weekly") {
+  if (hasWeekday(j.schedule_kind)) {
     const w = wholeNumber(d.weekday);
     if (w === null) return { ok: false, message: WEEKDAY_MISSING };
     return { ok: true, body: { ...timed, weekday: w } };

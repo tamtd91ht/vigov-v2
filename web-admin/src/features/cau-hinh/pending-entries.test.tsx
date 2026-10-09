@@ -13,8 +13,7 @@ import { PHAN_CHUA_DUNG } from "./nhan-cau-hinh";
 /**
  * The entries of `PHAN_CHUA_DUNG` must stay TRUE: each one is the description behind a "?" on the
  * screen (ADR 0068 §14) and a line `tools/tien_do_san_pham.py` counts. That each entry REACHES the
- * page is held where it is drawn (`automation-tab.pending.test.tsx`); the collapsed bottom block that
- * used to print them all is retired.
+ * page is held where it is drawn; the collapsed bottom block that used to print them all is retired.
  */
 describe("phần chưa dựng của màn Cấu hình — mục còn đúng", () => {
   it("mỗi mục có tên và lý do", () => {
@@ -64,13 +63,15 @@ describe("phần chưa dựng của màn Cấu hình — mục còn đúng", () 
     ).toEqual(["Nhập Excel chung cho mọi nhóm danh mục"]);
   });
 
-  it("Tự động hoá: chỉ còn Gửi báo cáo định kỳ (chờ xuất báo cáo); Tính lại số liệu Tổng quan đã bỏ, không có mục", () => {
+  it("Tự động hoá: không còn mục nào — Gửi báo cáo định kỳ đã dựng (ADR 0086 B), Tính lại số liệu Tổng quan đã bỏ", () => {
     // ADR 0053 / ADR 0068 §14: a job the owner refused gets no placeholder and no entry — an entry
-    // would make the progress report count it as "not built yet".
+    // would make the progress report count it as "not built yet". `scheduled_reports` is a live card.
     expect(PHAN_CHUA_DUNG.some((p) => /Tính lại số liệu/.test(`${p.ten} ${p.viSao}`))).toBe(false);
-    const report = PHAN_CHUA_DUNG.filter((p) => p.ten === "Gửi báo cáo định kỳ");
-    expect(report).toHaveLength(1);
-    expect(report[0]!.viSao).toMatch(/xuất\s+báo cáo/);
+    expect(PHAN_CHUA_DUNG.some((p) => /báo cáo định kỳ/i.test(`${p.ten} ${p.viSao}`))).toBe(false);
+  });
+
+  it("Kênh Zalo: không còn mục 'Thêm loại việc nhắn qua Zalo' — chín loại theo hành vi đã dựng (ADR 0086 A2)", () => {
+    expect(PHAN_CHUA_DUNG.some((p) => /Zalo/i.test(`${p.ten} ${p.viSao}`))).toBe(false);
   });
 
   it("không còn mục Lời hệ thống — nhóm Báo cáo `report.*` đã có chủ và có tuyến (reporting)", () => {

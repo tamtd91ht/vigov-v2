@@ -5,8 +5,8 @@
  * ─────────────────────────────────────────────────────────────────────────────────────────
  * MỖI MỤC RA TỚI MÀN HÌNH Ở ĐÚNG CHỖ ĐẶC TẢ ĐẶT NÓ (ADR 0068 §14): phần ấy được vẽ thành đúng loại
  * control nó sẽ là, bị vô hiệu, mang dấu "?"; bấm "?" thì đọc `ten` + `viSao` của mục ở đây. Khối gập
- * "N phần chưa dựng" cuối trang đã bỏ. Mục "Gửi báo cáo định kỳ" là thẻ thứ năm của tab Tự động hoá
- * (`automation-tab.tsx`).
+ * "N phần chưa dựng" cuối trang đã bỏ. "Gửi báo cáo định kỳ" và chín loại nhắn Zalo theo hành vi đã
+ * dựng (ADR 0086) nên không còn mục ở đây.
  *
  * VIỆC ĐÃ QUYẾT KHÔNG LÀM THÌ KHÔNG CÓ MỤC Ở ĐÂY: "Tính lại số liệu Tổng quan" bị bỏ hẳn — màn Tổng
  * quan đếm trực tiếp, không lưu số liệu dựng sẵn (ADR 0053, ADR 0058). Một mục cho nó là báo cáo tiến
@@ -27,22 +27,9 @@ export type PhanChuaDung = {
 
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   {
-    ten: "Gửi báo cáo định kỳ",
-    viSao:
-      "Tự gửi báo cáo tuần vào đầu tuần và báo cáo tháng vào ngày mùng 1. Việc này chờ chức năng xuất " +
-      "báo cáo của màn Báo cáo: chưa xuất được tệp thì chưa có gì để gửi.",
-  },
-  {
     ten: "Nhập Excel chung cho mọi nhóm danh mục",
     viSao:
       "Nhập một tệp cho tất cả các nhóm danh mục cùng lúc. Máy chủ hiện chỉ nhận tệp theo từng nhóm; " +
       "hãy chọn một nhóm ở hàng lọc rồi bấm Nhập từ Excel để nhập vào nhóm đó (ADR 0079).",
-  },
-  {
-    ten: "Thêm loại việc nhắn qua Zalo",
-    viSao:
-      "Việc này chưa có nơi nào trong phần mềm phát ra thông báo, nên chưa nhắn qua Zalo được. Các việc " +
-      "sắp đến hạn, quá hạn, chưa cử người, bị đôn đốc và bản tin đầu tuần thì đã bật/tắt được; mỗi việc " +
-      "còn lại sẽ được thêm dần (ADR 0079).",
   },
 ];
