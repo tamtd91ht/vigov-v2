@@ -104,6 +104,9 @@ const (
 	// NoticeUnassigned is the holding unit having named nobody past the commune's threshold — its own
 	// kind since comms split it out of OVERDUE, so a commune can switch it separately.
 	NoticeUnassigned
+	// NoticeReportReady is the scheduled_reports job's notice (comms REPORT_READY, ADR 0086 B1) — sent
+	// by the runner directly, like every other job notice, not from the outbox.
+	NoticeReportReady
 )
 
 // StaffNotice is one notice before delivery.

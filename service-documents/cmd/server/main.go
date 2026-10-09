@@ -135,6 +135,9 @@ func run(log *slog.Logger) error {
 	// series are told apart by the `so_sach` value inside each statement, not by which Go object
 	// issued them. Two stores would be two objects over one table, which is one object too many.
 	daySo := docstore.NewDaySoStore(kho)
+	// The staff-notice outbox (ADR 0086 A1): written by routing to a named officer inside the routing's
+	// transaction, drained by the relay below. ONE store for both registers' acts and for the relay.
+	staffNotices := docstore.NewStaffNoticeOutboxStore(kho)
 
 	// 3b. use cases — the business write and its audit entry share ONE transaction inside these
 	//     (rule 6, invariant 3). The handlers only translate HTTP. It is given *store.DB rather
@@ -186,7 +189,7 @@ func run(log *slog.Logger) error {
 	// THE OUTGOING REGISTER TAKES NO IDENTITY CLIENT. An outgoing document carries no commitment to
 	// meet — issuing it IS the act — so there is no deadline to fetch and no reason for that
 	// register to stop working when identity is slow.
-	ghiVanBanDen := app.NewVanBanDen(kho, vanBanDen, daySo, dinhDanh)
+	ghiVanBanDen := app.NewVanBanDen(kho, vanBanDen, daySo, dinhDanh, staffNotices)
 	ghiVanBanDi := app.NewVanBanDi(kho, vanBanDi, daySo)
 
 	// 6. idempotency store. An empty REDIS_DSN happens in DEV only — local development with no
@@ -214,7 +217,7 @@ func run(log *slog.Logger) error {
 	// one of them — Register panics on a nil Checker rather than letting them 403 or panic later.
 	// Sổ đơn thư (ADR 0078): the SAME counter as the two document registers (series 'don-thu'), and the
 	// SAME identity client — units and assignees are checked live in the commune.
-	citizenLetters := app.NewCitizenLetters(kho, docstore.NewCitizenLetterStore(kho), daySo, dinhDanh)
+	citizenLetters := app.NewCitizenLetters(kho, docstore.NewCitizenLetterStore(kho), daySo, dinhDanh, staffNotices)
 
 	mux := http.NewServeMux()
 	svchttp.Register(mux, svchttp.Deps{
@@ -298,6 +301,7 @@ func run(log *slog.Logger) error {
 	runnerCtx, stopRunner := context.WithCancel(context.Background())
 	defer stopRunner()
 	runnerDone := make(chan struct{})
+	relayDone := make(chan struct{})
 	if addr := cfg.CommsGRPCAddr(); addr != "" {
 		comms, err := commsclient.Dial(addr, cfg.GRPCCallerKey(), log)
 		if err != nil {
@@ -316,9 +320,25 @@ func run(log *slog.Logger) error {
 			defer close(runnerDone)
 			runner.Run(runnerCtx)
 		}()
+
+		// THE STAFF-NOTICE RELAY (ADR 0086 A1) — drains `staff_notice_outbox` into comms over the SAME
+		// client, under its own advisory lock on the SAME unscoped handle. Off together with the runner
+		// in dev without COMMS_GRPC_ADDR: rows then wait in the outbox, owed, and leave once it is set.
+		relay, err := app.NewStaffNoticeRelay(app.StaffNoticeRelayDeps{
+			Communes: automation, Locks: automation, Outbox: staffNotices, Comms: comms, Log: log,
+		})
+		if err != nil {
+			return err
+		}
+		go func() {
+			defer close(relayDone)
+			relay.Run(runnerCtx)
+		}()
 	} else {
-		log.Warn("CẢNH BÁO: bộ chạy tự động hoá TẮT — thiếu COMMS_GRPC_ADDR", "service", "documents")
+		log.Warn("CẢNH BÁO: bộ chạy tự động hoá và bộ chuyển thông báo cán bộ TẮT — thiếu COMMS_GRPC_ADDR",
+			"service", "documents")
 		close(runnerDone)
+		close(relayDone)
 	}
 
 	dungLai := make(chan os.Signal, 1)
@@ -372,6 +392,11 @@ func run(log *slog.Logger) error {
 		case <-runnerDone:
 		case <-ctx.Done():
 			log.Warn("bộ chạy tự động hoá không dừng kịp hạn", "service", "documents")
+		}
+		select {
+		case <-relayDone:
+		case <-ctx.Done():
+			log.Warn("bộ chuyển thông báo cán bộ không dừng kịp hạn", "service", "documents")
 		}
 		return errHTTP
 	}

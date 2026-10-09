@@ -194,6 +194,10 @@ type VanBanDen struct {
 	daySo KhoDaySo
 	han   HanXuLyDoc
 
+	// notices is the staff-notice outbox: routing to a named officer writes its row in the routing's
+	// own transaction (ADR 0086 A1). Required — writeStaffNotice fails the act closed without it.
+	notices StaffNoticeOutbox
+
 	// sinhID is injected so a test can pin the id. In production it is ulid.Moi.
 	sinhID func() (string, error)
 
@@ -207,8 +211,8 @@ type VanBanDen struct {
 	nay func() time.Time
 }
 
-func NewVanBanDen(db *store.DB, kho KhoVanBanDen, daySo KhoDaySo, han HanXuLyDoc) *VanBanDen {
-	return &VanBanDen{db: db, kho: kho, daySo: daySo, han: han, sinhID: ulid.Moi}
+func NewVanBanDen(db *store.DB, kho KhoVanBanDen, daySo KhoDaySo, han HanXuLyDoc, notices StaffNoticeOutbox) *VanBanDen {
+	return &VanBanDen{db: db, kho: kho, daySo: daySo, han: han, notices: notices, sinhID: ulid.Moi}
 }
 
 // nayHoac is the clock, UTC. `TIMESTAMPTZ` stores an instant rather than a wall reading, so the
@@ -539,6 +543,17 @@ func (uc *VanBanDen) Chuyen(ctx context.Context, id string, yc YeuCauChuyenVanBa
 			NoiDung:              lyDo,
 		}); err != nil {
 			return err
+		}
+
+		// THE NAMED OFFICER IS TOLD — from the outbox, in THIS transaction (ADR 0086 A1, kind 22). The
+		// key is the timeline row just written, so routing the same document back to the same officer
+		// after it went round notifies again (A3 #2). No officer named ("để bộ phận tự phân công"), or
+		// the clerk routing to themselves: no row. A failure here rolls the routing back with it.
+		if canBoMa != "" {
+			if err := writeStaffNotice(ctx, tx, uc.notices, uc.sinhID,
+				domain.IncomingAssignedNotice(truoc, idLichSu, canBoMa), nguoi.ID, luc); err != nil {
+				return err
+			}
 		}
 
 		sau = truoc

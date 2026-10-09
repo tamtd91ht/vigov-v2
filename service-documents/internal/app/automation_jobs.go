@@ -353,6 +353,73 @@ func (r *AutomationRunner) weeklyDigest(ctx context.Context, reg automationRegis
 	return p, nil
 }
 
+// --- scheduled_reports -----------------------------------------------------------------------------
+
+// errReportPeriodUnknown: identity claimed a SCHEDULED_REPORTS run without saying WEEK or MONTH (a build
+// that predates AutomationRun.scheduled_report_period). The run sends NOTHING and is recorded FAILED —
+// never a period read from this runner's own clock (identity.proto; ADR 0086 stop condition #4).
+var errReportPeriodUnknown = errors.New("việc nền: lượt báo cáo định kỳ không mang kỳ tuần/tháng")
+
+// reportPeriodFor maps identity's period onto the key's spelling; false for UNSPECIFIED or unknown.
+func reportPeriodFor(p identityv1.ScheduledReportPeriod) (domain.ReportPeriod, bool) {
+	switch p {
+	case identityv1.ScheduledReportPeriod_SCHEDULED_REPORT_PERIOD_WEEK:
+		return domain.ReportWeek, true
+	case identityv1.ScheduledReportPeriod_SCHEDULED_REPORT_PERIOD_MONTH:
+		return domain.ReportMonth, true
+	}
+	return "", false
+}
+
+// scheduledReport sends the leadership this service's part of the scheduled report (ADR 0086 B1: "mỗi
+// service sở hữu sổ gửi phần của mình" — documents: incoming documents past their deadline). Claimed
+// for VAN_BAN_DEN only (automationJobs), so the letter register never reaches here; were it to, the run
+// fails rather than reporting letters under the documents' key.
+//
+// THE FIGURE IS A BACKLOG, counted at the run's `claimed_at` from each document's STORED deadline
+// (PastDeadlineAt — the comparison /tong-quan and the reminders make; rule 10, invariant 3). The
+// period names the notice and its key; it bounds nothing in the count (ADR 0086 §Hệ quả).
+func (r *AutomationRunner) scheduledReport(ctx context.Context, reg automationRegister, asOf time.Time,
+	period identityv1.ScheduledReportPeriod) (automationPlan, error) {
+
+	var p automationPlan
+	rp, ok := reportPeriodFor(period)
+	if !ok {
+		return p, errReportPeriodUnknown
+	}
+	if reg.workKind != incomingRegister.workKind {
+		return p, fmt.Errorf("việc nền: báo cáo định kỳ không có phần cho sổ %v", reg.workKind)
+	}
+	start, ok := domain.ReportPeriodStart(rp, asOf)
+	if !ok {
+		return p, errReportPeriodUnknown
+	}
+	book, err := r.newRecipientBook(ctx, reg, nil, true)
+	if err != nil {
+		return p, err
+	}
+	p.configMissing = book.leadersMissing
+
+	recs, err := r.loadRecords(ctx, reg)
+	if err != nil {
+		return p, err
+	}
+	p.examined = len(recs)
+	var pastDeadline int
+	for _, x := range recs {
+		if x.PastDeadlineAt(asOf) {
+			pastDeadline++
+		}
+	}
+	if len(book.leaders) == 0 {
+		// Nobody flagged as leadership: nobody is told, never "everyone" (ResolveLeadershipStaff).
+		p.digestWithoutRecipient = pastDeadline
+		return p, nil
+	}
+	p.notices = append(p.notices, domain.ScheduledReportNotice(rp, start, pastDeadline, book.leaders))
+	return p, nil
+}
+
 // --- recipients ------------------------------------------------------------------------------------
 
 // recipientBook holds, for ONE run, every recipient lookup it needs — asked once, batched.
@@ -526,6 +593,8 @@ func commsKind(k domain.NoticeKind) (commsv1.StaffNotificationKind, bool) {
 		return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_ESCALATION, true
 	case domain.NoticeWeeklyDigest:
 		return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_WEEKLY_DIGEST, true
+	case domain.NoticeReportReady:
+		return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_REPORT_READY, true
 	}
 	return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_UNSPECIFIED, false
 }

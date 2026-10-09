@@ -432,7 +432,8 @@ func dungUseCaseVanBanDen(t *testing.T, k *khoVBGia, soKetNoi int) (*VanBanDen, 
 	// opens is the transaction the stores write in, and two handles would be two pools.
 	kho := store.New(db)
 	han := &hanGia{tra: hanMau}
-	uc := NewVanBanDen(kho, docstore.NewVanBanDenStore(kho), docstore.NewDaySoStore(kho), han)
+	uc := NewVanBanDen(kho, docstore.NewVanBanDenStore(kho), docstore.NewDaySoStore(kho), han,
+		docstore.NewStaffNoticeOutboxStore(kho))
 	uc.sinhID = func() (string, error) { return idMoiVanBan, nil }
 	uc.nay = func() time.Time { return lucVaoSo }
 	return uc, han, tenant.Into(context.Background(), xaA)

@@ -40,6 +40,11 @@ type AutomationRun struct {
 	Job       identityv1.AutomationJob
 	WorkKind  identityv1.WorkKind
 	ClaimedAt time.Time
+	// ScheduledReportPeriod is WEEK or MONTH on a SCHEDULED_REPORTS run, UNSPECIFIED on every other job
+	// (identity.proto AutomationRun.scheduled_report_period). Copied as received: a runner that gets
+	// UNSPECIFIED on a SCHEDULED_REPORTS run sends nothing and records FAILED — it never reads its own
+	// clock for the period (ADR 0086 B2), so this wrapper does not either.
+	ScheduledReportPeriod identityv1.ScheduledReportPeriod
 }
 
 // AutomationOutcome is what RecordAutomationRunOutcome writes — a closed outcome and three counts.
@@ -88,7 +93,8 @@ func (c *Client) ClaimDueAutomationRuns(ctx context.Context, scopes []*identityv
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, AutomationRun{RunID: r.GetRunId(), Job: sc.GetJob(), WorkKind: sc.GetWorkKind(), ClaimedAt: at})
+		out = append(out, AutomationRun{RunID: r.GetRunId(), Job: sc.GetJob(), WorkKind: sc.GetWorkKind(), ClaimedAt: at,
+			ScheduledReportPeriod: r.GetScheduledReportPeriod()})
 	}
 	return out, nil
 }

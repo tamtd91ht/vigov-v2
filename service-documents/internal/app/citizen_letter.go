@@ -195,13 +195,17 @@ type CitizenLetters struct {
 	repo   CitizenLetterRepo
 	series KhoDaySo
 	dir    LetterDirectory
+	// notices is the staff-notice outbox: Route with a named officer writes its row in the routing's own
+	// transaction (ADR 0086 A1). Required — writeStaffNotice fails the act closed without it.
+	notices StaffNoticeOutbox
 
 	newID func() (string, error) // ulid.Moi in production; a seam so a test can pin ids
 	now   func() time.Time       // nil = the real clock, UTC
 }
 
-func NewCitizenLetters(db *store.DB, repo CitizenLetterRepo, series KhoDaySo, dir LetterDirectory) *CitizenLetters {
-	return &CitizenLetters{db: db, repo: repo, series: series, dir: dir, newID: ulid.Moi}
+func NewCitizenLetters(db *store.DB, repo CitizenLetterRepo, series KhoDaySo, dir LetterDirectory,
+	notices StaffNoticeOutbox) *CitizenLetters {
+	return &CitizenLetters{db: db, repo: repo, series: series, dir: dir, notices: notices, newID: ulid.Moi}
 }
 
 func (uc *CitizenLetters) clock() time.Time {
@@ -416,6 +420,16 @@ func (uc *CitizenLetters) Route(ctx context.Context, id string, req RouteLetterR
 			AssigneeCode: assignee, Content: reason,
 		}); err != nil {
 			return err
+		}
+		// THE NAMED OFFICER IS TOLD — from the outbox, in THIS transaction (ADR 0086 A1, kind 22), keyed
+		// on the log row just written. Title = the register number only; the body stays EMPTY (no
+		// summary, no sender, no type — a denunciation must not announce itself, ADR 0078 #4). Booking
+		// with a unit and no officer never reaches here, and owes no notice.
+		if assignee != "" {
+			if err := writeStaffNotice(ctx, tx, uc.notices, uc.newID,
+				domain.LetterAssignedNotice(before, logID, assignee), caller.Actor.ID, now); err != nil {
+				return err
+			}
 		}
 		after = before
 		after.HoldingUnitID, after.AssigneeCode, after.UpdatedAt = unit, assignee, now

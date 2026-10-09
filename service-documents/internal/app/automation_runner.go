@@ -4,8 +4,9 @@ package app
 // the data — ADR 0058 (user decision 2026-09-29). COPIED IN DESIGN from service-petitions'
 // internal/app/automation_runner.go, deliberately (ADR 0058 §Hệ quả: "ba vòng lặp giống nhau ở hai
 // service" — lifting the shared part into core/ is a later build step, not this one). This service
-// runs the three jobs over two registers: incoming documents (VAN_BAN_DEN) and citizen letters
-// (DON_THU, ADR 0079 lô 5 Q18 — only letters carrying a clerk-set deadline).
+// runs the jobs over two registers: incoming documents (VAN_BAN_DEN) and citizen letters (DON_THU,
+// ADR 0079 lô 5 Q18 — only letters carrying a clerk-set deadline). scheduled_reports runs over the
+// incoming register only (ADR 0086 B1).
 //
 // ONE TICK A MINUTE (ADR 0058 §7: "chạy ngay" is only a mark in identity, picked up at the next tick,
 // ≤ 1 minute). Per tick:
@@ -116,16 +117,31 @@ func NewAutomationRunner(d AutomationDeps) (*AutomationRunner, error) {
 	return &AutomationRunner{d: d, interval: AutomationTickInterval}, nil
 }
 
-// automationJob pairs the contract's enum with the lock name (the settings table's lower-case key).
+// automationJob pairs the contract's enum with the lock name (the settings table's lower-case key) and
+// the kinds it is claimed for — nil means every kind in automationKinds.
 type automationJob struct {
-	name string
-	job  identityv1.AutomationJob
+	name  string
+	job   identityv1.AutomationJob
+	kinds []identityv1.WorkKind
 }
 
 var automationJobs = []automationJob{
-	{"sla_reminders", identityv1.AutomationJob_AUTOMATION_JOB_SLA_REMINDERS},
-	{"escalation", identityv1.AutomationJob_AUTOMATION_JOB_ESCALATION},
-	{"weekly_digest", identityv1.AutomationJob_AUTOMATION_JOB_WEEKLY_DIGEST},
+	{"sla_reminders", identityv1.AutomationJob_AUTOMATION_JOB_SLA_REMINDERS, nil},
+	{"escalation", identityv1.AutomationJob_AUTOMATION_JOB_ESCALATION, nil},
+	{"weekly_digest", identityv1.AutomationJob_AUTOMATION_JOB_WEEKLY_DIGEST, nil},
+	// ADR 0086 B1: documents' part of the scheduled report is the incoming register's overdue backlog —
+	// and nothing for letters, so the DON_THU scope is never claimed (a claimed slot is not given back,
+	// and one with nothing to send would record a run that reported nothing).
+	{"scheduled_reports", identityv1.AutomationJob_AUTOMATION_JOB_SCHEDULED_REPORTS,
+		[]identityv1.WorkKind{identityv1.WorkKind_WORK_KIND_VAN_BAN_DEN}},
+}
+
+// kindsOf is the kinds a job is claimed for.
+func (j automationJob) kindsOf() []identityv1.WorkKind {
+	if j.kinds != nil {
+		return j.kinds
+	}
+	return automationKinds
 }
 
 // automationKinds are the WorkKinds this runner CLAIMS — only kinds it owns (a runner claiming another
@@ -174,7 +190,7 @@ func (r *AutomationRunner) Tick(ctx context.Context) {
 		if !held[j.name] {
 			continue // another replica runs this job this tick
 		}
-		for _, k := range automationKinds {
+		for _, k := range j.kindsOf() {
 			scopes = append(scopes, &identityv1.AutomationRunScope{Job: j.job, WorkKind: k})
 		}
 	}
@@ -256,6 +272,8 @@ func (r *AutomationRunner) execute(ctx context.Context, run identityclient.Autom
 		p, err = r.escalation(ctx, reg, run.ClaimedAt)
 	case identityv1.AutomationJob_AUTOMATION_JOB_WEEKLY_DIGEST:
 		p, err = r.weeklyDigest(ctx, reg, run.ClaimedAt)
+	case identityv1.AutomationJob_AUTOMATION_JOB_SCHEDULED_REPORTS:
+		p, err = r.scheduledReport(ctx, reg, run.ClaimedAt, run.ScheduledReportPeriod)
 	default:
 		err = fmt.Errorf("việc nền không biết: %v", run.Job)
 	}

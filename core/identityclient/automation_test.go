@@ -118,6 +118,28 @@ func TestClaimReturnsRunsAndCarriesTenant(t *testing.T) {
 	assertTenantOnWire(t, srv.sawTenant)
 }
 
+// The period identity decided for a SCHEDULED_REPORTS run reaches the runner unchanged, and UNSPECIFIED
+// stays UNSPECIFIED — the runner refuses that run rather than guessing (ADR 0086 B2). A wrapper that
+// dropped the field would make every scheduled report a FAILED run with nothing saying why.
+func TestClaimCarriesTheScheduledReportPeriod(t *testing.T) {
+	scope := &identityv1.AutomationRunScope{Job: identityv1.AutomationJob_AUTOMATION_JOB_SCHEDULED_REPORTS,
+		WorkKind: identityv1.WorkKind_WORK_KIND_VAN_BAN_DEN}
+	for _, p := range []identityv1.ScheduledReportPeriod{
+		identityv1.ScheduledReportPeriod_SCHEDULED_REPORT_PERIOD_MONTH,
+		identityv1.ScheduledReportPeriod_SCHEDULED_REPORT_PERIOD_UNSPECIFIED,
+	} {
+		srv := &fakeAutomationServer{runs: []*identityv1.AutomationRun{{RunId: "run-1", Scope: scope,
+			ClaimedAt: timestamppb.New(missedAt), ScheduledReportPeriod: p}}}
+		runs, err := moMay(t, srv).ClaimDueAutomationRuns(ngucCanh(), []*identityv1.AutomationRunScope{scope})
+		if err != nil {
+			t.Fatalf("Claim: %v", err)
+		}
+		if len(runs) != 1 || runs[0].ScheduledReportPeriod != p {
+			t.Errorf("period = %+v, want %v", runs, p)
+		}
+	}
+}
+
 func TestClaimRefusesUnaskedScopeAndUnsetClaimedAt(t *testing.T) {
 	other := &identityv1.AutomationRunScope{Job: identityv1.AutomationJob_AUTOMATION_JOB_SLA_REMINDERS,
 		WorkKind: identityv1.WorkKind_WORK_KIND_VAN_BAN_DEN}

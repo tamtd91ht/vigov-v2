@@ -197,7 +197,7 @@ func buildLetters(t *testing.T, k *khoVBGia, repo *letterRepoFake, dir *director
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { db.Close() })
 	kho := store.New(db)
-	uc := NewCitizenLetters(kho, repo, docstore.NewDaySoStore(kho), dir)
+	uc := NewCitizenLetters(kho, repo, docstore.NewDaySoStore(kho), dir, docstore.NewStaffNoticeOutboxStore(kho))
 	n := 0
 	uc.newID = func() (string, error) {
 		n++

@@ -320,6 +320,7 @@ const (
 	jobSLA       = identityv1.AutomationJob_AUTOMATION_JOB_SLA_REMINDERS
 	jobEscalate  = identityv1.AutomationJob_AUTOMATION_JOB_ESCALATION
 	jobDigest    = identityv1.AutomationJob_AUTOMATION_JOB_WEEKLY_DIGEST
+	jobReports   = identityv1.AutomationJob_AUTOMATION_JOB_SCHEDULED_REPORTS
 	kindIncoming = identityv1.WorkKind_WORK_KIND_VAN_BAN_DEN
 	kindLetter   = identityv1.WorkKind_WORK_KIND_DON_THU
 	succeeded    = identityv1.AutomationRunOutcome_AUTOMATION_RUN_OUTCOME_SUCCEEDED
@@ -355,17 +356,21 @@ func TestClaimRunAndRecordOutcome(t *testing.T) {
 	h.claim(communeA, "run-1", jobSLA)
 	h.runner.Tick(context.Background())
 
-	// Six scopes: three jobs × {VAN_BAN_DEN, DON_THU}. Never a petitions kind.
+	// Seven scopes: three jobs × {VAN_BAN_DEN, DON_THU}, plus scheduled_reports × VAN_BAN_DEN only
+	// (ADR 0086 B1 — documents' part is the incoming backlog). Never a petitions kind.
 	got := h.identity.claimed[communeA]
-	if len(got) != 6 {
-		t.Fatalf("claimed %d phạm vi, muốn 6", len(got))
+	if len(got) != 7 {
+		t.Fatalf("claimed %d phạm vi, muốn 7", len(got))
 	}
 	perKind := map[identityv1.WorkKind]int{}
 	for _, s := range got {
 		perKind[s.GetWorkKind()]++
+		if s.GetJob() == jobReports && s.GetWorkKind() != kindIncoming {
+			t.Errorf("scheduled_reports nhận cho loại %v — chỉ văn bản đến", s.GetWorkKind())
+		}
 	}
-	if perKind[kindIncoming] != 3 || perKind[kindLetter] != 3 {
-		t.Errorf("phạm vi theo loại = %v, muốn 3 văn bản đến + 3 đơn thư", perKind)
+	if perKind[kindIncoming] != 4 || perKind[kindLetter] != 3 {
+		t.Errorf("phạm vi theo loại = %v, muốn 4 văn bản đến + 3 đơn thư", perKind)
 	}
 	want := []string{"sla_reminders:due_soon:van-ban-den:2026-09-29:CB-001", "sla_reminders:overdue:van-ban-den:vb-late:2026-09-29"}
 	if keys := h.keys(communeA); strings.Join(keys, "|") != strings.Join(want, "|") {
