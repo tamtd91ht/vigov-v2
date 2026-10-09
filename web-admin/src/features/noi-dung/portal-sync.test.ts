@@ -24,16 +24,20 @@ import {
   intervalLabel,
   keyHint,
   keyRequirement,
+  API_URL_REQUIRED,
+  CATEGORIES_REQUIRED_TO_ENABLE,
+  groupChoices,
   KEY_FIRST_HINT,
   KEY_NEW_URL_HINT,
+  KEY_REQUIRED,
   KEY_SAVED_HINT,
   MAX_ITEMS_ERROR,
   MAX_ITEMS_PER_RUN_MAX,
-  orderAsTree,
+  pickMany,
+  PORTAL_SYNC_DESCRIPTION,
   outcomeLabel,
-  POLL_INTERVAL_MS,
-  POLL_MAX_ATTEMPTS,
   portalSyncStatus,
+  REFETCH_DELAYS_MS,
   portalSyncStatusLabel,
   runCountsLine,
   runErrorLine,
@@ -101,9 +105,16 @@ describe("status chip", () => {
     ).toEqual(["Đang bật", "Đang tắt", "Chưa cấu hình", "Thiếu khoá mã hoá"]);
   });
 
-  it("interval 0 reads as manual only", () => {
-    expect(intervalLabel(0)).toBe("Chỉ chạy tay");
+  it("the prototype's interval names where it has one; every other hour is `Mỗi N giờ`", () => {
+    expect(intervalLabel(0)).toBe("Chỉ chạy khi bấm tay");
+    expect(intervalLabel(1)).toBe("Mỗi giờ");
     expect(intervalLabel(6)).toBe("Mỗi 6 giờ");
+    expect(intervalLabel(24)).toBe("Mỗi ngày");
+    expect(intervalLabel(12)).toBe("Mỗi 12 giờ");
+  });
+
+  it("the dialog's sentence is the prototype's, verbatim", () => {
+    expect(PORTAL_SYNC_DESCRIPTION).toBe("Tin đã đăng trên Cổng của xã sẽ tự về sổ tin này, khỏi phải gõ lại.");
   });
 });
 
@@ -137,11 +148,8 @@ describe("runs", () => {
     expect(runNowBlockedReason(settingsOut({ encryption_configured: false }), undefined)).toContain("khoá mã hoá");
   });
 
-  it("polling is BOUNDED: a handful of reads a few seconds apart, about a minute in all", () => {
-    expect(POLL_MAX_ATTEMPTS).toBeGreaterThan(0);
-    expect(POLL_MAX_ATTEMPTS).toBeLessThanOrEqual(20);
-    expect(POLL_INTERVAL_MS).toBeGreaterThanOrEqual(2000);
-    expect(POLL_MAX_ATTEMPTS * POLL_INTERVAL_MS).toBeLessThanOrEqual(120_000);
+  it("after a run is started the card re-reads itself THREE times — 4 s, 15 s, 45 s — then never again", () => {
+    expect(REFETCH_DELAYS_MS).toEqual([4000, 15000, 45000]);
   });
 });
 
@@ -155,13 +163,14 @@ describe("settings form — the key is write-only", () => {
     const f = formFromSettings(s);
     expect(keyRequirement(s, f)).toBeNull();
     expect(keyHint(s, f)).toBe(KEY_SAVED_HINT);
-    expect(settingsFormError(s, f)).toBeNull();
+    expect(KEY_SAVED_HINT).toBe("Để trống nếu không đổi.");
+    expect(settingsFormError(s, f, 1)).toBeNull();
 
     const moved = { ...f, api_url: "https://khac.danang.gov.vn/api" };
     expect(keyRequirement(s, moved)).toBe("new-url");
     expect(keyHint(s, moved)).toBe(KEY_NEW_URL_HINT);
-    expect(settingsFormError(s, moved)).toBe(KEY_NEW_URL_HINT);
-    expect(settingsFormError(s, { ...moved, api_key: "abc" })).toBeNull();
+    expect(settingsFormError(s, moved, null)).toEqual({ field: "api_key", text: KEY_NEW_URL_HINT });
+    expect(settingsFormError(s, { ...moved, api_key: "abc" }, null)).toBeNull();
 
     // Trimming only — same rule as domain.PortalAPIURLChanged.
     expect(keyRequirement(s, { ...f, api_url: `  ${s.api_url} ` })).toBeNull();
@@ -169,7 +178,10 @@ describe("settings form — the key is write-only", () => {
     const fresh = settingsOut({ configured: false, api_key_set: false, api_url: "" });
     const ff = { ...formFromSettings(fresh), api_url: "https://xa.danang.gov.vn/api" };
     expect(keyRequirement(fresh, ff)).toBe("first");
-    expect(settingsFormError(fresh, ff)).toBe(KEY_FIRST_HINT);
+    expect(keyHint(fresh, ff)).toBe(KEY_FIRST_HINT);
+    expect(KEY_FIRST_HINT).toBe("Do đơn vị vận hành Cổng cấp.");
+    expect(settingsFormError(fresh, ff, 0)).toEqual({ field: "api_key", text: KEY_REQUIRED });
+    expect(KEY_REQUIRED).toBe("Nhập mã bảo mật do Cổng cấp.");
   });
 
   it("the body is the whole form; the key only when typed, untrimmed", () => {
@@ -188,22 +200,34 @@ describe("settings form — the key is write-only", () => {
     expect(settingsBody({ ...f, api_key: "k3y" }).api_key).toBe("k3y");
   });
 
-  it("a half-typed number holds Lưu with a sentence, never sent as 0", () => {
+  it("a half-typed number holds Lưu with a sentence under its box, never sent as 0", () => {
     const s = settingsOut();
     const f = formFromSettings(s);
-    expect(settingsFormError(s, { ...f, window_days: "" })).toContain("Số ngày");
-    expect(settingsFormError(s, { ...f, max_items_per_run: "0" })).toContain("Số tin tối đa");
-    expect(settingsFormError(s, { ...f, api_url: "  " })).toContain("địa chỉ API");
+    expect(settingsFormError(s, { ...f, window_days: "" }, 1)).toEqual({ field: "window_days", text: WINDOW_DAYS_ERROR });
+    expect(settingsFormError(s, { ...f, max_items_per_run: "0" }, 1)).toEqual({ field: "max_items_per_run", text: MAX_ITEMS_ERROR });
+    expect(settingsFormError(s, { ...f, api_url: "  " }, 1)).toEqual({ field: "api_url", text: API_URL_REQUIRED });
+    expect(API_URL_REQUIRED).toBe("Nhập địa chỉ API của Cổng.");
+  });
+
+  it("switching sync on with no category ticked is refused — unless the tree could not be read", () => {
+    const s = settingsOut();
+    const on = { ...formFromSettings(s), is_enabled: true };
+    expect(settingsFormError(s, on, 0)).toEqual({ field: "categories", text: CATEGORIES_REQUIRED_TO_ENABLE });
+    expect(CATEGORIES_REQUIRED_TO_ENABLE).toBe("Chọn ít nhất một chuyên mục trước khi bật đồng bộ.");
+    expect(settingsFormError(s, on, 2)).toBeNull();
+    // Unknown (the portal did not answer): the server decides, nothing is guessed here.
+    expect(settingsFormError(s, on, null)).toBeNull();
+    expect(settingsFormError(s, { ...on, is_enabled: false }, 0)).toBeNull();
   });
 
   it("the owner's ceilings hold Lưu with a sentence naming the range: window 1..90, items 1..100", () => {
     const s = settingsOut();
     const f = formFromSettings(s);
-    expect(settingsFormError(s, { ...f, window_days: "90", max_items_per_run: "100" })).toBeNull();
-    expect(settingsFormError(s, { ...f, window_days: "1", max_items_per_run: "1" })).toBeNull();
-    expect(settingsFormError(s, { ...f, window_days: "91" })).toBe(WINDOW_DAYS_ERROR);
-    expect(settingsFormError(s, { ...f, window_days: "0" })).toBe(WINDOW_DAYS_ERROR);
-    expect(settingsFormError(s, { ...f, max_items_per_run: "101" })).toBe(MAX_ITEMS_ERROR);
+    expect(settingsFormError(s, { ...f, window_days: "90", max_items_per_run: "100" }, 1)).toBeNull();
+    expect(settingsFormError(s, { ...f, window_days: "1", max_items_per_run: "1" }, 1)).toBeNull();
+    expect(settingsFormError(s, { ...f, window_days: "91" }, 1)?.text).toBe(WINDOW_DAYS_ERROR);
+    expect(settingsFormError(s, { ...f, window_days: "0" }, 1)?.text).toBe(WINDOW_DAYS_ERROR);
+    expect(settingsFormError(s, { ...f, max_items_per_run: "101" }, 1)?.text).toBe(MAX_ITEMS_ERROR);
     expect(WINDOW_DAYS_ERROR).toContain("từ 1 tới 90");
     expect(MAX_ITEMS_ERROR).toContain("từ 1 tới 100");
     // Never sent past a ceiling: the body carries null, not 91 (and Lưu is off anyway).
@@ -254,18 +278,45 @@ describe("category tree", () => {
     expect(TARGET_KIND_OPTIONS.map((o) => o.value)).toEqual(["tin-tuc", "su-kien", "thong-bao"]);
   });
 
-  it("orders roots then children with depth; missing ones at the root, flagged", () => {
-    const rows = orderAsTree(choicesFromTree(TREE));
-    expect(rows.map((r) => [r.choice.external_id, r.depth])).toEqual([
-      ["1", 0],
-      ["2", 1],
-      ["3", 0],
-      ["4", 1],
-      ["9", 0],
+  it("groups by parent in the portal's order; no parent (or dropped by the portal) → `Khác`", () => {
+    const groups = groupChoices(choicesFromTree(TREE));
+    expect(groups.map((g) => [g.name, g.items.map((c) => c.external_id)])).toEqual([
+      ["Khác", ["1", "3", "9"]],
+      ["Danh mục", ["2"]],
+      ["Kinh tế", ["4"]],
     ]);
-    expect(rows.find((r) => r.choice.external_id === "9")?.choice.on_portal).toBe(false);
-    // Against the ceiling, and the missing-but-selected one counts: the server's 30 counts it too.
-    expect(selectedCountLabel(choicesFromTree(TREE))).toBe("đã chọn 3/30");
+    expect(choicesFromTree(TREE).find((c) => c.external_id === "9")?.on_portal).toBe(false);
+    // The prototype's counter: ticked over the rows listed. The missing-but-selected one counts.
+    expect(selectedCountLabel(choicesFromTree(TREE))).toBe("đã chọn 3/5");
+  });
+
+  it("two parents sharing a name stay two groups — the reason the list is grouped at all", () => {
+    const groups = groupChoices([
+      { external_id: "a", name: "Chuyển đổi số", parent_id: "P1", parent_name: "Tin tức", selected: false, target_kind: "", on_portal: true },
+      { external_id: "b", name: "Chuyển đổi số", parent_id: "P2", parent_name: "Tin tức", selected: false, target_kind: "", on_portal: true },
+    ]);
+    expect(groups).toHaveLength(2);
+  });
+
+  it("`chọn cả mục` ticks a group up to the ceiling, keeping a kind already set; `bỏ cả mục` unticks only it", () => {
+    const many: CategoryChoice[] = Array.from({ length: 32 }, (_, i) => ({
+      external_id: String(i),
+      name: `C${i}`,
+      parent_id: "",
+      parent_name: "",
+      selected: i < 28,
+      target_kind: i === 0 ? "thong-bao" : i < 28 ? "tin-tuc" : "",
+      on_portal: true,
+    }));
+    const group = new Set(["0", "28", "29", "30", "31"]);
+    const taken = pickMany(many, group, true, "tin-tuc");
+    expect(taken.filter((c) => c.selected).length).toBe(SELECTED_CATEGORIES_MAX);
+    expect(taken.find((c) => c.external_id === "0")?.target_kind).toBe("thong-bao");
+    expect(taken.filter((c) => ["28", "29"].includes(c.external_id)).every((c) => c.selected && c.target_kind === "tin-tuc")).toBe(true);
+    expect(taken.filter((c) => ["30", "31"].includes(c.external_id)).some((c) => c.selected)).toBe(false);
+    const dropped = pickMany(taken, group, false, "tin-tuc");
+    expect(dropped.filter((c) => group.has(c.external_id)).some((c) => c.selected)).toBe(false);
+    expect(dropped.filter((c) => c.selected).length).toBe(27);
   });
 
   it("`Chọn tất cả` stops at 30, already-ticked ones counted first; missing rows are never ticked by it", () => {
@@ -273,11 +324,12 @@ describe("category tree", () => {
       external_id: String(i),
       name: `C${i}`,
       parent_id: "",
+      parent_name: "",
       selected: i >= 35, // five already ticked, at the END of the order
       target_kind: i >= 35 ? "su-kien" : "",
       on_portal: true,
     }));
-    many.push({ external_id: "gone", name: "Gone", parent_id: "", selected: false, target_kind: "", on_portal: false });
+    many.push({ external_id: "gone", name: "Gone", parent_id: "", parent_name: "", selected: false, target_kind: "", on_portal: false });
     const after = selectAllUpToLimit(many, "tin-tuc");
     expect(after.filter((c) => c.selected).length).toBe(SELECTED_CATEGORIES_MAX);
     expect(after.slice(0, 25).every((c) => c.selected && c.target_kind === "tin-tuc")).toBe(true);
@@ -286,15 +338,6 @@ describe("category tree", () => {
     expect(after.find((c) => c.external_id === "gone")?.selected).toBe(false);
     // Already at the ceiling: nothing moves.
     expect(selectAllUpToLimit(after, "tin-tuc")).toEqual(after);
-  });
-
-  it("a cycle or an unknown parent cannot drop or repeat a row", () => {
-    const rows = orderAsTree([
-      { external_id: "a", name: "A", parent_id: "b", selected: false, target_kind: "", on_portal: true },
-      { external_id: "b", name: "B", parent_id: "a", selected: false, target_kind: "", on_portal: true },
-      { external_id: "c", name: "C", parent_id: "zz", selected: false, target_kind: "", on_portal: true },
-    ]);
-    expect(rows.map((r) => r.choice.external_id).sort()).toEqual(["a", "b", "c"]);
   });
 
   it("the body holds ONLY what changed, each entry with a valid kind", () => {

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { PhienDaDoc } from "@/features/phien/phien-hien-tai";
 
 import { NO_MINI_APP_ACCESS } from "./mini-app-tabs";
-import { MiniAppFrame } from "./mini-app-workspace";
+import { MiniAppFrame, TAB_BODY_CLASS } from "./mini-app-workspace";
 
 /**
  * Tab gating of `/mini-app`: each tab on its own key, the other tab's screen never mounted, the denied and
@@ -84,6 +84,26 @@ describe("/mini-app tabs", () => {
     expect(html).not.toContain("<a ");
     expect(html).not.toContain("SCREEN");
     expect(html).toContain('role="status"');
+  });
+
+  it("the prototype's frame: a full-width white band of tabs over a line, then ONE padded body for either tab", () => {
+    const html = render(sessionWith(["content.read", "admin.user"]));
+    expect(html).toMatch(/<nav aria-label="Ngăn của màn Nội dung Mini App" class="min-w-0 bg-white px-4 pt-5 md:px-7">/);
+    const links = tabLinks(html);
+    expect(links[0]).toContain("rounded-t-[10px] border border-b-0 px-4 py-2.5 text-[13px] font-semibold");
+    expect(links[0]).toContain("border-line bg-white text-navy");
+    expect(links[1]).toContain("border-transparent text-ink-muted hover:text-navy");
+    expect(html).toContain('<div class="border-t border-line"></div></nav>');
+    // The body padding (prototype `p-7`) is drawn HERE once — the tab's screen sits inside it.
+    expect(html).toContain(`<div class="${TAB_BODY_CLASS}" data-testid="mini-app-tab-body"><p>CONTENT-SCREEN</p></div>`);
+    expect(TAB_BODY_CLASS).toContain("md:p-7");
+    const directory = render(sessionWith(["content.read", "admin.user"]), "danh-ba");
+    expect(directory).toContain(`<div class="${TAB_BODY_CLASS}" data-testid="mini-app-tab-body"><p>DIRECTORY-SCREEN</p></div>`);
+  });
+
+  it("the denied sentence gets the same padding (the page's own is off on this route)", () => {
+    const html = render(sessionWith(["report.read"]));
+    expect(html.startsWith(`<div class="${TAB_BODY_CLASS}">`)).toBe(true);
   });
 
   it("session could not be read: the server's sentence, no tab, no screen", () => {

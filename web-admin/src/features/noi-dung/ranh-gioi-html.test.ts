@@ -159,8 +159,10 @@ describe("ranh giới HTML của màn Nội dung Mini App", () => {
       }
     }
     // A scan that finds nothing is a scan that is always green: the previews exist, so they must be seen.
-    expect(found.length).toBeGreaterThanOrEqual(3);
-    expect(found.some((f) => f.startsWith("broadcast-audio-field.tsx"))).toBe(true);
+    // One since 09/10/2026: the cover's preview left the form, and so did the broadcast's `<audio>` player
+    // (prototype parity — the edit form shows the same two boxes as create, no player). An `<audio>` or
+    // `<img>` added back must come through the allow-list above.
+    expect(found.length).toBeGreaterThanOrEqual(1);
     expect(found.some((f) => f.startsWith("body-image-view.tsx"))).toBe(true);
     // `bodyImagePreviewSrc` anywhere else is not a way around the rule above: only the NodeView may bind it.
     expect(

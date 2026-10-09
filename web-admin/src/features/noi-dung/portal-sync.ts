@@ -26,14 +26,19 @@ import type {
 /* ── Card ──────────────────────────────────────────────────────────────────────────────────────── */
 
 export const PORTAL_SYNC_TITLE = "Đồng bộ tin từ Cổng thông tin điện tử";
-export const PORTAL_SYNC_DESCRIPTION =
-  "Tin đã đăng trên Cổng thông tin của xã sẽ tự về sổ tin này, khỏi phải gõ lại.";
+/** The config dialog's one sentence — verbatim, prototype `ContentSourcePanel.tsx:319`. */
+export const PORTAL_SYNC_DESCRIPTION = "Tin đã đăng trên Cổng của xã sẽ tự về sổ tin này, khỏi phải gõ lại.";
+/** The dialog's two footer buttons (prototype `ContentSourcePanel.tsx:556-563`). */
+export const CANCEL_LABEL = "Huỷ";
+export const SAVE_CONFIG_LABEL = "Lưu cấu hình";
 export const RUN_NOW_LABEL = "Đồng bộ ngay";
 export const CONFIGURE_LABEL = "Cấu hình";
-export const RELOAD_LABEL = "Tải lại";
-export const HISTORY_LABEL = "Lịch sử đồng bộ";
+/** The primary button before the commune connected anything (prototype `ContentSourcePanel.tsx:170`). */
+export const CONNECT_LABEL = "Nối Cổng thông tin";
+/** The card's line before the commune connected anything — verbatim, prototype `ContentSourcePanel.tsx:126`. */
+export const NOT_CONNECTED =
+  "Chưa nối. Xã nào đã có Cổng thông tin riêng thì khai báo ở đây để khỏi phải đăng tin hai lần.";
 export const LOADING_SETTINGS = "Đang tải cấu hình đồng bộ…";
-export const NO_RUN_YET = "Chưa chạy lượt đồng bộ nào.";
 
 /**
  * The four states of the chip. ORDER MATTERS: without the platform's encryption key nothing can be
@@ -58,12 +63,11 @@ export function portalSyncStatusLabel(st: PortalSyncStatus): string {
   return STATUS_LABEL[st];
 }
 
-/** `globals.css` has a green and a grey chip only; the TEXT says which of the three grey states it is. */
-export function portalSyncStatusChipClass(st: PortalSyncStatus): string {
-  return st === "enabled" ? "chip chip-hoat-dong" : "chip chip-ngung";
-}
-
-/** One sentence under the chip saying what the state means and what to do. */
+/**
+ * What a state means and what to do. No longer printed under the card's status line (owner D3,
+ * 09/10/2026: the prototype's line is `Đang bật|Đang tắt · …` alone); the settings form still says the
+ * `missing-encryption` one, since without it nothing can be saved.
+ */
 const STATUS_EXPLAINER: Readonly<Record<PortalSyncStatus, string>> = {
   "missing-encryption":
     "Nền tảng chưa có khoá mã hoá bí mật, nên chưa lưu hay dùng được mã bảo mật của Cổng. " +
@@ -77,13 +81,38 @@ export function portalSyncStatusExplainer(st: PortalSyncStatus): string {
   return STATUS_EXPLAINER[st];
 }
 
-/** Interval 0 is "manual only" (ADR 0067 §2 "Ghi" #4). */
+/**
+ * The prototype's interval names (`ContentSourcePanel.tsx:32-38`) for the hours it shares with the server;
+ * every other hour of 0..24 reads `Mỗi N giờ`. Interval 0 is "manual only" (ADR 0067 §2 "Ghi" #4). The
+ * card's status line and the dialog's select both read this, so the two never name one value twice.
+ */
 export function intervalLabel(hours: number): string {
-  return hours === 0 ? "Chỉ chạy tay" : `Mỗi ${hours} giờ`;
+  if (hours === 0) return "Chỉ chạy khi bấm tay";
+  if (hours === 1) return "Mỗi giờ";
+  if (hours === 24) return "Mỗi ngày";
+  return `Mỗi ${hours} giờ`;
 }
 
-/** 0..24 — the select's options, in order. The server's bound (`PortalIntervalMax`), stated once. */
-export const INTERVAL_OPTIONS: readonly number[] = Array.from({ length: 25 }, (_, i) => i);
+/**
+ * The prototype's set (`ContentSourcePanel.tsx:32-38`) in the server's whole hours: manual, hourly, every
+ * 6 hours, daily. Its `Mỗi 15 phút` has no hour value — the card draws it as a disabled option with a "?"
+ * (`INTERVAL_15_MIN_PART`).
+ */
+export const INTERVAL_OPTIONS: readonly number[] = [0, 1, 6, 24];
+
+/** The label of the prototype's 15-minute option, drawn disabled. */
+export const INTERVAL_15_MIN_LABEL = "Mỗi 15 phút";
+
+/**
+ * The select's hour options. A stored interval outside the prototype's set (any of the server's 0..24) is
+ * added in its place: dropping it would show another option as selected, and the next `Lưu cấu hình` would
+ * silently change the commune's schedule.
+ */
+export function intervalOptions(current: number): number[] {
+  const out = [...INTERVAL_OPTIONS];
+  if (!out.includes(current)) out.push(current);
+  return out.sort((a, b) => a - b);
+}
 
 export const PUBLISH_MODE_REVIEW = "cho-duyet";
 export const PUBLISH_MODE_DIRECT = "dang-thang";
@@ -96,25 +125,16 @@ export function publishModeLabel(mode: string): string {
 }
 
 /**
- * The two radio options of the form, each with the sentence saying what it does to the residents.
- * `Chờ duyệt` first and marked default: ADR 0067 §2 "Chế độ đăng" #1.
+ * The prototype's checkbox (`ContentSourcePanel.tsx:528-534`) in place of a two-option picker: ticked =
+ * `dang-thang`, unticked = `cho-duyet`. A commune that never ticked it stays on `cho-duyet`, the default
+ * of ADR 0067 §2 "Chế độ đăng" #1 (the prototype ticks it by default — that is the point ADR 0067 overrides).
  */
-export const PUBLISH_MODE_OPTIONS: readonly { value: string; label: string; explainer: string }[] = [
-  {
-    value: PUBLISH_MODE_REVIEW,
-    label: "Chờ duyệt (mặc định)",
-    explainer:
-      "Tin về từ Cổng nằm trong sổ ở trạng thái “Chờ duyệt”; bà con chưa thấy cho tới khi cán bộ mở bài, " +
-      "tích “Đăng lên Mini App” rồi Lưu.",
-  },
-  {
-    value: PUBLISH_MODE_DIRECT,
-    label: "Đăng thẳng",
-    explainer:
-      "Tin về từ Cổng hiện ngay cho bà con trên Mini App, không qua bước duyệt. Chỉ chọn khi xã tin " +
-      "mọi tin trên Cổng đều đăng được cho dân.",
-  },
-];
+export const PUBLISH_DIRECT_LABEL = "Tin về thì đăng thẳng lên Mini App";
+export const ENABLED_LABEL = "Bật đồng bộ tự động";
+export const KEEP_SOURCE_LABEL = "Ghi rõ nguồn tin gốc";
+/** Its note, verbatim (`ContentSourcePanel.tsx:542-545`); the checkbox itself is a "?" (`PHAN_CHUA_DUNG`). */
+export const DOWNLOAD_IMAGES_NOTE =
+  "Ảnh trên Cổng phục vụ qua http, mà Mini App chạy trên https sẽ chặn. Tắt mục này thì tin về không có ảnh.";
 
 /* ── Runs ──────────────────────────────────────────────────────────────────────────────────────── */
 
@@ -128,19 +148,6 @@ const OUTCOME_LABEL: Readonly<Record<string, string>> = {
 export function outcomeLabel(outcome: string): string {
   if (outcome === "") return "Đang chạy";
   return OUTCOME_LABEL[outcome] ?? outcome;
-}
-
-export function outcomeChipClass(outcome: string): string {
-  return outcome === "thanh-cong" ? "chip chip-hoat-dong" : "chip chip-ngung";
-}
-
-const TRIGGER_LABEL: Readonly<Record<string, string>> = {
-  "theo-lich": "Theo lịch",
-  "chay-tay": "Chạy tay",
-};
-
-export function triggerLabel(kind: string): string {
-  return TRIGGER_LABEL[kind] ?? kind;
 }
 
 /** A run with no `finished_at` is still running (or crashed, until the server's reaper closes it). */
@@ -169,19 +176,20 @@ export function runErrorLine(e: comms_portalRunErrorOut): string {
   return e.count > 1 ? `${where}: ${e.error} (${e.count} lần)` : `${where}: ${e.error}`;
 }
 
-/* ── Bounded polling after `⟳ Đồng bộ ngay` ───────────────────────────────────────────────────── */
+/* ── After `⟳ Đồng bộ ngay`: three re-reads, then silence ─────────────────────────────────────── */
+
+/** The toasts of `Đồng bộ ngay` — verbatim, prototype `ContentSourcePanel.tsx:84-88`. */
+export const RUN_STARTED_TOAST = "Đang lấy tin về. Vài chục giây nữa mở lại màn hình này để xem kết quả.";
+export const RUN_REFUSED_TOAST = "Không xếp được lượt đồng bộ.";
 
 /**
- * After a 202 the screen re-reads the history a FEW times, then stops. NOT FOREVER: a run on a slow
- * portal can take many minutes (100 articles, images through ClamAV), and an open tab polling until it
- * ends is a request every few seconds per open admin screen of every commune. Twelve reads five seconds
- * apart cover a normal run; after that the officer presses `Tải lại`.
+ * After a 202 the card re-reads itself (settings + newest run) at these delays, then stops (owner,
+ * 09/10/2026 — replaces the old 5-second polling). NOT FOREVER: a run on a slow portal can take many
+ * minutes, and an open tab polling until it ends is a request every few seconds per open admin screen of
+ * every commune. Three reads cover a normal run; a longer one is seen the next time the screen opens,
+ * which is what the toast tells the officer.
  */
-export const POLL_INTERVAL_MS = 5000;
-export const POLL_MAX_ATTEMPTS = 12;
-export const POLL_GAVE_UP =
-  "Lượt đồng bộ vẫn đang chạy ở máy chủ. Màn hình đã thôi tự kiểm tra — bấm “Tải lại” để xem kết quả.";
-export const RUN_STARTED = "Đã mở một lượt đồng bộ. Kết quả sẽ hiện ở đây khi lượt chạy xong.";
+export const REFETCH_DELAYS_MS: readonly number[] = [4000, 15000, 45000];
 
 /**
  * The wait after 503 `portal_sync_busy`, from the server's `Retry-After` (60 s today). Said, never acted
@@ -191,9 +199,6 @@ export function retryWaitLabel(seconds: number): string {
   if (seconds < 60) return `Có thể bấm lại sau khoảng ${seconds} giây.`;
   return `Có thể bấm lại sau khoảng ${Math.ceil(seconds / 60)} phút.`;
 }
-
-/** The card's way into §6's `Chờ duyệt` queue (the table's `Trạng thái` filter). */
-export const SHOW_PENDING_LABEL = "Xem các tin chờ duyệt";
 
 /** Why `⟳ Đồng bộ ngay` is off, or `null` when it is on. UX only — the server answers 409/503 anyway. */
 export function runNowBlockedReason(
@@ -253,12 +258,29 @@ export function keyRequirement(s: comms_portalSyncSettingsOut, form: SettingsFor
   return null;
 }
 
-export const KEY_SAVED_HINT = "Đã lưu khoá. Để trống nếu không đổi.";
-export const KEY_FIRST_HINT = "Chưa có mã bảo mật — bắt buộc nhập ở lần lưu đầu tiên.";
+/*
+ * The prototype's hints (`ContentSourcePanel.tsx:337-341`). Its configured hint reads `Đang dùng {hint}.
+ * Để trống nếu không đổi.`; `{hint}` is drawn as a disabled "?" (`KEY_IN_USE_PART`): the settings response
+ * carries `api_key_set` and nothing derived from the key (backend gap — no `secret_hint` field exists), and
+ * a hint built here would have to come from the key itself, which never comes back.
+ */
+export const KEY_IN_USE_PREFIX = "Đang dùng";
+export const KEY_SAVED_HINT = "Để trống nếu không đổi.";
+export const KEY_FIRST_HINT = "Do đơn vị vận hành Cổng cấp.";
+/** Stricter than the prototype, and kept: ADR 0067 §2 decision 5 — the stored key never follows a new address. */
 export const KEY_NEW_URL_HINT =
   "Đã đổi địa chỉ API thì phải nhập lại mã bảo mật: mã cũ không được gửi tới một địa chỉ chưa từng dùng nó.";
-export const API_URL_HINT =
-  "Bắt đầu bằng https://, tên máy kết thúc bằng .gov.vn — ví dụ https://<tên-xã>.danang.gov.vn/DesktopModules/cttdt/api/apichiase";
+export const KEY_KEEP_PLACEHOLDER = "Giữ nguyên mã cũ";
+/**
+ * The address box's placeholder: the shape of a Đà Nẵng portal address with `<tên-xã>` where the
+ * prototype names one commune — one bundle serves every commune (rule 1, invariant 10).
+ */
+export const API_URL_PLACEHOLDER = "https://<tên-xã>.danang.gov.vn/DesktopModules/cttdt/api/apichiase";
+
+/** The prototype's three refusals on `Lưu cấu hình` (`ContentSourcePanel.tsx:273-285`), verbatim. */
+export const API_URL_REQUIRED = "Nhập địa chỉ API của Cổng.";
+export const KEY_REQUIRED = "Nhập mã bảo mật do Cổng cấp.";
+export const CATEGORIES_REQUIRED_TO_ENABLE = "Chọn ít nhất một chuyên mục trước khi bật đồng bộ.";
 
 export function keyHint(s: comms_portalSyncSettingsOut, form: SettingsForm): string {
   const req = keyRequirement(s, form);
@@ -277,8 +299,9 @@ export const WINDOW_DAYS_MAX = 90;
 export const MAX_ITEMS_PER_RUN_MAX = 100;
 export const SELECTED_CATEGORIES_MAX = 30;
 
-export const WINDOW_DAYS_HINT = `Từ 1 tới ${WINDOW_DAYS_MAX} ngày — ${WINDOW_DAYS_MAX} là mức tối đa, xã chọn ít hơn được.`;
-export const MAX_ITEMS_HINT = `Từ 1 tới ${MAX_ITEMS_PER_RUN_MAX} tin — ${MAX_ITEMS_PER_RUN_MAX} là mức tối đa, xã chọn ít hơn được.`;
+/** The prototype's unit hints under the two number boxes (`ContentSourcePanel.tsx:497,509`). */
+export const WINDOW_DAYS_HINT = "ngày trở lại";
+export const MAX_ITEMS_HINT = "tin";
 export const WINDOW_DAYS_ERROR = `Số ngày lấy tin phải là một số nguyên từ 1 tới ${WINDOW_DAYS_MAX}.`;
 export const MAX_ITEMS_ERROR = `Số tin tối đa mỗi lượt phải là một số nguyên từ 1 tới ${MAX_ITEMS_PER_RUN_MAX}.`;
 
@@ -290,16 +313,33 @@ function intInRange(text: string, max: number): number | null {
   return n >= 1 && n <= max ? n : null;
 }
 
+/** Which box a refusal belongs to — the sentence is drawn under that box. */
+export type SettingsField = "api_url" | "api_key" | "window_days" | "max_items_per_run" | "categories";
+
 /**
- * The sentence that holds `Lưu cấu hình` off, or `null`. What the officer can see is missing or past a
- * ceiling — the url shape stays the server's 400, shown verbatim.
+ * The first refusal of `Lưu cấu hình`, or `null`: what the officer can see is missing or past a ceiling —
+ * the url shape stays the server's 400, shown verbatim.
+ *
+ * `selected` is how many categories are ticked, or `null` when that is not known (the tree could not be
+ * read): then the categories rule is the server's, not guessed here. A commune not yet configured has no
+ * tree, so it passes `0` — the prototype refuses to switch sync on with nothing chosen, because a call to
+ * the portal with an empty category list drags every record back.
  */
-export function settingsFormError(s: comms_portalSyncSettingsOut, form: SettingsForm): string | null {
-  if (form.api_url.trim() === "") return "Hãy nhập địa chỉ API của Cổng.";
+export function settingsFormError(
+  s: comms_portalSyncSettingsOut,
+  form: SettingsForm,
+  selected: number | null,
+): { field: SettingsField; text: string } | null {
+  if (form.api_url.trim() === "") return { field: "api_url", text: API_URL_REQUIRED };
   const req = keyRequirement(s, form);
-  if (req !== null && form.api_key === "") return req === "first" ? KEY_FIRST_HINT : KEY_NEW_URL_HINT;
-  if (intInRange(form.window_days, WINDOW_DAYS_MAX) === null) return WINDOW_DAYS_ERROR;
-  if (intInRange(form.max_items_per_run, MAX_ITEMS_PER_RUN_MAX) === null) return MAX_ITEMS_ERROR;
+  if (req !== null && form.api_key === "") {
+    return { field: "api_key", text: req === "first" ? KEY_REQUIRED : KEY_NEW_URL_HINT };
+  }
+  if (form.is_enabled && selected === 0) return { field: "categories", text: CATEGORIES_REQUIRED_TO_ENABLE };
+  if (intInRange(form.window_days, WINDOW_DAYS_MAX) === null) return { field: "window_days", text: WINDOW_DAYS_ERROR };
+  if (intInRange(form.max_items_per_run, MAX_ITEMS_PER_RUN_MAX) === null) {
+    return { field: "max_items_per_run", text: MAX_ITEMS_ERROR };
+  }
   return null;
 }
 
@@ -335,24 +375,30 @@ export const TARGET_KIND_OPTIONS: readonly { value: string; label: string }[] = 
 /** A newly ticked category starts as `Tin tức` — the server refuses an entry without a valid kind. */
 export const DEFAULT_TARGET_KIND = "tin-tuc";
 
-export const MISSING_ON_PORTAL = "không còn trên cổng";
+/** Verbatim, prototype `ContentSourcePanel.tsx:355-394`. */
+export const CATEGORIES_TITLE = "Chuyên mục lấy về";
 export const CATEGORIES_NEED_SETTINGS =
-  "Lưu địa chỉ API và mã bảo mật trước — sau đó danh sách chuyên mục của Cổng sẽ hiện ở đây.";
+  "Lưu cấu hình một lần trước, rồi mở lại để chọn chuyên mục — danh sách này hỏi thẳng từ Cổng nên cần mã bảo mật.";
+export const CATEGORIES_UNREACHABLE = "Không gọi được sang Cổng. Kiểm tra lại địa chỉ và mã bảo mật.";
+/** For a screen reader beside the skeleton — the skeleton itself says nothing. */
 export const CATEGORIES_LOADING = "Đang hỏi Cổng danh sách chuyên mục…";
 export const CATEGORIES_EMPTY = "Cổng không trả về chuyên mục nào.";
-export const CATEGORIES_NOTHING_CHANGED = "Không có chuyên mục nào thay đổi — chưa gửi gì.";
-export const CATEGORIES_SAVED = "Đã lưu lựa chọn chuyên mục.";
 /** Beside the server's 403 sentence when the tree needs `content.update` (D3) and the account lacks it. */
 export const CATEGORIES_NEED_UPDATE = "Cần quyền sửa nội dung để xem cây chuyên mục.";
 export const CATEGORIES_LIMIT_REACHED =
   `Đã chọn đủ ${SELECTED_CATEGORIES_MAX} chuyên mục — mức tối đa của mỗi xã. Bỏ chọn một chuyên mục để chọn chuyên mục khác.`;
-export const SETTINGS_SAVED = "Đã lưu cấu hình đồng bộ.";
+/** The success toast of `Lưu cấu hình` — verbatim, prototype `ContentSourcePanel.tsx:300`. */
+export const SETTINGS_SAVED = "Đã lưu cấu hình nguồn tin.";
+/** The group of categories with no parent on the portal — the prototype's `group_name || "Khác"`. */
+export const NO_PARENT_GROUP = "Khác";
 
 /** One row of the picker: a portal category (live) or a stored one the portal no longer lists. */
 export type CategoryChoice = {
   external_id: string;
   name: string;
   parent_id: string;
+  /** The parent's name on the portal — the group heading. `""` for a root or a row the portal dropped. */
+  parent_name: string;
   selected: boolean;
   target_kind: string;
   on_portal: boolean;
@@ -364,6 +410,7 @@ export function choicesFromTree(tree: comms_portalCategoryTreeOut): CategoryChoi
     external_id: n.external_id,
     name: n.name,
     parent_id: n.parent_id,
+    parent_name: n.parent_name,
     selected: n.is_selected,
     target_kind: n.target_kind,
     on_portal: true,
@@ -375,6 +422,7 @@ export function choicesFromTree(tree: comms_portalCategoryTreeOut): CategoryChoi
       external_id: m.external_id,
       name: m.name,
       parent_id: "",
+      parent_name: "",
       selected: m.is_selected,
       target_kind: m.target_kind,
       on_portal: false,
@@ -384,35 +432,47 @@ export function choicesFromTree(tree: comms_portalCategoryTreeOut): CategoryChoi
 }
 
 /**
- * Order the choices as a tree: each root followed by its descendants, `depth` for the indent. A parent
- * the list does not hold makes its child a root, and a cycle in the portal's data cannot loop — every
- * row appears exactly once.
+ * The picker's groups, by parent, in the order the portal listed them (prototype `groupOptions`,
+ * `ContentSourcePanel.tsx:53-67`). NOT FOR TIDINESS: a commune's portal has two categories both called
+ * "Chuyển đổi số" under different parents, and a flat list shows two identical lines.
+ *
+ * KEYED BY THE PARENT'S ID, LABELLED BY ITS NAME: two parents sharing a name stay two groups. A row with
+ * no parent — a root, or a stored row the portal no longer lists — goes under `Khác`.
  */
-export function orderAsTree(choices: readonly CategoryChoice[]): { choice: CategoryChoice; depth: number }[] {
-  const ids = new Set(choices.map((c) => c.external_id));
-  const children = new Map<string, CategoryChoice[]>();
-  const roots: CategoryChoice[] = [];
+export function groupChoices(choices: readonly CategoryChoice[]): { key: string; name: string; items: CategoryChoice[] }[] {
+  const order: string[] = [];
+  const groups = new Map<string, { key: string; name: string; items: CategoryChoice[] }>();
   for (const c of choices) {
-    if (c.parent_id === "" || c.parent_id === "0" || !ids.has(c.parent_id) || c.parent_id === c.external_id) {
-      roots.push(c);
-    } else {
-      const list = children.get(c.parent_id) ?? [];
-      list.push(c);
-      children.set(c.parent_id, list);
+    const hasParent = c.parent_id !== "" && c.parent_id !== "0" && c.parent_name !== "";
+    const key = hasParent ? `p:${c.parent_id}` : "";
+    let g = groups.get(key);
+    if (g === undefined) {
+      g = { key, name: hasParent ? c.parent_name : NO_PARENT_GROUP, items: [] };
+      groups.set(key, g);
+      order.push(key);
     }
+    g.items.push(c);
   }
-  const out: { choice: CategoryChoice; depth: number }[] = [];
-  const placed = new Set<string>();
-  const walk = (c: CategoryChoice, depth: number) => {
-    if (placed.has(c.external_id)) return;
-    placed.add(c.external_id);
-    out.push({ choice: c, depth });
-    for (const k of children.get(c.external_id) ?? []) walk(k, depth + 1);
-  };
-  for (const r of roots) walk(r, 0);
-  // Rows only reachable through a cycle: shown at the root rather than dropped.
-  for (const c of choices) walk(c, 0);
-  return out;
+  return order.map((k) => groups.get(k)!);
+}
+
+/**
+ * Tick or untick a batch (`chọn cả mục` / `bỏ cả mục`, prototype `pickMany`). Ticking stops at the
+ * ceiling exactly as `Chọn tất cả` does; a row already ticked keeps the kind the officer set.
+ */
+export function pickMany(
+  choices: readonly CategoryChoice[],
+  ids: ReadonlySet<string>,
+  take: boolean,
+  defaultKind: string,
+): CategoryChoice[] {
+  if (!take) return choices.map((c) => (ids.has(c.external_id) ? { ...c, selected: false } : c));
+  let n = selectedCount(choices);
+  return choices.map((c) => {
+    if (!ids.has(c.external_id) || c.selected || n >= SELECTED_CATEGORIES_MAX) return c;
+    n++;
+    return { ...c, selected: true, target_kind: c.target_kind === "" ? defaultKind : c.target_kind };
+  });
 }
 
 /**
@@ -449,9 +509,12 @@ export function selectedCount(choices: readonly CategoryChoice[]): number {
   return choices.filter((c) => c.selected).length;
 }
 
-/** `đã chọn {n}/30` — against the ceiling, not against the tree's size. */
+/**
+ * `đã chọn {x}/{y}` — the prototype's counter (`ContentSourcePanel.tsx:360-362`): ticked over the rows of
+ * the list. The ceiling of 30 is said by `CATEGORIES_LIMIT_REACHED` when it is reached.
+ */
 export function selectedCountLabel(choices: readonly CategoryChoice[]): string {
-  return `đã chọn ${selectedCount(choices)}/${SELECTED_CATEGORIES_MAX}`;
+  return `đã chọn ${selectedCount(choices)}/${choices.length}`;
 }
 
 /**

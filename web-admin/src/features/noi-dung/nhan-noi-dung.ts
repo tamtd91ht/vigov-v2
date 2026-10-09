@@ -24,9 +24,9 @@ import type { PhienDaDoc } from "@/features/phien/phien-hien-tai";
 import type { KetQua } from "@/lib/api/goi";
 import {
   CONTENT_TYPE_BANNER,
+  CONTENT_TYPE_BROADCAST,
   CONTENT_TYPE_EVENT,
   CONTENT_TYPE_VIDEO,
-  type UpdateCategoryIn,
 } from "@/lib/api/noi-dung";
 import type {
   comms_danhMucRa,
@@ -61,7 +61,6 @@ export const URL_TOI_DA = 2000;
 export const SUMMARY_SAPO_HINT = "Đoạn mở đầu (sapo) — Mini App in đậm ngay dưới tiêu đề bài.";
 export const TEN_DANH_MUC_TOI_DA = 200;
 export const SLUG_DANH_MUC_TOI_DA = 64;
-export const THU_TU_DANH_MUC_TOI_DA = 9999;
 /**
  * `domain.EventPlaceMaxRunes`: in CHARACTERS (Go counts runes, the CHECK uses `char_length`), so it
  * is counted in code points below, not in UTF-16 units — `.length` would disagree with the server on
@@ -186,12 +185,10 @@ export function canEditContent(session: PhienDaDoc): boolean {
 }
 
 /**
- * Sổ rỗng. Đặc tả không có câu nào cho trạng thái này, nên câu dưới là câu viết mới, cùng giọng
- * với các màn đã có — và điều ấy được nói ra ở đây thay vì để người sau tưởng mình đọc lại một câu
- * của đặc tả.
+ * Sổ rỗng — the prototype's sentence verbatim (`ContentWorkspace.tsx:309`), one row spanning the table.
+ * ONE sentence for "nothing yet" and "nothing in this slice": the screen does not tell the two apart.
  */
-export const SO_RONG = "Chưa có nội dung nào trong lát cắt đang xem.";
-export const DANH_MUC_RONG = "Xã chưa có danh mục tin nào.";
+export const SO_RONG = "Chưa có nội dung nào ở mục này.";
 
 export const DANG_TAI_SO = "Đang tải danh sách nội dung…";
 export const DANG_TAI_TOAN_VAN = "Đang tải toàn văn bài viết…";
@@ -201,10 +198,15 @@ export const DANG_TAI_TOAN_VAN = "Đang tải toàn văn bài viết…";
 /**
  * The one line under §7's `Nội dung` box (ADR 0067 §1). It says what survives and WHERE that is
  * decided: a paste from Word keeps only these, and the server — not this screen — enforces it.
+ *
+ * IMAGES ARE KEPT since ADR 0067 §Sửa đổi 03/10/2026: an image inserted with the editor's `Chèn ảnh`
+ * (`<img data-file-id>`, uploaded and scanned) survives the save. An image pasted from elsewhere is not
+ * one of those and is still dropped — hence "ảnh chèn bằng nút Chèn ảnh", not "ảnh".
  */
 export const CANH_BAO_HTML_THO =
-  "Giữ được: đoạn văn, tiêu đề lớn/nhỏ, chữ đậm, chữ nghiêng, danh sách và liên kết https. Máy chủ " +
-  "làm sạch thân bài mỗi lần lưu — ảnh, bảng, màu chữ và mọi định dạng khác bị bỏ trước khi tới bà con.";
+  "Giữ được: đoạn văn, tiêu đề lớn/nhỏ, chữ đậm, chữ nghiêng, danh sách, liên kết https và ảnh chèn " +
+  "bằng nút “Chèn ảnh”. Máy chủ làm sạch thân bài mỗi lần lưu — bảng, màu chữ và mọi định dạng khác " +
+  "bị bỏ trước khi tới bà con.";
 
 /* ── Xoá một mục nội dung — soft delete with a mandatory reason (rule 7) ─────────────────────────
  *
@@ -213,7 +215,10 @@ export const CANH_BAO_HTML_THO =
  * here a dialog asks for the reason first, and the server refuses a blank one anyway.
  */
 
-/** The action column's header: it now holds `✎` and `🗑`. */
+/**
+ * The action column's name — for screen readers only: the prototype draws that column with no header
+ * text (`ContentWorkspace.tsx:299`). It holds `✎`, `Đăng`/`Gỡ` and `🗑`.
+ */
 export const ACTIONS_COLUMN_LABEL = "Thao tác";
 /** The row's delete symbol; the accessible name carries the title (`contentDeleteAriaLabel`). */
 export const CONTENT_DELETE_SYMBOL = "🗑";
@@ -225,10 +230,10 @@ export const CONTENT_DELETE_NOTE =
   "Nội dung sẽ được gỡ khỏi Mini App và không còn trong danh sách. Hồ sơ, lý do xoá và lịch sử " +
   "thao tác vẫn được lưu lại. Nếu chỉ muốn tạm ẩn với bà con, hãy sửa nội dung và bỏ chọn “Đăng " +
   "lên Mini App”.";
-/** Shown above the table after a 204 — the prototype's toast, worded for a delete. */
-export const CONTENT_DELETED = "Đã xoá khỏi Mini App.";
+/** The toast after a 204 — the prototype's, verbatim (`ContentWorkspace.tsx:156`). The act stays a soft delete. */
+export const CONTENT_DELETED = "Đã gỡ khỏi Mini App.";
 /**
- * Shown above the table after a 404. The server gives ONE answer for "already deleted", "another
+ * The toast after a 404. The server gives ONE answer for "already deleted", "another
  * commune's" and "never existed" (rule 4, forbidden #2), so this sentence guesses no further than that.
  */
 export const CONTENT_DELETE_GONE =
@@ -305,8 +310,60 @@ export function nhanLoai(ma: string): string {
   return NHAN_LOAI[ma] ?? ma;
 }
 
-/** Nhãn tab `Tất cả` — §5 vẽ sáu tab, nhưng sổ phải mở được ở trạng thái không lọc. */
-export const MOI_LOAI_NHAN = "Tất cả";
+/**
+ * The labels of the `Loại nội dung` select in the editor dialog — the prototype's `KIND_LABELS`
+ * (`ContentItemForm.tsx:32-39`), longer than the tab labels (`nhanLoai`) on purpose: the tab bar is
+ * short words, the dialog names what the item is.
+ */
+const DIALOG_TYPE_LABEL: Readonly<Record<string, string>> = {
+  "tin-tuc": "Tin tức",
+  "su-kien": "Sự kiện",
+  "thong-bao": "Thông báo",
+  "truyen-thanh": "Bản tin truyền thanh",
+  video: "Video",
+  banner: "Banner trang chủ",
+};
+
+export function dialogTypeLabel(ma: string): string {
+  return DIALOG_TYPE_LABEL[ma] ?? ma;
+}
+
+/* ── Đăng / Gỡ — the row's one-press publish toggle (owner D1, 09/10/2026) ───────────────────── */
+
+export const PUBLISH_BUTTON = "Đăng";
+export const UNPUBLISH_BUTTON = "Gỡ";
+export const PUBLISHED_TOAST = "Đã đăng.";
+export const UNPUBLISHED_TOAST = "Đã gỡ khỏi Mini App.";
+export const PUBLISH_TOGGLE_FAILED = "Không đổi được trạng thái đăng.";
+
+/**
+ * The PATCH body of `Đăng` / `Gỡ`: ONLY `publish`. `Gỡ` on a row that is showing (`dang-hien`), `Đăng`
+ * on anything else — `an` and `cho-duyet` alike, the latter being the approval of a synced item.
+ *
+ * Nothing else rides along: any other field would be a second, unasked-for edit in the same audit entry.
+ * The owner accepted (D1, 09/10/2026) that the server then marks a synced item `hand_edited`, so the
+ * next portal sync leaves it alone.
+ */
+export function publishToggleBody(status: string): { publish: boolean } {
+  return { publish: status !== "dang-hien" };
+}
+
+/* ── Save toasts of the editor dialog (prototype `ContentItemForm.tsx:182-192`) ───────────────── */
+
+export const SAVED_TOAST = "Đã lưu thay đổi.";
+export const CREATED_PUBLISHED_TOAST = "Đã đăng lên Mini App.";
+export const CREATED_DRAFT_TOAST = "Đã lưu bản nháp.";
+export const SAVE_FAILED_TOAST = "Không lưu được. Vui lòng thử lại.";
+/** Inline under `Tiêu đề` when Lưu is pressed with it empty — the prototype's message. */
+export const TITLE_REQUIRED = "Vui lòng nhập tiêu đề";
+/** The submit button's word while a file of the form is still uploading (prototype `ContentItemForm.tsx:374`). */
+export const UPLOADING_FILES_LABEL = "Đang tải tệp…";
+
+/** Which toast a successful save shows. */
+export function saveToast(editing: boolean, publish: boolean): string {
+  if (editing) return SAVED_TOAST;
+  return publish ? CREATED_PUBLISHED_TOAST : CREATED_DRAFT_TOAST;
+}
 
 /* ── Ba trạng thái §6 ──────────────────────────────────────────────────────────────────────── */
 
@@ -379,8 +436,6 @@ export const SOURCE_PORTAL_SYNC = "dong-bo-cong";
 export const PENDING_REVIEW_HINT =
   "Bài này đang chờ duyệt — bà con chưa thấy. Tích “Đăng lên Mini App” rồi Lưu để đăng cho bà con.";
 
-/** §10.4 — bài đồng bộ đã bị cán bộ sửa tay thì lượt đồng bộ sau không ghi đè nữa. */
-export const NHAN_DA_SUA_TAY = "Đã sửa tay — lượt đồng bộ sau không ghi đè";
 
 /* ── Phép định dạng ────────────────────────────────────────────────────────────────────────── */
 
@@ -506,20 +561,6 @@ export function formatVietnamDateTime(instant: string): string {
 }
 
 /**
- * "Đăng lần đầu lúc …", or `null` when the item has never been published.
- *
- * `published_at` is fixed by the FIRST publication and never moves (ADR 0047 §6, G1): unpublishing and
- * republishing keeps it. That is why the label says "lần đầu" — it is not "the time it went live
- * again", and a reader of §6 must not take it for that.
- */
-export function publishedAtLabel(nd: comms_noiDungRa): string | null {
-  if (nd.published_at === undefined || nd.published_at === null || nd.published_at === "") {
-    return null;
-  }
-  return `Đăng lần đầu lúc ${formatVietnamDateTime(nd.published_at)}`;
-}
-
-/**
  * `published_on` → `14/9/2026`, khuôn `d/M/yyyy` của §6 (KHÔNG đệm số 0).
  *
  * ⚠ CẮT CHUỖI CHỨ KHÔNG QUA `Date`, VÀ ĐÓ KHÔNG PHẢI MỘT LỐI TẮT. `published_on` là một NGÀY, không
@@ -538,9 +579,32 @@ export function nhanNgayDang(ngay: string | null): string {
   return `${Number(m[3])}/${Number(m[2])}/${m[1]}`;
 }
 
-/** §6 cột `Tệp đính kèm`: `🔗 Có ảnh` / `—`. Suy từ `has_image`, thứ máy chủ đã suy từ URL ảnh. */
-export function nhanTepDinhKem(coAnh: boolean): string {
-  return coAnh ? "🔗 Có ảnh" : DAU_GACH;
+/**
+ * §6 `Tệp đính kèm`, per type — the prototype's cell (`ContentWorkspace.tsx:394-425`): it says at a glance
+ * which item still lacks the file it lives by, so the office does not open each one to find out.
+ *
+ *   banner        the picture IS the banner        → `Đã có ảnh` / `Thiếu ảnh`   (`has_image`)
+ *   truyen-thanh  the broadcast file                → `Đã có tệp` / `Thiếu tệp`   (`audio_file_id`)
+ *   video         the link (ADR 0047 §6, no file)   → `Đã có tệp` / `Thiếu tệp`   (`video_url`)
+ *   the rest      a cover is optional               → `Có ảnh` / `—`
+ *
+ * All three fields are on the LIST route (`service-comms/internal/http/noi_dung_mini_app.go`, `noiDungRa`).
+ * `tone`: `ok` green, `missing` amber with a warning icon, `muted` grey, `none` the dash alone.
+ */
+export type AttachmentState = {
+  readonly label: string;
+  readonly tone: "ok" | "missing" | "muted" | "none";
+};
+
+export function attachmentState(nd: comms_noiDungRa): AttachmentState {
+  if (nd.type === CONTENT_TYPE_BANNER) {
+    return nd.has_image ? { label: "Đã có ảnh", tone: "ok" } : { label: "Thiếu ảnh", tone: "missing" };
+  }
+  if (nd.type === CONTENT_TYPE_BROADCAST || nd.type === CONTENT_TYPE_VIDEO) {
+    const file = nd.type === CONTENT_TYPE_BROADCAST ? nd.audio_file_id : nd.video_url;
+    return (file ?? "") !== "" ? { label: "Đã có tệp", tone: "ok" } : { label: "Thiếu tệp", tone: "missing" };
+  }
+  return nd.has_image ? { label: "Có ảnh", tone: "muted" } : { label: DAU_GACH, tone: "none" };
 }
 
 /** §6 column and detail row label for `view_count`. */
@@ -662,15 +726,28 @@ export function nhanMucDanhMuc(muc: MucDanhMuc): string {
 }
 
 /**
- * Tên danh mục của một bài, cho cột §6.
+ * A category as the prototype names it: `Cha › Con`, the parent's name first (`ContentWorkspace.tsx:132-137`,
+ * `:263`).
  *
- * `category_id` RỖNG LÀ MỘT TRẠNG THÁI BÌNH THƯỜNG (`— Chưa xếp danh mục —`), không phải một giá
- * trị thiếu. Một id KHÔNG rỗng mà không tra được thì hiện chính id ấy chứ không hiện dấu gạch:
- * dấu gạch nói "chưa xếp danh mục", còn sự thật là màn hình chưa nạp xong cây danh mục.
+ * THE PARENT IS NOT DECORATION: a commune's portal has two categories both called "Chuyển đổi số" under
+ * different parents, and the name alone cannot tell them apart. A parent with the SAME name as its child
+ * is not repeated. A parent the list does not hold → the name alone.
  */
-export function tenDanhMuc(id: string, ds: readonly comms_danhMucRa[]): string {
-  if (id === "") return CHUA_XEP_DANH_MUC;
-  return ds.find((d) => d.id === id)?.name ?? id;
+export function categoryPath(dm: comms_danhMucRa, ds: readonly comms_danhMucRa[]): string {
+  const parent = dm.parent_id === "" ? undefined : ds.find((d) => d.id === dm.parent_id);
+  return parent !== undefined && parent.name !== dm.name ? `${parent.name} › ${dm.name}` : dm.name;
+}
+
+/**
+ * The `Chuyên mục` cell of §6: `Cha › Con`, or `—` for an item filed nowhere (the prototype's dash).
+ *
+ * A NON-EMPTY id that cannot be looked up shows the id itself, never the dash: the dash says "not
+ * filed", while the truth is that the category list has not loaded (or failed to).
+ */
+export function categoryCellLabel(id: string, ds: readonly comms_danhMucRa[]): string {
+  if (id === "") return DAU_GACH;
+  const dm = ds.find((d) => d.id === id);
+  return dm === undefined ? id : categoryPath(dm, ds);
 }
 
 /* ── Biểu mẫu §7: giá trị, thân THÊM, thân SỬA ────────────────────────────────────────────── */
@@ -756,12 +833,13 @@ export const ERR_LINK_TO_INVALID =
 export const ERR_DISPLAY_ORDER_INVALID = "Thứ tự hiển thị phải là số nguyên không âm.";
 export const ERR_DISPLAY_ORDER_CANNOT_CLEAR =
   "Banner đã có thứ tự hiển thị thì không bỏ trống được nữa — hãy nhập một số không âm.";
+/** Names the box as the dialog labels it for a banner — `Ảnh banner` (prototype `ContentItemForm.tsx:340`). */
 export const ERR_BANNER_COVER_REQUIRED =
-  "Banner bắt buộc có Ảnh đại diện — hãy tải ảnh lên trước khi lưu.";
+  "Banner bắt buộc có Ảnh banner — hãy tải ảnh lên trước khi lưu.";
 
 /** Under the banner boxes: the picture IS the banner, and the title is what a screen reader says. */
 export const BANNER_COVER_NOTICE =
-  "Banner là một tấm ảnh ở dải đầu trang chủ Mini App: bắt buộc có Ảnh đại diện, và tiêu đề được " +
+  "Banner là một tấm ảnh ở dải đầu trang chủ Mini App: bắt buộc có Ảnh banner, và tiêu đề được " +
   "đọc thay cho ảnh với người dùng trình đọc màn hình.";
 export const LINK_TO_HINT =
   "Để trống thì banner không bấm được. Đường trong Mini App bắt đầu bằng /, ví dụ /tin-tuc; trang " +
@@ -771,9 +849,6 @@ export const DISPLAY_ORDER_HINT = "Số nhỏ hiện trước trên dải banner
 /** The hint under the two event boxes — says which clock they are read in. */
 export const EVENT_TIME_HINT =
   "Giờ Việt Nam (GMT+7), không phụ thuộc múi giờ đặt trên máy tính này.";
-/** The hint under the video box. */
-export const VIDEO_URL_HINT =
-  "Chỉ nhận địa chỉ bắt đầu bằng http:// hoặc https://. Bà con bấm vào sẽ mở video ở ngoài ứng dụng.";
 
 const CONTROL_CHAR = /[\u0000-\u001f\u007f-\u009f]/;
 const CONTROL_OR_SPACE = /[\s\u0000-\u001f\u007f-\u009f]/;
@@ -1055,85 +1130,62 @@ export function coThayDoi(than: Record<string, unknown>): boolean {
 /** Câu hiện khi bấm Lưu mà không ô nào đổi. */
 export const KHONG_CO_GI_DOI = "Chưa có ô nào thay đổi, nên không có gì để lưu.";
 
-/* ── `⊞ Danh mục tin`: edit, hide, delete (ADR 0067 §3) ─────────────────────────────────────── */
+/* ── `⊞ Danh mục tin`: the prototype's `CategoryManagerDialog` (ADR 0067 §3) ─────────────────────── */
 
-/** The owner's answer of 01/10/2026, said next to the toggle: hiding is about the chip, not the items. */
-export const CATEGORY_HIDE_EXPLAINER =
-  "Ẩn một danh mục chỉ bỏ nút lọc của danh mục ấy trên Mini App. Các bài trong danh mục vẫn hiện " +
-  "cho bà con như cũ.";
+/** Verbatim, prototype `CategoryManagerDialog.tsx:92-185`. */
+export const CATEGORY_DIALOG_TITLE = "Danh mục tin";
+export const CATEGORY_IMPORT_NOTE =
+  "Lấy đủ cây chuyên mục của Cổng về đây. Chỉ danh mục, không kéo theo bản tin nào — chọn chuyên mục " +
+  "nào lấy tin vẫn ở phần Nguồn tin.";
+export const CATEGORY_ADD_LABEL = "Thêm danh mục";
+export const CATEGORY_ADD_PLACEHOLDER = "Nông nghiệp";
+export const CATEGORY_PARENT_LABEL = "Thuộc mục (nếu có)";
+export const CATEGORY_NO_PARENT_OPTION = "— Không có danh mục cha —";
+export const CATEGORY_ADD_BUTTON = "Thêm";
+export const CATEGORY_ADDED_TOAST = "Đã thêm danh mục.";
+export const CATEGORY_RENAMED_TOAST = "Đã đổi tên danh mục.";
+/** After a category's soft delete — the prototype's toast, verbatim (`CategoryManagerDialog.tsx:226`). */
+export const CATEGORY_DELETED_TOAST = "Đã xoá danh mục.";
+export const CATEGORY_ROOT_GROUP = "Đứng riêng, không thuộc mục cha nào";
+/** The prototype's empty sentence, less its second half ("…hoặc bật đồng bộ với Cổng…"): see `CATEGORY_IMPORT_PART`. */
+export const CATEGORY_EMPTY = "Chưa có danh mục nào. Thêm ở trên.";
+/** `Tắt` hides the category's filter chip on the Mini App (`hidden: true`); its items stay public. */
+export const CATEGORY_TURN_OFF = "Tắt";
+export const CATEGORY_TURN_ON = "Bật";
 export const CATEGORY_DELETE_NOTE =
   "Xoá là xoá mềm: danh mục và lý do xoá vẫn được lưu, slug không cấp lại. Chỉ xoá được danh mục " +
   "không còn bài nào và không còn danh mục con — còn thì hãy ẩn danh mục thay vì xoá.";
-export const CATEGORY_PARENT_HINT =
-  "Danh sách đã bỏ chính danh mục này và các danh mục con của nó. Máy chủ vẫn kiểm lại khi lưu.";
-export const CATEGORY_SLUG_FIXED = "Slug đã cấp thì không đổi được.";
-export const CATEGORY_SHOWN = "Đang hiện trên Mini App";
-export const CATEGORY_HIDDEN = "Đã ẩn trên Mini App";
-export const CATEGORY_HIDE_BUTTON = "Ẩn trên Mini App";
-export const CATEGORY_SHOW_BUTTON = "Hiện lại trên Mini App";
 export const CATEGORY_DELETE_BUTTON = "Xoá";
-export const CATEGORY_EDIT_BUTTON = "Sửa";
 export const CATEGORY_REASON_LABEL = "Lý do xoá *";
 
 /**
- * The category itself and every category under it — the parents an edit must not offer.
+ * The dialog's list, grouped by parent (prototype `groupByParent`, `CategoryManagerDialog.tsx:319-338`):
+ * the categories with no parent FIRST, under `CATEGORY_ROOT_GROUP`, then one group per parent, named by the
+ * parent, in tree order. A category whose parent the list does not hold stands alone — never dropped.
  *
- * A HINT, NOT THE RULE: the server walks the ancestors under the commune's tree lock and answers 409
- * `category_cycle`. This only keeps the officer from picking a value that is certain to be refused. A
- * cycle already in the data cannot hang it: every id is visited once.
+ * NOT FOR TIDINESS: two categories may share a name under different parents, and a flat list would show
+ * two identical lines.
  */
-export function selfAndDescendants(id: string, ds: readonly comms_danhMucRa[]): ReadonlySet<string> {
-  const out = new Set<string>([id]);
-  let grew = true;
-  while (grew) {
-    grew = false;
-    for (const d of ds) {
-      if (!out.has(d.id) && d.parent_id !== "" && out.has(d.parent_id)) {
-        out.add(d.id);
-        grew = true;
-      }
+export function groupCategoriesByParent(
+  ds: readonly comms_danhMucRa[],
+): readonly { readonly parentId: string; readonly name: string; readonly items: readonly comms_danhMucRa[] }[] {
+  const byId = new Map(ds.map((d) => [d.id, d]));
+  const order: string[] = [""];
+  const groups = new Map<string, comms_danhMucRa[]>([["", []]]);
+  for (const m of dungCayDanhMuc(ds)) {
+    const parent = m.dm.parent_id !== "" ? byId.get(m.dm.parent_id) : undefined;
+    const key = parent === undefined ? "" : parent.id;
+    let g = groups.get(key);
+    if (g === undefined) {
+      g = [];
+      groups.set(key, g);
+      order.push(key);
     }
+    g.push(m.dm);
   }
-  return out;
-}
-
-/** The tree for the parent select of the edit form, without the category and its descendants. */
-export function parentChoices(id: string, ds: readonly comms_danhMucRa[]): readonly MucDanhMuc[] {
-  const excluded = selfAndDescendants(id, ds);
-  return dungCayDanhMuc(ds).filter((m) => !excluded.has(m.dm.id));
-}
-
-/** The three boxes of the edit form, as typed. */
-export type CategoryEditValues = {
-  readonly name: string;
-  readonly parentId: string;
-  readonly order: string;
-};
-
-export function categoryEditValues(dm: comms_danhMucRa): CategoryEditValues {
-  return { name: dm.name, parentId: dm.parent_id, order: String(dm.order) };
-}
-
-/**
- * The PATCH body: ONLY what changed. Every field is a pointer at the server, so sending the order back
- * unchanged is harmless — but sending `parent_id` back unchanged re-runs the cycle walk under a lock for
- * nothing, and a body that names only what moved is the one the audit entry will describe. `hidden` is
- * not here: it has its own button and its own one-field PATCH. `slug` is never here (400).
- *
- * An unreadable order is sent as nothing: the box is `type=number` with `min=0`, and the server's own
- * 400 names the rule if a value ever gets through.
- */
-export function categoryPatchBody(
-  before: comms_danhMucRa,
-  v: CategoryEditValues,
-): UpdateCategoryIn {
-  const out: UpdateCategoryIn = {};
-  const name = v.name.trim();
-  if (name !== before.name) out.name = name;
-  if (v.parentId !== before.parent_id) out.parent_id = v.parentId;
-  const order = Number.parseInt(v.order, 10);
-  if (!Number.isNaN(order) && order !== before.order) out.order = order;
-  return out;
+  return order
+    .filter((k) => (groups.get(k) ?? []).length > 0)
+    .map((k) => ({ parentId: k, name: k === "" ? CATEGORY_ROOT_GROUP : byId.get(k)!.name, items: groups.get(k)! }));
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
@@ -1160,7 +1212,39 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
     viSao:
       "Thẻ chưa hiện số chuyên mục đang đồng bộ: danh sách chuyên mục được hỏi thẳng Cổng thông tin " +
       "của xã mỗi lần cần, không lưu lại, nên đếm trên thẻ là hỏi Cổng mỗi lần mở màn này. Số chuyên " +
-      "mục đã chọn xem ở mục “Cấu hình” của thẻ, dạng “đã chọn n/30” (mỗi xã chọn tối đa 30 chuyên mục).",
+      "mục đã chọn xem ở mục “Cấu hình” của thẻ, dạng “đã chọn n/tổng số chuyên mục” (mỗi xã chọn tối " +
+      "đa 30 chuyên mục).",
+  },
+  // The prototype's `Tải ảnh về kho của xã` checkbox in the `Cấu hình` dialog (`ContentSourcePanel.tsx:535`).
+  // The settings contract (`comms_portalSyncSettingsIn`) has no such field: drawn disabled with a "?"
+  // (`portal-sync-card.tsx`, `DownloadImagesPending`).
+  {
+    ten: "Tải ảnh về kho của xã",
+    viSao:
+      "Chưa bật hay tắt được việc tải ảnh của tin từ Cổng về kho của xã ở đây: cấu hình đồng bộ trên " +
+      "máy chủ chưa có lựa chọn này.",
+  },
+  // The `Danh mục tin` dialog (`CategoryManagerDialog.tsx`, owner D4 09/10/2026): three parts with no
+  // route behind them — the import of the portal's category tree, each category's item count, and the
+  // mark of a category that came from the portal. Drawn in place as disabled "?" (`category-admin.tsx`).
+  {
+    ten: "Lấy danh mục từ Cổng",
+    viSao:
+      "Chưa lấy được cây chuyên mục của Cổng thông tin về làm danh mục tin: máy chủ chưa có đường nạp " +
+      "danh mục từ Cổng. Danh mục tin của xã thêm ở ô “Thêm danh mục”; chọn chuyên mục nào để lấy tin " +
+      "vẫn ở phần cấu hình đồng bộ.",
+  },
+  {
+    ten: "Số bài của mỗi danh mục",
+    viSao:
+      "Chưa hiện số bài của từng danh mục: danh sách danh mục máy chủ trả chưa kèm số bài. Muốn xem bài " +
+      "của một danh mục, lọc sổ nội dung theo danh mục ấy.",
+  },
+  {
+    ten: "Dấu danh mục lấy từ Cổng",
+    viSao:
+      "Chưa đánh dấu được danh mục nào lấy từ Cổng thông tin: máy chủ chưa ghi nguồn của từng danh mục, " +
+      "và danh mục tin hiện do xã tự thêm.",
   },
   // The prototype's first table column (06/10/2026): a thumbnail of each item. The LIST route serves only
   // `has_image`; the signed preview link is on the DETAIL route alone, so the column holds a "?" header
@@ -1172,9 +1256,60 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
     ten: "Ảnh thu nhỏ trong bảng",
     viSao:
       "Bảng chưa hiện ảnh thu nhỏ của từng bài: danh sách máy chủ trả chỉ cho biết bài có ảnh hay không, " +
-      "còn đường xem ảnh chỉ có khi mở từng bài. Ảnh của một bài xem ở biểu mẫu sửa bài ấy.",
+      "chưa kèm đường xem ảnh.",
+  },
+  // The prototype's pager (09/10/2026): `a–b trên N mục` and `Trang x/y`. The list route pages by cursor
+  // and never counts (`core/page`), so N and y are unknown: the known part is drawn, each unknown number
+  // is a "?" (`so-noi-dung.tsx`, `ContentPager`). Literals, same reason as above.
+  {
+    ten: "Tổng số mục của danh sách",
+    viSao:
+      "Thanh phân trang chưa hiện tổng số mục: máy chủ trả danh sách theo từng trang nối tiếp nhau và " +
+      "không đếm tổng, nên chỉ biết đang xem từ mục nào tới mục nào và còn trang sau hay không.",
+  },
+  {
+    ten: "Tổng số trang của danh sách",
+    viSao:
+      "Thanh phân trang chưa hiện tổng số trang: máy chủ không đếm tổng số mục, nên chỉ biết đang ở trang " +
+      "thứ mấy. Bấm “Sau” để xem trang tiếp theo khi còn.",
+  },
+  // The portal-sync dialog (09/10/2026): the prototype's `Mỗi 15 phút` interval and its `Đang dùng {hint}`
+  // key hint (`ContentSourcePanel.tsx:32-38`, `:337-341`). Literals, same reason as above.
+  {
+    ten: "Đồng bộ mỗi 15 phút",
+    viSao:
+      "Chưa chọn được nhịp đồng bộ mỗi 15 phút: lịch đồng bộ trên máy chủ tính theo số giờ nguyên, ngắn " +
+      "nhất là mỗi giờ.",
+  },
+  {
+    ten: "Gợi ý mã bảo mật đang dùng",
+    viSao:
+      "Chưa hiện được gợi ý của mã bảo mật đang dùng: máy chủ chỉ cho biết đã lưu mã hay chưa, không trả " +
+      "lại mã hay bất kỳ phần nào của mã.",
   },
 ];
+
+/** `ten` of the card's category count, and of the two pager parts — looked up by `pendingContentPart`. */
+export const PORTAL_CATEGORY_COUNT_PART = "Số chuyên mục đang đồng bộ";
+export const TOTAL_ITEMS_PART = "Tổng số mục của danh sách";
+export const TOTAL_PAGES_PART = "Tổng số trang của danh sách";
+/** `ten` of the four parts of the two dialogs (portal config, `Danh mục tin`). */
+export const DOWNLOAD_IMAGES_PART = "Tải ảnh về kho của xã";
+export const CATEGORY_IMPORT_PART = "Lấy danh mục từ Cổng";
+export const CATEGORY_ITEM_COUNT_PART = "Số bài của mỗi danh mục";
+export const CATEGORY_FROM_PORTAL_PART = "Dấu danh mục lấy từ Cổng";
+/** `ten` of the two portal-sync dialog parts. */
+export const INTERVAL_15_MIN_PART = "Đồng bộ mỗi 15 phút";
+export const KEY_IN_USE_PART = "Gợi ý mã bảo mật đang dùng";
+
+/** Rows per page of §6 — the prototype's `PAGE_SIZE` (`ContentWorkspace.tsx:60`). */
+export const PAGE_SIZE = 25;
+
+/** `1–25`: the `a–b` of the pager's `a–b trên N mục`, from the 0-based page index and this page's rows. */
+export function pageRange(pageIndex: number, rows: number): string {
+  const first = pageIndex * PAGE_SIZE + 1;
+  return `${first}–${first + Math.max(rows, 1) - 1}`;
+}
 
 /** One entry by its `ten`. Throws on an unknown name — a "?" with no description is never drawn. */
 export function pendingContentPart(ten: string): PhanChuaDung {

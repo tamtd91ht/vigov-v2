@@ -6,7 +6,7 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PhienProvider } from "@/features/phien/phien-hien-tai"; // vi-name-ok: existing export (rule 12 inv 3)
 import type { comms_noiDungRa } from "@/lib/api/schema.gen"; // vi-name-ok: generated contract type
@@ -18,6 +18,15 @@ import {
   contentDeleteAriaLabel,
 } from "./nhan-noi-dung";
 import { SoNoiDung } from "./so-noi-dung"; // vi-name-ok: existing export (rule 12 inv 3)
+
+const T = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }));
+vi.mock("sonner", () => ({ toast: T }));
+
+beforeEach(() => {
+  T.success.mockClear();
+  T.error.mockClear();
+  T.info.mockClear();
+});
 
 beforeAll(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -152,9 +161,6 @@ async function deleteRow(title: string, reason: string): Promise<void> {
   await settle();
 }
 
-function statusLines(): string[] {
-  return Array.from(host!.querySelectorAll('[role="status"]')).map((p) => p.textContent ?? "");
-}
 
 describe("the delete button follows `content.update`", () => {
   it("DENIED (`content.read` only): the rows are there, no delete button on any of them", async () => {
@@ -174,7 +180,7 @@ describe("the delete button follows `content.update`", () => {
 });
 
 describe("after the server answered", () => {
-  it("204: the dialog closes, the same page is read again, the row is gone, the success line shows", async () => {
+  it("204: the dialog closes, the same page is read again, the row is gone, the success TOAST shows", async () => {
     const s = fakeServer(["content.read", "content.update"], [[A, B], [B]], new Response(null, { status: 204 }));
     await mountScreen();
     expect(s.listReads()).toHaveLength(1);
@@ -189,7 +195,11 @@ describe("after the server answered", () => {
     expect(s.listReads()[1]).toBe(s.listReads()[0]);
     expect(host!.textContent).not.toContain(A.title);
     expect(host!.textContent).toContain(B.title);
-    expect(statusLines()).toContain(CONTENT_DELETED);
+    expect(T.success).toHaveBeenCalledWith(CONTENT_DELETED);
+    // The prototype's wording, verbatim (`ContentWorkspace.tsx:156`) — the act itself stays a soft delete.
+    expect(CONTENT_DELETED).toBe("Đã gỡ khỏi Mini App.");
+    // A toast, not a line above the table (prototype; owner 09/10/2026 row 34).
+    expect(host!.textContent).not.toContain(CONTENT_DELETED);
   });
 
   it("404: the dialog closes, the officer is told it is no longer there, the list is read again", async () => {
@@ -204,7 +214,7 @@ describe("after the server answered", () => {
 
     expect(host!.querySelector("#content-delete-reason")).toBeNull();
     expect(s.listReads()).toHaveLength(2);
-    expect(statusLines()).toContain(CONTENT_DELETE_GONE);
+    expect(T.info).toHaveBeenCalledWith(CONTENT_DELETE_GONE);
   });
 
   it("400: the dialog stays with the reason and the server's sentence; the list is NOT read again", async () => {
@@ -221,6 +231,6 @@ describe("after the server answered", () => {
     expect(host!.querySelector<HTMLTextAreaElement>("#content-delete-reason")?.value).toBe("Đăng nhầm");
     expect(host!.querySelector("dialog [role=\"alert\"]")?.textContent).toBe(sentence);
     expect(s.listReads()).toHaveLength(1);
-    expect(statusLines()).not.toContain(CONTENT_DELETED);
+    expect(T.success).not.toHaveBeenCalled();
   });
 });

@@ -18,10 +18,19 @@ import type { CallResult } from "@/lib/api/task-attachments";
 import { uploadToStorage } from "@/lib/api/task-attachments";
 import type { comms_coverFileOut, comms_coverImageOut } from "@/lib/api/schema.gen";
 
-/** §7, verbatim. */
+/** §7 and the prototype's `FilePicker` (`ContentItemForm.tsx:338-350`, `:421-425`), verbatim. */
+export const COVER_LABEL = "Ảnh đại diện";
+export const COVER_BANNER_LABEL = "Ảnh banner";
 export const COVER_PICK_BUTTON = "Chọn tệp từ máy";
 export const COVER_HINT = "JPG, PNG hoặc WebP — tối đa 50MB";
-export const COVER_REPLACE_BUTTON = "Chọn ảnh khác";
+export const COVER_BANNER_HINT = "JPG, PNG hoặc WebP — nên dùng ảnh ngang, tỷ lệ khoảng 16:9";
+/** The slot's text once the article has a cover (saved or just uploaded) and no new file is chosen. */
+export const COVER_REPLACE_BUTTON = "Đã có tệp — chọn tệp mới để thay";
+
+/** `2.4MB` — the chosen file's size, as the prototype prints it next to the slot. */
+export function coverSizeLabel(bytes: number): string {
+  return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+}
 export const COVER_REMOVE_BUTTON = "Gỡ ảnh";
 export const COVER_RETRY_BUTTON = "Kiểm tra lại";
 

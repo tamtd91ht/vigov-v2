@@ -5,14 +5,24 @@ import { QUYEN_CONG_KHAI_DANH_BA } from "@/lib/quyen";
 import { TRANG_DAU } from "@/features/cau-hinh/ngan-xep-con-tro";
 
 import {
+  attachmentState,
   canEditContent,
   CANH_BAO_HTML_THO,
-  categoryPatchBody,
+  categoryCellLabel,
+  categoryPath,
+  CREATED_DRAFT_TOAST,
+  CREATED_PUBLISHED_TOAST,
+  dialogTypeLabel,
+  PAGE_SIZE,
+  pageRange,
+  publishToggleBody,
+  SAVED_TOAST,
+  saveToast,
+  SO_RONG,
   CONTENT_UPDATE_PERMISSION,
   MO_TA_THE_DANH_BA,
   PUBLISHED_STAFF_UNREAD,
   publishedStaffText,
-  CHUA_XEP_DANH_MUC,
   coThayDoi,
   DAU_GACH,
   DELETE_REASON_MAX_CHARS,
@@ -33,12 +43,11 @@ import {
   FORM_TRONG,
   formatVietnamDateTime,
   giaTriTuHang,
+  groupCategoriesByParent,
   instantToLocalInput,
   isValidLinkTo,
   localInputToInstant,
-  parentChoices,
   parseDisplayOrder,
-  publishedAtLabel,
   validateTypeFields,
   viewCountText,
   LOAI_MAC_DINH,
@@ -49,11 +58,8 @@ import {
   nhanMucDanhMuc,
   nhanNgayDang,
   nhanNguon,
-  nhanTepDinhKem,
   nhanTrangThai,
   PHAN_CHUA_DUNG,
-  selfAndDescendants,
-  tenDanhMuc,
   thanBaiNeuCo,
   thanSua,
   thanThem,
@@ -186,9 +192,23 @@ describe("sáu loại §5 và ba trạng thái §6", () => {
 });
 
 describe("hai ô nhỏ của bảng §6", () => {
-  it("`Tệp đính kèm` suy từ `has_image`", () => {
-    expect(nhanTepDinhKem(true)).toBe("🔗 Có ảnh");
-    expect(nhanTepDinhKem(false)).toBe(DAU_GACH);
+  it("`Tệp đính kèm` per type — the prototype's cell (banner: image, broadcast/video: file, rest: cover)", () => {
+    expect(attachmentState(hang({ type: "banner", has_image: true }))).toEqual({ label: "Đã có ảnh", tone: "ok" });
+    expect(attachmentState(hang({ type: "banner", has_image: false }))).toEqual({ label: "Thiếu ảnh", tone: "missing" });
+    expect(attachmentState(hang({ type: "truyen-thanh", audio_file_id: "01JAUD" }))).toEqual({ label: "Đã có tệp", tone: "ok" });
+    expect(attachmentState(hang({ type: "truyen-thanh" }))).toEqual({ label: "Thiếu tệp", tone: "missing" });
+    // A broadcast's COVER is not its file: an image alone still says the file is missing.
+    expect(attachmentState(hang({ type: "truyen-thanh", has_image: true })).tone).toBe("missing");
+    expect(attachmentState(hang({ type: "video", video_url: "https://youtu.be/x" }))).toEqual({ label: "Đã có tệp", tone: "ok" });
+    expect(attachmentState(hang({ type: "video", video_url: "" }))).toEqual({ label: "Thiếu tệp", tone: "missing" });
+    for (const type of ["tin-tuc", "su-kien", "thong-bao"]) {
+      expect(attachmentState(hang({ type, has_image: true }))).toEqual({ label: "Có ảnh", tone: "muted" });
+      expect(attachmentState(hang({ type, has_image: false }))).toEqual({ label: DAU_GACH, tone: "none" });
+    }
+  });
+
+  it("the empty table's sentence is the prototype's, verbatim", () => {
+    expect(SO_RONG).toBe("Chưa có nội dung nào ở mục này.");
   });
 
   it("tóm tắt gộp về một dòng, and is NOT cut — the one-line cut is CSS's (`.summary-one-line`)", () => {
@@ -252,20 +272,79 @@ describe("cây danh mục dựng từ danh sách phẳng", () => {
   });
 });
 
-describe("tên danh mục của một bài", () => {
-  const ds = [danhMuc({ id: "01JDM1", name: "Chuyển đổi số" })];
+describe("tên danh mục của một bài — `Cha › Con`", () => {
+  const ds = [
+    danhMuc({ id: "P1", name: "Tin hoạt động" }),
+    danhMuc({ id: "P2", name: "Chính quyền" }),
+    danhMuc({ id: "C1", name: "Chuyển đổi số", parent_id: "P1" }),
+    danhMuc({ id: "C2", name: "Chuyển đổi số", parent_id: "P2" }),
+    danhMuc({ id: "T", name: "Tin tức" }),
+    danhMuc({ id: "T1", name: "Tin tức", parent_id: "T" }),
+  ];
 
-  it("id rỗng là một trạng thái BÌNH THƯỜNG, không phải một giá trị thiếu", () => {
-    expect(tenDanhMuc("", ds)).toBe(CHUA_XEP_DANH_MUC);
+  it("id rỗng là dấu gạch của bản mẫu — bài chưa xếp danh mục", () => {
+    expect(categoryCellLabel("", ds)).toBe(DAU_GACH);
   });
 
-  it("id tra được thì hiện tên", () => {
-    expect(tenDanhMuc("01JDM1", ds)).toBe("Chuyển đổi số");
+  it("two children with the same name are told apart by their parent", () => {
+    expect(categoryCellLabel("C1", ds)).toBe("Tin hoạt động › Chuyển đổi số");
+    expect(categoryCellLabel("C2", ds)).toBe("Chính quyền › Chuyển đổi số");
+    expect(categoryCellLabel("P1", ds)).toBe("Tin hoạt động");
+  });
+
+  it("a parent of the same name is not repeated; a parent not in the list is left out", () => {
+    expect(categoryPath(ds[5]!, ds)).toBe("Tin tức");
+    expect(categoryPath(danhMuc({ id: "X", name: "Lẻ", parent_id: "KHONG-CO" }), ds)).toBe("Lẻ");
   });
 
   it("id KHÔNG tra được hiện chính id, không hiện dấu gạch", () => {
     // Dấu gạch nói "chưa xếp danh mục"; sự thật là cây danh mục chưa nạp xong. Hai câu khác nhau.
-    expect(tenDanhMuc("01JLA", ds)).toBe("01JLA");
+    expect(categoryCellLabel("01JLA", ds)).toBe("01JLA");
+  });
+});
+
+describe("Đăng / Gỡ — the PATCH body is `{publish}` ONLY (owner D1, 09/10/2026)", () => {
+  it("`Gỡ` on a showing row, `Đăng` on a hidden or a pending one — and nothing else in the body", () => {
+    expect(publishToggleBody("dang-hien")).toEqual({ publish: false });
+    expect(publishToggleBody("an")).toEqual({ publish: true });
+    expect(publishToggleBody("cho-duyet")).toEqual({ publish: true });
+    expect(Object.keys(publishToggleBody("an"))).toEqual(["publish"]);
+  });
+});
+
+describe("the editor dialog's words", () => {
+  it("save toasts — the prototype's three, by edit / new + published / new draft", () => {
+    expect(saveToast(true, true)).toBe(SAVED_TOAST);
+    expect(saveToast(true, false)).toBe("Đã lưu thay đổi.");
+    expect(saveToast(false, true)).toBe(CREATED_PUBLISHED_TOAST);
+    expect(CREATED_PUBLISHED_TOAST).toBe("Đã đăng lên Mini App.");
+    expect(saveToast(false, false)).toBe(CREATED_DRAFT_TOAST);
+    expect(CREATED_DRAFT_TOAST).toBe("Đã lưu bản nháp.");
+  });
+
+  it("the type select's labels are the prototype's longer ones; the tabs keep the short ones", () => {
+    expect(MOI_LOAI.map(dialogTypeLabel)).toEqual([
+      "Tin tức",
+      "Sự kiện",
+      "Thông báo",
+      "Bản tin truyền thanh",
+      "Video",
+      "Banner trang chủ",
+    ]);
+    expect(nhanLoai("truyen-thanh")).toBe("Truyền thanh");
+    expect(nhanLoai("banner")).toBe("Banner");
+  });
+});
+
+describe("pager — 25 rows, `a–b` known, the total not", () => {
+  it("page size is the prototype's 25", () => {
+    expect(PAGE_SIZE).toBe(25);
+  });
+
+  it("`a–b` from the page index and this page's rows", () => {
+    expect(pageRange(0, 25)).toBe("1–25");
+    expect(pageRange(1, 25)).toBe("26–50");
+    expect(pageRange(2, 7)).toBe("51–57");
   });
 });
 
@@ -478,17 +557,9 @@ describe("event instants — Vietnam wall-clock, sent with +07:00", () => {
   });
 });
 
-describe("`Đăng lần đầu lúc` — published_at in dd/MM/yyyy HH:mm, Vietnam time", () => {
-  it("formats the first-publication instant", () => {
+describe("`formatVietnamDateTime` — dd/MM/yyyy HH:mm, Vietnam time", () => {
+  it("formats an instant", () => {
     expect(formatVietnamDateTime("2026-10-01T02:05:00Z")).toBe("01/10/2026 09:05");
-    expect(publishedAtLabel(hang({ published_at: "2026-10-01T02:05:00Z" }))).toBe(
-      "Đăng lần đầu lúc 01/10/2026 09:05",
-    );
-  });
-
-  it("never published → no label, not a dash pretending it was", () => {
-    expect(publishedAtLabel(hang())).toBeNull();
-    expect(publishedAtLabel(hang({ published_at: null }))).toBeNull();
   });
 });
 
@@ -668,7 +739,29 @@ describe("phần chưa dựng được", () => {
     // per-item delete (soft, with a reason, DELETE /api/v1/content-items/{id}). The `Lượt xem` column
     // left it the same day: the owner decided to show the server's count (ADR 0047, row 02/10/2026).
     // 06/10/2026: the prototype's thumbnail column joined it — the list route serves no image link.
-    expect(PHAN_CHUA_DUNG.map((p) => p.ten)).toEqual(["Số chuyên mục đang đồng bộ", "Ảnh thu nhỏ trong bảng"]);
+    // 09/10/2026: the prototype's pager — its total and its page count; the list route never counts.
+    // 09/10/2026 (owner D4): the config dialog's image download box, and the `Danh mục tin` dialog's
+    // portal import, item count and `Từ Cổng` mark — no route behind any of the four.
+    // 09/10/2026 (prototype parity): the config dialog's `Mỗi 15 phút` interval and the `Đang dùng {hint}`
+    // of the stored key — the server counts whole hours and returns nothing derived from the key.
+    expect(PHAN_CHUA_DUNG.map((p) => p.ten)).toEqual([
+      "Số chuyên mục đang đồng bộ",
+      "Tải ảnh về kho của xã",
+      "Lấy danh mục từ Cổng",
+      "Số bài của mỗi danh mục",
+      "Dấu danh mục lấy từ Cổng",
+      "Ảnh thu nhỏ trong bảng",
+      "Tổng số mục của danh sách",
+      "Tổng số trang của danh sách",
+      "Đồng bộ mỗi 15 phút",
+      "Gợi ý mã bảo mật đang dùng",
+    ]);
+  });
+
+  it("the thumbnail's reason no longer points to a cover preview in the edit form (there is none)", () => {
+    const thumb = PHAN_CHUA_DUNG.find((p) => p.ten === "Ảnh thu nhỏ trong bảng")!;
+    expect(thumb.viSao).not.toContain("biểu mẫu sửa");
+    expect(thumb.viSao).not.toContain("xem ở");
   });
 
   it("no item still claims the view count is not shown", () => {
@@ -793,6 +886,9 @@ describe("phần chưa dựng được — the remaining items", () => {
     expect(CANH_BAO_HTML_THO).toContain("Máy chủ làm sạch");
     expect(CANH_BAO_HTML_THO).not.toContain("MÃ NGUỒN HTML");
     expect(CANH_BAO_HTML_THO).not.toContain("KHÔNG làm sạch");
+    // Body images are kept since ADR 0067 §Sửa đổi 03/10/2026: the note must not say images are dropped.
+    expect(CANH_BAO_HTML_THO).not.toContain("— ảnh, bảng");
+    expect(CANH_BAO_HTML_THO).toContain("ảnh chèn bằng nút “Chèn ảnh”");
   });
 
   it("mỗi mục đều có lý do, không mục nào là một dòng tên suông", () => {
@@ -911,40 +1007,30 @@ describe("banner validation and bodies", () => {
 });
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
- * `⊞ Danh mục tin` — edit (ADR 0067 §3)
+ * `⊞ Danh mục tin` — the list grouped by parent (prototype `CategoryManagerDialog.tsx:319-338`)
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
-describe("category edit", () => {
-  const tree = [
-    danhMuc({ id: "A", name: "A" }),
-    danhMuc({ id: "B", name: "B", parent_id: "A" }),
-    danhMuc({ id: "C", name: "C", parent_id: "B" }),
-    danhMuc({ id: "D", name: "D" }),
-  ];
-
-  it("the parent select leaves out the category and all its descendants", () => {
-    expect([...selfAndDescendants("A", tree)].sort()).toEqual(["A", "B", "C"]);
-    expect(parentChoices("A", tree).map((m) => m.dm.id)).toEqual(["D"]);
-    expect(parentChoices("C", tree).map((m) => m.dm.id)).toEqual(["A", "B", "D"]);
+describe("category groups", () => {
+  it("no-parent categories FIRST under the prototype's heading, then one group per parent, named by it", () => {
+    const groups = groupCategoriesByParent([
+      danhMuc({ id: "C", name: "Tổ 1", parent_id: "B" }),
+      danhMuc({ id: "B", name: "Thôn Một", parent_id: "A" }),
+      danhMuc({ id: "A", name: "Tin xã" }),
+      danhMuc({ id: "D", name: "An ninh", order: 2 }),
+    ]);
+    expect(groups.map((g) => [g.name, g.items.map((d) => d.id)])).toEqual([
+      ["Đứng riêng, không thuộc mục cha nào", ["A", "D"]],
+      ["Tin xã", ["B"]],
+      ["Thôn Một", ["C"]],
+    ]);
   });
 
-  it("a cycle already in the data does not hang the walk", () => {
-    const loop = [danhMuc({ id: "X", parent_id: "Y" }), danhMuc({ id: "Y", parent_id: "X" })];
-    expect([...selfAndDescendants("X", loop)].sort()).toEqual(["X", "Y"]);
+  it("a parent the list does not hold makes its child stand alone — never dropped", () => {
+    const groups = groupCategoriesByParent([danhMuc({ id: "X", name: "Mồ côi", parent_id: "GONE" })]);
+    expect(groups).toEqual([{ parentId: "", name: "Đứng riêng, không thuộc mục cha nào", items: [expect.objectContaining({ id: "X" })] }]);
   });
 
-  it("the PATCH body holds only what changed, never `slug` or `hidden`", () => {
-    const b = tree[1]!;
-    expect(categoryPatchBody(b, { name: "B", parentId: "A", order: "0" })).toEqual({});
-    expect(categoryPatchBody(b, { name: "  Tên mới ", parentId: "A", order: "0" })).toEqual({
-      name: "Tên mới",
-    });
-    // "" is the server's spelling of "move to the root".
-    expect(categoryPatchBody(b, { name: "B", parentId: "", order: "4" })).toEqual({
-      parent_id: "",
-      order: 4,
-    });
-    const body = categoryPatchBody(b, { name: "Z", parentId: "D", order: "1" });
-    expect(Object.keys(body).sort()).toEqual(["name", "order", "parent_id"]);
+  it("an empty list draws no group, not an empty heading", () => {
+    expect(groupCategoriesByParent([])).toEqual([]);
   });
 });

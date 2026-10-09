@@ -2,49 +2,45 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AUDIO_FORM_MISSING, removeContentAudio, requestAudioUpload, suaNoiDung } from "@/lib/api/noi-dung";
-import type { comms_audioOut, comms_noiDungRa } from "@/lib/api/schema.gen";
+import type { comms_audioOut, comms_noiDungRa } from "@/lib/api/schema.gen"; // vi-name-ok: generated contract type
 
 import {
   AUDIO_ACCEPT,
   AUDIO_DURATION_FORMAT,
   AUDIO_DURATION_MAX_SECONDS,
   AUDIO_DURATION_RANGE,
+  AUDIO_DURATION_LABEL,
   AUDIO_EMPTY,
+  AUDIO_HAS_FILE,
+  AUDIO_HINT,
   AUDIO_MAX_BYTES,
   AUDIO_NOT_READY,
   AUDIO_PICK_BUTTON,
-  AUDIO_PREVIEW_MISSING,
-  AUDIO_REMOVE_BUTTON,
-  AUDIO_REMOVE_QUESTION,
   AUDIO_RETRY_BUTTON,
-  AUDIO_SAVE_FIRST,
+  AUDIO_DURATION_NEEDED_TO_SAVE,
   AUDIO_STORAGE_FAILED,
   AUDIO_TOO_LARGE,
-  AUDIO_TYPE_CHANGE_DETACHES,
   AUDIO_TYPE_REFUSED,
   AUDIO_WAIT_NOTE,
   afterAudioCompletion,
-  audioFormatLabel,
   audioInFlight,
-  audioPreviewSrc,
   declaredAudioType,
-  formatAudioDuration,
   formatAudioSize,
+  heldAudioProblem,
   parseAudioDuration,
-  previewExpiresInMs,
   retryAudioCompletion,
   runAudioUpload,
-  savedAudioText,
+  savedAudioPatch,
   type AudioUploadState,
 } from "./broadcast-audio";
-import { BroadcastAudioField } from "./broadcast-audio-field";
+import { HeldAudioField } from "./broadcast-audio-field";
 import { FORM_TRONG, giaTriTuHang, thanSua } from "./nhan-noi-dung";
 import { FormNoiDung } from "./so-noi-dung";
 
 /**
  * §7 `Truyền thanh` — the broadcast audio (ADR 0067 §4). The pre-check (MP3/M4A, 30 MB), the typed
- * duration, the completion answers BY CODE, the player's `src`, the flow a → b → c over a fake `fetch`
- * and a fake `XMLHttpRequest`, the remove PATCH, and the block as rendered in each state.
+ * duration in whole seconds, the completion answers BY CODE, the flow a → b → c over a fake `fetch` and a
+ * fake `XMLHttpRequest`, the edit form's audio PATCH, and the two boxes as rendered.
  */
 
 const MB = 1024 * 1024;
@@ -82,67 +78,33 @@ describe("pre-check — convenience; the server's `content-audio` policy still d
   });
 });
 
-describe("typed duration — mm:ss or h:mm:ss, 1 s .. 6 h", () => {
-  it("parses minutes:seconds (minutes may pass 59) and hours:minutes:seconds", () => {
-    expect(parseAudioDuration("12:30")).toEqual({ ok: true, seconds: 750 });
-    expect(parseAudioDuration(" 0:01 ")).toEqual({ ok: true, seconds: 1 });
-    expect(parseAudioDuration("90:00")).toEqual({ ok: true, seconds: 5400 });
-    expect(parseAudioDuration("1:05:00")).toEqual({ ok: true, seconds: 3900 });
-    expect(parseAudioDuration("6:00:00")).toEqual({ ok: true, seconds: AUDIO_DURATION_MAX_SECONDS });
-    expect(parseAudioDuration("360:00")).toEqual({ ok: true, seconds: 21600 });
+describe("typed duration — whole seconds (prototype `Thời lượng (giây)`), 1 s .. 6 h", () => {
+  it("the label is the prototype's, verbatim", () => {
+    expect(AUDIO_DURATION_LABEL).toBe("Thời lượng (giây)");
   });
 
-  it("bounds: 0:00 and anything past 6 hours are refused with the range sentence", () => {
-    expect(parseAudioDuration("0:00")).toEqual({ ok: false, message: AUDIO_DURATION_RANGE });
-    expect(parseAudioDuration("6:00:01")).toEqual({ ok: false, message: AUDIO_DURATION_RANGE });
-    expect(parseAudioDuration("360:01")).toEqual({ ok: false, message: AUDIO_DURATION_RANGE });
+  it("parses a whole number of seconds", () => {
+    expect(parseAudioDuration("750")).toEqual({ ok: true, seconds: 750 });
+    expect(parseAudioDuration(" 1 ")).toEqual({ ok: true, seconds: 1 });
+    expect(parseAudioDuration("21600")).toEqual({ ok: true, seconds: AUDIO_DURATION_MAX_SECONDS });
   });
 
-  it("a bare number, seconds ≥ 60, letters, negatives or empty are refused with the format sentence", () => {
-    for (const raw of ["750", "5", "12:60", "1:60:00", "abc", "-1:00", "", "12:3", "1:2:3"]) {
+  it("bounds: 0 and anything past 6 hours are refused with the range sentence", () => {
+    expect(parseAudioDuration("0")).toEqual({ ok: false, message: AUDIO_DURATION_RANGE });
+    expect(parseAudioDuration("21601")).toEqual({ ok: false, message: AUDIO_DURATION_RANGE });
+  });
+
+  it("minutes:seconds, decimals, signs, letters or empty are refused with the format sentence", () => {
+    for (const raw of ["12:30", "1:05:00", "12.5", "-1", "+5", "1e3", "abc", "", "1234567"]) {
       expect(parseAudioDuration(raw), raw).toEqual({ ok: false, message: AUDIO_DURATION_FORMAT });
     }
   });
-
-  it("formats back for display", () => {
-    expect(formatAudioDuration(750)).toBe("12:30");
-    expect(formatAudioDuration(5)).toBe("0:05");
-    expect(formatAudioDuration(3900)).toBe("1:05:00");
-  });
 });
 
-describe("display of the saved audio", () => {
-  const ready: comms_audioOut = {
-    file_id: "01JAUD1",
-    status: "ready",
-    mime_type: "audio/mpeg",
-    size_bytes: 13107200,
-    duration_seconds: 750,
-    preview_url: "https://files.example.test/vigov-private/t_01JXA/a.mp3?X-Amz-Signature=S",
-    preview_expires_at: "2026-10-01T03:15:00Z",
-  };
-
-  it("format, size and duration in one line", () => {
-    expect(savedAudioText(ready)).toBe("Tệp hiện tại: MP3 · 12,5 MB · thời lượng 12:30");
-    expect(audioFormatLabel("audio/mp4")).toBe("M4A");
+describe("display of a picked file", () => {
+  it("size with a Vietnamese decimal comma", () => {
+    expect(formatAudioSize(13107200)).toBe("12,5 MB");
     expect(formatAudioSize(undefined)).toBe("không rõ dung lượng");
-    expect(savedAudioText({ ...ready, status: "" })).toContain("không đọc được");
-  });
-
-  it("player `src`: only the signed http(s) `preview_url` of a READY file", () => {
-    expect(audioPreviewSrc(ready)).toBe(ready.preview_url);
-    for (const preview_url of ["javascript:alert(1)", "data:audio/mpeg;base64,AAAA", "/a.mp3", "", undefined]) {
-      expect(audioPreviewSrc({ ...ready, preview_url }), String(preview_url)).toBeNull();
-    }
-    expect(audioPreviewSrc({ ...ready, status: "pending" })).toBeNull();
-    expect(audioPreviewSrc(null)).toBeNull();
-  });
-
-  it("expiry: milliseconds left from `preview_expires_at`, null when absent or unreadable", () => {
-    const now = Date.parse("2026-10-01T03:00:00Z");
-    expect(previewExpiresInMs(ready, now)).toBe(15 * 60 * 1000);
-    expect(previewExpiresInMs({ ...ready, preview_expires_at: null }, now)).toBeNull();
-    expect(previewExpiresInMs({ ...ready, preview_expires_at: "x" }, now)).toBeNull();
   });
 });
 
@@ -260,7 +222,7 @@ describe("runAudioUpload — request → upload → completion", () => {
     const calls = fakeFetch(json(UPLOAD, 201), json(done, 200));
     const states: AudioUploadState[] = [];
 
-    const last = await runAudioUpload(mp3(), "01JTT1", "12:30", (s) => states.push(s));
+    const last = await runAudioUpload(mp3(), "01JTT1", "750", (s) => states.push(s));
 
     expect(calls[0]?.url).toBe("/api/v1/content-items/audio-files");
     expect(calls[0]?.init?.method).toBe("POST");
@@ -289,11 +251,11 @@ describe("runAudioUpload — request → upload → completion", () => {
   it("an invalid duration, a WAV or a 31 MB file never reaches the network", async () => {
     const xhr = fakeXHR(204);
     const calls = fakeFetch(json(UPLOAD, 201), json({}, 200));
-    expect(await runAudioUpload(mp3(), "01JTT1", "750", () => {})).toEqual({ kind: "refused", message: AUDIO_DURATION_FORMAT });
+    expect(await runAudioUpload(mp3(), "01JTT1", "12:30", () => {})).toEqual({ kind: "refused", message: AUDIO_DURATION_FORMAT });
     const wav = new File([new Uint8Array([1])], "a.wav", { type: "audio/wav" });
-    expect(await runAudioUpload(wav, "01JTT1", "1:00", () => {})).toEqual({ kind: "refused", message: AUDIO_TYPE_REFUSED });
+    expect(await runAudioUpload(wav, "01JTT1", "60", () => {})).toEqual({ kind: "refused", message: AUDIO_TYPE_REFUSED });
     const big = { name: "a.mp3", type: "audio/mpeg", size: 31 * MB } as unknown as File;
-    expect(await runAudioUpload(big, "01JTT1", "1:00", () => {})).toEqual({ kind: "refused", message: AUDIO_TOO_LARGE });
+    expect(await runAudioUpload(big, "01JTT1", "60", () => {})).toEqual({ kind: "refused", message: AUDIO_TOO_LARGE });
     expect(calls).toHaveLength(0);
     expect(xhr).toHaveLength(0);
   });
@@ -307,7 +269,7 @@ describe("runAudioUpload — request → upload → completion", () => {
     ] as const) {
       const xhr = fakeXHR(204);
       fakeFetch(json({ code, message }, status), json({}, 200));
-      expect(await runAudioUpload(mp3(), "01JTT1", "1:00", () => {})).toEqual({ kind: "refused", message });
+      expect(await runAudioUpload(mp3(), "01JTT1", "60", () => {})).toEqual({ kind: "refused", message });
       expect(xhr).toHaveLength(0);
       vi.unstubAllGlobals();
     }
@@ -323,7 +285,7 @@ describe("runAudioUpload — request → upload → completion", () => {
   it("a 201 without the form is refused, not uploaded", async () => {
     const xhr = fakeXHR(204);
     fakeFetch(json({ audio_file: UPLOAD.audio_file }, 201), json({}, 200));
-    expect(await runAudioUpload(mp3(), "01JTT1", "1:00", () => {})).toEqual({
+    expect(await runAudioUpload(mp3(), "01JTT1", "60", () => {})).toEqual({
       kind: "refused",
       message: AUDIO_FORM_MISSING,
     });
@@ -334,18 +296,18 @@ describe("runAudioUpload — request → upload → completion", () => {
     fakeXHR(204);
     const cau = "Tệp bị từ chối: tệp không phải âm thanh MP3/M4A hợp lệ (ví dụ tệp video đổi đuôi).";
     fakeFetch(json(UPLOAD, 201), json({ code: "audio_rejected", message: cau }, 422));
-    expect(await runAudioUpload(mp3(), "01JTT1", "1:00", () => {})).toEqual({ kind: "refused", message: cau });
+    expect(await runAudioUpload(mp3(), "01JTT1", "60", () => {})).toEqual({ kind: "refused", message: cau });
   });
 
   it("503 at completion: `Hoàn tất lại` completes AGAIN — no second declaration, no second upload", async () => {
     const xhr = fakeXHR(204);
     const calls = fakeFetch(json(UPLOAD, 201), json({ code: "malware_scan_unavailable", message: "Chưa quét được." }, 503));
-    expect(await runAudioUpload(mp3(), "01JTT1", "1:00", () => {})).toEqual({
+    expect(await runAudioUpload(mp3(), "01JTT1", "60", () => {})).toEqual({
       kind: "retry",
       id: "01JAUDIO1",
       message: "Chưa quét được.",
     });
-    await retryAudioCompletion("01JAUDIO1", "2:00", () => {});
+    await retryAudioCompletion("01JAUDIO1", "120", () => {});
     expect(calls.filter((c) => c.url === "/api/v1/content-items/audio-files")).toHaveLength(1);
     const completions = calls.filter((c) => c.url.endsWith("/completion"));
     expect(completions).toHaveLength(2);
@@ -367,27 +329,57 @@ describe("runAudioUpload — request → upload → completion", () => {
   it("the store refuses the form: one sentence of our own, no completion asked", async () => {
     fakeXHR(403);
     const calls = fakeFetch(json(UPLOAD, 201), json({}, 200));
-    expect(await runAudioUpload(mp3(), "01JTT1", "1:00", () => {})).toEqual({ kind: "refused", message: AUDIO_STORAGE_FAILED });
+    expect(await runAudioUpload(mp3(), "01JTT1", "60", () => {})).toEqual({ kind: "refused", message: AUDIO_STORAGE_FAILED });
     expect(calls.some((c) => c.url.endsWith("/completion"))).toBe(false);
   });
 });
 
-describe("Gỡ âm thanh — PATCH audio_file_id \"\"", () => {
-  it("sends exactly {audio_file_id: \"\"} to the item", async () => {
+describe("the edit form's audio PATCH — `savedAudioPatch`", () => {
+  const f = () => new File([new Uint8Array([1])], "ban-tin.mp3", { type: "audio/mpeg" });
+
+  it("no file attached: nothing (a picked file is uploaded after the save)", () => {
+    expect(savedAudioPatch(null, null, "")).toEqual({});
+    expect(savedAudioPatch(null, f(), "750")).toEqual({});
+  });
+
+  it("a new file on a broadcast with its file: REMOVE first — the item holds one live file", () => {
+    expect(savedAudioPatch("3900", f(), "750")).toEqual({ audio_file_id: "" });
+  });
+
+  it("only the duration edited: `audio_duration_seconds`; unchanged or invalid: nothing", () => {
+    expect(savedAudioPatch("3900", null, "4000")).toEqual({ audio_duration_seconds: 4000 });
+    expect(savedAudioPatch("3900", null, " 3900 ")).toEqual({});
+    expect(savedAudioPatch("3900", null, "abc")).toEqual({});
+  });
+
+  it("an edited duration must be valid before Lưu, even with no new file", () => {
+    expect(heldAudioProblem(null, "", true)).toBe(AUDIO_DURATION_NEEDED_TO_SAVE);
+    expect(heldAudioProblem(null, "0", true)).toBe(AUDIO_DURATION_RANGE);
+    expect(heldAudioProblem(null, "4000", true)).toBeNull();
+  });
+
+  it("suaNoiDung sends `{audio_file_id: \"\"}` exactly as given (the replace's removal)", async () => {
     const calls = fakeFetch(json({}, 201), json({}, 200));
-    const kq = await removeContentAudio("01JTT1");
+    const kq = await suaNoiDung("01JTT1", { audio_file_id: "" });
     expect(kq.ok).toBe(true);
-    expect(calls).toHaveLength(1);
     expect(calls[0]?.url).toBe("/api/v1/content-items/01JTT1");
     expect(calls[0]?.init?.method).toBe("PATCH");
     expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({ audio_file_id: "" });
   });
 
-  it("the form's Lưu never carries an audio field — the audio is not part of the form", () => {
-    const row = { id: "01JTT1", type: "truyen-thanh", title: "Bản tin", audio_file_id: "01JAUDIO1", audio_duration_seconds: 750 } as comms_noiDungRa;
-    const before = giaTriTuHang({ ...row, category_id: "", summary: "", status: "an" } as comms_noiDungRa);
+  it("thanSua never carries an audio field — the audio half comes from `savedAudioPatch` only", () => {
+    const row = { id: "01JTT1", type: "truyen-thanh", title: "Bản tin", audio_file_id: "01JAUDIO1", audio_duration_seconds: 750 } as comms_noiDungRa; // vi-name-ok: generated contract type
+    const before = giaTriTuHang({ ...row, category_id: "", summary: "", status: "an" } as comms_noiDungRa); // vi-name-ok: generated contract type
     const body = thanSua(before, { ...before, title: "Bản tin sáng" });
     expect(Object.keys(body)).toEqual(["title"]);
+  });
+
+  it("removeContentAudio sends exactly {audio_file_id: \"\"} to the item", async () => {
+    const calls = fakeFetch(json({}, 201), json({}, 200));
+    expect((await removeContentAudio("01JTT1")).ok).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.init?.method).toBe("PATCH");
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({ audio_file_id: "" });
   });
 
   it("suaNoiDung passes audio fields only when given", async () => {
@@ -397,7 +389,7 @@ describe("Gỡ âm thanh — PATCH audio_file_id \"\"", () => {
   });
 });
 
-/* ── The block as rendered (no DOM events: rendered to a string) ─────────────────────────────── */
+/* ── The two boxes as rendered (no DOM events: rendered to a string) ─────────────────────────── */
 
 const SAVED: comms_audioOut = {
   file_id: "01JAUDIO1",
@@ -409,75 +401,42 @@ const SAVED: comms_audioOut = {
   preview_expires_at: "2099-01-01T00:00:00Z",
 };
 
-function field(props: Partial<Parameters<typeof BroadcastAudioField>[0]> = {}): string {
-  return renderToStaticMarkup(
-    <BroadcastAudioField
-      itemId="01JTT1"
-      initialAudio={null}
-      currentType="truyen-thanh"
-      disabled={false}
-      onBusyChange={() => {}}
-      {...props}
-    />,
-  );
-}
+describe("HeldAudioField — the prototype's two boxes", () => {
+  const box = (props: Partial<Parameters<typeof HeldAudioField>[0]> = {}) =>
+    renderToStaticMarkup(
+      <HeldAudioField file={null} duration="" problem={null} disabled={false} onFile={() => {}} onDuration={() => {}} {...props} />,
+    );
 
-describe("BroadcastAudioField", () => {
-  it("no audio yet: duration box, picker (held until a duration is typed), the 30MB hint", () => {
-    const html = field();
-    expect(html).toContain('id="thoi-luong-am-thanh"');
-    expect(html).toContain('accept=".mp3,.m4a,audio/mpeg,audio/mp4,audio/x-m4a"');
-    expect(html).toMatch(/<input[^>]*id="tep-am-thanh"[^>]*disabled=""/);
+  it("empty: `Thời lượng (giây)` as a whole-seconds number box (min 1), `Chọn tệp từ máy`, the 30MB hint", () => {
+    const html = box();
+    expect(html).toContain("Thời lượng (giây)");
+    expect(html).toMatch(/<input[^>]*id="thoi-luong-am-thanh"[^>]*type="number"[^>]*min="1"[^>]*step="1"/);
+    expect(AUDIO_PICK_BUTTON).toBe("Chọn tệp từ máy");
     expect(html).toContain(AUDIO_PICK_BUTTON);
-    expect(html).toContain("tối đa 30MB");
-    expect(html).not.toContain("<audio");
+    expect(AUDIO_HINT).toBe("MP3 hoặc M4A — tối đa 30MB");
+    expect(html).toContain(AUDIO_HINT);
+    expect(html).not.toContain("Mỗi mục truyền thanh có một tệp");
+    expect(html).toContain('accept=".mp3,.m4a,audio/mpeg,audio/mp4,audio/x-m4a"');
   });
 
-  it("an audio attached: format, size, duration, a player on the signed link with preload=none, Gỡ âm thanh", () => {
-    const html = field({ initialAudio: SAVED });
-    expect(html).toContain("M4A · 5,0 MB · thời lượng 1:05:00");
-    expect(html).toContain("<audio");
-    expect(html).toContain('preload="none"');
-    expect(html).toContain(`src="${SAVED.preview_url?.replace(/&/g, "&amp;")}"`);
-    expect(html).toContain(AUDIO_REMOVE_BUTTON);
-    // Replace = remove first: no picker while a file is attached.
-    expect(html).not.toContain('id="tep-am-thanh"');
+  it("a saved file: `Đã có tệp — chọn tệp mới để thay`", () => {
+    expect(AUDIO_HAS_FILE).toBe("Đã có tệp — chọn tệp mới để thay");
+    const html = box({ hasExisting: true, duration: "3900" });
+    expect(html).toContain(AUDIO_HAS_FILE);
+    expect(html).not.toContain(AUDIO_PICK_BUTTON);
+    expect(html).toContain('value="3900"');
   });
 
-  it("no usable preview link: no player, the missing sentence and the refresh button", () => {
-    const html = field({ initialAudio: { ...SAVED, preview_url: undefined } });
-    expect(html).not.toContain("<audio");
-    expect(html).toContain(AUDIO_PREVIEW_MISSING);
-    expect(html).toContain("Lấy link nghe thử mới");
-  });
-
-  it("the remove confirmation asks before the PATCH", () => {
-    const html = field({ initialAudio: SAVED, initialConfirmRemove: true });
-    expect(html).toContain(AUDIO_REMOVE_QUESTION);
-    expect(html).toContain("Xác nhận gỡ");
-  });
-
-  it("retry state: the server's sentence as an alert, and `Hoàn tất lại`", () => {
-    const html = field({ initialState: { kind: "retry", id: "01JAUDIO1", message: "Chưa quét được mã độc." } });
-    expect(html).toContain('role="alert"');
-    expect(html).toContain("Chưa quét được mã độc.");
-    expect(html).toContain(AUDIO_RETRY_BUTTON);
-  });
-
-  it("refused state: the server's sentence verbatim", () => {
-    const html = field({ initialState: { kind: "refused", message: "Mục truyền thanh này đã có tệp âm thanh." } });
-    expect(html).toContain("Bị từ chối: Mục truyền thanh này đã có tệp âm thanh.");
-  });
-
-  it("type box moved away: only the warning that Lưu removes the audio", () => {
-    const html = field({ initialAudio: SAVED, currentType: "tin-tuc" });
-    expect(html).toContain(AUDIO_TYPE_CHANGE_DETACHES);
-    expect(html).not.toContain("<audio");
-    expect(field({ currentType: "tin-tuc" })).toBe("");
+  it("a chosen file: its name, and its size in MB in leaf", () => {
+    const file = new File([new Uint8Array(3 * MB)], "ban-tin-sang.mp3", { type: "audio/mpeg" });
+    const html = box({ file, hasExisting: true });
+    expect(html).toContain("ban-tin-sang.mp3");
+    expect(html).not.toContain(AUDIO_HAS_FILE);
+    expect(html).toMatch(/text-leaf[^>]*>3,0 MB</);
   });
 });
 
-describe("the §7 form and the audio block", () => {
+describe("the §7 form and the audio boxes", () => {
   const row = {
     id: "01JTT1",
     type: "truyen-thanh",
@@ -497,9 +456,9 @@ describe("the §7 form and the audio block", () => {
     audio_file_id: "01JAUDIO1",
     audio_duration_seconds: 3900,
     audio: SAVED,
-  } as comms_noiDungRa;
+  } as comms_noiDungRa; // vi-name-ok: generated contract type
 
-  const form = (gt = FORM_TRONG, hang?: comms_noiDungRa, initialAudioState?: AudioUploadState) =>
+  const form = (gt = FORM_TRONG, hang?: comms_noiDungRa, initialAudioState?: AudioUploadState) => // vi-name-ok: generated contract type
     renderToStaticMarkup(
       <FormNoiDung
         tieuDeForm="T"
@@ -515,26 +474,55 @@ describe("the §7 form and the audio block", () => {
       />,
     );
 
-  it("create form with type Truyền thanh: SAVE FIRST, no picker", () => {
+  it("create form with type Truyền thanh: the duration and the file slot at once", () => {
     const html = form({ ...FORM_TRONG, type: "truyen-thanh" });
-    expect(html).toContain(AUDIO_SAVE_FIRST);
-    expect(html).not.toContain('id="tep-am-thanh"');
+    expect(html).toContain('id="thoi-luong-am-thanh"');
+    expect(html).toContain('id="tep-am-thanh"');
+    expect(html).toContain(AUDIO_PICK_BUTTON);
   });
 
-  it("an item saved as another type, switched to Truyền thanh: SAVE FIRST too", () => {
-    const other = { ...row, type: "tin-tuc", audio: undefined, audio_file_id: undefined } as comms_noiDungRa;
-    const html = form({ ...giaTriTuHang(other), type: "truyen-thanh" }, other);
-    expect(html).toContain("bấm Lưu trước");
-    expect(html).not.toContain('id="tep-am-thanh"');
-  });
-
-  it("an item saved as Truyền thanh: the audio block with the attached file", () => {
+  it("an item saved as Truyền thanh: the SAME two boxes — duration in seconds, `Đã có tệp…` — no player, no remove", () => {
     const html = form(giaTriTuHang(row), row);
-    expect(html).toContain("thời lượng 1:05:00");
-    expect(html).not.toContain("bấm Lưu trước");
+    expect(html).toContain('id="thoi-luong-am-thanh"');
+    expect(html).toMatch(/<input[^>]*id="thoi-luong-am-thanh"[^>]*value="3900"/);
+    expect(html).toContain(AUDIO_HAS_FILE);
+    expect(html).not.toContain("<audio");
+    for (const gone of [
+      "Gỡ âm thanh",
+      "Lấy link nghe thử mới",
+      "không cần bấm Lưu cho phần âm thanh",
+      "Mục chưa có tệp âm thanh.",
+      "Máy chủ không tự đo",
+      "Muốn thay tệp",
+    ]) {
+      expect(html, gone).not.toContain(gone);
+    }
   });
 
-  it("other types never show the audio block", () => {
+  it("an item saved as Truyền thanh with no file: `Chọn tệp từ máy`, empty duration", () => {
+    const none = { ...row, audio: undefined, audio_file_id: undefined, audio_duration_seconds: undefined } as comms_noiDungRa; // vi-name-ok: generated contract type
+    const html = form(giaTriTuHang(none), none);
+    expect(html).toContain(AUDIO_PICK_BUTTON);
+    expect(html).toMatch(/<input[^>]*id="thoi-luong-am-thanh"[^>]*value=""/);
+  });
+
+  it("a carried upload stuck at completion: its sentence as an alert, and `Hoàn tất lại`", () => {
+    const none = { ...row, audio: undefined, audio_file_id: undefined, audio_duration_seconds: undefined } as comms_noiDungRa; // vi-name-ok: generated contract type
+    const html = form(giaTriTuHang(none), none, { kind: "retry", id: "01JAUDIO1", message: "Chưa quét được mã độc." });
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("Chưa quét được mã độc.");
+    expect(html).toContain(AUDIO_RETRY_BUTTON);
+  });
+
+  it("a held file needs a valid duration before Lưu; no file needs none", () => {
+    const f = new File([new Uint8Array([1])], "ban-tin.mp3", { type: "audio/mpeg" });
+    expect(heldAudioProblem(null, "")).toBeNull();
+    expect(heldAudioProblem(f, "")).toBe(AUDIO_DURATION_NEEDED_TO_SAVE);
+    expect(heldAudioProblem(f, "12:30")).toBe(AUDIO_DURATION_FORMAT);
+    expect(heldAudioProblem(f, "750")).toBeNull();
+  });
+
+  it("other types never show the audio boxes", () => {
     const html = form(FORM_TRONG);
     expect(html).not.toContain("Tệp âm thanh");
     expect(html).not.toContain(AUDIO_WAIT_NOTE);

@@ -53,6 +53,11 @@ describe("/mini-app", () => {
     expect(await open({ tab: "x" })).toBe("noi-dung");
   });
 
+  it("the page's own padding is off (`p-0`): the tab band is flush, the workspace pads its body", async () => {
+    const html = renderToStaticMarkup(await MiniAppPage({ searchParams: Promise.resolve({}) }));
+    expect(html).toContain('<main class="than-trang p-0">');
+  });
+
   it("unknown Host: 404, nothing rendered", async () => {
     tenantResolves = false;
     await expect(MiniAppPage({ searchParams: Promise.resolve({ tab: "danh-ba" }) })).rejects.toThrow("NEXT_NOT_FOUND");

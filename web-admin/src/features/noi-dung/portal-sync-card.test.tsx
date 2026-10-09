@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 //
-// jsdom for this file: these tests PRESS the buttons and let the poll timer run — which request a click
-// sends, and when the polling stops, is the card's whole job. Same reasoning as `category-admin.test.tsx`.
+// jsdom for this file: these tests PRESS the buttons and let the re-read timers run — which request a
+// click sends, and when the re-reads stop, is the card's whole job. Same reasoning as `category-admin.test.tsx`.
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { pendingMarkerLabel } from "@/components/ui/pending-feature";
 import type { KetQua } from "@/lib/api/goi";
@@ -17,23 +17,46 @@ import type {
   page_Result_comms_portalRunOut,
 } from "@/lib/api/schema.gen";
 
+const T = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }));
+vi.mock("sonner", () => ({ toast: T }));
+
 import {
+  API_URL_REQUIRED,
   CATEGORIES_LIMIT_REACHED,
+  CATEGORIES_NEED_SETTINGS,
   CATEGORIES_NEED_UPDATE,
-  MAX_ITEMS_ERROR,
-  POLL_GAVE_UP,
-  POLL_MAX_ATTEMPTS,
+  CATEGORIES_REQUIRED_TO_ENABLE,
+  CATEGORIES_UNREACHABLE,
+  DOWNLOAD_IMAGES_NOTE,
+  KEY_FIRST_HINT,
   KEY_NEW_URL_HINT,
+  KEY_REQUIRED,
   KEY_SAVED_HINT,
-  MISSING_ON_PORTAL,
-  SHOW_PENDING_LABEL,
+  MAX_ITEMS_ERROR,
+  NOT_CONNECTED,
+  PORTAL_SYNC_DESCRIPTION,
+  RUN_REFUSED_TOAST,
+  RUN_STARTED_TOAST,
+  SETTINGS_SAVED,
   WINDOW_DAYS_ERROR,
 } from "./portal-sync";
-import { PHAN_CHUA_DUNG } from "./nhan-noi-dung";
+import {
+  DOWNLOAD_IMAGES_PART,
+  INTERVAL_15_MIN_PART,
+  KEY_IN_USE_PART,
+  pendingContentPart,
+  PORTAL_CATEGORY_COUNT_PART,
+} from "./nhan-noi-dung";
 import { PortalSyncCard, type PortalSyncApi } from "./portal-sync-card";
 
 beforeAll(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+});
+
+beforeEach(() => {
+  T.success.mockClear();
+  T.error.mockClear();
+  T.info.mockClear();
 });
 
 function settingsOut(over: Partial<comms_portalSyncSettingsOut> = {}): comms_portalSyncSettingsOut {
@@ -115,19 +138,12 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-async function mount(
-  api: Fakes,
-  pollIntervalMs = 1000,
-  showPendingReview?: () => void,
-  canEdit = true,
-): Promise<void> {
+async function mount(api: Fakes, canEdit = true, refetchDelaysMs: readonly number[] = [4000, 15000, 45000]): Promise<void> {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
   await act(async () => {
-    root!.render(
-      <PortalSyncCard api={api} pollIntervalMs={pollIntervalMs} showPendingReview={showPendingReview} canEdit={canEdit} />,
-    );
+    root!.render(<PortalSyncCard api={api} refetchDelaysMs={refetchDelaysMs} canEdit={canEdit} />);
   });
 }
 
@@ -153,58 +169,93 @@ function type(el: HTMLInputElement | HTMLSelectElement, value: string): void {
 
 const chip = () => host!.querySelector('[data-testid="portal-sync-status"]')?.textContent;
 const text = () => host!.textContent ?? "";
+const has = (label: string) => Array.from(host!.querySelectorAll("button")).some((b) => b.textContent === label);
 
-describe("status chip and meta line", () => {
+describe("status line (prototype `ContentSourcePanel.tsx:107-129`)", () => {
   it.each([
-    [{}, "Đang bật"],
-    [{ is_enabled: false }, "Đang tắt"],
-    [{ configured: false }, "Chưa cấu hình"],
-    [{ encryption_configured: false }, "Thiếu khoá mã hoá"],
-  ] as const)("%o → %s", async (over, label) => {
+    [{}, "Đang bật", "text-leaf"],
+    [{ is_enabled: false }, "Đang tắt", "text-ink-muted"],
+    // Without the platform key the commune's own state is still what the line says; the run button's
+    // reason names the key.
+    [{ encryption_configured: false }, "Đang bật", "text-leaf"],
+  ] as const)("%o → %s", async (over, label, colour) => {
     await mount(fakes({ settings: { ok: true, duLieu: settingsOut(over) } }));
     expect(chip()).toBe(label);
+    expect(host!.querySelector('[data-testid="portal-sync-status"]')!.className).toContain(colour);
   });
 
-  it("meta line: interval and publish mode", async () => {
+  it("one line: state · {?} chuyên mục · interval · publish mode", async () => {
     await mount(fakes());
-    expect(text()).toContain("Mỗi 6 giờ · đăng thẳng");
+    const line = host!.querySelector('[data-testid="portal-sync-status-line"]')!.textContent;
+    expect(line).toBe("Đang bật · ?chuyên mục · Mỗi 6 giờ · đăng thẳng");
   });
 
-  it("meta line: §3's category count is a disabled '?' whose reason is the PHAN_CHUA_DUNG entry (MA-02)", async () => {
+  it("the category count is a disabled '?' in the number's place, its reason the PHAN_CHUA_DUNG entry (MA-02)", async () => {
     await mount(fakes());
-    const marker = host!.querySelector(`[aria-label="${pendingMarkerLabel(PHAN_CHUA_DUNG[0]!.ten)}"]`);
+    const marker = host!.querySelector(`[aria-label="${pendingMarkerLabel(PORTAL_CATEGORY_COUNT_PART)}"]`);
     expect(marker).not.toBeNull();
-    expect(marker!.closest('[aria-disabled="true"]')?.textContent).toContain("Số chuyên mục");
+    expect(marker!.closest('[aria-disabled="true"]')?.textContent).toContain("chuyên mục");
   });
 
-  it("not configured: no category-count placeholder on a line that shows no figures", async () => {
-    await mount(fakes({ settings: { ok: true, duLieu: settingsOut({ configured: false }) } }));
-    expect(text()).not.toContain("Số chuyên mục");
+  it("not connected: the prototype's sentence, `Nối Cổng thông tin`, no `Đồng bộ ngay`, no figures", async () => {
+    await mount(fakes({ settings: { ok: true, duLieu: settingsOut({ configured: false, api_key_set: false }) } }));
+    expect(text()).toContain(NOT_CONNECTED);
+    expect(chip()).toBeUndefined();
+    expect(text()).not.toContain("chuyên mục");
+    expect(has("Nối Cổng thông tin")).toBe(true);
+    expect(has("Cấu hình")).toBe(false);
+    expect(has("Đồng bộ ngay")).toBe(false);
+  });
+
+  it("connected: `Cấu hình` and `Đồng bộ ngay`", async () => {
+    await mount(fakes());
+    expect(has("Cấu hình")).toBe(true);
+    expect(has("Nối Cổng thông tin")).toBe(false);
+    expect(has("Đồng bộ ngay")).toBe(true);
+  });
+
+  it("D3: no history, no `Tải lại`, no pending-queue link, no explainer sentence, no result chip", async () => {
+    await mount(fakes({ settings: { ok: true, duLieu: settingsOut({ is_enabled: false, publish_mode: "cho-duyet" }) } }));
+    expect(host!.querySelector("details")).toBeNull();
+    expect(text()).not.toContain("Lịch sử đồng bộ");
+    expect(has("Tải lại")).toBe(false);
+    expect(text()).not.toContain("Xem các tin chờ duyệt");
+    expect(text()).not.toContain("Lịch đồng bộ đang tắt");
+    expect(text()).not.toContain("Một phần");
+    expect(host!.querySelector(".chip")).toBeNull();
+  });
+
+  it("loading: a skeleton block and the status sentence for a screen reader", async () => {
+    const api = fakes();
+    api.getSettings.mockImplementation(() => new Promise(() => {}));
+    await mount(api);
+    expect(host!.querySelector('[role="status"]')?.textContent).toBe("Đang tải cấu hình đồng bộ…");
+    expect(host!.querySelector(".h-24")).not.toBeNull();
+    expect(host!.querySelector("section")).toBeNull();
   });
 });
 
 describe("denied — the server's 403 reaches the card verbatim", () => {
-  it("no chip, the sentence, and the run button off", async () => {
+  it("no status, the sentence, and `Cấu hình` off", async () => {
     const sentence = "Bạn không có quyền thực hiện thao tác này.";
     await mount(fakes({ settings: { ok: false, thongBao: sentence }, runs: { ok: false, thongBao: sentence } }));
     expect(chip()).toBeUndefined();
     expect(host!.querySelector('[role="alert"]')?.textContent).toBe(sentence);
-    expect(button("Đồng bộ ngay").disabled).toBe(true);
-    expect(button("Cấu hình").disabled).toBe(true);
+    expect(button("Nối Cổng thông tin").disabled).toBe(true);
   });
 });
 
 describe("`content.update` gates the two write controls (prototype `ContentSourcePanel canEdit`)", () => {
-  const has = (label: string) => Array.from(host!.querySelectorAll("button")).some((b) => b.textContent === label);
-
-  it("DENIED: no `⟳ Đồng bộ ngay`, no `Cấu hình`, no run-blocked hint — status, last run and reload stay", async () => {
-    await mount(fakes({ settings: { ok: true, duLieu: settingsOut({ configured: false }) } }), 1000, undefined, false);
+  it("DENIED: no `Đồng bộ ngay`, no `Cấu hình`, no run-blocked hint — the status and the last run stay", async () => {
+    await mount(fakes({ runs: page([RUNNING]) }), false);
     expect(has("Đồng bộ ngay")).toBe(false);
     expect(has("Cấu hình")).toBe(false);
+    // The only button left is the "?" of the category count — it explains, it writes nothing.
+    expect(Array.from(host!.querySelectorAll("button")).every((b) => b.hasAttribute("data-pending-marker"))).toBe(true);
     expect(host!.querySelector("#portal-sync-run-blocked")).toBeNull();
     expect(host!.querySelector("dialog")).toBeNull();
-    expect(chip()).toBe("Chưa cấu hình");
-    expect(has("Tải lại")).toBe(true);
+    expect(chip()).toBe("Đang bật");
+    expect(host!.querySelector('[data-testid="portal-sync-last-run"]')).not.toBeNull();
   });
 
   it("ALLOWED: both are there, and `Cấu hình` opens the settings in an overlay `<dialog>` named by its heading", async () => {
@@ -213,11 +264,19 @@ describe("`content.update` gates the two write controls (prototype `ContentSourc
     expect(host!.querySelector("dialog")).toBeNull();
     await click(button("Cấu hình"));
     const dialog = host!.querySelector("dialog")!;
-    expect(dialog.className).toBe("overlay-dialog");
+    expect(dialog.className).toContain("overlay-dialog");
+    // The prototype's `sm:max-w-[46rem]`, never wider than the screen.
+    expect(dialog.className).toContain("w-[min(46rem,calc(100vw-1rem))]");
     expect(dialog.hasAttribute("open")).toBe(true);
     expect(dialog.getAttribute("aria-labelledby")).toBe("portal-sync-config-title");
     expect(dialog.querySelector("#portal-sync-config-title")).not.toBeNull();
     expect(dialog.querySelector("#portal-sync-config")).not.toBeNull();
+  });
+
+  it("`Nối Cổng thông tin` opens the same settings", async () => {
+    await mount(fakes({ settings: { ok: true, duLieu: settingsOut({ configured: false, api_key_set: false }) } }));
+    await click(button("Nối Cổng thông tin"));
+    expect(host!.querySelector("dialog #portal-sync-config")).not.toBeNull();
   });
 
   it("Esc (`cancel`) closes the overlay", async () => {
@@ -230,118 +289,115 @@ describe("`content.update` gates the two write controls (prototype `ContentSourc
   });
 });
 
-describe("last run and error block", () => {
-  it("time, outcome, counts and one line per category error — no article, no URL", async () => {
+describe("last run line (prototype `ContentSourcePanel.tsx:131-149`)", () => {
+  it("dd/MM/yyyy HH:mm, new items, skipped (both kinds), the errors in red — no article, no URL", async () => {
     await mount(fakes());
-    const last = host!.querySelector('[data-testid="portal-sync-last-run"]')!.textContent!;
-    expect(last).toContain("Chạy lần cuối 08:09 14/09/2026");
-    expect(last).toContain("Một phần");
-    expect(last).toContain("1 tin mới · bỏ qua 3563 · lỗi 2");
-    const errors = Array.from(host!.querySelectorAll('[aria-label="Lỗi của lượt đồng bộ"] li')).map((l) => l.textContent);
-    expect(errors).toEqual(["Các dự án: timeout", "Hoạt động của các doanh nghiệp: connect (2 lần)"]);
+    const last = host!.querySelector('[data-testid="portal-sync-last-run"]')!;
+    expect(last.textContent).toContain("Chạy lần cuối 14/09/2026 08:09");
+    expect(last.textContent).toContain("1 tin mới");
+    expect(last.textContent).toContain("bỏ qua 3563");
+    const errors = host!.querySelector('[data-testid="portal-sync-run-errors"]')!;
+    expect(errors.textContent).toBe("Các dự án: timeout; Hoạt động của các doanh nghiệp: connect (2 lần)");
+    expect(errors.className).toContain("text-danger");
     expect(text()).not.toContain("https://");
   });
 
-  it("history: trigger, actor as business code or Hệ thống", async () => {
-    await mount(fakes({ runs: page([run({ id: "A", trigger_kind: "chay-tay", actor: "CB-00123" }), run({ id: "B" })]) }));
-    const rows = Array.from(host!.querySelectorAll("details tbody tr")).map((r) => r.textContent ?? "");
-    expect(rows[0]).toContain("Chạy tay");
-    expect(rows[0]).toContain("CB-00123");
-    expect(rows[1]).toContain("Theo lịch");
-    expect(rows[1]).toContain("Hệ thống");
+  it("a clean run draws no error part", async () => {
+    await mount(fakes({ runs: page([run({ error_summary: [], failed_count: 0 })]) }));
+    expect(host!.querySelector('[data-testid="portal-sync-run-errors"]')).toBeNull();
   });
 
-  it("no run yet says so", async () => {
+  it("a run still going says so instead of `0 tin mới`", async () => {
+    await mount(fakes({ runs: page([RUNNING]) }));
+    const last = host!.querySelector('[data-testid="portal-sync-last-run"]')!.textContent!;
+    expect(last).toContain("Đang chạy");
+    expect(last).not.toContain("tin mới");
+  });
+
+  it("no run yet: no line at all", async () => {
     await mount(fakes({ runs: page([]) }));
-    expect(text()).toContain("Chưa chạy lượt đồng bộ nào.");
+    expect(host!.querySelector('[data-testid="portal-sync-last-run"]')).toBeNull();
   });
 });
 
 describe("⟳ Đồng bộ ngay", () => {
-  it("is off while the newest run is unfinished", async () => {
+  it("is off while the newest run is unfinished; the reason is its accessible description, not a visible line", async () => {
     await mount(fakes({ runs: page([RUNNING]) }));
-    expect(button("Đồng bộ ngay").disabled).toBe(true);
-    expect(text()).toContain("Đang có một lượt đồng bộ chạy");
+    const run = button("Đồng bộ ngay");
+    expect(run.disabled).toBe(true);
+    const reason = host!.querySelector("#portal-sync-run-blocked")!;
+    expect(reason.textContent).toContain("Đang có một lượt đồng bộ chạy");
+    // Screen-reader only (the prototype draws no line), tied to the button, and on hover.
+    expect(reason.className).toBe("an-thi-giac");
+    expect(run.getAttribute("aria-describedby")).toBe("portal-sync-run-blocked");
+    expect(run.title).toContain("Đang có một lượt đồng bộ chạy");
   });
 
-  it("is off before the commune configured anything", async () => {
-    await mount(fakes({ settings: { ok: true, duLieu: settingsOut({ configured: false, api_key_set: false }) } }));
-    expect(button("Đồng bộ ngay").disabled).toBe(true);
+  it("on: no reason element, no description, no title", async () => {
+    await mount(fakes());
+    const run = button("Đồng bộ ngay");
+    expect(run.disabled).toBe(false);
+    expect(host!.querySelector("#portal-sync-run-blocked")).toBeNull();
+    expect(run.hasAttribute("aria-describedby")).toBe(false);
+    expect(run.hasAttribute("title")).toBe(false);
   });
 
-  it("polls a BOUNDED number of times, then stops and says so", async () => {
+  it("202: the prototype's toast, then the card re-reads itself at 4 s, 15 s and 45 s — and never again", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const api = fakes();
     await mount(api);
-    api.listRuns.mockImplementation(async () => page([RUNNING]));
-
-    await click(button("Đồng bộ ngay"));
-    expect(api.startRun).toHaveBeenCalledTimes(1);
-    expect(button("Đồng bộ ngay").disabled).toBe(true);
-    const afterStart = api.listRuns.mock.calls.length; // mount + the read right after the 202
-
-    for (let i = 0; i < POLL_MAX_ATTEMPTS + 5; i++) {
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(1000);
-      });
-    }
-    expect(api.listRuns.mock.calls.length - afterStart).toBe(POLL_MAX_ATTEMPTS);
-    expect(text()).toContain(POLL_GAVE_UP);
-
-    // Nothing more, however long the tab stays open.
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(60_000);
-    });
-    expect(api.listRuns.mock.calls.length - afterStart).toBe(POLL_MAX_ATTEMPTS);
-  });
-
-  it("stops polling as soon as the run has finished, and re-reads the settings", async () => {
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-    const api = fakes();
-    await mount(api);
-    api.listRuns.mockImplementationOnce(async () => page([RUNNING])); // right after the 202
-    api.listRuns.mockImplementationOnce(async () => page([RUNNING])); // poll 1
-    api.listRuns.mockImplementation(async () => page([run({ id: "R2", outcome: "thanh-cong", error_summary: [] })]));
     const settingsBefore = api.getSettings.mock.calls.length;
 
     await click(button("Đồng bộ ngay"));
-    for (let i = 0; i < 6; i++) {
+    expect(api.startRun).toHaveBeenCalledTimes(1);
+    expect(T.success).toHaveBeenCalledWith(RUN_STARTED_TOAST);
+    const runsAfterStart = api.listRuns.mock.calls.length; // mount + the read right after the 202
+
+    const advance = async (ms: number) => {
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(1000);
+        await vi.advanceTimersByTimeAsync(ms);
       });
-    }
-    // mount + after-202 + poll 1 + poll 2 (finished) — then silence.
-    expect(api.listRuns).toHaveBeenCalledTimes(4);
-    expect(api.getSettings.mock.calls.length).toBe(settingsBefore + 1);
-    expect(button("Đồng bộ ngay").disabled).toBe(false);
-    expect(text()).not.toContain(POLL_GAVE_UP);
+    };
+    await advance(3999);
+    expect(api.getSettings.mock.calls.length - settingsBefore).toBe(0);
+    await advance(1);
+    expect(api.getSettings.mock.calls.length - settingsBefore).toBe(1);
+    await advance(11_000);
+    expect(api.getSettings.mock.calls.length - settingsBefore).toBe(2);
+    await advance(30_000);
+    expect(api.getSettings.mock.calls.length - settingsBefore).toBe(3);
+    expect(api.listRuns.mock.calls.length - runsAfterStart).toBe(3);
+
+    // Nothing more, however long the tab stays open.
+    await advance(10 * 60_000);
+    expect(api.getSettings.mock.calls.length - settingsBefore).toBe(3);
+    expect(api.listRuns.mock.calls.length - runsAfterStart).toBe(3);
   });
 
-  it("a refusal shows the server's sentence; the retry reuses the SAME key; a 202 renews it", async () => {
+  it("a refusal: the prototype's error toast with the server's sentence; the retry reuses the SAME key", async () => {
     const api = fakes();
     const sentence = "Đang có một lượt đồng bộ của xã. Hãy chờ lượt ấy xong rồi chạy lại.";
     api.startRun.mockImplementationOnce(async () => ({ ok: false, thongBao: sentence }));
     await mount(api);
     await click(button("Đồng bộ ngay"));
-    expect(host!.querySelector('[role="alert"]')?.textContent).toBe(sentence);
+    expect(T.error).toHaveBeenCalledWith(RUN_REFUSED_TOAST, { description: sentence });
+    expect(T.success).not.toHaveBeenCalled();
     await click(button("Đồng bộ ngay"));
     const [k1, k2] = api.startRun.mock.calls.map((c) => c[0]);
     expect(k1).toBe(k2);
     expect(k1).not.toBe("");
   });
 
-  it("503 portal_sync_busy: the server's sentence and the Retry-After wait — and NO retry by itself", async () => {
+  it("503 portal_sync_busy: the toast carries the Retry-After wait — and NOTHING is retried or re-read", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const api = fakes();
     const sentence = "Hệ thống đang chạy đồng bộ cho các xã khác. Hãy thử lại sau ít phút.";
     api.startRun.mockImplementation(async () => ({ ok: false, thongBao: sentence, retryAfterSeconds: 60 }));
     await mount(api);
     await click(button("Đồng bộ ngay"));
-    const alert = host!.querySelector('[role="alert"]')!;
-    expect(alert.textContent).toContain(sentence);
-    expect(host!.querySelector('[data-testid="portal-sync-retry-wait"]')?.textContent).toBe(
-      "Có thể bấm lại sau khoảng 1 phút.",
-    );
+    expect(T.error).toHaveBeenCalledWith(RUN_REFUSED_TOAST, {
+      description: `${sentence} Có thể bấm lại sau khoảng 1 phút.`,
+    });
     const runsBefore = api.listRuns.mock.calls.length;
     await act(async () => {
       await vi.advanceTimersByTimeAsync(5 * 60_000);
@@ -351,35 +407,102 @@ describe("⟳ Đồng bộ ngay", () => {
     // The officer may press again; the button is not held.
     expect(button("Đồng bộ ngay").disabled).toBe(false);
   });
-
-  it("a refusal without Retry-After shows no wait line", async () => {
-    const api = fakes();
-    api.startRun.mockImplementationOnce(async () => ({ ok: false, thongBao: "Bộ chạy đồng bộ đang khởi động lại." }));
-    await mount(api);
-    await click(button("Đồng bộ ngay"));
-    expect(host!.querySelector('[data-testid="portal-sync-retry-wait"]')).toBeNull();
-  });
 });
 
-describe("Xem các tin chờ duyệt", () => {
-  it("in review mode the card offers the §6 queue; pressing it calls the filter setter", async () => {
-    const show = vi.fn();
-    await mount(fakes({ settings: { ok: true, duLieu: settingsOut({ publish_mode: "cho-duyet" }) } }), 1000, show);
-    await click(button(SHOW_PENDING_LABEL));
-    expect(show).toHaveBeenCalledTimes(1);
+describe("Cấu hình — the dialog (prototype `ContentSourcePanel.tsx:313-566`)", () => {
+  async function openConfig(api: Fakes): Promise<void> {
+    await mount(api);
+    await click(button("Cấu hình"));
+  }
+
+  it("one title, one sentence, no inner heading repeated; a scrolling body; `Huỷ` · `Lưu cấu hình`", async () => {
+    await openConfig(fakes());
+    const dialog = host!.querySelector("dialog")!;
+    expect(dialog.querySelector("h3")?.textContent).toBe("Đồng bộ tin từ Cổng thông tin điện tử");
+    expect(dialog.querySelectorAll("h3, h4")).toHaveLength(1);
+    expect(dialog.textContent!.split(PORTAL_SYNC_DESCRIPTION)).toHaveLength(2);
+    expect(dialog.querySelector(".max-h-\\[62vh\\].overflow-y-auto")).not.toBeNull();
+    const footer = Array.from(dialog.querySelectorAll("button")).filter((b) => b.closest(".justify-end") !== null);
+    expect(footer.map((b) => b.textContent)).toEqual(["Huỷ", "Lưu cấu hình"]);
+    // ONE save button: the categories have no save of their own any more.
+    expect(has("Lưu chuyên mục")).toBe(false);
+    // The two-option publish picker and its explainers are gone.
+    expect(dialog.querySelector('input[type="radio"]')).toBeNull();
+    expect(dialog.textContent).not.toContain("Chờ duyệt (mặc định)");
   });
 
-  it("not offered in direct mode, nor before configuration", async () => {
-    await mount(fakes(), 1000, vi.fn());
-    expect(text()).not.toContain(SHOW_PENDING_LABEL);
-    act(() => root?.unmount());
-    host?.remove();
-    await mount(
-      fakes({ settings: { ok: true, duLieu: settingsOut({ configured: false, publish_mode: "cho-duyet" }) } }),
-      1000,
-      vi.fn(),
-    );
-    expect(text()).not.toContain(SHOW_PENDING_LABEL);
+  it("the checkbox box, in the prototype's order; `Tải ảnh về kho của xã` is a disabled '?' with its note", async () => {
+    await openConfig(fakes());
+    const rows = Array.from(host!.querySelectorAll(".rounded-\\[10px\\].space-y-2 > :is(label, div)")).map((r) => r.textContent);
+    expect(rows).toEqual([
+      "Bật đồng bộ tự động",
+      "Tin về thì đăng thẳng lên Mini App",
+      "Tải ảnh về kho của xã?",
+      "Ghi rõ nguồn tin gốc",
+    ]);
+    const images = host!.querySelector<HTMLInputElement>("#portal-sync-download-images")!;
+    expect(images.disabled).toBe(true);
+    expect(host!.querySelector(`[aria-label="${pendingMarkerLabel(DOWNLOAD_IMAGES_PART)}"]`)).not.toBeNull();
+    expect(text()).toContain(DOWNLOAD_IMAGES_NOTE);
+  });
+
+  it("`Tin về thì đăng thẳng` is the publish mode: ticked = dang-thang, unticked = cho-duyet", async () => {
+    const api = fakes({ settings: { ok: true, duLieu: settingsOut({ publish_mode: "cho-duyet" }) } });
+    await openConfig(api);
+    const direct = host!.querySelector<HTMLInputElement>("#portal-sync-direct")!;
+    expect(direct.checked).toBe(false);
+    await click(direct);
+    await click(button("Lưu cấu hình"));
+    expect(api.saveSettings.mock.calls[0]![0].publish_mode).toBe("dang-thang");
+  });
+
+  it("the three numbers side by side with the prototype's labels and unit hints", async () => {
+    await openConfig(fakes());
+    const grid = host!.querySelector("#portal-sync-interval")!.closest(".grid")!;
+    expect(grid.className).toContain("sm:grid-cols-3");
+    expect(Array.from(grid.querySelectorAll("label")).map((l) => l.textContent)).toEqual([
+      "Nhịp đồng bộ",
+      "Chỉ lấy tin trong",
+      "Tối đa mỗi lần",
+    ]);
+    expect(grid.textContent).toContain("ngày trở lại");
+    expect(grid.textContent).toContain("tin");
+  });
+
+  it("the interval options are the prototype's set; `Mỗi 15 phút` is a disabled \"?\" (whole hours only)", async () => {
+    await openConfig(fakes());
+    const options = Array.from(host!.querySelectorAll<HTMLOptionElement>("#portal-sync-interval option"));
+    expect(options.map((o) => o.textContent)).toEqual([
+      "Chỉ chạy khi bấm tay",
+      "Mỗi 15 phút ?",
+      "Mỗi giờ",
+      "Mỗi 6 giờ",
+      "Mỗi ngày",
+    ]);
+    expect(options.map((o) => o.value)).toEqual(["0", "", "1", "6", "24"]);
+    const quarter = options[1]!;
+    expect(quarter.disabled).toBe(true);
+    expect(quarter.title).toBe(pendingContentPart(INTERVAL_15_MIN_PART).viSao);
+    expect(host!.querySelector<HTMLSelectElement>("#portal-sync-interval")!.value).toBe("6");
+  });
+
+  it("a stored interval outside the set is kept as its own option — never silently changed", async () => {
+    const api = fakes({ settings: { ok: true, duLieu: settingsOut({ interval_hours: 12 }) } });
+    await openConfig(api);
+    const select = host!.querySelector<HTMLSelectElement>("#portal-sync-interval")!;
+    expect(Array.from(select.options).map((o) => o.textContent)).toEqual([
+      "Chỉ chạy khi bấm tay",
+      "Mỗi 15 phút ?",
+      "Mỗi giờ",
+      "Mỗi 6 giờ",
+      "Mỗi 12 giờ",
+      "Mỗi ngày",
+    ]);
+    expect(select.value).toBe("12");
+    // The card's line names it with the same labeller.
+    expect(host!.querySelector('[data-testid="portal-sync-status-line"]')!.textContent).toContain("Mỗi 12 giờ");
+    await click(button("Lưu cấu hình"));
+    expect(api.saveSettings.mock.calls[0]![0].interval_hours).toBe(12);
   });
 });
 
@@ -391,69 +514,98 @@ describe("Cấu hình — settings", () => {
   const keyBox = () => host!.querySelector<HTMLInputElement>("#portal-sync-api-key")!;
   const urlBox = () => host!.querySelector<HTMLInputElement>("#portal-sync-api-url")!;
   const saveBtn = () => button("Lưu cấu hình");
+  const save = () => click(saveBtn());
 
-  it("the key box is empty and password-typed; the hint says a key is stored", async () => {
+  it("the key box is empty and password-typed; the hint says blank keeps it", async () => {
     await openConfig(fakes());
     expect(keyBox().value).toBe("");
     expect(keyBox().type).toBe("password");
+    // `new-password`, not the prototype's `off`: browsers ignore `off` and would offer the officer's own login.
     expect(keyBox().autocomplete).toBe("new-password");
-    expect(host!.querySelector('[data-testid="portal-sync-key-hint"]')?.textContent).toBe(KEY_SAVED_HINT);
+    expect(keyBox().placeholder).toBe("Giữ nguyên mã cũ");
+    // The prototype's `Đang dùng {hint}. Để trống nếu không đổi.`, a disabled "?" in the hint's place.
+    const hint = host!.querySelector('[data-testid="portal-sync-key-hint"]')!;
+    expect(hint.textContent).toBe(`Đang dùng?. ${KEY_SAVED_HINT}`);
+    expect(hint.querySelector(`[aria-label="${pendingMarkerLabel(KEY_IN_USE_PART)}"]`)).not.toBeNull();
     expect(saveBtn().disabled).toBe(false);
   });
 
-  it("changing the address requires the key again — Lưu off until typed, then sent", async () => {
+  it("the address placeholder names no commune", async () => {
+    await openConfig(fakes());
+    expect(urlBox().placeholder).toContain("<tên-xã>");
+  });
+
+  it("an empty address is refused under its box, nothing sent", async () => {
+    const api = fakes();
+    await openConfig(api);
+    type(urlBox(), "  ");
+    await save();
+    expect(api.saveSettings).not.toHaveBeenCalled();
+    expect(urlBox().closest(".flex-col")!.querySelector('[role="alert"]')?.textContent).toBe(API_URL_REQUIRED);
+  });
+
+  it("first time: the key is required, its hint is the prototype's, the refusal is its own sentence", async () => {
+    const api = fakes({ settings: { ok: true, duLieu: settingsOut({ configured: false, api_key_set: false, api_url: "", is_enabled: false }) } });
+    await mount(api);
+    await click(button("Nối Cổng thông tin"));
+    expect(host!.querySelector('[data-testid="portal-sync-key-hint"]')?.textContent).toBe(KEY_FIRST_HINT);
+    type(urlBox(), "https://xa.danang.gov.vn/api");
+    await save();
+    expect(api.saveSettings).not.toHaveBeenCalled();
+    expect(keyBox().closest(".flex-col")!.querySelector('[role="alert"]')?.textContent).toBe(KEY_REQUIRED);
+  });
+
+  it("changing the address requires the key again — refused under the key box until typed, then sent", async () => {
     const api = fakes();
     await openConfig(api);
     type(urlBox(), "https://khac.danang.gov.vn/api");
     expect(host!.querySelector('[data-testid="portal-sync-key-hint"]')?.textContent).toBe(KEY_NEW_URL_HINT);
-    expect(saveBtn().disabled).toBe(true);
+    await save();
+    expect(api.saveSettings).not.toHaveBeenCalled();
+    expect(keyBox().closest(".flex-col")!.querySelector('[role="alert"]')?.textContent).toBe(KEY_NEW_URL_HINT);
 
     type(keyBox(), "k3y-moi");
-    expect(saveBtn().disabled).toBe(false);
-    await act(async () => {
-      saveBtn().form!.requestSubmit();
-    });
+    await save();
     expect(api.saveSettings).toHaveBeenCalledTimes(1);
     expect(api.saveSettings.mock.calls[0]![0]).toMatchObject({
       api_url: "https://khac.danang.gov.vn/api",
       api_key: "k3y-moi",
     });
+    // The tree on screen was read from the OLD portal: none of it is sent to the new one.
+    expect(api.saveCategories).not.toHaveBeenCalled();
   });
 
   it("a save that keeps the address sends no key at all", async () => {
     const api = fakes();
     await openConfig(api);
     type(host!.querySelector<HTMLSelectElement>("#portal-sync-interval")!, "0");
-    await act(async () => {
-      saveBtn().form!.requestSubmit();
-    });
+    await save();
     const body = api.saveSettings.mock.calls[0]![0];
     expect("api_key" in body).toBe(false);
     expect(body.interval_hours).toBe(0);
   });
 
-  it("the server's 422 is shown verbatim and the typed key stays for the retry", async () => {
+  it("the server's 422 is shown verbatim, the dialog stays and the typed key stays for the retry", async () => {
     const api = fakes();
     const sentence = "Đã đổi địa chỉ API thì phải nhập lại mã bảo mật. Mã cũ không được gửi tới một địa chỉ chưa từng dùng nó.";
     api.saveSettings.mockImplementationOnce(async () => ({ ok: false, thongBao: sentence }));
     await openConfig(api);
     type(keyBox(), "abc");
-    await act(async () => {
-      saveBtn().form!.requestSubmit();
-    });
-    expect(host!.querySelector("form [role='alert']")?.textContent).toBe(sentence);
+    await save();
+    expect(Array.from(host!.querySelectorAll("form [role='alert']")).map((a) => a.textContent)).toContain(sentence);
     expect(keyBox().value).toBe("abc");
+    expect(T.success).not.toHaveBeenCalled();
   });
 
-  it("after a successful save the key box is empty again", async () => {
+  it("success: the prototype's toast, the dialog closes, the card shows the new settings", async () => {
     const api = fakes();
+    api.saveSettings.mockImplementationOnce(async () => ({ ok: true, duLieu: settingsOut({ interval_hours: 24 }) }));
     await openConfig(api);
-    type(keyBox(), "abc");
-    await act(async () => {
-      saveBtn().form!.requestSubmit();
-    });
-    expect(keyBox().value).toBe("");
-    expect(text()).toContain("Đã lưu cấu hình đồng bộ.");
+    await save();
+    expect(T.success).toHaveBeenCalledWith(SETTINGS_SAVED);
+    expect(SETTINGS_SAVED).toBe("Đã lưu cấu hình nguồn tin.");
+    expect(host!.querySelector("dialog")).toBeNull();
+    expect(host!.querySelector('[data-testid="portal-sync-status-line"]')?.textContent).toContain("Mỗi ngày");
   });
 
   it("without the platform key, Lưu is off and the reason is said", async () => {
@@ -462,26 +614,23 @@ describe("Cấu hình — settings", () => {
     expect(host!.querySelector("form [role='alert']")?.textContent).toContain("khoá mã hoá");
   });
 
-  it("window 1..90 and items 1..100: min/max on the inputs, a sentence naming the range holds Lưu", async () => {
+  it("window 1..90 and items 1..100: min/max on the inputs, a sentence under the box holds the save", async () => {
     const api = fakes();
     await openConfig(api);
     const win = host!.querySelector<HTMLInputElement>("#portal-sync-window")!;
     const max = host!.querySelector<HTMLInputElement>("#portal-sync-max-items")!;
     expect([win.min, win.max, max.min, max.max]).toEqual(["1", "90", "1", "100"]);
-    expect(text()).toContain("Từ 1 tới 90 ngày");
-    expect(text()).toContain("Từ 1 tới 100 tin");
 
     type(win, "91");
-    expect(host!.querySelector('[data-testid="portal-sync-form-error"]')?.textContent).toBe(WINDOW_DAYS_ERROR);
-    expect(saveBtn().disabled).toBe(true);
+    await save();
+    expect(win.closest(".flex-col")!.querySelector('[role="alert"]')?.textContent).toBe(WINDOW_DAYS_ERROR);
+    expect(api.saveSettings).not.toHaveBeenCalled();
     type(win, "30");
     type(max, "101");
-    expect(host!.querySelector('[data-testid="portal-sync-form-error"]')?.textContent).toBe(MAX_ITEMS_ERROR);
+    await save();
+    expect(max.closest(".flex-col")!.querySelector('[role="alert"]')?.textContent).toBe(MAX_ITEMS_ERROR);
     type(max, "50");
-    expect(saveBtn().disabled).toBe(false);
-    await act(async () => {
-      saveBtn().form!.requestSubmit();
-    });
+    await save();
     expect(api.saveSettings.mock.calls[0]![0]).toMatchObject({ window_days: 30, max_items_per_run: 50 });
   });
 
@@ -490,67 +639,138 @@ describe("Cấu hình — settings", () => {
     const sentence = "dong_bo_cong: số ngày lấy tin phải từ 1 tới 90";
     api.saveSettings.mockImplementationOnce(async () => ({ ok: false, thongBao: sentence }));
     await openConfig(api);
-    await act(async () => {
-      saveBtn().form!.requestSubmit();
-    });
-    expect(host!.querySelector("form [role='alert']")?.textContent).toBe(sentence);
-  });
-
-  it("publish mode radios explain both choices; Chờ duyệt is marked default", async () => {
-    await openConfig(fakes());
-    const form = host!.querySelector("form")!.textContent!;
-    expect(form).toContain("Chờ duyệt (mặc định)");
-    expect(form).toContain("bà con chưa thấy");
-    expect(form).toContain("hiện ngay cho bà con");
+    await save();
+    expect(Array.from(host!.querySelectorAll("form [role='alert']")).map((a) => a.textContent)).toContain(sentence);
   });
 });
 
 describe("Cấu hình — categories", () => {
-  it("not configured: the portal is not asked, a sentence says why", async () => {
+  const box = () => host!.querySelector('[data-testid="portal-sync-categories"]')!;
+
+  it("not configured: the portal is not asked, the prototype's sentence says why", async () => {
     const api = fakes({ settings: { ok: true, duLieu: settingsOut({ configured: false, api_key_set: false }) } });
     await mount(api);
-    await click(button("Cấu hình"));
+    await click(button("Nối Cổng thông tin"));
     expect(api.getCategories).not.toHaveBeenCalled();
-    expect(text()).toContain("Lưu địa chỉ API và mã bảo mật trước");
+    expect(box().textContent).toContain(CATEGORIES_NEED_SETTINGS);
+    expect(has("Chọn tất cả")).toBe(false);
   });
 
-  it("the tree, the missing one flagged, and the body holds only the changes", async () => {
+  it("first time with sync switched on: refused inside the box — nothing can be ticked yet", async () => {
+    const api = fakes({ settings: { ok: true, duLieu: settingsOut({ configured: false, api_key_set: false, api_url: "", is_enabled: true }) } });
+    await mount(api);
+    await click(button("Nối Cổng thông tin"));
+    type(host!.querySelector<HTMLInputElement>("#portal-sync-api-url")!, "https://xa.danang.gov.vn/api");
+    type(host!.querySelector<HTMLInputElement>("#portal-sync-api-key")!, "k3y");
+    await click(button("Lưu cấu hình"));
+    expect(api.saveSettings).not.toHaveBeenCalled();
+    expect(box().querySelector('[role="alert"]')?.textContent).toBe(CATEGORIES_REQUIRED_TO_ENABLE);
+  });
+
+  it("loading: a skeleton inside the box", async () => {
     const api = fakes();
+    api.getCategories.mockImplementation(() => new Promise(() => {}));
     await mount(api);
     await click(button("Cấu hình"));
-    expect(api.getCategories).toHaveBeenCalledTimes(1);
-    // Against the ceiling; the missing-but-selected row counts, as it does at the server.
-    expect(text()).toContain("đã chọn 2/30");
-    expect(text()).toContain(MISSING_ON_PORTAL);
+    expect(box().querySelector(".h-24")).not.toBeNull();
+  });
 
+  it("grouped by parent: `Khác` for the roots, a group per parent, each with `chọn cả mục`; no 'không còn trên cổng' chip", async () => {
+    await mount(fakes());
+    await click(button("Cấu hình"));
+    const groups = Array.from(box().querySelectorAll("p.uppercase")).map((g) => g.textContent);
+    expect(groups).toEqual(["Khác", "Danh mục"]);
+    expect(text()).toContain("đã chọn 2/3");
+    expect(text()).not.toContain("không còn trên cổng");
+    expect(Array.from(box().querySelectorAll("button")).map((b) => b.textContent)).toEqual([
+      "Chọn tất cả",
+      "Bỏ chọn",
+      "chọn cả mục",
+      // `Danh mục`'s one child is ticked: the group's button unticks.
+      "bỏ cả mục",
+    ]);
+  });
+
+  it("`chọn cả mục` ticks the whole group; a ticked one shows the kind select", async () => {
+    await mount(fakes());
+    await click(button("Cấu hình"));
+    expect(host!.querySelector('[aria-label="Loại nội dung của chuyên mục Danh mục"]')).toBeNull();
+    await click(button("chọn cả mục"));
+    expect(host!.querySelector<HTMLInputElement>("#portal-category-1")!.checked).toBe(true);
+    expect(host!.querySelector<HTMLSelectElement>('[aria-label="Loại nội dung của chuyên mục Danh mục"]')!.value).toBe("tin-tuc");
+    expect(text()).toContain("đã chọn 3/3");
+  });
+
+  it("ONE save: PUT settings, THEN PUT categories with only the changes", async () => {
+    const api = fakes();
+    const order: string[] = [];
+    api.saveSettings.mockImplementation(async (b) => {
+      order.push("settings");
+      return { ok: true, duLieu: settingsOut({ api_url: b.api_url }) };
+    });
+    api.saveCategories.mockImplementation(async () => {
+      order.push("categories");
+      return { ok: true as const, duLieu: { items: [] } };
+    });
+    await mount(api);
+    await click(button("Cấu hình"));
     await click(host!.querySelector<HTMLInputElement>("#portal-category-1")!);
     type(host!.querySelector<HTMLSelectElement>('[aria-label="Loại nội dung của chuyên mục Danh mục"]')!, "thong-bao");
     await click(host!.querySelector<HTMLInputElement>("#portal-category-9")!);
+    await click(button("Lưu cấu hình"));
 
-    await act(async () => {
-      button("Lưu chuyên mục").form!.requestSubmit();
-    });
+    expect(order).toEqual(["settings", "categories"]);
     expect(api.saveCategories.mock.calls[0]![0]).toEqual({
       categories: [
         { external_id: "1", name: "Danh mục", target_kind: "thong-bao", is_selected: true },
         { external_id: "9", name: "Mục cũ", target_kind: "su-kien", is_selected: false },
       ],
     });
-
-    // Saved state is the new baseline: pressing again sends nothing.
-    await act(async () => {
-      button("Lưu chuyên mục").form!.requestSubmit();
-    });
-    expect(api.saveCategories).toHaveBeenCalledTimes(1);
+    expect(T.success).toHaveBeenCalledWith(SETTINGS_SAVED);
+    expect(host!.querySelector("dialog")).toBeNull();
   });
 
-  it("a portal failure (502) shows the server's sentence, not the portal's", async () => {
+  it("nothing ticked differently: only the settings are sent", async () => {
     const api = fakes();
-    const sentence = "Cổng không trả lời kịp. Hãy thử lại sau.";
-    api.getCategories.mockImplementation(async () => ({ ok: false, thongBao: sentence }));
     await mount(api);
     await click(button("Cấu hình"));
+    await click(button("Lưu cấu hình"));
+    expect(api.saveSettings).toHaveBeenCalledTimes(1);
+    expect(api.saveCategories).not.toHaveBeenCalled();
+  });
+
+  it("the settings refused: the chain stops there, the categories are never sent", async () => {
+    const api = fakes();
+    api.saveSettings.mockImplementationOnce(async () => ({ ok: false, thongBao: "Từ chối." }));
+    await mount(api);
+    await click(button("Cấu hình"));
+    await click(host!.querySelector<HTMLInputElement>("#portal-category-1")!);
+    await click(button("Lưu cấu hình"));
+    expect(api.saveCategories).not.toHaveBeenCalled();
+    expect(Array.from(host!.querySelectorAll("form [role='alert']")).map((a) => a.textContent)).toContain("Từ chối.");
+  });
+
+  it("the server's 422 too_many_categories is shown verbatim; the dialog stays open", async () => {
+    const api = fakes();
+    const sentence = "Mỗi xã chọn tối đa 30 chuyên mục Cổng. Hãy bỏ chọn bớt rồi lưu lại.";
+    api.saveCategories.mockImplementationOnce(async () => ({ ok: false, thongBao: sentence }));
+    await mount(api);
+    await click(button("Cấu hình"));
+    await click(host!.querySelector<HTMLInputElement>("#portal-category-1")!);
+    await click(button("Lưu cấu hình"));
     expect(Array.from(host!.querySelectorAll('[role="alert"]')).map((a) => a.textContent)).toContain(sentence);
+    expect(host!.querySelector("dialog")).not.toBeNull();
+    expect(T.success).not.toHaveBeenCalled();
+  });
+
+  it("a portal failure (502): the prototype's sentence in red inside the box", async () => {
+    const api = fakes();
+    api.getCategories.mockImplementation(async () => ({ ok: false, thongBao: "Cổng không trả lời kịp. Hãy thử lại sau." }));
+    await mount(api);
+    await click(button("Cấu hình"));
+    const alert = box().querySelector('[role="alert"]')!;
+    expect(alert.textContent).toBe(CATEGORIES_UNREACHABLE);
+    expect(alert.className).toContain("text-danger");
     expect(text()).not.toContain(CATEGORIES_NEED_UPDATE);
   });
 
@@ -595,11 +815,11 @@ describe("Cấu hình — categories", () => {
     api.getCategories.mockImplementation(async () => ({ ok: true, duLieu: big }));
     await mount(api);
     await click(button("Cấu hình"));
-    expect(text()).toContain("đã chọn 29/30");
+    expect(text()).toContain("đã chọn 29/32");
     expect(host!.querySelector('[data-testid="portal-sync-categories-limit"]')).toBeNull();
 
     await click(host!.querySelector<HTMLInputElement>("#portal-category-c29")!);
-    expect(text()).toContain("đã chọn 30/30");
+    expect(text()).toContain("đã chọn 30/32");
     expect(host!.querySelector('[data-testid="portal-sync-categories-limit"]')?.textContent).toBe(CATEGORIES_LIMIT_REACHED);
     expect(host!.querySelector<HTMLInputElement>("#portal-category-c30")!.disabled).toBe(true);
     expect(host!.querySelector<HTMLInputElement>("#portal-category-c0")!.disabled).toBe(false);
@@ -610,7 +830,7 @@ describe("Cấu hình — categories", () => {
     expect(host!.querySelector<HTMLInputElement>("#portal-category-c30")!.disabled).toBe(false);
   });
 
-  it("Chọn tất cả on a 40-category portal ticks exactly 30", async () => {
+  it("Chọn tất cả on a 40-category portal ticks exactly 30, and the one save sends them", async () => {
     const big: comms_portalCategoryTreeOut = {
       items: Array.from({ length: 40 }, (_, i) => ({
         external_id: `c${i}`,
@@ -627,23 +847,20 @@ describe("Cấu hình — categories", () => {
     await mount(api);
     await click(button("Cấu hình"));
     await click(button("Chọn tất cả"));
-    expect(text()).toContain("đã chọn 30/30");
-    await act(async () => {
-      button("Lưu chuyên mục").form!.requestSubmit();
-    });
+    expect(text()).toContain("đã chọn 30/40");
+    await click(button("Lưu cấu hình"));
     expect(api.saveCategories.mock.calls[0]![0].categories.filter((c) => c.is_selected)).toHaveLength(30);
   });
 
-  it("the server's 422 too_many_categories is shown verbatim on save", async () => {
+  it("switching sync on with every category unticked is refused inside the box", async () => {
     const api = fakes();
-    const sentence = "Mỗi xã chọn tối đa 30 chuyên mục Cổng. Hãy bỏ chọn bớt rồi lưu lại.";
-    api.saveCategories.mockImplementationOnce(async () => ({ ok: false, thongBao: sentence }));
     await mount(api);
     await click(button("Cấu hình"));
-    await click(host!.querySelector<HTMLInputElement>("#portal-category-1")!);
-    await act(async () => {
-      button("Lưu chuyên mục").form!.requestSubmit();
-    });
-    expect(Array.from(host!.querySelectorAll('[role="alert"]')).map((a) => a.textContent)).toContain(sentence);
+    await click(button("Bỏ chọn"));
+    // The stored row the portal no longer lists is unticked by hand.
+    await click(host!.querySelector<HTMLInputElement>("#portal-category-9")!);
+    await click(button("Lưu cấu hình"));
+    expect(api.saveSettings).not.toHaveBeenCalled();
+    expect(box().querySelector('[role="alert"]')?.textContent).toBe(CATEGORIES_REQUIRED_TO_ENABLE);
   });
 });

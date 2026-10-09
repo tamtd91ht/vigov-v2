@@ -10,9 +10,7 @@ import type { comms_danhMucRa, comms_noiDungRa } from "@/lib/api/schema.gen";
 import {
   BANNER_COVER_NOTICE,
   CANH_BAO_HTML_THO,
-  CATEGORY_HIDDEN,
-  CATEGORY_HIDE_EXPLAINER,
-  CATEGORY_SHOWN,
+  CATEGORY_ROOT_GROUP,
   CHUA_XEP_DANH_MUC,
   ERR_BANNER_COVER_REQUIRED,
   ERR_EVENT_END_BEFORE_START,
@@ -25,30 +23,33 @@ import {
   FORM_TRONG,
   giaTriTuHang,
   LINK_TO_HINT,
+  MO_TA_FORM_THEM,
   MO_TA_THE_DANH_BA,
   MOI_DANH_MUC,
-  MOI_LOAI_NHAN,
-  NHAN_DA_SUA_TAY,
   NHAN_NUT_DANH_MUC,
   NHAN_NUT_SUA,
   NHAN_NUT_THEM,
   NHAN_O_DANG,
   PENDING_REVIEW_HINT,
   PHAN_CHUA_DUNG,
+  THAN_BAI_RONG,
   THUMBNAIL_PART,
+  TITLE_REQUIRED,
+  TOTAL_ITEMS_PART,
+  TOTAL_PAGES_PART,
   portalCategoryLabel,
   PUBLISHED_STAFF_UNREAD,
   SO_RONG,
   STATUS_FILTER_OPTIONS,
-  VIDEO_URL_HINT,
+  UPLOADING_FILES_LABEL,
 } from "./nhan-noi-dung";
 import {
+  COVER_BANNER_HINT,
   COVER_HINT,
   COVER_PICK_BUTTON,
   COVER_PREVIEW_MISSING,
   COVER_REMOVE_BUTTON,
   COVER_REPLACE_BUTTON,
-  COVER_WAIT_NOTE,
   COVER_WILL_DETACH,
   type CoverUploadState,
 } from "./cover-image";
@@ -57,6 +58,7 @@ import { EDITOR_LOADING } from "./rich-text-editor";
 import {
   BangNoiDung,
   CONTENT_TABPANEL_ID,
+  ContentPager,
   contentTabId,
   FormDanhMuc,
   FormNoiDung,
@@ -64,32 +66,25 @@ import {
   HeaderActions,
   ThanhTabLoai,
   TheDanhBaChinhQuyen,
-  ThongTinChiDoc,
 } from "./so-noi-dung";
 
 /**
- * Canh những QUYẾT ĐỊNH CÓ RA TỚI TRANG hay không.
+ * Canh những QUYẾT ĐỊNH CÓ RA TỚI TRANG hay không — the prototype's `ContentWorkspace` / `ContentItemForm`
+ * (ADR 0068 lần 5) and the owner's decisions of 09/10/2026 (D1 `Đăng`/`Gỡ`, D3 extras removed).
  *
  * NHÓM QUAN TRỌNG NHẤT Ở TỆP NÀY LÀ NHÓM **HTML KHÔNG ĐƯỢC DỰNG**: the body is never handed to the
  * page as a string. On the server render the editor has not mounted (it needs a DOM), so the stored body
  * must not appear AT ALL — escaped or not; the editor's own behaviour is `rich-text.test.ts` (jsdom).
  *
  * Nhóm thứ hai canh một sự VẮNG MẶT, thứ khó canh nhất vì không có gì để tìm trên trang: without
- * `content.update` there is no `✎`/`🗑` in the table, and KHÔNG có ô chọn trạng thái trong biểu mẫu.
+ * `content.update` there is no `✎`/`Đăng`/`Gỡ`/`🗑` in the table, and KHÔNG có ô chọn trạng thái trong biểu mẫu.
  */
 
 /**
  * Chuỗi như nó THẬT SỰ nằm trong HTML.
  *
  * ⚠ `renderToStaticMarkup` thoát `&`, `<`, `>`, `"` và `'`, nên một phép `not.toContain` với chuỗi
- * thô sẽ XANH kể cả khi chữ ấy đang nằm chình ình trên trang — tức là canh đúng con số không. Đã
- * đo ở `features/thu-chi/bang-thu-chi.test.tsx`.
- *
- * NĂM KÝ TỰ, KHÔNG PHẢI HAI như bản ở màn Thông báo — và sự khác ấy do chính màn này gây ra: chữ
- * trên màn ở đây NHẮC TỚI HTML (`` `<script>` ``, `<p>`), nên `<` và `>` xuất hiện thật trong văn
- * bản chứ không chỉ trong dữ liệu thử. Đo 24/09/2026: thiếu hai ký tự ấy thì ca "TỪNG mục ra tới
- * trang" đỏ ngay ở mục đầu tiên — mục quan trọng nhất của khối.
- *
+ * thô sẽ XANH kể cả khi chữ ấy đang nằm chình ình trên trang — tức là canh đúng con số không.
  * `&` PHẢI THAY TRƯỚC, nếu không `&lt;` vừa sinh ra sẽ bị thay tiếp thành `&amp;lt;`.
  */
 function nhuTrongHTML(s: string): string {
@@ -143,26 +138,48 @@ function veBang(
   canEdit = true,
 ) {
   return renderToStaticMarkup(
-    <BangNoiDung ds={ds} danhMuc={dm} sua={() => {}} remove={() => {}} canEdit={canEdit} />,
+    <BangNoiDung ds={ds} danhMuc={dm} sua={() => {}} remove={() => {}} togglePublish={() => {}} canEdit={canEdit} />,
   );
 }
 
 /** The table's body only — the header carries a "?" popover trigger of its own. */
 const bodyOf = (html: string) => html.slice(html.indexOf("<tbody>"));
 
-function veForm(gt = FORM_TRONG, h?: comms_noiDungRa, coverState?: CoverUploadState) {
+function veForm(
+  gt = FORM_TRONG,
+  h?: comms_noiDungRa,
+  coverState?: CoverUploadState,
+  dm: readonly comms_danhMucRa[] = [danhMuc()],
+  titleTouched = false,
+) {
   return renderToStaticMarkup(
     <FormNoiDung
       tieuDeForm="Thêm nội dung cho Mini App"
-      moTa="mô tả"
+      moTa={MO_TA_FORM_THEM}
       giaTriDau={gt}
       hang={h}
-      danhMuc={[danhMuc()]}
+      danhMuc={dm}
       dangGui={false}
       loi={null}
       huy={() => {}}
       luu={() => {}}
       initialCoverState={coverState}
+      initialTitleTouched={titleTouched}
+    />,
+  );
+}
+
+function filterRow(over: Partial<Parameters<typeof HangLocNoiDung>[0]> = {}) {
+  return renderToStaticMarkup(
+    <HangLocNoiDung
+      danhMucID=""
+      datDanhMucID={() => {}}
+      tim=""
+      datTim={() => {}}
+      danhMuc={[]}
+      status=""
+      setStatus={() => {}}
+      {...over}
     />,
   );
 }
@@ -176,80 +193,75 @@ describe("thân bài ra tới trang dưới dạng DỮ LIỆU, không phải m�
 
   it("a stored body never reaches the server-rendered page — neither as markup nor as text", () => {
     const html = veForm({ ...FORM_TRONG, body: DOC });
-    // No tag opened from it: the danger this screen exists to avoid.
     expect(html).not.toContain("<script");
     expect(html).not.toContain("<img");
-    // And not even escaped: the body lives only inside the editor, which mounts in the browser.
     expect(html).not.toContain("alert");
     expect(html).toContain(EDITOR_LOADING);
   });
 
-  it("the one note about sanitising stands NEXT TO the box, not in a code comment", () => {
+  it("no note under the body box (prototype parity 09/10/2026): neither the cleaner's list nor the empty-body line", () => {
     const html = veForm();
-    expect(html).toContain(nhuTrongHTML(CANH_BAO_HTML_THO));
-    expect(html).toContain('id="than-bai-noi-dung-hint"');
-    // The old sentences about raw HTML source are gone with the textarea.
+    expect(html).not.toContain(nhuTrongHTML(CANH_BAO_HTML_THO));
+    expect(html).not.toContain('id="than-bai-noi-dung-hint"');
+    expect(html).not.toContain(THAN_BAI_RONG);
     expect(html).not.toContain("MÃ NGUỒN HTML");
     expect(html).not.toContain("<textarea id=\"than-bai-noi-dung\"");
   });
 
   it("KHÔNG có ô xem trước nào — không `dangerouslySetInnerHTML`, không khối `preview`", () => {
-    // Phép quét mã nguồn nằm ở `ranh-gioi-html.test.ts`; ca này canh cùng điều ấy ở đầu ra.
     const html = veForm({ ...FORM_TRONG, body: "<b>đậm</b>" });
     expect(html).not.toContain("<b>đậm</b>");
     expect(html).not.toContain("&lt;b&gt;");
   });
 
   it("tiêu đề mang dấu ngoặc nhọn cũng ra dạng đã thoát ở BẢNG", () => {
-    // Bảng §6 không hiện thân bài, nhưng tiêu đề và tóm tắt cũng là chữ cán bộ gõ.
     const html = veBang([hang({ title: "<b>Tin nóng</b>", summary: "<i>ngay</i>" })]);
     expect(html).toContain("&lt;b&gt;Tin nóng&lt;/b&gt;");
     expect(html).not.toContain("<b>Tin nóng</b>");
   });
 
-  it("liên kết bài gốc hiện dưới dạng CHỮ, không thành một `href` bấm được", () => {
-    // Danh sách trắng lược đồ ở máy chủ chỉ chặn lúc GHI. Một hàng cũ trong CSDL không có gì bảo
-    // đảm điều đó, và `javascript:…` trong một `href` là thực thi mã.
-    const html = renderToStaticMarkup(
-      <ThongTinChiDoc hang={hang({ source_url: "javascript:alert(1)" })} />,
-    );
-    expect(html).toContain("javascript:alert(1)");
-    expect(html).not.toContain('href="javascript:alert(1)"');
+  it("D3: the edit form has no read-only block — the original link is not on the page at all", () => {
+    const row = hang({ source_url: "javascript:alert(1)", body: "" });
+    const html = veForm(giaTriTuHang(row), row);
+    expect(html).not.toContain("javascript:alert(1)");
+    expect(html).not.toContain("Cập nhật lúc");
+    expect(html).not.toContain("Người soạn");
   });
 });
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
- * BẢNG §6
+ * BẢNG §6 — the prototype's columns
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
 describe("bảng nội dung §6", () => {
-  it("sáu cột dữ liệu cùng ra một hàng", () => {
+  it("the data of a row, without a `Loại` column (each tab IS one type)", () => {
     const html = veBang([hang()]);
-
     expect(html).toContain("Xã tổ chức hội nghị tổng kết công tác chuyển đổi số");
     expect(html).toContain("Hội nghị diễn ra sáng 14/9");
-    expect(html).toContain("Tin tức");
     expect(html).toContain("Chuyển đổi số");
-    // The `🔗` of the label is drawn as a lucide icon now (ADR 0068 §2); the words are unchanged.
-    expect(html).toContain(">Có ảnh<");
-    expect(html).toContain("lucide-image");
+    expect(html).toContain(">Có ảnh</span>");
+    expect(html).toContain("lucide-paperclip");
     expect(html).toContain("14/9/2026");
     expect(html).toContain("Đang hiện");
+    expect(html).not.toContain(">Loại</th>");
   });
 
-  it("cột `Lượt xem` nằm sau `Ngày đăng`, trước `Trạng thái` (§6, owner 02/10/2026)", () => {
+  it("header: the thumbnail '?' with no words, then the prototype's six titles, then an unnamed actions column", () => {
     const html = veBang([hang({ view_count: 42 })]);
     const headers = [...html.matchAll(/<th scope="col"[^>]*>([^<]*)<\/th>/g)].map((m) => m[1]);
-    expect(headers).toEqual([
-      "Tiêu đề",
-      "Loại",
-      "Chuyên mục",
-      "Tệp đính kèm",
-      "Ngày đăng",
-      "Lượt xem",
-      "Trạng thái",
-      ACTIONS_COLUMN_LABEL,
-    ]);
+    expect(headers).toEqual(["Tiêu đề", "Chuyên mục", "Tệp đính kèm", "Ngày đăng", "Lượt xem", "Trạng thái"]);
+    // The thumbnail header: a "?" and its name for screen readers only, no visible "Ảnh".
+    const thumb = /<th scope="col" class="w-16"[^>]*>[^]*?<\/th>/.exec(html)?.[0] ?? "";
+    expect(thumb).toContain(`aria-label="${pendingMarkerLabel(THUMBNAIL_PART)}"`);
+    expect(thumb).toContain(`<span class="an-thi-giac">${THUMBNAIL_PART}</span>`);
+    expect(thumb).not.toContain(">Ảnh<");
+    // The actions column is named for screen readers only.
+    expect(html).toContain(`<th scope="col" class="w-32"><span class="an-thi-giac">${ACTIONS_COLUMN_LABEL}</span></th>`);
+    // Widths and alignments of the prototype.
+    expect(html).toContain('<th scope="col" class="w-48">Chuyên mục</th>');
+    expect(html).toContain('<th scope="col" class="w-32">Ngày đăng</th>');
+    expect(html).toContain('<th scope="col" class="w-24 text-right">Lượt xem</th>');
+    expect(html).toContain('<th scope="col" class="w-28 text-center">Trạng thái</th>');
     expect(html).toContain("lucide-eye");
     expect(html).toContain(">42</span>");
   });
@@ -259,156 +271,268 @@ describe("bảng nội dung §6", () => {
     expect(veBang([hang({ view_count: 0 })])).toMatch(/lucide-eye[^]*?<\/svg>0<\/span>/);
   });
 
-  it("cột `Lượt xem` không sắp xếp được — chỉ là chữ, không nút, không aria-sort", () => {
-    const html = veBang([hang({ view_count: 42 })]);
-    const th = /<th scope="col"[^>]*>Lượt xem<\/th>/.exec(html)?.[0] ?? "";
-    expect(th).not.toBe("");
-    expect(th).not.toContain("aria-sort");
-    expect(th).not.toContain("<button");
-  });
-
-  it("the action column holds the pencil and the trash (lucide icons since ADR 0068)", () => {
+  it("the title opens the edit dialog (a button), the summary is one line under it", () => {
     const html = veBang([hang()]);
-    expect(html).toContain(NHAN_NUT_SUA);
-    expect(html).toContain(`title="${CONTENT_DELETE_TITLE}"`);
-    expect(html).toContain(`>${ACTIONS_COLUMN_LABEL}</th>`);
+    expect(html).toMatch(
+      /<button type="button" title="Xã tổ chức hội nghị[^"]*" aria-haspopup="dialog" class="[^"]*block w-full[^"]*truncate[^"]*font-semibold text-navy hover:underline"/,
+    );
+    expect(html).toContain('<p class="m-0 mt-0.5 truncate text-[11.5px] text-ink-muted">Hội nghị diễn ra sáng 14/9');
   });
 
-  it("nút sửa mang nhãn nói rõ đang sửa bài nào — sáu hàng cùng một ký hiệu thì đọc không ra", () => {
+  it("the action column: pencil · Đăng/Gỡ · trash, each naming its row", () => {
     const html = veBang([hang()]);
     expect(html).toContain(nhuTrongHTML("Sửa: Xã tổ chức hội nghị tổng kết công tác chuyển đổi số"));
-  });
-
-  it("the delete button names its row too, and only OPENS a dialog", () => {
-    const html = veBang([hang()]);
+    expect(html).toContain(NHAN_NUT_SUA);
+    expect(html).toContain(`title="${CONTENT_DELETE_TITLE}"`);
     expect(html).toContain(
       `aria-label="${nhuTrongHTML(contentDeleteAriaLabel("Xã tổ chức hội nghị tổng kết công tác chuyển đổi số"))}"`,
     );
+    expect(html).toContain('aria-label="Gỡ: Xã tổ chức hội nghị tổng kết công tác chuyển đổi số"');
+    const pencil = html.indexOf("lucide-pencil");
+    const toggle = html.indexOf(">Gỡ</button>");
+    const trash = html.indexOf("lucide-trash");
+    expect(pencil).toBeGreaterThan(0);
+    expect(toggle).toBeGreaterThan(pencil);
+    expect(trash).toBeGreaterThan(toggle);
+  });
+
+  it("`Gỡ` on a showing row, `Đăng` on a hidden or a pending one (D1)", () => {
+    expect(veBang([hang({ status: "dang-hien" })])).toContain(">Gỡ</button>");
+    expect(veBang([hang({ status: "an" })])).toContain(">Đăng</button>");
+    expect(veBang([hang({ status: "cho-duyet" })])).toContain(">Đăng</button>");
+    expect(veBang([hang({ status: "an" })])).not.toContain(">Gỡ</button>");
+  });
+
+  it("the toggle in flight is held, the others are not", () => {
+    const html = renderToStaticMarkup(
+      <BangNoiDung
+        ds={[hang({ id: "A", title: "A" }), hang({ id: "B", title: "B" })]}
+        danhMuc={[]}
+        sua={() => {}}
+        remove={() => {}}
+        togglePublish={() => {}}
+        publishingId="A"
+        canEdit
+      />,
+    );
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*aria-busy="true"[^>]*aria-label="Gỡ: A"/);
+    expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*aria-label="Gỡ: B"/);
+  });
+
+  it("the delete button only OPENS a dialog; the title and the pencil open the edit dialog", () => {
     // Counted in the BODY: the header's thumbnail "?" opens a popover of its own.
-    expect(bodyOf(html).match(/aria-haspopup="dialog"/g)?.length).toBe(2);
+    expect(bodyOf(veBang([hang()])).match(/aria-haspopup="dialog"/g)?.length).toBe(3);
   });
 
-  it("bài chưa xếp danh mục hiện đúng chữ đặc tả, không hiện ô trống", () => {
-    expect(veBang([hang({ category_id: "" })])).toContain(CHUA_XEP_DANH_MUC);
+  it("an item filed nowhere shows the prototype's dash; a filed one `Cha › Con`", () => {
+    const ds = [danhMuc({ id: "P", name: "Tin hoạt động" }), danhMuc({ id: "C", name: "Chuyển đổi số", parent_id: "P" })];
+    const body = bodyOf(veBang([hang({ category_id: "" })], ds));
+    expect(body).toMatch(/<span class="block max-w-\[14rem\] truncate text-ink-muted" title="—">—<\/span>/);
+    expect(body).not.toContain(CHUA_XEP_DANH_MUC);
+    expect(veBang([hang({ category_id: "C" })], ds)).toContain(">Tin hoạt động › Chuyển đổi số</span>");
   });
 
-  it("cờ §10.4 ra tới hàng — cán bộ phải thấy bài đã thoát khỏi lượt đồng bộ", () => {
-    expect(veBang([hang({ hand_edited: true })])).toContain(NHAN_DA_SUA_TAY);
-    expect(veBang([hang({ hand_edited: false })])).not.toContain(NHAN_DA_SUA_TAY);
+  it("`Tệp đính kèm` per type: banner image, broadcast file, video link — missing ones in amber with a warning", () => {
+    const banner = veBang([hang({ type: "banner", has_image: false })]);
+    expect(banner).toContain("text-tangerine");
+    expect(banner).toContain("lucide-triangle-alert");
+    expect(banner).toContain(">Thiếu ảnh</span>");
+    expect(veBang([hang({ type: "banner", has_image: true })])).toContain(">Đã có ảnh</span>");
+    expect(veBang([hang({ type: "truyen-thanh", audio_file_id: "01JA" })])).toMatch(/text-leaf[^]*Đã có tệp/);
+    expect(veBang([hang({ type: "truyen-thanh" })])).toContain(">Thiếu tệp</span>");
+    expect(veBang([hang({ type: "video", video_url: "https://youtu.be/x" })])).toContain(">Đã có tệp</span>");
+    expect(bodyOf(veBang([hang({ has_image: false })]))).toContain('<span class="text-ink-muted">—</span>');
   });
 
-  it("chip `Chờ duyệt` và `Ẩn` hiện đúng chữ, không lẫn với `Đang hiện`", () => {
+  it("D3: no sub-line `Đồng bộ từ Cổng`, `Đã sửa tay…`, `Đăng lần đầu lúc…` — the portal category line stays", () => {
+    const synced = {
+      ...hang({ source: "dong-bo-cong", hand_edited: true, published_at: "2026-10-01T02:05:00Z" }),
+      portal_category_name: "Tin địa phương",
+    };
+    const html = veBang([synced]);
+    expect(html).not.toContain("Đồng bộ từ Cổng");
+    expect(html).not.toContain("Đã sửa tay");
+    expect(html).not.toContain("Đăng lần đầu");
+    expect(html).toContain(portalCategoryLabel("Tin địa phương"));
+    expect(veBang([hang({ id: "B" })])).not.toContain("Chuyên mục Cổng:");
+  });
+
+  it("chip `Chờ duyệt` và `Ẩn` hiện đúng chữ, không lẫn với `Đang hiện` — three statuses kept (D1)", () => {
     expect(veBang([hang({ status: "cho-duyet" })])).toContain("Chờ duyệt");
     expect(veBang([hang({ status: "an" })])).toContain("Ẩn");
     expect(veBang([hang({ status: "an" })])).not.toContain("Đang hiện");
   });
 
-  it("sổ rỗng thì nói ra, không để trang trắng", () => {
-    expect(veBang([])).toContain(SO_RONG);
+  it("an empty page says the prototype's sentence in ONE row spanning the table", () => {
+    const html = veBang([]);
+    expect(html).toContain(`<td colSpan="8" class="py-12 text-center text-ink-muted">${SO_RONG}</td>`);
+    expect(veBang([], [], false)).toContain(`<td colSpan="7" class="py-12 text-center text-ink-muted">${SO_RONG}</td>`);
   });
 
-  it("the summary is clamped by CSS to one line — NEVER cut by characters", () => {
-    // 400 characters: well past the old 140-character cut, so a surviving slice would show here.
-    const long = `${"Hội nghị tổng kết công tác chuyển đổi số của xã ".repeat(8)}KẾT-THÚC`;
-    const html = veBang([hang({ summary: long })]);
-    expect(html).toContain('<span class="dong-phu summary-one-line">');
+  it("a long title stays one line, cut by CSS, the whole title on hover; the frame scrolls sideways only", () => {
+    const long = "Tiêu đề rất dài ".repeat(20).trim();
+    const html = veBang([hang({ title: long, summary: `${"Hội nghị ".repeat(60)}KẾT-THÚC` })]);
+    expect(html).toContain(`title="${long}"`);
+    expect(html).toContain("max-w-[34rem]");
+    // The PAGE scrolls (prototype `ContentWorkspace.tsx:288-289`): no box height, no sticky header.
+    const frame = /<div class="(bang-cuon[^"]*)">/.exec(html)![1]!;
+    expect(frame).toContain("overflow-x-auto");
+    expect(frame).not.toContain("max-h-");
+    expect(frame.split(" ")).not.toContain("overflow-auto");
+    expect(frame).not.toContain("sticky");
+    // The summary is never cut by characters: the whole text is in the page.
     expect(html).toContain("KẾT-THÚC");
     expect(html).not.toContain("…");
+  });
+
+  it("the prototype's thumbnail column is '—' cells: the list route serves no image link", () => {
+    const html = veBang([hang()]);
+    expect(bodyOf(html)).toContain("data-pending");
+    expect(html).not.toContain("<img");
   });
 });
 
 describe("`content.update` gates the table's write controls", () => {
-  it("DENIED: no `✎`, no `🗑`, no action column — the data columns stay", () => {
+  it("DENIED: no `✎`, no `Đăng`/`Gỡ`, no `🗑`, no action column, the title is plain text", () => {
     const html = veBang([hang()], [danhMuc()], false);
     expect(html).not.toContain(NHAN_NUT_SUA);
     expect(html).not.toContain(CONTENT_DELETE_TITLE);
     expect(html).not.toContain("Xoá");
-    expect(html).not.toContain(`>${ACTIONS_COLUMN_LABEL}</th>`);
+    expect(html).not.toContain(">Gỡ</button>");
+    expect(html).not.toContain(">Đăng</button>");
+    expect(html).not.toContain(ACTIONS_COLUMN_LABEL);
     expect(bodyOf(html)).not.toContain("aria-haspopup");
-    // Eight header cells: the thumbnail "?" (prototype, not served), Tiêu đề, Loại, Chuyên mục, Tệp đính
-    // kèm, Ngày đăng, Lượt xem, Trạng thái — and no Thao tác.
-    expect(html.match(/<th scope="col"/g)?.length).toBe(8);
+    expect(bodyOf(html)).not.toContain("<button");
+    // Seven header cells: the thumbnail "?" and the six data columns — no actions.
+    expect(html.match(/<th scope="col"/g)?.length).toBe(7);
     expect(html).toContain("Xã tổ chức hội nghị tổng kết công tác chuyển đổi số");
   });
 
-  it("ALLOWED: the pencil and the trash on every row, each saying it opens a dialog", () => {
-    const html = veBang([hang({ id: "A" }), hang({ id: "B" })], [danhMuc()], true);
-    expect(bodyOf(html).match(/aria-haspopup="dialog"/g)?.length).toBe(4);
+  it("ALLOWED: title, pencil and trash open dialogs on every row; one toggle per row", () => {
+    const html = veBang([hang({ id: "A" }), hang({ id: "B", status: "an" })], [danhMuc()], true);
+    expect(bodyOf(html).match(/aria-haspopup="dialog"/g)?.length).toBe(6);
     expect(html.match(new RegExp(`title="${CONTENT_DELETE_TITLE}"`, "g"))?.length).toBe(2);
-    expect(html).toContain(`>${ACTIONS_COLUMN_LABEL}</th>`);
+    expect(html.match(/>Gỡ<\/button>|>Đăng<\/button>/g)?.length).toBe(2);
   });
 
-  it("`+ Thêm nội dung`: absent without the key, present with it — the prototype's Plus icon + words", () => {
+  it("`Thêm nội dung`: absent without the key, present with it — the prototype's Plus icon + words, pushed right", () => {
     expect(renderToStaticMarkup(<HeaderActions canEdit={false} addOpen={false} openAdd={() => {}} />)).toBe("");
     const html = renderToStaticMarkup(<HeaderActions canEdit addOpen={false} openAdd={() => {}} />);
     expect(html).toContain("lucide-plus");
     expect(html).toContain("Thêm nội dung");
+    expect(html).toContain("ml-auto");
     expect(html).not.toContain(nhuTrongHTML(NHAN_NUT_THEM));
     expect(html).toContain('aria-haspopup="dialog"');
   });
 
   it("the filter row draws what it is given at its end, and nothing when given nothing", () => {
-    const row = (extra?: ReactNode) =>
-      renderToStaticMarkup(
-        <HangLocNoiDung
-          danhMucID=""
-          datDanhMucID={() => {}}
-          tim=""
-          datTim={() => {}}
-          timNgay={() => {}}
-          danhMuc={[]}
-          status=""
-          setStatus={() => {}}
-          extra={extra}
-        />,
-      );
+    const row = (extra?: ReactNode) => filterRow({ extra });
     expect(row()).not.toContain(NHAN_NUT_DANH_MUC);
     expect(row(<button type="button">{NHAN_NUT_DANH_MUC}</button>)).toContain(NHAN_NUT_DANH_MUC);
   });
 });
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
- * BIỂU MẪU §7
+ * PAGER — inside the frame, 25 rows, the total a "?"
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+describe("pager", () => {
+  const pager = (pageIndex: number, rows: number, hasNext: boolean) =>
+    renderToStaticMarkup(
+      <ContentPager pageIndex={pageIndex} rows={rows} hasNext={hasNext} previous={() => {}} next={() => {}} />,
+    );
+
+  it("hidden on a single page — the first page with nothing after it", () => {
+    expect(pager(0, 7, false)).toBe("");
+  });
+
+  it("`a–b trên ? mục` · `Trước` · `Trang x/?` · `Sau`, each unknown number a '?' with its reason", () => {
+    const html = pager(1, 25, true);
+    expect(html).toContain("26–50 trên");
+    expect(html).toContain(`aria-label="${pendingMarkerLabel(TOTAL_ITEMS_PART)}"`);
+    expect(html).toContain("Trang 2/");
+    expect(html).toContain(`aria-label="${pendingMarkerLabel(TOTAL_PAGES_PART)}"`);
+    expect(html).toContain("Trước");
+    expect(html).toContain("Sau");
+    expect(html).toContain("lucide-chevron-left");
+    expect(html).toContain("lucide-chevron-right");
+    expect(html).toContain("border-t border-line px-4 py-2.5");
+  });
+
+  it("`Trước` off on the first page, `Sau` off on the last", () => {
+    expect(pager(0, 25, true)).toMatch(/<button[^>]*disabled=""[^>]*>.*Trước<\/button>/);
+    expect(pager(2, 3, false)).toMatch(/<button[^>]*disabled=""[^>]*>Sau/);
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * BIỂU MẪU §7 — the prototype's `ContentItemForm`
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
 describe("biểu mẫu nội dung §7", () => {
-  it("bảy ô của đặc tả có mặt, và ô tích mang đúng chữ đặc tả", () => {
+  it("the boxes of a news item, in the prototype's order, and the sentence right under the title", () => {
     const html = veForm();
+    const order = ["Loại nội dung", "Danh mục", "Tiêu đề", "Tóm tắt", "Nội dung", "Ảnh đại diện", NHAN_O_DANG].map((w) =>
+      html.indexOf(`>${w}`),
+    );
+    for (const i of order) expect(i).toBeGreaterThan(0);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(html).toMatch(/<h3 id="tieu-de-form-noi-dung"[^>]*>Thêm nội dung cho Mini App<\/h3><p[^>]*>/);
+    expect(html).toContain(nhuTrongHTML(MO_TA_FORM_THEM));
+    // No section headings any more (owner 09/10/2026: the prototype draws none).
+    expect(html).not.toContain("Thông tin chung");
+    expect(html).not.toContain("Ảnh, âm thanh và đính kèm");
+    expect(html).not.toContain("<h4");
+  });
 
-    expect(html).toContain("Loại nội dung");
-    expect(html).toContain("Danh mục");
-    expect(html).toContain("Tiêu đề");
-    expect(html).toContain("Tóm tắt");
-    expect(html).toContain("Nội dung");
-    expect(html).toContain("Ảnh đại diện");
-    expect(html).toContain(NHAN_O_DANG);
+  it("one scrolling column, Huỷ then Lưu at its end", () => {
+    const html = veForm();
+    expect(html).toContain("max-h-[70vh]");
+    expect(html.indexOf(">Huỷ</button>")).toBeLessThan(html.indexOf(">Lưu</button>"));
   });
 
   it("KHÔNG có ô chọn trạng thái — máy chủ suy trạng thái từ ô tích", () => {
-    // Một thân tự khai trạng thái là một bài đăng vượt qua bước duyệt mà §10.2 dành cho lượt đồng
-    // bộ, hoặc một bài tự nhận `cho-duyet`.
     const html = veForm();
     expect(html).not.toContain('id="trang-thai-noi-dung"');
     expect(html).not.toContain("Chờ duyệt");
   });
 
-  it("`Ảnh đại diện` is a file picker — `Chọn tệp từ máy`, JPG/PNG/WebP, no link box", () => {
+  it("the type select carries the prototype's longer labels", () => {
     const html = veForm();
-    expect(html).toMatch(/<input[^>]*id="anh-noi-dung"[^>]*type="file"[^>]*accept="\.jpg,\.jpeg,\.png,\.webp,image\/jpeg,image\/png,image\/webp"/);
-    // The visible control is the input's LABEL — keyboard: the input itself stays focusable.
-    expect(html).toContain(`<label for="anh-noi-dung" class="nut-phu">${COVER_PICK_BUTTON}`);
-    expect(html).toContain(COVER_HINT);
-    expect(html).not.toContain("heic");
-    // The legacy link box is gone: no URL input carries the image any more.
-    expect(html).not.toContain("Ảnh đại diện (liên kết)");
-    expect(html).not.toMatch(/<input[^>]*id="anh-noi-dung"[^>]*type="url"/);
-  });
-
-  it("sáu loại của §5 đều có trong ô chọn", () => {
-    const html = veForm();
-    for (const nhan of ["Tin tức", "Sự kiện", "Thông báo", "Truyền thanh", "Video", "Banner"]) {
+    for (const nhan of ["Tin tức", "Sự kiện", "Thông báo", "Bản tin truyền thanh", "Video", "Banner trang chủ"]) {
       expect(html).toContain(`>${nhan}</option>`);
     }
+  });
+
+  it("`Loại nội dung` is locked when editing, free when adding", () => {
+    expect(veForm()).not.toMatch(/<select id="loai-noi-dung"[^>]*disabled=""/);
+    const row = hang({ body: "" });
+    expect(veForm(giaTriTuHang(row), row)).toMatch(/<select id="loai-noi-dung"[^>]*disabled=""/);
+  });
+
+  it("the category select offers non-hidden categories only — but keeps the item's own hidden one", () => {
+    const ds = [danhMuc({ id: "V", name: "Tin xã" }), danhMuc({ id: "H", name: "Mục cũ", hidden: true })];
+    const create = veForm(FORM_TRONG, undefined, undefined, ds);
+    expect(create).toContain('<option value="V">Tin xã</option>');
+    expect(create).not.toContain('value="H"');
+    const row = hang({ body: "", category_id: "H" });
+    const edit = veForm(giaTriTuHang(row), row, undefined, ds);
+    // Selected, not misreported as `— Chưa xếp danh mục —`.
+    expect(edit).toContain('<option value="H" selected="">Mục cũ</option>');
+    expect(edit).toContain('<option value="V">Tin xã</option>');
+  });
+
+  it("the category select reads `Cha › Con`, after `— Chưa xếp danh mục —`", () => {
+    const ds = [danhMuc({ id: "P", name: "Tin hoạt động" }), danhMuc({ id: "C", name: "Chuyển đổi số", parent_id: "P" })];
+    const html = veForm(FORM_TRONG, undefined, undefined, ds);
+    expect(html).toMatch(new RegExp(`<select id="danh-muc-noi-dung"><option value=""[^>]*>${CHUA_XEP_DANH_MUC}</option>`));
+    expect(html).toContain('<option value="C">Tin hoạt động › Chuyển đổi số</option>');
+  });
+
+  it("`Đăng lên Mini App` is a plain tick box and words — no bordered box", () => {
+    const html = veForm();
+    expect(html).toMatch(/<label for="dang-len-mini-app" class="flex cursor-pointer items-center gap-2.5 text-\[12.5px\] text-navy">/);
+    expect(html).not.toContain("border-brand-500 bg-brand-50");
   });
 
   it("ô tích BẬT khi mở một bài đang hiện, TẮT khi mở một bài chờ duyệt", () => {
@@ -416,16 +540,59 @@ describe("biểu mẫu nội dung §7", () => {
     expect(veForm(giaTriTuHang(hang({ status: "cho-duyet", body: "" })))).not.toContain("checked");
   });
 
-  it("nút Lưu TẮT khi tiêu đề rỗng — máy chủ vẫn là nơi từ chối thật", () => {
-    // The submit button ITSELF: since ADR 0068 every button's classes carry `disabled:…` utilities, so a
-    // bare `toContain("disabled")` would be green on any form.
-    expect(veForm()).toMatch(/<button type="submit"[^>]*disabled=""[^>]*>Lưu<\/button>/);
-    expect(veForm({ ...FORM_TRONG, title: "Có tiêu đề" })).toContain(">Lưu</button>");
+  it("saving: the word stays `Lưu` beside a spinner — no `Đang lưu…` (prototype `ContentItemForm.tsx:370-375`)", () => {
+    const html = renderToStaticMarkup(
+      <FormNoiDung
+        tieuDeForm="T"
+        moTa=""
+        giaTriDau={{ ...FORM_TRONG, title: "Có tiêu đề" }}
+        danhMuc={[]}
+        dangGui
+        loi={null}
+        huy={() => {}}
+        luu={() => {}}
+      />,
+    );
+    const submit = html.slice(html.indexOf('<button type="submit"'));
+    expect(submit).toMatch(/^<button type="submit"[^>]*disabled=""[^>]*aria-busy="true"/);
+    expect(submit).toContain("animate-spin");
+    expect(submit).toMatch(/<\/svg>Lưu<\/button>/);
+    expect(html).not.toContain("Đang lưu…");
+    expect(html).not.toContain(UPLOADING_FILES_LABEL);
   });
 
-  it("khối chỉ đọc chỉ xuất hiện khi đang SỬA", () => {
+  it("uploading a held file after the save: `Đang tải tệp…`", () => {
+    const html = renderToStaticMarkup(
+      <FormNoiDung
+        tieuDeForm="T"
+        moTa=""
+        giaTriDau={{ ...FORM_TRONG, title: "Có tiêu đề", type: "truyen-thanh" }}
+        danhMuc={[]}
+        dangGui
+        uploading
+        loi={null}
+        huy={() => {}}
+        luu={() => {}}
+      />,
+    );
+    expect(html).toMatch(new RegExp(`<button type="submit"[^>]*disabled=""[^>]*>[^]*?${UPLOADING_FILES_LABEL}</button>`));
+  });
+
+  it("Lưu is PRESSABLE with an empty title; pressed, the title says `Vui lòng nhập tiêu đề` inline", () => {
+    expect(veForm()).toMatch(/<button type="submit"[^>]*>Lưu<\/button>/);
+    expect(veForm()).not.toMatch(/<button type="submit"[^>]*disabled=""/);
+    expect(veForm()).not.toContain(TITLE_REQUIRED);
+    const touched = veForm(FORM_TRONG, undefined, undefined, undefined, true);
+    expect(touched).toContain(`<p role="alert" class="m-0 text-[12px] font-medium text-danger">${TITLE_REQUIRED}</p>`);
+    expect(veForm({ ...FORM_TRONG, title: "Có tiêu đề" }, undefined, undefined, undefined, true)).not.toContain(
+      TITLE_REQUIRED,
+    );
+  });
+
+  it("D3: no read-only block on the edit form", () => {
     expect(veForm()).not.toContain("Cập nhật lúc");
-    expect(veForm(FORM_TRONG, hang())).toContain("Cập nhật lúc");
+    expect(veForm(FORM_TRONG, hang())).not.toContain("Cập nhật lúc");
+    expect(veForm(FORM_TRONG, hang())).not.toContain("<dl");
   });
 });
 
@@ -440,7 +607,9 @@ describe("per-type boxes of §7 :131 (ADR 0047 §6)", () => {
     expect(html).toContain(">Kết thúc<");
     expect(html).toContain(">Địa điểm<");
     expect(html.match(/type="datetime-local"/g)?.length).toBe(2);
-    expect(html).toContain(nhuTrongHTML(EVENT_TIME_HINT));
+    // No GMT+7 / clock hint under the two boxes (prototype parity 09/10/2026).
+    expect(html).not.toContain(nhuTrongHTML(EVENT_TIME_HINT));
+    expect(html).not.toContain("GMT+7");
     expect(html).not.toContain(VIDEO_BOX);
   });
 
@@ -448,7 +617,9 @@ describe("per-type boxes of §7 :131 (ADR 0047 §6)", () => {
     const html = veForm({ ...FORM_TRONG, type: "video" });
     expect(html).toContain(VIDEO_BOX);
     expect(html).toContain(">Liên kết video<");
-    expect(html).toContain(nhuTrongHTML(VIDEO_URL_HINT));
+    // No hint under the box (prototype parity: `ContentItemForm.tsx` has none).
+    expect(html).not.toContain("Chỉ nhận địa chỉ bắt đầu bằng http://");
+    expect(html).not.toContain("mở video ở ngoài ứng dụng");
     for (const box of EVENT_BOXES) expect(html).not.toContain(box);
   });
 
@@ -459,19 +630,27 @@ describe("per-type boxes of §7 :131 (ADR 0047 §6)", () => {
     }
   });
 
-  it("`Banner` shows Liên kết khi bấm · Thứ tự hiển thị and the cover notice; no other type does", () => {
+  it("`Banner`: `Thứ tự chạy` beside the type, `Bấm vào thì mở gì` under the title, no summary, no body, no category", () => {
     const html = veForm({ ...FORM_TRONG, type: "banner" });
     expect(html).toContain('id="lien-ket-banner"');
-    expect(html).toContain('id="thu-tu-banner"');
-    expect(html).toContain(">Liên kết khi bấm<");
-    expect(html).toContain(">Thứ tự hiển thị<");
-    expect(html).toContain(nhuTrongHTML(BANNER_COVER_NOTICE));
-    expect(html).toContain(nhuTrongHTML(LINK_TO_HINT));
+    expect(html).toMatch(/<input id="thu-tu-banner"[^>]*placeholder="Số nhỏ hiện trước"/);
+    expect(html).toContain(">Thứ tự chạy<");
+    expect(html).toContain(">Bấm vào thì mở gì<");
+    expect(html).toContain('placeholder="Ví dụ: /tin-tuc — để trống thì ảnh chỉ để xem"');
+    expect(html.indexOf(">Thứ tự chạy<")).toBeLessThan(html.indexOf(">Tiêu đề"));
+    expect(html.indexOf(">Tiêu đề")).toBeLessThan(html.indexOf(">Bấm vào thì mở gì<"));
+    expect(html).not.toContain('id="tom-tat-noi-dung"');
+    expect(html).not.toContain(EDITOR_LOADING);
+    expect(html).not.toContain('id="danh-muc-noi-dung"');
+    // No notice box and no link hint (prototype parity 09/10/2026); the required-image rule stays inline.
+    expect(html).not.toContain(nhuTrongHTML(BANNER_COVER_NOTICE));
+    expect(html).not.toContain(nhuTrongHTML(LINK_TO_HINT));
     for (const type of ["tin-tuc", "su-kien", "thong-bao", "truyen-thanh", "video"]) {
       const other = veForm({ ...FORM_TRONG, type, link_to: "/x", display_order: "1" });
       expect(other, type).not.toContain('id="lien-ket-banner"');
       expect(other, type).not.toContain('id="thu-tu-banner"');
       expect(other, type).not.toContain(nhuTrongHTML(BANNER_COVER_NOTICE));
+      expect(other, type).toContain('id="danh-muc-noi-dung"');
     }
   });
 
@@ -505,9 +684,7 @@ describe("per-type boxes of §7 :131 (ADR 0047 §6)", () => {
       event_ends_local: "2026-10-05T07:00",
     });
     expect(html).toContain(ERR_EVENT_END_BEFORE_START);
-    // The submit button itself carries `disabled` (a `>Lưu</button>` match would pass either way).
     expect(html).toMatch(/<button type="submit"[^>]*disabled=""[^>]*>Lưu<\/button>/);
-    // And with the window fixed, the same form lets Lưu through.
     const ok = veForm({
       ...FORM_TRONG,
       type: "su-kien",
@@ -519,12 +696,7 @@ describe("per-type boxes of §7 :131 (ADR 0047 §6)", () => {
   });
 
   it("an end without a start is named", () => {
-    const html = veForm({
-      ...FORM_TRONG,
-      type: "su-kien",
-      title: "T",
-      event_ends_local: "2026-10-05T07:00",
-    });
+    const html = veForm({ ...FORM_TRONG, type: "su-kien", title: "T", event_ends_local: "2026-10-05T07:00" });
     expect(html).toContain(ERR_EVENT_END_WITHOUT_START);
   });
 
@@ -551,137 +723,77 @@ describe("per-type boxes of §7 :131 (ADR 0047 §6)", () => {
   });
 });
 
-describe("`Đăng lần đầu lúc` — published_at", () => {
-  it("shows in the table row and in the read-only block when present", () => {
-    const h = hang({ published_at: "2026-10-01T02:05:00Z" });
-    expect(veBang([h])).toContain("Đăng lần đầu lúc 01/10/2026 09:05");
-    expect(renderToStaticMarkup(<ThongTinChiDoc hang={h} />)).toContain(
-      "Đăng lần đầu lúc 01/10/2026 09:05",
-    );
-  });
-
-  it("absent for an item never published", () => {
-    expect(veBang([hang()])).not.toContain("Đăng lần đầu");
-    expect(renderToStaticMarkup(<ThongTinChiDoc hang={hang()} />)).not.toContain("Đăng lần đầu");
-  });
-});
-
-describe("khối thông tin chỉ đọc", () => {
-  it("mốc cập nhật in giờ Việt Nam kể cả khi máy chạy ở UTC", () => {
-    const html = renderToStaticMarkup(<ThongTinChiDoc hang={hang()} />);
-    expect(html).toContain("16:35 14/09/2026");
-  });
-
-  it("mã nghiệp vụ cán bộ, không phải id nội bộ", () => {
-    expect(renderToStaticMarkup(<ThongTinChiDoc hang={hang()} />)).toContain("CB-2026-7K3M9Q");
-  });
-
-  it("có dòng `Lượt xem` chỉ đọc, và không có ô nhập nào", () => {
-    const html = renderToStaticMarkup(<ThongTinChiDoc hang={hang({ view_count: 1234 })} />);
-    expect(html).toContain("<dt>Lượt xem</dt><dd>1.234</dd>");
-    expect(html).not.toContain("<input");
-  });
-
-  it("lượt xem bằng 0 hiện `0`", () => {
-    const html = renderToStaticMarkup(<ThongTinChiDoc hang={hang({ view_count: 0 })} />);
-    expect(html).toContain("<dt>Lượt xem</dt><dd>0</dd>");
-  });
-});
-
 /* ══════════════════════════════════════════════════════════════════════════════════════════
- * TAB, BỘ LỌC, HAI THẺ ĐẦU MÀN, DANH MỤC
+ * TAB, BỘ LỌC, THẺ DANH BẠ, DANH MỤC
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
-describe("sáu tab loại §5", () => {
-  it("bảy nút: `Tất cả` cộng sáu loại", () => {
-    const html = renderToStaticMarkup(<ThanhTabLoai loai="" datLoai={() => {}} />);
-    expect(html).toContain(MOI_LOAI_NHAN);
-    for (const nhan of ["Tin tức", "Sự kiện", "Thông báo", "Truyền thanh", "Video", "Banner"]) {
-      expect(html).toContain(nhan);
-    }
+describe("sáu tab loại §5 — exactly the prototype's six, no `Tất cả`", () => {
+  it("six tabs in the prototype's order and words", () => {
+    const html = renderToStaticMarkup(<ThanhTabLoai loai="tin-tuc" datLoai={() => {}} />);
+    const labels = [...html.matchAll(/role="tab"[^>]*>(?:<svg[^]*?<\/svg>)?([^<]*)<\/button>/g)].map((m) => m[1]);
+    expect(labels).toEqual(["Tin tức", "Sự kiện", "Thông báo", "Truyền thanh", "Video", "Banner"]);
+    expect(html).not.toContain("Tất cả");
+    expect(html).toContain("lucide-radio");
+    expect(html).toContain("lucide-images");
   });
 
-  it("real tabs: a `tablist` of seven `tab`s, exactly one selected and the only one in the Tab order", () => {
+  it("real tabs: a `tablist` of six `tab`s, exactly one selected and the only one in the Tab order", () => {
     const html = renderToStaticMarkup(<ThanhTabLoai loai="video" datLoai={() => {}} />);
     expect(html).toContain('role="tablist"');
     expect(html).toContain('aria-label="Loại nội dung"');
-    expect(html.match(/role="tab"/g)?.length).toBe(7);
+    expect(html.match(/role="tab"/g)?.length).toBe(6);
     expect(html.match(/aria-selected="true"/g)?.length).toBe(1);
     expect(html.match(/tabindex="0"/g)?.length).toBe(1);
-    expect(html.match(/tabindex="-1"/g)?.length).toBe(6);
+    expect(html.match(/tabindex="-1"/g)?.length).toBe(5);
     expect(html).toMatch(/id="content-type-tab-video"[^>]*aria-selected="true"[^>]*tabindex="0"/);
-    // Every tab controls the one panel; no button is a toggle any more.
-    expect(html.match(new RegExp(`aria-controls="${CONTENT_TABPANEL_ID}"`, "g"))?.length).toBe(7);
+    expect(html.match(new RegExp(`aria-controls="${CONTENT_TABPANEL_ID}"`, "g"))?.length).toBe(6);
     expect(html).not.toContain("aria-pressed");
+    expect(contentTabId("banner")).toBe("content-type-tab-banner");
   });
 
-  it("`Tất cả` is selected when no type is filtered, and its id is stable", () => {
-    const html = renderToStaticMarkup(<ThanhTabLoai loai="" datLoai={() => {}} />);
-    expect(html).toMatch(/id="content-type-tab-all"[^>]*aria-selected="true"/);
-    expect(contentTabId("")).toBe("content-type-tab-all");
-    expect(contentTabId("banner")).toBe("content-type-tab-banner");
+  it("the prototype's pill bar: canvas fill, the open tab white and raised", () => {
+    const html = renderToStaticMarkup(<ThanhTabLoai loai="tin-tuc" datLoai={() => {}} />);
+    expect(html).toMatch(/role="tablist"/);
+    expect(html).toContain("rounded-[10px] border border-line bg-canvas p-1");
+    expect(html).toMatch(/id="content-type-tab-tin-tuc"[^>]*class="[^"]*bg-white text-navy shadow-card"/);
   });
 });
 
 describe("hàng lọc §6", () => {
-  it("ô tìm và ô chọn danh mục cùng ra một hàng", () => {
-    const html = renderToStaticMarkup(
-      <HangLocNoiDung
-        danhMucID=""
-        datDanhMucID={() => {}}
-        tim=""
-        datTim={() => {}}
-        timNgay={() => {}}
-        danhMuc={[danhMuc()]}
-        status=""
-        setStatus={() => {}}
-      />,
-    );
-
-    expect(html).toContain("Tìm theo tiêu đề");
-    expect(html).toContain(MOI_DANH_MUC);
-    expect(html).toContain("Chuyển đổi số");
+  it("search filters as you type: no `Tìm` button, no submit, the prototype's box", () => {
+    const html = filterRow();
+    expect(html).toContain('role="search"');
+    expect(html).not.toContain('type="submit"');
+    expect(html).not.toContain(">Tìm<");
+    expect(html).toContain('placeholder="Tìm theo tiêu đề…"');
+    expect(html).toContain("lucide-search");
+    expect(html).toMatch(/<input id="tim-noi-dung"[^>]*class="[^"]*h-9[^"]*pl-9[^"]*text-\[12.5px\]/);
+    expect(html).toContain("w-72");
   });
 
-  it("ô tìm nằm trong một `form` — gửi bằng submit, không gửi theo từng phím", () => {
-    // Mỗi phím là một lời gọi mang chữ cán bộ đang gõ vào một URL, và một URL đi vào mọi log
-    // truy cập (luật 3, cấm #4).
-    const html = renderToStaticMarkup(
-      <HangLocNoiDung
-        danhMucID=""
-        datDanhMucID={() => {}}
-        tim=""
-        datTim={() => {}}
-        timNgay={() => {}}
-        danhMuc={[]}
-        status=""
-        setStatus={() => {}}
-      />,
+  it("the category select: only once the commune has a visible category; `Tất cả danh mục` first; `Cha › Con`; hidden ones left out", () => {
+    expect(filterRow()).not.toContain('id="loc-danh-muc"');
+    expect(filterRow({ danhMuc: [danhMuc({ hidden: true })] })).not.toContain('id="loc-danh-muc"');
+    const ds = [
+      danhMuc({ id: "P", name: "Tin hoạt động" }),
+      danhMuc({ id: "C", name: "Chuyển đổi số", parent_id: "P" }),
+      danhMuc({ id: "H", name: "Mục đã ẩn", hidden: true }),
+    ];
+    const html = filterRow({ danhMuc: ds });
+    const options = [...(/<select id="loc-danh-muc"[^>]*>([^]*?)<\/select>/.exec(html)?.[1] ?? "").matchAll(/>([^<]*)<\/option>/g)].map(
+      (m) => m[1],
     );
-    expect(html).toContain('role="search"');
-    expect(html).toContain('type="submit"');
+    expect(options).toEqual([MOI_DANH_MUC, "Tin hoạt động", "Tin hoạt động › Chuyển đổi số"]);
+  });
+
+  it("a category still the active filter keeps its select, even if hidden since", () => {
+    expect(filterRow({ danhMucID: "X" })).toContain('id="loc-danh-muc"');
   });
 });
 
-describe("§6 status filter", () => {
-  function filterRow(status: string) {
-    return renderToStaticMarkup(
-      <HangLocNoiDung
-        danhMucID=""
-        datDanhMucID={() => {}}
-        tim=""
-        datTim={() => {}}
-        timNgay={() => {}}
-        danhMuc={[]}
-        status={status}
-        setStatus={() => {}}
-      />,
-    );
-  }
-
+describe("§6 status filter (kept, owner D1)", () => {
   it("offers Tất cả / Đang hiện / Ẩn / Chờ duyệt with the server's three codes, Tất cả sending nothing", () => {
-    const html = filterRow("");
-    // The label is Field's now (label above, its own classes); still a real `<label for>` on the select.
+    const html = filterRow();
     expect(html).toMatch(/<label for="loc-trang-thai"[^>]*>Trạng thái<\/label>/);
     const options = [...html.matchAll(/<option value="([^"]*)"[^>]*>([^<]*)<\/option>/g)]
       .map((m) => [m[1], m[2]])
@@ -696,24 +808,7 @@ describe("§6 status filter", () => {
   });
 
   it("the chosen status is the select's value", () => {
-    expect(filterRow("cho-duyet")).toMatch(/<option value="cho-duyet" selected="">Chờ duyệt<\/option>/);
-  });
-});
-
-describe("portal category of a synced item (C2)", () => {
-  it("the row shows it under the source line; a hand-written row and a synced one without it do not", () => {
-    const synced = { ...hang({ id: "A", source: "dong-bo-cong", status: "cho-duyet" }), portal_category_name: "Tin địa phương" };
-    const html = veBang([synced, hang({ id: "B" }), hang({ id: "C", source: "dong-bo-cong" })]);
-    expect(html.split(portalCategoryLabel("Tin địa phương")).length - 1).toBe(1);
-    expect(html.indexOf("Đồng bộ từ Cổng")).toBeLessThan(html.indexOf(portalCategoryLabel("Tin địa phương")));
-    expect(html).not.toContain("Chuyên mục Cổng: <");
-  });
-
-  it("the detail's read-only block names it; absent when the server sent none", () => {
-    const synced = { ...hang({ source: "dong-bo-cong", body: "<p>x</p>" }), portal_category_name: "Tin địa phương" };
-    const html = renderToStaticMarkup(<ThongTinChiDoc hang={synced} />);
-    expect(html).toContain("<dt>Chuyên mục Cổng</dt><dd>Tin địa phương</dd>");
-    expect(renderToStaticMarkup(<ThongTinChiDoc hang={hang({ body: "" })} />)).not.toContain("Chuyên mục Cổng");
+    expect(filterRow({ status: "cho-duyet" })).toMatch(/<option value="cho-duyet" selected="">Chờ duyệt<\/option>/);
   });
 });
 
@@ -727,6 +822,14 @@ describe("thẻ Danh bạ chính quyền §4", () => {
     expect(html).toContain('href="/mini-app?tab=danh-ba"');
   });
 
+  it("the prototype's look: white card, brand icon, `Mở →` in brand", () => {
+    const html = card({ ok: true, duLieu: 1 });
+    expect(html).toContain("mb-5 flex min-w-0 items-center gap-3 rounded-[10px] border border-line bg-white px-4 py-3");
+    expect(html).toContain("hover:border-brand/40");
+    expect(html).toMatch(/lucide-book-user[^"]*size-5 shrink-0 text-brand"/);
+    expect(html).toMatch(/<span class="shrink-0 text-\[12.5px\] font-semibold text-brand">Mở/);
+  });
+
   it("a successful 0 is said — it is true", () => {
     expect(card({ ok: true, duLieu: 0 })).toContain("Đang hiện 0 cán bộ cho bà con.");
   });
@@ -736,7 +839,6 @@ describe("thẻ Danh bạ chính quyền §4", () => {
     expect(html).not.toMatch(/\d+ cán bộ/);
     expect(html).toContain(MO_TA_THE_DANH_BA);
     expect(html).not.toContain(PUBLISHED_STAFF_UNREAD);
-    expect(html).toContain('href="/mini-app?tab=danh-ba"');
   });
 
   it("after a failed read: NO number — never a 0 that lies — and the failure is said", () => {
@@ -747,58 +849,52 @@ describe("thẻ Danh bạ chính quyền §4", () => {
   });
 });
 
-describe("biểu mẫu danh mục tin", () => {
-  it("the ADD form stays an add form — edit and delete live in `CategoryAdmin`", () => {
-    const html = renderToStaticMarkup(
-      <FormDanhMuc
-        danhMuc={[danhMuc()]}
-        dangGui={false}
-        loi={null}
-        huy={() => {}}
-        luu={() => {}}
-      />,
-    );
+describe("biểu mẫu danh mục tin — the prototype's add row (`CategoryManagerDialog.tsx:127-166`)", () => {
+  const ve = (ds: readonly comms_danhMucRa[], loi: string | null = null) =>
+    renderToStaticMarkup(<FormDanhMuc danhMuc={ds} dangGui={false} loi={loi} luu={() => {}} />);
 
-    expect(html).toContain("Thêm danh mục tin");
-    expect(html).not.toContain("🗑");
-    expect(html).not.toContain(">Xoá<");
-    expect(html).not.toContain(">Sửa<");
+  it("one row: `Thêm danh mục` (placeholder Nông nghiệp) · `Thuộc mục (nếu có)` · `Slug` · `+ Thêm` — no Huỷ/Lưu, no order", () => {
+    const html = ve([danhMuc()]);
+    const labels = [...html.matchAll(/<label for="([^"]+)"[^>]*>([^<]*)/g)].map((m) => [m[1], m[2]]);
+    expect(labels).toEqual([
+      ["ten-danh-muc", "Thêm danh mục"],
+      ["cha-danh-muc", "Thuộc mục (nếu có)"],
+      ["slug-danh-muc", "Slug"],
+    ]);
+    expect(html).toContain('placeholder="Nông nghiệp"');
+    expect(html).toMatch(/<button[^>]*type="submit"[^>]*>[^]*?lucide-plus[^]*?Thêm<\/button>/);
+    expect(html).not.toContain(">Huỷ<");
+    expect(html).not.toContain(">Lưu<");
+    expect(html).not.toContain("Thứ tự hiển thị");
+    expect(html).not.toContain("Thêm danh mục tin");
+    expect(html).toMatch(/<div class="flex flex-wrap items-end gap-2">/);
   });
 
   it("nói trước hai điều máy chủ sẽ từ chối: khuôn slug, và slug đã cấp không cấp lại", () => {
-    const html = renderToStaticMarkup(
-      <FormDanhMuc danhMuc={[]} dangGui={false} loi={null} huy={() => {}} luu={() => {}} />,
-    );
+    const html = ve([]);
     expect(html).toContain("chữ thường a-z");
     expect(html).toContain("KHÔNG cấp lại");
   });
+
+  it("the server's sentence is shown verbatim under the row", () => {
+    expect(ve([], "Slug đã có trong xã.")).toContain('role="alert">Slug đã có trong xã.</p>');
+  });
 });
 
-describe("`CategoryAdmin` — the tree with Sửa · Ẩn/Hiện · Xoá (ADR 0067 §3)", () => {
+describe("`CategoryAdmin` — grouped rows with rename · Tắt/Bật · Xoá (ADR 0067 §3)", () => {
   const never = () => new Promise<never>(() => {});
   const ve = (ds: readonly comms_danhMucRa[]) =>
-    renderToStaticMarkup(
-      <CategoryAdmin categories={ds} update={never} remove={never} changed={() => {}} />,
-    );
+    renderToStaticMarkup(<CategoryAdmin categories={ds} update={never} remove={never} changed={() => {}} />);
 
-  it("every row has the three actions, named with the category", () => {
-    const html = ve([danhMuc(), danhMuc({ id: "01JDM2", name: "An ninh", slug: "an-ninh" })]);
-    expect(html).toContain(nhuTrongHTML("Sửa danh mục Chuyển đổi số"));
+  it("every row: its name in an editable box, `Tắt`/`Bật` and the bin, named with the category", () => {
+    const html = ve([danhMuc(), danhMuc({ id: "01JDM2", name: "An ninh", slug: "an-ninh", hidden: true })]);
+    expect(html).toContain(CATEGORY_ROOT_GROUP);
+    expect(html).toContain('value="Chuyển đổi số"');
     expect(html).toContain(nhuTrongHTML("Xoá danh mục An ninh"));
-    expect(html.match(/>Sửa</g)?.length).toBe(2);
-    expect(html.match(/>Xoá</g)?.length).toBe(2);
-    expect(html).toContain("Slug: chuyen-doi-so");
-  });
-
-  it("the hide toggle reads the row's state, and the owner's rule is said next to it", () => {
-    const html = ve([danhMuc(), danhMuc({ id: "01JDM2", name: "Cũ", hidden: true })]);
-    expect(html).toContain(CATEGORY_SHOWN);
-    expect(html).toContain(CATEGORY_HIDDEN);
-    expect(html).toContain(">Ẩn trên Mini App<");
-    expect(html).toContain(">Hiện lại trên Mini App<");
-    // Hiding removes the chip only — the articles still show (owner, 01/10/2026).
-    expect(html).toContain(nhuTrongHTML(CATEGORY_HIDE_EXPLAINER));
-    expect(CATEGORY_HIDE_EXPLAINER).toContain("vẫn hiện");
+    expect(html).toContain(">Tắt</button>");
+    expect(html).toContain(">Bật</button>");
+    expect(html).not.toContain(">Sửa<");
+    expect(html).not.toContain("Slug:");
   });
 });
 
@@ -806,7 +902,7 @@ describe("`CategoryAdmin` — the tree with Sửa · Ẩn/Hiện · Xoá (ADR 00
  * PHẦN CHƯA DỰNG ĐƯỢC — mỗi mục PHẢI ra HTML
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
-describe("phần chưa dựng được — một dấu '?' trên thẻ Đồng bộ Cổng, không còn khối gấp ở đầu màn (MA-02)", () => {
+describe("phần chưa dựng được — dấu '?' tại chỗ, không còn khối gấp ở đầu màn (MA-02)", () => {
   const all = PHAN_CHUA_DUNG.map((p) => `${p.ten} ${p.viSao}`).join(" | ");
 
   it("màn không còn khối 'N phần của bản thiết kế chưa dựng được'", () => {
@@ -817,12 +913,11 @@ describe("phần chưa dựng được — một dấu '?' trên thẻ Đồng b
 
   it("lý do viết cho cán bộ đọc: không số hiệu ADR, không ký hiệu mục đặc tả", () => {
     expect(all).not.toMatch(/ADR|§/);
-    expect(all).toContain("đã chọn n/30");
+    expect(all).toContain("đã chọn n/tổng số chuyên mục");
+    expect(all).toContain("tối đa 30 chuyên mục");
   });
 
   it("thứ chặn THẬT được gọi tên — không phải thứ đã có", () => {
-    // Built 02/10/2026: the §4 count, the §2 layout and the `content.update` gate; ADR 0067 §2 the
-    // portal sync, §4 the broadcast audio. No entry may still say they are missing.
     for (const built of [
       "Đang hiện 26 cán bộ",
       "aria-pressed",
@@ -846,18 +941,36 @@ describe("nhãn nút chính của màn", () => {
 });
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
- * §7 `Ảnh đại diện` — the cover block in each state (no DOM: rendered to a string)
+ * §7 `Ảnh đại diện` / `Ảnh banner` — the prototype's dashed slot, the 3-step flow kept
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
 describe("cover block of §7", () => {
   const READY_FORM = { ...FORM_TRONG, title: "Có tiêu đề" };
 
-  it("uploading: progress as `role=status`, Lưu held, the wait note said", () => {
+  it("a dashed slot that IS the picker: Upload icon, `Chọn tệp từ máy`, the hint; JPG/PNG/WebP only", () => {
+    const html = veForm();
+    expect(html).toMatch(/<input id="anh-noi-dung"[^>]*type="file"[^>]*accept="\.jpg,\.jpeg,\.png,\.webp,image\/jpeg,image\/png,image\/webp"/);
+    // The input first (focusable), its label right after: the visible slot.
+    expect(html).toMatch(/<input id="anh-noi-dung"[^>]*class="peer an-thi-giac"[^>]*\/><label for="anh-noi-dung" class="[^"]*border-dashed[^"]*peer-focus-visible:ring-3/);
+    expect(html).toContain("lucide-upload");
+    expect(html).toContain(`>${COVER_PICK_BUTTON}</span>`);
+    expect(html).toContain(COVER_HINT);
+    expect(html).toContain(">Ảnh đại diện</span>");
+    expect(html).not.toContain("heic");
+    expect(html).not.toMatch(/<input[^>]*id="anh-noi-dung"[^>]*type="url"/);
+  });
+
+  it("a banner's cover is `Ảnh banner` with its landscape hint", () => {
+    const html = veForm({ ...FORM_TRONG, type: "banner" });
+    expect(html).toContain(">Ảnh banner</span>");
+    expect(html).toContain(COVER_BANNER_HINT);
+    expect(html).not.toContain(">Ảnh đại diện</span>");
+  });
+
+  it("uploading: progress as `role=status`, Lưu held and saying `Đang tải tệp…`, the picker frozen", () => {
     const html = veForm(READY_FORM, undefined, { kind: "uploading", id: "01JC", percent: 40 });
-    expect(html).toContain('<p role="status">Đang tải lên 40%</p>');
-    expect(html).toContain(COVER_WAIT_NOTE);
-    expect(html).toMatch(/<button type="submit"[^>]*disabled=""[^>]*>Lưu<\/button>/);
-    // The picker is frozen while one file moves.
+    expect(html).toMatch(/<p role="status"[^>]*>Đang tải lên 40%<\/p>/);
+    expect(html).toMatch(new RegExp(`<button type="submit"[^>]*disabled=""[^>]*>[^]*?${UPLOADING_FILES_LABEL}</button>`));
     expect(html).toMatch(/<input[^>]*id="anh-noi-dung"[^>]*disabled=""/);
   });
 
@@ -865,7 +978,6 @@ describe("cover block of §7", () => {
     const sentence = "Ảnh bị từ chối vì phát hiện mã độc và không được lưu.";
     const html = veForm(READY_FORM, undefined, { kind: "refused", message: sentence });
     expect(html).toContain(`<p role="alert" class="thong-bao-loi">Bị từ chối: ${sentence}</p>`);
-    // A refusal does not hold Lưu: the article can be saved without a cover.
     expect(html).not.toMatch(/<button type="submit"[^>]*disabled=""/);
   });
 
@@ -875,7 +987,7 @@ describe("cover block of §7", () => {
     expect(html).toContain("Chưa kiểm tra xong: Chưa quét được mã độc.");
   });
 
-  it("edit form: the saved cover's preview comes ONLY from the server's `preview_url`", () => {
+  it("edit form: the slot says a file is there — no preview, no saved-cover line, no `Gỡ ảnh`", () => {
     const row = hang({
       body: "",
       image_url: "https://legacy.example.vn/anh.jpg",
@@ -888,24 +1000,12 @@ describe("cover block of §7", () => {
       },
     });
     const html = veForm(giaTriTuHang(row), row);
-    expect(html).toContain('src="https://files.example.test/vigov-pub/t_01JXA/cover.jpg?X-Amz-Signature=S"');
-    expect(html.match(/<img /g)?.length).toBe(1);
-    // The legacy link is shown as text in the read-only block, never as a `src`.
-    expect(html).not.toContain('src="https://legacy.example.vn/anh.jpg"');
-    expect(html).toContain("https://legacy.example.vn/anh.jpg");
-    expect(html).toContain(`>${COVER_REPLACE_BUTTON}`);
-    expect(html).toContain(`>${COVER_REMOVE_BUTTON}</button>`);
-  });
-
-  it("a non-http(s) `preview_url` is never a `src`; a missing one says so", () => {
-    const row = hang({
-      body: "",
-      cover_image_file_id: "01JCOVER0",
-      cover_image: { file_id: "01JCOVER0", status: "ready", public: false, preview_url: "javascript:alert(1)" },
-    });
-    const html = veForm(giaTriTuHang(row), row);
     expect(html).not.toContain("<img");
-    expect(html).toContain(COVER_PREVIEW_MISSING);
+    expect(html).toContain(`>${COVER_REPLACE_BUTTON}</span>`);
+    expect(COVER_REPLACE_BUTTON).toBe("Đã có tệp — chọn tệp mới để thay");
+    expect(html).not.toContain(COVER_REMOVE_BUTTON);
+    expect(html).not.toContain(COVER_PREVIEW_MISSING);
+    expect(html).not.toContain("Ảnh bìa hiện tại");
   });
 
   it("no cover on the article: no image, no `Gỡ ảnh`", () => {
@@ -914,65 +1014,19 @@ describe("cover block of §7", () => {
     expect(html).not.toContain(`>${COVER_REMOVE_BUTTON}<`);
   });
 
-  it("`Gỡ ảnh` pressed on a saved cover: the detach is said before Lưu", () => {
+  it("no `will be detached` line either", () => {
     const row = hang({ body: "", cover_image_file_id: "01JCOVER0" });
     const html = veForm({ ...giaTriTuHang(row), cover_image_file_id: "" }, row);
-    expect(html).toContain(COVER_WILL_DETACH);
-    expect(html).not.toContain("<img");
+    expect(html).not.toContain(COVER_WILL_DETACH);
+    expect(html).toContain(`>${COVER_PICK_BUTTON}</span>`);
   });
 });
 
-/* ══════════════════════════════════════════════════════════════════════════════════════════
- * Items from the portal sync (ADR 0067 §2) — visible, and publishable when waiting for approval
- * ══════════════════════════════════════════════════════════════════════════════════════════ */
-
-describe("portal-synced items in the table and the edit form", () => {
-  it("a synced row says it came from the portal; a hand-written one does not", () => {
-    const html = veBang([
-      hang({ id: "A", source: "dong-bo-cong", status: "cho-duyet" }),
-      hang({ id: "B", source: "thu-cong" }),
-    ]);
-    expect(html.split("Đồng bộ từ Cổng").length - 1).toBe(1);
-    expect(html).toContain(">Chờ duyệt<");
-  });
-
-  it("an item waiting for approval says how to publish it; a published one does not", () => {
+describe("an item waiting for approval", () => {
+  it("no `Chờ duyệt` notice in the edit form (prototype parity 09/10/2026); the tick starts off", () => {
     const waiting = hang({ source: "dong-bo-cong", status: "cho-duyet", body: "<p>x</p>" });
     const html = veForm(giaTriTuHang(waiting), waiting);
-    expect(html).toContain(nhuTrongHTML(PENDING_REVIEW_HINT));
-    // The tick is OFF for `cho-duyet`, so ticking it is what publishes (thanSua sends publish: true).
+    expect(html).not.toContain(nhuTrongHTML(PENDING_REVIEW_HINT));
     expect(giaTriTuHang(waiting).publish).toBe(false);
-    const live = hang({ status: "dang-hien", body: "<p>x</p>" });
-    expect(veForm(giaTriTuHang(live), live)).not.toContain(nhuTrongHTML(PENDING_REVIEW_HINT));
   });
 });
-
-describe("bảng theo bản mẫu (ADR 0068 lần 5, 06/10/2026)", () => {
-  it("the prototype's thumbnail column is a '?' header and '—' cells: the list route serves no image link", () => {
-    const html = veBang([hang()]);
-    expect(html).toContain(`aria-label="${pendingMarkerLabel(THUMBNAIL_PART)}"`);
-    expect(bodyOf(html)).toContain("data-pending");
-    expect(html).not.toContain("<img");
-  });
-
-  it("`Loại` is drawn under `Tất cả` only — each other tab IS one type, as in the prototype", () => {
-    const all = renderToStaticMarkup(
-      <BangNoiDung ds={[hang()]} danhMuc={[danhMuc()]} sua={() => {}} remove={() => {}} canEdit showType />,
-    );
-    const one = renderToStaticMarkup(
-      <BangNoiDung ds={[hang()]} danhMuc={[danhMuc()]} sua={() => {}} remove={() => {}} canEdit showType={false} />,
-    );
-    expect(all).toContain(">Loại</th>");
-    expect(one).not.toContain(">Loại</th>");
-  });
-
-  it("a long title stays one line, cut by CSS, the whole title on hover; the table scrolls inside its frame", () => {
-    const long = "Tiêu đề rất dài ".repeat(20).trim();
-    const html = veBang([hang({ title: long })]);
-    expect(html).toContain(`title="${long}"`);
-    expect(html).toMatch(/class="ten-can-bo block overflow-hidden text-ellipsis whitespace-nowrap"/);
-    expect(html).toContain("max-w-[34rem]");
-    expect(html).toContain("overflow-auto");
-  });
-});
-

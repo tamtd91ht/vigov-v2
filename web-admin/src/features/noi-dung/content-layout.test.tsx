@@ -32,7 +32,7 @@ function render(node: ReactNode): void {
 }
 
 function Tabs({ onChange }: { onChange: (t: string) => void }) {
-  const [type, setType] = useState("");
+  const [type, setType] = useState("tin-tuc");
   return (
     <ThanhTabLoai
       loai={type}
@@ -56,15 +56,16 @@ describe("content-type tabs — WAI-ARIA keyboard", () => {
   it("→ selects AND focuses the next tab; ← wraps from the first to the last; Home / End", () => {
     const onChange = vi.fn();
     render(<Tabs onChange={onChange} />);
-    expect(selected().textContent).toBe("Tất cả");
+    // Six tabs, `Tin tức` open by default — no `Tất cả` (prototype `ContentWorkspace.tsx:75-101`).
+    expect(selected().textContent).toBe("Tin tức");
 
     press(selected(), "ArrowRight");
-    expect(selected().textContent).toBe("Tin tức");
+    expect(selected().textContent).toBe("Sự kiện");
     expect(document.activeElement).toBe(selected());
-    expect(onChange).toHaveBeenLastCalledWith("tin-tuc");
+    expect(onChange).toHaveBeenLastCalledWith("su-kien");
 
     press(selected(), "Home");
-    expect(selected().textContent).toBe("Tất cả");
+    expect(selected().textContent).toBe("Tin tức");
 
     press(selected(), "ArrowLeft");
     expect(selected().textContent).toBe("Banner");
@@ -86,7 +87,7 @@ describe("content-type tabs — WAI-ARIA keyboard", () => {
     render(<Tabs onChange={() => {}} />);
     press(selected(), "ArrowRight");
     const inOrder = Array.from(host!.querySelectorAll<HTMLButtonElement>('[role="tab"]')).filter((b) => b.tabIndex === 0);
-    expect(inOrder.map((b) => b.textContent)).toEqual(["Tin tức"]);
+    expect(inOrder.map((b) => b.textContent)).toEqual(["Sự kiện"]);
   });
 });
 

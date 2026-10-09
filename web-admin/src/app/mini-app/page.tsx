@@ -59,7 +59,10 @@ export default async function MiniAppPage({
       <PhienProvider>
         <div className="khung-trang">
           <DauTrang />
-          <main className="than-trang">
+          {/* `p-0`: the tab band is full width and flush under the header (prototype `MiniAppWorkspace.tsx:39`),
+              so the page's own padding moves INSIDE the workspace, under the band. A utility wins over
+              `.than-trang` (it sits in `@layer legacy`), at every width. */}
+          <main className="than-trang p-0">
             {/* `key`: switching tab is a fresh screen, as the prototype's `key={tab}` — no filter or open
                 dialog of one tab survives into the other. */}
             <MiniAppWorkspace

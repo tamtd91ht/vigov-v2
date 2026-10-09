@@ -136,11 +136,15 @@ describe("the banner box on the form", () => {
     expect(html).toContain('list="lien-ket-banner-duong-app"');
     expect(html).toContain('<datalist id="lien-ket-banner-duong-app">');
     for (const { path } of BANNER_APP_PATHS) expect(html).toContain(`value="${path}"`);
-    expect(html).toContain(BANNER_ARTICLE_PATH_HINT.replace(/</g, "&lt;").replace(/>/g, "&gt;"));
   });
 
-  it("shows the not-tappable warning for an unknown in-app path, and not for a known one", () => {
-    expect(render(banner)).toContain('id="lien-ket-banner-canh-bao"');
-    expect(render({ ...banner, link_to: "/truyen-thanh" })).not.toContain('id="lien-ket-banner-canh-bao"');
+  it("the prototype's label and placeholder only — no hint paragraph, no not-tappable warning (09/10/2026)", () => {
+    const html = render(banner);
+    expect(html).toContain("Bấm vào thì mở gì");
+    expect(html).toContain('placeholder="Ví dụ: /tin-tuc — để trống thì ảnh chỉ để xem"');
+    expect(html).not.toContain(BANNER_ARTICLE_PATH_HINT.replace(/</g, "&lt;").replace(/>/g, "&gt;"));
+    expect(html).not.toContain('id="lien-ket-banner-goi-y"');
+    expect(html).not.toContain('id="lien-ket-banner-canh-bao"');
+    expect(html).not.toContain("Mini App chưa có màn nào cho đường này");
   });
 });

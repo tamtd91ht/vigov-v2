@@ -12,7 +12,14 @@ import type { comms_noiDungRa } from "@/lib/api/schema.gen";
 import { BODY_IMAGE_WAIT_COVER } from "./body-image";
 import { BODY_IMAGE_URL_BUTTON } from "./body-image-panel";
 // vi-name-ok: existing exports of nhan-noi-dung.ts / so-noi-dung.tsx (rule 12 inv 3)
-import { FORM_TRONG, giaTriTuHang, SUMMARY_SAPO_HINT, type GiaTriFormNoiDung } from "./nhan-noi-dung";
+import {
+  CANH_BAO_HTML_THO,
+  FORM_TRONG,
+  giaTriTuHang,
+  SUMMARY_SAPO_HINT,
+  THAN_BAI_RONG,
+  type GiaTriFormNoiDung,
+} from "./nhan-noi-dung";
 import { FormNoiDung } from "./so-noi-dung";
 
 /**
@@ -300,8 +307,11 @@ describe("saved article", () => {
   });
 });
 
-it("`Tóm tắt` says it is the sapo shown bold under the title", async () => {
+it("`Tóm tắt` and `Nội dung` carry no hint lines — the prototype has none (09/10/2026)", async () => {
   stubNetwork();
   await mountForm(FORM_TRONG);
-  expect(host!.textContent).toContain(SUMMARY_SAPO_HINT);
+  expect(host!.textContent).not.toContain(SUMMARY_SAPO_HINT);
+  expect(host!.textContent).not.toContain(CANH_BAO_HTML_THO);
+  // The editor is empty here: the old "no body" line must not appear under it either.
+  expect(host!.textContent).not.toContain(THAN_BAI_RONG);
 });

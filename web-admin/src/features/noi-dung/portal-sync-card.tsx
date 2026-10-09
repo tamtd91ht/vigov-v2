@@ -1,13 +1,17 @@
 "use client";
 
-import { Clock, Link2, LoaderCircle, RefreshCw, Shapes } from "lucide-react";
+import { CheckCircle2, Link2, LoaderCircle, RefreshCw, TriangleAlert, X } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
+import { toast } from "sonner";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
+import { IconButton } from "@/components/ui/icon-button";
 import { PendingMarker } from "@/components/ui/pending-feature";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { KetQua } from "@/lib/api/goi";
+import { cn } from "@/lib/cn";
 import {
   getPortalCategories,
   getPortalSyncSettings,
@@ -27,54 +31,66 @@ import type {
   page_Result_comms_portalRunOut,
 } from "@/lib/api/schema.gen";
 
-import { DAU_GACH, nhanMoc, PHAN_CHUA_DUNG } from "./nhan-noi-dung";
 import {
-  API_URL_HINT,
+  CLOSE_LABEL,
+  DAU_GACH,
+  DOWNLOAD_IMAGES_PART,
+  formatVietnamDateTime,
+  INTERVAL_15_MIN_PART,
+  KEY_IN_USE_PART,
+  pendingContentPart,
+  PORTAL_CATEGORY_COUNT_PART,
+} from "./nhan-noi-dung";
+import {
+  API_URL_PLACEHOLDER,
+  CANCEL_LABEL,
   categoriesBody,
   CATEGORIES_EMPTY,
   CATEGORIES_LIMIT_REACHED,
   CATEGORIES_LOADING,
   CATEGORIES_NEED_SETTINGS,
   CATEGORIES_NEED_UPDATE,
-  CATEGORIES_NOTHING_CHANGED,
-  CATEGORIES_SAVED,
+  CATEGORIES_TITLE,
+  CATEGORIES_UNREACHABLE,
   choicesFromTree,
   CONFIGURE_LABEL,
+  CONNECT_LABEL,
   DEFAULT_TARGET_KIND,
+  DOWNLOAD_IMAGES_NOTE,
+  ENABLED_LABEL,
   formFromSettings,
-  HISTORY_LABEL,
-  INTERVAL_OPTIONS,
+  groupChoices,
+  INTERVAL_15_MIN_LABEL,
   intervalLabel,
+  intervalOptions,
+  KEEP_SOURCE_LABEL,
+  KEY_IN_USE_PREFIX,
+  KEY_KEEP_PLACEHOLDER,
+  KEY_SAVED_HINT,
   keyHint,
   keyRequirement,
   LOADING_SETTINGS,
   MAX_ITEMS_HINT,
   MAX_ITEMS_PER_RUN_MAX,
-  MISSING_ON_PORTAL,
-  NO_RUN_YET,
-  orderAsTree,
-  outcomeChipClass,
+  NOT_CONNECTED,
   outcomeLabel,
-  POLL_GAVE_UP,
-  POLL_INTERVAL_MS,
-  POLL_MAX_ATTEMPTS,
+  pickMany,
   PORTAL_SYNC_DESCRIPTION,
   PORTAL_SYNC_TITLE,
-  portalSyncStatus,
-  portalSyncStatusChipClass,
   portalSyncStatusExplainer,
-  portalSyncStatusLabel,
-  PUBLISH_MODE_OPTIONS,
+  PUBLISH_DIRECT_LABEL,
+  PUBLISH_MODE_DIRECT,
   PUBLISH_MODE_REVIEW,
   publishModeLabel,
-  RELOAD_LABEL,
+  REFETCH_DELAYS_MS,
   retryWaitLabel,
   RUN_NOW_LABEL,
-  RUN_STARTED,
-  runCountsLine,
+  RUN_REFUSED_TOAST,
+  RUN_STARTED_TOAST,
   runErrorLine,
   runIsUnfinished,
   runNowBlockedReason,
+  SAVE_CONFIG_LABEL,
   SELECTED_CATEGORIES_MAX,
   selectAllUpToLimit,
   selectedCount,
@@ -82,36 +98,38 @@ import {
   SETTINGS_SAVED,
   settingsBody,
   settingsFormError,
-  SHOW_PENDING_LABEL,
+  skippedCount,
   TARGET_KIND_OPTIONS,
-  triggerLabel,
   WINDOW_DAYS_HINT,
   WINDOW_DAYS_MAX,
   type CategoryChoice,
+  type SettingsField,
   type SettingsForm,
 } from "./portal-sync";
 import { OverlayDialog } from "./overlay-dialog";
 
 /**
- * §3 — the card "Đồng bộ tin từ Cổng thông tin điện tử" (ADR 0067 §2): chip, meta line, last run,
- * error block, `⟳ Đồng bộ ngay`, `Cấu hình`, and the run history.
+ * §3 — the card "Đồng bộ tin từ Cổng thông tin điện tử" (ADR 0067 §2), drawn as the prototype's
+ * `ContentSourcePanel` (`vigov-require/apps/admin/src/components/content/ContentSourcePanel.tsx:92-180`):
+ * the title with its link icon, ONE status line (`Đang bật · {n} chuyên mục · Mỗi 6 giờ · chờ duyệt`), the
+ * last run's line, and on the right `Đồng bộ ngay` (outline, only once connected) and `Cấu hình` /
+ * `Nối Cổng thông tin` (primary). The run history, `Tải lại`, the pending-queue link, the state's
+ * explainer sentence and the result chip are gone (owner D3, 09/10/2026).
  *
  * THE KEY NEVER COMES BACK. The settings response says `api_key_set` and nothing more; the key box is
  * empty on every open, and its text lives only in the form's state until the PUT, then is dropped.
  *
  * THE CATEGORY TREE IS ASKED ONLY WHEN `Cấu hình` IS OPEN. Each read is an outbound call to the commune's
- * portal (ADR 0067 §2: never copied), so the card's meta line does not show §3's `{n} chuyên mục` — it
- * holds a disabled "?" at that spot instead (`PHAN_CHUA_DUNG`, ADR 0068 §14). The count is shown inside
- * the form, from the live tree.
+ * portal (ADR 0067 §2: never copied), so the status line's `{n} chuyên mục` holds a disabled "?" where the
+ * number would be (`PHAN_CHUA_DUNG`, ADR 0068 §14). The count is shown inside the form, from the live tree.
  *
- * `⟳ Đồng bộ ngay` AND `Cấu hình` ARE DRAWN ONLY WITH `content.update` (`canEdit`, 02/10/2026, as the
- * prototype's `ContentSourcePanel canEdit`): every call behind them declares that key — the run, both
- * PUTs, and the category tree, a GET under the write key (owner 02/10/2026, D3). An account with
- * `content.read` only sees the status, the last run and the history. Hiding is convenience:
- * `service-comms` checks the key on every call and a 403 sentence reaches the card verbatim (rule 5,
- * forbidden #1).
+ * `⟳ Đồng bộ ngay` AND `Cấu hình` ARE DRAWN ONLY WITH `content.update` (`canEdit`, as the prototype's
+ * `ContentSourcePanel canEdit`): every call behind them declares that key — the run, both PUTs, and the
+ * category tree, a GET under the write key (owner 02/10/2026, D3). Hiding is convenience: `service-comms`
+ * checks the key on every call and a 403 sentence reaches the card verbatim (rule 5, forbidden #1).
  *
- * `Cấu hình` OPENS AN OVERLAY (`OverlayDialog`), §3's "modal cấu hình đồng bộ".
+ * AFTER A 202 THE CARD RE-READS ITSELF THREE TIMES (`REFETCH_DELAYS_MS`: 4 s, 15 s, 45 s), then stops — the
+ * toast tells the officer to reopen the screen later for a longer run. Never an open-ended poll.
  */
 
 /** The six calls, injectable so the tests press the buttons against fakes. */
@@ -133,33 +151,37 @@ export const PORTAL_SYNC_API: PortalSyncApi = {
   startRun: startPortalSyncRun,
 };
 
+/**
+ * The config dialog's width — the prototype's `sm:max-w-[46rem]` (`ContentSourcePanel.tsx:315`), never
+ * wider than the screen less a 0.5rem margin each side. `p-5` as the content editor's dialog.
+ */
+const CONFIG_DIALOG_CLASS = "w-[min(46rem,calc(100vw-1rem))] p-5";
+
+/** The prototype's checkbox rows (`ContentSourcePanel.tsx:521`) and their native box. */
+const CHECK_ROW = "flex items-center gap-2.5 text-[12.5px]";
+const CHECKBOX = "accent-brand m-0 size-3.5 shrink-0";
+
 export function PortalSyncCard({
   api = PORTAL_SYNC_API,
-  pollIntervalMs = POLL_INTERVAL_MS,
-  showPendingReview,
+  refetchDelaysMs = REFETCH_DELAYS_MS,
   canEdit,
 }: {
   api?: PortalSyncApi;
-  pollIntervalMs?: number;
+  /** When the card re-reads itself after a 202. Tests pass shorter ones. */
+  refetchDelaysMs?: readonly number[];
   /** `content.update` held (`canEditContent`). Required: no default, so no caller forgets to decide. */
   canEdit: boolean;
-  /** Sets §6's `Trạng thái` filter to `Chờ duyệt`. Absent = no link (the card alone, in a test). */
-  showPendingReview?: () => void;
 }) {
   const [settings, setSettings] = useState<KetQua<comms_portalSyncSettingsOut> | null>(null);
   const [runs, setRuns] = useState<KetQua<page_Result_comms_portalRunOut> | null>(null);
-  const [reload, setReload] = useState(0);
   const [configOpen, setConfigOpen] = useState(false);
 
   // ONE KEY PER PRESS: a double click, or a retry after a lost answer, reuses it and `core/idem` turns
   // it into one run. Renewed only after a 202 — a refused attempt is released by the server.
   const [runKey, setRunKey] = useState(khoaChongTrungMoi);
   const [starting, setStarting] = useState(false);
-  // `wait`: the Retry-After sentence of a 503 portal_sync_busy, under the server's own sentence.
-  const [startMessage, setStartMessage] = useState<{ ok: boolean; text: string; wait?: string } | null>(null);
-  // `left` reads still owed after a 202; `null` = not polling. Reaching 0 with the run unfinished
-  // shows POLL_GAVE_UP.
-  const [poll, setPoll] = useState<{ left: number } | null>(null);
+  // Counts the 202s: each one schedules its own three re-reads, and a new press cancels the old ones.
+  const [startedRuns, setStartedRuns] = useState(0);
 
   useEffect(() => {
     let gone = false;
@@ -172,189 +194,162 @@ export function PortalSyncCard({
     return () => {
       gone = true;
     };
-  }, [api, reload]);
+  }, [api]);
 
   useEffect(() => {
-    if (poll === null || poll.left <= 0) return;
+    if (startedRuns === 0) return;
     let gone = false;
-    const t = setTimeout(() => {
-      api.listRuns().then((r) => {
-        if (gone) return;
-        setRuns(r);
-        if (r.ok && !runIsUnfinished(r.duLieu.items[0])) {
-          setPoll(null);
-          setStartMessage(null);
-          // `last_run_at` moved: re-read the settings line too.
-          api.getSettings().then((s) => {
-            if (!gone) setSettings(s);
-          });
-        } else {
-          setPoll({ left: poll.left - 1 });
-        }
-      });
-    }, pollIntervalMs);
+    const timers = refetchDelaysMs.map((ms) =>
+      setTimeout(() => {
+        // `last_run_at` and the newest run both move when a run ends: the whole card is read again.
+        api.getSettings().then((r) => {
+          if (!gone) setSettings(r);
+        });
+        api.listRuns().then((r) => {
+          if (!gone) setRuns(r);
+        });
+      }, ms),
+    );
     return () => {
       gone = true;
-      clearTimeout(t);
+      timers.forEach(clearTimeout);
     };
-  }, [api, poll, pollIntervalMs]);
+  }, [api, startedRuns, refetchDelaysMs]);
 
   const latest: comms_portalRunOut | undefined = runs !== null && runs.ok ? runs.duLieu.items[0] : undefined;
 
   function runNow(): void {
     setStarting(true);
-    setStartMessage(null);
     api.startRun(runKey).then((r) => {
       setStarting(false);
       if (!r.ok) {
-        // 409 portal_sync_in_progress / not_configured, 503 — the server's sentence, verbatim. On 503
-        // portal_sync_busy the Retry-After wait is said too — and NOTHING is scheduled: the officer
-        // presses again (same key, released by the server).
-        setStartMessage(
-          r.retryAfterSeconds === undefined
-            ? { ok: false, text: r.thongBao }
-            : { ok: false, text: r.thongBao, wait: retryWaitLabel(r.retryAfterSeconds) },
-        );
+        // 409 portal_sync_in_progress / not_configured, 503 — the prototype's toast, with the server's own
+        // sentence under it. On 503 portal_sync_busy the Retry-After wait is said too — and NOTHING is
+        // scheduled: the officer presses again (same key, released by the server).
+        const wait = r.retryAfterSeconds === undefined ? "" : ` ${retryWaitLabel(r.retryAfterSeconds)}`;
+        toast.error(RUN_REFUSED_TOAST, { description: `${r.thongBao}${wait}` });
         return;
       }
       setRunKey(khoaChongTrungMoi());
-      setStartMessage({ ok: true, text: RUN_STARTED });
-      // Read once now (the new run row disables the button), then a bounded number of times.
+      toast.success(RUN_STARTED_TOAST);
+      // Read once now: the new run row disables the button at once.
       api.listRuns().then(setRuns);
-      setPoll({ left: POLL_MAX_ATTEMPTS });
+      setStartedRuns((n) => n + 1);
     });
   }
 
-  function reloadAll(): void {
-    setPoll(null);
-    setStartMessage(null);
-    setReload((n) => n + 1);
+  if (settings === null) {
+    return (
+      <div className="mb-5">
+        <p role="status" className="an-thi-giac">
+          {LOADING_SETTINGS}
+        </p>
+        <Skeleton className="h-24 w-full rounded-card" />
+      </div>
+    );
   }
 
-  const s = settings !== null && settings.ok ? settings.duLieu : null;
-  const status = s === null ? null : portalSyncStatus(s);
+  const s = settings.ok ? settings.duLieu : null;
+  const connected = s !== null && s.configured;
   const blocked = s === null ? null : runNowBlockedReason(s, latest);
   const runDisabled = s === null || starting || blocked !== null || runs === null;
 
   return (
-    // The prototype's `ContentSourcePanel`: one bordered panel, the title with its link icon, the status
-    // line and the last run on the left, `Đồng bộ ngay` (outline) and `Cấu hình` (primary) on the right.
-    // Ours adds `Tải lại` and the run history under it — kept, they are how a failed run is read.
     <section
-      className="khoi-chi-tiet portal-sync-card m-0 min-w-0 rounded-xl border border-line bg-surface p-4"
+      className="portal-sync-card mb-5 min-w-0 rounded-card border border-line bg-white p-4 shadow-card"
       aria-labelledby="portal-sync-title"
     >
       <div className="flex min-w-0 flex-wrap items-start gap-3">
-        <div className="flex min-w-0 flex-1 basis-72 flex-col gap-1 text-xs text-ink-500 [&_p]:m-0">
-          <h2 id="portal-sync-title" className="m-0 flex items-center gap-2 text-[13px] font-bold text-ink-900">
+        <div className="min-w-0 flex-1 basis-72 [&_p]:m-0">
+          <h2 id="portal-sync-title" className="m-0 flex items-center gap-2 text-[13px] font-bold text-navy">
             <Link2 aria-hidden="true" focusable="false" className="size-4 shrink-0" />
             {PORTAL_SYNC_TITLE}
           </h2>
 
-          {settings === null && <p role="status">{LOADING_SETTINGS}</p>}
-          {settings !== null && !settings.ok && (
-            <p className="thong-bao-loi" role="alert">
+          {!settings.ok && (
+            <p className="thong-bao-loi mt-1" role="alert">
               {settings.thongBao}
             </p>
           )}
 
-          {s !== null && status !== null && (
-            <>
-              <p className="flex flex-wrap items-center gap-x-1">
-                <span className={portalSyncStatusChipClass(status)} data-testid="portal-sync-status">
-                  {portalSyncStatusLabel(status)}
+          {s !== null &&
+            (connected ? (
+              <p className="mt-1 text-[12px] text-ink-muted" data-testid="portal-sync-status-line">
+                <span
+                  className={cn("font-semibold", s.is_enabled ? "text-leaf" : "text-ink-muted")}
+                  data-testid="portal-sync-status"
+                >
+                  {s.is_enabled ? "Đang bật" : "Đang tắt"}
                 </span>
-                {s.configured && (
-                  <>
-                    {" "}
-                    · {intervalLabel(s.interval_hours)} · {publishModeLabel(s.publish_mode)} ·{" "}
-                    <CategoryCountPending />
-                  </>
-                )}
+                {" · "}
+                <CategoryCountPending />
+                {" · "}
+                {intervalLabel(s.interval_hours)}
+                {" · "}
+                {publishModeLabel(s.publish_mode)}
               </p>
-              {portalSyncStatusExplainer(status) !== "" && <p className="ghi-chu">{portalSyncStatusExplainer(status)}</p>}
-              {/* Review mode puts every import in `Chờ duyệt`; the way to that queue is one press. No count:
-                  the list route has no total, and a number read off one page would be wrong. */}
-              {showPendingReview !== undefined && s.configured && s.publish_mode === PUBLISH_MODE_REVIEW && (
-                <p>
-                  <button type="button" className="nut-phu" onClick={showPendingReview}>
-                    {SHOW_PENDING_LABEL}
-                  </button>
-                </p>
-              )}
-            </>
-          )}
+            ) : (
+              <p className="mt-1 text-[12px] text-ink-muted">{NOT_CONNECTED}</p>
+            ))}
 
-          {runs !== null && runs.ok && <LastRun run={latest} />}
+          {latest !== undefined && <LastRun run={latest} />}
+          {runs !== null && !runs.ok && (
+            <p className="thong-bao-loi mt-1" role="alert">
+              {runs.thongBao}
+            </p>
+          )}
+          {/* Why `Đồng bộ ngay` is off (a run in flight, no platform key) — only where that button is drawn. Not a
+              visible line (the prototype draws none): the button's accessible description, and its `title`. */}
+          {canEdit && connected && blocked !== null && (
+            <p className="an-thi-giac" id="portal-sync-run-blocked">
+              {blocked}
+            </p>
+          )}
         </div>
 
-        <div className="cum-nut flex flex-wrap items-center gap-2">
-          {canEdit && (
-            <>
+        {canEdit && (
+          <div className="flex items-center gap-2">
+            {connected && (
               <Button
                 type="button"
                 variant="secondary"
                 size="sm"
                 disabled={runDisabled}
+                aria-describedby={blocked !== null ? "portal-sync-run-blocked" : undefined}
+                title={blocked ?? undefined}
                 icon={
                   starting ? (
-                    <LoaderCircle aria-hidden="true" focusable="false" className="animate-spin" />
+                    <LoaderCircle aria-hidden="true" focusable="false" className="size-3.5 animate-spin" />
                   ) : (
-                    <RefreshCw aria-hidden="true" focusable="false" />
+                    <RefreshCw aria-hidden="true" focusable="false" className="size-3.5" />
                   )
                 }
                 onClick={runNow}
               >
                 {RUN_NOW_LABEL}
               </Button>
-              <Button
-                type="button"
-                variant="primary"
-                size="sm"
-                aria-haspopup="dialog"
-                aria-expanded={configOpen}
-                disabled={s === null}
-                onClick={() => setConfigOpen(true)}
-              >
-                {CONFIGURE_LABEL}
-              </Button>
-            </>
-          )}
-          <Button type="button" variant="ghost" size="sm" onClick={reloadAll}>
-            {RELOAD_LABEL}
-          </Button>
-        </div>
+            )}
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              aria-haspopup="dialog"
+              aria-expanded={configOpen}
+              disabled={s === null}
+              onClick={() => setConfigOpen(true)}
+            >
+              {connected ? CONFIGURE_LABEL : CONNECT_LABEL}
+            </Button>
+          </div>
+        )}
       </div>
 
-      {runs !== null && !runs.ok && (
-        <p className="thong-bao-loi" role="alert">
-          {runs.thongBao}
-        </p>
-      )}
-      {canEdit && blocked !== null && s !== null && (
-        <p className="ghi-chu" id="portal-sync-run-blocked">
-          {blocked}
-        </p>
-      )}
-      {startMessage !== null && (
-        <p role={startMessage.ok ? "status" : "alert"} className={startMessage.ok ? undefined : "thong-bao-loi"}>
-          {startMessage.text}
-          {startMessage.wait !== undefined && (
-            <span className="dong-phu" data-testid="portal-sync-retry-wait">
-              {startMessage.wait}
-            </span>
-          )}
-        </p>
-      )}
-      {poll !== null && poll.left <= 0 && <p role="status">{POLL_GAVE_UP}</p>}
-
-      {runs !== null && runs.ok && runs.duLieu.items.length > 0 && <RunHistory runs={runs.duLieu.items} />}
-
       {canEdit && configOpen && s !== null && (
-        <OverlayDialog titleId="portal-sync-config-title" onDismiss={() => setConfigOpen(false)}>
-          <div className="dau-khoi-chi-tiet">
-            <h3 id="portal-sync-config-title">{PORTAL_SYNC_TITLE}</h3>
-          </div>
+        <OverlayDialog
+          titleId="portal-sync-config-title"
+          onDismiss={() => setConfigOpen(false)}
+          className={CONFIG_DIALOG_CLASS}
+        >
           <PortalSyncConfig
             settings={s}
             api={api}
@@ -367,87 +362,59 @@ export function PortalSyncCard({
   );
 }
 
-/** §3's `Chạy lần cuối {HH:mm dd/MM/yyyy}` + outcome + counts, and the red error block. */
-export function LastRun({ run }: { run: comms_portalRunOut | undefined }) {
-  if (run === undefined) return <p className="ghi-chu">{NO_RUN_YET}</p>;
+/**
+ * The prototype's last-run line (`ContentSourcePanel.tsx:131-149`): `Chạy lần cuối {dd/MM/yyyy HH:mm}` ·
+ * `{n} tin mới` · `bỏ qua {n}` · the errors in red. From the newest run of the history route — the settings
+ * carry only `last_run_at`, not the counts.
+ *
+ * A RUN STILL GOING HAS NO COUNTS YET: it says `Đang chạy` instead of a `0 tin mới` that would read as a
+ * finished run that found nothing.
+ */
+export function LastRun({ run }: { run: comms_portalRunOut }) {
   return (
-    <div data-testid="portal-sync-last-run">
-      <p>
-        Chạy lần cuối {nhanMoc(run.started_at)}{" "}
-        <span className={outcomeChipClass(run.outcome)}>{outcomeLabel(run.outcome)}</span>
-        {!runIsUnfinished(run) && <> · {runCountsLine(run)}</>}
-      </p>
-      <RunErrors run={run} />
-    </div>
+    <p
+      className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-ink-muted"
+      data-testid="portal-sync-last-run"
+    >
+      <span>Chạy lần cuối {run.started_at === null ? DAU_GACH : formatVietnamDateTime(run.started_at)}</span>
+      {runIsUnfinished(run) ? (
+        <span>{outcomeLabel(run.outcome)}</span>
+      ) : (
+        <>
+          <span className="flex items-center gap-1 text-leaf">
+            <CheckCircle2 aria-hidden="true" focusable="false" className="size-3" />
+            {run.imported_count} tin mới
+          </span>
+          <span>bỏ qua {skippedCount(run)}</span>
+          {run.error_summary.length > 0 && (
+            <span className="flex items-center gap-1 font-semibold text-danger" data-testid="portal-sync-run-errors">
+              <TriangleAlert aria-hidden="true" focusable="false" className="size-3" />
+              {run.error_summary.map(runErrorLine).join("; ")}
+            </span>
+          )}
+        </>
+      )}
+    </p>
   );
 }
 
-function RunErrors({ run }: { run: comms_portalRunOut }) {
-  if (run.error_summary.length === 0) return null;
-  return (
-    <ul className="thong-bao-loi" aria-label="Lỗi của lượt đồng bộ">
-      {run.error_summary.map((e, i) => (
-        <li key={`${e.category_external_id}|${e.error}|${i}`}>{runErrorLine(e)}</li>
-      ))}
-    </ul>
-  );
-}
-
-/** `Lịch sử đồng bộ` — the newest page of runs, collapsed by default. */
-export function RunHistory({ runs }: { runs: readonly comms_portalRunOut[] }) {
-  return (
-    <details>
-      <summary>
-        {HISTORY_LABEL} ({runs.length} lượt gần nhất)
-      </summary>
-      <div className="bang-cuon">
-        <table className="bang-can-bo">
-          <caption className="an-thi-giac">{HISTORY_LABEL}</caption>
-          <thead>
-            <tr>
-              <th scope="col">Bắt đầu</th>
-              <th scope="col">Kiểu chạy</th>
-              <th scope="col">Người chạy</th>
-              <th scope="col">Kết quả</th>
-              <th scope="col">Số tin</th>
-              <th scope="col">Lỗi</th>
-            </tr>
-          </thead>
-          <tbody>
-            {runs.map((r) => (
-              <tr key={r.id}>
-                <td>
-                  {nhanMoc(r.started_at)}
-                  {r.finished_at !== null && <span className="dong-phu">xong {nhanMoc(r.finished_at)}</span>}
-                </td>
-                <td>{triggerLabel(r.trigger_kind)}</td>
-                {/* `system` or the staff BUSINESS code (rule 6, invariant 8) — no name, no internal id. */}
-                <td>{r.actor === "" ? DAU_GACH : r.actor === "system" ? "Hệ thống" : r.actor}</td>
-                <td>
-                  <span className={outcomeChipClass(r.outcome)}>{outcomeLabel(r.outcome)}</span>
-                </td>
-                <td>{runIsUnfinished(r) ? DAU_GACH : `đọc ${r.fetched_count} · ${runCountsLine(r)}`}</td>
-                <td>
-                  {r.error_summary.length === 0 ? (
-                    DAU_GACH
-                  ) : (
-                    <ul>
-                      {r.error_summary.map((e, i) => (
-                        <li key={`${e.category_external_id}|${e.error}|${i}`}>{runErrorLine(e)}</li>
-                      ))}
-                    </ul>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </details>
-  );
-}
-
-/** The `Cấu hình` section: the settings form, then the category picker (saved separately). */
+/**
+ * The `Cấu hình` dialog's body — the prototype's `SourceDialog` (`ContentSourcePanel.tsx:313-566`): title and
+ * one sentence, ONE scrolling column (address, key, `Chuyên mục lấy về`, the three numbers, the checkbox box),
+ * then `Huỷ` · `Lưu cấu hình`.
+ *
+ * ONE SAVE BUTTON, TWO ROUTES, IN THIS ORDER: `PUT settings`, then `PUT categories` — the latter only when
+ * the tree was read and something in it changed (`categoriesBody` sends only the changes). The first refusal
+ * stops the chain and is shown verbatim. If the settings were written and the categories refused, the card
+ * already shows the new settings and the dialog stays open on the categories' sentence: a retry re-sends the
+ * same settings (a PUT of the whole form, harmless) and then the categories.
+ *
+ * A CHANGED ADDRESS SENDS NO CATEGORIES: the tree on screen was read from the OLD portal, and its ids mean
+ * nothing to the new one. Reopening `Cấu hình` asks the new portal.
+ *
+ * A FAILED SAVE KEEPS THE FORM — and the typed key — so the officer does not paste it twice after fixing
+ * the address.
+ */
 export function PortalSyncConfig({
   settings,
   api,
@@ -459,249 +426,24 @@ export function PortalSyncConfig({
   close: () => void;
   saved: (s: comms_portalSyncSettingsOut) => void;
 }) {
-  // Counts successful saves. It keys the form, so each save rebuilds it from the server's answer: the
-  // key box empties and the hints follow `api_key_set`. A failed save keeps the form — and the typed
-  // key — so the officer does not paste it twice after fixing the address.
-  const [saves, setSaves] = useState(0);
-  return (
-    <div id="portal-sync-config">
-      {saves > 0 && <p role="status">{SETTINGS_SAVED}</p>}
-      <SettingsFormView
-        key={saves}
-        settings={settings}
-        api={api}
-        close={close}
-        saved={(next) => {
-          setSaves((n) => n + 1);
-          saved(next);
-        }}
-      />
-      {settings.configured ? (
-        // Re-asked after each save: a new address is a different portal.
-        <CategoryPicker api={api} key={`${saves}|${settings.api_url}`} />
-      ) : (
-        <p className="ghi-chu">{CATEGORIES_NEED_SETTINGS}</p>
-      )}
-    </div>
-  );
-}
-
-function SettingsFormView({
-  settings,
-  api,
-  close,
-  saved,
-}: {
-  settings: comms_portalSyncSettingsOut;
-  api: PortalSyncApi;
-  close: () => void;
-  saved: (s: comms_portalSyncSettingsOut) => void;
-}) {
   const [form, setForm] = useState<SettingsForm>(() => formFromSettings(settings));
-  const [sending, setSending] = useState(false);
-  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
-
-  const formError = settingsFormError(settings, form);
-  const keyRequired = keyRequirement(settings, form) !== null;
-  // Without the platform key the server answers 503 and writes nothing — the button says so up front.
-  const canSave = formError === null && settings.encryption_configured && !sending;
-
-  function submit(e: FormEvent): void {
-    e.preventDefault();
-    if (!canSave) return;
-    setSending(true);
-    api.saveSettings(settingsBody(form)).then((r) => {
-      setSending(false);
-      if (!r.ok) {
-        // 422 api_key_required(_for_new_url), 400 url rule, 503 encryption — verbatim. The typed key
-        // stays in the box so the officer does not paste it twice after fixing the address.
-        setMessage({ ok: false, text: r.thongBao });
-        return;
-      }
-      saved(r.duLieu);
-    });
-  }
-
-  return (
-    <form className="form-danh-muc" onSubmit={submit} aria-labelledby="portal-sync-form-title">
-      <h4 id="portal-sync-form-title">{PORTAL_SYNC_TITLE}</h4>
-      <p className="ghi-chu">{PORTAL_SYNC_DESCRIPTION}</p>
-
-      <div className="o-nhap">
-        <label htmlFor="portal-sync-api-url">Địa chỉ API của Cổng *</label>
-        <input
-          id="portal-sync-api-url"
-          name="portal-sync-api-url"
-          type="url"
-          inputMode="url"
-          value={form.api_url}
-          placeholder="https://"
-          autoComplete="off"
-          maxLength={2048}
-          aria-describedby="portal-sync-api-url-hint"
-          onChange={(e) => setForm({ ...form, api_url: e.target.value })}
-        />
-        <p className="ghi-chu" id="portal-sync-api-url-hint">
-          {API_URL_HINT}
-        </p>
-      </div>
-
-      <div className="o-nhap">
-        <label htmlFor="portal-sync-api-key">Mã bảo mật{keyRequired ? " *" : ""}</label>
-        {/* WRITE-ONLY: never prefilled, `new-password` so no browser offers a saved password here. */}
-        <input
-          id="portal-sync-api-key"
-          name="portal-sync-api-key"
-          type="password"
-          value={form.api_key}
-          placeholder={keyRequired ? "" : "Giữ nguyên mã cũ"}
-          autoComplete="new-password"
-          spellCheck={false}
-          maxLength={512}
-          aria-describedby="portal-sync-api-key-hint"
-          onChange={(e) => setForm({ ...form, api_key: e.target.value })}
-        />
-        <p className="ghi-chu" id="portal-sync-api-key-hint" data-testid="portal-sync-key-hint">
-          {keyHint(settings, form)}
-        </p>
-      </div>
-
-      <fieldset className="o-nhap">
-        <legend>Chế độ đăng</legend>
-        {PUBLISH_MODE_OPTIONS.map((o) => (
-          <div key={o.value}>
-            <label htmlFor={`portal-sync-mode-${o.value}`}>
-              <input
-                id={`portal-sync-mode-${o.value}`}
-                type="radio"
-                name="portal-sync-mode"
-                value={o.value}
-                checked={form.publish_mode === o.value}
-                onChange={() => setForm({ ...form, publish_mode: o.value })}
-              />{" "}
-              {o.label}
-            </label>
-            <p className="ghi-chu">{o.explainer}</p>
-          </div>
-        ))}
-      </fieldset>
-
-      {/* Label above, 40px, ChevronDown — the same select as every other on this screen (owner, 02/10/2026). */}
-      <Field label="Nhịp đồng bộ" htmlFor="portal-sync-interval" kind="select" icon={Clock} grow="auto" className="mb-4 max-w-sm">
-        <select
-          id="portal-sync-interval"
-          value={String(form.interval_hours)}
-          onChange={(e) => setForm({ ...form, interval_hours: Number.parseInt(e.target.value, 10) })}
-        >
-          {INTERVAL_OPTIONS.map((h) => (
-            <option key={h} value={String(h)}>
-              {intervalLabel(h)}
-            </option>
-          ))}
-        </select>
-      </Field>
-
-      <div className="o-nhap">
-        <label htmlFor="portal-sync-window">Lấy tin đăng trong bao nhiêu ngày gần nhất</label>
-        <input
-          id="portal-sync-window"
-          type="number"
-          inputMode="numeric"
-          min={1}
-          max={WINDOW_DAYS_MAX}
-          step={1}
-          value={form.window_days}
-          aria-describedby="portal-sync-window-hint"
-          onChange={(e) => setForm({ ...form, window_days: e.target.value })}
-        />
-        <p className="ghi-chu" id="portal-sync-window-hint">
-          {WINDOW_DAYS_HINT}
-        </p>
-      </div>
-
-      <div className="o-nhap">
-        <label htmlFor="portal-sync-max-items">Số tin tối đa mỗi lượt</label>
-        <input
-          id="portal-sync-max-items"
-          type="number"
-          inputMode="numeric"
-          min={1}
-          max={MAX_ITEMS_PER_RUN_MAX}
-          step={1}
-          value={form.max_items_per_run}
-          aria-describedby="portal-sync-max-items-hint"
-          onChange={(e) => setForm({ ...form, max_items_per_run: e.target.value })}
-        />
-        <p className="ghi-chu" id="portal-sync-max-items-hint">
-          {MAX_ITEMS_HINT}
-        </p>
-      </div>
-
-      <div className="o-nhap">
-        <label htmlFor="portal-sync-credit">
-          <input
-            id="portal-sync-credit"
-            type="checkbox"
-            checked={form.keep_source_credit}
-            onChange={(e) => setForm({ ...form, keep_source_credit: e.target.checked })}
-          />{" "}
-          Giữ dòng ghi nguồn “Nguồn: …” của Cổng trong bài
-        </label>
-      </div>
-
-      <div className="o-nhap">
-        <label htmlFor="portal-sync-enabled">
-          <input
-            id="portal-sync-enabled"
-            type="checkbox"
-            checked={form.is_enabled}
-            onChange={(e) => setForm({ ...form, is_enabled: e.target.checked })}
-          />{" "}
-          Bật đồng bộ theo lịch
-        </label>
-      </div>
-
-      {!settings.encryption_configured && (
-        <p className="thong-bao-loi" role="alert">
-          {portalSyncStatusExplainer("missing-encryption")}
-        </p>
-      )}
-      {formError !== null && (
-        <p className="ghi-chu" data-testid="portal-sync-form-error">
-          {formError}
-        </p>
-      )}
-      {message !== null && (
-        <p role={message.ok ? "status" : "alert"} className={message.ok ? undefined : "thong-bao-loi"}>
-          {message.text}
-        </p>
-      )}
-
-      <div className="cum-nut">
-        <button type="button" className="nut-phu" disabled={sending} onClick={close}>
-          Đóng
-        </button>
-        <button type="submit" className="nut-chinh" disabled={!canSave}>
-          Lưu cấu hình
-        </button>
-      </div>
-    </form>
-  );
-}
-
-/** The live category tree with ticks and a kind per ticked category; `Lưu chuyên mục` saves only changes. */
-export function CategoryPicker({ api }: { api: PortalSyncApi }) {
-  const [loaded, setLoaded] = useState<CategoryTreeResult | null>(null);
+  const [tree, setTree] = useState<CategoryTreeResult | null>(null);
   const [initial, setInitial] = useState<CategoryChoice[]>([]);
   const [choices, setChoices] = useState<CategoryChoice[]>([]);
   const [sending, setSending] = useState(false);
-  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  // The client-side refusal of the last press, drawn under its own box.
+  const [refusal, setRefusal] = useState<{ field: SettingsField; text: string } | null>(null);
+  // The server's sentence of the last press — 422 api_key_required(_for_new_url), 400 url rule, 503
+  // encryption, 422 too_many_categories — verbatim.
+  const [serverError, setServerError] = useState<string | null>(null);
 
+  // Only a configured commune has a key the server can spend on the portal; otherwise nothing is asked.
   useEffect(() => {
+    if (!settings.configured) return;
     let gone = false;
     api.getCategories().then((r) => {
       if (gone) return;
-      setLoaded(r);
+      setTree(r);
       if (r.ok) {
         const c = choicesFromTree(r.duLieu);
         setInitial(c);
@@ -711,176 +453,486 @@ export function CategoryPicker({ api }: { api: PortalSyncApi }) {
     return () => {
       gone = true;
     };
-  }, [api]);
+  }, [api, settings.configured]);
 
-  function update(id: string, change: Partial<CategoryChoice>): void {
-    setMessage(null);
-    setChoices((cs) => cs.map((c) => (c.external_id === id ? { ...c, ...change } : c)));
+  const keyRequired = keyRequirement(settings, form) !== null;
+  const errorOf = (field: SettingsField) => (refusal !== null && refusal.field === field ? refusal.text : undefined);
+
+  function edit(next: SettingsForm): void {
+    setForm(next);
+    setRefusal(null);
   }
 
-  function tick(c: CategoryChoice, selected: boolean): void {
-    update(c.external_id, {
-      selected,
-      target_kind: selected && c.target_kind === "" ? DEFAULT_TARGET_KIND : c.target_kind,
-    });
-  }
-
-  function setAll(selected: boolean): void {
-    setMessage(null);
-    // Ticking all stops at the ceiling (30); unticking all clears the portal's rows.
-    setChoices((cs) =>
-      selected
-        ? selectAllUpToLimit(cs, DEFAULT_TARGET_KIND)
-        : cs.map((c) => (c.on_portal ? { ...c, selected: false } : c)),
-    );
-  }
-
-  function save(e: FormEvent): void {
+  function submit(e: FormEvent): void {
     e.preventDefault();
-    const body = categoriesBody(initial, choices);
-    if (body.categories.length === 0) {
-      setMessage({ ok: false, text: CATEGORIES_NOTHING_CHANGED });
-      return;
-    }
-    setSending(true);
-    api.saveCategories(body).then((r) => {
+    // Without the platform key the server answers 503 and writes nothing — the button says so up front.
+    if (sending || !settings.encryption_configured) return;
+    const urlChanged = form.api_url.trim() !== settings.api_url.trim();
+    const treeUsable = tree !== null && tree.ok && !urlChanged;
+    const selected = !settings.configured ? 0 : treeUsable ? selectedCount(choices) : null;
+    const err = settingsFormError(settings, form, selected);
+    setRefusal(err);
+    setServerError(null);
+    if (err !== null) return;
+
+    const catBody = treeUsable ? categoriesBody(initial, choices) : null;
+    const finish = () => {
       setSending(false);
+      toast.success(SETTINGS_SAVED);
+      close();
+    };
+    setSending(true);
+    api.saveSettings(settingsBody(form)).then((r) => {
       if (!r.ok) {
-        setMessage({ ok: false, text: r.thongBao });
+        setSending(false);
+        setServerError(r.thongBao);
         return;
       }
-      // What was just saved is the new baseline: a second press sends nothing.
-      setInitial(choices);
-      setMessage({ ok: true, text: CATEGORIES_SAVED });
+      saved(r.duLieu);
+      if (catBody === null || catBody.categories.length === 0) {
+        finish();
+        return;
+      }
+      api.saveCategories(catBody).then((c) => {
+        if (!c.ok) {
+          setSending(false);
+          setServerError(c.thongBao);
+          return;
+        }
+        // What was just saved is the new baseline, should the close be refused.
+        setInitial(choices);
+        finish();
+      });
     });
   }
 
-  if (loaded === null) return <p role="status">{CATEGORIES_LOADING}</p>;
-  if (!loaded.ok) {
-    // 409 not configured, 502 portal_<class> — the server's sentence, which never quotes the portal.
-    // 403: the same sentence, plus which right the tree needs (D3). Only this block; the form above stays.
-    return (
-      <div data-testid="portal-sync-categories-refused">
-        {loaded.forbidden === true && <p className="ghi-chu">{CATEGORIES_NEED_UPDATE}</p>}
-        <p className="thong-bao-loi" role="alert">
-          {loaded.thongBao}
-        </p>
-      </div>
-    );
-  }
-
-  const rows = orderAsTree(choices);
-  // A HINT, not the rule: unticked boxes go off at 30 and the server's 422 is what refuses.
-  const atLimit = selectedCount(choices) >= SELECTED_CATEGORIES_MAX;
-
   return (
-    <form className="form-danh-muc" onSubmit={save} aria-labelledby="portal-sync-categories-title">
-      <h4 id="portal-sync-categories-title">
-        Chuyên mục lấy về <span className="dong-phu">{selectedCountLabel(choices)}</span>
-      </h4>
-      <p className="ghi-chu">
-        Danh sách hỏi trực tiếp Cổng mỗi lần mở cấu hình. Mỗi chuyên mục đã chọn về sổ thành một loại nội
-        dung: Tin tức, Sự kiện hoặc Thông báo.
-      </p>
+    <form id="portal-sync-config" className="m-0" onSubmit={submit} noValidate aria-labelledby="portal-sync-config-title">
+      <div className="mb-4 flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <h3 id="portal-sync-config-title" className="m-0 text-lg leading-snug font-semibold text-navy">
+            {PORTAL_SYNC_TITLE}
+          </h3>
+          <p className="m-0 mt-1 text-[13px] text-ink-muted">{PORTAL_SYNC_DESCRIPTION}</p>
+        </div>
+        <IconButton type="button" label={CLOSE_LABEL} className="-mt-1 -mr-2 min-h-0" disabled={sending} onClick={close}>
+          <X aria-hidden="true" focusable="false" />
+        </IconButton>
+      </div>
 
-      {rows.length === 0 && <p className="trang-thai-rong">{CATEGORIES_EMPTY}</p>}
-      {atLimit && (
-        <p className="ghi-chu" role="status" data-testid="portal-sync-categories-limit">
-          {CATEGORIES_LIMIT_REACHED}
-        </p>
-      )}
+      <div className="max-h-[62vh] space-y-4 overflow-y-auto pr-1">
+        <Field
+          label="Địa chỉ API của Cổng"
+          htmlFor="portal-sync-api-url"
+          required
+          grow="auto"
+          error={errorOf("api_url")}
+        >
+          <input
+            id="portal-sync-api-url"
+            name="portal-sync-api-url"
+            type="url"
+            inputMode="url"
+            value={form.api_url}
+            placeholder={API_URL_PLACEHOLDER}
+            autoComplete="off"
+            maxLength={2048}
+            onChange={(e) => edit({ ...form, api_url: e.target.value })}
+          />
+        </Field>
 
-      {rows.length > 0 && (
-        <>
-          <div className="cum-nut">
-            <button type="button" className="nut-phu" disabled={atLimit} onClick={() => setAll(true)}>
-              Chọn tất cả
-            </button>
-            <button type="button" className="nut-phu" onClick={() => setAll(false)}>
-              Bỏ chọn
-            </button>
-          </div>
-          <ul className="category-list" aria-label="Cây chuyên mục của Cổng">
-            {rows.map(({ choice: c, depth }) => {
-              const tickId = `portal-category-${c.external_id}`;
-              return (
-                // The indent is the tree's depth, so it cannot be a class; same shape as `bang-thu-chi.tsx`.
-                <li
-                  key={c.external_id}
-                  className="category-row"
-                  style={{ paddingInlineStart: `${depth * 1.5}rem` }}
-                >
-                  <label htmlFor={tickId}>
-                    <input
-                      id={tickId}
-                      type="checkbox"
-                      checked={c.selected}
-                      disabled={!c.selected && atLimit}
-                      onChange={(e) => tick(c, e.target.checked)}
-                    />{" "}
-                    {c.name}
-                  </label>
-                  {!c.on_portal && <span className="chip chip-ngung"> {MISSING_ON_PORTAL}</span>}
-                  {c.selected && (
-                    // Field with the label hidden: the row's name already says which category this is,
-                    // and `aria-label` stays the select's accessible name, word for word.
-                    <Field
-                      label={`Loại nội dung của chuyên mục ${c.name}`}
-                      htmlFor={`${tickId}-kind`}
-                      hideLabel
-                      kind="select"
-                      icon={Shapes}
-                      grow="auto"
-                      className="w-full max-w-xs"
-                    >
-                      <select
-                        id={`${tickId}-kind`}
-                        aria-label={`Loại nội dung của chuyên mục ${c.name}`}
-                        value={c.target_kind === "" ? DEFAULT_TARGET_KIND : c.target_kind}
-                        onChange={(e) => update(c.external_id, { target_kind: e.target.value })}
-                      >
-                        {TARGET_KIND_OPTIONS.map((o) => (
-                          <option key={o.value} value={o.value}>
-                            {o.label}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </>
-      )}
+        <Field
+          label="Mã bảo mật"
+          htmlFor="portal-sync-api-key"
+          required={keyRequired}
+          grow="auto"
+          hint={
+            <span data-testid="portal-sync-key-hint">
+              {keyRequirement(settings, form) === null ? <KeyInUseHint /> : keyHint(settings, form)}
+            </span>
+          }
+          error={errorOf("api_key")}
+        >
+          {/* WRITE-ONLY: never prefilled. `new-password`, not the prototype's `off`: browsers ignore `off` on a
+              password box and would offer the officer's OWN saved login here — which would then be sent as
+              the commune's portal key. */}
+          <input
+            id="portal-sync-api-key"
+            name="portal-sync-api-key"
+            type="password"
+            value={form.api_key}
+            placeholder={keyRequired ? "" : KEY_KEEP_PLACEHOLDER}
+            autoComplete="new-password"
+            spellCheck={false}
+            maxLength={512}
+            onChange={(e) => edit({ ...form, api_key: e.target.value })}
+          />
+        </Field>
 
-      {message !== null && (
-        <p role={message.ok ? "status" : "alert"} className={message.ok ? undefined : "thong-bao-loi"}>
-          {message.text}
-        </p>
-      )}
+        <CategoryPicker
+          configured={settings.configured}
+          tree={tree}
+          choices={choices}
+          setChoices={(next) => {
+            setChoices(next);
+            setRefusal(null);
+          }}
+          error={errorOf("categories")}
+        />
 
-      <div className="cum-nut">
-        <button type="submit" className="nut-chinh" disabled={sending || rows.length === 0}>
-          Lưu chuyên mục
-        </button>
+        {/* `sm:` so the three boxes stack at 320px instead of squeezing a select to a third of the screen. */}
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label="Nhịp đồng bộ" htmlFor="portal-sync-interval" kind="select" grow="auto">
+            <select
+              id="portal-sync-interval"
+              value={String(form.interval_hours)}
+              onChange={(e) => edit({ ...form, interval_hours: Number.parseInt(e.target.value, 10) })}
+            >
+              {/* The prototype's set (`intervalOptions`); its `Mỗi 15 phút` disabled with a "?" — the server
+                  counts whole hours. The reason is the PHAN_CHUA_DUNG entry, on hover. */}
+              {intervalOptions(settings.interval_hours).map((h) => (
+                <IntervalOption key={h} hours={h} />
+              ))}
+            </select>
+          </Field>
+          <Field
+            label="Chỉ lấy tin trong"
+            htmlFor="portal-sync-window"
+            grow="auto"
+            hint={WINDOW_DAYS_HINT}
+            error={errorOf("window_days")}
+          >
+            <input
+              id="portal-sync-window"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={WINDOW_DAYS_MAX}
+              step={1}
+              value={form.window_days}
+              onChange={(e) => edit({ ...form, window_days: e.target.value })}
+            />
+          </Field>
+          <Field
+            label="Tối đa mỗi lần"
+            htmlFor="portal-sync-max-items"
+            grow="auto"
+            hint={MAX_ITEMS_HINT}
+            error={errorOf("max_items_per_run")}
+          >
+            <input
+              id="portal-sync-max-items"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={MAX_ITEMS_PER_RUN_MAX}
+              step={1}
+              value={form.max_items_per_run}
+              onChange={(e) => edit({ ...form, max_items_per_run: e.target.value })}
+            />
+          </Field>
+        </div>
+
+        <div className="space-y-2 rounded-[10px] border border-line p-3">
+          <label htmlFor="portal-sync-enabled" className={CHECK_ROW}>
+            <input
+              id="portal-sync-enabled"
+              type="checkbox"
+              className={CHECKBOX}
+              checked={form.is_enabled}
+              onChange={(e) => edit({ ...form, is_enabled: e.target.checked })}
+            />
+            {ENABLED_LABEL}
+          </label>
+          <label htmlFor="portal-sync-direct" className={CHECK_ROW}>
+            <input
+              id="portal-sync-direct"
+              type="checkbox"
+              className={CHECKBOX}
+              checked={form.publish_mode === PUBLISH_MODE_DIRECT}
+              onChange={(e) =>
+                edit({ ...form, publish_mode: e.target.checked ? PUBLISH_MODE_DIRECT : PUBLISH_MODE_REVIEW })
+              }
+            />
+            {PUBLISH_DIRECT_LABEL}
+          </label>
+          <DownloadImagesPending />
+          <label htmlFor="portal-sync-credit" className={CHECK_ROW}>
+            <input
+              id="portal-sync-credit"
+              type="checkbox"
+              className={CHECKBOX}
+              checked={form.keep_source_credit}
+              onChange={(e) => edit({ ...form, keep_source_credit: e.target.checked })}
+            />
+            {KEEP_SOURCE_LABEL}
+          </label>
+        </div>
+
+        {!settings.encryption_configured && (
+          <p className="m-0 text-[12px] font-medium text-danger" role="alert">
+            {portalSyncStatusExplainer("missing-encryption")}
+          </p>
+        )}
+        {serverError !== null && (
+          <p className="m-0 text-[12px] font-medium text-danger" role="alert">
+            {serverError}
+          </p>
+        )}
+      </div>
+
+      <div className="mt-4 flex justify-end gap-2">
+        <Button type="button" variant="secondary" disabled={sending} onClick={close}>
+          {CANCEL_LABEL}
+        </Button>
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={sending || !settings.encryption_configured}
+          aria-busy={sending || undefined}
+          icon={sending ? <LoaderCircle aria-hidden="true" focusable="false" className="animate-spin" /> : undefined}
+        >
+          {SAVE_CONFIG_LABEL}
+        </Button>
       </div>
     </form>
   );
 }
 
 /**
- * §3's `{n} chuyên mục` on the meta line, as a disabled "?" placeholder (ADR 0068 §14, MA-02) — the
- * reason is the single `PHAN_CHUA_DUNG` entry, passed as-is. A child component because `PendingMarker`
- * uses hooks.
+ * `Chuyên mục lấy về` — the prototype's box (`ContentSourcePanel.tsx:353-477`): the counter and `Chọn tất cả`
+ * · `Bỏ chọn` once the list is in, then the portal's categories GROUPED BY PARENT with `chọn cả mục` /
+ * `bỏ cả mục` per group, and a kind select beside each ticked one. Nothing is saved from here: the dialog's
+ * one `Lưu cấu hình` sends the changes.
+ *
+ * THE 30 CEILING: unticked boxes go off at 30 and `Chọn tất cả` stops there; the server's 422 is what
+ * refuses (`CATEGORIES_LIMIT_REACHED` is a hint).
+ */
+export function CategoryPicker({
+  configured,
+  tree,
+  choices,
+  setChoices,
+  error,
+}: {
+  configured: boolean;
+  /** `null` while the portal is being asked. */
+  tree: CategoryTreeResult | null;
+  choices: readonly CategoryChoice[];
+  setChoices: (next: CategoryChoice[]) => void;
+  /** `Chọn ít nhất một chuyên mục…` after a press of `Lưu cấu hình`. */
+  error?: string;
+}) {
+  const listed = configured && tree !== null && tree.ok && choices.length > 0;
+  // A HINT, not the rule: unticked boxes go off at 30 and the server's 422 is what refuses.
+  const atLimit = selectedCount(choices) >= SELECTED_CATEGORIES_MAX;
+
+  function update(id: string, change: Partial<CategoryChoice>): void {
+    setChoices(choices.map((c) => (c.external_id === id ? { ...c, ...change } : c)));
+  }
+
+  return (
+    <div className="rounded-[10px] border border-line p-3" data-testid="portal-sync-categories">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <p className="m-0 text-[12.5px] font-semibold text-navy">{CATEGORIES_TITLE}</p>
+        {listed && (
+          <>
+            <span className="text-[11.5px] text-ink-muted tabular-nums">{selectedCountLabel(choices)}</span>
+            <div className="ml-auto flex gap-1.5">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={atLimit}
+                onClick={() => setChoices(selectAllUpToLimit(choices, DEFAULT_TARGET_KIND))}
+              >
+                Chọn tất cả
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                // Unticks the portal's rows; a stored row the portal no longer lists is unticked by hand.
+                onClick={() => setChoices(choices.map((c) => (c.on_portal ? { ...c, selected: false } : c)))}
+              >
+                Bỏ chọn
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+
+      {!configured ? (
+        <p className="m-0 text-[12px] text-ink-muted">{CATEGORIES_NEED_SETTINGS}</p>
+      ) : tree === null ? (
+        <>
+          <p role="status" className="an-thi-giac">
+            {CATEGORIES_LOADING}
+          </p>
+          <Skeleton className="h-24 w-full" />
+        </>
+      ) : !tree.ok ? (
+        tree.forbidden === true ? (
+          // 403: the account reads the register but may not spend the commune's portal key (D3). The
+          // server's sentence and the right it needs; the rest of the dialog keeps working.
+          <div data-testid="portal-sync-categories-refused">
+            <p className="m-0 text-[12px] text-ink-muted">{CATEGORIES_NEED_UPDATE}</p>
+            <p className="m-0 text-[12px] text-danger" role="alert">
+              {tree.thongBao}
+            </p>
+          </div>
+        ) : (
+          <p className="m-0 text-[12px] text-danger" role="alert">
+            {CATEGORIES_UNREACHABLE}
+          </p>
+        )
+      ) : choices.length === 0 ? (
+        <p className="m-0 text-[12px] text-ink-muted">{CATEGORIES_EMPTY}</p>
+      ) : (
+        <>
+          {atLimit && (
+            <p className="m-0 mb-2 text-[11.5px] text-ink-muted" role="status" data-testid="portal-sync-categories-limit">
+              {CATEGORIES_LIMIT_REACHED}
+            </p>
+          )}
+          <div className="max-h-72 space-y-1 overflow-y-auto" aria-label="Chuyên mục của Cổng" role="group">
+            {groupChoices(choices).map((g) => {
+              const ids = new Set(g.items.map((c) => c.external_id));
+              const all = g.items.every((c) => c.selected);
+              return (
+                <div key={g.key}>
+                  <div className="mt-2 mb-1 flex items-center gap-2 first:mt-0">
+                    <p className="m-0 text-[11px] font-semibold tracking-wide text-ink-muted uppercase">{g.name}</p>
+                    <button
+                      type="button"
+                      className="cursor-pointer border-0 bg-transparent p-0 [font-family:inherit] text-[11px] font-semibold text-navy hover:underline"
+                      aria-label={`${all ? "Bỏ cả mục" : "Chọn cả mục"} ${g.name}`}
+                      onClick={() => setChoices(pickMany(choices, ids, !all, DEFAULT_TARGET_KIND))}
+                    >
+                      {all ? "bỏ cả mục" : "chọn cả mục"}
+                    </button>
+                  </div>
+                  {g.items.map((c) => {
+                    const tickId = `portal-category-${c.external_id}`;
+                    return (
+                      <div key={c.external_id} className="flex items-center gap-2.5 py-0.5 pl-2 text-[12.5px]">
+                        <input
+                          id={tickId}
+                          type="checkbox"
+                          className={CHECKBOX}
+                          checked={c.selected}
+                          disabled={!c.selected && atLimit}
+                          aria-label={`Lấy chuyên mục ${c.name} thuộc ${g.name}`}
+                          onChange={(e) =>
+                            update(c.external_id, {
+                              selected: e.target.checked,
+                              target_kind:
+                                e.target.checked && c.target_kind === "" ? DEFAULT_TARGET_KIND : c.target_kind,
+                            })
+                          }
+                        />
+                        <label htmlFor={tickId} className="min-w-0 flex-1 truncate">
+                          {c.name}
+                        </label>
+                        {c.selected && (
+                          <select
+                            className="h-7 shrink-0 rounded-md border border-solid border-line bg-white px-2 text-[11.5px]"
+                            aria-label={`Loại nội dung của chuyên mục ${c.name}`}
+                            value={c.target_kind === "" ? DEFAULT_TARGET_KIND : c.target_kind}
+                            onChange={(e) => update(c.external_id, { target_kind: e.target.value })}
+                          >
+                            {TARGET_KIND_OPTIONS.map((o) => (
+                              <option key={o.value} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {error !== undefined && (
+        <p className="m-0 mt-2 text-[12px] font-medium text-danger" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * `Tải ảnh về kho của xã` and its note (prototype `ContentSourcePanel.tsx:535-545`), drawn disabled with a "?"
+ * (ADR 0068 §14): the settings contract has no such field, so the box could only lie. A child component
+ * because `PendingMarker` uses hooks.
+ */
+function DownloadImagesPending() {
+  return (
+    <>
+      <div className={cn(CHECK_ROW, "text-ink-muted")} data-pending="" aria-disabled="true">
+        <input id="portal-sync-download-images" type="checkbox" className={CHECKBOX} disabled />
+        <label htmlFor="portal-sync-download-images">Tải ảnh về kho của xã</label>
+        <PendingMarker info={pendingContentPart(DOWNLOAD_IMAGES_PART)} />
+      </div>
+      <p className="m-0 pl-7 text-[11px] text-ink-muted">{DOWNLOAD_IMAGES_NOTE}</p>
+    </>
+  );
+}
+
+/**
+ * §3's `{n} chuyên mục` on the status line, with a disabled "?" where the number would be (ADR 0068 §14,
+ * MA-02) — the reason is the `PHAN_CHUA_DUNG` entry, passed as-is. A child component because
+ * `PendingMarker` uses hooks.
  */
 function CategoryCountPending() {
-  const info = PHAN_CHUA_DUNG[0];
-  if (info === undefined) return null;
+  const info = pendingContentPart(PORTAL_CATEGORY_COUNT_PART);
   return (
-    <span className="inline-flex items-center gap-1 text-ink-400" aria-disabled="true" data-pending="">
-      Số chuyên mục
+    <span className="inline-flex items-center gap-1 align-middle" aria-disabled="true" data-pending="">
       <PendingMarker info={info} />
+      chuyên mục
+    </span>
+  );
+}
+
+/**
+ * One option of `Nhịp đồng bộ`. The prototype's 15-minute option sits between `Chỉ chạy khi bấm tay` and
+ * `Mỗi giờ`, disabled and marked "?": an `<option>` can hold no button, so the mark is text and the reason
+ * (the PHAN_CHUA_DUNG entry, as-is) is its `title`.
+ */
+function IntervalOption({ hours }: { hours: number }) {
+  const option = (
+    <option value={String(hours)}>
+      {intervalLabel(hours)}
+    </option>
+  );
+  if (hours !== 0) return option;
+  return (
+    <>
+      {option}
+      <option value="" disabled title={pendingContentPart(INTERVAL_15_MIN_PART).viSao} data-pending="">
+        {`${INTERVAL_15_MIN_LABEL} ?`}
+      </option>
+    </>
+  );
+}
+
+/**
+ * The prototype's configured key hint, `Đang dùng {hint}. Để trống nếu không đổi.`, with a disabled "?" in
+ * the `{hint}`'s place — the server returns `api_key_set` and nothing derived from the key. A child
+ * component because `PendingMarker` uses hooks.
+ */
+function KeyInUseHint() {
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1" data-pending="">
+      {KEY_IN_USE_PREFIX}
+      <PendingMarker info={pendingContentPart(KEY_IN_USE_PART)} />
+      {`. ${KEY_SAVED_HINT}`}
     </span>
   );
 }

@@ -1,11 +1,13 @@
 "use client";
 
-import { Eye, EyeOff, FolderTree, ListOrdered, Pencil, Trash2 } from "lucide-react";
+import { DownloadCloud, Link2, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
+import { PendingButton, PendingMarker } from "@/components/ui/pending-feature";
 import type { KetQua } from "@/lib/api/goi";
 import { cn } from "@/lib/cn";
 import type { UpdateCategoryIn } from "@/lib/api/noi-dung";
@@ -13,33 +15,33 @@ import type { comms_danhMucRa } from "@/lib/api/schema.gen";
 
 import {
   CATEGORY_DELETE_BUTTON,
+  CATEGORY_DELETED_TOAST,
   CATEGORY_DELETE_NOTE,
-  CATEGORY_EDIT_BUTTON,
-  CATEGORY_HIDDEN,
-  CATEGORY_HIDE_BUTTON,
-  CATEGORY_HIDE_EXPLAINER,
-  CATEGORY_PARENT_HINT,
+  CATEGORY_EMPTY,
+  CATEGORY_FROM_PORTAL_PART,
+  CATEGORY_IMPORT_NOTE,
+  CATEGORY_IMPORT_PART,
+  CATEGORY_ITEM_COUNT_PART,
   CATEGORY_REASON_LABEL,
-  CATEGORY_SHOW_BUTTON,
-  CATEGORY_SHOWN,
-  CATEGORY_SLUG_FIXED,
-  categoryEditValues,
-  categoryPatchBody,
-  DANH_MUC_RONG,
+  CATEGORY_RENAMED_TOAST,
+  CATEGORY_TURN_OFF,
+  CATEGORY_TURN_ON,
   DELETE_REASON_MAX_CHARS,
-  dungCayDanhMuc,
-  KHONG_CO_GI_DOI,
+  groupCategoriesByParent,
   NHAN_NUT_HUY,
-  NHAN_NUT_LUU,
-  nhanMucDanhMuc,
-  parentChoices,
+  pendingContentPart,
   TEN_DANH_MUC_TOI_DA,
-  THU_TU_DANH_MUC_TOI_DA,
-  type CategoryEditValues,
 } from "./nhan-noi-dung";
 
 /**
- * `⊞ Danh mục tin` — the commune's category tree with edit, hide/show and delete (ADR 0067 §3).
+ * `⊞ Danh mục tin` — the list of the prototype's `CategoryManagerDialog` (`CategoryManagerDialog.tsx:168-316`),
+ * grouped by parent, the categories with no parent first. Each row: the name, editable IN PLACE (Enter or
+ * leaving the box saves, Esc puts the old name back) · `{n} bài` and `Từ Cổng` as disabled "?" (no route
+ * serves either, owner D4 09/10/2026) · `Tắt` / `Bật` · the bin, which opens the soft delete with a reason
+ * (rule 7 — the prototype's two-step `Xoá hẳn` is a hard delete this system does not have).
+ *
+ * A TURNED-OFF ROW IS DIMMED, as the prototype draws it (`CategoryManagerDialog.tsx:244,257`): the page
+ * colour behind it, the name struck through. That is the state's only mark, so no badge repeats it.
  *
  * EVERY REFUSAL IS THE SERVER'S SENTENCE, VERBATIM. `category_cycle`, `parent_missing`,
  * `category_not_empty`, the self-parent 400 and the slug 400 each come with a Vietnamese sentence written
@@ -64,253 +66,225 @@ export function CategoryAdmin({
   /** Called after a successful write: the parent re-reads the tree (another officer may have moved it). */
   changed: () => void;
 }) {
-  const [open, setOpen] = useState<{ kind: "edit" | "delete"; id: string } | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ id: string; message: string } | null>(null);
 
-  const tree = dungCayDanhMuc(categories);
-
-  function run(id: string, call: Promise<KetQua<unknown>>): void {
+  function run(id: string, call: Promise<KetQua<unknown>>, okToast?: string): Promise<boolean> {
     setBusy(true);
-    void call.then((kq) => {
+    return call.then((kq) => {
       setBusy(false);
       if (!kq.ok) {
         setError({ id, message: kq.thongBao });
-        return;
+        return false;
       }
       setError(null);
-      setOpen(null);
+      setDeletingId(null);
+      if (okToast !== undefined) toast.success(okToast);
       changed();
+      return true;
     });
   }
 
-  if (tree.length === 0) return <p className="ghi-chu">{DANH_MUC_RONG}</p>;
-
   return (
-    <div className="category-admin flex flex-col gap-2">
-      <h3 className="m-0 text-[15px] font-semibold text-ink-900">Danh mục tin của xã</h3>
-      <p className="ghi-chu m-0">{CATEGORY_HIDE_EXPLAINER}</p>
-      <ul className="category-list m-0 rounded-xl border border-line px-4">
-        {tree.map((m) => {
-          const dm = m.dm;
-          const rowError = error !== null && error.id === dm.id ? error.message : null;
-          const editing = open !== null && open.id === dm.id && open.kind === "edit";
-          const deleting = open !== null && open.id === dm.id && open.kind === "delete";
-          return (
-            <li key={dm.id} className="category-row last:border-b-0">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span className="ten-can-bo">{nhanMucDanhMuc(m)}</span>
-                <Badge tone={dm.hidden ? "neutral" : "success"} icon={dm.hidden ? EyeOff : Eye}>
-                  {dm.hidden ? CATEGORY_HIDDEN : CATEGORY_SHOWN}
-                </Badge>
-                <span className="dong-phu basis-full">
-                  Slug: {dm.slug} · Thứ tự: {dm.order}
-                </span>
-              </div>
-              {/* Every action keeps its word (spec §7: an act with consequences is never icon-only).
-                  `min-h-0` lifts the legacy 44px of `.category-row .nut-phu` to the 34px row size. */}
-              <div className="cum-nut">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="min-h-0"
-                  icon={<Pencil aria-hidden="true" focusable="false" />}
-                  aria-expanded={editing}
-                  disabled={busy}
-                  aria-label={`${CATEGORY_EDIT_BUTTON} danh mục ${dm.name}`}
-                  onClick={() => {
-                    setError(null);
-                    setOpen(editing ? null : { kind: "edit", id: dm.id });
-                  }}
-                >
-                  {CATEGORY_EDIT_BUTTON}
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="min-h-0"
-                  icon={dm.hidden ? <Eye aria-hidden="true" focusable="false" /> : <EyeOff aria-hidden="true" focusable="false" />}
-                  disabled={busy}
-                  aria-label={`${dm.hidden ? CATEGORY_SHOW_BUTTON : CATEGORY_HIDE_BUTTON}: ${dm.name}`}
-                  onClick={() => run(dm.id, update(dm.id, { hidden: !dm.hidden }))}
-                >
-                  {dm.hidden ? CATEGORY_SHOW_BUTTON : CATEGORY_HIDE_BUTTON}
-                </Button>
-                <Button
-                  type="button"
-                  variant="danger"
-                  size="sm"
-                  className="min-h-0"
-                  icon={<Trash2 aria-hidden="true" focusable="false" />}
-                  aria-expanded={deleting}
-                  disabled={busy}
-                  aria-label={`${CATEGORY_DELETE_BUTTON} danh mục ${dm.name}`}
-                  onClick={() => {
-                    setError(null);
-                    setOpen(deleting ? null : { kind: "delete", id: dm.id });
-                  }}
-                >
-                  {CATEGORY_DELETE_BUTTON}
-                </Button>
-              </div>
-
-              {rowError !== null && !editing && !deleting && (
-                <p className="thong-bao-loi" role="alert">
-                  {rowError}
-                </p>
-              )}
-
-              {editing && (
-                <CategoryEditForm
-                  category={dm}
-                  categories={categories}
-                  busy={busy}
-                  error={rowError}
-                  cancel={() => setOpen(null)}
-                  save={(body) => run(dm.id, update(dm.id, body))}
-                  nothingChanged={() => setError({ id: dm.id, message: KHONG_CO_GI_DOI })}
-                />
-              )}
-
-              {deleting && (
-                <CategoryDeleteForm
-                  category={dm}
-                  busy={busy}
-                  error={rowError}
-                  cancel={() => setOpen(null)}
-                  confirm={(reason) => run(dm.id, remove(dm.id, reason))}
-                  hideInstead={() => run(dm.id, update(dm.id, { hidden: true }))}
-                />
-              )}
-            </li>
-          );
-        })}
-      </ul>
+    <div className="category-admin max-h-[26rem] space-y-3 overflow-y-auto pr-1">
+      {categories.length === 0 ? (
+        <p className="m-0 py-6 text-center text-[12.5px] text-ink-muted">{CATEGORY_EMPTY}</p>
+      ) : (
+        groupCategoriesByParent(categories).map((g) => (
+          <div key={g.parentId === "" ? "-" : g.parentId}>
+            <p className="m-0 mb-1.5 text-[11px] font-semibold tracking-wide text-ink-muted uppercase">{g.name}</p>
+            <ul className="m-0 list-none space-y-1.5 p-0">
+              {g.items.map((dm) => {
+                const rowError = error !== null && error.id === dm.id ? error.message : null;
+                const deleting = deletingId === dm.id;
+                return (
+                  <li key={dm.id} className="m-0">
+                    <CategoryRow
+                      // Keyed by the name too: a reload with a new name rebuilds the box from it.
+                      key={`${dm.id}|${dm.name}`}
+                      category={dm}
+                      busy={busy}
+                      deleting={deleting}
+                      rename={(name) => run(dm.id, update(dm.id, { name }), CATEGORY_RENAMED_TOAST)}
+                      toggle={() => void run(dm.id, update(dm.id, { hidden: !dm.hidden }))}
+                      askDelete={() => {
+                        setError(null);
+                        setDeletingId(deleting ? null : dm.id);
+                      }}
+                    />
+                    {rowError !== null && !deleting && (
+                      <p className="m-0 mt-1 text-[12px] font-medium text-danger" role="alert">
+                        {rowError}
+                      </p>
+                    )}
+                    {deleting && (
+                      <CategoryDeleteForm
+                        category={dm}
+                        busy={busy}
+                        error={rowError}
+                        cancel={() => setDeletingId(null)}
+                        confirm={(reason) => void run(dm.id, remove(dm.id, reason), CATEGORY_DELETED_TOAST)}
+                      />
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))
+      )}
     </div>
   );
 }
 
 /**
- * Edit one category: name, parent, order. The slug is shown, not editable — an issued code never changes.
+ * One row (prototype `CategoryRow`, `CategoryManagerDialog.tsx:240-314`). A component of its own because
+ * the name box holds its own text and `PendingMarker` uses hooks.
  *
- * THE PARENT SELECT LEAVES OUT THE CATEGORY AND ITS DESCENDANTS (`parentChoices`) as a hint only; the
- * server decides (409 `category_cycle`) and its sentence reaches `error`.
- *
- * `save` gets ONLY the fields that moved (`categoryPatchBody`). Nothing moved → no PATCH, a sentence.
+ * THE RENAME SENDS `{name}` AND NOTHING ELSE, and only when the trimmed name moved: an unchanged or empty box
+ * puts the old name back without a call. A refusal puts the old name back too; its sentence is under the row.
  */
-export function CategoryEditForm({
-  category,
-  categories,
+function CategoryRow({
+  category: dm,
   busy,
-  error,
-  cancel,
-  save,
-  nothingChanged,
+  deleting,
+  rename,
+  toggle,
+  askDelete,
 }: {
   category: comms_danhMucRa;
-  categories: readonly comms_danhMucRa[];
   busy: boolean;
-  error: string | null;
-  cancel: () => void;
-  save: (body: UpdateCategoryIn) => void;
-  nothingChanged: () => void;
+  deleting: boolean;
+  rename: (name: string) => Promise<boolean>;
+  toggle: () => void;
+  askDelete: () => void;
 }) {
-  const [v, setV] = useState<CategoryEditValues>(() => categoryEditValues(category));
-  const choices = parentChoices(category.id, categories);
-  const fid = `sua-danh-muc-${category.id}`;
-  const ready = v.name.trim() !== "";
+  const [name, setName] = useState(dm.name);
 
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    if (!ready) return;
-    const body = categoryPatchBody(category, v);
-    if (Object.keys(body).length === 0) {
-      nothingChanged();
+  function saveName(): void {
+    const next = name.trim();
+    if (next === "" || next === dm.name) {
+      setName(dm.name);
       return;
     }
-    save(body);
+    void rename(next).then((ok) => {
+      if (!ok) setName(dm.name);
+    });
   }
 
   return (
-    <form className={SUB_FORM_CLASS} onSubmit={submit} aria-labelledby={`${fid}-tieu-de`}>
-      <h4 id={`${fid}-tieu-de`}>Sửa danh mục: {category.name}</h4>
-      <p className="ghi-chu m-0">
-        Slug: <code>{category.slug}</code> — {CATEGORY_SLUG_FIXED}
-      </p>
-
-      <Field label="Tên danh mục *" htmlFor={`${fid}-ten`} grow="auto">
-        <input
-          id={`${fid}-ten`}
-          name={`${fid}-ten`}
-          value={v.name}
-          maxLength={TEN_DANH_MUC_TOI_DA}
-          autoComplete="off"
-          onChange={(e) => setV({ ...v, name: e.target.value })}
-        />
-      </Field>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="flex flex-col gap-1.5">
-          <Field label="Danh mục cha" htmlFor={`${fid}-cha`} kind="select" icon={FolderTree} grow="auto">
-            <select
-              id={`${fid}-cha`}
-              value={v.parentId}
-              aria-describedby={`${fid}-cha-goi-y`}
-              onChange={(e) => setV({ ...v, parentId: e.target.value })}
-            >
-              <option value="">— Không có danh mục cha —</option>
-              {choices.map((m) => (
-                <option key={m.dm.id} value={m.dm.id}>
-                  {nhanMucDanhMuc(m)}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <p className="ghi-chu m-0" id={`${fid}-cha-goi-y`}>
-            {CATEGORY_PARENT_HINT}
-          </p>
-        </div>
-
-        <Field label="Thứ tự hiển thị" htmlFor={`${fid}-thu-tu`} icon={ListOrdered} grow="auto">
-          <input
-            id={`${fid}-thu-tu`}
-            name={`${fid}-thu-tu`}
-            type="number"
-            min={0}
-            max={THU_TU_DANH_MUC_TOI_DA}
-            value={v.order}
-            onChange={(e) => setV({ ...v, order: e.target.value })}
-          />
-        </Field>
-      </div>
-
-      {error !== null && (
-        <p className="thong-bao-loi m-0" role="alert">
-          {error}
-        </p>
+    <div
+      className={cn(
+        "flex items-center gap-2 rounded-[10px] border border-solid border-line px-2.5 py-2",
+        dm.hidden ? "bg-canvas" : "bg-surface",
       )}
+    >
+      <input
+        id={`ten-danh-muc-${dm.id}`}
+        aria-label={`Tên danh mục ${dm.name}`}
+        value={name}
+        maxLength={TEN_DANH_MUC_TOI_DA}
+        autoComplete="off"
+        disabled={busy}
+        onChange={(e) => setName(e.target.value)}
+        onBlur={saveName}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            e.currentTarget.blur();
+          }
+          if (e.key === "Escape") {
+            // Prevented: inside the native `<dialog>`, Esc would otherwise close the whole dialog.
+            e.preventDefault();
+            setName(dm.name);
+          }
+        }}
+        className={cn(
+          "h-8 min-w-0 flex-1 rounded-md border border-solid border-transparent bg-transparent px-1.5 [font-family:inherit] text-[12.5px] text-navy outline-none",
+          "hover:border-line focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+          dm.hidden && "text-ink-muted line-through",
+        )}
+      />
 
-      <div className="flex flex-wrap justify-end gap-2">
-        <button type="button" className={cn("nut-phu", SUB_BUTTON, buttonVariants({ variant: "secondary" }))} disabled={busy} onClick={cancel}>
-          {NHAN_NUT_HUY}
-        </button>
-        <button type="submit" className={cn("nut-chinh", SUB_BUTTON, buttonVariants({ variant: "primary" }))} disabled={busy || !ready}>
-          {NHAN_NUT_LUU}
-        </button>
-      </div>
-    </form>
+      <ItemCountPending />
+      <FromPortalPending />
+
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        className="h-8 shrink-0 px-2 text-[11.5px]"
+        disabled={busy}
+        aria-label={`${dm.hidden ? CATEGORY_TURN_ON : CATEGORY_TURN_OFF} danh mục ${dm.name}`}
+        onClick={toggle}
+      >
+        {dm.hidden ? CATEGORY_TURN_ON : CATEGORY_TURN_OFF}
+      </Button>
+
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        className="h-8 shrink-0 px-2 text-danger"
+        icon={<Trash2 aria-hidden="true" focusable="false" className="size-3.5" />}
+        aria-expanded={deleting}
+        disabled={busy}
+        aria-label={`${CATEGORY_DELETE_BUTTON} danh mục ${dm.name}`}
+        onClick={askDelete}
+      />
+    </div>
+  );
+}
+
+/** `{n} bài` with a "?" where the number would be — the list route carries no item count. */
+function ItemCountPending() {
+  return (
+    <span
+      className="inline-flex shrink-0 items-center gap-1 text-[11px] text-ink-muted tabular-nums"
+      aria-disabled="true"
+      data-pending=""
+    >
+      <PendingMarker info={pendingContentPart(CATEGORY_ITEM_COUNT_PART)} />
+      bài
+    </span>
+  );
+}
+
+/** The prototype's `Từ Cổng` badge, greyed, with its "?" — the row carries no source. */
+function FromPortalPending() {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1" aria-disabled="true" data-pending="">
+      <Badge tone="neutral" icon={Link2} className="text-ink-muted opacity-60">
+        Từ Cổng
+      </Badge>
+      <PendingMarker info={pendingContentPart(CATEGORY_FROM_PORTAL_PART)} />
+    </span>
+  );
+}
+
+/**
+ * The prototype's box above the add row (`CategoryManagerDialog.tsx:107-125`): its sentence and `Lấy danh mục
+ * từ Cổng`, the button drawn disabled with a "?" — no route imports the portal's tree (owner D4).
+ * `bg-canvas` is the prototype's `bg-surface` (the page grey; this app's `bg-surface` is white).
+ */
+export function CategoryImportPending() {
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-[10px] border border-solid border-line bg-canvas p-2.5">
+      <p className="m-0 flex-1 text-[11.5px] text-ink-muted">{CATEGORY_IMPORT_NOTE}</p>
+      <PendingButton
+        info={pendingContentPart(CATEGORY_IMPORT_PART)}
+        size="sm"
+        icon={<DownloadCloud aria-hidden="true" focusable="false" className="size-4" />}
+      />
+    </div>
   );
 }
 
 /**
  * Delete one category — a soft delete with a MANDATORY reason (rule 7). The button stays off until a
- * reason is typed; the server refuses an empty one anyway.
- *
- * `Ẩn thay vì xoá` is offered up front rather than after a refusal: the refusal (409 `category_not_empty`)
- * is the common case — a category in use is the one somebody wants gone — and hiding reaches the same goal
- * without touching an article.
+ * reason is typed; the server refuses an empty one anyway. No `Ẩn thay vì xoá` here (the prototype has
+ * none): the row's own `Tắt` hides a category.
  */
 export function CategoryDeleteForm({
   category,
@@ -318,14 +292,12 @@ export function CategoryDeleteForm({
   error,
   cancel,
   confirm,
-  hideInstead,
 }: {
   category: comms_danhMucRa;
   busy: boolean;
   error: string | null;
   cancel: () => void;
   confirm: (reason: string) => void;
-  hideInstead: () => void;
 }) {
   const [reason, setReason] = useState("");
   const fid = `xoa-danh-muc-${category.id}`;
@@ -364,12 +336,6 @@ export function CategoryDeleteForm({
         <button type="button" className={cn("nut-phu", SUB_BUTTON, buttonVariants({ variant: "secondary" }))} disabled={busy} onClick={cancel}>
           {NHAN_NUT_HUY}
         </button>
-        {!category.hidden && (
-          <button type="button" className={cn("nut-phu", SUB_BUTTON, buttonVariants({ variant: "secondary" }))} disabled={busy} onClick={hideInstead}>
-            <EyeOff aria-hidden="true" focusable="false" />
-            Ẩn thay vì xoá
-          </button>
-        )}
         <button type="submit" className={cn("nut-phu nut-xoa", SUB_BUTTON, buttonVariants({ variant: "danger" }))} disabled={busy || trimmed === ""}>
           <Trash2 aria-hidden="true" focusable="false" />
           Xoá danh mục
@@ -380,8 +346,8 @@ export function CategoryDeleteForm({
 }
 
 /**
- * The inline edit / delete form under a row: a muted panel, not the legacy blue-edged box. `h4` restyled
- * from here because `.form-danh-muc h4` sets its own margin and size.
+ * The inline delete form under a row: a muted panel, not the legacy blue-edged box. `h4` restyled from here
+ * because `.form-danh-muc h4` sets its own margin and size.
  */
 const SUB_FORM_CLASS = cn(
   "form-danh-muc mt-1 mb-0 flex flex-col gap-4 rounded-xl border border-line border-l-line bg-surface-muted p-4",
