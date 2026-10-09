@@ -379,20 +379,24 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     // call's result leaves the phone outside a petition. The shared sentences below now tell both uses (the
     // shared App ID also prefills the name on a commune page opened by QR, `App.tsx` `QrCommuneApp`); the
     // commune app's own wording moved, unchanged, into `commune_app` (`ket-xuat-ho-so.test.ts` §7).
+    // 09/10/2026 (ADR 0050 §Sửa đổi 09/10): with a verified number the send screen has no name box — a
+    // read-only sender line — and a name not yet granted is asked ONCE, right after the phone confirmation
+    // the citizen started by tapping send. The sentences below tell both moments: a declaration naming a box
+    // the reviewer cannot find is exactly what this table exists to prevent.
     api: "getUserInfo",
     nua: "ca-hai",
-    man: "Liên hệ · Trang của một xã mở bằng mã QR (tên hiện ở Trang chủ, Cá nhân và ô họ tên của Gửi phản ánh)",
-    tinh_nang: "Chat với chuyên viên · Điền sẵn họ tên khi gửi phản ánh",
+    man: "Liên hệ · Trang của một xã mở bằng mã QR (tên hiện ở Trang chủ, Cá nhân và dòng người gửi của Gửi phản ánh)",
+    tinh_nang: "Chat với chuyên viên · Điền sẵn người gửi khi gửi phản ánh",
     de_lam_gi:
-      "Lấy tên hiển thị Zalo của bạn sau khi bạn đồng ý. Ở màn Liên hệ, khi bạn bấm “Chat với chuyên viên”, tên được gửi kèm yêu cầu trò chuyện tới máy chủ của Tập đoàn ViHAT Group để chuyên viên biết ai đang nhắn; bạn từ chối thì cửa sổ trò chuyện vẫn mở, chỉ là không có tên. Trên trang của một xã, tên được lấy một lần khi trang mở ra, để điền sẵn ô họ tên khi gửi phản ánh; tên ấy chỉ nằm trên điện thoại này cho tới khi bạn tự bấm gửi phản ánh.",
+      "Lấy tên hiển thị Zalo của bạn sau khi bạn đồng ý. Ở màn Liên hệ, khi bạn bấm “Chat với chuyên viên”, tên được gửi kèm yêu cầu trò chuyện tới máy chủ của Tập đoàn ViHAT Group để chuyên viên biết ai đang nhắn; bạn từ chối thì cửa sổ trò chuyện vẫn mở, chỉ là không có tên. Trên trang của một xã, tên được lấy một lần: khi trang mở ra nếu bạn đã đồng ý, hoặc ngay sau bước xác nhận số điện thoại khi bạn bấm gửi phản ánh — ứng dụng nói trước rằng sẽ xin cả họ tên và số điện thoại. Tên hiện sẵn ở dòng người gửi; bạn từ chối thì tự nhập họ tên. Tên ấy chỉ nằm trên điện thoại này cho tới khi bạn tự bấm gửi phản ánh.",
     hoi_nguoi_dung: true,
     roi_khoi_may:
       "Ở màn Liên hệ: tên hiển thị Zalo được gửi tới máy chủ của Tập đoàn ViHAT Group cùng yêu cầu trò chuyện, khi bạn bấm “Chat với chuyên viên”. Trên trang của một xã: tên không rời khỏi máy cho tới khi bạn tự bấm gửi phản ánh.",
     commune_app: {
-      man: "Mở ứng dụng của xã (tên hiện ở Trang chủ, Cá nhân và ô họ tên của Gửi phản ánh)",
-      tinh_nang: "Điền sẵn họ tên khi gửi phản ánh",
+      man: "Mở ứng dụng của xã · Gửi phản ánh (tên hiện ở Trang chủ, Cá nhân và dòng người gửi của Gửi phản ánh)",
+      tinh_nang: "Điền sẵn người gửi khi gửi phản ánh",
       de_lam_gi:
-        "Lấy tên hiển thị Zalo của bạn một lần, khi bạn mở ứng dụng của xã và đồng ý, để điền sẵn ô họ tên khi gửi phản ánh tới xã. Tên chỉ nằm trên điện thoại này; ứng dụng không gửi nó đi đâu cho tới khi bạn tự bấm gửi phản ánh.",
+        "Lấy tên hiển thị Zalo của bạn một lần — khi bạn mở ứng dụng của xã và đồng ý, hoặc ngay sau bước xác nhận số điện thoại khi bạn bấm gửi phản ánh (ứng dụng nói trước rằng sẽ xin cả họ tên và số điện thoại) — để hiện sẵn ở dòng người gửi khi gửi phản ánh tới xã; bạn từ chối thì tự nhập họ tên. Tên chỉ nằm trên điện thoại này; ứng dụng không gửi nó đi đâu cho tới khi bạn tự bấm gửi phản ánh.",
       roi_khoi_may: "",
     },
   },
