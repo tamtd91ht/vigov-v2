@@ -67,7 +67,8 @@ const NHAN_TRANG_THAI: Readonly<Record<string, string>> = {
 const NHAN_KENH: Readonly<Record<string, string>> = {
   "zalo-mini-app": "Zalo Mini App",
   "zalo-oa": "Zalo OA",
-  "web-xa": "Trang web của xã",
+  // Prototype `feedback-display.ts:61` (`CHANNEL_LABEL.web`), verbatim.
+  "web-xa": "Web của xã",
   "can-bo-nhap-ho": "Cán bộ nhập hộ",
 };
 
@@ -136,10 +137,71 @@ export function nhanLinhVuc(l: LinhVucPhanAnh): string {
  */
 export function nhanNguoiGui(phieu: petitions_phieuPhanAnhRa): string {
   if (phieu.anonymous) return "Người gửi ẩn danh";
+  return senderPair(phieu);
+}
 
-  const phan = [phieu.reporter_name, phieu.reporter_phone].filter((p) => p !== "");
-  if (phan.length === 0) return "Không có thông tin người gửi";
-  return phan.join(" · ");
+/**
+ * The sender on a LIST CARD — the prototype's words (`FeedbackCard.tsx`, spec 03): "Gửi ẩn danh" where
+ * the drawer says "Người gửi ẩn danh". Same masked pair otherwise; nothing is put back together.
+ */
+export function cardSenderLabel(phieu: petitions_phieuPhanAnhRa): string {
+  if (phieu.anonymous) return "Gửi ẩn danh";
+  return senderPair(phieu);
+}
+
+/** Prototype's fallback (`FeedbackDetailDrawer.tsx:203`) when the server sent neither half. */
+export const SENDER_UNKNOWN = "Không rõ người gửi";
+
+function senderPair(phieu: petitions_phieuPhanAnhRa): string {
+  const parts = [phieu.reporter_name, phieu.reporter_phone].filter((p) => p !== "");
+  if (parts.length === 0) return SENDER_UNKNOWN;
+  return parts.join(" · ");
+}
+
+/**
+ * The account key that opens the `can-bo` field (seeded `service-identity/migrations/0001_init.sql:301`).
+ * Read ONLY to decide whether the restricted-flow note is drawn — UX; the server filters the petitions.
+ */
+export const RESTRICTED_FEEDBACK_PERMISSION = "feedback.restricted";
+
+/**
+ * Prototype `FeedbackWorkspace.tsx:125-131`, FIRST SENTENCE ONLY (owner decision D3, 09/10/2026): the
+ * key can be granted to others than the chairman, so "Chỉ Chủ tịch Uỷ ban đọc được." would be false.
+ */
+export const RESTRICTED_FLOW_NOTE = "Phản ánh về tác phong cán bộ đi luồng riêng và không hiển thị ở đây.";
+
+/**
+ * `?id=` of `/phan-anh` → the lookup code to open, or `null`. Only a single plain token is accepted
+ * (letters, digits, `-`, `_`, ≤ 64): anything else is not a lookup code and is ignored, never sent.
+ * The detail route still decides whether this account in this commune may read it.
+ */
+export function petitionDeepLinkCode(raw: string | readonly string[] | undefined): string | null {
+  if (typeof raw !== "string") return null;
+  const code = raw.trim();
+  return /^[A-Za-z0-9_-]{1,64}$/.test(code) ? code : null;
+}
+
+const DATE_FORMAT = new Intl.DateTimeFormat("vi-VN", {
+  timeZone: "Asia/Ho_Chi_Minh",
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+});
+const TIME_FORMAT = new Intl.DateTimeFormat("vi-VN", {
+  timeZone: "Asia/Ho_Chi_Minh",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+/**
+ * `09/09/2026 14:21` — the prototype's `formatDateTime` order (date first), for the drawer's header
+ * line. Same pinned zone as `nhanThoiDiem`; an unreadable string is shown as sent.
+ */
+export function dateTimeLabel(iso: string): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return iso;
+  return `${DATE_FORMAT.format(at)} ${TIME_FORMAT.format(at)}`;
 }
 
 /**
@@ -174,7 +236,10 @@ export const UNVERIFIED_CONTACT_NOTE =
  * flag hides is the reporter (`nhanNguoiGui`), not the place.
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
+/** The location row of the lookup view (`tra-cuu-phieu.tsx`). */
 export const SCENE_LOCATION_LABEL = "Vị trí hiện trường";
+/** The drawer's section title — prototype `FeedbackDetailDrawer.tsx:395`, owner decision D2. */
+export const LOCATION_SECTION_TITLE = "Vị trí";
 /** Requirement `FeedbackDetailDrawer.tsx:402`, verbatim. */
 export const SCENE_NO_ADDRESS = "Không có địa chỉ ghi kèm";
 export const SCENE_NO_COORDINATES = "Người dân không gửi toạ độ";
@@ -214,7 +279,8 @@ export const SCENE_PHOTOS_TITLE = "Ảnh trước và sau khi xử lý";
 export const SCENE_PHOTOS_BEFORE = "Trước khi xử lý";
 export const SCENE_PHOTOS_AFTER = "Sau khi xử lý";
 export const SCENE_PHOTOS_LOADING = "Đang tải ảnh người dân gửi kèm phiếu…";
-export const SCENE_PHOTOS_EMPTY = "Người dân không gửi ảnh kèm phiếu này.";
+/** Prototype `FeedbackDetailDrawer.tsx:354`, verbatim. */
+export const SCENE_PHOTOS_EMPTY = "Người dân chưa gửi ảnh.";
 /** 503 `storage_not_configured`. Says the rest of the petition still works — it does. */
 export const SCENE_PHOTOS_UNAVAILABLE =
   "Kho ảnh tạm thời chưa sẵn sàng nên chưa xem được ảnh hiện trường. Các thông tin khác của phiếu vẫn dùng bình thường.";
@@ -672,9 +738,8 @@ export function buocLuongChinh(trangThai: string): readonly OBuoc[] {
 /**
  * Hai ô RẼ NHÁNH của §8.2 (`Không tiếp nhận`, `Chuyển cấp trên`), sáng theo TRẠNG THÁI của phiếu.
  *
- * Ô KHÔNG BẤM ĐƯỢC. Đặc tả vẽ nhãn `chuyển sang` (bấm để chuyển), nhưng hai nhánh này là hành vi
- * KẾT THÚC phiếu và phải mang một lý do người dân đọc được — nên chúng là hai biểu mẫu riêng bên
- * dưới (`BieuMauReNhanh`), không phải một cú bấm trên thanh bước.
+ * Which of them is PRESSABLE, and which act it opens, is `statusStrip`'s (owner decision D1,
+ * 09/10/2026): pressing one opens its reason form (`BieuMauReNhanh`) in the strip's composer.
  *
  * Không có `daQua`: hai nhánh là trạng thái cuối, không phiếu nào đi QUA chúng.
  */
@@ -834,7 +899,8 @@ export function loiCoQuan(coQuan: string): string | null {
 
 export const NHAN_KHONG_TIEP_NHAN = "Không tiếp nhận";
 export const NHAN_CHUYEN_CAP_TREN = "Chuyển cấp trên";
-export const NHAN_O_LY_DO = "Lý do (người dân sẽ đọc được)";
+/** Prototype `FeedbackStatusPipeline.tsx:211-213`, verbatim. */
+export const NHAN_O_LY_DO = "Lý do (bắt buộc, trả lời cho người dân)";
 export const NHAN_O_CO_QUAN = "Cơ quan tiếp nhận";
 export const GOI_Y_CO_QUAN = "Ví dụ: Công ty điện lực, Công an xã, Sở Xây dựng…";
 
@@ -877,6 +943,153 @@ export function conBuocKeTiep(trangThai: string): boolean {
   return viTri >= 0 && viTri < LUONG_CHINH.length - 1;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * THE CLICKABLE STATUS STRIP — owner decision D1, 09/10/2026
+ *
+ * A chip is clickable ONLY for a move our server performs for staff, and clicking it opens the ONE
+ * existing act that performs it — its own route, its own key. The prototype's `TRANSITIONS` table is
+ * NOT adopted: no lifecycle change, no notification change.
+ *
+ * `STAFF_MOVES` is the server's lifecycle map (`service-petitions/internal/domain/phieu_phan_anh.go:80-90`,
+ * `chuyenDuocSang`) narrowed to the moves a STAFF act reaches, each paired with that act:
+ *
+ *   da-tiep-nhan    → dang-phan-loai    classify  (domain/xu_ly_phan_anh.go:288)
+ *   dang-phan-loai  → da-chuyen-xu-ly   assign    (SauKhiPhanCong, :347-358)
+ *   dang-phan-loai  → khong-tiep-nhan   reject    (KetThucNhanhDuoc — branches only from here)
+ *   dang-phan-loai  → chuyen-cap-tren   refer
+ *   da-chuyen-xu-ly → dang-xu-ly        advance   (tienTrinhChinh, :303-307)
+ *   dang-xu-ly      → da-xu-ly          advance
+ *   da-xu-ly        → cho-dan-xac-nhan  advance
+ *   da-xu-ly        → da-dong           close     only with NO citizen to confirm (DongDuoc)
+ *   cho-dan-xac-nhan → da-dong          close
+ *
+ * LEFT OUT ON PURPOSE: every reopening edge (`… → dang-xu-ly` after `da-xu-ly`) — only the citizen's
+ * 1–2 star rating reaches it (ADR 0050 point 2); a staff chip there would be a button whose only answer
+ * is a refusal. A copy of a server map can drift; when it does, the server's 409 sentence still reaches
+ * the screen verbatim, and the drift is only ever a missing chip, never a move the server lacks.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** The existing act behind a move. */
+export type StripAct = "classify" | "assign" | "reject" | "refer" | "advance" | "close";
+
+const STAFF_MOVES: Readonly<Record<string, readonly { readonly to: string; readonly act: StripAct }[]>> = {
+  "da-tiep-nhan": [{ to: "dang-phan-loai", act: "classify" }],
+  "dang-phan-loai": [
+    { to: "da-chuyen-xu-ly", act: "assign" },
+    { to: "khong-tiep-nhan", act: "reject" },
+    { to: "chuyen-cap-tren", act: "refer" },
+  ],
+  "da-chuyen-xu-ly": [{ to: "dang-xu-ly", act: "advance" }],
+  "dang-xu-ly": [{ to: "da-xu-ly", act: "advance" }],
+  "da-xu-ly": [
+    { to: "cho-dan-xac-nhan", act: "advance" },
+    { to: "da-dong", act: "close" },
+  ],
+  "cho-dan-xac-nhan": [{ to: "da-dong", act: "close" }],
+};
+
+/** Reasons a chip is disabled — the `title` / screen-reader text of the chip. */
+export const STRIP_NOT_A_STEP = "Không chuyển thẳng sang bước này được theo quy trình.";
+export const STRIP_NEEDS_CLASSIFY = "Cần quyền chốt lĩnh vực phản ánh (feedback.classify).";
+export const STRIP_NEEDS_ASSIGN = "Cần quyền chuyển xử lý phản ánh (feedback.assign).";
+export const STRIP_NEEDS_RESOLVE = "Cần quyền kết thúc xử lý phản ánh (feedback.resolve).";
+export const STRIP_WAIT_CITIZEN = "Phiếu có người dân đứng sau: chờ người dân xác nhận rồi mới đóng.";
+/** Prototype `FeedbackStatusPipeline.tsx:329-331`, verbatim — no move is open to this account. */
+export const STRIP_NO_PERMISSION = "Bạn không có quyền đổi trạng thái phiếu này.";
+
+/** One chip of the strip. */
+export type StripStep = {
+  readonly code: string;
+  readonly label: string;
+  /** `current` = where the petition is; `next` = clickable; `blocked` = not clickable now. */
+  readonly role: "current" | "next" | "blocked";
+  /** The act a `next` chip opens. */
+  readonly act?: StripAct;
+  /** Why a `blocked` chip cannot be pressed; the status explanation on `current`. */
+  readonly reason: string;
+  /** A lifecycle move from the current status (pressable or not) — the branch row shows only these. */
+  readonly isMove: boolean;
+};
+
+export type StatusStripView = {
+  readonly main: readonly StripStep[];
+  /** Only the branch the petition is on, or a branch it can move to (prototype `:156-158`). */
+  readonly branches: readonly StripStep[];
+  /** There is a move from here, and this account may press none of them. */
+  readonly noPermission: boolean;
+};
+
+function gateReason(act: StripAct, cong: CongThaoTac, petition: petitions_phieuPhanAnhRa): string | null {
+  switch (act) {
+    case "classify":
+    case "reject":
+    case "refer":
+      return cong.phanLoai ? null : STRIP_NEEDS_CLASSIFY;
+    case "assign":
+      return cong.phanCong ? null : STRIP_NEEDS_ASSIGN;
+    case "advance":
+      // NO UI GATE: the holder rule is the server's (`congThaoTac`); its 403 reaches the screen.
+      return null;
+    case "close":
+      if (!dongDuocTrenManHinh(petition)) return STRIP_WAIT_CITIZEN;
+      return cong.dongPhieu ? null : STRIP_NEEDS_RESOLVE;
+  }
+}
+
+/** The whole strip for one petition and one account's gates. */
+export function statusStrip(petition: petitions_phieuPhanAnhRa, cong: CongThaoTac): StatusStripView {
+  const moves = Object.hasOwn(STAFF_MOVES, petition.status) ? (STAFF_MOVES[petition.status] ?? []) : [];
+  const step = (code: string): StripStep => {
+    const label = nhanTrangThai(code);
+    if (code === petition.status) {
+      return { code, label, role: "current", reason: cauGiaiThichTrangThai(code) ?? "", isMove: false };
+    }
+    const move = moves.find((m) => m.to === code);
+    if (move === undefined) return { code, label, role: "blocked", reason: STRIP_NOT_A_STEP, isMove: false };
+    const refused = gateReason(move.act, cong, petition);
+    return refused === null
+      ? { code, label, role: "next", act: move.act, reason: `Chuyển sang ${label}`, isMove: true }
+      : { code, label, role: "blocked", reason: refused, isMove: true };
+  };
+  const main = LUONG_CHINH.map(step);
+  const branches = RE_NHANH.map(step).filter((s) => s.role === "current" || s.isMove);
+  const all = [...main, ...branches];
+  return {
+    main,
+    branches,
+    noPermission: moves.length > 0 && !all.some((s) => s.role === "next"),
+  };
+}
+
+/** The composer's title — prototype `FeedbackStatusPipeline.tsx:187-189`. */
+export function composerTitle(statusCode: string): string {
+  return `Chuyển sang “${nhanTrangThai(statusCode)}”`;
+}
+
+/** Success toast of a status act — prototype `FeedbackStatusPipeline.tsx:96`. */
+export function movedToast(statusCode: string): string {
+  return `Đã chuyển sang “${nhanTrangThai(statusCode)}”.`;
+}
+
+/** Success toasts of the other acts — prototype `FeedbackDetailDrawer.tsx:174,277,299,183`. */
+export const ASSIGNED_TOAST = "Đã chuyển xử lý.";
+export const PUBLISHED_TOAST = "Phiếu đã hiện công khai.";
+export const HIDDEN_TOAST = "Đã ẩn khỏi trang công khai.";
+export const AFTER_PHOTO_TOAST = "Đã tải ảnh sau xử lý.";
+export const LOG_WRITTEN_TOAST = "Đã ghi vào nhật ký.";
+
+/** Prototype `HandoverFields` warning, verbatim (row 52-60). */
+export const UNIT_WITHOUT_STAFF = "Bộ phận này chưa có cán bộ nào đang hoạt động.";
+
+/** Fact cell `Đang giao cho` fallbacks — prototype `FeedbackDetailDrawer.tsx:251,256`. */
+export const NO_UNIT_YET = "Chưa giao bộ phận nào";
+export const NO_ASSIGNEE_YET = "Chưa chỉ định cán bộ xử lý";
+
+/** The branch box's label — prototype `FeedbackDetailDrawer.tsx:338-340`. */
+export function branchReasonLabel(statusCode: string): string {
+  return `Lý do ${nhanTrangThai(statusCode).toLowerCase()}`;
+}
+
 /** Câu dưới nút `Đóng phiếu` khi tài khoản thiếu `feedback.resolve`. Nói ĐÚNG tên khoá. */
 export const CAU_THIEU_QUYEN_DONG =
   "Tài khoản của bạn không có quyền kết thúc xử lý phản ánh (feedback.resolve), nên không có nút " +
@@ -912,7 +1125,12 @@ export const GHI_CHU_TIEN_TRANG_THAI =
  */
 export const ASSIGN_NEEDS_CLASSIFICATION = "Cần phân loại phiếu trước khi chuyển xử lý.";
 
-export const NHAN_O_KET_QUA = "Kết quả xử lý người dân đọc được";
+/**
+ * Prototype `FeedbackStatusPipeline.tsx:196-203`, verbatim. The prototype asks it at `resolved`; our
+ * server takes the citizen-readable result at CLOSING (rule 10, invariant 6), so it sits in the close act.
+ */
+export const NHAN_O_KET_QUA = "Kết quả xử lý — người dân sẽ đọc câu này";
+export const RESULT_PLACEHOLDER = "Đã thu gom toàn bộ rác, dọn vệ sinh khu vực.";
 
 export const GHI_CHU_O_KET_QUA =
   "Bắt buộc. Ghi rõ kết quả xử lý; người dân sẽ đọc được nội dung này khi tra cứu phiếu.";
@@ -927,12 +1145,12 @@ export const SO_RONG =
 export const DANG_TAI_SO = "Đang tải sổ phản ánh…";
 
 /**
- * The register with no filter and nothing to show. NOT the prototype's "Chưa có phản ánh nào": a
- * petition of a restricted field is absent from the page for an account without `feedback.restricted`,
- * and the screen must neither say it exists nor claim it does not (rule 4, forbidden #2). "Nothing to
- * show" is true for both. The second line is the prototype's, word for word.
+ * The register with no filter and nothing to show — the prototype's two lines, word for word
+ * (`FeedbackWorkspace.tsx:236-242`). Since owner decision D3 (09/10/2026) an account without
+ * `feedback.restricted` also reads, above, that staff-conduct petitions are not shown here, so "Chưa có
+ * phản ánh nào" is read as "none on this screen" and says nothing about any restricted petition.
  */
-export const LIST_EMPTY_TITLE = "Chưa có phiếu phản ánh nào để hiển thị.";
+export const LIST_EMPTY_TITLE = "Chưa có phản ánh nào";
 export const LIST_EMPTY_HINT = "Phiếu gửi từ Zalo Mini App sẽ hiện ở đây ngay khi người dân bấm gửi.";
 
 /** A card whose petition carries no address (the prototype's fallback, verbatim). */
@@ -1126,9 +1344,11 @@ export function loiGhiChuNoiBo(ghiChu: string): string | null {
 
 export const TIEU_DE_NHAT_KY = "Nhật ký xử lý";
 export const DANG_TAI_NHAT_KY = "Đang tải nhật ký xử lý…";
-/** Phiếu vào sổ trước 26/09/2026 không có dòng nào — theo thiết kế, không phải lỗi. */
-export const NHAT_KY_RONG =
-  "Chưa có dòng nhật ký nào. Nhật ký bắt đầu ghi từ ngày 26/09/2026.";
+/**
+ * No row — prototype `FeedbackActivityPanel.tsx:237-239`, verbatim. (A petition booked before
+ * 26/09/2026 has none by design: the log started that day.)
+ */
+export const NHAT_KY_RONG = "Chưa có ghi chép nào.";
 export const NHAN_XEM_THEM_NHAT_KY = "Xem thêm";
 export const NHAN_NUT_GHI_NHAT_KY = "Ghi nhật ký";
 export const NHAN_O_GHI_NHAT_KY = "Nội dung nhật ký";
@@ -1139,7 +1359,13 @@ export const NHAC_DU_LIEU_CA_NHAN =
 export const NHAN_BO_PHAN_PHU_TRACH = "Bộ phận / Phụ trách";
 export const NHAN_NGUOI_THUC_HIEN = "Người thực hiện";
 
-export const NHAN_O_GHI_CHU_NOI_BO = "Ghi chú nội bộ (không gửi người dân)";
+/**
+ * The optional note of every act — prototype `FeedbackStatusPipeline.tsx:236-241`, verbatim. It goes
+ * into the processing log only; the line under the box says it is not sent to the citizen.
+ */
+export const NHAN_O_GHI_CHU_NOI_BO = "Nội dung cập nhật";
+export const UPDATE_NOTE_PLACEHOLDER = "Đã làm gì, ai làm, còn vướng gì… (không bắt buộc)";
+export const UPDATE_NOTE_INTERNAL = "không gửi người dân";
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * "TẠO NHIỆM VỤ" FROM A PETITION (§13) — POST …/tasks
@@ -1406,26 +1632,27 @@ export type PhanChuaDung = {
 };
 
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
-  // §8.4 mini map + hamlet beside the address. The coordinates the citizen sent (`lat`/`lng`) are
-  // shown as text in `Vị trí hiện trường`. A map means asking an outside tile provider for the area
-  // around that point — sending a citizen's coordinates to an external service for the first time,
-  // which the owner has not decided (rule 3, stop condition 2); hence no "open in map" link either.
-  // The petition response carries no hamlet (`petitions_phieuPhanAnhRa`, re-read 02/10/2026).
+  // §8.4 mini map + hamlet beside the address. The basemap question (rule 3, stop condition 2: a
+  // citizen's coordinates must not go to an outside tile provider) is DECIDED — ADR 0072 §Sửa đổi
+  // 09/10/2026: self-hosted PMTiles, served by the system itself. Still missing: the basemap file being
+  // built and deployed. Until then no tile is loaded and no "open in map" link exists. The petition
+  // response carries no hamlet (`petitions_phieuPhanAnhRa`, re-read 02/10/2026).
   {
     id: "sceneMap",
     ten: "Bản đồ hiện trường và tên thôn",
     viSao:
-      "Vị trí người dân gửi kèm đã hiện thành chữ ở ô “Vị trí hiện trường”. Bản đồ nhỏ chưa vẽ vì " +
-      "phải gửi toạ độ của người dân tới một nhà cung cấp bản đồ bên ngoài — việc này chưa được " +
-      "quyết. Phiếu cũng chưa mang tên thôn.",
+      "Đã chọn dùng nền bản đồ lưu ngay trên máy chủ của hệ thống, không gửi vị trí của người dân ra " +
+      "ngoài. Bản đồ nhỏ đang chờ dựng tệp nền bản đồ nên chưa hiện. Phiếu cũng chưa mang tên thôn.",
   },
-  // §9 heat map tab: same external-map-provider question as `sceneMap` (rule 3, stop condition 2).
+  // §9 heat map tab: same self-hosted basemap (ADR 0072 §Sửa đổi 09/10/2026), plus a route returning
+  // EVERY located petition of the commune — the paged list holds one page only, and a heat map of one
+  // page would show leadership a false density.
   {
     id: "heatMapTab",
     ten: "Bản đồ nhiệt",
     viSao:
-      "Bản đồ nhiệt cần gửi toạ độ của người dân tới một nhà cung cấp bản đồ bên ngoài — việc này " +
-      "chưa được quyết, nên tab này chưa mở được.",
+      "Đã chọn dùng nền bản đồ lưu ngay trên máy chủ của hệ thống. Tab này đang chờ dựng tệp nền bản " +
+      "đồ và phần lấy toàn bộ điểm phản ánh của xã, nên chưa mở được.",
   },
   // §10 report tab. The only counting route is `GET /api/v1/citizen-report-summary` (the four KPI
   // cards, §3); none counts by field, unit or hamlet (service-petitions routes, re-read 02/10/2026).
@@ -1493,6 +1720,33 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
     viSao:
       "Phiếu nhập hộ chưa đính được ảnh hiện trường: hiện chỉ người dân gửi ảnh được, từ Zalo Mini " +
       "App.",
+  },
+  // The composer's `Đính kèm ảnh, tệp` (FeedbackStatusPipeline.tsx:287-294). None of the six act routes
+  // (classification, assignment, status, closure, rejection, referral) takes a file; files go with a
+  // log entry only (`…/log-attachments`).
+  {
+    id: "composerAttachment",
+    ten: "Đính kèm ảnh, tệp khi chuyển trạng thái",
+    viSao:
+      "Lúc chuyển trạng thái chưa đính kèm được ảnh hay tệp. Hãy đính kèm khi ghi nhật ký ở cột bên " +
+      "phải, ngay sau khi chuyển.",
+  },
+  // The log row's `Nội bộ` pill (FeedbackActivityPanel.tsx:268-272). A log row carries no
+  // "shown to the citizen" flag (`petitions_nhatKyPhieuRa`); every staff log row is internal today.
+  {
+    id: "logVisibility",
+    ten: "Nội bộ",
+    viSao:
+      "Chưa đánh dấu được dòng nhật ký nào người dân xem được và dòng nào chỉ nội bộ. Hiện mọi dòng " +
+      "nhật ký chỉ cán bộ trong xã xem được.",
+  },
+  // The log file row's remove button (FeedbackActivityPanel.tsx:365-374). No route removes a log
+  // attachment: a file on a log entry is part of an archival record (rule 7).
+  {
+    id: "logFileRemoval",
+    ten: "Gỡ tệp đính kèm",
+    viSao:
+      "Chưa gỡ được tệp đã đính kèm vào nhật ký. Tệp đã ghi vào nhật ký là một phần hồ sơ của phiếu.",
   },
   {
     id: "overdueDays",

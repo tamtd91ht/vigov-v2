@@ -45,9 +45,15 @@ function petition(change: Partial<petitions_phieuPhanAnhRa> = {}): petitions_phi
   };
 }
 
-function drawer(permissions: readonly string[], p = petition(), closeRefusal: string | null = null): string {
+function drawer(
+  permissions: readonly string[],
+  p = petition(),
+  closeRefusal: string | null = null,
+  initialStep: string | null = null,
+): string {
   return renderToStaticMarkup(
     <ChiTietPhieu
+      initialStep={initialStep}
       phieu={p}
       bayGio={new Date("2026-10-02T03:00:00Z")}
       cong={congThaoTac(false, false, permissions.includes("feedback.resolve"))}
@@ -107,8 +113,8 @@ describe("the close block — 409 `after_photo_required`", () => {
   // A reworded commune sentence: no client copy of a default could make this green.
   const CAU = "Xã yêu cầu có ảnh nghiệm thu trước khi đóng phiếu.";
 
-  it("the commune's sentence, VERBATIM, inside the close block, with the way to the upload", () => {
-    const html = drawer(["feedback.read", "feedback.resolve"], petition(), CAU);
+  it("the commune's sentence, VERBATIM, inside the close act (the `Đã đóng` chip's composer), with the way to the upload", () => {
+    const html = drawer(["feedback.read", "feedback.resolve"], petition(), CAU, "da-dong");
     const block = html.slice(html.indexOf('id="ket-qua-xu-ly"'));
     expect(block).toContain(CAU);
     expect(block).toContain(esc(AFTER_PHOTO_REQUIRED_HINT));

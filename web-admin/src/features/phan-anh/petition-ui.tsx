@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { Badge, type BadgeTone } from "@/components/ui/badge";
+import { Badge } from "@/components/ui/badge";
 import { buttonVariants, LEGACY_BUTTON_CLASS, type ButtonSize, type ButtonVariant } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 
@@ -34,32 +34,55 @@ import { UNVERIFIED_CONTACT_LABEL, UNVERIFIED_CONTACT_NOTE } from "./nhan-phieu"
  */
 
 /**
- * Icon and tone per lifecycle CODE (ADR 0027's nine codes) — never per label. ICON + WORD, never
+ * Icon and colours per lifecycle CODE (ADR 0027's nine codes) — never per label. ICON + WORD, never
  * colour alone (spec §7): every code has its own icon shape.
  *
- * Red is deliberately absent: overdue is not a status, it is DERIVED from the deadline (rule 10,
- * invariant 3) and drawn beside the deadline. An unknown code falls to the neutral pill with the
- * neutral icon — it still shows the label the screen computed for it.
+ * The one red status is `khong-tiep-nhan`, as in the prototype — a refusal, not lateness: overdue is
+ * not a status, it is DERIVED from the deadline (rule 10, invariant 3) and drawn beside the deadline.
+ * An unknown code falls to the neutral look — it still shows the label the screen computed for it.
  */
-const STATUS_LOOK: Readonly<Record<string, { tone: BadgeTone; icon: LucideIcon }>> = {
-  "da-tiep-nhan": { tone: "info", icon: Inbox },
-  "dang-phan-loai": { tone: "info", icon: Tags },
-  "da-chuyen-xu-ly": { tone: "info", icon: Forward },
-  "dang-xu-ly": { tone: "info", icon: Loader },
-  "da-xu-ly": { tone: "info", icon: ClipboardCheck },
-  "cho-dan-xac-nhan": { tone: "warning", icon: Hourglass },
-  "da-dong": { tone: "success", icon: CircleCheck },
-  "khong-tiep-nhan": { tone: "neutral", icon: Ban },
-  "chuyen-cap-tren": { tone: "neutral", icon: ArrowUpRight },
+const STATUS_LOOK: Readonly<Record<string, { chip: string; active: string; icon: LucideIcon }>> = {
+  // `chip` = prototype `feedback-display.ts:9-40` (`FEEDBACK_STATUS_META`); `active` = the filled step of
+  // the strip (`FEEDBACK_ACTIVE_TONE`, `:507-517`). Mapped onto our nine codes (ADR 0027).
+  "da-tiep-nhan": { chip: "bg-ink-muted/12 text-ink border-line", active: "bg-ink-muted text-white", icon: Inbox },
+  "dang-phan-loai": { chip: "bg-tangerine/12 text-tangerine border-tangerine/25", active: "bg-tangerine text-white", icon: Tags },
+  "da-chuyen-xu-ly": { chip: "bg-brand/12 text-brand border-brand/25", active: "bg-brand text-white", icon: Forward },
+  "dang-xu-ly": { chip: "bg-teal/12 text-teal border-teal/25", active: "bg-teal text-white", icon: Loader },
+  "da-xu-ly": { chip: "bg-leaf/12 text-leaf border-leaf/25", active: "bg-leaf text-white", icon: ClipboardCheck },
+  "cho-dan-xac-nhan": { chip: "bg-violet/12 text-violet border-violet/25", active: "bg-violet text-white", icon: Hourglass },
+  "da-dong": { chip: "bg-ink/12 text-ink border-line", active: "bg-ink text-white", icon: CircleCheck },
+  "khong-tiep-nhan": { chip: "bg-danger/12 text-danger border-danger/25", active: "bg-danger text-white", icon: Ban },
+  "chuyen-cap-tren": { chip: "bg-violet/12 text-violet border-violet/25", active: "bg-violet text-white", icon: ArrowUpRight },
 };
 
-/** Status pill. `children` is the label for `status`, passed verbatim by the caller. */
+const UNKNOWN_LOOK = { chip: "bg-ink-muted/12 text-ink border-line", active: "bg-ink-muted text-white", icon: Inbox };
+
+/** The icon of a status code — the strip draws it beside each step's word. */
+export function statusIcon(status: string): LucideIcon {
+  return (STATUS_LOOK[status] ?? UNKNOWN_LOOK).icon;
+}
+
+/** The filled background + text of the strip's CURRENT step. */
+export function statusActiveClass(status: string): string {
+  return (STATUS_LOOK[status] ?? UNKNOWN_LOOK).active;
+}
+
+/**
+ * Status pill — the prototype's colours, ICON + WORD (ADR 0068 lần 6 #7: never colour alone). `children`
+ * is the label for `status`, passed verbatim by the caller. An unknown code gets the neutral look.
+ */
 export function PetitionStatusBadge({ status, children }: { status: string; children: ReactNode }) {
-  const look = STATUS_LOOK[status];
+  const look = STATUS_LOOK[status] ?? UNKNOWN_LOOK;
   return (
-    <Badge tone={look?.tone ?? "neutral"} icon={look?.icon}>
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full border border-solid px-2 py-0.5 text-[11px] leading-tight font-semibold whitespace-nowrap",
+        look.chip,
+      )}
+    >
+      <Glyph icon={look.icon} className="size-3 shrink-0" />
       {children}
-    </Badge>
+    </span>
   );
 }
 

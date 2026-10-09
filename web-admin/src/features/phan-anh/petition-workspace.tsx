@@ -1,6 +1,5 @@
 "use client";
 
-import { MessageSquareWarning } from "lucide-react";
 import { useState } from "react";
 
 import { PageHeader } from "@/components/ui/page-header";
@@ -28,18 +27,23 @@ export const PETITION_READ_DENIED =
  * account without the key still sees which screen it is on. The intake button is gated by
  * `feedback.create` inside `StaffIntakeButton` — UX only, the server checks both keys (rule 5).
  *
- * NO "tác phong cán bộ đi luồng riêng" LINE (prototype `FeedbackWorkspace.tsx:125-131`): telling an
- * account without `feedback.restricted` that such petitions exist is exactly what rule 4, forbidden #2
- * forbids. The register is silent about them.
+ * THE "tác phong cán bộ đi luồng riêng" NOTE (prototype `FeedbackWorkspace.tsx:125-131`) is drawn by the
+ * register for accounts WITHOUT `feedback.restricted` — owner decision D3, 09/10/2026. It states the
+ * RULE (such petitions take a separate route), never a count or any sign that one exists, so it reveals
+ * nothing about any petition (rule 4, forbidden #2). Only its first sentence: the key can be granted to
+ * others than the chairman, so the prototype's "Chỉ Chủ tịch Uỷ ban đọc được." would be false.
  *
  * A booked petition bumps `bookings`, which the register folds into its read key: the new petition
  * shows without rebuilding the register (its filters and page stay).
  */
 export function PetitionWorkspace({
   drillDown = NO_DRILL_DOWN,
+  openCode = null,
 }: {
   /** Overview filter, read on the SERVER (`app/phan-anh/page.tsx`). */
   drillDown?: DrillDown<"citizen-reports">;
+  /** `?id=<lookup code>` deep link, read on the server: the register opens that petition's drawer. */
+  openCode?: string | null;
 }) {
   const phien = usePhien();
   // FAIL CLOSED: an unread or failed session holds no key (rule 1, forbidden #1).
@@ -49,7 +53,8 @@ export function PetitionWorkspace({
   return (
     <>
       <PageHeader
-        icon={MessageSquareWarning}
+        // `FeedbackWorkspace.tsx:73`: 20px under the header row, no icon.
+        className="mb-5"
         title={PETITION_PAGE_TITLE}
         subtitle={PETITION_PAGE_SUBTITLE}
         actions={
@@ -61,7 +66,12 @@ export function PetitionWorkspace({
       <CongQuyen khoa={QUYEN_XEM_PHAN_ANH} cauThieuQuyen={PETITION_READ_DENIED}>
         {/* One spacing between the register and the lookup (spec §6.9). */}
         <div className="flex min-w-0 flex-col gap-6">
-          <SoPhanAnh key={drillDownKey(drillDown)} drillDown={drillDown} reloadSignal={bookings} />
+          <SoPhanAnh
+            key={drillDownKey(drillDown)}
+            drillDown={drillDown}
+            reloadSignal={bookings}
+            openCode={openCode}
+          />
           <TraCuuPhieu />
         </div>
       </CongQuyen>

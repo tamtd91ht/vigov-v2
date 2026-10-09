@@ -133,13 +133,11 @@ export function PublicationBox({
   const writable = setPublication !== undefined;
   return (
     <>
-      <p className="inline-flex items-center gap-1.5 font-medium">
-        <Glyph icon={view.status === "cong-khai" ? Eye : EyeOff} className="size-4 shrink-0 text-ink-500" />
-        {view.label}
-      </p>
-      {view.hint !== "" && <p className="ghi-chu">{view.hint}</p>}
+      {/* Prototype `FeedbackDetailDrawer.tsx:266-267`: the state in words, then its hint — no glyph. */}
+      <p className="text-[12.5px] text-navy">{view.label}</p>
+      {view.hint !== "" && <p className="mt-0.5 text-[11px] text-ink-muted">{view.hint}</p>}
       {writable && mayModerate && (view.canPublish || view.canHide) && (
-        <div className="cum-nut mt-2">
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
           {view.canPublish && (
             <button
               type="button"

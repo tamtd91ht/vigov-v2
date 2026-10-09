@@ -81,6 +81,30 @@ function pressAll(el: HTMLElement, ids: readonly string[]): void {
   expect(fetchSpy).not.toHaveBeenCalled();
 }
 
+const PETITION: petitions_phieuPhanAnhRa = {
+  code: "PA-2026-0021",
+  channel: "zalo-mini-app",
+  status: "dang-xu-ly",
+  field: "rac-thai",
+  field_label: "Rác thải – Vệ sinh môi trường",
+  content: "Rác tồn đọng ở đầu ngõ.",
+  address: "Đầu ngõ thôn Hà Lam",
+  lat: 15.5,
+  lng: 108.2,
+  reporter_name: "",
+  reporter_phone: "",
+  anonymous: true,
+  clock_from: "2026-09-09T07:20:00Z",
+  booked_at: "2026-09-09T07:21:00Z",
+  acknowledge_due: "2026-09-09T09:20:00Z",
+  resolve_due: "2026-09-10T09:20:00Z",
+  classify_due: "2026-09-09T11:20:00Z",
+  unit: "",
+  assignee: "",
+  result: "",
+  public: false,
+};
+
 describe("Phản ánh — placeholders (ADR 0068 §14)", () => {
   it("main tabs: Danh sách selected; Bản đồ nhiệt and Báo cáo disabled, out of the tab order; no block", () => {
     const el = mount(<SoPhanAnh />);
@@ -110,33 +134,10 @@ describe("Phản ánh — placeholders (ADR 0068 §14)", () => {
     expect(datLoc).not.toHaveBeenCalled();
   });
 
-  it("drawer §8.4: the scene map is a placeholder section that loads no tile", () => {
-    const petition: petitions_phieuPhanAnhRa = {
-      code: "PA-2026-0021",
-      channel: "zalo-mini-app",
-      status: "dang-xu-ly",
-      field: "rac-thai",
-      field_label: "Rác thải – Vệ sinh môi trường",
-      content: "Rác tồn đọng ở đầu ngõ.",
-      address: "Đầu ngõ thôn Hà Lam",
-      lat: 15.5,
-      lng: 108.2,
-      reporter_name: "",
-      reporter_phone: "",
-      anonymous: true,
-      clock_from: "2026-09-09T07:20:00Z",
-      booked_at: "2026-09-09T07:21:00Z",
-      acknowledge_due: "2026-09-09T09:20:00Z",
-      resolve_due: "2026-09-10T09:20:00Z",
-      classify_due: "2026-09-09T11:20:00Z",
-      unit: "",
-      assignee: "",
-      result: "",
-      public: false,
-    };
+  it("drawer `Vị trí` (D2): the mini-map is a disabled placeholder in its place, loading no tile", () => {
     const el = mount(
       <ChiTietPhieu
-        phieu={petition}
+        phieu={PETITION}
         bayGio={new Date("2026-09-09T08:00:00Z")}
         cong={congThaoTac(false, false, false)}
         tenBoPhan={new Map()}
@@ -154,9 +155,63 @@ describe("Phản ánh — placeholders (ADR 0068 §14)", () => {
       />,
     );
     const section = marker(el, "sceneMap").closest("section");
-    expect(section?.querySelector("h3")?.textContent).toBe(petitionPendingPart("sceneMap").ten);
+    expect(section?.querySelector("h3")?.textContent).toBe("Vị trí");
+    // The address stays under the map's place.
+    expect(section?.textContent).toContain("Đầu ngõ thôn Hà Lam");
     // No map is drawn: no image, no frame, nothing that could fetch a tile.
     expect(section?.querySelector("img, iframe")).toBeNull();
     pressAll(el, ["sceneMap"]);
+  });
+
+  it("drawer `Vị trí` (D2): no coordinates → no section at all", () => {
+    const el = mount(
+      <ChiTietPhieu
+        phieu={{ ...PETITION, lat: null, lng: null }}
+        bayGio={new Date("2026-09-09T08:00:00Z")}
+        cong={congThaoTac(false, false, false)}
+        tenBoPhan={new Map()}
+        boPhan={[]}
+        danhBa={null}
+        dangGui={false}
+        loiGhi={null}
+        dong={() => {}}
+        phanLoai={() => {}}
+        chuyenXuLy={() => {}}
+        tienTrangThai={() => {}}
+        dongPhieuLai={() => {}}
+        khongTiepNhan={() => {}}
+        chuyenCapTren={() => {}}
+      />,
+    );
+    expect([...el.querySelectorAll("h3")].map((h) => h.textContent)).not.toContain("Vị trí");
+    expect(() => marker(el, "sceneMap")).toThrow();
+  });
+
+  it("composer: `Đính kèm ảnh, tệp` is a disabled placeholder; its '?' opens and reaches no network", () => {
+    const el = mount(
+      <ChiTietPhieu
+        phieu={{ ...PETITION, status: "dang-xu-ly" }}
+        bayGio={new Date("2026-09-09T08:00:00Z")}
+        cong={congThaoTac(false, false, false)}
+        tenBoPhan={new Map()}
+        boPhan={[]}
+        danhBa={null}
+        dangGui={false}
+        loiGhi={null}
+        dong={() => {}}
+        phanLoai={() => {}}
+        chuyenXuLy={() => {}}
+        tienTrangThai={() => {}}
+        dongPhieuLai={() => {}}
+        khongTiepNhan={() => {}}
+        chuyenCapTren={() => {}}
+        initialStep="da-xu-ly"
+      />,
+    );
+    const attach = [...el.querySelectorAll<HTMLButtonElement>("button")].find((b) =>
+      b.textContent?.includes("Đính kèm ảnh, tệp"),
+    );
+    expect(attach?.disabled).toBe(true);
+    pressAll(el, ["composerAttachment", "duplicates", "logVisibility"]);
   });
 });

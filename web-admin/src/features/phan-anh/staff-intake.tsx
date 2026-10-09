@@ -56,11 +56,10 @@ import {
   INTAKE_SUBMIT,
   INTAKE_TITLE,
   intakeContentError,
-  NHAC_DU_LIEU_CA_NHAN,
   PETITION_INTAKE_PERMISSION,
   petitionPendingPart,
 } from "./nhan-phieu";
-import { BusyLabel, Glyph, HINT_CLASS, LABEL_CLASS, TEXTAREA_CLASS } from "./petition-ui";
+import { BusyLabel, Glyph, LABEL_CLASS, TEXTAREA_CLASS } from "./petition-ui";
 
 /**
  * "Nhập hộ phản ánh" (spec §11) — an officer books a petition for a citizen who called, came to the
@@ -194,8 +193,11 @@ export function StaffIntakeForm({
         field: values.field,
         content: values.content,
         address: values.address,
-        reporterName: values.reporterName,
-        reporterPhone: values.reporterPhone,
+        // ANONYMOUS SENDS NO NAME AND NO PHONE (prototype `FeedbackEntryForm.tsx`: both disabled and sent
+        // as null). A name typed before the box was ticked must not reach the record the citizen asked
+        // to keep anonymous (rule 3). Blank strings are left out of the body by `bookStaffIntake`.
+        reporterName: values.anonymous ? "" : values.reporterName,
+        reporterPhone: values.anonymous ? "" : values.reporterPhone,
         anonymous: values.anonymous,
         clockFrom,
       },
@@ -327,7 +329,7 @@ export function StaffIntakeFormView({
         </p>
       )}
 
-      <Field label={`${INTAKE_FIELD_LABEL} (bắt buộc)`} htmlFor="nhap-ho-linh-vuc" icon={Shapes} kind="select" grow="auto" className="max-w-none">
+      <Field label={INTAKE_FIELD_LABEL} required htmlFor="nhap-ho-linh-vuc" icon={Shapes} kind="select" grow="auto" className="max-w-none">
         <select
           id="nhap-ho-linh-vuc"
           name="nhap-ho-linh-vuc"
@@ -366,25 +368,23 @@ export function StaffIntakeFormView({
         </Field>
       </div>
 
+      {/* Prototype `FeedbackEntryForm.tsx:164-175`: `*` after the label, 3 rows, no line under it. */}
       <div>
         <label htmlFor="nhap-ho-noi-dung" className={LABEL_CLASS}>
-          {INTAKE_CONTENT_LABEL} (bắt buộc)
+          {INTAKE_CONTENT_LABEL}
+          <span className="ml-1 text-danger">*</span>
         </label>
         <textarea
           id="nhap-ho-noi-dung"
           name="nhap-ho-noi-dung"
-          rows={4}
+          rows={3}
           required
           className={TEXTAREA_CLASS}
           value={values.content}
           placeholder={INTAKE_CONTENT_PLACEHOLDER}
           disabled={sending}
-          aria-describedby="nhap-ho-noi-dung-nhac"
           onChange={(e) => set("content", e.target.value)}
         />
-        <p className={HINT_CLASS} id="nhap-ho-noi-dung-nhac">
-          {NHAC_DU_LIEU_CA_NHAN}
-        </p>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -417,7 +417,7 @@ export function StaffIntakeFormView({
             name="nhap-ho-nguoi-gui"
             value={values.reporterName}
             autoComplete="off"
-            disabled={sending}
+            disabled={sending || values.anonymous}
             onChange={(e) => set("reporterName", e.target.value)}
           />
         </Field>
@@ -429,17 +429,19 @@ export function StaffIntakeFormView({
             inputMode="tel"
             value={values.reporterPhone}
             autoComplete="off"
-            disabled={sending}
+            disabled={sending || values.anonymous}
             onChange={(e) => set("reporterPhone", e.target.value)}
           />
         </Field>
       </div>
 
-      <div className="o-chon">
-        <label htmlFor="nhap-ho-an-danh">
+      {/* Prototype `FeedbackEntryForm.tsx:222-230`: 12.5px, a 14px brand box. */}
+      <div>
+        <label htmlFor="nhap-ho-an-danh" className="flex items-center gap-2 text-[12.5px] text-ink">
           <input
             id="nhap-ho-an-danh"
             type="checkbox"
+            className="accent-brand size-3.5"
             checked={values.anonymous}
             disabled={sending}
             onChange={(e) => set("anonymous", e.target.checked)}

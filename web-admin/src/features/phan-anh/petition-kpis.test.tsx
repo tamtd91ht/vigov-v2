@@ -37,6 +37,16 @@ function view(s: petitions_citizenReportSummaryOut) {
 /** `&` in an href is written `&amp;` by React. */
 const href = (h: string) => h.replace(/&/g, "&amp;");
 
+/** The visible text of one card's value line (screen-reader-only prefixes stripped). */
+function cardValue(html: string, label: string): string {
+  const card = html.split(`data-kpi="${label}"`)[1] ?? "";
+  const value = card.match(/data-kpi-value=""[^>]*>([\s\S]*?)<\/p>/)?.[1] ?? "";
+  return value
+    .replace(/<span class="an-thi-giac">[\s\S]*?<\/span>/g, "")
+    .replace(/<[^>]+>/g, "")
+    .trim();
+}
+
 describe("kpiPeriod / kpiHref — the window and the list behind each figure", () => {
   it("the window is the 90 days before now, half-open", () => {
     const now = new Date("2026-10-02T03:00:00Z");
@@ -84,27 +94,41 @@ describe("PetitionKpisView — the four cards", () => {
     expect(view(summary({ rating_sum: 8, rating_sample: 2 }))).toContain("4,0/5");
   });
 
-  it("sample 0: the average is —, never 0, with the sentence; and no rating_sample link", () => {
+  it("sample 0: the average is —, never 0, and no rating_sample link; the prototype's one hint line only", () => {
     const html = view(summary({ rating_sum: 0, rating_sample: 0, low_rating: 0 }));
     expect(html).not.toContain("0,0/5");
-    expect(html).toContain(KPI_NO_RATING);
+    expect(cardValue(html, "Điểm hài lòng trung bình")).toBe("—");
+    // Prototype `FeedbackWorkspace.tsx:108-116`: one hint, no second sentence under it.
+    expect(html).not.toContain(KPI_NO_RATING);
     expect(html).not.toContain(`href="${href(kpiHref("rating_sample", PERIOD))}"`);
     // The low-rating list still opens (0 of them is a true count).
     expect(html).toContain("0 phiếu bị đánh giá thấp");
   });
 
-  it("a server before 02/10/2026 (fields absent): “Chưa có dữ liệu”, never 0", () => {
+  it("a server before 02/10/2026 (fields absent): —, never 0", () => {
     const html = view(
       summary({ rating_sample: undefined, rating_sum: undefined, low_rating: undefined, publication_pending: null }),
     );
-    expect(html.match(/Chưa có dữ liệu/g)?.length).toBe(2);
+    expect(cardValue(html, "Điểm hài lòng trung bình")).toBe("—");
+    expect(cardValue(html, "Chờ kiểm duyệt")).toBe("—");
     expect(html).not.toContain("phiếu bị đánh giá thấp");
+    expect(html).not.toMatch(/>0<\/a>/);
   });
 
-  it("late > 0 is red WITH the icon beside it — never colour alone", () => {
+  it("late > 0: the WHOLE value is danger, with the warning icon before the hint — never colour alone", () => {
     const html = view(summary({ late: 2 }));
-    expect(html).toMatch(/text-danger-600[^>]*>.*lucide-alarm-clock/);
-    expect(view(summary({ late: 0 }))).not.toContain("lucide-alarm-clock");
+    expect(html).toMatch(/data-kpi-value="" class="[^"]*text-danger[^"]*"|class="[^"]*text-danger[^"]*" data-kpi-value=""/);
+    expect(html).toContain("lucide-triangle-alert");
+    const calm = view(summary({ late: 0 }));
+    expect(calm).toMatch(/class="[^"]*text-leaf[^"]*"[^>]*data-kpi-value=""|data-kpi-value=""[^>]*class="[^"]*text-leaf/);
+    expect(calm).not.toContain("lucide-triangle-alert");
+  });
+
+  it("prototype card: no icon tile, uppercase 11px label, 18px bold value, 11px hint", () => {
+    const html = view(summary());
+    expect(html).not.toMatch(/lucide-(inbox|target|star|eye)/);
+    expect(html.match(/text-\[11px\] font-semibold tracking-wide uppercase/g)?.length).toBe(4);
+    expect(html.match(/text-\[18px\] font-bold/g)?.length).toBe(4);
   });
 
   it("on-time sample 0: no percentage, never 0%", () => {
@@ -117,11 +141,12 @@ describe("PetitionKpisView — the four cards", () => {
     expect(view(summary())).not.toMatch(/quá hạn \d|trễ \d+ (ngày|giờ)/i);
   });
 
-  it("loading: a status sentence and skeletons, no figure", () => {
+  it("loading: a status sentence and ONE h-24 skeleton (prototype `FeedbackWorkspace.tsx:92`), no figure", () => {
     const html = renderToStaticMarkup(<PetitionKpisView summary={null} period={PERIOD} />);
     expect(html).toContain("Đang tải số liệu phản ánh…");
     expect(html).toContain('aria-busy="true"');
     expect(html).not.toContain("<a ");
+    expect(html.match(/aria-hidden="true" class="[^"]*h-24/g)?.length).toBe(1);
   });
 
   it("refused: the server's sentence verbatim, with Tải lại", () => {

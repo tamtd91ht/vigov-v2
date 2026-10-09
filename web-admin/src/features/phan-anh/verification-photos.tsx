@@ -1,7 +1,8 @@
 "use client";
 
-import { CloudOff, ImageOff, ImageUp, Lock, RefreshCw, ShieldX, X } from "lucide-react";
+import { CloudOff, ImageUp, Lock, RefreshCw, ShieldX, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { Notice } from "@/components/ui/notice";
 import { cn } from "@/lib/cn";
@@ -25,6 +26,7 @@ import {
   AFTER_PHOTO_CLOSED,
   AFTER_PHOTO_INPUT_LABEL,
   AFTER_PHOTO_NOTE,
+  AFTER_PHOTO_TOAST,
   AFTER_PHOTO_UPLOAD_BUTTON,
   AFTER_PHOTO_UPLOAD_DENIED,
   AFTER_PHOTOS_EMPTY,
@@ -42,7 +44,7 @@ import {
   scenePhotoSrc,
 } from "./nhan-phieu";
 import { buttonClass, Glyph } from "./petition-ui";
-import { freshLinksFor, scenePhotosState, THUMB_GRID, type ScenePhotosState } from "./scene-photos";
+import { EmptyPhotoBox, freshLinksFor, scenePhotosState, THUMB_GRID, type ScenePhotosState } from "./scene-photos";
 
 /**
  * §8.4 `Sau khi xử lý` — the verification photos staff upload (owner, 02/10/2026; ADR 0047 row "Ảnh
@@ -195,7 +197,10 @@ export function VerificationPhotos({
     const next = afterPhotoCompletion(id, await deps.complete(lookupCode, id));
     set(key, next);
     // A stored photo is on the petition now: read the list ONCE more to show it.
-    if (next.kind === "stored") setReads((n) => n + 1);
+    if (next.kind === "stored") {
+      setReads((n) => n + 1);
+      toast.success(AFTER_PHOTO_TOAST);
+    }
   }
 
   async function start(key: string, file: File): Promise<void> {
@@ -320,12 +325,7 @@ export function VerificationPhotosView({
           {AFTER_PHOTOS_LOADING}
         </p>
       )}
-      {state.kind === "empty" && (
-        <p className="inline-flex items-center gap-2 text-sm text-ink-500">
-          <Glyph icon={ImageOff} className="size-4 shrink-0" />
-          {AFTER_PHOTOS_EMPTY}
-        </p>
-      )}
+      {state.kind === "empty" && <EmptyPhotoBox>{AFTER_PHOTOS_EMPTY}</EmptyPhotoBox>}
       {(state.kind === "unavailable" || state.kind === "error") && (
         <div className="flex flex-wrap items-center gap-3">
           <Glyph icon={CloudOff} className="size-[18px] shrink-0 text-danger-600" />
@@ -350,7 +350,7 @@ export function VerificationPhotosView({
                   aria-pressed={i === openIndex}
                   onClick={() => open(p.id)}
                   className={cn(
-                    "block aspect-[4/3] w-full cursor-pointer overflow-hidden rounded-lg border border-line bg-surface-muted p-0",
+                    "block h-32 w-full cursor-pointer overflow-hidden rounded-[10px] border border-line bg-surface-muted p-0",
                     "transition-[border-color,box-shadow] duration-150 hover:border-brand-500",
                     "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500",
                     i === openIndex && "border-brand-600 ring-2 ring-brand-500",

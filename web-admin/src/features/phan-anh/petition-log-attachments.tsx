@@ -1,8 +1,9 @@
 "use client";
 
-import { Paperclip } from "lucide-react";
+import { Paperclip, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
 
+import { PendingFeature } from "@/components/ui/pending-feature";
 import {
   afterCompletion,
   attachmentTypeLabel,
@@ -27,6 +28,7 @@ import type {
 } from "@/lib/api/schema.gen";
 import { uploadToStorage, type CallResult } from "@/lib/api/task-attachments";
 
+import { petitionPendingPart } from "./nhan-phieu";
 import { buttonClass, Glyph } from "./petition-ui";
 
 /**
@@ -183,6 +185,18 @@ export function PetitionLogAttachmentList({
           >
             Tải về
           </button>
+          {/* The prototype's remove button (`FeedbackActivityPanel.tsx:365-374`). No route removes a
+              log file — it is part of the petition's record — so it is drawn disabled with its "?". */}
+          <PendingFeature info={petitionPendingPart("logFileRemoval")}>
+            <button
+              type="button"
+              disabled
+              aria-label={`Gỡ tệp ${a.file_name}`}
+              className="grid size-7 cursor-not-allowed place-items-center rounded border-0 bg-transparent text-ink-muted opacity-60"
+            >
+              <Glyph icon={Trash2} className="size-3.5" />
+            </button>
+          </PendingFeature>
           {busy === a.id && <span role="status">{DOWNLOAD_OPENING}</span>}
           {refusal?.id === a.id && (
             <span className="thong-bao-loi" role="alert">

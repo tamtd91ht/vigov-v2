@@ -18,14 +18,13 @@ import type {
 
 import {
   CANH_BAO_RE_NHANH,
-  CAU_THIEU_QUYEN_DONG,
-  CAU_THIEU_QUYEN_PHAN_CONG,
-  CAU_THIEU_QUYEN_PHAN_LOAI,
-  ASSIGN_NEEDS_CLASSIFICATION,
+  composerTitle,
   congThaoTac,
   danhBaTheoMa,
   DE_BO_PHAN_PHAN_CONG,
   GOI_Y_GHI_NHAT_KY,
+  LIST_EMPTY_HINT,
+  LIST_EMPTY_TITLE,
   NHAC_DU_LIEU_CA_NHAN,
   NHAN_BO_PHAN_PHU_TRACH,
   NHAN_CHUYEN_CAP_TREN,
@@ -35,8 +34,12 @@ import {
   NHAN_O_GHI_CHU_NOI_BO,
   NHAN_O_KET_QUA,
   NHAN_O_LY_DO,
-  NHAN_TIEN_TRANG_THAI,
   NHAT_KY_RONG,
+  RESULT_PLACEHOLDER,
+  STRIP_NEEDS_RESOLVE,
+  STRIP_NO_PERMISSION,
+  STRIP_NOT_A_STEP,
+  STRIP_WAIT_CITIZEN,
   PHAM_VI_GIAO_CHO_TOI,
   PHAM_VI_TOAN_XA,
   PHAN_CHUA_DUNG,
@@ -139,9 +142,11 @@ function veChiTiet(
   cong: ReturnType<typeof congThaoTac>,
   p = phieu(),
   danhBa: KetQua<identity_danhBaChonNguoiRa> | null = DANH_BA,
+  initialStep: string | null = null,
 ): string {
   return renderToStaticMarkup(
     <ChiTietPhieu
+      initialStep={initialStep}
       phieu={p}
       bayGio={BAY_GIO}
       cong={cong}
@@ -164,37 +169,63 @@ function veChiTiet(
 /** Chỉ dấu KHÔNG THỂ NHẦM của biểu mẫu đóng phiếu: id của ô kết quả. */
 const O_KET_QUA = 'id="ket-qua-xu-ly"';
 
-describe("HAI CỔNG KHÁC NHAU — nút tiến trạng thái và nút Đóng phiếu", () => {
-  it("chỉ có LUẬT NẮM GIỮ (không `feedback.resolve`): tiến được trạng thái, KHÔNG có nút Đóng phiếu", () => {
+type Chip = { tag: string; label: string; role: string };
+
+/** Every chip of the status strip: its `<button>` tag, its word, its second line. */
+function chips(html: string): Chip[] {
+  return [
+    ...html.matchAll(
+      /<li class="flex min-w-\[6\.5rem\] flex-1">(<button[^>]*>)[\s\S]*?<\/svg>([^<]*)<\/span><span[^>]*>([^<]*)<\/span><\/button><\/li>/g,
+    ),
+  ].map((m) => ({ tag: m[1] ?? "", label: m[2] ?? "", role: m[3] ?? "" }));
+}
+
+function chip(html: string, label: string): Chip | undefined {
+  return chips(html).find((c) => c.label === label);
+}
+
+/**
+ * OWNER DECISION D1 (09/10/2026): the strip's chips are pressable ONLY for a move our server performs,
+ * and pressing one opens THE EXISTING ACT for it. A static render cannot press: `initialStep` opens the
+ * composer of that chip — and opens NOTHING when the chip is not pressable, which is what the denied
+ * cases below rely on.
+ */
+describe("HAI CỔNG KHÁC NHAU — tiến trạng thái (luật nắm giữ) và Đóng phiếu (`feedback.resolve`)", () => {
+  it("chỉ có LUẬT NẮM GIỮ (không khoá nào): bước kế tiếp BẤM ĐƯỢC; Đóng phiếu thì không", () => {
     // Đây là tài khoản trưởng thôn: xem được sổ, đang giữ một phiếu, không có khoá toàn xã.
-    const html = veChiTiet(congThaoTac(false, false, false));
+    const html = veChiTiet(congThaoTac(false, false, false), phieu({ status: "dang-xu-ly" }), DANH_BA, "da-xu-ly");
+    // Chip kế tiếp CÓ — luật nắm giữ mở nó, và giao diện không được lấy mất.
+    expect(chip(html, "Đã xử lý")?.role).toBe("chuyển sang");
+    expect(html).toContain(nhuTrongHTML(composerTitle("da-xu-ly")));
+    expect(html).toContain('id="ghi-chu-tien"');
+    expect(html).toMatch(/>Xác nhận<\/button>/);
+    expect(html).toMatch(/>Huỷ<\/button>/);
+    // No close form on this status, whatever the key.
+    expect(html).not.toContain(O_KET_QUA);
+  });
 
-    // Nút tiến trạng thái CÓ — luật nắm giữ mở nó, và giao diện không được lấy mất.
-    expect(html).toContain(nhuTrongHTML(NHAN_TIEN_TRANG_THAI));
-
-    // Biểu mẫu đóng phiếu KHÔNG ra tới trang. Canh bằng id của ô kết quả và bằng nhãn của nó, chứ
-    // KHÔNG bằng chuỗi "Đóng phiếu": chính câu từ chối `CAU_THIEU_QUYEN_DONG` cũng chứa hai chữ
-    // ấy, nên một phép `not.toContain("Đóng phiếu")` sẽ đỏ vì lý do sai — hoặc xanh vì lý do sai
-    // vào ngày câu ấy đổi.
+  it("DENIED — `cho-dan-xac-nhan` without `feedback.resolve`: the `Đã đóng` chip is blocked, names the key, opens nothing", () => {
+    const html = veChiTiet(congThaoTac(true, true, false), phieu({ status: "cho-dan-xac-nhan" }), DANH_BA, "da-dong");
+    const dong = chip(html, "Đã đóng");
+    expect(dong?.role).toBe("—");
+    expect(dong?.tag).toContain('aria-disabled="true"');
+    expect(dong?.tag).toContain(nhuTrongHTML(STRIP_NEEDS_RESOLVE));
     expect(html).not.toContain(O_KET_QUA);
     expect(html).not.toContain(nhuTrongHTML(NHAN_O_KET_QUA));
-
-    // Và cán bộ được nói cho biết mình thiếu ĐÚNG khoá nào.
-    expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_DONG));
-    expect(html).toContain("feedback.resolve");
+    // No move is open to this account here: the prototype's one sentence.
+    expect(html).toContain(STRIP_NO_PERMISSION);
   });
 
-  it("có `feedback.resolve`: biểu mẫu đóng phiếu ra tới trang, kèm ô kết quả người dân đọc", () => {
-    const html = veChiTiet(congThaoTac(false, false, true), phieu({ status: "cho-dan-xac-nhan" }));
-
+  it("có `feedback.resolve`: the `Đã đóng` chip opens the close act, with the result the citizen reads", () => {
+    const html = veChiTiet(congThaoTac(false, false, true), phieu({ status: "cho-dan-xac-nhan" }), DANH_BA, "da-dong");
+    expect(chip(html, "Đã đóng")?.role).toBe("chuyển sang");
     expect(html).toContain(O_KET_QUA);
     expect(html).toContain(nhuTrongHTML(NHAN_O_KET_QUA));
-    // Nút tiến trạng thái vẫn còn: khoá toàn xã KHÔNG thay thế luật nắm giữ, nó chỉ thêm vào.
-    expect(html).toContain(nhuTrongHTML(NHAN_TIEN_TRANG_THAI));
-    expect(html).not.toContain(nhuTrongHTML(CAU_THIEU_QUYEN_DONG));
+    expect(html).toContain(nhuTrongHTML(RESULT_PLACEHOLDER));
+    expect(html).not.toContain(STRIP_NO_PERMISSION);
   });
 
-  it("nút tiến trạng thái KHÔNG bị gắn sau `feedback.resolve` — bốn bộ quyền, bốn lần vẫn có", () => {
+  it("bước tiến KHÔNG bị gắn sau `feedback.resolve` — bốn bộ quyền, bốn lần vẫn bấm được", () => {
     // VẾ CHỊU LỰC. Bài này đỏ đúng vào ngày ai đó "gộp cho gọn" hai cổng làm một — thao tác trông
     // hợp lý, không làm hỏng màn hình của người viết mã, và lấy mất khả năng xử lý việc của mọi
     // trưởng thôn trong xã.
@@ -204,40 +235,64 @@ describe("HAI CỔNG KHÁC NHAU — nút tiến trạng thái và nút Đóng ph
       congThaoTac(false, true, false),
       congThaoTac(true, true, true),
     ]) {
-      expect(veChiTiet(cong)).toContain(nhuTrongHTML(NHAN_TIEN_TRANG_THAI));
+      expect(chip(veChiTiet(cong), "Đã xử lý")?.role).toBe("chuyển sang");
     }
   });
 
-  it("phiếu đã ở bước cuối luồng chính thì không còn nút tiến — không phải vì quyền", () => {
+  it("phiếu đã đóng: không chip nào bấm được — không phải vì quyền", () => {
     const html = veChiTiet(congThaoTac(true, true, true), phieu({ status: "da-dong" }));
-    expect(html).not.toContain(nhuTrongHTML(NHAN_TIEN_TRANG_THAI));
+    expect(chips(html).filter((c) => c.role === "chuyển sang")).toEqual([]);
+    expect(chip(html, "Đã đóng")?.role).toBe("đang ở đây");
+    expect(html).not.toContain(STRIP_NO_PERMISSION);
+  });
+
+  it("the strip: icon + word on every chip, the current one filled with ITS status colour", () => {
+    const html = veChiTiet(congThaoTac(true, true, true), phieu({ status: "dang-xu-ly" }));
+    expect(chips(html).map((c) => c.label)).toEqual([
+      "Đã tiếp nhận",
+      "Đang phân loại",
+      "Đã chuyển xử lý",
+      "Đang xử lý",
+      "Đã xử lý",
+      "Chờ dân xác nhận",
+      "Đã đóng",
+    ]);
+    const current = chip(html, "Đang xử lý");
+    expect(current?.tag).toContain('aria-current="step"');
+    expect(current?.tag).toContain("bg-teal text-white");
+    // No branch row when no branch is the petition's or open to it.
+    expect(html).not.toContain("Rẽ nhánh:");
   });
 });
 
 describe("CỔNG QUYỀN — phân loại và chuyển xử lý", () => {
-  it("thiếu `feedback.classify`: không có ô chọn lĩnh vực, và câu từ chối gọi đúng tên khoá", () => {
-    const html = veChiTiet(congThaoTac(false, true, true), phieu({ status: "da-tiep-nhan" }));
+  it("DENIED — thiếu `feedback.classify`: chip `Đang phân loại` blocked with the key, no field select", () => {
+    const html = veChiTiet(congThaoTac(false, true, true), phieu({ status: "da-tiep-nhan" }), DANH_BA, "dang-phan-loai");
     expect(html).not.toContain('id="chon-linh-vuc"');
-    expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_PHAN_LOAI));
-    expect(html).toContain("feedback.classify");
+    expect(chip(html, "Đang phân loại")?.tag).toContain("feedback.classify");
+    expect(html).toContain(STRIP_NO_PERMISSION);
   });
 
-  it("thiếu `feedback.assign`: không có khối Chuyển xử lý, và KHÔNG có ô chọn cán bộ", () => {
+  it("có `feedback.classify` ở `da-tiep-nhan`: the chip opens the classify act", () => {
+    const html = veChiTiet(congThaoTac(true, false, false), phieu({ status: "da-tiep-nhan" }), DANH_BA, "dang-phan-loai");
+    expect(html).toContain('id="chon-linh-vuc"');
+    expect(html).toContain('id="ghi-chu-phan-loai"');
+  });
+
+  it("DENIED — thiếu `feedback.assign`: no hand-over section, NO officer select", () => {
     const html = veChiTiet(congThaoTac(true, false, true));
     expect(html).not.toContain('id="chon-bo-phan"');
     expect(html).not.toContain('id="chon-can-bo"');
     expect(html).not.toContain(nhuTrongHTML(DE_BO_PHAN_PHAN_CONG));
-    expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_PHAN_CONG));
-    expect(html).toContain("feedback.assign");
+    expect(html).not.toContain("Chuyển xử lý, không đổi trạng thái");
   });
 
   it("có `feedback.classify` nhưng phiếu đã qua bước phân loại: không vẽ ô chọn", () => {
     // Máy chủ chốt lĩnh vực bằng câu UPDATE mang `trang_thai = 'da-tiep-nhan'`, nên lần thứ hai là
-    // 409. Ẩn ô chọn là nói ra điều ấy trước, không phải dựng thêm một luật.
-    const html = veChiTiet(congThaoTac(true, true, true), phieu({ status: "dang-xu-ly" }));
+    // 409. The chip is not a move from here.
+    const html = veChiTiet(congThaoTac(true, true, true), phieu({ status: "dang-xu-ly" }), DANH_BA, "dang-phan-loai");
     expect(html).not.toContain('id="chon-linh-vuc"');
-    // Và KHÔNG hiện câu "thiếu quyền" — tài khoản có quyền, chỉ là phiếu đã qua bước ấy.
-    expect(html).not.toContain(nhuTrongHTML(CAU_THIEU_QUYEN_PHAN_LOAI));
+    expect(chip(html, "Đang phân loại")?.tag).toContain(nhuTrongHTML(STRIP_NOT_A_STEP));
   });
 
   it("thiếu `feedback.read`: cả màn không dựng", () => {
@@ -355,28 +410,29 @@ describe("dữ liệu cá nhân — màn hình hiện đúng thứ máy chủ g�
         mo={() => {}}
       />,
     );
-    expect(html).toContain("Người gửi ẩn danh");
+    // The card's words are the prototype's: "Gửi ẩn danh" (the drawer says "Người gửi ẩn danh").
+    expect(html).toContain("Gửi ẩn danh");
     expect(html).not.toContain("Nguyễn");
     expect(html).not.toContain("09****0000");
   });
 });
 
-describe("vị trí hiện trường — khối chi tiết (§8.4)", () => {
+describe("vị trí — khối chi tiết (D2: only with coordinates)", () => {
   const ALL_GATES = congThaoTac(true, true, true);
 
-  it("coordinates as text, six decimals, with the provenance note", () => {
+  it("coordinates: the `Vị trí` section — map placeholder, the address, the coordinates as text", () => {
     const html = veChiTiet(ALL_GATES, phieu({ lat: 21.028511, lng: 105.804817 }));
-    expect(html).toContain("Vị trí hiện trường");
+    expect(html).toContain(">Vị trí</h3>");
+    expect(html).toContain(nhuTrongHTML(pendingMarkerLabel(petitionPendingPart("sceneMap").ten)));
     expect(html).toContain("Tổ 6, thôn Hà Lam");
     expect(html).toContain("21.028511, 105.804817");
     expect(html).toContain("Toạ độ do người dân gửi kèm từ ứng dụng");
   });
 
-  it("absent coordinates are SAID, not a vanished row", () => {
+  it("no coordinates: no `Vị trí` section at all (prototype `FeedbackDetailDrawer.tsx:394`)", () => {
     const html = veChiTiet(ALL_GATES, phieu());
-    expect(html).toContain("Vị trí hiện trường");
-    expect(html).toContain("Người dân không gửi toạ độ");
-    expect(html).not.toContain("Toạ độ do người dân gửi kèm");
+    expect(html).not.toContain(">Vị trí</h3>");
+    expect(html).not.toContain(nhuTrongHTML(pendingMarkerLabel(petitionPendingPart("sceneMap").ten)));
   });
 
   it("anonymous: location shown, reporter hidden", () => {
@@ -447,24 +503,29 @@ describe("phần chưa dựng — mô tả sau dấu '?' (ADR 0068 §14)", () =>
  * lọt ra ngoài cổng là thứ không ai thấy trong lúc phát triển.
  */
 describe("hai nhánh rẽ — chỉ ở `dang-phan-loai`, chỉ với `feedback.classify`", () => {
-  const NUT_KHONG_TIEP_NHAN = `>${NHAN_KHONG_TIEP_NHAN}</button>`;
-  const NUT_CHUYEN_CAP_TREN = `>${NHAN_CHUYEN_CAP_TREN}</button>`;
-
-  it("có `feedback.classify` và phiếu ở `dang-phan-loai`: hai nút có mặt", () => {
+  it("có `feedback.classify` và phiếu ở `dang-phan-loai`: hai chip rẽ nhánh bấm được; each opens its act", () => {
     const html = veChiTiet(congThaoTac(true, false, false), phieu({ status: "dang-phan-loai" }));
-    expect(html).toContain(NUT_KHONG_TIEP_NHAN);
-    expect(html).toContain(NUT_CHUYEN_CAP_TREN);
+    expect(html).toContain("Rẽ nhánh:");
+    expect(chip(html, NHAN_KHONG_TIEP_NHAN)?.role).toBe("chuyển sang");
+    expect(chip(html, NHAN_CHUYEN_CAP_TREN)?.role).toBe("chuyển sang");
+    const reject = veChiTiet(congThaoTac(true, false, false), phieu({ status: "dang-phan-loai" }), DANH_BA, "khong-tiep-nhan");
+    expect(reject).toContain('id="ly-do-khong-tiep-nhan"');
+    expect(reject).not.toContain('id="co-quan-khong-tiep-nhan"');
+    const refer = veChiTiet(congThaoTac(true, false, false), phieu({ status: "dang-phan-loai" }), DANH_BA, "chuyen-cap-tren");
+    expect(refer).toContain('id="ly-do-chuyen-cap-tren"');
+    expect(refer).toContain('id="co-quan-chuyen-cap-tren"');
   });
 
-  it("THIẾU `feedback.classify`: không nút nào, và câu thiếu quyền nói đúng tên khoá", () => {
-    const html = veChiTiet(congThaoTac(false, true, true), phieu({ status: "dang-phan-loai" }));
-    expect(html).not.toContain(NUT_KHONG_TIEP_NHAN);
-    expect(html).not.toContain(NUT_CHUYEN_CAP_TREN);
-    expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_PHAN_LOAI));
-    expect(html).toContain("feedback.classify");
+  it("DENIED — THIẾU `feedback.classify`: both branch chips blocked with the key; no form opens", () => {
+    const html = veChiTiet(congThaoTac(false, true, true), phieu({ status: "dang-phan-loai" }), DANH_BA, "khong-tiep-nhan");
+    for (const label of [NHAN_KHONG_TIEP_NHAN, NHAN_CHUYEN_CAP_TREN]) {
+      expect(chip(html, label)?.role, label).toBe("—");
+      expect(chip(html, label)?.tag, label).toContain("feedback.classify");
+    }
+    expect(html).not.toContain('id="ly-do-khong-tiep-nhan"');
   });
 
-  it("có khoá nhưng phiếu ở trạng thái khác: không nút nào — máy chủ sẽ trả 409", () => {
+  it("có khoá nhưng phiếu ở trạng thái khác: no branch chip is pressable — the server would answer 409", () => {
     for (const status of [
       "da-tiep-nhan",
       "da-chuyen-xu-ly",
@@ -475,9 +536,10 @@ describe("hai nhánh rẽ — chỉ ở `dang-phan-loai`, chỉ với `feedback.
       "khong-tiep-nhan",
       "chuyen-cap-tren",
     ]) {
-      const html = veChiTiet(congThaoTac(true, true, true), phieu({ status }));
-      expect(html, status).not.toContain(NUT_KHONG_TIEP_NHAN);
-      expect(html, status).not.toContain(NUT_CHUYEN_CAP_TREN);
+      const html = veChiTiet(congThaoTac(true, true, true), phieu({ status }), DANH_BA, "khong-tiep-nhan");
+      expect(chip(html, NHAN_KHONG_TIEP_NHAN)?.role, status).not.toBe("chuyển sang");
+      expect(chip(html, NHAN_CHUYEN_CAP_TREN)?.role, status).not.toBe("chuyển sang");
+      expect(html, status).not.toContain('id="ly-do-khong-tiep-nhan"');
     }
   });
 });
@@ -505,9 +567,14 @@ describe("biểu mẫu nhánh rẽ", () => {
     return submitTag(html);
   }
 
-  it("nhãn ô lý do nói người dân đọc được, và cảnh báo không hoàn tác + người dân được báo", () => {
+  it("nhãn ô lý do (prototype, verbatim), cảnh báo không hoàn tác + người dân được báo, Huỷ / Xác nhận", () => {
     const html = veBieuMau("khong-tiep-nhan");
     expect(html).toContain(nhuTrongHTML(NHAN_O_LY_DO));
+    expect(NHAN_O_LY_DO).toBe("Lý do (bắt buộc, trả lời cho người dân)");
+    expect(html).toMatch(/>Xác nhận<\/button>/);
+    expect(html).toMatch(/>Huỷ<\/button>/);
+    // Inline in the composer now, not a confirm dialog.
+    expect(html.startsWith("<form")).toBe(true);
     expect(html).toContain(nhuTrongHTML(CANH_BAO_RE_NHANH));
     expect(CANH_BAO_RE_NHANH).toContain("không hoàn tác");
     expect(CANH_BAO_RE_NHANH).toContain("Người dân được thông báo");
@@ -557,7 +624,8 @@ describe("chi tiết phiếu ở nhánh rẽ — lý do, cơ quan, thời điể
         branch_ended_at: "2026-09-10T03:05:00Z",
       }),
     );
-    expect(html).toContain("<dt>Lý do</dt>");
+    // The prototype's tangerine box, labelled "Lý do {trạng thái viết thường}".
+    expect(html).toContain(">Lý do không tiếp nhận</p>");
     expect(html).toContain(LY_DO);
     // 03:05Z = 10:05 giờ Việt Nam.
     expect(html).toContain("10:05");
@@ -586,7 +654,7 @@ describe("chi tiết phiếu ở nhánh rẽ — lý do, cơ quan, thời điể
         congThaoTac(true, true, true),
         phieu({ status, reason: LY_DO, receiving_body: CO_QUAN }),
       );
-      expect(html, status).not.toContain("<dt>Lý do</dt>");
+      expect(html, status).not.toMatch(/>Lý do (không tiếp nhận|chuyển cấp trên)<\/p>/);
       expect(html, status).not.toContain("<dt>Cơ quan tiếp nhận</dt>");
       expect(html, status).not.toContain(LY_DO);
     }
@@ -599,46 +667,36 @@ describe("chi tiết phiếu ở nhánh rẽ — lý do, cơ quan, thời điể
   });
 });
 
-describe("Đóng phiếu — hai điểm đóng", () => {
+describe("Đóng phiếu — hai điểm đóng (the `Đã đóng` chip)", () => {
+  const close = (cong: ReturnType<typeof congThaoTac>, p: petitions_phieuPhanAnhRa) =>
+    veChiTiet(cong, p, DANH_BA, "da-dong");
+
   it("`cho-dan-xac-nhan`: có biểu mẫu đóng, kênh nào cũng vậy", () => {
-    expect(
-      veChiTiet(congThaoTac(false, false, true), phieu({ status: "cho-dan-xac-nhan" })),
-    ).toContain(O_KET_QUA);
+    expect(close(congThaoTac(false, false, true), phieu({ status: "cho-dan-xac-nhan" }))).toContain(O_KET_QUA);
   });
 
   it("`da-xu-ly` kênh `can-bo-nhap-ho` (không có công dân để xác nhận): có biểu mẫu đóng", () => {
-    const html = veChiTiet(
-      congThaoTac(false, false, true),
-      phieu({ status: "da-xu-ly", channel: "can-bo-nhap-ho" }),
-    );
+    const html = close(congThaoTac(false, false, true), phieu({ status: "da-xu-ly", channel: "can-bo-nhap-ho" }));
     expect(html).toContain(O_KET_QUA);
   });
 
-  it("`da-xu-ly` kênh công dân: KHÔNG có biểu mẫu đóng — phải qua bước chờ dân xác nhận", () => {
+  it("DENIED — `da-xu-ly` kênh công dân: KHÔNG có biểu mẫu đóng — phải qua bước chờ dân xác nhận", () => {
     for (const channel of ["zalo-mini-app", "zalo-oa", "web-xa"]) {
-      const html = veChiTiet(
-        congThaoTac(false, false, true),
-        phieu({ status: "da-xu-ly", channel }),
-      );
+      const html = close(congThaoTac(false, false, true), phieu({ status: "da-xu-ly", channel }));
       expect(html, channel).not.toContain(O_KET_QUA);
+      expect(chip(html, "Đã đóng")?.tag, channel).toContain(nhuTrongHTML(STRIP_WAIT_CITIZEN));
     }
   });
 
-  it("`da-xu-ly` nhập hộ nhưng THIẾU `feedback.resolve`: không biểu mẫu, câu thiếu quyền", () => {
-    const html = veChiTiet(
-      congThaoTac(true, true, false),
-      phieu({ status: "da-xu-ly", channel: "can-bo-nhap-ho" }),
-    );
+  it("DENIED — `da-xu-ly` nhập hộ nhưng THIẾU `feedback.resolve`: không biểu mẫu, the chip names the key", () => {
+    const html = close(congThaoTac(true, true, false), phieu({ status: "da-xu-ly", channel: "can-bo-nhap-ho" }));
     expect(html).not.toContain(O_KET_QUA);
-    expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_DONG));
+    expect(chip(html, "Đã đóng")?.tag).toContain("feedback.resolve");
   });
 
   it("các trạng thái khác: không có biểu mẫu đóng", () => {
     for (const status of ["da-tiep-nhan", "dang-phan-loai", "dang-xu-ly", "da-dong", "khong-tiep-nhan"]) {
-      const html = veChiTiet(
-        congThaoTac(true, true, true),
-        phieu({ status, channel: "can-bo-nhap-ho" }),
-      );
+      const html = close(congThaoTac(true, true, true), phieu({ status, channel: "can-bo-nhap-ho" }));
       expect(html, status).not.toContain(O_KET_QUA);
     }
   });
@@ -679,12 +737,16 @@ describe("nhật ký xử lý — khối, nút ghi, các dòng", () => {
     };
   }
 
-  it("có `feedback.read`: khối nhật ký và nút `Ghi nhật ký` có mặt", () => {
+  it("có `feedback.read`: khối nhật ký, the open box and `Ghi nhật ký`; title has no icon", () => {
     const html = renderToStaticMarkup(
       <NhatKyPhieu maTraCuu="PA-2026-0021" tenBoPhan={TB} danhBa={DB} coNutGhi={true} />,
     );
-    expect(html).toContain(TIEU_DE_NHAT_KY);
+    expect(html).toMatch(new RegExp(`<h3[^>]*>${TIEU_DE_NHAT_KY}</h3>`));
+    expect(html).not.toContain("lucide-history");
     expect(html).toContain(NUT_GHI);
+    expect(html).toContain(nhuTrongHTML(GOI_Y_GHI_NHAT_KY));
+    // `Nội bộ` has no flag behind it on a log row: a disabled pill with its "?" (ADR 0068 §14).
+    expect(html).toContain(nhuTrongHTML(pendingMarkerLabel(petitionPendingPart("logVisibility").ten)));
   });
 
   it("CA BỊ TỪ CHỐI — không có quyền (hoặc phiên chưa rõ): KHÔNG có nút ghi, vẫn đọc được", () => {
@@ -721,27 +783,45 @@ describe("nhật ký xử lý — khối, nút ghi, các dòng", () => {
     expect(html).toContain(NUT_GHI);
   });
 
-  it("rỗng: câu nói nhật ký bắt đầu ghi từ 26/09/2026 — phiếu cũ không có dòng, theo thiết kế", () => {
+  it("rỗng: the prototype's sentence (`FeedbackActivityPanel.tsx:237-239`)", () => {
     const html = renderToStaticMarkup(<DanhSachNhatKy dong={[]} tenBoPhan={TB} danhBa={DB} />);
     expect(html).toContain(NHAT_KY_RONG);
-    expect(NHAT_KY_RONG).toBe("Chưa có dòng nhật ký nào. Nhật ký bắt đầu ghi từ ngày 26/09/2026.");
+    expect(NHAT_KY_RONG).toBe("Chưa có ghi chép nào.");
   });
 
-  it("một dòng: giờ Việt Nam, nhãn thao tác, chip trạng thái, HỌ TÊN kèm MÃ người thực hiện", () => {
+  it("một dòng: initials avatar, HỌ TÊN kèm MÃ, giờ Việt Nam, the act, the status pill", () => {
     const html = renderToStaticMarkup(
       <DanhSachNhatKy dong={[dong({ action: "chuyen-trang-thai" })]} tenBoPhan={TB} danhBa={DB} />,
     );
-    // 03:05Z = 10:05 giờ Việt Nam.
-    expect(html).toContain("10:05 26/09/2026");
+    // 03:05Z = 10:05 giờ Việt Nam, date first like the prototype's `formatDateTime`.
+    expect(html).toContain("26/09/2026 10:05");
     expect(html).toContain("Chuyển trạng thái");
-    expect(html).toContain("Đang xử lý");
+    expect(html).toMatch(/bg-brand\/12[^"]*"[^>]*>Đang xử lý</);
     // PA-06: họ tên tra từ danh bạ màn hình đã đọc một lần, MÃ vẫn ở trên dòng (luật 6, bất biến 8).
-    expect(html).toContain("Lê Văn C (CB-00200)");
-    // Dòng không phải `phan-cong` thì không có ô bộ phận.
-    expect(html).not.toContain(nhuTrongHTML(NHAN_BO_PHAN_PHU_TRACH));
+    expect(html).toContain("<b class=\"text-navy text-[12.5px]\">Lê Văn C (CB-00200)</b>");
+    // The avatar: initials of the name, never the code.
+    expect(html).toMatch(/aria-hidden="true"[^>]*>VC<\/span>/);
+    // Dòng không phải `phan-cong` thì không có dòng bộ phận.
+    expect(html).not.toContain("Bộ phận: ");
   });
 
-  it("dòng `phan-cong`: có `Bộ phận / Phụ trách`, tên bộ phận và người phụ trách", () => {
+  it("status pill ONLY when the status changed from the row before (older); a note keeps none", () => {
+    const html = renderToStaticMarkup(
+      <DanhSachNhatKy
+        dong={[
+          dong({ id: "3", action: "ghi-chu", status: "dang-xu-ly", note: "Đã gọi điện." }),
+          dong({ id: "2", action: "chuyen-trang-thai", status: "dang-xu-ly" }),
+          dong({ id: "1", action: "phan-cong", status: "da-chuyen-xu-ly" }),
+        ]}
+        tenBoPhan={TB}
+        danhBa={DB}
+      />,
+    );
+    // Three rows, two status changes: the note on an unchanged status carries no pill.
+    expect(html.match(/inline-block rounded-full bg-brand\/12/g)?.length).toBe(2);
+  });
+
+  it("dòng `phan-cong`: “Bộ phận: X” and “Phụ trách: Y” lines (prototype `:282-299`)", () => {
     const html = renderToStaticMarkup(
       <DanhSachNhatKy
         dong={[dong({ action: "phan-cong", unit: "01JBOPHAN", assignee: "CB-00123" })]}
@@ -749,10 +829,10 @@ describe("nhật ký xử lý — khối, nút ghi, các dòng", () => {
         danhBa={DB}
       />,
     );
-    expect(html).toContain(nhuTrongHTML(NHAN_BO_PHAN_PHU_TRACH));
-    expect(html).toContain("VĂN PHÒNG ĐẢNG ỦY");
-    expect(html).toContain("Trần Thị B");
+    expect(html).toMatch(/Bộ phận: (<!-- -->)?<\/span><b[^>]*>VĂN PHÒNG ĐẢNG ỦY<\/b>/);
+    expect(html).toMatch(/Phụ trách: (<!-- -->)?<\/span><b[^>]*>Trần Thị B<\/b>/);
     expect(html).toContain("Chuyển xử lý");
+    expect(NHAN_BO_PHAN_PHU_TRACH).toBe("Bộ phận / Phụ trách");
   });
 
   it("ghi chú: chữ được THOÁT (không HTML nào chạy), xuống dòng giữ bằng lớp CSS", () => {
@@ -775,7 +855,7 @@ describe("nhật ký xử lý — khối, nút ghi, các dòng", () => {
     expect(nguon).not.toMatch(/dangerouslySetInnerHTML\s*=/);
   });
 
-  it("biểu mẫu ghi: nhãn gắn với ô, gợi ý, bộ đếm /2000, lời nhắc không ghi SĐT/CCCD", () => {
+  it("biểu mẫu ghi (always open): labelled 3-row box, the hint, the reminder, `Ghi nhật ký` with Send", () => {
     const html = renderToStaticMarkup(
       <BieuMauGhiNhatKy
         id="bm"
@@ -784,15 +864,25 @@ describe("nhật ký xử lý — khối, nút ghi, các dòng", () => {
         dangGui={false}
         loi={null}
         gui={() => {}}
-        huy={() => {}}
       />,
     );
     expect(html).toContain('for="bm-noi-dung"');
-    expect(html).toContain('id="bm-noi-dung"');
+    expect(html).toMatch(/<textarea[^>]*id="bm-noi-dung"[^>]*rows="3"|<textarea[^>]*rows="3"[^>]*id="bm-noi-dung"/);
     expect(html).toContain(nhuTrongHTML(GOI_Y_GHI_NHAT_KY));
-    expect(html).toMatch(/0(<!-- -->)?\/(<!-- -->)?2000(<!-- -->)? ký tự/);
     expect(html).toContain(nhuTrongHTML(NHAC_DU_LIEU_CA_NHAN));
+    expect(html).toContain("lucide-send");
+    expect(html).toMatch(/>Ghi nhật ký<\/button>/);
+    // No `Huỷ`: the box is not a toggled form any more (prototype `:159-231`).
+    expect(html).not.toContain(">Huỷ<");
     // Trống thì nút lưu khoá.
+    expect(submitTag(html)).toContain("disabled");
+  });
+
+  it("biểu mẫu ghi: over 2000 characters, the server's limit is said and the button locks", () => {
+    const html = renderToStaticMarkup(
+      <BieuMauGhiNhatKy id="bm" noiDung={"ệ".repeat(2001)} datNoiDung={() => {}} dangGui={false} loi={null} gui={() => {}} />,
+    );
+    expect(html).toContain("không được quá 2000 ký tự");
     expect(submitTag(html)).toContain("disabled");
   });
 
@@ -806,7 +896,6 @@ describe("nhật ký xử lý — khối, nút ghi, các dòng", () => {
         dangGui={false}
         loi={cau}
         gui={() => {}}
-        huy={() => {}}
       />,
     );
     expect(html).toContain(cau);
@@ -814,24 +903,29 @@ describe("nhật ký xử lý — khối, nút ghi, các dòng", () => {
   });
 });
 
-describe("ghi chú nội bộ trên sáu thao tác — ô nhập", () => {
-  it("ô có nhãn gắn đúng id, và nói rõ KHÔNG gửi người dân", () => {
+describe("`Nội dung cập nhật` trên sáu thao tác — ô nhập", () => {
+  it("ô có nhãn gắn đúng id (prototype words), and the line under it says it is NOT sent to the citizen", () => {
     const html = renderToStaticMarkup(<ONhapGhiChuNoiBo id="gc" giaTri="" datGiaTri={() => {}} />);
     expect(html).toContain('for="gc"');
     expect(html).toContain('id="gc"');
+    expect(NHAN_O_GHI_CHU_NOI_BO).toBe("Nội dung cập nhật");
     expect(html).toContain(nhuTrongHTML(NHAN_O_GHI_CHU_NOI_BO));
-    expect(NHAN_O_GHI_CHU_NOI_BO).toContain("không gửi người dân");
+    expect(html).toContain("Đã làm gì, ai làm, còn vướng gì… (không bắt buộc)");
+    expect(html).toContain("không gửi người dân");
   });
 
-  it("có mặt ở phân loại, chuyển xử lý, tiến trạng thái, đóng phiếu", () => {
-    const html = veChiTiet(congThaoTac(true, true, true), phieu({ status: "da-tiep-nhan" }));
-    expect(html).toContain('id="ghi-chu-phan-loai"');
-    expect(html).toContain('id="ghi-chu-tien"');
-    // `Chuyển xử lý` is not drawn before classification (PA-03) — its note box lives one step later.
-    const phanCong = veChiTiet(congThaoTac(true, true, true), phieu({ status: "dang-phan-loai" }));
-    expect(phanCong).toContain('id="ghi-chu-phan-cong"');
-    const dongP = veChiTiet(congThaoTac(false, false, true), phieu({ status: "cho-dan-xac-nhan" }));
-    expect(dongP).toContain('id="ghi-chu-dong"');
+  it("có mặt ở phân loại, chuyển xử lý, tiến trạng thái, đóng phiếu — each in its chip's composer", () => {
+    const ALL = congThaoTac(true, true, true);
+    expect(veChiTiet(ALL, phieu({ status: "da-tiep-nhan" }), DANH_BA, "dang-phan-loai")).toContain(
+      'id="ghi-chu-phan-loai"',
+    );
+    expect(veChiTiet(ALL, phieu({ status: "dang-phan-loai" }), DANH_BA, "da-chuyen-xu-ly")).toContain(
+      'id="ghi-chu-phan-cong"',
+    );
+    expect(veChiTiet(ALL, phieu({ status: "da-chuyen-xu-ly" }), DANH_BA, "dang-xu-ly")).toContain('id="ghi-chu-tien"');
+    expect(
+      veChiTiet(congThaoTac(false, false, true), phieu({ status: "cho-dan-xac-nhan" }), DANH_BA, "da-dong"),
+    ).toContain('id="ghi-chu-dong"');
   });
 
   it("có mặt ở hai nhánh rẽ, TÁCH khỏi ô lý do người dân đọc", () => {
@@ -864,6 +958,8 @@ describe("Đóng phiếu — `has_citizen` thắng kênh khi có mặt", () => {
     const html = veChiTiet(
       congThaoTac(false, false, true),
       phieu({ status: "da-xu-ly", channel: "zalo-mini-app", has_citizen: false }),
+      DANH_BA,
+      "da-dong",
     );
     expect(html).toContain(O_KET_QUA);
   });
@@ -872,6 +968,8 @@ describe("Đóng phiếu — `has_citizen` thắng kênh khi có mặt", () => {
     const html = veChiTiet(
       congThaoTac(false, false, true),
       phieu({ status: "da-xu-ly", channel: "can-bo-nhap-ho", has_citizen: true }),
+      DANH_BA,
+      "da-dong",
     );
     expect(html).not.toContain(O_KET_QUA);
   });
@@ -1041,14 +1139,13 @@ describe("moderation buttons send the right target", () => {
 });
 
 describe("drawer — rating block and reopen line", () => {
-  it("not rated: “Người dân chưa đánh giá”, no reopen line", () => {
+  it("not rated: NO rating section (prototype `FeedbackDetailDrawer.tsx:441`), no reopen line", () => {
     const html = veChiTiet(congThaoTac(false, false, false), phieu({ reopen_count: 0 }));
-    expect(html).toContain("Đánh giá của người dân");
-    expect(html).toContain("Người dân chưa đánh giá");
+    expect(html).not.toContain("Đánh giá của người dân");
     expect(html).not.toContain("Đã mở lại");
   });
 
-  it("1 star, reopened twice: stars, comment, red sentence, reopen line under the deadlines", () => {
+  it("1 star, reopened twice: danger box, star icons, comment, red sentence, reopen line under the deadlines", () => {
     const html = veChiTiet(
       congThaoTac(false, false, false),
       phieu({
@@ -1058,19 +1155,24 @@ describe("drawer — rating block and reopen line", () => {
         reopen_count: 2,
       }),
     );
-    expect(html).toContain("★☆☆☆☆");
-    expect(html).toContain("1/5");
+    expect(html).toContain("Đánh giá của người dân");
+    expect(html).toContain("border-danger/25 bg-danger/8");
+    expect(html.match(/lucide-star /g)?.length).toBe(5);
+    expect(html.match(/fill-tangerine text-tangerine/g)?.length).toBe(1);
+    expect(html).toContain('aria-label="1/5 sao"');
+    expect(html).toContain(">1/5</span>");
     expect(html).toContain("“Chưa ai đến xem.”");
-    expect(html).toContain('<p class="nhan-lech">Đánh giá thấp — phiếu đã tự mở lại để xử lý tiếp.</p>');
+    expect(html).toMatch(/text-danger">Đánh giá thấp — phiếu đã tự mở lại để xử lý tiếp\.<\/p>/);
     expect(html).toContain('<p class="nhan-lech">Đã mở lại 2 lần do người dân chấm điểm thấp</p>');
     // The reopen line sits in the `Hạn xử lý xong` cell, after the deadline.
     expect(html.indexOf("Hạn xử lý xong")).toBeLessThan(html.indexOf("Đã mở lại 2 lần"));
     expect(html.indexOf("Đã mở lại 2 lần")).toBeLessThan(html.indexOf("Đang giao cho"));
   });
 
-  it("5 stars: no red sentence", () => {
+  it("5 stars: leaf box, five filled stars, no red sentence", () => {
     const html = veChiTiet(congThaoTac(false, false, false), phieu({ rating: 5, reopen_count: 1 }));
-    expect(html).toContain("★★★★★");
+    expect(html).toContain("border-leaf/25 bg-leaf/8");
+    expect(html.match(/fill-tangerine text-tangerine/g)?.length).toBe(5);
     expect(html).not.toContain("Đánh giá thấp");
     // An earlier reopening is still on record and still said.
     expect(html).toContain("Đã mở lại 1 lần");
@@ -1143,8 +1245,8 @@ describe("log — the two citizen-rating rows", () => {
     const html = renderToStaticMarkup(
       <DanhSachNhatKy dong={[dongNhatKy({})]} tenBoPhan={TB} danhBa={DB} />,
     );
-    expect(html).toContain("<strong>Người dân đánh giá</strong>");
-    expect(html).toContain("<dd>Người dân</dd>");
+    expect(html).toMatch(/>Người dân đánh giá<\/span>/);
+    expect(html).toMatch(/<b[^>]*>Người dân<\/b>/);
     expect(html).not.toContain("Không được hiện");
     expect(html).not.toContain(">cong-dan<");
     expect(html).toContain("Người dân đánh giá 4 sao");
@@ -1164,7 +1266,7 @@ describe("log — the two citizen-rating rows", () => {
         danhBa={DB}
       />,
     );
-    expect(html).toContain("<strong>Mở lại do đánh giá thấp</strong>");
+    expect(html).toMatch(/>Mở lại do đánh giá thấp<\/span>/);
     expect(html).toContain("Người dân đánh giá 2 sao — phiếu được mở lại");
     expect(html).not.toContain("chưa có nhãn");
   });
@@ -1177,9 +1279,15 @@ describe("log — the two citizen-rating rows", () => {
  * (c) say an assignment refusal next to the assign button, not at the top of the card.
  */
 describe("PA-03 — phân loại trước, chuyển xử lý sau", () => {
-  function veVoi(p: petitions_phieuPhanAnhRa, cong: ReturnType<typeof congThaoTac>, assignRefusal: string | null = null) {
+  function veVoi(
+    p: petitions_phieuPhanAnhRa,
+    cong: ReturnType<typeof congThaoTac>,
+    assignRefusal: string | null = null,
+    initialStep: string | null = null,
+  ) {
     return renderToStaticMarkup(
       <ChiTietPhieu
+        initialStep={initialStep}
         phieu={p}
         bayGio={BAY_GIO}
         cong={cong}
@@ -1206,50 +1314,60 @@ describe("PA-03 — phân loại trước, chuyển xử lý sau", () => {
     return o.match(/<option value="([^"]*)" selected="">/)?.[1] ?? null;
   }
 
-  it("(a) ô Lĩnh vực mở sẵn lĩnh vực đã chọn lúc nhập hộ — nút Chốt lĩnh vực bấm được ngay", () => {
+  it("(a) ô Lĩnh vực mở sẵn lĩnh vực đã chọn lúc nhập hộ — nút Xác nhận bấm được ngay", () => {
     const html = veVoi(
       phieu({ status: "da-tiep-nhan", channel: "can-bo-nhap-ho", field: "giao-thong" }),
       congThaoTac(true, false, false),
+      null,
+      "dang-phan-loai",
     );
     expect(linhVucDangChon(html)).toBe("giao-thong");
     expect(submitTag(html)).not.toContain("disabled");
   });
 
   it("(a) phiếu chưa có lĩnh vực: ô để trống, nút khoá", () => {
-    const html = veVoi(phieu({ status: "da-tiep-nhan", field: "" }), congThaoTac(true, false, false));
+    const html = veVoi(phieu({ status: "da-tiep-nhan", field: "" }), congThaoTac(true, false, false), null, "dang-phan-loai");
     expect(linhVucDangChon(html)).toBe("");
     expect(submitTag(html)).toContain("disabled");
   });
 
-  it("(b) CA BỊ TỪ CHỐI — `da-tiep-nhan`, có `feedback.assign`: KHÔNG có biểu mẫu chuyển xử lý, có câu lý do", () => {
-    const html = veVoi(phieu({ status: "da-tiep-nhan" }), congThaoTac(false, true, false));
+  it("(b) CA BỊ TỪ CHỐI — `da-tiep-nhan`, có `feedback.assign`: `Đã chuyển xử lý` is not a move from here", () => {
+    const html = veVoi(phieu({ status: "da-tiep-nhan" }), congThaoTac(false, true, false), null, "da-chuyen-xu-ly");
     expect(html).not.toContain('id="chon-bo-phan"');
-    expect(html).toContain(nhuTrongHTML(ASSIGN_NEEDS_CLASSIFICATION));
-    expect(ASSIGN_NEEDS_CLASSIFICATION).toBe("Cần phân loại phiếu trước khi chuyển xử lý.");
+    expect(chip(html, "Đã chuyển xử lý")?.tag).toContain(nhuTrongHTML(STRIP_NOT_A_STEP));
   });
 
-  it("(b) đã phân loại (`dang-phan-loai`): biểu mẫu có, câu lý do không", () => {
-    const html = veVoi(phieu({ status: "dang-phan-loai" }), congThaoTac(false, true, false));
+  it("(b) đã phân loại (`dang-phan-loai`): the chip opens the assign act", () => {
+    const html = veVoi(phieu({ status: "dang-phan-loai" }), congThaoTac(false, true, false), null, "da-chuyen-xu-ly");
+    expect(chip(html, "Đã chuyển xử lý")?.role).toBe("chuyển sang");
     expect(html).toContain('id="chon-bo-phan"');
-    expect(html).not.toContain(nhuTrongHTML(ASSIGN_NEEDS_CLASSIFICATION));
+    expect(html).toContain(nhuTrongHTML(composerTitle("da-chuyen-xu-ly")));
   });
 
-  it("(b) thiếu `feedback.assign`: câu thiếu quyền vẫn là câu được nói, ở mọi trạng thái", () => {
-    const html = veVoi(phieu({ status: "da-tiep-nhan" }), congThaoTac(false, false, false));
-    expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_PHAN_CONG));
-    expect(html).not.toContain(nhuTrongHTML(ASSIGN_NEEDS_CLASSIFICATION));
+  it("(b) DENIED — thiếu `feedback.assign` at `dang-phan-loai`: the chip names the key, no picker", () => {
+    const html = veVoi(phieu({ status: "dang-phan-loai" }), congThaoTac(false, false, false), null, "da-chuyen-xu-ly");
+    expect(chip(html, "Đã chuyển xử lý")?.tag).toContain("feedback.assign");
+    expect(html).not.toContain('id="chon-bo-phan"');
   });
 
-  it("(c) câu từ chối chuyển xử lý nằm TRONG khối chuyển xử lý, ngay trước nút", () => {
+  it("(c) câu từ chối chuyển xử lý nằm TRONG biểu mẫu chuyển xử lý, ngay trước nút", () => {
     const cau = "Phiếu phải được phân loại trước khi chuyển xử lý.";
-    const html = veVoi(phieu({ status: "dang-phan-loai" }), congThaoTac(false, true, false), cau);
+    const html = veVoi(phieu({ status: "dang-phan-loai" }), congThaoTac(false, true, false), cau, "da-chuyen-xu-ly");
+    const form = html.match(/<form[^>]*>(?:(?!<\/form>)[\s\S])*id="chon-bo-phan"[\s\S]*?<\/form>/)?.[0] ?? "";
+    expect(form).toContain(cau);
+    expect(form.indexOf(cau)).toBeLessThan(form.indexOf(">Xác nhận</button>"));
+  });
+
+  it("(c) the same in the hand-over section (later statuses), before `Chuyển xử lý`", () => {
+    const cau = "Bộ phận này không nhận phiếu lĩnh vực ấy.";
+    const html = veVoi(phieu({ status: "dang-xu-ly" }), congThaoTac(false, true, false), cau);
     const form = html.match(/<form[^>]*>(?:(?!<\/form>)[\s\S])*id="chon-bo-phan"[\s\S]*?<\/form>/)?.[0] ?? "";
     expect(form).toContain(cau);
     expect(form.indexOf(cau)).toBeLessThan(form.indexOf(">Chuyển xử lý</button>"));
   });
 
-  it("(c) không có lời từ chối: khối chuyển xử lý không có dòng báo lỗi", () => {
-    const html = veVoi(phieu({ status: "dang-phan-loai" }), congThaoTac(false, true, false));
+  it("(c) không có lời từ chối: biểu mẫu chuyển xử lý không có dòng báo lỗi", () => {
+    const html = veVoi(phieu({ status: "dang-phan-loai" }), congThaoTac(false, true, false), null, "da-chuyen-xu-ly");
     const form = html.match(/<form[^>]*>(?:(?!<\/form>)[\s\S])*id="chon-bo-phan"[\s\S]*?<\/form>/)?.[0] ?? "";
     expect(form).not.toBe("");
     expect(form).not.toContain('role="alert"');
@@ -1298,20 +1416,103 @@ describe("prototype composition — list cards", () => {
     expect(card(phieu())).not.toContain("data-tre-han");
   });
 
-  it("not rated: the channel sits in the corner instead of stars", () => {
+  it("not rated: the channel sits in the corner instead of stars; `web-xa` reads “Web của xã”", () => {
     expect(card(phieu())).toContain("Zalo Mini App");
+    expect(card(phieu({ channel: "web-xa" }))).toContain("Web của xã");
+  });
+
+  it("the prototype's card (`FeedbackCard`, rows 19-28): shadow, code chip, brand field chip, no open ring", () => {
+    const html = card(phieu());
+    const tag = html.match(/<button[^>]*>/)?.[0] ?? "";
+    expect(tag).toContain("shadow-card");
+    expect(tag).not.toContain("ring-2");
+    expect(html).toMatch(/bg-\[#F7FAFC\][^"]*text-\[10\.5px\][^"]*"[^>]*>PA-2026-0021</);
+    expect(html).toMatch(/bg-brand\/12[^"]*text-brand"[^>]*>Rác thải/);
+    expect(html).toContain("line-clamp-2 text-[12.8px]");
+    // Status chip in the prototype's colours, icon + word (ADR 0068 lần 6 #7).
+    expect(html).toMatch(/bg-teal\/12 text-teal[^"]*"><svg[\s\S]*?<\/svg>Đang xử lý<\/span>/);
+  });
+
+  it("stars: danger at 1–2, tangerine from 3", () => {
+    expect(card(phieu({ rating: 2 }))).toMatch(/text-\[11\.5px\] text-danger"[^>]*>★★☆☆☆/);
+    expect(card(phieu({ rating: 4 }))).toMatch(/text-\[11\.5px\] text-tangerine"[^>]*>★★★★☆/);
+  });
+
+  it("empty register: the prototype's two lines in a white card", () => {
+    const html = renderToStaticMarkup(
+      <DanhSachThe
+        phieu={[]}
+        bayGio={BAY_GIO}
+        maDangMo={null}
+        moPhieu={() => {}}
+        empty={undefined}
+      />,
+    );
+    // No filter sentence passed → the list's own (filter) sentence; the screen passes the two lines.
+    expect(html).toContain("shadow-card");
+    expect(LIST_EMPTY_TITLE).toBe("Chưa có phản ánh nào");
+    expect(LIST_EMPTY_HINT).toBe("Phiếu gửi từ Zalo Mini App sẽ hiện ở đây ngay khi người dân bấm gửi.");
+  });
+});
+
+describe("the filter row (rows 9-14)", () => {
+  const html = renderToStaticMarkup(
+    <HangLoc loc={{}} tim="" datTim={() => {}} datLoc={() => {}} boPhan={BO_PHAN} thon={[]} />,
+  );
+
+  it("scope: the prototype's bordered group, active = navy, each choice's hint as its title", () => {
+    expect(html).toMatch(/<button type="button" title="Tất cả hồ sơ trong xã" class="[^"]*bg-navy text-white/);
+    expect(html).toContain('title="Đích danh tôi là người xử lý"');
+    expect(html).toContain('title="Tôi giao, tôi theo dõi, tôi đã xử lý, hoặc bộ phận tôi đang giữ"');
+    expect(html.match(/class="h-9 [^"]*text-\[12\.5px\] font-semibold/g)?.length).toBe(3);
+  });
+
+  it("search: 256px box, the prototype's placeholder; selects and box are 36px / 12.5px", () => {
+    expect(html).toContain('placeholder="Tìm theo nội dung, mã phiếu, địa chỉ…"');
+    expect(html).toContain("w-64");
+    expect(html.match(/\[&amp;_select\]:h-9!/g)?.length).toBe(6);
+  });
+
+  it("checkboxes: 12.5px words, a 14px brand box", () => {
+    expect(html.match(/class="accent-brand size-3\.5"/g)?.length).toBe(2);
+    expect(html).toContain("Chỉ phiếu trễ hạn");
+    expect(html).toContain("Bị đánh giá thấp");
   });
 });
 
 describe("prototype composition — the drawer", () => {
   const ALL = congThaoTac(true, true, true);
 
-  it("is a dialog named by code · channel · time — never by the citizen's words", () => {
+  it("is a dialog named by code · channel · time — never by the citizen's words; the field is the title", () => {
     const html = veChiTiet(ALL);
     expect(html).toMatch(/<dialog[^>]*aria-labelledby="tieu-de-chi-tiet-phieu"/);
-    const name = html.match(/<h2 id="tieu-de-chi-tiet-phieu"[^>]*>([\s\S]*?)<\/h2>/)?.[1] ?? "";
+    const name = html.match(/<p id="tieu-de-chi-tiet-phieu"[^>]*>([\s\S]*?)<\/p>/)?.[1] ?? "";
     expect(name).toContain("PA-2026-0021");
+    // Date first, Vietnam time (07:21Z = 14:21).
+    expect(name).toContain("09/09/2026 14:21");
     expect(name).not.toContain("Rác tồn đọng");
+    expect(html).toMatch(/<h2 class="[^"]*text-\[15px\][^"]*">Rác thải – Vệ sinh môi trường<\/h2>/);
+  });
+
+  it("the prototype's drawer frame: 72rem, never past 98vw, navy veil, left-cast shadow", () => {
+    const tag = veChiTiet(ALL).match(/<dialog[^>]*>/)?.[0] ?? "";
+    expect(tag).toContain("md:w-[72rem]");
+    expect(tag).toContain("max-w-[98vw]");
+    expect(tag).toContain("backdrop:bg-navy/30");
+    expect(tag).toContain("md:shadow-[-10px_0_36px_rgba(16,43,67,0.18)]");
+  });
+
+  it("header: the sender in 11.5px; neither half sent → “Không rõ người gửi”", () => {
+    expect(veChiTiet(ALL, phieu({ reporter_name: "", reporter_phone: "" }))).toContain("Không rõ người gửi");
+  });
+
+  it("facts: 10.5px labels; an unassigned petition says so in the prototype's words", () => {
+    const html = veChiTiet(ALL, phieu({ unit: "", assignee: "" }));
+    expect(html).toContain("Chưa giao bộ phận nào");
+    expect(html).toContain("Chưa chỉ định cán bộ xử lý");
+    expect(html.match(/text-\[10\.5px\] font-bold tracking-wide text-ink-muted uppercase/g)?.length).toBe(3);
+    // The publication state is words only — no glyph before it.
+    expect(html).not.toContain("lucide-eye");
   });
 
   it("three fact cells in the prototype's order, both clocks in the first", () => {
@@ -1322,18 +1523,21 @@ describe("prototype composition — the drawer", () => {
     expect([...at].sort((a, b) => a - b)).toEqual(at);
   });
 
-  it("sections in the prototype's order: content → photos → location → duplicates (?) → rating → acts → log", () => {
-    const html = veChiTiet(ALL);
+  it("sections in the prototype's order: content → location → duplicates (?) → rating → hand-over → log", () => {
+    const html = veChiTiet(ALL, phieu({ lat: 21.028511, lng: 105.804817, rating: 4 }));
     const order = [
       "Nội dung phản ánh",
-      "Vị trí hiện trường",
+      ">Vị trí</h3>",
       pendingMarkerLabel(petitionPendingPart("duplicates").ten),
       "Đánh giá của người dân",
-      "Xử lý phiếu",
+      "Chuyển xử lý, không đổi trạng thái",
       TIEU_DE_NHAT_KY,
-    ].map((w) => html.indexOf(nhuTrongHTML(w)));
+    ].map((w) => html.indexOf(w.startsWith(">") ? w : nhuTrongHTML(w)));
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
+    // Flat sections, no card and no icon title (row 52-60).
+    expect(html).not.toContain("Xử lý phiếu");
+    expect(html).not.toContain("lucide-list-checks");
   });
 
   it("the duplicates block offers NO merge button — only its '?'", () => {

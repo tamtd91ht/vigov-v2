@@ -11,6 +11,9 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { storedIds } from "@/features/nhiem-vu/task-attachments";
 import type { petitions_nhatKyPhieuRa, petitions_taskAttachmentOut } from "@/lib/api/schema.gen";
 
+import { pendingMarkerLabel } from "@/components/ui/pending-feature";
+
+import { petitionPendingPart } from "./nhan-phieu";
 import { BieuMauGhiNhatKy, DanhSachNhatKy } from "./nhat-ky-phieu";
 import {
   PetitionLogAttachmentList,
@@ -140,6 +143,14 @@ describe("PetitionLogAttachmentList — the download link is asked for AT THE CL
     expect(tab.location.href).toBe("https://kho.example.test/f?sig=1");
   });
 
+  it("removing a file has no route: a DISABLED remove button with its '?', after the download (ADR 0068 §14)", () => {
+    const html = renderToStaticMarkup(<PetitionLogAttachmentList lookupCode="PA-1" attachments={[FILE]} />);
+    const remove = html.match(/<button[^>]*aria-label="Gỡ tệp bien-ban-hien-truong.pdf"[^>]*>/)?.[0] ?? "";
+    expect(remove).toContain('disabled=""');
+    expect(html).toContain(pendingMarkerLabel(petitionPendingPart("logFileRemoval").ten));
+    expect(html.indexOf("Tải về")).toBeLessThan(html.indexOf("Gỡ tệp"));
+  });
+
   it("a refusal closes the blank tab and says the server's sentence", async () => {
     const tab = { opener: {} as unknown, location: { href: "" }, close: vi.fn() };
     vi.stubGlobal("open", vi.fn(() => tab));
@@ -187,7 +198,7 @@ describe("the log — files on a row, and the entry form waiting for uploads", (
 
   it("while a file still moves, the entry waits: the note says so and the submit is disabled", () => {
     const tag = (h: string) => (h.match(/<button type="submit"[^>]*>/)?.[0] ?? "").replace(/\sclass="[^"]*"/, "");
-    const props = { id: "f", noiDung: "Đã tới.", datNoiDung: () => {}, dangGui: false, loi: null, gui: () => {}, huy: () => {} };
+    const props = { id: "f", noiDung: "Đã tới.", datNoiDung: () => {}, dangGui: false, loi: null, gui: () => {} };
     const waiting = renderToStaticMarkup(<BieuMauGhiNhatKy {...props} choTep dinhKem={<p>PICKER</p>} />);
     expect(waiting).toContain("PICKER");
     expect(waiting).toContain("Chờ các tệp tải lên và kiểm tra xong rồi mới ghi nhật ký.");

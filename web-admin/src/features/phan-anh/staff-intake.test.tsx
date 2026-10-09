@@ -112,6 +112,14 @@ describe("the modal's shape (§11) — what is on it and what is NOT", () => {
     expect(html).toContain("Huỷ");
   });
 
+  it("prototype marks: required fields carry `*`, not “(bắt buộc)”; content is 3 rows; no reminder line", () => {
+    expect(html).not.toContain("(bắt buộc)");
+    expect(html.match(/<span class="ml-1 text-danger">\*<\/span>/g)?.length).toBe(2);
+    expect(html).toMatch(/<textarea id="nhap-ho-noi-dung"[^>]*rows="3"/);
+    expect(html).not.toContain("Không ghi số điện thoại, số CCCD");
+    expect(html).toContain('class="accent-brand size-3.5"');
+  });
+
   it("the field options are the COMMUNE'S list from the route, `can-bo` included", () => {
     expect(html).toContain('<option value="rac-thai">Rác thải – Vệ sinh môi trường</option>');
     expect(html).toContain('<option value="can-bo">Thái độ / tác phong cán bộ</option>');
@@ -249,6 +257,23 @@ describe("booking — the flow", () => {
     await flush();
     expect(q(h, '[role="alert"]').textContent).toBe(cau);
     expect(h.textContent).not.toContain("Mã tra cứu");
+  });
+
+  it("anonymous: name and phone are DISABLED, and whatever was typed is NOT sent (prototype FeedbackEntryForm.tsx:208,216)", async () => {
+    const book = vi.fn(async (_i: StaffIntakeInput, _k: string) => ({ ok: true as const, duLieu: { code: "x" } }));
+    const h = mount(book);
+    await flush();
+    fill(h);
+    type(q<HTMLInputElement>(h, "#nhap-ho-nguoi-gui"), "Nguyễn Văn A");
+    act(() => q<HTMLInputElement>(h, "#nhap-ho-an-danh").click());
+    expect(q<HTMLInputElement>(h, "#nhap-ho-nguoi-gui").disabled).toBe(true);
+    expect(q<HTMLInputElement>(h, "#nhap-ho-so-dien-thoai").disabled).toBe(true);
+    submit(h);
+    await flush();
+    const input = book.mock.calls[0]?.[0];
+    expect(input?.anonymous).toBe(true);
+    expect(input?.reporterName).toBe("");
+    expect(input?.reporterPhone).toBe("");
   });
 
   it("a blank clock sends NO `clock_from` — the server takes the booking instant", async () => {

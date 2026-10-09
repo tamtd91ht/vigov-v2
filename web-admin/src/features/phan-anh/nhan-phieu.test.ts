@@ -60,7 +60,12 @@ import {
   ratingView,
   reopenLine,
   SCENE_LOCATION_LABEL,
+  LOCATION_SECTION_TITLE,
   sceneCoordinates,
+  statusStrip,
+  cardSenderLabel,
+  dateTimeLabel,
+  petitionDeepLinkCode,
   afterPhotoType,
   afterPhotoUploadOpen,
   clockFromBounds,
@@ -178,10 +183,28 @@ describe("người gửi", () => {
     expect(isContactUnverified(phieu({ channel: "zalo-mini-app", has_citizen: false }))).toBe(false);
   });
 
-  it("không ẩn danh mà cả hai trường rỗng: nói ra, không để ô trống", () => {
-    expect(nhanNguoiGui(phieu({ reporter_name: "", reporter_phone: "" }))).toBe(
-      "Không có thông tin người gửi",
-    );
+  it("không ẩn danh mà cả hai trường rỗng: nói ra (the prototype's words), không để ô trống", () => {
+    expect(nhanNguoiGui(phieu({ reporter_name: "", reporter_phone: "" }))).toBe("Không rõ người gửi");
+    expect(cardSenderLabel(phieu({ reporter_name: "", reporter_phone: "" }))).toBe("Không rõ người gửi");
+  });
+
+  it("the card says “Gửi ẩn danh”, the drawer “Người gửi ẩn danh” — and neither adds anything", () => {
+    const an = phieu({ anonymous: true, reporter_name: "", reporter_phone: "" });
+    expect(cardSenderLabel(an)).toBe("Gửi ẩn danh");
+    expect(nhanNguoiGui(an)).toBe("Người gửi ẩn danh");
+    expect(cardSenderLabel(phieu())).toBe(nhanNguoiGui(phieu()));
+  });
+
+  it("`?id=` deep link: a single plain token only; anything else is ignored, never sent", () => {
+    expect(petitionDeepLinkCode("PA-2026-0021")).toBe("PA-2026-0021");
+    expect(petitionDeepLinkCode("  PA-1 ")).toBe("PA-1");
+    for (const bad of [undefined, "", "../x", "PA 1", "a".repeat(65), ["PA-1", "PA-2"]]) {
+      expect(petitionDeepLinkCode(bad as string | readonly string[] | undefined)).toBeNull();
+    }
+  });
+
+  it("drawer header time: date first, Vietnam time", () => {
+    expect(dateTimeLabel("2026-09-09T07:21:00Z")).toBe("09/09/2026 14:21");
   });
 });
 
@@ -742,7 +765,9 @@ describe("phần chưa dựng được — nhật ký xử lý đã rời danh s
     // đúng một mô tả (tab Bản đồ nhiệt / tab Báo cáo; ô thôn / nút đính ảnh của modal nhập hộ). Bỏ
     // nhầm một mục khác cùng lúc là đỏ ở đây. Mười từ 06/10/2026: khối `Có thể trùng với phiếu khác`
     // của prototype (ADR 0068 lần 5) có chỗ giữ riêng.
-    expect(PHAN_CHUA_DUNG.length).toBe(10);
+    // Thirteen from 09/10/2026 (prototype round, owner decisions D1–D5): the composer's attachment, the
+    // log row's `Nội bộ` pill and the log file's remove button have no route behind them.
+    expect(PHAN_CHUA_DUNG.length).toBe(13);
     // Both photo halves are built now (ADR 0047: the "after" row replaces G8).
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.startsWith("Ảnh sau khi xử lý"))).toBe(false);
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("Ảnh trước"))).toBe(false);
@@ -766,10 +791,11 @@ describe("phần chưa dựng được — đánh giá và kiểm duyệt công 
 
   it("the KPI cards left the list; only the heat-map (§9) and Báo cáo (§10) tabs remain, with why", () => {
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("KPI") || p.ten.includes("§3"))).toBe(false);
-    // One entry per tab — each "?" opens its own reason: the undecided map provider, and no count by
-    // field / unit / hamlet for the whole commune.
+    // One entry per tab — each "?" opens its own reason: the basemap and all-points read still being
+    // built, and no count by field / unit / hamlet for the whole commune.
     expect(petitionPendingPart("heatMapTab").ten).toBe("Bản đồ nhiệt");
-    expect(petitionPendingPart("heatMapTab").viSao).toContain("nhà cung cấp bản đồ");
+    expect(petitionPendingPart("heatMapTab").viSao).toContain("lưu ngay trên máy chủ của hệ thống");
+    expect(petitionPendingPart("heatMapTab").viSao).toContain("toàn bộ điểm phản ánh");
     expect(petitionPendingPart("reportTab").ten).toBe("Báo cáo");
     expect(petitionPendingPart("reportTab").viSao).toContain("theo lĩnh vực, theo bộ phận hay theo thôn");
     expect(petitionPendingPart("reportTab").viSao).toContain("Bốn thẻ số liệu");
@@ -791,6 +817,10 @@ describe("phần chưa dựng được — đánh giá và kiểm duyệt công 
       "Email của cán bộ trong ô `Đang giao cho` và ô chọn cán bộ (§8.3, §8.5)",
       "Thôn, tổ dân phố",
       "Đính ảnh hiện trường",
+      // 09/10/2026: three prototype controls with no route behind them.
+      "Đính kèm ảnh, tệp khi chuyển trạng thái",
+      "Nội bộ",
+      "Gỡ tệp đính kèm",
       "`⚠ Quá hạn 3 ngày` — số ngày trễ (§8.3, §7)",
     ]);
     // The overdue NUMBER stays unbuilt on purpose (ADR 0007 decision 10a): the entry still says why.
@@ -806,15 +836,22 @@ describe("vị trí hiện trường — toạ độ đã về, bản đồ chư
     expect(tatCa()).not.toContain("hợp đồng không trả `lat`/`lng`");
   });
 
-  it("the heatmap and the mini-map both name the undecided map provider (rule 3 stop #2)", () => {
-    // Staff-readable now (ADR 0068 §14: the sentence opens behind a "?"); the rule reference lives in
-    // the code comment above each entry.
-    expect(petitionPendingPart("heatMapTab").viSao).toContain("nhà cung cấp bản đồ bên ngoài");
-    const map = petitionPendingPart("sceneMap");
-    expect(map.viSao).toContain("nhà cung cấp bản đồ bên ngoài");
-    expect(map.viSao).toContain("chưa được quyết");
-    expect(map.viSao).toContain(SCENE_LOCATION_LABEL);
-    expect(map.viSao).toContain("tên thôn");
+  it("the heatmap and the mini-map say the self-hosted basemap is chosen and still being built (ADR 0072 §Sửa đổi 09/10/2026)", () => {
+    // Staff-readable (ADR 0068 §14: the sentence opens behind a "?"); the ADR and the technical reason
+    // live in the code comment above each entry, never on screen.
+    for (const id of ["heatMapTab", "sceneMap"]) {
+      const viSao = petitionPendingPart(id).viSao;
+      expect(viSao, id).toContain("lưu ngay trên máy chủ của hệ thống");
+      expect(viSao, id).toContain("đang chờ dựng tệp nền");
+      // The provider question is decided: no entry may still say it is open.
+      expect(viSao, id).not.toContain("chưa được quyết");
+      expect(viSao, id).not.toMatch(/ADR|PMTiles/);
+    }
+    expect(petitionPendingPart("sceneMap").viSao).toContain("tên thôn");
+    // Owner decision D2: the drawer's section is titled "Vị trí", as in the prototype; the lookup view
+    // keeps its own row label.
+    expect(LOCATION_SECTION_TITLE).toBe("Vị trí");
+    expect(SCENE_LOCATION_LABEL).toBe("Vị trí hiện trường");
   });
 
   it("six decimals, latitude first", () => {
@@ -831,6 +868,103 @@ describe("vị trí hiện trường — toạ độ đã về, bản đồ chư
     expect(sceneCoordinates({ lat: 21.028511, lng: null })).toBeNull();
     expect(sceneCoordinates({ lat: Number.NaN, lng: 105.804817 })).toBeNull();
     expect(sceneCoordinates({ lat: 21.028511, lng: Number.POSITIVE_INFINITY })).toBeNull();
+  });
+});
+
+/**
+ * Owner decision D1 (09/10/2026): a chip is pressable ONLY for a move the server performs for staff, and
+ * only with that act's key. Pinned in both directions — the developer's account holds every key, so a
+ * chip leaking past its gate is invisible while building.
+ */
+describe("status strip — which chips are pressable (D1)", () => {
+  const ALL = congThaoTac(true, true, true);
+  const NONE = congThaoTac(false, false, false);
+  const p = (status: string, more: Record<string, unknown> = {}) =>
+    ({
+      code: "PA-1",
+      channel: "zalo-mini-app",
+      status,
+      field: "rac-thai",
+      field_label: "",
+      content: "",
+      address: "",
+      reporter_name: "",
+      reporter_phone: "",
+      anonymous: true,
+      clock_from: "2026-09-09T07:20:00Z",
+      booked_at: "2026-09-09T07:21:00Z",
+      acknowledge_due: null,
+      resolve_due: null,
+      classify_due: null,
+      unit: "",
+      assignee: "",
+      result: "",
+      public: false,
+      ...more,
+    }) as Parameters<typeof statusStrip>[0];
+  const nextOf = (v: ReturnType<typeof statusStrip>) =>
+    [...v.main, ...v.branches].filter((s) => s.role === "next").map((s) => `${s.code}:${s.act}`);
+
+  it("every key: exactly the server's staff moves, each with its own act", () => {
+    expect(nextOf(statusStrip(p("da-tiep-nhan"), ALL))).toEqual(["dang-phan-loai:classify"]);
+    expect(nextOf(statusStrip(p("dang-phan-loai"), ALL))).toEqual([
+      "da-chuyen-xu-ly:assign",
+      "khong-tiep-nhan:reject",
+      "chuyen-cap-tren:refer",
+    ]);
+    expect(nextOf(statusStrip(p("da-chuyen-xu-ly"), ALL))).toEqual(["dang-xu-ly:advance"]);
+    expect(nextOf(statusStrip(p("dang-xu-ly"), ALL))).toEqual(["da-xu-ly:advance"]);
+    // A citizen stands behind it: close only from `cho-dan-xac-nhan`.
+    expect(nextOf(statusStrip(p("da-xu-ly"), ALL))).toEqual(["cho-dan-xac-nhan:advance"]);
+    expect(nextOf(statusStrip(p("da-xu-ly", { has_citizen: false }), ALL))).toEqual([
+      "cho-dan-xac-nhan:advance",
+      "da-dong:close",
+    ]);
+    expect(nextOf(statusStrip(p("cho-dan-xac-nhan"), ALL))).toEqual(["da-dong:close"]);
+    for (const end of ["da-dong", "khong-tiep-nhan", "chuyen-cap-tren"]) {
+      expect(nextOf(statusStrip(p(end), ALL)), end).toEqual([]);
+    }
+  });
+
+  it("no reopening chip for staff: only the citizen's 1–2 stars reopen (ADR 0050 point 2)", () => {
+    for (const s of ["da-xu-ly", "cho-dan-xac-nhan", "da-dong"]) {
+      const step = statusStrip(p(s, { has_citizen: false }), ALL).main.find((x) => x.code === "dang-xu-ly");
+      expect(step?.role, s).toBe("blocked");
+    }
+  });
+
+  it("DENIED — without the act's key the chip is blocked WITH the key's name; advance has no UI gate", () => {
+    const classify = statusStrip(p("da-tiep-nhan"), NONE).main.find((s) => s.code === "dang-phan-loai");
+    expect(classify?.role).toBe("blocked");
+    expect(classify?.reason).toContain("feedback.classify");
+    const screening = statusStrip(p("dang-phan-loai"), congThaoTac(true, false, false));
+    expect(screening.main.find((s) => s.code === "da-chuyen-xu-ly")?.reason).toContain("feedback.assign");
+    expect(nextOf(screening)).toEqual(["khong-tiep-nhan:reject", "chuyen-cap-tren:refer"]);
+    const closing = statusStrip(p("cho-dan-xac-nhan"), congThaoTac(true, true, false));
+    expect(closing.main.find((s) => s.code === "da-dong")?.reason).toContain("feedback.resolve");
+    // The holder rule is the server's: advance stays pressable with no key at all.
+    expect(nextOf(statusStrip(p("dang-xu-ly"), NONE))).toEqual(["da-xu-ly:advance"]);
+  });
+
+  it("the no-permission sentence: only when there IS a move and none is open to this account", () => {
+    expect(statusStrip(p("da-tiep-nhan"), NONE).noPermission).toBe(true);
+    expect(statusStrip(p("cho-dan-xac-nhan"), NONE).noPermission).toBe(true);
+    expect(statusStrip(p("dang-xu-ly"), NONE).noPermission).toBe(false);
+    expect(statusStrip(p("da-dong"), NONE).noPermission).toBe(false);
+    expect(statusStrip(p("da-tiep-nhan"), ALL).noPermission).toBe(false);
+  });
+
+  it("branch row: only the branch the petition is on, or one it can move to", () => {
+    expect(statusStrip(p("dang-xu-ly"), ALL).branches).toEqual([]);
+    expect(statusStrip(p("dang-phan-loai"), ALL).branches.map((s) => s.code)).toEqual([
+      "khong-tiep-nhan",
+      "chuyen-cap-tren",
+    ]);
+    // Without the key the branches are still SHOWN (they are moves of the lifecycle), but blocked.
+    expect(statusStrip(p("dang-phan-loai"), NONE).branches.map((s) => s.role)).toEqual(["blocked", "blocked"]);
+    expect(statusStrip(p("chuyen-cap-tren"), ALL).branches.map((s) => `${s.code}:${s.role}`)).toEqual([
+      "chuyen-cap-tren:current",
+    ]);
   });
 });
 

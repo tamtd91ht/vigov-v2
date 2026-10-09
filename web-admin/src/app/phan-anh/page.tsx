@@ -1,6 +1,7 @@
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
+import { petitionDeepLinkCode } from "@/features/phan-anh/nhan-phieu";
 import { PetitionWorkspace } from "@/features/phan-anh/petition-workspace";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { parseDrillDown, type RawSearchParams } from "@/lib/drill-down";
@@ -34,7 +35,12 @@ export default async function TrangPhanAnh({
   const xa = await layCauHinhXa();
   // Lọc mở từ trang Tổng quan (SRS M7.2.2). Đọc ở MÁY CHỦ và chuyển xuống bằng prop: màn danh sách
   // không tự đọc thanh địa chỉ. Sổ được khoá theo lọc — đổi lọc là dựng lại sổ từ trang đầu.
-  const drillDown = parseDrillDown("citizen-reports", await searchParams);
+  const params = await searchParams;
+  const drillDown = parseDrillDown("citizen-reports", params);
+  // `?id=<mã tra cứu>` opens that petition's drawer (prototype `app/phan-anh/page.tsx`). A lookup code
+  // is a business code, not personal data; the detail route still checks `feedback.read` and the
+  // commune, and answers 404 for a code that is not this commune's.
+  const openCode = petitionDeepLinkCode(params.id);
 
   return (
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
@@ -42,7 +48,7 @@ export default async function TrangPhanAnh({
         <div className="khung-trang">
           <DauTrang />
           <main className="than-trang">
-            <PetitionWorkspace drillDown={drillDown} />
+            <PetitionWorkspace drillDown={drillDown} openCode={openCode} />
           </main>
         </div>
       </PhienProvider>

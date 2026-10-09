@@ -1,10 +1,11 @@
 "use client";
 
-import { ChevronDown, History, LockKeyhole, NotebookPen } from "lucide-react";
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { ArrowRightLeft, ChevronDown, LockKeyhole, Send, UserCheck } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { toast } from "sonner";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { PendingFeature } from "@/components/ui/pending-feature";
 import { AttachmentPicker } from "@/features/nhiem-vu/task-attachments-ui";
 import { ATTACH_WAIT_NOTE, anyInFlight, storedIds } from "@/features/nhiem-vu/task-attachments";
 import { cn } from "@/lib/cn";
@@ -18,15 +19,13 @@ import type {
 
 import {
   DANG_TAI_NHAT_KY,
-  demKyTu,
-  GHI_CHU_TOI_DA,
+  dateTimeLabel,
   GOI_Y_GHI_NHAT_KY,
   laDongPhanCong,
+  LOG_WRITTEN_TOAST,
   logActorLabel,
   loiGhiChuNhatKy,
   NHAC_DU_LIEU_CA_NHAN,
-  NHAN_BO_PHAN_PHU_TRACH,
-  NHAN_NGUOI_THUC_HIEN,
   NHAN_NUT_GHI_NHAT_KY,
   NHAN_O_GHI_NHAT_KY,
   NHAN_XEM_THEM_NHAT_KY,
@@ -34,21 +33,12 @@ import {
   nhanBoPhan,
   nhanCanBoXuLy,
   nhanThaoTacNhatKy,
-  nhanThoiDiem,
   nhanTrangThai,
+  petitionPendingPart,
   TIEU_DE_NHAT_KY,
   type DanhBaTheoMa,
 } from "./nhan-phieu";
-import {
-  BusyLabel,
-  buttonClass,
-  Glyph,
-  HINT_CLASS,
-  LABEL_CLASS,
-  PetitionStatusBadge,
-  SectionTitle,
-  TEXTAREA_CLASS,
-} from "./petition-ui";
+import { buttonClass, Glyph, TEXTAREA_CLASS } from "./petition-ui";
 import { PetitionLogAttachmentList, usePetitionLogAttachments } from "./petition-log-attachments";
 
 /**
@@ -107,7 +97,6 @@ export function NhatKyPhieu({
   const [dangTaiThem, datDangTaiThem] = useState(false);
   const [loiThem, datLoiThem] = useState<string | null>(null);
 
-  const [moGhi, datMoGhi] = useState(false);
   const [noiDung, datNoiDung] = useState("");
   /**
    * Khoá chống trùng của BẢN NHÁP đang gõ. Giữ nguyên qua mọi lần gửi lại sau lỗi (kể cả lỗi mạng mà
@@ -116,7 +105,6 @@ export function NhatKyPhieu({
   const [khoa, datKhoa] = useState(khoaChongTrungMoi);
   const [dangGui, datDangGui] = useState(false);
   const [loiGhi, datLoiGhi] = useState<string | null>(null);
-  const nutGhi = useRef<HTMLButtonElement>(null);
   // `📎 Đính kèm` (§8.7). Only STORED files go with the entry; the entry waits while any still moves.
   const tep = usePetitionLogAttachments(maTraCuu);
   const choTep = anyInFlight(tep.items);
@@ -160,12 +148,6 @@ export function NhatKyPhieu({
     });
   }
 
-  function dongBieuMau(): void {
-    datMoGhi(false);
-    // Bản nháp và khoá của nó ĐƯỢC GIỮ: mở lại là gõ tiếp, và gửi lại vẫn là cùng một lần ghi.
-    nutGhi.current?.focus();
-  }
-
   function gui(): void {
     if (choTep) return;
     datDangGui(true);
@@ -180,57 +162,55 @@ export function NhatKyPhieu({
       datLoiGhi(null);
       datNoiDung("");
       tep.clear();
-      datMoGhi(false);
       datLanTaiLai((n) => n + 1);
-      nutGhi.current?.focus();
+      toast.success(LOG_WRITTEN_TOAST);
     });
   }
 
+  // THE PROTOTYPE'S PANEL (`FeedbackActivityPanel.tsx:154-326`): a header block with the title and the
+  // ALWAYS-OPEN entry box, then the rows. Flat — the aside is the frame, no card inside it.
   return (
-    <Card as="section" aria-labelledby={`tieu-de-nhat-ky-${maTraCuu}`}>
-      <CardHeader className="justify-between">
-        <SectionTitle icon={History} id={`tieu-de-nhat-ky-${maTraCuu}`}>
-          {TIEU_DE_NHAT_KY}
-        </SectionTitle>
+    <section aria-labelledby={`tieu-de-nhat-ky-${maTraCuu}`} className="flex min-h-0 flex-col">
+      <div className="shrink-0 border-b border-solid border-line px-4 py-3">
+        <div className="flex items-center gap-2">
+          <h3 id={`tieu-de-nhat-ky-${maTraCuu}`} className="m-0 text-[12.5px] font-bold text-navy">
+            {TIEU_DE_NHAT_KY}
+          </h3>
+          {/* The prototype's per-row `Nội bộ` pill has no flag behind it (no "shown to the citizen" on a
+              log row): ONE disabled pill with its "?" here, not a guess on every row. */}
+          <PendingFeature info={petitionPendingPart("logVisibility")} className="ml-auto">
+            <span
+              aria-disabled="true"
+              className="rounded-full bg-ink-muted/12 px-2 py-0.5 text-[10.5px] font-semibold text-ink-muted opacity-60"
+            >
+              Nội bộ
+            </span>
+          </PendingFeature>
+        </div>
         {coNutGhi && (
-          <button
-            ref={nutGhi}
-            type="button"
-            className={buttonClass("secondary", "sm")}
-            aria-expanded={moGhi}
-            aria-controls={`bieu-mau-nhat-ky-${maTraCuu}`}
-            onClick={() => (moGhi ? dongBieuMau() : datMoGhi(true))}
-          >
-            <Glyph icon={NotebookPen} />
-            {NHAN_NUT_GHI_NHAT_KY}
-          </button>
+          <BieuMauGhiNhatKy
+            id={`bieu-mau-nhat-ky-${maTraCuu}`}
+            noiDung={noiDung}
+            datNoiDung={datNoiDung}
+            dangGui={dangGui}
+            loi={loiGhi}
+            gui={gui}
+            choTep={choTep}
+            dinhKem={
+              <AttachmentPicker
+                fieldId={`bieu-mau-nhat-ky-${maTraCuu}`}
+                items={tep.items}
+                disabled={dangGui}
+                onAdd={tep.add}
+                onRetry={tep.retry}
+                onRemove={tep.remove}
+              />
+            }
+          />
         )}
-      </CardHeader>
+      </div>
 
-      <CardContent className="flex flex-col gap-3 [&>p]:m-0">
-      {coNutGhi && moGhi && (
-        <BieuMauGhiNhatKy
-          id={`bieu-mau-nhat-ky-${maTraCuu}`}
-          noiDung={noiDung}
-          datNoiDung={datNoiDung}
-          dangGui={dangGui}
-          loi={loiGhi}
-          gui={gui}
-          huy={dongBieuMau}
-          choTep={choTep}
-          dinhKem={
-            <AttachmentPicker
-              fieldId={`bieu-mau-nhat-ky-${maTraCuu}`}
-              items={tep.items}
-              disabled={dangGui}
-              onAdd={tep.add}
-              onRetry={tep.retry}
-              onRemove={tep.remove}
-            />
-          }
-        />
-      )}
-
+      <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 py-3 [&>p]:m-0">
       {hienTai === null && (
         <p role="status" className="text-sm text-ink-500">
           {DANG_TAI_NHAT_KY}
@@ -265,8 +245,8 @@ export function NhatKyPhieu({
           )}
         </>
       )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }
 
@@ -291,72 +271,108 @@ export function DanhSachNhatKy({
   maTraCuu?: string;
 }) {
   if (dong.length === 0) {
-    return (
-      <p className="m-0 inline-flex items-center gap-2 text-sm text-ink-500">
-        <Glyph icon={History} className="size-4 shrink-0" />
-        {NHAT_KY_RONG}
-      </p>
-    );
+    return <p className="m-0 py-10 text-center text-[12px] text-ink-muted">{NHAT_KY_RONG}</p>;
   }
 
-  // A clean vertical timeline (spec v2 §8b "Minh bạch"): a dot and a hairline on the left, then the
-  // time, the act, the status pill, who did it and the note — the same fields, in the same order.
+  // The prototype's rows (`FeedbackActivityPanel.tsx:241-323`): initials, the name and the time, the
+  // status pill ONLY when the status changed, the hand-over lines, the note, the files. The act's own
+  // label stays beside the time — "Tạo nhiệm vụ", "Người dân đánh giá" would otherwise read as nothing.
   return (
-    <ol aria-label="Nhật ký xử lý, mới nhất trước" className="m-0 list-none p-0">
-      {dong.map((d) => (
-        <li
-          key={d.id}
-          className="relative pb-4 pl-6 last:pb-0 before:absolute before:top-1.5 before:left-[5px] before:h-full before:w-px before:bg-line last:before:hidden"
-        >
-          <span
-            aria-hidden="true"
-            className="absolute top-1.5 left-0 size-[11px] rounded-full border-2 border-brand-500 bg-surface"
-          />
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-            <time dateTime={d.at} className="text-xs text-ink-500 tabular-nums">
-              {nhanThoiDiem(d.at)}
-            </time>
-            <strong>{nhanThaoTacNhatKy(d.action)}</strong>
-            {d.status !== "" && (
-              <PetitionStatusBadge status={d.status}>{nhanTrangThai(d.status)}</PetitionStatusBadge>
-            )}
-          </div>
-          <dl className="mt-1 mb-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-[13px] [&>dd]:m-0 [&>dt]:text-ink-500">
-            {laDongPhanCong(d.action) && (
-              <>
-                <dt>{NHAN_BO_PHAN_PHU_TRACH}</dt>
-                <dd>
-                  {nhanBoPhan(d.unit, tenBoPhan)} · {nhanCanBoXuLy(d.assignee, danhBa)}
-                </dd>
-              </>
-            )}
-            <dt>{NHAN_NGUOI_THUC_HIEN}</dt>
-            {/* `cong-dan` reads "Người dân" and is never looked up in the staff directory. */}
-            <dd>{logActorLabel(d.actor_code, danhBa)}</dd>
-          </dl>
-          {/* The class stays exactly `ghi-chu-nhat-ky` (it keeps the line breaks; a test reads it);
-              the frame comes from the wrapper. */}
-          {d.note !== "" && (
-            <div className="mt-1.5 rounded-lg bg-surface-muted px-3 py-2 text-sm [&>p]:m-0">
-              <p className="ghi-chu-nhat-ky">{d.note}</p>
+    <ol aria-label="Nhật ký xử lý, mới nhất trước" className="m-0 flex list-none flex-col gap-3 p-0">
+      {dong.map((d, i) => {
+        const who = logActorLabel(d.actor_code, danhBa);
+        const older = dong[i + 1];
+        // Rows come newest first, so the row BELOW is the one before. The oldest row of the page has no
+        // predecessor here: its pill follows whether the act moves a status at all.
+        const changed =
+          d.status !== "" && (older !== undefined ? older.status !== d.status : !LOG_ACTS_KEEPING_STATUS.has(d.action));
+        return (
+          <li key={d.id} className="flex gap-2.5">
+            <span
+              aria-hidden="true"
+              className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-brand/12 text-[11px] font-bold text-brand"
+            >
+              {initials(who)}
+            </span>
+            <div className="min-w-0 flex-1 [&>p]:m-0">
+              <div className="flex flex-wrap items-baseline gap-x-2">
+                <b className="text-navy text-[12.5px]">{who}</b>
+                <time dateTime={d.at} className="text-[11px] text-ink-muted tabular-nums">
+                  {dateTimeLabel(d.at)}
+                </time>
+                <span className="text-[11px] text-ink-muted">{nhanThaoTacNhatKy(d.action)}</span>
+              </div>
+              {changed && (
+                <span className="mt-1 inline-block rounded-full bg-brand/12 px-2 py-0.5 text-[11px] font-semibold text-brand">
+                  {nhanTrangThai(d.status)}
+                </span>
+              )}
+              {laDongPhanCong(d.action) && (
+                <>
+                  <p className="mt-1 flex items-start gap-1.5 text-[12px] text-navy">
+                    <Glyph icon={ArrowRightLeft} className="mt-0.5 size-3 shrink-0 text-ink-muted" />
+                    <span>
+                      <span className="text-ink-muted">Bộ phận: </span>
+                      <b className="font-semibold">{nhanBoPhan(d.unit, tenBoPhan)}</b>
+                    </span>
+                  </p>
+                  {d.assignee !== "" && (
+                    <p className="mt-0.5 flex items-start gap-1.5 text-[12px] text-navy">
+                      <Glyph icon={UserCheck} className="mt-0.5 size-3 shrink-0 text-ink-muted" />
+                      <span>
+                        <span className="text-ink-muted">Phụ trách: </span>
+                        <b className="font-semibold">{nhanCanBoXuLy(d.assignee, danhBa)}</b>
+                      </span>
+                    </p>
+                  )}
+                </>
+              )}
+              {/* The class stays exactly `ghi-chu-nhat-ky` (it keeps the line breaks; a test reads it). */}
+              {d.note !== "" && (
+                <div className="mt-1 text-[12.5px] [&>p]:m-0">
+                  <p className="ghi-chu-nhat-ky">{d.note}</p>
+                </div>
+              )}
+              {/* The row's files (§8.7): a download link each, asked for at the click — never prefetched. */}
+              {maTraCuu !== undefined && (
+                <PetitionLogAttachmentList lookupCode={maTraCuu} attachments={d.attachments ?? []} />
+              )}
             </div>
-          )}
-          {/* The row's files (§8.7): a download link each, asked for at the click — never prefetched. */}
-          {maTraCuu !== undefined && (
-            <PetitionLogAttachmentList lookupCode={maTraCuu} attachments={d.attachments ?? []} />
-          )}
-        </li>
-      ))}
+          </li>
+        );
+      })}
     </ol>
   );
 }
 
+/** Acts that never move the status — the pill fallback for the oldest row on a page. */
+const LOG_ACTS_KEEPING_STATUS: ReadonlySet<string> = new Set(["ghi-chu", "danh-gia", "tao-nhiem-vu"]);
+
 /**
- * Biểu mẫu `Ghi nhật ký`. Điều khiển từ ngoài (bản nháp sống ở `NhatKyPhieu`) để đóng rồi mở lại
- * không mất chữ và không đổi khoá chống trùng. `Esc` trong ô nhập là đóng.
+ * Up to two initials of the actor's NAME (the code in brackets is left out), as the prototype's `Avatar`.
+ * A bare code (`CB-00123`) gives its letters; nothing gives "?".
+ */
+function initials(label: string): string {
+  const name = label.replace(/\s*\([^)]*\)\s*$/, "");
+  const letters = name
+    .split(/\s+/)
+    .filter((w) => w !== "")
+    .slice(-2)
+    .map((w) => w[0] ?? "")
+    .join("")
+    .toUpperCase();
+  return letters === "" ? "?" : letters;
+}
+
+/**
+ * Biểu mẫu `Ghi nhật ký` — ALWAYS OPEN under the panel's title, as in the prototype
+ * (`FeedbackActivityPanel.tsx:159-231`): a 3-row box, `Đính kèm`, `Ghi nhật ký`. Controlled from
+ * outside (the draft and its idempotency key live in `NhatKyPhieu`), so a failed send keeps the text and
+ * the retry is the same write.
  *
  * Nút gửi khoá khi trống hoặc quá 2000 ký tự — nhưng giới hạn thật ở máy chủ, và câu 400 của nó vẫn
- * ra nguyên văn nếu hai bên lệch nhau.
+ * ra nguyên văn nếu hai bên lệch nhau. No autofocus: the box is there whenever the drawer opens, and
+ * stealing focus from the drawer's title would hide where the officer is.
  */
 export function BieuMauGhiNhatKy({
   id,
@@ -365,7 +381,6 @@ export function BieuMauGhiNhatKy({
   dangGui,
   loi,
   gui,
-  huy,
   dinhKem,
   choTep = false,
 }: {
@@ -375,79 +390,63 @@ export function BieuMauGhiNhatKy({
   dangGui: boolean;
   loi: string | null;
   gui: () => void;
-  huy: () => void;
   /** The `📎 Đính kèm` picker (`AttachmentPicker`), passed in by the block that owns the files. */
   dinhKem?: ReactNode;
   /** A chosen file is still uploading or being checked: the entry waits for it. */
   choTep?: boolean;
 }) {
-  const oNhap = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
-    oNhap.current?.focus();
-  }, []);
-
   const loiO = loiGhiChuNhatKy(noiDung);
   const idO = `${id}-noi-dung`;
-
-  function phim(e: KeyboardEvent<HTMLTextAreaElement>): void {
-    if (e.key === "Escape") {
-      e.preventDefault();
-      huy();
-    }
-  }
+  // Empty is "nothing to send" (the button locks), not an error to shout about.
+  const tooLong = loiO !== null && noiDung !== "";
 
   return (
     <form
       id={id}
-      className="form-danh-muc m-0 flex flex-col gap-3 rounded-xl border border-line bg-surface-muted p-3"
+      className="m-0 mt-2 flex flex-col gap-2"
       onSubmit={(e) => {
         e.preventDefault();
         if (loiO === null && !dangGui && !choTep) gui();
       }}
     >
-      <div>
-        <label htmlFor={idO} className={LABEL_CLASS}>
-          {NHAN_O_GHI_NHAT_KY}
-        </label>
-        <textarea
-          ref={oNhap}
-          id={idO}
-          name={idO}
-          rows={4}
-          className={cn(TEXTAREA_CLASS, loiO !== null && noiDung !== "" && "border-danger-600")}
-          value={noiDung}
-          placeholder={GOI_Y_GHI_NHAT_KY}
-          onChange={(e) => datNoiDung(e.target.value)}
-          onKeyDown={phim}
-          aria-describedby={`${idO}-dem ${idO}-nhac`}
-        />
-        <p
-          className={cn(HINT_CLASS, loiO !== null && noiDung !== "" && "text-danger-600")}
-          id={`${idO}-dem`}
-          aria-live="polite"
-        >
-          {demKyTu(noiDung)}/{GHI_CHU_TOI_DA} ký tự
-          {loiO !== null && noiDung !== "" ? ` · ${loiO}` : ""}
+      <label htmlFor={idO} className="an-thi-giac">
+        {NHAN_O_GHI_NHAT_KY}
+      </label>
+      <textarea
+        id={idO}
+        name={idO}
+        rows={3}
+        className={cn(TEXTAREA_CLASS, "bg-white", tooLong && "border-danger-600")}
+        value={noiDung}
+        placeholder={GOI_Y_GHI_NHAT_KY}
+        onChange={(e) => datNoiDung(e.target.value)}
+        aria-describedby={`${idO}-nhac`}
+      />
+      {tooLong && (
+        <p className="m-0 text-[11px] text-danger-600" aria-live="polite">
+          {loiO}
         </p>
-        <p className={cn(HINT_CLASS, "inline-flex items-start gap-1")} id={`${idO}-nhac`}>
-          <Glyph icon={LockKeyhole} className="mt-0.5 size-3.5 shrink-0" />
-          {NHAC_DU_LIEU_CA_NHAN}
-        </p>
-      </div>
-      {dinhKem}
+      )}
+      <p className="m-0 inline-flex items-start gap-1 text-[11px] text-ink-muted" id={`${idO}-nhac`}>
+        <Glyph icon={LockKeyhole} className="mt-0.5 size-3 shrink-0" />
+        {NHAC_DU_LIEU_CA_NHAN}
+      </p>
       {choTep && <p className="ghi-chu m-0">{ATTACH_WAIT_NOTE}</p>}
       {loi !== null && (
         <p className="thong-bao-loi m-0" role="alert">
           {loi}
         </p>
       )}
-      <div className="cum-nut justify-end">
+      <div className="flex flex-wrap items-start gap-2">
+        <div className="min-w-0 flex-1">{dinhKem}</div>
         {/* Busy = THIS form's own send (`dangGui` is the log block's state, not the drawer's). */}
-        <button type="submit" className={buttonClass("primary")} disabled={dangGui || choTep || loiO !== null}>
-          <BusyLabel busy={dangGui}>Lưu vào nhật ký</BusyLabel>
-        </button>
-        <button type="button" className={buttonClass("secondary")} onClick={huy} disabled={dangGui}>
-          Huỷ
+        <button
+          type="submit"
+          className={buttonClass("primary", "sm", "ml-auto")}
+          disabled={dangGui || choTep || loiO !== null}
+        >
+          <Glyph icon={Send} className="size-3.5" />
+          {NHAN_NUT_GHI_NHAT_KY}
         </button>
       </div>
     </form>

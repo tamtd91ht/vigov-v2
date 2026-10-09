@@ -21,6 +21,8 @@ import { PetitionWorkspace } from "./petition-workspace";
 
 const render = () => renderToStaticMarkup(<PetitionWorkspace />);
 
+// `SoPhanAnh` starts reads on mount; under `renderToStaticMarkup` effects never run, so no stub is needed.
+
 /** The button itself — NOT the words, which also appear in the "not built" list (§11's hamlet/photos). */
 const INTAKE_BUTTON = /<button[^>]*aria-haspopup="dialog"[^>]*>.*?Nhập hộ phản ánh<\/button>/;
 
@@ -46,18 +48,18 @@ describe("`+ Nhập hộ phản ánh` — `feedback.create`", () => {
 });
 
 describe("KPI cards — `feedback.read` AND `report.read`", () => {
-  it("both keys: the row is drawn (loading first)", () => {
+  it("both keys: the row is drawn (loading first: the sentence and the prototype's one block)", () => {
     session.permissions = ["feedback.read", "report.read"];
     const html = render();
     expect(html).toContain("Đang tải số liệu phản ánh…");
-    expect(html).toContain("Điểm hài lòng trung bình");
+    expect(html).toContain('aria-label="Số liệu phản ánh"');
   });
 
   it("DENIED — one key of the two, none, or an unknown session: no card", () => {
     for (const p of [["feedback.read"], ["report.read"], [], null]) {
       session.permissions = p;
       const html = render();
-      expect(html, String(p)).not.toContain("Điểm hài lòng trung bình");
+      expect(html, String(p)).not.toContain('aria-label="Số liệu phản ánh"');
       expect(html, String(p)).not.toContain("Đang tải số liệu phản ánh…");
     }
   });
@@ -74,10 +76,42 @@ describe("the page frame — `feedback.read`", () => {
     expect(html).not.toContain('id="petition-filters"');
   });
 
-  it("with it: the register under the header; never a line about restricted petitions (rule 4)", () => {
+  it("the prototype's header: plain title, verbatim subtitle, mb-5, no icon tile", () => {
     session.permissions = ["feedback.read"];
     const html = render();
-    expect(html).toContain("Sổ phản ánh của xã");
-    expect(html).not.toMatch(/luồng riêng|không hiển thị ở đây|Chủ tịch Uỷ ban đọc được/);
+    expect(html).toMatch(/<header class="[^"]*mb-5/);
+    expect(html).toContain(">Phản ánh của người dân</h1>");
+    expect(html).toContain(
+      "Tiếp nhận từ Zalo Mini App và các kênh khác, theo dõi thời hạn, đối chiếu ảnh trước và sau khi xử lý.",
+    );
+    expect(html).not.toContain("lucide-message-square-warning");
+  });
+});
+
+/**
+ * Owner decision D3 (09/10/2026): an account WITHOUT `feedback.restricted` reads the prototype's note
+ * (`FeedbackWorkspace.tsx:125-131`), FIRST SENTENCE ONLY — the key can be granted to others than the
+ * chairman, so "Chỉ Chủ tịch Uỷ ban đọc được." would be false. A holder of the key sees the petitions
+ * themselves and no note.
+ */
+describe("restricted-flow note — accounts without `feedback.restricted`", () => {
+  const NOTE = "Phản ánh về tác phong cán bộ đi luồng riêng và không hiển thị ở đây.";
+
+  it("without the key: the one sentence, never the chairman sentence", () => {
+    session.permissions = ["feedback.read"];
+    const html = render();
+    expect(html).toContain(NOTE);
+    expect(html).toContain("lucide-shield-alert");
+    expect(html).not.toContain("Chủ tịch Uỷ ban đọc được");
+  });
+
+  it("DENIED direction — with the key: no note", () => {
+    session.permissions = ["feedback.read", "feedback.restricted"];
+    expect(render()).not.toContain(NOTE);
+  });
+
+  it("without `feedback.read`: no register, so no note either", () => {
+    session.permissions = ["feedback.create"];
+    expect(render()).not.toContain(NOTE);
   });
 });

@@ -1,12 +1,11 @@
 "use client";
 
-import { AlarmClock, CloudOff, Eye, Inbox, RefreshCw, Star, Target } from "lucide-react";
+import { CloudOff, RefreshCw, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { StatCard } from "@/components/ui/stat-card";
 import { cn } from "@/lib/cn";
 import { fetchCitizenReportSummary, type SummaryPeriod } from "@/lib/api/dashboard";
 import type { KetQua } from "@/lib/api/goi";
@@ -17,7 +16,6 @@ import {
   inProgressCaption,
   KPI_LOADING,
   KPI_NO_DEADLINE_SAMPLE,
-  KPI_NO_RATING,
   KPI_ON_TIME_LABEL,
   KPI_PENDING_CAPTION,
   KPI_PENDING_LABEL,
@@ -123,122 +121,136 @@ export function PetitionKpisView({
   }
 
   const s = summary?.ok === true ? summary.duLieu : null;
-  const busy = <Skeleton className="h-[26px] w-16" />;
 
-  const pct = s === null ? null : onTimePercent(s.on_time, s.on_time_sample);
-  const average = s === null ? null : ratingAverage(s.rating_sum, s.rating_sample);
-  const lowRating = s?.low_rating;
-  const pending = s?.publication_pending;
-  const ratingKnown = typeof s?.rating_sample === "number" && typeof s?.rating_sum === "number";
-
-  return (
-    <section aria-label="Số liệu phản ánh" aria-busy={s === null} className="m-0">
-      {s === null && (
+  if (s === null) {
+    // The prototype's loading state (`FeedbackWorkspace.tsx:91-92`): ONE block the height of the row.
+    return (
+      <section aria-label="Số liệu phản ánh" aria-busy="true" className="m-0">
         <p className="an-thi-giac" role="status">
           {KPI_LOADING}
         </p>
-      )}
+        <Skeleton className="h-24 w-full rounded-card" />
+      </section>
+    );
+  }
+
+  const pct = onTimePercent(s.on_time, s.on_time_sample);
+  const average = ratingAverage(s.rating_sum, s.rating_sample);
+  const lowRating = s.low_rating;
+  const pending = s.publication_pending;
+  const ratingKnown = typeof s.rating_sample === "number" && typeof s.rating_sum === "number";
+  const late = s.late > 0;
+
+  return (
+    <section aria-label="Số liệu phản ánh" aria-busy={false} className="m-0">
       {/* The prototype's grid (`FeedbackWorkspace.tsx:94`): 1 / 2 / 4 columns, 12px apart. */}
       <ul className="m-0 grid list-none grid-cols-1 gap-3 p-0 sm:grid-cols-2 xl:grid-cols-4">
-        <li className="min-w-0">
-          <StatCard
-            icon={Inbox}
-            label={KPI_TOTAL_LABEL}
-            value={s === null ? busy : <FigureLink href={kpiHref("received", period)} label={KPI_TOTAL_LABEL}>{kpiCount(s.received)}</FigureLink>}
-            caption={
-              s === null ? undefined : (
-                <FigureLink href={kpiHref("in_progress", period)} label={inProgressCaption(s.in_progress)} small>
-                  {inProgressCaption(s.in_progress)}
-                </FigureLink>
-              )
-            }
-          />
-        </li>
-        <li className="min-w-0">
-          <StatCard
-            icon={Target}
-            label={KPI_ON_TIME_LABEL}
-            value={
-              s === null ? (
-                busy
-              ) : (
-                <span className="inline-flex items-baseline gap-1.5">
-                  <FigureLink href={kpiHref("on_time", period)} label="Đúng hạn">
-                    {kpiCount(s.on_time)}
-                  </FigureLink>
-                  <span aria-hidden="true" className="text-ink-400">
-                    /
-                  </span>
-                  {/* Red ONLY with the icon beside it — never colour alone (spec §7). */}
-                  <FigureLink
-                    href={kpiHref("late", period)}
-                    label="Trễ hạn trong kỳ"
-                    className={s.late > 0 ? "text-danger-600" : undefined}
-                  >
-                    {s.late > 0 && <Glyph icon={AlarmClock} className="mr-1 inline size-5 align-[-2px]" />}
-                    {kpiCount(s.late)}
-                  </FigureLink>
-                </span>
-              )
-            }
-            caption={s === null ? undefined : pct === null ? KPI_NO_DEADLINE_SAMPLE : `${pct} đúng hạn`}
-          />
-        </li>
-        <li className="min-w-0">
-          <StatCard
-            icon={Star}
-            tone="warning"
-            label={KPI_RATING_LABEL}
-            value={
-              s === null
-                ? busy
-                : !ratingKnown
-                  ? // The server predates the fields: "Chưa có dữ liệu", never 0.
-                    null
-                  : average === null
-                    ? // Nobody has rated yet (sample 0): no value, NEVER 0,0/5.
-                      "—"
-                    : (
-                        <FigureLink href={kpiHref("rating_sample", period)} label={KPI_RATING_LABEL}>
-                          {average}
-                        </FigureLink>
-                      )
-            }
-            caption={
-              s === null || !ratingKnown ? undefined : (
-                <span className="flex min-w-0 flex-col gap-0.5">
-                  {average === null && <span>{KPI_NO_RATING}</span>}
-                  {typeof lowRating === "number" && (
-                    <FigureLink href={kpiHref("low_rating", period)} label={lowRatingCaption(lowRating)} small>
-                      {lowRatingCaption(lowRating)}
-                    </FigureLink>
-                  )}
-                </span>
-              )
-            }
-          />
-        </li>
-        <li className="min-w-0">
-          <StatCard
-            icon={Eye}
-            tone="neutral"
-            label={KPI_PENDING_LABEL}
-            value={
-              s === null ? (
-                busy
-              ) : typeof pending === "number" ? (
-                <FigureLink href={kpiHref("publication_pending", period)} label={KPI_PENDING_LABEL}>
-                  {kpiCount(pending)}
-                </FigureLink>
-              ) : (
-                null
-              )
-            }
-            caption={s !== null && typeof pending !== "number" ? undefined : KPI_PENDING_CAPTION}
-          />
-        </li>
+        <KpiCard
+          label={KPI_TOTAL_LABEL}
+          value={
+            <FigureLink href={kpiHref("received", period)} label={KPI_TOTAL_LABEL}>
+              {kpiCount(s.received)}
+            </FigureLink>
+          }
+          hint={
+            <FigureLink href={kpiHref("in_progress", period)} label={inProgressCaption(s.in_progress)}>
+              {inProgressCaption(s.in_progress)}
+            </FigureLink>
+          }
+        />
+        {/* `FeedbackWorkspace.tsx:100-107`: the WHOLE value is danger when anything is late, leaf
+            otherwise; danger also puts the warning icon before the hint — never colour alone. */}
+        <KpiCard
+          label={KPI_ON_TIME_LABEL}
+          accent={late ? "danger" : "leaf"}
+          value={
+            <>
+              <FigureLink href={kpiHref("on_time", period)} label="Đúng hạn">
+                {kpiCount(s.on_time)}
+              </FigureLink>{" "}
+              /{" "}
+              <FigureLink href={kpiHref("late", period)} label="Trễ hạn trong kỳ">
+                {kpiCount(s.late)}
+              </FigureLink>
+            </>
+          }
+          hint={pct === null ? KPI_NO_DEADLINE_SAMPLE : `${pct} đúng hạn`}
+        />
+        <KpiCard
+          label={KPI_RATING_LABEL}
+          value={
+            // `—` when nobody has rated (sample 0) or the server predates the fields — NEVER 0,0/5.
+            average === null || !ratingKnown ? (
+              "—"
+            ) : (
+              <FigureLink href={kpiHref("rating_sample", period)} label={KPI_RATING_LABEL}>
+                {average}
+              </FigureLink>
+            )
+          }
+          hint={
+            ratingKnown && typeof lowRating === "number" ? (
+              <FigureLink href={kpiHref("low_rating", period)} label={lowRatingCaption(lowRating)}>
+                {lowRatingCaption(lowRating)}
+              </FigureLink>
+            ) : undefined
+          }
+        />
+        <KpiCard
+          label={KPI_PENDING_LABEL}
+          value={
+            typeof pending === "number" ? (
+              <FigureLink href={kpiHref("publication_pending", period)} label={KPI_PENDING_LABEL}>
+                {kpiCount(pending)}
+              </FigureLink>
+            ) : (
+              "—"
+            )
+          }
+          hint={KPI_PENDING_CAPTION}
+        />
       </ul>
     </section>
+  );
+}
+
+/**
+ * One KPI card — the prototype's `SummaryCard` (`FeedbackWorkspace.tsx:290-320`), local like
+ * `features/giai-ngan/disbursement-overview.tsx` `Kpi`: NO icon tile, uppercase 11px label, 18px bold
+ * value, 11px hint. `danger` puts `TriangleAlert` before the hint.
+ */
+function KpiCard({
+  label,
+  value,
+  hint,
+  accent,
+}: {
+  label: string;
+  value: ReactNode;
+  hint?: ReactNode;
+  accent?: "danger" | "leaf";
+}) {
+  return (
+    <li className="border-line shadow-card rounded-card min-w-0 border border-solid bg-white p-4" data-kpi={label}>
+      <p className="text-ink-muted m-0 text-[11px] font-semibold tracking-wide uppercase">{label}</p>
+      <p
+        data-kpi-value=""
+        className={cn(
+          "m-0 mt-1.5 text-[18px] font-bold tabular-nums",
+          accent === "danger" ? "text-danger" : accent === "leaf" ? "text-leaf" : "text-navy",
+        )}
+      >
+        {value}
+      </p>
+      {hint !== undefined && (
+        <div className="text-ink-muted mt-1 flex items-start gap-1 text-[11px]">
+          {accent === "danger" && (
+            <TriangleAlert aria-hidden="true" focusable="false" className="mt-0.5 size-3 shrink-0" />
+          )}
+          <span className="min-w-0">{hint}</span>
+        </div>
+      )}
+    </li>
   );
 }
 
@@ -249,14 +261,10 @@ export function PetitionKpisView({
 function FigureLink({
   href,
   label,
-  small = false,
-  className,
   children,
 }: {
   href: string;
   label: string;
-  small?: boolean;
-  className?: string;
   children: ReactNode;
 }) {
   return (
@@ -266,8 +274,6 @@ function FigureLink({
       className={cn(
         "rounded text-inherit underline-offset-4 hover:underline",
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500",
-        small && "text-xs",
-        className,
       )}
     >
       <span className="an-thi-giac">{kpiLinkLabel(label)}: </span>

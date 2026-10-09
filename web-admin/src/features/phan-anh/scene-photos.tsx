@@ -6,13 +6,11 @@ import {
   Clock,
   CloudOff,
   ImageOff,
-  Images,
   RefreshCw,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/cn";
 import { listPetitionPhotos } from "@/lib/api/phieu-phan-anh";
 import type { petitions_photoLinkOut, petitions_photoListOut } from "@/lib/api/schema.gen";
@@ -38,7 +36,7 @@ import {
   scenePhotoOpenLabel,
   scenePhotoSrc,
 } from "./nhan-phieu";
-import { buttonClass, Glyph, SectionTitle } from "./petition-ui";
+import { buttonClass, Glyph } from "./petition-ui";
 
 /**
  * §8.4 `Ảnh trước và sau khi xử lý` on the petition drawer — the "before" column is the photos the
@@ -265,34 +263,30 @@ export function ScenePhotosView({
   const nextPhoto = openIndex >= 0 ? items[openIndex + 1] : undefined;
 
   return (
-    <Card as="section" className="scene-photos" aria-labelledby={headingId}>
-      <CardHeader>
-        <SectionTitle icon={Images} id={headingId}>
-          {SCENE_PHOTOS_TITLE}
-        </SectionTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3 [&>p]:m-0">
-
-      <h5 className={COLUMN_TITLE}>{SCENE_PHOTOS_BEFORE}</h5>
+    // THE PROTOTYPE'S SECTION (`FeedbackDetailDrawer.tsx:348-392`): flat, a hairline above, a 12.5px
+    // title, then TWO COLUMNS — before | after — each with its uppercase label and either the photos
+    // (two per row, 128px high) or a dashed empty box saying so.
+    <section className="scene-photos mt-5 border-t border-solid border-line pt-4" aria-labelledby={headingId}>
+      <h3 id={headingId} className="m-0 mb-2.5 text-[12.5px] font-bold text-navy">
+        {SCENE_PHOTOS_TITLE}
+      </h3>
+      <div className="grid grid-cols-2 gap-4">
+      <div className="flex min-w-0 flex-col gap-2 [&>p]:m-0">
+      <h4 className={COLUMN_TITLE}>{SCENE_PHOTOS_BEFORE}</h4>
       {state.kind === "loading" && (
         <>
-          <p role="status" className="text-sm text-ink-500">
+          <p role="status" className="text-[11.5px] text-ink-muted">
             {SCENE_PHOTOS_LOADING}
           </p>
           {/* Decorative placeholders in the grid's shape; the sentence above is the announcement. */}
           <div aria-hidden="true" className={THUMB_GRID}>
-            {[0, 1, 2].map((i) => (
-              <span key={i} className="aspect-[4/3] rounded-lg bg-line motion-safe:animate-pulse" />
+            {[0, 1].map((i) => (
+              <span key={i} className="h-32 rounded-[10px] bg-line motion-safe:animate-pulse" />
             ))}
           </div>
         </>
       )}
-      {state.kind === "empty" && (
-        <p className="inline-flex items-center gap-2 text-sm text-ink-500">
-          <Glyph icon={ImageOff} className="size-4 shrink-0" />
-          {SCENE_PHOTOS_EMPTY}
-        </p>
-      )}
+      {state.kind === "empty" && <EmptyPhotoBox>{SCENE_PHOTOS_EMPTY}</EmptyPhotoBox>}
       {(state.kind === "unavailable" || state.kind === "error") && (
         <div className="flex flex-wrap items-center gap-3">
           <Glyph icon={CloudOff} className="size-[18px] shrink-0 text-danger-600" />
@@ -318,7 +312,7 @@ export function ScenePhotosView({
                   aria-pressed={i === openIndex}
                   onClick={() => open(p.id)}
                   className={cn(
-                    "block aspect-[4/3] w-full cursor-pointer overflow-hidden rounded-lg border border-line bg-surface-muted p-0",
+                    "block h-32 w-full cursor-pointer overflow-hidden rounded-[10px] border border-line bg-surface-muted p-0",
                     "transition-[border-color,box-shadow] duration-150 hover:border-brand-500",
                     "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500",
                     i === openIndex && "border-brand-600 ring-2 ring-brand-500",
@@ -344,12 +338,25 @@ export function ScenePhotosView({
           })}
         </ul>
       )}
+      </div>
+
+      {/* `Sau khi xử lý` — the verification photos (`VerificationPhotos`, passed in by the drawer: it
+          reads the network and the drawer is called as a plain function in one test). The heading is
+          the target of the close act's "Đến mục Sau khi xử lý" link, hence its id and tabIndex. */}
+      <div className="flex min-w-0 flex-col gap-2">
+        <h4 id={afterPhotosHeadingId(lookupCode)} tabIndex={-1} className={cn(COLUMN_TITLE, "outline-none")}>
+          {SCENE_PHOTOS_AFTER}
+        </h4>
+        {after}
+      </div>
+      </div>
+
       {refreshing && (
-        <p role="status" className="text-sm text-ink-500">
+        <p role="status" className="m-0 mt-2 text-sm text-ink-500">
           {SCENE_PHOTOS_REFRESHING}
         </p>
       )}
-      {notice !== null && <p className="ghi-chu">{notice}</p>}
+      {notice !== null && <p className="ghi-chu m-0 mt-2">{notice}</p>}
 
       {opened !== undefined && (
         <FullSizePhoto
@@ -368,24 +375,24 @@ export function ScenePhotosView({
           onError={() => onFullImageError(opened.id)}
         />
       )}
-
-      {/* `Sau khi xử lý` — the verification photos (`VerificationPhotos`, passed in by the drawer: it
-          reads the network and the drawer is called as a plain function in one test). The heading is
-          the target of the close block's "Đến mục Sau khi xử lý" link, hence its id and tabIndex. */}
-      <h5 id={afterPhotosHeadingId(lookupCode)} tabIndex={-1} className={cn(COLUMN_TITLE, "outline-none")}>
-        {SCENE_PHOTOS_AFTER}
-      </h5>
-      {after}
-      </CardContent>
-    </Card>
+    </section>
   );
 }
 
-/** Square-ish thumbnails, as many columns as fit (spec §6.5 grid rule), never wider than the card. */
-export const THUMB_GRID = "grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-3";
+/** Two thumbnails per row, 8px apart (prototype `PhotoColumn`, `FeedbackDetailDrawer.tsx:614`). */
+export const THUMB_GRID = "grid grid-cols-2 gap-2";
 
-/** `Trước khi xử lý` / `Sau khi xử lý` — 12px/600 column labels (spec §3). */
-const COLUMN_TITLE = "m-0 text-xs font-semibold text-ink-700";
+/** `Trước khi xử lý` / `Sau khi xử lý` — prototype `PhotoColumn` label: 11.5px bold uppercase. */
+const COLUMN_TITLE = "m-0 text-[11.5px] font-bold tracking-wide text-ink-muted uppercase";
+
+/** The prototype's empty column: a dashed 128px box with one sentence (`FeedbackDetailDrawer.tsx:603-612`). */
+export function EmptyPhotoBox({ children }: { children: ReactNode }) {
+  return (
+    <div className="grid h-32 place-items-center rounded-[10px] border border-dashed border-line px-3 text-center text-[11.5px] text-ink-muted">
+      {children}
+    </div>
+  );
+}
 
 /** Id of the `Sau khi xử lý` heading — the close block links to it. */
 export function afterPhotosHeadingId(lookupCode: string): string {
