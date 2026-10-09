@@ -970,6 +970,130 @@ service IdentityService {
   // RETRYING IS SAFE: it writes nothing, publishes nothing, and leaves no audit entry.
   rpc ResolveLiveOrgUnitCodes(ResolveLiveOrgUnitCodesRequest) returns (ResolveLiveOrgUnitCodesResponse);
 
+  // ResolveActiveResidentialUnits answers ONE question about residential-unit ids a caller is about
+  // to WRITE onto a record: is this an ACTIVE thôn / tổ dân phố (`thon_to_dan_pho`, entity
+  // ResidentialUnit) of the commune named by "x-tenant-id"? Each id that is, is answered with the
+  // unit's name.
+  //
+  // WHY IT EXISTS (owner decision 2026-10-09). A petition records the residential unit it concerns
+  // (`phieu_phan_anh.thon_id`, service-petitions migration 0004:265). The citizen may set it from the
+  // Mini App (optional), and staff set it at intake and at classification. Either way the id arrives
+  // in a request BODY — client-supplied — and until this RPC nothing outside this service could
+  // verify it without opening this schema (rule 2, forbidden #2). service-petitions therefore refused
+  // the field on staff intake (service-petitions/internal/app/staff_intake.go:37). Unchecked, a
+  // crafted body files a petition against ANOTHER commune's hamlet, against one the commune has taken
+  // out of use, or against an id that names nothing — and every report grouped by area then counts it
+  // somewhere that is not this commune's ground. Same shape as ResolveLiveOrgUnits, on purpose.
+  //
+  // # THE PREDICATE — the whole of what "active" means
+  //
+  // An id is ACTIVE when a `thon_to_dan_pho` row with that id exists in the commune named by
+  // "x-tenant-id", `deleted_at IS NULL`, AND `dang_dung` is true. `dang_dung = false` is how the
+  // commune TAKES A UNIT OUT OF USE (PATCH /api/v1/residential-units/{id}, `active: false`; no route
+  // writes `deleted_at`, store/residential_unit_write.go:16) — a merged hamlet, a unit that no longer
+  // exists on the ground. ADR 0059 §2 fixed what that flag means: "lọc ở ô chọn, không lọc ở nhãn" —
+  // filtered from pickers, never from labels. Setting a petition's unit IS a pick, so an out-of-use
+  // unit is refused here; printing an old record's unit is a label, which is
+  // ResolveResidentialUnitNames. This predicate is therefore narrower than the "live" (deleted_at
+  // only) of ResolveLiveOrgUnits.
+  //
+  // ANY PICKER THAT OFFERS UNITS FOR THIS FIELD MUST USE THE SAME PREDICATE. GET
+  // /api/v1/residential-units returns out-of-use units too (flagged `active: false`) because it is
+  // the administration screen; a petition form filling its picker from it must drop the inactive
+  // ones, or it offers a choice this RPC then refuses. Whoever changes one changes both, in the same
+  // commit.
+  //
+  // # ONE ANSWER FOR EVERY REFUSAL — absent
+  //
+  // Unknown, out of use, soft-deleted and ANOTHER COMMUNE'S id are indistinguishable in the
+  // response. Telling "another commune" apart from "unknown" would leak that the id exists in a
+  // commune the caller may not read (rule 1). The caller's sentence to its user is one: "thôn / tổ
+  // dân phố này không còn nhận phản ánh".
+  //
+  // # A LOOKUP BY IDS THE CALLER ALREADY HOLDS — NEVER A LIST
+  //
+  // An empty request answers empty, never "every active unit". The response never carries an id that
+  // was not requested. The list of units is GET /api/v1/residential-units, not this.
+  //
+  // # A CALLER DECIDES FROM THIS
+  //
+  // Absent MUST be refused by the caller (fail closed): a 400 to the citizen or the clerk naming the
+  // field, never a silent drop of the hamlet and never a write of the id unchecked. Present may be
+  // written. A point-in-time answer — a unit taken out of use a millisecond later is not seen — and
+  // that window is accepted for the reason ResolveAssignableStaff states. NEVER cached across requests.
+  //
+  // # THE NAME TRAVELS WITH THE ANSWER, AND IS NOT FOR STORING
+  //
+  // The caller needs the name to answer the request that set the hamlet without a second hop. It is
+  // TODAY'S `ten`; the record stores the ID, never the name (a renamed unit would otherwise print two
+  // names for one place). Printing names for ALREADY-STORED ids is ResolveResidentialUnitNames' job —
+  // NOT this RPC's: a report built from this one blanks every hamlet taken out of use since the
+  // petition was filed, on an archival record.
+  //
+  // # No personal data; the commune travels in metadata; not audited
+  //
+  // A unit's id and name are facts of the commune's map, not personal data (the head of the unit,
+  // a person, is deliberately NOT carried). "x-tenant-id" is what makes another commune's id absent,
+  // so this method is not a candidate for core/grpcx.methodsWithoutTenant (ADR 0012, decision 1). On
+  // the citizen path the commune is the citizen SESSION's commune, never one the Mini App names. The
+  // audited act is the caller's WRITE of the petition, inside the caller's own transaction.
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK                  zero or more items. FEWER THAN REQUESTED IS ORDINARY — it is "not active".
+  //   INVALID_ARGUMENT    more than 200 ids in one call. Never a silent truncation.
+  //   NOT_FOUND           NEVER produced. A unit that is not active is an ABSENT item.
+  //   UNAUTHENTICATED     NEVER produced by this RPC — it belongs to the caller-key interceptor.
+  //   UNAVAILABLE etc.    the call did not happen. Refuse the write with a retryable error (503);
+  //                       never fall back to writing the id unchecked, and never to dropping it.
+  //
+  // RETRYING IS SAFE: it writes nothing, publishes nothing, and leaves no audit entry.
+  rpc ResolveActiveResidentialUnits(ResolveActiveResidentialUnitsRequest) returns (ResolveActiveResidentialUnitsResponse);
+
+  // ResolveResidentialUnitNames turns the residential-unit ids ALREADY-STORED RECORDS carry into the
+  // names a person can read — INCLUDING units since taken out of use or removed.
+  //
+  // WHY IT EXISTS (owner decision 2026-10-09): petitions store `thon_id` AS A VALUE, and the petition
+  // views, exports and the report by area print the unit's name beside each record or group. Nothing
+  // outside this service can turn the id into a name without opening this schema (rule 2,
+  // forbidden #2).
+  //
+  // # IT MIRRORS ResolveOrgUnitNames, AND FOR THE SAME REASON IT ANSWERS UNITS OUT OF USE
+  //
+  // A petition filed in 2026 against a hamlet merged away in 2027 still holds that hamlet's id, and a
+  // report or printout must say what the record holds — a blank area on an administrative record is
+  // an unattributed line. So an out-of-use unit (`dang_dung = false`) is answered RECORD_STANDING_LIVE
+  // (standing reads `deleted_at` and nothing else, as for ResolveTaskBlocLabels), and a soft-deleted
+  // one is answered RECORD_STANDING_REMOVED. That is the one difference from
+  // ResolveActiveResidentialUnits, and why the two are not one RPC with a flag: the one a caller
+  // DECIDES from must never answer a unit that may not receive new records.
+  //
+  // # IT RESOLVES A NAME. IT DECIDES NOTHING
+  //
+  // Never read "this id resolved" as "this unit may be written": it may have resolved PRECISELY
+  // BECAUSE the record is old. "Active" is ResolveActiveResidentialUnits' question.
+  //
+  // THE NAME IS TODAY'S NAME of that unit — `thon_to_dan_pho.ten` is editable and the record holds
+  // only the id. Stated for the reason ResolveOrgUnitNames states it.
+  //
+  // A lookup by ids the caller already holds, never a list; an empty list answers empty; the response
+  // never carries an id that was not requested; another commune's id is ABSENT, indistinguishable
+  // from an id that names nothing (rule 1). No personal data; not audited (the export or report is
+  // the caller's act); not exempt from "x-tenant-id".
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK                  zero or more items. FEWER THAN REQUESTED IS ORDINARY, never an error.
+  //   INVALID_ARGUMENT    more than 200 ids in one call. Never a silent truncation. A report over a
+  //                       commune at its ceiling (500 units, store.TranDanhSachThonToDanPho) batches.
+  //   NOT_FOUND           NEVER produced. An id that resolves to nothing is an ABSENT ITEM.
+  //   UNAUTHENTICATED     NEVER produced by this RPC — it belongs to the caller-key interceptor.
+  //   UNAVAILABLE etc.    the call did not happen, and IT IS NOT "no name". A report rendering an
+  //                       outage as blank areas writes an absence onto a record. Fail the request.
+  //
+  // RETRYING IS SAFE: it writes nothing, publishes nothing, and leaves no audit entry.
+  rpc ResolveResidentialUnitNames(ResolveResidentialUnitNamesRequest) returns (ResolveResidentialUnitNamesResponse);
+
   rpc ListCitizenCommunes(ListCitizenCommunesRequest) returns (ListCitizenCommunesResponse);
 
   // AdvanceWorkingHours moves an instant forward through ONE commune's working calendar and
@@ -2915,6 +3039,82 @@ message OrgUnitCodeMatch {
 
   // The live unit's `bo_phan.id` — the value the caller stores. NEVER EMPTY in an OK response.
   string id = 2;
+}
+
+message ResolveActiveResidentialUnitsRequest {
+  // THE RESIDENTIAL-UNIT IDS the caller is about to write — `thon_to_dan_pho.id`, the value
+  // service-petitions stores in `phieu_phan_anh.thon_id`. NOT `thon_to_dan_pho.ma` (the slug): the
+  // record stores the id, so the id is what has to be verified.
+  //
+  // Duplicates are collapsed by the server; order carries no meaning. A blank string matches no row
+  // and is simply absent from the answer.
+  //
+  // AT MOST 200 ids per call; more is INVALID_ARGUMENT, never a silent truncation. One petition names
+  // one unit; the ceiling is the ResolveResidentialUnitNames one so a bulk caller batches identically.
+  //
+  // AN EMPTY LIST IS A VALID REQUEST AND ANSWERS EMPTY. It is NOT "every active unit".
+  //
+  // THERE IS NO SECOND FIELD, AND THAT IS THE DESIGN: a predicate here turns a verification into a
+  // listing of the commune's units.
+  repeated string ids = 1;
+}
+
+// Wrapped, not a bare repeated message: adding a field later must not change the RPC signature.
+message ResolveActiveResidentialUnitsResponse {
+  // One item per requested id that is an ACTIVE unit of this commune — a SUBSET of the request, each
+  // at most once, in no meaningful order. The caller maps by ActiveResidentialUnit.id.
+  //
+  // AN ID IS ABSENT when it does not exist, is out of use, is soft deleted, or belongs to ANOTHER
+  // COMMUNE than the one in "x-tenant-id". Indistinguishable on purpose (rule 1); the caller refuses
+  // every one of them the same way.
+  repeated ActiveResidentialUnit items = 1;
+}
+
+// ActiveResidentialUnit is an id the caller may write, with the name to answer its request with —
+// and nothing else. No slug, no type, no counts, no head of unit: none is needed to accept a
+// petition's area, and the head is a person.
+message ActiveResidentialUnit {
+  // Echoed from the request — the KEY the caller maps by. `thon_to_dan_pho.id`.
+  string id = 1;
+
+  // The unit's name exactly as `thon_to_dan_pho.ten` holds it TODAY ("Thôn Bình An"). `name` and not
+  // `label`: `ten` is a proper name (kb/00-foundation/ubiquitous-language.md). NEVER EMPTY in an OK
+  // response: the column is NOT NULL, so an empty string is a contract fault. NOT FOR STORING.
+  string name = 2;
+}
+
+message ResolveResidentialUnitNamesRequest {
+  // THE RESIDENTIAL-UNIT IDS already-stored records carry — `thon_to_dan_pho.id`, the value
+  // service-petitions stores in `phieu_phan_anh.thon_id`. Duplicates are collapsed; order carries no
+  // meaning; a blank string is absent.
+  //
+  // AT MOST 200 ids per call — the ResolveOrgUnitNames ceiling. More is INVALID_ARGUMENT, never a
+  // silent truncation. An empty list answers empty — NOT "every unit". No second field.
+  repeated string ids = 1;
+}
+
+// Wrapped, not a bare repeated message: adding a field later must not change the RPC signature.
+message ResolveResidentialUnitNamesResponse {
+  // FEWER ITEMS THAN IDS REQUESTED IS A VALID RESPONSE, and the order is NOT the order of `ids`. The
+  // caller MUST map by ResidentialUnitName.id — index alignment prints one hamlet's name on another
+  // hamlet's line.
+  //
+  // AN ID IS ABSENT when it names no row, or a row of ANOTHER COMMUNE than the one in "x-tenant-id"
+  // — indistinguishable (rule 1). Out-of-use and soft-deleted units are NOT absent.
+  repeated ResidentialUnitName items = 1;
+}
+
+// ResidentialUnitName is what it takes to print ONE unit's name beside ONE record, and nothing else.
+message ResidentialUnitName {
+  // Echoed from the request — the KEY the caller maps by. `thon_to_dan_pho.id`.
+  string id = 1;
+
+  // `thon_to_dan_pho.ten` as it stands TODAY. NEVER EMPTY in an OK response (NOT NULL column).
+  string name = 2;
+
+  // `deleted_at` and nothing else: a unit merely taken out of use (`dang_dung = false`) is LIVE.
+  // NEVER UNSPECIFIED in an OK response.
+  RecordStanding standing = 3;
 }
 
 message ListCitizenCommunesRequest { string citizen_id = 1; }
