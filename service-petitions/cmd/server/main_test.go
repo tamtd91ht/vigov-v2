@@ -477,6 +477,11 @@ func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *m
 		// Never invoked here; the route file refuses a nil. Own suites: internal/app and internal/http
 		// citizen_report_breakdown_test.go / citizen_report_figures_test.go.
 		CitizenReportBreakdown: app.NewCitizenReportBreakdown(nil, nil),
+		// Merging duplicate petitions — never invoked here; the route file refuses a nil. Own suites:
+		// internal/app/petition_merge_test.go and internal/http/citizen_report_merge_test.go.
+		CitizenReportMerge:  app.NewXuLyPhanAnh(nil, nil, nil, nil, nil, nil, nil),
+		MergeLinks:          petstore.NewPhieuPhanAnhStore(nil),
+		DuplicateCandidates: app.NewDuplicateCandidates(nil, nil),
 		// Never invoked here; Register refuses a nil. Built exactly as main() builds it, so the
 		// real restricted-field subquery passes WithHiddenSubjects' wiring-time check in this test
 		// too. Own suite: internal/http/audit_entries_test.go.

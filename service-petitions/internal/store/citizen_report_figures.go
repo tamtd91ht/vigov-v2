@@ -123,10 +123,11 @@ func (s *PhieuPhanAnhStore) CitizenReportPoints(ctx context.Context, loc LocPhie
 
 // --- the breakdown ------------------------------------------------------------------------------------
 
-// citizenReportOverdueNow is "overdue as of now" — the overdue queue's own two predicates
-// (OverdueCitizenReports), so the breakdown's stock figure and the "Cần xử lý ngay" panel are one set.
-var citizenReportOverdueNow = `((` + citizenReportClassificationOverdue + `) OR (` +
-	citizenReportResolutionOverdue + `))`
+// citizenReportOverdueNow is "overdue as of now" — the overdue queue's own predicate
+// (OverdueCitizenReports reads THIS variable), so the breakdown's stock figure and the "Cần xử lý ngay"
+// panel are one set. MAIN PETITIONS ONLY (mainPetitionCondition).
+var citizenReportOverdueNow = `(` + mainPetitionCondition + ` AND ((` + citizenReportClassificationOverdue +
+	`) OR (` + citizenReportResolutionOverdue + `)))`
 
 // citizenReportFinished is "the work was finished in the period" — the instant domain.QuaHan compares
 // once the work is done (the resolve clock stops at `xu_ly_xong_luc`, not at closing).
@@ -147,31 +148,45 @@ const (
 	breakdownPlaceKey = `COALESCE(thon_id, '')`
 )
 
+// onlyMain prefixes a figure's predicate with mainPetitionCondition.
+func onlyMain(cond string) string { return "(" + mainPetitionCondition + " AND " + cond + ")" }
+
 // citizenReportBreakdownColumns is the SELECT list, read by position in lockstep with the Scan.
 //
 // THE ON-TIME COLUMNS ARE citizenReportMetricCondition'S TEXT, NOT A RESPELLING — so the field rows sum
 // to the /tong-quan tile for the same period, and the grand row IS the tile.
+//
+// MERGED PETITIONS (ADR 0087 §7, ADR 0053 §C2/§C5). The rows BY FIELD and BY HAMLET count MAIN petitions
+// only, in every column. The GRAND row is the tile: its "Nhận vào" counts EVERY petition (the first
+// column), its on-time / finished / overdue count main petitions, and its rating counts every petition
+// exactly as the tile's does — each citizen rates their own petition, and ADR 0087 §7 names no rating
+// rule. So the field rows' `received` no longer sums to the grand `received`: the difference is the
+// merged petitions received in the period, which is the split ADR 0087 §7 decided.
 func citizenReportBreakdownColumns() string {
 	cond := func(m domain.CitizenReportMetric) string { return citizenReportMetricCondition(m, "$2", "$3") }
+	ratingSample := cond(domain.CitizenReportRatingSample)
 	return "GROUPING(" + breakdownFieldKey + "), GROUPING(" + breakdownPlaceKey + "), " +
 		breakdownFieldKey + ", " + breakdownPlaceKey +
-		", count(*) FILTER (WHERE " + cond(domain.CitizenReportReceived) + ")" +
-		", count(*) FILTER (WHERE " + citizenReportReceivedAccepted("$2", "$3") + ")" +
-		", count(*) FILTER (WHERE " + citizenReportFinished("$2", "$3") + ")" +
-		", count(*) FILTER (WHERE " + cond(domain.CitizenReportOnTimeSample) + ")" +
+		", count(*) FILTER (WHERE " + cond(domain.CitizenReportReceived) + ")" + // every petition: the tile
+		", count(*) FILTER (WHERE " + onlyMain(cond(domain.CitizenReportReceived)) + ")" +
+		", count(*) FILTER (WHERE " + onlyMain(citizenReportReceivedAccepted("$2", "$3")) + ")" +
+		", count(*) FILTER (WHERE " + onlyMain(citizenReportFinished("$2", "$3")) + ")" +
+		", count(*) FILTER (WHERE " + cond(domain.CitizenReportOnTimeSample) + ")" + // main-only by definition
 		", count(*) FILTER (WHERE " + cond(domain.CitizenReportOnTime) + ")" +
 		", count(*) FILTER (WHERE " + cond(domain.CitizenReportLate) + ")" +
-		", count(*) FILTER (WHERE " + cond(domain.CitizenReportRatingSample) + ")" +
+		", count(*) FILTER (WHERE " + ratingSample + ")" + // every petition: the tile
 		", " + citizenReportRatingSumColumn +
-		", count(*) FILTER (WHERE " + citizenReportOverdueNow + ")" +
+		", count(*) FILTER (WHERE " + onlyMain(ratingSample) + ")" +
+		", sum(diem_hai_long) FILTER (WHERE " + onlyMain(ratingSample) + ")" +
+		", count(*) FILTER (WHERE " + citizenReportOverdueNow + ")" + // main-only by definition
 		", now()"
 }
 
 // citizenReportBreakdownTail scopes, restricts to the rows some figure counts, then groups.
 //
 // scopeFilter IS THE ONE SCOPE OF EVERY FIGURE READ (summary, queue, breakdown): live rows, and the
-// restricted field unless the reader holds the key. A later batch that excludes merged ("phụ")
-// petitions from the figures adds its clause THERE, once, for all of them.
+// restricted field unless the reader holds the key. MERGED PETITIONS ARE NOT EXCLUDED THERE — "Nhận vào"
+// counts them (ADR 0087 §7) — but per figure, through mainPetitionCondition; see the columns above.
 //
 // THREE GROUPING SETS IN ONE STATEMENT — by field, by residential unit, and `()` — so every figure is
 // read at ONE instant and the empty set yields the grand row (section (a) and `now()`) even when no
@@ -210,39 +225,54 @@ func (s *PhieuPhanAnhStore) CitizenReportBreakdown(ctx context.Context, p domain
 	}
 	var sawGrand bool
 	for rows.Next() {
+		// POSITIONAL, in lockstep with citizenReportBreakdownColumns.
 		var (
-			groupedField, groupedPlace int64
-			field, place               sql.NullString
-			c                          [7]int64
-			ratingSum                  sql.NullInt64
-			overdue                    int64
-			asOf                       time.Time
+			groupedField, groupedPlace        int64
+			field, place                      sql.NullString
+			receivedAll, receivedMain         int64
+			acceptedMain, finishedMain        int64
+			sample, onTime, late              int64
+			ratingSampleAll, ratingSampleMain int64
+			ratingSumAll, ratingSumMain       sql.NullInt64
+			overdue                           int64
+			asOf                              time.Time
 		)
 		if err := rows.Scan(&groupedField, &groupedPlace, &field, &place,
-			&c[0], &c[1], &c[2], &c[3], &c[4], &c[5], &c[6], &ratingSum, &overdue, &asOf); err != nil {
+			&receivedAll, &receivedMain, &acceptedMain, &finishedMain, &sample, &onTime, &late,
+			&ratingSampleAll, &ratingSumAll, &ratingSampleMain, &ratingSumMain, &overdue, &asOf); err != nil {
 			return domain.CitizenReportBreakdown{}, fmt.Errorf("phieu_phan_anh: thống kê theo kỳ: đọc dòng: %w", err)
 		}
+		// The rows by field: MAIN petitions in every column (ADR 0087 §7).
 		fig := domain.CitizenReportFieldFigures{
-			FieldCode: field.String, Received: int(c[0]), Finished: int(c[2]),
-			OnTimeSample: int(c[3]), OnTime: int(c[4]), Late: int(c[5]),
-			RatingSample: int(c[6]), RatingSum: int(ratingSum.Int64), Overdue: int(overdue),
+			FieldCode: field.String, Received: int(receivedMain), Finished: int(finishedMain),
+			OnTimeSample: int(sample), OnTime: int(onTime), Late: int(late),
+			RatingSample: int(ratingSampleMain), RatingSum: int(ratingSumMain.Int64), Overdue: int(overdue),
 		}
 		switch {
 		case groupedField == 1 && groupedPlace == 1:
-			// The `()` set: section (a), and the statement's now().
+			// The `()` set: section (a), and the statement's now(). THE TILE: every petition received and
+			// rated, main petitions for the work figures — see citizenReportBreakdownColumns.
 			sawGrand = true
 			fig.FieldCode = ""
+			fig.Received = int(receivedAll)
+			fig.RatingSample, fig.RatingSum = int(ratingSampleAll), int(ratingSumAll.Int64)
 			out.Totals, out.AsOf = fig, asOf
 		case groupedField == 0:
+			// A field in scope ONLY through merged petitions (received or rated) shows nothing: every
+			// main-only column is zero. Before merging existed no such row could form — every row in scope
+			// satisfied one of the counted figures.
+			if receivedMain == 0 && finishedMain == 0 && sample == 0 && ratingSampleMain == 0 && overdue == 0 {
+				continue
+			}
 			out.Fields = append(out.Fields, fig)
 		default:
-			// A place in scope only through a figure it does not show (finished, rating) is not a row —
-			// except "no place", which ADR 0053 §C5 keeps ALWAYS (added below when absent).
-			if place.String != "" && c[1] == 0 && overdue == 0 {
+			// A place in scope only through a figure it does not show (finished, rating, a merged petition)
+			// is not a row — except "no place", which ADR 0053 §C5 keeps ALWAYS (added below when absent).
+			if place.String != "" && acceptedMain == 0 && overdue == 0 {
 				continue
 			}
 			out.ResidentialUnits = append(out.ResidentialUnits, domain.CitizenReportResidentialUnitFigures{
-				ResidentialUnitID: place.String, Received: int(c[1]), Overdue: int(overdue),
+				ResidentialUnitID: place.String, Received: int(acceptedMain), Overdue: int(overdue),
 			})
 		}
 	}
@@ -272,7 +302,8 @@ func (s *PhieuPhanAnhStore) CitizenReportBreakdown(ctx context.Context, p domain
 // `xu_ly_xong_luc` and the instant of the LAST assignment before that (owner decision 09/10/2026, ADR
 // 0053 §C4 open item 1: "từ LẦN GIAO CUỐI cho bộ phận đang giữ phiếu lúc xu_ly_xong_luc").
 //
-//	done     the petitions finished in [from, to), scoped like every figure (scopeFilter)
+//	done     the MAIN petitions finished in [from, to), scoped like every figure (scopeFilter) — "theo
+//	         đơn vị chỉ đếm phiếu chính" (ADR 0087 §7)
 //	steps    their `phan-cong` timeline rows AT OR BEFORE the finishing instant — the processing log
 //	         (migration 0013) is the only record of who held a petition WHEN; the petition's own
 //	         `bo_phan_id` says who holds it NOW and would credit a later re-assignment with old work
@@ -289,7 +320,7 @@ func (s *PhieuPhanAnhStore) CitizenReportBreakdown(ctx context.Context, p domain
 func citizenReportHandlingStmt(restricted bool) string {
 	return `WITH done AS (
 	SELECT id, xu_ly_xong_luc FROM phieu_phan_anh
-	WHERE tenant_id = $1 ` + scopeFilter(restricted) + ` AND ` + citizenReportFinished("$2", "$3") + `
+	WHERE tenant_id = $1 ` + scopeFilter(restricted) + ` AND ` + onlyMain(citizenReportFinished("$2", "$3")) + `
 ), steps AS (
 	SELECT l.phieu_phan_anh_id AS pid, l.bo_phan_id AS unit, l.thoi_diem AS at, l.id AS lid
 	FROM nhat_ky_phan_anh l JOIN done d ON d.id = l.phieu_phan_anh_id

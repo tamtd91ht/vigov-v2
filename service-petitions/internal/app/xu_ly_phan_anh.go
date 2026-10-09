@@ -104,6 +104,18 @@ type KhoPhieuXuLy interface {
 	// LatestReopenAtTx is the instant of the most recent reopening, read from the timeline (zero = none)
 	// — the close gate's cut on a reopened petition (checkVerificationPhotoGate).
 	LatestReopenAtTx(ctx context.Context, tx *store.ScopedTx, petitionID string) (time.Time, error)
+
+	// THE MERGE LINK (ADR 0087, migration 0037) — petition_merge.go. Same discipline: every method takes
+	// the transaction, every write carries what was read under the lock.
+	ByIDForUpdate(ctx context.Context, tx *store.ScopedTx, id string) (domain.PhieuPhanAnh, error)
+	HasMergedPetitionsTx(ctx context.Context, tx *store.ScopedTx, id string) (bool, error)
+	MovePetitionDeadlineForMerge(ctx context.Context, tx *store.ScopedTx, id string, from, to time.Time) error
+	LinkMerge(ctx context.Context, tx *store.ScopedTx, id, mainID string, status domain.TrangThai,
+		at time.Time, by string) error
+	UnlinkMerge(ctx context.Context, tx *store.ScopedTx, id, mainID string, status domain.TrangThai) error
+	MergedPetitionsForUpdate(ctx context.Context, tx *store.ScopedTx, mainID string) ([]domain.PhieuPhanAnh, error)
+	FollowMain(ctx context.Context, tx *store.ScopedTx, id, mainID string, from, to domain.TrangThai,
+		workDoneAt time.Time, result string, closedAt time.Time) error
 }
 
 // KhoSuKien records the obligation to tell the citizen, in the SAME transaction as the change.
@@ -444,6 +456,10 @@ type XuLyPhanAnh struct {
 	// log notes a residential-unit change for operators (internal; ids and the code only — no personal
 	// data). nil = slog.Default(). The record of the change is the audit entry, not this line.
 	log *slog.Logger
+
+	// mergeEvents is the append-only history of merges and unmerges (migration 0037), built from `db` by
+	// the constructor like `notices` — petition_merge.go.
+	mergeEvents PetitionMergeEvents
 }
 
 // WithResidentialUnits wires the residential-unit check and the operator log (ADR 0088).
@@ -463,7 +479,8 @@ func NewXuLyPhanAnh(db *store.DB, kho KhoPhieuXuLy, suKien KhoSuKien, han DocHan
 	giaoViec KiemCanBoGiaoViec, settings VerificationPhotoSwitch, staffFiles PetitionStaffFiles) *XuLyPhanAnh {
 	return &XuLyPhanAnh{db: db, kho: kho, suKien: suKien, han: han, giaoViec: giaoViec,
 		settings: settings, staffFiles: staffFiles, sinhID: ulid.Moi,
-		notices: petstore.NewStaffNoticeOutboxStore(db), noticeID: ulid.Moi}
+		notices: petstore.NewStaffNoticeOutboxStore(db), noticeID: ulid.Moi,
+		mergeEvents: petstore.NewPetitionMergeEventStore(db)}
 }
 
 // VerificationPhotoSwitch reads ADR 0008 decision 3's per-commune switch INSIDE the closing
@@ -1095,7 +1112,12 @@ func (uc *XuLyPhanAnh) TienTrangThai(ctx context.Context, ma, ghiChuTho string, 
 		if err := uc.linkActAttachments(ctx, tx, logID, attachmentIDs); err != nil {
 			return err
 		}
-		return uc.ghiSuKien(ctx, tx, sau, sangTrangThai, bayGio)
+		if err := uc.ghiSuKien(ctx, tx, sau, sangTrangThai, bayGio); err != nil {
+			return err
+		}
+		// ENTERING `cho-dan-xac-nhan`, THE MERGED PETITIONS COME ALONG (ADR 0087 §2), in THIS transaction —
+		// petition_merge.go. Every other step moves nothing but this petition.
+		return uc.followMain(ctx, tx, sau, nguoi, bayGio)
 	})
 	if err != nil {
 		return domain.PhieuPhanAnh{}, bocPhieu(ctx, "chuyển trạng thái", err)
@@ -1237,7 +1259,12 @@ func (uc *XuLyPhanAnh) Dong(ctx context.Context, ma, ketQuaTho, ghiChuTho string
 		if err := uc.linkActAttachments(ctx, tx, logID, attachmentIDs); err != nil {
 			return err
 		}
-		return uc.ghiSuKien(ctx, tx, sau, domain.DaDong, bayGio)
+		if err := uc.ghiSuKien(ctx, tx, sau, domain.DaDong, bayGio); err != nil {
+			return err
+		}
+		// THE MERGED PETITIONS CLOSE WITH IT, with THIS result (ADR 0087 §2), in THIS transaction — a main
+		// petition closed while one of its merged petitions stays open would be one incident half-closed.
+		return uc.followMain(ctx, tx, sau, nguoi, bayGio)
 	})
 	if err != nil {
 		return domain.PhieuPhanAnh{}, bocPhieu(ctx, "đóng phiếu", err)

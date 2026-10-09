@@ -309,6 +309,15 @@ type PhieuPhanAnh struct {
 	RatingComment string
 	RatedAt       time.Time
 
+	// THE MERGE LINK (migration 0037, ADR 0087): MergedInto is the MAIN petition's INTERNAL id in the
+	// same commune, "" on a main petition — which is every petition nobody has merged. MergedAt and
+	// MergedBy (a staff BUSINESS code, rule 6 invariant 8) describe the CURRENT link only; the history
+	// is petition_merge_event. A link, not a status: the petition keeps its code, deadline and
+	// lifecycle (petition_merge.go). STAFF-ONLY — no citizen response carries any of the three.
+	MergedInto string
+	MergedAt   time.Time
+	MergedBy   string
+
 	// TaoLuc is when the ROW was created, and it is filled ONLY by the paginated read — the cursor
 	// offers it as a sort column and nothing else in this service uses it.
 	//

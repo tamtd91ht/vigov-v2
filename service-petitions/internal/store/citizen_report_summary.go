@@ -34,6 +34,21 @@ var ErrCitizenReportMetricInvalid = errors.New("phieu_phan_anh: chỉ số tổn
 var citizenReportInProgressCondition = `trang_thai NOT IN ('` + string(domain.DaDong) + `', '` +
 	string(domain.KhongTiepNhan) + `', '` + string(domain.ChuyenCapTren) + `')`
 
+// mainPetitionCondition is "a MAIN petition — an incident" (ADR 0087 §7, migration 0037): one that is not
+// merged into another. THE ONE SPELLING of "only main petitions", used by every WORK figure:
+//
+//	on time / late / their sample      here, inside citizenReportMetricCondition — so the /tong-quan tile,
+//	                                   the breakdown and the `metric=` drill-down are one predicate
+//	the overdue stock and its queue    citizenReportOverdueNow, OverdueCitizenReports (owner, 09/10/2026,
+//	                                   ADR 0087 open item #4 answered by the main session)
+//	by field, by unit, by hamlet       citizen_report_figures.go (ADR 0087 §7; ADR 0053 §C5)
+//
+// AND NOT BY "Nhận vào" (`received`), which counts EVERY petition — each one is a citizen reporting, the
+// load on the channel (ADR 0087 §7). Counting a merged petition in on-time would count one incident twice
+// — what ADR 0008 #8 avoids. Every petition nobody merged has `merged_into` NULL, so before the first merge
+// every figure is unchanged.
+const mainPetitionCondition = `merged_into IS NULL`
+
 // citizenReportMetricCondition is THE ONE SQL SPELLING of each petition figure. `from`/`to` are the
 // placeholders chosen for the period bounds; the stock figure ignores them.
 //
@@ -76,12 +91,15 @@ func citizenReportMetricCondition(m domain.CitizenReportMetric, from, to string)
 		// which on the staff-booked channel can be a week earlier. Includes `khong-tiep-nhan`: a report
 		// the commune declined was still received.
 		return "(vao_so_luc >= " + from + " AND vao_so_luc < " + to + ")"
+	// THE THREE ON-TIME FIGURES COUNT MAIN PETITIONS ONLY — mainPetitionCondition says why.
 	case domain.CitizenReportOnTimeSample:
-		return "((" + settled + ") OR (" + ceilingMissed + "))"
+		return "(" + mainPetitionCondition + " AND ((" + settled + ") OR (" + ceilingMissed + ")))"
 	case domain.CitizenReportOnTime:
-		return "((" + settled + " AND xu_ly_xong_luc <= han_xu_ly_xong) AND NOT (" + ceilingMissed + "))"
+		return "(" + mainPetitionCondition + " AND ((" + settled + " AND xu_ly_xong_luc <= han_xu_ly_xong) AND NOT (" +
+			ceilingMissed + ")))"
 	case domain.CitizenReportLate:
-		return "((" + settled + " AND xu_ly_xong_luc > han_xu_ly_xong) OR (" + ceilingMissed + "))"
+		return "(" + mainPetitionCondition + " AND ((" + settled + " AND xu_ly_xong_luc > han_xu_ly_xong) OR (" +
+			ceilingMissed + ")))"
 	case domain.CitizenReportRatingSample:
 		return "(" + citizenReportRatedCondition + ")"
 	case domain.CitizenReportLowRating:
@@ -270,8 +288,10 @@ func (s *PhieuPhanAnhStore) OverdueCitizenReports(ctx context.Context, limit int
 	if limit < 1 || limit > OverdueQueueMax {
 		return nil, ErrOverdueQueueLimit
 	}
-	filter := scopeFilter(restricted) +
-		` AND ((` + citizenReportClassificationOverdue + `) OR (` + citizenReportResolutionOverdue + `))` +
+	// MAIN PETITIONS ONLY (mainPetitionCondition): a merged petition follows its main, whose deadline is
+	// already the earlier of the two — listing both is one incident twice, and an unclassified merged
+	// petition would sit past its ceiling for ever. The SAME predicate as the breakdown's stock figure.
+	filter := scopeFilter(restricted) + ` AND ` + citizenReportOverdueNow +
 		` ORDER BY 4 ASC, id ASC LIMIT $2`
 
 	rows, err := s.db.For(ctx).Query(ctx, overdueCitizenReportColumns, "phieu_phan_anh", filter, limit)

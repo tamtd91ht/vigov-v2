@@ -342,6 +342,11 @@ func chay(log *slog.Logger) error {
 		app.NewTier1Fields(platformclient.NewPetitionFields(nenTang.Client(), log)),
 		petstore.NewNhanLinhVucStore(kho))
 
+	// The staff acts on a petition — ONE instance behind XuLyPhieu and CitizenReportMerge, so merging and
+	// the lifecycle acts it follows share one lock discipline and one outbox (internal/app/petition_merge.go).
+	petitionActs := app.NewXuLyPhanAnh(kho, phieu, suKien, dinhDanh, dinhDanh,
+		petstore.NewPetitionSettingsStore(kho), storedFiles).WithResidentialUnits(dinhDanh, log)
+
 	mux := http.NewServeMux()
 	svchttp.Register(mux, svchttp.Deps{
 		// Deps.Checker is staffauth.Checker: it decides from the permission set the middleware
@@ -382,8 +387,13 @@ func chay(log *slog.Logger) error {
 		// verification photos in its own transaction; `storedFiles` also links a note's attachments.
 		// `dinhDanh` once more as the residential-unit check (ADR 0088): a unit the classifier CHANGES is
 		// confirmed by identity's ResolveActiveResidentialUnits before the transaction opens.
-		XuLyPhieu: app.NewXuLyPhanAnh(kho, phieu, suKien, dinhDanh, dinhDanh,
-			petstore.NewPetitionSettingsStore(kho), storedFiles).WithResidentialUnits(dinhDanh, log),
+		XuLyPhieu: petitionActs,
+		// Merging duplicate petitions (ADR 0087): the acts on the SAME instance; the detail's link codes
+		// from the register store; the suspected-duplicate search over the same store and the commune's
+		// thresholds (migration 0038).
+		CitizenReportMerge:  petitionActs,
+		MergeLinks:          phieu,
+		DuplicateCandidates: app.NewDuplicateCandidates(phieu, petstore.NewPetitionSettingsStore(kho)),
 		// "Nhập hộ phản ánh" (§11): the SAME petition store, outbox store and identity client as the
 		// citizen intake, and the SAME field catalogue — under the staff rule (CheckStaffIntakeField).
 		// The SAME client checks the officer's residential unit (ADR 0088).

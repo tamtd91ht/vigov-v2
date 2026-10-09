@@ -256,6 +256,11 @@ type mayChu struct {
 
 	// unitNames is identity's residential-unit name lookup — residential_unit_test.go.
 	unitNames *unitNamesFake
+
+	// Merging duplicate petitions — citizen_report_merge_test.go.
+	merge *mergeActsFake
+	links *mergeLinksFake
+	dups  *duplicateCandidatesFake
 }
 
 func dungMayChu(t *testing.T) *mayChu {
@@ -317,6 +322,8 @@ func dungMayChu(t *testing.T) *mayChu {
 	fields := newFieldCatalogueFake()
 	// The residential-unit names — residential_unit_test.go.
 	unitNames := newUnitNamesFake()
+	// Merging duplicate petitions — citizen_report_merge_test.go.
+	merge, links, dups := &mergeActsFake{}, &mergeLinksFake{}, &duplicateCandidatesFake{}
 
 	m := &mayChu{
 		d: Deps{
@@ -383,6 +390,10 @@ func dungMayChu(t *testing.T) *mayChu {
 			CitizenReportBreakdown: breakdown,
 			// identity's residential-unit names — residential_unit_test.go.
 			ResidentialUnitNames: unitNames,
+			// Merging duplicate petitions — citizen_report_merge_test.go.
+			CitizenReportMerge:  merge,
+			MergeLinks:          links,
+			DuplicateCandidates: dups,
 			// The audit-log reader: present because Register refuses a nil one; its suite is
 			// audit_entries_test.go.
 			AuditLog: &auditLogFake{},
@@ -430,6 +441,10 @@ func dungMayChu(t *testing.T) *mayChu {
 
 		staffIntake: staffIntake,
 		unitNames:   unitNames,
+
+		merge: merge,
+		links: links,
+		dups:  dups,
 	}
 	m.dungLai(t, nil)
 	return m
@@ -547,6 +562,10 @@ func depsDay() Deps {
 		CitizenReportBreakdown: citizenReportBreakdownSample(),
 		AuditLog:               &auditLogFake{},
 		SystemMessages:         &systemMessagesFake{},
+		// Merging duplicate petitions.
+		CitizenReportMerge:  &mergeActsFake{},
+		MergeLinks:          &mergeLinksFake{},
+		DuplicateCandidates: &duplicateCandidatesFake{},
 	}
 }
 

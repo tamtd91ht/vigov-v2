@@ -91,6 +91,16 @@ type khoPhieuXuLyGia struct {
 	// latestReopen is what `SELECT max(thoi_diem) FROM nhat_ky_phan_anh …` answers — the latest
 	// reopening (store.LatestReopenAtTx). nil is the NULL of "no reopening row".
 	latestReopen driver.Value
+
+	// byKey, when set, serves the single-petition reads BY THE CODE OR ID THEY ASKED FOR (the second
+	// argument) instead of `hang` — the merge acts read TWO petitions in one transaction, and a fake that
+	// answered both with one row could not tell the main petition from the merged one. A key absent from
+	// the map is "no such live petition".
+	byKey map[string]map[string]driver.Value
+
+	// children answers every read keyed on `merged_into = $2` (the follow-along batch and the no-chain
+	// check). Empty by default: a petition nobody merged into, which is every existing test's petition.
+	children []map[string]driver.Value
 }
 
 func khoPhieuMau() *khoPhieuXuLyGia {
@@ -143,7 +153,11 @@ func dongPhieuMau(sua map[string]any) map[string]driver.Value {
 		"rating_comment":       nil,
 		"danh_gia_luc":         nil,
 		"zalo_account_id":      nil, // ADR 0080 owner column — NULL on a citizen-filed petition
-		"tao_luc":              mocGocThu,
+		// The merge link (migration 0037) — NULL on a main petition, every petition nobody merged.
+		"merged_into": nil,
+		"merged_at":   nil,
+		"merged_by":   nil,
+		"tao_luc":     mocGocThu,
 	}
 	for k, v := range sua {
 		d[k] = v
@@ -254,21 +268,35 @@ func (c *connPhieuGia) QueryContext(_ context.Context, q string, args []driver.N
 	if err != nil {
 		return nil, err
 	}
-	if c.k.hang == nil {
-		return &rowsPhieuGia{cot: cot}, nil
-	}
-	mot := make([]driver.Value, len(cot))
-	for i, ten := range cot {
-		v, co := c.k.hang[ten]
-		if !co {
-			// A column was added to cotPhieu and not to the fixture. Failing loudly beats scanning a
-			// nil that "passes" while proving nothing — and on this table a silently nil deadline is a
-			// commitment that reads as "không áp dụng".
-			panic("driver giả: không có giá trị mẫu cho cột " + ten)
+	nguon := []map[string]driver.Value{}
+	switch {
+	case strings.Contains(q, "merged_into = $2"):
+		nguon = c.k.children
+	case c.k.byKey != nil:
+		if len(args) >= 2 {
+			if key, ok := args[1].Value.(string); ok && c.k.byKey[key] != nil {
+				nguon = append(nguon, c.k.byKey[key])
+			}
 		}
-		mot[i] = v
+	case c.k.hang != nil:
+		nguon = append(nguon, c.k.hang)
 	}
-	return &rowsPhieuGia{cot: cot, hang: [][]driver.Value{mot}}, nil
+	ra := &rowsPhieuGia{cot: cot}
+	for _, h := range nguon {
+		mot := make([]driver.Value, len(cot))
+		for i, ten := range cot {
+			v, co := h[ten]
+			if !co {
+				// A column was added to cotPhieu and not to the fixture. Failing loudly beats scanning a
+				// nil that "passes" while proving nothing — and on this table a silently nil deadline is a
+				// commitment that reads as "không áp dụng".
+				panic("driver giả: không có giá trị mẫu cho cột " + ten)
+			}
+			mot[i] = v
+		}
+		ra.hang = append(ra.hang, mot)
+	}
+	return ra, nil
 }
 
 // cotTrongSelect reads the SELECT list out of the statement. THIS IS WHAT MAKES THE COLUMN CHECK

@@ -17,7 +17,9 @@ package store
 //  5. `ma_tra_cuu`, `goc_dem_han`, `kenh_tiep_nhan` AND THE THREE DEADLINE COLUMNS APPEAR IN NO
 //     UPDATE HERE. The first three are refused by the `ho_so_luu_tru_bat_bien` trigger underneath;
 //     `han_tiep_nhan` and `han_phan_loai` are fixed at intake and `han_xu_ly_xong` is fixed by
-//     ChotLinhVuc alone (rule 10, invariant 2). Their absence is what keeps that floor unreachable.
+//     ChotLinhVuc (rule 10, invariant 2). Their absence is what keeps that floor unreachable. The ONE
+//     other writer of `han_xu_ly_xong` is petition_merge.go's MovePetitionDeadlineForMerge, whose
+//     statement can only move it EARLIER (ADR 0087 §1).
 
 import (
 	"context"

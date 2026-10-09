@@ -1438,6 +1438,27 @@
     },
     {
       "service": "petitions",
+      "method": "GET",
+      "path": "/api/v1/citizen-reports/{maTraCuu}/duplicate-candidates",
+      "operation_id": "petitions_get_citizen_reports_by_maTraCuu_duplicate_candidates",
+      "task_id": "0c31ead3557b",
+      "summary": "Phiếu phản ánh nghi trùng với một phiếu — cùng xã, trong bán kính và số ngày xã cấu hình, gần nhất trước",
+      "screen": "09-phan-anh-nguoi-dan §8",
+      "permission_kind": "permission",
+      "permission": "feedback.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "petitions.duplicateCandidatesOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes_citizen_report_merge.go"
+    },
+    {
+      "service": "petitions",
       "method": "POST",
       "path": "/api/v1/citizen-reports/{maTraCuu}/log-attachments",
       "operation_id": "petitions_post_citizen_reports_by_maTraCuu_log_attachments",
@@ -1574,6 +1595,30 @@
         "500": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "POST",
+      "path": "/api/v1/citizen-reports/{maTraCuu}/merge",
+      "operation_id": "petitions_post_citizen_reports_by_maTraCuu_merge",
+      "task_id": "b24074ff2d8a",
+      "summary": "Gộp phiếu phản ánh trùng vào một phiếu chính cùng xã — liên kết, không đóng phiếu; hạn phiếu chính lấy mốc sớm hơn",
+      "screen": "09-phan-anh-nguoi-dan §8",
+      "permission_kind": "permission",
+      "permission": "feedback.classify",
+      "idempotency": "khong-can",
+      "idempotency_reason": "câu UPDATE mang `merged_into IS NULL`, nên lần gửi thứ hai trả 409 đã gộp — đúng một liên kết, một dòng lịch sử, một cặp vết",
+      "request_schema": "petitions.citizenReportMergeIn",
+      "reply_schemas": {
+        "200": "petitions.phieuPhanAnhRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes_citizen_report_merge.go"
     },
     {
       "service": "petitions",
@@ -1714,6 +1759,30 @@
         "503": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "POST",
+      "path": "/api/v1/citizen-reports/{maTraCuu}/unmerge",
+      "operation_id": "petitions_post_citizen_reports_by_maTraCuu_unmerge",
+      "task_id": "c5d2a654c4b8",
+      "summary": "Tách một phiếu phản ánh đã gộp khỏi phiếu chính — lý do bắt buộc, có vết, hạn phiếu chính giữ nguyên",
+      "screen": "09-phan-anh-nguoi-dan §8",
+      "permission_kind": "permission",
+      "permission": "feedback.classify",
+      "idempotency": "khong-can",
+      "idempotency_reason": "câu UPDATE mang `merged_into` của phiếu chính, nên lần gửi thứ hai trả 409 chưa gộp — đúng một lần tách, một dòng lịch sử",
+      "request_schema": "petitions.citizenReportUnmergeIn",
+      "reply_schemas": {
+        "200": "petitions.phieuPhanAnhRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes_citizen_report_merge.go"
     },
     {
       "service": "petitions",

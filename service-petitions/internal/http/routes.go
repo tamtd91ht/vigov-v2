@@ -603,6 +603,13 @@ type Deps struct {
 	// (app.CitizenReportBreakdown). routes_citizen_report_figures.go refuses it nil.
 	CitizenReportBreakdown CitizenReportBreakdownReader
 
+	// MERGING DUPLICATE PETITIONS (ADR 0087) — routes_citizen_report_merge.go refuses all three nil. The
+	// two acts open a transaction (the XuLyPhieu instance in production); the two reads do not — the
+	// detail's link codes are a store read, the suspected-duplicate search a use case over the store.
+	CitizenReportMerge  CitizenReportMerging
+	MergeLinks          CitizenReportMergeLinks
+	DuplicateCandidates CitizenReportDuplicateCandidates
+
 	// ResidentialUnitNames names the thôn / tổ dân phố a petition carries (ADR 0088) on the staff detail,
 	// list and write responses — *identityclient.Client in production. nil is NOT refused at construction
 	// (most routes never need it); a read that needs a name then answers 503, never a blank name.
@@ -745,6 +752,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	registerCatalogueImportRoutes(mux, d, h)
 	// The /phan-anh statistics and the log-attachment removal — four routes (routes_citizen_report_figures.go).
 	registerCitizenReportFigureRoutes(mux, d, h)
+	// Merging duplicate petitions (ADR 0087) — three routes (routes_citizen_report_merge.go).
+	registerCitizenReportMergeRoutes(mux, d, h)
 
 	// --- the commune's task catalogues. TWO READ ROUTES, AND DELIBERATELY NO WRITE ROUTE --------
 	//

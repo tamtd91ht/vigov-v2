@@ -57,7 +57,8 @@ const cotPhieu = `id, ma_tra_cuu, kenh_tiep_nhan, cong_dan_id, noi_dung, linh_vu
 	publication_status, so_lan_mo_lai,
 	ly_do_ket_thuc_nhanh, co_quan_nhan, ket_thuc_nhanh_luc,
 	diem_hai_long, rating_comment, danh_gia_luc,
-	zalo_account_id`
+	zalo_account_id,
+	merged_into, merged_at, merged_by`
 
 // TheoMaTraCuu reads one petition by the code the citizen was handed.
 //
@@ -333,6 +334,11 @@ func quetPhieuThem(r quangKiem, them ...any) (domain.PhieuPhanAnh, error) {
 		// staff-booked petition.
 		zaloAccount sql.NullString
 
+		// The merge link (migration 0037, ADR 0087). All three NULL on a main petition — every petition
+		// nobody merged — and all three set while linked (CHECK `phieu_phan_anh_merge_link_complete`).
+		mergedInto, mergedBy sql.NullString
+		mergedAt             sql.NullTime
+
 		// `publication_status` (migration 0017) is NOT NULL with a default, so a plain string. It sits in
 		// the position `hien_cong_khai` used to hold — that column is superseded and no longer read.
 		publication string
@@ -349,6 +355,7 @@ func quetPhieuThem(r quangKiem, them ...any) (domain.PhieuPhanAnh, error) {
 		&lyDoKetThuc, &coQuanNhan, &ketThucNhanhLuc,
 		&ratingStars, &ratingComment, &ratedAt,
 		&zaloAccount,
+		&mergedInto, &mergedAt, &mergedBy,
 	}
 	if err := r.Scan(append(dich, them...)...); err != nil {
 		return domain.PhieuPhanAnh{}, fmt.Errorf("phieu_phan_anh: đọc dòng: %w", err)
@@ -376,6 +383,9 @@ func quetPhieuThem(r quangKiem, them ...any) (domain.PhieuPhanAnh, error) {
 	p.Rating = int(ratingStars.Int64)
 	p.RatingComment = ratingComment.String
 	p.RatedAt = ratedAt.Time
+	p.MergedInto = mergedInto.String
+	p.MergedAt = mergedAt.Time
+	p.MergedBy = mergedBy.String
 	if lat.Valid {
 		v := lat.Float64
 		p.Lat = &v

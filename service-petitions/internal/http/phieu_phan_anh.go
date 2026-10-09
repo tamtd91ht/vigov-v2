@@ -260,6 +260,19 @@ type phieuPhanAnhRa struct {
 	// Absent therefore means "this server predates the field", never "not reopened". There is no cap
 	// (ADR 0050): this is a monitoring figure, "một phiếu có thể quay vòng mãi".
 	ReopenCount *int `json:"reopen_count,omitempty"`
+
+	// THE MERGE LINK (ADR 0087) — STAFF SURFACE ONLY; phieuCuaToiRa and the accountless lookup carry none
+	// of it (ADR 0087 §4: a citizen never learns another petition through the link).
+	//
+	// MergedAt and MergedBy (a staff business code) are on EVERY staff response, so a list row can show
+	// "đã gộp" without a second read. MergedInto is the MAIN petition's LOOKUP CODE and MergedPetitions the
+	// codes merged into this one — on the DETAIL (one batched read, CitizenReportMergeLinks) and on the
+	// merge act's reply; never the internal ids the row holds. All omitempty: optional in the contract,
+	// absent on a petition nobody merged.
+	MergedInto      string     `json:"merged_into,omitempty"`
+	MergedAt        *time.Time `json:"merged_at,omitempty"`
+	MergedBy        string     `json:"merged_by,omitempty"`
+	MergedPetitions []string   `json:"merged_petitions,omitempty"`
 }
 
 // phieuRaNgoai builds the response. `xemDayDu` is the ONLY switch between masked and full, and it
@@ -345,6 +358,10 @@ func phieuRaNgoai(p domain.PhieuPhanAnh, nhan string, xemDayDu bool) phieuPhanAn
 	}
 	reopened := p.SoLanMoLai
 	ra.ReopenCount = &reopened
+	if p.MergedInto != "" {
+		at := p.MergedAt
+		ra.MergedAt, ra.MergedBy = &at, p.MergedBy
+	}
 	return ra
 }
 
@@ -466,6 +483,17 @@ func (h *Handler) DocPhieuPhanAnh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// THE MERGE LINKS' CODES (ADR 0087), before the disclosure decision for the same reason as the names: a
+	// failure here must not follow an entry recording a disclosure that never reached anybody. Refused
+	// (500) rather than answered without them — a merged petition shown as an ordinary one is an officer
+	// working an incident twice.
+	links, err := h.d.MergeLinks.MergeLinks(ctx, p)
+	if err != nil {
+		h.d.Log.Error("đọc liên kết gộp phiếu: lỗi hệ thống", "xa", string(tenant.MustFrom(ctx)), "err", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return
+	}
+
 	// THE DISCLOSURE DECISION, LAST, AND THE TRAIL BEFORE THE BODY.
 	//
 	// Last on purpose: everything above can still fail with a 500, and an entry recording a
@@ -509,6 +537,7 @@ func (h *Handler) DocPhieuPhanAnh(w http.ResponseWriter, r *http.Request) {
 
 	ra := phieuRaNgoai(p, nhan, xemDayDu)
 	ra.ResidentialUnitName = unitNames[p.ThonID].Name
+	ra.MergedInto, ra.MergedPetitions = links.MainCode, links.ChildCodes
 	vietJSON(w, http.StatusOK, ra)
 }
 

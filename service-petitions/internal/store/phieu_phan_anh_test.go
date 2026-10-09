@@ -89,6 +89,11 @@ func dongPhieu(sua map[string]driver.Value) map[string]driver.Value {
 		"danh_gia_luc":   nil,
 		// The Zalo-account owner (migration 0032, ADR 0080) — NULL on a citizen-filed petition.
 		"zalo_account_id": nil,
+		// The merge link (migration 0037, ADR 0087) — NULL on a main petition, which is every petition
+		// nobody merged.
+		"merged_into": nil,
+		"merged_at":   nil,
+		"merged_by":   nil,
 		// Only cotPhieuCoTaoLuc asks for it; the map is shared by both shapes, and a value the SELECT
 		// did not ask for is simply not read.
 		"tao_luc": mocVaoSo,

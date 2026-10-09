@@ -56,6 +56,52 @@ func (s *PetitionSettingsStore) VerificationPhotoRequiredTx(ctx context.Context,
 		"petition_settings", "LIMIT 2"))
 }
 
+// The suspected-duplicate thresholds' decided defaults (ADR 0087 §6: 50 m, 7 days). They MUST equal the
+// column DEFAULTs of migration 0038, whose header asks exactly this of the reader: "no row" answers 50 and
+// 7, as a row written with the defaults does — the verificationPhotoRequiredByDefault precedent. They are
+// NOT constants of the rule (ADR 0087 stop condition #5): a commune's own row overrides both.
+const (
+	duplicateRadiusMetersByDefault = 50
+	duplicateWindowDaysByDefault   = 7
+)
+
+// DuplicateThresholds is one commune's suspected-duplicate radius (metres) and window (calendar days).
+type DuplicateThresholds struct {
+	RadiusMeters int
+	WindowDays   int
+}
+
+// DuplicateThresholds reads this commune's thresholds. NO ROW IS THE DECIDED DEFAULTS; a driver failure
+// is an error and never answered with a default — a suggestion list built on a guessed radius would look
+// complete while it is not.
+func (s *PetitionSettingsStore) DuplicateThresholds(ctx context.Context) (DuplicateThresholds, error) {
+	rows, err := s.db.For(ctx).Query(ctx, "duplicate_radius_meters, duplicate_window_days",
+		"petition_settings", "LIMIT 2")
+	if err != nil {
+		return DuplicateThresholds{}, fmt.Errorf("petition_settings: read thresholds: %w", err)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return DuplicateThresholds{}, fmt.Errorf("petition_settings: read thresholds: %w", err)
+		}
+		return DuplicateThresholds{RadiusMeters: duplicateRadiusMetersByDefault,
+			WindowDays: duplicateWindowDaysByDefault}, nil
+	}
+	var t DuplicateThresholds
+	if err := rows.Scan(&t.RadiusMeters, &t.WindowDays); err != nil {
+		return DuplicateThresholds{}, fmt.Errorf("petition_settings: scan thresholds: %w", err)
+	}
+	if rows.Next() {
+		return DuplicateThresholds{}, ErrPetitionSettingsDuplicate
+	}
+	if err := rows.Err(); err != nil {
+		return DuplicateThresholds{}, fmt.Errorf("petition_settings: read thresholds: %w", err)
+	}
+	return t, nil
+}
+
 func readVerificationPhotoRequired(rows *sql.Rows, err error) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("petition_settings: read: %w", err)

@@ -157,18 +157,101 @@ func TestBreakdownReusesTheTilePredicates(t *testing.T) {
 
 var brAsOf = time.Date(2026, 10, 9, 3, 0, 0, 0, time.UTC)
 
-// row builds one positional answer: groupedField, groupedPlace, field, place, then the seven counts
-// (received, received-accepted, finished, sample, on-time, late, rating sample) + rating sum + overdue.
+// brRow builds one positional answer for a register WITH NO MERGED PETITION: groupedField, groupedPlace,
+// field, place, then the seven counts (received, received-accepted, finished, sample, on-time, late,
+// rating sample) + rating sum + overdue. With nothing merged every "all" column equals its "main" twin, so
+// it is expanded to the statement's full layout by brRowFull.
 func brRow(gf, gp int64, field, place any, c ...int64) []driver.Value {
+	received, accepted, finished, sample, onTime, late, ratingSample, ratingSum, overdue :=
+		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8]
+	return brRowFull(gf, gp, field, place, received, received, accepted, finished, sample, onTime, late,
+		ratingSample, ratingSum, ratingSample, ratingSum, overdue)
+}
+
+// brRowFull is the statement's positional layout: received-all, received-main, accepted-main,
+// finished-main, sample, on-time, late, rating sample all, rating sum all, rating sample main, rating sum
+// main, overdue. A negative rating sum is NULL (nothing rated).
+func brRowFull(gf, gp int64, field, place any, c ...int64) []driver.Value {
 	v := []driver.Value{gf, gp, field, place}
 	for i, n := range c {
-		if i == 7 && n < 0 {
-			v = append(v, nil) // NULL rating sum
+		if (i == 8 || i == 10) && n < 0 {
+			v = append(v, nil)
 			continue
 		}
 		v = append(v, n)
 	}
 	return append(v, brAsOf)
+}
+
+// ADR 0087 §7: the grand row's "Nhận vào" counts EVERY petition; the rows by field and by hamlet count
+// MAIN petitions only; a field or a hamlet reached only through merged petitions is not a row.
+func TestBreakdownMergedPetitionsSplit(t *testing.T) {
+	d := &countDriver{rows: [][]driver.Value{
+		// rac-thai: 5 received, 2 of them merged -> 3 main; ratings: 4 all, 3 main.
+		brRowFull(0, 1, "rac-thai", nil, 5, 3, 3, 1, 1, 1, 0, 4, 14, 3, 11, 1),
+		// a field reached only through a merged petition: every main-only column zero.
+		brRowFull(0, 1, "giao-thong", nil, 1, 0, 0, 0, 0, 0, 0, 1, 5, 0, -1, 0),
+		brRowFull(1, 0, nil, "thon-1", 5, 3, 3, 1, 1, 1, 0, 4, 14, 3, 11, 1),
+		brRowFull(1, 0, nil, "thon-9", 1, 0, 0, 0, 0, 0, 0, 1, 5, 0, -1, 0), // merged only
+		brRowFull(1, 1, nil, nil, 6, 3, 3, 1, 1, 1, 0, 5, 19, 3, 11, 1),
+	}}
+	got, err := NewPhieuPhanAnhStore(store.New(sql.OpenDB(d))).CitizenReportBreakdown(ctxXa(xaThu), periodA, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Totals.Received != 6 || got.Totals.RatingSample != 5 || got.Totals.RatingSum != 19 || got.Totals.Finished != 1 {
+		t.Errorf("totals = %+v — received and rating over EVERY petition, work over main ones", got.Totals)
+	}
+	if len(got.Fields) != 1 || got.Fields[0].FieldCode != "rac-thai" || got.Fields[0].Received != 3 ||
+		got.Fields[0].RatingSample != 3 || got.Fields[0].RatingSum != 11 {
+		t.Errorf("fields = %+v — main petitions only, the merged-only field dropped", got.Fields)
+	}
+	if len(got.ResidentialUnits) != 2 || got.ResidentialUnits[1] != (domain.CitizenReportResidentialUnitFigures{
+		ResidentialUnitID: "thon-1", Received: 3, Overdue: 1}) {
+		t.Errorf("residential units = %+v — main only, the merged-only hamlet dropped", got.ResidentialUnits)
+	}
+
+	// The statement: every work column carries `merged_into IS NULL`; the first received column does not.
+	cols := citizenReportBreakdownColumns()
+	if !strings.HasPrefix(cols[strings.Index(cols, "count(*)"):],
+		"count(*) FILTER (WHERE "+citizenReportMetricCondition(domain.CitizenReportReceived, "$2", "$3")+")") {
+		t.Error("the grand received column is not the tile's received predicate")
+	}
+	for _, frag := range []string{
+		onlyMain(citizenReportMetricCondition(domain.CitizenReportReceived, "$2", "$3")),
+		onlyMain(citizenReportReceivedAccepted("$2", "$3")),
+		onlyMain(citizenReportFinished("$2", "$3")),
+	} {
+		if !strings.Contains(cols, frag) {
+			t.Errorf("breakdown lacks the main-only column %q", frag)
+		}
+	}
+	if !strings.Contains(citizenReportHandlingStmt(false), onlyMain(citizenReportFinished("$2", "$3"))) {
+		t.Error("the by-unit handling read counts merged petitions")
+	}
+}
+
+// The on-time figures and the overdue stock carry `merged_into IS NULL`; "Nhận vào" never does.
+func TestWorkFiguresCountMainPetitionsOnly(t *testing.T) {
+	for _, m := range []domain.CitizenReportMetric{domain.CitizenReportOnTimeSample, domain.CitizenReportOnTime,
+		domain.CitizenReportLate} {
+		if !strings.HasPrefix(citizenReportMetricCondition(m, "$2", "$3"), "("+mainPetitionCondition+" AND ") {
+			t.Errorf("%s counts merged petitions", m)
+		}
+	}
+	for _, m := range []domain.CitizenReportMetric{domain.CitizenReportReceived, domain.CitizenReportInProgress,
+		domain.CitizenReportRatingSample} {
+		if strings.Contains(citizenReportMetricCondition(m, "$2", "$3"), mainPetitionCondition) {
+			t.Errorf("%s excludes merged petitions — ADR 0087 §7 counts every petition there", m)
+		}
+	}
+	if !strings.HasPrefix(citizenReportOverdueNow, "("+mainPetitionCondition+" AND ") {
+		t.Error("the overdue stock counts merged petitions")
+	}
+	// The register LIST and its total are NOT figures: merged petitions are petitions and stay listed.
+	if f, _, _ := registerFilter(LocPhieu{}); strings.Contains(f, "merged_into") {
+		t.Errorf("the register filter hides merged petitions: %q", f)
+	}
 }
 
 func TestBreakdownStatementAndRows(t *testing.T) {

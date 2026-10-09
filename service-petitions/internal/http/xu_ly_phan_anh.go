@@ -644,7 +644,10 @@ func (h *Handler) ChuyenCapTrenPhieu(w http.ResponseWriter, r *http.Request) {
 // IT ALSO FIRES ON ONE REAL PATH: an officer without the key who CLASSIFIES a petition INTO
 // `can-bo`. That act is allowed — see app.duocChamPhieuHanChe — and it succeeds; the answer is 404
 // because the record the response would carry is one that officer may no longer read.
-func (h *Handler) traPhieu(w http.ResponseWriter, r *http.Request, p domain.PhieuPhanAnh) {
+//
+// `sua` (variadic, so every existing call is unchanged) lets an act add what only it knows to the reply —
+// the merge act's main petition CODE, which the row holds only as an internal id.
+func (h *Handler) traPhieu(w http.ResponseWriter, r *http.Request, p domain.PhieuPhanAnh, sua ...func(*phieuPhanAnhRa)) {
 	ctx := r.Context()
 	if p.LinhVuc == LinhVucHanChe && !h.coQuyenHanChe(ctx) {
 		h.khongTimThay(w)
@@ -667,6 +670,9 @@ func (h *Handler) traPhieu(w http.ResponseWriter, r *http.Request, p domain.Phie
 	// After the commit, so a failed name lookup is logged and the name omitted — never a 5xx for an act
 	// that happened (same reasoning as the label above).
 	h.nameOneResidentialUnit(ctx, &ra)
+	for _, f := range sua {
+		f(&ra)
+	}
 	vietJSON(w, http.StatusOK, ra)
 }
 
