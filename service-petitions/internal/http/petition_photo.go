@@ -281,8 +281,10 @@ func (h *HandlerCongDan) answerPhotoError(w http.ResponseWriter, r *http.Request
 	// service does not read" (09/10/2026, a missing temp bucket). Commune, file id, code and the
 	// wrapped error only — that error names object keys, never the lookup code or the citizen (rule 3).
 	refused := func(code string) {
-		h.d.Log.WarnContext(ctx, "ảnh hiện trường: từ chối", "xa", string(tenant.MustFrom(ctx)), "viec", what,
-			"tep_id", r.PathValue("id"), "ma", code, "err", err)
+		// INFO and `ma_loi`, as tuChoiXuLy (xu_ly_phan_anh.go): a refusal is the rule doing its job, and
+		// `ma` in this service is a petition's lookup code — a log key a reader must never confuse with it.
+		h.d.Log.InfoContext(ctx, "ảnh hiện trường: từ chối", "xa", string(tenant.MustFrom(ctx)), "viec", what,
+			"tep_id", r.PathValue("id"), "ma_loi", code, "err", err)
 	}
 	switch {
 	case errors.Is(err, petstore.ErrPhieuKhongTonTai):

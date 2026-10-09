@@ -432,7 +432,7 @@ func TestCitizenPhotoRefusalMapping(t *testing.T) {
 			// bucket answered 409 with nothing in the log). Never the lookup code (rule 3).
 			if c.status == http.StatusConflict || c.status == http.StatusUnprocessableEntity {
 				logged := s.log.String()
-				for _, want := range []string{"level=WARN", "ma=" + c.code, "tep_id=" + photoIDHTTP} {
+				for _, want := range []string{"level=INFO", "ma_loi=" + c.code, "tep_id=" + photoIDHTTP} {
 					if !strings.Contains(logged, want) {
 						t.Errorf("log lacks %q: %s", want, logged)
 					}
