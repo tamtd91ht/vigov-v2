@@ -1111,6 +1111,14 @@
       "bang_chung": "5831c61e (Danh bạ) · b0701080 (Nội dung, hộp nội dung, Cổng, Danh mục). web-admin typecheck + lint sạch, vitest 286 tệp/5315 ca xanh. make check: brain, hook, Go xanh; target web lúc chạy đỏ chỉ do việc dở của phiên song song (cau-hinh, đã commit b0a996bb) và 2 ca dashboard/export.test.ts quá 5s khi máy tải nặng (đã đỏ y vậy trước đây). ui-ux-reviewer đối chiếu MÃ với mã nguồn prototype: vòng 1 FAIL 18 nhóm, vòng 2 FAIL 4 nhóm, vòng 3 sửa nốt các hàng còn lại (chưa chấm lại vòng 4). CHƯA kiểm bằng ảnh render — máy này không dựng được màn; người dùng build và kiểm — chưa được báo là khớp prototype.",
       "tiep_theo": "(1) Người dùng kiểm ảnh trên bản build: tab Nội dung (danh sách, hộp nội dung từng loại mới/đã lưu, Danh mục tin, thẻ + hộp Cổng), tab Danh bạ (danh sách có chọn, hộp cán bộ, hộp đồng ý, hộp Nhập Excel các trạng thái); khoảng trắng 'Đang dùng ? .' cần nhìn ảnh. (2) BACKEND DEPENDENCY (service-comms): tổng số bài cho 'a–b trên N mục'/'Trang x/y', ảnh thu nhỏ trong danh sách, số bài mỗi danh mục, nhịp 15 phút, tuỳ chọn tải ảnh về kho, gợi ý mã bảo mật đang dùng; (service-identity): xoá mềm hàng loạt cán bộ có lý do. (3) Mất chức năng do bám prototype, chủ dự án nên biết: không đổi được mục cha/thứ tự của danh mục (chỉ đổi tên), không gỡ được ảnh bìa (chỉ thay), không gỡ âm thanh mà không thay; thay âm thanh xoá tệp cũ trước, tải lên hỏng thì bài tạm không có âm thanh. (4) Nhập Excel ở Danh bạ dùng tuyến nhập TÀI KHOẢN cán bộ (tạo tài khoản, mật khẩu tạm) — prototype chỉ nhập danh bạ. (5) Còn export không dùng: cong-khai.ts daCongKhai/daRut, xoa-dong.ts DELETE_SHORT, lib/api/noi-dung.ts removeContentAudio.",
       "no_confirm": []
+    },
+    {
+      "id": "the-kanban-nhiem-vu-thang-hang-09-10",
+      "menu": "nhiem-vu",
+      "trang_thai": "xong",
+      "viec": "Kanban Nhiệm vụ: thẻ hai cột cạnh nhau không thẳng hàng vì chiều cao thẻ theo độ dài tiêu đề (người dùng báo 09/10). Tiêu đề tối đa 3 dòng, phần tràn thành '…', rê chuột hiện tiêu đề đầy đủ",
+      "bang_chung": "(commit này) — so-nhiem-vu.tsx TheNhiemVu: tiêu đề gắn lớp .tieu-de-the (có sẵn ở globals.css nhưng chưa từng được gắn) + thuộc tính title; .tieu-de-the thêm min-height calc(3 * 1.375em) để luôn cao 3 dòng; hàng 'n việc con · đã gia hạn' giữ min-h-4 khi trống. Ca kiểm mới: kanban-nhiem-vu.test.tsx (lớp + title), ui-foundation.test.ts (clamp + min-height). vitest nhiem-vu + ui-foundation + dev-preview 26 tệp/742 ca xanh, tsc + eslint sạch",
+      "tiep_theo": "Chưa có ảnh render thật trên trình duyệt — người dùng tự xem lại bảng Kanban sau khi build. Thẻ nay cao cố định 3 dòng tiêu đề kể cả tiêu đề 1 dòng (giá của việc thẳng hàng)"
     }
   ]
 }

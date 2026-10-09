@@ -3233,6 +3233,10 @@ aside.khoi-chua-khai h3 {
   -webkit-line-clamp: 3;
   line-clamp: 3;
   overflow: hidden;
+  /* Three lines TALL even when the title is one line: in `em` of the title's own size times its
+   * `leading-snug` (1.375), so the reserve follows the font. Without it a card's height follows its
+   * title and the cards of neighbouring columns stop lining up (tester 09/10/2026). */
+  min-height: calc(3 * 1.375em);
 }
 
 /* Kanban moves (28/09/2026). The card's two buttons wrap instead of overflowing at 320px, and

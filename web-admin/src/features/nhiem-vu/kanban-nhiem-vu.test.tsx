@@ -227,6 +227,14 @@ describe("(#15) con số đầu cột — TỔNG THẬT từ `/task-counts`, kh�
     expect(html).toContain(nhuTrongHTML(kanbanPartialNote(1, null)));
   });
 
+  it("tiêu đề thẻ: tối đa 3 dòng (`.tieu-de-the`) và tiêu đề đầy đủ hiện khi rê chuột (`title`)", () => {
+    const dai = "Kiểm tra hiện trạng tuyến đường liên thôn ".repeat(6).trim();
+    const html = veBang(namCot({ "dang-thuc-hien": trang([nhiemVu({ title: dai })], false) }), { pha: "dangTai" });
+    expect(html).toMatch(
+      new RegExp(`<span id="the-nhiem-vu-NV19" class="tieu-de-the[^"]*" title="${nhuTrongHTML(dai)}">`),
+    );
+  });
+
   it("thứ tự cột vẫn theo bảng nhãn của xã (`/task-statuses`), không theo thứ tự trả về của số", () => {
     const d = allCounts();
     const html = veBang(namCot(), { pha: "xong", duLieu: { by_status: [...d.by_status].reverse() } });
@@ -316,7 +324,7 @@ describe("thẻ nhiệm vụ §4.1", () => {
     // Presentation pins (ADR 0068 §5): the spec's card frame and type sizes.
     expect(html).toContain('class="border-line shadow-card relative rounded-[10px] border bg-white transition"');
     expect(html).toContain('<span class="text-ink-muted mb-0.5 block text-[10.5px] font-semibold">NV19</span>');
-    expect(html).toContain('class="text-navy block text-[12.8px] leading-snug font-semibold"');
+    expect(html).toContain('class="tieu-de-the text-navy text-[12.8px] leading-snug font-semibold"');
     // `extension_count` 0: no extension chip (prototype `TaskCard.tsx:85`).
     expect(html).not.toContain("đã gia hạn");
   });

@@ -381,6 +381,12 @@ describe("kanban board carries the prototype's layout values", () => {
     expect(card).toContain("border-radius: 10px;");
     expect(card).not.toContain("border-left");
   });
+
+  it("a card title is clamped to 3 lines AND reserves 3 lines, so cards line up across columns", () => {
+    const title = ruleBody(".tieu-de-the");
+    expect(title).toContain("-webkit-line-clamp: 3;");
+    expect(title).toContain("min-height: calc(3 * 1.375em);");
+  });
 });
 
 // ADR 0068 lần 6 review round 1 — each one a rendered defect a class-level test could not see.
