@@ -387,8 +387,10 @@ func TestDanhMucQuyenDuocNap(t *testing.T) {
 	// (`feedback.classify`, `feedback.unmask` — ADR 0030). Con số 33 đứng ở đây từ trước
 	// migration 0007 và không ai thấy nó sai, vì ca này CHƯA TỪNG CHẠY MỘT LẦN NÀO: thiếu
 	// `VIGOV_TEST_DSN` thì nó tự bỏ qua mà gói vẫn in `ok`.
-	if n != 35 {
-		t.Errorf("có %d quyền trong danh mục, muốn 35 (33 của 0001 + 2 của 0007)", n)
+	// Updated 09/10/2026 with migration 0028: the 35 above had already gone stale at 0010 and 0022,
+	// unseen for the reason stated. Now 33 (0001) + 2 (0007) + 1 (0010) + 1 (0022) + 6 (0028).
+	if n != 43 {
+		t.Errorf("có %d quyền trong danh mục, muốn 43 (33 của 0001 + 2 của 0007 + 1 của 0010 + 1 của 0022 + 6 của 0028)", n)
 	}
 }
 

@@ -13,8 +13,9 @@ package domain
 // =================================================================================================
 // EVERY KEY IS WRITTEN OUT. THERE IS NO WILDCARD, NO "task.*", NO "every key in `quyen`".
 //
-// Chủ tịch UBND holds the 33 keys of migration 0001 BY NAME, not "everything the catalogue holds".
-// The difference is the whole point: the catalogue has 36 keys today, and the three that are not
+// Chủ tịch UBND holds the 33 keys of migration 0001 (plus the six of 0028, below) BY NAME, not
+// "everything the catalogue holds". The difference is the whole point: the catalogue had 36 keys
+// when this was written, and the three that are not
 // here — `feedback.classify`, `feedback.unmask` (0007) and `admin.user.delete` (0010) — were added
 // later for narrower reasons, one of them the right to read citizens' full names and phone numbers
 // (rule 3). An expansion over the table would grant them silently, and would grant whatever the next
@@ -28,7 +29,15 @@ package domain
 //
 // WHERE THE LISTS COME FROM: the user's table of 2026-09-28, cross-checked against
 // vigov-require default_config.json:186-335 and against the keys the migrations of this service
-// actually seed. Nothing was widened or narrowed here.
+// actually seed. Nothing was widened or narrowed here — with ONE later, named exception:
+//
+// USER DECISION 2026-10-09: Chủ tịch UBND and Phó Chủ tịch UBND ALSO hold the six keys of migration
+// 0028 (citizen.read, citizen.update, dossier.import, dossier.read, dossier.update, notice.send), and
+// no other template does. 0028 grants the same six to those two roles in every commune that already
+// has them, so a commune seeded after 0028 and one seeded before end in the same state. Named here,
+// key by key, for the reason above: it is a person's decision, not an expansion over the catalogue.
+// Consequence for #14 (app/role_template.go): the caller of a template run must now hold these six
+// too — see 0028 question 4.
 
 // RoleTemplate is one template role.
 type RoleTemplate struct {
@@ -59,8 +68,8 @@ func RoleTemplates() []RoleTemplate {
 	return []RoleTemplate{
 		{
 			Order: 1, Code: "chu-tich-ubnd", Name: "Chủ tịch UBND", IsLeader: true,
-			// The 33 keys of migration 0001:279-312, in that order. NOT the catalogue: see the file
-			// comment for the three keys deliberately absent.
+			// The 33 keys of migration 0001:279-312, in that order, then the six of 0028. NOT the
+			// catalogue: see the file comment for the keys deliberately absent.
 			Permissions: []string{
 				"admin.audit", "admin.lookup", "admin.org", "admin.role", "admin.sla", "admin.user",
 				"announcement.create",
@@ -72,6 +81,10 @@ func RoleTemplates() []RoleTemplate {
 				"petition.create", "petition.read",
 				"report.export", "report.read",
 				"task.approve", "task.assign", "task.create", "task.delete", "task.extend", "task.read", "task.update",
+				// Migration 0028, user decision 2026-10-09 (file comment).
+				"citizen.read", "citizen.update",
+				"dossier.import", "dossier.read", "dossier.update",
+				"notice.send",
 			},
 		},
 		{
@@ -87,6 +100,10 @@ func RoleTemplates() []RoleTemplate {
 				"feedback.read", "feedback.create", "feedback.assign", "feedback.resolve",
 				"content.read", "content.update",
 				"announcement.create",
+				// Migration 0028, user decision 2026-10-09 (file comment).
+				"citizen.read", "citizen.update",
+				"dossier.import", "dossier.read", "dossier.update",
+				"notice.send",
 			},
 		},
 		{
