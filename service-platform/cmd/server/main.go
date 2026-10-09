@@ -236,7 +236,10 @@ func run(log *slog.Logger) error {
 		Checker:  staffauth.Checker{},
 		Branding: branding,
 		URLs:     branding,
-		Log:      log,
+		// ONE cap for the whole process (ADR 0052 §Sửa đổi 09/10/2026: 4 uploads per pod), shared by
+		// every upload route this binary mounts — today the logo and the banner.
+		Uploads: httpx.NewUploadSlots(httpx.UploadSlotsPerPod),
+		Log:     log,
 	})
 
 	// The commune-host edge chain — buildCommuneEdge, below, says why each layer sits where it does.

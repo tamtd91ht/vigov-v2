@@ -4,13 +4,17 @@ package app
 // the commune itself under `admin.org`, published the moment they are saved (#3: no review), every set
 // and every removal audited in the same transaction with the CB- code.
 //
-//	a. RequestUpload  POST …/logo-uploads | …/banner-uploads                pending row + presigned POST
-//	b. the browser    POST straight to OBJECT_STORAGE_PUBLIC_ENDPOINT        bytes never cross this service
-//	c. Complete       POST …/{id}/completion                                 sniff · scan · hash · promote ·
-//	                                                                         derivative · PUBLISH · point
-//	                                                                         the profile at it — ONE tx
-//	d. Remove         DELETE …/logo | …/banner                               column NULL + audit, then
-//	                                                                         withdraw the old public copy
+//	Upload   POST …/logo-uploads | …/banner-uploads, ONE multipart request (ADR 0052 §Sửa đổi 09/10/2026):
+//	           a. open      pending row + audit, one tx — before a byte of the file is read
+//	           b. receive   the file STREAMED into the temp bucket (PutUpload) under this service's own
+//	                        MinIO account; a failed write moves the row to `failed`
+//	           c. complete  sniff · scan · hash · promote · derivative · PUBLISH · point the profile at
+//	                        it — ONE tx
+//	Remove   DELETE …/logo | …/banner     column NULL + audit, then withdraw the old public copy
+//
+// Until 09/10/2026 step b was the browser POSTing straight to MinIO with a presigned form and step c a
+// separate `…/completion` call. Both are gone: a failure inside MinIO's write path was invisible to
+// ViGov, and MinIO had to accept writes from the Internet (the owner's decision, ADR 0052 §Sửa đổi).
 //
 // THE SHAPE IS service-comms/internal/app/content_cover.go's, on purpose: one upload discipline for
 // every service that stores files (ADR 0052). What differs, and why:
@@ -45,9 +49,8 @@ package app
 // migration 0016), read through core/platformclient/uploadpolicy like every other service reads them, so
 // the narrowing and the fail-closed semantics are the same code. Not configured → refusal (503).
 //
-// WHAT IS NEVER LOGGED OR PUT IN AN ERROR: the original file name (rule 3), any presigned URL or form
-// field (bearer credentials), file content. The trail carries file ids, the sniffed type, the size, the
-// hash and the reason for a refusal — never the name.
+// WHAT IS NEVER LOGGED OR PUT IN AN ERROR: the original file name (rule 3), file content. The trail
+// carries file ids, the sniffed type, the size, the hash and the reason for a refusal — never the name.
 
 import (
 	"bytes"
@@ -75,9 +78,14 @@ const (
 	ActionBrandingUploadRequested = "yeu_cau_tai_anh_nhan_dien_xa"
 	ActionBrandingSet             = "dat_anh_nhan_dien_xa"
 	ActionBrandingRejected        = "tu_choi_anh_nhan_dien_xa"
-	ActionBrandingExpired         = "anh_nhan_dien_xa_het_han_tai"
-	ActionBrandingRemoved         = "go_anh_nhan_dien_xa"
-	ActionBrandingWithdrawn       = "go_ban_cong_khai_anh_nhan_dien_cu"
+	// ActionBrandingUploadFailed: the file never reached the temp bucket whole (the client stopped, sent
+	// a malformed body, or the store refused the write). The row is `failed`; nothing was inspected.
+	ActionBrandingUploadFailed = "tai_anh_nhan_dien_xa_khong_thanh"
+	// ActionBrandingExpired is NO LONGER WRITTEN (since 09/10/2026 nothing can expire between the
+	// request and the bytes: they are one request). Kept because audit entries carrying it exist.
+	ActionBrandingExpired   = "anh_nhan_dien_xa_het_han_tai"
+	ActionBrandingRemoved   = "go_anh_nhan_dien_xa"
+	ActionBrandingWithdrawn = "go_ban_cong_khai_anh_nhan_dien_cu"
 )
 
 // Rejection reasons — the `ly_do` of a rejected entry and the key the handler picks its sentence by.
@@ -117,19 +125,16 @@ var (
 	// ErrBrandingFileNotFound: no such upload FOR THIS CALLER — unknown, another commune's, another
 	// officer's, the other image's. One answer for all (rule 4, forbidden #2, applied to staff). 404.
 	ErrBrandingFileNotFound = errors.New("nhận diện xã: không tìm thấy tệp đã tải lên")
-	// ErrBrandingNotPending: completion of a file already refused or expired. 409.
+	// ErrBrandingNotPending: the row left `pending` under the completion (a concurrent writer). 409.
 	ErrBrandingNotPending = errors.New("nhận diện xã: tệp không còn chờ hoàn tất")
-	// ErrBrandingUploadNotReceived: completion before the bytes arrived, form still valid. 409.
-	ErrBrandingUploadNotReceived = errors.New("nhận diện xã: chưa nhận được tệp")
-	// ErrBrandingUploadExpired: the form expired with nothing uploaded; the row moves to `failed`. 409.
-	ErrBrandingUploadExpired = errors.New("nhận diện xã: lượt tải lên đã hết hạn")
-	// ErrBrandingUploadChanged: the object was replaced through the still-valid form mid-inspection. 409.
+	// ErrBrandingUploadChanged: the temp object changed between two reads of the inspection (its ETag
+	// no longer matched). 409.
 	ErrBrandingUploadChanged = errors.New("nhận diện xã: tệp vừa bị thay đổi trong lúc kiểm tra")
 	// ErrBrandingPublishUnavailable: the object store refused or could not be reached while publishing.
 	// NOTHING was written; the profile is as it was. 503.
 	ErrBrandingPublishUnavailable = errors.New("nhận diện xã: chưa đăng được ảnh lên kho công khai")
-	// ErrBrandingDecodeBusy: the decode slot stayed taken for brandingDecodeWait. Nothing written;
-	// the row stays as it was and the completion is retryable. 503.
+	// ErrBrandingDecodeBusy: the decode slot stayed taken for brandingDecodeWait. Nothing written past
+	// the pending row; the officer uploads again. 503.
 	ErrBrandingDecodeBusy = errors.New("nhận diện xã: máy chủ đang bận xử lý ảnh khác")
 	// ErrBrandingRejected is what every *BrandingRejection matches.
 	ErrBrandingRejected = errors.New("nhận diện xã: tệp bị từ chối")
@@ -185,8 +190,8 @@ const (
 // BrandingObjectStore is the part of *storage.Client the branding acts call — an interface so the tests
 // run with no MinIO. The semantics are core/storage's; read storage.go before implementing another.
 type BrandingObjectStore interface {
-	PresignUpload(ctx context.Context, uploadKey string, maxBytes int64, contentType string,
-		ttl time.Duration) (storage.PresignedPost, error)
+	PutUpload(ctx context.Context, uploadKey string, r io.Reader, size int64, maxBytes int64,
+		contentType string) (storage.ObjectInfo, error)
 	Stat(ctx context.Context, b storage.Bucket, key string) (storage.ObjectInfo, error)
 	ReadHead(ctx context.Context, b storage.Bucket, key, ifMatchETag string, n int) ([]byte, error)
 	Open(ctx context.Context, b storage.Bucket, key, ifMatchETag string) (io.ReadCloser, int64, error)
@@ -340,59 +345,123 @@ func (uc *Branding) PublicURL(key string) string {
 	return u
 }
 
-// --- a. request an upload -----------------------------------------------------------------------------
+// --- a + b. one upload: open the row, stream the file in, complete ------------------------------------
 
-// BrandingUploadRequest is what the browser declares before it uploads. Checked here; the bytes are
-// checked again at completion — a claim is never the fact (ADR 0052 §1c).
+// BrandingUploadRequest is one upload as the handler received it: the declaration, read from the
+// multipart text fields and the file part's header, and the file itself as a stream. The declaration is
+// checked before a byte of the stream is read; the bytes are checked again by the completion — a claim
+// is never the fact (ADR 0052 §1c).
 type BrandingUploadRequest struct {
 	FileName    string
-	ContentType string // DECLARED; the key's extension follows it, completion sniffs the truth
-	Size        int64
+	ContentType string // DECLARED; the key's extension follows it, the completion sniffs the truth
+	Size        int64  // DECLARED byte count; Body must yield exactly this many
+	// Body is the file. NEVER BUFFERED here: it is piped into the temp bucket (core/storage PutUpload).
+	Body io.Reader
+	// Deadline bounds the write of Body (httpx.UploadRequest.Deadline). Zero = only ctx bounds it. The
+	// completion that follows is NOT under it — see Upload.
+	Deadline time.Time
+	// Received confirms the transport delivered the whole file and nothing after it
+	// (httpx.UploadRequest.Finish). Called after the write succeeds and before anything is recorded
+	// about the bytes. nil = nothing to confirm.
+	Received func() error
 }
 
-// BrandingUpload is the pending row and the form the browser posts the file with.
-type BrandingUpload struct {
-	File domain.StoredFile
-	Post storage.PresignedPost // bearer credential for its TTL — never logged
-}
-
-// RequestUpload issues one upload slot (ADR 0052 §1a). ONE TRANSACTION: the profile row locked when it
-// exists (a soft-deleted one refuses here, before anybody uploads), the count, the pending row, the audit
-// entry. The presigned POST is signed INSIDE it — offline — so a signing failure leaves no row behind.
-func (uc *Branding) RequestUpload(ctx context.Context, img domain.BrandingImage, req BrandingUploadRequest,
-	actor audit.Actor) (BrandingUpload, error) {
-
-	if err := checkActor(img, actor); err != nil {
-		return BrandingUpload{}, err
-	}
-	name, err := domain.CleanFileName(req.FileName)
-	if err != nil {
-		return BrandingUpload{}, err
-	}
-	if req.Size <= 0 {
-		return BrandingUpload{}, domain.ErrBrandingSizeInvalid
+// MaxUploadBytes is the size cap of one image under platform's CURRENT policy — what the handler bounds
+// the request body by before it reads it. Not configured / unreadable → the same refusals as Upload.
+func (uc *Branding) MaxUploadBytes(ctx context.Context, img domain.BrandingImage) (int64, error) {
+	if !img.Valid() {
+		return 0, ErrBrandingImageUnknown
 	}
 	if !uc.uploadsConfigured() {
-		return BrandingUpload{}, ErrBrandingUploadNotConfigured
+		return 0, ErrBrandingUploadNotConfigured
 	}
 	pol, err := uc.policy(ctx, img)
 	if err != nil {
-		return BrandingUpload{}, err
+		return 0, err
+	}
+	if pol.MaxBytes <= 0 {
+		// uploadpolicy never answers this; a zero cap would refuse every file, so it is "not configured".
+		return 0, fmt.Errorf("%w: policy %s has no size cap", ErrBrandingUploadNotConfigured, img)
+	}
+	return pol.MaxBytes, nil
+}
+
+// Upload is the whole of ADR 0052 §Sửa đổi 09/10/2026 for one image, in the request that carries it:
+//
+//	a. open      one transaction: profile row locked, count, pending row, audit entry — nothing read yet
+//	b. receive   Body streamed into the temp bucket under the row's upload key, bounded by Deadline;
+//	             then Received. Either fails → the row moves to `failed` (audited) and the error returns
+//	c. complete  the completion that used to be its own route, unchanged
+//
+// THE DEADLINE BOUNDS STEP b ONLY. A client may use most of its 180 s sending the file; putting the scan
+// and the publication under what is left would turn a slow connection into a half-done completion.
+// Step c is bounded by its own waits (decode slot, scanner, store) and the request's context.
+//
+// A step-c failure that is "not now" (scanner, decode slot, store) leaves the row `pending`, as it always
+// did; there is no completion route left to retry it, so the officer uploads again and the abandoned row
+// stops counting against the file limit after storage.UploadTTL. Every error after step a names the file
+// id, so the refusal log line can be matched to the row.
+func (uc *Branding) Upload(ctx context.Context, img domain.BrandingImage, req BrandingUploadRequest,
+	actor audit.Actor) (domain.StoredFile, error) {
+
+	f, uploadKey, pol, err := uc.open(ctx, img, req, actor)
+	if err != nil {
+		return domain.StoredFile{}, err
+	}
+	if err := uc.receive(ctx, req, uploadKey, pol.MaxBytes); err != nil {
+		uc.failUnreceived(ctx, img, f.ID, uploadKey, actor)
+		return domain.StoredFile{}, fmt.Errorf("nhận diện xã: tệp %s: %w", f.ID, err)
+	}
+	done, err := uc.complete(ctx, img, f.ID, actor)
+	if err != nil {
+		return domain.StoredFile{}, fmt.Errorf("nhận diện xã: tệp %s: %w", f.ID, err)
+	}
+	return done, nil
+}
+
+// open is step a (formerly RequestUpload, ADR 0052 §1a, without the presigned form). ONE TRANSACTION:
+// the profile row locked when it exists (a soft-deleted one refuses here, before a byte is read), the
+// count, the pending row, the audit entry.
+func (uc *Branding) open(ctx context.Context, img domain.BrandingImage, req BrandingUploadRequest,
+	actor audit.Actor) (domain.StoredFile, string, uploadpolicy.Policy, error) {
+
+	fail := func(err error) (domain.StoredFile, string, uploadpolicy.Policy, error) {
+		return domain.StoredFile{}, "", uploadpolicy.Policy{}, err
+	}
+	if err := checkActor(img, actor); err != nil {
+		return fail(err)
+	}
+	if req.Body == nil {
+		return fail(errors.New("nhận diện xã: lượt tải không có luồng tệp — lỗi nối dây ở handler"))
+	}
+	name, err := domain.CleanFileName(req.FileName)
+	if err != nil {
+		return fail(err)
+	}
+	if req.Size <= 0 {
+		return fail(domain.ErrBrandingSizeInvalid)
+	}
+	if !uc.uploadsConfigured() {
+		return fail(ErrBrandingUploadNotConfigured)
+	}
+	pol, err := uc.policy(ctx, img)
+	if err != nil {
+		return fail(err)
 	}
 	if !pol.AllowsMIME(req.ContentType) {
-		return BrandingUpload{}, ErrBrandingTypeNotAllowed
+		return fail(ErrBrandingTypeNotAllowed)
 	}
 	if req.Size > pol.MaxBytes {
-		return BrandingUpload{}, ErrBrandingTooLarge
+		return fail(ErrBrandingTooLarge)
 	}
 	ext, ok := storage.ExtForMIME(req.ContentType)
 	if !ok {
-		return BrandingUpload{}, ErrBrandingTypeNotAllowed // unreachable while uploadpolicy narrows to storage's list
+		return fail(ErrBrandingTypeNotAllowed) // unreachable while uploadpolicy narrows to storage's list
 	}
 
 	id, err := uc.newID()
 	if err != nil {
-		return BrandingUpload{}, fmt.Errorf("nhận diện xã: sinh mã tệp: %w", err)
+		return fail(fmt.Errorf("nhận diện xã: sinh mã tệp: %w", err))
 	}
 	now := uc.clock()
 	key := storage.Key{
@@ -402,14 +471,14 @@ func (uc *Branding) RequestUpload(ctx context.Context, img domain.BrandingImage,
 	}
 	objectKey, err := key.Path()
 	if err != nil {
-		return BrandingUpload{}, fmt.Errorf("nhận diện xã: dựng khoá đối tượng: %w", err)
+		return fail(fmt.Errorf("nhận diện xã: dựng khoá đối tượng: %w", err))
 	}
 	uploadKey, err := key.UploadPath()
 	if err != nil {
-		return BrandingUpload{}, fmt.Errorf("nhận diện xã: dựng khoá tải lên: %w", err)
+		return fail(fmt.Errorf("nhận diện xã: dựng khoá tải lên: %w", err))
 	}
 
-	var out BrandingUpload
+	var out domain.StoredFile
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		p, found, err := uc.profiles.ProfileForUpdate(ctx, tx)
 		if err != nil {
@@ -437,10 +506,6 @@ func (uc *Branding) RequestUpload(ctx context.Context, img domain.BrandingImage,
 		if err := uc.files.InsertPending(ctx, tx, f); err != nil {
 			return err
 		}
-		post, err := uc.objects.PresignUpload(ctx, uploadKey, pol.MaxBytes, req.ContentType, storage.UploadTTL)
-		if err != nil {
-			return fmt.Errorf("nhận diện xã: ký lượt tải lên: %w", err)
-		}
 		if err := writeBrandingAudit(ctx, tx, actor, ActionBrandingUploadRequested, img, now, map[string]any{
 			"tep_id":          id,
 			"muc_dich":        string(img),
@@ -449,13 +514,61 @@ func (uc *Branding) RequestUpload(ctx context.Context, img domain.BrandingImage,
 		}); err != nil {
 			return err
 		}
-		out = BrandingUpload{File: f, Post: post}
+		out = f
 		return nil
 	})
 	if err != nil {
-		return BrandingUpload{}, err
+		return fail(err)
 	}
-	return out, nil
+	return out, uploadKey, pol, nil
+}
+
+// receive is step b: the stream into the temp bucket, then the transport's own confirmation. Errors keep
+// their sentinels (httpx's upload errors come back wrapped through PutUpload; storage's are its own), so
+// the handler maps a client that stopped sending to a 4xx and a store that refused to a 5xx.
+func (uc *Branding) receive(ctx context.Context, req BrandingUploadRequest, uploadKey string, maxBytes int64) error {
+	putCtx := ctx
+	if !req.Deadline.IsZero() {
+		var cancel context.CancelFunc
+		putCtx, cancel = context.WithDeadline(ctx, req.Deadline)
+		defer cancel()
+	}
+	if _, err := uc.objects.PutUpload(putCtx, uploadKey, req.Body, req.Size, maxBytes, req.ContentType); err != nil {
+		return brandingStorageErr("ghi tệp vào kho tạm", err)
+	}
+	if req.Received != nil {
+		if err := req.Received(); err != nil {
+			return fmt.Errorf("nhận diện xã: xác nhận đã nhận đủ tệp: %w", err)
+		}
+	}
+	return nil
+}
+
+// failUnreceived closes a row whose file never arrived whole: the temp object (if a write left one) is
+// purged, and the row moves pending → failed with its audit entry, in one transaction (rule 6 inv 3).
+//
+// ON A DETACHED CONTEXT: the usual cause is the client hanging up, which has already cancelled the
+// request's. Best effort — a failure is logged and the row stays `pending`, which stops counting against
+// the file limit after storage.UploadTTL; the temp lifecycle removes any object within a day.
+func (uc *Branding) failUnreceived(ctx context.Context, img domain.BrandingImage, id, uploadKey string,
+	actor audit.Actor) {
+
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), detachedTimeout)
+	defer cancel()
+	removed := uc.objects.PurgeAllVersions(ctx, storage.BucketTemp, uploadKey) == nil
+	now := uc.clock()
+	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		if err := uc.files.Transition(ctx, tx, id, domain.StoredFilePending, domain.StoredFileFailed, now); err != nil {
+			return err
+		}
+		return writeBrandingAudit(ctx, tx, actor, ActionBrandingUploadFailed, img, now, map[string]any{
+			"tep_id": id, "da_xoa_tep_tam": removed,
+		})
+	})
+	if err != nil {
+		uc.log.Warn("nhận diện xã: tải tệp không thành, chưa chuyển được dòng sang failed — dòng giữ pending",
+			"xa", string(tenant.MustFrom(ctx)), "tep_id", id, "err", err)
+	}
 }
 
 // --- c. complete an upload: inspect, derive, publish, point -------------------------------------------
@@ -466,8 +579,6 @@ const (
 	brandingReady brandingOutcome = iota + 1
 	brandingRejectedFile
 	brandingFailed // stored, but no derivative can be made: `processing → failed`
-	brandingNotReceived
-	brandingExpired
 )
 
 type brandingInspection struct {
@@ -479,14 +590,14 @@ type brandingInspection struct {
 	tempRemoved bool
 }
 
-// Complete is ADR 0052 §1c, the derivative, the publication and the profile pointer, for one upload.
-// Only the officer it was issued to, only for the image it was issued for.
+// complete is step c — ADR 0052 §1c, the derivative, the publication and the profile pointer — for the
+// upload Upload has just written to the temp bucket. Only the officer it was issued to, only for the
+// image it was issued for: the id never comes off the wire, but the checks stay, because they are what
+// stands between two concurrent writers of the same row.
 //
 // IDEMPOTENT: a file already `ready` is returned as it is and nothing is written — `ready` is reached
-// only by the transaction that also published it and pointed the profile at it, so a retried request
-// answers the same outcome. (A ready file that has since been replaced is returned too: completing it
-// again never makes an old image current.)
-func (uc *Branding) Complete(ctx context.Context, img domain.BrandingImage, id string, actor audit.Actor) (
+// only by the transaction that also published it and pointed the profile at it.
+func (uc *Branding) complete(ctx context.Context, img domain.BrandingImage, id string, actor audit.Actor) (
 	domain.StoredFile, error) {
 
 	if err := checkActor(img, actor); err != nil {
@@ -525,9 +636,6 @@ func (uc *Branding) Complete(ctx context.Context, img domain.BrandingImage, id s
 	insp, err := uc.inspect(ctx, img, *f, key, pol)
 	if err != nil {
 		return domain.StoredFile{}, err
-	}
-	if insp.kind == brandingNotReceived {
-		return domain.StoredFile{}, ErrBrandingUploadNotReceived
 	}
 
 	now := uc.clock()
@@ -588,24 +696,18 @@ func (uc *Branding) Complete(ctx context.Context, img domain.BrandingImage, id s
 			return writeBrandingAudit(ctx, tx, actor, ActionBrandingRejected, img, now, map[string]any{
 				"tep_id": id, "ly_do": insp.reason,
 			})
-		case brandingRejectedFile, brandingExpired:
+		case brandingRejectedFile:
 			if cur.Status != domain.StoredFilePending {
 				return ErrBrandingNotPending
 			}
-			to, action := domain.StoredFileRejected, ActionBrandingRejected
-			d := map[string]any{"tep_id": id}
-			if insp.kind == brandingExpired {
-				to, action = domain.StoredFileFailed, ActionBrandingExpired
-			} else {
-				d["ly_do"], d["da_xoa_tep_tam"] = insp.reason, insp.tempRemoved
-				if insp.signature != "" {
-					d["chu_ky_ma_doc"] = insp.signature
-				}
+			d := map[string]any{"tep_id": id, "ly_do": insp.reason, "da_xoa_tep_tam": insp.tempRemoved}
+			if insp.signature != "" {
+				d["chu_ky_ma_doc"] = insp.signature
 			}
-			if err := uc.files.Transition(ctx, tx, id, domain.StoredFilePending, to, now); err != nil {
+			if err := uc.files.Transition(ctx, tx, id, domain.StoredFilePending, domain.StoredFileRejected, now); err != nil {
 				return err
 			}
-			return writeBrandingAudit(ctx, tx, actor, action, img, now, d)
+			return writeBrandingAudit(ctx, tx, actor, ActionBrandingRejected, img, now, d)
 		}
 		return fmt.Errorf("nhận diện xã: kết quả kiểm tra không rõ (%d)", insp.kind)
 	})
@@ -616,14 +718,10 @@ func (uc *Branding) Complete(ctx context.Context, img domain.BrandingImage, id s
 		return domain.StoredFile{}, err
 	}
 	uc.withdrawAfterCommit(ctx, img, withdraw, actor, deleteReasonReplaced)
-	switch {
-	case done.ID != "":
+	if done.ID != "" {
 		return done, nil
-	case insp.kind == brandingExpired:
-		return domain.StoredFile{}, ErrBrandingUploadExpired
-	default:
-		return domain.StoredFile{}, &BrandingRejection{Reason: insp.reason}
 	}
+	return domain.StoredFile{}, &BrandingRejection{Reason: insp.reason}
 }
 
 // lockedProfile is the profile row as a write saw it, and whether this write created it.
@@ -889,8 +987,8 @@ func (uc *Branding) withdrawAfterCommit(ctx context.Context, img domain.Branding
 
 // --- inspection (lock-free) ---------------------------------------------------------------------------
 
-// inspect is the lock-free half of Complete. An error means nothing may be decided yet (scanner down,
-// object replaced mid-inspection, store failure): nothing is written and the row stays retryable.
+// inspect is the lock-free half of complete. An error means nothing may be decided yet (scanner down,
+// object replaced mid-inspection, store failure): nothing is written and the row stays `pending`.
 func (uc *Branding) inspect(ctx context.Context, img domain.BrandingImage, f domain.StoredFile,
 	key storage.Key, pol uploadpolicy.Policy) (brandingInspection, error) {
 
@@ -967,8 +1065,8 @@ func (uc *Branding) inspect(ctx context.Context, img domain.BrandingImage, f dom
 	return uc.derive(ctx, img, f, key, pr.ETag, facts, false)
 }
 
-// fromDestination handles "the original is already in the private bucket" (a previous completion
-// promoted it; its transaction or its derivative did not finish) or "nothing arrived". A destination
+// fromDestination handles "the original is already in the private bucket" (a concurrent completion
+// promoted it first, or a previous one whose transaction or derivative did not finish). A destination
 // object is TRUSTED AS SCANNED because nothing else writes there: Promote is the only path into
 // `content-source/…/platform/<purpose>/…/original.*`, it runs only after a clean scan, and IAM scopes
 // this service's key to its own subtree (ADR 0052 §3).
@@ -980,10 +1078,10 @@ func (uc *Branding) fromDestination(ctx context.Context, img domain.BrandingImag
 		if f.Status != domain.StoredFilePending {
 			return brandingInspection{}, errors.New("nhận diện xã: dòng đã lưu nhưng không thấy bản gốc ở kho lưu")
 		}
-		if uc.clock().After(f.CreatedAt.Add(storage.UploadTTL)) {
-			return brandingInspection{kind: brandingExpired}, nil
-		}
-		return brandingInspection{kind: brandingNotReceived}, nil
+		// Neither in temp nor promoted, right after this request wrote it: not the client's doing. A
+		// temp bucket that drops what was just written, or a read pointed at another store (the 09/10
+		// incident shape) — an operator's problem, so a 500 with the cause, never "upload again".
+		return brandingInspection{}, fmt.Errorf("nhận diện xã: tệp vừa ghi không có ở kho tạm lẫn kho lưu: %w", err)
 	}
 	if err != nil {
 		return brandingInspection{}, brandingStorageErr("đọc thông tin tệp đã lưu", err)

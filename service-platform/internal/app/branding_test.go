@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/vihat/vigov/core/audit"
+	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/malwarescan"
 	"github.com/vihat/vigov/core/platformclient/uploadpolicy"
 	"github.com/vihat/vigov/core/storage"
@@ -253,6 +254,14 @@ type fakeObjects struct {
 	produced              map[string][]byte
 	published, unpublish  []string
 	publishErr            error
+	puts                  []fakePut
+	purged                []string
+}
+
+// fakePut is one PutUpload call as the store saw it.
+type fakePut struct {
+	key, contentType string
+	size, maxBytes   int64
 }
 
 func newFakeObjects() *fakeObjects {
@@ -270,9 +279,26 @@ func (o *fakeObjects) bucket(b storage.Bucket) map[string][]byte {
 	return o.private
 }
 
-func (o *fakeObjects) PresignUpload(_ context.Context, key string, _ int64, _ string, ttl time.Duration) (storage.PresignedPost, error) {
-	return storage.PresignedPost{URL: "https://minio.example/temp", Fields: map[string]string{"key": key},
-		ExpiresAt: time.Now().Add(ttl)}, nil
+// PutUpload keeps core/storage's contract where this file's properties depend on it: exactly `size`
+// bytes or ErrSizeMismatch, a reader's own error passed through WRAPPED (so its sentinel survives), and
+// nothing kept in temp unless the whole body arrived.
+func (o *fakeObjects) PutUpload(_ context.Context, key string, r io.Reader, size, maxBytes int64, ctype string) (storage.ObjectInfo, error) {
+	o.puts = append(o.puts, fakePut{key: key, contentType: ctype, size: size, maxBytes: maxBytes})
+	if !strings.HasPrefix(key, storage.TempUploadPrefix) {
+		return storage.ObjectInfo{}, storage.ErrInvalidArgument
+	}
+	if size > maxBytes {
+		return storage.ObjectInfo{}, storage.ErrTooLarge
+	}
+	b, err := io.ReadAll(io.LimitReader(r, size+1))
+	if err != nil {
+		return storage.ObjectInfo{}, fmt.Errorf("storage: read: %w", err)
+	}
+	if int64(len(b)) != size {
+		return storage.ObjectInfo{}, fmt.Errorf("%w: %w", storage.ErrInvalidArgument, storage.ErrSizeMismatch)
+	}
+	o.temp[key] = b
+	return storage.ObjectInfo{Key: key, Size: size, ETag: "etag"}, nil
 }
 func (o *fakeObjects) Stat(_ context.Context, b storage.Bucket, key string) (storage.ObjectInfo, error) {
 	v, ok := o.bucket(b)[key]
@@ -317,6 +343,7 @@ func (o *fakeObjects) PutServerProduced(_ context.Context, dst storage.Key, r io
 }
 func (o *fakeObjects) PurgeAllVersions(_ context.Context, b storage.Bucket, key string) error {
 	delete(o.bucket(b), key)
+	o.purged = append(o.purged, key)
 	return nil
 }
 func (o *fakeObjects) PublishDerivative(_ context.Context, src, dst storage.Key) error {
@@ -399,21 +426,61 @@ func transparentPNG(t *testing.T, w, h int) []byte {
 	return buf.Bytes()
 }
 
-// upload issues an upload in commune c and drops body into the temp bucket under its upload key.
-func (r *rig) upload(t *testing.T, c tenant.ID, img domain.BrandingImage, body []byte) string {
+// staged runs step a (open) in commune c and drops body into the temp bucket under the row's upload key
+// — the state step b leaves behind — so the completion's properties are tested on bytes no transport
+// could produce (a temp object over the CURRENT policy, a forged header).
+func (r *rig) staged(t *testing.T, c tenant.ID, img domain.BrandingImage, body []byte) string {
 	t.Helper()
-	up, err := r.uc.RequestUpload(tenant.Into(context.Background(), c), img,
-		BrandingUploadRequest{FileName: "logo.png", ContentType: storage.MIMEPNG, Size: 1024}, staffA) // the DECLARED size; the bytes are measured at completion
+	f, uploadKey, _, err := r.uc.open(tenant.Into(context.Background(), c), img,
+		BrandingUploadRequest{FileName: "logo.png", ContentType: storage.MIMEPNG, Size: 1024, Body: bytes.NewReader(nil)},
+		staffA) // the DECLARED size; the bytes are measured at completion
 	if err != nil {
-		t.Fatalf("RequestUpload: %v", err)
+		t.Fatalf("open: %v", err)
 	}
-	r.objects.temp[storage.TempUploadPrefix+up.File.ObjectKey] = body
-	return up.File.ID
+	r.objects.temp[uploadKey] = body
+	return f.ID
 }
 
-// --- request ------------------------------------------------------------------------------------
+// countingReader counts what was read: a refused declaration must not read a byte of the file.
+type countingReader struct {
+	r io.Reader
+	n int
+}
 
-func TestRequestUploadRefusesDeclarationsOutsideThePolicy(t *testing.T) {
+func (c *countingReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n += n
+	return n, err
+}
+
+// failingReader yields `ok` bytes of body, then runs before() and fails with err — a client that stops
+// sending mid-file.
+type failingReader struct {
+	body   []byte
+	ok     int
+	err    error
+	before func()
+}
+
+func (f *failingReader) Read(p []byte) (int, error) {
+	if f.ok > 0 {
+		n := copy(p, f.body[:f.ok])
+		f.body, f.ok = f.body[n:], f.ok-n
+		return n, nil
+	}
+	if f.before != nil {
+		f.before()
+	}
+	return 0, f.err
+}
+
+func pngUpload(body io.Reader, size int) BrandingUploadRequest {
+	return BrandingUploadRequest{FileName: "logo.png", ContentType: storage.MIMEPNG, Size: int64(size), Body: body}
+}
+
+// --- upload: open · receive · complete --------------------------------------------------------
+
+func TestUploadRefusesDeclarationsOutsideThePolicyBeforeReadingAByte(t *testing.T) {
 	ctx := tenant.Into(context.Background(), communeA)
 	for _, tc := range []struct {
 		name string
@@ -427,19 +494,22 @@ func TestRequestUploadRefusesDeclarationsOutsideThePolicy(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := newRig(t)
-			if _, err := r.uc.RequestUpload(ctx, domain.BrandingLogo, tc.req, staffA); !errors.Is(err, tc.want) {
+			body := &countingReader{r: bytes.NewReader(make([]byte, 64))}
+			tc.req.Body = body
+			if _, err := r.uc.Upload(ctx, domain.BrandingLogo, tc.req, staffA); !errors.Is(err, tc.want) {
 				t.Fatalf("err = %v, want %v", err, tc.want)
 			}
-			if r.db.begins != 0 || len(r.files.of(communeA)) != 0 {
-				t.Error("a refused declaration opened a transaction or wrote a row")
+			if r.db.begins != 0 || len(r.files.of(communeA)) != 0 || body.n != 0 || len(r.objects.puts) != 0 {
+				t.Errorf("a refused declaration opened a tx (%d), wrote a row, read %d bytes or wrote to the store (%d)",
+					r.db.begins, body.n, len(r.objects.puts))
 			}
 		})
 	}
 }
 
-func TestRequestUploadWritesRowAndAuditInOneTxUnderTheCommuneKey(t *testing.T) {
+func TestOpenWritesRowAndAuditInOneTxUnderTheCommuneKey(t *testing.T) {
 	r := newRig(t)
-	id := r.upload(t, communeA, domain.BrandingLogo, []byte("x"))
+	id := r.staged(t, communeA, domain.BrandingLogo, []byte("x"))
 	f := r.files.of(communeA)[id]
 	if f == nil || f.Status != domain.StoredFilePending || f.UploadedBy != "CB-00123" {
 		t.Fatalf("row = %+v", f)
@@ -454,19 +524,140 @@ func TestRequestUploadWritesRowAndAuditInOneTxUnderTheCommuneKey(t *testing.T) {
 	}
 }
 
-func TestRequestUploadRefusesNoActorAndDeletedProfile(t *testing.T) {
+func TestUploadRefusesNoActorAndDeletedProfileBeforeReadingAByte(t *testing.T) {
 	r := newRig(t)
 	ctx := tenant.Into(context.Background(), communeA)
-	req := BrandingUploadRequest{FileName: "a.png", ContentType: storage.MIMEPNG, Size: 10}
-	if _, err := r.uc.RequestUpload(ctx, domain.BrandingLogo, req, audit.Actor{Kind: "staff"}); !errors.Is(err, ErrBrandingNoActor) {
+	body := &countingReader{r: bytes.NewReader(make([]byte, 10))}
+	if _, err := r.uc.Upload(ctx, domain.BrandingLogo, pngUpload(body, 10), audit.Actor{Kind: "staff"}); !errors.Is(err, ErrBrandingNoActor) {
 		t.Fatalf("no actor: err = %v", err)
 	}
 	r.profiles.rows[communeA] = &domain.ProfileBranding{Deleted: true}
-	if _, err := r.uc.RequestUpload(ctx, domain.BrandingLogo, req, staffA); !errors.Is(err, domain.ErrProfileDeleted) {
+	if _, err := r.uc.Upload(ctx, domain.BrandingLogo, pngUpload(body, 10), staffA); !errors.Is(err, domain.ErrProfileDeleted) {
 		t.Fatalf("deleted profile: err = %v, want ErrProfileDeleted", err)
 	}
-	if len(r.files.of(communeA)) != 0 || r.db.commits != 0 {
-		t.Error("a refused request left a row or committed")
+	if len(r.files.of(communeA)) != 0 || r.db.commits != 0 || body.n != 0 || len(r.objects.puts) != 0 {
+		t.Error("a refused upload left a row, committed, or read the file")
+	}
+}
+
+func TestUploadStreamsIntoTempThenCompletesInTheSameCall(t *testing.T) {
+	r := newRig(t)
+	ctx := tenant.Into(context.Background(), communeA)
+	png := transparentPNG(t, 64, 64)
+	received := 0
+	req := pngUpload(bytes.NewReader(png), len(png))
+	req.Received = func() error { received++; return nil }
+
+	f, err := r.uc.Upload(ctx, domain.BrandingLogo, req, staffA)
+	if err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+	if f.Status != domain.StoredFileReady || f.PublicObjectKey == "" || r.profiles.rows[communeA].LogoFileID != f.ID {
+		t.Fatalf("file = %+v — the upload must end published and current", f)
+	}
+	// ONE write into the temp bucket, under THIS row's upload key, capped by the POLICY, declared type.
+	if len(r.objects.puts) != 1 {
+		t.Fatalf("puts = %+v, want one", r.objects.puts)
+	}
+	put, row := r.objects.puts[0], r.files.of(communeA)[f.ID]
+	if put.key != storage.TempUploadPrefix+row.ObjectKey || put.maxBytes != 2<<20 || put.contentType != storage.MIMEPNG ||
+		put.size != int64(len(png)) {
+		t.Errorf("put = %+v, want the row's upload key, the 2 MB policy cap, image/png, %d bytes", put, len(png))
+	}
+	if received != 1 {
+		t.Errorf("Received called %d times, want 1 — the transport must be confirmed before recording", received)
+	}
+	// open tx + completion tx, each with its entry; promoted out of temp.
+	if r.db.commits != 2 || r.db.count("INSERT INTO audit_log") != 2 || r.db.rolls != 0 || len(r.objects.temp) != 0 {
+		t.Errorf("commits=%d audits=%d rollbacks=%d temp=%d", r.db.commits, r.db.count("INSERT INTO audit_log"),
+			r.db.rolls, len(r.objects.temp))
+	}
+}
+
+// A client that stops sending mid-file: the row moves pending → failed with its entry, even though the
+// request's context is already cancelled (the usual cause), and nothing is scanned or published.
+func TestUploadStreamFailureMovesTheRowToFailedOnADetachedContext(t *testing.T) {
+	r := newRig(t)
+	ctx, cancel := context.WithCancel(tenant.Into(context.Background(), communeA))
+	defer cancel()
+	png := transparentPNG(t, 32, 32)
+	body := &failingReader{body: png, ok: 10, err: httpx.ErrUploadTimeout, before: cancel}
+
+	_, err := r.uc.Upload(ctx, domain.BrandingLogo, pngUpload(body, len(png)), staffA)
+	if !errors.Is(err, httpx.ErrUploadTimeout) {
+		t.Fatalf("err = %v, want the transport's sentinel kept through the store", err)
+	}
+	rows := r.files.of(communeA)
+	if len(rows) != 1 {
+		t.Fatalf("rows = %d, want 1", len(rows))
+	}
+	for id, f := range rows {
+		if f.Status != domain.StoredFileFailed {
+			t.Errorf("row status = %s, want failed", f.Status)
+		}
+		if !strings.Contains(err.Error(), id) {
+			t.Errorf("error %q does not name the file id — the refusal log cannot be matched to the row", err)
+		}
+	}
+	if r.db.commits != 2 || r.db.count("INSERT INTO audit_log") != 2 {
+		t.Errorf("commits=%d audits=%d, want open + failed, each audited", r.db.commits, r.db.count("INSERT INTO audit_log"))
+	}
+	if len(r.objects.temp) != 0 || len(r.objects.published) != 0 || r.profiles.rows[communeA] != nil {
+		t.Error("a file that never arrived was kept, published or pointed at")
+	}
+}
+
+func TestUploadShorterThanDeclaredMovesTheRowToFailed(t *testing.T) {
+	r := newRig(t)
+	ctx := tenant.Into(context.Background(), communeA)
+	png := transparentPNG(t, 16, 16)
+	_, err := r.uc.Upload(ctx, domain.BrandingLogo, pngUpload(bytes.NewReader(png), len(png)+5), staffA)
+	if !errors.Is(err, storage.ErrSizeMismatch) {
+		t.Fatalf("err = %v, want ErrSizeMismatch", err)
+	}
+	for _, f := range r.files.of(communeA) {
+		if f.Status != domain.StoredFileFailed {
+			t.Errorf("row status = %s, want failed", f.Status)
+		}
+	}
+}
+
+// The store took Size bytes but the transport then finds more after them (a second part, a longer
+// file): refused BEFORE the completion records anything, and the temp object is purged.
+func TestUploadTransportNotConfirmedPurgesTempAndFailsTheRow(t *testing.T) {
+	r := newRig(t)
+	ctx := tenant.Into(context.Background(), communeA)
+	png := transparentPNG(t, 16, 16)
+	req := pngUpload(bytes.NewReader(png), len(png))
+	req.Received = func() error { return fmt.Errorf("%w: a part after the file", httpx.ErrUploadMalformed) }
+
+	_, err := r.uc.Upload(ctx, domain.BrandingLogo, req, staffA)
+	if !errors.Is(err, httpx.ErrUploadMalformed) {
+		t.Fatalf("err = %v, want ErrUploadMalformed", err)
+	}
+	for _, f := range r.files.of(communeA) {
+		if f.Status != domain.StoredFileFailed {
+			t.Errorf("row status = %s, want failed", f.Status)
+		}
+	}
+	if len(r.objects.temp) != 0 || len(r.objects.purged) != 1 || len(r.objects.published) != 0 {
+		t.Errorf("temp=%d purged=%v published=%v — the unconfirmed bytes must be purged, never completed",
+			len(r.objects.temp), r.objects.purged, r.objects.published)
+	}
+}
+
+func TestMaxUploadBytesIsThePolicyCapAndFailsClosed(t *testing.T) {
+	r := newRig(t)
+	ctx := tenant.Into(context.Background(), communeA)
+	if n, err := r.uc.MaxUploadBytes(ctx, domain.BrandingBanner); err != nil || n != 2<<20 {
+		t.Fatalf("MaxUploadBytes = %d, %v; want the 2 MB policy", n, err)
+	}
+	if _, err := r.uc.MaxUploadBytes(ctx, domain.BrandingImage("other")); !errors.Is(err, ErrBrandingImageUnknown) {
+		t.Errorf("unknown image: err = %v", err)
+	}
+	r.uc.scanner = nil
+	if _, err := r.uc.MaxUploadBytes(ctx, domain.BrandingLogo); !errors.Is(err, ErrBrandingUploadNotConfigured) {
+		t.Errorf("no scanner: err = %v, want ErrBrandingUploadNotConfigured", err)
 	}
 }
 
@@ -475,9 +666,9 @@ func TestRequestUploadRefusesNoActorAndDeletedProfile(t *testing.T) {
 func TestCompleteLogoPublishesAlphaPNGPointsProfileAndAuditsInTheTx(t *testing.T) {
 	r := newRig(t)
 	ctx := tenant.Into(context.Background(), communeA)
-	id := r.upload(t, communeA, domain.BrandingLogo, transparentPNG(t, 300, 300))
+	id := r.staged(t, communeA, domain.BrandingLogo, transparentPNG(t, 300, 300))
 
-	f, err := r.uc.Complete(ctx, domain.BrandingLogo, id, staffA)
+	f, err := r.uc.complete(ctx, domain.BrandingLogo, id, staffA)
 	if err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
@@ -509,7 +700,7 @@ func TestCompleteLogoPublishesAlphaPNGPointsProfileAndAuditsInTheTx(t *testing.T
 
 	// IDEMPOTENT: a second completion writes nothing.
 	before := r.db.count("INSERT INTO audit_log")
-	if _, err := r.uc.Complete(ctx, domain.BrandingLogo, id, staffA); err != nil {
+	if _, err := r.uc.complete(ctx, domain.BrandingLogo, id, staffA); err != nil {
 		t.Fatal(err)
 	}
 	if r.db.count("INSERT INTO audit_log") != before {
@@ -520,13 +711,13 @@ func TestCompleteLogoPublishesAlphaPNGPointsProfileAndAuditsInTheTx(t *testing.T
 func TestReplacingTheLogoPointsFirstThenWithdrawsAndSoftDeletesTheOld(t *testing.T) {
 	r := newRig(t)
 	ctx := tenant.Into(context.Background(), communeA)
-	first := r.upload(t, communeA, domain.BrandingLogo, transparentPNG(t, 64, 64))
-	f1, err := r.uc.Complete(ctx, domain.BrandingLogo, first, staffA)
+	first := r.staged(t, communeA, domain.BrandingLogo, transparentPNG(t, 64, 64))
+	f1, err := r.uc.complete(ctx, domain.BrandingLogo, first, staffA)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second := r.upload(t, communeA, domain.BrandingLogo, transparentPNG(t, 80, 80))
-	f2, err := r.uc.Complete(ctx, domain.BrandingLogo, second, staffA)
+	second := r.staged(t, communeA, domain.BrandingLogo, transparentPNG(t, 80, 80))
+	f2, err := r.uc.complete(ctx, domain.BrandingLogo, second, staffA)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -551,9 +742,9 @@ func TestCompleteRejectsMalwareAndPublishesNothing(t *testing.T) {
 	r := newRig(t)
 	r.uc.scanner = fakeScanner{infected: true}
 	ctx := tenant.Into(context.Background(), communeA)
-	id := r.upload(t, communeA, domain.BrandingLogo, transparentPNG(t, 32, 32))
+	id := r.staged(t, communeA, domain.BrandingLogo, transparentPNG(t, 32, 32))
 
-	_, err := r.uc.Complete(ctx, domain.BrandingLogo, id, staffA)
+	_, err := r.uc.complete(ctx, domain.BrandingLogo, id, staffA)
 	var rej *BrandingRejection
 	if !errors.As(err, &rej) || rej.Reason != BrandingRejectMalware {
 		t.Fatalf("err = %v, want a malware rejection", err)
@@ -574,12 +765,12 @@ func TestCompleteRejectsWrongSniffedTypeAndOversizeAtCompletion(t *testing.T) {
 		reason string
 	}{
 		{"declared PNG, bytes are a PDF", []byte("%PDF-1.7\n%âãÏÓ\n1 0 obj\n"), BrandingRejectTypeNotAllowed},
-		{"grew past 2 MB through the form", append(transparentPNG(t, 8, 8), make([]byte, 2<<20)...), BrandingRejectTooLarge},
+		{"temp object over the CURRENT policy", append(transparentPNG(t, 8, 8), make([]byte, 2<<20)...), BrandingRejectTooLarge},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := newRig(t)
-			id := r.upload(t, communeA, domain.BrandingLogo, tc.body)
-			_, err := r.uc.Complete(tenant.Into(context.Background(), communeA), domain.BrandingLogo, id, staffA)
+			id := r.staged(t, communeA, domain.BrandingLogo, tc.body)
+			_, err := r.uc.complete(tenant.Into(context.Background(), communeA), domain.BrandingLogo, id, staffA)
 			var rej *BrandingRejection
 			if !errors.As(err, &rej) || rej.Reason != tc.reason {
 				t.Fatalf("err = %v, want rejection %q", err, tc.reason)
@@ -595,19 +786,19 @@ func TestCompleteInAnotherCommuneIsNotFound(t *testing.T) {
 	// The upload id of commune A completed on commune B's host: the row is not B's — one answer, 404,
 	// no inspection, nothing touched (rule 1; rule 4 forbidden #2 on the commune axis).
 	r := newRig(t)
-	id := r.upload(t, communeA, domain.BrandingLogo, transparentPNG(t, 16, 16))
-	_, err := r.uc.Complete(tenant.Into(context.Background(), communeB), domain.BrandingLogo, id, staffA)
+	id := r.staged(t, communeA, domain.BrandingLogo, transparentPNG(t, 16, 16))
+	_, err := r.uc.complete(tenant.Into(context.Background(), communeB), domain.BrandingLogo, id, staffA)
 	if !errors.Is(err, ErrBrandingFileNotFound) {
 		t.Fatalf("err = %v, want ErrBrandingFileNotFound", err)
 	}
 	// Completed as the BANNER: also not found (the file was issued for the logo).
-	_, err = r.uc.Complete(tenant.Into(context.Background(), communeA), domain.BrandingBanner, id, staffA)
+	_, err = r.uc.complete(tenant.Into(context.Background(), communeA), domain.BrandingBanner, id, staffA)
 	if !errors.Is(err, ErrBrandingFileNotFound) {
 		t.Fatalf("other image: err = %v, want ErrBrandingFileNotFound", err)
 	}
 	// Another officer of the same commune: not found either.
 	other := audit.Actor{ID: "CB-00999", Kind: "staff"}
-	_, err = r.uc.Complete(tenant.Into(context.Background(), communeA), domain.BrandingLogo, id, other)
+	_, err = r.uc.complete(tenant.Into(context.Background(), communeA), domain.BrandingLogo, id, other)
 	if !errors.Is(err, ErrBrandingFileNotFound) {
 		t.Fatalf("other officer: err = %v, want ErrBrandingFileNotFound", err)
 	}
@@ -618,9 +809,9 @@ func TestCompleteInAnotherCommuneIsNotFound(t *testing.T) {
 
 func TestCompleteOnSoftDeletedProfileRefusesAndPublishesNothing(t *testing.T) {
 	r := newRig(t)
-	id := r.upload(t, communeA, domain.BrandingLogo, transparentPNG(t, 16, 16))
+	id := r.staged(t, communeA, domain.BrandingLogo, transparentPNG(t, 16, 16))
 	r.profiles.rows[communeA] = &domain.ProfileBranding{Deleted: true}
-	_, err := r.uc.Complete(tenant.Into(context.Background(), communeA), domain.BrandingLogo, id, staffA)
+	_, err := r.uc.complete(tenant.Into(context.Background(), communeA), domain.BrandingLogo, id, staffA)
 	if !errors.Is(err, domain.ErrProfileDeleted) {
 		t.Fatalf("err = %v, want ErrProfileDeleted", err)
 	}
@@ -634,10 +825,10 @@ func TestAuditFailureRollsBackAndWithdrawsTheCopy(t *testing.T) {
 	// The audit INSERT of the completion is the LAST statement of its transaction. It fails → the whole
 	// transaction rolls back, and the public copy already made is undone (rule 6 inv 3; ADR 0052 §11).
 	r := newRig(t)
-	id := r.upload(t, communeA, domain.BrandingLogo, transparentPNG(t, 16, 16))
+	id := r.staged(t, communeA, domain.BrandingLogo, transparentPNG(t, 16, 16))
 	r.db.failOn = "INSERT INTO audit_log"
 	r.files.keyRolledBack = true
-	_, err := r.uc.Complete(tenant.Into(context.Background(), communeA), domain.BrandingLogo, id, staffA)
+	_, err := r.uc.complete(tenant.Into(context.Background(), communeA), domain.BrandingLogo, id, staffA)
 	if err == nil {
 		t.Fatal("audit failure did not fail the completion")
 	}
@@ -655,8 +846,8 @@ func decodeJPEGConfig(b []byte) (image.Config, error) { return jpeg.DecodeConfig
 func TestPublishFailureWritesNothing(t *testing.T) {
 	r := newRig(t)
 	r.objects.publishErr = errors.New("minio down")
-	id := r.upload(t, communeA, domain.BrandingBanner, transparentPNG(t, 16, 16))
-	_, err := r.uc.Complete(tenant.Into(context.Background(), communeA), domain.BrandingBanner, id, staffA)
+	id := r.staged(t, communeA, domain.BrandingBanner, transparentPNG(t, 16, 16))
+	_, err := r.uc.complete(tenant.Into(context.Background(), communeA), domain.BrandingBanner, id, staffA)
 	if !errors.Is(err, ErrBrandingPublishUnavailable) {
 		t.Fatalf("err = %v, want ErrBrandingPublishUnavailable", err)
 	}
@@ -667,8 +858,8 @@ func TestPublishFailureWritesNothing(t *testing.T) {
 
 func TestBannerDerivativeIs1600WideJPEG(t *testing.T) {
 	r := newRig(t)
-	id := r.upload(t, communeA, domain.BrandingBanner, transparentPNG(t, 800, 100))
-	f, err := r.uc.Complete(tenant.Into(context.Background(), communeA), domain.BrandingBanner, id, staffA)
+	id := r.staged(t, communeA, domain.BrandingBanner, transparentPNG(t, 800, 100))
+	f, err := r.uc.complete(tenant.Into(context.Background(), communeA), domain.BrandingBanner, id, staffA)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -689,8 +880,8 @@ func TestDecodeBombRefusedFromTheHeader(t *testing.T) {
 	b := buf.Bytes()
 	// Rewrite the IHDR height (bytes 20..23) to 9000 — the CRC is wrong, which the header read ignores.
 	b[20], b[21], b[22], b[23] = 0, 0, 0x23, 0x28
-	id := r.upload(t, communeA, domain.BrandingLogo, b)
-	_, err := r.uc.Complete(tenant.Into(context.Background(), communeA), domain.BrandingLogo, id, staffA)
+	id := r.staged(t, communeA, domain.BrandingLogo, b)
+	_, err := r.uc.complete(tenant.Into(context.Background(), communeA), domain.BrandingLogo, id, staffA)
 	var rej *BrandingRejection
 	if !errors.As(err, &rej) || (rej.Reason != BrandingRejectTooManyPixels && rej.Reason != BrandingRejectUndecodable) {
 		t.Fatalf("err = %v, want a too-many-pixels (or undecodable) rejection", err)
@@ -702,8 +893,8 @@ func TestDecodeBombRefusedFromTheHeader(t *testing.T) {
 func TestRemoveClearsAuditsWithdrawsAndIsIdempotent(t *testing.T) {
 	r := newRig(t)
 	ctx := tenant.Into(context.Background(), communeA)
-	id := r.upload(t, communeA, domain.BrandingLogo, transparentPNG(t, 16, 16))
-	f, err := r.uc.Complete(ctx, domain.BrandingLogo, id, staffA)
+	id := r.staged(t, communeA, domain.BrandingLogo, transparentPNG(t, 16, 16))
+	f, err := r.uc.complete(ctx, domain.BrandingLogo, id, staffA)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -739,8 +930,7 @@ func TestUnconfiguredStorageRefusesAndBuildsNoURL(t *testing.T) {
 	r := newRig(t)
 	r.uc.objects = nil
 	ctx := tenant.Into(context.Background(), communeA)
-	_, err := r.uc.RequestUpload(ctx, domain.BrandingLogo,
-		BrandingUploadRequest{FileName: "a.png", ContentType: storage.MIMEPNG, Size: 10}, staffA)
+	_, err := r.uc.Upload(ctx, domain.BrandingLogo, pngUpload(bytes.NewReader(make([]byte, 10)), 10), staffA)
 	if !errors.Is(err, ErrBrandingUploadNotConfigured) {
 		t.Fatalf("err = %v", err)
 	}
@@ -757,8 +947,8 @@ func TestUndoPublishLeavesACopyAConcurrentCompletionCommitted(t *testing.T) {
 	// THE LOCK and, seeing Y's key, leave the object alone.
 	r := newRig(t)
 	ctx := tenant.Into(context.Background(), communeA)
-	id := r.upload(t, communeA, domain.BrandingLogo, transparentPNG(t, 16, 16))
-	f, err := r.uc.Complete(ctx, domain.BrandingLogo, id, staffA) // plays Y: committed, key recorded
+	id := r.staged(t, communeA, domain.BrandingLogo, transparentPNG(t, 16, 16))
+	f, err := r.uc.complete(ctx, domain.BrandingLogo, id, staffA) // plays Y: committed, key recorded
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -779,9 +969,9 @@ func TestUndoPublishLeavesACopyAConcurrentCompletionCommitted(t *testing.T) {
 func TestUndoPublishWithdrawsAnUnrecordedCopyUnderTheLock(t *testing.T) {
 	r := newRig(t)
 	ctx := tenant.Into(context.Background(), communeA)
-	id := r.upload(t, communeA, domain.BrandingLogo, transparentPNG(t, 16, 16))
+	id := r.staged(t, communeA, domain.BrandingLogo, transparentPNG(t, 16, 16))
 	r.files.keyRolledBack = true // the completion's tx "rolls back": key never kept
-	if _, err := r.uc.Complete(ctx, domain.BrandingLogo, id, staffA); err != nil {
+	if _, err := r.uc.complete(ctx, domain.BrandingLogo, id, staffA); err != nil {
 		t.Fatal(err)
 	}
 	r.uc.undoPublish(ctx, domain.BrandingLogo, id)
@@ -794,11 +984,11 @@ func TestDecodeSlotBusyAnswers503AfterTheDeadlineAndIOIsOutsideTheSlot(t *testin
 	r := newRig(t)
 	r.uc.decodeWait = 50 * time.Millisecond
 	ctx := tenant.Into(context.Background(), communeA)
-	id := r.upload(t, communeA, domain.BrandingLogo, transparentPNG(t, 16, 16))
+	id := r.staged(t, communeA, domain.BrandingLogo, transparentPNG(t, 16, 16))
 
 	r.uc.decodeSlot <- struct{}{} // another commune's decode holds the slot
 	start := time.Now()
-	_, err := r.uc.Complete(ctx, domain.BrandingLogo, id, staffA)
+	_, err := r.uc.complete(ctx, domain.BrandingLogo, id, staffA)
 	<-r.uc.decodeSlot
 	if !errors.Is(err, ErrBrandingDecodeBusy) {
 		t.Fatalf("err = %v, want ErrBrandingDecodeBusy", err)
@@ -812,7 +1002,7 @@ func TestDecodeSlotBusyAnswers503AfterTheDeadlineAndIOIsOutsideTheSlot(t *testin
 			r.db.commits, len(r.objects.produced), len(r.objects.published))
 	}
 	// Retryable: with the slot free the same completion succeeds.
-	if _, err := r.uc.Complete(ctx, domain.BrandingLogo, id, staffA); err != nil {
+	if _, err := r.uc.complete(ctx, domain.BrandingLogo, id, staffA); err != nil {
 		t.Fatalf("retry after busy: %v", err)
 	}
 }

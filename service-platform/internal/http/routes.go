@@ -24,6 +24,7 @@ import (
 	"net/http"
 
 	"github.com/vihat/vigov/core/authz"
+	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
 )
 
@@ -34,7 +35,11 @@ type Deps struct {
 	Branding BrandingActs
 	// URLs turns a public key into its anonymous URL (app.Branding.PublicURL). Required.
 	URLs interface{ PublicURL(key string) string }
-	Log  *slog.Logger
+	// Uploads is the PROCESS's one per-pod upload cap (httpx.NewUploadSlots(httpx.UploadSlotsPerPod)),
+	// built once in cmd/server and shared by every upload route — a cap per route would multiply it.
+	// Required.
+	Uploads *httpx.UploadSlots
+	Log     *slog.Logger
 }
 
 // Register mounts the platform routes of the commune host.
@@ -42,10 +47,10 @@ type Deps struct {
 // It PANICS on a missing dependency, at startup: a nil Checker would make RequirePermission meet a nil
 // interface on the first request, and a nil use case a nil-pointer 500 nobody can explain.
 func Register(mux *http.ServeMux, d Deps) {
-	if d.Checker == nil || d.Branding == nil || d.URLs == nil || d.Log == nil {
-		panic("platform/http: Register thiếu phụ thuộc — Checker, Branding, URLs và Log đều bắt buộc")
+	if d.Checker == nil || d.Branding == nil || d.URLs == nil || d.Uploads == nil || d.Log == nil {
+		panic("platform/http: Register thiếu phụ thuộc — Checker, Branding, URLs, Uploads và Log đều bắt buộc")
 	}
-	h := &brandingHandlers{acts: d.Branding, urls: d.URLs, log: d.Log}
+	h := &brandingHandlers{acts: d.Branding, urls: d.URLs, slots: d.Uploads, log: d.Log}
 
 	// --- the commune's identity images: logo and web-admin banner (ADR 0069) -----------------------------
 	//
@@ -72,52 +77,47 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "admin.org")(
 			http.HandlerFunc(h.settings)))
 
-	// XIN TẢI LOGO — ADR 0052 §1a: a pending row and a presigned POST into the temp bucket (15 minutes).
-	// The limits are platform's own `tenant-logo` policy (2 MB, PNG/WebP/JPEG, migration 0016). A
-	// soft-deleted display profile refuses here (409), before anybody uploads.
+	// TẢI LOGO — ONE multipart request (ADR 0052 §Sửa đổi 09/10/2026): the file streams through this
+	// service into the temp bucket, then, in the same request, stat · sniff · the CURRENT policy · ClamAV
+	// · sha256 · promote to the private bucket · decode, orient, normalise to a 512 px square PNG KEEPING
+	// TRANSPARENCY · publish · point the profile at it · audit, in ONE transaction (saving is publishing,
+	// ADR 0069 #3). The previous logo's public copy is withdrawn after commit. Replies with the stored
+	// file. No presigned form and no `…/{id}/completion` route any more — both removed by that amendment.
 	//
-	// idem.Required(idem.MoKhiHong): a double submit issues a second pending row — one unused upload slot
-	// for 15 minutes, never a second published logo. A cache outage must not stop an administrator.
+	// BODY (multipart/form-data, parts IN THIS ORDER — core/httpx ReadUpload):
+	//   size       required  the file's byte count, decimal; over the `tenant-logo` cap → 413 before a
+	//                        byte of the file is read
+	//   file_name  optional  the name to keep (≤ 255 characters); absent → the file part's filename
+	//   file       required  LAST; its part Content-Type is the declared type (PNG / WebP / JPEG)
+	// Limits: platform's own `tenant-logo` policy (2 MB, PNG/WebP/JPEG, migration 0016). At most
+	// httpx.UploadSlotsPerPod uploads at once per pod (→ 503 upload_busy + Retry-After), 180 s to send.
 	//
-	// @summary  Xin tải logo xã — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút)
+	// Refusals: 400 malformed body / declaration · 408 too slow · 409 profile soft-deleted or file limit ·
+	// 413 too large · 415 not multipart · 422 infected, wrong sniffed type, undecodable, too many pixels ·
+	// 503 busy, or scanner / limits / object store down (nothing published, NEVER stored unscanned —
+	// ADR 0052 §9). A file that never arrived whole leaves its row `failed`, audited.
+	//
+	// idem.Required(idem.MoKhiHong): the same key replays the first answer. A double submit under two
+	// keys stores and publishes the image twice — the second becomes current and the first is withdrawn,
+	// never a broken profile. A cache outage must not stop an administrator.
+	//
+	// @summary  Tải logo xã (multipart: size, file_name?, file) — quét mã độc, chuẩn hoá PNG vuông 512px giữ nền trong, đăng và đặt làm logo hiện tại
 	// @screen   *(chưa có đặc tả — ADR 0069, Cấu hình › Nhận diện xã)*
-	// @request  brandingUploadIn
-	// @reply    201 brandingUploadOut
+	// @reply    201 brandingFileOut
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
+	// @reply    408 httpx.Error
 	// @reply    409 httpx.Error
+	// @reply    413 httpx.Error
+	// @reply    415 httpx.Error
+	// @reply    422 httpx.Error
 	// @reply    500 httpx.Error
 	// @reply    503 httpx.Error
 	mux.Handle("POST /api/v1/commune-branding/logo-uploads",
 		authz.RequirePermission(d.Checker, "admin.org")(
 			idem.Required(idem.MoKhiHong)(
-				http.HandlerFunc(h.requestLogoUpload))))
-
-	// HOÀN TẤT TẢI LOGO — stat · sniff · the CURRENT policy · ClamAV · sha256 · promote to the private
-	// bucket · decode, orient, normalise to a 512 px square PNG KEEPING TRANSPARENCY · publish · point the
-	// profile at it · audit, in ONE transaction (saving is publishing, ADR 0069 #3). The previous logo's
-	// public copy is withdrawn after commit. Only the officer the upload was issued to; anybody else's id
-	// answers 404. Infected, wrong type, too large, undecodable, too many pixels → 422. Scanner, limits or
-	// object store down → 503, nothing written, retryable, NEVER stored unscanned (ADR 0052 §9).
-	//
-	// idem.KhongCan: a second completion of a ready file answers that file and writes nothing; two in
-	// flight serialise on the row lock and the loser lands on the winner's row.
-	//
-	// @summary  Hoàn tất tải logo xã — quét mã độc, chuẩn hoá PNG vuông 512px giữ nền trong, đăng và đặt làm logo hiện tại
-	// @screen   *(chưa có đặc tả — ADR 0069, Cấu hình › Nhận diện xã)*
-	// @reply    200 brandingFileOut
-	// @reply    401 httpx.Error
-	// @reply    403 httpx.Error
-	// @reply    404 httpx.Error
-	// @reply    409 httpx.Error
-	// @reply    422 httpx.Error
-	// @reply    500 httpx.Error
-	// @reply    503 httpx.Error
-	mux.Handle("POST /api/v1/commune-branding/logo-uploads/{id}/completion",
-		authz.RequirePermission(d.Checker, "admin.org")(
-			idem.KhongCan("hoàn tất lần hai trên ảnh đã sẵn sàng trả lại đúng ảnh ấy và không ghi gì; hai lượt cùng lúc tuần tự hoá trên khoá dòng")(
-				http.HandlerFunc(h.completeLogoUpload))))
+				http.HandlerFunc(h.uploadLogo))))
 
 	// GỠ LOGO — the profile column set NULL + audit in one transaction; then the public copy is withdrawn
 	// and the file row SOFT-deleted (rule 7). The sidebar falls back to the building icon (ADR 0069 #7).
@@ -137,41 +137,28 @@ func Register(mux *http.ServeMux, d Deps) {
 			idem.KhongCan("gỡ ảnh chưa đặt không ghi gì và trả 204 như lần trước; dòng hồ sơ được khoá nên hai lượt gỡ cùng lúc chỉ ghi một vết")(
 				http.HandlerFunc(h.removeLogo))))
 
-	// XIN TẢI BANNER WEB-ADMIN — the same three steps as the logo, purpose `tenant-banner` (2 MB,
-	// PNG/WebP/JPEG). NOT the Mini App banner (comms, ADR 0069 #6).
+	// TẢI BANNER WEB-ADMIN — as the logo, purpose `tenant-banner` (2 MB, PNG/WebP/JPEG), same body
+	// (size · file_name? · file), same limits and refusals. The derivative is a JPEG exactly 1600 px wide
+	// (aspect kept, flattened onto white; never taller than 1600 px). NOT the Mini App banner (comms,
+	// ADR 0069 #6).
 	//
-	// @summary  Xin tải banner web-admin của xã — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút)
+	// @summary  Tải banner web-admin của xã (multipart: size, file_name?, file) — quét mã độc, chuẩn hoá rộng 1600px, đăng và đặt làm banner hiện tại
 	// @screen   *(chưa có đặc tả — ADR 0069, Cấu hình › Nhận diện xã)*
-	// @request  brandingUploadIn
-	// @reply    201 brandingUploadOut
+	// @reply    201 brandingFileOut
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
+	// @reply    408 httpx.Error
 	// @reply    409 httpx.Error
+	// @reply    413 httpx.Error
+	// @reply    415 httpx.Error
+	// @reply    422 httpx.Error
 	// @reply    500 httpx.Error
 	// @reply    503 httpx.Error
 	mux.Handle("POST /api/v1/commune-branding/banner-uploads",
 		authz.RequirePermission(d.Checker, "admin.org")(
 			idem.Required(idem.MoKhiHong)(
-				http.HandlerFunc(h.requestBannerUpload))))
-
-	// HOÀN TẤT TẢI BANNER — as the logo's completion; the derivative is a JPEG exactly 1600 px wide
-	// (aspect kept, flattened onto white; never taller than 1600 px).
-	//
-	// @summary  Hoàn tất tải banner web-admin — quét mã độc, chuẩn hoá rộng 1600px, đăng và đặt làm banner hiện tại
-	// @screen   *(chưa có đặc tả — ADR 0069, Cấu hình › Nhận diện xã)*
-	// @reply    200 brandingFileOut
-	// @reply    401 httpx.Error
-	// @reply    403 httpx.Error
-	// @reply    404 httpx.Error
-	// @reply    409 httpx.Error
-	// @reply    422 httpx.Error
-	// @reply    500 httpx.Error
-	// @reply    503 httpx.Error
-	mux.Handle("POST /api/v1/commune-branding/banner-uploads/{id}/completion",
-		authz.RequirePermission(d.Checker, "admin.org")(
-			idem.KhongCan("hoàn tất lần hai trên ảnh đã sẵn sàng trả lại đúng ảnh ấy và không ghi gì; hai lượt cùng lúc tuần tự hoá trên khoá dòng")(
-				http.HandlerFunc(h.completeBannerUpload))))
+				http.HandlerFunc(h.uploadBanner))))
 
 	// GỠ BANNER — as removing the logo; web-admin then draws no strip (ADR 0069 #7).
 	//

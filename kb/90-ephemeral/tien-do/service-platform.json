@@ -318,6 +318,13 @@
       "viec": "Ghi log INFO mọi lần từ chối 409/422 khi tải tệp: ảnh nhận diện xã — logo, banner (brandingHandlers.answerError; 409 profile_deleted giữ dòng WARN có sẵn) — 09/10 thiếu bucket temp trả 409 mà log không nói gì",
       "bang_chung": "(commit này) — fileRefusalLog: xa, viec, tep_id, ma_loi, err (không tên tệp). http/branding.go; ca kiểm http/branding_refusal_log_test.go. go vet + go test internal/http, internal/app xanh",
       "tiep_theo": "Lỗi 'chưa nhận được / hết hạn' ở service này chưa bọc chi tiết khoá temp/private như petitions"
+    },
+    {
+      "id": "tai-len-qua-service-branding",
+      "trang_thai": "xong",
+      "viec": "ADR 0052 §Sửa đổi 09/10/2026 thẻ F: logo/banner xã tải lên bằng MỘT lệnh multipart qua service-platform (size, file_name?, file) → 201 tệp đã lưu; bỏ …/completion; 4 lượt/pod; ghi luồng hỏng → dòng failed + xoá tạm (động từ trail mới tai_anh_nhan_dien_xa_khong_thanh); 413 file_too_large, 408, 415, 503 upload_busy",
+      "bang_chung": "(commit này) — go vet + go test ./... service-platform xanh (phiên chính chạy lại); ca 401/403/403-sai-xã/201 cho 5 tuyến",
+      "tiep_theo": "web-admin (commune-branding.ts) CHƯA chuyển — tải logo/banner hỏng nếu triển khai platform trước web-admin (đợt 3). openapi.json/schema.gen.ts chưa sinh lại. Dòng pending khi bước hoàn tất trả 503 (máy quét/xử lý ảnh bận) không còn tuyến thử lại: cán bộ tải lại, dòng cũ hết tính sau UploadTTL."
     }
   ]
 }

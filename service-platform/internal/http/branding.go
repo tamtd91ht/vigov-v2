@@ -3,19 +3,22 @@ package http
 // THE COMMUNE'S IDENTITY IMAGES (ADR 0069) — the HTTP half of internal/app/branding.go. The routes are
 // declared in routes.go; these handlers DECIDE NOTHING, they translate the use case's answer.
 //
-// ⚠ THE REPLY OF AN UPLOAD REQUEST CARRIES A BEARER CREDENTIAL (the presigned POST form). It goes to the
-// client and nowhere else: no handler here logs a reply, a URL, a form field or a file name.
+// AN UPLOAD IS ONE multipart REQUEST (ADR 0052 §Sửa đổi 09/10/2026). No handler here logs a field value, a file
+// name or file content (rule 3): a file name is often a person's name.
 
 import (
 	"context"
 	"errors"
 	"log/slog"
+	"mime"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/httpx"
+	"github.com/vihat/vigov/core/storage"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-platform/internal/app"
 	"github.com/vihat/vigov/service-platform/internal/domain"
@@ -25,9 +28,9 @@ import (
 // the routes' permission suite runs without MinIO, clamd or PostgreSQL.
 type BrandingActs interface {
 	Settings(ctx context.Context) (app.BrandingSettings, error)
-	RequestUpload(ctx context.Context, img domain.BrandingImage, req app.BrandingUploadRequest,
-		actor audit.Actor) (app.BrandingUpload, error)
-	Complete(ctx context.Context, img domain.BrandingImage, id string, actor audit.Actor) (domain.StoredFile, error)
+	MaxUploadBytes(ctx context.Context, img domain.BrandingImage) (int64, error)
+	Upload(ctx context.Context, img domain.BrandingImage, req app.BrandingUploadRequest,
+		actor audit.Actor) (domain.StoredFile, error)
 	Remove(ctx context.Context, img domain.BrandingImage, actor audit.Actor) (bool, error)
 }
 
@@ -42,15 +45,9 @@ type brandingSettingsOut struct {
 	UpdatedBy string     `json:"updated_by,omitempty"`
 }
 
-// brandingUploadIn is what the browser declares before it uploads. CHECKED against platform's
-// `tenant-logo` / `tenant-banner` policy here, and the bytes are checked again at completion.
-//
-// ⚠ `file_name` CAN NAME A PERSON (rule 3): stored, never logged, never in an object key.
-type brandingUploadIn struct {
-	FileName    string `json:"file_name"`
-	ContentType string `json:"content_type"`
-	Size        int64  `json:"size"`
-}
+// brandingFileNameField is the optional text part naming the file; absent, the file part's own filename
+// is used. ⚠ IT CAN NAME A PERSON (rule 3): stored, never logged, never in an object key.
+const brandingFileNameField = "file_name"
 
 // brandingFileOut is one uploaded file as staff see it. No object key, no uploader, no file name.
 type brandingFileOut struct {
@@ -66,24 +63,12 @@ type brandingFileOut struct {
 	PublicURL string `json:"public_url"`
 }
 
-// brandingUploadOut is the reply of an upload request. `upload` is the form: every `fields` entry as a
-// form field, then the file as the LAST field named `file`, POSTed to `url`; valid until `expires_at`.
-type brandingUploadOut struct {
-	File   brandingFileOut       `json:"file"`
-	Upload brandingPresignedPost `json:"upload"`
-}
-
-// brandingPresignedPost is a presigned POST into the temp bucket (15 minutes, ADR 0052 §1a).
-type brandingPresignedPost struct {
-	URL       string            `json:"url"`
-	Fields    map[string]string `json:"fields"`
-	ExpiresAt time.Time         `json:"expires_at"`
-}
-
 type brandingHandlers struct {
 	acts BrandingActs
 	urls interface{ PublicURL(key string) string }
-	log  *slog.Logger
+	// slots is the PROCESS's one httpx.UploadSlots, shared with every other upload route it may grow.
+	slots *httpx.UploadSlots
+	log   *slog.Logger
 }
 
 func (h *brandingHandlers) fileOut(f domain.StoredFile) brandingFileOut {
@@ -122,20 +107,12 @@ func (h *brandingHandlers) settings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-func (h *brandingHandlers) requestLogoUpload(w http.ResponseWriter, r *http.Request) {
-	h.requestUpload(w, r, domain.BrandingLogo)
+func (h *brandingHandlers) uploadLogo(w http.ResponseWriter, r *http.Request) {
+	h.upload(w, r, domain.BrandingLogo)
 }
 
-func (h *brandingHandlers) requestBannerUpload(w http.ResponseWriter, r *http.Request) {
-	h.requestUpload(w, r, domain.BrandingBanner)
-}
-
-func (h *brandingHandlers) completeLogoUpload(w http.ResponseWriter, r *http.Request) {
-	h.complete(w, r, domain.BrandingLogo)
-}
-
-func (h *brandingHandlers) completeBannerUpload(w http.ResponseWriter, r *http.Request) {
-	h.complete(w, r, domain.BrandingBanner)
+func (h *brandingHandlers) uploadBanner(w http.ResponseWriter, r *http.Request) {
+	h.upload(w, r, domain.BrandingBanner)
 }
 
 func (h *brandingHandlers) removeLogo(w http.ResponseWriter, r *http.Request) {
@@ -146,43 +123,57 @@ func (h *brandingHandlers) removeBanner(w http.ResponseWriter, r *http.Request) 
 	h.remove(w, r, domain.BrandingBanner)
 }
 
-func (h *brandingHandlers) requestUpload(w http.ResponseWriter, r *http.Request, img domain.BrandingImage) {
-	var in brandingUploadIn
-	if !decodeBody(w, r, &in) {
-		return
-	}
+// upload is one image upload, in core/httpx/upload.go's order: the actor, a slot (before a byte is
+// read), the cap from the CURRENT policy, the envelope (ReadUpload), then the use case, which streams the
+// file into the temp bucket, confirms the transport (Finish) and completes. 201 with the stored file.
+func (h *brandingHandlers) upload(w http.ResponseWriter, r *http.Request, img domain.BrandingImage) {
+	const what = "tải ảnh nhận diện"
 	actor, ok := staffActor(r)
 	if !ok {
 		h.missingPrincipal(w, r)
 		return
 	}
-	up, err := h.acts.RequestUpload(r.Context(), img, app.BrandingUploadRequest{
-		FileName: in.FileName, ContentType: in.ContentType, Size: in.Size,
+	release, ok := h.slots.Acquire(r.Context())
+	defer release()
+	if !ok {
+		h.log.InfoContext(r.Context(), "nhận diện xã: hết lượt tải đồng thời của pod — trả 503",
+			"xa", string(tenant.MustFrom(r.Context())), "viec", what, "ma_loi", httpx.UploadBusyCode)
+		httpx.WriteUploadBusy(w, "")
+		return
+	}
+	maxBytes, err := h.acts.MaxUploadBytes(r.Context(), img)
+	if err != nil {
+		h.answerError(w, r, what, err)
+		return
+	}
+	up, err := httpx.ReadUpload(w, r, httpx.UploadOptions{MaxFileBytes: maxBytes, Fields: []string{brandingFileNameField}})
+	if err != nil {
+		h.answerError(w, r, what, err)
+		return
+	}
+	name := up.Fields[brandingFileNameField]
+	if name == "" {
+		name = up.Filename
+	}
+	f, err := h.acts.Upload(r.Context(), img, app.BrandingUploadRequest{
+		FileName: name, ContentType: declaredType(up.ContentType), Size: up.Size,
+		Body: up.File, Deadline: up.Deadline, Received: up.Finish,
 	}, actor)
 	if err != nil {
-		h.answerError(w, r, "xin tải ảnh nhận diện", err)
+		h.answerError(w, r, what, err)
 		return
 	}
-	// A form is a bearer credential: no cache between here and the officer's browser keeps it.
-	noStore(w)
-	writeJSON(w, http.StatusCreated, brandingUploadOut{
-		File:   h.fileOut(up.File),
-		Upload: brandingPresignedPost{URL: up.Post.URL, Fields: up.Post.Fields, ExpiresAt: up.Post.ExpiresAt},
-	})
+	writeJSON(w, http.StatusCreated, h.fileOut(f))
 }
 
-func (h *brandingHandlers) complete(w http.ResponseWriter, r *http.Request, img domain.BrandingImage) {
-	actor, ok := staffActor(r)
-	if !ok {
-		h.missingPrincipal(w, r)
-		return
-	}
-	f, err := h.acts.Complete(r.Context(), img, r.PathValue("id"), actor)
+// declaredType is the file part's Content-Type without parameters, lower-cased — a hint only (the
+// completion sniffs the bytes), but the policy matches it exactly. Unparseable → "", refused as a type.
+func declaredType(raw string) string {
+	mt, _, err := mime.ParseMediaType(raw)
 	if err != nil {
-		h.answerError(w, r, "hoàn tất ảnh nhận diện", err)
-		return
+		return ""
 	}
-	writeJSON(w, http.StatusOK, h.fileOut(f))
+	return strings.ToLower(mt)
 }
 
 func (h *brandingHandlers) remove(w http.ResponseWriter, r *http.Request, img domain.BrandingImage) {
@@ -214,23 +205,53 @@ var brandingRejectionSentences = map[string]string{
 	app.BrandingRejectTooManyPixels:  "Ảnh bị từ chối: ảnh có kích thước điểm ảnh quá lớn để xử lý. Hãy thu nhỏ ảnh rồi tải lên lại.",
 }
 
-// fileRefusalLog returns the INFO line every 409/422 of an upload route writes. The client reads a fixed
-// sentence, so without it an operator cannot tell "the upload never arrived" from "it arrived in a store
-// this service does not read" (09/10/2026, a missing temp bucket — petitions' fileRefusalLog). INFO and
-// `ma_loi`, as petitions' tuChoiXuLy: a refusal is the rule doing its job. Commune, file id, code and the
-// wrapped error only — those errors name the commune and object keys, never a file name (rule 3).
+// fileRefusalLog returns the INFO line every refusal of an upload that is the client's or the file's
+// (408/409/413/415/422, and the 400s of the transport) writes. The client reads a fixed sentence, so
+// without it an operator cannot tell "the upload never arrived" from "it arrived in a store this service
+// does not read" (09/10/2026, a missing temp bucket — petitions' fileRefusalLog). INFO and `ma_loi`, as
+// petitions' tuChoiXuLy: a refusal is the rule doing its job. Commune, code and the wrapped error only —
+// the use case's errors name the file id (Upload wraps every error after the row exists) and object
+// keys, never a file name; httpx's never carry a client value (rule 3).
 func fileRefusalLog(r *http.Request, log *slog.Logger, msg, what string, err error) func(code string) {
 	ctx := r.Context()
 	return func(code string) {
-		log.InfoContext(ctx, msg, "xa", string(tenant.MustFrom(ctx)), "viec", what,
-			"tep_id", r.PathValue("id"), "ma_loi", code, "err", err)
+		log.InfoContext(ctx, msg, "xa", string(tenant.MustFrom(ctx)), "viec", what, "ma_loi", code, "err", err)
 	}
+}
+
+// answerUploadTransport answers the refusals of the request body itself — httpx's sentinels, and
+// storage's when the stream did not match its declaration. false = err is none of them.
+func answerUploadTransport(w http.ResponseWriter, err error, refused func(code string)) bool {
+	var status int
+	var code, sentence string
+	switch st := httpx.UploadErrorStatus(err); {
+	case st == http.StatusUnsupportedMediaType:
+		status, code, sentence = st, "unsupported_media_type",
+			"Ảnh phải được gửi dạng multipart/form-data."
+	case st == http.StatusRequestEntityTooLarge, errors.Is(err, storage.ErrTooLarge), errors.Is(err, app.ErrBrandingTooLarge):
+		status, code, sentence = http.StatusRequestEntityTooLarge, "file_too_large",
+			"Ảnh lớn hơn dung lượng tối đa được phép."
+	case st == http.StatusRequestTimeout:
+		status, code, sentence = st, "upload_timeout",
+			"Tải ảnh lên quá thời gian cho phép nên ảnh CHƯA được nhận. Vui lòng kiểm tra kết nối rồi tải lên lại."
+	case st == http.StatusBadRequest, errors.Is(err, storage.ErrSizeMismatch):
+		status, code, sentence = http.StatusBadRequest, "invalid_upload",
+			"Tệp gửi lên không trọn vẹn hoặc sai định dạng nên ảnh CHƯA được nhận. Vui lòng chọn ảnh và tải lên lại."
+	default:
+		return false
+	}
+	refused(code)
+	httpx.WriteError(w, status, code, sentence, "")
+	return true
 }
 
 // answerError maps the use case's refusals. 503 for everything that is "not now" rather than "no":
 // storage / scanner / limits not configured or unreachable — nothing was stored in any of them.
 func (h *brandingHandlers) answerError(w http.ResponseWriter, r *http.Request, what string, err error) {
 	refused := fileRefusalLog(r, h.log, "nhận diện xã: từ chối", what, err)
+	if answerUploadTransport(w, err, refused) {
+		return
+	}
 	var rej *app.BrandingRejection
 	switch {
 	case errors.Is(err, app.ErrBrandingFileNotFound):
@@ -240,12 +261,9 @@ func (h *brandingHandlers) answerError(w http.ResponseWriter, r *http.Request, w
 			"Tên tệp không hợp lệ — cần có tên, không quá 255 ký tự và không chứa ký tự điều khiển.", "")
 	case errors.Is(err, domain.ErrBrandingSizeInvalid):
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", "Kích thước tệp khai báo không hợp lệ.", "")
-	case errors.Is(err, app.ErrBrandingTypeNotAllowed):
+	case errors.Is(err, app.ErrBrandingTypeNotAllowed), errors.Is(err, storage.ErrTypeNotAllowed):
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
 			"Loại tệp này không được phép. Hãy chọn ảnh PNG, WebP hoặc JPEG.", "")
-	case errors.Is(err, app.ErrBrandingTooLarge):
-		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
-			"Ảnh lớn hơn dung lượng tối đa được phép.", "")
 	case errors.As(err, &rej):
 		sentence, ok := brandingRejectionSentences[rej.Reason]
 		if !ok {
@@ -266,19 +284,11 @@ func (h *brandingHandlers) answerError(w http.ResponseWriter, r *http.Request, w
 	case errors.Is(err, app.ErrBrandingNotPending):
 		refused("upload_state")
 		httpx.WriteError(w, http.StatusConflict, "upload_state",
-			"Ảnh này đã bị từ chối hoặc lượt tải đã hết hạn. Hãy chọn ảnh và tải lên lại.", "")
-	case errors.Is(err, app.ErrBrandingUploadNotReceived):
-		refused("upload_not_received")
-		httpx.WriteError(w, http.StatusConflict, "upload_not_received",
-			"Chưa nhận được tệp. Hãy chờ tải lên xong rồi bấm hoàn tất lại.", "")
-	case errors.Is(err, app.ErrBrandingUploadExpired):
-		refused("upload_expired")
-		httpx.WriteError(w, http.StatusConflict, "upload_expired",
-			"Lượt tải lên đã hết hạn mà chưa nhận được tệp. Hãy chọn ảnh và tải lên lại.", "")
+			"Ảnh này vừa được xử lý ở một lượt khác. Hãy tải lại trang để xem ảnh hiện tại.", "")
 	case errors.Is(err, app.ErrBrandingUploadChanged):
 		refused("upload_changed")
 		httpx.WriteError(w, http.StatusConflict, "upload_changed",
-			"Tệp vừa bị thay đổi trong lúc kiểm tra. Hãy bấm hoàn tất lại.", "")
+			"Tệp vừa bị thay đổi trong lúc kiểm tra nên ảnh CHƯA được nhận. Hãy tải ảnh lên lại.", "")
 	case errors.Is(err, app.ErrBrandingUploadNotConfigured):
 		h.log.Warn("CẢNH BÁO: từ chối ảnh nhận diện vì chưa cấu hình kho lưu tệp / máy quét / giới hạn",
 			"xa", string(tenant.MustFrom(r.Context())), "viec", what, "err", err)
@@ -298,7 +308,7 @@ func (h *brandingHandlers) answerError(w http.ResponseWriter, r *http.Request, w
 		h.log.Warn("nhận diện xã: hết chờ lượt xử lý ảnh — trả 503, không ghi gì",
 			"xa", string(tenant.MustFrom(r.Context())), "viec", what)
 		httpx.WriteError(w, http.StatusServiceUnavailable, "image_processing_busy",
-			"Hệ thống đang xử lý ảnh khác nên ảnh CHƯA được nhận. Vui lòng bấm hoàn tất lại sau ít giây.", "")
+			"Hệ thống đang xử lý ảnh khác nên ảnh CHƯA được nhận. Vui lòng tải ảnh lên lại sau ít giây.", "")
 	case errors.Is(err, app.ErrBrandingPublishUnavailable):
 		h.log.Warn("CẢNH BÁO: chưa đăng được ảnh nhận diện lên kho công khai — không ghi gì",
 			"xa", string(tenant.MustFrom(r.Context())), "viec", what, "err", err)
