@@ -129,7 +129,10 @@ func may(t *testing.T, sua func(*Deps)) (*Server, *bytes.Buffer) {
 		// The register display reads. Fakes in reference_names_test.go; they answer NOTHING by default.
 		OrgUnitNames:   &orgUnitNameFake{},
 		TaskBlocLabels: &taskBlocLabelFake{},
-		Quyen:          quyenGia{quyen: []authz.Perm{"admin.user", "task.extend"}},
+		// The residential-unit reads. Fake in residential_units_test.go; it answers NOTHING by default.
+		ResidentialUnits:     &residentialUnitFake{},
+		ResidentialUnitNames: &residentialUnitFake{},
+		Quyen:                quyenGia{quyen: []authz.Perm{"admin.user", "task.extend"}},
 		// The citizen session registry — a default that answers successfully, like every other
 		// collaborator here, so a test about ResolveCitizenSession overrides only the one thing it
 		// is about. Its fakes live in phien_cong_dan_test.go, beside the handler they exercise.
@@ -589,29 +592,31 @@ func TestNewServerTuChoiNoiDayKhongDu(t *testing.T) {
 	}
 	du := func() Deps {
 		return Deps{
-			Signer:             ky,
-			Phien:              &phienGia{},
-			IdleSessions:       &idleRevokerFake{},
-			CanBo:              canBoGia{},
-			Lo:                 &loGia{},
-			Ten:                &tenGia{},
-			GiaoViec:           &giaoViecGia{},
-			OrgUnits:           &orgUnitFake{},
-			OrgUnitNames:       &orgUnitNameFake{},
-			TaskBlocLabels:     &taskBlocLabelFake{},
-			Quyen:              quyenGia{},
-			PhienCongDan:       &phienCongDanGia{},
-			Communes:           &communesFake{},
-			Lich:               &lichGia{},
-			NghiLe:             &nghiLeGia{},
-			LamBu:              &lamBuGia{},
-			SLA:                &slaGia{},
-			CitizenLetterRules: &letterRulesFake{},
-			Recipients:         &recipientsFake{},
-			PermissionKeys:     &keysFake{},
-			Automation:         &automationFake{},
-			ContactPhones:      &contactPhoneFake{},
-			Log:                slog.New(slog.NewTextHandler(io.Discard, nil)),
+			Signer:               ky,
+			Phien:                &phienGia{},
+			IdleSessions:         &idleRevokerFake{},
+			CanBo:                canBoGia{},
+			Lo:                   &loGia{},
+			Ten:                  &tenGia{},
+			GiaoViec:             &giaoViecGia{},
+			OrgUnits:             &orgUnitFake{},
+			OrgUnitNames:         &orgUnitNameFake{},
+			TaskBlocLabels:       &taskBlocLabelFake{},
+			ResidentialUnits:     &residentialUnitFake{},
+			ResidentialUnitNames: &residentialUnitFake{},
+			Quyen:                quyenGia{},
+			PhienCongDan:         &phienCongDanGia{},
+			Communes:             &communesFake{},
+			Lich:                 &lichGia{},
+			NghiLe:               &nghiLeGia{},
+			LamBu:                &lamBuGia{},
+			SLA:                  &slaGia{},
+			CitizenLetterRules:   &letterRulesFake{},
+			Recipients:           &recipientsFake{},
+			PermissionKeys:       &keysFake{},
+			Automation:           &automationFake{},
+			ContactPhones:        &contactPhoneFake{},
+			Log:                  slog.New(slog.NewTextHandler(io.Discard, nil)),
 		}
 	}
 
@@ -636,6 +641,10 @@ func TestNewServerTuChoiNoiDayKhongDu(t *testing.T) {
 		// Missing either is a task register that cannot print its unit or bloc columns.
 		"thiếu kho tên bộ phận":        func(d *Deps) { d.OrgUnitNames = nil },
 		"thiếu kho nhãn khối nhiệm vụ": func(d *Deps) { d.TaskBlocLabels = nil },
+		// Missing the first is every petition naming a hamlet answering 503; missing the second is
+		// petitions that cannot print their hamlet (ADR 0088).
+		"missing active residential units": func(d *Deps) { d.ResidentialUnits = nil },
+		"missing residential unit names":   func(d *Deps) { d.ResidentialUnitNames = nil },
 		// Missing it is not "one RPC unavailable": every OTHER service's citizen edge is built on
 		// this one lookup, so the whole citizen channel of the platform goes with it.
 		"thiếu sổ phiên công dân": func(d *Deps) { d.PhienCongDan = nil },

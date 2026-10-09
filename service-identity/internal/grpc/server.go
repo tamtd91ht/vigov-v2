@@ -208,6 +208,13 @@ type Deps struct {
 	OrgUnitNames   OrgUnitNamer
 	TaskBlocLabels TaskBlocLabeler
 
+	// The residential-unit reads (residential_units.go, ADR 0088). TWO FIELDS for the reason
+	// OrgUnits and OrgUnitNames are two: ResidentialUnits is the DECISION read (live AND in use) a
+	// petition write trusts; ResidentialUnitNames answers out-of-use and removed units for printouts.
+	// Both are *idstore.ThonToDanPhoStore in production.
+	ResidentialUnits     ActiveResidentialUnitReader
+	ResidentialUnitNames ResidentialUnitNamer
+
 	// The CITIZEN session registry, read by ResolveCitizenSession and by nothing else here.
 	//
 	// A SEPARATE FIELD FROM Phien, AND THE TWO MUST NEVER BE MERGED — the same discipline
@@ -308,6 +315,10 @@ func NewServer(d Deps) *Server {
 		panic("identity/grpc: thiếu kho tên bộ phận — ResolveOrgUnitNames sẽ panic, và sổ theo dõi nhiệm vụ không in được tên bộ phận")
 	case d.TaskBlocLabels == nil:
 		panic("identity/grpc: thiếu kho nhãn khối nhiệm vụ — ResolveTaskBlocLabels sẽ panic, và sổ theo dõi nhiệm vụ không in được nhãn khối")
+	case d.ResidentialUnits == nil:
+		panic("identity/grpc: thiếu kho thôn / tổ dân phố đang dùng — ResolveActiveResidentialUnits sẽ panic, và mọi phản ánh ghi thôn phải trả 503")
+	case d.ResidentialUnitNames == nil:
+		panic("identity/grpc: thiếu kho tên thôn / tổ dân phố — ResolveResidentialUnitNames sẽ panic, và phản ánh không in được tên thôn")
 	case d.Quyen == nil:
 		panic("identity/grpc: thiếu kho quyền — ResolveStaffPrincipal sẽ trả principal rỗng quyền, không phân biệt được với người thật sự không có quyền")
 	case d.PhienCongDan == nil:

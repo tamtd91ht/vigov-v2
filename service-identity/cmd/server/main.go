@@ -674,6 +674,11 @@ func run(log *slog.Logger) error {
 		// ResolveTaskBlocLabels). Same stores, separate fields: these answer removed rows on purpose.
 		OrgUnitNames:   boPhan,
 		TaskBlocLabels: khoiNhiemVu,
+		// The residential-unit reads (ADR 0088): the SAME *idstore.ThonToDanPhoStore that serves GET
+		// /api/v1/residential-units, two fields — the decision read (live AND in use) and the display
+		// read (out-of-use and removed units answered) must never be one.
+		ResidentialUnits:     thonToDanPho,
+		ResidentialUnitNames: thonToDanPho,
 		// The SAME *idstore.Checker that guards every route, through its QuyenCua method. One
 		// grant predicate for the guard and for the principal: a second one would drift, and
 		// drift in either direction is a defect with no error attached.

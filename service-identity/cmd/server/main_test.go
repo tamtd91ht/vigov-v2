@@ -160,6 +160,17 @@ func (taskBlocLabelFake) LabelsByCode(context.Context, []string) ([]domain.TaskB
 	return nil, nil
 }
 
+// residentialUnitWiringFake answers no unit — the predicates are defended in internal/store and
+// internal/grpc.
+type residentialUnitWiringFake struct{}
+
+func (residentialUnitWiringFake) ActiveUnitsByID(context.Context, []string) ([]domain.ActiveResidentialUnit, error) {
+	return nil, nil
+}
+func (residentialUnitWiringFake) UnitNamesByID(context.Context, []string) ([]domain.ResidentialUnitName, error) {
+	return nil, nil
+}
+
 func noiDayGia(t *testing.T) svcgrpc.Deps {
 	t.Helper()
 	ky, err := token.NewSigner([]secret.Secret{khoaKyGia})
@@ -182,7 +193,10 @@ func noiDayGia(t *testing.T) svcgrpc.Deps {
 		// Answer nothing — the register display reads only need to be wired for NewServer to build.
 		OrgUnitNames:   orgUnitFake{},
 		TaskBlocLabels: taskBlocLabelFake{},
-		Quyen:          quyenGia{},
+		// Answer nothing — the residential-unit reads only need to be wired for NewServer to build.
+		ResidentialUnits:     residentialUnitWiringFake{},
+		ResidentialUnitNames: residentialUnitWiringFake{},
+		Quyen:                quyenGia{},
 		// Required, or NewServer refuses to build: every OTHER service's citizen edge is built on
 		// this one lookup (svcgrpc.Deps.PhienCongDan).
 		PhienCongDan: phienCongDanGia{},
