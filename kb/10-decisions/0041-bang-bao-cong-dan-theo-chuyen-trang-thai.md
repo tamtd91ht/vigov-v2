@@ -9,6 +9,8 @@ owns_facts:
   - "phiếu phản ánh chuyển VÀO trạng thái nào thì người dân được báo, trạng thái nào thì không — và vì sao"
   - "những gì không bao giờ được đi trong lời báo cho người dân về phiếu phản ánh"
   - "vì sao luật 10 bất biến 5 đọc là 'mọi chuyển trạng thái trong bảng báo', không phải 'mọi chuyển trạng thái'"
+  - "lời báo lúc gộp phiếu phụ vào phiếu chính (một tin, cho người dân của phiếu phụ) và lời báo riêng của từng phiếu phụ khi phiếu chính kết thúc (chủ dự án, 09/10/2026; mô hình gộp: ADR 0087)"
+  - "nhật ký xử lý của phiếu phản ánh luôn là nội bộ: không có cờ công khai, không dòng nào đi tới người dân (chủ dự án, 09/10/2026)"
 ---
 
 # 0041. Báo người dân theo bảng chuyển trạng thái, không phải mọi bước
@@ -16,6 +18,8 @@ owns_facts:
 **Trạng thái:** đã chốt · **Ngày:** 2026-09-24 · **Người dùng chốt** (cổng xác nhận của lượt
 `/develop-feature Phản ánh người dân`, chọn theo khuyến nghị của chuyên gia nghiệp vụ) · Dựng ở
 commit `43250a9`
+**Sửa đổi 09/10/2026:** thêm lời báo của gộp phiếu trùng (ADR 0087) và chốt nhật ký xử lý luôn nội bộ
+(§Sửa đổi 09/10/2026, cuối tệp).
 
 ## Bối cảnh
 
@@ -102,3 +106,33 @@ ghi nhận.
 | 2 | `khong-tiep-nhan`, `chuyen-cap-tren`: lý do, cơ quan tiếp nhận, nơi đi tiếp chưa có cột nào giữ. Ai dựng tuyến phải quyết lưu ở đâu và cái nào được đi trong tin | người dựng tuyến |
 | 3 | Mở lại và gia hạn không phải trạng thái đích riêng, nên bảng khoá theo trạng thái không biểu diễn được. Ai dựng phải mở rộng cơ chế, không thêm danh sách thứ hai. 28/09/2026 → ADR 0050: mở lại do dân chấm thấp nay là việc có thật, không còn "tương lai" | người dựng tuyến |
 | 4 | **Chưa gửi được thật.** Chưa có relay outbox / client Kafka (luật 11 điều kiện dừng #1); chưa có mẫu ZNS theo xã (ADR 0018) | người dùng |
+
+## Sửa đổi 09/10/2026 — gộp phiếu trùng và nhật ký xử lý
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. **Người quyết:** chủ dự án,
+09/10/2026, trong phiên chính (`/fix-web-admin --menu=phan-anh-nguoi-dan`), qua phiếu hỏi. **Chưa dựng.**
+Đây là **đổi bảng** — điều kiện dừng #3 của luật 10 — nên được ghi kèm người quyết.
+
+### Lời báo khi gộp (mô hình: ADR 0087)
+
+| Sự kiện | Ai nhận | Lời báo mang |
+|---|---|---|
+| Phiếu bị gộp vào phiếu chính | Người dân của **phiếu phụ**, **một** tin | Ý: *"Phiếu của anh/chị đã được ghép với phản ánh cùng vụ việc, kết quả sẽ báo khi xử lý xong."* Mã tra cứu của **chính** phiếu ấy. **Không** mã, nội dung, ảnh hay người gửi của phiếu chính (luật 4) |
+| Phiếu chính vào `cho-dan-xac-nhan` / `da-dong` | Người dân của **từng** phiếu phụ, mỗi người một tin | Đúng dòng `cho-dan-xac-nhan` / `da-dong` của bảng trên, theo **phiếu của mình**, cùng câu kết quả |
+| Tách phiếu | — | **Chưa quyết** có báo hay không — hỏi khi dựng |
+
+**Câu chữ cuối cùng** của tin lúc gộp **chưa chốt**: câu trên là ý chủ dự án duyệt, không phải mẫu ZNS.
+Mẫu theo xã (ADR 0018) khi dựng phải đưa chủ dự án duyệt câu và ghi lại ở đây.
+
+Tin lúc gộp **không** gắn với trạng thái đích — cùng hình dạng việc còn mở #3 (mở lại, gia hạn): mở
+rộng cơ chế `loiNhanChoDan`, **không** thêm danh sách thứ hai. Phiếu `can-bo` không bao giờ bị gộp
+(ADR 0087 §5), nên không có tin gộp nào cho lĩnh vực ấy.
+
+### Nhật ký xử lý luôn nội bộ
+
+Bổ sung danh sách **Không bao giờ gửi**: **dòng nhật ký xử lý** của phiếu, kể cả tệp kèm trên dòng ấy.
+Nhật ký **không có cờ công khai** — không có đường nào bật một dòng cho người dân xem.
+
+Vì sao: nhật ký mang tên cán bộ, ghi chú nội bộ và luân chuyển — ba thứ đã nằm trong danh sách trên
+(luật 4 cấm #5). Một cờ công khai theo dòng là một quyết định luật 3/4 **mỗi lần cán bộ bấm**, không ai
+rà được. Điều người dân được đọc là **câu kết quả** (luật 10 bất biến 6), không phải nhật ký.

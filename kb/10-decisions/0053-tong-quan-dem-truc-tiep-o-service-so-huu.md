@@ -21,6 +21,7 @@ owns_facts:
   - "drill-down ?metric= (+from/to) tới /nhiem-vu, /phan-anh, /van-ban và vì sao ca kiểm không-trạng-thái-URL của sổ văn bản đến được nới"
   - "ảnh trước/sau bị chặn, cảnh báo thiên tai để đợt sau, trên /tong-quan"
   - "danh sách chỗ /tong-quan của v2 cố ý khác kho yêu cầu, người dùng chốt giữ hướng v2"
+  - "tab Báo cáo của /phan-anh: kỳ như §3, đúng hạn/trễ dùng đúng vị từ của /tong-quan, ô 'Đang trễ hạn (hiện tại)' là số tồn, bảng theo lĩnh vực, theo đơn vị (giờ làm việc từ lúc giao tới xu_ly_xong_luc), theo thôn — định nghĩa từng bảng (chủ dự án, 09/10/2026)"
 ---
 
 # 0053. Tổng quan điều hành: đếm trực tiếp ở service sở hữu, không qua `reporting`
@@ -29,6 +30,8 @@ owns_facts:
 **28/09/2026**) · mọi dòng ghi **"tạm"** hoặc **"chờ khách"** là **chưa được khách chốt** ·
 **Lệch** ADR 0010 §*Vì sao Elasticsearch KHÔNG dùng cho báo cáo* (`:75-76`) và ADR 0001 (`:65`,
 `:104`) **cho riêng `/tong-quan`** — không thay hai ADR ấy ở chỗ khác · Phạm vi: M7 đợt 1.
+**Sửa đổi 04/10/2026:** mở `/bao-cao` (cuối tệp). **Sửa đổi 09/10/2026:** tab Báo cáo của `/phan-anh`
+(cuối tệp).
 
 ## Bối cảnh
 
@@ -312,3 +315,64 @@ khỏi cán bộ ngân sách không có `report.read`. Cổng cho khối Thu –
 (`web-admin/src/features/dashboard/overview.tsx:133`, `showBudget`); máy chủ vẫn đòi `budget.read`.
 Hệ quả: với khối Thu – Chi, người có `budget.read` mà không có `report.read` vẫn đọc được ba chỉ số
 năm — đúng điều sổ Thu – Chi vốn cho họ đọc.
+
+## Sửa đổi 09/10/2026 — tab Báo cáo của `/phan-anh`
+
+**Người quyết:** chủ dự án, 09/10/2026, trong phiên chính (`/fix-web-admin --menu=phan-anh-nguoi-dan`),
+qua phiếu hỏi. **Chưa dựng.** Bề mặt: tab **Báo cáo** của màn `/phan-anh` (web-admin, cán bộ).
+
+**Vì sao là sửa đổi, không ADR mới.** Kỳ (§3), vị từ đúng hạn (§4, dẫn ADR 0035 §#26) và luật "một ô
+một vị từ với danh sách" (§1) đã sở hữu ở đây. Tab này **dùng lại** chúng; ADR mới sẽ đặt sự thật "kỳ"
+và "đúng hạn" ở hai tệp — luật 9 cấm #2. Như B1: đếm trực tiếp ở `petitions`, không qua `reporting`.
+
+### C1. Kỳ
+
+Tuần / Tháng / Quý / Năm, Asia/Ho_Chi_Minh, `[from, to)` — **đúng §3** như `/bao-cao`. **Không** "90
+ngày" của prototype: một cửa sổ trượt 90 ngày không khớp kỳ nào của `/tong-quan` hay `/bao-cao`, nên cùng
+một con số sẽ hiện hai giá trị ở hai trang.
+
+### C2. Định nghĩa chung
+
+| Điểm | Quyết định |
+|---|---|
+| Đúng hạn / trễ | **Đúng vị từ** `citizenReportMetricCondition` (`service-petitions/internal/store/citizen_report_summary.go:40-84`, mẫu A ∪ B của câu mở #26 / ADR 0035). Không viết vị từ thứ hai |
+| "Đang trễ hạn (hiện tại)" | Ô **mới**, **số tồn** lúc đọc, suy từ hạn đã lưu so với lúc đọc (luật 10 bất biến 3). **Không bao giờ là tỷ lệ** — cùng lý do B5 mục b: tử số tồn hiện tại, mẫu số theo kỳ là con số không ai đọc đúng |
+| Xoá mềm | Loại **khắp nơi** (luật 7 bất biến 2) |
+| Lĩnh vực `can-bo` | Loại khi người đọc không có `feedback.restricted` — cùng hằng với danh sách (§2) |
+| Phiếu gộp | "Nhận vào" đếm mọi phiếu; đúng hạn, theo lĩnh vực, theo đơn vị chỉ phiếu chính — **ADR 0087 §7 sở hữu** |
+
+### C3. Bảng theo lĩnh vực
+
+| Điểm | Quyết định |
+|---|---|
+| Hàng | **Một hàng mỗi mã lĩnh vực**, cộng một hàng riêng **"Chưa phân loại"** — không gộp vào hàng nào |
+| `can-bo` | Như C2 |
+| Hài lòng | Hiện **kèm số mẫu** (số phiếu được đánh giá). Điểm trên 2 phiếu và trên 200 phiếu không đọc như nhau |
+
+### C4. Bảng theo đơn vị
+
+| Điểm | Quyết định |
+|---|---|
+| Thời gian xử lý trung bình | Tính bằng **giờ làm việc** (ADR 0007), từ lúc **giao cho đơn vị** tới `xu_ly_xong_luc` |
+| Đo bằng | `identity` `MeasureWorkingHours` (`proto/vigov/identity/v1/identity.proto:1297`). **Không** trừ giờ đồng hồ — luật 10 cấm #2 |
+| Quy về đơn vị nào | Đơn vị **đang giữ phiếu lúc `xu_ly_xong_luc`** |
+| Mẫu | Chỉ phiếu **xử lý xong trong kỳ** |
+
+### C5. Bảng theo thôn
+
+| Điểm | Quyết định |
+|---|---|
+| Đếm | Phiếu **nhận vào trong kỳ** theo `thon_id`, cộng cột **trễ hạn hiện tại** (số tồn) |
+| Hàng | Luôn có hàng **"Chưa xác định địa bàn"** — kể cả khi bằng 0 |
+| Loại | `khong-tiep-nhan` và **phiếu phụ** đã gộp (ADR 0087) |
+| Giữ | `chuyen-cap-tren` — vụ việc vẫn xảy ra trên địa bàn ấy |
+| Thôn của phiếu | Thôn ghi trên phiếu lúc tiếp nhận, không suy từ toạ độ — ADR 0088 sở hữu |
+
+### Còn mở khi dựng — hỏi, không tự quyết
+
+| # | Việc | Vì sao không tự chọn |
+|---|---|---|
+| 1 | "Lúc giao cho đơn vị" (C4) khi phiếu được giao lại: lần giao cho đơn vị giữ phiếu lúc xong, hay lần giao đầu | Hai cách cho hai con số khác nhau cho cùng đơn vị |
+| 2 | Tab có dòng so sánh kỳ trước (§3) không | Chủ dự án không nói |
+| 3 | Ô "Đang trễ hạn (hiện tại)" có loại phiếu phụ không | ADR 0087 còn mở #4 |
+| 4 | Ca PostgreSQL "số dòng danh sách = con số" cho các bảng mới | §9: phía phản ánh chưa có ca PostgreSQL nào |
