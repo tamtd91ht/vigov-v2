@@ -7,6 +7,19 @@
   ],
   "events": [
     {
+      "name": "petitions.merge_changed.v1",
+      "owner_service": "petitions",
+      "version": "v1",
+      "schema": "proto/vigov/petitions/v1/events.proto#PetitionMergeChanged",
+      "publishers": [],
+      "consumers": [],
+      "unclassified_mentions": [],
+      "state": [
+        "CHƯA CÓ BÊN PHÁT trong mã Go: không tệp .go nào (ngoài test và mã sinh) nhắc tên sự kiện này ở dạng hằng chuỗi. Hợp đồng đã tồn tại — proto/vigov/petitions/v1/events.proto#PetitionMergeChanged — nhưng chưa ai phát.",
+        "CHƯA CÓ BÊN NHẬN trong mã Go: chưa dịch vụ nào đăng ký nghe. Đổi lược đồ hôm nay chưa làm vỡ ai; ngày có bên nhận đầu tiên thì đổi tại chỗ là hết đường và phải phát `.v2` song song (luật 2 bất biến 4)."
+      ]
+    },
+    {
       "name": "petitions.status_changed.v1",
       "owner_service": "petitions",
       "version": "v1",

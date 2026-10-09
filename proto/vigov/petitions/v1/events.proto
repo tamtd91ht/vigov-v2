@@ -216,6 +216,12 @@ message CitizenMessage {
   // owned by `kb/00-foundation/ubiquitous-language.md` — a commune may NOT rename them
   // (ADR 0027, addendum of 2026-09-20), which is why the label may travel at all: it is the same
   // word in all 200+ communes, so it carries no local meaning and no personal data.
+  //
+  // INSIDE `PetitionMergeChanged` (below) no status was entered, and this field carries the
+  // label of the ACT instead — a software string of the same kind, the same in every commune.
+  // The field keeps its name because renaming it is a contract break (buf `FILE` class) for a
+  // live consumer, and because `comms` reads it into the same `moc_nhan` parameter either way:
+  // to the citizen it is "what just happened to my petition" in both cases.
   string status_label = 1;
 
   // WHAT HAPPENS NEXT — a sentence about the PROCEDURE, never about the person. `comms` sends
@@ -267,4 +273,118 @@ message CitizenMessage {
 //                         `comms` may act on, and a staff identity in a message read by the
 //                         citizen channel is a step toward a staff name leaving the commune.
 //   anything from the RULE 3 list in the header   not "not yet" — never.
+// ---------------------------------------------------------------------------
+
+// PetitionMergeChanged is the payload of the event named:
+//
+//     petitions.merge_changed.v1
+//
+// THE FACT THAT A PETITION WAS LINKED TO, OR UNLINKED FROM, A MAIN PETITION (ADR 0087). It is
+// a SECOND event and not a ninth reading of `petitions.status_changed.v1`, and the reason is the
+// one a later session is most likely to "simplify" away:
+//
+//   * a merge CHANGES NO STATUS (ADR 0087 §1: "đã gộp" is a link, never a status), so
+//     `status_changed` would have to state a transition that did not happen — the event name
+//     would become a lie for every other consumer, present or future;
+//   * `comms` deduplicates on the business fact, `doi_tuong_loai | doi_tuong_ma | moc | lan |
+//     nguoi_nhan_ma | kenh` (`domain.KhoaLanGui`). A merge notice sent as `status_changed` with
+//     the petition's CURRENT status lands on the key of the notice the citizen already received
+//     for that status, and is dropped as a duplicate — silently, looking exactly like correct
+//     deduplication from inside the system.
+//
+// Here the `moc` of that key is `kind` (`gop-phieu` / `tach-phieu`), which cannot collide with
+// the nine status codes of ADR 0027, and `lan` is `occurrence`, so a petition merged, unmerged
+// and merged again owes — and gets — a distinct row each time.
+//
+// ABOUT THE CHILD PETITION ONLY. The petition this event names is the one that was merged or
+// unmerged (`merged_into` set or cleared on it), and the citizen it addresses is THAT petition's
+// citizen. The main petition's citizen is owed nothing by the act (ADR 0041 §Sửa đổi
+// 09/10/2026), and the main petition itself does not appear in the message at all — see the
+// "deliberately absent" list below.
+//
+// PUBLISHED ON EVERY MERGE AND EVERY UNMERGE, not only the ones that owe a message — the same
+// rule, for the same reason, as `PetitionStatusChanged`: the event is the fact; whether the fact
+// also owes the citizen a word is expressed by the presence of `citizen_message`.
+//
+// RECORDED IN THE SAME TRANSACTION AS THE LINK, THE `petition_merge_event` ROW AND THE AUDIT
+// ENTRIES, as an outbox row; published only after that transaction commits. Eventually
+// consistent with the merge — a merge is NEVER refused because a message could not be sent
+// (ADR 0006 consequence 4). The declared boundary, its compensation and its `why` are in
+// `kb/30-indexes/transaction-boundaries.json` under `thong_bao_cong_dan_khi_gop_tach_phieu`.
+//
+// ORDERING IS NOT PROMISED. A merge and an unmerge of the same petition in quick succession are
+// two events with two keys, and a consumer must not assume they arrive in the order they
+// happened. Neither depends on the other to be valid, which is why neither carries a reference
+// to the other.
+message PetitionMergeChanged {
+  // The lookup code of the petition that was merged or unmerged — the CHILD's business code,
+  // the one ITS citizen was given at intake (rule 10, invariant 1). Never the main petition's
+  // code, never an internal ULID. `comms` stores it as `doi_tuong_ma` and sends it back as the
+  // `ma_tra_cuu` parameter, exactly as for `PetitionStatusChanged.lookup_code`.
+  string lookup_code = 1;
+
+  // WHAT HAPPENED — one of the codes `petitions` owns in `domain.MergeKind`:
+  // `gop-phieu` (linked to a main petition) or `tach-phieu` (the link cleared).
+  //
+  // A STRING AND NOT AN ENUM, for the reason written on `PetitionStatusChanged.status`: the list
+  // is the publisher's, and an enum would compile a copy of it into every consumer. Vietnamese
+  // kebab-case values (ADR 0011). `comms` stores it as `moc` and selects the commune's approved
+  // ZNS template by it (ADR 0018) — it validates nothing else against it.
+  string kind = 2;
+
+  // WHICH OCCURRENCE of this kind of act on this petition: 1 for its first merge, 2 for its
+  // second merge after an unmerge, and the same, independently, for `tach-phieu`. It is the
+  // count of `petition_merge_event` rows for (this petition, this kind) INCLUDING the row the
+  // act just wrote — that table is append-only and written in the same transaction, under the
+  // petition's row lock, so the count is stable and a republication of the same act yields
+  // the same number.
+  //
+  // REQUIRED, and zero is malformed — exactly as `PetitionStatusChanged.occurrence`: without it
+  // the second merge of a petition collapses onto the first in `comms`' deduplication key and
+  // the citizen is never told about it. A consumer refuses 0; it never defaults it to 1.
+  uint32 occurrence = 3;
+
+  // WHO IS OWED THE MESSAGE — the OPAQUE citizen identity id of the CHILD petition's citizen,
+  // the same value and the same reasoning as `PetitionStatusChanged.citizen_id`. Never a phone
+  // number, never a name.
+  //
+  // A petition with no citizen account behind it (booked by staff) has nobody to tell: the
+  // publisher writes NO outbox row for it, rather than a message guaranteed to dead-letter.
+  string citizen_id = 4;
+
+  // WHAT THE CITIZEN IS TOLD — PRESENT ONLY WHEN THE ACT OWES THEM A MESSAGE. Absence is a
+  // fact, as on `PetitionStatusChanged`, and a consumer does no work for such an event.
+  //
+  // `status_label` carries the label of the ACT (see its comment on `CitizenMessage`) and
+  // `next_step` the procedural sentence. BOTH ARE COMPOSED BY THE SOFTWARE; neither is the
+  // staff-written merge or unmerge reason, which may quote a report and stays on
+  // `petition_merge_event` (rule 3). Neither may name the main petition — its code, content,
+  // photographs or reporter (ADR 0087 §4, rule 4).
+  //
+  // WHICH ACTS CARRY IT is not encoded here, for the reason written on
+  // `PetitionStatusChanged.citizen_message`: it is a promise to citizens, owned by ADR 0041
+  // (§Sửa đổi 09/10/2026) and executed in service-petitions/internal/domain/petition_merge.go.
+  // Deciding that `tach-phieu` does or does not notify changes no field of this contract.
+  CitizenMessage citizen_message = 5;
+}
+
+// ---------------------------------------------------------------------------
+// WHAT IS DELIBERATELY ABSENT from PetitionMergeChanged:
+//
+//   tenant_id, the event id, occurred_at   ENVELOPE fields (header of this file). A copy in
+//                         the payload is a second answer that can disagree with the first, and
+//                         a commune named in a body is a commune the publisher granted itself.
+//   the MAIN petition's lookup code   ADR 0087 §4 and ADR 0041 §Sửa đổi 09/10/2026: the child's
+//                         citizen never sees anything of the main petition. A code that reaches
+//                         `comms` is one template parameter away from reaching that citizen,
+//                         and from there it opens the other person's case on the lookup screen.
+//   the merge / unmerge reason   staff free text (ADR 0087 §5 makes it mandatory on unmerge); it
+//                         may quote a report and stays on `petition_merge_event` (rule 3).
+//   the main petition's deadline before/after   `comms` does not act on it, and the child's
+//                         own deadline does not move (ADR 0087 §1). The audit entry holds it.
+//   the current status of the child   unchanged by the act and not needed to address or word
+//                         the message; a consumer that needs it asks over gRPC.
+//   the actor             audited in the same transaction (rule 6); not something `comms` may
+//                         act on, and a staff identity does not travel on the citizen path.
+//   anything from the RULE 3 list in the header   never.
 // ---------------------------------------------------------------------------
