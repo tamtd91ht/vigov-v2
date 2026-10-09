@@ -129,6 +129,12 @@ spec:
             # POST /api/v1/citizen-letter-tasks trả 503. Đòi `documents` phơi cổng 9090 —
             # `deploy/base/documents/service.yaml` — và cặp netpol quy tắc 3d + 4b.
             - { name: DOCUMENTS_GRPC_ADDR, value: documents:9090 }
+            # GIỚI HẠN MỀM của bộ thu gom Go (runtime đọc, không phải biến của core/config): ~78% của
+            # `limits.memory: 384Mi` bên dưới. Từ 09/10/2026 tệp tải lên đi QUA pod này (ADR 0052 §Sửa đổi
+            # 09/10/2026: tối đa 4 lượt/pod, ảnh được giải mã + mã hoá lại); không có dòng này GC chỉ chạy
+            # theo GOGC và heap có thể vượt 384Mi trước khi GC kịp thu — OOM-kill là mọi lượt đang tải
+            # và mọi yêu cầu khác của pod cùng đổ. Đổi limits.memory thì đổi số này cùng lúc.
+            - { name: GOMEMLIMIT, value: "300MiB" }
           envFrom:
             - configMapRef: { name: common-config }
             # Secret PHẢI có ít nhất: DATABASE_DSN · GRPC_CALLER_KEY · SESSION_SIGNING_KEYS.

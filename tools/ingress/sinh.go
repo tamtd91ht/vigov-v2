@@ -170,6 +170,88 @@ func cacHostDichVu(luats []luatIngress) ([]hostDichVu, error) {
 	return ra, nil
 }
 
+// The public edge is split into TWO Ingress objects because ingress-nginx reads
+// `proxy-body-size` (and `proxy-request-buffering`) per Ingress OBJECT, never per host, and the
+// owner set two different caps (ADR 0052 §Sửa đổi 09/10/2026): uploads now travel as one multipart
+// request through the owning service, so the hosts that carry them take 55 MB (a 50 MB file plus
+// the multipart envelope) while every other host keeps 25 MB.
+//
+// `vigov` keeps the commune web host at index 0 and the name the overlays already patch, so the
+// existing patch target is unchanged; the hosts that take no upload move to `vigov-no-upload`.
+// Name order is also apply order (kustomize sorts by name within a kind): `vigov` sheds those hosts
+// before `vigov-no-upload` claims them, so ingress-nginx's admission webhook never sees one host/path
+// in two objects during the rollout.
+const (
+	ingressUpload   = "vigov"
+	ingressNoUpload = "vigov-no-upload"
+
+	bodyCapUpload  = "55m"
+	bodyCapDefault = "25m"
+)
+
+// uploadHosts are the services whose PUBLIC host takes the upload cap, each with the reason. The
+// owner named four hosts; anything not listed falls into the 25 MB object — the smaller cap is the
+// default, never the larger one.
+//
+// web-admin is here because staff uploads reach the services through its /api/v1/* gateway
+// (ADR 0043): the commune web host is where a staff upload enters the edge.
+var uploadHosts = map[string]string{
+	dichVuWeb:   "staff uploads of every service enter through the web gateway (ADR 0043)",
+	"comms":     "cover image, body image, broadcast audio (ADR 0052 §Sửa đổi 09/10/2026)",
+	"petitions": "citizen scene photos, after-processing photos, log and task attachments (ADR 0052 §Sửa đổi 09/10/2026)",
+	"platform":  "commune logo/banner (ADR 0052 §Sửa đổi 09/10/2026); its public host routes only the Exact paths of pathScopedPublicRoutes",
+}
+
+// ingressObject is one generated Ingress: its name, the overlay patch file that sets its hosts per
+// environment, its body cap, and its host rules in index order (the overlays patch by index).
+type ingressObject struct {
+	Name    string
+	Patch   string // file name inside deploy/overlays/<env>/
+	BodyCap string
+	// Stream turns request buffering off: see the comment rendered next to the annotation.
+	Stream bool
+	// Web is true for the object carrying the commune web host; it is always rule 0.
+	Web   bool
+	Hosts []hostDichVu
+}
+
+// ingressObjects partitions the public hosts into the two objects. Fixed order: `vigov` first.
+//
+// FAIL CLOSED: an uploadHosts service with no public host is a stale list, not something to skip —
+// the owner's cap would silently apply to nothing. An empty `vigov-no-upload` is refused too: an
+// Ingress with no rule is not a manifest anyone meant to apply.
+func ingressObjects(luats []luatIngress) ([]ingressObject, error) {
+	hosts, err := cacHostDichVu(luats)
+	if err != nil {
+		return nil, err
+	}
+	up := ingressObject{Name: ingressUpload, Patch: "ingress-moi-truong.yaml", BodyCap: bodyCapUpload, Stream: true, Web: true}
+	rest := ingressObject{Name: ingressNoUpload, Patch: "ingress-no-upload-environment.yaml", BodyCap: bodyCapDefault}
+	seen := map[string]bool{}
+	for _, h := range hosts {
+		if _, ok := uploadHosts[h.DichVu]; ok {
+			up.Hosts = append(up.Hosts, h)
+			seen[h.DichVu] = true
+			continue
+		}
+		rest.Hosts = append(rest.Hosts, h)
+	}
+	names := make([]string, 0, len(uploadHosts))
+	for s := range uploadHosts {
+		names = append(names, s)
+	}
+	sort.Strings(names)
+	for _, s := range names {
+		if s != dichVuWeb && !seen[s] {
+			return nil, fmt.Errorf("uploadHosts: %s không có host công khai nào — trần %s không áp vào đâu; sửa danh sách (ADR 0052 §Sửa đổi 09/10/2026)", s, bodyCapUpload)
+		}
+	}
+	if len(rest.Hosts) == 0 {
+		return nil, fmt.Errorf("Ingress %s không còn host nào — không sinh một Ingress rỗng", ingressNoUpload)
+	}
+	return []ingressObject{up, rest}, nil
+}
+
 // luatWeb returns the "/" catch-all — the only rule of the commune web host.
 func luatWeb(luats []luatIngress) (luatIngress, error) {
 	for _, l := range luats {
@@ -188,9 +270,13 @@ func sinhYAML(tuyens []tuyenHopDong, luats []luatIngress, base moiTruong) ([]byt
 	if err != nil {
 		return nil, err
 	}
-	hosts, err := cacHostDichVu(luats)
+	objs, err := ingressObjects(luats)
 	if err != nil {
 		return nil, err
+	}
+	hostCount := 0
+	for _, o := range objs {
+		hostCount += len(o.Hosts)
 	}
 	var b strings.Builder
 
@@ -213,8 +299,6 @@ func sinhYAML(tuyens []tuyenHopDong, luats []luatIngress, base moiTruong) ([]byt
 	for _, d := range tenDichVu {
 		phanBo = append(phanBo, fmt.Sprintf("%s %d", d, demTheoDichVu[d]))
 	}
-	duoi := base.DuoiAPI
-
 	b.WriteString("# TỆP NÀY ĐƯỢC SINH RA bởi tools/ingress. KHÔNG SỬA TAY — sửa tay là mất, im lặng, ở\n")
 	b.WriteString("# lần sinh sau (luật 9, bất biến 8). Sinh lại: `go run ./tools/ingress` (hoặc `make kb`).\n")
 	b.WriteString("#\n")
@@ -230,26 +314,72 @@ func sinhYAML(tuyens []tuyenHopDong, luats []luatIngress, base moiTruong) ([]byt
 	b.WriteString("# Bảng tiền tố → dịch vụ vì thế KHÔNG còn là các luật `paths` ở đây; nó chỉ còn là chú\n")
 	b.WriteString("# giải trên từng host dịch vụ, và là bảng TS kia — cùng một lần phân giải hợp đồng.\n")
 	b.WriteString("#\n")
-	b.WriteString("# HOST và TLS của từng môi trường do overlay vá vào (deploy/overlays/<mt>/ingress-moi-truong.yaml,\n")
-	b.WriteString("# CŨNG SINH RA bởi bộ sinh này). Base mang host của prod.\n")
-	b.WriteString(fmt.Sprintf("#\n# 1 host web + %d host dịch vụ.\n", len(hosts)))
+	b.WriteString("# HOST và TLS của từng môi trường do overlay vá vào (deploy/overlays/<mt>/ingress-moi-truong.yaml\n")
+	b.WriteString("# cho `vigov`, ingress-no-upload-environment.yaml cho `vigov-no-upload` — CŨNG SINH RA bởi bộ\n")
+	b.WriteString("# sinh này). Base mang host của prod.\n")
+	b.WriteString("#\n")
+	b.WriteString("# HAI Ingress vì trần thân yêu cầu (`proxy-body-size`) của ingress-nginx đặt theo ĐỐI TƯỢNG\n")
+	b.WriteString("# Ingress, không theo host. Chủ dự án chốt 09/10/2026 (ADR 0052 §Sửa đổi 09/10/2026): tải lên\n")
+	b.WriteString(fmt.Sprintf("# đi qua service, nên host web + host có tải lên nhận %s; host khác giữ %s. Mỗi\n", bodyCapUpload, bodyCapDefault))
+	b.WriteString("# Ingress có bản vá overlay riêng (danh sách uploadHosts ở tools/ingress/sinh.go).\n")
+	b.WriteString(fmt.Sprintf("#\n# 1 host web + %d host dịch vụ.\n", hostCount))
+	for _, o := range objs {
+		b.WriteString("---\n")
+		writeIngress(&b, o, web, base.DuoiAPI, base.HostWeb)
+	}
+	return []byte(b.String()), nil
+}
+
+// writeIngress renders one Ingress object of the generated file.
+func writeIngress(b *strings.Builder, o ingressObject, web luatIngress, apiSuffix, webHost string) {
 	b.WriteString("apiVersion: networking.k8s.io/v1\n")
 	b.WriteString("kind: Ingress\n")
 	b.WriteString("metadata:\n")
-	b.WriteString("  name: vigov\n")
+	b.WriteString("  name: " + o.Name + "\n")
 	b.WriteString("  annotations:\n")
 	b.WriteString("    # Bắt buộc HTTPS. Số điện thoại và nội dung phản ánh của công dân đi qua đây\n")
 	b.WriteString("    # (Nghị định 13/2023/NĐ-CP).\n")
 	b.WriteString("    nginx.ingress.kubernetes.io/ssl-redirect: \"true\"\n")
-	b.WriteString("    nginx.ingress.kubernetes.io/proxy-body-size: \"25m\"\n")
+	if o.Stream {
+		b.WriteString(fmt.Sprintf("    # %s: tệp 50 MB + phần bao multipart (ADR 0052 §Sửa đổi 09/10/2026). Giới hạn TỪNG loại\n", bodyCapUpload))
+		b.WriteString("    # tệp vẫn do service kiểm theo cấu hình platform — trần này chỉ là chặn trên ở rìa.\n")
+	} else {
+		b.WriteString("    # Không host nào ở đây nhận tải lên tệp — giữ trần mặc định.\n")
+	}
+	b.WriteString(fmt.Sprintf("    nginx.ingress.kubernetes.io/proxy-body-size: %q\n", o.BodyCap))
+	if o.Stream {
+		b.WriteString("    # TRUYỀN THẲNG thân yêu cầu tới pod (chủ dự án chọn ghi luồng, 09/10/2026). Được: controller\n")
+		b.WriteString("    # không đệm 55 MB mỗi lượt ra đĩa/RAM của nó, và pod bắt đầu ghi luồng sang MinIO từ byte đầu.\n")
+		b.WriteString("    # Mất: (1) khách mạng chậm giữ một suất tải của pod (tối đa 4/pod) suốt thời gian truyền — cận\n")
+		b.WriteString("    # 180 s mỗi lượt ở service chặn việc ấy; (2) nginx KHÔNG thử lại sang pod khác khi pod lỗi giữa\n")
+		b.WriteString("    # chừng (proxy_next_upstream cần thân đã đệm) — client nhận lỗi và gửi lại.\n")
+		b.WriteString("    nginx.ingress.kubernetes.io/proxy-request-buffering: \"off\"\n")
+	}
 	b.WriteString("spec:\n")
 	b.WriteString("  ingressClassName: nginx\n")
 	b.WriteString("  # `tls:` do overlay THÊM VÀO — tên secret khác nhau từng môi trường.\n")
 	b.WriteString("  #\n")
-	b.WriteString("  # THỨ TỰ `rules` CÓ Ý NGHĨA: overlay vá host theo CHỈ SỐ (`/spec/rules/<i>/host`). Chỉ số 0 là\n")
-	b.WriteString("  # host web; 1..n là host dịch vụ, xếp theo tên. Bản vá overlay `test` host cũ trước khi\n")
+	if o.Web {
+		b.WriteString("  # THỨ TỰ `rules` CÓ Ý NGHĨA: overlay vá host theo CHỈ SỐ (`/spec/rules/<i>/host`). Chỉ số 0 là\n")
+		b.WriteString("  # host web; 1..n là host dịch vụ, xếp theo tên. Bản vá overlay `test` host cũ trước khi\n")
+	} else {
+		b.WriteString("  # THỨ TỰ `rules` CÓ Ý NGHĨA: overlay vá host theo CHỈ SỐ (`/spec/rules/<i>/host`), host dịch\n")
+		b.WriteString("  # vụ xếp theo tên. Bản vá overlay `test` host cũ trước khi\n")
+	}
 	b.WriteString("  # `replace`, nên overlay lệch chỉ số là `kustomize build` ĐỔ chứ không vá nhầm host.\n")
 	b.WriteString("  rules:\n")
+	if o.Web {
+		writeWebHost(b, web, webHost)
+	}
+	for i, h := range o.Hosts {
+		if o.Web || i > 0 {
+			b.WriteString("    #\n")
+		}
+		writeServiceHost(b, h, apiSuffix)
+	}
+}
+
+func writeWebHost(b *strings.Builder, web luatIngress, webHost string) {
 	b.WriteString("    # HOST WEB — MỘT quy tắc ký tự đại diện cho MỌI xã. `Host` thật đi nguyên vẹn tới pod\n")
 	b.WriteString("    # (ingress-nginx giữ nguyên Host mặc định) và `httpx.TenantMiddleware` phân giải nó thành\n")
 	b.WriteString("    # xã ở rìa ngoài cùng. Host không khớp xã nào ⇒ 404, không bao giờ một xã mặc định\n")
@@ -257,35 +387,35 @@ func sinhYAML(tuyens []tuyenHopDong, luats []luatIngress, base moiTruong) ([]byt
 	b.WriteString("    #\n")
 	b.WriteString("    # Nhãn đầu `admin` · `admin-stg` · `api` · `api-stg` · `stg` · `www` khớp ký tự đại diện này\n")
 	b.WriteString("    # nhưng là nhãn DÀNH RIÊNG: `platform` từ chối gán chúng cho một xã, nên chúng nhận 404.\n")
-	b.WriteString(fmt.Sprintf("    - host: %q\n", base.HostWeb))
+	b.WriteString(fmt.Sprintf("    - host: %q\n", webHost))
 	b.WriteString("      http:\n")
 	b.WriteString("        paths:\n")
 	b.WriteString("          # BẮT HẾT — web quản trị (Next.js). KHÔNG sinh từ hợp đồng. `/api/v1/*` cũng tới đây và\n")
 	b.WriteString("          # web chuyển tiếp; tiền tố lạ nhận 404 JSON, không tới dịch vụ nào (ADR 0043).\n")
-	viet1Path(&b, web.DichVu, web.Cong)
-	for _, h := range hosts {
-		b.WriteString("    #\n")
-		if len(h.Exact) > 0 {
-			b.WriteString(fmt.Sprintf("    # %s — CHỈ %d đường dẫn công khai, khớp ĐÚNG (Exact), không `/`: cổng REST của\n", h.DichVu, len(h.Exact)))
-			b.WriteString("    # dịch vụ này còn phục vụ miền vận hành (ADR 0048), nên chỉ tuyến được chủ dự án mở mới\n")
-			b.WriteString("    # ra internet — danh sách ở pathScopedPublicRoutes (tools/ingress/sinh.go).\n")
-			b.WriteString(fmt.Sprintf("    - host: %q\n", h.DichVu+"."+duoi))
-			b.WriteString("      http:\n")
-			b.WriteString("        paths:\n")
-			for _, p := range h.Exact {
-				writePath(&b, p, "Exact", h.DichVu, h.Cong)
-			}
-			continue
-		}
-		for _, dong := range ghiChuPhu(fmt.Sprintf("%s — %d tài nguyên:", h.DichVu, len(h.TienTo)), h.TienTo) {
-			b.WriteString("    # " + dong + "\n")
-		}
-		b.WriteString(fmt.Sprintf("    - host: %q\n", h.DichVu+"."+duoi))
+	viet1Path(b, web.DichVu, web.Cong)
+}
+
+func writeServiceHost(b *strings.Builder, h hostDichVu, apiSuffix string) {
+	host := h.DichVu + "." + apiSuffix
+	if len(h.Exact) > 0 {
+		b.WriteString(fmt.Sprintf("    # %s — CHỈ %d đường dẫn công khai, khớp ĐÚNG (Exact), không `/`: cổng REST của\n", h.DichVu, len(h.Exact)))
+		b.WriteString("    # dịch vụ này còn phục vụ miền vận hành (ADR 0048), nên chỉ tuyến được chủ dự án mở mới\n")
+		b.WriteString("    # ra internet — danh sách ở pathScopedPublicRoutes (tools/ingress/sinh.go).\n")
+		b.WriteString(fmt.Sprintf("    - host: %q\n", host))
 		b.WriteString("      http:\n")
 		b.WriteString("        paths:\n")
-		viet1Path(&b, h.DichVu, h.Cong)
+		for _, p := range h.Exact {
+			writePath(b, p, "Exact", h.DichVu, h.Cong)
+		}
+		return
 	}
-	return []byte(b.String()), nil
+	for _, dong := range ghiChuPhu(fmt.Sprintf("%s — %d tài nguyên:", h.DichVu, len(h.TienTo)), h.TienTo) {
+		b.WriteString("    # " + dong + "\n")
+	}
+	b.WriteString(fmt.Sprintf("    - host: %q\n", host))
+	b.WriteString("      http:\n")
+	b.WriteString("        paths:\n")
+	viet1Path(b, h.DichVu, h.Cong)
 }
 
 func viet1Path(b *strings.Builder, dichVu, cong string) {
@@ -301,9 +431,12 @@ func writePath(b *strings.Builder, path, pathType, dichVu, cong string) {
 	b.WriteString("                port: { name: " + cong + " }\n")
 }
 
-// duongOverlay is where the environment patch of one overlay lives.
-func duongOverlay(mt string) string {
-	return "deploy/overlays/" + mt + "/ingress-moi-truong.yaml"
+// duongOverlay is where the environment patch of one Ingress object lives in one overlay. The
+// overlay's kustomization.yaml must name it with `target: … name: <object>` —
+// TestOverlayKustomizationPatchesEveryIngress checks that, because a missing entry leaves that
+// object carrying PROD hosts in the staging namespace.
+func duongOverlay(mt, patch string) string {
+	return "deploy/overlays/" + mt + "/" + patch
 }
 
 // sinhOverlay renders the JSON6902 patch of one environment: every host of base, by index,
@@ -315,14 +448,13 @@ func duongOverlay(mt string) string {
 // Each `replace` is preceded by a `test` on the base value. A base regenerated with a new
 // service shifts the indices; with the `test` the overlay then fails at build time instead of
 // patching a neighbour's host.
-func sinhOverlay(mt, goc moiTruong, luats []luatIngress) ([]byte, error) {
-	hosts, err := cacHostDichVu(luats)
-	if err != nil {
-		return nil, err
-	}
+//
+// One patch per Ingress object (ingressObjects); TLS lists only the Secrets covering that
+// object's hosts — the web wildcard only where the web host is.
+func sinhOverlay(mt, goc moiTruong, o ingressObject) []byte {
 	var b strings.Builder
 	b.WriteString("# TỆP NÀY ĐƯỢC SINH RA bởi tools/ingress (`go run ./tools/ingress`, hoặc `make kb`). KHÔNG SỬA\n")
-	b.WriteString("# TAY. Phần MÔI TRƯỜNG `" + mt.Ten + "` của Ingress — host và TLS, và CHỈ hai thứ ấy. Bảng định\n")
+	b.WriteString("# TAY. Phần MÔI TRƯỜNG `" + mt.Ten + "` của Ingress `" + o.Name + "` — host và TLS, và CHỈ hai thứ ấy. Bảng định\n")
 	b.WriteString("# tuyến ở `deploy/base/mang/ingress.yaml`, giống nhau ở mọi môi trường.\n")
 	b.WriteString("#\n")
 	b.WriteString("# VÌ SAO LÀ BẢN VÁ JSON6902 CHỨ KHÔNG PHẢI MỘT `Ingress` ĐẦY ĐỦ: `spec.rules` là danh sách KHÔNG\n")
@@ -338,21 +470,27 @@ func sinhOverlay(mt, goc moiTruong, luats []luatIngress) ([]byte, error) {
 		b.WriteString(fmt.Sprintf("- op: test\n  path: /spec/rules/%d/host\n  value: %q\n", i, cu))
 		b.WriteString(fmt.Sprintf("- op: replace\n  path: /spec/rules/%d/host\n  value: %q\n", i, moi))
 	}
-	vaHost(0, goc.HostWeb, mt.HostWeb)
-	for i, h := range hosts {
-		vaHost(i+1, h.DichVu+"."+goc.DuoiAPI, h.DichVu+"."+mt.DuoiAPI)
+	first := 0
+	if o.Web {
+		vaHost(0, goc.HostWeb, mt.HostWeb)
+		first = 1
+	}
+	for i, h := range o.Hosts {
+		vaHost(i+first, h.DichVu+"."+goc.DuoiAPI, h.DichVu+"."+mt.DuoiAPI)
 	}
 	b.WriteString("\n")
 	b.WriteString("# `add` chứ không `replace`: base cố ý KHÔNG khai `tls`, và `replace` đổ khi đường dẫn chưa có.\n")
-	b.WriteString("# Hai Secret TLS tạo NGOÀI kho này — KHÔNG BAO GIỜ commit khoá. Tên: deploy/cau-hinh/README.md.\n")
+	b.WriteString("# Secret TLS tạo NGOÀI kho này — KHÔNG BAO GIỜ commit khoá. Tên: deploy/cau-hinh/README.md.\n")
 	b.WriteString("- op: add\n")
 	b.WriteString("  path: /spec/tls\n")
 	b.WriteString("  value:\n")
-	b.WriteString(fmt.Sprintf("    - hosts: [%q]\n", mt.HostWeb))
-	b.WriteString("      secretName: " + mt.TLSWeb + "\n")
+	if o.Web {
+		b.WriteString(fmt.Sprintf("    - hosts: [%q]\n", mt.HostWeb))
+		b.WriteString("      secretName: " + mt.TLSWeb + "\n")
+	}
 	b.WriteString(fmt.Sprintf("    - hosts: [%q]\n", "*."+mt.DuoiAPI))
 	b.WriteString("      secretName: " + mt.TLSAPI + "\n")
-	return []byte(b.String()), nil
+	return []byte(b.String())
 }
 
 // ghiChuPhu wraps a heading and a list of items into comment lines of bounded width. The

@@ -371,7 +371,7 @@ func bangDinhTuyen(tuyens []tuyenHopDong, cong func(string) (string, error)) ([]
 
 // sinhTuKho is the whole pipeline: read the contract from the repository, resolve, render.
 // It returns the CONTENT of every generated file, keyed by repository-relative path —
-// ingress.yaml, one host/TLS patch per overlay, the web-admin routing table, and the host
+// ingress.yaml, one host/TLS patch per overlay and Ingress object, the web-admin routing table, and the host
 // constants of deploy/hosts.yaml's consumers (sinhhosts.go) — and writes
 // nothing, so the tests can compare them against the files on disk without a temporary
 // directory. All come from ONE resolved rule list; an error in any render returns none, so
@@ -405,13 +405,15 @@ func sinhTuKho(root string) (map[string][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	objs, err := ingressObjects(luats)
+	if err != nil {
+		return nil, err
+	}
 	ra := map[string][]byte{duongTepSinh: y, duongTepTS: ts}
 	for _, mt := range plan.Environments {
-		o, err := sinhOverlay(mt, base, luats)
-		if err != nil {
-			return nil, err
+		for _, o := range objs {
+			ra[duongOverlay(mt.Ten, o.Patch)] = sinhOverlay(mt, base, o)
 		}
-		ra[duongOverlay(mt.Ten)] = o
 	}
 	consts, err := renderHostConstants(root, plan, luats)
 	if err != nil {

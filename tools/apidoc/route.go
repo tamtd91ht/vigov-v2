@@ -25,6 +25,10 @@ type tuyen struct {
 	Summary string
 	Screen  string
 	Request string // Go type name, "" when the route takes no body
+	// Multipart is the multipart/form-data body of an upload route — `@multipart size purpose? file`.
+	// Mutually exclusive with Request: a route takes a JSON body or a multipart one, never both.
+	// See parseMultipart for why it is a field list and not a Go type.
+	Multipart []multipartField
 	// Page names the page.Allowlist variable this route pages with — `@page store.SapXepCanBo`.
 	//
 	// NÓ LÀ MỘT CON TRỎ, KHÔNG PHẢI MỘT BẢN SAO. Danh sách cột được phép sắp xếp vẫn nằm đúng
@@ -70,6 +74,69 @@ type traLoi struct {
 	// a union with codes the route never answers; one that guessed reachability would be deciding a
 	// business rule. The author of the route states it, next to the status it belongs to.
 	Codes []string
+}
+
+// multipartField is one part of a multipart/form-data upload body.
+type multipartField struct {
+	Name     string
+	Optional bool // declared with a trailing `?`
+	Binary   bool // the `file` part; every other part is a text field
+}
+
+// multipartNamePattern is the shape of a part name. Lowercase snake_case like the JSON fields of the
+// contract: the name is typed again in a FormData.append call, and a name the pattern would refuse is
+// one somebody would spell two ways.
+var multipartNamePattern = regexp.MustCompile(`^[a-z][a-z0-9]*(_[a-z0-9]+)*$`)
+
+// Part names fixed by the wire shape every upload route reads with httpx.ReadUpload
+// (core/httpx/upload.go: UploadFileField, UploadSizeField). Repeated here because tools/ does not
+// import core/; a mismatch would show as every upload answering 400 in the route's own tests.
+const (
+	multipartFileField = "file"
+	multipartSizeField = "size"
+)
+
+// parseMultipart reads `@multipart <part> <part?> ... file`.
+//
+// WHY A FIELD LIST AND NOT A GO TYPE like @request: an upload body has no Go struct — httpx.ReadUpload
+// takes the text field NAMES (UploadOptions.Fields) and streams the file — so there is no type for the
+// AST to resolve, and inventing one only for the contract would be a second source for the names.
+//
+// The rules mirror httpx.ReadUpload, so the contract cannot describe a body the server refuses:
+// `size` present and required; `file` present exactly once, required, and LAST — ReadUpload reads
+// the text parts first and refuses anything after the file; no name twice.
+func parseMultipart(tokens []string) ([]multipartField, error) {
+	if len(tokens) == 0 {
+		return nil, fmt.Errorf("@multipart cần danh sách phần, ví dụ `@multipart size purpose? file`")
+	}
+	seen := map[string]bool{}
+	var out []multipartField
+	for i, tok := range tokens {
+		name := strings.TrimSuffix(tok, "?")
+		f := multipartField{Name: name, Optional: name != tok, Binary: name == multipartFileField}
+		if !multipartNamePattern.MatchString(name) {
+			return nil, fmt.Errorf("@multipart: tên phần %q sai dạng — snake_case chữ thường, `?` cuối nếu không bắt buộc", tok)
+		}
+		if seen[name] {
+			return nil, fmt.Errorf("@multipart: phần %q khai hai lần", name)
+		}
+		seen[name] = true
+		if f.Binary && (f.Optional || i != len(tokens)-1) {
+			return nil, fmt.Errorf("@multipart: `%s` phải bắt buộc và đứng CUỐI — httpx.ReadUpload đọc các trường chữ trước, "+
+				"rồi đúng một phần tệp, rồi không gì nữa", multipartFileField)
+		}
+		if name == multipartSizeField && f.Optional {
+			return nil, fmt.Errorf("@multipart: `%s` là bắt buộc — httpx.ReadUpload cần số byte trước khi ghi luồng", multipartSizeField)
+		}
+		out = append(out, f)
+	}
+	if !seen[multipartFileField] {
+		return nil, fmt.Errorf("@multipart: thiếu phần `%s` — tuyến tải lên nhận đúng một tệp", multipartFileField)
+	}
+	if !seen[multipartSizeField] {
+		return nil, fmt.Errorf("@multipart: thiếu phần `%s` — httpx.ReadUpload bắt buộc nó", multipartSizeField)
+	}
+	return out, nil
 }
 
 // errorCodePattern is the shape of an httpx.Error `code`: lowercase snake_case, starting with a
@@ -435,6 +502,15 @@ func phanTichChuThich(text string, t *tuyen) error {
 				return fmt.Errorf("@request khai hai lần")
 			}
 			t.Request = phanCon
+		case "@multipart":
+			if t.Multipart != nil {
+				return fmt.Errorf("@multipart khai hai lần")
+			}
+			fields, err := parseMultipart(truong[1:])
+			if err != nil {
+				return err
+			}
+			t.Multipart = fields
 		case "@reply":
 			if len(truong) < 3 {
 				return fmt.Errorf("@reply cần đúng dạng `@reply <mã> <Kiểu|-> [mã_lỗi ...]`, gặp %q", ln)
@@ -474,8 +550,11 @@ func phanTichChuThich(text string, t *tuyen) error {
 				t.Replies = append(t.Replies, traLoi{Status: ma, Kieu: kieu, Codes: codes})
 			}
 		default:
-			return fmt.Errorf("thẻ chú thích không biết: %s — chỉ có @summary, @screen, @page, @request, @reply, @consumer", the)
+			return fmt.Errorf("thẻ chú thích không biết: %s — chỉ có @summary, @screen, @page, @request, @multipart, @reply, @consumer", the)
 		}
+	}
+	if t.Request != "" && t.Multipart != nil {
+		return fmt.Errorf("@request và @multipart cùng khai — một tuyến nhận thân JSON HOẶC multipart, không cả hai")
 	}
 	sort.Slice(t.Replies, func(i, j int) bool { return t.Replies[i].Status < t.Replies[j].Status })
 	return nil

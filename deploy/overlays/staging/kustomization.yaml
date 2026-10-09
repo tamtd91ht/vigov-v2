@@ -37,6 +37,10 @@ patches:
   # Host + TLS của staging. Bảng định tuyến KHÔNG ở đây — xem `ingress-moi-truong.yaml`.
   - path: ingress-moi-truong.yaml
     target: { group: networking.k8s.io, version: v1, kind: Ingress, name: vigov }
+  # The 25 MB Ingress (hosts that take no upload — ADR 0052 §Sửa đổi 09/10/2026). Missing this entry
+  # does NOT fail kustomize: the object keeps base's PROD hosts on the controller staging shares.
+  - path: ingress-no-upload-environment.yaml
+    target: { group: networking.k8s.io, version: v1, kind: Ingress, name: vigov-no-upload }
 
 # THẺ ẢNH — CHỈ DÙNG CHO LẦN CÀI ĐẦU, không phản ánh thẻ đang chạy. Lý do đầy đủ ở khối
 # cùng tên trong `overlays/prod/kustomization.yaml`.

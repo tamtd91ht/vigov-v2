@@ -32,7 +32,9 @@ func TestTepSinhRaKhopVoiHopDong(t *testing.T) {
 	// deploy/hosts.yaml says.
 	muonTep := []string{duongTepSinh, duongTepTS, configHostsPath, domainHostsPath, operatorHostsPath, citizenHostsPath}
 	for _, mt := range plan.Environments {
-		muonTep = append(muonTep, duongOverlay(mt.Ten))
+		for _, name := range pinnedIngressNames {
+			muonTep = append(muonTep, duongOverlay(mt.Ten, pinnedPatchFiles[name]))
+		}
 	}
 	if len(tep) != len(muonTep) {
 		t.Fatalf("bộ sinh trả %d tệp, mong %d", len(tep), len(muonTep))
@@ -238,9 +240,16 @@ type thaoTacVa struct {
 	Value any    `yaml:"value"`
 }
 
-func docOverlay(t *testing.T, mt string) []thaoTacVa {
+// pinnedPatchFiles — the overlay patch file of each Ingress object. `ingress-moi-truong.yaml` is
+// the file both kustomizations named before the split; it stays `vigov`'s.
+var pinnedPatchFiles = map[string]string{
+	"vigov":           "ingress-moi-truong.yaml",
+	"vigov-no-upload": "ingress-no-upload-environment.yaml",
+}
+
+func docOverlay(t *testing.T, mt, patch string) []thaoTacVa {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join(goc(t), "deploy", "overlays", mt, "ingress-moi-truong.yaml"))
+	raw, err := os.ReadFile(filepath.Join(goc(t), "deploy", "overlays", mt, patch))
 	if err != nil {
 		t.Fatalf("đọc bản vá %s: %v", mt, err)
 	}
@@ -259,9 +268,19 @@ func docOverlay(t *testing.T, mt string) []thaoTacVa {
 // both wildcards; and no operation touches `paths` — a patch that rewrites the path list puts
 // the routing table back in an unchecked file.
 func TestOverlayVaDungChiSoLuatDuyNhat(t *testing.T) {
-	rules := docTepSinh(t).Spec.Rules
+	for _, obj := range readIngressObjects(t) {
+		checkOverlayOfObject(t, obj)
+	}
+}
+
+// checkOverlayOfObject runs the index checks for one Ingress object. Only `vigov` carries the web
+// host (rule 0) and therefore the web TLS Secret; `vigov-no-upload` carries API hosts only.
+func checkOverlayOfObject(t *testing.T, obj ingressTep) {
+	t.Helper()
+	rules := obj.Spec.Rules
+	hasWeb := obj.Metadata.Name == "vigov"
 	for mt, m := range moHinhChot {
-		ops := docOverlay(t, mt)
+		ops := docOverlay(t, mt, pinnedPatchFiles[obj.Metadata.Name])
 		daVa := map[string]bool{}
 		var tls []any
 		for k, op := range ops {
@@ -291,7 +310,7 @@ func TestOverlayVaDungChiSoLuatDuyNhat(t *testing.T) {
 		for i, r := range rules {
 			duong := "/spec/rules/" + strconv.Itoa(i) + "/host"
 			muonHost := m[0]
-			if i > 0 {
+			if i > 0 || !hasWeb {
 				ten, _, _ := strings.Cut(r.Host, ".")
 				muonHost = ten + "." + m[1]
 			}
@@ -330,8 +349,12 @@ func TestOverlayVaDungChiSoLuatDuyNhat(t *testing.T) {
 				t.Errorf("overlay %s: một mục tls không có secretName", mt)
 			}
 		}
-		if strings.Join(tlsHosts, ",") != m[0]+",*."+m[1] {
-			t.Errorf("overlay %s: tls phủ %v, mong [%s *.%s]", mt, tlsHosts, m[0], m[1])
+		wantTLS := "*." + m[1]
+		if hasWeb {
+			wantTLS = m[0] + "," + wantTLS
+		}
+		if strings.Join(tlsHosts, ",") != wantTLS {
+			t.Errorf("overlay %s / %s: tls phủ %v, mong [%s]", mt, obj.Metadata.Name, tlsHosts, wantTLS)
 		}
 	}
 }
@@ -371,10 +394,13 @@ func TestKhopHostMotNhan(t *testing.T) {
 func TestKhongMoiTruongNaoKhopHostCuaMoiTruongKhac(t *testing.T) {
 	hostCua := map[string][]string{}
 	for mt := range moHinhChot {
-		for _, op := range docOverlay(t, mt) {
-			if op.Op == "replace" {
-				s, _ := op.Value.(string)
-				hostCua[mt] = append(hostCua[mt], s)
+		// `vigov` first: its first replaced host is the web host (hs[0] below).
+		for _, name := range pinnedIngressNames {
+			for _, op := range docOverlay(t, mt, pinnedPatchFiles[name]) {
+				if op.Op == "replace" {
+					s, _ := op.Value.(string)
+					hostCua[mt] = append(hostCua[mt], s)
+				}
 			}
 		}
 		if len(hostCua[mt]) < 2 {

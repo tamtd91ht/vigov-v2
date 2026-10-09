@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bytes"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -25,7 +28,8 @@ type ingressTep struct {
 	APIVersion string `yaml:"apiVersion"`
 	Kind       string `yaml:"kind"`
 	Metadata   struct {
-		Name string `yaml:"name"`
+		Name        string            `yaml:"name"`
+		Annotations map[string]string `yaml:"annotations"`
 	} `yaml:"metadata"`
 	Spec struct {
 		IngressClassName string `yaml:"ingressClassName"`
@@ -59,20 +63,54 @@ func goc(t *testing.T) string {
 	return root
 }
 
-func docTepSinh(t *testing.T) ingressTep {
+// pinnedIngressNames — the objects the file must hold, in order. Literal, not read from the
+// generator: `vigov` is the name both overlay kustomizations already target.
+var pinnedIngressNames = []string{"vigov", "vigov-no-upload"}
+
+// readIngressObjects reads every document of the generated file and checks it holds exactly the
+// pinned Ingress objects, in order.
+func readIngressObjects(t *testing.T) []ingressTep {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join(goc(t), duongTepSinh))
 	if err != nil {
 		t.Fatalf("đọc %s: %v", duongTepSinh, err)
 	}
-	var ing ingressTep
-	if err := yaml.Unmarshal(raw, &ing); err != nil {
-		t.Fatalf("%s không phải YAML hợp lệ: %v", duongTepSinh, err)
+	dec := yaml.NewDecoder(bytes.NewReader(raw))
+	var out []ingressTep
+	for {
+		var ing ingressTep
+		err := dec.Decode(&ing)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			t.Fatalf("%s không phải YAML hợp lệ: %v", duongTepSinh, err)
+		}
+		out = append(out, ing)
 	}
-	if ing.Kind != "Ingress" || ing.Metadata.Name != "vigov" {
-		t.Fatalf("%s: mong Ingress tên vigov, có %q/%q", duongTepSinh, ing.Kind, ing.Metadata.Name)
+	if len(out) != len(pinnedIngressNames) {
+		t.Fatalf("%s có %d tài liệu, mong %d Ingress %v", duongTepSinh, len(out), len(pinnedIngressNames), pinnedIngressNames)
 	}
-	return ing
+	for i, ing := range out {
+		if ing.Kind != "Ingress" || ing.Metadata.Name != pinnedIngressNames[i] {
+			t.Fatalf("%s tài liệu %d: mong Ingress tên %s, có %q/%q", duongTepSinh, i, pinnedIngressNames[i], ing.Kind, ing.Metadata.Name)
+		}
+	}
+	return out
+}
+
+// docTepSinh is the HOST-LEVEL view of the generated file: the rules of every Ingress object
+// concatenated in file order. `vigov` comes first and its rule 0 is the web host, so Rules[0] is
+// the web host and Rules[1:] are the service hosts. Per-object checks (indices the overlays patch,
+// annotations) use readIngressObjects instead.
+func docTepSinh(t *testing.T) ingressTep {
+	t.Helper()
+	objs := readIngressObjects(t)
+	merged := objs[0]
+	for _, o := range objs[1:] {
+		merged.Spec.Rules = append(merged.Spec.Rules, o.Spec.Rules...)
+	}
+	return merged
 }
 
 func docTuyenHopDong(t *testing.T) []tuyenHopDong {

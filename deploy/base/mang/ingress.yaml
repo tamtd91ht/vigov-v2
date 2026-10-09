@@ -15,10 +15,17 @@
 # Bảng tiền tố → dịch vụ vì thế KHÔNG còn là các luật `paths` ở đây; nó chỉ còn là chú
 # giải trên từng host dịch vụ, và là bảng TS kia — cùng một lần phân giải hợp đồng.
 #
-# HOST và TLS của từng môi trường do overlay vá vào (deploy/overlays/<mt>/ingress-moi-truong.yaml,
-# CŨNG SINH RA bởi bộ sinh này). Base mang host của prod.
+# HOST và TLS của từng môi trường do overlay vá vào (deploy/overlays/<mt>/ingress-moi-truong.yaml
+# cho `vigov`, ingress-no-upload-environment.yaml cho `vigov-no-upload` — CŨNG SINH RA bởi bộ
+# sinh này). Base mang host của prod.
+#
+# HAI Ingress vì trần thân yêu cầu (`proxy-body-size`) của ingress-nginx đặt theo ĐỐI TƯỢNG
+# Ingress, không theo host. Chủ dự án chốt 09/10/2026 (ADR 0052 §Sửa đổi 09/10/2026): tải lên
+# đi qua service, nên host web + host có tải lên nhận 55m; host khác giữ 25m. Mỗi
+# Ingress có bản vá overlay riêng (danh sách uploadHosts ở tools/ingress/sinh.go).
 #
 # 1 host web + 7 host dịch vụ.
+---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -27,7 +34,15 @@ metadata:
     # Bắt buộc HTTPS. Số điện thoại và nội dung phản ánh của công dân đi qua đây
     # (Nghị định 13/2023/NĐ-CP).
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/proxy-body-size: "25m"
+    # 55m: tệp 50 MB + phần bao multipart (ADR 0052 §Sửa đổi 09/10/2026). Giới hạn TỪNG loại
+    # tệp vẫn do service kiểm theo cấu hình platform — trần này chỉ là chặn trên ở rìa.
+    nginx.ingress.kubernetes.io/proxy-body-size: "55m"
+    # TRUYỀN THẲNG thân yêu cầu tới pod (chủ dự án chọn ghi luồng, 09/10/2026). Được: controller
+    # không đệm 55 MB mỗi lượt ra đĩa/RAM của nó, và pod bắt đầu ghi luồng sang MinIO từ byte đầu.
+    # Mất: (1) khách mạng chậm giữ một suất tải của pod (tối đa 4/pod) suốt thời gian truyền — cận
+    # 180 s mỗi lượt ở service chặn việc ấy; (2) nginx KHÔNG thử lại sang pod khác khi pod lỗi giữa
+    # chừng (proxy_next_upstream cần thân đã đệm) — client nhận lỗi và gửi lại.
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
 spec:
   ingressClassName: nginx
   # `tls:` do overlay THÊM VÀO — tên secret khác nhau từng môi trường.
@@ -72,6 +87,57 @@ spec:
                 name: comms
                 port: { name: rest }
     #
+    # petitions — 26 tài nguyên: /api/v1/citizen-letter-tasks · /api/v1/citizen-report-breakdown
+    #   /api/v1/citizen-report-counts · /api/v1/citizen-report-fields
+    #   /api/v1/citizen-report-intake-fields · /api/v1/citizen-report-points
+    #   /api/v1/citizen-report-summary · /api/v1/citizen-reports · /api/v1/meetings
+    #   /api/v1/my-citizen-report-fields · /api/v1/my-citizen-reports
+    #   /api/v1/overdue-citizen-reports · /api/v1/overdue-tasks · /api/v1/petitions-audit-entries
+    #   /api/v1/petitions-system-messages · /api/v1/public-citizen-report-fields
+    #   /api/v1/public-citizen-reports · /api/v1/task-counts · /api/v1/task-extension-counts
+    #   /api/v1/task-extensions · /api/v1/task-priorities · /api/v1/task-statuses
+    #   /api/v1/task-summary · /api/v1/task-types · /api/v1/task-unit-summary · /api/v1/tasks
+    - host: "petitions.api.vigov.vn"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: petitions
+                port: { name: rest }
+    #
+    # platform — CHỈ 1 đường dẫn công khai, khớp ĐÚNG (Exact), không `/`: cổng REST của
+    # dịch vụ này còn phục vụ miền vận hành (ADR 0048), nên chỉ tuyến được chủ dự án mở mới
+    # ra internet — danh sách ở pathScopedPublicRoutes (tools/ingress/sinh.go).
+    - host: "platform.api.vigov.vn"
+      http:
+        paths:
+          - path: /api/v1/mini-app-ids
+            pathType: Exact
+            backend:
+              service:
+                name: platform
+                port: { name: rest }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vigov-no-upload
+  annotations:
+    # Bắt buộc HTTPS. Số điện thoại và nội dung phản ánh của công dân đi qua đây
+    # (Nghị định 13/2023/NĐ-CP).
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # Không host nào ở đây nhận tải lên tệp — giữ trần mặc định.
+    nginx.ingress.kubernetes.io/proxy-body-size: "25m"
+spec:
+  ingressClassName: nginx
+  # `tls:` do overlay THÊM VÀO — tên secret khác nhau từng môi trường.
+  #
+  # THỨ TỰ `rules` CÓ Ý NGHĨA: overlay vá host theo CHỈ SỐ (`/spec/rules/<i>/host`), host dịch
+  # vụ xếp theo tên. Bản vá overlay `test` host cũ trước khi
+  # `replace`, nên overlay lệch chỉ số là `kustomize build` ĐỔ chứ không vá nhầm host.
+  rules:
     # documents — 9 tài nguyên: /api/v1/citizen-letter-counts · /api/v1/citizen-letter-report
     #   /api/v1/citizen-letters · /api/v1/document-types · /api/v1/documents-audit-entries
     #   /api/v1/incoming-document-overdue-queue · /api/v1/incoming-document-summary
@@ -117,39 +183,6 @@ spec:
             backend:
               service:
                 name: identity
-                port: { name: rest }
-    #
-    # petitions — 26 tài nguyên: /api/v1/citizen-letter-tasks · /api/v1/citizen-report-breakdown
-    #   /api/v1/citizen-report-counts · /api/v1/citizen-report-fields
-    #   /api/v1/citizen-report-intake-fields · /api/v1/citizen-report-points
-    #   /api/v1/citizen-report-summary · /api/v1/citizen-reports · /api/v1/meetings
-    #   /api/v1/my-citizen-report-fields · /api/v1/my-citizen-reports
-    #   /api/v1/overdue-citizen-reports · /api/v1/overdue-tasks · /api/v1/petitions-audit-entries
-    #   /api/v1/petitions-system-messages · /api/v1/public-citizen-report-fields
-    #   /api/v1/public-citizen-reports · /api/v1/task-counts · /api/v1/task-extension-counts
-    #   /api/v1/task-extensions · /api/v1/task-priorities · /api/v1/task-statuses
-    #   /api/v1/task-summary · /api/v1/task-types · /api/v1/task-unit-summary · /api/v1/tasks
-    - host: "petitions.api.vigov.vn"
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: petitions
-                port: { name: rest }
-    #
-    # platform — CHỈ 1 đường dẫn công khai, khớp ĐÚNG (Exact), không `/`: cổng REST của
-    # dịch vụ này còn phục vụ miền vận hành (ADR 0048), nên chỉ tuyến được chủ dự án mở mới
-    # ra internet — danh sách ở pathScopedPublicRoutes (tools/ingress/sinh.go).
-    - host: "platform.api.vigov.vn"
-      http:
-        paths:
-          - path: /api/v1/mini-app-ids
-            pathType: Exact
-            backend:
-              service:
-                name: platform
                 port: { name: rest }
     #
     # reporting — 1 tài nguyên: /api/v1/reporting-system-messages

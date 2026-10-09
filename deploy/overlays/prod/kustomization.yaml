@@ -13,6 +13,10 @@ resources:
 patches:
   - path: ingress-moi-truong.yaml
     target: { group: networking.k8s.io, version: v1, kind: Ingress, name: vigov }
+  # The 25 MB Ingress (hosts that take no upload — ADR 0052 §Sửa đổi 09/10/2026). Missing this entry
+  # does NOT fail kustomize: the object keeps base's hosts, which is how staging would claim prod's.
+  - path: ingress-no-upload-environment.yaml
+    target: { group: networking.k8s.io, version: v1, kind: Ingress, name: vigov-no-upload }
 
 commonLabels:
   # Nhãn để CHỌN, không phải để xoá. Job triển khai cố ý KHÔNG dùng `kubectl apply --prune`:

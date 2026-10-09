@@ -105,6 +105,7 @@ type dongBeMat struct {
 	IdemMode    string            `json:"idempotency_on_store_failure,omitempty"`
 	IdemLyDo    string            `json:"idempotency_reason,omitempty"`
 	Request     string            `json:"request_schema,omitempty"`
+	RequestType string            `json:"request_content_type,omitempty"` // only when not JSON
 	Replies     map[string]string `json:"reply_schemas"`
 	File        string            `json:"declared_in"`
 }
@@ -260,6 +261,9 @@ func dungTaiLieu(tuyens []tuyen, gm *giaiMa) (*om, *beMat, error) {
 				set("content", newOM().set("application/json", newOM().
 					set("schema", newOM().set("$ref", "#/components/schemas/"+requestRef[t.pkgDir+"\x00"+t.Request])))))
 		}
+		if len(t.Multipart) > 0 {
+			op.set("requestBody", multipartBody(t.Multipart))
+		}
 
 		resp := newOM()
 		tra := map[string]string{}
@@ -314,6 +318,7 @@ func dungTaiLieu(tuyens []tuyen, gm *giaiMa) (*om, *beMat, error) {
 			IdemMode:    t.Idem.Mode,
 			IdemLyDo:    t.Idem.LyDo,
 			Request:     requestRef[t.pkgDir+"\x00"+t.Request],
+			RequestType: requestContentType(t),
 			Replies:     tra,
 			File:        t.File,
 		})
@@ -341,7 +346,7 @@ func dungTaiLieu(tuyens []tuyen, gm *giaiMa) (*om, *beMat, error) {
 			"Mỗi operation khai quyền ở x-vigov-permission; thiếu khai báo là từ chối, không phải cho qua (luật 5).",
 			"Phiên đi bằng cookie httpOnly do máy chủ đặt; client không tự gắn Authorization.",
 		}, " ")))
-	doc.set("x-vigov-source", "*/internal/ — chú thích @summary/@screen/@request/@reply/@consumer ngay trên câu lệnh đăng ký route")
+	doc.set("x-vigov-source", "*/internal/ — chú thích @summary/@screen/@request/@multipart/@reply/@consumer ngay trên câu lệnh đăng ký route")
 	doc.set("paths", paths)
 	doc.set("components", newOM().set("schemas", schemas))
 
@@ -383,6 +388,47 @@ func (b *boSchema) refTheoTen(pkgDir, ten string, nghiem bool) (string, error) {
 		return "", fmt.Errorf("%s không phải kiểu có hình dạng đối tượng", ten)
 	}
 	return b.refCua(k, nghiem)
+}
+
+// multipartContentType is the only non-JSON request body the contract describes.
+const multipartContentType = "multipart/form-data"
+
+// requestContentType names a non-JSON body for the flat surface; empty for JSON or no body, so every
+// existing row stays byte-identical.
+func requestContentType(t tuyen) string {
+	if len(t.Multipart) > 0 {
+		return multipartContentType
+	}
+	return ""
+}
+
+// multipartBody renders `@multipart` as an inline object schema: text parts `string`, the file part
+// `string` + `format: binary` (the OpenAPI spelling of a file part). Inline rather than a component:
+// the parts have no Go type to name (parseMultipart). Properties keep the declared order, which IS the
+// wire order httpx.ReadUpload requires — the description says so because a JSON object cannot.
+func multipartBody(fields []multipartField) *om {
+	props := newOM()
+	required := []any{}
+	for _, f := range fields {
+		s := newOM().set("type", "string")
+		if f.Binary {
+			s.set("format", "binary")
+		}
+		props.set(f.Name, s)
+		if !f.Optional {
+			required = append(required, f.Name)
+		}
+	}
+	schema := newOM().
+		set("type", "object").
+		set("description", "Gửi các phần THEO ĐÚNG THỨ TỰ trên: trường chữ trước, `"+multipartFileField+
+			"` cuối cùng; `"+multipartSizeField+"` là số byte của tệp (httpx.ReadUpload). Phần không khai bị từ chối.").
+		set("properties", props).
+		set("required", required).
+		set("additionalProperties", false)
+	return newOM().
+		set("required", true).
+		set("content", newOM().set(multipartContentType, newOM().set("schema", schema)))
 }
 
 // permissionText is the single-string form of a declaration's keys, for the FLAT outputs

@@ -112,6 +112,12 @@ spec:
             # identity (luật 2, cấm #1). Giá trị này đòi `identity` phải thật sự phơi cổng
             # 9090 — xem `deploy/base/identity/service.yaml`.
             - { name: IDENTITY_GRPC_ADDR, value: identity:9090 }
+            # GIỚI HẠN MỀM của bộ thu gom Go (runtime đọc, không phải biến của core/config): ~78% của
+            # `limits.memory: 384Mi` bên dưới. Từ 09/10/2026 tệp tải lên đi QUA pod này (ADR 0052 §Sửa đổi
+            # 09/10/2026: tối đa 4 lượt/pod — ảnh bìa, ảnh thân bài, âm thanh truyền thanh); không có dòng
+            # này GC chỉ chạy theo GOGC và heap có thể vượt 384Mi trước khi GC kịp thu — OOM-kill là mọi
+            # lượt đang tải và mọi yêu cầu khác của pod cùng đổ. Đổi limits.memory thì đổi số này cùng lúc.
+            - { name: GOMEMLIMIT, value: "300MiB" }
           envFrom:
             - configMapRef: { name: common-config }
             # Secret PHẢI có ít nhất: DATABASE_DSN · GRPC_CALLER_KEY · SESSION_SIGNING_KEYS.

@@ -1,5 +1,5 @@
 # TỆP NÀY ĐƯỢC SINH RA bởi tools/ingress (`go run ./tools/ingress`, hoặc `make kb`). KHÔNG SỬA
-# TAY. Phần MÔI TRƯỜNG `prod` của Ingress `vigov` — host và TLS, và CHỈ hai thứ ấy. Bảng định
+# TAY. Phần MÔI TRƯỜNG `prod` của Ingress `vigov-no-upload` — host và TLS, và CHỈ hai thứ ấy. Bảng định
 # tuyến ở `deploy/base/mang/ingress.yaml`, giống nhau ở mọi môi trường.
 #
 # VÌ SAO LÀ BẢN VÁ JSON6902 CHỨ KHÔNG PHẢI MỘT `Ingress` ĐẦY ĐỦ: `spec.rules` là danh sách KHÔNG
@@ -13,35 +13,33 @@
 # không host nào của môi trường này rơi vào quy tắc của môi trường khác.
 - op: test
   path: /spec/rules/0/host
-  value: "*.vigov.vn"
+  value: "documents.api.vigov.vn"
 - op: replace
   path: /spec/rules/0/host
-  value: "*.vigov.vn"
+  value: "documents.api.vigov.vn"
 - op: test
   path: /spec/rules/1/host
-  value: "comms.api.vigov.vn"
+  value: "finance.api.vigov.vn"
 - op: replace
   path: /spec/rules/1/host
-  value: "comms.api.vigov.vn"
+  value: "finance.api.vigov.vn"
 - op: test
   path: /spec/rules/2/host
-  value: "petitions.api.vigov.vn"
+  value: "identity.api.vigov.vn"
 - op: replace
   path: /spec/rules/2/host
-  value: "petitions.api.vigov.vn"
+  value: "identity.api.vigov.vn"
 - op: test
   path: /spec/rules/3/host
-  value: "platform.api.vigov.vn"
+  value: "reporting.api.vigov.vn"
 - op: replace
   path: /spec/rules/3/host
-  value: "platform.api.vigov.vn"
+  value: "reporting.api.vigov.vn"
 
 # `add` chứ không `replace`: base cố ý KHÔNG khai `tls`, và `replace` đổ khi đường dẫn chưa có.
 # Secret TLS tạo NGOÀI kho này — KHÔNG BAO GIỜ commit khoá. Tên: deploy/cau-hinh/README.md.
 - op: add
   path: /spec/tls
   value:
-    - hosts: ["*.vigov.vn"]
-      secretName: vigov-wildcard-tls
     - hosts: ["*.api.vigov.vn"]
       secretName: vigov-api-wildcard-tls

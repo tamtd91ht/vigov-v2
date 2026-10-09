@@ -262,6 +262,13 @@
       "bang_chung": "02/10/2026 (TASK-3, chưa commit): deploy/base/platform/deployment.yaml env IDENTITY_GRPC_ADDR=identity:9090 + chú thích khoá phải có trong common-config / platform-secrets; deploy/base/mang/netpol.yaml quy tắc 3b thêm platform, đối tượng mới allow-platform-egress-identity-staff-grpc (9090) và allow-platform-egress-storage (9000/3310); quy tắc 11 (9093) giữ nguyên. deploy/cau-hinh/README.md: các dòng OBJECT_STORAGE_* / MALWARE_SCANNER_ADDRESS / IDENTITY_GRPC_ADDR nêu platform + đoạn 'trước khi rollout'. ingress.yaml + hai overlay SINH LẠI (make kb): luật host platform.api.vigov.vn (khuôn mọi dịch vụ; TenantMiddleware trả 404 vì là host dành riêng). make check rc=0. Sau rà soát: KHÔNG còn host công khai platform.api.vigov.vn — tools/ingress không sinh host API cho platform (servicesWithoutAPIHost: cổng REST dùng chung với miền vận hành, ADR 0048 #6(c)); ingress + overlay trở về như HEAD trừ dòng đếm tuyến. deployment platform thêm GOMEMLIMIT=300MiB (~78% của 384Mi).",
       "no_confirm": [],
       "tiep_theo": "Người vận hành: tạo user MinIO riêng của platform (…/platform/* ở private/temp + ghi public), đặt hai khoá vào platform-secrets, đảm bảo common-config có đủ khoá kho tệp/máy quét, áp netpol mới TRƯỚC khi lên ảnh platform; DNS/TLS cho platform.api.vigov.vn theo wildcard *.api."
+    },
+    {
+      "id": "tai-len-qua-service-ingress-55mb",
+      "trang_thai": "xong",
+      "viec": "ADR 0052 §Sửa đổi 09/10/2026 thẻ C: ingress tách hai đối tượng — 'vigov' (web, comms, petitions, platform) proxy-body-size 55m + proxy-request-buffering off; 'vigov-no-upload' (documents, finance, identity, reporting) 25m; vá overlay prod/staging cho đối tượng mới; GOMEMLIMIT=300MiB cho petitions + comms; tools/apidoc khai @multipart",
+      "bang_chung": "(commit này) — tools/ingress (uploadHosts, body_cap_test.go kể cả TestOverlayKustomizationPatchesEveryIngress), tools/apidoc (@multipart, multipart_test.go); go vet + go test tools/ingress, tools/apidoc xanh; kubectl kustomize deploy/overlays/prod tách đúng host 55m/25m. CHƯA áp lên cụm thật",
+      "tiep_theo": "proxy-read-timeout của ingress-nginx mặc định 60 s chưa đổi — quét mã độc/mã hoá lại lâu hơn 60 s sau khi nhận thân sẽ 504. web-admin gen-api-types.mjs chưa hiểu multipart (ra 'than: never'). Ingress MinIO storage-api.vigov.vn chỉ GET/HEAD/OPTIONS: việc vận hành ngoài kho."
     }
   ]
 }
