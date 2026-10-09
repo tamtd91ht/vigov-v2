@@ -159,8 +159,8 @@ var envHints = map[string]envHint{
 		shape:   "https://<minio nội bộ>:<cổng>",
 	},
 	"OBJECT_STORAGE_PUBLIC_ENDPOINT": {
-		meaning: "Địa chỉ MinIO mà trình duyệt và Mini App thấy — nằm trong đường dẫn tải có chữ ký (presigned URL).",
-		source:  "Người vận hành MinIO: tên miền công khai trỏ vào MinIO, https.",
+		meaning: "Địa chỉ S3 API của MinIO mà trình duyệt và Mini App thấy — nằm trong đường dẫn tải có chữ ký (presigned URL). Là CỔNG API (mặc định :9000), KHÔNG phải MinIO Console (giao diện web, :9001): Console trả 200 cho lệnh tải lên nên điện thoại tưởng xong mà không có tệp nào (09/10/2026).",
+		source:  "Người vận hành MinIO: tên miền công khai trỏ vào cổng S3 API của CÙNG MinIO với OBJECT_STORAGE_ENDPOINT, https. Không có tên miền nội bộ riêng thì đặt bằng OBJECT_STORAGE_ENDPOINT.",
 		place:   inConfigMap,
 		shape:   "https://<minio trình duyệt thấy>",
 	},
