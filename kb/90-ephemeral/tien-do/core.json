@@ -339,6 +339,14 @@
       "viec": "Log để giám sát luồng tải tệp: dòng khởi động 'kho lưu tệp' (cửa nội bộ, cửa công khai, 3 bucket) ở petitions/comms/platform; petitions ghi 'ảnh hiện trường: cấp chỗ tải' (dich_tai_len, khoa_tai_len) và khoa_luu khi lưu xong. 09/10: điện thoại tải lên thành công qua OBJECT_STORAGE_PUBLIC_ENDPOINT nhưng petitions đọc qua OBJECT_STORAGE_ENDPOINT không thấy — hai cửa trỏ hai kho",
       "bang_chung": "(commit này) — core/storage Client.LogAttrs, PresignedPost.Destination (không chữ ký, không policy); ca kiểm TestLogAttrsNamesBothEndpointsAndBuckets, TestPresignedPostDestinationDropsCredentials. go test core/storage, comms+platform cmd xanh; petitions cmd + internal/http xanh trên worktree sạch",
       "tiep_theo": "Vận hành: sửa OBJECT_STORAGE_PUBLIC_ENDPOINT trỏ qua ingress tới đúng MinIO của OBJECT_STORAGE_ENDPOINT; dòng 'kho lưu tệp' lúc khởi động để đối chiếu"
+    },
+    {
+      "id": "tai-len-qua-service-putupload",
+      "menu": "phan-anh-nguoi-dan",
+      "trang_thai": "xong",
+      "viec": "ADR 0052 §Sửa đổi 09/10/2026 thẻ A: core/storage PutUpload — service ghi luồng tệp vào bucket tạm (khoá upload/…, cỡ biết trước, DisableMultipart, không đệm cả tệp); ErrTooLarge (413) tách khỏi ErrInvalidArgument, ErrSizeMismatch",
+      "bang_chung": "(commit này) — TestPutUploadRefusals (12 ca), TestPutUploadStoresExactBytes, TestPutUploadRefusesWrongLength; go vet + go test core/storage xanh. TestIntegrationPutUploadThenPromote CHƯA CHẠY (không có MinIO thật)",
+      "tiep_theo": "PresignUpload còn — gỡ ở thẻ dọn sau khi mọi service chuyển. Chạy integration với MinIO thật (VIGOV_TEST_MINIO_ENDPOINT)."
     }
   ]
 }

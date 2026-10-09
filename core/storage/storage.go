@@ -14,6 +14,12 @@
 // EXIF — into the private bucket. Every other write path copies bytes a client uploaded; this one
 // streams bytes the caller hands over, so it carries its own refusals rather than widening Promote.
 //
+// PLUS PutUpload (added 2026-10-09, ADR 0052 §Sửa đổi 09/10/2026 — the ninth operation): uploads
+// now travel THROUGH the owning service as one multipart request, and the service streams the file
+// into the temp bucket under the same `upload/…` key the presigned POST used. Step (c) below then
+// runs unchanged on what it wrote. Steps (a) and (b) are superseded; PresignUpload stays until the
+// services have moved off it.
+//
 // IT IS A LIBRARY, NOT A SERVICE (ADR 0001:96). Metadata lives in each owning service's own
 // `stored_file` table (rule 2 invariant 1); this package knows nothing about it, nothing about
 // permissions and nothing about the audit trail. The caller checks permission / citizen session
@@ -94,6 +100,13 @@ var (
 	// public — an original, or anything of class citizen-media (ADR 0052 §ĐIỀU KIỆN DỪNG #2).
 	// Not a retryable error and not a caller bug to route around: it is a STOP CONDITION.
 	ErrNotPublishable = errors.New("storage: object may not be published")
+	// ErrTooLarge: PutUpload was given a size above the caller's limit for the purpose. Refused
+	// before any byte is read; a handler answers 413.
+	ErrTooLarge = errors.New("storage: file exceeds the size limit")
+	// ErrSizeMismatch: a reader yielded more or fewer bytes than the size declared for it. Always
+	// returned together with ErrInvalidArgument (both match errors.Is), so callers of
+	// PutServerProduced that test for ErrInvalidArgument keep working. Nothing is committed.
+	ErrSizeMismatch = errors.New("storage: body length differs from the declared size")
 )
 
 // Bucket is one of the three functional buckets of ADR 0052 §2.
@@ -316,6 +329,81 @@ func (c *Client) PresignUpload(ctx context.Context, uploadKey string, maxBytes i
 		return PresignedPost{}, fmt.Errorf("storage: presign upload: %w", err)
 	}
 	return PresignedPost{URL: u.String(), Fields: fields, ExpiresAt: expires}, nil
+}
+
+// PutUpload streams a client's file, received by the owning service, into the TEMP bucket under
+// uploadKey — the ninth operation, added by ADR 0052 §Sửa đổi 09/10/2026 (owner decision): uploads
+// go through the service, never straight from a device to MinIO. It writes exactly what the
+// presigned POST used to write, so the completion step (c) — Stat, sniff, malware scan, SHA256,
+// Promote bound to the ETag — runs on it unchanged. The returned ETag is the one to bind (c) to.
+//
+// THE CALLER HAS ALREADY decided, before reading a byte of the body: session / permission (rules 4
+// and 5), commune (rule 1), the per-purpose type and size policy (ADR 0052 §10), the per-pod
+// concurrency slot and any rate limit. This function only refuses what breaks its own contract:
+//   - uploadKey not an `upload/…` key (an `export/…` key, a destination key, a free-form string)
+//     → ErrInvalidArgument together with ErrInvalidKey.
+//   - contentType off the allow-list → ErrTypeNotAllowed; its extension not the key's →
+//     ErrInvalidArgument. The same two refusals as PresignUpload. contentType is the DECLARED type:
+//     it is never trusted downstream, because Promote stores the sniffed one.
+//   - maxBytes <= 0 → ErrInvalidArgument. There is no default: the limit is platform policy.
+//   - size <= 0 → ErrInvalidArgument (an empty file is not an upload); size > maxBytes →
+//     ErrTooLarge (a handler answers 413). Both before any byte is read.
+//   - a nil reader → ErrInvalidArgument.
+//
+// MEMORY: one PUT with the KNOWN size and DisableMultipart, read through a 64 KiB buffer
+// (exactBufSize) — never size -1, with which minio-go buffers multipart parts of up to hundreds of
+// MiB in a pod whose limit is 384 MiB (ADR 0052 §Sửa đổi, đánh đổi).
+//
+// r must yield EXACTLY size bytes; more or fewer fails with ErrSizeMismatch (and
+// ErrInvalidArgument) while the request body is still one byte short, so the store never commits a
+// truncated or padded object. Store errors pass through mapErr. No user metadata is written
+// (ADR 0052 §3: the original file name is personal data and lives in stored_file).
+//
+// The temp key is fresh per upload (a new server-side ObjectID), so no existence check is made; the
+// temp lifecycle rule removes anything the caller abandons within a day.
+func (c *Client) PutUpload(ctx context.Context, uploadKey string, r io.Reader, size int64, maxBytes int64, contentType string) (ObjectInfo, error) {
+	if !strings.HasPrefix(uploadKey, TempUploadPrefix) {
+		return ObjectInfo{}, fmt.Errorf("%w: %w: only %s keys are written by PutUpload", ErrInvalidArgument, ErrInvalidKey, TempUploadPrefix)
+	}
+	name, k, err := c.checkKey(BucketTemp, uploadKey)
+	if err != nil {
+		return ObjectInfo{}, fmt.Errorf("%w: %w", ErrInvalidArgument, err)
+	}
+	ext, ok := ExtForMIME(contentType)
+	if !ok {
+		return ObjectInfo{}, fmt.Errorf("%w: declared type %q", ErrTypeNotAllowed, contentType)
+	}
+	if ext != k.Ext {
+		return ObjectInfo{}, fmt.Errorf("%w: declared type %q does not match key extension %q", ErrInvalidArgument, contentType, k.Ext)
+	}
+	if maxBytes <= 0 {
+		return ObjectInfo{}, fmt.Errorf("%w: maxBytes must be positive", ErrInvalidArgument)
+	}
+	if size <= 0 {
+		return ObjectInfo{}, fmt.Errorf("%w: size must be positive", ErrInvalidArgument)
+	}
+	if size > maxBytes {
+		return ObjectInfo{}, fmt.Errorf("%w: %d bytes, limit %d", ErrTooLarge, size, maxBytes)
+	}
+	if r == nil {
+		return ObjectInfo{}, fmt.Errorf("%w: reader is nil", ErrInvalidArgument)
+	}
+	er := &exactReader{br: bufio.NewReaderSize(r, exactBufSize), remaining: size}
+	info, err := c.api.PutObject(ctx, name, uploadKey, er, size, minio.PutObjectOptions{
+		ContentType: contentType,
+		// One request: a failed body can never leave a completed object behind.
+		DisableMultipart: true,
+	})
+	if er.err != nil {
+		return ObjectInfo{}, er.err
+	}
+	if err != nil {
+		return ObjectInfo{}, mapErr("put upload", err)
+	}
+	return ObjectInfo{
+		Key: uploadKey, Size: size, ETag: info.ETag, ContentType: contentType,
+		VersionID: info.VersionID, LastModified: info.LastModified,
+	}, nil
 }
 
 // ObjectInfo is what Stat reports.
@@ -694,8 +782,8 @@ const (
 	exactWindow  = 4 << 10
 )
 
-// exactReader yields exactly `remaining` bytes of br, hashing them, and fails — with a sticky
-// ErrInvalidArgument — if br is shorter or longer. The length check happens BEFORE the final bytes
+// exactReader yields exactly `remaining` bytes of br, hashing them when h is set, and fails — with
+// a sticky ErrInvalidArgument + ErrSizeMismatch — if br is shorter or longer. The length check happens BEFORE the final bytes
 // are returned: once the last byte is handed to the transport the store may commit, so "too long"
 // has to be known while the body is still one byte short.
 type exactReader struct {
@@ -719,20 +807,22 @@ func (e *exactReader) Read(p []byte) (int, error) {
 		buf, err := e.br.Peek(int(e.remaining) + 1)
 		switch {
 		case int64(len(buf)) > e.remaining:
-			e.err = fmt.Errorf("%w: reader yields more than the declared size", ErrInvalidArgument)
+			e.err = fmt.Errorf("%w: %w: reader yields more than the declared size", ErrInvalidArgument, ErrSizeMismatch)
 			return 0, e.err
 		case err != nil && !errors.Is(err, io.EOF):
 			e.err = fmt.Errorf("storage: read: %w", err)
 			return 0, e.err
 		case int64(len(buf)) < e.remaining:
-			e.err = fmt.Errorf("%w: reader yields less than the declared size", ErrInvalidArgument)
+			e.err = fmt.Errorf("%w: %w: reader yields less than the declared size", ErrInvalidArgument, ErrSizeMismatch)
 			return 0, e.err
 		}
 	} else if limit := e.remaining - exactWindow; int64(len(p)) > limit {
 		p = p[:limit] // never step into the final window without the peek above
 	}
 	n, err := e.br.Read(p)
-	e.h.Write(p[:n])
+	if e.h != nil { // PutUpload does not hash: step (c) hashes what the store holds
+		e.h.Write(p[:n])
+	}
 	e.remaining -= int64(n)
 	switch {
 	case err == nil:
@@ -740,7 +830,7 @@ func (e *exactReader) Read(p []byte) (int, error) {
 	case errors.Is(err, io.EOF) && e.remaining == 0:
 		return n, nil
 	case errors.Is(err, io.EOF):
-		e.err = fmt.Errorf("%w: reader yields less than the declared size", ErrInvalidArgument)
+		e.err = fmt.Errorf("%w: %w: reader yields less than the declared size", ErrInvalidArgument, ErrSizeMismatch)
 	default:
 		e.err = fmt.Errorf("storage: read: %w", err)
 	}

@@ -1,12 +1,15 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -327,5 +330,122 @@ func TestPresignedPostDestinationDropsCredentials(t *testing.T) {
 	target, key := p.Destination()
 	if target != "https://files.example.test/vigov-test-temp/" || key != "upload/x/original.jpg" {
 		t.Fatalf("Destination = %q, %q", target, key)
+	}
+}
+
+// Every refusal of PutUpload happens before any byte is read and before any network call:
+// testClient points at a host that does not exist, so reaching it would surface another error.
+func TestPutUploadRefusals(t *testing.T) {
+	c := testClient(t)
+	ctx := context.Background()
+	up, _ := scenePhoto().UploadPath()
+	export, _ := scenePhoto().ExportPath()
+	dst, _ := scenePhoto().Path()
+	body := jpegBytes(100)
+	cases := map[string]struct {
+		key, mime string
+		r         io.Reader
+		size, max int64
+		want      []error
+	}{
+		"export key":          {export, MIMEJPEG, bytes.NewReader(body), 100, 1000, []error{ErrInvalidArgument, ErrInvalidKey}},
+		"destination key":     {dst, MIMEJPEG, bytes.NewReader(body), 100, 1000, []error{ErrInvalidArgument, ErrInvalidKey}},
+		"free-form key":       {"upload/../etc/passwd", MIMEJPEG, bytes.NewReader(body), 100, 1000, []error{ErrInvalidArgument, ErrInvalidKey}},
+		"empty key":           {"", MIMEJPEG, bytes.NewReader(body), 100, 1000, []error{ErrInvalidArgument, ErrInvalidKey}},
+		"html type":           {up, "text/html", bytes.NewReader(body), 100, 1000, []error{ErrTypeNotAllowed}},
+		"type mismatches ext": {up, MIMEPNG, bytes.NewReader(body), 100, 1000, []error{ErrInvalidArgument}},
+		"zero max":            {up, MIMEJPEG, bytes.NewReader(body), 100, 0, []error{ErrInvalidArgument}},
+		"negative max":        {up, MIMEJPEG, bytes.NewReader(body), 100, -1, []error{ErrInvalidArgument}},
+		"zero size":           {up, MIMEJPEG, bytes.NewReader(body), 0, 1000, []error{ErrInvalidArgument}},
+		"negative size":       {up, MIMEJPEG, bytes.NewReader(body), -1, 1000, []error{ErrInvalidArgument}},
+		"above the limit":     {up, MIMEJPEG, bytes.NewReader(body), 1001, 1000, []error{ErrTooLarge}},
+		"nil reader":          {up, MIMEJPEG, nil, 100, 1000, []error{ErrInvalidArgument}},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := c.PutUpload(ctx, tc.key, tc.r, tc.size, tc.max, tc.mime)
+			for _, want := range tc.want {
+				if !errors.Is(err, want) {
+					t.Fatalf("err = %v, want %v", err, want)
+				}
+			}
+		})
+	}
+	// The size limit is the caller's, distinct from a malformed call: a handler maps it to 413.
+	if _, err := c.PutUpload(ctx, up, bytes.NewReader(body), 1001, 1000, MIMEJPEG); errors.Is(err, ErrInvalidArgument) {
+		t.Errorf("too large is also ErrInvalidArgument (%v): the handler could not tell 413 from 400", err)
+	}
+}
+
+// newUploadS3 is newProduceS3 pointed at the temp bucket and the upload key.
+func newUploadS3(t *testing.T, uploadKey string) (*produceS3, *Client) {
+	t.Helper()
+	f, c := newProduceS3(t, uploadKey)
+	f.mu.Lock()
+	f.path = "/vigov-test-temp/" + uploadKey
+	f.mu.Unlock()
+	return f, c
+}
+
+func TestPutUploadStoresExactBytes(t *testing.T) {
+	for name, size := range map[string]int{
+		"small": 1000,
+		// Larger than the read-ahead buffer and the final window: every branch of exactReader runs.
+		"multi-buffer body": 3*exactBufSize + 123,
+	} {
+		t.Run(name, func(t *testing.T) {
+			up, _ := scenePhoto().UploadPath()
+			f, c := newUploadS3(t, up)
+			body := jpegBytes(size)
+			got, err := c.PutUpload(context.Background(), up, bytes.NewReader(body), int64(size), int64(size), MIMEJPEG)
+			if err != nil {
+				t.Fatalf("PutUpload: %v (other requests: %v)", err, f.otherReqs)
+			}
+			if got.Key != up || got.Size != int64(size) || got.ETag != "e2" || got.ContentType != MIMEJPEG {
+				t.Fatalf("got %+v", got)
+			}
+			if !bytes.Equal(f.stored, body) {
+				t.Fatalf("stored %d bytes, want the %d sent", len(f.stored), len(body))
+			}
+			if f.puts != 1 || len(f.otherReqs) != 0 {
+				t.Errorf("want exactly one PUT, got puts=%d other=%v", f.puts, f.otherReqs)
+			}
+			if ct := f.putHdr.Get("Content-Type"); ct != MIMEJPEG {
+				t.Errorf("Content-Type = %q", ct)
+			}
+			// Known size, one request: no multipart upload id, and a declared length that matches.
+			if f.putHdr.Get("x-amz-decoded-content-length") != "" && f.putHdr.Get("x-amz-decoded-content-length") != strconv.Itoa(size) {
+				t.Errorf("decoded length = %q", f.putHdr.Get("x-amz-decoded-content-length"))
+			}
+			for h := range f.putHdr {
+				if strings.HasPrefix(strings.ToLower(h), "x-amz-meta-") {
+					t.Errorf("user metadata written: %s", h)
+				}
+			}
+		})
+	}
+}
+
+// A body that does not match its declared size fails with ErrSizeMismatch, and the store never
+// receives a whole body — nothing is committed under the upload key.
+func TestPutUploadRefusesWrongLength(t *testing.T) {
+	cases := map[string]struct{ actual, declared int }{
+		"longer, small":  {101, 100},
+		"longer, large":  {3*exactBufSize + 1, 3 * exactBufSize},
+		"shorter, small": {99, 100},
+		"shorter, large": {3 * exactBufSize, 3*exactBufSize + 1},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			up, _ := scenePhoto().UploadPath()
+			f, c := newUploadS3(t, up)
+			_, err := c.PutUpload(context.Background(), up, bytes.NewReader(jpegBytes(tc.actual)), int64(tc.declared), 1<<30, MIMEJPEG)
+			if !errors.Is(err, ErrSizeMismatch) {
+				t.Fatalf("err = %v, want ErrSizeMismatch", err)
+			}
+			if f.exists {
+				t.Fatalf("a %d-byte body declared as %d was stored", tc.actual, tc.declared)
+			}
+		})
 	}
 }

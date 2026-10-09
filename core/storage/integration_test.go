@@ -226,6 +226,58 @@ func TestIntegrationUploadPromoteDownloadPurge(t *testing.T) {
 	}
 }
 
+// PutUpload against a real MinIO (ADR 0052 §Sửa đổi 09/10/2026): the service writes the temp
+// object itself, then step (c) runs on it unchanged — Stat, sniff, Promote bound to the ETag
+// PutUpload returned. A short body is refused and leaves no object behind.
+func TestIntegrationPutUploadThenPromote(t *testing.T) {
+	c, cleanup := integrationClient(t)
+	defer cleanup()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	objectID, err := NewObjectID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	k := Key{
+		Class: ClassContentSource, TenantID: testTenant, CreatedAt: time.Now(),
+		Service: ServiceComms, Purpose: PurposeContentImage, ObjectID: objectID,
+		Variant: VariantOriginal, Ext: "png",
+	}
+	up, err := k.UploadPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	png := append([]byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}, bytes.Repeat([]byte{7}, 200_000)...)
+
+	// Short body first: refused, and MinIO holds nothing under the key.
+	if _, err := c.PutUpload(ctx, up, bytes.NewReader(png[:1000]), int64(len(png)), 1<<20, MIMEPNG); !errors.Is(err, ErrSizeMismatch) {
+		t.Fatalf("short body: %v, want ErrSizeMismatch", err)
+	}
+	if _, err := c.Stat(ctx, BucketTemp, up); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("a short body left an object: %v", err)
+	}
+
+	put, err := c.PutUpload(ctx, up, bytes.NewReader(png), int64(len(png)), 1<<20, MIMEPNG)
+	if err != nil {
+		t.Fatalf("PutUpload: %v", err)
+	}
+	st, err := c.Stat(ctx, BucketTemp, up)
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	if st.ETag != put.ETag || st.Size != int64(len(png)) || st.ContentType != MIMEPNG {
+		t.Fatalf("stat = %+v, put = %+v", st, put)
+	}
+	promoted, err := c.Promote(ctx, up, put.ETag, k, BucketPrivate)
+	if err != nil {
+		t.Fatalf("Promote: %v", err)
+	}
+	if promoted.Size != int64(len(png)) || promoted.ContentType != MIMEPNG {
+		t.Fatalf("promoted = %+v", promoted)
+	}
+}
+
 // PutServerProduced against a real MinIO, in the shape of both flows it serves:
 // (b) a citizen photo uploaded to temp, re-encoded (here: a stand-in byte slice), stored as the
 // private original, then the raw temp upload purged; (a) a content-source derivative that
