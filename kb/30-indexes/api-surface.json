@@ -4932,6 +4932,25 @@
       "declared_in": "service-petitions/internal/http/routes_cong_dan.go"
     },
     {
+      "service": "identity",
+      "method": "GET",
+      "path": "/api/v1/my-residential-units",
+      "operation_id": "identity_get_my_residential_units",
+      "task_id": "29c18e09d6e6",
+      "summary": "Danh sách thôn / tổ dân phố ĐANG DÙNG của xã trong phiên công dân, cho ô chọn ở form gửi phản ánh trên Mini App — chỉ mã và tên, theo thứ tự của xã",
+      "permission_kind": "citizen-only",
+      "tenant_class": "tu-phien-chi-xem",
+      "tenant_class_reason": "danh sách thôn / tổ dân phố là sổ địa bàn của xã, như nhau với mọi người dân và không chứa hồ sơ của ai — phiên chưa xác thực số vẫn gửi được phản ánh (ADR 0080) nên vẫn cần ô chọn thôn",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "identity.myResidentialUnitsOut",
+        "401": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes_citizen.go"
+    },
+    {
       "service": "comms",
       "method": "GET",
       "path": "/api/v1/notifications",

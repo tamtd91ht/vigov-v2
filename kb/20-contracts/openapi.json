@@ -21893,6 +21893,68 @@
         }
       }
     },
+    "/api/v1/my-residential-units": {
+      "get": {
+        "summary": "Danh sách thôn / tổ dân phố ĐANG DÙNG của xã trong phiên công dân, cho ô chọn ở form gửi phản ánh trên Mini App — chỉ mã và tên, theo thứ tự của xã",
+        "operationId": "identity_get_my_residential_units",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-permission": {
+          "kind": "citizen-only"
+        },
+        "x-vigov-tenant-class": {
+          "kind": "tu-phien-chi-xem",
+          "tenant_in_context": true,
+          "source": "phiên công dân — không bao giờ từ Host, header hay query (luật 1 cấm #2)",
+          "reason": "danh sách thôn / tổ dân phố là sổ địa bàn của xã, như nhau với mọi người dân và không chứa hồ sơ của ai — phiên chưa xác thực số vẫn gửi được phản ánh (ADR 0080) nên vẫn cần ô chọn thôn",
+          "note": "Chỉ xem: nhận cả phiên CHƯA xác thực số điện thoại, nên không được đọc hay ghi hồ sơ của chính công dân (ADR 0045)."
+        },
+        "x-vigov-task": "29c18e09d6e6",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.myResidentialUnitsOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/notifications": {
       "get": {
         "summary": "Hộp thông báo ở chuông của CHÍNH cán bộ đang đăng nhập — mới nhất trước, có con trỏ trang",
@@ -46207,6 +46269,39 @@
           "grants",
           "groups",
           "roles"
+        ],
+        "additionalProperties": false
+      },
+      "identity.myResidentialUnitOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID — what the petition send carries back (`residential_unit_id`)"
+          },
+          "name": {
+            "type": "string",
+            "description": "\"Thôn Bình An\" — today's name, for display"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "identity.myResidentialUnitsOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.myResidentialUnitOut"
+            }
+          }
+        },
+        "required": [
+          "items"
         ],
         "additionalProperties": false
       },

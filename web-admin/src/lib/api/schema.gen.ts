@@ -2670,6 +2670,17 @@ export type identity_maTranQuyenRa = {
   "grants": Array<identity_capQuyenRa>;
 };
 
+export type identity_myResidentialUnitOut = {
+  /** ULID — what the petition send carries back (`residential_unit_id`) */
+  "id": string;
+  /** "Thôn Bình An" — today's name, for display */
+  "name": string;
+};
+
+export type identity_myResidentialUnitsOut = {
+  "items": Array<identity_myResidentialUnitOut>;
+};
+
 export type identity_ngayNghiLeRa = {
   /** ULID — what a later edit would reference */
   "id": string;
@@ -8972,6 +8983,23 @@ export type petitions_get_my_citizen_reports_by_maTraCuu_verification_photos = {
   };
   errorCodes: {
     403: "chua_xac_thuc_so";
+  };
+};
+
+/** GET /api/v1/my-residential-units — Danh sách thôn / tổ dân phố ĐANG DÙNG của xã trong phiên công dân, cho ô chọn ở form gửi phản ánh trên Mini App — chỉ mã và tên, theo thứ tự của xã */
+export type identity_get_my_residential_units = {
+  duongDan: "/api/v1/my-residential-units";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_myResidentialUnitsOut;
+    401: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
   };
 };
 
