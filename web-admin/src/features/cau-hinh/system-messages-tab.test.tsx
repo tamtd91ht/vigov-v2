@@ -384,10 +384,22 @@ describe("câu xã tự thêm (ADR 0079 Q2)", () => {
     expect(card(message({ overridden: true }), { deleteReason: "" })).not.toContain("Lý do xoá");
   });
 
-  it("HỒI QUY (ADR 0079 lô 3): câu CHƯA có lời của xã thì KHÔNG có 'Tắt' — không có gì để tắt", () => {
+  it("chủ dự án 09/10/2026 (thay ADR 0079 lô 3): câu CHƯA sửa lời cũng có 'Tắt' thật — như prototype :193-194", () => {
     const html = card(message({ overridden: false }));
+    const off = buttonOf(html, "Tắt");
+    expect(off).not.toContain(DISABLED_ATTR);
+    expect(off).toContain('type="button"');
+    // Never reworded: still no "Khôi phục lời gốc", nothing to go back to.
+    expect(html).not.toContain(form.RESTORE_BUTTON);
+  });
+
+  it("câu CHƯA sửa lời đang tắt: mờ, viên 'Đang tắt — dùng lời gốc', nút 'Bật lại'; không 'Đã sửa lời'", () => {
+    const html = card(message({ overridden: false, is_active: false }));
+    expect(html).toMatch(/<article class="[^"]*opacity-60"/);
+    expect(html).toContain(form.SWITCHED_OFF_BADGE);
+    expect(html).not.toContain(form.OVERRIDDEN_BADGE);
+    expect(buttonOf(html, "Bật lại")).not.toContain(DISABLED_ATTR);
     expect(html).not.toMatch(/>Tắt<\/button>/);
-    expect(html).not.toContain("Tắt câu hệ thống");
   });
 
   it("HỒI QUY: 'Đi kèm phần mềm' và 'Đã sửa lời' là thuộc tính — viên chữ không biểu tượng, như prototype", () => {

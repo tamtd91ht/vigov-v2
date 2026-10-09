@@ -45,7 +45,8 @@ type SystemMessageService interface {
 //	group_code     `bao-cao` — the web's group code, which section of the tab the card is listed under
 //	origin         always `shipped` here (no commune sentences in this group, ADR 0079 Q5a); kept so the
 //	               three services answer one shape
-//	is_active      false only for a switched-off wording
+//	is_active      false for a switched-off sentence — any shipped key since 09/10/2026, reworded or
+//	               not (then overridden false, current_text the default), or a commune sentence
 //	override_text  the commune's stored wording of a shipped key, present while overridden, ALSO while
 //	               switched off (then current_text is the default) — what "Bật lại" brings back
 type systemMessageOut struct {
@@ -170,9 +171,6 @@ func (h *Handler) writeSystemMessageError(w http.ResponseWriter, r *http.Request
 		// Same body for every unknown key, including another service's (`budget.scope_notice`,
 		// `feedback.*`): the key is not this service's to reword.
 		httpx.WriteError(w, http.StatusNotFound, "not_found", "Không có câu hệ thống mang mã này ở phân hệ Báo cáo.", "")
-	case errors.Is(err, domain.ErrNoOverrideToSwitch):
-		httpx.WriteError(w, http.StatusConflict, "no_commune_wording",
-			"Câu này đang dùng lời gốc của phần mềm, chưa có lời của xã để tắt hoặc bật.", "")
 	case domain.IsMessageInputError(err):
 		// The domain's own sentence: it names the rule and holds no personal data. The use case
 		// returns input refusals UNWRAPPED (they happen before any transaction), so no commune id or

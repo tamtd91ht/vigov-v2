@@ -230,3 +230,28 @@ func TestSetActiveWritesOnlyTheSwitch(t *testing.T) {
 		t.Error("zero rows reported as success")
 	}
 }
+
+// A sentence switched off WITHOUT a commune wording (migration 0005): NULL is read as "" and "" is
+// written as NULL — never as an empty string, which the text-shape CHECK refuses, and never as the
+// default, which would pin it.
+func TestOverrideWithoutWordingIsNull(t *testing.T) {
+	row := overrideRow(false)
+	row["message_text"] = nil
+	d := &smDB{rows: []map[string]driver.Value{row}}
+	s, h, ctx := smStore(d)
+	live, err := s.ListLive(ctx)
+	if err != nil || len(live) != 1 || live[0].Text != "" || !live[0].Inactive {
+		t.Fatalf("ListLive of a NULL wording: %+v %v", live, err)
+	}
+
+	d = &smDB{affected: 1}
+	s, h, ctx = smStore(d)
+	o := domain.MessageOverride{ID: "o1", Key: row["message_key"].(string), UpdatedAt: smAt, UpdatedBy: "CB-1", Inactive: true}
+	if err := smInTx(t, h, ctx, func(tx *pkgstore.ScopedTx) error { return s.AddOverride(ctx, tx, o) }); err != nil {
+		t.Fatal(err)
+	}
+	st := smOne(t, d, "INSERT INTO system_message_override")
+	if st.args[3] != nil || st.args[6] != false {
+		t.Errorf("unworded switched-off row bound message_text=%#v is_active=%v, want NULL/false", st.args[3], st.args[6])
+	}
+}

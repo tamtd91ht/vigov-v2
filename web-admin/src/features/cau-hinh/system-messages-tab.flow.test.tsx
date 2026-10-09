@@ -279,6 +279,50 @@ describe("Tắt / Bật lại", () => {
     expect(card.textContent).toContain("Đang tắt — dùng lời gốc");
     expect(card.querySelector("textarea")!.value).toBe("Xin ghi lý do.");
   });
+
+  it("owner 09/10/2026: a shipped sentence NEVER reworded switches off and back on through …/override", async () => {
+    const notice: SystemMessage = {
+      code: "budget.scope_notice",
+      group_code: "giai-ngan",
+      origin: "shipped",
+      description: "Dòng ranh giới sản phẩm",
+      default_text: "Hệ thống là công cụ theo dõi.",
+      current_text: "Hệ thống là công cụ theo dõi.",
+      overridden: false,
+      is_active: true,
+    };
+    lists.finance = [notice];
+    H.phien = session(["admin.lookup"]);
+    const el = await mount();
+
+    writeReply = { status: 200, body: { ...notice, is_active: false } };
+    act(() => button(cardOf(el, "budget.scope_notice"), "Tắt").click());
+    await settle();
+    expect(writes()[0]).toMatchObject({
+      method: "PATCH",
+      url: "/api/v1/finance-system-messages/budget.scope_notice/override",
+      body: { is_active: false },
+    });
+    let card = cardOf(el, "budget.scope_notice");
+    expect(card.className).toContain("opacity-60");
+    expect(card.textContent).toContain("Đang tắt");
+    expect(card.textContent).not.toContain("Đã sửa lời");
+    expect(card.textContent).not.toContain("Khôi phục lời gốc");
+    expect(card.textContent).not.toContain("Câu này đang dùng lời gốc");
+
+    writeReply = { status: 200, body: notice };
+    act(() => button(card, "Bật lại").click());
+    await settle();
+    expect(writes()[1]).toMatchObject({
+      method: "PATCH",
+      url: "/api/v1/finance-system-messages/budget.scope_notice/override",
+      body: { is_active: true },
+    });
+    card = cardOf(el, "budget.scope_notice");
+    expect(card.className).not.toContain("opacity-60");
+    expect(button(card, "Tắt")).toBeDefined();
+    expect(T.success).not.toHaveBeenCalled();
+  });
 });
 
 describe("Xoá (câu xã tự thêm)", () => {

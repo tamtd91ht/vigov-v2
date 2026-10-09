@@ -44,13 +44,14 @@ type systemMessagesFake struct {
 	list    []domain.SystemMessage
 	result  domain.SystemMessage
 
-	// Text is recorded apart from `calls`: the investment-project reads call it on every request,
+	// Resolve is recorded apart from `calls`: the investment-project reads call it on every request,
 	// and the three routes above count their own calls.
 	textCalls   int
 	textKey     string
 	textCommune tenant.ID
 	textOut     string // "" answers the shipped default, which is what a commune that reworded nothing reads
 	textErr     error
+	textOff     bool // the commune switched the key off (with textOut "" — never reworded)
 
 	active  *bool
 	created app.NewCustomMessage
@@ -58,20 +59,21 @@ type systemMessagesFake struct {
 	reason  string
 }
 
-func (f *systemMessagesFake) Text(ctx context.Context, key string) (string, error) {
+func (f *systemMessagesFake) Resolve(ctx context.Context, key string) (domain.SystemMessage, error) {
 	f.textCalls++
 	f.textKey, f.textCommune = key, tenant.MustFrom(ctx)
 	if f.textErr != nil {
-		return "", f.textErr
-	}
-	if f.textOut != "" {
-		return f.textOut, nil
+		return domain.SystemMessage{}, f.textErr
 	}
 	m, ok := domain.LookupShippedMessage(key)
 	if !ok {
-		return "", domain.ErrUnknownMessageKey
+		return domain.SystemMessage{}, domain.ErrUnknownMessageKey
 	}
-	return m.DefaultText, nil
+	var o *domain.MessageOverride
+	if f.textOut != "" || f.textOff {
+		o = &domain.MessageOverride{Key: key, Text: f.textOut, Inactive: f.textOff}
+	}
+	return domain.ResolveMessage(m, o), nil
 }
 
 func (f *systemMessagesFake) record(ctx context.Context, op string) {

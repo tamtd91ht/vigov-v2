@@ -38,7 +38,6 @@ import {
   ADDED_SENTENCE,
   addMessageFlow,
   type AddDraft,
-  canSwitch,
   COMMUNE_BADGE,
   DELETE_BUTTON,
   DELETE_REASON_MAX,
@@ -75,8 +74,9 @@ import {
  * (ADR 0079 Q2/Q5). One key, `admin.lookup`, on every route — the tab hides as a whole without it
  * (convenience; the server refuses).
  *
- * WHAT A CARD OFFERS FOLLOWS ITS ORIGIN (ADR 0079 Q2, lô 3 "Khi nào hiện Tắt"):
- *   shipped    Lưu · Khôi phục lời gốc (when reworded) · Tắt/Bật lại (when reworded). Never Xoá.
+ * WHAT A CARD OFFERS FOLLOWS ITS ORIGIN (ADR 0079 Q2; the switch on EVERY card since the owner's
+ * decision of 09/10/2026, which replaced lô 3 "Khi nào hiện Tắt"):
+ *   shipped    Lưu · Khôi phục lời gốc (when reworded) · Tắt/Bật lại. Never Xoá.
  *   commune    Lưu · Tắt/Bật lại · Xoá (soft, with a reason — rule 7). Never Khôi phục: no lời gốc.
  *
  * COMMUNE SENTENCES ARE STORED AND MANAGED ONLY (Q5b) — nothing shows them yet. The card does NOT say
@@ -618,20 +618,18 @@ export function SystemMessageCardView({
               {RESTORE_BUTTON}
             </Button>
           )}
-          {/* Only a sentence carrying the commune's own wording has anything to switch (ADR 0079 lô 3). */}
-          {canSwitch(m) && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className={SMALL_BUTTON_CLASS}
-              disabled={busy}
-              aria-busy={busy}
-              onClick={onToggle}
-            >
-              {m.is_active ? SWITCH_OFF_BUTTON : SWITCH_ON_BUTTON}
-            </Button>
-          )}
+          {/* EVERY sentence has the switch, reworded or not (owner, 09/10/2026; prototype :193-194). */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={SMALL_BUTTON_CLASS}
+            disabled={busy}
+            aria-busy={busy}
+            onClick={onToggle}
+          >
+            {m.is_active ? SWITCH_OFF_BUTTON : SWITCH_ON_BUTTON}
+          </Button>
           {/* A shipped sentence is never deleted — only reworded back (spec 07, server 409). */}
           {commune && (
             <Button

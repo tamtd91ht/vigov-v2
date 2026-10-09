@@ -77,9 +77,8 @@ func TestSwitchRefusals(t *testing.T) {
 		want  error
 		begin int
 	}{
-		"unknown key":       {"budget.scope_notice", staff, domain.ErrUnknownMessageKey, 0},
-		"no actor":          {titleKey, audit.Actor{Kind: "staff"}, domain.ErrMessageActorMissing, 0},
-		"nothing to switch": {titleKey, staff, domain.ErrNoOverrideToSwitch, 1},
+		"unknown key": {"budget.scope_notice", staff, domain.ErrUnknownMessageKey, 0},
+		"no actor":    {titleKey, audit.Actor{Kind: "staff"}, domain.ErrMessageActorMissing, 0},
 	} {
 		t.Run(name, func(t *testing.T) {
 			d, f := &recordingDriver{}, newOverrideFake()
@@ -90,6 +89,47 @@ func TestSwitchRefusals(t *testing.T) {
 				t.Errorf("begin=%d commit=%d switches=%d", d.begins, d.commits, f.switches)
 			}
 		})
+	}
+}
+
+// EVERY SHIPPED KEY HAS A SWITCH (user decision 09/10/2026, migration 0005). "Tắt" of a key the commune
+// never reworded stores a row with NO wording, switched off, audited in the same transaction; the list
+// shows the default with Active false; "Bật" soft deletes that row.
+func TestSwitchOffUnwordedReportSentence(t *testing.T) {
+	m, _ := domain.LookupShippedMessage(titleKey)
+	d, f := &recordingDriver{}, newOverrideFake()
+	ctx := tenant.Into(context.Background(), communeA)
+
+	got, err := newMessagesUseCase(t, d, f).SetActive(ctx, titleKey, false, staff)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Active || got.Overridden || got.CurrentText != m.DefaultText || got.UpdatedBy != staff.ID {
+		t.Errorf("after Tắt: %+v", got)
+	}
+	row := f.live[communeA][titleKey]
+	if f.adds != 1 || row == nil || row.Text != "" || !row.Inactive || d.begins != 1 || d.commits != 1 || len(f.txsSeen) != 1 {
+		t.Fatalf("adds=%d row=%+v begin=%d commit=%d — want one unworded off row in one transaction", f.adds, row, d.begins, d.commits)
+	}
+	stmt, delta := auditEntry(t, d)
+	if stmt.args[4] != ActionSwitchOffSystemMessage || delta["sau"]["is_active"] != false || delta["sau"]["overridden"] != false {
+		t.Errorf("audit %v %v", stmt.args[4], delta)
+	}
+	list, _ := newMessagesUseCase(t, &recordingDriver{}, f).Messages(ctx)
+	if list[0].Key != titleKey || list[0].Active || list[0].Overridden || list[0].CurrentText != m.DefaultText {
+		t.Errorf("list while off: %+v", list[0])
+	}
+
+	d2 := &recordingDriver{}
+	got, err = newMessagesUseCase(t, d2, f).SetActive(ctx, titleKey, true, staff)
+	if err != nil || !got.Active || got.Overridden {
+		t.Fatalf("Bật: %+v, %v", got, err)
+	}
+	if f.deletes != 1 || f.lastReason != SwitchOnReason || f.switches != 0 || f.live[communeA][titleKey] != nil {
+		t.Errorf("deletes=%d reason=%q switches=%d", f.deletes, f.lastReason, f.switches)
+	}
+	if stmt, _ := auditEntry(t, d2); stmt.args[4] != ActionSwitchOnSystemMessage {
+		t.Errorf("action = %v", stmt.args[4])
 	}
 }
 

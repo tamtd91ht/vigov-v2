@@ -314,38 +314,48 @@ func TestRestoreUnknownKey(t *testing.T) {
 	}
 }
 
-func TestTextResolvesOneKeyForTheRequestsCommune(t *testing.T) {
+func TestResolveOneKeyForTheRequestsCommune(t *testing.T) {
 	k, f := &khoGia{}, newOverrideFake()
 	uc := newMessagesUseCase(t, k, f)
 	m, _ := domain.LookupShippedMessage(domain.KeyBudgetScopeNotice)
 
-	// A commune that reworded nothing reads the shipped sentence.
-	got, err := uc.Text(tenant.Into(context.Background(), xaA), domain.KeyBudgetScopeNotice)
-	if err != nil || got != m.DefaultText {
-		t.Fatalf("no override: got %q, %v — want the default", got, err)
+	// A commune that reworded nothing reads the shipped sentence, switched on.
+	got, err := uc.Resolve(tenant.Into(context.Background(), xaA), domain.KeyBudgetScopeNotice)
+	if err != nil || got.CurrentText != m.DefaultText || !got.Active {
+		t.Fatalf("no override: got %+v, %v — want the default, on", got, err)
 	}
 
 	// Commune A's own wording reaches A; commune B, which reworded nothing, still reads the default.
 	f.live[xaA] = &domain.MessageOverride{ID: "o1", Key: domain.KeyBudgetScopeNotice, Text: "Câu riêng của xã A."}
-	if got, _ := uc.Text(tenant.Into(context.Background(), xaA), domain.KeyBudgetScopeNotice); got != "Câu riêng của xã A." {
-		t.Errorf("commune A reads %q, want its own wording", got)
+	if got, _ := uc.Resolve(tenant.Into(context.Background(), xaA), domain.KeyBudgetScopeNotice); got.CurrentText != "Câu riêng của xã A." {
+		t.Errorf("commune A reads %q, want its own wording", got.CurrentText)
 	}
-	if got, _ := uc.Text(tenant.Into(context.Background(), xaB), domain.KeyBudgetScopeNotice); got != m.DefaultText {
-		t.Errorf("commune B reads %q, want the default — another commune's wording leaked", got)
+	if got, _ := uc.Resolve(tenant.Into(context.Background(), xaB), domain.KeyBudgetScopeNotice); got.CurrentText != m.DefaultText {
+		t.Errorf("commune B reads %q, want the default — another commune's wording leaked", got.CurrentText)
+	}
+
+	// Switched off WITHOUT a wording (migration 0019): Active false — the consumer hides it — and the
+	// default stays the fallback text; commune B is untouched.
+	f.live[xaA] = &domain.MessageOverride{ID: "o2", Key: domain.KeyBudgetScopeNotice, Inactive: true}
+	if got, _ := uc.Resolve(tenant.Into(context.Background(), xaA), domain.KeyBudgetScopeNotice); got.Active || got.Overridden || got.CurrentText != m.DefaultText {
+		t.Errorf("switched off: %+v", got)
+	}
+	if got, _ := uc.Resolve(tenant.Into(context.Background(), xaB), domain.KeyBudgetScopeNotice); !got.Active {
+		t.Error("commune A's switch reached commune B")
 	}
 }
 
-func TestTextRefusesUnknownKeyAndStoreFailure(t *testing.T) {
+func TestResolveRefusesUnknownKeyAndStoreFailure(t *testing.T) {
 	k, f := &khoGia{}, newOverrideFake()
 	uc := newMessagesUseCase(t, k, f)
 	ctx := tenant.Into(context.Background(), xaA)
 
-	if _, err := uc.Text(ctx, "feedback.reason_required"); !errors.Is(err, domain.ErrUnknownMessageKey) {
+	if _, err := uc.Resolve(ctx, "feedback.reason_required"); !errors.Is(err, domain.ErrUnknownMessageKey) {
 		t.Errorf("another service's key: err = %v, want ErrUnknownMessageKey", err)
 	}
 	// A STORE FAILURE IS AN ERROR, NOT THE DEFAULT.
 	f.listErr = errors.New("cơ sở dữ liệu không phản hồi")
-	if got, err := uc.Text(ctx, domain.KeyBudgetScopeNotice); err == nil || got != "" {
-		t.Errorf("store failure: got %q, %v — want an error and no sentence", got, err)
+	if got, err := uc.Resolve(ctx, domain.KeyBudgetScopeNotice); err == nil || got.CurrentText != "" {
+		t.Errorf("store failure: got %+v, %v — want an error and no sentence", got, err)
 	}
 }

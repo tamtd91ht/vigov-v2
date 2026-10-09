@@ -13387,7 +13387,7 @@
         }
       },
       "patch": {
-        "summary": "Xã tắt hoặc bật lại lời đã sửa của một câu hệ thống (tắt thì dùng lời gốc của phần mềm)",
+        "summary": "Xã tắt hoặc bật một câu hệ thống (tắt thì ẩn nơi dùng, nơi bắt buộc có lời thì dùng lời gốc)",
         "operationId": "finance_patch_finance_system_messages_by_code_override",
         "tags": [
           "finance"
@@ -13451,16 +13451,6 @@
           },
           "404": {
             "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -23131,7 +23121,7 @@
         }
       },
       "patch": {
-        "summary": "Xã tắt hoặc bật lại lời đã sửa của một câu hệ thống (tắt thì dùng lời gốc của phần mềm)",
+        "summary": "Xã tắt hoặc bật một câu hệ thống (tắt thì ẩn nơi dùng, nơi bắt buộc có lời thì dùng lời gốc)",
         "operationId": "petitions_patch_petitions_system_messages_by_code_override",
         "tags": [
           "petitions"
@@ -23195,16 +23185,6 @@
           },
           "404": {
             "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -24786,7 +24766,7 @@
         }
       },
       "patch": {
-        "summary": "Xã tắt hoặc bật lại lời đã sửa của một câu hệ thống (tắt thì dùng lời gốc của phần mềm)",
+        "summary": "Xã tắt hoặc bật một câu hệ thống (tắt thì ẩn nơi dùng, nơi bắt buộc có lời thì dùng lời gốc)",
         "operationId": "reporting_patch_reporting_system_messages_by_code_override",
         "tags": [
           "reporting"
@@ -24850,16 +24830,6 @@
           },
           "404": {
             "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {

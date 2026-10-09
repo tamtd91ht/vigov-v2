@@ -7,8 +7,8 @@
  *
  *   GET    /api/v1/{petitions,finance,reporting}-system-messages
  *   PUT    …/{code}/override   { text }       → 200  the commune's wording
- *   PATCH  …/{code}/override   { is_active }  → 200  "Tắt / Bật lại" of that wording (409 no_commune_wording
- *                                                    when the commune never reworded it)
+ *   PATCH  …/{code}/override   { is_active }  → 200  "Tắt / Bật lại" of the sentence, reworded or not
+ *                                                    (owner, 09/10/2026 — no more 409 no_commune_wording)
  *   DELETE …/{code}/override                  → 204  back to the software's sentence
  *
  * A COMMUNE sentence (`origin: "commune"`, "Xã tự thêm") lives in petitions (groups `phan-anh`, `chung`)
@@ -161,8 +161,9 @@ export async function restoreSystemMessage(
 }
 
 /**
- * "Tắt / Bật lại" of the commune's wording of a SHIPPED sentence: off keeps the words and puts the
- * software's sentence back in force. A sentence never reworded answers 409 `no_commune_wording`.
+ * "Tắt / Bật lại" of a SHIPPED sentence, reworded or not: off keeps any commune words and the sentence is
+ * hidden where it is used, or the software's sentence where the screen must say something (the server
+ * decides per use).
  */
 export function switchSystemMessage(
   module: SystemMessageModule,

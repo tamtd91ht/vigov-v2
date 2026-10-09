@@ -82,6 +82,10 @@ const (
 // whole meaning is "undo my commune's change" would be friction that records nothing new.
 const RestoreReason = "khôi phục câu mặc định"
 
+// SwitchOnReason is `delete_reason` on the row "Bật" retires when the commune never reworded the
+// sentence (migration 0019): that row held only the switch, so switching on ends it.
+const SwitchOnReason = "bật lại câu mặc định"
+
 // SystemMessages owns listing, rewording and restoring this service's system sentences.
 type SystemMessages struct {
 	db    *store.DB
@@ -129,28 +133,33 @@ func (uc *SystemMessages) Messages(ctx context.Context) ([]domain.SystemMessage,
 	return out, nil
 }
 
-// Text returns the sentence in force for ONE key in the request's commune: the commune's wording if
-// it has one, the shipped default otherwise. It is the read every route that EMITS a sentence uses
-// (the Messages comment above says why no route may read the constant directly).
+// Resolve returns ONE key resolved for the request's commune: the commune's wording if it has one and
+// it is on, the shipped default otherwise, and whether the commune switched it off. It is the read every
+// route that EMITS a sentence uses (the Messages comment above says why no route may read the constant
+// directly).
+//
+// IT RETURNS THE WHOLE RESOLUTION, NOT A STRING, because "switched off" means HIDDEN where the consumer
+// can stay silent and the DEFAULT where it must say something (user decision 09/10/2026) — and only the
+// consumer knows which it is. A string would have made that choice here, for every consumer at once.
 //
 // SAME FAILURE RULE AS Messages: a store error is an error, never the default. The budget banner
 // read through here sits above public-money figures; showing the vendor's sentence to a commune that
 // replaced it, because a read failed, is the silent wrong answer this layer exists to refuse.
-func (uc *SystemMessages) Text(ctx context.Context, key string) (string, error) {
+func (uc *SystemMessages) Resolve(ctx context.Context, key string) (domain.SystemMessage, error) {
 	shipped, ok := domain.LookupShippedMessage(key)
 	if !ok {
-		return "", domain.ErrUnknownMessageKey
+		return domain.SystemMessage{}, domain.ErrUnknownMessageKey
 	}
 	live, err := uc.store.ListLive(ctx)
 	if err != nil {
-		return "", wrapMessage(ctx, "đọc", err)
+		return domain.SystemMessage{}, wrapMessage(ctx, "đọc", err)
 	}
 	for i := range live {
 		if live[i].Key == key {
-			return domain.ResolveMessage(shipped, &live[i]).CurrentText, nil
+			return domain.ResolveMessage(shipped, &live[i]), nil
 		}
 	}
-	return domain.ResolveMessage(shipped, nil).CurrentText, nil
+	return domain.ResolveMessage(shipped, nil), nil
 }
 
 // Reword sets the commune's own wording of one key.
@@ -182,8 +191,10 @@ func (uc *SystemMessages) Reword(ctx context.Context, key, rawText string, actor
 		// THE COMPARISON IS AGAINST THE COMMUNE'S WORDING when it has one, switched on or off — not
 		// against the text in force. Re-sending the stored words of a switched-off wording changes
 		// nothing; comparing to CurrentText (the default, while off) would rewrite it as "new".
+		// A row switched off WITHOUT a wording (migration 0019) has no words: compare with the default,
+		// or sending the default would pin it as the commune's "wording".
 		stored := shipped.DefaultText
-		if cur != nil {
+		if cur != nil && cur.Text != "" {
 			stored = cur.Text
 		}
 		if stored == text {

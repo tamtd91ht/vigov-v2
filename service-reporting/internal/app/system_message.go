@@ -55,6 +55,10 @@ const (
 // the administrator fills: the act IS the reason, and the retired wording is in the audit entry.
 const RestoreReason = "khôi phục câu mặc định"
 
+// SwitchOnReason is `delete_reason` on the row "Bật" retires when the commune never reworded the
+// sentence (migration 0005): that row held only the switch, so switching on ends it.
+const SwitchOnReason = "bật lại câu mặc định"
+
 // SystemMessages owns listing, rewording and restoring this service's system sentences.
 type SystemMessages struct {
 	db    *store.DB
@@ -120,8 +124,10 @@ func (uc *SystemMessages) Reword(ctx context.Context, key, rawText string, actor
 		// THE COMPARISON IS AGAINST THE COMMUNE'S WORDING when it has one, switched on or off — not
 		// against the text in force. Re-sending the stored words of a switched-off wording changes
 		// nothing; comparing to CurrentText (the default, while off) would rewrite it as "new".
+		// A row switched off WITHOUT a wording (migration 0005) has no words: compare with the default,
+		// or sending the default would pin it as the commune's "wording".
 		stored := shipped.DefaultText
-		if cur != nil {
+		if cur != nil && cur.Text != "" {
 			stored = cur.Text
 		}
 		if stored == text {

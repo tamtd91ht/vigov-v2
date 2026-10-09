@@ -29,7 +29,7 @@ type SystemMessageService interface {
 	Messages(ctx context.Context) ([]domain.SystemMessage, error)
 	// Text is the sentence in force for one key — what a route that EMITS the sentence reads
 	// (`scope_notice` on the investment-project reads, du_an.go).
-	Text(ctx context.Context, key string) (string, error)
+	Resolve(ctx context.Context, key string) (domain.SystemMessage, error)
 	Reword(ctx context.Context, key, text string, actor audit.Actor) (domain.SystemMessage, error)
 	Restore(ctx context.Context, key string, actor audit.Actor) (domain.SystemMessage, error)
 	SetActive(ctx context.Context, key string, active bool, actor audit.Actor) (domain.SystemMessage, error)
@@ -50,7 +50,8 @@ type SystemMessageService interface {
 //
 //	group_code     the web's group code — which section of the tab the card is listed under
 //	origin         `shipped` (đi kèm phần mềm) or `commune` (xã tự thêm) — which buttons a card has
-//	is_active      false only for a switched-off wording or a switched-off commune sentence
+//	is_active      false for a switched-off sentence — any shipped key since 09/10/2026, reworded or
+//	               not (then overridden false, current_text the default), or a commune sentence
 //	override_text  the commune's stored wording of a shipped key, present while overridden, ALSO while
 //	               switched off (then current_text is the default) — what "Bật lại" brings back
 //	default_text   absent on a commune sentence: there is no software sentence to fall back to
@@ -304,9 +305,6 @@ func (h *Handler) writeSystemMessageError(w http.ResponseWriter, r *http.Request
 	case errors.Is(err, domain.ErrCustomCatalogueFull):
 		httpx.WriteError(w, http.StatusConflict, "catalogue_full",
 			"Số câu xã tự thêm đã đạt tối đa. Hãy xoá bớt câu không dùng.", "")
-	case errors.Is(err, domain.ErrNoOverrideToSwitch):
-		httpx.WriteError(w, http.StatusConflict, "no_commune_wording",
-			"Câu này đang dùng lời gốc của phần mềm, chưa có lời của xã để tắt hoặc bật.", "")
 	case domain.IsCustomMessageInputError(err):
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
 	case domain.IsMessageInputError(err):

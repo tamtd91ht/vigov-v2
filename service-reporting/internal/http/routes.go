@@ -124,14 +124,15 @@ func Register(mux *http.ServeMux, d Deps) {
 	// SAME KEY, `admin.lookup`: the same screen and the same act of administering the commune's
 	// configuration as the three routes above (rule 5, invariant 3c — no key invented).
 
-	// "Tắt / Bật lại" of the commune's wording of a SHIPPED key: a PATCH of the override sub-resource's
-	// one other field. While off, every reader resolves the shipped sentence (domain.ResolveMessage).
-	// 409 `no_commune_wording` on a key the commune never reworded — nothing to switch, and a shipped
-	// refusal may not be silenced.
+	// "Tắt / Bật" of a SHIPPED key, reworded or not (user decision 09/10/2026, which retired the 409
+	// `no_commune_wording`): a PATCH of the override sub-resource's one other field. A switched-off
+	// sentence is hidden where it is used, or the shipped default where the consumer must say something.
+	// Nothing prints a `report.*` sentence yet; the export, when built, decides per
+	// sentence hidden (Active false) or default (CurrentText).
 	//
 	// idem.KhongCan: app.SetActive writes nothing and files no entry when the state already holds.
 	//
-	// @summary  Xã tắt hoặc bật lại lời đã sửa của một câu hệ thống (tắt thì dùng lời gốc của phần mềm)
+	// @summary  Xã tắt hoặc bật một câu hệ thống (tắt thì ẩn nơi dùng, nơi bắt buộc có lời thì dùng lời gốc)
 	// @screen   14-cau-hinh §7
 	// @request  switchSystemMessageIn
 	// @reply    200 systemMessageOut
@@ -139,7 +140,6 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    404 httpx.Error
-	// @reply    409 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("PATCH /api/v1/reporting-system-messages/{code}/override",
 		authz.RequirePermission(d.Checker, "admin.lookup")(

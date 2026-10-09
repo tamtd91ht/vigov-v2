@@ -563,14 +563,15 @@ func (h *Handler) ImplementingUnits(w http.ResponseWriter, r *http.Request) {
 }
 
 // scopeNotice reads `budget.scope_notice` for the request's commune, through app.SystemMessages —
-// never domain's default directly, or a commune's own wording is ignored (rule 1, invariant 10).
+// never domain's default directly, or a commune's own wording is ignored (rule 1, invariant 10). It
+// answers "" when the commune switched the notice off.
 //
 // A FAILURE IS A 500, NOT THE DEFAULT SENTENCE, for the reason app.SystemMessages.Text gives: a
 // commune that replaced the wording must never be shown the vendor's because a read failed, with
 // nothing saying so. It answers the request itself and reports false; the caller only returns.
 func (h *Handler) scopeNotice(w http.ResponseWriter, r *http.Request) (string, bool) {
 	ctx := r.Context()
-	text, err := h.d.SystemMessages.Text(ctx, domain.KeyBudgetScopeNotice)
+	m, err := h.d.SystemMessages.Resolve(ctx, domain.KeyBudgetScopeNotice)
 	if err != nil {
 		h.d.Log.Error("lời hệ thống budget.scope_notice: lỗi hệ thống",
 			"xa", string(tenant.MustFrom(ctx)), "err", err)
@@ -578,5 +579,12 @@ func (h *Handler) scopeNotice(w http.ResponseWriter, r *http.Request) (string, b
 			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
 		return "", false
 	}
-	return text, true
+	// SWITCHED OFF = NOT SENT (user decision 09/10/2026: a switched-off sentence is hidden where it is
+	// used). The banner is the one consumer of this key and nothing breaks without it: "" leaves
+	// `scope_notice` out of every reply (omitempty), and the web draws no banner for an absent notice
+	// (web-admin bang-du-an.tsx). Never the default here — that would ignore the commune's switch.
+	if !m.Active {
+		return "", true
+	}
+	return m.CurrentText, true
 }

@@ -7022,7 +7022,7 @@ export type finance_put_finance_system_messages_by_code_override = {
   };
 };
 
-/** PATCH /api/v1/finance-system-messages/{code}/override — Xã tắt hoặc bật lại lời đã sửa của một câu hệ thống (tắt thì dùng lời gốc của phần mềm) */
+/** PATCH /api/v1/finance-system-messages/{code}/override — Xã tắt hoặc bật một câu hệ thống (tắt thì ẩn nơi dùng, nơi bắt buộc có lời thì dùng lời gốc) */
 export type finance_patch_finance_system_messages_by_code_override = {
   duongDan: "/api/v1/finance-system-messages/{code}/override";
   phuongThuc: "PATCH";
@@ -7038,7 +7038,6 @@ export type finance_patch_finance_system_messages_by_code_override = {
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;
-    409: httpx_Error;
     500: httpx_Error;
   };
 };
@@ -9169,7 +9168,7 @@ export type petitions_put_petitions_system_messages_by_code_override = {
   };
 };
 
-/** PATCH /api/v1/petitions-system-messages/{code}/override — Xã tắt hoặc bật lại lời đã sửa của một câu hệ thống (tắt thì dùng lời gốc của phần mềm) */
+/** PATCH /api/v1/petitions-system-messages/{code}/override — Xã tắt hoặc bật một câu hệ thống (tắt thì ẩn nơi dùng, nơi bắt buộc có lời thì dùng lời gốc) */
 export type petitions_patch_petitions_system_messages_by_code_override = {
   duongDan: "/api/v1/petitions-system-messages/{code}/override";
   phuongThuc: "PATCH";
@@ -9185,7 +9184,6 @@ export type petitions_patch_petitions_system_messages_by_code_override = {
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;
-    409: httpx_Error;
     500: httpx_Error;
   };
 };
@@ -9558,7 +9556,7 @@ export type reporting_put_reporting_system_messages_by_code_override = {
   };
 };
 
-/** PATCH /api/v1/reporting-system-messages/{code}/override — Xã tắt hoặc bật lại lời đã sửa của một câu hệ thống (tắt thì dùng lời gốc của phần mềm) */
+/** PATCH /api/v1/reporting-system-messages/{code}/override — Xã tắt hoặc bật một câu hệ thống (tắt thì ẩn nơi dùng, nơi bắt buộc có lời thì dùng lời gốc) */
 export type reporting_patch_reporting_system_messages_by_code_override = {
   duongDan: "/api/v1/reporting-system-messages/{code}/override";
   phuongThuc: "PATCH";
@@ -9574,7 +9572,6 @@ export type reporting_patch_reporting_system_messages_by_code_override = {
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;
-    409: httpx_Error;
     500: httpx_Error;
   };
 };

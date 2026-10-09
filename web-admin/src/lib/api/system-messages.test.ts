@@ -147,10 +147,10 @@ describe("switchSystemMessage — PATCH …/{code}/override", () => {
     expect(c.headers.has("Idempotency-Key")).toBe(false);
   });
 
-  it("409 no_commune_wording is the server's sentence", async () => {
-    const sentence = "Câu này đang dùng lời gốc của phần mềm, chưa có lời của xã để tắt hoặc bật.";
-    stubFetch(() => reply(409, { code: "no_commune_wording", message: sentence }));
-    expect(await switchSystemMessage("petitions", "feedback.never_public", false)).toEqual({ ok: false, thongBao: sentence });
+  it("a refusal is the server's sentence", async () => {
+    const sentence = "Không có câu hệ thống mang mã này ở phân hệ Tiếp dân – Nhiệm vụ.";
+    stubFetch(() => reply(404, { code: "not_found", message: sentence }));
+    expect(await switchSystemMessage("petitions", "feedback.khong_co", false)).toEqual({ ok: false, thongBao: sentence });
   });
 });
 

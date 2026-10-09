@@ -110,6 +110,9 @@ type MessageOverride struct {
 	// shipped sentence is in force until "Bật lại". Named for the off state so the zero value is the
 	// column's default (`is_active` true): an override built without thinking about the switch is in
 	// force, exactly as every override was before 0033.
+	//
+	// Text "" with Inactive true is a sentence switched off WITHOUT a commune wording (migration 0035:
+	// `message_text` NULL). The database refuses "" as a wording, so "" never means anything else.
 	Inactive bool
 }
 
@@ -137,6 +140,14 @@ const (
 //	override, on         CurrentText = OverrideText, Overridden true,  Active true
 //	override, "Tắt"      CurrentText = DefaultText, Overridden true,  Active false — OverrideText
 //	                     still carries the commune's words, so "Bật lại" shows what comes back
+//	"Tắt", no wording    CurrentText = DefaultText, Overridden false, Active false — a sentence the
+//	                     commune switched off without rewording it (user decision 09/10/2026,
+//	                     migration 0035)
+//
+// WHAT A CONSUMER READS (user decision 09/10/2026): a switched-off sentence is HIDDEN where it is used;
+// a consumer that must say something falls back to the software's sentence. So CurrentText is always
+// the text a must-say consumer prints (the default while off), and Active is what a consumer that can
+// stay silent checks first. Which kind each consumer is, is decided AT the consumer, never here.
 //
 // A commune sentence (Origin commune) has no DefaultText; CurrentText is its own text and Active its
 // switch — see CustomMessage.
@@ -176,14 +187,19 @@ func ResolveMessage(m ShippedMessage, o *MessageOverride) SystemMessage {
 		return out
 	}
 	at := o.UpdatedAt
+	out.Active = !o.Inactive
+	out.UpdatedAt = &at
+	out.UpdatedBy = o.UpdatedBy
+	if o.Text == "" {
+		// Switched off without ever being reworded: the default stays the fallback text, and nothing
+		// is "overridden" — there is no commune wording for "Bật" to bring back.
+		return out
+	}
 	out.OverrideText = o.Text
 	out.Overridden = true
-	out.Active = !o.Inactive
 	if out.Active {
 		out.CurrentText = o.Text
 	}
-	out.UpdatedAt = &at
-	out.UpdatedBy = o.UpdatedBy
 	return out
 }
 

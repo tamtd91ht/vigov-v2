@@ -517,6 +517,23 @@ func TestDuAnReadsCarryTheCommunesScopeNotice(t *testing.T) {
 	}
 }
 
+// SWITCHED OFF = HIDDEN (user decision 09/10/2026): a commune that switched `budget.scope_notice` off —
+// reworded or not — gets no `scope_notice` at all, never the default, on both reads.
+func TestDuAnReadsOmitScopeNoticeSwitchedOff(t *testing.T) {
+	for _, reworded := range []string{"", "Câu riêng của xã."} {
+		for _, path := range []string{"/api/v1/investment-projects?year=2026", "/api/v1/investment-projects/da-001"} {
+			m := dungMayChuVoi(t, coQuyen("budget.read"))
+			fake := m.d.SystemMessages.(*systemMessagesFake)
+			fake.textOut, fake.textOff = reworded, true
+			w := m.goi(t, http.MethodGet, hostA, path, canBoCua(xaA))
+			doiMa(t, w, http.StatusOK)
+			if strings.Contains(w.Body.String(), `"scope_notice"`) {
+				t.Errorf("%s (reworded %q): a switched-off notice was sent: %s", path, reworded, w.Body.String())
+			}
+		}
+	}
+}
+
 func TestDuAnListCarriesScopeNoticeOnceNotPerItem(t *testing.T) {
 	m := dungMayChuVoi(t, coQuyen("budget.read"))
 	w := m.goi(t, http.MethodGet, hostA, "/api/v1/investment-projects?year=2026", canBoCua(xaA))

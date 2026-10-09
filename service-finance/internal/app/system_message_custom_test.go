@@ -147,8 +147,8 @@ func TestSwitchedOffOverrideResolvesToDefault(t *testing.T) {
 		t.Errorf("delta = %v", d)
 	}
 
-	if text, err := uc.Text(ctx, m.Key); err != nil || text != m.DefaultText {
-		t.Errorf("Text while off = %q, %v — a refusal would send the switched-off wording", text, err)
+	if r, err := uc.Resolve(ctx, m.Key); err != nil || r.CurrentText != m.DefaultText || r.Active {
+		t.Errorf("Resolve while off = %+v, %v — the banner would print the switched-off wording", r, err)
 	}
 	list, _ := uc.Messages(ctx)
 	for _, x := range list {
@@ -179,15 +179,82 @@ func TestSwitchSameStateWritesNothing(t *testing.T) {
 	}
 }
 
-// "Tắt only on sentences with commune wording": a key on the default has nothing to switch.
-func TestSwitchWithoutOverrideIsRefused(t *testing.T) {
+// EVERY SHIPPED domain.KeyBudgetScopeNotice HAS A SWITCH (user decision 09/10/2026, migration 0019). "Tắt" of a key the commune
+// never reworded stores a row with NO wording, switched off, and audits it in the same transaction;
+// readers resolve the default (CurrentText) with Active false; "Bật" soft deletes that row.
+func TestSwitchOffUnwordedSentence(t *testing.T) {
+	m, _ := domain.LookupShippedMessage(domain.KeyBudgetScopeNotice)
 	k, f := &khoGia{}, newOverrideFake()
-	_, err := newMessagesUseCase(t, k, f).SetActive(tenant.Into(context.Background(), xaA), domain.KeyBudgetScopeNotice, false, staff)
-	if !errors.Is(err, domain.ErrNoOverrideToSwitch) {
-		t.Errorf("err = %v, want ErrNoOverrideToSwitch", err)
+	uc := newMessagesUseCase(t, k, f)
+	ctx := tenant.Into(context.Background(), xaA)
+
+	got, err := uc.SetActive(ctx, m.Key, false, staff)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if f.switches != 0 || k.daCommit != 0 {
-		t.Error("a refused switch committed")
+	if got.Active || got.Overridden || got.OverrideText != "" || got.CurrentText != m.DefaultText || got.UpdatedBy != "CB-00123" {
+		t.Errorf("after Tắt: %+v", got)
+	}
+	if f.adds != 1 || f.switches != 0 || k.batDau != 1 || k.daCommit != 1 || len(f.txsSeen) != 1 {
+		t.Errorf("adds=%d switches=%d begin=%d commit=%d txs=%d — want one insert in one transaction",
+			f.adds, f.switches, k.batDau, k.daCommit, len(f.txsSeen))
+	}
+	row, _ := f.LiveForUpdate(ctx, f.lastTx, m.Key)
+	if row == nil || row.Text != "" || !row.Inactive || row.UpdatedBy != "CB-00123" {
+		t.Fatalf("stored row = %+v — want no wording (NULL), switched off, who = business code", row)
+	}
+	if a := auditAction(t, k); a != ActionSwitchOffSystemMessage {
+		t.Errorf("action = %v", a)
+	}
+	d := auditDelta(t, k)
+	if d["truoc"]["is_active"] != true || d["sau"]["is_active"] != false || d["sau"]["overridden"] != false {
+		t.Errorf("delta = %v", d)
+	}
+	list, err := uc.Messages(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range list {
+		if x.Key == m.Key && (x.Active || x.Overridden || x.CurrentText != m.DefaultText) {
+			t.Errorf("list while off: %+v", x)
+		}
+	}
+
+	// Sending the default to a switched-off unworded key pins nothing.
+	k2 := &khoGia{}
+	if _, err := newMessagesUseCase(t, k2, f).Reword(ctx, m.Key, m.DefaultText, staff); err != nil {
+		t.Fatal(err)
+	}
+	if f.updates != 0 || k2.coCau("audit_log") {
+		t.Error("rewording a switched-off unworded key with the default wrote something")
+	}
+
+	// "Bật": the row held only the switch, so it is soft deleted, with its reason, and audited.
+	k3 := &khoGia{}
+	got, err = newMessagesUseCase(t, k3, f).SetActive(ctx, m.Key, true, staff)
+	if err != nil || !got.Active || got.Overridden || got.CurrentText != m.DefaultText {
+		t.Fatalf("Bật: %+v, %v", got, err)
+	}
+	if f.deletes != 1 || f.lastReason != SwitchOnReason || f.lastBy != "CB-00123" || f.switches != 0 {
+		t.Errorf("deletes=%d reason=%q by=%q switches=%d", f.deletes, f.lastReason, f.lastBy, f.switches)
+	}
+	if a := auditAction(t, k3); a != ActionSwitchOnSystemMessage {
+		t.Errorf("action = %v", a)
+	}
+	if row, _ := f.LiveForUpdate(ctx, f.lastTx, m.Key); row != nil {
+		t.Errorf("a live row survived Bật: %+v", row)
+	}
+}
+
+// Switching ON a key with no row is the state already held: nothing written, nothing audited.
+func TestSwitchOnWithoutRowWritesNothing(t *testing.T) {
+	k, f := &khoGia{}, newOverrideFake()
+	got, err := newMessagesUseCase(t, k, f).SetActive(tenant.Into(context.Background(), xaA), domain.KeyBudgetScopeNotice, true, staff)
+	if err != nil || !got.Active {
+		t.Fatalf("%+v %v", got, err)
+	}
+	if f.adds+f.deletes+f.switches != 0 || k.coCau("audit_log") {
+		t.Error("switching on a key already on wrote something")
 	}
 }
 

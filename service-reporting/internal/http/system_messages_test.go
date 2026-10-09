@@ -561,15 +561,6 @@ func TestSwitchPassesStateRequiresItAndMapsRefusal(t *testing.T) {
 	if s.svc.calls != 0 {
 		t.Error("a PATCH with no state reached the use case")
 	}
-
-	s = newHarness(t)
-	s.checker.grant(communeA, "admin.lookup")
-	s.svc.err = domain.ErrNoOverrideToSwitch
-	w = call(s.h, http.MethodPatch, hostA, overridePath(titleKey), staffOf(communeA), `{"is_active":false}`)
-	wantStatus(t, w, http.StatusConflict)
-	if !strings.Contains(w.Body.String(), "no_commune_wording") {
-		t.Errorf("body %s", w.Body.String())
-	}
 }
 
 func TestListCarriesGroupOriginAndSwitch(t *testing.T) {

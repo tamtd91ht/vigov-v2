@@ -152,15 +152,6 @@ export function isCommune(m: SystemMessage): boolean {
 }
 
 /**
- * Whether the card offers "Tắt / Bật lại": only a sentence carrying the commune's own wording — a
- * reworded shipped sentence or a commune sentence (ADR 0079 lô 3, "Khi nào hiện Tắt"). A shipped
- * sentence in force has nothing to switch; the server answers 409 `no_commune_wording`.
- */
-export function canSwitch(m: SystemMessage): boolean {
-  return isCommune(m) || m.overridden;
-}
-
-/**
  * The words the edit box holds. A switched-off reworded sentence has the DEFAULT in force
  * (`current_text`) and the commune's words in `override_text`; the box edits the commune's words, which
  * is also what the server compares a save against (`app.Reword`).
@@ -214,7 +205,11 @@ export function restoreMessageFlow(
   return restoreSystemMessage(module, code);
 }
 
-/** "Tắt" / "Bật lại": flips `is_active` on whichever route owns the sentence's switch. */
+/**
+ * "Tắt" / "Bật lại": flips `is_active` on whichever route owns the sentence's switch. EVERY card has one
+ * (owner, 09/10/2026, as the prototype `MessageTemplateTable.tsx:193-194`) — a shipped sentence the
+ * commune never reworded included; the server no longer answers 409 `no_commune_wording`.
+ */
 export function switchMessageFlow(
   module: SystemMessageModule,
   message: SystemMessage,

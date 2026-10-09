@@ -47,7 +47,11 @@ const systemMessageOverrideCols = `id, message_key, message_text, updated_at, up
 func scanOverride(scan func(...any) error) (domain.MessageOverride, error) {
 	var o domain.MessageOverride
 	var active bool
-	err := scan(&o.ID, &o.Key, &o.Text, &o.UpdatedAt, &o.UpdatedBy, &active)
+	// `message_text` is NULL on a sentence switched off without a commune wording (migration 0005);
+	// it reads as "", which domain.ResolveMessage treats as "not reworded".
+	var text sql.NullString
+	err := scan(&o.ID, &o.Key, &text, &o.UpdatedAt, &o.UpdatedBy, &active)
+	o.Text = text.String
 	o.Inactive = !active
 	return o, err
 }
@@ -110,7 +114,10 @@ func (s *SystemMessageOverrideStore) AddOverride(ctx context.Context, tx *store.
 	const stmt = `INSERT INTO system_message_override
 		(tenant_id, id, message_key, message_text, created_at, created_by, updated_at, updated_by, is_active)
 		VALUES ($1, $2, $3, $4, $5, $6, $5, $6, $7)`
-	if _, err := tx.Exec(ctx, stmt, string(tx.TenantID()), o.ID, o.Key, o.Text, o.UpdatedAt, o.UpdatedBy, !o.Inactive); err != nil {
+	// No wording binds NULL, never "": a switched-off sentence the commune never reworded (migration
+	// 0005); the CHECK `system_message_override_wording_or_off` refuses it switched on.
+	text := sql.NullString{String: o.Text, Valid: o.Text != ""}
+	if _, err := tx.Exec(ctx, stmt, string(tx.TenantID()), o.ID, o.Key, text, o.UpdatedAt, o.UpdatedBy, !o.Inactive); err != nil {
 		return fmt.Errorf("system_message_override: chèn: %w", err)
 	}
 	return nil

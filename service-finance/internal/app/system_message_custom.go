@@ -19,12 +19,13 @@ import (
 	"github.com/vihat/vigov/service-finance/internal/domain"
 )
 
-// SetActive is "Tắt" (active false) or "Bật lại" (active true) of the commune's wording of a SHIPPED
-// key. While off, every reader resolves the shipped sentence (domain.ResolveMessage) — including the
-// `scope_notice` the investment-project reads print (du_an.go), which reads through Text.
+// SetActive is "Tắt" (active false) or "Bật" (active true) of a SHIPPED key. While off, the
+// `scope_notice` banner the investment-project reads print is NOT SENT (du_an.go scopeNotice).
 //
-// ONLY A KEY THE COMMUNE REWORDED HAS A SWITCH: with no live wording there is nothing to switch, and a
-// commune may not silence a shipped sentence — domain.ErrNoOverrideToSwitch (409).
+// EVERY SHIPPED KEY HAS A SWITCH (user decision 09/10/2026, migration 0019), reworded or not. A
+// switched-off sentence is HIDDEN where it is used, and a consumer that must say something falls back
+// to the shipped sentence — which kind each consumer is, is decided at the consumer (Active vs
+// CurrentText). "Tắt" of an unworded key stores a row with no wording; "Bật" of it soft deletes that row.
 //
 // THE SAME STATE AGAIN WRITES NOTHING AND AUDITS NOTHING, which is what makes the route idempotent.
 func (uc *SystemMessages) SetActive(ctx context.Context, key string, active bool, actor audit.Actor) (domain.SystemMessage, error) {
@@ -42,21 +43,41 @@ func (uc *SystemMessages) SetActive(ctx context.Context, key string, active bool
 		if err != nil {
 			return err
 		}
-		if cur == nil {
-			return domain.ErrNoOverrideToSwitch
-		}
 		before := domain.ResolveMessage(shipped, cur)
 		if before.Active == active {
 			after = before
 			return nil
 		}
 		at := uc.now().UTC()
-		if err := uc.store.SetActive(ctx, tx, cur.ID, active, actor.ID, at); err != nil {
-			return err
+		switch {
+		case cur == nil:
+			// "Tắt" of a sentence the commune never reworded (no row means on, so only "Tắt" gets
+			// here): a row with NO wording, switched off. Never a copy of the default — that would pin
+			// it against a corrected default in a later release.
+			o := domain.MessageOverride{Key: key, Inactive: true, UpdatedAt: at, UpdatedBy: actor.ID}
+			if o.ID, err = uc.newID(); err != nil {
+				return fmt.Errorf("system_message: sinh mã: %w", err)
+			}
+			if err := uc.store.AddOverride(ctx, tx, o); err != nil {
+				return err
+			}
+			after = domain.ResolveMessage(shipped, &o)
+		case cur.Text == "":
+			// "Bật" of an unworded sentence: the row has nothing left to say, so it is soft deleted
+			// (rule 7, invariant 1) and the commune is back to "no row" — the CHECK of migration 0019
+			// refuses a live unworded row switched on.
+			if err := uc.store.SoftDelete(ctx, tx, cur.ID, actor.ID, SwitchOnReason, at); err != nil {
+				return err
+			}
+			after = domain.ResolveMessage(shipped, nil)
+		default:
+			if err := uc.store.SetActive(ctx, tx, cur.ID, active, actor.ID, at); err != nil {
+				return err
+			}
+			o := *cur
+			o.Inactive, o.UpdatedAt, o.UpdatedBy = !active, at, actor.ID
+			after = domain.ResolveMessage(shipped, &o)
 		}
-		o := *cur
-		o.Inactive, o.UpdatedAt, o.UpdatedBy = !active, at, actor.ID
-		after = domain.ResolveMessage(shipped, &o)
 		return writeMessageAudit(ctx, tx, actor, switchAction(active), before, after)
 	})
 	if err != nil {

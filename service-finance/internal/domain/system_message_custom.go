@@ -71,12 +71,6 @@ var (
 	// ErrShippedMessageNotCustom — PATCH of a commune sentence's fields aimed at a shipped key.
 	ErrShippedMessageNotCustom = errors.New("system_message: câu đi kèm phần mềm sửa lời bằng tuyến lời của xã")
 
-	// ErrNoOverrideToSwitch — "Tắt / Bật lại" on a shipped key the commune never reworded. The switch
-	// lives on the commune's wording; with none there is nothing to switch, and a commune may not
-	// SILENCE a shipped sentence (petitions 0033, "what this file does not decide"; main-session rule "Tắt only on
-	// sentences with commune wording").
-	ErrNoOverrideToSwitch = errors.New("system_message: câu đang dùng lời gốc, chưa có lời của xã để tắt hoặc bật")
-
 	// ErrCustomCatalogueFull — the commune is at TranCustomMessages live sentences.
 	ErrCustomCatalogueFull = errors.New("system_message: số câu xã tự thêm đã đạt tối đa")
 

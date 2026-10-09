@@ -114,13 +114,12 @@ func TestCustomMessageRefusalsMapped(t *testing.T) {
 		// The unique-key race (store.AddCustom), wrapped as it arrives from the use case.
 		"code taken, race": {fmt.Errorf("system_message: thêm câu cho xã X: %w", fmt.Errorf("custom_system_message: chèn: %w", domain.ErrMessageCodeTaken)),
 			http.StatusConflict, "message_code_taken", "Mã này đã được dùng cho một câu khác."},
-		"shipped delete":    {domain.ErrShippedMessageNotDeletable, http.StatusConflict, "system_message", "Câu đi kèm phần mềm chỉ sửa lời được, không xoá được."},
-		"shipped edit":      {domain.ErrShippedMessageNotCustom, http.StatusConflict, "system_message", ""},
-		"nothing to switch": {domain.ErrNoOverrideToSwitch, http.StatusConflict, "no_commune_wording", ""},
-		"full":              {domain.ErrCustomCatalogueFull, http.StatusConflict, "catalogue_full", ""},
-		"not found":         {domain.ErrCustomMessageNotFound, http.StatusNotFound, "not_found", ""},
-		"bad key":           {domain.ErrCustomKeyPrefix, http.StatusBadRequest, "invalid_request", ""},
-		"no reason":         {domain.ErrCustomDeleteReasonEmpty, http.StatusBadRequest, "invalid_request", ""},
+		"shipped delete": {domain.ErrShippedMessageNotDeletable, http.StatusConflict, "system_message", "Câu đi kèm phần mềm chỉ sửa lời được, không xoá được."},
+		"shipped edit":   {domain.ErrShippedMessageNotCustom, http.StatusConflict, "system_message", ""},
+		"full":           {domain.ErrCustomCatalogueFull, http.StatusConflict, "catalogue_full", ""},
+		"not found":      {domain.ErrCustomMessageNotFound, http.StatusNotFound, "not_found", ""},
+		"bad key":        {domain.ErrCustomKeyPrefix, http.StatusBadRequest, "invalid_request", ""},
+		"no reason":      {domain.ErrCustomDeleteReasonEmpty, http.StatusBadRequest, "invalid_request", ""},
 	} {
 		t.Run(name, func(t *testing.T) {
 			s := newSystemMessagesHarness(t)

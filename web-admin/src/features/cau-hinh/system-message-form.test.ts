@@ -5,7 +5,6 @@ import type { SystemMessage } from "@/lib/api/system-messages";
 import {
   ADD_CODE_PLACEHOLDER,
   addMessageFlow,
-  canSwitch,
   groupOfCode,
   DELETE_REASON_MISSING,
   deleteMessageFlow,
@@ -162,9 +161,20 @@ describe("switchMessageFlow — Tắt / Bật lại", () => {
     expect(c.body).toEqual({ is_active: true });
   });
 
-  it("409 no_commune_wording comes back as the server's sentence", async () => {
-    const sentence = "Câu này đang dùng lời gốc của phần mềm, chưa có lời của xã để tắt hoặc bật.";
-    vi.stubGlobal("fetch", vi.fn(async () => reply(409, { code: "no_commune_wording", message: sentence })));
+  it("a shipped sentence the commune NEVER reworded has the switch too (owner, 09/10/2026): PATCH …/override { is_active: false }", async () => {
+    const fake = vi.fn(async () => reply(200, { ...SHIPPED, is_active: false }));
+    vi.stubGlobal("fetch", fake);
+    const r = await switchMessageFlow("finance", { ...SHIPPED, code: "budget.scope_notice" });
+    expect(r).toEqual({ ok: true, duLieu: { ...SHIPPED, is_active: false } });
+    const c = lastCall(fake);
+    expect(c.path).toBe("/api/v1/finance-system-messages/budget.scope_notice/override");
+    expect(c.method).toBe("PATCH");
+    expect(c.body).toEqual({ is_active: false });
+  });
+
+  it("a refusal comes back as the server's sentence", async () => {
+    const sentence = "Không có câu hệ thống mang mã này ở phân hệ Tiếp dân – Nhiệm vụ.";
+    vi.stubGlobal("fetch", vi.fn(async () => reply(404, { code: "not_found", message: sentence })));
     expect(await switchMessageFlow("petitions", SHIPPED)).toEqual({ ok: false, thongBao: sentence });
   });
 });
@@ -272,12 +282,6 @@ describe("deleteMessageFlow — Xoá câu xã tự thêm", () => {
 });
 
 describe("small decisions — the card", () => {
-  it("Tắt is offered only when the commune has wording: a reworded shipped sentence, or a commune sentence", () => {
-    expect(canSwitch(SHIPPED)).toBe(false);
-    expect(canSwitch({ ...SHIPPED, overridden: true })).toBe(true);
-    expect(canSwitch(COMMUNE)).toBe(true);
-  });
-
   it("the edit box holds the commune's words of a switched-off rewording, not the default in force", () => {
     expect(editableText({ ...SHIPPED, overridden: true, is_active: false, override_text: "Của xã." })).toBe("Của xã.");
     expect(editableText(SHIPPED)).toBe("Mặc định.");
