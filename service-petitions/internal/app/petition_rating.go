@@ -89,15 +89,20 @@ type RatePetition struct {
 	// from `db` by the constructor; noticeID is its own id seam.
 	notices  StaffNoticeOutbox
 	noticeID func() (string, error)
+
+	// mergeHistory is read for the reopening's occurrence: a petition that was unmerged has started a
+	// round the reopen counter does not see (statusOccurrence). Built from `db` like `notices`.
+	mergeHistory PetitionMergeEvents
 }
 
 func NewRatePetition(db *store.DB, s PetitionRatingStore, events KhoSuKien) *RatePetition {
 	return &RatePetition{
 		db: db, store: s, events: events,
-		newID:    ulid.Moi,
-		now:      func() time.Time { return time.Now().UTC() },
-		notices:  petstore.NewStaffNoticeOutboxStore(db),
-		noticeID: ulid.Moi,
+		newID:        ulid.Moi,
+		now:          func() time.Time { return time.Now().UTC() },
+		notices:      petstore.NewStaffNoticeOutboxStore(db),
+		noticeID:     ulid.Moi,
+		mergeHistory: petstore.NewPetitionMergeEventStore(db),
 	}
 }
 
@@ -225,11 +230,18 @@ func (uc *RatePetition) Rate(ctx context.Context, ma string, req RatingRequest, 
 			return nil
 		}
 		// THE REOPENING OWES THE CITIZEN A WORD (ADR 0041:53, ADR 0050 point 2; rule 10, invariant 5),
-		// in the SAME transaction. `after.SoLanMoLai` is already incremented, so Occurrence is the
-		// ordinal of THIS entry into `dang-xu-ly` — never a duplicate of the first one.
-		if err := writeStatusChangedEvent(ctx, tx, uc.events, uc.newID, after, domain.DangXuLy, at,
-			domain.ReopenNextStep(after)); err != nil {
-			return err
+		// in the SAME transaction. `after.SoLanMoLai` is already incremented and the unmerges are added
+		// (statusOccurrence), so Occurrence is a round no earlier entry into `dang-xu-ly` used — not the
+		// first one's, and not the one an unmerge back into processing already took.
+		if after.CongDanID != "" {
+			unmerges, err := countUnmerges(ctx, tx, uc.mergeHistory, after)
+			if err != nil {
+				return err
+			}
+			if err := writeStatusChangedEvent(ctx, tx, uc.events, uc.newID, after, domain.DangXuLy, at,
+				domain.ReopenNextStep(after), unmerges); err != nil {
+				return err
+			}
 		}
 		// AND THE OFFICER HOLDING IT A NOTICE (ADR 0086 kind 24), keyed by this rating's timeline row. No
 		// officer on the petition (a unit-only assignment) → no row. The actor is a CITIZEN, so there is

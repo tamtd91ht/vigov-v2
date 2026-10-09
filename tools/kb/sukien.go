@@ -277,15 +277,40 @@ var (
 	benNhan = map[string]bool{"Subscribe": true, "Consume": true, "Nghe": true, "DangKyNghe": true}
 )
 
+// outboxRowFields names the struct literals that PUT an event name on its way out, and the field the
+// name goes in: setting it is publishing, exactly as calling Publish is.
+//
+//	events.Envelope{Name: …}   the envelope a publisher hands to the bus
+//	SuKienDi{Ten: …}           a row of a service's transactional outbox (service-petitions
+//	                           `su_kien_di`, migration 0005) — the relay publishes it after the commit.
+//	                           Not recognising it made the outbox, the RIGHT way to publish, read as
+//	                           "no publisher" for every event that uses it.
+//
+// The type is matched by its last name, qualified (`petstore.SuKienDi`) or not (inside its own package).
+var outboxRowFields = map[string]string{"Envelope": "Name", "SuKienDi": "Ten"}
+
+// parsedGoFile is one non-test Go file, parsed once and read by every pass below.
+type parsedGoFile struct {
+	rel, service, pkgDir string
+	fset                 *token.FileSet
+	file                 *ast.File
+}
+
 // benTuMaGo finds every mention of an event name as a Go string constant, and classifies it.
 //
 // QUA CẢ MỘT HẰNG SỐ CÓ TÊN, không chỉ chuỗi viết thẳng. `service-comms` khai
 // `const TenSuKienPhieuDoiTrangThai = "petitions.status_changed.v1"` rồi so tên phong bì với
 // hằng ấy — đó là cách ĐÚNG để viết (một chỗ duy nhất giữ tên), nên một bộ sinh chỉ nhìn chuỗi
 // viết thẳng sẽ đọc chính đoạn mã tốt nhất thành "không rõ vai".
+//
+// THE CONSTANT IS PACKAGE-SCOPED, SO THE LOOKUP IS TOO. Go lets one file declare the name and another
+// use it (service-petitions declares both outbox names in xu_ly_phan_anh.go; petition_merge.go writes
+// one). Resolved per file, that use is invisible and the declaration is reported as unclassified — so
+// every file is parsed first, the constants are gathered per package directory, and only then classified.
 func benTuMaGo(root string, ten map[string]bool) (phat, nhan, chuaRo map[string][]mocMa, err error) {
 	phat, nhan, chuaRo = map[string][]mocMa{}, map[string][]mocMa{}, map[string][]mocMa{}
 
+	var files []parsedGoFile
 	err = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -309,13 +334,23 @@ func benTuMaGo(root string, ten map[string]bool) (phat, nhan, chuaRo map[string]
 		}
 		rel, _ := filepath.Rel(root, path)
 		rel = filepath.ToSlash(rel)
-		dichVu := strings.SplitN(rel, "/", 2)[0]
+		files = append(files, parsedGoFile{rel: rel, service: strings.SplitN(rel, "/", 2)[0],
+			pkgDir: filepath.ToSlash(filepath.Dir(rel)), fset: fset, file: f})
+		return nil
+	})
+	if err != nil {
+		return phat, nhan, chuaRo, err
+	}
 
-		// LƯỢT MỘT — hằng số cấp gói mang tên một sự kiện. Nó CHƯA phải một vai: khai một cái
-		// tên không phát và không nghe gì cả. Vai đến từ chỗ DÙNG nó, ở lượt hai.
-		biDanh := map[string]string{}           // tên hằng -> tên sự kiện
-		biDanhLit := map[string]*ast.BasicLit{} // và chỗ khai nó, để báo khi không ai dùng
-		for _, d := range f.Decls {
+	// LƯỢT MỘT — hằng số cấp gói mang tên một sự kiện, gom THEO GÓI. Nó CHƯA phải một vai: khai một
+	// cái tên không phát và không nghe gì cả. Vai đến từ chỗ DÙNG nó, ở lượt hai.
+	pkgAliases := map[string]map[string]string{}          // gói -> tên hằng -> tên sự kiện
+	pkgAliasLits := map[string]map[string]*ast.BasicLit{} // và chỗ khai nó, để báo khi không ai dùng
+	for _, pf := range files {
+		if pkgAliases[pf.pkgDir] == nil {
+			pkgAliases[pf.pkgDir], pkgAliasLits[pf.pkgDir] = map[string]string{}, map[string]*ast.BasicLit{}
+		}
+		for _, d := range pf.file.Decls {
 			gd, ok := d.(*ast.GenDecl)
 			if !ok || (gd.Tok != token.CONST && gd.Tok != token.VAR) {
 				continue
@@ -330,24 +365,35 @@ func benTuMaGo(root string, ten map[string]bool) (phat, nhan, chuaRo map[string]
 						continue
 					}
 					if lit, s, ok := chuoiSuKien(vs.Values[i], ten); ok {
-						biDanh[nm.Name] = s
-						biDanhLit[nm.Name] = lit
+						pkgAliases[pf.pkgDir][nm.Name] = s
+						pkgAliasLits[pf.pkgDir][nm.Name] = lit
 					}
 				}
 			}
 		}
+	}
 
-		daXep := map[ast.Node]bool{}
-		daDung := map[string]bool{} // bí danh đã được xếp vai ở ít nhất một chỗ dùng
+	daXep := map[ast.Node]bool{}
+	pkgUsed := map[string]map[string]bool{} // gói -> bí danh đã được xếp vai ở ít nhất một chỗ dùng
+	at := func(pf parsedGoFile, n ast.Node) mocMa {
+		return mocMa{
+			Service: strings.TrimPrefix(pf.service, "service-"),
+			At:      fmt.Sprintf("%s:%d", pf.rel, pf.fset.Position(n.Pos()).Line),
+		}
+	}
+	for _, pf := range files {
+		pf := pf
+		biDanh := pkgAliases[pf.pkgDir]
+		if pkgUsed[pf.pkgDir] == nil {
+			pkgUsed[pf.pkgDir] = map[string]bool{}
+		}
+		daDung := pkgUsed[pf.pkgDir]
 		ghi := func(vao map[string][]mocMa, n ast.Node, s string) {
 			daXep[n] = true
 			if id, ok := n.(*ast.Ident); ok {
 				daDung[id.Name] = true
 			}
-			vao[s] = append(vao[s], mocMa{
-				Service: strings.TrimPrefix(dichVu, "service-"),
-				At:      fmt.Sprintf("%s:%d", rel, fset.Position(n.Pos()).Line),
-			})
+			vao[s] = append(vao[s], at(pf, n))
 		}
 		// tenCua đọc một biểu thức thành tên sự kiện — chuỗi viết thẳng hoặc hằng số ở trên.
 		tenCua := func(e ast.Expr) (ast.Node, string, bool) {
@@ -363,13 +409,20 @@ func benTuMaGo(root string, ten map[string]bool) (phat, nhan, chuaRo map[string]
 		}
 
 		// LƯỢT HAI — xếp vai theo hình dạng câu lệnh.
-		ast.Inspect(f, func(n ast.Node) bool {
+		ast.Inspect(pf.file, func(n ast.Node) bool {
 			switch x := n.(type) {
 			case *ast.CompositeLit:
-				// events.Envelope{Name: "petitions.status_changed.v1", …} — ĐẶT tên vào phong bì
-				// là phát.
-				sel, ok := x.Type.(*ast.SelectorExpr)
-				if !ok || sel.Sel.Name != "Envelope" {
+				// events.Envelope{Name: "petitions.status_changed.v1", …} hoặc một dòng outbox
+				// SuKienDi{Ten: …} — ĐẶT tên vào thứ sẽ được gửi đi là phát (outboxRowFields).
+				var typeName string
+				switch ty := x.Type.(type) {
+				case *ast.SelectorExpr:
+					typeName = ty.Sel.Name
+				case *ast.Ident:
+					typeName = ty.Name
+				}
+				field, ok := outboxRowFields[typeName]
+				if !ok {
 					return true
 				}
 				for _, e := range x.Elts {
@@ -378,7 +431,7 @@ func benTuMaGo(root string, ten map[string]bool) (phat, nhan, chuaRo map[string]
 						continue
 					}
 					k, ok := kv.Key.(*ast.Ident)
-					if !ok || k.Name != "Name" {
+					if !ok || k.Name != field {
 						continue
 					}
 					if nd, s, ok := tenCua(kv.Value); ok {
@@ -437,25 +490,27 @@ func benTuMaGo(root string, ten map[string]bool) (phat, nhan, chuaRo map[string]
 			}
 			return true
 		})
+	}
 
-		// LƯỢT BA — mọi hằng chuỗi mang tên sự kiện mà chưa được xếp vai. Chỗ khai một hằng số
-		// ĐÃ được dùng ở một vai thì không báo lại: nó là cùng một sự thật, kể hai lần.
-		ast.Inspect(f, func(n ast.Node) bool {
+	// LƯỢT BA — mọi hằng chuỗi mang tên sự kiện mà chưa được xếp vai. Chỗ khai một hằng số ĐÃ được
+	// dùng ở một vai — ở BẤT KỲ tệp nào của cùng gói — thì không báo lại: cùng một sự thật, kể hai lần.
+	for _, pf := range files {
+		pf := pf
+		ast.Inspect(pf.file, func(n ast.Node) bool {
 			lit, s, ok := chuoiSuKien(n, ten)
 			if !ok || daXep[lit] {
 				return true
 			}
-			for nm, l := range biDanhLit {
-				if l == lit && daDung[nm] {
+			for nm, l := range pkgAliasLits[pf.pkgDir] {
+				if l == lit && pkgUsed[pf.pkgDir][nm] {
 					return true
 				}
 			}
-			ghi(chuaRo, lit, s)
+			chuaRo[s] = append(chuaRo[s], at(pf, lit))
 			return true
 		})
-		return nil
-	})
-	return phat, nhan, chuaRo, err
+	}
+	return phat, nhan, chuaRo, nil
 }
 
 // chuoiSuKien reports whether a node is a string literal naming a known event.

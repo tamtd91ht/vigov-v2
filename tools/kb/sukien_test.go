@@ -297,6 +297,77 @@ func Nhan(e events.Envelope) error {
 	}
 }
 
+// THE TRANSACTIONAL OUTBOX IS A PUBLISHER, and the event-name constant may live in ANOTHER FILE of the
+// same package — service-petitions' exact shape: the names declared in xu_ly_phan_anh.go, one of them
+// written into `petstore.SuKienDi{Ten: …}` from petition_merge.go. Before, both events read "no publisher"
+// with the declaration listed as an unclassified mention.
+func TestOutboxRowIsPublisherAcrossFilesOfOnePackage(t *testing.T) {
+	root := t.TempDir()
+	vietTep(t, root, "proto/vigov/thu/v1/events.proto", protoThu)
+	vietTep(t, root, "service-thu/internal/app/names.go", `package app
+
+const eventDone = "thu.da_xong.v1"
+`)
+	vietTep(t, root, "service-thu/internal/app/act.go", `package app
+
+import petstore "vd/service-thu/internal/store"
+
+func write() petstore.SuKienDi {
+	return petstore.SuKienDi{ID: "x", Ten: eventDone}
+}
+`)
+	// Inside its own package the type is unqualified; a literal name works as well as a constant.
+	vietTep(t, root, "service-thu/internal/store/outbox.go", `package store
+
+type SuKienDi struct{ ID, Ten string }
+
+func own() SuKienDi { return SuKienDi{Ten: "thu.da_xong.v1"} }
+`)
+	// A DIFFERENT package declaring a constant of the same name is not resolved through the first one.
+	vietTep(t, root, "service-khac/internal/app/other.go", `package app
+
+const eventDone = "thu.da_xong.v1"
+`)
+
+	sk, _, err := quetSuKien(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var at []string
+	for _, p := range sk[0].BenPhat {
+		if p.Service != "thu" {
+			t.Errorf("publisher service = %q", p.Service)
+		}
+		at = append(at, p.At)
+	}
+	if len(at) != 2 || !strings.HasPrefix(at[0], "service-thu/internal/app/act.go:") ||
+		!strings.HasPrefix(at[1], "service-thu/internal/store/outbox.go:") {
+		t.Fatalf("publishers = %v", at)
+	}
+	if len(sk[0].ChuaRo) != 1 || !strings.HasPrefix(sk[0].ChuaRo[0].At, "service-khac/internal/app/other.go:") {
+		t.Errorf("unclassified = %+v — only the other package's unused constant", sk[0].ChuaRo)
+	}
+}
+
+// A field OTHER than the outbox's name field carries no role: `SuKienDi{DoiTuong: …}` is not publishing.
+func TestOutboxRowOtherFieldIsNotPublisher(t *testing.T) {
+	root := t.TempDir()
+	vietTep(t, root, "proto/vigov/thu/v1/events.proto", protoThu)
+	vietTep(t, root, "service-thu/internal/app/act.go", `package app
+
+type SuKienDi struct{ Ten, DoiTuong string }
+
+func write() SuKienDi { return SuKienDi{DoiTuong: "thu.da_xong.v1"} }
+`)
+	sk, _, err := quetSuKien(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sk[0].BenPhat) != 0 || len(sk[0].ChuaRo) != 1 {
+		t.Errorf("publishers = %+v, unclassified = %+v", sk[0].BenPhat, sk[0].ChuaRo)
+	}
+}
+
 // Một hình dạng bộ sinh chưa biết KHÔNG được biến mất: nó hiện ra kèm cảnh báo. Đó là khác biệt
 // giữa bộ sinh này và tệp rỗng nó thay thế.
 func TestNhacTenMaKhongRoVaiThiBao(t *testing.T) {
@@ -343,5 +414,19 @@ func TestKhoThatCoSuKienDauTien(t *testing.T) {
 	}
 	if thay.Owner != "petitions" || thay.Version != "v1" {
 		t.Errorf("xuất xứ sai: %q %q", thay.Owner, thay.Version)
+	}
+	// Both petitions events leave through the outbox (SuKienDi{Ten: <const>}); the index must say so.
+	for _, s := range sk {
+		if s.Ten != "petitions.status_changed.v1" && s.Ten != "petitions.merge_changed.v1" {
+			continue
+		}
+		found := false
+		for _, p := range s.BenPhat {
+			found = found || p.Service == "petitions"
+		}
+		if !found || len(s.ChuaRo) != 0 {
+			t.Errorf("%s: publishers %+v, unclassified %+v — service-petitions must be the publisher",
+				s.Ten, s.BenPhat, s.ChuaRo)
+		}
 	}
 }

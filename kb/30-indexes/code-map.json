@@ -1760,7 +1760,7 @@
     },
     "app.NewRatePetition": {
       "kind": "func",
-      "at": "service-petitions/internal/app/petition_rating.go:94"
+      "at": "service-petitions/internal/app/petition_rating.go:98"
     },
     "app.NewResidentialUnitImporter": {
       "kind": "func",
@@ -2272,7 +2272,7 @@
     },
     "app.Rate": {
       "kind": "func",
-      "at": "service-petitions/internal/app/petition_rating.go:109"
+      "at": "service-petitions/internal/app/petition_rating.go:114"
     },
     "app.RatePetition": {
       "kind": "type",

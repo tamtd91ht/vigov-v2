@@ -109,9 +109,11 @@ func main() {
 			"proto/ (luật 2 bất biến 7); bên phát và bên nhận SINH TỪ mã Go.",
 		"_how": "Tên sự kiện: dòng đứng riêng dạng `<miền>.<việc>.v<n>` trong khối chú thích DÍNH LIỀN " +
 			"ngay trên `message` của .proto. Bên phát: ĐẶT tên vào phong bì — `events.Envelope{Name: " +
-			"...}` — hoặc một lời gọi Publish/Phat mang tên ấy. Bên nhận: SO tên phong bì đang đến " +
+			"...}` — hoặc vào một dòng outbox — `SuKienDi{Ten: ...}` — hoặc một lời gọi Publish/Phat " +
+			"mang tên ấy. Bên nhận: SO tên phong bì đang đến " +
 			"với nó (`e.Name != TenSuKien...`), một `case \"...\":`, hoặc một lời gọi " +
-			"Subscribe/Consume/Nghe. Tên đi qua một hằng số cấp gói vẫn theo được. Hình dạng khác " +
+			"Subscribe/Consume/Nghe. Tên đi qua một hằng số cấp gói (khai ở bất kỳ tệp nào của gói) " +
+			"vẫn theo được. Hình dạng khác " +
 			"thì tên vẫn hiện ở `unclassified_mentions` kèm cảnh báo — không bị bỏ đi trong im lặng.",
 		"_warnings": rongNeuNilChuoi(canhBaoSuKien),
 		"events":    suKien,

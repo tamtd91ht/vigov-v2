@@ -625,6 +625,15 @@
       "no_confirm": [],
       "tiep_theo": "Cùng lượt dựng: đổi dòng khai KHAI_BAO_LOI_GOI và hồ sơ nộp Zalo (content/ket-xuat-ho-so.ts) sang chooseImage cho nút chụp; soát đoạn chính sách ảnh hiện trường [CHỜ DUYỆT] (mục chinh-sach-anh-hien-truong-nhap). Chưa kiểm quyền Zalo của chooseImage máy ảnh cho App ID app chung và app xã. Thử trên máy thật: fetch đường dẫn tạm của chooseImage trả byte ảnh, mã huỷ khi người dùng đóng máy ảnh. Máy chủ vẫn bỏ EXIF (G3) — ảnh máy ảnh hệ điều hành có thể mang GPS.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "chon-thon-khi-gui-phan-anh-09-10",
+      "menu": "phan-anh-nguoi-dan",
+      "trang_thai": "xong",
+      "viec": "Ô chọn 'Thôn, tổ dân phố' tuỳ chọn ở cả app chung và app riêng của xã (ADR 0088): đọc GET /api/v1/my-residential-units, mặc định 'Không chọn', ẩn khi rỗng, tải lỗi vẫn gửi được, gửi residential_unit_id chỉ khi chọn, 400/503 hiện câu máy chủ; luồng không tài khoản không dùng; không lưu vào bản nháp.",
+      "bang_chung": "bbe5883c, e42507af. tsc sạch, vitest 69 tệp/1877 ca xanh. Prototype không có ô này ở form gửi — đặt ngay sau khối địa chỉ. Chưa thử trên máy Zalo thật.",
+      "tiep_theo": "Thử trên máy thật. Giới hạn tần suất tuyến my-residential-units chờ chủ dự án.",
+      "no_confirm": []
     }
   ]
 }

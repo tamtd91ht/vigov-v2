@@ -1488,18 +1488,73 @@ func (uc *XuLyPhanAnh) ketThucNhanh(ctx context.Context, ma string, nhanh domain
 // decides how.
 func (uc *XuLyPhanAnh) ghiSuKien(ctx context.Context, tx *store.ScopedTx,
 	p domain.PhieuPhanAnh, moi domain.TrangThai, luc time.Time) error {
-	return ghiSuKienDoiTrangThai(ctx, tx, uc.suKien, uc.sinhID, p, moi, luc)
+	if p.CongDanID == "" {
+		return nil // no recipient, no row — and no count to pay for (writeStatusChangedEvent)
+	}
+	unmerges, err := countUnmerges(ctx, tx, uc.mergeEvents, p)
+	if err != nil {
+		return err
+	}
+	return writeStatusChangedEvent(ctx, tx, uc.suKien, uc.sinhID, p, moi, luc, domain.ViecTiepTheo(p, moi),
+		unmerges)
 }
 
-// ghiSuKienDoiTrangThai is the ONE builder of the `petitions.status_changed.v1` outbox row, shared by
-// the staff acts above and the citizen intake (gui_phan_anh.go).
+// ghiSuKienDoiTrangThai is the `petitions.status_changed.v1` outbox row of the two INTAKE paths
+// (gui_phan_anh.go, staff_intake.go) — a petition CREATED IN THIS SAME TRANSACTION.
+//
+// ZERO UNMERGES IS A FACT THERE, NOT A DEFAULT: a row that did not exist before this transaction cannot
+// have been merged, let alone unmerged. That is the ONLY reason this path skips the count, and it is why
+// no other caller may use it — every act on an EXISTING petition goes through XuLyPhanAnh.ghiSuKien (or,
+// for the rating, RatePetition), which reads the count (statusOccurrence says why it matters).
 //
 // A PACKAGE FUNCTION AND NOT A METHOD, because two use cases publish the same fact and a second copy
 // of this body in the intake would be a second place where the message shape, the occurrence rule and
 // the "no recipient, no row" rule could drift apart. `p` is the petition AFTER the change.
 func ghiSuKienDoiTrangThai(ctx context.Context, tx *store.ScopedTx, suKien KhoSuKien,
 	sinhID func() (string, error), p domain.PhieuPhanAnh, moi domain.TrangThai, luc time.Time) error {
-	return writeStatusChangedEvent(ctx, tx, suKien, sinhID, p, moi, luc, domain.ViecTiepTheo(p, moi))
+	return writeStatusChangedEvent(ctx, tx, suKien, sinhID, p, moi, luc, domain.ViecTiepTheo(p, moi), 0)
+}
+
+// errMergeHistoryUnreadable: the occurrence of an act on an existing petition needs its unmerge count, and
+// the history store is not wired. Refused (500) rather than counted as 0 — a 0 here is exactly the
+// duplicate occurrence statusOccurrence exists to prevent, and comms would drop the notice silently.
+var errMergeHistoryUnreadable = errors.New(
+	"xu_ly_phan_anh: không đọc được lịch sử gộp/tách — không tính được lần báo trạng thái")
+
+// countUnmerges answers how many times petition `p` has been taken out of a main petition, from the
+// append-only history (migration 0037) INSIDE the act's transaction, so an unmerge appended earlier in
+// the same transaction is counted. ScopedTx binds the commune (rule 1, invariant 5).
+func countUnmerges(ctx context.Context, tx *store.ScopedTx, history PetitionMergeEvents,
+	p domain.PhieuPhanAnh) (int, error) {
+	if history == nil {
+		return 0, errMergeHistoryUnreadable
+	}
+	return history.CountTx(ctx, tx, p.ID, domain.MergeKindUnmerge)
+}
+
+// statusOccurrence is the `occurrence` of `petitions.status_changed.v1`: WHICH ROUND of its lifecycle the
+// petition is in when it enters a status. comms deduplicates a notice on
+// (petition, moc = status, lan = occurrence, recipient, channel), so two entries of one status with the
+// same number are ONE notice — the second is dropped and the citizen is never told.
+//
+// A ROUND ENDS AT EITHER OF THE TWO BACKWARD EDGES INTO PROCESSING, and nowhere else:
+//
+//	reopening by rating   counted in `so_lan_mo_lai` (petition_rating.go)
+//	unmerging             NOT counted there, deliberately — it is not a reopening and the close gate
+//	                      reads that counter (domain/xu_ly_phan_anh.go, tienTrinhChinh). Counted from
+//	                      petition_merge_event instead.
+//
+// Every other edge of the lifecycle moves forward (domain.tienTrinhChinh and the four named acts), so a
+// status is entered at most once per round and (round, status) never repeats.
+//
+// WHY ROUNDS AND NOT "TIMES THIS STATUS WAS ENTERED": the two agree on every flow that never revisits a
+// status, but differ where a round SKIPPED one — `da-xu-ly → da-dong` when nobody can confirm, then a
+// reopening, then `cho-dan-xac-nhan` for the first time. The old rule sent 2 there; an entry count would
+// send 1, and a petition in flight at deploy could then send 2 again one round later — a key comms has
+// already seen. Rounds equal the old value exactly whenever there was no unmerge (`unmerges` = 0), so
+// every key already issued stays issued and no future one collides with it.
+func statusOccurrence(p domain.PhieuPhanAnh, unmerges int) uint32 {
+	return uint32(p.SoLanMoLai) + uint32(unmerges) + 1
 }
 
 // writeStatusChangedEvent is the body of ghiSuKienDoiTrangThai with the citizen's sentence passed IN.
@@ -1509,10 +1564,10 @@ func ghiSuKienDoiTrangThai(ctx context.Context, tx *store.ScopedTx, suKien KhoSu
 // reopening itself owes the citizen a word (ADR 0041:53, ADR 0050 point 2). Passing the sentence keeps
 // ONE builder of the message shape, the occurrence rule and the "no recipient, no row" rule — the
 // extension ADR 0041 open item #3 asks for, rather than a second copy of this body. `nextStep` "" means
-// the transition owes nothing, exactly as before.
+// the transition owes nothing, exactly as before. `unmerges` is countUnmerges' answer (0 only on intake).
 func writeStatusChangedEvent(ctx context.Context, tx *store.ScopedTx, suKien KhoSuKien,
 	sinhID func() (string, error), p domain.PhieuPhanAnh, moi domain.TrangThai, luc time.Time,
-	nextStep string) error {
+	nextStep string, unmerges int) error {
 
 	if p.CongDanID == "" {
 		return nil
@@ -1521,11 +1576,11 @@ func writeStatusChangedEvent(ctx context.Context, tx *store.ScopedTx, suKien Kho
 	tin := &petitionsv1.PetitionStatusChanged{
 		LookupCode: p.MaTraCuu,
 		Status:     string(moi),
-		// WHICH OCCURRENCE of this status on this petition. `so_lan_mo_lai` is 0 until a reopening
-		// happens, so the first time through is 1 — and ZERO IS NEVER SENT, which the consumer treats
-		// as malformed on purpose: defaulting it to 1 would make the SECOND closing of a reopened
-		// petition look like a duplicate of the first, and the citizen would never be told about it.
-		Occurrence: uint32(p.SoLanMoLai) + 1,
+		// WHICH OCCURRENCE of this status on this petition — the round (statusOccurrence). The first
+		// time through is 1 — and ZERO IS NEVER SENT, which the consumer treats as malformed on purpose:
+		// defaulting it to 1 would make the SECOND closing of a reopened petition look like a duplicate
+		// of the first, and the citizen would never be told about it.
+		Occurrence: statusOccurrence(p, unmerges),
 		CitizenId:  p.CongDanID,
 	}
 
