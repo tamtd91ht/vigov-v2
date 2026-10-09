@@ -8,10 +8,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { HopXoa } from "@/features/danh-ba/hop-xoa";
 import { CAU_THIEU_LY_DO } from "@/features/danh-ba/xoa-dong";
 
+import { BAN_TRONG, NUT_THEM_CAN_BO } from "@/components/danh-ba/nhan-ghi-danh-ba";
+
 import { BangCanBo, DanhBaCanBo, HangLocNguoiDung, SEARCH_DEBOUNCE_MS } from "./danh-ba-can-bo";
 import type { LocNguoiDung } from "./danh-ba-can-bo";
-import { SEARCH_PLACEHOLDER } from "./nhan-can-bo";
+import { OMatKhauTam, XacNhanTaiKhoan } from "./mat-khau-tam";
+import { SEARCH_PLACEHOLDER, roleChangeFailed } from "./nhan-can-bo";
 import { sangTrangSau, TRANG_DAU } from "./ngan-xep-con-tro";
+import { StaffAccountForm } from "./staff-account-form";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════════════════════
@@ -177,12 +181,20 @@ let countsAnswer: { status: number; body: unknown };
  * resolves later, to make an older search's count arrive AFTER a newer one's.
  */
 let countQueryAnswer: (body: { q: string }) => Promise<{ status: number; body: unknown }>;
+/** What the list routes answer (GET and search alike). */
+let listAnswer: { items: identity_canBoTomTat[]; next_cursor: string; has_more: boolean };
+/**
+ * The write routes of the add/edit flows, by `METHOD path`. Absent = not expected in this test: the
+ * fake answers 500 so an unexpected write is visible as a failure, never as a silent success.
+ */
+let writeAnswers: Record<string, { status: number; body: unknown }>;
 
 function allCalls(): LoiGoi[] {
   return (gia.mock.calls as [string, RequestInit | undefined][]).map(([url, tc]) => ({
     url,
     method: tc?.method ?? "GET",
-    than: tc?.body === undefined ? null : (JSON.parse(String(tc.body)) as Record<string, unknown>),
+    than:
+      tc?.body === undefined || tc.body === null ? null : (JSON.parse(String(tc.body)) as Record<string, unknown>),
   }));
 }
 
@@ -203,6 +215,8 @@ function json(status: number, body: unknown): Response {
 beforeEach(() => {
   countsAnswer = { status: 200, body: { total: 7, published: 0, no_department: { total: 0, published: 0 }, departments: [] } };
   countQueryAnswer = async () => ({ status: 200, body: { total: 3 } });
+  listAnswer = { items: [A], next_cursor: "CB-00001", has_more: true };
+  writeAnswers = {};
   gia = vi.fn(async (url: string, init?: RequestInit) => {
     if (url === COUNTS_PATH) return json(countsAnswer.status, countsAnswer.body);
     if (url === COUNT_QUERIES_PATH) {
@@ -210,7 +224,13 @@ beforeEach(() => {
       return json(a.status, a.body);
     }
     if (init?.method === "DELETE") return json(204, null);
-    return json(200, { items: [A], next_cursor: "CB-00001", has_more: true });
+    const method = init?.method ?? "GET";
+    const isList = (method === "GET" && url.startsWith("/api/v1/staff")) || url === "/api/v1/staff/searches";
+    if (!isList) {
+      const w = writeAnswers[`${method} ${url}`];
+      return w === undefined ? json(500, { code: "unexpected", message: "Không mong đợi." }) : json(w.status, w.body);
+    }
+    return json(200, listAnswer);
   });
   vi.stubGlobal("fetch", gia);
   vi.mocked(apiDanhMuc.docDanhMucDanhBa).mockResolvedValue({
@@ -228,7 +248,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-async function moMan(props: { canDelete?: boolean } = {}) {
+async function moMan(props: { canDelete?: boolean; selfCode?: string | null } = {}) {
   const m = may(DanhBaCanBo, props);
   await xongMang(m);
   return m;
@@ -681,5 +701,170 @@ describe("count line while searching — M is the search's own total (owner deci
     for (const { url } of countQueryCalls()) {
       expect(url).toBe(COUNT_QUERIES_PATH);
     }
+  });
+});
+
+/* ---- 9. pager only with another page (user 09/10/2026) ---------------------------------------- */
+
+describe("pager — hidden on a one-page list", () => {
+  const pagers = (m: { cay: () => unknown }) => tatCa(m.cay(), (p) => typeof p.props.diToiTrang === "function");
+
+  it("one page (no `has_more`, first page) → no `Trang trước / Trang sau` at all", async () => {
+    listAnswer = { items: [A], next_cursor: "", has_more: false };
+    const m = await moMan();
+    expect(pagers(m)).toHaveLength(0);
+  });
+
+  it("another page → the pager is there", async () => {
+    const m = await moMan();
+    expect(pagers(m)).toHaveLength(1);
+  });
+});
+
+/* ---- 10. edit: role chosen in the dialog, PUT .../role AFTER the PATCH (user 09/10/2026) --------- */
+
+/** Run the effects and promise chains of a flow with several awaits in a row. */
+async function settle(m: { ve: () => unknown }) {
+  for (let i = 0; i < 6; i++) await xongMang(m);
+}
+
+const form = (m: { cay: () => unknown }) => phaiCo(m.cay(), StaffAccountForm);
+const PATCH_A = `PATCH /api/v1/staff/${A.id}`;
+const ROLE_A = `PUT /api/v1/staff/${A.id}/role`;
+
+function writes(): LoiGoi[] {
+  return allCalls().filter((c) => c.method !== "GET" && c.url !== "/api/v1/staff/searches" && c.url !== COUNT_QUERIES_PATH);
+}
+
+describe("edit dialog — role change calls the role route AFTER the patch", () => {
+  async function openEdit(props: { selfCode?: string | null } = {}) {
+    const m = await moMan(props);
+    phaiCo(m.cay(), BangCanBo).thaoTac.sua(A);
+    m.ve();
+    return m;
+  }
+
+  it("role changed → PATCH /staff/{id}, THEN PUT /staff/{id}/role {role_id}; dialog closes on success", async () => {
+    writeAnswers[PATCH_A] = { status: 200, body: A };
+    writeAnswers[ROLE_A] = { status: 200, body: { ...A, role_id: "VT-2" } };
+    const m = await openEdit();
+    expect(form(m).roleId).toBe("");
+    expect(form(m).roleChoice).toBe("editable");
+    form(m).setRoleId("VT-2");
+    m.ve();
+    form(m).onSubmit();
+    await settle(m);
+
+    const w = writes();
+    expect(w.map((c) => `${c.method} ${c.url}`)).toEqual([PATCH_A, ROLE_A]);
+    expect(w[0]?.than).not.toHaveProperty("role_id");
+    expect(w[1]?.than).toEqual({ role_id: "VT-2" });
+    expect(tatCa(m.cay(), (p) => p.type === StaffAccountForm)).toHaveLength(0);
+  });
+
+  it("role unchanged → the PATCH alone, no role route", async () => {
+    writeAnswers[PATCH_A] = { status: 200, body: A };
+    const m = await openEdit();
+    form(m).setDraft({ ...form(m).draft, chucDanh: "Công chức Văn phòng" });
+    m.ve();
+    form(m).onSubmit();
+    await settle(m);
+    expect(writes().map((c) => `${c.method} ${c.url}`)).toEqual([PATCH_A]);
+  });
+
+  it("role route refused (#13/#14) → its sentence in the dialog; Lưu again retries the ROLE only", async () => {
+    const sentence = "Xã phải luôn còn ít nhất một người quản trị.";
+    writeAnswers[PATCH_A] = { status: 200, body: A };
+    writeAnswers[ROLE_A] = { status: 409, body: { code: "last_admin", message: sentence } };
+    const m = await openEdit();
+    form(m).setRoleId("VT-2");
+    m.ve();
+    form(m).onSubmit();
+    await settle(m);
+
+    expect(form(m).serverError).toBe(roleChangeFailed(sentence));
+    expect(form(m).serverError).toContain(sentence);
+
+    form(m).onSubmit();
+    await settle(m);
+    const w = writes().map((c) => `${c.method} ${c.url}`);
+    expect(w.filter((x) => x === PATCH_A)).toHaveLength(1);
+    expect(w.filter((x) => x === ROLE_A)).toHaveLength(2);
+  });
+
+  it("DENIED, own row (#14): the choice is disabled and no role route is ever called", async () => {
+    writeAnswers[PATCH_A] = { status: 200, body: A };
+    const m = await openEdit({ selfCode: A.code });
+    expect(form(m).roleChoice).toBe("own");
+    // Even if a value slipped through (the radios are disabled), the screen does not send it.
+    form(m).setRoleId("VT-2");
+    m.ve();
+    form(m).onSubmit();
+    await settle(m);
+    expect(writes().map((c) => `${c.method} ${c.url}`)).toEqual([PATCH_A]);
+  });
+});
+
+/* ---- 11. add: with an email, the account is granted at once (user 09/10/2026) --------------------- */
+
+const B: identity_canBoTomTat = { ...A, id: "01J00000000000000000000002", code: "CB-00002", full_name: "Trần Thị B", email: "ttb@demo.invalid" };
+const GRANT_B = `POST /api/v1/staff/${B.id}/account`;
+/** Fake, and obviously so (rule 8). */
+const FAKE_PASSWORD = "mat-khau-gia-de-kiem-tra";
+
+describe("add dialog — email filled chains the grant-account route", () => {
+  async function openAdd() {
+    const m = await moMan();
+    const add = tatCa(m.cay(), (p) => p.props.children === NUT_THEM_CAN_BO)[0];
+    (add?.props.onClick as () => void)();
+    m.ve();
+    return m;
+  }
+
+  it("email → POST /staff, THEN POST /staff/{id}/account; the one-time password opens; form closed", async () => {
+    writeAnswers["POST /api/v1/staff"] = { status: 201, body: B };
+    writeAnswers[GRANT_B] = { status: 201, body: { staff: { ...B, has_account: true }, temporary_password: FAKE_PASSWORD } };
+    const m = await openAdd();
+    expect(form(m).open.kieu).toBe("them");
+    form(m).setDraft({ ...BAN_TRONG, hoTen: "Trần Thị B", email: "ttb@demo.invalid" });
+    m.ve();
+    form(m).onSubmit();
+    await settle(m);
+
+    const w = writes();
+    expect(w.map((c) => `${c.method} ${c.url}`)).toEqual(["POST /api/v1/staff", GRANT_B]);
+    expect(w[0]?.than).toMatchObject({ full_name: "Trần Thị B", email: "ttb@demo.invalid" });
+    expect(w[0]?.than).not.toHaveProperty("password");
+    expect(phaiCo(m.cay(), OMatKhauTam).matKhauTam).toMatchObject({ kieu: "cap", maCanBo: B.code, matKhau: FAKE_PASSWORD });
+    expect(tatCa(m.cay(), (p) => p.type === StaffAccountForm)).toHaveLength(0);
+  });
+
+  it("grant refused → the entry stays, the grant confirmation opens with the server's sentence (retry)", async () => {
+    const sentence = "Thư điện tử này đã được dùng cho một tài khoản khác.";
+    writeAnswers["POST /api/v1/staff"] = { status: 201, body: B };
+    writeAnswers[GRANT_B] = { status: 409, body: { code: "email_taken", message: sentence } };
+    const m = await openAdd();
+    form(m).setDraft({ ...BAN_TRONG, hoTen: "Trần Thị B", email: "ttb@demo.invalid" });
+    m.ve();
+    form(m).onSubmit();
+    await settle(m);
+
+    const confirm = phaiCo(m.cay(), XacNhanTaiKhoan);
+    expect(confirm.dangMo).toMatchObject({ kieu: "cap", canBo: { id: B.id } });
+    expect(confirm.loiMayChu).toBe(sentence);
+    expect(tatCa(m.cay(), (p) => p.type === OMatKhauTam)).toHaveLength(0);
+    // No delete of the entry: the only writes are the add and the one grant attempt.
+    expect(writes().map((c) => `${c.method} ${c.url}`)).toEqual(["POST /api/v1/staff", GRANT_B]);
+  });
+
+  it("no email → the directory entry only, no grant call", async () => {
+    writeAnswers["POST /api/v1/staff"] = { status: 201, body: { ...B, email: "" } };
+    const m = await openAdd();
+    form(m).setDraft({ ...BAN_TRONG, hoTen: "Trần Thị B" });
+    m.ve();
+    form(m).onSubmit();
+    await settle(m);
+    expect(writes().map((c) => `${c.method} ${c.url}`)).toEqual(["POST /api/v1/staff"]);
+    expect(tatCa(m.cay(), (p) => p.type === OMatKhauTam || p.type === XacNhanTaiKhoan)).toHaveLength(0);
   });
 });

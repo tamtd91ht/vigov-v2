@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Loader2, Minus, ShieldQuestion } from "lucide-react";
+import { Check, Loader2, Lock, Minus, ShieldQuestion } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -17,7 +17,7 @@ import type {
   identity_vaiTroCotRa,
 } from "@/lib/api/schema.gen";
 
-import { oDaCap, trangThaiMaTran, type BangDaCap } from "./ma-tran-quyen";
+import { oDaCap, orderRoleColumns, trangThaiMaTran, type BangDaCap } from "./ma-tran-quyen";
 import {
   CHU_THICH_BANG_SUA,
   CHU_THICH_BANG_XEM,
@@ -247,6 +247,9 @@ export function BangMaTran({
   daCap: BangDaCap;
   chinhSua?: ChinhSuaMaTran;
 }) {
+  // DISPLAY ORDER ONLY (user 09/10/2026): by name A→Z, the system-administrator role last
+  // (`orderRoleColumns`). The data, the saves and the server's order are untouched.
+  const columns = orderRoleColumns(vaiTro);
   return (
     // `role="region"` + `tabIndex` để vùng cuộn ngang tới được bằng bàn phím.
     <div
@@ -263,11 +266,11 @@ export function BangMaTran({
           <tr>
             <th
               scope="col"
-              className="bg-canvas border-line text-ink-muted sticky left-0 z-10 border-b px-4 py-3 text-left font-semibold"
+              className="bg-canvas border-line text-ink-muted sticky left-0 z-10 w-48 min-w-48 border-b px-4 py-3 text-left font-semibold"
             >
               Quyền
             </th>
-            {vaiTro.map((vt) => (
+            {columns.map((vt) => (
               <th
                 scope="col"
                 key={vt.id}
@@ -308,7 +311,7 @@ export function BangMaTran({
             <tr>
               <th
                 scope="rowgroup"
-                colSpan={vaiTro.length + 1}
+                colSpan={columns.length + 1}
                 className="bg-canvas/70 border-line text-navy border-y px-4 py-2 text-left text-[11.5px] font-bold tracking-wide uppercase"
               >
                 {n.name}
@@ -317,16 +320,17 @@ export function BangMaTran({
             {n.permissions.map((q) => (
               <tr key={q.code} className="hover:bg-canvas/60">
                 {/* Khoá quyền hiện ngay dưới nhãn: nó là MỘT khoá phẳng `<nhóm>.<việc>` (luật 5,
-                    bất biến 3b), là chuỗi mà máy chủ kiểm trên từng tuyến. Wraps, no truncation
-                    (prototype :196-203). */}
+                    bất biến 3b), là chuỗi mà máy chủ kiểm trên từng tuyến. 192px column, the label on
+                    ONE line (user 09/10/2026: rows ≈ 59px like the prototype) — a longer label widens
+                    the column rather than wrapping or being cut. */}
                 <th
                   scope="row"
-                  className="border-line sticky left-0 z-10 border-b bg-white px-4 py-2.5 text-left font-normal"
+                  className="border-line sticky left-0 z-10 w-48 min-w-48 border-b bg-white px-4 py-2.5 text-left font-normal"
                 >
-                  <div className="text-navy font-medium">{q.label}</div>
-                  <code className="text-ink-muted text-[10.5px]">{q.code}</code>
+                  <div className="text-navy font-medium whitespace-nowrap">{q.label}</div>
+                  <code className="text-ink-muted font-mono text-xs">{q.code}</code>
                 </th>
-                {vaiTro.map((vt) =>
+                {columns.map((vt) =>
                   chinhSua === undefined ? (
                     <ODaCap key={vt.id} daCap={oDaCap(daCap, vt.id, q.code)} />
                   ) : (
@@ -407,7 +411,14 @@ function DauCotSua({ vt, chinhSua }: { vt: identity_vaiTroCotRa; chinhSua: Chinh
           </Button>
         </div>
       )}
-      {cuaToi && <div className="text-ink-muted mt-2 text-[10.5px] font-normal">{LY_DO_KHONG_TU_SUA}</div>}
+      {/* A lock, not the sentence (user 09/10/2026: header ≤ 110px). The sentence is the lock's tooltip
+          and, for a screen reader, its visually hidden text — never colour or shape alone. */}
+      {cuaToi && (
+        <span className="text-ink-muted mt-2 inline-flex justify-center" title={LY_DO_KHONG_TU_SUA}>
+          <Lock aria-hidden="true" focusable="false" className="size-3.5" />
+          <span className="an-thi-giac">{LY_DO_KHONG_TU_SUA}</span>
+        </span>
+      )}
       {loi !== undefined && (
         <div className="text-danger mt-1 text-[11px] font-normal" role="alert">
           {loi}
@@ -448,6 +459,11 @@ function ODaCap({ daCap }: { daCap: boolean }) {
  *
  * Ô đã khác bản máy chủ mang thêm nền `bg-tangerine/12` — cán bộ thấy được mình đã đổi những ô nào
  * trước khi bấm Lưu. Ô của cột bị khoá (#14, hoặc đang lưu) là nút `disabled`, mờ đi.
+ *
+ * `border-0 bg-transparent p-0 shadow-none`: preflight is off, so a bare `<button>` keeps the UA's
+ * border and grey fill — the frame round the glyph the prototype does not have (user 09/10/2026).
+ * The hover is `bg-canvas`: the spec's `bg-surface` is the PAGE colour, which is `canvas` in this app
+ * (`globals.css`), where `bg-surface` is the white card and would not show on a white row.
  */
 function OBatTat({
   daCap,
@@ -466,7 +482,7 @@ function OBatTat({
     <td className={daDoi ? `${CELL_CLASS} bg-tangerine/12` : CELL_CLASS}>
       <button
         type="button"
-        className="hover:bg-canvas mx-auto grid size-7 place-items-center rounded-md disabled:cursor-not-allowed disabled:opacity-50"
+        className="hover:bg-canvas mx-auto grid size-7 place-items-center rounded-md border-0 bg-transparent p-0 shadow-none disabled:cursor-not-allowed disabled:opacity-50"
         aria-pressed={daCap}
         disabled={khoa}
         aria-label={nhan}

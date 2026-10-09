@@ -173,7 +173,7 @@ export function cauKhongRoKetQua(kieu: KieuCapTaiKhoan): string {
   return kieu === "cap"
     ? "Không nhận được trả lời của máy chủ, nên chưa biết tài khoản đã được cấp hay chưa. Nếu máy " +
         "chủ đã cấp thì mật khẩu tạm của lần ấy đã mất và không lấy lại được. Hãy đóng ô này, xem " +
-        "lại cột Tài khoản ở dòng của cán bộ: nếu đã có tài khoản thì bấm Đặt lại mật khẩu — lần " +
+        "lại chip tài khoản ở dòng của cán bộ: nếu đã ghi Có tài khoản thì bấm Đặt lại mật khẩu — lần " +
         "đặt lại sinh một mật khẩu KHÁC."
     : "Không nhận được trả lời của máy chủ, nên chưa biết mật khẩu đã đổi hay chưa. Nếu máy chủ đã " +
         "đổi thì mật khẩu tạm của lần ấy đã mất và không lấy lại được, và mật khẩu cũ cũng không " +

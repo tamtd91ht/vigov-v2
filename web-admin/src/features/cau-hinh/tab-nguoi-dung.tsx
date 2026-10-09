@@ -155,6 +155,8 @@ export function TabNguoiDung({ active = true }: { active?: boolean } = {}) {
         canDelete={duocXoaTheoPhien(phien)}
         importOpen={importOpen}
         onImportClose={() => setImportOpen(false)}
+        // Own row's role choice is disabled (#14) — the session's staff code; the server still refuses.
+        selfCode={phien !== null && phien.ok ? phien.duLieu.staff.code : null}
       />
     </>
   );

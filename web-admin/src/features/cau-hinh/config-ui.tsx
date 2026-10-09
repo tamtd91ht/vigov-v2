@@ -132,7 +132,9 @@ export function ConfigTable({
 
 /**
  * "Đang dùng" / "Ngừng dùng" — the spec's two status chips. The shared Badge keeps its tone icon
- * (owner decision 08/10/2026): a status is never colour alone.
+ * (owner decision 08/10/2026): a status is never colour alone. ONE EXCEPTION, decided by the user on
+ * 09/10/2026: the `/nguoi-dung` table draws its status and account chips text-only, like the prototype
+ * (`Badge icon={null}`, `danh-ba-can-bo.tsx` `StatusCell`); every chip here keeps its icon.
  */
 export function StatusBadge({ active }: { active: boolean }) {
   return active ? (

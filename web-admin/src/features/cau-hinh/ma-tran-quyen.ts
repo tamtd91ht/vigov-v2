@@ -55,9 +55,10 @@ export type TrangThaiMaTran =
 /**
  * Phản hồi → trạng thái. `null` là **chưa đọc xong**, khác hẳn "đọc xong và hỏng" (xem `goi.ts`).
  *
- * KHÔNG SẮP XẾP LẠI TRỤC NÀO. Thứ tự hàng là thứ tự danh mục quyền được ghi trong migration, thứ
- * tự cột là thứ tự xã đã sắp vai trò; sắp lại ở đây cho "gọn" là lặng lẽ phủ quyết cả hai
- * (`service-identity/internal/http/quyen.go`, `gomTheoNhom`).
+ * KHÔNG SẮP XẾP LẠI TRỤC NÀO Ở ĐÂY: trạng thái giữ đúng thứ tự máy chủ trả. Thứ tự hàng là thứ tự danh
+ * mục quyền được ghi trong migration (`service-identity/internal/http/quyen.go`, `gomTheoNhom`). Cột thì
+ * được sắp LÚC VẼ, theo quyết định của người dùng ngày 09/10/2026 (`orderRoleColumns` dưới đây) — chỉ
+ * thứ tự hiển thị, không đụng dữ liệu hay thứ tự lưu của xã.
  */
 export function trangThaiMaTran(kq: KetQua<identity_maTranQuyenRa> | null): TrangThaiMaTran {
   if (kq === null) return { pha: "dangDoc" };
@@ -77,6 +78,30 @@ export function trangThaiMaTran(kq: KetQua<identity_maTranQuyenRa> | null): Tran
   }
 
   return { pha: "coDuLieu", nhom: groups, vaiTro: roles, daCap: dungBangDaCap(grants) };
+}
+
+/**
+ * `vai_tro.ma` of the role holding every key — `idstore.MaVaiTroQuanTriMacDinh`
+ * (`service-identity/internal/store/quan_tri_mac_dinh.go:33`). The CODE, never the name: a commune may
+ * rename the role, the slug is what stays.
+ */
+export const SYSTEM_ADMIN_ROLE_CODE = "quan-tri-he-thong";
+
+const VI_COLLATOR = new Intl.Collator("vi");
+
+/**
+ * The matrix columns in DISPLAY order (user 09/10/2026, prototype `RolePermissionMatrix.tsx`): by name,
+ * Vietnamese collation (`localeCompare('vi')`), with the system-administrator role LAST — it holds every
+ * key, so its column says nothing a reader compares against the others. A new array; the input keeps
+ * the server's order. Ties keep the server's order too (the sort is stable).
+ */
+export function orderRoleColumns(roles: readonly identity_vaiTroCotRa[]): identity_vaiTroCotRa[] {
+  return [...roles].sort((a, b) => {
+    const aLast = a.code === SYSTEM_ADMIN_ROLE_CODE;
+    const bLast = b.code === SYSTEM_ADMIN_ROLE_CODE;
+    if (aLast !== bLast) return aLast ? 1 : -1;
+    return VI_COLLATOR.compare(a.name, b.name);
+  });
 }
 
 /**

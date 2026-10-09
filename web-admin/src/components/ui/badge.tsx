@@ -46,13 +46,17 @@ const TONE_ICON: Record<BadgeTone, LucideIcon> = {
 
 export type BadgeProps = Omit<ComponentProps<"span">, "children"> & {
   tone?: BadgeTone;
-  /** Overrides the tone's default icon. */
-  icon?: LucideIcon;
+  /**
+   * Overrides the tone's default icon. `null` draws NO icon — the prototype's text-only chip, for a
+   * screen whose owner chose it (`/nguoi-dung`, user 09/10/2026). Absent keeps the icon, so every
+   * other screen is unchanged; the word still carries the meaning, never the colour alone.
+   */
+  icon?: LucideIcon | null;
   children: ReactNode;
 };
 
 export function Badge({ tone = "neutral", icon, className, children, ...props }: BadgeProps) {
-  const Icon = icon ?? TONE_ICON[tone];
+  const Icon = icon === null ? null : (icon ?? TONE_ICON[tone]);
   return (
     <span
       className={cn(
@@ -62,7 +66,7 @@ export function Badge({ tone = "neutral", icon, className, children, ...props }:
       )}
       {...props}
     >
-      <Icon aria-hidden="true" focusable="false" className="size-3 shrink-0" strokeWidth={2} />
+      {Icon !== null && <Icon aria-hidden="true" focusable="false" className="size-3 shrink-0" strokeWidth={2} />}
       {children}
     </span>
   );

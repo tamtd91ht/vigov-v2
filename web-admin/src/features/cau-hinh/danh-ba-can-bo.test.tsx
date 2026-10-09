@@ -1,10 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { LOI_KHONG_RO } from "@/lib/api/goi";
 import type { identity_canBoTomTat } from "@/lib/api/schema.gen";
 
-import { BangCanBo, type ThaoTacDong } from "./danh-ba-can-bo";
+import { BangCanBo, staffRowMenuItems, type ThaoTacDong } from "./danh-ba-can-bo";
 import {
   CAU_CHI_HIEN_MOT_LAN,
   NUT_CAP_TAI_KHOAN,
@@ -14,19 +14,17 @@ import {
   XacNhanTaiKhoan,
   cauKhongRoKetQua,
 } from "./mat-khau-tam";
-import { NO_EMAIL_ACCOUNT_REASON, NO_EMAIL_MARKER } from "./nhan-can-bo";
+import { NO_EMAIL_ACCOUNT_REASON, NO_EMAIL_MENU_HINT, NO_EMAIL_SUBLINE } from "./nhan-can-bo";
 import type { BangTraDanhMuc } from "./tra-danh-muc";
 
 /**
  * BA ĐIỀU TỆP NÀY CANH, và cả ba đều là những thứ một lần sửa MỘT DÒNG phá được mà không phép
  * kiểm nào khác thấy (điều thứ ba ở cuối tệp, cùng với lý do của nó):
  *
- * 1. HAI CỘT ĐIỆN THOẠI PHẢI Ở RIÊNG — câu mở #16, khách chốt 22/09/2026. Máy bàn cơ quan là
- *    THÔNG TIN CÔNG VỤ, di động cá nhân là DỮ LIỆU CÁ NHÂN theo Nghị định 13. Hai địa vị pháp lý
- *    khác nhau nghĩa là hai luật che, hai luật xuất Excel, hai luật công khai ra Mini App. Hệ quả
- *    của một lần gộp không phải giao diện xấu: mọi quy tắc về sau buộc áp CHUNG một mức cho hai
- *    loại dữ liệu, mà mức an toàn phải lấy theo loại nhạy hơn — nên hoặc số máy bàn của cơ quan
- *    bị che vô cớ, hoặc số di động cá nhân đi theo bản xuất ra ngoài.
+ * 1. MỘT CỘT "ĐIỆN THOẠI", NHƯNG HAI LOẠI SỐ VẪN KHÔNG LẪN — người dùng chốt 09/10/2026 bảng theo
+ *    prototype: ô hiện di động, không có thì máy bàn. Câu mở #16 (khách chốt 22/09/2026) vẫn giữ ở
+ *    chỗ khác: hai ô nhập riêng trong hộp thoại, giá trị NGUYÊN VĂN máy chủ trả (che hay không là
+ *    việc của máy chủ), và `title` của ô nói đó là loại số nào. Không nối hai số vào một ô.
  *
  * 2. NÚT XOÁ CHỈ ĐI SAU QUYỀN RIÊNG — câu mở #10 tách khoá khỏi xoá; xoá mềm một dòng nhập trùng mang
  *    `admin.user.delete` (ADR 0035). Chủ dự án chốt 08/10/2026 đưa `Trash2` của prototype về màn này,
@@ -38,7 +36,6 @@ const TRA_RONG: BangTraDanhMuc = { pha: "xong", ten: new Map() };
 
 const KHONG_LAM_GI: ThaoTacDong = {
   sua: () => {},
-  doiVaiTro: () => {},
   datKhoa: () => {},
   capTaiKhoan: () => {},
   datLaiMatKhau: () => {},
@@ -79,62 +76,49 @@ function ve(danhSach: readonly identity_canBoTomTat[] = [CAN_BO]) {
       danhSach={danhSach}
       thaoTac={KHONG_LAM_GI}
       traBoPhan={TRA_RONG}
-      traVaiTro={TRA_RONG}
     />,
   );
 }
 
-describe("danh bạ cán bộ giữ hai cột điện thoại riêng", () => {
-  it("có HAI đầu cột, mỗi cột nói rõ loại số", () => {
+describe("cột Điện thoại — di động, không có thì máy bàn, nguyên văn máy chủ (người dùng 09/10/2026)", () => {
+  it("một đầu cột 'Điện thoại'; hai cột cũ không còn", () => {
     const html = ve();
-
-    expect(html).toContain("Máy bàn cơ quan");
-    expect(html).toContain("Di động cá nhân");
-
-    // VẾ CHỊU LỰC: nhãn trung tính "Điện thoại" là đúng hình dạng cột gộp, và là thứ tệp này tồn
-    // tại để chặn. Người sắp bấm nút xuất, hay sắp tick ô công khai, phải biết mình đang đụng loại
-    // nào — một nhãn trung tính là lúc họ không biết.
-    expect(html).not.toContain(">Điện thoại<");
+    expect(html).toContain(">Điện thoại<");
+    expect(html).not.toContain(">Máy bàn cơ quan<");
+    expect(html).not.toContain(">Di động cá nhân<");
   });
 
-  it("hai số hiện ở HAI ô, không gộp và không nối chuỗi", () => {
+  it("có di động → hiện di động, và `title` nói đó là di động cá nhân; KHÔNG nối thêm máy bàn", () => {
     const html = ve();
-
-    expect(html).toMatch(new RegExp(`<td[^>]*>${MAY_BAN}</td>`));
-    expect(html).toMatch(new RegExp(`<td[^>]*>${DI_DONG}</td>`));
-
-    // Ba cách gộp thường gặp, chặn cả ba: nối bằng dấu phẩy, nối bằng gạch, và `a || b`.
+    expect(html).toContain(`<td title="Di động cá nhân">${DI_DONG}</td>`);
+    expect(html).not.toContain(MAY_BAN);
     expect(html).not.toContain(`${MAY_BAN}, ${DI_DONG}`);
-    expect(html).not.toContain(`${MAY_BAN} · ${DI_DONG}`);
-    expect(html).not.toContain(`${MAY_BAN} / ${DI_DONG}`);
+    expect(html).not.toContain(`${DI_DONG} · ${MAY_BAN}`);
   });
 
-  it("số KHÔNG bị che trên màn nội bộ — #11", () => {
-    const html = ve();
-
-    // #11 chốt 22/09/2026: cán bộ cùng xã không bị che số của nhau, vì họ phải gọi nhau để làm
-    // việc; che thì họ truyền số qua kênh riêng và cơ quan mất cả vết lẫn quyền kiểm soát. Máy chủ
-    // trả số nguyên vẹn (`soRaManHinhNoiBo`), nên một dấu sao ở đây là giao diện tự che thêm.
-    expect(html).not.toContain("****");
-  });
-
-  it("cán bộ KHÔNG có di động vẫn hiện được, và ô ấy hiện '—' chứ không mượn số máy bàn", () => {
-    // Cột `di_dong_ca_nhan` là `NOT NULL DEFAULT ''` (migration 0009) — "không có số" là chuỗi
-    // rỗng, một trạng thái THẬT, không phải lỗi. Lấp nó bằng số máy bàn là ghép hai loại dữ liệu
-    // vào một ô bằng đường khác.
+  it("không có di động → hiện máy bàn, `title` nói đó là máy bàn cơ quan", () => {
     const html = ve([{ ...CAN_BO, mobile: "" }]);
+    expect(html).toContain(`<td title="Máy bàn cơ quan">${MAY_BAN}</td>`);
+  });
 
-    expect(html).toMatch(new RegExp(`<td[^>]*>${MAY_BAN}</td>`));
-    expect(html).toMatch(/<td[^>]*>—<\/td>/);
+  it("không có số nào → '—', không `title`", () => {
+    expect(ve([{ ...CAN_BO, mobile: "", phone: "  " }])).toContain("<td>—</td>");
+  });
+
+  it("giá trị đi ra ĐÚNG như máy chủ gửi — màn hình không che thêm, không gỡ che", () => {
+    // #11: máy chủ trả số nguyên vẹn trong nội bộ xã; một chuỗi đã che (nếu máy chủ che) cũng đi ra
+    // nguyên văn. Màn hình không có quy tắc che nào của riêng nó.
+    expect(ve()).not.toContain("****");
+    const masked = "090****000";
+    expect(ve([{ ...CAN_BO, mobile: masked }])).toContain(`>${masked}</td>`);
   });
 });
 
-describe("cụm nút của một dòng — Xoá chỉ khi có `admin.user.delete`", () => {
-  it("mỗi dòng có Sửa tài khoản và Đổi vai trò", () => {
+describe("cụm nút của một dòng — Sửa · ⋯ · Xoá (người dùng 09/10/2026)", () => {
+  it("mỗi dòng có Sửa tài khoản; KHÔNG còn nút Đổi vai trò (vai trò sửa trong hộp thoại Sửa)", () => {
     const html = ve();
-
     expect(html).toContain("Sửa tài khoản");
-    expect(html).toContain("Đổi vai trò");
+    expect(html).not.toContain("Đổi vai trò");
   });
 
   it("không có khoá xoá → KHÔNG có nút Xoá dưới bất kỳ cách viết nào", () => {
@@ -148,22 +132,28 @@ describe("cụm nút của một dòng — Xoá chỉ khi có `admin.user.delete
     expect(html).not.toContain("nut-xoa");
   });
 
-  it("nhãn nút khoá đi theo `active`, không theo một cờ riêng", () => {
-    // `active` là `dang_hoat_dong` của máy chủ và cũng là thứ tuyến lockout ghi vào, nên nhãn nút
-    // không thể lệch với việc nút ấy sắp làm. Đọc nhầm sang `has_account` là mời người dùng bấm
-    // "Mở khoá" lên một tài khoản đang chạy bình thường.
-    expect(ve([{ ...CAN_BO, active: true }])).toContain("Khoá tài khoản");
-    expect(ve([{ ...CAN_BO, active: false }])).toContain("Mở khoá tài khoản");
+  it("nhãn mục khoá trong menu ⋯ đi theo `active`, không theo một cờ riêng", () => {
+    // `active` là `dang_hoat_dong` của máy chủ và cũng là thứ tuyến lockout ghi vào, nên nhãn không
+    // thể lệch với việc mục ấy sắp làm. Đọc nhầm sang `has_account` là mời người dùng bấm "Mở khoá"
+    // lên một tài khoản đang chạy bình thường.
+    expect(staffRowMenuItems({ ...CAN_BO, active: true }, KHONG_LAM_GI)[0]).toMatchObject({ label: "Khoá tài khoản" });
+    expect(staffRowMenuItems({ ...CAN_BO, active: false }, KHONG_LAM_GI)[0]).toMatchObject({ label: "Mở khoá tài khoản" });
   });
 
-  it("prototype row (ADR 0068 lần 5): icon-only actions, the action in `title`, the person in `aria-label`; locked = `Tạm khoá`", () => {
+  it("mục khoá gọi ĐÚNG hành động của màn hình với CẢ DÒNG", () => {
+    const datKhoa = vi.fn();
+    const item = staffRowMenuItems(CAN_BO, { ...KHONG_LAM_GI, datKhoa })[0];
+    if (item?.kind !== "item") throw new Error("cần một mục");
+    item.onSelect();
+    expect(datKhoa).toHaveBeenCalledWith(CAN_BO);
+  });
+
+  it("prototype row: icon-only actions, the action in `title`, the person in `aria-label`; locked = `Tạm khoá`", () => {
     const html = ve([{ ...CAN_BO, active: false }]);
     expect(html).toContain('title="Sửa tài khoản"');
-    expect(html).toContain('title="Mở khoá tài khoản"');
-    expect(html).toContain('aria-label="Mở khoá tài khoản: Huỳnh Văn A"');
+    expect(html).toContain('aria-label="Thao tác khác: Huỳnh Văn A"');
     // No visible action WORDS in the row: the names live in the attributes, so the row stays one line.
     expect(html).not.toContain(">Sửa tài khoản<");
-    expect(html).not.toContain(">Đổi vai trò<");
     expect(html).toContain(">Tạm khoá<");
   });
 
@@ -173,7 +163,7 @@ describe("cụm nút của một dòng — Xoá chỉ khi có `admin.user.delete
     const html = ve();
 
     expect(html).toContain('aria-label="Sửa tài khoản: Huỳnh Văn A"');
-    expect(html).toContain('aria-label="Khoá tài khoản: Huỳnh Văn A"');
+    expect(html).toContain('aria-label="Thao tác khác: Huỳnh Văn A"');
   });
 });
 
@@ -196,44 +186,43 @@ describe("cụm nút của một dòng — Xoá chỉ khi có `admin.user.delete
 /** Giá trị GIẢ, và trông rõ là giả: không một mật khẩu thật nào được viết vào kho này (luật 8). */
 const MAT_KHAU_GIA = "mat-khau-gia-de-kiem-tra";
 
-describe("hai nút thông tin đăng nhập loại trừ nhau theo `has_account`", () => {
+/** Labels of the row's `⋯` menu, in order. */
+function menuLabels(cb: identity_canBoTomTat): string[] {
+  return staffRowMenuItems(cb, KHONG_LAM_GI).map((i) => (i.kind === "item" ? i.label : "—"));
+}
+
+describe("hai mục thông tin đăng nhập trong menu ⋯ loại trừ nhau theo `has_account`", () => {
   it("chưa có tài khoản → có Cấp tài khoản, KHÔNG có Đặt lại mật khẩu", () => {
-    const html = ve([{ ...CAN_BO, has_account: false }]);
+    const labels = menuLabels({ ...CAN_BO, has_account: false });
 
-    expect(html).toContain(NUT_CAP_TAI_KHOAN);
-    expect(html).toContain(`aria-label="${NUT_CAP_TAI_KHOAN}: Huỳnh Văn A"`);
-
-    // VẾ CHỊU LỰC. Đặt lại mật khẩu lên một người chưa có tài khoản là một nút gọi vào tuyến chắc
+    expect(labels).toContain(NUT_CAP_TAI_KHOAN);
+    // VẾ CHỊU LỰC. Đặt lại mật khẩu lên một người chưa có tài khoản là một mục gọi vào tuyến chắc
     // chắn từ chối — và người quản trị bấm nó sẽ kết luận hệ thống hỏng.
-    expect(html).not.toContain(NUT_DAT_LAI_MAT_KHAU);
+    expect(labels).not.toContain(NUT_DAT_LAI_MAT_KHAU);
   });
 
   it("đã có tài khoản → có Đặt lại mật khẩu, KHÔNG có Cấp tài khoản", () => {
-    const html = ve([{ ...CAN_BO, has_account: true }]);
+    const labels = menuLabels({ ...CAN_BO, has_account: true });
 
-    expect(html).toContain(NUT_DAT_LAI_MAT_KHAU);
-    expect(html).toContain(`aria-label="${NUT_DAT_LAI_MAT_KHAU}: Huỳnh Văn A"`);
-
-    // VẾ CHỊU LỰC. `POST /staff/{id}/account` mang `AND NOT co_tai_khoan`, nên nút này trên một
+    expect(labels).toContain(NUT_DAT_LAI_MAT_KHAU);
+    // VẾ CHỊU LỰC. `POST /staff/{id}/account` mang `AND NOT co_tai_khoan`, nên mục này trên một
     // dòng đã có tài khoản chỉ dẫn tới 409 — và việc thật sự cần làm lúc ấy là ĐẶT LẠI.
-    expect(html).not.toContain(NUT_CAP_TAI_KHOAN);
+    expect(labels).not.toContain(NUT_CAP_TAI_KHOAN);
   });
 
-  it("KHÔNG BAO GIỜ hiện cả hai, kể cả dưới dạng một nút bị làm mờ", () => {
-    // Một nút `disabled` là hình dạng "cả hai cùng có mặt" mà một phép kiểm chỉ đếm chữ sẽ bỏ lọt.
-    // Nó mời người dùng hỏi "vì sao không bấm được" và đi tìm một quyền họ không hề thiếu; nhiều
-    // trình đọc màn hình còn bỏ qua hẳn nút bị vô hiệu, nên họ không biết là có gì ở đó.
+  it("KHÔNG BAO GIỜ có cả hai; có thư điện tử thì không mục nào bị làm mờ", () => {
     for (const coTaiKhoan of [true, false]) {
-      const html = ve([{ ...CAN_BO, has_account: coTaiKhoan }]);
-      const soNut =
-        Number(html.includes(NUT_CAP_TAI_KHOAN)) + Number(html.includes(NUT_DAT_LAI_MAT_KHAU));
-
-      expect(soNut).toBe(1);
-      // `disabled=""`, the attribute — the shared Button's classes carry `disabled:` variants. The
-      // header's sort buttons are disabled by design (no server sort), so only the row is read.
-      const body = /<tbody[^>]*>([\s\S]*)<\/tbody>/.exec(html)?.[1] ?? "";
-      expect(body).not.toContain('disabled=""');
+      const items = staffRowMenuItems({ ...CAN_BO, has_account: coTaiKhoan }, KHONG_LAM_GI);
+      const labels = items.map((i) => (i.kind === "item" ? i.label : ""));
+      expect(Number(labels.includes(NUT_CAP_TAI_KHOAN)) + Number(labels.includes(NUT_DAT_LAI_MAT_KHAU))).toBe(1);
+      expect(items.some((i) => i.kind === "item" && i.disabled === true)).toBe(false);
     }
+  });
+
+  it("the table itself carries no disabled control for a row with an email and no account", () => {
+    const html = ve([{ ...CAN_BO, has_account: false }]);
+    const body = /<tbody[^>]*>([\s\S]*)<\/tbody>/.exec(html)?.[1] ?? "";
+    expect(body).not.toContain('disabled=""');
   });
 });
 
@@ -344,38 +333,39 @@ describe("lỗi của máy chủ ra nguyên văn, và ca im lặng có câu riê
 describe("staff without an email — optional since 4cf87b6", () => {
   const NO_EMAIL: identity_canBoTomTat = { ...CAN_BO, email: "", has_account: false };
 
-  /** The "Cấp tài khoản" button of the only row, as markup. */
-  function issueButton(html: string): string {
-    return (
-      new RegExp(`<button[^>]*aria-label="${NUT_CAP_TAI_KHOAN}: [^"]*"[^>]*>`).exec(html)?.[0] ?? ""
-    );
+  /** The "Cấp tài khoản" item of the row's `⋯` menu. */
+  function issueItem(cb: identity_canBoTomTat) {
+    const item = staffRowMenuItems(cb, KHONG_LAM_GI).find((i) => i.kind === "item" && i.label === NUT_CAP_TAI_KHOAN);
+    if (item === undefined || item.kind !== "item") throw new Error("không thấy mục Cấp tài khoản");
+    return item;
   }
 
-  it("the list shows the empty marker, never an empty cell", () => {
+  it("the list says 'Chưa có thư điện tử' under the name, never an empty line", () => {
     const html = ve([NO_EMAIL]);
-    expect(html).toContain(`<div class="text-ink-muted text-[11.5px]">${NO_EMAIL_MARKER}</div>`);
+    expect(html).toContain(`<div class="text-ink-muted text-[11.5px]">${NO_EMAIL_SUBLINE}</div>`);
     expect(html).not.toContain('<div class="text-ink-muted text-[11.5px]"></div>');
   });
 
-  it("DENIED: 'Cấp tài khoản' is disabled and the reason is readable next to it", () => {
-    const html = ve([NO_EMAIL]);
-    const button = issueButton(html);
+  it("DENIED: 'Cấp tài khoản' is in the menu but disabled, its reason as the item's second line", () => {
+    const item = issueItem(NO_EMAIL);
+    expect(item.disabled).toBe(true);
+    expect(item.hint).toBe(NO_EMAIL_MENU_HINT);
+  });
 
-    expect(button).toContain('disabled=""');
-    expect(button).toContain(`aria-describedby="no-email-reason-${NO_EMAIL.id}"`);
-    expect(html).toContain(`id="no-email-reason-${NO_EMAIL.id}">${NO_EMAIL_ACCOUNT_REASON}<`);
+  it("the account chip carries the long reason in its title and in hidden text", () => {
+    const html = ve([NO_EMAIL]);
+    expect(html).toContain(`title="${NO_EMAIL_ACCOUNT_REASON}"`);
+    expect(html).toContain(`id="account-reason-${NO_EMAIL.id}" class="an-thi-giac">${NO_EMAIL_ACCOUNT_REASON}<`);
   });
 
   it("whitespace-only email counts as no email", () => {
-    expect(issueButton(ve([{ ...NO_EMAIL, email: "   " }]))).toContain('disabled=""');
+    expect(issueItem({ ...NO_EMAIL, email: "   " }).disabled).toBe(true);
   });
 
-  it("ALLOWED: with an email the button is enabled and no reason is shown", () => {
-    const html = ve([{ ...NO_EMAIL, email: "demo@thangbinh.test" }]);
-
-    expect(issueButton(html)).not.toBe("");
-    expect(issueButton(html)).not.toContain('disabled=""');
-    expect(html).not.toContain(NO_EMAIL_ACCOUNT_REASON);
+  it("ALLOWED: with an email the item is enabled and the long no-email reason is nowhere", () => {
+    const withEmail = { ...NO_EMAIL, email: "demo@thangbinh.test" };
+    expect(issueItem(withEmail).disabled).toBeUndefined();
+    expect(ve([withEmail])).not.toContain(NO_EMAIL_ACCOUNT_REASON);
   });
 
   it("the server's 409 staff_has_no_email sentence still reaches the page verbatim", () => {

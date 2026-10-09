@@ -86,6 +86,17 @@ export function nhanTaiKhoan(coTaiKhoan: boolean): string {
 /** Marker for a staff row with no email (optional since 4cf87b6; the server returns `""`). */
 export const NO_EMAIL_MARKER = "—";
 
+/**
+ * The muted sub-line under the name on `/nguoi-dung` when the row has no email (user 09/10/2026). The
+ * list says it in words because the email is the login name: "no email" is why the row has no account.
+ */
+export const NO_EMAIL_SUBLINE = "Chưa có thư điện tử";
+
+/** The `/nguoi-dung` sub-line under the name: the email, or `NO_EMAIL_SUBLINE`. */
+export function emailSubline(email: string): string {
+  return email.trim() === "" ? NO_EMAIL_SUBLINE : email;
+}
+
 /** The email as shown in the list and the detail panel. Blank never renders as an empty cell. */
 export function emailLabel(email: string): string {
   return email.trim() === "" ? NO_EMAIL_MARKER : email;
@@ -194,6 +205,92 @@ export const USERS_DENIED =
 export function staffCountLine(shown: number, total: number | null): string {
   return total === null ? `Hiển thị ${shown} cán bộ.` : `Hiển thị ${shown}/${total} cán bộ.`;
 }
+
+/* ---- `/nguoi-dung` after the user's decisions of 09/10/2026 ---------------------------------------- */
+
+/**
+ * The `Điện thoại` cell (user 09/10/2026, prototype's single column): the personal mobile when there is
+ * one, else the office phone, else "—". VALUES EXACTLY AS THE SERVER SENT THEM — whatever masking it
+ * applied per field stays (Decree 13, open question #16); nothing here masks or unmasks. `kind` says
+ * which of the two numbers is shown, so the cell can still name its legal status (#16) to whoever
+ * hovers or reads it with a screen reader.
+ */
+export function phoneCell(mobile: string, office: string): { text: string; kind: string | null } {
+  if (mobile.trim() !== "") return { text: mobile, kind: "Di động cá nhân" };
+  if (office.trim() !== "") return { text: office, kind: "Máy bàn cơ quan" };
+  return { text: "—", kind: null };
+}
+
+/**
+ * Long reason of the account badge, in its `title` and in visually hidden text. The badge itself says
+ * only `nhanTaiKhoan(has_account)`, so the row stays one line (spec P0 #2: rows ≤ 56px).
+ */
+export function accountBadgeReason(hasAccount: boolean, email: string): string {
+  if (hasAccount) return "Đã cấp tài khoản đăng nhập; thư điện tử là tên đăng nhập.";
+  if (!canIssueAccount(email)) return NO_EMAIL_ACCOUNT_REASON;
+  return "Chưa cấp tài khoản đăng nhập. Mở menu ⋯ ở cuối dòng và chọn Cấp tài khoản.";
+}
+
+/** Accessible name and tooltip of the row's `⋯` menu. */
+export function moreActionsLabel(fullName: string): string {
+  return `Thao tác khác: ${fullName}`;
+}
+
+/** Second line of the disabled `Cấp tài khoản` menu item — why it cannot be chosen. */
+export const NO_EMAIL_MENU_HINT = "Chưa có thư điện tử — sửa hồ sơ để thêm.";
+
+/** Add dialog — the prototype's words (`UserFormDialog.tsx`), user 09/10/2026. */
+export const ADD_ACCOUNT_TITLE = "Thêm tài khoản cán bộ";
+export const ADD_ACCOUNT_DESCRIPTION = "Cán bộ dùng thư điện tử này để đăng nhập.";
+export const ADD_ACCOUNT_BUTTON = "Thêm tài khoản";
+
+/** Edit dialog: the staff code as the sub-line under the title (#15: shown, never an input). */
+export function staffCodeLine(code: string): string {
+  return `Mã cán bộ: ${code}`;
+}
+
+/**
+ * Added with an email, but the server's answer was a REPLAY of an earlier add (no row in it), so the
+ * account could not be issued in the same step. Says what to do next; nothing was lost.
+ */
+export const ADD_GRANT_NOT_CHAINED =
+  "Đã thêm vào danh bạ nhưng chưa cấp tài khoản. Mở menu ⋯ ở dòng của cán bộ và chọn Cấp tài khoản.";
+
+/** Field labels of the account form that differ from the shared directory form. */
+export const MOBILE_LABEL = "Điện thoại (di động)";
+export const OFFICE_PHONE_LABEL = "Máy bàn cơ quan";
+export const ROLE_LABEL = "Vai trò";
+/** `""` is a real value of `PUT .../role` — somebody can hold no role — so it is a choice of its own. */
+export const NO_ROLE_OPTION = "Không giữ vai trò nào";
+export const MISSING_ROLE_OPTION = "Giá trị đang lưu — không còn trong danh mục";
+export const NO_ROLES_YET = "Chưa có vai trò nào để gán.";
+
+/** Under the disabled email of a row that holds an account: the email is the login name. */
+export const EMAIL_LOCKED_HINT = "Không đổi được thư điện tử đăng nhập.";
+
+/**
+ * Under the disabled role choice of the signed-in officer's own row (#14). UX only: the server refuses
+ * the change anyway (403 `self_target_forbidden`).
+ */
+export const OWN_ROLE_HINT = "Bạn không tự đổi vai trò của chính mình được. Hãy nhờ một người quản trị khác.";
+
+/**
+ * The profile was saved but the role change that followed was refused. The server's sentence is kept
+ * verbatim after the prefix (#13/#14 reasons) — the prefix only says the first half already happened,
+ * so the officer does not retype the profile.
+ */
+export function roleChangeFailed(serverSentence: string): string {
+  return `Đã lưu hồ sơ, nhưng chưa đổi được vai trò: ${serverSentence}`;
+}
+
+/* ---- staff Excel import dialog (user 09/10/2026, prototype `ExcelImportDialog`) -------------------- */
+
+export const STAFF_IMPORT_TITLE = "Nhập người dùng từ Excel";
+export const STAFF_IMPORT_DESCRIPTION =
+  "Tệp được kiểm trước và chưa ghi gì. Còn một dòng sai thì không dòng nào được nhận — sửa tệp rồi nhập lại.";
+export const STAFF_IMPORT_CHOOSE_FILE = "Chọn tệp .xlsx";
+export const STAFF_IMPORT_SUBMIT = "Nhập";
+export const STAFF_IMPORT_ERRORS_HEADING = "Tệp có lỗi — chưa cán bộ nào được tạo. Sửa các dòng dưới đây rồi nhập lại.";
 
 /** Empty text cells read "—" (prototype), never an empty cell. */
 export function orDash(text: string): string {

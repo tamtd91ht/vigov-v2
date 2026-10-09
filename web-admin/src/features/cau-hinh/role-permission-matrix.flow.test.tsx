@@ -133,4 +133,21 @@ describe("Phân quyền matrix — prototype behaviour (card B)", () => {
     expect(T.success).not.toHaveBeenCalled();
     expect(el.querySelector('[role="alert"]')?.textContent).toBe(reason);
   });
+
+  it("columns read A→Z by name, the system administrator (by its code) LAST — user 09/10/2026", async () => {
+    H.read.mockResolvedValue({
+      ok: true,
+      duLieu: {
+        ...MATRIX,
+        roles: [
+          { id: "vt-0", code: "quan-tri-he-thong", name: "Quản trị hệ thống", is_leader: false, staff_count: 1, active_account_count: 1 },
+          ...MATRIX.roles,
+          { id: "vt-3", code: "ke-toan", name: "Kế toán", is_leader: false, staff_count: 1, active_account_count: 1 },
+        ],
+      },
+    } satisfies KetQua<identity_maTranQuyenRa>);
+    const el = await mount();
+    const heads = [...el.querySelectorAll("thead th .text-navy.font-semibold")].map((d) => d.textContent);
+    expect(heads).toEqual(["Chuyên viên", "Kế toán", "Phó Chủ tịch", "Quản trị hệ thống"]);
+  });
 });

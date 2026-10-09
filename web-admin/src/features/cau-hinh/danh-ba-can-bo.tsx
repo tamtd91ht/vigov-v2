@@ -1,17 +1,6 @@
 "use client";
 
-import {
-  ArrowUpDown,
-  KeyRound,
-  Lock,
-  LockOpen,
-  Pencil,
-  Plus,
-  Search,
-  Trash2,
-  UserCog,
-  UserPlus,
-} from "lucide-react";
+import { ArrowUpDown, KeyRound, Lock, LockOpen, Pencil, Plus, Search, Trash2, UserPlus } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
@@ -24,22 +13,16 @@ import {
   ACCOUNT_EDIT_TITLE,
   ACCOUNT_SAVED,
   BAN_TRONG,
-  GIAI_THICH_THEM,
-  NUT_DOI_VAI_TRO,
   NUT_KHOA,
   NUT_MO_KHOA,
   NUT_THEM_CAN_BO,
   banTuCanBo,
   daDatKhoa,
-  daDoiVaiTro,
   daThem,
   khoaChongTrungMoi,
-  staffCodeNote,
   thanSua,
   thanThem,
   tieuDeKhoa,
-  tieuDeThem,
-  tieuDeVaiTro,
   type BanNhapCanBo,
 } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import {
@@ -55,6 +38,7 @@ import {
   type KhoaSapXep,
 } from "@/lib/api/can-bo";
 import { ketQuaGuiTim, type LocDanhBa } from "@/features/danh-ba/loc-danh-ba";
+import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import { HopXoa } from "@/features/danh-ba/hop-xoa";
 import { daXoa, tieuDeXoa, yeuCauXoa } from "@/features/danh-ba/xoa-dong";
 import { Badge } from "@/components/ui/badge";
@@ -70,8 +54,6 @@ import { cn } from "@/lib/cn";
 
 import { ConfigDialog } from "./config-dialog";
 import { ConfigTable, EmptyRow, RowActions, SMALL_BUTTON_CLASS } from "./config-ui";
-import { ExcelImportPanel } from "./excel-import-panel";
-import { STAFF_IMPORT_TARGET } from "./excel-import-targets";
 import {
   CAU_PHAT_LAI_KHONG_CO_MAT_KHAU,
   NUT_CAP_TAI_KHOAN,
@@ -90,28 +72,38 @@ import {
   type NganXepConTro,
 } from "./ngan-xep-con-tro";
 import {
+  ADD_ACCOUNT_DESCRIPTION,
+  ADD_ACCOUNT_TITLE,
+  ADD_GRANT_NOT_CHAINED,
   DELETE_ACCOUNT_BUTTON,
   DELETE_BLOCKED_REASON,
   EDIT_ACCOUNT_BUTTON,
   EMPTY_STAFF_LIST,
-  NO_EMAIL_ACCOUNT_REASON,
+  NO_EMAIL_MENU_HINT,
   SEARCH_LABEL,
   SEARCH_PLACEHOLDER,
+  accountBadgeReason,
   canIssueAccount,
-  emailLabel,
+  emailSubline,
+  moreActionsLabel,
   nhanDangNhapGanNhat,
   nhanTaiKhoan,
   nhanTrangThai,
-  nhanVaiTro,
   orDash,
+  phoneCell,
+  roleChangeFailed,
+  staffCodeLine,
   staffCountLine,
   unitCellLabel,
 } from "./nhan-can-bo";
+import { StaffAccountForm, type RoleChoice } from "./staff-account-form";
+import { StaffImportDialog } from "./staff-import-dialog";
 import { bangTraTuKetQua, traTen, type BangTraDanhMuc, type KetTra } from "./tra-danh-muc";
 
 /**
  * Bảng danh bạ cán bộ của màn `/nguoi-dung` — theo prototype (`vigov-require/apps/admin/src/components/
- * admin/UserTable.tsx`, `UserFormDialog.tsx`) và quyết định của chủ dự án 08/10/2026 (fix-web-admin thẻ A).
+ * admin/UserTable.tsx`, `UserFormDialog.tsx`), quyết định của chủ dự án 08/10/2026 (fix-web-admin thẻ A)
+ * và quyết định của người dùng 09/10/2026 (đặc tả `cap-nhat-menu-nguoi-dung-phan-quyen-theo-prototype`).
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
  * Hợp đồng REST phục vụ màn hình này: đọc `GET /api/v1/staff`, `POST /api/v1/staff/searches` (chữ tìm
@@ -121,16 +113,27 @@ import { bangTraTuKetQua, traTen, type BangTraDanhMuc, type KetTra } from "./tra
  * `PUT /staff/{id}/role`, `POST /staff/{id}/account`, `PUT /staff/{id}/password` (cùng `admin.user`) và
  * `DELETE /staff/{id}` (`admin.user.delete`, xoá mềm kèm lý do — luật 7).
  *
- * CHỖ MÀN HÌNH NÀY KHÁC PROTOTYPE, VÀ VÌ SAO (hạng 1/2 thắng prototype):
+ * BẢY CỘT CỦA PROTOTYPE (người dùng 09/10/2026): Họ và tên (dòng phụ là thư điện tử) · Chức danh · Bộ
+ * phận · Điện thoại · Đăng nhập gần nhất · Trạng thái · cột thao tác không tiêu đề. Cột Vai trò, Tài
+ * khoản và hai cột điện thoại của 08/10 đã bỏ: trạng thái tài khoản thành chip thứ hai cạnh Trạng thái,
+ * câu dài vào `title`; vai trò sửa trong hộp thoại Sửa.
  *
- *   · Hai cột / hai ô điện thoại (#16) thay cho một "Điện thoại".
- *   · Không ô mật khẩu, không hộp vai trò trong hộp thoại hồ sơ: mật khẩu tạm do máy chủ sinh, hiện
- *     một lần (#9); vai trò đi tuyến riêng mang ràng buộc #13/#14 (`Đổi vai trò`).
- *   · Thêm `Đổi vai trò`, `Khoá/Mở khoá`, `Cấp TK/Đặt lại MK` ở mỗi dòng, và cột `Vai trò`, `Tài khoản`.
+ * CHỖ MÀN HÌNH NÀY VẪN KHÁC PROTOTYPE, VÀ VÌ SAO:
+ *
+ *   · Cột "Điện thoại" hiện di động, không có thì máy bàn — NGUYÊN VĂN máy chủ trả (che hay không là
+ *     việc của máy chủ, Nghị định 13, câu mở #16); `title` của ô nói đó là loại số nào. Cột này KHÔNG
+ *     sắp được: khoá `phone` của máy chủ chỉ sắp theo máy bàn, không theo `di_dong ?? may_ban`, và màn
+ *     hình không bịa ra một khoá sắp xếp mới.
+ *   · Không ô mật khẩu (người dùng 09/10/2026, câu mở #9): mật khẩu tạm do máy chủ sinh, hiện một lần.
+ *     Thêm có thư điện tử thì cấp tài khoản ngay sau khi thêm (`POST /staff/{id}/account`); quên mật
+ *     khẩu là `Đặt lại mật khẩu` trong menu `⋯`.
+ *   · MỘT vai trò, chọn trong hộp thoại Sửa và lưu bằng `PUT /staff/{id}/role` SAU lần PATCH hồ sơ —
+ *     tuyến mang ràng buộc #13/#14. Không còn hộp thoại `Đổi vai trò` riêng.
+ *   · `Khoá/Mở khoá` và `Cấp tài khoản`/`Đặt lại mật khẩu` gom vào menu `⋯` giữa Sửa và Xoá.
  *   · Xoá hỏi lý do (luật 7) và chỉ cho dòng KHÔNG có tài khoản (#10: nghỉ thì khoá, không xoá).
- *   · Tìm ở MÁY CHỦ, theo trang con trỏ: danh bạ một xã không đọc hết về trình duyệt để lọc.
- *   · Sắp xếp ở MÁY CHỦ (4b0b9ce3), không sắp một trang ở client: đúng sáu cột prototype sắp được là nút
- *     thật (chủ dự án 08/10/2026); Vai trò, Di động cá nhân, Tài khoản là chữ trơn — không sắp được.
+ *   · Tìm ở MÁY CHỦ, theo trang con trỏ: danh bạ một xã không đọc hết về trình duyệt để lọc. Nút trang
+ *     chỉ hiện khi có trang trước hoặc trang sau.
+ *   · Sắp xếp ở MÁY CHỦ (4b0b9ce3), không sắp một trang ở client: năm cột có khoá của máy chủ là nút thật.
  *
  * KHÔNG CÓ CỔNG QUYỀN RIÊNG CHO PHẦN GHI `admin.user`: `TabNguoiDung` đã dùng đúng khoá ấy để quyết định
  * có dựng màn hình này hay không. `canDelete` (từ `admin.user.delete`) chỉ quyết định có VẼ `Trash2`.
@@ -154,8 +157,16 @@ export function DanhBaCanBo({
   canDelete = false,
   importOpen = false,
   onImportClose = () => {},
+  selfCode = null,
 }: {
   active?: boolean;
+  /**
+   * The signed-in officer's staff code (`GET /api/v1/sessions/current` → `staff.code`), to disable the
+   * role choice on their OWN row (#14). `null` = unknown: nothing is disabled, the server still refuses
+   * (403 `self_target_forbidden`). Passed down, never read here: this component is driven in tests by
+   * a hook runner that knows no context.
+   */
+  selfCode?: string | null;
   /** The session holds `admin.user.delete` — draws `Trash2`. UX only: the server checks the key. */
   canDelete?: boolean;
   /**
@@ -195,7 +206,14 @@ export function DanhBaCanBo({
 
   const [dangMo, datDangMo] = useState<DangMoGhi | null>(null);
   const [ban, datBan] = useState<BanNhapCanBo>(BAN_TRONG);
+  /** The role chosen in the edit dialog (`""` = no role). Sent through `PUT .../role`, never the PATCH. */
   const [vaiTroID, datVaiTroID] = useState("");
+  /**
+   * The row as the PATCH returned it, once the profile is saved and the role change that followed was
+   * refused. A second Lưu then compares against THIS row: an unchanged profile is not PATCHed again
+   * (which would write a second audit entry for nothing), only the role is retried.
+   */
+  const [patchedRow, setPatchedRow] = useState<identity_canBoTomTat | null>(null);
   const [loiMayChu, datLoiMayChu] = useState("");
   const [dangGui, datDangGui] = useState(false);
   /** The row whose deletion is being confirmed, and the reason typed for it (rule 7: never without one). */
@@ -351,7 +369,8 @@ export function DanhBaCanBo({
   const moBieuMau = useCallback((m: DangMoGhi) => {
     datDangMo(m);
     datBan(m.kieu === "sua" ? banTuCanBo(m.canBo) : BAN_TRONG);
-    datVaiTroID(m.kieu === "vaiTro" ? m.canBo.role_id : "");
+    datVaiTroID(m.kieu === "sua" ? m.canBo.role_id : "");
+    setPatchedRow(null);
     datLoiMayChu("");
     setDeleting(null);
     // Đóng biểu mẫu xác nhận của đường thông tin đăng nhập: hai biểu mẫu mở cùng lúc là hai nút Lưu
@@ -364,6 +383,7 @@ export function DanhBaCanBo({
     datDangMo(null);
     datBan(BAN_TRONG);
     datVaiTroID("");
+    setPatchedRow(null);
     datLoiMayChu("");
   }, []);
 
@@ -375,12 +395,97 @@ export function DanhBaCanBo({
     datDangMo(null);
     datBan(BAN_TRONG);
     datVaiTroID("");
+    setPatchedRow(null);
     datLoiMayChu("");
     setDeleting(null);
     setDeleteReason("");
     toast.success(cau);
     datLanDoc((n) => n + 1);
   }, []);
+
+  /** Whether the edit dialog may change this row's role — not on the officer's own row (#14). */
+  const roleChoiceFor = useCallback(
+    (cb: identity_canBoTomTat): RoleChoice => (selfCode !== null && cb.code === selfCode ? "own" : "editable"),
+    [selfCode],
+  );
+
+  /**
+   * ADD. Without an email: one `POST /staff`, a directory entry only. WITH an email (user 09/10/2026):
+   * the entry first, then AT ONCE the existing grant route `POST /staff/{id}/account`, whose one-time
+   * password opens in the box below. If the grant fails the entry STAYS (it was created); the form
+   * closes, the list re-reads (the row shows `Chỉ trong danh bạ`), and the grant's confirmation opens
+   * with the server's sentence — its button is the retry, as `⋯ › Cấp tài khoản` is later.
+   */
+  const addStaff = useCallback(
+    async (idempotencyKey: string) => {
+      const draft = ban;
+      const kq = await themCanBo(thanThem(draft), idempotencyKey);
+      if (!kq.ok) {
+        datLoiMayChu(kq.thongBao);
+        return;
+      }
+      const created = kq.duLieu;
+      const name = typeof created.full_name === "string" ? created.full_name : draft.hoTen;
+      if (!canIssueAccount(draft.email)) {
+        ghiXong(daThem(name));
+        return;
+      }
+      // A replay of an earlier add (`{code, replayed: true}`) carries no row, so there is no id to grant.
+      if (typeof created.id !== "string" || created.id === "") {
+        ghiXong(daThem(name));
+        toast.error(ADD_GRANT_NOT_CHAINED);
+        return;
+      }
+      const grant = await capTaiKhoan(created.id);
+      ghiXong(daThem(name));
+      const password = grant.ok ? grant.duLieu.temporary_password : undefined;
+      if (grant.ok && typeof password === "string" && password !== "") {
+        datMatKhauTam({ kieu: "cap", maCanBo: created.code, hoTen: name, matKhau: password });
+        return;
+      }
+      datMoTaiKhoan({ kieu: "cap", canBo: created });
+      datLoiTaiKhoan(grant.ok ? CAU_PHAT_LAI_KHONG_CO_MAT_KHAU : grant.thongBao);
+    },
+    [ban, ghiXong],
+  );
+
+  /**
+   * EDIT. The profile PATCH first; then, only if the role choice differs and may be changed, the
+   * existing `PUT /staff/{id}/role` — so #13 and #14 still answer there, and their sentence reaches
+   * this dialog. A refused role change leaves the dialog open with the profile already saved
+   * (`patchedRow`); the list is re-read so the row shows what the server now holds.
+   */
+  const saveEdit = useCallback(
+    async (cb: identity_canBoTomTat) => {
+      const base = patchedRow ?? cb;
+      const profileChanged = patchedRow === null || !sameDraft(banTuCanBo(base), ban);
+      const roleWanted = roleChoiceFor(cb) === "editable" && vaiTroID !== base.role_id;
+      let saved = base;
+      if (profileChanged) {
+        const kq = await suaCanBo(cb.id, thanSua(ban, base));
+        if (!kq.ok) {
+          datLoiMayChu(kq.thongBao);
+          return;
+        }
+        saved = kq.duLieu;
+      }
+      if (!roleWanted) {
+        ghiXong(ACCOUNT_SAVED);
+        return;
+      }
+      const role = await doiVaiTroCanBo(cb.id, vaiTroID);
+      if (role.ok) {
+        ghiXong(ACCOUNT_SAVED);
+        return;
+      }
+      if (profileChanged) {
+        setPatchedRow(saved);
+        datLanDoc((n) => n + 1);
+      }
+      datLoiMayChu(roleChangeFailed(role.thongBao));
+    },
+    [ban, ghiXong, patchedRow, roleChoiceFor, vaiTroID],
+  );
 
   const guiBieuMau = useCallback(() => {
     if (dangMo === null || dangGui) return;
@@ -391,27 +496,27 @@ export function DanhBaCanBo({
     // KHÔNG KIỂM ĐỘ DÀI, KHUÔN THƯ ĐIỆN TỬ HAY KÝ TỰ SỐ ĐIỆN THOẠI Ở ĐÂY. Máy chủ kiểm cả ba, mỗi thứ
     // kèm một câu tiếng Việt nói rõ phải sửa gì (`domain/danh_ba_ghi.go`); chép xuống client là bản
     // sao thứ hai của một bộ quy tắc nghiệp vụ (luật 9, cấm #2).
-    const goi =
-      dangMo.kieu === "them"
-        ? themCanBo(thanThem(ban), dangMo.khoaChongTrung).then((kq) =>
-            kq.ok ? ghiXong(daThem(kq.duLieu.full_name)) : datLoiMayChu(kq.thongBao),
-          )
-        : dangMo.kieu === "sua"
-          ? suaCanBo(dangMo.canBo.id, thanSua(ban, dangMo.canBo)).then((kq) =>
-              kq.ok ? ghiXong(ACCOUNT_SAVED) : datLoiMayChu(kq.thongBao),
-            )
-          : dangMo.kieu === "vaiTro"
-            ? doiVaiTroCanBo(dangMo.canBo.id, vaiTroID).then((kq) =>
-                kq.ok ? ghiXong(daDoiVaiTro(kq.duLieu.full_name)) : datLoiMayChu(kq.thongBao),
-              )
-            : datKhoaCanBo(dangMo.canBo.id, dangMo.khoa).then((kq) =>
-                kq.ok
-                  ? ghiXong(daDatKhoa(kq.duLieu.full_name, dangMo.khoa))
-                  : datLoiMayChu(kq.thongBao),
-              );
+    let goi: Promise<unknown>;
+    switch (dangMo.kieu) {
+      case "them":
+        goi = addStaff(dangMo.khoaChongTrung);
+        break;
+      case "sua":
+        goi = saveEdit(dangMo.canBo);
+        break;
+      case "khoa":
+        goi = datKhoaCanBo(dangMo.canBo.id, dangMo.khoa).then((kq) =>
+          kq.ok ? ghiXong(daDatKhoa(kq.duLieu.full_name, dangMo.khoa)) : datLoiMayChu(kq.thongBao),
+        );
+        break;
+      case "vaiTro":
+        // No longer opened on this screen (user 09/10/2026: the role is chosen in the edit dialog).
+        goi = Promise.resolve();
+        break;
+    }
 
     void goi.finally(() => datDangGui(false));
-  }, [ban, dangGui, dangMo, ghiXong, vaiTroID]);
+  }, [addStaff, dangGui, dangMo, ghiXong, saveEdit]);
 
   /* ---- xoá mềm một dòng (decision 1, 08/10/2026) ------------------------------------------------ */
 
@@ -526,11 +631,10 @@ export function DanhBaCanBo({
       .finally(() => datDangGuiTaiKhoan(false));
   }, [dangGuiTaiKhoan, moTaiKhoan]);
 
-  /** The row actions, in ONE object so no seventh action is added without passing through here. */
+  /** The row actions, in ONE object so no sixth action is added without passing through here. */
   const thaoTac = useMemo<ThaoTacDong>(
     () => ({
       sua: (cb) => moBieuMau({ kieu: "sua", canBo: cb }),
-      doiVaiTro: (cb) => moBieuMau({ kieu: "vaiTro", canBo: cb }),
       datKhoa: (cb) => moBieuMau({ kieu: "khoa", canBo: cb, khoa: cb.active }),
       capTaiKhoan: moCapTaiKhoan,
       datLaiMatKhau: moDatLaiMatKhau,
@@ -563,30 +667,45 @@ export function DanhBaCanBo({
         dialog (or a password) with it. All are top-layer `<dialog>`s, so their place here adds no space.
       */}
 
-      {/* Staff import. Only the panel's own close calls `onImportClose` (`excel-import-panel.tsx`). */}
-      {importOpen && (
-        <ExcelImportPanel
-          target={STAFF_IMPORT_TARGET}
-          onImported={() => datLanDoc((n) => n + 1)}
-          onClose={onImportClose}
-          asDialog
-        />
-      )}
+      {/* Staff import (user 09/10/2026: the prototype's 672px dialog). Only its own close calls
+          `onImportClose` — after a 201 that close is the one-time passwords' explicit button. */}
+      {importOpen && <StaffImportDialog onImported={() => datLanDoc((n) => n + 1)} onClose={onImportClose} />}
 
-      {dangMo !== null && (
+      {dangMo !== null && (dangMo.kieu === "them" || dangMo.kieu === "sua") && (
         <AccountDialog
-          title={dialogTitle(dangMo)}
+          title={dangMo.kieu === "them" ? ADD_ACCOUNT_TITLE : ACCOUNT_EDIT_TITLE}
           description={
-            dangMo.kieu === "them"
-              ? GIAI_THICH_THEM
-              : dangMo.kieu === "sua"
-                ? staffCodeNote(dangMo.canBo.code)
-                : undefined
+            dangMo.kieu === "them" ? (
+              ADD_ACCOUNT_DESCRIPTION
+            ) : (
+              // The staff code as a small muted sub-line (#15: shown, never an input).
+              <span className="text-xs">{staffCodeLine(dangMo.canBo.code)}</span>
+            )
           }
-          wide={dangMo.kieu === "them" || dangMo.kieu === "sua"}
+          wide
           busy={dangGui}
           onDismiss={dongBieuMau}
         >
+          <StaffAccountForm
+            open={dangMo}
+            draft={ban}
+            setDraft={datBan}
+            roleId={vaiTroID}
+            setRoleId={datVaiTroID}
+            roleChoice={dangMo.kieu === "sua" ? roleChoiceFor(dangMo.canBo) : "editable"}
+            units={mucBoPhan}
+            roles={mucVaiTro}
+            serverError={loiMayChu}
+            busy={dangGui}
+            onSubmit={guiBieuMau}
+            onCancel={dongBieuMau}
+          />
+        </AccountDialog>
+      )}
+
+      {/* Lock / unlock keeps its confirmation form (#13's refusal lands there). */}
+      {dangMo !== null && dangMo.kieu === "khoa" && (
+        <AccountDialog title={tieuDeKhoa(dangMo.canBo.full_name, dangMo.khoa)} wide={false} busy={dangGui} onDismiss={dongBieuMau}>
           <BieuMauGhiCanBo
             layout="account"
             dangMo={dangMo}
@@ -682,22 +801,24 @@ export function DanhBaCanBo({
             danhSach={trangThai.trang.items}
             thaoTac={thaoTac}
             traBoPhan={traBoPhan}
-            traVaiTro={traVaiTro}
             canDelete={canDelete}
             sort={sort}
             onSort={changeSort}
           />
-          {/* The prototype's count line; the cursor pager (kept, decision 3) at the right of it. */}
+          {/* The prototype's count line; the cursor pager at the right of it ONLY when there is another
+              page to go to (user 09/10/2026: no dead buttons on a one-page list). */}
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
             <p className="text-ink-muted m-0 text-[12px]">
               {staffCountLine(trangThai.trang.items.length, shownTotal)}
             </p>
-            <DieuHuongTrang
-              nganXep={nganXep}
-              conTroTiep={trangThai.trang.next_cursor}
-              conTrangSau={trangThai.trang.has_more}
-              diToiTrang={diToiTrang}
-            />
+            {hasOtherPage(nganXep, trangThai.trang.has_more, trangThai.trang.next_cursor) && (
+              <DieuHuongTrang
+                nganXep={nganXep}
+                conTroTiep={trangThai.trang.next_cursor}
+                conTrangSau={trangThai.trang.has_more}
+                diToiTrang={diToiTrang}
+              />
+            )}
           </div>
         </>
       )}
@@ -705,18 +826,17 @@ export function DanhBaCanBo({
   );
 }
 
-/** The heading of the write dialog. Edit is the prototype's; add keeps "…vào danh bạ" (#9: no account yet). */
-function dialogTitle(open: DangMoGhi): string {
-  switch (open.kieu) {
-    case "them":
-      return tieuDeThem();
-    case "sua":
-      return ACCOUNT_EDIT_TITLE;
-    case "vaiTro":
-      return tieuDeVaiTro(open.canBo.full_name);
-    case "khoa":
-      return tieuDeKhoa(open.canBo.full_name, open.khoa);
-  }
+/** Two drafts hold the same profile — the seven fields of `BanNhapCanBo`, compared as typed. */
+function sameDraft(a: BanNhapCanBo, b: BanNhapCanBo): boolean {
+  return (Object.keys(a) as (keyof BanNhapCanBo)[]).every((k) => a[k] === b[k]);
+}
+
+/**
+ * Whether the list has a page before or after this one — the cursor pager's own two conditions
+ * (`DieuHuongTrang`). The contract has no page count, so "more than one page" is exactly this.
+ */
+export function hasOtherPage(stack: NganXepConTro, hasMore: boolean, nextCursor: string): boolean {
+  return coTrangTruoc(stack) || (hasMore && nextCursor !== "");
 }
 
 /**
@@ -734,7 +854,7 @@ function AccountDialog({
   children,
 }: {
   title: string;
-  description?: string;
+  description?: ReactNode;
   wide: boolean;
   busy: boolean;
   onDismiss: () => void;
@@ -887,7 +1007,6 @@ export function HangLocNguoiDung({
  */
 export type ThaoTacDong = {
   sua: (cb: identity_canBoTomTat) => void;
-  doiVaiTro: (cb: identity_canBoTomTat) => void;
   datKhoa: (cb: identity_canBoTomTat) => void;
   capTaiKhoan: (cb: identity_canBoTomTat) => void;
   datLaiMatKhau: (cb: identity_canBoTomTat) => void;
@@ -925,9 +1044,41 @@ function RowButton({
 }
 
 /**
- * Cụm nút của một dòng (`flex items-center justify-end gap-1.5`, prototype). MỖI NÚT MANG TÊN NGƯỜI
- * TRONG `aria-label`: hai mươi nút đọc lên giống hệt nhau là danh sách người dùng trình đọc màn hình
- * không chọn đúng được dòng — và chọn nhầm ở đây là khoá nhầm tài khoản của một cán bộ.
+ * The `⋯` menu of one row (user 09/10/2026): `Khoá`/`Mở khoá`, then `Đặt lại mật khẩu` OR `Cấp tài
+ * khoản` — ONE of the two, never both: `has_account` splits two worlds the server already separates in
+ * its WHERE clause, so the other action is ABSENT, not greyed. A row with no email keeps `Cấp tài khoản`
+ * DISABLED with its reason as the item's second line (the same fixable gap as before; the server still
+ * answers 409). Pure, exported: the closed menu renders no items to HTML, so tests read this list.
+ */
+export function staffRowMenuItems(cb: identity_canBoTomTat, actions: ThaoTacDong): ActionMenuItem[] {
+  const lock: ActionMenuItem = {
+    kind: "item",
+    id: "lock",
+    // Lock or unlock reads `active` — the very field the lockout route writes, so the label cannot drift.
+    label: cb.active ? NUT_KHOA : NUT_MO_KHOA,
+    icon: cb.active ? Lock : LockOpen,
+    onSelect: () => actions.datKhoa(cb),
+  };
+  const credential: ActionMenuItem = cb.has_account
+    ? { kind: "item", id: "password", label: NUT_DAT_LAI_MAT_KHAU, icon: KeyRound, onSelect: () => actions.datLaiMatKhau(cb) }
+    : canIssueAccount(cb.email)
+      ? { kind: "item", id: "account", label: NUT_CAP_TAI_KHOAN, icon: UserPlus, onSelect: () => actions.capTaiKhoan(cb) }
+      : {
+          kind: "item",
+          id: "account",
+          label: NUT_CAP_TAI_KHOAN,
+          icon: UserPlus,
+          onSelect: () => {},
+          disabled: true,
+          hint: NO_EMAIL_MENU_HINT,
+        };
+  return [lock, credential];
+}
+
+/**
+ * Cụm nút của một dòng (`flex items-center justify-end gap-1.5`, prototype): `Sửa` · `⋯` · `Xoá`. MỖI
+ * NÚT MANG TÊN NGƯỜI TRONG `aria-label`: hai mươi nút đọc lên giống hệt nhau là danh sách người dùng
+ * trình đọc màn hình không chọn đúng được dòng — và chọn nhầm ở đây là khoá nhầm tài khoản của một cán bộ.
  */
 function NutCuaDong({
   cb,
@@ -945,42 +1096,8 @@ function NutCuaDong({
       <RowButton action={EDIT_ACCOUNT_BUTTON} person={person} onClick={() => thaoTac.sua(cb)}>
         <Pencil aria-hidden="true" focusable="false" className={icon} />
       </RowButton>
-      <RowButton action={NUT_DOI_VAI_TRO} person={person} onClick={() => thaoTac.doiVaiTro(cb)}>
-        <UserCog aria-hidden="true" focusable="false" className={icon} />
-      </RowButton>
-      {/* Khoá hay mở khoá đọc từ `active` — chính thứ tuyến lockout ghi vào, nên nhãn không lệch việc. */}
-      <RowButton action={cb.active ? NUT_KHOA : NUT_MO_KHOA} person={person} onClick={() => thaoTac.datKhoa(cb)}>
-        {cb.active ? (
-          <Lock aria-hidden="true" focusable="false" className={icon} />
-        ) : (
-          <LockOpen aria-hidden="true" focusable="false" className={icon} />
-        )}
-      </RowButton>
 
-      {/* MỘT NÚT, KHÔNG HAI: `has_account` tách hai thế giới loại trừ nhau ngay trong mệnh đề WHERE,
-          nên nút kia VẮNG MẶT chứ không mờ đi — việc ấy không áp dụng cho dòng này. */}
-      {cb.has_account ? (
-        <RowButton action={NUT_DAT_LAI_MAT_KHAU} person={person} onClick={() => thaoTac.datLaiMatKhau(cb)}>
-          <KeyRound aria-hidden="true" focusable="false" className={icon} />
-        </RowButton>
-      ) : canIssueAccount(cb.email) ? (
-        <RowButton action={NUT_CAP_TAI_KHOAN} person={person} onClick={() => thaoTac.capTaiKhoan(cb)}>
-          <UserPlus aria-hidden="true" focusable="false" className={icon} />
-        </RowButton>
-      ) : (
-        // NO EMAIL, NO ACCOUNT: the SAME action blocked by a fixable gap, so it is disabled and tied to
-        // the VISIBLE reason in the row's "Tài khoản" cell. The server still refuses (409).
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          aria-label={`${NUT_CAP_TAI_KHOAN}: ${person}`}
-          aria-describedby={`no-email-reason-${cb.id}`}
-          disabled
-        >
-          <UserPlus aria-hidden="true" focusable="false" className={icon} />
-        </Button>
-      )}
+      <ActionMenu label={moreActionsLabel(person)} items={staffRowMenuItems(cb, thaoTac)} triggerVariant="secondary" />
 
       {canDelete &&
         (cb.has_account ? (
@@ -1018,23 +1135,28 @@ function NutCuaDong({
 }
 
 /**
- * Ô "Tài khoản": có / chưa, và — với dòng chưa cấp được — lý do, đọc được ngay trong ô (và bởi trình
- * đọc màn hình qua `aria-describedby` của nút bị vô hiệu). Không cắt "…" (U19): câu được xuống dòng.
+ * The two chips of the `Trạng thái` cell (user 09/10/2026): the status, then the account — TEXT ONLY,
+ * the prototype's chips (`icon={null}`; this overrides, for this table alone, the 08/10 note on
+ * `StatusBadge` in `config-ui.tsx` — the shared Badge keeps its icon everywhere else). The tone follows
+ * the CODE (`active`, `has_account`), never the words. The account chip's long reason is its `title`
+ * and visually hidden text, so the row stays one line (≤ 56px).
+ *
+ * `active` and `has_account` ARE TWO QUESTIONS (`nhanTrangThai`): two chips, never one merged word.
  */
-function OTaiKhoan({ cb }: { cb: identity_canBoTomTat }) {
-  const khongCoThu = !cb.has_account && !canIssueAccount(cb.email);
+function StatusCell({ cb }: { cb: identity_canBoTomTat }) {
+  const reason = accountBadgeReason(cb.has_account, cb.email);
   return (
-    <>
-      <span className="block">{nhanTaiKhoan(cb.has_account)}</span>
-      {khongCoThu && (
-        <span
-          className="text-ink-muted block max-w-[16rem] text-[11.5px] whitespace-normal"
-          id={`no-email-reason-${cb.id}`}
-        >
-          {NO_EMAIL_ACCOUNT_REASON}
-        </span>
-      )}
-    </>
+    <div className="flex items-center gap-1.5">
+      <Badge tone={cb.active ? "success" : "danger"} icon={null}>
+        {nhanTrangThai(cb.active)}
+      </Badge>
+      <Badge tone={cb.has_account ? "info" : "neutral"} icon={null} title={reason} aria-describedby={`account-reason-${cb.id}`}>
+        {nhanTaiKhoan(cb.has_account)}
+      </Badge>
+      <span id={`account-reason-${cb.id}`} className="an-thi-giac">
+        {reason}
+      </span>
+    </div>
   );
 }
 
@@ -1086,21 +1208,19 @@ function SortHead({
 }
 
 /**
- * The nine data columns, in the owner's order (decision 3). `sortKey` only on the prototype's six (owner
- * 08/10/2026); the other three are plain text — not sortable, like the actions column. "Máy bàn cơ
- * quan" sorts by `phone`, the OFFICE phone (the prototype's "Điện thoại"), never the personal mobile.
+ * The prototype's six data columns, in its order (user 09/10/2026); the seventh is the actions column
+ * with no visible head. `sortKey` where the server has a key for exactly what the column shows.
+ * `Điện thoại` has NONE: the cell is the mobile, else the office line, and the server's `phone` key
+ * orders by the office line alone — sorting by it would put rows in an order the column does not
+ * show. No key is invented here; the head is plain text until the server offers one.
  */
 const DATA_COLUMNS: readonly { readonly label: string; readonly sortKey?: KhoaSapXep }[] = [
   { label: "Họ và tên", sortKey: "full_name" },
   { label: "Chức danh", sortKey: "position" },
   { label: "Bộ phận", sortKey: "department" },
-  { label: "Vai trò" },
-  // TWO phone columns, labelled by kind (#16): duty information vs Decree 13 personal data.
-  { label: "Máy bàn cơ quan", sortKey: "phone" },
-  { label: "Di động cá nhân" },
+  { label: "Điện thoại" },
   { label: "Đăng nhập gần nhất", sortKey: "last_login_at" },
   { label: "Trạng thái", sortKey: "status" },
-  { label: "Tài khoản" },
 ];
 
 const NO_SORT = () => {};
@@ -1111,7 +1231,6 @@ export function BangCanBo({
   danhSach,
   thaoTac,
   traBoPhan,
-  traVaiTro,
   canDelete = false,
   sort = null,
   onSort = NO_SORT,
@@ -1120,7 +1239,6 @@ export function BangCanBo({
   thaoTac: ThaoTacDong;
   /** Bảng tra đã dựng sẵn, đi XUỐNG như tham số. Không dòng nào tự đi hỏi máy chủ. */
   traBoPhan: BangTraDanhMuc;
-  traVaiTro: BangTraDanhMuc;
   canDelete?: boolean;
   /** The applied order, for `aria-sort`. The screen owns it; the table only reports clicks. */
   sort?: StaffSort | null;
@@ -1152,32 +1270,23 @@ export function BangCanBo({
         ) : (
           danhSach.map((cb) => {
             const unit = traTen(traBoPhan, cb.department_id);
-            const role = traTen(traVaiTro, cb.role_id);
+            const phone = phoneCell(cb.mobile, cb.phone);
             return (
               <tr key={cb.id}>
                 <td>
                   <div className="text-navy font-semibold">{cb.full_name}</div>
-                  <div className="text-ink-muted text-[11.5px]">{emailLabel(cb.email)}</div>
+                  <div className="text-ink-muted text-[11.5px]">{emailSubline(cb.email)}</div>
                 </td>
                 <td>{orDash(cb.position)}</td>
                 <td>
                   <span className={unit.loai === "chuaGan" ? undefined : lopNhanDanhMuc(unit)}>{unitCellLabel(unit)}</span>
                 </td>
-                <td>
-                  <span className={lopNhanDanhMuc(role)}>{nhanVaiTro(role)}</span>
-                </td>
-                {/* HAI Ô RIÊNG, HIỆN NGUYÊN VĂN thứ máy chủ trả (#11: không che trong nội bộ xã). Không
-                    gộp bằng `phone || mobile`, không nối bằng dấu phẩy. */}
-                <td>{orDash(cb.phone)}</td>
-                <td>{orDash(cb.mobile)}</td>
+                {/* ONE cell (user 09/10/2026): the mobile, else the office line, AS THE SERVER SENT IT —
+                    no masking or unmasking here (#11/#16, Decree 13). `title` names which kind it is. */}
+                <td title={phone.kind ?? undefined}>{phone.text}</td>
                 <td>{nhanDangNhapGanNhat(cb.last_login_at)}</td>
                 <td>
-                  {/* Tone by the CODE (`active`), never by the words; the Badge's icon is allowed
-                      (ADR 0068 lần 6 #7). */}
-                  <Badge tone={cb.active ? "success" : "danger"}>{nhanTrangThai(cb.active)}</Badge>
-                </td>
-                <td>
-                  <OTaiKhoan cb={cb} />
+                  <StatusCell cb={cb} />
                 </td>
                 <td className="text-right">
                   <NutCuaDong cb={cb} thaoTac={thaoTac} canDelete={canDelete} />

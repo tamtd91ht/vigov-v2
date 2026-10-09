@@ -36,6 +36,14 @@ export type ActionMenuItem =
       readonly icon: LucideIcon;
       readonly onSelect: () => void;
       readonly tone?: "danger";
+      /**
+       * The action exists for this row but cannot run now (e.g. `Cấp tài khoản` without an email): the
+       * item stays in the list, greyed, so the officer sees it and `hint` says why. Radix skips it on
+       * arrow keys and never fires `onSelect`. UX only — the server still refuses the call.
+       */
+      readonly disabled?: boolean;
+      /** A second, muted line under the label — the reason a disabled item cannot be chosen. */
+      readonly hint?: string;
     }
   | { readonly kind: "separator"; readonly id: string };
 
@@ -45,6 +53,11 @@ export type ActionMenuProps = {
   items: readonly ActionMenuItem[];
   align?: "start" | "end";
   className?: string;
+  /**
+   * The trigger's look. Default `icon` (borderless). `secondary` is the outline square that sits among
+   * a row's other `sm` outline buttons (`/nguoi-dung`), so the three read as one group.
+   */
+  triggerVariant?: "icon" | "secondary";
 };
 
 const ITEM = cn(
@@ -56,11 +69,11 @@ const ITEM = cn(
 
 const ITEM_DANGER = "text-danger-600 data-[highlighted]:bg-danger-50 data-[highlighted]:text-danger-600";
 
-export function ActionMenu({ label, items, align = "end", className }: ActionMenuProps) {
+export function ActionMenu({ label, items, align = "end", className, triggerVariant = "icon" }: ActionMenuProps) {
   return (
     <DropdownMenu.Root modal={false}>
       <DropdownMenu.Trigger asChild>
-        <IconButton type="button" label={label} className={className}>
+        <IconButton type="button" label={label} variant={triggerVariant} className={className}>
           <Ellipsis aria-hidden="true" />
         </IconButton>
       </DropdownMenu.Trigger>
@@ -81,10 +94,18 @@ export function ActionMenu({ label, items, align = "end", className }: ActionMen
               <DropdownMenu.Item
                 key={it.id}
                 onSelect={it.onSelect}
+                disabled={it.disabled}
                 className={cn(ITEM, it.tone === "danger" && ITEM_DANGER)}
               >
                 <it.icon aria-hidden="true" focusable="false" strokeWidth={1.8} />
-                {it.label}
+                {it.hint === undefined ? (
+                  it.label
+                ) : (
+                  <span className="flex min-w-0 flex-col">
+                    <span>{it.label}</span>
+                    <span className="text-ink-muted text-xs font-normal whitespace-normal">{it.hint}</span>
+                  </span>
+                )}
               </DropdownMenu.Item>
             ),
           )}

@@ -8,7 +8,7 @@ import type {
 } from "@/lib/api/schema.gen";
 
 import { BangMaTran, type ChinhSuaMaTran } from "./ma-tran-phan-quyen";
-import { dungBangDaCap } from "./ma-tran-quyen";
+import { SYSTEM_ADMIN_ROLE_CODE, dungBangDaCap, orderRoleColumns } from "./ma-tran-quyen";
 import { LY_DO_KHONG_TU_SUA } from "./nhan-ma-tran";
 import { banSuaMoi, batDauLuu, batTatO, bangHienThi, ketThucLuu, type BanSua } from "./sua-phan-quyen";
 
@@ -224,7 +224,13 @@ describe("BangMaTran ở chế độ sửa", () => {
 
   it("cột của CHÍNH vai trò mình bị khoá kèm lý do (#14); cột khác vẫn bấm được", () => {
     const html = veSua(banSuaMoi(GOC_A), "lanh-dao");
-    expect(html).toContain(LY_DO_KHONG_TU_SUA);
+    // A lock icon in the head; the sentence is its tooltip and its hidden text — not a visible paragraph
+    // (user 09/10/2026: header ≤ 110px).
+    expect(html).toMatch(
+      new RegExp(`<span class="text-ink-muted mt-2 inline-flex justify-center" title="${LY_DO_KHONG_TU_SUA}"><svg[^>]*lucide-lock[^>]*>`),
+    );
+    expect(html).toContain(`<span class="an-thi-giac">${LY_DO_KHONG_TU_SUA}</span>`);
+    expect(html).not.toContain(`text-[10.5px] font-normal">${LY_DO_KHONG_TU_SUA}`);
     expect(o(html, "Lãnh đạo — Phân quyền")).toContain('disabled=""');
     expect(o(html, "Chuyên viên — Phân quyền")).not.toContain('disabled=""');
     // Its cells cannot change, so it never offers a Save.
@@ -254,10 +260,10 @@ describe("BangMaTran follows the prototype (card B)", () => {
     expect(html).not.toMatch(/sticky top-0/);
   });
 
-  it("P10: corner cell 'Quyền' sticks left, canvas fill, no fixed width", () => {
+  it("P10: corner cell 'Quyền' sticks left, canvas fill, 192px (user 09/10/2026)", () => {
     const html = ve(NHOM_A);
     expect(html).toMatch(
-      /<th scope="col" class="bg-canvas border-line text-ink-muted sticky left-0 z-10 border-b px-4 py-3 text-left font-semibold">Quyền<\/th>/,
+      /<th scope="col" class="bg-canvas border-line text-ink-muted sticky left-0 z-10 w-48 min-w-48 border-b px-4 py-3 text-left font-semibold">Quyền<\/th>/,
     );
   });
 
@@ -292,11 +298,11 @@ describe("BangMaTran follows the prototype (card B)", () => {
     expect(html).not.toContain("nhan-nhom");
   });
 
-  it("P21/P22: permission cell — label + code, sticky left, white, wraps (no truncate)", () => {
+  it("P21/P22: permission cell — 192px sticky, label on ONE line, key mono text-xs, no truncate", () => {
     const html = ve(NHOM_A);
     expect(html).toContain('<tr class="hover:bg-canvas/60">');
     expect(html).toMatch(
-      /<th scope="row" class="border-line sticky left-0 z-10 border-b bg-white px-4 py-2\.5 text-left font-normal"><div class="text-navy font-medium">Quản lý tài khoản<\/div><code class="text-ink-muted text-\[10\.5px\]">admin\.user<\/code><\/th>/,
+      /<th scope="row" class="border-line sticky left-0 z-10 w-48 min-w-48 border-b bg-white px-4 py-2\.5 text-left font-normal"><div class="text-navy font-medium whitespace-nowrap">Quản lý tài khoản<\/div><code class="text-ink-muted font-mono text-xs">admin\.user<\/code><\/th>/,
     );
     expect(html).not.toContain("truncate");
   });
@@ -308,10 +314,10 @@ describe("BangMaTran follows the prototype (card B)", () => {
     expect(html).toMatch(/<svg[^>]*class="lucide lucide-minus[^"]*text-ink-muted\/40 mx-auto size-4"/);
   });
 
-  it("P24: edit-mode toggle is the prototype's 28px square button", () => {
+  it("P24: edit-mode toggle is the prototype's 28px square button with NO frame (preflight is off)", () => {
     const html = veSua(banSuaMoi(GOC_A));
     expect(o(html, "Chuyên viên — Quản lý tài khoản")).toContain(
-      'class="hover:bg-canvas mx-auto grid size-7 place-items-center rounded-md',
+      'class="hover:bg-canvas mx-auto grid size-7 place-items-center rounded-md border-0 bg-transparent p-0 shadow-none',
     );
   });
 
@@ -337,5 +343,55 @@ describe("BangMaTran follows the prototype (card B)", () => {
     // Loader2 inside the saving column's Lưu only; the word stays "Lưu".
     expect(html.match(/lucide-loader-circle[^"]*size-3 animate-spin/g)).toHaveLength(1);
     expect(html).not.toContain("Đang lưu…");
+  });
+});
+
+/* ---- column order (user 09/10/2026) ------------------------------------------------------------ */
+
+function role(id: string, code: string, name: string): identity_vaiTroCotRa {
+  return { id, code, name, is_leader: false, staff_count: 0, active_account_count: 0 };
+}
+
+/** The prototype's eight commune roles plus the system administrator, in the server's (seed) order. */
+const SEED_ORDER: readonly identity_vaiTroCotRa[] = [
+  role("r0", SYSTEM_ADMIN_ROLE_CODE, "Quản trị hệ thống"),
+  role("r1", "chu-tich", "Chủ tịch UBND"),
+  role("r2", "pho-chu-tich", "Phó Chủ tịch UBND"),
+  role("r3", "chanh-van-phong", "Chánh Văn phòng"),
+  role("r4", "truong-bo-phan", "Trưởng bộ phận"),
+  role("r5", "chuyen-vien", "Chuyên viên chuyên môn"),
+  role("r6", "ke-toan", "Kế toán"),
+  role("r7", "mot-cua", "Cán bộ một cửa"),
+  role("r8", "truong-thon", "Trưởng thôn, Tổ trưởng dân phố"),
+];
+
+const A_TO_Z_ADMIN_LAST = [
+  "Cán bộ một cửa",
+  "Chánh Văn phòng",
+  "Chủ tịch UBND",
+  "Chuyên viên chuyên môn",
+  "Kế toán",
+  "Phó Chủ tịch UBND",
+  "Trưởng bộ phận",
+  "Trưởng thôn, Tổ trưởng dân phố",
+  "Quản trị hệ thống",
+];
+
+describe("matrix columns — by name A→Z (Vietnamese), system administrator LAST", () => {
+  it("orderRoleColumns: the prototype's order, admin last by its CODE; the input is not mutated", () => {
+    const input = [...SEED_ORDER];
+    expect(orderRoleColumns(input).map((r) => r.name)).toEqual(A_TO_Z_ADMIN_LAST);
+    expect(input.map((r) => r.id)).toEqual(SEED_ORDER.map((r) => r.id));
+  });
+
+  it("admin is found by code, not by name: a renamed admin role still goes last", () => {
+    const renamed = [role("x", SYSTEM_ADMIN_ROLE_CODE, "An ninh"), role("y", "ke-toan", "Kế toán")];
+    expect(orderRoleColumns(renamed).map((r) => r.id)).toEqual(["y", "x"]);
+  });
+
+  it("the rendered table heads follow that order", () => {
+    const html = renderToStaticMarkup(<BangMaTran nhom={NHOM_A} vaiTro={SEED_ORDER} daCap={dungBangDaCap([])} />);
+    const heads = [...html.matchAll(/<div class="text-navy font-semibold">([^<]+)<\/div>/g)].map((m) => m[1]);
+    expect(heads).toEqual(A_TO_Z_ADMIN_LAST);
   });
 });
