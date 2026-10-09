@@ -100,7 +100,8 @@ prototype". Say instead: *"chưa kiểm bằng ảnh render — chưa được b
 | Before the fix | Baseline (§2) complete; every exception cites its ADR | `ui-ux-reviewer` |
 | Diagnosis | The root cause explains **every** MISMATCH row, or the rest are listed as separate | main session |
 | After each change | New screenshot → §3 table again. Any MISMATCH left → back to the builder with the rows | main session + `ui-ux-reviewer` |
-| Before commit | §3 table has no MISMATCH and no UNVERIFIABLE on the rows the defect covers | `ui-ux-reviewer` verdict **PASS** |
+| Before saying "khớp prototype" | §3 table has no MISMATCH and no UNVERIFIABLE on the rows the defect covers | `ui-ux-reviewer` verdict **PASS** |
+| Commit | Always, as soon as validation ran — then push (owner, 09/10/2026). No picture → commit + push marked "chưa kiểm bằng ảnh render", never held on disk | main session |
 | Regression | Other screens sharing the changed component/CSS: screenshot at least one | main session |
 
 ---

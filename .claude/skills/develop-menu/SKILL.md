@@ -128,8 +128,13 @@ Parallel only within ROUTING §0.5 (≤2 Go-compiling agents; one feature's back
 sequential). Then, **per card**, in the main session:
 
 ```
-builder returns → validate (ROUTING §0.6) → review the diff → commit (ROUTING §0.7) → document (§7)
+builder returns → validate (ROUTING §0.6) → review the diff → commit + push (ROUTING §0.7) → document (§7)
 ```
+
+**Push after every commit, at once** (owner, 09/10/2026: "bất cứ lúc nào code xong đều phải commit
+và push"). A check that could not run on this machine — screenshot, PostgreSQL — is written into
+the commit message and the ledger as unverified; it never keeps finished code on disk.
+`hooks/commit_push_guard.py` blocks the session from ending otherwise.
 
 **Builders do not commit; the main session commits each card after validating it.** Two
 agents committing at once race on `.git/index.lock`, and an agent cannot know whether the tree

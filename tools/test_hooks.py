@@ -1041,6 +1041,34 @@ WORKFLOW_CASES = [
 ]
 
 
+# ---- pure-function cases: when commit_push_guard BLOCKS -----------------------------------
+#
+# Same exemption as the other Stop hooks (it needs transcripts and git), same answer: the decision
+# is a pure function of (paths this session wrote, dirty paths, commits ahead). The silent cases
+# matter as much as the loud ones: a file only ANOTHER session left dirty must never block this
+# one — that is the parallel-session rule (ROUTING §0.7) — or the guard gets disabled.
+COMMIT_PUSH_CASES = [
+    (["web-admin/src/a.tsx"], {"web-admin/src/a.tsx"}, 0, True, "tệp phiên này viết còn chưa commit"),
+    ([], set(), 2, True, "đã commit nhưng chưa push"),
+    (["web-admin/src/a.tsx"], set(), 0, False, "đã commit và push — im"),
+    (["web-admin/src/a.tsx"], {"web-admin/src/b.tsx"}, 0, False,
+     "chỉ tệp của PHIÊN KHÁC còn bẩn — im"),
+    ([], set(), 0, False, "phiên không viết gì — im"),
+]
+
+# Transcripts record absolute Windows paths, sometimes with escaped backslashes; git reports
+# repo-relative forward-slash paths. A mapping that misses one shape makes every dirty file look
+# foreign, and the guard goes silent for the wrong reason.
+REPO_PATH_CASES = [
+    ("D:\\\\works\\\\repo\\\\web-admin\\\\src\\\\a.tsx", "D:\\works\\repo", "web-admin/src/a.tsx",
+     "đường tuyệt đối Windows, gạch chéo kép"),
+    ("D:/works/repo/.claude/hooks/x.py", "D:\\works\\repo", ".claude/hooks/x.py",
+     "giữ dấu chấm đầu thư mục"),
+    ("C:/Users/dell/AppData/Local/Temp/x.html", "D:\\works\\repo", None, "ngoài kho — bỏ qua"),
+    ("./kb/a.json", "D:\\works\\repo", "kb/a.json", "đường tương đối"),
+]
+
+
 # ---- pure-function cases: which shell commands make codegraph_sync run --------------------
 #
 # The hook never blocks, so it has no BLOCK case; what can be wrong is WHEN it runs. Too narrow
@@ -1458,6 +1486,23 @@ def chay_thuan() -> list[tuple[str, str, bool, bool]]:
         mark = "  OK   " if ok else "  FAIL "
         want = "CODE " if mong else "BỎ QUA"
         print(f"{mark} [{want}] {'stop_verify_guard.is_code':24s} {nhan}")
+        if not ok:
+            sai.append((duong, nhan, mong, duoc))
+
+    import commit_push_guard as cpg  # noqa: E402
+    for written, dirty, ahead, mong, nhan in COMMIT_PUSH_CASES:
+        duoc = bool(cpg.problems(written, dirty, ahead))
+        ok = duoc == mong
+        mark = "  OK   " if ok else "  FAIL "
+        want = "CHẶN" if mong else "IM  "
+        print(f"{mark} [{want}] {'commit_push_guard.problems':24s} {nhan}")
+        if not ok:
+            sai.append((str(written), nhan, mong, duoc))
+    for duong, goc, mong, nhan in REPO_PATH_CASES:
+        duoc = cpg.to_repo_path(duong, goc)
+        ok = duoc == mong
+        mark = "  OK   " if ok else "  FAIL "
+        print(f"{mark} [PATH] {'commit_push_guard.to_repo_path':24s} {nhan}")
         if not ok:
             sai.append((duong, nhan, mong, duoc))
 

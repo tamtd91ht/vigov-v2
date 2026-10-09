@@ -148,7 +148,10 @@ for hook, kind in cases:
 # and carried in WORKFLOW_CASES.
 # `codegraph_sync` (2026-09-24) is a SIDE-EFFECT hook that never blocks by design, so a BLOCK
 # payload case cannot exist; when it runs (`can_sync_sau`) is pure and carried in CAN_SYNC_CASES.
-EXEMPT = {"session_start", "drift_guard", "stop_verify_guard", "workflow_guard", "codegraph_sync"}
+# `commit_push_guard` (2026-10-09) reads the transcripts and asks git; its decision `problems` and
+# its path mapping `to_repo_path` are pure and carried in COMMIT_PUSH_CASES / REPO_PATH_CASES.
+EXEMPT = {"session_start", "drift_guard", "stop_verify_guard", "workflow_guard", "codegraph_sync",
+          "commit_push_guard"}
 gaps = []
 for h in sorted(on_disk - EXEMPT):
     d = tally.get(h, {"BLOCK": 0, "PASS": 0})

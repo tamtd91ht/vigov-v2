@@ -162,7 +162,9 @@ comments, this brain — is in **English**.
 
 ## GIT — `main` ONLY
 
-Commit and push straight to `main`, **one commit per validated task** (ROUTING §0.7). Branch **only** when the user decides to, or when the
+Commit and push straight to `main`, **one commit per validated task** (ROUTING §0.7) —
+**push right after every commit; finished code never stays local**, even when a screenshot or
+PostgreSQL check could not run (say what is unverified). `commit_push_guard` blocks Stop otherwise. Branch **only** when the user decides to, or when the
 agent proposes it and the user **agrees**. "To be safe" is not a reason to branch on your
 own: if you see a risk, **state the risk**, then do what was asked.
 

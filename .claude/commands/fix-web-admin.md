@@ -116,8 +116,11 @@ One card, owner `admin-web-builder` (ROUTING §3), regression test with `test-de
 2. The fix, at the root cause only. Anything else found goes back as `OUT-OF-SCOPE`.
 3. Validate (ROUTING §0.6): in `web-admin/`, `npm run typecheck` · `npm run lint` ·
    `npm run test`; then `make check` at the repo root. The new test now passes.
-3b. **UI defect — validate against the prototype (§5b) before step 4.** No PASS, no commit.
-4. Review the diff, commit by explicit path: `fix(web-admin): <menu> — <the defect, short>`.
+3b. **UI defect — validate against the prototype (§5b) when a screenshot can be taken.** No PASS,
+   no claim of "khớp prototype" — but the code is still committed and pushed (owner, 09/10/2026).
+4. Review the diff, commit by explicit path: `fix(web-admin): <menu> — <the defect, short>`, then
+   `git push origin main` at once (ROUTING §0.7). Not verified by screenshot → say so in the
+   message and the ledger ("chưa kiểm bằng ảnh render").
 5. Ledger (skill §7): an item in the module's `kb/90-ephemeral/tien-do/<module>.json` with
    `"menu": "<slug>"`, the sha and the validation run in `bang_chung`; correct any `xong` item §1
    found to be wrong. Then `make kb`.
@@ -138,9 +141,10 @@ After the builder returns and step 3 is green:
 3. **FAIL** → back to `admin-web-builder` with the MISMATCH rows verbatim, then step 3 and this
    section again. Three rounds without PASS → STOP and show the user the table; the cause is
    probably not where the diagnosis put it.
-4. **UNVERIFIABLE** → get the missing picture (or ask the user for it). Never commit on it, and
-   never word the result as "matches the prototype".
-5. **PASS** → step 4 (commit). Put the verdict and the screenshot file names in the ledger item's
+4. **UNVERIFIABLE** (no browser, dev server down, no picture) → commit + push anyway (step 4),
+   marked unverified in the message and the ledger; ask the user to check on the build machine.
+   Never word the result as "matches the prototype". Finished code never waits on a picture.
+5. **PASS** → step 4 (commit + push). Put the verdict and the screenshot file names in the ledger item's
    `bang_chung`.
 
 ## 6. Final response

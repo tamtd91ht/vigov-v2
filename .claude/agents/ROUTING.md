@@ -187,9 +187,13 @@ never by assuming.
 commit what could have been validated and was not; if a step cannot run on this machine, say
 so and name it.
 
-### 0.7 Commit — one per validated task
+### 0.7 Commit — one per validated task, pushed at once
 
-Straight to `main` (GIT section of CLAUDE.md). Small, one scope, no unrelated hunks, staged
+Straight to `main` (GIT section of CLAUDE.md), then `git push origin main` **immediately** — owner's
+order 09/10/2026: finished code never waits on disk. A step that could not run (screenshot,
+PostgreSQL) is stated in the commit message and the reply, not a reason to hold the commit.
+`hooks/commit_push_guard.py` blocks Stop while this session's files are dirty or the branch is
+ahead of origin. Small, one scope, no unrelated hunks, staged
 **by explicit path** — never `git add -A`, which sweeps up a parallel session's work. Message
 `type(scope): …` (`feat` · `fix` · `refactor` · `test` · `docs` · `chore`). Independent tasks
 are not folded into one commit.
