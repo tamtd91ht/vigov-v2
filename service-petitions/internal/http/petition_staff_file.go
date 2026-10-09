@@ -149,6 +149,7 @@ var verificationPhotoRejections = map[string]string{
 // answerVerificationPhotoError maps one failure onto a status and a FIXED sentence — never err.Error(),
 // which carries the commune id. Default 500.
 func (h *Handler) answerVerificationPhotoError(w http.ResponseWriter, r *http.Request, what string, err error) {
+	refused := fileRefusalLog(r, h.d.Log, "ảnh sau xử lý: từ chối", what, err)
 	ctx := r.Context()
 	var rej *app.AttachmentRejection
 	switch {
@@ -168,22 +169,29 @@ func (h *Handler) answerVerificationPhotoError(w http.ResponseWriter, r *http.Re
 		if !ok {
 			sentence = "Ảnh bị từ chối và không được lưu."
 		}
+		refused("photo_rejected")
 		httpx.WriteError(w, http.StatusUnprocessableEntity, "photo_rejected", sentence, "")
 	case errors.Is(err, app.ErrVerificationPhotoWindowClosed):
+		refused("petition_state")
 		httpx.WriteError(w, http.StatusConflict, "petition_state",
 			"Phiếu đã kết thúc nên không thêm ảnh sau xử lý được nữa.", "")
 	case errors.Is(err, app.ErrVerificationPhotoCountReached):
+		refused("photo_limit")
 		httpx.WriteError(w, http.StatusConflict, "photo_limit", "Phiếu đã có đủ số ảnh sau xử lý tối đa.", "")
 	case errors.Is(err, app.ErrAttachmentNotPending):
+		refused("photo_state")
 		httpx.WriteError(w, http.StatusConflict, "photo_state",
 			"Ảnh này đã bị từ chối hoặc lượt tải đã hết hạn. Hãy chọn ảnh và tải lên lại.", "")
 	case errors.Is(err, app.ErrUploadNotReceived):
+		refused("upload_not_received")
 		httpx.WriteError(w, http.StatusConflict, "upload_not_received",
 			"Chưa nhận được ảnh. Hãy chờ tải lên xong rồi bấm hoàn tất lại.", "")
 	case errors.Is(err, app.ErrUploadExpired):
+		refused("upload_expired")
 		httpx.WriteError(w, http.StatusConflict, "upload_expired",
 			"Lượt tải lên đã hết hạn mà chưa nhận được ảnh. Hãy chọn ảnh và tải lên lại.", "")
 	case errors.Is(err, app.ErrUploadChanged):
+		refused("upload_changed")
 		httpx.WriteError(w, http.StatusConflict, "upload_changed",
 			"Ảnh vừa bị thay đổi trong lúc kiểm tra. Hãy bấm hoàn tất lại.", "")
 	case writePhotoUnavailable(ctx, w, h.d.Log, what, err):
@@ -270,6 +278,7 @@ var petitionLogRejectionSentences = map[string]string{
 // petition's 404, the note rule's 403, the 500 — to traLoiLoiXuLy, so a petition route answers one way.
 // Also used by GhiChuPhieu, whose two attachment refusals are 400s.
 func (h *Handler) answerPetitionLogAttachmentError(w http.ResponseWriter, r *http.Request, what string, err error) {
+	refused := fileRefusalLog(r, h.d.Log, "tệp đính kèm nhật ký phiếu: từ chối", what, err)
 	ctx := r.Context()
 	var rej *app.AttachmentRejection
 	switch {
@@ -293,20 +302,26 @@ func (h *Handler) answerPetitionLogAttachmentError(w http.ResponseWriter, r *htt
 		if !ok {
 			sentence = "Tệp bị từ chối và không được lưu."
 		}
+		refused("attachment_rejected")
 		httpx.WriteError(w, http.StatusUnprocessableEntity, "attachment_rejected", sentence, "")
 	case errors.Is(err, app.ErrPetitionLogAttachmentCountReached):
+		refused("attachment_limit")
 		httpx.WriteError(w, http.StatusConflict, "attachment_limit",
 			"Phiếu đã có đủ số tệp đính kèm tối đa được phép.", "")
 	case errors.Is(err, app.ErrAttachmentNotPending):
+		refused("attachment_state")
 		httpx.WriteError(w, http.StatusConflict, "attachment_state",
 			"Tệp này đã bị từ chối hoặc lượt tải đã hết hạn. Hãy chọn tệp và tải lên lại.", "")
 	case errors.Is(err, app.ErrUploadNotReceived):
+		refused("upload_not_received")
 		httpx.WriteError(w, http.StatusConflict, "upload_not_received",
 			"Chưa nhận được tệp. Hãy chờ tải lên xong rồi bấm hoàn tất lại.", "")
 	case errors.Is(err, app.ErrUploadExpired):
+		refused("upload_expired")
 		httpx.WriteError(w, http.StatusConflict, "upload_expired",
 			"Lượt tải lên đã hết hạn mà chưa nhận được tệp. Hãy chọn tệp và tải lên lại.", "")
 	case errors.Is(err, app.ErrUploadChanged):
+		refused("upload_changed")
 		httpx.WriteError(w, http.StatusConflict, "upload_changed",
 			"Tệp vừa bị thay đổi trong lúc kiểm tra. Hãy bấm hoàn tất lại.", "")
 	case errors.Is(err, app.ErrUploadNotConfigured), errors.Is(err, app.ErrUploadLimitsUnavailable),

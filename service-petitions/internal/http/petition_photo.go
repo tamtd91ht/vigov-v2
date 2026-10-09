@@ -276,16 +276,7 @@ var photoRejections = map[string]string{
 func (h *HandlerCongDan) answerPhotoError(w http.ResponseWriter, r *http.Request, what string, err error) {
 	ctx := r.Context()
 	var rej *app.AttachmentRejection
-	// Every 409/422 is logged with its cause: the citizen reads a fixed sentence, so without this line
-	// an operator cannot tell "the phone never uploaded" from "the phone uploaded to a store this
-	// service does not read" (09/10/2026, a missing temp bucket). Commune, file id, code and the
-	// wrapped error only — that error names object keys, never the lookup code or the citizen (rule 3).
-	refused := func(code string) {
-		// INFO and `ma_loi`, as tuChoiXuLy (xu_ly_phan_anh.go): a refusal is the rule doing its job, and
-		// `ma` in this service is a petition's lookup code — a log key a reader must never confuse with it.
-		h.d.Log.InfoContext(ctx, "ảnh hiện trường: từ chối", "xa", string(tenant.MustFrom(ctx)), "viec", what,
-			"tep_id", r.PathValue("id"), "ma_loi", code, "err", err)
-	}
+	refused := fileRefusalLog(r, h.d.Log, "ảnh hiện trường: từ chối", what, err)
 	switch {
 	case errors.Is(err, petstore.ErrPhieuKhongTonTai):
 		// Identical to an unknown code on GET /api/v1/my-citizen-reports/{code} — rule 4, forbidden #2.
@@ -333,6 +324,22 @@ func (h *HandlerCongDan) answerPhotoError(w http.ResponseWriter, r *http.Request
 	default:
 		h.d.Log.Error("ảnh hiện trường: lỗi hệ thống", "xa", string(tenant.MustFrom(ctx)), "viec", what, "err", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
+	}
+}
+
+// fileRefusalLog returns the line every 409/422 of a FILE route writes — the citizen's scene photo,
+// staff's verification photo, the petition log and task attachments. The client reads a fixed sentence,
+// so without it an operator cannot tell "the upload never arrived" from "it arrived in a store this
+// service does not read" (09/10/2026, a missing temp bucket answered 409 with nothing in the log).
+//
+// INFO and `ma_loi`, as tuChoiXuLy (xu_ly_phan_anh.go): a refusal is the rule doing its job, and `ma`
+// in this service is a petition's lookup code. Commune, file id, code and the wrapped error only: the
+// error names object keys and the commune, never a lookup code, a person or a file name (rule 3).
+func fileRefusalLog(r *http.Request, log *slog.Logger, msg, what string, err error) func(code string) {
+	ctx := r.Context()
+	return func(code string) {
+		log.InfoContext(ctx, msg, "xa", string(tenant.MustFrom(ctx)), "viec", what,
+			"tep_id", r.PathValue("id"), "ma_loi", code, "err", err)
 	}
 }
 

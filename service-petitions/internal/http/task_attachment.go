@@ -195,6 +195,7 @@ var rejectionSentences = map[string]string{
 // platform or the scanner unreachable. Nothing was stored in any of them (ADR 0052 §9, §10). The commune
 // is logged, never the file name.
 func (h *Handler) answerTaskAttachmentError(w http.ResponseWriter, r *http.Request, what string, err error) {
+	refused := fileRefusalLog(r, h.d.Log, "tệp đính kèm nhiệm vụ: từ chối", what, err)
 	var rej *app.AttachmentRejection
 	switch {
 	case errors.Is(err, app.ErrAttachmentNotFound):
@@ -217,6 +218,7 @@ func (h *Handler) answerTaskAttachmentError(w http.ResponseWriter, r *http.Reque
 	case errors.Is(err, domain.ErrAttachmentUnderLegalHold):
 		// Its own code: the client can say "held for a complaint or an inspection" rather than a generic
 		// conflict, and nothing the officer reloads will change it.
+		refused("legal_hold")
 		httpx.WriteError(w, http.StatusConflict, "legal_hold",
 			"Tệp đang được giữ để phục vụ khiếu nại hoặc thanh tra nên chưa thể gỡ. "+
 				"Khi việc giữ tệp kết thúc, bạn mới gỡ được.", "")
@@ -232,20 +234,26 @@ func (h *Handler) answerTaskAttachmentError(w http.ResponseWriter, r *http.Reque
 		if !ok {
 			sentence = "Tệp bị từ chối và không được lưu."
 		}
+		refused("attachment_rejected")
 		httpx.WriteError(w, http.StatusUnprocessableEntity, "attachment_rejected", sentence, "")
 	case errors.Is(err, app.ErrAttachmentCountReached):
+		refused("attachment_limit")
 		httpx.WriteError(w, http.StatusConflict, "attachment_limit",
 			"Nhiệm vụ đã có đủ số tệp đính kèm tối đa được phép.", "")
 	case errors.Is(err, app.ErrAttachmentNotPending):
+		refused("attachment_state")
 		httpx.WriteError(w, http.StatusConflict, "attachment_state",
 			"Tệp này đã bị từ chối hoặc lượt tải đã hết hạn. Hãy chọn tệp và tải lên lại.", "")
 	case errors.Is(err, app.ErrUploadNotReceived):
+		refused("upload_not_received")
 		httpx.WriteError(w, http.StatusConflict, "upload_not_received",
 			"Chưa nhận được tệp. Hãy chờ tải lên xong rồi bấm hoàn tất lại.", "")
 	case errors.Is(err, app.ErrUploadExpired):
+		refused("upload_expired")
 		httpx.WriteError(w, http.StatusConflict, "upload_expired",
 			"Lượt tải lên đã hết hạn mà chưa nhận được tệp. Hãy chọn tệp và tải lên lại.", "")
 	case errors.Is(err, app.ErrUploadChanged):
+		refused("upload_changed")
 		httpx.WriteError(w, http.StatusConflict, "upload_changed",
 			"Tệp vừa bị thay đổi trong lúc kiểm tra. Hãy bấm hoàn tất lại.", "")
 

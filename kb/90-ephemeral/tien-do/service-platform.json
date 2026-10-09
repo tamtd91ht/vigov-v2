@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-platform",
-  "cap_nhat": "2026-10-06",
+  "cap_nhat": "2026-10-09",
   "muc": [
     {
       "id": "danh-muc-tham-chieu",
@@ -311,6 +311,13 @@
       "trang_thai": "dang_lam",
       "bang_chung": "service-platform/internal/http/mini_app_ids.go (authz.Public, Cache-Control: no-store, 404 mini_app_id_not_found một thân cho mọi trường hợp vắng, 409 *_ambiguous, 400 invalid_query); store.Directory.LiveOwnMiniAppID (mọi tên miền của xã đang hoạt động); gắn ngoài cả hai chuỗi ở cmd/server/mini_app_ids.go; giới hạn ratelimit.MiniAppIDLookup 30 lần/phút/mạng IP, đóng kín khi Redis hỏng (con số TẠM, chủ dự án chưa chốt); Ingress: luật Exact duy nhất trên platform.api.vigov.vn (pathScopedPublicRoutes, tools/ingress/sinh.go). go test xanh, ca PG SKIP.",
       "tiep_theo": "Deploy service-platform + nạp lại Ingress vào Rancher, rồi `curl https://platform.api.vigov.vn/api/v1/mini-app-ids?app=vihat`. Kiểm DNS platform.api.vigov.vn trỏ về ingress (TLS *.api.vigov.vn đã phủ). Chủ dự án chốt con số 30/phút. Ghi ADR (sửa đổi 0070 hoặc 0048) cho việc mở một đường dẫn của pod platform ra internet. Chạy ca PG trên PostgreSQL thật."
+    },
+    {
+      "id": "log-tu-choi-tai-tep-09-10",
+      "trang_thai": "xong",
+      "viec": "Ghi log INFO mọi lần từ chối 409/422 khi tải tệp: ảnh nhận diện xã — logo, banner (brandingHandlers.answerError; 409 profile_deleted giữ dòng WARN có sẵn) — 09/10 thiếu bucket temp trả 409 mà log không nói gì",
+      "bang_chung": "(commit này) — fileRefusalLog: xa, viec, tep_id, ma_loi, err (không tên tệp). http/branding.go; ca kiểm http/branding_refusal_log_test.go. go vet + go test internal/http, internal/app xanh",
+      "tiep_theo": "Lỗi 'chưa nhận được / hết hạn' ở service này chưa bọc chi tiết khoá temp/private như petitions"
     }
   ]
 }

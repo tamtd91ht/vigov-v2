@@ -395,7 +395,7 @@ func (uc *StaffVerificationPhotos) completePending(ctx context.Context, ma, id s
 		return domain.StoredFile{}, err
 	}
 	if insp.kind == outcomeNotReceived {
-		return domain.StoredFile{}, ErrUploadNotReceived
+		return domain.StoredFile{}, fmt.Errorf("%w: %s", ErrUploadNotReceived, notReceivedDetail(f, insp))
 	}
 
 	// 3. One short transaction.
@@ -498,7 +498,7 @@ func (uc *StaffVerificationPhotos) completePending(ctx context.Context, ma, id s
 	case insp.kind == outcomeRejected:
 		return domain.StoredFile{}, &AttachmentRejection{Reason: insp.reason}
 	default: // outcomeExpired
-		return domain.StoredFile{}, ErrUploadExpired
+		return domain.StoredFile{}, fmt.Errorf("%w: %s", ErrUploadExpired, notReceivedDetail(f, insp))
 	}
 }
 

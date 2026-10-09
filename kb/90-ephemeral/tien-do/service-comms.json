@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-comms",
-  "cap_nhat": "2026-10-08",
+  "cap_nhat": "2026-10-09",
   "muc": [
     {
       "id": "so-thong-bao-gui-cong-dan",
@@ -357,6 +357,14 @@
       "bang_chung": "043cd0eb: proto STAFF_NOTIFICATION_KIND_DISBURSEMENT_MENTION = 17; kindFromWire; domain.BellOnlyKinds + ZaloQueueableKinds; enqueueZaloDeliveries lọc kind = ANY(ZaloQueueableKinds) nên không có dòng zalo_delivery; migration 0023 nới CHECK staff_notification; nhãn chuông web. go vet + go test service-comms xanh; buf lint/breaking/generate sạch.",
       "no_confirm": [],
       "tiep_theo": "CHƯA chạy migration 0023 và pg test (không gửi Zalo) trên PostgreSQL thật. Thứ tự triển khai: comms trước, finance (nơi phát) sau."
+    },
+    {
+      "id": "log-tu-choi-tai-tep-09-10",
+      "menu": "noi-dung-mini-app",
+      "trang_thai": "xong",
+      "viec": "Ghi log INFO mọi lần từ chối 409/422 khi tải tệp: ảnh bìa (answerCoverError) và âm thanh truyền thanh (answerAudioError) — 09/10 thiếu bucket temp trả 409 mà log không nói gì",
+      "bang_chung": "(commit này) — fileRefusalLog: xa, viec, tep_id, ma_loi, err (không tên tệp). http/content_cover.go, http/content_audio.go; ca kiểm http/file_refusal_log_test.go. go vet + go test internal/http, internal/app xanh",
+      "tiep_theo": "Lỗi 'chưa nhận được / hết hạn' ở service này chưa bọc chi tiết khoá temp/private như petitions"
     }
   ]
 }

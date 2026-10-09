@@ -432,7 +432,7 @@ func (uc *TaskAttachments) Complete(ctx context.Context, ma, id string, actor au
 		return domain.StoredFile{}, err
 	}
 	if insp.kind == outcomeNotReceived {
-		return domain.StoredFile{}, ErrUploadNotReceived
+		return domain.StoredFile{}, fmt.Errorf("%w: %s", ErrUploadNotReceived, attachmentNotReceivedDetail(*f, key))
 	}
 
 	// 3. One short transaction writes the outcome, re-checking everything it depends on.
@@ -503,8 +503,21 @@ func (uc *TaskAttachments) Complete(ctx context.Context, ma, id string, actor au
 	case insp.kind == outcomeRejected:
 		return domain.StoredFile{}, &AttachmentRejection{Reason: insp.reason}
 	default: // outcomeExpired
-		return domain.StoredFile{}, ErrUploadExpired
+		return domain.StoredFile{}, fmt.Errorf("%w: %s", ErrUploadExpired, attachmentNotReceivedDetail(*f, key))
 	}
+}
+
+// attachmentNotReceivedDetail is notReceivedDetail (petition_photo.go) for an upload that is PROMOTED,
+// not re-encoded: one temp key — the destination's upload path — and the destination. For the log
+// only; the handler answers a fixed sentence. Keys carry the commune and the file id, never the file
+// NAME the officer typed (ADR 0052 §3), so this text is safe to log.
+func attachmentNotReceivedDetail(f domain.StoredFile, key storage.Key) string {
+	up, err := key.UploadPath()
+	if err != nil {
+		up = "(không dựng được khoá tải lên)"
+	}
+	return fmt.Sprintf("không có tệp tạm ở bucket temp (%q), chưa có tệp ở bucket private (%q); xin chỗ tải lúc %s",
+		up, f.ObjectKey, f.CreatedAt.UTC().Format(time.RFC3339))
 }
 
 // ownUpload: the row exists, is a task attachment of THIS task, and was issued to THIS officer.

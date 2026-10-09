@@ -176,6 +176,7 @@ var audioRejectionSentences = map[string]string{
 
 // answerAudioError maps the audio refusals, then hands the rest to traLoiLoiNoiDung.
 func (h *Handler) answerAudioError(w http.ResponseWriter, r *http.Request, what string, err error) {
+	refused := fileRefusalLog(r, h.d.Log, "âm thanh truyền thanh: từ chối", what, err)
 	var rej *app.AudioRejection
 	switch {
 	case errors.Is(err, app.ErrAudioFileNotFound):
@@ -201,20 +202,26 @@ func (h *Handler) answerAudioError(w http.ResponseWriter, r *http.Request, what 
 		if !ok {
 			sentence = "Tệp âm thanh bị từ chối và không được lưu."
 		}
+		refused("audio_rejected")
 		httpx.WriteError(w, http.StatusUnprocessableEntity, "audio_rejected", sentence, "")
 	case errors.Is(err, app.ErrAudioCountReached):
+		refused("audio_limit")
 		httpx.WriteError(w, http.StatusConflict, "audio_limit",
 			"Mục truyền thanh này đã có tệp âm thanh (hoặc đang có một lượt tải lên). Hãy gỡ tệp cũ trước khi tải tệp mới.", "")
 	case errors.Is(err, app.ErrAudioNotPending):
+		refused("audio_state")
 		httpx.WriteError(w, http.StatusConflict, "audio_state",
 			"Tệp này đã bị từ chối hoặc lượt tải đã hết hạn. Hãy chọn tệp và tải lên lại.", "")
 	case errors.Is(err, app.ErrAudioUploadNotReceived):
+		refused("upload_not_received")
 		httpx.WriteError(w, http.StatusConflict, "upload_not_received",
 			"Chưa nhận được tệp. Hãy chờ tải lên xong rồi bấm hoàn tất lại.", "")
 	case errors.Is(err, app.ErrAudioUploadExpired):
+		refused("upload_expired")
 		httpx.WriteError(w, http.StatusConflict, "upload_expired",
 			"Lượt tải lên đã hết hạn mà chưa nhận được tệp. Hãy chọn tệp và tải lên lại.", "")
 	case errors.Is(err, app.ErrAudioUploadChanged):
+		refused("upload_changed")
 		httpx.WriteError(w, http.StatusConflict, "upload_changed",
 			"Tệp vừa bị thay đổi trong lúc kiểm tra. Hãy bấm hoàn tất lại.", "")
 	case errors.Is(err, app.ErrAudioLimitsUnavailable):

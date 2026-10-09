@@ -22,6 +22,7 @@ package http
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -195,10 +196,24 @@ var coverRejectionSentences = map[string]string{
 	app.CoverRejectTooManyPixels:  "Ảnh bị từ chối: ảnh có kích thước điểm ảnh quá lớn để xử lý. Hãy thu nhỏ ảnh rồi tải lên lại.",
 }
 
+// fileRefusalLog returns the INFO line every 409/422 of an upload route writes. The client reads a fixed
+// sentence, so without it an operator cannot tell "the upload never arrived" from "it arrived in a store
+// this service does not read" (09/10/2026, a missing temp bucket — petitions' fileRefusalLog). INFO and
+// `ma_loi`, as petitions' tuChoiXuLy: a refusal is the rule doing its job. Commune, file id, code and the
+// wrapped error only — those errors name the commune and object keys, never a file name (rule 3).
+func fileRefusalLog(r *http.Request, log *slog.Logger, msg, what string, err error) func(code string) {
+	ctx := r.Context()
+	return func(code string) {
+		log.InfoContext(ctx, msg, "xa", string(tenant.MustFrom(ctx)), "viec", what,
+			"tep_id", r.PathValue("id"), "ma_loi", code, "err", err)
+	}
+}
+
 // answerCoverError maps the cover refusals, then hands the rest to traLoiLoiNoiDung so a content route
 // answers one way. 503 for everything that is "not now" rather than "no": storage / scanner / limits
 // not configured, the platform or the scanner unreachable — nothing was stored in any of them.
 func (h *Handler) answerCoverError(w http.ResponseWriter, r *http.Request, what string, err error) {
+	refused := fileRefusalLog(r, h.d.Log, "ảnh bìa: từ chối", what, err)
 	var rej *app.CoverRejection
 	switch {
 	case errors.Is(err, app.ErrCoverFileNotFound):
@@ -221,19 +236,25 @@ func (h *Handler) answerCoverError(w http.ResponseWriter, r *http.Request, what 
 		if !ok {
 			sentence = "Ảnh bị từ chối và không được lưu."
 		}
+		refused("cover_rejected")
 		httpx.WriteError(w, http.StatusUnprocessableEntity, "cover_rejected", sentence, "")
 	case errors.Is(err, app.ErrCoverCountReached):
+		refused("cover_limit")
 		httpx.WriteError(w, http.StatusConflict, "cover_limit", "Mục nội dung đã có đủ số ảnh tối đa được phép.", "")
 	case errors.Is(err, app.ErrCoverNotPending):
+		refused("cover_state")
 		httpx.WriteError(w, http.StatusConflict, "cover_state",
 			"Ảnh này đã bị từ chối hoặc lượt tải đã hết hạn. Hãy chọn ảnh và tải lên lại.", "")
 	case errors.Is(err, app.ErrCoverUploadNotReceived):
+		refused("upload_not_received")
 		httpx.WriteError(w, http.StatusConflict, "upload_not_received",
 			"Chưa nhận được tệp. Hãy chờ tải lên xong rồi bấm hoàn tất lại.", "")
 	case errors.Is(err, app.ErrCoverUploadExpired):
+		refused("upload_expired")
 		httpx.WriteError(w, http.StatusConflict, "upload_expired",
 			"Lượt tải lên đã hết hạn mà chưa nhận được tệp. Hãy chọn ảnh và tải lên lại.", "")
 	case errors.Is(err, app.ErrCoverUploadChanged):
+		refused("upload_changed")
 		httpx.WriteError(w, http.StatusConflict, "upload_changed",
 			"Tệp vừa bị thay đổi trong lúc kiểm tra. Hãy bấm hoàn tất lại.", "")
 	case errors.Is(err, app.ErrCoverLimitsUnavailable):

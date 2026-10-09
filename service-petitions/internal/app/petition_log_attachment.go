@@ -278,7 +278,7 @@ func (uc *PetitionLogAttachments) Complete(ctx context.Context, ma, id string, a
 		return domain.StoredFile{}, err
 	}
 	if insp.kind == outcomeNotReceived {
-		return domain.StoredFile{}, ErrUploadNotReceived
+		return domain.StoredFile{}, fmt.Errorf("%w: %s", ErrUploadNotReceived, attachmentNotReceivedDetail(*f, key))
 	}
 
 	// 3. One short transaction writes the outcome, re-checking everything it depends on.
@@ -349,7 +349,7 @@ func (uc *PetitionLogAttachments) Complete(ctx context.Context, ma, id string, a
 	case insp.kind == outcomeRejected:
 		return domain.StoredFile{}, &AttachmentRejection{Reason: insp.reason}
 	default: // outcomeExpired
-		return domain.StoredFile{}, ErrUploadExpired
+		return domain.StoredFile{}, fmt.Errorf("%w: %s", ErrUploadExpired, attachmentNotReceivedDetail(*f, key))
 	}
 }
 
