@@ -3,11 +3,12 @@ id: 0052-object-storage-minio
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: cfdd90a
+derived_from_commit: 49b689a4
 expires: null
 owns_facts:
   - "lưu trữ đối tượng dùng MinIO (S3) qua thư viện core/storage, metadata ở bảng stored_file của từng service sở hữu tệp"
-  - "luồng tải lên ba bước: xin phép ở service → tải thẳng lên bucket temp bằng presigned POST → complete (dò kiểu, sha256, quét mã độc, bỏ EXIF, chép sang bucket đích, ghi nghiệp vụ + vết cùng giao dịch)"
+  - "luồng tải lên (từ 09/10/2026): một lệnh multipart tới API của service sở hữu → service ghi luồng vào bucket temp bằng tài khoản của nó → chạy ngay bước hoàn tất (dò kiểu, sha256, quét mã độc, bỏ EXIF, chép sang bucket đích, ghi nghiệp vụ + vết cùng giao dịch); thiết bị không ghi thẳng vào MinIO"
+  - "vì sao thiết bị không tải thẳng lên MinIO bằng presigned POST, và ingress công khai của MinIO chỉ cho đọc (sự cố 09/10/2026)"
   - "ba bucket theo chức năng: vigov-{env}-private · vigov-{env}-public · vigov-{env}-temp"
   - "dạng khoá đối tượng {class}/t_{tenant_id}/{yyyy}/{mm}/{service}/{purpose}/{object_id}/{variant}.{ext} và vì sao tiền tố xã viết t_ chứ không t:"
   - "vì sao tên tệp gốc không bao giờ nằm trong khoá đối tượng"
@@ -25,6 +26,9 @@ owns_facts:
 ghi **"chưa chốt"** là **chưa được chốt** · **Bổ sung** ADR 0010 (thêm hai thành phần hạ tầng: kho
 đối tượng và máy quét mã độc) · **Cụ thể hoá** ADR 0001 §*Hai thứ CỐ Ý không phải service* dòng
 *Lưu trữ tệp* — không thay nó · Mọi tên dưới đây là tiếng Anh theo ADR 0051.
+**Sửa đổi 09/10/2026:** mọi luồng tải lên đi qua API của service sở hữu, thiết bị không còn ghi thẳng
+vào MinIO bằng presigned POST; ingress công khai của MinIO chỉ cho đọc — thay §1 bước (a)(b)(c)
+(§*Sửa đổi 09/10/2026*, cuối tệp). Chiều xem (presigned GET) không đổi.
 
 ## Bối cảnh
 
@@ -305,3 +309,39 @@ của ADR 0047 quyết.
 → ADR 0010 (hạ tầng dữ liệu): `kb/10-decisions/0010-data-infrastructure.md`
 → ADR 0046 (tên miền) · ADR 0048 (khu vận hành; #8 logo — trả lời bởi §2) · ADR 0051 (tên tiếng Anh)
 → Luật 1 bất biến 7 · luật 3 · luật 4 bất biến 7 · luật 6 · luật 7 · luật 8 · luật 11
+
+## Sửa đổi 09/10/2026 — tải lên đi qua service sở hữu; MinIO chỉ cho đọc từ Internet
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. **Người quyết:** chủ dự án,
+09/10/2026, sau sự cố cùng ngày. Lời chủ dự án: *"nó phải gọi qua 1 pod service nào đó rồi pod đó mới
+đi xử lý, gọi qua minio trực tiếp là không đúng, chưa kể minio có xác thực riêng"*.
+
+| Điều | Chốt |
+|---|---|
+| Phạm vi | **Mọi** luồng tải lên: `petitions` — ảnh hiện trường của người dân, ảnh sau xử lý, tệp đính kèm nhật ký phiếu, tệp đính kèm nhiệm vụ · `comms` — ảnh bìa, âm thanh truyền thanh · `platform` — logo/banner xã |
+| Đường đi | Tải lên đi qua **API của service sở hữu nghiệp vụ**. Thiết bị (Mini App, web-admin) **không còn** POST thẳng vào MinIO bằng presigned POST |
+| Cách nhận | **Một** lệnh multipart tới service. Service xác thực phiên/quyền (luật 4, luật 5), xã (luật 1), kiểm loại + dung lượng theo mục đích (§10), **ghi luồng** (stream) tệp vào bucket temp bằng tài khoản MinIO của chính nó — **không giữ cả tệp trong RAM** — rồi chạy **ngay** bước hoàn tất hiện có: quét mã độc, dò magic bytes, với ảnh thì giải mã, xoay, mã hoá lại JPEG bỏ EXIF; chép sang private; xoá tạm; ghi nghiệp vụ + vết **cùng giao dịch** (luật 6 bất biến 3). Trả về tệp đã lưu |
+| Giới hạn đồng thời | Mỗi pod giới hạn số lượt tải cùng lúc (cận do vendor đặt, cùng kiểu `photoReadSlots` ở `service-petitions/internal/app/petition_photo.go:106-122`) |
+| Xem / tải xuống | **Giữ** presigned GET (≤ 15 phút) đọc thẳng MinIO — không đổi |
+| Hạ tầng | Ingress công khai của MinIO S3 API (`storage-api.vigov.vn`) chỉ cho **GET/HEAD** (và OPTIONS cho CORS); mọi lệnh ghi từ Internet bị chặn ở nginx. Service ghi qua `OBJECT_STORAGE_ENDPOINT` |
+| Trạng thái | Quyết định đã chốt, **CHƯA dựng** |
+
+**Lý do — sự cố 09/10/2026.** `OBJECT_STORAGE_PUBLIC_ENDPOINT` trỏ nhầm MinIO Console; Console trả 200
+cho lệnh tải lên nên điện thoại tưởng xong mà không có tệp. Sửa endpoint rồi, lệnh POST từ webview
+Zalo vẫn treo "pending" — lỗi nằm **ngoài tầm nhìn** của service: không log, không mã lỗi. Đi qua
+service thì mọi lỗi tải lên có log và mã lỗi của ViGov; MinIO không phải mở ghi ra Internet.
+
+**Thay gì:**
+
+- §1 bước (a)(b)(c) (presigned POST + hoàn tất): bước (a) và (b) bỏ; bước (c) cũ trở thành **phần sau
+  của chính lệnh tải lên**, không còn là lệnh riêng của client.
+- Mọi chỗ trong ADR này nói thiết bị tải thẳng lên MinIO: §1 câu *"`core/storage` … chỉ năm việc:
+  presigned POST"*, §4 dòng `OBJECT_STORAGE_PUBLIC_ENDPOINT` (*"presigned POST/GET"*), §*Hệ quả* dòng
+  *"Presigned ký theo `OBJECT_STORAGE_PUBLIC_ENDPOINT`… mọi lần tải của trình duyệt trả 403"* và
+  dòng *"Dễ hơn: byte không qua service"*.
+- `OBJECT_STORAGE_PUBLIC_ENDPOINT` sau khi đổi **chỉ còn dùng để ký link GET**.
+- Chiều xem không đổi.
+
+**Đánh đổi đã nêu với chủ dự án:** băng thông tải lên đi qua pod; phải giới hạn đồng thời và ghi
+luồng (không đệm cả tệp) để không vượt giới hạn RAM của pod (`petitions` 384 MiB,
+`deploy/base/petitions/deployment.yaml:168`).
