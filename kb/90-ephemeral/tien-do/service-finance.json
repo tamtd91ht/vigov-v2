@@ -345,6 +345,15 @@
       "viec": "Lời hệ thống tắt được câu chưa sửa (migration 0019); biểu ngữ budget.scope_notice ẩn khi tắt.",
       "bang_chung": "7eccd37e. go build/vet/test xanh. CHƯA CHẠY TRÊN POSTGRESQL THẬT (máy không có DSN/Docker).",
       "tiep_theo": "Chạy migration trên PostgreSQL thật."
+    },
+    {
+      "id": "budget-line-entry-count",
+      "menu": "thu-chi-ngan-sach",
+      "trang_thai": "chua_lam",
+      "no_confirm": [],
+      "viec": "BACKEND DEPENDENCY từ /fix-web-admin thu-chi 09/10: trả entry_count (số đợt sống) trên mỗi dòng finance_dongRa để web vẽ badge trên nút 'Các đợt thu, chi' như prototype (FiscalReportPanel.tsx ListPlus badge).",
+      "bang_chung": "",
+      "tiep_theo": "/develop-backend-api thu-chi-ngan-sach: thêm trường tuỳ chọn, đếm trong cùng truy vấn đọc bảng (không N+1), rồi web vẽ badge."
     }
   ]
 }

@@ -1164,6 +1164,15 @@
       "bang_chung": "commit 'feat(web-admin): /phan-anh tính năng thật'. typecheck sạch, eslint sạch, vitest toàn web 298 tệp/5516 ca, check:api khớp. CHƯA kiểm bằng ảnh render; bản đồ chưa chạy với tệp nền thật (BASEMAP_URL chưa đặt).",
       "tiep_theo": "(1) Giao diện gộp phiếu (tuyến đã có b97a6379) — ô 'Có thể trùng' vẫn '?'. (2) Kiểm ảnh trên bản build sau khi đặt tệp nền. (3) Lệch prototype có chủ ý: trọng số điểm nhiệt = 1 (tuyến không trả hạn), gợi ý rỗng bản đồ nhiệt sửa 'nhập hộ không mang toạ độ', cột báo cáo theo bộ phận chỉ 'Đã xử lý xong' + 'TB giờ xử lý', nhãn lĩnh vực lấy danh mục tĩnh. (4) CSP cho nền + worker (nợ missing-security-headers).",
       "no_confirm": []
+    },
+    {
+      "id": "thu-chi-theo-spec-09-10",
+      "menu": "thu-chi-ngan-sach",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "/fix-web-admin thu-chi-ngan-sach theo tmp/web/thu-chi-ngan-sach/vigov-thu-chi-spec (bảng khác biệt ui-ux-reviewer 65 dòng + 23 dòng hộp đợt). Người dùng chốt 09/10: giữ budget.confirm + lý do khi gỡ; số và % tròn 1 chữ số như prototype; ô tổng theo đơn vị tính của bảng; sửa tên/số tại chỗ + nút bút chì sửa TT/thứ tự; giữ hộp xác nhận đổi cách tính; nút đợt ở dòng cha vô hiệu kèm lý do; câu trống nguyên prototype.",
+      "bang_chung": "2418211d. vitest thu-chi+dashboard+dev-preview 17 tệp 402 ca xanh, lint sạch. CHƯA KIỂM BẰNG ẢNH RENDER — extension Chrome mất kết nối, dev server bị tắt vì máy thiếu bộ nhớ.",
+      "tiep_theo": "(1) Kiểm trên máy build ở 1280/1534px: thanh cuộn ngang của bảng, ô Cách tính hẹp hơn prototype ~20px vì thêm nút bút chì (chữ có thể bị cắt). (2) Builder tự quyết, chờ người dùng: nền ô tổng/form đợt dùng bg-canvas (bg-surface của app là trắng); tài khoản chỉ xem vẫn thấy cột Cách tính dạng chữ (prototype ẩn). (3) Bỏ câu 'đợt chỉ cộng khi Cộng theo đợt' và dòng đơn vị trong hộp đợt (theo prototype). (4) BACKEND DEPENDENCY: badge số đợt cần entry_count trên dòng (service-finance)."
     }
   ]
 }
