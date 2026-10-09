@@ -48,6 +48,7 @@ func automationSample() *automationFake {
 					Trigger: domain.TriggerRequest, ClaimedAt: at},
 			}},
 		{Setting: domain.SuggestedAutomationSetting(domain.JobWeeklyDigest), LastRuns: []domain.AutomationRun{}},
+		{Setting: domain.SuggestedAutomationSetting(domain.JobScheduledReports), LastRuns: []domain.AutomationRun{}},
 	}}
 }
 
@@ -91,6 +92,10 @@ func automationRoutes() []automationRoute {
 		{"list", "GET", "/api/v1/automation-jobs", "", http.StatusOK},
 		{"save", "PUT", "/api/v1/automation-jobs/escalation", `{"enabled":true,"run_hour":7,"run_minute":0}`, http.StatusOK},
 		{"run now", "POST", "/api/v1/automation-jobs/escalation/runs", "", http.StatusAccepted},
+		// The fourth job (ADR 0086 B) on the same two write routes — same key, same four answers.
+		{"save scheduled_reports", "PUT", "/api/v1/automation-jobs/scheduled_reports",
+			`{"enabled":true,"weekday":1,"run_hour":7,"run_minute":45}`, http.StatusOK},
+		{"run now scheduled_reports", "POST", "/api/v1/automation-jobs/scheduled_reports/runs", "", http.StatusAccepted},
 	}
 }
 
@@ -187,7 +192,7 @@ func TestListAutomationJobsWireShape(t *testing.T) {
 	var out struct {
 		Items []map[string]json.RawMessage `json:"items"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil || len(out.Items) != 3 {
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil || len(out.Items) != 4 {
 		t.Fatalf("body = %s (%v)", w.Body.String(), err)
 	}
 	sla := out.Items[0]
@@ -210,6 +215,30 @@ func TestListAutomationJobsWireShape(t *testing.T) {
 	}
 	if string(out.Items[2]["weekday"]) != "1" {
 		t.Errorf("weekly_digest prefill weekday = %s, want ISO Monday 1", out.Items[2]["weekday"])
+	}
+	rep := out.Items[3]
+	for k, want := range map[string]string{"job": `"scheduled_reports"`, "schedule_kind": `"monthly_and_weekly"`,
+		"configured": "false", "enabled": "false", "weekday": "1", "run_hour": "7", "run_minute": "45",
+		"interval_minutes": "null", "min_interval_minutes": "null"} {
+		if got := string(rep[k]); got != want {
+			t.Errorf("scheduled_reports.%s = %s, want %s", k, got, want)
+		}
+	}
+}
+
+// The new job's PUT reaches the use case with the weekly shape (weekday + HH:MM, no interval).
+func TestSaveScheduledReportsPassesWeekdayShape(t *testing.T) {
+	m := buildAutomationServer(t)
+	w := m.goi(t, "PUT", hostA, "/api/v1/automation-jobs/scheduled_reports",
+		`{"enabled":true,"weekday":3,"run_hour":8,"run_minute":15}`, m.tokenCho(t, xaA, sidA))
+	if w.Code != http.StatusOK {
+		t.Fatalf("code = %d", w.Code)
+	}
+	r := m.automation.lastReq
+	if m.automation.lastJob != domain.JobScheduledReports || r.Enabled == nil || !*r.Enabled || r.Weekday == nil ||
+		*r.Weekday != 3 || r.RunHour == nil || *r.RunHour != 8 || r.RunMinute == nil || *r.RunMinute != 15 ||
+		r.IntervalMinutes != nil {
+		t.Errorf("request reached the use case as %+v (job %q)", r, m.automation.lastJob)
 	}
 }
 

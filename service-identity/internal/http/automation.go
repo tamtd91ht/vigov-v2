@@ -16,7 +16,7 @@ import (
 
 // The routes behind Cấu hình → Tự động hoá (docs/ui-ux/14-cau-hinh.md §9, ADR 0058):
 //
-//	GET  /api/v1/automation-jobs              the three jobs, their settings, last run per kind of work
+//	GET  /api/v1/automation-jobs              the four jobs, their settings, last run per kind of work
 //	PUT  /api/v1/automation-jobs/{job}        save one job's settings (switch + cadence)
 //	POST /api/v1/automation-jobs/{job}/runs   request a run now — claimed at the runners' next tick
 //
@@ -31,7 +31,7 @@ import (
 // string here plus `make kb`. `runs` is the nominalised sub-resource for "chạy ngay" (REQUIRED #8) —
 // the contract's own `AutomationRun`.
 //
-// {job} IS THE SOFTWARE KEY (`sla_reminders` · `escalation` · `weekly_digest`), the same string the
+// {job} IS THE SOFTWARE KEY (`sla_reminders` · `escalation` · `weekly_digest` · `scheduled_reports`), the same string the
 // contract's AutomationJob comment names and the table stores — one spelling from column to URL.
 
 // AutomationJobs is the use case behind the three routes, declared at the point of use.
@@ -66,17 +66,20 @@ type automationRunOut struct {
 // automationJobOut is one job card.
 type automationJobOut struct {
 	Job string `json:"job"`
-	// ScheduleKind decides which cadence fields the card shows: `interval` · `daily` · `weekly`.
+	// ScheduleKind decides which cadence fields the card shows: `interval` · `daily` · `weekly` ·
+	// `monthly_and_weekly` (scheduled_reports: the weekday AND the 1st of each month, same HH:MM — the
+	// same three fields as `weekly`).
 	ScheduleKind string `json:"schedule_kind"`
 	// Configured is false when the commune never saved this job — it is OFF, and the cadence fields
-	// below are the suggested prefill (15 minutes; 07:00; Monday 07:30), not a running schedule.
+	// below are the suggested prefill (15 minutes; 07:00; Monday 07:30; Monday 07:45), not a running
+	// schedule.
 	Configured bool `json:"configured"`
 	Enabled    bool `json:"enabled"`
 
 	IntervalMinutes    *int `json:"interval_minutes"`     // interval jobs only, else null
 	MinIntervalMinutes *int `json:"min_interval_minutes"` // interval jobs only: 5
-	RunHour            *int `json:"run_hour"`             // daily/weekly, 0–23, Asia/Ho_Chi_Minh
-	RunMinute          *int `json:"run_minute"`           // daily/weekly, 0–59
+	RunHour            *int `json:"run_hour"`             // every kind but interval, 0–23, Asia/Ho_Chi_Minh
+	RunMinute          *int `json:"run_minute"`           // every kind but interval, 0–59
 	// Weekday is ISO: 1 = Monday … 7 = Sunday (NOT the reference system's 0 = Monday).
 	Weekday *int `json:"weekday"`
 
@@ -119,7 +122,7 @@ func automationJobToOut(v app.AutomationJobView) automationJobOut {
 		out.IntervalMinutes, out.MinIntervalMinutes = intPtr(s.IntervalMinutes), intPtr(domain.MinIntervalMinutes)
 	case domain.ScheduleDaily:
 		out.RunHour, out.RunMinute = intPtr(s.RunHour), intPtr(s.RunMinute)
-	case domain.ScheduleWeekly:
+	case domain.ScheduleWeekly, domain.ScheduleMonthlyAndWeekly:
 		out.RunHour, out.RunMinute, out.Weekday = intPtr(s.RunHour), intPtr(s.RunMinute), intPtr(s.Weekday)
 	}
 	for _, r := range v.LastRuns {

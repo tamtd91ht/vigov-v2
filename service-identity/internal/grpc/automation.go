@@ -25,7 +25,7 @@ type AutomationRuns interface {
 }
 
 // MaxClaimScopes — 1 to 10 scopes per claim, checked on what was sent. The contract's reasoning: one
-// runner owns two of the four kinds, so its full claim is three jobs × two kinds = six.
+// runner owns two of the four kinds, so its full claim is four jobs × two kinds = eight.
 const MaxClaimScopes = 10
 
 func (s *Server) ClaimDueAutomationRuns(ctx context.Context, req *identityv1.ClaimDueAutomationRunsRequest) (
@@ -78,10 +78,18 @@ func (s *Server) ClaimDueAutomationRuns(ctx context.Context, req *identityv1.Cla
 			// would be one the runner cannot route.
 			return nil, status.Error(codes.Internal, "lỗi nội bộ, vui lòng thử lại")
 		}
+		period, ok := reportPeriodTo(r.Scope.Job, r.ReportPeriod)
+		if !ok {
+			// UNREACHABLE — app.ClaimDue refuses a scheduled_reports run without a period, and no other
+			// job gets one. Checked because the claim is already committed: answering it with UNSPECIFIED
+			// would make the runner record FAILED (contract) and spend the slot silently.
+			return nil, status.Error(codes.Internal, "lỗi nội bộ, vui lòng thử lại")
+		}
 		runs = append(runs, &identityv1.AutomationRun{
-			RunId:     r.ID,
-			Scope:     &identityv1.AutomationRunScope{Job: pj, WorkKind: pk},
-			ClaimedAt: timestamppb.New(r.ClaimedAt),
+			RunId:                 r.ID,
+			Scope:                 &identityv1.AutomationRunScope{Job: pj, WorkKind: pk},
+			ClaimedAt:             timestamppb.New(r.ClaimedAt),
+			ScheduledReportPeriod: period,
 		})
 	}
 	return &identityv1.ClaimDueAutomationRunsResponse{Runs: runs}, nil
@@ -129,6 +137,8 @@ func automationJobFrom(j identityv1.AutomationJob) (domain.AutomationJob, error)
 		return domain.JobEscalation, nil
 	case identityv1.AutomationJob_AUTOMATION_JOB_WEEKLY_DIGEST:
 		return domain.JobWeeklyDigest, nil
+	case identityv1.AutomationJob_AUTOMATION_JOB_SCHEDULED_REPORTS:
+		return domain.JobScheduledReports, nil
 	}
 	return "", status.Errorf(codes.InvalidArgument, "job %d không phải một việc tự động hoá hợp lệ", int32(j))
 }
@@ -141,8 +151,25 @@ func automationJobTo(j domain.AutomationJob) (identityv1.AutomationJob, bool) {
 		return identityv1.AutomationJob_AUTOMATION_JOB_ESCALATION, true
 	case domain.JobWeeklyDigest:
 		return identityv1.AutomationJob_AUTOMATION_JOB_WEEKLY_DIGEST, true
+	case domain.JobScheduledReports:
+		return identityv1.AutomationJob_AUTOMATION_JOB_SCHEDULED_REPORTS, true
 	}
 	return identityv1.AutomationJob_AUTOMATION_JOB_UNSPECIFIED, false
+}
+
+// reportPeriodTo maps a run's period onto the wire. FALSE when the pair breaks the contract's rule —
+// WEEK or MONTH on a SCHEDULED_REPORTS run, UNSPECIFIED on every other job.
+func reportPeriodTo(job domain.AutomationJob, p domain.ReportPeriod) (identityv1.ScheduledReportPeriod, bool) {
+	if job != domain.JobScheduledReports {
+		return identityv1.ScheduledReportPeriod_SCHEDULED_REPORT_PERIOD_UNSPECIFIED, p == ""
+	}
+	switch p {
+	case domain.ReportPeriodWeek:
+		return identityv1.ScheduledReportPeriod_SCHEDULED_REPORT_PERIOD_WEEK, true
+	case domain.ReportPeriodMonth:
+		return identityv1.ScheduledReportPeriod_SCHEDULED_REPORT_PERIOD_MONTH, true
+	}
+	return identityv1.ScheduledReportPeriod_SCHEDULED_REPORT_PERIOD_UNSPECIFIED, false
 }
 
 // workKindTo is loaiViecTu's inverse. A domain kind with no wire value is answered false, which the

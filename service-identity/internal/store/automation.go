@@ -36,7 +36,7 @@ var ErrAutomationSettingExists = errors.New("tự động hoá: cấu hình vi�
 const automationSettingColumns = `job, enabled, interval_minutes, run_hour, run_minute, weekday, ` +
 	`enabled_at, run_requested_at, run_requested_by, updated_at, updated_by`
 
-// Settings reads every job setting this commune saved — at most three rows (PRIMARY KEY (tenant_id,
+// Settings reads every job setting this commune saved — at most four rows (PRIMARY KEY (tenant_id,
 // job) and a CHECK on `job`), so there is nothing to page. An absent job is OFF.
 //
 // NOT INSIDE A TRANSACTION, DELIBERATELY: the claim decides on this read and then writes through a
@@ -49,7 +49,7 @@ func (s *AutomationStore) Settings(ctx context.Context) ([]domain.AutomationSett
 	}
 	defer rows.Close()
 
-	out := make([]domain.AutomationSetting, 0, 3)
+	out := make([]domain.AutomationSetting, 0, 4)
 	for rows.Next() {
 		st, err := scanSetting(rows.Scan)
 		if err != nil {
@@ -199,13 +199,14 @@ func (s *AutomationStore) ClaimScope(ctx context.Context, tx *store.ScopedTx, pr
 }
 
 // InsertRun records a claimed run, in the same transaction as the lease that won it — so there is
-// never a lease naming a run that does not exist.
+// never a lease naming a run that does not exist. The report period is NULL on every job but
+// `scheduled_reports` — the shape `automation_run_report_period_shape` pins (migration 0029).
 func (s *AutomationStore) InsertRun(ctx context.Context, tx *store.ScopedTx, run domain.AutomationRun) error {
 	const stmt = `INSERT INTO automation_run
-			(tenant_id, id, job, work_kind, run_trigger, claimed_at)
-		VALUES ($1, $2, $3, $4, $5, $6)`
+			(tenant_id, id, job, work_kind, run_trigger, claimed_at, scheduled_report_period)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)`
 	_, err := tx.Exec(ctx, stmt, string(tx.TenantID()), run.ID, string(run.Scope.Job),
-		string(run.Scope.WorkKind), string(run.Trigger), run.ClaimedAt)
+		string(run.Scope.WorkKind), string(run.Trigger), run.ClaimedAt, stringOrNull(string(run.ReportPeriod)))
 	if err != nil {
 		return fmt.Errorf("tự động hoá: ghi lượt chạy: %w", err)
 	}
@@ -214,7 +215,7 @@ func (s *AutomationStore) InsertRun(ctx context.Context, tx *store.ScopedTx, run
 
 // automationRunColumns IS READ BY POSITION in scanRun — three adjacent nullable INTEGER counts.
 const automationRunColumns = `id, job, work_kind, run_trigger, claimed_at, outcome, ` +
-	`records_examined, notices_delivered, records_without_recipient, recorded_at`
+	`records_examined, notices_delivered, records_without_recipient, recorded_at, scheduled_report_period`
 
 // RunForUpdate reads one run of this commune inside the caller's transaction and holds it, so two
 // replicas recording the same run serialise and the first write wins.
@@ -255,7 +256,8 @@ func (s *AutomationStore) RecordRun(ctx context.Context, tx *store.ScopedTx, run
 // `sc.tenant_id = $1` (rule 1, the QueryJoin contract).
 const lastRunsQuery = `
 SELECT r.id, r.job, r.work_kind, r.run_trigger, r.claimed_at, r.outcome,
-       r.records_examined, r.notices_delivered, r.records_without_recipient, r.recorded_at
+       r.records_examined, r.notices_delivered, r.records_without_recipient, r.recorded_at,
+       r.scheduled_report_period
 FROM automation_run_scope sc
 JOIN automation_run r
   ON r.tenant_id = sc.tenant_id
@@ -321,13 +323,15 @@ func scanRun(scan func(...any) error) (domain.AutomationRun, error) {
 		examined, delivered sql.NullInt64
 		withoutRecipient    sql.NullInt64
 		recordedAt          sql.NullTime
+		period              sql.NullString
 	)
 	if err := scan(&r.ID, &job, &kind, &trigger, &r.ClaimedAt, &outcome,
-		&examined, &delivered, &withoutRecipient, &recordedAt); err != nil {
+		&examined, &delivered, &withoutRecipient, &recordedAt, &period); err != nil {
 		return domain.AutomationRun{}, err
 	}
 	r.Scope = domain.AutomationScope{Job: domain.AutomationJob(job), WorkKind: domain.LoaiViec(kind)}
 	r.Trigger = domain.RunTrigger(trigger)
+	r.ReportPeriod = domain.ReportPeriod(period.String)
 	r.Report = domain.RunReport{
 		Outcome:                 domain.RunOutcome(outcome.String),
 		RecordsExamined:         int(examined.Int64),
@@ -346,7 +350,7 @@ func cadenceColumns(st domain.AutomationSetting) (interval, hour, minute, weekda
 		return st.IntervalMinutes, nil, nil, nil
 	case domain.ScheduleDaily:
 		return nil, st.RunHour, st.RunMinute, nil
-	case domain.ScheduleWeekly:
+	case domain.ScheduleWeekly, domain.ScheduleMonthlyAndWeekly:
 		return nil, st.RunHour, st.RunMinute, st.Weekday
 	}
 	return nil, nil, nil, nil

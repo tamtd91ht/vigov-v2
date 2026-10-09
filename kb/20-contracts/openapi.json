@@ -43835,14 +43835,14 @@
               "integer",
               "null"
             ],
-            "description": "daily/weekly, 0–23, Asia/Ho_Chi_Minh"
+            "description": "every kind but interval, 0–23, Asia/Ho_Chi_Minh"
           },
           "run_minute": {
             "type": [
               "integer",
               "null"
             ],
-            "description": "daily/weekly, 0–59"
+            "description": "every kind but interval, 0–59"
           },
           "weekday": {
             "type": [

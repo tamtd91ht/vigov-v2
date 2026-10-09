@@ -361,6 +361,150 @@ func TestRunNowClaimedAtNextTickOncePerScope(t *testing.T) {
 	}
 }
 
+// --- scheduled_reports (ADR 0086 B2) ----------------------------------------------------------------
+//
+// The petitions runner owns NHIEM_VU + PHAN_ANH, documents owns VAN_BAN_DEN (ADR 0058 §8's split).
+
+var (
+	reportsTasks     = domain.AutomationScope{Job: domain.JobScheduledReports, WorkKind: domain.LoaiViecNhiemVu}
+	reportsPetitions = domain.AutomationScope{Job: domain.JobScheduledReports, WorkKind: domain.LoaiViecPhanAnh}
+	reportsDocuments = domain.AutomationScope{Job: domain.JobScheduledReports, WorkKind: domain.LoaiViecVanBanDen}
+)
+
+// localVN builds an instant in Asia/Ho_Chi_Minh with a FIXED +07 zone (the oracle is not the code's
+// own zone lookup).
+func localVN(y int, mo time.Month, d, h, mi int) time.Time {
+	return time.Date(y, mo, d, h, mi, 0, 0, time.FixedZone("ICT-oracle", 7*3600)).UTC()
+}
+
+func reportsOn(enabledAt time.Time) domain.AutomationSetting {
+	return domain.AutomationSetting{Job: domain.JobScheduledReports, Enabled: true, Weekday: 1, RunHour: 7,
+		RunMinute: 45, EnabledAt: enabledAt}
+}
+
+// Monday 1 June 2026: ONE month run per scope — each runner's scopes each win once, all MONTH, and a
+// tick a minute later (a restarted replica) claims nothing.
+func TestClaimScheduledReportsFirstOnMondayOneMonthRunPerScope(t *testing.T) {
+	uc, mem, _, ctx, clock := buildAutomation(t)
+	mem.settings[domain.JobScheduledReports] = reportsOn(localVN(2026, 5, 20, 9, 0))
+	*clock = localVN(2026, 6, 1, 7, 45)
+
+	petitions, err := uc.ClaimDue(ctx, []domain.AutomationScope{reportsTasks, reportsPetitions})
+	if err != nil || len(petitions) != 2 {
+		t.Fatalf("petitions claim: %v (err %v), want two runs", petitions, err)
+	}
+	documents, err := uc.ClaimDue(ctx, []domain.AutomationScope{reportsDocuments})
+	if err != nil || len(documents) != 1 {
+		t.Fatalf("documents claim: %v (err %v), want one run", documents, err)
+	}
+	for _, r := range append(petitions, documents...) {
+		if r.ReportPeriod != domain.ReportPeriodMonth || r.Trigger != domain.TriggerSchedule {
+			t.Errorf("run %+v: want a scheduled MONTH run", r)
+		}
+		if mem.runs[r.ID].ReportPeriod != domain.ReportPeriodMonth {
+			t.Errorf("run %s stored without its period", r.ID)
+		}
+	}
+	*clock = localVN(2026, 6, 1, 7, 46)
+	if again, _ := uc.ClaimDue(ctx, []domain.AutomationScope{reportsTasks, reportsPetitions, reportsDocuments}); len(again) != 0 {
+		t.Fatalf("restart inside the slot claimed again: %v", again)
+	}
+	*clock = localVN(2026, 6, 1, 23, 0)
+	if again, _ := uc.ClaimDue(ctx, []domain.AutomationScope{reportsTasks}); len(again) != 0 {
+		t.Fatalf("a second slot opened on the 1st: %v", again)
+	}
+}
+
+func TestClaimScheduledReportsOrdinaryMondayIsWeek(t *testing.T) {
+	uc, mem, _, ctx, clock := buildAutomation(t)
+	mem.settings[domain.JobScheduledReports] = reportsOn(localVN(2026, 9, 20, 9, 0))
+	*clock = localVN(2026, 10, 5, 8, 0)
+	runs, err := uc.ClaimDue(ctx, []domain.AutomationScope{reportsDocuments})
+	if err != nil || len(runs) != 1 || runs[0].ReportPeriod != domain.ReportPeriodWeek {
+		t.Fatalf("ordinary Monday: %v (err %v), want one WEEK run", runs, err)
+	}
+	// Other jobs never carry a period.
+	mem.settings[domain.JobEscalation] = domain.AutomationSetting{Job: domain.JobEscalation, Enabled: true,
+		RunHour: 7, EnabledAt: localVN(2026, 9, 20, 9, 0)}
+	esc, _ := uc.ClaimDue(ctx, []domain.AutomationScope{{Job: domain.JobEscalation, WorkKind: domain.LoaiViecNhiemVu}})
+	if len(esc) != 1 || esc[0].ReportPeriod != "" {
+		t.Errorf("escalation run = %v, want one run with no period", esc)
+	}
+}
+
+// Switched on at 09:00 on the 1st: that morning's month slot never counts.
+func TestClaimScheduledReportsSlotBeforeSwitchOnIsNotClaimed(t *testing.T) {
+	uc, mem, _, ctx, clock := buildAutomation(t)
+	mem.settings[domain.JobScheduledReports] = reportsOn(localVN(2026, 10, 1, 9, 0))
+	*clock = localVN(2026, 10, 1, 9, 1)
+	if runs, err := uc.ClaimDue(ctx, []domain.AutomationScope{reportsTasks}); err != nil || len(runs) != 0 {
+		t.Fatalf("claimed %v (err %v) — the 07:45 slot opened before the switch-on", runs, err)
+	}
+}
+
+// "Chạy ngay" accepts the job; the run carries the period of the claim's own date (WEEK on a Tuesday),
+// and the outcome's audit entry names that period — the claim itself is never audited.
+func TestScheduledReportsRunNowAndOutcomeAuditNamesPeriod(t *testing.T) {
+	uc, mem, rec, ctx, clock := buildAutomation(t)
+	mem.settings[domain.JobScheduledReports] = reportsOn(nowAuto.Add(-72 * time.Hour))
+	mem.states[reportsTasks] = domain.ScopeState{LastRunID: "01JOLD000000000000000000RT", LastClaimedAt: nowAuto.Add(-26 * time.Hour)}
+	if _, err := uc.RequestRun(ctx, domain.JobScheduledReports, staffActor()); err != nil {
+		t.Fatalf("RequestRun: %v", err)
+	}
+	*clock = nowAuto.Add(time.Minute)
+	runs, err := uc.ClaimDue(ctx, []domain.AutomationScope{reportsTasks})
+	if err != nil || len(runs) != 1 || runs[0].Trigger != domain.TriggerRequest || runs[0].ReportPeriod != domain.ReportPeriodWeek {
+		t.Fatalf("run-now: %v (err %v), want one request run for the week", runs, err)
+	}
+	if err := uc.RecordOutcome(ctx, runs[0].ID, domain.RunReport{Outcome: domain.OutcomeSucceeded, NoticesDelivered: 2}); err != nil {
+		t.Fatalf("RecordOutcome: %v", err)
+	}
+	a := rec.audits()
+	if len(a) != 2 { // the run-now press, the outcome
+		t.Fatalf("%d audit entries, want 2", len(a))
+	}
+	var delta map[string]any
+	if err := json.Unmarshal(a[1].args[7].([]byte), &delta); err != nil || delta["scheduled_report_period"] != "week" {
+		t.Errorf("outcome delta = %s (%v), want scheduled_report_period week", a[1].args[7], err)
+	}
+}
+
+func TestSaveScheduledReportsSettingShape(t *testing.T) {
+	uc, mem, rec, ctx, _ := buildAutomation(t)
+	h, m, wd, iv, bad := 7, 45, 1, 15, 8
+	cases := map[string]struct {
+		req AutomationSettingRequest
+		err error
+	}{
+		"weekday missing":  {AutomationSettingRequest{Enabled: boolp(true), RunHour: &h, RunMinute: &m}, ErrAutomationFieldMissing},
+		"interval foreign": {AutomationSettingRequest{Enabled: boolp(true), RunHour: &h, RunMinute: &m, Weekday: &wd, IntervalMinutes: &iv}, ErrAutomationFieldNotApplicable},
+		"weekday 8":        {AutomationSettingRequest{Enabled: boolp(true), RunHour: &h, RunMinute: &m, Weekday: &bad}, domain.ErrWeekdayOutOfRange},
+	}
+	for name, c := range cases {
+		if _, err := uc.SaveSetting(ctx, domain.JobScheduledReports, c.req, staffActor()); !errors.Is(err, c.err) {
+			t.Errorf("%s: err = %v, want %v", name, err, c.err)
+		}
+	}
+	if rec.begun != 0 {
+		t.Errorf("%d transactions opened for refused bodies", rec.begun)
+	}
+	v, err := uc.SaveSetting(ctx, domain.JobScheduledReports,
+		AutomationSettingRequest{Enabled: boolp(true), RunHour: &h, RunMinute: &m, Weekday: &wd}, staffActor())
+	if err != nil {
+		t.Fatalf("valid save: %v", err)
+	}
+	if s := mem.settings[domain.JobScheduledReports]; !s.Enabled || s.Weekday != 1 || s.RunHour != 7 || s.RunMinute != 45 ||
+		!s.EnabledAt.Equal(nowAuto) || !v.Configured {
+		t.Errorf("saved %+v", s)
+	}
+	a := rec.audits()
+	var delta map[string]map[string]any
+	if len(a) != 1 || json.Unmarshal(a[0].args[7].([]byte), &delta) != nil || delta["sau"]["weekday"] != float64(1) ||
+		a[0].args[5] != "tu-dong-hoa/scheduled_reports" {
+		t.Errorf("audit = %v", a)
+	}
+}
+
 // --- record outcome ---------------------------------------------------------------------------------
 
 func TestRecordOutcomeFirstWriteWinsOneSystemAuditEntry(t *testing.T) {
@@ -498,10 +642,10 @@ func TestRequestRunRefusedWhenOffOrMissing(t *testing.T) {
 	}
 }
 
-func TestOverviewListsThreeJobsWithPrefillWhenUnconfigured(t *testing.T) {
+func TestOverviewListsFourJobsWithPrefillWhenUnconfigured(t *testing.T) {
 	uc, _, _, ctx, _ := buildAutomation(t)
 	views, err := uc.Overview(ctx)
-	if err != nil || len(views) != 3 {
+	if err != nil || len(views) != 4 {
 		t.Fatalf("views = %v, err = %v", views, err)
 	}
 	for i, j := range domain.AutomationJobs() {

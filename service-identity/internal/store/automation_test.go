@@ -85,6 +85,12 @@ func TestAutomationLastRunsJoinBindsBothTablesToCommune(t *testing.T) {
 		"run_trigger": "request", "claimed_at": time.Date(2026, 9, 29, 3, 0, 0, 0, time.UTC),
 		"outcome": "succeeded", "records_examined": int64(12), "notices_delivered": int64(3),
 		"records_without_recipient": int64(1), "recorded_at": time.Date(2026, 9, 29, 3, 1, 0, 0, time.UTC),
+		"scheduled_report_period": nil,
+	}, {
+		"id": "01JRUN0000000000000000000B", "job": "scheduled_reports", "work_kind": "nhiem-vu",
+		"run_trigger": "schedule", "claimed_at": time.Date(2026, 10, 1, 0, 45, 0, 0, time.UTC),
+		"outcome": nil, "records_examined": nil, "notices_delivered": nil,
+		"records_without_recipient": nil, "recorded_at": nil, "scheduled_report_period": "month",
 	}}
 	runs, err := NewAutomationStore(dbGia(k)).LastRuns(ctxXa(xaMau))
 	if err != nil {
@@ -96,8 +102,40 @@ func TestAutomationLastRunsJoinBindsBothTablesToCommune(t *testing.T) {
 	}
 	r := runs[0]
 	if r.Report.Outcome != domain.OutcomeSucceeded || r.Report.RecordsExamined != 12 ||
-		r.Report.NoticesDelivered != 3 || r.Report.RecordsWithoutRecipient != 1 || r.Trigger != domain.TriggerRequest {
+		r.Report.NoticesDelivered != 3 || r.Report.RecordsWithoutRecipient != 1 || r.Trigger != domain.TriggerRequest ||
+		r.ReportPeriod != "" {
 		t.Errorf("scanned %+v", r)
+	}
+	if r := runs[1]; r.Scope.Job != domain.JobScheduledReports || r.ReportPeriod != domain.ReportPeriodMonth || r.Recorded() {
+		t.Errorf("scheduled_reports run scanned %+v, want period month and no outcome", r)
+	}
+}
+
+// The period goes in as `week`/`month` on a scheduled_reports run and as SQL NULL on every other job —
+// the shape `automation_run_report_period_shape` (migration 0029) refuses otherwise.
+func TestAutomationInsertRunWritesPeriodOrNull(t *testing.T) {
+	for _, tc := range []struct {
+		run  domain.AutomationRun
+		want driver.Value
+	}{
+		{domain.AutomationRun{ID: "01JRUN0000000000000000000A", Scope: domain.AutomationScope{Job: domain.JobScheduledReports,
+			WorkKind: domain.LoaiViecVanBanDen}, Trigger: domain.TriggerSchedule, ReportPeriod: domain.ReportPeriodWeek}, "week"},
+		{domain.AutomationRun{ID: "01JRUN0000000000000000000B", Scope: domain.AutomationScope{Job: domain.JobEscalation,
+			WorkKind: domain.LoaiViecVanBanDen}, Trigger: domain.TriggerSchedule}, nil},
+	} {
+		k := khoMoi()
+		s := NewAutomationStore(dbGia(k))
+		tc.run.ClaimedAt = time.Date(2026, 10, 5, 0, 45, 0, 0, time.UTC)
+		err := dbGia(k).For(ctxXa(xaMau)).Tx(ctxXa(xaMau), func(tx *pkgstore.ScopedTx) error {
+			return s.InsertRun(context.Background(), tx, tc.run)
+		})
+		if err != nil {
+			t.Fatalf("InsertRun: %v", err)
+		}
+		l := k.cuoi()
+		if !strings.Contains(l.sql, "scheduled_report_period") || len(l.args) != 7 || l.args[0] != xaMau || l.args[6] != tc.want {
+			t.Errorf("%s: sql %s args %v, want period %v at $7", tc.run.Scope.Job, l.sql, l.args, tc.want)
+		}
 	}
 }
 

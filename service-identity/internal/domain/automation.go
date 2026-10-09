@@ -16,27 +16,29 @@ import (
 
 // AutomationJob is the software key of one job. English values, following the contract's
 // AutomationJob comment: keys of the software's jobs, identical in every commune, not values written
-// into an archival record. THREE, by the user's decision of 2026-09-29 (`refresh_dashboards` dropped,
-// `send_scheduled_reports` deferred — ADR 0058 §4).
+// into an archival record. FOUR: the user's decision of 2026-09-29 built three (`refresh_dashboards`
+// dropped — ADR 0058 §4), and the user un-deferred `send_scheduled_reports` on 2026-10-09 as
+// `scheduled_reports` (ADR 0086 B).
 type AutomationJob string
 
 const (
-	JobSLAReminders AutomationJob = "sla_reminders"
-	JobEscalation   AutomationJob = "escalation"
-	JobWeeklyDigest AutomationJob = "weekly_digest"
+	JobSLAReminders     AutomationJob = "sla_reminders"
+	JobEscalation       AutomationJob = "escalation"
+	JobWeeklyDigest     AutomationJob = "weekly_digest"
+	JobScheduledReports AutomationJob = "scheduled_reports"
 )
 
 // AutomationJobs lists the jobs in the order the configuration screen shows them (§9's order).
 // A fresh slice per call: a package-level one would be mutable by any caller.
 func AutomationJobs() []AutomationJob {
-	return []AutomationJob{JobSLAReminders, JobEscalation, JobWeeklyDigest}
+	return []AutomationJob{JobSLAReminders, JobEscalation, JobWeeklyDigest, JobScheduledReports}
 }
 
-// Valid reports whether j is one of the three keys. A caller meeting false refuses — an unknown job
+// Valid reports whether j is one of the four keys. A caller meeting false refuses — an unknown job
 // is not "off", it is a request for something the software does not run.
 func (j AutomationJob) Valid() bool {
 	switch j {
-	case JobSLAReminders, JobEscalation, JobWeeklyDigest:
+	case JobSLAReminders, JobEscalation, JobWeeklyDigest, JobScheduledReports:
 		return true
 	}
 	return false
@@ -49,7 +51,18 @@ const (
 	ScheduleInterval ScheduleKind = "interval" // every N minutes
 	ScheduleDaily    ScheduleKind = "daily"    // once a day at HH:MM
 	ScheduleWeekly   ScheduleKind = "weekly"   // once a week, on a weekday, at HH:MM
+
+	// ScheduleMonthlyAndWeekly — on a weekday at HH:MM AND on the 1st of every month at the same HH:MM;
+	// one slot on a day that is both. The reference system's own kind name (automation.py:95). Same
+	// cadence fields as ScheduleWeekly; only the slots differ (LatestSlot).
+	ScheduleMonthlyAndWeekly ScheduleKind = "monthly_and_weekly"
 )
+
+// HasWeekday reports whether the kind's cadence carries a weekday (and HH:MM) — the shape the two
+// weekday kinds share, which `automation_job_setting_shape` pins (migration 0029).
+func (k ScheduleKind) HasWeekday() bool {
+	return k == ScheduleWeekly || k == ScheduleMonthlyAndWeekly
+}
 
 // Schedule returns the job's one schedule kind — FIXED BY THE JOB, never chosen by the commune
 // (contract: "ONE SCHEDULE PER JOB, fixed by the job, set by the commune"). "" for an unknown job.
@@ -61,6 +74,8 @@ func (j AutomationJob) Schedule() ScheduleKind {
 		return ScheduleDaily
 	case JobWeeklyDigest:
 		return ScheduleWeekly
+	case JobScheduledReports:
+		return ScheduleMonthlyAndWeekly
 	}
 	return ""
 }
@@ -91,9 +106,9 @@ type AutomationSetting struct {
 	// The cadence. Only the fields of the job's ScheduleKind are meaningful; the others are zero and
 	// the store writes them as NULL (the table's shape CHECK refuses anything else).
 	IntervalMinutes int // ScheduleInterval
-	RunHour         int // ScheduleDaily, ScheduleWeekly — local hour in Asia/Ho_Chi_Minh
-	RunMinute       int // ScheduleDaily, ScheduleWeekly
-	Weekday         int // ScheduleWeekly — ISO 1 = Monday … 7 = Sunday, like `lich_lam_viec.thu`
+	RunHour         int // every kind but ScheduleInterval — local hour in Asia/Ho_Chi_Minh
+	RunMinute       int // every kind but ScheduleInterval
+	Weekday         int // ScheduleKind.HasWeekday — ISO 1 = Monday … 7 = Sunday, like `lich_lam_viec.thu`
 
 	// EnabledAt is when the job was last switched ON. No slot opened before it counts. Zero = never.
 	EnabledAt time.Time
@@ -115,14 +130,14 @@ func ValidateAutomationSetting(s AutomationSetting) error {
 		if s.IntervalMinutes < MinIntervalMinutes || s.IntervalMinutes > MaxIntervalMinutes {
 			return ErrIntervalOutOfRange
 		}
-	case ScheduleDaily, ScheduleWeekly:
+	case ScheduleDaily, ScheduleWeekly, ScheduleMonthlyAndWeekly:
 		if s.RunHour < 0 || s.RunHour > 23 {
 			return ErrHourOutOfRange
 		}
 		if s.RunMinute < 0 || s.RunMinute > 59 {
 			return ErrMinuteOutOfRange
 		}
-		if s.Job.Schedule() == ScheduleWeekly && (s.Weekday < 1 || s.Weekday > 7) {
+		if s.Job.Schedule().HasWeekday() && (s.Weekday < 1 || s.Weekday > 7) {
 			return ErrWeekdayOutOfRange
 		}
 	default:
@@ -132,7 +147,9 @@ func ValidateAutomationSetting(s AutomationSetting) error {
 }
 
 // SuggestedAutomationSetting is the FORM PREFILL for a job with no row: switched off, with the
-// user's suggested cadence (2026-09-29) — 15 minutes; daily 07:00; Monday 07:30.
+// user's suggested cadence (2026-09-29) — 15 minutes; daily 07:00; Monday 07:30 — and, for
+// `scheduled_reports`, the reference system's Monday 07:45 (automation.py:96-98; ADR 0086 "theo
+// prototype").
 //
 // IT IS NEVER READ BY A CLAIM. A job with no row is off, and DueTrigger is only ever handed a row the
 // commune saved. Returning these numbers on GET is what lets the screen show a cadence to switch on
@@ -146,6 +163,8 @@ func SuggestedAutomationSetting(j AutomationJob) AutomationSetting {
 		s.RunHour, s.RunMinute = 7, 0
 	case JobWeeklyDigest:
 		s.Weekday, s.RunHour, s.RunMinute = 1, 7, 30
+	case JobScheduledReports:
+		s.Weekday, s.RunHour, s.RunMinute = 1, 7, 45
 	}
 	return s
 }
@@ -211,6 +230,10 @@ func DueTrigger(s AutomationSetting, st ScopeState, now time.Time, zone *time.Lo
 //	          run-now claim restarts the count
 //	daily     today at HH:MM, or yesterday's when today's has not come
 //	weekly    the most recent weekday at HH:MM, looking back at most a week
+//	monthly_and_weekly
+//	          the most recent day that is the weekday OR the 1st, at HH:MM — at most a week back, since
+//	          the weekday recurs within seven days. ONE SLOT PER DAY: both rules name the same HH:MM, so
+//	          a 1st that is also the weekday is one instant, not two
 //
 // Built with time.Date in the zone, never by truncating an instant: Truncate works on UTC and would
 // put a 07:00 slot at 14:00 local.
@@ -250,8 +273,59 @@ func LatestSlot(s AutomationSetting, st ScopeState, now time.Time, zone *time.Lo
 				return slot, true
 			}
 		}
+
+	case ScheduleMonthlyAndWeekly:
+		l := now.In(zone)
+		for back := 0; back <= 7; back++ {
+			slot := time.Date(l.Year(), l.Month(), l.Day()-back, s.RunHour, s.RunMinute, 0, 0, zone)
+			if (slot.Day() == 1 || thuISO(slot) == s.Weekday) && !slot.After(now) {
+				return slot, true
+			}
+		}
 	}
 	return time.Time{}, false
+}
+
+// ReportPeriod is which period a `scheduled_reports` run reports (contract: ScheduledReportPeriod),
+// stored in `automation_run.scheduled_report_period` (migration 0029). "" on every other job. Only
+// WEEK or MONTH: the BOUNDS of the period are the runners' (ADR 0086 B1 — the current week/month just
+// started, in Vietnam time).
+type ReportPeriod string
+
+const (
+	ReportPeriodWeek  ReportPeriod = "week"
+	ReportPeriodMonth ReportPeriod = "month"
+)
+
+// ScheduledReportPeriod decides the period of one claimed `scheduled_reports` run — THE ONE
+// IMPLEMENTATION of "is today the 1st" (ADR 0086 B2, stop condition #4: a runner never decides it).
+//
+//	scheduled run   the SLOT's local date: the 1st → MONTH, any other day → WEEK. A slot that opened on
+//	                the 1st and is claimed on the 2nd (every runner down overnight) is still the month
+//	                report it was due as
+//	"run now"       the claim's local date, by the same rule — the reference system's run for one
+//	                commune (reports.py:191-198: "the 1st sends the month, other days the week"). A
+//	                press on the 1st therefore reports the month
+//
+// "" for any other job, or when no slot exists (unreachable after DueTrigger answered TriggerSchedule).
+func ScheduledReportPeriod(s AutomationSetting, st ScopeState, trigger RunTrigger, now time.Time,
+	zone *time.Location) ReportPeriod {
+
+	if s.Job != JobScheduledReports || zone == nil {
+		return ""
+	}
+	day := now
+	if trigger == TriggerSchedule {
+		slot, ok := LatestSlot(s, st, now, zone)
+		if !ok {
+			return ""
+		}
+		day = slot
+	}
+	if day.In(zone).Day() == 1 {
+		return ReportPeriodMonth
+	}
+	return ReportPeriodWeek
 }
 
 // RunOutcome is how one run ended (contract: AutomationRunOutcome). Closed; no free text crosses.
@@ -290,6 +364,9 @@ type AutomationRun struct {
 	Scope     AutomationScope
 	Trigger   RunTrigger
 	ClaimedAt time.Time
+
+	// ReportPeriod — set on a `scheduled_reports` run only (ScheduledReportPeriod), "" otherwise.
+	ReportPeriod ReportPeriod
 
 	Report     RunReport
 	RecordedAt time.Time

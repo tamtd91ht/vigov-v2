@@ -302,6 +302,53 @@ func TestClaimCitizenLetterKindRoundTrips(t *testing.T) {
 	}
 }
 
+// SCHEDULED_REPORTS is claimable (identity ships first — the contract's ROLLOUT note) and its run carries
+// the period identity decided; every other job's run carries UNSPECIFIED.
+func TestClaimScheduledReportsCarriesPeriod(t *testing.T) {
+	at := time.Date(2026, 10, 1, 0, 45, 0, 0, time.UTC)
+	fake := &automationFake{runs: []domain.AutomationRun{
+		{ID: "01JRUN0000000000000000000C", Scope: domain.AutomationScope{Job: domain.JobScheduledReports,
+			WorkKind: domain.LoaiViecNhiemVu}, ClaimedAt: at, ReportPeriod: domain.ReportPeriodMonth},
+		{ID: "01JRUN0000000000000000000D", Scope: domain.AutomationScope{Job: domain.JobScheduledReports,
+			WorkKind: domain.LoaiViecVanBanDen}, ClaimedAt: at, ReportPeriod: domain.ReportPeriodWeek},
+		{ID: "01JRUN0000000000000000000E", Scope: domain.AutomationScope{Job: domain.JobEscalation,
+			WorkKind: domain.LoaiViecNhiemVu}, ClaimedAt: at},
+	}}
+	s, _ := may(t, func(d *Deps) { d.Automation = fake })
+	ra, err := s.ClaimDueAutomationRuns(ctxXa(xaA), &identityv1.ClaimDueAutomationRunsRequest{Scopes: []*identityv1.AutomationRunScope{
+		scope(identityv1.AutomationJob_AUTOMATION_JOB_SCHEDULED_REPORTS, identityv1.WorkKind_WORK_KIND_NHIEM_VU),
+	}})
+	if err != nil {
+		t.Fatalf("claim scheduled_reports: %v", err)
+	}
+	if len(fake.gotScopes) != 1 || fake.gotScopes[0].Job != domain.JobScheduledReports {
+		t.Errorf("use case got %v, want one scheduled_reports scope", fake.gotScopes)
+	}
+	runs := ra.GetRuns()
+	if len(runs) != 3 ||
+		runs[0].GetScope().GetJob() != identityv1.AutomationJob_AUTOMATION_JOB_SCHEDULED_REPORTS ||
+		runs[0].GetScheduledReportPeriod() != identityv1.ScheduledReportPeriod_SCHEDULED_REPORT_PERIOD_MONTH ||
+		runs[1].GetScheduledReportPeriod() != identityv1.ScheduledReportPeriod_SCHEDULED_REPORT_PERIOD_WEEK ||
+		runs[2].GetScheduledReportPeriod() != identityv1.ScheduledReportPeriod_SCHEDULED_REPORT_PERIOD_UNSPECIFIED {
+		t.Errorf("runs = %v", runs)
+	}
+}
+
+// A scheduled_reports run reaching the handler without a period is answered Internal — never encoded
+// as UNSPECIFIED, which the runner would record as FAILED with nothing reporting why.
+func TestClaimScheduledReportsWithoutPeriodIsInternal(t *testing.T) {
+	fake := &automationFake{runs: []domain.AutomationRun{{ID: "01JRUN0000000000000000000F",
+		Scope:     domain.AutomationScope{Job: domain.JobScheduledReports, WorkKind: domain.LoaiViecNhiemVu},
+		ClaimedAt: time.Date(2026, 10, 5, 0, 45, 0, 0, time.UTC)}}}
+	s, _ := may(t, func(d *Deps) { d.Automation = fake })
+	_, err := s.ClaimDueAutomationRuns(ctxXa(xaA), &identityv1.ClaimDueAutomationRunsRequest{Scopes: []*identityv1.AutomationRunScope{
+		scope(identityv1.AutomationJob_AUTOMATION_JOB_SCHEDULED_REPORTS, identityv1.WorkKind_WORK_KIND_NHIEM_VU),
+	}})
+	if status.Code(err) != codes.Internal {
+		t.Errorf("code = %v, want Internal", status.Code(err))
+	}
+}
+
 func TestClaimStatusCodes(t *testing.T) {
 	ok := scope(identityv1.AutomationJob_AUTOMATION_JOB_ESCALATION, identityv1.WorkKind_WORK_KIND_NHIEM_VU)
 	var eleven []*identityv1.AutomationRunScope

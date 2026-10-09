@@ -2262,9 +2262,9 @@ export type identity_automationJobOut = {
   "interval_minutes": number | null;
   /** interval jobs only: 5 */
   "min_interval_minutes": number | null;
-  /** daily/weekly, 0–23, Asia/Ho_Chi_Minh */
+  /** every kind but interval, 0–23, Asia/Ho_Chi_Minh */
   "run_hour": number | null;
-  /** daily/weekly, 0–59 */
+  /** every kind but interval, 0–59 */
   "run_minute": number | null;
   "weekday": number | null;
   /** always Asia/Ho_Chi_Minh */

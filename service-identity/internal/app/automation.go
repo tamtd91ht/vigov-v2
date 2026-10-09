@@ -125,7 +125,7 @@ type AutomationJobView struct {
 	LastRuns []domain.AutomationRun
 }
 
-// Overview returns the three jobs of the commune in the context, in the screen's order.
+// Overview returns the jobs of the commune in the context (domain.AutomationJobs), in the screen's order.
 func (uc *Automation) Overview(ctx context.Context) ([]AutomationJobView, error) {
 	settings, err := uc.repo.Settings(ctx)
 	if err != nil {
@@ -139,8 +139,9 @@ func (uc *Automation) Overview(ctx context.Context) ([]AutomationJobView, error)
 	for _, s := range settings {
 		saved[s.Job] = s
 	}
-	out := make([]AutomationJobView, 0, 3)
-	for _, j := range domain.AutomationJobs() {
+	jobs := domain.AutomationJobs()
+	out := make([]AutomationJobView, 0, len(jobs))
+	for _, j := range jobs {
 		v := AutomationJobView{Setting: domain.SuggestedAutomationSetting(j), LastRuns: []domain.AutomationRun{}}
 		if s, ok := saved[j]; ok {
 			v.Setting, v.Configured = s, true
@@ -196,7 +197,7 @@ func buildSetting(job domain.AutomationJob, base domain.AutomationSetting, req A
 	case domain.ScheduleDaily:
 		need = []*int{req.RunHour, req.RunMinute}
 		foreign = []*int{req.IntervalMinutes, req.Weekday}
-	case domain.ScheduleWeekly:
+	case domain.ScheduleWeekly, domain.ScheduleMonthlyAndWeekly:
 		need = []*int{req.RunHour, req.RunMinute, req.Weekday}
 		foreign = []*int{req.IntervalMinutes}
 	default:
@@ -339,7 +340,7 @@ func (uc *Automation) RequestRun(ctx context.Context, job domain.AutomationJob, 
 // the runs this call won. Absent = not enabled, not due, or won by another caller (the contract's
 // three indistinguishable reasons).
 //
-// CHEAP ENOUGH FOR A ONE-MINUTE TICK: two small scoped SELECTs (settings ≤ 3 rows, leases ≤ 12) when
+// CHEAP ENOUGH FOR A ONE-MINUTE TICK: two small scoped SELECTs (settings ≤ 4 rows, leases ≤ 16) when
 // nothing is due, and one short transaction per due scope. The decision is made on those reads OUTSIDE
 // a transaction; correctness comes from the compare-and-set in ClaimScope, which refuses if the lease
 // moved after the read — so two replicas that both decide "due" produce one winner.
@@ -379,7 +380,15 @@ func (uc *Automation) ClaimDue(ctx context.Context, scopes []domain.AutomationSc
 		if err != nil {
 			return nil, fmt.Errorf("tự động hoá: sinh mã lượt chạy: %w", err)
 		}
-		run := domain.AutomationRun{ID: id, Scope: sc, Trigger: trigger, ClaimedAt: now}
+		// The period of a `scheduled_reports` run is decided HERE, on the same setting, lease and `now`
+		// the trigger was decided on (ADR 0086 B2) — "" for every other job.
+		run := domain.AutomationRun{ID: id, Scope: sc, Trigger: trigger, ClaimedAt: now,
+			ReportPeriod: domain.ScheduledReportPeriod(setting, st, trigger, now, zone)}
+		if sc.Job == domain.JobScheduledReports && run.ReportPeriod == "" {
+			// UNREACHABLE after DueTrigger said due. Refused rather than claimed: a run without a period
+			// is one the runner must fail (contract), and the slot would be spent for nothing.
+			return nil, errors.New("tự động hoá: không xác định được kỳ báo cáo của lượt chạy")
+		}
 		var claimed bool
 		err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 			ok, err := uc.repo.ClaimScope(ctx, tx, st.LastRunID, run)
@@ -419,19 +428,25 @@ func (uc *Automation) RecordOutcome(ctx context.Context, runID string, rep domai
 		}
 		// THE SYSTEM PRINCIPAL (core/audit.SystemActor, audit.go:35-37): a background job is a system
 		// action (rule 6, invariant 6). No IP — there is no request from a person to observe one from.
+		delta := map[string]any{
+			"run_id":                    run.ID,
+			"trigger":                   string(run.Trigger),
+			"claimed_at":                run.ClaimedAt.Format(time.RFC3339),
+			"outcome":                   string(rep.Outcome),
+			"records_examined":          rep.RecordsExamined,
+			"notices_delivered":         rep.NoticesDelivered,
+			"records_without_recipient": rep.RecordsWithoutRecipient,
+		}
+		// The claim is not audited, so this entry is the only place an inspection can read WHICH report
+		// leadership was sent (migration 0029 §3).
+		if run.ReportPeriod != "" {
+			delta["scheduled_report_period"] = string(run.ReportPeriod)
+		}
 		return audit.Write(ctx, tx, audit.Entry{
 			Actor:   audit.Actor{ID: audit.SystemActor, Kind: "system"},
 			Action:  ActionRecordAutomationRun,
 			Subject: automationSubject(run.Scope.Job) + "/" + string(run.Scope.WorkKind),
-			Delta: automationDelta(map[string]any{
-				"run_id":                    run.ID,
-				"trigger":                   string(run.Trigger),
-				"claimed_at":                run.ClaimedAt.Format(time.RFC3339),
-				"outcome":                   string(rep.Outcome),
-				"records_examined":          rep.RecordsExamined,
-				"notices_delivered":         rep.NoticesDelivered,
-				"records_without_recipient": rep.RecordsWithoutRecipient,
-			}),
+			Delta:   automationDelta(delta),
 		})
 	})
 }
@@ -449,7 +464,7 @@ func settingDelta(s domain.AutomationSetting) map[string]any {
 		d["interval_minutes"] = s.IntervalMinutes
 	case domain.ScheduleDaily:
 		d["run_hour"], d["run_minute"] = s.RunHour, s.RunMinute
-	case domain.ScheduleWeekly:
+	case domain.ScheduleWeekly, domain.ScheduleMonthlyAndWeekly:
 		d["weekday"], d["run_hour"], d["run_minute"] = s.Weekday, s.RunHour, s.RunMinute
 	}
 	return d

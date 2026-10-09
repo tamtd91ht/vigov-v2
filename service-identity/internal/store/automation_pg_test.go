@@ -69,3 +69,43 @@ func TestPgAutomationClaimRaceOneWinner(t *testing.T) {
 		t.Fatalf("stale claim: %d winners, want 0", n)
 	}
 }
+
+// Migration 0029: a `scheduled_reports` run is admitted with its period and read back with it; a period
+// on another job, or a scheduled_reports run without one, is refused by the server.
+func TestPgScheduledReportsRunCarriesPeriod(t *testing.T) {
+	db := moKetNoi(t)
+	xa, _ := xaRieng(t)
+	ctx := ctxXa(xa)
+	kho := pkgstore.New(db)
+	s := NewAutomationStore(kho)
+	at := time.Now().UTC().Truncate(time.Microsecond)
+
+	insert := func(run domain.AutomationRun) error {
+		return kho.For(ctx).Tx(ctx, func(tx *pkgstore.ScopedTx) error { return s.InsertRun(ctx, tx, run) })
+	}
+	good := domain.AutomationRun{ID: idSLA("REPA"), Scope: domain.AutomationScope{Job: domain.JobScheduledReports,
+		WorkKind: domain.LoaiViecNhiemVu}, Trigger: domain.TriggerSchedule, ClaimedAt: at, ReportPeriod: domain.ReportPeriodMonth}
+	if err := insert(good); err != nil {
+		t.Fatalf("scheduled_reports run refused: %v", err)
+	}
+	err := kho.For(ctx).Tx(ctx, func(tx *pkgstore.ScopedTx) error {
+		r, err := s.RunForUpdate(ctx, tx, good.ID)
+		if err == nil && r.ReportPeriod != domain.ReportPeriodMonth {
+			t.Errorf("period read back as %q", r.ReportPeriod)
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatalf("RunForUpdate: %v", err)
+	}
+	noPeriod := good
+	noPeriod.ID, noPeriod.ReportPeriod = idSLA("REPB"), ""
+	if insert(noPeriod) == nil {
+		t.Error("scheduled_reports run without a period admitted")
+	}
+	foreign := domain.AutomationRun{ID: idSLA("REPC"), Scope: domain.AutomationScope{Job: domain.JobEscalation,
+		WorkKind: domain.LoaiViecNhiemVu}, Trigger: domain.TriggerSchedule, ClaimedAt: at, ReportPeriod: domain.ReportPeriodWeek}
+	if insert(foreign) == nil {
+		t.Error("escalation run carrying a report period admitted")
+	}
+}
