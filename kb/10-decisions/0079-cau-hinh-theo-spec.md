@@ -44,6 +44,26 @@ nhật lại ui ux toàn bộ view và action trong menu cấu hình này, tham 
 §*Sửa đổi 07/10/2026 (lần 6)* cho riêng menu Cấu hình, như ADR 0076 cho Nhiệm vụ · **Thay một phần**
 ADR 0074 (#1, #3, #4 — chỉ phần bot của xã, §*Quan hệ với ADR 0074*).
 
+**Sửa đổi 09/10/2026** (người dùng, spec `tmp/web/updated/cap-nhat-menu-cau-hinh-theo-prototype.md`,
+"theo prototype, prototype không có thì theo khuyến nghị của spec"). Các điểm dưới THAY điểm tương ứng
+của ADR này:
+
+| Điểm 08/10 | Thay bằng 09/10 |
+|---|---|
+| Lô ba Q9: thanh tab xuống dòng khi tràn | Thanh tab MỘT dòng, cuộn ngang ẩn thanh cuộn, tab đang chọn tự vào tầm nhìn |
+| Tab Lịch làm việc ngay sau Thời hạn xử lý | 9 tab theo thứ tự prototype, rồi Lịch làm việc · Nhật ký hệ thống · Nhận diện xã |
+| Huy hiệu trạng thái giữ icon + chữ | Chỉ chữ, như prototype |
+| 'Giữ bất kể spec': bỏ câu 'Mặc định 72 giờ' | Câu 'Mặc định {N} giờ.' với N đọc từ dòng mặc định phản ánh của chính xã; không có dòng thì không hiện (luật 10 cấm #3 vẫn giữ: không ghi cứng số) |
+| Trường bản đồ bỏ câu đầu về tệp Excel | Thêm nguyên câu prototype, dù chưa có tuyến nhập tài nguyên bản đồ |
+| Lô hai Q3: 10 loại Zalo chưa có nơi phát, mỗi loại một ADR | Một ADR chung: ADR 0086 |
+| Lời hệ thống: chỉ tắt được câu xã đã sửa/tự thêm | Tắt được mọi câu; câu bị tắt ẩn hẳn ở nơi dùng |
+| Thẻ 'Gửi báo cáo định kỳ ?' | Dựng thật theo prototype, ADR 0086 B1 |
+| Danh mục chưa có Lĩnh vực phản ánh | Thêm nhóm Lĩnh vực phản ánh qua tuyến có sẵn: chỉ sửa nhãn, thứ tự, bật/tắt (ADR 0026) |
+
+Giữ nguyên, người dùng chốt cùng ngày: không đổi mã bộ phận đã cấp, không tách Loại đơn thư
+`kien-nghi-phan-anh`, không gieo dữ liệu xã (thôn, mã nhiệm vụ, trường Doanh nghiệp), không thêm việc
+nền Tính lại số liệu Tổng quan, Thôn giữ Ngừng dùng thay Xoá.
+
 ## Bối cảnh
 
 Nguồn: spec `tmp/web/cau-hinh/vigov-cau-hinh-spec/02`–`12` (ngoài git), chủ dự án viết từ prototype
