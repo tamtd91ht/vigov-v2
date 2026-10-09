@@ -1925,6 +1925,8 @@ service IdentityService {
   //     sla_reminders   every N minutes, N >= 5
   //     escalation      daily at HH:MM
   //     weekly_digest   weekly on a weekday at HH:MM
+  //     scheduled_reports  weekly on a weekday at HH:MM AND on the 1st of each month at HH:MM
+  //                        (one slot when both fall on one day; see AutomationJob SCHEDULED_REPORTS)
   //   A scope is due when its job is ENABLED and a scheduled slot has opened since the scope was
   //   last claimed. A slot that opened while no runner was ticking is run ONCE, at the next claim —
   //   never replayed once per missed slot, and never skipped for the day (the reference system's
@@ -3577,6 +3579,30 @@ enum AutomationJob {
 
   // "Bản tin đầu tuần cho lãnh đạo" — weekly. Addresses ResolveLeadershipStaff.
   AUTOMATION_JOB_WEEKLY_DIGEST = 3;
+
+  // "Gửi báo cáo định kỳ" — `send_scheduled_reports` of the reference system
+  // (../vigov-require/apps/api/app/modules/admin/automation.py:91-99, workers/reports.py), un-deferred by
+  // the user on 09/10/2026 ("theo prototype"; ADR 0086 part B). Stored as `scheduled_reports`.
+  //
+  // SCHEDULE "monthly_and_weekly": on the configured weekday at HH:MM AND on the 1st of every month at the
+  // same HH:MM (Asia/Ho_Chi_Minh). A 1st that is also the weekday is ONE slot, a month slot. Which
+  // period a claimed slot reports is decided HERE and returned as AutomationRun.scheduled_report_period —
+  // the same reason the schedule never leaves this service: several runners claim this job, and two
+  // implementations of "is today the 1st" drift.
+  //
+  // It sends a BELL/ZALO NOTICE (comms REPORT_READY) carrying headline figures — not a file and not mail:
+  // the reference job attaches nothing (reports.py:147-157). Which runner owns which scope is ADR 0086.
+  //
+  // ROLLOUT: identity first. A runner must not claim this job before identity knows it — an unknown value
+  // in a scope is INVALID_ARGUMENT and fails the runner's whole claim for that commune.
+  AUTOMATION_JOB_SCHEDULED_REPORTS = 4;
+}
+
+// Which period a SCHEDULED_REPORTS run reports. Set only on such a run; UNSPECIFIED on every other job.
+enum ScheduledReportPeriod {
+  SCHEDULED_REPORT_PERIOD_UNSPECIFIED = 0;
+  SCHEDULED_REPORT_PERIOD_WEEK = 1;
+  SCHEDULED_REPORT_PERIOD_MONTH = 2;
 }
 
 // The unit of run state: one job, over one kind of work, run by the one service that owns that
@@ -3620,6 +3646,12 @@ message AutomationRun {
   // This service's clock at the claim. THE RUNNER'S `now` FOR THE WHOLE RUN — see the RPC comment.
   // NEVER UNSET in an OK response.
   google.protobuf.Timestamp claimed_at = 3;
+
+  // For a SCHEDULED_REPORTS run: WEEK or MONTH — the slot the claim won (AutomationJob comment). For any
+  // other job: UNSPECIFIED. A runner that receives UNSPECIFIED on a SCHEDULED_REPORTS run (an identity
+  // build that predates this field) sends NOTHING and records FAILED — never guesses the period from its
+  // own clock. The period's BOUNDS are not here: see ADR 0086 part B, open question B-U1.
+  ScheduledReportPeriod scheduled_report_period = 4;
 }
 
 // How one run ended. Closed on purpose — no free text crosses (see RecordAutomationRunOutcome).

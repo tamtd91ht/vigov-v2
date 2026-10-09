@@ -233,6 +233,70 @@ enum StaffNotificationKind {
   //
   // ROLLOUT: comms first, as for 5–16 — a comms build that predates 17 refuses the whole batch.
   STAFF_NOTIFICATION_KIND_DISBURSEMENT_MENTION = 17;
+
+  // --- ADR 0079 Q3 phase 2: notices fixed by ONE ACT of a person (ADR 0086) ---------------------------
+  //
+  // Values 18–24 are sent by the service that owns the act, from an OUTBOX ROW written in the act's own
+  // transaction and drained by an in-process relay that calls this RPC (ADR 0086; transaction boundary
+  // `thong_bao_can_bo_khi_giao_viec`). Each is a Zalo box a commune ticks separately (spec 11 row codes
+  // in parentheses; the web maps them — ADR 0079 Q1 #6). NOT BELL-ONLY: unlike 17, comms queues a Zalo
+  // delivery for these when the commune selected the kind and the recipient is linked.
+  //
+  // THE KEY IS THE ACT, NOT THE RECORD. Each hand-over is a decision somebody made, and handing the same
+  // record back to the same person after it went round must notify again (prototype
+  // vigov-require docs/spec/07-viec-nen-va-thong-bao.md:44-49). So the recipe is
+  // `<stored value>:<id of the row the act wrote>` — the timeline / log / request row of THAT act — and
+  // a relay retry, a redone drain or a second replica sends the same key.
+  //
+  // THE ACTOR IS NEVER A RECIPIENT ("người vừa bấm nút thì không báo", same source). The producer drops
+  // the acting staff code before writing the row; an empty list writes no row.
+  //
+  // Rule 3 as for every kind: title/body carry business codes (task title, `NV…`, arrival number, a
+  // lookup code) and NEVER a petition's content, a citizen's rating comment or a citizen letter's summary
+  // — the prototype bodies that carry those (feedback/service.py:474, :846; documents/service.py:231) are
+  // the lines not to copy.
+  //
+  // ROLLOUT: comms first, as for 5–17 — a comms build that predates a value refuses the whole batch with
+  // INVALID_ARGUMENT, the relay keeps the rows undelivered, and they leave once comms catches up.
+
+  // → `nhiem-vu.giao-moi` (task.assigned). A task was created with, or handed to, a person or a unit.
+  // Recipients: the named assignee; with no assignee, the unit's `task.assign` holders
+  // (identity.ResolveOrgUnitPermissionHolders). Producer service-petitions.
+  STAFF_NOTIFICATION_KIND_TASK_ASSIGNED = 18;
+
+  // → `nhiem-vu.de-nghi-lui-han` (task.extension_requested). An extension request awaits a decision.
+  // Recipient: the task's assigning leader, else its creator. Producer service-petitions.
+  STAFF_NOTIFICATION_KIND_TASK_EXTENSION_REQUESTED = 19;
+
+  // → `nhiem-vu.cho-duyet` (task.approval_requested). A task moved to `cho-duyet`. Producer
+  // service-petitions; recipient per ADR 0086.
+  STAFF_NOTIFICATION_KIND_TASK_APPROVAL_REQUESTED = 20;
+
+  // → `nhiem-vu.nhac-ten` (task.comment_mention). A colleague was mentioned in a task's timeline entry.
+  // One notice per entry, every mentioned code but the author's. Producer service-petitions.
+  STAFF_NOTIFICATION_KIND_TASK_MENTION = 21;
+
+  // → `van-ban.chuyen-toi` (document.transferred). An incoming document OR a citizen letter was handed
+  // to a named officer (one family, as for 9–12). Producer service-documents.
+  STAFF_NOTIFICATION_KIND_DOCUMENT_ASSIGNED = 22;
+
+  // → `phan-anh.phan-cong` (feedback.assigned). A petition was assigned to a named officer. A restricted
+  // petition (ADR 0030) carries no field label, only its lookup code. Producer service-petitions.
+  STAFF_NOTIFICATION_KIND_PETITION_ASSIGNED = 23;
+
+  // → `phan-anh.mo-lai` (feedback.reopened). A petition reopened on a 1–2 star rating (ADR 0050 point 2).
+  // Recipient: the officer holding it. The citizen's comment is NEVER in it. Producer service-petitions.
+  STAFF_NOTIFICATION_KIND_PETITION_REOPENED = 24;
+
+  // → `bao-cao.san-sang` (report.ready). Sent by the `scheduled_reports` automation job
+  // (identity.v1.AutomationJob SCHEDULED_REPORTS) — a JOB, so delivered by the runner directly, like 1–16,
+  // not from an outbox. Recipients: identity.ResolveLeadershipStaff. Key
+  // `scheduled_reports:<work_kind>:<week|month>:<YYYY-MM-DD of the period start>`.
+  STAFF_NOTIFICATION_KIND_REPORT_READY = 25;
+
+  // "Thông báo mới gửi cho mình" (announcement.published) has NO wire value on purpose: comms itself
+  // issues announcements, so it writes that bell row in the issuing transaction (`thong-bao.moi`).
+  // A value is added only when another service needs to send it.
 }
 
 message DeliverStaffNotificationsRequest {
