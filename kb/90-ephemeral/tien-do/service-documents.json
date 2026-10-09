@@ -168,6 +168,14 @@
       "bang_chung": "53196f95 (migration 0008 source + ràng buộc kết quả theo loại) · bf43af79 (status_group, citizen-letter-counts, 'Phân công xử lý', báo cáo, gRPC ResolveCitizenLetterForTask) · 6cdddada (hạn tự điền qua identity khi vào sổ / thụ lý KN-TC, identity lỗi → từ chối) · e87b72ac (nhập Excel tất cả-hoặc-không qua đúng code vào sổ, xuất Excel báo cáo có ghi vết). go build/vet/test service-documents xanh; make check (trừ web) 09/10: 95 gói ok, lint xanh sau fabcfa81.",
       "no_confirm": [],
       "tiep_theo": "CHƯA chạy PostgreSQL thật (VIGOV_TEST_DSN trống) — migration 0008, Count theo nhóm, LiveByID, nhập Excel chưa qua CSDL thật. Bỏ ngỏ có chủ ý: câu chữ gợi ý 'Bộ phận đang xử lý, trong hạn giải quyết.' hiện cả khi quá hạn (chữ prototype). Cột bộ phận trong mẫu Excel nhận MÃ bộ phận (không tên); loại đơn/ngày trống bị từ chối (prototype mặc định). Xuất Excel không có tên xã. ADR 0064 #5 (đơn vị gia hạn) còn mở."
+    },
+    {
+      "no_confirm": [],
+      "id": "adr0086-thong-bao-va-bao-cao-09-10",
+      "trang_thai": "xong",
+      "viec": "ADR 0086: outbox (0009) + bộ chuyển; van-ban.chuyen-toi (không gửi trích yếu ra Zalo — luật 3); scheduled_reports VAN_BAN_DEN.",
+      "bang_chung": "626cb700. go build/vet/test xanh. CHƯA CHẠY TRÊN POSTGRESQL THẬT (máy không có DSN/Docker).",
+      "tiep_theo": "Thứ tự triển khai: identity → comms → petitions/documents (identity cũ không biết SCHEDULED_REPORTS sẽ từ chối cả lượt nhận). Chạy migration trên PostgreSQL thật. Dòng outbox bị gạt (failed_class) chưa có màn xem/đẩy lại; dòng đã giao chưa dọn. Tiêu đề báo cáo dùng lời mặc định — chưa đọc được lời xã sửa ở service-reporting (chưa có hợp đồng)."
     }
   ]
 }

@@ -661,6 +661,14 @@
       "viec": "Ghi log mọi lần từ chối 409/422 của tuyến ảnh hiện trường công dân kèm nguyên nhân — 09/10 thiếu bucket temp trả 500 rồi 409 mà log không nói gì",
       "bang_chung": "(commit này) — http/petition_photo.go answerPhotoError: INFO 'ảnh hiện trường: từ chối' với xa, viec, tep_id, ma_loi, err (cùng quy ước tuChoiXuLy — sửa sau rà của context-scout/cross-context-scout) (không mã tra cứu); app/petition_photo.go: upload_not_received/upload_expired bọc chi tiết khoá đã tìm ở bucket temp + khoá bản sạch ở private + giờ xin chỗ tải. Ca kiểm: TestCitizenPhotoRefusalMapping (log có level=INFO, ma_loi, tep_id, không có mã tra cứu), TestPhotoCompleteAlreadyStoredAndNotYetAndExpired. go test ./... service-petitions xanh || MỞ RỘNG 09/10 (commit này): hàm chung fileRefusalLog (http/petition_photo.go) dùng cho ảnh hiện trường, ảnh sau xử lý (answerVerificationPhotoError), tệp đính kèm nhật ký phiếu, tệp đính kèm nhiệm vụ — INFO 'ma_loi'; upload_not_received/expired của ảnh sau xử lý, tệp nhật ký, tệp nhiệm vụ bọc chi tiết khoá temp/private (notReceivedDetail, attachmentNotReceivedDetail). Ca kiểm: http/file_refusal_log_test.go (3 tuyến × 3 mã). go test ./... service-petitions xanh trên worktree sạch từ HEAD",
       "tiep_theo": "Đã làm cùng kiểu cho comms (ảnh bìa, âm thanh) và platform (ảnh nhận diện) — xem mục log-tu-choi-tai-tep-09-10 ở hai sổ ấy."
+    },
+    {
+      "no_confirm": [],
+      "id": "adr0086-thong-bao-va-bao-cao-09-10",
+      "trang_thai": "xong",
+      "viec": "ADR 0086: outbox staff_notice_outbox (0036) + bộ chuyển; 6 loại tin (giao việc, lùi hạn, chờ duyệt, nhắc tên — thêm mentioned_staff_codes vào POST /tasks/{ma}/log-entries —, phân công phản ánh, mở lại phản ánh); scheduled_reports NHIEM_VU + PHAN_ANH. Lời hệ thống: tắt được câu chưa sửa (0035).",
+      "bang_chung": "e882e0d0, 7eccd37e. go build/vet/test xanh. CHƯA CHẠY TRÊN POSTGRESQL THẬT (máy không có DSN/Docker).",
+      "tiep_theo": "Thứ tự triển khai: identity → comms → petitions/documents (identity cũ không biết SCHEDULED_REPORTS sẽ từ chối cả lượt nhận). Chạy migration trên PostgreSQL thật. Dòng outbox bị gạt (failed_class) chưa có màn xem/đẩy lại; dòng đã giao chưa dọn. Tiêu đề báo cáo dùng lời mặc định — chưa đọc được lời xã sửa ở service-reporting (chưa có hợp đồng)."
     }
   ]
 }

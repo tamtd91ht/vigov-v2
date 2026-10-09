@@ -3048,7 +3048,7 @@
       "path": "/api/v1/finance-system-messages/{code}/override",
       "operation_id": "finance_patch_finance_system_messages_by_code_override",
       "task_id": "f0cfcb337845",
-      "summary": "Xã tắt hoặc bật lại lời đã sửa của một câu hệ thống (tắt thì dùng lời gốc của phần mềm)",
+      "summary": "Xã tắt hoặc bật một câu hệ thống (tắt thì ẩn nơi dùng, nơi bắt buộc có lời thì dùng lời gốc)",
       "screen": "14-cau-hinh §7",
       "permission_kind": "permission",
       "permission": "admin.lookup",
@@ -3061,7 +3061,6 @@
         "401": "httpx.Error",
         "403": "httpx.Error",
         "404": "httpx.Error",
-        "409": "httpx.Error",
         "500": "httpx.Error"
       },
       "declared_in": "service-finance/internal/http/routes.go"
@@ -5285,7 +5284,7 @@
       "path": "/api/v1/petitions-system-messages/{code}/override",
       "operation_id": "petitions_patch_petitions_system_messages_by_code_override",
       "task_id": "82a09b78371b",
-      "summary": "Xã tắt hoặc bật lại lời đã sửa của một câu hệ thống (tắt thì dùng lời gốc của phần mềm)",
+      "summary": "Xã tắt hoặc bật một câu hệ thống (tắt thì ẩn nơi dùng, nơi bắt buộc có lời thì dùng lời gốc)",
       "screen": "14-cau-hinh §7",
       "permission_kind": "permission",
       "permission": "admin.lookup",
@@ -5298,7 +5297,6 @@
         "401": "httpx.Error",
         "403": "httpx.Error",
         "404": "httpx.Error",
-        "409": "httpx.Error",
         "500": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes.go"
@@ -5703,7 +5701,7 @@
       "path": "/api/v1/reporting-system-messages/{code}/override",
       "operation_id": "reporting_patch_reporting_system_messages_by_code_override",
       "task_id": "a7fea7e356ce",
-      "summary": "Xã tắt hoặc bật lại lời đã sửa của một câu hệ thống (tắt thì dùng lời gốc của phần mềm)",
+      "summary": "Xã tắt hoặc bật một câu hệ thống (tắt thì ẩn nơi dùng, nơi bắt buộc có lời thì dùng lời gốc)",
       "screen": "14-cau-hinh §7",
       "permission_kind": "permission",
       "permission": "admin.lookup",
@@ -5716,7 +5714,6 @@
         "401": "httpx.Error",
         "403": "httpx.Error",
         "404": "httpx.Error",
-        "409": "httpx.Error",
         "500": "httpx.Error"
       },
       "declared_in": "service-reporting/internal/http/routes.go"
@@ -7867,7 +7864,8 @@
         "401": "httpx.Error",
         "403": "httpx.Error",
         "404": "httpx.Error",
-        "500": "httpx.Error"
+        "500": "httpx.Error",
+        "503": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes.go"
     },

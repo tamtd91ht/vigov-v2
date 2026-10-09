@@ -315,6 +315,14 @@
       "bang_chung": "(commit này) — core/storage/storage.go mapErr dùng minio ErrorResponse.BucketName. go test ./storage xanh",
       "tiep_theo": "",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "no_confirm": [],
+      "id": "identityclient-scheduled-report-period-09-10",
+      "trang_thai": "xong",
+      "viec": "core/identityclient: AutomationRun.ScheduledReportPeriod.",
+      "bang_chung": "626cb700. go test core/identityclient xanh.",
+      "tiep_theo": "Chạy migration trên PostgreSQL thật."
     }
   ]
 }

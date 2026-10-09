@@ -365,6 +365,14 @@
       "viec": "Ghi log INFO mọi lần từ chối 409/422 khi tải tệp: ảnh bìa (answerCoverError) và âm thanh truyền thanh (answerAudioError) — 09/10 thiếu bucket temp trả 409 mà log không nói gì",
       "bang_chung": "(commit này) — fileRefusalLog: xa, viec, tep_id, ma_loi, err (không tên tệp). http/content_cover.go, http/content_audio.go; ca kiểm http/file_refusal_log_test.go. go vet + go test internal/http, internal/app xanh",
       "tiep_theo": "Lỗi 'chưa nhận được / hết hạn' ở service này chưa bọc chi tiết khoá temp/private như petitions"
+    },
+    {
+      "no_confirm": [],
+      "id": "adr0086-nhan-loai-moi-09-10",
+      "trang_thai": "xong",
+      "viec": "ADR 0086: migration 0025 mở CHECK cho 9 loại; kindFromWire 18–25; phát hành thông báo nội bộ ghi chuông trong cùng giao dịch.",
+      "bang_chung": "954f64ce. go build/vet/test xanh. CHƯA CHẠY TRÊN POSTGRESQL THẬT (máy không có DSN/Docker).",
+      "tiep_theo": "Chạy migration trên PostgreSQL thật."
     }
   ]
 }

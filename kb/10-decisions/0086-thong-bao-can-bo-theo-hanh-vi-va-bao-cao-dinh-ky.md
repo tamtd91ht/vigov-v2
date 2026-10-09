@@ -78,7 +78,7 @@ Ba điểm người dùng chốt khác hoặc làm rõ prototype:
 
 | Điểm | Chốt 09/10 |
 |---|---|
-| Nơi chạy | Mỗi service sở hữu sổ gửi phần của mình, như bản tin tuần (ADR 0058 §8): petitions (nhiệm vụ quá hạn, phản ánh trễ), documents (văn bản đến quá hạn). Lãnh đạo nhận 2 tin. Không có nơi gộp, không RPC đếm mới |
+| Nơi chạy | Mỗi service sở hữu sổ gửi phần của mình, như bản tin tuần (ADR 0058 §8): petitions (nhiệm vụ quá hạn; phản ánh trễ), documents (văn bản đến quá hạn). Mỗi loại việc một lượt nhận như bản tin tuần, nên lãnh đạo nhận 3 tin (Nhiệm vụ, Phản ánh, Văn bản đến). Không có nơi gộp, không RPC đếm mới |
 | Kỳ | Kỳ HIỆN TẠI vừa bắt đầu, như prototype; ranh giới ngày theo giờ Việt Nam (ADR 0053 §3), không theo UTC |
 | Nội dung | Nhãn tiếng Việt ("Nhiệm vụ quá hạn: 3"), không mã chỉ số thô. Số không có dữ liệu thì bỏ, không ghi 0 (ADR 0053 §6) — số Giải ngân bỏ vì finance chưa có bên chạy |
 

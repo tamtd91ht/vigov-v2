@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-reporting",
-  "cap_nhat": "2026-10-08",
+  "cap_nhat": "2026-10-09",
   "muc": [
     {
       "id": "khung-rong-cho-khach-chot",
@@ -45,6 +45,14 @@
       "bang_chung": "Migration c4e2f0c7 (0004); 2a4959cb. go test ./service-reporting/... xanh.",
       "no_confirm": [],
       "tiep_theo": "Nợ cũ: CHECK delete_complete của 0003 như finance. Web chưa nối lại."
+    },
+    {
+      "no_confirm": [],
+      "id": "loi-he-thong-tat-moi-cau-09-10",
+      "trang_thai": "xong",
+      "viec": "Lời hệ thống tắt được câu chưa sửa (migration 0005); report.* chưa có nơi dùng.",
+      "bang_chung": "7eccd37e. go build/vet/test xanh. CHƯA CHẠY TRÊN POSTGRESQL THẬT (máy không có DSN/Docker).",
+      "tiep_theo": "Chạy migration trên PostgreSQL thật."
     }
   ]
 }

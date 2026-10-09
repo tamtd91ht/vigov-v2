@@ -1128,6 +1128,15 @@
       "bang_chung": "1f0de65b. tsc sạch ở bien-ban; eslint bien-ban sạch; vitest bien-ban+nhiem-vu+van-ban+phan-anh 54 tệp/1352 ca; toàn web 5337/5339 (2 ca dashboard/export quá giờ lúc tải, riêng 15/15 xanh). ui-ux-reviewer chỉ viết baseline trên mã nguồn (UNVERIFIABLE), chưa chấm VALIDATE — builder dừng giữa chừng vì giới hạn API, phiên chính làm nốt hộp Nhập biên bản. CHƯA kiểm bằng ảnh render — người dùng kiểm sau build; chưa được báo là khớp prototype.",
       "tiep_theo": "(1) Người dùng kiểm ảnh: thẻ Dự thảo có đủ trạng thái kết luận, một kết luận mở danh sách nhiệm vụ đã tách, thẻ Đã ký, danh sách rỗng, lần tải đầu, hộp Nhập, hộp Tách, hộp Gỡ. (2) Chạy ui-ux-reviewer VALIDATE trên mã (chưa chạy vòng nào). (3) Ô nhập vẫn dùng lớp cũ .o-nhap — hình ô so với Input/Textarea của prototype chỉ thấy được trên ảnh. (4) Còn mở từ trước ở man-bien-ban-hop/giao-dien-bien-ban-hop-w2-s3: OChonCanBo không có chevron, nút Tải lại trong khung xem chi tiết.",
       "no_confirm": []
+    },
+    {
+      "no_confirm": [],
+      "id": "cau-hinh-theo-spec-09-10",
+      "menu": "cau-hinh",
+      "trang_thai": "xong",
+      "viec": "Spec tmp/web/updated/cap-nhat-menu-cau-hinh-theo-prototype.md, người dùng chốt 09/10 (ADR 0079 §Sửa đổi 09/10, ADR 0086): thanh tab một dòng + thứ tự prototype; hộp Nhập Excel 672px dùng chung (Sơ đồ, Thôn, Danh mục, Người dùng); chip chỉ chữ; nhóm Lĩnh vực phản ánh trong Danh mục; Thời hạn header một dòng, sắp dòng, 'Mặc định N giờ.' từ dữ liệu xã; câu Excel Trường bản đồ; gợi ý Máy chủ thư; Lời hệ thống Tắt mọi câu; 9 dòng Kênh Zalo có loại thật; thẻ Gửi báo cáo định kỳ thật.",
+      "bang_chung": "35d32e48, 7eccd37e (phần web), 53019d33. vitest toàn bộ 289 tệp 5348 ca xanh lúc 35d32e48; cau-hinh+dev-preview 63 tệp 1061 ca lúc 53019d33. CHƯA KIỂM BẰNG ẢNH RENDER.",
+      "tiep_theo": "(1) Đo trên máy build: thanh tab ≤36px ở 1280/1534, header Thời hạn một dòng ở 1534, thẻ Sơ đồ ≈65px. (2) Người dùng xem 2 câu mới: 'Máy chủ chưa nhận loại này nên chưa bật được.' (Kênh Zalo) và mô tả 'Báo cáo tuần vào đầu tuần…' sai khi xã chọn thứ khác thứ Hai. (3) ExcelImportPanel/OrgUnitImportPanel không còn màn nào gọi — dọn sau; target.explanation không còn hiện (mất ghi chú Mức ưu tiên, hướng dẫn mật khẩu tạm). (4) Câu Excel ở Trường bản đồ nói về tính năng chưa có (chưa có tuyến nhập tài nguyên bản đồ). (5) Không làm theo người dùng chốt: đổi mã TTPVHCC, tách Loại đơn thư, gieo dữ liệu xã, job Tính lại Tổng quan, Xoá thôn."
     }
   ]
 }

@@ -582,6 +582,14 @@
       "bang_chung": "17b4aba9. go build, go test migrations/domain/store/app xanh; check_quyen PASS (43 khoá, 6 chưa có mã Go dùng — thông tin). CHƯA CHẠY TRÊN POSTGRESQL THẬT (máy không có DSN/Docker).",
       "no_confirm": [],
       "tiep_theo": "(1) Chạy 0028 trên PostgreSQL thật/Jenkins. (2) Sáu khoá chưa có tuyến nào kiểm — khi dựng module Danh bạ người dân / Hồ sơ công dân / Gửi thông báo thì dùng đúng các khoá này; notice.send chồng nghĩa với announcement.create, cần phân biệt khi dựng. (3) Ghi quyết định đè #27 vào ADR (knowledge-keeper)."
+    },
+    {
+      "no_confirm": [],
+      "id": "scheduled-reports-lich-09-10",
+      "trang_thai": "xong",
+      "viec": "ADR 0086 B2: migration 0029, lịch scheduled_reports (thứ + mùng 1, giờ VN), automation_run.scheduled_report_period.",
+      "bang_chung": "4ba24ac5. go build/test xanh. CHƯA CHẠY TRÊN POSTGRESQL THẬT (máy không có DSN/Docker).",
+      "tiep_theo": "Chạy migration trên PostgreSQL thật."
     }
   ]
 }
