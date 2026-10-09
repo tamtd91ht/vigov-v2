@@ -49,6 +49,7 @@ import {
   sessionGateOffersRetry,
   type SessionGateState,
 } from "./commune-session";
+import { ConsentDialog } from "./consent-dialog";
 import { dichGoi } from "./DanhBaCanBoScreen";
 import { ThanDanhBaXa, useDanhBaXa } from "./DanhBaXa";
 import { DauManCon, KhoiTrangThai, RootTabHeader, SectionHeader, type SectionAccent, type Tone, TrangCon } from "./khung-xa";
@@ -870,19 +871,54 @@ function AppCuaXa(props: {
   const nameAfterPhone = useRef(false);
   const askName = useRef(props.onAgreeName);
   askName.current = props.onAgreeName;
+  /** The name request as of the LAST render — the gate runs its act later, from an older render's closure. */
+  const nameNow = useRef(props.name);
+  nameNow.current = props.name;
 
-  /** Run `act` with a session — at once if one exists, otherwise after the explanation and the tap. */
-  function requireSession(task: PhoneVerificationTask, act: () => void) {
+  /*
+   * THE GAP THE GATE LEAVES (owner report, 09/10/2026: "tên Zalo không được điền sẵn"). When a VERIFIED session
+   * already exists in this open — opened by "Phản ánh của tôi", "Tra cứu" or a rating — `gate.require` runs the
+   * act at once, no gate is shown, so the name was never asked and the send screen fell to (c). Then the act
+   * waits behind ONE short question (`ConsentDialog`): "Cho phép" asks Zalo through `TrangXa` (the only holder of
+   * the bridge), "Không" or Escape settles "no name"; either way the send screen opens. Asked only while the name
+   * is `needs-consent`, and any answer settles it — so never twice in one open (`TrangXa`'s `nameAsked` guards
+   * the Zalo call itself). Asked BEFORE the screen opens, so its first render already sees "being asked" or
+   * "settled", and the sender never swaps under the citizen's finger (`VerifiedSender`).
+   */
+  const [namePrompt, setNamePrompt] = useState<(() => void) | null>(null);
+
+  /**
+   * Run `act` with a session — at once if one exists, otherwise after the explanation and the tap. `offerName`:
+   * the act opens "Gửi phản ánh" (only `go`), so a name never asked may be asked first — never for a retry.
+   */
+  function requireSession(task: PhoneVerificationTask, act: () => void, offerName = false) {
     setGateTask(task);
     gate.require(() => {
-      if (nameAfterPhone.current && task === "submit" && layPhienViGov()?.phone_verified === true) askName.current();
+      const verified = layPhienViGov()?.phone_verified === true;
+      const askedWithPhone = nameAfterPhone.current;
       nameAfterPhone.current = false;
+      if (askedWithPhone && task === "submit" && verified) {
+        askName.current();
+      } else if (offerName && verified && nameNow.current.kind === "needs-consent") {
+        setNamePrompt(() => act);
+        petitions.loadIfIdle();
+        return;
+      }
       act();
       // A session now exists: the home block and Cá nhân fill in without a second question — but only with a
       // VERIFIED phone. A phone-less session (ADR 0080) is refused by the list route, and that refusal would
       // drop the session and put the gate over the form the citizen just opened.
-      if (layPhienViGov()?.phone_verified === true) petitions.loadIfIdle();
+      if (verified) petitions.loadIfIdle();
     }, task);
+  }
+
+  /** The name question's answer, then the send screen it was holding back. */
+  function answerNamePrompt(allow: boolean) {
+    const act = namePrompt;
+    setNamePrompt(null);
+    if (allow) props.onAgreeName();
+    else props.onDeclineName();
+    act?.();
   }
 
   /** 401 / 403 `chua_xac_thuc_so`: forget the session, and run the act again through the gate. */
@@ -898,7 +934,7 @@ function AppCuaXa(props: {
 
   /** Navigation from a tap. The two personal screens pass the gate; everything else is public. */
   function go(m: ManXa) {
-    if (m.kieu === "gui") requireSession("submit", () => datMan(m));
+    if (m.kieu === "gui") requireSession("submit", () => datMan(m), true);
     else if (m.kieu === "tra-cuu-phieu") requireSession("lookup", () => datMan(m));
     else datMan(m);
   }
@@ -1091,6 +1127,14 @@ function AppCuaXa(props: {
       <div className={entering ? "xa-frame xa-frame--enter" : "xa-frame"} hidden={gateScreen !== null}>
         {content}
       </div>
+      {namePrompt !== null && (
+        <ConsentDialog
+          id="xa-name-prompt-question"
+          question={XA_TN.name_prompt_question}
+          onAllow={() => answerNamePrompt(true)}
+          onDeny={() => answerNamePrompt(false)}
+        />
+      )}
     </div>
   );
 

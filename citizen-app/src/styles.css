@@ -4434,13 +4434,6 @@ button.xa-o-nhanh {
 .xa-photo-buttons p {
   margin: 0;
 }
-.xa-photo-why {
-  display: grid;
-  gap: 8px;
-}
-.xa-photo-why p {
-  margin: 0;
-}
 .xa-photo-uploads p {
   margin: 0 0 6px;
 }
@@ -4724,7 +4717,8 @@ button.xa-o-nhanh {
   color: var(--ink);
 }
 
-/* ---------- "Bạn sắp rời ứng dụng để mở …" (`leave-app.tsx`) ---------- */
+/* ---------- "Bạn sắp rời ứng dụng để mở …" (`leave-app.tsx`) — and the short permission question
+   (`consent-dialog.tsx`), which reuses these classes so the app has one dialog style ---------- */
 /* Over the whole screen, the box at the bottom where the thumb is. It does not slide in from off-screen: since UI-1
    (02/10/2026) the box only fades in with an 8px rise, 180ms, and not at all under reduced motion (the guard). */
 .xa-leave-app {

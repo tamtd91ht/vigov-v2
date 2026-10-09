@@ -204,7 +204,7 @@ xác thực" trên màn là thật.
 ## Sửa đổi 09/10/2026 — người gửi đã xác thực số: một dòng chỉ đọc, không "Sửa"; tên Zalo hỏi cùng bước xác nhận số
 
 Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. **Người quyết:** chủ dự án,
-09/10/2026, trong phiên chính. **Đang dựng** (phiên khác) — sổ
+09/10/2026, trong phiên chính. **Đã dựng** `a9b3f05e` (a–f) và hàng (g)–(h) dưới đây — sổ
 `citizen-app/gui-phan-anh-nguoi-gui-da-xac-thuc`.
 
 **Lý do (lời chủ dự án):** bỏ ma sát — tên và số đã có từ Zalo thì người dân không phải nhập. Cách dựng
@@ -218,6 +218,8 @@ Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói kh�
 | d | Thời điểm lấy tên | Chưa có tên lúc vào gửi thì tên Zalo được **hỏi cùng bước xác nhận số**: màn giải thích trước hộp thoại Zalo nói rõ xin **cả họ tên và số** (chính sách Zalo 3.3.4). **Chỉ hỏi một lần duy nhất trong phiên**; đã có tên (đồng ý ở thẻ trang chủ, hoặc lần kiểm im lặng lúc mở app) thì không hỏi lại. Chế độ người gửi (a)/(c) **chốt khi tên đã ngã ngũ**, không đổi dưới tay người dân |
 | e | Công tắc "Gửi ẩn danh" | **Giữ** (điểm 3). Bật thì dòng "Gửi bằng" ẩn |
 | f | Hệ quả kỹ thuật | Ở (a)/(c) client gửi `reporter_phone` **rỗng**; máy chủ tự gắn số đã xác thực (§*Sửa đổi 08/10/2026* điểm 2, RPC `ResolveCitizenContactPhone`, `proto/vigov/identity/v1/identity.proto:403`). Số/tên còn trong nháp **không được gửi ngầm** ở (a)/(c) — lỗi của bản 08/10: số gõ trước khi dòng gập vẫn gửi ngầm và **đè** số đã xác thực |
+| g | Phiên đã xác thực **có sẵn** từ trước trong lần mở (mở ở "Phản ánh của tôi", "Tra cứu", đánh giá) nên bấm gửi **không qua bước xác nhận số** | Tên chưa ngã ngũ thì trước form hiện **popup ngắn** "Dùng tên Zalo của bạn làm tên người gửi?" — "Cho phép" hỏi Zalo **một lần**, "Không"/Escape/chạm nền = không tên → (c). Vẫn một lần mỗi lần mở. Bổ sung 09/10 sau khi chủ dự án báo tên không được điền: bản `a9b3f05e` bỏ sót đường này |
+| h | Chụp ảnh / chọn ảnh hiện trường | Thay thẻ giải thích dài trước hộp thoại Zalo bằng **popup ngắn** "Cho phép ứng dụng dùng camera để chụp ảnh hiện trường?" / "…truy cập ảnh trong máy để chọn ảnh hiện trường?" — "Cho phép" / "Không" (chủ dự án 09/10: *"chỉ cần show cho phép ứng dụng dùng camera là được"*). Câu hỏi ngắn ấy vẫn là lời nói trước hộp thoại Zalo (chính sách 3.3.4) |
 
 **Thay gì:** điểm 1 của §*Sửa đổi 08/10/2026* (nút "Sửa") và vế *"'Sửa' vẫn còn"* ở đoạn *Thay gì* của
 mục ấy. Điểm 2–4 của §*Sửa đổi 08/10/2026* vẫn đứng. Điểm 9 vẫn đứng: ở (a) người gửi là tên Zalo, ở (c)

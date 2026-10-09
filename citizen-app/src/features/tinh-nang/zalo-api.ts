@@ -216,8 +216,10 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     commune_app: {
       man: "Gửi phản ánh · Phản ánh của tôi",
       tinh_nang: "Ảnh hiện trường",
+      // 09/10/2026 (owner): the long explanation card became ONE question, "Cho phép ứng dụng dùng camera để chụp
+      // ảnh hiện trường?" (`cong-dan/man/consent-dialog.tsx`); Zalo is asked only after its "Cho phép".
       de_lam_gi:
-        "Hỏi bà con có cho phép dùng máy ảnh hay không, chỉ khi chính bà con bấm “Chụp ảnh” để chụp nơi xảy ra sự việc, sau khi ứng dụng đã nói rõ ảnh dùng để làm gì.",
+        "Hỏi bà con có cho phép dùng máy ảnh hay không, chỉ khi chính bà con bấm “Chụp ảnh” để chụp nơi xảy ra sự việc rồi bấm “Cho phép” ở câu hỏi của ứng dụng “Cho phép ứng dụng dùng camera để chụp ảnh hiện trường?”. Bấm “Không” thì Zalo không được hỏi.",
       // The question itself sends nothing; the photo's way out is the `chooseImage` row below.
       roi_khoi_may: "",
     },
@@ -238,8 +240,9 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     commune_app: {
       man: "Gửi phản ánh · Phản ánh của tôi",
       tinh_nang: "Ảnh hiện trường",
+      // 09/10/2026 (owner): opened only after "Cho phép" on the app's own one-line question.
       de_lam_gi:
-        "Mở cửa sổ chọn ảnh để bà con chọn ảnh có sẵn trong máy, chỉ khi chính bà con bấm “Chọn ảnh có sẵn”; tối đa 5 ảnh cho một phản ánh. Ứng dụng chỉ nhận những ảnh bà con đã chọn, không xem các ảnh khác trong máy.",
+        "Mở cửa sổ chọn ảnh để bà con chọn ảnh có sẵn trong máy, chỉ khi chính bà con bấm “Chọn ảnh có sẵn” rồi bấm “Cho phép” ở câu hỏi của ứng dụng “Cho phép ứng dụng truy cập ảnh trong máy để chọn ảnh hiện trường?”; tối đa 5 ảnh cho một phản ánh. Ứng dụng chỉ nhận những ảnh bà con đã chọn, không xem các ảnh khác trong máy.",
       roi_khoi_may:
         "Ảnh bà con đã chọn, kèm loại ảnh và dung lượng, được gửi tới hệ thống của xã sau khi phản ánh đã được ghi nhận, để đính vào chính phản ánh ấy. Ảnh không được giữ trong bản nháp trên máy.",
     },
@@ -253,8 +256,9 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     nua: "ca-hai",
     man: "Trang của một xã mở bằng mã QR · Gửi phản ánh · Phản ánh của tôi",
     tinh_nang: "Ảnh hiện trường",
+    // 09/10/2026 (owner): and only after "Cho phép" on the app's one-line camera question (`consent-dialog.tsx`).
     de_lam_gi:
-      "Mở máy ảnh của điện thoại để bạn chụp một ảnh nơi xảy ra sự việc, chỉ khi chính bạn bấm “Chụp ảnh” lúc gửi phản ánh tới xã; tối đa 5 ảnh cho một phản ánh. Ứng dụng chỉ nhận ảnh bạn vừa chụp.",
+      "Mở máy ảnh của điện thoại để bạn chụp một ảnh nơi xảy ra sự việc, chỉ khi chính bạn bấm “Chụp ảnh” lúc gửi phản ánh tới xã rồi bấm “Cho phép” ở câu hỏi của ứng dụng; tối đa 5 ảnh cho một phản ánh. Ứng dụng chỉ nhận ảnh bạn vừa chụp.",
     hoi_nguoi_dung: false,
     roi_khoi_may:
       "Ảnh bạn đã chụp, kèm loại ảnh và dung lượng, được gửi tới hệ thống của xã sau khi phản ánh đã được ghi nhận, để đính vào chính phản ánh ấy.",
@@ -262,7 +266,7 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
       man: "Gửi phản ánh · Phản ánh của tôi",
       tinh_nang: "Ảnh hiện trường",
       de_lam_gi:
-        "Mở máy ảnh của điện thoại để bà con chụp một ảnh nơi xảy ra sự việc, chỉ khi chính bà con bấm “Chụp ảnh”; tối đa 5 ảnh cho một phản ánh. Ứng dụng chỉ nhận ảnh bà con vừa chụp.",
+        "Mở máy ảnh của điện thoại để bà con chụp một ảnh nơi xảy ra sự việc, chỉ khi chính bà con bấm “Chụp ảnh” rồi bấm “Cho phép” ở câu hỏi của ứng dụng; tối đa 5 ảnh cho một phản ánh. Ứng dụng chỉ nhận ảnh bà con vừa chụp.",
       roi_khoi_may:
         "Ảnh bà con đã chụp, kèm loại ảnh và dung lượng, được gửi tới hệ thống của xã sau khi phản ánh đã được ghi nhận, để đính vào chính phản ánh ấy. Ảnh không được giữ trong bản nháp trên máy.",
     },
@@ -383,12 +387,16 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     // read-only sender line — and a name not yet granted is asked ONCE, right after the phone confirmation
     // the citizen started by tapping send. The sentences below tell both moments: a declaration naming a box
     // the reviewer cannot find is exactly what this table exists to prevent.
+    // 09/10/2026, a THIRD moment (owner): the number was already confirmed earlier in this open ("Phản ánh của
+    // tôi", "Tra cứu", a rating), so tapping send shows no phone step — then the one-line question "Dùng tên Zalo
+    // của bạn làm tên người gửi?" (`cong-dan/man/consent-dialog.tsx`, `TrangXa.tsx`) comes first, and Zalo is
+    // asked only after its "Cho phép". Still at most once per open.
     api: "getUserInfo",
     nua: "ca-hai",
     man: "Liên hệ · Trang của một xã mở bằng mã QR (tên hiện ở Trang chủ, Cá nhân và dòng người gửi của Gửi phản ánh)",
     tinh_nang: "Chat với chuyên viên · Điền sẵn người gửi khi gửi phản ánh",
     de_lam_gi:
-      "Lấy tên hiển thị Zalo của bạn sau khi bạn đồng ý. Ở màn Liên hệ, khi bạn bấm “Chat với chuyên viên”, tên được gửi kèm yêu cầu trò chuyện tới máy chủ của Tập đoàn ViHAT Group để chuyên viên biết ai đang nhắn; bạn từ chối thì cửa sổ trò chuyện vẫn mở, chỉ là không có tên. Trên trang của một xã, tên được lấy một lần: khi trang mở ra nếu bạn đã đồng ý, hoặc ngay sau bước xác nhận số điện thoại khi bạn bấm gửi phản ánh — ứng dụng nói trước rằng sẽ xin cả họ tên và số điện thoại. Tên hiện sẵn ở dòng người gửi; bạn từ chối thì tự nhập họ tên. Tên ấy chỉ nằm trên điện thoại này cho tới khi bạn tự bấm gửi phản ánh.",
+      "Lấy tên hiển thị Zalo của bạn sau khi bạn đồng ý. Ở màn Liên hệ, khi bạn bấm “Chat với chuyên viên”, tên được gửi kèm yêu cầu trò chuyện tới máy chủ của Tập đoàn ViHAT Group để chuyên viên biết ai đang nhắn; bạn từ chối thì cửa sổ trò chuyện vẫn mở, chỉ là không có tên. Trên trang của một xã, tên được lấy nhiều nhất một lần mỗi lần mở: khi trang mở ra nếu bạn đã đồng ý; hoặc ngay sau bước xác nhận số điện thoại khi bạn bấm gửi phản ánh — ứng dụng nói trước rằng sẽ xin cả họ tên và số điện thoại; hoặc, nếu số điện thoại đã được xác nhận trước đó, khi bạn bấm gửi phản ánh và chọn “Cho phép” ở câu hỏi “Dùng tên Zalo của bạn làm tên người gửi?”. Tên hiện sẵn ở dòng người gửi; bạn từ chối thì tự nhập họ tên. Tên ấy chỉ nằm trên điện thoại này cho tới khi bạn tự bấm gửi phản ánh.",
     hoi_nguoi_dung: true,
     roi_khoi_may:
       "Ở màn Liên hệ: tên hiển thị Zalo được gửi tới máy chủ của Tập đoàn ViHAT Group cùng yêu cầu trò chuyện, khi bạn bấm “Chat với chuyên viên”. Trên trang của một xã: tên không rời khỏi máy cho tới khi bạn tự bấm gửi phản ánh.",
@@ -396,7 +404,7 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
       man: "Mở ứng dụng của xã · Gửi phản ánh (tên hiện ở Trang chủ, Cá nhân và dòng người gửi của Gửi phản ánh)",
       tinh_nang: "Điền sẵn người gửi khi gửi phản ánh",
       de_lam_gi:
-        "Lấy tên hiển thị Zalo của bạn một lần — khi bạn mở ứng dụng của xã và đồng ý, hoặc ngay sau bước xác nhận số điện thoại khi bạn bấm gửi phản ánh (ứng dụng nói trước rằng sẽ xin cả họ tên và số điện thoại) — để hiện sẵn ở dòng người gửi khi gửi phản ánh tới xã; bạn từ chối thì tự nhập họ tên. Tên chỉ nằm trên điện thoại này; ứng dụng không gửi nó đi đâu cho tới khi bạn tự bấm gửi phản ánh.",
+        "Lấy tên hiển thị Zalo của bạn nhiều nhất một lần mỗi lần mở — khi bạn mở ứng dụng của xã và đồng ý; hoặc ngay sau bước xác nhận số điện thoại khi bạn bấm gửi phản ánh (ứng dụng nói trước rằng sẽ xin cả họ tên và số điện thoại); hoặc, nếu số điện thoại đã được xác nhận trước đó, khi bạn bấm gửi phản ánh và chọn “Cho phép” ở câu hỏi “Dùng tên Zalo của bạn làm tên người gửi?” — để hiện sẵn ở dòng người gửi khi gửi phản ánh tới xã; bạn từ chối thì tự nhập họ tên. Tên chỉ nằm trên điện thoại này; ứng dụng không gửi nó đi đâu cho tới khi bạn tự bấm gửi phản ánh.",
       roi_khoi_may: "",
     },
   },
@@ -934,8 +942,9 @@ function untilReturnWithoutPhoto<T>(pending: Promise<T>): Promise<T | typeof NO_
  * picker's temp paths; nothing is uploaded by this call.
  *
  * The permission call is KEPT although `index.d.ts` does not mark `chooseImage` `@requirePermission`: whether
- * Zalo's webview opens the camera for a Mini App without it has not been measured on a device, and the
- * explanation card already tells the citizen Zalo will ask. Dropping it is one line once measured.
+ * Zalo's webview opens the camera for a Mini App without it has not been measured on a device. The app's own
+ * one-line question (`cong-dan/man/consent-dialog.tsx`, 09/10/2026) runs BEFORE this whole function, not instead
+ * of the permission call. Dropping it is one line once measured.
  */
 export async function takeScenePhoto(): Promise<ScenePhotoPick> {
   const kq = await xin("camera", async (sdk, step) => {

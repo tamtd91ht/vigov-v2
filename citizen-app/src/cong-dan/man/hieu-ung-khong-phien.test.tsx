@@ -58,6 +58,7 @@ import { GuiPhanAnhScreen, ID_DAU_BUOC } from "./GuiPhanAnhScreen";
 import {
   ACCOUNTLESS,
   COMMUNE_APP_SESSION,
+  CONSENT_DIALOG,
   CUA_TOI,
   GUI,
   KENH_CHUA_MO,
@@ -72,6 +73,7 @@ import {
 } from "./noi-dung";
 import { CommuneSendScreen, SERVER_ATTACHES_SESSION_PHONE } from "./PhanAnhAppXa";
 import { PhanAnhCuaToiScreen } from "./PhanAnhCuaToiScreen";
+import type { PickScenePhotos } from "./scene-photos";
 // vi-name-ok: importing the EXISTING type `KetQuaLayTen` — no new name
 import type { KetQuaLayTen, NameRequestMode } from "./trai-nghiem";
 import { TraCuuPhieuScreen } from "./TraCuuPhieuScreen";
@@ -235,8 +237,11 @@ function tatCaPhanTu(nut: NutGia): PhanTuGia[] {
   return nut.childNodes.flatMap((c) => (c instanceof PhanTuGia ? [c, ...tatCaPhanTu(c)] : []));
 }
 
-/** Deliver one bubbling event to `target`: capture listeners root → target, then bubble target → root. */
-function dispatch(target: PhanTuGia, type: string) {
+/**
+ * Deliver one bubbling event to `target`: capture listeners root → target, then bubble target → root. `extra`
+ * carries what a key event needs (`key`, `shiftKey`) — React reads them from the native event.
+ */
+function dispatch(target: PhanTuGia, type: string, extra: Record<string, unknown> = {}) {
   const path: NutGia[] = [];
   for (let n: NutGia | null = target; n !== null; n = n.parentNode) path.push(n);
   let stopped = false;
@@ -254,6 +259,7 @@ function dispatch(target: PhanTuGia, type: string) {
     stopPropagation() {
       stopped = true;
     },
+    ...extra,
   };
   for (const n of [...path].reverse()) {
     for (const l of n.listeners.get(type) ?? []) if (l.capture && !stopped) l.fn(event);
@@ -267,6 +273,16 @@ function dispatch(target: PhanTuGia, type: string) {
 async function press(button: PhanTuGia) {
   await act(async () => {
     dispatch(button, "click");
+  });
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
+}
+
+/** Press a key with the focus on `target` (the dialog's Escape / Tab handling). */
+async function pressKey(target: PhanTuGia, key: string, shiftKey = false) {
+  await act(async () => {
+    dispatch(target, "keydown", { key, shiftKey });
   });
   await act(async () => {
     await new Promise((r) => setTimeout(r, 0));
@@ -1181,6 +1197,247 @@ describe("app xã — cổng gửi phản ánh: hỏi họ tên cùng bước x�
     await press(buttonsNamed(khung, PHONE_VERIFICATION.allow)[0]!);
     expect(openSession).toHaveBeenCalledTimes(1);
     expect(calls).toEqual(["check"]);
+    await go();
+  });
+
+  /* ── A VERIFIED session already exists in this open: the gate is skipped, so the name popup asks (09/10/2026) ── */
+
+  /** What "Phản ánh của tôi", "Tra cứu" or a rating leave behind: a verified session, opened before any send. */
+  const verifiedSessionExists = () => datPhienViGov({ token: "tok-thu-nghiem", ten_xa: COMMUNE, phone_verified: true });
+  const namePrompt = (khung: PhanTuGia) =>
+    tatCaPhanTu(khung).find(
+      (p) => p.getAttribute("role") === "alertdialog" && p.textContent.includes(XA_TN.name_prompt_question),
+    ) ?? null;
+  const fieldTiles = (khung: PhanTuGia) => tatCaPhanTu(khung).filter((p) => p.getAttribute("role") === "radio");
+
+  it("ROOT CAUSE, reproduced: 'Phản ánh của tôi' opened the session first → sending skips the gate → the popup asks the name", async () => {
+    const list = vi.mocked(phanAnhCuaToi);
+    const real = list.getMockImplementation();
+    list.mockImplementation(async () => ({ kieu: "loi-may-chu" }));
+    try {
+      const { bridge, calls } = nameBridge({ kieu: "tu-choi" }, { kieu: "xong", ho_ten: NAME });
+      const { khung, go } = await mountApp(bridge);
+      await press(buttonsNamed(khung, XA_PA.need_session_button)[0]!);
+      // The "mine" gate speaks of the number only — the name is not part of that act.
+      expect(khung.textContent).not.toContain(COMMUNE_APP_SESSION.zalo_asks_with_name);
+      await press(buttonsNamed(khung, PHONE_VERIFICATION.allow)[0]!);
+      expect(layPhienViGov()?.phone_verified).toBe(true);
+      expect(calls).toEqual(["check"]);
+
+      await press(sendTile(khung));
+      // No second gate (the session exists) — before 09/10 this fell straight to (c) with the name never asked.
+      expect(openSession).toHaveBeenCalledTimes(1);
+      const dialog = namePrompt(khung)!;
+      expect(dialog).not.toBeNull();
+      expect(dialog.getAttribute("aria-modal")).toBe("true");
+      expect(XA_TN.name_prompt_question).toBe("Dùng tên Zalo của bạn làm tên người gửi?");
+      // Nothing asked before the answer, and the form is not open under the question.
+      expect(calls).toEqual(["check"]);
+      expect(fieldTiles(khung)).toEqual([]);
+
+      await press(buttonsNamed(dialog, CONSENT_DIALOG.allow)[0]!);
+      expect(calls).toEqual(["check", "ask"]);
+      expect(namePrompt(khung)).toBeNull();
+      await toWritingStep(khung);
+      expect(khung.textContent).toContain(XA_PA.sender_summary_with_phone(NAME));
+      expect(doc().getElementById("xa-ho-ten")).toBeNull();
+      expect(doc().getElementById("xa-dien-thoai")).toBeNull();
+
+      // Never twice in one open.
+      await leaveSendScreen(khung);
+      await press(sendTile(khung));
+      expect(namePrompt(khung)).toBeNull();
+      expect(calls).toEqual(["check", "ask"]);
+      await go();
+    } finally {
+      list.mockImplementation(real!);
+    }
+  });
+
+  it("verified session + name never asked: 'Không' → (c), Zalo asked nothing, and the popup never comes back", async () => {
+    const { bridge, calls } = nameBridge({ kieu: "tu-choi" }, { kieu: "xong", ho_ten: "never asked" });
+    const { khung, go } = await mountApp(bridge);
+    verifiedSessionExists();
+    await press(sendTile(khung));
+    await press(buttonsNamed(namePrompt(khung)!, CONSENT_DIALOG.deny)[0]!);
+    expect(namePrompt(khung)).toBeNull();
+    expect(calls).toEqual(["check"]);
+    await toWritingStep(khung);
+    expect(doc().getElementById("xa-ho-ten")!.getAttribute("aria-required")).toBe("true");
+    expect(doc().getElementById("xa-dien-thoai")).toBeNull();
+    expect(khung.textContent).toContain(XA_PA.sender_verified_phone);
+
+    await leaveSendScreen(khung);
+    await press(sendTile(khung));
+    expect(namePrompt(khung)).toBeNull();
+    await toWritingStep(khung);
+    expect(calls).toEqual(["check"]);
+    expect(khung.textContent).toContain(XA_PA.sender_verified_phone);
+    await go();
+  });
+
+  it("Escape on the name popup is 'Không': (c), nothing asked", async () => {
+    const { bridge, calls } = nameBridge({ kieu: "tu-choi" }, { kieu: "xong", ho_ten: "never asked" });
+    const { khung, go } = await mountApp(bridge);
+    verifiedSessionExists();
+    await press(sendTile(khung));
+    const dialog = namePrompt(khung)!;
+    // The focus starts inside the dialog, on the choice that grants nothing.
+    expect(doc().activeElement).toBe(buttonsNamed(dialog, CONSENT_DIALOG.deny)[0]);
+    await pressKey(doc().activeElement!, "Escape");
+    expect(namePrompt(khung)).toBeNull();
+    expect(calls).toEqual(["check"]);
+    await toWritingStep(khung);
+    expect(doc().getElementById("xa-ho-ten")).not.toBeNull();
+    await go();
+  });
+
+  it("'Cho phép' but Zalo gives no name: (c), and the popup is not offered again", async () => {
+    const { bridge, calls } = nameBridge({ kieu: "tu-choi" }, { kieu: "khong-lay-duoc" });
+    const { khung, go } = await mountApp(bridge);
+    verifiedSessionExists();
+    await press(sendTile(khung));
+    await press(buttonsNamed(namePrompt(khung)!, CONSENT_DIALOG.allow)[0]!);
+    expect(calls).toEqual(["check", "ask"]);
+    await toWritingStep(khung);
+    expect(doc().getElementById("xa-ho-ten")).not.toBeNull();
+    expect(khung.textContent).toContain(XA_PA.sender_verified_phone);
+
+    await leaveSendScreen(khung);
+    await press(sendTile(khung));
+    expect(namePrompt(khung)).toBeNull();
+    expect(calls).toEqual(["check", "ask"]);
+    await go();
+  });
+
+  it("no popup when the name is already settled — given at open (a), or declined on the home card (c)", async () => {
+    const given = nameBridge({ kieu: "xong", ho_ten: NAME }, { kieu: "xong", ho_ten: "never asked" });
+    const a = await mountApp(given.bridge);
+    verifiedSessionExists();
+    await press(sendTile(a.khung));
+    expect(namePrompt(a.khung)).toBeNull();
+    await toWritingStep(a.khung);
+    expect(a.khung.textContent).toContain(XA_PA.sender_summary_with_phone(NAME));
+    expect(given.calls).toEqual(["check"]);
+    await a.go();
+
+    datPhienViGov(null);
+    const declined = nameBridge({ kieu: "tu-choi" }, { kieu: "xong", ho_ten: "never asked" });
+    const c = await mountApp(declined.bridge);
+    verifiedSessionExists();
+    await press(buttonsNamed(c.khung, XA_TN.name_card_decline)[0]!);
+    await press(sendTile(c.khung));
+    expect(namePrompt(c.khung)).toBeNull();
+    await toWritingStep(c.khung);
+    expect(doc().getElementById("xa-ho-ten")).not.toBeNull();
+    expect(declined.calls).toEqual(["check"]);
+    await c.go();
+  });
+});
+
+/* ═════════════════ 09/10/2026 (owner) — scene photos: a SHORT question before Zalo's dialog, once per button ═════════════════ */
+
+describe("app xã — ảnh hiện trường: câu hỏi ngắn trước hộp thoại của Zalo, một lần cho mỗi nút", () => {
+  const doc = () => (globalThis as unknown as { document: TaiLieuGia }).document;
+
+  beforeEach(() => {
+    trang.phien = { token: "tok-thu-nghiem", ten_xa: "Xã Thử Nghiệm", phone_verified: true };
+    vi.mocked(citizenReportFields).mockReset();
+    vi.mocked(citizenReportFields).mockResolvedValue({ kieu: "xong", fields: FIELDS });
+  });
+
+  async function mountWithPicker() {
+    const pick = vi.fn<PickScenePhotos>(async () => ({ kind: "huy" }));
+    const mounted = await gan(
+      createElement(CommuneSendScreen, {
+        ten_xa: "Xã Thử Nghiệm",
+        ho_ten: "Nguyễn Văn An",
+        verifiedPhone: true,
+        pickScenePhotos: pick,
+        onBack: () => {},
+        onSessionLost: () => {},
+        onSent: () => {},
+        onOpenPetition: () => {},
+      }),
+    );
+    await press(tatCaPhanTu(mounted.khung).filter((p) => p.getAttribute("role") === "radio")[0]!);
+    return { ...mounted, pick };
+  }
+
+  const consent = (khung: PhanTuGia) => tatCaPhanTu(khung).find((p) => p.getAttribute("role") === "alertdialog") ?? null;
+  const take = (khung: PhanTuGia) => buttonsNamed(khung, SCENE_PHOTOS.take)[0]!;
+  const library = (khung: PhanTuGia) => buttonsNamed(khung, SCENE_PHOTOS.pick)[0]!;
+
+  it("'Chụp ảnh': the question comes FIRST and Zalo is not called; 'Không' closes it and calls nothing", async () => {
+    const { khung, pick, go } = await mountWithPicker();
+    await press(take(khung));
+    const dialog = consent(khung)!;
+    expect(dialog).not.toBeNull();
+    expect(dialog.getAttribute("aria-modal")).toBe("true");
+    expect(dialog.textContent).toContain(SCENE_PHOTOS.camera_question);
+    expect(buttonsNamed(dialog, CONSENT_DIALOG.allow)).toHaveLength(1);
+    expect(pick).not.toHaveBeenCalled();
+    // The focus is in the dialog, on "Không".
+    expect(doc().activeElement).toBe(buttonsNamed(dialog, CONSENT_DIALOG.deny)[0]);
+
+    await press(buttonsNamed(dialog, CONSENT_DIALOG.deny)[0]!);
+    expect(consent(khung)).toBeNull();
+    expect(pick).not.toHaveBeenCalled();
+    // Not allowed yet: the next tap asks again.
+    await press(take(khung));
+    expect(consent(khung)).not.toBeNull();
+    expect(pick).not.toHaveBeenCalled();
+    await go();
+  });
+
+  it("'Cho phép' → Zalo exactly as before; later taps go straight to Zalo; the other button asks its own question", async () => {
+    const { khung, pick, go } = await mountWithPicker();
+    await press(take(khung));
+    await press(buttonsNamed(consent(khung)!, CONSENT_DIALOG.allow)[0]!);
+    expect(consent(khung)).toBeNull();
+    expect(pick.mock.calls).toEqual([["camera", 1]]);
+
+    await press(take(khung));
+    expect(consent(khung)).toBeNull();
+    expect(pick.mock.calls).toEqual([["camera", 1], ["camera", 1]]);
+
+    await press(library(khung));
+    const dialog = consent(khung)!;
+    expect(dialog.textContent).toContain(SCENE_PHOTOS.library_question);
+    expect(pick).toHaveBeenCalledTimes(2);
+    await press(buttonsNamed(dialog, CONSENT_DIALOG.allow)[0]!);
+    expect(pick.mock.calls[2]).toEqual(["library", 5]);
+    await press(library(khung));
+    expect(consent(khung)).toBeNull();
+    expect(pick).toHaveBeenCalledTimes(4);
+    await go();
+  });
+
+  it("Escape and a tap on the dimmed area are 'Không'; a tap inside the box is not; Tab stays in the dialog", async () => {
+    const { khung, pick, go } = await mountWithPicker();
+    await press(take(khung));
+    let dialog = consent(khung)!;
+    const allow = buttonsNamed(dialog, CONSENT_DIALOG.allow)[0]!;
+    const deny = buttonsNamed(dialog, CONSENT_DIALOG.deny)[0]!;
+    await pressKey(deny, "Tab");
+    expect(doc().activeElement).toBe(allow);
+    await pressKey(allow, "Tab");
+    expect(doc().activeElement).toBe(deny);
+    await pressKey(deny, "Tab", true);
+    expect(doc().activeElement).toBe(allow);
+    await pressKey(allow, "Escape");
+    expect(consent(khung)).toBeNull();
+    expect(pick).not.toHaveBeenCalled();
+
+    await press(library(khung));
+    dialog = consent(khung)!;
+    // Inside the box (the question itself): nothing happens.
+    await press(tatCaPhanTu(dialog).find((p) => p.textContent === SCENE_PHOTOS.library_question)!);
+    expect(consent(khung)).not.toBeNull();
+    // The dimmed area around it.
+    await press(dialog.parentNode as PhanTuGia);
+    expect(consent(khung)).toBeNull();
+    expect(pick).not.toHaveBeenCalled();
     await go();
   });
 });

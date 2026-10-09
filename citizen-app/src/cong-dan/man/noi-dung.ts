@@ -867,6 +867,12 @@ export const XA_TN = {
   name_card_asking: "Đang chờ bà con trả lời Zalo…",
   /** Zalo refused the name with a code (`zaloFailureSentence`). Not asked again in this open — no retry. */
   name_zalo_failed: (zalo: string) => `${zalo} Bà con vẫn dùng ứng dụng bình thường và tự gõ họ tên khi gửi phản ánh.`,
+  /**
+   * The short question before Zalo's name dialog when the citizen opens "Gửi phản ánh" with a phone ALREADY
+   * verified in this open — no gate, so no other moment said it (owner's wording, 09/10/2026). Buttons:
+   * `CONSENT_DIALOG`.
+   */
+  name_prompt_question: "Dùng tên Zalo của bạn làm tên người gửi?",
   chua_co_ten: "Chưa xác định",
   /** Accessible name of the Tin tức · Sự kiện · Thông báo tablist on the news tab. */
   loc_loai_tin: "Loại tin",
@@ -1165,6 +1171,15 @@ export const XA_PA = {
 } as const;
 
 /**
+ * The two answers of every short permission question asked before a Zalo dialog (`consent-dialog.tsx`): scene
+ * photos and the Zalo name (owner, 09/10/2026). One pair of words for one kind of question.
+ */
+export const CONSENT_DIALOG = {
+  allow: "Cho phép",
+  deny: "Không",
+} as const;
+
+/**
  * ẢNH HIỆN TRƯỜNG — app riêng của xã (`scene-photos.tsx`; ADR 0047 row "Ảnh hiện trường khi gửi phản ánh").
  * Every failure says what to do next and carries no code; none blames the citizen for the server; none says
  * the petition failed — it never does because of a photo (owner, 02/10/2026). No server threshold is written
@@ -1182,15 +1197,10 @@ export const SCENE_PHOTOS = {
   photo_alt: (i: number) => `Ảnh hiện trường thứ ${i}`,
   no_preview: (i: number) => `Ảnh thứ ${i} — máy này không xem trước được, ảnh vẫn được gửi.`,
   remove: (i: number) => `Bỏ ảnh thứ ${i}`,
-  // The card BEFORE Zalo's own dialog (Zalo policy 3.3.4): what for, and that Zalo will ask.
-  camera_title: "Chụp ảnh hiện trường",
-  camera_why:
-    "Ứng dụng cần dùng máy ảnh để bà con chụp nơi xảy ra sự việc. Bấm “Tiếp tục” thì Zalo sẽ hỏi bà con có cho phép dùng máy ảnh không. Ảnh chỉ được gửi tới xã, kèm phản ánh này.",
-  library_title: "Chọn ảnh có sẵn trong máy",
-  library_why:
-    "Bấm “Tiếp tục” thì Zalo mở cửa sổ chọn ảnh trên điện thoại. Chỉ những ảnh bà con chọn mới được gửi tới xã, kèm phản ánh này. Ứng dụng không xem các ảnh khác trong máy.",
-  continue: "Tiếp tục",
-  later: "Để sau",
+  // The ONE sentence said BEFORE Zalo's own dialog (Zalo policy 3.3.4) — a short modal question, owner's wording
+  // of 09/10/2026, replacing the long explanation card. Buttons: `CONSENT_DIALOG`.
+  camera_question: "Cho phép ứng dụng dùng camera để chụp ảnh hiện trường?",
+  library_question: "Cho phép ứng dụng truy cập ảnh trong máy để chọn ảnh hiện trường?",
   camera_refused: "Bà con chưa cho phép dùng máy ảnh. Bà con vẫn gửi được phản ánh, hoặc bấm “Chọn ảnh có sẵn”.",
   library_refused: "Bà con chưa cho phép mở ảnh trong máy. Bà con vẫn gửi được phản ánh không kèm ảnh.",
   outside_zalo: "Chỉ chụp hoặc chọn ảnh được khi mở ứng dụng trong Zalo. Bà con vẫn gửi được phản ánh không kèm ảnh.",

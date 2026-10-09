@@ -24,8 +24,9 @@ vi.mock("zmp-sdk", () => sdk);
 vi.mock("../dang-nhap/goi-may-chu", () => ({ reportClientError: async () => {} }));
 
 import { toScenePhotoPickResult } from "../../App";
+import { CONSENT_DIALOG, SCENE_PHOTOS, XA_TN } from "../../cong-dan/man/noi-dung";
 
-import { chooseScenePhotos, takeScenePhoto } from "./zalo-api";
+import { chooseScenePhotos, KHAI_BAO_LOI_GOI, takeScenePhoto } from "./zalo-api";
 
 const zaloError = (code: number) => Object.assign(new Error("platform text that must not travel"), { code });
 
@@ -164,5 +165,36 @@ describe("App.tsx — the bridge table", () => {
     expect(
       toScenePhotoPickResult({ kieu: "khong-lay-duoc", failure: { capability: "photos", code: -1403, transient: false } }),
     ).toEqual({ kind: "thu-lai", zalo: { capability: "photos", code: -1403, transient: false } });
+  });
+});
+
+/**
+ * THE ZALO SUBMISSION DECLARES THE MOMENT THE APP ACTUALLY HAS (owner, 09/10/2026): the long explanation card
+ * became one question with "Cho phép" / "Không". A row still describing the card — or not naming the question a
+ * reviewer will see on screen — sends the reviewer looking for a screen that is not there.
+ */
+describe("the commune app's declarations name the short questions, word for word", () => {
+  const row = (api: string) => KHAI_BAO_LOI_GOI.find((r) => r.api === api)!;
+
+  it("camera and photo picker: the question's exact words, and 'Cho phép' before Zalo", () => {
+    expect(row("requestCameraPermission").commune_app!.de_lam_gi).toContain(`“${SCENE_PHOTOS.camera_question}”`);
+    expect(row("openMediaPicker").commune_app!.de_lam_gi).toContain(`“${SCENE_PHOTOS.library_question}”`);
+    for (const api of ["requestCameraPermission", "openMediaPicker", "chooseImage"]) {
+      expect(row(api).commune_app!.de_lam_gi, api).toContain(`“${CONSENT_DIALOG.allow}”`);
+    }
+    expect(row("chooseImage").de_lam_gi).toContain(`“${CONSENT_DIALOG.allow}”`);
+  });
+
+  it("getUserInfo: the third moment — a number already confirmed, then the name question", () => {
+    expect(row("getUserInfo").de_lam_gi).toContain(`“${XA_TN.name_prompt_question}”`);
+    expect(row("getUserInfo").commune_app!.de_lam_gi).toContain(`“${XA_TN.name_prompt_question}”`);
+  });
+
+  it("no row still speaks of the old card's buttons", () => {
+    for (const r of KHAI_BAO_LOI_GOI) {
+      for (const text of [r.de_lam_gi, r.commune_app?.de_lam_gi ?? ""]) {
+        expect(text, r.api).not.toMatch(/“Tiếp tục”|“Để sau”|đã nói rõ ảnh dùng để làm gì/);
+      }
+    }
   });
 });

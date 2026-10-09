@@ -47,6 +47,7 @@ import { taoLanGui } from "../api/lan-gui"; // vi-name-ok: existing export, not 
 import type { ZaloFailure } from "../api/mo-phien-vigov";
 
 import { BieuTuong } from "./BieuTuong";
+import { ConsentDialog } from "./consent-dialog";
 import { SCENE_PHOTOS, VERIFICATION_PHOTOS, zaloFailureSentence, zaloSupportCode } from "./noi-dung";
 import type { OnSessionLost } from "./PhanAnhAppXa";
 
@@ -124,9 +125,11 @@ export function pickFailureText(f: PickFailure): string {
 }
 
 /**
- * The two buttons' behaviour. THE SCREEN SAYS WHY BEFORE ZALO ASKS (Zalo policy 3.3.4, as the phone gate and
- * the name card do): the first tap on each button opens an explanation card; "Tiếp tục" on it runs the pick.
- * Later taps in the same screen go straight to Zalo — the citizen has read it once.
+ * The two buttons' behaviour. THE SCREEN ASKS BEFORE ZALO DOES (Zalo policy 3.3.4, as the phone gate does): the
+ * first tap on each button opens a short question (`ConsentDialog`, owner 09/10/2026 — it replaced a long
+ * explanation card); "Cho phép" runs the pick, "Không" closes it and calls nothing. Once allowed, later taps on
+ * THAT button go straight to Zalo for as long as this screen lives — the same scope the card had: per button,
+ * per screen. `explaining` is the button whose question is open.
  */
 export function usePhotoPicking(pick: PickScenePhotos | undefined, remaining: () => number, onPicked: (paths: string[]) => void) {
   const [explaining, setExplaining] = useState<ScenePhotoSource | null>(null);
@@ -163,8 +166,8 @@ export function usePhotoPicking(pick: PickScenePhotos | undefined, remaining: ()
 export type PhotoPicking = ReturnType<typeof usePhotoPicking>;
 
 /**
- * The explanation card, or the two buttons, plus the pick's failure line (and Zalo's "Mã hỗ trợ" under it).
- * Pure apart from the callbacks — rendered by the tests without a DOM.
+ * The two buttons, the open question over them (`explaining`), plus the pick's failure line (and Zalo's "Mã hỗ
+ * trợ" under it). Pure apart from the callbacks — rendered by the tests without a DOM.
  */
 export function ScenePhotoButtons(props: {
   count: number;
@@ -176,25 +179,16 @@ export function ScenePhotoButtons(props: {
   onCancel: () => void;
 }) {
   const full = props.count >= MAX_SCENE_PHOTOS;
-  if (props.explaining !== null) {
-    const camera = props.explaining === "camera";
-    return (
-      <div className="xa-the xa-the--dem xa-photo-why" role="group" aria-labelledby="xa-photo-why-title">
-        <h3 className="xa-dau-khoi__tieu-de" id="xa-photo-why-title">
-          {camera ? SCENE_PHOTOS.camera_title : SCENE_PHOTOS.library_title}
-        </h3>
-        <p>{camera ? SCENE_PHOTOS.camera_why : SCENE_PHOTOS.library_why}</p>
-        <button type="button" className="xa-nut" onClick={props.onConfirm}>
-          {SCENE_PHOTOS.continue}
-        </button>
-        <button type="button" className="xa-nut xa-nut--phu" onClick={props.onCancel}>
-          {SCENE_PHOTOS.later}
-        </button>
-      </div>
-    );
-  }
   return (
     <div className="xa-photo-buttons">
+      {props.explaining !== null && (
+        <ConsentDialog
+          id="xa-photo-consent-question"
+          question={props.explaining === "camera" ? SCENE_PHOTOS.camera_question : SCENE_PHOTOS.library_question}
+          onAllow={props.onConfirm}
+          onDeny={props.onCancel}
+        />
+      )}
       {full ? (
         <p className="xa-phu" role="status">
           {SCENE_PHOTOS.full(MAX_SCENE_PHOTOS)}

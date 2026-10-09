@@ -32,7 +32,7 @@ import {
 } from "../api/hop-dong-phan-anh";
 import type { PhieuCuaToi } from "../api/hop-dong-phan-anh";
 
-import { SCENE_PHOTOS, XA_PA, ZALO_FAILURE } from "./noi-dung";
+import { CONSENT_DIALOG, SCENE_PHOTOS, XA_PA, ZALO_FAILURE } from "./noi-dung";
 import { CommuneSendScreen, PetitionBody, SendDone } from "./PhanAnhAppXa";
 import {
   attachScenePhoto,
@@ -412,16 +412,31 @@ describe("the send form's photo field", () => {
     expect(html).toContain(SCENE_PHOTOS.full(MAX_SCENE_PHOTOS));
   });
 
-  it("BEFORE Zalo asks, the card says why and that Zalo will ask — for each button", () => {
+  it("BEFORE Zalo asks: a SHORT modal question per button, 'Cho phép' / 'Không' (owner, 09/10/2026)", () => {
+    expect(SCENE_PHOTOS.camera_question).toBe("Cho phép ứng dụng dùng camera để chụp ảnh hiện trường?");
+    expect(SCENE_PHOTOS.library_question).toBe("Cho phép ứng dụng truy cập ảnh trong máy để chọn ảnh hiện trường?");
+    expect(CONSENT_DIALOG.allow).toBe("Cho phép");
+    expect(CONSENT_DIALOG.deny).toBe("Không");
+
     const camera = renderToStaticMarkup(createElement(ScenePhotoButtons, { ...buttonProps(), explaining: "camera" }));
-    expect(camera).toContain(SCENE_PHOTOS.camera_why);
-    expect(camera).toContain(SCENE_PHOTOS.continue);
-    expect(camera).toContain(SCENE_PHOTOS.later);
-    expect(camera).not.toContain(SCENE_PHOTOS.pick);
-    expect(camera).not.toContain(`${SCENE_PHOTOS.take}</button>`);
-    expect(SCENE_PHOTOS.camera_why).toMatch(/Zalo sẽ hỏi/);
+    // A modal dialog a screen reader reads as a question and stays in — not an inline card.
+    expect(camera).toMatch(/role="alertdialog" aria-modal="true" aria-labelledby="xa-photo-consent-question"/);
+    expect(camera).toContain(SCENE_PHOTOS.camera_question);
+    expect(camera).not.toContain(SCENE_PHOTOS.library_question);
+    expect(camera).toContain(`>${CONSENT_DIALOG.allow}</button>`);
+    expect(camera).toContain(`>${CONSENT_DIALOG.deny}</button>`);
+    // The long card is gone: no "Tiếp tục" / "Để sau", no paragraph about what Zalo will do.
+    expect(camera).not.toContain("Tiếp tục");
+    expect(camera).not.toContain("Để sau");
+    expect(camera).not.toMatch(/Zalo sẽ hỏi/);
+    expect("camera_why" in SCENE_PHOTOS || "library_why" in SCENE_PHOTOS).toBe(false);
+
     const library = renderToStaticMarkup(createElement(ScenePhotoButtons, { ...buttonProps(), explaining: "library" }));
-    expect(library).toContain(SCENE_PHOTOS.library_why);
+    expect(library).toContain(SCENE_PHOTOS.library_question);
+    expect(library).not.toContain(SCENE_PHOTOS.camera_question);
+
+    // No question open: no dialog at all.
+    expect(renderToStaticMarkup(createElement(ScenePhotoButtons, buttonProps()))).not.toContain("alertdialog");
   });
 
   it("the send screen renders without asking Zalo for anything", () => {
