@@ -324,6 +324,10 @@ Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói kh�
 | Giới hạn đồng thời | Mỗi pod giới hạn số lượt tải cùng lúc (cận do vendor đặt, cùng kiểu `photoReadSlots` ở `service-petitions/internal/app/petition_photo.go:106-122`) |
 | Xem / tải xuống | **Giữ** presigned GET (≤ 15 phút) đọc thẳng MinIO — không đổi |
 | Hạ tầng | Ingress công khai của MinIO S3 API (`storage-api.vigov.vn`) chỉ cho **GET/HEAD** (và OPTIONS cho CORS); mọi lệnh ghi từ Internet bị chặn ở nginx. Service ghi qua `OBJECT_STORAGE_ENDPOINT` |
+| Phạm vi bổ sung (chủ dự án, 09/10) | Thêm **ảnh trong thân bài** comms (`content-items/body-images`) — cùng mã với ảnh bìa; không còn luồng nào ghi thẳng MinIO |
+| Trần thân yêu cầu ở ingress | **55 MB** cho host petitions · comms · platform · web (đủ tệp 50 MB + phần bao multipart); host khác giữ 25 MB. Giới hạn từng loại tệp vẫn do platform kiểm |
+| Giới hạn tải ảnh của người dân | Giữ con số **30 lượt / 15 phút**, mỗi lượt nay là một ảnh (trước ≈ 15 ảnh vì đếm cả xin chỗ lẫn hoàn tất) — chủ dự án chọn nới |
+| Ngưỡng nhà cung cấp (chủ dự án duyệt cả gói) | Mỗi pod **tối đa 4 lượt tải cùng lúc** (thừa → 503, thử lại); mỗi lượt tải **tối đa 180 giây**; `GOMEMLIMIT=300MiB` cho petitions + comms; **bỏ hẳn** các tuyến `…/completion` cũ |
 | Trạng thái | Quyết định đã chốt, **CHƯA dựng** |
 
 **Lý do — sự cố 09/10/2026.** `OBJECT_STORAGE_PUBLIC_ENDPOINT` trỏ nhầm MinIO Console; Console trả 200
