@@ -389,7 +389,9 @@ func main() {
 		Checker:       staffauth.Checker{},
 		LoaiTaiNguyen: loaiTaiNguyen,
 		ThongBao:      thongBao,
-		GhiThongBao:   commsapp.NewSoanThongBaoNoiBo(kho, thongBao),
+		// Issuing rings each recipient's bell in the same transaction (`thong-bao.moi`, migration 0025),
+		// through the bell's own store, and queues the Zalo copies like the gRPC delivery does.
+		GhiThongBao: commsapp.NewSoanThongBaoNoiBo(kho, thongBao, staffInbox).WithZaloOutbox(zaloLinks, log),
 
 		NoiDung: noiDung,
 		GhiNoiDung: commsapp.NewSoanNoiDungMiniApp(kho, noiDung, danhMucNoiDung).

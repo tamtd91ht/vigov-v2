@@ -195,18 +195,54 @@ func TestZaloReminderTextAndLink(t *testing.T) {
 
 // --- 0021: per-domain kinds and the read-time map --------------------------------------------------
 
-func TestZaloReminderKindsAreThe0021Kinds(t *testing.T) {
-	b, err := os.ReadFile("../../migrations/0021_zalo_kinds_per_domain.sql")
+func TestZaloReminderKindsAreThe0021And0025Kinds(t *testing.T) {
+	b, err := os.ReadFile("../../migrations/0025_staff_notification_act_kinds.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
 	check := string(b)
-	if len(ZaloReminderKinds) != 13 {
-		t.Fatalf("%d selectable kinds, want 12 per-domain + the weekly digest", len(ZaloReminderKinds))
+	if len(ZaloReminderKinds) != 22 {
+		t.Fatalf("%d selectable kinds, want 12 per-domain + the weekly digest + 9 act notices", len(ZaloReminderKinds))
 	}
+	// 0025 restates the whole list in each CHECK, so every selectable kind must appear in it.
 	for _, k := range ZaloReminderKinds {
 		if !strings.Contains(check, "'"+k+"'") {
-			t.Errorf("%q is not admitted by 0021's CHECKs", k)
+			t.Errorf("%q is not admitted by 0025's CHECKs", k)
+		}
+	}
+	// The order is the screen's: 0021's thirteen first, unchanged, then the nine act notices.
+	if ZaloReminderKinds[12] != "ban-tin-tuan" || ZaloReminderKinds[13] != "nhiem-vu.giao-moi" ||
+		ZaloReminderKinds[21] != "thong-bao.moi" {
+		t.Errorf("order = %v", ZaloReminderKinds)
+	}
+}
+
+// The act notices (0025) are selectable, queueable, bell-known, matched only by their own box — and never
+// by an OLD value, which no producer of an act notice ever sent.
+func TestActNoticeKindsReachZaloOnlyWhenTicked(t *testing.T) {
+	act := []string{"nhiem-vu.giao-moi", "nhiem-vu.de-nghi-lui-han", "nhiem-vu.cho-duyet", "nhiem-vu.nhac-ten",
+		"van-ban.chuyen-toi", "phan-anh.phan-cong", "phan-anh.mo-lai", "bao-cao.san-sang", "thong-bao.moi"}
+	old := []string{"sap-den-han", "qua-han", "leo-thang", "ban-tin-tuan"}
+	for _, k := range act {
+		if !knownKind(k) {
+			t.Errorf("%q: the bell refuses it", k)
+		}
+		if !slices.Contains(ZaloQueueableKinds(), k) {
+			t.Errorf("%q gets no zalo_delivery row", k)
+		}
+		if !ZaloKindSelected([]string{k}, k) {
+			t.Errorf("%q is not selected by its own box", k)
+		}
+		if ZaloKindSelected(old, k) {
+			t.Errorf("%q passes a selection of the four old values", k)
+		}
+		if ZaloKindSelected([]string{ZaloKindTaskOverdue}, k) {
+			t.Errorf("%q passes an unrelated box", k)
+		}
+		s := DefaultZaloChannelSetting()
+		s.IsEnabled, s.Kinds = true, []string{k}
+		if got, err := NormalizeZaloChannelSetting(s); err != nil || !slices.Equal(got.Kinds, []string{k}) {
+			t.Errorf("%q cannot be saved alone: %v %v", k, got.Kinds, err)
 		}
 	}
 }
@@ -250,8 +286,8 @@ func TestBellOnlyKindsNeverReachZalo(t *testing.T) {
 // the twelve per-domain kinds — so the enqueue filter cannot drop a Zalo notice by mistake.
 func TestZaloQueueableKindsAreTheNoticeKinds(t *testing.T) {
 	q := ZaloQueueableKinds()
-	if len(q) != 16 {
-		t.Fatalf("%d queueable kinds, want 4 old + 12 per-domain", len(q))
+	if len(q) != 25 {
+		t.Fatalf("%d queueable kinds, want 4 old + 12 per-domain + 9 act notices", len(q))
 	}
 	for _, k := range append([]string{"sap-den-han", "qua-han", "leo-thang", "ban-tin-tuan"}, ZaloReminderKinds...) {
 		if !slices.Contains(q, k) {
@@ -272,8 +308,9 @@ func TestZaloLegacyKindMapIs0021sTable(t *testing.T) {
 			t.Errorf("%s → %s, want %s", old, got, kinds)
 		}
 	}
-	// Together the four old values cover every selectable kind exactly: lossless both ways.
-	if got := ExpandZaloKinds([]string{"sap-den-han", "qua-han", "leo-thang", "ban-tin-tuan"}); !slices.Equal(got, ZaloReminderKinds) {
+	// Together the four old values cover every 0021 kind exactly: lossless both ways. They stop short of
+	// 0025's act notices on purpose — no old producer sent one, so no old selection meant one.
+	if got := ExpandZaloKinds([]string{"sap-den-han", "qua-han", "leo-thang", "ban-tin-tuan"}); !slices.Equal(got, ZaloReminderKinds[:13]) {
 		t.Errorf("the four old values expand to %v", got)
 	}
 	legacy, perDomain := ZaloLegacyKindPairs()

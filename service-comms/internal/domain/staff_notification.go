@@ -201,8 +201,9 @@ func ValidateDeliveries(in []NotificationDelivery) ([]NotificationDelivery, erro
 	return out, nil
 }
 
-// knownKind is the set 0023's staff_notification_kind_with_bell_only admits: the four old kinds, the twelve
-// per-domain ones (ZaloReminderKinds, which also holds the weekly digest) and the bell-only kinds. One
+// knownKind is the set 0025's staff_notification_kind_with_act_notices admits: the four old kinds, the
+// twelve per-domain ones and the nine act notices (ZaloReminderKinds, which also holds the weekly digest)
+// and the bell-only kinds. One
 // list for both, so the bell and the Zalo selection can never disagree on what a kind is.
 func knownKind(k string) bool {
 	return slices.Contains(ZaloQueueableKinds(), k) || slices.Contains(BellOnlyKinds, k)

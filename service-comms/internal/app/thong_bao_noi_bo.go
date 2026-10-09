@@ -20,6 +20,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/vihat/vigov/core/audit"
@@ -46,6 +48,15 @@ type SoanThongBaoNoiBo struct {
 	db  *store.DB
 	kho KhoThongBaoNoiBo
 
+	// bell writes each recipient's header-bell row (`thong-bao.moi`, migration 0025) in the issuing
+	// transaction — the SAME store function DeliverStaffNotifications uses (StaffNotificationRepo.AddDelivery),
+	// so the bell has one write path whoever feeds it. Required: PhatHanh refuses without it.
+	bell StaffNotificationRepo
+	// zalo queues the Zalo copies of those rows, inside its own savepoint (ADR 0074 #1: a Zalo failure never
+	// fails the bell). nil = no Zalo channel wired.
+	zalo ZaloOutbox
+	log  *slog.Logger
+
 	// sinhID and bayGio are injected so a test can pin both. In production they are ulid.Moi and
 	// time.Now. The clock is injectable because `phat_hanh_luc` is the moment §3 prints and the
 	// database refuses to change it afterwards — a test that could not fix it could only assert
@@ -54,8 +65,52 @@ type SoanThongBaoNoiBo struct {
 	bayGio func() time.Time
 }
 
-func NewSoanThongBaoNoiBo(db *store.DB, kho KhoThongBaoNoiBo) *SoanThongBaoNoiBo {
-	return &SoanThongBaoNoiBo{db: db, kho: kho, sinhID: ulid.Moi, bayGio: time.Now}
+func NewSoanThongBaoNoiBo(db *store.DB, kho KhoThongBaoNoiBo, bell StaffNotificationRepo) *SoanThongBaoNoiBo {
+	return &SoanThongBaoNoiBo{db: db, kho: kho, bell: bell, sinhID: ulid.Moi, bayGio: time.Now, log: slog.Default()}
+}
+
+// WithZaloOutbox wires the Zalo Bot outbox, as StaffNotifications.WithZaloOutbox does. log reports an
+// enqueue failure (commune and count only).
+func (uc *SoanThongBaoNoiBo) WithZaloOutbox(o ZaloOutbox, log *slog.Logger) *SoanThongBaoNoiBo {
+	uc.zalo = o
+	if log != nil {
+		uc.log = log
+	}
+	return uc
+}
+
+// ErrBellNotWired refuses an issue when the bell store is missing — a wiring fault. Issuing anyway would
+// put the announcement in the book while no recipient's bell ever rang: the silent "nobody was told" this
+// file exists to prevent (see ErrGuiTheoBoPhanChuaCo).
+var ErrBellNotWired = errors.New("thong_bao: chưa nối hộp thư chuông")
+
+// announcementBellLink is where the bell item leads in web-admin (`web-admin/src/app/thong-bao`). The
+// book, not the card: the route takes no id today, and an id in a query string the page ignores would be
+// a link that looks precise and is not.
+const announcementBellLink = "/thong-bao"
+
+// announcementBellTitle is the bell's first line: the announcement's title, clipped to the bell's 200
+// characters (domain.MaxNotificationTitleLen) because the book admits 300 (domain.TieuDeToiDa). Only the
+// bell's display line is clipped — the announcement keeps its title whole.
+func announcementBellTitle(title string) string {
+	r := []rune(title)
+	if len(r) <= domain.MaxNotificationTitleLen {
+		return title
+	}
+	return strings.TrimSpace(string(r[:domain.MaxNotificationTitleLen-1])) + "…"
+}
+
+// announcementBellRecipients is the announcement's recipients less the publisher: "người vừa bấm nút thì
+// không báo" (comms.proto, the act-notice rule). The recipient LIST of the book is unchanged — a publisher
+// who named themselves is still on it; only their own bell does not ring for their own act.
+func announcementBellRecipients(recipients []string, publisher string) []string {
+	out := make([]string, 0, len(recipients))
+	for _, ma := range recipients {
+		if ma != publisher {
+			out = append(out, ma)
+		}
+	}
+	return out
 }
 
 // HanhViPhatHanhThongBao is the business verb written into the trail. Vietnamese snake_case, like
@@ -110,9 +165,14 @@ var (
 //	                    is no SMTP adapter and no `Cấu hình → Máy chủ thư` in this repository, so
 //	                    `trang_thai_thu` stays `chua-gui` and §3's mail chip never appears. Sending
 //	                    mail from a commune is an external dependency and a separate decision.
-//	no bell entry       §8's unified inbox (`hop_thu_thong_bao`) is fed by four modules, three of
-//	                    them in service-petitions. That is an inter-service contract, not a row this
-//	                    use case may invent (migration 0005 says the same).
+//
+// # THE BELL ROW IS PART OF THE ACT (ADR 0086, migration 0025)
+//
+// Each recipient but the publisher gets a `thong-bao.moi` row in the header bell, keyed
+// `thong-bao.moi:<announcement id>`, in THIS transaction and through the same store function the gRPC
+// delivery uses — plus a Zalo copy when the commune ticked that kind and the recipient is linked. An
+// issued announcement whose bell rows failed is rolled back with them: "issued" and "told" are one fact.
+// The Zalo copy alone may fail without failing the act (its savepoint, ADR 0074 #1).
 //
 // # THE AUTHOR COMES FROM THE SESSION AND FROM NOWHERE ELSE
 //
@@ -140,6 +200,9 @@ func (uc *SoanThongBaoNoiBo) PhatHanh(ctx context.Context, yc domain.YeuCauSoanT
 	if nguoi.ID == "" {
 		return domain.ThongBaoNoiBo{}, ErrThieuNguoiSoan
 	}
+	if uc.bell == nil {
+		return domain.ThongBaoNoiBo{}, ErrBellNotWired
+	}
 
 	id, err := uc.sinhID()
 	if err != nil {
@@ -148,8 +211,38 @@ func (uc *SoanThongBaoNoiBo) PhatHanh(ctx context.Context, yc domain.YeuCauSoanT
 
 	// ONE CLOCK READING FOR THE WHOLE ACT. Reading it twice would let `phat_hanh_luc` and the audit
 	// entry's own timestamp disagree about when the commune issued this, and the database refuses
-	// to correct the first one afterwards.
-	luc := uc.bayGio().UTC()
+	// to correct the first one afterwards. Microseconds — PostgreSQL's precision — because the Zalo
+	// outbox finds the bell rows by (key, created_at), and a nanosecond value would match none of them.
+	luc := uc.bayGio().UTC().Truncate(time.Microsecond)
+
+	// THE BELL NOTICE, built and validated BEFORE the transaction by the contract's own rules
+	// (domain.ValidateDeliveries) — the same bounds a gRPC caller meets. Empty when the publisher was
+	// the only recipient: then no bell row is written, and nothing is wrong.
+	var bellNotice []domain.NotificationDelivery
+	if codes := announcementBellRecipients(sach.NguoiNhanMa, nguoi.ID); len(codes) > 0 {
+		bellNotice, err = domain.ValidateDeliveries([]domain.NotificationDelivery{{
+			IdempotencyKey: domain.ZaloKindAnnouncementPublished + ":" + id,
+			Kind:           domain.ZaloKindAnnouncementPublished,
+			RecipientCodes: codes,
+			Title:          announcementBellTitle(sach.TieuDe),
+			Link:           announcementBellLink,
+		}})
+		if err != nil {
+			// The announcement passed its own checks; the bell refusing it is this file's bug, not the
+			// author's — and the cause names a field, never the title.
+			return domain.ThongBaoNoiBo{}, fmt.Errorf("thong_bao: dựng thông báo chuông: %w", err)
+		}
+	}
+	bellIDs := make([]string, 0, len(sach.NguoiNhanMa))
+	for _, n := range bellNotice {
+		for range n.RecipientCodes {
+			bid, err := uc.sinhID()
+			if err != nil {
+				return domain.ThongBaoNoiBo{}, fmt.Errorf("thong_bao: sinh mã chuông: %w", err)
+			}
+			bellIDs = append(bellIDs, bid)
+		}
+	}
 
 	moi := domain.ThongBaoNoiBo{
 		ID:      id,
@@ -187,7 +280,32 @@ func (uc *SoanThongBaoNoiBo) PhatHanh(ctx context.Context, yc domain.YeuCauSoanT
 			return err
 		}
 
-		delta, err := json.Marshal(map[string]any{"sau": tomTatThongBaoNoiBo(moi, nguoiNhan)})
+		// The bell rows of the act, in this transaction: a failure here rolls back the announcement too.
+		bellDelta := map[string]any{"tao_moi": 0, "da_co": 0}
+		for _, n := range bellNotice {
+			created, err := uc.bell.AddDelivery(ctx, tx, n, bellIDs, luc)
+			if err != nil {
+				return err
+			}
+			bellDelta["khoa"] = n.IdempotencyKey
+			bellDelta["tao_moi"] = created
+			bellDelta["da_co"] = len(n.RecipientCodes) - created
+			if uc.zalo != nil && created > 0 {
+				queued, err := uc.zalo.EnqueueZaloDeliveries(ctx, tx, []string{n.IdempotencyKey}, nil, luc)
+				if err != nil {
+					// NOT returned (ADR 0074 #1): the bell is delivered without its Zalo copies, and the
+					// trail says so. The error names the statement, never the title or a recipient.
+					uc.log.WarnContext(ctx, "CẢNH BÁO: không xếp được tin Zalo cho thông báo nội bộ — chuông vẫn giao đủ",
+						"xa", string(tx.TenantID()), "so_nguoi_nhan", len(n.RecipientCodes), "err", err)
+					bellDelta["zalo_loi_xep_hang"] = true
+				} else {
+					bellDelta["zalo_xep_hang"] = queued
+				}
+			}
+		}
+
+		// COUNTS AND THE KEY ONLY — never the title the bell row carries (see chuDeThongBaoNoiBo).
+		delta, err := json.Marshal(map[string]any{"sau": tomTatThongBaoNoiBo(moi, nguoiNhan), "chuong": bellDelta})
 		if err != nil {
 			return fmt.Errorf("thong_bao: mã hoá delta: %w", err)
 		}

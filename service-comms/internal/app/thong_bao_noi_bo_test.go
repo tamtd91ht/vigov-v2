@@ -132,7 +132,7 @@ func dungUseCaseThongBao(t *testing.T, k *khoTBGia) (*SoanThongBaoNoiBo, context
 	t.Cleanup(func() { db.Close() })
 
 	kho := store.New(db)
-	uc := NewSoanThongBaoNoiBo(kho, commsstore.NewThongBaoNoiBoStore(kho))
+	uc := NewSoanThongBaoNoiBo(kho, commsstore.NewThongBaoNoiBoStore(kho), commsstore.NewStaffNotificationStore(kho))
 	uc.sinhID = func() (string, error) { return idThongBaoPinned, nil }
 	uc.bayGio = func() time.Time { return lucPinned }
 	return uc, tenant.Into(context.Background(), xaA)

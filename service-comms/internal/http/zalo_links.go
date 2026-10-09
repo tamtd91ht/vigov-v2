@@ -98,8 +98,8 @@ type zaloLinkedStaffList struct {
 //
 // `kinds` IS ALWAYS PER-DOMAIN (migration 0021): a row still holding one of the four old values is read
 // as the per-domain kinds it means. `supported_events` is the list a commune may tick — 0021's twelve
-// per-domain kinds and the weekly digest, in display order (spec Cấu hình 11 §2 "Chỉ hiện các sự kiện có
-// trong supported_events"); the ten spec events with no producer yet are not in it (ADR 0079 Q3).
+// per-domain kinds and the weekly digest, then 0025's nine act notices (ADR 0086), in display order (spec
+// Cấu hình 11 §2 "Chỉ hiện các sự kiện có trong supported_events").
 type zaloChannelSettingsOut struct {
 	IsEnabled              bool     `json:"is_enabled"`
 	Kinds                  []string `json:"kinds"`

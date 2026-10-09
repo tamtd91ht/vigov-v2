@@ -341,6 +341,54 @@ func TestPgZaloEnqueueDecidesTheThreeLocalSkips(t *testing.T) {
 	}
 }
 
+// 0025 (ADR 0086): an act notice is admitted on all three tables and gets a QUEUED Zalo row only when the
+// commune ticked its own kind — never through an old value, which no producer of an act notice ever sent.
+func TestPgZaloEnqueueActNoticeOnlyWhenTicked(t *testing.T) {
+	h, s, z, c1, _ := zaloRig(t)
+	ctx := ctxXa(tenant.ID(c1))
+	notices := NewStaffNotificationStore(h)
+	pairStaff(t, h, s, z, c1, "CB-00001", "chat-act-"+c1, "link-act")
+	save := func(kinds ...string) {
+		if err := h.For(ctx).Tx(ctx, func(tx *pkgstore.ScopedTx) error {
+			return s.SaveChannelSetting(ctx, tx, domain.ZaloChannelSetting{IsEnabled: true, Kinds: kinds,
+				QuietStartMinute: 21 * 60, QuietEndMinute: 6 * 60}, "CB-9", zaloAt)
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	deliver := func(key, kind string) (string, string) {
+		if err := h.For(ctx).Tx(ctx, func(tx *pkgstore.ScopedTx) error {
+			if _, err := notices.AddDelivery(ctx, tx, domain.NotificationDelivery{IdempotencyKey: key, Kind: kind,
+				RecipientCodes: []string{"CB-00001"}, Title: "T"}, []string{c1[:10] + "-" + key}, zaloAt); err != nil {
+				return err
+			}
+			_, err := s.EnqueueZaloDeliveries(ctx, tx, []string{key}, nil, zaloAt)
+			return err
+		}); err != nil {
+			t.Fatalf("%s: %v", key, err)
+		}
+		var st, reason string
+		if err := moKetNoi(t).QueryRow(`SELECT d.status, COALESCE(d.skip_reason, '') FROM zalo_delivery d
+			JOIN staff_notification n ON n.tenant_id = d.tenant_id AND n.id = d.notification_id
+			WHERE d.tenant_id = $1 AND n.idempotency_key = $2`, c1, key).Scan(&st, &reason); err != nil {
+			t.Fatalf("%s: %v", key, err)
+		}
+		return st, reason
+	}
+	// Every old value ticked, and a different act notice: still off for this one.
+	save("sap-den-han", "qua-han", "leo-thang", "ban-tin-tuan", domain.ZaloKindPetitionReopened)
+	if st, r := deliver("act-1", domain.ZaloKindTaskAssigned); st != "bo-qua" || r != "loai-tat" {
+		t.Errorf("not ticked: %s/%s", st, r)
+	}
+	save(domain.ZaloKindTaskAssigned, domain.ZaloKindAnnouncementPublished)
+	if st, r := deliver("act-2", domain.ZaloKindTaskAssigned); st != "cho-gui" || r != "" {
+		t.Errorf("ticked: %s/%s", st, r)
+	}
+	if st, _ := deliver("thong-bao.moi:act-3", domain.ZaloKindAnnouncementPublished); st != "cho-gui" {
+		t.Errorf("announcement ticked: %s", st)
+	}
+}
+
 func contains(ids []tenant.ID, want string) bool {
 	for _, id := range ids {
 		if string(id) == want {

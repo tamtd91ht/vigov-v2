@@ -147,7 +147,8 @@ func TestDeliverMapsOutcomesAndKindsAndUsesSystemActor(t *testing.T) {
 }
 
 // Every wire value of comms.proto maps to exactly the value 0021 admits; 1–4 keep their old values
-// (the read-time map routes them), 5–16 are stored per-domain as-is, 17 is the bell-only mention (0023).
+// (the read-time map routes them), 5–16 are stored per-domain as-is, 17 is the bell-only mention (0023),
+// 18–25 the act notices (0025).
 func TestKindFromWireIsTheProtoTable(t *testing.T) {
 	want := map[commsv1.StaffNotificationKind]string{
 		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DUE_SOON:             "sap-den-han",
@@ -167,9 +168,24 @@ func TestKindFromWireIsTheProtoTable(t *testing.T) {
 		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_UNASSIGNED:  "phan-anh.chua-cu-nguoi",
 		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_ESCALATION:  "phan-anh.leo-thang",
 		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DISBURSEMENT_MENTION: "giai-ngan.nhac-ten",
-		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_UNSPECIFIED:          "",
-		commsv1.StaffNotificationKind(18):                                          "",
-		commsv1.StaffNotificationKind(-1):                                          "",
+		// 18–25: the act notices of 0025 (ADR 0086), stored as their value as-is.
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_ASSIGNED:            "nhiem-vu.giao-moi",
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_EXTENSION_REQUESTED: "nhiem-vu.de-nghi-lui-han",
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_APPROVAL_REQUESTED:  "nhiem-vu.cho-duyet",
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_MENTION:             "nhiem-vu.nhac-ten",
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_ASSIGNED:        "van-ban.chuyen-toi",
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_ASSIGNED:        "phan-anh.phan-cong",
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_REOPENED:        "phan-anh.mo-lai",
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_REPORT_READY:             "bao-cao.san-sang",
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_UNSPECIFIED:              "",
+		commsv1.StaffNotificationKind(26):                                              "",
+		commsv1.StaffNotificationKind(-1):                                              "",
+	}
+	// `thong-bao.moi` has no wire value: no input maps to it (comms issues announcements itself).
+	for v := range commsv1.StaffNotificationKind_name {
+		if kindFromWire(commsv1.StaffNotificationKind(v)) == domain.ZaloKindAnnouncementPublished {
+			t.Errorf("wire value %d maps to thong-bao.moi — another service could forge an announcement notice", v)
+		}
 	}
 	// Every enum value the generated code knows is in the table — an 18th added to the proto without a
 	// mapping here turns this red instead of being refused in production.
@@ -210,6 +226,44 @@ func TestDeliverAcceptsPerDomainKinds(t *testing.T) {
 	}
 	if f.lastIn[0].Kind != domain.ZaloKindPetitionOverdue || f.lastIn[1].Kind != domain.ZaloKindDocumentUnassigned {
 		t.Errorf("loại = %q, %q", f.lastIn[0].Kind, f.lastIn[1].Kind)
+	}
+}
+
+// Every act notice 18–25 passes the whole RPC, validation included, and reaches the use case as its
+// stored value — a comms that maps them but whose domain refused one would fail every relay drain.
+func TestDeliverAcceptsActNoticeKinds(t *testing.T) {
+	for wire, stored := range map[commsv1.StaffNotificationKind]string{
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_ASSIGNED:            domain.ZaloKindTaskAssigned,
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_EXTENSION_REQUESTED: domain.ZaloKindTaskExtensionRequested,
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_APPROVAL_REQUESTED:  domain.ZaloKindTaskApprovalRequested,
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_MENTION:             domain.ZaloKindTaskMention,
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_ASSIGNED:        domain.ZaloKindDocumentAssigned,
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_ASSIGNED:        domain.ZaloKindPetitionAssigned,
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_REOPENED:        domain.ZaloKindPetitionReopened,
+		commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_REPORT_READY:             domain.ZaloKindReportReady,
+	} {
+		r := goodRequest()
+		r.Notifications[0].Kind = wire
+		f := &fakeDeliverer{}
+		if _, err := newTestServer(f).DeliverStaffNotifications(ctxWithPeer(), r); err != nil {
+			t.Fatalf("%v: %v", wire, err)
+		}
+		if f.lastIn[0].Kind != stored {
+			t.Errorf("%v → %q, want %q", wire, f.lastIn[0].Kind, stored)
+		}
+	}
+}
+
+// An unknown wire value next to a valid act notice still refuses the WHOLE batch: the use case writes
+// nothing, and the relay keeps both rows undelivered until comms catches up (comms.proto ROLLOUT).
+func TestDeliverUnknownWireValueRefusesWholeBatch(t *testing.T) {
+	r := goodRequest()
+	r.Notifications[0].Kind = commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_ASSIGNED
+	r.Notifications[1].Kind = commsv1.StaffNotificationKind(26)
+	f := &fakeDeliverer{}
+	res, err := newTestServer(f).DeliverStaffNotifications(ctxWithPeer(), r)
+	if status.Code(err) != codes.InvalidArgument || res != nil {
+		t.Fatalf("code = %v, res = %v; want INVALID_ARGUMENT and nothing", status.Code(err), res)
 	}
 }
 

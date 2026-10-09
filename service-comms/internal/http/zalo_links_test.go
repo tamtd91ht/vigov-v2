@@ -338,7 +338,8 @@ func TestZaloShapesMatchTheWebContract(t *testing.T) {
 		t.Errorf("unsaved settings = %v, want off with 21:00–06:00", set)
 	}
 	// ADR 0079 Q3 phase 1: the twelve per-domain kinds with a producer, and the weekly digest — no more.
-	if ev, _ := set["supported_events"].([]any); len(ev) != 13 || ev[0] != "nhiem-vu.sap-den-han" || ev[12] != "ban-tin-tuan" {
+	if ev, _ := set["supported_events"].([]any); len(ev) != 22 || ev[0] != "nhiem-vu.sap-den-han" || ev[12] != "ban-tin-tuan" ||
+		ev[13] != "nhiem-vu.giao-moi" || ev[21] != "thong-bao.moi" {
 		t.Errorf("supported_events = %v", set["supported_events"])
 	}
 	if set["platform_ready"] != false {

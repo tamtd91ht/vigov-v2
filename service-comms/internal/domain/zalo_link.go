@@ -160,18 +160,39 @@ const (
 	ZaloKindWeeklyDigest       = StaffNotificationWeeklyDigest // unchanged value: one digest event
 )
 
+// The phase-2 kinds of migration 0025 (ADR 0079 Q3 phase 2, ADR 0086): notices fixed by ONE ACT of a
+// person, keyed `<kind>:<id of the row the act wrote>` (comms.proto StaffNotificationKind 18–25). NOT
+// bell-only: each is a box a commune may tick, and a linked recipient gets a Zalo copy when it is ticked.
+const (
+	ZaloKindTaskAssigned           = "nhiem-vu.giao-moi"        // TASK_ASSIGNED = 18
+	ZaloKindTaskExtensionRequested = "nhiem-vu.de-nghi-lui-han" // TASK_EXTENSION_REQUESTED = 19
+	ZaloKindTaskApprovalRequested  = "nhiem-vu.cho-duyet"       // TASK_APPROVAL_REQUESTED = 20
+	ZaloKindTaskMention            = "nhiem-vu.nhac-ten"        // TASK_MENTION = 21
+	ZaloKindDocumentAssigned       = "van-ban.chuyen-toi"       // DOCUMENT_ASSIGNED = 22
+	ZaloKindPetitionAssigned       = "phan-anh.phan-cong"       // PETITION_ASSIGNED = 23
+	ZaloKindPetitionReopened       = "phan-anh.mo-lai"          // PETITION_REOPENED = 24
+	ZaloKindReportReady            = "bao-cao.san-sang"         // REPORT_READY = 25
+	// ZaloKindAnnouncementPublished has NO wire value on purpose (comms.proto): comms issues announcements
+	// itself and writes this bell row in the issuing transaction (app.SoanThongBaoNoiBo.PhatHanh).
+	ZaloKindAnnouncementPublished = "thong-bao.moi"
+)
+
 // ZaloReminderKinds is what a commune may SELECT and SAVE, in the canonical order the settings are
-// stored and shown in: 0021's twelve per-domain kinds, then the weekly digest. The four OLD values of
-// 0010/0018 are not here: they stay valid in the database and are mapped at read (ZaloLegacyKindMap).
+// stored and shown in: 0021's twelve per-domain kinds, the weekly digest, then 0025's nine act notices.
+// The four OLD values of 0010/0018 are not here: they stay valid in the database and are mapped at read
+// (ZaloLegacyKindMap) — and they never mean an act notice, which no old producer ever sent.
 var ZaloReminderKinds = []string{
 	ZaloKindTaskDueSoon, ZaloKindTaskOverdue, ZaloKindTaskUnassigned, ZaloKindTaskEscalation,
 	ZaloKindDocumentDueSoon, ZaloKindDocumentOverdue, ZaloKindDocumentUnassigned, ZaloKindDocumentEscalation,
 	ZaloKindPetitionDueSoon, ZaloKindPetitionOverdue, ZaloKindPetitionUnassigned, ZaloKindPetitionEscalation,
 	ZaloKindWeeklyDigest,
+	ZaloKindTaskAssigned, ZaloKindTaskExtensionRequested, ZaloKindTaskApprovalRequested, ZaloKindTaskMention,
+	ZaloKindDocumentAssigned, ZaloKindPetitionAssigned, ZaloKindPetitionReopened, ZaloKindReportReady,
+	ZaloKindAnnouncementPublished,
 }
 
 // ZaloQueueableKinds is every kind the Zalo enqueue may write a zalo_delivery row for — queued or
-// skipped: the four OLD kinds and ZaloReminderKinds, exactly what 0021's zalo_delivery.kind CHECK
+// skipped: the four OLD kinds and ZaloReminderKinds, exactly what 0025's zalo_delivery.kind CHECK
 // admits (less 'thu-nghiem', which has no notice). A kind NOT here (BellOnlyKinds) gets no row at all:
 // filtering it in the enqueue statement keeps the savepoint from failing on that CHECK and taking every
 // other notice's Zalo row of the call down with it.

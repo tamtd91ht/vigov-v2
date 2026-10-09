@@ -104,6 +104,25 @@ func kindFromWire(k commsv1.StaffNotificationKind) string {
 	// 17 is BELL ONLY (ADR 0081 #5): stored for the bell, never queued for Zalo (domain.BellOnlyKinds).
 	case commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DISBURSEMENT_MENTION:
 		return domain.StaffNotificationDisbursementMention
+
+	// 18–25 are the act notices of migration 0025 (ADR 0086). Queued for Zalo like 5–16 when the commune
+	// ticked the kind. `thong-bao.moi` has no wire value: no other service may send it.
+	case commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_ASSIGNED:
+		return domain.ZaloKindTaskAssigned
+	case commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_EXTENSION_REQUESTED:
+		return domain.ZaloKindTaskExtensionRequested
+	case commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_APPROVAL_REQUESTED:
+		return domain.ZaloKindTaskApprovalRequested
+	case commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_TASK_MENTION:
+		return domain.ZaloKindTaskMention
+	case commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DOCUMENT_ASSIGNED:
+		return domain.ZaloKindDocumentAssigned
+	case commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_ASSIGNED:
+		return domain.ZaloKindPetitionAssigned
+	case commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_PETITION_REOPENED:
+		return domain.ZaloKindPetitionReopened
+	case commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_REPORT_READY:
+		return domain.ZaloKindReportReady
 	}
 	return ""
 }
