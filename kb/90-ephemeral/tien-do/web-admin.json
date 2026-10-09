@@ -1119,6 +1119,15 @@
       "viec": "Kanban Nhiệm vụ: thẻ hai cột cạnh nhau không thẳng hàng vì chiều cao thẻ theo độ dài tiêu đề (người dùng báo 09/10). Tiêu đề tối đa 3 dòng, phần tràn thành '…', rê chuột hiện tiêu đề đầy đủ",
       "bang_chung": "(commit này) — so-nhiem-vu.tsx TheNhiemVu: tiêu đề gắn lớp .tieu-de-the (có sẵn ở globals.css nhưng chưa từng được gắn) + thuộc tính title; .tieu-de-the thêm min-height calc(3 * 1.375em) để luôn cao 3 dòng; hàng 'n việc con · đã gia hạn' giữ min-h-4 khi trống. Ca kiểm mới: kanban-nhiem-vu.test.tsx (lớp + title), ui-foundation.test.ts (clamp + min-height). vitest nhiem-vu + ui-foundation + dev-preview 26 tệp/742 ca xanh, tsc + eslint sạch",
       "tiep_theo": "Chưa có ảnh render thật trên trình duyệt — người dùng tự xem lại bảng Kanban sau khi build. Thẻ nay cao cố định 3 dòng tiêu đề kể cả tiêu đề 1 dòng (giá của việc thẳng hàng)"
+    },
+    {
+      "id": "bien-ban-hop-theo-spec-09-10",
+      "menu": "bien-ban-hop",
+      "trang_thai": "xong",
+      "viec": "/fix-web-admin --menu=bien-ban — /nhiem-vu/bien-ban bám prototype MeetingMinutes.tsx + tmp/web/bien-ban/vigov-bien-ban-spec/02–06, giữ mọi chức năng web có thêm (README spec). Chủ dự án chốt 09/10: badge '{a}/{n} kết luận xong · {x}/{y} nhiệm vụ xong' không đậm; giữ Quá hạn; hộp Tách giữ form Giao việc; thành công = toast, lỗi tại chỗ.",
+      "bang_chung": "1f0de65b. tsc sạch ở bien-ban; eslint bien-ban sạch; vitest bien-ban+nhiem-vu+van-ban+phan-anh 54 tệp/1352 ca; toàn web 5337/5339 (2 ca dashboard/export quá giờ lúc tải, riêng 15/15 xanh). ui-ux-reviewer chỉ viết baseline trên mã nguồn (UNVERIFIABLE), chưa chấm VALIDATE — builder dừng giữa chừng vì giới hạn API, phiên chính làm nốt hộp Nhập biên bản. CHƯA kiểm bằng ảnh render — người dùng kiểm sau build; chưa được báo là khớp prototype.",
+      "tiep_theo": "(1) Người dùng kiểm ảnh: thẻ Dự thảo có đủ trạng thái kết luận, một kết luận mở danh sách nhiệm vụ đã tách, thẻ Đã ký, danh sách rỗng, lần tải đầu, hộp Nhập, hộp Tách, hộp Gỡ. (2) Chạy ui-ux-reviewer VALIDATE trên mã (chưa chạy vòng nào). (3) Ô nhập vẫn dùng lớp cũ .o-nhap — hình ô so với Input/Textarea của prototype chỉ thấy được trên ảnh. (4) Còn mở từ trước ở man-bien-ban-hop/giao-dien-bien-ban-hop-w2-s3: OChonCanBo không có chevron, nút Tải lại trong khung xem chi tiết.",
+      "no_confirm": []
     }
   ]
 }
