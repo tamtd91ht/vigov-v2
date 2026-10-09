@@ -171,3 +171,11 @@ export const CLOSE_BUTTON = "Đóng";
 // No emoji: the screens draw a lucide `Upload` beside the word (ADR 0068 §2, spec §4).
 export const IMPORT_BUTTON = "Nhập từ Excel";
 export const NOTHING_TO_CREATE = "Tệp không có dòng nào để nhập.";
+
+/* ---- the shared 672px dialog (`excel-import-dialog.tsx`, prototype `ExcelImportDialog`) ----------- */
+
+/** The prototype's description, verbatim (`shared/ExcelImportDialog.tsx:108-109`). */
+export const IMPORT_DIALOG_DESCRIPTION =
+  "Tệp được kiểm trước và chưa ghi gì. Còn một dòng sai thì không dòng nào được nhận — sửa tệp rồi nhập lại.";
+export const CHOOSE_XLSX_BUTTON = "Chọn tệp .xlsx";
+export const IMPORT_SUBMIT = "Nhập";

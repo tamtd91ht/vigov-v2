@@ -128,6 +128,8 @@ export const SAVE_BUTTON = "Lưu cấu hình";
 export const SAVED_SENTENCE = "Đã lưu cấu hình máy chủ thư.";
 export const TEST_LABEL = "Gửi thư thử tới";
 export const TEST_BUTTON = "Gửi thử";
+/** Under the locked test box until a configuration is saved (spec 10, user 09/10/2026). */
+export const TEST_SAVE_FIRST_HINT = "Lưu cấu hình trước khi gửi thử.";
 export const TEST_SENT_TOAST = "Đã gửi. Kiểm tra hộp thư.";
 /** The request never reached an answer from service-comms (network, or a proxy page instead of it). */
 export const CALL_FAILED = "Không gọi được máy chủ.";

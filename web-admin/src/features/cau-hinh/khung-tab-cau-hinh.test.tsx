@@ -129,7 +129,7 @@ describe("khung tab màn Cấu hình", () => {
     expect(html).toContain('id="panel-cau-hinh-lich-lam-viec"');
   });
 
-  it("`admin.sla` → Thời hạn xử lý rồi Lịch làm việc, liền nhau, theo thứ tự ADR 0079 D1", () => {
+  it("`admin.sla` → Thời hạn xử lý rồi Tự động hoá; Lịch làm việc sau các tab của prototype (người dùng, 09/10/2026)", () => {
     phienGia = phienCo(["admin.sla"]);
     const html = renderToStaticMarkup(<KhungTabCauHinh />);
     const order = [...html.matchAll(/role="tab"[^>]*>([^<]+)<\/button>/g)].map((m) => m[1]);
@@ -138,24 +138,46 @@ describe("khung tab màn Cấu hình", () => {
       "Thôn / Tổ dân phố",
       "Danh mục",
       "Thời hạn xử lý",
-      "Lịch làm việc",
       "Tự động hoá",
+      "Lịch làm việc",
     ]);
   });
 
-  it("thanh mười hai tab XUỐNG DÒNG khi thiếu chỗ, không cuộn ngang (chủ dự án, VALIDATE 08/10/2026)", () => {
-    // At 1440px twelve tabs overflowed and "Nhận diện xã" sat hidden past the right edge with no cue.
+  it("đủ mọi khoá → mười hai tab: chín tab đúng thứ tự prototype, rồi Lịch làm việc · Nhật ký hệ thống · Nhận diện xã", () => {
+    phienGia = phienCo(["admin.user", "admin.role", "admin.org", "admin.lookup", "admin.sla", "admin.audit", "asset.read"]);
+    const html = renderToStaticMarkup(<KhungTabCauHinh />);
+    const order = [...html.matchAll(/role="tab"[^>]*>([^<]+)<\/button>/g)].map((m) => m[1]);
+    expect(order).toEqual([
+      "Sơ đồ tổ chức",
+      "Thôn / Tổ dân phố",
+      "Danh mục",
+      "Trường bản đồ",
+      "Lời hệ thống",
+      "Thời hạn xử lý",
+      "Tự động hoá",
+      "Máy chủ thư",
+      "Kênh Zalo",
+      "Lịch làm việc",
+      "Nhật ký hệ thống",
+      "Nhận diện xã",
+    ]);
+  });
+
+  it("thanh mười hai tab MỘT DÒNG, cuộn ngang, ẩn thanh cuộn, cao 32px (người dùng, 09/10/2026)", () => {
+    // A wrapped strip grew to 56px with "Nhận diện xã" on a second row; the prototype's is one 32px row.
     phienGia = phienCo(["admin.user", "admin.role", "admin.org", "admin.lookup", "admin.sla", "admin.audit", "asset.read"]);
     const html = renderToStaticMarkup(<KhungTabCauHinh />);
     const tablist = html.match(/<div role="tablist"[^>]*class="([^"]*)"/);
     expect(tablist).not.toBeNull();
     const cls = tablist![1]!.split(" ");
-    expect(cls).toContain("flex-wrap");
-    expect(cls).toContain("h-auto");
+    expect(cls).toContain("flex-nowrap");
+    expect(cls).toContain("overflow-x-auto");
+    expect(cls).toContain("h-8");
+    expect(cls).toContain("[scrollbar-width:none]");
+    expect(cls).toContain("[&amp;::-webkit-scrollbar]:hidden"); // `&` is escaped in markup
     expect(cls).toContain("bg-muted");
-    expect(cls).not.toContain("h-8");
-    expect(cls).not.toContain("overflow-x-auto");
-    expect(html).not.toContain("overflow-x-auto");
+    expect(cls).not.toContain("flex-wrap");
+    expect(cls).not.toContain("h-auto");
     expect(html).toContain('id="tab-cau-hinh-nhan-dien-xa"');
   });
 

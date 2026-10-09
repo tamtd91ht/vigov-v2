@@ -45,7 +45,8 @@ export const IMPORT_EXPLANATION =
   "trước, chưa ghi gì; chỉ khi tệp không có lỗi mới nhập được, và nhập thì nhập cả tệp hoặc không " +
   "nhập gì. Bộ phận đã có trên sơ đồ không bị sửa.";
 
-export const ERRORS_HEADING = "Tệp có lỗi — chưa bộ phận nào được tạo. Hãy sửa các dòng dưới đây rồi kiểm tra lại:";
+// "nhập lại", not "kiểm tra lại": the shared dialog has no separate check button (spec §1, 09/10/2026).
+export const ERRORS_HEADING = "Tệp có lỗi — chưa bộ phận nào được tạo. Sửa các dòng dưới đây rồi nhập lại.";
 
 export function previewLead(count: number): string {
   return `Tệp hợp lệ. Sẽ tạo ${count} bộ phận:`;

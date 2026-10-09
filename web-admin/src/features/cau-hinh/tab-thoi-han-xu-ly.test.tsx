@@ -247,11 +247,23 @@ describe("hộp giải thích (spec 08)", () => {
     expect(ve()).toContain("Thời hạn tính theo <b>giờ làm việc</b>, không tính ngày nghỉ và ngày lễ.");
   });
 
-  it("KHÔNG có câu 'Mặc định 72 giờ, tức ba ngày' — một con số SLA ghi cứng (luật 10 cấm #3)", () => {
-    // REGRESSION: the old banner rendered `DAN_THOI_HAN_2`, which ended with exactly this sentence.
-    const html = ve();
+  it("câu cuối 'Mặc định {N} giờ.' lấy N từ dòng mặc định phản ánh CỦA XÃ — không ghi cứng (người dùng 09/10/2026, luật 10 cấm #3)", () => {
+    const petitionDefault = { ...DEFAULT_ROW, due_soon_hours: 40 };
+    const documentDefault = { ...DEFAULT_ROW, id: "01J0000000000000000000DOC", work_kind: "van-ban-den", due_soon_hours: 99 };
+    const html = ve({ thoiHan: rowsOf(documentDefault, DONG_SLA, petitionDefault) });
+    expect(html).toContain("con số trong thông báo ở chuông. Mặc định 40 giờ.</span>");
+    // Not the prototype's figure, not another kind's default, not a field row's (DONG_SLA has 4).
     expect(html).not.toContain("72 giờ");
+    expect(html).not.toContain("Mặc định 99 giờ");
+    expect(html).not.toContain("Mặc định 4 giờ");
+    // A day count would need the commune's working calendar, which this tab does not read.
     expect(html).not.toContain("tức ba ngày");
+  });
+
+  it("chưa có dòng mặc định phản ánh → không có câu 'Mặc định … giờ' (không bịa số)", () => {
+    const html = ve({ thoiHan: rowsOf(DONG_SLA) });
+    expect(html).toContain("con số trong thông báo ở chuông.</span>");
+    expect(html).not.toMatch(/Mặc định \d+ giờ/);
   });
 
   it("câu áp dụng nói đúng điều hệ thống làm: hạn đã đặt giữ nguyên (luật 10 bất biến 2, ADR 0028)", () => {
@@ -380,7 +392,9 @@ describe("bảng thời hạn xử lý", () => {
   });
 
   it("dòng mặc định nói rõ nó là mặc định, chữ mờ", () => {
-    expect(ve({ thoiHan: rowsOf(DEFAULT_ROW) })).toContain('<td class="text-ink-muted">Mặc định cho mọi lĩnh vực</td>');
+    expect(ve({ thoiHan: rowsOf(DEFAULT_ROW) })).toContain(
+      '<td class="whitespace-normal! text-ink-muted">Mặc định cho mọi lĩnh vực</td>',
+    );
   });
 
   it("dòng `don-thu` đọc là 'Đơn thư', chữ navy đậm, không hiện mã thô", () => {
@@ -390,10 +404,63 @@ describe("bảng thời hạn xử lý", () => {
     expect(html).not.toContain("don-thu");
   });
 
-  it("nhịp dọc space-y-3 (`SlaTable.tsx:67`); đầu cột được xuống dòng để bảng vừa khung, không đẩy cột thao tác ra ngoài", () => {
+  it("nhịp dọc space-y-3 (`SlaTable.tsx:67`); đầu cột MỘT DÒNG với độ rộng cố định, chỉ ô Lĩnh vực xuống dòng (người dùng, 09/10/2026)", () => {
     const html = ve();
     expect(html).toMatch(/^<section class="space-y-3"/);
-    expect(html).toContain('<div class="[&amp;_th]:min-w-[4.5rem] [&amp;_th]:whitespace-normal"><div role="region"');
+    expect(html).not.toContain("[&amp;_th]:whitespace-normal");
+    expect(html).toContain('<th scope="col" class="w-[96px]">Tiếp nhận</th>');
+    expect(html).toContain('<th scope="col" class="w-[96px]">Xử lý xong</th>');
+    expect(html).toContain('<th scope="col" class="w-[152px]">Sắp đến hạn khi còn</th>');
+    expect(html).toContain('<th scope="col" class="w-[172px]">Báo lãnh đạo trực tiếp</th>');
+    expect(html).toContain('<th scope="col" class="w-[104px]">Báo Chủ tịch</th>');
+    expect(html).toContain('<th scope="col" class="w-[148px]">Giữ chưa phân công</th>');
+    // No catalogue passed → the raw code, in the one cell allowed to wrap.
+    expect(html).toContain('<td class="whitespace-normal!">an-ninh-trat-tu</td>');
+  });
+
+  it("thứ tự dòng: Văn bản đến → Đơn thư → Phản ánh (Mặc định đầu, rồi nhãn A→Z) → Nhiệm vụ (người dùng, 09/10/2026)", () => {
+    const row = (id: string, work_kind: string, field: string): identity_dongSLARa => ({
+      ...DONG_SLA,
+      id,
+      work_kind,
+      field,
+      is_default: field === "",
+    });
+    const catalogues: SlaFieldCatalogues = {
+      ...CATALOGUES,
+      "phan-anh": {
+        ok: true,
+        duLieu: [option("rac-thai", "Rác thải – Vệ sinh môi trường"), option("an-ninh", "An ninh trật tự"), option("dien", "Điện")],
+      },
+    };
+    // Server order deliberately scrambled.
+    const html = ve(
+      {
+        thoiHan: rowsOf(
+          row("01", "nhiem-vu", ""),
+          row("02", "phan-anh", "rac-thai"),
+          row("03", "don-thu", ""),
+          row("04", "phan-anh", "dien"),
+          row("05", "phan-anh", ""),
+          row("06", "van-ban-den", ""),
+          row("07", "phan-anh", "an-ninh"),
+        ),
+      },
+      { catalogues },
+    );
+    const cells = [...html.matchAll(/<tr><td class="text-navy font-medium">([^<]+)<\/td><td[^>]*>([^<]+)<\/td>/g)].map(
+      (m) => `${m[1]} | ${m[2]}`,
+    );
+    expect(cells).toEqual([
+      "Văn bản đến | Mặc định cho mọi lĩnh vực",
+      "Đơn thư | Mặc định cho mọi lĩnh vực",
+      "Phản ánh của người dân | Mặc định cho mọi lĩnh vực",
+      "Phản ánh của người dân | An ninh trật tự",
+      // Vietnamese collation: "Điện" sorts after "D…" and before "R…".
+      "Phản ánh của người dân | Điện",
+      "Phản ánh của người dân | Rác thải – Vệ sinh môi trường",
+      "Nhiệm vụ | Mặc định cho mọi lĩnh vực",
+    ]);
   });
 
   it("không còn tên lớp CSS cũ nào", () => {
@@ -661,8 +728,8 @@ describe("cột Lĩnh vực (SLA-03)", () => {
       },
       { catalogues: CATALOGUES },
     );
-    expect(html).toContain("<td>Công văn</td>");
-    expect(html).toContain("<td>Khẩn</td>");
+    expect(html).toContain('<td class="whitespace-normal!">Công văn</td>');
+    expect(html).toContain('<td class="whitespace-normal!">Khẩn</td>');
     expect(html).not.toContain(">cong-van<");
     expect(html).not.toContain(">khan<");
   });

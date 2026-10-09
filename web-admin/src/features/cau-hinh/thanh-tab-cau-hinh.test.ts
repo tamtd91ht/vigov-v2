@@ -40,7 +40,7 @@ afterEach(() => {
 });
 
 describe("tab nào của màn Cấu hình được hiện", () => {
-  it("đủ khoá cổng (trừ `admin.org`) → mười một tab theo thứ tự ADR 0079 D1: Lịch làm việc ngay sau Thời hạn xử lý, Kênh Zalo sau Máy chủ thư, Nhật ký hệ thống cuối", async () => {
+  it("đủ khoá cổng (trừ `admin.org`) → mười một tab: chín tab đầu theo prototype, rồi Lịch làm việc, Nhật ký hệ thống (người dùng, 09/10/2026)", async () => {
     const phien = await phienVoi(
       phanHoiPhien(["admin.user", "admin.role", "asset.read", "admin.lookup", "admin.sla", "admin.audit"]),
     );
@@ -52,10 +52,10 @@ describe("tab nào của màn Cấu hình được hiện", () => {
       "Trường bản đồ",
       "Lời hệ thống",
       "Thời hạn xử lý",
-      "Lịch làm việc",
       "Tự động hoá",
       "Máy chủ thư",
       "Kênh Zalo",
+      "Lịch làm việc",
       "Nhật ký hệ thống",
     ]);
     expect(coThanhTab(phien, hien.length)).toBe(true);

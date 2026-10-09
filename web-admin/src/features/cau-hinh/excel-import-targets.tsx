@@ -52,7 +52,10 @@ import {
 } from "./org-unit-import-flow";
 
 /**
- * Every "⬆ Nhập từ Excel" of the configuration screen, one `ImportTarget` each (ADR 0059).
+ * Every "⬆ Nhập từ Excel" of the configuration screen, one `ImportTarget` each (ADR 0059). The screens
+ * open them in the shared 672px `ExcelImportDialog` (spec §1, user 09/10/2026), which does NOT draw
+ * `explanation` — the prototype's one description stands for every target. `explanation` stays on each
+ * target for the older `ExcelImportPanel`, which tests still render.
  *
  * TO WIRE ANOTHER IMPORT (another catalogue group): write its routes file
  * beside `lib/api/map-asset-type-import.ts`, add ONE target here, and — for a catalogue group — one
@@ -104,7 +107,7 @@ export const RESIDENTIAL_UNIT_IMPORT_TARGET: ImportTarget<ResidentialUnitImportR
   templateFileName: "mau-nhap-thon-to-dan-pho.xlsx",
   confirmButton: "Nhập các địa bàn này",
   errorsHeading:
-    "Tệp có lỗi — chưa thôn / tổ dân phố nào được tạo. Hãy sửa các dòng dưới đây rồi kiểm tra lại:",
+    "Tệp có lỗi — chưa thôn / tổ dân phố nào được tạo. Sửa các dòng dưới đây rồi nhập lại.",
   rowsLabel: "Các thôn / tổ dân phố sẽ tạo",
   previewLead: (n) => `Tệp hợp lệ. Sẽ tạo ${n} thôn / tổ dân phố:`,
   importedSentence: (n) =>
@@ -137,7 +140,7 @@ export const MAP_ASSET_TYPE_IMPORT_TARGET: ImportTarget<MapAssetTypeImportRow> =
   templateFileName: "mau-nhap-loai-tai-nguyen-ban-do.xlsx",
   confirmButton: "Nhập các loại này",
   errorsHeading:
-    "Tệp có lỗi — chưa loại tài nguyên nào được tạo. Hãy sửa các dòng dưới đây rồi kiểm tra lại:",
+    "Tệp có lỗi — chưa loại tài nguyên nào được tạo. Sửa các dòng dưới đây rồi nhập lại.",
   rowsLabel: "Các loại tài nguyên bản đồ sẽ tạo",
   previewLead: (n) => `Tệp hợp lệ. Sẽ tạo ${n} loại tài nguyên bản đồ:`,
   importedSentence: (n) =>
@@ -238,7 +241,7 @@ function lookupImportTarget<R extends LookupImportRow>(spec: {
       (spec.explanationNote === undefined ? "" : ` ${spec.explanationNote}`),
     templateFileName: spec.templateFileName,
     confirmButton: "Nhập các mục này",
-    errorsHeading: `Tệp có lỗi — chưa ${noun} nào được tạo. Hãy sửa các dòng dưới đây rồi kiểm tra lại:`,
+    errorsHeading: `Tệp có lỗi — chưa ${noun} nào được tạo. Sửa các dòng dưới đây rồi nhập lại.`,
     rowsLabel: `Các ${noun} sẽ tạo`,
     previewLead: (n) => `Tệp hợp lệ. Sẽ tạo ${n} ${noun}:`,
     importedSentence: (n) =>

@@ -376,7 +376,9 @@ export function KhungSoDo({
       )}
 
       {tai.pha === "xong" && cay.length > 0 && (
-        <ul className="m-0 list-none space-y-2 p-0" aria-label={TIEU_DE_SO_DO}>
+        // ~4px between cards and ~65px per card (`space-y-1`, `py-2.5` below): the prototype as measured at
+        // 1534px (user decision 09/10/2026, spec §3) — not `OrgChart.tsx`'s `space-y-2 py-3` as written.
+        <ul className="m-0 list-none space-y-1 p-0" aria-label={TIEU_DE_SO_DO}>
           {cay.map((n) => (
             <OrgUnitBranch key={n.bp.id} node={n} coQuyenGhi={coQuyenGhi} thaoTac={thaoTac} />
           ))}
@@ -408,7 +410,7 @@ function OrgUnitBranch({
       <TheBoPhan bp={node.bp} coQuyenGhi={coQuyenGhi} thaoTac={thaoTac} />
       {node.con.length > 0 && (
         // Preflight is off: `border-0` zeroes the three other sides before `border-l-2` sets the left.
-        <ul className="border-line m-0 mt-2 ml-6 list-none space-y-2 border-0 border-l-2 border-dashed p-0 pl-5">
+        <ul className="border-line m-0 mt-1 ml-6 list-none space-y-1 border-0 border-l-2 border-dashed p-0 pl-5">
           {node.con.map((c) => (
             <OrgUnitBranch key={c.bp.id} node={c} coQuyenGhi={coQuyenGhi} thaoTac={thaoTac} />
           ))}
@@ -433,7 +435,7 @@ function TheBoPhan({
   thaoTac: ThaoTacCay;
 }) {
   return (
-    <div className="border-line shadow-card flex flex-wrap items-center gap-3 rounded-[10px] border border-solid bg-white px-4 py-3">
+    <div className="border-line shadow-card flex flex-wrap items-center gap-3 rounded-[10px] border border-solid bg-white px-4 py-2.5">
       <span aria-hidden="true" className="bg-navy/8 text-navy grid size-9 shrink-0 place-items-center rounded-[9px]">
         <Building2 focusable="false" className="size-4" />
       </span>

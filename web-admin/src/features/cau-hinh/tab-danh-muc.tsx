@@ -13,7 +13,8 @@ import { cn } from "@/lib/cn";
 import { suaMuc, themMuc, xoaMuc, type KhoaDanhMucGhi } from "@/lib/api/danh-muc"; // vi-name-ok: existing exports of danh-muc.ts, imported not declared (rule 12 inv 3)
 import { docDanhMucNghiepVu, type BayDanhMuc } from "@/lib/api/danh-muc-nghiep-vu";
 import type { KetQua } from "@/lib/api/goi";
-import type { petitions_danhSachTrangThaiNhiemVuRa } from "@/lib/api/schema.gen";
+import type { petitions_danhSachTrangThaiNhiemVuRa, petitions_petitionFieldListOut } from "@/lib/api/schema.gen";
+import { readCitizenReportFields, updateCitizenReportField } from "@/lib/api/citizen-report-fields";
 import { suaTrangThaiNhiemVu, layTrangThaiNhiemVu } from "@/lib/api/trang-thai-nhiem-vu";
 import { QUYEN_QUAN_LY_DANH_MUC, quyetDinhTheoKhoa } from "@/lib/quyen";
 
@@ -51,12 +52,15 @@ import {
   O_LY_DO_XOA,
   O_NHAN,
   O_THU_TU,
+  PETITION_FIELD_GROUP_LABEL,
+  PETITION_FIELD_IMPORT_REASON,
   nhanMacDinh,
   nhanNutCuaDong,
 } from "./nhan-danh-muc";
 import {
   CATALOGUE_GROUPS,
   DEFAULT_ENTRY_COLOR,
+  PETITION_FIELD_GROUP,
   TASK_STATUS_GROUP,
   catalogueRows,
   codeFromLabel,
@@ -128,6 +132,13 @@ export function TabDanhMuc() {
   const sessionError =
     writeDecision !== null && !writeDecision.hien && writeDecision.vi === "khong-doc-duoc" ? writeDecision.thongBao : "";
 
+  /**
+   * "Lĩnh vực phản ánh" (user decision 09/10/2026). Its READ declares `admin.lookup` too — unlike the
+   * seven catalogues — so it is read only when the session holds that key: an account without it is
+   * never sent a request bound to answer 403, and simply sees no such group. `null` = not read.
+   */
+  const [petitionFields, setPetitionFields] = useState<KetQua<petitions_petitionFieldListOut> | null>(null);
+
   useEffect(() => {
     let dropped = false;
     docDanhMucNghiepVu().then((d) => {
@@ -141,13 +152,31 @@ export function TabDanhMuc() {
     };
   }, [reads]);
 
+  useEffect(() => {
+    if (!canWrite) return;
+    let dropped = false;
+    readCitizenReportFields().then((r) => {
+      if (!dropped) setPetitionFields(r);
+    });
+    return () => {
+      dropped = true;
+    };
+  }, [reads, canWrite]);
+  // Derived, never stored: without the key the group does not exist on this screen.
+  const shownPetitionFields = canWrite ? petitionFields : null;
+
   const groups = useMemo(() => (catalogues === null ? null : nhomDanhMuc(catalogues)), [catalogues]);
   const allRows = useMemo(
     () =>
       groups === null
         ? []
-        : catalogueRows(groups, taskStatuses !== null && taskStatuses.ok ? taskStatuses.duLieu.items : [], null),
-    [groups, taskStatuses],
+        : catalogueRows(
+            groups,
+            taskStatuses !== null && taskStatuses.ok ? taskStatuses.duLieu.items : [],
+            null,
+            shownPetitionFields !== null && shownPetitionFields.ok ? shownPetitionFields.duLieu.items : [],
+          ),
+    [groups, taskStatuses, shownPetitionFields],
   );
   const writable = useMemo(() => writableGroups(groups), [groups]);
   const shownGroup = effectiveShownGroup(allRows, chosenGroup);
@@ -197,7 +226,8 @@ export function TabDanhMuc() {
       setDraft({
         ...EMPTY_DRAFT,
         label: row.item.label,
-        order: row.kind === "taskStatus" ? String(row.item.order) : laMucGhi(row.item) ? String(row.item.order) : "",
+        order:
+          row.kind !== "lookup" ? String(row.item.order) : laMucGhi(row.item) ? String(row.item.order) : "",
         isDefault: row.kind === "lookup" && row.item.is_default,
         // Task statuses carry no colour; every catalogue row does (`null` = none).
         color: row.kind === "lookup" ? row.item.color : null,
@@ -212,10 +242,17 @@ export function TabDanhMuc() {
       setServerError("");
     },
     setActive: (row, active) => {
-      if (busy || row.kind !== "lookup" || row.group.ghi === null) return;
-      close();
+      if (busy) return;
       // No toast on success: the switch changing IS the confirmation (prototype `LookupTable.tsx:188-194`
       // toasts only the error; ADR 0079 lô 6 #3). A refusal still shows, as every write's does.
+      if (row.kind === "petitionField") {
+        close();
+        // The commune's switch is `enabled`; `active` is the vendor's flag and is never sent.
+        run(updateCitizenReportField(row.item.code, { enabled: active }), null);
+        return;
+      }
+      if (row.kind !== "lookup" || row.group.ghi === null) return;
+      close();
       run(suaMuc(row.group.ghi, row.item.id, { active }), null);
     },
     makeDefault: (row) => {
@@ -272,12 +309,16 @@ export function TabDanhMuc() {
         run(suaTrangThaiNhiemVu(row.item.code, body.than), SAVED);
         return;
       }
-      if (row.group.ghi === null) return;
       const order = orderValue(draft.order);
       if (!order.ok) {
         setLocalError(THU_TU_KHONG_PHAI_SO);
         return;
       }
+      if (row.kind === "petitionField") {
+        run(updateCitizenReportField(row.item.code, { label, order: order.value }), SAVED);
+        return;
+      }
+      if (row.group.ghi === null) return;
       run(
         suaMuc(row.group.ghi, row.item.id, {
           label,
@@ -313,11 +354,17 @@ export function TabDanhMuc() {
     <CatalogueView
       groups={groups}
       taskStatuses={taskStatuses}
+      petitionFields={shownPetitionFields}
       shownGroup={shownGroup}
       onShowGroup={setChosenGroup}
       canWrite={canWrite}
       sessionError={sessionError}
-      importButton={catalogueImportButton(canWrite, importGroup, () => setReads((n) => n + 1))}
+      importButton={catalogueImportButton(
+        canWrite,
+        importGroup,
+        () => setReads((n) => n + 1),
+        shownGroup === PETITION_FIELD_GROUP,
+      )}
       open={open}
       draft={draft}
       setDraft={updateDraft}
@@ -401,15 +448,41 @@ const COMMON_IMPORT_PENDING = PHAN_CHUA_DUNG.find((p) => p.ten === "Nhập Excel
  *   · a filtered group with an import route → the working button for THAT group;
  *   · "Tất cả", the eighth group, or a group without a route → the same button DISABLED with its "?"
  *     (ADR 0068 §14): the server imports per group only, there is no route taking every group at once.
+ *   · "Lĩnh vực phản ánh" → DISABLED with its reason, and NO "?": the "?" says "being built", and
+ *     nothing is — the codes are the vendor's by design (ADR 0026, user decision 09/10/2026).
  * Without the key: nothing at all — a "?" would announce a write the account may not do anyway.
  */
 export function catalogueImportButton(
   canWrite: boolean,
   importGroup: KhoaDanhMucGhi | null,
   onImported: () => void,
+  petitionFieldsShown = false,
 ): ReactNode {
   if (!canWrite) return null;
   if (importGroup !== null) return IMPORT_BUTTONS[importGroup](onImported);
+  if (petitionFieldsShown) {
+    return (
+      <div className="mb-3 flex h-7 items-center justify-end">
+        {/* The title sits on the wrapper: a disabled button fires no hover in some browsers. */}
+        <span title={PETITION_FIELD_IMPORT_REASON} className="inline-flex items-center">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={SMALL_BUTTON_CLASS}
+            disabled
+            aria-describedby="petition-field-import-reason"
+            icon={<Upload aria-hidden="true" focusable="false" className="size-4" />}
+          >
+            Nhập từ Excel
+          </Button>
+          <span id="petition-field-import-reason" className="an-thi-giac">
+            {PETITION_FIELD_IMPORT_REASON}
+          </span>
+        </span>
+      </div>
+    );
+  }
   return (
     // FIXED 28px ROW, the height of the working sm `ConfigImportButton`: the legacy `nut-phu` min-height
     // (32px) reached the disabled button inside `PendingButton` (which takes no button class), so the
@@ -518,6 +591,7 @@ function newIdempotencyKey(): string {
 export function CatalogueView({
   groups,
   taskStatuses,
+  petitionFields = null,
   shownGroup: chosenGroup,
   onShowGroup,
   canWrite,
@@ -533,6 +607,8 @@ export function CatalogueView({
 }: {
   groups: readonly NhomDanhMuc[] | null;
   taskStatuses: KetQua<petitions_danhSachTrangThaiNhiemVuRa> | null;
+  /** "Lĩnh vực phản ánh" — `null` = not read (yet, or this account lacks `admin.lookup`): no rows. */
+  petitionFields?: KetQua<petitions_petitionFieldListOut> | null;
   shownGroup: ShownGroup;
   onShowGroup: (g: ShownGroup) => void;
   canWrite: boolean;
@@ -549,11 +625,12 @@ export function CatalogueView({
 }) {
   const loading = groups === null || taskStatuses === null;
   const taskItems = taskStatuses !== null && taskStatuses.ok ? taskStatuses.duLieu.items : [];
-  const allRows = groups === null ? [] : catalogueRows(groups, taskItems, null);
+  const fieldItems = petitionFields !== null && petitionFields.ok ? petitionFields.duLieu.items : [];
+  const allRows = groups === null ? [] : catalogueRows(groups, taskItems, null, fieldItems);
   // Applied here too (the tab already passes the effective value): the view must never narrow to a group
   // that has no filter button.
   const shownGroup = effectiveShownGroup(allRows, chosenGroup);
-  const rows = groups === null ? [] : catalogueRows(groups, taskItems, shownGroup);
+  const rows = groups === null ? [] : catalogueRows(groups, taskItems, shownGroup, fieldItems);
   const total = allRows.length;
   const present = groupsWithRows(allRows);
   const writable = writableGroups(groups);
@@ -568,6 +645,9 @@ export function CatalogueView({
   }
   if (taskStatuses !== null && !taskStatuses.ok && (shownGroup === null || shownGroup === TASK_STATUS_GROUP)) {
     readErrors.push(`${TIEU_DE_NHOM_TRANG_THAI}: ${taskStatuses.thongBao}`);
+  }
+  if (petitionFields !== null && !petitionFields.ok && (shownGroup === null || shownGroup === PETITION_FIELD_GROUP)) {
+    readErrors.push(`${PETITION_FIELD_GROUP_LABEL}: ${petitionFields.thongBao}`);
   }
 
   return (
@@ -595,6 +675,11 @@ export function CatalogueView({
         {present.has(TASK_STATUS_GROUP) && (
           <FilterButton pressed={shownGroup === TASK_STATUS_GROUP} onClick={() => onShowGroup(TASK_STATUS_GROUP)}>
             {TIEU_DE_NHOM_TRANG_THAI}
+          </FilterButton>
+        )}
+        {present.has(PETITION_FIELD_GROUP) && (
+          <FilterButton pressed={shownGroup === PETITION_FIELD_GROUP} onClick={() => onShowGroup(PETITION_FIELD_GROUP)}>
+            {PETITION_FIELD_GROUP_LABEL}
           </FilterButton>
         )}
         {canWrite && writable.length > 0 && (
@@ -848,10 +933,15 @@ export function CatalogueTableRow({
   const label = row.item.label;
   const writeShaped = row.kind === "lookup" && laMucGhi(row.item);
   // Order is the contract's field — never the array position: the edit changes exactly this number.
-  const order = row.kind === "taskStatus" ? row.item.order : laMucGhi(row.item) ? row.item.order : "—";
-  // Task statuses are the seven fixed codes the software ships (#21), so their source is the system.
-  const source = row.kind === "taskStatus" ? "he-thong" : laMucGhi(row.item) ? row.item.source : null;
-  const active = row.kind === "taskStatus" ? true : row.item.active;
+  const order = row.kind !== "lookup" ? row.item.order : laMucGhi(row.item) ? row.item.order : "—";
+  // Task statuses are the seven fixed codes the software ships (#21) and petition fields the vendor's
+  // tier-1 codes (ADR 0026), so the source of both is the system.
+  const source = row.kind !== "lookup" ? "he-thong" : laMucGhi(row.item) ? row.item.source : null;
+  // A petition field is in use when the vendor has not retired it AND the commune has it switched on.
+  const active =
+    row.kind === "taskStatus" ? true : row.kind === "petitionField" ? row.item.active && row.item.enabled : row.item.active;
+  const groupLabel =
+    row.kind === "lookup" ? row.group.nhan : row.kind === "taskStatus" ? TIEU_DE_NHOM_TRANG_THAI : PETITION_FIELD_GROUP_LABEL;
   const isDefault = row.kind === "lookup" && row.item.is_default;
   const dot = row.kind === "lookup" ? dotColor(row.item.color) : null;
   const keys = submitOrCancel(actions.submit, actions.cancel);
@@ -860,7 +950,7 @@ export function CatalogueTableRow({
 
   return (
     <tr>
-      <td className="text-ink-muted">{row.kind === "lookup" ? row.group.nhan : TIEU_DE_NHOM_TRANG_THAI}</td>
+      <td className="text-ink-muted">{groupLabel}</td>
       <td>
         <code className="text-[11.5px]">{row.item.code}</code>
       </td>
@@ -1040,6 +1130,28 @@ function RowButtons({ row, busy, actions }: { row: CatalogueRow; busy: boolean; 
 
   // #21: the eighth group renames and reorders, nothing else — the pencil only.
   if (row.kind === "taskStatus") return <RowActions>{pencil}</RowActions>;
+  // Lĩnh vực phản ánh: pencil, and the commune's on/off switch — no default, no bin (ADR 0026). A code
+  // the vendor retired (`active: false`) gets no switch: turning it on would accept nothing.
+  if (row.kind === "petitionField") {
+    const field = row.item;
+    return (
+      <RowActions>
+        {pencil}
+        {field.active && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-label={nhanNutCuaDong(field.enabled ? NUT_TAT : ENABLE, label)}
+            disabled={busy}
+            onClick={() => actions.setActive(row, !field.enabled)}
+          >
+            {field.enabled ? NUT_TAT : ENABLE}
+          </Button>
+        )}
+      </RowActions>
+    );
+  }
   // No write route for the group, or a row that does not state its tier: no button (fail closed).
   if (row.group.ghi === null || !laMucGhi(row.item)) return null;
 

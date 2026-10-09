@@ -37,6 +37,12 @@ vi.mock("@/lib/api/trang-thai-nhiem-vu", async (importOriginal) => ({
   layTrangThaiNhiemVu: async () => ({ ok: true, duLieu: { items: [] } }),
 }));
 
+// The "Lĩnh vực phản ánh" read is not under test here (`petition-field-group.flow.test.tsx`).
+vi.mock("@/lib/api/citizen-report-fields", () => ({
+  readCitizenReportFields: async () => ({ ok: true, duLieu: { items: [] } }),
+  updateCitizenReportField: vi.fn(),
+}));
+
 const { TabDanhMuc } = await import("./tab-danh-muc");
 
 const ENTRY: MucDanhMucGhi = {

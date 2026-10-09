@@ -6,6 +6,7 @@
  * quan nhà nước là thứ có người phải trả lời, không phải chỗ để diễn đạt cho gọn.
  */
 
+import { CHOOSE_XLSX_BUTTON, IMPORT_DIALOG_DESCRIPTION, IMPORT_SUBMIT } from "./excel-import-flow";
 import type { KetTra } from "./tra-danh-muc";
 
 /**
@@ -286,10 +287,10 @@ export function roleChangeFailed(serverSentence: string): string {
 /* ---- staff Excel import dialog (user 09/10/2026, prototype `ExcelImportDialog`) -------------------- */
 
 export const STAFF_IMPORT_TITLE = "Nhập người dùng từ Excel";
-export const STAFF_IMPORT_DESCRIPTION =
-  "Tệp được kiểm trước và chưa ghi gì. Còn một dòng sai thì không dòng nào được nhận — sửa tệp rồi nhập lại.";
-export const STAFF_IMPORT_CHOOSE_FILE = "Chọn tệp .xlsx";
-export const STAFF_IMPORT_SUBMIT = "Nhập";
+// The staff dialog is now the shared one (`excel-import-dialog.tsx`); its three fixed words live there.
+export const STAFF_IMPORT_DESCRIPTION = IMPORT_DIALOG_DESCRIPTION;
+export const STAFF_IMPORT_CHOOSE_FILE = CHOOSE_XLSX_BUTTON;
+export const STAFF_IMPORT_SUBMIT = IMPORT_SUBMIT;
 export const STAFF_IMPORT_ERRORS_HEADING = "Tệp có lỗi — chưa cán bộ nào được tạo. Sửa các dòng dưới đây rồi nhập lại.";
 
 /** Empty text cells read "—" (prototype), never an empty cell. */

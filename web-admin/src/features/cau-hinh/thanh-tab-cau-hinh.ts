@@ -74,8 +74,12 @@ export type MoTaTab<M extends string = MaTabCauHinh> = {
  * other outbound channel of the commune, behind the same `admin.lookup` key.
  *
  * OWNER DECISION 08/10/2026 (ADR 0079 D1): "Thời hạn xử lý" is gated on `admin.sla` like the prototype,
- * and its three calendar tables moved to a tab of their own, "Lịch làm việc", right after it and with
- * NO gate — the calendar reads are `any-authenticated`; its write buttons still need `admin.sla`.
+ * and its three calendar tables moved to a tab of their own, "Lịch làm việc", with NO gate — the
+ * calendar reads are `any-authenticated`; its write buttons still need `admin.sla`.
+ *
+ * USER DECISION 09/10/2026 (replaces ADR 0079 D1's "right after Thời hạn xử lý"): the first nine tabs
+ * are the prototype's nine in the prototype's order; the three tabs the prototype lacks — "Lịch làm
+ * việc", "Nhật ký hệ thống", "Nhận diện xã" — follow, in that order.
  */
 export const TAB_CAU_HINH: readonly MoTaTab[] = [
   { ma: "so-do-to-chuc", nhan: "Sơ đồ tổ chức", cong: null },
@@ -84,10 +88,10 @@ export const TAB_CAU_HINH: readonly MoTaTab[] = [
   { ma: "truong-ban-do", nhan: "Trường bản đồ", cong: mapFieldTabDecision },
   { ma: "loi-he-thong", nhan: "Lời hệ thống", cong: systemMessagesTabDecision },
   { ma: "thoi-han-xu-ly", nhan: "Thời hạn xử lý", cong: slaTabDecision },
-  { ma: "lich-lam-viec", nhan: "Lịch làm việc", cong: null },
   { ma: "tu-dong-hoa", nhan: "Tự động hoá", cong: automationTabDecision },
   { ma: "may-chu-thu", nhan: "Máy chủ thư", cong: mailServerTabDecision },
   { ma: "kenh-zalo", nhan: "Kênh Zalo", cong: zaloChannelTabDecision },
+  { ma: "lich-lam-viec", nhan: "Lịch làm việc", cong: null },
   { ma: "nhat-ky-he-thong", nhan: "Nhật ký hệ thống", cong: auditLogTabDecision },
   { ma: "nhan-dien-xa", nhan: "Nhận diện xã", cong: brandingTabDecision },
 ];

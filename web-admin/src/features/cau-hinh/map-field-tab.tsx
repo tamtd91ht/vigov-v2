@@ -57,12 +57,14 @@ export const ADD_FIELD_BUTTON = "Thêm trường";
 export const LABEL_PLACEHOLDER = "Ví dụ: Số phòng học kiên cố";
 
 /**
- * Spec 06 §4's footnote MINUS ITS FIRST SENTENCE ("Cột trong tệp Excel nhập vào chỉ được giữ lại khi có
- * trường tương ứng ở đây."): no Excel import of map ASSETS exists — the contract has no
- * `/map-assets/import*` route, and `map-asset-type-import.ts` imports the asset-TYPE catalogue, not
- * assets — so that sentence would describe a behaviour nobody can find.
+ * Spec 06 §4's footnote, the prototype's two sentences verbatim (`AssetFieldTable.tsx`). The FIRST
+ * sentence is kept by the user's explicit choice (09/10/2026), replacing the earlier omission — although
+ * no Excel import of map ASSETS exists yet: the contract has no `/map-assets/import*` route, and
+ * `map-asset-type-import.ts` imports the asset-TYPE catalogue, not assets. The sentence states the rule
+ * that import must follow once it is built.
  */
 export const MAP_FIELD_NOTE =
+  "Cột trong tệp Excel nhập vào chỉ được giữ lại khi có trường tương ứng ở đây. " +
   "Trường đã xoá thì dữ liệu cũ vẫn còn trong hồ sơ, chỉ không hiện ra trên biểu mẫu nữa.";
 
 /** Empty state when the commune has no asset type: fields hang off a type, so types come first. */

@@ -80,8 +80,9 @@ export const GHI_CHU_SAU_KHI_GIEO =
  * - `SLA_BANNER_DUE_SOON_*`: the three uses are real — the reminder digest (`slaReminders` →
  *   `ResolveDueSoonCutoff`, `service-petitions/internal/app/automation_jobs.go`), the task register's
  *   `soon=true` filter (`service-petitions/internal/http/nhiem_vu.go`), and the bell's "Sắp đến hạn"
- *   notice. The spec's closing "Mặc định 72 giờ, tức ba ngày" is DROPPED: an SLA figure written into
- *   source, false for most rows (rule 10 forbidden #3, ADR 0079).
+ *   notice. The prototype's closing "Mặc định 72 giờ, tức ba ngày" is NOT written into source (rule 10
+ *   forbidden #3): since the user decision of 09/10/2026 (replacing ADR 0079's "Bỏ") the closing
+ *   sentence is BUILT FROM DATA — `dueSoonDefaultSentence`, fed the commune's own default petition row.
  */
 export const SLA_BANNER_LEAD = "Thời hạn tính theo ";
 export const SLA_BANNER_UNIT = "giờ làm việc";
@@ -93,6 +94,20 @@ export const SLA_BANNER_DUE_SOON_COLUMN = "Sắp đến hạn khi còn";
 export const SLA_BANNER_DUE_SOON_REST =
   " quyết định cả ba: lúc nào gửi lời nhắc, ô lọc “Sắp đến hạn” trên màn nhiệm vụ lấy ra việc nào, " +
   "và con số trong thông báo ở chuông.";
+
+/**
+ * The banner's closing sentence (prototype `SlaTable.tsx:76`), with the figure of THIS commune: the
+ * "Sắp đến hạn khi còn" hours of its default `phan-anh` row. No such row → the caller omits it.
+ *
+ * WHY NO "tức {n} ngày" CLAUSE: the prototype's "72 giờ, tức ba ngày" divides by 24, but this figure
+ * is WORKING hours (`service-identity/internal/domain/sla.go:82`; the banner says so in bold). 72
+ * working hours are not three days by the clock, and how many WORKING days they make depends on the
+ * commune's own weekly calendar (tab Lịch làm việc), which this tab does not read. Any day count here
+ * would be a second, guessed rule (rule 10 invariant 4) — so the sentence states the hours only.
+ */
+export function dueSoonDefaultSentence(hours: number): string {
+  return `Mặc định ${hours} giờ.`;
+}
 
 /*
  * NO NOTE UNDER THE TABLE (owner, 08/10/2026: "Bỏ hết, đúng prototype"). The former note explained

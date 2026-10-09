@@ -74,3 +74,14 @@ describe("config-ui pieces leave the parent's space-y gap alone", () => {
     expect(form).toContain("border-solid");
   });
 });
+
+describe("StatusBadge (user decision 09/10/2026)", () => {
+  it("text-only like the prototype — no tone icon on either chip, the word tells them apart", () => {
+    const on = renderToStaticMarkup(<StatusBadge active />);
+    const off = renderToStaticMarkup(<StatusBadge active={false} />);
+    expect(on).not.toContain("<svg");
+    expect(off).not.toContain("<svg");
+    expect(on).toContain("Đang dùng");
+    expect(off).toContain("Ngừng dùng");
+  });
+});

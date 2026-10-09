@@ -37,6 +37,7 @@ import {
   TEST_BUTTON,
   TEST_LABEL,
   TEST_RECIPIENT_PLACEHOLDER,
+  TEST_SAVE_FIRST_HINT,
   TEST_SENT_TOAST,
   draftFromSettings,
   lastTestSentence,
@@ -265,6 +266,10 @@ export function MailServerView({
   // saving changes nothing on the server.
   const noMailPath = !saved.configured || !saved.is_enabled;
   const testDisabled = readOnly || testing || !saved.configured;
+  const recipientLocked = readOnly || !saved.configured;
+  // Only the "not saved yet" lock gets the hint: the read-only lock (no encryption key) has its own
+  // banner above, and "save first" would tell that officer to do something that cannot succeed.
+  const showSaveFirstHint = !readOnly && !saved.configured;
   return (
     // Spec 10 (prototype `EmailSettingPanel.tsx:75`): one white card, max 3xl, NO shadow.
     <section className="border-line max-w-3xl rounded-[12px] border border-solid bg-white p-4" aria-labelledby="tieu-de-may-chu-thu">
@@ -425,36 +430,47 @@ export function MailServerView({
 
         {/* From 640px: right-aligned, the box `w-56` (spec 10 #6). Below: the full row, the box
             shrinking — 224px + the button do not fit a 320px screen's card. */}
-        <form
-          className="m-0 flex w-full min-w-0 items-end gap-2 sm:ml-auto sm:w-auto"
-          aria-label="Gửi thư thử"
-          onSubmit={(e) => {
-            e.preventDefault();
-            onTest();
-          }}
-        >
-          <ConfigField label={TEST_LABEL} htmlFor="o-gui-thu-toi" className="flex-1 sm:flex-none">
-            <input
-              id="o-gui-thu-toi"
-              name="recipient"
-              type="email"
-              className={cn(formInputCls, "sm:w-56")}
-              value={recipient}
-              placeholder={TEST_RECIPIENT_PLACEHOLDER}
-              disabled={readOnly || !saved.configured}
-              onChange={(e) => setRecipient(e.target.value)}
-            />
-          </ConfigField>
-          <Button
-            type="submit"
-            variant="outline"
-            icon={<Mail aria-hidden="true" focusable="false" />}
-            disabled={testDisabled || recipient.trim() === ""}
-            aria-busy={testing}
+        <div className="flex w-full min-w-0 flex-col sm:ml-auto sm:w-auto">
+          <form
+            className="m-0 flex w-full min-w-0 items-end gap-2"
+            aria-label="Gửi thư thử"
+            onSubmit={(e) => {
+              e.preventDefault();
+              onTest();
+            }}
           >
-            {TEST_BUTTON}
-          </Button>
-        </form>
+            <ConfigField label={TEST_LABEL} htmlFor="o-gui-thu-toi" className="flex-1 sm:flex-none">
+              <input
+                id="o-gui-thu-toi"
+                name="recipient"
+                type="email"
+                className={cn(formInputCls, "sm:w-56")}
+                value={recipient}
+                placeholder={TEST_RECIPIENT_PLACEHOLDER}
+                disabled={recipientLocked}
+                aria-describedby={showSaveFirstHint ? "goi-y-gui-thu" : undefined}
+                onChange={(e) => setRecipient(e.target.value)}
+              />
+            </ConfigField>
+            <Button
+              type="submit"
+              variant="outline"
+              icon={<Mail aria-hidden="true" focusable="false" />}
+              disabled={testDisabled || recipient.trim() === ""}
+              aria-busy={testing}
+            >
+              {TEST_BUTTON}
+            </Button>
+          </form>
+          {/* Spec 10 (user 09/10/2026): the box stays locked until a configuration is saved — the test
+              sends with the SAVED settings — and this line says why it is locked. Not shown to a
+              read-only account: saving is not something it can do. */}
+          {showSaveFirstHint && (
+            <p id="goi-y-gui-thu" className="text-ink-muted m-0 mt-1 text-[11px]">
+              {TEST_SAVE_FIRST_HINT}
+            </p>
+          )}
+        </div>
       </div>
 
       {saveError !== null && (

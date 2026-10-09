@@ -243,3 +243,15 @@ export function daXoa(tenNhom: string): string {
 export const CAU_THIEU_QUYEN_GHI =
   "Tài khoản của bạn chỉ xem được danh mục. Việc thêm, sửa, tắt và xoá mục cần quyền Quản lý " +
   "danh mục.";
+
+/* ---- Lĩnh vực phản ánh (user decision 09/10/2026, ADR 0026) ------------------------------------- */
+
+/** The group's name, as the spec names it (§5) and the SLA table's add row calls the same list. */
+export const PETITION_FIELD_GROUP_LABEL = "Lĩnh vực phản ánh";
+
+/**
+ * Why the import button is greyed on this group. Not a "?" placeholder: nothing is being built here —
+ * the codes are the vendor's by design (ADR 0026), so there is no add, no delete and no import.
+ */
+export const PETITION_FIELD_IMPORT_REASON =
+  "Mã lĩnh vực do nhà cung cấp quản lý; xã chỉ sửa nhãn, thứ tự, bật/tắt.";

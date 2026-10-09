@@ -39,7 +39,7 @@
 import { BAY_DANH_MUC_GHI, type MoTaDanhMucGhi } from "@/lib/api/danh-muc";
 import type { BayDanhMuc, MucDanhMuc } from "@/lib/api/danh-muc-nghiep-vu";
 import type { KetQua } from "@/lib/api/goi";
-import type { petitions_trangThaiNhiemVuRa } from "@/lib/api/schema.gen";
+import type { petitions_petitionFieldOut, petitions_trangThaiNhiemVuRa } from "@/lib/api/schema.gen";
 
 export type TrangThaiNhom =
   | { pha: "khongDocDuoc"; thongBao: string }
@@ -75,12 +75,14 @@ export type NhomDanhMuc = {
 /**
  * Bảy nhóm, THEO ĐÚNG THỨ TỰ BẢNG §5 CỦA ĐẶC TẢ — không theo vần chữ cái, không theo tên dịch vụ.
  *
- * BA NHÓM CỦA ĐẶC TẢ KHÔNG CÓ Ở ĐÂY, và không vì ai bỏ sót. `Lĩnh vực phản ánh` và `Loại đơn thư`
- * chưa có tuyến nào trong hợp đồng REST (`kb/20-contracts/openapi.json`). `Trạng thái nhiệm vụ`
- * thì CÓ tuyến, nhưng không cùng khuôn: câu hỏi #21 đã chốt là đơn vị chỉ đổi nhãn và thứ tự của
- * một bộ mã cố định (`PATCH /api/v1/task-statuses/{code}`, không thêm, không xoá), nên nó không
- * phải một nhóm thêm · sửa · xoá mềm của bảng này — tab vẽ nó bằng thành phần riêng
- * `nhom-trang-thai-nhiem-vu.tsx`.
+ * BA NHÓM CỦA ĐẶC TẢ KHÔNG CÓ Ở ĐÂY. `Loại đơn thư` has no REST route in the contract yet. The two
+ * others DO have routes but not this table's add · edit · soft-delete shape, so they are rows of their
+ * own kind in the same table (`catalogueRows`):
+ *   · `Trạng thái nhiệm vụ` — decision #21: label and order of seven fixed codes
+ *     (`PATCH /api/v1/task-statuses/{code}`).
+ *   · `Lĩnh vực phản ánh` — the vendor's tier-1 codes (ADR 0026/0060): the commune edits label and
+ *     order and switches a code on or off (`GET`/`PATCH /api/v1/citizen-report-fields[/{code}]`,
+ *     `admin.lookup`); no add, no delete, no import (user decision 09/10/2026).
  *
  * VÌ SAO CÓ CỜ `thuTuLaThangBac` THAY VÌ MỘT NHÁNH `if (khoa === "mucUuTienNhiemVu")` rải trong
  * component: thứ tự của `items` ở mức ưu tiên LÀ thang bậc của đơn vị, không phải sở thích trình
@@ -155,13 +157,20 @@ export function trangThaiNhom(kq: KetQua<{ items: readonly MucDanhMuc[] }>): Tra
  */
 export const TASK_STATUS_GROUP = "trangThaiNhiemVu";
 
-/** What the group filter can be narrowed to: one of the seven groups, the eighth, or `null` for all. */
-export type ShownGroup = KhoaNhom | typeof TASK_STATUS_GROUP | null;
+/**
+ * Key of the "Lĩnh vực phản ánh" filter button — read through `/api/v1/citizen-report-fields`, not one
+ * of the seven catalogue keys (vendor codes: label, order and on/off only; user decision 09/10/2026).
+ */
+export const PETITION_FIELD_GROUP = "linhVucPhanAnh"; // vi-name-ok: a filter VALUE, same family as TASK_STATUS_GROUP's "trangThaiNhiemVu"
+
+/** What the group filter can be narrowed to: one of the seven groups, the two code lists, or `null` for all. */
+export type ShownGroup = KhoaNhom | typeof TASK_STATUS_GROUP | typeof PETITION_FIELD_GROUP | null;
 
 /** One line of the tab's single table (spec 05: one table across groups, "Nhóm danh mục" first). */
 export type CatalogueRow =
   | { readonly kind: "lookup"; readonly key: string; readonly group: NhomDanhMuc; readonly item: MucDanhMuc }
-  | { readonly kind: "taskStatus"; readonly key: string; readonly item: petitions_trangThaiNhiemVuRa };
+  | { readonly kind: "taskStatus"; readonly key: string; readonly item: petitions_trangThaiNhiemVuRa }
+  | { readonly kind: "petitionField"; readonly key: string; readonly item: petitions_petitionFieldOut };
 
 /**
  * The rows of the one table, narrowed to `shown`.
@@ -169,7 +178,8 @@ export type CatalogueRow =
  * GROUP ORDER IS `BANG_NHOM`'s, ITEM ORDER IS THE SERVER'S — no sort anywhere. In "Mức ưu tiên nhiệm
  * vụ" the order of `items` IS the commune's scale (see `BANG_NHOM`); sorting the merged table by label
  * or code would silently change which priority reads as the most urgent. Task statuses come last, in
- * the order the server returns (effective order, ties by default).
+ * the order the server returns (effective order, ties by default); petition fields after them, in the
+ * commune's order as the server returns it.
  *
  * A group that could not be read contributes no row: the tab states its server sentence above the
  * table, so its absence is explained rather than read as "no entries".
@@ -178,6 +188,7 @@ export function catalogueRows(
   groups: readonly NhomDanhMuc[],
   taskStatuses: readonly petitions_trangThaiNhiemVuRa[],
   shown: ShownGroup,
+  petitionFields: readonly petitions_petitionFieldOut[] = [],
 ): CatalogueRow[] {
   const rows: CatalogueRow[] = [];
   for (const group of groups) {
@@ -192,12 +203,18 @@ export function catalogueRows(
       rows.push({ kind: "taskStatus", key: `${TASK_STATUS_GROUP}:${item.code}`, item });
     }
   }
+  if (shown === null || shown === PETITION_FIELD_GROUP) {
+    for (const item of petitionFields) {
+      rows.push({ kind: "petitionField", key: `${PETITION_FIELD_GROUP}:${item.code}`, item });
+    }
+  }
   return rows;
 }
 
 /** The filter key a row belongs to. */
 function rowGroup(row: CatalogueRow): Exclude<ShownGroup, null> {
-  return row.kind === "lookup" ? row.group.khoa : TASK_STATUS_GROUP;
+  if (row.kind === "lookup") return row.group.khoa;
+  return row.kind === "taskStatus" ? TASK_STATUS_GROUP : PETITION_FIELD_GROUP;
 }
 
 /**

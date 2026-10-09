@@ -67,8 +67,10 @@ describe("thẻ bộ phận và nút ghi", () => {
   it("REGRESSION (spec 03): thẻ theo spec, không lớp legacy `.the-bo-phan` / `.cay-bo-phan`", () => {
     const html = khung(true);
     expect(html).toContain(
-      "border-line shadow-card flex flex-wrap items-center gap-3 rounded-[10px] border border-solid bg-white px-4 py-3",
+      "border-line shadow-card flex flex-wrap items-center gap-3 rounded-[10px] border border-solid bg-white px-4 py-2.5",
     );
+    // ~4px between cards, ~65px per card (user decision 09/10/2026, spec §3).
+    expect(html).toMatch(/<ul class="m-0 list-none space-y-1 p-0" aria-label=/);
     expect(html).toContain("bg-navy/8 text-navy grid size-9");
     expect(html).toContain('<code class="text-ink-muted text-[11px]">01jvp</code>');
     expect(html).not.toMatch(/class="[^"]*\b(the-bo-phan|cay-bo-phan|cum-nut)\b/);

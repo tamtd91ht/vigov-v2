@@ -40,9 +40,8 @@ import type {
   identity_post_sla_defaults,
   identity_removeSLAFieldRowIn,
   identity_suaSLAVao,
-  petitions_get_citizen_report_fields,
-  petitions_petitionFieldListOut,
 } from "./schema.gen";
+import { readCitizenReportFields } from "./citizen-report-fields";
 
 /**
  * GET /api/v1/sla — cả bảng, kèm `problems`.
@@ -98,8 +97,7 @@ function toOptions<T extends { code: string; label: string; active: boolean }>(
  * the catalogue is one commune's (`danh-muc.ts`).
  */
 export async function readPetitionFieldOptions(): Promise<KetQua<readonly SlaFieldOption[]>> {
-  const path: petitions_get_citizen_report_fields["duongDan"] = "/api/v1/citizen-report-fields";
-  return toOptions(await docJSON<petitions_petitionFieldListOut>(path));
+  return toOptions(await readCitizenReportFields());
 }
 
 /** GET /api/v1/document-types — the field list of `van-ban-den` rows. Reuses the catalogue reader. */

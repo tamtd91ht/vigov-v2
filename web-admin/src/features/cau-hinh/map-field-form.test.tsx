@@ -312,9 +312,11 @@ describe("toolbar and footnote", () => {
     expect(assetTypeOptionLabel(TYPES[0]!, TYPES)).toBe("Doanh nghiệp");
   });
 
-  it("the footnote never promises an Excel import of assets that does not exist", () => {
-    expect(MAP_FIELD_NOTE).not.toContain("Excel");
-    expect(MAP_FIELD_NOTE).toBe("Trường đã xoá thì dữ liệu cũ vẫn còn trong hồ sơ, chỉ không hiện ra trên biểu mẫu nữa.");
+  it("the footnote is the prototype's two sentences verbatim, the Excel one first (user 09/10/2026)", () => {
+    expect(MAP_FIELD_NOTE).toBe(
+      "Cột trong tệp Excel nhập vào chỉ được giữ lại khi có trường tương ứng ở đây. " +
+        "Trường đã xoá thì dữ liệu cũ vẫn còn trong hồ sơ, chỉ không hiện ra trên biểu mẫu nữa.",
+    );
   });
 });
 

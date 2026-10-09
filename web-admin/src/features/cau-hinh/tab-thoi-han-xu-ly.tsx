@@ -76,6 +76,7 @@ import {
   UNASSIGNED_HOLD_OFF,
   afterHoursCell,
   cauGieoThoiHan,
+  dueSoonDefaultSentence,
   hoursCell,
   nhanLinhVuc,
   nhanLoaiViec,
@@ -97,6 +98,7 @@ import {
 } from "./sua-thoi-han";
 import { CitizenLetterDeadlineBlock } from "./citizen-letter-deadline-block";
 import { RemoveStep } from "./remove-reason-step";
+import { orderSlaRows } from "./sla-row-order";
 import { KhoiChuaKhai } from "./working-calendar-tab";
 
 /**
@@ -540,6 +542,8 @@ export function ManThoiHanXuLy({
   const khoi = khoiCanhBao(tinhTrangBang(du.thoiHan), "chuaBiet");
   const kq = du.thoiHan;
   const rows = kq !== null && kq.ok ? kq.duLieu.items : [];
+  // The banner's closing figure comes from THIS commune's default petition row (user 09/10/2026).
+  const petitionDefault = rows.find((d) => d.work_kind === "phan-anh" && d.is_default);
 
   return (
     <section className="space-y-3" aria-labelledby="tieu-de-thoi-han">
@@ -570,6 +574,7 @@ export function ManThoiHanXuLy({
           {SLA_BANNER_DUE_SOON_LEAD}
           <b>{SLA_BANNER_DUE_SOON_COLUMN}</b>
           {SLA_BANNER_DUE_SOON_REST}
+          {petitionDefault !== undefined && ` ${dueSoonDefaultSentence(petitionDefault.due_soon_hours)}`}
         </span>
       </div>
 
@@ -716,9 +721,24 @@ function FigureText({
 }
 
 /**
+ * Fixed width of each figure column, wide enough for its heading on ONE line (user 09/10/2026, spec 08
+ * "header 1 dòng ở 1534px") and for the 80px edit box plus cell padding. Rough budget at 14px, 16px
+ * padding included: kind ~181 + 6 figures 856 + actions ~86 ≈ 1123px, leaving the Lĩnh vực column —
+ * the only one whose body text wraps — about 115–200px of the ~1240px content width at 1534px.
+ */
+const COLUMN_WIDTH: Record<KhoaGio, string> = {
+  acknowledge_hours: "w-[96px]",
+  resolve_hours: "w-[96px]",
+  due_soon_hours: "w-[152px]",
+  escalate_leader_hours: "w-[172px]",
+  escalate_president_hours: "w-[104px]",
+  unassigned_hold_hours: "w-[148px]",
+};
+
+/**
  * The SLA table (`SlaTable.tsx:96-126`) plus the sixth figure "Giữ chưa phân công" before the actions
- * (ADR 0079 decision 3). GIỮ NGUYÊN THỨ TỰ MÁY CHỦ TRẢ VỀ: sắp lại theo tên lĩnh vực sẽ tách dòng mặc
- * định khỏi nhóm của nó.
+ * (ADR 0079 decision 3). Rows in the prototype's order (`orderSlaRows`, user 09/10/2026): the default
+ * row still leads its own kind, so sorting by label no longer splits it from its group.
  */
 function SlaTable({
   rows,
@@ -738,14 +758,15 @@ function SlaTable({
   remove: InlineRemove | null;
 }) {
   const columnCount = 2 + COT_GIO.length + (coQuyenGhi ? 1 : 0);
+  const fieldLabel = (d: identity_dongSLARa) =>
+    nhanLinhVuc(d.field, d.is_default, labelsFor(catalogues, d.work_kind));
+  const ordered = orderSlaRows(rows, fieldLabel);
 
   return (
-    // FITS 1144px WITHOUT SCROLLING THE ACTIONS AWAY: `.data-table thead th` is `nowrap` (legacy layer,
-    // so a utility beats it), and the six long figure headings alone overran the content width. Headings
-    // wrap; each figure column keeps 4.5rem so "Tiếp nhận" does not collapse to one word per line. Rough
-    // budget, 16px cell padding included: kind ~166 + field ~186 + 6 × 88 + actions ~86 ≈ 970px read,
-    // ≈ 1050px while editing (6 × (80px input + 16)). Body cells stay `nowrap` (ConfigTable).
-    <div className="[&_th]:min-w-[4.5rem] [&_th]:whitespace-normal">
+    // HEADINGS ON ONE LINE (user 09/10/2026 — the earlier wrapping headings are gone): `.data-table thead
+    // th` is `nowrap` (legacy layer) and each figure column has a fixed width (`COLUMN_WIDTH`). The
+    // Lĩnh vực cell is the one that wraps, so the table still fits without scrolling the actions away.
+    <div>
       <ConfigTable
         label="Thời hạn xử lý"
         caption="Số giờ làm việc cho từng loại việc và lĩnh vực của đơn vị"
@@ -755,7 +776,7 @@ function SlaTable({
             <th scope="col">Loại việc</th>
             <th scope="col">Lĩnh vực</th>
             {COT_GIO.map((c) => (
-              <th scope="col" key={c}>
+              <th scope="col" key={c} className={COLUMN_WIDTH[c]}>
                 {NHAN_COT[c]}
               </th>
             ))}
@@ -767,13 +788,9 @@ function SlaTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((d) => {
+          {ordered.map((d) => {
             const kindText = nhanLoaiViec(d.work_kind);
-            const fieldText = nhanLinhVuc(
-              d.field,
-              d.is_default,
-              labelsFor(catalogues, d.work_kind),
-            );
+            const fieldText = fieldLabel(d);
             const editing =
               coQuyenGhi && edit !== null && edit.rowId === d.id ? edit : null;
             // Never on the default row, even if a stale state names it: the server refuses it anyway.
@@ -791,7 +808,7 @@ function SlaTable({
               <Fragment key={d.id}>
                 <tr>
                   <td className="text-navy font-medium">{kindText}</td>
-                  <td className={d.is_default ? "text-ink-muted" : undefined}>
+                  <td className={cn("whitespace-normal!", d.is_default && "text-ink-muted")}>
                     {fieldText}
                   </td>
                   {COT_GIO.map((c) => (

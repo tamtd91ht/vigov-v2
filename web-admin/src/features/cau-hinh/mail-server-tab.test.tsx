@@ -230,6 +230,24 @@ describe("test send", () => {
     expect(box(el, "host").value).toBe("smtp.dang-go.gov.vn");
   });
 
+  it("nothing saved yet → the box is locked and says 'Lưu cấu hình trước khi gửi thử.' (user 09/10/2026)", async () => {
+    H.phien = session(["admin.lookup"]);
+    getReply = { status: 200, body: { ...SAVED, configured: false } };
+    const el = await mount();
+    const recipient = box(el, "recipient");
+    expect(recipient.disabled).toBe(true);
+    const hint = el.querySelector("#goi-y-gui-thu");
+    expect(hint?.textContent).toBe("Lưu cấu hình trước khi gửi thử.");
+    expect(recipient.getAttribute("aria-describedby")).toBe("goi-y-gui-thu");
+  });
+
+  it("saved → the box is open and the hint is gone", async () => {
+    H.phien = session(["admin.lookup"]);
+    const el = await mount();
+    expect(box(el, "recipient").disabled).toBe(false);
+    expect(el.textContent).not.toContain("Lưu cấu hình trước khi gửi thử.");
+  });
+
   it("network failure → 'Không gọi được máy chủ.'", async () => {
     H.phien = session(["admin.lookup"]);
     testReply = "network";

@@ -73,13 +73,21 @@ export function KhungTabCauHinh() {
     ? dangChon
     : hien[0]?.ma;
 
+  // The strip scrolls sideways (one row, user 09/10/2026), so a tab chosen by click or arrow key is
+  // brought into view — otherwise "Nhận diện xã" could be selected while sitting past the right edge.
+  // `nearest` on both axes: never scroll the page vertically just because a tab was chosen.
+  function selectTab(ma: MaTabCauHinh) {
+    datDangChon(ma);
+    nutTab.current[ma]?.scrollIntoView?.({ inline: "nearest", block: "nearest" });
+  }
+
   function xuLyPhim(e: KeyboardEvent<HTMLButtonElement>, viTri: number) {
     const ke = tabKeTheoPhim(e.key, viTri, hien.length);
     const toi = ke === null ? undefined : hien[ke];
     if (toi === undefined) return;
     e.preventDefault();
     const ma = toi.ma;
-    datDangChon(ma);
+    selectTab(ma);
     nutTab.current[ma]?.focus();
   }
 
@@ -97,12 +105,15 @@ export function KhungTabCauHinh() {
           segments `px-1.5 text-sm font-medium` at 60% foreground, each 25px tall (the prototype's
           `h-[calc(100%-1px)]` of a 32px strip); the open one a WHITE raised segment (`bg-surface` here —
           this app's `bg-background` is the page colour, not white).
-          WRAPS, NEVER SCROLLS (owner, VALIDATE 08/10/2026): the prototype has nine tabs, this screen
-          twelve, and at 1440px a sideways scroller hid "Nhận diện xã" past the right edge with nothing
-          saying it was there. So the strip is `flex-wrap` with `h-auto`: when a row is full the next tabs
-          go onto a second row and the muted strip grows to hold both. */}
+          ONE ROW, SCROLLS SIDEWAYS (user 09/10/2026 — replaces ADR 0079 lô 3 Q9 "wraps"): a wrapped
+          strip grew to 56px and dropped "Nhận diện xã" onto a second row; the prototype's strip is one
+          32px row. So `flex-nowrap overflow-x-auto` at the TabList's own 32px (`h-8`, ≤36px), scrollbar
+          hidden, and the chosen tab scrolled into view (`selectTab`) so it is never selected off-screen. */}
       {coThanh && (
-        <TabList aria-label="Các phần cấu hình" className="h-auto flex-wrap overflow-visible">
+        <TabList
+          aria-label="Các phần cấu hình"
+          className="flex-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
           {hien.map((t, i) => (
             <Tab
               key={t.ma}
@@ -113,7 +124,7 @@ export function KhungTabCauHinh() {
               selected={t.ma === chon}
               aria-controls={idPanel(t.ma)}
               tabIndex={t.ma === chon ? 0 : -1}
-              onClick={() => datDangChon(t.ma)}
+              onClick={() => selectTab(t.ma)}
               onKeyDown={(e) => xuLyPhim(e, i)}
               className={cn("h-[25px]", t.ma === chon && "bg-surface")}
             >
