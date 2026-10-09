@@ -676,7 +676,8 @@ export function profileLogoUrl(profile: CommuneProfile | null): string {
  *
  *   `hoi`       WHY first, then what Zalo will ask, then the button — Zalo's dialog opens only on "Đồng ý"
  *               (policy 3.3.4; the words are `PHONE_VERIFICATION`'s, the same act as the shared app's — except
- *               where the number GOES: `COMMUNE_APP_SESSION.zalo_asks`, ADR 0066)
+ *               where the number GOES: `COMMUNE_APP_SESSION.zalo_asks`, ADR 0066). When the same tap also asks
+ *               for the name (`asksName`), both sentences name both (`why_with_name`, `zalo_asks_with_name`)
  *   `dang-mo`   words, not a spinner — and "Về trang chủ", which works while the open runs
  *   `ket-qua`   one sentence saying what to do next, "Về trang chủ" always, a retry only where a new tap can
  *               help — the retry is "Đồng ý chia sẻ số điện thoại" again, since that tap is what opens Zalo's dialog
@@ -692,6 +693,11 @@ export function SessionGateScreen(props: {
   onDecline: () => void;
   /** "Gửi bằng họ tên và số điện thoại" — absent = never offered (tests that pin the older screen). */
   onManual?: () => void;
+  /**
+   * The same tap also asks Zalo for the NAME (sending, name not settled — owner, 09/10/2026): the words before it
+   * then say both (policy 3.3.4). Absent/false = only the number is asked, and only the number is named.
+   */
+  asksName?: boolean;
   /**
    * The accountless path (ADR 0083): "Gửi phản ánh không cần tài khoản" / "Tra cứu bằng mã phiếu" — only where
    * `offersAccountless` says (Zalo refused the access token). Absent = never offered.
@@ -725,8 +731,10 @@ export function SessionGateScreen(props: {
             <h2 className="xa-dau-khoi__tieu-de" id="xa-cong-tieu-de">
               {PHONE_VERIFICATION.title}
             </h2>
-            <p>{PHONE_VERIFICATION.why}</p>
-            <p className="xa-phu">{COMMUNE_APP_SESSION.zalo_asks}</p>
+            <p>{props.asksName === true ? COMMUNE_APP_SESSION.why_with_name : PHONE_VERIFICATION.why}</p>
+            <p className="xa-phu">
+              {props.asksName === true ? COMMUNE_APP_SESSION.zalo_asks_with_name : COMMUNE_APP_SESSION.zalo_asks}
+            </p>
             <button type="button" className="xa-nut" onClick={props.onAllow}>
               {PHONE_VERIFICATION.allow}
             </button>
@@ -849,10 +857,26 @@ function AppCuaXa(props: {
   // The 403 path of the rating block (`usePhoneVerification`): the same opener, the same commune check.
   const reopenWithPhone = useMemo(() => (openSession ? communeAppReopen(openSession) : undefined), [openSession]);
 
+  /*
+   * THE ZALO NAME, ASKED IN THE SAME STEP AS THE NUMBER (owner, 09/10/2026). Sending, with the name not settled in
+   * this open (`needs-consent`): the gate's words name both (`asksName`), and the one tap on "Đồng ý" asks Zalo for
+   * the number and — once a VERIFIED session is open — for the name. At most once per open: `TrangXa` asks only
+   * from `needs-consent`, and any answer settles it. Never when the number was refused: the name would serve
+   * nothing. Asked BEFORE the act, so the send screen's first render already sees "being asked" and never paints a
+   * layout it would then change (`VerifiedSender`).
+   */
+  const asksName = gateTask === "submit" && props.name.kind === "needs-consent";
+  /** Set when the citizen tapped "Đồng ý" on a gate that said it would ask for the name too. */
+  const nameAfterPhone = useRef(false);
+  const askName = useRef(props.onAgreeName);
+  askName.current = props.onAgreeName;
+
   /** Run `act` with a session — at once if one exists, otherwise after the explanation and the tap. */
   function requireSession(task: PhoneVerificationTask, act: () => void) {
     setGateTask(task);
     gate.require(() => {
+      if (nameAfterPhone.current && task === "submit" && layPhienViGov()?.phone_verified === true) askName.current();
+      nameAfterPhone.current = false;
       act();
       // A session now exists: the home block and Cá nhân fill in without a second question — but only with a
       // VERIFIED phone. A phone-less session (ADR 0080) is refused by the list route, and that refusal would
@@ -901,6 +925,7 @@ function AppCuaXa(props: {
         <CommuneSendScreen
           ten_xa={xa.ten}
           ho_ten={shownName}
+          nameAtEntry={props.name}
           getSceneLocation={props.getSceneLocation}
           pickScenePhotos={props.pickScenePhotos}
           draftStore={props.draftStore}
@@ -1036,7 +1061,11 @@ function AppCuaXa(props: {
       <SessionGateScreen
         state={gateState}
         task={gateTask}
-        onAllow={() => void gate.allow()}
+        asksName={asksName}
+        onAllow={() => {
+          nameAfterPhone.current = asksName;
+          void gate.allow();
+        }}
         onDecline={gate.decline}
         onManual={() => void gate.manual()}
         onAccountless={() => {
@@ -1240,8 +1269,15 @@ export function TrangXa(props: {
       .then((kq) => setName(afterNameCheck(kq)));
   }, [lay_ten]);
 
+  /**
+   * Zalo's name dialog — from the home card's "Đồng ý", or from the send gate's "Đồng ý" right after the number
+   * (`AppCuaXa`). AT MOST ONCE per open (owner, 09/10/2026): the ref holds even when two callers act in the same
+   * tick, before `name` has re-rendered out of `needs-consent`.
+   */
+  const nameAsked = useRef(false);
   async function askName() {
-    if (lay_ten === undefined || name.kind !== "needs-consent") return;
+    if (lay_ten === undefined || name.kind !== "needs-consent" || nameAsked.current) return;
+    nameAsked.current = true;
     setName({ kind: "asking" });
     const kq = await lay_ten("ask").catch((): Awaited<ReturnType<LayTenZalo>> => ({ kieu: "khong-lay-duoc" }));
     setName(afterNameAsk(kq));

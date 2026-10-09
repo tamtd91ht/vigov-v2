@@ -19,7 +19,8 @@ owns_facts:
   - "nháp phản ánh giữ trên máy CHỈ trong app riêng của xã: một khoá, sáu trường, họ tên và số điện thoại lưu cả khi ẩn danh (vòng 4–5, 28/09/2026; sửa 06/10/2026 — có cả ở app chung mở từ QR của xã)"
   - "ở app chung, khoá nháp mang tên miền xã vì một origin phục vụ nhiều xã — ràng buộc người dựng chọn, không phải lời chủ dự án (06/10/2026)"
   - "không có màn phiếu công khai phía dân; kiểm duyệt pending/approved/hidden là việc của cán bộ ở máy chủ; phiếu tác phong cán bộ không bao giờ công khai (vòng 4, 28/09/2026)"
-  - "phiên đã xác thực số: màn gửi gộp họ tên + số thành một dòng 'Gửi bằng: <tên> · số Zalo đã xác thực' có nút 'Sửa'; ô số để trống thì service-petitions gắn số đã xác thực của phiên, che và ghi vết như số gõ tay; không bao giờ cho phiếu ẩn danh, không áp ADR 0080, 0083 (chủ dự án, 08/10/2026)"
+  - "phiên đã xác thực số: ô số để trống thì service-petitions gắn số đã xác thực của phiên, che và ghi vết như số gõ tay; không bao giờ cho phiếu ẩn danh, không áp ADR 0080, 0083 (chủ dự án, 08/10/2026)"
+  - "phiên đã xác thực số + có tên Zalo: màn gửi chỉ một dòng chỉ đọc 'Gửi bằng: <tên Zalo> · số Zalo đã xác thực', không ô nhập, không nút 'Sửa'; từ chối cho tên thì ô họ tên bắt buộc + dòng chỉ đọc số; tên hỏi cùng bước xác nhận số, một lần trong phiên (chủ dự án, 09/10/2026 — thay 'Sửa' của 08/10)"
 ---
 
 # 0050. Kênh công dân theo kho yêu cầu — xung đột thì theo yêu cầu, còn lại theo prototype
@@ -49,6 +50,9 @@ phần ADR 0028** (quyết định E cho kênh Mini App), **ADR 0041** (thêm m�
 >
 > 08/10/2026 — chủ dự án: **người gửi đã xác thực số gọn một dòng, máy chủ gắn số của phiên** (điểm 4,
 > 9) — §*Sửa đổi 08/10/2026*.
+>
+> 09/10/2026 — chủ dự án: **người gửi đã xác thực số là một dòng chỉ đọc, bỏ nút "Sửa"; tên Zalo hỏi
+> cùng bước xác nhận số** — §*Sửa đổi 09/10/2026* (thay điểm 1 của §*Sửa đổi 08/10/2026*).
 
 ## Bối cảnh
 
@@ -196,6 +200,28 @@ với phiên đã xác thực số, dân **không phải gõ lại** — số l�
 thực nằm ở phiên phía máy chủ. Client tự điền rồi gửi lại thì số trên phiếu là chữ client nói, không còn là
 số máy chủ đã xác minh — đúng thứ luật 4 bất biến 2 cấm cho danh tính. Gắn ở máy chủ thì nhãn "số Zalo đã
 xác thực" trên màn là thật.
+
+## Sửa đổi 09/10/2026 — người gửi đã xác thực số: một dòng chỉ đọc, không "Sửa"; tên Zalo hỏi cùng bước xác nhận số
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. **Người quyết:** chủ dự án,
+09/10/2026, trong phiên chính. **Đang dựng** (phiên khác) — sổ
+`citizen-app/gui-phan-anh-nguoi-gui-da-xac-thuc`.
+
+**Lý do (lời chủ dự án):** bỏ ma sát — tên và số đã có từ Zalo thì người dân không phải nhập. Cách dựng
+08/10 cho ô hiện trước, tên về muộn khi người dân đã chạm vào ô, rồi dòng gập lại và không sửa được.
+
+| # | Ca | Chốt |
+|---|---|---|
+| a | Phiên **đã xác thực số** (Zalo cho số) **và có tên Zalo** | **Không** ô họ tên, **không** ô số, **không** nút "Sửa" — chỉ một dòng chỉ đọc "Gửi bằng: <tên Zalo> · số Zalo đã xác thực". **Thay** điểm 1 của §*Sửa đổi 08/10/2026* (dòng kèm "Sửa", "Sửa" mở cả hai ô — commit `cd498172`) |
+| b | Zalo **không cho số** (từ chối / `-1401`; nhập tay ADR 0080, không tài khoản ADR 0083) | Giữ ô họ tên + ô số, **bắt buộc** — không đổi |
+| c | **Có** số đã xác thực, người dân **từ chối cho tên** (`getUserInfo` bị từ chối hoặc lỗi) | Chỉ **ô nhập họ tên** (bắt buộc) + dòng chỉ đọc số Zalo đã xác thực; **không** ô số |
+| d | Thời điểm lấy tên | Chưa có tên lúc vào gửi thì tên Zalo được **hỏi cùng bước xác nhận số**: màn giải thích trước hộp thoại Zalo nói rõ xin **cả họ tên và số** (chính sách Zalo 3.3.4). **Chỉ hỏi một lần duy nhất trong phiên**; đã có tên (đồng ý ở thẻ trang chủ, hoặc lần kiểm im lặng lúc mở app) thì không hỏi lại. Chế độ người gửi (a)/(c) **chốt khi tên đã ngã ngũ**, không đổi dưới tay người dân |
+| e | Công tắc "Gửi ẩn danh" | **Giữ** (điểm 3). Bật thì dòng "Gửi bằng" ẩn |
+| f | Hệ quả kỹ thuật | Ở (a)/(c) client gửi `reporter_phone` **rỗng**; máy chủ tự gắn số đã xác thực (§*Sửa đổi 08/10/2026* điểm 2, RPC `ResolveCitizenContactPhone`, `proto/vigov/identity/v1/identity.proto:403`). Số/tên còn trong nháp **không được gửi ngầm** ở (a)/(c) — lỗi của bản 08/10: số gõ trước khi dòng gập vẫn gửi ngầm và **đè** số đã xác thực |
+
+**Thay gì:** điểm 1 của §*Sửa đổi 08/10/2026* (nút "Sửa") và vế *"'Sửa' vẫn còn"* ở đoạn *Thay gì* của
+mục ấy. Điểm 2–4 của §*Sửa đổi 08/10/2026* vẫn đứng. Điểm 9 vẫn đứng: ở (a) người gửi là tên Zalo, ở (c)
+là tên người dân gõ.
 
 ## ĐIỀU KIỆN DỪNG
 

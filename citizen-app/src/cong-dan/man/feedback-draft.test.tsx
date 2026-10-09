@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { XA_PA } from "./noi-dung";
-import { CommuneSendScreen, restoreDraft } from "./PhanAnhAppXa";
+import { CommuneSendScreen, restoreDraft, verifiedSenderOf, withVerifiedSender } from "./PhanAnhAppXa";
 import type { FeedbackDraftStore, NhapPhieu } from "./trai-nghiem";
 
 /** Field CODES as the commune's catalogue offers them (`my-citizen-report-fields`). */
@@ -91,5 +91,35 @@ describe("send screen with a saved draft", () => {
     // An anonymous draft keeps no name; the name from Zalo in this session fills in.
     expect(restoreDraft({ ...DRAFT, ho_ten: "", an_danh: true }, "Trần Thị Đào", OFFERED).form.ho_ten).toBe("Trần Thị Đào");
     expect(restoreDraft({ ...DRAFT, ho_ten: "" }, null, OFFERED).form.ho_ten).toBe("");
+  });
+
+  it("on a VERIFIED session the draft's number never comes back; (a) takes the Zalo name, (c) keeps the typed one", () => {
+    // (a): no box shows the name or the number, so neither may ride along hidden from the draft.
+    const a = restoreDraft(DRAFT, "Trần Thị Đào", OFFERED, { kind: "zalo-name", name: "Trần Thị Đào" });
+    expect(a.form).toEqual({ ...DRAFT, ho_ten: "Trần Thị Đào", dien_thoai: "" });
+    // (c): the name box shows the draft's name; the number has no box, so it goes.
+    const c = restoreDraft(DRAFT, null, OFFERED, { kind: "typed-name" });
+    expect(c.form).toEqual({ ...DRAFT, dien_thoai: "" });
+    expect(c.step).toBe(2);
+  });
+});
+
+describe("the sender of a verified session, from the Zalo name request", () => {
+  it("settled with a name → (a); settled without one, or never consented → (c); still being asked → pending (null)", () => {
+    expect(verifiedSenderOf({ kind: "settled", name: " Trần Thị Đào " })).toEqual({ kind: "zalo-name", name: "Trần Thị Đào" });
+    expect(verifiedSenderOf({ kind: "settled", name: null })).toEqual({ kind: "typed-name" });
+    expect(verifiedSenderOf({ kind: "settled", name: "  " })).toEqual({ kind: "typed-name" });
+    expect(verifiedSenderOf({ kind: "needs-consent" })).toEqual({ kind: "typed-name" });
+    expect(verifiedSenderOf({ kind: "checking" })).toBeNull();
+    expect(verifiedSenderOf({ kind: "asking" })).toBeNull();
+  });
+
+  it("the form as sent: the number always empty; the name is Zalo's in (a), the typed one in (c)", () => {
+    expect(withVerifiedSender(DRAFT, { kind: "zalo-name", name: "Trần Thị Đào" })).toEqual({
+      ...DRAFT,
+      ho_ten: "Trần Thị Đào",
+      dien_thoai: "",
+    });
+    expect(withVerifiedSender(DRAFT, { kind: "typed-name" })).toEqual({ ...DRAFT, dien_thoai: "" });
   });
 });

@@ -100,6 +100,7 @@ import {
   type FeedbackDraftStore,
   kiemNhapPhieu,
   type LoiNhapPhieu,
+  type NameAtEntry,
   NHAN_BUOC,
   NHAN_NHOM,
   nhomCua,
@@ -921,24 +922,64 @@ export function fieldTone(tone: string | null): Tone {
  * screen drops it the moment the catalogue arrives without it. Otherwise step 2, the writing step, as the
  * prototype does (`NewFeedbackPage.tsx:222`). An empty name in the draft (an anonymous one keeps none)
  * falls back to the name taken from Zalo in this session.
+ *
+ * `verifiedSender` (a session whose Zalo number is verified, its sender settled): the draft's number is dropped
+ * and, in (a), its name replaced by the Zalo name — neither has a box there, so a value kept from the draft would
+ * be sent HIDDEN. That is the defect of 08/10/2026: a number typed before the old fold went out unseen and
+ * overrode the verified one.
  */
 export function restoreDraft(
   draft: NhapPhieu,
   zaloName: string | null,
   offered: readonly string[] | null,
+  verifiedSender?: VerifiedSender,
 ): { form: NhapPhieu; step: 1 | 2 } {
   const field = offered === null || offered.includes(draft.linh_vuc) ? draft.linh_vuc : "";
+  const form: NhapPhieu = {
+    linh_vuc: field,
+    noi_dung: draft.noi_dung,
+    dia_chi: draft.dia_chi,
+    ho_ten: draft.ho_ten !== "" ? draft.ho_ten : (zaloName ?? ""),
+    dien_thoai: draft.dien_thoai,
+    an_danh: draft.an_danh,
+  };
   return {
-    form: {
-      linh_vuc: field,
-      noi_dung: draft.noi_dung,
-      dia_chi: draft.dia_chi,
-      ho_ten: draft.ho_ten !== "" ? draft.ho_ten : (zaloName ?? ""),
-      dien_thoai: draft.dien_thoai,
-      an_danh: draft.an_danh,
-    },
+    form: verifiedSender === undefined ? form : withVerifiedSender(form, verifiedSender),
     step: field !== "" ? 2 : 1,
   };
+}
+
+/**
+ * THE SENDER ON A VERIFIED SESSION (owner, 09/10/2026, final — ADR 0050). The server attaches the session's
+ * verified number to the petition by itself (`SERVER_ATTACHES_SESSION_PHONE`), so there is never a number box:
+ *
+ *   `zalo-name`   (a) Zalo gave the name: ONE read-only line "Gửi bằng: <tên> · số Zalo đã xác thực" — no box,
+ *                 no "Sửa". The name sent is the Zalo name.
+ *   `typed-name`  (c) the name was declined, failed, or never consented to: a REQUIRED name box alone, and a line
+ *                 saying the verified Zalo number is used.
+ *
+ * Neither is a UI preference: the old "Sửa" opened a number box whose value was sent instead of the verified
+ * one, and a box that appears under the citizen's finger is a box they type into by accident.
+ */
+export type VerifiedSender = { readonly kind: "zalo-name"; readonly name: string } | { readonly kind: "typed-name" };
+
+/**
+ * The Zalo name request → the sender of a verified session, or `null` while the answer is still coming (the
+ * check at app open, or the dialog asked right after the number — `TrangXa`). `needs-consent` is (c): nobody
+ * will ask in this screen, and the explanation the dialog needs is not on it. PURE.
+ */
+export function verifiedSenderOf(name: NameAtEntry): VerifiedSender | null {
+  if (name.kind === "checking" || name.kind === "asking") return null;
+  const zalo = name.kind === "settled" ? (name.name ?? "").trim() : "";
+  return zalo === "" ? { kind: "typed-name" } : { kind: "zalo-name", name: zalo };
+}
+
+/**
+ * The form as a verified session sends it: the number ALWAYS empty (`reporter_phone: ""` — the server attaches
+ * the verified one; the client never sends it itself), the name the Zalo one in (a), the typed one in (c). PURE.
+ */
+export function withVerifiedSender(form: NhapPhieu, sender: VerifiedSender): NhapPhieu {
+  return { ...form, ho_ten: sender.kind === "zalo-name" ? sender.name : form.ho_ten, dien_thoai: "" };
 }
 
 /**
@@ -1112,11 +1153,12 @@ export function FieldStep(props: {
 }
 
 /**
- * THE ONE SWITCH for the number box on a verified session (owner, 08/10/2026). `true` since `service-petitions`
- * attaches the session's verified number to a petition whose number box is empty (identity
- * `ResolveCitizenContactPhone`, ADR 0050 §Sửa đổi 08/10/2026): the box folds into the name line ("Gửi bằng: <tên>
- * · số Zalo đã xác thực"), and "Sửa" opens both. Back to `false` only if that server step is removed — otherwise a
- * hidden box sends petitions with NO number for the commune to call back. Needs identity deployed before petitions.
+ * THE ONE SWITCH for the number box on a verified session. `true` since `service-petitions` attaches the session's
+ * verified number to a petition sent with an empty `reporter_phone` (`gui_phan_anh.go`, identity
+ * `ResolveCitizenContactPhone`, ADR 0050 §Sửa đổi 08/10/2026). While `true`, a verified session has NO number box
+ * and sends `reporter_phone: ""` (`VerifiedSender`, owner 09/10/2026). Back to `false` only if that server step is
+ * removed — the form then falls back to the name and optional number boxes, because with no box and no server step
+ * a petition would reach the commune with NO number to call back. Needs identity deployed before petitions.
  */
 export const SERVER_ATTACHES_SESSION_PHONE = true;
 
@@ -1124,6 +1166,12 @@ export function CommuneSendScreen(props: {
   ten_xa: string;
   /** Họ tên lấy từ Zalo lúc mở app, hoặc `null`. CHỈ để điền sẵn — màn này không gọi Zalo. */
   ho_ten: string | null;
+  /**
+   * Where the Zalo name request of this open stands (`TrangXa`) — what tells "still being asked" from "declined",
+   * which `ho_ten: null` cannot. Read only on a verified session (`VerifiedSender`). Absent (tests, the accountless
+   * path) = settled on `ho_ten`.
+   */
+  nameAtEntry?: NameAtEntry;
   /** The location exchange, injected by the shell; absent = no location button (outside Zalo, tests). */
   getSceneLocation?: GetSceneLocation;
   /**
@@ -1140,13 +1188,13 @@ export function CommuneSendScreen(props: {
   typedContact?: boolean;
   /**
    * The session's Zalo number IS verified (`phone_verified === true`) — read by `TrangXa` from the session, as
-   * `typedContact` is. Only then may a filled name fold into one line (`senderFolded`). Absent (no session yet,
-   * tests) = not verified: the boxes stay, and the screen never claims a verification it was not told about.
+   * `typedContact` is. Only then is the sender (a) or (c) (`VerifiedSender`). Absent (no session yet, tests) = not
+   * verified: the boxes stay, and the screen never claims a verification it was not told about.
    */
   verifiedPhone?: boolean;
   /**
-   * Whether the server attaches the session's verified number to the petition by itself — then the number box
-   * folds into the name line too. Tests only; production reads `SERVER_ATTACHES_SESSION_PHONE`.
+   * Whether the server attaches the session's verified number to the petition by itself — the condition of (a)
+   * and (c). Tests only; production reads `SERVER_ATTACHES_SESSION_PHONE`.
    */
   sessionPhoneAttached?: boolean;
   /**
@@ -1234,41 +1282,35 @@ export function CommuneSendScreen(props: {
   const pickedLabel =
     catalogue.kind === "ready" ? (catalogue.fields.find((f) => f.code === form.linh_vuc)?.label ?? "") : "";
 
-  /** The citizen typed in the name box at least once — from then on the box is theirs, never refilled. */
-  const nameTouched = useRef(false);
-  /** "Sửa" was pressed on the folded name line: the boxes stay open for the rest of this screen. */
-  const [editingSender, setEditingSender] = useState(false);
-
   const edit = (k: "noi_dung" | "dia_chi" | "ho_ten" | "dien_thoai") => (v: string) => {
-    if (k === "ho_ten") nameTouched.current = true;
     setForm((t) => ({ ...t, [k]: v }));
     setAttempt(null);
     setFailure(null);
     setFailureMessage(null);
   };
 
-  /**
-   * THE ZALO NAME THAT ARRIVES AFTER THE SCREEN OPENED. `blankForm(props.ho_ten)` reads it once, in the state
-   * initialiser — a name settled later (the check at entry still running, or "Đồng ý" pressed meanwhile) never
-   * reached the box. Filled only while the box is EMPTY and UNTOUCHED, so a name the citizen typed or cleared is
-   * never overwritten; and not while an attempt is held, whose body was built without it (`lan-gui.ts`).
-   */
-  useEffect(() => {
-    const late = props.ho_ten;
-    if (late === null || late.trim() === "" || nameTouched.current || attempt !== null) return;
-    setForm((t) => (t.ho_ten === "" ? { ...t, ho_ten: late } : t));
-  }, [props.ho_ten, attempt]);
-
   /** Anonymous as it applies: never on the typed-contact path, whatever a restored draft held. */
   const anonymous = !typedContact && form.an_danh;
   /**
-   * The name as one line to read (owner, 08/10/2026): a VERIFIED session, not the typed-contact or accountless
-   * path (their boxes are required and stay), not anonymous, a name present, "Sửa" not pressed. An empty name
-   * keeps the box — the citizen must type it.
+   * (a) / (c) apply: a VERIFIED session, not the typed-contact or accountless path (b — its required boxes stay),
+   * and the server attaching the verified number. Otherwise the name and optional number boxes, as before.
    */
-  const senderFolded =
-    props.verifiedPhone === true && !typedContact && !anonymous && form.ho_ten.trim() !== "" && !editingSender;
-  const phoneFolded = senderFolded && (props.sessionPhoneAttached ?? SERVER_ATTACHES_SESSION_PHONE);
+  const verifiedSession =
+    props.verifiedPhone === true && !typedContact && (props.sessionPhoneAttached ?? SERVER_ATTACHES_SESSION_PHONE);
+  /**
+   * THE SENDER, FIXED ONCE THE NAME HAS SETTLED (owner, 09/10/2026). `null` while the Zalo name is still being
+   * asked: then no box at all, so nothing can be typed into a box that is about to change. The first settled
+   * answer is kept for the life of this screen — a name arriving later never swaps (c) into (a) under the
+   * citizen's finger (the old late-fill fold did exactly that). Set during render, not in an effect, so the
+   * settled layout is the first one painted.
+   */
+  const arrivedSender = verifiedSenderOf(props.nameAtEntry ?? { kind: "settled", name: props.ho_ten });
+  const [sender, setSender] = useState<VerifiedSender | null>(arrivedSender);
+  if (sender === null && arrivedSender !== null) {
+    setSender(arrivedSender);
+    // A form restored while the name was pending may still hold a number with no box to show it in.
+    if (verifiedSession) setForm((t) => withVerifiedSender(t, arrivedSender));
+  }
   const hasContent = form.linh_vuc !== "" || form.noi_dung.trim() !== "" || form.dia_chi.trim() !== "";
 
   // Save as the citizen types, on the writing step only (the prototype's rule, `NewFeedbackPage.tsx:124`).
@@ -1280,7 +1322,12 @@ export function CommuneSendScreen(props: {
 
   function resumeDraft() {
     if (draftOffer === null) return;
-    const restored = restoreDraft(draftOffer, props.ho_ten, offeredCodes(catalogue));
+    const restored = restoreDraft(
+      draftOffer,
+      props.ho_ten,
+      offeredCodes(catalogue),
+      verifiedSession && sender !== null ? sender : undefined,
+    );
     setForm(restored.form);
     setDraftOffer(null);
     setStep(restored.step);
@@ -1363,10 +1410,15 @@ export function CommuneSendScreen(props: {
     props.onSent(out.petition);
   }
 
+  /** The sender is (a)/(c) and still being asked, and the citizen has not chosen anonymous: nothing to send yet. */
+  const senderPending = verifiedSession && sender === null && !anonymous;
+
   function submit() {
-    if (sending) return;
+    if (sending || senderPending) return;
+    // (a) / (c): the number is never sent by the client, and (a)'s name is Zalo's — whatever the form holds.
+    const out = verifiedSession && sender !== null ? withVerifiedSender(form, sender) : form;
     const e = kiemNhapPhieu(
-      form,
+      out,
       {
         thieu: XA_PA.thieu_mo_ta,
         thieu_nguoi_gui: XA_PA.thieu_nguoi_gui,
@@ -1381,8 +1433,8 @@ export function CommuneSendScreen(props: {
       try {
         a = taoLanGui(
           accountless === undefined
-            ? sendBody(form, location, typedContact)
-            : accountlessSendBody(form, accountless.domain),
+            ? sendBody(out, location, typedContact)
+            : accountlessSendBody(out, accountless.domain),
         );
       } catch {
         setFailure("khong-tao-duoc-khoa");
@@ -1543,52 +1595,57 @@ export function CommuneSendScreen(props: {
                 <span className="xa-cong-tac__nut" />
               </button>
             </div>
-            {!anonymous && (
+            {/* THE SENDER (owner, 09/10/2026): (a) one read-only line; (c) the required name box and the line
+                saying the verified number is used; still being asked → a status line, no box; otherwise (b, or no
+                verified session) the name and number boxes. Anonymous hides all of it, as before. */}
+            {!anonymous && verifiedSession && sender === null && (
+              <p className="xa-phu" role="status">
+                {XA_PA.sender_pending}
+              </p>
+            )}
+            {!anonymous && verifiedSession && sender?.kind === "zalo-name" && (
+              <div className="xa-field-picked">
+                <span className="xa-field-picked__text">{XA_PA.sender_summary_with_phone(sender.name)}</span>
+              </div>
+            )}
+            {!anonymous && verifiedSession && sender?.kind === "typed-name" && (
               <>
-                {senderFolded ? (
-                  <div className="xa-field-picked">
-                    <span className="xa-field-picked__text">
-                      {phoneFolded ? XA_PA.sender_summary_with_phone(form.ho_ten.trim()) : XA_PA.sender_summary(form.ho_ten.trim())}
-                    </span>
-                    <button
-                      type="button"
-                      className="xa-field-change"
-                      aria-label={phoneFolded ? XA_PA.sender_edit_label_with_phone : XA_PA.sender_edit_label}
-                      onClick={() => setEditingSender(true)}
-                    >
-                      {XA_PA.sender_edit}
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <ONhapDong
-                      id="xa-ho-ten"
-                      nhan={XA_PA.ten_nguoi_pa}
-                      goi_y={XA_PA.goi_y_ten}
-                      gia_tri={form.ho_ten}
-                      toi_da={DO_DAI_TOI_DA.ho_ten}
-                      required={typedContact || undefined}
-                      autoFocus={editingSender}
-                      onDoi={edit("ho_ten")}
-                    />
-                    {errors.ho_ten && <p className="xa-loi-o" role="alert">{errors.ho_ten}</p>}
-                  </>
-                )}
-                {!phoneFolded && (
-                  <>
-                    <ONhapDong
-                      id="xa-dien-thoai"
-                      nhan={typedContact ? XA_PA.phone_required_label : XA_PA.so_dien_thoai}
-                      goi_y={XA_PA.goi_y_so}
-                      gia_tri={form.dien_thoai}
-                      toi_da={DO_DAI_TOI_DA.dien_thoai}
-                      kieu_ban_phim="tel"
-                      required={typedContact || undefined}
-                      onDoi={edit("dien_thoai")}
-                    />
-                    {errors.dien_thoai && <p className="xa-loi-o" role="alert">{errors.dien_thoai}</p>}
-                  </>
-                )}
+                <ONhapDong
+                  id="xa-ho-ten"
+                  nhan={XA_PA.ten_nguoi_pa}
+                  goi_y={XA_PA.goi_y_ten}
+                  gia_tri={form.ho_ten}
+                  toi_da={DO_DAI_TOI_DA.ho_ten}
+                  required
+                  onDoi={edit("ho_ten")}
+                />
+                {errors.ho_ten && <p className="xa-loi-o" role="alert">{errors.ho_ten}</p>}
+                <p className="xa-phu">{XA_PA.sender_verified_phone}</p>
+              </>
+            )}
+            {!anonymous && !verifiedSession && (
+              <>
+                <ONhapDong
+                  id="xa-ho-ten"
+                  nhan={XA_PA.ten_nguoi_pa}
+                  goi_y={XA_PA.goi_y_ten}
+                  gia_tri={form.ho_ten}
+                  toi_da={DO_DAI_TOI_DA.ho_ten}
+                  required={typedContact || undefined}
+                  onDoi={edit("ho_ten")}
+                />
+                {errors.ho_ten && <p className="xa-loi-o" role="alert">{errors.ho_ten}</p>}
+                <ONhapDong
+                  id="xa-dien-thoai"
+                  nhan={typedContact ? XA_PA.phone_required_label : XA_PA.so_dien_thoai}
+                  goi_y={XA_PA.goi_y_so}
+                  gia_tri={form.dien_thoai}
+                  toi_da={DO_DAI_TOI_DA.dien_thoai}
+                  kieu_ban_phim="tel"
+                  required={typedContact || undefined}
+                  onDoi={edit("dien_thoai")}
+                />
+                {errors.dien_thoai && <p className="xa-loi-o" role="alert">{errors.dien_thoai}</p>}
               </>
             )}
             <p className="xa-phu">
@@ -1642,7 +1699,12 @@ export function CommuneSendScreen(props: {
               {GUI.nut_gui_lai}
             </button>
           ) : (
-            <button type="button" className="xa-nut" onClick={submit} disabled={sending || form.noi_dung.trim() === ""}>
+            <button
+              type="button"
+              className="xa-nut"
+              onClick={submit}
+              disabled={sending || senderPending || form.noi_dung.trim() === ""}
+            >
               <BieuTuong ten="send" co={20} />
               {GUI.tieu_de}
             </button>

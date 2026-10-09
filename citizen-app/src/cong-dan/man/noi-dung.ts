@@ -370,6 +370,15 @@ export const COMMUNE_APP_SESSION = {
    */
   zalo_asks:
     "Khi bạn bấm nút dưới đây, Zalo sẽ hỏi bạn có đồng ý chia sẻ số điện thoại không. Số được gửi thẳng tới hệ thống của xã. Ứng dụng không lưu số này trên điện thoại.",
+  /**
+   * SENDING, when the Zalo name has not been settled in this open (owner, 09/10/2026): the same tap asks Zalo for
+   * the number AND the name, so the words before it say both (policy 3.3.4 — the purpose before any dialog).
+   * Shown only on that path: where only the number is asked, a sentence naming the name too would be false.
+   */
+  why_with_name:
+    "Với họ tên và số điện thoại Zalo của bạn, xã biết chắc phản ánh là của ai và liên hệ lại được với bạn; bạn không phải gõ họ tên, và xem lại được mọi phản ánh của mình trong “Phản ánh của tôi”. Dù bạn có chia sẻ hay không, chỉ bạn xem được phản ánh bạn đã gửi.",
+  zalo_asks_with_name:
+    "Khi bạn bấm nút dưới đây, Zalo sẽ hỏi bạn có đồng ý chia sẻ số điện thoại không, rồi hỏi bạn có đồng ý cho ứng dụng dùng họ tên trên Zalo không. Số được gửi thẳng tới hệ thống của xã, và ứng dụng không lưu số này trên điện thoại; họ tên chỉ tới xã khi bạn gửi phản ánh. Không đồng ý cho dùng họ tên thì bạn tự gõ họ tên khi gửi.",
   working: "Đang kết nối với hệ thống của xã…",
   not_connected: (task: string) =>
     `Ứng dụng của xã chưa được kết nối với hệ thống tiếp nhận phản ánh, nên ${task}. Hãy đến Bộ phận tiếp nhận của Ủy ban nhân dân xã, hoặc gọi điện thoại cho xã.`,
@@ -1116,14 +1125,14 @@ export const XA_PA = {
   location_without_button: "Bà con ghi rõ nơi xảy ra ở ô dưới: thôn, tổ, đường, số nhà.",
   so_dien_thoai: "Số điện thoại",
   goi_y_so: "Để cán bộ liên hệ khi cần",
-  // 08/10/2026 (owner): a session whose Zalo number is verified, with the name already filled, shows the name as
-  // one line to read — "Sửa" opens the box. `sender_summary_with_phone` is for the day the server attaches the
-  // verified number itself (`PhanAnhAppXa.tsx` `SERVER_ATTACHES_SESSION_PHONE`); until then the number box stays.
-  sender_summary: (name: string) => `Gửi với họ tên: ${name}`,
+  // 09/10/2026 (owner, final): on a session whose Zalo number is verified there is NO number box — the server
+  // attaches the verified number itself (`PhanAnhAppXa.tsx` `SERVER_ATTACHES_SESSION_PHONE`). With a Zalo name the
+  // sender is this one read-only line (no box, no "Sửa"); without one, a required name box and the line below it.
   sender_summary_with_phone: (name: string) => `Gửi bằng: ${name} · số Zalo đã xác thực`,
-  sender_edit: "Sửa",
-  sender_edit_label: "Sửa họ tên người gửi",
-  sender_edit_label_with_phone: "Sửa họ tên và số điện thoại người gửi",
+  sender_verified_phone: "Gửi bằng số Zalo đã xác thực",
+  // The Zalo name is still being asked (the check at app open, or the dialog right after the number): no box
+  // yet, so the layout cannot change under the citizen's finger once the answer comes.
+  sender_pending: "Đang lấy họ tên từ Zalo…",
   // Photos left this list on 02/10/2026 — optional by the owner's decision (`anh_bat_buoc`).
   bat_buoc: "Bắt buộc: lĩnh vực, mô tả, vị trí, họ tên người gửi.",
   bat_buoc_an_danh: "Bắt buộc: lĩnh vực, mô tả, vị trí.",

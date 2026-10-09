@@ -33,7 +33,8 @@ const trang = vi.hoisted(() => ({
 
 vi.mock("../api/phien-vigov", async (importOriginal) => {
   const goc = await importOriginal<typeof import("../api/phien-vigov")>();
-  return { layPhienViGov: () => (trang.phien === undefined ? goc.layPhienViGov() : trang.phien) };
+  // `...goc`: the commune app's gate STORES a session through the real `datPhienViGov` (09/10/2026 cases).
+  return { ...goc, layPhienViGov: () => (trang.phien === undefined ? goc.layPhienViGov() : trang.phien) };
 });
 
 vi.mock("../api/goi-vigov", async (importOriginal) => {
@@ -44,16 +45,19 @@ vi.mock("../api/goi-vigov", async (importOriginal) => {
     traCuuPhieu: vi.fn(goc.traCuuPhieu),
     phanAnhCuaToi: vi.fn(goc.phanAnhCuaToi),
     citizenReportFields: vi.fn(goc.citizenReportFields),
+    traXaTheoTenMien: vi.fn(goc.traXaTheoTenMien),
   };
 });
 
-import { citizenReportFields, guiPhanAnh, phanAnhCuaToi, traCuuPhieu } from "../api/goi-vigov";
+import { citizenReportFields, guiPhanAnh, phanAnhCuaToi, traCuuPhieu, traXaTheoTenMien } from "../api/goi-vigov";
 import type { PhieuCuaToi } from "../api/hop-dong-phan-anh";
-import { layPhienViGov } from "../api/phien-vigov";
+import type { OpenCommuneAppSession } from "../api/mo-phien-vigov";
+import { datPhienViGov, layPhienViGov } from "../api/phien-vigov";
 
 import { GuiPhanAnhScreen, ID_DAU_BUOC } from "./GuiPhanAnhScreen";
 import {
   ACCOUNTLESS,
+  COMMUNE_APP_SESSION,
   CUA_TOI,
   GUI,
   KENH_CHUA_MO,
@@ -62,12 +66,16 @@ import {
   QUAY_LAI,
   SCENE_PHOTOS,
   TYPED_CONTACT,
+  XA_GIAO_DIEN,
   XA_PA,
   XA_TN,
 } from "./noi-dung";
 import { CommuneSendScreen, SERVER_ATTACHES_SESSION_PHONE } from "./PhanAnhAppXa";
 import { PhanAnhCuaToiScreen } from "./PhanAnhCuaToiScreen";
+// vi-name-ok: importing the EXISTING type `KetQuaLayTen` — no new name
+import type { KetQuaLayTen, NameRequestMode } from "./trai-nghiem";
 import { TraCuuPhieuScreen } from "./TraCuuPhieuScreen";
+import { TrangXa } from "./TrangXa";
 
 // ---------------------------------------------------------------------------------------------
 // DOM tối thiểu — đủ cho `react-dom/client` gắn, cập nhật và gỡ một cây tĩnh.
@@ -804,10 +812,11 @@ describe("app xã — phiên chưa xác thực số: họ tên + số bắt bu�
   });
 });
 
-/* ═════════════════ 08/10/2026 (owner) — a verified session folds the name; a late Zalo name; the growing box ═════════════════ */
+/* ═════════════════ 09/10/2026 (owner, final) — the sender on a VERIFIED session: one line, or the name box alone ═════════════════ */
 
-describe("app xã — phiên đã xác thực số: họ tên gọn một dòng + 'Sửa', số điện thoại vẫn là ô tuỳ chọn", () => {
+describe("app xã — phiên đã xác thực số: (a) một dòng tên Zalo, (c) chỉ ô họ tên; không ô số, không 'Sửa'", () => {
   const NAME = "Nguyễn Văn An";
+  const TYPED = "Trần Thị Bình";
   const doc = () => (globalThis as unknown as { document: TaiLieuGia }).document;
 
   beforeEach(() => {
@@ -831,7 +840,7 @@ describe("app xã — phiên đã xác thực số: họ tên gọn một dòng 
     });
 
   /** Mounted with a handle to render it again with new props — a name that arrives late is a new prop. */
-  async function mountSend(props: SendProps) {
+  async function mountSend(props: SendProps, pickField = true) {
     const khung = doc().createElement("div");
     doc().body.appendChild(khung);
     const goc = taoGoc(khung as unknown as Element);
@@ -844,107 +853,161 @@ describe("app xã — phiên đã xác thực số: họ tên gọn một dòng 
       });
     };
     await render(props);
-    await press(tatCaPhanTu(khung).filter((p) => p.getAttribute("role") === "radio")[0]!);
+    if (pickField) await press(tatCaPhanTu(khung).filter((p) => p.getAttribute("role") === "radio")[0]!);
     return { khung, render, go: () => act(() => goc.unmount()) };
   }
 
-  it("verified + a name, server NOT attaching the number: one line with the name and 'Sửa'; the number box stays, optional", async () => {
-    const { khung, go } = await mountSend({ sessionPhoneAttached: false });
-    expect(khung.textContent).toContain(XA_PA.sender_summary(NAME));
-    expect(khung.textContent).not.toContain(XA_PA.sender_summary_with_phone(NAME));
-    expect(doc().getElementById("xa-ho-ten")).toBeNull();
-    const phone = doc().getElementById("xa-dien-thoai")!;
-    expect(phone).not.toBeNull();
-    expect(phone.getAttribute("aria-required")).toBeNull();
-    const edit = buttonsNamed(khung, XA_PA.sender_edit);
-    expect(edit).toHaveLength(1);
-    // The accessible name starts with the visible word (WCAG 2.5.3) and says WHAT is edited.
-    expect(edit[0]!.getAttribute("aria-label")).toBe(XA_PA.sender_edit_label);
-    expect(XA_PA.sender_edit_label.startsWith(XA_PA.sender_edit)).toBe(true);
-    await go();
-  });
+  const sentBody = (i = 0) => JSON.parse(vi.mocked(guiPhanAnh).mock.calls[i]![0].than) as Record<string, unknown>;
+  const anonymousSwitch = (khung: PhanTuGia) => tatCaPhanTu(khung).find((p) => p.getAttribute("role") === "switch")!;
+  /** No button anywhere on the form that edits the sender — the old "Sửa" is gone, not hidden. */
+  const noEditButton = (khung: PhanTuGia) => expect(buttonsNamed(khung, "Sửa")).toEqual([]);
 
-  it("'Sửa' opens the name box with the name in it, focused; the line is gone", async () => {
-    const { khung, go } = await mountSend({});
-    await press(buttonsNamed(khung, XA_PA.sender_edit)[0]!);
-    expect(boxText("xa-ho-ten")).toBe(NAME);
-    expect(doc().activeElement?.getAttribute("id")).toBe("xa-ho-ten");
-    expect(khung.textContent).not.toContain(XA_PA.sender_summary(NAME));
-    // Cleared after "Sửa": the box stays open (the name is required, as before), it does not fold back.
-    await typeInto(doc().getElementById("xa-ho-ten")!, "");
-    expect(doc().getElementById("xa-ho-ten")).not.toBeNull();
-    await go();
-  });
-
-  it("sent folded: the name goes as it reads, the number EMPTY when not typed (anonymous off)", async () => {
-    const { khung, go } = await mountSend({});
+  async function writeAndSend(khung: PhanTuGia) {
     await typeInto(doc().getElementById("xa-noi-dung")!, "Rác tồn đọng đầu ngõ 12");
     vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "xong", phieu: SENT });
     await press(buttonsNamed(khung, GUI.tieu_de)[0]!);
-    expect(guiPhanAnh).toHaveBeenCalledTimes(1);
-    const body = JSON.parse(vi.mocked(guiPhanAnh).mock.calls[0]![0].than) as Record<string, unknown>;
-    expect(body).toMatchObject({ reporter_name: NAME, reporter_phone: "", anonymous: false });
-    await go();
-  });
+  }
 
-  it("no fold: session not verified (or unknown), an empty name, anonymous on, the typed-contact path", async () => {
-    for (const props of [{ verifiedPhone: undefined }, { verifiedPhone: false }, { ho_ten: null }, { typedContact: true }]) {
-      const { khung, go } = await mountSend(props);
-      expect(doc().getElementById("xa-ho-ten"), JSON.stringify(props)).not.toBeNull();
-      expect(buttonsNamed(khung, XA_PA.sender_edit)).toEqual([]);
-      await go();
-    }
+  it("(a) verified + a Zalo name: one read-only line, no name box, no number box, no 'Sửa'", async () => {
+    expect(SERVER_ATTACHES_SESSION_PHONE).toBe(true);
     const { khung, go } = await mountSend({});
-    await press(tatCaPhanTu(khung).find((p) => p.getAttribute("role") === "switch")!);
+    expect(khung.textContent).toContain(XA_PA.sender_summary_with_phone(NAME));
     expect(doc().getElementById("xa-ho-ten")).toBeNull();
     expect(doc().getElementById("xa-dien-thoai")).toBeNull();
-    expect(khung.textContent).not.toContain(XA_PA.sender_summary(NAME));
+    noEditButton(khung);
     await go();
   });
 
-  it("the day the server attaches the number (the one switch): both fold, 'Sửa' opens both", async () => {
-    expect(SERVER_ATTACHES_SESSION_PHONE).toBe(true);
-    const { khung, go } = await mountSend({ sessionPhoneAttached: true });
-    expect(khung.textContent).toContain(XA_PA.sender_summary_with_phone(NAME));
+  it("(a) sends the Zalo name and an EMPTY number — the server attaches the verified one", async () => {
+    const { khung, go } = await mountSend({ nameAtEntry: { kind: "settled", name: NAME }, ho_ten: NAME });
+    await writeAndSend(khung);
+    expect(guiPhanAnh).toHaveBeenCalledTimes(1);
+    expect(sentBody()).toMatchObject({ reporter_name: NAME, reporter_phone: "", anonymous: false });
+    await go();
+  });
+
+  it("(c) verified, the name declined: ONLY a required name box and the verified-number line; no number box", async () => {
+    const { khung, go } = await mountSend({ ho_ten: null, nameAtEntry: { kind: "settled", name: null } });
+    const box = doc().getElementById("xa-ho-ten")!;
+    expect(box).not.toBeNull();
+    expect(box.getAttribute("aria-required")).toBe("true");
     expect(doc().getElementById("xa-dien-thoai")).toBeNull();
-    const edit = buttonsNamed(khung, XA_PA.sender_edit)[0]!;
-    expect(edit.getAttribute("aria-label")).toBe(XA_PA.sender_edit_label_with_phone);
-    await press(edit);
-    expect(doc().getElementById("xa-ho-ten")).not.toBeNull();
-    expect(doc().getElementById("xa-dien-thoai")).not.toBeNull();
+    expect(khung.textContent).toContain(XA_PA.sender_verified_phone);
+    expect(khung.textContent).not.toContain(XA_PA.sender_summary_with_phone(""));
+    noEditButton(khung);
+
+    // An empty name is refused before anything leaves, with what to do next.
+    await typeInto(doc().getElementById("xa-noi-dung")!, "Rác tồn đọng đầu ngõ 12");
+    await press(buttonsNamed(khung, GUI.tieu_de)[0]!);
+    expect(guiPhanAnh).not.toHaveBeenCalled();
+    expect(khung.textContent).toContain(XA_PA.thieu_nguoi_gui);
+
+    await typeInto(doc().getElementById("xa-ho-ten")!, TYPED);
+    vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "xong", phieu: SENT });
+    await press(buttonsNamed(khung, GUI.tieu_de)[0]!);
+    expect(guiPhanAnh).toHaveBeenCalledTimes(1);
+    expect(sentBody()).toMatchObject({ reporter_name: TYPED, reporter_phone: "", anonymous: false });
     await go();
   });
 
-  it("a Zalo name that arrives AFTER the screen opened fills the empty, untouched box", async () => {
-    const { render, go } = await mountSend({ ho_ten: null, verifiedPhone: false });
-    expect(boxText("xa-ho-ten")).toBe("");
-    await render({ ho_ten: NAME, verifiedPhone: false });
-    expect(boxText("xa-ho-ten")).toBe(NAME);
+  it("a restored draft holding a number does NOT carry it into (a) or (c); (a) sends the Zalo name, (c) the typed one", async () => {
+    const DRAFT = {
+      linh_vuc: FIELDS[0].code,
+      noi_dung: "Rác tồn đọng đầu ngõ 12",
+      dia_chi: "",
+      ho_ten: TYPED,
+      dien_thoai: "0900000000",
+      an_danh: false,
+    };
+    const store = { load: () => DRAFT, save: vi.fn(), clear: vi.fn() };
+
+    const a = await mountSend({ draftStore: store }, false);
+    await press(buttonsNamed(a.khung, XA_PA.draft_resume)[0]!);
+    expect(a.khung.textContent).toContain(XA_PA.sender_summary_with_phone(NAME));
+    expect(doc().getElementById("xa-dien-thoai")).toBeNull();
+    vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "xong", phieu: SENT });
+    await press(buttonsNamed(a.khung, GUI.tieu_de)[0]!);
+    expect(sentBody(0)).toMatchObject({ reporter_name: NAME, reporter_phone: "" });
+    await a.go();
+
+    const c = await mountSend({ draftStore: store, ho_ten: null, nameAtEntry: { kind: "settled", name: null } }, false);
+    await press(buttonsNamed(c.khung, XA_PA.draft_resume)[0]!);
+    expect(boxText("xa-ho-ten")).toBe(TYPED);
+    expect(doc().getElementById("xa-dien-thoai")).toBeNull();
+    vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "xong", phieu: SENT });
+    await press(buttonsNamed(c.khung, GUI.tieu_de)[0]!);
+    expect(sentBody(1)).toMatchObject({ reporter_name: TYPED, reporter_phone: "" });
+    // The draft saved while writing carries no number either.
+    for (const [saved] of store.save.mock.calls) expect((saved as { dien_thoai: string }).dien_thoai).toBe("");
+    await c.go();
+  });
+
+  it("the mode is FIXED once the name settled: a name arriving later never swaps (c) into (a)", async () => {
+    const { khung, render, go } = await mountSend({ ho_ten: null, nameAtEntry: { kind: "settled", name: null } });
+    await typeInto(doc().getElementById("xa-ho-ten")!, TYPED);
+    await render({ ho_ten: NAME, nameAtEntry: { kind: "settled", name: NAME } });
+    expect(boxText("xa-ho-ten")).toBe(TYPED);
+    expect(khung.textContent).toContain(XA_PA.sender_verified_phone);
+    expect(khung.textContent).not.toContain(XA_PA.sender_summary_with_phone(NAME));
     await go();
-    // On a verified session the same late name folds into the line.
-    const folded = await mountSend({ ho_ten: null });
+  });
+
+  it("still being asked: no box at all and no sending until it settles — then (a) or (c), once", async () => {
+    const asking = await mountSend({ ho_ten: null, nameAtEntry: { kind: "asking" } });
+    expect(asking.khung.textContent).toContain(XA_PA.sender_pending);
+    expect(doc().getElementById("xa-ho-ten")).toBeNull();
+    expect(doc().getElementById("xa-dien-thoai")).toBeNull();
+    await typeInto(doc().getElementById("xa-noi-dung")!, "Rác tồn đọng đầu ngõ 12");
+    expect(buttonsNamed(asking.khung, GUI.tieu_de)[0]!.hasAttribute("disabled")).toBe(true);
+    await asking.render({ ho_ten: NAME, nameAtEntry: { kind: "settled", name: NAME } });
+    expect(asking.khung.textContent).toContain(XA_PA.sender_summary_with_phone(NAME));
+    expect(asking.khung.textContent).not.toContain(XA_PA.sender_pending);
+    await asking.go();
+
+    const declined = await mountSend({ ho_ten: null, nameAtEntry: { kind: "checking" } });
+    await declined.render({ ho_ten: null, nameAtEntry: { kind: "settled", name: null } });
     expect(doc().getElementById("xa-ho-ten")).not.toBeNull();
-    await folded.render({ ho_ten: NAME });
-    // The server attaches the verified number (SERVER_ATTACHES_SESSION_PHONE), so the line names both.
-    expect(folded.khung.textContent).toContain(XA_PA.sender_summary_with_phone(NAME));
-    await folded.go();
+    expect(declined.khung.textContent).toContain(XA_PA.sender_verified_phone);
+    await declined.go();
   });
 
-  it("…but never overwrites what the citizen typed — nor a box they emptied themselves", async () => {
-    const typed = await mountSend({ ho_ten: null, verifiedPhone: false });
-    await typeInto(doc().getElementById("xa-ho-ten")!, "Trần Thị Bình");
-    await typed.render({ ho_ten: NAME, verifiedPhone: false });
-    expect(boxText("xa-ho-ten")).toBe("Trần Thị Bình");
-    await typed.go();
-
-    const emptied = await mountSend({ ho_ten: null, verifiedPhone: false });
-    await typeInto(doc().getElementById("xa-ho-ten")!, "T");
-    await typeInto(doc().getElementById("xa-ho-ten")!, "");
-    await emptied.render({ ho_ten: NAME, verifiedPhone: false });
-    expect(boxText("xa-ho-ten")).toBe("");
-    await emptied.go();
+  it("'Gửi ẩn danh' still hides the sender in (a) and (c), and the body says anonymous", async () => {
+    for (const props of [{}, { ho_ten: null, nameAtEntry: { kind: "settled", name: null } } as SendProps]) {
+      const { khung, go } = await mountSend(props);
+      await press(anonymousSwitch(khung));
+      expect(doc().getElementById("xa-ho-ten")).toBeNull();
+      expect(doc().getElementById("xa-dien-thoai")).toBeNull();
+      expect(khung.textContent).not.toContain(XA_PA.sender_summary_with_phone(NAME));
+      expect(khung.textContent).not.toContain(XA_PA.sender_verified_phone);
+      await writeAndSend(khung);
+      expect(sentBody(vi.mocked(guiPhanAnh).mock.calls.length - 1)).toMatchObject({
+        reporter_name: "",
+        reporter_phone: "",
+        anonymous: true,
+      });
+      await go();
+    }
   });
 
+  it("not (a)/(c): no verified session (or unknown), or the server switch off — the name and number boxes, as before", async () => {
+    for (const props of [{ verifiedPhone: undefined }, { verifiedPhone: false }, { sessionPhoneAttached: false }]) {
+      const { khung, go } = await mountSend(props);
+      expect(doc().getElementById("xa-ho-ten"), JSON.stringify(props)).not.toBeNull();
+      expect(doc().getElementById("xa-dien-thoai"), JSON.stringify(props)).not.toBeNull();
+      expect(khung.textContent).not.toContain(XA_PA.sender_summary_with_phone(NAME));
+      noEditButton(khung);
+      await go();
+    }
+  });
+
+  it("(b) unchanged: the typed-contact path keeps both boxes required, whatever the Zalo name", async () => {
+    const { khung, go } = await mountSend({ typedContact: true, verifiedPhone: false });
+    expect(doc().getElementById("xa-ho-ten")).not.toBeNull();
+    expect(doc().getElementById("xa-dien-thoai")!.getAttribute("aria-required")).toBe("true");
+    expect(khung.textContent).not.toContain(XA_PA.sender_summary_with_phone(NAME));
+    expect(khung.textContent).not.toContain(XA_PA.sender_verified_phone);
+    await go();
+  });
   it("the description box: three lines, grows with the text; the shared app's box keeps six lines", async () => {
     const { go } = await mountSend({});
     const box = doc().getElementById("xa-noi-dung")!;
@@ -967,6 +1030,158 @@ describe("app xã — phiên đã xác thực số: họ tên gọn một dòng 
     expect(sharedBox.getAttribute("rows")).toBe("6");
     expect(sharedBox.getAttribute("class")).not.toContain("cd-o__nhap--grow");
     await shared.go();
+  });
+});
+
+/* ═════════════════ 09/10/2026 (owner, final) — the Zalo name is asked in the SAME step as the number, at most once ═════════════════ */
+
+describe("app xã — cổng gửi phản ánh: hỏi họ tên cùng bước xác nhận số, nhiều nhất một lần mỗi lần mở", () => {
+  const COMMUNE = "Xã Thử Nghiệm";
+  const NAME = "Nguyễn Văn An";
+  const doc = () => (globalThis as unknown as { document: TaiLieuGia }).document;
+
+  beforeEach(() => {
+    // The REAL session store: the gate opens the session through it, the screens read it back.
+    trang.phien = undefined;
+    datPhienViGov(null);
+    vi.mocked(guiPhanAnh).mockReset();
+    vi.mocked(citizenReportFields).mockReset();
+    vi.mocked(citizenReportFields).mockResolvedValue({ kieu: "xong", fields: FIELDS });
+    vi.mocked(traXaTheoTenMien).mockResolvedValue({
+      kieu: "xong",
+      gia_tri: [{ ten: COMMUNE, tinh: "Tỉnh Thử Nghiệm" }],
+    } as Awaited<ReturnType<typeof traXaTheoTenMien>>);
+    // Everything else the home screen reads (news, profile, banners) answers "nothing here".
+    fetch_gia.mockImplementation(async () => ({ status: 404, ok: false, json: async () => ({}) }));
+  });
+
+  afterEach(() => {
+    datPhienViGov(null);
+  });
+
+  /** The shell's name bridge: answers `check` and `ask` as told, and records every call. */
+  function nameBridge(check: KetQuaLayTen, ask: KetQuaLayTen) {
+    const calls: NameRequestMode[] = [];
+    const bridge = vi.fn(async (mode: NameRequestMode) => {
+      calls.push(mode);
+      return mode === "check" ? check : ask;
+    });
+    return { bridge, calls };
+  }
+
+  const openSession = vi.fn<OpenCommuneAppSession>(async () => ({
+    kieu: "xong",
+    token: "tok-thu-nghiem",
+    ten_xa: COMMUNE,
+    da_xac_thuc_so: true,
+  }));
+
+  async function mountApp(bridge: (mode: NameRequestMode) => Promise<KetQuaLayTen>) {
+    openSession.mockClear();
+    return gan(createElement(TrangXa, { ten_mien: "thu.vigov.example", lay_ten: bridge, openSession }));
+  }
+
+  const sendTile = (khung: PhanTuGia) => buttonsNamed(khung, XA_GIAO_DIEN.o_gui)[0]!;
+
+  /** Pick the first field: the sender block lives on the writing step. */
+  async function toWritingStep(khung: PhanTuGia) {
+    await press(tatCaPhanTu(khung).filter((p) => p.getAttribute("role") === "radio")[0]!);
+  }
+
+  /** From the writing step back to home: "Quay lại" twice, then "Huỷ bỏ" in the cancel question. */
+  async function leaveSendScreen(khung: PhanTuGia) {
+    await press(buttonsNamed(khung, QUAY_LAI)[0]!);
+    await press(buttonsNamed(khung, QUAY_LAI)[0]!);
+    await press(buttonsNamed(khung, XA_TN.huy_bo)[0]!);
+  }
+
+  it("name not settled: the explanation names BOTH; one tap → number, then name; (a); never asked again", async () => {
+    const { bridge, calls } = nameBridge({ kieu: "tu-choi" }, { kieu: "xong", ho_ten: NAME });
+    const { khung, go } = await mountApp(bridge);
+    expect(calls).toEqual(["check"]);
+
+    await press(sendTile(khung));
+    // Policy 3.3.4: the purpose of BOTH dialogs is said before either opens; nothing asked yet.
+    expect(khung.textContent).toContain(COMMUNE_APP_SESSION.why_with_name);
+    expect(khung.textContent).toContain(COMMUNE_APP_SESSION.zalo_asks_with_name);
+    expect(khung.textContent).not.toContain(COMMUNE_APP_SESSION.zalo_asks);
+    expect(openSession).not.toHaveBeenCalled();
+    expect(calls).toEqual(["check"]);
+
+    await press(buttonsNamed(khung, PHONE_VERIFICATION.allow)[0]!);
+    expect(openSession).toHaveBeenCalledTimes(1);
+    expect(calls).toEqual(["check", "ask"]);
+    await toWritingStep(khung);
+    expect(khung.textContent).toContain(XA_PA.sender_summary_with_phone(NAME));
+    expect(doc().getElementById("xa-ho-ten")).toBeNull();
+    expect(doc().getElementById("xa-dien-thoai")).toBeNull();
+
+    // A second send in the same open: the session exists, the name is settled — no gate, no dialog.
+    await leaveSendScreen(khung);
+    await press(sendTile(khung));
+    await toWritingStep(khung);
+    expect(calls).toEqual(["check", "ask"]);
+    expect(openSession).toHaveBeenCalledTimes(1);
+    expect(khung.textContent).toContain(XA_PA.sender_summary_with_phone(NAME));
+    await go();
+  });
+
+  it("the name declined in Zalo's dialog: (c) — the name box alone — and it is never asked again in this open", async () => {
+    const { bridge, calls } = nameBridge({ kieu: "tu-choi" }, { kieu: "tu-choi" });
+    const { khung, go } = await mountApp(bridge);
+    await press(sendTile(khung));
+    await press(buttonsNamed(khung, PHONE_VERIFICATION.allow)[0]!);
+    await toWritingStep(khung);
+    expect(calls).toEqual(["check", "ask"]);
+    expect(doc().getElementById("xa-ho-ten")!.getAttribute("aria-required")).toBe("true");
+    expect(doc().getElementById("xa-dien-thoai")).toBeNull();
+    expect(khung.textContent).toContain(XA_PA.sender_verified_phone);
+
+    await leaveSendScreen(khung);
+    await press(sendTile(khung));
+    await toWritingStep(khung);
+    expect(calls).toEqual(["check", "ask"]);
+    expect(khung.textContent).toContain(XA_PA.sender_verified_phone);
+    await go();
+  });
+
+  it("name already settled at open: the gate speaks of the number only and asks Zalo for nothing else; (a)", async () => {
+    const { bridge, calls } = nameBridge({ kieu: "xong", ho_ten: NAME }, { kieu: "xong", ho_ten: "never asked" });
+    const { khung, go } = await mountApp(bridge);
+    await press(sendTile(khung));
+    expect(khung.textContent).toContain(COMMUNE_APP_SESSION.zalo_asks);
+    expect(khung.textContent).toContain(PHONE_VERIFICATION.why);
+    expect(khung.textContent).not.toContain(COMMUNE_APP_SESSION.zalo_asks_with_name);
+    await press(buttonsNamed(khung, PHONE_VERIFICATION.allow)[0]!);
+    await toWritingStep(khung);
+    expect(calls).toEqual(["check"]);
+    expect(khung.textContent).toContain(XA_PA.sender_summary_with_phone(NAME));
+    await go();
+  });
+
+  it("name declined on the home card: the gate does not ask it again; (c)", async () => {
+    const { bridge, calls } = nameBridge({ kieu: "tu-choi" }, { kieu: "xong", ho_ten: "never asked" });
+    const { khung, go } = await mountApp(bridge);
+    await press(buttonsNamed(khung, XA_TN.name_card_decline)[0]!);
+    await press(sendTile(khung));
+    expect(khung.textContent).not.toContain(COMMUNE_APP_SESSION.zalo_asks_with_name);
+    await press(buttonsNamed(khung, PHONE_VERIFICATION.allow)[0]!);
+    await toWritingStep(khung);
+    expect(calls).toEqual(["check"]);
+    expect(doc().getElementById("xa-ho-ten")).not.toBeNull();
+    expect(doc().getElementById("xa-dien-thoai")).toBeNull();
+    await go();
+  });
+
+  it("the number refused: the name is not asked either — nothing for it to serve", async () => {
+    const { bridge, calls } = nameBridge({ kieu: "tu-choi" }, { kieu: "xong", ho_ten: NAME });
+    const { khung, go } = await mountApp(bridge);
+    openSession.mockResolvedValueOnce({ kieu: "tu-choi" });
+    await press(sendTile(khung));
+    await press(buttonsNamed(khung, PHONE_VERIFICATION.allow)[0]!);
+    expect(openSession).toHaveBeenCalledTimes(1);
+    expect(calls).toEqual(["check"]);
+    await go();
   });
 });
 

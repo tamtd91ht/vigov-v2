@@ -601,11 +601,11 @@
     },
     {
       "id": "gui-phan-anh-nguoi-gui-da-xac-thuc",
-      "viec": "Màn gửi phản ánh, phiên ĐÃ xác thực số: gộp 'Họ và tên' + 'Số điện thoại' thành một dòng 'Gửi bằng: <tên> · số Zalo đã xác thực' có nút 'Sửa'; để trống ô số thì máy chủ gắn số của phiên (chủ dự án 08/10/2026, ADR 0050 §Sửa đổi 08/10/2026)",
-      "trang_thai": "dang_lam",
-      "bang_chung": "Quyết định: kb/10-decisions/0050-kenh-cong-dan-theo-kho-yeu-cau.md §Sửa đổi 08/10/2026 (:178). Mã đang dựng ở phiên khác 08/10/2026 — chưa có bằng chứng chạy. Phía máy chủ: sổ service-petitions/gan-so-da-xac-thuc-cua-phien.",
+      "viec": "Màn gửi phản ánh, phiên ĐÃ xác thực số: gộp 'Họ và tên' + 'Số điện thoại' thành một dòng 'Gửi bằng: <tên> · số Zalo đã xác thực' có nút 'Sửa'; để trống ô số thì máy chủ gắn số của phiên (chủ dự án 08/10/2026, ADR 0050 §Sửa đổi 08/10/2026) — SỬA 09/10/2026 (chủ dự án, ADR 0050 §Sửa đổi 09/10/2026): thay quyết định 08/10. Có số + có tên Zalo: một dòng CHỈ ĐỌC, không ô nhập, không nút 'Sửa'; có số mà từ chối cho tên: ô họ tên bắt buộc + dòng chỉ đọc số; không có số: hai ô bắt buộc như cũ; tên Zalo hỏi cùng bước xác nhận số, một lần trong phiên; 'Gửi ẩn danh' giữ",
+      "trang_thai": "xong",
+      "bang_chung": "Quyết định: kb/10-decisions/0050-kenh-cong-dan-theo-kho-yeu-cau.md §Sửa đổi 08/10/2026 (:178). Mã đang dựng ở phiên khác 08/10/2026 — chưa có bằng chứng chạy. Phía máy chủ: sổ service-petitions/gan-so-da-xac-thuc-cua-phien. || 09/10/2026 (commit này): CommuneSendScreen theo ADR 0050 §Sửa đổi 09/10 — (a) một dòng chỉ đọc không ô/không Sửa, (c) chỉ ô họ tên bắt buộc, chế độ chốt khi tên ngã ngũ (không đổi dưới tay), (a)/(c) gửi reporter_phone rỗng, nháp không gửi ngầm số/tên; TrangXa hỏi tên cùng bước xác nhận số (why_with_name/zalo_asks_with_name), nameAsked chỉ hỏi một lần mỗi lần mở. Ca kiểm: hieu-ung-khong-phien.test.tsx (9 ca màn + 5 ca TrangXa thật), feedback-draft.test.tsx (+3). tsc sạch; vitest 68 tệp/1846 ca xanh (phiên chính chạy lại). eslint: citizen-app không có cấu hình eslint",
       "no_confirm": [],
-      "tiep_theo": "Không áp cho phiếu ẩn danh, phiên chưa xác thực số (ADR 0080) và phiếu không tài khoản (ADR 0083) — các màn ấy giữ hai ô như cũ. Client KHÔNG tự điền số rồi gửi lại: để trống, máy chủ gắn. Chính sách quyền riêng tư: soát câu về số điện thoại trên phiếu (lời văn chủ dự án duyệt).",
+      "tiep_theo": "Chưa có ảnh render thật trên máy Zalo. Hộp thoại tên của Zalo treo thì form chờ mãi (chỉ 'Gửi ẩn danh' hoặc rời màn thoát được — cùng rủi ro với thẻ hỏi tên ở trang chủ). Phiên đã mở trước đó cho 'Phản ánh của tôi' mà tên chưa đồng ý: gửi không qua cổng → (c), không hỏi tên. Soát hồ sơ nộp Zalo (content/ket-xuat-ho-so.ts) cho thời điểm hỏi tên mới.",
       "menu": "phan-anh-nguoi-dan"
     },
     {
